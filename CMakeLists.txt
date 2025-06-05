@@ -1,0 +1,29 @@
+cmake_minimum_required(VERSION 3.30)
+set(CMAKE_CXX_STANDARD 20)
+
+project(HurdyGurdy LANGUAGES CXX)
+
+find_package(Vulkan REQUIRED)
+add_subdirectory(vendor/glfw EXCLUDE_FROM_ALL)
+add_subdirectory(vendor/fastgltf EXCLUDE_FROM_ALL)
+
+file(GLOB_RECURSE HG_SRC "src/*.cpp" "include/*.h")
+add_library(hurdy_gurdy STATIC ${HG_SRC})
+target_include_directories(hurdy_gurdy PUBLIC include)
+target_include_directories(hurdy_gurdy PUBLIC SYSTEM vendor)
+target_Link_libraries(hurdy_gurdy PUBLIC Vulkan::Vulkan glfw fastgltf)
+
+file(GLOB_RECURSE DEMO_SRC "demo/*.cpp" "demo/*.h")
+add_executable(demo ${DEMO_SRC})
+target_link_libraries(demo PUBLIC hurdy_gurdy)
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    message(STATUS "Configuring for GCC or Clang...")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic")
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+    message(STATUS "Configuring for MSVC...")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
+    set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT demo)
+else()
+    message(WARNING "Unknown compiler ID: ${CMAKE_CXX_COMPILER_ID}. Using default flags.")
+endif()
