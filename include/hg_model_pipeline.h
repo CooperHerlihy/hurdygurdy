@@ -14,9 +14,9 @@ public:
     };
 
     struct Texture {
-        GpuImage image;
-        vk::Sampler sampler;
-        vk::DescriptorSet set;
+        GpuImage image = {};
+        vk::Sampler sampler = {};
+        vk::DescriptorSet set = {};
 
         void destroy(const Engine& engine) const {
             debug_assert(sampler != nullptr);
@@ -26,16 +26,20 @@ public:
     };
 
     struct Model {
-        u32 index_count;
-        GpuBuffer index_buffer;
-        GpuBuffer vertex_buffer;
-        usize texture_index;
+        u32 index_count = 0;
+        GpuBuffer index_buffer = {};
+        GpuBuffer vertex_buffer = {};
+        usize texture_index = UINT32_MAX;
         // material data?
 
         void destroy(const Engine& engine) const {
             index_buffer.destroy(engine);
             vertex_buffer.destroy(engine);
         }
+    };
+
+    struct PushConstant {
+        glm::mat4 model = {1.0f};
     };
 
     struct RenderTicket {
@@ -46,11 +50,9 @@ public:
     [[nodiscard]] static ModelPipeline create(const Engine& engine, const Window& window);
     void destroy(const Engine& engine) const;
     void resize(const Engine& engine, const Window& window);
-    void render(const vk::CommandBuffer cmd, Window& window);
+    void render(vk::CommandBuffer cmd, Window& window);
 
-    void update_projection(const Engine& engine, const glm::mat4& projection_matrix) const {
-        m_vp_buffer.write(engine, projection_matrix, offsetof(ViewProjectionUniform, projection));
-    }
+    void update_projection(const Engine& engine, const glm::mat4& projection) const { m_vp_buffer.write(engine, projection, offsetof(ViewProjectionUniform, projection)); }
     void update_camera(const Engine& engine, const Cameraf& camera) const { m_vp_buffer.write(engine, camera.view(), offsetof(ViewProjectionUniform, view)); }
 
     void queue_model(const usize model_index, const Transform3Df& transform) {
@@ -58,14 +60,14 @@ public:
         m_render_queue.emplace_back(model_index, transform);
     }
 
-    void load_texture(const Engine& engine, const std::filesystem::path path);
-    void load_model(const Engine& engine, const std::filesystem::path path, const usize texture_index);
+    void load_texture(const Engine& engine, std::filesystem::path path);
+    void load_model(const Engine& engine, std::filesystem::path path, usize texture_index);
 
 private:
-    ModelPipeline(const GpuImage color_image, const GpuImage depth_image, const Pipeline render_pipeline, const vk::DescriptorPool descriptor_pool, const vk::DescriptorSet vp_set,
-                  const GpuBuffer vp_buffer)
-        : m_color_image(color_image), m_depth_image(depth_image), m_render_pipeline(render_pipeline), m_descriptor_pool(descriptor_pool), m_vp_set(vp_set), m_vp_buffer(vp_buffer),
-          m_textures(), m_models(), m_render_queue() {};
+    ModelPipeline(const GpuImage color_image, const GpuImage& depth_image, const Pipeline& render_pipeline, const vk::DescriptorPool descriptor_pool,
+                  const vk::DescriptorSet vp_set, const GpuBuffer vp_buffer)
+        : m_color_image(color_image), m_depth_image(depth_image), m_render_pipeline(render_pipeline), m_descriptor_pool(descriptor_pool), m_vp_set(vp_set),
+          m_vp_buffer(vp_buffer) {};
 
     GpuImage m_color_image = {};
     GpuImage m_depth_image = {};

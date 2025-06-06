@@ -20,10 +20,6 @@ struct ModelVertex {
     glm::vec2 uv = {0.0f, 0.0f};
 };
 
-struct ModelPushConstant {
-    glm::mat4 model = {1.0f};
-};
-
 struct ModelData {
     std::vector<u32> indices = {};
     std::vector<ModelVertex> vertices = {};

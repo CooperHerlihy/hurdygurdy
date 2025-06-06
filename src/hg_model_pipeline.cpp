@@ -149,7 +149,7 @@ void ModelPipeline::render(const vk::CommandBuffer cmd, Window& window) {
 
         cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_render_pipeline.layout, 0, sets, {});
 
-        ModelPushConstant model_push = {ticket.transform.matrix()};
+        PushConstant model_push = {ticket.transform.matrix()};
         cmd.pushConstants(m_render_pipeline.layout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(model_push), &model_push);
 
         std::array vertex_buffers = {model.vertex_buffer.buffer};
