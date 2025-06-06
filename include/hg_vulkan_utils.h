@@ -1,7 +1,6 @@
 #pragma once
 
 #include "hg_rendering_engine.h"
-#include "hg_utils.h"
 
 namespace hg {
 
@@ -83,11 +82,6 @@ struct SamplerConfig {
     u32 mip_levels = 1;
 };
 [[nodiscard]] vk::Sampler create_sampler(const Engine& engine, const SamplerConfig& config);
-inline void destroy_sampler(const Engine& engine, const vk::Sampler sampler) {
-    debug_assert(engine.device != nullptr);
-    debug_assert(sampler != nullptr);
-    engine.device.destroySampler(sampler);
-}
 
 vk::CommandBuffer begin_single_time_commands(const Engine& engine);
 void end_single_time_commands(const Engine& engine, vk::CommandBuffer cmd);
