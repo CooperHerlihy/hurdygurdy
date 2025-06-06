@@ -25,7 +25,7 @@ ModelPipeline ModelPipeline::create(const Engine& engine, const Window& window) 
             .set_render_target(std::array{window.image_format}, vk::Format::eD32Sfloat)
             .add_descriptor_set_layout(std::array{vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex}})
             .add_descriptor_set_layout(std::array{vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment}})
-            .add_push_constant_range(vk::ShaderStageFlagBits::eVertex, sizeof(ModelPushConstant))
+            .add_push_constant_range(vk::ShaderStageFlagBits::eVertex, sizeof(PushConstant))
             .add_vertex_binding(std::array{VertexAttribute{vk::Format::eR32G32B32Sfloat, offsetof(ModelVertex, position)},
                                            VertexAttribute{vk::Format::eR32G32B32Sfloat, offsetof(ModelVertex, normal)},
                                            VertexAttribute{vk::Format::eR32G32Sfloat, offsetof(ModelVertex, uv)}},
