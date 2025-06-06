@@ -1,8 +1,7 @@
 #pragma once
 
 #include "hg_math.h"
-#include "hg_utils.h"
-#include "hg_vulkan_utils.h"
+#include "hg_vulkan_engine.h"
 
 namespace hg {
 

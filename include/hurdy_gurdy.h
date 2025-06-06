@@ -4,6 +4,5 @@
 #include "hg_utils.h"
 #include "hg_math.h"
 #include "hg_load.h"
-#include "hg_rendering_engine.h"
-#include "hg_vulkan_utils.h"
+#include "hg_vulkan_engine.h"
 #include "hg_model_pipeline.h"
