@@ -5,12 +5,6 @@ struct ViewProjectionUniform {
     glm::mat4 projection = {1.0f};
 };
 
-struct SpritePushConstant {
-    glm::mat4 model = {1.0f};
-    glm::vec2 top_left = {0.0f, 0.0f};
-    glm::vec2 bottom_right = {1.0f, 1.0f};
-};
-
 int main() {
     const auto engine = hg::Engine::create();
     defer(engine.destroy());
@@ -29,20 +23,6 @@ int main() {
                                                      .aspect_flags = vk::ImageAspectFlagBits::eDepth,
                                                      .sample_count = vk::SampleCountFlagBits::e4});
     defer(depth_image.destroy(engine));
-
-    const auto sprite_pipeline =
-        hg::GraphicsPipelineBuilder()
-            .set_shaders("../shaders/sprite.vert.spv", "../shaders/sprite.frag.spv")
-            .set_render_target(std::array{window.image_format}, vk::Format::eD32Sfloat)
-            .add_descriptor_set_layout(std::array{vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex}})
-            .add_descriptor_set_layout(std::array{vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment}})
-            .add_push_constant_range(vk::ShaderStageFlagBits::eVertex, sizeof(SpritePushConstant))
-            .set_MSAA(vk::SampleCountFlagBits::e4)
-            .set_topology(vk::PrimitiveTopology::eTriangleFan)
-            .enable_depth_buffer()
-            .enable_color_blend()
-            .build(engine);
-    defer(sprite_pipeline.destroy(engine));
 
     const auto model_pipeline =
         hg::GraphicsPipelineBuilder()
@@ -63,10 +43,10 @@ int main() {
     defer(model_pipeline.destroy(engine));
 
     constexpr std::array pool_sizes = {
-        vk::DescriptorPoolSize{vk::DescriptorType::eUniformBuffer, 2},
-        vk::DescriptorPoolSize{vk::DescriptorType::eCombinedImageSampler, 2},
+        vk::DescriptorPoolSize{vk::DescriptorType::eUniformBuffer, 1},
+        vk::DescriptorPoolSize{vk::DescriptorType::eCombinedImageSampler, 1},
     };
-    const auto [pool_result, pool] = engine.device.createDescriptorPool({.maxSets = 4, .poolSizeCount = static_cast<uint32_t>(pool_sizes.size()), .pPoolSizes = pool_sizes.data()});
+    const auto [pool_result, pool] = engine.device.createDescriptorPool({.maxSets = 2, .poolSizeCount = static_cast<uint32_t>(pool_sizes.size()), .pPoolSizes = pool_sizes.data()});
     critical_assert(pool_result == vk::Result::eSuccess);
     defer(engine.device.destroyDescriptorPool(pool));
 
@@ -79,31 +59,6 @@ int main() {
 
     const f32 aspect_ratio = static_cast<f32>(window.extent.width) / static_cast<f32>(window.extent.height);
     vp_buffer.write(engine, glm::perspective(glm::pi<f32>() / 4.0f, aspect_ratio, 0.1f, 100.f), offsetof(ViewProjectionUniform, projection));
-
-    hg::Transform3Df cat = {};
-    cat.position = {0.0f, -2.0f, 2.0f};
-    cat.scale = {1.5f, 1.0f, 1.0f};
-
-    const auto cat_data = hg::ImageData::load("../assets/cat.png").value();
-    const vk::Extent3D cat_extent = {static_cast<u32>(cat_data.width), static_cast<u32>(cat_data.height), 1};
-    const u32 cat_mips = hg::get_mip_count(cat_extent);
-    const auto cat_image = hg::GpuImage::create(engine, {.extent = cat_extent,
-                                                         .format = vk::Format::eR8G8B8A8Srgb,
-                                                         .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst,
-                                                         .mip_levels = cat_mips});
-    defer(cat_image.destroy(engine));
-    cat_image.write(engine, cat_data.pixels, cat_extent, 4, vk::ImageLayout::eShaderReadOnlyOptimal);
-    cat_image.generate_mipmaps(engine, cat_mips, cat_extent, vk::Format::eR8G8B8A8Srgb, vk::ImageLayout::eShaderReadOnlyOptimal);
-    cat_data.unload();
-
-    const auto cat_sampler = hg::create_sampler(engine, {.type = hg::SamplerType::Linear, .mip_levels = hg::get_mip_count(cat_extent)});
-    defer(hg::destroy_sampler(engine, cat_sampler));
-
-    std::array<vk::DescriptorSet, 2> cat_sets = {};
-    hg::allocate_descriptor_sets(engine, pool, sprite_pipeline.descriptor_layouts, cat_sets);
-
-    hg::write_uniform_buffer_descriptor(engine, cat_sets[0], 0, vp_buffer.buffer, sizeof(ViewProjectionUniform));
-    hg::write_image_sampler_descriptor(engine, cat_sets[1], 0, cat_sampler, cat_image.view);
 
     hg::Transform3Df barrels = {};
     barrels.position = {0.0f, 0.0f, 1.0f};
@@ -253,14 +208,6 @@ int main() {
             .pColorAttachments = &color_attachment,
             .pDepthAttachment = &depth_attachment,
         });
-
-        cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, sprite_pipeline.pipeline);
-        cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, sprite_pipeline.layout, 0, cat_sets, {});
-
-        SpritePushConstant cat_push = {cat.matrix(), {0.0f, 0.0f}, {1.0f, 1.0f}};
-        cmd.pushConstants(sprite_pipeline.layout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(cat_push), &cat_push);
-
-        cmd.draw(4, 1, 0, 0);
 
         cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, model_pipeline.pipeline);
         cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, model_pipeline.layout, 0, model_sets, {});
