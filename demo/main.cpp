@@ -8,7 +8,7 @@ struct ViewProjectionUniform {
 struct SpritePushConstant {
     glm::mat4 model = {1.0f};
     glm::vec2 top_left = {0.0f, 0.0f};
-    glm::vec2 top_right = {1.0f, 1.0f};
+    glm::vec2 bottom_right = {1.0f, 1.0f};
 };
 
 int main() {
@@ -18,13 +18,12 @@ int main() {
     auto window = hg::Window::create(engine, 1920, 1080);
     defer(window.destroy(engine));
 
-    vk::Extent3D window_extent = {window.extent.width, window.extent.height, 1};
-    auto color_image = hg::GpuImage::create(engine, {.extent = window_extent,
+    auto color_image = hg::GpuImage::create(engine, {.extent = {window.extent.width, window.extent.height, 1},
                                                      .format = window.image_format,
                                                      .usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc,
                                                      .sample_count = vk::SampleCountFlagBits::e4});
     defer(color_image.destroy(engine));
-    auto depth_image = hg::GpuImage::create(engine, {.extent = window_extent,
+    auto depth_image = hg::GpuImage::create(engine, {.extent = {window.extent.width, window.extent.height, 1},
                                                      .format = vk::Format::eD32Sfloat,
                                                      .usage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
                                                      .aspect_flags = vk::ImageAspectFlagBits::eDepth,
@@ -71,12 +70,6 @@ int main() {
     critical_assert(pool_result == vk::Result::eSuccess);
     defer(engine.device.destroyDescriptorPool(pool));
 
-    std::array<vk::DescriptorSet, 2> cat_sets = {};
-    hg::allocate_descriptor_sets(engine, pool, sprite_pipeline.descriptor_layouts, cat_sets);
-
-    std::array<vk::DescriptorSet, 2> model_sets = {};
-    hg::allocate_descriptor_sets(engine, pool, model_pipeline.descriptor_layouts, model_sets);
-
     const auto vp_buffer = hg::GpuBuffer::create(engine, sizeof(ViewProjectionUniform), vk::BufferUsageFlagBits::eUniformBuffer, hg::GpuBuffer::RandomAccess);
     defer(vp_buffer.destroy(engine));
 
@@ -86,9 +79,6 @@ int main() {
 
     const f32 aspect_ratio = static_cast<f32>(window.extent.width) / static_cast<f32>(window.extent.height);
     vp_buffer.write(engine, glm::perspective(glm::pi<f32>() / 4.0f, aspect_ratio, 0.1f, 100.f), offsetof(ViewProjectionUniform, projection));
-
-    hg::write_uniform_buffer_descriptor(engine, cat_sets[0], 0, vp_buffer.buffer, sizeof(ViewProjectionUniform));
-    hg::write_uniform_buffer_descriptor(engine, model_sets[0], 0, vp_buffer.buffer, sizeof(ViewProjectionUniform));
 
     hg::Transform3Df cat = {};
     cat.position = {0.0f, -2.0f, 2.0f};
@@ -109,6 +99,10 @@ int main() {
     const auto cat_sampler = hg::create_sampler(engine, {.type = hg::SamplerType::Linear, .mip_levels = hg::get_mip_count(cat_extent)});
     defer(hg::destroy_sampler(engine, cat_sampler));
 
+    std::array<vk::DescriptorSet, 2> cat_sets = {};
+    hg::allocate_descriptor_sets(engine, pool, sprite_pipeline.descriptor_layouts, cat_sets);
+
+    hg::write_uniform_buffer_descriptor(engine, cat_sets[0], 0, vp_buffer.buffer, sizeof(ViewProjectionUniform));
     hg::write_image_sampler_descriptor(engine, cat_sets[1], 0, cat_sampler, cat_image.view);
 
     hg::Transform3Df barrels = {};
@@ -141,6 +135,10 @@ int main() {
     const auto model_texture_sampler = hg::create_sampler(engine, {.type = hg::SamplerType::Linear, .mip_levels = hg::get_mip_count(model_texture_extent)});
     defer(engine.device.destroySampler(model_texture_sampler));
 
+    std::array<vk::DescriptorSet, 2> model_sets = {};
+    hg::allocate_descriptor_sets(engine, pool, model_pipeline.descriptor_layouts, model_sets);
+
+    hg::write_uniform_buffer_descriptor(engine, model_sets[0], 0, vp_buffer.buffer, sizeof(ViewProjectionUniform));
     hg::write_image_sampler_descriptor(engine, model_sets[1], 0, model_texture_sampler, model_texture_image.view);
 
     glm::vec<2, f64> cursor_pos = {};
@@ -316,14 +314,13 @@ int main() {
             };
 
             window.resize(engine);
-            window_extent = vk::Extent3D{window.extent.width, window.extent.height, 1};
             color_image.destroy(engine);
-            color_image = hg::GpuImage::create(engine, {.extent = window_extent,
+            color_image = hg::GpuImage::create(engine, {.extent = {window.extent.width, window.extent.height, 1},
                                                         .format = window.image_format,
                                                         .usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc,
                                                         .sample_count = vk::SampleCountFlagBits::e4});
             depth_image.destroy(engine);
-            depth_image = hg::GpuImage::create(engine, {.extent = window_extent,
+            depth_image = hg::GpuImage::create(engine, {.extent = {window.extent.width, window.extent.height, 1},
                                                         .format = vk::Format::eD32Sfloat,
                                                         .usage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
                                                         .aspect_flags = vk::ImageAspectFlagBits::eDepth,

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "hg_utils.h"
-#include <optional>
+#include "hg_math.h"
 
 namespace hg {
 
@@ -23,6 +23,7 @@ struct ModelVertex {
 
 struct ModelPushConstant {
     glm::mat4 model = {1.0f};
+    Transform3Df transform;
 };
 
 struct ModelData {

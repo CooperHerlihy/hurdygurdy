@@ -1,8 +1,9 @@
 #version 450
 
 layout(location = 0) out vec3 frag_position;
-layout(location = 1) out vec3 frag_normal;
-layout(location = 2) out vec2 frag_uv;
+layout(location = 1) out vec3 frag_camera;
+layout(location = 2) out vec3 frag_normal;
+layout(location = 3) out vec2 frag_uv;
 
 layout(location = 0) in vec3 in_position;
 layout(location = 1) in vec3 in_normal;
@@ -23,6 +24,7 @@ void main() {
     vec4 relative_position = u_vp.view * absolute_position;
 
     frag_position = absolute_position.xyz;
+    frag_camera = inverse(u_vp.view)[3].xyz;
     frag_normal = in_normal;
     frag_uv = in_uv;
 
