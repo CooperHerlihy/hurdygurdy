@@ -85,8 +85,8 @@ template <typename T> struct Camera {
     glm::qua<T> rotation = glm::qua<T>::wxyz(1, 0, 0, 0);
 
     [[nodiscard]] constexpr glm::mat<4, 4, T> view() const noexcept {
-        glm::mat<4, 4, T> rot{glm::conjugate(rotation) * glm::mat<3, 3, T>{1}};
-        glm::mat<4, 4, T> pos{1};
+        glm::mat<4, 4, T> rot = glm::conjugate(rotation) * glm::mat<3, 3, T>{1};
+        glm::mat<4, 4, T> pos = {1};
         pos[3].x = -position.x;
         pos[3].y = -position.y;
         pos[3].z = -position.z;

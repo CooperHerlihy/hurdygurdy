@@ -1,6 +1,8 @@
 #include "hg_model_pipeline.h"
 
 #include "hg_load.h"
+#include <vulkan/vulkan_enums.hpp>
+#include <vulkan/vulkan_structs.hpp>
 
 namespace hg {
 
@@ -8,22 +10,25 @@ ModelPipeline ModelPipeline::create(const Engine& engine, const Window& window) 
     debug_assert(engine.device != nullptr);
     debug_assert(window.window != nullptr);
 
-    const auto color_image = GpuImage::create(engine, {.extent = {window.extent.width, window.extent.height, 1},
+    ModelPipeline pipeline;
+
+    pipeline.m_color_image = GpuImage::create(engine, {.extent = {window.extent.width, window.extent.height, 1},
                                                        .format = window.image_format,
                                                        .usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc,
                                                        .sample_count = vk::SampleCountFlagBits::e4});
 
-    const auto depth_image = GpuImage::create(engine, {.extent = {window.extent.width, window.extent.height, 1},
+    pipeline.m_depth_image = GpuImage::create(engine, {.extent = {window.extent.width, window.extent.height, 1},
                                                        .format = vk::Format::eD32Sfloat,
                                                        .usage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
                                                        .aspect_flags = vk::ImageAspectFlagBits::eDepth,
                                                        .sample_count = vk::SampleCountFlagBits::e4});
 
-    const auto render_pipeline =
+    pipeline.m_render_pipeline =
         GraphicsPipelineBuilder()
             .set_shaders("../shaders/model.vert.spv", "../shaders/model.frag.spv")
             .set_render_target(std::array{window.image_format}, vk::Format::eD32Sfloat)
-            .add_descriptor_set_layout(std::array{vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex}})
+            .add_descriptor_set_layout(std::array{vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex},
+                                                  vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eFragment}})
             .add_descriptor_set_layout(std::array{vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment}})
             .add_push_constant_range(vk::ShaderStageFlagBits::eVertex, sizeof(PushConstant))
             .add_vertex_binding(std::array{VertexAttribute{vk::Format::eR32G32B32Sfloat, offsetof(ModelVertex, position)},
@@ -37,22 +42,20 @@ ModelPipeline ModelPipeline::create(const Engine& engine, const Window& window) 
             .build(engine);
 
     constexpr std::array pool_sizes = {
-        vk::DescriptorPoolSize{vk::DescriptorType::eUniformBuffer, 1},
+        vk::DescriptorPoolSize{vk::DescriptorType::eUniformBuffer, 2},
         vk::DescriptorPoolSize{vk::DescriptorType::eCombinedImageSampler, 255},
     };
     const auto pool = engine.device.createDescriptorPool({.maxSets = 256, .poolSizeCount = static_cast<uint32_t>(pool_sizes.size()), .pPoolSizes = pool_sizes.data()});
     critical_assert(pool.result == vk::Result::eSuccess);
+    pipeline.m_descriptor_pool = pool.value;
 
-    const auto vp_set = allocate_descriptor_set(engine, pool.value, render_pipeline.descriptor_layouts[0]);
-    const auto vp_buffer = GpuBuffer::create(engine, sizeof(ViewProjectionUniform), vk::BufferUsageFlagBits::eUniformBuffer, GpuBuffer::RandomAccess);
-    write_uniform_buffer_descriptor(engine, vp_set, 0, vp_buffer.buffer, sizeof(ViewProjectionUniform));
+    pipeline.m_global_set = allocate_descriptor_set(engine, pool.value, pipeline.m_render_pipeline.descriptor_layouts[0]);
+    pipeline.m_vp_buffer = GpuBuffer::create(engine, sizeof(ViewProjectionUniform), vk::BufferUsageFlagBits::eUniformBuffer, GpuBuffer::RandomAccess);
+    write_uniform_buffer_descriptor(engine, pipeline.m_global_set, 0, pipeline.m_vp_buffer.buffer, sizeof(ViewProjectionUniform));
+    pipeline.m_light_buffer = GpuBuffer::create(engine, sizeof(LightUniform) * MaxLights, vk::BufferUsageFlagBits::eUniformBuffer, GpuBuffer::RandomAccess);
+    write_uniform_buffer_descriptor(engine, pipeline.m_global_set, 1, pipeline.m_light_buffer.buffer, sizeof(LightUniform));
 
-    debug_assert(color_image.image != nullptr);
-    debug_assert(depth_image.image != nullptr);
-    debug_assert(render_pipeline.pipeline != nullptr);
-    debug_assert(pool.value != nullptr);
-    debug_assert(vp_set != nullptr);
-    return {color_image, depth_image, render_pipeline, pool.value, vp_set, vp_buffer};
+    return pipeline;
 }
 
 void ModelPipeline::destroy(const Engine& engine) const {
@@ -63,6 +66,8 @@ void ModelPipeline::destroy(const Engine& engine) const {
     for (const auto& model : m_models) {
         model.destroy(engine);
     }
+    debug_assert(m_light_buffer.buffer != nullptr);
+    m_light_buffer.destroy(engine);
     debug_assert(m_vp_buffer.buffer != nullptr);
     m_vp_buffer.destroy(engine);
     debug_assert(m_descriptor_pool != nullptr);
@@ -100,10 +105,24 @@ void ModelPipeline::resize(const Engine& engine, const Window& window) {
     debug_assert(m_color_image.image != nullptr);
 }
 
-void ModelPipeline::render(const vk::CommandBuffer cmd, Window& window) {
+void ModelPipeline::render(const vk::CommandBuffer cmd, const Engine& engine, Window& window, const Cameraf& camera) {
     debug_assert(cmd != nullptr);
     debug_assert(window.current_image() != nullptr);
     debug_assert(window.current_view() != nullptr);
+
+    const glm::mat4 view = camera.view();
+    m_vp_buffer.write(engine, view, offsetof(ViewProjectionUniform, view));
+
+    LightUniform lights = {
+        .count = m_lights.size(),
+    };
+    for (usize i = 0; i < m_lights.size(); ++i) {
+        lights.vals[i] = {
+            .position = view * m_lights[i].position,
+            .color = m_lights[i].color,
+        };
+    }
+    m_light_buffer.write(engine, lights);
 
     const vk::Viewport viewport = {0.0f, 0.0f, static_cast<f32>(window.extent.width), static_cast<f32>(window.extent.height), 0.0f, 1.0f};
     cmd.setViewport(0, {viewport});
@@ -142,7 +161,7 @@ void ModelPipeline::render(const vk::CommandBuffer cmd, Window& window) {
 
     cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, m_render_pipeline.pipeline);
 
-    std::array<vk::DescriptorSet, 2> sets = {m_vp_set, nullptr};
+    std::array<vk::DescriptorSet, 2> sets = {m_global_set, nullptr};
     for (const auto& ticket : m_render_queue) {
         const auto& model = m_models[ticket.model_index];
         sets[1] = m_textures[model.texture_index].set;

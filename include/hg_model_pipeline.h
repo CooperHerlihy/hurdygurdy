@@ -1,15 +1,32 @@
 #pragma once
 
 #include "hg_math.h"
+#include "hg_utils.h"
 #include "hg_vulkan_engine.h"
 
 namespace hg {
 
 class ModelPipeline {
 public:
+    ModelPipeline() = default;
+
     struct ViewProjectionUniform {
-        glm::mat4 view = {1.0f};
         glm::mat4 projection = {1.0f};
+        glm::mat4 view = {1.0f};
+    };
+
+    struct PushConstant {
+        glm::mat4 model = {1.0f};
+    };
+
+    static constexpr usize MaxLights = 10;
+    struct Light {
+        glm::vec4 position = {};
+        glm::vec4 color = {};
+    };
+    struct LightUniform {
+        Light vals[MaxLights];
+        alignas(16) usize count;
     };
 
     struct Texture {
@@ -37,10 +54,6 @@ public:
         }
     };
 
-    struct PushConstant {
-        glm::mat4 model = {1.0f};
-    };
-
     struct RenderTicket {
         usize model_index;
         Transform3Df transform;
@@ -49,10 +62,9 @@ public:
     [[nodiscard]] static ModelPipeline create(const Engine& engine, const Window& window);
     void destroy(const Engine& engine) const;
     void resize(const Engine& engine, const Window& window);
-    void render(vk::CommandBuffer cmd, Window& window);
+    void render(vk::CommandBuffer cmd, const Engine& engine, Window& window, const Cameraf& camera);
 
     void update_projection(const Engine& engine, const glm::mat4& projection) const { m_vp_buffer.write(engine, projection, offsetof(ViewProjectionUniform, projection)); }
-    void update_camera(const Engine& engine, const Cameraf& camera) const { m_vp_buffer.write(engine, camera.view(), offsetof(ViewProjectionUniform, view)); }
 
     void queue_model(const usize model_index, const Transform3Df& transform) {
         debug_assert(model_index < m_models.size());
@@ -62,19 +74,26 @@ public:
     void load_texture(const Engine& engine, std::filesystem::path path);
     void load_model(const Engine& engine, std::filesystem::path path, usize texture_index);
 
-private:
-    ModelPipeline(const GpuImage color_image, const GpuImage& depth_image, const Pipeline& render_pipeline, const vk::DescriptorPool descriptor_pool,
-                  const vk::DescriptorSet vp_set, const GpuBuffer vp_buffer)
-        : m_color_image(color_image), m_depth_image(depth_image), m_render_pipeline(render_pipeline), m_descriptor_pool(descriptor_pool), m_vp_set(vp_set),
-          m_vp_buffer(vp_buffer) {};
+    void add_light(const glm::vec3 position, const glm::vec3 color) {
+        debug_assert(m_lights.size() <= MaxLights);
+        m_lights.emplace_back(glm::vec4{position, 1.0f}, glm::vec4{color, 1.0});
+    }
 
+    void update_light(const usize index, const glm::vec3 position, const glm::vec3 color) {
+        debug_assert(index < m_lights.size());
+        m_lights[index] = {glm::vec4{position, 1.0f}, glm::vec4{color, 1.0}};
+    }
+
+private:
     GpuImage m_color_image = {};
     GpuImage m_depth_image = {};
     Pipeline m_render_pipeline = {};
     vk::DescriptorPool m_descriptor_pool = {};
-    vk::DescriptorSet m_vp_set = {};
+    vk::DescriptorSet m_global_set = {};
     GpuBuffer m_vp_buffer = {};
+    GpuBuffer m_light_buffer = {};
 
+    std::vector<Light> m_lights = {};
     std::vector<Texture> m_textures = {};
     std::vector<Model> m_models = {};
     std::vector<RenderTicket> m_render_queue = {};
