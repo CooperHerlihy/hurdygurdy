@@ -1,8 +1,5 @@
 #include "hg_model_pipeline.h"
-
-#include "hg_load.h"
-#include <vulkan/vulkan_enums.hpp>
-#include <vulkan/vulkan_structs.hpp>
+#include "hg_utils.h"
 
 namespace hg {
 
@@ -23,7 +20,7 @@ ModelPipeline ModelPipeline::create(const Engine& engine, const Window& window) 
                                                        .aspect_flags = vk::ImageAspectFlagBits::eDepth,
                                                        .sample_count = vk::SampleCountFlagBits::e4});
 
-    pipeline.m_render_pipeline =
+    pipeline.m_model_pipeline =
         GraphicsPipelineBuilder()
             .set_shaders("../shaders/model.vert.spv", "../shaders/model.frag.spv")
             .set_render_target(std::array{window.image_format}, vk::Format::eD32Sfloat)
@@ -37,7 +34,6 @@ ModelPipeline ModelPipeline::create(const Engine& engine, const Window& window) 
                                 sizeof(ModelVertex))
             .set_MSAA(vk::SampleCountFlagBits::e4)
             .enable_depth_buffer()
-            .enable_color_blend()
             .enable_culling()
             .build(engine);
 
@@ -49,7 +45,7 @@ ModelPipeline ModelPipeline::create(const Engine& engine, const Window& window) 
     critical_assert(pool.result == vk::Result::eSuccess);
     pipeline.m_descriptor_pool = pool.value;
 
-    pipeline.m_global_set = allocate_descriptor_set(engine, pool.value, pipeline.m_render_pipeline.descriptor_layouts[0]);
+    pipeline.m_global_set = allocate_descriptor_set(engine, pool.value, pipeline.m_model_pipeline.descriptor_layouts[0]);
     pipeline.m_vp_buffer = GpuBuffer::create(engine, sizeof(ViewProjectionUniform), vk::BufferUsageFlagBits::eUniformBuffer, GpuBuffer::RandomAccess);
     write_uniform_buffer_descriptor(engine, pipeline.m_global_set, 0, pipeline.m_vp_buffer.buffer, sizeof(ViewProjectionUniform));
     pipeline.m_light_buffer = GpuBuffer::create(engine, sizeof(LightUniform) * MaxLights, vk::BufferUsageFlagBits::eUniformBuffer, GpuBuffer::RandomAccess);
@@ -72,8 +68,8 @@ void ModelPipeline::destroy(const Engine& engine) const {
     m_vp_buffer.destroy(engine);
     debug_assert(m_descriptor_pool != nullptr);
     engine.device.destroyDescriptorPool(m_descriptor_pool);
-    debug_assert(m_render_pipeline.pipeline != nullptr);
-    m_render_pipeline.destroy(engine);
+    debug_assert(m_model_pipeline.pipeline != nullptr);
+    m_model_pipeline.destroy(engine);
     debug_assert(m_depth_image.image != nullptr);
     m_depth_image.destroy(engine);
     debug_assert(m_color_image.image != nullptr);
@@ -114,6 +110,7 @@ void ModelPipeline::render(const vk::CommandBuffer cmd, const Engine& engine, Wi
     m_vp_buffer.write(engine, view, offsetof(ViewProjectionUniform, view));
 
     LightUniform lights = {
+        .vals = {},
         .count = m_lights.size(),
     };
     for (usize i = 0; i < m_lights.size(); ++i) {
@@ -123,6 +120,7 @@ void ModelPipeline::render(const vk::CommandBuffer cmd, const Engine& engine, Wi
         };
     }
     m_light_buffer.write(engine, lights);
+    m_lights.clear();
 
     const vk::Viewport viewport = {0.0f, 0.0f, static_cast<f32>(window.extent.width), static_cast<f32>(window.extent.height), 0.0f, 1.0f};
     cmd.setViewport(0, {viewport});
@@ -159,17 +157,17 @@ void ModelPipeline::render(const vk::CommandBuffer cmd, const Engine& engine, Wi
         .pDepthAttachment = &depth_attachment,
     });
 
-    cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, m_render_pipeline.pipeline);
+    cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, m_model_pipeline.pipeline);
 
     std::array<vk::DescriptorSet, 2> sets = {m_global_set, nullptr};
     for (const auto& ticket : m_render_queue) {
         const auto& model = m_models[ticket.model_index];
         sets[1] = m_textures[model.texture_index].set;
 
-        cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_render_pipeline.layout, 0, sets, {});
+        cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_model_pipeline.layout, 0, sets, {});
 
         PushConstant model_push = {ticket.transform.matrix()};
-        cmd.pushConstants(m_render_pipeline.layout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(model_push), &model_push);
+        cmd.pushConstants(m_model_pipeline.layout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(model_push), &model_push);
 
         std::array vertex_buffers = {model.vertex_buffer.buffer};
         std::array offsets = {vk::DeviceSize{0}};
@@ -212,43 +210,66 @@ void ModelPipeline::render(const vk::CommandBuffer cmd, const Engine& engine, Wi
 }
 
 void ModelPipeline::load_texture(const Engine& engine, const std::filesystem::path path) {
+    debug_assert(!path.empty());
+
     const auto texture_result = ImageData::load(path);
     critical_assert(texture_result.has_value());
     const auto texture_data = texture_result.value();
     defer(texture_data.unload());
 
-    const vk::Extent3D extent = {static_cast<u32>(texture_data.width), static_cast<u32>(texture_data.height), 1};
+    load_texture_from_data(engine, texture_data.pixels, {static_cast<u32>(texture_data.width), static_cast<u32>(texture_data.height), 1}, vk::Format::eR8G8B8A8Srgb, 4);
+}
+
+void ModelPipeline::load_texture_from_data(const Engine& engine, const void* data, const vk::Extent3D extent, const vk::Format format, const u32 pixel_alignment) {
+    debug_assert(data != nullptr);
+    debug_assert(extent.width > 0);
+    debug_assert(extent.height > 0);
+    debug_assert(extent.depth > 0);
+    debug_assert(format != vk::Format::eUndefined);
+    debug_assert(pixel_alignment > 0);
+
     const u32 mips = get_mip_count(extent);
 
     const auto image = GpuImage::create(engine, {.extent = extent,
-                                                 .format = vk::Format::eR8G8B8A8Srgb,
+                                                 .format = format,
                                                  .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst,
                                                  .mip_levels = mips});
 
-    image.write(engine, texture_data.pixels, extent, 4, vk::ImageLayout::eShaderReadOnlyOptimal);
-    image.generate_mipmaps(engine, mips, extent, vk::Format::eR8G8B8A8Srgb, vk::ImageLayout::eShaderReadOnlyOptimal);
+    image.write(engine, data, extent, pixel_alignment, vk::ImageLayout::eShaderReadOnlyOptimal);
+    image.generate_mipmaps(engine, mips, extent, format, vk::ImageLayout::eShaderReadOnlyOptimal);
 
     const auto sampler = create_sampler(engine, {.type = SamplerType::Linear, .mip_levels = get_mip_count(extent)});
-    const auto set = allocate_descriptor_set(engine, m_descriptor_pool, m_render_pipeline.descriptor_layouts[1]);
+    const auto set = allocate_descriptor_set(engine, m_descriptor_pool, m_model_pipeline.descriptor_layouts[1]);
     write_image_sampler_descriptor(engine, set, 0, sampler, image.view);
 
     m_textures.emplace_back(image, sampler, set);
 }
 
 void ModelPipeline::load_model(const Engine& engine, const std::filesystem::path path, const usize texture_index) {
+    debug_assert(!path.empty());
+    debug_assert(texture_index < m_textures.size());
+    
     const auto model_result = ModelData::load_gltf(path);
     critical_assert(model_result.has_value());
     const auto model_data = model_result.value();
 
+    load_model_from_data(engine, model_data.indices, model_data.vertices, texture_index);
+}
+
+void ModelPipeline::load_model_from_data(const Engine& engine, const std::span<const u32> indices, const std::span<const ModelVertex> vertices, const usize texture_index) {
+    debug_assert(!indices.empty());
+    debug_assert(!vertices.empty());
+    debug_assert(texture_index < m_textures.size());
+
     const auto index_buffer =
-        GpuBuffer::create(engine, model_data.indices.size() * sizeof(model_data.indices[0]), vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst);
+        GpuBuffer::create(engine, indices.size() * sizeof(indices[0]), vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst);
     const auto vertex_buffer =
-        GpuBuffer::create(engine, model_data.vertices.size() * sizeof(model_data.vertices[0]), vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst);
+        GpuBuffer::create(engine, vertices.size() * sizeof(vertices[0]), vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst);
 
-    index_buffer.write(engine, model_data.indices.data(), model_data.indices.size() * sizeof(model_data.indices[0]), 0);
-    vertex_buffer.write(engine, model_data.vertices.data(), model_data.vertices.size() * sizeof(model_data.vertices[0]), 0);
+    index_buffer.write(engine, indices.data(), indices.size() * sizeof(indices[0]), 0);
+    vertex_buffer.write(engine, vertices.data(), vertices.size() * sizeof(vertices[0]), 0);
 
-    m_models.emplace_back(static_cast<u32>(model_data.indices.size()), index_buffer, vertex_buffer, texture_index);
+    m_models.emplace_back(static_cast<u32>(indices.size()), index_buffer, vertex_buffer, texture_index);
 }
 
 } // namespace hg
