@@ -33,11 +33,18 @@ std::optional<ModelData> ModelData::load_gltf(const std::filesystem::path path) 
 
     std::vector<u32> indices;
     std::vector<ModelVertex> vertices;
+    float roughness = 0.5f;
+    float metalness = 0.3f;
 
     for (const auto& mesh : asset->meshes) {
         for (const auto& primitive : mesh.primitives) {
             const usize initial_index = indices.size();
             const usize initial_vertex = vertices.size();
+
+            if (primitive.materialIndex.has_value()) {
+                roughness = asset->materials[*primitive.materialIndex].pbrData.roughnessFactor;
+                metalness = asset->materials[*primitive.materialIndex].pbrData.metallicFactor;
+            }
 
             critical_assert(primitive.indicesAccessor.has_value());
 
@@ -66,7 +73,7 @@ std::optional<ModelData> ModelData::load_gltf(const std::filesystem::path path) 
         }
     }
 
-    return std::make_optional<ModelData>(std::move(indices), std::move(vertices));
+    return std::make_optional<ModelData>(std::move(indices), std::move(vertices), roughness, metalness);
 }
 
 } // namespace hg

@@ -166,7 +166,7 @@ void ModelPipeline::render(const vk::CommandBuffer cmd, const Engine& engine, Wi
 
         cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_model_pipeline.layout, 0, sets, {});
 
-        PushConstant model_push = {ticket.transform.matrix()};
+        PushConstant model_push = {ticket.transform.matrix(), model.roughness, model.metalness};
         cmd.pushConstants(m_model_pipeline.layout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(model_push), &model_push);
 
         std::array vertex_buffers = {model.vertex_buffer.buffer};
@@ -248,28 +248,29 @@ void ModelPipeline::load_texture_from_data(const Engine& engine, const void* dat
 void ModelPipeline::load_model(const Engine& engine, const std::filesystem::path path, const usize texture_index) {
     debug_assert(!path.empty());
     debug_assert(texture_index < m_textures.size());
-    
+
     const auto model_result = ModelData::load_gltf(path);
     critical_assert(model_result.has_value());
     const auto model_data = model_result.value();
 
-    load_model_from_data(engine, model_data.indices, model_data.vertices, texture_index);
+    load_model_from_data(engine, model_data.indices, model_data.vertices, texture_index, model_data.roughness, model_data.metalness);
 }
 
-void ModelPipeline::load_model_from_data(const Engine& engine, const std::span<const u32> indices, const std::span<const ModelVertex> vertices, const usize texture_index) {
+void ModelPipeline::load_model_from_data(const Engine& engine, const std::span<const u32> indices, const std::span<const ModelVertex> vertices, const usize texture_index,
+                                         float roughness, float metalness) {
     debug_assert(!indices.empty());
     debug_assert(!vertices.empty());
     debug_assert(texture_index < m_textures.size());
+    debug_assert(roughness >= 0.0 && roughness <= 1.0);
+    debug_assert(metalness >= 0.0 && metalness <= 1.0);
 
-    const auto index_buffer =
-        GpuBuffer::create(engine, indices.size() * sizeof(indices[0]), vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst);
-    const auto vertex_buffer =
-        GpuBuffer::create(engine, vertices.size() * sizeof(vertices[0]), vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst);
+    const auto index_buffer = GpuBuffer::create(engine, indices.size() * sizeof(indices[0]), vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst);
+    const auto vertex_buffer = GpuBuffer::create(engine, vertices.size() * sizeof(vertices[0]), vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst);
 
     index_buffer.write(engine, indices.data(), indices.size() * sizeof(indices[0]), 0);
     vertex_buffer.write(engine, vertices.data(), vertices.size() * sizeof(vertices[0]), 0);
 
-    m_models.emplace_back(static_cast<u32>(indices.size()), index_buffer, vertex_buffer, texture_index);
+    m_models.emplace_back(static_cast<u32>(indices.size()), index_buffer, vertex_buffer, texture_index, roughness, metalness);
 }
 
 } // namespace hg

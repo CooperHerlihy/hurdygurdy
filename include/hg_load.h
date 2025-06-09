@@ -23,6 +23,8 @@ struct ModelVertex {
 struct ModelData {
     std::vector<u32> indices = {};
     std::vector<ModelVertex> vertices = {};
+    float roughness = 0.0f;
+    float metalness = 0.0f;
 
     [[nodiscard]] static std::optional<ModelData> load_gltf(std::filesystem::path path);
 };

@@ -1,8 +1,8 @@
 #pragma once
 
+#include "hg_load.h"
 #include "hg_math.h"
 #include "hg_utils.h"
-#include "hg_load.h"
 #include "hg_vulkan_engine.h"
 
 namespace hg {
@@ -18,6 +18,8 @@ public:
 
     struct PushConstant {
         glm::mat4 model = {1.0f};
+        float roughness = 0.0f;
+        float metalness = 0.0f;
     };
 
     static constexpr usize MaxLights = 10;
@@ -47,7 +49,8 @@ public:
         GpuBuffer index_buffer = {};
         GpuBuffer vertex_buffer = {};
         usize texture_index = UINT32_MAX;
-        // material data?
+        float roughness = 0.5f;
+        float metalness = 0.5f;
 
         void destroy(const Engine& engine) const {
             index_buffer.destroy(engine);
@@ -84,9 +87,9 @@ public:
 
     void load_texture(const Engine& engine, std::filesystem::path path);
     void load_texture_from_data(const Engine& engine, const void* data, const vk::Extent3D extent, const vk::Format format, const u32 pixel_alignment);
-    
+
     void load_model(const Engine& engine, std::filesystem::path path, usize texture_index);
-    void load_model_from_data(const Engine& engine, std::span<const u32> indices, std::span<const ModelVertex> vertices, usize texture_index);
+    void load_model_from_data(const Engine& engine, std::span<const u32> indices, std::span<const ModelVertex> vertices, usize texture_index, float roughness, float metalness);
 
     void queue_light(const glm::vec3 position, const glm::vec3 color) {
         debug_assert(m_lights.size() <= MaxLights);

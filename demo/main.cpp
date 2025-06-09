@@ -43,8 +43,7 @@ static hg::ModelData generate_sphere(const f32 radius, u32 fidelity) {
         indices.push_back(top_index - ((i + 2) % fidelity + 1));
     }
 
-    hg::ModelData model = {std::move(indices), std::move(vertices)};
-    return model;
+    return {std::move(indices), std::move(vertices)};
 }
 
 int main() {
@@ -57,11 +56,11 @@ int main() {
     auto model_pipeline = hg::ModelPipeline::create(engine, window);
     defer(model_pipeline.destroy(engine));
 
-    std::array<u32, 4> default_color = {};
-    default_color.fill(0xff888888);
-    model_pipeline.load_texture_from_data(engine, default_color.data(), {2, 2, 1}, vk::Format::eR8G8B8A8Srgb, 4);
-    const auto sphere_model = generate_sphere(1.0f, 64);
-    model_pipeline.load_model_from_data(engine, sphere_model.indices, sphere_model.vertices, 0);
+    std::array<u32, 4> sphere_color = {};
+    sphere_color.fill(0xff666666);
+    model_pipeline.load_texture_from_data(engine, sphere_color.data(), {2, 2, 1}, vk::Format::eR8G8B8A8Srgb, 4);
+    const auto sphere_model = generate_sphere(1.0f, 32);
+    model_pipeline.load_model_from_data(engine, sphere_model.indices, sphere_model.vertices, 0, 0.2, 0.8);
 
     model_pipeline.load_texture(engine, "../assets/dungeon_models/Assets/gltf/dungeon_texture.png");
     model_pipeline.load_model(engine, "../assets/dungeon_models/Assets/gltf/barrel_small_stack.gltf", 1);
@@ -158,8 +157,8 @@ int main() {
         }
 
         const bool present_success = window.submit_frame(engine, [&](const vk::CommandBuffer cmd) {
-            model_pipeline.queue_light({2.5f, -2.0f, 2.25f}, {glm::vec3{1.0f, 0.2f, 0.0f} * 10.0f});
-            model_pipeline.queue_light({-3.0f, -3.0f, -3.0f}, {glm::vec3{1.0f, 0.9f, 0.7f} * 50.0f});
+            model_pipeline.queue_light({-20.0f, -30.0f, -20.0f}, {glm::vec3{1.0f, 0.9f, 0.7f} * 3000.0f});
+            model_pipeline.queue_light({2.5f, -2.0f, 2.25f}, {glm::vec3{1.0f, 0.2f, 0.0f} * 5.0f});
 
             model_pipeline.queue_model(0, sphere);
 
