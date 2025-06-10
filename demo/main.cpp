@@ -7,7 +7,7 @@ static hg::ModelData generate_sphere(const f32 radius, u32 fidelity) {
     std::vector<hg::ModelVertex> vertices = {};
     vertices.reserve(2 + fidelity * fidelity);
 
-    glm::vec3 point = {0.0f, -1.0f, 0.0f};
+    glm::vec3 point = {0.0f, -radius, 0.0f};
     vertices.emplace_back(point, point, glm::vec2{});
     for (u32 i = 0; i < fidelity; ++i) {
         f32 h = -std::cos(glm::pi<f32>() * i / fidelity);
@@ -17,7 +17,7 @@ static hg::ModelData generate_sphere(const f32 radius, u32 fidelity) {
             vertices.emplace_back(point * radius, point, glm::vec2{});
         }
     }
-    point = {0.0f, 1.0f, 0.0f};
+    point = {0.0f, radius, 0.0f};
     vertices.emplace_back(point, point, glm::vec2{});
 
     std::vector<u32> indices = {};
@@ -53,21 +53,21 @@ int main() {
     auto window = hg::Window::create(engine, 1920, 1080);
     defer(window.destroy(engine));
 
-    auto model_pipeline = hg::ModelPipeline::create(engine, window);
-    defer(model_pipeline.destroy(engine));
+    auto pbr_pipeline = hg::PbrPipeline::create(engine, window);
+    defer(pbr_pipeline.destroy(engine));
 
     std::array<u32, 4> sphere_color = {};
-    sphere_color.fill(0xff666666);
-    model_pipeline.load_texture_from_data(engine, sphere_color.data(), {2, 2, 1}, vk::Format::eR8G8B8A8Srgb, 4);
-    const auto sphere_model = generate_sphere(1.0f, 32);
-    model_pipeline.load_model_from_data(engine, sphere_model.indices, sphere_model.vertices, 0, 0.2, 0.8);
+    sphere_color.fill(0xff44ccff);
+    pbr_pipeline.load_texture_from_data(engine, sphere_color.data(), {2, 2, 1}, vk::Format::eR8G8B8A8Srgb, 4);
+    const auto sphere_model = generate_sphere(0.5f, 32);
+    pbr_pipeline.load_model_from_data(engine, sphere_model.indices, sphere_model.vertices, 0, 0.04f, 1.0f);
 
-    model_pipeline.load_texture(engine, "../assets/dungeon_models/Assets/gltf/dungeon_texture.png");
-    model_pipeline.load_model(engine, "../assets/dungeon_models/Assets/gltf/barrel_small_stack.gltf", 1);
-    model_pipeline.load_model(engine, "../assets/dungeon_models/Assets/gltf/bed_decorated.gltf", 1);
-    model_pipeline.load_model(engine, "../assets/dungeon_models/Assets/gltf/floor_dirt_large.gltf", 1);
+    pbr_pipeline.load_texture(engine, "../assets/dungeon_models/Assets/gltf/dungeon_texture.png");
+    pbr_pipeline.load_model(engine, "../assets/dungeon_models/Assets/gltf/barrel_small_stack.gltf", 1);
+    pbr_pipeline.load_model(engine, "../assets/dungeon_models/Assets/gltf/bed_decorated.gltf", 1);
+    pbr_pipeline.load_model(engine, "../assets/dungeon_models/Assets/gltf/floor_dirt_large.gltf", 1);
 
-    model_pipeline.update_projection(engine, glm::perspective(glm::pi<f32>() / 4.0f, static_cast<f32>(window.extent.width) / static_cast<f32>(window.extent.height), 0.1f, 100.f));
+    pbr_pipeline.update_projection(engine, glm::perspective(glm::pi<f32>() / 4.0f, static_cast<f32>(window.extent.width) / static_cast<f32>(window.extent.height), 0.1f, 100.f));
 
     hg::Cameraf camera = {};
     camera.translate({0.0f, -2.0f, -4.0f});
@@ -157,17 +157,17 @@ int main() {
         }
 
         const bool present_success = window.submit_frame(engine, [&](const vk::CommandBuffer cmd) {
-            model_pipeline.queue_light({-20.0f, -30.0f, -20.0f}, {glm::vec3{1.0f, 0.9f, 0.7f} * 3000.0f});
-            model_pipeline.queue_light({2.5f, -2.0f, 2.25f}, {glm::vec3{1.0f, 0.2f, 0.0f} * 5.0f});
+            pbr_pipeline.queue_light({-2.0f, -3.0f, -2.0f}, {glm::vec3{1.0f, 0.9f, 0.7f} * 200.0f});
+            pbr_pipeline.queue_light({2.5f, -2.0f, 2.25f}, {glm::vec3{1.0f, 0.2f, 0.0f} * 10.0f});
 
-            model_pipeline.queue_model(0, sphere);
+            pbr_pipeline.queue_model(0, sphere);
 
-            model_pipeline.queue_model(1, barrels);
-            model_pipeline.queue_model(2, bed);
-            model_pipeline.queue_model(3, floor1);
-            model_pipeline.queue_model(3, floor2);
+            pbr_pipeline.queue_model(1, barrels);
+            pbr_pipeline.queue_model(2, bed);
+            pbr_pipeline.queue_model(3, floor1);
+            pbr_pipeline.queue_model(3, floor2);
 
-            model_pipeline.render(cmd, engine, window, camera);
+            pbr_pipeline.render(cmd, engine, window, camera);
         });
 
         if (!present_success) {
@@ -182,8 +182,8 @@ int main() {
             };
 
             window.resize(engine);
-            model_pipeline.resize(engine, window);
-            model_pipeline.update_projection(engine,
+            pbr_pipeline.resize(engine, window);
+            pbr_pipeline.update_projection(engine,
                                              glm::perspective(glm::pi<f32>() / 4.0f, static_cast<f32>(window.extent.width) / static_cast<f32>(window.extent.height), 0.1f, 100.f));
         }
     }

@@ -7,17 +7,20 @@
 
 namespace hg {
 
-class ModelPipeline {
+class PbrPipeline {
 public:
-    ModelPipeline() = default;
+    PbrPipeline() = default;
+
+    struct PushConstant {
+        glm::mat4 model = {1.0f};
+    };
 
     struct ViewProjectionUniform {
         glm::mat4 projection = {1.0f};
         glm::mat4 view = {1.0f};
     };
 
-    struct PushConstant {
-        glm::mat4 model = {1.0f};
+    struct MaterialUniform {
         float roughness = 0.0f;
         float metalness = 0.0f;
     };
@@ -35,10 +38,11 @@ public:
     struct Texture {
         GpuImage image = {};
         vk::Sampler sampler = {};
-        vk::DescriptorSet set = {};
 
         void destroy(const Engine& engine) const {
+            debug_assert(engine.device != nullptr);
             debug_assert(sampler != nullptr);
+
             engine.device.destroySampler(sampler);
             image.destroy(engine);
         }
@@ -48,13 +52,13 @@ public:
         u32 index_count = 0;
         GpuBuffer index_buffer = {};
         GpuBuffer vertex_buffer = {};
-        usize texture_index = UINT32_MAX;
-        float roughness = 0.5f;
-        float metalness = 0.5f;
+        GpuBuffer material_buffer = {};
+        vk::DescriptorSet set = {};
 
         void destroy(const Engine& engine) const {
-            index_buffer.destroy(engine);
+            material_buffer.destroy(engine);
             vertex_buffer.destroy(engine);
+            index_buffer.destroy(engine);
         }
     };
 
@@ -63,7 +67,7 @@ public:
         Transform3Df transform;
     };
 
-    [[nodiscard]] static ModelPipeline create(const Engine& engine, const Window& window);
+    [[nodiscard]] static PbrPipeline create(const Engine& engine, const Window& window);
     void destroy(const Engine& engine) const;
     void resize(const Engine& engine, const Window& window);
     void render(vk::CommandBuffer cmd, const Engine& engine, Window& window, const Cameraf& camera);
@@ -73,7 +77,6 @@ public:
     void add_texture(const Texture& texture) {
         debug_assert(texture.image.image != nullptr);
         debug_assert(texture.sampler != nullptr);
-        debug_assert(texture.set != nullptr);
         m_textures.push_back(texture);
     }
 
@@ -81,7 +84,7 @@ public:
         debug_assert(model.index_count > 0);
         debug_assert(model.index_buffer.buffer != nullptr);
         debug_assert(model.vertex_buffer.buffer != nullptr);
-        debug_assert(model.texture_index < m_textures.size());
+        debug_assert(model.set != nullptr);
         m_models.push_back(model);
     }
 

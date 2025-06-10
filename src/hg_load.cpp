@@ -34,7 +34,7 @@ std::optional<ModelData> ModelData::load_gltf(const std::filesystem::path path) 
     std::vector<u32> indices;
     std::vector<ModelVertex> vertices;
     float roughness = 0.5f;
-    float metalness = 0.3f;
+    float metalness = 0.0f;
 
     for (const auto& mesh : asset->meshes) {
         for (const auto& primitive : mesh.primitives) {
