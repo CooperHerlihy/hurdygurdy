@@ -50,7 +50,7 @@ vec3 brdf(const vec3 albedo, const float metal, const float roughness, const vec
     const vec3 F = f0 + (vec3(1.0) - f0) * pow((1 - vdoth), 5.0);
     const float D = d_ggx(roughness, ndoth);
     const float G = g_ggx(roughness, ndotv) * g_ggx(roughness, ndotl);
-    const vec3 specular = (F / 4.0) * (D * G / max((ndotv * ndotl), 0.0001));
+    const vec3 specular = (F / 4.0) * (D * G / ((ndotv * ndotl) + 0.0001));
 
     const vec3 ks = F;
     const vec3 kd = (1 - ks) * (1 - metal);

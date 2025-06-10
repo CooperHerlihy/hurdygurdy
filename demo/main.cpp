@@ -1,5 +1,7 @@
 #include "hurdy_gurdy.h"
 
+constexpr double rt3 = 1.73205080757;
+
 static hg::ModelData generate_sphere(const f32 radius, u32 fidelity) {
     debug_assert(radius > 0);
     debug_assert(fidelity >= 3);
@@ -59,37 +61,35 @@ int main() {
     std::array<u32, 4> sphere_color = {};
     sphere_color.fill(0xff44ccff);
     pbr_pipeline.load_texture_from_data(engine, sphere_color.data(), {2, 2, 1}, vk::Format::eR8G8B8A8Srgb, 4);
-    const auto sphere_model = generate_sphere(0.5f, 32);
-    pbr_pipeline.load_model_from_data(engine, sphere_model.indices, sphere_model.vertices, 0, 0.04f, 1.0f);
+    constexpr usize sphere_texture = 0;
+    pbr_pipeline.load_texture(engine, "../assets/hexagon_models/Textures/hexagons_medieval.png");
+    constexpr usize hex_tex = 1;
 
-    pbr_pipeline.load_texture(engine, "../assets/dungeon_models/Assets/gltf/dungeon_texture.png");
-    pbr_pipeline.load_model(engine, "../assets/dungeon_models/Assets/gltf/barrel_small_stack.gltf", 1);
-    pbr_pipeline.load_model(engine, "../assets/dungeon_models/Assets/gltf/bed_decorated.gltf", 1);
-    pbr_pipeline.load_model(engine, "../assets/dungeon_models/Assets/gltf/floor_dirt_large.gltf", 1);
+    const auto sphere_model = generate_sphere(0.5f, 32);
+    pbr_pipeline.load_model_from_data(engine, sphere_model.indices, sphere_model.vertices, sphere_texture, 0.04f, 1.0f);
+    constexpr usize sphere = 0;
+
+    pbr_pipeline.load_model(engine, "../assets/hexagon_models/Assets/gltf/tiles/base/hex_grass.gltf", hex_tex);
+    constexpr usize grass = 1;
+    pbr_pipeline.load_model(engine, "../assets/hexagon_models/Assets/gltf/decoration/nature/tree_single_A.gltf", hex_tex);
+    constexpr usize tree = 2;
+
+    pbr_pipeline.load_model(engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_home_A_blue.gltf", hex_tex);
+    constexpr usize building = 3;
+    pbr_pipeline.load_model(engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_tower_A_blue.gltf", hex_tex);
+    constexpr usize tower = 4;
+    pbr_pipeline.load_model(engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_blacksmith_blue.gltf", hex_tex);
+    constexpr usize blacksmith = 5;
+    pbr_pipeline.load_model(engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_castle_blue.gltf", hex_tex);
+    constexpr usize castle = 6;
 
     pbr_pipeline.update_projection(engine, glm::perspective(glm::pi<f32>() / 4.0f, static_cast<f32>(window.extent.width) / static_cast<f32>(window.extent.height), 0.1f, 100.f));
 
     hg::Cameraf camera = {};
     camera.translate({0.0f, -2.0f, -4.0f});
 
-    hg::Transform3Df sphere = {
-        .position = {0.0f, -2.0f, 1.0f},
-    };
-
-    hg::Transform3Df barrels = {
-        .position = {-2.0f, 0.0f, 2.0f},
-    };
-    barrels.rotate_external(glm::angleAxis(glm::pi<f32>() / 4, glm::vec3{0.0f, -1.0f, 0.0f}));
-
-    hg::Transform3Df bed = {
-        .position = {1.0f, 0.0f, 1.0f},
-    };
-
-    hg::Transform3Df floor1 = {
-        .position = {-1.5f, 0.0f, 1.0f},
-    };
-    hg::Transform3Df floor2 = {
-        .position = {1.5f, 0.0f, 1.0f},
+    hg::Transform3Df sphere_transform = {
+        .position = {0.0f, -2.0f, 0.0f},
     };
 
     glm::dvec2 cursor_pos = {};
@@ -113,16 +113,16 @@ int main() {
         glfwPollEvents();
 
         if (glfwGetKey(window.window, GLFW_KEY_LEFT) == GLFW_PRESS) {
-            sphere.translate({-delta32, 0.0f, 0.0f});
+            sphere_transform.translate({-delta32, 0.0f, 0.0f});
         }
         if (glfwGetKey(window.window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
-            sphere.translate({delta32, 0.0f, 0.0f});
+            sphere_transform.translate({delta32, 0.0f, 0.0f});
         }
         if (glfwGetKey(window.window, GLFW_KEY_DOWN) == GLFW_PRESS) {
-            sphere.translate({0.0f, 0.0f, -delta32});
+            sphere_transform.translate({0.0f, 0.0f, -delta32});
         }
         if (glfwGetKey(window.window, GLFW_KEY_UP) == GLFW_PRESS) {
-            sphere.translate({0.0f, 0.0f, delta32});
+            sphere_transform.translate({0.0f, 0.0f, delta32});
         }
 
         constexpr f32 speed = 2.0f;
@@ -157,15 +157,27 @@ int main() {
         }
 
         const bool present_success = window.submit_frame(engine, [&](const vk::CommandBuffer cmd) {
-            pbr_pipeline.queue_light({-2.0f, -3.0f, -2.0f}, {glm::vec3{1.0f, 0.9f, 0.7f} * 200.0f});
+            pbr_pipeline.queue_light({-2.0f, -3.0f, -2.0f}, {glm::vec3{1.0f, 1.0f, 1.0f} * 300.0f});
             pbr_pipeline.queue_light({2.5f, -2.0f, 2.25f}, {glm::vec3{1.0f, 0.2f, 0.0f} * 10.0f});
 
-            pbr_pipeline.queue_model(0, sphere);
+            pbr_pipeline.queue_model(sphere, sphere_transform);
 
-            pbr_pipeline.queue_model(1, barrels);
-            pbr_pipeline.queue_model(2, bed);
-            pbr_pipeline.queue_model(3, floor1);
-            pbr_pipeline.queue_model(3, floor2);
+            pbr_pipeline.queue_model(grass, {.position = {0.0f, 0.0f, 0.0f}});
+
+            pbr_pipeline.queue_model(grass, {.position = {-1.0f, -0.25f, rt3}});
+            pbr_pipeline.queue_model(blacksmith, {.position = {-1.0f, -0.25f, rt3}});
+
+            pbr_pipeline.queue_model(grass, {.position = {1.0f, -0.5f, rt3}});
+            pbr_pipeline.queue_model(castle, {.position = {1.0f, -0.5f, rt3}});
+
+            pbr_pipeline.queue_model(grass, {.position = {-2.0f, -0.1f, 0.0f}});
+            pbr_pipeline.queue_model(building, {.position = {-2.0f, -0.1f, 0.0f}});
+            pbr_pipeline.queue_model(tree, {.position = {-2.0f - 0.75f, -0.1f, 0.0f - 0.25f}});
+
+            pbr_pipeline.queue_model(grass, {.position = {2.0f, -0.25f, 0.0f}});
+            pbr_pipeline.queue_model(tower, {.position = {2.0f, -0.25f, 0.0f}});
+            pbr_pipeline.queue_model(tree, {.position = {2.0f - 0.75f, -0.25f, 0.0f + 0.25f}});
+            pbr_pipeline.queue_model(tree, {.position = {2.0f + 0.75f, -0.25f, 0.0f - 0.25f}});
 
             pbr_pipeline.render(cmd, engine, window, camera);
         });
@@ -184,7 +196,7 @@ int main() {
             window.resize(engine);
             pbr_pipeline.resize(engine, window);
             pbr_pipeline.update_projection(engine,
-                                             glm::perspective(glm::pi<f32>() / 4.0f, static_cast<f32>(window.extent.width) / static_cast<f32>(window.extent.height), 0.1f, 100.f));
+                                           glm::perspective(glm::pi<f32>() / 4.0f, static_cast<f32>(window.extent.width) / static_cast<f32>(window.extent.height), 0.1f, 100.f));
         }
     }
 
