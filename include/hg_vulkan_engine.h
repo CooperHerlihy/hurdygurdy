@@ -144,72 +144,22 @@ struct SamplerConfig {
 };
 [[nodiscard]] vk::Sampler create_sampler(const Engine& engine, const SamplerConfig& config);
 
-vk::CommandBuffer begin_single_time_commands(const Engine& engine);
-void end_single_time_commands(const Engine& engine, vk::CommandBuffer cmd);
-void submit_single_time_commands(const Engine& engine, const auto& commands) {
-    const auto cmd = begin_single_time_commands(engine);
-    commands(cmd);
-    end_single_time_commands(engine, cmd);
+inline vk::DescriptorSetLayout create_set_layout(const Engine& engine, const std::span<const vk::DescriptorSetLayoutBinding> bindings) {
+    debug_assert(engine.device != nullptr);
+    const auto layout = engine.device.createDescriptorSetLayout({.bindingCount = static_cast<u32>(bindings.size()), .pBindings = bindings.data()});
+    critical_assert(layout.result == vk::Result::eSuccess);
+    return layout.value;
 }
-
-class BarrierBuilder {
-public:
-    explicit constexpr BarrierBuilder(const vk::CommandBuffer cmd) : m_cmd(cmd) {}
-
-    void build_and_run(const vk::DependencyFlagBits flags = {}) {
-        m_cmd.pipelineBarrier2({
-            .dependencyFlags = flags,
-            .memoryBarrierCount = static_cast<u32>(m_memories.size()),
-            .pMemoryBarriers = m_memories.data(),
-            .bufferMemoryBarrierCount = static_cast<u32>(m_buffers.size()),
-            .pBufferMemoryBarriers = m_buffers.data(),
-            .imageMemoryBarrierCount = static_cast<u32>(m_images.size()),
-            .pImageMemoryBarriers = m_images.data(),
-        });
-    }
-
-    BarrierBuilder& add_memory_barrier(const vk::MemoryBarrier2& barrier) {
-        m_memories.push_back(barrier);
-        return *this;
-    }
-    BarrierBuilder& add_buffer_barrier(const vk::BufferMemoryBarrier2& barrier) {
-        debug_assert(barrier.buffer != nullptr);
-        m_buffers.push_back(barrier);
-        return *this;
-    }
-    BarrierBuilder& add_image_barrier(const vk::ImageMemoryBarrier2& barrier) {
-        debug_assert(barrier.image != nullptr);
-        m_images.push_back(barrier);
-        return *this;
-    }
-    BarrierBuilder& add_image_barrier(const vk::Image image, const vk::ImageSubresourceRange& subresource_range) {
-        debug_assert(image != nullptr);
-        m_images.push_back({
-            .image = image,
-            .subresourceRange = subresource_range,
-        });
-        return *this;
-    }
-    BarrierBuilder& set_image_src(const vk::PipelineStageFlags2 src_stage_mask, const vk::AccessFlags2 src_access_mask, const vk::ImageLayout old_layout) {
-        m_images.back().srcStageMask = src_stage_mask;
-        m_images.back().srcAccessMask = src_access_mask;
-        m_images.back().oldLayout = old_layout;
-        return *this;
-    }
-    BarrierBuilder& set_image_dst(const vk::PipelineStageFlags2 dst_stage_mask, const vk::AccessFlags2 dst_access_mask, const vk::ImageLayout new_layout) {
-        debug_assert(new_layout != vk::ImageLayout::eUndefined);
-        m_images.back().dstStageMask = dst_stage_mask;
-        m_images.back().dstAccessMask = dst_access_mask;
-        m_images.back().newLayout = new_layout;
-        return *this;
-    }
-
-private:
-    vk::CommandBuffer m_cmd = {};
-    std::vector<vk::MemoryBarrier2> m_memories = {};
-    std::vector<vk::BufferMemoryBarrier2> m_buffers = {};
-    std::vector<vk::ImageMemoryBarrier2> m_images = {};
+struct ShaderConfig {
+    std::filesystem::path path = {};
+    vk::ShaderCodeTypeEXT code_type = vk::ShaderCodeTypeEXT::eSpirv;
+    vk::ShaderStageFlagBits stage = {};
+    vk::ShaderStageFlags next_stage = {};
+    std::span<const vk::DescriptorSetLayout> set_layouts = {};
+    std::span<const vk::PushConstantRange> push_ranges = {};
+    vk::ShaderCreateFlagsEXT flags = {};
 };
+[[nodiscard]] vk::ShaderEXT create_shader(const Engine& engine, const ShaderConfig& config);
 
 struct Pipeline {
     std::vector<vk::DescriptorSetLayout> descriptor_layouts = {};
@@ -335,6 +285,73 @@ private:
     vk::PrimitiveTopology m_topology = vk::PrimitiveTopology::eTriangleList;
     bool m_depth_buffer = false;
     bool m_color_blend = false;
+};
+
+vk::CommandBuffer begin_single_time_commands(const Engine& engine);
+void end_single_time_commands(const Engine& engine, vk::CommandBuffer cmd);
+void submit_single_time_commands(const Engine& engine, const auto& commands) {
+    const auto cmd = begin_single_time_commands(engine);
+    commands(cmd);
+    end_single_time_commands(engine, cmd);
+}
+
+class BarrierBuilder {
+public:
+    explicit constexpr BarrierBuilder(const vk::CommandBuffer cmd) : m_cmd(cmd) {}
+
+    void build_and_run(const vk::DependencyFlagBits flags = {}) {
+        m_cmd.pipelineBarrier2({
+            .dependencyFlags = flags,
+            .memoryBarrierCount = static_cast<u32>(m_memories.size()),
+            .pMemoryBarriers = m_memories.data(),
+            .bufferMemoryBarrierCount = static_cast<u32>(m_buffers.size()),
+            .pBufferMemoryBarriers = m_buffers.data(),
+            .imageMemoryBarrierCount = static_cast<u32>(m_images.size()),
+            .pImageMemoryBarriers = m_images.data(),
+        });
+    }
+
+    BarrierBuilder& add_memory_barrier(const vk::MemoryBarrier2& barrier) {
+        m_memories.push_back(barrier);
+        return *this;
+    }
+    BarrierBuilder& add_buffer_barrier(const vk::BufferMemoryBarrier2& barrier) {
+        debug_assert(barrier.buffer != nullptr);
+        m_buffers.push_back(barrier);
+        return *this;
+    }
+    BarrierBuilder& add_image_barrier(const vk::ImageMemoryBarrier2& barrier) {
+        debug_assert(barrier.image != nullptr);
+        m_images.push_back(barrier);
+        return *this;
+    }
+    BarrierBuilder& add_image_barrier(const vk::Image image, const vk::ImageSubresourceRange& subresource_range) {
+        debug_assert(image != nullptr);
+        m_images.push_back({
+            .image = image,
+            .subresourceRange = subresource_range,
+        });
+        return *this;
+    }
+    BarrierBuilder& set_image_src(const vk::PipelineStageFlags2 src_stage_mask, const vk::AccessFlags2 src_access_mask, const vk::ImageLayout old_layout) {
+        m_images.back().srcStageMask = src_stage_mask;
+        m_images.back().srcAccessMask = src_access_mask;
+        m_images.back().oldLayout = old_layout;
+        return *this;
+    }
+    BarrierBuilder& set_image_dst(const vk::PipelineStageFlags2 dst_stage_mask, const vk::AccessFlags2 dst_access_mask, const vk::ImageLayout new_layout) {
+        debug_assert(new_layout != vk::ImageLayout::eUndefined);
+        m_images.back().dstStageMask = dst_stage_mask;
+        m_images.back().dstAccessMask = dst_access_mask;
+        m_images.back().newLayout = new_layout;
+        return *this;
+    }
+
+private:
+    vk::CommandBuffer m_cmd = {};
+    std::vector<vk::MemoryBarrier2> m_memories = {};
+    std::vector<vk::BufferMemoryBarrier2> m_buffers = {};
+    std::vector<vk::ImageMemoryBarrier2> m_images = {};
 };
 
 } // namespace hg

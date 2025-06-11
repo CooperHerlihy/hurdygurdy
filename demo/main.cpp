@@ -2,19 +2,19 @@
 
 constexpr double rt3 = 1.73205080757;
 
-static hg::ModelData generate_sphere(const f32 radius, u32 fidelity) {
+static hg::ModelData generate_sphere(const f32 radius, i32 fidelity) {
     debug_assert(radius > 0);
     debug_assert(fidelity >= 3);
 
     std::vector<hg::ModelVertex> vertices = {};
-    vertices.reserve(2 + fidelity * fidelity);
+    vertices.reserve(static_cast<usize>(2 + fidelity * fidelity));
 
     glm::vec3 point = {0.0f, -radius, 0.0f};
     vertices.emplace_back(point, point, glm::vec2{});
-    for (u32 i = 0; i < fidelity; ++i) {
+    for (i32 i = 0; i < fidelity; ++i) {
         f32 h = -std::cos(glm::pi<f32>() * i / fidelity);
         f32 r = std::sin(glm::pi<f32>() * i / fidelity);
-        for (u32 j = 0; j < fidelity; ++j) {
+        for (i32 j = 0; j < fidelity; ++j) {
             point = glm::vec3{r * std::cos(glm::tau<f32>() * j / fidelity), h, r * std::sin(glm::tau<f32>() * j / fidelity)};
             vertices.emplace_back(point * radius, point, glm::vec2{});
         }
@@ -23,13 +23,13 @@ static hg::ModelData generate_sphere(const f32 radius, u32 fidelity) {
     vertices.emplace_back(point, point, glm::vec2{});
 
     std::vector<u32> indices = {};
-    indices.reserve(fidelity * (fidelity + 2) * 3);
-    for (u32 i = 0; i < fidelity; ++i) {
+    indices.reserve(static_cast<usize>(fidelity * (fidelity + 2) * 3));
+    for (i32 i = 0; i < fidelity; ++i) {
         indices.push_back(0);
         indices.push_back((i + 1) % fidelity + 1);
         indices.push_back((i + 2) % fidelity + 1);
     }
-    for (u32 i = 1; i <= fidelity * (fidelity - 1); ++i) {
+    for (i32 i = 1; i <= fidelity * (fidelity - 1); ++i) {
         indices.push_back(i);
         indices.push_back(i + fidelity);
         indices.push_back(i + 1);
@@ -38,8 +38,8 @@ static hg::ModelData generate_sphere(const f32 radius, u32 fidelity) {
         indices.push_back(i + fidelity);
         indices.push_back(i + fidelity + 1);
     }
-    u32 top_index = 1 + fidelity * fidelity;
-    for (u32 i = 0; i < fidelity; ++i) {
+    i32 top_index = 1 + fidelity * fidelity;
+    for (i32 i = 0; i < fidelity; ++i) {
         indices.push_back(top_index);
         indices.push_back(top_index - ((i + 1) % fidelity + 1));
         indices.push_back(top_index - ((i + 2) % fidelity + 1));
