@@ -1,4 +1,6 @@
 #include "hg_vulkan_engine.h"
+#include "hg_utils.h"
+#include <vulkan/vulkan_enums.hpp>
 
 namespace hg {
 
@@ -761,13 +763,10 @@ vk::Sampler create_sampler(const Engine& engine, const SamplerConfig& config) {
     return sampler.value;
 }
 
-vk::ShaderEXT create_shader(const Engine& engine, const ShaderConfig& config) {
-    debug_assert(engine.device != nullptr);
-    debug_assert(!config.path.empty());
-    debug_assert(config.code_type == vk::ShaderCodeTypeEXT::eSpirv && "binary shader code types untested");
-    debug_assert(config.stage != vk::ShaderStageFlagBits{0});
+static std::vector<char> read_shader(const std::filesystem::path path) {
+    debug_assert(!path.empty());
 
-    auto file = std::ifstream{config.path, std::ios::ate | std::ios::binary};
+    auto file = std::ifstream{path, std::ios::ate | std::ios::binary};
     critical_assert(file.is_open());
 
     const usize code_size = file.tellg();
@@ -775,10 +774,22 @@ vk::ShaderEXT create_shader(const Engine& engine, const ShaderConfig& config) {
     code.resize(code_size);
     file.seekg(0);
     file.read(code.data(), static_cast<std::streamsize>(code.size()));
-
     file.close();
 
+    critical_assert(!code.empty());
+    return code;
+}
+
+vk::ShaderEXT create_unlinked_shader(const Engine& engine, const ShaderConfig& config) {
+    debug_assert(engine.device != nullptr);
+    debug_assert(!config.path.empty());
+    debug_assert(config.code_type == vk::ShaderCodeTypeEXT::eSpirv && "binary shader code types untested");
+    debug_assert(config.stage != vk::ShaderStageFlagBits{0});
+
+    const auto code = read_shader(config.path);
+
     const auto shader = engine.device.createShaderEXT({
+        .flags = config.flags,
         .stage = config.stage,
         .nextStage = config.next_stage,
         .codeType = config.code_type,
@@ -792,6 +803,42 @@ vk::ShaderEXT create_shader(const Engine& engine, const ShaderConfig& config) {
     });
     critical_assert(shader.result == vk::Result::eSuccess);
     return shader.value;
+}
+
+void create_linked_shaders(const Engine& engine, const std::span<const ShaderConfig> configs, const std::span<vk::ShaderEXT> out_shaders) {
+    debug_assert(engine.device != nullptr);
+    debug_assert(configs.size() >= 2);
+
+    std::vector<std::vector<char>> codes = {};
+    codes.reserve(configs.size());
+    for (const auto& config : configs) {
+        debug_assert(!config.path.empty());
+        debug_assert(config.code_type == vk::ShaderCodeTypeEXT::eSpirv && "binary shader code types untested");
+        debug_assert(config.stage != vk::ShaderStageFlagBits{0});
+
+        codes.push_back(read_shader(config.path));
+    }
+
+    std::vector<vk::ShaderCreateInfoEXT> shader_infos = {};
+    shader_infos.reserve(configs.size());
+    for (usize i = 0; i < codes.size(); ++i) {
+        shader_infos.push_back({
+            .flags = configs[i].flags | vk::ShaderCreateFlagBitsEXT::eLinkStage,
+            .stage = configs[i].stage,
+            .nextStage = configs[i].next_stage,
+            .codeType = configs[i].code_type,
+            .codeSize = codes[i].size(),
+            .pCode = codes[i].data(),
+            .pName = "main",
+            .setLayoutCount = static_cast<u32>(configs[i].set_layouts.size()),
+            .pSetLayouts = configs[i].set_layouts.data(),
+            .pushConstantRangeCount = static_cast<u32>(configs[i].push_ranges.size()),
+            .pPushConstantRanges = configs[i].push_ranges.data(),
+        });
+    }
+
+    const auto shader_result = engine.device.createShadersEXT(shader_infos.size(), shader_infos.data(), nullptr, out_shaders.data());
+    critical_assert(shader_result == vk::Result::eSuccess);
 }
 
 Pipeline GraphicsPipelineBuilder::build(const Engine& engine) const {

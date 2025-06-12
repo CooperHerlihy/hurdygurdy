@@ -4,6 +4,8 @@
 #include "hg_math.h"
 #include "hg_utils.h"
 #include "hg_vulkan_engine.h"
+#include <glm/ext/vector_float2.hpp>
+#include <vulkan/vulkan_handles.hpp>
 
 namespace hg {
 
@@ -117,6 +119,15 @@ private:
     std::vector<Model> m_models = {};
     std::vector<RenderTicket> m_render_queue = {};
     std::vector<Light> m_lights = {};
+
+    vk::DescriptorSetLayout test_set_layout = {};
+    vk::PipelineLayout test_pipeline_layout = {};
+    vk::ShaderEXT test_vert_shader = {};
+    vk::ShaderEXT test_frag_shader = {};
+    vk::DescriptorSet test_set = {};
+    GpuBuffer test_vertices = {};
+    GpuImage test_texture = {};
+    vk::Sampler test_sampler = {};
 };
 
 } // namespace hg

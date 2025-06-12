@@ -159,7 +159,8 @@ struct ShaderConfig {
     std::span<const vk::PushConstantRange> push_ranges = {};
     vk::ShaderCreateFlagsEXT flags = {};
 };
-[[nodiscard]] vk::ShaderEXT create_shader(const Engine& engine, const ShaderConfig& config);
+[[nodiscard]] vk::ShaderEXT create_unlinked_shader(const Engine& engine, const ShaderConfig& config);
+void create_linked_shaders(const Engine& engine, std::span<const ShaderConfig> configs, std::span<vk::ShaderEXT> out_shaders);
 
 struct Pipeline {
     std::vector<vk::DescriptorSetLayout> descriptor_layouts = {};
