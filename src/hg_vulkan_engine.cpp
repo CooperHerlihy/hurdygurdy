@@ -1,6 +1,4 @@
 #include "hg_vulkan_engine.h"
-#include "hg_utils.h"
-#include <vulkan/vulkan_enums.hpp>
 
 namespace hg {
 
@@ -409,6 +407,28 @@ vk::CommandBuffer Window::begin_frame(const Engine& engine) {
     const auto begin_result = current_cmd().begin({.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
     critical_assert(begin_result == vk::Result::eSuccess);
 
+    const vk::Viewport viewport = {0.0f, 0.0f, static_cast<f32>(extent.width), static_cast<f32>(extent.height), 0.0f, 1.0f};
+    current_cmd().setViewportWithCount({viewport});
+    const vk::Rect2D scissor = {{0, 0}, extent};
+    current_cmd().setScissorWithCount({scissor});
+
+    current_cmd().setRasterizerDiscardEnable(vk::False);
+    current_cmd().setPrimitiveRestartEnable(vk::False);
+    current_cmd().setPrimitiveTopology(vk::PrimitiveTopology::eTriangleList);
+    current_cmd().setPolygonModeEXT(vk::PolygonMode::eFill);
+    current_cmd().setFrontFace(vk::FrontFace::eCounterClockwise);
+    current_cmd().setCullMode(vk::CullModeFlagBits::eNone);
+    current_cmd().setDepthTestEnable(vk::True);
+    current_cmd().setDepthWriteEnable(vk::True);
+    current_cmd().setDepthCompareOp(vk::CompareOp::eLess);
+    current_cmd().setDepthBiasEnable(vk::False);
+    current_cmd().setStencilTestEnable(vk::False);
+    current_cmd().setRasterizationSamplesEXT(vk::SampleCountFlagBits::e1);
+    current_cmd().setSampleMaskEXT(vk::SampleCountFlagBits::e1, vk::SampleMask{0xff});
+    current_cmd().setAlphaToCoverageEnableEXT(vk::False);
+    current_cmd().setColorWriteMaskEXT(0, {vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA});
+    current_cmd().setColorBlendEnableEXT(0, {vk::False});
+
     m_recording = true;
     return current_cmd();
 }
@@ -805,7 +825,7 @@ vk::ShaderEXT create_unlinked_shader(const Engine& engine, const ShaderConfig& c
     return shader.value;
 }
 
-void create_linked_shaders(const Engine& engine, const std::span<const ShaderConfig> configs, const std::span<vk::ShaderEXT> out_shaders) {
+void create_linked_shaders(const Engine& engine, const std::span<vk::ShaderEXT> out_shaders, const std::span<const ShaderConfig> configs) {
     debug_assert(engine.device != nullptr);
     debug_assert(configs.size() >= 2);
 
@@ -839,139 +859,6 @@ void create_linked_shaders(const Engine& engine, const std::span<const ShaderCon
 
     const auto shader_result = engine.device.createShadersEXT(shader_infos.size(), shader_infos.data(), nullptr, out_shaders.data());
     critical_assert(shader_result == vk::Result::eSuccess);
-}
-
-Pipeline GraphicsPipelineBuilder::build(const Engine& engine) const {
-    debug_assert(engine.device != nullptr);
-    debug_assert(!m_vertex_shader.empty());
-    debug_assert(!m_fragment_shader.empty());
-    debug_assert(m_MSAA != static_cast<vk::SampleCountFlagBits>(0));
-
-    std::vector<vk::DescriptorSetLayout> descriptor_layouts = {};
-    descriptor_layouts.reserve(m_descriptor_sets.size());
-    for (const auto& bindings : m_descriptor_sets) {
-        const auto layout = engine.device.createDescriptorSetLayout({.bindingCount = static_cast<u32>(bindings.size()), .pBindings = bindings.data()});
-        critical_assert(layout.result == vk::Result::eSuccess);
-        descriptor_layouts.push_back(layout.value);
-    }
-
-    const auto layout = engine.device.createPipelineLayout({
-        .setLayoutCount = static_cast<u32>(descriptor_layouts.size()),
-        .pSetLayouts = descriptor_layouts.data(),
-        .pushConstantRangeCount = static_cast<u32>(m_push_constants.size()),
-        .pPushConstantRanges = m_push_constants.data(),
-    });
-    critical_assert(layout.result == vk::Result::eSuccess);
-
-    const auto create_shader = [&](const std::string_view path) -> vk::ShaderModule {
-        auto file = std::ifstream{path.data(), std::ios::ate | std::ios::binary};
-        critical_assert(file.is_open());
-
-        const usize code_size = file.tellg();
-        std::vector<char> code;
-        code.resize(code_size);
-        file.seekg(0);
-        file.read(code.data(), static_cast<std::streamsize>(code.size()));
-        file.close();
-
-        const auto shader = engine.device.createShaderModule({.codeSize = code.size(), .pCode = reinterpret_cast<u32*>(code.data())});
-        critical_assert(shader.result == vk::Result::eSuccess);
-        return shader.value;
-    };
-    const std::array shader_stage_infos = {
-        vk::PipelineShaderStageCreateInfo{.stage = vk::ShaderStageFlagBits::eVertex, .module = create_shader(m_vertex_shader), .pName = "main"},
-        vk::PipelineShaderStageCreateInfo{.stage = vk::ShaderStageFlagBits::eFragment, .module = create_shader(m_fragment_shader), .pName = "main"},
-    };
-    defer({
-        for (const auto& shader : shader_stage_infos) {
-            engine.device.destroyShaderModule(shader.module);
-        }
-    });
-
-    std::vector<vk::VertexInputBindingDescription> vertex_bindings = {};
-    vertex_bindings.reserve(m_vertex_bindings.size());
-    std::vector<vk::VertexInputAttributeDescription> vertex_attributes = {};
-    vertex_attributes.reserve(m_vertex_bindings.size() * 2);
-    for (usize binding = 0; binding < m_vertex_bindings.size(); ++binding) {
-        const auto& [attributes, stride, input_rate] = m_vertex_bindings[binding];
-        vertex_bindings.emplace_back(binding, stride, input_rate);
-        for (usize location = 0; location < attributes.size(); ++location) {
-            const auto& [format, offset] = attributes[location];
-            vertex_attributes.emplace_back(location, binding, format, offset);
-        }
-    }
-    const vk::PipelineVertexInputStateCreateInfo vertex_input_info = {
-        .vertexBindingDescriptionCount = static_cast<u32>(vertex_bindings.size()),
-        .pVertexBindingDescriptions = vertex_bindings.data(),
-        .vertexAttributeDescriptionCount = static_cast<u32>(vertex_attributes.size()),
-        .pVertexAttributeDescriptions = vertex_attributes.data(),
-    };
-    const vk::PipelineInputAssemblyStateCreateInfo input_assembly_info = {.topology = m_topology};
-    constexpr vk::PipelineTessellationStateCreateInfo tessellation_info = {};
-    constexpr vk::PipelineViewportStateCreateInfo viewport_info = {.viewportCount = 1, .scissorCount = 1};
-    const vk::PipelineRasterizationStateCreateInfo rasterization_info = {
-        .polygonMode = vk::PolygonMode::eFill,
-        .cullMode = m_cull_mode,
-        .lineWidth = 1.0f,
-    };
-    vk::PipelineMultisampleStateCreateInfo multisample_info = {};
-    multisample_info.rasterizationSamples = m_MSAA;
-    if (m_MSAA > vk::SampleCountFlagBits::e1) {
-        multisample_info.sampleShadingEnable = vk::True;
-        multisample_info.minSampleShading = 0.2f;
-    }
-    vk::PipelineDepthStencilStateCreateInfo depth_stencil_info = {};
-    if (m_depth_buffer) {
-        depth_stencil_info.depthTestEnable = vk::True;
-        depth_stencil_info.depthWriteEnable = vk::True;
-        depth_stencil_info.depthCompareOp = vk::CompareOp::eLess;
-        depth_stencil_info.minDepthBounds = 0.0f;
-        depth_stencil_info.maxDepthBounds = 1.0f;
-    }
-
-    vk::PipelineColorBlendAttachmentState color_blend_attachment = {.colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-                                                                                      vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA};
-    if (m_color_blend) {
-        color_blend_attachment.blendEnable = vk::True;
-        color_blend_attachment.srcColorBlendFactor = vk::BlendFactor::eSrcAlpha;
-        color_blend_attachment.dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha;
-        color_blend_attachment.colorBlendOp = vk::BlendOp::eAdd;
-        color_blend_attachment.srcAlphaBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha;
-        color_blend_attachment.dstAlphaBlendFactor = vk::BlendFactor::eZero;
-        color_blend_attachment.alphaBlendOp = vk::BlendOp::eAdd;
-    }
-    const vk::PipelineColorBlendStateCreateInfo color_blend_info = {
-        .attachmentCount = 1, .pAttachments = &color_blend_attachment, .blendConstants = std::array{1.0f, 1.0f, 1.0f, 1.0f}};
-
-    constexpr std::array dynamic_state = {vk::DynamicState::eViewport, vk::DynamicState::eScissor};
-    const vk::PipelineDynamicStateCreateInfo dynamic_state_info = {.dynamicStateCount = static_cast<u32>(dynamic_state.size()), .pDynamicStates = dynamic_state.data()};
-
-    const vk::PipelineRenderingCreateInfo dynamic_rendering_info = {
-        .colorAttachmentCount = static_cast<u32>(m_color_formats.size()),
-        .pColorAttachmentFormats = m_color_formats.data(),
-        .depthAttachmentFormat = m_depth_format,
-        .stencilAttachmentFormat = m_stencil_format,
-    };
-    const vk::GraphicsPipelineCreateInfo pipeline_info = {
-        .pNext = &dynamic_rendering_info,
-        .stageCount = static_cast<u32>(shader_stage_infos.size()),
-        .pStages = shader_stage_infos.data(),
-        .pVertexInputState = &vertex_input_info,
-        .pInputAssemblyState = &input_assembly_info,
-        .pTessellationState = &tessellation_info,
-        .pViewportState = &viewport_info,
-        .pRasterizationState = &rasterization_info,
-        .pMultisampleState = &multisample_info,
-        .pDepthStencilState = &depth_stencil_info,
-        .pColorBlendState = &color_blend_info,
-        .pDynamicState = &dynamic_state_info,
-        .layout = layout.value,
-        .basePipelineIndex = -1,
-    };
-    const auto pipeline = engine.device.createGraphicsPipeline(m_cache, pipeline_info);
-    critical_assert(pipeline.result == vk::Result::eSuccess);
-
-    return {descriptor_layouts, layout.value, pipeline.value};
 }
 
 vk::CommandBuffer begin_single_time_commands(const Engine& engine) {

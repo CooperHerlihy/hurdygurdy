@@ -1,11 +1,4 @@
 #include "hg_pbr_pipeline.h"
-#include "hg_utils.h"
-#include "hg_vulkan_engine.h"
-#include <sys/stat.h>
-#include <vulkan/vulkan.hpp>
-#include <vulkan/vulkan_enums.hpp>
-#include <vulkan/vulkan_handles.hpp>
-#include <vulkan/vulkan_structs.hpp>
 
 namespace hg {
 
@@ -26,23 +19,34 @@ PbrPipeline PbrPipeline::create(const Engine& engine, const Window& window) {
                                                        .aspect_flags = vk::ImageAspectFlagBits::eDepth,
                                                        .sample_count = vk::SampleCountFlagBits::e4});
 
-    pipeline.m_model_pipeline =
-        GraphicsPipelineBuilder()
-            .set_shaders("../shaders/pbr.vert.spv", "../shaders/pbr.frag.spv")
-            .set_render_target(std::array{window.image_format}, vk::Format::eD32Sfloat)
-            .add_descriptor_set_layout(std::array{vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex},
-                                                  vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eFragment}})
-            .add_descriptor_set_layout(std::array{vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment},
-                                                  vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eFragment}})
-            .add_push_constant_range(vk::ShaderStageFlagBits::eVertex, sizeof(PushConstant))
-            .add_vertex_binding(std::array{VertexAttribute{vk::Format::eR32G32B32Sfloat, offsetof(ModelVertex, position)},
-                                           VertexAttribute{vk::Format::eR32G32B32Sfloat, offsetof(ModelVertex, normal)},
-                                           VertexAttribute{vk::Format::eR32G32Sfloat, offsetof(ModelVertex, uv)}},
-                                sizeof(ModelVertex))
-            .set_MSAA(vk::SampleCountFlagBits::e4)
-            .enable_depth_buffer()
-            .enable_culling()
-            .build(engine);
+    pipeline.m_pbr_set_layouts[0] =
+        create_set_layout(engine, std::array{vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex},
+                                             vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eFragment}});
+    pipeline.m_pbr_set_layouts[1] =
+        create_set_layout(engine, std::array{vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment},
+                                             vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eFragment}});
+
+    std::array push_ranges = {vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex, 0, sizeof(PushConstant)}};
+    const auto pbr_layout = engine.device.createPipelineLayout(vk::PipelineLayoutCreateInfo{
+        .setLayoutCount = static_cast<u32>(pipeline.m_pbr_set_layouts.size()),
+        .pSetLayouts = pipeline.m_pbr_set_layouts.data(),
+        .pushConstantRangeCount = static_cast<u32>(push_ranges.size()),
+        .pPushConstantRanges = push_ranges.data(),
+    });
+    critical_assert(pbr_layout.result == vk::Result::eSuccess);
+    pipeline.m_pbr_layout = pbr_layout.value;
+
+    create_linked_shaders(engine, pipeline.m_pbr_shaders,
+                          std::array{ShaderConfig{.path = "../shaders/pbr.vert.spv",
+                                                  .stage = vk::ShaderStageFlagBits::eVertex,
+                                                  .next_stage = vk::ShaderStageFlagBits::eFragment,
+                                                  .set_layouts = pipeline.m_pbr_set_layouts,
+                                                  .push_ranges = push_ranges},
+                                     ShaderConfig{.path = "../shaders/pbr.frag.spv",
+                                                  .stage = vk::ShaderStageFlagBits::eFragment,
+                                                  .next_stage = {},
+                                                  .set_layouts = pipeline.m_pbr_set_layouts,
+                                                  .push_ranges = push_ranges}});
 
     constexpr std::array pool_sizes = {
         vk::DescriptorPoolSize{vk::DescriptorType::eUniformBuffer, 256},
@@ -52,98 +56,46 @@ PbrPipeline PbrPipeline::create(const Engine& engine, const Window& window) {
     critical_assert(pool.result == vk::Result::eSuccess);
     pipeline.m_descriptor_pool = pool.value;
 
-    pipeline.m_global_set = allocate_descriptor_set(engine, pool.value, pipeline.m_model_pipeline.descriptor_layouts[0]);
+    pipeline.m_global_set = allocate_descriptor_set(engine, pool.value, pipeline.m_pbr_set_layouts[0]);
     pipeline.m_vp_buffer = GpuBuffer::create(engine, sizeof(ViewProjectionUniform), vk::BufferUsageFlagBits::eUniformBuffer, GpuBuffer::RandomAccess);
     write_uniform_buffer_descriptor(engine, pipeline.m_global_set, 0, pipeline.m_vp_buffer.buffer, sizeof(ViewProjectionUniform));
     pipeline.m_light_buffer = GpuBuffer::create(engine, sizeof(LightUniform) * MaxLights, vk::BufferUsageFlagBits::eUniformBuffer, GpuBuffer::RandomAccess);
     write_uniform_buffer_descriptor(engine, pipeline.m_global_set, 1, pipeline.m_light_buffer.buffer, sizeof(LightUniform));
 
-    pipeline.test_set_layout = create_set_layout(engine, std::array{
-                                                             vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex},
-                                                             vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment},
-                                                         });
-    pipeline.test_set = allocate_descriptor_set(engine, pipeline.m_descriptor_pool, pipeline.test_set_layout);
-
-    vk::PushConstantRange push = {vk::ShaderStageFlagBits::eVertex, 0, sizeof(PushConstant)};
-    const auto pipeline_layout = engine.device.createPipelineLayout(vk::PipelineLayoutCreateInfo{
-        .setLayoutCount = 1,
-        .pSetLayouts = &pipeline.test_set_layout,
-        .pushConstantRangeCount = 1,
-        .pPushConstantRanges = &push,
-    });
-    critical_assert(pipeline_layout.result == vk::Result::eSuccess);
-    pipeline.test_pipeline_layout = pipeline_layout.value;
-
-    std::array<vk::ShaderEXT, 2> shaders = {};
-    create_linked_shaders(engine,
-                          std::array{
-                              ShaderConfig{
-                                  .path = "../shaders/test.vert.spv",
-                                  .stage = vk::ShaderStageFlagBits::eVertex,
-                                  .next_stage = vk::ShaderStageFlagBits::eFragment,
-                                  .set_layouts = {&pipeline.test_set_layout, 1},
-                                  .push_ranges = {&push, 1},
-                              },
-                              ShaderConfig{
-                                  .path = "../shaders/test.frag.spv",
-                                  .stage = vk::ShaderStageFlagBits::eFragment,
-                                  .set_layouts = {&pipeline.test_set_layout, 1},
-                                  .push_ranges = {&push, 1},
-                              },
-                          },
-                          shaders);
-    pipeline.test_vert_shader = shaders[0];
-    pipeline.test_frag_shader = shaders[1];
-
-    std::array test_vertices = {
-        glm::vec2{0.0, 0.0},
-        glm::vec2{0.0, 1.0},
-        glm::vec2{1.0, 1.0},
-        glm::vec2{1.0, 0.0},
-    };
-    pipeline.test_vertices = GpuBuffer::create(engine, sizeof(test_vertices), vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst);
-    pipeline.test_vertices.write(engine, test_vertices);
-
-    const auto cat = ImageData::load("../assets/cat.png");
-    debug_assert(cat.has_value());
-    pipeline.test_texture = GpuImage::create(engine, {.extent = {static_cast<u32>(cat->width), static_cast<u32>(cat->height), 1},
-                                                      .format = vk::Format::eR8G8B8A8Srgb,
-                                                      .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst});
-    pipeline.test_texture.write(engine, cat->pixels, {static_cast<u32>(cat->width), static_cast<u32>(cat->height), 1}, 4, vk::ImageLayout::eShaderReadOnlyOptimal);
-    cat->unload();
-
-    pipeline.test_sampler = create_sampler(engine, {.type = SamplerType::Linear});
-
-    write_uniform_buffer_descriptor(engine, pipeline.test_set, 0, pipeline.m_vp_buffer.buffer, sizeof(ViewProjectionUniform));
-    write_image_sampler_descriptor(engine, pipeline.test_set, 1, pipeline.test_sampler, pipeline.test_texture.view);
-
     return pipeline;
 }
 
 void PbrPipeline::destroy(const Engine& engine) const {
-    engine.device.destroySampler(test_sampler);
-    test_texture.destroy(engine);
-    test_vertices.destroy(engine);
-    engine.device.destroyShaderEXT(test_frag_shader);
-    engine.device.destroyShaderEXT(test_vert_shader);
-    engine.device.destroyPipelineLayout(test_pipeline_layout);
-    engine.device.destroyDescriptorSetLayout(test_set_layout);
-
     debug_assert(engine.device != nullptr);
+
     for (const auto& texture : m_textures) {
         texture.destroy(engine);
     }
     for (const auto& model : m_models) {
         model.destroy(engine);
     }
+
     debug_assert(m_light_buffer.buffer != nullptr);
     m_light_buffer.destroy(engine);
     debug_assert(m_vp_buffer.buffer != nullptr);
     m_vp_buffer.destroy(engine);
+
     debug_assert(m_descriptor_pool != nullptr);
     engine.device.destroyDescriptorPool(m_descriptor_pool);
-    debug_assert(m_model_pipeline.pipeline != nullptr);
-    m_model_pipeline.destroy(engine);
+
+    for (const auto& set_layout : m_pbr_set_layouts) {
+        debug_assert(set_layout != nullptr);
+        engine.device.destroyDescriptorSetLayout(set_layout);
+    }
+
+    debug_assert(m_pbr_layout != nullptr);
+    engine.device.destroyPipelineLayout(m_pbr_layout);
+
+    for (const auto& shader : m_pbr_shaders) {
+        debug_assert(shader != nullptr);
+        engine.device.destroyShaderEXT(shader);
+    }
+
     debug_assert(m_depth_image.image != nullptr);
     m_depth_image.destroy(engine);
     debug_assert(m_color_image.image != nullptr);
@@ -196,11 +148,6 @@ void PbrPipeline::render(const vk::CommandBuffer cmd, const Engine& engine, Wind
     m_light_buffer.write(engine, lights);
     m_lights.clear();
 
-    const vk::Viewport viewport = {0.0f, 0.0f, static_cast<f32>(window.extent.width), static_cast<f32>(window.extent.height), 0.0f, 1.0f};
-    cmd.setViewport(0, {viewport});
-    const vk::Rect2D scissor = {{0, 0}, window.extent};
-    cmd.setScissor(0, {scissor});
-
     BarrierBuilder(cmd)
         .add_image_barrier(m_color_image.image, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
         .set_image_dst(vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::AccessFlagBits2::eColorAttachmentWrite, vk::ImageLayout::eColorAttachmentOptimal)
@@ -231,17 +178,25 @@ void PbrPipeline::render(const vk::CommandBuffer cmd, const Engine& engine, Wind
         .pDepthAttachment = &depth_attachment,
     });
 
-    cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, m_model_pipeline.pipeline);
+    cmd.setCullMode(vk::CullModeFlagBits::eBack);
+    cmd.setRasterizationSamplesEXT(vk::SampleCountFlagBits::e4);
+    cmd.setSampleMaskEXT(vk::SampleCountFlagBits::e4, vk::SampleMask{0xff});
+    cmd.setVertexInputEXT({vk::VertexInputBindingDescription2EXT{.stride = sizeof(ModelVertex), .inputRate = vk::VertexInputRate::eVertex, .divisor = 1}},
+                          {vk::VertexInputAttributeDescription2EXT{.location = 0, .format = vk::Format::eR32G32B32Sfloat, .offset = offsetof(ModelVertex, position)},
+                           vk::VertexInputAttributeDescription2EXT{.location = 1, .format = vk::Format::eR32G32B32Sfloat, .offset = offsetof(ModelVertex, normal)},
+                           vk::VertexInputAttributeDescription2EXT{.location = 2, .format = vk::Format::eR32G32Sfloat, .offset = offsetof(ModelVertex, uv)}});
+
+    cmd.bindShadersEXT({vk::ShaderStageFlagBits::eVertex, vk::ShaderStageFlagBits::eFragment}, m_pbr_shaders);
 
     std::array<vk::DescriptorSet, 2> sets = {m_global_set, nullptr};
     for (const auto& ticket : m_render_queue) {
         const auto& model = m_models[ticket.model_index];
         sets[1] = model.set;
 
-        cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_model_pipeline.layout, 0, sets, {});
+        cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pbr_layout, 0, sets, {});
 
         PushConstant model_push = {ticket.transform.matrix()};
-        cmd.pushConstants(m_model_pipeline.layout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(model_push), &model_push);
+        cmd.pushConstants(m_pbr_layout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(model_push), &model_push);
 
         std::array vertex_buffers = {model.vertex_buffer.buffer};
         std::array offsets = {vk::DeviceSize{0}};
@@ -249,38 +204,6 @@ void PbrPipeline::render(const vk::CommandBuffer cmd, const Engine& engine, Wind
         cmd.bindIndexBuffer(model.index_buffer.buffer, 0, vk::IndexType::eUint32);
         cmd.drawIndexed(model.index_count, 1, 0, 0, 1);
     }
-
-    cmd.setViewportWithCount({viewport});
-    cmd.setScissorWithCount({scissor});
-
-    cmd.setRasterizerDiscardEnable(vk::False);
-    cmd.setPrimitiveTopology(vk::PrimitiveTopology::eTriangleFan);
-    cmd.setPrimitiveRestartEnable(vk::False);
-    cmd.setVertexInputEXT({vk::VertexInputBindingDescription2EXT{.binding = 0, .stride = sizeof(glm::vec2), .inputRate = vk::VertexInputRate::eVertex, .divisor = 1}},
-                          {vk::VertexInputAttributeDescription2EXT{.location = 0, .binding = 0, .format = vk::Format::eR32G32Sfloat, .offset = 0}});
-    cmd.setCullMode(vk::CullModeFlagBits::eNone);
-    cmd.setDepthTestEnable(vk::True);
-    cmd.setDepthWriteEnable(vk::True);
-    cmd.setDepthBiasEnable(vk::False);
-    cmd.setDepthCompareOp(vk::CompareOp::eLessOrEqual);
-    cmd.setStencilTestEnable(vk::False);
-    cmd.setPolygonModeEXT(vk::PolygonMode::eFill);
-    cmd.setRasterizationSamplesEXT(vk::SampleCountFlagBits::e4);
-    cmd.setSampleMaskEXT(vk::SampleCountFlagBits::e4, vk::SampleMask{0xff});
-    cmd.setAlphaToCoverageEnableEXT(vk::True);
-    cmd.setColorBlendEnableEXT(0, {vk::False});
-    cmd.setColorWriteMaskEXT(0, {vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA});
-
-    cmd.bindShadersEXT({vk::ShaderStageFlagBits::eVertex, vk::ShaderStageFlagBits::eFragment}, {test_vert_shader, test_frag_shader});
-
-    cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, test_pipeline_layout, 0, {test_set}, {});
-    PushConstant model_push = {};
-    cmd.pushConstants(m_model_pipeline.layout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(model_push), &model_push);
-
-    std::array vertex_buffers = {test_vertices.buffer};
-    std::array offsets = {vk::DeviceSize{0}};
-    cmd.bindVertexBuffers(0, vertex_buffers, offsets);
-    cmd.draw(4, 1, 0, 0);
 
     cmd.endRendering();
 
@@ -345,7 +268,7 @@ void PbrPipeline::load_texture_from_data(const Engine& engine, const void* data,
     image.generate_mipmaps(engine, mips, extent, format, vk::ImageLayout::eShaderReadOnlyOptimal);
 
     const auto sampler = create_sampler(engine, {.type = SamplerType::Linear, .mip_levels = get_mip_count(extent)});
-    const auto set = allocate_descriptor_set(engine, m_descriptor_pool, m_model_pipeline.descriptor_layouts[1]);
+    const auto set = allocate_descriptor_set(engine, m_descriptor_pool, m_pbr_set_layouts[1]);
     write_image_sampler_descriptor(engine, set, 0, sampler, image.view);
 
     m_textures.emplace_back(image, sampler);
@@ -378,7 +301,7 @@ void PbrPipeline::load_model_from_data(const Engine& engine, const std::span<con
     vertex_buffer.write(engine, vertices.data(), vertices.size() * sizeof(vertices[0]), 0);
     material_buffer.write(engine, MaterialUniform{roughness, metalness});
 
-    const auto set = hg::allocate_descriptor_set(engine, m_descriptor_pool, m_model_pipeline.descriptor_layouts[1]);
+    const auto set = hg::allocate_descriptor_set(engine, m_descriptor_pool, m_pbr_set_layouts[1]);
     hg::write_image_sampler_descriptor(engine, set, 0, m_textures[texture_index].sampler, m_textures[texture_index].image.view);
     hg::write_uniform_buffer_descriptor(engine, set, 1, material_buffer.buffer, sizeof(MaterialUniform));
 

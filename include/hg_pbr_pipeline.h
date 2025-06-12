@@ -4,8 +4,6 @@
 #include "hg_math.h"
 #include "hg_utils.h"
 #include "hg_vulkan_engine.h"
-#include <glm/ext/vector_float2.hpp>
-#include <vulkan/vulkan_handles.hpp>
 
 namespace hg {
 
@@ -109,7 +107,9 @@ public:
 private:
     GpuImage m_color_image = {};
     GpuImage m_depth_image = {};
-    Pipeline m_model_pipeline = {};
+    std::array<vk::ShaderEXT, 2> m_pbr_shaders = {};
+    vk::PipelineLayout m_pbr_layout = {};
+    std::array<vk::DescriptorSetLayout, 2> m_pbr_set_layouts = {};
     vk::DescriptorPool m_descriptor_pool = {};
     vk::DescriptorSet m_global_set = {};
     GpuBuffer m_vp_buffer = {};
@@ -119,15 +119,6 @@ private:
     std::vector<Model> m_models = {};
     std::vector<RenderTicket> m_render_queue = {};
     std::vector<Light> m_lights = {};
-
-    vk::DescriptorSetLayout test_set_layout = {};
-    vk::PipelineLayout test_pipeline_layout = {};
-    vk::ShaderEXT test_vert_shader = {};
-    vk::ShaderEXT test_frag_shader = {};
-    vk::DescriptorSet test_set = {};
-    GpuBuffer test_vertices = {};
-    GpuImage test_texture = {};
-    vk::Sampler test_sampler = {};
 };
 
 } // namespace hg
