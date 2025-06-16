@@ -1,5 +1,15 @@
 #include "hg_load.h"
 
+#include <stb/stb_image.h>
+
+#define FASTGLTF_COMPILE_AS_CPP20
+#include <fastgltf/core.hpp>
+#include <fastgltf/tools.hpp>
+#include <fastgltf/glm_element_traits.hpp>
+
+#include <filesystem>
+#include <optional>
+
 namespace hg {
 
 std::optional<ImageData> ImageData::load(const std::filesystem::path path) {

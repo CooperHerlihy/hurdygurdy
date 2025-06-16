@@ -1,5 +1,6 @@
 #pragma once
 
+#include "hg_pch.h"
 #include "hg_utils.h"
 
 namespace glm {
@@ -25,7 +26,7 @@ template <typename T> struct Transform2D {
         glm::mat<2, 2, T> m2{1};
         m2[0].x = scale.x;
         m2[1].y = scale.y;
-        glm::mat<2, 2, T> rot = {cos(radians), sin(radians), -sin(radians), cos(radians)};
+        glm::mat<2, 2, T> rot = {std::cos(radians), std::sin(radians), -std::sin(radians), std::cos(radians)};
         m2 = rot * m2;
         glm::mat<4, 4, T> m4{m2};
         m4[3].x = position.x;

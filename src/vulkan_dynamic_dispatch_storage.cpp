@@ -1,2 +1,2 @@
-#include "hg_external.h"
+#include "hg_pch.h"
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE

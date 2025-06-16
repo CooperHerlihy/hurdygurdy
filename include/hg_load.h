@@ -2,6 +2,9 @@
 
 #include "hg_utils.h"
 
+#include <filesystem>
+#include <optional>
+
 namespace hg {
 
 struct ImageData {

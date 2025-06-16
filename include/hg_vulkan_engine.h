@@ -1,6 +1,12 @@
 #pragma once
 
+#include "hg_pch.h"
 #include "hg_utils.h"
+
+#include <array>
+#include <filesystem>
+#include <span>
+#include <vector>
 
 namespace hg {
 
@@ -115,9 +121,12 @@ struct GpuImage {
         vmaDestroyImage(engine.allocator, image, allocation);
     }
 
+    [[nodiscard]] static GpuImage create_cubemap(const Engine& engine, std::filesystem::path path);
+
     void write(const Engine& engine, const void* data, vk::Extent3D extent, u32 pixel_alignment, vk::ImageLayout final_layout,
                const vk::ImageSubresourceRange& subresource = {vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1}) const;
     void generate_mipmaps(const Engine& engine, u32 levels, vk::Extent3D extent, vk::Format format, vk::ImageLayout final_layout) const;
+
 };
 
 inline u32 get_mip_count(const vk::Extent3D extent) {

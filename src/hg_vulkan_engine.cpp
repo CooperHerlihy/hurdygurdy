@@ -1,5 +1,17 @@
 #include "hg_vulkan_engine.h"
 
+#include "hg_load.h"
+#include "hg_pch.h"
+#include "hg_utils.h"
+
+#include <array>
+#include <format>
+#include <fstream>
+#include <iostream>
+#include <span>
+#include <vector>
+#include <vulkan/vulkan_handles.hpp>
+
 namespace hg {
 
 #ifdef NDEBUG
@@ -529,9 +541,7 @@ void GpuBuffer::write(const Engine& engine, const void* data, const vk::DeviceSi
     const auto copy_result = vmaCopyMemoryToAllocation(engine.allocator, data, staging_buffer.allocation, 0, size);
     critical_assert(copy_result == VK_SUCCESS);
 
-    const auto cmd = begin_single_time_commands(engine);
-    cmd.copyBuffer(staging_buffer.buffer, buffer, {vk::BufferCopy(offset, 0, size)});
-    end_single_time_commands(engine, cmd);
+    submit_single_time_commands(engine, [&](const vk::CommandBuffer cmd) { cmd.copyBuffer(staging_buffer.buffer, buffer, {vk::BufferCopy(offset, 0, size)}); });
 }
 
 GpuImage GpuImage::create(const Engine& engine, const Config& config) {
@@ -582,13 +592,196 @@ GpuImage GpuImage::create(const Engine& engine, const Config& config) {
     critical_assert(view.result == vk::Result::eSuccess);
 
     if (config.layout != vk::ImageLayout::eUndefined) {
-        const auto cmd = begin_single_time_commands(engine);
-        BarrierBuilder(cmd)
-            .add_image_barrier(image, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
-            .set_image_dst(vk::PipelineStageFlagBits2::eNone, vk::AccessFlagBits2::eNone, config.layout)
-            .build_and_run();
-        end_single_time_commands(engine, cmd);
+        submit_single_time_commands(engine, [&](const vk::CommandBuffer cmd) {
+            BarrierBuilder(cmd)
+                .add_image_barrier(image, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
+                .set_image_dst(vk::PipelineStageFlagBits2::eNone, vk::AccessFlagBits2::eNone, config.layout)
+                .build_and_run();
+        });
     }
+
+    return {allocation, image, view.value};
+}
+
+struct StagingImage {
+    VmaAllocation allocation = nullptr;
+    vk::Image image = {};
+
+    struct Config {
+        vk::Extent3D extent = {};
+        vk::Format format = vk::Format::eUndefined;
+        vk::ImageUsageFlags usage = {};
+        vk::SampleCountFlagBits sample_count = vk::SampleCountFlagBits::e1;
+        u32 mip_levels = 1;
+    };
+
+    void destroy(const Engine& engine) const { vmaDestroyImage(engine.allocator, image, allocation); }
+    [[nodiscard]] static StagingImage create(const Engine& engine, const Config& config) {
+        debug_assert(engine.device != nullptr);
+        debug_assert(engine.allocator != nullptr);
+        debug_assert(config.extent.width > 0);
+        debug_assert(config.extent.height > 0);
+        debug_assert(config.extent.depth > 0);
+        debug_assert(config.format != vk::Format::eUndefined);
+        debug_assert(config.usage != static_cast<vk::ImageUsageFlags>(0));
+        debug_assert(config.sample_count != static_cast<vk::SampleCountFlagBits>(0));
+        debug_assert(config.mip_levels > 0);
+
+        VkImageType dimensions = VK_IMAGE_TYPE_3D;
+        if (config.extent.depth == 1) {
+            dimensions = static_cast<VkImageType>(dimensions - 1);
+            if (config.extent.height == 1) {
+                dimensions = static_cast<VkImageType>(dimensions - 1);
+            }
+        }
+        VkImageCreateInfo image_info = {};
+        image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        image_info.imageType = dimensions;
+        image_info.format = static_cast<VkFormat>(config.format);
+        image_info.extent = config.extent;
+        image_info.mipLevels = config.mip_levels;
+        image_info.arrayLayers = 1;
+        image_info.samples = static_cast<VkSampleCountFlagBits>(config.sample_count);
+        image_info.usage = static_cast<VkImageUsageFlags>(config.usage);
+
+        VmaAllocationCreateInfo alloc_info = {};
+        alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+        alloc_info.flags = 0;
+
+        VkImage image = VK_NULL_HANDLE;
+        VmaAllocation allocation = VK_NULL_HANDLE;
+        const auto image_result = vmaCreateImage(engine.allocator, &image_info, &alloc_info, &image, &allocation, nullptr);
+        critical_assert(image_result == VK_SUCCESS);
+
+        return {allocation, image};
+    }
+};
+
+GpuImage GpuImage::create_cubemap(const Engine& engine, const std::filesystem::path path) {
+    debug_assert(engine.device != nullptr);
+    debug_assert(engine.allocator != nullptr);
+
+    const auto data = ImageData::load(path);
+    critical_assert(data.has_value());
+    defer(data->unload());
+
+    const vk::Extent3D staging_extent = {static_cast<u32>(data->width), static_cast<u32>(data->height), 1};
+    const VkDeviceSize staging_size = static_cast<u64>(staging_extent.width) * static_cast<u64>(staging_extent.height) * 4;
+
+    const auto staging_buffer = GpuBuffer::create(engine, staging_size, vk::BufferUsageFlagBits::eTransferSrc, GpuBuffer::MemoryType::Staging);
+    defer(staging_buffer.destroy(engine));
+    staging_buffer.write(engine, data->pixels, staging_size, 0);
+
+    const auto staging_image = StagingImage::create(
+        engine, {.extent = staging_extent, .format = vk::Format::eR8G8B8A8Srgb, .usage = vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eTransferSrc});
+    defer(staging_image.destroy(engine));
+
+    const vk::Extent3D extent = {staging_extent.width / 4, staging_extent.height / 3, 1};
+
+    VkImageCreateInfo image_info = {};
+    image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    image_info.imageType = VK_IMAGE_TYPE_2D;
+    image_info.format = VK_FORMAT_R8G8B8A8_SRGB;
+    image_info.extent = extent;
+    image_info.mipLevels = 1;
+    image_info.arrayLayers = 1;
+    image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    image_info.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    image_info.arrayLayers = 6;
+    image_info.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+
+    VmaAllocationCreateInfo alloc_info = {};
+    alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+    alloc_info.flags = 0;
+
+    VkImage image = VK_NULL_HANDLE;
+    VmaAllocation allocation = VK_NULL_HANDLE;
+    const auto image_result = vmaCreateImage(engine.allocator, &image_info, &alloc_info, &image, &allocation, nullptr);
+    critical_assert(image_result == VK_SUCCESS);
+
+    const vk::ImageViewCreateInfo view_info = {
+        .image = image,
+        .viewType = vk::ImageViewType::eCube,
+        .format = vk::Format::eR8G8B8A8Srgb,
+        .subresourceRange = {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 6},
+    };
+    const auto view = engine.device.createImageView(view_info);
+    critical_assert(view.result == vk::Result::eSuccess);
+
+    submit_single_time_commands(engine, [&](const vk::CommandBuffer cmd) {
+        BarrierBuilder(cmd)
+            .add_image_barrier(staging_image.image, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
+            .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
+            .build_and_run();
+
+        const vk::BufferImageCopy2 copy_region = {.imageSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1}, .imageExtent = staging_extent};
+        cmd.copyBufferToImage2({.srcBuffer = staging_buffer.buffer,
+                                .dstImage = staging_image.image,
+                                .dstImageLayout = vk::ImageLayout::eTransferDstOptimal,
+                                .regionCount = 1,
+                                .pRegions = &copy_region});
+
+        BarrierBuilder(cmd)
+            .add_image_barrier(staging_image.image, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
+            .set_image_src(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
+            .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferRead, vk::ImageLayout::eTransferSrcOptimal)
+            .add_image_barrier(image, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 6})
+            .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
+            .build_and_run();
+
+        std::array copies = {
+            vk::ImageCopy2{
+                .srcSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+                .srcOffset = {data->width * 2 / 4, data->height * 1 / 3, 0},
+                .dstSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+                .extent = extent,
+            },
+            vk::ImageCopy2{
+                .srcSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+                .srcOffset = {data->width * 0 / 4, data->height * 1 / 3, 0},
+                .dstSubresource = {vk::ImageAspectFlagBits::eColor, 0, 1, 1},
+                .extent = extent,
+            },
+            vk::ImageCopy2{
+                .srcSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+                .srcOffset = {data->width * 1 / 4, data->height * 0 / 3, 0},
+                .dstSubresource = {vk::ImageAspectFlagBits::eColor, 0, 2, 1},
+                .extent = extent,
+            },
+            vk::ImageCopy2{
+                .srcSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+                .srcOffset = {data->width * 1 / 4, data->height * 2 / 3, 0},
+                .dstSubresource = {vk::ImageAspectFlagBits::eColor, 0, 3, 1},
+                .extent = extent,
+            },
+            vk::ImageCopy2{
+                .srcSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+                .srcOffset = {data->width * 1 / 4, data->height * 1 / 3, 0},
+                .dstSubresource = {vk::ImageAspectFlagBits::eColor, 0, 4, 1},
+                .extent = extent,
+            },
+            vk::ImageCopy2{
+                .srcSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+                .srcOffset = {data->width * 3 / 4, data->height * 1 / 3, 0},
+                .dstSubresource = {vk::ImageAspectFlagBits::eColor, 0, 5, 1},
+                .extent = extent,
+            },
+        };
+        cmd.copyImage2({
+            .srcImage = staging_image.image,
+            .srcImageLayout = vk::ImageLayout::eTransferSrcOptimal,
+            .dstImage = image,
+            .dstImageLayout = vk::ImageLayout::eTransferDstOptimal,
+            .regionCount = static_cast<u32>(copies.size()),
+            .pRegions = copies.data(),
+        });
+
+        BarrierBuilder(cmd)
+            .add_image_barrier(image, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 6})
+            .set_image_src(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
+            .set_image_dst(vk::PipelineStageFlagBits2::eFragmentShader, vk::AccessFlagBits2::eShaderRead, vk::ImageLayout::eShaderReadOnlyOptimal)
+            .build_and_run();
+    });
 
     return {allocation, image, view.value};
 }
@@ -610,24 +803,22 @@ void GpuImage::write(const Engine& engine, const void* data, const vk::Extent3D 
     defer(vmaDestroyBuffer(engine.allocator, staging_buffer.buffer, staging_buffer.allocation));
     staging_buffer.write(engine, data, size, 0);
 
-    const auto cmd = begin_single_time_commands(engine);
+    submit_single_time_commands(engine, [&](const vk::CommandBuffer cmd) {
+        BarrierBuilder(cmd)
+            .add_image_barrier(image, subresource)
+            .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
+            .build_and_run();
 
-    BarrierBuilder(cmd)
-        .add_image_barrier(image, subresource)
-        .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
-        .build_and_run();
+        const vk::BufferImageCopy2 copy_region = {.imageSubresource = {subresource.aspectMask, 0, 0, 1}, .imageExtent = extent};
+        cmd.copyBufferToImage2(
+            {.srcBuffer = staging_buffer.buffer, .dstImage = image, .dstImageLayout = vk::ImageLayout::eTransferDstOptimal, .regionCount = 1, .pRegions = &copy_region});
 
-    const vk::BufferImageCopy2 copy_region = {.imageSubresource = {subresource.aspectMask, 0, 0, 1}, .imageExtent = extent};
-    cmd.copyBufferToImage2(
-        {.srcBuffer = staging_buffer.buffer, .dstImage = image, .dstImageLayout = vk::ImageLayout::eTransferDstOptimal, .regionCount = 1, .pRegions = &copy_region});
-
-    BarrierBuilder(cmd)
-        .add_image_barrier(image, subresource)
-        .set_image_src(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
-        .set_image_dst(vk::PipelineStageFlagBits2::eFragmentShader, vk::AccessFlagBits2::eShaderRead, final_layout)
-        .build_and_run();
-
-    end_single_time_commands(engine, cmd);
+        BarrierBuilder(cmd)
+            .add_image_barrier(image, subresource)
+            .set_image_src(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
+            .set_image_dst(vk::PipelineStageFlagBits2::eNone, vk::AccessFlagBits2::eNone, final_layout)
+            .build_and_run();
+    });
 }
 
 void GpuImage::generate_mipmaps(const Engine& engine, const u32 mip_levels, const vk::Extent3D extent, const vk::Format format, const vk::ImageLayout final_layout) const {
@@ -642,60 +833,58 @@ void GpuImage::generate_mipmaps(const Engine& engine, const u32 mip_levels, cons
     const auto format_properties = engine.gpu.getFormatProperties(format);
     critical_assert(format_properties.optimalTilingFeatures & vk::FormatFeatureFlagBits::eSampledImageFilterLinear);
 
-    const auto cmd = begin_single_time_commands(engine);
-
-    vk::Offset3D mip_offset = {static_cast<i32>(extent.width), static_cast<i32>(extent.height), static_cast<i32>(extent.depth)};
-
-    BarrierBuilder(cmd)
-        .add_image_barrier(image, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
-        .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferRead, vk::ImageLayout::eTransferSrcOptimal)
-        .build_and_run();
-
-    for (u32 level = 0; level < mip_levels - 1; ++level) {
-        BarrierBuilder(cmd)
-            .add_image_barrier(image, {vk::ImageAspectFlagBits::eColor, level + 1, 1, 0, 1})
-            .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
-            .build_and_run();
-
-        vk::ImageBlit2 region = {
-            .srcSubresource = {vk::ImageAspectFlagBits::eColor, level, 0, 1},
-            .dstSubresource = {vk::ImageAspectFlagBits::eColor, level + 1, 0, 1},
-        };
-        region.srcOffsets[1] = mip_offset;
-        if (mip_offset.x > 1) {
-            mip_offset.x /= 2;
-        }
-        if (mip_offset.y > 1) {
-            mip_offset.y /= 2;
-        }
-        if (mip_offset.z > 1) {
-            mip_offset.z /= 2;
-        }
-        region.dstOffsets[1] = mip_offset;
-        cmd.blitImage2({
-            .srcImage = image,
-            .srcImageLayout = vk::ImageLayout::eTransferSrcOptimal,
-            .dstImage = image,
-            .dstImageLayout = vk::ImageLayout::eTransferDstOptimal,
-            .regionCount = 1,
-            .pRegions = &region,
-            .filter = vk::Filter::eLinear,
-        });
+    submit_single_time_commands(engine, [&](const vk::CommandBuffer cmd) {
+        vk::Offset3D mip_offset = {static_cast<i32>(extent.width), static_cast<i32>(extent.height), static_cast<i32>(extent.depth)};
 
         BarrierBuilder(cmd)
-            .add_image_barrier(image, {vk::ImageAspectFlagBits::eColor, level + 1, 1, 0, 1})
-            .set_image_src(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
+            .add_image_barrier(image, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
             .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferRead, vk::ImageLayout::eTransferSrcOptimal)
             .build_and_run();
-    }
 
-    BarrierBuilder(cmd)
-        .add_image_barrier(image, {vk::ImageAspectFlagBits::eColor, 0, mip_levels, 0, 1})
-        .set_image_src(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferRead, vk::ImageLayout::eTransferSrcOptimal)
-        .set_image_dst(vk::PipelineStageFlagBits2::eNone, vk::AccessFlagBits2::eNone, final_layout)
-        .build_and_run();
+        for (u32 level = 0; level < mip_levels - 1; ++level) {
+            BarrierBuilder(cmd)
+                .add_image_barrier(image, {vk::ImageAspectFlagBits::eColor, level + 1, 1, 0, 1})
+                .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
+                .build_and_run();
 
-    end_single_time_commands(engine, cmd);
+            vk::ImageBlit2 region = {
+                .srcSubresource = {vk::ImageAspectFlagBits::eColor, level, 0, 1},
+                .dstSubresource = {vk::ImageAspectFlagBits::eColor, level + 1, 0, 1},
+            };
+            region.srcOffsets[1] = mip_offset;
+            if (mip_offset.x > 1) {
+                mip_offset.x /= 2;
+            }
+            if (mip_offset.y > 1) {
+                mip_offset.y /= 2;
+            }
+            if (mip_offset.z > 1) {
+                mip_offset.z /= 2;
+            }
+            region.dstOffsets[1] = mip_offset;
+            cmd.blitImage2({
+                .srcImage = image,
+                .srcImageLayout = vk::ImageLayout::eTransferSrcOptimal,
+                .dstImage = image,
+                .dstImageLayout = vk::ImageLayout::eTransferDstOptimal,
+                .regionCount = 1,
+                .pRegions = &region,
+                .filter = vk::Filter::eLinear,
+            });
+
+            BarrierBuilder(cmd)
+                .add_image_barrier(image, {vk::ImageAspectFlagBits::eColor, level + 1, 1, 0, 1})
+                .set_image_src(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
+                .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferRead, vk::ImageLayout::eTransferSrcOptimal)
+                .build_and_run();
+        }
+
+        BarrierBuilder(cmd)
+            .add_image_barrier(image, {vk::ImageAspectFlagBits::eColor, 0, mip_levels, 0, 1})
+            .set_image_src(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferRead, vk::ImageLayout::eTransferSrcOptimal)
+            .set_image_dst(vk::PipelineStageFlagBits2::eNone, vk::AccessFlagBits2::eNone, final_layout)
+            .build_and_run();
+    });
 }
 
 void allocate_descriptor_sets(const Engine& engine, const vk::DescriptorPool pool, const std::span<const vk::DescriptorSetLayout> layouts,
@@ -857,7 +1046,7 @@ void create_linked_shaders(const Engine& engine, const std::span<vk::ShaderEXT> 
         });
     }
 
-    const auto shader_result = engine.device.createShadersEXT(shader_infos.size(), shader_infos.data(), nullptr, out_shaders.data());
+    const auto shader_result = engine.device.createShadersEXT(static_cast<u32>(shader_infos.size()), shader_infos.data(), nullptr, out_shaders.data());
     critical_assert(shader_result == vk::Result::eSuccess);
 }
 

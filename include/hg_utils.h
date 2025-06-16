@@ -1,6 +1,10 @@
 #pragma once
 
-#include "hg_external.h"
+#include <chrono>
+#include <cstdint>
+#include <format>
+#include <iostream>
+#include <string_view>
 
 using i8 = int8_t;
 using i16 = int16_t;

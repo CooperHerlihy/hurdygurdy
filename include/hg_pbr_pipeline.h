@@ -2,6 +2,7 @@
 
 #include "hg_load.h"
 #include "hg_math.h"
+#include "hg_mesh.h"
 #include "hg_utils.h"
 #include "hg_vulkan_engine.h"
 
@@ -62,6 +63,22 @@ public:
         }
     };
 
+    struct Skybox {
+        static constexpr u32 IndexCount = 36;
+        vk::DescriptorSet set = {};
+        vk::Sampler sampler = {};
+        GpuImage cubemap = {};
+        GpuBuffer index_buffer = {};
+        GpuBuffer vertex_buffer = {};
+
+        void destroy(const Engine& engine) const {
+            engine.device.destroySampler(sampler);
+            cubemap.destroy(engine);
+            index_buffer.destroy(engine);
+            vertex_buffer.destroy(engine);
+        }
+    };
+
     struct RenderTicket {
         usize model_index;
         Transform3Df transform;
@@ -94,6 +111,8 @@ public:
     void load_model(const Engine& engine, std::filesystem::path path, usize texture_index);
     void load_model_from_data(const Engine& engine, std::span<const u32> indices, std::span<const ModelVertex> vertices, usize texture_index, float roughness, float metalness);
 
+    void load_skybox(const Engine& engine, std::filesystem::path path);
+
     void queue_light(const glm::vec3 position, const glm::vec3 color) {
         debug_assert(m_lights.size() <= MaxLights);
         m_lights.emplace_back(glm::vec4{position, 1.0f}, glm::vec4{color, 1.0});
@@ -107,14 +126,21 @@ public:
 private:
     GpuImage m_color_image = {};
     GpuImage m_depth_image = {};
+
     std::array<vk::ShaderEXT, 2> m_pbr_shaders = {};
     vk::PipelineLayout m_pbr_layout = {};
     std::array<vk::DescriptorSetLayout, 2> m_pbr_set_layouts = {};
+
+    std::array<vk::ShaderEXT, 2> m_skybox_shaders = {};
+    vk::PipelineLayout m_skybox_layout = {};
+    std::array<vk::DescriptorSetLayout, 2> m_skybox_set_layouts = {};
+
     vk::DescriptorPool m_descriptor_pool = {};
     vk::DescriptorSet m_global_set = {};
     GpuBuffer m_vp_buffer = {};
     GpuBuffer m_light_buffer = {};
 
+    Skybox m_skybox = {};
     std::vector<Texture> m_textures = {};
     std::vector<Model> m_models = {};
     std::vector<RenderTicket> m_render_queue = {};

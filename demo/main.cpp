@@ -1,52 +1,6 @@
-#include "hurdy_gurdy.h"
+#include <hurdy_gurdy.h>
 
-constexpr double rt3 = 1.73205080757;
-
-static hg::ModelData generate_sphere(const f32 radius, i32 fidelity) {
-    debug_assert(radius > 0);
-    debug_assert(fidelity >= 3);
-
-    std::vector<hg::ModelVertex> vertices = {};
-    vertices.reserve(static_cast<usize>(2 + fidelity * fidelity));
-
-    glm::vec3 point = {0.0f, -radius, 0.0f};
-    vertices.emplace_back(point, point, glm::vec2{});
-    for (i32 i = 0; i < fidelity; ++i) {
-        f32 h = -std::cos(glm::pi<f32>() * i / fidelity);
-        f32 r = std::sin(glm::pi<f32>() * i / fidelity);
-        for (i32 j = 0; j < fidelity; ++j) {
-            point = glm::vec3{r * std::cos(glm::tau<f32>() * j / fidelity), h, r * std::sin(glm::tau<f32>() * j / fidelity)};
-            vertices.emplace_back(point * radius, point, glm::vec2{});
-        }
-    }
-    point = {0.0f, radius, 0.0f};
-    vertices.emplace_back(point, point, glm::vec2{});
-
-    std::vector<u32> indices = {};
-    indices.reserve(static_cast<usize>(fidelity * (fidelity + 2) * 3));
-    for (i32 i = 0; i < fidelity; ++i) {
-        indices.push_back(0);
-        indices.push_back((i + 1) % fidelity + 1);
-        indices.push_back((i + 2) % fidelity + 1);
-    }
-    for (i32 i = 1; i <= fidelity * (fidelity - 1); ++i) {
-        indices.push_back(i);
-        indices.push_back(i + fidelity);
-        indices.push_back(i + 1);
-
-        indices.push_back(i + 1);
-        indices.push_back(i + fidelity);
-        indices.push_back(i + fidelity + 1);
-    }
-    i32 top_index = 1 + fidelity * fidelity;
-    for (i32 i = 0; i < fidelity; ++i) {
-        indices.push_back(top_index);
-        indices.push_back(top_index - ((i + 1) % fidelity + 1));
-        indices.push_back(top_index - ((i + 2) % fidelity + 1));
-    }
-
-    return {std::move(indices), std::move(vertices)};
-}
+constexpr double sqrt3 = 1.73205080757;
 
 int main() {
     const auto engine = hg::Engine::create();
@@ -58,6 +12,8 @@ int main() {
     auto pbr_pipeline = hg::PbrPipeline::create(engine, window);
     defer(pbr_pipeline.destroy(engine));
 
+    pbr_pipeline.load_skybox(engine, "../assets/cloudy_skyboxes/Cubemap/Cubemap_Sky_06-512x512.png");
+
     std::array<u32, 4> sphere_color = {};
     sphere_color.fill(0xff44ccff);
     pbr_pipeline.load_texture_from_data(engine, sphere_color.data(), {2, 2, 1}, vk::Format::eR8G8B8A8Srgb, 4);
@@ -65,7 +21,7 @@ int main() {
     pbr_pipeline.load_texture(engine, "../assets/hexagon_models/Textures/hexagons_medieval.png");
     constexpr usize hex_tex = 1;
 
-    const auto sphere_model = generate_sphere(0.5f, 32);
+    const auto sphere_model = hg::generate_sphere(32);
     pbr_pipeline.load_model_from_data(engine, sphere_model.indices, sphere_model.vertices, sphere_texture, 0.04f, 1.0f);
     constexpr usize sphere = 0;
 
@@ -83,13 +39,15 @@ int main() {
     pbr_pipeline.load_model(engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_castle_blue.gltf", hex_tex);
     constexpr usize castle = 6;
 
+
     pbr_pipeline.update_projection(engine, glm::perspective(glm::pi<f32>() / 4.0f, static_cast<f32>(window.extent.width) / static_cast<f32>(window.extent.height), 0.1f, 100.f));
 
     hg::Cameraf camera = {};
     camera.translate({0.0f, -2.0f, -4.0f});
 
     hg::Transform3Df sphere_transform = {
-        .position = {0.0f, -2.0f, 0.0f},
+        .position = {0.0f, -1.0f, 0.0f},
+        .scale = {0.25f, 0.25f, 0.25f},
     };
 
     glm::dvec2 cursor_pos = {};
@@ -158,17 +116,17 @@ int main() {
 
         const bool present_success = window.submit_frame(engine, [&](const vk::CommandBuffer cmd) {
             pbr_pipeline.queue_light({-2.0f, -3.0f, -2.0f}, {glm::vec3{1.0f, 1.0f, 1.0f} * 300.0f});
-            pbr_pipeline.queue_light({2.5f, -2.0f, 2.25f}, {glm::vec3{1.0f, 0.2f, 0.0f} * 10.0f});
+            pbr_pipeline.queue_light({-0.8f, -0.5f, 1.5}, {glm::vec3{1.0f, 0.2f, 0.0f} * 10.0f});
 
             pbr_pipeline.queue_model(sphere, sphere_transform);
 
             pbr_pipeline.queue_model(grass, {.position = {0.0f, 0.0f, 0.0f}});
 
-            pbr_pipeline.queue_model(grass, {.position = {-1.0f, -0.25f, rt3}});
-            pbr_pipeline.queue_model(blacksmith, {.position = {-1.0f, -0.25f, rt3}});
+            pbr_pipeline.queue_model(grass, {.position = {-1.0f, -0.25f, sqrt3}});
+            pbr_pipeline.queue_model(blacksmith, {.position = {-1.0f, -0.25f, sqrt3}});
 
-            pbr_pipeline.queue_model(grass, {.position = {1.0f, -0.5f, rt3}});
-            pbr_pipeline.queue_model(castle, {.position = {1.0f, -0.5f, rt3}});
+            pbr_pipeline.queue_model(grass, {.position = {1.0f, -0.5f, sqrt3}});
+            pbr_pipeline.queue_model(castle, {.position = {1.0f, -0.5f, sqrt3}});
 
             pbr_pipeline.queue_model(grass, {.position = {-2.0f, -0.1f, 0.0f}});
             pbr_pipeline.queue_model(building, {.position = {-2.0f, -0.1f, 0.0f}});
