@@ -1,7 +1,6 @@
 #pragma once
 
 #include "hg_utils.h"
-#include "hg_load.h"
 
 #include <vector>
 
@@ -9,11 +8,13 @@ namespace hg {
 
 struct Mesh {
     std::vector<u32> indices = {};
-    std::vector<ModelVertex> vertices = {};
+    std::vector<glm::vec3> positions = {};
+    std::vector<glm::vec3> normals = {};
+    std::vector<glm::vec2> tex_coords = {};
 };
 
 [[nodiscard]] Mesh generate_square();
 [[nodiscard]] Mesh generate_cube();
 [[nodiscard]] Mesh generate_sphere(i32 fidelity);
 
-}
+} // namespace hg

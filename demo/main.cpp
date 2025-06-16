@@ -1,15 +1,17 @@
 #include <hurdy_gurdy.h>
 
+using namespace hg;
+
 constexpr double sqrt3 = 1.73205080757;
 
 int main() {
-    const auto engine = hg::Engine::create();
+    const auto engine = Engine::create();
     defer(engine.destroy());
 
-    auto window = hg::Window::create(engine, 1920, 1080);
+    auto window = Window::create(engine, 1920, 1080);
     defer(window.destroy(engine));
 
-    auto pbr_pipeline = hg::PbrPipeline::create(engine, window);
+    auto pbr_pipeline = PbrPipeline::create(engine, window);
     defer(pbr_pipeline.destroy(engine));
 
     pbr_pipeline.load_skybox(engine, "../assets/cloudy_skyboxes/Cubemap/Cubemap_Sky_06-512x512.png");
@@ -21,7 +23,7 @@ int main() {
     pbr_pipeline.load_texture(engine, "../assets/hexagon_models/Textures/hexagons_medieval.png");
     constexpr usize hex_tex = 1;
 
-    const auto sphere_model = hg::generate_sphere(32);
+    const auto sphere_model = PbrPipeline::VertexData::from_mesh(generate_sphere(32));
     pbr_pipeline.load_model_from_data(engine, sphere_model.indices, sphere_model.vertices, sphere_texture, 0.04f, 1.0f);
     constexpr usize sphere = 0;
 
@@ -42,10 +44,10 @@ int main() {
 
     pbr_pipeline.update_projection(engine, glm::perspective(glm::pi<f32>() / 4.0f, static_cast<f32>(window.extent.width) / static_cast<f32>(window.extent.height), 0.1f, 100.f));
 
-    hg::Cameraf camera = {};
+    Cameraf camera = {};
     camera.translate({0.0f, -2.0f, -4.0f});
 
-    hg::Transform3Df sphere_transform = {
+    Transform3Df sphere_transform = {
         .position = {0.0f, -1.0f, 0.0f},
         .scale = {0.25f, 0.25f, 0.25f},
     };
@@ -53,7 +55,7 @@ int main() {
     glm::dvec2 cursor_pos = {};
     glfwGetCursorPos(window.window, &cursor_pos.x, &cursor_pos.y);
 
-    hg::Clock clock = {};
+    Clock clock = {};
     f64 time_count = 0.0;
     i32 frame_count = 0;
     while (!glfwWindowShouldClose(window.window)) {

@@ -4,8 +4,8 @@
 
 #define FASTGLTF_COMPILE_AS_CPP20
 #include <fastgltf/core.hpp>
-#include <fastgltf/tools.hpp>
 #include <fastgltf/glm_element_traits.hpp>
+#include <fastgltf/tools.hpp>
 
 #include <filesystem>
 #include <optional>
@@ -41,19 +41,16 @@ std::optional<ModelData> ModelData::load_gltf(const std::filesystem::path path) 
     auto asset = parser.loadGltf(buffer.get(), path.parent_path(), options);
     critical_assert(asset.error() == fastgltf::Error::None);
 
-    std::vector<u32> indices;
-    std::vector<ModelVertex> vertices;
-    float roughness = 0.5f;
-    float metalness = 0.0f;
+    std::optional model = ModelData{
+        .roughness = 0.5f,
+        .metalness = 0.0f,
+    };
 
     for (const auto& mesh : asset->meshes) {
         for (const auto& primitive : mesh.primitives) {
-            const usize initial_index = indices.size();
-            const usize initial_vertex = vertices.size();
-
             if (primitive.materialIndex.has_value()) {
-                roughness = asset->materials[*primitive.materialIndex].pbrData.roughnessFactor;
-                metalness = asset->materials[*primitive.materialIndex].pbrData.metallicFactor;
+                model->roughness = asset->materials[*primitive.materialIndex].pbrData.roughnessFactor;
+                model->metalness = asset->materials[*primitive.materialIndex].pbrData.metallicFactor;
             }
 
             critical_assert(primitive.indicesAccessor.has_value());
@@ -61,29 +58,24 @@ std::optional<ModelData> ModelData::load_gltf(const std::filesystem::path path) 
             auto& index_accessor = asset->accessors[primitive.indicesAccessor.value()];
             auto& position_accessor = asset->accessors[primitive.findAttribute("POSITION")->accessorIndex];
             auto& normal_accessor = asset->accessors[primitive.findAttribute("NORMAL")->accessorIndex];
-            auto& uv_accessor = asset->accessors[primitive.findAttribute("TEXCOORD_0")->accessorIndex];
+            auto& tex_coord_accessor = asset->accessors[primitive.findAttribute("TEXCOORD_0")->accessorIndex];
 
             critical_assert(position_accessor.bufferViewIndex.has_value());
             critical_assert(position_accessor.type == fastgltf::AccessorType::Vec3);
             critical_assert(normal_accessor.bufferViewIndex.has_value());
             critical_assert(normal_accessor.type == fastgltf::AccessorType::Vec3);
-            critical_assert(uv_accessor.bufferViewIndex.has_value());
-            critical_assert(uv_accessor.type == fastgltf::AccessorType::Vec2);
+            critical_assert(tex_coord_accessor.bufferViewIndex.has_value());
+            critical_assert(tex_coord_accessor.type == fastgltf::AccessorType::Vec2);
 
-            indices.resize(initial_index + index_accessor.count);
-            vertices.resize(initial_vertex + position_accessor.count);
-
-            fastgltf::iterateAccessorWithIndex<u32>(asset.get(), index_accessor,
-                                                    [&](u32 index, usize i) { indices[i + initial_index] = index + static_cast<u32>(initial_vertex); });
-            fastgltf::iterateAccessorWithIndex<glm::vec3>(asset.get(), position_accessor,
-                                                          [&](glm::vec3 position, usize i) { vertices[i + initial_vertex].position = position * glm::vec3{1.0f, -1.0f, -1.0f}; });
-            fastgltf::iterateAccessorWithIndex<glm::vec3>(asset.get(), normal_accessor,
-                                                          [&](glm::vec3 normal, usize i) { vertices[i + initial_vertex].normal = normal * glm::vec3{1.0f, -1.0f, -1.0f}; });
-            fastgltf::iterateAccessorWithIndex<glm::vec2>(asset.get(), uv_accessor, [&](glm::vec2 uv, usize i) { vertices[i + initial_vertex].uv = uv; });
+            fastgltf::iterateAccessor<u32>(asset.get(), index_accessor,
+                                           [&](u32 index) { model->mesh.indices.emplace_back(index + static_cast<u32>(model->mesh.positions.size())); });
+            fastgltf::iterateAccessor<glm::vec3>(asset.get(), position_accessor, [&](glm::vec3 pos) { model->mesh.positions.emplace_back(pos * glm::vec3{1.0f, -1.0f, -1.0f}); });
+            fastgltf::iterateAccessor<glm::vec3>(asset.get(), normal_accessor, [&](glm::vec3 normal) { model->mesh.normals.emplace_back(normal * glm::vec3{1.0f, -1.0f, -1.0f}); });
+            fastgltf::iterateAccessor<glm::vec2>(asset.get(), tex_coord_accessor, [&](glm::vec2 tex_coord) { model->mesh.tex_coords.emplace_back(tex_coord); });
         }
     }
 
-    return std::make_optional<ModelData>(std::move(indices), std::move(vertices), roughness, metalness);
+    return model;
 }
 
 } // namespace hg

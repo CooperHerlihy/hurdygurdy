@@ -1,6 +1,5 @@
 #pragma once
 
-#include "hg_load.h"
 #include "hg_math.h"
 #include "hg_mesh.h"
 #include "hg_utils.h"
@@ -80,8 +79,21 @@ public:
     };
 
     struct RenderTicket {
-        usize model_index;
-        Transform3Df transform;
+        usize model_index = {};
+        Transform3Df transform = {};
+    };
+
+    struct Vertex {
+        glm::vec3 position = {};
+        glm::vec3 normal = {};
+        glm::vec2 tex_coord = {};
+    };
+
+    struct VertexData {
+        std::vector<u32> indices = {};
+        std::vector<Vertex> vertices = {};
+
+        static VertexData from_mesh(const Mesh& mesh);
     };
 
     [[nodiscard]] static PbrPipeline create(const Engine& engine, const Window& window);
@@ -91,12 +103,18 @@ public:
 
     void update_projection(const Engine& engine, const glm::mat4& projection) const { m_vp_buffer.write(engine, projection, offsetof(ViewProjectionUniform, projection)); }
 
+    void load_skybox(const Engine& engine, std::filesystem::path path);
+
+    void load_texture(const Engine& engine, std::filesystem::path path);
+    void load_texture_from_data(const Engine& engine, const void* data, const vk::Extent3D extent, const vk::Format format, const u32 pixel_alignment);
     void add_texture(const Texture& texture) {
         debug_assert(texture.image.image != nullptr);
         debug_assert(texture.sampler != nullptr);
         m_textures.push_back(texture);
     }
 
+    void load_model(const Engine& engine, std::filesystem::path path, usize texture_index);
+    void load_model_from_data(const Engine& engine, std::span<const u32> indices, std::span<const Vertex> vertices, usize texture_index, float roughness, float metalness);
     void add_model(const Model& model) {
         debug_assert(model.index_count > 0);
         debug_assert(model.index_buffer.buffer != nullptr);
@@ -104,14 +122,6 @@ public:
         debug_assert(model.set != nullptr);
         m_models.push_back(model);
     }
-
-    void load_texture(const Engine& engine, std::filesystem::path path);
-    void load_texture_from_data(const Engine& engine, const void* data, const vk::Extent3D extent, const vk::Format format, const u32 pixel_alignment);
-
-    void load_model(const Engine& engine, std::filesystem::path path, usize texture_index);
-    void load_model_from_data(const Engine& engine, std::span<const u32> indices, std::span<const ModelVertex> vertices, usize texture_index, float roughness, float metalness);
-
-    void load_skybox(const Engine& engine, std::filesystem::path path);
 
     void queue_light(const glm::vec3 position, const glm::vec3 color) {
         debug_assert(m_lights.size() <= MaxLights);

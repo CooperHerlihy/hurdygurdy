@@ -229,10 +229,8 @@ void PbrPipeline::render(const vk::CommandBuffer cmd, const Engine& engine, Wind
     cmd.setRasterizationSamplesEXT(vk::SampleCountFlagBits::e4);
     cmd.setSampleMaskEXT(vk::SampleCountFlagBits::e4, vk::SampleMask{0xff});
 
-    cmd.setVertexInputEXT({vk::VertexInputBindingDescription2EXT{.stride = sizeof(ModelVertex), .inputRate = vk::VertexInputRate::eVertex, .divisor = 1}},
-                          {vk::VertexInputAttributeDescription2EXT{.location = 0, .format = vk::Format::eR32G32B32Sfloat, .offset = offsetof(ModelVertex, position)},
-                           vk::VertexInputAttributeDescription2EXT{.location = 1, .format = vk::Format::eR32G32B32Sfloat, .offset = offsetof(ModelVertex, normal)},
-                           vk::VertexInputAttributeDescription2EXT{.location = 2, .format = vk::Format::eR32G32Sfloat, .offset = offsetof(ModelVertex, uv)}});
+    cmd.setVertexInputEXT({vk::VertexInputBindingDescription2EXT{.stride = sizeof(glm::vec3), .inputRate = vk::VertexInputRate::eVertex, .divisor = 1}},
+                          {vk::VertexInputAttributeDescription2EXT{.location = 0, .format = vk::Format::eR32G32B32Sfloat}});
 
     cmd.setDepthTestEnable(vk::False);
     cmd.setDepthWriteEnable(vk::False);
@@ -244,6 +242,11 @@ void PbrPipeline::render(const vk::CommandBuffer cmd, const Engine& engine, Wind
     cmd.bindIndexBuffer(m_skybox.index_buffer.buffer, 0, vk::IndexType::eUint32);
     cmd.bindVertexBuffers(0, {m_skybox.vertex_buffer.buffer}, {vk::DeviceSize{0}});
     cmd.drawIndexed(m_skybox.IndexCount, 1, 0, 0, 1);
+
+    cmd.setVertexInputEXT({vk::VertexInputBindingDescription2EXT{.stride = sizeof(Vertex), .inputRate = vk::VertexInputRate::eVertex, .divisor = 1}},
+                          {vk::VertexInputAttributeDescription2EXT{.location = 0, .format = vk::Format::eR32G32B32Sfloat, .offset = offsetof(Vertex, position)},
+                           vk::VertexInputAttributeDescription2EXT{.location = 1, .format = vk::Format::eR32G32B32Sfloat, .offset = offsetof(Vertex, normal)},
+                           vk::VertexInputAttributeDescription2EXT{.location = 2, .format = vk::Format::eR32G32Sfloat, .offset = offsetof(Vertex, tex_coord)}});
 
     cmd.setDepthTestEnable(vk::True);
     cmd.setDepthWriteEnable(vk::True);
@@ -337,11 +340,12 @@ void PbrPipeline::load_model(const Engine& engine, const std::filesystem::path p
     critical_assert(model_result.has_value());
     const auto model_data = model_result.value();
 
-    load_model_from_data(engine, model_data.indices, model_data.vertices, texture_index, model_data.roughness, model_data.metalness);
+    const auto vertex_data = VertexData::from_mesh(std::move(model_data.mesh));
+    load_model_from_data(engine, vertex_data.indices, vertex_data.vertices, texture_index, model_data.roughness, model_data.metalness);
 }
 
-void PbrPipeline::load_model_from_data(const Engine& engine, const std::span<const u32> indices, const std::span<const ModelVertex> vertices, const usize texture_index,
-                                       float roughness, float metalness) {
+void PbrPipeline::load_model_from_data(const Engine& engine, const std::span<const u32> indices, const std::span<const Vertex> vertices, const usize texture_index, float roughness,
+                                       float metalness) {
     debug_assert(!indices.empty());
     debug_assert(!vertices.empty());
     debug_assert(texture_index < m_textures.size());
@@ -372,13 +376,29 @@ void PbrPipeline::load_skybox(const Engine& engine, const std::filesystem::path 
 
     m_skybox.index_buffer = GpuBuffer::create(engine, mesh.indices.size() * sizeof(mesh.indices[0]), vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst);
     m_skybox.vertex_buffer =
-        GpuBuffer::create(engine, mesh.vertices.size() * sizeof(mesh.vertices[0]), vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst);
+        GpuBuffer::create(engine, mesh.positions.size() * sizeof(mesh.positions[0]), vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst);
 
     m_skybox.index_buffer.write(engine, mesh.indices.data(), mesh.indices.size() * sizeof(mesh.indices[0]), 0);
-    m_skybox.vertex_buffer.write(engine, mesh.vertices.data(), mesh.vertices.size() * sizeof(mesh.vertices[0]), 0);
+    m_skybox.vertex_buffer.write(engine, mesh.positions.data(), mesh.positions.size() * sizeof(mesh.positions[0]), 0);
 
     m_skybox.set = hg::allocate_descriptor_set(engine, m_descriptor_pool, m_skybox_set_layouts[1]);
     hg::write_image_sampler_descriptor(engine, m_skybox.set, 0, m_skybox.sampler, m_skybox.cubemap.view);
+}
+
+PbrPipeline::VertexData PbrPipeline::VertexData::from_mesh(const Mesh& mesh) {
+    debug_assert(mesh.indices.size() > 0);
+    debug_assert(mesh.positions.size() > 0);
+    debug_assert(mesh.normals.size() > 0);
+    debug_assert(mesh.tex_coords.size() > 0);
+
+    VertexData data = {};
+    data.indices = std::move(mesh.indices);
+    data.vertices.reserve(mesh.positions.size());
+    for (usize i = 0; i < mesh.positions.size(); ++i) {
+        data.vertices.emplace_back(mesh.positions[i], mesh.normals[i], mesh.tex_coords[i]);
+    }
+
+    return data;
 }
 
 } // namespace hg

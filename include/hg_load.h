@@ -1,5 +1,6 @@
 #pragma once
 
+#include "hg_mesh.h"
 #include "hg_utils.h"
 
 #include <filesystem>
@@ -17,15 +18,8 @@ struct ImageData {
     void unload() const { std::free(pixels); }
 };
 
-struct ModelVertex {
-    glm::vec3 position = {0.0f, 0.0f, 0.0f};
-    glm::vec3 normal = {1.0f, 0.0f, 0.0f};
-    glm::vec2 uv = {0.0f, 0.0f};
-};
-
 struct ModelData {
-    std::vector<u32> indices = {};
-    std::vector<ModelVertex> vertices = {};
+    Mesh mesh = {};
     float roughness = 0.0f;
     float metalness = 0.0f;
 
