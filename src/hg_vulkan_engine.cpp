@@ -4,13 +4,13 @@
 #include "hg_pch.h"
 #include "hg_utils.h"
 
+#include <algorithm>
 #include <array>
 #include <format>
 #include <fstream>
 #include <iostream>
 #include <span>
 #include <vector>
-#include <vulkan/vulkan_handles.hpp>
 
 namespace hg {
 
@@ -60,8 +60,8 @@ const vk::DebugUtilsMessengerCreateInfoEXT DebugUtilsMessengerCreateInfo = {
     const auto [extensions_result, extensions] = vk::enumerateInstanceExtensionProperties();
     critical_assert(extensions_result == vk::Result::eSuccess);
 
-    return std::all_of(required_extensions.begin(), required_extensions.end(), [&](const char* required) {
-        return std::any_of(extensions.begin(), extensions.end(), [&](const VkExtensionProperties& extension) { return strcmp(required, extension.extensionName) == 0; });
+    return std::ranges::all_of(required_extensions, [&](const char* required) {
+        return std::ranges::any_of(extensions, [&](const VkExtensionProperties& extension) { return strcmp(required, extension.extensionName) == 0; });
     });
 }
 
@@ -117,8 +117,8 @@ static vk::PhysicalDevice find_gpu(const Engine& engine) {
 
         const auto [extension_result, extensions] = gpu.enumerateDeviceExtensionProperties();
         critical_assert(extension_result == vk::Result::eSuccess);
-        if (!std::all_of(DeviceExtensions.begin(), DeviceExtensions.end(), [&](const char* required) {
-                return std::any_of(extensions.begin(), extensions.end(), [&](const vk::ExtensionProperties extension) { return strcmp(required, extension.extensionName); });
+        if (!std::ranges::all_of(DeviceExtensions, [&](const char* required) {
+                return std::ranges::any_of(extensions, [&](const vk::ExtensionProperties extension) { return strcmp(required, extension.extensionName); });
             })) {
             return false;
         }
@@ -365,7 +365,7 @@ void Window::resize(const Engine& engine) {
         .imageArrayLayers = 1,
         .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferDst,
         .preTransform = surface_capabilities.currentTransform,
-        .presentMode = std::any_of(present_modes.begin(), present_modes.end(), [](const vk::PresentModeKHR mode) { return mode == vk::PresentModeKHR::eMailbox; })
+        .presentMode = std::ranges::any_of(present_modes, [](const vk::PresentModeKHR mode) { return mode == vk::PresentModeKHR::eMailbox; })
                            ? vk::PresentModeKHR::eMailbox
                            : vk::PresentModeKHR::eFifo,
         .clipped = vk::True,
@@ -663,14 +663,13 @@ GpuImage GpuImage::create_cubemap(const Engine& engine, const std::filesystem::p
 
     const auto data = ImageData::load(path);
     critical_assert(data.has_value());
-    defer(data->unload());
 
     const vk::Extent3D staging_extent = {static_cast<u32>(data->width), static_cast<u32>(data->height), 1};
     const VkDeviceSize staging_size = static_cast<u64>(staging_extent.width) * static_cast<u64>(staging_extent.height) * 4;
 
     const auto staging_buffer = GpuBuffer::create(engine, staging_size, vk::BufferUsageFlagBits::eTransferSrc, GpuBuffer::MemoryType::Staging);
     defer(staging_buffer.destroy(engine));
-    staging_buffer.write(engine, data->pixels, staging_size, 0);
+    staging_buffer.write(engine, data->pixels.get(), staging_size, 0);
 
     const auto staging_image = StagingImage::create(
         engine, {.extent = staging_extent, .format = vk::Format::eR8G8B8A8Srgb, .usage = vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eTransferSrc});

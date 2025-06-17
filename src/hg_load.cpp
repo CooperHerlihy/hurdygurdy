@@ -8,6 +8,7 @@
 #include <fastgltf/tools.hpp>
 
 #include <filesystem>
+#include <memory>
 #include <optional>
 
 namespace hg {
@@ -15,16 +16,21 @@ namespace hg {
 std::optional<ImageData> ImageData::load(const std::filesystem::path path) {
     debug_assert(!path.empty());
 
-    ImageData data;
-    data.pixels = stbi_load(path.string().data(), &data.width, &data.height, &data.channels, STBI_rgb_alpha);
-    if (data.pixels == nullptr) {
+    int width = 0, height = 0, channels = 0;
+    const auto pixels = stbi_load(path.string().data(), &width, &height, &channels, STBI_rgb_alpha);
+    if (pixels == nullptr) {
         return std::nullopt;
     }
 
-    critical_assert(data.width > 0);
-    critical_assert(data.height > 0);
-    critical_assert(data.channels > 0);
-    return std::optional{data};
+    critical_assert(width > 0);
+    critical_assert(height > 0);
+    critical_assert(channels > 0);
+    return std::optional<ImageData>{{
+        .pixels = std::unique_ptr<u8[], Deleter>{pixels},
+        .width = width,
+        .height = height,
+        .channels = channels,
+    }};
 }
 
 std::optional<ModelData> ModelData::load_gltf(const std::filesystem::path path) {

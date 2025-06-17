@@ -4,18 +4,24 @@
 #include "hg_utils.h"
 
 #include <filesystem>
+#include <memory>
 #include <optional>
 
 namespace hg {
 
 struct ImageData {
-    u8* pixels = nullptr;
+private:
+    struct Deleter {
+        void operator()(u8* ptr) { std::free(ptr); }
+    };
+
+public:
+    std::unique_ptr<u8[], Deleter> pixels;
     i32 width = 0;
     i32 height = 0;
     i32 channels = 0;
 
     [[nodiscard]] static std::optional<ImageData> load(std::filesystem::path path);
-    void unload() const { std::free(pixels); }
 };
 
 struct ModelData {

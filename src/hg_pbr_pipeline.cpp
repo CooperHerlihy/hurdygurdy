@@ -304,9 +304,8 @@ void PbrPipeline::load_texture(const Engine& engine, const std::filesystem::path
 
     const auto texture_data = ImageData::load(path);
     critical_assert(texture_data.has_value());
-    defer(texture_data->unload());
 
-    load_texture_from_data(engine, texture_data->pixels, {static_cast<u32>(texture_data->width), static_cast<u32>(texture_data->height), 1}, vk::Format::eR8G8B8A8Srgb, 4);
+    load_texture_from_data(engine, texture_data->pixels.get(), {static_cast<u32>(texture_data->width), static_cast<u32>(texture_data->height), 1}, vk::Format::eR8G8B8A8Srgb, 4);
 }
 
 void PbrPipeline::load_texture_from_data(const Engine& engine, const void* data, const vk::Extent3D extent, const vk::Format format, const u32 pixel_alignment) {
@@ -336,12 +335,10 @@ void PbrPipeline::load_model(const Engine& engine, const std::filesystem::path p
     debug_assert(!path.empty());
     debug_assert(texture_index < m_textures.size());
 
-    const auto model_result = ModelData::load_gltf(path);
-    critical_assert(model_result.has_value());
-    const auto model_data = model_result.value();
-
-    const auto vertex_data = VertexData::from_mesh(std::move(model_data.mesh));
-    load_model_from_data(engine, vertex_data.indices, vertex_data.vertices, texture_index, model_data.roughness, model_data.metalness);
+    const auto model = ModelData::load_gltf(path);
+    critical_assert(model.has_value());
+    const auto vertex_data = VertexData::from_mesh(std::move(model->mesh));
+    load_model_from_data(engine, vertex_data.indices, vertex_data.vertices, texture_index, model->roughness, model->metalness);
 }
 
 void PbrPipeline::load_model_from_data(const Engine& engine, const std::span<const u32> indices, const std::span<const Vertex> vertices, const usize texture_index, float roughness,

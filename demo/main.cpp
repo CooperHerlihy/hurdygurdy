@@ -16,41 +16,39 @@ int main() {
 
     pbr_pipeline.load_skybox(engine, "../assets/cloudy_skyboxes/Cubemap/Cubemap_Sky_06-512x512.png");
 
-    std::array<u32, 4> sphere_color = {};
-    sphere_color.fill(0xff44ccff);
-    pbr_pipeline.load_texture_from_data(engine, sphere_color.data(), {2, 2, 1}, vk::Format::eR8G8B8A8Srgb, 4);
-    constexpr usize sphere_texture = 0;
+    std::array<u32, 4> gold_color = {};
+    gold_color.fill(0xff44ccff);
+    pbr_pipeline.load_texture_from_data(engine, gold_color.data(), {2, 2, 1}, vk::Format::eR8G8B8A8Srgb, 4);
+    constexpr usize gold_texture = 0;
     pbr_pipeline.load_texture(engine, "../assets/hexagon_models/Textures/hexagons_medieval.png");
     constexpr usize hex_tex = 1;
 
     const auto sphere_model = PbrPipeline::VertexData::from_mesh(generate_sphere(32));
-    pbr_pipeline.load_model_from_data(engine, sphere_model.indices, sphere_model.vertices, sphere_texture, 0.04f, 1.0f);
+    pbr_pipeline.load_model_from_data(engine, sphere_model.indices, sphere_model.vertices, gold_texture, 0.1f, 1.0f);
     constexpr usize sphere = 0;
 
+    const auto cube_model = PbrPipeline::VertexData::from_mesh(generate_cube());
+    pbr_pipeline.load_model_from_data(engine, cube_model.indices, cube_model.vertices, gold_texture, 0.1f, 1.0f);
+    constexpr usize cube = 1;
+
     pbr_pipeline.load_model(engine, "../assets/hexagon_models/Assets/gltf/tiles/base/hex_grass.gltf", hex_tex);
-    constexpr usize grass = 1;
+    constexpr usize grass = 2;
     pbr_pipeline.load_model(engine, "../assets/hexagon_models/Assets/gltf/decoration/nature/tree_single_A.gltf", hex_tex);
-    constexpr usize tree = 2;
+    constexpr usize tree = 3;
 
     pbr_pipeline.load_model(engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_home_A_blue.gltf", hex_tex);
-    constexpr usize building = 3;
+    constexpr usize building = 4;
     pbr_pipeline.load_model(engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_tower_A_blue.gltf", hex_tex);
-    constexpr usize tower = 4;
+    constexpr usize tower = 5;
     pbr_pipeline.load_model(engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_blacksmith_blue.gltf", hex_tex);
-    constexpr usize blacksmith = 5;
+    constexpr usize blacksmith = 6;
     pbr_pipeline.load_model(engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_castle_blue.gltf", hex_tex);
-    constexpr usize castle = 6;
-
+    constexpr usize castle = 7;
 
     pbr_pipeline.update_projection(engine, glm::perspective(glm::pi<f32>() / 4.0f, static_cast<f32>(window.extent.width) / static_cast<f32>(window.extent.height), 0.1f, 100.f));
 
     Cameraf camera = {};
     camera.translate({0.0f, -2.0f, -4.0f});
-
-    Transform3Df sphere_transform = {
-        .position = {0.0f, -1.0f, 0.0f},
-        .scale = {0.25f, 0.25f, 0.25f},
-    };
 
     glm::dvec2 cursor_pos = {};
     glfwGetCursorPos(window.window, &cursor_pos.x, &cursor_pos.y);
@@ -71,19 +69,6 @@ int main() {
         ++frame_count;
 
         glfwPollEvents();
-
-        if (glfwGetKey(window.window, GLFW_KEY_LEFT) == GLFW_PRESS) {
-            sphere_transform.translate({-delta32, 0.0f, 0.0f});
-        }
-        if (glfwGetKey(window.window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
-            sphere_transform.translate({delta32, 0.0f, 0.0f});
-        }
-        if (glfwGetKey(window.window, GLFW_KEY_DOWN) == GLFW_PRESS) {
-            sphere_transform.translate({0.0f, 0.0f, -delta32});
-        }
-        if (glfwGetKey(window.window, GLFW_KEY_UP) == GLFW_PRESS) {
-            sphere_transform.translate({0.0f, 0.0f, delta32});
-        }
 
         constexpr f32 speed = 2.0f;
         if (glfwGetKey(window.window, GLFW_KEY_A) == GLFW_PRESS) {
@@ -117,10 +102,11 @@ int main() {
         }
 
         const bool present_success = window.submit_frame(engine, [&](const vk::CommandBuffer cmd) {
-            pbr_pipeline.queue_light({-2.0f, -3.0f, -2.0f}, {glm::vec3{1.0f, 1.0f, 1.0f} * 300.0f});
+            pbr_pipeline.queue_light({1.0f, -3.0f, -2.0f}, {glm::vec3{1.0f, 1.0f, 1.0f} * 300.0f});
             pbr_pipeline.queue_light({-0.8f, -0.5f, 1.5}, {glm::vec3{1.0f, 0.2f, 0.0f} * 10.0f});
 
-            pbr_pipeline.queue_model(sphere, sphere_transform);
+            pbr_pipeline.queue_model(sphere, {.position = {-0.5f, -0.5f, 0.0f}, .scale = {0.25f, 0.25f, 0.25f}});
+            pbr_pipeline.queue_model(cube, {.position = {0.5f, -0.5f, 0.0f}, .scale = {0.25f, 0.25f, 0.25f}});
 
             pbr_pipeline.queue_model(grass, {.position = {0.0f, 0.0f, 0.0f}});
 
