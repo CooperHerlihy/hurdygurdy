@@ -26,7 +26,6 @@ int main() {
     const auto sphere_model = PbrPipeline::VertexData::from_mesh(generate_sphere(32));
     pbr_pipeline.load_model_from_data(engine, sphere_model.indices, sphere_model.vertices, gold_texture, 0.1f, 1.0f);
     constexpr usize sphere = 0;
-
     const auto cube_model = PbrPipeline::VertexData::from_mesh(generate_cube());
     pbr_pipeline.load_model_from_data(engine, cube_model.indices, cube_model.vertices, gold_texture, 0.1f, 1.0f);
     constexpr usize cube = 1;
@@ -35,7 +34,6 @@ int main() {
     constexpr usize grass = 2;
     pbr_pipeline.load_model(engine, "../assets/hexagon_models/Assets/gltf/decoration/nature/tree_single_A.gltf", hex_tex);
     constexpr usize tree = 3;
-
     pbr_pipeline.load_model(engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_home_A_blue.gltf", hex_tex);
     constexpr usize building = 4;
     pbr_pipeline.load_model(engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_tower_A_blue.gltf", hex_tex);
@@ -105,10 +103,9 @@ int main() {
             pbr_pipeline.queue_light({1.0f, -3.0f, -2.0f}, {glm::vec3{1.0f, 1.0f, 1.0f} * 300.0f});
             pbr_pipeline.queue_light({-0.8f, -0.5f, 1.5}, {glm::vec3{1.0f, 0.2f, 0.0f} * 10.0f});
 
+            pbr_pipeline.queue_model(grass, {.position = {0.0f, 0.0f, 0.0f}});
             pbr_pipeline.queue_model(sphere, {.position = {-0.5f, -0.5f, 0.0f}, .scale = {0.25f, 0.25f, 0.25f}});
             pbr_pipeline.queue_model(cube, {.position = {0.5f, -0.5f, 0.0f}, .scale = {0.25f, 0.25f, 0.25f}});
-
-            pbr_pipeline.queue_model(grass, {.position = {0.0f, 0.0f, 0.0f}});
 
             pbr_pipeline.queue_model(grass, {.position = {-1.0f, -0.25f, sqrt3}});
             pbr_pipeline.queue_model(blacksmith, {.position = {-1.0f, -0.25f, sqrt3}});
