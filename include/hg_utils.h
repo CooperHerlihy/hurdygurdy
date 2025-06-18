@@ -1,11 +1,9 @@
 #pragma once
 
 #include <chrono>
-#include <compare>
 #include <cstdint>
 #include <format>
 #include <iostream>
-#include <string>
 #include <string_view>
 #include <type_traits>
 #include <utility>
@@ -33,7 +31,6 @@ using f64 = double;
 #define debug_assert(condition)                                                                                                                                                    \
     if (!(condition)) {                                                                                                                                                            \
         std::cerr << std::format("Failed debug assert: {}\n    {}, {}\n", #condition, __FILE__, __LINE__);                                                                         \
-        __debugbreak();                                                                                                                                                            \
         std::terminate();                                                                                                                                                          \
     }
 #endif
@@ -41,8 +38,13 @@ using f64 = double;
 #define critical_assert(condition)                                                                                                                                                 \
     if (!(condition)) {                                                                                                                                                            \
         std::cerr << std::format("Failed critical assert: {}\n    {}, {}\n", #condition, __FILE__, __LINE__);                                                                      \
-        __debugbreak();                                                                                                                                                            \
         std::terminate();                                                                                                                                                          \
+    }
+
+#define if_err_return(result)                                                                                                                                                      \
+    static_assert(std::is_same_v<decltype(result), Result>);                                                                                                                       \
+    if ((result).has_err()) {                                                                                                                                                      \
+        return (result).err();                                                                                                                                                     \
     }
 
 template <typename F> struct DeferInternal {
@@ -90,201 +92,84 @@ private:
     std::chrono::high_resolution_clock::time_point m_begin = std::chrono::high_resolution_clock::now();
 };
 
-class Error {
-public:
-    enum Code {
-        Unknown,
-        UnknownVulkan,
-        UnknownGLFW,
-        OutOfMemory,
-        OutOfGpuMemory,
-        FileNotFound,
-        FileInvalid,
-
-        VulkanInitFailed,
-        VulkanResourceNotFound,
-        // etc. add as needed
-    };
-
-    Code code = Unknown;
-    std::string message = {};
-
-    Error(const Code code, const std::string_view error, const std::string_view context) : code{code}, message{std::format("Error: {}, while {}", error, context)} {}
-    Error(Error&& error, const std::string_view context) : code{error.code}, message{std::move(error.message)} { append_context(context); }
-    void append_context(const std::string_view context) { message += std::format(", while {}", context); }
-
-    constexpr Error() = default;
-    constexpr ~Error() = default;
-    Error(const Error&) = delete;
-    Error& operator=(const Error&) = delete;
-    constexpr Error(Error&&) = default;
-    constexpr Error& operator=(Error&&) = default;
+enum class Err {
+    Unknown = 0,
+    ImageFileNotFound,
+    GltfFileNotFound,
+    // ... add more as needed
 };
 
-template <typename T> class Result {
-public:
-    template <typename... Args> static constexpr Result emplace_ok(Args&&... args) { return {std::in_place_type_t<T>(), std::forward<Args>(args)...}; }
-    constexpr Result(Error&& error) : m_result{std::move(error)} {}
+#define HG_MAKE_CASE(c)                                                                                                                                                            \
+    case Err::c:                                                                                                                                                                   \
+        return #c;
 
-    constexpr ~Result() = default;
-    Result(const Result&) = delete;
-    Result& operator=(const Result&) = delete;
-    constexpr Result(Result&&) = default;
-    constexpr Result& operator=(Result&&) = default;
-
-    constexpr bool has_err() const { return std::holds_alternative<Error>(m_result); }
-    constexpr Error& get_err() & { return std::get<Error>(m_result); }
-    constexpr Error&& get_err() && { return std::move(std::get<Error>(m_result)); }
-    constexpr const Error& get_err() const& { return std::get<Error>(m_result); }
-    constexpr const Error&& get_err() const&& { return std::move(std::get<Error>(m_result)); }
-
-    constexpr bool has_val() const { return std::holds_alternative<T>(m_result); }
-    constexpr T& get_val() & { return std::get<T>(m_result); }
-    constexpr T&& get_val() && { return std::move(std::get<T>(m_result)); }
-    constexpr const T& get_val() const& { return std::get<T>(m_result); }
-    constexpr const T&& get_val() const&& { return std::move(std::get<T>(m_result)); }
-
-    constexpr T& operator*() & { return get_val(); }
-    constexpr T&& operator*() && { return std::move(get_val()); }
-    constexpr const T& operator*() const& { return get_val(); }
-    constexpr const T&& operator*() const&& { return get_val(); }
-
-    constexpr T* operator->() { return &get_val(); }
-    constexpr const T* operator->() const { return &get_val(); }
-
-    template <typename U = std::remove_cv_t<T>> constexpr T val_or(U&& default_value) const& { return has_val() ? **this : static_cast<T>(std::forward<U>(default_value)); }
-    template <typename U = std::remove_cv_t<T>> constexpr T val_or(U&& default_value) && { return has_val() ? std::move(**this) : static_cast<T>(std::forward<U>(default_value)); }
-
-private:
-    template <typename... Args> constexpr Result(Args&&... args) : m_result{std::forward<Args>(args)...} {}
-
-    std::variant<T, Error> m_result = {};
-};
-
-template <> class Result<void> {
-public:
-    template <typename... Args> static constexpr Result emplace_ok(Args&&... args) { return {std::in_place_type_t<void>(), std::forward<Args>(args)...}; }
-    constexpr Result(Error&& error) : m_err{std::move(error)} {}
-
-    constexpr ~Result() = default;
-    Result(const Result&) = delete;
-    Result& operator=(const Result&) = delete;
-    constexpr Result(Result&&) = default;
-    constexpr Result& operator=(Result&&) = default;
-
-    constexpr bool has_err() const { return m_err.has_value(); }
-    constexpr Error& get_err() & { return *m_err; }
-    constexpr Error&& get_err() && { return std::move(*m_err); }
-    constexpr const Error& get_err() const& { return *m_err; }
-    constexpr const Error&& get_err() const&& { return std::move(*m_err); }
-
-private:
-    template <typename... Args> constexpr Result(std::in_place_type_t<void>, Args&&...) {}
-
-    std::optional<Error> m_err = std::nullopt;
-};
-
-template <typename T> constexpr Result<std::remove_cvref_t<T>> ok(T&& val) {
-    return Result<std::remove_cvref_t<T>>::emplace_ok(std::forward<T>(val));
-}
-template <typename T = void, typename... Args> constexpr Result<T> ok(Args&&... args) {
-    return Result<T>::emplace_ok(std::forward<Args>(args)...);
-}
-
-template <typename T> constexpr Error err(Result<T>& error, const std::string_view context) {
-    return {std::move(error.get_err()), context};
-}
-
-#define HG_MAKE_CASE(e)                                                                                                                                                            \
-    case Error::e:                                                                                                                                                                 \
-        return {                                                                                                                                                                   \
-            Error::e, #e " error", context                                                                                                                                         \
-        }
-
-constexpr Error err(const Error::Code code, const std::string_view context) {
+constexpr std::string_view err_to_string(Err code) {
     switch (code) {
-        HG_MAKE_CASE(Unknown);
-        HG_MAKE_CASE(UnknownVulkan);
-        HG_MAKE_CASE(UnknownGLFW);
-        HG_MAKE_CASE(OutOfMemory);
-        HG_MAKE_CASE(OutOfGpuMemory);
-        HG_MAKE_CASE(FileNotFound);
-        HG_MAKE_CASE(FileInvalid);
-        HG_MAKE_CASE(VulkanInitFailed);
-        HG_MAKE_CASE(VulkanResourceNotFound);
+        HG_MAKE_CASE(Unknown)
+        HG_MAKE_CASE(ImageFileNotFound)
+        HG_MAKE_CASE(GltfFileNotFound)
     }
     debug_assert(false);
 }
 
 #undef HG_MAKE_CASE
 
-#define HG_MAKE_CASE_WITH_CODE(e, c)                                                                                                                                               \
-    case vk::Result::e:                                                                                                                                                            \
-        return {                                                                                                                                                                   \
-            (Error::c), "Vulkan " #e " error", context                                                                                                                             \
-        }
+template <typename T> class Result {
+public:
+    constexpr Result(const Err error) : m_result{error} {}
+    template <typename... Args> constexpr Result(std::in_place_type_t<T>, Args&&... args) : m_result{std::in_place_type_t<T>(), std::forward<Args>(args)...} {}
 
-#define HG_MAKE_CASE(e) HG_MAKE_CASE_WITH_CODE(e, UnknownVulkan)
+    constexpr ~Result() = default;
+    Result(const Result&) = delete;
+    Result& operator=(const Result&) = delete;
+    constexpr Result(Result&&) = default;
+    constexpr Result& operator=(Result&&) = default;
 
-constexpr Error err(const vk::Result result, const std::string_view context) {
-    switch (result) {
-        HG_MAKE_CASE_WITH_CODE(eErrorOutOfHostMemory, OutOfMemory);
-        HG_MAKE_CASE_WITH_CODE(eErrorOutOfDeviceMemory, OutOfGpuMemory);
+    constexpr bool has_err() const { return std::holds_alternative<Err>(m_result); }
+    constexpr Err err() const { return std::get<Err>(m_result); }
 
-        HG_MAKE_CASE(eSuccess);
-        HG_MAKE_CASE(eNotReady);
-        HG_MAKE_CASE(eTimeout);
-        HG_MAKE_CASE(eEventSet);
-        HG_MAKE_CASE(eEventReset);
-        HG_MAKE_CASE(eIncomplete);
-        HG_MAKE_CASE(eErrorInitializationFailed);
-        HG_MAKE_CASE(eErrorDeviceLost);
-        HG_MAKE_CASE(eErrorMemoryMapFailed);
-        HG_MAKE_CASE(eErrorLayerNotPresent);
-        HG_MAKE_CASE(eErrorExtensionNotPresent);
-        HG_MAKE_CASE(eErrorFeatureNotPresent);
-        HG_MAKE_CASE(eErrorIncompatibleDriver);
-        HG_MAKE_CASE(eErrorTooManyObjects);
-        HG_MAKE_CASE(eErrorFormatNotSupported);
-        HG_MAKE_CASE(eErrorFragmentedPool);
-        HG_MAKE_CASE(eErrorUnknown);
-        HG_MAKE_CASE(eErrorOutOfPoolMemory);
-        HG_MAKE_CASE(eErrorInvalidExternalHandle);
-        HG_MAKE_CASE(eErrorFragmentation);
-        HG_MAKE_CASE(eErrorInvalidDeviceAddressEXT);
-        HG_MAKE_CASE(eErrorPipelineCompileRequiredEXT);
-        HG_MAKE_CASE(eErrorNotPermitted);
-        HG_MAKE_CASE(eErrorSurfaceLostKHR);
-        HG_MAKE_CASE(eErrorNativeWindowInUseKHR);
-        HG_MAKE_CASE(eSuboptimalKHR);
-        HG_MAKE_CASE(eErrorOutOfDateKHR);
-        HG_MAKE_CASE(eErrorIncompatibleDisplayKHR);
-        HG_MAKE_CASE(eErrorValidationFailedEXT);
-        HG_MAKE_CASE(eErrorInvalidShaderNV);
-        HG_MAKE_CASE(eErrorImageUsageNotSupportedKHR);
-        HG_MAKE_CASE(eErrorVideoPictureLayoutNotSupportedKHR);
-        HG_MAKE_CASE(eErrorVideoProfileOperationNotSupportedKHR);
-        HG_MAKE_CASE(eErrorVideoProfileFormatNotSupportedKHR);
-        HG_MAKE_CASE(eErrorVideoProfileCodecNotSupportedKHR);
-        HG_MAKE_CASE(eErrorVideoStdVersionNotSupportedKHR);
-        HG_MAKE_CASE(eErrorInvalidDrmFormatModifierPlaneLayoutEXT);
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
-        HG_MAKE_CASE(eErrorFullScreenExclusiveModeLostEXT);
-#endif /*VK_USE_PLATFORM_WIN32_KHR*/
-        HG_MAKE_CASE(eThreadIdleKHR);
-        HG_MAKE_CASE(eThreadDoneKHR);
-        HG_MAKE_CASE(eOperationDeferredKHR);
-        HG_MAKE_CASE(eOperationNotDeferredKHR);
-        HG_MAKE_CASE(eErrorInvalidVideoStdParametersKHR);
-        HG_MAKE_CASE(eErrorCompressionExhaustedEXT);
-        HG_MAKE_CASE(eErrorIncompatibleShaderBinaryEXT);
-        HG_MAKE_CASE(ePipelineBinaryMissingKHR);
-        HG_MAKE_CASE(eErrorNotEnoughSpaceKHR);
-    }
-    return {Error::UnknownVulkan, "Vulkan unknown vk::Result value", context};
+    constexpr T& val() & { return std::get<T>(m_result); }
+    constexpr T& operator*() & { return val(); }
+    constexpr T&& val() && { return std::move(std::get<T>(m_result)); }
+    constexpr T&& operator*() && { return std::move(val()); }
+
+    constexpr const T& val() const& { return std::get<T>(m_result); }
+    constexpr const T& operator*() const& { return val(); }
+    constexpr const T&& val() const&& { return std::move(std::get<T>(m_result)); }
+    constexpr const T&& operator*() const&& { return val(); }
+
+    constexpr T* operator->() { return &val(); }
+    constexpr const T* operator->() const { return &val(); }
+
+    template <typename U = std::remove_cv_t<T>> constexpr T val_or(U&& default_value) const& { return !has_err() ? **this : static_cast<T>(std::forward<U>(default_value)); }
+    template <typename U = std::remove_cv_t<T>> constexpr T val_or(U&& default_value) && { return !has_err() ? std::move(**this) : static_cast<T>(std::forward<U>(default_value)); }
+
+private:
+    std::variant<T, Err> m_result = {};
+};
+
+template <> class Result<void> {
+public:
+    constexpr Result(const Err error) : m_err{error} {}
+    constexpr Result(std::in_place_type_t<void>) {}
+
+    constexpr bool has_err() const { return m_err.has_value(); }
+    constexpr Err err() const { return *m_err; }
+
+private:
+    std::optional<Err> m_err = std::nullopt;
+};
+
+constexpr Result<void> ok() {
+    return std::in_place_type_t<void>();
 }
 
-#undef HG_MAKE_CASE
-#undef HG_MAKE_CASE_WITH_CODE
+template <typename T, typename U = std::remove_cvref_t<T>> constexpr Result<U> ok(T&& val) {
+    return Result<U>{std::in_place_type_t<U>(), std::forward<T>(val)};
+}
+
+template <typename T, typename... Args> constexpr Result<T> ok(Args&&... args) {
+    return Result<T>{std::in_place_type_t<T>(), std::forward<Args>(args)...};
+}
 
 } // namespace hg

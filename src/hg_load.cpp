@@ -18,7 +18,7 @@ Result<ImageData> ImageData::load(const std::filesystem::path path) {
     int width = 0, height = 0, channels = 0;
     const auto pixels = stbi_load(path.string().data(), &width, &height, &channels, STBI_rgb_alpha);
     if (pixels == nullptr) {
-        return err(Error::FileNotFound, std::format("searching for image file {}", path.string()));
+        return Err::ImageFileNotFound;
     }
 
     critical_assert(width > 0);
@@ -32,7 +32,7 @@ Result<ModelData> ModelData::load_gltf(const std::filesystem::path path) {
 
     auto buffer = fastgltf::GltfDataBuffer::FromPath(path);
     if (buffer.error() == fastgltf::Error::InvalidPath) {
-        return err(Error::FileNotFound, std::format("searching for gltf file {}", path.string()));
+        return Err::GltfFileNotFound;
     }
     critical_assert(buffer.error() == fastgltf::Error::None);
 

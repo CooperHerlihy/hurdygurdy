@@ -303,7 +303,7 @@ void PbrPipeline::load_texture(const Engine& engine, const std::filesystem::path
     debug_assert(!path.empty());
 
     const auto texture_data = ImageData::load(path);
-    critical_assert(texture_data.has_val());
+    critical_assert(!texture_data.has_err());
 
     load_texture_from_data(engine, texture_data->pixels.get(), {static_cast<u32>(texture_data->width), static_cast<u32>(texture_data->height), 1}, vk::Format::eR8G8B8A8Srgb, 4);
 }
@@ -336,7 +336,7 @@ void PbrPipeline::load_model(const Engine& engine, const std::filesystem::path p
     debug_assert(texture_index < m_textures.size());
 
     const auto model = ModelData::load_gltf(path);
-    critical_assert(model.has_val());
+    critical_assert(!model.has_err());
     const auto vertex_data = VertexData::from_mesh(std::move(model->mesh));
     load_model_from_data(engine, vertex_data.indices, vertex_data.vertices, texture_index, model->roughness, model->metalness);
 }

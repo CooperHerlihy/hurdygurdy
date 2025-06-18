@@ -22,7 +22,7 @@ struct Engine {
     vk::CommandPool command_pool = {};
     vk::CommandPool single_time_command_pool = {};
 
-    [[nodiscard]] static Result<Engine> create();
+    [[nodiscard]] static Engine create();
     void destroy() const;
 };
 
@@ -49,9 +49,9 @@ public:
     vk::Semaphore& is_image_available() { return m_image_available_semaphores[m_current_frame_index]; }
     vk::Semaphore& is_ready_to_present() { return m_ready_to_present_semaphores[current_image_index]; }
 
-    [[nodiscard]] static Result<Window> create(const Engine& engine, i32 width, i32 height);
+    [[nodiscard]] static Window create(const Engine& engine, i32 width, i32 height);
     void destroy(const Engine& engine) const;
-    Result<void> resize(const Engine& engine);
+    void resize(const Engine& engine);
 
     [[nodiscard]] vk::CommandBuffer begin_frame(const Engine& engine);
     [[nodiscard]] bool end_frame(const Engine& engine);
