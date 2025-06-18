@@ -38,34 +38,38 @@ const vk::DebugUtilsMessengerCreateInfoEXT DebugUtilsMessengerCreateInfo = {
     .pfnUserCallback = debug_callback,
 };
 
-[[nodiscard]] static std::vector<const char*> get_required_instance_extensions() {
+[[nodiscard]] static Result<std::vector<const char*>> get_required_instance_extensions() {
     u32 glfw_extension_count = 0;
     const char** glfw_extensions = glfwGetRequiredInstanceExtensions(&glfw_extension_count);
-    critical_assert(glfw_extensions != nullptr);
+    if (glfw_extensions == nullptr) {
+        return err(Error::UnknownGLFW, "finding required instance extensions from GLFW");
+    }
 
-    std::vector<const char*> required_extensions = {};
-    required_extensions.reserve(static_cast<usize>(glfw_extension_count) + 1);
+    auto required_extensions = ok<std::vector<const char*>>();
+    required_extensions->reserve(static_cast<usize>(glfw_extension_count) + 1);
     for (usize i = 0; i < glfw_extension_count; ++i) {
-        required_extensions.push_back(glfw_extensions[i]);
+        required_extensions->push_back(glfw_extensions[i]);
     }
 #ifndef NDEBUG
-    required_extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+    required_extensions->push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 #endif
     return required_extensions;
 }
 
-[[nodiscard]] static bool check_instance_extension_availability(const std::span<const char* const> required_extensions) {
+[[nodiscard]] static Result<bool> check_instance_extension_availability(const std::span<const char* const> required_extensions) {
     debug_assert(!required_extensions.empty());
 
-    const auto [extensions_result, extensions] = vk::enumerateInstanceExtensionProperties();
-    critical_assert(extensions_result == vk::Result::eSuccess);
+    const auto extensions = vk::enumerateInstanceExtensionProperties();
+    if (extensions.result != vk::Result::eSuccess) {
+        return err(extensions.result, "enumerating instance extension properties");
+    }
 
-    return std::ranges::all_of(required_extensions, [&](const char* required) {
-        return std::ranges::any_of(extensions, [&](const VkExtensionProperties& extension) { return strcmp(required, extension.extensionName) == 0; });
-    });
+    return ok(std::ranges::all_of(required_extensions, [&](const char* required) {
+        return std::ranges::any_of(extensions.value, [&](const VkExtensionProperties& extension) { return strcmp(required, extension.extensionName) == 0; });
+    }));
 }
 
-static vk::Instance init_instance() {
+static Result<vk::Instance> init_instance() {
     const vk::ApplicationInfo app_info = {
         .pApplicationName = "Hurdy Gurdy",
         .applicationVersion = 0,
@@ -74,66 +78,81 @@ static vk::Instance init_instance() {
         .apiVersion = VK_API_VERSION_1_3,
     };
 
-    const std::vector<const char*> required_extensions = get_required_instance_extensions();
-    critical_assert(check_instance_extension_availability(required_extensions));
+    auto required_extensions = get_required_instance_extensions();
+    if (required_extensions.has_err()) {
+        return err(required_extensions, "initializing Vulkan instance");
+    }
+    auto extensions_available = check_instance_extension_availability(*required_extensions);
+    if (extensions_available.has_err()) {
+        return err(extensions_available, "initializing Vulkan instance");
+    }
+    if (*extensions_available == false) {
+        return err(Error::VulkanResourceNotFound, "initializing Vulkan instance");
+    }
 
-    const vk::InstanceCreateInfo instance_info = {
+    const auto instance = vk::createInstance({
         .pNext = &DebugUtilsMessengerCreateInfo,
         .pApplicationInfo = &app_info,
         .enabledLayerCount = static_cast<u32>(ValidationLayers.size()),
         .ppEnabledLayerNames = ValidationLayers.data(),
-        .enabledExtensionCount = static_cast<u32>(required_extensions.size()),
-        .ppEnabledExtensionNames = required_extensions.data(),
-    };
-
-    const auto instance = vk::createInstance(instance_info);
-    critical_assert(instance.result == vk::Result::eSuccess);
-    return instance.value;
+        .enabledExtensionCount = static_cast<u32>(required_extensions->size()),
+        .ppEnabledExtensionNames = required_extensions->data(),
+    });
+    if (instance.result != vk::Result::eSuccess) {
+        return err(instance.result, "initializing Vulkan instance");
+    }
+    return ok(instance.value);
 }
 
-static std::optional<u32> find_queue_family(const vk::PhysicalDevice gpu) {
+static Result<u32> find_queue_family(const vk::PhysicalDevice gpu) {
     debug_assert(gpu != nullptr);
 
     const auto queue_families = gpu.getQueueFamilyProperties();
     const auto queue_family = std::find_if(queue_families.begin(), queue_families.end(),
                                            [](const vk::QueueFamilyProperties family) { return family.queueFlags & (vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eCompute); });
     if (queue_family == queue_families.end()) {
-        return std::nullopt;
+        return err(Error::VulkanResourceNotFound, "finding gpu queue family");
     }
-    return std::optional{static_cast<u32>(queue_family - queue_families.begin())};
+    return ok(static_cast<u32>(queue_family - queue_families.begin()));
 }
 
-static vk::PhysicalDevice find_gpu(const Engine& engine) {
+static Result<vk::PhysicalDevice> find_gpu(const Engine& engine) {
     debug_assert(engine.instance != nullptr);
 
-    const auto [gpus_result, gpus] = engine.instance.enumeratePhysicalDevices();
-    critical_assert(gpus_result == vk::Result::eSuccess);
+    const auto gpus = engine.instance.enumeratePhysicalDevices();
+    if (gpus.result != vk::Result::eSuccess) {
+        return err(gpus.result, "enumerating Vulkan physical devices");
+    }
 
-    const auto gpu = std::find_if(gpus.begin(), gpus.end(), [](const vk::PhysicalDevice gpu) {
+    const auto gpu = std::find_if(gpus.value.begin(), gpus.value.end(), [](const vk::PhysicalDevice gpu) {
         const auto features = gpu.getFeatures();
         if (features.sampleRateShading != vk::True || features.samplerAnisotropy != vk::True) {
             return false;
         }
 
-        const auto [extension_result, extensions] = gpu.enumerateDeviceExtensionProperties();
-        critical_assert(extension_result == vk::Result::eSuccess);
+        const auto extensions = gpu.enumerateDeviceExtensionProperties();
+        if (extensions.result != vk::Result::eSuccess) {
+            return false;
+        }
         if (!std::ranges::all_of(DeviceExtensions, [&](const char* required) {
-                return std::ranges::any_of(extensions, [&](const vk::ExtensionProperties extension) { return strcmp(required, extension.extensionName); });
+                return std::ranges::any_of(extensions.value, [&](const vk::ExtensionProperties extension) { return strcmp(required, extension.extensionName); });
             })) {
             return false;
         }
 
-        if (!find_queue_family(gpu).has_value()) {
+        if (!find_queue_family(gpu).has_val()) {
             return false;
         }
 
         return true;
     });
-    critical_assert(gpu != gpus.end());
-    return *gpu;
+    if (gpu == gpus.value.end()) {
+        return err(Error::VulkanInitFailed, "finding suitable Vulkan physical device");
+    }
+    return ok(*gpu);
 }
 
-static vk::Device init_device(const Engine& engine) {
+static Result<vk::Device> init_device(const Engine& engine) {
     debug_assert(engine.gpu != nullptr);
     debug_assert(engine.queue_family_index != UINT32_MAX);
 
@@ -144,13 +163,12 @@ static vk::Device init_device(const Engine& engine) {
     vk::PhysicalDeviceBufferAddressFeaturesEXT buffer_address_feature = {.pNext = &shader_object_feature, .bufferDeviceAddress = vk::True};
     vk::PhysicalDeviceDynamicRenderingFeaturesKHR dynamic_rendering_feature = {.pNext = &buffer_address_feature, .dynamicRendering = vk::True};
     vk::PhysicalDeviceSynchronization2Features synchronization2_feature = {.pNext = &dynamic_rendering_feature, .synchronization2 = vk::True};
-
     constexpr vk::PhysicalDeviceFeatures features = {
         .sampleRateShading = vk::True,
         .samplerAnisotropy = vk::True,
     };
 
-    vk::DeviceCreateInfo device_info = {
+    const auto device = engine.gpu.createDevice({
         .pNext = synchronization2_feature,
         .queueCreateInfoCount = 1,
         .pQueueCreateInfos = &queue_info,
@@ -159,13 +177,14 @@ static vk::Device init_device(const Engine& engine) {
         .enabledExtensionCount = static_cast<u32>(DeviceExtensions.size()),
         .ppEnabledExtensionNames = DeviceExtensions.data(),
         .pEnabledFeatures = &features,
-    };
-    const auto device = engine.gpu.createDevice(device_info);
-    critical_assert(device.result == vk::Result::eSuccess);
-    return device.value;
+    });
+    if (device.result != vk::Result::eSuccess) {
+        return err(device.result, "initializing Vulkan device");
+    }
+    return ok(device.value);
 }
 
-static VmaAllocator init_allocator(const Engine& engine) {
+static Result<VmaAllocator> init_allocator(const Engine& engine) {
     debug_assert(engine.instance != nullptr);
     debug_assert(engine.gpu != nullptr);
     debug_assert(engine.device != nullptr);
@@ -176,19 +195,20 @@ static VmaAllocator init_allocator(const Engine& engine) {
     info.instance = engine.instance;
     info.vulkanApiVersion = VK_API_VERSION_1_3;
 
-    VmaAllocator allocator = nullptr;
-    const auto result = vmaCreateAllocator(&info, &allocator);
-    critical_assert(result == VK_SUCCESS);
-
+    auto allocator = ok<VmaAllocator>(nullptr);
+    const auto result = vmaCreateAllocator(&info, &*allocator);
+    if (result != VK_SUCCESS) {
+        return err(static_cast<vk::Result>(result), "initializing VmaAllocator");
+    }
     return allocator;
 }
 
 static bool s_engine_initialized = false;
 
-Engine Engine::create() {
+Result<Engine> Engine::create() {
     debug_assert(s_engine_initialized == false);
 
-    Engine engine = {};
+    auto engine = ok<Engine>();
 
     const auto glfw_success = glfwInit();
     critical_assert(glfw_success == GLFW_TRUE);
@@ -196,45 +216,68 @@ Engine Engine::create() {
 
     VULKAN_HPP_DEFAULT_DISPATCHER.init();
 
-    engine.instance = init_instance();
-    debug_assert(engine.instance != nullptr);
+    auto instance = init_instance();
+    if (instance.has_err()) {
+        return err(instance, "initializing engine");
+    }
+    engine->instance = instance.get_val();
 
-    VULKAN_HPP_DEFAULT_DISPATCHER.init(engine.instance);
+    VULKAN_HPP_DEFAULT_DISPATCHER.init(engine->instance);
 
-    const auto messenger = engine.instance.createDebugUtilsMessengerEXT(DebugUtilsMessengerCreateInfo);
-    critical_assert(messenger.result == vk::Result::eSuccess);
-    engine.debug_messenger = messenger.value;
+    const auto messenger = engine->instance.createDebugUtilsMessengerEXT(DebugUtilsMessengerCreateInfo);
+    if (messenger.result != vk::Result::eSuccess) {
+        return err(messenger.result, "initializing engine");
+    }
+    engine->debug_messenger = messenger.value;
 
-    engine.gpu = find_gpu(engine);
-    critical_assert(engine.gpu != nullptr);
+    auto gpu = find_gpu(*engine);
+    if (gpu.has_err()) {
+        return err(gpu, "initializing engine");
+    }
+    engine->gpu = *gpu;
 
-    engine.queue_family_index = *find_queue_family(engine.gpu);
-    critical_assert(engine.queue_family_index != UINT32_MAX);
+    auto queue_family_index = find_queue_family(engine->gpu);
+    if (queue_family_index.has_err()) {
+        return err(queue_family_index, "initializing engine");
+    }
+    engine->queue_family_index = *queue_family_index;
 
-    engine.device = init_device(engine);
-    critical_assert(engine.device != nullptr);
+    auto device = init_device(*engine);
+    if (device.has_err()) {
+        return err(device, "initializing engine");
+    }
+    engine->device = *device;
 
-    VULKAN_HPP_DEFAULT_DISPATCHER.init(engine.device);
+    VULKAN_HPP_DEFAULT_DISPATCHER.init(engine->device);
 
-    engine.queue = engine.device.getQueue(engine.queue_family_index, 0);
-    critical_assert(engine.queue != nullptr);
+    engine->queue = engine->device.getQueue(engine->queue_family_index, 0);
+    if (engine->queue == nullptr) {
+        return err(Error::VulkanResourceNotFound, "initializing engine Vulkan queue");
+    }
 
-    engine.allocator = init_allocator(engine);
-    critical_assert(engine.allocator != nullptr);
+    auto allocator = init_allocator(*engine);
+    if (allocator.has_err()) {
+        return err(allocator, "initializing engine");
+    }
+    engine->allocator = *allocator;
 
-    const auto pool = engine.device.createCommandPool({
+    const auto pool = engine->device.createCommandPool({
         .flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
-        .queueFamilyIndex = engine.queue_family_index,
+        .queueFamilyIndex = engine->queue_family_index,
     });
-    critical_assert(pool.result == vk::Result::eSuccess);
-    engine.command_pool = pool.value;
+    if (pool.result != vk::Result::eSuccess) {
+        return err(pool.result, "initializing engine");
+    }
+    engine->command_pool = pool.value;
 
-    const auto transient_pool = engine.device.createCommandPool({
+    const auto transient_pool = engine->device.createCommandPool({
         .flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
-        .queueFamilyIndex = engine.queue_family_index,
+        .queueFamilyIndex = engine->queue_family_index,
     });
-    critical_assert(transient_pool.result == vk::Result::eSuccess);
-    engine.single_time_command_pool = transient_pool.value;
+    if (transient_pool.result != vk::Result::eSuccess) {
+        return err(transient_pool.result, "initializing engine");
+    }
+    engine->single_time_command_pool = transient_pool.value;
 
     s_engine_initialized = true;
     return engine;
@@ -266,42 +309,50 @@ void Engine::destroy() const {
     s_engine_initialized = false;
 }
 
-Window Window::create(const Engine& engine, i32 width, i32 height) {
+Result<Window> Window::create(const Engine& engine, i32 width, i32 height) {
     debug_assert(engine.device != nullptr);
     debug_assert(width > 0);
     debug_assert(height > 0);
 
-    Window window = {};
+    auto window = ok<Window>();
 
-    window.window = glfwCreateWindow(width, height, "Hurdy Gurdy", nullptr, nullptr);
-    debug_assert(window.window != nullptr);
+    window->window = glfwCreateWindow(width, height, "Hurdy Gurdy", nullptr, nullptr);
+    if (window->window == nullptr) {
+        return err(Error::UnknownGLFW, "initializing window");
+    }
 
     debug_assert(engine.instance != nullptr);
-    const auto surface_result = glfwCreateWindowSurface(engine.instance, window.window, nullptr, reinterpret_cast<VkSurfaceKHR*>(&window.surface));
-    critical_assert(surface_result == VK_SUCCESS);
+    const auto surface_result = glfwCreateWindowSurface(engine.instance, window->window, nullptr, reinterpret_cast<VkSurfaceKHR*>(&window->surface));
+    if (surface_result != VK_SUCCESS) {
+        return err(static_cast<vk::Result>(surface_result), "initializing window");
+    }
 
-    window.resize(engine);
-    debug_assert(window.swapchain != nullptr);
+    auto window_result = window->resize(engine);
+    if (window_result.has_err()) {
+        return err(window_result, "initializing window");
+    }
 
     debug_assert(engine.command_pool != nullptr);
     const vk::CommandBufferAllocateInfo cmd_info{
         .commandPool = engine.command_pool,
         .commandBufferCount = MaxFramesInFlight,
     };
-    const auto cmd_result = engine.device.allocateCommandBuffers(&cmd_info, window.m_command_buffers.data());
-    critical_assert(cmd_result == vk::Result::eSuccess);
+    const auto cmd_result = engine.device.allocateCommandBuffers(&cmd_info, window->m_command_buffers.data());
+    if (cmd_result != vk::Result::eSuccess) {
+        return err(cmd_result, "initializing window command buffers");
+    }
 
-    for (auto& fence : window.m_frame_finished_fences) {
+    for (auto& fence : window->m_frame_finished_fences) {
         const auto new_fence = engine.device.createFence({.flags = vk::FenceCreateFlagBits::eSignaled});
         critical_assert(new_fence.result == vk::Result::eSuccess);
         fence = new_fence.value;
     }
-    for (auto& semaphore : window.m_image_available_semaphores) {
+    for (auto& semaphore : window->m_image_available_semaphores) {
         const auto new_semaphore = engine.device.createSemaphore({});
         critical_assert(new_semaphore.result == vk::Result::eSuccess);
         semaphore = new_semaphore.value;
     }
-    for (auto& semaphore : window.m_ready_to_present_semaphores) {
+    for (auto& semaphore : window->m_ready_to_present_semaphores) {
         const auto new_semaphore = engine.device.createSemaphore({});
         critical_assert(new_semaphore.result == vk::Result::eSuccess);
         semaphore = new_semaphore.value;
@@ -344,7 +395,7 @@ void Window::destroy(const Engine& engine) const {
     glfwDestroyWindow(window);
 }
 
-void Window::resize(const Engine& engine) {
+Result<void> Window::resize(const Engine& engine) {
     debug_assert(engine.gpu != nullptr);
     debug_assert(engine.device != nullptr);
 
@@ -365,9 +416,8 @@ void Window::resize(const Engine& engine) {
         .imageArrayLayers = 1,
         .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferDst,
         .preTransform = surface_capabilities.currentTransform,
-        .presentMode = std::ranges::any_of(present_modes, [](const vk::PresentModeKHR mode) { return mode == vk::PresentModeKHR::eMailbox; })
-                           ? vk::PresentModeKHR::eMailbox
-                           : vk::PresentModeKHR::eFifo,
+        .presentMode = std::ranges::any_of(present_modes, [](const vk::PresentModeKHR mode) { return mode == vk::PresentModeKHR::eMailbox; }) ? vk::PresentModeKHR::eMailbox
+                                                                                                                                              : vk::PresentModeKHR::eFifo,
         .clipped = vk::True,
         .oldSwapchain = swapchain,
     };
@@ -400,6 +450,8 @@ void Window::resize(const Engine& engine) {
         critical_assert(view.result == vk::Result::eSuccess);
         swapchain_views[i] = view.value;
     }
+
+    return ok();
 }
 
 vk::CommandBuffer Window::begin_frame(const Engine& engine) {

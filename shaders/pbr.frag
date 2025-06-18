@@ -45,12 +45,12 @@ float g_ggx(const float roughness, const float theta) {
 }
 
 vec3 brdf(const vec3 albedo, const float metal, const float roughness, const vec3 f0, const float ndotv, const float ndotl, const float ndoth, const float vdoth) {
-    const vec3 diffuse = albedo * ndotl / pi;
+    const vec3 diffuse = albedo / pi;
 
     const vec3 F = f0 + (vec3(1.0) - f0) * pow((1 - vdoth), 5.0);
     const float D = d_ggx(roughness, ndoth);
     const float G = g_ggx(roughness, ndotv) * g_ggx(roughness, ndotl);
-    const vec3 specular = (F / 4.0) * (D * G / ndotv);
+    const vec3 specular = (F / 4.0) * (D * G / ((ndotv * ndotl) + 0.0001));
 
     const vec3 ks = F;
     const vec3 kd = (1 - ks) * (1 - metal);
@@ -69,7 +69,7 @@ vec3 calc_reflection(const Light light, const vec3 normal, const vec3 albedo, co
     const float vdoth = clamp(dot(view_dir, half_dir), 0.0, 1.0);
 
     const float attenuation = 1.0 / dot(light_rel_pos, light_rel_pos);
-    return (light.color.xyz * attenuation) * (brdf(albedo, metal, roughness, f0, ndotv, ndotl, ndoth, vdoth));
+    return (light.color.xyz * attenuation) * (brdf(albedo, metal, roughness, f0, ndotv, ndotl, ndoth, vdoth) * ndotl);
 }
 
 void main() {

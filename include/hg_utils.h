@@ -100,6 +100,9 @@ public:
         OutOfGpuMemory,
         FileNotFound,
         FileInvalid,
+
+        VulkanInitFailed,
+        VulkanResourceNotFound,
         // etc. add as needed
     };
 
@@ -181,8 +184,8 @@ private:
     std::optional<Error> m_err = std::nullopt;
 };
 
-template <typename T, typename U = std::remove_cv_t<T>> constexpr Result<U> ok(T&& val) {
-    return Result<U>::emplace_ok(static_cast<U>(std::forward<T>(val)));
+template <typename T> constexpr Result<std::remove_cvref_t<T>> ok(T&& val) {
+    return Result<std::remove_cvref_t<T>>::emplace_ok(std::forward<T>(val));
 }
 template <typename T = void, typename... Args> constexpr Result<T> ok(Args&&... args) {
     return Result<T>::emplace_ok(std::forward<Args>(args)...);
@@ -194,7 +197,9 @@ template <typename T> constexpr Error err(Result<T>& error, const std::string_vi
 
 #define HG_MAKE_CASE(e)                                                                                                                                                            \
     case Error::e:                                                                                                                                                                 \
-        return {Error::e, #e " error", context}
+        return {                                                                                                                                                                   \
+            Error::e, #e " error", context                                                                                                                                         \
+        }
 
 constexpr Error err(const Error::Code code, const std::string_view context) {
     switch (code) {
@@ -205,6 +210,8 @@ constexpr Error err(const Error::Code code, const std::string_view context) {
         HG_MAKE_CASE(OutOfGpuMemory);
         HG_MAKE_CASE(FileNotFound);
         HG_MAKE_CASE(FileInvalid);
+        HG_MAKE_CASE(VulkanInitFailed);
+        HG_MAKE_CASE(VulkanResourceNotFound);
     }
     debug_assert(false);
 }
@@ -213,7 +220,9 @@ constexpr Error err(const Error::Code code, const std::string_view context) {
 
 #define HG_MAKE_CASE_WITH_CODE(e, c)                                                                                                                                               \
     case vk::Result::e:                                                                                                                                                            \
-        return {(Error::c), "Vulkan " #e " error", context}
+        return {                                                                                                                                                                   \
+            (Error::c), "Vulkan " #e " error", context                                                                                                                             \
+        }
 
 #define HG_MAKE_CASE(e) HG_MAKE_CASE_WITH_CODE(e, UnknownVulkan)
 
