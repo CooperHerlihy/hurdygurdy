@@ -5,7 +5,6 @@
 
 #include <filesystem>
 #include <memory>
-#include <optional>
 
 namespace hg {
 
@@ -21,7 +20,7 @@ public:
     i32 height = 0;
     i32 channels = 0;
 
-    [[nodiscard]] static std::optional<ImageData> load(std::filesystem::path path);
+    [[nodiscard]] static Result<ImageData> load(std::filesystem::path path);
 };
 
 struct ModelData {
@@ -29,7 +28,7 @@ struct ModelData {
     float roughness = 0.0f;
     float metalness = 0.0f;
 
-    [[nodiscard]] static std::optional<ModelData> load_gltf(std::filesystem::path path);
+    [[nodiscard]] static Result<ModelData> load_gltf(std::filesystem::path path);
 };
 
 } // namespace hg

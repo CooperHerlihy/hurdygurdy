@@ -5,10 +5,10 @@
 namespace hg {
 
 struct Mesh {
-    Vec<u32> indices = {};
-    Vec<glm::vec3> positions = {};
-    Vec<glm::vec3> normals = {};
-    Vec<glm::vec2> tex_coords = {};
+    std::vector<u32> indices = {};
+    std::vector<glm::vec3> positions = {};
+    std::vector<glm::vec3> normals = {};
+    std::vector<glm::vec2> tex_coords = {};
 };
 
 [[nodiscard]] Mesh generate_square();

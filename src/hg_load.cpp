@@ -9,36 +9,30 @@
 
 #include <filesystem>
 #include <memory>
-#include <optional>
 
 namespace hg {
 
-std::optional<ImageData> ImageData::load(const std::filesystem::path path) {
+Result<ImageData> ImageData::load(const std::filesystem::path path) {
     debug_assert(!path.empty());
 
     int width = 0, height = 0, channels = 0;
     const auto pixels = stbi_load(path.string().data(), &width, &height, &channels, STBI_rgb_alpha);
     if (pixels == nullptr) {
-        return std::nullopt;
+        return err(Error::FileNotFound, std::format("searching for image file {}", path.string()));
     }
 
     critical_assert(width > 0);
     critical_assert(height > 0);
     critical_assert(channels > 0);
-    return std::optional<ImageData>{{
-        .pixels = std::unique_ptr<u8[], Deleter>{pixels},
-        .width = width,
-        .height = height,
-        .channels = channels,
-    }};
+    return ok<ImageData>(std::unique_ptr<u8[], Deleter>{pixels}, width, height, channels);
 }
 
-std::optional<ModelData> ModelData::load_gltf(const std::filesystem::path path) {
+Result<ModelData> ModelData::load_gltf(const std::filesystem::path path) {
     fastgltf::Parser parser;
 
     auto buffer = fastgltf::GltfDataBuffer::FromPath(path);
     if (buffer.error() == fastgltf::Error::InvalidPath) {
-        return std::nullopt;
+        return err(Error::FileNotFound, std::format("searching for gltf file {}", path.string()));
     }
     critical_assert(buffer.error() == fastgltf::Error::None);
 
@@ -47,10 +41,9 @@ std::optional<ModelData> ModelData::load_gltf(const std::filesystem::path path) 
     auto asset = parser.loadGltf(buffer.get(), path.parent_path(), options);
     critical_assert(asset.error() == fastgltf::Error::None);
 
-    std::optional model = ModelData{
-        .roughness = 0.5f,
-        .metalness = 0.0f,
-    };
+    auto model = ok<ModelData>();
+    model->roughness = 0.5f;
+    model->metalness = 0.0f;
 
     for (const auto& mesh : asset->meshes) {
         for (const auto& primitive : mesh.primitives) {

@@ -38,12 +38,12 @@ const vk::DebugUtilsMessengerCreateInfoEXT DebugUtilsMessengerCreateInfo = {
     .pfnUserCallback = debug_callback,
 };
 
-[[nodiscard]] static Vec<const char*> get_required_instance_extensions() {
+[[nodiscard]] static std::vector<const char*> get_required_instance_extensions() {
     u32 glfw_extension_count = 0;
     const char** glfw_extensions = glfwGetRequiredInstanceExtensions(&glfw_extension_count);
     critical_assert(glfw_extensions != nullptr);
 
-    Vec<const char*> required_extensions = {};
+    std::vector<const char*> required_extensions = {};
     required_extensions.reserve(static_cast<usize>(glfw_extension_count) + 1);
     for (usize i = 0; i < glfw_extension_count; ++i) {
         required_extensions.push_back(glfw_extensions[i]);
@@ -74,7 +74,7 @@ static vk::Instance init_instance() {
         .apiVersion = VK_API_VERSION_1_3,
     };
 
-    const Vec<const char*> required_extensions = get_required_instance_extensions();
+    const std::vector<const char*> required_extensions = get_required_instance_extensions();
     critical_assert(check_instance_extension_availability(required_extensions));
 
     const vk::InstanceCreateInfo instance_info = {
@@ -662,7 +662,7 @@ GpuImage GpuImage::create_cubemap(const Engine& engine, const std::filesystem::p
     debug_assert(engine.allocator != nullptr);
 
     const auto data = ImageData::load(path);
-    critical_assert(data.has_value());
+    critical_assert(data.has_val());
 
     const vk::Extent3D staging_extent = {static_cast<u32>(data->width), static_cast<u32>(data->height), 1};
     const VkDeviceSize staging_size = static_cast<u64>(staging_extent.width) * static_cast<u64>(staging_extent.height) * 4;
@@ -971,14 +971,14 @@ vk::Sampler create_sampler(const Engine& engine, const SamplerConfig& config) {
     return sampler.value;
 }
 
-static Vec<char> read_shader(const std::filesystem::path path) {
+static std::vector<char> read_shader(const std::filesystem::path path) {
     debug_assert(!path.empty());
 
     auto file = std::ifstream{path, std::ios::ate | std::ios::binary};
     critical_assert(file.is_open());
 
     const usize code_size = file.tellg();
-    Vec<char> code;
+    std::vector<char> code;
     code.resize(code_size);
     file.seekg(0);
     file.read(code.data(), static_cast<std::streamsize>(code.size()));
@@ -1017,7 +1017,7 @@ void create_linked_shaders(const Engine& engine, const std::span<vk::ShaderEXT> 
     debug_assert(engine.device != nullptr);
     debug_assert(configs.size() >= 2);
 
-    Vec<Vec<char>> codes = {};
+    std::vector<std::vector<char>> codes = {};
     codes.reserve(configs.size());
     for (const auto& config : configs) {
         debug_assert(!config.path.empty());
@@ -1027,7 +1027,7 @@ void create_linked_shaders(const Engine& engine, const std::span<vk::ShaderEXT> 
         codes.push_back(read_shader(config.path));
     }
 
-    Vec<vk::ShaderCreateInfoEXT> shader_infos = {};
+    std::vector<vk::ShaderCreateInfoEXT> shader_infos = {};
     shader_infos.reserve(configs.size());
     for (usize i = 0; i < codes.size(); ++i) {
         shader_infos.push_back({

@@ -7,6 +7,7 @@
 #include <iostream>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <variant>
 
@@ -89,71 +90,12 @@ private:
     std::chrono::high_resolution_clock::time_point m_begin = std::chrono::high_resolution_clock::now();
 };
 
-template <typename T> class Vec {
-public:
-    template <typename... Args> constexpr Vec(Args&&... args) : m_vec{std::forward<Args>(args)...} {}
-
-    constexpr Vec clone() const { return Vec{std::vector{m_vec}}; }
-
-    constexpr ~Vec() = default;
-    Vec(const Vec&) = delete;
-    Vec& operator=(const Vec&) = delete;
-    constexpr Vec(Vec&&) = default;
-    constexpr Vec& operator=(Vec&&) = default;
-
-    constexpr std::strong_ordering operator<=>(const Vec&) const = default;
-
-    constexpr bool empty() const { return m_vec.empty(); }
-    constexpr usize size() const { return m_vec.size(); }
-    constexpr usize capacity() const { return m_vec.capacity(); }
-    constexpr usize max_size() const { return m_vec.max_size(); }
-
-    constexpr T& operator[](usize index) {
-        debug_assert(index < size());
-        return m_vec[index];
-    }
-    constexpr T& at(usize index) { return m_vec.at(index); }
-    constexpr T& front() { return m_vec.front(); }
-    constexpr T& back() { return m_vec.back(); }
-    constexpr T* data() { return m_vec.data(); }
-    constexpr std::vector<T>& get() { return m_vec; }
-
-    constexpr const T& operator[](usize index) const {
-        debug_assert(index < size());
-        return m_vec[index];
-    }
-    constexpr const T& at(usize index) const { return m_vec.at(index); }
-    constexpr const T& front() const { return m_vec.front(); }
-    constexpr const T& back() const { return m_vec.back(); }
-    constexpr const T* data() const { return m_vec.data(); }
-    constexpr const std::vector<T>& get() const { return m_vec; }
-
-    constexpr void resize(const usize new_size) { m_vec.resize(new_size); }
-    constexpr void clear() { m_vec.clear(); }
-    constexpr void reserve(const usize new_size) { m_vec.reserve(new_size); }
-    constexpr void shrink_to_fit() { m_vec.shrink_to_fit(); }
-    constexpr void push_back(const T& val) { m_vec.emplace_back(val); }
-    constexpr void push_back(T&& val) { m_vec.emplace_back(std::move(val)); }
-    constexpr void pop_back() { m_vec.pop_back(); }
-    template <typename... Args> constexpr void emplace_back(Args&&... args) { m_vec.emplace_back(std::forward<Args>(args)...); }
-
-    constexpr auto begin() { return m_vec.begin(); }
-    constexpr auto end() { return m_vec.end(); }
-    constexpr auto begin() const { return m_vec.begin(); }
-    constexpr auto end() const { return m_vec.end(); }
-
-    operator std::span<T>() { return m_vec; }
-    operator std::span<const T>() const { return m_vec; }
-
-private:
-    std::vector<T> m_vec = {};
-};
-
 class Error {
 public:
     enum Code {
         Unknown,
         UnknownVulkan,
+        UnknownGLFW,
         OutOfMemory,
         OutOfGpuMemory,
         FileNotFound,
@@ -179,7 +121,7 @@ public:
 template <typename T> class Result {
 public:
     template <typename... Args> static constexpr Result emplace_ok(Args&&... args) { return {std::in_place_type_t<T>(), std::forward<Args>(args)...}; }
-    template <typename... Args> static constexpr Result emplace_err(Args&&... args) { return {std::in_place_type_t<Error>(), std::forward<Args>(args)...}; }
+    constexpr Result(Error&& error) : m_result{std::move(error)} {}
 
     constexpr ~Result() = default;
     Result(const Result&) = delete;
@@ -219,7 +161,7 @@ private:
 template <> class Result<void> {
 public:
     template <typename... Args> static constexpr Result emplace_ok(Args&&... args) { return {std::in_place_type_t<void>(), std::forward<Args>(args)...}; }
-    template <typename... Args> static constexpr Result emplace_err(Args&&... args) { return {std::in_place_type_t<Error>(), std::forward<Args>(args)...}; }
+    constexpr Result(Error&& error) : m_err{std::move(error)} {}
 
     constexpr ~Result() = default;
     Result(const Result&) = delete;
@@ -235,43 +177,30 @@ public:
 
 private:
     template <typename... Args> constexpr Result(std::in_place_type_t<void>, Args&&...) {}
-    template <typename... Args> constexpr Result(std::in_place_type_t<Error>, Args&&... args) : m_err{{std::forward<Args>(args)...}} {}
 
     std::optional<Error> m_err = std::nullopt;
 };
 
+template <typename T, typename U = std::remove_cv_t<T>> constexpr Result<U> ok(T&& val) {
+    return Result<U>::emplace_ok(static_cast<U>(std::forward<T>(val)));
+}
 template <typename T = void, typename... Args> constexpr Result<T> ok(Args&&... args) {
     return Result<T>::emplace_ok(std::forward<Args>(args)...);
 }
 
-template <typename T = void> constexpr Result<T> err(Error&& error) {
-    return Result<T>::emplace_err(std::move(error));
-}
-template <typename T = void> constexpr Result<T> err(Error&& error, const std::string_view context) {
-    return Result<T>::emplace_err(std::move(error), context);
-}
-template <typename T = void> constexpr Result<T> err(const Error::Code code, const std::string_view error, const std::string_view context) {
-    return Result<T>::emplace_err(code, error, context);
-}
-
-template <typename T> constexpr Result<T> err(Result<T>& error, const std::string_view context) {
-    return Result<T>::emplace_err(std::move(error.get_err()), context);
-}
-template <typename T, typename U>
-constexpr Result<T> err(Result<U>& error, const std::string_view context)
-    requires(!std::is_same_v<T, U>)
-{
-    return Result<T>::emplace_err(std::move(error.get_err()), context);
+template <typename T> constexpr Error err(Result<T>& error, const std::string_view context) {
+    return {std::move(error.get_err()), context};
 }
 
 #define HG_MAKE_CASE(e)                                                                                                                                                            \
     case Error::e:                                                                                                                                                                 \
-        return Result<T>::emplace_err((Error::e), #e " error", context)
+        return {Error::e, #e " error", context}
 
-template <typename T = void> constexpr Result<T> err(const Error::Code code, const std::string_view context) {
+constexpr Error err(const Error::Code code, const std::string_view context) {
     switch (code) {
         HG_MAKE_CASE(Unknown);
         HG_MAKE_CASE(UnknownVulkan);
+        HG_MAKE_CASE(UnknownGLFW);
         HG_MAKE_CASE(OutOfMemory);
         HG_MAKE_CASE(OutOfGpuMemory);
         HG_MAKE_CASE(FileNotFound);
@@ -284,11 +213,11 @@ template <typename T = void> constexpr Result<T> err(const Error::Code code, con
 
 #define HG_MAKE_CASE_WITH_CODE(e, c)                                                                                                                                               \
     case vk::Result::e:                                                                                                                                                            \
-        return Result<T>::emplace_err((Error::c), "Vulkan " #e " error", context)
+        return {(Error::c), "Vulkan " #e " error", context}
 
 #define HG_MAKE_CASE(e) HG_MAKE_CASE_WITH_CODE(e, UnknownVulkan)
 
-template <typename T = void> constexpr Result<T> err(const vk::Result result, const std::string_view context) {
+constexpr Error err(const vk::Result result, const std::string_view context) {
     switch (result) {
         HG_MAKE_CASE_WITH_CODE(eErrorOutOfHostMemory, OutOfMemory);
         HG_MAKE_CASE_WITH_CODE(eErrorOutOfDeviceMemory, OutOfGpuMemory);
@@ -343,7 +272,7 @@ template <typename T = void> constexpr Result<T> err(const vk::Result result, co
         HG_MAKE_CASE(ePipelineBinaryMissingKHR);
         HG_MAKE_CASE(eErrorNotEnoughSpaceKHR);
     }
-    return Result<T>::emplace_err(Error::UnknownVulkan, "Vulkan unknown vk::Result value", context);
+    return {Error::UnknownVulkan, "Vulkan unknown vk::Result value", context};
 }
 
 #undef HG_MAKE_CASE

@@ -303,7 +303,7 @@ void PbrPipeline::load_texture(const Engine& engine, const std::filesystem::path
     debug_assert(!path.empty());
 
     const auto texture_data = ImageData::load(path);
-    critical_assert(texture_data.has_value());
+    critical_assert(texture_data.has_val());
 
     load_texture_from_data(engine, texture_data->pixels.get(), {static_cast<u32>(texture_data->width), static_cast<u32>(texture_data->height), 1}, vk::Format::eR8G8B8A8Srgb, 4);
 }
@@ -336,7 +336,7 @@ void PbrPipeline::load_model(const Engine& engine, const std::filesystem::path p
     debug_assert(texture_index < m_textures.size());
 
     const auto model = ModelData::load_gltf(path);
-    critical_assert(model.has_value());
+    critical_assert(model.has_val());
     const auto vertex_data = VertexData::from_mesh(std::move(model->mesh));
     load_model_from_data(engine, vertex_data.indices, vertex_data.vertices, texture_index, model->roughness, model->metalness);
 }
@@ -388,7 +388,7 @@ PbrPipeline::VertexData PbrPipeline::VertexData::from_mesh(const Mesh& mesh) {
     debug_assert(mesh.normals.size() > 0);
     debug_assert(mesh.tex_coords.size() > 0);
 
-    VertexData data = {.indices = std::move(mesh.indices.get())};
+    VertexData data = {.indices = std::move(mesh.indices)};
     data.vertices.reserve(mesh.positions.size());
     for (usize i = 0; i < mesh.positions.size(); ++i) {
         data.vertices.emplace_back(mesh.positions[i], mesh.normals[i], mesh.tex_coords[i]);

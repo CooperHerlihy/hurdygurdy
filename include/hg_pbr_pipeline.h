@@ -90,8 +90,8 @@ public:
     };
 
     struct VertexData {
-        Vec<u32> indices = {};
-        Vec<Vertex> vertices = {};
+        std::vector<u32> indices = {};
+        std::vector<Vertex> vertices = {};
 
         static VertexData from_mesh(const Mesh& mesh);
     };
@@ -151,10 +151,10 @@ private:
     GpuBuffer m_light_buffer = {};
 
     Skybox m_skybox = {};
-    Vec<Texture> m_textures = {};
-    Vec<Model> m_models = {};
-    Vec<RenderTicket> m_render_queue = {};
-    Vec<Light> m_lights = {};
+    std::vector<Texture> m_textures = {};
+    std::vector<Model> m_models = {};
+    std::vector<RenderTicket> m_render_queue = {};
+    std::vector<Light> m_lights = {};
 };
 
 } // namespace hg
