@@ -388,8 +388,7 @@ PbrPipeline::VertexData PbrPipeline::VertexData::from_mesh(const Mesh& mesh) {
     debug_assert(mesh.normals.size() > 0);
     debug_assert(mesh.tex_coords.size() > 0);
 
-    VertexData data = {};
-    data.indices = std::move(mesh.indices);
+    VertexData data = {.indices = std::move(mesh.indices.get())};
     data.vertices.reserve(mesh.positions.size());
     for (usize i = 0; i < mesh.positions.size(); ++i) {
         data.vertices.emplace_back(mesh.positions[i], mesh.normals[i], mesh.tex_coords[i]);

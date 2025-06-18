@@ -139,8 +139,8 @@ public:
 
     constexpr auto begin() { return m_vec.begin(); }
     constexpr auto end() { return m_vec.end(); }
-    constexpr auto cbegin() const { return m_vec.cbegin(); }
-    constexpr auto cend() const { return m_vec.cend(); }
+    constexpr auto begin() const { return m_vec.begin(); }
+    constexpr auto end() const { return m_vec.end(); }
 
     operator std::span<T>() { return m_vec; }
     operator std::span<const T>() const { return m_vec; }
@@ -244,15 +244,14 @@ template <typename T = void, typename... Args> constexpr Result<T> ok(Args&&... 
     return Result<T>::emplace_ok(std::forward<Args>(args)...);
 }
 
-template <typename T = void> constexpr Result<T> err(const Error::Code code, const std::string_view error, const std::string_view context) {
-    return Result<T>::emplace_err(code, error, context);
-}
-
 template <typename T = void> constexpr Result<T> err(Error&& error) {
     return Result<T>::emplace_err(std::move(error));
 }
 template <typename T = void> constexpr Result<T> err(Error&& error, const std::string_view context) {
     return Result<T>::emplace_err(std::move(error), context);
+}
+template <typename T = void> constexpr Result<T> err(const Error::Code code, const std::string_view error, const std::string_view context) {
+    return Result<T>::emplace_err(code, error, context);
 }
 
 template <typename T> constexpr Result<T> err(Result<T>& error, const std::string_view context) {

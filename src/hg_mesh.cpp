@@ -4,10 +4,10 @@ namespace hg {
 
 Mesh generate_square() {
     return {
-        .indices = {0, 1, 2, 2, 3, 0},
-        .positions = {{-1.0f, -1.0f, 0.0f}, {-1.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {1.0f, -1.0f, 0.0f}},
-        .normals = {{0.0f, 0.0f, -1.0f}, {0.0f, 0.0f, -1.0f}, {0.0f, 0.0f, -1.0f}, {0.0f, 0.0f, -1.0f}},
-        .tex_coords = {{0.0f, 0.0f}, {0.0f, 1.0f}, {1.0f, 1.0f}, {1.0f, 0.0f}},
+        .indices = {0u, 1u, 2u, 2u, 3u, 0u},
+        .positions = {glm::vec3{-1.0f, -1.0f, 0.0f}, glm::vec3{-1.0f, 1.0f, 0.0f}, glm::vec3{1.0f, 1.0f, 0.0f}, glm::vec3{1.0f, -1.0f, 0.0f}},
+        .normals = {glm::vec3{0.0f, 0.0f, -1.0f}, glm::vec3{0.0f, 0.0f, -1.0f}, glm::vec3{0.0f, 0.0f, -1.0f}, glm::vec3{0.0f, 0.0f, -1.0f}},
+        .tex_coords = {glm::vec2{0.0f, 0.0f}, glm::vec2{0.0f, 1.0f}, glm::vec2{1.0f, 1.0f}, glm::vec2{1.0f, 0.0f}},
     };
 }
 

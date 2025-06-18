@@ -233,9 +233,9 @@ public:
 
 private:
     vk::CommandBuffer m_cmd = {};
-    std::vector<vk::MemoryBarrier2> m_memories = {};
-    std::vector<vk::BufferMemoryBarrier2> m_buffers = {};
-    std::vector<vk::ImageMemoryBarrier2> m_images = {};
+    Vec<vk::MemoryBarrier2> m_memories = {};
+    Vec<vk::BufferMemoryBarrier2> m_buffers = {};
+    Vec<vk::ImageMemoryBarrier2> m_images = {};
 };
 
 } // namespace hg
