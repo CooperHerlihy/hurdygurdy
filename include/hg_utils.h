@@ -28,14 +28,14 @@ using f64 = double;
 #ifdef NDEBUG
 #define debug_assert(condition) ((void)0)
 #else
-#define debug_assert(condition)                                                                            \
+#define debug_assert(condition)                                                                        \
 if (!(condition)) {                                                                                    \
     std::cerr << std::format("Failed debug assert: {}\n    {}, {}\n", #condition, __FILE__, __LINE__); \
     std::terminate();                                                                                  \
 }
 #endif
 
-#define critical_assert(condition)                                                                            \
+#define critical_assert(condition)                                                                        \
 if (!(condition)) {                                                                                       \
     std::cerr << std::format("Failed critical assert: {}\n    {}, {}\n", #condition, __FILE__, __LINE__); \
     std::terminate();                                                                                     \
@@ -84,7 +84,7 @@ private:
     std::chrono::high_resolution_clock::time_point m_begin = std::chrono::high_resolution_clock::now();
 };
 
-enum class Err {
+enum class Err : u8 {
     Unknown = 0,
 
     ImageFileNotFound,
@@ -117,81 +117,67 @@ enum class Err {
     VkSwapchainImagesUnavailable,
     CouldNotCreateSwapchainImageView,
 
-    CouldNotCreateVkDescriptorSetLayout,
-
     // ... add more as needed
 };
 
-#define HG_MAKE_CASE(c) \
-case Err::c:        \
-    return #c;
-
+#define HG_MAKE_ERROR_STRING(c) case Err :: c : return #c
 constexpr std::string_view err_to_string(Err code) {
     switch (code) {
-        HG_MAKE_CASE(Unknown)
-        HG_MAKE_CASE(ImageFileNotFound)
-        HG_MAKE_CASE(ImageFileInvalid)
-        HG_MAKE_CASE(GltfFileNotFound)
-        HG_MAKE_CASE(GltfFileInvalid)
+        HG_MAKE_ERROR_STRING(Unknown);
 
-        HG_MAKE_CASE(VkInstanceExtensionsUnavailable)
-        HG_MAKE_CASE(VkInstanceExtensionPropertiesUnavailable)
-        HG_MAKE_CASE(CouldNotCreateVkInstance)
-        HG_MAKE_CASE(CouldNotCreateVkDebugUtilsMessenger)
-        HG_MAKE_CASE(VkPhysicalDevicesUnavailable)
-        HG_MAKE_CASE(VkPhysicalDevicesUnsuitable)
-        HG_MAKE_CASE(VkPhysicalDevicePropertiesUnavailable)
-        HG_MAKE_CASE(CouldNotCreateVkDevice)
-        HG_MAKE_CASE(VkQueueFamilyUnavailable)
-        HG_MAKE_CASE(VkQueueUnavailable)
-        HG_MAKE_CASE(CouldNotCreateVmaAllocator)
-        HG_MAKE_CASE(CouldNotCreateVkCommandPool)
-        HG_MAKE_CASE(CouldNotCreateVkFence)
-        HG_MAKE_CASE(CouldNotCreateVkSemaphore)
+        HG_MAKE_ERROR_STRING(ImageFileNotFound);
+        HG_MAKE_ERROR_STRING(ImageFileInvalid);
+        HG_MAKE_ERROR_STRING(GltfFileNotFound);
+        HG_MAKE_ERROR_STRING(GltfFileInvalid);
 
-        HG_MAKE_CASE(CouldNotCreateGlfwWindow)
-        HG_MAKE_CASE(CouldNotCreateGlfwVkSurface)
-        HG_MAKE_CASE(CouldNotAllocateVkCommandBuffers)
-        HG_MAKE_CASE(VkSurfaceCapabilitiesUnavailable)
-        HG_MAKE_CASE(VkSurfaceInvalidSize)
-        HG_MAKE_CASE(VkSurfacePresentModesUnavailable)
-        HG_MAKE_CASE(CouldNotCreateVkSwapchain)
-        HG_MAKE_CASE(VkSwapchainImagesUnavailable)
-        HG_MAKE_CASE(CouldNotCreateSwapchainImageView)
+        HG_MAKE_ERROR_STRING(VkInstanceExtensionsUnavailable);
+        HG_MAKE_ERROR_STRING(VkInstanceExtensionPropertiesUnavailable);
+        HG_MAKE_ERROR_STRING(CouldNotCreateVkInstance);
+        HG_MAKE_ERROR_STRING(CouldNotCreateVkDebugUtilsMessenger);
+        HG_MAKE_ERROR_STRING(VkPhysicalDevicesUnavailable);
+        HG_MAKE_ERROR_STRING(VkPhysicalDevicesUnsuitable);
+        HG_MAKE_ERROR_STRING(VkPhysicalDevicePropertiesUnavailable);
+        HG_MAKE_ERROR_STRING(CouldNotCreateVkDevice);
+        HG_MAKE_ERROR_STRING(VkQueueFamilyUnavailable);
+        HG_MAKE_ERROR_STRING(VkQueueUnavailable);
+        HG_MAKE_ERROR_STRING(CouldNotCreateVmaAllocator);
+        HG_MAKE_ERROR_STRING(CouldNotCreateVkCommandPool);
+        HG_MAKE_ERROR_STRING(CouldNotCreateVkFence);
+        HG_MAKE_ERROR_STRING(CouldNotCreateVkSemaphore);
 
-        HG_MAKE_CASE(CouldNotCreateVkDescriptorSetLayout)
+        HG_MAKE_ERROR_STRING(CouldNotCreateGlfwWindow);
+        HG_MAKE_ERROR_STRING(CouldNotCreateGlfwVkSurface);
+        HG_MAKE_ERROR_STRING(CouldNotAllocateVkCommandBuffers);
+        HG_MAKE_ERROR_STRING(VkSurfaceCapabilitiesUnavailable);
+        HG_MAKE_ERROR_STRING(VkSurfaceInvalidSize);
+        HG_MAKE_ERROR_STRING(VkSurfacePresentModesUnavailable);
+        HG_MAKE_ERROR_STRING(CouldNotCreateVkSwapchain);
+        HG_MAKE_ERROR_STRING(VkSwapchainImagesUnavailable);
+        HG_MAKE_ERROR_STRING(CouldNotCreateSwapchainImageView);
     }
     debug_assert(false);
 }
-
-#undef HG_MAKE_CASE
+#undef HG_MAKE_ERROR_STRING
 
 template <typename T> class Result {
 public:
     constexpr Result(const Err error) : m_result{error} {}
     template <typename... Args> constexpr Result(std::in_place_type_t<T>, Args&&... args) : m_result{std::in_place_type_t<T>(), std::forward<Args>(args)...} {}
 
-    constexpr ~Result() = default;
-    Result(const Result&) = delete;
-    Result& operator=(const Result&) = delete;
-    constexpr Result(Result&&) = default;
-    constexpr Result& operator=(Result&&) = default;
-
     constexpr bool has_err() const { return std::holds_alternative<Err>(m_result); }
     constexpr Err err() const { return std::get<Err>(m_result); }
 
     constexpr T& val() & { return std::get<T>(m_result); }
-    constexpr T& operator*() & { return val(); }
     constexpr T&& val() && { return std::move(std::get<T>(m_result)); }
+    constexpr T* operator->() { return &val(); }
+    constexpr T& operator*() & { return val(); }
     constexpr T&& operator*() && { return std::move(val()); }
 
     constexpr const T& val() const& { return std::get<T>(m_result); }
-    constexpr const T& operator*() const& { return val(); }
     constexpr const T&& val() const&& { return std::move(std::get<T>(m_result)); }
-    constexpr const T&& operator*() const&& { return val(); }
-
-    constexpr T* operator->() { return &val(); }
     constexpr const T* operator->() const { return &val(); }
+    constexpr const T& operator*() const& { return val(); }
+    constexpr const T&& operator*() const&& { return val(); }
 
     template <typename U = std::remove_cv_t<T>> constexpr T val_or(U&& default_value) const& { return !has_err() ? **this : static_cast<T>(std::forward<U>(default_value)); }
     template <typename U = std::remove_cv_t<T>> constexpr T val_or(U&& default_value) && { return !has_err() ? std::move(**this) : static_cast<T>(std::forward<U>(default_value)); }
