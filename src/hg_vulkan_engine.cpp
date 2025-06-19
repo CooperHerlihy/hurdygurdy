@@ -1,8 +1,8 @@
 #include "hg_vulkan_engine.h"
 
-#include "hg_load.h"
 #include "hg_pch.h"
 #include "hg_utils.h"
+#include "hg_load.h"
 
 #include <algorithm>
 #include <array>
@@ -25,8 +25,7 @@ constexpr std::array DeviceExtensions = {
     VK_EXT_SHADER_OBJECT_EXTENSION_NAME,
 };
 
-static vk::Bool32 debug_callback(const vk::DebugUtilsMessageSeverityFlagBitsEXT severity, const vk::DebugUtilsMessageTypeFlagsEXT,
-                                 const vk::DebugUtilsMessengerCallbackDataEXT* callback_data, void*) {
+static vk::Bool32 debug_callback(const vk::DebugUtilsMessageSeverityFlagBitsEXT severity, const vk::DebugUtilsMessageTypeFlagsEXT, const vk::DebugUtilsMessengerCallbackDataEXT* callback_data, void*) {
     std::cout << std::format("{}\n", callback_data->pMessage);
     debug_assert(!(severity & vk::DebugUtilsMessageSeverityFlagBitsEXT::eError));
     return VK_FALSE;
@@ -38,34 +37,36 @@ const vk::DebugUtilsMessengerCreateInfoEXT DebugUtilsMessengerCreateInfo = {
     .pfnUserCallback = debug_callback,
 };
 
-[[nodiscard]] static std::vector<const char*> get_required_instance_extensions() {
+[[nodiscard]] static Result<std::vector<const char*>> get_required_instance_extensions() {
     u32 glfw_extension_count = 0;
     const char** glfw_extensions = glfwGetRequiredInstanceExtensions(&glfw_extension_count);
     critical_assert(glfw_extensions != nullptr);
 
-    std::vector<const char*> required_extensions = {};
-    required_extensions.reserve(static_cast<usize>(glfw_extension_count) + 1);
-    for (usize i = 0; i < glfw_extension_count; ++i) {
-        required_extensions.push_back(glfw_extensions[i]);
-    }
+    auto required_extensions = ok<std::vector<const char*>>();
+    required_extensions->reserve(static_cast<usize>(glfw_extension_count) + 1);
+    for (usize i = 0; i < glfw_extension_count; ++i)
+        required_extensions->push_back(glfw_extensions[i]);
 #ifndef NDEBUG
-    required_extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+    required_extensions->push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 #endif
     return required_extensions;
 }
 
-[[nodiscard]] static bool check_instance_extension_availability(const std::span<const char* const> required_extensions) {
+[[nodiscard]] static Result<bool> check_instance_extension_availability(const std::span<const char* const> required_extensions) {
     debug_assert(!required_extensions.empty());
 
-    const auto [extensions_result, extensions] = vk::enumerateInstanceExtensionProperties();
-    critical_assert(extensions_result == vk::Result::eSuccess);
+    const auto extensions = vk::enumerateInstanceExtensionProperties();
+    if (extensions.result != vk::Result::eSuccess)
+        return Err::VkInstanceExtensionPropertiesUnavailable;
 
-    return std::ranges::all_of(required_extensions, [&](const char* required) {
-        return std::ranges::any_of(extensions, [&](const VkExtensionProperties& extension) { return strcmp(required, extension.extensionName) == 0; });
-    });
+    return ok(std::ranges::all_of(required_extensions, [&](const char* required) {
+        return std::ranges::any_of(extensions.value, [&](const VkExtensionProperties& extension) {
+            return strcmp(required, extension.extensionName) == 0;
+        });
+    }));
 }
 
-static vk::Instance init_instance() {
+static Result<vk::Instance> init_instance() {
     const vk::ApplicationInfo app_info = {
         .pApplicationName = "Hurdy Gurdy",
         .applicationVersion = 0,
@@ -74,83 +75,94 @@ static vk::Instance init_instance() {
         .apiVersion = VK_API_VERSION_1_3,
     };
 
-    const std::vector<const char*> required_extensions = get_required_instance_extensions();
-    critical_assert(check_instance_extension_availability(required_extensions));
+    const auto required_extensions = get_required_instance_extensions();
+    if (required_extensions.has_err())
+        return required_extensions.err();
 
-    const vk::InstanceCreateInfo instance_info = {
+    const auto extensions_available = check_instance_extension_availability(*required_extensions);
+    if (extensions_available.has_err())
+        return extensions_available.err();
+    if (extensions_available.val() == false)
+        return Err::VkInstanceExtensionsUnavailable;
+
+    const auto instance = vk::createInstance({
         .pNext = &DebugUtilsMessengerCreateInfo,
         .pApplicationInfo = &app_info,
         .enabledLayerCount = static_cast<u32>(ValidationLayers.size()),
         .ppEnabledLayerNames = ValidationLayers.data(),
-        .enabledExtensionCount = static_cast<u32>(required_extensions.size()),
-        .ppEnabledExtensionNames = required_extensions.data(),
-    };
-
-    const auto instance = vk::createInstance(instance_info);
-    critical_assert(instance.result == vk::Result::eSuccess);
-    return instance.value;
+        .enabledExtensionCount = static_cast<u32>(required_extensions->size()),
+        .ppEnabledExtensionNames = required_extensions->data(),
+    });
+    if (instance.result != vk::Result::eSuccess)
+        return Err::CouldNotCreateVkInstance;
+    return ok(instance.value);
 }
 
-static std::optional<u32> find_queue_family(const vk::PhysicalDevice gpu) {
+static Result<u32> find_queue_family(const vk::PhysicalDevice gpu) {
     debug_assert(gpu != nullptr);
 
     const auto queue_families = gpu.getQueueFamilyProperties();
-    const auto queue_family = std::find_if(queue_families.begin(), queue_families.end(),
-                                           [](const vk::QueueFamilyProperties family) { return family.queueFlags & (vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eCompute); });
-    if (queue_family == queue_families.end()) {
-        return std::nullopt;
-    }
-    return std::optional{static_cast<u32>(queue_family - queue_families.begin())};
+    const auto queue_family = std::find_if(queue_families.begin(), queue_families.end(), [](const vk::QueueFamilyProperties family) {
+        return family.queueFlags & (vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eCompute);
+    });
+    if (queue_family == queue_families.end())
+        return Err::VkQueueFamilyUnavailable;
+    return ok(static_cast<u32>(queue_family - queue_families.begin()));
 }
 
-static vk::PhysicalDevice find_gpu(const Engine& engine) {
+static Result<vk::PhysicalDevice> find_gpu(const Engine& engine) {
     debug_assert(engine.instance != nullptr);
 
-    const auto [gpus_result, gpus] = engine.instance.enumeratePhysicalDevices();
-    critical_assert(gpus_result == vk::Result::eSuccess);
+    const auto gpus = engine.instance.enumeratePhysicalDevices();
+    if (gpus.result != vk::Result::eSuccess)
+        return Err::VkPhysicalDevicesUnavailable;
 
-    const auto gpu = std::find_if(gpus.begin(), gpus.end(), [](const vk::PhysicalDevice gpu) {
+    for (const auto gpu : gpus.value) {
         const auto features = gpu.getFeatures();
-        if (features.sampleRateShading != vk::True || features.samplerAnisotropy != vk::True) {
-            return false;
-        }
+        if (features.sampleRateShading != vk::True || features.samplerAnisotropy != vk::True)
+            continue;
 
-        const auto [extension_result, extensions] = gpu.enumerateDeviceExtensionProperties();
-        critical_assert(extension_result == vk::Result::eSuccess);
+        const auto extensions = gpu.enumerateDeviceExtensionProperties();
+        if (extensions.result != vk::Result::eSuccess)
+            return Err::VkPhysicalDevicePropertiesUnavailable;
+
         if (!std::ranges::all_of(DeviceExtensions, [&](const char* required) {
-                return std::ranges::any_of(extensions, [&](const vk::ExtensionProperties extension) { return strcmp(required, extension.extensionName); });
-            })) {
-            return false;
-        }
+            return std::ranges::any_of(extensions.value, [&](const vk::ExtensionProperties extension) {
+                return strcmp(required, extension.extensionName);
+            });
+        }))
+            continue;
 
-        if (!find_queue_family(gpu).has_value()) {
-            return false;
-        }
+        if (find_queue_family(gpu).has_err())
+            continue;
 
-        return true;
-    });
-    critical_assert(gpu != gpus.end());
-    return *gpu;
+        return ok(gpu);
+    }
+
+    return Err::VkPhysicalDevicesUnsuitable;
 }
 
-static vk::Device init_device(const Engine& engine) {
+static Result<vk::Device> init_device(const Engine& engine) {
     debug_assert(engine.gpu != nullptr);
     debug_assert(engine.queue_family_index != UINT32_MAX);
-
-    float queue_priority = 1.0f;
-    vk::DeviceQueueCreateInfo queue_info{.queueFamilyIndex = engine.queue_family_index, .queueCount = 1, .pQueuePriorities = &queue_priority};
 
     vk::PhysicalDeviceShaderObjectFeaturesEXT shader_object_feature = {.pNext = nullptr, .shaderObject = vk::True};
     vk::PhysicalDeviceBufferAddressFeaturesEXT buffer_address_feature = {.pNext = &shader_object_feature, .bufferDeviceAddress = vk::True};
     vk::PhysicalDeviceDynamicRenderingFeaturesKHR dynamic_rendering_feature = {.pNext = &buffer_address_feature, .dynamicRendering = vk::True};
     vk::PhysicalDeviceSynchronization2Features synchronization2_feature = {.pNext = &dynamic_rendering_feature, .synchronization2 = vk::True};
-
     constexpr vk::PhysicalDeviceFeatures features = {
         .sampleRateShading = vk::True,
         .samplerAnisotropy = vk::True,
     };
 
-    vk::DeviceCreateInfo device_info = {
+    constexpr float queue_priority = 1.0f;
+    const vk::DeviceQueueCreateInfo queue_info{
+        .queueFamilyIndex = engine.queue_family_index,
+        .queueCount = 1,
+        .pQueuePriorities = &queue_priority
+    };
+
+    const auto device = engine.gpu.createDevice({
         .pNext = synchronization2_feature,
         .queueCreateInfoCount = 1,
         .pQueueCreateInfos = &queue_info,
@@ -159,13 +171,13 @@ static vk::Device init_device(const Engine& engine) {
         .enabledExtensionCount = static_cast<u32>(DeviceExtensions.size()),
         .ppEnabledExtensionNames = DeviceExtensions.data(),
         .pEnabledFeatures = &features,
-    };
-    const auto device = engine.gpu.createDevice(device_info);
-    critical_assert(device.result == vk::Result::eSuccess);
-    return device.value;
+    });
+    if (device.result != vk::Result::eSuccess)
+        return Err::CouldNotCreateVkDevice;
+    return ok(device.value);
 }
 
-static VmaAllocator init_allocator(const Engine& engine) {
+static Result<VmaAllocator> init_allocator(const Engine& engine) {
     debug_assert(engine.instance != nullptr);
     debug_assert(engine.gpu != nullptr);
     debug_assert(engine.device != nullptr);
@@ -176,19 +188,19 @@ static VmaAllocator init_allocator(const Engine& engine) {
     info.instance = engine.instance;
     info.vulkanApiVersion = VK_API_VERSION_1_3;
 
-    VmaAllocator allocator = nullptr;
-    const auto result = vmaCreateAllocator(&info, &allocator);
-    critical_assert(result == VK_SUCCESS);
-
+    auto allocator = ok<VmaAllocator>(nullptr);
+    const auto result = vmaCreateAllocator(&info, &*allocator);
+    if (result != VK_SUCCESS)
+        return Err::CouldNotCreateVmaAllocator;
     return allocator;
 }
 
 static bool s_engine_initialized = false;
 
-Engine Engine::create() {
+Result<Engine> Engine::create() {
     debug_assert(s_engine_initialized == false);
 
-    Engine engine = {};
+    auto engine = ok<Engine>();
 
     const auto glfw_success = glfwInit();
     critical_assert(glfw_success == GLFW_TRUE);
@@ -196,45 +208,59 @@ Engine Engine::create() {
 
     VULKAN_HPP_DEFAULT_DISPATCHER.init();
 
-    engine.instance = init_instance();
-    debug_assert(engine.instance != nullptr);
+    const auto instance = init_instance();
+    if (instance.has_err())
+        return instance.err();
+    engine->instance = *instance;
 
-    VULKAN_HPP_DEFAULT_DISPATCHER.init(engine.instance);
+    VULKAN_HPP_DEFAULT_DISPATCHER.init(engine->instance);
 
-    const auto messenger = engine.instance.createDebugUtilsMessengerEXT(DebugUtilsMessengerCreateInfo);
-    critical_assert(messenger.result == vk::Result::eSuccess);
-    engine.debug_messenger = messenger.value;
+    const auto messenger = engine->instance.createDebugUtilsMessengerEXT(DebugUtilsMessengerCreateInfo);
+    if (messenger.result != vk::Result::eSuccess)
+        return Err::CouldNotCreateVkDebugUtilsMessenger;
+    engine->debug_messenger = messenger.value;
 
-    engine.gpu = find_gpu(engine);
-    critical_assert(engine.gpu != nullptr);
+    const auto gpu = find_gpu(*engine);
+    if (gpu.has_err())
+        return gpu.err();
+    engine->gpu = *gpu;
 
-    engine.queue_family_index = *find_queue_family(engine.gpu);
-    critical_assert(engine.queue_family_index != UINT32_MAX);
+    const auto queue_family = find_queue_family(engine->gpu);
+    if (queue_family.has_err())
+        return queue_family.err();
+    engine->queue_family_index = *queue_family;
 
-    engine.device = init_device(engine);
-    critical_assert(engine.device != nullptr);
+    const auto device = init_device(*engine);
+    if (device.has_err())
+        return device.err();
+    engine->device = *device;
 
-    VULKAN_HPP_DEFAULT_DISPATCHER.init(engine.device);
+    VULKAN_HPP_DEFAULT_DISPATCHER.init(engine->device);
 
-    engine.queue = engine.device.getQueue(engine.queue_family_index, 0);
-    critical_assert(engine.queue != nullptr);
+    engine->queue = engine->device.getQueue(engine->queue_family_index, 0);
+    if (engine->queue == nullptr)
+        return Err::VkQueueUnavailable;
 
-    engine.allocator = init_allocator(engine);
-    critical_assert(engine.allocator != nullptr);
+    const auto allocator = init_allocator(*engine);
+    if (allocator.has_err())
+        return allocator.err();
+    engine->allocator = *allocator;
 
-    const auto pool = engine.device.createCommandPool({
+    const auto pool = engine->device.createCommandPool({
         .flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
-        .queueFamilyIndex = engine.queue_family_index,
+        .queueFamilyIndex = engine->queue_family_index,
     });
-    critical_assert(pool.result == vk::Result::eSuccess);
-    engine.command_pool = pool.value;
+    if (pool.result != vk::Result::eSuccess)
+        return Err::CouldNotCreateVkCommandPool;
+    engine->command_pool = pool.value;
 
-    const auto transient_pool = engine.device.createCommandPool({
+    const auto transient_pool = engine->device.createCommandPool({
         .flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
-        .queueFamilyIndex = engine.queue_family_index,
+        .queueFamilyIndex = engine->queue_family_index,
     });
-    critical_assert(transient_pool.result == vk::Result::eSuccess);
-    engine.single_time_command_pool = transient_pool.value;
+    if (transient_pool.result != vk::Result::eSuccess)
+        return Err::CouldNotCreateVkCommandPool;
+    engine->single_time_command_pool = transient_pool.value;
 
     s_engine_initialized = true;
     return engine;
@@ -255,8 +281,7 @@ void Engine::destroy() const {
     device.destroy();
 
     debug_assert(debug_messenger != nullptr);
-    const PFN_vkDestroyDebugUtilsMessengerEXT vkDestroyDebugUtilsMessengerEXT =
-        (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+    const PFN_vkDestroyDebugUtilsMessengerEXT vkDestroyDebugUtilsMessengerEXT = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
     critical_assert(vkDestroyDebugUtilsMessengerEXT != nullptr);
     vkDestroyDebugUtilsMessengerEXT(instance, debug_messenger, nullptr);
 
@@ -266,44 +291,51 @@ void Engine::destroy() const {
     s_engine_initialized = false;
 }
 
-Window Window::create(const Engine& engine, i32 width, i32 height) {
+Result<Window> Window::create(const Engine& engine, const i32 width, const i32 height) {
     debug_assert(engine.device != nullptr);
     debug_assert(width > 0);
     debug_assert(height > 0);
 
-    Window window = {};
+    auto window = ok<Window>();
 
-    window.window = glfwCreateWindow(width, height, "Hurdy Gurdy", nullptr, nullptr);
-    debug_assert(window.window != nullptr);
+    window->window = glfwCreateWindow(width, height, "Hurdy Gurdy", nullptr, nullptr);
+    if (window->window == nullptr)
+        return Err::CouldNotCreateGlfwWindow;
 
     debug_assert(engine.instance != nullptr);
-    const auto surface_result = glfwCreateWindowSurface(engine.instance, window.window, nullptr, reinterpret_cast<VkSurfaceKHR*>(&window.surface));
-    critical_assert(surface_result == VK_SUCCESS);
+    const auto surface_result = glfwCreateWindowSurface(engine.instance, window->window, nullptr, reinterpret_cast<VkSurfaceKHR*>(&window->surface));
+    if (surface_result != VK_SUCCESS)
+        return Err::CouldNotCreateGlfwVkSurface;
 
-    window.resize(engine);
-    debug_assert(window.swapchain != nullptr);
+    const auto window_result = window->resize(engine);
+    if (window_result.has_err())
+        return window_result.err();
 
     debug_assert(engine.command_pool != nullptr);
     const vk::CommandBufferAllocateInfo cmd_info{
         .commandPool = engine.command_pool,
         .commandBufferCount = MaxFramesInFlight,
     };
-    const auto cmd_result = engine.device.allocateCommandBuffers(&cmd_info, window.m_command_buffers.data());
-    critical_assert(cmd_result == vk::Result::eSuccess);
+    const auto cmd_result = engine.device.allocateCommandBuffers(&cmd_info, window->m_command_buffers.data());
+    if (cmd_result != vk::Result::eSuccess)
+        return Err::CouldNotAllocateVkCommandBuffers;
 
-    for (auto& fence : window.m_frame_finished_fences) {
+    for (auto& fence : window->m_frame_finished_fences) {
         const auto new_fence = engine.device.createFence({.flags = vk::FenceCreateFlagBits::eSignaled});
-        critical_assert(new_fence.result == vk::Result::eSuccess);
+        if (new_fence.result != vk::Result::eSuccess)
+            return Err::CouldNotCreateVkFence;
         fence = new_fence.value;
     }
-    for (auto& semaphore : window.m_image_available_semaphores) {
+    for (auto& semaphore : window->m_image_available_semaphores) {
         const auto new_semaphore = engine.device.createSemaphore({});
-        critical_assert(new_semaphore.result == vk::Result::eSuccess);
+        if (new_semaphore.result != vk::Result::eSuccess)
+            return Err::CouldNotCreateVkSemaphore;
         semaphore = new_semaphore.value;
     }
-    for (auto& semaphore : window.m_ready_to_present_semaphores) {
+    for (auto& semaphore : window->m_ready_to_present_semaphores) {
         const auto new_semaphore = engine.device.createSemaphore({});
-        critical_assert(new_semaphore.result == vk::Result::eSuccess);
+        if (new_semaphore.result != vk::Result::eSuccess)
+            return Err::CouldNotCreateVkSemaphore;
         semaphore = new_semaphore.value;
     }
 
@@ -344,35 +376,36 @@ void Window::destroy(const Engine& engine) const {
     glfwDestroyWindow(window);
 }
 
-void Window::resize(const Engine& engine) {
+Result<void> Window::resize(const Engine& engine) {
     debug_assert(engine.gpu != nullptr);
     debug_assert(engine.device != nullptr);
 
     const auto [surface_result, surface_capabilities] = engine.gpu.getSurfaceCapabilitiesKHR(surface);
-    critical_assert(surface_result == vk::Result::eSuccess);
-    critical_assert(surface_capabilities.currentExtent.width > 0);
-    critical_assert(surface_capabilities.currentExtent.height > 0);
+    if (surface_result != vk::Result::eSuccess)
+        return Err::VkSurfaceCapabilitiesUnavailable;
+    if (surface_capabilities.currentExtent.width <= 0 || surface_capabilities.currentExtent.height <= 0)
+        return Err::VkSurfaceInvalidSize;
 
     const auto [present_mode_result, present_modes] = engine.gpu.getSurfacePresentModesKHR(surface);
-    critical_assert(present_mode_result == vk::Result::eSuccess);
+    if (present_mode_result != vk::Result::eSuccess)
+        return Err::VkSurfacePresentModesUnavailable;
 
-    const vk::SwapchainCreateInfoKHR swapchain_info = {
+    const auto new_swapchain = engine.device.createSwapchainKHR({
         .surface = surface,
         .minImageCount = surface_capabilities.maxImageCount == 0 ? MaxSwapchainImages : std::min(surface_capabilities.minImageCount + 1, surface_capabilities.maxImageCount),
-        .imageFormat = vk::Format::eR8G8B8A8Srgb,
-        .imageColorSpace = vk::ColorSpaceKHR::eSrgbNonlinear,
+        .imageFormat = SwapchainImageFormat,
+        .imageColorSpace = SwapchainColorSpace,
         .imageExtent = surface_capabilities.currentExtent,
         .imageArrayLayers = 1,
         .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferDst,
         .preTransform = surface_capabilities.currentTransform,
-        .presentMode = std::ranges::any_of(present_modes, [](const vk::PresentModeKHR mode) { return mode == vk::PresentModeKHR::eMailbox; })
-                           ? vk::PresentModeKHR::eMailbox
-                           : vk::PresentModeKHR::eFifo,
+        .presentMode = std::ranges::any_of(present_modes, [](const vk::PresentModeKHR mode) { return mode == vk::PresentModeKHR::eMailbox; }) ? vk::PresentModeKHR::eMailbox : vk::PresentModeKHR::eFifo,
         .clipped = vk::True,
         .oldSwapchain = swapchain,
-    };
-    const auto new_swapchain = engine.device.createSwapchainKHR(swapchain_info);
-    critical_assert(new_swapchain.result == vk::Result::eSuccess);
+    });
+    if (new_swapchain.result != vk::Result::eSuccess)
+        return Err::CouldNotCreateVkSwapchain;
+
     if (swapchain != nullptr) {
         for (usize i = 0; i < image_count; ++i) {
             debug_assert(swapchain_views[i] != nullptr);
@@ -381,25 +414,29 @@ void Window::resize(const Engine& engine) {
         engine.device.destroySwapchainKHR(swapchain);
     }
     swapchain = new_swapchain.value;
-    extent = swapchain_info.imageExtent;
-    image_format = swapchain_info.imageFormat;
+    extent = surface_capabilities.currentExtent;
 
     const vk::Result image_count_result = engine.device.getSwapchainImagesKHR(swapchain, &image_count, nullptr);
-    critical_assert(image_count_result == vk::Result::eSuccess);
+    if (image_count_result != vk::Result::eSuccess)
+        return Err::VkSwapchainImagesUnavailable;
     const vk::Result image_result = engine.device.getSwapchainImagesKHR(swapchain, &image_count, swapchain_images.data());
-    critical_assert(image_result == vk::Result::eSuccess);
+    if (image_result != vk::Result::eSuccess)
+        return Err::VkSwapchainImagesUnavailable;
 
     for (size_t i = 0; i < image_count; ++i) {
         const vk::ImageViewCreateInfo view_info = {
             .image = swapchain_images[i],
             .viewType = vk::ImageViewType::e2D,
-            .format = image_format,
+            .format = SwapchainImageFormat,
             .subresourceRange = {vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1},
         };
         const auto view = engine.device.createImageView(view_info);
-        critical_assert(view.result == vk::Result::eSuccess);
+        if (view.result != vk::Result::eSuccess)
+            return Err::CouldNotCreateSwapchainImageView;
         swapchain_views[i] = view.value;
     }
+
+    return ok();
 }
 
 vk::CommandBuffer Window::begin_frame(const Engine& engine) {
@@ -481,9 +518,8 @@ bool Window::end_frame(const Engine& engine) {
         .pImageIndices = &current_image_index,
     };
     const auto present_result = engine.queue.presentKHR(present_info);
-    if (present_result == vk::Result::eErrorOutOfDateKHR) {
+    if (present_result == vk::Result::eErrorOutOfDateKHR)
         return false;
-    }
     critical_assert(present_result == vk::Result::eSuccess);
 
     m_current_frame_index = (m_current_frame_index + 1) % MaxFramesInFlight;
@@ -541,7 +577,9 @@ void GpuBuffer::write(const Engine& engine, const void* data, const vk::DeviceSi
     const auto copy_result = vmaCopyMemoryToAllocation(engine.allocator, data, staging_buffer.allocation, 0, size);
     critical_assert(copy_result == VK_SUCCESS);
 
-    submit_single_time_commands(engine, [&](const vk::CommandBuffer cmd) { cmd.copyBuffer(staging_buffer.buffer, buffer, {vk::BufferCopy(offset, 0, size)}); });
+    submit_single_time_commands(engine, [&](const vk::CommandBuffer cmd) {
+        cmd.copyBuffer(staging_buffer.buffer, buffer, {vk::BufferCopy(offset, 0, size)});
+    });
 }
 
 GpuImage GpuImage::create(const Engine& engine, const Config& config) {
@@ -559,9 +597,8 @@ GpuImage GpuImage::create(const Engine& engine, const Config& config) {
     VkImageType dimensions = VK_IMAGE_TYPE_3D;
     if (config.extent.depth == 1) {
         dimensions = static_cast<VkImageType>(dimensions - 1);
-        if (config.extent.height == 1) {
+        if (config.extent.height == 1)
             dimensions = static_cast<VkImageType>(dimensions - 1);
-        }
     }
     VkImageCreateInfo image_info = {};
     image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -630,9 +667,8 @@ struct StagingImage {
         VkImageType dimensions = VK_IMAGE_TYPE_3D;
         if (config.extent.depth == 1) {
             dimensions = static_cast<VkImageType>(dimensions - 1);
-            if (config.extent.height == 1) {
+            if (config.extent.height == 1)
                 dimensions = static_cast<VkImageType>(dimensions - 1);
-            }
         }
         VkImageCreateInfo image_info = {};
         image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -671,8 +707,11 @@ GpuImage GpuImage::create_cubemap(const Engine& engine, const std::filesystem::p
     defer(staging_buffer.destroy(engine));
     staging_buffer.write(engine, data->pixels.get(), staging_size, 0);
 
-    const auto staging_image = StagingImage::create(
-        engine, {.extent = staging_extent, .format = vk::Format::eR8G8B8A8Srgb, .usage = vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eTransferSrc});
+    const auto staging_image = StagingImage::create(engine, {
+        .extent = staging_extent, 
+        .format = vk::Format::eR8G8B8A8Srgb, 
+        .usage = vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eTransferSrc
+    });
     defer(staging_image.destroy(engine));
 
     const vk::Extent3D extent = {staging_extent.width / 4, staging_extent.height / 3, 1};
@@ -714,11 +753,13 @@ GpuImage GpuImage::create_cubemap(const Engine& engine, const std::filesystem::p
             .build_and_run();
 
         const vk::BufferImageCopy2 copy_region = {.imageSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1}, .imageExtent = staging_extent};
-        cmd.copyBufferToImage2({.srcBuffer = staging_buffer.buffer,
-                                .dstImage = staging_image.image,
-                                .dstImageLayout = vk::ImageLayout::eTransferDstOptimal,
-                                .regionCount = 1,
-                                .pRegions = &copy_region});
+        cmd.copyBufferToImage2({
+            .srcBuffer = staging_buffer.buffer, 
+            .dstImage = staging_image.image,
+            .dstImageLayout = vk::ImageLayout::eTransferDstOptimal,
+            .regionCount = 1,
+            .pRegions = &copy_region
+        });
 
         BarrierBuilder(cmd)
             .add_image_barrier(staging_image.image, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
@@ -785,8 +826,7 @@ GpuImage GpuImage::create_cubemap(const Engine& engine, const std::filesystem::p
     return {allocation, image, view.value};
 }
 
-void GpuImage::write(const Engine& engine, const void* data, const vk::Extent3D extent, const u32 pixel_alignment, const vk::ImageLayout final_layout,
-                     const vk::ImageSubresourceRange& subresource) const {
+void GpuImage::write(const Engine& engine, const void* data, const vk::Extent3D extent, const u32 pixel_alignment, const vk::ImageLayout final_layout, const vk::ImageSubresourceRange& subresource) const {
     debug_assert(engine.allocator != nullptr);
     debug_assert(allocation != nullptr);
     debug_assert(image != nullptr);
@@ -809,8 +849,13 @@ void GpuImage::write(const Engine& engine, const void* data, const vk::Extent3D 
             .build_and_run();
 
         const vk::BufferImageCopy2 copy_region = {.imageSubresource = {subresource.aspectMask, 0, 0, 1}, .imageExtent = extent};
-        cmd.copyBufferToImage2(
-            {.srcBuffer = staging_buffer.buffer, .dstImage = image, .dstImageLayout = vk::ImageLayout::eTransferDstOptimal, .regionCount = 1, .pRegions = &copy_region});
+        cmd.copyBufferToImage2({
+            .srcBuffer = staging_buffer.buffer,
+            .dstImage = image,
+            .dstImageLayout = vk::ImageLayout::eTransferDstOptimal,
+            .regionCount = 1,
+            .pRegions = &copy_region
+        });
 
         BarrierBuilder(cmd)
             .add_image_barrier(image, subresource)
@@ -851,16 +896,14 @@ void GpuImage::generate_mipmaps(const Engine& engine, const u32 mip_levels, cons
                 .dstSubresource = {vk::ImageAspectFlagBits::eColor, level + 1, 0, 1},
             };
             region.srcOffsets[1] = mip_offset;
-            if (mip_offset.x > 1) {
+            if (mip_offset.x > 1)
                 mip_offset.x /= 2;
-            }
-            if (mip_offset.y > 1) {
+            if (mip_offset.y > 1)
                 mip_offset.y /= 2;
-            }
-            if (mip_offset.z > 1) {
+            if (mip_offset.z > 1)
                 mip_offset.z /= 2;
-            }
             region.dstOffsets[1] = mip_offset;
+
             cmd.blitImage2({
                 .srcImage = image,
                 .srcImageLayout = vk::ImageLayout::eTransferSrcOptimal,
@@ -886,8 +929,7 @@ void GpuImage::generate_mipmaps(const Engine& engine, const u32 mip_levels, cons
     });
 }
 
-void allocate_descriptor_sets(const Engine& engine, const vk::DescriptorPool pool, const std::span<const vk::DescriptorSetLayout> layouts,
-                              const std::span<vk::DescriptorSet> sets) {
+void allocate_descriptor_sets(const Engine& engine, const vk::DescriptorPool pool, const std::span<const vk::DescriptorSetLayout> layouts, const std::span<vk::DescriptorSet> sets) {
     debug_assert(pool != nullptr);
     debug_assert(!layouts.empty());
     debug_assert(layouts[0] != nullptr);
@@ -905,8 +947,7 @@ void allocate_descriptor_sets(const Engine& engine, const vk::DescriptorPool poo
     critical_assert(set_result == vk::Result::eSuccess);
 }
 
-void write_uniform_buffer_descriptor(const Engine& engine, const vk::DescriptorSet set, const u32 binding, const vk::Buffer buffer, const vk::DeviceSize size,
-                                     const vk::DeviceSize offset) {
+void write_uniform_buffer_descriptor(const Engine& engine, const vk::DescriptorSet set, const u32 binding, const vk::Buffer buffer, const vk::DeviceSize size, const vk::DeviceSize offset) {
     debug_assert(set != nullptr);
     debug_assert(buffer != nullptr);
     debug_assert(size != 0);
@@ -962,7 +1003,7 @@ vk::Sampler create_sampler(const Engine& engine, const SamplerConfig& config) {
         sampler_info.minFilter = vk::Filter::eNearest;
         sampler_info.mipmapMode = vk::SamplerMipmapMode::eNearest;
     } else {
-        critical_assert(!"Invalid sampler type");
+        debug_assert(!"Invalid sampler type");
     }
 
     debug_assert(engine.device != nullptr);

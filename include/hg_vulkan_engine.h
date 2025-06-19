@@ -6,6 +6,7 @@
 #include <array>
 #include <filesystem>
 #include <span>
+#include <vulkan/vulkan_enums.hpp>
 
 namespace hg {
 
@@ -22,7 +23,7 @@ struct Engine {
     vk::CommandPool command_pool = {};
     vk::CommandPool single_time_command_pool = {};
 
-    [[nodiscard]] static Engine create();
+    [[nodiscard]] static Result<Engine> create();
     void destroy() const;
 };
 
@@ -31,12 +32,14 @@ constexpr u32 MaxSwapchainImages = 3;
 
 class Window {
 public:
+    static constexpr vk::Format SwapchainImageFormat = vk::Format::eR8G8B8A8Srgb;
+    static constexpr vk::ColorSpaceKHR SwapchainColorSpace = vk::ColorSpaceKHR::eSrgbNonlinear;
+
     GLFWwindow* window = nullptr;
     vk::SurfaceKHR surface = {};
 
     vk::SwapchainKHR swapchain = {};
     vk::Extent2D extent = {};
-    vk::Format image_format = vk::Format::eUndefined;
     u32 image_count = 0;
     u32 current_image_index = 0;
     std::array<vk::Image, MaxSwapchainImages> swapchain_images = {};
@@ -49,9 +52,9 @@ public:
     vk::Semaphore& is_image_available() { return m_image_available_semaphores[m_current_frame_index]; }
     vk::Semaphore& is_ready_to_present() { return m_ready_to_present_semaphores[current_image_index]; }
 
-    [[nodiscard]] static Window create(const Engine& engine, i32 width, i32 height);
+    [[nodiscard]] static Result<Window> create(const Engine& engine, i32 width, i32 height);
     void destroy(const Engine& engine) const;
-    void resize(const Engine& engine);
+    [[nodiscard]] Result<void> resize(const Engine& engine);
 
     [[nodiscard]] vk::CommandBuffer begin_frame(const Engine& engine);
     [[nodiscard]] bool end_frame(const Engine& engine);
@@ -125,7 +128,6 @@ struct GpuImage {
     void write(const Engine& engine, const void* data, vk::Extent3D extent, u32 pixel_alignment, vk::ImageLayout final_layout,
                const vk::ImageSubresourceRange& subresource = {vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1}) const;
     void generate_mipmaps(const Engine& engine, u32 levels, vk::Extent3D extent, vk::Format format, vk::ImageLayout final_layout) const;
-
 };
 
 inline u32 get_mip_count(const vk::Extent3D extent) {
@@ -154,7 +156,10 @@ struct SamplerConfig {
 
 inline vk::DescriptorSetLayout create_set_layout(const Engine& engine, const std::span<const vk::DescriptorSetLayoutBinding> bindings) {
     debug_assert(engine.device != nullptr);
-    const auto layout = engine.device.createDescriptorSetLayout({.bindingCount = static_cast<u32>(bindings.size()), .pBindings = bindings.data()});
+    const auto layout = engine.device.createDescriptorSetLayout({
+        .bindingCount = static_cast<u32>(bindings.size()),
+        .pBindings = bindings.data(),
+    });
     critical_assert(layout.result == vk::Result::eSuccess);
     return layout.value;
 }

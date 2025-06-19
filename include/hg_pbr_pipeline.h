@@ -1,8 +1,8 @@
 #pragma once
 
+#include "hg_utils.h"
 #include "hg_math.h"
 #include "hg_mesh.h"
-#include "hg_utils.h"
 #include "hg_vulkan_engine.h"
 
 namespace hg {
@@ -101,7 +101,9 @@ public:
     void resize(const Engine& engine, const Window& window);
     void render(vk::CommandBuffer cmd, const Engine& engine, Window& window, const Cameraf& camera);
 
-    void update_projection(const Engine& engine, const glm::mat4& projection) const { m_vp_buffer.write(engine, projection, offsetof(ViewProjectionUniform, projection)); }
+    void update_projection(const Engine& engine, const glm::mat4& projection) const {
+        m_vp_buffer.write(engine, projection, offsetof(ViewProjectionUniform, projection));
+    }
 
     void load_skybox(const Engine& engine, std::filesystem::path path);
 

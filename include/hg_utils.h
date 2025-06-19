@@ -28,24 +28,18 @@ using f64 = double;
 #ifdef NDEBUG
 #define debug_assert(condition) ((void)0)
 #else
-#define debug_assert(condition)                                                                                                                                                    \
-    if (!(condition)) {                                                                                                                                                            \
-        std::cerr << std::format("Failed debug assert: {}\n    {}, {}\n", #condition, __FILE__, __LINE__);                                                                         \
-        std::terminate();                                                                                                                                                          \
-    }
+#define debug_assert(condition)                                                                            \
+if (!(condition)) {                                                                                    \
+    std::cerr << std::format("Failed debug assert: {}\n    {}, {}\n", #condition, __FILE__, __LINE__); \
+    std::terminate();                                                                                  \
+}
 #endif
 
-#define critical_assert(condition)                                                                                                                                                 \
-    if (!(condition)) {                                                                                                                                                            \
-        std::cerr << std::format("Failed critical assert: {}\n    {}, {}\n", #condition, __FILE__, __LINE__);                                                                      \
-        std::terminate();                                                                                                                                                          \
-    }
-
-#define if_err_return(result)                                                                                                                                                      \
-    static_assert(std::is_same_v<decltype(result), Result>);                                                                                                                       \
-    if ((result).has_err()) {                                                                                                                                                      \
-        return (result).err();                                                                                                                                                     \
-    }
+#define critical_assert(condition)                                                                            \
+if (!(condition)) {                                                                                       \
+    std::cerr << std::format("Failed critical assert: {}\n    {}, {}\n", #condition, __FILE__, __LINE__); \
+    std::terminate();                                                                                     \
+}
 
 template <typename F> struct DeferInternal {
     F f;
@@ -53,9 +47,7 @@ template <typename F> struct DeferInternal {
     ~DeferInternal() { f(); }
 };
 
-template <typename F> DeferInternal<F> defer_function(F f) {
-    return DeferInternal<F>(f);
-}
+template <typename F> DeferInternal<F> defer_function(F f) { return DeferInternal<F>(f); }
 
 #define DEFER_INTERMEDIATE_1(x, y) x##y
 #define DEFER_INTERMEDIATE_2(x, y) DEFER_INTERMEDIATE_1(x, y)
@@ -94,20 +86,80 @@ private:
 
 enum class Err {
     Unknown = 0,
+
     ImageFileNotFound,
+    ImageFileInvalid,
     GltfFileNotFound,
+    GltfFileInvalid,
+
+    VkInstanceExtensionsUnavailable,
+    VkInstanceExtensionPropertiesUnavailable,
+    CouldNotCreateVkInstance,
+    CouldNotCreateVkDebugUtilsMessenger,
+    VkPhysicalDevicesUnavailable,
+    VkPhysicalDevicesUnsuitable,
+    VkPhysicalDevicePropertiesUnavailable,
+    CouldNotCreateVkDevice,
+    VkQueueFamilyUnavailable,
+    VkQueueUnavailable,
+    CouldNotCreateVmaAllocator,
+    CouldNotCreateVkCommandPool,
+
+    CouldNotCreateGlfwWindow,
+    CouldNotCreateGlfwVkSurface,
+    CouldNotAllocateVkCommandBuffers,
+    CouldNotCreateVkFence,
+    CouldNotCreateVkSemaphore,
+    VkSurfaceCapabilitiesUnavailable,
+    VkSurfaceInvalidSize,
+    VkSurfacePresentModesUnavailable,
+    CouldNotCreateVkSwapchain,
+    VkSwapchainImagesUnavailable,
+    CouldNotCreateSwapchainImageView,
+
+    CouldNotCreateVkDescriptorSetLayout,
+
     // ... add more as needed
 };
 
-#define HG_MAKE_CASE(c)                                                                                                                                                            \
-    case Err::c:                                                                                                                                                                   \
-        return #c;
+#define HG_MAKE_CASE(c) \
+case Err::c:        \
+    return #c;
 
 constexpr std::string_view err_to_string(Err code) {
     switch (code) {
         HG_MAKE_CASE(Unknown)
         HG_MAKE_CASE(ImageFileNotFound)
+        HG_MAKE_CASE(ImageFileInvalid)
         HG_MAKE_CASE(GltfFileNotFound)
+        HG_MAKE_CASE(GltfFileInvalid)
+
+        HG_MAKE_CASE(VkInstanceExtensionsUnavailable)
+        HG_MAKE_CASE(VkInstanceExtensionPropertiesUnavailable)
+        HG_MAKE_CASE(CouldNotCreateVkInstance)
+        HG_MAKE_CASE(CouldNotCreateVkDebugUtilsMessenger)
+        HG_MAKE_CASE(VkPhysicalDevicesUnavailable)
+        HG_MAKE_CASE(VkPhysicalDevicesUnsuitable)
+        HG_MAKE_CASE(VkPhysicalDevicePropertiesUnavailable)
+        HG_MAKE_CASE(CouldNotCreateVkDevice)
+        HG_MAKE_CASE(VkQueueFamilyUnavailable)
+        HG_MAKE_CASE(VkQueueUnavailable)
+        HG_MAKE_CASE(CouldNotCreateVmaAllocator)
+        HG_MAKE_CASE(CouldNotCreateVkCommandPool)
+        HG_MAKE_CASE(CouldNotCreateVkFence)
+        HG_MAKE_CASE(CouldNotCreateVkSemaphore)
+
+        HG_MAKE_CASE(CouldNotCreateGlfwWindow)
+        HG_MAKE_CASE(CouldNotCreateGlfwVkSurface)
+        HG_MAKE_CASE(CouldNotAllocateVkCommandBuffers)
+        HG_MAKE_CASE(VkSurfaceCapabilitiesUnavailable)
+        HG_MAKE_CASE(VkSurfaceInvalidSize)
+        HG_MAKE_CASE(VkSurfacePresentModesUnavailable)
+        HG_MAKE_CASE(CouldNotCreateVkSwapchain)
+        HG_MAKE_CASE(VkSwapchainImagesUnavailable)
+        HG_MAKE_CASE(CouldNotCreateSwapchainImageView)
+
+        HG_MAKE_CASE(CouldNotCreateVkDescriptorSetLayout)
     }
     debug_assert(false);
 }
@@ -160,11 +212,10 @@ private:
     std::optional<Err> m_err = std::nullopt;
 };
 
-constexpr Result<void> ok() {
-    return std::in_place_type_t<void>();
-}
+constexpr Result<void> ok() { return std::in_place_type_t<void>(); }
 
-template <typename T, typename U = std::remove_cvref_t<T>> constexpr Result<U> ok(T&& val) {
+template <typename T, typename U = std::remove_cvref_t<T>> constexpr Result<U> ok(T&& val)
+requires(std::is_trivially_copyable_v<U> || std::is_rvalue_reference_v<T>) {
     return Result<U>{std::in_place_type_t<U>(), std::forward<T>(val)};
 }
 

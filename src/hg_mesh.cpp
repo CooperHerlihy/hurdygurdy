@@ -4,10 +4,10 @@ namespace hg {
 
 Mesh generate_square() {
     return {
-        .indices = {0u, 1u, 2u, 2u, 3u, 0u},
-        .positions = {glm::vec3{-1.0f, -1.0f, 0.0f}, glm::vec3{-1.0f, 1.0f, 0.0f}, glm::vec3{1.0f, 1.0f, 0.0f}, glm::vec3{1.0f, -1.0f, 0.0f}},
-        .normals = {glm::vec3{0.0f, 0.0f, -1.0f}, glm::vec3{0.0f, 0.0f, -1.0f}, glm::vec3{0.0f, 0.0f, -1.0f}, glm::vec3{0.0f, 0.0f, -1.0f}},
-        .tex_coords = {glm::vec2{0.0f, 0.0f}, glm::vec2{0.0f, 1.0f}, glm::vec2{1.0f, 1.0f}, glm::vec2{1.0f, 0.0f}},
+        .indices =    {0, 1, 2, 2, 3, 0},
+        .positions =  {{-1.0f, -1.0f,  0.0f}, {-1.0f,  1.0f,  0.0f}, { 1.0f,  1.0f,  0.0f}, { 1.0f, -1.0f,  0.0f}},
+        .normals =    {{ 0.0f,  0.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}},
+        .tex_coords = {{ 0.0f,  0.0f       }, { 0.0f,  1.0f       }, { 1.0f,  1.0f       }, { 1.0f,  0.0f       }},
     };
 }
 
@@ -15,27 +15,26 @@ Mesh generate_cube() {
     Mesh cube = {};
 
     std::array<Mesh, 6> squares = {};
-    for (usize i = 0; i < 6; ++i) {
+    for (usize i = 0; i < 6; ++i)
         squares[i] = generate_square();
-    }
 
     for (auto& normal : squares[0].normals) {
-        normal = glm::vec3{0.0f, -1.0f, 0.0f};
+        normal = {0.0f, -1.0f, 0.0f};
     }
     for (auto& normal : squares[1].normals) {
-        normal = glm::vec3{-1.0f, 0.0f, 0.0f};
+        normal = {-1.0f, 0.0f, 0.0f};
     }
     for (auto& normal : squares[2].normals) {
-        normal = glm::vec3{0.0f, 0.0f, -1.0f};
+        normal = {0.0f, 0.0f, -1.0f};
     }
     for (auto& normal : squares[3].normals) {
-        normal = glm::vec3{1.0f, 0.0f, 0.0f};
+        normal = {1.0f, 0.0f, 0.0f};
     }
     for (auto& normal : squares[4].normals) {
-        normal = glm::vec3{0.0f, 0.0f, 1.0f};
+        normal = {0.0f, 0.0f, 1.0f};
     }
     for (auto& normal : squares[5].normals) {
-        normal = glm::vec3{0.0f, 1.0f, 0.0f};
+        normal = {0.0f, 1.0f, 0.0f};
     }
 
     for (auto& position : squares[0].positions) {
@@ -134,4 +133,4 @@ Mesh generate_sphere(i32 fidelity) {
     return sphere;
 }
 
-}
+} // namespace hg
