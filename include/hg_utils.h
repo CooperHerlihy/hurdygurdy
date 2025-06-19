@@ -8,6 +8,7 @@
 #include <type_traits>
 #include <utility>
 #include <variant>
+#include <vulkan/vulkan.hpp>
 
 using i8 = std::int8_t;
 using i16 = std::int16_t;
@@ -87,49 +88,82 @@ private:
 enum class Err : u8 {
     Unknown = 0,
 
-    ImageFileNotFound,
-    ImageFileInvalid,
-    GltfFileNotFound,
-    GltfFileInvalid,
-
+    // Engine init
+    CouldNotInitializeGlfw,
+    RequiredGlfwInstanceExtensionsUnavailable,
     VkInstanceExtensionsUnavailable,
     VkInstanceExtensionPropertiesUnavailable,
     CouldNotCreateVkInstance,
     CouldNotCreateVkDebugUtilsMessenger,
     VkPhysicalDevicesUnavailable,
-    VkPhysicalDevicesUnsuitable,
     VkPhysicalDevicePropertiesUnavailable,
+    VkPhysicalDevicesUnsuitable,
     CouldNotCreateVkDevice,
     VkQueueFamilyUnavailable,
     VkQueueUnavailable,
     CouldNotCreateVmaAllocator,
     CouldNotCreateVkCommandPool,
 
+    // Window init
     CouldNotCreateGlfwWindow,
     CouldNotCreateGlfwVkSurface,
     CouldNotAllocateVkCommandBuffers,
     CouldNotCreateVkFence,
     CouldNotCreateVkSemaphore,
     VkSurfaceCapabilitiesUnavailable,
-    VkSurfaceInvalidSize,
+    InvalidWindowSize,
     VkSurfacePresentModesUnavailable,
     CouldNotCreateVkSwapchain,
     VkSwapchainImagesUnavailable,
     CouldNotCreateSwapchainImageView,
 
+    // Record frame
+    CouldNotWaitForVkFence,
+    CouldNotResetVkFence,
+    CouldNotAcquireVkSwapchainImage,
+    CouldNotBeginVkCommandBuffer,
+    CouldNotEndVkCommandBuffer,
+    CouldNotSubmitVkCommandBuffer,
+    CouldNotPresentFrame,
+
+    // Vulkan resources
+    CouldNotCreateGpuBuffer,
+    CouldNotWriteGpuBuffer,
+    CouldNotCreateStagingGpuBuffer,
+    CouldNotWriteStagingGpuBuffer,
+    CouldNotCreateStagingGpuImage,
+    CouldNotWriteStagingGpuImage,
+    CouldNotCreateGpuImage,
+    CouldNotCreateGpuImageView,
+    CouldNotWriteGpuImage,
+    CouldNotCreateCubemap,
+    CouldNotGenerateMipmaps,
+    CouldNotCreateVkSampler,
+    CouldNotCreateVkDescriptorSetLayout,
+    CouldNotAllocateVkDescriptorSets,
+    CouldNotCreateVkShader,
+    CouldNotCreateVkPipelineLayout,
+    CouldNotCreateVkDescriptorPool,
+
+    // File resources
+    ShaderFileNotFound,
+    ShaderFileInvalid,
+    ImageFileNotFound,
+    ImageFileInvalid,
+    GltfFileNotFound,
+    GltfFileInvalid,
+
     // ... add more as needed
 };
 
 #define HG_MAKE_ERROR_STRING(c) case Err :: c : return #c
-constexpr std::string_view err_to_string(Err code) {
+constexpr std::string_view to_string(Err code) {
     switch (code) {
         HG_MAKE_ERROR_STRING(Unknown);
 
-        HG_MAKE_ERROR_STRING(ImageFileNotFound);
-        HG_MAKE_ERROR_STRING(ImageFileInvalid);
-        HG_MAKE_ERROR_STRING(GltfFileNotFound);
-        HG_MAKE_ERROR_STRING(GltfFileInvalid);
-
+        // Engine init
+        HG_MAKE_ERROR_STRING(CouldNotInitializeGlfw);
+        HG_MAKE_ERROR_STRING(RequiredGlfwInstanceExtensionsUnavailable);
         HG_MAKE_ERROR_STRING(VkInstanceExtensionsUnavailable);
         HG_MAKE_ERROR_STRING(VkInstanceExtensionPropertiesUnavailable);
         HG_MAKE_ERROR_STRING(CouldNotCreateVkInstance);
@@ -145,15 +179,54 @@ constexpr std::string_view err_to_string(Err code) {
         HG_MAKE_ERROR_STRING(CouldNotCreateVkFence);
         HG_MAKE_ERROR_STRING(CouldNotCreateVkSemaphore);
 
+        // Window init
         HG_MAKE_ERROR_STRING(CouldNotCreateGlfwWindow);
         HG_MAKE_ERROR_STRING(CouldNotCreateGlfwVkSurface);
         HG_MAKE_ERROR_STRING(CouldNotAllocateVkCommandBuffers);
         HG_MAKE_ERROR_STRING(VkSurfaceCapabilitiesUnavailable);
-        HG_MAKE_ERROR_STRING(VkSurfaceInvalidSize);
+        HG_MAKE_ERROR_STRING(InvalidWindowSize);
         HG_MAKE_ERROR_STRING(VkSurfacePresentModesUnavailable);
         HG_MAKE_ERROR_STRING(CouldNotCreateVkSwapchain);
         HG_MAKE_ERROR_STRING(VkSwapchainImagesUnavailable);
         HG_MAKE_ERROR_STRING(CouldNotCreateSwapchainImageView);
+
+        // Record frame
+        HG_MAKE_ERROR_STRING(CouldNotWaitForVkFence);
+        HG_MAKE_ERROR_STRING(CouldNotResetVkFence);
+        HG_MAKE_ERROR_STRING(CouldNotAcquireVkSwapchainImage);
+        HG_MAKE_ERROR_STRING(CouldNotBeginVkCommandBuffer);
+        HG_MAKE_ERROR_STRING(CouldNotEndVkCommandBuffer);
+        HG_MAKE_ERROR_STRING(CouldNotSubmitVkCommandBuffer);
+        HG_MAKE_ERROR_STRING(CouldNotPresentFrame);
+
+        // Vulkan resources
+        HG_MAKE_ERROR_STRING(CouldNotCreateGpuBuffer);
+        HG_MAKE_ERROR_STRING(CouldNotWriteGpuBuffer);
+        HG_MAKE_ERROR_STRING(CouldNotCreateStagingGpuBuffer);
+        HG_MAKE_ERROR_STRING(CouldNotWriteStagingGpuBuffer);
+        HG_MAKE_ERROR_STRING(CouldNotCreateStagingGpuImage);
+        HG_MAKE_ERROR_STRING(CouldNotWriteStagingGpuImage);
+        HG_MAKE_ERROR_STRING(CouldNotCreateGpuImage);
+        HG_MAKE_ERROR_STRING(CouldNotCreateGpuImageView);
+        HG_MAKE_ERROR_STRING(CouldNotWriteGpuImage);
+        HG_MAKE_ERROR_STRING(CouldNotCreateCubemap);
+        HG_MAKE_ERROR_STRING(CouldNotGenerateMipmaps);
+        HG_MAKE_ERROR_STRING(CouldNotCreateVkSampler);
+        HG_MAKE_ERROR_STRING(CouldNotCreateVkDescriptorSetLayout);
+        HG_MAKE_ERROR_STRING(CouldNotAllocateVkDescriptorSets);
+        HG_MAKE_ERROR_STRING(CouldNotCreateVkShader);
+        HG_MAKE_ERROR_STRING(CouldNotCreateVkPipelineLayout);
+        HG_MAKE_ERROR_STRING(CouldNotCreateVkDescriptorPool);
+
+        // File resources
+        HG_MAKE_ERROR_STRING(ShaderFileNotFound);
+        HG_MAKE_ERROR_STRING(ShaderFileInvalid);
+        HG_MAKE_ERROR_STRING(ImageFileNotFound);
+        HG_MAKE_ERROR_STRING(ImageFileInvalid);
+        HG_MAKE_ERROR_STRING(GltfFileNotFound);
+        HG_MAKE_ERROR_STRING(GltfFileInvalid);
+
+        // ... add more as needed
     }
     debug_assert(false);
 }

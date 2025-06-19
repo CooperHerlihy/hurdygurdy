@@ -6,7 +6,9 @@
 #include <array>
 #include <filesystem>
 #include <span>
+#include <vulkan/vulkan_core.h>
 #include <vulkan/vulkan_enums.hpp>
+#include <vulkan/vulkan_handles.hpp>
 
 namespace hg {
 
@@ -45,22 +47,24 @@ public:
     std::array<vk::Image, MaxSwapchainImages> swapchain_images = {};
     std::array<vk::ImageView, MaxSwapchainImages> swapchain_views = {};
 
-    vk::CommandBuffer& current_cmd() { return m_command_buffers[m_current_frame_index]; }
-    vk::Image& current_image() { return swapchain_images[current_image_index]; }
-    vk::ImageView& current_view() { return swapchain_views[current_image_index]; }
-    vk::Fence& is_frame_finished() { return m_frame_finished_fences[m_current_frame_index]; }
-    vk::Semaphore& is_image_available() { return m_image_available_semaphores[m_current_frame_index]; }
-    vk::Semaphore& is_ready_to_present() { return m_ready_to_present_semaphores[current_image_index]; }
+    [[nodiscard]] vk::CommandBuffer& current_cmd() { return m_command_buffers[m_current_frame_index]; }
+    [[nodiscard]] vk::Image& current_image() { return swapchain_images[current_image_index]; }
+    [[nodiscard]] vk::ImageView& current_view() { return swapchain_views[current_image_index]; }
+    [[nodiscard]] vk::Fence& is_frame_finished() { return m_frame_finished_fences[m_current_frame_index]; }
+    [[nodiscard]] vk::Semaphore& is_image_available() { return m_image_available_semaphores[m_current_frame_index]; }
+    [[nodiscard]] vk::Semaphore& is_ready_to_present() { return m_ready_to_present_semaphores[current_image_index]; }
 
     [[nodiscard]] static Result<Window> create(const Engine& engine, i32 width, i32 height);
     void destroy(const Engine& engine) const;
     [[nodiscard]] Result<void> resize(const Engine& engine);
 
-    [[nodiscard]] vk::CommandBuffer begin_frame(const Engine& engine);
-    [[nodiscard]] bool end_frame(const Engine& engine);
-    [[nodiscard]] bool submit_frame(const Engine& engine, const auto& commands) {
+    [[nodiscard]] Result<vk::CommandBuffer> begin_frame(const Engine& engine);
+    [[nodiscard]] Result<void> end_frame(const Engine& engine);
+    [[nodiscard]] Result<void> submit_frame(const Engine& engine, const auto& commands) {
         const auto cmd = begin_frame(engine);
-        commands(cmd);
+        if (cmd.has_err())
+            return cmd.err();
+        commands(*cmd);
         return end_frame(engine);
     }
 
@@ -84,7 +88,7 @@ struct GpuBuffer {
     vk::Buffer buffer = {};
     MemoryType memory_type = DeviceLocal;
 
-    [[nodiscard]] static GpuBuffer create(const Engine& engine, vk::DeviceSize size, vk::BufferUsageFlags usage, MemoryType memory_type = DeviceLocal);
+    [[nodiscard]] static Result<GpuBuffer> create(const Engine& engine, vk::DeviceSize size, vk::BufferUsageFlags usage, MemoryType memory_type = DeviceLocal);
     void destroy(const Engine& engine) const {
         debug_assert(allocation != nullptr);
         debug_assert(buffer != nullptr);
@@ -92,8 +96,32 @@ struct GpuBuffer {
         vmaDestroyBuffer(engine.allocator, buffer, allocation);
     }
 
-    void write(const Engine& engine, const void* data, vk::DeviceSize size, vk::DeviceSize offset) const;
-    void write(const Engine& engine, const auto& data, const vk::DeviceSize offset = 0) const { write(engine, &data, sizeof(data), offset); };
+    [[nodiscard]] Result<void> write(const Engine& engine, const void* data, vk::DeviceSize size, vk::DeviceSize offset) const;
+    [[nodiscard]] Result<void> write(const Engine& engine, const auto& data, const vk::DeviceSize offset = 0) const { return write(engine, &data, sizeof(data), offset); };
+};
+
+struct StagingGpuImage {
+    VmaAllocation allocation = nullptr;
+    vk::Image image = {};
+
+    struct Config {
+        vk::Extent3D extent = {};
+        vk::Format format = vk::Format::eUndefined;
+        vk::ImageUsageFlags usage = {};
+        vk::SampleCountFlagBits sample_count = vk::SampleCountFlagBits::e1;
+        u32 mip_levels = 1;
+    };
+
+    [[nodiscard]] static Result<StagingGpuImage> create(const Engine& engine, const Config& config);
+    void destroy(const Engine& engine) const {
+        debug_assert(allocation != nullptr);
+        debug_assert(image != nullptr);
+        debug_assert(engine.device != nullptr);
+        vmaDestroyImage(engine.allocator, image, allocation);
+    }
+
+    [[nodiscard]] Result<void> write(const Engine& engine, const void* data, vk::Extent3D extent, u32 pixel_alignment, vk::ImageLayout final_layout,
+                                     const vk::ImageSubresourceRange& subresource = {vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1}) const;
 };
 
 struct GpuImage {
@@ -111,7 +139,8 @@ struct GpuImage {
         u32 mip_levels = 1;
     };
 
-    [[nodiscard]] static GpuImage create(const Engine& engine, const Config& config);
+    [[nodiscard]] static Result<GpuImage> create(const Engine& engine, const Config& config);
+    [[nodiscard]] static Result<GpuImage> create_cubemap(const Engine& engine, std::filesystem::path path);
     void destroy(const Engine& engine) const {
         debug_assert(view != nullptr);
         debug_assert(engine.device != nullptr);
@@ -123,46 +152,45 @@ struct GpuImage {
         vmaDestroyImage(engine.allocator, image, allocation);
     }
 
-    [[nodiscard]] static GpuImage create_cubemap(const Engine& engine, std::filesystem::path path);
+    [[nodiscard]] Result<void> write(const Engine& engine, const void* data, vk::Extent3D extent, u32 pixel_alignment, vk::ImageLayout final_layout,
+                                     const vk::ImageSubresourceRange& subresource = {vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1}) const {
+        const auto write_result = StagingGpuImage{allocation, image}.write(engine, data, extent, pixel_alignment, final_layout, subresource);
+        if (write_result.has_err())
+            return Err::CouldNotWriteGpuImage;
+        return ok();
+    }
 
-    void write(const Engine& engine, const void* data, vk::Extent3D extent, u32 pixel_alignment, vk::ImageLayout final_layout,
-               const vk::ImageSubresourceRange& subresource = {vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1}) const;
-    void generate_mipmaps(const Engine& engine, u32 levels, vk::Extent3D extent, vk::Format format, vk::ImageLayout final_layout) const;
+    [[nodiscard]] Result<void> generate_mipmaps(const Engine& engine, u32 levels, vk::Extent3D extent, vk::Format format, vk::ImageLayout final_layout) const;
 };
 
 inline u32 get_mip_count(const vk::Extent3D extent) {
     return static_cast<u32>(std::floor(std::log2(std::max(std::max(extent.width, extent.height), extent.depth)))) + 1;
 }
 
-void allocate_descriptor_sets(const Engine& engine, vk::DescriptorPool pool, std::span<const vk::DescriptorSetLayout> layouts, std::span<vk::DescriptorSet> sets);
-inline vk::DescriptorSet allocate_descriptor_set(const Engine& engine, vk::DescriptorPool pool, vk::DescriptorSetLayout layout) {
-    vk::DescriptorSet set = nullptr;
-    allocate_descriptor_sets(engine, pool, {&layout, 1}, {&set, 1});
-    return set;
-}
-void write_uniform_buffer_descriptor(const Engine& engine, vk::DescriptorSet set, u32 binding, vk::Buffer buffer, vk::DeviceSize size, vk::DeviceSize offset = 0);
-void write_image_sampler_descriptor(const Engine& engine, vk::DescriptorSet set, u32 binding, vk::Sampler sampler, vk::ImageView view);
-
 enum class SamplerType {
-    Nearest,
-    Linear,
+    Nearest = VK_FILTER_NEAREST,
+    Linear = VK_FILTER_LINEAR,
 };
 struct SamplerConfig {
     SamplerType type = SamplerType::Nearest;
     vk::SamplerAddressMode edge_mode = vk::SamplerAddressMode::eRepeat;
     u32 mip_levels = 1;
 };
-[[nodiscard]] vk::Sampler create_sampler(const Engine& engine, const SamplerConfig& config);
+[[nodiscard]] Result<vk::Sampler> create_sampler(const Engine& engine, const SamplerConfig& config);
 
-inline vk::DescriptorSetLayout create_set_layout(const Engine& engine, const std::span<const vk::DescriptorSetLayoutBinding> bindings) {
-    debug_assert(engine.device != nullptr);
-    const auto layout = engine.device.createDescriptorSetLayout({
-        .bindingCount = static_cast<u32>(bindings.size()),
-        .pBindings = bindings.data(),
-    });
-    critical_assert(layout.result == vk::Result::eSuccess);
-    return layout.value;
+[[nodiscard]] Result<vk::DescriptorSetLayout> create_set_layout(const Engine& engine, const std::span<const vk::DescriptorSetLayoutBinding> bindings);
+
+[[nodiscard]] Result<void> allocate_descriptor_sets(const Engine& engine, vk::DescriptorPool pool, std::span<const vk::DescriptorSetLayout> layouts, std::span<vk::DescriptorSet> sets);
+[[nodiscard]] inline Result<vk::DescriptorSet> allocate_descriptor_set(const Engine& engine, vk::DescriptorPool pool, vk::DescriptorSetLayout layout) {
+    auto set = ok<vk::DescriptorSet>();
+    const auto alloc_result = allocate_descriptor_sets(engine, pool, {&layout, 1}, {&*set, 1});
+    if (alloc_result.has_err())
+        return alloc_result.err();
+    return set;
 }
+void write_uniform_buffer_descriptor(const Engine& engine, vk::DescriptorSet set, u32 binding, vk::Buffer buffer, vk::DeviceSize size, vk::DeviceSize offset = 0);
+void write_image_sampler_descriptor(const Engine& engine, vk::DescriptorSet set, u32 binding, vk::Sampler sampler, vk::ImageView view);
+
 struct ShaderConfig {
     std::filesystem::path path = {};
     vk::ShaderCodeTypeEXT code_type = vk::ShaderCodeTypeEXT::eSpirv;
@@ -172,15 +200,17 @@ struct ShaderConfig {
     std::span<const vk::PushConstantRange> push_ranges = {};
     vk::ShaderCreateFlagsEXT flags = {};
 };
-[[nodiscard]] vk::ShaderEXT create_unlinked_shader(const Engine& engine, const ShaderConfig& config);
-void create_linked_shaders(const Engine& engine, std::span<vk::ShaderEXT> out_shaders, std::span<const ShaderConfig> configs);
+[[nodiscard]] Result<vk::ShaderEXT> create_unlinked_shader(const Engine& engine, const ShaderConfig& config);
+[[nodiscard]] Result<void> create_linked_shaders(const Engine& engine, std::span<vk::ShaderEXT> out_shaders, std::span<const ShaderConfig> configs);
 
-vk::CommandBuffer begin_single_time_commands(const Engine& engine);
-void end_single_time_commands(const Engine& engine, vk::CommandBuffer cmd);
-void submit_single_time_commands(const Engine& engine, const auto& commands) {
+[[nodiscard]] Result<vk::CommandBuffer> begin_single_time_commands(const Engine& engine);
+[[nodiscard]] Result<void> end_single_time_commands(const Engine& engine, vk::CommandBuffer cmd);
+[[nodiscard]] Result<void> submit_single_time_commands(const Engine& engine, const auto& commands) {
     const auto cmd = begin_single_time_commands(engine);
-    commands(cmd);
-    end_single_time_commands(engine, cmd);
+    if (cmd.has_err())
+        return cmd.err();
+    commands(*cmd);
+    return end_single_time_commands(engine, *cmd);
 }
 
 class BarrierBuilder {
