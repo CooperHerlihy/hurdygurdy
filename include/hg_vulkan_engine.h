@@ -29,6 +29,15 @@ struct Engine {
 constexpr u32 MaxFramesInFlight = 2;
 constexpr u32 MaxSwapchainImages = 3;
 
+class Window;
+
+class Pipeline {
+public:
+    virtual ~Pipeline() = default;
+
+    virtual void cmd_draw(const Window& window, const vk::CommandBuffer cmd) const = 0;
+};
+
 class Window {
 public:
     static constexpr vk::Format SwapchainImageFormat = vk::Format::eR8G8B8A8Srgb;
@@ -51,17 +60,31 @@ public:
     [[nodiscard]] vk::Semaphore& is_image_available() { return m_image_available_semaphores[m_current_frame_index]; }
     [[nodiscard]] vk::Semaphore& is_ready_to_present() { return m_ready_to_present_semaphores[current_image_index]; }
 
+    [[nodiscard]] const vk::CommandBuffer& current_cmd() const { return m_command_buffers[m_current_frame_index]; }
+    [[nodiscard]] const vk::Image& current_image() const { return swapchain_images[current_image_index]; }
+    [[nodiscard]] const vk::ImageView& current_view() const { return swapchain_views[current_image_index]; }
+    [[nodiscard]] const vk::Fence& is_frame_finished() const { return m_frame_finished_fences[m_current_frame_index]; }
+    [[nodiscard]] const vk::Semaphore& is_image_available() const { return m_image_available_semaphores[m_current_frame_index]; }
+    [[nodiscard]] const vk::Semaphore& is_ready_to_present() const { return m_ready_to_present_semaphores[current_image_index]; }
+
     [[nodiscard]] static Result<Window> create(const Engine& engine, i32 width, i32 height);
     void destroy(const Engine& engine) const;
     [[nodiscard]] Result<void> resize(const Engine& engine);
 
     [[nodiscard]] Result<vk::CommandBuffer> begin_frame(const Engine& engine);
     [[nodiscard]] Result<void> end_frame(const Engine& engine);
-    [[nodiscard]] Result<void> submit_frame(const Engine& engine, const auto& commands) {
+    // [[nodiscard]] Result<void> submit_frame(const Engine& engine, const auto& commands) {
+    //     const auto cmd = begin_frame(engine);
+    //     if (cmd.has_err())
+    //         return cmd.err();
+    //     commands(*cmd);
+    //     return end_frame(engine);
+    // }
+    [[nodiscard]] Result<void> submit_frame(const Engine& engine, const Pipeline& pipeline) {
         const auto cmd = begin_frame(engine);
         if (cmd.has_err())
             return cmd.err();
-        commands(*cmd);
+        pipeline.cmd_draw(*this, *cmd);
         return end_frame(engine);
     }
 
