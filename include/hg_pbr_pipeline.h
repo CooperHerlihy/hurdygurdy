@@ -107,17 +107,17 @@ public:
 
     [[nodiscard]] static Result<PbrPipeline> create(const Engine& engine, const Window& window);
     void destroy(const Engine& engine) const;
-    [[nodiscard]] Result<void> resize(const Engine& engine, const Window& window);
+    void resize(const Engine& engine, const Window& window);
     void render(vk::CommandBuffer cmd, const Engine& engine, Window& window, const Cameraf& camera);
 
-    [[nodiscard]] Result<void> update_projection(const Engine& engine, const glm::mat4& projection) const {
-        return m_vp_buffer.write(engine, projection, offsetof(ViewProjectionUniform, projection));
+    void update_projection(const Engine& engine, const glm::mat4& projection) const {
+        m_vp_buffer.write(engine, projection, offsetof(ViewProjectionUniform, projection));
     }
 
     [[nodiscard]] Result<void> load_skybox(const Engine& engine, std::filesystem::path path);
 
     [[nodiscard]] Result<TextureHandle> load_texture(const Engine& engine, std::filesystem::path path);
-    [[nodiscard]] Result<TextureHandle> load_texture_from_data(const Engine& engine, const void* data, const vk::Extent3D extent, const vk::Format format, const u32 pixel_alignment);
+    [[nodiscard]] TextureHandle load_texture_from_data(const Engine& engine, const void* data, const vk::Extent3D extent, const vk::Format format, const u32 pixel_alignment);
     void add_texture(const Texture& texture) {
         debug_assert(texture.image.image != nullptr);
         debug_assert(texture.sampler != nullptr);
@@ -125,7 +125,7 @@ public:
     }
 
     [[nodiscard]] Result<ModelHandle> load_model(const Engine& engine, std::filesystem::path path, TextureHandle texture);
-    [[nodiscard]] Result<ModelHandle> load_model_from_data(const Engine& engine, std::span<const u32> indices, std::span<const Vertex> vertices, TextureHandle texture, float roughness, float metalness);
+    [[nodiscard]] ModelHandle load_model_from_data(const Engine& engine, std::span<const u32> indices, std::span<const Vertex> vertices, TextureHandle texture, float roughness, float metalness);
     void add_model(const Model& model) {
         debug_assert(model.index_count > 0);
         debug_assert(model.index_buffer.buffer != nullptr);

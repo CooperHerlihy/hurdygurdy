@@ -42,10 +42,10 @@ const vk::DebugUtilsMessengerCreateInfoEXT DebugUtilsMessengerCreateInfo = {
     u32 glfw_extension_count = 0;
     const char** glfw_extensions = glfwGetRequiredInstanceExtensions(&glfw_extension_count);
     if (glfw_extensions == nullptr)
-        return Err::RequiredGlfwInstanceExtensionsUnavailable;
+        return Err::GlfwFailure;
 
     auto required_extensions = ok<std::vector<const char*>>();
-    required_extensions->reserve(static_cast<usize>(glfw_extension_count) + 1);
+    required_extensions->reserve(glfw_extension_count + 1);
     for (usize i = 0; i < glfw_extension_count; ++i)
         required_extensions->emplace_back(glfw_extensions[i]);
 #ifndef NDEBUG
@@ -59,7 +59,7 @@ const vk::DebugUtilsMessengerCreateInfoEXT DebugUtilsMessengerCreateInfo = {
 
     const auto extensions = vk::enumerateInstanceExtensionProperties();
     if (extensions.result != vk::Result::eSuccess)
-        return Err::VkInstanceExtensionPropertiesUnavailable;
+        return Err::VulkanFailure;
 
     return ok(std::ranges::all_of(required_extensions, [&](const char* required) {
         return std::ranges::any_of(extensions.value, [&](const VkExtensionProperties& extension) {
@@ -84,15 +84,15 @@ static Result<vk::Instance> init_instance() {
     const auto extensions_available = check_instance_extension_availability(*required_extensions);
     if (extensions_available.has_err())
         return extensions_available.err();
-    if (extensions_available.val() == false)
-        return Err::VkInstanceExtensionsUnavailable;
+    if (!*extensions_available)
+        return Err::VulkanExtensionsUnavailable;
 
     const auto instance = vk::createInstance({
         .pNext = &DebugUtilsMessengerCreateInfo,
         .pApplicationInfo = &app_info,
-        .enabledLayerCount = static_cast<u32>(ValidationLayers.size()),
+        .enabledLayerCount = to_u32(ValidationLayers.size()),
         .ppEnabledLayerNames = ValidationLayers.data(),
-        .enabledExtensionCount = static_cast<u32>(required_extensions->size()),
+        .enabledExtensionCount = to_u32(required_extensions->size()),
         .ppEnabledExtensionNames = required_extensions->data(),
     });
     if (instance.result != vk::Result::eSuccess)
@@ -126,7 +126,7 @@ static Result<vk::PhysicalDevice> find_gpu(const Engine& engine) {
 
         const auto extensions = gpu.enumerateDeviceExtensionProperties();
         if (extensions.result != vk::Result::eSuccess)
-            return Err::VkPhysicalDevicePropertiesUnavailable;
+            return Err::VulkanFailure;
 
         if (!std::ranges::all_of(DeviceExtensions, [&](const char* required) {
             return std::ranges::any_of(extensions.value, [&](const vk::ExtensionProperties extension) {
@@ -168,9 +168,9 @@ static Result<vk::Device> init_device(const Engine& engine) {
         .pNext = synchronization2_feature,
         .queueCreateInfoCount = 1,
         .pQueueCreateInfos = &queue_info,
-        .enabledLayerCount = static_cast<u32>(ValidationLayers.size()),
+        .enabledLayerCount = to_u32(ValidationLayers.size()),
         .ppEnabledLayerNames = ValidationLayers.data(),
-        .enabledExtensionCount = static_cast<u32>(DeviceExtensions.size()),
+        .enabledExtensionCount = to_u32(DeviceExtensions.size()),
         .ppEnabledExtensionNames = DeviceExtensions.data(),
         .pEnabledFeatures = &features,
     });
@@ -200,7 +200,8 @@ static Result<VmaAllocator> init_allocator(const Engine& engine) {
 static bool s_engine_initialized = false;
 
 Result<Engine> Engine::create() {
-    debug_assert(s_engine_initialized == false);
+    if (s_engine_initialized)
+        critical_error("Cannot initialize more than one engine");
 
     auto engine = ok<Engine>();
 
@@ -270,7 +271,8 @@ Result<Engine> Engine::create() {
 }
 
 void Engine::destroy() const {
-    debug_assert(s_engine_initialized == true);
+    if (!s_engine_initialized)
+        critical_error("Cannot destroy uninitialized engine");
 
     debug_assert(single_time_command_pool != nullptr);
     device.destroyCommandPool(single_time_command_pool);
@@ -284,8 +286,7 @@ void Engine::destroy() const {
     device.destroy();
 
     debug_assert(debug_messenger != nullptr);
-    const PFN_vkDestroyDebugUtilsMessengerEXT vkDestroyDebugUtilsMessengerEXT = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
-    vkDestroyDebugUtilsMessengerEXT(instance, debug_messenger, nullptr);
+    instance.destroyDebugUtilsMessengerEXT(debug_messenger);
 
     debug_assert(instance != nullptr);
     instance.destroy();
@@ -302,12 +303,12 @@ Result<Window> Window::create(const Engine& engine, const i32 width, const i32 h
 
     window->window = glfwCreateWindow(width, height, "Hurdy Gurdy", nullptr, nullptr);
     if (window->window == nullptr)
-        return Err::CouldNotCreateGlfwWindow;
+        return Err::GlfwFailure;
 
     debug_assert(engine.instance != nullptr);
     const auto surface_result = glfwCreateWindowSurface(engine.instance, window->window, nullptr, reinterpret_cast<VkSurfaceKHR*>(&window->surface));
     if (surface_result != VK_SUCCESS)
-        return Err::CouldNotCreateGlfwVkSurface;
+        return Err::GlfwFailure;
 
     const auto window_result = window->resize(engine);
     if (window_result.has_err())
@@ -362,7 +363,7 @@ void Window::destroy(const Engine& engine) const {
 
     debug_assert(engine.command_pool != nullptr);
     debug_assert(m_command_buffers[0] != nullptr);
-    engine.device.freeCommandBuffers(engine.command_pool, static_cast<u32>(m_command_buffers.size()), m_command_buffers.data());
+    engine.device.freeCommandBuffers(engine.command_pool, to_u32(m_command_buffers.size()), m_command_buffers.data());
 
     for (usize i = 0; i < image_count; ++i) {
         debug_assert(swapchain_views[i] != nullptr);
@@ -384,13 +385,13 @@ Result<void> Window::resize(const Engine& engine) {
 
     const auto [surface_result, surface_capabilities] = engine.gpu.getSurfaceCapabilitiesKHR(surface);
     if (surface_result != vk::Result::eSuccess)
-        return Err::VkSurfaceCapabilitiesUnavailable;
+        return Err::VulkanFailure;
     if (surface_capabilities.currentExtent.width <= 0 || surface_capabilities.currentExtent.height <= 0)
         return Err::InvalidWindowSize;
 
     const auto [present_mode_result, present_modes] = engine.gpu.getSurfacePresentModesKHR(surface);
     if (present_mode_result != vk::Result::eSuccess)
-        return Err::VkSurfacePresentModesUnavailable;
+        return Err::VulkanFailure;
 
     const auto new_swapchain = engine.device.createSwapchainKHR({
         .surface = surface,
@@ -434,7 +435,7 @@ Result<void> Window::resize(const Engine& engine) {
         };
         const auto view = engine.device.createImageView(view_info);
         if (view.result != vk::Result::eSuccess)
-            return Err::CouldNotCreateSwapchainImageView;
+            return Err::CouldNotCreateGpuImageView;
         swapchain_views[i] = view.value;
     }
 
@@ -445,12 +446,12 @@ Result<vk::CommandBuffer> Window::begin_frame(const Engine& engine) {
     debug_assert(engine.device != nullptr);
     debug_assert(!m_recording);
 
-    const auto wait_result = engine.device.waitForFences({is_frame_finished()}, vk::True, UINT64_MAX);
+    const auto wait_result = engine.device.waitForFences({is_frame_finished()}, vk::True, 1'000'000'000);
     if (wait_result != vk::Result::eSuccess)
         return Err::CouldNotWaitForVkFence;
     const auto reset_result = engine.device.resetFences({is_frame_finished()});
     if (reset_result != vk::Result::eSuccess)
-        return Err::CouldNotResetVkFence;
+        return Err::VulkanFailure;
 
     const auto acquire_result = engine.device.acquireNextImageKHR(swapchain, UINT64_MAX, is_image_available(), nullptr);
     if (acquire_result.result != vk::Result::eSuccess)
@@ -528,16 +529,16 @@ Result<void> Window::end_frame(const Engine& engine) {
     if (present_result == vk::Result::eErrorOutOfDateKHR)
         return Err::InvalidWindowSize;
     if (present_result != vk::Result::eSuccess)
-        return Err::CouldNotPresentFrame;
+        return Err::CouldNotPresentVkSwapchainImage;
 
     m_current_frame_index = (m_current_frame_index + 1) % MaxFramesInFlight;
     return ok();
 }
 
-Result<GpuBuffer> GpuBuffer::create(const Engine& engine, const vk::DeviceSize size, const vk::BufferUsageFlags usage, const MemoryType memory_type) {
+Result<GpuBuffer> GpuBuffer::create_result(const Engine& engine, const vk::DeviceSize size, const vk::BufferUsageFlags usage, const MemoryType memory_type) {
     debug_assert(engine.allocator != nullptr);
     debug_assert(size != 0);
-    debug_assert(usage != static_cast<vk::BufferUsageFlags>(0));
+    debug_assert(usage != vk::BufferUsageFlags{});
 
     VkBufferCreateInfo buffer_info = {};
     buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -562,15 +563,12 @@ Result<GpuBuffer> GpuBuffer::create(const Engine& engine, const vk::DeviceSize s
     VmaAllocation allocation = nullptr;
     const auto buffer_result = vmaCreateBuffer(engine.allocator, &buffer_info, &alloc_info, &buffer, &allocation, nullptr);
     if (buffer_result != VK_SUCCESS) {
-        if (memory_type == Staging)
-            return Err::CouldNotCreateStagingGpuBuffer;
-        else
-            return Err::CouldNotCreateGpuBuffer;
+        return Err::CouldNotCreateGpuBuffer;
     }
     return ok<GpuBuffer>(allocation, buffer, memory_type);
 }
 
-Result<void> GpuBuffer::write(const Engine& engine, const void* data, const vk::DeviceSize size, const vk::DeviceSize offset) const {
+Result<void> GpuBuffer::write_result(const Engine& engine, const void* data, const vk::DeviceSize size, const vk::DeviceSize offset) const {
     debug_assert(engine.allocator != nullptr);
     debug_assert(allocation != nullptr);
     debug_assert(buffer != nullptr);
@@ -581,16 +579,13 @@ Result<void> GpuBuffer::write(const Engine& engine, const void* data, const vk::
     if (memory_type == RandomAccess || memory_type == Staging) {
         const auto copy_result = vmaCopyMemoryToAllocation(engine.allocator, data, allocation, offset, size);
         if (copy_result != VK_SUCCESS) {
-            if (memory_type == Staging)
-                return Err::CouldNotWriteStagingGpuBuffer;
-            else
-                return Err::CouldNotWriteGpuBuffer;
+            return Err::CouldNotWriteGpuBuffer;
         }
         return ok();
     }
     debug_assert(memory_type == DeviceLocal);
 
-    const auto staging_buffer = create(engine, size, vk::BufferUsageFlagBits::eTransferSrc, Staging);
+    const auto staging_buffer = create_result(engine, size, vk::BufferUsageFlagBits::eTransferSrc, Staging);
     if (staging_buffer.has_err())
         return staging_buffer.err();
     defer(vmaDestroyBuffer(engine.allocator, staging_buffer->buffer, staging_buffer->allocation));
@@ -613,8 +608,8 @@ Result<StagingGpuImage> StagingGpuImage::create(const Engine& engine, const Conf
     debug_assert(config.extent.height > 0);
     debug_assert(config.extent.depth > 0);
     debug_assert(config.format != vk::Format::eUndefined);
-    debug_assert(config.usage != static_cast<vk::ImageUsageFlags>(0));
-    debug_assert(config.sample_count != static_cast<vk::SampleCountFlagBits>(0));
+    debug_assert(config.usage != vk::ImageUsageFlags{});
+    debug_assert(config.sample_count != vk::SampleCountFlagBits{});
     debug_assert(config.mip_levels > 0);
 
     VkImageType dimensions = VK_IMAGE_TYPE_3D;
@@ -641,12 +636,12 @@ Result<StagingGpuImage> StagingGpuImage::create(const Engine& engine, const Conf
     VmaAllocation allocation = VK_NULL_HANDLE;
     const auto image_result = vmaCreateImage(engine.allocator, &image_info, &alloc_info, &image, &allocation, nullptr);
     if (image_result != VK_SUCCESS)
-        return Err::CouldNotCreateStagingGpuImage;
+        return Err::CouldNotCreateGpuImage;
 
     return ok<StagingGpuImage>(allocation, image);
 }
 
-Result<void> StagingGpuImage::write(const Engine& engine, const void* data, const vk::Extent3D extent, const u32 pixel_alignment, const vk::ImageLayout final_layout, const vk::ImageSubresourceRange& subresource) const {
+Result<void> StagingGpuImage::write(const Engine& engine, const void* data, const vk::Extent3D extent, const u64 pixel_alignment, const vk::ImageLayout final_layout, const vk::ImageSubresourceRange& subresource) const {
     debug_assert(engine.allocator != nullptr);
     debug_assert(allocation != nullptr);
     debug_assert(image != nullptr);
@@ -655,13 +650,13 @@ Result<void> StagingGpuImage::write(const Engine& engine, const void* data, cons
     debug_assert(extent.height > 0);
     debug_assert(extent.depth > 0);
 
-    const VkDeviceSize size = static_cast<u64>(extent.width) * static_cast<u64>(extent.height) * static_cast<u64>(extent.depth) * static_cast<u64>(pixel_alignment);
+    const VkDeviceSize size = extent.width * extent.height * extent.depth * pixel_alignment;
 
-    const auto staging_buffer = GpuBuffer::create(engine, size, vk::BufferUsageFlagBits::eTransferSrc, GpuBuffer::MemoryType::Staging);
+    const auto staging_buffer = GpuBuffer::create_result(engine, size, vk::BufferUsageFlagBits::eTransferSrc, GpuBuffer::MemoryType::Staging);
     if (staging_buffer.has_err())
         return staging_buffer.err();
     defer(vmaDestroyBuffer(engine.allocator, staging_buffer->buffer, staging_buffer->allocation));
-    const auto staging_write = staging_buffer->write(engine, data, size, 0);
+    const auto staging_write = staging_buffer->write_result(engine, data, size, 0);
     if (staging_write.has_err())
         return staging_write.err();
 
@@ -687,21 +682,21 @@ Result<void> StagingGpuImage::write(const Engine& engine, const void* data, cons
             .build_and_run();
     });
     if (submit_result.has_err())
-        return Err::CouldNotWriteStagingGpuBuffer;
+        return Err::CouldNotWriteGpuImage;
 
     return ok();
 }
 
-Result<GpuImage> GpuImage::create(const Engine& engine, const Config& config) {
+Result<GpuImage> GpuImage::create_result(const Engine& engine, const Config& config) {
     debug_assert(engine.device != nullptr);
     debug_assert(engine.allocator != nullptr);
     debug_assert(config.extent.width > 0);
     debug_assert(config.extent.height > 0);
     debug_assert(config.extent.depth > 0);
     debug_assert(config.format != vk::Format::eUndefined);
-    debug_assert(config.usage != static_cast<vk::ImageUsageFlags>(0));
-    debug_assert(config.aspect_flags != static_cast<vk::ImageAspectFlagBits>(0));
-    debug_assert(config.sample_count != static_cast<vk::SampleCountFlagBits>(0));
+    debug_assert(config.usage != vk::ImageUsageFlags{});
+    debug_assert(config.aspect_flags != vk::ImageAspectFlagBits{});
+    debug_assert(config.sample_count != vk::SampleCountFlagBits{});
     debug_assert(config.mip_levels > 0);
 
     const auto staging = StagingGpuImage::create(engine, {config.extent, config.format, config.usage, config.sample_count, config.mip_levels});
@@ -745,7 +740,7 @@ Result<GpuImage> GpuImage::create_cubemap(const Engine& engine, const std::files
     if (data.has_err())
         return data.err();
 
-    const vk::Extent3D staging_extent = {static_cast<u32>(data->width), static_cast<u32>(data->height), 1};
+    const vk::Extent3D staging_extent = {to_u32(data->width), to_u32(data->height), 1};
 
     const auto staging_image = StagingGpuImage::create(engine, {
         .extent = staging_extent, 
@@ -781,7 +776,7 @@ Result<GpuImage> GpuImage::create_cubemap(const Engine& engine, const std::files
     VmaAllocation allocation = VK_NULL_HANDLE;
     const auto image_result = vmaCreateImage(engine.allocator, &image_info, &alloc_info, &image, &allocation, nullptr);
     if (image_result != VK_SUCCESS)
-        return Err::CouldNotCreateCubemap;
+        return Err::CouldNotCreateGpuImage;
 
     const auto view = engine.device.createImageView({
         .image = image,
@@ -790,7 +785,7 @@ Result<GpuImage> GpuImage::create_cubemap(const Engine& engine, const std::files
         .subresourceRange = {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 6},
     });
     if (view.result != vk::Result::eSuccess)
-        return Err::CouldNotCreateCubemap;
+        return Err::CouldNotCreateGpuImageView;
 
     const auto submit_result = submit_single_time_commands(engine, [&](const vk::CommandBuffer cmd) {
         BarrierBuilder(cmd)
@@ -841,7 +836,7 @@ Result<GpuImage> GpuImage::create_cubemap(const Engine& engine, const std::files
             .srcImageLayout = vk::ImageLayout::eTransferSrcOptimal,
             .dstImage = image,
             .dstImageLayout = vk::ImageLayout::eTransferDstOptimal,
-            .regionCount = static_cast<u32>(copies.size()),
+            .regionCount = to_u32(copies.size()),
             .pRegions = copies.data(),
         });
 
@@ -852,12 +847,12 @@ Result<GpuImage> GpuImage::create_cubemap(const Engine& engine, const std::files
             .build_and_run();
     });
     if (submit_result.has_err())
-        return Err::CouldNotCreateCubemap;
+        return Err::CouldNotWriteGpuImage;
 
     return ok<GpuImage>(allocation, image, view.value);
 }
 
-Result<void> GpuImage::generate_mipmaps(const Engine& engine, const u32 mip_levels, const vk::Extent3D extent, const vk::Format format, const vk::ImageLayout final_layout) const {
+Result<void> GpuImage::generate_mipmaps_result(const Engine& engine, const u32 mip_levels, const vk::Extent3D extent, const vk::Format format, const vk::ImageLayout final_layout) const {
     debug_assert(image != nullptr);
     debug_assert(extent.width > 0);
     debug_assert(extent.height > 0);
@@ -871,7 +866,7 @@ Result<void> GpuImage::generate_mipmaps(const Engine& engine, const u32 mip_leve
         return Err::CouldNotGenerateMipmaps;
 
     const auto submit_result = submit_single_time_commands(engine, [&](const vk::CommandBuffer cmd) {
-        vk::Offset3D mip_offset = {static_cast<i32>(extent.width), static_cast<i32>(extent.height), static_cast<i32>(extent.depth)};
+        vk::Offset3D mip_offset = {to_i32(extent.width), to_i32(extent.height), to_i32(extent.depth)};
 
         BarrierBuilder(cmd)
             .add_image_barrier(image, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
@@ -926,7 +921,7 @@ Result<void> GpuImage::generate_mipmaps(const Engine& engine, const u32 mip_leve
     return ok();
 }
 
-Result<vk::Sampler> create_sampler(const Engine& engine, const SamplerConfig& config) {
+Result<vk::Sampler> create_sampler_result(const Engine& engine, const SamplerConfig& config) {
     debug_assert(engine.gpu != nullptr);
     const auto limits = engine.gpu.getProperties().limits;
 
@@ -961,7 +956,7 @@ Result<vk::Sampler> create_sampler(const Engine& engine, const SamplerConfig& co
 Result<vk::DescriptorSetLayout> create_set_layout(const Engine& engine, const std::span<const vk::DescriptorSetLayoutBinding> bindings) {
     debug_assert(engine.device != nullptr);
     const auto layout = engine.device.createDescriptorSetLayout({
-        .bindingCount = static_cast<u32>(bindings.size()),
+        .bindingCount = to_u32(bindings.size()),
         .pBindings = bindings.data(),
     });
     if (layout.result != vk::Result::eSuccess)
@@ -979,7 +974,7 @@ Result<void> allocate_descriptor_sets(const Engine& engine, const vk::Descriptor
 
     const vk::DescriptorSetAllocateInfo alloc_info = {
         .descriptorPool = pool,
-        .descriptorSetCount = static_cast<u32>(layouts.size()),
+        .descriptorSetCount = to_u32(layouts.size()),
         .pSetLayouts = layouts.data(),
     };
     debug_assert(engine.device != nullptr);
@@ -1060,9 +1055,9 @@ Result<vk::ShaderEXT> create_unlinked_shader(const Engine& engine, const ShaderC
         .codeSize = code->size(),
         .pCode = code->data(),
         .pName = "main",
-        .setLayoutCount = static_cast<u32>(config.set_layouts.size()),
+        .setLayoutCount = to_u32(config.set_layouts.size()),
         .pSetLayouts = config.set_layouts.data(),
-        .pushConstantRangeCount = static_cast<u32>(config.push_ranges.size()),
+        .pushConstantRangeCount = to_u32(config.push_ranges.size()),
         .pPushConstantRanges = config.push_ranges.data(),
     });
     if (shader.result != vk::Result::eSuccess)
@@ -1098,14 +1093,14 @@ Result<void> create_linked_shaders(const Engine& engine, const std::span<vk::Sha
             .codeSize = codes[i].size(),
             .pCode = codes[i].data(),
             .pName = "main",
-            .setLayoutCount = static_cast<u32>(configs[i].set_layouts.size()),
+            .setLayoutCount = to_u32(configs[i].set_layouts.size()),
             .pSetLayouts = configs[i].set_layouts.data(),
-            .pushConstantRangeCount = static_cast<u32>(configs[i].push_ranges.size()),
+            .pushConstantRangeCount = to_u32(configs[i].push_ranges.size()),
             .pPushConstantRanges = configs[i].push_ranges.data(),
         });
     }
 
-    const auto shader_result = engine.device.createShadersEXT(static_cast<u32>(shader_infos.size()), shader_infos.data(), nullptr, out_shaders.data());
+    const auto shader_result = engine.device.createShadersEXT(to_u32(shader_infos.size()), shader_infos.data(), nullptr, out_shaders.data());
     if (shader_result != vk::Result::eSuccess)
         return Err::CouldNotCreateVkShader;
     return ok();

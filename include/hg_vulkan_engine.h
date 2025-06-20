@@ -6,9 +6,6 @@
 #include <array>
 #include <filesystem>
 #include <span>
-#include <vulkan/vulkan_core.h>
-#include <vulkan/vulkan_enums.hpp>
-#include <vulkan/vulkan_handles.hpp>
 
 namespace hg {
 
@@ -88,7 +85,13 @@ struct GpuBuffer {
     vk::Buffer buffer = {};
     MemoryType memory_type = DeviceLocal;
 
-    [[nodiscard]] static Result<GpuBuffer> create(const Engine& engine, vk::DeviceSize size, vk::BufferUsageFlags usage, MemoryType memory_type = DeviceLocal);
+    [[nodiscard]] static Result<GpuBuffer> create_result(const Engine& engine, vk::DeviceSize size, vk::BufferUsageFlags usage, MemoryType memory_type = DeviceLocal);
+    [[nodiscard]] static GpuBuffer create(const Engine& engine, vk::DeviceSize size, vk::BufferUsageFlags usage, MemoryType memory_type = DeviceLocal) {
+        const auto buffer = create_result(engine, size, usage, memory_type);
+        if (buffer.has_err())
+            critical_error("Could not create gpu buffer");
+        return *buffer;
+    }
     void destroy(const Engine& engine) const {
         debug_assert(allocation != nullptr);
         debug_assert(buffer != nullptr);
@@ -96,8 +99,13 @@ struct GpuBuffer {
         vmaDestroyBuffer(engine.allocator, buffer, allocation);
     }
 
-    [[nodiscard]] Result<void> write(const Engine& engine, const void* data, vk::DeviceSize size, vk::DeviceSize offset) const;
-    [[nodiscard]] Result<void> write(const Engine& engine, const auto& data, const vk::DeviceSize offset = 0) const { return write(engine, &data, sizeof(data), offset); };
+    [[nodiscard]] Result<void> write_result(const Engine& engine, const void* data, vk::DeviceSize size, vk::DeviceSize offset) const;
+    void write(const Engine& engine, const void* data, vk::DeviceSize size, vk::DeviceSize offset) const {
+        const auto result = write_result(engine, data, size, offset);
+        if (result.has_err())
+            critical_error("Could not write to gpu buffer");
+    }
+    void write(const Engine& engine, const auto& data, const vk::DeviceSize offset = 0) const { write(engine, &data, sizeof(data), offset); };
 };
 
 struct StagingGpuImage {
@@ -120,7 +128,7 @@ struct StagingGpuImage {
         vmaDestroyImage(engine.allocator, image, allocation);
     }
 
-    [[nodiscard]] Result<void> write(const Engine& engine, const void* data, vk::Extent3D extent, u32 pixel_alignment, vk::ImageLayout final_layout,
+    [[nodiscard]] Result<void> write(const Engine& engine, const void* data, vk::Extent3D extent, u64 pixel_alignment, vk::ImageLayout final_layout,
                                      const vk::ImageSubresourceRange& subresource = {vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1}) const;
 };
 
@@ -139,7 +147,13 @@ struct GpuImage {
         u32 mip_levels = 1;
     };
 
-    [[nodiscard]] static Result<GpuImage> create(const Engine& engine, const Config& config);
+    [[nodiscard]] static Result<GpuImage> create_result(const Engine& engine, const Config& config);
+    [[nodiscard]] static GpuImage create(const Engine& engine, const Config& config) {
+        const auto image = create_result(engine, config);
+        if (image.has_err())
+            critical_error("Could not create gpu image");
+        return *image;
+    }
     [[nodiscard]] static Result<GpuImage> create_cubemap(const Engine& engine, std::filesystem::path path);
     void destroy(const Engine& engine) const {
         debug_assert(view != nullptr);
@@ -152,15 +166,23 @@ struct GpuImage {
         vmaDestroyImage(engine.allocator, image, allocation);
     }
 
-    [[nodiscard]] Result<void> write(const Engine& engine, const void* data, vk::Extent3D extent, u32 pixel_alignment, vk::ImageLayout final_layout,
-                                     const vk::ImageSubresourceRange& subresource = {vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1}) const {
+    [[nodiscard]] Result<void> write_result(const Engine& engine, const void* data, vk::Extent3D extent, u32 pixel_alignment, vk::ImageLayout final_layout,
+                                            const vk::ImageSubresourceRange& subresource = {vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1}) const {
+        return StagingGpuImage{allocation, image}.write(engine, data, extent, pixel_alignment, final_layout, subresource);
+    }
+    void write(const Engine& engine, const void* data, vk::Extent3D extent, u32 pixel_alignment, vk::ImageLayout final_layout,
+               const vk::ImageSubresourceRange& subresource = {vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1}) const {
         const auto write_result = StagingGpuImage{allocation, image}.write(engine, data, extent, pixel_alignment, final_layout, subresource);
         if (write_result.has_err())
-            return Err::CouldNotWriteGpuImage;
-        return ok();
+            critical_error("Could not write to gpu image");
     }
 
-    [[nodiscard]] Result<void> generate_mipmaps(const Engine& engine, u32 levels, vk::Extent3D extent, vk::Format format, vk::ImageLayout final_layout) const;
+    [[nodiscard]] Result<void> generate_mipmaps_result(const Engine& engine, u32 levels, vk::Extent3D extent, vk::Format format, vk::ImageLayout final_layout) const;
+    void generate_mipmaps(const Engine& engine, u32 levels, vk::Extent3D extent, vk::Format format, vk::ImageLayout final_layout) const {
+        const auto mipmap = generate_mipmaps_result(engine, levels, extent, format, final_layout);
+        if (mipmap.has_err())
+            critical_error("Could not generate mipmaps");
+    }
 };
 
 inline u32 get_mip_count(const vk::Extent3D extent) {
@@ -176,7 +198,13 @@ struct SamplerConfig {
     vk::SamplerAddressMode edge_mode = vk::SamplerAddressMode::eRepeat;
     u32 mip_levels = 1;
 };
-[[nodiscard]] Result<vk::Sampler> create_sampler(const Engine& engine, const SamplerConfig& config);
+[[nodiscard]] Result<vk::Sampler> create_sampler_result(const Engine& engine, const SamplerConfig& config);
+[[nodiscard]] inline vk::Sampler create_sampler(const Engine& engine, const SamplerConfig& config) {
+    const auto sampler = create_sampler_result(engine, config);
+    if (sampler.has_err())
+        critical_error("Could not create VkSampler");
+    return *sampler;
+}
 
 [[nodiscard]] Result<vk::DescriptorSetLayout> create_set_layout(const Engine& engine, const std::span<const vk::DescriptorSetLayoutBinding> bindings);
 
@@ -220,11 +248,11 @@ public:
     void build_and_run(const vk::DependencyFlagBits flags = {}) {
         m_cmd.pipelineBarrier2({
             .dependencyFlags = flags,
-            .memoryBarrierCount = static_cast<u32>(m_memories.size()),
+            .memoryBarrierCount = to_u32(m_memories.size()),
             .pMemoryBarriers = m_memories.data(),
-            .bufferMemoryBarrierCount = static_cast<u32>(m_buffers.size()),
+            .bufferMemoryBarrierCount = to_u32(m_buffers.size()),
             .pBufferMemoryBarriers = m_buffers.data(),
-            .imageMemoryBarrierCount = static_cast<u32>(m_images.size()),
+            .imageMemoryBarrierCount = to_u32(m_images.size()),
             .pImageMemoryBarriers = m_images.data(),
         });
     }

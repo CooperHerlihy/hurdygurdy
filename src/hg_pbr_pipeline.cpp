@@ -16,26 +16,19 @@ Result<PbrPipeline> PbrPipeline::create(const Engine& engine, const Window& wind
 
     auto pipeline = ok<PbrPipeline>();
 
-    auto color_image = GpuImage::create(engine, {
+    pipeline->m_color_image = GpuImage::create(engine, {
         .extent = {window.extent.width, window.extent.height, 1},
         .format = window.SwapchainImageFormat,
         .usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc,
         .sample_count = vk::SampleCountFlagBits::e4,
     });
-    auto depth_image = GpuImage::create(engine, {
+    pipeline->m_depth_image = GpuImage::create(engine, {
         .extent = {window.extent.width, window.extent.height, 1},
         .format = vk::Format::eD32Sfloat,
         .usage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
         .aspect_flags = vk::ImageAspectFlagBits::eDepth,
         .sample_count = vk::SampleCountFlagBits::e4,
     });
-    if (color_image.has_err())
-        return color_image.err();
-    if (depth_image.has_err())
-        return depth_image.err();
-
-    pipeline->m_color_image = *color_image;
-    pipeline->m_depth_image = *depth_image;
 
     std::array pbr_set_layouts = {
         create_set_layout(engine, std::array{
@@ -55,9 +48,9 @@ Result<PbrPipeline> PbrPipeline::create(const Engine& engine, const Window& wind
 
     std::array push_ranges = {vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex, 0, sizeof(PushConstant)}};
     const auto pbr_layout = engine.device.createPipelineLayout({
-        .setLayoutCount = static_cast<u32>(pipeline->m_pbr_set_layouts.size()),
+        .setLayoutCount = to_u32(pipeline->m_pbr_set_layouts.size()),
         .pSetLayouts = pipeline->m_pbr_set_layouts.data(),
-        .pushConstantRangeCount = static_cast<u32>(push_ranges.size()),
+        .pushConstantRangeCount = to_u32(push_ranges.size()),
         .pPushConstantRanges = push_ranges.data(),
     });
     if (pbr_layout.result != vk::Result::eSuccess)
@@ -99,7 +92,7 @@ Result<PbrPipeline> PbrPipeline::create(const Engine& engine, const Window& wind
     }
 
     const auto skybox_layout = engine.device.createPipelineLayout({
-        .setLayoutCount = static_cast<u32>(pipeline->m_skybox_set_layouts.size()),
+        .setLayoutCount = to_u32(pipeline->m_skybox_set_layouts.size()),
         .pSetLayouts = pipeline->m_skybox_set_layouts.data(),
     });
     if (skybox_layout.result != vk::Result::eSuccess)
@@ -131,28 +124,20 @@ Result<PbrPipeline> PbrPipeline::create(const Engine& engine, const Window& wind
     };
     const auto pool = engine.device.createDescriptorPool({
         .maxSets = 256, 
-        .poolSizeCount = static_cast<uint32_t>(pool_sizes.size()), 
+        .poolSizeCount = to_u32(pool_sizes.size()), 
         .pPoolSizes = pool_sizes.data(),
     });
     if (pool.result != vk::Result::eSuccess)
         return Err::CouldNotCreateVkDescriptorPool;
     pipeline->m_descriptor_pool = pool.value;
 
-    const auto global_set = allocate_descriptor_set(engine, pipeline->m_descriptor_pool, pipeline->m_pbr_set_layouts[0]);
-    const auto vp_buffer = GpuBuffer::create(engine, sizeof(ViewProjectionUniform), vk::BufferUsageFlagBits::eUniformBuffer, GpuBuffer::RandomAccess);
-    const auto light_buffer = GpuBuffer::create(engine, sizeof(LightUniform) * MaxLights, vk::BufferUsageFlagBits::eUniformBuffer, GpuBuffer::RandomAccess);
+    pipeline->m_vp_buffer = GpuBuffer::create(engine, sizeof(ViewProjectionUniform), vk::BufferUsageFlagBits::eUniformBuffer, GpuBuffer::RandomAccess);
+    pipeline->m_light_buffer = GpuBuffer::create(engine, sizeof(LightUniform) * MaxLights, vk::BufferUsageFlagBits::eUniformBuffer, GpuBuffer::RandomAccess);
 
+    const auto global_set = allocate_descriptor_set(engine, pipeline->m_descriptor_pool, pipeline->m_pbr_set_layouts[0]);
     if (global_set.has_err())
         return global_set.err();
-    if (vp_buffer.has_err())
-        return vp_buffer.err();
-    if (light_buffer.has_err())
-        return light_buffer.err();
-
     pipeline->m_global_set = *global_set;
-    pipeline->m_vp_buffer = *vp_buffer;
-    pipeline->m_light_buffer = *light_buffer;
-
     write_uniform_buffer_descriptor(engine, pipeline->m_global_set, 0, pipeline->m_vp_buffer.buffer, sizeof(ViewProjectionUniform));
     write_uniform_buffer_descriptor(engine, pipeline->m_global_set, 1, pipeline->m_light_buffer.buffer, sizeof(LightUniform));
 
@@ -206,38 +191,29 @@ void PbrPipeline::destroy(const Engine& engine) const {
     m_color_image.destroy(engine);
 }
 
-Result<void> PbrPipeline::resize(const Engine& engine, const Window& window) {
+void PbrPipeline::resize(const Engine& engine, const Window& window) {
     debug_assert(m_color_image.image != nullptr);
     debug_assert(m_color_image.image != nullptr);
     debug_assert(engine.device != nullptr);
     debug_assert(window.extent.width > 0);
     debug_assert(window.extent.height > 0);
 
-    auto color_image = GpuImage::create(engine, {
+    m_color_image.destroy(engine);
+    m_color_image = GpuImage::create(engine, {
         .extent = {window.extent.width, window.extent.height, 1},
         .format = window.SwapchainImageFormat,
         .usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc,
         .sample_count = vk::SampleCountFlagBits::e4,
     });
-    auto depth_image = GpuImage::create(engine, {
+
+    m_depth_image.destroy(engine);
+    m_depth_image = GpuImage::create(engine, {
         .extent = {window.extent.width, window.extent.height, 1},
         .format = vk::Format::eD32Sfloat,
         .usage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
         .aspect_flags = vk::ImageAspectFlagBits::eDepth,
         .sample_count = vk::SampleCountFlagBits::e4,
     });
-
-    if (color_image.has_err())
-        return color_image.err();
-    if (depth_image.has_err())
-        return depth_image.err();
-
-    m_color_image.destroy(engine);
-    m_depth_image.destroy(engine);
-    m_color_image = *color_image;
-    m_depth_image = *depth_image;
-
-    return ok();
 }
 
 void PbrPipeline::render(const vk::CommandBuffer cmd, const Engine& engine, Window& window, const Cameraf& camera) {
@@ -246,9 +222,7 @@ void PbrPipeline::render(const vk::CommandBuffer cmd, const Engine& engine, Wind
     debug_assert(window.current_view() != nullptr);
 
     const glm::mat4 view = camera.view();
-    const auto vp_write = m_vp_buffer.write(engine, view, offsetof(ViewProjectionUniform, view));
-    if (vp_write.has_err())
-        std::terminate();
+    m_vp_buffer.write(engine, view, offsetof(ViewProjectionUniform, view));
 
     LightUniform lights = {
         .vals = {},
@@ -260,9 +234,7 @@ void PbrPipeline::render(const vk::CommandBuffer cmd, const Engine& engine, Wind
             .color = m_lights[i].color,
         };
     }
-    const auto light_write = m_light_buffer.write(engine, lights);
-    if (light_write.has_err())
-        std::terminate();
+    m_light_buffer.write(engine, lights);
     m_lights.clear();
 
     BarrierBuilder(cmd)
@@ -372,37 +344,22 @@ void PbrPipeline::render(const vk::CommandBuffer cmd, const Engine& engine, Wind
 }
 
 Result<void> PbrPipeline::load_skybox(const Engine& engine, const std::filesystem::path path) {
-    const auto cubemap = GpuImage::create_cubemap(engine, path);
-    const auto sampler = create_sampler(engine, {.type = SamplerType::Linear});
     const auto set = hg::allocate_descriptor_set(engine, m_descriptor_pool, m_skybox_set_layouts[1]);
-    if (cubemap.has_err())
-        return cubemap.err();
-    if (sampler.has_err())
-        return sampler.err();
+    const auto cubemap = GpuImage::create_cubemap(engine, path);
     if (set.has_err())
         return set.err();
-    m_skybox.cubemap = *cubemap;
-    m_skybox.sampler = *sampler;
+    if (cubemap.has_err())
+        return cubemap.err();
     m_skybox.set = *set;
+    m_skybox.cubemap = *cubemap;
+    m_skybox.sampler = create_sampler(engine, {.type = SamplerType::Linear});
     hg::write_image_sampler_descriptor(engine, m_skybox.set, 0, m_skybox.sampler, m_skybox.cubemap.view);
 
     const auto mesh = generate_cube();
-
-    const auto index_buffer = GpuBuffer::create(engine, mesh.indices.size() * sizeof(mesh.indices[0]), vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst);
-    const auto vertex_buffer = GpuBuffer::create(engine, mesh.positions.size() * sizeof(mesh.positions[0]), vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst);
-    if (index_buffer.has_err())
-        return index_buffer.err();
-    if (vertex_buffer.has_err())
-        return vertex_buffer.err();
-    m_skybox.index_buffer = *index_buffer;
-    m_skybox.vertex_buffer = *vertex_buffer;
-
-    const auto index_write = m_skybox.index_buffer.write(engine, mesh.indices.data(), mesh.indices.size() * sizeof(mesh.indices[0]), 0);
-    const auto vertex_write = m_skybox.vertex_buffer.write(engine, mesh.positions.data(), mesh.positions.size() * sizeof(mesh.positions[0]), 0);
-    if (index_write.has_err())
-        return index_write.err();
-    if (vertex_write.has_err())
-        return vertex_write.err();
+    m_skybox.index_buffer = GpuBuffer::create(engine, mesh.indices.size() * sizeof(mesh.indices[0]), vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst);
+    m_skybox.vertex_buffer = GpuBuffer::create(engine, mesh.positions.size() * sizeof(mesh.positions[0]), vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst);
+    m_skybox.index_buffer.write(engine, mesh.indices.data(), mesh.indices.size() * sizeof(mesh.indices[0]), 0);
+    m_skybox.vertex_buffer.write(engine, mesh.positions.data(), mesh.positions.size() * sizeof(mesh.positions[0]), 0);
 
     return ok();
 }
@@ -414,10 +371,10 @@ Result<PbrPipeline::TextureHandle> PbrPipeline::load_texture(const Engine& engin
     if (texture_data.has_err())
         return texture_data.err();
 
-    return load_texture_from_data(engine, texture_data->pixels.get(), {static_cast<u32>(texture_data->width), static_cast<u32>(texture_data->height), 1}, vk::Format::eR8G8B8A8Srgb, 4);
+    return ok(load_texture_from_data(engine, texture_data->pixels.get(), {to_u32(texture_data->width), to_u32(texture_data->height), 1}, vk::Format::eR8G8B8A8Srgb, 4));
 }
 
-Result<PbrPipeline::TextureHandle> PbrPipeline::load_texture_from_data(const Engine& engine, const void* data, const vk::Extent3D extent, const vk::Format format, const u32 pixel_alignment) {
+PbrPipeline::TextureHandle PbrPipeline::load_texture_from_data(const Engine& engine, const void* data, const vk::Extent3D extent, const vk::Format format, const u32 pixel_alignment) {
     debug_assert(data != nullptr);
     debug_assert(extent.width > 0);
     debug_assert(extent.height > 0);
@@ -432,22 +389,12 @@ Result<PbrPipeline::TextureHandle> PbrPipeline::load_texture_from_data(const Eng
         .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst,
         .mip_levels = mips,
     });
-    if (image.has_err())
-        return image.err();
+    image.write(engine, data, extent, pixel_alignment, vk::ImageLayout::eShaderReadOnlyOptimal);
+    image.generate_mipmaps(engine, mips, extent, format, vk::ImageLayout::eShaderReadOnlyOptimal);
+    const auto sampler = create_sampler(engine, {.type = SamplerType::Linear, .mip_levels = mips});
 
-    const auto write_result = image->write(engine, data, extent, pixel_alignment, vk::ImageLayout::eShaderReadOnlyOptimal);
-    const auto mipmap_result = image->generate_mipmaps(engine, mips, extent, format, vk::ImageLayout::eShaderReadOnlyOptimal);
-    const auto sampler = create_sampler(engine, {.type = SamplerType::Linear, .mip_levels = get_mip_count(extent)});
-
-    if (write_result.has_err())
-        return write_result.err();
-    if (mipmap_result.has_err())
-        return mipmap_result.err();
-    if (sampler.has_err())
-        return sampler.err();
-
-    m_textures.emplace_back(*image, *sampler);
-    return ok<TextureHandle>(m_textures.size() - 1);
+    m_textures.emplace_back(image, sampler);
+    return {m_textures.size() - 1};
 }
 
 Result<PbrPipeline::ModelHandle> PbrPipeline::load_model(const Engine& engine, const std::filesystem::path path, const TextureHandle texture) {
@@ -459,10 +406,10 @@ Result<PbrPipeline::ModelHandle> PbrPipeline::load_model(const Engine& engine, c
         return model.err();
 
     const auto vertex_data = VertexData::from_mesh(std::move(model->mesh));
-    return load_model_from_data(engine, vertex_data.indices, vertex_data.vertices, texture, model->roughness, model->metalness);
+    return ok(load_model_from_data(engine, vertex_data.indices, vertex_data.vertices, texture, model->roughness, model->metalness));
 }
 
-Result<PbrPipeline::ModelHandle> PbrPipeline::load_model_from_data(const Engine& engine, const std::span<const u32> indices, const std::span<const Vertex> vertices, const TextureHandle texture, float roughness, float metalness) {
+PbrPipeline::ModelHandle PbrPipeline::load_model_from_data(const Engine& engine, const std::span<const u32> indices, const std::span<const Vertex> vertices, const TextureHandle texture, float roughness, float metalness) {
     debug_assert(!indices.empty());
     debug_assert(!vertices.empty());
     debug_assert(texture.index < m_textures.size());
@@ -472,31 +419,19 @@ Result<PbrPipeline::ModelHandle> PbrPipeline::load_model_from_data(const Engine&
     const auto index_buffer = GpuBuffer::create(engine, indices.size() * sizeof(indices[0]), vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst);
     const auto vertex_buffer = GpuBuffer::create(engine, vertices.size() * sizeof(vertices[0]), vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst);
     const auto material_buffer = GpuBuffer::create(engine, sizeof(MaterialUniform), vk::BufferUsageFlagBits::eUniformBuffer | vk::BufferUsageFlagBits::eTransferDst);
-    if (index_buffer.has_err())
-        return index_buffer.err();
-    if (vertex_buffer.has_err())
-        return vertex_buffer.err();
-    if (material_buffer.has_err())
-        return material_buffer.err();
 
-    const auto index_write = index_buffer->write(engine, indices.data(), indices.size() * sizeof(indices[0]), 0);
-    const auto vertex_write = vertex_buffer->write(engine, vertices.data(), vertices.size() * sizeof(vertices[0]), 0);
-    const auto material_write = material_buffer->write(engine, MaterialUniform{roughness, metalness});
-    if (index_write.has_err())
-        return index_write.err();
-    if (vertex_write.has_err())
-        return vertex_write.err();
-    if (material_write.has_err())
-        return material_write.err();
+    index_buffer.write(engine, indices.data(), indices.size() * sizeof(indices[0]), 0);
+    vertex_buffer.write(engine, vertices.data(), vertices.size() * sizeof(vertices[0]), 0);
+    material_buffer.write(engine, MaterialUniform{roughness, metalness});
 
     const auto set = hg::allocate_descriptor_set(engine, m_descriptor_pool, m_pbr_set_layouts[1]);
     if (set.has_err())
-        return set.err();
+        critical_error("PbrPipeline descriptor pool is empty");
     hg::write_image_sampler_descriptor(engine, *set, 0, m_textures[texture.index].sampler, m_textures[texture.index].image.view);
-    hg::write_uniform_buffer_descriptor(engine, *set, 1, material_buffer->buffer, sizeof(MaterialUniform));
+    hg::write_uniform_buffer_descriptor(engine, *set, 1, material_buffer.buffer, sizeof(MaterialUniform));
 
-    m_models.emplace_back(static_cast<u32>(indices.size()), *index_buffer, *vertex_buffer, *material_buffer, *set);
-    return ok<ModelHandle>(m_models.size() - 1);
+    m_models.emplace_back(to_u32(indices.size()), index_buffer, vertex_buffer, material_buffer, *set);
+    return {m_models.size() - 1};
 }
 
 PbrPipeline::VertexData PbrPipeline::VertexData::from_mesh(const Mesh& mesh) {

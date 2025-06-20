@@ -8,7 +8,6 @@
 #include <type_traits>
 #include <utility>
 #include <variant>
-#include <vulkan/vulkan.hpp>
 
 using i8 = std::int8_t;
 using i16 = std::int16_t;
@@ -32,14 +31,13 @@ using f64 = double;
 #define debug_assert(condition)                                                                        \
 if (!(condition)) {                                                                                    \
     std::cerr << std::format("Failed debug assert: {}\n    {}, {}\n", #condition, __FILE__, __LINE__); \
-    std::terminate();                                                                                  \
+    __debugbreak();                                                                                    \
 }
 #endif
 
-#define critical_assert(condition)                                                                        \
-if (!(condition)) {                                                                                       \
-    std::cerr << std::format("Failed critical assert: {}\n    {}, {}\n", #condition, __FILE__, __LINE__); \
-    std::terminate();                                                                                     \
+#define critical_error(message) {                                                          \
+    std::cerr << std::format("Critical error on {}, {}: {}", __FILE__, __LINE__, message); \
+    std::terminate();                                                                      \
 }
 
 template <typename F> struct DeferInternal {
@@ -56,6 +54,19 @@ template <typename F> DeferInternal<F> defer_function(F f) { return DeferInterna
 #define defer(code) auto DEFER_INTERMEDIATE_3(_defer_) = defer_function([&] { code; })
 
 namespace hg {
+
+constexpr i32 to_i32(const u32 val) {
+    debug_assert(static_cast<i32>(val) >= 0);
+    return static_cast<i32>(val);
+}
+constexpr u32 to_u32(const i32 val) {
+    debug_assert(val >= 0);
+    return static_cast<u32>(val);
+}
+constexpr u32 to_u32(const usize val) {
+    debug_assert(val < UINT32_MAX);
+    return static_cast<u32>(val);
+}
 
 class Clock {
 public:
@@ -88,64 +99,50 @@ private:
 enum class Err : u8 {
     Unknown = 0,
 
-    // Engine init
+    // Initialization
+    GlfwFailure,
     CouldNotInitializeGlfw,
-    RequiredGlfwInstanceExtensionsUnavailable,
-    VkInstanceExtensionsUnavailable,
-    VkInstanceExtensionPropertiesUnavailable,
-    CouldNotCreateVkInstance,
-    CouldNotCreateVkDebugUtilsMessenger,
+    VulkanFailure,
+    VulkanExtensionsUnavailable,
     VkPhysicalDevicesUnavailable,
-    VkPhysicalDevicePropertiesUnavailable,
     VkPhysicalDevicesUnsuitable,
-    CouldNotCreateVkDevice,
     VkQueueFamilyUnavailable,
     VkQueueUnavailable,
+    VkSwapchainImagesUnavailable,
+    InvalidWindowSize,
+
+    // Vulkan
+    CouldNotCreateVkInstance,
+    CouldNotCreateVkDebugUtilsMessenger,
+    CouldNotCreateVkDevice,
     CouldNotCreateVmaAllocator,
     CouldNotCreateVkCommandPool,
-
-    // Window init
-    CouldNotCreateGlfwWindow,
-    CouldNotCreateGlfwVkSurface,
     CouldNotAllocateVkCommandBuffers,
     CouldNotCreateVkFence,
     CouldNotCreateVkSemaphore,
-    VkSurfaceCapabilitiesUnavailable,
-    InvalidWindowSize,
-    VkSurfacePresentModesUnavailable,
     CouldNotCreateVkSwapchain,
-    VkSwapchainImagesUnavailable,
-    CouldNotCreateSwapchainImageView,
+    CouldNotCreateVkDescriptorSetLayout,
+    CouldNotCreateVkPipelineLayout,
+    CouldNotCreateVkShader,
+    CouldNotCreateVkDescriptorPool,
+    CouldNotAllocateVkDescriptorSets,
+    CouldNotCreateVkSampler,
 
-    // Record frame
-    CouldNotWaitForVkFence,
-    CouldNotResetVkFence,
-    CouldNotAcquireVkSwapchainImage,
-    CouldNotBeginVkCommandBuffer,
-    CouldNotEndVkCommandBuffer,
-    CouldNotSubmitVkCommandBuffer,
-    CouldNotPresentFrame,
-
-    // Vulkan resources
     CouldNotCreateGpuBuffer,
     CouldNotWriteGpuBuffer,
-    CouldNotCreateStagingGpuBuffer,
-    CouldNotWriteStagingGpuBuffer,
-    CouldNotCreateStagingGpuImage,
-    CouldNotWriteStagingGpuImage,
     CouldNotCreateGpuImage,
     CouldNotCreateGpuImageView,
     CouldNotWriteGpuImage,
-    CouldNotCreateCubemap,
     CouldNotGenerateMipmaps,
-    CouldNotCreateVkSampler,
-    CouldNotCreateVkDescriptorSetLayout,
-    CouldNotAllocateVkDescriptorSets,
-    CouldNotCreateVkShader,
-    CouldNotCreateVkPipelineLayout,
-    CouldNotCreateVkDescriptorPool,
 
-    // File resources
+    CouldNotBeginVkCommandBuffer,
+    CouldNotEndVkCommandBuffer,
+    CouldNotSubmitVkCommandBuffer,
+    CouldNotWaitForVkFence,
+    CouldNotAcquireVkSwapchainImage,
+    CouldNotPresentVkSwapchainImage,
+
+    // File
     ShaderFileNotFound,
     ShaderFileInvalid,
     ImageFileNotFound,
@@ -161,64 +158,50 @@ constexpr std::string_view to_string(Err code) {
     switch (code) {
         HG_MAKE_ERROR_STRING(Unknown);
 
-        // Engine init
+        // Initialization
+        HG_MAKE_ERROR_STRING(GlfwFailure);
         HG_MAKE_ERROR_STRING(CouldNotInitializeGlfw);
-        HG_MAKE_ERROR_STRING(RequiredGlfwInstanceExtensionsUnavailable);
-        HG_MAKE_ERROR_STRING(VkInstanceExtensionsUnavailable);
-        HG_MAKE_ERROR_STRING(VkInstanceExtensionPropertiesUnavailable);
-        HG_MAKE_ERROR_STRING(CouldNotCreateVkInstance);
-        HG_MAKE_ERROR_STRING(CouldNotCreateVkDebugUtilsMessenger);
+        HG_MAKE_ERROR_STRING(VulkanFailure);
+        HG_MAKE_ERROR_STRING(VulkanExtensionsUnavailable);
         HG_MAKE_ERROR_STRING(VkPhysicalDevicesUnavailable);
         HG_MAKE_ERROR_STRING(VkPhysicalDevicesUnsuitable);
-        HG_MAKE_ERROR_STRING(VkPhysicalDevicePropertiesUnavailable);
-        HG_MAKE_ERROR_STRING(CouldNotCreateVkDevice);
         HG_MAKE_ERROR_STRING(VkQueueFamilyUnavailable);
         HG_MAKE_ERROR_STRING(VkQueueUnavailable);
+        HG_MAKE_ERROR_STRING(VkSwapchainImagesUnavailable);
+        HG_MAKE_ERROR_STRING(InvalidWindowSize);
+
+        // Vulkan
+        HG_MAKE_ERROR_STRING(CouldNotCreateVkInstance);
+        HG_MAKE_ERROR_STRING(CouldNotCreateVkDebugUtilsMessenger);
+        HG_MAKE_ERROR_STRING(CouldNotCreateVkDevice);
         HG_MAKE_ERROR_STRING(CouldNotCreateVmaAllocator);
         HG_MAKE_ERROR_STRING(CouldNotCreateVkCommandPool);
+        HG_MAKE_ERROR_STRING(CouldNotAllocateVkCommandBuffers);
         HG_MAKE_ERROR_STRING(CouldNotCreateVkFence);
         HG_MAKE_ERROR_STRING(CouldNotCreateVkSemaphore);
-
-        // Window init
-        HG_MAKE_ERROR_STRING(CouldNotCreateGlfwWindow);
-        HG_MAKE_ERROR_STRING(CouldNotCreateGlfwVkSurface);
-        HG_MAKE_ERROR_STRING(CouldNotAllocateVkCommandBuffers);
-        HG_MAKE_ERROR_STRING(VkSurfaceCapabilitiesUnavailable);
-        HG_MAKE_ERROR_STRING(InvalidWindowSize);
-        HG_MAKE_ERROR_STRING(VkSurfacePresentModesUnavailable);
         HG_MAKE_ERROR_STRING(CouldNotCreateVkSwapchain);
-        HG_MAKE_ERROR_STRING(VkSwapchainImagesUnavailable);
-        HG_MAKE_ERROR_STRING(CouldNotCreateSwapchainImageView);
+        HG_MAKE_ERROR_STRING(CouldNotCreateVkDescriptorSetLayout);
+        HG_MAKE_ERROR_STRING(CouldNotCreateVkPipelineLayout);
+        HG_MAKE_ERROR_STRING(CouldNotCreateVkShader);
+        HG_MAKE_ERROR_STRING(CouldNotCreateVkDescriptorPool);
+        HG_MAKE_ERROR_STRING(CouldNotAllocateVkDescriptorSets);
+        HG_MAKE_ERROR_STRING(CouldNotCreateVkSampler);
 
-        // Record frame
-        HG_MAKE_ERROR_STRING(CouldNotWaitForVkFence);
-        HG_MAKE_ERROR_STRING(CouldNotResetVkFence);
-        HG_MAKE_ERROR_STRING(CouldNotAcquireVkSwapchainImage);
-        HG_MAKE_ERROR_STRING(CouldNotBeginVkCommandBuffer);
-        HG_MAKE_ERROR_STRING(CouldNotEndVkCommandBuffer);
-        HG_MAKE_ERROR_STRING(CouldNotSubmitVkCommandBuffer);
-        HG_MAKE_ERROR_STRING(CouldNotPresentFrame);
-
-        // Vulkan resources
         HG_MAKE_ERROR_STRING(CouldNotCreateGpuBuffer);
         HG_MAKE_ERROR_STRING(CouldNotWriteGpuBuffer);
-        HG_MAKE_ERROR_STRING(CouldNotCreateStagingGpuBuffer);
-        HG_MAKE_ERROR_STRING(CouldNotWriteStagingGpuBuffer);
-        HG_MAKE_ERROR_STRING(CouldNotCreateStagingGpuImage);
-        HG_MAKE_ERROR_STRING(CouldNotWriteStagingGpuImage);
         HG_MAKE_ERROR_STRING(CouldNotCreateGpuImage);
         HG_MAKE_ERROR_STRING(CouldNotCreateGpuImageView);
         HG_MAKE_ERROR_STRING(CouldNotWriteGpuImage);
-        HG_MAKE_ERROR_STRING(CouldNotCreateCubemap);
         HG_MAKE_ERROR_STRING(CouldNotGenerateMipmaps);
-        HG_MAKE_ERROR_STRING(CouldNotCreateVkSampler);
-        HG_MAKE_ERROR_STRING(CouldNotCreateVkDescriptorSetLayout);
-        HG_MAKE_ERROR_STRING(CouldNotAllocateVkDescriptorSets);
-        HG_MAKE_ERROR_STRING(CouldNotCreateVkShader);
-        HG_MAKE_ERROR_STRING(CouldNotCreateVkPipelineLayout);
-        HG_MAKE_ERROR_STRING(CouldNotCreateVkDescriptorPool);
 
-        // File resources
+        HG_MAKE_ERROR_STRING(CouldNotBeginVkCommandBuffer);
+        HG_MAKE_ERROR_STRING(CouldNotEndVkCommandBuffer);
+        HG_MAKE_ERROR_STRING(CouldNotSubmitVkCommandBuffer);
+        HG_MAKE_ERROR_STRING(CouldNotWaitForVkFence);
+        HG_MAKE_ERROR_STRING(CouldNotAcquireVkSwapchainImage);
+        HG_MAKE_ERROR_STRING(CouldNotPresentVkSwapchainImage);
+
+        // File
         HG_MAKE_ERROR_STRING(ShaderFileNotFound);
         HG_MAKE_ERROR_STRING(ShaderFileInvalid);
         HG_MAKE_ERROR_STRING(ImageFileNotFound);
@@ -228,7 +211,7 @@ constexpr std::string_view to_string(Err code) {
 
         // ... add more as needed
     }
-    debug_assert(false);
+    return "Cannot stringify invalid error code";
 }
 #undef HG_MAKE_ERROR_STRING
 

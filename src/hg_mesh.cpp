@@ -66,7 +66,7 @@ Mesh generate_cube() {
     cube.normals.reserve(24);
     cube.tex_coords.reserve(24);
     for (const auto& square : squares) {
-        u32 vertex_count = static_cast<u32>(cube.positions.size());
+        u32 vertex_count = to_u32(cube.positions.size());
         for (const auto index : square.indices) {
             cube.indices.push_back(vertex_count + index);
         }

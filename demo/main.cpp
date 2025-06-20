@@ -1,17 +1,10 @@
-#include "hg_utils.h"
 #include <hurdy_gurdy.h>
-#include <vulkan/vulkan_enums.hpp>
 
 using namespace hg;
 
 constexpr double sqrt3 = 1.73205080757;
 
-void print_err(std::string_view context, Err err) {
-    std::cout << std::format("{} error: {}", context, to_string(err));
-    std::terminate();
-}
-
-#define errp(e) if (e.has_err()) print_err(#e, e.err())
+#define errp(e) if (e.has_err()) critical_error(std::format("{} error: {}", #e, to_string(e.err())))
 
 int main() {
     const auto engine = Engine::create();
@@ -31,32 +24,21 @@ int main() {
     std::array<u32, 4> gold_color = {};
     gold_color.fill(0xff44ccff);
     const auto gold_texture = pbr_pipeline->load_texture_from_data(*engine, gold_color.data(), {2, 2, 1}, vk::Format::eR8G8B8A8Srgb, 4);
-    errp(gold_texture);
-    const auto hex_texture = pbr_pipeline->load_texture(*engine, "../assets/hexagon_models/Textures/hexagons_medieval.png");
-    errp(hex_texture);
+    const auto hex_texture = *pbr_pipeline->load_texture(*engine, "../assets/hexagon_models/Textures/hexagons_medieval.png");
 
     const auto sphere_model = PbrPipeline::VertexData::from_mesh(generate_sphere(32));
-    const auto sphere = pbr_pipeline->load_model_from_data(*engine, sphere_model.indices, sphere_model.vertices, *gold_texture, 0.1f, 1.0f);
-    errp(sphere);
+    const auto sphere = pbr_pipeline->load_model_from_data(*engine, sphere_model.indices, sphere_model.vertices, gold_texture, 0.1f, 1.0f);
     const auto cube_model = PbrPipeline::VertexData::from_mesh(generate_cube());
-    const auto cube = pbr_pipeline->load_model_from_data(*engine, cube_model.indices, cube_model.vertices, *gold_texture, 0.1f, 1.0f);
-    errp(cube);
+    const auto cube = pbr_pipeline->load_model_from_data(*engine, cube_model.indices, cube_model.vertices, gold_texture, 0.1f, 1.0f);
 
-    const auto grass = pbr_pipeline->load_model(*engine, "../assets/hexagon_models/Assets/gltf/tiles/base/hex_grass.gltf", *hex_texture);
-    errp(grass);
-    const auto tree = pbr_pipeline->load_model(*engine, "../assets/hexagon_models/Assets/gltf/decoration/nature/tree_single_A.gltf", *hex_texture);
-    errp(tree);
-    const auto building = pbr_pipeline->load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_home_A_blue.gltf", *hex_texture);
-    errp(building);
-    const auto tower = pbr_pipeline->load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_tower_A_blue.gltf", *hex_texture);
-    errp(tower);
-    const auto blacksmith = pbr_pipeline->load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_blacksmith_blue.gltf", *hex_texture);
-    errp(blacksmith);
-    const auto castle = pbr_pipeline->load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_castle_blue.gltf", *hex_texture);
-    errp(castle);
+    const auto grass = *pbr_pipeline->load_model(*engine, "../assets/hexagon_models/Assets/gltf/tiles/base/hex_grass.gltf", hex_texture);
+    const auto tree = *pbr_pipeline->load_model(*engine, "../assets/hexagon_models/Assets/gltf/decoration/nature/tree_single_A.gltf", hex_texture);
+    const auto building = *pbr_pipeline->load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_home_A_blue.gltf", hex_texture);
+    const auto tower = *pbr_pipeline->load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_tower_A_blue.gltf", hex_texture);
+    const auto blacksmith = *pbr_pipeline->load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_blacksmith_blue.gltf", hex_texture);
+    const auto castle = *pbr_pipeline->load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_castle_blue.gltf", hex_texture);
 
-    const auto projection_result = pbr_pipeline->update_projection(*engine, glm::perspective(glm::pi<f32>() / 4.0f, static_cast<f32>(window->extent.width) / static_cast<f32>(window->extent.height), 0.1f, 100.f));
-    errp(projection_result);
+    pbr_pipeline->update_projection(*engine, glm::perspective(glm::pi<f32>() / 4.0f, static_cast<f32>(window->extent.width) / static_cast<f32>(window->extent.height), 0.1f, 100.f));
 
     Cameraf camera = {};
     camera.translate({0.0f, -2.0f, -4.0f});
@@ -109,24 +91,24 @@ int main() {
             pbr_pipeline->queue_light({1.0f, -3.0f, -2.0f}, {glm::vec3{1.0f, 1.0f, 1.0f} * 300.0f});
             pbr_pipeline->queue_light({-0.8f, -0.5f, 1.5}, {glm::vec3{1.0f, 0.2f, 0.0f} * 10.0f});
 
-            pbr_pipeline->queue_model(*grass, {.position = {0.0f, 0.0f, 0.0f}});
-            pbr_pipeline->queue_model(*sphere, {.position = {-0.5f, -0.5f, 0.0f}, .scale = {0.25f, 0.25f, 0.25f}});
-            pbr_pipeline->queue_model(*cube, {.position = {0.5f, -0.5f, 0.0f}, .scale = {0.25f, 0.25f, 0.25f}});
+            pbr_pipeline->queue_model(grass, {.position = {0.0f, 0.0f, 0.0f}});
+            pbr_pipeline->queue_model(sphere, {.position = {-0.5f, -0.5f, 0.0f}, .scale = {0.25f, 0.25f, 0.25f}});
+            pbr_pipeline->queue_model(cube, {.position = {0.5f, -0.5f, 0.0f}, .scale = {0.25f, 0.25f, 0.25f}});
 
-            pbr_pipeline->queue_model(*grass, {.position = {-1.0f, -0.25f, sqrt3}});
-            pbr_pipeline->queue_model(*blacksmith, {.position = {-1.0f, -0.25f, sqrt3}});
+            pbr_pipeline->queue_model(grass, {.position = {-1.0f, -0.25f, sqrt3}});
+            pbr_pipeline->queue_model(blacksmith, {.position = {-1.0f, -0.25f, sqrt3}});
 
-            pbr_pipeline->queue_model(*grass, {.position = {1.0f, -0.5f, sqrt3}});
-            pbr_pipeline->queue_model(*castle, {.position = {1.0f, -0.5f, sqrt3}});
+            pbr_pipeline->queue_model(grass, {.position = {1.0f, -0.5f, sqrt3}});
+            pbr_pipeline->queue_model(castle, {.position = {1.0f, -0.5f, sqrt3}});
 
-            pbr_pipeline->queue_model(*grass, {.position = {-2.0f, -0.1f, 0.0f}});
-            pbr_pipeline->queue_model(*building, {.position = {-2.0f, -0.1f, 0.0f}});
-            pbr_pipeline->queue_model(*tree, {.position = {-2.0f - 0.75f, -0.1f, 0.0f - 0.25f}});
+            pbr_pipeline->queue_model(grass, {.position = {-2.0f, -0.1f, 0.0f}});
+            pbr_pipeline->queue_model(building, {.position = {-2.0f, -0.1f, 0.0f}});
+            pbr_pipeline->queue_model(tree, {.position = {-2.0f - 0.75f, -0.1f, 0.0f - 0.25f}});
 
-            pbr_pipeline->queue_model(*grass, {.position = {2.0f, -0.25f, 0.0f}});
-            pbr_pipeline->queue_model(*tower, {.position = {2.0f, -0.25f, 0.0f}});
-            pbr_pipeline->queue_model(*tree, {.position = {2.0f - 0.75f, -0.25f, 0.0f + 0.25f}});
-            pbr_pipeline->queue_model(*tree, {.position = {2.0f + 0.75f, -0.25f, 0.0f - 0.25f}});
+            pbr_pipeline->queue_model(grass, {.position = {2.0f, -0.25f, 0.0f}});
+            pbr_pipeline->queue_model(tower, {.position = {2.0f, -0.25f, 0.0f}});
+            pbr_pipeline->queue_model(tree, {.position = {2.0f - 0.75f, -0.25f, 0.0f + 0.25f}});
+            pbr_pipeline->queue_model(tree, {.position = {2.0f + 0.75f, -0.25f, 0.0f - 0.25f}});
 
             pbr_pipeline->render(cmd, *engine, *window, camera);
         });
@@ -151,10 +133,8 @@ int main() {
                 frame_result = window->resize(*engine);
             }
 
-            const auto resize_result = pbr_pipeline->resize(*engine, *window);
-            errp(resize_result);
-            const auto projection_result = pbr_pipeline->update_projection(*engine, glm::perspective(glm::pi<f32>() / 4.0f, static_cast<f32>(window->extent.width) / static_cast<f32>(window->extent.height), 0.1f, 100.f));
-            errp(projection_result);
+            pbr_pipeline->resize(*engine, *window);
+            pbr_pipeline->update_projection(*engine, glm::perspective(glm::pi<f32>() / 4.0f, static_cast<f32>(window->extent.width) / static_cast<f32>(window->extent.height), 0.1f, 100.f));
         }
     }
 
