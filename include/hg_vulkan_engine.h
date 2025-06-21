@@ -73,13 +73,6 @@ public:
 
     [[nodiscard]] Result<vk::CommandBuffer> begin_frame(const Engine& engine);
     [[nodiscard]] Result<void> end_frame(const Engine& engine);
-    // [[nodiscard]] Result<void> submit_frame(const Engine& engine, const auto& commands) {
-    //     const auto cmd = begin_frame(engine);
-    //     if (cmd.has_err())
-    //         return cmd.err();
-    //     commands(*cmd);
-    //     return end_frame(engine);
-    // }
     [[nodiscard]] Result<void> submit_frame(const Engine& engine, const Pipeline& pipeline) {
         const auto cmd = begin_frame(engine);
         if (cmd.has_err())

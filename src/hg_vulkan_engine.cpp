@@ -4,7 +4,6 @@
 #include "hg_utils.h"
 #include "hg_load.h"
 
-#include <algorithm>
 #include <array>
 #include <format>
 #include <fstream>
