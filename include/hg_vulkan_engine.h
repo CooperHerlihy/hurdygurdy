@@ -29,13 +29,10 @@ struct Engine {
 constexpr u32 MaxFramesInFlight = 2;
 constexpr u32 MaxSwapchainImages = 3;
 
-class Window;
-
 class Pipeline {
 public:
     virtual ~Pipeline() = default;
-
-    virtual void cmd_draw(const Window& window, const vk::CommandBuffer cmd) const = 0;
+    virtual void cmd_draw(vk::CommandBuffer cmd, vk::Image render_target, vk::Extent2D window_size) const = 0;
 };
 
 class Window {
@@ -43,29 +40,8 @@ public:
     static constexpr vk::Format SwapchainImageFormat = vk::Format::eR8G8B8A8Srgb;
     static constexpr vk::ColorSpaceKHR SwapchainColorSpace = vk::ColorSpaceKHR::eSrgbNonlinear;
 
-    GLFWwindow* window = nullptr;
-    vk::SurfaceKHR surface = {};
-
-    vk::SwapchainKHR swapchain = {};
-    vk::Extent2D extent = {};
-    u32 image_count = 0;
-    u32 current_image_index = 0;
-    std::array<vk::Image, MaxSwapchainImages> swapchain_images = {};
-    std::array<vk::ImageView, MaxSwapchainImages> swapchain_views = {};
-
-    [[nodiscard]] vk::CommandBuffer& current_cmd() { return m_command_buffers[m_current_frame_index]; }
-    [[nodiscard]] vk::Image& current_image() { return swapchain_images[current_image_index]; }
-    [[nodiscard]] vk::ImageView& current_view() { return swapchain_views[current_image_index]; }
-    [[nodiscard]] vk::Fence& is_frame_finished() { return m_frame_finished_fences[m_current_frame_index]; }
-    [[nodiscard]] vk::Semaphore& is_image_available() { return m_image_available_semaphores[m_current_frame_index]; }
-    [[nodiscard]] vk::Semaphore& is_ready_to_present() { return m_ready_to_present_semaphores[current_image_index]; }
-
-    [[nodiscard]] const vk::CommandBuffer& current_cmd() const { return m_command_buffers[m_current_frame_index]; }
-    [[nodiscard]] const vk::Image& current_image() const { return swapchain_images[current_image_index]; }
-    [[nodiscard]] const vk::ImageView& current_view() const { return swapchain_views[current_image_index]; }
-    [[nodiscard]] const vk::Fence& is_frame_finished() const { return m_frame_finished_fences[m_current_frame_index]; }
-    [[nodiscard]] const vk::Semaphore& is_image_available() const { return m_image_available_semaphores[m_current_frame_index]; }
-    [[nodiscard]] const vk::Semaphore& is_ready_to_present() const { return m_ready_to_present_semaphores[current_image_index]; }
+    [[nodiscard]] GLFWwindow* window() const { return m_window; }
+    [[nodiscard]] vk::Extent2D extent() const { return m_extent; }
 
     [[nodiscard]] static Result<Window> create(const Engine& engine, i32 width, i32 height);
     void destroy(const Engine& engine) const;
@@ -77,17 +53,35 @@ public:
         const auto cmd = begin_frame(engine);
         if (cmd.has_err())
             return cmd.err();
-        pipeline.cmd_draw(*this, *cmd);
+        pipeline.cmd_draw(*cmd, current_image(), m_extent);
         return end_frame(engine);
     }
 
 private:
+    [[nodiscard]] vk::CommandBuffer& current_cmd() { return m_command_buffers[m_current_frame_index]; }
+    [[nodiscard]] vk::Image& current_image() { return m_swapchain_images[m_current_image_index]; }
+    [[nodiscard]] vk::Fence& is_frame_finished() { return m_frame_finished_fences[m_current_frame_index]; }
+    [[nodiscard]] vk::Semaphore& is_image_available() { return m_image_available_semaphores[m_current_frame_index]; }
+    [[nodiscard]] vk::Semaphore& is_ready_to_present() { return m_ready_to_present_semaphores[m_current_image_index]; }
+    [[nodiscard]] const vk::CommandBuffer& current_cmd() const { return m_command_buffers[m_current_frame_index]; }
+    [[nodiscard]] const vk::Image& current_image() const { return m_swapchain_images[m_current_image_index]; }
+    [[nodiscard]] const vk::Fence& is_frame_finished() const { return m_frame_finished_fences[m_current_frame_index]; }
+    [[nodiscard]] const vk::Semaphore& is_image_available() const { return m_image_available_semaphores[m_current_frame_index]; }
+    [[nodiscard]] const vk::Semaphore& is_ready_to_present() const { return m_ready_to_present_semaphores[m_current_image_index]; }
+
+    GLFWwindow* m_window = nullptr;
+    vk::SurfaceKHR m_surface = {};
+    vk::Extent2D m_extent = {};
+    vk::SwapchainKHR m_swapchain = {};
+    std::array<vk::Image, MaxSwapchainImages> m_swapchain_images = {};
+    u32 m_image_count = 0;
+    u32 m_current_image_index = 0;
     u32 m_current_frame_index = 0;
+    bool m_recording = false;
     std::array<vk::CommandBuffer, MaxFramesInFlight> m_command_buffers = {};
     std::array<vk::Fence, MaxFramesInFlight> m_frame_finished_fences = {};
     std::array<vk::Semaphore, MaxFramesInFlight> m_image_available_semaphores = {};
     std::array<vk::Semaphore, MaxSwapchainImages> m_ready_to_present_semaphores = {};
-    bool m_recording = false;
 };
 
 struct GpuBuffer {

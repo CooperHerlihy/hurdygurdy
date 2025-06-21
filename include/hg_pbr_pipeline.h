@@ -7,9 +7,9 @@
 
 namespace hg {
 
-class PbrPipeline : public Pipeline {
+class DefaultPipeline : public Pipeline {
 public:
-    PbrPipeline() = default;
+    DefaultPipeline() = default;
 
     class RenderSystem {
     public:
@@ -34,11 +34,11 @@ public:
         alignas(16) usize count = 0;
     };
 
-    [[nodiscard]] static Result<PbrPipeline> create(const Engine& engine, const Window& window, const vk::DescriptorPool descriptor_pool);
+    [[nodiscard]] static Result<DefaultPipeline> create(const Engine& engine, vk::Extent2D window_size, vk::DescriptorPool descriptor_pool);
     void destroy(const Engine& engine) const;
-    void resize(const Engine& engine, const Window& window);
+    void resize(const Engine& engine, const vk::Extent2D window_size);
 
-    void cmd_draw(const Window& window, const vk::CommandBuffer cmd) const override;
+    void cmd_draw(vk::CommandBuffer cmd, vk::Image render_target, vk::Extent2D window_size) const override;
 
     vk::DescriptorSetLayout get_global_set_layout() const { return m_set_layout; }
 
@@ -65,15 +65,14 @@ private:
     vk::DescriptorSet m_global_set = {};
     GpuBuffer m_vp_buffer = {};
     GpuBuffer m_light_buffer = {};
-
     std::vector<Light> m_lights = {};
 
     std::vector<const RenderSystem*> m_render_systems = {};
 };
 
-class SkyboxSystem : public PbrPipeline::RenderSystem {
+class SkyboxRenderer : public DefaultPipeline::RenderSystem {
 public:
-    [[nodiscard]] static Result<SkyboxSystem> create(const Engine& engine, const PbrPipeline& pipeline);
+    [[nodiscard]] static Result<SkyboxRenderer> create(const Engine& engine, const DefaultPipeline& pipeline);
     void destroy(const Engine& engine) const;
     void cmd_draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) const override;
 
@@ -92,9 +91,9 @@ private:
     GpuBuffer m_vertex_buffer = {};
 };
 
-class ModelSystem : public PbrPipeline::RenderSystem {
+class PbrRenderer : public DefaultPipeline::RenderSystem {
 public:
-    [[nodiscard]] static Result<ModelSystem> create(const Engine& engine, const PbrPipeline& pipeline);
+    [[nodiscard]] static Result<PbrRenderer> create(const Engine& engine, const DefaultPipeline& pipeline);
     void destroy(const Engine& engine) const;
 
     struct Vertex {
@@ -158,7 +157,7 @@ public:
         usize index = UINT32_MAX;
     };
     [[nodiscard]] Result<ModelHandle> load_model(const Engine& engine, const vk::DescriptorPool descriptor_pool, std::filesystem::path path, TextureHandle texture);
-    [[nodiscard]] ModelHandle load_model_from_data(const Engine& engine, const vk::DescriptorPool descriptor_pool, std::span<const u32> indices, std::span<const Vertex> vertices, TextureHandle texture, float roughness, float metalness);
+    [[nodiscard]] ModelHandle load_model_from_data(const Engine& engine, const vk::DescriptorPool descriptor_pool, const VertexData& data, float roughness, float metalness, TextureHandle texture);
 
     struct RenderTicket {
         ModelHandle model = {};

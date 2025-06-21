@@ -300,12 +300,12 @@ Result<Window> Window::create(const Engine& engine, const i32 width, const i32 h
 
     auto window = ok<Window>();
 
-    window->window = glfwCreateWindow(width, height, "Hurdy Gurdy", nullptr, nullptr);
-    if (window->window == nullptr)
+    window->m_window = glfwCreateWindow(width, height, "Hurdy Gurdy", nullptr, nullptr);
+    if (window->m_window == nullptr)
         return Err::GlfwFailure;
 
     debug_assert(engine.instance != nullptr);
-    const auto surface_result = glfwCreateWindowSurface(engine.instance, window->window, nullptr, reinterpret_cast<VkSurfaceKHR*>(&window->surface));
+    const auto surface_result = glfwCreateWindowSurface(engine.instance, window->m_window, nullptr, reinterpret_cast<VkSurfaceKHR*>(&window->m_surface));
     if (surface_result != VK_SUCCESS)
         return Err::GlfwFailure;
 
@@ -364,36 +364,32 @@ void Window::destroy(const Engine& engine) const {
     debug_assert(m_command_buffers[0] != nullptr);
     engine.device.freeCommandBuffers(engine.command_pool, to_u32(m_command_buffers.size()), m_command_buffers.data());
 
-    for (usize i = 0; i < image_count; ++i) {
-        debug_assert(swapchain_views[i] != nullptr);
-        engine.device.destroyImageView(swapchain_views[i]);
-    }
-    debug_assert(swapchain != nullptr);
-    engine.device.destroySwapchainKHR(swapchain);
+    debug_assert(m_swapchain != nullptr);
+    engine.device.destroySwapchainKHR(m_swapchain);
 
-    debug_assert(surface != nullptr);
-    engine.instance.destroySurfaceKHR(surface);
+    debug_assert(m_surface != nullptr);
+    engine.instance.destroySurfaceKHR(m_surface);
 
-    debug_assert(window != nullptr);
-    glfwDestroyWindow(window);
+    debug_assert(m_window != nullptr);
+    glfwDestroyWindow(m_window);
 }
 
 Result<void> Window::resize(const Engine& engine) {
     debug_assert(engine.gpu != nullptr);
     debug_assert(engine.device != nullptr);
 
-    const auto [surface_result, surface_capabilities] = engine.gpu.getSurfaceCapabilitiesKHR(surface);
+    const auto [surface_result, surface_capabilities] = engine.gpu.getSurfaceCapabilitiesKHR(m_surface);
     if (surface_result != vk::Result::eSuccess)
         return Err::VulkanFailure;
     if (surface_capabilities.currentExtent.width <= 0 || surface_capabilities.currentExtent.height <= 0)
         return Err::InvalidWindowSize;
 
-    const auto [present_mode_result, present_modes] = engine.gpu.getSurfacePresentModesKHR(surface);
+    const auto [present_mode_result, present_modes] = engine.gpu.getSurfacePresentModesKHR(m_surface);
     if (present_mode_result != vk::Result::eSuccess)
         return Err::VulkanFailure;
 
     const auto new_swapchain = engine.device.createSwapchainKHR({
-        .surface = surface,
+        .surface = m_surface,
         .minImageCount = surface_capabilities.maxImageCount == 0 ? MaxSwapchainImages : std::min(surface_capabilities.minImageCount + 1, surface_capabilities.maxImageCount),
         .imageFormat = SwapchainImageFormat,
         .imageColorSpace = SwapchainColorSpace,
@@ -403,40 +399,23 @@ Result<void> Window::resize(const Engine& engine) {
         .preTransform = surface_capabilities.currentTransform,
         .presentMode = std::ranges::any_of(present_modes, [](const vk::PresentModeKHR mode) { return mode == vk::PresentModeKHR::eMailbox; }) ? vk::PresentModeKHR::eMailbox : vk::PresentModeKHR::eFifo,
         .clipped = vk::True,
-        .oldSwapchain = swapchain,
+        .oldSwapchain = m_swapchain,
     });
     if (new_swapchain.result != vk::Result::eSuccess)
         return Err::CouldNotCreateVkSwapchain;
 
-    if (swapchain != nullptr) {
-        for (usize i = 0; i < image_count; ++i) {
-            debug_assert(swapchain_views[i] != nullptr);
-            engine.device.destroyImageView(swapchain_views[i]);
-        }
-        engine.device.destroySwapchainKHR(swapchain);
+    if (m_swapchain != nullptr) {
+        engine.device.destroySwapchainKHR(m_swapchain);
     }
-    swapchain = new_swapchain.value;
-    extent = surface_capabilities.currentExtent;
+    m_swapchain = new_swapchain.value;
+    m_extent = surface_capabilities.currentExtent;
 
-    const vk::Result image_count_result = engine.device.getSwapchainImagesKHR(swapchain, &image_count, nullptr);
+    const vk::Result image_count_result = engine.device.getSwapchainImagesKHR(m_swapchain, &m_image_count, nullptr);
     if (image_count_result != vk::Result::eSuccess)
         return Err::VkSwapchainImagesUnavailable;
-    const vk::Result image_result = engine.device.getSwapchainImagesKHR(swapchain, &image_count, swapchain_images.data());
+    const vk::Result image_result = engine.device.getSwapchainImagesKHR(m_swapchain, &m_image_count, m_swapchain_images.data());
     if (image_result != vk::Result::eSuccess)
         return Err::VkSwapchainImagesUnavailable;
-
-    for (size_t i = 0; i < image_count; ++i) {
-        const vk::ImageViewCreateInfo view_info = {
-            .image = swapchain_images[i],
-            .viewType = vk::ImageViewType::e2D,
-            .format = SwapchainImageFormat,
-            .subresourceRange = {vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1},
-        };
-        const auto view = engine.device.createImageView(view_info);
-        if (view.result != vk::Result::eSuccess)
-            return Err::CouldNotCreateGpuImageView;
-        swapchain_views[i] = view.value;
-    }
 
     return ok();
 }
@@ -452,19 +431,19 @@ Result<vk::CommandBuffer> Window::begin_frame(const Engine& engine) {
     if (reset_result != vk::Result::eSuccess)
         return Err::VulkanFailure;
 
-    const auto acquire_result = engine.device.acquireNextImageKHR(swapchain, UINT64_MAX, is_image_available(), nullptr);
+    const auto acquire_result = engine.device.acquireNextImageKHR(m_swapchain, UINT64_MAX, is_image_available(), nullptr);
     if (acquire_result.result != vk::Result::eSuccess)
         return Err::CouldNotAcquireVkSwapchainImage;
-    current_image_index = acquire_result.value;
+    m_current_image_index = acquire_result.value;
 
     debug_assert(current_cmd() != nullptr);
     const auto begin_result = current_cmd().begin({.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
     if (begin_result != vk::Result::eSuccess)
         return Err::CouldNotBeginVkCommandBuffer;
 
-    const vk::Viewport viewport = {0.0f, 0.0f, static_cast<f32>(extent.width), static_cast<f32>(extent.height), 0.0f, 1.0f};
+    const vk::Viewport viewport = {0.0f, 0.0f, static_cast<f32>(m_extent.width), static_cast<f32>(m_extent.height), 0.0f, 1.0f};
     current_cmd().setViewportWithCount({viewport});
-    const vk::Rect2D scissor = {{0, 0}, extent};
+    const vk::Rect2D scissor = {{0, 0}, m_extent};
     current_cmd().setScissorWithCount({scissor});
 
     current_cmd().setRasterizerDiscardEnable(vk::False);
@@ -516,13 +495,13 @@ Result<void> Window::end_frame(const Engine& engine) {
         return Err::CouldNotSubmitVkCommandBuffer;
 
     debug_assert(is_ready_to_present() != nullptr);
-    debug_assert(swapchain != nullptr);
+    debug_assert(m_swapchain != nullptr);
     const vk::PresentInfoKHR present_info = {
         .waitSemaphoreCount = 1,
         .pWaitSemaphores = &is_ready_to_present(),
         .swapchainCount = 1,
-        .pSwapchains = &swapchain,
-        .pImageIndices = &current_image_index,
+        .pSwapchains = &m_swapchain,
+        .pImageIndices = &m_current_image_index,
     };
     const auto present_result = engine.queue.presentKHR(present_info);
     if (present_result == vk::Result::eErrorOutOfDateKHR)
