@@ -1,4 +1,3 @@
-#include "hg_utils.h"
 #include <hurdy_gurdy.h>
 
 using namespace hg;
@@ -13,7 +12,7 @@ int main() {
         critical_error(errf(engine));
     defer(engine->destroy());
 
-    auto window = Window::create(*engine, 1920, 1080);
+    auto window = Window::create(*engine, true, 0, 0);
     if (window.has_err())
         critical_error(errf(window));
     defer(window->destroy(*engine));
@@ -53,7 +52,7 @@ int main() {
 
     std::array<u32, 4> gold_color = {};
     gold_color.fill(0xff44ccff);
-    const auto gold_texture = model_renderer->load_texture_from_data(*engine, gold_color.data(), {2, 2, 1}, vk::Format::eR8G8B8A8Srgb, 4);
+    const auto gold_texture = model_renderer->load_texture_from_data(*engine, {gold_color.data(), 4, {2, 2, 1}});
     const auto hex_texture = *model_renderer->load_texture(*engine, "../assets/hexagon_models/Textures/hexagons_medieval.png");
 
     const auto sphere = model_renderer->load_model_from_data(*engine, descriptor_pool, PbrRenderer::VertexData::from_mesh(generate_sphere(32)), 0.1f, 1.0f, gold_texture);
@@ -87,7 +86,8 @@ int main() {
     model_renderer->queue_model(tree, {.position = {2.0f - 0.75f, -0.25f, 0.0f + 0.25f}});
     model_renderer->queue_model(tree, {.position = {2.0f + 0.75f, -0.25f, 0.0f - 0.25f}});
 
-    pbr_pipeline->update_projection(*engine, glm::perspective(glm::pi<f32>() / 4.0f, static_cast<f32>(window->extent().width) / static_cast<f32>(window->extent().height), 0.1f, 100.f));
+    const f32 aspect_ratio = static_cast<f32>(window->extent().width) / static_cast<f32>(window->extent().height);
+    pbr_pipeline->update_projection(*engine, glm::perspective(glm::pi<f32>() / 4.0f, aspect_ratio, 0.1f, 100.f));
 
     Cameraf camera = {};
     camera.translate({0.0f, -2.0f, -4.0f});
@@ -137,32 +137,9 @@ int main() {
             camera.rotate_internal(glm::angleAxis<f32, glm::defaultp>(cursor_dif.y * turn_speed, {-1.0f, 0.0f, 0.0f}));
 
         pbr_pipeline->update_camera(*engine, camera);
-        auto frame_result = window->submit_frame(*engine, *pbr_pipeline);
-        if (frame_result.has_err()) {
-            while (frame_result.has_err()) {
-                if (frame_result.err() != Err::InvalidWindowSize) {
-                    if (frame_result.has_err()) {
-                        critical_error(errf(frame_result));
-                    };
-                }
-
-                for (int width = 0, height = 0; width == 0 || height == 0;) {
-                    debug_assert(window->window() != nullptr);
-                    glfwGetWindowSize(window->window(), &width, &height);
-                    glfwPollEvents();
-                };
-
-                debug_assert(engine->queue != nullptr);
-                const auto wait_result = engine->queue.waitIdle();
-                if (wait_result != vk::Result::eSuccess)
-                    critical_error("Could not wait for queue");
-
-                frame_result = window->resize(*engine);
-            }
-
-            pbr_pipeline->resize(*engine, window->extent());
-            pbr_pipeline->update_projection(*engine, glm::perspective(glm::pi<f32>() / 4.0f, static_cast<f32>(window->extent().width) / static_cast<f32>(window->extent().height), 0.1f, 100.f));
-        }
+        const auto frame_result = window->submit_frame(*engine, *pbr_pipeline);
+        if (frame_result.has_err())
+            critical_error(errf(frame_result));
     }
 
     (void)engine->device.waitIdle();

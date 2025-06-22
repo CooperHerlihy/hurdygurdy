@@ -137,7 +137,7 @@ public:
         usize index = UINT32_MAX;
     };
     [[nodiscard]] Result<TextureHandle> load_texture(const Engine& engine, std::filesystem::path path);
-    [[nodiscard]] TextureHandle load_texture_from_data(const Engine& engine, const void* data, const vk::Extent3D extent, const vk::Format format, const u32 pixel_alignment);
+    [[nodiscard]] TextureHandle load_texture_from_data(const Engine& engine, const GpuImage::Data& data, vk::Format format = vk::Format::eR8G8B8A8Srgb);
 
     struct Model {
         u32 index_count = 0;

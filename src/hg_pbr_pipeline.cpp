@@ -32,10 +32,16 @@ Result<DefaultPipeline> DefaultPipeline::create(const Engine& engine, const vk::
         .sample_count = vk::SampleCountFlagBits::e4,
     });
 
-    pipeline->m_vp_buffer = GpuBuffer::create(engine, sizeof(ViewProjectionUniform), vk::BufferUsageFlagBits::eUniformBuffer, GpuBuffer::RandomAccess);
-    pipeline->m_light_buffer = GpuBuffer::create(engine, sizeof(LightUniform) * MaxLights, vk::BufferUsageFlagBits::eUniformBuffer, GpuBuffer::RandomAccess);
+    pipeline->m_vp_buffer = GpuBuffer::create(engine, {
+        sizeof(ViewProjectionUniform),
+        vk::BufferUsageFlagBits::eUniformBuffer, GpuBuffer::RandomAccess
+    });
+    pipeline->m_light_buffer = GpuBuffer::create(engine, {
+        sizeof(LightUniform) * MaxLights,
+        vk::BufferUsageFlagBits::eUniformBuffer, GpuBuffer::RandomAccess
+    });
 
-    const auto set_layout = create_set_layout(engine, std::array{
+    const auto set_layout = create_descriptor_set_layout(engine, std::array{
         vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex},
         vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eFragment},
     });
@@ -187,7 +193,7 @@ void DefaultPipeline::cmd_draw(const vk::CommandBuffer cmd, const vk::Image rend
 Result<SkyboxRenderer> SkyboxRenderer::create(const Engine& engine, const DefaultPipeline& pipeline) {
     auto renderer = ok<SkyboxRenderer>();
 
-    const auto set_layout = create_set_layout(engine, std::array{
+    const auto set_layout = create_descriptor_set_layout(engine, std::array{
         vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment},
     });
     if (set_layout.has_err())
@@ -238,8 +244,14 @@ Result<void> SkyboxRenderer::load_skybox(const Engine& engine, const vk::Descrip
     hg::write_image_sampler_descriptor(engine, m_set, 0, m_sampler, m_cubemap.view);
 
     const auto mesh = generate_cube();
-    m_index_buffer = GpuBuffer::create(engine, mesh.indices.size() * sizeof(mesh.indices[0]), vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst);
-    m_vertex_buffer = GpuBuffer::create(engine, mesh.positions.size() * sizeof(mesh.positions[0]), vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst);
+    m_index_buffer = GpuBuffer::create(engine, {
+        mesh.indices.size() * sizeof(mesh.indices[0]),
+        vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst
+    });
+    m_vertex_buffer = GpuBuffer::create(engine, {
+        mesh.positions.size() * sizeof(mesh.positions[0]),
+        vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst
+    });
     m_index_buffer.write(engine, mesh.indices.data(), mesh.indices.size() * sizeof(mesh.indices[0]), 0);
     m_vertex_buffer.write(engine, mesh.positions.data(), mesh.positions.size() * sizeof(mesh.positions[0]), 0);
 
@@ -297,7 +309,7 @@ void SkyboxRenderer::cmd_draw(const vk::CommandBuffer cmd, const vk::DescriptorS
 Result<PbrRenderer> PbrRenderer::create(const Engine& engine, const DefaultPipeline& pipeline) {
     auto renderer = ok<PbrRenderer>();
 
-    const auto set_layout = create_set_layout(engine, std::array{
+    const auto set_layout = create_descriptor_set_layout(engine, std::array{
         vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment},
         vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eFragment},
     });
@@ -392,26 +404,28 @@ Result<PbrRenderer::TextureHandle> PbrRenderer::load_texture(const Engine& engin
     if (texture_data.has_err())
         return texture_data.err();
 
-    return ok(load_texture_from_data(engine, texture_data->pixels.get(), {to_u32(texture_data->width), to_u32(texture_data->height), 1}, vk::Format::eR8G8B8A8Srgb, 4));
+    return ok(load_texture_from_data(engine, {
+        texture_data->pixels.get(), 4, {to_u32(texture_data->width), to_u32(texture_data->height), 1}
+    }));
 }
 
-PbrRenderer::TextureHandle PbrRenderer::load_texture_from_data(const Engine& engine, const void* data, const vk::Extent3D extent, const vk::Format format, const u32 pixel_alignment) {
-    debug_assert(data != nullptr);
-    debug_assert(extent.width > 0);
-    debug_assert(extent.height > 0);
-    debug_assert(extent.depth > 0);
+PbrRenderer::TextureHandle PbrRenderer::load_texture_from_data(const Engine& engine, const GpuImage::Data& data, const vk::Format format) {
+    debug_assert(data.ptr != nullptr);
+    debug_assert(data.alignment > 0);
+    debug_assert(data.extent.width > 0);
+    debug_assert(data.extent.height > 0);
+    debug_assert(data.extent.depth > 0);
     debug_assert(format != vk::Format::eUndefined);
-    debug_assert(pixel_alignment > 0);
 
-    const u32 mips = get_mip_count(extent);
+    const u32 mips = get_mip_count(data.extent);
     const auto image = GpuImage::create(engine, {
-        .extent = extent,
+        .extent = data.extent,
         .format = format,
         .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst,
         .mip_levels = mips,
     });
-    image.write(engine, data, extent, pixel_alignment, vk::ImageLayout::eShaderReadOnlyOptimal);
-    image.generate_mipmaps(engine, mips, extent, format, vk::ImageLayout::eShaderReadOnlyOptimal);
+    image.write(engine, data, vk::ImageLayout::eShaderReadOnlyOptimal);
+    image.generate_mipmaps(engine, mips, data.extent, format, vk::ImageLayout::eShaderReadOnlyOptimal);
     const auto sampler = create_sampler(engine, {.type = SamplerType::Linear, .mip_levels = mips});
 
     m_textures.emplace_back(image, sampler);
@@ -437,9 +451,18 @@ PbrRenderer::ModelHandle PbrRenderer::load_model_from_data(const Engine& engine,
     debug_assert(roughness >= 0.0 && roughness <= 1.0);
     debug_assert(metalness >= 0.0 && metalness <= 1.0);
 
-    const auto index_buffer = GpuBuffer::create(engine, data.indices.size() * sizeof(data.indices[0]), vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst);
-    const auto vertex_buffer = GpuBuffer::create(engine, data.vertices.size() * sizeof(data.vertices[0]), vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst);
-    const auto material_buffer = GpuBuffer::create(engine, sizeof(MaterialUniform), vk::BufferUsageFlagBits::eUniformBuffer | vk::BufferUsageFlagBits::eTransferDst);
+    const auto index_buffer = GpuBuffer::create(engine, {
+        data.indices.size() * sizeof(data.indices[0]),
+        vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst
+    });
+    const auto vertex_buffer = GpuBuffer::create(engine, {
+        data.vertices.size() * sizeof(data.vertices[0]),
+        vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst
+    });
+    const auto material_buffer = GpuBuffer::create(engine, {
+        sizeof(MaterialUniform),
+        vk::BufferUsageFlagBits::eUniformBuffer | vk::BufferUsageFlagBits::eTransferDst
+    });
 
     index_buffer.write(engine, data.indices.data(), data.indices.size() * sizeof(data.indices[0]), 0);
     vertex_buffer.write(engine, data.vertices.data(), data.vertices.size() * sizeof(data.vertices[0]), 0);

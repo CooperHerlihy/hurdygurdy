@@ -40,12 +40,12 @@ public:
     static constexpr vk::Format SwapchainImageFormat = vk::Format::eR8G8B8A8Srgb;
     static constexpr vk::ColorSpaceKHR SwapchainColorSpace = vk::ColorSpaceKHR::eSrgbNonlinear;
 
-    [[nodiscard]] GLFWwindow* window() const { return m_window; }
-    [[nodiscard]] vk::Extent2D extent() const { return m_extent; }
-
-    [[nodiscard]] static Result<Window> create(const Engine& engine, i32 width, i32 height);
+    [[nodiscard]] static Result<Window> create(const Engine& engine, bool fullscreen, i32 width, i32 height);
     void destroy(const Engine& engine) const;
     [[nodiscard]] Result<void> resize(const Engine& engine);
+
+    [[nodiscard]] GLFWwindow* window() const { return m_window; }
+    [[nodiscard]] vk::Extent2D extent() const { return m_extent; }
 
     [[nodiscard]] Result<vk::CommandBuffer> begin_frame(const Engine& engine);
     [[nodiscard]] Result<void> end_frame(const Engine& engine);
@@ -95,9 +95,15 @@ struct GpuBuffer {
     vk::Buffer buffer = {};
     MemoryType memory_type = DeviceLocal;
 
-    [[nodiscard]] static Result<GpuBuffer> create_result(const Engine& engine, vk::DeviceSize size, vk::BufferUsageFlags usage, MemoryType memory_type = DeviceLocal);
-    [[nodiscard]] static GpuBuffer create(const Engine& engine, vk::DeviceSize size, vk::BufferUsageFlags usage, MemoryType memory_type = DeviceLocal) {
-        const auto buffer = create_result(engine, size, usage, memory_type);
+    struct Config {
+        vk::DeviceSize size;
+        vk::BufferUsageFlags usage;
+        MemoryType memory_type = DeviceLocal;
+    };
+
+    [[nodiscard]] static Result<GpuBuffer> create_result(const Engine& engine, const Config& config);
+    [[nodiscard]] static GpuBuffer create(const Engine& engine, const Config& config) {
+        const auto buffer = create_result(engine, config);
         if (buffer.has_err())
             critical_error("Could not create gpu buffer");
         return *buffer;
@@ -115,7 +121,9 @@ struct GpuBuffer {
         if (result.has_err())
             critical_error("Could not write to gpu buffer");
     }
-    void write(const Engine& engine, const auto& data, const vk::DeviceSize offset = 0) const { write(engine, &data, sizeof(data), offset); };
+    void write(const Engine& engine, const auto& data, const vk::DeviceSize offset = 0) const {
+        write(engine, &data, sizeof(data), offset);
+    };
 };
 
 struct StagingGpuImage {
@@ -138,8 +146,13 @@ struct StagingGpuImage {
         vmaDestroyImage(engine.allocator, image, allocation);
     }
 
-    [[nodiscard]] Result<void> write(const Engine& engine, const void* data, vk::Extent3D extent, u64 pixel_alignment, vk::ImageLayout final_layout,
-                                     const vk::ImageSubresourceRange& subresource = {vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1}) const;
+    struct Data {
+        const void* ptr;
+        u64 alignment;
+        vk::Extent3D extent;
+    };
+
+    [[nodiscard]] Result<void> write(const Engine& engine, const Data& data, vk::ImageLayout final_layout, const vk::ImageSubresourceRange& subresource = {vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1}) const;
 };
 
 struct GpuImage {
@@ -176,13 +189,14 @@ struct GpuImage {
         vmaDestroyImage(engine.allocator, image, allocation);
     }
 
-    [[nodiscard]] Result<void> write_result(const Engine& engine, const void* data, vk::Extent3D extent, u32 pixel_alignment, vk::ImageLayout final_layout,
+    using Data = StagingGpuImage::Data;
+    [[nodiscard]] Result<void> write_result(const Engine& engine, const Data& data, vk::ImageLayout final_layout,
                                             const vk::ImageSubresourceRange& subresource = {vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1}) const {
-        return StagingGpuImage{allocation, image}.write(engine, data, extent, pixel_alignment, final_layout, subresource);
+        return StagingGpuImage{allocation, image}.write(engine, data, final_layout, subresource);
     }
-    void write(const Engine& engine, const void* data, vk::Extent3D extent, u32 pixel_alignment, vk::ImageLayout final_layout,
+    void write(const Engine& engine, const Data& data, vk::ImageLayout final_layout,
                const vk::ImageSubresourceRange& subresource = {vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1}) const {
-        const auto write_result = StagingGpuImage{allocation, image}.write(engine, data, extent, pixel_alignment, final_layout, subresource);
+        const auto write_result = StagingGpuImage{allocation, image}.write(engine, data, final_layout, subresource);
         if (write_result.has_err())
             critical_error("Could not write to gpu image");
     }
@@ -216,9 +230,9 @@ struct SamplerConfig {
     return *sampler;
 }
 
-[[nodiscard]] Result<vk::DescriptorSetLayout> create_set_layout(const Engine& engine, const std::span<const vk::DescriptorSetLayoutBinding> bindings);
+[[nodiscard]] Result<vk::DescriptorSetLayout> create_descriptor_set_layout(const Engine& engine, std::span<const vk::DescriptorSetLayoutBinding> bindings);
 
-[[nodiscard]] Result<void> allocate_descriptor_sets(const Engine& engine, vk::DescriptorPool pool, std::span<const vk::DescriptorSetLayout> layouts, std::span<vk::DescriptorSet> sets);
+[[nodiscard]] Result<void> allocate_descriptor_sets(const Engine& engine, vk::DescriptorPool pool, std::span<const vk::DescriptorSetLayout> layouts, std::span<vk::DescriptorSet> out_sets);
 [[nodiscard]] inline Result<vk::DescriptorSet> allocate_descriptor_set(const Engine& engine, vk::DescriptorPool pool, vk::DescriptorSetLayout layout) {
     auto set = ok<vk::DescriptorSet>();
     const auto alloc_result = allocate_descriptor_sets(engine, pool, {&layout, 1}, {&*set, 1});
