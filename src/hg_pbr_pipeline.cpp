@@ -7,6 +7,8 @@
 #include "hg_vulkan_engine.h"
 
 #include <filesystem>
+#include <vulkan/vulkan_enums.hpp>
+#include <vulkan/vulkan_structs.hpp>
 
 namespace hg {
 
@@ -252,27 +254,34 @@ Result<SkyboxRenderer> SkyboxRenderer::create(const Engine& engine, const Defaul
     if (skybox_shader_result.has_err())
         return skybox_shader_result.err();
 
+    const auto descriptor_pool = create_descriptor_pool(engine, 1, std::array{
+        vk::DescriptorPoolSize{vk::DescriptorType::eCombinedImageSampler, 1}
+    });
+    if (descriptor_pool.has_err())
+        return descriptor_pool.err();
+    renderer->m_descriptor_pool = *descriptor_pool;
+
+    const auto set = allocate_descriptor_set(engine, renderer->m_descriptor_pool, renderer->m_set_layout);
+    if (set.has_err())
+        return set.err();
+    renderer->m_set = *set;
+
     ASSERT(renderer->m_set_layout != nullptr);
     ASSERT(renderer->m_pipeline_layout != nullptr);
+    ASSERT(renderer->m_descriptor_pool != nullptr);
+    ASSERT(renderer->m_set != nullptr);
     for (const auto shader : renderer->m_shaders) {
         ASSERT(shader != nullptr);
     }
     return renderer;
 }
 
-Result<void> SkyboxRenderer::load_skybox(
-    const Engine& engine, const vk::DescriptorPool pool, const std::filesystem::path path
-) {
-    ASSERT(pool != nullptr);
+Result<void> SkyboxRenderer::load_skybox(const Engine& engine, const std::filesystem::path path) {
     ASSERT(!path.empty());
 
-    const auto set = hg::allocate_descriptor_set(engine, pool, m_set_layout);
     const auto cubemap = GpuImage::create_cubemap(engine, path);
-    if (set.has_err())
-        return set.err();
     if (cubemap.has_err())
         return cubemap.err();
-    m_set = *set;
     m_cubemap = *cubemap;
     m_sampler = create_sampler(engine, {.type = SamplerType::Linear});
     hg::write_image_sampler_descriptor(engine, m_set, 0, m_sampler, m_cubemap.view);
@@ -315,6 +324,9 @@ void SkyboxRenderer::destroy(const Engine& engine) const {
         ASSERT(shader != nullptr);
         engine.device.destroyShaderEXT(shader);
     }
+
+    ASSERT(m_descriptor_pool != nullptr);
+    engine.device.destroyDescriptorPool(m_descriptor_pool);
 
     ASSERT(m_pipeline_layout != nullptr);
     engine.device.destroyPipelineLayout(m_pipeline_layout);
@@ -534,9 +546,8 @@ PbrRenderer::TextureHandle PbrRenderer::load_texture_from_data(
 }
 
 Result<PbrRenderer::ModelHandle> PbrRenderer::load_model(
-    const Engine& engine, const vk::DescriptorPool descriptor_pool, std::filesystem::path path, TextureHandle texture
+    const Engine& engine, std::filesystem::path path, TextureHandle texture
 ) {
-    ASSERT(descriptor_pool != nullptr);
     ASSERT(!path.empty());
     ASSERT(texture.index < m_textures.size());
 
@@ -545,17 +556,15 @@ Result<PbrRenderer::ModelHandle> PbrRenderer::load_model(
         return model.err();
 
     const auto vertex_data = VertexData::from_mesh(std::move(model->mesh));
-    return ok(load_model_from_data(engine, descriptor_pool, vertex_data, texture, model->roughness, model->metalness));
+    return ok(load_model_from_data(engine, vertex_data, texture, model->roughness, model->metalness));
 }
 
 PbrRenderer::ModelHandle PbrRenderer::load_model_from_data(
     const Engine& engine,
-    const vk::DescriptorPool descriptor_pool,
     const VertexData& data,
     const TextureHandle texture,
     const float roughness, const float metalness
 ) {
-    ASSERT(descriptor_pool != nullptr);
     ASSERT(!data.indices.empty());
     ASSERT(!data.vertices.empty());
     ASSERT(texture.index < m_textures.size());

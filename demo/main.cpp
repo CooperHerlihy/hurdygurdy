@@ -17,12 +17,6 @@ int main() {
         ERROR(errf(window));
     defer(window->destroy(*engine));
 
-    const auto descriptor_pool = *create_descriptor_pool(*engine, 256, std::array{
-        vk::DescriptorPoolSize{vk::DescriptorType::eUniformBuffer, 256},
-        vk::DescriptorPoolSize{vk::DescriptorType::eCombinedImageSampler, 256},
-    });
-    defer(engine->device.destroyDescriptorPool(descriptor_pool));
-
     auto pbr_pipeline = DefaultPipeline::create(*engine, window->extent());
     if (pbr_pipeline.has_err())
         ERROR(errf(pbr_pipeline));
@@ -32,9 +26,6 @@ int main() {
     if (skybox_renderer.has_err())
         ERROR(errf(skybox_renderer));
     defer(skybox_renderer->destroy(*engine));
-    const auto skybox = skybox_renderer->load_skybox(*engine, descriptor_pool, "../assets/cloudy_skyboxes/Cubemap/Cubemap_Sky_06-512x512.png");
-    if (skybox.has_err())
-        ERROR(errf(skybox));
     pbr_pipeline->add_render_system(*skybox_renderer);
 
     auto model_renderer = PbrRenderer::create(*engine, *pbr_pipeline);
@@ -43,19 +34,23 @@ int main() {
     defer(model_renderer->destroy(*engine));
     pbr_pipeline->add_render_system(*model_renderer);
 
+    const auto skybox = skybox_renderer->load_skybox(*engine, "../assets/cloudy_skyboxes/Cubemap/Cubemap_Sky_06-512x512.png");
+    if (skybox.has_err())
+        ERROR(errf(skybox));
+
     std::array<u32, 4> gold_color = {};
     gold_color.fill(0xff44ccff);
     const auto gold_texture = model_renderer->load_texture_from_data(*engine, {gold_color.data(), 4, {2, 2, 1}});
     const auto hex_texture = *model_renderer->load_texture(*engine, "../assets/hexagon_models/Textures/hexagons_medieval.png");
 
-    const auto sphere = model_renderer->load_model_from_data(*engine, descriptor_pool, PbrRenderer::VertexData::from_mesh(generate_sphere(32)), gold_texture, 0.1f, 1.0f);
-    const auto cube = model_renderer->load_model_from_data(*engine, descriptor_pool, PbrRenderer::VertexData::from_mesh(generate_cube()), gold_texture, 0.1f, 1.0f);
-    const auto grass = *model_renderer->load_model(*engine, descriptor_pool, "../assets/hexagon_models/Assets/gltf/tiles/base/hex_grass.gltf", hex_texture);
-    const auto tree = *model_renderer->load_model(*engine, descriptor_pool, "../assets/hexagon_models/Assets/gltf/decoration/nature/tree_single_A.gltf", hex_texture);
-    const auto building = *model_renderer->load_model(*engine, descriptor_pool, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_home_A_blue.gltf", hex_texture);
-    const auto tower = *model_renderer->load_model(*engine, descriptor_pool, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_tower_A_blue.gltf", hex_texture);
-    const auto blacksmith = *model_renderer->load_model(*engine, descriptor_pool, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_blacksmith_blue.gltf", hex_texture);
-    const auto castle = *model_renderer->load_model(*engine, descriptor_pool, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_castle_blue.gltf", hex_texture);
+    const auto sphere = model_renderer->load_model_from_data(*engine, PbrRenderer::VertexData::from_mesh(generate_sphere(32)), gold_texture, 0.1f, 1.0f);
+    const auto cube = model_renderer->load_model_from_data(*engine, PbrRenderer::VertexData::from_mesh(generate_cube()), gold_texture, 0.1f, 1.0f);
+    const auto grass = *model_renderer->load_model(*engine, "../assets/hexagon_models/Assets/gltf/tiles/base/hex_grass.gltf", hex_texture);
+    const auto tree = *model_renderer->load_model(*engine, "../assets/hexagon_models/Assets/gltf/decoration/nature/tree_single_A.gltf", hex_texture);
+    const auto building = *model_renderer->load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_home_A_blue.gltf", hex_texture);
+    const auto tower = *model_renderer->load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_tower_A_blue.gltf", hex_texture);
+    const auto blacksmith = *model_renderer->load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_blacksmith_blue.gltf", hex_texture);
+    const auto castle = *model_renderer->load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_castle_blue.gltf", hex_texture);
 
     pbr_pipeline->queue_light({-2.0f, -3.0f, -2.0f}, {glm::vec3{1.0f, 1.0f, 1.0f} * 300.0f});
     pbr_pipeline->queue_light({-0.8f, -0.5f, 1.5}, {glm::vec3{1.0f, 0.2f, 0.0f} * 10.0f});
@@ -130,7 +125,7 @@ int main() {
             camera.rotate_internal(glm::angleAxis<f32, glm::defaultp>(cursor_dif.y * turn_speed, {-1.0f, 0.0f, 0.0f}));
 
         pbr_pipeline->update_camera(*engine, camera);
-        const auto frame_result = window->submit_frame(*engine, *pbr_pipeline);
+        const auto frame_result = window->draw_frame(*engine, *pbr_pipeline);
         if (frame_result.has_err()) {
             if (frame_result.err() == Err::InvalidWindowSize) {
                 for (int w = 0, h = 0; w == 0 || h == 0; glfwGetWindowSize(window->window(), &w, &h)) {

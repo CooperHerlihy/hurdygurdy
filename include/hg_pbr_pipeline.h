@@ -4,6 +4,7 @@
 #include "hg_math.h"
 #include "hg_mesh.h"
 #include "hg_vulkan_engine.h"
+#include <vulkan/vulkan_handles.hpp>
 
 namespace hg {
 
@@ -80,7 +81,7 @@ public:
     void cmd_draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) const override;
 
     [[nodiscard]] Result<void> load_skybox(
-        const Engine& engine, const vk::DescriptorPool pool, const std::filesystem::path path
+        const Engine& engine, const std::filesystem::path path
     );
 
 private:
@@ -88,9 +89,11 @@ private:
     vk::PipelineLayout m_pipeline_layout = {};
     std::array<vk::ShaderEXT, 2> m_shaders = {};
 
+    vk::DescriptorPool m_descriptor_pool = {};
+    vk::DescriptorSet m_set = {};
+
     GpuImage m_cubemap = {};
     vk::Sampler m_sampler = {};
-    vk::DescriptorSet m_set = {};
 
     GpuBuffer m_index_buffer = {};
     GpuBuffer m_vertex_buffer = {};
@@ -164,12 +167,10 @@ public:
     };
     [[nodiscard]] Result<ModelHandle> load_model(
         const Engine& engine,
-        const vk::DescriptorPool descriptor_pool,
         std::filesystem::path path,
         TextureHandle texture);
     [[nodiscard]] ModelHandle load_model_from_data(
         const Engine& engine,
-        const vk::DescriptorPool descriptor_pool,
         const VertexData& data,
         TextureHandle texture,
         float roughness, float metalness
