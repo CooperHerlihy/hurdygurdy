@@ -151,9 +151,11 @@ enum class Err : u8 {
     CouldNotBeginVkCommandBuffer,
     CouldNotEndVkCommandBuffer,
     CouldNotSubmitVkCommandBuffer,
-    CouldNotWaitForVkFence,
     CouldNotAcquireVkSwapchainImage,
     CouldNotPresentVkSwapchainImage,
+    CouldNotWaitForVkFence,
+    CouldNotWaitForVkQueue,
+    CouldNotWaitForVkDevice,
 
     // File
     ShaderFileNotFound,
@@ -210,9 +212,11 @@ constexpr std::string_view to_string(Err code) {
         HG_MAKE_ERROR_STRING(CouldNotBeginVkCommandBuffer);
         HG_MAKE_ERROR_STRING(CouldNotEndVkCommandBuffer);
         HG_MAKE_ERROR_STRING(CouldNotSubmitVkCommandBuffer);
-        HG_MAKE_ERROR_STRING(CouldNotWaitForVkFence);
         HG_MAKE_ERROR_STRING(CouldNotAcquireVkSwapchainImage);
         HG_MAKE_ERROR_STRING(CouldNotPresentVkSwapchainImage);
+        HG_MAKE_ERROR_STRING(CouldNotWaitForVkFence);
+        HG_MAKE_ERROR_STRING(CouldNotWaitForVkQueue);
+        HG_MAKE_ERROR_STRING(CouldNotWaitForVkDevice);
 
         // File
         HG_MAKE_ERROR_STRING(ShaderFileNotFound);

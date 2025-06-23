@@ -6,7 +6,6 @@
 #include <array>
 #include <filesystem>
 #include <span>
-#include <vulkan/vulkan_enums.hpp>
 
 namespace hg {
 
@@ -153,7 +152,10 @@ struct StagingGpuImage {
         vk::Extent3D extent;
     };
 
-    [[nodiscard]] Result<void> write(const Engine& engine, const Data& data, vk::ImageLayout final_layout, const vk::ImageSubresourceRange& subresource = {vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1}) const;
+    [[nodiscard]] Result<void> write(
+        const Engine& engine, const Data& data, vk::ImageLayout final_layout,
+        const vk::ImageSubresourceRange& subresource = {vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1}
+    ) const;
 };
 
 struct GpuImage {
@@ -191,19 +193,28 @@ struct GpuImage {
     }
 
     using Data = StagingGpuImage::Data;
-    [[nodiscard]] Result<void> write_result(const Engine& engine, const Data& data, vk::ImageLayout final_layout,
-                                            const vk::ImageSubresourceRange& subresource = {vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1}) const {
+    [[nodiscard]] Result<void> write_result(
+        const Engine& engine, const Data& data, vk::ImageLayout final_layout,
+        const vk::ImageSubresourceRange& subresource = {vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1}
+    ) const {
         return StagingGpuImage{allocation, image}.write(engine, data, final_layout, subresource);
     }
-    void write(const Engine& engine, const Data& data, vk::ImageLayout final_layout,
-               const vk::ImageSubresourceRange& subresource = {vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1}) const {
+    void write(
+        const Engine& engine, const Data& data, vk::ImageLayout final_layout,
+        const vk::ImageSubresourceRange& subresource = {vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1}
+    ) const {
         const auto write_result = StagingGpuImage{allocation, image}.write(engine, data, final_layout, subresource);
         if (write_result.has_err())
             ERROR("Could not write to gpu image");
     }
 
-    [[nodiscard]] Result<void> generate_mipmaps_result(const Engine& engine, u32 levels, vk::Extent3D extent, vk::Format format, vk::ImageLayout final_layout) const;
-    void generate_mipmaps(const Engine& engine, u32 levels, vk::Extent3D extent, vk::Format format, vk::ImageLayout final_layout) const {
+    [[nodiscard]] Result<void> generate_mipmaps_result(
+        const Engine& engine, u32 levels, vk::Extent3D extent, vk::Format format, vk::ImageLayout final_layout
+    ) const;
+
+    void generate_mipmaps(
+        const Engine& engine, u32 levels, vk::Extent3D extent, vk::Format format, vk::ImageLayout final_layout
+    ) const {
         const auto mipmap = generate_mipmaps_result(engine, levels, extent, format, final_layout);
         if (mipmap.has_err())
             ERROR("Could not generate mipmaps");
@@ -231,18 +242,39 @@ struct SamplerConfig {
     return *sampler;
 }
 
-[[nodiscard]] Result<vk::DescriptorSetLayout> create_descriptor_set_layout(const Engine& engine, std::span<const vk::DescriptorSetLayoutBinding> bindings);
+[[nodiscard]] Result<vk::DescriptorPool> create_descriptor_pool(
+    const Engine& engine, u32 max_sets, std::span<const vk::DescriptorPoolSize> descriptors
+);
+[[nodiscard]] Result<vk::DescriptorSetLayout> create_descriptor_set_layout(
+    const Engine& engine,
+    std::span<const vk::DescriptorSetLayoutBinding> bindings,
+    std::span<const vk::DescriptorBindingFlags> flags = {}
+);
 
-[[nodiscard]] Result<void> allocate_descriptor_sets(const Engine& engine, vk::DescriptorPool pool, std::span<const vk::DescriptorSetLayout> layouts, std::span<vk::DescriptorSet> out_sets);
-[[nodiscard]] inline Result<vk::DescriptorSet> allocate_descriptor_set(const Engine& engine, vk::DescriptorPool pool, vk::DescriptorSetLayout layout) {
+[[nodiscard]] Result<void> allocate_descriptor_sets(
+    const Engine& engine, vk::DescriptorPool pool,
+    std::span<const vk::DescriptorSetLayout> layouts,
+    std::span<vk::DescriptorSet> out_sets
+);
+[[nodiscard]] inline Result<vk::DescriptorSet> allocate_descriptor_set(
+    const Engine& engine, vk::DescriptorPool pool, vk::DescriptorSetLayout layout
+) {
     auto set = ok<vk::DescriptorSet>();
     const auto alloc_result = allocate_descriptor_sets(engine, pool, {&layout, 1}, {&*set, 1});
     if (alloc_result.has_err())
         return alloc_result.err();
     return set;
 }
-void write_uniform_buffer_descriptor(const Engine& engine, vk::DescriptorSet set, u32 binding, vk::Buffer buffer, vk::DeviceSize size, vk::DeviceSize offset = 0);
-void write_image_sampler_descriptor(const Engine& engine, vk::DescriptorSet set, u32 binding, vk::Sampler sampler, vk::ImageView view);
+void write_uniform_buffer_descriptor(
+    const Engine& engine, vk::DescriptorSet set, u32 binding,
+    vk::Buffer buffer, vk::DeviceSize size, vk::DeviceSize offset = 0,
+    u32 binding_array_index = 0
+);
+void write_image_sampler_descriptor(
+    const Engine& engine, vk::DescriptorSet set, u32 binding,
+    vk::Sampler sampler, vk::ImageView view,
+    u32 binding_array_index = 0
+);
 
 struct ShaderConfig {
     std::filesystem::path path = {};
@@ -254,7 +286,11 @@ struct ShaderConfig {
     vk::ShaderCreateFlagsEXT flags = {};
 };
 [[nodiscard]] Result<vk::ShaderEXT> create_unlinked_shader(const Engine& engine, const ShaderConfig& config);
-[[nodiscard]] Result<void> create_linked_shaders(const Engine& engine, std::span<vk::ShaderEXT> out_shaders, std::span<const ShaderConfig> configs);
+[[nodiscard]] Result<void> create_linked_shaders(
+    const Engine& engine,
+    std::span<vk::ShaderEXT> out_shaders,
+    std::span<const ShaderConfig> configs
+);
 
 [[nodiscard]] Result<vk::CommandBuffer> begin_single_time_commands(const Engine& engine);
 [[nodiscard]] Result<void> end_single_time_commands(const Engine& engine, vk::CommandBuffer cmd);
@@ -305,13 +341,21 @@ public:
         });
         return *this;
     }
-    BarrierBuilder& set_image_src(const vk::PipelineStageFlags2 src_stage_mask, const vk::AccessFlags2 src_access_mask, const vk::ImageLayout old_layout) {
+    BarrierBuilder& set_image_src(
+        const vk::PipelineStageFlags2 src_stage_mask,
+        const vk::AccessFlags2 src_access_mask,
+        const vk::ImageLayout old_layout
+    ) {
         m_images.back().srcStageMask = src_stage_mask;
         m_images.back().srcAccessMask = src_access_mask;
         m_images.back().oldLayout = old_layout;
         return *this;
     }
-    BarrierBuilder& set_image_dst(const vk::PipelineStageFlags2 dst_stage_mask, const vk::AccessFlags2 dst_access_mask, const vk::ImageLayout new_layout) {
+    BarrierBuilder& set_image_dst(
+        const vk::PipelineStageFlags2 dst_stage_mask,
+        const vk::AccessFlags2 dst_access_mask,
+        const vk::ImageLayout new_layout
+    ) {
         ASSERT(new_layout != vk::ImageLayout::eUndefined);
         m_images.back().dstStageMask = dst_stage_mask;
         m_images.back().dstAccessMask = dst_access_mask;

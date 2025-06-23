@@ -1,4 +1,5 @@
 #version 450
+#extension GL_EXT_nonuniform_qualifier : require
 
 layout(location = 0) out vec4 out_color;
 
@@ -7,13 +8,6 @@ layout(location = 1) in vec3 v_normal;
 layout(location = 2) in vec2 v_uv;
 
 const float pi = 3.14159265;
-
-layout(set = 1, binding = 0) uniform sampler2D u_sampler;
-
-layout(set = 1, binding = 1) uniform Material {
-    float roughness;
-    float metal;
-} u_material;
 
 const uint MaxLights = 10;
 
@@ -26,6 +20,15 @@ layout(set = 0, binding = 1) uniform LightUniform {
     Light vals[MaxLights];
     uint count;
 } u_light;
+
+layout(set = 1, binding = 0) uniform sampler2D u_samplers[];
+
+layout(push_constant) uniform PushConstant {
+    mat4 model;
+    uint texture_index;
+    float roughness;
+    float metal;
+} push;
 
 float square(const float x) {
     return x * x;
@@ -73,12 +76,12 @@ vec3 calc_reflection(const Light light, const vec3 normal, const vec3 albedo, co
 }
 
 void main() {
-    const vec4 tex = texture(u_sampler, v_uv);
+    const vec4 tex = texture(u_samplers[push.texture_index], v_uv);
 
     const vec3 normal = normalize(v_normal);
     const vec3 albedo = tex.xyz;
-    const float metal = u_material.metal;
-    const float roughness = u_material.roughness;
+    const float metal = push.metal;
+    const float roughness = push.roughness;
     const vec3 f0 = mix(vec3(0.04), albedo, metal);
 
     const vec3 ambient = vec3(0.03, 0.03, 0.03);

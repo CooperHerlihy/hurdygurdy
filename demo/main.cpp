@@ -17,20 +17,13 @@ int main() {
         ERROR(errf(window));
     defer(window->destroy(*engine));
 
-    constexpr std::array pool_sizes = {
+    const auto descriptor_pool = *create_descriptor_pool(*engine, 256, std::array{
         vk::DescriptorPoolSize{vk::DescriptorType::eUniformBuffer, 256},
         vk::DescriptorPoolSize{vk::DescriptorType::eCombinedImageSampler, 256},
-    };
-    const auto descriptor_pool = engine->device.createDescriptorPool({
-        .maxSets = 256, 
-        .poolSizeCount = to_u32(pool_sizes.size()), 
-        .pPoolSizes = pool_sizes.data(),
-    }).value;
-    if (descriptor_pool == nullptr)
-        ERROR("Could not create descriptor pool");
+    });
     defer(engine->device.destroyDescriptorPool(descriptor_pool));
 
-    auto pbr_pipeline = DefaultPipeline::create(*engine, window->extent(), descriptor_pool);
+    auto pbr_pipeline = DefaultPipeline::create(*engine, window->extent());
     if (pbr_pipeline.has_err())
         ERROR(errf(pbr_pipeline));
     defer(pbr_pipeline->destroy(*engine));
@@ -55,8 +48,8 @@ int main() {
     const auto gold_texture = model_renderer->load_texture_from_data(*engine, {gold_color.data(), 4, {2, 2, 1}});
     const auto hex_texture = *model_renderer->load_texture(*engine, "../assets/hexagon_models/Textures/hexagons_medieval.png");
 
-    const auto sphere = model_renderer->load_model_from_data(*engine, descriptor_pool, PbrRenderer::VertexData::from_mesh(generate_sphere(32)), 0.1f, 1.0f, gold_texture);
-    const auto cube = model_renderer->load_model_from_data(*engine, descriptor_pool, PbrRenderer::VertexData::from_mesh(generate_cube()), 0.1f, 1.0f, gold_texture);
+    const auto sphere = model_renderer->load_model_from_data(*engine, descriptor_pool, PbrRenderer::VertexData::from_mesh(generate_sphere(32)), gold_texture, 0.1f, 1.0f);
+    const auto cube = model_renderer->load_model_from_data(*engine, descriptor_pool, PbrRenderer::VertexData::from_mesh(generate_cube()), gold_texture, 0.1f, 1.0f);
     const auto grass = *model_renderer->load_model(*engine, descriptor_pool, "../assets/hexagon_models/Assets/gltf/tiles/base/hex_grass.gltf", hex_texture);
     const auto tree = *model_renderer->load_model(*engine, descriptor_pool, "../assets/hexagon_models/Assets/gltf/decoration/nature/tree_single_A.gltf", hex_texture);
     const auto building = *model_renderer->load_model(*engine, descriptor_pool, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_home_A_blue.gltf", hex_texture);
@@ -138,8 +131,19 @@ int main() {
 
         pbr_pipeline->update_camera(*engine, camera);
         const auto frame_result = window->submit_frame(*engine, *pbr_pipeline);
-        if (frame_result.has_err())
-            ERROR(errf(frame_result));
+        if (frame_result.has_err()) {
+            if (frame_result.err() == Err::InvalidWindowSize) {
+                for (int w = 0, h = 0; w == 0 || h == 0; glfwGetWindowSize(window->window(), &w, &h)) {
+                    glfwPollEvents();
+                }
+                const auto res = window->resize(*engine);
+                if (res.has_err())
+                    ERROR("Could not resize window");
+                pbr_pipeline->resize(*engine, window->extent());
+            } else {
+                ERROR(errf(frame_result));
+            }
+        }
     }
 
     (void)engine->device.waitIdle();

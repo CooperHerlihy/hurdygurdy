@@ -6,15 +6,13 @@
 #include "hg_load.h"
 #include "hg_vulkan_engine.h"
 
-#include <concepts>
 #include <filesystem>
 
 namespace hg {
 
-Result<DefaultPipeline> DefaultPipeline::create(const Engine& engine, const vk::Extent2D window_size, const vk::DescriptorPool descriptor_pool) {
+Result<DefaultPipeline> DefaultPipeline::create(const Engine& engine, const vk::Extent2D window_size) {
     ASSERT(window_size.width != 0);
     ASSERT(window_size.height != 0);
-    ASSERT(descriptor_pool != nullptr);
 
     auto pipeline = ok<DefaultPipeline>();
 
@@ -32,6 +30,13 @@ Result<DefaultPipeline> DefaultPipeline::create(const Engine& engine, const vk::
         .sample_count = vk::SampleCountFlagBits::e4,
     });
 
+    const auto descriptor_pool = create_descriptor_pool(engine, 1, std::array{
+        vk::DescriptorPoolSize{vk::DescriptorType::eUniformBuffer, 2}
+    });
+    if (descriptor_pool.has_err())
+        return descriptor_pool.err();
+    pipeline->m_descriptor_pool = *descriptor_pool;
+
     const auto set_layout = create_descriptor_set_layout(engine, std::array{
         vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex},
         vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eFragment},
@@ -40,7 +45,7 @@ Result<DefaultPipeline> DefaultPipeline::create(const Engine& engine, const vk::
         return set_layout.err();
     pipeline->m_set_layout = *set_layout;
 
-    const auto global_set = allocate_descriptor_set(engine, descriptor_pool, pipeline->m_set_layout);
+    const auto global_set = allocate_descriptor_set(engine, pipeline->m_descriptor_pool, pipeline->m_set_layout);
     if (global_set.has_err())
         return global_set.err();
     pipeline->m_global_set = *global_set;
@@ -77,6 +82,8 @@ void DefaultPipeline::destroy(const Engine& engine) const {
 
     ASSERT(m_set_layout != nullptr);
     engine.device.destroyDescriptorSetLayout(m_set_layout);
+    ASSERT(m_descriptor_pool != nullptr);
+    engine.device.destroyDescriptorPool(m_descriptor_pool);
     ASSERT(m_light_buffer.buffer != nullptr);
     m_light_buffer.destroy(engine);
     ASSERT(m_vp_buffer.buffer != nullptr);
@@ -129,7 +136,9 @@ void DefaultPipeline::update_camera(const Engine& engine, const Cameraf& camera)
     m_vp_buffer.write(engine, view, offsetof(ViewProjectionUniform, view));
 }
 
-void DefaultPipeline::cmd_draw(const vk::CommandBuffer cmd, const vk::Image render_target, const vk::Extent2D window_size) const {
+void DefaultPipeline::cmd_draw(
+    const vk::CommandBuffer cmd, const vk::Image render_target, const vk::Extent2D window_size
+) const {
     ASSERT(cmd != nullptr);
     ASSERT(render_target != nullptr);
     ASSERT(window_size.width > 0);
@@ -139,7 +148,10 @@ void DefaultPipeline::cmd_draw(const vk::CommandBuffer cmd, const vk::Image rend
         .add_image_barrier(m_color_image.image, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
         .set_image_dst(vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::AccessFlagBits2::eColorAttachmentWrite, vk::ImageLayout::eColorAttachmentOptimal)
         .add_image_barrier(m_depth_image.image, {vk::ImageAspectFlagBits::eDepth, 0, 1, 0, 1})
-        .set_image_dst(vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests, vk::AccessFlagBits2::eDepthStencilAttachmentWrite, vk::ImageLayout::eDepthStencilAttachmentOptimal)
+        .set_image_dst(
+            vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
+            vk::AccessFlagBits2::eDepthStencilAttachmentWrite, vk::ImageLayout::eDepthStencilAttachmentOptimal
+        )
         .build_and_run();
 
     const vk::RenderingAttachmentInfo color_attachment = {
@@ -248,7 +260,9 @@ Result<SkyboxRenderer> SkyboxRenderer::create(const Engine& engine, const Defaul
     return renderer;
 }
 
-Result<void> SkyboxRenderer::load_skybox(const Engine& engine, const vk::DescriptorPool pool, const std::filesystem::path path) {
+Result<void> SkyboxRenderer::load_skybox(
+    const Engine& engine, const vk::DescriptorPool pool, const std::filesystem::path path
+) {
     ASSERT(pool != nullptr);
     ASSERT(!path.empty());
 
@@ -323,7 +337,9 @@ void SkyboxRenderer::cmd_draw(const vk::CommandBuffer cmd, const vk::DescriptorS
     cmd.bindShadersEXT({vk::ShaderStageFlagBits::eVertex, vk::ShaderStageFlagBits::eFragment}, m_shaders);
     cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipeline_layout, 0, {global_set, m_set}, {});
 
-    cmd.setVertexInputEXT({vk::VertexInputBindingDescription2EXT{.stride = sizeof(glm::vec3), .inputRate = vk::VertexInputRate::eVertex, .divisor = 1}}, {
+    cmd.setVertexInputEXT({
+        vk::VertexInputBindingDescription2EXT{.stride = sizeof(glm::vec3), .inputRate = vk::VertexInputRate::eVertex, .divisor = 1}
+    }, {
         vk::VertexInputAttributeDescription2EXT{.location = 0, .format = vk::Format::eR32G32B32Sfloat}
     });
     cmd.bindVertexBuffers(0, {m_vertex_buffer.buffer}, {vk::DeviceSize{0}});
@@ -338,17 +354,24 @@ void SkyboxRenderer::cmd_draw(const vk::CommandBuffer cmd, const vk::DescriptorS
 Result<PbrRenderer> PbrRenderer::create(const Engine& engine, const DefaultPipeline& pipeline) {
     auto renderer = ok<PbrRenderer>();
 
-    const auto set_layout = create_descriptor_set_layout(engine, std::array{
-        vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment},
-        vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eFragment},
-    });
+    const auto set_layout = create_descriptor_set_layout(
+        engine,
+        std::array{
+            vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, MaxTextures, vk::ShaderStageFlagBits::eFragment},
+        },
+        std::array{
+            vk::DescriptorBindingFlags{vk::DescriptorBindingFlagBits::ePartiallyBound}
+        }
+    );
     if (set_layout.has_err())
         return set_layout.err();
     renderer->m_set_layout = *set_layout;
 
     ASSERT(pipeline.get_global_set_layout() != nullptr);
     std::array set_layouts = {pipeline.get_global_set_layout(), renderer->m_set_layout};
-    std::array push_ranges = {vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex, 0, sizeof(PushConstant)}};
+    std::array push_ranges = {vk::PushConstantRange{
+        vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, 0, sizeof(PushConstant)
+    }};
     const auto pipeline_layout = engine.device.createPipelineLayout({
         .setLayoutCount = to_u32(set_layouts.size()),
         .pSetLayouts = set_layouts.data(),
@@ -378,11 +401,25 @@ Result<PbrRenderer> PbrRenderer::create(const Engine& engine, const DefaultPipel
     if (shader_result.has_err())
         return shader_result.err();
 
+    const auto descriptor_pool = create_descriptor_pool(engine, 1, std::array{
+        vk::DescriptorPoolSize{vk::DescriptorType::eCombinedImageSampler, MaxTextures}
+    });
+    if (descriptor_pool.has_err())
+        return descriptor_pool.err();
+    renderer->m_descriptor_pool = *descriptor_pool;
+
+    const auto texture_set = allocate_descriptor_set(engine, renderer->m_descriptor_pool, renderer->m_set_layout);
+    if (texture_set.has_err())
+        return texture_set.err();
+    renderer->m_texture_set = *texture_set;
+
     ASSERT(renderer->m_set_layout != nullptr);
     ASSERT(renderer->m_pipeline_layout != nullptr);
     for (const auto shader : renderer->m_shaders) {
         ASSERT(shader != nullptr);
     }
+    ASSERT(renderer->m_descriptor_pool != nullptr);
+    ASSERT(renderer->m_texture_set != nullptr);
     return renderer;
 }
 
@@ -399,6 +436,9 @@ void PbrRenderer::destroy(const Engine& engine) const {
         engine.device.destroyShaderEXT(shader);
     }
 
+    ASSERT(m_descriptor_pool != nullptr);
+    engine.device.destroyDescriptorPool(m_descriptor_pool);
+
     ASSERT(m_pipeline_layout != nullptr);
     engine.device.destroyPipelineLayout(m_pipeline_layout);
 
@@ -412,19 +452,30 @@ void PbrRenderer::cmd_draw(const vk::CommandBuffer cmd, const vk::DescriptorSet 
 
     cmd.setCullMode(vk::CullModeFlagBits::eBack);
 
-    cmd.setVertexInputEXT({vk::VertexInputBindingDescription2EXT{.stride = sizeof(Vertex), .inputRate = vk::VertexInputRate::eVertex, .divisor = 1}}, {
+    cmd.setVertexInputEXT({
+        vk::VertexInputBindingDescription2EXT{.stride = sizeof(Vertex), .inputRate = vk::VertexInputRate::eVertex, .divisor = 1}
+    }, {
         vk::VertexInputAttributeDescription2EXT{.location = 0, .format = vk::Format::eR32G32B32Sfloat, .offset = offsetof(Vertex, position)},
         vk::VertexInputAttributeDescription2EXT{.location = 1, .format = vk::Format::eR32G32B32Sfloat, .offset = offsetof(Vertex, normal)},
         vk::VertexInputAttributeDescription2EXT{.location = 2, .format = vk::Format::eR32G32Sfloat, .offset = offsetof(Vertex, tex_coord)}
     });
     cmd.bindShadersEXT({vk::ShaderStageFlagBits::eVertex, vk::ShaderStageFlagBits::eFragment}, m_shaders);
 
+    cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipeline_layout, 0, {global_set, m_texture_set}, {});
     for (const auto& ticket : m_render_queue) {
         const auto& model = m_models[ticket.model.index];
 
-        cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipeline_layout, 0, {global_set, model.set}, {});
-        PushConstant model_push = {ticket.transform.matrix()};
-        cmd.pushConstants(m_pipeline_layout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(model_push), &model_push);
+        PushConstant model_push = {
+            .model = ticket.transform.matrix(),
+            .texture_index = to_u32(model.texture.index),
+            .roughness = model.roughness,
+            .metalness = model.metalness
+        };
+        cmd.pushConstants(
+            m_pipeline_layout,
+            vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+            0, sizeof(model_push), &model_push
+        );
 
         cmd.bindIndexBuffer(model.index_buffer.buffer, 0, vk::IndexType::eUint32);
         cmd.bindVertexBuffers(0, {model.vertex_buffer.buffer}, {vk::DeviceSize{0}});
@@ -435,6 +486,7 @@ void PbrRenderer::cmd_draw(const vk::CommandBuffer cmd, const vk::DescriptorSet 
 }
 
 Result<PbrRenderer::TextureHandle> PbrRenderer::load_texture(const Engine& engine, std::filesystem::path path) {
+    ASSERT(m_textures.size() < MaxTextures);
     ASSERT(!path.empty());
 
     const auto texture_data = ImageData::load(path);
@@ -446,7 +498,10 @@ Result<PbrRenderer::TextureHandle> PbrRenderer::load_texture(const Engine& engin
     }));
 }
 
-PbrRenderer::TextureHandle PbrRenderer::load_texture_from_data(const Engine& engine, const GpuImage::Data& data, const vk::Format format) {
+PbrRenderer::TextureHandle PbrRenderer::load_texture_from_data(
+    const Engine& engine, const GpuImage::Data& data, const vk::Format format
+) {
+    ASSERT(m_textures.size() < MaxTextures);
     ASSERT(data.ptr != nullptr);
     ASSERT(data.alignment > 0);
     ASSERT(data.extent.width > 0);
@@ -458,22 +513,29 @@ PbrRenderer::TextureHandle PbrRenderer::load_texture_from_data(const Engine& eng
     const auto image = GpuImage::create(engine, {
         .extent = data.extent,
         .format = format,
-        .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst,
+        .usage = vk::ImageUsageFlagBits::eSampled
+               | vk::ImageUsageFlagBits::eTransferSrc
+               | vk::ImageUsageFlagBits::eTransferDst,
         .mip_levels = mips,
     });
     image.write(engine, data, vk::ImageLayout::eShaderReadOnlyOptimal);
     image.generate_mipmaps(engine, mips, data.extent, format, vk::ImageLayout::eShaderReadOnlyOptimal);
     const auto sampler = create_sampler(engine, {.type = SamplerType::Linear, .mip_levels = mips});
 
+    usize index = m_textures.size();
+    write_image_sampler_descriptor(engine, m_texture_set, 0, sampler, image.view, to_u32(index));
+
     ASSERT(image.allocation != nullptr);
     ASSERT(image.image != nullptr);
     ASSERT(image.view != nullptr);
     ASSERT(sampler != nullptr);
     m_textures.emplace_back(image, sampler);
-    return {m_textures.size() - 1};
+    return {index};
 }
 
-Result<PbrRenderer::ModelHandle> PbrRenderer::load_model(const Engine& engine, const vk::DescriptorPool descriptor_pool, std::filesystem::path path, TextureHandle texture) {
+Result<PbrRenderer::ModelHandle> PbrRenderer::load_model(
+    const Engine& engine, const vk::DescriptorPool descriptor_pool, std::filesystem::path path, TextureHandle texture
+) {
     ASSERT(descriptor_pool != nullptr);
     ASSERT(!path.empty());
     ASSERT(texture.index < m_textures.size());
@@ -483,10 +545,16 @@ Result<PbrRenderer::ModelHandle> PbrRenderer::load_model(const Engine& engine, c
         return model.err();
 
     const auto vertex_data = VertexData::from_mesh(std::move(model->mesh));
-    return ok(load_model_from_data(engine, descriptor_pool, vertex_data, model->roughness, model->metalness, texture));
+    return ok(load_model_from_data(engine, descriptor_pool, vertex_data, texture, model->roughness, model->metalness));
 }
 
-PbrRenderer::ModelHandle PbrRenderer::load_model_from_data(const Engine& engine, const vk::DescriptorPool descriptor_pool, const VertexData& data, const float roughness, const float metalness, const TextureHandle texture) {
+PbrRenderer::ModelHandle PbrRenderer::load_model_from_data(
+    const Engine& engine,
+    const vk::DescriptorPool descriptor_pool,
+    const VertexData& data,
+    const TextureHandle texture,
+    const float roughness, const float metalness
+) {
     ASSERT(descriptor_pool != nullptr);
     ASSERT(!data.indices.empty());
     ASSERT(!data.vertices.empty());
@@ -502,30 +570,16 @@ PbrRenderer::ModelHandle PbrRenderer::load_model_from_data(const Engine& engine,
         data.vertices.size() * sizeof(data.vertices[0]),
         vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst
     });
-    const auto material_buffer = GpuBuffer::create(engine, {
-        sizeof(MaterialUniform),
-        vk::BufferUsageFlagBits::eUniformBuffer | vk::BufferUsageFlagBits::eTransferDst
-    });
 
     index_buffer.write(engine, data.indices.data(), data.indices.size() * sizeof(data.indices[0]), 0);
     vertex_buffer.write(engine, data.vertices.data(), data.vertices.size() * sizeof(data.vertices[0]), 0);
-    material_buffer.write(engine, MaterialUniform{roughness, metalness});
-
-    const auto set = hg::allocate_descriptor_set(engine, descriptor_pool, m_set_layout);
-    if (set.has_err())
-        ERROR("PbrPipeline descriptor pool is empty");
-    hg::write_image_sampler_descriptor(engine, *set, 0, m_textures[texture.index].sampler, m_textures[texture.index].image.view);
-    hg::write_uniform_buffer_descriptor(engine, *set, 1, material_buffer.buffer, sizeof(MaterialUniform));
 
     ASSERT(data.indices.size() > 0);
     ASSERT(index_buffer.allocation != nullptr);
     ASSERT(index_buffer.buffer != nullptr);
     ASSERT(vertex_buffer.allocation != nullptr);
     ASSERT(vertex_buffer.buffer != nullptr);
-    ASSERT(material_buffer.allocation != nullptr);
-    ASSERT(material_buffer.buffer != nullptr);
-    ASSERT(*set != nullptr);
-    m_models.emplace_back(to_u32(data.indices.size()), index_buffer, vertex_buffer, material_buffer, *set);
+    m_models.emplace_back(to_u32(data.indices.size()), index_buffer, vertex_buffer, texture, roughness, metalness);
     return {m_models.size() - 1};
 }
 

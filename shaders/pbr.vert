@@ -15,6 +15,9 @@ layout(set = 0, binding = 0) uniform VP {
 
 layout(push_constant) uniform PushConstant {
     mat4 model;
+    uint texture_index;
+    float roughness;
+    float metal;
 } push;
 
 void main() {

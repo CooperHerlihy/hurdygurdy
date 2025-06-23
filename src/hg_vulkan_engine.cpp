@@ -25,7 +25,11 @@ constexpr std::array DeviceExtensions = {
     VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
 };
 
-static vk::Bool32 debug_callback(const vk::DebugUtilsMessageSeverityFlagBitsEXT severity, const vk::DebugUtilsMessageTypeFlagsEXT, const vk::DebugUtilsMessengerCallbackDataEXT* callback_data, void*) {
+static vk::Bool32 debug_callback(
+    const vk::DebugUtilsMessageSeverityFlagBitsEXT severity,
+    const vk::DebugUtilsMessageTypeFlagsEXT,
+    const vk::DebugUtilsMessengerCallbackDataEXT* callback_data, void*
+) {
     std::cout << std::format("{}\n", callback_data->pMessage);
     if (severity & vk::DebugUtilsMessageSeverityFlagBitsEXT::eError)
         ERROR("Vulkan error");
@@ -160,26 +164,26 @@ static Result<vk::Device> init_device(const Engine& engine) {
     vk::PhysicalDeviceBufferAddressFeaturesEXT buffer_address_feature = {.pNext = nullptr, .bufferDeviceAddress = vk::True};
     vk::PhysicalDeviceDescriptorIndexingFeatures descriptor_indexing_features = {
         .pNext = &buffer_address_feature,
-        .shaderInputAttachmentArrayDynamicIndexing = {},
-        .shaderUniformTexelBufferArrayDynamicIndexing = {},
-        .shaderStorageTexelBufferArrayDynamicIndexing = {},
-        .shaderUniformBufferArrayNonUniformIndexing = {},
-        .shaderSampledImageArrayNonUniformIndexing = {},
-        .shaderStorageBufferArrayNonUniformIndexing = {},
-        .shaderStorageImageArrayNonUniformIndexing = {},
-        .shaderInputAttachmentArrayNonUniformIndexing = {},
-        .shaderUniformTexelBufferArrayNonUniformIndexing = {},
-        .shaderStorageTexelBufferArrayNonUniformIndexing = {},
-        .descriptorBindingUniformBufferUpdateAfterBind = {},
-        .descriptorBindingSampledImageUpdateAfterBind = {},
-        .descriptorBindingStorageImageUpdateAfterBind = {},
-        .descriptorBindingStorageBufferUpdateAfterBind = {},
-        .descriptorBindingUniformTexelBufferUpdateAfterBind = {},
-        .descriptorBindingStorageTexelBufferUpdateAfterBind = {},
-        .descriptorBindingUpdateUnusedWhilePending = {},
-        .descriptorBindingPartiallyBound = {},
-        .descriptorBindingVariableDescriptorCount = {},
-        .runtimeDescriptorArray = {},
+        // .shaderInputAttachmentArrayDynamicIndexing = true,
+        // .shaderUniformTexelBufferArrayDynamicIndexing = true,
+        // .shaderStorageTexelBufferArrayDynamicIndexing = true,
+        // .shaderUniformBufferArrayNonUniformIndexing = true,
+        .shaderSampledImageArrayNonUniformIndexing = true,
+        // .shaderStorageBufferArrayNonUniformIndexing = true,
+        // .shaderStorageImageArrayNonUniformIndexing = true,
+        // .shaderInputAttachmentArrayNonUniformIndexing = true,
+        // .shaderUniformTexelBufferArrayNonUniformIndexing = true,
+        // .shaderStorageTexelBufferArrayNonUniformIndexing = true,
+        // .descriptorBindingUniformBufferUpdateAfterBind = true,
+        // .descriptorBindingSampledImageUpdateAfterBind = true,
+        // .descriptorBindingStorageImageUpdateAfterBind = true,
+        // .descriptorBindingStorageBufferUpdateAfterBind = true,
+        // .descriptorBindingUniformTexelBufferUpdateAfterBind = true,
+        // .descriptorBindingStorageTexelBufferUpdateAfterBind = true,
+        // .descriptorBindingUpdateUnusedWhilePending = true,
+        .descriptorBindingPartiallyBound = true,
+        // .descriptorBindingVariableDescriptorCount = true,
+        .runtimeDescriptorArray = true,
     };
     vk::PhysicalDeviceShaderObjectFeaturesEXT shader_object_feature = {.pNext = &descriptor_indexing_features, .shaderObject = vk::True};
     vk::PhysicalDeviceDynamicRenderingFeatures dynamic_rendering_feature = {.pNext = &shader_object_feature, .dynamicRendering = vk::True};
@@ -473,19 +477,27 @@ Result<void> Window::resize(const Engine& engine) {
 
     const auto new_swapchain = engine.device.createSwapchainKHR({
         .surface = m_surface,
-        .minImageCount = surface_capabilities.maxImageCount == 0 ? MaxSwapchainImages : std::min(surface_capabilities.minImageCount + 1, surface_capabilities.maxImageCount),
+        .minImageCount = surface_capabilities.maxImageCount == 0
+                         ? MaxSwapchainImages
+                         : std::min(surface_capabilities.minImageCount + 1, surface_capabilities.maxImageCount),
         .imageFormat = SwapchainImageFormat,
         .imageColorSpace = SwapchainColorSpace,
         .imageExtent = surface_capabilities.currentExtent,
         .imageArrayLayers = 1,
         .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferDst,
         .preTransform = surface_capabilities.currentTransform,
-        .presentMode = std::ranges::any_of(present_modes, [](const vk::PresentModeKHR mode) { return mode == vk::PresentModeKHR::eMailbox; }) ? vk::PresentModeKHR::eMailbox : vk::PresentModeKHR::eFifo,
+        .presentMode = std::ranges::any_of(present_modes, [](const vk::PresentModeKHR mode) {
+            return mode == vk::PresentModeKHR::eMailbox;
+        }) ? vk::PresentModeKHR::eMailbox : vk::PresentModeKHR::eFifo,
         .clipped = vk::True,
         .oldSwapchain = m_swapchain,
     });
     if (new_swapchain.result != vk::Result::eSuccess)
         return Err::CouldNotCreateVkSwapchain;
+
+    const auto wait_result = engine.queue.waitIdle();
+    if (wait_result != vk::Result::eSuccess)
+        return Err::CouldNotWaitForVkQueue;
 
     if (m_swapchain != nullptr) {
         engine.device.destroySwapchainKHR(m_swapchain);
@@ -531,7 +543,11 @@ Result<vk::CommandBuffer> Window::begin_frame(const Engine& engine) {
         return Err::CouldNotBeginVkCommandBuffer;
     m_recording = true;
 
-    const vk::Viewport viewport = {0.0f, 0.0f, static_cast<f32>(m_extent.width), static_cast<f32>(m_extent.height), 0.0f, 1.0f};
+    const vk::Viewport viewport = {
+        0.0f, 0.0f,
+        static_cast<f32>(m_extent.width), static_cast<f32>(m_extent.height),
+        0.0f, 1.0f,
+    };
     current_cmd().setViewportWithCount({viewport});
     const vk::Rect2D scissor = {{0, 0}, m_extent};
     current_cmd().setScissorWithCount({scissor});
@@ -642,7 +658,9 @@ Result<GpuBuffer> GpuBuffer::create_result(const Engine& engine, const Config& c
     return ok<GpuBuffer>(allocation, buffer, config.memory_type);
 }
 
-Result<void> GpuBuffer::write_result(const Engine& engine, const void* data, const vk::DeviceSize size, const vk::DeviceSize offset) const {
+Result<void> GpuBuffer::write_result(
+    const Engine& engine, const void* data, const vk::DeviceSize size, const vk::DeviceSize offset
+) const {
     ASSERT(engine.allocator != nullptr);
     ASSERT(allocation != nullptr);
     ASSERT(buffer != nullptr);
@@ -718,7 +736,10 @@ Result<StagingGpuImage> StagingGpuImage::create(const Engine& engine, const Conf
     return ok<StagingGpuImage>(allocation, image);
 }
 
-Result<void> StagingGpuImage::write(const Engine& engine, const Data& data, const vk::ImageLayout final_layout, const vk::ImageSubresourceRange& subresource) const {
+Result<void> StagingGpuImage::write(
+    const Engine& engine, const Data& data, const vk::ImageLayout final_layout,
+    const vk::ImageSubresourceRange& subresource
+) const {
     ASSERT(engine.allocator != nullptr);
     ASSERT(allocation != nullptr);
     ASSERT(image != nullptr);
@@ -730,7 +751,9 @@ Result<void> StagingGpuImage::write(const Engine& engine, const Data& data, cons
 
     const VkDeviceSize size = data.extent.width * data.extent.height * data.extent.depth * data.alignment;
 
-    const auto staging_buffer = GpuBuffer::create_result(engine, {size, vk::BufferUsageFlagBits::eTransferSrc, GpuBuffer::MemoryType::Staging});
+    const auto staging_buffer = GpuBuffer::create_result(engine, {
+        size, vk::BufferUsageFlagBits::eTransferSrc, GpuBuffer::MemoryType::Staging
+    });
     if (staging_buffer.has_err())
         return staging_buffer.err();
     defer(vmaDestroyBuffer(engine.allocator, staging_buffer->buffer, staging_buffer->allocation));
@@ -744,7 +767,10 @@ Result<void> StagingGpuImage::write(const Engine& engine, const Data& data, cons
             .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
             .build_and_run();
 
-        const vk::BufferImageCopy2 copy_region = {.imageSubresource = {subresource.aspectMask, 0, 0, 1}, .imageExtent = data.extent};
+        const vk::BufferImageCopy2 copy_region = {
+            .imageSubresource = {subresource.aspectMask, 0, 0, 1},
+            .imageExtent = data.extent
+        };
         cmd.copyBufferToImage2({
             .srcBuffer = staging_buffer->buffer,
             .dstImage = image,
@@ -777,7 +803,9 @@ Result<GpuImage> GpuImage::create_result(const Engine& engine, const Config& con
     ASSERT(config.sample_count != vk::SampleCountFlagBits{});
     ASSERT(config.mip_levels > 0);
 
-    const auto staging = StagingGpuImage::create(engine, {config.extent, config.format, config.usage, config.sample_count, config.mip_levels});
+    const auto staging = StagingGpuImage::create(engine, {
+        config.extent, config.format, config.usage, config.sample_count, config.mip_levels
+    });
     if (staging.has_err())
         return Err::CouldNotCreateGpuImage;
 
@@ -832,7 +860,10 @@ Result<GpuImage> GpuImage::create_cubemap(const Engine& engine, const std::files
     if (staging_image.has_err())
         return staging_image.err();
     defer(staging_image->destroy(engine));
-    const auto staging_write = staging_image->write(engine, {data->pixels.get(), 4, staging_extent}, vk::ImageLayout::eTransferSrcOptimal);
+    const auto staging_write = staging_image->write(engine,
+        {data->pixels.get(), 4, staging_extent},
+        vk::ImageLayout::eTransferSrcOptimal
+    );
     if (staging_write.has_err())
         return staging_write.err();
 
@@ -937,7 +968,13 @@ Result<GpuImage> GpuImage::create_cubemap(const Engine& engine, const std::files
     return ok<GpuImage>(allocation, image, view.value);
 }
 
-Result<void> GpuImage::generate_mipmaps_result(const Engine& engine, const u32 mip_levels, const vk::Extent3D extent, const vk::Format format, const vk::ImageLayout final_layout) const {
+Result<void> GpuImage::generate_mipmaps_result(
+    const Engine& engine,
+    const u32 mip_levels,
+    const vk::Extent3D extent,
+    const vk::Format format,
+    const vk::ImageLayout final_layout
+) const {
     ASSERT(engine.gpu != nullptr);
     ASSERT(image != nullptr);
     ASSERT(mip_levels > 1);
@@ -1042,10 +1079,42 @@ Result<vk::Sampler> create_sampler_result(const Engine& engine, const SamplerCon
     return ok(sampler.value);
 }
 
-Result<vk::DescriptorSetLayout> create_descriptor_set_layout(const Engine& engine, const std::span<const vk::DescriptorSetLayoutBinding> bindings) {
+Result<vk::DescriptorPool> create_descriptor_pool(
+    const Engine& engine, const u32 max_sets,
+    const std::span<const vk::DescriptorPoolSize> descriptors
+) {
     ASSERT(engine.device != nullptr);
+    ASSERT(max_sets >= 1);
+    ASSERT(!descriptors.empty());
 
+    const auto pool = engine.device.createDescriptorPool({
+        .maxSets = max_sets, 
+        .poolSizeCount = to_u32(descriptors.size()), 
+        .pPoolSizes = descriptors.data(),
+    });
+    if (pool.result != vk::Result::eSuccess)
+        return Err::CouldNotCreateVkDescriptorPool;
+
+    ASSERT(pool.value != nullptr);
+    return ok(pool.value);
+}
+
+Result<vk::DescriptorSetLayout> create_descriptor_set_layout(
+    const Engine& engine,
+    const std::span<const vk::DescriptorSetLayoutBinding> bindings,
+    const std::span<const vk::DescriptorBindingFlags> flags
+) {
+    ASSERT(engine.device != nullptr);
+    ASSERT(!bindings.empty());
+    if (!flags.empty())
+        ASSERT(flags.size() == bindings.size());
+
+    const vk::DescriptorSetLayoutBindingFlagsCreateInfo flag_info = {
+        .bindingCount = to_u32(flags.size()),
+        .pBindingFlags = flags.data(),
+    };
     const auto layout = engine.device.createDescriptorSetLayout({
+        .pNext = flags.empty() ? nullptr : &flag_info,
         .bindingCount = to_u32(bindings.size()),
         .pBindings = bindings.data(),
     });
@@ -1056,7 +1125,11 @@ Result<vk::DescriptorSetLayout> create_descriptor_set_layout(const Engine& engin
     return ok(layout.value);
 }
 
-Result<void> allocate_descriptor_sets(const Engine& engine, const vk::DescriptorPool pool, const std::span<const vk::DescriptorSetLayout> layouts, const std::span<vk::DescriptorSet> out_sets) {
+Result<void> allocate_descriptor_sets(
+    const Engine& engine, const vk::DescriptorPool pool,
+    const std::span<const vk::DescriptorSetLayout> layouts,
+    const std::span<vk::DescriptorSet> out_sets
+) {
     ASSERT(engine.device != nullptr);
     ASSERT(pool != nullptr);
     ASSERT(!layouts.empty());
@@ -1084,7 +1157,11 @@ Result<void> allocate_descriptor_sets(const Engine& engine, const vk::Descriptor
     return ok();
 }
 
-void write_uniform_buffer_descriptor(const Engine& engine, const vk::DescriptorSet set, const u32 binding, const vk::Buffer buffer, const vk::DeviceSize size, const vk::DeviceSize offset) {
+void write_uniform_buffer_descriptor(
+    const Engine& engine, const vk::DescriptorSet set, const u32 binding,
+    const vk::Buffer buffer, const vk::DeviceSize size, const vk::DeviceSize offset,
+    const u32 binding_array_index
+) {
     ASSERT(engine.device != nullptr);
     ASSERT(set != nullptr);
     ASSERT(buffer != nullptr);
@@ -1094,6 +1171,7 @@ void write_uniform_buffer_descriptor(const Engine& engine, const vk::DescriptorS
     const vk::WriteDescriptorSet descriptor_write = {
         .dstSet = set,
         .dstBinding = binding,
+        .dstArrayElement = binding_array_index,
         .descriptorCount = 1,
         .descriptorType = vk::DescriptorType::eUniformBuffer,
         .pBufferInfo = &buffer_info,
@@ -1101,7 +1179,11 @@ void write_uniform_buffer_descriptor(const Engine& engine, const vk::DescriptorS
     engine.device.updateDescriptorSets({descriptor_write}, {});
 }
 
-void write_image_sampler_descriptor(const Engine& engine, const vk::DescriptorSet set, const u32 binding, const vk::Sampler sampler, const vk::ImageView view) {
+void write_image_sampler_descriptor(
+    const Engine& engine, const vk::DescriptorSet set, const u32 binding,
+    const vk::Sampler sampler, const vk::ImageView view,
+    const u32 binding_array_index
+) {
     ASSERT(engine.device != nullptr);
     ASSERT(set != nullptr);
     ASSERT(sampler != nullptr);
@@ -1111,6 +1193,7 @@ void write_image_sampler_descriptor(const Engine& engine, const vk::DescriptorSe
     const vk::WriteDescriptorSet descriptor_write = {
         .dstSet = set,
         .dstBinding = binding,
+        .dstArrayElement = binding_array_index,
         .descriptorCount = 1,
         .descriptorType = vk::DescriptorType::eCombinedImageSampler,
         .pImageInfo = &image_info,
@@ -1169,7 +1252,11 @@ Result<vk::ShaderEXT> create_unlinked_shader(const Engine& engine, const ShaderC
     return ok(shader.value);
 }
 
-Result<void> create_linked_shaders(const Engine& engine, const std::span<vk::ShaderEXT> out_shaders, const std::span<const ShaderConfig> configs) {
+Result<void> create_linked_shaders(
+    const Engine& engine,
+    const std::span<vk::ShaderEXT> out_shaders,
+    const std::span<const ShaderConfig> configs
+) {
     ASSERT(engine.device != nullptr);
     ASSERT(out_shaders.size() >= 2);
     ASSERT(configs.size() >= 2);
