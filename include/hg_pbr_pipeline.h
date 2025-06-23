@@ -47,13 +47,15 @@ public:
     }
 
     void update_projection(const Engine& engine, const glm::mat4& projection) const {
+        ASSERT(m_vp_buffer.allocation != nullptr);
+        ASSERT(m_vp_buffer.buffer != nullptr);
         m_vp_buffer.write(engine, projection, offsetof(ViewProjectionUniform, projection));
     }
 
     void update_camera(const Engine& engine, const Cameraf& camera);
 
     void queue_light(const glm::vec3 position, const glm::vec3 color) {
-        debug_assert(m_lights.size() <= MaxLights);
+        ASSERT(m_lights.size() <= MaxLights);
         m_lights.emplace_back(glm::vec4{position, 1.0f}, glm::vec4{color, 1.0});
     }
 
@@ -125,10 +127,10 @@ public:
         vk::Sampler sampler = {};
 
         void destroy(const Engine& engine) const {
-            debug_assert(engine.device != nullptr);
-            debug_assert(sampler != nullptr);
-
+            ASSERT(sampler != nullptr);
+            ASSERT(engine.device != nullptr);
             engine.device.destroySampler(sampler);
+
             image.destroy(engine);
         }
     };
@@ -164,7 +166,7 @@ public:
         Transform3Df transform = {};
     };
     void queue_model(const ModelHandle model, const Transform3Df& transform) {
-        debug_assert(model.index < m_models.size());
+        ASSERT(model.index < m_models.size());
         m_render_queue.emplace_back(model, transform);
     }
 

@@ -21,14 +21,14 @@ inline constexpr std::array ValidationLayers = {"VK_LAYER_KHRONOS_validation"};
 #endif
 constexpr std::array DeviceExtensions = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-    VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
     VK_EXT_SHADER_OBJECT_EXTENSION_NAME,
+    VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
 };
 
 static vk::Bool32 debug_callback(const vk::DebugUtilsMessageSeverityFlagBitsEXT severity, const vk::DebugUtilsMessageTypeFlagsEXT, const vk::DebugUtilsMessengerCallbackDataEXT* callback_data, void*) {
     std::cout << std::format("{}\n", callback_data->pMessage);
     if (severity & vk::DebugUtilsMessageSeverityFlagBitsEXT::eError)
-        __debugbreak();
+        ERROR("Vulkan error");
     return VK_FALSE;
 }
 
@@ -55,11 +55,12 @@ const vk::DebugUtilsMessengerCreateInfoEXT DebugUtilsMessengerCreateInfo = {
 #ifndef NDEBUG
     required_extensions->emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 #endif
+
     return required_extensions;
 }
 
 [[nodiscard]] static Result<bool> check_instance_extension_availability(const std::span<const char* const> required_extensions) {
-    debug_assert(!required_extensions.empty());
+    ASSERT(!required_extensions.empty());
 
     const auto extensions = vk::enumerateInstanceExtensionProperties();
     if (extensions.result != vk::Result::eSuccess)
@@ -101,11 +102,13 @@ static Result<vk::Instance> init_instance() {
     });
     if (instance.result != vk::Result::eSuccess)
         return Err::CouldNotCreateVkInstance;
+
+    ASSERT(instance.value != nullptr);
     return ok(instance.value);
 }
 
 static Result<u32> find_queue_family(const vk::PhysicalDevice gpu) {
-    debug_assert(gpu != nullptr);
+    ASSERT(gpu != nullptr);
 
     const auto queue_families = gpu.getQueueFamilyProperties();
     const auto queue_family = std::ranges::find_if(queue_families, [](const vk::QueueFamilyProperties family) {
@@ -113,11 +116,12 @@ static Result<u32> find_queue_family(const vk::PhysicalDevice gpu) {
     });
     if (queue_family == queue_families.end())
         return Err::VkQueueFamilyUnavailable;
+
     return ok(static_cast<u32>(queue_family - queue_families.begin()));
 }
 
 static Result<vk::PhysicalDevice> find_gpu(const Engine& engine) {
-    debug_assert(engine.instance != nullptr);
+    ASSERT(engine.instance != nullptr);
 
     const auto gpus = engine.instance.enumeratePhysicalDevices();
     if (gpus.result != vk::Result::eSuccess)
@@ -142,6 +146,7 @@ static Result<vk::PhysicalDevice> find_gpu(const Engine& engine) {
         if (find_queue_family(gpu).has_err())
             continue;
 
+        ASSERT(gpu != nullptr);
         return ok(gpu);
     }
 
@@ -149,12 +154,35 @@ static Result<vk::PhysicalDevice> find_gpu(const Engine& engine) {
 }
 
 static Result<vk::Device> init_device(const Engine& engine) {
-    debug_assert(engine.gpu != nullptr);
-    debug_assert(engine.queue_family_index != UINT32_MAX);
+    ASSERT(engine.gpu != nullptr);
+    ASSERT(engine.queue_family_index != UINT32_MAX);
 
-    vk::PhysicalDeviceShaderObjectFeaturesEXT shader_object_feature = {.pNext = nullptr, .shaderObject = vk::True};
-    vk::PhysicalDeviceBufferAddressFeaturesEXT buffer_address_feature = {.pNext = &shader_object_feature, .bufferDeviceAddress = vk::True};
-    vk::PhysicalDeviceDynamicRenderingFeaturesKHR dynamic_rendering_feature = {.pNext = &buffer_address_feature, .dynamicRendering = vk::True};
+    vk::PhysicalDeviceBufferAddressFeaturesEXT buffer_address_feature = {.pNext = nullptr, .bufferDeviceAddress = vk::True};
+    vk::PhysicalDeviceDescriptorIndexingFeatures descriptor_indexing_features = {
+        .pNext = &buffer_address_feature,
+        .shaderInputAttachmentArrayDynamicIndexing = {},
+        .shaderUniformTexelBufferArrayDynamicIndexing = {},
+        .shaderStorageTexelBufferArrayDynamicIndexing = {},
+        .shaderUniformBufferArrayNonUniformIndexing = {},
+        .shaderSampledImageArrayNonUniformIndexing = {},
+        .shaderStorageBufferArrayNonUniformIndexing = {},
+        .shaderStorageImageArrayNonUniformIndexing = {},
+        .shaderInputAttachmentArrayNonUniformIndexing = {},
+        .shaderUniformTexelBufferArrayNonUniformIndexing = {},
+        .shaderStorageTexelBufferArrayNonUniformIndexing = {},
+        .descriptorBindingUniformBufferUpdateAfterBind = {},
+        .descriptorBindingSampledImageUpdateAfterBind = {},
+        .descriptorBindingStorageImageUpdateAfterBind = {},
+        .descriptorBindingStorageBufferUpdateAfterBind = {},
+        .descriptorBindingUniformTexelBufferUpdateAfterBind = {},
+        .descriptorBindingStorageTexelBufferUpdateAfterBind = {},
+        .descriptorBindingUpdateUnusedWhilePending = {},
+        .descriptorBindingPartiallyBound = {},
+        .descriptorBindingVariableDescriptorCount = {},
+        .runtimeDescriptorArray = {},
+    };
+    vk::PhysicalDeviceShaderObjectFeaturesEXT shader_object_feature = {.pNext = &descriptor_indexing_features, .shaderObject = vk::True};
+    vk::PhysicalDeviceDynamicRenderingFeatures dynamic_rendering_feature = {.pNext = &shader_object_feature, .dynamicRendering = vk::True};
     vk::PhysicalDeviceSynchronization2Features synchronization2_feature = {.pNext = &dynamic_rendering_feature, .synchronization2 = vk::True};
     constexpr vk::PhysicalDeviceFeatures features = {
         .sampleRateShading = vk::True,
@@ -180,13 +208,15 @@ static Result<vk::Device> init_device(const Engine& engine) {
     });
     if (device.result != vk::Result::eSuccess)
         return Err::CouldNotCreateVkDevice;
+
+    ASSERT(device.value != nullptr);
     return ok(device.value);
 }
 
 static Result<VmaAllocator> init_allocator(const Engine& engine) {
-    debug_assert(engine.instance != nullptr);
-    debug_assert(engine.gpu != nullptr);
-    debug_assert(engine.device != nullptr);
+    ASSERT(engine.instance != nullptr);
+    ASSERT(engine.gpu != nullptr);
+    ASSERT(engine.device != nullptr);
 
     VmaAllocatorCreateInfo info = {};
     info.physicalDevice = engine.gpu;
@@ -205,7 +235,7 @@ static bool s_engine_initialized = false;
 
 Result<Engine> Engine::create() {
     if (s_engine_initialized)
-        critical_error("Cannot initialize more than one engine");
+        ERROR("Cannot initialize more than one engine");
 
     auto engine = ok<Engine>();
 
@@ -271,38 +301,49 @@ Result<Engine> Engine::create() {
     engine->single_time_command_pool = transient_pool.value;
 
     s_engine_initialized = true;
+    ASSERT(engine->instance != nullptr);
+    ASSERT(engine->debug_messenger != nullptr);
+    ASSERT(engine->gpu != nullptr);
+    ASSERT(engine->device != nullptr);
+    ASSERT(engine->allocator != nullptr);
+    ASSERT(engine->queue_family_index != UINT32_MAX);
+    ASSERT(engine->queue != nullptr);
+    ASSERT(engine->command_pool != nullptr);
+    ASSERT(engine->single_time_command_pool != nullptr);
     return engine;
 }
 
 void Engine::destroy() const {
     if (!s_engine_initialized)
-        critical_error("Cannot destroy uninitialized engine");
+        ERROR("Cannot destroy uninitialized engine");
 
-    debug_assert(single_time_command_pool != nullptr);
+    ASSERT(single_time_command_pool != nullptr);
     device.destroyCommandPool(single_time_command_pool);
-    debug_assert(command_pool != nullptr);
+    ASSERT(command_pool != nullptr);
     device.destroyCommandPool(command_pool);
 
-    debug_assert(allocator != nullptr);
+    ASSERT(allocator != nullptr);
     vmaDestroyAllocator(allocator);
 
-    debug_assert(device != nullptr);
+    ASSERT(device != nullptr);
     device.destroy();
 
-    debug_assert(debug_messenger != nullptr);
+    ASSERT(debug_messenger != nullptr);
     instance.destroyDebugUtilsMessengerEXT(debug_messenger);
 
-    debug_assert(instance != nullptr);
+    ASSERT(instance != nullptr);
     instance.destroy();
 
     s_engine_initialized = false;
 }
 
 Result<Window> Window::create(const Engine& engine, const bool fullscreen, const i32 width, const i32 height) {
-    debug_assert(engine.device != nullptr);
+    ASSERT(engine.instance != nullptr);
+    ASSERT(engine.device != nullptr);
+    ASSERT(engine.command_pool != nullptr);
     if (!fullscreen) {
-        debug_assert(width > 0);
-        debug_assert(height > 0);
+        ASSERT(width > 0);
+        ASSERT(height > 0);
     }
 
     auto window = ok<Window>();
@@ -325,7 +366,6 @@ Result<Window> Window::create(const Engine& engine, const bool fullscreen, const
             return Err::GlfwFailure;
     }
 
-    debug_assert(engine.instance != nullptr);
     VkSurfaceKHR surface = VK_NULL_HANDLE;
     const auto surface_result = glfwCreateWindowSurface(engine.instance, window->m_window, nullptr, &surface);
     if (surface_result != VK_SUCCESS)
@@ -336,7 +376,6 @@ Result<Window> Window::create(const Engine& engine, const bool fullscreen, const
     if (window_result.has_err())
         return window_result.err();
 
-    debug_assert(engine.command_pool != nullptr);
     const vk::CommandBufferAllocateInfo cmd_info{
         .commandPool = engine.command_pool,
         .commandBufferCount = MaxFramesInFlight,
@@ -364,42 +403,63 @@ Result<Window> Window::create(const Engine& engine, const bool fullscreen, const
         semaphore = new_semaphore.value;
     }
 
+    ASSERT(window->m_window != nullptr);
+    ASSERT(window->m_surface != nullptr);
+    ASSERT(window->m_extent != nullptr);
+    ASSERT(window->m_swapchain != nullptr);
+    for (const auto image : window->m_swapchain_images) {
+        ASSERT(image != nullptr);
+    }
+    for (const auto cmd : window->m_command_buffers) {
+        ASSERT(cmd != nullptr);
+    }
+    for (const auto fence : window->m_frame_finished_fences) {
+        ASSERT(fence != nullptr);
+    }
+    for (const auto semaphore : window->m_image_available_semaphores) {
+        ASSERT(semaphore != nullptr);
+    }
+    for (const auto semaphore : window->m_ready_to_present_semaphores) {
+        ASSERT(semaphore != nullptr);
+    }
     return window;
 }
 
 void Window::destroy(const Engine& engine) const {
-    debug_assert(engine.device != nullptr);
+    ASSERT(engine.device != nullptr);
 
-    for (auto& fence : m_frame_finished_fences) {
-        debug_assert(fence != nullptr);
+    for (const auto fence : m_frame_finished_fences) {
+        ASSERT(fence != nullptr);
         engine.device.destroyFence(fence);
     }
-    for (auto& semaphore : m_image_available_semaphores) {
-        debug_assert(semaphore != nullptr);
+    for (const auto semaphore : m_image_available_semaphores) {
+        ASSERT(semaphore != nullptr);
         engine.device.destroySemaphore(semaphore);
     }
-    for (auto& semaphore : m_ready_to_present_semaphores) {
-        debug_assert(semaphore != nullptr);
+    for (const auto semaphore : m_ready_to_present_semaphores) {
+        ASSERT(semaphore != nullptr);
         engine.device.destroySemaphore(semaphore);
     }
 
-    debug_assert(engine.command_pool != nullptr);
-    debug_assert(m_command_buffers[0] != nullptr);
+    ASSERT(engine.command_pool != nullptr);
+    for (const auto cmd : m_command_buffers) {
+        ASSERT(cmd != nullptr);
+    }
     engine.device.freeCommandBuffers(engine.command_pool, to_u32(m_command_buffers.size()), m_command_buffers.data());
 
-    debug_assert(m_swapchain != nullptr);
+    ASSERT(m_swapchain != nullptr);
     engine.device.destroySwapchainKHR(m_swapchain);
 
-    debug_assert(m_surface != nullptr);
+    ASSERT(m_surface != nullptr);
     engine.instance.destroySurfaceKHR(m_surface);
 
-    debug_assert(m_window != nullptr);
+    ASSERT(m_window != nullptr);
     glfwDestroyWindow(m_window);
 }
 
 Result<void> Window::resize(const Engine& engine) {
-    debug_assert(engine.gpu != nullptr);
-    debug_assert(engine.device != nullptr);
+    ASSERT(engine.gpu != nullptr);
+    ASSERT(engine.device != nullptr);
 
     const auto [surface_result, surface_capabilities] = engine.gpu.getSurfaceCapabilitiesKHR(m_surface);
     if (surface_result != vk::Result::eSuccess)
@@ -440,12 +500,19 @@ Result<void> Window::resize(const Engine& engine) {
     if (image_result != vk::Result::eSuccess)
         return Err::VkSwapchainImagesUnavailable;
 
+    ASSERT(m_swapchain != nullptr);
+    for (const auto image : m_swapchain_images) {
+        ASSERT(image != nullptr);
+    }
     return ok();
 }
 
 Result<vk::CommandBuffer> Window::begin_frame(const Engine& engine) {
-    debug_assert(engine.device != nullptr);
-    debug_assert(!m_recording);
+    ASSERT(!m_recording);
+    ASSERT(current_cmd() != nullptr);
+    ASSERT(is_frame_finished() != nullptr);
+    ASSERT(is_image_available() != nullptr);
+    ASSERT(engine.device != nullptr);
 
     const auto wait_result = engine.device.waitForFences({is_frame_finished()}, vk::True, 1'000'000'000);
     if (wait_result != vk::Result::eSuccess)
@@ -459,10 +526,10 @@ Result<vk::CommandBuffer> Window::begin_frame(const Engine& engine) {
         return Err::CouldNotAcquireVkSwapchainImage;
     m_current_image_index = acquire_result.value;
 
-    debug_assert(current_cmd() != nullptr);
     const auto begin_result = current_cmd().begin({.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
     if (begin_result != vk::Result::eSuccess)
         return Err::CouldNotBeginVkCommandBuffer;
+    m_recording = true;
 
     const vk::Viewport viewport = {0.0f, 0.0f, static_cast<f32>(m_extent.width), static_cast<f32>(m_extent.height), 0.0f, 1.0f};
     current_cmd().setViewportWithCount({viewport});
@@ -483,26 +550,31 @@ Result<vk::CommandBuffer> Window::begin_frame(const Engine& engine) {
     current_cmd().setRasterizationSamplesEXT(vk::SampleCountFlagBits::e1);
     current_cmd().setSampleMaskEXT(vk::SampleCountFlagBits::e1, vk::SampleMask{0xff});
     current_cmd().setAlphaToCoverageEnableEXT(vk::False);
-    current_cmd().setColorWriteMaskEXT(0, {vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA});
+    current_cmd().setColorWriteMaskEXT(0, {
+          vk::ColorComponentFlagBits::eR
+        | vk::ColorComponentFlagBits::eG
+        | vk::ColorComponentFlagBits::eB
+        | vk::ColorComponentFlagBits::eA
+    });
     current_cmd().setColorBlendEnableEXT(0, {vk::False});
 
-    m_recording = true;
     return ok(current_cmd());
 }
 
 Result<void> Window::end_frame(const Engine& engine) {
-    debug_assert(engine.device != nullptr);
-    debug_assert(m_recording);
+    ASSERT(m_recording);
+    ASSERT(m_swapchain != nullptr);
+    ASSERT(current_cmd() != nullptr);
+    ASSERT(is_image_available() != nullptr);
+    ASSERT(is_ready_to_present() != nullptr);
+    ASSERT(engine.device != nullptr);
 
-    debug_assert(current_cmd() != nullptr);
     const auto end_result = current_cmd().end();
     if (end_result != vk::Result::eSuccess)
         return Err::CouldNotEndVkCommandBuffer;
     m_recording = false;
 
     constexpr vk::PipelineStageFlags wait_stage = vk::PipelineStageFlagBits::eColorAttachmentOutput;
-    debug_assert(is_image_available() != nullptr);
-    debug_assert(is_ready_to_present() != nullptr);
     vk::SubmitInfo submit_info = {
         .waitSemaphoreCount = 1,
         .pWaitSemaphores = &is_image_available(),
@@ -517,8 +589,6 @@ Result<void> Window::end_frame(const Engine& engine) {
     if (submit_result != vk::Result::eSuccess)
         return Err::CouldNotSubmitVkCommandBuffer;
 
-    debug_assert(is_ready_to_present() != nullptr);
-    debug_assert(m_swapchain != nullptr);
     const vk::PresentInfoKHR present_info = {
         .waitSemaphoreCount = 1,
         .pWaitSemaphores = &is_ready_to_present(),
@@ -537,9 +607,9 @@ Result<void> Window::end_frame(const Engine& engine) {
 }
 
 Result<GpuBuffer> GpuBuffer::create_result(const Engine& engine, const Config& config) {
-    debug_assert(engine.allocator != nullptr);
-    debug_assert(config.size != 0);
-    debug_assert(config.usage != vk::BufferUsageFlags{});
+    ASSERT(engine.allocator != nullptr);
+    ASSERT(config.size != 0);
+    ASSERT(config.usage != vk::BufferUsageFlags{});
 
     VkBufferCreateInfo buffer_info = {};
     buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -557,7 +627,7 @@ Result<GpuBuffer> GpuBuffer::create_result(const Engine& engine, const Config& c
         alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
         alloc_info.flags = 0;
     } else {
-        debug_assert(!"Invalid buffer memory type");
+        ERROR("Invalid buffer memory type");
     }
 
     VkBuffer buffer = nullptr;
@@ -566,16 +636,20 @@ Result<GpuBuffer> GpuBuffer::create_result(const Engine& engine, const Config& c
     if (buffer_result != VK_SUCCESS) {
         return Err::CouldNotCreateGpuBuffer;
     }
+
+    ASSERT(allocation != nullptr);
+    ASSERT(buffer != nullptr);
     return ok<GpuBuffer>(allocation, buffer, config.memory_type);
 }
 
 Result<void> GpuBuffer::write_result(const Engine& engine, const void* data, const vk::DeviceSize size, const vk::DeviceSize offset) const {
-    debug_assert(engine.allocator != nullptr);
-    debug_assert(allocation != nullptr);
-    debug_assert(buffer != nullptr);
-    debug_assert(data != nullptr);
-    debug_assert(size != 0);
-    debug_assert((offset == 0 && memory_type == Staging) || memory_type != Staging);
+    ASSERT(engine.allocator != nullptr);
+    ASSERT(allocation != nullptr);
+    ASSERT(buffer != nullptr);
+    ASSERT(data != nullptr);
+    ASSERT(size != 0);
+    if (memory_type == Staging)
+        ASSERT(offset == 0);
 
     if (memory_type == RandomAccess || memory_type == Staging) {
         const auto copy_result = vmaCopyMemoryToAllocation(engine.allocator, data, allocation, offset, size);
@@ -584,7 +658,7 @@ Result<void> GpuBuffer::write_result(const Engine& engine, const void* data, con
         }
         return ok();
     }
-    debug_assert(memory_type == DeviceLocal);
+    ASSERT(memory_type == DeviceLocal);
 
     const auto staging_buffer = create_result(engine, {size, vk::BufferUsageFlagBits::eTransferSrc, Staging});
     if (staging_buffer.has_err())
@@ -603,15 +677,15 @@ Result<void> GpuBuffer::write_result(const Engine& engine, const void* data, con
 }
 
 Result<StagingGpuImage> StagingGpuImage::create(const Engine& engine, const Config& config) {
-    debug_assert(engine.device != nullptr);
-    debug_assert(engine.allocator != nullptr);
-    debug_assert(config.extent.width > 0);
-    debug_assert(config.extent.height > 0);
-    debug_assert(config.extent.depth > 0);
-    debug_assert(config.format != vk::Format::eUndefined);
-    debug_assert(config.usage != vk::ImageUsageFlags{});
-    debug_assert(config.sample_count != vk::SampleCountFlagBits{});
-    debug_assert(config.mip_levels > 0);
+    ASSERT(engine.device != nullptr);
+    ASSERT(engine.allocator != nullptr);
+    ASSERT(config.extent.width > 0);
+    ASSERT(config.extent.height > 0);
+    ASSERT(config.extent.depth > 0);
+    ASSERT(config.format != vk::Format::eUndefined);
+    ASSERT(config.usage != vk::ImageUsageFlags{});
+    ASSERT(config.sample_count != vk::SampleCountFlagBits{});
+    ASSERT(config.mip_levels > 0);
 
     VkImageType dimensions = VK_IMAGE_TYPE_3D;
     if (config.extent.depth == 1) {
@@ -639,18 +713,20 @@ Result<StagingGpuImage> StagingGpuImage::create(const Engine& engine, const Conf
     if (image_result != VK_SUCCESS)
         return Err::CouldNotCreateGpuImage;
 
+    ASSERT(allocation != nullptr);
+    ASSERT(image != nullptr);
     return ok<StagingGpuImage>(allocation, image);
 }
 
 Result<void> StagingGpuImage::write(const Engine& engine, const Data& data, const vk::ImageLayout final_layout, const vk::ImageSubresourceRange& subresource) const {
-    debug_assert(engine.allocator != nullptr);
-    debug_assert(allocation != nullptr);
-    debug_assert(image != nullptr);
-    debug_assert(data.ptr != nullptr);
-    debug_assert(data.alignment > 0);
-    debug_assert(data.extent.width > 0);
-    debug_assert(data.extent.height > 0);
-    debug_assert(data.extent.depth > 0);
+    ASSERT(engine.allocator != nullptr);
+    ASSERT(allocation != nullptr);
+    ASSERT(image != nullptr);
+    ASSERT(data.ptr != nullptr);
+    ASSERT(data.alignment > 0);
+    ASSERT(data.extent.width > 0);
+    ASSERT(data.extent.height > 0);
+    ASSERT(data.extent.depth > 0);
 
     const VkDeviceSize size = data.extent.width * data.extent.height * data.extent.depth * data.alignment;
 
@@ -690,16 +766,16 @@ Result<void> StagingGpuImage::write(const Engine& engine, const Data& data, cons
 }
 
 Result<GpuImage> GpuImage::create_result(const Engine& engine, const Config& config) {
-    debug_assert(engine.device != nullptr);
-    debug_assert(engine.allocator != nullptr);
-    debug_assert(config.extent.width > 0);
-    debug_assert(config.extent.height > 0);
-    debug_assert(config.extent.depth > 0);
-    debug_assert(config.format != vk::Format::eUndefined);
-    debug_assert(config.usage != vk::ImageUsageFlags{});
-    debug_assert(config.aspect_flags != vk::ImageAspectFlagBits{});
-    debug_assert(config.sample_count != vk::SampleCountFlagBits{});
-    debug_assert(config.mip_levels > 0);
+    ASSERT(engine.device != nullptr);
+    ASSERT(engine.allocator != nullptr);
+    ASSERT(config.extent.width > 0);
+    ASSERT(config.extent.height > 0);
+    ASSERT(config.extent.depth > 0);
+    ASSERT(config.format != vk::Format::eUndefined);
+    ASSERT(config.usage != vk::ImageUsageFlags{});
+    ASSERT(config.aspect_flags != vk::ImageAspectFlagBits{});
+    ASSERT(config.sample_count != vk::SampleCountFlagBits{});
+    ASSERT(config.mip_levels > 0);
 
     const auto staging = StagingGpuImage::create(engine, {config.extent, config.format, config.usage, config.sample_count, config.mip_levels});
     if (staging.has_err())
@@ -731,12 +807,16 @@ Result<GpuImage> GpuImage::create_result(const Engine& engine, const Config& con
             return Err::CouldNotCreateGpuImage;
     }
 
+    ASSERT(staging->allocation != nullptr);
+    ASSERT(staging->image != nullptr);
+    ASSERT(view.value != nullptr);
     return ok<GpuImage>(staging->allocation, staging->image, view.value);
 }
 
 Result<GpuImage> GpuImage::create_cubemap(const Engine& engine, const std::filesystem::path path) {
-    debug_assert(engine.device != nullptr);
-    debug_assert(engine.allocator != nullptr);
+    ASSERT(engine.device != nullptr);
+    ASSERT(engine.allocator != nullptr);
+    ASSERT(!path.empty());
 
     const auto data = ImageData::load(path);
     if (data.has_err())
@@ -851,18 +931,22 @@ Result<GpuImage> GpuImage::create_cubemap(const Engine& engine, const std::files
     if (submit_result.has_err())
         return Err::CouldNotWriteGpuImage;
 
+    ASSERT(allocation != nullptr);
+    ASSERT(image != nullptr);
+    ASSERT(view.value != nullptr);
     return ok<GpuImage>(allocation, image, view.value);
 }
 
 Result<void> GpuImage::generate_mipmaps_result(const Engine& engine, const u32 mip_levels, const vk::Extent3D extent, const vk::Format format, const vk::ImageLayout final_layout) const {
-    debug_assert(image != nullptr);
-    debug_assert(extent.width > 0);
-    debug_assert(extent.height > 0);
-    debug_assert(extent.depth > 0);
-    debug_assert(format != vk::Format::eUndefined);
-    debug_assert(final_layout != vk::ImageLayout::eUndefined);
+    ASSERT(engine.gpu != nullptr);
+    ASSERT(image != nullptr);
+    ASSERT(mip_levels > 1);
+    ASSERT(extent.width > 0);
+    ASSERT(extent.height > 0);
+    ASSERT(extent.depth > 0);
+    ASSERT(format != vk::Format::eUndefined);
+    ASSERT(final_layout != vk::ImageLayout::eUndefined);
 
-    debug_assert(engine.gpu != nullptr);
     const auto format_properties = engine.gpu.getFormatProperties(format);
     if (!(format_properties.optimalTilingFeatures & vk::FormatFeatureFlagBits::eSampledImageFilterLinear))
         return Err::CouldNotGenerateMipmaps;
@@ -924,7 +1008,9 @@ Result<void> GpuImage::generate_mipmaps_result(const Engine& engine, const u32 m
 }
 
 Result<vk::Sampler> create_sampler_result(const Engine& engine, const SamplerConfig& config) {
-    debug_assert(engine.gpu != nullptr);
+    ASSERT(engine.device != nullptr);
+    ASSERT(engine.gpu != nullptr);
+    ASSERT(config.mip_levels >= 1);
     const auto limits = engine.gpu.getProperties().limits;
 
     vk::SamplerCreateInfo sampler_info = {
@@ -945,51 +1031,64 @@ Result<vk::Sampler> create_sampler_result(const Engine& engine, const SamplerCon
         sampler_info.minFilter = vk::Filter::eNearest;
         sampler_info.mipmapMode = vk::SamplerMipmapMode::eNearest;
     } else {
-        debug_assert(!"Invalid sampler type");
+        ERROR("Invalid sampler type");
     }
 
-    debug_assert(engine.device != nullptr);
     const auto sampler = engine.device.createSampler(sampler_info);
     if (sampler.result != vk::Result::eSuccess)
         return Err::CouldNotCreateVkSampler;
+
+    ASSERT(sampler.value != nullptr);
     return ok(sampler.value);
 }
 
 Result<vk::DescriptorSetLayout> create_descriptor_set_layout(const Engine& engine, const std::span<const vk::DescriptorSetLayoutBinding> bindings) {
-    debug_assert(engine.device != nullptr);
+    ASSERT(engine.device != nullptr);
+
     const auto layout = engine.device.createDescriptorSetLayout({
         .bindingCount = to_u32(bindings.size()),
         .pBindings = bindings.data(),
     });
     if (layout.result != vk::Result::eSuccess)
         return Err::CouldNotCreateVkDescriptorSetLayout;
+
+    ASSERT(layout.value != nullptr);
     return ok(layout.value);
 }
 
 Result<void> allocate_descriptor_sets(const Engine& engine, const vk::DescriptorPool pool, const std::span<const vk::DescriptorSetLayout> layouts, const std::span<vk::DescriptorSet> out_sets) {
-    debug_assert(pool != nullptr);
-    debug_assert(!layouts.empty());
-    debug_assert(layouts[0] != nullptr);
-    debug_assert(!out_sets.empty());
-    debug_assert(out_sets[0] == nullptr);
-    debug_assert(layouts.size() == out_sets.size());
+    ASSERT(engine.device != nullptr);
+    ASSERT(pool != nullptr);
+    ASSERT(!layouts.empty());
+    for (const auto layout : layouts) {
+        ASSERT(layout != nullptr);
+    }
+    ASSERT(!out_sets.empty());
+    for (const auto set : out_sets) {
+        ASSERT(set == nullptr);
+    }
+    ASSERT(layouts.size() == out_sets.size());
 
     const vk::DescriptorSetAllocateInfo alloc_info = {
         .descriptorPool = pool,
         .descriptorSetCount = to_u32(layouts.size()),
         .pSetLayouts = layouts.data(),
     };
-    debug_assert(engine.device != nullptr);
     const auto set_result = engine.device.allocateDescriptorSets(&alloc_info, out_sets.data());
     if (set_result != vk::Result::eSuccess)
         return Err::CouldNotAllocateVkDescriptorSets;
+
+    for (const auto set : out_sets) {
+        ASSERT(set != nullptr);
+    }
     return ok();
 }
 
 void write_uniform_buffer_descriptor(const Engine& engine, const vk::DescriptorSet set, const u32 binding, const vk::Buffer buffer, const vk::DeviceSize size, const vk::DeviceSize offset) {
-    debug_assert(set != nullptr);
-    debug_assert(buffer != nullptr);
-    debug_assert(size != 0);
+    ASSERT(engine.device != nullptr);
+    ASSERT(set != nullptr);
+    ASSERT(buffer != nullptr);
+    ASSERT(size != 0);
 
     const vk::DescriptorBufferInfo buffer_info = {buffer, offset, size};
     const vk::WriteDescriptorSet descriptor_write = {
@@ -999,14 +1098,14 @@ void write_uniform_buffer_descriptor(const Engine& engine, const vk::DescriptorS
         .descriptorType = vk::DescriptorType::eUniformBuffer,
         .pBufferInfo = &buffer_info,
     };
-    debug_assert(engine.device != nullptr);
     engine.device.updateDescriptorSets({descriptor_write}, {});
 }
 
 void write_image_sampler_descriptor(const Engine& engine, const vk::DescriptorSet set, const u32 binding, const vk::Sampler sampler, const vk::ImageView view) {
-    debug_assert(set != nullptr);
-    debug_assert(sampler != nullptr);
-    debug_assert(view != nullptr);
+    ASSERT(engine.device != nullptr);
+    ASSERT(set != nullptr);
+    ASSERT(sampler != nullptr);
+    ASSERT(view != nullptr);
 
     const vk::DescriptorImageInfo image_info = {sampler, view, vk::ImageLayout::eShaderReadOnlyOptimal};
     const vk::WriteDescriptorSet descriptor_write = {
@@ -1016,12 +1115,11 @@ void write_image_sampler_descriptor(const Engine& engine, const vk::DescriptorSe
         .descriptorType = vk::DescriptorType::eCombinedImageSampler,
         .pImageInfo = &image_info,
     };
-    debug_assert(engine.device != nullptr);
     engine.device.updateDescriptorSets({descriptor_write}, {});
 }
 
 static Result<std::vector<char>> read_shader(const std::filesystem::path path) {
-    debug_assert(!path.empty());
+    ASSERT(!path.empty());
 
     auto file = std::ifstream{path, std::ios::ate | std::ios::binary};
     if (!file.is_open())
@@ -1036,14 +1134,16 @@ static Result<std::vector<char>> read_shader(const std::filesystem::path path) {
 
     if (code->empty())
         return Err::ShaderFileInvalid;
+
+    ASSERT(!code->empty());
     return code;
 }
 
 Result<vk::ShaderEXT> create_unlinked_shader(const Engine& engine, const ShaderConfig& config) {
-    debug_assert(engine.device != nullptr);
-    debug_assert(!config.path.empty());
-    debug_assert(config.code_type == vk::ShaderCodeTypeEXT::eSpirv && "binary shader code types untested");
-    debug_assert(config.stage != vk::ShaderStageFlagBits{0});
+    ASSERT(engine.device != nullptr);
+    ASSERT(!config.path.empty());
+    ASSERT(config.code_type == vk::ShaderCodeTypeEXT::eSpirv && "binary shader code types untested");
+    ASSERT(config.stage != vk::ShaderStageFlagBits{0});
 
     const auto code = read_shader(config.path);
     if (code.has_err())
@@ -1064,19 +1164,31 @@ Result<vk::ShaderEXT> create_unlinked_shader(const Engine& engine, const ShaderC
     });
     if (shader.result != vk::Result::eSuccess)
         return Err::CouldNotCreateVkShader;
+
+    ASSERT(shader.value != nullptr);
     return ok(shader.value);
 }
 
 Result<void> create_linked_shaders(const Engine& engine, const std::span<vk::ShaderEXT> out_shaders, const std::span<const ShaderConfig> configs) {
-    debug_assert(engine.device != nullptr);
-    debug_assert(configs.size() >= 2);
+    ASSERT(engine.device != nullptr);
+    ASSERT(out_shaders.size() >= 2);
+    ASSERT(configs.size() >= 2);
+    ASSERT(out_shaders.size() == configs.size());
+    for (const auto shader : out_shaders) {
+        ASSERT(shader == nullptr);
+    }
+    for (const auto& config : configs) {
+        ASSERT(!config.path.empty());
+        ASSERT(config.code_type == vk::ShaderCodeTypeEXT::eSpirv && "binary shader code types untested");
+        ASSERT(config.stage != vk::ShaderStageFlagBits{0});
+    }
 
     std::vector<std::vector<char>> codes = {};
     codes.reserve(configs.size());
     for (const auto& config : configs) {
-        debug_assert(!config.path.empty());
-        debug_assert(config.code_type == vk::ShaderCodeTypeEXT::eSpirv && "binary shader code types untested");
-        debug_assert(config.stage != vk::ShaderStageFlagBits{0});
+        ASSERT(!config.path.empty());
+        ASSERT(config.code_type == vk::ShaderCodeTypeEXT::eSpirv && "binary shader code types untested");
+        ASSERT(config.stage != vk::ShaderStageFlagBits{0});
 
         const auto code = read_shader(config.path);
         if (code.has_err())
@@ -1105,12 +1217,16 @@ Result<void> create_linked_shaders(const Engine& engine, const std::span<vk::Sha
     const auto shader_result = engine.device.createShadersEXT(to_u32(shader_infos.size()), shader_infos.data(), nullptr, out_shaders.data());
     if (shader_result != vk::Result::eSuccess)
         return Err::CouldNotCreateVkShader;
+
+    for (const auto shader : out_shaders) {
+        ASSERT(shader != nullptr);
+    }
     return ok();
 }
 
 Result<vk::CommandBuffer> begin_single_time_commands(const Engine& engine) {
-    debug_assert(engine.device != nullptr);
-    debug_assert(engine.single_time_command_pool != nullptr);
+    ASSERT(engine.device != nullptr);
+    ASSERT(engine.single_time_command_pool != nullptr);
 
     vk::CommandBufferAllocateInfo alloc_info = {
         .commandPool = engine.single_time_command_pool,
@@ -1125,12 +1241,14 @@ Result<vk::CommandBuffer> begin_single_time_commands(const Engine& engine) {
     if (begin_result != vk::Result::eSuccess)
         return Err::CouldNotBeginVkCommandBuffer;
 
+    ASSERT(*cmd != nullptr);
     return cmd;
 }
 
 Result<void> end_single_time_commands(const Engine& engine, const vk::CommandBuffer cmd) {
-    debug_assert(engine.device != nullptr);
-    debug_assert(engine.single_time_command_pool != nullptr);
+    ASSERT(engine.device != nullptr);
+    ASSERT(engine.single_time_command_pool != nullptr);
+    ASSERT(cmd != nullptr);
 
     const auto end_result = cmd.end();
     if (end_result != vk::Result::eSuccess)

@@ -13,7 +13,7 @@
 namespace hg {
 
 Result<ImageData> ImageData::load(const std::filesystem::path path) {
-    debug_assert(!path.empty());
+    ASSERT(!path.empty());
 
     int width = 0, height = 0, channels = 0;
     const auto pixels = stbi_load(path.string().data(), &width, &height, &channels, STBI_rgb_alpha);
@@ -22,10 +22,12 @@ Result<ImageData> ImageData::load(const std::filesystem::path path) {
     if (width <= 0 || height <= 0 || channels <= 0)
         return Err::ImageFileInvalid;
 
-    return ok<ImageData>(std::unique_ptr<u8[], Deleter>{pixels}, width, height, channels);
+    return ok<ImageData>(std::unique_ptr<u8[], decltype(FreeDeleter)>{pixels}, width, height, channels);
 }
 
 Result<ModelData> ModelData::load_gltf(const std::filesystem::path path) {
+    ASSERT(!path.empty());
+
     fastgltf::Parser parser;
 
     auto buffer = fastgltf::GltfDataBuffer::FromPath(path);
@@ -78,6 +80,10 @@ Result<ModelData> ModelData::load_gltf(const std::filesystem::path path) {
         }
     }
 
+    ASSERT(!model->mesh.indices.empty());
+    ASSERT(!model->mesh.positions.empty());
+    ASSERT(!model->mesh.normals.empty());
+    ASSERT(!model->mesh.tex_coords.empty());
     return model;
 }
 

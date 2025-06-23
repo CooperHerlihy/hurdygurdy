@@ -8,14 +8,13 @@
 
 namespace hg {
 
+
 struct ImageData {
 private:
-    struct Deleter {
-        void operator()(u8* ptr) { std::free(ptr); }
-    };
+    static constexpr auto FreeDeleter = [](u8* ptr) { std::free(ptr); };
 
 public:
-    std::unique_ptr<u8[], Deleter> pixels;
+    std::unique_ptr<u8[], decltype(FreeDeleter)> pixels;
     i32 width = 0;
     i32 height = 0;
     i32 channels = 0;

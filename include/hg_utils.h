@@ -1,5 +1,6 @@
 #pragma once
 
+#include <assert.h>
 #include <chrono>
 #include <cstdint>
 #include <format>
@@ -25,20 +26,34 @@ using usize = std::size_t;
 using f32 = float;
 using f64 = double;
 
+namespace hg {
+
 #ifdef NDEBUG
-#define debug_assert(condition) ((void)0)
-#else
-#define debug_assert(condition)                                                                        \
-if (!(condition)) {                                                                                    \
-    std::cerr << std::format("Failed debug assert: {}\n    {}, {}\n", #condition, __FILE__, __LINE__); \
-    __debugbreak();                                                                                    \
+
+inline void hg_assert_internal(const std::string_view message) {
+    std::cerr << std::format("Failed assertion: {}\n", message);
+    std::terminate();
 }
+
+#define ASSERT(condition) if (!(condition)) [[unlikely]] hg_assert_internal(#condition);
+
+#else
+
+inline void hg_assert_internal(const std::string_view message, const std::string_view file, const int line) {
+    std::cerr << std::format("Failed assertion: {}\n    File: {}\n    Line: {}\n", message, file, line);
+    std::terminate();
+}
+
+#define ASSERT(condition) if (!(condition)) [[unlikely]] hg_assert_internal(#condition, __FILE__, __LINE__);
+
 #endif
 
-#define critical_error(message) {                                                          \
-    std::cerr << std::format("Critical error on {}, {}: {}", __FILE__, __LINE__, message); \
-    std::terminate();                                                                      \
+inline void hg_error_internal(const std::string_view message, const std::string_view file, const int line) {
+    std::cerr << std::format("Critical error: {}\n    File: {}\n    Line: {}\n", message, file, line);
+    std::terminate();
 }
+
+#define ERROR(message) hg_error_internal(message, __FILE__, __LINE__);
 
 template <typename F> struct DeferInternal {
     F f;
@@ -53,18 +68,16 @@ template <typename F> DeferInternal<F> defer_function(F f) { return DeferInterna
 #define DEFER_INTERMEDIATE_3(x) DEFER_INTERMEDIATE_2(x, __COUNTER__)
 #define defer(code) auto DEFER_INTERMEDIATE_3(_defer_) = defer_function([&] { code; })
 
-namespace hg {
-
 constexpr i32 to_i32(const u32 val) {
-    debug_assert(static_cast<i32>(val) >= 0);
+    ASSERT(static_cast<i32>(val) >= 0);
     return static_cast<i32>(val);
 }
 constexpr u32 to_u32(const i32 val) {
-    debug_assert(val >= 0);
+    ASSERT(val >= 0);
     return static_cast<u32>(val);
 }
 constexpr u32 to_u32(const usize val) {
-    debug_assert(val < UINT32_MAX);
+    ASSERT(val < UINT32_MAX);
     return static_cast<u32>(val);
 }
 
@@ -221,19 +234,52 @@ public:
     template <typename... Args> constexpr Result(std::in_place_type_t<T>, Args&&... args) : m_result{std::in_place_type_t<T>(), std::forward<Args>(args)...} {}
 
     constexpr bool has_err() const { return std::holds_alternative<Err>(m_result); }
-    constexpr Err err() const { return std::get<Err>(m_result); }
+    constexpr Err err() const {
+        ASSERT(has_err());
+        return std::get<Err>(m_result);
+    }
 
-    constexpr T& val() & { return std::get<T>(m_result); }
-    constexpr T&& val() && { return std::move(std::get<T>(m_result)); }
-    constexpr T* operator->() { return &val(); }
-    constexpr T& operator*() & { return val(); }
-    constexpr T&& operator*() && { return std::move(val()); }
+    constexpr T& val() & {
+        ASSERT(!has_err());
+        return std::get<T>(m_result);
+    }
+    constexpr T&& val() && {
+        ASSERT(!has_err());
+        return std::move(std::get<T>(m_result));
+    }
+    constexpr T* operator->() {
+        ASSERT(!has_err());
+        return &val();
+    }
+    constexpr T& operator*() & {
+        ASSERT(!has_err());
+        return val();
+    }
+    constexpr T&& operator*() && {
+        ASSERT(!has_err());
+        return std::move(val());
+    }
 
-    constexpr const T& val() const& { return std::get<T>(m_result); }
-    constexpr const T&& val() const&& { return std::move(std::get<T>(m_result)); }
-    constexpr const T* operator->() const { return &val(); }
-    constexpr const T& operator*() const& { return val(); }
-    constexpr const T&& operator*() const&& { return val(); }
+    constexpr const T& val() const& {
+        ASSERT(!has_err());
+        return std::get<T>(m_result);
+    }
+    constexpr const T&& val() const&& {
+        ASSERT(!has_err());
+        return std::move(std::get<T>(m_result));
+    }
+    constexpr const T* operator->() const {
+        ASSERT(!has_err());
+        return &val();
+    }
+    constexpr const T& operator*() const& {
+        ASSERT(!has_err());
+        return val();
+    }
+    constexpr const T&& operator*() const&& {
+        ASSERT(!has_err());
+        return val();
+    }
 
     template <typename U = std::remove_cv_t<T>> constexpr T val_or(U&& default_value) const& { return !has_err() ? **this : static_cast<T>(std::forward<U>(default_value)); }
     template <typename U = std::remove_cv_t<T>> constexpr T val_or(U&& default_value) && { return !has_err() ? std::move(**this) : static_cast<T>(std::forward<U>(default_value)); }
@@ -248,7 +294,10 @@ public:
     constexpr Result(std::in_place_type_t<void>) {}
 
     constexpr bool has_err() const { return m_err.has_value(); }
-    constexpr Err err() const { return *m_err; }
+    constexpr Err err() const {
+        ASSERT(has_err());
+        return *m_err;
+    }
 
 private:
     std::optional<Err> m_err = std::nullopt;

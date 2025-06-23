@@ -6,15 +6,15 @@
 #include "hg_load.h"
 #include "hg_vulkan_engine.h"
 
+#include <concepts>
 #include <filesystem>
 
 namespace hg {
 
 Result<DefaultPipeline> DefaultPipeline::create(const Engine& engine, const vk::Extent2D window_size, const vk::DescriptorPool descriptor_pool) {
-    debug_assert(engine.device != nullptr);
-    debug_assert(window_size.width != 0);
-    debug_assert(window_size.height != 0);
-    debug_assert(descriptor_pool != nullptr);
+    ASSERT(window_size.width != 0);
+    ASSERT(window_size.height != 0);
+    ASSERT(descriptor_pool != nullptr);
 
     auto pipeline = ok<DefaultPipeline>();
 
@@ -32,15 +32,6 @@ Result<DefaultPipeline> DefaultPipeline::create(const Engine& engine, const vk::
         .sample_count = vk::SampleCountFlagBits::e4,
     });
 
-    pipeline->m_vp_buffer = GpuBuffer::create(engine, {
-        sizeof(ViewProjectionUniform),
-        vk::BufferUsageFlagBits::eUniformBuffer, GpuBuffer::RandomAccess
-    });
-    pipeline->m_light_buffer = GpuBuffer::create(engine, {
-        sizeof(LightUniform) * MaxLights,
-        vk::BufferUsageFlagBits::eUniformBuffer, GpuBuffer::RandomAccess
-    });
-
     const auto set_layout = create_descriptor_set_layout(engine, std::array{
         vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex},
         vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eFragment},
@@ -53,35 +44,53 @@ Result<DefaultPipeline> DefaultPipeline::create(const Engine& engine, const vk::
     if (global_set.has_err())
         return global_set.err();
     pipeline->m_global_set = *global_set;
+
+    pipeline->m_vp_buffer = GpuBuffer::create(engine, {
+        sizeof(ViewProjectionUniform),
+        vk::BufferUsageFlagBits::eUniformBuffer, GpuBuffer::RandomAccess
+    });
+    pipeline->m_light_buffer = GpuBuffer::create(engine, {
+        sizeof(LightUniform) * MaxLights,
+        vk::BufferUsageFlagBits::eUniformBuffer, GpuBuffer::RandomAccess
+    });
+
     write_uniform_buffer_descriptor(engine, pipeline->m_global_set, 0, pipeline->m_vp_buffer.buffer, sizeof(ViewProjectionUniform));
     write_uniform_buffer_descriptor(engine, pipeline->m_global_set, 1, pipeline->m_light_buffer.buffer, sizeof(LightUniform));
 
+    ASSERT(pipeline->m_color_image.allocation != nullptr);
+    ASSERT(pipeline->m_color_image.image != nullptr);
+    ASSERT(pipeline->m_color_image.view != nullptr);
+    ASSERT(pipeline->m_depth_image.allocation != nullptr);
+    ASSERT(pipeline->m_depth_image.image != nullptr);
+    ASSERT(pipeline->m_depth_image.view != nullptr);
+    ASSERT(pipeline->m_set_layout != nullptr);
+    ASSERT(pipeline->m_global_set != nullptr);
+    ASSERT(pipeline->m_vp_buffer.allocation != nullptr);
+    ASSERT(pipeline->m_vp_buffer.buffer != nullptr);
+    ASSERT(pipeline->m_light_buffer.allocation != nullptr);
+    ASSERT(pipeline->m_light_buffer.buffer != nullptr);
     return pipeline;
 }
 
 void DefaultPipeline::destroy(const Engine& engine) const {
-    debug_assert(engine.device != nullptr);
+    ASSERT(engine.device != nullptr);
 
-    debug_assert(m_set_layout != nullptr);
+    ASSERT(m_set_layout != nullptr);
     engine.device.destroyDescriptorSetLayout(m_set_layout);
-
-    debug_assert(m_light_buffer.buffer != nullptr);
+    ASSERT(m_light_buffer.buffer != nullptr);
     m_light_buffer.destroy(engine);
-    debug_assert(m_vp_buffer.buffer != nullptr);
+    ASSERT(m_vp_buffer.buffer != nullptr);
     m_vp_buffer.destroy(engine);
 
-    debug_assert(m_depth_image.image != nullptr);
     m_depth_image.destroy(engine);
-    debug_assert(m_color_image.image != nullptr);
     m_color_image.destroy(engine);
 }
 
 void DefaultPipeline::resize(const Engine& engine, const vk::Extent2D window_size) {
-    debug_assert(m_color_image.image != nullptr);
-    debug_assert(m_color_image.image != nullptr);
-    debug_assert(engine.device != nullptr);
-    debug_assert(window_size.width > 0);
-    debug_assert(window_size.height > 0);
+    ASSERT(m_color_image.image != nullptr);
+    ASSERT(m_depth_image.image != nullptr);
+    ASSERT(window_size.width > 0);
+    ASSERT(window_size.height > 0);
 
     m_color_image.destroy(engine);
     m_color_image = GpuImage::create(engine, {
@@ -99,12 +108,15 @@ void DefaultPipeline::resize(const Engine& engine, const vk::Extent2D window_siz
         .aspect_flags = vk::ImageAspectFlagBits::eDepth,
         .sample_count = vk::SampleCountFlagBits::e4,
     });
+
+    ASSERT(m_color_image.image != nullptr);
+    ASSERT(m_depth_image.image != nullptr);
 }
 
 void DefaultPipeline::update_camera(const Engine& engine, const Cameraf& camera) {
     const glm::mat4 view = camera.view();
 
-    debug_assert(m_lights.size() < MaxLights);
+    ASSERT(m_lights.size() < MaxLights);
     LightUniform lights = {.count = m_lights.size()};
     for (usize i = 0; i < m_lights.size(); ++i) {
         lights.vals[i] = {
@@ -118,10 +130,10 @@ void DefaultPipeline::update_camera(const Engine& engine, const Cameraf& camera)
 }
 
 void DefaultPipeline::cmd_draw(const vk::CommandBuffer cmd, const vk::Image render_target, const vk::Extent2D window_size) const {
-    debug_assert(cmd != nullptr);
-    debug_assert(window_size.width > 0);
-    debug_assert(window_size.height > 0);
-    debug_assert(render_target != nullptr);
+    ASSERT(cmd != nullptr);
+    ASSERT(render_target != nullptr);
+    ASSERT(window_size.width > 0);
+    ASSERT(window_size.height > 0);
 
     BarrierBuilder(cmd)
         .add_image_barrier(m_color_image.image, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
@@ -228,10 +240,18 @@ Result<SkyboxRenderer> SkyboxRenderer::create(const Engine& engine, const Defaul
     if (skybox_shader_result.has_err())
         return skybox_shader_result.err();
 
+    ASSERT(renderer->m_set_layout != nullptr);
+    ASSERT(renderer->m_pipeline_layout != nullptr);
+    for (const auto shader : renderer->m_shaders) {
+        ASSERT(shader != nullptr);
+    }
     return renderer;
 }
 
 Result<void> SkyboxRenderer::load_skybox(const Engine& engine, const vk::DescriptorPool pool, const std::filesystem::path path) {
+    ASSERT(pool != nullptr);
+    ASSERT(!path.empty());
+
     const auto set = hg::allocate_descriptor_set(engine, pool, m_set_layout);
     const auto cubemap = GpuImage::create_cubemap(engine, path);
     if (set.has_err())
@@ -255,37 +275,46 @@ Result<void> SkyboxRenderer::load_skybox(const Engine& engine, const vk::Descrip
     m_index_buffer.write(engine, mesh.indices.data(), mesh.indices.size() * sizeof(mesh.indices[0]), 0);
     m_vertex_buffer.write(engine, mesh.positions.data(), mesh.positions.size() * sizeof(mesh.positions[0]), 0);
 
+    ASSERT(m_cubemap.allocation != nullptr);
+    ASSERT(m_cubemap.image != nullptr);
+    ASSERT(m_cubemap.view != nullptr);
+    ASSERT(m_sampler != nullptr);
+    ASSERT(m_set != nullptr);
+    ASSERT(m_index_buffer.allocation != nullptr);
+    ASSERT(m_index_buffer.buffer != nullptr);
+    ASSERT(m_vertex_buffer.allocation != nullptr);
+    ASSERT(m_vertex_buffer.buffer != nullptr);
     return ok();
 }
 
 void SkyboxRenderer::destroy(const Engine& engine) const {
-    debug_assert(engine.device != nullptr);
+    ASSERT(engine.device != nullptr);
 
     m_vertex_buffer.destroy(engine);
     m_index_buffer.destroy(engine);
     m_cubemap.destroy(engine);
 
-    debug_assert(m_sampler != nullptr);
+    ASSERT(m_sampler != nullptr);
     engine.device.destroySampler(m_sampler);
 
     for (const auto& shader : m_shaders) {
-        debug_assert(shader != nullptr);
+        ASSERT(shader != nullptr);
         engine.device.destroyShaderEXT(shader);
     }
 
-    debug_assert(m_pipeline_layout != nullptr);
+    ASSERT(m_pipeline_layout != nullptr);
     engine.device.destroyPipelineLayout(m_pipeline_layout);
 
-    debug_assert(m_set_layout != nullptr);
+    ASSERT(m_set_layout != nullptr);
     engine.device.destroyDescriptorSetLayout(m_set_layout);
 }
 
 void SkyboxRenderer::cmd_draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) const {
-    debug_assert(m_set != nullptr);
-    debug_assert(m_vertex_buffer.buffer != nullptr);
-    debug_assert(m_index_buffer.buffer != nullptr);
-    debug_assert(cmd != nullptr);
-    debug_assert(global_set != nullptr);
+    ASSERT(m_set != nullptr);
+    ASSERT(m_vertex_buffer.buffer != nullptr);
+    ASSERT(m_index_buffer.buffer != nullptr);
+    ASSERT(cmd != nullptr);
+    ASSERT(global_set != nullptr);
 
     cmd.setDepthTestEnable(vk::False);
     cmd.setDepthWriteEnable(vk::False);
@@ -317,6 +346,7 @@ Result<PbrRenderer> PbrRenderer::create(const Engine& engine, const DefaultPipel
         return set_layout.err();
     renderer->m_set_layout = *set_layout;
 
+    ASSERT(pipeline.get_global_set_layout() != nullptr);
     std::array set_layouts = {pipeline.get_global_set_layout(), renderer->m_set_layout};
     std::array push_ranges = {vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex, 0, sizeof(PushConstant)}};
     const auto pipeline_layout = engine.device.createPipelineLayout({
@@ -348,30 +378,37 @@ Result<PbrRenderer> PbrRenderer::create(const Engine& engine, const DefaultPipel
     if (shader_result.has_err())
         return shader_result.err();
 
+    ASSERT(renderer->m_set_layout != nullptr);
+    ASSERT(renderer->m_pipeline_layout != nullptr);
+    for (const auto shader : renderer->m_shaders) {
+        ASSERT(shader != nullptr);
+    }
     return renderer;
 }
 
 void PbrRenderer::destroy(const Engine& engine) const {
+    ASSERT(engine.device != nullptr);
+
     for (const auto& texture : m_textures)
     texture.destroy(engine);
     for (const auto& model : m_models)
     model.destroy(engine);
 
     for (const auto& shader : m_shaders) {
-        debug_assert(shader != nullptr);
+        ASSERT(shader != nullptr);
         engine.device.destroyShaderEXT(shader);
     }
 
-    debug_assert(m_pipeline_layout != nullptr);
+    ASSERT(m_pipeline_layout != nullptr);
     engine.device.destroyPipelineLayout(m_pipeline_layout);
 
-    debug_assert(m_set_layout != nullptr);
+    ASSERT(m_set_layout != nullptr);
     engine.device.destroyDescriptorSetLayout(m_set_layout);
 }
 
 void PbrRenderer::cmd_draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) const {
-    debug_assert(cmd != nullptr);
-    debug_assert(global_set != nullptr);
+    ASSERT(cmd != nullptr);
+    ASSERT(global_set != nullptr);
 
     cmd.setCullMode(vk::CullModeFlagBits::eBack);
 
@@ -398,7 +435,7 @@ void PbrRenderer::cmd_draw(const vk::CommandBuffer cmd, const vk::DescriptorSet 
 }
 
 Result<PbrRenderer::TextureHandle> PbrRenderer::load_texture(const Engine& engine, std::filesystem::path path) {
-    debug_assert(!path.empty());
+    ASSERT(!path.empty());
 
     const auto texture_data = ImageData::load(path);
     if (texture_data.has_err())
@@ -410,12 +447,12 @@ Result<PbrRenderer::TextureHandle> PbrRenderer::load_texture(const Engine& engin
 }
 
 PbrRenderer::TextureHandle PbrRenderer::load_texture_from_data(const Engine& engine, const GpuImage::Data& data, const vk::Format format) {
-    debug_assert(data.ptr != nullptr);
-    debug_assert(data.alignment > 0);
-    debug_assert(data.extent.width > 0);
-    debug_assert(data.extent.height > 0);
-    debug_assert(data.extent.depth > 0);
-    debug_assert(format != vk::Format::eUndefined);
+    ASSERT(data.ptr != nullptr);
+    ASSERT(data.alignment > 0);
+    ASSERT(data.extent.width > 0);
+    ASSERT(data.extent.height > 0);
+    ASSERT(data.extent.depth > 0);
+    ASSERT(format != vk::Format::eUndefined);
 
     const u32 mips = get_mip_count(data.extent);
     const auto image = GpuImage::create(engine, {
@@ -428,13 +465,18 @@ PbrRenderer::TextureHandle PbrRenderer::load_texture_from_data(const Engine& eng
     image.generate_mipmaps(engine, mips, data.extent, format, vk::ImageLayout::eShaderReadOnlyOptimal);
     const auto sampler = create_sampler(engine, {.type = SamplerType::Linear, .mip_levels = mips});
 
+    ASSERT(image.allocation != nullptr);
+    ASSERT(image.image != nullptr);
+    ASSERT(image.view != nullptr);
+    ASSERT(sampler != nullptr);
     m_textures.emplace_back(image, sampler);
     return {m_textures.size() - 1};
 }
 
 Result<PbrRenderer::ModelHandle> PbrRenderer::load_model(const Engine& engine, const vk::DescriptorPool descriptor_pool, std::filesystem::path path, TextureHandle texture) {
-    debug_assert(!path.empty());
-    debug_assert(texture.index < m_textures.size());
+    ASSERT(descriptor_pool != nullptr);
+    ASSERT(!path.empty());
+    ASSERT(texture.index < m_textures.size());
 
     const auto model = ModelData::load_gltf(path);
     if (model.has_err())
@@ -445,11 +487,12 @@ Result<PbrRenderer::ModelHandle> PbrRenderer::load_model(const Engine& engine, c
 }
 
 PbrRenderer::ModelHandle PbrRenderer::load_model_from_data(const Engine& engine, const vk::DescriptorPool descriptor_pool, const VertexData& data, const float roughness, const float metalness, const TextureHandle texture) {
-    debug_assert(!data.indices.empty());
-    debug_assert(!data.vertices.empty());
-    debug_assert(texture.index < m_textures.size());
-    debug_assert(roughness >= 0.0 && roughness <= 1.0);
-    debug_assert(metalness >= 0.0 && metalness <= 1.0);
+    ASSERT(descriptor_pool != nullptr);
+    ASSERT(!data.indices.empty());
+    ASSERT(!data.vertices.empty());
+    ASSERT(texture.index < m_textures.size());
+    ASSERT(roughness >= 0.0 && roughness <= 1.0);
+    ASSERT(metalness >= 0.0 && metalness <= 1.0);
 
     const auto index_buffer = GpuBuffer::create(engine, {
         data.indices.size() * sizeof(data.indices[0]),
@@ -470,19 +513,27 @@ PbrRenderer::ModelHandle PbrRenderer::load_model_from_data(const Engine& engine,
 
     const auto set = hg::allocate_descriptor_set(engine, descriptor_pool, m_set_layout);
     if (set.has_err())
-        critical_error("PbrPipeline descriptor pool is empty");
+        ERROR("PbrPipeline descriptor pool is empty");
     hg::write_image_sampler_descriptor(engine, *set, 0, m_textures[texture.index].sampler, m_textures[texture.index].image.view);
     hg::write_uniform_buffer_descriptor(engine, *set, 1, material_buffer.buffer, sizeof(MaterialUniform));
 
+    ASSERT(data.indices.size() > 0);
+    ASSERT(index_buffer.allocation != nullptr);
+    ASSERT(index_buffer.buffer != nullptr);
+    ASSERT(vertex_buffer.allocation != nullptr);
+    ASSERT(vertex_buffer.buffer != nullptr);
+    ASSERT(material_buffer.allocation != nullptr);
+    ASSERT(material_buffer.buffer != nullptr);
+    ASSERT(*set != nullptr);
     m_models.emplace_back(to_u32(data.indices.size()), index_buffer, vertex_buffer, material_buffer, *set);
     return {m_models.size() - 1};
 }
 
 PbrRenderer::VertexData PbrRenderer::VertexData::from_mesh(const Mesh& mesh) {
-    debug_assert(mesh.indices.size() > 0);
-    debug_assert(mesh.positions.size() > 0);
-    debug_assert(mesh.normals.size() > 0);
-    debug_assert(mesh.tex_coords.size() > 0);
+    ASSERT(!mesh.indices.empty());
+    ASSERT(!mesh.positions.empty());
+    ASSERT(!mesh.normals.empty());
+    ASSERT(!mesh.tex_coords.empty());
 
     VertexData data = {.indices = std::move(mesh.indices)};
     data.vertices.reserve(mesh.positions.size());
@@ -490,6 +541,8 @@ PbrRenderer::VertexData PbrRenderer::VertexData::from_mesh(const Mesh& mesh) {
         data.vertices.emplace_back(mesh.positions[i], mesh.normals[i], mesh.tex_coords[i]);
     }
 
+    ASSERT(!data.indices.empty());
+    ASSERT(!data.vertices.empty());
     return data;
 }
 

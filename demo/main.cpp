@@ -9,12 +9,12 @@ constexpr double sqrt3 = 1.73205080757;
 int main() {
     const auto engine = Engine::create();
     if (engine.has_err())
-        critical_error(errf(engine));
+        ERROR(errf(engine));
     defer(engine->destroy());
 
     auto window = Window::create(*engine, true, 0, 0);
     if (window.has_err())
-        critical_error(errf(window));
+        ERROR(errf(window));
     defer(window->destroy(*engine));
 
     constexpr std::array pool_sizes = {
@@ -27,26 +27,26 @@ int main() {
         .pPoolSizes = pool_sizes.data(),
     }).value;
     if (descriptor_pool == nullptr)
-        critical_error("Could not create descriptor pool");
+        ERROR("Could not create descriptor pool");
     defer(engine->device.destroyDescriptorPool(descriptor_pool));
 
     auto pbr_pipeline = DefaultPipeline::create(*engine, window->extent(), descriptor_pool);
     if (pbr_pipeline.has_err())
-        critical_error(errf(pbr_pipeline));
+        ERROR(errf(pbr_pipeline));
     defer(pbr_pipeline->destroy(*engine));
 
     auto skybox_renderer = SkyboxRenderer::create(*engine, *pbr_pipeline);
     if (skybox_renderer.has_err())
-        critical_error(errf(skybox_renderer));
+        ERROR(errf(skybox_renderer));
     defer(skybox_renderer->destroy(*engine));
     const auto skybox = skybox_renderer->load_skybox(*engine, descriptor_pool, "../assets/cloudy_skyboxes/Cubemap/Cubemap_Sky_06-512x512.png");
     if (skybox.has_err())
-        critical_error(errf(skybox));
+        ERROR(errf(skybox));
     pbr_pipeline->add_render_system(*skybox_renderer);
 
     auto model_renderer = PbrRenderer::create(*engine, *pbr_pipeline);
     if (model_renderer.has_err())
-        critical_error(errf(model_renderer));
+        ERROR(errf(model_renderer));
     defer(model_renderer->destroy(*engine));
     pbr_pipeline->add_render_system(*model_renderer);
 
@@ -139,7 +139,7 @@ int main() {
         pbr_pipeline->update_camera(*engine, camera);
         const auto frame_result = window->submit_frame(*engine, *pbr_pipeline);
         if (frame_result.has_err())
-            critical_error(errf(frame_result));
+            ERROR(errf(frame_result));
     }
 
     (void)engine->device.waitIdle();

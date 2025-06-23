@@ -4,9 +4,9 @@ namespace hg {
 
 Mesh generate_square() {
     return {
-        .indices =    {0, 1, 2, 2, 3, 0},
-        .positions =  {{-1.0f, -1.0f,  0.0f}, {-1.0f,  1.0f,  0.0f}, { 1.0f,  1.0f,  0.0f}, { 1.0f, -1.0f,  0.0f}},
-        .normals =    {{ 0.0f,  0.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}},
+        .indices    = {0, 1, 2, 2, 3, 0},
+        .positions  = {{-1.0f, -1.0f,  0.0f}, {-1.0f,  1.0f,  0.0f}, { 1.0f,  1.0f,  0.0f}, { 1.0f, -1.0f,  0.0f}},
+        .normals    = {{ 0.0f,  0.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}},
         .tex_coords = {{ 0.0f,  0.0f       }, { 0.0f,  1.0f       }, { 1.0f,  1.0f       }, { 1.0f,  0.0f       }},
     };
 }
@@ -81,11 +81,15 @@ Mesh generate_cube() {
         }
     }
 
+    ASSERT(cube.indices.size() == 36);
+    ASSERT(cube.positions.size() == 24);
+    ASSERT(cube.normals.size() == 24);
+    ASSERT(cube.tex_coords.size() == 24);
     return cube;
 }
 
 Mesh generate_sphere(i32 fidelity) {
-    debug_assert(fidelity >= 3);
+    ASSERT(fidelity >= 3);
 
     Mesh sphere = {};
     sphere.positions.reserve(static_cast<usize>(2 + fidelity * fidelity));
@@ -130,6 +134,10 @@ Mesh generate_sphere(i32 fidelity) {
         sphere.indices.push_back(top_index - ((i + 2) % fidelity + 1));
     }
 
+    ASSERT(!sphere.indices.empty());
+    ASSERT(!sphere.positions.empty());
+    ASSERT(!sphere.normals.empty());
+    ASSERT(!sphere.tex_coords.empty());
     return sphere;
 }
 
