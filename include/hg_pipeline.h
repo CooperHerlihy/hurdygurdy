@@ -4,7 +4,6 @@
 #include "hg_math.h"
 #include "hg_mesh.h"
 #include "hg_vulkan_engine.h"
-#include <vulkan/vulkan_handles.hpp>
 
 namespace hg {
 
@@ -55,9 +54,13 @@ public:
 
     void update_camera(const Engine& engine, const Cameraf& camera);
 
-    void queue_light(const glm::vec3 position, const glm::vec3 color) {
+    void add_light(const glm::vec3 position, const glm::vec3 color) {
         ASSERT(m_lights.size() <= MaxLights);
         m_lights.emplace_back(glm::vec4{position, 1.0f}, glm::vec4{color, 1.0});
+    }
+
+    void clear_lights() {
+        m_lights.clear();
     }
 
 private:
@@ -141,8 +144,9 @@ public:
     };
 
     struct TextureHandle {
-        usize index = UINT32_MAX;
+        usize index = SIZE_MAX;
     };
+
     [[nodiscard]] Result<TextureHandle> load_texture(const Engine& engine, std::filesystem::path path);
     [[nodiscard]] TextureHandle load_texture_from_data(
         const Engine& engine, const GpuImage::Data& data, vk::Format format = vk::Format::eR8G8B8A8Srgb
@@ -163,8 +167,9 @@ public:
     };
 
     struct ModelHandle {
-        usize index = UINT32_MAX;
+        usize index = SIZE_MAX;
     };
+
     [[nodiscard]] Result<ModelHandle> load_model(
         const Engine& engine,
         std::filesystem::path path,
@@ -180,9 +185,14 @@ public:
         ModelHandle model = {};
         Transform3Df transform = {};
     };
+
     void queue_model(const ModelHandle model, const Transform3Df& transform) {
         ASSERT(model.index < m_models.size());
         m_render_queue.emplace_back(model, transform);
+    }
+
+    void clear_queue() {
+        m_render_queue.clear();
     }
 
 private:
@@ -192,6 +202,7 @@ private:
 
     vk::DescriptorPool m_descriptor_pool = {};
     vk::DescriptorSet m_texture_set = {};
+
     std::vector<Texture> m_textures = {};
     std::vector<Model> m_models = {};
     std::vector<RenderTicket> m_render_queue = {};

@@ -1,4 +1,4 @@
-#include "hg_pbr_pipeline.h"
+#include "hg_pipeline.h"
 
 #include "hg_utils.h"
 #include "hg_math.h"
@@ -7,8 +7,6 @@
 #include "hg_vulkan_engine.h"
 
 #include <filesystem>
-#include <vulkan/vulkan_enums.hpp>
-#include <vulkan/vulkan_structs.hpp>
 
 namespace hg {
 

@@ -17,22 +17,22 @@ int main() {
         ERROR(errf(window));
     defer(window->destroy(*engine));
 
-    auto pbr_pipeline = DefaultPipeline::create(*engine, window->extent());
-    if (pbr_pipeline.has_err())
-        ERROR(errf(pbr_pipeline));
-    defer(pbr_pipeline->destroy(*engine));
+    auto pipeline = DefaultPipeline::create(*engine, window->extent());
+    if (pipeline.has_err())
+        ERROR(errf(pipeline));
+    defer(pipeline->destroy(*engine));
 
-    auto skybox_renderer = SkyboxRenderer::create(*engine, *pbr_pipeline);
+    auto skybox_renderer = SkyboxRenderer::create(*engine, *pipeline);
     if (skybox_renderer.has_err())
         ERROR(errf(skybox_renderer));
     defer(skybox_renderer->destroy(*engine));
-    pbr_pipeline->add_render_system(*skybox_renderer);
+    pipeline->add_render_system(*skybox_renderer);
 
-    auto model_renderer = PbrRenderer::create(*engine, *pbr_pipeline);
+    auto model_renderer = PbrRenderer::create(*engine, *pipeline);
     if (model_renderer.has_err())
         ERROR(errf(model_renderer));
     defer(model_renderer->destroy(*engine));
-    pbr_pipeline->add_render_system(*model_renderer);
+    pipeline->add_render_system(*model_renderer);
 
     const auto skybox = skybox_renderer->load_skybox(*engine, "../assets/cloudy_skyboxes/Cubemap/Cubemap_Sky_06-512x512.png");
     if (skybox.has_err())
@@ -52,30 +52,8 @@ int main() {
     const auto blacksmith = *model_renderer->load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_blacksmith_blue.gltf", hex_texture);
     const auto castle = *model_renderer->load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_castle_blue.gltf", hex_texture);
 
-    pbr_pipeline->queue_light({-2.0f, -3.0f, -2.0f}, {glm::vec3{1.0f, 1.0f, 1.0f} * 300.0f});
-    pbr_pipeline->queue_light({-0.8f, -0.5f, 1.5}, {glm::vec3{1.0f, 0.2f, 0.0f} * 10.0f});
-
-    model_renderer->queue_model(grass, {.position = {0.0f, 0.0f, 0.0f}});
-    model_renderer->queue_model(sphere, {.position = {-0.5f, -0.5f, 0.0f}, .scale = {0.25f, 0.25f, 0.25f}});
-    model_renderer->queue_model(cube, {.position = {0.5f, -0.5f, 0.0f}, .scale = {0.25f, 0.25f, 0.25f}});
-
-    model_renderer->queue_model(grass, {.position = {-1.0f, -0.25f, sqrt3}});
-    model_renderer->queue_model(blacksmith, {.position = {-1.0f, -0.25f, sqrt3}});
-
-    model_renderer->queue_model(grass, {.position = {1.0f, -0.5f, sqrt3}});
-    model_renderer->queue_model(castle, {.position = {1.0f, -0.5f, sqrt3}});
-
-    model_renderer->queue_model(grass, {.position = {-2.0f, -0.1f, 0.0f}});
-    model_renderer->queue_model(building, {.position = {-2.0f, -0.1f, 0.0f}});
-    model_renderer->queue_model(tree, {.position = {-2.0f - 0.75f, -0.1f, 0.0f - 0.25f}});
-
-    model_renderer->queue_model(grass, {.position = {2.0f, -0.25f, 0.0f}});
-    model_renderer->queue_model(tower, {.position = {2.0f, -0.25f, 0.0f}});
-    model_renderer->queue_model(tree, {.position = {2.0f - 0.75f, -0.25f, 0.0f + 0.25f}});
-    model_renderer->queue_model(tree, {.position = {2.0f + 0.75f, -0.25f, 0.0f - 0.25f}});
-
     const f32 aspect_ratio = static_cast<f32>(window->extent().width) / static_cast<f32>(window->extent().height);
-    pbr_pipeline->update_projection(*engine, glm::perspective(glm::pi<f32>() / 4.0f, aspect_ratio, 0.1f, 100.f));
+    pipeline->update_projection(*engine, glm::perspective(glm::pi<f32>() / 4.0f, aspect_ratio, 0.1f, 100.f));
 
     Cameraf camera = {};
     camera.translate({0.0f, -2.0f, -4.0f});
@@ -124,8 +102,35 @@ int main() {
         if (cursor_dif.y != 0 && glfwGetMouseButton(window->window(), GLFW_MOUSE_BUTTON_1))
             camera.rotate_internal(glm::angleAxis<f32, glm::defaultp>(cursor_dif.y * turn_speed, {-1.0f, 0.0f, 0.0f}));
 
-        pbr_pipeline->update_camera(*engine, camera);
-        const auto frame_result = window->draw_frame(*engine, *pbr_pipeline);
+        model_renderer->clear_queue();
+
+        model_renderer->queue_model(grass, {.position = {0.0f, 0.0f, 0.0f}});
+        model_renderer->queue_model(sphere, {.position = {-0.5f, -0.5f, 0.0f}, .scale = {0.25f, 0.25f, 0.25f}});
+        model_renderer->queue_model(cube, {.position = {0.5f, -0.5f, 0.0f}, .scale = {0.25f, 0.25f, 0.25f}});
+
+        model_renderer->queue_model(grass, {.position = {-1.0f, -0.25f, sqrt3}});
+        model_renderer->queue_model(blacksmith, {.position = {-1.0f, -0.25f, sqrt3}});
+
+        model_renderer->queue_model(grass, {.position = {1.0f, -0.5f, sqrt3}});
+        model_renderer->queue_model(castle, {.position = {1.0f, -0.5f, sqrt3}});
+
+        model_renderer->queue_model(grass, {.position = {-2.0f, -0.1f, 0.0f}});
+        model_renderer->queue_model(building, {.position = {-2.0f, -0.1f, 0.0f}});
+        model_renderer->queue_model(tree, {.position = {-2.0f - 0.75f, -0.1f, 0.0f - 0.25f}});
+
+        model_renderer->queue_model(grass, {.position = {2.0f, -0.25f, 0.0f}});
+        model_renderer->queue_model(tower, {.position = {2.0f, -0.25f, 0.0f}});
+        model_renderer->queue_model(tree, {.position = {2.0f - 0.75f, -0.25f, 0.0f + 0.25f}});
+        model_renderer->queue_model(tree, {.position = {2.0f + 0.75f, -0.25f, 0.0f - 0.25f}});
+
+        pipeline->clear_lights();
+
+        pipeline->add_light({-2.0f, -3.0f, -2.0f}, {glm::vec3{1.0f, 1.0f, 1.0f} * 300.0f});
+        pipeline->add_light({-0.8f, -0.5f, 1.5}, {glm::vec3{1.0f, 0.2f, 0.0f} * 10.0f});
+
+        pipeline->update_camera(*engine, camera);
+
+        const auto frame_result = window->draw_frame(*engine, *pipeline);
         if (frame_result.has_err()) {
             if (frame_result.err() == Err::InvalidWindowSize) {
                 for (int w = 0, h = 0; w == 0 || h == 0; glfwGetWindowSize(window->window(), &w, &h)) {
@@ -134,7 +139,7 @@ int main() {
                 const auto res = window->resize(*engine);
                 if (res.has_err())
                     ERROR("Could not resize window");
-                pbr_pipeline->resize(*engine, window->extent());
+                pipeline->resize(*engine, window->extent());
             } else {
                 ERROR(errf(frame_result));
             }
