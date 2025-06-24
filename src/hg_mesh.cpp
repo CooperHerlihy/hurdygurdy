@@ -12,80 +12,40 @@ Mesh generate_square() {
 }
 
 Mesh generate_cube() {
-    Mesh cube = {};
-
-    std::array<Mesh, 6> squares = {};
-    for (usize i = 0; i < 6; ++i)
-        squares[i] = generate_square();
-
-    for (auto& normal : squares[0].normals) {
-        normal = {0.0f, -1.0f, 0.0f};
-    }
-    for (auto& normal : squares[1].normals) {
-        normal = {-1.0f, 0.0f, 0.0f};
-    }
-    for (auto& normal : squares[2].normals) {
-        normal = {0.0f, 0.0f, -1.0f};
-    }
-    for (auto& normal : squares[3].normals) {
-        normal = {1.0f, 0.0f, 0.0f};
-    }
-    for (auto& normal : squares[4].normals) {
-        normal = {0.0f, 0.0f, 1.0f};
-    }
-    for (auto& normal : squares[5].normals) {
-        normal = {0.0f, 1.0f, 0.0f};
-    }
-
-    for (auto& position : squares[0].positions) {
-        position.z = -1.0f;
-        position = glm::angleAxis(glm::pi<f32>() * 0.5f, glm::vec3{-1.0f, 0.0f, 0.0f}) * position;
-    }
-    for (auto& position : squares[1].positions) {
-        position.z = -1.0f;
-        position = glm::angleAxis(glm::pi<f32>() * 0.5f, glm::vec3{0.0f, 1.0f, 0.0f}) * position;
-    }
-    for (auto& position : squares[2].positions) {
-        position.z = -1.0f;
-    }
-    for (auto& position : squares[3].positions) {
-        position.z = -1.0f;
-        position = glm::angleAxis(glm::pi<f32>() * 0.5f, glm::vec3{0.0f, -1.0f, 0.0f}) * position;
-    }
-    for (auto& position : squares[4].positions) {
-        position.z = -1.0f;
-        position = glm::angleAxis(glm::pi<f32>(), glm::vec3{0.0f, 1.0f, 0.0f}) * position;
-    }
-    for (auto& position : squares[5].positions) {
-        position.z = -1.0f;
-        position = glm::angleAxis(glm::pi<f32>() * 0.5f, glm::vec3{1.0f, 0.0f, 0.0f}) * position;
-    }
-
-    cube.indices.reserve(36);
-    cube.positions.reserve(24);
-    cube.normals.reserve(24);
-    cube.tex_coords.reserve(24);
-    for (const auto& square : squares) {
-        u32 vertex_count = to_u32(cube.positions.size());
-        for (const auto index : square.indices) {
-            cube.indices.push_back(vertex_count + index);
-        }
-        for (const auto position : square.positions) {
-            cube.positions.push_back(position);
-        }
-        for (const auto normal : square.normals) {
-            cube.normals.push_back(normal);
-        }
-        for (const auto tex_coord : square.tex_coords) {
-            cube.tex_coords.push_back(tex_coord);
-        }
-    }
-
-    ASSERT(cube.indices.size() == 36);
-    ASSERT(cube.positions.size() == 24);
-    ASSERT(cube.normals.size() == 24);
-    ASSERT(cube.tex_coords.size() == 24);
-    return cube;
+    return {
+        .indices = {
+             0,  1,  2,  2,  3,  0,
+             4,  5,  6,  6,  7,  4,
+             8,  9, 10, 10, 11,  8,
+            12, 13, 14, 14, 15, 12,
+            16, 17, 18, 18, 19, 16,
+            20, 21, 22, 22, 23, 20,
+        },
+        .positions = {
+            {-1.0f, -1.0f,  1.0f}, {-1.0f, -1.0f, -1.0f}, { 1.0f, -1.0f, -1.0f}, { 1.0f, -1.0f,  1.0f},
+            {-1.0f, -1.0f,  1.0f}, {-1.0f,  1.0f,  1.0f}, {-1.0f,  1.0f, -1.0f}, {-1.0f, -1.0f, -1.0f},
+            {-1.0f, -1.0f, -1.0f}, {-1.0f,  1.0f, -1.0f}, { 1.0f,  1.0f, -1.0f}, { 1.0f, -1.0f, -1.0f},
+            { 1.0f, -1.0f, -1.0f}, { 1.0f,  1.0f, -1.0f}, { 1.0f,  1.0f,  1.0f}, { 1.0f, -1.0f,  1.0f},
+            { 1.0f, -1.0f,  1.0f}, { 1.0f,  1.0f,  1.0f}, {-1.0f,  1.0f,  1.0f}, {-1.0f, -1.0f,  1.0f},
+            {-1.0f,  1.0f, -1.0f}, {-1.0f,  1.0f,  1.0f}, { 1.0f,  1.0f,  1.0f}, { 1.0f,  1.0f, -1.0f},
+        },
+        .normals = {
+            { 0.0f, -1.0f,  0.0f}, { 0.0f, -1.0f,  0.0f}, { 0.0f, -1.0f,  0.0f}, { 0.0f, -1.0f,  0.0f},
+            {-1.0f,  0.0f,  0.0f}, {-1.0f,  0.0f,  0.0f}, {-1.0f,  0.0f,  0.0f}, {-1.0f,  0.0f,  0.0f},
+            { 0.0f,  0.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}, { 0.0f,  0.0f, -1.0f},
+            { 1.0f,  0.0f,  0.0f}, { 1.0f,  0.0f,  0.0f}, { 1.0f,  0.0f,  0.0f}, { 1.0f,  0.0f,  0.0f},
+            { 0.0f,  0.0f,  1.0f}, { 0.0f,  0.0f,  1.0f}, { 0.0f,  0.0f,  1.0f}, { 0.0f,  0.0f,  1.0f},
+            { 0.0f,  1.0f,  0.0f}, { 0.0f,  1.0f,  0.0f}, { 0.0f,  1.0f,  0.0f}, { 0.0f,  1.0f,  0.0f},
+        },
+        .tex_coords = {
+            {0.0f, 0.0f}, {0.0f, 1.0f}, {1.0f, 1.0f}, {1.0f, 0.0f},
+            {0.0f, 0.0f}, {0.0f, 1.0f}, {1.0f, 1.0f}, {1.0f, 0.0f},
+            {0.0f, 0.0f}, {0.0f, 1.0f}, {1.0f, 1.0f}, {1.0f, 0.0f},
+            {0.0f, 0.0f}, {0.0f, 1.0f}, {1.0f, 1.0f}, {1.0f, 0.0f},
+            {0.0f, 0.0f}, {0.0f, 1.0f}, {1.0f, 1.0f}, {1.0f, 0.0f},
+            {0.0f, 0.0f}, {0.0f, 1.0f}, {1.0f, 1.0f}, {1.0f, 0.0f},
+        },
+    };
 }
 
 Mesh generate_sphere(i32 fidelity) {

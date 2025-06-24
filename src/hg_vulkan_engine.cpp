@@ -567,10 +567,8 @@ Result<vk::CommandBuffer> Window::begin_frame(const Engine& engine) {
     current_cmd().setSampleMaskEXT(vk::SampleCountFlagBits::e1, vk::SampleMask{0xff});
     current_cmd().setAlphaToCoverageEnableEXT(vk::False);
     current_cmd().setColorWriteMaskEXT(0, {
-          vk::ColorComponentFlagBits::eR
-        | vk::ColorComponentFlagBits::eG
-        | vk::ColorComponentFlagBits::eB
-        | vk::ColorComponentFlagBits::eA
+        vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+        vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA
     });
     current_cmd().setColorBlendEnableEXT(0, {vk::False});
 
