@@ -43,8 +43,8 @@ int main() {
     const auto gold_texture = model_renderer->load_texture_from_data(*engine, {gold_color.data(), 4, {2, 2, 1}});
     const auto hex_texture = *model_renderer->load_texture(*engine, "../assets/hexagon_models/Textures/hexagons_medieval.png");
 
-    const auto sphere = model_renderer->load_model_from_data(*engine, PbrRenderer::VertexData::from_mesh(generate_sphere(32)), gold_texture, 0.1f, 1.0f);
-    const auto cube = model_renderer->load_model_from_data(*engine, PbrRenderer::VertexData::from_mesh(generate_cube()), gold_texture, 0.1f, 1.0f);
+    const auto sphere = model_renderer->load_model_from_data(*engine, PbrRenderer::VertexData::from_mesh(generate_sphere({32, 16})), hex_texture, 0.1f, 0.0f);
+    const auto cube = model_renderer->load_model_from_data(*engine, PbrRenderer::VertexData::from_mesh(generate_cube()), hex_texture, 0.1f, 0.0f);
     const auto grass = *model_renderer->load_model(*engine, "../assets/hexagon_models/Assets/gltf/tiles/base/hex_grass.gltf", hex_texture);
     const auto tree = *model_renderer->load_model(*engine, "../assets/hexagon_models/Assets/gltf/decoration/nature/tree_single_A.gltf", hex_texture);
     const auto building = *model_renderer->load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_home_A_blue.gltf", hex_texture);

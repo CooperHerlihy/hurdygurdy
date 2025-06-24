@@ -13,6 +13,6 @@ struct Mesh {
 
 [[nodiscard]] Mesh generate_square();
 [[nodiscard]] Mesh generate_cube();
-[[nodiscard]] Mesh generate_sphere(i32 fidelity);
+[[nodiscard]] Mesh generate_sphere(glm::uvec2 fidelity);
 
 } // namespace hg

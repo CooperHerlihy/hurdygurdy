@@ -1,4 +1,4 @@
-#include "hg_mesh.h"
+#include "hg_generate.h"
 
 namespace hg {
 
@@ -48,50 +48,37 @@ Mesh generate_cube() {
     };
 }
 
-Mesh generate_sphere(i32 fidelity) {
-    ASSERT(fidelity >= 3);
+Mesh generate_sphere(const glm::uvec2 fidelity) {
+    ASSERT(fidelity.x >= 3);
+    ASSERT(fidelity.y >= 2);
 
     Mesh sphere = {};
-    sphere.positions.reserve(static_cast<usize>(2 + fidelity * fidelity));
-    sphere.normals.reserve(static_cast<usize>(2 + fidelity * fidelity));
-    sphere.tex_coords.resize(static_cast<usize>(2 + fidelity * fidelity));
 
-    glm::vec3 point = {0.0f, -1.0f, 0.0f};
-    sphere.positions.emplace_back(point);
-    sphere.normals.emplace_back(point);
-    for (i32 i = 0; i < fidelity; ++i) {
-        f32 h = -std::cos(glm::pi<f32>() * i / fidelity);
-        f32 r = std::sin(glm::pi<f32>() * i / fidelity);
-        for (i32 j = 0; j < fidelity; ++j) {
-            point = glm::vec3{r * std::cos(glm::tau<f32>() * j / fidelity), h, r * std::sin(glm::tau<f32>() * j / fidelity)};
-            sphere.positions.emplace_back(point);
-            sphere.normals.emplace_back(point);
+    sphere.positions.reserve((fidelity.x + 1) * (fidelity.y + 1));
+    sphere.normals.reserve((fidelity.x + 1) * (fidelity.y + 1));
+    sphere.tex_coords.reserve((fidelity.x + 1) * (fidelity.y + 1));
+    for (u32 i = 0; i <= fidelity.y; ++i) {
+        f32 h = -std::cos(glm::pi<f32>() * i / fidelity.y);
+        f32 r = std::sin(glm::pi<f32>() * i / fidelity.y);
+        for (u32 j = 0; j <= fidelity.x; ++j) {
+            f32 x = -std::sin(glm::tau<f32>() * j / fidelity.x) * r;
+            f32 y = std::cos(glm::tau<f32>() * j / fidelity.x) * r;
+            sphere.positions.emplace_back(x, h, y);
+            sphere.normals.emplace_back(x, h, y);
+            sphere.tex_coords.emplace_back(static_cast<f32>(j) / fidelity.x, static_cast<f32>(i) / fidelity.y);
         }
     }
-    point = {0.0f, 1.0f, 0.0f};
-    sphere.positions.emplace_back(point);
-    sphere.normals.emplace_back(point);
 
-    sphere.indices.reserve(static_cast<usize>(fidelity * (fidelity + 2) * 3));
-    for (i32 i = 0; i < fidelity; ++i) {
-        sphere.indices.push_back(0);
-        sphere.indices.push_back((i + 1) % fidelity + 1);
-        sphere.indices.push_back((i + 2) % fidelity + 1);
-    }
-    for (i32 i = 1; i <= fidelity * (fidelity - 1); ++i) {
-        sphere.indices.push_back(i);
-        sphere.indices.push_back(i + fidelity);
-        sphere.indices.push_back(i + 1);
-
-        sphere.indices.push_back(i + 1);
-        sphere.indices.push_back(i + fidelity);
-        sphere.indices.push_back(i + fidelity + 1);
-    }
-    i32 top_index = 1 + fidelity * fidelity;
-    for (i32 i = 0; i < fidelity; ++i) {
-        sphere.indices.push_back(top_index);
-        sphere.indices.push_back(top_index - ((i + 1) % fidelity + 1));
-        sphere.indices.push_back(top_index - ((i + 2) % fidelity + 1));
+    sphere.indices.reserve(fidelity.x * fidelity.y * 6);
+    for (u32 i = 0; i < (fidelity.x + 1) * (fidelity.y); ++i) {
+        if (i % (fidelity.x + 1) == (fidelity.x))
+            continue;
+        sphere.indices.emplace_back(i);
+        sphere.indices.emplace_back(i + fidelity.x + 1);
+        sphere.indices.emplace_back(i + fidelity.x + 2);
+        sphere.indices.emplace_back(i + fidelity.x + 2);
+        sphere.indices.emplace_back(i + 1);
+        sphere.indices.emplace_back(i);
     }
 
     ASSERT(!sphere.indices.empty());

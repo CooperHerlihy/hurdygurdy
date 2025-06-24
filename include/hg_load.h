@@ -1,7 +1,7 @@
 #pragma once
 
 #include "hg_utils.h"
-#include "hg_mesh.h"
+#include "hg_generate.h"
 
 #include <filesystem>
 #include <memory>

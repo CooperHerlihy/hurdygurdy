@@ -1,6 +1,5 @@
 #pragma once
 
-#include <assert.h>
 #include <chrono>
 #include <cstdint>
 #include <format>
@@ -35,7 +34,7 @@ inline void hg_assert_internal(const std::string_view message) {
     std::terminate();
 }
 
-#define ASSERT(condition) if (!(condition)) [[unlikely]] hg_assert_internal(#condition);
+#define ASSERT(condition) { if (!(condition)) [[unlikely]] hg_assert_internal(#condition); }
 
 #else
 
@@ -44,7 +43,7 @@ inline void hg_assert_internal(const std::string_view message, const std::string
     std::terminate();
 }
 
-#define ASSERT(condition) if (!(condition)) [[unlikely]] hg_assert_internal(#condition, __FILE__, __LINE__);
+#define ASSERT(condition) { if (!(condition)) [[unlikely]] hg_assert_internal(#condition, __FILE__, __LINE__); }
 
 #endif
 
@@ -53,7 +52,7 @@ inline void hg_error_internal(const std::string_view message, const std::string_
     std::terminate();
 }
 
-#define ERROR(message) hg_error_internal(message, __FILE__, __LINE__);
+#define ERROR(message) { hg_error_internal(message, __FILE__, __LINE__); }
 
 template <typename F> struct DeferInternal {
     F f;
