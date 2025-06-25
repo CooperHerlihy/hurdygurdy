@@ -1,18 +1,41 @@
 #include "hg_generate.h"
 
+#include <mikktspace/mikktspace.h>
+
 namespace hg {
 
+void Mesh::generate_tangents() {
+    // TODO: use mikktspace to generator tangents
+}
+
 Mesh generate_square() {
-    return {
-        .indices    = {0, 1, 2, 2, 3, 0},
-        .positions  = {{-1.0f, -1.0f,  0.0f}, {-1.0f,  1.0f,  0.0f}, { 1.0f,  1.0f,  0.0f}, { 1.0f, -1.0f,  0.0f}},
-        .normals    = {{ 0.0f,  0.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}},
-        .tex_coords = {{ 0.0f,  0.0f       }, { 0.0f,  1.0f       }, { 1.0f,  1.0f       }, { 1.0f,  0.0f       }},
+    Mesh square = {
+        .indices = {0, 1, 2, 2, 3, 0},
+        .positions = {
+            {-1.0f, -1.0f,  0.0f},
+            {-1.0f,  1.0f,  0.0f},
+            { 1.0f,  1.0f,  0.0f},
+            { 1.0f, -1.0f,  0.0f}
+        },
+        .normals = {
+            { 0.0f,  0.0f, -1.0f},
+            { 0.0f,  0.0f, -1.0f},
+            { 0.0f,  0.0f, -1.0f},
+            { 0.0f,  0.0f, -1.0f}
+        },
+        .tex_coords = {
+            { 0.0f,  0.0f},
+            { 0.0f,  1.0f},
+            { 1.0f,  1.0f},
+            { 1.0f,  0.0f}
+        },
     };
+    square.generate_tangents();
+    return square;
 }
 
 Mesh generate_cube() {
-    return {
+    Mesh cube = {
         .indices = {
              0,  1,  2,  2,  3,  0,
              4,  5,  6,  6,  7,  4,
@@ -46,6 +69,8 @@ Mesh generate_cube() {
             {0.0f, 0.0f}, {0.0f, 1.0f}, {1.0f, 1.0f}, {1.0f, 0.0f},
         },
     };
+    cube.generate_tangents();
+    return cube;
 }
 
 Mesh generate_sphere(const glm::uvec2 fidelity) {
@@ -81,9 +106,12 @@ Mesh generate_sphere(const glm::uvec2 fidelity) {
         sphere.indices.emplace_back(i);
     }
 
+    sphere.generate_tangents();
+
     ASSERT(!sphere.indices.empty());
     ASSERT(!sphere.positions.empty());
     ASSERT(!sphere.normals.empty());
+    // ASSERT(!sphere.tangents.empty());
     ASSERT(!sphere.tex_coords.empty());
     return sphere;
 }

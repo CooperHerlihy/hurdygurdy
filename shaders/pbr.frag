@@ -25,6 +25,7 @@ layout(set = 1, binding = 0) uniform sampler2D u_samplers[];
 
 layout(push_constant) uniform PushConstant {
     mat4 model;
+    uint normal_map_index;
     uint texture_index;
     float roughness;
     float metal;

@@ -38,19 +38,27 @@ int main() {
     if (skybox.has_err())
         ERROR(errf(skybox));
 
+    std::array<glm::vec4, 4> default_normal_image = {};
+    default_normal_image.fill(glm::vec4{0.0f, 0.0f, -1.0f, 0.0f});
+    const auto default_normal_texture = model_renderer->load_texture_from_data(*engine, {default_normal_image.data(), sizeof(glm::vec4), {16, 16, 1}}, vk::Format::eR32G32B32A32Sfloat);
+
+    const auto noise_normal_image = generate_white_noise_normal_map(64, 64, 0.01935478);
+    const auto noise_normal_texture = model_renderer->load_texture_from_data(*engine, {noise_normal_image.data(), sizeof(glm::vec4), {64, 64, 1}}, vk::Format::eR32G32B32A32Sfloat);
+
+    const auto noise_image = generate_white_noise_texture(256, 256, 0.290518734);
+    const auto noise_texture = model_renderer->load_texture_from_data(*engine, GpuImage::Data{noise_image.data(), sizeof(f32), {256, 256, 1}});
+
     std::array<u32, 4> gold_color = {};
     gold_color.fill(0xff44ccff);
     const auto gold_texture = model_renderer->load_texture_from_data(*engine, {gold_color.data(), 4, {2, 2, 1}});
+
     const auto hex_texture = *model_renderer->load_texture(*engine, "../assets/hexagon_models/Textures/hexagons_medieval.png");
 
-    const auto sphere = model_renderer->load_model_from_data(*engine, PbrRenderer::VertexData::from_mesh(generate_sphere({32, 16})), hex_texture, 0.1f, 0.0f);
-    const auto cube = model_renderer->load_model_from_data(*engine, PbrRenderer::VertexData::from_mesh(generate_cube()), hex_texture, 0.1f, 0.0f);
-    const auto grass = *model_renderer->load_model(*engine, "../assets/hexagon_models/Assets/gltf/tiles/base/hex_grass.gltf", hex_texture);
-    const auto tree = *model_renderer->load_model(*engine, "../assets/hexagon_models/Assets/gltf/decoration/nature/tree_single_A.gltf", hex_texture);
-    const auto building = *model_renderer->load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_home_A_blue.gltf", hex_texture);
-    const auto tower = *model_renderer->load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_tower_A_blue.gltf", hex_texture);
-    const auto blacksmith = *model_renderer->load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_blacksmith_blue.gltf", hex_texture);
-    const auto castle = *model_renderer->load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_castle_blue.gltf", hex_texture);
+    const auto cube = model_renderer->load_model_from_data(*engine, PbrRenderer::VertexData::from_mesh(generate_cube()), noise_normal_texture, noise_texture, 0.1f, 0.0f);
+    const auto sphere = model_renderer->load_model_from_data(*engine, PbrRenderer::VertexData::from_mesh(generate_sphere({64, 32})), noise_normal_texture, gold_texture, 0.1f, 0.0f);
+    const auto grass = *model_renderer->load_model(*engine, "../assets/hexagon_models/Assets/gltf/tiles/base/hex_grass.gltf", default_normal_texture, hex_texture);
+    const auto building = *model_renderer->load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_home_A_blue.gltf", default_normal_texture, hex_texture);
+    const auto tower = *model_renderer->load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_tower_A_blue.gltf", default_normal_texture, hex_texture);
 
     const f32 aspect_ratio = static_cast<f32>(window->extent().width) / static_cast<f32>(window->extent().height);
     pipeline->update_projection(*engine, glm::perspective(glm::pi<f32>() / 4.0f, aspect_ratio, 0.1f, 100.f));
@@ -109,24 +117,14 @@ int main() {
         model_renderer->queue_model(cube, {.position = {0.5f, -0.5f, 0.0f}, .scale = {0.25f, 0.25f, 0.25f}});
 
         model_renderer->queue_model(grass, {.position = {-1.0f, -0.25f, sqrt3}});
-        model_renderer->queue_model(blacksmith, {.position = {-1.0f, -0.25f, sqrt3}});
+        model_renderer->queue_model(building, {.position = {-1.0f, -0.25f, sqrt3}});
 
         model_renderer->queue_model(grass, {.position = {1.0f, -0.5f, sqrt3}});
-        model_renderer->queue_model(castle, {.position = {1.0f, -0.5f, sqrt3}});
-
-        model_renderer->queue_model(grass, {.position = {-2.0f, -0.1f, 0.0f}});
-        model_renderer->queue_model(building, {.position = {-2.0f, -0.1f, 0.0f}});
-        model_renderer->queue_model(tree, {.position = {-2.0f - 0.75f, -0.1f, 0.0f - 0.25f}});
-
-        model_renderer->queue_model(grass, {.position = {2.0f, -0.25f, 0.0f}});
-        model_renderer->queue_model(tower, {.position = {2.0f, -0.25f, 0.0f}});
-        model_renderer->queue_model(tree, {.position = {2.0f - 0.75f, -0.25f, 0.0f + 0.25f}});
-        model_renderer->queue_model(tree, {.position = {2.0f + 0.75f, -0.25f, 0.0f - 0.25f}});
+        model_renderer->queue_model(tower, {.position = {1.0f, -0.5f, sqrt3}});
 
         pipeline->clear_lights();
 
         pipeline->add_light({-2.0f, -3.0f, -2.0f}, {glm::vec3{1.0f, 1.0f, 1.0f} * 300.0f});
-        pipeline->add_light({-0.8f, -0.5f, 1.5}, {glm::vec3{1.0f, 0.2f, 0.0f} * 10.0f});
 
         pipeline->update_camera(*engine, camera);
 

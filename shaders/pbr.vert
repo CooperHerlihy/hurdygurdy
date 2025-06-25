@@ -6,7 +6,8 @@ layout(location = 2) out vec2 f_uv;
 
 layout(location = 0) in vec3 in_pos;
 layout(location = 1) in vec3 in_normal;
-layout(location = 2) in vec2 in_uv;
+layout(location = 2) in vec3 in_tangent;
+layout(location = 3) in vec2 in_uv;
 
 layout(set = 0, binding = 0) uniform VP {
     mat4 projection;
@@ -15,6 +16,7 @@ layout(set = 0, binding = 0) uniform VP {
 
 layout(push_constant) uniform PushConstant {
     mat4 model;
+    uint normal_map_index;
     uint texture_index;
     float roughness;
     float metal;

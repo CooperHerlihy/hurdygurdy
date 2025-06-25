@@ -486,9 +486,10 @@ Result<void> Window::resize(const Engine& engine) {
         .imageArrayLayers = 1,
         .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferDst,
         .preTransform = surface_capabilities.currentTransform,
-        .presentMode = std::ranges::any_of(present_modes, [](const vk::PresentModeKHR mode) {
-            return mode == vk::PresentModeKHR::eMailbox;
-        }) ? vk::PresentModeKHR::eMailbox : vk::PresentModeKHR::eFifo,
+        .presentMode = std::ranges::any_of(present_modes, [](const vk::PresentModeKHR mode) { return mode == vk::PresentModeKHR::eMailbox; })
+            // ? vk::PresentModeKHR::eMailbox
+            ? vk::PresentModeKHR::eFifo
+            : vk::PresentModeKHR::eFifo,
         .clipped = vk::True,
         .oldSwapchain = m_swapchain,
     });

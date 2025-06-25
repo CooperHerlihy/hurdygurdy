@@ -73,16 +73,27 @@ Result<ModelData> ModelData::load_gltf(const std::filesystem::path path) {
             if (tex_coord_accessor.type != fastgltf::AccessorType::Vec2)
                 return Err::GltfFileInvalid;
 
-            fastgltf::iterateAccessor<u32>(asset.get(), index_accessor, [&](u32 index) { model->mesh.indices.emplace_back(index + to_u32(model->mesh.positions.size())); });
-            fastgltf::iterateAccessor<glm::vec3>(asset.get(), position_accessor, [&](glm::vec3 position) { model->mesh.positions.emplace_back(position * glm::vec3{1.0f, -1.0f, -1.0f}); });
-            fastgltf::iterateAccessor<glm::vec3>(asset.get(), normal_accessor, [&](glm::vec3 normal) { model->mesh.normals.emplace_back(normal * glm::vec3{1.0f, -1.0f, -1.0f}); });
-            fastgltf::iterateAccessor<glm::vec2>(asset.get(), tex_coord_accessor, [&](glm::vec2 tex_coord) { model->mesh.tex_coords.emplace_back(tex_coord); });
+            fastgltf::iterateAccessor<u32>(asset.get(), index_accessor, [&](u32 index) { 
+                model->mesh.indices.emplace_back(index + to_u32(model->mesh.positions.size()));
+            });
+            fastgltf::iterateAccessor<glm::vec3>(asset.get(), position_accessor, [&](glm::vec3 position) {
+                model->mesh.positions.emplace_back(position * glm::vec3{1.0f, -1.0f, -1.0f});
+            });
+            fastgltf::iterateAccessor<glm::vec3>(asset.get(), normal_accessor, [&](glm::vec3 normal) {
+                model->mesh.normals.emplace_back(normal * glm::vec3{1.0f, -1.0f, -1.0f});
+            });
+            fastgltf::iterateAccessor<glm::vec2>(asset.get(), tex_coord_accessor, [&](glm::vec2 tex_coord) {
+                model->mesh.tex_coords.emplace_back(tex_coord);
+            });
         }
     }
+
+    model->mesh.generate_tangents();
 
     ASSERT(!model->mesh.indices.empty());
     ASSERT(!model->mesh.positions.empty());
     ASSERT(!model->mesh.normals.empty());
+    // ASSERT(!model->mesh.tangents.empty());
     ASSERT(!model->mesh.tex_coords.empty());
     return model;
 }

@@ -467,7 +467,8 @@ void PbrRenderer::cmd_draw(const vk::CommandBuffer cmd, const vk::DescriptorSet 
     }, {
         vk::VertexInputAttributeDescription2EXT{.location = 0, .format = vk::Format::eR32G32B32Sfloat, .offset = offsetof(Vertex, position)},
         vk::VertexInputAttributeDescription2EXT{.location = 1, .format = vk::Format::eR32G32B32Sfloat, .offset = offsetof(Vertex, normal)},
-        vk::VertexInputAttributeDescription2EXT{.location = 2, .format = vk::Format::eR32G32Sfloat, .offset = offsetof(Vertex, tex_coord)}
+        vk::VertexInputAttributeDescription2EXT{.location = 2, .format = vk::Format::eR32G32B32Sfloat, .offset = offsetof(Vertex, tangent)},
+        vk::VertexInputAttributeDescription2EXT{.location = 3, .format = vk::Format::eR32G32Sfloat, .offset = offsetof(Vertex, tex_coord)}
     });
     cmd.bindShadersEXT({vk::ShaderStageFlagBits::eVertex, vk::ShaderStageFlagBits::eFragment}, m_shaders);
 
@@ -477,6 +478,7 @@ void PbrRenderer::cmd_draw(const vk::CommandBuffer cmd, const vk::DescriptorSet 
 
         PushConstant model_push = {
             .model = ticket.transform.matrix(),
+            .normal_map_index = to_u32(model.normal_map.index),
             .texture_index = to_u32(model.texture.index),
             .roughness = model.roughness,
             .metalness = model.metalness
@@ -544,7 +546,8 @@ PbrRenderer::TextureHandle PbrRenderer::load_texture_from_data(
 }
 
 Result<PbrRenderer::ModelHandle> PbrRenderer::load_model(
-    const Engine& engine, std::filesystem::path path, TextureHandle texture
+    const Engine& engine, const std::filesystem::path path,
+    const TextureHandle normal_map, const TextureHandle texture
 ) {
     ASSERT(!path.empty());
     ASSERT(texture.index < m_textures.size());
@@ -554,14 +557,16 @@ Result<PbrRenderer::ModelHandle> PbrRenderer::load_model(
         return model.err();
 
     const auto vertex_data = VertexData::from_mesh(std::move(model->mesh));
-    return ok(load_model_from_data(engine, vertex_data, texture, model->roughness, model->metalness));
+    return ok(load_model_from_data(engine, vertex_data, normal_map, texture, model->roughness, model->metalness));
 }
 
 PbrRenderer::ModelHandle PbrRenderer::load_model_from_data(
     const Engine& engine,
     const VertexData& data,
+    const TextureHandle normal_map,
     const TextureHandle texture,
-    const float roughness, const float metalness
+    const float roughness,
+    const float metalness
 ) {
     ASSERT(!data.indices.empty());
     ASSERT(!data.vertices.empty());
@@ -586,7 +591,12 @@ PbrRenderer::ModelHandle PbrRenderer::load_model_from_data(
     ASSERT(index_buffer.buffer != nullptr);
     ASSERT(vertex_buffer.allocation != nullptr);
     ASSERT(vertex_buffer.buffer != nullptr);
-    m_models.emplace_back(to_u32(data.indices.size()), index_buffer, vertex_buffer, texture, roughness, metalness);
+    m_models.emplace_back(
+        to_u32(data.indices.size()),
+        index_buffer, vertex_buffer,
+        normal_map, texture,
+        roughness, metalness
+    );
     return {m_models.size() - 1};
 }
 
@@ -594,12 +604,14 @@ PbrRenderer::VertexData PbrRenderer::VertexData::from_mesh(const Mesh& mesh) {
     ASSERT(!mesh.indices.empty());
     ASSERT(!mesh.positions.empty());
     ASSERT(!mesh.normals.empty());
+    // ASSERT(!mesh.tangents.empty());
     ASSERT(!mesh.tex_coords.empty());
 
     VertexData data = {.indices = std::move(mesh.indices)};
     data.vertices.reserve(mesh.positions.size());
     for (usize i = 0; i < mesh.positions.size(); ++i) {
-        data.vertices.emplace_back(mesh.positions[i], mesh.normals[i], mesh.tex_coords[i]);
+        // data.vertices.emplace_back(mesh.positions[i], mesh.normals[i], mesh.tangents[i], mesh.tex_coords[i]);
+        data.vertices.emplace_back(mesh.positions[i], mesh.normals[i], glm::vec3{}, mesh.tex_coords[i]);
     }
 
     ASSERT(!data.indices.empty());

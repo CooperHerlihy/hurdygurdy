@@ -110,6 +110,7 @@ public:
     struct Vertex {
         glm::vec3 position = {};
         glm::vec3 normal = {};
+        glm::vec3 tangent = {};
         glm::vec2 tex_coord = {};
     };
 
@@ -122,6 +123,7 @@ public:
 
     struct PushConstant {
         glm::mat4 model = {1.0f};
+        u32 normal_map_index = UINT32_MAX;
         u32 texture_index = UINT32_MAX;
         float roughness = 0.0f;
         float metalness = 0.0f;
@@ -156,6 +158,7 @@ public:
         u32 index_count = 0;
         GpuBuffer index_buffer = {};
         GpuBuffer vertex_buffer = {};
+        TextureHandle normal_map = {};
         TextureHandle texture = {};
         float roughness = 0.0;
         float metalness = 0.0;
@@ -173,10 +176,13 @@ public:
     [[nodiscard]] Result<ModelHandle> load_model(
         const Engine& engine,
         std::filesystem::path path,
-        TextureHandle texture);
+        TextureHandle normal_map,
+        TextureHandle texture
+    );
     [[nodiscard]] ModelHandle load_model_from_data(
         const Engine& engine,
         const VertexData& data,
+        TextureHandle normal_map,
         TextureHandle texture,
         float roughness, float metalness
     );
