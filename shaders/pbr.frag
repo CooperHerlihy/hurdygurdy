@@ -18,8 +18,8 @@ struct Light {
 };
 
 layout(set = 0, binding = 1) uniform LightUniform {
-    Light vals[MaxLights];
     uint count;
+    Light vals[MaxLights];
 } u_light;
 
 layout(set = 1, binding = 0) uniform sampler2D u_samplers[];

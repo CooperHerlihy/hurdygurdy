@@ -352,11 +352,10 @@ void SkyboxRenderer::cmd_draw(const vk::CommandBuffer cmd, const vk::DescriptorS
     cmd.bindShadersEXT({vk::ShaderStageFlagBits::eVertex, vk::ShaderStageFlagBits::eFragment}, m_shaders);
     cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipeline_layout, 0, {global_set, m_set}, {});
 
-    cmd.setVertexInputEXT({
-        vk::VertexInputBindingDescription2EXT{.stride = sizeof(glm::vec3), .inputRate = vk::VertexInputRate::eVertex, .divisor = 1}
-    }, {
-        vk::VertexInputAttributeDescription2EXT{.location = 0, .format = vk::Format::eR32G32B32Sfloat}
-    });
+    cmd.setVertexInputEXT(
+        {vk::VertexInputBindingDescription2EXT{.stride = sizeof(glm::vec3), .inputRate = vk::VertexInputRate::eVertex, .divisor = 1}},
+        {vk::VertexInputAttributeDescription2EXT{.location = 0, .format = vk::Format::eR32G32B32Sfloat}}
+    );
     cmd.bindVertexBuffers(0, {m_vertex_buffer.buffer}, {vk::DeviceSize{0}});
     cmd.bindIndexBuffer(m_index_buffer.buffer, 0, vk::IndexType::eUint32);
     cmd.drawIndexed(36, 1, 0, 0, 1);
@@ -371,12 +370,8 @@ Result<PbrRenderer> PbrRenderer::create(const Engine& engine, const DefaultPipel
 
     const auto set_layout = create_descriptor_set_layout(
         engine,
-        std::array{
-            vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, MaxTextures, vk::ShaderStageFlagBits::eFragment},
-        },
-        std::array{
-            vk::DescriptorBindingFlags{vk::DescriptorBindingFlagBits::ePartiallyBound}
-        }
+        std::array{vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, MaxTextures, vk::ShaderStageFlagBits::eFragment},},
+        std::array{vk::DescriptorBindingFlags{vk::DescriptorBindingFlagBits::ePartiallyBound}}
     );
     if (set_layout.has_err())
         return set_layout.err();

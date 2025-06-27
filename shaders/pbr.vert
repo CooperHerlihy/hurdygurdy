@@ -25,11 +25,12 @@ layout(push_constant) uniform PushConstant {
 
 void main() {
     const mat4 mv = u_vp.view * push.model;
+    const mat3 imv = mat3(transpose(inverse(mv)));
     const vec4 pos = mv * vec4(in_pos, 1.0);
 
     f_pos = pos.xyz;
-    f_normal = mat3(transpose(inverse(mv))) * in_normal;
-    f_tangent = vec4(mat3(transpose(inverse(mv))) * in_tangent.xyz, in_tangent.w);
+    f_normal = imv * in_normal;
+    f_tangent = vec4(imv * in_tangent.xyz, in_tangent.w);
     f_uv = in_uv;
 
     gl_Position = u_vp.projection * pos;

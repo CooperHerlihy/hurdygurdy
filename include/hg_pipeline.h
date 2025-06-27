@@ -30,8 +30,8 @@ public:
     };
 
     struct LightUniform {
-        Light vals[MaxLights] = {};
         alignas(16) usize count = 0;
+        alignas(16) Light vals[MaxLights] = {};
     };
 
     [[nodiscard]] static Result<DefaultPipeline> create(const Engine& engine, vk::Extent2D window_size);

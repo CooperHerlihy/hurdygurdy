@@ -23,16 +23,15 @@ int main() {
     defer(pipeline->destroy(*engine));
 
     auto skybox_renderer = SkyboxRenderer::create(*engine, *pipeline);
+    auto model_renderer = PbrRenderer::create(*engine, *pipeline);
+    defer(skybox_renderer->destroy(*engine));
+    defer(model_renderer->destroy(*engine));
+    pipeline->add_render_system(*skybox_renderer);
+    pipeline->add_render_system(*model_renderer);
     if (skybox_renderer.has_err())
         ERROR(errf(skybox_renderer));
-    defer(skybox_renderer->destroy(*engine));
-    pipeline->add_render_system(*skybox_renderer);
-
-    auto model_renderer = PbrRenderer::create(*engine, *pipeline);
     if (model_renderer.has_err())
         ERROR(errf(model_renderer));
-    defer(model_renderer->destroy(*engine));
-    pipeline->add_render_system(*model_renderer);
 
     const auto skybox = skybox_renderer->load_skybox(*engine, "../assets/cloudy_skyboxes/Cubemap/Cubemap_Sky_06-512x512.png");
     if (skybox.has_err())

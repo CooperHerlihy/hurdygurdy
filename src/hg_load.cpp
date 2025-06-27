@@ -37,7 +37,10 @@ Result<ModelData> ModelData::load_gltf(const std::filesystem::path path) {
     if (buffer.error() != fastgltf::Error::None)
         return Err::GltfFileInvalid;
 
-    const auto options = fastgltf::Options::DecomposeNodeMatrices | fastgltf::Options::GenerateMeshIndices | fastgltf::Options::LoadExternalBuffers; // | fastgltf::Options::LoadExternalImages;
+    const auto options = fastgltf::Options::DecomposeNodeMatrices
+                       | fastgltf::Options::GenerateMeshIndices
+                       // | fastgltf::Options::LoadExternalImages
+                       | fastgltf::Options::LoadExternalBuffers;
     auto asset = parser.loadGltf(buffer.get(), path.parent_path(), options);
     if (asset.error() != fastgltf::Error::None)
         return Err::GltfFileInvalid;
