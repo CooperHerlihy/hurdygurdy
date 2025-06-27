@@ -107,20 +107,6 @@ public:
     [[nodiscard]] static Result<PbrRenderer> create(const Engine& engine, const DefaultPipeline& pipeline);
     void destroy(const Engine& engine) const;
 
-    struct Vertex {
-        glm::vec3 position = {};
-        glm::vec3 normal = {};
-        glm::vec3 tangent = {};
-        glm::vec2 tex_coord = {};
-    };
-
-    struct VertexData {
-        std::vector<u32> indices = {};
-        std::vector<Vertex> vertices = {};
-
-        static VertexData from_mesh(const Mesh& mesh);
-    };
-
     struct PushConstant {
         glm::mat4 model = {1.0f};
         u32 normal_map_index = UINT32_MAX;
@@ -181,7 +167,7 @@ public:
     );
     [[nodiscard]] ModelHandle load_model_from_data(
         const Engine& engine,
-        const VertexData& data,
+        const Mesh& data,
         TextureHandle normal_map,
         TextureHandle texture,
         float roughness, float metalness

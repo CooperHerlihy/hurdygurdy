@@ -29,7 +29,7 @@ namespace hg {
 
 #ifdef NDEBUG
 
-inline void hg_assert_internal(const std::string_view message) {
+[[noreturn]] inline void hg_assert_internal(const std::string_view message) {
     std::cerr << std::format("Failed assertion: {}\n", message);
     std::terminate();
 }
@@ -38,7 +38,7 @@ inline void hg_assert_internal(const std::string_view message) {
 
 #else
 
-inline void hg_assert_internal(const std::string_view message, const std::string_view file, const int line) {
+[[noreturn]] inline void hg_assert_internal(const std::string_view message, const std::string_view file, const int line) {
     std::cerr << std::format("Failed assertion: {}\n    File: {}\n    Line: {}\n", message, file, line);
     std::terminate();
 }
@@ -47,7 +47,7 @@ inline void hg_assert_internal(const std::string_view message, const std::string
 
 #endif
 
-inline void hg_error_internal(const std::string_view message, const std::string_view file, const int line) {
+[[noreturn]] inline void hg_error_internal(const std::string_view message, const std::string_view file, const int line) {
     std::cerr << std::format("Critical error: {}\n    File: {}\n    Line: {}\n", message, file, line);
     std::terminate();
 }

@@ -1,118 +1,194 @@
 #include "hg_generate.h"
+#include "hg_utils.h"
 
 #include <mikktspace/mikktspace.h>
+#include <welder/weldmesh.h>
 
 namespace hg {
 
-void Mesh::generate_tangents() {
-    // TODO: use mikktspace to generator tangents
+void create_tangents(std::span<Vertex> primitives) {
+    ASSERT(primitives.size() % 3 == 0);
+
+    SMikkTSpaceInterface mikk_functions = {
+        .m_getNumFaces = [](const SMikkTSpaceContext* pContext) {
+            return static_cast<int>(static_cast<std::span<Vertex>*>(pContext->m_pUserData)->size() / 3);
+        },
+        .m_getNumVerticesOfFace = [](const SMikkTSpaceContext*, const int) {
+            return 3;
+        },
+        .m_getPosition = [](const SMikkTSpaceContext * pContext, float fvPosOut[], const int iFace, const int iVert) {
+            glm::vec3 pos = (*static_cast<std::span<Vertex>*>(pContext->m_pUserData))[iFace * 3 + iVert].position;
+            fvPosOut[0] = pos.x;
+            fvPosOut[1] = pos.y;
+            fvPosOut[2] = pos.z;
+        },
+        .m_getNormal = [](const SMikkTSpaceContext * pContext, float fvNormOut[], const int iFace, const int iVert) {
+            glm::vec3 normal = (*static_cast<std::span<Vertex>*>(pContext->m_pUserData))[iFace * 3 + iVert].normal;
+            fvNormOut[0] = normal.x;
+            fvNormOut[1] = normal.y;
+            fvNormOut[2] = normal.z;
+        } ,
+        .m_getTexCoord = [](const SMikkTSpaceContext * pContext, float fvTexcOut[], const int iFace, const int iVert) {
+            glm::vec2 tex = (*static_cast<std::span<Vertex>*>(pContext->m_pUserData))[iFace * 3 + iVert].tex_coord;
+            fvTexcOut[0] = tex.x;
+            fvTexcOut[1] = tex.y;
+        },
+        .m_setTSpaceBasic = [](const SMikkTSpaceContext * pContext, const float fvTangent[], const float fSign, const int iFace, const int iVert) {
+            (*static_cast<std::span<Vertex>*>(pContext->m_pUserData))[iFace * 3 + iVert].tangent = {fvTangent[0], fvTangent[1], fvTangent[2], fSign};
+        },
+        .m_setTSpace = nullptr,
+    };
+    SMikkTSpaceContext mikk_context = {
+        .m_pInterface = &mikk_functions,
+        .m_pUserData = reinterpret_cast<void*>(&primitives),
+    };
+    genTangSpaceDefault(&mikk_context);
+}
+
+Mesh Mesh::from_primitives(const std::span<const Vertex> primitives) {
+    ASSERT(primitives.size() % 3 == 0);
+
+    Mesh mesh = {};
+    mesh.indices.resize(primitives.size());
+    mesh.vertices.resize(primitives.size());
+    WeldMesh(
+        reinterpret_cast<int*>(mesh.indices.data()),
+        reinterpret_cast<float*>(mesh.vertices.data()),
+        reinterpret_cast<const float*>(primitives.data()),
+        static_cast<i32>(primitives.size()),
+        sizeof(Vertex) / sizeof(float)
+    );
+
+    return mesh;
 }
 
 Mesh generate_square() {
-    Mesh square = {
-        .indices = {0, 1, 2, 2, 3, 0},
-        .positions = {
-            {-1.0f, -1.0f,  0.0f},
-            {-1.0f,  1.0f,  0.0f},
-            { 1.0f,  1.0f,  0.0f},
-            { 1.0f, -1.0f,  0.0f}
-        },
-        .normals = {
-            { 0.0f,  0.0f, -1.0f},
-            { 0.0f,  0.0f, -1.0f},
-            { 0.0f,  0.0f, -1.0f},
-            { 0.0f,  0.0f, -1.0f}
-        },
-        .tex_coords = {
-            { 0.0f,  0.0f},
-            { 0.0f,  1.0f},
-            { 1.0f,  1.0f},
-            { 1.0f,  0.0f}
-        },
+    std::vector<Vertex> square = {
+        { {-1.0f, -1.0f,  0.0f}, { 0.0f,  0.0f, -1.0f}, {}, { 0.0f,  0.0f}, },
+        { {-1.0f,  1.0f,  0.0f}, { 0.0f,  0.0f, -1.0f}, {}, { 0.0f,  1.0f}, },
+        { { 1.0f,  1.0f,  0.0f}, { 0.0f,  0.0f, -1.0f}, {}, { 1.0f,  1.0f}, },
+        { { 1.0f,  1.0f,  0.0f}, { 0.0f,  0.0f, -1.0f}, {}, { 1.0f,  1.0f}, },
+        { { 1.0f, -1.0f,  0.0f}, { 0.0f,  0.0f, -1.0f}, {}, { 1.0f,  0.0f}, },
+        { {-1.0f, -1.0f,  0.0f}, { 0.0f,  0.0f, -1.0f}, {}, { 0.0f,  0.0f}, },
     };
-    square.generate_tangents();
-    return square;
+    create_tangents(square);
+    return Mesh::from_primitives(square);
 }
 
 Mesh generate_cube() {
-    Mesh cube = {
-        .indices = {
-             0,  1,  2,  2,  3,  0,
-             4,  5,  6,  6,  7,  4,
-             8,  9, 10, 10, 11,  8,
-            12, 13, 14, 14, 15, 12,
-            16, 17, 18, 18, 19, 16,
-            20, 21, 22, 22, 23, 20,
-        },
-        .positions = {
-            {-1.0f, -1.0f,  1.0f}, {-1.0f, -1.0f, -1.0f}, { 1.0f, -1.0f, -1.0f}, { 1.0f, -1.0f,  1.0f},
-            {-1.0f, -1.0f,  1.0f}, {-1.0f,  1.0f,  1.0f}, {-1.0f,  1.0f, -1.0f}, {-1.0f, -1.0f, -1.0f},
-            {-1.0f, -1.0f, -1.0f}, {-1.0f,  1.0f, -1.0f}, { 1.0f,  1.0f, -1.0f}, { 1.0f, -1.0f, -1.0f},
-            { 1.0f, -1.0f, -1.0f}, { 1.0f,  1.0f, -1.0f}, { 1.0f,  1.0f,  1.0f}, { 1.0f, -1.0f,  1.0f},
-            { 1.0f, -1.0f,  1.0f}, { 1.0f,  1.0f,  1.0f}, {-1.0f,  1.0f,  1.0f}, {-1.0f, -1.0f,  1.0f},
-            {-1.0f,  1.0f, -1.0f}, {-1.0f,  1.0f,  1.0f}, { 1.0f,  1.0f,  1.0f}, { 1.0f,  1.0f, -1.0f},
-        },
-        .normals = {
-            { 0.0f, -1.0f,  0.0f}, { 0.0f, -1.0f,  0.0f}, { 0.0f, -1.0f,  0.0f}, { 0.0f, -1.0f,  0.0f},
-            {-1.0f,  0.0f,  0.0f}, {-1.0f,  0.0f,  0.0f}, {-1.0f,  0.0f,  0.0f}, {-1.0f,  0.0f,  0.0f},
-            { 0.0f,  0.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}, { 0.0f,  0.0f, -1.0f},
-            { 1.0f,  0.0f,  0.0f}, { 1.0f,  0.0f,  0.0f}, { 1.0f,  0.0f,  0.0f}, { 1.0f,  0.0f,  0.0f},
-            { 0.0f,  0.0f,  1.0f}, { 0.0f,  0.0f,  1.0f}, { 0.0f,  0.0f,  1.0f}, { 0.0f,  0.0f,  1.0f},
-            { 0.0f,  1.0f,  0.0f}, { 0.0f,  1.0f,  0.0f}, { 0.0f,  1.0f,  0.0f}, { 0.0f,  1.0f,  0.0f},
-        },
-        .tex_coords = {
-            {0.0f, 0.0f}, {0.0f, 1.0f}, {1.0f, 1.0f}, {1.0f, 0.0f},
-            {0.0f, 0.0f}, {0.0f, 1.0f}, {1.0f, 1.0f}, {1.0f, 0.0f},
-            {0.0f, 0.0f}, {0.0f, 1.0f}, {1.0f, 1.0f}, {1.0f, 0.0f},
-            {0.0f, 0.0f}, {0.0f, 1.0f}, {1.0f, 1.0f}, {1.0f, 0.0f},
-            {0.0f, 0.0f}, {0.0f, 1.0f}, {1.0f, 1.0f}, {1.0f, 0.0f},
-            {0.0f, 0.0f}, {0.0f, 1.0f}, {1.0f, 1.0f}, {1.0f, 0.0f},
-        },
+    std::vector<Vertex> cube = {
+        { {-1.0f, -1.0f,  1.0f}, { 0.0f, -1.0f,  0.0f}, {}, {0.0f, 0.0f}, },
+        { {-1.0f, -1.0f, -1.0f}, { 0.0f, -1.0f,  0.0f}, {}, {0.0f, 1.0f}, },
+        { { 1.0f, -1.0f, -1.0f}, { 0.0f, -1.0f,  0.0f}, {}, {1.0f, 1.0f}, },
+        { { 1.0f, -1.0f, -1.0f}, { 0.0f, -1.0f,  0.0f}, {}, {1.0f, 1.0f}, },
+        { { 1.0f, -1.0f,  1.0f}, { 0.0f, -1.0f,  0.0f}, {}, {1.0f, 0.0f}, },
+        { {-1.0f, -1.0f,  1.0f}, { 0.0f, -1.0f,  0.0f}, {}, {0.0f, 0.0f}, },
+
+        { {-1.0f, -1.0f,  1.0f}, {-1.0f,  0.0f,  0.0f}, {}, {0.0f, 0.0f}, },
+        { {-1.0f,  1.0f,  1.0f}, {-1.0f,  0.0f,  0.0f}, {}, {0.0f, 1.0f}, },
+        { {-1.0f,  1.0f, -1.0f}, {-1.0f,  0.0f,  0.0f}, {}, {1.0f, 1.0f}, },
+        { {-1.0f,  1.0f, -1.0f}, {-1.0f,  0.0f,  0.0f}, {}, {1.0f, 1.0f}, },
+        { {-1.0f, -1.0f, -1.0f}, {-1.0f,  0.0f,  0.0f}, {}, {1.0f, 0.0f}, },
+        { {-1.0f, -1.0f,  1.0f}, {-1.0f,  0.0f,  0.0f}, {}, {0.0f, 0.0f}, },
+
+        { {-1.0f, -1.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}, {}, {0.0f, 0.0f}, },
+        { {-1.0f,  1.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}, {}, {0.0f, 1.0f}, },
+        { { 1.0f,  1.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}, {}, {1.0f, 1.0f}, },
+        { { 1.0f,  1.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}, {}, {1.0f, 1.0f}, },
+        { { 1.0f, -1.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}, {}, {1.0f, 0.0f}, },
+        { {-1.0f, -1.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}, {}, {0.0f, 0.0f}, },
+
+        { { 1.0f, -1.0f, -1.0f}, { 1.0f,  0.0f,  0.0f}, {}, {0.0f, 0.0f}, },
+        { { 1.0f,  1.0f, -1.0f}, { 1.0f,  0.0f,  0.0f}, {}, {0.0f, 1.0f}, },
+        { { 1.0f,  1.0f,  1.0f}, { 1.0f,  0.0f,  0.0f}, {}, {1.0f, 1.0f}, },
+        { { 1.0f,  1.0f,  1.0f}, { 1.0f,  0.0f,  0.0f}, {}, {1.0f, 1.0f}, },
+        { { 1.0f, -1.0f,  1.0f}, { 1.0f,  0.0f,  0.0f}, {}, {1.0f, 0.0f}, },
+        { { 1.0f, -1.0f, -1.0f}, { 1.0f,  0.0f,  0.0f}, {}, {0.0f, 0.0f}, },
+
+        { { 1.0f, -1.0f,  1.0f}, { 0.0f,  0.0f,  1.0f}, {}, {0.0f, 0.0f}, },
+        { { 1.0f,  1.0f,  1.0f}, { 0.0f,  0.0f,  1.0f}, {}, {0.0f, 1.0f}, },
+        { {-1.0f,  1.0f,  1.0f}, { 0.0f,  0.0f,  1.0f}, {}, {1.0f, 1.0f}, },
+        { {-1.0f,  1.0f,  1.0f}, { 0.0f,  0.0f,  1.0f}, {}, {1.0f, 1.0f}, },
+        { {-1.0f, -1.0f,  1.0f}, { 0.0f,  0.0f,  1.0f}, {}, {1.0f, 0.0f}, },
+        { { 1.0f, -1.0f,  1.0f}, { 0.0f,  0.0f,  1.0f}, {}, {0.0f, 0.0f}, },
+
+        { {-1.0f,  1.0f, -1.0f}, { 0.0f,  1.0f,  0.0f}, {}, {0.0f, 0.0f}, },
+        { {-1.0f,  1.0f,  1.0f}, { 0.0f,  1.0f,  0.0f}, {}, {0.0f, 1.0f}, },
+        { { 1.0f,  1.0f,  1.0f}, { 0.0f,  1.0f,  0.0f}, {}, {1.0f, 1.0f}, },
+        { { 1.0f,  1.0f,  1.0f}, { 0.0f,  1.0f,  0.0f}, {}, {1.0f, 1.0f}, },
+        { { 1.0f,  1.0f, -1.0f}, { 0.0f,  1.0f,  0.0f}, {}, {1.0f, 0.0f}, },
+        { {-1.0f,  1.0f, -1.0f}, { 0.0f,  1.0f,  0.0f}, {}, {0.0f, 0.0f}, },
     };
-    cube.generate_tangents();
-    return cube;
+    create_tangents(cube);
+    return Mesh::from_primitives(cube);
 }
 
 Mesh generate_sphere(const glm::uvec2 fidelity) {
     ASSERT(fidelity.x >= 3);
     ASSERT(fidelity.y >= 2);
 
-    Mesh sphere = {};
+    std::vector<Vertex> primitives = {};
 
-    sphere.positions.reserve((fidelity.x + 1) * (fidelity.y + 1));
-    sphere.normals.reserve((fidelity.x + 1) * (fidelity.y + 1));
-    sphere.tex_coords.reserve((fidelity.x + 1) * (fidelity.y + 1));
-    for (u32 i = 0; i <= fidelity.y; ++i) {
+    primitives.reserve((fidelity.x + 1) * (fidelity.y + 1));
+
+    for (u32 i = 0; i < fidelity.y; ++i) {
+
         f32 h = -std::cos(glm::pi<f32>() * i / fidelity.y);
+        f32 h_next = -std::cos(glm::pi<f32>() * (i + 1) / fidelity.y);
         f32 r = std::sin(glm::pi<f32>() * i / fidelity.y);
-        for (u32 j = 0; j <= fidelity.x; ++j) {
-            f32 x = -std::sin(glm::tau<f32>() * j / fidelity.x) * r;
-            f32 y = std::cos(glm::tau<f32>() * j / fidelity.x) * r;
-            sphere.positions.emplace_back(x, h, y);
-            sphere.normals.emplace_back(x, h, y);
-            sphere.tex_coords.emplace_back(static_cast<f32>(j) / fidelity.x, static_cast<f32>(i) / fidelity.y);
+        f32 r_next= std::sin(glm::pi<f32>() * (i + 1) / fidelity.y);
+
+        for (u32 j = 0; j < fidelity.x; ++j) {
+
+            f32 x = -std::sin(glm::tau<f32>() * j / fidelity.x);
+            f32 x_next = -std::sin(glm::tau<f32>() * (j + 1) / fidelity.x);
+            f32 y = std::cos(glm::tau<f32>() * j / fidelity.x);
+            f32 y_next = std::cos(glm::tau<f32>() * (j + 1) / fidelity.x);
+
+            primitives.emplace_back(
+                glm::vec3{x * r, h, y * r},
+                glm::vec3{x * r, h, y * r},
+                glm::vec4{},
+                glm::vec2{static_cast<f32>(j) / fidelity.x, static_cast<f32>(i) / fidelity.y}
+            );
+            primitives.emplace_back(
+                glm::vec3{x * r_next, h_next, y * r_next},
+                glm::vec3{x * r_next, h_next, y * r_next},
+                glm::vec4{},
+                glm::vec2{static_cast<f32>(j) / fidelity.x, static_cast<f32>(i + 1) / fidelity.y}
+            );
+            primitives.emplace_back(
+                glm::vec3{x_next * r_next, h_next, y_next * r_next},
+                glm::vec3{x_next * r_next, h_next, y_next * r_next},
+                glm::vec4{},
+                glm::vec2{static_cast<f32>(j + 1) / fidelity.x, static_cast<f32>(i + 1) / fidelity.y}
+            );
+            primitives.emplace_back(
+                glm::vec3{x_next * r_next, h_next, y_next * r_next},
+                glm::vec3{x_next * r_next, h_next, y_next * r_next},
+                glm::vec4{},
+                glm::vec2{static_cast<f32>(j + 1) / fidelity.x, static_cast<f32>(i + 1) / fidelity.y}
+            );
+            primitives.emplace_back(
+                glm::vec3{x_next * r, h, y_next * r},
+                glm::vec3{x_next * r, h, y_next * r},
+                glm::vec4{},
+                glm::vec2{static_cast<f32>(j + 1) / fidelity.x, static_cast<f32>(i) / fidelity.y}
+            );
+            primitives.emplace_back(
+                glm::vec3{x * r, h, y * r},
+                glm::vec3{x * r, h, y * r},
+                glm::vec4{},
+                glm::vec2{static_cast<f32>(j) / fidelity.x, static_cast<f32>(i) / fidelity.y}
+            );
         }
     }
 
-    sphere.indices.reserve(fidelity.x * fidelity.y * 6);
-    for (u32 i = 0; i < (fidelity.x + 1) * (fidelity.y); ++i) {
-        if (i % (fidelity.x + 1) == (fidelity.x))
-            continue;
-        sphere.indices.emplace_back(i);
-        sphere.indices.emplace_back(i + fidelity.x + 1);
-        sphere.indices.emplace_back(i + fidelity.x + 2);
-        sphere.indices.emplace_back(i + fidelity.x + 2);
-        sphere.indices.emplace_back(i + 1);
-        sphere.indices.emplace_back(i);
-    }
-
-    sphere.generate_tangents();
+    create_tangents(primitives);
+    Mesh sphere = Mesh::from_primitives(primitives);
 
     ASSERT(!sphere.indices.empty());
-    ASSERT(!sphere.positions.empty());
-    ASSERT(!sphere.normals.empty());
-    // ASSERT(!sphere.tangents.empty());
-    ASSERT(!sphere.tex_coords.empty());
+    ASSERT(!sphere.vertices.empty());
     return sphere;
 }
 

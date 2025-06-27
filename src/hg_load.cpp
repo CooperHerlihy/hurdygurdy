@@ -1,4 +1,5 @@
 #include "hg_load.h"
+#include "hg_generate.h"
 
 #include <stb/stb_image.h>
 
@@ -45,6 +46,7 @@ Result<ModelData> ModelData::load_gltf(const std::filesystem::path path) {
     model->roughness = 0.5f;
     model->metalness = 0.0f;
 
+    std::vector<Vertex> primitives = {};
     for (const auto& mesh : asset->meshes) {
         for (const auto& primitive : mesh.primitives) {
             if (primitive.materialIndex.has_value()) {
@@ -74,27 +76,24 @@ Result<ModelData> ModelData::load_gltf(const std::filesystem::path path) {
                 return Err::GltfFileInvalid;
 
             fastgltf::iterateAccessor<u32>(asset.get(), index_accessor, [&](u32 index) { 
-                model->mesh.indices.emplace_back(index + to_u32(model->mesh.positions.size()));
+                primitives.emplace_back(
+                    fastgltf::getAccessorElement<glm::vec3>(asset.get(), position_accessor, index) * glm::vec3{1.0f, -1.0f, -1.0f},
+                    fastgltf::getAccessorElement<glm::vec3>(asset.get(), normal_accessor, index) * glm::vec3{1.0f, -1.0f, -1.0f},
+                    glm::vec4{},
+                    fastgltf::getAccessorElement<glm::vec2>(asset.get(), tex_coord_accessor, index)
+                );
             });
-            fastgltf::iterateAccessor<glm::vec3>(asset.get(), position_accessor, [&](glm::vec3 position) {
-                model->mesh.positions.emplace_back(position * glm::vec3{1.0f, -1.0f, -1.0f});
-            });
-            fastgltf::iterateAccessor<glm::vec3>(asset.get(), normal_accessor, [&](glm::vec3 normal) {
-                model->mesh.normals.emplace_back(normal * glm::vec3{1.0f, -1.0f, -1.0f});
-            });
-            fastgltf::iterateAccessor<glm::vec2>(asset.get(), tex_coord_accessor, [&](glm::vec2 tex_coord) {
-                model->mesh.tex_coords.emplace_back(tex_coord);
-            });
+
+            if (primitives.size() % 3 != 0)
+                return Err::GltfFileInvalid;
         }
     }
 
-    model->mesh.generate_tangents();
+    create_tangents(primitives);
+    model->mesh = Mesh::from_primitives(primitives);
 
     ASSERT(!model->mesh.indices.empty());
-    ASSERT(!model->mesh.positions.empty());
-    ASSERT(!model->mesh.normals.empty());
-    // ASSERT(!model->mesh.tangents.empty());
-    ASSERT(!model->mesh.tex_coords.empty());
+    ASSERT(!model->mesh.vertices.empty());
     return model;
 }
 

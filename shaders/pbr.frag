@@ -5,7 +5,8 @@ layout(location = 0) out vec4 out_color;
 
 layout(location = 0) in vec3 v_pos;
 layout(location = 1) in vec3 v_normal;
-layout(location = 2) in vec2 v_uv;
+layout(location = 2) in vec4 v_tangent;
+layout(location = 3) in vec2 v_uv;
 
 const float pi = 3.14159265;
 
@@ -77,16 +78,17 @@ vec3 calc_reflection(const Light light, const vec3 normal, const vec3 albedo, co
 }
 
 void main() {
-    const vec4 tex = texture(u_samplers[push.texture_index], v_uv);
+    const mat3 tbn = mat3(normalize(v_tangent.xyz), normalize(v_tangent.w * cross(v_normal, v_tangent.xyz)), normalize(v_normal));
+    const vec3 normal = v_tangent == vec4(0.0) ? normalize(v_normal) : tbn * -texture(u_samplers[push.normal_map_index], v_uv).xyz;
 
-    const vec3 normal = normalize(v_normal);
+    const vec4 tex = texture(u_samplers[push.texture_index], v_uv);
     const vec3 albedo = tex.xyz;
+
     const float metal = push.metal;
     const float roughness = push.roughness;
     const vec3 f0 = mix(vec3(0.04), albedo, metal);
 
     const vec3 ambient = vec3(0.03, 0.03, 0.03);
-
     vec3 total_light = ambient;
     for (uint i = 0u; i < u_light.count; i++) {
         total_light += calc_reflection(u_light.vals[i], normal, albedo, metal, roughness, f0);

@@ -40,7 +40,7 @@ int main() {
 
     std::array<glm::vec4, 4> default_normal_image = {};
     default_normal_image.fill(glm::vec4{0.0f, 0.0f, -1.0f, 0.0f});
-    const auto default_normal_texture = model_renderer->load_texture_from_data(*engine, {default_normal_image.data(), sizeof(glm::vec4), {16, 16, 1}}, vk::Format::eR32G32B32A32Sfloat);
+    const auto default_normal_texture = model_renderer->load_texture_from_data(*engine, {default_normal_image.data(), sizeof(glm::vec4), {2, 2, 1}}, vk::Format::eR32G32B32A32Sfloat);
 
     const auto noise_normal_image = generate_white_noise_normal_map(64, 64, 0.01935478);
     const auto noise_normal_texture = model_renderer->load_texture_from_data(*engine, {noise_normal_image.data(), sizeof(glm::vec4), {64, 64, 1}}, vk::Format::eR32G32B32A32Sfloat);
@@ -54,8 +54,8 @@ int main() {
 
     const auto hex_texture = *model_renderer->load_texture(*engine, "../assets/hexagon_models/Textures/hexagons_medieval.png");
 
-    const auto cube = model_renderer->load_model_from_data(*engine, PbrRenderer::VertexData::from_mesh(generate_cube()), noise_normal_texture, noise_texture, 0.1f, 0.0f);
-    const auto sphere = model_renderer->load_model_from_data(*engine, PbrRenderer::VertexData::from_mesh(generate_sphere({64, 32})), noise_normal_texture, gold_texture, 0.1f, 0.0f);
+    const auto cube = model_renderer->load_model_from_data(*engine, generate_cube(), noise_normal_texture, gold_texture, 0.5f, 1.0f);
+    const auto sphere = model_renderer->load_model_from_data(*engine, generate_sphere({64, 32}), noise_normal_texture, gold_texture, 0.1f, 1.0f);
     const auto grass = *model_renderer->load_model(*engine, "../assets/hexagon_models/Assets/gltf/tiles/base/hex_grass.gltf", default_normal_texture, hex_texture);
     const auto building = *model_renderer->load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_home_A_blue.gltf", default_normal_texture, hex_texture);
     const auto tower = *model_renderer->load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_tower_A_blue.gltf", default_normal_texture, hex_texture);

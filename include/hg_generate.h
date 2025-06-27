@@ -4,14 +4,20 @@
 
 namespace hg {
 
+struct Vertex {
+    glm::vec3 position = {};
+    glm::vec3 normal = {};
+    glm::vec4 tangent = {};
+    glm::vec2 tex_coord = {};
+};
+
+void create_tangents(std::span<Vertex> primitives);
+
 struct Mesh {
     std::vector<u32> indices = {};
-    std::vector<glm::vec3> positions = {};
-    std::vector<glm::vec3> normals = {};
-    std::vector<glm::vec3> tangents = {};
-    std::vector<glm::vec2> tex_coords = {};
+    std::vector<Vertex> vertices = {};
 
-    void generate_tangents();
+    [[nodiscard]] static Mesh from_primitives(std::span<const Vertex> primitives);
 };
 
 [[nodiscard]] Mesh generate_square();
@@ -63,7 +69,7 @@ private:
             const f64 x = seed;
             seed = gen_random_norm(seed);
             const f64 y = seed;
-            map[i][j] = glm::normalize(glm::vec4(x * 0.1f - 0.05f, y * 0.1f - 0.05f, -1.0f, 0.0f));
+            map[i][j] = glm::normalize(glm::vec4((x - 0.5f) * 0.5f,(y - 0.05f) * 0.5f, -1.0f, 0.0f));
         }
     }
     return map;

@@ -285,26 +285,31 @@ Result<void> SkyboxRenderer::load_skybox(const Engine& engine, const std::filesy
     hg::write_image_sampler_descriptor(engine, m_set, 0, m_sampler, m_cubemap.view);
 
     const auto mesh = generate_cube();
+    std::vector<glm::vec3> positions = {};
+    positions.reserve(mesh.vertices.size());
+    for (const auto vertex : mesh.vertices) {
+        positions.emplace_back(vertex.position);
+    }
+    m_vertex_buffer = GpuBuffer::create(engine, {
+        positions.size() * sizeof(positions[0]),
+        vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst
+    });
     m_index_buffer = GpuBuffer::create(engine, {
         mesh.indices.size() * sizeof(mesh.indices[0]),
         vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst
     });
-    m_vertex_buffer = GpuBuffer::create(engine, {
-        mesh.positions.size() * sizeof(mesh.positions[0]),
-        vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst
-    });
+    m_vertex_buffer.write(engine, positions.data(), positions.size() * sizeof(positions[0]), 0);
     m_index_buffer.write(engine, mesh.indices.data(), mesh.indices.size() * sizeof(mesh.indices[0]), 0);
-    m_vertex_buffer.write(engine, mesh.positions.data(), mesh.positions.size() * sizeof(mesh.positions[0]), 0);
 
     ASSERT(m_cubemap.allocation != nullptr);
     ASSERT(m_cubemap.image != nullptr);
     ASSERT(m_cubemap.view != nullptr);
     ASSERT(m_sampler != nullptr);
     ASSERT(m_set != nullptr);
-    ASSERT(m_index_buffer.allocation != nullptr);
-    ASSERT(m_index_buffer.buffer != nullptr);
     ASSERT(m_vertex_buffer.allocation != nullptr);
     ASSERT(m_vertex_buffer.buffer != nullptr);
+    ASSERT(m_index_buffer.allocation != nullptr);
+    ASSERT(m_index_buffer.buffer != nullptr);
     return ok();
 }
 
@@ -467,7 +472,7 @@ void PbrRenderer::cmd_draw(const vk::CommandBuffer cmd, const vk::DescriptorSet 
     }, {
         vk::VertexInputAttributeDescription2EXT{.location = 0, .format = vk::Format::eR32G32B32Sfloat, .offset = offsetof(Vertex, position)},
         vk::VertexInputAttributeDescription2EXT{.location = 1, .format = vk::Format::eR32G32B32Sfloat, .offset = offsetof(Vertex, normal)},
-        vk::VertexInputAttributeDescription2EXT{.location = 2, .format = vk::Format::eR32G32B32Sfloat, .offset = offsetof(Vertex, tangent)},
+        vk::VertexInputAttributeDescription2EXT{.location = 2, .format = vk::Format::eR32G32B32A32Sfloat, .offset = offsetof(Vertex, tangent)},
         vk::VertexInputAttributeDescription2EXT{.location = 3, .format = vk::Format::eR32G32Sfloat, .offset = offsetof(Vertex, tex_coord)}
     });
     cmd.bindShadersEXT({vk::ShaderStageFlagBits::eVertex, vk::ShaderStageFlagBits::eFragment}, m_shaders);
@@ -556,13 +561,12 @@ Result<PbrRenderer::ModelHandle> PbrRenderer::load_model(
     if (model.has_err())
         return model.err();
 
-    const auto vertex_data = VertexData::from_mesh(std::move(model->mesh));
-    return ok(load_model_from_data(engine, vertex_data, normal_map, texture, model->roughness, model->metalness));
+    return ok(load_model_from_data(engine, model->mesh, normal_map, texture, model->roughness, model->metalness));
 }
 
 PbrRenderer::ModelHandle PbrRenderer::load_model_from_data(
     const Engine& engine,
-    const VertexData& data,
+    const Mesh& data,
     const TextureHandle normal_map,
     const TextureHandle texture,
     const float roughness,
@@ -598,25 +602,6 @@ PbrRenderer::ModelHandle PbrRenderer::load_model_from_data(
         roughness, metalness
     );
     return {m_models.size() - 1};
-}
-
-PbrRenderer::VertexData PbrRenderer::VertexData::from_mesh(const Mesh& mesh) {
-    ASSERT(!mesh.indices.empty());
-    ASSERT(!mesh.positions.empty());
-    ASSERT(!mesh.normals.empty());
-    // ASSERT(!mesh.tangents.empty());
-    ASSERT(!mesh.tex_coords.empty());
-
-    VertexData data = {.indices = std::move(mesh.indices)};
-    data.vertices.reserve(mesh.positions.size());
-    for (usize i = 0; i < mesh.positions.size(); ++i) {
-        // data.vertices.emplace_back(mesh.positions[i], mesh.normals[i], mesh.tangents[i], mesh.tex_coords[i]);
-        data.vertices.emplace_back(mesh.positions[i], mesh.normals[i], glm::vec3{}, mesh.tex_coords[i]);
-    }
-
-    ASSERT(!data.indices.empty());
-    ASSERT(!data.vertices.empty());
-    return data;
 }
 
 } // namespace hg

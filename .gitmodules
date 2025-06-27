@@ -10,3 +10,6 @@
 [submodule "vendor/mikktspace"]
 	path = vendor/mikktspace
 	url = https://github.com/mmikk/MikkTSpace
+[submodule "vendor/welder"]
+	path = vendor/welder
+	url = https://github.com/mmikk/Welder
