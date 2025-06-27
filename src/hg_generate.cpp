@@ -128,58 +128,64 @@ Mesh generate_sphere(const glm::uvec2 fidelity) {
     ASSERT(fidelity.y >= 2);
 
     std::vector<Vertex> primitives = {};
+    primitives.reserve((fidelity.x + 1) * (fidelity.y + 1) * 6);
 
-    primitives.reserve((fidelity.x + 1) * (fidelity.y + 1));
-
+    f32 h_next = -1.0f;
+    f32 r_next = 0.0f;
+    f32 x_next = 0.0f;
+    f32 y_next = 1.0f;
     for (u32 i = 0; i < fidelity.y; ++i) {
-
-        f32 h = -std::cos(glm::pi<f32>() * i / fidelity.y);
-        f32 h_next = -std::cos(glm::pi<f32>() * (i + 1) / fidelity.y);
-        f32 r = std::sin(glm::pi<f32>() * i / fidelity.y);
-        f32 r_next= std::sin(glm::pi<f32>() * (i + 1) / fidelity.y);
+        const f32 h = h_next;
+        const f32 r = r_next;
+        h_next = -std::cos(glm::pi<f32>() * (i + 1) / fidelity.y);
+        r_next = std::sin(glm::pi<f32>() * (i + 1) / fidelity.y);
 
         for (u32 j = 0; j < fidelity.x; ++j) {
+            const f32 x = x_next;
+            const f32 y = y_next;
+            x_next = -std::sin(glm::tau<f32>() * (j + 1) / fidelity.x);
+            y_next = std::cos(glm::tau<f32>() * (j + 1) / fidelity.x);
 
-            f32 x = -std::sin(glm::tau<f32>() * j / fidelity.x);
-            f32 x_next = -std::sin(glm::tau<f32>() * (j + 1) / fidelity.x);
-            f32 y = std::cos(glm::tau<f32>() * j / fidelity.x);
-            f32 y_next = std::cos(glm::tau<f32>() * (j + 1) / fidelity.x);
+            const f32 u = static_cast<f32>(j) / fidelity.x;
+            const f32 v = static_cast<f32>(i) / fidelity.y;
+            const f32 u_next = static_cast<f32>(j + 1) / fidelity.x;
+            const f32 v_next = static_cast<f32>(i + 1) / fidelity.y;
 
             primitives.emplace_back(
                 glm::vec3{x * r, h, y * r},
                 glm::vec3{x * r, h, y * r},
                 glm::vec4{},
-                glm::vec2{static_cast<f32>(j) / fidelity.x, static_cast<f32>(i) / fidelity.y}
+                glm::vec2{u, v}
             );
             primitives.emplace_back(
                 glm::vec3{x * r_next, h_next, y * r_next},
                 glm::vec3{x * r_next, h_next, y * r_next},
                 glm::vec4{},
-                glm::vec2{static_cast<f32>(j) / fidelity.x, static_cast<f32>(i + 1) / fidelity.y}
+                glm::vec2{u, v_next}
             );
             primitives.emplace_back(
                 glm::vec3{x_next * r_next, h_next, y_next * r_next},
                 glm::vec3{x_next * r_next, h_next, y_next * r_next},
                 glm::vec4{},
-                glm::vec2{static_cast<f32>(j + 1) / fidelity.x, static_cast<f32>(i + 1) / fidelity.y}
+                glm::vec2{u_next, v_next}
             );
             primitives.emplace_back(
                 glm::vec3{x_next * r_next, h_next, y_next * r_next},
                 glm::vec3{x_next * r_next, h_next, y_next * r_next},
                 glm::vec4{},
-                glm::vec2{static_cast<f32>(j + 1) / fidelity.x, static_cast<f32>(i + 1) / fidelity.y}
+                glm::vec2{u_next, v_next}
             );
             primitives.emplace_back(
                 glm::vec3{x_next * r, h, y_next * r},
                 glm::vec3{x_next * r, h, y_next * r},
                 glm::vec4{},
-                glm::vec2{static_cast<f32>(j + 1) / fidelity.x, static_cast<f32>(i) / fidelity.y}
+                glm::vec2{u_next, v}
             );
             primitives.emplace_back(
                 glm::vec3{x * r, h, y * r},
                 glm::vec3{x * r, h, y * r},
                 glm::vec4{},
-                glm::vec2{static_cast<f32>(j) / fidelity.x, static_cast<f32>(i) / fidelity.y}
+                glm::vec2{u, v}
             );
         }
     }
