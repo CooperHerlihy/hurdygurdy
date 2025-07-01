@@ -1,5 +1,4 @@
 #include "hg_generate.h"
-#include "hg_utils.h"
 
 #include <mikktspace/mikktspace.h>
 #include <welder/weldmesh.h>
@@ -198,4 +197,33 @@ Mesh generate_sphere(const glm::uvec2 fidelity) {
     return sphere;
 }
 
+[[nodiscard]] Image<f32> generate_value_noise(const glm::vec<2, usize>& size, const Image<f32>& fixed_points) {
+    ASSERT(fixed_points.width() < size.x);
+    ASSERT(fixed_points.height() < size.y);
+    Image<f32> interpolated = size;
+    for (usize v = 0; v < size.y; ++v) {
+        for (usize u = 0; u < size.x; ++u) {
+            const f64 x = static_cast<f64>(u) * static_cast<f64>(fixed_points.width()) / static_cast<f64>(size.x);
+            const f64 y = static_cast<f64>(v) * static_cast<f64>(fixed_points.height()) / static_cast<f64>(size.y);
+            const usize x_floor = static_cast<usize>(std::floor(x));
+            const usize y_floor = static_cast<usize>(std::floor(y));
+            const usize x_ceil = (x_floor + 1) % fixed_points.width();
+            const usize y_ceil = (y_floor + 1) % fixed_points.height();
+            interpolated[v][u] = lerp(
+                lerp(
+                    fixed_points[y_floor][x_floor],
+                    fixed_points[y_floor][x_ceil],
+                    smoothstep(static_cast<f32>(x - std::floor(x)))
+                ),
+                lerp(
+                    fixed_points[y_ceil][x_floor],
+                    fixed_points[y_ceil][x_ceil],
+                    smoothstep(static_cast<f32>(x - std::floor(x)))
+                ),
+                smoothstep(static_cast<f32>(y - std::floor(y)))
+            );
+        }
+    }
+    return interpolated;
+}
 } // namespace hg

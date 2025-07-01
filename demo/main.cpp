@@ -41,11 +41,32 @@ int main() {
     default_normal_image.fill(glm::vec4{0.0f, 0.0f, -1.0f, 0.0f});
     const auto default_normal_texture = model_renderer->load_texture_from_data(*engine, {default_normal_image.data(), sizeof(glm::vec4), {2, 2, 1}}, vk::Format::eR32G32B32A32Sfloat);
 
-    const auto noise_normal_image = generate_white_noise_normal_map(64, 64, 0.01935478);
-    const auto noise_normal_texture = model_renderer->load_texture_from_data(*engine, {noise_normal_image.data(), sizeof(glm::vec4), {64, 64, 1}}, vk::Format::eR32G32B32A32Sfloat);
+    const auto white_noise_image0 = generate_white_noise<f32>({8, 8});
+    auto value_noise_image0 = generate_value_noise({512, 512}, white_noise_image0);
+    transform_image(value_noise_image0, [](const f32 val) -> f32 { return val * 0.5f; });
 
-    const auto noise_image = generate_white_noise_texture(256, 256, 0.290518734);
-    const auto noise_texture = model_renderer->load_texture_from_data(*engine, GpuImage::Data{noise_image.data(), sizeof(f32), {256, 256, 1}});
+    const auto white_noise_image1 = generate_white_noise<f32>({16, 16});
+    auto value_noise_image1 = generate_value_noise({512, 512}, white_noise_image1);
+    transform_image(value_noise_image1, [](const f32 val) -> f32 { return val * 0.25f; });
+
+    const auto white_noise_image2 = generate_white_noise<f32>({32, 32});
+    auto value_noise_image2 = generate_value_noise({512, 512}, white_noise_image2);
+    transform_image(value_noise_image2, [](const f32 val) -> f32 { return val * 0.125f; });
+
+    const auto white_noise_image3 = generate_white_noise<f32>({64, 64});
+    auto value_noise_image3 = generate_value_noise({512, 512}, white_noise_image3);
+    transform_image(value_noise_image3, [](const f32 val) -> f32 { return val * 0.0625f; });
+
+    Image<f32> value_noise_image = {{512, 512}};
+    value_noise_image += value_noise_image0;
+    value_noise_image += value_noise_image1;
+    value_noise_image += value_noise_image2;
+    value_noise_image += value_noise_image3;
+
+    const auto value_noise_color_image = map_image<u32>(value_noise_image, [](const f32 val) -> u32 {
+        return (static_cast<u32>(val * 255.0f) << 0) + (static_cast<u32>(val * 255.0f) << 8) + (static_cast<u32>(val * 255.0f) << 16) + 0xff000000;
+    });
+    const auto noise_texture = model_renderer->load_texture_from_data(*engine, GpuImage::Data{value_noise_color_image.data(), sizeof(u32), {512, 512, 1}});
 
     std::array<u32, 4> gold_color = {};
     gold_color.fill(0xff44ccff);
@@ -53,8 +74,8 @@ int main() {
 
     const auto hex_texture = *model_renderer->load_texture(*engine, "../assets/hexagon_models/Textures/hexagons_medieval.png");
 
-    const auto cube = model_renderer->load_model_from_data(*engine, generate_cube(), noise_normal_texture, gold_texture, 0.5f, 1.0f);
-    const auto sphere = model_renderer->load_model_from_data(*engine, generate_sphere({64, 32}), noise_normal_texture, gold_texture, 0.1f, 1.0f);
+    const auto cube = model_renderer->load_model_from_data(*engine, generate_cube(), default_normal_texture, noise_texture, 0.1f, 0.0f);
+    const auto sphere = model_renderer->load_model_from_data(*engine, generate_sphere({64, 32}), default_normal_texture, noise_texture, 0.1f, 0.0f);
     const auto grass = *model_renderer->load_model(*engine, "../assets/hexagon_models/Assets/gltf/tiles/base/hex_grass.gltf", default_normal_texture, hex_texture);
     const auto building = *model_renderer->load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_home_A_blue.gltf", default_normal_texture, hex_texture);
     const auto tower = *model_renderer->load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_tower_A_blue.gltf", default_normal_texture, hex_texture);

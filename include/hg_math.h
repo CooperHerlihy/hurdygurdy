@@ -17,6 +17,17 @@ template <typename T> constexpr mat<3, 3, T> operator*(qua<T> lhs, mat<3, 3, T> 
 
 namespace hg {
 
+template <std::floating_point T> T lerp(const T a, const T b, const T t) { return a + t * (b - a); }
+
+template <std::floating_point T> T smoothstep(const T t) {
+    ASSERT(t >= 0 && t <= 1);
+    return t * t * (3 - 2 * t);
+}
+template <std::floating_point T> T smoothstep_quintic(const T t) {
+    ASSERT(t >= 0 && t <= 1);
+    return t * t * t * (t * (t * 6 - 15) + 10);
+}
+
 template <typename T> struct Transform2D {
     glm::vec<3, T> position = {0, 0, 0};
     glm::vec<2, T> scale = {1, 1};
