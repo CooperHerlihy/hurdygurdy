@@ -1,4 +1,5 @@
 #include "hg_generate.h"
+#include "hg_math.h"
 
 #include <mikktspace/mikktspace.h>
 #include <welder/weldmesh.h>
@@ -197,14 +198,14 @@ Mesh generate_sphere(const glm::uvec2 fidelity) {
     return sphere;
 }
 
-[[nodiscard]] Image<f32> generate_value_noise(const glm::vec<2, usize>& size, const Image<f32>& fixed_points) {
+Image<f32> generate_value_noise(const glm::vec<2, usize> size, const Image<f32>& fixed_points) {
     ASSERT(fixed_points.width() < size.x);
     ASSERT(fixed_points.height() < size.y);
     Image<f32> interpolated = size;
     for (usize v = 0; v < size.y; ++v) {
         for (usize u = 0; u < size.x; ++u) {
-            const f64 x = static_cast<f64>(u) * static_cast<f64>(fixed_points.width()) / static_cast<f64>(size.x);
-            const f64 y = static_cast<f64>(v) * static_cast<f64>(fixed_points.height()) / static_cast<f64>(size.y);
+            const f32 x = static_cast<f32>(u) * static_cast<f32>(fixed_points.width()) / static_cast<f32>(size.x);
+            const f32 y = static_cast<f32>(v) * static_cast<f32>(fixed_points.height()) / static_cast<f32>(size.y);
             const usize x_floor = static_cast<usize>(std::floor(x));
             const usize y_floor = static_cast<usize>(std::floor(y));
             const usize x_ceil = (x_floor + 1) % fixed_points.width();
@@ -226,4 +227,38 @@ Mesh generate_sphere(const glm::uvec2 fidelity) {
     }
     return interpolated;
 }
+
+Image<f32> generate_perlin_noise(const glm::vec<2, usize> size, const Image<glm::vec2>& gradients) {
+    ASSERT(gradients.width() < size.x);
+    ASSERT(gradients.height() < size.y);
+    Image<f32> interpolated = size;
+    for (usize v = 0; v < size.y; ++v) {
+        for (usize u = 0; u < size.x; ++u) {
+            const f32 x = static_cast<f32>(u) * static_cast<f32>(gradients.width()) / static_cast<f32>(size.x);
+            const f32 y = static_cast<f32>(v) * static_cast<f32>(gradients.height()) / static_cast<f32>(size.y);
+            const f32 x_t = x - std::floor(x);
+            const f32 y_t = y - std::floor(y);
+            const usize x_floor = static_cast<usize>(std::floor(x));
+            const usize y_floor = static_cast<usize>(std::floor(y));
+            const usize x_ceil = (x_floor + 1) % gradients.width();
+            const usize y_ceil = (y_floor + 1) % gradients.height();
+
+            interpolated[v][u] = lerp(
+                lerp(
+                    glm::dot(gradients[y_floor][x_floor], glm::vec2{x_t       , y_t}),
+                    glm::dot(gradients[y_floor][x_ceil] , glm::vec2{x_t - 1.0f, y_t}),
+                    smoothstep_quintic(x_t)
+                ),
+                lerp(
+                    glm::dot(gradients[y_ceil][x_floor], glm::vec2{x_t       , y_t - 1.0f}),
+                    glm::dot(gradients[y_ceil][x_ceil] , glm::vec2{x_t - 1.0f, y_t - 1.0f}),
+                    smoothstep_quintic(x_t)
+                ),
+                smoothstep_quintic(y_t)
+            ) * 0.5f + 0.5f;
+        }
+    }
+    return interpolated;
+}
+
 } // namespace hg

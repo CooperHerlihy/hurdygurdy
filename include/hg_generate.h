@@ -59,14 +59,6 @@ private:
     usize m_stride = 0;
 };
 
-template<typename T, typename F> void transform_image(Image<T>& image, const F& pred) {
-    for (usize y = 0; y < image.height(); ++y) {
-        for (usize x = 0; x < image.width(); ++x) {
-            image[y][x] = pred(image[y][x]);
-        }
-    }
-}
-
 template<typename T, typename U, typename F> Image<T> map_image(const Image<U>& image, const F& pred) {
     Image<T> mapped = {{image.width(), image.height()}};
     for (usize y = 0; y < image.height(); ++y) {
@@ -75,6 +67,14 @@ template<typename T, typename U, typename F> Image<T> map_image(const Image<U>& 
         }
     }
     return mapped;
+}
+
+template<typename T, typename F> void map_image_in_place(Image<T>& image, const F& pred) {
+    for (usize y = 0; y < image.height(); ++y) {
+        for (usize x = 0; x < image.width(); ++x) {
+            image[y][x] = pred(image[y][x]);
+        }
+    }
 }
 
 inline std::random_device g_random_device = {};
@@ -98,7 +98,15 @@ template <> [[nodiscard]] inline i32 rng<i32>() { return static_cast<i32>(g_u64_
 template <> [[nodiscard]] inline i16 rng<i16>() { return static_cast<i16>(g_u64_dist(g_twister)); }
 template <> [[nodiscard]] inline i8 rng<i8>() { return static_cast<i8>(g_u64_dist(g_twister)); }
 
-template <typename T> [[nodiscard]] Image<T> generate_white_noise(const glm::vec<2, usize>& size, u64 seed) {
+template <> [[nodiscard]] inline glm::vec2 rng<glm::vec2>() {
+    f32 angle = rng<f32>() * glm::two_pi<f32>();
+    return {
+        std::cos(angle),
+        std::sin(angle),
+    };
+}
+
+template <typename T> [[nodiscard]] Image<T> generate_white_noise(const glm::vec<2, usize> size, u64 seed) {
     std::mt19937_64 twister{seed};
     Image<T> image = size;
     for (T* pixel = image.data(); pixel < image.data() + image.size(); ++pixel) {
@@ -107,7 +115,7 @@ template <typename T> [[nodiscard]] Image<T> generate_white_noise(const glm::vec
     return image;
 }
 
-template <typename T> [[nodiscard]] Image<T> generate_white_noise(const glm::vec<2, usize>& size) {
+template <typename T> [[nodiscard]] Image<T> generate_white_noise(const glm::vec<2, usize> size) {
     Image<T> image = size;
     for (T* pixel = image.data(); pixel < image.data() + image.size(); ++pixel) {
         *pixel = rng<T>();
@@ -115,6 +123,16 @@ template <typename T> [[nodiscard]] Image<T> generate_white_noise(const glm::vec
     return image;
 }
 
-[[nodiscard]] Image<f32> generate_value_noise(const glm::vec<2, usize>& size, const Image<f32>& fixed_points);
+[[nodiscard]] Image<f32> generate_value_noise(const glm::vec<2, usize> size, const Image<f32>& fixed_points);
+[[nodiscard]] inline Image<f32> generate_value_noise(const glm::vec<2, usize> size, const glm::vec<2, usize> frequency) {
+    const auto white_noise_image = generate_white_noise<f32>(frequency);
+    return generate_value_noise(size, white_noise_image);
+}
+
+[[nodiscard]] Image<f32> generate_perlin_noise(const glm::vec<2, usize> size, const Image<glm::vec2>& gradients);
+[[nodiscard]] inline Image<f32> generate_perlin_noise(const glm::vec<2, usize> size, const glm::vec<2, usize> frequency) {
+    const auto gradient_image = generate_white_noise<glm::vec2>(frequency);
+    return generate_perlin_noise(size, gradient_image);
+}
 
 } // namespace hg
