@@ -204,21 +204,19 @@ Image<glm::vec4> create_normals_from_heightmap(const Image<f32>& heightmap) {
 
     for (usize v = 0; v < heightmap.height(); ++v) {
         for (usize u = 0; u < heightmap.width(); ++u) {
-            const glm::vec3 pos = {static_cast<f32>(u), static_cast<f32>(v), heightmap[v][u]};
+            const f32 height = heightmap[v][u];
 
             const usize v_up = v == 0 ? heightmap.height() - 1 : v - 1;
             const usize u_left = u == 0 ? heightmap.width() - 1 : u - 1;
-            const glm::vec3 up  = {static_cast<f32>(u), static_cast<f32>(v) - 1.0f, -heightmap[v_up][u]};
-            const glm::vec3 left  = {static_cast<f32>(u) - 1.0f, static_cast<f32>(v), -heightmap[v][u_left]};
-            const glm::vec3 normal0 = glm::normalize(glm::cross(up - pos, left - pos));
+            const glm::vec3 up  = {0.0f, -1.0f, heightmap[v_up][u] - height};
+            const glm::vec3 left  = {-1.0f, 0.0f, heightmap[v][u_left] - height};
 
             const usize v_down = (v + 1) % heightmap.height();
             const usize u_right = (u + 1) % heightmap.width();
-            const glm::vec3 down = {static_cast<f32>(u), static_cast<f32>(v) + 1.0f, -heightmap[v_down][u]};
-            const glm::vec3 right  = {static_cast<f32>(u) + 1.0f, static_cast<f32>(v), -heightmap[v][u_right]};
-            const glm::vec3 normal1 = glm::normalize(glm::cross(down - pos, right - pos));
+            const glm::vec3 down = {0.0f, 1.0f, heightmap[v_down][u] - height};
+            const glm::vec3 right  = {1.0f, 0.0f, heightmap[v][u_right] - height};
 
-            normals[v][u] = glm::vec4{glm::normalize(normal0 + normal1), 0.0f};
+            normals[v][u] = glm::vec4{glm::normalize(glm::cross(up, left) + glm::cross(down, right)), 0.0f};
         }
     }
 
