@@ -26,69 +26,11 @@ struct Engine {
     void destroy() const;
 };
 
-constexpr u32 MaxFramesInFlight = 2;
-constexpr u32 MaxSwapchainImages = 3;
-
-class Pipeline {
-public:
-    virtual ~Pipeline() = default;
-    virtual void cmd_draw(vk::CommandBuffer cmd, vk::Image render_target, vk::Extent2D window_size) const = 0;
-};
-
-class Window {
-public:
-    static constexpr vk::Format SwapchainImageFormat = vk::Format::eR8G8B8A8Srgb;
-    static constexpr vk::ColorSpaceKHR SwapchainColorSpace = vk::ColorSpaceKHR::eSrgbNonlinear;
-
-    [[nodiscard]] static Result<Window> create(const Engine& engine, bool fullscreen, i32 width, i32 height);
-    void destroy(const Engine& engine) const;
-    [[nodiscard]] Result<void> resize(const Engine& engine);
-
-    [[nodiscard]] GLFWwindow* window() const { return m_window; }
-    [[nodiscard]] vk::Extent2D extent() const { return m_extent; }
-
-    [[nodiscard]] Result<vk::CommandBuffer> begin_frame(const Engine& engine);
-    [[nodiscard]] Result<void> end_frame(const Engine& engine);
-    [[nodiscard]] Result<void> draw_frame(const Engine& engine, const Pipeline& pipeline) {
-        const auto cmd = begin_frame(engine);
-        if (cmd.has_err())
-            return cmd.err();
-        pipeline.cmd_draw(*cmd, current_image(), m_extent);
-        return end_frame(engine);
-    }
-
-private:
-    [[nodiscard]] vk::CommandBuffer& current_cmd() { return m_command_buffers[m_current_frame_index]; }
-    [[nodiscard]] vk::Image& current_image() { return m_swapchain_images[m_current_image_index]; }
-    [[nodiscard]] vk::Fence& is_frame_finished() { return m_frame_finished_fences[m_current_frame_index]; }
-    [[nodiscard]] vk::Semaphore& is_image_available() { return m_image_available_semaphores[m_current_frame_index]; }
-    [[nodiscard]] vk::Semaphore& is_ready_to_present() { return m_ready_to_present_semaphores[m_current_image_index]; }
-    [[nodiscard]] const vk::CommandBuffer& current_cmd() const { return m_command_buffers[m_current_frame_index]; }
-    [[nodiscard]] const vk::Image& current_image() const { return m_swapchain_images[m_current_image_index]; }
-    [[nodiscard]] const vk::Fence& is_frame_finished() const { return m_frame_finished_fences[m_current_frame_index]; }
-    [[nodiscard]] const vk::Semaphore& is_image_available() const { return m_image_available_semaphores[m_current_frame_index]; }
-    [[nodiscard]] const vk::Semaphore& is_ready_to_present() const { return m_ready_to_present_semaphores[m_current_image_index]; }
-
-    GLFWwindow* m_window = nullptr;
-    vk::SurfaceKHR m_surface = {};
-    vk::Extent2D m_extent = {};
-    vk::SwapchainKHR m_swapchain = {};
-    std::array<vk::Image, MaxSwapchainImages> m_swapchain_images = {};
-    u32 m_image_count = 0;
-    u32 m_current_image_index = 0;
-    u32 m_current_frame_index = 0;
-    bool m_recording = false;
-    std::array<vk::CommandBuffer, MaxFramesInFlight> m_command_buffers = {};
-    std::array<vk::Fence, MaxFramesInFlight> m_frame_finished_fences = {};
-    std::array<vk::Semaphore, MaxFramesInFlight> m_image_available_semaphores = {};
-    std::array<vk::Semaphore, MaxSwapchainImages> m_ready_to_present_semaphores = {};
-};
-
 struct GpuBuffer {
     enum MemoryType {
         DeviceLocal,
         RandomAccess,
-        Staging,
+        LinearAccess,
     };
 
     VmaAllocation allocation = nullptr;
@@ -126,42 +68,84 @@ struct GpuBuffer {
     };
 };
 
-struct StagingGpuImage {
-    VmaAllocation allocation = nullptr;
-    vk::Image image = {};
+class GpuImage {
+public:
+    vk::Image get() const {
+        ASSERT(m_image != nullptr);
+        return m_image;
+    }
 
     struct Config {
         vk::Extent3D extent = {};
+        vk::ImageType dimensions = vk::ImageType::e1D;
         vk::Format format = vk::Format::eUndefined;
         vk::ImageUsageFlags usage = {};
         vk::SampleCountFlagBits sample_count = vk::SampleCountFlagBits::e1;
         u32 mip_levels = 1;
     };
+    [[nodiscard]] static Result<GpuImage> create(const Engine& engine, const Config& config);
 
-    [[nodiscard]] static Result<StagingGpuImage> create(const Engine& engine, const Config& config);
+    struct CubemapConfig {
+        vk::Extent3D face_extent = {};
+        vk::Format format = vk::Format::eUndefined;
+        vk::ImageUsageFlags usage = {};
+    };
+    [[nodiscard]] static Result<GpuImage> create_cubemap(const Engine& engine, const CubemapConfig& config);
+
     void destroy(const Engine& engine) const {
-        ASSERT(allocation != nullptr);
-        ASSERT(image != nullptr);
+        ASSERT(m_allocation != nullptr);
+        ASSERT(m_image != nullptr);
         ASSERT(engine.device != nullptr);
-        vmaDestroyImage(engine.allocator, image, allocation);
+        vmaDestroyImage(engine.allocator, m_image, m_allocation);
     }
 
     struct Data {
-        const void* ptr;
-        u64 alignment;
-        vk::Extent3D extent;
+        const void* ptr = nullptr;
+        u64 alignment = 0;
+        vk::Extent3D extent = {};
     };
 
-    [[nodiscard]] Result<void> write(
-        const Engine& engine, const Data& data, vk::ImageLayout final_layout,
-        const vk::ImageSubresourceRange& subresource = {vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1}
-    ) const;
+    struct WriteConfig {
+        Data data = {};
+        vk::ImageLayout final_layout = vk::ImageLayout::eShaderReadOnlyOptimal;
+        vk::ImageSubresourceRange subresource = {vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1};
+    };
+
+    [[nodiscard]] Result<void> write(const Engine& engine, const WriteConfig& config) const;
+
+private:
+    VmaAllocation m_allocation = nullptr;
+    vk::Image m_image = {};
 };
 
-struct GpuImage {
-    VmaAllocation allocation = nullptr;
-    vk::Image image = {};
-    vk::ImageView view = {};
+class GpuImageView {
+public:
+    vk::ImageView get() const {
+        ASSERT(m_view != nullptr);
+        return m_view;
+    }
+
+    struct Config {
+        vk::Image image = {};
+        vk::ImageViewType dimensions = vk::ImageViewType::e1D;
+        vk::Format format = vk::Format::eUndefined;
+        vk::ImageSubresourceRange subresource = {vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1};
+    };
+    [[nodiscard]] static Result<GpuImageView> create(const Engine& engine, const Config& config);
+
+    void destroy(const Engine& engine) const {
+        ASSERT(m_view != nullptr);
+        engine.device.destroyImageView(m_view);
+    }
+
+private:
+    vk::ImageView m_view = {};
+};
+
+class GpuImageAndView {
+public:
+    vk::Image get_image() const { return m_image.get(); }
+    vk::ImageView get_view() const { return m_view.get(); }
 
     struct Config {
         vk::Extent3D extent = {};
@@ -173,38 +157,28 @@ struct GpuImage {
         u32 mip_levels = 1;
     };
 
-    [[nodiscard]] static Result<GpuImage> create_result(const Engine& engine, const Config& config);
-    [[nodiscard]] static GpuImage create(const Engine& engine, const Config& config) {
+    [[nodiscard]] static Result<GpuImageAndView> create_result(const Engine& engine, const Config& config);
+    [[nodiscard]] static GpuImageAndView create(const Engine& engine, const Config& config) {
         const auto image = create_result(engine, config);
         if (image.has_err())
             ERROR("Could not create gpu image");
         return *image;
     }
-    [[nodiscard]] static Result<GpuImage> create_cubemap(const Engine& engine, std::filesystem::path path);
+
+    [[nodiscard]] static Result<GpuImageAndView> create_cubemap(const Engine& engine, std::filesystem::path path);
+
     void destroy(const Engine& engine) const {
-        ASSERT(view != nullptr);
-        ASSERT(engine.device != nullptr);
-        engine.device.destroyImageView(view);
-
-        ASSERT(allocation != nullptr);
-        ASSERT(image != nullptr);
-        ASSERT(engine.allocator != nullptr);
-        vmaDestroyImage(engine.allocator, image, allocation);
+        m_image.destroy(engine);
+        m_view.destroy(engine);
     }
 
-    using Data = StagingGpuImage::Data;
-    [[nodiscard]] Result<void> write_result(
-        const Engine& engine, const Data& data, vk::ImageLayout final_layout,
-        const vk::ImageSubresourceRange& subresource = {vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1}
-    ) const {
-        return StagingGpuImage{allocation, image}.write(engine, data, final_layout, subresource);
+    using Data = GpuImage::Data;
+    [[nodiscard]] Result<void> write_result(const Engine& engine, const GpuImage::WriteConfig& config) const {
+        return m_image.write(engine, config);
     }
-    void write(
-        const Engine& engine, const Data& data, vk::ImageLayout final_layout,
-        const vk::ImageSubresourceRange& subresource = {vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1}
-    ) const {
-        const auto write_result = StagingGpuImage{allocation, image}.write(engine, data, final_layout, subresource);
-        if (write_result.has_err())
+    void write(const Engine& engine, const GpuImage::WriteConfig& config) const {
+        const auto write = write_result(engine, config);
+        if (write.has_err())
             ERROR("Could not write to gpu image");
     }
 
@@ -219,6 +193,10 @@ struct GpuImage {
         if (mipmap.has_err())
             ERROR("Could not generate mipmaps");
     }
+
+private:
+    GpuImage m_image = {};
+    GpuImageView m_view = {};
 };
 
 inline u32 get_mip_count(const vk::Extent3D extent) {
@@ -368,6 +346,65 @@ private:
     std::vector<vk::MemoryBarrier2> m_memories = {};
     std::vector<vk::BufferMemoryBarrier2> m_buffers = {};
     std::vector<vk::ImageMemoryBarrier2> m_images = {};
+};
+
+constexpr u32 MaxFramesInFlight = 2;
+constexpr u32 MaxSwapchainImages = 3;
+
+class Pipeline {
+public:
+    virtual ~Pipeline() = default;
+    virtual void cmd_draw(vk::CommandBuffer cmd, vk::Image render_target, vk::Extent2D window_size) const = 0;
+};
+
+class Window {
+public:
+    static constexpr vk::Format SwapchainImageFormat = vk::Format::eR8G8B8A8Srgb;
+    static constexpr vk::ColorSpaceKHR SwapchainColorSpace = vk::ColorSpaceKHR::eSrgbNonlinear;
+
+    [[nodiscard]] static Result<Window> create(const Engine& engine, bool fullscreen, i32 width, i32 height);
+    void destroy(const Engine& engine) const;
+    [[nodiscard]] Result<void> resize(const Engine& engine);
+
+    [[nodiscard]] GLFWwindow* window() const { return m_window; }
+    [[nodiscard]] vk::Extent2D extent() const { return m_extent; }
+
+    [[nodiscard]] Result<void> draw_frame(const Engine& engine, const Pipeline& pipeline) {
+        const auto cmd = begin_frame(engine);
+        if (cmd.has_err())
+            return cmd.err();
+        pipeline.cmd_draw(*cmd, current_image(), m_extent);
+        return end_frame(engine);
+    }
+
+private:
+    [[nodiscard]] Result<vk::CommandBuffer> begin_frame(const Engine& engine);
+    [[nodiscard]] Result<void> end_frame(const Engine& engine);
+
+    [[nodiscard]] vk::CommandBuffer& current_cmd() { return m_command_buffers[m_current_frame_index]; }
+    [[nodiscard]] vk::Image& current_image() { return m_swapchain_images[m_current_image_index]; }
+    [[nodiscard]] vk::Fence& is_frame_finished() { return m_frame_finished_fences[m_current_frame_index]; }
+    [[nodiscard]] vk::Semaphore& is_image_available() { return m_image_available_semaphores[m_current_frame_index]; }
+    [[nodiscard]] vk::Semaphore& is_ready_to_present() { return m_ready_to_present_semaphores[m_current_image_index]; }
+    [[nodiscard]] const vk::CommandBuffer& current_cmd() const { return m_command_buffers[m_current_frame_index]; }
+    [[nodiscard]] const vk::Image& current_image() const { return m_swapchain_images[m_current_image_index]; }
+    [[nodiscard]] const vk::Fence& is_frame_finished() const { return m_frame_finished_fences[m_current_frame_index]; }
+    [[nodiscard]] const vk::Semaphore& is_image_available() const { return m_image_available_semaphores[m_current_frame_index]; }
+    [[nodiscard]] const vk::Semaphore& is_ready_to_present() const { return m_ready_to_present_semaphores[m_current_image_index]; }
+
+    GLFWwindow* m_window = nullptr;
+    vk::SurfaceKHR m_surface = {};
+    vk::Extent2D m_extent = {};
+    vk::SwapchainKHR m_swapchain = {};
+    std::array<vk::Image, MaxSwapchainImages> m_swapchain_images = {};
+    u32 m_image_count = 0;
+    u32 m_current_image_index = 0;
+    u32 m_current_frame_index = 0;
+    bool m_recording = false;
+    std::array<vk::CommandBuffer, MaxFramesInFlight> m_command_buffers = {};
+    std::array<vk::Fence, MaxFramesInFlight> m_frame_finished_fences = {};
+    std::array<vk::Semaphore, MaxFramesInFlight> m_image_available_semaphores = {};
+    std::array<vk::Semaphore, MaxSwapchainImages> m_ready_to_present_semaphores = {};
 };
 
 } // namespace hg

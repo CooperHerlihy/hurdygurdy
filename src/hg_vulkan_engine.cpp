@@ -46,7 +46,7 @@ const vk::DebugUtilsMessengerCreateInfoEXT DebugUtilsMessengerCreateInfo = {
     .pfnUserCallback = debug_callback,
 };
 
-[[nodiscard]] static Result<std::vector<const char*>> get_required_instance_extensions() {
+static Result<std::vector<const char*>> get_required_instance_extensions() {
     u32 glfw_extension_count = 0;
     const char** glfw_extensions = glfwGetRequiredInstanceExtensions(&glfw_extension_count);
     if (glfw_extensions == nullptr)
@@ -63,7 +63,7 @@ const vk::DebugUtilsMessengerCreateInfoEXT DebugUtilsMessengerCreateInfo = {
     return required_extensions;
 }
 
-[[nodiscard]] static Result<bool> check_instance_extension_availability(const std::span<const char* const> required_extensions) {
+static Result<bool> check_instance_extension_availability(const std::span<const char* const> required_extensions) {
     ASSERT(!required_extensions.empty());
 
     const auto extensions = vk::enumerateInstanceExtensionProperties();
@@ -341,286 +341,6 @@ void Engine::destroy() const {
     s_engine_initialized = false;
 }
 
-Result<Window> Window::create(const Engine& engine, const bool fullscreen, const i32 width, const i32 height) {
-    ASSERT(engine.instance != nullptr);
-    ASSERT(engine.device != nullptr);
-    ASSERT(engine.command_pool != nullptr);
-    if (!fullscreen) {
-        ASSERT(width > 0);
-        ASSERT(height > 0);
-    }
-
-    auto window = ok<Window>();
-
-    if (fullscreen) {
-        const auto monitor = glfwGetPrimaryMonitor();
-        if (monitor == nullptr)
-            return Err::GlfwFailure;
-
-        const auto video_mode = glfwGetVideoMode(monitor);
-        if (video_mode == nullptr)
-            return Err::GlfwFailure;
-
-        window->m_window = glfwCreateWindow(video_mode->width, video_mode->width, "Hurdy Gurdy", monitor, nullptr);
-        if (window->m_window == nullptr)
-            return Err::GlfwFailure;
-    } else {
-        window->m_window = glfwCreateWindow(width, height, "Hurdy Gurdy", nullptr, nullptr);
-        if (window->m_window == nullptr)
-            return Err::GlfwFailure;
-    }
-
-    VkSurfaceKHR surface = VK_NULL_HANDLE;
-    const auto surface_result = glfwCreateWindowSurface(engine.instance, window->m_window, nullptr, &surface);
-    if (surface_result != VK_SUCCESS)
-        return Err::GlfwFailure;
-    window->m_surface = surface;
-
-    const auto window_result = window->resize(engine);
-    if (window_result.has_err())
-        return window_result.err();
-
-    const vk::CommandBufferAllocateInfo cmd_info{
-        .commandPool = engine.command_pool,
-        .commandBufferCount = MaxFramesInFlight,
-    };
-    const auto cmd_result = engine.device.allocateCommandBuffers(&cmd_info, window->m_command_buffers.data());
-    if (cmd_result != vk::Result::eSuccess)
-        return Err::CouldNotAllocateVkCommandBuffers;
-
-    for (auto& fence : window->m_frame_finished_fences) {
-        const auto new_fence = engine.device.createFence({.flags = vk::FenceCreateFlagBits::eSignaled});
-        if (new_fence.result != vk::Result::eSuccess)
-            return Err::CouldNotCreateVkFence;
-        fence = new_fence.value;
-    }
-    for (auto& semaphore : window->m_image_available_semaphores) {
-        const auto new_semaphore = engine.device.createSemaphore({});
-        if (new_semaphore.result != vk::Result::eSuccess)
-            return Err::CouldNotCreateVkSemaphore;
-        semaphore = new_semaphore.value;
-    }
-    for (auto& semaphore : window->m_ready_to_present_semaphores) {
-        const auto new_semaphore = engine.device.createSemaphore({});
-        if (new_semaphore.result != vk::Result::eSuccess)
-            return Err::CouldNotCreateVkSemaphore;
-        semaphore = new_semaphore.value;
-    }
-
-    ASSERT(window->m_window != nullptr);
-    ASSERT(window->m_surface != nullptr);
-    ASSERT(window->m_extent != nullptr);
-    ASSERT(window->m_swapchain != nullptr);
-    for (const auto image : window->m_swapchain_images) {
-        ASSERT(image != nullptr);
-    }
-    for (const auto cmd : window->m_command_buffers) {
-        ASSERT(cmd != nullptr);
-    }
-    for (const auto fence : window->m_frame_finished_fences) {
-        ASSERT(fence != nullptr);
-    }
-    for (const auto semaphore : window->m_image_available_semaphores) {
-        ASSERT(semaphore != nullptr);
-    }
-    for (const auto semaphore : window->m_ready_to_present_semaphores) {
-        ASSERT(semaphore != nullptr);
-    }
-    return window;
-}
-
-void Window::destroy(const Engine& engine) const {
-    ASSERT(engine.device != nullptr);
-
-    for (const auto fence : m_frame_finished_fences) {
-        ASSERT(fence != nullptr);
-        engine.device.destroyFence(fence);
-    }
-    for (const auto semaphore : m_image_available_semaphores) {
-        ASSERT(semaphore != nullptr);
-        engine.device.destroySemaphore(semaphore);
-    }
-    for (const auto semaphore : m_ready_to_present_semaphores) {
-        ASSERT(semaphore != nullptr);
-        engine.device.destroySemaphore(semaphore);
-    }
-
-    ASSERT(engine.command_pool != nullptr);
-    for (const auto cmd : m_command_buffers) {
-        ASSERT(cmd != nullptr);
-    }
-    engine.device.freeCommandBuffers(engine.command_pool, to_u32(m_command_buffers.size()), m_command_buffers.data());
-
-    ASSERT(m_swapchain != nullptr);
-    engine.device.destroySwapchainKHR(m_swapchain);
-
-    ASSERT(m_surface != nullptr);
-    engine.instance.destroySurfaceKHR(m_surface);
-
-    ASSERT(m_window != nullptr);
-    glfwDestroyWindow(m_window);
-}
-
-Result<void> Window::resize(const Engine& engine) {
-    ASSERT(engine.gpu != nullptr);
-    ASSERT(engine.device != nullptr);
-
-    const auto [surface_result, surface_capabilities] = engine.gpu.getSurfaceCapabilitiesKHR(m_surface);
-    if (surface_result != vk::Result::eSuccess)
-        return Err::VulkanFailure;
-    if (surface_capabilities.currentExtent.width <= 0 || surface_capabilities.currentExtent.height <= 0)
-        return Err::InvalidWindowSize;
-
-    const auto [present_mode_result, present_modes] = engine.gpu.getSurfacePresentModesKHR(m_surface);
-    if (present_mode_result != vk::Result::eSuccess)
-        return Err::VulkanFailure;
-
-    const auto new_swapchain = engine.device.createSwapchainKHR({
-        .surface = m_surface,
-        .minImageCount = surface_capabilities.maxImageCount == 0
-                         ? MaxSwapchainImages
-                         : std::min(surface_capabilities.minImageCount + 1, surface_capabilities.maxImageCount),
-        .imageFormat = SwapchainImageFormat,
-        .imageColorSpace = SwapchainColorSpace,
-        .imageExtent = surface_capabilities.currentExtent,
-        .imageArrayLayers = 1,
-        .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferDst,
-        .preTransform = surface_capabilities.currentTransform,
-        .presentMode = std::ranges::any_of(present_modes, [](const vk::PresentModeKHR mode) { return mode == vk::PresentModeKHR::eMailbox; })
-            // ? vk::PresentModeKHR::eMailbox
-            ? vk::PresentModeKHR::eFifo
-            : vk::PresentModeKHR::eFifo,
-        .clipped = vk::True,
-        .oldSwapchain = m_swapchain,
-    });
-    if (new_swapchain.result != vk::Result::eSuccess)
-        return Err::CouldNotCreateVkSwapchain;
-
-    const auto wait_result = engine.queue.waitIdle();
-    if (wait_result != vk::Result::eSuccess)
-        return Err::CouldNotWaitForVkQueue;
-
-    if (m_swapchain != nullptr) {
-        engine.device.destroySwapchainKHR(m_swapchain);
-    }
-    m_swapchain = new_swapchain.value;
-    m_extent = surface_capabilities.currentExtent;
-
-    const vk::Result image_count_result = engine.device.getSwapchainImagesKHR(m_swapchain, &m_image_count, nullptr);
-    if (image_count_result != vk::Result::eSuccess)
-        return Err::VkSwapchainImagesUnavailable;
-    const vk::Result image_result = engine.device.getSwapchainImagesKHR(m_swapchain, &m_image_count, m_swapchain_images.data());
-    if (image_result != vk::Result::eSuccess)
-        return Err::VkSwapchainImagesUnavailable;
-
-    ASSERT(m_swapchain != nullptr);
-    for (const auto image : m_swapchain_images) {
-        ASSERT(image != nullptr);
-    }
-    return ok();
-}
-
-Result<vk::CommandBuffer> Window::begin_frame(const Engine& engine) {
-    ASSERT(!m_recording);
-    ASSERT(current_cmd() != nullptr);
-    ASSERT(is_frame_finished() != nullptr);
-    ASSERT(is_image_available() != nullptr);
-    ASSERT(engine.device != nullptr);
-
-    const auto wait_result = engine.device.waitForFences({is_frame_finished()}, vk::True, 1'000'000'000);
-    if (wait_result != vk::Result::eSuccess)
-        return Err::CouldNotWaitForVkFence;
-    const auto reset_result = engine.device.resetFences({is_frame_finished()});
-    if (reset_result != vk::Result::eSuccess)
-        return Err::VulkanFailure;
-
-    const auto acquire_result = engine.device.acquireNextImageKHR(m_swapchain, UINT64_MAX, is_image_available(), nullptr);
-    if (acquire_result.result != vk::Result::eSuccess)
-        return Err::CouldNotAcquireVkSwapchainImage;
-    m_current_image_index = acquire_result.value;
-
-    const auto begin_result = current_cmd().begin({.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
-    if (begin_result != vk::Result::eSuccess)
-        return Err::CouldNotBeginVkCommandBuffer;
-    m_recording = true;
-
-    const vk::Viewport viewport = {
-        0.0f, 0.0f,
-        static_cast<f32>(m_extent.width), static_cast<f32>(m_extent.height),
-        0.0f, 1.0f,
-    };
-    current_cmd().setViewportWithCount({viewport});
-    const vk::Rect2D scissor = {{0, 0}, m_extent};
-    current_cmd().setScissorWithCount({scissor});
-
-    current_cmd().setRasterizerDiscardEnable(vk::False);
-    current_cmd().setPrimitiveRestartEnable(vk::False);
-    current_cmd().setPrimitiveTopology(vk::PrimitiveTopology::eTriangleList);
-    current_cmd().setPolygonModeEXT(vk::PolygonMode::eFill);
-    current_cmd().setFrontFace(vk::FrontFace::eCounterClockwise);
-    current_cmd().setCullMode(vk::CullModeFlagBits::eNone);
-    current_cmd().setDepthTestEnable(vk::True);
-    current_cmd().setDepthWriteEnable(vk::True);
-    current_cmd().setDepthCompareOp(vk::CompareOp::eLess);
-    current_cmd().setDepthBiasEnable(vk::False);
-    current_cmd().setStencilTestEnable(vk::False);
-    current_cmd().setRasterizationSamplesEXT(vk::SampleCountFlagBits::e1);
-    current_cmd().setSampleMaskEXT(vk::SampleCountFlagBits::e1, vk::SampleMask{0xff});
-    current_cmd().setAlphaToCoverageEnableEXT(vk::False);
-    current_cmd().setColorWriteMaskEXT(0, {
-        vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-        vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA
-    });
-    current_cmd().setColorBlendEnableEXT(0, {vk::False});
-
-    return ok(current_cmd());
-}
-
-Result<void> Window::end_frame(const Engine& engine) {
-    ASSERT(m_recording);
-    ASSERT(m_swapchain != nullptr);
-    ASSERT(current_cmd() != nullptr);
-    ASSERT(is_image_available() != nullptr);
-    ASSERT(is_ready_to_present() != nullptr);
-    ASSERT(engine.device != nullptr);
-
-    const auto end_result = current_cmd().end();
-    if (end_result != vk::Result::eSuccess)
-        return Err::CouldNotEndVkCommandBuffer;
-    m_recording = false;
-
-    constexpr vk::PipelineStageFlags wait_stage = vk::PipelineStageFlagBits::eColorAttachmentOutput;
-    vk::SubmitInfo submit_info = {
-        .waitSemaphoreCount = 1,
-        .pWaitSemaphores = &is_image_available(),
-        .pWaitDstStageMask = &wait_stage,
-        .commandBufferCount = 1,
-        .pCommandBuffers = &current_cmd(),
-        .signalSemaphoreCount = 1,
-        .pSignalSemaphores = &is_ready_to_present(),
-    };
-
-    const auto submit_result = engine.queue.submit({submit_info}, is_frame_finished());
-    if (submit_result != vk::Result::eSuccess)
-        return Err::CouldNotSubmitVkCommandBuffer;
-
-    const vk::PresentInfoKHR present_info = {
-        .waitSemaphoreCount = 1,
-        .pWaitSemaphores = &is_ready_to_present(),
-        .swapchainCount = 1,
-        .pSwapchains = &m_swapchain,
-        .pImageIndices = &m_current_image_index,
-    };
-    const auto present_result = engine.queue.presentKHR(present_info);
-    if (present_result == vk::Result::eErrorOutOfDateKHR)
-        return Err::InvalidWindowSize;
-    if (present_result != vk::Result::eSuccess)
-        return Err::CouldNotPresentVkSwapchainImage;
-
-    m_current_frame_index = (m_current_frame_index + 1) % MaxFramesInFlight;
-    return ok();
-}
-
 Result<GpuBuffer> GpuBuffer::create_result(const Engine& engine, const Config& config) {
     ASSERT(engine.allocator != nullptr);
     ASSERT(config.size != 0);
@@ -635,7 +355,7 @@ Result<GpuBuffer> GpuBuffer::create_result(const Engine& engine, const Config& c
     if (config.memory_type == RandomAccess) {
         alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
         alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
-    } else if (config.memory_type == Staging) {
+    } else if (config.memory_type == LinearAccess) {
         alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
         alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
     } else if (config.memory_type == DeviceLocal) {
@@ -665,10 +385,10 @@ Result<void> GpuBuffer::write_result(
     ASSERT(buffer != nullptr);
     ASSERT(data != nullptr);
     ASSERT(size != 0);
-    if (memory_type == Staging)
+    if (memory_type == LinearAccess)
         ASSERT(offset == 0);
 
-    if (memory_type == RandomAccess || memory_type == Staging) {
+    if (memory_type == RandomAccess || memory_type == LinearAccess) {
         const auto copy_result = vmaCopyMemoryToAllocation(engine.allocator, data, allocation, offset, size);
         if (copy_result != VK_SUCCESS) {
             return Err::CouldNotWriteGpuBuffer;
@@ -677,7 +397,7 @@ Result<void> GpuBuffer::write_result(
     }
     ASSERT(memory_type == DeviceLocal);
 
-    const auto staging_buffer = create_result(engine, {size, vk::BufferUsageFlagBits::eTransferSrc, Staging});
+    const auto staging_buffer = create_result(engine, {size, vk::BufferUsageFlagBits::eTransferSrc, LinearAccess});
     if (staging_buffer.has_err())
         return staging_buffer.err();
     defer(vmaDestroyBuffer(engine.allocator, staging_buffer->buffer, staging_buffer->allocation));
@@ -693,7 +413,7 @@ Result<void> GpuBuffer::write_result(
     return ok();
 }
 
-Result<StagingGpuImage> StagingGpuImage::create(const Engine& engine, const Config& config) {
+Result<GpuImage> GpuImage::create(const Engine& engine, const Config& config) {
     ASSERT(engine.device != nullptr);
     ASSERT(engine.allocator != nullptr);
     ASSERT(config.extent.width > 0);
@@ -704,15 +424,9 @@ Result<StagingGpuImage> StagingGpuImage::create(const Engine& engine, const Conf
     ASSERT(config.sample_count != vk::SampleCountFlagBits{});
     ASSERT(config.mip_levels > 0);
 
-    VkImageType dimensions = VK_IMAGE_TYPE_3D;
-    if (config.extent.depth == 1) {
-        dimensions = static_cast<VkImageType>(dimensions - 1);
-        if (config.extent.height == 1)
-            dimensions = static_cast<VkImageType>(dimensions - 1);
-    }
     VkImageCreateInfo image_info = {};
     image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    image_info.imageType = dimensions;
+    image_info.imageType = static_cast<VkImageType>(config.dimensions);
     image_info.format = static_cast<VkFormat>(config.format);
     image_info.extent = config.extent;
     image_info.mipLevels = config.mip_levels;
@@ -724,160 +438,34 @@ Result<StagingGpuImage> StagingGpuImage::create(const Engine& engine, const Conf
     alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
     alloc_info.flags = 0;
 
-    VkImage image = VK_NULL_HANDLE;
-    VmaAllocation allocation = VK_NULL_HANDLE;
-    const auto image_result = vmaCreateImage(engine.allocator, &image_info, &alloc_info, &image, &allocation, nullptr);
+    VkImage vk_image = VK_NULL_HANDLE;
+    VmaAllocation vma_allocation = VK_NULL_HANDLE;
+    const auto image_result = vmaCreateImage(engine.allocator, &image_info, &alloc_info, &vk_image, &vma_allocation, nullptr);
     if (image_result != VK_SUCCESS)
         return Err::CouldNotCreateGpuImage;
 
-    ASSERT(allocation != nullptr);
-    ASSERT(image != nullptr);
-    return ok<StagingGpuImage>(allocation, image);
+    auto image = ok<GpuImage>();
+    image->m_image = vk_image;
+    image->m_allocation = vma_allocation;
+
+    ASSERT(image->m_image != nullptr);
+    ASSERT(image->m_allocation != nullptr);
+    return image;
 }
 
-Result<void> StagingGpuImage::write(
-    const Engine& engine, const Data& data, const vk::ImageLayout final_layout,
-    const vk::ImageSubresourceRange& subresource
-) const {
-    ASSERT(engine.allocator != nullptr);
-    ASSERT(allocation != nullptr);
-    ASSERT(image != nullptr);
-    ASSERT(data.ptr != nullptr);
-    ASSERT(data.alignment > 0);
-    ASSERT(data.extent.width > 0);
-    ASSERT(data.extent.height > 0);
-    ASSERT(data.extent.depth > 0);
-
-    const VkDeviceSize size = data.extent.width * data.extent.height * data.extent.depth * data.alignment;
-
-    const auto staging_buffer = GpuBuffer::create_result(engine, {
-        size, vk::BufferUsageFlagBits::eTransferSrc, GpuBuffer::MemoryType::Staging
-    });
-    if (staging_buffer.has_err())
-        return staging_buffer.err();
-    defer(vmaDestroyBuffer(engine.allocator, staging_buffer->buffer, staging_buffer->allocation));
-    const auto staging_write = staging_buffer->write_result(engine, data.ptr, size, 0);
-    if (staging_write.has_err())
-        return staging_write.err();
-
-    const auto submit_result = submit_single_time_commands(engine, [&](const vk::CommandBuffer cmd) {
-        BarrierBuilder(cmd)
-            .add_image_barrier(image, subresource)
-            .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
-            .build_and_run();
-
-        const vk::BufferImageCopy2 copy_region = {
-            .imageSubresource = {subresource.aspectMask, 0, 0, 1},
-            .imageExtent = data.extent
-        };
-        cmd.copyBufferToImage2({
-            .srcBuffer = staging_buffer->buffer,
-            .dstImage = image,
-            .dstImageLayout = vk::ImageLayout::eTransferDstOptimal,
-            .regionCount = 1,
-            .pRegions = &copy_region
-        });
-
-        BarrierBuilder(cmd)
-            .add_image_barrier(image, subresource)
-            .set_image_src(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
-            .set_image_dst(vk::PipelineStageFlagBits2::eNone, vk::AccessFlagBits2::eNone, final_layout)
-            .build_and_run();
-    });
-    if (submit_result.has_err())
-        return Err::CouldNotWriteGpuImage;
-
-    return ok();
-}
-
-Result<GpuImage> GpuImage::create_result(const Engine& engine, const Config& config) {
+Result<GpuImage> GpuImage::create_cubemap(const Engine& engine, const CubemapConfig& config) {
     ASSERT(engine.device != nullptr);
     ASSERT(engine.allocator != nullptr);
-    ASSERT(config.extent.width > 0);
-    ASSERT(config.extent.height > 0);
-    ASSERT(config.extent.depth > 0);
-    ASSERT(config.format != vk::Format::eUndefined);
-    ASSERT(config.usage != vk::ImageUsageFlags{});
-    ASSERT(config.aspect_flags != vk::ImageAspectFlagBits{});
-    ASSERT(config.sample_count != vk::SampleCountFlagBits{});
-    ASSERT(config.mip_levels > 0);
-
-    const auto staging = StagingGpuImage::create(engine, {
-        config.extent, config.format, config.usage, config.sample_count, config.mip_levels
-    });
-    if (staging.has_err())
-        return Err::CouldNotCreateGpuImage;
-
-    vk::ImageViewType dimensions = vk::ImageViewType::e3D;
-    if (config.extent.depth == 1) {
-        dimensions = static_cast<vk::ImageViewType>(static_cast<int>(dimensions) - 1);
-        if (config.extent.height == 1)
-            dimensions = static_cast<vk::ImageViewType>(static_cast<int>(dimensions) - 1);
-    }
-    const auto view = engine.device.createImageView({
-        .image = staging->image,
-        .viewType = dimensions,
-        .format = config.format,
-        .subresourceRange = {config.aspect_flags, 0, config.mip_levels, 0, 1},
-    });
-    if (view.result != vk::Result::eSuccess)
-        return Err::CouldNotCreateGpuImageView;
-
-    if (config.layout != vk::ImageLayout::eUndefined) {
-        const auto submit_result = submit_single_time_commands(engine, [&](const vk::CommandBuffer cmd) {
-            BarrierBuilder(cmd)
-                .add_image_barrier(staging->image, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
-                .set_image_dst(vk::PipelineStageFlagBits2::eNone, vk::AccessFlagBits2::eNone, config.layout)
-                .build_and_run();
-        });
-        if (submit_result.has_err())
-            return Err::CouldNotCreateGpuImage;
-    }
-
-    ASSERT(staging->allocation != nullptr);
-    ASSERT(staging->image != nullptr);
-    ASSERT(view.value != nullptr);
-    return ok<GpuImage>(staging->allocation, staging->image, view.value);
-}
-
-Result<GpuImage> GpuImage::create_cubemap(const Engine& engine, const std::filesystem::path path) {
-    ASSERT(engine.device != nullptr);
-    ASSERT(engine.allocator != nullptr);
-    ASSERT(!path.empty());
-
-    const auto data = ImageData::load(path);
-    if (data.has_err())
-        return data.err();
-
-    const vk::Extent3D staging_extent = {to_u32(data->width), to_u32(data->height), 1};
-
-    const auto staging_image = StagingGpuImage::create(engine, {
-        .extent = staging_extent, 
-        .format = vk::Format::eR8G8B8A8Srgb, 
-        .usage = vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eTransferSrc
-    });
-    if (staging_image.has_err())
-        return staging_image.err();
-    defer(staging_image->destroy(engine));
-    const auto staging_write = staging_image->write(engine,
-        {data->pixels.get(), 4, staging_extent},
-        vk::ImageLayout::eTransferSrcOptimal
-    );
-    if (staging_write.has_err())
-        return staging_write.err();
-
-    const vk::Extent3D extent = {staging_extent.width / 4, staging_extent.height / 3, 1};
 
     VkImageCreateInfo image_info = {};
     image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     image_info.imageType = VK_IMAGE_TYPE_2D;
-    image_info.format = VK_FORMAT_R8G8B8A8_SRGB;
-    image_info.extent = extent;
+    image_info.format = static_cast<VkFormat>(config.format);
+    image_info.extent = config.face_extent;
     image_info.mipLevels = 1;
-    image_info.arrayLayers = 1;
-    image_info.samples = VK_SAMPLE_COUNT_1_BIT;
-    image_info.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
     image_info.arrayLayers = 6;
+    image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    image_info.usage = static_cast<VkImageUsageFlags>(config.usage);
     image_info.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
 
     VmaAllocationCreateInfo alloc_info = {};
@@ -890,18 +478,199 @@ Result<GpuImage> GpuImage::create_cubemap(const Engine& engine, const std::files
     if (image_result != VK_SUCCESS)
         return Err::CouldNotCreateGpuImage;
 
-    const auto view = engine.device.createImageView({
-        .image = image,
-        .viewType = vk::ImageViewType::eCube,
-        .format = vk::Format::eR8G8B8A8Srgb,
-        .subresourceRange = {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 6},
+    auto cubemap = ok<GpuImage>();
+    cubemap->m_allocation = allocation;
+    cubemap->m_image = image;
+
+    ASSERT(cubemap->m_image != nullptr);
+    ASSERT(cubemap->m_allocation != nullptr);
+    return cubemap;
+}
+
+Result<void> GpuImage::write(const Engine& engine, const WriteConfig& config) const {
+    ASSERT(engine.allocator != nullptr);
+    ASSERT(m_allocation != nullptr);
+    ASSERT(m_image != nullptr);
+
+    const auto& data = config.data;
+    ASSERT(data.ptr != nullptr);
+    ASSERT(data.alignment > 0);
+    ASSERT(data.extent.width > 0);
+    ASSERT(data.extent.height > 0);
+    ASSERT(data.extent.depth > 0);
+
+    const VkDeviceSize size = data.extent.width * data.extent.height * data.extent.depth * data.alignment;
+
+    const auto staging_buffer = GpuBuffer::create_result(engine, {
+        size, vk::BufferUsageFlagBits::eTransferSrc, GpuBuffer::MemoryType::LinearAccess
     });
-    if (view.result != vk::Result::eSuccess)
-        return Err::CouldNotCreateGpuImageView;
+    if (staging_buffer.has_err())
+        return staging_buffer.err();
+    defer(vmaDestroyBuffer(engine.allocator, staging_buffer->buffer, staging_buffer->allocation));
+    const auto staging_write = staging_buffer->write_result(engine, data.ptr, size, 0);
+    if (staging_write.has_err())
+        return staging_write.err();
 
     const auto submit_result = submit_single_time_commands(engine, [&](const vk::CommandBuffer cmd) {
         BarrierBuilder(cmd)
-            .add_image_barrier(image, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 6})
+            .add_image_barrier(m_image, config.subresource)
+            .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
+            .build_and_run();
+
+        const vk::BufferImageCopy2 copy_region = {
+            .imageSubresource = {config.subresource.aspectMask, 0, 0, 1},
+            .imageExtent = data.extent
+        };
+        cmd.copyBufferToImage2({
+            .srcBuffer = staging_buffer->buffer,
+            .dstImage = m_image,
+            .dstImageLayout = vk::ImageLayout::eTransferDstOptimal,
+            .regionCount = 1,
+            .pRegions = &copy_region
+        });
+
+        BarrierBuilder(cmd)
+            .add_image_barrier(m_image, config.subresource)
+            .set_image_src(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
+            .set_image_dst(vk::PipelineStageFlagBits2::eNone, vk::AccessFlagBits2::eNone, config.final_layout)
+            .build_and_run();
+    });
+    if (submit_result.has_err())
+        return Err::CouldNotWriteGpuImage;
+
+    return ok();
+}
+
+Result<GpuImageView> GpuImageView::create(const Engine& engine, const Config& config) {
+    ASSERT(engine.device != nullptr);
+    ASSERT(engine.allocator != nullptr);
+    ASSERT(config.image != nullptr);
+    ASSERT(config.format != vk::Format::eUndefined);
+
+    const auto vk_view = engine.device.createImageView({
+        .image = config.image,
+        .viewType = config.dimensions,
+        .format = config.format,
+        .subresourceRange = config.subresource,
+    });
+    if (vk_view.result != vk::Result::eSuccess)
+        return Err::CouldNotCreateGpuImageView;
+
+    auto view = ok<GpuImageView>();
+    view->m_view = vk_view.value;
+    return view;
+}
+
+Result<GpuImageAndView> GpuImageAndView::create_result(const Engine& engine, const Config& config) {
+    ASSERT(engine.device != nullptr);
+    ASSERT(engine.allocator != nullptr);
+    ASSERT(config.extent.width > 0);
+    ASSERT(config.extent.height > 0);
+    ASSERT(config.extent.depth > 0);
+    ASSERT(config.format != vk::Format::eUndefined);
+    ASSERT(config.usage != vk::ImageUsageFlags{});
+    ASSERT(config.aspect_flags != vk::ImageAspectFlagBits{});
+    ASSERT(config.sample_count != vk::SampleCountFlagBits{});
+    ASSERT(config.mip_levels > 0);
+
+    vk::ImageType image_dimensions = vk::ImageType::e3D;
+    if (config.extent.depth == 1) {
+        image_dimensions = static_cast<vk::ImageType>(static_cast<int>(image_dimensions) - 1);
+        if (config.extent.height == 1)
+            image_dimensions = static_cast<vk::ImageType>(static_cast<int>(image_dimensions) - 1);
+    }
+    const auto image = GpuImage::create(engine, {
+        .extent = config.extent,
+        .dimensions = image_dimensions,
+        .format = config.format,
+        .usage = config.usage,
+        .sample_count = config.sample_count,
+        .mip_levels = config.mip_levels,
+    });
+    if (image.has_err())
+        return Err::CouldNotCreateGpuImage;
+
+    if (config.layout != vk::ImageLayout::eUndefined) {
+        const auto submit_result = submit_single_time_commands(engine, [&](const vk::CommandBuffer cmd) {
+            BarrierBuilder(cmd)
+                .add_image_barrier(image->get(), {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
+                .set_image_dst(vk::PipelineStageFlagBits2::eNone, vk::AccessFlagBits2::eNone, config.layout)
+                .build_and_run();
+        });
+        if (submit_result.has_err())
+            return Err::CouldNotCreateGpuImage;
+    }
+
+    vk::ImageViewType view_dimensions = vk::ImageViewType::e3D;
+    if (config.extent.depth == 1) {
+        view_dimensions = static_cast<vk::ImageViewType>(static_cast<int>(view_dimensions) - 1);
+        if (config.extent.height == 1)
+            view_dimensions = static_cast<vk::ImageViewType>(static_cast<int>(view_dimensions) - 1);
+    }
+    const auto view = GpuImageView::create(engine, {
+        .image = image->get(),
+        .dimensions = view_dimensions,
+        .format = config.format,
+        .subresource = {.aspectMask = config.aspect_flags, .levelCount = config.mip_levels, .layerCount = 1},
+    });
+    if (view.has_err())
+        return Err::CouldNotCreateGpuImageView;
+
+    auto image_and_view = ok<GpuImageAndView>();
+    image_and_view->m_image = *image;
+    image_and_view->m_view = *view;
+    return image_and_view;
+}
+
+Result<GpuImageAndView> GpuImageAndView::create_cubemap(const Engine& engine, const std::filesystem::path path) {
+    ASSERT(engine.device != nullptr);
+    ASSERT(engine.allocator != nullptr);
+    ASSERT(!path.empty());
+
+    const auto data = ImageData::load(path);
+    if (data.has_err())
+        return data.err();
+
+    const vk::Extent3D staging_extent = {to_u32(data->width), to_u32(data->height), 1};
+
+    const auto staging_image = GpuImage::create(engine, {
+        .extent = staging_extent, 
+        .dimensions = vk::ImageType::e2D,
+        .format = vk::Format::eR8G8B8A8Srgb, 
+        .usage = vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eTransferSrc
+    });
+    if (staging_image.has_err())
+        return staging_image.err();
+    defer(staging_image->destroy(engine));
+    const auto staging_write = staging_image->write(engine, {
+        {data->pixels.get(), 4, staging_extent},
+        vk::ImageLayout::eTransferSrcOptimal
+    });
+    if (staging_write.has_err())
+        return staging_write.err();
+
+    const vk::Extent3D face_extent = {staging_extent.width / 4, staging_extent.height / 3, 1};
+
+    const auto image = GpuImage::create_cubemap(engine, {
+        .face_extent = face_extent,
+        .format = vk::Format::eR8G8B8A8Srgb,
+        .usage = vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
+    });
+    if (image.has_err())
+        return image.err();
+
+    const auto view = GpuImageView::create(engine, {
+        .image = image->get(),
+        .dimensions = vk::ImageViewType::eCube,
+        .format = vk::Format::eR8G8B8A8Srgb,
+        .subresource = {.aspectMask = vk::ImageAspectFlagBits::eColor, .levelCount = 1, .layerCount = 6},
+    });
+    if (view.has_err())
+        return view.err();
+
+    const auto submit_result = submit_single_time_commands(engine, [&](const vk::CommandBuffer cmd) {
+        BarrierBuilder(cmd)
+            .add_image_barrier(image->get(), {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 6})
             .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
             .build_and_run();
 
@@ -910,50 +679,50 @@ Result<GpuImage> GpuImage::create_cubemap(const Engine& engine, const std::files
                 .srcSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
                 .srcOffset = {data->width * 2 / 4, data->height * 1 / 3, 0},
                 .dstSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
-                .extent = extent,
+                .extent = face_extent,
             },
             vk::ImageCopy2{
                 .srcSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
                 .srcOffset = {data->width * 0 / 4, data->height * 1 / 3, 0},
                 .dstSubresource = {vk::ImageAspectFlagBits::eColor, 0, 1, 1},
-                .extent = extent,
+                .extent = face_extent,
             },
             vk::ImageCopy2{
                 .srcSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
                 .srcOffset = {data->width * 1 / 4, data->height * 0 / 3, 0},
                 .dstSubresource = {vk::ImageAspectFlagBits::eColor, 0, 2, 1},
-                .extent = extent,
+                .extent = face_extent,
             },
             vk::ImageCopy2{
                 .srcSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
                 .srcOffset = {data->width * 1 / 4, data->height * 2 / 3, 0},
                 .dstSubresource = {vk::ImageAspectFlagBits::eColor, 0, 3, 1},
-                .extent = extent,
+                .extent = face_extent,
             },
             vk::ImageCopy2{
                 .srcSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
                 .srcOffset = {data->width * 1 / 4, data->height * 1 / 3, 0},
                 .dstSubresource = {vk::ImageAspectFlagBits::eColor, 0, 4, 1},
-                .extent = extent,
+                .extent = face_extent,
             },
             vk::ImageCopy2{
                 .srcSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
                 .srcOffset = {data->width * 3 / 4, data->height * 1 / 3, 0},
                 .dstSubresource = {vk::ImageAspectFlagBits::eColor, 0, 5, 1},
-                .extent = extent,
+                .extent = face_extent,
             },
         };
         cmd.copyImage2({
-            .srcImage = staging_image->image,
+            .srcImage = staging_image->get(),
             .srcImageLayout = vk::ImageLayout::eTransferSrcOptimal,
-            .dstImage = image,
+            .dstImage = image->get(),
             .dstImageLayout = vk::ImageLayout::eTransferDstOptimal,
             .regionCount = to_u32(copies.size()),
             .pRegions = copies.data(),
         });
 
         BarrierBuilder(cmd)
-            .add_image_barrier(image, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 6})
+            .add_image_barrier(image->get(), {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 6})
             .set_image_src(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
             .set_image_dst(vk::PipelineStageFlagBits2::eFragmentShader, vk::AccessFlagBits2::eShaderRead, vk::ImageLayout::eShaderReadOnlyOptimal)
             .build_and_run();
@@ -961,13 +730,13 @@ Result<GpuImage> GpuImage::create_cubemap(const Engine& engine, const std::files
     if (submit_result.has_err())
         return Err::CouldNotWriteGpuImage;
 
-    ASSERT(allocation != nullptr);
-    ASSERT(image != nullptr);
-    ASSERT(view.value != nullptr);
-    return ok<GpuImage>(allocation, image, view.value);
+    auto cubemap = ok<GpuImageAndView>();
+    cubemap->m_image = *image;
+    cubemap->m_view = *view;
+    return cubemap;
 }
 
-Result<void> GpuImage::generate_mipmaps_result(
+Result<void> GpuImageAndView::generate_mipmaps_result(
     const Engine& engine,
     const u32 mip_levels,
     const vk::Extent3D extent,
@@ -975,7 +744,6 @@ Result<void> GpuImage::generate_mipmaps_result(
     const vk::ImageLayout final_layout
 ) const {
     ASSERT(engine.gpu != nullptr);
-    ASSERT(image != nullptr);
     ASSERT(mip_levels > 1);
     ASSERT(extent.width > 0);
     ASSERT(extent.height > 0);
@@ -991,13 +759,13 @@ Result<void> GpuImage::generate_mipmaps_result(
         vk::Offset3D mip_offset = {to_i32(extent.width), to_i32(extent.height), to_i32(extent.depth)};
 
         BarrierBuilder(cmd)
-            .add_image_barrier(image, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
+            .add_image_barrier(m_image.get(), {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
             .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferRead, vk::ImageLayout::eTransferSrcOptimal)
             .build_and_run();
 
         for (u32 level = 0; level < mip_levels - 1; ++level) {
             BarrierBuilder(cmd)
-                .add_image_barrier(image, {vk::ImageAspectFlagBits::eColor, level + 1, 1, 0, 1})
+                .add_image_barrier(m_image.get(), {vk::ImageAspectFlagBits::eColor, level + 1, 1, 0, 1})
                 .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
                 .build_and_run();
 
@@ -1015,9 +783,9 @@ Result<void> GpuImage::generate_mipmaps_result(
             region.dstOffsets[1] = mip_offset;
 
             cmd.blitImage2({
-                .srcImage = image,
+                .srcImage = m_image.get(),
                 .srcImageLayout = vk::ImageLayout::eTransferSrcOptimal,
-                .dstImage = image,
+                .dstImage = m_image.get(),
                 .dstImageLayout = vk::ImageLayout::eTransferDstOptimal,
                 .regionCount = 1,
                 .pRegions = &region,
@@ -1025,14 +793,14 @@ Result<void> GpuImage::generate_mipmaps_result(
             });
 
             BarrierBuilder(cmd)
-                .add_image_barrier(image, {vk::ImageAspectFlagBits::eColor, level + 1, 1, 0, 1})
+                .add_image_barrier(m_image.get(), {vk::ImageAspectFlagBits::eColor, level + 1, 1, 0, 1})
                 .set_image_src(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
                 .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferRead, vk::ImageLayout::eTransferSrcOptimal)
                 .build_and_run();
         }
 
         BarrierBuilder(cmd)
-            .add_image_barrier(image, {vk::ImageAspectFlagBits::eColor, 0, mip_levels, 0, 1})
+            .add_image_barrier(m_image.get(), {vk::ImageAspectFlagBits::eColor, 0, mip_levels, 0, 1})
             .set_image_src(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferRead, vk::ImageLayout::eTransferSrcOptimal)
             .set_image_dst(vk::PipelineStageFlagBits2::eNone, vk::AccessFlagBits2::eNone, final_layout)
             .build_and_run();
@@ -1358,6 +1126,286 @@ Result<void> end_single_time_commands(const Engine& engine, const vk::CommandBuf
         return Err::CouldNotWaitForVkFence;
 
     engine.device.freeCommandBuffers(engine.single_time_command_pool, {cmd});
+    return ok();
+}
+
+Result<Window> Window::create(const Engine& engine, const bool fullscreen, const i32 width, const i32 height) {
+    ASSERT(engine.instance != nullptr);
+    ASSERT(engine.device != nullptr);
+    ASSERT(engine.command_pool != nullptr);
+    if (!fullscreen) {
+        ASSERT(width > 0);
+        ASSERT(height > 0);
+    }
+
+    auto window = ok<Window>();
+
+    if (fullscreen) {
+        const auto monitor = glfwGetPrimaryMonitor();
+        if (monitor == nullptr)
+            return Err::GlfwFailure;
+
+        const auto video_mode = glfwGetVideoMode(monitor);
+        if (video_mode == nullptr)
+            return Err::GlfwFailure;
+
+        window->m_window = glfwCreateWindow(video_mode->width, video_mode->width, "Hurdy Gurdy", monitor, nullptr);
+        if (window->m_window == nullptr)
+            return Err::GlfwFailure;
+    } else {
+        window->m_window = glfwCreateWindow(width, height, "Hurdy Gurdy", nullptr, nullptr);
+        if (window->m_window == nullptr)
+            return Err::GlfwFailure;
+    }
+
+    VkSurfaceKHR surface = VK_NULL_HANDLE;
+    const auto surface_result = glfwCreateWindowSurface(engine.instance, window->m_window, nullptr, &surface);
+    if (surface_result != VK_SUCCESS)
+        return Err::GlfwFailure;
+    window->m_surface = surface;
+
+    const auto window_result = window->resize(engine);
+    if (window_result.has_err())
+        return window_result.err();
+
+    const vk::CommandBufferAllocateInfo cmd_info{
+        .commandPool = engine.command_pool,
+        .commandBufferCount = MaxFramesInFlight,
+    };
+    const auto cmd_result = engine.device.allocateCommandBuffers(&cmd_info, window->m_command_buffers.data());
+    if (cmd_result != vk::Result::eSuccess)
+        return Err::CouldNotAllocateVkCommandBuffers;
+
+    for (auto& fence : window->m_frame_finished_fences) {
+        const auto new_fence = engine.device.createFence({.flags = vk::FenceCreateFlagBits::eSignaled});
+        if (new_fence.result != vk::Result::eSuccess)
+            return Err::CouldNotCreateVkFence;
+        fence = new_fence.value;
+    }
+    for (auto& semaphore : window->m_image_available_semaphores) {
+        const auto new_semaphore = engine.device.createSemaphore({});
+        if (new_semaphore.result != vk::Result::eSuccess)
+            return Err::CouldNotCreateVkSemaphore;
+        semaphore = new_semaphore.value;
+    }
+    for (auto& semaphore : window->m_ready_to_present_semaphores) {
+        const auto new_semaphore = engine.device.createSemaphore({});
+        if (new_semaphore.result != vk::Result::eSuccess)
+            return Err::CouldNotCreateVkSemaphore;
+        semaphore = new_semaphore.value;
+    }
+
+    ASSERT(window->m_window != nullptr);
+    ASSERT(window->m_surface != nullptr);
+    ASSERT(window->m_extent != nullptr);
+    ASSERT(window->m_swapchain != nullptr);
+    for (const auto image : window->m_swapchain_images) {
+        ASSERT(image != nullptr);
+    }
+    for (const auto cmd : window->m_command_buffers) {
+        ASSERT(cmd != nullptr);
+    }
+    for (const auto fence : window->m_frame_finished_fences) {
+        ASSERT(fence != nullptr);
+    }
+    for (const auto semaphore : window->m_image_available_semaphores) {
+        ASSERT(semaphore != nullptr);
+    }
+    for (const auto semaphore : window->m_ready_to_present_semaphores) {
+        ASSERT(semaphore != nullptr);
+    }
+    return window;
+}
+
+void Window::destroy(const Engine& engine) const {
+    ASSERT(engine.device != nullptr);
+
+    for (const auto fence : m_frame_finished_fences) {
+        ASSERT(fence != nullptr);
+        engine.device.destroyFence(fence);
+    }
+    for (const auto semaphore : m_image_available_semaphores) {
+        ASSERT(semaphore != nullptr);
+        engine.device.destroySemaphore(semaphore);
+    }
+    for (const auto semaphore : m_ready_to_present_semaphores) {
+        ASSERT(semaphore != nullptr);
+        engine.device.destroySemaphore(semaphore);
+    }
+
+    ASSERT(engine.command_pool != nullptr);
+    for (const auto cmd : m_command_buffers) {
+        ASSERT(cmd != nullptr);
+    }
+    engine.device.freeCommandBuffers(engine.command_pool, to_u32(m_command_buffers.size()), m_command_buffers.data());
+
+    ASSERT(m_swapchain != nullptr);
+    engine.device.destroySwapchainKHR(m_swapchain);
+
+    ASSERT(m_surface != nullptr);
+    engine.instance.destroySurfaceKHR(m_surface);
+
+    ASSERT(m_window != nullptr);
+    glfwDestroyWindow(m_window);
+}
+
+Result<void> Window::resize(const Engine& engine) {
+    ASSERT(engine.gpu != nullptr);
+    ASSERT(engine.device != nullptr);
+
+    const auto [surface_result, surface_capabilities] = engine.gpu.getSurfaceCapabilitiesKHR(m_surface);
+    if (surface_result != vk::Result::eSuccess)
+        return Err::VulkanFailure;
+    if (surface_capabilities.currentExtent.width <= 0 || surface_capabilities.currentExtent.height <= 0)
+        return Err::InvalidWindowSize;
+
+    const auto [present_mode_result, present_modes] = engine.gpu.getSurfacePresentModesKHR(m_surface);
+    if (present_mode_result != vk::Result::eSuccess)
+        return Err::VulkanFailure;
+
+    const auto new_swapchain = engine.device.createSwapchainKHR({
+        .surface = m_surface,
+        .minImageCount = surface_capabilities.maxImageCount == 0
+                         ? MaxSwapchainImages
+                         : std::min(surface_capabilities.minImageCount + 1, surface_capabilities.maxImageCount),
+        .imageFormat = SwapchainImageFormat,
+        .imageColorSpace = SwapchainColorSpace,
+        .imageExtent = surface_capabilities.currentExtent,
+        .imageArrayLayers = 1,
+        .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferDst,
+        .preTransform = surface_capabilities.currentTransform,
+        .presentMode = std::ranges::any_of(present_modes, [](const vk::PresentModeKHR mode) { return mode == vk::PresentModeKHR::eMailbox; })
+            // ? vk::PresentModeKHR::eMailbox
+            ? vk::PresentModeKHR::eFifo
+            : vk::PresentModeKHR::eFifo,
+        .clipped = vk::True,
+        .oldSwapchain = m_swapchain,
+    });
+    if (new_swapchain.result != vk::Result::eSuccess)
+        return Err::CouldNotCreateVkSwapchain;
+
+    const auto wait_result = engine.queue.waitIdle();
+    if (wait_result != vk::Result::eSuccess)
+        return Err::CouldNotWaitForVkQueue;
+
+    if (m_swapchain != nullptr) {
+        engine.device.destroySwapchainKHR(m_swapchain);
+    }
+    m_swapchain = new_swapchain.value;
+    m_extent = surface_capabilities.currentExtent;
+
+    const vk::Result image_count_result = engine.device.getSwapchainImagesKHR(m_swapchain, &m_image_count, nullptr);
+    if (image_count_result != vk::Result::eSuccess)
+        return Err::VkSwapchainImagesUnavailable;
+    const vk::Result image_result = engine.device.getSwapchainImagesKHR(m_swapchain, &m_image_count, m_swapchain_images.data());
+    if (image_result != vk::Result::eSuccess)
+        return Err::VkSwapchainImagesUnavailable;
+
+    ASSERT(m_swapchain != nullptr);
+    for (const auto image : m_swapchain_images) {
+        ASSERT(image != nullptr);
+    }
+    return ok();
+}
+
+Result<vk::CommandBuffer> Window::begin_frame(const Engine& engine) {
+    ASSERT(!m_recording);
+    ASSERT(current_cmd() != nullptr);
+    ASSERT(is_frame_finished() != nullptr);
+    ASSERT(is_image_available() != nullptr);
+    ASSERT(engine.device != nullptr);
+
+    const auto wait_result = engine.device.waitForFences({is_frame_finished()}, vk::True, 1'000'000'000);
+    if (wait_result != vk::Result::eSuccess)
+        return Err::CouldNotWaitForVkFence;
+    const auto reset_result = engine.device.resetFences({is_frame_finished()});
+    if (reset_result != vk::Result::eSuccess)
+        return Err::VulkanFailure;
+
+    const auto acquire_result = engine.device.acquireNextImageKHR(m_swapchain, UINT64_MAX, is_image_available(), nullptr);
+    if (acquire_result.result != vk::Result::eSuccess)
+        return Err::CouldNotAcquireVkSwapchainImage;
+    m_current_image_index = acquire_result.value;
+
+    const auto begin_result = current_cmd().begin({.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
+    if (begin_result != vk::Result::eSuccess)
+        return Err::CouldNotBeginVkCommandBuffer;
+    m_recording = true;
+
+    const vk::Viewport viewport = {
+        0.0f, 0.0f,
+        static_cast<f32>(m_extent.width), static_cast<f32>(m_extent.height),
+        0.0f, 1.0f,
+    };
+    current_cmd().setViewportWithCount({viewport});
+    const vk::Rect2D scissor = {{0, 0}, m_extent};
+    current_cmd().setScissorWithCount({scissor});
+
+    current_cmd().setRasterizerDiscardEnable(vk::False);
+    current_cmd().setPrimitiveRestartEnable(vk::False);
+    current_cmd().setPrimitiveTopology(vk::PrimitiveTopology::eTriangleList);
+    current_cmd().setPolygonModeEXT(vk::PolygonMode::eFill);
+    current_cmd().setFrontFace(vk::FrontFace::eCounterClockwise);
+    current_cmd().setCullMode(vk::CullModeFlagBits::eNone);
+    current_cmd().setDepthTestEnable(vk::True);
+    current_cmd().setDepthWriteEnable(vk::True);
+    current_cmd().setDepthCompareOp(vk::CompareOp::eLess);
+    current_cmd().setDepthBiasEnable(vk::False);
+    current_cmd().setStencilTestEnable(vk::False);
+    current_cmd().setRasterizationSamplesEXT(vk::SampleCountFlagBits::e1);
+    current_cmd().setSampleMaskEXT(vk::SampleCountFlagBits::e1, vk::SampleMask{0xff});
+    current_cmd().setAlphaToCoverageEnableEXT(vk::False);
+    current_cmd().setColorWriteMaskEXT(0, {
+        vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+        vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA
+    });
+    current_cmd().setColorBlendEnableEXT(0, {vk::False});
+
+    return ok(current_cmd());
+}
+
+Result<void> Window::end_frame(const Engine& engine) {
+    ASSERT(m_recording);
+    ASSERT(m_swapchain != nullptr);
+    ASSERT(current_cmd() != nullptr);
+    ASSERT(is_image_available() != nullptr);
+    ASSERT(is_ready_to_present() != nullptr);
+    ASSERT(engine.device != nullptr);
+
+    const auto end_result = current_cmd().end();
+    if (end_result != vk::Result::eSuccess)
+        return Err::CouldNotEndVkCommandBuffer;
+    m_recording = false;
+
+    constexpr vk::PipelineStageFlags wait_stage = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+    vk::SubmitInfo submit_info = {
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores = &is_image_available(),
+        .pWaitDstStageMask = &wait_stage,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &current_cmd(),
+        .signalSemaphoreCount = 1,
+        .pSignalSemaphores = &is_ready_to_present(),
+    };
+
+    const auto submit_result = engine.queue.submit({submit_info}, is_frame_finished());
+    if (submit_result != vk::Result::eSuccess)
+        return Err::CouldNotSubmitVkCommandBuffer;
+
+    const vk::PresentInfoKHR present_info = {
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores = &is_ready_to_present(),
+        .swapchainCount = 1,
+        .pSwapchains = &m_swapchain,
+        .pImageIndices = &m_current_image_index,
+    };
+    const auto present_result = engine.queue.presentKHR(present_info);
+    if (present_result == vk::Result::eErrorOutOfDateKHR)
+        return Err::InvalidWindowSize;
+    if (present_result != vk::Result::eSuccess)
+        return Err::CouldNotPresentVkSwapchainImage;
+
+    m_current_frame_index = (m_current_frame_index + 1) % MaxFramesInFlight;
     return ok();
 }
 

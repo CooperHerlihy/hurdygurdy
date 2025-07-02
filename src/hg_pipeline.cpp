@@ -16,13 +16,13 @@ Result<DefaultPipeline> DefaultPipeline::create(const Engine& engine, const vk::
 
     auto pipeline = ok<DefaultPipeline>();
 
-    pipeline->m_color_image = GpuImage::create(engine, {
+    pipeline->m_color_image = GpuImageAndView::create(engine, {
         .extent = {window_size.width, window_size.height, 1},
         .format = Window::SwapchainImageFormat,
         .usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc,
         .sample_count = vk::SampleCountFlagBits::e4,
     });
-    pipeline->m_depth_image = GpuImage::create(engine, {
+    pipeline->m_depth_image = GpuImageAndView::create(engine, {
         .extent = {window_size.width, window_size.height, 1},
         .format = vk::Format::eD32Sfloat,
         .usage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
@@ -62,12 +62,6 @@ Result<DefaultPipeline> DefaultPipeline::create(const Engine& engine, const vk::
     write_uniform_buffer_descriptor(engine, pipeline->m_global_set, 0, pipeline->m_vp_buffer.buffer, sizeof(ViewProjectionUniform));
     write_uniform_buffer_descriptor(engine, pipeline->m_global_set, 1, pipeline->m_light_buffer.buffer, sizeof(LightUniform));
 
-    ASSERT(pipeline->m_color_image.allocation != nullptr);
-    ASSERT(pipeline->m_color_image.image != nullptr);
-    ASSERT(pipeline->m_color_image.view != nullptr);
-    ASSERT(pipeline->m_depth_image.allocation != nullptr);
-    ASSERT(pipeline->m_depth_image.image != nullptr);
-    ASSERT(pipeline->m_depth_image.view != nullptr);
     ASSERT(pipeline->m_set_layout != nullptr);
     ASSERT(pipeline->m_global_set != nullptr);
     ASSERT(pipeline->m_vp_buffer.allocation != nullptr);
@@ -94,13 +88,11 @@ void DefaultPipeline::destroy(const Engine& engine) const {
 }
 
 void DefaultPipeline::resize(const Engine& engine, const vk::Extent2D window_size) {
-    ASSERT(m_color_image.image != nullptr);
-    ASSERT(m_depth_image.image != nullptr);
     ASSERT(window_size.width > 0);
     ASSERT(window_size.height > 0);
 
     m_color_image.destroy(engine);
-    m_color_image = GpuImage::create(engine, {
+    m_color_image = GpuImageAndView::create(engine, {
         .extent = {window_size.width, window_size.height, 1},
         .format = Window::SwapchainImageFormat,
         .usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc,
@@ -108,16 +100,13 @@ void DefaultPipeline::resize(const Engine& engine, const vk::Extent2D window_siz
     });
 
     m_depth_image.destroy(engine);
-    m_depth_image = GpuImage::create(engine, {
+    m_depth_image = GpuImageAndView::create(engine, {
         .extent = {window_size.width, window_size.height, 1},
         .format = vk::Format::eD32Sfloat,
         .usage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
         .aspect_flags = vk::ImageAspectFlagBits::eDepth,
         .sample_count = vk::SampleCountFlagBits::e4,
     });
-
-    ASSERT(m_color_image.image != nullptr);
-    ASSERT(m_depth_image.image != nullptr);
 }
 
 void DefaultPipeline::update_camera(const Engine& engine, const Cameraf& camera) {
@@ -145,9 +134,9 @@ void DefaultPipeline::cmd_draw(
     ASSERT(window_size.height > 0);
 
     BarrierBuilder(cmd)
-        .add_image_barrier(m_color_image.image, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
+        .add_image_barrier(m_color_image.get_image(), {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
         .set_image_dst(vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::AccessFlagBits2::eColorAttachmentWrite, vk::ImageLayout::eColorAttachmentOptimal)
-        .add_image_barrier(m_depth_image.image, {vk::ImageAspectFlagBits::eDepth, 0, 1, 0, 1})
+        .add_image_barrier(m_depth_image.get_image(), {vk::ImageAspectFlagBits::eDepth, 0, 1, 0, 1})
         .set_image_dst(
             vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
             vk::AccessFlagBits2::eDepthStencilAttachmentWrite, vk::ImageLayout::eDepthStencilAttachmentOptimal
@@ -155,14 +144,14 @@ void DefaultPipeline::cmd_draw(
         .build_and_run();
 
     const vk::RenderingAttachmentInfo color_attachment = {
-        .imageView = m_color_image.view,
+        .imageView = m_color_image.get_view(),
         .imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
         .loadOp = vk::AttachmentLoadOp::eDontCare,
         .storeOp = vk::AttachmentStoreOp::eStore,
         .clearValue = {{std::array{0.0f, 0.0f, 0.0f, 1.0f}}},
     };
     const vk::RenderingAttachmentInfo depth_attachment = {
-        .imageView = m_depth_image.view,
+        .imageView = m_depth_image.get_view(),
         .imageLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
         .loadOp = vk::AttachmentLoadOp::eClear,
         .storeOp = vk::AttachmentStoreOp::eDontCare,
@@ -186,7 +175,7 @@ void DefaultPipeline::cmd_draw(
     cmd.endRendering();
 
     BarrierBuilder(cmd)
-        .add_image_barrier(m_color_image.image, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
+        .add_image_barrier(m_color_image.get_image(), {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
         .set_image_src(vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::AccessFlagBits2::eColorAttachmentWrite, vk::ImageLayout::eColorAttachmentOptimal)
         .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferRead, vk::ImageLayout::eTransferSrcOptimal)
         .add_image_barrier(render_target, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
@@ -199,7 +188,7 @@ void DefaultPipeline::cmd_draw(
         .extent = vk::Extent3D{window_size.width, window_size.height, 1},
     };
     cmd.resolveImage2({
-        .srcImage = m_color_image.image,
+        .srcImage = m_color_image.get_image(),
         .srcImageLayout = vk::ImageLayout::eTransferSrcOptimal,
         .dstImage = render_target,
         .dstImageLayout = vk::ImageLayout::eTransferDstOptimal,
@@ -277,12 +266,12 @@ Result<SkyboxRenderer> SkyboxRenderer::create(const Engine& engine, const Defaul
 Result<void> SkyboxRenderer::load_skybox(const Engine& engine, const std::filesystem::path path) {
     ASSERT(!path.empty());
 
-    const auto cubemap = GpuImage::create_cubemap(engine, path);
+    const auto cubemap = GpuImageAndView::create_cubemap(engine, path);
     if (cubemap.has_err())
         return cubemap.err();
     m_cubemap = *cubemap;
     m_sampler = create_sampler(engine, {.type = SamplerType::Linear});
-    hg::write_image_sampler_descriptor(engine, m_set, 0, m_sampler, m_cubemap.view);
+    hg::write_image_sampler_descriptor(engine, m_set, 0, m_sampler, m_cubemap.get_view());
 
     const auto mesh = generate_cube();
     std::vector<glm::vec3> positions = {};
@@ -301,9 +290,6 @@ Result<void> SkyboxRenderer::load_skybox(const Engine& engine, const std::filesy
     m_vertex_buffer.write(engine, positions.data(), positions.size() * sizeof(positions[0]), 0);
     m_index_buffer.write(engine, mesh.indices.data(), mesh.indices.size() * sizeof(mesh.indices[0]), 0);
 
-    ASSERT(m_cubemap.allocation != nullptr);
-    ASSERT(m_cubemap.image != nullptr);
-    ASSERT(m_cubemap.view != nullptr);
     ASSERT(m_sampler != nullptr);
     ASSERT(m_set != nullptr);
     ASSERT(m_vertex_buffer.allocation != nullptr);
@@ -511,7 +497,7 @@ Result<PbrRenderer::TextureHandle> PbrRenderer::load_texture(const Engine& engin
 }
 
 PbrRenderer::TextureHandle PbrRenderer::load_texture_from_data(
-    const Engine& engine, const GpuImage::Data& data, const vk::Format format
+    const Engine& engine, const GpuImageAndView::Data& data, const vk::Format format
 ) {
     ASSERT(m_textures.size() < MaxTextures);
     ASSERT(data.ptr != nullptr);
@@ -522,7 +508,7 @@ PbrRenderer::TextureHandle PbrRenderer::load_texture_from_data(
     ASSERT(format != vk::Format::eUndefined);
 
     const u32 mips = get_mip_count(data.extent);
-    const auto image = GpuImage::create(engine, {
+    const auto image = GpuImageAndView::create(engine, {
         .extent = data.extent,
         .format = format,
         .usage = vk::ImageUsageFlagBits::eSampled
@@ -530,16 +516,13 @@ PbrRenderer::TextureHandle PbrRenderer::load_texture_from_data(
                | vk::ImageUsageFlagBits::eTransferDst,
         .mip_levels = mips,
     });
-    image.write(engine, data, vk::ImageLayout::eShaderReadOnlyOptimal);
+    image.write(engine, {data});
     image.generate_mipmaps(engine, mips, data.extent, format, vk::ImageLayout::eShaderReadOnlyOptimal);
     const auto sampler = create_sampler(engine, {.type = SamplerType::Linear, .mip_levels = mips});
 
     usize index = m_textures.size();
-    write_image_sampler_descriptor(engine, m_texture_set, 0, sampler, image.view, to_u32(index));
+    write_image_sampler_descriptor(engine, m_texture_set, 0, sampler, image.get_view(), to_u32(index));
 
-    ASSERT(image.allocation != nullptr);
-    ASSERT(image.image != nullptr);
-    ASSERT(image.view != nullptr);
     ASSERT(sampler != nullptr);
     m_textures.emplace_back(image, sampler);
     return {index};

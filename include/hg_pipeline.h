@@ -64,8 +64,8 @@ public:
     }
 
 private:
-    GpuImage m_color_image = {};
-    GpuImage m_depth_image = {};
+    GpuImageAndView m_color_image = {};
+    GpuImageAndView m_depth_image = {};
 
     vk::DescriptorPool m_descriptor_pool = {};
     vk::DescriptorSetLayout m_set_layout = {};
@@ -95,7 +95,7 @@ private:
     vk::DescriptorPool m_descriptor_pool = {};
     vk::DescriptorSet m_set = {};
 
-    GpuImage m_cubemap = {};
+    GpuImageAndView m_cubemap = {};
     vk::Sampler m_sampler = {};
 
     GpuBuffer m_index_buffer = {};
@@ -119,7 +119,7 @@ public:
 
     static constexpr usize MaxTextures = 256;
     struct Texture {
-        GpuImage image = {};
+        GpuImageAndView image = {};
         vk::Sampler sampler = {};
 
         void destroy(const Engine& engine) const {
@@ -137,7 +137,7 @@ public:
 
     [[nodiscard]] Result<TextureHandle> load_texture(const Engine& engine, std::filesystem::path path);
     [[nodiscard]] TextureHandle load_texture_from_data(
-        const Engine& engine, const GpuImage::Data& data, vk::Format format = vk::Format::eR8G8B8A8Srgb
+        const Engine& engine, const GpuImageAndView::Data& data, vk::Format format = vk::Format::eR8G8B8A8Srgb
     );
 
     struct Model {
