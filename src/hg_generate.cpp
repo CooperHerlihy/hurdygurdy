@@ -1,4 +1,5 @@
 #include "hg_generate.h"
+
 #include "hg_math.h"
 
 #include <mikktspace/mikktspace.h>
@@ -259,6 +260,60 @@ Image<f32> generate_perlin_noise(const glm::vec<2, usize> size, const Image<glm:
         }
     }
     return interpolated;
+}
+
+Image<f32> generate_fractal_value_noise(const glm::vec<2, usize> size, const glm::vec<2, usize> initial_size, const usize max_octaves) {
+    ASSERT(size.x > initial_size.x && size.y > initial_size.y);
+    ASSERT(initial_size.x > 0 && initial_size.y > 0);
+    ASSERT(max_octaves > 0);
+
+    Image<f32> image = size;
+    auto octave_size = initial_size;
+    const usize octaves = std::min(
+        max_octaves, static_cast<usize>(
+            std::floor(std::log2(std::min(
+                static_cast<f32>(size.x) / static_cast<f32>(initial_size.x),
+                static_cast<f32>(size.y) / static_cast<f32>(initial_size.y)
+            )))
+        )
+    );
+    const f32 divisions = std::exp2f(octaves) - 1.0f;
+    f32 amplitude = std::floor(divisions / 2.0f) / divisions;
+    for (usize i = 0; i < octaves; ++i, octave_size *= 2, amplitude *= 0.5f) {
+        image += generate_value_noise(size,
+            generate_white_noise<f32>(
+                octave_size,
+                [amplitude]() -> f32 { return rng<f32>() * amplitude; }
+            )
+        );
+    }
+    return image;
+}
+
+Image<f32> generate_fractal_perlin_noise(const glm::vec<2, usize> size, const glm::vec<2, usize> initial_size, const usize max_octaves) {
+    ASSERT(size.x > initial_size.x && size.y > initial_size.y);
+    ASSERT(initial_size.x > 0 && initial_size.y > 0);
+    ASSERT(max_octaves > 0);
+
+    Image<f32> image = size;
+    auto octave_size = initial_size;
+    const usize octaves = std::min(
+        max_octaves, static_cast<usize>(
+            std::floor(std::log2(std::min(
+                static_cast<f32>(size.x) / static_cast<f32>(initial_size.x),
+                static_cast<f32>(size.y) / static_cast<f32>(initial_size.y)
+            )))
+        )
+    );
+    const f32 divisions = std::exp2f(octaves) - 1.0f;
+    f32 amplitude = std::floor(divisions / 2.0f) / divisions;
+    for (usize i = 0; i < octaves; ++i, octave_size *= 2, amplitude *= 0.5f) {
+        image += transform_image(
+            generate_perlin_noise(size, generate_white_noise<glm::vec2>(octave_size)),
+            [amplitude](const f32 val) -> f32 { return val * amplitude; }
+        );
+    }
+    return image;
 }
 
 } // namespace hg

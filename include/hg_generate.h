@@ -1,7 +1,6 @@
 #pragma once
 
 #include "hg_utils.h"
-#include "hg_math.h"
 
 #include <random>
 
@@ -59,7 +58,7 @@ private:
     usize m_stride = 0;
 };
 
-template<typename T, typename U, typename F> Image<T> map_image(const Image<U>& image, const F& pred) {
+template<typename T, typename U, typename F> Image<T> map_image(const Image<U>& image, F pred) {
     Image<T> mapped = {{image.width(), image.height()}};
     for (usize y = 0; y < image.height(); ++y) {
         for (usize x = 0; x < image.width(); ++x) {
@@ -69,7 +68,7 @@ template<typename T, typename U, typename F> Image<T> map_image(const Image<U>& 
     return mapped;
 }
 
-template<typename T, typename F> void map_image_in_place(Image<T>& image, const F& pred) {
+template<typename T, typename F> void transform_image(Image<T>& image, F pred) {
     for (usize y = 0; y < image.height(); ++y) {
         for (usize x = 0; x < image.width(); ++x) {
             image[y][x] = pred(image[y][x]);
@@ -77,42 +76,37 @@ template<typename T, typename F> void map_image_in_place(Image<T>& image, const 
     }
 }
 
+template<typename T, typename F> [[nodiscard]] Image<T> transform_image(Image<T>&& image, F pred) {
+    for (usize y = 0; y < image.height(); ++y) {
+        for (usize x = 0; x < image.width(); ++x) {
+            image[y][x] = pred(image[y][x]);
+        }
+    }
+    return image;
+}
+
 inline std::random_device g_random_device = {};
 inline std::mt19937_64 g_twister{g_random_device()};
-inline std::uniform_real_distribution<f64> g_f64_dist{0.0f, 1.0f};
-inline std::uniform_real_distribution<f32> g_f32_dist{0.0f, 1.0f};
-inline std::uniform_int_distribution<u64> g_u64_dist{0, UINT64_MAX};
+using Twister = std::mt19937_64;
 
 template <typename T> T rng();
 
-template <> [[nodiscard]] inline f64 rng<f64>() { return g_f64_dist(g_twister); }
-template <> [[nodiscard]] inline f32 rng<f32>() { return g_f32_dist(g_twister); }
+template <> [[nodiscard]] inline f64 rng<f64>() { return std::uniform_real_distribution<f64>{0.0f, 1.0f}(g_twister); }
+template <> [[nodiscard]] inline f32 rng<f32>() { return std::uniform_real_distribution<f32>{0.0f, 1.0f}(g_twister); }
 
-template <> [[nodiscard]] inline u64 rng<u64>() { return g_u64_dist(g_twister); }
-template <> [[nodiscard]] inline u32 rng<u32>() { return static_cast<u32>(g_u64_dist(g_twister)); }
-template <> [[nodiscard]] inline u16 rng<u16>() { return static_cast<u16>(g_u64_dist(g_twister)); }
-template <> [[nodiscard]] inline u8 rng<u8>() { return static_cast<u8>(g_u64_dist(g_twister)); }
+template <> [[nodiscard]] inline u64 rng<u64>() { return g_twister(); }
+template <> [[nodiscard]] inline u32 rng<u32>() { return static_cast<u32>(rng<u64>()); }
+template <> [[nodiscard]] inline u16 rng<u16>() { return static_cast<u16>(rng<u64>()); }
+template <> [[nodiscard]] inline u8 rng<u8>() { return static_cast<u8>(rng<u64>()); }
 
-template <> [[nodiscard]] inline i64 rng<i64>() { return static_cast<i64>(g_u64_dist(g_twister)); }
-template <> [[nodiscard]] inline i32 rng<i32>() { return static_cast<i32>(g_u64_dist(g_twister)); }
-template <> [[nodiscard]] inline i16 rng<i16>() { return static_cast<i16>(g_u64_dist(g_twister)); }
-template <> [[nodiscard]] inline i8 rng<i8>() { return static_cast<i8>(g_u64_dist(g_twister)); }
+template <> [[nodiscard]] inline i64 rng<i64>() { return static_cast<i64>(rng<u64>()); }
+template <> [[nodiscard]] inline i32 rng<i32>() { return static_cast<i32>(rng<u64>()); }
+template <> [[nodiscard]] inline i16 rng<i16>() { return static_cast<i16>(rng<u64>()); }
+template <> [[nodiscard]] inline i8 rng<i8>() { return static_cast<i8>(rng<u64>()); }
 
 template <> [[nodiscard]] inline glm::vec2 rng<glm::vec2>() {
-    f32 angle = rng<f32>() * glm::two_pi<f32>();
-    return {
-        std::cos(angle),
-        std::sin(angle),
-    };
-}
-
-template <typename T> [[nodiscard]] Image<T> generate_white_noise(const glm::vec<2, usize> size, u64 seed) {
-    std::mt19937_64 twister{seed};
-    Image<T> image = size;
-    for (T* pixel = image.data(); pixel < image.data() + image.size(); ++pixel) {
-        *pixel = rng<T>();
-    }
-    return image;
+    const f32 angle = rng<f32>() * glm::two_pi<f32>();
+    return {std::cos(angle), std::sin(angle)};
 }
 
 template <typename T> [[nodiscard]] Image<T> generate_white_noise(const glm::vec<2, usize> size) {
@@ -123,16 +117,28 @@ template <typename T> [[nodiscard]] Image<T> generate_white_noise(const glm::vec
     return image;
 }
 
-[[nodiscard]] Image<f32> generate_value_noise(const glm::vec<2, usize> size, const Image<f32>& fixed_points);
-[[nodiscard]] inline Image<f32> generate_value_noise(const glm::vec<2, usize> size, const glm::vec<2, usize> frequency) {
-    const auto white_noise_image = generate_white_noise<f32>(frequency);
-    return generate_value_noise(size, white_noise_image);
+template <typename RandGen, typename Res> concept IsRandomGenerator = requires(RandGen gen) {
+    { gen() } -> std::convertible_to<Res>;
+};
+
+template <typename T, typename RandGen> Image<T> generate_white_noise(
+    const glm::vec<2, usize> size, RandGen rand_gen
+) requires IsRandomGenerator<RandGen, T> {
+    Image<T> image = size;
+    for (T* pixel = image.data(); pixel < image.data() + image.size(); ++pixel) {
+        *pixel = rand_gen();
+    }
+    return image;
 }
 
-[[nodiscard]] Image<f32> generate_perlin_noise(const glm::vec<2, usize> size, const Image<glm::vec2>& gradients);
-[[nodiscard]] inline Image<f32> generate_perlin_noise(const glm::vec<2, usize> size, const glm::vec<2, usize> frequency) {
-    const auto gradient_image = generate_white_noise<glm::vec2>(frequency);
-    return generate_perlin_noise(size, gradient_image);
-}
+[[nodiscard]] Image<f32> generate_value_noise(glm::vec<2, usize> size, const Image<f32>& fixed_points);
+[[nodiscard]] Image<f32> generate_fractal_value_noise(
+    glm::vec<2, usize> size, glm::vec<2, usize> initial_size, usize max_octaves = SIZE_MAX
+);
+
+[[nodiscard]] Image<f32> generate_perlin_noise(glm::vec<2, usize> size, const Image<glm::vec2>& gradients);
+[[nodiscard]] Image<f32> generate_fractal_perlin_noise(
+    glm::vec<2, usize> size, glm::vec<2, usize> initial_size, usize max_octaves = SIZE_MAX
+);
 
 } // namespace hg
