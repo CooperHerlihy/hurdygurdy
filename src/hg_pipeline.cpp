@@ -59,15 +59,11 @@ Result<DefaultPipeline> DefaultPipeline::create(const Engine& engine, const vk::
         vk::BufferUsageFlagBits::eUniformBuffer, GpuBuffer::RandomAccess
     });
 
-    write_uniform_buffer_descriptor(engine, pipeline->m_global_set, 0, pipeline->m_vp_buffer.buffer, sizeof(ViewProjectionUniform));
-    write_uniform_buffer_descriptor(engine, pipeline->m_global_set, 1, pipeline->m_light_buffer.buffer, sizeof(LightUniform));
+    write_uniform_buffer_descriptor(engine, pipeline->m_global_set, 0, pipeline->m_vp_buffer.get(), sizeof(ViewProjectionUniform));
+    write_uniform_buffer_descriptor(engine, pipeline->m_global_set, 1, pipeline->m_light_buffer.get(), sizeof(LightUniform));
 
     ASSERT(pipeline->m_set_layout != nullptr);
     ASSERT(pipeline->m_global_set != nullptr);
-    ASSERT(pipeline->m_vp_buffer.allocation != nullptr);
-    ASSERT(pipeline->m_vp_buffer.buffer != nullptr);
-    ASSERT(pipeline->m_light_buffer.allocation != nullptr);
-    ASSERT(pipeline->m_light_buffer.buffer != nullptr);
     return pipeline;
 }
 
@@ -78,9 +74,8 @@ void DefaultPipeline::destroy(const Engine& engine) const {
     engine.device.destroyDescriptorSetLayout(m_set_layout);
     ASSERT(m_descriptor_pool != nullptr);
     engine.device.destroyDescriptorPool(m_descriptor_pool);
-    ASSERT(m_light_buffer.buffer != nullptr);
+
     m_light_buffer.destroy(engine);
-    ASSERT(m_vp_buffer.buffer != nullptr);
     m_vp_buffer.destroy(engine);
 
     m_depth_image.destroy(engine);
@@ -287,15 +282,11 @@ Result<void> SkyboxRenderer::load_skybox(const Engine& engine, const std::filesy
         mesh.indices.size() * sizeof(mesh.indices[0]),
         vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst
     });
-    m_vertex_buffer.write(engine, positions.data(), positions.size() * sizeof(positions[0]), 0);
-    m_index_buffer.write(engine, mesh.indices.data(), mesh.indices.size() * sizeof(mesh.indices[0]), 0);
+    m_vertex_buffer.write_span(engine, std::span{positions}, 0);
+    m_index_buffer.write_span(engine, std::span{mesh.indices}, 0);
 
     ASSERT(m_sampler != nullptr);
     ASSERT(m_set != nullptr);
-    ASSERT(m_vertex_buffer.allocation != nullptr);
-    ASSERT(m_vertex_buffer.buffer != nullptr);
-    ASSERT(m_index_buffer.allocation != nullptr);
-    ASSERT(m_index_buffer.buffer != nullptr);
     return ok();
 }
 
@@ -326,8 +317,6 @@ void SkyboxRenderer::destroy(const Engine& engine) const {
 
 void SkyboxRenderer::cmd_draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) const {
     ASSERT(m_set != nullptr);
-    ASSERT(m_vertex_buffer.buffer != nullptr);
-    ASSERT(m_index_buffer.buffer != nullptr);
     ASSERT(cmd != nullptr);
     ASSERT(global_set != nullptr);
 
@@ -342,8 +331,8 @@ void SkyboxRenderer::cmd_draw(const vk::CommandBuffer cmd, const vk::DescriptorS
         {vk::VertexInputBindingDescription2EXT{.stride = sizeof(glm::vec3), .inputRate = vk::VertexInputRate::eVertex, .divisor = 1}},
         {vk::VertexInputAttributeDescription2EXT{.location = 0, .format = vk::Format::eR32G32B32Sfloat}}
     );
-    cmd.bindVertexBuffers(0, {m_vertex_buffer.buffer}, {vk::DeviceSize{0}});
-    cmd.bindIndexBuffer(m_index_buffer.buffer, 0, vk::IndexType::eUint32);
+    cmd.bindVertexBuffers(0, {m_vertex_buffer.get()}, {vk::DeviceSize{0}});
+    cmd.bindIndexBuffer(m_index_buffer.get(), 0, vk::IndexType::eUint32);
     cmd.drawIndexed(36, 1, 0, 0, 1);
 
     cmd.setDepthTestEnable(vk::True);
@@ -475,8 +464,8 @@ void PbrRenderer::cmd_draw(const vk::CommandBuffer cmd, const vk::DescriptorSet 
             0, sizeof(model_push), &model_push
         );
 
-        cmd.bindIndexBuffer(model.index_buffer.buffer, 0, vk::IndexType::eUint32);
-        cmd.bindVertexBuffers(0, {model.vertex_buffer.buffer}, {vk::DeviceSize{0}});
+        cmd.bindIndexBuffer(model.index_buffer.get(), 0, vk::IndexType::eUint32);
+        cmd.bindVertexBuffers(0, {model.vertex_buffer.get()}, {vk::DeviceSize{0}});
         cmd.drawIndexed(model.index_count, 1, 0, 0, 1);
     }
 
@@ -565,14 +554,9 @@ PbrRenderer::ModelHandle PbrRenderer::load_model_from_data(
         vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst
     });
 
-    index_buffer.write(engine, data.indices.data(), data.indices.size() * sizeof(data.indices[0]), 0);
-    vertex_buffer.write(engine, data.vertices.data(), data.vertices.size() * sizeof(data.vertices[0]), 0);
+    index_buffer.write_span(engine, std::span{data.indices});
+    vertex_buffer.write_span(engine, std::span{data.vertices});
 
-    ASSERT(data.indices.size() > 0);
-    ASSERT(index_buffer.allocation != nullptr);
-    ASSERT(index_buffer.buffer != nullptr);
-    ASSERT(vertex_buffer.allocation != nullptr);
-    ASSERT(vertex_buffer.buffer != nullptr);
     m_models.emplace_back(
         to_u32(data.indices.size()),
         index_buffer, vertex_buffer,

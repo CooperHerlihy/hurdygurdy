@@ -4,6 +4,7 @@
 #include "hg_math.h"
 #include "hg_generate.h"
 #include "hg_vulkan_engine.h"
+#include <span>
 
 namespace hg {
 
@@ -47,8 +48,6 @@ public:
     }
 
     void update_projection(const Engine& engine, const glm::mat4& projection) const {
-        ASSERT(m_vp_buffer.allocation != nullptr);
-        ASSERT(m_vp_buffer.buffer != nullptr);
         m_vp_buffer.write(engine, projection, offsetof(ViewProjectionUniform, projection));
     }
 

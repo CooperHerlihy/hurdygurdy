@@ -365,48 +365,53 @@ Result<GpuBuffer> GpuBuffer::create_result(const Engine& engine, const Config& c
         ERROR("Invalid buffer memory type");
     }
 
-    VkBuffer buffer = nullptr;
-    VmaAllocation allocation = nullptr;
-    const auto buffer_result = vmaCreateBuffer(engine.allocator, &buffer_info, &alloc_info, &buffer, &allocation, nullptr);
+    VkBuffer vk_buffer = nullptr;
+    VmaAllocation vma_allocation = nullptr;
+    const auto buffer_result = vmaCreateBuffer(engine.allocator, &buffer_info, &alloc_info, &vk_buffer, &vma_allocation, nullptr);
     if (buffer_result != VK_SUCCESS) {
         return Err::CouldNotCreateGpuBuffer;
     }
 
-    ASSERT(allocation != nullptr);
-    ASSERT(buffer != nullptr);
-    return ok<GpuBuffer>(allocation, buffer, config.memory_type);
+    auto buffer = ok<GpuBuffer>();
+    buffer->m_allocation = vma_allocation;
+    buffer->m_buffer = vk_buffer;
+    buffer->m_type = config.memory_type;
+
+    ASSERT(buffer->m_allocation != nullptr);
+    ASSERT(buffer->m_buffer != nullptr);
+    return buffer;
 }
 
 Result<void> GpuBuffer::write_result(
     const Engine& engine, const void* data, const vk::DeviceSize size, const vk::DeviceSize offset
 ) const {
     ASSERT(engine.allocator != nullptr);
-    ASSERT(allocation != nullptr);
-    ASSERT(buffer != nullptr);
+    ASSERT(m_allocation != nullptr);
+    ASSERT(m_buffer != nullptr);
     ASSERT(data != nullptr);
     ASSERT(size != 0);
-    if (memory_type == LinearAccess)
+    if (m_type == LinearAccess)
         ASSERT(offset == 0);
 
-    if (memory_type == RandomAccess || memory_type == LinearAccess) {
-        const auto copy_result = vmaCopyMemoryToAllocation(engine.allocator, data, allocation, offset, size);
+    if (m_type == RandomAccess || m_type == LinearAccess) {
+        const auto copy_result = vmaCopyMemoryToAllocation(engine.allocator, data, m_allocation, offset, size);
         if (copy_result != VK_SUCCESS) {
             return Err::CouldNotWriteGpuBuffer;
         }
         return ok();
     }
-    ASSERT(memory_type == DeviceLocal);
+    ASSERT(m_type == DeviceLocal);
 
     const auto staging_buffer = create_result(engine, {size, vk::BufferUsageFlagBits::eTransferSrc, LinearAccess});
     if (staging_buffer.has_err())
         return staging_buffer.err();
-    defer(vmaDestroyBuffer(engine.allocator, staging_buffer->buffer, staging_buffer->allocation));
-    const auto copy_result = vmaCopyMemoryToAllocation(engine.allocator, data, staging_buffer->allocation, 0, size);
+    defer(vmaDestroyBuffer(engine.allocator, staging_buffer->m_buffer, staging_buffer->m_allocation));
+    const auto copy_result = vmaCopyMemoryToAllocation(engine.allocator, data, staging_buffer->m_allocation, 0, size);
     if (copy_result != VK_SUCCESS)
         return staging_buffer.err();
 
     auto submit = submit_single_time_commands(engine, [&](const vk::CommandBuffer cmd) {
-        cmd.copyBuffer(staging_buffer->buffer, buffer, {vk::BufferCopy(offset, 0, size)});
+        cmd.copyBuffer(staging_buffer->m_buffer, m_buffer, {vk::BufferCopy(offset, 0, size)});
     });
     if (submit.has_err())
         return Err::CouldNotWriteGpuBuffer;
@@ -506,7 +511,7 @@ Result<void> GpuImage::write(const Engine& engine, const WriteConfig& config) co
     });
     if (staging_buffer.has_err())
         return staging_buffer.err();
-    defer(vmaDestroyBuffer(engine.allocator, staging_buffer->buffer, staging_buffer->allocation));
+    defer(staging_buffer->destroy(engine));
     const auto staging_write = staging_buffer->write_result(engine, data.ptr, size, 0);
     if (staging_write.has_err())
         return staging_write.err();
@@ -522,7 +527,7 @@ Result<void> GpuImage::write(const Engine& engine, const WriteConfig& config) co
             .imageExtent = data.extent
         };
         cmd.copyBufferToImage2({
-            .srcBuffer = staging_buffer->buffer,
+            .srcBuffer = staging_buffer->get(),
             .dstImage = m_image,
             .dstImageLayout = vk::ImageLayout::eTransferDstOptimal,
             .regionCount = 1,

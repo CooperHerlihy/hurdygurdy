@@ -26,23 +26,24 @@ struct Engine {
     void destroy() const;
 };
 
-struct GpuBuffer {
+class GpuBuffer {
+public:
+    vk::Buffer get() const {
+        ASSERT(m_buffer != nullptr);
+        return m_buffer;
+    }
+
     enum MemoryType {
         DeviceLocal,
         RandomAccess,
         LinearAccess,
     };
 
-    VmaAllocation allocation = nullptr;
-    vk::Buffer buffer = {};
-    MemoryType memory_type = DeviceLocal;
-
     struct Config {
         vk::DeviceSize size;
         vk::BufferUsageFlags usage;
         MemoryType memory_type = DeviceLocal;
     };
-
     [[nodiscard]] static Result<GpuBuffer> create_result(const Engine& engine, const Config& config);
     [[nodiscard]] static GpuBuffer create(const Engine& engine, const Config& config) {
         const auto buffer = create_result(engine, config);
@@ -50,22 +51,34 @@ struct GpuBuffer {
             ERROR("Could not create gpu buffer");
         return *buffer;
     }
+
     void destroy(const Engine& engine) const {
-        ASSERT(allocation != nullptr);
-        ASSERT(buffer != nullptr);
+        ASSERT(m_allocation != nullptr);
+        ASSERT(m_buffer != nullptr);
         ASSERT(engine.allocator != nullptr);
-        vmaDestroyBuffer(engine.allocator, buffer, allocation);
+        vmaDestroyBuffer(engine.allocator, m_buffer, m_allocation);
     }
 
     [[nodiscard]] Result<void> write_result(const Engine& engine, const void* data, vk::DeviceSize size, vk::DeviceSize offset) const;
-    void write(const Engine& engine, const void* data, vk::DeviceSize size, vk::DeviceSize offset) const {
+
+    void write_void(const Engine& engine, const void* data, vk::DeviceSize size, vk::DeviceSize offset) const {
         const auto result = write_result(engine, data, size, offset);
         if (result.has_err())
             ERROR("Could not write to gpu buffer");
     }
-    void write(const Engine& engine, const auto& data, const vk::DeviceSize offset = 0) const {
-        write(engine, &data, sizeof(data), offset);
-    };
+
+    template <typename T> void write_span(const Engine& engine, const std::span<T> data, vk::DeviceSize offset = 0) const {
+        write_void(engine, data.data(), data.size() * sizeof(T), offset);
+    }
+
+    template <typename T> void write(const Engine& engine, const T& data, vk::DeviceSize offset = 0) const {
+        write_void(engine, &data, sizeof(T), offset);
+    }
+
+private:
+    VmaAllocation m_allocation = nullptr;
+    vk::Buffer m_buffer = {};
+    MemoryType m_type = DeviceLocal;
 };
 
 class GpuImage {
