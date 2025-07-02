@@ -199,6 +199,32 @@ Mesh generate_sphere(const glm::uvec2 fidelity) {
     return sphere;
 }
 
+Image<glm::vec4> create_normals_from_heightmap(const Image<f32>& heightmap) {
+    Image<glm::vec4> normals = {{heightmap.width(), heightmap.height()}};
+
+    for (usize v = 0; v < heightmap.height(); ++v) {
+        for (usize u = 0; u < heightmap.width(); ++u) {
+            const glm::vec3 pos = {static_cast<f32>(u), static_cast<f32>(v), heightmap[v][u]};
+
+            const usize v_up = v == 0 ? heightmap.height() - 1 : v - 1;
+            const usize u_left = u == 0 ? heightmap.width() - 1 : u - 1;
+            const glm::vec3 up  = {static_cast<f32>(u), static_cast<f32>(v) - 1.0f, -heightmap[v_up][u]};
+            const glm::vec3 left  = {static_cast<f32>(u) - 1.0f, static_cast<f32>(v), -heightmap[v][u_left]};
+            const glm::vec3 normal0 = glm::normalize(glm::cross(up - pos, left - pos));
+
+            const usize v_down = (v + 1) % heightmap.height();
+            const usize u_right = (u + 1) % heightmap.width();
+            const glm::vec3 down = {static_cast<f32>(u), static_cast<f32>(v) + 1.0f, -heightmap[v_down][u]};
+            const glm::vec3 right  = {static_cast<f32>(u) + 1.0f, static_cast<f32>(v), -heightmap[v][u_right]};
+            const glm::vec3 normal1 = glm::normalize(glm::cross(down - pos, right - pos));
+
+            normals[v][u] = glm::vec4{glm::normalize(normal0 + normal1), 0.0f};
+        }
+    }
+
+    return normals;
+}
+
 Image<f32> generate_value_noise(const glm::vec<2, usize> size, const Image<f32>& fixed_points) {
     ASSERT(fixed_points.width() < size.x);
     ASSERT(fixed_points.height() < size.y);
@@ -262,7 +288,9 @@ Image<f32> generate_perlin_noise(const glm::vec<2, usize> size, const Image<glm:
     return interpolated;
 }
 
-Image<f32> generate_fractal_value_noise(const glm::vec<2, usize> size, const glm::vec<2, usize> initial_size, const usize max_octaves) {
+Image<f32> generate_fractal_value_noise(
+    const glm::vec<2, usize> size, const glm::vec<2, usize> initial_size, const usize max_octaves
+) {
     ASSERT(size.x > initial_size.x && size.y > initial_size.y);
     ASSERT(initial_size.x > 0 && initial_size.y > 0);
     ASSERT(max_octaves > 0);
@@ -277,7 +305,7 @@ Image<f32> generate_fractal_value_noise(const glm::vec<2, usize> size, const glm
             )))
         )
     );
-    const f32 divisions = std::exp2f(octaves) - 1.0f;
+    const f32 divisions = std::exp2f(static_cast<f32>(octaves)) - 1.0f;
     f32 amplitude = std::floor(divisions / 2.0f) / divisions;
     for (usize i = 0; i < octaves; ++i, octave_size *= 2, amplitude *= 0.5f) {
         image += generate_value_noise(size,
@@ -290,7 +318,9 @@ Image<f32> generate_fractal_value_noise(const glm::vec<2, usize> size, const glm
     return image;
 }
 
-Image<f32> generate_fractal_perlin_noise(const glm::vec<2, usize> size, const glm::vec<2, usize> initial_size, const usize max_octaves) {
+Image<f32> generate_fractal_perlin_noise(
+    const glm::vec<2, usize> size, const glm::vec<2, usize> initial_size, const usize max_octaves
+) {
     ASSERT(size.x > initial_size.x && size.y > initial_size.y);
     ASSERT(initial_size.x > 0 && initial_size.y > 0);
     ASSERT(max_octaves > 0);
@@ -305,7 +335,7 @@ Image<f32> generate_fractal_perlin_noise(const glm::vec<2, usize> size, const gl
             )))
         )
     );
-    const f32 divisions = std::exp2f(octaves) - 1.0f;
+    const f32 divisions = std::exp2f(static_cast<f32>(octaves)) - 1.0f;
     f32 amplitude = std::floor(divisions / 2.0f) / divisions;
     for (usize i = 0; i < octaves; ++i, octave_size *= 2, amplitude *= 0.5f) {
         image += transform_image(

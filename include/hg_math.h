@@ -23,6 +23,7 @@ template <std::floating_point T> T smoothstep(const T t) {
     ASSERT(t >= 0 && t <= 1);
     return t * t * (3 - 2 * t);
 }
+
 template <std::floating_point T> T smoothstep_quintic(const T t) {
     ASSERT(t >= 0 && t <= 1);
     return t * t * t * (t * (t * 6 - 15) + 10);

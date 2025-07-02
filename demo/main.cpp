@@ -42,24 +42,26 @@ int main() {
     default_normal_image.fill(glm::vec4{0.0f, 0.0f, -1.0f, 0.0f});
     const auto default_normal_texture = model_renderer->load_texture_from_data(*engine, {default_normal_image.data(), sizeof(glm::vec4), {2, 2, 1}}, vk::Format::eR32G32B32A32Sfloat);
 
-    const auto value_noise_color_image = map_image<u32>(generate_fractal_value_noise({512, 512}, {8, 8}), [](const f32 val) -> u32 {
-        return (static_cast<u32>(val * 255.0f) << 0) + (static_cast<u32>(val * 255.0f) << 8) + (static_cast<u32>(val * 255.0f) << 16) + 0xff000000;
-    });
-    const auto value_noise_texture = model_renderer->load_texture_from_data(*engine, GpuImage::Data{value_noise_color_image.data(), sizeof(u32), {512, 512, 1}});
+    const auto perlin_normal_image = create_normals_from_heightmap(generate_fractal_perlin_noise({512, 512}, {128, 128}));
+    const auto perlin_normal_texture = model_renderer->load_texture_from_data(*engine, {perlin_normal_image.data(), sizeof(glm::vec4), {512, 512, 1}}, vk::Format::eR32G32B32A32Sfloat);
 
     const auto perlin_noise_color_image = map_image<u32>(generate_fractal_perlin_noise({512, 512}, {8, 8}), [](const f32 val) -> u32 {
         return (static_cast<u32>(val * 255.0f) << 0) + (static_cast<u32>(val * 255.0f) << 8) + (static_cast<u32>(val * 255.0f) << 16) + 0xff000000;
     });
-    const auto perlin_noise_texture = model_renderer->load_texture_from_data(*engine, GpuImage::Data{perlin_noise_color_image.data(), sizeof(u32), {512, 512, 1}});
+    const auto perlin_noise_texture = model_renderer->load_texture_from_data(*engine, {perlin_noise_color_image.data(), sizeof(u32), {512, 512, 1}});
 
     std::array<u32, 4> gold_color = {};
     gold_color.fill(0xff44ccff);
     const auto gold_texture = model_renderer->load_texture_from_data(*engine, {gold_color.data(), 4, {2, 2, 1}});
 
+    std::array<u32, 4> gray_color = {};
+    gray_color.fill(0xff777777);
+    const auto gray_texture = model_renderer->load_texture_from_data(*engine, {gray_color.data(), 4, {2, 2, 1}});
+
     const auto hex_texture = *model_renderer->load_texture(*engine, "../assets/hexagon_models/Textures/hexagons_medieval.png");
 
-    const auto cube = model_renderer->load_model_from_data(*engine, generate_cube(), default_normal_texture, perlin_noise_texture, 0.1f, 0.0f);
-    const auto sphere = model_renderer->load_model_from_data(*engine, generate_sphere({64, 32}), default_normal_texture, value_noise_texture, 0.1f, 0.0f);
+    const auto cube = model_renderer->load_model_from_data(*engine, generate_cube(), perlin_normal_texture, gray_texture, 0.2f, 0.0f);
+    const auto sphere = model_renderer->load_model_from_data(*engine, generate_sphere({64, 32}), perlin_normal_texture, gray_texture, 0.2f, 1.0f);
     const auto grass = *model_renderer->load_model(*engine, "../assets/hexagon_models/Assets/gltf/tiles/base/hex_grass.gltf", default_normal_texture, hex_texture);
     const auto building = *model_renderer->load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_home_A_blue.gltf", default_normal_texture, hex_texture);
     const auto tower = *model_renderer->load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_tower_A_blue.gltf", default_normal_texture, hex_texture);

@@ -85,6 +85,8 @@ template<typename T, typename F> [[nodiscard]] Image<T> transform_image(Image<T>
     return image;
 }
 
+[[nodiscard]] Image<glm::vec4> create_normals_from_heightmap(const Image<f32>& heightmap);
+
 inline std::random_device g_random_device = {};
 inline std::mt19937_64 g_twister{g_random_device()};
 using Twister = std::mt19937_64;
@@ -109,21 +111,7 @@ template <> [[nodiscard]] inline glm::vec2 rng<glm::vec2>() {
     return {std::cos(angle), std::sin(angle)};
 }
 
-template <typename T> [[nodiscard]] Image<T> generate_white_noise(const glm::vec<2, usize> size) {
-    Image<T> image = size;
-    for (T* pixel = image.data(); pixel < image.data() + image.size(); ++pixel) {
-        *pixel = rng<T>();
-    }
-    return image;
-}
-
-template <typename RandGen, typename Res> concept IsRandomGenerator = requires(RandGen gen) {
-    { gen() } -> std::convertible_to<Res>;
-};
-
-template <typename T, typename RandGen> Image<T> generate_white_noise(
-    const glm::vec<2, usize> size, RandGen rand_gen
-) requires IsRandomGenerator<RandGen, T> {
+template <typename T, typename RandGen = decltype(rng<T>)> Image<T> generate_white_noise(const glm::vec<2, usize> size, RandGen rand_gen = rng<T>) {
     Image<T> image = size;
     for (T* pixel = image.data(); pixel < image.data() + image.size(); ++pixel) {
         *pixel = rand_gen();
@@ -132,11 +120,11 @@ template <typename T, typename RandGen> Image<T> generate_white_noise(
 }
 
 [[nodiscard]] Image<f32> generate_value_noise(glm::vec<2, usize> size, const Image<f32>& fixed_points);
+[[nodiscard]] Image<f32> generate_perlin_noise(glm::vec<2, usize> size, const Image<glm::vec2>& gradients);
+
 [[nodiscard]] Image<f32> generate_fractal_value_noise(
     glm::vec<2, usize> size, glm::vec<2, usize> initial_size, usize max_octaves = SIZE_MAX
 );
-
-[[nodiscard]] Image<f32> generate_perlin_noise(glm::vec<2, usize> size, const Image<glm::vec2>& gradients);
 [[nodiscard]] Image<f32> generate_fractal_perlin_noise(
     glm::vec<2, usize> size, glm::vec<2, usize> initial_size, usize max_octaves = SIZE_MAX
 );
