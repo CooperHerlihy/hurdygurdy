@@ -11,6 +11,7 @@
 #include <iostream>
 #include <span>
 #include <vector>
+#include <vulkan/vulkan_enums.hpp>
 
 namespace hg {
 
@@ -1067,6 +1068,26 @@ void write_texture_descriptor(
     engine.device.updateDescriptorSets({descriptor_write}, {});
 }
 
+Result<PipelineLayout> PipelineLayout::create(const Engine& engine, const Config& config) {
+    ASSERT(engine.device != nullptr);
+
+    vk::PipelineLayoutCreateInfo layout_info = {
+        .setLayoutCount = to_u32(config.set_layouts.size()),
+        .pSetLayouts = config.set_layouts.data(),
+        .pushConstantRangeCount = to_u32(config.push_ranges.size()),
+        .pPushConstantRanges = config.push_ranges.data(),
+    };
+    const auto vk_layout= engine.device.createPipelineLayout(layout_info, nullptr);
+    if (vk_layout.result != vk::Result::eSuccess)
+        return Err::CouldNotCreateVkPipelineLayout;
+
+    auto layout = ok<PipelineLayout>();
+    layout->m_pipeline_layout = vk_layout.value;
+
+    ASSERT(layout->m_pipeline_layout != nullptr);
+    return layout;
+}
+
 static Result<std::vector<char>> read_shader(const std::filesystem::path path) {
     ASSERT(!path.empty());
 
@@ -1088,7 +1109,7 @@ static Result<std::vector<char>> read_shader(const std::filesystem::path path) {
     return code;
 }
 
-Result<vk::ShaderEXT> create_unlinked_shader(const Engine& engine, const ShaderConfig& config) {
+Result<UnlinkedShader> UnlinkedShader::create(const Engine& engine, const Config& config) {
     ASSERT(engine.device != nullptr);
     ASSERT(!config.path.empty());
     ASSERT(config.code_type == vk::ShaderCodeTypeEXT::eSpirv && "binary shader code types untested");
@@ -1098,8 +1119,7 @@ Result<vk::ShaderEXT> create_unlinked_shader(const Engine& engine, const ShaderC
     if (code.has_err())
         return code.err();
 
-    const auto shader = engine.device.createShaderEXT({
-        .flags = config.flags,
+    const auto vk_shader = engine.device.createShaderEXT({
         .stage = config.stage,
         .nextStage = config.next_stage,
         .codeType = config.code_type,
@@ -1111,70 +1131,75 @@ Result<vk::ShaderEXT> create_unlinked_shader(const Engine& engine, const ShaderC
         .pushConstantRangeCount = to_u32(config.push_ranges.size()),
         .pPushConstantRanges = config.push_ranges.data(),
     });
-    if (shader.result != vk::Result::eSuccess)
+    if (vk_shader.result != vk::Result::eSuccess)
         return Err::CouldNotCreateVkShader;
 
-    ASSERT(shader.value != nullptr);
-    return ok(shader.value);
+    auto shader = ok<UnlinkedShader>();
+    shader->m_shader = vk_shader.value;
+
+    ASSERT(shader->m_shader != nullptr);
+    return shader;
 }
 
-Result<void> create_linked_shaders(
-    const Engine& engine,
-    const std::span<vk::ShaderEXT> out_shaders,
-    const std::span<const ShaderConfig> configs
-) {
+Result<GraphicsPipeline> GraphicsPipeline::create(const Engine& engine, const Config& config) {
     ASSERT(engine.device != nullptr);
-    ASSERT(out_shaders.size() >= 2);
-    ASSERT(configs.size() >= 2);
-    ASSERT(out_shaders.size() == configs.size());
-    for (const auto shader : out_shaders) {
-        ASSERT(shader == nullptr);
-    }
-    for (const auto& config : configs) {
-        ASSERT(!config.path.empty());
-        ASSERT(config.code_type == vk::ShaderCodeTypeEXT::eSpirv && "binary shader code types untested");
-        ASSERT(config.stage != vk::ShaderStageFlagBits{0});
-    }
+    ASSERT(!config.vertex_shader_path.empty());
+    ASSERT(!config.fragment_shader_path.empty());
+    ASSERT(config.code_type == vk::ShaderCodeTypeEXT::eSpirv && "binary shader code types untested");
 
-    std::vector<std::vector<char>> codes = {};
-    codes.reserve(configs.size());
-    for (const auto& config : configs) {
-        ASSERT(!config.path.empty());
-        ASSERT(config.code_type == vk::ShaderCodeTypeEXT::eSpirv && "binary shader code types untested");
-        ASSERT(config.stage != vk::ShaderStageFlagBits{0});
+    const auto layout = PipelineLayout::create(engine, {
+        .set_layouts = config.set_layouts,
+        .push_ranges = config.push_ranges,
+    });
+    if (layout.has_err())
+        return layout.err();
 
-        const auto code = read_shader(config.path);
-        if (code.has_err())
-            return code.err();
-        codes.emplace_back(std::move(*code));
-    }
+    const auto vertex_code = read_shader(config.vertex_shader_path);
+    if (vertex_code.has_err())
+        return vertex_code.err();
+    const auto fragment_code = read_shader(config.fragment_shader_path);
+    if (fragment_code.has_err())
+        return fragment_code.err();
 
-    std::vector<vk::ShaderCreateInfoEXT> shader_infos = {};
-    shader_infos.reserve(configs.size());
-    for (usize i = 0; i < codes.size(); ++i) {
-        shader_infos.push_back({
-            .flags = configs[i].flags | vk::ShaderCreateFlagBitsEXT::eLinkStage,
-            .stage = configs[i].stage,
-            .nextStage = configs[i].next_stage,
-            .codeType = configs[i].code_type,
-            .codeSize = codes[i].size(),
-            .pCode = codes[i].data(),
+    std::array shader_infos = {
+        vk::ShaderCreateInfoEXT{
+            .flags = vk::ShaderCreateFlagBitsEXT::eLinkStage,
+            .stage = vk::ShaderStageFlagBits::eVertex,
+            .nextStage = vk::ShaderStageFlagBits::eFragment,
+            .codeType = config.code_type,
+            .codeSize = vertex_code->size(),
+            .pCode = vertex_code->data(),
             .pName = "main",
-            .setLayoutCount = to_u32(configs[i].set_layouts.size()),
-            .pSetLayouts = configs[i].set_layouts.data(),
-            .pushConstantRangeCount = to_u32(configs[i].push_ranges.size()),
-            .pPushConstantRanges = configs[i].push_ranges.data(),
-        });
-    }
+            .setLayoutCount = to_u32(config.set_layouts.size()),
+            .pSetLayouts = config.set_layouts.data(),
+            .pushConstantRangeCount = to_u32(config.push_ranges.size()),
+            .pPushConstantRanges = config.push_ranges.data(),
+        },
+        vk::ShaderCreateInfoEXT{
+            .flags = vk::ShaderCreateFlagBitsEXT::eLinkStage,
+            .stage = vk::ShaderStageFlagBits::eFragment,
+            .nextStage = {},
+            .codeType = config.code_type,
+            .codeSize = fragment_code->size(),
+            .pCode = fragment_code->data(),
+            .pName = "main",
+            .setLayoutCount = to_u32(config.set_layouts.size()),
+            .pSetLayouts = config.set_layouts.data(),
+            .pushConstantRangeCount = to_u32(config.push_ranges.size()),
+            .pPushConstantRanges = config.push_ranges.data(),
+        },
+    };
 
-    const auto shader_result = engine.device.createShadersEXT(to_u32(shader_infos.size()), shader_infos.data(), nullptr, out_shaders.data());
+    std::array<vk::ShaderEXT, 2> shaders = {};
+    const auto shader_result = engine.device.createShadersEXT(to_u32(shader_infos.size()), shader_infos.data(), nullptr, shaders.data());
     if (shader_result != vk::Result::eSuccess)
         return Err::CouldNotCreateVkShader;
 
-    for (const auto shader : out_shaders) {
-        ASSERT(shader != nullptr);
-    }
-    return ok();
+    auto pipeline = ok<GraphicsPipeline>();
+    pipeline->m_layout = *layout;
+    pipeline->m_shaders = shaders;
+
+    return pipeline;
 }
 
 Result<vk::CommandBuffer> begin_single_time_commands(const Engine& engine) {

@@ -7,13 +7,13 @@
 
 namespace hg {
 
-class DefaultPipeline : public Pipeline {
+class DefaultRenderer : public Renderer {
 public:
-    DefaultPipeline() = default;
+    DefaultRenderer() = default;
 
-    class RenderSystem {
+    class Pipeline {
     public:
-        virtual ~RenderSystem() = default;
+        virtual ~Pipeline() = default;
 
         virtual void cmd_draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) const = 0;
     };
@@ -34,7 +34,7 @@ public:
         alignas(16) Light vals[MaxLights] = {};
     };
 
-    [[nodiscard]] static Result<DefaultPipeline> create(const Engine& engine, vk::Extent2D window_size);
+    [[nodiscard]] static Result<DefaultRenderer> create(const Engine& engine, vk::Extent2D window_size);
     void destroy(const Engine& engine) const;
     void resize(const Engine& engine, const vk::Extent2D window_size);
 
@@ -42,8 +42,8 @@ public:
 
     vk::DescriptorSetLayout get_global_set_layout() const { return m_set_layout; }
 
-    void add_render_system(const RenderSystem& system) {
-        m_render_systems.emplace_back(&system);
+    void add_pipeline(const Pipeline& system) {
+        m_pipelines.emplace_back(&system);
     }
 
     void update_projection(const Engine& engine, const glm::mat4& projection) const {
@@ -72,12 +72,12 @@ private:
     GpuBuffer m_light_buffer = {};
     std::vector<Light> m_lights = {};
 
-    std::vector<const RenderSystem*> m_render_systems = {};
+    std::vector<const Pipeline*> m_pipelines = {};
 };
 
-class SkyboxRenderer : public DefaultPipeline::RenderSystem {
+class SkyboxPipeline : public DefaultRenderer::Pipeline {
 public:
-    [[nodiscard]] static Result<SkyboxRenderer> create(const Engine& engine, const DefaultPipeline& pipeline);
+    [[nodiscard]] static Result<SkyboxPipeline> create(const Engine& engine, const DefaultRenderer& pipeline);
     void destroy(const Engine& engine) const;
     void cmd_draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) const override;
 
@@ -85,8 +85,7 @@ public:
 
 private:
     vk::DescriptorSetLayout m_set_layout = {};
-    vk::PipelineLayout m_pipeline_layout = {};
-    std::array<vk::ShaderEXT, 2> m_shaders = {};
+    GraphicsPipeline m_pipeline = {};
 
     vk::DescriptorPool m_descriptor_pool = {};
     vk::DescriptorSet m_set = {};
@@ -96,9 +95,9 @@ private:
     GpuBuffer m_vertex_buffer = {};
 };
 
-class PbrRenderer : public DefaultPipeline::RenderSystem {
+class PbrPipeline : public DefaultRenderer::Pipeline {
 public:
-    [[nodiscard]] static Result<PbrRenderer> create(const Engine& engine, const DefaultPipeline& pipeline);
+    [[nodiscard]] static Result<PbrPipeline> create(const Engine& engine, const DefaultRenderer& pipeline);
     void destroy(const Engine& engine) const;
 
     struct PushConstant {
@@ -172,8 +171,7 @@ public:
 
 private:
     vk::DescriptorSetLayout m_set_layout = {};
-    vk::PipelineLayout m_pipeline_layout = {};
-    std::array<vk::ShaderEXT, 2> m_shaders = {};
+    GraphicsPipeline m_pipeline = {};
 
     vk::DescriptorPool m_descriptor_pool = {};
     vk::DescriptorSet m_texture_set = {};

@@ -336,21 +336,87 @@ void write_texture_descriptor(
     vk::DescriptorSet set, u32 binding, u32 binding_array_index = 0
 );
 
-struct ShaderConfig {
-    std::filesystem::path path = {};
-    vk::ShaderCodeTypeEXT code_type = vk::ShaderCodeTypeEXT::eSpirv;
-    vk::ShaderStageFlagBits stage = {};
-    vk::ShaderStageFlags next_stage = {};
-    std::span<const vk::DescriptorSetLayout> set_layouts = {};
-    std::span<const vk::PushConstantRange> push_ranges = {};
-    vk::ShaderCreateFlagsEXT flags = {};
+class PipelineLayout {
+public:
+    vk::PipelineLayout get() const {
+        ASSERT(m_pipeline_layout != nullptr);
+        return m_pipeline_layout;
+    }
+
+    struct Config {
+        std::span<const vk::DescriptorSetLayout> set_layouts = {};
+        std::span<const vk::PushConstantRange> push_ranges = {};
+    };
+    [[nodiscard]] static Result<PipelineLayout> create(const Engine& engine, const Config& config);
+
+    void destroy(const Engine& engine) const {
+        ASSERT(engine.device != nullptr);
+        engine.device.destroyPipelineLayout(m_pipeline_layout);
+    }
+
+private:
+    vk::PipelineLayout m_pipeline_layout = {};
 };
-[[nodiscard]] Result<vk::ShaderEXT> create_unlinked_shader(const Engine& engine, const ShaderConfig& config);
-[[nodiscard]] Result<void> create_linked_shaders(
-    const Engine& engine,
-    std::span<vk::ShaderEXT> out_shaders,
-    std::span<const ShaderConfig> configs
-);
+
+class UnlinkedShader {
+public:
+    vk::ShaderEXT get() const {
+        ASSERT(m_shader != nullptr);
+        return m_shader;
+    }
+
+    struct Config {
+        std::filesystem::path path = {};
+        vk::ShaderCodeTypeEXT code_type = vk::ShaderCodeTypeEXT::eSpirv;
+        vk::ShaderStageFlagBits stage = {};
+        vk::ShaderStageFlagBits next_stage = {};
+        std::span<const vk::DescriptorSetLayout> set_layouts = {};
+        std::span<const vk::PushConstantRange> push_ranges = {};
+    };
+    [[nodiscard]] static Result<UnlinkedShader> create(const Engine& engine, const Config& config);
+
+    void destroy(const Engine& engine) const {
+        ASSERT(engine.device != nullptr);
+        engine.device.destroyShaderEXT(m_shader);
+    }
+
+private:
+    vk::ShaderEXT m_shader = {};
+};
+
+class GraphicsPipeline {
+public:
+    vk::PipelineLayout get_layout() const { return m_layout.get(); }
+    std::span<const vk::ShaderEXT> get_shaders() const {
+        for (const auto shader : m_shaders) {
+            ASSERT(shader != nullptr);
+        }
+        return m_shaders;
+    }
+
+    struct Config {
+        std::span<const vk::DescriptorSetLayout> set_layouts = {};
+        std::span<const vk::PushConstantRange> push_ranges = {};
+        std::filesystem::path vertex_shader_path = {};
+        std::filesystem::path fragment_shader_path = {};
+        vk::ShaderCodeTypeEXT code_type = vk::ShaderCodeTypeEXT::eSpirv;
+    };
+    [[nodiscard]] static Result<GraphicsPipeline> create(const Engine& engine, const Config& config);
+
+    void destroy(const Engine& engine) const {
+        ASSERT(engine.device != nullptr);
+        m_layout.destroy(engine);
+
+        for (const auto shader : m_shaders) {
+            ASSERT(shader != nullptr);
+            engine.device.destroyShaderEXT(shader);
+        }
+    }
+
+private:
+    PipelineLayout m_layout = {};
+    std::array<vk::ShaderEXT, 2> m_shaders = {};
+};
 
 [[nodiscard]] Result<vk::CommandBuffer> begin_single_time_commands(const Engine& engine);
 [[nodiscard]] Result<void> end_single_time_commands(const Engine& engine, vk::CommandBuffer cmd);
@@ -433,9 +499,9 @@ private:
 constexpr u32 MaxFramesInFlight = 2;
 constexpr u32 MaxSwapchainImages = 3;
 
-class Pipeline {
+class Renderer {
 public:
-    virtual ~Pipeline() = default;
+    virtual ~Renderer() = default;
     virtual void cmd_draw(vk::CommandBuffer cmd, vk::Image render_target, vk::Extent2D window_size) const = 0;
 };
 
@@ -451,11 +517,11 @@ public:
     [[nodiscard]] GLFWwindow* window() const { return m_window; }
     [[nodiscard]] vk::Extent2D extent() const { return m_extent; }
 
-    [[nodiscard]] Result<void> draw_frame(const Engine& engine, const Pipeline& pipeline) {
+    [[nodiscard]] Result<void> draw_frame(const Engine& engine, const Renderer& renderer) {
         const auto cmd = begin_frame(engine);
         if (cmd.has_err())
             return cmd.err();
-        pipeline.cmd_draw(*cmd, current_image(), m_extent);
+        renderer.cmd_draw(*cmd, current_image(), m_extent);
         return end_frame(engine);
     }
 
