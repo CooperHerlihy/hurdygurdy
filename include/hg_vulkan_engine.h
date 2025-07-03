@@ -178,14 +178,18 @@ public:
         return *image;
     }
 
-    [[nodiscard]] static Result<GpuImageAndView> create_cubemap(const Engine& engine, std::filesystem::path path);
+    struct CubemapConfig {
+        std::filesystem::path path = {};
+        vk::Format format = vk::Format::eR8G8B8A8Srgb;
+        vk::ImageAspectFlagBits aspect_flags = vk::ImageAspectFlagBits::eColor;
+    };
+    [[nodiscard]] static Result<GpuImageAndView> create_cubemap(const Engine& engine, const CubemapConfig& config);
 
     void destroy(const Engine& engine) const {
         m_image.destroy(engine);
         m_view.destroy(engine);
     }
 
-    using Data = GpuImage::Data;
     [[nodiscard]] Result<void> write_result(const Engine& engine, const GpuImage::WriteConfig& config) const {
         return m_image.write(engine, config);
     }
@@ -250,10 +254,44 @@ private:
     vk::Sampler m_sampler = {};
 };
 
-class CombinedImageSampler {
+class Texture {
 public:
+    vk::Image get_image() const { return m_image.get_image(); }
+    vk::ImageView get_view() const { return m_image.get_view(); }
+    vk::Sampler get_sampler() const { return m_sampler.get(); }
+
+    struct Config {
+        vk::Format format = vk::Format::eUndefined;
+        vk::ImageAspectFlagBits aspect_flags = vk::ImageAspectFlagBits::eColor;
+        bool create_mips = false;
+        Sampler::Type sampler_type = Sampler::Nearest;
+        vk::SamplerAddressMode edge_mode = vk::SamplerAddressMode::eRepeat;
+    };
+    [[nodiscard]] static Result<Texture> from_data_result(
+        const Engine& engine, const GpuImage::Data& data, const Config& config
+    );
+    [[nodiscard]] static Texture from_data(
+        const Engine& engine, const GpuImage::Data& data, const Config& config
+    ) {
+        const auto texture = from_data_result(engine, data, config);
+        if (texture.has_err())
+            ERROR("Could not create texture");
+        return *texture;
+    }
+    [[nodiscard]] static Result<Texture> from_file(
+        const Engine& engine, std::filesystem::path path, const Config& config
+    );
+    [[nodiscard]] static Result<Texture> create_cubemap(
+        const Engine& engine, std::filesystem::path path, const Config& config
+    );
+
+    void destroy(const Engine& engine) const {
+        m_image.destroy(engine);
+        m_sampler.destroy(engine);
+    }
+
 private:
-    GpuImageView m_image_view = {};
+    GpuImageAndView m_image = {};
     Sampler m_sampler = {};
 };
 

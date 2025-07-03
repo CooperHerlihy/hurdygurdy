@@ -627,12 +627,14 @@ Result<GpuImageAndView> GpuImageAndView::create_result(const Engine& engine, con
     return image_and_view;
 }
 
-Result<GpuImageAndView> GpuImageAndView::create_cubemap(const Engine& engine, const std::filesystem::path path) {
+Result<GpuImageAndView> GpuImageAndView::create_cubemap(const Engine& engine, const CubemapConfig& config) {
     ASSERT(engine.device != nullptr);
     ASSERT(engine.allocator != nullptr);
-    ASSERT(!path.empty());
+    ASSERT(!config.path.empty());
+    ASSERT(config.format != vk::Format::eUndefined);
+    ASSERT(config.aspect_flags != vk::ImageAspectFlagBits{});
 
-    const auto data = ImageData::load(path);
+    const auto data = ImageData::load(config.path);
     if (data.has_err())
         return data.err();
 
@@ -641,7 +643,7 @@ Result<GpuImageAndView> GpuImageAndView::create_cubemap(const Engine& engine, co
     const auto staging_image = GpuImage::create(engine, {
         .extent = staging_extent, 
         .dimensions = vk::ImageType::e2D,
-        .format = vk::Format::eR8G8B8A8Srgb, 
+        .format = config.format,
         .usage = vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eTransferSrc
     });
     if (staging_image.has_err())
@@ -658,7 +660,7 @@ Result<GpuImageAndView> GpuImageAndView::create_cubemap(const Engine& engine, co
 
     const auto image = GpuImage::create_cubemap(engine, {
         .face_extent = face_extent,
-        .format = vk::Format::eR8G8B8A8Srgb,
+        .format = config.format,
         .usage = vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
     });
     if (image.has_err())
@@ -667,53 +669,53 @@ Result<GpuImageAndView> GpuImageAndView::create_cubemap(const Engine& engine, co
     const auto view = GpuImageView::create(engine, {
         .image = image->get(),
         .dimensions = vk::ImageViewType::eCube,
-        .format = vk::Format::eR8G8B8A8Srgb,
-        .subresource = {.aspectMask = vk::ImageAspectFlagBits::eColor, .levelCount = 1, .layerCount = 6},
+        .format = config.format,
+        .subresource = {.aspectMask = config.aspect_flags, .levelCount = 1, .layerCount = 6},
     });
     if (view.has_err())
         return view.err();
 
     const auto submit_result = submit_single_time_commands(engine, [&](const vk::CommandBuffer cmd) {
         BarrierBuilder(cmd)
-            .add_image_barrier(image->get(), {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 6})
+            .add_image_barrier(image->get(), {config.aspect_flags, 0, 1, 0, 6})
             .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
             .build_and_run();
 
         std::array copies = {
             vk::ImageCopy2{
-                .srcSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+                .srcSubresource = {config.aspect_flags, 0, 0, 1},
                 .srcOffset = {data->width * 2 / 4, data->height * 1 / 3, 0},
-                .dstSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+                .dstSubresource = {config.aspect_flags, 0, 0, 1},
                 .extent = face_extent,
             },
             vk::ImageCopy2{
-                .srcSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+                .srcSubresource = {config.aspect_flags, 0, 0, 1},
                 .srcOffset = {data->width * 0 / 4, data->height * 1 / 3, 0},
-                .dstSubresource = {vk::ImageAspectFlagBits::eColor, 0, 1, 1},
+                .dstSubresource = {config.aspect_flags, 0, 1, 1},
                 .extent = face_extent,
             },
             vk::ImageCopy2{
-                .srcSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+                .srcSubresource = {config.aspect_flags, 0, 0, 1},
                 .srcOffset = {data->width * 1 / 4, data->height * 0 / 3, 0},
-                .dstSubresource = {vk::ImageAspectFlagBits::eColor, 0, 2, 1},
+                .dstSubresource = {config.aspect_flags, 0, 2, 1},
                 .extent = face_extent,
             },
             vk::ImageCopy2{
-                .srcSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+                .srcSubresource = {config.aspect_flags, 0, 0, 1},
                 .srcOffset = {data->width * 1 / 4, data->height * 2 / 3, 0},
-                .dstSubresource = {vk::ImageAspectFlagBits::eColor, 0, 3, 1},
+                .dstSubresource = {config.aspect_flags, 0, 3, 1},
                 .extent = face_extent,
             },
             vk::ImageCopy2{
-                .srcSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+                .srcSubresource = {config.aspect_flags, 0, 0, 1},
                 .srcOffset = {data->width * 1 / 4, data->height * 1 / 3, 0},
-                .dstSubresource = {vk::ImageAspectFlagBits::eColor, 0, 4, 1},
+                .dstSubresource = {config.aspect_flags, 0, 4, 1},
                 .extent = face_extent,
             },
             vk::ImageCopy2{
-                .srcSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+                .srcSubresource = {config.aspect_flags, 0, 0, 1},
                 .srcOffset = {data->width * 3 / 4, data->height * 1 / 3, 0},
-                .dstSubresource = {vk::ImageAspectFlagBits::eColor, 0, 5, 1},
+                .dstSubresource = {config.aspect_flags, 0, 5, 1},
                 .extent = face_extent,
             },
         };
@@ -727,7 +729,7 @@ Result<GpuImageAndView> GpuImageAndView::create_cubemap(const Engine& engine, co
         });
 
         BarrierBuilder(cmd)
-            .add_image_barrier(image->get(), {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 6})
+            .add_image_barrier(image->get(), {config.aspect_flags, 0, 1, 0, 6})
             .set_image_src(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
             .set_image_dst(vk::PipelineStageFlagBits2::eFragmentShader, vk::AccessFlagBits2::eShaderRead, vk::ImageLayout::eShaderReadOnlyOptimal)
             .build_and_run();
@@ -851,6 +853,99 @@ Result<Sampler> Sampler::create_result(const Engine& engine, const Config& confi
 
     ASSERT(sampler->m_sampler != nullptr);
     return sampler;
+}
+
+Result<Texture> Texture::from_data_result(const Engine& engine, const GpuImage::Data& data, const Config& config) {
+    const u32 mip_count = config.create_mips ? get_mip_count(data.extent) : 1;
+
+    const auto image = GpuImageAndView::create_result(engine, {
+        .extent = data.extent,
+        .format = config.format,
+        .usage = vk::ImageUsageFlagBits::eSampled
+               | vk::ImageUsageFlagBits::eTransferSrc
+               | vk::ImageUsageFlagBits::eTransferDst,
+        .aspect_flags = config.aspect_flags,
+        .sample_count = vk::SampleCountFlagBits::e1,
+        .layout = vk::ImageLayout::eUndefined, // TODO: does this work?
+        .mip_levels = mip_count,
+    });
+    if (image.has_err())
+        return image.err();
+
+    const auto write = image->write_result(engine, {
+        .data = data,
+        .final_layout = vk::ImageLayout::eShaderReadOnlyOptimal,
+        .subresource = {config.aspect_flags, 0, vk::RemainingMipLevels, 0, 1},
+
+    });
+    if (write.has_err())
+        return write.err();
+
+    if (config.create_mips) {
+        const auto generate_mips = image->generate_mipmaps_result(
+            engine,
+            mip_count,
+            data.extent,
+            vk::Format::eR8G8B8A8Srgb,
+            vk::ImageLayout::eShaderReadOnlyOptimal
+        );
+        if (generate_mips.has_err())
+            return generate_mips.err();
+    }
+
+    const auto sampler = Sampler::create_result(engine, {
+        .type = config.sampler_type,
+        .edge_mode = config.edge_mode,
+        .mip_levels = mip_count,
+    });
+    if (sampler.has_err())
+        return sampler.err();
+
+    auto texture = ok<Texture>();
+    texture->m_image = *image;
+    texture->m_sampler = *sampler;
+
+    return texture;
+}
+
+Result<Texture> Texture::from_file(const Engine& engine, const std::filesystem::path path, const Config& config) {
+    ASSERT(!path.empty());
+
+    const auto data = ImageData::load(path);
+    if (data.has_err())
+        return data.err();
+
+    return from_data_result(engine, {
+        .ptr = data->pixels.get(),
+        .alignment = 4,
+        .extent = {to_u32(data->width), to_u32(data->height), 1}
+    }, config);
+}
+
+Result<Texture> Texture::create_cubemap(const Engine& engine, const std::filesystem::path path, const Config& config) {
+    ASSERT(!path.empty());
+    ASSERT(config.create_mips == false);
+
+    const auto cubemap = GpuImageAndView::create_cubemap(engine, {
+        .path = path,
+        .format = config.format,
+        .aspect_flags = config.aspect_flags,
+    });
+    if (cubemap.has_err())
+        return cubemap.err();
+    const auto sampler = Sampler::create_result(engine, {
+        .type = config.sampler_type,
+        .edge_mode = config.edge_mode,
+        .mip_levels = 1,
+    });
+    if (sampler.has_err())
+        return sampler.err();
+
+    auto texture = ok<Texture>();
+    texture->m_image = *cubemap;
+    texture->m_sampler = *sampler;
+
+    return texture;
 }
 
 Result<vk::DescriptorPool> create_descriptor_pool(

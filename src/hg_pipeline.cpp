@@ -261,12 +261,15 @@ Result<SkyboxRenderer> SkyboxRenderer::create(const Engine& engine, const Defaul
 Result<void> SkyboxRenderer::load_skybox(const Engine& engine, const std::filesystem::path path) {
     ASSERT(!path.empty());
 
-    const auto cubemap = GpuImageAndView::create_cubemap(engine, path);
+    const auto cubemap = Texture::create_cubemap(engine, path, {
+        .format = vk::Format::eR8G8B8A8Srgb,
+        .aspect_flags = vk::ImageAspectFlagBits::eColor,
+        .sampler_type = Sampler::Linear,
+    });
     if (cubemap.has_err())
         return cubemap.err();
+    hg::write_image_sampler_descriptor(engine, m_set, 0, cubemap->get_sampler(), cubemap->get_view());
     m_cubemap = *cubemap;
-    m_sampler = Sampler::create(engine, {.type = Sampler::Linear});
-    hg::write_image_sampler_descriptor(engine, m_set, 0, m_sampler.get(), m_cubemap.get_view());
 
     const auto mesh = generate_cube();
     std::vector<glm::vec3> positions = {};
@@ -295,7 +298,6 @@ void SkyboxRenderer::destroy(const Engine& engine) const {
     m_vertex_buffer.destroy(engine);
     m_index_buffer.destroy(engine);
     m_cubemap.destroy(engine);
-    m_sampler.destroy(engine);
 
     for (const auto& shader : m_shaders) {
         ASSERT(shader != nullptr);
@@ -469,47 +471,33 @@ void PbrRenderer::cmd_draw(const vk::CommandBuffer cmd, const vk::DescriptorSet 
     cmd.setCullMode(vk::CullModeFlagBits::eNone);
 }
 
-Result<PbrRenderer::TextureHandle> PbrRenderer::load_texture(const Engine& engine, std::filesystem::path path) {
+Result<PbrRenderer::TextureHandle> PbrRenderer::load_texture(
+    const Engine& engine, std::filesystem::path path, const vk::Format format
+) {
     ASSERT(m_textures.size() < MaxTextures);
-    ASSERT(!path.empty());
 
-    const auto texture_data = ImageData::load(path);
-    if (texture_data.has_err())
-        return texture_data.err();
+    const auto texture = Texture::from_file(engine, path, {.format = format, .create_mips = true, .sampler_type = Sampler::Linear});
+    if (texture.has_err())
+        return texture.err();
 
-    return ok(load_texture_from_data(engine, {
-        texture_data->pixels.get(), 4, {to_u32(texture_data->width), to_u32(texture_data->height), 1}
-    }));
+    usize index = m_textures.size();
+    write_image_sampler_descriptor(engine, m_texture_set, 0, texture->get_sampler(), texture->get_view(), to_u32(index));
+
+    m_textures.emplace_back(*texture);
+    return ok<TextureHandle>(index);
 }
 
 PbrRenderer::TextureHandle PbrRenderer::load_texture_from_data(
-    const Engine& engine, const GpuImageAndView::Data& data, const vk::Format format
+    const Engine& engine, const GpuImage::Data& data, const vk::Format format
 ) {
     ASSERT(m_textures.size() < MaxTextures);
-    ASSERT(data.ptr != nullptr);
-    ASSERT(data.alignment > 0);
-    ASSERT(data.extent.width > 0);
-    ASSERT(data.extent.height > 0);
-    ASSERT(data.extent.depth > 0);
-    ASSERT(format != vk::Format::eUndefined);
 
-    const u32 mips = get_mip_count(data.extent);
-    const auto image = GpuImageAndView::create(engine, {
-        .extent = data.extent,
-        .format = format,
-        .usage = vk::ImageUsageFlagBits::eSampled
-               | vk::ImageUsageFlagBits::eTransferSrc
-               | vk::ImageUsageFlagBits::eTransferDst,
-        .mip_levels = mips,
-    });
-    image.write(engine, {data});
-    image.generate_mipmaps(engine, mips, data.extent, format, vk::ImageLayout::eShaderReadOnlyOptimal);
-    const auto sampler = Sampler::create(engine, {.type = Sampler::Linear, .mip_levels = mips});
+    const auto texture = Texture::from_data(engine, data, {.format = format, .create_mips = true, .sampler_type = Sampler::Linear});
 
     usize index = m_textures.size();
-    write_image_sampler_descriptor(engine, m_texture_set, 0, sampler.get(), image.get_view(), to_u32(index));
+    write_image_sampler_descriptor(engine, m_texture_set, 0, texture.get_sampler(), texture.get_view(), to_u32(index));
 
-    m_textures.emplace_back(image, sampler);
+    m_textures.emplace_back(texture);
     return {index};
 }
 

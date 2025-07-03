@@ -81,9 +81,7 @@ public:
     void destroy(const Engine& engine) const;
     void cmd_draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) const override;
 
-    [[nodiscard]] Result<void> load_skybox(
-        const Engine& engine, const std::filesystem::path path
-    );
+    [[nodiscard]] Result<void> load_skybox(const Engine& engine, const std::filesystem::path path);
 
 private:
     vk::DescriptorSetLayout m_set_layout = {};
@@ -93,9 +91,7 @@ private:
     vk::DescriptorPool m_descriptor_pool = {};
     vk::DescriptorSet m_set = {};
 
-    GpuImageAndView m_cubemap = {};
-    Sampler m_sampler = {};
-
+    Texture m_cubemap = {};
     GpuBuffer m_index_buffer = {};
     GpuBuffer m_vertex_buffer = {};
 };
@@ -116,23 +112,15 @@ public:
     void cmd_draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) const override;
 
     static constexpr usize MaxTextures = 256;
-    struct Texture {
-        GpuImageAndView image = {};
-        Sampler sampler = {};
-
-        void destroy(const Engine& engine) const {
-            sampler.destroy(engine);
-            image.destroy(engine);
-        }
-    };
-
     struct TextureHandle {
         usize index = SIZE_MAX;
     };
 
-    [[nodiscard]] Result<TextureHandle> load_texture(const Engine& engine, std::filesystem::path path);
+    [[nodiscard]] Result<TextureHandle> load_texture(
+        const Engine& engine, std::filesystem::path path, vk::Format format = vk::Format::eR8G8B8A8Srgb
+    );
     [[nodiscard]] TextureHandle load_texture_from_data(
-        const Engine& engine, const GpuImageAndView::Data& data, vk::Format format = vk::Format::eR8G8B8A8Srgb
+        const Engine& engine, const GpuImage::Data& data, vk::Format format = vk::Format::eR8G8B8A8Srgb
     );
 
     struct Model {
