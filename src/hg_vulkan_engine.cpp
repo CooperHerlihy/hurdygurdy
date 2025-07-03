@@ -856,7 +856,7 @@ Result<Sampler> Sampler::create_result(const Engine& engine, const Config& confi
 }
 
 Result<Texture> Texture::from_data_result(const Engine& engine, const GpuImage::Data& data, const Config& config) {
-    const u32 mip_count = config.create_mips ? get_mip_count(data.extent) : 1;
+    const u32 mip_levels = config.create_mips ? get_mip_count(data.extent) : 1;
 
     const auto image = GpuImageAndView::create_result(engine, {
         .extent = data.extent,
@@ -865,9 +865,7 @@ Result<Texture> Texture::from_data_result(const Engine& engine, const GpuImage::
                | vk::ImageUsageFlagBits::eTransferSrc
                | vk::ImageUsageFlagBits::eTransferDst,
         .aspect_flags = config.aspect_flags,
-        .sample_count = vk::SampleCountFlagBits::e1,
-        .layout = vk::ImageLayout::eUndefined, // TODO: does this work?
-        .mip_levels = mip_count,
+        .mip_levels = mip_levels,
     });
     if (image.has_err())
         return image.err();
@@ -881,10 +879,10 @@ Result<Texture> Texture::from_data_result(const Engine& engine, const GpuImage::
     if (write.has_err())
         return write.err();
 
-    if (config.create_mips) {
+    if (mip_levels > 1) {
         const auto generate_mips = image->generate_mipmaps_result(
             engine,
-            mip_count,
+            mip_levels,
             data.extent,
             vk::Format::eR8G8B8A8Srgb,
             vk::ImageLayout::eShaderReadOnlyOptimal
@@ -896,7 +894,7 @@ Result<Texture> Texture::from_data_result(const Engine& engine, const GpuImage::
     const auto sampler = Sampler::create_result(engine, {
         .type = config.sampler_type,
         .edge_mode = config.edge_mode,
-        .mip_levels = mip_count,
+        .mip_levels = mip_levels,
     });
     if (sampler.has_err())
         return sampler.err();
@@ -1027,16 +1025,15 @@ Result<void> allocate_descriptor_sets(
 }
 
 void write_uniform_buffer_descriptor(
-    const Engine& engine, const vk::DescriptorSet set, const u32 binding,
-    const vk::Buffer buffer, const vk::DeviceSize size, const vk::DeviceSize offset,
-    const u32 binding_array_index
+    const Engine& engine, const GpuBuffer::View& buffer,
+    const vk::DescriptorSet set, const u32 binding, const u32 binding_array_index
 ) {
     ASSERT(engine.device != nullptr);
     ASSERT(set != nullptr);
-    ASSERT(buffer != nullptr);
-    ASSERT(size != 0);
+    ASSERT(buffer.buffer != nullptr);
+    ASSERT(buffer.range != 0);
 
-    const vk::DescriptorBufferInfo buffer_info = {buffer, offset, size};
+    const vk::DescriptorBufferInfo buffer_info = {buffer.buffer, buffer.offset, buffer.range};
     const vk::WriteDescriptorSet descriptor_write = {
         .dstSet = set,
         .dstBinding = binding,
@@ -1048,17 +1045,17 @@ void write_uniform_buffer_descriptor(
     engine.device.updateDescriptorSets({descriptor_write}, {});
 }
 
-void write_image_sampler_descriptor(
-    const Engine& engine, const vk::DescriptorSet set, const u32 binding,
-    const vk::Sampler sampler, const vk::ImageView view,
-    const u32 binding_array_index
+void write_texture_descriptor(
+    const Engine& engine, const Texture& texture,
+    const vk::DescriptorSet set, const u32 binding, const u32 binding_array_index
 ) {
     ASSERT(engine.device != nullptr);
     ASSERT(set != nullptr);
-    ASSERT(sampler != nullptr);
-    ASSERT(view != nullptr);
 
-    const vk::DescriptorImageInfo image_info = {sampler, view, vk::ImageLayout::eShaderReadOnlyOptimal};
+    const vk::DescriptorImageInfo image_info = {
+        .sampler = texture.get_sampler(),
+        .imageView = texture.get_view(),
+        .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal};
     const vk::WriteDescriptorSet descriptor_write = {
         .dstSet = set,
         .dstBinding = binding,

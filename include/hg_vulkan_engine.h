@@ -33,6 +33,12 @@ public:
         return m_buffer;
     }
 
+    struct View {
+        vk::Buffer buffer = nullptr;
+        vk::DeviceSize range = 0;
+        vk::DeviceSize offset = 0;
+    };
+
     enum MemoryType {
         DeviceLocal,
         RandomAccess,
@@ -298,6 +304,7 @@ private:
 [[nodiscard]] Result<vk::DescriptorPool> create_descriptor_pool(
     const Engine& engine, u32 max_sets, std::span<const vk::DescriptorPoolSize> descriptors
 );
+
 [[nodiscard]] Result<vk::DescriptorSetLayout> create_descriptor_set_layout(
     const Engine& engine,
     std::span<const vk::DescriptorSetLayoutBinding> bindings,
@@ -310,7 +317,7 @@ private:
     std::span<vk::DescriptorSet> out_sets
 );
 [[nodiscard]] inline Result<vk::DescriptorSet> allocate_descriptor_set(
-    const Engine& engine, vk::DescriptorPool pool, vk::DescriptorSetLayout layout
+    const Engine& engine, const vk::DescriptorPool pool, const vk::DescriptorSetLayout layout
 ) {
     auto set = ok<vk::DescriptorSet>();
     const auto alloc_result = allocate_descriptor_sets(engine, pool, {&layout, 1}, {&*set, 1});
@@ -318,15 +325,15 @@ private:
         return alloc_result.err();
     return set;
 }
+
 void write_uniform_buffer_descriptor(
-    const Engine& engine, vk::DescriptorSet set, u32 binding,
-    vk::Buffer buffer, vk::DeviceSize size, vk::DeviceSize offset = 0,
-    u32 binding_array_index = 0
+    const Engine& engine, const GpuBuffer::View& buffer,
+    vk::DescriptorSet set, u32 binding, u32 binding_array_index = 0
 );
-void write_image_sampler_descriptor(
-    const Engine& engine, vk::DescriptorSet set, u32 binding,
-    vk::Sampler sampler, vk::ImageView view,
-    u32 binding_array_index = 0
+
+void write_texture_descriptor(
+    const Engine& engine, const Texture& texture,
+    vk::DescriptorSet set, u32 binding, u32 binding_array_index = 0
 );
 
 struct ShaderConfig {

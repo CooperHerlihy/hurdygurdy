@@ -59,8 +59,8 @@ Result<DefaultPipeline> DefaultPipeline::create(const Engine& engine, const vk::
         vk::BufferUsageFlagBits::eUniformBuffer, GpuBuffer::RandomAccess
     });
 
-    write_uniform_buffer_descriptor(engine, pipeline->m_global_set, 0, pipeline->m_vp_buffer.get(), sizeof(ViewProjectionUniform));
-    write_uniform_buffer_descriptor(engine, pipeline->m_global_set, 1, pipeline->m_light_buffer.get(), sizeof(LightUniform));
+    write_uniform_buffer_descriptor(engine, {pipeline->m_vp_buffer.get(), sizeof(ViewProjectionUniform)}, pipeline->m_global_set, 0);
+    write_uniform_buffer_descriptor(engine, {pipeline->m_light_buffer.get(), sizeof(LightUniform)}, pipeline->m_global_set, 1);
 
     ASSERT(pipeline->m_set_layout != nullptr);
     ASSERT(pipeline->m_global_set != nullptr);
@@ -268,7 +268,7 @@ Result<void> SkyboxRenderer::load_skybox(const Engine& engine, const std::filesy
     });
     if (cubemap.has_err())
         return cubemap.err();
-    hg::write_image_sampler_descriptor(engine, m_set, 0, cubemap->get_sampler(), cubemap->get_view());
+    hg::write_texture_descriptor(engine, *cubemap, m_set, 0);
     m_cubemap = *cubemap;
 
     const auto mesh = generate_cube();
@@ -481,7 +481,7 @@ Result<PbrRenderer::TextureHandle> PbrRenderer::load_texture(
         return texture.err();
 
     usize index = m_textures.size();
-    write_image_sampler_descriptor(engine, m_texture_set, 0, texture->get_sampler(), texture->get_view(), to_u32(index));
+    write_texture_descriptor(engine, *texture, m_texture_set, 0, to_u32(index));
 
     m_textures.emplace_back(*texture);
     return ok<TextureHandle>(index);
@@ -495,7 +495,7 @@ PbrRenderer::TextureHandle PbrRenderer::load_texture_from_data(
     const auto texture = Texture::from_data(engine, data, {.format = format, .create_mips = true, .sampler_type = Sampler::Linear});
 
     usize index = m_textures.size();
-    write_image_sampler_descriptor(engine, m_texture_set, 0, texture.get_sampler(), texture.get_view(), to_u32(index));
+    write_texture_descriptor(engine, texture, m_texture_set, 0, to_u32(index));
 
     m_textures.emplace_back(texture);
     return {index};
