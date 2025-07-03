@@ -816,7 +816,7 @@ Result<void> GpuImageAndView::generate_mipmaps_result(
     return ok();
 }
 
-Result<vk::Sampler> create_sampler_result(const Engine& engine, const SamplerConfig& config) {
+Result<Sampler> Sampler::create_result(const Engine& engine, const Config& config) {
     ASSERT(engine.device != nullptr);
     ASSERT(engine.gpu != nullptr);
     ASSERT(config.mip_levels >= 1);
@@ -831,24 +831,26 @@ Result<vk::Sampler> create_sampler_result(const Engine& engine, const SamplerCon
         .maxLod = static_cast<f32>(config.mip_levels),
         .borderColor = vk::BorderColor::eIntOpaqueBlack,
     };
-    if (config.type == SamplerType::Linear) {
+    if (config.type == Linear) {
         sampler_info.magFilter = vk::Filter::eLinear;
         sampler_info.minFilter = vk::Filter::eLinear;
         sampler_info.mipmapMode = vk::SamplerMipmapMode::eLinear;
-    } else if (config.type == SamplerType::Nearest) {
+    } else if (config.type == Nearest) {
         sampler_info.magFilter = vk::Filter::eNearest;
         sampler_info.minFilter = vk::Filter::eNearest;
         sampler_info.mipmapMode = vk::SamplerMipmapMode::eNearest;
     } else {
         ERROR("Invalid sampler type");
     }
-
-    const auto sampler = engine.device.createSampler(sampler_info);
-    if (sampler.result != vk::Result::eSuccess)
+    const auto vk_sampler = engine.device.createSampler(sampler_info);
+    if (vk_sampler.result != vk::Result::eSuccess)
         return Err::CouldNotCreateVkSampler;
 
-    ASSERT(sampler.value != nullptr);
-    return ok(sampler.value);
+    auto sampler = ok<Sampler>();
+    sampler->m_sampler = vk_sampler.value;
+
+    ASSERT(sampler->m_sampler != nullptr);
+    return sampler;
 }
 
 Result<vk::DescriptorPool> create_descriptor_pool(

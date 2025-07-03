@@ -4,7 +4,6 @@
 #include "hg_math.h"
 #include "hg_generate.h"
 #include "hg_vulkan_engine.h"
-#include <span>
 
 namespace hg {
 
@@ -95,7 +94,7 @@ private:
     vk::DescriptorSet m_set = {};
 
     GpuImageAndView m_cubemap = {};
-    vk::Sampler m_sampler = {};
+    Sampler m_sampler = {};
 
     GpuBuffer m_index_buffer = {};
     GpuBuffer m_vertex_buffer = {};
@@ -119,13 +118,10 @@ public:
     static constexpr usize MaxTextures = 256;
     struct Texture {
         GpuImageAndView image = {};
-        vk::Sampler sampler = {};
+        Sampler sampler = {};
 
         void destroy(const Engine& engine) const {
-            ASSERT(sampler != nullptr);
-            ASSERT(engine.device != nullptr);
-            engine.device.destroySampler(sampler);
-
+            sampler.destroy(engine);
             image.destroy(engine);
         }
     };

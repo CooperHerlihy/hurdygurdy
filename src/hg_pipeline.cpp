@@ -265,8 +265,8 @@ Result<void> SkyboxRenderer::load_skybox(const Engine& engine, const std::filesy
     if (cubemap.has_err())
         return cubemap.err();
     m_cubemap = *cubemap;
-    m_sampler = create_sampler(engine, {.type = SamplerType::Linear});
-    hg::write_image_sampler_descriptor(engine, m_set, 0, m_sampler, m_cubemap.get_view());
+    m_sampler = Sampler::create(engine, {.type = Sampler::Linear});
+    hg::write_image_sampler_descriptor(engine, m_set, 0, m_sampler.get(), m_cubemap.get_view());
 
     const auto mesh = generate_cube();
     std::vector<glm::vec3> positions = {};
@@ -285,7 +285,6 @@ Result<void> SkyboxRenderer::load_skybox(const Engine& engine, const std::filesy
     m_vertex_buffer.write_span(engine, std::span{positions}, 0);
     m_index_buffer.write_span(engine, std::span{mesh.indices}, 0);
 
-    ASSERT(m_sampler != nullptr);
     ASSERT(m_set != nullptr);
     return ok();
 }
@@ -296,9 +295,7 @@ void SkyboxRenderer::destroy(const Engine& engine) const {
     m_vertex_buffer.destroy(engine);
     m_index_buffer.destroy(engine);
     m_cubemap.destroy(engine);
-
-    ASSERT(m_sampler != nullptr);
-    engine.device.destroySampler(m_sampler);
+    m_sampler.destroy(engine);
 
     for (const auto& shader : m_shaders) {
         ASSERT(shader != nullptr);
@@ -507,12 +504,11 @@ PbrRenderer::TextureHandle PbrRenderer::load_texture_from_data(
     });
     image.write(engine, {data});
     image.generate_mipmaps(engine, mips, data.extent, format, vk::ImageLayout::eShaderReadOnlyOptimal);
-    const auto sampler = create_sampler(engine, {.type = SamplerType::Linear, .mip_levels = mips});
+    const auto sampler = Sampler::create(engine, {.type = Sampler::Linear, .mip_levels = mips});
 
     usize index = m_textures.size();
-    write_image_sampler_descriptor(engine, m_texture_set, 0, sampler, image.get_view(), to_u32(index));
+    write_image_sampler_descriptor(engine, m_texture_set, 0, sampler.get(), image.get_view(), to_u32(index));
 
-    ASSERT(sampler != nullptr);
     m_textures.emplace_back(image, sampler);
     return {index};
 }

@@ -216,22 +216,46 @@ inline u32 get_mip_count(const vk::Extent3D extent) {
     return static_cast<u32>(std::floor(std::log2(std::max(std::max(extent.width, extent.height), extent.depth)))) + 1;
 }
 
-enum class SamplerType {
-    Nearest = VK_FILTER_NEAREST,
-    Linear = VK_FILTER_LINEAR,
+class Sampler {
+public:
+    vk::Sampler get() const {
+        ASSERT(m_sampler != nullptr);
+        return m_sampler;
+    }
+
+    enum Type {
+        Nearest = VK_FILTER_NEAREST,
+        Linear = VK_FILTER_LINEAR,
+    };
+
+    struct Config {
+        Type type = Nearest;
+        vk::SamplerAddressMode edge_mode = vk::SamplerAddressMode::eRepeat;
+        u32 mip_levels = 1;
+    };
+    [[nodiscard]] static Result<Sampler> create_result(const Engine& engine, const Config& config);
+    [[nodiscard]] static Sampler create(const Engine& engine, const Config& config) {
+        const auto sampler = create_result(engine, config);
+        if (sampler.has_err())
+            ERROR("Could not create Vulkan sampler");
+        return *sampler;
+    }
+
+    void destroy(const Engine& engine) const {
+        ASSERT(m_sampler != nullptr);
+        engine.device.destroySampler(m_sampler);
+    }
+
+private:
+    vk::Sampler m_sampler = {};
 };
-struct SamplerConfig {
-    SamplerType type = SamplerType::Nearest;
-    vk::SamplerAddressMode edge_mode = vk::SamplerAddressMode::eRepeat;
-    u32 mip_levels = 1;
+
+class CombinedImageSampler {
+public:
+private:
+    GpuImageView m_image_view = {};
+    Sampler m_sampler = {};
 };
-[[nodiscard]] Result<vk::Sampler> create_sampler_result(const Engine& engine, const SamplerConfig& config);
-[[nodiscard]] inline vk::Sampler create_sampler(const Engine& engine, const SamplerConfig& config) {
-    const auto sampler = create_sampler_result(engine, config);
-    if (sampler.has_err())
-        ERROR("Could not create VkSampler");
-    return *sampler;
-}
 
 [[nodiscard]] Result<vk::DescriptorPool> create_descriptor_pool(
     const Engine& engine, u32 max_sets, std::span<const vk::DescriptorPoolSize> descriptors
