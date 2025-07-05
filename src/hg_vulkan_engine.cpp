@@ -31,9 +31,14 @@ static vk::Bool32 debug_callback(
     const vk::DebugUtilsMessageTypeFlagsEXT,
     const vk::DebugUtilsMessengerCallbackDataEXT* callback_data, void*
 ) {
-    std::cout << std::format("{}\n", callback_data->pMessage);
-    if (severity & vk::DebugUtilsMessageSeverityFlagBitsEXT::eError)
-        ERROR("Vulkan error");
+    if (severity & (vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo
+                 |  vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose)) {
+        INFO("{}", callback_data->pMessage);
+    } else if (severity & vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning) {
+        WARN("{}", callback_data->pMessage);
+    } else if (severity & vk::DebugUtilsMessageSeverityFlagBitsEXT::eError || true) {
+        ERROR("{}", callback_data->pMessage);
+    }
     return VK_FALSE;
 }
 
@@ -47,11 +52,13 @@ const vk::DebugUtilsMessengerCreateInfoEXT DebugUtilsMessengerCreateInfo = {
     .pfnUserCallback = debug_callback,
 };
 
-static Result<std::vector<const char*>> get_required_instance_extensions() {
+static Result<std::vector<const char*>> get_instance_extensions() {
+    CONTEXT("Getting required instance extensions");
+
     u32 glfw_extension_count = 0;
     const char** glfw_extensions = glfwGetRequiredInstanceExtensions(&glfw_extension_count);
     if (glfw_extensions == nullptr)
-        return Err::GlfwFailure;
+        ERROR("Failed to get required instance extensions from GLFW");
 
     auto required_extensions = ok<std::vector<const char*>>();
     required_extensions->reserve(glfw_extension_count + 1);
@@ -61,24 +68,28 @@ static Result<std::vector<const char*>> get_required_instance_extensions() {
     required_extensions->emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 #endif
 
-    return required_extensions;
-}
-
-static Result<bool> check_instance_extension_availability(const std::span<const char* const> required_extensions) {
-    ASSERT(!required_extensions.empty());
-
     const auto extensions = vk::enumerateInstanceExtensionProperties();
-    if (extensions.result != vk::Result::eSuccess)
-        return Err::VulkanFailure;
+    switch (extensions.result) {
+        case vk::Result::eSuccess: break;
+        case vk::Result::eIncomplete: WARN("Vulkan incomplete enumeration"); break;
+        case vk::Result::eErrorLayerNotPresent: return Err::VulkanLayerUnavailable;
+        case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
+        case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
+    default: ERROR("Unknown Vulkan error");
+    }
 
-    return ok(std::ranges::all_of(required_extensions, [&](const char* required) {
+    if (!std::ranges::all_of(*required_extensions, [&](const char* required) {
         return std::ranges::any_of(extensions.value, [&](const VkExtensionProperties& extension) {
             return strcmp(required, extension.extensionName) == 0;
         });
-    }));
+    })) return Err::VulkanExtensionUnavailable;
+
+    return required_extensions;
 }
 
 static Result<vk::Instance> init_instance() {
+    CONTEXT("Initializing Vulkan instance");
+
     const vk::ApplicationInfo app_info = {
         .pApplicationName = "Hurdy Gurdy",
         .applicationVersion = 0,
@@ -87,32 +98,48 @@ static Result<vk::Instance> init_instance() {
         .apiVersion = VK_API_VERSION_1_3,
     };
 
-    const auto required_extensions = get_required_instance_extensions();
-    if (required_extensions.has_err())
-        return required_extensions.err();
-
-    const auto extensions_available = check_instance_extension_availability(*required_extensions);
-    if (extensions_available.has_err())
-        return extensions_available.err();
-    if (!*extensions_available)
-        return Err::VulkanExtensionsUnavailable;
+    const auto extensions = get_instance_extensions();
+    if (extensions.has_err())
+        return extensions.err();
 
     const auto instance = vk::createInstance({
         .pNext = &DebugUtilsMessengerCreateInfo,
         .pApplicationInfo = &app_info,
         .enabledLayerCount = to_u32(ValidationLayers.size()),
         .ppEnabledLayerNames = ValidationLayers.data(),
-        .enabledExtensionCount = to_u32(required_extensions->size()),
-        .ppEnabledExtensionNames = required_extensions->data(),
+        .enabledExtensionCount = to_u32(extensions->size()),
+        .ppEnabledExtensionNames = extensions->data(),
     });
-    if (instance.result != vk::Result::eSuccess)
-        return Err::CouldNotCreateVkInstance;
+    switch (instance.result) {
+        case vk::Result::eSuccess: break;
+        case vk::Result::eErrorLayerNotPresent: return Err::VulkanLayerUnavailable;
+        case vk::Result::eErrorExtensionNotPresent: return Err::VulkanExtensionUnavailable;
+        case vk::Result::eErrorIncompatibleDriver: return Err::VulkanIncompatibleDriver;
+        case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
+        case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
+        case vk::Result::eErrorInitializationFailed: ERROR("Vulkan initialization failed");
+        default: ERROR("Unknown Vulkan error");
+    }
 
     ASSERT(instance.value != nullptr);
     return ok(instance.value);
 }
 
+static vk::DebugUtilsMessengerEXT init_debug_messenger(const Engine& engine) {
+    CONTEXT("Initializing Vulkan debug messenger");
+    ASSERT(engine.instance != nullptr);
+
+    const auto messenger = engine.instance.createDebugUtilsMessengerEXT(DebugUtilsMessengerCreateInfo);
+        switch (messenger.result) {
+        case vk::Result::eSuccess: break;
+        case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
+        default: ERROR("Unknown Vulkan error");
+    }
+    return messenger.value;
+}
+
 static Result<u32> find_queue_family(const vk::PhysicalDevice gpu) {
+    CONTEXT("Finding queue family");
     ASSERT(gpu != nullptr);
 
     const auto queue_families = gpu.getQueueFamilyProperties();
@@ -126,11 +153,20 @@ static Result<u32> find_queue_family(const vk::PhysicalDevice gpu) {
 }
 
 static Result<vk::PhysicalDevice> find_gpu(const Engine& engine) {
+    CONTEXT("Finding suitable GPU");
     ASSERT(engine.instance != nullptr);
 
     const auto gpus = engine.instance.enumeratePhysicalDevices();
-    if (gpus.result != vk::Result::eSuccess)
+    if (gpus.value.empty())
         return Err::VkPhysicalDevicesUnavailable;
+    switch (gpus.result) {
+    case vk::Result::eSuccess: break;
+    case vk::Result::eIncomplete: WARN("Vulkan incomplete"); break;
+    case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
+    case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
+    case vk::Result::eErrorInitializationFailed: ERROR("Vulkan initialization failed");
+    default: ERROR("Unknown Vulkan error");
+    }
 
     for (const auto gpu : gpus.value) {
         const auto features = gpu.getFeatures();
@@ -138,8 +174,14 @@ static Result<vk::PhysicalDevice> find_gpu(const Engine& engine) {
             continue;
 
         const auto extensions = gpu.enumerateDeviceExtensionProperties();
-        if (extensions.result != vk::Result::eSuccess)
-            return Err::VulkanFailure;
+        switch (extensions.result) {
+        case vk::Result::eSuccess: break;
+        case vk::Result::eIncomplete: WARN("Vulkan incomplete"); break;
+        case vk::Result::eErrorLayerNotPresent: return Err::VulkanLayerUnavailable;
+        case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
+        case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
+        default: ERROR("Unknown Vulkan error");
+        }
 
         if (!std::ranges::all_of(DeviceExtensions, [&](const char* required) {
             return std::ranges::any_of(extensions.value, [&](const vk::ExtensionProperties extension) {
@@ -159,6 +201,7 @@ static Result<vk::PhysicalDevice> find_gpu(const Engine& engine) {
 }
 
 static Result<vk::Device> init_device(const Engine& engine) {
+    CONTEXT("Initializing Vulkan device");
     ASSERT(engine.gpu != nullptr);
     ASSERT(engine.queue_family_index != UINT32_MAX);
 
@@ -211,14 +254,24 @@ static Result<vk::Device> init_device(const Engine& engine) {
         .ppEnabledExtensionNames = DeviceExtensions.data(),
         .pEnabledFeatures = &features,
     });
-    if (device.result != vk::Result::eSuccess)
-        return Err::CouldNotCreateVkDevice;
+    switch (device.result) {
+        case vk::Result::eSuccess: break;
+        case vk::Result::eErrorExtensionNotPresent: return Err::VulkanExtensionUnavailable;
+        case vk::Result::eErrorFeatureNotPresent: return Err::VulkanFeatureUnavailable;
+        case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
+        case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
+        case vk::Result::eErrorInitializationFailed: ERROR("Vulkan initialization failed");
+        case vk::Result::eErrorTooManyObjects: ERROR("Vulkan too many objects");
+        case vk::Result::eErrorDeviceLost: ERROR("Vulkan device lost");
+        default: ERROR("Unknown Vulkan error");
+    }
 
     ASSERT(device.value != nullptr);
     return ok(device.value);
 }
 
 static Result<VmaAllocator> init_allocator(const Engine& engine) {
+    CONTEXT("Initializing Vulkan memory allocator");
     ASSERT(engine.instance != nullptr);
     ASSERT(engine.gpu != nullptr);
     ASSERT(engine.device != nullptr);
@@ -239,8 +292,8 @@ static Result<VmaAllocator> init_allocator(const Engine& engine) {
 static bool s_engine_initialized = false;
 
 Result<Engine> Engine::create() {
-    if (s_engine_initialized)
-        ERROR("Cannot initialize more than one engine");
+    CONTEXT("Creating Vulkan engine");
+    ASSERT(!s_engine_initialized);
 
     auto engine = ok<Engine>();
 
@@ -258,10 +311,7 @@ Result<Engine> Engine::create() {
 
     VULKAN_HPP_DEFAULT_DISPATCHER.init(engine->instance);
 
-    const auto messenger = engine->instance.createDebugUtilsMessengerEXT(DebugUtilsMessengerCreateInfo);
-    if (messenger.result != vk::Result::eSuccess)
-        return Err::CouldNotCreateVkDebugUtilsMessenger;
-    engine->debug_messenger = messenger.value;
+    engine->debug_messenger = init_debug_messenger(*engine);
 
     const auto gpu = find_gpu(*engine);
     if (gpu.has_err())
@@ -287,30 +337,21 @@ Result<Engine> Engine::create() {
     const auto allocator = init_allocator(*engine);
     if (allocator.has_err())
         return allocator.err();
-    engine->allocator = *allocator;
+    engine->gpu_allocator = *allocator;
 
-    const auto pool = engine->device.createCommandPool({
-        .flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
-        .queueFamilyIndex = engine->queue_family_index,
-    });
-    if (pool.result != vk::Result::eSuccess)
-        return Err::CouldNotCreateVkCommandPool;
-    engine->command_pool = pool.value;
-
-    const auto transient_pool = engine->device.createCommandPool({
-        .flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
-        .queueFamilyIndex = engine->queue_family_index,
-    });
-    if (transient_pool.result != vk::Result::eSuccess)
-        return Err::CouldNotCreateVkCommandPool;
-    engine->single_time_command_pool = transient_pool.value;
+    engine->command_pool = create_command_pool(
+        *engine, vk::CommandPoolCreateFlagBits::eResetCommandBuffer
+    );
+    engine->single_time_command_pool = create_command_pool(
+        *engine, vk::CommandPoolCreateFlagBits::eResetCommandBuffer | vk::CommandPoolCreateFlagBits::eTransient
+    );
 
     s_engine_initialized = true;
     ASSERT(engine->instance != nullptr);
     ASSERT(engine->debug_messenger != nullptr);
     ASSERT(engine->gpu != nullptr);
     ASSERT(engine->device != nullptr);
-    ASSERT(engine->allocator != nullptr);
+    ASSERT(engine->gpu_allocator != nullptr);
     ASSERT(engine->queue_family_index != UINT32_MAX);
     ASSERT(engine->queue != nullptr);
     ASSERT(engine->command_pool != nullptr);
@@ -319,16 +360,15 @@ Result<Engine> Engine::create() {
 }
 
 void Engine::destroy() const {
-    if (!s_engine_initialized)
-        ERROR("Cannot destroy uninitialized engine");
+    ASSERT(s_engine_initialized)
 
     ASSERT(single_time_command_pool != nullptr);
     device.destroyCommandPool(single_time_command_pool);
     ASSERT(command_pool != nullptr);
     device.destroyCommandPool(command_pool);
 
-    ASSERT(allocator != nullptr);
-    vmaDestroyAllocator(allocator);
+    ASSERT(gpu_allocator != nullptr);
+    vmaDestroyAllocator(gpu_allocator);
 
     ASSERT(device != nullptr);
     device.destroy();
@@ -343,7 +383,7 @@ void Engine::destroy() const {
 }
 
 Result<GpuBuffer> GpuBuffer::create_result(const Engine& engine, const Config& config) {
-    ASSERT(engine.allocator != nullptr);
+    ASSERT(engine.gpu_allocator != nullptr);
     ASSERT(config.size != 0);
     ASSERT(config.usage != vk::BufferUsageFlags{});
 
@@ -368,7 +408,7 @@ Result<GpuBuffer> GpuBuffer::create_result(const Engine& engine, const Config& c
 
     VkBuffer vk_buffer = nullptr;
     VmaAllocation vma_allocation = nullptr;
-    const auto buffer_result = vmaCreateBuffer(engine.allocator, &buffer_info, &alloc_info, &vk_buffer, &vma_allocation, nullptr);
+    const auto buffer_result = vmaCreateBuffer(engine.gpu_allocator, &buffer_info, &alloc_info, &vk_buffer, &vma_allocation, nullptr);
     if (buffer_result != VK_SUCCESS) {
         return Err::CouldNotCreateGpuBuffer;
     }
@@ -386,7 +426,7 @@ Result<GpuBuffer> GpuBuffer::create_result(const Engine& engine, const Config& c
 Result<void> GpuBuffer::write_result(
     const Engine& engine, const void* data, const vk::DeviceSize size, const vk::DeviceSize offset
 ) const {
-    ASSERT(engine.allocator != nullptr);
+    ASSERT(engine.gpu_allocator != nullptr);
     ASSERT(m_allocation != nullptr);
     ASSERT(m_buffer != nullptr);
     ASSERT(data != nullptr);
@@ -395,7 +435,7 @@ Result<void> GpuBuffer::write_result(
         ASSERT(offset == 0);
 
     if (m_type == RandomAccess || m_type == LinearAccess) {
-        const auto copy_result = vmaCopyMemoryToAllocation(engine.allocator, data, m_allocation, offset, size);
+        const auto copy_result = vmaCopyMemoryToAllocation(engine.gpu_allocator, data, m_allocation, offset, size);
         if (copy_result != VK_SUCCESS) {
             return Err::CouldNotWriteGpuBuffer;
         }
@@ -406,8 +446,8 @@ Result<void> GpuBuffer::write_result(
     const auto staging_buffer = create_result(engine, {size, vk::BufferUsageFlagBits::eTransferSrc, LinearAccess});
     if (staging_buffer.has_err())
         return staging_buffer.err();
-    defer(vmaDestroyBuffer(engine.allocator, staging_buffer->m_buffer, staging_buffer->m_allocation));
-    const auto copy_result = vmaCopyMemoryToAllocation(engine.allocator, data, staging_buffer->m_allocation, 0, size);
+    defer(vmaDestroyBuffer(engine.gpu_allocator, staging_buffer->m_buffer, staging_buffer->m_allocation));
+    const auto copy_result = vmaCopyMemoryToAllocation(engine.gpu_allocator, data, staging_buffer->m_allocation, 0, size);
     if (copy_result != VK_SUCCESS)
         return staging_buffer.err();
 
@@ -421,7 +461,7 @@ Result<void> GpuBuffer::write_result(
 
 Result<GpuImage> GpuImage::create(const Engine& engine, const Config& config) {
     ASSERT(engine.device != nullptr);
-    ASSERT(engine.allocator != nullptr);
+    ASSERT(engine.gpu_allocator != nullptr);
     ASSERT(config.extent.width > 0);
     ASSERT(config.extent.height > 0);
     ASSERT(config.extent.depth > 0);
@@ -446,7 +486,7 @@ Result<GpuImage> GpuImage::create(const Engine& engine, const Config& config) {
 
     VkImage vk_image = VK_NULL_HANDLE;
     VmaAllocation vma_allocation = VK_NULL_HANDLE;
-    const auto image_result = vmaCreateImage(engine.allocator, &image_info, &alloc_info, &vk_image, &vma_allocation, nullptr);
+    const auto image_result = vmaCreateImage(engine.gpu_allocator, &image_info, &alloc_info, &vk_image, &vma_allocation, nullptr);
     if (image_result != VK_SUCCESS)
         return Err::CouldNotCreateGpuImage;
 
@@ -461,7 +501,7 @@ Result<GpuImage> GpuImage::create(const Engine& engine, const Config& config) {
 
 Result<GpuImage> GpuImage::create_cubemap(const Engine& engine, const CubemapConfig& config) {
     ASSERT(engine.device != nullptr);
-    ASSERT(engine.allocator != nullptr);
+    ASSERT(engine.gpu_allocator != nullptr);
 
     VkImageCreateInfo image_info = {};
     image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -480,7 +520,7 @@ Result<GpuImage> GpuImage::create_cubemap(const Engine& engine, const CubemapCon
 
     VkImage image = VK_NULL_HANDLE;
     VmaAllocation allocation = VK_NULL_HANDLE;
-    const auto image_result = vmaCreateImage(engine.allocator, &image_info, &alloc_info, &image, &allocation, nullptr);
+    const auto image_result = vmaCreateImage(engine.gpu_allocator, &image_info, &alloc_info, &image, &allocation, nullptr);
     if (image_result != VK_SUCCESS)
         return Err::CouldNotCreateGpuImage;
 
@@ -494,7 +534,7 @@ Result<GpuImage> GpuImage::create_cubemap(const Engine& engine, const CubemapCon
 }
 
 Result<void> GpuImage::write(const Engine& engine, const WriteConfig& config) const {
-    ASSERT(engine.allocator != nullptr);
+    ASSERT(engine.gpu_allocator != nullptr);
     ASSERT(m_allocation != nullptr);
     ASSERT(m_image != nullptr);
 
@@ -549,7 +589,7 @@ Result<void> GpuImage::write(const Engine& engine, const WriteConfig& config) co
 
 Result<GpuImageView> GpuImageView::create(const Engine& engine, const Config& config) {
     ASSERT(engine.device != nullptr);
-    ASSERT(engine.allocator != nullptr);
+    ASSERT(engine.gpu_allocator != nullptr);
     ASSERT(config.image != nullptr);
     ASSERT(config.format != vk::Format::eUndefined);
 
@@ -569,7 +609,7 @@ Result<GpuImageView> GpuImageView::create(const Engine& engine, const Config& co
 
 Result<GpuImageAndView> GpuImageAndView::create_result(const Engine& engine, const Config& config) {
     ASSERT(engine.device != nullptr);
-    ASSERT(engine.allocator != nullptr);
+    ASSERT(engine.gpu_allocator != nullptr);
     ASSERT(config.extent.width > 0);
     ASSERT(config.extent.height > 0);
     ASSERT(config.extent.depth > 0);
@@ -630,7 +670,7 @@ Result<GpuImageAndView> GpuImageAndView::create_result(const Engine& engine, con
 
 Result<GpuImageAndView> GpuImageAndView::create_cubemap(const Engine& engine, const CubemapConfig& config) {
     ASSERT(engine.device != nullptr);
-    ASSERT(engine.allocator != nullptr);
+    ASSERT(engine.gpu_allocator != nullptr);
     ASSERT(!config.path.empty());
     ASSERT(config.format != vk::Format::eUndefined);
     ASSERT(config.aspect_flags != vk::ImageAspectFlagBits{});
@@ -947,26 +987,6 @@ Result<Texture> Texture::create_cubemap(const Engine& engine, const std::filesys
     return texture;
 }
 
-Result<vk::DescriptorPool> create_descriptor_pool(
-    const Engine& engine, const u32 max_sets,
-    const std::span<const vk::DescriptorPoolSize> descriptors
-) {
-    ASSERT(engine.device != nullptr);
-    ASSERT(max_sets >= 1);
-    ASSERT(!descriptors.empty());
-
-    const auto pool = engine.device.createDescriptorPool({
-        .maxSets = max_sets, 
-        .poolSizeCount = to_u32(descriptors.size()), 
-        .pPoolSizes = descriptors.data(),
-    });
-    if (pool.result != vk::Result::eSuccess)
-        return Err::CouldNotCreateVkDescriptorPool;
-
-    ASSERT(pool.value != nullptr);
-    return ok(pool.value);
-}
-
 Result<vk::DescriptorSetLayout> create_descriptor_set_layout(
     const Engine& engine,
     const std::span<const vk::DescriptorSetLayoutBinding> bindings,
@@ -991,6 +1011,29 @@ Result<vk::DescriptorSetLayout> create_descriptor_set_layout(
 
     ASSERT(layout.value != nullptr);
     return ok(layout.value);
+}
+
+Result<vk::DescriptorPool> create_descriptor_pool(
+    const Engine& engine, const u32 max_sets,
+    const std::span<const vk::DescriptorPoolSize> descriptors
+) {
+    ASSERT(engine.device != nullptr);
+    ASSERT(max_sets >= 1);
+    ASSERT(!descriptors.empty());
+    for (const auto& descriptor : descriptors) {
+        ASSERT(descriptor.descriptorCount > 0);
+    }
+
+    const auto pool = engine.device.createDescriptorPool({
+        .maxSets = max_sets, 
+        .poolSizeCount = to_u32(descriptors.size()), 
+        .pPoolSizes = descriptors.data(),
+    });
+    if (pool.result != vk::Result::eSuccess)
+        return Err::CouldNotCreateVkDescriptorPool;
+
+    ASSERT(pool.value != nullptr);
+    return ok(pool.value);
 }
 
 Result<void> allocate_descriptor_sets(
@@ -1046,7 +1089,7 @@ void write_uniform_buffer_descriptor(
     engine.device.updateDescriptorSets({descriptor_write}, {});
 }
 
-void write_texture_descriptor(
+void write_image_sampler_descriptor(
     const Engine& engine, const Texture& texture,
     const vk::DescriptorSet set, const u32 binding, const u32 binding_array_index
 ) {
@@ -1200,6 +1243,24 @@ Result<GraphicsPipeline> GraphicsPipeline::create(const Engine& engine, const Co
     pipeline->m_shaders = shaders;
 
     return pipeline;
+}
+
+vk::CommandPool create_command_pool(const Engine& engine, const vk::CommandPoolCreateFlags flags) {
+    CONTEXT("Creating Vulkan command pool");
+    ASSERT(engine.device != nullptr);
+    ASSERT(engine.queue_family_index != UINT32_MAX);
+
+    const auto pool = engine.device.createCommandPool({
+        .flags = flags,
+        .queueFamilyIndex = engine.queue_family_index,
+    });
+    switch (pool.result) {
+        case vk::Result::eSuccess: break;
+        case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
+        case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
+        default: ERROR("Unknown Vulkan error");
+    }
+    return pool.value;
 }
 
 Result<vk::CommandBuffer> begin_single_time_commands(const Engine& engine) {

@@ -14,11 +14,9 @@ struct Engine {
     vk::DebugUtilsMessengerEXT debug_messenger = {};
     vk::PhysicalDevice gpu = {};
     vk::Device device = {};
-    VmaAllocator allocator = nullptr;
-
+    VmaAllocator gpu_allocator = nullptr;
     u32 queue_family_index = UINT32_MAX;
     vk::Queue queue = {};
-
     vk::CommandPool command_pool = {};
     vk::CommandPool single_time_command_pool = {};
 
@@ -61,8 +59,8 @@ public:
     void destroy(const Engine& engine) const {
         ASSERT(m_allocation != nullptr);
         ASSERT(m_buffer != nullptr);
-        ASSERT(engine.allocator != nullptr);
-        vmaDestroyBuffer(engine.allocator, m_buffer, m_allocation);
+        ASSERT(engine.gpu_allocator != nullptr);
+        vmaDestroyBuffer(engine.gpu_allocator, m_buffer, m_allocation);
     }
 
     [[nodiscard]] Result<void> write_result(const Engine& engine, const void* data, vk::DeviceSize size, vk::DeviceSize offset) const;
@@ -115,7 +113,7 @@ public:
         ASSERT(m_allocation != nullptr);
         ASSERT(m_image != nullptr);
         ASSERT(engine.device != nullptr);
-        vmaDestroyImage(engine.allocator, m_image, m_allocation);
+        vmaDestroyImage(engine.gpu_allocator, m_image, m_allocation);
     }
 
     struct Data {
@@ -166,6 +164,13 @@ public:
     vk::Image get_image() const { return m_image.get(); }
     vk::ImageView get_view() const { return m_view.get(); }
 
+    [[nodiscard]] static GpuImageAndView from_parts(GpuImage&& image, GpuImageView&& view) {
+        GpuImageAndView image_and_view = {};
+        image_and_view.m_image = image;
+        image_and_view.m_view = view;
+        return image_and_view;
+    }
+
     struct Config {
         vk::Extent3D extent = {};
         vk::Format format = vk::Format::eUndefined;
@@ -175,7 +180,6 @@ public:
         vk::ImageLayout layout = vk::ImageLayout::eUndefined;
         u32 mip_levels = 1;
     };
-
     [[nodiscard]] static Result<GpuImageAndView> create_result(const Engine& engine, const Config& config);
     [[nodiscard]] static GpuImageAndView create(const Engine& engine, const Config& config) {
         const auto image = create_result(engine, config);
@@ -266,6 +270,16 @@ public:
     vk::ImageView get_view() const { return m_image.get_view(); }
     vk::Sampler get_sampler() const { return m_sampler.get(); }
 
+    [[nodiscard]] static Texture from_parts(GpuImageAndView&& image, Sampler&& sampler) {
+        Texture texture = {};
+        texture.m_image = image;
+        texture.m_sampler = sampler;
+        return texture;
+    }
+    [[nodiscard]] static Texture from_parts(GpuImage&& image, GpuImageView&& view, Sampler&& sampler) {
+        return from_parts(GpuImageAndView::from_parts(std::move(image), std::move(view)), std::move(sampler));
+    }
+
     struct Config {
         vk::Format format = vk::Format::eUndefined;
         vk::ImageAspectFlagBits aspect_flags = vk::ImageAspectFlagBits::eColor;
@@ -301,14 +315,14 @@ private:
     Sampler m_sampler = {};
 };
 
-[[nodiscard]] Result<vk::DescriptorPool> create_descriptor_pool(
-    const Engine& engine, u32 max_sets, std::span<const vk::DescriptorPoolSize> descriptors
-);
-
 [[nodiscard]] Result<vk::DescriptorSetLayout> create_descriptor_set_layout(
     const Engine& engine,
     std::span<const vk::DescriptorSetLayoutBinding> bindings,
     std::span<const vk::DescriptorBindingFlags> flags = {}
+);
+
+[[nodiscard]] Result<vk::DescriptorPool> create_descriptor_pool(
+    const Engine& engine, u32 max_sets, std::span<const vk::DescriptorPoolSize> descriptors
 );
 
 [[nodiscard]] Result<void> allocate_descriptor_sets(
@@ -331,7 +345,7 @@ void write_uniform_buffer_descriptor(
     vk::DescriptorSet set, u32 binding, u32 binding_array_index = 0
 );
 
-void write_texture_descriptor(
+void write_image_sampler_descriptor(
     const Engine& engine, const Texture& texture,
     vk::DescriptorSet set, u32 binding, u32 binding_array_index = 0
 );
@@ -418,10 +432,12 @@ private:
     std::array<vk::ShaderEXT, 2> m_shaders = {};
 };
 
+[[nodiscard]] vk::CommandPool create_command_pool(const Engine& engine, vk::CommandPoolCreateFlags flags);
+
 [[nodiscard]] Result<vk::CommandBuffer> begin_single_time_commands(const Engine& engine);
 [[nodiscard]] Result<void> end_single_time_commands(const Engine& engine, vk::CommandBuffer cmd);
 [[nodiscard]] Result<void> submit_single_time_commands(const Engine& engine, const auto& commands) {
-    const auto cmd = begin_single_time_commands(engine);
+    const Result<vk::CommandBuffer> cmd = begin_single_time_commands(engine);
     if (cmd.has_err())
         return cmd.err();
     commands(*cmd);

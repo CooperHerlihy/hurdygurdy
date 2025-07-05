@@ -30,13 +30,6 @@ Result<DefaultRenderer> DefaultRenderer::create(const Engine& engine, const vk::
         .sample_count = vk::SampleCountFlagBits::e4,
     });
 
-    const auto descriptor_pool = create_descriptor_pool(engine, 1, std::array{
-        vk::DescriptorPoolSize{vk::DescriptorType::eUniformBuffer, 2}
-    });
-    if (descriptor_pool.has_err())
-        return descriptor_pool.err();
-    pipeline->m_descriptor_pool = *descriptor_pool;
-
     const auto set_layout = create_descriptor_set_layout(engine, std::array{
         vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex},
         vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eFragment},
@@ -44,6 +37,13 @@ Result<DefaultRenderer> DefaultRenderer::create(const Engine& engine, const vk::
     if (set_layout.has_err())
         return set_layout.err();
     pipeline->m_set_layout = *set_layout;
+
+    const auto descriptor_pool = create_descriptor_pool(engine, 1, std::array{
+        vk::DescriptorPoolSize{vk::DescriptorType::eUniformBuffer, 2}
+    });
+    if (descriptor_pool.has_err())
+        return descriptor_pool.err();
+    pipeline->m_descriptor_pool = *descriptor_pool;
 
     const auto global_set = allocate_descriptor_set(engine, pipeline->m_descriptor_pool, pipeline->m_set_layout);
     if (global_set.has_err())
@@ -70,10 +70,10 @@ Result<DefaultRenderer> DefaultRenderer::create(const Engine& engine, const vk::
 void DefaultRenderer::destroy(const Engine& engine) const {
     ASSERT(engine.device != nullptr);
 
-    ASSERT(m_set_layout != nullptr);
-    engine.device.destroyDescriptorSetLayout(m_set_layout);
     ASSERT(m_descriptor_pool != nullptr);
     engine.device.destroyDescriptorPool(m_descriptor_pool);
+    ASSERT(m_set_layout != nullptr);
+    engine.device.destroyDescriptorSetLayout(m_set_layout);
 
     m_light_buffer.destroy(engine);
     m_vp_buffer.destroy(engine);
@@ -248,7 +248,7 @@ Result<void> SkyboxPipeline::load_skybox(const Engine& engine, const std::filesy
     });
     if (cubemap.has_err())
         return cubemap.err();
-    hg::write_texture_descriptor(engine, *cubemap, m_set, 0);
+    hg::write_image_sampler_descriptor(engine, *cubemap, m_set, 0);
     m_cubemap = *cubemap;
 
     const auto mesh = generate_cube();
@@ -427,7 +427,7 @@ Result<PbrPipeline::TextureHandle> PbrPipeline::load_texture(
         return texture.err();
 
     usize index = m_textures.size();
-    write_texture_descriptor(engine, *texture, m_texture_set, 0, to_u32(index));
+    write_image_sampler_descriptor(engine, *texture, m_texture_set, 0, to_u32(index));
 
     m_textures.emplace_back(*texture);
     return ok<TextureHandle>(index);
@@ -441,7 +441,7 @@ PbrPipeline::TextureHandle PbrPipeline::load_texture_from_data(
     const auto texture = Texture::from_data(engine, data, {.format = format, .create_mips = true, .sampler_type = Sampler::Linear});
 
     usize index = m_textures.size();
-    write_texture_descriptor(engine, texture, m_texture_set, 0, to_u32(index));
+    write_image_sampler_descriptor(engine, texture, m_texture_set, 0, to_u32(index));
 
     m_textures.emplace_back(texture);
     return {index};

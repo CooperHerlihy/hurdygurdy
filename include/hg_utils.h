@@ -27,33 +27,6 @@ using f64 = double;
 
 namespace hg {
 
-#ifdef NDEBUG
-
-[[noreturn]] inline void hg_assert_internal(const std::string_view message) {
-    std::cerr << std::format("Failed assertion: {}\n", message);
-    std::terminate();
-}
-
-#define ASSERT(condition) { if (!(condition)) [[unlikely]] hg_assert_internal(#condition); }
-
-#else
-
-[[noreturn]] inline void hg_assert_internal(const std::string_view message, const std::string_view file, const int line) {
-    std::cerr << std::format("Failed assertion: {}\n    File: {}\n    Line: {}\n", message, file, line);
-    std::terminate();
-}
-
-#define ASSERT(condition) { if (!(condition)) [[unlikely]] hg_assert_internal(#condition, __FILE__, __LINE__); }
-
-#endif
-
-[[noreturn]] inline void hg_error_internal(const std::string_view message, const std::string_view file, const int line) {
-    std::cerr << std::format("Critical error: {}\n    File: {}\n    Line: {}\n", message, file, line);
-    std::terminate();
-}
-
-#define ERROR(message) { hg_error_internal(message, __FILE__, __LINE__); }
-
 template <typename F> struct DeferInternal {
     F f;
     explicit DeferInternal(F f_) : f(f_) {}
@@ -66,6 +39,34 @@ template <typename F> DeferInternal<F> defer_function(F f) { return DeferInterna
 #define DEFER_INTERMEDIATE_2(x, y) DEFER_INTERMEDIATE_1(x, y)
 #define DEFER_INTERMEDIATE_3(x) DEFER_INTERMEDIATE_2(x, __COUNTER__)
 #define defer(code) auto DEFER_INTERMEDIATE_3(_defer_) = defer_function([&] { code; })
+
+thread_local inline std::vector<std::string> g_error_context = {};
+constexpr inline void push_error_context(const std::string&& context) { g_error_context.emplace_back(std::move(context)); }
+constexpr inline void pop_error_context() { g_error_context.pop_back(); }
+
+[[noreturn]] inline void error_internal(const std::string_view message) {
+    std::cerr << "Error trace:\n";
+    for (const auto& context : g_error_context) {
+        std::cerr << "    Note: " << context << "\n";
+    }
+    std::cerr << "    Error: " << message << "\n";
+    std::terminate();
+}
+
+inline void warn_internal(const std::string_view message) {
+    std::cerr << std::format("Warning: {}\n    Context: {}\n", message, g_error_context.back());
+}
+
+inline void info_internal(const std::string_view message) {
+    std::cerr << "Info: " << message << "\n";
+}
+
+#define CONTEXT(context, ...) push_error_context(std::format(context, __VA_ARGS__)); defer(pop_error_context());
+#define ERROR(message, ...) { error_internal(std::format(message, __VA_ARGS__)); }
+#define WARN(message, ...) { warn_internal(std::format(message, __VA_ARGS__)); }
+#define INFO(message, ...) { info_internal(std::format(message, __VA_ARGS__)); }
+
+#define ASSERT(condition) { if (!(condition)) [[unlikely]] ERROR("Assertion failed: {}", #condition); }
 
 constexpr i32 to_i32(const u32 val) {
     ASSERT(static_cast<i32>(val) >= 0);
@@ -115,7 +116,10 @@ enum class Err : u8 {
     GlfwFailure,
     CouldNotInitializeGlfw,
     VulkanFailure,
-    VulkanExtensionsUnavailable,
+    VulkanLayerUnavailable,
+    VulkanExtensionUnavailable,
+    VulkanFeatureUnavailable,
+    VulkanIncompatibleDriver,
     VkPhysicalDevicesUnavailable,
     VkPhysicalDevicesUnsuitable,
     VkQueueFamilyUnavailable,
@@ -124,9 +128,6 @@ enum class Err : u8 {
     InvalidWindowSize,
 
     // Vulkan
-    CouldNotCreateVkInstance,
-    CouldNotCreateVkDebugUtilsMessenger,
-    CouldNotCreateVkDevice,
     CouldNotCreateVmaAllocator,
     CouldNotCreateVkCommandPool,
     CouldNotAllocateVkCommandBuffers,
@@ -176,7 +177,10 @@ constexpr std::string_view to_string(Err code) {
         HG_MAKE_ERROR_STRING(GlfwFailure);
         HG_MAKE_ERROR_STRING(CouldNotInitializeGlfw);
         HG_MAKE_ERROR_STRING(VulkanFailure);
-        HG_MAKE_ERROR_STRING(VulkanExtensionsUnavailable);
+        HG_MAKE_ERROR_STRING(VulkanLayerUnavailable);
+        HG_MAKE_ERROR_STRING(VulkanExtensionUnavailable);
+        HG_MAKE_ERROR_STRING(VulkanFeatureUnavailable);
+        HG_MAKE_ERROR_STRING(VulkanIncompatibleDriver);
         HG_MAKE_ERROR_STRING(VkPhysicalDevicesUnavailable);
         HG_MAKE_ERROR_STRING(VkPhysicalDevicesUnsuitable);
         HG_MAKE_ERROR_STRING(VkQueueFamilyUnavailable);
@@ -185,9 +189,6 @@ constexpr std::string_view to_string(Err code) {
         HG_MAKE_ERROR_STRING(InvalidWindowSize);
 
         // Vulkan
-        HG_MAKE_ERROR_STRING(CouldNotCreateVkInstance);
-        HG_MAKE_ERROR_STRING(CouldNotCreateVkDebugUtilsMessenger);
-        HG_MAKE_ERROR_STRING(CouldNotCreateVkDevice);
         HG_MAKE_ERROR_STRING(CouldNotCreateVmaAllocator);
         HG_MAKE_ERROR_STRING(CouldNotCreateVkCommandPool);
         HG_MAKE_ERROR_STRING(CouldNotAllocateVkCommandBuffers);
@@ -233,7 +234,7 @@ constexpr std::string_view to_string(Err code) {
 
 template <typename T> class Result {
 public:
-    constexpr Result(const Err error) : m_result{error} {}
+    constexpr Result(const Err error) : m_result{error} { WARN("{}", to_string(error)); }
     template <typename... Args> constexpr Result(std::in_place_type_t<T>, Args&&... args) : m_result{std::in_place_type_t<T>(), std::forward<Args>(args)...} {}
 
     constexpr bool has_err() const { return std::holds_alternative<Err>(m_result); }
@@ -293,7 +294,7 @@ private:
 
 template <> class Result<void> {
 public:
-    constexpr Result(const Err error) : m_err{error} {}
+    Result(const Err error) : m_err{error} { WARN("{}", to_string(error)); }
     constexpr Result(std::in_place_type_t<void>) {}
 
     constexpr bool has_err() const { return m_err.has_value(); }
@@ -315,6 +316,109 @@ requires(std::is_trivially_copyable_v<U> || std::is_rvalue_reference_v<T>) {
 
 template <typename T, typename... Args> constexpr Result<T> ok(Args&&... args) {
     return Result<T>{std::in_place_type_t<T>(), std::forward<Args>(args)...};
+}
+
+constexpr Result<void> vk_success_or_error(const vk::Result result) {
+    switch (result) {
+    case vk::Result::eSuccess:
+        return ok();
+    case vk::Result::eNotReady:
+        ERROR("Vulkan not ready");
+    case vk::Result::eTimeout:
+        ERROR("Vulkan timeout");
+    case vk::Result::eEventSet:
+        ERROR("Vulkan event set");
+    case vk::Result::eEventReset:
+        ERROR("Vulkan event reset");
+    case vk::Result::eIncomplete:
+        ERROR("Vulkan incomplete");
+    case vk::Result::eErrorOutOfHostMemory:
+        ERROR("Vulkan ran out of host memory");
+    case vk::Result::eErrorOutOfDeviceMemory:
+        ERROR("Vulkan ran out of device memory");
+    case vk::Result::eErrorInitializationFailed:
+        ERROR("Vulkan initialization failed");
+    case vk::Result::eErrorDeviceLost:
+        ERROR("Vulkan device lost");
+    case vk::Result::eErrorMemoryMapFailed:
+        ERROR("Vulkan memory map failed");
+    case vk::Result::eErrorLayerNotPresent:
+        ERROR("Vulkan layer not present");
+    case vk::Result::eErrorExtensionNotPresent:
+        ERROR("Vulkan extension not present");
+    case vk::Result::eErrorFeatureNotPresent:
+        ERROR("Vulkan feature not present");
+    case vk::Result::eErrorIncompatibleDriver:
+        ERROR("Vulkan incompatible driver");
+    case vk::Result::eErrorTooManyObjects:
+        ERROR("Vulkan too many objects");
+    case vk::Result::eErrorFormatNotSupported:
+        ERROR("Vulkan format not supported");
+    case vk::Result::eErrorFragmentedPool:
+        ERROR("Vulkan fragmented pool");
+    case vk::Result::eErrorUnknown:
+        ERROR("Vulkan unknown");
+    case vk::Result::eErrorOutOfPoolMemory:
+        ERROR("Vulkan out of pool memory");
+    case vk::Result::eErrorInvalidExternalHandle:
+        ERROR("Vulkan invalid external handle");
+    case vk::Result::eErrorFragmentation:
+        ERROR("Vulkan fragmentation");
+    case vk::Result::eErrorInvalidDeviceAddressEXT:
+        ERROR("Vulkan invalid device address");
+    case vk::Result::eErrorPipelineCompileRequiredEXT:
+        ERROR("Vulkan pipeline compile required");
+    case vk::Result::eErrorNotPermitted:
+        ERROR("Vulkan not permitted");
+    case vk::Result::eErrorSurfaceLostKHR:
+        ERROR("Vulkan surface lost");
+    case vk::Result::eErrorNativeWindowInUseKHR:
+        ERROR("Vulkan native window in use");
+    case vk::Result::eSuboptimalKHR:
+        ERROR("Vulkan suboptimal");
+    case vk::Result::eErrorOutOfDateKHR:
+        ERROR("Vulkan out of date");
+    case vk::Result::eErrorIncompatibleDisplayKHR:
+        ERROR("Vulkan incompatible display");
+    case vk::Result::eErrorValidationFailedEXT:
+        ERROR("Vulkan validation failed");
+    case vk::Result::eErrorInvalidShaderNV:
+        ERROR("Vulkan invalid shader");
+    case vk::Result::eErrorImageUsageNotSupportedKHR:
+        ERROR("Vulkan image usage not supported");
+    case vk::Result::eErrorVideoPictureLayoutNotSupportedKHR:
+        ERROR("Vulkan video picture layout not supported");
+    case vk::Result::eErrorVideoProfileOperationNotSupportedKHR:
+        ERROR("Vulkan video profile operation not supported");
+    case vk::Result::eErrorVideoProfileFormatNotSupportedKHR:
+        ERROR("Vulkan video profile format not supported");
+    case vk::Result::eErrorVideoProfileCodecNotSupportedKHR:
+        ERROR("Vulkan video profile codec not supported");
+    case vk::Result::eErrorVideoStdVersionNotSupportedKHR:
+        ERROR("Vulkan video std version not supported");
+    case vk::Result::eErrorInvalidDrmFormatModifierPlaneLayoutEXT:
+        ERROR("Vulkan invalid drm format modifier plane layout");
+    case vk::Result::eThreadIdleKHR:
+        ERROR("Vulkan thread idle");
+    case vk::Result::eThreadDoneKHR:
+        ERROR("Vulkan thread done");
+    case vk::Result::eOperationDeferredKHR:
+        ERROR("Vulkan operation deferred");
+    case vk::Result::eOperationNotDeferredKHR:
+        ERROR("Vulkan operation not deferred");
+    case vk::Result::eErrorInvalidVideoStdParametersKHR:
+        ERROR("Vulkan invalid video std parameters");
+    case vk::Result::eErrorCompressionExhaustedEXT:
+        ERROR("Vulkan compression exhausted");
+    case vk::Result::eErrorIncompatibleShaderBinaryEXT:
+        ERROR("Vulkan incompatible shader binary");
+    case vk::Result::ePipelineBinaryMissingKHR:
+        ERROR("Vulkan pipeline binary missing");
+    case vk::Result::eErrorNotEnoughSpaceKHR:
+        ERROR("Vulkan not enough space");
+    default:
+        ERROR("Unknown Vulkan error");
+    }
 }
 
 } // namespace hg

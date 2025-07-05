@@ -65,8 +65,8 @@ private:
     GpuImageAndView m_color_image = {};
     GpuImageAndView m_depth_image = {};
 
-    vk::DescriptorPool m_descriptor_pool = {};
     vk::DescriptorSetLayout m_set_layout = {};
+    vk::DescriptorPool m_descriptor_pool = {};
     vk::DescriptorSet m_global_set = {};
     GpuBuffer m_vp_buffer = {};
     GpuBuffer m_light_buffer = {};
