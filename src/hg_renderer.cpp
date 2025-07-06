@@ -39,7 +39,7 @@ DefaultRenderer DefaultRenderer::create(const Engine& engine, const vk::Extent2D
         vk::DescriptorPoolSize{vk::DescriptorType::eUniformBuffer, 2}
     }});
 
-    pipeline.m_global_set = *allocate_descriptor_set(engine, pipeline.m_descriptor_pool.get(), pipeline.m_set_layout.get());;
+    pipeline.m_global_set = *pipeline.m_descriptor_pool.allocate_set(engine, pipeline.m_set_layout.get());;
 
     pipeline.m_vp_buffer = GpuBuffer::create(engine, {
         sizeof(ViewProjectionUniform),
@@ -211,7 +211,7 @@ SkyboxPipeline SkyboxPipeline::create(const Engine& engine, const DefaultRendere
         vk::DescriptorPoolSize{vk::DescriptorType::eCombinedImageSampler, 1}
     }});
 
-    pipeline.m_set = *allocate_descriptor_set(engine, pipeline.m_descriptor_pool.get(), pipeline.m_set_layout.get());;
+    pipeline.m_set = *pipeline.m_descriptor_pool.allocate_set(engine, pipeline.m_set_layout.get());;
 
     ASSERT(pipeline.m_set != nullptr);
     return pipeline;
@@ -316,7 +316,7 @@ PbrPipeline PbrPipeline::create(const Engine& engine, const DefaultRenderer& ren
     pipeline.m_descriptor_pool = DescriptorPool::create(engine, {1, std::array{
         vk::DescriptorPoolSize{vk::DescriptorType::eCombinedImageSampler, MaxTextures}
     }});
-    pipeline.m_texture_set = *allocate_descriptor_set(engine, pipeline.m_descriptor_pool.get(), pipeline.m_set_layout.get());;
+    pipeline.m_texture_set = *pipeline.m_descriptor_pool.allocate_set(engine, pipeline.m_set_layout.get());;
 
     ASSERT(pipeline.m_texture_set != nullptr);
     return pipeline;

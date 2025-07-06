@@ -314,8 +314,8 @@ private:
 class DescriptorPool {
 public:
     vk::DescriptorPool get() const {
-        ASSERT(m_descriptor_pool != nullptr);
-        return m_descriptor_pool;
+        ASSERT(m_pool != nullptr);
+        return m_pool;
     }
 
     struct Config {
@@ -327,30 +327,30 @@ public:
     void destroy(const Engine& engine) const {
         CONTEXT("Destroying Vulkan descriptor pool");
 
-        ASSERT(m_descriptor_pool != nullptr);
+        ASSERT(m_pool != nullptr);
         ASSERT(engine.device != nullptr);
 
-        engine.device.destroyDescriptorPool(m_descriptor_pool);
+        engine.device.destroyDescriptorPool(m_pool);
+    }
+
+    [[nodiscard]] Result<void> allocate_sets(
+        const Engine& engine,
+        std::span<const vk::DescriptorSetLayout> layouts,
+        std::span<vk::DescriptorSet> out_sets
+    );
+    [[nodiscard]] inline Result<vk::DescriptorSet> allocate_set(
+        const Engine& engine, const vk::DescriptorSetLayout layout
+    ) {
+        auto set = ok<vk::DescriptorSet>();
+        const auto alloc_result = allocate_sets(engine, {&layout, 1}, {&*set, 1});
+        if (alloc_result.has_err())
+            return alloc_result.err();
+        return set;
     }
 
 private:
-    vk::DescriptorPool m_descriptor_pool{};
+    vk::DescriptorPool m_pool{};
 };
-
-[[nodiscard]] Result<void> allocate_descriptor_sets(
-    const Engine& engine, vk::DescriptorPool pool,
-    std::span<const vk::DescriptorSetLayout> layouts,
-    std::span<vk::DescriptorSet> out_sets
-);
-[[nodiscard]] inline Result<vk::DescriptorSet> allocate_descriptor_set(
-    const Engine& engine, const vk::DescriptorPool pool, const vk::DescriptorSetLayout layout
-) {
-    auto set = ok<vk::DescriptorSet>();
-    const auto alloc_result = allocate_descriptor_sets(engine, pool, {&layout, 1}, {&*set, 1});
-    if (alloc_result.has_err())
-        return alloc_result.err();
-    return set;
-}
 
 void write_uniform_buffer_descriptor(
     const Engine& engine, const GpuBuffer::View& buffer,

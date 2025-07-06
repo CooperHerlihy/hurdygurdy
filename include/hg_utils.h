@@ -63,7 +63,7 @@ inline void info_internal(std::string&& message) { std::cout << "Info: " << std:
 
 #define CONTEXT(message, ...) push_stack_context(std::format(message, __VA_ARGS__)); defer(pop_stack_context());
 #define CONTEXT_PUSH(message, ...) push_stack_context(std::format(message, __VA_ARGS__));
-#define CONTEXT_POP(message, ...) defer(pop_stack_context());
+#define CONTEXT_POP() defer(pop_stack_context());
 
 #define ERROR(message, ...) error_internal(std::format(message, __VA_ARGS__));
 #define WARN(message, ...) warn_internal(std::format(message, __VA_ARGS__));

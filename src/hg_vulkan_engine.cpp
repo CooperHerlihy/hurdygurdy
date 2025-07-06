@@ -126,6 +126,7 @@ static Result<vk::Instance> init_instance() {
 
 static vk::DebugUtilsMessengerEXT init_debug_messenger(const Engine& engine) {
     CONTEXT("Initializing Vulkan debug messenger");
+
     ASSERT(engine.instance != nullptr);
 
     const auto messenger = engine.instance.createDebugUtilsMessengerEXT(DebugUtilsMessengerCreateInfo);
@@ -139,6 +140,7 @@ static vk::DebugUtilsMessengerEXT init_debug_messenger(const Engine& engine) {
 
 static Result<u32> find_queue_family(const vk::PhysicalDevice gpu) {
     CONTEXT("Finding queue family");
+
     ASSERT(gpu != nullptr);
 
     const auto queue_families = gpu.getQueueFamilyProperties();
@@ -153,6 +155,7 @@ static Result<u32> find_queue_family(const vk::PhysicalDevice gpu) {
 
 static Result<vk::PhysicalDevice> find_gpu(const Engine& engine) {
     CONTEXT("Finding suitable GPU");
+
     ASSERT(engine.instance != nullptr);
 
     const auto gpus = engine.instance.enumeratePhysicalDevices();
@@ -200,6 +203,7 @@ static Result<vk::PhysicalDevice> find_gpu(const Engine& engine) {
 
 static Result<vk::Device> init_device(const Engine& engine) {
     CONTEXT("Initializing Vulkan device");
+
     ASSERT(engine.gpu != nullptr);
     ASSERT(engine.queue_family_index != UINT32_MAX);
 
@@ -270,6 +274,7 @@ static Result<vk::Device> init_device(const Engine& engine) {
 
 static VmaAllocator init_allocator(const Engine& engine) {
     CONTEXT("Initializing Vulkan memory allocator");
+
     ASSERT(engine.instance != nullptr);
     ASSERT(engine.gpu != nullptr);
     ASSERT(engine.device != nullptr);
@@ -352,6 +357,7 @@ Result<Engine> Engine::create() {
 
 void Engine::destroy() const {
     CONTEXT("Destroying Vulkan engine");
+
     ASSERT(instance != nullptr);
     ASSERT(debug_messenger != nullptr);
     ASSERT(device != nullptr);
@@ -369,6 +375,7 @@ void Engine::destroy() const {
 
 GpuBuffer GpuBuffer::create(const Engine& engine, const Config& config) {
     CONTEXT("Creating Vulkan buffer");
+
     ASSERT(engine.gpu_allocator != nullptr);
     ASSERT(config.size != 0);
     ASSERT(config.usage != vk::BufferUsageFlags{});
@@ -418,6 +425,7 @@ void GpuBuffer::write_void(
     const Engine& engine, const void* data, const vk::DeviceSize size, const vk::DeviceSize offset
 ) const {
     CONTEXT("Writing to Vulkan buffer");
+
     ASSERT(engine.gpu_allocator != nullptr);
     ASSERT(m_allocation != nullptr);
     ASSERT(m_buffer != nullptr);
@@ -456,6 +464,7 @@ void GpuBuffer::write_void(
 
 GpuImage GpuImage::create(const Engine& engine, const Config& config) {
     CONTEXT("Creating Vulkan image");
+
     ASSERT(engine.device != nullptr);
     ASSERT(engine.gpu_allocator != nullptr);
     ASSERT(config.extent.width > 0);
@@ -504,6 +513,7 @@ GpuImage GpuImage::create(const Engine& engine, const Config& config) {
 
 GpuImage GpuImage::create_cubemap(const Engine& engine, const CubemapConfig& config) {
     CONTEXT("Creating Vulkan cubemap image");
+
     ASSERT(engine.device != nullptr);
     ASSERT(engine.gpu_allocator != nullptr);
     ASSERT(config.face_extent.width > 0);
@@ -551,6 +561,7 @@ GpuImage GpuImage::create_cubemap(const Engine& engine, const CubemapConfig& con
 
 void GpuImage::write(const Engine& engine, const WriteConfig& config) const {
     CONTEXT("Writing to Vulkan image");
+
     ASSERT(engine.gpu_allocator != nullptr);
     ASSERT(m_allocation != nullptr);
     ASSERT(m_image != nullptr);
@@ -598,6 +609,7 @@ void GpuImage::write(const Engine& engine, const WriteConfig& config) const {
 
 GpuImageView GpuImageView::create(const Engine& engine, const Config& config) {
     CONTEXT("Creating Vulkan image view");
+
     ASSERT(engine.device != nullptr);
     ASSERT(engine.gpu_allocator != nullptr);
     ASSERT(config.image != nullptr);
@@ -624,6 +636,7 @@ GpuImageView GpuImageView::create(const Engine& engine, const Config& config) {
 
 GpuImageAndView GpuImageAndView::create(const Engine& engine, const Config& config) {
     CONTEXT("Creating Vulkan image and view");
+
     ASSERT(engine.device != nullptr);
     ASSERT(engine.gpu_allocator != nullptr);
     ASSERT(config.extent.width > 0);
@@ -680,6 +693,7 @@ GpuImageAndView GpuImageAndView::create(const Engine& engine, const Config& conf
 
 GpuImageAndView GpuImageAndView::create_cubemap(const Engine& engine, const CubemapConfig& config) {
     CONTEXT("Creating Vulkan cubemap image and view");
+
     ASSERT(engine.device != nullptr);
     ASSERT(engine.gpu_allocator != nullptr);
     ASSERT(config.data.pixels != nullptr);
@@ -792,6 +806,7 @@ void GpuImageAndView::generate_mipmaps(
     const vk::ImageLayout final_layout
 ) const {
     CONTEXT("Generating mipmaps");
+
     ASSERT(engine.gpu != nullptr);
     ASSERT(mip_levels > 1);
     ASSERT(extent.width > 0);
@@ -858,6 +873,7 @@ void GpuImageAndView::generate_mipmaps(
 
 Sampler Sampler::create(const Engine& engine, const Config& config) {
     CONTEXT("Creating Vulkan sampler");
+
     ASSERT(engine.device != nullptr);
     ASSERT(engine.gpu != nullptr);
     ASSERT(config.mip_levels >= 1);
@@ -943,6 +959,7 @@ Texture Texture::from_data(const Engine& engine, const GpuImage::Data& data, con
 
 Result<Texture> Texture::from_file(const Engine& engine, const std::filesystem::path path, const Config& config) {
     CONTEXT("Creating Vulkan texture from file");
+
     ASSERT(!path.empty());
 
     const auto data = ImageData::load(path);
@@ -958,6 +975,7 @@ Result<Texture> Texture::from_file(const Engine& engine, const std::filesystem::
 
 Result<Texture> Texture::from_cubemap_file(const Engine& engine, const std::filesystem::path path, const Config& config) {
     CONTEXT("Creating Vulkan cubemap texture from file");
+
     ASSERT(!path.empty());
     ASSERT(config.create_mips == false);
 
@@ -984,6 +1002,7 @@ Result<Texture> Texture::from_cubemap_file(const Engine& engine, const std::file
 
 DescriptorSetLayout DescriptorSetLayout::create(const Engine& engine, const Config& config) {
     CONTEXT("Creating Vulkan descriptor set layout");
+
     ASSERT(engine.device != nullptr);
     ASSERT(!config.bindings.empty());
     if (!config.flags.empty())
@@ -1014,6 +1033,7 @@ DescriptorSetLayout DescriptorSetLayout::create(const Engine& engine, const Conf
 
 DescriptorPool DescriptorPool::create(const Engine& engine, const Config& config) {
     CONTEXT("Creating Vulkan descriptor pool");
+
     ASSERT(engine.device != nullptr);
     ASSERT(config.max_sets >= 1);
     ASSERT(!config.descriptors.empty());
@@ -1035,20 +1055,21 @@ DescriptorPool DescriptorPool::create(const Engine& engine, const Config& config
     }
 
     DescriptorPool descriptor_pool{};
-    descriptor_pool.m_descriptor_pool = pool.value;
+    descriptor_pool.m_pool = pool.value;
 
-    ASSERT(descriptor_pool.m_descriptor_pool != nullptr);
+    ASSERT(descriptor_pool.m_pool != nullptr);
     return descriptor_pool;
 }
 
-Result<void> allocate_descriptor_sets(
-    const Engine& engine, const vk::DescriptorPool pool,
+Result<void> DescriptorPool::allocate_sets(
+    const Engine& engine,
     const std::span<const vk::DescriptorSetLayout> layouts,
     const std::span<vk::DescriptorSet> out_sets
 ) {
     CONTEXT("Allocating Vulkan descriptor sets");
+
+    ASSERT(m_pool != nullptr);
     ASSERT(engine.device != nullptr);
-    ASSERT(pool != nullptr);
     ASSERT(!layouts.empty());
     for (const auto layout : layouts) {
         ASSERT(layout != nullptr);
@@ -1060,7 +1081,7 @@ Result<void> allocate_descriptor_sets(
     ASSERT(layouts.size() == out_sets.size());
 
     const vk::DescriptorSetAllocateInfo alloc_info{
-        .descriptorPool = pool,
+        .descriptorPool = m_pool,
         .descriptorSetCount = to_u32(layouts.size()),
         .pSetLayouts = layouts.data(),
     };
@@ -1085,6 +1106,7 @@ void write_uniform_buffer_descriptor(
     const vk::DescriptorSet set, const u32 binding, const u32 binding_array_index
 ) {
     CONTEXT("Writing Vulkan uniform buffer descriptor");
+
     ASSERT(engine.device != nullptr);
     ASSERT(set != nullptr);
     ASSERT(buffer.buffer != nullptr);
@@ -1107,6 +1129,7 @@ void write_image_sampler_descriptor(
     const vk::DescriptorSet set, const u32 binding, const u32 binding_array_index
 ) {
     CONTEXT("Writing Vulkan combined image and sampler descriptor");
+
     ASSERT(engine.device != nullptr);
     ASSERT(set != nullptr);
 
@@ -1127,6 +1150,7 @@ void write_image_sampler_descriptor(
 
 PipelineLayout PipelineLayout::create(const Engine& engine, const Config& config) {
     CONTEXT("Creating Vulkan pipeline layout");
+
     ASSERT(engine.device != nullptr);
 
     vk::PipelineLayoutCreateInfo layout_info{
@@ -1152,6 +1176,7 @@ PipelineLayout PipelineLayout::create(const Engine& engine, const Config& config
 
 static Result<std::vector<char>> read_shader(const std::filesystem::path path) {
     CONTEXT("Reading Vulkan shader code");
+
     ASSERT(!path.empty());
 
     auto file = std::ifstream{path, std::ios::ate | std::ios::binary};
@@ -1174,6 +1199,7 @@ static Result<std::vector<char>> read_shader(const std::filesystem::path path) {
 
 Result<UnlinkedShader> UnlinkedShader::create(const Engine& engine, const Config& config) {
     CONTEXT("Creating Vulkan unlinked shader");
+
     ASSERT(engine.device != nullptr);
     ASSERT(!config.path.empty());
     ASSERT(config.code_type == vk::ShaderCodeTypeEXT::eSpirv && "binary shader code types untested");
@@ -1213,6 +1239,7 @@ Result<UnlinkedShader> UnlinkedShader::create(const Engine& engine, const Config
 
 Result<GraphicsPipeline> GraphicsPipeline::create(const Engine& engine, const Config& config) {
     CONTEXT("Creating Vulkan graphics pipeline");
+
     ASSERT(engine.device != nullptr);
     ASSERT(!config.vertex_shader_path.empty());
     ASSERT(!config.fragment_shader_path.empty());
@@ -1284,6 +1311,7 @@ Result<GraphicsPipeline> GraphicsPipeline::create(const Engine& engine, const Co
 
 Fence Fence::create(const Engine& engine, const Config& config) {
     CONTEXT("Creating Vulkan fence");
+
     ASSERT(engine.device != nullptr);
 
     const auto vk_fence = engine.device.createFence({.flags = config.flags});
@@ -1303,6 +1331,7 @@ Fence Fence::create(const Engine& engine, const Config& config) {
 
 void Fence::wait(const Engine& engine) const {
     CONTEXT("Waiting for fence");
+
     ASSERT(engine.device != nullptr);
     ASSERT(m_fence != nullptr);
 
@@ -1319,6 +1348,7 @@ void Fence::wait(const Engine& engine) const {
 
 void Fence::reset(const Engine& engine) const {
     CONTEXT("Resetting fence");
+
     ASSERT(engine.device != nullptr);
     ASSERT(m_fence != nullptr);
 
@@ -1332,6 +1362,7 @@ void Fence::reset(const Engine& engine) const {
 
 Semaphore Semaphore::create(const Engine& engine) {
     CONTEXT("Creating Vulkan semaphore");
+
     ASSERT(engine.device != nullptr);
 
     const auto vk_semaphore = engine.device.createSemaphore({});
@@ -1351,6 +1382,7 @@ Semaphore Semaphore::create(const Engine& engine) {
 
 vk::CommandPool create_command_pool(const Engine& engine, const vk::CommandPoolCreateFlags flags) {
     CONTEXT("Creating Vulkan command pool");
+
     ASSERT(engine.device != nullptr);
     ASSERT(engine.queue_family_index != UINT32_MAX);
 
@@ -1369,6 +1401,7 @@ vk::CommandPool create_command_pool(const Engine& engine, const vk::CommandPoolC
 
 void allocate_command_buffers(const Engine& engine, const std::span<vk::CommandBuffer> out_cmds) {
     CONTEXT("Allocating Vulkan command buffers");
+
     ASSERT(engine.device != nullptr);
     ASSERT(engine.command_pool != nullptr);
 
@@ -1387,6 +1420,7 @@ void allocate_command_buffers(const Engine& engine, const std::span<vk::CommandB
 
 vk::CommandBuffer begin_single_time_commands(const Engine& engine) {
     CONTEXT("Beginning Vulkan single time command buffer");
+
     ASSERT(engine.device != nullptr);
     ASSERT(engine.single_time_command_pool != nullptr);
 
@@ -1417,6 +1451,7 @@ vk::CommandBuffer begin_single_time_commands(const Engine& engine) {
 
 void end_single_time_commands(const Engine& engine, const vk::CommandBuffer cmd) {
     CONTEXT("Ending Vulkan single time command buffer");
+
     ASSERT(engine.device != nullptr);
     ASSERT(engine.single_time_command_pool != nullptr);
     ASSERT(cmd != nullptr);
@@ -1467,6 +1502,7 @@ void end_single_time_commands(const Engine& engine, const vk::CommandBuffer cmd)
 
 Result<Window> Window::create(const Engine& engine, const bool fullscreen, const i32 width, const i32 height) {
     CONTEXT("Creating window");
+
     ASSERT(engine.instance != nullptr);
     ASSERT(engine.device != nullptr);
     ASSERT(engine.command_pool != nullptr);
@@ -1537,6 +1573,7 @@ Result<Window> Window::create(const Engine& engine, const bool fullscreen, const
 
 void Window::destroy(const Engine& engine) const {
     CONTEXT("Destroying window");
+
     ASSERT(engine.device != nullptr);
 
     for (const auto fence : m_frame_finished_fences) {
@@ -1567,6 +1604,7 @@ void Window::destroy(const Engine& engine) const {
 
 Result<void> Window::resize(const Engine& engine) {
     CONTEXT("Resizing window");
+
     ASSERT(engine.gpu != nullptr);
     ASSERT(engine.device != nullptr);
 
@@ -1651,6 +1689,8 @@ Result<void> Window::resize(const Engine& engine) {
 }
 
 Result<vk::CommandBuffer> Window::begin_frame(const Engine& engine) {
+    CONTEXT("Beginning frame");
+
     ASSERT(!m_recording);
     ASSERT(current_cmd() != nullptr);
     ASSERT(engine.device != nullptr);
@@ -1719,6 +1759,8 @@ Result<vk::CommandBuffer> Window::begin_frame(const Engine& engine) {
 }
 
 Result<void> Window::end_frame(const Engine& engine) {
+    CONTEXT("Ending frame");
+
     ASSERT(m_recording);
     ASSERT(m_swapchain != nullptr);
     ASSERT(current_cmd() != nullptr);
