@@ -40,31 +40,34 @@ template <typename F> DeferInternal<F> defer_function(F f) { return DeferInterna
 #define DEFER_INTERMEDIATE_3(x) DEFER_INTERMEDIATE_2(x, __COUNTER__)
 #define defer(code) auto DEFER_INTERMEDIATE_3(_defer_) = defer_function([&] { code; })
 
-thread_local inline std::vector<std::string> g_error_context = {};
-constexpr inline void push_error_context(const std::string&& context) { g_error_context.emplace_back(std::move(context)); }
-constexpr inline void pop_error_context() { g_error_context.pop_back(); }
+thread_local inline std::vector<std::string> g_stack_context = {};
+constexpr inline void push_stack_context(std::string&& context) { g_stack_context.emplace_back(std::move(context)); }
+constexpr inline void pop_stack_context() { g_stack_context.pop_back(); }
 
 [[noreturn]] inline void error_internal(const std::string_view message) {
-    std::cerr << "Error trace:\n";
-    for (const auto& context : g_error_context) {
-        std::cerr << "    Note: " << context << "\n";
+    std::cerr << "Error: " << message << "\n";
+    for (auto it = g_stack_context.rbegin(); it != g_stack_context.rend(); ++it) {
+        std::cerr << "    Trace: " << *it << "\n";
     }
-    std::cerr << "    Error: " << message << "\n";
     std::terminate();
 }
 
 inline void warn_internal(const std::string_view message) {
-    std::cerr << std::format("Warning: {}\n    Context: {}\n", message, g_error_context.back());
+    std::cerr << "Warning: " << message << "\n";
+    for (auto it = g_stack_context.rbegin(); it != g_stack_context.rend(); ++it) {
+        std::cerr << "    Trace: " << *it << "\n";
+    }
 }
 
-inline void info_internal(const std::string_view message) {
-    std::cerr << "Info: " << message << "\n";
-}
+inline void info_internal(const std::string_view message) { std::cout << "Info: " << message << "\n"; }
 
-#define CONTEXT(context, ...) push_error_context(std::format(context, __VA_ARGS__)); defer(pop_error_context());
-#define ERROR(message, ...) { error_internal(std::format(message, __VA_ARGS__)); }
-#define WARN(message, ...) { warn_internal(std::format(message, __VA_ARGS__)); }
-#define INFO(message, ...) { info_internal(std::format(message, __VA_ARGS__)); }
+#define CONTEXT(message, ...) push_stack_context(std::format(message, __VA_ARGS__)); defer(pop_stack_context());
+#define CONTEXT_PUSH(message, ...) push_stack_context(std::format(message, __VA_ARGS__));
+#define CONTEXT_POP(message, ...) defer(pop_stack_context());
+
+#define ERROR(message, ...) error_internal(std::format(message, __VA_ARGS__));
+#define WARN(message, ...) warn_internal(std::format(message, __VA_ARGS__));
+#define INFO(message, ...) info_internal(std::format(message, __VA_ARGS__));
 
 #define ASSERT(condition) { if (!(condition)) [[unlikely]] ERROR("Assertion failed: {}", #condition); }
 
@@ -113,49 +116,21 @@ enum class Err : u8 {
     Unknown = 0,
 
     // Initialization
-    GlfwFailure,
-    CouldNotInitializeGlfw,
-    VulkanFailure,
     VulkanLayerUnavailable,
     VulkanExtensionUnavailable,
     VulkanFeatureUnavailable,
     VulkanIncompatibleDriver,
-    VkPhysicalDevicesUnavailable,
-    VkPhysicalDevicesUnsuitable,
+    NoCompatibleVkPhysicalDevice,
     VkQueueFamilyUnavailable,
     VkQueueUnavailable,
-    VkSwapchainImagesUnavailable,
-    InvalidWindowSize,
+
+    // Window
+    MonitorUnvailable,
+    InvalidWindow,
+    FrameTimeout,
 
     // Vulkan
-    CouldNotCreateVmaAllocator,
-    CouldNotCreateVkCommandPool,
-    CouldNotAllocateVkCommandBuffers,
-    CouldNotCreateVkFence,
-    CouldNotCreateVkSemaphore,
-    CouldNotCreateVkSwapchain,
-    CouldNotCreateVkDescriptorSetLayout,
-    CouldNotCreateVkPipelineLayout,
-    CouldNotCreateVkShader,
-    CouldNotCreateVkDescriptorPool,
     CouldNotAllocateVkDescriptorSets,
-    CouldNotCreateVkSampler,
-
-    CouldNotCreateGpuBuffer,
-    CouldNotWriteGpuBuffer,
-    CouldNotCreateGpuImage,
-    CouldNotCreateGpuImageView,
-    CouldNotWriteGpuImage,
-    CouldNotGenerateMipmaps,
-
-    CouldNotBeginVkCommandBuffer,
-    CouldNotEndVkCommandBuffer,
-    CouldNotSubmitVkCommandBuffer,
-    CouldNotAcquireVkSwapchainImage,
-    CouldNotPresentVkSwapchainImage,
-    CouldNotWaitForVkFence,
-    CouldNotWaitForVkQueue,
-    CouldNotWaitForVkDevice,
 
     // File
     ShaderFileNotFound,
@@ -174,49 +149,19 @@ constexpr std::string_view to_string(Err code) {
         HG_MAKE_ERROR_STRING(Unknown);
 
         // Initialization
-        HG_MAKE_ERROR_STRING(GlfwFailure);
-        HG_MAKE_ERROR_STRING(CouldNotInitializeGlfw);
-        HG_MAKE_ERROR_STRING(VulkanFailure);
         HG_MAKE_ERROR_STRING(VulkanLayerUnavailable);
         HG_MAKE_ERROR_STRING(VulkanExtensionUnavailable);
         HG_MAKE_ERROR_STRING(VulkanFeatureUnavailable);
         HG_MAKE_ERROR_STRING(VulkanIncompatibleDriver);
-        HG_MAKE_ERROR_STRING(VkPhysicalDevicesUnavailable);
-        HG_MAKE_ERROR_STRING(VkPhysicalDevicesUnsuitable);
+        HG_MAKE_ERROR_STRING(NoCompatibleVkPhysicalDevice);
         HG_MAKE_ERROR_STRING(VkQueueFamilyUnavailable);
         HG_MAKE_ERROR_STRING(VkQueueUnavailable);
-        HG_MAKE_ERROR_STRING(VkSwapchainImagesUnavailable);
-        HG_MAKE_ERROR_STRING(InvalidWindowSize);
+        HG_MAKE_ERROR_STRING(MonitorUnvailable);
 
-        // Vulkan
-        HG_MAKE_ERROR_STRING(CouldNotCreateVmaAllocator);
-        HG_MAKE_ERROR_STRING(CouldNotCreateVkCommandPool);
-        HG_MAKE_ERROR_STRING(CouldNotAllocateVkCommandBuffers);
-        HG_MAKE_ERROR_STRING(CouldNotCreateVkFence);
-        HG_MAKE_ERROR_STRING(CouldNotCreateVkSemaphore);
-        HG_MAKE_ERROR_STRING(CouldNotCreateVkSwapchain);
-        HG_MAKE_ERROR_STRING(CouldNotCreateVkDescriptorSetLayout);
-        HG_MAKE_ERROR_STRING(CouldNotCreateVkPipelineLayout);
-        HG_MAKE_ERROR_STRING(CouldNotCreateVkShader);
-        HG_MAKE_ERROR_STRING(CouldNotCreateVkDescriptorPool);
+        HG_MAKE_ERROR_STRING(InvalidWindow);
+        HG_MAKE_ERROR_STRING(FrameTimeout);
+
         HG_MAKE_ERROR_STRING(CouldNotAllocateVkDescriptorSets);
-        HG_MAKE_ERROR_STRING(CouldNotCreateVkSampler);
-
-        HG_MAKE_ERROR_STRING(CouldNotCreateGpuBuffer);
-        HG_MAKE_ERROR_STRING(CouldNotWriteGpuBuffer);
-        HG_MAKE_ERROR_STRING(CouldNotCreateGpuImage);
-        HG_MAKE_ERROR_STRING(CouldNotCreateGpuImageView);
-        HG_MAKE_ERROR_STRING(CouldNotWriteGpuImage);
-        HG_MAKE_ERROR_STRING(CouldNotGenerateMipmaps);
-
-        HG_MAKE_ERROR_STRING(CouldNotBeginVkCommandBuffer);
-        HG_MAKE_ERROR_STRING(CouldNotEndVkCommandBuffer);
-        HG_MAKE_ERROR_STRING(CouldNotSubmitVkCommandBuffer);
-        HG_MAKE_ERROR_STRING(CouldNotAcquireVkSwapchainImage);
-        HG_MAKE_ERROR_STRING(CouldNotPresentVkSwapchainImage);
-        HG_MAKE_ERROR_STRING(CouldNotWaitForVkFence);
-        HG_MAKE_ERROR_STRING(CouldNotWaitForVkQueue);
-        HG_MAKE_ERROR_STRING(CouldNotWaitForVkDevice);
 
         // File
         HG_MAKE_ERROR_STRING(ShaderFileNotFound);

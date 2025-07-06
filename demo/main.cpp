@@ -138,16 +138,19 @@ int main() {
 
         const auto frame_result = window->draw_frame(*engine, *renderer);
         if (frame_result.has_err()) {
-            if (frame_result.err() == Err::InvalidWindowSize) {
+            switch (frame_result.err()) {
+            case Err::FrameTimeout: WARN("Frame timeout"); break;
+            case Err::InvalidWindow: {
                 for (int w = 0, h = 0; w == 0 || h == 0; glfwGetWindowSize(window->window(), &w, &h)) {
                     glfwPollEvents();
                 }
                 const auto res = window->resize(*engine);
                 if (res.has_err())
                     ERROR("Could not resize window");
-                renderer->resize(*engine, window->extent());
-            } else {
-                ERROR(errf(frame_result));
+                    renderer->resize(*engine, window->extent());
+                }
+                break;
+            default: ERROR(errf(frame_result));
             }
         }
     }

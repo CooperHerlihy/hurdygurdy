@@ -30,20 +30,14 @@ Result<DefaultRenderer> DefaultRenderer::create(const Engine& engine, const vk::
         .sample_count = vk::SampleCountFlagBits::e4,
     });
 
-    const auto set_layout = create_descriptor_set_layout(engine, std::array{
+    pipeline->m_set_layout = create_descriptor_set_layout(engine, std::array{
         vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex},
         vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eFragment},
     });
-    if (set_layout.has_err())
-        return set_layout.err();
-    pipeline->m_set_layout = *set_layout;
 
-    const auto descriptor_pool = create_descriptor_pool(engine, 1, std::array{
+    pipeline->m_descriptor_pool = create_descriptor_pool(engine, 1, std::array{
         vk::DescriptorPoolSize{vk::DescriptorType::eUniformBuffer, 2}
     });
-    if (descriptor_pool.has_err())
-        return descriptor_pool.err();
-    pipeline->m_descriptor_pool = *descriptor_pool;
 
     const auto global_set = allocate_descriptor_set(engine, pipeline->m_descriptor_pool, pipeline->m_set_layout);
     if (global_set.has_err())
@@ -201,12 +195,9 @@ void DefaultRenderer::cmd_draw(
 Result<SkyboxPipeline> SkyboxPipeline::create(const Engine& engine, const DefaultRenderer& renderer) {
     auto pipeline = ok<SkyboxPipeline>();
 
-    const auto set_layout = create_descriptor_set_layout(engine, std::array{
+    pipeline->m_set_layout = create_descriptor_set_layout(engine, std::array{
         vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment},
     });
-    if (set_layout.has_err())
-        return set_layout.err();
-    pipeline->m_set_layout = *set_layout;
 
     std::array set_layouts = {renderer.get_global_set_layout(), pipeline->m_set_layout};
 
@@ -220,12 +211,9 @@ Result<SkyboxPipeline> SkyboxPipeline::create(const Engine& engine, const Defaul
         return graphics_pipeline.err();
     pipeline->m_pipeline= *graphics_pipeline;
 
-    const auto descriptor_pool = create_descriptor_pool(engine, 1, std::array{
+    pipeline->m_descriptor_pool = create_descriptor_pool(engine, 1, std::array{
         vk::DescriptorPoolSize{vk::DescriptorType::eCombinedImageSampler, 1}
     });
-    if (descriptor_pool.has_err())
-        return descriptor_pool.err();
-    pipeline->m_descriptor_pool = *descriptor_pool;
 
     const auto set = allocate_descriptor_set(engine, pipeline->m_descriptor_pool, pipeline->m_set_layout);
     if (set.has_err())
@@ -241,7 +229,7 @@ Result<SkyboxPipeline> SkyboxPipeline::create(const Engine& engine, const Defaul
 Result<void> SkyboxPipeline::load_skybox(const Engine& engine, const std::filesystem::path path) {
     ASSERT(!path.empty());
 
-    const auto cubemap = Texture::create_cubemap(engine, path, {
+    const auto cubemap = Texture::from_cubemap_file(engine, path, {
         .format = vk::Format::eR8G8B8A8Srgb,
         .aspect_flags = vk::ImageAspectFlagBits::eColor,
         .sampler_type = Sampler::Linear,
@@ -316,14 +304,11 @@ void SkyboxPipeline::cmd_draw(const vk::CommandBuffer cmd, const vk::DescriptorS
 Result<PbrPipeline> PbrPipeline::create(const Engine& engine, const DefaultRenderer& renderer) {
     auto pipeline = ok<PbrPipeline>();
 
-    const auto set_layout = create_descriptor_set_layout(
+    pipeline->m_set_layout = create_descriptor_set_layout(
         engine,
         std::array{vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, MaxTextures, vk::ShaderStageFlagBits::eFragment},},
         std::array{vk::DescriptorBindingFlags{vk::DescriptorBindingFlagBits::ePartiallyBound}}
     );
-    if (set_layout.has_err())
-        return set_layout.err();
-    pipeline->m_set_layout = *set_layout;
 
     ASSERT(renderer.get_global_set_layout() != nullptr);
     std::array set_layouts = {renderer.get_global_set_layout(), pipeline->m_set_layout};
@@ -341,12 +326,9 @@ Result<PbrPipeline> PbrPipeline::create(const Engine& engine, const DefaultRende
         return graphics_pipeline.err();
     pipeline->m_pipeline = *graphics_pipeline;
 
-    const auto descriptor_pool = create_descriptor_pool(engine, 1, std::array{
+    pipeline->m_descriptor_pool = create_descriptor_pool(engine, 1, std::array{
         vk::DescriptorPoolSize{vk::DescriptorType::eCombinedImageSampler, MaxTextures}
     });
-    if (descriptor_pool.has_err())
-        return descriptor_pool.err();
-    pipeline->m_descriptor_pool = *descriptor_pool;
 
     const auto texture_set = allocate_descriptor_set(engine, pipeline->m_descriptor_pool, pipeline->m_set_layout);
     if (texture_set.has_err())
