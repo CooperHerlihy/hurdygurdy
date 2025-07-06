@@ -386,8 +386,73 @@ private:
     std::array<vk::ShaderEXT, 2> m_shaders = {};
 };
 
-[[nodiscard]] vk::Fence create_fence(const Engine& engine, vk::FenceCreateFlags flags);
-[[nodiscard]] vk::Semaphore create_semaphore(const Engine& engine);
+class Fence {
+public:
+    vk::Fence get() const { return m_fence; }
+
+    struct Config {
+        vk::FenceCreateFlags flags = {};
+    };
+    [[nodiscard]] static Fence create(const Engine& engine, const Config& config);
+
+    void destroy(const Engine& engine) const {
+        CONTEXT("Destroying fence");
+        ASSERT(engine.device != nullptr);
+        ASSERT(m_fence != nullptr);
+        engine.device.destroyFence(m_fence);
+    }
+
+    void wait(const Engine& engine) const {
+        CONTEXT("Waiting for fence");
+        ASSERT(engine.device != nullptr);
+        ASSERT(m_fence != nullptr);
+
+        const auto wait_result = engine.device.waitForFences({m_fence}, vk::True, 1'000'000'000);
+        switch (wait_result) {
+            case vk::Result::eSuccess: break;
+            case vk::Result::eTimeout: WARN("Vulkan timed out"); break;
+            case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
+            case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
+            case vk::Result::eErrorDeviceLost: ERROR("Vulkan device lost");
+            default: ERROR("Unexpected Vulkan error");
+        }
+    }
+
+    void reset(const Engine& engine) const {
+        CONTEXT("Resetting fence");
+        ASSERT(engine.device != nullptr);
+        ASSERT(m_fence != nullptr);
+
+        const auto reset_result = engine.device.resetFences({m_fence});
+        switch (reset_result) {
+            case vk::Result::eSuccess: break;
+            case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
+            default: ERROR("Unexpected Vulkan error");
+        }
+    }
+
+private:
+    vk::Fence m_fence = nullptr;
+};
+
+class Semaphore {
+public:
+    vk::Semaphore get() const { return m_semaphore; }
+    vk::Semaphore* ptr() { return &m_semaphore; }
+
+    [[nodiscard]] static Semaphore create(const Engine& engine);
+
+    void destroy(const Engine& engine) const {
+        CONTEXT("Destroying semaphore");
+        ASSERT(engine.device != nullptr);
+        ASSERT(m_semaphore != nullptr);
+        engine.device.destroySemaphore(m_semaphore);
+    }
+
+private:
+    vk::Semaphore m_semaphore = nullptr;
+};
+
 
 [[nodiscard]] vk::CommandPool create_command_pool(const Engine& engine, vk::CommandPoolCreateFlags flags);
 void allocate_command_buffers(const Engine& engine, const std::span<vk::CommandBuffer> out_cmds);
@@ -503,14 +568,14 @@ private:
 
     [[nodiscard]] vk::CommandBuffer& current_cmd() { return m_command_buffers[m_current_frame_index]; }
     [[nodiscard]] vk::Image& current_image() { return m_swapchain_images[m_current_image_index]; }
-    [[nodiscard]] vk::Fence& is_frame_finished() { return m_frame_finished_fences[m_current_frame_index]; }
-    [[nodiscard]] vk::Semaphore& is_image_available() { return m_image_available_semaphores[m_current_frame_index]; }
-    [[nodiscard]] vk::Semaphore& is_ready_to_present() { return m_ready_to_present_semaphores[m_current_image_index]; }
+    [[nodiscard]] Fence& is_frame_finished() { return m_frame_finished_fences[m_current_frame_index]; }
+    [[nodiscard]] Semaphore& is_image_available() { return m_image_available_semaphores[m_current_frame_index]; }
+    [[nodiscard]] Semaphore& is_ready_to_present() { return m_ready_to_present_semaphores[m_current_image_index]; }
     [[nodiscard]] const vk::CommandBuffer& current_cmd() const { return m_command_buffers[m_current_frame_index]; }
     [[nodiscard]] const vk::Image& current_image() const { return m_swapchain_images[m_current_image_index]; }
-    [[nodiscard]] const vk::Fence& is_frame_finished() const { return m_frame_finished_fences[m_current_frame_index]; }
-    [[nodiscard]] const vk::Semaphore& is_image_available() const { return m_image_available_semaphores[m_current_frame_index]; }
-    [[nodiscard]] const vk::Semaphore& is_ready_to_present() const { return m_ready_to_present_semaphores[m_current_image_index]; }
+    [[nodiscard]] const Fence& is_frame_finished() const { return m_frame_finished_fences[m_current_frame_index]; }
+    [[nodiscard]] const Semaphore& is_image_available() const { return m_image_available_semaphores[m_current_frame_index]; }
+    [[nodiscard]] const Semaphore& is_ready_to_present() const { return m_ready_to_present_semaphores[m_current_image_index]; }
 
     GLFWwindow* m_window = nullptr;
     vk::SurfaceKHR m_surface = {};
@@ -522,9 +587,9 @@ private:
     u32 m_current_frame_index = 0;
     bool m_recording = false;
     std::array<vk::CommandBuffer, MaxFramesInFlight> m_command_buffers = {};
-    std::array<vk::Fence, MaxFramesInFlight> m_frame_finished_fences = {};
-    std::array<vk::Semaphore, MaxFramesInFlight> m_image_available_semaphores = {};
-    std::array<vk::Semaphore, MaxSwapchainImages> m_ready_to_present_semaphores = {};
+    std::array<Fence, MaxFramesInFlight> m_frame_finished_fences = {};
+    std::array<Semaphore, MaxFramesInFlight> m_image_available_semaphores = {};
+    std::array<Semaphore, MaxSwapchainImages> m_ready_to_present_semaphores = {};
 };
 
 } // namespace hg

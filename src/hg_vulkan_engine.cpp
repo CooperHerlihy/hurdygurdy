@@ -1279,32 +1279,42 @@ Result<GraphicsPipeline> GraphicsPipeline::create(const Engine& engine, const Co
     return pipeline;
 }
 
-vk::Fence create_fence(const Engine& engine, const vk::FenceCreateFlags flags) {
+Fence Fence::create(const Engine& engine, const Config& config) {
     CONTEXT("Creating Vulkan fence");
     ASSERT(engine.device != nullptr);
 
-    const auto fence = engine.device.createFence({.flags = flags});
-    switch (fence.result) {
+    const auto vk_fence = engine.device.createFence({.flags = config.flags});
+    switch (vk_fence.result) {
         case vk::Result::eSuccess: break;
         case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
         case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
         default: ERROR("Unexpected Vulkan error");
     }
-    return fence.value;
+
+    Fence fence = {};
+    fence.m_fence = vk_fence.value;
+
+    ASSERT(fence.m_fence != nullptr);
+    return fence;
 }
 
-vk::Semaphore create_semaphore(const Engine& engine) {
+Semaphore Semaphore::create(const Engine& engine) {
     CONTEXT("Creating Vulkan semaphore");
     ASSERT(engine.device != nullptr);
 
-    const auto semaphore = engine.device.createSemaphore({});
-    switch (semaphore.result) {
+    const auto vk_semaphore = engine.device.createSemaphore({});
+    switch (vk_semaphore.result) {
         case vk::Result::eSuccess: break;
         case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
         case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
         default: ERROR("Unexpected Vulkan error");
     }
-    return semaphore.value;
+
+    Semaphore semaphore = {};
+    semaphore.m_semaphore = vk_semaphore.value;
+
+    ASSERT(semaphore.m_semaphore != nullptr);
+    return semaphore;
 }
 
 vk::CommandPool create_command_pool(const Engine& engine, const vk::CommandPoolCreateFlags flags) {
@@ -1471,13 +1481,13 @@ Result<Window> Window::create(const Engine& engine, const bool fullscreen, const
     allocate_command_buffers(engine, window->m_command_buffers);
 
     for (auto& fence : window->m_frame_finished_fences) {
-        fence = create_fence(engine, vk::FenceCreateFlagBits::eSignaled);
+        fence = Fence::create(engine, {vk::FenceCreateFlagBits::eSignaled});
     }
     for (auto& semaphore : window->m_image_available_semaphores) {
-        semaphore = create_semaphore(engine);
+        semaphore = Semaphore::create(engine);
     }
     for (auto& semaphore : window->m_ready_to_present_semaphores) {
-        semaphore = create_semaphore(engine);
+        semaphore = Semaphore::create(engine);
     }
 
     ASSERT(window->m_window != nullptr);
@@ -1490,15 +1500,6 @@ Result<Window> Window::create(const Engine& engine, const bool fullscreen, const
     for (const auto cmd : window->m_command_buffers) {
         ASSERT(cmd != nullptr);
     }
-    for (const auto fence : window->m_frame_finished_fences) {
-        ASSERT(fence != nullptr);
-    }
-    for (const auto semaphore : window->m_image_available_semaphores) {
-        ASSERT(semaphore != nullptr);
-    }
-    for (const auto semaphore : window->m_ready_to_present_semaphores) {
-        ASSERT(semaphore != nullptr);
-    }
     return window;
 }
 
@@ -1507,16 +1508,13 @@ void Window::destroy(const Engine& engine) const {
     ASSERT(engine.device != nullptr);
 
     for (const auto fence : m_frame_finished_fences) {
-        ASSERT(fence != nullptr);
-        engine.device.destroyFence(fence);
+        fence.destroy(engine);
     }
     for (const auto semaphore : m_image_available_semaphores) {
-        ASSERT(semaphore != nullptr);
-        engine.device.destroySemaphore(semaphore);
+        semaphore.destroy(engine);
     }
     for (const auto semaphore : m_ready_to_present_semaphores) {
-        ASSERT(semaphore != nullptr);
-        engine.device.destroySemaphore(semaphore);
+        semaphore.destroy(engine);
     }
 
     ASSERT(engine.command_pool != nullptr);
@@ -1623,29 +1621,16 @@ Result<void> Window::resize(const Engine& engine) {
 Result<vk::CommandBuffer> Window::begin_frame(const Engine& engine) {
     ASSERT(!m_recording);
     ASSERT(current_cmd() != nullptr);
-    ASSERT(is_frame_finished() != nullptr);
-    ASSERT(is_image_available() != nullptr);
     ASSERT(engine.device != nullptr);
 
     m_current_frame_index = (m_current_frame_index + 1) % MaxFramesInFlight;
 
-    const auto wait_result = engine.device.waitForFences({is_frame_finished()}, vk::True, 1'000'000'000);
-    switch (wait_result) {
-        case vk::Result::eSuccess: break;
-        case vk::Result::eTimeout: return Err::FrameTimeout;
-        case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
-        case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
-        case vk::Result::eErrorDeviceLost: ERROR("Vulkan device lost");
-        default: ERROR("Unexpected Vulkan error");
-    }
-    const auto reset_result = engine.device.resetFences({is_frame_finished()});
-    switch (reset_result) {
-        case vk::Result::eSuccess: break;
-        case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
-        default: ERROR("Unexpected Vulkan error");
-    }
+    is_frame_finished().wait(engine);
+    is_frame_finished().reset(engine);
 
-    const auto acquire_result = engine.device.acquireNextImageKHR(m_swapchain, 1'000'000'000, is_image_available(), nullptr);
+    const auto acquire_result = engine.device.acquireNextImageKHR(
+        m_swapchain, 1'000'000'000, is_image_available().get(), nullptr
+    );
     switch (acquire_result.result) {
         case vk::Result::eSuccess: break;
         case vk::Result::eTimeout: return Err::FrameTimeout;
@@ -1705,8 +1690,6 @@ Result<void> Window::end_frame(const Engine& engine) {
     ASSERT(m_recording);
     ASSERT(m_swapchain != nullptr);
     ASSERT(current_cmd() != nullptr);
-    ASSERT(is_image_available() != nullptr);
-    ASSERT(is_ready_to_present() != nullptr);
     ASSERT(engine.device != nullptr);
 
     const auto end_result = current_cmd().end();
@@ -1722,15 +1705,15 @@ Result<void> Window::end_frame(const Engine& engine) {
     constexpr vk::PipelineStageFlags wait_stage = vk::PipelineStageFlagBits::eColorAttachmentOutput;
     vk::SubmitInfo submit_info = {
         .waitSemaphoreCount = 1,
-        .pWaitSemaphores = &is_image_available(),
+        .pWaitSemaphores = is_image_available().ptr(),
         .pWaitDstStageMask = &wait_stage,
         .commandBufferCount = 1,
         .pCommandBuffers = &current_cmd(),
         .signalSemaphoreCount = 1,
-        .pSignalSemaphores = &is_ready_to_present(),
+        .pSignalSemaphores = is_ready_to_present().ptr(),
     };
 
-    const auto submit_result = engine.queue.submit({submit_info}, is_frame_finished());
+    const auto submit_result = engine.queue.submit({submit_info}, is_frame_finished().get());
     switch (submit_result) {
         case vk::Result::eSuccess: break;
         case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
@@ -1741,7 +1724,7 @@ Result<void> Window::end_frame(const Engine& engine) {
 
     const vk::PresentInfoKHR present_info = {
         .waitSemaphoreCount = 1,
-        .pWaitSemaphores = &is_ready_to_present(),
+        .pWaitSemaphores = is_ready_to_present().ptr(),
         .swapchainCount = 1,
         .pSwapchains = &m_swapchain,
         .pImageIndices = &m_current_image_index,
