@@ -402,34 +402,8 @@ public:
         engine.device.destroyFence(m_fence);
     }
 
-    void wait(const Engine& engine) const {
-        CONTEXT("Waiting for fence");
-        ASSERT(engine.device != nullptr);
-        ASSERT(m_fence != nullptr);
-
-        const auto wait_result = engine.device.waitForFences({m_fence}, vk::True, 1'000'000'000);
-        switch (wait_result) {
-            case vk::Result::eSuccess: break;
-            case vk::Result::eTimeout: WARN("Vulkan timed out"); break;
-            case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
-            case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
-            case vk::Result::eErrorDeviceLost: ERROR("Vulkan device lost");
-            default: ERROR("Unexpected Vulkan error");
-        }
-    }
-
-    void reset(const Engine& engine) const {
-        CONTEXT("Resetting fence");
-        ASSERT(engine.device != nullptr);
-        ASSERT(m_fence != nullptr);
-
-        const auto reset_result = engine.device.resetFences({m_fence});
-        switch (reset_result) {
-            case vk::Result::eSuccess: break;
-            case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
-            default: ERROR("Unexpected Vulkan error");
-        }
-    }
+    void wait(const Engine& engine) const;
+    void reset(const Engine& engine) const;
 
 private:
     vk::Fence m_fence = nullptr;
