@@ -49,7 +49,7 @@ Result<ModelData> ModelData::load_gltf(const std::filesystem::path path) {
     model->roughness = 0.5f;
     model->metalness = 0.0f;
 
-    std::vector<Vertex> primitives = {};
+    std::vector<Vertex> primitives{};
     for (const auto& mesh : asset->meshes) {
         for (const auto& primitive : mesh.primitives) {
             if (primitive.materialIndex.has_value()) {

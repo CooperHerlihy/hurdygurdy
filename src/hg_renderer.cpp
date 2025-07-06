@@ -10,54 +10,51 @@
 
 namespace hg {
 
-Result<DefaultRenderer> DefaultRenderer::create(const Engine& engine, const vk::Extent2D window_size) {
+DefaultRenderer DefaultRenderer::create(const Engine& engine, const vk::Extent2D window_size) {
     ASSERT(window_size.width != 0);
     ASSERT(window_size.height != 0);
 
-    auto pipeline = ok<DefaultRenderer>();
+    DefaultRenderer pipeline{};
 
-    pipeline->m_color_image = GpuImageAndView::create(engine, {
-        .extent = {window_size.width, window_size.height, 1},
+    pipeline.m_color_image = GpuImageAndView::create(engine, {
+        .extent{window_size.width, window_size.height, 1},
         .format = Window::SwapchainImageFormat,
         .usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc,
         .sample_count = vk::SampleCountFlagBits::e4,
     });
-    pipeline->m_depth_image = GpuImageAndView::create(engine, {
-        .extent = {window_size.width, window_size.height, 1},
+    pipeline.m_depth_image = GpuImageAndView::create(engine, {
+        .extent{window_size.width, window_size.height, 1},
         .format = vk::Format::eD32Sfloat,
         .usage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
         .aspect_flags = vk::ImageAspectFlagBits::eDepth,
         .sample_count = vk::SampleCountFlagBits::e4,
     });
 
-    pipeline->m_set_layout = create_descriptor_set_layout(engine, std::array{
+    pipeline.m_set_layout = create_descriptor_set_layout(engine, std::array{
         vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex},
         vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eFragment},
     });
 
-    pipeline->m_descriptor_pool = create_descriptor_pool(engine, 1, std::array{
+    pipeline.m_descriptor_pool = create_descriptor_pool(engine, 1, std::array{
         vk::DescriptorPoolSize{vk::DescriptorType::eUniformBuffer, 2}
     });
 
-    const auto global_set = allocate_descriptor_set(engine, pipeline->m_descriptor_pool, pipeline->m_set_layout);
-    if (global_set.has_err())
-        return global_set.err();
-    pipeline->m_global_set = *global_set;
+    pipeline.m_global_set = *allocate_descriptor_set(engine, pipeline.m_descriptor_pool, pipeline.m_set_layout);;
 
-    pipeline->m_vp_buffer = GpuBuffer::create(engine, {
+    pipeline.m_vp_buffer = GpuBuffer::create(engine, {
         sizeof(ViewProjectionUniform),
         vk::BufferUsageFlagBits::eUniformBuffer, GpuBuffer::RandomAccess
     });
-    pipeline->m_light_buffer = GpuBuffer::create(engine, {
+    pipeline.m_light_buffer = GpuBuffer::create(engine, {
         sizeof(LightUniform) * MaxLights,
         vk::BufferUsageFlagBits::eUniformBuffer, GpuBuffer::RandomAccess
     });
 
-    write_uniform_buffer_descriptor(engine, {pipeline->m_vp_buffer.get(), sizeof(ViewProjectionUniform)}, pipeline->m_global_set, 0);
-    write_uniform_buffer_descriptor(engine, {pipeline->m_light_buffer.get(), sizeof(LightUniform)}, pipeline->m_global_set, 1);
+    write_uniform_buffer_descriptor(engine, {pipeline.m_vp_buffer.get(), sizeof(ViewProjectionUniform)}, pipeline.m_global_set, 0);
+    write_uniform_buffer_descriptor(engine, {pipeline.m_light_buffer.get(), sizeof(LightUniform)}, pipeline.m_global_set, 1);
 
-    ASSERT(pipeline->m_set_layout != nullptr);
-    ASSERT(pipeline->m_global_set != nullptr);
+    ASSERT(pipeline.m_set_layout != nullptr);
+    ASSERT(pipeline.m_global_set != nullptr);
     return pipeline;
 }
 
@@ -82,7 +79,7 @@ void DefaultRenderer::resize(const Engine& engine, const vk::Extent2D window_siz
 
     m_color_image.destroy(engine);
     m_color_image = GpuImageAndView::create(engine, {
-        .extent = {window_size.width, window_size.height, 1},
+        .extent{window_size.width, window_size.height, 1},
         .format = Window::SwapchainImageFormat,
         .usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc,
         .sample_count = vk::SampleCountFlagBits::e4,
@@ -90,7 +87,7 @@ void DefaultRenderer::resize(const Engine& engine, const vk::Extent2D window_siz
 
     m_depth_image.destroy(engine);
     m_depth_image = GpuImageAndView::create(engine, {
-        .extent = {window_size.width, window_size.height, 1},
+        .extent{window_size.width, window_size.height, 1},
         .format = vk::Format::eD32Sfloat,
         .usage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
         .aspect_flags = vk::ImageAspectFlagBits::eDepth,
@@ -99,10 +96,10 @@ void DefaultRenderer::resize(const Engine& engine, const vk::Extent2D window_siz
 }
 
 void DefaultRenderer::update_camera(const Engine& engine, const Cameraf& camera) {
-    const glm::mat4 view = camera.view();
+    const glm::mat4 view{camera.view()};
 
     ASSERT(m_lights.size() < MaxLights);
-    LightUniform lights = {.count = m_lights.size()};
+    LightUniform lights{.count = m_lights.size()};
     for (usize i = 0; i < m_lights.size(); ++i) {
         lights.vals[i] = {
             .position = view * m_lights[i].position,
@@ -132,22 +129,22 @@ void DefaultRenderer::cmd_draw(
         )
         .build_and_run();
 
-    const vk::RenderingAttachmentInfo color_attachment = {
+    const vk::RenderingAttachmentInfo color_attachment{
         .imageView = m_color_image.get_view(),
         .imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
         .loadOp = vk::AttachmentLoadOp::eDontCare,
         .storeOp = vk::AttachmentStoreOp::eStore,
-        .clearValue = {{std::array{0.0f, 0.0f, 0.0f, 1.0f}}},
+        .clearValue{{std::array{0.0f, 0.0f, 0.0f, 1.0f}}},
     };
-    const vk::RenderingAttachmentInfo depth_attachment = {
+    const vk::RenderingAttachmentInfo depth_attachment{
         .imageView = m_depth_image.get_view(),
         .imageLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
         .loadOp = vk::AttachmentLoadOp::eClear,
         .storeOp = vk::AttachmentStoreOp::eDontCare,
-        .clearValue = {.depthStencil = {.depth = 1.0f, .stencil = 0}},
+        .clearValue{.depthStencil{.depth = 1.0f, .stencil = 0}},
     };
     cmd.beginRendering({
-        .renderArea = {{0, 0}, window_size},
+        .renderArea{{0, 0}, window_size},
         .layerCount = 1,
         .colorAttachmentCount = 1,
         .pColorAttachments = &color_attachment,
@@ -171,10 +168,10 @@ void DefaultRenderer::cmd_draw(
         .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
         .build_and_run();
 
-    const vk::ImageResolve2 resolve = {
-        .srcSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
-        .dstSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
-        .extent = vk::Extent3D{window_size.width, window_size.height, 1},
+    const vk::ImageResolve2 resolve{
+        .srcSubresource{vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+        .dstSubresource{vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+        .extent{window_size.width, window_size.height, 1},
     };
     cmd.resolveImage2({
         .srcImage = m_color_image.get_image(),
@@ -192,37 +189,41 @@ void DefaultRenderer::cmd_draw(
         .build_and_run();
 }
 
-Result<SkyboxPipeline> SkyboxPipeline::create(const Engine& engine, const DefaultRenderer& renderer) {
-    auto pipeline = ok<SkyboxPipeline>();
+SkyboxPipeline SkyboxPipeline::create(const Engine& engine, const DefaultRenderer& renderer) {
+    ASSERT(renderer.get_global_set_layout() != nullptr);
 
-    pipeline->m_set_layout = create_descriptor_set_layout(engine, std::array{
+    SkyboxPipeline pipeline{};
+
+    pipeline.m_set_layout = create_descriptor_set_layout(engine, std::array{
         vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment},
     });
 
-    std::array set_layouts = {renderer.get_global_set_layout(), pipeline->m_set_layout};
+    std::array set_layouts{renderer.get_global_set_layout(), pipeline.m_set_layout};
 
     const auto graphics_pipeline = GraphicsPipeline::create(engine, {
         .set_layouts = set_layouts,
-        .push_ranges = {},
+        .push_ranges{},
         .vertex_shader_path = "../shaders/skybox.vert.spv",
         .fragment_shader_path = "../shaders/skybox.frag.spv",
     });
-    if (graphics_pipeline.has_err())
-        return graphics_pipeline.err();
-    pipeline->m_pipeline= *graphics_pipeline;
+    if (graphics_pipeline.has_err()) {
+        if (graphics_pipeline.err() == Err::ShaderFileNotFound || graphics_pipeline.err() == Err::ShaderFileInvalid) {
+            ERROR("Could not find valid default shaders");
+        } else {
+            ERROR("Unexpected error: {}", to_string(graphics_pipeline.err()));
+        }
+    }
+    pipeline.m_pipeline= *graphics_pipeline;
 
-    pipeline->m_descriptor_pool = create_descriptor_pool(engine, 1, std::array{
+    pipeline.m_descriptor_pool = create_descriptor_pool(engine, 1, std::array{
         vk::DescriptorPoolSize{vk::DescriptorType::eCombinedImageSampler, 1}
     });
 
-    const auto set = allocate_descriptor_set(engine, pipeline->m_descriptor_pool, pipeline->m_set_layout);
-    if (set.has_err())
-        return set.err();
-    pipeline->m_set = *set;
+    pipeline.m_set = *allocate_descriptor_set(engine, pipeline.m_descriptor_pool, pipeline.m_set_layout);;
 
-    ASSERT(pipeline->m_set_layout != nullptr);
-    ASSERT(pipeline->m_descriptor_pool != nullptr);
-    ASSERT(pipeline->m_set != nullptr);
+    ASSERT(pipeline.m_set_layout != nullptr);
+    ASSERT(pipeline.m_descriptor_pool != nullptr);
+    ASSERT(pipeline.m_set != nullptr);
     return pipeline;
 }
 
@@ -240,7 +241,7 @@ Result<void> SkyboxPipeline::load_skybox(const Engine& engine, const std::filesy
     m_cubemap = *cubemap;
 
     const auto mesh = generate_cube();
-    std::vector<glm::vec3> positions = {};
+    std::vector<glm::vec3> positions{};
     positions.reserve(mesh.vertices.size());
     for (const auto vertex : mesh.vertices) {
         positions.emplace_back(vertex.position);
@@ -301,18 +302,19 @@ void SkyboxPipeline::cmd_draw(const vk::CommandBuffer cmd, const vk::DescriptorS
     cmd.setCullMode(vk::CullModeFlagBits::eNone);
 }
 
-Result<PbrPipeline> PbrPipeline::create(const Engine& engine, const DefaultRenderer& renderer) {
-    auto pipeline = ok<PbrPipeline>();
+PbrPipeline PbrPipeline::create(const Engine& engine, const DefaultRenderer& renderer) {
+    ASSERT(renderer.get_global_set_layout() != nullptr);
 
-    pipeline->m_set_layout = create_descriptor_set_layout(
+    PbrPipeline pipeline{};
+
+    pipeline.m_set_layout = create_descriptor_set_layout(
         engine,
         std::array{vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, MaxTextures, vk::ShaderStageFlagBits::eFragment},},
         std::array{vk::DescriptorBindingFlags{vk::DescriptorBindingFlagBits::ePartiallyBound}}
     );
 
-    ASSERT(renderer.get_global_set_layout() != nullptr);
-    std::array set_layouts = {renderer.get_global_set_layout(), pipeline->m_set_layout};
-    std::array push_ranges = {vk::PushConstantRange{
+    std::array set_layouts{renderer.get_global_set_layout(), pipeline.m_set_layout};
+    std::array push_ranges{vk::PushConstantRange{
         vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, 0, sizeof(PushConstant)
     }};
 
@@ -322,22 +324,23 @@ Result<PbrPipeline> PbrPipeline::create(const Engine& engine, const DefaultRende
         .vertex_shader_path = "../shaders/pbr.vert.spv",
         .fragment_shader_path = "../shaders/pbr.frag.spv",
     });
-    if (graphics_pipeline.has_err())
-        return graphics_pipeline.err();
-    pipeline->m_pipeline = *graphics_pipeline;
+    if (graphics_pipeline.has_err()) {
+        if (graphics_pipeline.err() == Err::ShaderFileNotFound || graphics_pipeline.err() == Err::ShaderFileInvalid) {
+            ERROR("Could not find valid default shaders");
+        } else {
+            ERROR("Unexpected error: {}", to_string(graphics_pipeline.err()));
+        }
+    }
+    pipeline.m_pipeline = *graphics_pipeline;
 
-    pipeline->m_descriptor_pool = create_descriptor_pool(engine, 1, std::array{
+    pipeline.m_descriptor_pool = create_descriptor_pool(engine, 1, std::array{
         vk::DescriptorPoolSize{vk::DescriptorType::eCombinedImageSampler, MaxTextures}
     });
+    pipeline.m_texture_set = *allocate_descriptor_set(engine, pipeline.m_descriptor_pool, pipeline.m_set_layout);;
 
-    const auto texture_set = allocate_descriptor_set(engine, pipeline->m_descriptor_pool, pipeline->m_set_layout);
-    if (texture_set.has_err())
-        return texture_set.err();
-    pipeline->m_texture_set = *texture_set;
-
-    ASSERT(pipeline->m_set_layout != nullptr);
-    ASSERT(pipeline->m_descriptor_pool != nullptr);
-    ASSERT(pipeline->m_texture_set != nullptr);
+    ASSERT(pipeline.m_set_layout != nullptr);
+    ASSERT(pipeline.m_descriptor_pool != nullptr);
+    ASSERT(pipeline.m_texture_set != nullptr);
     return pipeline;
 }
 
@@ -378,7 +381,7 @@ void PbrPipeline::cmd_draw(const vk::CommandBuffer cmd, const vk::DescriptorSet 
     for (const auto& ticket : m_render_queue) {
         const auto& model = m_models[ticket.model.index];
 
-        PushConstant model_push = {
+        PushConstant model_push{
             .model = ticket.transform.matrix(),
             .normal_map_index = to_u32(model.normal_map.index),
             .texture_index = to_u32(model.texture.index),

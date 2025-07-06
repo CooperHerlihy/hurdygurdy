@@ -40,26 +40,26 @@ template <typename F> DeferInternal<F> defer_function(F f) { return DeferInterna
 #define DEFER_INTERMEDIATE_3(x) DEFER_INTERMEDIATE_2(x, __COUNTER__)
 #define defer(code) auto DEFER_INTERMEDIATE_3(_defer_) = defer_function([&] { code; })
 
-thread_local inline std::vector<std::string> g_stack_context = {};
+thread_local inline std::vector<std::string> g_stack_context{};
 constexpr inline void push_stack_context(std::string&& context) { g_stack_context.emplace_back(std::move(context)); }
 constexpr inline void pop_stack_context() { g_stack_context.pop_back(); }
 
-[[noreturn]] inline void error_internal(const std::string_view message) {
-    std::cerr << "Error: " << message << "\n";
+[[noreturn]] inline void error_internal(std::string&& message) {
+    std::cerr << "Error: " << std::move(message) << "\n";
     for (auto it = g_stack_context.rbegin(); it != g_stack_context.rend(); ++it) {
         std::cerr << "    Trace: " << *it << "\n";
     }
     std::terminate();
 }
 
-inline void warn_internal(const std::string_view message) {
-    std::cerr << "Warning: " << message << "\n";
+inline void warn_internal(std::string&& message) {
+    std::cerr << "Warning: " << std::move(message) << "\n";
     for (auto it = g_stack_context.rbegin(); it != g_stack_context.rend(); ++it) {
         std::cerr << "    Trace: " << *it << "\n";
     }
 }
 
-inline void info_internal(const std::string_view message) { std::cout << "Info: " << message << "\n"; }
+inline void info_internal(std::string&& message) { std::cout << "Info: " << std::move(message) << "\n"; }
 
 #define CONTEXT(message, ...) push_stack_context(std::format(message, __VA_ARGS__)); defer(pop_stack_context());
 #define CONTEXT_PUSH(message, ...) push_stack_context(std::format(message, __VA_ARGS__));
@@ -95,7 +95,7 @@ public:
     [[nodiscard]] constexpr f64 delta_sec() const { return static_cast<f64>(m_delta.count()) / 1'000'000'000.0; }
 
 private:
-    std::chrono::high_resolution_clock::time_point m_previous = std::chrono::high_resolution_clock::now();
+    std::chrono::high_resolution_clock::time_point m_previous{std::chrono::high_resolution_clock::now()};
     std::chrono::nanoseconds m_delta{0};
 };
 
@@ -109,7 +109,7 @@ public:
     }
 
 private:
-    std::chrono::high_resolution_clock::time_point m_begin = std::chrono::high_resolution_clock::now();
+    std::chrono::high_resolution_clock::time_point m_begin{std::chrono::high_resolution_clock::now()};
 };
 
 enum class Err : u8 {
@@ -234,7 +234,7 @@ public:
     template <typename U = std::remove_cv_t<T>> constexpr T val_or(U&& default_value) && { return !has_err() ? std::move(**this) : static_cast<T>(std::forward<U>(default_value)); }
 
 private:
-    std::variant<T, Err> m_result = {};
+    std::variant<T, Err> m_result{};
 };
 
 template <> class Result<void> {
@@ -249,7 +249,7 @@ public:
     }
 
 private:
-    std::optional<Err> m_err = std::nullopt;
+    std::optional<Err> m_err{std::nullopt};
 };
 
 constexpr Result<void> ok() { return std::in_place_type_t<void>(); }

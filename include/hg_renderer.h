@@ -19,22 +19,22 @@ public:
     };
 
     struct ViewProjectionUniform {
-        glm::mat4 projection = {1.0f};
-        glm::mat4 view = {1.0f};
+        glm::mat4 projection{1.0f};
+        glm::mat4 view{1.0f};
     };
 
     static constexpr usize MaxLights = 10;
     struct Light {
-        glm::vec4 position = {};
-        glm::vec4 color = {};
+        glm::vec4 position{};
+        glm::vec4 color{};
     };
 
     struct LightUniform {
         alignas(16) usize count = 0;
-        alignas(16) Light vals[MaxLights] = {};
+        alignas(16) Light vals[MaxLights]{};
     };
 
-    [[nodiscard]] static Result<DefaultRenderer> create(const Engine& engine, vk::Extent2D window_size);
+    [[nodiscard]] static DefaultRenderer create(const Engine& engine, vk::Extent2D window_size);
     void destroy(const Engine& engine) const;
     void resize(const Engine& engine, const vk::Extent2D window_size);
 
@@ -62,46 +62,46 @@ public:
     }
 
 private:
-    GpuImageAndView m_color_image = {};
-    GpuImageAndView m_depth_image = {};
+    GpuImageAndView m_color_image{};
+    GpuImageAndView m_depth_image{};
 
-    vk::DescriptorSetLayout m_set_layout = {};
-    vk::DescriptorPool m_descriptor_pool = {};
-    vk::DescriptorSet m_global_set = {};
-    GpuBuffer m_vp_buffer = {};
-    GpuBuffer m_light_buffer = {};
-    std::vector<Light> m_lights = {};
+    vk::DescriptorSetLayout m_set_layout{};
+    vk::DescriptorPool m_descriptor_pool{};
+    vk::DescriptorSet m_global_set{};
+    GpuBuffer m_vp_buffer{};
+    GpuBuffer m_light_buffer{};
+    std::vector<Light> m_lights{};
 
-    std::vector<const Pipeline*> m_pipelines = {};
+    std::vector<const Pipeline*> m_pipelines{};
 };
 
 class SkyboxPipeline : public DefaultRenderer::Pipeline {
 public:
-    [[nodiscard]] static Result<SkyboxPipeline> create(const Engine& engine, const DefaultRenderer& pipeline);
+    [[nodiscard]] static SkyboxPipeline create(const Engine& engine, const DefaultRenderer& pipeline);
     void destroy(const Engine& engine) const;
     void cmd_draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) const override;
 
     [[nodiscard]] Result<void> load_skybox(const Engine& engine, const std::filesystem::path path);
 
 private:
-    vk::DescriptorSetLayout m_set_layout = {};
-    GraphicsPipeline m_pipeline = {};
+    vk::DescriptorSetLayout m_set_layout{};
+    GraphicsPipeline m_pipeline{};
 
-    vk::DescriptorPool m_descriptor_pool = {};
-    vk::DescriptorSet m_set = {};
+    vk::DescriptorPool m_descriptor_pool{};
+    vk::DescriptorSet m_set{};
 
-    Texture m_cubemap = {};
-    GpuBuffer m_index_buffer = {};
-    GpuBuffer m_vertex_buffer = {};
+    Texture m_cubemap{};
+    GpuBuffer m_index_buffer{};
+    GpuBuffer m_vertex_buffer{};
 };
 
 class PbrPipeline : public DefaultRenderer::Pipeline {
 public:
-    [[nodiscard]] static Result<PbrPipeline> create(const Engine& engine, const DefaultRenderer& pipeline);
+    [[nodiscard]] static PbrPipeline create(const Engine& engine, const DefaultRenderer& pipeline);
     void destroy(const Engine& engine) const;
 
     struct PushConstant {
-        glm::mat4 model = {1.0f};
+        glm::mat4 model{1.0f};
         u32 normal_map_index = UINT32_MAX;
         u32 texture_index = UINT32_MAX;
         float roughness = 0.0f;
@@ -124,10 +124,10 @@ public:
 
     struct Model {
         u32 index_count = 0;
-        GpuBuffer index_buffer = {};
-        GpuBuffer vertex_buffer = {};
-        TextureHandle normal_map = {};
-        TextureHandle texture = {};
+        GpuBuffer index_buffer{};
+        GpuBuffer vertex_buffer{};
+        TextureHandle normal_map{};
+        TextureHandle texture{};
         float roughness = 0.0;
         float metalness = 0.0;
 
@@ -156,8 +156,8 @@ public:
     );
 
     struct RenderTicket {
-        ModelHandle model = {};
-        Transform3Df transform = {};
+        ModelHandle model{};
+        Transform3Df transform{};
     };
 
     void queue_model(const ModelHandle model, const Transform3Df& transform) {
@@ -170,15 +170,15 @@ public:
     }
 
 private:
-    vk::DescriptorSetLayout m_set_layout = {};
-    GraphicsPipeline m_pipeline = {};
+    vk::DescriptorSetLayout m_set_layout{};
+    GraphicsPipeline m_pipeline{};
 
-    vk::DescriptorPool m_descriptor_pool = {};
-    vk::DescriptorSet m_texture_set = {};
+    vk::DescriptorPool m_descriptor_pool{};
+    vk::DescriptorSet m_texture_set{};
 
-    std::vector<Texture> m_textures = {};
-    std::vector<Model> m_models = {};
-    std::vector<RenderTicket> m_render_queue = {};
+    std::vector<Texture> m_textures{};
+    std::vector<Model> m_models{};
+    std::vector<RenderTicket> m_render_queue{};
 };
 
 } // namespace hg

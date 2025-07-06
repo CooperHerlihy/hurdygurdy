@@ -11,16 +11,15 @@
 #include <iostream>
 #include <span>
 #include <vector>
-#include <vulkan/vulkan_enums.hpp>
 
 namespace hg {
 
 #ifdef NDEBUG
-inline constexpr std::array<const char*, 0> ValidationLayers = {};
+inline constexpr std::array<const char*, 0> ValidationLayers{};
 #else
-inline constexpr std::array ValidationLayers = {"VK_LAYER_KHRONOS_validation"};
+inline constexpr std::array ValidationLayers{"VK_LAYER_KHRONOS_validation"};
 #endif
-constexpr std::array DeviceExtensions = {
+constexpr std::array DeviceExtensions{
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
     VK_EXT_SHADER_OBJECT_EXTENSION_NAME,
     VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
@@ -42,7 +41,7 @@ static vk::Bool32 debug_callback(
     return VK_FALSE;
 }
 
-const vk::DebugUtilsMessengerCreateInfoEXT DebugUtilsMessengerCreateInfo = {
+const vk::DebugUtilsMessengerCreateInfoEXT DebugUtilsMessengerCreateInfo{
     .messageSeverity = vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose
                      | vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning
                      | vk::DebugUtilsMessageSeverityFlagBitsEXT::eError,
@@ -90,7 +89,7 @@ static Result<std::vector<const char*>> get_instance_extensions() {
 static Result<vk::Instance> init_instance() {
     CONTEXT("Initializing Vulkan instance");
 
-    const vk::ApplicationInfo app_info = {
+    const vk::ApplicationInfo app_info{
         .pApplicationName = "Hurdy Gurdy",
         .applicationVersion = 0,
         .pEngineName = "Hurdy Gurdy",
@@ -204,8 +203,8 @@ static Result<vk::Device> init_device(const Engine& engine) {
     ASSERT(engine.gpu != nullptr);
     ASSERT(engine.queue_family_index != UINT32_MAX);
 
-    vk::PhysicalDeviceBufferAddressFeaturesEXT buffer_address_feature = {.pNext = nullptr, .bufferDeviceAddress = vk::True};
-    vk::PhysicalDeviceDescriptorIndexingFeatures descriptor_indexing_features = {
+    vk::PhysicalDeviceBufferAddressFeaturesEXT buffer_address_feature{.pNext = nullptr, .bufferDeviceAddress = vk::True};
+    vk::PhysicalDeviceDescriptorIndexingFeatures descriptor_indexing_features{
         .pNext = &buffer_address_feature,
         // .shaderInputAttachmentArrayDynamicIndexing = true,
         // .shaderUniformTexelBufferArrayDynamicIndexing = true,
@@ -228,10 +227,10 @@ static Result<vk::Device> init_device(const Engine& engine) {
         // .descriptorBindingVariableDescriptorCount = true,
         .runtimeDescriptorArray = true,
     };
-    vk::PhysicalDeviceShaderObjectFeaturesEXT shader_object_feature = {.pNext = &descriptor_indexing_features, .shaderObject = vk::True};
-    vk::PhysicalDeviceDynamicRenderingFeatures dynamic_rendering_feature = {.pNext = &shader_object_feature, .dynamicRendering = vk::True};
-    vk::PhysicalDeviceSynchronization2Features synchronization2_feature = {.pNext = &dynamic_rendering_feature, .synchronization2 = vk::True};
-    constexpr vk::PhysicalDeviceFeatures features = {
+    vk::PhysicalDeviceShaderObjectFeaturesEXT shader_object_feature{.pNext = &descriptor_indexing_features, .shaderObject = vk::True};
+    vk::PhysicalDeviceDynamicRenderingFeatures dynamic_rendering_feature{.pNext = &shader_object_feature, .dynamicRendering = vk::True};
+    vk::PhysicalDeviceSynchronization2Features synchronization2_feature{.pNext = &dynamic_rendering_feature, .synchronization2 = vk::True};
+    constexpr vk::PhysicalDeviceFeatures features{
         .sampleRateShading = vk::True,
         .samplerAnisotropy = vk::True,
     };
@@ -275,7 +274,7 @@ static VmaAllocator init_allocator(const Engine& engine) {
     ASSERT(engine.gpu != nullptr);
     ASSERT(engine.device != nullptr);
 
-    VmaAllocatorCreateInfo info = {};
+    VmaAllocatorCreateInfo info{};
     info.physicalDevice = engine.gpu;
     info.device = engine.device;
     info.instance = engine.instance;
@@ -374,12 +373,12 @@ GpuBuffer GpuBuffer::create(const Engine& engine, const Config& config) {
     ASSERT(config.size != 0);
     ASSERT(config.usage != vk::BufferUsageFlags{});
 
-    VkBufferCreateInfo buffer_info = {};
+    VkBufferCreateInfo buffer_info{};
     buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     buffer_info.size = config.size;
     buffer_info.usage = static_cast<VkBufferUsageFlags>(config.usage);
 
-    VmaAllocationCreateInfo alloc_info = {};
+    VmaAllocationCreateInfo alloc_info{};
     if (config.memory_type == RandomAccess) {
         alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
         alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
@@ -467,7 +466,7 @@ GpuImage GpuImage::create(const Engine& engine, const Config& config) {
     ASSERT(config.sample_count != vk::SampleCountFlagBits{});
     ASSERT(config.mip_levels > 0);
 
-    VkImageCreateInfo image_info = {};
+    VkImageCreateInfo image_info{};
     image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     image_info.imageType = static_cast<VkImageType>(config.dimensions);
     image_info.format = static_cast<VkFormat>(config.format);
@@ -477,7 +476,7 @@ GpuImage GpuImage::create(const Engine& engine, const Config& config) {
     image_info.samples = static_cast<VkSampleCountFlagBits>(config.sample_count);
     image_info.usage = static_cast<VkImageUsageFlags>(config.usage);
 
-    VmaAllocationCreateInfo alloc_info = {};
+    VmaAllocationCreateInfo alloc_info{};
     alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
     alloc_info.flags = 0;
 
@@ -494,7 +493,7 @@ GpuImage GpuImage::create(const Engine& engine, const Config& config) {
         default: ERROR("Unexpected Vulkan error");
     }
 
-    GpuImage image = {};
+    GpuImage image{};
     image.m_image = vk_image;
     image.m_allocation = vma_allocation;
 
@@ -513,7 +512,7 @@ GpuImage GpuImage::create_cubemap(const Engine& engine, const CubemapConfig& con
     ASSERT(config.format != vk::Format::eUndefined);
     ASSERT(config.usage != vk::ImageUsageFlags{});
 
-    VkImageCreateInfo image_info = {};
+    VkImageCreateInfo image_info{};
     image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     image_info.imageType = VK_IMAGE_TYPE_2D;
     image_info.format = static_cast<VkFormat>(config.format);
@@ -524,7 +523,7 @@ GpuImage GpuImage::create_cubemap(const Engine& engine, const CubemapConfig& con
     image_info.usage = static_cast<VkImageUsageFlags>(config.usage);
     image_info.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
 
-    VmaAllocationCreateInfo alloc_info = {};
+    VmaAllocationCreateInfo alloc_info{};
     alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
     alloc_info.flags = 0;
 
@@ -541,7 +540,7 @@ GpuImage GpuImage::create_cubemap(const Engine& engine, const CubemapConfig& con
         default: ERROR("Unexpected Vulkan error");
     }
 
-    GpuImage cubemap = {};
+    GpuImage cubemap{};
     cubemap.m_allocation = allocation;
     cubemap.m_image = image;
 
@@ -577,8 +576,8 @@ void GpuImage::write(const Engine& engine, const WriteConfig& config) const {
             .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
             .build_and_run();
 
-        const vk::BufferImageCopy2 copy_region = {
-            .imageSubresource = {config.subresource.aspectMask, 0, 0, 1},
+        const vk::BufferImageCopy2 copy_region{
+            .imageSubresource{config.subresource.aspectMask, 0, 0, 1},
             .imageExtent = data.extent
         };
         cmd.copyBufferToImage2({
@@ -618,7 +617,7 @@ GpuImageView GpuImageView::create(const Engine& engine, const Config& config) {
         default: ERROR("Unexpected Vulkan error");
     }
 
-    GpuImageView view = {};
+    GpuImageView view{};
     view.m_view = vk_view.value;
     return view;
 }
@@ -670,10 +669,10 @@ GpuImageAndView GpuImageAndView::create(const Engine& engine, const Config& conf
         .image = image.get(),
         .dimensions = view_dimensions,
         .format = config.format,
-        .subresource = {.aspectMask = config.aspect_flags, .levelCount = config.mip_levels, .layerCount = 1},
+        .subresource{.aspectMask = config.aspect_flags, .levelCount = config.mip_levels, .layerCount = 1},
     });
 
-    GpuImageAndView image_and_view = {};
+    GpuImageAndView image_and_view{};
     image_and_view.m_image = image;
     image_and_view.m_view = view;
     return image_and_view;
@@ -690,7 +689,7 @@ GpuImageAndView GpuImageAndView::create_cubemap(const Engine& engine, const Cube
     ASSERT(config.format != vk::Format::eUndefined);
     ASSERT(config.aspect_flags != vk::ImageAspectFlagBits{});
 
-    const vk::Extent3D staging_extent = {to_u32(config.data.width), to_u32(config.data.height), 1};
+    const vk::Extent3D staging_extent{to_u32(config.data.width), to_u32(config.data.height), 1};
 
     const auto staging_image = GpuImage::create(engine, {
         .extent = staging_extent, 
@@ -704,7 +703,7 @@ GpuImageAndView GpuImageAndView::create_cubemap(const Engine& engine, const Cube
         vk::ImageLayout::eTransferSrcOptimal
     });
 
-    const vk::Extent3D face_extent = {staging_extent.width / 4, staging_extent.height / 3, 1};
+    const vk::Extent3D face_extent{staging_extent.width / 4, staging_extent.height / 3, 1};
 
     const auto image = GpuImage::create_cubemap(engine, {
         .face_extent = face_extent,
@@ -716,7 +715,7 @@ GpuImageAndView GpuImageAndView::create_cubemap(const Engine& engine, const Cube
         .image = image.get(),
         .dimensions = vk::ImageViewType::eCube,
         .format = config.format,
-        .subresource = {.aspectMask = config.aspect_flags, .levelCount = 1, .layerCount = 6},
+        .subresource{.aspectMask = config.aspect_flags, .levelCount = 1, .layerCount = 6},
     });
 
     submit_single_time_commands(engine, [&](const vk::CommandBuffer cmd) {
@@ -725,41 +724,41 @@ GpuImageAndView GpuImageAndView::create_cubemap(const Engine& engine, const Cube
             .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
             .build_and_run();
 
-        std::array copies = {
+        std::array copies{
             vk::ImageCopy2{
-                .srcSubresource = {config.aspect_flags, 0, 0, 1},
-                .srcOffset = {config.data.width * 2 / 4, config.data.height * 1 / 3, 0},
-                .dstSubresource = {config.aspect_flags, 0, 0, 1},
+                .srcSubresource{config.aspect_flags, 0, 0, 1},
+                .srcOffset{config.data.width * 2 / 4, config.data.height * 1 / 3, 0},
+                .dstSubresource{config.aspect_flags, 0, 0, 1},
                 .extent = face_extent,
             },
             vk::ImageCopy2{
-                .srcSubresource = {config.aspect_flags, 0, 0, 1},
-                .srcOffset = {config.data.width * 0 / 4, config.data.height * 1 / 3, 0},
-                .dstSubresource = {config.aspect_flags, 0, 1, 1},
+                .srcSubresource{config.aspect_flags, 0, 0, 1},
+                .srcOffset{config.data.width * 0 / 4, config.data.height * 1 / 3, 0},
+                .dstSubresource{config.aspect_flags, 0, 1, 1},
                 .extent = face_extent,
             },
             vk::ImageCopy2{
-                .srcSubresource = {config.aspect_flags, 0, 0, 1},
-                .srcOffset = {config.data.width * 1 / 4, config.data.height * 0 / 3, 0},
-                .dstSubresource = {config.aspect_flags, 0, 2, 1},
+                .srcSubresource{config.aspect_flags, 0, 0, 1},
+                .srcOffset{config.data.width * 1 / 4, config.data.height * 0 / 3, 0},
+                .dstSubresource{config.aspect_flags, 0, 2, 1},
                 .extent = face_extent,
             },
             vk::ImageCopy2{
-                .srcSubresource = {config.aspect_flags, 0, 0, 1},
-                .srcOffset = {config.data.width * 1 / 4, config.data.height * 2 / 3, 0},
-                .dstSubresource = {config.aspect_flags, 0, 3, 1},
+                .srcSubresource{config.aspect_flags, 0, 0, 1},
+                .srcOffset{config.data.width * 1 / 4, config.data.height * 2 / 3, 0},
+                .dstSubresource{config.aspect_flags, 0, 3, 1},
                 .extent = face_extent,
             },
             vk::ImageCopy2{
-                .srcSubresource = {config.aspect_flags, 0, 0, 1},
-                .srcOffset = {config.data.width * 1 / 4, config.data.height * 1 / 3, 0},
-                .dstSubresource = {config.aspect_flags, 0, 4, 1},
+                .srcSubresource{config.aspect_flags, 0, 0, 1},
+                .srcOffset{config.data.width * 1 / 4, config.data.height * 1 / 3, 0},
+                .dstSubresource{config.aspect_flags, 0, 4, 1},
                 .extent = face_extent,
             },
             vk::ImageCopy2{
-                .srcSubresource = {config.aspect_flags, 0, 0, 1},
-                .srcOffset = {config.data.width * 3 / 4, config.data.height * 1 / 3, 0},
-                .dstSubresource = {config.aspect_flags, 0, 5, 1},
+                .srcSubresource{config.aspect_flags, 0, 0, 1},
+                .srcOffset{config.data.width * 3 / 4, config.data.height * 1 / 3, 0},
+                .dstSubresource{config.aspect_flags, 0, 5, 1},
                 .extent = face_extent,
             },
         };
@@ -779,7 +778,7 @@ GpuImageAndView GpuImageAndView::create_cubemap(const Engine& engine, const Cube
             .build_and_run();
     });
 
-    GpuImageAndView cubemap = {};
+    GpuImageAndView cubemap{};
     cubemap.m_image = image;
     cubemap.m_view = view;
     return cubemap;
@@ -806,7 +805,7 @@ void GpuImageAndView::generate_mipmaps(
         ERROR("Format does not support optimal tiling with linear filtering");
 
     submit_single_time_commands(engine, [&](const vk::CommandBuffer cmd) {
-        vk::Offset3D mip_offset = {to_i32(extent.width), to_i32(extent.height), to_i32(extent.depth)};
+        vk::Offset3D mip_offset{to_i32(extent.width), to_i32(extent.height), to_i32(extent.depth)};
 
         BarrierBuilder(cmd)
             .add_image_barrier(m_image.get(), {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
@@ -819,9 +818,9 @@ void GpuImageAndView::generate_mipmaps(
                 .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
                 .build_and_run();
 
-            vk::ImageBlit2 region = {
-                .srcSubresource = {vk::ImageAspectFlagBits::eColor, level, 0, 1},
-                .dstSubresource = {vk::ImageAspectFlagBits::eColor, level + 1, 0, 1},
+            vk::ImageBlit2 region{
+                .srcSubresource{vk::ImageAspectFlagBits::eColor, level, 0, 1},
+                .dstSubresource{vk::ImageAspectFlagBits::eColor, level + 1, 0, 1},
             };
             region.srcOffsets[1] = mip_offset;
             if (mip_offset.x > 1)
@@ -864,7 +863,7 @@ Sampler Sampler::create(const Engine& engine, const Config& config) {
     ASSERT(config.mip_levels >= 1);
     const auto limits = engine.gpu.getProperties().limits;
 
-    vk::SamplerCreateInfo sampler_info = {
+    vk::SamplerCreateInfo sampler_info{
         .addressModeU = config.edge_mode,
         .addressModeV = config.edge_mode,
         .addressModeW = config.edge_mode,
@@ -893,7 +892,7 @@ Sampler Sampler::create(const Engine& engine, const Config& config) {
         default: ERROR("Unexpected Vulkan error");
     }
 
-    Sampler sampler = {};
+    Sampler sampler{};
     sampler.m_sampler = vk_sampler.value;
 
     ASSERT(sampler.m_sampler != nullptr);
@@ -917,7 +916,7 @@ Texture Texture::from_data(const Engine& engine, const GpuImage::Data& data, con
     image.write(engine, {
         .data = data,
         .final_layout = vk::ImageLayout::eShaderReadOnlyOptimal,
-        .subresource = {config.aspect_flags, 0, vk::RemainingMipLevels, 0, 1},
+        .subresource{config.aspect_flags, 0, vk::RemainingMipLevels, 0, 1},
     });
 
     if (mip_levels > 1) {
@@ -936,7 +935,7 @@ Texture Texture::from_data(const Engine& engine, const GpuImage::Data& data, con
         .mip_levels = mip_levels,
     });
 
-    Texture texture = {};
+    Texture texture{};
     texture.m_image = image;
     texture.m_sampler = sampler;
     return texture;
@@ -953,7 +952,7 @@ Result<Texture> Texture::from_file(const Engine& engine, const std::filesystem::
     return ok(from_data(engine, {
         .ptr = data->pixels.get(),
         .alignment = 4,
-        .extent = {to_u32(data->width), to_u32(data->height), 1}
+        .extent{to_u32(data->width), to_u32(data->height), 1}
     }, config));
 }
 
@@ -994,7 +993,7 @@ vk::DescriptorSetLayout create_descriptor_set_layout(
     if (!flags.empty())
         ASSERT(flags.size() == bindings.size());
 
-    const vk::DescriptorSetLayoutBindingFlagsCreateInfo flag_info = {
+    const vk::DescriptorSetLayoutBindingFlagsCreateInfo flag_info{
         .bindingCount = to_u32(flags.size()),
         .pBindingFlags = flags.data(),
     };
@@ -1061,7 +1060,7 @@ Result<void> allocate_descriptor_sets(
     }
     ASSERT(layouts.size() == out_sets.size());
 
-    const vk::DescriptorSetAllocateInfo alloc_info = {
+    const vk::DescriptorSetAllocateInfo alloc_info{
         .descriptorPool = pool,
         .descriptorSetCount = to_u32(layouts.size()),
         .pSetLayouts = layouts.data(),
@@ -1092,8 +1091,8 @@ void write_uniform_buffer_descriptor(
     ASSERT(buffer.buffer != nullptr);
     ASSERT(buffer.range != 0);
 
-    const vk::DescriptorBufferInfo buffer_info = {buffer.buffer, buffer.offset, buffer.range};
-    const vk::WriteDescriptorSet descriptor_write = {
+    const vk::DescriptorBufferInfo buffer_info{buffer.buffer, buffer.offset, buffer.range};
+    const vk::WriteDescriptorSet descriptor_write{
         .dstSet = set,
         .dstBinding = binding,
         .dstArrayElement = binding_array_index,
@@ -1112,11 +1111,11 @@ void write_image_sampler_descriptor(
     ASSERT(engine.device != nullptr);
     ASSERT(set != nullptr);
 
-    const vk::DescriptorImageInfo image_info = {
+    const vk::DescriptorImageInfo image_info{
         .sampler = texture.get_sampler(),
         .imageView = texture.get_view(),
         .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal};
-    const vk::WriteDescriptorSet descriptor_write = {
+    const vk::WriteDescriptorSet descriptor_write{
         .dstSet = set,
         .dstBinding = binding,
         .dstArrayElement = binding_array_index,
@@ -1131,7 +1130,7 @@ PipelineLayout PipelineLayout::create(const Engine& engine, const Config& config
     CONTEXT("Creating Vulkan pipeline layout");
     ASSERT(engine.device != nullptr);
 
-    vk::PipelineLayoutCreateInfo layout_info = {
+    vk::PipelineLayoutCreateInfo layout_info{
         .setLayoutCount = to_u32(config.set_layouts.size()),
         .pSetLayouts = config.set_layouts.data(),
         .pushConstantRangeCount = to_u32(config.push_ranges.size()),
@@ -1145,7 +1144,7 @@ PipelineLayout PipelineLayout::create(const Engine& engine, const Config& config
         default: ERROR("Unexpected Vulkan error");
     }
 
-    PipelineLayout layout = {};
+    PipelineLayout layout{};
     layout.m_pipeline_layout = vk_layout.value;
 
     ASSERT(layout.m_pipeline_layout != nullptr);
@@ -1225,14 +1224,19 @@ Result<GraphicsPipeline> GraphicsPipeline::create(const Engine& engine, const Co
         .push_ranges = config.push_ranges,
     });
 
+    CONTEXT_PUSH("Vertex shader: {}", config.vertex_shader_path.string());
     const auto vertex_code = read_shader(config.vertex_shader_path);
     if (vertex_code.has_err())
         return vertex_code.err();
+    CONTEXT_POP();
+
+    CONTEXT_PUSH("Fragment shader: {}", config.fragment_shader_path.string());
     const auto fragment_code = read_shader(config.fragment_shader_path);
     if (fragment_code.has_err())
         return fragment_code.err();
+    CONTEXT_POP();
 
-    std::array shader_infos = {
+    std::array shader_infos{
         vk::ShaderCreateInfoEXT{
             .flags = vk::ShaderCreateFlagBitsEXT::eLinkStage,
             .stage = vk::ShaderStageFlagBits::eVertex,
@@ -1249,7 +1253,7 @@ Result<GraphicsPipeline> GraphicsPipeline::create(const Engine& engine, const Co
         vk::ShaderCreateInfoEXT{
             .flags = vk::ShaderCreateFlagBitsEXT::eLinkStage,
             .stage = vk::ShaderStageFlagBits::eFragment,
-            .nextStage = {},
+            .nextStage{},
             .codeType = config.code_type,
             .codeSize = fragment_code->size(),
             .pCode = fragment_code->data(),
@@ -1261,7 +1265,7 @@ Result<GraphicsPipeline> GraphicsPipeline::create(const Engine& engine, const Co
         },
     };
 
-    std::array<vk::ShaderEXT, 2> shaders = {};
+    std::array<vk::ShaderEXT, 2> shaders{};
     const auto shader_result = engine.device.createShadersEXT(to_u32(shader_infos.size()), shader_infos.data(), nullptr, shaders.data());
     switch (shader_result) {
         case vk::Result::eSuccess: break;
@@ -1291,7 +1295,7 @@ Fence Fence::create(const Engine& engine, const Config& config) {
         default: ERROR("Unexpected Vulkan error");
     }
 
-    Fence fence = {};
+    Fence fence{};
     fence.m_fence = vk_fence.value;
 
     ASSERT(fence.m_fence != nullptr);
@@ -1339,7 +1343,7 @@ Semaphore Semaphore::create(const Engine& engine) {
         default: ERROR("Unexpected Vulkan error");
     }
 
-    Semaphore semaphore = {};
+    Semaphore semaphore{};
     semaphore.m_semaphore = vk_semaphore.value;
 
     ASSERT(semaphore.m_semaphore != nullptr);
@@ -1369,7 +1373,7 @@ void allocate_command_buffers(const Engine& engine, const std::span<vk::CommandB
     ASSERT(engine.device != nullptr);
     ASSERT(engine.command_pool != nullptr);
 
-    const vk::CommandBufferAllocateInfo alloc_info = {
+    const vk::CommandBufferAllocateInfo alloc_info{
         .commandPool = engine.command_pool,
         .commandBufferCount = to_u32(out_cmds.size()),
     };
@@ -1387,11 +1391,11 @@ vk::CommandBuffer begin_single_time_commands(const Engine& engine) {
     ASSERT(engine.device != nullptr);
     ASSERT(engine.single_time_command_pool != nullptr);
 
-    vk::CommandBufferAllocateInfo alloc_info = {
+    vk::CommandBufferAllocateInfo alloc_info{
         .commandPool = engine.single_time_command_pool,
         .commandBufferCount = 1,
     };
-    vk::CommandBuffer cmd = {};
+    vk::CommandBuffer cmd{};
     const auto cmd_result = engine.device.allocateCommandBuffers(&alloc_info, &cmd);
     switch (cmd_result) {
         case vk::Result::eSuccess: break;
@@ -1436,7 +1440,7 @@ void end_single_time_commands(const Engine& engine, const vk::CommandBuffer cmd)
     }
     defer(engine.device.destroyFence(fence.value));
 
-    vk::SubmitInfo submit_info = {
+    vk::SubmitInfo submit_info{
         .commandBufferCount = 1,
         .pCommandBuffers = &cmd,
     };
@@ -1633,10 +1637,10 @@ Result<void> Window::resize(const Engine& engine) {
     m_swapchain = new_swapchain.value;
     m_extent = surface_capabilities.currentExtent;
 
-    const vk::Result image_count_result = engine.device.getSwapchainImagesKHR(m_swapchain, &m_image_count, nullptr);
+    const auto image_count_result = engine.device.getSwapchainImagesKHR(m_swapchain, &m_image_count, nullptr);
     if (image_count_result != vk::Result::eSuccess)
         ERROR("Could not get swapchain images");
-    const vk::Result image_result = engine.device.getSwapchainImagesKHR(m_swapchain, &m_image_count, m_swapchain_images.data());
+    const auto image_result = engine.device.getSwapchainImagesKHR(m_swapchain, &m_image_count, m_swapchain_images.data());
     if (image_result != vk::Result::eSuccess)
         ERROR("Could not get swapchain images");
 
@@ -1683,13 +1687,13 @@ Result<vk::CommandBuffer> Window::begin_frame(const Engine& engine) {
     }
     m_recording = true;
 
-    const vk::Viewport viewport = {
+    const vk::Viewport viewport{
         0.0f, 0.0f,
         static_cast<f32>(m_extent.width), static_cast<f32>(m_extent.height),
         0.0f, 1.0f,
     };
     current_cmd().setViewportWithCount({viewport});
-    const vk::Rect2D scissor = {{0, 0}, m_extent};
+    const vk::Rect2D scissor{{0, 0}, m_extent};
     current_cmd().setScissorWithCount({scissor});
 
     current_cmd().setRasterizerDiscardEnable(vk::False);
@@ -1732,7 +1736,7 @@ Result<void> Window::end_frame(const Engine& engine) {
     m_recording = false;
 
     constexpr vk::PipelineStageFlags wait_stage = vk::PipelineStageFlagBits::eColorAttachmentOutput;
-    vk::SubmitInfo submit_info = {
+    vk::SubmitInfo submit_info{
         .waitSemaphoreCount = 1,
         .pWaitSemaphores = is_image_available().ptr(),
         .pWaitDstStageMask = &wait_stage,
@@ -1751,7 +1755,7 @@ Result<void> Window::end_frame(const Engine& engine) {
         default: ERROR("Unexpected Vulkan error");
     }
 
-    const vk::PresentInfoKHR present_info = {
+    const vk::PresentInfoKHR present_info{
         .waitSemaphoreCount = 1,
         .pWaitSemaphores = is_ready_to_present().ptr(),
         .swapchainCount = 1,

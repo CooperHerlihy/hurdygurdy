@@ -30,15 +30,15 @@ template <std::floating_point T> T smoothstep_quintic(const T t) {
 }
 
 template <typename T> struct Transform2D {
-    glm::vec<3, T> position = {0, 0, 0};
-    glm::vec<2, T> scale = {1, 1};
+    glm::vec<3, T> position{0, 0, 0};
+    glm::vec<2, T> scale{1, 1};
     T radians = 0;
 
     [[nodiscard]] constexpr glm::mat<4, 4, T> matrix() const noexcept {
         glm::mat<2, 2, T> m2{1};
         m2[0].x = scale.x;
         m2[1].y = scale.y;
-        glm::mat<2, 2, T> rot = {std::cos(radians), std::sin(radians), -std::sin(radians), std::cos(radians)};
+        glm::mat<2, 2, T> rot{std::cos(radians), std::sin(radians), -std::sin(radians), std::cos(radians)};
         m2 = rot * m2;
         glm::mat<4, 4, T> m4{m2};
         m4[3].x = position.x;
@@ -60,9 +60,9 @@ template <typename T> struct Transform2D {
 using Transform2Df = Transform2D<f32>;
 
 template <typename T> struct Transform3D {
-    glm::vec<3, T> position = {0, 0, 0};
-    glm::vec<3, T> scale = {1, 1, 1};
-    glm::qua<T> rotation = glm::qua<T>::wxyz(1, 0, 0, 0);
+    glm::vec<3, T> position{0, 0, 0};
+    glm::vec<3, T> scale{1, 1, 1};
+    glm::qua<T> rotation{1, 0, 0, 0};
 
     [[nodiscard]] constexpr glm::mat<4, 4, T> matrix() const noexcept {
         glm::mat<3, 3, T> m3{1};
@@ -94,12 +94,12 @@ template <typename T> struct Transform3D {
 using Transform3Df = Transform3D<f32>;
 
 template <typename T> struct Camera {
-    glm::vec<3, T> position = {0, 0, 0};
-    glm::qua<T> rotation = glm::qua<T>::wxyz(1, 0, 0, 0);
+    glm::vec<3, T> position{0, 0, 0};
+    glm::qua<T> rotation{1, 0, 0, 0};
 
     [[nodiscard]] constexpr glm::mat<4, 4, T> view() const noexcept {
-        glm::mat<4, 4, T> rot = glm::conjugate(rotation) * glm::mat<3, 3, T>{1};
-        glm::mat<4, 4, T> pos = {1};
+        glm::mat<4, 4, T> rot{glm::conjugate(rotation) * glm::mat<3, 3, T>{1}};
+        glm::mat<4, 4, T> pos{1};
         pos[3].x = -position.x;
         pos[3].y = -position.y;
         pos[3].z = -position.z;
@@ -111,7 +111,7 @@ template <typename T> struct Camera {
         return *this;
     }
     constexpr Camera& move(const glm::vec<3, T> dir, T distance) noexcept {
-        glm::vec<3, T> d = rotation * glm::vec<3, T>{dir.x, 0, dir.z};
+        glm::vec<3, T> d{rotation * glm::vec<3, T>{dir.x, 0, dir.z}};
         d.y = dir.y;
         position += glm::normalize(d) * distance;
         return *this;

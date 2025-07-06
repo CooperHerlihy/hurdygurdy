@@ -10,7 +10,7 @@ namespace hg {
 void create_tangents(std::span<Vertex> primitives) {
     ASSERT(primitives.size() % 3 == 0);
 
-    SMikkTSpaceInterface mikk_functions = {
+    SMikkTSpaceInterface mikk_functions{
         .m_getNumFaces = [](const SMikkTSpaceContext* pContext) {
             return static_cast<int>(static_cast<std::span<Vertex>*>(pContext->m_pUserData)->size() / 3);
         },
@@ -39,7 +39,7 @@ void create_tangents(std::span<Vertex> primitives) {
         },
         .m_setTSpace = nullptr,
     };
-    SMikkTSpaceContext mikk_context = {
+    SMikkTSpaceContext mikk_context{
         .m_pInterface = &mikk_functions,
         .m_pUserData = reinterpret_cast<void*>(&primitives),
     };
@@ -49,7 +49,7 @@ void create_tangents(std::span<Vertex> primitives) {
 Mesh Mesh::from_primitives(const std::span<const Vertex> primitives) {
     ASSERT(primitives.size() % 3 == 0);
 
-    Mesh mesh = {};
+    Mesh mesh{};
     mesh.indices.resize(primitives.size());
     mesh.vertices.resize(primitives.size());
     WeldMesh(
@@ -64,7 +64,7 @@ Mesh Mesh::from_primitives(const std::span<const Vertex> primitives) {
 }
 
 Mesh generate_square() {
-    std::vector<Vertex> square = {
+    std::vector<Vertex> square{
         { {-1.0f, -1.0f,  0.0f}, { 0.0f,  0.0f, -1.0f}, {}, { 0.0f,  0.0f}, },
         { {-1.0f,  1.0f,  0.0f}, { 0.0f,  0.0f, -1.0f}, {}, { 0.0f,  1.0f}, },
         { { 1.0f,  1.0f,  0.0f}, { 0.0f,  0.0f, -1.0f}, {}, { 1.0f,  1.0f}, },
@@ -77,7 +77,7 @@ Mesh generate_square() {
 }
 
 Mesh generate_cube() {
-    std::vector<Vertex> cube = {
+    std::vector<Vertex> cube{
         { {-1.0f, -1.0f,  1.0f}, { 0.0f, -1.0f,  0.0f}, {}, {0.0f, 0.0f}, },
         { {-1.0f, -1.0f, -1.0f}, { 0.0f, -1.0f,  0.0f}, {}, {0.0f, 1.0f}, },
         { { 1.0f, -1.0f, -1.0f}, { 0.0f, -1.0f,  0.0f}, {}, {1.0f, 1.0f}, },
@@ -128,7 +128,7 @@ Mesh generate_sphere(const glm::uvec2 fidelity) {
     ASSERT(fidelity.x >= 3);
     ASSERT(fidelity.y >= 2);
 
-    std::vector<Vertex> primitives = {};
+    std::vector<Vertex> primitives{};
     primitives.reserve((fidelity.x + 1) * (fidelity.y + 1) * 6);
 
     f32 h_next = -1.0f;
@@ -192,7 +192,7 @@ Mesh generate_sphere(const glm::uvec2 fidelity) {
     }
 
     create_tangents(primitives);
-    Mesh sphere = Mesh::from_primitives(primitives);
+    auto sphere = Mesh::from_primitives(primitives);
 
     ASSERT(!sphere.indices.empty());
     ASSERT(!sphere.vertices.empty());
@@ -200,7 +200,7 @@ Mesh generate_sphere(const glm::uvec2 fidelity) {
 }
 
 Image<glm::vec4> create_normals_from_heightmap(const Image<f32>& heightmap) {
-    Image<glm::vec4> normals = {{heightmap.width(), heightmap.height()}};
+    Image<glm::vec4> normals{{heightmap.width(), heightmap.height()}};
 
     for (usize v = 0; v < heightmap.height(); ++v) {
         for (usize u = 0; u < heightmap.width(); ++u) {
@@ -226,7 +226,7 @@ Image<glm::vec4> create_normals_from_heightmap(const Image<f32>& heightmap) {
 Image<f32> generate_value_noise(const glm::vec<2, usize> size, const Image<f32>& fixed_points) {
     ASSERT(fixed_points.width() < size.x);
     ASSERT(fixed_points.height() < size.y);
-    Image<f32> interpolated = size;
+    Image<f32> interpolated{size};
     for (usize v = 0; v < size.y; ++v) {
         for (usize u = 0; u < size.x; ++u) {
             const f32 x = static_cast<f32>(u) * static_cast<f32>(fixed_points.width()) / static_cast<f32>(size.x);
@@ -256,7 +256,7 @@ Image<f32> generate_value_noise(const glm::vec<2, usize> size, const Image<f32>&
 Image<f32> generate_perlin_noise(const glm::vec<2, usize> size, const Image<glm::vec2>& gradients) {
     ASSERT(gradients.width() < size.x);
     ASSERT(gradients.height() < size.y);
-    Image<f32> interpolated = size;
+    Image<f32> interpolated{size};
     for (usize v = 0; v < size.y; ++v) {
         for (usize u = 0; u < size.x; ++u) {
             const f32 x = static_cast<f32>(u) * static_cast<f32>(gradients.width()) / static_cast<f32>(size.x);
@@ -293,7 +293,7 @@ Image<f32> generate_fractal_value_noise(
     ASSERT(initial_size.x > 0 && initial_size.y > 0);
     ASSERT(max_octaves > 0);
 
-    Image<f32> image = size;
+    Image<f32> image{size};
     auto octave_size = initial_size;
     const usize octaves = std::min(
         max_octaves, static_cast<usize>(
@@ -323,7 +323,7 @@ Image<f32> generate_fractal_perlin_noise(
     ASSERT(initial_size.x > 0 && initial_size.y > 0);
     ASSERT(max_octaves > 0);
 
-    Image<f32> image = size;
+    Image<f32> image{size};
     auto octave_size = initial_size;
     const usize octaves = std::min(
         max_octaves, static_cast<usize>(

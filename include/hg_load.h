@@ -23,7 +23,7 @@ public:
 };
 
 struct ModelData {
-    Mesh mesh = {};
+    Mesh mesh{};
     float roughness = 0.0f;
     float metalness = 0.0f;
 

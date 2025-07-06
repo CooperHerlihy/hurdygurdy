@@ -7,17 +7,17 @@
 namespace hg {
 
 struct Vertex {
-    glm::vec3 position = {};
-    glm::vec3 normal = {};
-    glm::vec4 tangent = {};
-    glm::vec2 tex_coord = {};
+    glm::vec3 position{};
+    glm::vec3 normal{};
+    glm::vec4 tangent{};
+    glm::vec2 tex_coord{};
 };
 
 void create_tangents(std::span<Vertex> primitives);
 
 struct Mesh {
-    std::vector<u32> indices = {};
-    std::vector<Vertex> vertices = {};
+    std::vector<u32> indices{};
+    std::vector<Vertex> vertices{};
 
     [[nodiscard]] static Mesh from_primitives(std::span<const Vertex> primitives);
 };
@@ -54,12 +54,12 @@ public:
     }
 
 private:
-    std::vector<T> m_vals = {};
+    std::vector<T> m_vals{};
     usize m_stride = 0;
 };
 
 template<typename T, typename U, typename F> Image<T> map_image(const Image<U>& image, F pred) {
-    Image<T> mapped = {{image.width(), image.height()}};
+    Image<T> mapped{{image.width(), image.height()}};
     for (usize y = 0; y < image.height(); ++y) {
         for (usize x = 0; x < image.width(); ++x) {
             mapped[y][x] = pred(image[y][x]);
@@ -87,7 +87,7 @@ template<typename T, typename F> [[nodiscard]] Image<T> transform_image(Image<T>
 
 [[nodiscard]] Image<glm::vec4> create_normals_from_heightmap(const Image<f32>& heightmap);
 
-inline std::random_device g_random_device = {};
+inline std::random_device g_random_device{};
 inline std::mt19937_64 g_twister{g_random_device()};
 using Twister = std::mt19937_64;
 

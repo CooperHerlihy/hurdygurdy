@@ -11,15 +11,15 @@
 namespace hg {
 
 struct Engine {
-    vk::Instance instance = {};
-    vk::DebugUtilsMessengerEXT debug_messenger = {};
-    vk::PhysicalDevice gpu = {};
-    vk::Device device = {};
+    vk::Instance instance{};
+    vk::DebugUtilsMessengerEXT debug_messenger{};
+    vk::PhysicalDevice gpu{};
+    vk::Device device{};
     VmaAllocator gpu_allocator = nullptr;
     u32 queue_family_index = UINT32_MAX;
-    vk::Queue queue = {};
-    vk::CommandPool command_pool = {};
-    vk::CommandPool single_time_command_pool = {};
+    vk::Queue queue{};
+    vk::CommandPool command_pool{};
+    vk::CommandPool single_time_command_pool{};
 
     [[nodiscard]] static Result<Engine> create();
     void destroy() const;
@@ -52,9 +52,12 @@ public:
     [[nodiscard]] static GpuBuffer create(const Engine& engine, const Config& config);
 
     void destroy(const Engine& engine) const {
+        CONTEXT("Destroying GPU buffer");
+
         ASSERT(m_allocation != nullptr);
         ASSERT(m_buffer != nullptr);
         ASSERT(engine.gpu_allocator != nullptr);
+
         vmaDestroyBuffer(engine.gpu_allocator, m_buffer, m_allocation);
     }
 
@@ -69,7 +72,7 @@ public:
 
 private:
     VmaAllocation m_allocation = nullptr;
-    vk::Buffer m_buffer = {};
+    vk::Buffer m_buffer{};
     MemoryType m_type = DeviceLocal;
 };
 
@@ -81,45 +84,48 @@ public:
     }
 
     struct Config {
-        vk::Extent3D extent = {};
-        vk::ImageType dimensions = vk::ImageType::e1D;
-        vk::Format format = vk::Format::eUndefined;
-        vk::ImageUsageFlags usage = {};
-        vk::SampleCountFlagBits sample_count = vk::SampleCountFlagBits::e1;
+        vk::Extent3D extent{};
+        vk::ImageType dimensions{vk::ImageType::e1D};
+        vk::Format format{vk::Format::eUndefined};
+        vk::ImageUsageFlags usage{};
+        vk::SampleCountFlagBits sample_count{vk::SampleCountFlagBits::e1};
         u32 mip_levels = 1;
     };
     [[nodiscard]] static GpuImage create(const Engine& engine, const Config& config);
 
     struct CubemapConfig {
-        vk::Extent3D face_extent = {};
-        vk::Format format = vk::Format::eUndefined;
-        vk::ImageUsageFlags usage = {};
+        vk::Extent3D face_extent{};
+        vk::Format format{vk::Format::eUndefined};
+        vk::ImageUsageFlags usage{};
     };
     [[nodiscard]] static GpuImage create_cubemap(const Engine& engine, const CubemapConfig& config);
 
     void destroy(const Engine& engine) const {
+        CONTEXT("Destroying GPU image");
+
         ASSERT(m_allocation != nullptr);
         ASSERT(m_image != nullptr);
         ASSERT(engine.device != nullptr);
+
         vmaDestroyImage(engine.gpu_allocator, m_image, m_allocation);
     }
 
     struct Data {
         const void* ptr = nullptr;
         u64 alignment = 0;
-        vk::Extent3D extent = {};
+        vk::Extent3D extent{};
     };
 
     struct WriteConfig {
-        Data data = {};
-        vk::ImageLayout final_layout = vk::ImageLayout::eShaderReadOnlyOptimal;
-        vk::ImageSubresourceRange subresource = {vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1};
+        Data data{};
+        vk::ImageLayout final_layout{vk::ImageLayout::eShaderReadOnlyOptimal};
+        vk::ImageSubresourceRange subresource{vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1};
     };
     void write(const Engine& engine, const WriteConfig& config) const;
 
 private:
     VmaAllocation m_allocation = nullptr;
-    vk::Image m_image = {};
+    vk::Image m_image{};
 };
 
 class GpuImageView {
@@ -130,20 +136,24 @@ public:
     }
 
     struct Config {
-        vk::Image image = {};
-        vk::ImageViewType dimensions = vk::ImageViewType::e1D;
-        vk::Format format = vk::Format::eUndefined;
-        vk::ImageSubresourceRange subresource = {vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1};
+        vk::Image image{};
+        vk::ImageViewType dimensions{vk::ImageViewType::e1D};
+        vk::Format format{vk::Format::eUndefined};
+        vk::ImageSubresourceRange subresource{vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1};
     };
     [[nodiscard]] static GpuImageView create(const Engine& engine, const Config& config);
 
     void destroy(const Engine& engine) const {
+        CONTEXT("Destroying GPU image view");
+
         ASSERT(m_view != nullptr);
+        ASSERT(engine.device != nullptr);
+
         engine.device.destroyImageView(m_view);
     }
 
 private:
-    vk::ImageView m_view = {};
+    vk::ImageView m_view{};
 };
 
 class GpuImageAndView {
@@ -152,27 +162,27 @@ public:
     vk::ImageView get_view() const { return m_view.get(); }
 
     [[nodiscard]] static GpuImageAndView from_parts(GpuImage&& image, GpuImageView&& view) {
-        GpuImageAndView image_and_view = {};
+        GpuImageAndView image_and_view{};
         image_and_view.m_image = image;
         image_and_view.m_view = view;
         return image_and_view;
     }
 
     struct Config {
-        vk::Extent3D extent = {};
-        vk::Format format = vk::Format::eUndefined;
-        vk::ImageUsageFlags usage = {};
-        vk::ImageAspectFlagBits aspect_flags = vk::ImageAspectFlagBits::eColor;
-        vk::SampleCountFlagBits sample_count = vk::SampleCountFlagBits::e1;
-        vk::ImageLayout layout = vk::ImageLayout::eUndefined;
+        vk::Extent3D extent{};
+        vk::Format format{vk::Format::eUndefined};
+        vk::ImageUsageFlags usage{};
+        vk::ImageAspectFlagBits aspect_flags{vk::ImageAspectFlagBits::eColor};
+        vk::SampleCountFlagBits sample_count{vk::SampleCountFlagBits::e1};
+        vk::ImageLayout layout{vk::ImageLayout::eUndefined};
         u32 mip_levels = 1;
     };
     [[nodiscard]] static GpuImageAndView create(const Engine& engine, const Config& config);
 
     struct CubemapConfig {
-        ImageData data = {};
-        vk::Format format = vk::Format::eR8G8B8A8Srgb;
-        vk::ImageAspectFlagBits aspect_flags = vk::ImageAspectFlagBits::eColor;
+        ImageData data{};
+        vk::Format format{vk::Format::eR8G8B8A8Srgb};
+        vk::ImageAspectFlagBits aspect_flags{vk::ImageAspectFlagBits::eColor};
     };
     [[nodiscard]] static GpuImageAndView create_cubemap(const Engine& engine, const CubemapConfig& config);
 
@@ -190,11 +200,13 @@ public:
     ) const;
 
 private:
-    GpuImage m_image = {};
-    GpuImageView m_view = {};
+    GpuImage m_image{};
+    GpuImageView m_view{};
 };
 
 inline u32 get_mip_count(const vk::Extent3D extent) {
+    ASSERT(extent.width > 0 || extent.height > 0 || extent.depth > 0);
+
     return static_cast<u32>(std::floor(std::log2(std::max(std::max(extent.width, extent.height), extent.depth)))) + 1;
 }
 
@@ -212,18 +224,22 @@ public:
 
     struct Config {
         Type type = Nearest;
-        vk::SamplerAddressMode edge_mode = vk::SamplerAddressMode::eRepeat;
+        vk::SamplerAddressMode edge_mode{vk::SamplerAddressMode::eRepeat};
         u32 mip_levels = 1;
     };
     [[nodiscard]] static Sampler create(const Engine& engine, const Config& config);
 
     void destroy(const Engine& engine) const {
+        CONTEXT("Destroying GPU sampler");
+
         ASSERT(m_sampler != nullptr);
+        ASSERT(engine.device != nullptr);
+
         engine.device.destroySampler(m_sampler);
     }
 
 private:
-    vk::Sampler m_sampler = {};
+    vk::Sampler m_sampler{};
 };
 
 class Texture {
@@ -233,7 +249,7 @@ public:
     vk::Sampler get_sampler() const { return m_sampler.get(); }
 
     [[nodiscard]] static Texture from_parts(GpuImageAndView&& image, Sampler&& sampler) {
-        Texture texture = {};
+        Texture texture{};
         texture.m_image = image;
         texture.m_sampler = sampler;
         return texture;
@@ -243,11 +259,11 @@ public:
     }
 
     struct Config {
-        vk::Format format = vk::Format::eUndefined;
-        vk::ImageAspectFlagBits aspect_flags = vk::ImageAspectFlagBits::eColor;
+        vk::Format format{vk::Format::eUndefined};
+        vk::ImageAspectFlagBits aspect_flags{vk::ImageAspectFlagBits::eColor};
         bool create_mips = false;
         Sampler::Type sampler_type = Sampler::Nearest;
-        vk::SamplerAddressMode edge_mode = vk::SamplerAddressMode::eRepeat;
+        vk::SamplerAddressMode edge_mode{vk::SamplerAddressMode::eRepeat};
     };
     [[nodiscard]] static Texture from_data(
         const Engine& engine, const GpuImage::Data& data, const Config& config
@@ -265,8 +281,8 @@ public:
     }
 
 private:
-    GpuImageAndView m_image = {};
-    Sampler m_sampler = {};
+    GpuImageAndView m_image{};
+    Sampler m_sampler{};
 };
 
 [[nodiscard]] vk::DescriptorSetLayout create_descriptor_set_layout(
@@ -312,18 +328,22 @@ public:
     }
 
     struct Config {
-        std::span<const vk::DescriptorSetLayout> set_layouts = {};
-        std::span<const vk::PushConstantRange> push_ranges = {};
+        std::span<const vk::DescriptorSetLayout> set_layouts{};
+        std::span<const vk::PushConstantRange> push_ranges{};
     };
     [[nodiscard]] static PipelineLayout create(const Engine& engine, const Config& config);
 
     void destroy(const Engine& engine) const {
+        CONTEXT("Destroying GPU pipeline layout");
+
+        ASSERT(m_pipeline_layout != nullptr);
         ASSERT(engine.device != nullptr);
+
         engine.device.destroyPipelineLayout(m_pipeline_layout);
     }
 
 private:
-    vk::PipelineLayout m_pipeline_layout = {};
+    vk::PipelineLayout m_pipeline_layout{};
 };
 
 class UnlinkedShader {
@@ -334,22 +354,26 @@ public:
     }
 
     struct Config {
-        std::filesystem::path path = {};
-        vk::ShaderCodeTypeEXT code_type = vk::ShaderCodeTypeEXT::eSpirv;
-        vk::ShaderStageFlagBits stage = {};
-        vk::ShaderStageFlagBits next_stage = {};
-        std::span<const vk::DescriptorSetLayout> set_layouts = {};
-        std::span<const vk::PushConstantRange> push_ranges = {};
+        std::filesystem::path path{};
+        vk::ShaderCodeTypeEXT code_type{vk::ShaderCodeTypeEXT::eSpirv};
+        vk::ShaderStageFlagBits stage{};
+        vk::ShaderStageFlagBits next_stage{};
+        std::span<const vk::DescriptorSetLayout> set_layouts{};
+        std::span<const vk::PushConstantRange> push_ranges{};
     };
     [[nodiscard]] static Result<UnlinkedShader> create(const Engine& engine, const Config& config);
 
     void destroy(const Engine& engine) const {
+        CONTEXT("Destroying GPU unlinked shader");
+
+        ASSERT(m_shader != nullptr);
         ASSERT(engine.device != nullptr);
+
         engine.device.destroyShaderEXT(m_shader);
     }
 
 private:
-    vk::ShaderEXT m_shader = {};
+    vk::ShaderEXT m_shader{};
 };
 
 class GraphicsPipeline {
@@ -363,42 +387,50 @@ public:
     }
 
     struct Config {
-        std::span<const vk::DescriptorSetLayout> set_layouts = {};
-        std::span<const vk::PushConstantRange> push_ranges = {};
-        std::filesystem::path vertex_shader_path = {};
-        std::filesystem::path fragment_shader_path = {};
-        vk::ShaderCodeTypeEXT code_type = vk::ShaderCodeTypeEXT::eSpirv;
+        std::span<const vk::DescriptorSetLayout> set_layouts{};
+        std::span<const vk::PushConstantRange> push_ranges{};
+        std::filesystem::path vertex_shader_path{};
+        std::filesystem::path fragment_shader_path{};
+        vk::ShaderCodeTypeEXT code_type{vk::ShaderCodeTypeEXT::eSpirv};
     };
     [[nodiscard]] static Result<GraphicsPipeline> create(const Engine& engine, const Config& config);
 
     void destroy(const Engine& engine) const {
+        CONTEXT("Destroying GPU graphics pipeline");
+
         ASSERT(engine.device != nullptr);
-        m_layout.destroy(engine);
 
         for (const auto shader : m_shaders) {
             ASSERT(shader != nullptr);
             engine.device.destroyShaderEXT(shader);
         }
+
+        m_layout.destroy(engine);
     }
 
 private:
-    PipelineLayout m_layout = {};
-    std::array<vk::ShaderEXT, 2> m_shaders = {};
+    PipelineLayout m_layout{};
+    std::array<vk::ShaderEXT, 2> m_shaders{};
 };
 
 class Fence {
 public:
-    vk::Fence get() const { return m_fence; }
+    vk::Fence get() const {
+        ASSERT(m_fence != nullptr);
+        return m_fence;
+    }
 
     struct Config {
-        vk::FenceCreateFlags flags = {};
+        vk::FenceCreateFlags flags{};
     };
     [[nodiscard]] static Fence create(const Engine& engine, const Config& config);
 
     void destroy(const Engine& engine) const {
         CONTEXT("Destroying fence");
-        ASSERT(engine.device != nullptr);
+
         ASSERT(m_fence != nullptr);
+        ASSERT(engine.device != nullptr);
+
         engine.device.destroyFence(m_fence);
     }
 
@@ -411,15 +443,23 @@ private:
 
 class Semaphore {
 public:
-    vk::Semaphore get() const { return m_semaphore; }
-    vk::Semaphore* ptr() { return &m_semaphore; }
+    vk::Semaphore get() const {
+        ASSERT(m_semaphore != nullptr);
+        return m_semaphore;
+    }
+    vk::Semaphore* ptr() {
+        ASSERT(m_semaphore != nullptr);
+        return &m_semaphore;
+    }
 
     [[nodiscard]] static Semaphore create(const Engine& engine);
 
     void destroy(const Engine& engine) const {
         CONTEXT("Destroying semaphore");
-        ASSERT(engine.device != nullptr);
+
         ASSERT(m_semaphore != nullptr);
+        ASSERT(engine.device != nullptr);
+
         engine.device.destroySemaphore(m_semaphore);
     }
 
@@ -461,17 +501,20 @@ public:
     }
     BarrierBuilder& add_buffer_barrier(const vk::BufferMemoryBarrier2& barrier) {
         ASSERT(barrier.buffer != nullptr);
+
         m_buffers.push_back(barrier);
         return *this;
     }
     BarrierBuilder& add_image_barrier(const vk::ImageMemoryBarrier2& barrier) {
         ASSERT(barrier.image != nullptr);
         ASSERT(barrier.newLayout != vk::ImageLayout::eUndefined);
+
         m_images.push_back(barrier);
         return *this;
     }
     BarrierBuilder& add_image_barrier(const vk::Image image, const vk::ImageSubresourceRange& subresource_range) {
         ASSERT(image != nullptr);
+
         m_images.push_back({
             .image = image,
             .subresourceRange = subresource_range,
@@ -494,6 +537,7 @@ public:
         const vk::ImageLayout new_layout
     ) {
         ASSERT(new_layout != vk::ImageLayout::eUndefined);
+
         m_images.back().dstStageMask = dst_stage_mask;
         m_images.back().dstAccessMask = dst_access_mask;
         m_images.back().newLayout = new_layout;
@@ -501,10 +545,10 @@ public:
     }
 
 private:
-    vk::CommandBuffer m_cmd = {};
-    std::vector<vk::MemoryBarrier2> m_memories = {};
-    std::vector<vk::BufferMemoryBarrier2> m_buffers = {};
-    std::vector<vk::ImageMemoryBarrier2> m_images = {};
+    vk::CommandBuffer m_cmd{};
+    std::vector<vk::MemoryBarrier2> m_memories{};
+    std::vector<vk::BufferMemoryBarrier2> m_buffers{};
+    std::vector<vk::ImageMemoryBarrier2> m_images{};
 };
 
 constexpr u32 MaxFramesInFlight = 2;
@@ -518,8 +562,8 @@ public:
 
 class Window {
 public:
-    static constexpr vk::Format SwapchainImageFormat = vk::Format::eR8G8B8A8Srgb;
-    static constexpr vk::ColorSpaceKHR SwapchainColorSpace = vk::ColorSpaceKHR::eSrgbNonlinear;
+    static constexpr vk::Format SwapchainImageFormat{vk::Format::eR8G8B8A8Srgb};
+    static constexpr vk::ColorSpaceKHR SwapchainColorSpace{vk::ColorSpaceKHR::eSrgbNonlinear};
 
     [[nodiscard]] static Result<Window> create(const Engine& engine, bool fullscreen, i32 width, i32 height);
     void destroy(const Engine& engine) const;
@@ -552,18 +596,18 @@ private:
     [[nodiscard]] const Semaphore& is_ready_to_present() const { return m_ready_to_present_semaphores[m_current_image_index]; }
 
     GLFWwindow* m_window = nullptr;
-    vk::SurfaceKHR m_surface = {};
-    vk::Extent2D m_extent = {};
-    vk::SwapchainKHR m_swapchain = {};
-    std::array<vk::Image, MaxSwapchainImages> m_swapchain_images = {};
+    vk::SurfaceKHR m_surface{};
+    vk::Extent2D m_extent{};
+    vk::SwapchainKHR m_swapchain{};
+    std::array<vk::Image, MaxSwapchainImages> m_swapchain_images{};
     u32 m_image_count = 0;
     u32 m_current_image_index = 0;
     u32 m_current_frame_index = 0;
     bool m_recording = false;
-    std::array<vk::CommandBuffer, MaxFramesInFlight> m_command_buffers = {};
-    std::array<Fence, MaxFramesInFlight> m_frame_finished_fences = {};
-    std::array<Semaphore, MaxFramesInFlight> m_image_available_semaphores = {};
-    std::array<Semaphore, MaxSwapchainImages> m_ready_to_present_semaphores = {};
+    std::array<vk::CommandBuffer, MaxFramesInFlight> m_command_buffers{};
+    std::array<Fence, MaxFramesInFlight> m_frame_finished_fences{};
+    std::array<Semaphore, MaxFramesInFlight> m_image_available_semaphores{};
+    std::array<Semaphore, MaxSwapchainImages> m_ready_to_present_semaphores{};
 };
 
 } // namespace hg
