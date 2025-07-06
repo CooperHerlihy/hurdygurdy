@@ -285,15 +285,57 @@ private:
     Sampler m_sampler{};
 };
 
-[[nodiscard]] vk::DescriptorSetLayout create_descriptor_set_layout(
-    const Engine& engine,
-    std::span<const vk::DescriptorSetLayoutBinding> bindings,
-    std::span<const vk::DescriptorBindingFlags> flags = {}
-);
+class DescriptorSetLayout {
+public:
+    vk::DescriptorSetLayout get() const {
+        ASSERT(m_descriptor_set_layout != nullptr);
+        return m_descriptor_set_layout;
+    }
 
-[[nodiscard]] vk::DescriptorPool create_descriptor_pool(
-    const Engine& engine, u32 max_sets, std::span<const vk::DescriptorPoolSize> descriptors
-);
+    struct Config {
+        std::span<const vk::DescriptorSetLayoutBinding> bindings;
+        std::span<const vk::DescriptorBindingFlags> flags = {};
+    };
+    [[nodiscard]] static DescriptorSetLayout create(const Engine& engine, const Config& config);
+
+    void destroy(const Engine& engine) const {
+        CONTEXT("Destroying Vulkan descriptor set layout");
+
+        ASSERT(m_descriptor_set_layout != nullptr);
+        ASSERT(engine.device != nullptr);
+
+        engine.device.destroyDescriptorSetLayout(m_descriptor_set_layout);
+    }
+
+private:
+    vk::DescriptorSetLayout m_descriptor_set_layout{};
+};
+
+class DescriptorPool {
+public:
+    vk::DescriptorPool get() const {
+        ASSERT(m_descriptor_pool != nullptr);
+        return m_descriptor_pool;
+    }
+
+    struct Config {
+        u32 max_sets = 0;
+        std::span<const vk::DescriptorPoolSize> descriptors{};
+    };
+    [[nodiscard]] static DescriptorPool create(const Engine& engine, const Config& config);
+
+    void destroy(const Engine& engine) const {
+        CONTEXT("Destroying Vulkan descriptor pool");
+
+        ASSERT(m_descriptor_pool != nullptr);
+        ASSERT(engine.device != nullptr);
+
+        engine.device.destroyDescriptorPool(m_descriptor_pool);
+    }
+
+private:
+    vk::DescriptorPool m_descriptor_pool{};
+};
 
 [[nodiscard]] Result<void> allocate_descriptor_sets(
     const Engine& engine, vk::DescriptorPool pool,

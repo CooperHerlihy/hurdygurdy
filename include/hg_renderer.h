@@ -40,7 +40,7 @@ public:
 
     void cmd_draw(vk::CommandBuffer cmd, vk::Image render_target, vk::Extent2D window_size) const override;
 
-    vk::DescriptorSetLayout get_global_set_layout() const { return m_set_layout; }
+    vk::DescriptorSetLayout get_global_set_layout() const { return m_set_layout.get(); }
 
     void add_pipeline(const Pipeline& system) {
         m_pipelines.emplace_back(&system);
@@ -65,8 +65,8 @@ private:
     GpuImageAndView m_color_image{};
     GpuImageAndView m_depth_image{};
 
-    vk::DescriptorSetLayout m_set_layout{};
-    vk::DescriptorPool m_descriptor_pool{};
+    DescriptorSetLayout m_set_layout{};
+    DescriptorPool m_descriptor_pool{};
     vk::DescriptorSet m_global_set{};
     GpuBuffer m_vp_buffer{};
     GpuBuffer m_light_buffer{};
@@ -84,10 +84,10 @@ public:
     [[nodiscard]] Result<void> load_skybox(const Engine& engine, const std::filesystem::path path);
 
 private:
-    vk::DescriptorSetLayout m_set_layout{};
+    DescriptorSetLayout m_set_layout{};
     GraphicsPipeline m_pipeline{};
 
-    vk::DescriptorPool m_descriptor_pool{};
+    DescriptorPool m_descriptor_pool{};
     vk::DescriptorSet m_set{};
 
     Texture m_cubemap{};
@@ -170,10 +170,10 @@ public:
     }
 
 private:
-    vk::DescriptorSetLayout m_set_layout{};
+    DescriptorSetLayout m_set_layout{};
     GraphicsPipeline m_pipeline{};
 
-    vk::DescriptorPool m_descriptor_pool{};
+    DescriptorPool m_descriptor_pool{};
     vk::DescriptorSet m_texture_set{};
 
     std::vector<Texture> m_textures{};

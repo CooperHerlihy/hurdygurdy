@@ -982,53 +982,49 @@ Result<Texture> Texture::from_cubemap_file(const Engine& engine, const std::file
     return texture;
 }
 
-vk::DescriptorSetLayout create_descriptor_set_layout(
-    const Engine& engine,
-    const std::span<const vk::DescriptorSetLayoutBinding> bindings,
-    const std::span<const vk::DescriptorBindingFlags> flags
-) {
+DescriptorSetLayout DescriptorSetLayout::create(const Engine& engine, const Config& config) {
     CONTEXT("Creating Vulkan descriptor set layout");
     ASSERT(engine.device != nullptr);
-    ASSERT(!bindings.empty());
-    if (!flags.empty())
-        ASSERT(flags.size() == bindings.size());
+    ASSERT(!config.bindings.empty());
+    if (!config.flags.empty())
+        ASSERT(config.flags.size() == config.bindings.size());
 
     const vk::DescriptorSetLayoutBindingFlagsCreateInfo flag_info{
-        .bindingCount = to_u32(flags.size()),
-        .pBindingFlags = flags.data(),
+        .bindingCount = to_u32(config.flags.size()),
+        .pBindingFlags = config.flags.data(),
     };
-    const auto layout = engine.device.createDescriptorSetLayout({
-        .pNext = flags.empty() ? nullptr : &flag_info,
-        .bindingCount = to_u32(bindings.size()),
-        .pBindings = bindings.data(),
+    const auto vk_layout = engine.device.createDescriptorSetLayout({
+        .pNext = config.flags.empty() ? nullptr : &flag_info,
+        .bindingCount = to_u32(config.bindings.size()),
+        .pBindings = config.bindings.data(),
     });
-    switch (layout.result) {
+    switch (vk_layout.result) {
         case vk::Result::eSuccess: break;
         case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
         case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
         default: ERROR("Unexpected Vulkan error");
     }
 
-    ASSERT(layout.value != nullptr);
-    return layout.value;
+    DescriptorSetLayout layout{};
+    layout.m_descriptor_set_layout = vk_layout.value;
+
+    ASSERT(layout.m_descriptor_set_layout != nullptr);
+    return layout;
 }
 
-vk::DescriptorPool create_descriptor_pool(
-    const Engine& engine, const u32 max_sets,
-    const std::span<const vk::DescriptorPoolSize> descriptors
-) {
+DescriptorPool DescriptorPool::create(const Engine& engine, const Config& config) {
     CONTEXT("Creating Vulkan descriptor pool");
     ASSERT(engine.device != nullptr);
-    ASSERT(max_sets >= 1);
-    ASSERT(!descriptors.empty());
-    for (const auto& descriptor : descriptors) {
+    ASSERT(config.max_sets >= 1);
+    ASSERT(!config.descriptors.empty());
+    for (const auto& descriptor : config.descriptors) {
         ASSERT(descriptor.descriptorCount > 0);
     }
 
     const auto pool = engine.device.createDescriptorPool({
-        .maxSets = max_sets, 
-        .poolSizeCount = to_u32(descriptors.size()), 
-        .pPoolSizes = descriptors.data(),
+        .maxSets = config.max_sets, 
+        .poolSizeCount = to_u32(config.descriptors.size()), 
+        .pPoolSizes = config.descriptors.data(),
     });
     switch (pool.result) {
         case vk::Result::eSuccess: break;
@@ -1038,8 +1034,11 @@ vk::DescriptorPool create_descriptor_pool(
         default: ERROR("Unexpected Vulkan error");
     }
 
-    ASSERT(pool.value != nullptr);
-    return pool.value;
+    DescriptorPool descriptor_pool{};
+    descriptor_pool.m_descriptor_pool = pool.value;
+
+    ASSERT(descriptor_pool.m_descriptor_pool != nullptr);
+    return descriptor_pool;
 }
 
 Result<void> allocate_descriptor_sets(

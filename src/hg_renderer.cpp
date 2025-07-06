@@ -30,16 +30,16 @@ DefaultRenderer DefaultRenderer::create(const Engine& engine, const vk::Extent2D
         .sample_count = vk::SampleCountFlagBits::e4,
     });
 
-    pipeline.m_set_layout = create_descriptor_set_layout(engine, std::array{
+    pipeline.m_set_layout = DescriptorSetLayout::create(engine, {std::array{
         vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex},
         vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eFragment},
-    });
+    }});
 
-    pipeline.m_descriptor_pool = create_descriptor_pool(engine, 1, std::array{
+    pipeline.m_descriptor_pool = DescriptorPool::create(engine, {1, std::array{
         vk::DescriptorPoolSize{vk::DescriptorType::eUniformBuffer, 2}
-    });
+    }});
 
-    pipeline.m_global_set = *allocate_descriptor_set(engine, pipeline.m_descriptor_pool, pipeline.m_set_layout);;
+    pipeline.m_global_set = *allocate_descriptor_set(engine, pipeline.m_descriptor_pool.get(), pipeline.m_set_layout.get());;
 
     pipeline.m_vp_buffer = GpuBuffer::create(engine, {
         sizeof(ViewProjectionUniform),
@@ -53,7 +53,6 @@ DefaultRenderer DefaultRenderer::create(const Engine& engine, const vk::Extent2D
     write_uniform_buffer_descriptor(engine, {pipeline.m_vp_buffer.get(), sizeof(ViewProjectionUniform)}, pipeline.m_global_set, 0);
     write_uniform_buffer_descriptor(engine, {pipeline.m_light_buffer.get(), sizeof(LightUniform)}, pipeline.m_global_set, 1);
 
-    ASSERT(pipeline.m_set_layout != nullptr);
     ASSERT(pipeline.m_global_set != nullptr);
     return pipeline;
 }
@@ -61,10 +60,8 @@ DefaultRenderer DefaultRenderer::create(const Engine& engine, const vk::Extent2D
 void DefaultRenderer::destroy(const Engine& engine) const {
     ASSERT(engine.device != nullptr);
 
-    ASSERT(m_descriptor_pool != nullptr);
-    engine.device.destroyDescriptorPool(m_descriptor_pool);
-    ASSERT(m_set_layout != nullptr);
-    engine.device.destroyDescriptorSetLayout(m_set_layout);
+    m_descriptor_pool.destroy(engine);
+    m_set_layout.destroy(engine);
 
     m_light_buffer.destroy(engine);
     m_vp_buffer.destroy(engine);
@@ -194,11 +191,11 @@ SkyboxPipeline SkyboxPipeline::create(const Engine& engine, const DefaultRendere
 
     SkyboxPipeline pipeline{};
 
-    pipeline.m_set_layout = create_descriptor_set_layout(engine, std::array{
+    pipeline.m_set_layout = DescriptorSetLayout::create(engine, {{std::array{
         vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment},
-    });
+    }}});
 
-    std::array set_layouts{renderer.get_global_set_layout(), pipeline.m_set_layout};
+    std::array set_layouts{renderer.get_global_set_layout(), pipeline.m_set_layout.get()};
 
     const auto graphics_pipeline = GraphicsPipeline::create(engine, {
         .set_layouts = set_layouts,
@@ -206,23 +203,16 @@ SkyboxPipeline SkyboxPipeline::create(const Engine& engine, const DefaultRendere
         .vertex_shader_path = "../shaders/skybox.vert.spv",
         .fragment_shader_path = "../shaders/skybox.frag.spv",
     });
-    if (graphics_pipeline.has_err()) {
-        if (graphics_pipeline.err() == Err::ShaderFileNotFound || graphics_pipeline.err() == Err::ShaderFileInvalid) {
-            ERROR("Could not find valid default shaders");
-        } else {
-            ERROR("Unexpected error: {}", to_string(graphics_pipeline.err()));
-        }
-    }
+    if (graphics_pipeline.has_err())
+        ERROR("Could not find valid skybox shaders");
     pipeline.m_pipeline= *graphics_pipeline;
 
-    pipeline.m_descriptor_pool = create_descriptor_pool(engine, 1, std::array{
+    pipeline.m_descriptor_pool = DescriptorPool::create(engine, {1, std::array{
         vk::DescriptorPoolSize{vk::DescriptorType::eCombinedImageSampler, 1}
-    });
+    }});
 
-    pipeline.m_set = *allocate_descriptor_set(engine, pipeline.m_descriptor_pool, pipeline.m_set_layout);;
+    pipeline.m_set = *allocate_descriptor_set(engine, pipeline.m_descriptor_pool.get(), pipeline.m_set_layout.get());;
 
-    ASSERT(pipeline.m_set_layout != nullptr);
-    ASSERT(pipeline.m_descriptor_pool != nullptr);
     ASSERT(pipeline.m_set != nullptr);
     return pipeline;
 }
@@ -268,13 +258,9 @@ void SkyboxPipeline::destroy(const Engine& engine) const {
     m_index_buffer.destroy(engine);
     m_cubemap.destroy(engine);
 
-    ASSERT(m_descriptor_pool != nullptr);
-    engine.device.destroyDescriptorPool(m_descriptor_pool);
-
+    m_descriptor_pool.destroy(engine);
     m_pipeline.destroy(engine);
-
-    ASSERT(m_set_layout != nullptr);
-    engine.device.destroyDescriptorSetLayout(m_set_layout);
+    m_set_layout.destroy(engine);
 }
 
 void SkyboxPipeline::cmd_draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) const {
@@ -307,13 +293,12 @@ PbrPipeline PbrPipeline::create(const Engine& engine, const DefaultRenderer& ren
 
     PbrPipeline pipeline{};
 
-    pipeline.m_set_layout = create_descriptor_set_layout(
-        engine,
+    pipeline.m_set_layout = DescriptorSetLayout::create(engine, {
         std::array{vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, MaxTextures, vk::ShaderStageFlagBits::eFragment},},
         std::array{vk::DescriptorBindingFlags{vk::DescriptorBindingFlagBits::ePartiallyBound}}
-    );
+    });
 
-    std::array set_layouts{renderer.get_global_set_layout(), pipeline.m_set_layout};
+    std::array set_layouts{renderer.get_global_set_layout(), pipeline.m_set_layout.get()};
     std::array push_ranges{vk::PushConstantRange{
         vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, 0, sizeof(PushConstant)
     }};
@@ -324,22 +309,15 @@ PbrPipeline PbrPipeline::create(const Engine& engine, const DefaultRenderer& ren
         .vertex_shader_path = "../shaders/pbr.vert.spv",
         .fragment_shader_path = "../shaders/pbr.frag.spv",
     });
-    if (graphics_pipeline.has_err()) {
-        if (graphics_pipeline.err() == Err::ShaderFileNotFound || graphics_pipeline.err() == Err::ShaderFileInvalid) {
-            ERROR("Could not find valid default shaders");
-        } else {
-            ERROR("Unexpected error: {}", to_string(graphics_pipeline.err()));
-        }
-    }
+    if (graphics_pipeline.has_err())
+        ERROR("Could not find valid pbr shaders");
     pipeline.m_pipeline = *graphics_pipeline;
 
-    pipeline.m_descriptor_pool = create_descriptor_pool(engine, 1, std::array{
+    pipeline.m_descriptor_pool = DescriptorPool::create(engine, {1, std::array{
         vk::DescriptorPoolSize{vk::DescriptorType::eCombinedImageSampler, MaxTextures}
-    });
-    pipeline.m_texture_set = *allocate_descriptor_set(engine, pipeline.m_descriptor_pool, pipeline.m_set_layout);;
+    }});
+    pipeline.m_texture_set = *allocate_descriptor_set(engine, pipeline.m_descriptor_pool.get(), pipeline.m_set_layout.get());;
 
-    ASSERT(pipeline.m_set_layout != nullptr);
-    ASSERT(pipeline.m_descriptor_pool != nullptr);
     ASSERT(pipeline.m_texture_set != nullptr);
     return pipeline;
 }
@@ -352,13 +330,9 @@ void PbrPipeline::destroy(const Engine& engine) const {
     for (const auto& model : m_models)
     model.destroy(engine);
 
-    ASSERT(m_descriptor_pool != nullptr);
-    engine.device.destroyDescriptorPool(m_descriptor_pool);
-
+    m_descriptor_pool.destroy(engine);
     m_pipeline.destroy(engine);
-
-    ASSERT(m_set_layout != nullptr);
-    engine.device.destroyDescriptorSetLayout(m_set_layout);
+    m_set_layout.destroy(engine);
 }
 
 void PbrPipeline::cmd_draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) const {
