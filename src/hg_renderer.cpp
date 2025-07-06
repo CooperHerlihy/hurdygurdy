@@ -4,25 +4,24 @@
 #include "hg_math.h"
 #include "hg_generate.h"
 #include "hg_load.h"
-#include "hg_vulkan_engine.h"
 
 #include <filesystem>
 
 namespace hg {
 
-DefaultRenderer DefaultRenderer::create(const Engine& engine, const vk::Extent2D window_size) {
+DefaultRenderer DefaultRenderer::create(const vk::Extent2D window_size) {
     ASSERT(window_size.width != 0);
     ASSERT(window_size.height != 0);
 
     DefaultRenderer pipeline{};
 
-    pipeline.m_color_image = GpuImageAndView::create(engine, {
+    pipeline.m_color_image = GpuImageAndView::create({
         .extent{window_size.width, window_size.height, 1},
         .format = Window::SwapchainImageFormat,
         .usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc,
         .sample_count = vk::SampleCountFlagBits::e4,
     });
-    pipeline.m_depth_image = GpuImageAndView::create(engine, {
+    pipeline.m_depth_image = GpuImageAndView::create({
         .extent{window_size.width, window_size.height, 1},
         .format = vk::Format::eD32Sfloat,
         .usage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
@@ -30,60 +29,65 @@ DefaultRenderer DefaultRenderer::create(const Engine& engine, const vk::Extent2D
         .sample_count = vk::SampleCountFlagBits::e4,
     });
 
-    pipeline.m_set_layout = DescriptorSetLayout::create(engine, {std::array{
+    pipeline.m_set_layout = DescriptorSetLayout::create({std::array{
         vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex},
         vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eFragment},
     }});
 
-    pipeline.m_descriptor_pool = DescriptorPool::create(engine, {1, std::array{
+    pipeline.m_descriptor_pool = DescriptorPool::create({1, std::array{
         vk::DescriptorPoolSize{vk::DescriptorType::eUniformBuffer, 2}
     }});
 
-    pipeline.m_global_set = *pipeline.m_descriptor_pool.allocate_set(engine, pipeline.m_set_layout.get());;
+    pipeline.m_global_set = *pipeline.m_descriptor_pool.allocate_set(pipeline.m_set_layout.get());;
 
-    pipeline.m_vp_buffer = GpuBuffer::create(engine, {
+    pipeline.m_vp_buffer = GpuBuffer::create({
         sizeof(ViewProjectionUniform),
         vk::BufferUsageFlagBits::eUniformBuffer, GpuBuffer::RandomAccess
     });
-    pipeline.m_light_buffer = GpuBuffer::create(engine, {
+    pipeline.m_light_buffer = GpuBuffer::create({
         sizeof(LightUniform) * MaxLights,
         vk::BufferUsageFlagBits::eUniformBuffer, GpuBuffer::RandomAccess
     });
 
-    write_uniform_buffer_descriptor(engine, {pipeline.m_vp_buffer.get(), sizeof(ViewProjectionUniform)}, pipeline.m_global_set, 0);
-    write_uniform_buffer_descriptor(engine, {pipeline.m_light_buffer.get(), sizeof(LightUniform)}, pipeline.m_global_set, 1);
+    write_uniform_buffer_descriptor({pipeline.m_vp_buffer.get(), sizeof(ViewProjectionUniform)}, pipeline.m_global_set, 0);
+    write_uniform_buffer_descriptor({pipeline.m_light_buffer.get(), sizeof(LightUniform)}, pipeline.m_global_set, 1);
 
     ASSERT(pipeline.m_global_set != nullptr);
     return pipeline;
 }
 
-void DefaultRenderer::destroy(const Engine& engine) const {
-    ASSERT(engine.device != nullptr);
+void DefaultRenderer::destroy() const {
+    const auto wait_result = g_vk.queue.waitIdle();
+    switch (wait_result) {
+        case vk::Result::eSuccess: break;
+        case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
+        case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
+        case vk::Result::eErrorDeviceLost: ERROR("Vulkan device lost");
+        default: ERROR("Unexpected Vulkan error");
+    }
 
-    m_descriptor_pool.destroy(engine);
-    m_set_layout.destroy(engine);
-
-    m_light_buffer.destroy(engine);
-    m_vp_buffer.destroy(engine);
-
-    m_depth_image.destroy(engine);
-    m_color_image.destroy(engine);
+    m_descriptor_pool.destroy();
+    m_set_layout.destroy();
+    m_light_buffer.destroy();
+    m_vp_buffer.destroy();
+    m_depth_image.destroy();
+    m_color_image.destroy();
 }
 
-void DefaultRenderer::resize(const Engine& engine, const vk::Extent2D window_size) {
+void DefaultRenderer::resize(const vk::Extent2D window_size) {
     ASSERT(window_size.width > 0);
     ASSERT(window_size.height > 0);
 
-    m_color_image.destroy(engine);
-    m_color_image = GpuImageAndView::create(engine, {
+    m_color_image.destroy();
+    m_color_image = GpuImageAndView::create({
         .extent{window_size.width, window_size.height, 1},
         .format = Window::SwapchainImageFormat,
         .usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc,
         .sample_count = vk::SampleCountFlagBits::e4,
     });
 
-    m_depth_image.destroy(engine);
-    m_depth_image = GpuImageAndView::create(engine, {
+    m_depth_image.destroy();
+    m_depth_image = GpuImageAndView::create({
         .extent{window_size.width, window_size.height, 1},
         .format = vk::Format::eD32Sfloat,
         .usage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
@@ -92,7 +96,7 @@ void DefaultRenderer::resize(const Engine& engine, const vk::Extent2D window_siz
     });
 }
 
-void DefaultRenderer::update_camera(const Engine& engine, const Cameraf& camera) {
+void DefaultRenderer::update_camera(const Cameraf& camera) {
     const glm::mat4 view{camera.view()};
 
     ASSERT(m_lights.size() < MaxLights);
@@ -104,17 +108,17 @@ void DefaultRenderer::update_camera(const Engine& engine, const Cameraf& camera)
         };
     }
 
-    m_light_buffer.write(engine, lights);
-    m_vp_buffer.write(engine, view, offsetof(ViewProjectionUniform, view));
+    m_light_buffer.write(lights);
+    m_vp_buffer.write(view, offsetof(ViewProjectionUniform, view));
 }
 
-void DefaultRenderer::cmd_draw(
-    const vk::CommandBuffer cmd, const vk::Image render_target, const vk::Extent2D window_size
-) const {
-    ASSERT(cmd != nullptr);
-    ASSERT(render_target != nullptr);
-    ASSERT(window_size.width > 0);
-    ASSERT(window_size.height > 0);
+void DefaultRenderer::draw(const Window::DrawInfo& info) const {
+    ASSERT(info.cmd != nullptr);
+    ASSERT(info.render_target != nullptr);
+    ASSERT(info.extent.width > 0);
+    ASSERT(info.extent.height > 0);
+
+    vk::CommandBuffer cmd = info.cmd;
 
     BarrierBuilder(cmd)
         .add_image_barrier(m_color_image.get_image(), {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
@@ -141,7 +145,7 @@ void DefaultRenderer::cmd_draw(
         .clearValue{.depthStencil{.depth = 1.0f, .stencil = 0}},
     };
     cmd.beginRendering({
-        .renderArea{{0, 0}, window_size},
+        .renderArea{{0, 0}, info.extent},
         .layerCount = 1,
         .colorAttachmentCount = 1,
         .pColorAttachments = &color_attachment,
@@ -152,7 +156,7 @@ void DefaultRenderer::cmd_draw(
     cmd.setSampleMaskEXT(vk::SampleCountFlagBits::e4, vk::SampleMask{0xff});
 
     for (const auto& system : m_pipelines) {
-        system->cmd_draw(cmd, m_global_set);
+        system->draw(cmd, m_global_set);
     }
 
     cmd.endRendering();
@@ -161,43 +165,43 @@ void DefaultRenderer::cmd_draw(
         .add_image_barrier(m_color_image.get_image(), {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
         .set_image_src(vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::AccessFlagBits2::eColorAttachmentWrite, vk::ImageLayout::eColorAttachmentOptimal)
         .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferRead, vk::ImageLayout::eTransferSrcOptimal)
-        .add_image_barrier(render_target, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
+        .add_image_barrier(info.render_target, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
         .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
         .build_and_run();
 
     const vk::ImageResolve2 resolve{
         .srcSubresource{vk::ImageAspectFlagBits::eColor, 0, 0, 1},
         .dstSubresource{vk::ImageAspectFlagBits::eColor, 0, 0, 1},
-        .extent{window_size.width, window_size.height, 1},
+        .extent{info.extent.width, info.extent.height, 1},
     };
     cmd.resolveImage2({
         .srcImage = m_color_image.get_image(),
         .srcImageLayout = vk::ImageLayout::eTransferSrcOptimal,
-        .dstImage = render_target,
+        .dstImage = info.render_target,
         .dstImageLayout = vk::ImageLayout::eTransferDstOptimal,
         .regionCount = 1,
         .pRegions = &resolve,
     });
 
     BarrierBuilder(cmd)
-        .add_image_barrier(render_target, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
+        .add_image_barrier(info.render_target, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
         .set_image_src(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
         .set_image_dst(vk::PipelineStageFlagBits2::eAllGraphics, vk::AccessFlagBits2::eNone, vk::ImageLayout::ePresentSrcKHR)
         .build_and_run();
 }
 
-SkyboxPipeline SkyboxPipeline::create(const Engine& engine, const DefaultRenderer& renderer) {
+SkyboxPipeline SkyboxPipeline::create(const DefaultRenderer& renderer) {
     ASSERT(renderer.get_global_set_layout() != nullptr);
 
     SkyboxPipeline pipeline{};
 
-    pipeline.m_set_layout = DescriptorSetLayout::create(engine, {{std::array{
+    pipeline.m_set_layout = DescriptorSetLayout::create({{std::array{
         vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment},
     }}});
 
     std::array set_layouts{renderer.get_global_set_layout(), pipeline.m_set_layout.get()};
 
-    const auto graphics_pipeline = GraphicsPipeline::create(engine, {
+    const auto graphics_pipeline = GraphicsPipeline::create({
         .set_layouts = set_layouts,
         .push_ranges{},
         .vertex_shader_path = "../shaders/skybox.vert.spv",
@@ -207,27 +211,27 @@ SkyboxPipeline SkyboxPipeline::create(const Engine& engine, const DefaultRendere
         ERROR("Could not find valid skybox shaders");
     pipeline.m_pipeline= *graphics_pipeline;
 
-    pipeline.m_descriptor_pool = DescriptorPool::create(engine, {1, std::array{
+    pipeline.m_descriptor_pool = DescriptorPool::create({1, std::array{
         vk::DescriptorPoolSize{vk::DescriptorType::eCombinedImageSampler, 1}
     }});
 
-    pipeline.m_set = *pipeline.m_descriptor_pool.allocate_set(engine, pipeline.m_set_layout.get());;
+    pipeline.m_set = *pipeline.m_descriptor_pool.allocate_set(pipeline.m_set_layout.get());;
 
     ASSERT(pipeline.m_set != nullptr);
     return pipeline;
 }
 
-Result<void> SkyboxPipeline::load_skybox(const Engine& engine, const std::filesystem::path path) {
+Result<void> SkyboxPipeline::load_skybox(const std::filesystem::path path) {
     ASSERT(!path.empty());
 
-    const auto cubemap = Texture::from_cubemap_file(engine, path, {
+    const auto cubemap = Texture::from_cubemap_file(path, {
         .format = vk::Format::eR8G8B8A8Srgb,
         .aspect_flags = vk::ImageAspectFlagBits::eColor,
         .sampler_type = Sampler::Linear,
     });
     if (cubemap.has_err())
         return cubemap.err();
-    hg::write_image_sampler_descriptor(engine, *cubemap, m_set, 0);
+    hg::write_image_sampler_descriptor(*cubemap, m_set, 0);
     m_cubemap = *cubemap;
 
     const auto mesh = generate_cube();
@@ -236,34 +240,41 @@ Result<void> SkyboxPipeline::load_skybox(const Engine& engine, const std::filesy
     for (const auto vertex : mesh.vertices) {
         positions.emplace_back(vertex.position);
     }
-    m_vertex_buffer = GpuBuffer::create(engine, {
+    m_vertex_buffer = GpuBuffer::create({
         positions.size() * sizeof(positions[0]),
         vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst
     });
-    m_index_buffer = GpuBuffer::create(engine, {
+    m_index_buffer = GpuBuffer::create({
         mesh.indices.size() * sizeof(mesh.indices[0]),
         vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst
     });
-    m_vertex_buffer.write_span(engine, std::span{positions}, 0);
-    m_index_buffer.write_span(engine, std::span{mesh.indices}, 0);
+    m_vertex_buffer.write_span(std::span{positions}, 0);
+    m_index_buffer.write_span(std::span{mesh.indices}, 0);
 
     ASSERT(m_set != nullptr);
     return ok();
 }
 
-void SkyboxPipeline::destroy(const Engine& engine) const {
-    ASSERT(engine.device != nullptr);
+void SkyboxPipeline::destroy() const {
+    const auto wait_result = g_vk.queue.waitIdle();
+    switch (wait_result) {
+        case vk::Result::eSuccess: break;
+        case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
+        case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
+        case vk::Result::eErrorDeviceLost: ERROR("Vulkan device lost");
+        default: ERROR("Unexpected Vulkan error");
+    }
 
-    m_vertex_buffer.destroy(engine);
-    m_index_buffer.destroy(engine);
-    m_cubemap.destroy(engine);
+    m_vertex_buffer.destroy();
+    m_index_buffer.destroy();
+    m_cubemap.destroy();
 
-    m_descriptor_pool.destroy(engine);
-    m_pipeline.destroy(engine);
-    m_set_layout.destroy(engine);
+    m_descriptor_pool.destroy();
+    m_pipeline.destroy();
+    m_set_layout.destroy();
 }
 
-void SkyboxPipeline::cmd_draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) const {
+void SkyboxPipeline::draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) const {
     ASSERT(m_set != nullptr);
     ASSERT(cmd != nullptr);
     ASSERT(global_set != nullptr);
@@ -288,12 +299,12 @@ void SkyboxPipeline::cmd_draw(const vk::CommandBuffer cmd, const vk::DescriptorS
     cmd.setCullMode(vk::CullModeFlagBits::eNone);
 }
 
-PbrPipeline PbrPipeline::create(const Engine& engine, const DefaultRenderer& renderer) {
+PbrPipeline PbrPipeline::create(const DefaultRenderer& renderer) {
     ASSERT(renderer.get_global_set_layout() != nullptr);
 
     PbrPipeline pipeline{};
 
-    pipeline.m_set_layout = DescriptorSetLayout::create(engine, {
+    pipeline.m_set_layout = DescriptorSetLayout::create({
         std::array{vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, MaxTextures, vk::ShaderStageFlagBits::eFragment},},
         std::array{vk::DescriptorBindingFlags{vk::DescriptorBindingFlagBits::ePartiallyBound}}
     });
@@ -303,7 +314,7 @@ PbrPipeline PbrPipeline::create(const Engine& engine, const DefaultRenderer& ren
         vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, 0, sizeof(PushConstant)
     }};
 
-    const auto graphics_pipeline = GraphicsPipeline::create(engine, {
+    const auto graphics_pipeline = GraphicsPipeline::create({
         .set_layouts = set_layouts,
         .push_ranges = push_ranges,
         .vertex_shader_path = "../shaders/pbr.vert.spv",
@@ -313,29 +324,37 @@ PbrPipeline PbrPipeline::create(const Engine& engine, const DefaultRenderer& ren
         ERROR("Could not find valid pbr shaders");
     pipeline.m_pipeline = *graphics_pipeline;
 
-    pipeline.m_descriptor_pool = DescriptorPool::create(engine, {1, std::array{
+    pipeline.m_descriptor_pool = DescriptorPool::create({1, std::array{
         vk::DescriptorPoolSize{vk::DescriptorType::eCombinedImageSampler, MaxTextures}
     }});
-    pipeline.m_texture_set = *pipeline.m_descriptor_pool.allocate_set(engine, pipeline.m_set_layout.get());;
+    pipeline.m_texture_set = *pipeline.m_descriptor_pool.allocate_set(pipeline.m_set_layout.get());;
 
     ASSERT(pipeline.m_texture_set != nullptr);
     return pipeline;
 }
 
-void PbrPipeline::destroy(const Engine& engine) const {
-    ASSERT(engine.device != nullptr);
+void PbrPipeline::destroy() const {
+    const auto wait_result = g_vk.queue.waitIdle();
+    switch (wait_result) {
+        case vk::Result::eSuccess: break;
+        case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
+        case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
+        case vk::Result::eErrorDeviceLost: ERROR("Vulkan device lost");
+        default: ERROR("Unexpected Vulkan error");
+    }
 
-    for (const auto& texture : m_textures)
-    texture.destroy(engine);
-    for (const auto& model : m_models)
-    model.destroy(engine);
-
-    m_descriptor_pool.destroy(engine);
-    m_pipeline.destroy(engine);
-    m_set_layout.destroy(engine);
+    for (const auto& texture : m_textures) {
+        texture.destroy();
+    }
+    for (const auto& model : m_models) {
+        model.destroy();
+    }
+    m_descriptor_pool.destroy();
+    m_pipeline.destroy();
+    m_set_layout.destroy();
 }
 
-void PbrPipeline::cmd_draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) const {
+void PbrPipeline::draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) const {
     ASSERT(cmd != nullptr);
     ASSERT(global_set != nullptr);
 
@@ -377,37 +396,37 @@ void PbrPipeline::cmd_draw(const vk::CommandBuffer cmd, const vk::DescriptorSet 
 }
 
 Result<PbrPipeline::TextureHandle> PbrPipeline::load_texture(
-    const Engine& engine, std::filesystem::path path, const vk::Format format
+    std::filesystem::path path, const vk::Format format
 ) {
     ASSERT(m_textures.size() < MaxTextures);
 
-    const auto texture = Texture::from_file(engine, path, {.format = format, .create_mips = true, .sampler_type = Sampler::Linear});
+    const auto texture = Texture::from_file(path, {.format = format, .create_mips = true, .sampler_type = Sampler::Linear});
     if (texture.has_err())
         return texture.err();
 
     usize index = m_textures.size();
-    write_image_sampler_descriptor(engine, *texture, m_texture_set, 0, to_u32(index));
+    write_image_sampler_descriptor(*texture, m_texture_set, 0, to_u32(index));
 
     m_textures.emplace_back(*texture);
     return ok<TextureHandle>(index);
 }
 
 PbrPipeline::TextureHandle PbrPipeline::load_texture_from_data(
-    const Engine& engine, const GpuImage::Data& data, const vk::Format format
+    const GpuImage::Data& data, const vk::Format format
 ) {
     ASSERT(m_textures.size() < MaxTextures);
 
-    const auto texture = Texture::from_data(engine, data, {.format = format, .create_mips = true, .sampler_type = Sampler::Linear});
+    const auto texture = Texture::from_data(data, {.format = format, .create_mips = true, .sampler_type = Sampler::Linear});
 
     usize index = m_textures.size();
-    write_image_sampler_descriptor(engine, texture, m_texture_set, 0, to_u32(index));
+    write_image_sampler_descriptor(texture, m_texture_set, 0, to_u32(index));
 
     m_textures.emplace_back(texture);
     return {index};
 }
 
 Result<PbrPipeline::ModelHandle> PbrPipeline::load_model(
-    const Engine& engine, const std::filesystem::path path,
+    const std::filesystem::path path,
     const TextureHandle normal_map, const TextureHandle texture
 ) {
     ASSERT(!path.empty());
@@ -417,11 +436,10 @@ Result<PbrPipeline::ModelHandle> PbrPipeline::load_model(
     if (model.has_err())
         return model.err();
 
-    return ok(load_model_from_data(engine, model->mesh, normal_map, texture, model->roughness, model->metalness));
+    return ok(load_model_from_data(model->mesh, normal_map, texture, model->roughness, model->metalness));
 }
 
 PbrPipeline::ModelHandle PbrPipeline::load_model_from_data(
-    const Engine& engine,
     const Mesh& data,
     const TextureHandle normal_map,
     const TextureHandle texture,
@@ -434,17 +452,17 @@ PbrPipeline::ModelHandle PbrPipeline::load_model_from_data(
     ASSERT(roughness >= 0.0 && roughness <= 1.0);
     ASSERT(metalness >= 0.0 && metalness <= 1.0);
 
-    const auto index_buffer = GpuBuffer::create(engine, {
+    const auto index_buffer = GpuBuffer::create({
         data.indices.size() * sizeof(data.indices[0]),
         vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst
     });
-    const auto vertex_buffer = GpuBuffer::create(engine, {
+    const auto vertex_buffer = GpuBuffer::create({
         data.vertices.size() * sizeof(data.vertices[0]),
         vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst
     });
 
-    index_buffer.write_span(engine, std::span{data.indices});
-    vertex_buffer.write_span(engine, std::span{data.vertices});
+    index_buffer.write_span(std::span{data.indices});
+    vertex_buffer.write_span(std::span{data.vertices});
 
     m_models.emplace_back(
         to_u32(data.indices.size()),
