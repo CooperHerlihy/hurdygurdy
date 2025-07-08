@@ -10,24 +10,23 @@
 
 namespace hg {
 
-struct VulkanContext {
+struct Vk {
     vk::Instance instance{};
     vk::DebugUtilsMessengerEXT debug_messenger{};
+
     vk::PhysicalDevice gpu{};
     vk::Device device{};
     VmaAllocator gpu_allocator = nullptr;
+
     u32 queue_family_index = UINT32_MAX;
     vk::Queue queue{};
+
     vk::CommandPool command_pool{};
     vk::CommandPool single_time_command_pool{};
 
-    [[nodiscard]] static Result<VulkanContext> create();
+    [[nodiscard]] static Result<Vk> create();
     void destroy() const;
 };
-
-inline VulkanContext g_vk{};
-[[nodiscard]] Result<void> init_vulkan();
-void deinit_vulkan();
 
 class GpuBuffer {
 public:
@@ -49,29 +48,28 @@ public:
     };
 
     struct Config {
-        vk::DeviceSize size;
-        vk::BufferUsageFlags usage;
+        vk::DeviceSize size = 0;
+        vk::BufferUsageFlags usage{};
         MemoryType memory_type = DeviceLocal;
     };
-    [[nodiscard]] static GpuBuffer create(const Config& config);
+    [[nodiscard]] static GpuBuffer create(const Vk& vk, const Config& config);
 
-    void destroy() const {
-        CONTEXT("Destroying GPU buffer");
+    void destroy(const Vk& vk) const {
+        CONTEXT("Destroying Vulkan buffer");
 
         ASSERT(m_allocation != nullptr);
         ASSERT(m_buffer != nullptr);
-        ASSERT(g_vk.gpu_allocator != nullptr);
 
-        vmaDestroyBuffer(g_vk.gpu_allocator, m_buffer, m_allocation);
+        vmaDestroyBuffer(vk.gpu_allocator, m_buffer, m_allocation);
     }
 
-    void write_void(const void* data, vk::DeviceSize size, vk::DeviceSize offset) const;
+    void write_void(const Vk& vk, const void* data, vk::DeviceSize size, vk::DeviceSize offset) const;
 
-    template <typename T> void write_span(const std::span<T> data, vk::DeviceSize offset = 0) const {
-        write_void(data.data(), data.size() * sizeof(T), offset);
+    template <typename T> void write_span(const Vk& vk, const std::span<T> data, vk::DeviceSize offset = 0) const {
+        write_void(vk, data.data(), data.size() * sizeof(T), offset);
     }
-    template <typename T> void write(const T& data, vk::DeviceSize offset = 0) const {
-        write_void(&data, sizeof(T), offset);
+    template <typename T> void write(const Vk& vk, const T& data, vk::DeviceSize offset = 0) const {
+        write_void(vk, &data, sizeof(T), offset);
     }
 
 private:
@@ -95,23 +93,22 @@ public:
         vk::SampleCountFlagBits sample_count{vk::SampleCountFlagBits::e1};
         u32 mip_levels = 1;
     };
-    [[nodiscard]] static GpuImage create(const Config& config);
+    [[nodiscard]] static GpuImage create(const Vk& vk, const Config& config);
 
     struct CubemapConfig {
         vk::Extent3D face_extent{};
         vk::Format format{vk::Format::eUndefined};
         vk::ImageUsageFlags usage{};
     };
-    [[nodiscard]] static GpuImage create_cubemap(const CubemapConfig& config);
+    [[nodiscard]] static GpuImage create_cubemap(const Vk& vk, const CubemapConfig& config);
 
-    void destroy() const {
+    void destroy(const Vk& vk) const {
         CONTEXT("Destroying GPU image");
 
         ASSERT(m_allocation != nullptr);
         ASSERT(m_image != nullptr);
-        ASSERT(g_vk.device != nullptr);
 
-        vmaDestroyImage(g_vk.gpu_allocator, m_image, m_allocation);
+        vmaDestroyImage(vk.gpu_allocator, m_image, m_allocation);
     }
 
     struct Data {
@@ -125,7 +122,7 @@ public:
         vk::ImageLayout final_layout{vk::ImageLayout::eShaderReadOnlyOptimal};
         vk::ImageSubresourceRange subresource{vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1};
     };
-    void write(const WriteConfig& config) const;
+    void write(const Vk& vk, const WriteConfig& config) const;
 
 private:
     VmaAllocation m_allocation = nullptr;
@@ -145,15 +142,14 @@ public:
         vk::Format format{vk::Format::eUndefined};
         vk::ImageSubresourceRange subresource{vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1};
     };
-    [[nodiscard]] static GpuImageView create(const Config& config);
+    [[nodiscard]] static GpuImageView create(const Vk& vk, const Config& config);
 
-    void destroy() const {
+    void destroy(const Vk& vk) const {
         CONTEXT("Destroying GPU image view");
 
         ASSERT(m_view != nullptr);
-        ASSERT(g_vk.device != nullptr);
 
-        g_vk.device.destroyImageView(m_view);
+        vk.device.destroyImageView(m_view);
     }
 
 private:
@@ -181,25 +177,25 @@ public:
         vk::ImageLayout layout{vk::ImageLayout::eUndefined};
         u32 mip_levels = 1;
     };
-    [[nodiscard]] static GpuImageAndView create(const Config& config);
+    [[nodiscard]] static GpuImageAndView create(const Vk& vk, const Config& config);
 
     struct CubemapConfig {
         ImageData data{};
         vk::Format format{vk::Format::eR8G8B8A8Srgb};
         vk::ImageAspectFlagBits aspect_flags{vk::ImageAspectFlagBits::eColor};
     };
-    [[nodiscard]] static GpuImageAndView create_cubemap(const CubemapConfig& config);
+    [[nodiscard]] static GpuImageAndView create_cubemap(const Vk& vk, const CubemapConfig& config);
 
-    void destroy() const {
-        m_image.destroy();
-        m_view.destroy();
+    void destroy(const Vk& vk) const {
+        m_image.destroy(vk);
+        m_view.destroy(vk);
     }
 
-    void write(const GpuImage::WriteConfig& config) const {
-        m_image.write(config);
+    void write(const Vk& vk, const GpuImage::WriteConfig& config) const {
+        m_image.write(vk, config);
     }
 
-    void generate_mipmaps(u32 levels, vk::Extent3D extent, vk::Format format, vk::ImageLayout final_layout) const;
+    void generate_mipmaps(const Vk& vk, u32 levels, vk::Extent3D extent, vk::Format format, vk::ImageLayout final_layout) const;
 
 private:
     GpuImage m_image{};
@@ -229,15 +225,14 @@ public:
         vk::SamplerAddressMode edge_mode{vk::SamplerAddressMode::eRepeat};
         u32 mip_levels = 1;
     };
-    [[nodiscard]] static Sampler create(const Config& config);
+    [[nodiscard]] static Sampler create(const Vk& vk, const Config& config);
 
-    void destroy() const {
+    void destroy(const Vk& vk) const {
         CONTEXT("Destroying GPU sampler");
 
         ASSERT(m_sampler != nullptr);
-        ASSERT(g_vk.device != nullptr);
 
-        g_vk.device.destroySampler(m_sampler);
+        vk.device.destroySampler(m_sampler);
     }
 
 private:
@@ -267,13 +262,13 @@ public:
         Sampler::Type sampler_type = Sampler::Nearest;
         vk::SamplerAddressMode edge_mode{vk::SamplerAddressMode::eRepeat};
     };
-    [[nodiscard]] static Texture from_data(const GpuImage::Data& data, const Config& config);
-    [[nodiscard]] static Result<Texture> from_file(std::filesystem::path path, const Config& config);
-    [[nodiscard]] static Result<Texture> from_cubemap_file(std::filesystem::path path, const Config& config);
+    [[nodiscard]] static Texture from_data(const Vk& vk, const GpuImage::Data& data, const Config& config);
+    [[nodiscard]] static Result<Texture> from_file(const Vk& vk, std::filesystem::path path, const Config& config);
+    [[nodiscard]] static Result<Texture> from_cubemap_file(const Vk& vk, std::filesystem::path path, const Config& config);
 
-    void destroy() const {
-        m_image.destroy();
-        m_sampler.destroy();
+    void destroy(const Vk& vk) const {
+        m_image.destroy(vk);
+        m_sampler.destroy(vk);
     }
 
 private:
@@ -292,15 +287,14 @@ public:
         std::span<const vk::DescriptorSetLayoutBinding> bindings;
         std::span<const vk::DescriptorBindingFlags> flags = {};
     };
-    [[nodiscard]] static DescriptorSetLayout create(const Config& config);
+    [[nodiscard]] static DescriptorSetLayout create(const Vk& vk, const Config& config);
 
-    void destroy() const {
+    void destroy(const Vk& vk) const {
         CONTEXT("Destroying Vulkan descriptor set layout");
 
         ASSERT(m_descriptor_set_layout != nullptr);
-        ASSERT(g_vk.device != nullptr);
 
-        g_vk.device.destroyDescriptorSetLayout(m_descriptor_set_layout);
+        vk.device.destroyDescriptorSetLayout(m_descriptor_set_layout);
     }
 
 private:
@@ -318,24 +312,24 @@ public:
         u32 max_sets = 0;
         std::span<const vk::DescriptorPoolSize> descriptors{};
     };
-    [[nodiscard]] static DescriptorPool create(const Config& config);
+    [[nodiscard]] static DescriptorPool create(const Vk& vk, const Config& config);
 
-    void destroy() const {
+    void destroy(const Vk& vk) const {
         CONTEXT("Destroying Vulkan descriptor pool");
 
         ASSERT(m_pool != nullptr);
-        ASSERT(g_vk.device != nullptr);
 
-        g_vk.device.destroyDescriptorPool(m_pool);
+        vk.device.destroyDescriptorPool(m_pool);
     }
 
     [[nodiscard]] Result<void> allocate_sets(
+        const Vk& vk,
         std::span<const vk::DescriptorSetLayout> layouts,
         std::span<vk::DescriptorSet> out_sets
     );
-    [[nodiscard]] inline Result<vk::DescriptorSet> allocate_set(const vk::DescriptorSetLayout layout) {
+    [[nodiscard]] inline Result<vk::DescriptorSet> allocate_set(const Vk& vk, const vk::DescriptorSetLayout layout) {
         auto set = ok<vk::DescriptorSet>();
-        const auto alloc_result = allocate_sets({&layout, 1}, {&*set, 1});
+        const auto alloc_result = allocate_sets(vk, {&layout, 1}, {&*set, 1});
         if (alloc_result.has_err())
             return alloc_result.err();
         return set;
@@ -346,12 +340,12 @@ private:
 };
 
 void write_uniform_buffer_descriptor(
-    const GpuBuffer::View& buffer,
+    const Vk& vk, const GpuBuffer::View& buffer,
     vk::DescriptorSet set, u32 binding, u32 binding_array_index = 0
 );
 
 void write_image_sampler_descriptor(
-    const Texture& texture,
+    const Vk& vk, const Texture& texture,
     vk::DescriptorSet set, u32 binding, u32 binding_array_index = 0
 );
 
@@ -366,15 +360,14 @@ public:
         std::span<const vk::DescriptorSetLayout> set_layouts{};
         std::span<const vk::PushConstantRange> push_ranges{};
     };
-    [[nodiscard]] static PipelineLayout create(const Config& config);
+    [[nodiscard]] static PipelineLayout create(const Vk& vk, const Config& config);
 
-    void destroy() const {
+    void destroy(const Vk& vk) const {
         CONTEXT("Destroying GPU pipeline layout");
 
         ASSERT(m_pipeline_layout != nullptr);
-        ASSERT(g_vk.device != nullptr);
 
-        g_vk.device.destroyPipelineLayout(m_pipeline_layout);
+        vk.device.destroyPipelineLayout(m_pipeline_layout);
     }
 
 private:
@@ -396,15 +389,14 @@ public:
         std::span<const vk::DescriptorSetLayout> set_layouts{};
         std::span<const vk::PushConstantRange> push_ranges{};
     };
-    [[nodiscard]] static Result<UnlinkedShader> create(const Config& config);
+    [[nodiscard]] static Result<UnlinkedShader> create(const Vk& vk, const Config& config);
 
-    void destroy() const {
+    void destroy(const Vk& vk) const {
         CONTEXT("Destroying GPU unlinked shader");
 
         ASSERT(m_shader != nullptr);
-        ASSERT(g_vk.device != nullptr);
 
-        g_vk.device.destroyShaderEXT(m_shader);
+        vk.device.destroyShaderEXT(m_shader);
     }
 
 private:
@@ -428,19 +420,17 @@ public:
         std::filesystem::path fragment_shader_path{};
         vk::ShaderCodeTypeEXT code_type{vk::ShaderCodeTypeEXT::eSpirv};
     };
-    [[nodiscard]] static Result<GraphicsPipeline> create(const Config& config);
+    [[nodiscard]] static Result<GraphicsPipeline> create(const Vk& vk, const Config& config);
 
-    void destroy() const {
+    void destroy(const Vk& vk) const {
         CONTEXT("Destroying GPU graphics pipeline");
-
-        ASSERT(g_vk.device != nullptr);
 
         for (const auto shader : m_shaders) {
             ASSERT(shader != nullptr);
-            g_vk.device.destroyShaderEXT(shader);
+            vk.device.destroyShaderEXT(shader);
         }
 
-        m_layout.destroy();
+        m_layout.destroy(vk);
     }
 
 private:
@@ -458,19 +448,18 @@ public:
     struct Config {
         vk::FenceCreateFlags flags{};
     };
-    [[nodiscard]] static Fence create(const Config& config);
+    [[nodiscard]] static Fence create(const Vk& vk, const Config& config);
 
-    void destroy() const {
+    void destroy(const Vk& vk) const {
         CONTEXT("Destroying fence");
 
         ASSERT(m_fence != nullptr);
-        ASSERT(g_vk.device != nullptr);
 
-        g_vk.device.destroyFence(m_fence);
+        vk.device.destroyFence(m_fence);
     }
 
-    void wait() const;
-    void reset() const;
+    void wait(const Vk& vk) const;
+    void reset(const Vk& vk) const;
 
 private:
     vk::Fence m_fence = nullptr;
@@ -487,30 +476,28 @@ public:
         return &m_semaphore;
     }
 
-    [[nodiscard]] static Semaphore create();
+    [[nodiscard]] static Semaphore create(const Vk& vk);
 
-    void destroy() const {
+    void destroy(const Vk& vk) const {
         CONTEXT("Destroying semaphore");
 
         ASSERT(m_semaphore != nullptr);
-        ASSERT(g_vk.device != nullptr);
 
-        g_vk.device.destroySemaphore(m_semaphore);
+        vk.device.destroySemaphore(m_semaphore);
     }
 
 private:
     vk::Semaphore m_semaphore = nullptr;
 };
 
+void allocate_command_buffers(const Vk& vk, const std::span<vk::CommandBuffer> out_cmds);
 
-void allocate_command_buffers(const std::span<vk::CommandBuffer> out_cmds);
-
-[[nodiscard]] vk::CommandBuffer begin_single_time_commands();
-void end_single_time_commands(vk::CommandBuffer cmd);
-void submit_single_time_commands(auto commands) {
-    const vk::CommandBuffer cmd = begin_single_time_commands();
+[[nodiscard]] vk::CommandBuffer begin_single_time_commands(const Vk& vk);
+void end_single_time_commands(const Vk& vk, vk::CommandBuffer cmd);
+void submit_single_time_commands(const Vk& vk, auto commands) {
+    const vk::CommandBuffer cmd = begin_single_time_commands(vk);
     commands(cmd);
-    end_single_time_commands(cmd);
+    end_single_time_commands(vk, cmd);
 }
 
 class BarrierBuilder {
@@ -593,9 +580,9 @@ public:
     static constexpr vk::Format SwapchainImageFormat{vk::Format::eR8G8B8A8Srgb};
     static constexpr vk::ColorSpaceKHR SwapchainColorSpace{vk::ColorSpaceKHR::eSrgbNonlinear};
 
-    [[nodiscard]] static Result<Window> create(bool fullscreen, i32 width, i32 height);
-    void destroy() const;
-    [[nodiscard]] Result<void> resize();
+    [[nodiscard]] static Result<Window> create(const Vk& vk, bool fullscreen, i32 width, i32 height);
+    void destroy(const Vk& vk) const;
+    [[nodiscard]] Result<void> resize(const Vk& vk);
 
     [[nodiscard]] GLFWwindow* window() const { return m_window; }
     [[nodiscard]] vk::Extent2D extent() const { return m_extent; }
@@ -605,22 +592,14 @@ public:
         vk::Image render_target{};
         vk::Extent2D extent{};
     };
-    template <typename Renderer>
-    [[nodiscard]] Result<void> draw_frame(const Renderer& renderer) {
-        const auto cmd = begin_frame();
-        if (cmd.has_err())
-            return cmd.err();
-
-        DrawInfo draw_info{*cmd, current_image(), m_extent};
-        renderer.draw(draw_info);
-
-        return end_frame();
+    [[nodiscard]] DrawInfo draw_info() const {
+        ASSERT(m_recording);
+        return DrawInfo{current_cmd(), current_image(), m_extent};
     }
+    [[nodiscard]] Result<vk::CommandBuffer> begin_frame(const Vk& vk);
+    [[nodiscard]] Result<void> end_frame(const Vk& vk);
 
 private:
-    [[nodiscard]] Result<vk::CommandBuffer> begin_frame();
-    [[nodiscard]] Result<void> end_frame();
-
     [[nodiscard]] vk::CommandBuffer& current_cmd() { return m_command_buffers[m_current_frame_index]; }
     [[nodiscard]] vk::Image& current_image() { return m_swapchain_images[m_current_image_index]; }
     [[nodiscard]] Fence& is_frame_finished() { return m_frame_finished_fences[m_current_frame_index]; }

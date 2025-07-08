@@ -3,7 +3,7 @@
 #include "hg_utils.h"
 #include "hg_math.h"
 #include "hg_generate.h"
-#include "hg_engine.h"
+#include "hg_vulkan.h"
 
 namespace hg {
 
@@ -36,9 +36,9 @@ public:
 
     void draw(const Window::DrawInfo& info) const;
 
-    [[nodiscard]] static DefaultRenderer create(vk::Extent2D window_size);
-    void destroy() const;
-    void resize(const vk::Extent2D window_size);
+    [[nodiscard]] static DefaultRenderer create(const Vk& vk, vk::Extent2D window_size);
+    void destroy(const Vk& vk) const;
+    void resize(const Vk& vk, const vk::Extent2D window_size);
 
     vk::DescriptorSetLayout get_global_set_layout() const { return m_set_layout.get(); }
 
@@ -46,11 +46,11 @@ public:
         m_pipelines.emplace_back(&system);
     }
 
-    void update_projection(const glm::mat4& projection) const {
-        m_vp_buffer.write(projection, offsetof(ViewProjectionUniform, projection));
+    void update_projection(const Vk& vk, const glm::mat4& projection) const {
+        m_vp_buffer.write(vk, projection, offsetof(ViewProjectionUniform, projection));
     }
 
-    void update_camera(const Cameraf& camera);
+    void update_camera(const Vk& vk, const Cameraf& camera);
 
     void add_light(const glm::vec3 position, const glm::vec3 color) {
         ASSERT(m_lights.size() <= MaxLights);
@@ -77,11 +77,11 @@ private:
 
 class SkyboxPipeline : public DefaultRenderer::Pipeline {
 public:
-    [[nodiscard]] static SkyboxPipeline create(const DefaultRenderer& pipeline);
-    void destroy() const;
+    [[nodiscard]] static SkyboxPipeline create(const Vk& vk, const DefaultRenderer& pipeline);
+    void destroy(const Vk& vk) const;
     void draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) const override;
 
-    [[nodiscard]] Result<void> load_skybox(const std::filesystem::path path);
+    [[nodiscard]] Result<void> load_skybox(const Vk& vk, const std::filesystem::path path);
 
 private:
     DescriptorSetLayout m_set_layout{};
@@ -97,8 +97,8 @@ private:
 
 class PbrPipeline : public DefaultRenderer::Pipeline {
 public:
-    [[nodiscard]] static PbrPipeline create(const DefaultRenderer& pipeline);
-    void destroy() const;
+    [[nodiscard]] static PbrPipeline create(const Vk& vk, const DefaultRenderer& pipeline);
+    void destroy(const Vk& vk) const;
 
     struct PushConstant {
         glm::mat4 model{1.0f};
@@ -116,10 +116,10 @@ public:
     };
 
     [[nodiscard]] Result<TextureHandle> load_texture(
-        std::filesystem::path path, vk::Format format = vk::Format::eR8G8B8A8Srgb
+        const Vk& vk, std::filesystem::path path, vk::Format format = vk::Format::eR8G8B8A8Srgb
     );
     [[nodiscard]] TextureHandle load_texture_from_data(
-        const GpuImage::Data& data, vk::Format format = vk::Format::eR8G8B8A8Srgb
+        const Vk& vk, const GpuImage::Data& data, vk::Format format = vk::Format::eR8G8B8A8Srgb
     );
 
     struct Model {
@@ -131,9 +131,9 @@ public:
         float roughness = 0.0;
         float metalness = 0.0;
 
-        void destroy() const {
-            vertex_buffer.destroy();
-            index_buffer.destroy();
+        void destroy(const Vk& vk) const {
+            vertex_buffer.destroy(vk);
+            index_buffer.destroy(vk);
         }
     };
 
@@ -142,15 +142,16 @@ public:
     };
 
     [[nodiscard]] Result<ModelHandle> load_model(
-        std::filesystem::path path,
-        TextureHandle normal_map,
-        TextureHandle texture
+        const Vk& vk, std::filesystem::path path,
+        TextureHandle normal_map, TextureHandle texture
     );
     [[nodiscard]] ModelHandle load_model_from_data(
+        const Vk& vk,
         const Mesh& data,
         TextureHandle normal_map,
         TextureHandle texture,
-        float roughness, float metalness
+        float roughness,
+        float metalness
     );
 
     struct RenderTicket {

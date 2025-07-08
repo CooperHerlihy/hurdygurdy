@@ -8,6 +8,7 @@
 #include <type_traits>
 #include <utility>
 #include <variant>
+#include <vulkan/vulkan_enums.hpp>
 
 using i8 = std::int8_t;
 using i16 = std::int16_t;
@@ -129,8 +130,9 @@ enum class Err : u8 {
     InvalidWindow,
     FrameTimeout,
 
-    // Vulkan
-    CouldNotAllocateVkDescriptorSets,
+    // Resources
+    OutOfMemory,
+    OutOfDescriptorSets,
 
     // File
     ShaderFileNotFound,
@@ -156,12 +158,15 @@ constexpr std::string_view to_string(Err code) {
         HG_MAKE_ERROR_STRING(NoCompatibleVkPhysicalDevice);
         HG_MAKE_ERROR_STRING(VkQueueFamilyUnavailable);
         HG_MAKE_ERROR_STRING(VkQueueUnavailable);
-        HG_MAKE_ERROR_STRING(MonitorUnvailable);
 
+        // Window
+        HG_MAKE_ERROR_STRING(MonitorUnvailable);
         HG_MAKE_ERROR_STRING(InvalidWindow);
         HG_MAKE_ERROR_STRING(FrameTimeout);
 
-        HG_MAKE_ERROR_STRING(CouldNotAllocateVkDescriptorSets);
+        // Resources
+        HG_MAKE_ERROR_STRING(OutOfMemory);
+        HG_MAKE_ERROR_STRING(OutOfDescriptorSets);
 
         // File
         HG_MAKE_ERROR_STRING(ShaderFileNotFound);
@@ -263,107 +268,219 @@ template <typename T, typename... Args> constexpr Result<T> ok(Args&&... args) {
     return Result<T>{std::in_place_type_t<T>(), std::forward<Args>(args)...};
 }
 
-constexpr Result<void> vk_success_or_error(const vk::Result result) {
-    switch (result) {
-    case vk::Result::eSuccess:
-        return ok();
-    case vk::Result::eNotReady:
-        ERROR("Vulkan not ready");
-    case vk::Result::eTimeout:
-        ERROR("Vulkan timeout");
-    case vk::Result::eEventSet:
-        ERROR("Vulkan event set");
-    case vk::Result::eEventReset:
-        ERROR("Vulkan event reset");
-    case vk::Result::eIncomplete:
-        ERROR("Vulkan incomplete");
-    case vk::Result::eErrorOutOfHostMemory:
-        ERROR("Vulkan ran out of host memory");
-    case vk::Result::eErrorOutOfDeviceMemory:
-        ERROR("Vulkan ran out of device memory");
-    case vk::Result::eErrorInitializationFailed:
-        ERROR("Vulkan initialization failed");
-    case vk::Result::eErrorDeviceLost:
-        ERROR("Vulkan device lost");
-    case vk::Result::eErrorMemoryMapFailed:
-        ERROR("Vulkan memory map failed");
-    case vk::Result::eErrorLayerNotPresent:
-        ERROR("Vulkan layer not present");
-    case vk::Result::eErrorExtensionNotPresent:
-        ERROR("Vulkan extension not present");
-    case vk::Result::eErrorFeatureNotPresent:
-        ERROR("Vulkan feature not present");
-    case vk::Result::eErrorIncompatibleDriver:
-        ERROR("Vulkan incompatible driver");
-    case vk::Result::eErrorTooManyObjects:
-        ERROR("Vulkan too many objects");
-    case vk::Result::eErrorFormatNotSupported:
-        ERROR("Vulkan format not supported");
-    case vk::Result::eErrorFragmentedPool:
-        ERROR("Vulkan fragmented pool");
-    case vk::Result::eErrorUnknown:
-        ERROR("Vulkan unknown");
-    case vk::Result::eErrorOutOfPoolMemory:
-        ERROR("Vulkan out of pool memory");
-    case vk::Result::eErrorInvalidExternalHandle:
-        ERROR("Vulkan invalid external handle");
-    case vk::Result::eErrorFragmentation:
-        ERROR("Vulkan fragmentation");
-    case vk::Result::eErrorInvalidDeviceAddressEXT:
-        ERROR("Vulkan invalid device address");
-    case vk::Result::eErrorPipelineCompileRequiredEXT:
-        ERROR("Vulkan pipeline compile required");
-    case vk::Result::eErrorNotPermitted:
-        ERROR("Vulkan not permitted");
-    case vk::Result::eErrorSurfaceLostKHR:
-        ERROR("Vulkan surface lost");
-    case vk::Result::eErrorNativeWindowInUseKHR:
-        ERROR("Vulkan native window in use");
-    case vk::Result::eSuboptimalKHR:
-        ERROR("Vulkan suboptimal");
-    case vk::Result::eErrorOutOfDateKHR:
-        ERROR("Vulkan out of date");
-    case vk::Result::eErrorIncompatibleDisplayKHR:
-        ERROR("Vulkan incompatible display");
-    case vk::Result::eErrorValidationFailedEXT:
-        ERROR("Vulkan validation failed");
-    case vk::Result::eErrorInvalidShaderNV:
-        ERROR("Vulkan invalid shader");
-    case vk::Result::eErrorImageUsageNotSupportedKHR:
-        ERROR("Vulkan image usage not supported");
-    case vk::Result::eErrorVideoPictureLayoutNotSupportedKHR:
-        ERROR("Vulkan video picture layout not supported");
-    case vk::Result::eErrorVideoProfileOperationNotSupportedKHR:
-        ERROR("Vulkan video profile operation not supported");
-    case vk::Result::eErrorVideoProfileFormatNotSupportedKHR:
-        ERROR("Vulkan video profile format not supported");
-    case vk::Result::eErrorVideoProfileCodecNotSupportedKHR:
-        ERROR("Vulkan video profile codec not supported");
-    case vk::Result::eErrorVideoStdVersionNotSupportedKHR:
-        ERROR("Vulkan video std version not supported");
-    case vk::Result::eErrorInvalidDrmFormatModifierPlaneLayoutEXT:
-        ERROR("Vulkan invalid drm format modifier plane layout");
-    case vk::Result::eThreadIdleKHR:
-        ERROR("Vulkan thread idle");
-    case vk::Result::eThreadDoneKHR:
-        ERROR("Vulkan thread done");
-    case vk::Result::eOperationDeferredKHR:
-        ERROR("Vulkan operation deferred");
-    case vk::Result::eOperationNotDeferredKHR:
-        ERROR("Vulkan operation not deferred");
-    case vk::Result::eErrorInvalidVideoStdParametersKHR:
-        ERROR("Vulkan invalid video std parameters");
-    case vk::Result::eErrorCompressionExhaustedEXT:
-        ERROR("Vulkan compression exhausted");
-    case vk::Result::eErrorIncompatibleShaderBinaryEXT:
-        ERROR("Vulkan incompatible shader binary");
-    case vk::Result::ePipelineBinaryMissingKHR:
-        ERROR("Vulkan pipeline binary missing");
-    case vk::Result::eErrorNotEnoughSpaceKHR:
-        ERROR("Vulkan not enough space");
-    default:
-        ERROR("Unknown Vulkan error");
-    }
+template <typename T>
+inline T* align_ptr(void* ptr) {
+    return reinterpret_cast<T*>((reinterpret_cast<usize>(ptr) + alignof(T) - 1) & ~(alignof(T) - 1));
 }
+
+template <typename T> concept Allocator = requires(T t) {
+    { t.get() } -> std::convertible_to<void*>;
+    { t.alloc(std::declval<usize>()) } -> std::same_as<std::span<T>>;
+    { t.dealloc(std::declval<void*>()) } -> std::same_as<void>;
+};
+
+struct ReturnNull { explicit constexpr ReturnNull() = default; };
+struct FatalError { explicit constexpr FatalError() = default; };
+
+template <typename FailurePolicy = FatalError> class LinearAllocator {
+    static_assert(std::is_same_v<FailurePolicy, FatalError> || std::is_same_v<FailurePolicy, ReturnNull>);
+public:
+    void* get() const { return m_memory.data(); }
+
+    LinearAllocator() = default;
+    LinearAllocator(std::byte* memory, usize size) : m_memory(memory, size), m_head(memory) {}
+    ~LinearAllocator() noexcept = default;
+
+    LinearAllocator(const LinearAllocator&) = delete;
+    LinearAllocator& operator=(const LinearAllocator&) = delete;
+    LinearAllocator(LinearAllocator&& other) noexcept : m_memory(other.m_memory), m_head(other.m_head) {
+        other.m_memory = {};
+        other.m_head = nullptr;
+    }
+    LinearAllocator& operator=(LinearAllocator&& other) noexcept {
+        if (this == &other)
+            return *this;
+        this->~LinearAllocator();
+        new (this) LinearAllocator(std::move(other));
+        return *this;
+    }
+
+    template <typename T> [[nodiscard]] T* alloc(const usize count = 1) {
+        ASSERT(count > 0);
+
+        T* ptr = align_ptr<T>(m_head);
+        std::byte* alloc_end = reinterpret_cast<std::byte*>(ptr + count) + sizeof(std::byte*);
+        if (alloc_end > m_memory.data() + m_memory.size()) {
+            if constexpr (std::is_same_v<FailurePolicy, FatalError>) {
+                ERROR("Linear allocator out of memory");
+            } else if constexpr (std::is_same_v<FailurePolicy, ReturnNull>) {
+                WARN("Linear allocator out of memory");
+                return nullptr;
+            }
+        }
+        m_head = ptr + count;
+        return ptr;
+    }
+
+    void dealloc(void*) {}
+    void reset() { m_head = m_memory.data(); }
+
+private:
+    std::span<std::byte> m_memory;
+    void* m_head = nullptr;
+};
+
+template <typename FailurePolicy = FatalError> class StackAllocator {
+    static_assert(std::is_same_v<FailurePolicy, FatalError> || std::is_same_v<FailurePolicy, ReturnNull>);
+public:
+    void* get() const { return m_memory.data(); }
+
+    StackAllocator() = default;
+    StackAllocator(std::byte* memory, usize size) : m_memory(memory, size), m_head(memory) {}
+    ~StackAllocator() noexcept = default;
+
+    StackAllocator(const StackAllocator&) = delete;
+    StackAllocator& operator=(const StackAllocator&) = delete;
+    StackAllocator(StackAllocator&& other) noexcept : m_memory(other.m_memory), m_head(other.m_head) {
+        other.m_memory = {};
+        other.m_head = nullptr;
+    }
+    StackAllocator& operator=(StackAllocator&& other) noexcept {
+        if (this == &other)
+            return *this;
+        this->~StackAllocator();
+        new (this) StackAllocator(std::move(other));
+        return *this;
+    }
+
+    template <typename T> [[nodiscard]] T* alloc(const usize count = 1) {
+        ASSERT(count > 0);
+
+        T* result_ptr = align_ptr<T>(m_head);
+        std::byte** metadata_ptr = align_ptr<std::byte*>(result_ptr + count);
+
+        std::byte* alloc_end = reinterpret_cast<std::byte*>(metadata_ptr + 1);
+        if (alloc_end > m_memory.data() + m_memory.size()) {
+            if constexpr (std::is_same_v<FailurePolicy, FatalError>) {
+                ERROR("Stack allocator out of memory");
+            } else if constexpr (std::is_same_v<FailurePolicy, ReturnNull>) {
+                WARN("Stack allocator out of memory");
+                return nullptr;
+            }
+        }
+
+        *metadata_ptr = reinterpret_cast<std::byte*>(m_head);
+        m_head = alloc_end;
+
+        return result_ptr;
+    }
+
+    void dealloc(void*) {
+        if (m_head > m_memory.data())
+            m_head = *(reinterpret_cast<std::byte**>(m_head) - 1);
+    }
+    void reset() { m_head = m_memory.data(); }
+
+private:
+    std::span<std::byte> m_memory;
+    std::byte* m_head = nullptr;
+};
+
+template <typename T, bool CheckMemoryLeaks = true> class PoolAllocator {
+private:
+    union Slot {
+        T data;
+        usize next;
+    };
+
+public:
+    void* get() const { return m_slots.data(); }
+
+    PoolAllocator() = default;
+    PoolAllocator(T* memory, usize size) requires(sizeof(T) >= sizeof(Slot)) :
+        m_slots(reinterpret_cast<Slot*>(memory), size)
+    {
+        for (usize i = 0; i < size; ++i) {
+            m_slots[i].next = i + 1;
+        }
+    }
+    PoolAllocator(usize* memory, usize size) requires(sizeof(T) < sizeof(Slot)) :
+        m_slots(reinterpret_cast<Slot*>(memory), size)
+    {
+        for (usize i = 0; i < size; ++i) {
+            m_slots[i].next = i + 1;
+        }
+    }
+
+    ~PoolAllocator() noexcept requires(!CheckMemoryLeaks) = default;
+    ~PoolAllocator() noexcept requires CheckMemoryLeaks {
+        if (m_slots.data() == nullptr)
+            return;
+
+        usize count = 0;
+        usize index = m_next;
+        while (index != m_slots.size() && count <= m_slots.size()) {
+            index = m_slots[index].next;
+            ++count;
+        }
+        if (count < m_slots.size())
+            ERROR("Pool allocator leaked memory");
+        if (count > m_slots.size())
+            ERROR("Pool allocator had double frees");
+    }
+
+    PoolAllocator(const PoolAllocator&) = delete;
+    PoolAllocator& operator=(const PoolAllocator&) = delete;
+    PoolAllocator(PoolAllocator&& other) noexcept :
+        m_slots(other.m_slots),
+        m_next(other.m_next)
+    {
+        other.m_slots = {};
+        other.m_next = 0;
+    }
+    PoolAllocator& operator=(PoolAllocator&& other) noexcept {
+        if (this == &other)
+            return *this;
+        this->~PoolAllocator();
+        new (this) PoolAllocator(std::move(other));
+        return *this;
+    }
+
+    [[nodiscard]] T* create(T&& resource)
+    requires(std::is_trivially_copyable_v<T> || std::is_rvalue_reference_v<T>) {
+        return new (get_next_resource()) T(std::move(resource));
+    }
+
+    template <typename... Args> [[nodiscard]] T* create(Args&&... args) {
+        return new (get_next_resource()) T(std::forward<Args>(args)...);
+    }
+
+    void destroy(T* resource) {
+        if (resource == nullptr)
+            return;
+
+        if constexpr (std::is_destructible_v<T>)
+            resource->~T();
+
+        Slot* slot = reinterpret_cast<Slot*>(resource);
+        const usize index = static_cast<usize>(slot - m_slots.data());
+        slot->next = m_next;
+        m_next = index;
+    }
+
+private:
+    T* get_next_resource() {
+        usize index = m_next;
+        if (index >= m_slots.size()) {
+            WARN("Resource pool out of memory");
+            return nullptr;
+        }
+        m_next = m_slots[index].next;
+        return &m_slots[index].data;
+    }
+
+    std::span<Slot> m_slots{};
+    usize m_next = 0;
+};
 
 } // namespace hg
