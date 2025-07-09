@@ -1,5 +1,6 @@
 #pragma once
 
+#include "hg_utils.h"
 #include "hg_vulkan.h"
 
 namespace hg {
@@ -12,83 +13,88 @@ template <typename T> concept EngineRenderer = requires(T t) {
     { t.draw(std::declval<Window::DrawInfo>()) } -> std::same_as<void>;
 };
 
-template <typename Renderer>
+template <EngineRenderer Renderer>
 class Engine {
-    static_assert(EngineRenderer<Renderer>);
 public:
     struct Config {
         bool fullscreen = false;
         glm::uvec2 window_size{1920, 1080};
 
         usize global_allocator_size = 1024 * 1024 * 1024;
-        usize stack_allocator_size = 1024 * 1024 * 1024;
+        usize stack_allocator_size = 128 * 1024 * 1024;
+        usize frame_allocator_size = 128 * 1024;
 
-        usize frame_allocator_size = 1024 * 1024 * 1024;
-
-        usize max_texture_count = 1024;
+        usize max_texture_count = 256;
     };
     static Result<Engine> create(const Config& config) {
         auto engine = ok<Engine>();
 
-        engine->m_global_memory = std::make_unique<std::byte[]>(config.global_allocator_size);
-        engine->m_stack_memory = std::make_unique<std::byte[]>(config.stack_allocator_size);
-
-        if (engine->m_global_memory == nullptr)
-            return Err::OutOfMemory;
-        if (engine->m_stack_memory == nullptr)
-            return Err::OutOfMemory;
-
-        engine->m_global_allocator = LinearAllocator<ReturnNull>{
-            engine->m_global_memory.get(), config.global_allocator_size
-        };
-        engine->m_stack_allocator = StackAllocator<ReturnNull>{
-            engine->m_stack_memory.get(), config.stack_allocator_size
-        };
-
-        for (usize i = 0; i < 2; ++i) {
-            engine->m_frame_memories[i] = std::make_unique<std::byte[]>(config.frame_allocator_size);
-            if (engine->m_frame_memories[i] == nullptr)
-                return Err::OutOfMemory;
-            engine->m_frame_allocators[i] = LinearAllocator<ReturnNull>{
-                engine->m_frame_memories[i].get(), config.frame_allocator_size
-            };
+        engine->m_global_allocator = LinearAllocator<CAllocator>{config.global_allocator_size};
+        engine->m_stack_allocator = StackAllocator<decltype(engine->m_global_allocator)>{engine->m_global_allocator, config.stack_allocator_size};
+        for (auto& frame_allocator : engine->m_frame_allocators) {
+            frame_allocator = LinearAllocator<decltype(engine->m_global_allocator)>{engine->m_global_allocator, config.frame_allocator_size};
         }
+
+        engine->m_texture_allocator = PoolAllocator<Texture, decltype(engine->m_global_allocator)>{engine->m_global_allocator, config.max_texture_count};
 
         const auto vk = Vk::create();
         if (vk.has_err())
             return vk.err();
-        engine->m_vk.reset(new (engine->m_global_allocator.template alloc<Vk>()) Vk{std::move(*vk)});
+        engine->m_vk = new (engine->m_global_allocator.template alloc<Vk>()) Vk{*vk};
 
         const auto window = Window::create(engine->vk(), config.fullscreen, config.window_size.x, config.window_size.y);
         if (window.has_err())
             return window.err();
-        engine->m_window.reset(new (engine->m_global_allocator.template alloc<Window>()) Window{std::move(*window)});
+        engine->m_window = new (engine->m_global_allocator.template alloc<Window>()) Window{*window};
 
-        engine->m_renderer.reset(new (engine->m_global_allocator.template alloc<Renderer>()) Renderer{
+        engine->m_renderer = new (engine->m_global_allocator.template alloc<Renderer>()) Renderer{
             Renderer::create(engine->vk(), engine->window().extent())
-        });
-
-        auto texture_memory = reinterpret_cast<Texture*>(malloc(config.max_texture_count * sizeof(Texture)));
-        if (texture_memory == nullptr)
-            return Err::OutOfMemory;
-        engine->m_texture_allocator = PoolAllocator<Texture>{texture_memory, config.max_texture_count};
+        };
 
         return engine;
     }
 
-    ~Engine() noexcept {
-        if (m_vk != nullptr) {
-            m_renderer->destroy(*m_vk);
-            m_window->destroy(*m_vk);
-            m_vk->destroy();
-        }
-    }
-
     Engine() = default;
+    ~Engine() noexcept {
+        if (m_moved_from)
+            return;
+
+        m_renderer->destroy(*m_vk);
+        m_window->destroy(*m_vk);
+        m_vk->destroy();
+
+        m_texture_allocator.destroy(m_global_allocator);
+
+        for (auto& frame_allocator : m_frame_allocators) {
+            frame_allocator.destroy(m_global_allocator);
+        }
+        m_stack_allocator.destroy(m_global_allocator);
+        m_global_allocator.destroy();
+    }
     Engine(const Engine&) = delete;
     Engine& operator=(const Engine&) = delete;
-    Engine(Engine&& other) noexcept = default;
-    Engine& operator=(Engine&& other) noexcept = default;
+    Engine(Engine&& other) noexcept
+        : m_moved_from{other.m_moved_from}
+        , m_global_allocator{other.m_global_allocator}
+        , m_stack_allocator{other.m_stack_allocator}
+        , m_frame_allocators{other.m_frame_allocators}
+        , m_frame_index{other.m_frame_index}
+
+        , m_texture_allocator{other.m_texture_allocator}
+
+        , m_vk{other.m_vk}
+        , m_window{other.m_window}
+        , m_renderer{other.m_renderer}
+    {
+        other.m_moved_from = true;
+    }
+    Engine& operator=(Engine&& other) noexcept {
+        if (this == &other)
+            return *this;
+        this->~Engine();
+        new (this) Engine(std::move(other));
+        return *this;
+    }
 
     [[nodiscard]] const Vk& vk() const { return *m_vk; }
     [[nodiscard]] const Window& window() const { return *m_window; }
@@ -137,21 +143,18 @@ public:
     }
 
 private:
-    std::unique_ptr<std::byte[]> m_global_memory = nullptr;
-    std::unique_ptr<std::byte[]> m_stack_memory = nullptr;
-    LinearAllocator<ReturnNull> m_global_allocator{};
-    StackAllocator<ReturnNull> m_stack_allocator{};
+    bool m_moved_from = false;
 
-    std::array<std::unique_ptr<std::byte[]>, 2> m_frame_memories{};
-    std::array<LinearAllocator<ReturnNull>, 2> m_frame_allocators{};
+    LinearAllocator<CAllocator> m_global_allocator{};
+    StackAllocator<decltype(m_global_allocator)> m_stack_allocator{};
+    std::array<LinearAllocator<decltype(m_global_allocator)>, 2> m_frame_allocators{};
     usize m_frame_index = 0;
 
-    std::unique_ptr<Vk, decltype([](void*) {})> m_vk = nullptr;
-    std::unique_ptr<Window, decltype([](void*) {})> m_window = nullptr;
-    std::unique_ptr<Renderer, decltype([](void*) {})> m_renderer = nullptr;
+    PoolAllocator<Texture, decltype(m_global_allocator)> m_texture_allocator{};
 
-    std::unique_ptr<Texture[]> m_texture_memory = nullptr;
-    PoolAllocator<Texture> m_texture_allocator{};
+    Vk* m_vk = nullptr;
+    Window* m_window = nullptr;
+    Renderer* m_renderer = nullptr;
 };
 
 } // namespace hg
