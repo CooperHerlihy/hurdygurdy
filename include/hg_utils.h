@@ -55,9 +55,8 @@ constexpr inline void pop_stack_context() { g_stack_context.pop_back(); }
 
 inline void warn_internal(std::string&& message) {
     std::cerr << "Warning: " << std::move(message) << "\n";
-    for (auto it = g_stack_context.rbegin(); it != g_stack_context.rend(); ++it) {
-        std::cerr << "    Trace: " << *it << "\n";
-    }
+    if (!g_stack_context.empty())
+        std::cerr << "    Trace: " << g_stack_context.back() << "\n";
 }
 
 inline void info_internal(std::string&& message) { std::cout << "Info: " << std::move(message) << "\n"; }
@@ -240,9 +239,12 @@ template <typename T, typename... Args> constexpr Result<T> ok(Args&&... args) {
     return Result<T>{std::in_place_type_t<T>(), std::forward<Args>(args)...};
 }
 
-template <typename T>
-inline T* align_ptr(void* ptr) {
+template <typename T> inline T* align_ptr(void* ptr) {
     return reinterpret_cast<T*>((reinterpret_cast<usize>(ptr) + alignof(T) - 1) & ~(alignof(T) - 1));
+}
+
+template <typename T> inline T* align_ptr(void* ptr, const usize alignment) {
+    return reinterpret_cast<T*>((reinterpret_cast<usize>(ptr) + alignment - 1) & ~(alignment - 1));
 }
 
 struct Terminate { explicit constexpr Terminate() = default; };
@@ -255,23 +257,23 @@ template <typename T> concept FailurePolicyTag = (
 
 template <typename T> concept Allocator = requires(T t) {
     { t.template alloc<T>(std::declval<usize>()) } -> std::same_as<T*>;
-    { t.dealloc(std::declval<void*>()) } -> std::same_as<void>;
+    { t.template dealloc<T>(std::declval<T*>(), std::declval<usize>()) } -> std::same_as<void>;
 };
 
+template <FailurePolicyTag FailurePolicy>
 class CAllocator {
 public:
     template <typename T> [[nodiscard]] static T* alloc(const usize count) {
         auto ptr = malloc(count * sizeof(T));
-        if (ptr == nullptr)
-            ERROR("Malloc returned null");
+        if constexpr (std::same_as<FailurePolicy, Terminate>)
+            if (ptr == nullptr)
+                ERROR("Malloc returned null");
         return static_cast<T*>(ptr);
     }
-    static void dealloc(void* ptr) { free(ptr); }
+    template <typename T> static void dealloc(T* ptr, const usize) { free(ptr); }
 };
 
-inline CAllocator c_allocator_instance{};
-
-template <Allocator Parent, FailurePolicyTag FP = Terminate>
+template <Allocator Parent, FailurePolicyTag FailurePolicy>
 class LinearAllocator {
 public:
     LinearAllocator() = default;
@@ -279,32 +281,33 @@ public:
         : m_memory{Parent::template alloc<std::byte>(size), size}
         , m_head{m_memory.data()}
     {}
-    void destroy() const requires std::is_empty_v<Parent> { Parent::dealloc(m_memory.data()); }
+    void destroy() const requires std::is_empty_v<Parent> { Parent::dealloc(m_memory.data(), m_memory.size()); }
 
     LinearAllocator(Parent& parent, const usize size)
         : m_memory{parent.template alloc<std::byte>(size), size}
         , m_head{m_memory.data()}
     {}
-    void destroy(Parent& parent) const { parent.dealloc(m_memory.data()); }
+    void destroy(Parent& parent) const { parent.dealloc(m_memory.data(), m_memory.size()); }
 
     template <typename T> [[nodiscard]] T* alloc(const usize count = 1) {
         ASSERT(count > 0);
 
         T* ptr = align_ptr<T>(m_head);
-        std::byte* alloc_end = reinterpret_cast<std::byte*>(ptr + count) + sizeof(std::byte*);
+        std::byte* alloc_end = reinterpret_cast<std::byte*>(ptr + count);
         if (alloc_end > m_memory.data() + m_memory.size()) {
-            if constexpr (std::same_as<FP, Terminate>)
+            if constexpr (std::same_as<FailurePolicy, Terminate>)
                 ERROR("Linear allocator out of memory");
-            if constexpr (std::same_as<FP, ReturnNull>) {
+            if constexpr (std::same_as<FailurePolicy, ReturnNull>) {
                 WARN("Linear allocator out of memory");
                 return nullptr;
             }
         }
-        m_head = ptr + count;
+        m_head = alloc_end;
+
         return ptr;
     }
 
-    void dealloc(void*) {}
+    template <typename T> void dealloc(T*, usize) {}
 
     void reset() { m_head = m_memory.data(); }
 
@@ -313,57 +316,63 @@ private:
     void* m_head = nullptr;
 };
 
-template <Allocator Parent, FailurePolicyTag FailurePolicy = Terminate>
+template <Allocator Parent, FailurePolicyTag FailurePolicy>
 class StackAllocator {
 public:
     StackAllocator() = default;
     StackAllocator(const usize size) requires std::is_empty_v<Parent>
         : m_memory{Parent::template alloc<std::byte>(size), size}
-        , m_head{m_memory.data()}
+        , m_head{align_ptr<std::byte*>(m_memory.data(), 16)}
     {}
-    void destroy() const requires std::is_empty_v<Parent> { Parent::dealloc(m_memory.data()); }
+    void destroy() const requires std::is_empty_v<Parent> { Parent::dealloc(m_memory.data(), m_memory.size()); }
 
     StackAllocator(Parent& parent, const usize size)
         : m_memory{parent.template alloc<std::byte>(size), size}
         , m_head{m_memory.data()}
     {}
-    void destroy(Parent& parent) const { parent.dealloc(m_memory.data()); }
+    void destroy(Parent& parent) const { parent.dealloc(m_memory.data(), m_memory.size()); }
 
     template <typename T> [[nodiscard]] T* alloc(const usize count = 1) {
         ASSERT(count > 0);
 
-        T* result_ptr = align_ptr<T>(m_head);
-        std::byte** metadata_ptr = align_ptr<std::byte*>(result_ptr + count);
-
-        std::byte* alloc_end = reinterpret_cast<std::byte*>(metadata_ptr + 1);
+        T* ptr = reinterpret_cast<T*>(m_head);
+        std::byte* alloc_end = reinterpret_cast<std::byte*>(ptr + count);
         if (alloc_end > m_memory.data() + m_memory.size()) {
             if constexpr (std::same_as<FailurePolicy, Terminate>)
-                ERROR("Stack allocator out of memory");
+                ERROR("Linear allocator out of memory");
             if constexpr (std::same_as<FailurePolicy, ReturnNull>) {
-                WARN("Stack allocator out of memory");
+                WARN("Linear allocator out of memory");
                 return nullptr;
             }
         }
+        m_head = align_ptr<std::byte*>(alloc_end, 16);
 
-        *metadata_ptr = reinterpret_cast<std::byte*>(m_head);
-        m_head = alloc_end;
-
-        return result_ptr;
+        return ptr;
     }
 
-    void dealloc(void*) {
-        if (m_head > m_memory.data())
-            m_head = *(reinterpret_cast<std::byte**>(m_head) - 1);
+    template <typename T> void dealloc(T* ptr, const usize count = 1) {
+        ASSERT(count > 0);
+
+        if (align_ptr<std::byte*>(ptr + count, 16) != m_head) {
+            if constexpr (std::same_as<FailurePolicy, Terminate>)
+                ERROR("Deallocation of invalid pointer from linear allocator");
+            if constexpr (std::same_as<FailurePolicy, ReturnNull>) {
+                WARN("Deallocation of invalid pointer from linear allocator");
+                return;
+            }
+        }
+
+        m_head = ptr;
     }
+
     void reset() { m_head = m_memory.data(); }
 
 private:
-    Parent* m_parent = nullptr;
-    std::span<std::byte> m_memory;
-    std::byte* m_head = nullptr;
+    std::span<std::byte> m_memory = {};
+    void* m_head = nullptr;
 };
 
-template <typename T, Allocator Parent, bool CheckMemoryLeaks = true>
+template <typename T, Allocator Parent, FailurePolicyTag FailurePolicy, bool CheckMemoryLeaks = true>
 class PoolAllocator {
 private:
     union Slot {
@@ -396,7 +405,7 @@ public:
             if (count > m_slots.size())
                 ERROR("Pool allocator had double frees");
         }
-        Parent::dealloc(m_slots.data());
+        Parent::dealloc(m_slots.data(), m_slots.size());
     }
 
     PoolAllocator(Parent& parent, const usize size)
@@ -423,7 +432,7 @@ public:
             if (count > m_slots.size())
                 ERROR("Pool allocator had double frees");
         }
-        parent.dealloc(m_slots.data());
+        parent.dealloc(m_slots.data(), m_slots.size());
     }
 
     [[nodiscard]] T* alloc(T&& resource)
@@ -452,8 +461,12 @@ private:
     T* get_next_resource() {
         usize index = m_next;
         if (index >= m_slots.size()) {
-            WARN("Resource pool out of memory");
-            return nullptr;
+            if constexpr (std::same_as<FailurePolicy, Terminate>)
+                ERROR("Resource pool out of memory");
+            if constexpr (std::same_as<FailurePolicy, ReturnNull>) {
+                WARN("Resource pool out of memory");
+                return nullptr;
+            }
         }
         m_next = m_slots[index].next;
         return &m_slots[index].data;

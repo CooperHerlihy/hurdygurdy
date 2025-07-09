@@ -7,6 +7,7 @@
 #include <array>
 #include <filesystem>
 #include <span>
+#include <vulkan/vulkan_handles.hpp>
 
 namespace hg {
 
@@ -572,20 +573,37 @@ private:
     std::vector<vk::ImageMemoryBarrier2> m_images{};
 };
 
-constexpr u32 MaxFramesInFlight = 2;
-constexpr u32 MaxSwapchainImages = 3;
-
-class Window {
+class Surface {
 public:
+    [[nodiscard]] vk::SurfaceKHR get() const {
+        ASSERT(m_surface != nullptr);
+        return m_surface;
+    }
+
+    [[nodiscard]] static Result<Surface> create(const Vk& vk, GLFWwindow* window);
+    void destroy(const Vk& vk) const {
+        CONTEXT("Destroying surface");
+
+        ASSERT(m_surface != nullptr);
+
+        vk.instance.destroySurfaceKHR(m_surface);
+    }
+
+private:
+    vk::SurfaceKHR m_surface{};
+};
+
+class Swapchain {
+public:
+    static constexpr u32 MaxFramesInFlight = 2;
+    static constexpr u32 MaxImages = 3;
+
     static constexpr vk::Format SwapchainImageFormat{vk::Format::eR8G8B8A8Srgb};
     static constexpr vk::ColorSpaceKHR SwapchainColorSpace{vk::ColorSpaceKHR::eSrgbNonlinear};
 
-    [[nodiscard]] static Result<Window> create(const Vk& vk, bool fullscreen, i32 width, i32 height);
+    [[nodiscard]] static Result<Swapchain> create(const Vk& vk, vk::SurfaceKHR surface);
     void destroy(const Vk& vk) const;
-    [[nodiscard]] Result<void> resize(const Vk& vk);
-
-    [[nodiscard]] GLFWwindow* window() const { return m_window; }
-    [[nodiscard]] vk::Extent2D extent() const { return m_extent; }
+    [[nodiscard]] Result<void> resize(const Vk& vk, vk::SurfaceKHR surface);
 
     struct DrawInfo {
         vk::CommandBuffer cmd{};
@@ -596,6 +614,7 @@ public:
         ASSERT(m_recording);
         return DrawInfo{current_cmd(), current_image(), m_extent};
     }
+
     [[nodiscard]] Result<vk::CommandBuffer> begin_frame(const Vk& vk);
     [[nodiscard]] Result<void> end_frame(const Vk& vk);
 
@@ -611,11 +630,9 @@ private:
     [[nodiscard]] const Semaphore& is_image_available() const { return m_image_available_semaphores[m_current_frame_index]; }
     [[nodiscard]] const Semaphore& is_ready_to_present() const { return m_ready_to_present_semaphores[m_current_image_index]; }
 
-    GLFWwindow* m_window = nullptr;
-    vk::SurfaceKHR m_surface{};
     vk::Extent2D m_extent{};
     vk::SwapchainKHR m_swapchain{};
-    std::array<vk::Image, MaxSwapchainImages> m_swapchain_images{};
+    std::array<vk::Image, MaxImages> m_swapchain_images{};
     u32 m_image_count = 0;
     u32 m_current_image_index = 0;
     u32 m_current_frame_index = 0;
@@ -623,7 +640,7 @@ private:
     std::array<vk::CommandBuffer, MaxFramesInFlight> m_command_buffers{};
     std::array<Fence, MaxFramesInFlight> m_frame_finished_fences{};
     std::array<Semaphore, MaxFramesInFlight> m_image_available_semaphores{};
-    std::array<Semaphore, MaxSwapchainImages> m_ready_to_present_semaphores{};
+    std::array<Semaphore, MaxImages> m_ready_to_present_semaphores{};
 };
 
 } // namespace hg

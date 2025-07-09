@@ -9,12 +9,96 @@
 
 namespace hg {
 
-DefaultRenderer DefaultRenderer::create(const Vk& vk, const vk::Extent2D window_size) {
+Result<Window> Window::create(const Vk& vk, bool fullscreen, i32 width, i32 height) {
+    CONTEXT("Creating window");
+
+    if (!fullscreen) {
+        ASSERT(width > 0);
+        ASSERT(height > 0);
+    }
+
+    auto window = ok<Window>();
+
+    if (fullscreen) {
+        const auto monitor = glfwGetPrimaryMonitor();
+        if (monitor == nullptr)
+            return Err::MonitorUnvailable;
+
+        const auto video_mode = glfwGetVideoMode(monitor);
+        if (video_mode == nullptr)
+            ERROR("Could not find video mode");
+
+        window->m_window = glfwCreateWindow(video_mode->width, video_mode->width, "Hurdy Gurdy", monitor, nullptr);
+        if (window->m_window == nullptr)
+            ERROR("Could not create window");
+
+    } else {
+        window->m_window = glfwCreateWindow(width, height, "Hurdy Gurdy", nullptr, nullptr);
+        if (window->m_window == nullptr)
+            ERROR("Could not create window");
+    }
+
+    const auto surface = Surface::create(vk, window->m_window);
+    if (surface.has_err())
+        return surface.err();
+    window->m_surface = *surface;
+
+    const auto swapchain = Swapchain::create(vk, window->m_surface.get());
+    if (swapchain.has_err())
+        return swapchain.err();
+    window->m_swapchain = *swapchain;
+
+    ASSERT(window->m_window != nullptr);
+    return window;
+}
+
+[[nodiscard]] Result<void> Window::draw(const Vk& vk, Renderer& renderer) {
+    CONTEXT("Drawing frame");
+
+    const auto frame_result = [&]() -> Result<void> {
+        const auto begin = m_swapchain.begin_frame(vk);
+        if (begin.has_err())
+            return begin.err();
+
+        renderer.draw(m_swapchain.draw_info());
+
+        const auto end = m_swapchain.end_frame(vk);
+        if (end.has_err())
+            return end.err();
+
+        return ok();
+    }();
+
+    if (frame_result.has_err()) {
+        switch (frame_result.err()) {
+            case Err::FrameTimeout: return frame_result.err();
+            case Err::InvalidWindow: {
+                for (int w = 0, h = 0; w <= 1 || h <= 1; glfwGetWindowSize(m_window, &w, &h)) {
+                    glfwPollEvents();
+                }
+
+                const auto resize_result = resize(vk);
+                if (resize_result.has_err())
+                    return resize_result.err();
+
+                renderer.resize(vk, *this);
+                break;
+            }
+            default: ERROR("Unexpected error: {}", to_string(frame_result.err()));
+        }
+    }
+
+    return ok();
+}
+
+DefaultRenderer DefaultRenderer::create(const Vk& vk, const Window& window) {
     DefaultRenderer pipeline{};
+
+    const auto window_size = window.get_extent();
 
     pipeline.m_color_image = GpuImageAndView::create(vk, {
         .extent{window_size.width, window_size.height, 1},
-        .format = Window::SwapchainImageFormat,
+        .format = Swapchain::SwapchainImageFormat,
         .usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc,
         .sample_count = vk::SampleCountFlagBits::e4,
     });
@@ -71,14 +155,13 @@ void DefaultRenderer::destroy(const Vk& vk) const {
     m_color_image.destroy(vk);
 }
 
-void DefaultRenderer::resize(const Vk& vk, const vk::Extent2D window_size) {
-    ASSERT(window_size.width > 0);
-    ASSERT(window_size.height > 0);
+void DefaultRenderer::resize(const Vk& vk, const Window& window) {
+    const auto window_size = window.get_extent();
 
     m_color_image.destroy(vk);
     m_color_image = GpuImageAndView::create(vk, {
         .extent{window_size.width, window_size.height, 1},
-        .format = Window::SwapchainImageFormat,
+        .format = Swapchain::SwapchainImageFormat,
         .usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc,
         .sample_count = vk::SampleCountFlagBits::e4,
     });
@@ -93,15 +176,15 @@ void DefaultRenderer::resize(const Vk& vk, const vk::Extent2D window_size) {
     });
 }
 
-void DefaultRenderer::update_camera(const Vk& vk, const Cameraf& camera) {
+void DefaultRenderer::update_camera_and_lights(const Vk& vk, const Cameraf& camera) {
     const glm::mat4 view{camera.view()};
 
-    ASSERT(m_lights.size() < MaxLights);
-    LightUniform lights{.count = m_lights.size()};
-    for (usize i = 0; i < m_lights.size(); ++i) {
+    ASSERT(m_light_queue.size() < MaxLights);
+    LightUniform lights{.count = m_light_queue.size()};
+    for (usize i = 0; i < m_light_queue.size(); ++i) {
         lights.vals[i] = {
-            .position = view * m_lights[i].position,
-            .color = m_lights[i].color,
+            .position = view * m_light_queue[i].position,
+            .color = m_light_queue[i].color,
         };
     }
 
@@ -109,7 +192,7 @@ void DefaultRenderer::update_camera(const Vk& vk, const Cameraf& camera) {
     m_vp_buffer.write(vk, view, offsetof(ViewProjectionUniform, view));
 }
 
-void DefaultRenderer::draw(const Window::DrawInfo& info) const {
+void DefaultRenderer::draw(const Swapchain::DrawInfo& info) {
     ASSERT(info.cmd != nullptr);
     ASSERT(info.render_target != nullptr);
     ASSERT(info.extent.width > 0);
@@ -152,7 +235,7 @@ void DefaultRenderer::draw(const Window::DrawInfo& info) const {
     cmd.setRasterizationSamplesEXT(vk::SampleCountFlagBits::e4);
     cmd.setSampleMaskEXT(vk::SampleCountFlagBits::e4, vk::SampleMask{0xff});
 
-    for (const auto& system : m_pipelines) {
+    for (auto system : m_pipelines) {
         system->draw(cmd, m_global_set);
     }
 
@@ -185,6 +268,8 @@ void DefaultRenderer::draw(const Window::DrawInfo& info) const {
         .set_image_src(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
         .set_image_dst(vk::PipelineStageFlagBits2::eAllGraphics, vk::AccessFlagBits2::eNone, vk::ImageLayout::ePresentSrcKHR)
         .build_and_run();
+
+    m_light_queue.clear();
 }
 
 SkyboxPipeline SkyboxPipeline::create(const Vk& vk, const DefaultRenderer& renderer) {
@@ -271,7 +356,7 @@ void SkyboxPipeline::destroy(const Vk& vk) const {
     m_set_layout.destroy(vk);
 }
 
-void SkyboxPipeline::draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) const {
+void SkyboxPipeline::draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) {
     ASSERT(m_set != nullptr);
     ASSERT(cmd != nullptr);
     ASSERT(global_set != nullptr);
@@ -351,7 +436,7 @@ void PbrPipeline::destroy(const Vk& vk) const {
     m_set_layout.destroy(vk);
 }
 
-void PbrPipeline::draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) const {
+void PbrPipeline::draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) {
     ASSERT(cmd != nullptr);
     ASSERT(global_set != nullptr);
 
@@ -390,6 +475,8 @@ void PbrPipeline::draw(const vk::CommandBuffer cmd, const vk::DescriptorSet glob
     }
 
     cmd.setCullMode(vk::CullModeFlagBits::eNone);
+
+    m_render_queue.clear();
 }
 
 Result<PbrPipeline::TextureHandle> PbrPipeline::load_texture(

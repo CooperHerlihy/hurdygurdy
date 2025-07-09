@@ -128,9 +128,9 @@ static vk::DebugUtilsMessengerEXT init_debug_messenger(const vk::Instance instan
 
     const auto messenger = instance.createDebugUtilsMessengerEXT(DebugUtilsMessengerCreateInfo);
         switch (messenger.result) {
-        case vk::Result::eSuccess: break;
-        case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
-        default: ERROR("Unexpected Vulkan error");
+            case vk::Result::eSuccess: break;
+            case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
+            default: ERROR("Unexpected Vulkan error");
     }
     return messenger.value;
 }
@@ -174,12 +174,12 @@ static Result<vk::PhysicalDevice> find_gpu(const vk::Instance instance) {
 
         const auto extensions = gpu.enumerateDeviceExtensionProperties();
             switch (extensions.result) {
-            case vk::Result::eSuccess: break;
-            case vk::Result::eIncomplete: WARN("Vulkan incomplete"); break;
-            case vk::Result::eErrorLayerNotPresent: return Err::VulkanLayerUnavailable;
-            case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
-            case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
-            default: ERROR("Unexpected Vulkan error");
+                case vk::Result::eSuccess: break;
+                case vk::Result::eIncomplete: WARN("Vulkan incomplete"); break;
+                case vk::Result::eErrorLayerNotPresent: return Err::VulkanLayerUnavailable;
+                case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
+                case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
+                default: ERROR("Unexpected Vulkan error");
         }
 
         if (!std::ranges::all_of(DeviceExtensions, [&](const char* required) {
@@ -1467,76 +1467,60 @@ void end_single_time_commands(const Vk& vk, vk::CommandBuffer cmd) {
     vk.device.freeCommandBuffers(vk.single_time_command_pool, {cmd});
 }
 
-Result<Window> Window::create(const Vk& vk, const bool fullscreen, const i32 width, const i32 height) {
-    CONTEXT("Creating window");
+Result<Surface> Surface::create(const Vk& vk, GLFWwindow* window) {
+    CONTEXT("Creating surface");
 
-    if (!fullscreen) {
-        ASSERT(width > 0);
-        ASSERT(height > 0);
-    }
+    auto surface = ok<Surface>();
 
-    auto window = ok<Window>();
-
-    if (fullscreen) {
-        const auto monitor = glfwGetPrimaryMonitor();
-        if (monitor == nullptr)
-            return Err::MonitorUnvailable;
-
-        const auto video_mode = glfwGetVideoMode(monitor);
-        if (video_mode == nullptr)
-            ERROR("Could not find video mode");
-
-        window->m_window = glfwCreateWindow(video_mode->width, video_mode->width, "Hurdy Gurdy", monitor, nullptr);
-        if (window->m_window == nullptr)
-            ERROR("Could not create window");
-
-    } else {
-        window->m_window = glfwCreateWindow(width, height, "Hurdy Gurdy", nullptr, nullptr);
-        if (window->m_window == nullptr)
-            ERROR("Could not create window");
-    }
-
-    VkSurfaceKHR surface = VK_NULL_HANDLE;
-    const auto surface_result = glfwCreateWindowSurface(vk.instance, window->m_window, nullptr, &surface);
+    VkSurfaceKHR vk_surface = VK_NULL_HANDLE;
+    const auto surface_result = glfwCreateWindowSurface(vk.instance, window, nullptr, &vk_surface);
     switch (surface_result) {
         case VK_SUCCESS: break;
+        case VK_ERROR_INITIALIZATION_FAILED: ERROR("Vulkan initialization failed");
         case VK_ERROR_EXTENSION_NOT_PRESENT: return Err::VulkanExtensionUnavailable;
         case VK_ERROR_NATIVE_WINDOW_IN_USE_KHR: ERROR("Window surface creation requires the window to have the client API set to GLFW_NO_API");
         default: ERROR("Unexpected Vulkan error");
     }
-    window->m_surface = surface;
+    surface->m_surface = vk_surface;
 
-    const auto window_result = window->resize(vk);
+    ASSERT(surface->m_surface != nullptr);
+    return surface;
+}
+
+Result<Swapchain> Swapchain::create(const Vk& vk, const vk::SurfaceKHR surface) {
+    CONTEXT("Creating swapchain");
+
+    auto swapchain = ok<Swapchain>();
+
+    const auto window_result = swapchain->resize(vk, surface);
     if (window_result.has_err())
         return window_result.err();
 
-    allocate_command_buffers(vk, window->m_command_buffers);
+    allocate_command_buffers(vk, swapchain->m_command_buffers);
 
-    for (auto& fence : window->m_frame_finished_fences) {
+    for (auto& fence : swapchain->m_frame_finished_fences) {
         fence = Fence::create(vk, {vk::FenceCreateFlagBits::eSignaled});
     }
-    for (auto& semaphore : window->m_image_available_semaphores) {
+    for (auto& semaphore : swapchain->m_image_available_semaphores) {
         semaphore = Semaphore::create(vk);
     }
-    for (auto& semaphore : window->m_ready_to_present_semaphores) {
+    for (auto& semaphore : swapchain->m_ready_to_present_semaphores) {
         semaphore = Semaphore::create(vk);
     }
 
-    ASSERT(window->m_window != nullptr);
-    ASSERT(window->m_surface != nullptr);
-    ASSERT(window->m_extent != nullptr);
-    ASSERT(window->m_swapchain != nullptr);
-    for (usize i = 0; i < window->m_image_count; ++i) {
-        ASSERT(window->m_swapchain_images[i] != nullptr);
+    ASSERT(swapchain->m_extent != nullptr);
+    ASSERT(swapchain->m_swapchain != nullptr);
+    for (usize i = 0; i < swapchain->m_image_count; ++i) {
+        ASSERT(swapchain->m_swapchain_images[i] != nullptr);
     }
-    for (const auto cmd : window->m_command_buffers) {
+    for (const auto cmd : swapchain->m_command_buffers) {
         ASSERT(cmd != nullptr);
     }
-    return window;
+    return swapchain;
 }
 
-void Window::destroy(const Vk& vk) const {
-    CONTEXT("Destroying window");
+void Swapchain::destroy(const Vk& vk) const {
+    CONTEXT("Destroying swapchain");
 
     for (const auto fence : m_frame_finished_fences) {
         fence.destroy(vk);
@@ -1555,18 +1539,12 @@ void Window::destroy(const Vk& vk) const {
 
     ASSERT(m_swapchain != nullptr);
     vk.device.destroySwapchainKHR(m_swapchain);
-
-    ASSERT(m_surface != nullptr);
-    vk.instance.destroySurfaceKHR(m_surface);
-
-    ASSERT(m_window != nullptr);
-    glfwDestroyWindow(m_window);
 }
 
-Result<void> Window::resize(const Vk& vk) {
-    CONTEXT("Resizing window");
+Result<void> Swapchain::resize(const Vk& vk, const vk::SurfaceKHR surface) {
+    CONTEXT("Resizing swapchain");
 
-    const auto [surface_result, surface_capabilities] = vk.gpu.getSurfaceCapabilitiesKHR(m_surface);
+    const auto [surface_result, surface_capabilities] = vk.gpu.getSurfaceCapabilitiesKHR(surface);
     switch (surface_result) {
         case vk::Result::eSuccess: break;
         case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
@@ -1574,10 +1552,18 @@ Result<void> Window::resize(const Vk& vk) {
         case vk::Result::eErrorSurfaceLostKHR: ERROR("Vulkan surface lost");
         default: ERROR("Unexpected Vulkan error");
     }
-    if (surface_capabilities.currentExtent.width <= 1 || surface_capabilities.currentExtent.height <= 1)
+    if (surface_capabilities.currentExtent.width == 0 || surface_capabilities.currentExtent.height == 0)
+        return Err::InvalidWindow;
+    if (surface_capabilities.currentExtent.width < surface_capabilities.minImageExtent.width)
+        return Err::InvalidWindow;
+    if (surface_capabilities.currentExtent.height < surface_capabilities.minImageExtent.height)
+        return Err::InvalidWindow;
+    if (surface_capabilities.currentExtent.width > surface_capabilities.maxImageExtent.width)
+        return Err::InvalidWindow;
+    if (surface_capabilities.currentExtent.height > surface_capabilities.maxImageExtent.height)
         return Err::InvalidWindow;
 
-    const auto [present_mode_result, present_modes] = vk.gpu.getSurfacePresentModesKHR(m_surface);
+    const auto [present_mode_result, present_modes] = vk.gpu.getSurfacePresentModesKHR(surface);
     switch (surface_result) {
         case vk::Result::eSuccess: break;
         case vk::Result::eIncomplete: WARN("Vulkan get present modes incomplete"); break;
@@ -1588,9 +1574,9 @@ Result<void> Window::resize(const Vk& vk) {
     }
 
     const auto new_swapchain = vk.device.createSwapchainKHR({
-        .surface = m_surface,
+        .surface = surface,
         .minImageCount = surface_capabilities.maxImageCount == 0
-                         ? MaxSwapchainImages
+                         ? MaxImages
                          : std::min(surface_capabilities.minImageCount + 1, surface_capabilities.maxImageCount),
         .imageFormat = SwapchainImageFormat,
         .imageColorSpace = SwapchainColorSpace,
@@ -1646,7 +1632,7 @@ Result<void> Window::resize(const Vk& vk) {
     return ok();
 }
 
-Result<vk::CommandBuffer> Window::begin_frame(const Vk& vk) {
+Result<vk::CommandBuffer> Swapchain::begin_frame(const Vk& vk) {
     CONTEXT("Beginning frame");
 
     ASSERT(!m_recording);
@@ -1715,7 +1701,7 @@ Result<vk::CommandBuffer> Window::begin_frame(const Vk& vk) {
     return ok(current_cmd());
 }
 
-Result<void> Window::end_frame(const Vk& vk) {
+Result<void> Swapchain::end_frame(const Vk& vk) {
     CONTEXT("Ending frame");
 
     ASSERT(m_recording);
@@ -1762,8 +1748,10 @@ Result<void> Window::end_frame(const Vk& vk) {
     const auto present_result = vk.queue.presentKHR(present_info);
     switch (present_result) {
         case vk::Result::eSuccess: break;
-        case vk::Result::eSuboptimalKHR: return Err::InvalidWindow;
-        case vk::Result::eErrorOutOfDateKHR: return Err::InvalidWindow;
+        case vk::Result::eSuboptimalKHR: [[fallthrough]];
+        case vk::Result::eErrorOutOfDateKHR: {
+            return Err::InvalidWindow;
+        }
         case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
         case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
         case vk::Result::eErrorDeviceLost: ERROR("Vulkan device lost");

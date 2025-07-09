@@ -7,7 +7,58 @@
 
 namespace hg {
 
-class DefaultRenderer {
+class Window {
+public:
+    class Renderer {
+    public:
+        virtual ~Renderer() = default;
+
+        virtual void draw(const Swapchain::DrawInfo& info) = 0;
+
+        virtual void resize(const Vk& vk, const Window& window) = 0;
+    };
+
+    [[nodiscard]] GLFWwindow* get() const {
+        ASSERT(m_window != nullptr);
+        return m_window;
+    }
+    [[nodiscard]] vk::SurfaceKHR get_surface() const { return m_surface.get(); }
+    [[nodiscard]] vk::Extent2D get_extent() const {
+        int width = 0, height = 0;
+        glfwGetFramebufferSize(m_window, &width, &height);
+        return {to_u32(width), to_u32(height)};
+    }
+
+    [[nodiscard]] static Result<Window> create(const Vk& vk, bool fullscreen, i32 width, i32 height);
+    void destroy(const Vk& vk) const {
+        CONTEXT("Destroying window");
+
+        m_swapchain.destroy(vk);
+        m_surface.destroy(vk);
+
+        ASSERT(m_window != nullptr);
+        glfwDestroyWindow(m_window);
+    }
+
+    [[nodiscard]] Result<void> resize(const Vk& vk) {
+        CONTEXT("Resizing window");
+
+        const auto res = m_swapchain.resize(vk, m_surface.get());
+        if (res.has_err())
+            return res.err();
+
+        return ok();
+    }
+
+    [[nodiscard]] Result<void> draw(const Vk& vk, Renderer& renderer);
+
+private:
+    GLFWwindow* m_window = nullptr;
+    Surface m_surface{};
+    Swapchain m_swapchain{};
+};
+
+class DefaultRenderer : public Window::Renderer {
 public:
     DefaultRenderer() = default;
 
@@ -15,7 +66,7 @@ public:
     public:
         virtual ~Pipeline() = default;
 
-        virtual void draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) const = 0;
+        virtual void draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) = 0;
     };
 
     struct ViewProjectionUniform {
@@ -34,15 +85,15 @@ public:
         alignas(16) Light vals[MaxLights]{};
     };
 
-    void draw(const Window::DrawInfo& info) const;
+    void draw(const Swapchain::DrawInfo& info) override;
 
-    [[nodiscard]] static DefaultRenderer create(const Vk& vk, vk::Extent2D window_size);
+    [[nodiscard]] static DefaultRenderer create(const Vk& vk, const Window& window);
     void destroy(const Vk& vk) const;
-    void resize(const Vk& vk, const vk::Extent2D window_size);
+    void resize(const Vk& vk, const Window& window) override;
 
     vk::DescriptorSetLayout get_global_set_layout() const { return m_set_layout.get(); }
 
-    void add_pipeline(const Pipeline& system) {
+    void add_pipeline(Pipeline& system) {
         m_pipelines.emplace_back(&system);
     }
 
@@ -50,15 +101,11 @@ public:
         m_vp_buffer.write(vk, projection, offsetof(ViewProjectionUniform, projection));
     }
 
-    void update_camera(const Vk& vk, const Cameraf& camera);
+    void update_camera_and_lights(const Vk& vk, const Cameraf& camera);
 
-    void add_light(const glm::vec3 position, const glm::vec3 color) {
-        ASSERT(m_lights.size() <= MaxLights);
-        m_lights.emplace_back(glm::vec4{position, 1.0f}, glm::vec4{color, 1.0});
-    }
-
-    void clear_lights() {
-        m_lights.clear();
+    void queue_light(const glm::vec3 position, const glm::vec3 color) {
+        ASSERT(m_light_queue.size() <= MaxLights);
+        m_light_queue.emplace_back(glm::vec4{position, 1.0f}, glm::vec4{color, 1.0});
     }
 
 private:
@@ -70,16 +117,16 @@ private:
     vk::DescriptorSet m_global_set{};
     GpuBuffer m_vp_buffer{};
     GpuBuffer m_light_buffer{};
-    std::vector<Light> m_lights{};
+    std::vector<Light> m_light_queue{};
 
-    std::vector<const Pipeline*> m_pipelines{};
+    std::vector<Pipeline*> m_pipelines{};
 };
 
 class SkyboxPipeline : public DefaultRenderer::Pipeline {
 public:
     [[nodiscard]] static SkyboxPipeline create(const Vk& vk, const DefaultRenderer& pipeline);
     void destroy(const Vk& vk) const;
-    void draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) const override;
+    void draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) override;
 
     [[nodiscard]] Result<void> load_skybox(const Vk& vk, const std::filesystem::path path);
 
@@ -108,7 +155,7 @@ public:
         float metalness = 0.0f;
     };
 
-    void draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) const override;
+    void draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) override;
 
     static constexpr usize MaxTextures = 256;
     struct TextureHandle {
@@ -165,7 +212,6 @@ public:
     }
 
     void clear_queue() {
-        m_render_queue.clear();
     }
 
 private:
