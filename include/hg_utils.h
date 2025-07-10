@@ -261,7 +261,7 @@ template <typename T> concept Allocator = requires(T t) {
     { t.template dealloc<T>(std::declval<T*>(), std::declval<usize>()) } -> std::same_as<void>;
 };
 
-template <FailurePolicyTag FailurePolicy>
+template <FailurePolicyTag FailurePolicy = Terminate>
 class CAllocator {
 public:
     template <typename T> [[nodiscard]] static T* alloc(const usize count) {
@@ -281,21 +281,29 @@ public:
     template <typename T> static void dealloc(T* ptr, const usize) { std::free(ptr); }
 };
 
-template <Allocator Parent, FailurePolicyTag FailurePolicy = Terminate>
+template <FailurePolicyTag FailurePolicy = Terminate>
 class LinearAllocator {
 public:
     LinearAllocator() = default;
-    LinearAllocator(const usize size) requires std::is_empty_v<Parent>
-        : m_memory{Parent::template alloc<std::byte>(size), size}
-        , m_head{m_memory.data()}
-    {}
-    void destroy() const requires std::is_empty_v<Parent> { Parent::dealloc(m_memory.data(), m_memory.size()); }
+    LinearAllocator(std::byte* memory, usize size) : m_memory{memory, size}, m_head{memory} {}
 
-    LinearAllocator(Parent& parent, const usize size)
-        : m_memory{parent.template alloc<std::byte>(size), size}
-        , m_head{m_memory.data()}
-    {}
-    void destroy(Parent& parent) const { parent.dealloc(m_memory.data(), m_memory.size()); }
+    template <Allocator Parent> static LinearAllocator create(const usize size) requires std::is_empty_v<Parent>
+    {
+        auto memory = Parent::template alloc<std::byte>(size);
+        return {memory, size};
+    }
+    template <Allocator Parent> void destroy() const requires std::is_empty_v<Parent> {
+        Parent::dealloc(m_memory.data(), m_memory.size());
+    }
+
+    template <Allocator Parent> static LinearAllocator create(Parent& parent, const usize size)
+    {
+        auto memory = parent.template alloc<std::byte>(size);
+        return {memory, size};
+    }
+    template <Allocator Parent> void destroy(Parent& parent) const {
+        parent.dealloc(m_memory.data(), m_memory.size());
+    }
 
     template <typename T> [[nodiscard]] T* alloc(const usize count = 1) {
         ASSERT(count > 0);
@@ -343,21 +351,30 @@ private:
     std::byte* m_head = nullptr;
 };
 
-template <Allocator Parent, FailurePolicyTag FailurePolicy = Terminate>
+template <FailurePolicyTag FailurePolicy = Terminate>
 class StackAllocator {
 public:
     StackAllocator() = default;
-    StackAllocator(const usize size) requires std::is_empty_v<Parent>
-        : m_memory{Parent::template alloc<std::byte>(size), size}
-        , m_head{reinterpret_cast<std::byte*>(align_ptr(m_memory.data(), 16))}
+    StackAllocator(std::byte* memory, usize size)
+        : m_memory{memory, size}
+        , m_head{reinterpret_cast<std::byte*>(align_ptr(memory, 16))}
     {}
-    void destroy() const requires std::is_empty_v<Parent> { Parent::dealloc(m_memory.data(), m_memory.size()); }
 
-    StackAllocator(Parent& parent, const usize size)
-        : m_memory{parent.template alloc<std::byte>(size), size}
-        , m_head{reinterpret_cast<std::byte*>(align_ptr(m_memory.data(), 16))}
-    {}
-    void destroy(Parent& parent) const { parent.dealloc(m_memory.data(), m_memory.size()); }
+    template <Allocator Parent> static StackAllocator create(const usize size) requires std::is_empty_v<Parent> {
+        auto memory = Parent::template alloc<std::byte>(size);
+        return {memory, size};
+    }
+    template <Allocator Parent> void destroy() const requires std::is_empty_v<Parent> {
+        Parent::dealloc(m_memory.data(), m_memory.size());
+    }
+
+    template <Allocator Parent> static StackAllocator create(Parent& parent, const usize size) {
+        auto memory = parent.template alloc<std::byte>(size);
+        return {memory, size};
+    }
+    template <Allocator Parent> void destroy(Parent& parent) const {
+        parent.dealloc(m_memory.data(), m_memory.size());
+    }
 
     template <typename T> [[nodiscard]] T* alloc(const usize count = 1) {
         ASSERT(count > 0);
@@ -418,7 +435,7 @@ private:
     std::byte* m_head = nullptr;
 };
 
-template <typename T, Allocator Parent, FailurePolicyTag FailurePolicy = Terminate, bool CheckMemoryLeaks = true>
+template <typename T, FailurePolicyTag FailurePolicy = Terminate>
 class PoolAllocator {
 private:
     union Slot {
@@ -428,56 +445,27 @@ private:
 
 public:
     PoolAllocator() = default;
-    PoolAllocator(const usize size) requires std::is_empty_v<Parent>
-        : m_slots{Parent::template alloc<Slot>(size), size}
-    {
-        for (usize i = 0; i < size; ++i) {
+    PoolAllocator(Slot* memory, usize count) : m_slots{memory, count} {
+        for (usize i = 0; i < count; ++i) {
             m_slots[i].next = i + 1;
         }
     }
-    void destroy() const requires std::is_empty_v<Parent> {
-        if constexpr (CheckMemoryLeaks) {
-            if (m_slots.data() == nullptr)
-                return;
 
-            usize count = 0;
-            usize index = m_next;
-            while (index != m_slots.size() && count <= m_slots.size()) {
-                index = m_slots[index].next;
-                ++count;
-            }
-            if (count < m_slots.size())
-                ERROR("Pool allocator leaked memory");
-            if (count > m_slots.size())
-                ERROR("Pool allocator had double frees");
-        }
+    template <Allocator Parent> static PoolAllocator create(const usize count) requires std::is_empty_v<Parent> {
+        auto memory = Parent::template alloc<Slot>(count);
+        return {memory, count};
+    }
+    template <Allocator Parent> void destroy() const requires std::is_empty_v<Parent> {
+        check_leaks();
         Parent::dealloc(m_slots.data(), m_slots.size());
     }
 
-    PoolAllocator(Parent& parent, const usize size)
-        : m_slots{parent.template alloc<Slot>(size), size}
-    {
-        for (usize i = 0; i < size; ++i) {
-            m_slots[i].next = i + 1;
-        }
+    template <Allocator Parent> static PoolAllocator create(Parent& parent, const usize count) {
+        auto memory = parent.template alloc<Slot>(count);
+        return {memory, count};
     }
-
-    void destroy(Parent& parent) const {
-        if constexpr (CheckMemoryLeaks) {
-            if (m_slots.data() == nullptr)
-                return;
-
-            usize count = 0;
-            usize index = m_next;
-            while (index != m_slots.size() && count <= m_slots.size()) {
-                index = m_slots[index].next;
-                ++count;
-            }
-            if (count < m_slots.size())
-                ERROR("Pool allocator leaked memory");
-            if (count > m_slots.size())
-                ERROR("Pool allocator had double frees");
-        }
+    template <Allocator Parent> void destroy(Parent& parent) const {
+        check_leaks();
         parent.dealloc(m_slots.data(), m_slots.size());
     }
 
@@ -516,6 +504,24 @@ private:
         }
         m_next = m_slots[index].next;
         return &m_slots[index].data;
+    }
+
+    void check_leaks() const {
+#ifndef NDEBUG
+        if (m_slots.data() == nullptr)
+            return;
+
+        usize count = 0;
+        usize index = m_next;
+        while (index != m_slots.size() && count <= m_slots.size()) {
+            index = m_slots[index].next;
+            ++count;
+        }
+        if (count < m_slots.size())
+            ERROR("Pool allocator leaked memory");
+        if (count > m_slots.size())
+            ERROR("Pool allocator had double frees");
+#endif
     }
 
     std::span<Slot> m_slots{};

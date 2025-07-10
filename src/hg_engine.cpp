@@ -5,11 +5,11 @@ namespace hg {
 Result<Engine> Engine::create(const Config& config) {
     auto engine = ok<Engine>();
 
-    engine->m_global_allocator = GlobalAllocator{config.global_allocator_size};
-    engine->m_stack_allocator = GlobalStackAllocator{engine->m_global_allocator, config.stack_allocator_size};
-    engine->m_frame_allocator = FrameAllocator{engine->m_global_allocator, config.frame_allocator_size};
+    engine->m_global_allocator = LinearAllocator<>::create<CAllocator<>>(config.global_allocator_size);
+    engine->m_stack_allocator = StackAllocator<>::create(engine->m_global_allocator, config.stack_allocator_size);
+    engine->m_frame_allocator = LinearAllocator<>::create(engine->m_global_allocator, config.frame_allocator_size);
 
-    engine->m_texture_allocator = TextureAllocator{engine->m_global_allocator, config.max_texture_count};
+    engine->m_texture_allocator = PoolAllocator<Texture>::create(engine->m_global_allocator, config.max_texture_count);
 
     const auto vk = Vk::create();
     if (vk.has_err())
@@ -35,7 +35,7 @@ Engine::~Engine() noexcept {
 
     m_frame_allocator.destroy(m_global_allocator);
     m_stack_allocator.destroy(m_global_allocator);
-    m_global_allocator.destroy();
+    m_global_allocator.destroy<CAllocator<>>();
 }
 
 Engine::Engine(Engine&& other) noexcept

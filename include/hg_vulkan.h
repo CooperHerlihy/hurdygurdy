@@ -10,11 +10,11 @@
 
 namespace hg {
 
-template <Allocator Parent>
+template <Allocator T>
 class VulkanAllocator {
 public:
     VulkanAllocator() = default;
-    VulkanAllocator(Parent& parent) : m_parent{&parent} {}
+    VulkanAllocator(T& parent) : m_parent{&parent} {}
 
     struct Metadata {
         std::byte* ptr = nullptr;
@@ -64,15 +64,15 @@ public:
         return {
             .pUserData = this,
             .pfnAllocation = [](void* data, usize size, usize alignment, vk::SystemAllocationScope) -> void* {
-                auto& allocator = *static_cast<VulkanAllocator<Parent>*>(data);
+                auto& allocator = *static_cast<VulkanAllocator<T>*>(data);
                 return allocator.alloc(size, alignment);
             },
             .pfnReallocation = [](void* data, void* original, usize size, usize alignment, vk::SystemAllocationScope) -> void* {
-                auto& allocator = *static_cast<VulkanAllocator<Parent>*>(data);
+                auto& allocator = *static_cast<VulkanAllocator<T>*>(data);
                 return allocator.realloc(original, size, alignment);
             },
             .pfnFree = [](void* data, void* memory) {
-                auto& allocator = *static_cast<VulkanAllocator<Parent>*>(data);
+                auto& allocator = *static_cast<VulkanAllocator<T>*>(data);
                 allocator.free(memory);
             },
             .pfnInternalAllocation = nullptr,
@@ -81,7 +81,7 @@ public:
     }
 
 private:
-    Parent* m_parent = nullptr;
+    T* m_parent = nullptr;
 };
 
 // template <Allocator Parent>

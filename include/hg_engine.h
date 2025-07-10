@@ -7,11 +7,6 @@ namespace hg {
 
 class Engine {
 public:
-    using GlobalAllocator = LinearAllocator<CAllocator<Terminate>>;
-    using GlobalStackAllocator = StackAllocator<GlobalAllocator>;
-    using FrameAllocator = LinearAllocator<GlobalAllocator>;
-    using TextureAllocator = PoolAllocator<Texture, GlobalAllocator>;
-
     struct Config {
         bool fullscreen = false;
         glm::uvec2 window_size{1920, 1080};
@@ -41,11 +36,11 @@ public:
         return ok();
     }
 
-    [[nodiscard]] GlobalAllocator& long_term_allocator() { return m_global_allocator; }
-    [[nodiscard]] FrameAllocator& short_term_allocator() { return m_frame_allocator; }
-    [[nodiscard]] GlobalStackAllocator& stack_allocator() { return m_stack_allocator; }
+    [[nodiscard]] LinearAllocator<>& long_term_allocator() { return m_global_allocator; }
+    [[nodiscard]] LinearAllocator<>& short_term_allocator() { return m_frame_allocator; }
+    [[nodiscard]] StackAllocator<>& stack_allocator() { return m_stack_allocator; }
 
-    [[nodiscard]] TextureAllocator& texture_allocator() { return m_texture_allocator; }
+    [[nodiscard]] PoolAllocator<Texture>& texture_allocator() { return m_texture_allocator; }
 
     [[nodiscard]] Vk& vk() { return *m_vk; }
     [[nodiscard]] Window& window() { return *m_window; }
@@ -55,12 +50,12 @@ public:
 private:
     bool m_moved_from = false;
 
-    GlobalAllocator m_global_allocator{};
-    FrameAllocator m_frame_allocator{};
-    GlobalStackAllocator m_stack_allocator{};
+    LinearAllocator<> m_global_allocator{};
+    LinearAllocator<> m_frame_allocator{};
+    StackAllocator<> m_stack_allocator{};
     usize m_frame_index = 0;
 
-    TextureAllocator m_texture_allocator{};
+    PoolAllocator<Texture> m_texture_allocator{};
 
     Vk* m_vk = nullptr;
     Window* m_window = nullptr;
