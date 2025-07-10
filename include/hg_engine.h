@@ -7,12 +7,10 @@ namespace hg {
 
 class Engine {
 public:
-    using GlobalAllocator = LinearAllocator<CAllocator<Terminate>, Terminate>;
-    using GlobalStackAllocator = StackAllocator<GlobalAllocator, Terminate>;
-    using FrameAllocator = LinearAllocator<GlobalAllocator, Terminate>;
-    using TextureAllocator = PoolAllocator<Texture, GlobalAllocator, Terminate>;
-
-    using TemporarySubAllocator = LinearAllocator<GlobalStackAllocator, Terminate>;
+    using GlobalAllocator = LinearAllocator<CAllocator<Terminate>>;
+    using GlobalStackAllocator = StackAllocator<GlobalAllocator>;
+    using FrameAllocator = LinearAllocator<GlobalAllocator>;
+    using TextureAllocator = PoolAllocator<Texture, GlobalAllocator>;
 
     struct Config {
         bool fullscreen = false;

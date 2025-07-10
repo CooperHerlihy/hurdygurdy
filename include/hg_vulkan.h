@@ -7,9 +7,105 @@
 #include <array>
 #include <filesystem>
 #include <span>
-#include <vulkan/vulkan_handles.hpp>
 
 namespace hg {
+
+template <Allocator Parent>
+class VulkanAllocator {
+public:
+    VulkanAllocator() = default;
+    VulkanAllocator(const usize size) requires std::is_empty_v<Parent>
+        : m_memory{Parent::template alloc<std::byte>(size), size}
+        , m_head{reinterpret_cast<std::byte*>(align_ptr(m_memory.data(), 16))}
+    {}
+    void destroy() const requires std::is_empty_v<Parent> { Parent::dealloc(m_memory.data(), m_memory.size()); }
+
+    VulkanAllocator(Parent& parent, const usize size)
+        : m_memory{parent.template alloc<std::byte>(size), size}
+        , m_head{reinterpret_cast<std::byte*>(align_ptr(m_memory.data(), 16))}
+    {}
+    void destroy(Parent& parent) const { parent.dealloc(m_memory.data(), m_memory.size()); }
+
+    struct Metadata {
+        std::byte* ptr = nullptr;
+        usize size = 0;
+    };
+
+    void* alloc(const usize size) {
+        auto alloc_internal = [&](usize size) -> void* {
+            std::byte* alloc_ptr = m_head;
+            std::byte* alloc_end = reinterpret_cast<std::byte*>(align_ptr(alloc_ptr + size, 16));
+            if (alloc_end > m_memory.data() + m_memory.size())
+                ERROR("Linear allocator out of memory");
+            m_head = alloc_end;
+            return alloc_ptr;
+        };
+
+        Metadata* metadata = reinterpret_cast<Metadata*>(alloc_internal(sizeof(Metadata)));
+        std::byte* alloc_ptr = reinterpret_cast<std::byte*>(alloc_internal(size));
+
+        *metadata = {
+            .ptr = alloc_ptr,
+            .size = static_cast<usize>(m_head - alloc_ptr),
+        };
+
+        return alloc_ptr;
+    }
+
+    void* realloc(void* original, const usize size) {
+        std::byte* original_ptr = reinterpret_cast<std::byte*>(original);
+        Metadata* original_metadata = reinterpret_cast<Metadata*>(original_ptr - sizeof(Metadata));
+        if (original_ptr != original_metadata->ptr)
+            ERROR("Cannot realloc from invalid pointer");
+
+        if (original_metadata->ptr + original_metadata->size == m_head) {
+            std::byte* new_end = reinterpret_cast<std::byte*>(align_ptr(original_ptr + size, 16));
+            if (new_end > m_memory.data() + m_memory.size())
+                ERROR("Linear allocator out of memory");
+
+            m_head = new_end;
+            original_metadata->size = static_cast<usize>(m_head - original_ptr);
+
+            return original;
+        } else {
+            std::byte* new_ptr = reinterpret_cast<std::byte*>(alloc(size));
+            std::memmove(new_ptr, original_ptr, original_metadata->size);
+            return new_ptr;
+        }
+    }
+
+    void free(void* memory) {
+        std::byte* ptr = reinterpret_cast<std::byte*>(memory);
+        Metadata* metadata = reinterpret_cast<Metadata*>(ptr - sizeof(Metadata));
+
+        if (metadata->ptr + metadata->size == m_head)
+            m_head = reinterpret_cast<std::byte*>(metadata);
+    }
+
+    vk::AllocationCallbacks callbacks() const {
+        return {
+            .pUserData = this,
+            .pfnAllocation = [](void* data, usize size, usize, vk::SystemAllocationScope) -> void* {
+                auto& allocator = *static_cast<VulkanAllocator<Parent>*>(data);
+                return allocator.alloc(size);
+            },
+            .pfnReallocation = [](void* data, void* original, usize size, usize, vk::SystemAllocationScope) -> void* {
+                auto& allocator = *static_cast<VulkanAllocator<Parent>*>(data);
+                return allocator.realloc(original, size);
+            },
+            .pfnFree = [](void* data, void* memory) {
+                auto& allocator = *static_cast<VulkanAllocator<Parent>*>(data);
+                allocator.free(memory);
+            },
+            .pfnInternalAllocation = nullptr,
+            .pfnInternalFree = nullptr,
+        };
+    }
+
+private:
+    std::span<std::byte> m_memory = {};
+    std::byte* m_head = nullptr;
+};
 
 struct Vk {
     vk::Instance instance{};
