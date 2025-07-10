@@ -243,6 +243,10 @@ inline void* align_ptr(void* ptr, const usize alignment) {
     return reinterpret_cast<void*>((reinterpret_cast<usize>(ptr) + alignment - 1) & ~(alignment - 1));
 }
 
+inline usize align_size(const usize size, const usize alignment) {
+    return (size + alignment - 1) & ~(alignment - 1);
+}
+
 struct Terminate { explicit constexpr Terminate() = default; };
 struct ReturnNull { explicit constexpr ReturnNull() = default; };
 
@@ -253,6 +257,7 @@ template <typename T> concept FailurePolicyTag = (
 
 template <typename T> concept Allocator = requires(T t) {
     { t.template alloc<T>(std::declval<usize>()) } -> std::same_as<T*>;
+    { t.template realloc<T>(std::declval<T*>(), std::declval<usize>(), std::declval<usize>()) } -> std::same_as<T*>;
     { t.template dealloc<T>(std::declval<T*>(), std::declval<usize>()) } -> std::same_as<void>;
 };
 
@@ -260,13 +265,20 @@ template <FailurePolicyTag FailurePolicy>
 class CAllocator {
 public:
     template <typename T> [[nodiscard]] static T* alloc(const usize count) {
-        auto ptr = malloc(count * sizeof(T));
+        auto ptr = std::malloc(count * sizeof(T));
         if constexpr (std::same_as<FailurePolicy, Terminate>)
             if (ptr == nullptr)
                 ERROR("Malloc returned null");
         return static_cast<T*>(ptr);
     }
-    template <typename T> static void dealloc(T* ptr, const usize) { free(ptr); }
+    template <typename T> static T* realloc(T* original_ptr, const usize, const usize new_count) {
+        auto ptr = std::realloc(original_ptr, new_count * sizeof(T));
+        if constexpr (std::same_as<FailurePolicy, Terminate>)
+            if (ptr == nullptr)
+                ERROR("Realloc returned null");
+        return static_cast<T*>(ptr);
+    }
+    template <typename T> static void dealloc(T* ptr, const usize) { std::free(ptr); }
 };
 
 template <Allocator Parent, FailurePolicyTag FailurePolicy = Terminate>
@@ -303,6 +315,25 @@ public:
         return alloc_ptr;
     }
 
+    template <typename T> T* realloc(T* original_ptr, const usize original_count, const usize new_count) {
+        ASSERT(original_ptr != nullptr);
+        ASSERT(original_count > 0);
+        ASSERT(new_count > 0);
+
+        if (original_ptr + original_count != m_head) {
+            T* alloc_ptr = alloc<T>(new_count);
+            std::memmove(alloc_ptr, original_ptr, original_count * sizeof(T));
+            return alloc_ptr;
+        }
+
+        std::byte* new_end = reinterpret_cast<std::byte*>(align_ptr(original_ptr + new_count, alignof(T)));
+        if (new_end > m_memory.data() + m_memory.size())
+            ERROR("Linear allocator out of memory");
+
+        m_head = new_end;
+        return original_ptr;
+    }
+
     template <typename T> void dealloc(T*, usize) {}
 
     void reset() { m_head = m_memory.data(); }
@@ -335,9 +366,9 @@ public:
         std::byte* alloc_end = reinterpret_cast<std::byte*>(alloc_ptr + count);
         if (alloc_end > m_memory.data() + m_memory.size()) {
             if constexpr (std::same_as<FailurePolicy, Terminate>)
-                ERROR("Linear allocator out of memory");
+                ERROR("Stack allocator out of memory");
             if constexpr (std::same_as<FailurePolicy, ReturnNull>) {
-                WARN("Linear allocator out of memory");
+                WARN("Stack allocator out of memory");
                 return nullptr;
             }
         }
@@ -346,14 +377,33 @@ public:
         return alloc_ptr;
     }
 
+    template <typename T> T* realloc(T* original_ptr, const usize original_count, const usize new_count) {
+        ASSERT(original_ptr != nullptr);
+        ASSERT(original_count > 0);
+        ASSERT(new_count > 0);
+
+        if (reinterpret_cast<std::byte*>(align_ptr(original_ptr + original_count, 16)) != m_head) {
+            T* alloc_ptr = alloc<T>(new_count);
+            std::memmove(alloc_ptr, original_ptr, original_count * sizeof(T));
+            return alloc_ptr;
+        }
+
+        std::byte* new_end = reinterpret_cast<std::byte*>(align_ptr(original_ptr + new_count, alignof(T)));
+        if (new_end > m_memory.data() + m_memory.size())
+            ERROR("Stack allocator out of memory");
+
+        m_head = new_end;
+        return original_ptr;
+    }
+
     template <typename T> void dealloc(T* ptr, const usize count = 1) {
         ASSERT(count > 0);
 
         if (reinterpret_cast<std::byte*>(align_ptr(ptr + count, 16)) != m_head) {
             if constexpr (std::same_as<FailurePolicy, Terminate>)
-                ERROR("Deallocation of invalid pointer from linear allocator");
+                ERROR("Deallocation of invalid pointer from stack allocator");
             if constexpr (std::same_as<FailurePolicy, ReturnNull>) {
-                WARN("Deallocation of invalid pointer from linear allocator");
+                WARN("Deallocation of invalid pointer from stack allocator");
                 return;
             }
         }
