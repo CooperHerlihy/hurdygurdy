@@ -31,8 +31,6 @@ public:
 
     [[nodiscard]] static Result<Window> create(const Vk& vk, bool fullscreen, i32 width, i32 height);
     void destroy(const Vk& vk) const {
-        CONTEXT("Destroying window");
-
         m_swapchain.destroy(vk);
         m_surface.destroy(vk);
 
@@ -41,8 +39,6 @@ public:
     }
 
     [[nodiscard]] Result<void> resize(const Vk& vk) {
-        CONTEXT("Resizing window");
-
         const auto res = m_swapchain.resize(vk, m_surface.get());
         if (res.has_err())
             return res.err();

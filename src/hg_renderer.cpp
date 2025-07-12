@@ -10,8 +10,6 @@
 namespace hg {
 
 Result<Window> Window::create(const Vk& vk, bool fullscreen, i32 width, i32 height) {
-    CONTEXT("Creating window");
-
     if (!fullscreen) {
         ASSERT(width > 0);
         ASSERT(height > 0);
@@ -53,8 +51,6 @@ Result<Window> Window::create(const Vk& vk, bool fullscreen, i32 width, i32 heig
 }
 
 [[nodiscard]] Result<void> Window::draw(const Vk& vk, Renderer& renderer) {
-    CONTEXT("Drawing frame");
-
     const auto frame_result = [&]() -> Result<void> {
         const auto begin = m_swapchain.begin_frame(vk);
         if (begin.has_err())

@@ -1,6 +1,8 @@
 #pragma once
 
 #include "hg_utils.h"
+#include "hg_allocator.h"
+#include "hg_vulkan.h"
 #include "hg_renderer.h"
 
 namespace hg {
@@ -27,12 +29,9 @@ public:
     Engine& operator=(Engine&& other) noexcept;
 
     [[nodiscard]] Result<void> draw(Window::Renderer& renderer) {
-        m_frame_index = (m_frame_index + 1) % 2;
-
         const auto frame_result = m_window->draw(*m_vk, renderer);
         if (frame_result.has_err())
             return frame_result.err();
-
         return ok();
     }
 
@@ -53,7 +52,6 @@ private:
     LinearAllocator<> m_global_allocator{};
     LinearAllocator<> m_frame_allocator{};
     StackAllocator<> m_stack_allocator{};
-    usize m_frame_index = 0;
 
     PoolAllocator<Texture> m_texture_allocator{};
 

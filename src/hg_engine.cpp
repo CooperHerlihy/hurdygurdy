@@ -5,7 +5,7 @@ namespace hg {
 Result<Engine> Engine::create(const Config& config) {
     auto engine = ok<Engine>();
 
-    engine->m_global_allocator = LinearAllocator<>::create<CAllocator<>>(config.global_allocator_size);
+    engine->m_global_allocator = LinearAllocator<>::create(mallocator(), config.global_allocator_size);
     engine->m_stack_allocator = StackAllocator<>::create(engine->m_global_allocator, config.stack_allocator_size);
     engine->m_frame_allocator = LinearAllocator<>::create(engine->m_global_allocator, config.frame_allocator_size);
 
@@ -35,7 +35,7 @@ Engine::~Engine() noexcept {
 
     m_frame_allocator.destroy(m_global_allocator);
     m_stack_allocator.destroy(m_global_allocator);
-    m_global_allocator.destroy<CAllocator<>>();
+    m_global_allocator.destroy(mallocator());
 }
 
 Engine::Engine(Engine&& other) noexcept
@@ -43,7 +43,6 @@ Engine::Engine(Engine&& other) noexcept
     , m_global_allocator{other.m_global_allocator}
     , m_frame_allocator{other.m_frame_allocator}
     , m_stack_allocator{other.m_stack_allocator}
-    , m_frame_index{other.m_frame_index}
 
     , m_texture_allocator{other.m_texture_allocator}
 

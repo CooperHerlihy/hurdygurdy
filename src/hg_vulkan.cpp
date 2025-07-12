@@ -29,11 +29,11 @@ static vk::Bool32 debug_callback(
 ) {
     if (severity & (vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo
                  |  vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose)) {
-        INFO("{}", callback_data->pMessage);
+        std::printf("Vulkan Info: %s\n", callback_data->pMessage);
     } else if (severity & vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning) {
-        WARN("{}", callback_data->pMessage);
+        std::printf("Vulkan Warning: %s\n", callback_data->pMessage);
     } else if (severity & vk::DebugUtilsMessageSeverityFlagBitsEXT::eError || true) {
-        ERROR("{}", callback_data->pMessage);
+        std::printf("Vulkan Error: %s\n", callback_data->pMessage);
     }
     return VK_FALSE;
 }
@@ -49,8 +49,6 @@ const vk::DebugUtilsMessengerCreateInfoEXT DebugUtilsMessengerCreateInfo{
 };
 
 static Result<std::vector<const char*>> get_instance_extensions() {
-    CONTEXT("Getting required instance extensions");
-
     u32 glfw_extension_count = 0;
     const char** glfw_extensions = glfwGetRequiredInstanceExtensions(&glfw_extension_count);
     if (glfw_extensions == nullptr)
@@ -67,7 +65,7 @@ static Result<std::vector<const char*>> get_instance_extensions() {
     const auto extensions = vk::enumerateInstanceExtensionProperties();
     switch (extensions.result) {
         case vk::Result::eSuccess: break;
-        case vk::Result::eIncomplete: WARN("Vulkan incomplete enumeration"); break;
+        case vk::Result::eIncomplete: LOG_WARN("Vulkan incomplete enumeration"); break;
         case vk::Result::eErrorLayerNotPresent: return Err::VulkanLayerUnavailable;
         case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
         case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
@@ -84,8 +82,6 @@ static Result<std::vector<const char*>> get_instance_extensions() {
 }
 
 static Result<vk::Instance> init_instance() {
-    CONTEXT("Initializing Vulkan instance");
-
     const vk::ApplicationInfo app_info{
         .pApplicationName = "Hurdy Gurdy",
         .applicationVersion = 0,
@@ -122,8 +118,9 @@ static Result<vk::Instance> init_instance() {
 }
 
 static vk::DebugUtilsMessengerEXT init_debug_messenger(const vk::Instance instance) {
-    CONTEXT("Initializing Vulkan debug messenger");
-
+#ifdef NDEBUG
+    return nullptr;
+#else
     ASSERT(instance != nullptr);
 
     const auto messenger = instance.createDebugUtilsMessengerEXT(DebugUtilsMessengerCreateInfo);
@@ -133,11 +130,10 @@ static vk::DebugUtilsMessengerEXT init_debug_messenger(const vk::Instance instan
             default: ERROR("Unexpected Vulkan error");
     }
     return messenger.value;
+#endif
 }
 
 static Result<u32> find_queue_family(const vk::PhysicalDevice gpu) {
-    CONTEXT("Finding queue family");
-
     ASSERT(gpu != nullptr);
 
     const auto queue_families = gpu.getQueueFamilyProperties();
@@ -151,8 +147,6 @@ static Result<u32> find_queue_family(const vk::PhysicalDevice gpu) {
 }
 
 static Result<vk::PhysicalDevice> find_gpu(const vk::Instance instance) {
-    CONTEXT("Finding suitable GPU");
-
     ASSERT(instance != nullptr);
 
     const auto gpus = instance.enumeratePhysicalDevices();
@@ -160,7 +154,7 @@ static Result<vk::PhysicalDevice> find_gpu(const vk::Instance instance) {
         return Err::NoCompatibleVkPhysicalDevice;
     switch (gpus.result) {
         case vk::Result::eSuccess: break;
-        case vk::Result::eIncomplete: WARN("Vulkan incomplete"); break;
+        case vk::Result::eIncomplete: LOG_WARN("Vulkan incomplete"); break;
         case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
         case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
         case vk::Result::eErrorInitializationFailed: ERROR("Vulkan initialization failed");
@@ -175,7 +169,7 @@ static Result<vk::PhysicalDevice> find_gpu(const vk::Instance instance) {
         const auto extensions = gpu.enumerateDeviceExtensionProperties();
             switch (extensions.result) {
                 case vk::Result::eSuccess: break;
-                case vk::Result::eIncomplete: WARN("Vulkan incomplete"); break;
+                case vk::Result::eIncomplete: LOG_WARN("Vulkan incomplete"); break;
                 case vk::Result::eErrorLayerNotPresent: return Err::VulkanLayerUnavailable;
                 case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
                 case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
@@ -199,8 +193,6 @@ static Result<vk::PhysicalDevice> find_gpu(const vk::Instance instance) {
 }
 
 static Result<vk::Device> init_device(const vk::PhysicalDevice gpu, const u32 queue_family_index) {
-    CONTEXT("Initializing Vulkan device");
-
     ASSERT(gpu != nullptr);
     ASSERT(queue_family_index != UINT32_MAX);
 
@@ -270,8 +262,6 @@ static Result<vk::Device> init_device(const vk::PhysicalDevice gpu, const u32 qu
 }
 
 static VmaAllocator init_allocator(const vk::Instance instance, const vk::PhysicalDevice gpu, const vk::Device device) {
-    CONTEXT("Initializing Vulkan memory allocator");
-
     ASSERT(instance != nullptr);
     ASSERT(gpu != nullptr);
     ASSERT(device != nullptr);
@@ -290,8 +280,6 @@ static VmaAllocator init_allocator(const vk::Instance instance, const vk::Physic
 }
 
 vk::CommandPool create_command_pool(const vk::Device device, const u32 queue_family_index, const vk::CommandPoolCreateFlags flags) {
-    CONTEXT("Creating Vulkan command pool");
-
     ASSERT(device != nullptr);
     ASSERT(queue_family_index != UINT32_MAX);
 
@@ -309,8 +297,6 @@ vk::CommandPool create_command_pool(const vk::Device device, const u32 queue_fam
 }
 
 Result<Vk> Vk::create() {
-    CONTEXT("Creating Vulkan engine");
-
     auto context = ok<Vk>();
 
     const auto glfw_success = glfwInit();
@@ -374,8 +360,6 @@ Result<Vk> Vk::create() {
 }
 
 void Vk::destroy() const {
-    CONTEXT("Destroying Vulkan engine");
-
     const auto wait_result = device.waitIdle();
     switch (wait_result) {
         case vk::Result::eSuccess: break;
@@ -386,7 +370,9 @@ void Vk::destroy() const {
     }
 
     ASSERT(instance != nullptr);
+#ifndef NDEBUG
     ASSERT(debug_messenger != nullptr);
+#endif
     ASSERT(device != nullptr);
     ASSERT(gpu_allocator != nullptr);
     ASSERT(command_pool != nullptr);
@@ -396,13 +382,13 @@ void Vk::destroy() const {
     device.destroyCommandPool(command_pool);
     vmaDestroyAllocator(gpu_allocator);
     device.destroy();
+#ifndef NDEBUG
     instance.destroyDebugUtilsMessengerEXT(debug_messenger);
+#endif
     instance.destroy();
 }
 
 GpuBuffer GpuBuffer::create(const Vk& vk, const Config& config) {
-    CONTEXT("Creating Vulkan buffer");
-
     ASSERT(config.size != 0);
     ASSERT(config.usage != vk::BufferUsageFlags{});
 
@@ -448,8 +434,6 @@ GpuBuffer GpuBuffer::create(const Vk& vk, const Config& config) {
 }
 
 void GpuBuffer::write_void(const Vk& vk, const void* data, const vk::DeviceSize size, const vk::DeviceSize offset) const {
-    CONTEXT("Writing to Vulkan buffer");
-
     ASSERT(m_allocation != nullptr);
     ASSERT(m_buffer != nullptr);
     ASSERT(data != nullptr);
@@ -486,8 +470,6 @@ void GpuBuffer::write_void(const Vk& vk, const void* data, const vk::DeviceSize 
 }
 
 GpuImage GpuImage::create(const Vk& vk, const Config& config) {
-    CONTEXT("Creating Vulkan image");
-
     ASSERT(config.extent.width > 0);
     ASSERT(config.extent.height > 0);
     ASSERT(config.extent.depth > 0);
@@ -533,8 +515,6 @@ GpuImage GpuImage::create(const Vk& vk, const Config& config) {
 }
 
 GpuImage GpuImage::create_cubemap(const Vk& vk, const CubemapConfig& config) {
-    CONTEXT("Creating Vulkan cubemap image");
-
     ASSERT(config.face_extent.width > 0);
     ASSERT(config.face_extent.height > 0);
     ASSERT(config.face_extent.depth > 0);
@@ -579,8 +559,6 @@ GpuImage GpuImage::create_cubemap(const Vk& vk, const CubemapConfig& config) {
 }
 
 void GpuImage::write(const Vk& vk, const WriteConfig& config) const {
-    CONTEXT("Writing to Vulkan image");
-
     ASSERT(m_allocation != nullptr);
     ASSERT(m_image != nullptr);
 
@@ -626,8 +604,6 @@ void GpuImage::write(const Vk& vk, const WriteConfig& config) const {
 }
 
 GpuImageView GpuImageView::create(const Vk& vk, const Config& config) {
-    CONTEXT("Creating Vulkan image view");
-
     ASSERT(config.image != nullptr);
     ASSERT(config.format != vk::Format::eUndefined);
 
@@ -651,8 +627,6 @@ GpuImageView GpuImageView::create(const Vk& vk, const Config& config) {
 }
 
 GpuImageAndView GpuImageAndView::create(const Vk& vk, const Config& config) {
-    CONTEXT("Creating Vulkan image and view");
-
     ASSERT(config.extent.width > 0);
     ASSERT(config.extent.height > 0);
     ASSERT(config.extent.depth > 0);
@@ -706,8 +680,6 @@ GpuImageAndView GpuImageAndView::create(const Vk& vk, const Config& config) {
 }
 
 GpuImageAndView GpuImageAndView::create_cubemap(const Vk& vk, const CubemapConfig& config) {
-    CONTEXT("Creating Vulkan cubemap image and view");
-
     ASSERT(config.data.pixels != nullptr);
     ASSERT(config.data.width > 0);
     ASSERT(config.data.height > 0);
@@ -817,8 +789,6 @@ void GpuImageAndView::generate_mipmaps(
     const vk::Format format,
     const vk::ImageLayout final_layout
 ) const {
-    CONTEXT("Generating mipmaps");
-
     ASSERT(mip_levels > 1);
     ASSERT(extent.width > 0);
     ASSERT(extent.height > 0);
@@ -883,8 +853,6 @@ void GpuImageAndView::generate_mipmaps(
 }
 
 Sampler Sampler::create(const Vk& vk, const Config& config) {
-    CONTEXT("Creating Vulkan sampler");
-
     ASSERT(config.mip_levels >= 1);
     const auto limits = vk.gpu.getProperties().limits;
 
@@ -925,8 +893,6 @@ Sampler Sampler::create(const Vk& vk, const Config& config) {
 }
 
 Texture Texture::from_data(const Vk& vk, const GpuImage::Data& data, const Config& config) {
-    CONTEXT("Creating Vulkan texture from data");
-
     const u32 mip_levels = config.create_mips ? get_mip_count(data.extent) : 1;
 
     const auto image = GpuImageAndView::create(vk, {
@@ -967,8 +933,6 @@ Texture Texture::from_data(const Vk& vk, const GpuImage::Data& data, const Confi
 }
 
 Result<Texture> Texture::from_file(const Vk& vk, const std::filesystem::path path, const Config& config) {
-    CONTEXT("Creating Vulkan texture from file");
-
     ASSERT(!path.empty());
 
     const auto data = ImageData::load(path);
@@ -983,8 +947,6 @@ Result<Texture> Texture::from_file(const Vk& vk, const std::filesystem::path pat
 }
 
 Result<Texture> Texture::from_cubemap_file(const Vk& vk, const std::filesystem::path path, const Config& config) {
-    CONTEXT("Creating Vulkan cubemap texture from file");
-
     ASSERT(!path.empty());
     ASSERT(config.create_mips == false);
 
@@ -1010,8 +972,6 @@ Result<Texture> Texture::from_cubemap_file(const Vk& vk, const std::filesystem::
 }
 
 DescriptorSetLayout DescriptorSetLayout::create(const Vk& vk, const Config& config) {
-    CONTEXT("Creating Vulkan descriptor set layout");
-
     ASSERT(!config.bindings.empty());
     if (!config.flags.empty())
         ASSERT(config.flags.size() == config.bindings.size());
@@ -1040,8 +1000,6 @@ DescriptorSetLayout DescriptorSetLayout::create(const Vk& vk, const Config& conf
 }
 
 DescriptorPool DescriptorPool::create(const Vk& vk, const Config& config) {
-    CONTEXT("Creating Vulkan descriptor pool");
-
     ASSERT(config.max_sets >= 1);
     ASSERT(!config.descriptors.empty());
     for (const auto& descriptor : config.descriptors) {
@@ -1073,8 +1031,6 @@ Result<void> DescriptorPool::allocate_sets(
     const std::span<const vk::DescriptorSetLayout> layouts,
     const std::span<vk::DescriptorSet> out_sets
 ) {
-    CONTEXT("Allocating Vulkan descriptor sets");
-
     ASSERT(m_pool != nullptr);
     ASSERT(!layouts.empty());
     for (const auto layout : layouts) {
@@ -1111,8 +1067,6 @@ void write_uniform_buffer_descriptor(
     const Vk& vk, const GpuBuffer::View& buffer,
     const vk::DescriptorSet set, const u32 binding, const u32 binding_array_index
 ) {
-    CONTEXT("Writing Vulkan uniform buffer descriptor");
-
     ASSERT(set != nullptr);
     ASSERT(buffer.buffer != nullptr);
     ASSERT(buffer.range != 0);
@@ -1133,8 +1087,6 @@ void write_image_sampler_descriptor(
     const Vk& vk, const Texture& texture,
     const vk::DescriptorSet set, const u32 binding, const u32 binding_array_index
 ) {
-    CONTEXT("Writing Vulkan combined image and sampler descriptor");
-
     ASSERT(set != nullptr);
 
     const vk::DescriptorImageInfo image_info{
@@ -1153,8 +1105,6 @@ void write_image_sampler_descriptor(
 }
 
 PipelineLayout PipelineLayout::create(const Vk& vk, const Config& config) {
-    CONTEXT("Creating Vulkan pipeline layout");
-
     vk::PipelineLayoutCreateInfo layout_info{
         .setLayoutCount = to_u32(config.set_layouts.size()),
         .pSetLayouts = config.set_layouts.data(),
@@ -1177,8 +1127,6 @@ PipelineLayout PipelineLayout::create(const Vk& vk, const Config& config) {
 }
 
 static Result<std::vector<char>> read_shader(const std::filesystem::path path) {
-    CONTEXT("Reading Vulkan shader code");
-
     ASSERT(!path.empty());
 
     auto file = std::ifstream{path, std::ios::ate | std::ios::binary};
@@ -1200,8 +1148,6 @@ static Result<std::vector<char>> read_shader(const std::filesystem::path path) {
 }
 
 Result<UnlinkedShader> UnlinkedShader::create(const Vk& vk, const Config& config) {
-    CONTEXT("Creating Vulkan unlinked shader");
-
     ASSERT(!config.path.empty());
     ASSERT(config.code_type == vk::ShaderCodeTypeEXT::eSpirv && "binary shader code types untested");
     ASSERT(config.stage != vk::ShaderStageFlagBits{0});
@@ -1239,8 +1185,6 @@ Result<UnlinkedShader> UnlinkedShader::create(const Vk& vk, const Config& config
 }
 
 Result<GraphicsPipeline> GraphicsPipeline::create(const Vk& vk, const Config& config) {
-    CONTEXT("Creating Vulkan graphics pipeline");
-
     ASSERT(!config.vertex_shader_path.empty());
     ASSERT(!config.fragment_shader_path.empty());
     ASSERT(config.code_type == vk::ShaderCodeTypeEXT::eSpirv && "binary shader code types untested");
@@ -1250,17 +1194,13 @@ Result<GraphicsPipeline> GraphicsPipeline::create(const Vk& vk, const Config& co
         .push_ranges = config.push_ranges,
     });
 
-    CONTEXT_PUSH("Vertex shader: {}", config.vertex_shader_path.string());
     const auto vertex_code = read_shader(config.vertex_shader_path);
     if (vertex_code.has_err())
         return vertex_code.err();
-    CONTEXT_POP();
 
-    CONTEXT_PUSH("Fragment shader: {}", config.fragment_shader_path.string());
     const auto fragment_code = read_shader(config.fragment_shader_path);
     if (fragment_code.has_err())
         return fragment_code.err();
-    CONTEXT_POP();
 
     std::array shader_infos{
         vk::ShaderCreateInfoEXT{
@@ -1310,8 +1250,6 @@ Result<GraphicsPipeline> GraphicsPipeline::create(const Vk& vk, const Config& co
 }
 
 Fence Fence::create(const Vk& vk, const Config& config) {
-    CONTEXT("Creating Vulkan fence");
-
     const auto vk_fence = vk.device.createFence({.flags = config.flags});
     switch (vk_fence.result) {
         case vk::Result::eSuccess: break;
@@ -1328,14 +1266,12 @@ Fence Fence::create(const Vk& vk, const Config& config) {
 }
 
 void Fence::wait(const Vk& vk) const {
-    CONTEXT("Waiting for fence");
-
     ASSERT(m_fence != nullptr);
 
     const auto wait_result = vk.device.waitForFences({m_fence}, vk::True, 1'000'000'000);
     switch (wait_result) {
         case vk::Result::eSuccess: break;
-        case vk::Result::eTimeout: WARN("Vulkan timed out"); break;
+        case vk::Result::eTimeout: LOG_WARN("Vulkan timed out"); break;
         case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
         case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
         case vk::Result::eErrorDeviceLost: ERROR("Vulkan device lost");
@@ -1344,8 +1280,6 @@ void Fence::wait(const Vk& vk) const {
 }
 
 void Fence::reset(const Vk& vk) const {
-    CONTEXT("Resetting fence");
-
     ASSERT(m_fence != nullptr);
 
     const auto reset_result = vk.device.resetFences({m_fence});
@@ -1357,8 +1291,6 @@ void Fence::reset(const Vk& vk) const {
 }
 
 Semaphore Semaphore::create(const Vk& vk) {
-    CONTEXT("Creating Vulkan semaphore");
-
     const auto vk_semaphore = vk.device.createSemaphore({});
     switch (vk_semaphore.result) {
         case vk::Result::eSuccess: break;
@@ -1375,8 +1307,6 @@ Semaphore Semaphore::create(const Vk& vk) {
 }
 
 void allocate_command_buffers(const Vk& vk, const std::span<vk::CommandBuffer> out_cmds) {
-    CONTEXT("Allocating Vulkan command buffers");
-
     const vk::CommandBufferAllocateInfo alloc_info{
         .commandPool = vk.command_pool,
         .commandBufferCount = to_u32(out_cmds.size()),
@@ -1391,8 +1321,6 @@ void allocate_command_buffers(const Vk& vk, const std::span<vk::CommandBuffer> o
 }
 
 vk::CommandBuffer begin_single_time_commands(const Vk& vk) {
-    CONTEXT("Beginning Vulkan single time command buffer");
-
     vk::CommandBufferAllocateInfo alloc_info{
         .commandPool = vk.single_time_command_pool,
         .commandBufferCount = 1,
@@ -1419,8 +1347,6 @@ vk::CommandBuffer begin_single_time_commands(const Vk& vk) {
 }
 
 void end_single_time_commands(const Vk& vk, vk::CommandBuffer cmd) {
-    CONTEXT("Ending Vulkan single time command buffer");
-
     ASSERT(cmd != nullptr);
 
     const auto end_result = cmd.end();
@@ -1457,7 +1383,7 @@ void end_single_time_commands(const Vk& vk, vk::CommandBuffer cmd) {
     const auto wait_result = vk.device.waitForFences({fence.value}, vk::True, 1'000'000'000);
     switch (wait_result) {
         case vk::Result::eSuccess: break;
-        case vk::Result::eTimeout: WARN("Vulkan fence timed out"); break;
+        case vk::Result::eTimeout: LOG_WARN("Vulkan fence timed out"); break;
         case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
         case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
         case vk::Result::eErrorDeviceLost: ERROR("Vulkan device lost");
@@ -1468,8 +1394,6 @@ void end_single_time_commands(const Vk& vk, vk::CommandBuffer cmd) {
 }
 
 Result<Surface> Surface::create(const Vk& vk, GLFWwindow* window) {
-    CONTEXT("Creating surface");
-
     auto surface = ok<Surface>();
 
     VkSurfaceKHR vk_surface = VK_NULL_HANDLE;
@@ -1488,8 +1412,6 @@ Result<Surface> Surface::create(const Vk& vk, GLFWwindow* window) {
 }
 
 Result<Swapchain> Swapchain::create(const Vk& vk, const vk::SurfaceKHR surface) {
-    CONTEXT("Creating swapchain");
-
     auto swapchain = ok<Swapchain>();
 
     const auto window_result = swapchain->resize(vk, surface);
@@ -1520,8 +1442,6 @@ Result<Swapchain> Swapchain::create(const Vk& vk, const vk::SurfaceKHR surface) 
 }
 
 void Swapchain::destroy(const Vk& vk) const {
-    CONTEXT("Destroying swapchain");
-
     for (const auto fence : m_frame_finished_fences) {
         fence.destroy(vk);
     }
@@ -1542,8 +1462,6 @@ void Swapchain::destroy(const Vk& vk) const {
 }
 
 Result<void> Swapchain::resize(const Vk& vk, const vk::SurfaceKHR surface) {
-    CONTEXT("Resizing swapchain");
-
     const auto [surface_result, surface_capabilities] = vk.gpu.getSurfaceCapabilitiesKHR(surface);
     switch (surface_result) {
         case vk::Result::eSuccess: break;
@@ -1566,7 +1484,7 @@ Result<void> Swapchain::resize(const Vk& vk, const vk::SurfaceKHR surface) {
     const auto [present_mode_result, present_modes] = vk.gpu.getSurfacePresentModesKHR(surface);
     switch (surface_result) {
         case vk::Result::eSuccess: break;
-        case vk::Result::eIncomplete: WARN("Vulkan get present modes incomplete"); break;
+        case vk::Result::eIncomplete: LOG_WARN("Vulkan get present modes incomplete"); break;
         case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
         case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
         case vk::Result::eErrorSurfaceLostKHR: ERROR("Vulkan surface lost");
@@ -1633,8 +1551,6 @@ Result<void> Swapchain::resize(const Vk& vk, const vk::SurfaceKHR surface) {
 }
 
 Result<vk::CommandBuffer> Swapchain::begin_frame(const Vk& vk) {
-    CONTEXT("Beginning frame");
-
     ASSERT(!m_recording);
     ASSERT(current_cmd() != nullptr);
 
@@ -1702,8 +1618,6 @@ Result<vk::CommandBuffer> Swapchain::begin_frame(const Vk& vk) {
 }
 
 Result<void> Swapchain::end_frame(const Vk& vk) {
-    CONTEXT("Ending frame");
-
     ASSERT(m_recording);
     ASSERT(m_swapchain != nullptr);
     ASSERT(current_cmd() != nullptr);

@@ -2,6 +2,7 @@
 
 #include "hg_pch.h"
 #include "hg_utils.h"
+#include "hg_allocator.h"
 #include "hg_load.h"
 
 #include <array>
@@ -10,11 +11,10 @@
 
 namespace hg {
 
-template <Allocator T>
 class VulkanAllocator {
 public:
     VulkanAllocator() = default;
-    VulkanAllocator(T& parent) : m_parent{&parent} {}
+    VulkanAllocator(Allocator& parent) : m_parent{&parent} {}
 
     struct Metadata {
         std::byte* ptr = nullptr;
@@ -24,7 +24,7 @@ public:
     void* alloc(const usize size, const usize alignment) {
         static_assert(sizeof(Metadata) == 16);
         usize total_size = sizeof(Metadata) + align_size(size, alignment);
-        std::byte* allocation = m_parent->template alloc<std::byte>(total_size);
+        std::byte* allocation = m_parent->alloc<std::byte>(total_size);
 
         Metadata* metadata = reinterpret_cast<Metadata*>(allocation);
         *metadata = {
@@ -42,7 +42,7 @@ public:
             ERROR("Cannot realloc from invalid pointer");
 
         usize new_size = sizeof(Metadata) + align_size(size, alignment);
-        std::byte* reallocation = m_parent->template realloc<std::byte>(original_metadata->ptr, original_metadata->size, new_size);
+        std::byte* reallocation = m_parent->realloc<std::byte>(original_metadata->ptr, original_metadata->size, new_size);
         Metadata* new_metadata = reinterpret_cast<Metadata*>(reallocation);
         *new_metadata = {
             .ptr = reallocation,
@@ -57,22 +57,22 @@ public:
         Metadata* metadata = reinterpret_cast<Metadata*>(ptr);
         if (ptr != metadata->ptr)
             ERROR("Cannot dealloc from invalid pointer");
-        m_parent->template dealloc<std::byte>(metadata->ptr, metadata->size);
+        m_parent->dealloc<std::byte>(metadata->ptr, metadata->size);
     }
 
     vk::AllocationCallbacks callbacks() {
         return {
             .pUserData = this,
             .pfnAllocation = [](void* data, usize size, usize alignment, vk::SystemAllocationScope) -> void* {
-                auto& allocator = *static_cast<VulkanAllocator<T>*>(data);
+                auto& allocator = *static_cast<VulkanAllocator*>(data);
                 return allocator.alloc(size, alignment);
             },
             .pfnReallocation = [](void* data, void* original, usize size, usize alignment, vk::SystemAllocationScope) -> void* {
-                auto& allocator = *static_cast<VulkanAllocator<T>*>(data);
+                auto& allocator = *static_cast<VulkanAllocator*>(data);
                 return allocator.realloc(original, size, alignment);
             },
             .pfnFree = [](void* data, void* memory) {
-                auto& allocator = *static_cast<VulkanAllocator<T>*>(data);
+                auto& allocator = *static_cast<VulkanAllocator*>(data);
                 allocator.free(memory);
             },
             .pfnInternalAllocation = nullptr,
@@ -81,105 +81,8 @@ public:
     }
 
 private:
-    T* m_parent = nullptr;
+    Allocator* m_parent = nullptr;
 };
-
-// template <Allocator Parent>
-// class VulkanAllocator {
-// public:
-//     VulkanAllocator() = default;
-//     VulkanAllocator(const usize size) requires std::is_empty_v<Parent>
-//         : m_memory{Parent::template alloc<std::byte>(size), size}
-//         , m_head{reinterpret_cast<std::byte*>(align_ptr(m_memory.data(), 16))}
-//     {}
-//     void destroy() const requires std::is_empty_v<Parent> { Parent::dealloc(m_memory.data(), m_memory.size()); }
-//
-//     VulkanAllocator(Parent& parent, const usize size)
-//         : m_memory{parent.template alloc<std::byte>(size), size}
-//         , m_head{reinterpret_cast<std::byte*>(align_ptr(m_memory.data(), 16))}
-//     {}
-//     void destroy(Parent& parent) const { parent.dealloc(m_memory.data(), m_memory.size()); }
-//
-//     struct Metadata {
-//         std::byte* ptr = nullptr;
-//         usize size = 0;
-//     };
-//
-//     void* alloc(const usize size) {
-//         auto alloc_internal = [&](usize size) -> void* {
-//             std::byte* alloc_ptr = m_head;
-//             std::byte* alloc_end = reinterpret_cast<std::byte*>(align_ptr(alloc_ptr + size, 16));
-//             if (alloc_end > m_memory.data() + m_memory.size())
-//                 ERROR("Linear allocator out of memory");
-//             m_head = alloc_end;
-//             return alloc_ptr;
-//         };
-//
-//         Metadata* metadata = reinterpret_cast<Metadata*>(alloc_internal(sizeof(Metadata)));
-//         std::byte* alloc_ptr = reinterpret_cast<std::byte*>(alloc_internal(size));
-//
-//         *metadata = {
-//             .ptr = alloc_ptr,
-//             .size = static_cast<usize>(m_head - alloc_ptr),
-//         };
-//
-//         return alloc_ptr;
-//     }
-//
-//     void* realloc(void* original, const usize size) {
-//         std::byte* original_ptr = reinterpret_cast<std::byte*>(original);
-//         Metadata* original_metadata = reinterpret_cast<Metadata*>(original_ptr - sizeof(Metadata));
-//         if (original_ptr != original_metadata->ptr)
-//             ERROR("Cannot realloc from invalid pointer");
-//
-//         if (original_metadata->ptr + original_metadata->size == m_head) {
-//             std::byte* new_end = reinterpret_cast<std::byte*>(align_ptr(original_ptr + size, 16));
-//             if (new_end > m_memory.data() + m_memory.size())
-//                 ERROR("Linear allocator out of memory");
-//
-//             m_head = new_end;
-//             original_metadata->size = static_cast<usize>(m_head - original_ptr);
-//
-//             return original;
-//         } else {
-//             std::byte* new_ptr = reinterpret_cast<std::byte*>(alloc(size));
-//             std::memmove(new_ptr, original_ptr, original_metadata->size);
-//             return new_ptr;
-//         }
-//     }
-//
-//     void free(void* memory) {
-//         std::byte* ptr = reinterpret_cast<std::byte*>(memory);
-//         Metadata* metadata = reinterpret_cast<Metadata*>(ptr - sizeof(Metadata));
-//
-//         if (metadata->ptr + metadata->size == m_head)
-//             m_head = reinterpret_cast<std::byte*>(metadata);
-//     }
-//
-//     vk::AllocationCallbacks callbacks() const {
-//         return {
-//             .pUserData = this,
-//             .pfnAllocation = [](void* data, usize size, usize, vk::SystemAllocationScope) -> void* {
-//                 auto& allocator = *static_cast<VulkanAllocator<Parent>*>(data);
-//                 return allocator.alloc(size);
-//             },
-//             .pfnReallocation = [](void* data, void* original, usize size, usize, vk::SystemAllocationScope) -> void* {
-//                 auto& allocator = *static_cast<VulkanAllocator<Parent>*>(data);
-//                 return allocator.realloc(original, size);
-//             },
-//             .pfnFree = [](void* data, void* memory) {
-//                 auto& allocator = *static_cast<VulkanAllocator<Parent>*>(data);
-//                 allocator.free(memory);
-//             },
-//             .pfnInternalAllocation = nullptr,
-//             .pfnInternalFree = nullptr,
-//         };
-//     }
-//
-// private:
-//     std::span<std::byte> m_memory = {};
-//     std::byte* m_head = nullptr;
-// };
 
 struct Vk {
     vk::Instance instance{};
@@ -226,8 +129,6 @@ public:
     [[nodiscard]] static GpuBuffer create(const Vk& vk, const Config& config);
 
     void destroy(const Vk& vk) const {
-        CONTEXT("Destroying Vulkan buffer");
-
         ASSERT(m_allocation != nullptr);
         ASSERT(m_buffer != nullptr);
 
@@ -274,8 +175,6 @@ public:
     [[nodiscard]] static GpuImage create_cubemap(const Vk& vk, const CubemapConfig& config);
 
     void destroy(const Vk& vk) const {
-        CONTEXT("Destroying GPU image");
-
         ASSERT(m_allocation != nullptr);
         ASSERT(m_image != nullptr);
 
@@ -316,8 +215,6 @@ public:
     [[nodiscard]] static GpuImageView create(const Vk& vk, const Config& config);
 
     void destroy(const Vk& vk) const {
-        CONTEXT("Destroying GPU image view");
-
         ASSERT(m_view != nullptr);
 
         vk.device.destroyImageView(m_view);
@@ -399,8 +296,6 @@ public:
     [[nodiscard]] static Sampler create(const Vk& vk, const Config& config);
 
     void destroy(const Vk& vk) const {
-        CONTEXT("Destroying GPU sampler");
-
         ASSERT(m_sampler != nullptr);
 
         vk.device.destroySampler(m_sampler);
@@ -461,8 +356,6 @@ public:
     [[nodiscard]] static DescriptorSetLayout create(const Vk& vk, const Config& config);
 
     void destroy(const Vk& vk) const {
-        CONTEXT("Destroying Vulkan descriptor set layout");
-
         ASSERT(m_descriptor_set_layout != nullptr);
 
         vk.device.destroyDescriptorSetLayout(m_descriptor_set_layout);
@@ -486,8 +379,6 @@ public:
     [[nodiscard]] static DescriptorPool create(const Vk& vk, const Config& config);
 
     void destroy(const Vk& vk) const {
-        CONTEXT("Destroying Vulkan descriptor pool");
-
         ASSERT(m_pool != nullptr);
 
         vk.device.destroyDescriptorPool(m_pool);
@@ -534,8 +425,6 @@ public:
     [[nodiscard]] static PipelineLayout create(const Vk& vk, const Config& config);
 
     void destroy(const Vk& vk) const {
-        CONTEXT("Destroying GPU pipeline layout");
-
         ASSERT(m_pipeline_layout != nullptr);
 
         vk.device.destroyPipelineLayout(m_pipeline_layout);
@@ -563,8 +452,6 @@ public:
     [[nodiscard]] static Result<UnlinkedShader> create(const Vk& vk, const Config& config);
 
     void destroy(const Vk& vk) const {
-        CONTEXT("Destroying GPU unlinked shader");
-
         ASSERT(m_shader != nullptr);
 
         vk.device.destroyShaderEXT(m_shader);
@@ -594,8 +481,6 @@ public:
     [[nodiscard]] static Result<GraphicsPipeline> create(const Vk& vk, const Config& config);
 
     void destroy(const Vk& vk) const {
-        CONTEXT("Destroying GPU graphics pipeline");
-
         for (const auto shader : m_shaders) {
             ASSERT(shader != nullptr);
             vk.device.destroyShaderEXT(shader);
@@ -622,8 +507,6 @@ public:
     [[nodiscard]] static Fence create(const Vk& vk, const Config& config);
 
     void destroy(const Vk& vk) const {
-        CONTEXT("Destroying fence");
-
         ASSERT(m_fence != nullptr);
 
         vk.device.destroyFence(m_fence);
@@ -650,8 +533,6 @@ public:
     [[nodiscard]] static Semaphore create(const Vk& vk);
 
     void destroy(const Vk& vk) const {
-        CONTEXT("Destroying semaphore");
-
         ASSERT(m_semaphore != nullptr);
 
         vk.device.destroySemaphore(m_semaphore);
@@ -752,8 +633,6 @@ public:
 
     [[nodiscard]] static Result<Surface> create(const Vk& vk, GLFWwindow* window);
     void destroy(const Vk& vk) const {
-        CONTEXT("Destroying surface");
-
         ASSERT(m_surface != nullptr);
 
         vk.instance.destroySurfaceKHR(m_surface);

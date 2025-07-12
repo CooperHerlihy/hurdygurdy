@@ -7,11 +7,9 @@ constexpr double sqrt3 = 1.73205080757;
 #define errf(e) "{} error: {}", #e, to_string(e.err())
 
 int main() {
-    CONTEXT("Running demo");
-
     auto engine = Engine::create({.fullscreen = true});
     if (engine.has_err())
-        ERROR(errf(engine));
+        LOGF_ERROR(errf(engine));
 
     auto renderer = DefaultRenderer::create(engine->vk(), engine->window());
     defer(renderer.destroy(engine->vk()));
@@ -25,7 +23,7 @@ int main() {
 
     const auto skybox = skybox_pipeline.load_skybox(engine->vk(), "../assets/cloudy_skyboxes/Cubemap/Cubemap_Sky_06-512x512.png");
     if (skybox.has_err())
-        ERROR(errf(skybox));
+        LOGF_ERROR(errf(skybox));
 
     std::array<glm::vec4, 4> default_normal_image{};
     default_normal_image.fill(glm::vec4{0.0f, 0.0f, -1.0f, 0.0f});
