@@ -300,7 +300,7 @@ Result<void> SkyboxPipeline::load_skybox(const Vk& vk, const std::filesystem::pa
     const auto mesh = generate_cube();
     std::vector<glm::vec3> positions{};
     positions.reserve(mesh.vertices.size());
-    for (const auto vertex : mesh.vertices) {
+    for (const auto& vertex : mesh.vertices) {
         positions.emplace_back(vertex.position);
     }
     m_vertex_buffer = GpuBuffer::create(vk, {

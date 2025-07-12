@@ -340,9 +340,9 @@ public:
 
 class Memory {
 public:
-    Memory(Allocator* heap_storage, Allocator* stack_storage)
-        : m_heap_storage{heap_storage}
-        , m_stack_storage{stack_storage}
+    Memory(Allocator& heap_storage, Allocator& stack_storage)
+        : m_heap_storage{&heap_storage}
+        , m_stack_storage{&stack_storage}
     {}
 
     Allocator& heap() { return *m_heap_storage; }
@@ -352,28 +352,28 @@ public:
         return static_cast<T*>(m_heap_storage->alloc_v(sizeof(T), alignof(T)));
     }
     template <typename T> void dealloc_heap(T* ptr) {
-        static_cast<T*>(m_heap_storage->dealloc_v(ptr, sizeof(T), alignof(T)));
+        m_heap_storage->dealloc_v(ptr, sizeof(T), alignof(T));
     }
 
     template <typename T> [[nodiscard]] Slice<T> alloc_heap(usize count) {
-        return static_cast<T*>(m_heap_storage->alloc_v(count * sizeof(T), alignof(T)));
+        return {static_cast<T*>(m_heap_storage->alloc_v(count * sizeof(T), alignof(T))), count};
     }
     template <typename T> void dealloc_heap(Slice<T> slice) {
-        static_cast<T*>(m_heap_storage->dealloc_v(slice.data, slice.count * sizeof(T), alignof(T)));
+        m_heap_storage->dealloc_v(slice.data, slice.count * sizeof(T), alignof(T));
     }
 
     template <typename T> [[nodiscard]] T* alloc_stack() {
         return static_cast<T*>(m_stack_storage->alloc_v(sizeof(T), alignof(T)));
     }
     template <typename T> void dealloc_stack(T* ptr) {
-        static_cast<T*>(m_stack_storage->dealloc_v(ptr, sizeof(T), alignof(T)));
+        m_stack_storage->dealloc_v(ptr, sizeof(T), alignof(T));
     }
 
     template <typename T> [[nodiscard]] Slice<T> alloc_stack(usize count) {
-        return static_cast<T*>(m_stack_storage->alloc_v(count * sizeof(T), alignof(T)));
+        return {static_cast<T*>(m_stack_storage->alloc_v(count * sizeof(T), alignof(T))), count};
     }
     template <typename T> void dealloc_stack(Slice<T> slice) {
-        static_cast<T*>(m_stack_storage->dealloc_v(slice.data, slice.count * sizeof(T), alignof(T)));
+        m_stack_storage->dealloc_v(slice.data, slice.count * sizeof(T), alignof(T));
     }
 
 private:

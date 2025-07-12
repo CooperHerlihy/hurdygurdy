@@ -11,62 +11,6 @@
 
 namespace hg {
 
-struct AllocationMetadata {
-    std::byte* ptr = nullptr;
-    usize size = 0;
-};
-
-static vk::AllocationCallbacks allocation_callbacks(Allocator& allocator) {
-    return {
-        .pUserData = &allocator,
-        .pfnAllocation = [](void* data, usize size, usize alignment, vk::SystemAllocationScope) -> void* {
-            auto& allocator = *static_cast<Allocator*>(data);
-
-            static_assert(sizeof(AllocationMetadata) == 16);
-            usize total_size = sizeof(AllocationMetadata) + align_size(size, alignment);
-            Slice<std::byte> allocation = allocator.alloc<std::byte>(total_size);
-
-            AllocationMetadata* metadata = reinterpret_cast<AllocationMetadata*>(allocation.data);
-            *metadata = {
-                .ptr = allocation.data,
-                .size = total_size,
-            };
-
-            return metadata->ptr + sizeof(AllocationMetadata);
-        },
-        .pfnReallocation = [](void* data, void* original, usize size, usize alignment, vk::SystemAllocationScope) -> void* {
-            auto& allocator = *static_cast<Allocator*>(data);
-
-            static_assert(sizeof(AllocationMetadata) == 16);
-            std::byte* original_alloc = reinterpret_cast<std::byte*>(original) - sizeof(AllocationMetadata);
-            AllocationMetadata* original_metadata = reinterpret_cast<AllocationMetadata*>(original_alloc);
-            if (original_alloc != original_metadata->ptr)
-                ERROR("Cannot realloc from invalid pointer");
-
-            usize new_size = sizeof(AllocationMetadata) + align_size(size, alignment);
-            Slice<std::byte> reallocation = allocator.realloc(Slice<std::byte>{original_metadata->ptr, original_metadata->size}, new_size);
-            AllocationMetadata* new_metadata = reinterpret_cast<AllocationMetadata*>(reallocation.data);
-            *new_metadata = {
-                .ptr = reallocation.data,
-                .size = new_size,
-            }; 
-            return new_metadata->ptr + sizeof(AllocationMetadata);
-        },
-        .pfnFree = [](void* data, void* memory) {
-            auto& allocator = *static_cast<Allocator*>(data);
-
-            static_assert(sizeof(AllocationMetadata) == 16);
-            std::byte* ptr = reinterpret_cast<std::byte*>(memory) - sizeof(AllocationMetadata);
-            AllocationMetadata* metadata = reinterpret_cast<AllocationMetadata*>(ptr);
-            if (ptr != metadata->ptr)
-                ERROR("Cannot dealloc from invalid pointer");
-            allocator.dealloc(Slice<std::byte>(metadata->ptr, metadata->size));
-        },
-        .pfnInternalAllocation = nullptr,
-        .pfnInternalFree = nullptr,
-    };
-}
-
 #ifdef NDEBUG
 inline constexpr std::array<const char*, 0> ValidationLayers{};
 #else
@@ -106,18 +50,16 @@ const vk::DebugUtilsMessengerCreateInfoEXT DebugUtilsMessengerCreateInfo{
     .pfnUserCallback = debug_callback,
 };
 
-static Result<std::vector<const char*>> get_instance_extensions() {
+static Result<Slice<const char*>> get_instance_extensions(Memory mem) {
     u32 glfw_extension_count = 0;
     const char** glfw_extensions = glfwGetRequiredInstanceExtensions(&glfw_extension_count);
     if (glfw_extensions == nullptr)
         ERROR("Failed to get required instance extensions from GLFW");
 
-    auto required_extensions = ok<std::vector<const char*>>();
-    required_extensions->reserve(glfw_extension_count + 1);
-    for (usize i = 0; i < glfw_extension_count; ++i)
-        required_extensions->emplace_back(glfw_extensions[i]);
+    auto required_extensions = ok(mem.alloc_heap<const char*>(glfw_extension_count + 1));
+    std::copy(glfw_extensions, glfw_extensions + glfw_extension_count, required_extensions->data);
 #ifndef NDEBUG
-    required_extensions->emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+    required_extensions->data[glfw_extension_count] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
 #endif
 
     const auto extensions = vk::enumerateInstanceExtensionProperties();
@@ -148,7 +90,10 @@ static Result<vk::Instance> init_instance(Memory mem) {
         .apiVersion = VK_API_VERSION_1_3,
     };
 
-    const auto extensions = get_instance_extensions();
+    auto extensions_mem = LinearAllocator<>::create(mem.stack(), 32);
+    defer(extensions_mem.destroy(mem.stack()));
+
+    const auto extensions = get_instance_extensions({extensions_mem, mem.stack()});
     if (extensions.has_err())
         return extensions.err();
 
@@ -157,8 +102,8 @@ static Result<vk::Instance> init_instance(Memory mem) {
         .pApplicationInfo = &app_info,
         .enabledLayerCount = to_u32(ValidationLayers.size()),
         .ppEnabledLayerNames = ValidationLayers.data(),
-        .enabledExtensionCount = to_u32(extensions->size()),
-        .ppEnabledExtensionNames = extensions->data(),
+        .enabledExtensionCount = to_u32(extensions->count),
+        .ppEnabledExtensionNames = extensions->data,
     });
     switch (instance.result) {
         case vk::Result::eSuccess: break;
@@ -191,10 +136,18 @@ static vk::DebugUtilsMessengerEXT init_debug_messenger(const vk::Instance instan
 #endif
 }
 
-static Result<u32> find_queue_family(const vk::PhysicalDevice gpu) {
+static Result<u32> find_queue_family(Memory mem, const vk::PhysicalDevice gpu) {
     ASSERT(gpu != nullptr);
 
-    const auto queue_families = gpu.getQueueFamilyProperties();
+    u32 queue_family_count = 0;
+    gpu.getQueueFamilyProperties(&queue_family_count, nullptr);
+    if (queue_family_count == 0)
+        return Err::VkQueueFamilyUnavailable;
+
+    auto queue_families = mem.alloc_stack<vk::QueueFamilyProperties>(queue_family_count);
+    defer(mem.dealloc_stack(queue_families));
+    gpu.getQueueFamilyProperties(&queue_family_count, queue_families.data);
+
     const auto queue_family = std::ranges::find_if(queue_families, [](const vk::QueueFamilyProperties family) {
         return static_cast<bool>(family.queueFlags & (vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eCompute));
     });
@@ -204,13 +157,12 @@ static Result<u32> find_queue_family(const vk::PhysicalDevice gpu) {
     return ok(static_cast<u32>(queue_family - queue_families.begin()));
 }
 
-static Result<vk::PhysicalDevice> find_gpu(const vk::Instance instance) {
+static Result<vk::PhysicalDevice> find_gpu(Memory mem, const vk::Instance instance) {
     ASSERT(instance != nullptr);
 
-    const auto gpus = instance.enumeratePhysicalDevices();
-    if (gpus.value.empty())
-        return Err::NoCompatibleVkPhysicalDevice;
-    switch (gpus.result) {
+    u32 gpu_count = 0;
+    auto gpu_count_result = instance.enumeratePhysicalDevices(&gpu_count, nullptr);
+    switch (gpu_count_result) {
         case vk::Result::eSuccess: break;
         case vk::Result::eIncomplete: LOG_WARN("Vulkan incomplete"); break;
         case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
@@ -219,7 +171,21 @@ static Result<vk::PhysicalDevice> find_gpu(const vk::Instance instance) {
         default: ERROR("Unexpected Vulkan error");
     }
 
-    for (const auto gpu : gpus.value) {
+    auto gpus = mem.alloc_stack<vk::PhysicalDevice>(gpu_count);
+    defer(mem.dealloc_stack(gpus));
+    auto gpu_result = instance.enumeratePhysicalDevices(&gpu_count, gpus.data);
+    if (gpus.data[0] == nullptr)
+        return Err::NoCompatibleVkPhysicalDevice;
+    switch (gpu_result) {
+        case vk::Result::eSuccess: break;
+        case vk::Result::eIncomplete: LOG_WARN("Vulkan incomplete"); break;
+        case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
+        case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
+        case vk::Result::eErrorInitializationFailed: ERROR("Vulkan initialization failed");
+        default: ERROR("Unexpected Vulkan error");
+    }
+
+    for (const auto gpu : gpus) {
         const auto features = gpu.getFeatures();
         if (features.sampleRateShading != vk::True || features.samplerAnisotropy != vk::True)
             continue;
@@ -240,7 +206,7 @@ static Result<vk::PhysicalDevice> find_gpu(const vk::Instance instance) {
             });
         })) continue;
 
-        if (find_queue_family(gpu).has_err())
+        if (find_queue_family(mem, gpu).has_err())
             continue;
 
         ASSERT(gpu != nullptr);
@@ -373,12 +339,12 @@ Result<Vk> Vk::create(Memory mem) {
 
     context->debug_messenger = init_debug_messenger(context->instance);
 
-    const auto gpu = find_gpu(context->instance);
+    const auto gpu = find_gpu(mem, context->instance);
     if (gpu.has_err())
         return gpu.err();
     context->gpu = *gpu;
 
-    const auto queue_family = find_queue_family(context->gpu);
+    const auto queue_family = find_queue_family(mem, context->gpu);
     if (queue_family.has_err())
         return queue_family.err();
     context->queue_family_index = *queue_family;
@@ -1091,11 +1057,11 @@ Result<void> DescriptorPool::allocate_sets(
 ) {
     ASSERT(m_pool != nullptr);
     ASSERT(!layouts.empty());
-    for (const auto layout : layouts) {
+    for (const auto& layout : layouts) {
         ASSERT(layout != nullptr);
     }
     ASSERT(!out_sets.empty());
-    for (const auto set : out_sets) {
+    for (const auto& set : out_sets) {
         ASSERT(set == nullptr);
     }
     ASSERT(layouts.size() == out_sets.size());
@@ -1115,7 +1081,7 @@ Result<void> DescriptorPool::allocate_sets(
         default: ERROR("Unexpected Vulkan error");
     }
 
-    for (const auto set : out_sets) {
+    for (const auto& set : out_sets) {
         ASSERT(set != nullptr);
     }
     return ok();
@@ -1496,24 +1462,24 @@ Result<Swapchain> Swapchain::create(const Vk& vk, const vk::SurfaceKHR surface) 
     for (usize i = 0; i < swapchain->m_image_count; ++i) {
         ASSERT(swapchain->m_swapchain_images[i] != nullptr);
     }
-    for (const auto cmd : swapchain->m_command_buffers) {
+    for (const auto& cmd : swapchain->m_command_buffers) {
         ASSERT(cmd != nullptr);
     }
     return swapchain;
 }
 
 void Swapchain::destroy(const Vk& vk) const {
-    for (const auto fence : m_frame_finished_fences) {
+    for (const auto& fence : m_frame_finished_fences) {
         fence.destroy(vk);
     }
-    for (const auto semaphore : m_image_available_semaphores) {
+    for (const auto& semaphore : m_image_available_semaphores) {
         semaphore.destroy(vk);
     }
-    for (const auto semaphore : m_ready_to_present_semaphores) {
+    for (const auto& semaphore : m_ready_to_present_semaphores) {
         semaphore.destroy(vk);
     }
 
-    for (const auto cmd : m_command_buffers) {
+    for (const auto& cmd : m_command_buffers) {
         ASSERT(cmd != nullptr);
     }
     vk.device.freeCommandBuffers(vk.command_pool, to_u32(m_command_buffers.size()), m_command_buffers.data());
@@ -1605,7 +1571,7 @@ Result<void> Swapchain::resize(const Vk& vk, const vk::SurfaceKHR surface) {
         ERROR("Could not get swapchain images");
 
     ASSERT(m_swapchain != nullptr);
-    for (const auto image : m_swapchain_images) {
+    for (const auto& image : m_swapchain_images) {
         ASSERT(image != nullptr);
     }
     return ok();

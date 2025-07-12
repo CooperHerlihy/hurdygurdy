@@ -28,13 +28,13 @@ public:
 
     operator Memory() {
         if (m_use_frame_allocator)
-            return Memory{&m_frame_allocator, &m_stack_allocator};
+            return Memory{m_frame_allocator, m_stack_allocator};
         else
-            return Memory{&m_global_allocator, &m_stack_allocator};
+            return Memory{m_global_allocator, m_stack_allocator};
     }
 
-    Memory global_memory() { return Memory{&m_global_allocator, &m_stack_allocator}; }
-    Memory frame_memory() { return Memory{&m_frame_allocator, &m_stack_allocator}; }
+    Memory global_memory() { return Memory{m_global_allocator, m_stack_allocator}; }
+    Memory frame_memory() { return Memory{m_frame_allocator, m_stack_allocator}; }
 
     template <typename T> [[nodiscard]] Result<T> alloc_global() {
         return static_cast<T*>(m_global_allocator.alloc_v(sizeof(T), alignof(T)));
