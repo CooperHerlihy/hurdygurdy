@@ -7,8 +7,6 @@
 
 namespace hg {
 
-void create_tangents(std::span<Vertex> primitives);
-
 [[nodiscard]] Mesh generate_square();
 [[nodiscard]] Mesh generate_cube();
 [[nodiscard]] Mesh generate_sphere(glm::uvec2 fidelity);

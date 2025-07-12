@@ -42,4 +42,6 @@ struct GltfModelData {
     [[nodiscard]] static Result<GltfModelData> load_gltf(std::filesystem::path path);
 };
 
+void create_tangents(std::span<Vertex> primitives);
+
 } // namespace hg

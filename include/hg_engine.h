@@ -1,7 +1,6 @@
 #pragma once
 
 #include "hg_utils.h"
-#include "hg_allocator.h"
 #include "hg_vulkan.h"
 #include "hg_renderer.h"
 
