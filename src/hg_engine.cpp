@@ -11,7 +11,7 @@ Result<Engine> Engine::create(const Config& config) {
 
     engine->m_texture_allocator = PoolAllocator<Texture>::create(engine->m_global_allocator, config.max_texture_count);
 
-    const auto vk = Vk::create();
+    const auto vk = Vk::create(engine->global_memory());
     if (vk.has_err())
         return vk.err();
     engine->m_vk = new (engine->m_global_allocator.template alloc<Vk>()) Vk{*vk};

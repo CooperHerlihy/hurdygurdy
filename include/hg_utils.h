@@ -1,13 +1,9 @@
 #pragma once
 
+#include <stdint.h>
 #include <chrono>
-#include <cstdint>
-#include <format>
-#include <iostream>
 #include <string_view>
 #include <type_traits>
-#include <utility>
-#include <variant>
 
 using i8 = std::int8_t;
 using i16 = std::int16_t;
@@ -48,20 +44,22 @@ public:
 
     void stop(const std::string_view message = "Timer stopped") const {
         const auto end = std::chrono::high_resolution_clock::now();
-        std::cout << std::format("{}: {}ms\n", message, static_cast<f64>((end - m_begin).count()) / 1'000'000.0);
+        std::printf("%s: %fms\n", message.data(), static_cast<f64>((end - m_begin).count()) / 1'000'000.0);
     }
 
 private:
     std::chrono::high_resolution_clock::time_point m_begin{std::chrono::high_resolution_clock::now()};
 };
 
-template <typename F> struct DeferInternal {
-    F f;
-    explicit DeferInternal(F f_) : f(f_) {}
-    ~DeferInternal() { f(); }
+template <typename Func> class DeferInternal {
+public:
+    explicit DeferInternal(Func func) : m_func(func) {}
+    ~DeferInternal() { m_func(); }
+private:
+    Func m_func;
 };
 
-template <typename F> DeferInternal<F> defer_function(F f) { return DeferInternal<F>(f); }
+template <typename Func> DeferInternal<Func> defer_function(Func f) { return DeferInternal<Func>(f); }
 
 #define DEFER_INTERMEDIATE_1(x, y) x##y
 #define DEFER_INTERMEDIATE_2(x, y) DEFER_INTERMEDIATE_1(x, y)
@@ -70,7 +68,7 @@ template <typename F> DeferInternal<F> defer_function(F f) { return DeferInterna
 
 enum class LogLevel { Info, Warning, Error };
 
-inline const char* to_string(LogLevel level) {
+inline std::string_view to_string(LogLevel level) {
     switch (level) {
         case LogLevel::Info: return "Info";
         case LogLevel::Warning: return "Warning";
@@ -80,7 +78,7 @@ inline const char* to_string(LogLevel level) {
 }
 
 #define LOG(level, message) {                                                                                \
-    std::fprintf(stderr, "%s: %s : %d %s(): %s\n", to_string(level), __FILE__, __LINE__, __func__, message); \
+    std::fprintf(stderr, "%s: %s : %d %s(): %s\n", to_string(level).data(), __FILE__, __LINE__, __func__, message); \
 }
 #define LOG_INFO(message) { LOG(LogLevel::Info, message) }
 #define LOG_WARN(message) { LOG(LogLevel::Warning, message) }
@@ -176,7 +174,7 @@ constexpr std::string_view to_string(Err code) {
 
         // ... add more as needed
     }
-    return "Cannot stringify invalid error code";
+    return "Invalid error code";
 }
 #undef HG_MAKE_ERROR_STRING
 
@@ -340,10 +338,47 @@ public:
     }
 };
 
-class AllocContext {
+class Memory {
 public:
-    Allocator* persistent_storage{};
-    Allocator* stack_storage{};
+    Memory(Allocator* heap_storage, Allocator* stack_storage)
+        : m_heap_storage{heap_storage}
+        , m_stack_storage{stack_storage}
+    {}
+
+    Allocator& heap() { return *m_heap_storage; }
+    Allocator& stack() { return *m_stack_storage; }
+
+    template <typename T> [[nodiscard]] T* alloc_heap() {
+        return static_cast<T*>(m_heap_storage->alloc_v(sizeof(T), alignof(T)));
+    }
+    template <typename T> void dealloc_heap(T* ptr) {
+        static_cast<T*>(m_heap_storage->dealloc_v(ptr, sizeof(T), alignof(T)));
+    }
+
+    template <typename T> [[nodiscard]] Slice<T> alloc_heap(usize count) {
+        return static_cast<T*>(m_heap_storage->alloc_v(count * sizeof(T), alignof(T)));
+    }
+    template <typename T> void dealloc_heap(Slice<T> slice) {
+        static_cast<T*>(m_heap_storage->dealloc_v(slice.data, slice.count * sizeof(T), alignof(T)));
+    }
+
+    template <typename T> [[nodiscard]] T* alloc_stack() {
+        return static_cast<T*>(m_stack_storage->alloc_v(sizeof(T), alignof(T)));
+    }
+    template <typename T> void dealloc_stack(T* ptr) {
+        static_cast<T*>(m_stack_storage->dealloc_v(ptr, sizeof(T), alignof(T)));
+    }
+
+    template <typename T> [[nodiscard]] Slice<T> alloc_stack(usize count) {
+        return static_cast<T*>(m_stack_storage->alloc_v(count * sizeof(T), alignof(T)));
+    }
+    template <typename T> void dealloc_stack(Slice<T> slice) {
+        static_cast<T*>(m_stack_storage->dealloc_v(slice.data, slice.count * sizeof(T), alignof(T)));
+    }
+
+private:
+    Allocator* m_heap_storage{};
+    Allocator* m_stack_storage{};
 };
 
 struct Terminate { explicit constexpr Terminate() = default; };
@@ -640,7 +675,7 @@ template <typename T, FailurePolicyTag FailurePolicy = Terminate>
 class PoolAllocator {
 private:
     union Slot {
-        std::byte data[align_size(sizeof(T), alignof(T))];
+        T data;
         usize next;
     };
 

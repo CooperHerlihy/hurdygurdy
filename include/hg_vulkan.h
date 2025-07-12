@@ -10,79 +10,6 @@
 
 namespace hg {
 
-class VulkanAllocator {
-public:
-    VulkanAllocator() = default;
-    VulkanAllocator(Allocator& parent) : m_parent{&parent} {}
-
-    struct Metadata {
-        std::byte* ptr = nullptr;
-        usize size = 0;
-    };
-
-    void* alloc(const usize size, const usize alignment) {
-        static_assert(sizeof(Metadata) == 16);
-        usize total_size = sizeof(Metadata) + align_size(size, alignment);
-        Slice<std::byte> allocation = m_parent->alloc<std::byte>(total_size);
-
-        Metadata* metadata = reinterpret_cast<Metadata*>(allocation.data);
-        *metadata = {
-            .ptr = allocation.data,
-            .size = total_size,
-        };
-        return metadata->ptr + sizeof(Metadata);
-    }
-
-    void* realloc(void* original, const usize size, const usize alignment) {
-        static_assert(sizeof(Metadata) == 16);
-        std::byte* original_alloc = reinterpret_cast<std::byte*>(original) - sizeof(Metadata);
-        Metadata* original_metadata = reinterpret_cast<Metadata*>(original_alloc);
-        if (original_alloc != original_metadata->ptr)
-            ERROR("Cannot realloc from invalid pointer");
-
-        usize new_size = sizeof(Metadata) + align_size(size, alignment);
-        Slice<std::byte> reallocation = m_parent->realloc(Slice<std::byte>{original_metadata->ptr, original_metadata->size}, new_size);
-        Metadata* new_metadata = reinterpret_cast<Metadata*>(reallocation.data);
-        *new_metadata = {
-            .ptr = reallocation.data,
-            .size = new_size,
-        }; 
-        return new_metadata->ptr + sizeof(Metadata);
-    }
-
-    void free(void* memory) {
-        static_assert(sizeof(Metadata) == 16);
-        std::byte* ptr = reinterpret_cast<std::byte*>(memory) - sizeof(Metadata);
-        Metadata* metadata = reinterpret_cast<Metadata*>(ptr);
-        if (ptr != metadata->ptr)
-            ERROR("Cannot dealloc from invalid pointer");
-        m_parent->dealloc(Slice<std::byte>(metadata->ptr, metadata->size));
-    }
-
-    vk::AllocationCallbacks callbacks() {
-        return {
-            .pUserData = this,
-            .pfnAllocation = [](void* data, usize size, usize alignment, vk::SystemAllocationScope) -> void* {
-                auto& allocator = *static_cast<VulkanAllocator*>(data);
-                return allocator.alloc(size, alignment);
-            },
-            .pfnReallocation = [](void* data, void* original, usize size, usize alignment, vk::SystemAllocationScope) -> void* {
-                auto& allocator = *static_cast<VulkanAllocator*>(data);
-                return allocator.realloc(original, size, alignment);
-            },
-            .pfnFree = [](void* data, void* memory) {
-                auto& allocator = *static_cast<VulkanAllocator*>(data);
-                allocator.free(memory);
-            },
-            .pfnInternalAllocation = nullptr,
-            .pfnInternalFree = nullptr,
-        };
-    }
-
-private:
-    Allocator* m_parent = nullptr;
-};
-
 struct Vk {
     vk::Instance instance{};
     vk::DebugUtilsMessengerEXT debug_messenger{};
@@ -97,7 +24,7 @@ struct Vk {
     vk::CommandPool command_pool{};
     vk::CommandPool single_time_command_pool{};
 
-    [[nodiscard]] static Result<Vk> create();
+    [[nodiscard]] static Result<Vk> create(Memory mem);
     void destroy() const;
 };
 

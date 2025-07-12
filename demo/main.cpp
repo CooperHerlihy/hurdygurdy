@@ -71,7 +71,7 @@ int main() {
         const f64 delta = clock.delta_sec();
         const f32 delta32 = static_cast<f32>(delta);
         if (time_count >= 1.0) {
-            std::cout << std::format("avg: {}ms\n", 1000.0 / frame_count);
+            std::printf("avg: %fms\n", 1000.0 / frame_count);
             frame_count = 0;
             time_count -= 1.0;
         }

@@ -11,6 +11,62 @@
 
 namespace hg {
 
+struct AllocationMetadata {
+    std::byte* ptr = nullptr;
+    usize size = 0;
+};
+
+static vk::AllocationCallbacks allocation_callbacks(Allocator& allocator) {
+    return {
+        .pUserData = &allocator,
+        .pfnAllocation = [](void* data, usize size, usize alignment, vk::SystemAllocationScope) -> void* {
+            auto& allocator = *static_cast<Allocator*>(data);
+
+            static_assert(sizeof(AllocationMetadata) == 16);
+            usize total_size = sizeof(AllocationMetadata) + align_size(size, alignment);
+            Slice<std::byte> allocation = allocator.alloc<std::byte>(total_size);
+
+            AllocationMetadata* metadata = reinterpret_cast<AllocationMetadata*>(allocation.data);
+            *metadata = {
+                .ptr = allocation.data,
+                .size = total_size,
+            };
+
+            return metadata->ptr + sizeof(AllocationMetadata);
+        },
+        .pfnReallocation = [](void* data, void* original, usize size, usize alignment, vk::SystemAllocationScope) -> void* {
+            auto& allocator = *static_cast<Allocator*>(data);
+
+            static_assert(sizeof(AllocationMetadata) == 16);
+            std::byte* original_alloc = reinterpret_cast<std::byte*>(original) - sizeof(AllocationMetadata);
+            AllocationMetadata* original_metadata = reinterpret_cast<AllocationMetadata*>(original_alloc);
+            if (original_alloc != original_metadata->ptr)
+                ERROR("Cannot realloc from invalid pointer");
+
+            usize new_size = sizeof(AllocationMetadata) + align_size(size, alignment);
+            Slice<std::byte> reallocation = allocator.realloc(Slice<std::byte>{original_metadata->ptr, original_metadata->size}, new_size);
+            AllocationMetadata* new_metadata = reinterpret_cast<AllocationMetadata*>(reallocation.data);
+            *new_metadata = {
+                .ptr = reallocation.data,
+                .size = new_size,
+            }; 
+            return new_metadata->ptr + sizeof(AllocationMetadata);
+        },
+        .pfnFree = [](void* data, void* memory) {
+            auto& allocator = *static_cast<Allocator*>(data);
+
+            static_assert(sizeof(AllocationMetadata) == 16);
+            std::byte* ptr = reinterpret_cast<std::byte*>(memory) - sizeof(AllocationMetadata);
+            AllocationMetadata* metadata = reinterpret_cast<AllocationMetadata*>(ptr);
+            if (ptr != metadata->ptr)
+                ERROR("Cannot dealloc from invalid pointer");
+            allocator.dealloc(Slice<std::byte>(metadata->ptr, metadata->size));
+        },
+        .pfnInternalAllocation = nullptr,
+        .pfnInternalFree = nullptr,
+    };
+}
+
 #ifdef NDEBUG
 inline constexpr std::array<const char*, 0> ValidationLayers{};
 #else
@@ -83,7 +139,7 @@ static Result<std::vector<const char*>> get_instance_extensions() {
     return required_extensions;
 }
 
-static Result<vk::Instance> init_instance() {
+static Result<vk::Instance> init_instance(Memory mem) {
     const vk::ApplicationInfo app_info{
         .pApplicationName = "Hurdy Gurdy",
         .applicationVersion = 0,
@@ -298,7 +354,7 @@ vk::CommandPool create_command_pool(const vk::Device device, const u32 queue_fam
     return pool.value;
 }
 
-Result<Vk> Vk::create() {
+Result<Vk> Vk::create(Memory mem) {
     auto context = ok<Vk>();
 
     const auto glfw_success = glfwInit();
@@ -308,7 +364,7 @@ Result<Vk> Vk::create() {
 
     VULKAN_HPP_DEFAULT_DISPATCHER.init();
 
-    const auto instance = init_instance();
+    const auto instance = init_instance(mem);
     if (instance.has_err())
         return instance.err();
     context->instance = *instance;
