@@ -9,96 +9,38 @@
 
 namespace hg {
 
-Result<Window> Window::create(const Vk& vk, bool fullscreen, i32 width, i32 height) {
-    if (!fullscreen) {
-        ASSERT(width > 0);
-        ASSERT(height > 0);
+Result<DefaultRenderer> DefaultRenderer::create(const Vk& vk, const Config& config) {
+    if (!config.fullscreen) {
+        ASSERT(config.window_size.x > 0);
+        ASSERT(config.window_size.y > 0);
     }
 
-    auto window = ok<Window>();
+    auto renderer = ok<DefaultRenderer>();
 
-    if (fullscreen) {
-        const auto monitor = glfwGetPrimaryMonitor();
-        if (monitor == nullptr)
-            return Err::MonitorUnvailable;
+    const auto window = Window::create(config.fullscreen, config.window_size.x, config.window_size.y);
+    if (window.has_err())
+        return window.err();
+    renderer->m_window = *window;
 
-        const auto video_mode = glfwGetVideoMode(monitor);
-        if (video_mode == nullptr)
-            ERROR("Could not find video mode");
-
-        window->m_window = glfwCreateWindow(video_mode->width, video_mode->width, "Hurdy Gurdy", monitor, nullptr);
-        if (window->m_window == nullptr)
-            ERROR("Could not create window");
-
-    } else {
-        window->m_window = glfwCreateWindow(width, height, "Hurdy Gurdy", nullptr, nullptr);
-        if (window->m_window == nullptr)
-            ERROR("Could not create window");
-    }
-
-    const auto surface = Surface::create(vk, window->m_window);
+    const auto surface = Surface::create(vk, renderer->m_window.get());
     if (surface.has_err())
         return surface.err();
-    window->m_surface = *surface;
+    renderer->m_surface = *surface;
 
-    const auto swapchain = Swapchain::create(vk, window->m_surface.get());
+    const auto swapchain = Swapchain::create(vk, renderer->m_surface.get());
     if (swapchain.has_err())
         return swapchain.err();
-    window->m_swapchain = *swapchain;
+    renderer->m_swapchain = *swapchain;
 
-    ASSERT(window->m_window != nullptr);
-    return window;
-}
+    const auto window_size = renderer->m_window.get_extent();
 
-[[nodiscard]] Result<void> Window::draw(const Vk& vk, Renderer& renderer) {
-    const auto frame_result = [&]() -> Result<void> {
-        const auto begin = m_swapchain.begin_frame(vk);
-        if (begin.has_err())
-            return begin.err();
-
-        renderer.draw(m_swapchain.draw_info());
-
-        const auto end = m_swapchain.end_frame(vk);
-        if (end.has_err())
-            return end.err();
-
-        return ok();
-    }();
-
-    if (frame_result.has_err()) {
-        switch (frame_result.err()) {
-            case Err::FrameTimeout: return frame_result.err();
-            case Err::InvalidWindow: {
-                for (int w = 0, h = 0; w <= 1 || h <= 1; glfwGetWindowSize(m_window, &w, &h)) {
-                    glfwPollEvents();
-                }
-
-                const auto resize_result = resize(vk);
-                if (resize_result.has_err())
-                    return resize_result.err();
-
-                renderer.resize(vk, *this);
-                break;
-            }
-            default: ERROR("Unexpected error: {}", to_string(frame_result.err()));
-        }
-    }
-
-    return ok();
-}
-
-DefaultRenderer DefaultRenderer::create(const Vk& vk, const Window& window) {
-    DefaultRenderer pipeline{};
-
-    const auto window_size = window.get_extent();
-
-    pipeline.m_color_image = GpuImageAndView::create(vk, {
+    renderer->m_color_image = GpuImageAndView::create(vk, {
         .extent{window_size.width, window_size.height, 1},
         .format = Swapchain::SwapchainImageFormat,
         .usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc,
         .sample_count = vk::SampleCountFlagBits::e4,
     });
-    pipeline.m_depth_image = GpuImageAndView::create(vk, {
+    renderer->m_depth_image = GpuImageAndView::create(vk, {
         .extent{window_size.width, window_size.height, 1},
         .format = vk::Format::eD32Sfloat,
         .usage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
@@ -106,53 +48,39 @@ DefaultRenderer DefaultRenderer::create(const Vk& vk, const Window& window) {
         .sample_count = vk::SampleCountFlagBits::e4,
     });
 
-    pipeline.m_set_layout = DescriptorSetLayout::create(vk, {std::array{
+    renderer->m_set_layout = DescriptorSetLayout::create(vk, {std::array{
         vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex},
         vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eFragment},
     }});
 
-    pipeline.m_descriptor_pool = DescriptorPool::create(vk, {1, std::array{
+    renderer->m_descriptor_pool = DescriptorPool::create(vk, {1, std::array{
         vk::DescriptorPoolSize{vk::DescriptorType::eUniformBuffer, 2}
     }});
 
-    pipeline.m_global_set = *pipeline.m_descriptor_pool.allocate_set(vk, pipeline.m_set_layout.get());;
+    renderer->m_global_set = *renderer->m_descriptor_pool.allocate_set(vk, renderer->m_set_layout.get());;
 
-    pipeline.m_vp_buffer = GpuBuffer::create(vk, {
+    renderer->m_vp_buffer = GpuBuffer::create(vk, {
         sizeof(ViewProjectionUniform),
         vk::BufferUsageFlagBits::eUniformBuffer, GpuBuffer::RandomAccess
     });
-    pipeline.m_light_buffer = GpuBuffer::create(vk, {
+    renderer->m_light_buffer = GpuBuffer::create(vk, {
         sizeof(LightUniform) * MaxLights,
         vk::BufferUsageFlagBits::eUniformBuffer, GpuBuffer::RandomAccess
     });
 
-    write_uniform_buffer_descriptor(vk, {pipeline.m_vp_buffer.get(), sizeof(ViewProjectionUniform)}, pipeline.m_global_set, 0);
-    write_uniform_buffer_descriptor(vk, {pipeline.m_light_buffer.get(), sizeof(LightUniform)}, pipeline.m_global_set, 1);
+    write_uniform_buffer_descriptor(vk, {renderer->m_vp_buffer.get(), sizeof(ViewProjectionUniform)}, renderer->m_global_set, 0);
+    write_uniform_buffer_descriptor(vk, {renderer->m_light_buffer.get(), sizeof(LightUniform)}, renderer->m_global_set, 1);
 
-    ASSERT(pipeline.m_global_set != nullptr);
-    return pipeline;
+    ASSERT(renderer->m_global_set != nullptr);
+    return renderer;
 }
 
-void DefaultRenderer::destroy(const Vk& vk) const {
-    const auto wait_result = vk.queue.waitIdle();
-    switch (wait_result) {
-        case vk::Result::eSuccess: break;
-        case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
-        case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
-        case vk::Result::eErrorDeviceLost: ERROR("Vulkan device lost");
-        default: ERROR("Unexpected Vulkan error");
-    }
+Result<void> DefaultRenderer::resize(const Vk& vk) {
+    const auto window_size = m_window.get_extent();
 
-    m_descriptor_pool.destroy(vk);
-    m_set_layout.destroy(vk);
-    m_light_buffer.destroy(vk);
-    m_vp_buffer.destroy(vk);
-    m_depth_image.destroy(vk);
-    m_color_image.destroy(vk);
-}
-
-void DefaultRenderer::resize(const Vk& vk, const Window& window) {
-    const auto window_size = window.get_extent();
+    auto swapchain_result = m_swapchain.resize(vk, m_surface.get());
+    if (swapchain_result.has_err())
+        return swapchain_result.err();
 
     m_color_image.destroy(vk);
     m_color_image = GpuImageAndView::create(vk, {
@@ -170,6 +98,141 @@ void DefaultRenderer::resize(const Vk& vk, const Window& window) {
         .aspect_flags = vk::ImageAspectFlagBits::eDepth,
         .sample_count = vk::SampleCountFlagBits::e4,
     });
+
+    return ok();
+}
+
+void DefaultRenderer::destroy(const Vk& vk) const {
+    const auto wait_result = vk.queue.waitIdle();
+    switch (wait_result) {
+        case vk::Result::eSuccess: break;
+        case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
+        case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
+        case vk::Result::eErrorDeviceLost: ERROR("Vulkan device lost");
+        default: ERROR("Unexpected Vulkan error");
+    }
+
+    m_descriptor_pool.destroy(vk);
+    m_set_layout.destroy(vk);
+
+    m_light_buffer.destroy(vk);
+    m_vp_buffer.destroy(vk);
+
+    m_depth_image.destroy(vk);
+    m_color_image.destroy(vk);
+
+    m_swapchain.destroy(vk);
+    m_surface.destroy(vk);
+    m_window.destroy();
+}
+
+[[nodiscard]] Result<void> DefaultRenderer::draw(const Vk& vk, const std::span<Pipeline*> pipelines) {
+    const auto frame_result = [&]() -> Result<void> {
+        const auto begin = m_swapchain.begin_frame(vk);
+        if (begin.has_err())
+            return begin.err();
+
+        const auto cmd = begin->cmd;
+        const auto render_target = begin->render_target;
+        const auto extent = begin->extent;
+
+        BarrierBuilder(cmd)
+            .add_image_barrier(m_color_image.get_image(), {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
+            .set_image_dst(vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::AccessFlagBits2::eColorAttachmentWrite, vk::ImageLayout::eColorAttachmentOptimal)
+            .add_image_barrier(m_depth_image.get_image(), {vk::ImageAspectFlagBits::eDepth, 0, 1, 0, 1})
+            .set_image_dst(
+                vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
+                vk::AccessFlagBits2::eDepthStencilAttachmentWrite, vk::ImageLayout::eDepthStencilAttachmentOptimal
+            )
+            .build_and_run();
+
+        const vk::RenderingAttachmentInfo color_attachment{
+            .imageView = m_color_image.get_view(),
+            .imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
+            .loadOp = vk::AttachmentLoadOp::eDontCare,
+            .storeOp = vk::AttachmentStoreOp::eStore,
+            .clearValue{{std::array{0.0f, 0.0f, 0.0f, 1.0f}}},
+        };
+        const vk::RenderingAttachmentInfo depth_attachment{
+            .imageView = m_depth_image.get_view(),
+            .imageLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
+            .loadOp = vk::AttachmentLoadOp::eClear,
+            .storeOp = vk::AttachmentStoreOp::eDontCare,
+            .clearValue{.depthStencil{.depth = 1.0f, .stencil = 0}},
+        };
+        cmd.beginRendering({
+            .renderArea{{0, 0}, extent},
+            .layerCount = 1,
+            .colorAttachmentCount = 1,
+            .pColorAttachments = &color_attachment,
+            .pDepthAttachment = &depth_attachment,
+        });
+
+        cmd.setRasterizationSamplesEXT(vk::SampleCountFlagBits::e4);
+        cmd.setSampleMaskEXT(vk::SampleCountFlagBits::e4, vk::SampleMask{0xff});
+
+        for (auto pipeline : pipelines) {
+            pipeline->draw(cmd, m_global_set);
+        }
+
+        cmd.endRendering();
+
+        BarrierBuilder(cmd)
+            .add_image_barrier(m_color_image.get_image(), {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
+            .set_image_src(vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::AccessFlagBits2::eColorAttachmentWrite, vk::ImageLayout::eColorAttachmentOptimal)
+            .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferRead, vk::ImageLayout::eTransferSrcOptimal)
+            .add_image_barrier(render_target, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
+            .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
+            .build_and_run();
+
+        const vk::ImageResolve2 resolve{
+            .srcSubresource{vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+            .dstSubresource{vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+            .extent{extent.width, extent.height, 1},
+        };
+        cmd.resolveImage2({
+            .srcImage = m_color_image.get_image(),
+            .srcImageLayout = vk::ImageLayout::eTransferSrcOptimal,
+            .dstImage = render_target,
+            .dstImageLayout = vk::ImageLayout::eTransferDstOptimal,
+            .regionCount = 1,
+            .pRegions = &resolve,
+        });
+
+        BarrierBuilder(cmd)
+            .add_image_barrier(render_target, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
+            .set_image_src(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
+            .set_image_dst(vk::PipelineStageFlagBits2::eAllGraphics, vk::AccessFlagBits2::eNone, vk::ImageLayout::ePresentSrcKHR)
+            .build_and_run();
+
+        m_light_queue.clear();
+
+        const auto end = m_swapchain.end_frame(vk);
+        if (end.has_err())
+            return end.err();
+        return ok();
+    }();
+
+    if (frame_result.has_err()) {
+        switch (frame_result.err()) {
+            case Err::FrameTimeout: return frame_result.err();
+            case Err::InvalidWindow: {
+                for (int w = 0, h = 0; w <= 1 || h <= 1; glfwGetWindowSize(m_window.get(), &w, &h)) {
+                    glfwPollEvents();
+                }
+
+                const auto resize_result = resize(vk);
+                if (resize_result.has_err())
+                    return resize_result.err();
+
+                resize(vk);
+                break;
+            }
+            default: ERROR("Unexpected error: {}", to_string(frame_result.err()));
+        }
+    }
+
+    return ok();
 }
 
 void DefaultRenderer::update_camera_and_lights(const Vk& vk, const Cameraf& camera) {
@@ -186,86 +249,6 @@ void DefaultRenderer::update_camera_and_lights(const Vk& vk, const Cameraf& came
 
     m_light_buffer.write(vk, lights);
     m_vp_buffer.write(vk, view, offsetof(ViewProjectionUniform, view));
-}
-
-void DefaultRenderer::draw(const Swapchain::DrawInfo& info) {
-    ASSERT(info.cmd != nullptr);
-    ASSERT(info.render_target != nullptr);
-    ASSERT(info.extent.width > 0);
-    ASSERT(info.extent.height > 0);
-
-    vk::CommandBuffer cmd = info.cmd;
-
-    BarrierBuilder(cmd)
-        .add_image_barrier(m_color_image.get_image(), {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
-        .set_image_dst(vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::AccessFlagBits2::eColorAttachmentWrite, vk::ImageLayout::eColorAttachmentOptimal)
-        .add_image_barrier(m_depth_image.get_image(), {vk::ImageAspectFlagBits::eDepth, 0, 1, 0, 1})
-        .set_image_dst(
-            vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
-            vk::AccessFlagBits2::eDepthStencilAttachmentWrite, vk::ImageLayout::eDepthStencilAttachmentOptimal
-        )
-        .build_and_run();
-
-    const vk::RenderingAttachmentInfo color_attachment{
-        .imageView = m_color_image.get_view(),
-        .imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
-        .loadOp = vk::AttachmentLoadOp::eDontCare,
-        .storeOp = vk::AttachmentStoreOp::eStore,
-        .clearValue{{std::array{0.0f, 0.0f, 0.0f, 1.0f}}},
-    };
-    const vk::RenderingAttachmentInfo depth_attachment{
-        .imageView = m_depth_image.get_view(),
-        .imageLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
-        .loadOp = vk::AttachmentLoadOp::eClear,
-        .storeOp = vk::AttachmentStoreOp::eDontCare,
-        .clearValue{.depthStencil{.depth = 1.0f, .stencil = 0}},
-    };
-    cmd.beginRendering({
-        .renderArea{{0, 0}, info.extent},
-        .layerCount = 1,
-        .colorAttachmentCount = 1,
-        .pColorAttachments = &color_attachment,
-        .pDepthAttachment = &depth_attachment,
-    });
-
-    cmd.setRasterizationSamplesEXT(vk::SampleCountFlagBits::e4);
-    cmd.setSampleMaskEXT(vk::SampleCountFlagBits::e4, vk::SampleMask{0xff});
-
-    for (auto system : m_pipelines) {
-        system->draw(cmd, m_global_set);
-    }
-
-    cmd.endRendering();
-
-    BarrierBuilder(cmd)
-        .add_image_barrier(m_color_image.get_image(), {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
-        .set_image_src(vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::AccessFlagBits2::eColorAttachmentWrite, vk::ImageLayout::eColorAttachmentOptimal)
-        .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferRead, vk::ImageLayout::eTransferSrcOptimal)
-        .add_image_barrier(info.render_target, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
-        .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
-        .build_and_run();
-
-    const vk::ImageResolve2 resolve{
-        .srcSubresource{vk::ImageAspectFlagBits::eColor, 0, 0, 1},
-        .dstSubresource{vk::ImageAspectFlagBits::eColor, 0, 0, 1},
-        .extent{info.extent.width, info.extent.height, 1},
-    };
-    cmd.resolveImage2({
-        .srcImage = m_color_image.get_image(),
-        .srcImageLayout = vk::ImageLayout::eTransferSrcOptimal,
-        .dstImage = info.render_target,
-        .dstImageLayout = vk::ImageLayout::eTransferDstOptimal,
-        .regionCount = 1,
-        .pRegions = &resolve,
-    });
-
-    BarrierBuilder(cmd)
-        .add_image_barrier(info.render_target, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
-        .set_image_src(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
-        .set_image_dst(vk::PipelineStageFlagBits2::eAllGraphics, vk::AccessFlagBits2::eNone, vk::ImageLayout::ePresentSrcKHR)
-        .build_and_run();
-
-    m_light_queue.clear();
 }
 
 SkyboxPipeline SkyboxPipeline::create(const Vk& vk, const DefaultRenderer& renderer) {

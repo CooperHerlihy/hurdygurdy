@@ -2,16 +2,12 @@
 
 #include "hg_utils.h"
 #include "hg_vulkan.h"
-#include "hg_renderer.h"
 
 namespace hg {
 
 class Engine {
 public:
     struct Config {
-        bool fullscreen = false;
-        glm::uvec2 window_size{1920, 1080};
-
         usize global_allocator_size = 1024 * 1024 * 1024;
         usize stack_allocator_size = 128 * 1024 * 1024;
         usize frame_allocator_size = 128 * 1024;
@@ -27,13 +23,6 @@ public:
     Engine(Engine&& other) noexcept;
     Engine& operator=(Engine&& other) noexcept;
 
-    [[nodiscard]] Result<void> draw(Window::Renderer& renderer) {
-        const auto frame_result = m_window->draw(*m_vk, renderer);
-        if (frame_result.has_err())
-            return frame_result.err();
-        return ok();
-    }
-
     [[nodiscard]] LinearAllocator<>& long_term_allocator() { return m_global_allocator; }
     [[nodiscard]] LinearAllocator<>& short_term_allocator() { return m_frame_allocator; }
     [[nodiscard]] StackAllocator<>& stack_allocator() { return m_stack_allocator; }
@@ -41,9 +30,7 @@ public:
     [[nodiscard]] PoolAllocator<Texture>& texture_allocator() { return m_texture_allocator; }
 
     [[nodiscard]] Vk& vk() { return *m_vk; }
-    [[nodiscard]] Window& window() { return *m_window; }
     [[nodiscard]] const Vk& vk() const { return *m_vk; }
-    [[nodiscard]] const Window& window() const { return *m_window; }
 
 private:
     bool m_moved_from = false;
@@ -55,7 +42,6 @@ private:
     PoolAllocator<Texture> m_texture_allocator{};
 
     Vk* m_vk = nullptr;
-    Window* m_window = nullptr;
 };
 
 } // namespace hg

@@ -16,11 +16,6 @@ Result<Engine> Engine::create(const Config& config) {
         return vk.err();
     engine->m_vk = new (engine->m_global_allocator.template alloc<Vk>()) Vk{*vk};
 
-    const auto window = Window::create(engine->vk(), config.fullscreen, config.window_size.x, config.window_size.y);
-    if (window.has_err())
-        return window.err();
-    engine->m_window = new (engine->m_global_allocator.template alloc<Window>()) Window{*window};
-
     return engine;
 }
 
@@ -28,7 +23,6 @@ Engine::~Engine() noexcept {
     if (m_moved_from)
         return;
 
-    m_window->destroy(*m_vk);
     m_vk->destroy();
 
     m_texture_allocator.destroy(m_global_allocator);
@@ -47,7 +41,6 @@ Engine::Engine(Engine&& other) noexcept
     , m_texture_allocator{other.m_texture_allocator}
 
     , m_vk{other.m_vk}
-    , m_window{other.m_window}
 {
     other.m_moved_from = true;
 }

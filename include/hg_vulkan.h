@@ -633,7 +633,6 @@ public:
     [[nodiscard]] static Result<Surface> create(const Vk& vk, GLFWwindow* window);
     void destroy(const Vk& vk) const {
         ASSERT(m_surface != nullptr);
-
         vk.instance.destroySurfaceKHR(m_surface);
     }
 
@@ -658,12 +657,7 @@ public:
         vk::Image render_target{};
         vk::Extent2D extent{};
     };
-    [[nodiscard]] DrawInfo draw_info() const {
-        ASSERT(m_recording);
-        return DrawInfo{current_cmd(), current_image(), m_extent};
-    }
-
-    [[nodiscard]] Result<vk::CommandBuffer> begin_frame(const Vk& vk);
+    [[nodiscard]] Result<DrawInfo> begin_frame(const Vk& vk);
     [[nodiscard]] Result<void> end_frame(const Vk& vk);
 
 private:

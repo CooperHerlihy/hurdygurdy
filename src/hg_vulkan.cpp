@@ -1552,7 +1552,7 @@ Result<void> Swapchain::resize(const Vk& vk, const vk::SurfaceKHR surface) {
     return ok();
 }
 
-Result<vk::CommandBuffer> Swapchain::begin_frame(const Vk& vk) {
+Result<Swapchain::DrawInfo> Swapchain::begin_frame(const Vk& vk) {
     ASSERT(!m_recording);
     ASSERT(current_cmd() != nullptr);
 
@@ -1616,7 +1616,7 @@ Result<vk::CommandBuffer> Swapchain::begin_frame(const Vk& vk) {
     });
     current_cmd().setColorBlendEnableEXT(0, {vk::False});
 
-    return ok(current_cmd());
+    return ok<DrawInfo>(current_cmd(), current_image(), m_extent);
 }
 
 Result<void> Swapchain::end_frame(const Vk& vk) {

@@ -2,59 +2,12 @@
 
 #include "hg_utils.h"
 #include "hg_math.h"
-#include "hg_generate.h"
+#include "hg_window.h"
 #include "hg_vulkan.h"
 
 namespace hg {
 
-class Window {
-public:
-    class Renderer {
-    public:
-        virtual ~Renderer() = default;
-
-        virtual void draw(const Swapchain::DrawInfo& info) = 0;
-
-        virtual void resize(const Vk& vk, const Window& window) = 0;
-    };
-
-    [[nodiscard]] GLFWwindow* get() const {
-        ASSERT(m_window != nullptr);
-        return m_window;
-    }
-    [[nodiscard]] vk::SurfaceKHR get_surface() const { return m_surface.get(); }
-    [[nodiscard]] vk::Extent2D get_extent() const {
-        int width = 0, height = 0;
-        glfwGetFramebufferSize(m_window, &width, &height);
-        return {to_u32(width), to_u32(height)};
-    }
-
-    [[nodiscard]] static Result<Window> create(const Vk& vk, bool fullscreen, i32 width, i32 height);
-    void destroy(const Vk& vk) const {
-        m_swapchain.destroy(vk);
-        m_surface.destroy(vk);
-
-        ASSERT(m_window != nullptr);
-        glfwDestroyWindow(m_window);
-    }
-
-    [[nodiscard]] Result<void> resize(const Vk& vk) {
-        const auto res = m_swapchain.resize(vk, m_surface.get());
-        if (res.has_err())
-            return res.err();
-
-        return ok();
-    }
-
-    [[nodiscard]] Result<void> draw(const Vk& vk, Renderer& renderer);
-
-private:
-    GLFWwindow* m_window = nullptr;
-    Surface m_surface{};
-    Swapchain m_swapchain{};
-};
-
-class DefaultRenderer : public Window::Renderer {
+class DefaultRenderer {
 public:
     DefaultRenderer() = default;
 
@@ -81,17 +34,20 @@ public:
         alignas(16) Light vals[MaxLights]{};
     };
 
-    void draw(const Swapchain::DrawInfo& info) override;
+    [[nodiscard]] GLFWwindow* get_window() const { return m_window.get(); }
+    [[nodiscard]] vk::Extent2D get_extent() const { return m_window.get_extent(); }
+    [[nodiscard]] vk::SurfaceKHR get_surface() const { return m_surface.get(); }
+    [[nodiscard]] vk::DescriptorSetLayout get_global_set_layout() const { return m_set_layout.get(); }
 
-    [[nodiscard]] static DefaultRenderer create(const Vk& vk, const Window& window);
+    struct Config {
+        bool fullscreen = false;
+        glm::uvec2 window_size{1920, 1080};
+    };
+    [[nodiscard]] static Result<DefaultRenderer> create(const Vk& vk, const Config& config);
+    Result<void> resize(const Vk& vk);
     void destroy(const Vk& vk) const;
-    void resize(const Vk& vk, const Window& window) override;
 
-    vk::DescriptorSetLayout get_global_set_layout() const { return m_set_layout.get(); }
-
-    void add_pipeline(Pipeline& system) {
-        m_pipelines.emplace_back(&system);
-    }
+    Result<void> draw(const Vk& vk, std::span<Pipeline*> pipelines);
 
     void update_projection(const Vk& vk, const glm::mat4& projection) const {
         m_vp_buffer.write(vk, projection, offsetof(ViewProjectionUniform, projection));
@@ -105,6 +61,10 @@ public:
     }
 
 private:
+    Window m_window{};
+    Surface m_surface{};
+    Swapchain m_swapchain{};
+
     GpuImageAndView m_color_image{};
     GpuImageAndView m_depth_image{};
 
@@ -114,8 +74,6 @@ private:
     GpuBuffer m_vp_buffer{};
     GpuBuffer m_light_buffer{};
     std::vector<Light> m_light_queue{};
-
-    std::vector<Pipeline*> m_pipelines{};
 };
 
 class SkyboxPipeline : public DefaultRenderer::Pipeline {
