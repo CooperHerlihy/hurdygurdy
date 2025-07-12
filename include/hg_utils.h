@@ -182,77 +182,115 @@ constexpr std::string_view to_string(Err code) {
 
 template <typename T> class Result {
 public:
-    constexpr Result(const Err error) : m_result{error} {}
-    template <typename... Args> constexpr Result(std::in_place_type_t<T>, Args&&... args) : m_result{std::in_place_type_t<T>(), std::forward<Args>(args)...} {}
+    constexpr Result(const Err error) : m_err{error} {}
+    template <typename... Args> constexpr Result(std::in_place_type_t<T>, Args&&... args)
+        : m_ok{std::forward<Args>(args)...}
+        , m_is_ok{true}
+    {}
 
-    constexpr bool has_err() const { return std::holds_alternative<Err>(m_result); }
+    ~Result() {
+        if constexpr (std::is_destructible_v<T>)
+            if (m_is_ok)
+                m_ok.~T();
+    }
+
+    Result(const Result&) = delete;
+    Result& operator=(const Result&) = delete;
+
+    constexpr Result(Result&& other) noexcept
+        : m_err{other.m_err}
+        , m_is_ok{other.m_is_ok}
+    {
+        if (m_is_ok)
+            new (&m_ok) T{std::move(other.m_ok)};
+    }
+    constexpr Result& operator=(Result&& other) noexcept {
+        if (this == &other)
+            return *this;
+        new (this) Result(std::move(other));
+        if (m_is_ok)
+            new (&m_ok) T{std::move(other.m_ok)};
+        return *this;
+    }
+
+    constexpr bool has_err() const { return !m_is_ok; }
     constexpr Err err() const {
         ASSERT(has_err());
-        return std::get<Err>(m_result);
+        return m_err;
     }
 
     constexpr T& val() & {
         ASSERT(!has_err());
-        return std::get<T>(m_result);
+        return m_ok;
     }
     constexpr T&& val() && {
         ASSERT(!has_err());
-        return std::move(std::get<T>(m_result));
+        return std::move(m_ok);
     }
     constexpr T* operator->() {
         ASSERT(!has_err());
-        return &val();
+        return &m_ok;
     }
     constexpr T& operator*() & {
         ASSERT(!has_err());
-        return val();
+        return m_ok;
     }
     constexpr T&& operator*() && {
         ASSERT(!has_err());
-        return std::move(val());
+        return std::move(m_ok);
     }
 
     constexpr const T& val() const& {
         ASSERT(!has_err());
-        return std::get<T>(m_result);
+        return m_ok;
     }
     constexpr const T&& val() const&& {
         ASSERT(!has_err());
-        return std::move(std::get<T>(m_result));
+        return std::move(m_ok);
     }
     constexpr const T* operator->() const {
         ASSERT(!has_err());
-        return &val();
+        return &m_ok;
     }
     constexpr const T& operator*() const& {
         ASSERT(!has_err());
-        return val();
+        return m_ok;
     }
     constexpr const T&& operator*() const&& {
         ASSERT(!has_err());
-        return val();
+        return m_ok;
     }
 
-    template <typename U = std::remove_cv_t<T>> constexpr T val_or(U&& default_value) const& { return !has_err() ? **this : static_cast<T>(std::forward<U>(default_value)); }
-    template <typename U = std::remove_cv_t<T>> constexpr T val_or(U&& default_value) && { return !has_err() ? std::move(**this) : static_cast<T>(std::forward<U>(default_value)); }
+    template <typename U = std::remove_cv_t<T>> constexpr T val_or(U&& default_value) const& {
+        return !has_err() ? **this : static_cast<T>(std::forward<U>(default_value));
+    }
+    template <typename U = std::remove_cv_t<T>> constexpr T val_or(U&& default_value) && {
+        return !has_err() ? std::move(**this) : static_cast<T>(std::forward<U>(default_value));
+    }
 
 private:
-    std::variant<T, Err> m_result{};
+    union {
+        T m_ok;
+        Err m_err = Err::Unknown;
+    };
+    bool m_is_ok = false;
 };
 
 template <> class Result<void> {
 public:
     constexpr Result(const Err error) : m_err{error} {}
-    constexpr Result(std::in_place_type_t<void>) {}
+    constexpr Result(std::in_place_type_t<void>) : m_is_ok{true} {}
 
-    constexpr bool has_err() const { return m_err.has_value(); }
+    constexpr bool has_err() const { return !m_is_ok; }
     constexpr Err err() const {
-        ASSERT(has_err());
-        return *m_err;
+        if (!has_err())
+            ERROR("Result does not have an error");
+        return m_err;
     }
 
 private:
-    std::optional<Err> m_err{std::nullopt};
+    Err m_err = Err::Unknown;
+    bool m_is_ok = false;
 };
 
 constexpr Result<void> ok() { return std::in_place_type_t<void>(); }
@@ -302,7 +340,7 @@ public:
     }
 };
 
-class AllocatorContext {
+class AllocContext {
 public:
     Allocator* persistent_storage{};
     Allocator* stack_storage{};
