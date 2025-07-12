@@ -512,7 +512,7 @@ Result<PbrPipeline::ModelHandle> PbrPipeline::load_model(
     ASSERT(!path.empty());
     ASSERT(texture.index < m_textures.size());
 
-    const auto model = ModelData::load_gltf(path);
+    const auto model = GltfModelData::load_gltf(path);
     if (model.has_err())
         return model.err();
 

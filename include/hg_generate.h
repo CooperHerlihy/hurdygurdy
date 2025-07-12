@@ -1,26 +1,13 @@
 #pragma once
 
 #include "hg_utils.h"
+#include "hg_load.h"
 
 #include <random>
 
 namespace hg {
 
-struct Vertex {
-    glm::vec3 position{};
-    glm::vec3 normal{};
-    glm::vec4 tangent{};
-    glm::vec2 tex_coord{};
-};
-
 void create_tangents(std::span<Vertex> primitives);
-
-struct Mesh {
-    std::vector<u32> indices{};
-    std::vector<Vertex> vertices{};
-
-    [[nodiscard]] static Mesh from_primitives(std::span<const Vertex> primitives);
-};
 
 [[nodiscard]] Mesh generate_square();
 [[nodiscard]] Mesh generate_cube();
