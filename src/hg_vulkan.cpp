@@ -32,8 +32,10 @@ static vk::Bool32 debug_callback(
         std::printf("Vulkan Info: %s\n", callback_data->pMessage);
     } else if (severity & vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning) {
         std::printf("Vulkan Warning: %s\n", callback_data->pMessage);
-    } else if (severity & vk::DebugUtilsMessageSeverityFlagBitsEXT::eError || true) {
+    } else if (severity & vk::DebugUtilsMessageSeverityFlagBitsEXT::eError) {
         std::printf("Vulkan Error: %s\n", callback_data->pMessage);
+    } else {
+        std::printf("Vulkan Unknown: %s\n", callback_data->pMessage);
     }
     return VK_FALSE;
 }

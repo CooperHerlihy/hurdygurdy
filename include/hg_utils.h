@@ -40,42 +40,20 @@ template <typename F> DeferInternal<F> defer_function(F f) { return DeferInterna
 #define DEFER_INTERMEDIATE_3(x) DEFER_INTERMEDIATE_2(x, __COUNTER__)
 #define defer(code) auto DEFER_INTERMEDIATE_3(_defer_) = defer_function([&] { code; })
 
-enum class LogLevel {
-    Info,
-    Warning,
-    Error,
-};
+enum class LogLevel { Info, Warning, Error };
 
 inline const char* to_string(LogLevel level) {
     switch (level) {
         case LogLevel::Info: return "Info";
         case LogLevel::Warning: return "Warning";
         case LogLevel::Error: return "Error";
+        default: return "Invalid log level";
     }
-    return "Invalid log level";
 }
 
-struct LogDetails {
-    const char* file = nullptr;
-    usize line = 0;
-    const char* function = nullptr;
-    LogLevel level = LogLevel::Info;
-};
-
-inline void log(const LogDetails& details, const char* message) {
-    std::fprintf(
-        stderr,
-        "%s: %s : %llu %s(): %s\n",
-        to_string(details.level),
-        details.file,
-        details.line,
-        details.function,
-        message
-    );
+#define LOG(level, message) {                                                                                \
+    std::fprintf(stderr, "%s: %s : %d %s(): %s\n", to_string(level), __FILE__, __LINE__, __func__, message); \
 }
-
-
-#define LOG(level, message) { log({ __FILE__, __LINE__, __func__, level }, message); }
 #define LOG_INFO(message) { LOG(LogLevel::Info, message) }
 #define LOG_WARN(message) { LOG(LogLevel::Warning, message) }
 #define LOG_ERROR(message) { LOG(LogLevel::Error, message) }
