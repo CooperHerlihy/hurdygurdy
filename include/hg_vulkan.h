@@ -23,11 +23,11 @@ public:
     void* alloc(const usize size, const usize alignment) {
         static_assert(sizeof(Metadata) == 16);
         usize total_size = sizeof(Metadata) + align_size(size, alignment);
-        std::byte* allocation = m_parent->alloc<std::byte>(total_size);
+        Slice<std::byte> allocation = m_parent->alloc<std::byte>(total_size);
 
-        Metadata* metadata = reinterpret_cast<Metadata*>(allocation);
+        Metadata* metadata = reinterpret_cast<Metadata*>(allocation.data);
         *metadata = {
-            .ptr = allocation,
+            .ptr = allocation.data,
             .size = total_size,
         };
         return metadata->ptr + sizeof(Metadata);
@@ -41,10 +41,10 @@ public:
             ERROR("Cannot realloc from invalid pointer");
 
         usize new_size = sizeof(Metadata) + align_size(size, alignment);
-        std::byte* reallocation = m_parent->realloc<std::byte>(original_metadata->ptr, original_metadata->size, new_size);
-        Metadata* new_metadata = reinterpret_cast<Metadata*>(reallocation);
+        Slice<std::byte> reallocation = m_parent->realloc(Slice<std::byte>{original_metadata->ptr, original_metadata->size}, new_size);
+        Metadata* new_metadata = reinterpret_cast<Metadata*>(reallocation.data);
         *new_metadata = {
-            .ptr = reallocation,
+            .ptr = reallocation.data,
             .size = new_size,
         }; 
         return new_metadata->ptr + sizeof(Metadata);
@@ -56,7 +56,7 @@ public:
         Metadata* metadata = reinterpret_cast<Metadata*>(ptr);
         if (ptr != metadata->ptr)
             ERROR("Cannot dealloc from invalid pointer");
-        m_parent->dealloc<std::byte>(metadata->ptr, metadata->size);
+        m_parent->dealloc(Slice<std::byte>(metadata->ptr, metadata->size));
     }
 
     vk::AllocationCallbacks callbacks() {

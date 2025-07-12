@@ -222,13 +222,15 @@ void DefaultRenderer::destroy(const Vk& vk) const {
                 }
 
                 const auto resize_result = resize(vk);
-                if (resize_result.has_err())
+                if (resize_result.has_err()) {
+                    LOGF_ERROR("Could not resize window: {}", to_string(resize_result.err()));
                     return resize_result.err();
+                }
 
                 resize(vk);
                 break;
             }
-            default: ERROR("Unexpected error: {}", to_string(frame_result.err()));
+            default: ERRORF("Unexpected error: {}", to_string(frame_result.err()));
         }
     }
 
@@ -269,7 +271,7 @@ SkyboxPipeline SkyboxPipeline::create(const Vk& vk, const DefaultRenderer& rende
         .fragment_shader_path = "../shaders/skybox.frag.spv",
     });
     if (graphics_pipeline.has_err())
-        ERROR("Could not find valid skybox shaders");
+        ERRORF("Could not create skybox shaders: {}", to_string(graphics_pipeline.err()));
     pipeline.m_pipeline= *graphics_pipeline;
 
     pipeline.m_descriptor_pool = DescriptorPool::create(vk, {1, std::array{

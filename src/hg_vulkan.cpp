@@ -1197,12 +1197,15 @@ Result<GraphicsPipeline> GraphicsPipeline::create(const Vk& vk, const Config& co
     });
 
     const auto vertex_code = read_shader(config.vertex_shader_path);
-    if (vertex_code.has_err())
+    if (vertex_code.has_err()) {
+        LOGF_ERROR("Could not load vertex shader: {}", config.vertex_shader_path.string());
         return vertex_code.err();
-
+    }
     const auto fragment_code = read_shader(config.fragment_shader_path);
-    if (fragment_code.has_err())
+    if (fragment_code.has_err()) {
+        LOGF_ERROR("Could not load fragment shader: {}", config.fragment_shader_path.string());
         return fragment_code.err();
+    }
 
     std::array shader_infos{
         vk::ShaderCreateInfoEXT{
