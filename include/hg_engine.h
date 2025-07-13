@@ -8,14 +8,10 @@ namespace hg {
 
 class Engine {
 public:
-    struct Config {
-        usize global_allocator_size = 16 * 1024 * 1024;
-        usize frame_allocator_size = 1024 * 1024;
-        usize stack_allocator_size = 1024 * 1024;
-
-        usize max_texture_count = 256;
-    };
+    struct Config : public Memory::Config {};
     [[nodiscard]] static Result<Engine> create(const Config& config);
+
+    [[nodiscard]] Memory& memory() { return m_memory; }
 
     Engine() = default;
     ~Engine() noexcept;
@@ -24,20 +20,15 @@ public:
     Engine(Engine&& other) noexcept;
     Engine& operator=(Engine&& other) noexcept;
 
-    DoubleStack stack() { return DoubleStack{m_stacks[0], m_stacks[1]}; }
-
     [[nodiscard]] Vk& vk() {
         ASSERT(m_vk != nullptr);
-        m_vk->stack = stack();
         return *m_vk;
     }
 
 private:
     bool m_moved_from = false;
 
-    PackedLinearAllocator<> m_global_storage{};
-    PackedLinearAllocator<> m_frame_storage{};
-    std::array<StackAllocator<>, 2> m_stacks{};
+    Memory m_memory{};
 
     Vk* m_vk = nullptr;
 };

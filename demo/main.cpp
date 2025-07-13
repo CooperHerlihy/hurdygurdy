@@ -9,6 +9,9 @@ constexpr double sqrt3 = 1.73205080757;
 #define errf(e) "{} error: {}", #e, to_string(e.err())
 
 int main() {
+
+    Memory memory = Memory::create({});
+
     auto engine = Engine::create({});
     if (engine.has_err())
         LOGF_ERROR(errf(engine));

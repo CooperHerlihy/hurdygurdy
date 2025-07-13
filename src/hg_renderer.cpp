@@ -1,15 +1,13 @@
 #include "hg_renderer.h"
 
-#include "hg_utils.h"
-#include "hg_math.h"
-#include "hg_generate.h"
 #include "hg_load.h"
+#include "hg_generate.h"
 
 #include <filesystem>
 
 namespace hg {
 
-Result<DefaultRenderer> DefaultRenderer::create(const Vk& vk, const Config& config) {
+Result<DefaultRenderer> DefaultRenderer::create(Vk& vk, const Config& config) {
     if (!config.fullscreen) {
         ASSERT(config.window_size.x > 0);
         ASSERT(config.window_size.y > 0);
@@ -75,7 +73,7 @@ Result<DefaultRenderer> DefaultRenderer::create(const Vk& vk, const Config& conf
     return renderer;
 }
 
-Result<void> DefaultRenderer::resize(const Vk& vk) {
+Result<void> DefaultRenderer::resize(Vk& vk) {
     const auto window_size = m_window.get_extent();
 
     auto swapchain_result = m_swapchain.resize(vk, m_surface.get());
@@ -102,7 +100,7 @@ Result<void> DefaultRenderer::resize(const Vk& vk) {
     return ok();
 }
 
-void DefaultRenderer::destroy(const Vk& vk) const {
+void DefaultRenderer::destroy(Vk& vk) const {
     const auto wait_result = vk.queue.waitIdle();
     switch (wait_result) {
         case vk::Result::eSuccess: break;
@@ -126,7 +124,7 @@ void DefaultRenderer::destroy(const Vk& vk) const {
     m_window.destroy();
 }
 
-[[nodiscard]] Result<void> DefaultRenderer::draw(const Vk& vk, const std::span<Pipeline*> pipelines) {
+[[nodiscard]] Result<void> DefaultRenderer::draw(Vk& vk, const std::span<Pipeline*> pipelines) {
     const auto frame_result = [&]() -> Result<void> {
         const auto begin = m_swapchain.begin_frame(vk);
         if (begin.has_err())
@@ -237,7 +235,7 @@ void DefaultRenderer::destroy(const Vk& vk) const {
     return ok();
 }
 
-void DefaultRenderer::update_camera_and_lights(const Vk& vk, const Cameraf& camera) {
+void DefaultRenderer::update_camera_and_lights(Vk& vk, const Cameraf& camera) {
     const glm::mat4 view{camera.view()};
 
     ASSERT(m_light_queue.size() < MaxLights);
@@ -253,7 +251,7 @@ void DefaultRenderer::update_camera_and_lights(const Vk& vk, const Cameraf& came
     m_vp_buffer.write(vk, view, offsetof(ViewProjectionUniform, view));
 }
 
-SkyboxPipeline SkyboxPipeline::create(const Vk& vk, const DefaultRenderer& renderer) {
+SkyboxPipeline SkyboxPipeline::create(Vk& vk, const DefaultRenderer& renderer) {
     ASSERT(renderer.get_global_set_layout() != nullptr);
 
     SkyboxPipeline pipeline{};
@@ -284,7 +282,7 @@ SkyboxPipeline SkyboxPipeline::create(const Vk& vk, const DefaultRenderer& rende
     return pipeline;
 }
 
-Result<void> SkyboxPipeline::load_skybox(const Vk& vk, const std::filesystem::path path) {
+Result<void> SkyboxPipeline::load_skybox(Vk& vk, const std::filesystem::path path) {
     ASSERT(!path.empty());
 
     const auto cubemap = Texture::from_cubemap_file(vk, path, {
@@ -318,7 +316,7 @@ Result<void> SkyboxPipeline::load_skybox(const Vk& vk, const std::filesystem::pa
     return ok();
 }
 
-void SkyboxPipeline::destroy(const Vk& vk) const {
+void SkyboxPipeline::destroy(Vk& vk) const {
     const auto wait_result = vk.queue.waitIdle();
     switch (wait_result) {
         case vk::Result::eSuccess: break;
@@ -362,7 +360,7 @@ void SkyboxPipeline::draw(const vk::CommandBuffer cmd, const vk::DescriptorSet g
     cmd.setCullMode(vk::CullModeFlagBits::eNone);
 }
 
-PbrPipeline PbrPipeline::create(const Vk& vk, const DefaultRenderer& renderer) {
+PbrPipeline PbrPipeline::create(Vk& vk, const DefaultRenderer& renderer) {
     ASSERT(renderer.get_global_set_layout() != nullptr);
 
     PbrPipeline pipeline{};
@@ -396,7 +394,7 @@ PbrPipeline PbrPipeline::create(const Vk& vk, const DefaultRenderer& renderer) {
     return pipeline;
 }
 
-void PbrPipeline::destroy(const Vk& vk) const {
+void PbrPipeline::destroy(Vk& vk) const {
     const auto wait_result = vk.queue.waitIdle();
     switch (wait_result) {
         case vk::Result::eSuccess: break;
@@ -461,7 +459,7 @@ void PbrPipeline::draw(const vk::CommandBuffer cmd, const vk::DescriptorSet glob
 }
 
 Result<PbrPipeline::TextureHandle> PbrPipeline::load_texture(
-    const Vk& vk, std::filesystem::path path, const vk::Format format
+    Vk& vk, std::filesystem::path path, const vk::Format format
 ) {
     ASSERT(m_textures.size() < MaxTextures);
 
@@ -477,7 +475,7 @@ Result<PbrPipeline::TextureHandle> PbrPipeline::load_texture(
 }
 
 PbrPipeline::TextureHandle PbrPipeline::load_texture_from_data(
-    const Vk& vk, const GpuImage::Data& data, const vk::Format format
+    Vk& vk, const GpuImage::Data& data, const vk::Format format
 ) {
     ASSERT(m_textures.size() < MaxTextures);
 
@@ -491,7 +489,7 @@ PbrPipeline::TextureHandle PbrPipeline::load_texture_from_data(
 }
 
 Result<PbrPipeline::ModelHandle> PbrPipeline::load_model(
-    const Vk& vk, const std::filesystem::path path,
+    Vk& vk, const std::filesystem::path path,
     const TextureHandle normal_map, const TextureHandle texture
 ) {
     ASSERT(!path.empty());
@@ -505,7 +503,7 @@ Result<PbrPipeline::ModelHandle> PbrPipeline::load_model(
 }
 
 PbrPipeline::ModelHandle PbrPipeline::load_model_from_data(
-    const Vk& vk,
+    Vk& vk,
     const Mesh& data,
     const TextureHandle normal_map,
     const TextureHandle texture,

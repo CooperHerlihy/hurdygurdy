@@ -1,9 +1,9 @@
 #pragma once
 
-#include <stdint.h>
-#include <chrono>
+#include <cstdint>
 #include <string_view>
 #include <type_traits>
+#include <chrono>
 
 using i8 = std::int8_t;
 using i16 = std::int16_t;
@@ -22,34 +22,6 @@ using f32 = float;
 using f64 = double;
 
 namespace hg {
-
-class Clock {
-public:
-    void update() {
-        const auto now = std::chrono::high_resolution_clock::now();
-        m_delta = now - m_previous;
-        m_previous = now;
-    }
-
-    [[nodiscard]] constexpr f64 delta_sec() const { return static_cast<f64>(m_delta.count()) / 1'000'000'000.0; }
-
-private:
-    std::chrono::high_resolution_clock::time_point m_previous{std::chrono::high_resolution_clock::now()};
-    std::chrono::nanoseconds m_delta{0};
-};
-
-class Timer {
-public:
-    void start() { m_begin = std::chrono::high_resolution_clock::now(); }
-
-    void stop(const std::string_view message = "Timer stopped") const {
-        const auto end = std::chrono::high_resolution_clock::now();
-        std::printf("%s: %fms\n", message.data(), static_cast<f64>((end - m_begin).count()) / 1'000'000.0);
-    }
-
-private:
-    std::chrono::high_resolution_clock::time_point m_begin{std::chrono::high_resolution_clock::now()};
-};
 
 template <typename Func> class DeferInternal {
 public:
@@ -77,7 +49,7 @@ inline std::string_view to_string(LogLevel level) {
     }
 }
 
-#define LOG(level, message) {                                                                                \
+#define LOG(level, message) {                                                                                       \
     std::fprintf(stderr, "%s: %s : %d %s(): %s\n", to_string(level).data(), __FILE__, __LINE__, __func__, message); \
 }
 #define LOG_INFO(message) { LOG(LogLevel::Info, message) }
@@ -301,5 +273,33 @@ requires(std::is_trivially_copyable_v<U> || std::is_rvalue_reference_v<T>) {
 template <typename T, typename... Args> constexpr Result<T> ok(Args&&... args) {
     return Result<T>{std::in_place_type_t<T>(), std::forward<Args>(args)...};
 }
+
+class Clock {
+public:
+    void update() {
+        const auto now = std::chrono::high_resolution_clock::now();
+        m_delta = now - m_previous;
+        m_previous = now;
+    }
+
+    [[nodiscard]] constexpr f64 delta_sec() const { return static_cast<f64>(m_delta.count()) / 1'000'000'000.0; }
+
+private:
+    std::chrono::high_resolution_clock::time_point m_previous{std::chrono::high_resolution_clock::now()};
+    std::chrono::nanoseconds m_delta{0};
+};
+
+class Timer {
+public:
+    void start() { m_begin = std::chrono::high_resolution_clock::now(); }
+
+    void stop(const std::string_view message = "Timer stopped") const {
+        const auto end = std::chrono::high_resolution_clock::now();
+        std::printf("%s: %fms\n", message.data(), static_cast<f64>((end - m_begin).count()) / 1'000'000.0);
+    }
+
+private:
+    std::chrono::high_resolution_clock::time_point m_begin{std::chrono::high_resolution_clock::now()};
+};
 
 } // namespace hg

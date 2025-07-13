@@ -4,464 +4,379 @@
 
 namespace hg {
 
-template <typename T> struct Slice {
-    T* data;
-    usize count;
+using byte = std::byte;
 
-    T& operator[](const usize index) const { return data[index]; }
+inline constexpr usize align_up(const usize size, const usize alignment) {
+    return (size + alignment - 1) & ~(alignment - 1);
+}
+inline byte* align_ptr_up(void* ptr, const usize alignment) {
+    return reinterpret_cast<byte*>(align_up(reinterpret_cast<usize>(ptr), alignment));
+}
+template <typename T> T* align_ptr_up(T* ptr) requires (!std::same_as<T, void>) {
+    return reinterpret_cast<T*>(align_up(reinterpret_cast<usize>(ptr), alignof(T)));
+}
+template <typename T> T* align_ptr_up(void* ptr) requires (!std::same_as<T, void>) {
+    return reinterpret_cast<T*>(align_up(reinterpret_cast<usize>(ptr), alignof(T)));
+}
+
+inline constexpr usize align_down(const usize size, const usize alignment) {
+    return size & ~(alignment - 1);
+}
+inline byte* align_ptr_down(void* ptr, const usize alignment) {
+    return reinterpret_cast<byte*>(align_down(reinterpret_cast<usize>(ptr), alignment));
+}
+template <typename T> T* align_ptr_down(T* ptr) requires (!std::same_as<T, void>) {
+    return reinterpret_cast<T*>(align_down(reinterpret_cast<usize>(ptr), alignof(T)));
+}
+template <typename T> T* align_ptr_down(void* ptr) requires (!std::same_as<T, void>) {
+    return reinterpret_cast<T*>(align_down(reinterpret_cast<usize>(ptr), alignof(T)));
+}
+
+template <typename T> struct Slice {
+    T* data = nullptr;
+    usize count = 0;
 
     T* begin() const { return data; }
     T* end() const { return data + count; }
+
+    T& operator[](const usize index) const {
+        ASSERT(index < count);
+        return data[index];
+    }
 };
 
-class Allocator {
+class Arena {
 public:
-    virtual ~Allocator() = default;
+    Arena() = default;
+    Arena(Slice<byte> memory) : m_memory{memory}, m_head{0} {}
+    Slice<byte> release() {
+        Slice<byte> memory{m_memory};
+        m_memory = Slice<byte>{};
+        m_head = 0;
+        return memory;
+    }
 
-    [[nodiscard]] virtual void* alloc_v(usize size, usize alignment) = 0;
-    [[nodiscard]] virtual void* realloc_v(void* original, usize original_size, usize new_size, usize alignment) = 0;
-    virtual void dealloc_v(void* ptr, usize size, usize alignment) = 0;
+    Arena(const Arena&) = delete;
+    Arena& operator=(const Arena&) = delete;
+    Arena(Arena&& other) noexcept
+        : m_memory{other.m_memory}
+        , m_head{other.m_head}
+    {
+        other.m_memory = Slice<byte>{};
+        other.m_head = 0;
+    }
+    Arena& operator=(Arena&& other) noexcept {
+        if (this == &other)
+            return *this;
+        if (m_memory.data != nullptr)
+            ERROR("Occupied arena cannot be moved into");
+        new (this) Arena(std::move(other));
+        return *this;
+    }
+
+    Slice<byte> alloc(usize size) {
+        ASSERT(size > 0);
+
+        Slice<byte> allocation{m_memory.data + m_head, align_up(size, 16)};
+        if (allocation.end() > m_memory.end())
+            ERROR("Stack out of memory");
+        m_head = allocation.end() - m_memory.data;
+
+        return allocation;
+    }
 
     template <typename T> [[nodiscard]] T* alloc() {
-        return static_cast<T*>(alloc_v(sizeof(T), alignof(T)));
+        return reinterpret_cast<T*>(alloc(sizeof(T)).data);
     }
     template <typename T> [[nodiscard]] Slice<T> alloc(usize count) {
-        ASSERT(count > 0);
-        return {static_cast<T*>(alloc_v(count * sizeof(T), alignof(T))), count};
+        return {reinterpret_cast<T*>(alloc(count * sizeof(T)).data), count};
     }
+
+    Slice<byte> realloc(Slice<byte> original, usize new_size) {
+        ASSERT(original.data != nullptr);
+        ASSERT(original.count > 0);
+        ASSERT(new_size > 0);
+
+        if (original.end() != m_memory.data + m_head)
+            ERROR("Stack can only reallocate top allocation");
+
+        Slice<byte> allocation{original.data, align_up(new_size, 16)};
+        if (allocation.end() > m_memory.end())
+            ERROR("Stack out of memory");
+        m_head = allocation.end() - m_memory.data;
+
+        return allocation;
+    }
+
     template <typename T> [[nodiscard]] Slice<T> realloc(Slice<T> original, usize new_count) {
-        return {static_cast<T*>(realloc_v(original.data, original.count * sizeof(T), new_count * sizeof(T), alignof(T))), new_count};
+        return {reinterpret_cast<T*>(realloc(
+            Slice<byte>{reinterpret_cast<byte*>(original.data), align_up(original.count * sizeof(T), 16)},
+            new_count * sizeof(T)
+        ).data), new_count};
     }
+
+    void dealloc(Slice<byte> allocation) {
+        ASSERT(allocation.data != nullptr);
+        ASSERT(allocation.count > 0);
+
+        if (allocation.end() != m_memory.data + m_head)
+            ERROR("Stack can only deallocate top allocation");
+
+        m_head = allocation.data - m_memory.data;
+    }
+
     template <typename T> void dealloc(T* ptr) {
-        dealloc_v(ptr, sizeof(T), alignof(T));
+        dealloc({reinterpret_cast<byte*>(ptr), align_up(sizeof(T), 16)});
     }
     template <typename T> void dealloc(Slice<T> slice) {
-        dealloc_v(slice.data, slice.count * sizeof(T), alignof(T));
-    }
-};
-
-struct Terminate { explicit constexpr Terminate() = default; };
-struct ReturnNull { explicit constexpr ReturnNull() = default; };
-
-template <typename T> concept FailurePolicyTag = (
-    std::same_as<T, Terminate> ||
-    std::same_as<T, ReturnNull>
-);
-
-inline constexpr usize align_size(const usize size, const usize alignment) {
-    return (size + alignment - 1) & ~(alignment - 1);
-}
-inline std::byte* align_ptr(void* ptr, const usize alignment) {
-    return reinterpret_cast<std::byte*>(align_size(reinterpret_cast<usize>(ptr), alignment));
-}
-template <typename T> T* align_ptr(T* ptr) requires (!std::same_as<T, void>) {
-    return reinterpret_cast<T*>(align_size(reinterpret_cast<usize>(ptr), alignof(T)));
-}
-
-inline constexpr usize align_size_down(const usize size, const usize alignment) {
-    return size & ~(alignment - 1);
-}
-inline std::byte* align_ptr_down(void* ptr, const usize alignment) {
-    return reinterpret_cast<std::byte*>(align_size_down(reinterpret_cast<usize>(ptr), alignment));
-}
-template <typename T> T* align_ptr_down(T* ptr) requires (!std::same_as<T, void>) {
-    return reinterpret_cast<T*>(align_size_down(reinterpret_cast<usize>(ptr), alignof(T)));
-}
-
-template <FailurePolicyTag FailurePolicy = Terminate>
-class CAllocator : public Allocator {
-public:
-    void* alloc_v(usize size, usize alignment) override {
-        ASSERT(size > 0);
-        ASSERT(alignment > 0);
-
-        auto ptr = std::malloc(align_size(size, alignment));
-        if constexpr (std::same_as<FailurePolicy, Terminate>)
-            if (ptr == nullptr)
-                ERROR("Malloc returned null");
-        return ptr;
-    }
-    void* realloc_v(void* original, usize original_size, usize new_size, usize alignment) override {
-        ASSERT(original != nullptr);
-        ASSERT(original_size > 0);
-        ASSERT(new_size > 0);
-        ASSERT(alignment > 0);
-
-        auto ptr = std::realloc(original, align_size(new_size, alignment));
-        if constexpr (std::same_as<FailurePolicy, Terminate>)
-            if (ptr == nullptr)
-                ERROR("Realloc returned null");
-        return ptr;
-    }
-    void dealloc_v(void* ptr, usize size, usize alignment) override {
-        ASSERT(ptr != nullptr);
-        ASSERT(size > 0);
-        ASSERT(alignment > 0);
-
-        std::free(ptr);
-    }
-
-    static CAllocator& instance() {
-        static CAllocator instance{};
-        return instance;
-    }
-
-    template <typename T> [[nodiscard]] static T* alloc() {
-        return static_cast<T*>(instance().alloc_v(sizeof(T), alignof(T)));
-    }
-    template <typename T> [[nodiscard]] static Slice<T> alloc(usize count) {
-        ASSERT(count > 0);
-        return {static_cast<T*>(instance().alloc_v(count * sizeof(T), alignof(T))), count};
-    }
-    template <typename T> [[nodiscard]] static Slice<T> realloc(Slice<T> original, usize new_count) {
-        return {static_cast<T*>(instance().realloc_v(original.data, original.count * sizeof(T), new_count * sizeof(T), alignof(T))), new_count};
-    }
-    template <typename T> static void dealloc(T* ptr) {
-        instance().dealloc_v(ptr, sizeof(T), alignof(T));
-    }
-    template <typename T> static void dealloc(Slice<T> slice) {
-        instance().dealloc_v(slice.data, slice.count * sizeof(T), alignof(T));
-    }
-};
-
-inline CAllocator<>& mallocator() { return CAllocator<>::instance(); }
-
-template <FailurePolicyTag FailurePolicy = Terminate>
-class StackAllocator : public Allocator {
-public:
-    StackAllocator() = default;
-    StackAllocator(Slice<std::byte> memory)
-        : m_memory{memory}
-        , m_head{align_ptr(memory.data, 16)}
-    {}
-
-    static StackAllocator create(Allocator& parent, const usize size) { return parent.alloc<std::byte>(size); }
-    void destroy(Allocator& parent) const { parent.dealloc(m_memory); }
-
-    [[nodiscard]] void* alloc_v(const usize size, const usize) override {
-        ASSERT(size > 0);
-
-        std::byte* alloc_ptr = m_head;
-        std::byte* alloc_end = alloc_ptr + align_size(size, 16);
-        if (alloc_end > m_memory.end()) {
-            if constexpr (std::same_as<FailurePolicy, Terminate>)
-                ERROR("Stack allocator out of memory");
-            if constexpr (std::same_as<FailurePolicy, ReturnNull>) {
-                LOG_ERROR("Stack allocator out of memory");
-                return nullptr;
-            }
-        }
-        m_head = align_ptr(alloc_end, 16);
-
-        return alloc_ptr;
-    }
-
-    [[nodiscard]] void* realloc_v(void* original, const usize original_size, const usize new_size, const usize) override {
-        ASSERT(original != nullptr);
-        ASSERT(original_size > 0);
-        ASSERT(new_size > 0);
-
-        std::byte* original_ptr = static_cast<std::byte*>(original);
-
-        if (align_ptr(original_ptr + original_size, 16) != m_head) {
-            void* alloc_ptr = alloc_v(new_size, 16);
-            std::memmove(alloc_ptr, original, align_size(original_size, 16));
-            return alloc_ptr;
-        }
-
-        std::byte* new_end = align_ptr(original_ptr + new_size, 16);
-        if (new_end > m_memory.end())
-            ERROR("Stack allocator out of memory");
-
-        m_head = new_end;
-        return original;
-    }
-
-    void dealloc_v(void* ptr, const usize size, const usize) override {
-        ASSERT(ptr != nullptr);
-        ASSERT(size > 0);
-
-        std::byte* ptr_byte = static_cast<std::byte*>(ptr);
-
-        if (align_ptr(ptr_byte + size, 16) != m_head) {
-            if constexpr (std::same_as<FailurePolicy, Terminate>)
-                ERROR("Deallocation of invalid pointer from stack allocator");
-            if constexpr (std::same_as<FailurePolicy, ReturnNull>) {
-                LOG_ERROR("Deallocation of invalid pointer from stack allocator");
-                return;
-            }
-        }
-
-        m_head = ptr_byte;
-    }
-
-    void reset() { m_head = m_memory.data; }
-
-private:
-    Slice<std::byte> m_memory{};
-    std::byte* m_head = nullptr;
-};
-
-class DoubleStack {
-public:
-    DoubleStack() = default;
-    DoubleStack(StackAllocator<>& temporary_space, StackAllocator<>& return_space)
-        : m_stack_space{&temporary_space}
-        , m_return_space{&return_space}
-    {}
-
-    DoubleStack copy() const { return DoubleStack{*m_stack_space, *m_return_space}; }
-    DoubleStack swap() const { return DoubleStack{*m_return_space, *m_stack_space}; }
-
-    template <typename T> [[nodiscard]] T* alloc() const {
-        return static_cast<T*>(m_stack_space->alloc_v(sizeof(T), alignof(T)));
-    }
-    template <typename T> [[nodiscard]] Slice<T> alloc(usize count) const {
-        return {static_cast<T*>(m_stack_space->alloc_v(count * sizeof(T), alignof(T))), count};
-    }
-    template <typename T> [[nodiscard]] Slice<T> realloc(Slice<T> original, usize new_count) const {
-        return {static_cast<T*>(m_stack_space->realloc_v(original.data, original.count * sizeof(T), new_count * sizeof(T), alignof(T))), new_count};
-    }
-
-    template <typename T> void dealloc(T* ptr) const {
-        m_stack_space->dealloc_v(ptr, sizeof(T), alignof(T));
-    }
-    template <typename T> void dealloc(Slice<T> slice) const {
-        m_stack_space->dealloc_v(slice.data, slice.count * sizeof(T), alignof(T));
-    }
-
-    template <typename T> [[nodiscard]] T* alloc_return() const {
-        return static_cast<T*>(m_return_space->alloc_v(sizeof(T), alignof(T)));
-    }
-    template <typename T> [[nodiscard]] Slice<T> alloc_return(usize count) const {
-        return {static_cast<T*>(m_return_space->alloc_v(count * sizeof(T), alignof(T))), count};
-    }
-    template <typename T> [[nodiscard]] Slice<T> realloc_return(Slice<T> original, usize new_count) const {
-        return {static_cast<T*>(m_return_space->realloc_v(
-            original.data, original.count * sizeof(T), new_count * sizeof(T), alignof(T)
-        )), new_count};
+        dealloc({reinterpret_cast<byte*>(slice.data), align_up(slice.count * sizeof(T), 16)});
     }
 
 private:
-    StackAllocator<>* m_stack_space{};
-    StackAllocator<>* m_return_space{};
+    Slice<byte> m_memory{};
+    usize m_head = 0;
 };
 
-template <FailurePolicyTag FailurePolicy = Terminate>
-class PackedLinearAllocator : public Allocator {
+class Stack {
 public:
-    PackedLinearAllocator() = default;
-    PackedLinearAllocator(Slice<std::byte> memory) : m_memory{memory}, m_head{memory.data} {}
-
-    static PackedLinearAllocator create(Allocator& parent, const usize size) { return parent.alloc<std::byte>(size); }
-    void destroy(Allocator& parent) const { parent.dealloc(m_memory); }
-
-    [[nodiscard]] void* alloc_v(const usize size, const usize alignment) override {
-        ASSERT(size > 0);
-        ASSERT(alignment > 0);
-
-        std::byte* alloc_ptr = align_ptr(m_head, alignment);
-        std::byte* alloc_end = alloc_ptr + align_size(size, alignment);
-        if (alloc_end > m_memory.end()) {
-            if constexpr (std::same_as<FailurePolicy, Terminate>)
-                ERROR("Linear allocator out of memory");
-            if constexpr (std::same_as<FailurePolicy, ReturnNull>) {
-                LOG_ERROR("Linear allocator out of memory");
-                return nullptr;
-            }
-        }
-        m_head = alloc_end;
-
-        return alloc_ptr;
-    }
-
-    void* realloc_v(void* original, const usize original_size, const usize new_size, const usize alignment) override {
-        ASSERT(original != nullptr);
-        ASSERT(original_size > 0);
-        ASSERT(new_size > 0);
-        ASSERT(alignment > 0);
-
-        std::byte* original_ptr = static_cast<std::byte*>(original);
-
-        if (align_ptr(original_ptr + original_size, alignment) != m_head) {
-            void* alloc_ptr = alloc_v(new_size, alignment);
-            std::memmove(alloc_ptr, original_ptr, original_size);
-            return alloc_ptr;
-        }
-
-        std::byte* new_end = align_ptr(original_ptr + new_size, alignment);
-        if (new_end > m_memory.end())
-            ERROR("Linear allocator out of memory");
-
-        m_head = new_end;
-        return original;
-    }
-
-    void dealloc_v(void*, usize, usize) override {}
-
-    void reset() { m_head = m_memory.data; }
-
-private:
-    Slice<std::byte> m_memory{};
-    std::byte* m_head = nullptr;
-};
-
-template <usize Size, FailurePolicyTag FailurePolicy = Terminate>
-class FixedSizeAllocator : public Allocator {
-private:
-    union Slot {
-        std::byte data[align_size(Size, 16)];
-        usize next;
+    struct Config {
+        usize size = 0;
     };
+    [[nodiscard]] static Stack create(const Config& config) {
+        byte* memory = static_cast<byte*>(malloc(config.size));
+        if (memory == nullptr)
+            ERROR("Malloc out of memory");
 
-public:
-    FixedSizeAllocator() = default;
-    FixedSizeAllocator(Slice<Slot> slots) : m_slots{slots} {
-        for (usize i = 0; i < m_slots.count; ++i) {
-            m_slots[i].next = i + 1;
-        }
+        Stack stack{};
+        stack.m_arena = Slice<byte>{memory, config.size};
+        return stack;
+    }
+    void destroy() {
+        free(m_arena.release().data);
     }
 
-    static FixedSizeAllocator create(Allocator& parent, const usize count) { return parent.alloc<Slot>(count); }
-    void destroy(Allocator& parent) const {
-        ASSERT(m_slots.data != nullptr);
-        check_leaks();
-        parent.dealloc(m_slots);
+    [[nodiscard]] Slice<byte> alloc(usize size) {
+        return m_arena.alloc(size);
+    }
+    [[nodiscard]] Slice<byte> realloc(Slice<byte> original, usize new_size) {
+        return m_arena.realloc(original, new_size);
+    }
+    void dealloc(Slice<byte> allocation) {
+        m_arena.dealloc(allocation);
     }
 
-    [[nodiscard]] void* alloc_v(const usize size, const usize) override {
-        ASSERT(align_size(size, 16) <= Size);
-
-        usize index = m_next;
-        if (index >= m_slots.count) {
-            if constexpr (std::same_as<FailurePolicy, Terminate>)
-                ERROR("Fixed size allocator out of memory");
-            if constexpr (std::same_as<FailurePolicy, ReturnNull>) {
-                LOG_ERROR("Fixed size allocator out of memory");
-                return nullptr;
-            }
-        }
-        m_next = m_slots[index].next;
-        return &m_slots[index].data;
+    template <typename T> [[nodiscard]] T* alloc() {
+        return m_arena.alloc<T>();
+    }
+    template <typename T> [[nodiscard]] Slice<T> alloc(usize count) {
+        return m_arena.alloc<T>(count);
     }
 
-    [[nodiscard]] void* realloc_v(void* original_ptr, const usize, const usize new_size, const usize) override {
-        ASSERT(original_ptr != nullptr);
-        ASSERT(align_size(new_size, 16) <= Size);
-        return original_ptr;
+    template <typename T> void dealloc(T* ptr) {
+        m_arena.dealloc<T>(ptr);
     }
-
-    void dealloc_v(void* ptr, const usize, const usize) override {
-        ASSERT(ptr != nullptr);
-
-        Slot* slot = reinterpret_cast<Slot*>(ptr);
-        const usize index = static_cast<usize>(slot - m_slots.data);
-        slot->next = m_next;
-        m_next = index;
+    template <typename T> void dealloc(Slice<T> slice) {
+        m_arena.dealloc<T>(slice);
     }
 
 private:
-    void check_leaks() const {
-#ifndef NDEBUG
-        usize count = 0;
-        usize index = m_next;
-        while (index != m_slots.count && count <= m_slots.size()) {
-            index = m_slots[index].next;
-            ++count;
-        }
-        if (count < m_slots.count) {
-            if constexpr (std::same_as<FailurePolicy, Terminate>)
-                ERROR("Fixed size allocator leaked memory");
-            if constexpr (std::same_as<FailurePolicy, ReturnNull>)
-                LOG_ERROR("Fixed size allocator leaked memory");
-        }
-        if (count > m_slots.count) {
-            if constexpr (std::same_as<FailurePolicy, Terminate>)
-                ERROR("Fixed size allocator had double frees");
-            if constexpr (std::same_as<FailurePolicy, ReturnNull>)
-                LOG_ERROR("Fixed size allocator had double frees");
-        }
-#endif
-    }
-
-    Slice<Slot> m_slots{};
-    usize m_next = 0;
+    Arena m_arena{};
 };
 
-template <typename T, FailurePolicyTag FailurePolicy = Terminate>
-class PoolAllocator {
-private:
-    union Slot {
+template <typename T> class Pool {
+public:
+    union Block {
         T data;
         usize next;
     };
 
-public:
-    PoolAllocator() = default;
-    PoolAllocator(Slice<Slot> slots) : m_slots{slots} {
-        for (usize i = 0; i < m_slots.count; ++i) {
-            m_slots[i].next = i + 1;
+    Pool() = default;
+    Pool(Slice<Block> memory) : m_blocks{memory} {
+        for (usize i = 0; i < m_blocks.count; ++i) {
+            m_blocks[i].next = i + 1;
         }
     }
-
-    static PoolAllocator create(Allocator& parent, const usize count) { return parent.alloc<Slot>(count); }
-    void destroy(Allocator& parent) const {
-        ASSERT(m_slots.data != nullptr);
-        check_leaks();
-        parent.dealloc(m_slots);
+    Slice<Block> release() {
+        Slice<Block> memory{m_blocks};
+        m_blocks = Slice<Block>{};
+        m_next = 0;
+        return memory;
     }
 
-    [[nodiscard]] T* alloc(const usize count = 1) {
-        ASSERT(count > 0);
+    Pool(const Pool&) = delete;
+    Pool& operator=(const Pool&) = delete;
+    Pool(Pool&& other) noexcept
+        : m_blocks{other.m_blocks}
+        , m_next{other.m_next}
+    {
+        other.m_blocks = Slice<Block>{};
+        other.m_next = 0;
+    }
+    Pool& operator=(Pool&& other) noexcept {
+        if (this == &other)
+            return *this;
+        if (m_blocks.data != nullptr)
+            ERROR("Occupied pool cannot be moved into");
+        new (this) Pool(std::move(other));
+        return *this;
+    }
+
+    T* alloc() {
+        ASSERT(m_blocks.count > 0);
 
         usize index = m_next;
-        if (index >= m_slots.count) {
-            if constexpr (std::same_as<FailurePolicy, Terminate>)
-                ERROR("Resource pool out of memory");
-            if constexpr (std::same_as<FailurePolicy, ReturnNull>) {
-                LOG_ERROR("Resource pool out of memory");
-                return nullptr;
-            }
-        }
-        m_next = m_slots[index].next;
-        return &m_slots[index].data;
+        if (index >= m_blocks.count)
+            ERROR("Pool out of memory");
+
+        m_next = m_blocks[index].next;
+        return &m_blocks[index].data;
     }
 
     void dealloc(T* ptr) {
         ASSERT(ptr != nullptr);
 
-        Slot* slot = reinterpret_cast<Slot*>(ptr);
-        const usize index = static_cast<usize>(slot - m_slots.data);
-        slot->next = m_next;
-        m_next = index;
+        Block* block = reinterpret_cast<Block*>(ptr);
+
+        if (block < m_blocks.begin() || block >= m_blocks.end())
+            ERROR("Pool cannot deallocate block outside of pool");
+        //if (((block - m_blocks.data) & (15)) != 0)
+            //ERROR("Pool cannot deallocate misaligned block");
+
+        block->next = m_next;
+        m_next = block - m_blocks.data;
     }
 
-private:
     void check_leaks() const {
 #ifndef NDEBUG
         usize count = 0;
         usize index = m_next;
-        while (index != m_slots.count && count <= m_slots.count) {
-            index = m_slots[index].next;
+        while (index != m_blocks.count && count <= m_blocks.count) {
+            index = m_blocks[index].next;
             ++count;
         }
-        if (count < m_slots.count) {
-            if constexpr (std::same_as<FailurePolicy, Terminate>)
-                ERROR("Pool allocator leaked memory");
-            if constexpr (std::same_as<FailurePolicy, ReturnNull>)
-                LOG_ERROR("Pool allocator leaked memory");
-        }
-        if (count > m_slots.count) {
-            if constexpr (std::same_as<FailurePolicy, Terminate>)
-                ERROR("Pool allocator had double frees");
-            if constexpr (std::same_as<FailurePolicy, ReturnNull>)
-                LOG_ERROR("Pool allocator had double frees");
-        }
+        if (count < m_blocks.count)
+            ERROR("Pool leaked memory");
+        if (count > m_blocks.count)
+            ERROR("Pool had double frees");
 #endif
     }
 
-    Slice<Slot> m_slots{};
+private:
+    Slice<Block> m_blocks{};
     usize m_next = 0;
+};
+
+template <usize SmallSize, usize LargeSize, usize HugeSize> class Heap {
+public:
+    using SmallType = std::array<byte, SmallSize>;
+    using LargeType = std::array<byte, LargeSize>;
+    using HugeType = std::array<byte, HugeSize>;
+
+    struct Config {
+        usize small_block_count = 0;
+        usize large_block_count = 0;
+        usize huge_block_count = 0;
+    };
+    [[nodiscard]] static Heap create(const Config& config) {
+        using SmallBlock = Pool<SmallType>::Block;
+        using LargeBlock = Pool<LargeType>::Block;
+        using HugeBlock = Pool<HugeType>::Block;
+
+        SmallBlock* small_blocks = static_cast<SmallBlock*>(malloc(sizeof(SmallBlock) * config.small_block_count));
+        LargeBlock* large_blocks = static_cast<LargeBlock*>(malloc(sizeof(LargeBlock) * config.large_block_count));
+        HugeBlock* huge_blocks = static_cast<HugeBlock*>(malloc(sizeof(HugeBlock) * config.huge_block_count));
+
+        if (huge_blocks == nullptr || large_blocks == nullptr || small_blocks == nullptr) {
+            free(huge_blocks);
+            free(large_blocks);
+            free(small_blocks);
+            ERROR("Malloc out of memory");
+        }
+
+        Heap heap{};
+        heap.m_huge_heap = Slice<HugeBlock>{huge_blocks, config.huge_block_count};
+        heap.m_large_heap = Slice<LargeBlock>{large_blocks, config.large_block_count};
+        heap.m_small_heap = Slice<SmallBlock>{small_blocks, config.small_block_count};
+        return heap;
+    }
+    void destroy() {
+        free(m_huge_heap.release().data);
+        free(m_large_heap.release().data);
+        free(m_small_heap.release().data);
+    }
+
+    [[nodiscard]] Slice<byte> alloc(usize size) {
+        if (size <= SmallSize)
+            return {m_small_heap.alloc()->data(), size};
+        else if (size <= LargeSize)
+            return {m_large_heap.alloc()->data(), size};
+        else if (size <= HugeSize)
+            return {m_huge_heap.alloc()->data(), size};
+        else
+            ERROR("Heap out of memory");
+    }
+
+    template <typename T> [[nodiscard]] T* alloc() {
+        return reinterpret_cast<T*>(alloc(sizeof(T)).data);
+    }
+    template <typename T> [[nodiscard]] Slice<T> alloc(usize count) {
+        return {reinterpret_cast<T*>(alloc(count * sizeof(T)).data), count};
+    }
+
+    void dealloc(Slice<byte> allocation) {
+        if (allocation.count <= SmallSize)
+            m_small_heap.dealloc(reinterpret_cast<SmallType*>(allocation.data));
+        else if (allocation.count <= LargeSize)
+            m_large_heap.dealloc(reinterpret_cast<LargeType*>(allocation.data));
+        else if (allocation.count <= HugeSize)
+            m_huge_heap.dealloc(reinterpret_cast<HugeType*>(allocation.data));
+        else
+            ERROR("Heap out of memory");
+    }
+
+    template <typename T> void dealloc(T* ptr) {
+        dealloc({reinterpret_cast<byte*>(ptr), sizeof(T)});
+    }
+    template <typename T> void dealloc(Slice<T> slice) {
+        dealloc({reinterpret_cast<byte*>(slice.data), slice.count * sizeof(T)});
+    }
+
+private:
+    Pool<SmallType> m_small_heap{};
+    Pool<LargeType> m_large_heap{};
+    Pool<HugeType> m_huge_heap{};
+};
+
+struct Memory {
+    using Heap = Heap<
+        1024,
+        1024 * 32,
+        1024 * 1024
+    >;
+
+    Stack stack{};
+    Heap heap{};
+
+    struct Config {
+        Stack::Config stack{
+            .size = 1024 * 1024
+        };
+        Heap::Config heap{
+            .small_block_count = 1024,
+            .large_block_count = 256,
+            .huge_block_count = 64,
+        };
+    };
+    [[nodiscard]] static Memory create(const Config& config) {
+        Memory memory{};
+        memory.heap = Heap::create(config.heap);
+        memory.stack = Stack::create(config.stack);
+        return memory;
+    }
+    void destroy() {
+        stack.destroy();
+        heap.destroy();
+    }
 };
 
 } // namespace hg

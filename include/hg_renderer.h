@@ -44,17 +44,17 @@ public:
         bool fullscreen = false;
         glm::uvec2 window_size{1920, 1080};
     };
-    [[nodiscard]] static Result<DefaultRenderer> create(const Vk& vk, const Config& config);
-    Result<void> resize(const Vk& vk);
-    void destroy(const Vk& vk) const;
+    [[nodiscard]] static Result<DefaultRenderer> create(Vk& vk, const Config& config);
+    Result<void> resize(Vk& vk);
+    void destroy(Vk& vk) const;
 
-    Result<void> draw(const Vk& vk, std::span<Pipeline*> pipelines);
+    Result<void> draw(Vk& vk, std::span<Pipeline*> pipelines);
 
-    void update_projection(const Vk& vk, const glm::mat4& projection) const {
+    void update_projection(Vk& vk, const glm::mat4& projection) const {
         m_vp_buffer.write(vk, projection, offsetof(ViewProjectionUniform, projection));
     }
 
-    void update_camera_and_lights(const Vk& vk, const Cameraf& camera);
+    void update_camera_and_lights(Vk& vk, const Cameraf& camera);
 
     void queue_light(const glm::vec3 position, const glm::vec3 color) {
         ASSERT(m_light_queue.size() <= MaxLights);
@@ -79,11 +79,11 @@ private:
 
 class SkyboxPipeline : public DefaultRenderer::Pipeline {
 public:
-    [[nodiscard]] static SkyboxPipeline create(const Vk& vk, const DefaultRenderer& pipeline);
-    void destroy(const Vk& vk) const;
+    [[nodiscard]] static SkyboxPipeline create(Vk& vk, const DefaultRenderer& pipeline);
+    void destroy(Vk& vk) const;
     void draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) override;
 
-    [[nodiscard]] Result<void> load_skybox(const Vk& vk, const std::filesystem::path path);
+    [[nodiscard]] Result<void> load_skybox(Vk& vk, const std::filesystem::path path);
 
 private:
     DescriptorSetLayout m_set_layout{};
@@ -99,8 +99,8 @@ private:
 
 class PbrPipeline : public DefaultRenderer::Pipeline {
 public:
-    [[nodiscard]] static PbrPipeline create(const Vk& vk, const DefaultRenderer& pipeline);
-    void destroy(const Vk& vk) const;
+    [[nodiscard]] static PbrPipeline create(Vk& vk, const DefaultRenderer& pipeline);
+    void destroy(Vk& vk) const;
 
     struct PushConstant {
         glm::mat4 model{1.0f};
@@ -118,10 +118,10 @@ public:
     };
 
     [[nodiscard]] Result<TextureHandle> load_texture(
-        const Vk& vk, std::filesystem::path path, vk::Format format = vk::Format::eR8G8B8A8Srgb
+        Vk& vk, std::filesystem::path path, vk::Format format = vk::Format::eR8G8B8A8Srgb
     );
     [[nodiscard]] TextureHandle load_texture_from_data(
-        const Vk& vk, const GpuImage::Data& data, vk::Format format = vk::Format::eR8G8B8A8Srgb
+        Vk& vk, const GpuImage::Data& data, vk::Format format = vk::Format::eR8G8B8A8Srgb
     );
 
     struct Model {
@@ -133,7 +133,7 @@ public:
         float roughness = 0.0;
         float metalness = 0.0;
 
-        void destroy(const Vk& vk) const {
+        void destroy(Vk& vk) const {
             vertex_buffer.destroy(vk);
             index_buffer.destroy(vk);
         }
@@ -144,11 +144,11 @@ public:
     };
 
     [[nodiscard]] Result<ModelHandle> load_model(
-        const Vk& vk, std::filesystem::path path,
+        Vk& vk, std::filesystem::path path,
         TextureHandle normal_map, TextureHandle texture
     );
     [[nodiscard]] ModelHandle load_model_from_data(
-        const Vk& vk,
+        Vk& vk,
         const Mesh& data,
         TextureHandle normal_map,
         TextureHandle texture,
