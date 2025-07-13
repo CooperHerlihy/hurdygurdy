@@ -1,6 +1,8 @@
 #pragma once
 
 #include "hg_utils.h"
+#include "hg_math.h"
+#include "hg_memory.h"
 #include "hg_load.h"
 
 #include <random>

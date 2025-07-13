@@ -1,7 +1,5 @@
 #include "hg_generate.h"
 
-#include "hg_math.h"
-
 namespace hg {
 
 Mesh generate_square() {

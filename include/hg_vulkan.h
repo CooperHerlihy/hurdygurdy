@@ -2,6 +2,7 @@
 
 #include "hg_pch.h"
 #include "hg_utils.h"
+#include "hg_memory.h"
 #include "hg_load.h"
 
 #include <array>
@@ -11,6 +12,8 @@
 namespace hg {
 
 struct Vk {
+    DoubleStack stack{};
+
     vk::Instance instance{};
     vk::DebugUtilsMessengerEXT debug_messenger{};
 
@@ -24,7 +27,7 @@ struct Vk {
     vk::CommandPool command_pool{};
     vk::CommandPool single_time_command_pool{};
 
-    [[nodiscard]] static Result<Vk> create(Memory mem);
+    [[nodiscard]] static Result<Vk> create(DoubleStack stack);
     void destroy() const;
 };
 

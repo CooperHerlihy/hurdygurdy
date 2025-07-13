@@ -50,13 +50,13 @@ const vk::DebugUtilsMessengerCreateInfoEXT DebugUtilsMessengerCreateInfo{
     .pfnUserCallback = debug_callback,
 };
 
-static Result<Slice<const char*>> get_instance_extensions(Memory mem) {
+static Result<Slice<const char*>> get_instance_extensions(DoubleStack stack) {
     u32 glfw_extension_count = 0;
     const char** glfw_extensions = glfwGetRequiredInstanceExtensions(&glfw_extension_count);
     if (glfw_extensions == nullptr)
         ERROR("Failed to get required instance extensions from GLFW");
 
-    auto required_extensions = ok(mem.alloc_heap<const char*>(glfw_extension_count + 1));
+    auto required_extensions = ok(stack.alloc_return<const char*>(glfw_extension_count + 1));
     std::copy(glfw_extensions, glfw_extensions + glfw_extension_count, required_extensions->data);
 #ifndef NDEBUG
     required_extensions->data[glfw_extension_count] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
@@ -65,8 +65,14 @@ static Result<Slice<const char*>> get_instance_extensions(Memory mem) {
     const auto extensions = vk::enumerateInstanceExtensionProperties();
     switch (extensions.result) {
         case vk::Result::eSuccess: break;
-        case vk::Result::eIncomplete: LOG_WARN("Vulkan incomplete enumeration"); break;
-        case vk::Result::eErrorLayerNotPresent: return Err::VulkanLayerUnavailable;
+        case vk::Result::eIncomplete: {
+            LOG_WARN("Vulkan incomplete enumeration");
+            break;
+        }
+        case vk::Result::eErrorLayerNotPresent: {
+            LOG_WARN("Vulkan layer not present");
+            return Err::VulkanLayerUnavailable;
+        }
         case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
         case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
         default: ERROR("Unexpected Vulkan error");
@@ -81,7 +87,7 @@ static Result<Slice<const char*>> get_instance_extensions(Memory mem) {
     return required_extensions;
 }
 
-static Result<vk::Instance> init_instance(Memory mem) {
+static Result<vk::Instance> init_instance(DoubleStack stack) {
     const vk::ApplicationInfo app_info{
         .pApplicationName = "Hurdy Gurdy",
         .applicationVersion = 0,
@@ -90,10 +96,8 @@ static Result<vk::Instance> init_instance(Memory mem) {
         .apiVersion = VK_API_VERSION_1_3,
     };
 
-    auto extensions_mem = LinearAllocator<>::create(mem.stack(), 32);
-    defer(extensions_mem.destroy(mem.stack()));
-
-    const auto extensions = get_instance_extensions({extensions_mem, mem.stack()});
+    const auto extensions = get_instance_extensions(stack.swap());
+    defer(stack.dealloc(*extensions));
     if (extensions.has_err())
         return extensions.err();
 
@@ -136,7 +140,7 @@ static vk::DebugUtilsMessengerEXT init_debug_messenger(const vk::Instance instan
 #endif
 }
 
-static Result<u32> find_queue_family(Memory mem, const vk::PhysicalDevice gpu) {
+static Result<u32> find_queue_family(DoubleStack stack, const vk::PhysicalDevice gpu) {
     ASSERT(gpu != nullptr);
 
     u32 queue_family_count = 0;
@@ -144,8 +148,8 @@ static Result<u32> find_queue_family(Memory mem, const vk::PhysicalDevice gpu) {
     if (queue_family_count == 0)
         return Err::VkQueueFamilyUnavailable;
 
-    auto queue_families = mem.alloc_stack<vk::QueueFamilyProperties>(queue_family_count);
-    defer(mem.dealloc_stack(queue_families));
+    auto queue_families = stack.alloc<vk::QueueFamilyProperties>(queue_family_count);
+    defer(stack.dealloc(queue_families));
     gpu.getQueueFamilyProperties(&queue_family_count, queue_families.data);
 
     const auto queue_family = std::ranges::find_if(queue_families, [](const vk::QueueFamilyProperties family) {
@@ -157,7 +161,7 @@ static Result<u32> find_queue_family(Memory mem, const vk::PhysicalDevice gpu) {
     return ok(static_cast<u32>(queue_family - queue_families.begin()));
 }
 
-static Result<vk::PhysicalDevice> find_gpu(Memory mem, const vk::Instance instance) {
+static Result<vk::PhysicalDevice> find_gpu(DoubleStack stack, const vk::Instance instance) {
     ASSERT(instance != nullptr);
 
     u32 gpu_count = 0;
@@ -171,8 +175,8 @@ static Result<vk::PhysicalDevice> find_gpu(Memory mem, const vk::Instance instan
         default: ERROR("Unexpected Vulkan error");
     }
 
-    auto gpus = mem.alloc_stack<vk::PhysicalDevice>(gpu_count);
-    defer(mem.dealloc_stack(gpus));
+    auto gpus = stack.alloc<vk::PhysicalDevice>(gpu_count);
+    defer(stack.dealloc(gpus));
     auto gpu_result = instance.enumeratePhysicalDevices(&gpu_count, gpus.data);
     if (gpus.data[0] == nullptr)
         return Err::NoCompatibleVkPhysicalDevice;
@@ -206,7 +210,7 @@ static Result<vk::PhysicalDevice> find_gpu(Memory mem, const vk::Instance instan
             });
         })) continue;
 
-        if (find_queue_family(mem, gpu).has_err())
+        if (find_queue_family(stack, gpu).has_err())
             continue;
 
         ASSERT(gpu != nullptr);
@@ -285,7 +289,7 @@ static Result<vk::Device> init_device(const vk::PhysicalDevice gpu, const u32 qu
     return ok(device.value);
 }
 
-static VmaAllocator init_allocator(const vk::Instance instance, const vk::PhysicalDevice gpu, const vk::Device device) {
+static VmaAllocator init_gpu_allocator(const vk::Instance instance, const vk::PhysicalDevice gpu, const vk::Device device) {
     ASSERT(instance != nullptr);
     ASSERT(gpu != nullptr);
     ASSERT(device != nullptr);
@@ -320,8 +324,10 @@ vk::CommandPool create_command_pool(const vk::Device device, const u32 queue_fam
     return pool.value;
 }
 
-Result<Vk> Vk::create(Memory mem) {
-    auto context = ok<Vk>();
+Result<Vk> Vk::create(DoubleStack stack) {
+    auto vk = ok<Vk>();
+
+    vk->stack = stack;
 
     const auto glfw_success = glfwInit();
     if (glfw_success == GLFW_FALSE)
@@ -330,57 +336,57 @@ Result<Vk> Vk::create(Memory mem) {
 
     VULKAN_HPP_DEFAULT_DISPATCHER.init();
 
-    const auto instance = init_instance(mem);
+    const auto instance = init_instance(stack);
     if (instance.has_err())
         return instance.err();
-    context->instance = *instance;
+    vk->instance = *instance;
 
-    VULKAN_HPP_DEFAULT_DISPATCHER.init(context->instance);
+    VULKAN_HPP_DEFAULT_DISPATCHER.init(vk->instance);
 
-    context->debug_messenger = init_debug_messenger(context->instance);
+    vk->debug_messenger = init_debug_messenger(vk->instance);
 
-    const auto gpu = find_gpu(mem, context->instance);
+    const auto gpu = find_gpu(stack, vk->instance);
     if (gpu.has_err())
         return gpu.err();
-    context->gpu = *gpu;
+    vk->gpu = *gpu;
 
-    const auto queue_family = find_queue_family(mem, context->gpu);
+    const auto queue_family = find_queue_family(stack, vk->gpu);
     if (queue_family.has_err())
         return queue_family.err();
-    context->queue_family_index = *queue_family;
+    vk->queue_family_index = *queue_family;
 
-    const auto device = init_device(context->gpu, context->queue_family_index);
+    const auto device = init_device(vk->gpu, vk->queue_family_index);
     if (device.has_err())
         return device.err();
-    context->device = *device;
+    vk->device = *device;
 
-    VULKAN_HPP_DEFAULT_DISPATCHER.init(context->device);
+    VULKAN_HPP_DEFAULT_DISPATCHER.init(vk->device);
 
-    context->queue = context->device.getQueue(context->queue_family_index, 0);
-    if (context->queue == nullptr)
+    vk->queue = vk->device.getQueue(vk->queue_family_index, 0);
+    if (vk->queue == nullptr)
         return Err::VkQueueUnavailable;
 
-    context->gpu_allocator = init_allocator(context->instance, context->gpu, context->device);
+    vk->gpu_allocator = init_gpu_allocator(vk->instance, vk->gpu, vk->device);
 
-    context->command_pool = create_command_pool(
-        context->device, context->queue_family_index,
+    vk->command_pool = create_command_pool(
+        vk->device, vk->queue_family_index,
         vk::CommandPoolCreateFlagBits::eResetCommandBuffer
     );
-    context->single_time_command_pool = create_command_pool(
-        context->device, context->queue_family_index,
+    vk->single_time_command_pool = create_command_pool(
+        vk->device, vk->queue_family_index,
         vk::CommandPoolCreateFlagBits::eResetCommandBuffer | vk::CommandPoolCreateFlagBits::eTransient
     );
 
-    ASSERT(context->instance != nullptr);
-    ASSERT(context->debug_messenger != nullptr);
-    ASSERT(context->gpu != nullptr);
-    ASSERT(context->device != nullptr);
-    ASSERT(context->gpu_allocator != nullptr);
-    ASSERT(context->queue_family_index != UINT32_MAX);
-    ASSERT(context->queue != nullptr);
-    ASSERT(context->command_pool != nullptr);
-    ASSERT(context->single_time_command_pool != nullptr);
-    return context;
+    ASSERT(vk->instance != nullptr);
+    ASSERT(vk->debug_messenger != nullptr);
+    ASSERT(vk->gpu != nullptr);
+    ASSERT(vk->device != nullptr);
+    ASSERT(vk->gpu_allocator != nullptr);
+    ASSERT(vk->queue_family_index != UINT32_MAX);
+    ASSERT(vk->queue != nullptr);
+    ASSERT(vk->command_pool != nullptr);
+    ASSERT(vk->single_time_command_pool != nullptr);
+    return vk;
 }
 
 void Vk::destroy() const {
@@ -1150,7 +1156,7 @@ PipelineLayout PipelineLayout::create(const Vk& vk, const Config& config) {
     return layout;
 }
 
-static Result<std::vector<char>> read_shader(const std::filesystem::path path) {
+static Result<Slice<char>> read_shader(DoubleStack stack, const std::filesystem::path path) {
     ASSERT(!path.empty());
 
     auto file = std::ifstream{path, std::ios::ate | std::ios::binary};
@@ -1158,16 +1164,14 @@ static Result<std::vector<char>> read_shader(const std::filesystem::path path) {
         return Err::ShaderFileNotFound;
 
     const usize code_size = file.tellg();
-    auto code = ok<std::vector<char>>();
-    code->resize(code_size);
-    file.seekg(0);
-    file.read(code->data(), static_cast<std::streamsize>(code->size()));
-    file.close();
-
-    if (code->empty())
+    if (code_size == 0)
         return Err::ShaderFileInvalid;
 
-    ASSERT(!code->empty());
+    auto code = ok<Slice<char>>(stack.alloc_return<char>(code_size));
+    file.seekg(0);
+    file.read(code->data, static_cast<std::streamsize>(code->count));
+    file.close();
+
     return code;
 }
 
@@ -1176,7 +1180,8 @@ Result<UnlinkedShader> UnlinkedShader::create(const Vk& vk, const Config& config
     ASSERT(config.code_type == vk::ShaderCodeTypeEXT::eSpirv && "binary shader code types untested");
     ASSERT(config.stage != vk::ShaderStageFlagBits{0});
 
-    const auto code = read_shader(config.path);
+    auto code = read_shader(vk.stack.swap(), config.path);
+    defer(vk.stack.dealloc(*code));
     if (code.has_err())
         return code.err();
 
@@ -1184,8 +1189,8 @@ Result<UnlinkedShader> UnlinkedShader::create(const Vk& vk, const Config& config
         .stage = config.stage,
         .nextStage = config.next_stage,
         .codeType = config.code_type,
-        .codeSize = code->size(),
-        .pCode = code->data(),
+        .codeSize = code->count,
+        .pCode = code->data,
         .pName = "main",
         .setLayoutCount = to_u32(config.set_layouts.size()),
         .pSetLayouts = config.set_layouts.data(),
@@ -1218,12 +1223,14 @@ Result<GraphicsPipeline> GraphicsPipeline::create(const Vk& vk, const Config& co
         .push_ranges = config.push_ranges,
     });
 
-    const auto vertex_code = read_shader(config.vertex_shader_path);
+    const auto vertex_code = read_shader(vk.stack.swap(), config.vertex_shader_path);
+    defer(vk.stack.dealloc(*vertex_code));
     if (vertex_code.has_err()) {
         LOGF_ERROR("Could not load vertex shader: {}", config.vertex_shader_path.string());
         return vertex_code.err();
     }
-    const auto fragment_code = read_shader(config.fragment_shader_path);
+    const auto fragment_code = read_shader(vk.stack.swap(), config.fragment_shader_path);
+    defer(vk.stack.dealloc(*fragment_code));
     if (fragment_code.has_err()) {
         LOGF_ERROR("Could not load fragment shader: {}", config.fragment_shader_path.string());
         return fragment_code.err();
@@ -1235,8 +1242,8 @@ Result<GraphicsPipeline> GraphicsPipeline::create(const Vk& vk, const Config& co
             .stage = vk::ShaderStageFlagBits::eVertex,
             .nextStage = vk::ShaderStageFlagBits::eFragment,
             .codeType = config.code_type,
-            .codeSize = vertex_code->size(),
-            .pCode = vertex_code->data(),
+            .codeSize = vertex_code->count,
+            .pCode = vertex_code->data,
             .pName = "main",
             .setLayoutCount = to_u32(config.set_layouts.size()),
             .pSetLayouts = config.set_layouts.data(),
@@ -1248,8 +1255,8 @@ Result<GraphicsPipeline> GraphicsPipeline::create(const Vk& vk, const Config& co
             .stage = vk::ShaderStageFlagBits::eFragment,
             .nextStage{},
             .codeType = config.code_type,
-            .codeSize = fragment_code->size(),
-            .pCode = fragment_code->data(),
+            .codeSize = fragment_code->count,
+            .pCode = fragment_code->data,
             .pName = "main",
             .setLayoutCount = to_u32(config.set_layouts.size()),
             .pSetLayouts = config.set_layouts.data(),

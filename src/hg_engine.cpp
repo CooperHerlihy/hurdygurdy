@@ -5,16 +5,16 @@ namespace hg {
 Result<Engine> Engine::create(const Config& config) {
     auto engine = ok<Engine>();
 
-    engine->m_global_allocator = LinearAllocator<>::create(mallocator(), config.global_allocator_size);
-    engine->m_stack_allocator = StackAllocator<>::create(engine->m_global_allocator, config.stack_allocator_size);
-    engine->m_frame_allocator = LinearAllocator<>::create(engine->m_global_allocator, config.frame_allocator_size);
+    engine->m_global_storage = PackedLinearAllocator<>::create(mallocator(), config.global_allocator_size);
+    engine->m_frame_storage = PackedLinearAllocator<>::create(engine->m_global_storage, config.frame_allocator_size);
+    for (auto& stack : engine->m_stacks) {
+        stack = StackAllocator<>::create(engine->m_global_storage, config.stack_allocator_size);
+    }
 
-    engine->m_texture_allocator = PoolAllocator<Texture>::create(engine->m_global_allocator, config.max_texture_count);
-
-    const auto vk = Vk::create(engine->global_memory());
+    const auto vk = Vk::create(engine->stack());
     if (vk.has_err())
         return vk.err();
-    engine->m_vk = new (engine->m_global_allocator.template alloc<Vk>()) Vk{*vk};
+    engine->m_vk = new (engine->m_global_storage.alloc<Vk>()) Vk{*vk};
 
     return engine;
 }
@@ -25,21 +25,14 @@ Engine::~Engine() noexcept {
 
     m_vk->destroy();
 
-    m_texture_allocator.destroy(m_global_allocator);
-
-    m_frame_allocator.destroy(m_global_allocator);
-    m_stack_allocator.destroy(m_global_allocator);
-    m_global_allocator.destroy(mallocator());
+    m_global_storage.destroy(mallocator());
 }
 
 Engine::Engine(Engine&& other) noexcept
     : m_moved_from{other.m_moved_from}
-    , m_global_allocator{other.m_global_allocator}
-    , m_frame_allocator{other.m_frame_allocator}
-    , m_stack_allocator{other.m_stack_allocator}
-
-    , m_texture_allocator{other.m_texture_allocator}
-
+    , m_global_storage{other.m_global_storage}
+    , m_frame_storage{other.m_frame_storage}
+    , m_stacks{other.m_stacks}
     , m_vk{other.m_vk}
 {
     other.m_moved_from = true;
