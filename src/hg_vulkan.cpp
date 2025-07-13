@@ -608,10 +608,10 @@ void GpuImage::write(const Vk& vk, const WriteConfig& config) const {
     staging_buffer.write_void(vk, data.ptr, size, 0);
 
     submit_single_time_commands(vk, [&](const vk::CommandBuffer cmd) {
-        BarrierBuilder(cmd)
-            .add_image_barrier(m_image, config.subresource)
-            .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
-            .build_and_run();
+        BarrierBuilder(vk, {.cmd = cmd, .image_barriers = 1})
+            .add_image_barrier(0, m_image, config.subresource)
+            .set_image_dst(0, vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
+            .build_and_run(vk);
 
         const vk::BufferImageCopy2 copy_region{
             .imageSubresource{config.subresource.aspectMask, 0, 0, 1},
@@ -625,11 +625,11 @@ void GpuImage::write(const Vk& vk, const WriteConfig& config) const {
             .pRegions = &copy_region
         });
 
-        BarrierBuilder(cmd)
-            .add_image_barrier(m_image, config.subresource)
-            .set_image_src(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
-            .set_image_dst(vk::PipelineStageFlagBits2::eNone, vk::AccessFlagBits2::eNone, config.final_layout)
-            .build_and_run();
+        BarrierBuilder(vk, {.cmd = cmd, .image_barriers = 1})
+            .add_image_barrier(0, m_image, config.subresource)
+            .set_image_src(0, vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
+            .set_image_dst(0, vk::PipelineStageFlagBits2::eNone, vk::AccessFlagBits2::eNone, config.final_layout)
+            .build_and_run(vk);
     });
 }
 
@@ -683,10 +683,10 @@ GpuImageAndView GpuImageAndView::create(const Vk& vk, const Config& config) {
 
     if (config.layout != vk::ImageLayout::eUndefined) {
         submit_single_time_commands(vk, [&](const vk::CommandBuffer cmd) {
-            BarrierBuilder(cmd)
-                .add_image_barrier(image.get(), {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
-                .set_image_dst(vk::PipelineStageFlagBits2::eNone, vk::AccessFlagBits2::eNone, config.layout)
-                .build_and_run();
+            BarrierBuilder(vk, {.cmd = cmd, .image_barriers = 1})
+                .add_image_barrier(0, image.get(), {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
+                .set_image_dst(0, vk::PipelineStageFlagBits2::eNone, vk::AccessFlagBits2::eNone, config.layout)
+                .build_and_run(vk);
         });
     }
 
@@ -747,10 +747,10 @@ GpuImageAndView GpuImageAndView::create_cubemap(const Vk& vk, const CubemapConfi
     });
 
     submit_single_time_commands(vk, [&](const vk::CommandBuffer cmd) {
-        BarrierBuilder(cmd)
-            .add_image_barrier(image.get(), {config.aspect_flags, 0, 1, 0, 6})
-            .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
-            .build_and_run();
+        BarrierBuilder(vk, {.cmd = cmd, .image_barriers = 1})
+            .add_image_barrier(0, image.get(), {config.aspect_flags, 0, 1, 0, 6})
+            .set_image_dst(0, vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
+            .build_and_run(vk);
 
         std::array copies{
             vk::ImageCopy2{
@@ -799,11 +799,11 @@ GpuImageAndView GpuImageAndView::create_cubemap(const Vk& vk, const CubemapConfi
             .pRegions = copies.data(),
         });
 
-        BarrierBuilder(cmd)
-            .add_image_barrier(image.get(), {config.aspect_flags, 0, 1, 0, 6})
-            .set_image_src(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
-            .set_image_dst(vk::PipelineStageFlagBits2::eFragmentShader, vk::AccessFlagBits2::eShaderRead, vk::ImageLayout::eShaderReadOnlyOptimal)
-            .build_and_run();
+        BarrierBuilder(vk, {.cmd = cmd, .image_barriers = 1})
+            .add_image_barrier(0, image.get(), {config.aspect_flags, 0, 1, 0, 6})
+            .set_image_src(0, vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
+            .set_image_dst(0, vk::PipelineStageFlagBits2::eFragmentShader, vk::AccessFlagBits2::eShaderRead, vk::ImageLayout::eShaderReadOnlyOptimal)
+            .build_and_run(vk);
     });
 
     GpuImageAndView cubemap{};
@@ -833,16 +833,16 @@ void GpuImageAndView::generate_mipmaps(
     submit_single_time_commands(vk, [&](const vk::CommandBuffer cmd) {
         vk::Offset3D mip_offset{to_i32(extent.width), to_i32(extent.height), to_i32(extent.depth)};
 
-        BarrierBuilder(cmd)
-            .add_image_barrier(m_image.get(), {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
-            .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferRead, vk::ImageLayout::eTransferSrcOptimal)
-            .build_and_run();
+        BarrierBuilder(vk, {.cmd = cmd, .image_barriers = 1})
+            .add_image_barrier(0, m_image.get(), {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
+            .set_image_dst(0, vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferRead, vk::ImageLayout::eTransferSrcOptimal)
+            .build_and_run(vk);
 
         for (u32 level = 0; level < mip_levels - 1; ++level) {
-            BarrierBuilder(cmd)
-                .add_image_barrier(m_image.get(), {vk::ImageAspectFlagBits::eColor, level + 1, 1, 0, 1})
-                .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
-                .build_and_run();
+            BarrierBuilder(vk, {.cmd = cmd, .image_barriers = 1})
+                .add_image_barrier(0, m_image.get(), {vk::ImageAspectFlagBits::eColor, level + 1, 1, 0, 1})
+                .set_image_dst(0, vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
+                .build_and_run(vk);
 
             vk::ImageBlit2 region{
                 .srcSubresource{vk::ImageAspectFlagBits::eColor, level, 0, 1},
@@ -867,18 +867,18 @@ void GpuImageAndView::generate_mipmaps(
                 .filter = vk::Filter::eLinear,
             });
 
-            BarrierBuilder(cmd)
-                .add_image_barrier(m_image.get(), {vk::ImageAspectFlagBits::eColor, level + 1, 1, 0, 1})
-                .set_image_src(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
-                .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferRead, vk::ImageLayout::eTransferSrcOptimal)
-                .build_and_run();
+            BarrierBuilder(vk, {.cmd = cmd, .image_barriers = 1})
+                .add_image_barrier(0, m_image.get(), {vk::ImageAspectFlagBits::eColor, level + 1, 1, 0, 1})
+                .set_image_src(0, vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
+                .set_image_dst(0, vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferRead, vk::ImageLayout::eTransferSrcOptimal)
+                .build_and_run(vk);
         }
 
-        BarrierBuilder(cmd)
-            .add_image_barrier(m_image.get(), {vk::ImageAspectFlagBits::eColor, 0, mip_levels, 0, 1})
-            .set_image_src(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferRead, vk::ImageLayout::eTransferSrcOptimal)
-            .set_image_dst(vk::PipelineStageFlagBits2::eNone, vk::AccessFlagBits2::eNone, final_layout)
-            .build_and_run();
+        BarrierBuilder(vk, {.cmd = cmd, .image_barriers = 1})
+            .add_image_barrier(0, m_image.get(), {vk::ImageAspectFlagBits::eColor, 0, mip_levels, 0, 1})
+            .set_image_src(0, vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferRead, vk::ImageLayout::eTransferSrcOptimal)
+            .set_image_dst(0, vk::PipelineStageFlagBits2::eNone, vk::AccessFlagBits2::eNone, final_layout)
+            .build_and_run(vk);
     });
 }
 

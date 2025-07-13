@@ -483,74 +483,109 @@ void submit_single_time_commands(const Vk& vk, auto commands) {
 
 class BarrierBuilder {
 public:
-    explicit constexpr BarrierBuilder(const vk::CommandBuffer cmd) : m_cmd(cmd) {}
-
-    void build_and_run(const vk::DependencyFlagBits flags = {}) {
+    struct Config {
+        vk::CommandBuffer cmd{};
+        usize memory_barriers = 0;
+        usize buffer_barriers = 0;
+        usize image_barriers = 0;
+    };
+    BarrierBuilder(const Vk& vk, const Config& config)
+        : m_cmd{config.cmd}
+    {
+        if (config.memory_barriers > 0) {
+            m_memories = vk.stack.alloc<vk::MemoryBarrier2>(config.memory_barriers);
+            for (auto& barrier : m_memories) { barrier = {}; }
+        }
+        if (config.buffer_barriers > 0) {
+            m_buffers = vk.stack.alloc<vk::BufferMemoryBarrier2>(config.buffer_barriers);
+            for (auto& barrier : m_buffers) { barrier = {}; }
+        }
+        if (config.image_barriers > 0) {
+            m_images = vk.stack.alloc<vk::ImageMemoryBarrier2>(config.image_barriers);
+            for (auto& barrier : m_images) { barrier = {}; }
+        }
+    }
+    void build_and_run(const Vk& vk, const vk::DependencyFlagBits flags = {}) {
         m_cmd.pipelineBarrier2({
             .dependencyFlags = flags,
-            .memoryBarrierCount = to_u32(m_memories.size()),
-            .pMemoryBarriers = m_memories.data(),
-            .bufferMemoryBarrierCount = to_u32(m_buffers.size()),
-            .pBufferMemoryBarriers = m_buffers.data(),
-            .imageMemoryBarrierCount = to_u32(m_images.size()),
-            .pImageMemoryBarriers = m_images.data(),
+            .memoryBarrierCount = to_u32(m_memories.count),
+            .pMemoryBarriers = m_memories.data,
+            .bufferMemoryBarrierCount = to_u32(m_buffers.count),
+            .pBufferMemoryBarriers = m_buffers.data,
+            .imageMemoryBarrierCount = to_u32(m_images.count),
+            .pImageMemoryBarriers = m_images.data,
         });
+
+        if (m_images.data != nullptr)
+            vk.stack.dealloc(m_images);
+        if (m_buffers.data != nullptr)
+            vk.stack.dealloc(m_buffers);
+        if (m_memories.data != nullptr)
+            vk.stack.dealloc(m_memories);
     }
 
-    BarrierBuilder& add_memory_barrier(const vk::MemoryBarrier2& barrier) {
-        m_memories.push_back(barrier);
+    BarrierBuilder& add_memory_barrier(const usize index, const vk::MemoryBarrier2& barrier) {
+        ASSERT(index < m_memories.count);
+
+        m_memories[index] = barrier;
         return *this;
     }
-    BarrierBuilder& add_buffer_barrier(const vk::BufferMemoryBarrier2& barrier) {
+    BarrierBuilder& add_buffer_barrier(const usize index, const vk::BufferMemoryBarrier2& barrier) {
+        ASSERT(index < m_buffers.count);
         ASSERT(barrier.buffer != nullptr);
 
-        m_buffers.push_back(barrier);
+        m_buffers[index] = barrier;
         return *this;
     }
-    BarrierBuilder& add_image_barrier(const vk::ImageMemoryBarrier2& barrier) {
+    BarrierBuilder& add_image_barrier(const usize index, const vk::ImageMemoryBarrier2& barrier) {
+        ASSERT(index < m_images.count);
         ASSERT(barrier.image != nullptr);
         ASSERT(barrier.newLayout != vk::ImageLayout::eUndefined);
 
-        m_images.push_back(barrier);
+        m_images[index] = barrier;
         return *this;
     }
-    BarrierBuilder& add_image_barrier(const vk::Image image, const vk::ImageSubresourceRange& subresource_range) {
+    BarrierBuilder& add_image_barrier(
+        const usize index,
+        const vk::Image image,
+        const vk::ImageSubresourceRange& subresource_range
+    ) {
         ASSERT(image != nullptr);
 
-        m_images.push_back({
-            .image = image,
-            .subresourceRange = subresource_range,
-        });
+        m_images[index].image = image;
+        m_images[index].subresourceRange = subresource_range;
         return *this;
     }
     BarrierBuilder& set_image_src(
+        const usize index,
         const vk::PipelineStageFlags2 src_stage_mask,
         const vk::AccessFlags2 src_access_mask,
         const vk::ImageLayout old_layout
     ) {
-        m_images.back().srcStageMask = src_stage_mask;
-        m_images.back().srcAccessMask = src_access_mask;
-        m_images.back().oldLayout = old_layout;
+        m_images[index].srcStageMask = src_stage_mask;
+        m_images[index].srcAccessMask = src_access_mask;
+        m_images[index].oldLayout = old_layout;
         return *this;
     }
     BarrierBuilder& set_image_dst(
+        const usize index,
         const vk::PipelineStageFlags2 dst_stage_mask,
         const vk::AccessFlags2 dst_access_mask,
         const vk::ImageLayout new_layout
     ) {
         ASSERT(new_layout != vk::ImageLayout::eUndefined);
 
-        m_images.back().dstStageMask = dst_stage_mask;
-        m_images.back().dstAccessMask = dst_access_mask;
-        m_images.back().newLayout = new_layout;
+        m_images[index].dstStageMask = dst_stage_mask;
+        m_images[index].dstAccessMask = dst_access_mask;
+        m_images[index].newLayout = new_layout;
         return *this;
     }
 
 private:
     vk::CommandBuffer m_cmd{};
-    std::vector<vk::MemoryBarrier2> m_memories{};
-    std::vector<vk::BufferMemoryBarrier2> m_buffers{};
-    std::vector<vk::ImageMemoryBarrier2> m_images{};
+    Slice<vk::MemoryBarrier2> m_memories{};
+    Slice<vk::BufferMemoryBarrier2> m_buffers{};
+    Slice<vk::ImageMemoryBarrier2> m_images{};
 };
 
 class Surface {

@@ -58,6 +58,16 @@ template <typename T> T* align_ptr(T* ptr) requires (!std::same_as<T, void>) {
     return reinterpret_cast<T*>(align_size(reinterpret_cast<usize>(ptr), alignof(T)));
 }
 
+inline constexpr usize align_size_down(const usize size, const usize alignment) {
+    return size & ~(alignment - 1);
+}
+inline std::byte* align_ptr_down(void* ptr, const usize alignment) {
+    return reinterpret_cast<std::byte*>(align_size_down(reinterpret_cast<usize>(ptr), alignment));
+}
+template <typename T> T* align_ptr_down(T* ptr) requires (!std::same_as<T, void>) {
+    return reinterpret_cast<T*>(align_size_down(reinterpret_cast<usize>(ptr), alignof(T)));
+}
+
 template <FailurePolicyTag FailurePolicy = Terminate>
 class CAllocator : public Allocator {
 public:
@@ -120,7 +130,10 @@ template <FailurePolicyTag FailurePolicy = Terminate>
 class StackAllocator : public Allocator {
 public:
     StackAllocator() = default;
-    StackAllocator(Slice<std::byte> memory) : m_memory{memory}, m_head{align_ptr(memory.data, 16)} {}
+    StackAllocator(Slice<std::byte> memory)
+        : m_memory{memory}
+        , m_head{align_ptr(memory.data, 16)}
+    {}
 
     static StackAllocator create(Allocator& parent, const usize size) { return parent.alloc<std::byte>(size); }
     void destroy(Allocator& parent) const { parent.dealloc(m_memory); }
@@ -189,45 +202,49 @@ private:
     std::byte* m_head = nullptr;
 };
 
-struct DoubleStack {
-    StackAllocator<>* temporary_space{};
-    StackAllocator<>* return_space{};
+class DoubleStack {
+public:
+    DoubleStack() = default;
+    DoubleStack(StackAllocator<>& temporary_space, StackAllocator<>& return_space)
+        : m_stack_space{&temporary_space}
+        , m_return_space{&return_space}
+    {}
 
-    DoubleStack swap() const {
-        return DoubleStack{
-            .temporary_space = return_space,
-            .return_space = temporary_space,
-        };
-    }
+    DoubleStack copy() const { return DoubleStack{*m_stack_space, *m_return_space}; }
+    DoubleStack swap() const { return DoubleStack{*m_return_space, *m_stack_space}; }
 
     template <typename T> [[nodiscard]] T* alloc() const {
-        return static_cast<T*>(temporary_space->alloc_v(sizeof(T), alignof(T)));
+        return static_cast<T*>(m_stack_space->alloc_v(sizeof(T), alignof(T)));
     }
     template <typename T> [[nodiscard]] Slice<T> alloc(usize count) const {
-        return {static_cast<T*>(temporary_space->alloc_v(count * sizeof(T), alignof(T))), count};
+        return {static_cast<T*>(m_stack_space->alloc_v(count * sizeof(T), alignof(T))), count};
     }
     template <typename T> [[nodiscard]] Slice<T> realloc(Slice<T> original, usize new_count) const {
-        return {static_cast<T*>(temporary_space->realloc_v(original.data, original.count * sizeof(T), new_count * sizeof(T), alignof(T))), new_count};
+        return {static_cast<T*>(m_stack_space->realloc_v(original.data, original.count * sizeof(T), new_count * sizeof(T), alignof(T))), new_count};
     }
 
     template <typename T> void dealloc(T* ptr) const {
-        temporary_space->dealloc_v(ptr, sizeof(T), alignof(T));
+        m_stack_space->dealloc_v(ptr, sizeof(T), alignof(T));
     }
     template <typename T> void dealloc(Slice<T> slice) const {
-        temporary_space->dealloc_v(slice.data, slice.count * sizeof(T), alignof(T));
+        m_stack_space->dealloc_v(slice.data, slice.count * sizeof(T), alignof(T));
     }
 
     template <typename T> [[nodiscard]] T* alloc_return() const {
-        return static_cast<T*>(return_space->alloc_v(sizeof(T), alignof(T)));
+        return static_cast<T*>(m_return_space->alloc_v(sizeof(T), alignof(T)));
     }
     template <typename T> [[nodiscard]] Slice<T> alloc_return(usize count) const {
-        return {static_cast<T*>(return_space->alloc_v(count * sizeof(T), alignof(T))), count};
+        return {static_cast<T*>(m_return_space->alloc_v(count * sizeof(T), alignof(T))), count};
     }
     template <typename T> [[nodiscard]] Slice<T> realloc_return(Slice<T> original, usize new_count) const {
-        return {static_cast<T*>(return_space->realloc_v(
+        return {static_cast<T*>(m_return_space->realloc_v(
             original.data, original.count * sizeof(T), new_count * sizeof(T), alignof(T)
         )), new_count};
     }
+
+private:
+    StackAllocator<>* m_stack_space{};
+    StackAllocator<>* m_return_space{};
 };
 
 template <FailurePolicyTag FailurePolicy = Terminate>

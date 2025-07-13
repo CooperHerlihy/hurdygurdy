@@ -136,15 +136,15 @@ void DefaultRenderer::destroy(const Vk& vk) const {
         const auto render_target = begin->render_target;
         const auto extent = begin->extent;
 
-        BarrierBuilder(cmd)
-            .add_image_barrier(m_color_image.get_image(), {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
-            .set_image_dst(vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::AccessFlagBits2::eColorAttachmentWrite, vk::ImageLayout::eColorAttachmentOptimal)
-            .add_image_barrier(m_depth_image.get_image(), {vk::ImageAspectFlagBits::eDepth, 0, 1, 0, 1})
-            .set_image_dst(
+        BarrierBuilder(vk, {.cmd = cmd, .image_barriers = 2})
+            .add_image_barrier(0, m_color_image.get_image(), {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
+            .set_image_dst(0, vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::AccessFlagBits2::eColorAttachmentWrite, vk::ImageLayout::eColorAttachmentOptimal)
+            .add_image_barrier(1, m_depth_image.get_image(), {vk::ImageAspectFlagBits::eDepth, 0, 1, 0, 1})
+            .set_image_dst(1,
                 vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
                 vk::AccessFlagBits2::eDepthStencilAttachmentWrite, vk::ImageLayout::eDepthStencilAttachmentOptimal
             )
-            .build_and_run();
+            .build_and_run(vk);
 
         const vk::RenderingAttachmentInfo color_attachment{
             .imageView = m_color_image.get_view(),
@@ -177,13 +177,13 @@ void DefaultRenderer::destroy(const Vk& vk) const {
 
         cmd.endRendering();
 
-        BarrierBuilder(cmd)
-            .add_image_barrier(m_color_image.get_image(), {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
-            .set_image_src(vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::AccessFlagBits2::eColorAttachmentWrite, vk::ImageLayout::eColorAttachmentOptimal)
-            .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferRead, vk::ImageLayout::eTransferSrcOptimal)
-            .add_image_barrier(render_target, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
-            .set_image_dst(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
-            .build_and_run();
+        BarrierBuilder(vk, {.cmd = cmd, .image_barriers = 2})
+            .add_image_barrier(0, m_color_image.get_image(), {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
+            .set_image_src(0, vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::AccessFlagBits2::eColorAttachmentWrite, vk::ImageLayout::eColorAttachmentOptimal)
+            .set_image_dst(0, vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferRead, vk::ImageLayout::eTransferSrcOptimal)
+            .add_image_barrier(1, render_target, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
+            .set_image_dst(1, vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
+            .build_and_run(vk);
 
         const vk::ImageResolve2 resolve{
             .srcSubresource{vk::ImageAspectFlagBits::eColor, 0, 0, 1},
@@ -199,11 +199,11 @@ void DefaultRenderer::destroy(const Vk& vk) const {
             .pRegions = &resolve,
         });
 
-        BarrierBuilder(cmd)
-            .add_image_barrier(render_target, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
-            .set_image_src(vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
-            .set_image_dst(vk::PipelineStageFlagBits2::eAllGraphics, vk::AccessFlagBits2::eNone, vk::ImageLayout::ePresentSrcKHR)
-            .build_and_run();
+        BarrierBuilder(vk, {.cmd = cmd, .image_barriers = 1})
+            .add_image_barrier(0, render_target, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
+            .set_image_src(0, vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
+            .set_image_dst(0, vk::PipelineStageFlagBits2::eAllGraphics, vk::AccessFlagBits2::eNone, vk::ImageLayout::ePresentSrcKHR)
+            .build_and_run(vk);
 
         m_light_queue.clear();
 

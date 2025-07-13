@@ -24,7 +24,7 @@ public:
     Engine(Engine&& other) noexcept;
     Engine& operator=(Engine&& other) noexcept;
 
-    DoubleStack stack() { return DoubleStack{&m_stacks[0], &m_stacks[1]}; }
+    DoubleStack stack() { return DoubleStack{m_stacks[0], m_stacks[1]}; }
 
     [[nodiscard]] Vk& vk() {
         ASSERT(m_vk != nullptr);
