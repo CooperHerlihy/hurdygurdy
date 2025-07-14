@@ -11,11 +11,10 @@
 #include <welder/weldmesh.h>
 
 #include <filesystem>
-#include <memory>
 
 namespace hg {
 
-Result<ImageData> ImageData::load(const std::filesystem::path path) {
+Result<ImageLoader::Handle> ImageLoader::load(const std::filesystem::path path) {
     ASSERT(!path.empty());
 
     int width = 0, height = 0, channels = 0;
@@ -26,10 +25,22 @@ Result<ImageData> ImageData::load(const std::filesystem::path path) {
     }
     if (width <= 0 || height <= 0 || channels <= 0) {
         LOGF_WARN("Image file invalid; width, height, and/or channels are zero: {}", path.string());
+        std::free(pixels);
         return Err::ImageFileInvalid;
     }
 
-    return ok<ImageData>(std::unique_ptr<u8[], decltype(FreeDeleter)>{pixels}, width, height, channels);
+    const auto image = m_pool.alloc();
+    m_pool[image] = {
+        .pixels = pixels,
+        .alignment = 4,
+        .size = {to_u32(width), to_u32(height), 1},
+    };
+    return ok<Handle>(image);
+}
+
+void ImageLoader::unload(const Handle image) {
+    std::free(get(image).pixels);
+    m_pool.dealloc(image.handle);
 }
 
 void create_tangents(std::span<Vertex> primitives) {

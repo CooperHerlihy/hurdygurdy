@@ -13,40 +13,40 @@ int main() {
     if (engine.has_err())
         LOGF_ERROR(errf(engine));
 
-    auto renderer = DefaultRenderer::create(engine->vk(), {.fullscreen = true});
-    defer(renderer->destroy(engine->vk()));
+    auto renderer = DefaultRenderer::create(*engine, {.fullscreen = true});
+    defer(renderer->destroy(*engine));
 
-    auto skybox_pipeline = SkyboxPipeline::create(engine->vk(), *renderer);
-    auto model_pipeline = PbrPipeline::create(engine->vk(), *renderer);
-    defer(skybox_pipeline.destroy(engine->vk()));
-    defer(model_pipeline.destroy(engine->vk()));
+    auto skybox_pipeline = SkyboxPipeline::create(*engine, *renderer);
+    auto model_pipeline = PbrPipeline::create(*engine, *renderer);
+    defer(skybox_pipeline.destroy(*engine));
+    defer(model_pipeline.destroy(*engine));
 
-    const auto skybox = skybox_pipeline.load_skybox(engine->vk(), "../assets/cloudy_skyboxes/Cubemap/Cubemap_Sky_06-512x512.png");
+    const auto skybox = skybox_pipeline.load_skybox(*engine, "../assets/cloudy_skyboxes/Cubemap/Cubemap_Sky_06-512x512.png");
     if (skybox.has_err())
         LOGF_ERROR(errf(skybox));
 
     std::array<glm::vec4, 4> default_normal_image{};
     default_normal_image.fill(glm::vec4{0.0f, 0.0f, -1.0f, 0.0f});
-    const auto default_normal_texture = model_pipeline.load_texture_from_data(engine->vk(), {default_normal_image.data(), sizeof(glm::vec4), {2, 2, 1}}, vk::Format::eR32G32B32A32Sfloat);
+    const auto default_normal_texture = model_pipeline.load_texture(*engine, {default_normal_image.data(), sizeof(glm::vec4), {2, 2, 1}}, vk::Format::eR32G32B32A32Sfloat);
 
-    const auto perlin_normal_image = create_normals_from_heightmap(generate_fractal_perlin_noise({512, 512}, {16, 16}));
-    const auto perlin_normal_texture = model_pipeline.load_texture_from_data(engine->vk(), {perlin_normal_image.data(), sizeof(glm::vec4), {512, 512, 1}}, vk::Format::eR32G32B32A32Sfloat);
+    auto perlin_normal_image = create_normals_from_heightmap(generate_fractal_perlin_noise({512, 512}, {16, 16}));
+    const auto perlin_normal_texture = model_pipeline.load_texture(*engine, {perlin_normal_image.data(), sizeof(glm::vec4), {512, 512, 1}}, vk::Format::eR32G32B32A32Sfloat);
 
     std::array<u32, 4> gray_color{};
     gray_color.fill(0xff777777);
-    const auto gray_texture = model_pipeline.load_texture_from_data(engine->vk(), {gray_color.data(), 4, {2, 2, 1}});
+    const auto gray_texture = model_pipeline.load_texture(*engine, {gray_color.data(), 4, {2, 2, 1}});
 
-    const auto hex_texture = *model_pipeline.load_texture(engine->vk(), "../assets/hexagon_models/Textures/hexagons_medieval.png");
+    const auto hex_texture = *model_pipeline.load_texture(*engine, "../assets/hexagon_models/Textures/hexagons_medieval.png");
 
-    const auto cube = model_pipeline.load_model_from_data(engine->vk(), generate_cube(), perlin_normal_texture, gray_texture, 0.2f, 0.0f);
-    const auto sphere = model_pipeline.load_model_from_data(engine->vk(), generate_sphere({64, 32}), perlin_normal_texture, gray_texture, 0.2f, 1.0f);
-    const auto grass = *model_pipeline.load_model(engine->vk(), "../assets/hexagon_models/Assets/gltf/tiles/base/hex_grass.gltf", default_normal_texture, hex_texture);
-    const auto building = *model_pipeline.load_model(engine->vk(), "../assets/hexagon_models/Assets/gltf/buildings/blue/building_home_A_blue.gltf", default_normal_texture, hex_texture);
-    const auto tower = *model_pipeline.load_model(engine->vk(), "../assets/hexagon_models/Assets/gltf/buildings/blue/building_tower_A_blue.gltf", default_normal_texture, hex_texture);
+    const auto cube = model_pipeline.load_model(*engine, {generate_cube(), 0.2f, 0.0f}, perlin_normal_texture, gray_texture);
+    const auto sphere = model_pipeline.load_model(*engine, {generate_sphere({64, 32}), 0.2f, 1.0f}, perlin_normal_texture, gray_texture);
+    const auto grass = *model_pipeline.load_model(*engine, "../assets/hexagon_models/Assets/gltf/tiles/base/hex_grass.gltf", default_normal_texture, hex_texture);
+    const auto building = *model_pipeline.load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_home_A_blue.gltf", default_normal_texture, hex_texture);
+    const auto tower = *model_pipeline.load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_tower_A_blue.gltf", default_normal_texture, hex_texture);
 
     const auto extent = renderer->get_extent();
     const f32 aspect_ratio = static_cast<f32>(extent.width) / static_cast<f32>(extent.height);
-    renderer->update_projection(engine->vk(), glm::perspective(glm::pi<f32>() / 4.0f, aspect_ratio, 0.1f, 100.f));
+    renderer->update_projection(*engine, glm::perspective(glm::pi<f32>() / 4.0f, aspect_ratio, 0.1f, 100.f));
 
     Cameraf camera{};
     camera.translate({0.0f, -2.0f, -4.0f});
@@ -107,9 +107,9 @@ int main() {
 
         renderer->queue_light({-2.0f, -3.0f, -2.0f}, {glm::vec3{1.0f, 1.0f, 1.0f} * 300.0f});
 
-        renderer->update_camera_and_lights(engine->vk(), camera);
+        renderer->update_camera_and_lights(*engine, camera);
 
         std::array<DefaultRenderer::Pipeline*, 2> pipelines{&skybox_pipeline, &model_pipeline};
-        (void)renderer->draw(engine->vk(), pipelines);
+        (void)renderer->draw(*engine, pipelines);
     }
 }

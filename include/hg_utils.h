@@ -297,6 +297,96 @@ inline constexpr usize align_down(const usize size, const usize alignment) {
     return size & ~(alignment - 1);
 }
 
+template <typename T> class Pool {
+public:
+    struct Handle { usize index = SIZE_MAX; };
+
+    union Block {
+        T data;
+        usize next;
+    };
+
+    Pool() = default;
+    Pool(Slice<Block> memory) : m_blocks{memory} {
+        for (usize i = 0; i < m_blocks.count; ++i) {
+            m_blocks[i].next = i + 1;
+        }
+    }
+    Slice<Block> release() {
+        Slice<Block> memory{m_blocks};
+        m_blocks = Slice<Block>{};
+        m_next = 0;
+        return memory;
+    }
+
+    [[nodiscard]] static Pool create(const usize count) {
+        Slice<Block> memory{reinterpret_cast<Block*>(std::malloc(sizeof(Block) * count)), count};
+        if (memory.data == nullptr)
+            ERROR("Could not allocate memory");
+        return Pool{memory};
+    }
+    void destroy() { std::free(m_blocks.data); }
+
+    Pool(const Pool&) = delete;
+    Pool& operator=(const Pool&) = delete;
+    Pool(Pool&& other) noexcept
+        : m_blocks{other.m_blocks}
+        , m_next{other.m_next}
+    {
+        other.m_blocks = Slice<Block>{};
+        other.m_next = 0;
+    }
+    Pool& operator=(Pool&& other) noexcept {
+        if (this == &other)
+            return *this;
+        if (m_blocks.data != nullptr)
+            ERROR("Occupied pool cannot be moved into");
+        new (this) Pool(std::move(other));
+        return *this;
+    }
+
+    [[nodiscard]] T& operator[](Handle handle) {
+        ASSERT(handle.index < m_blocks.count);
+        return m_blocks[handle.index].data;
+    }
+
+    [[nodiscard]] Handle alloc() {
+        usize index = m_next;
+        if (index >= m_blocks.count)
+            ERROR("Pool out of memory");
+
+        m_next = m_blocks[index].next;
+        return {index};
+    }
+
+    void dealloc(Handle handle) {
+        if (handle.index >= m_blocks.count)
+            ERROR("Pool cannot deallocate block outside of pool");
+
+        m_blocks[handle.index].next = m_next;
+        m_next = handle.index;
+    }
+
+    void check_leaks() const {
+#ifndef NDEBUG
+        usize count = 0;
+        usize index = m_next;
+        while (index != m_blocks.count && count <= m_blocks.count) {
+            index = m_blocks[index].next;
+            ++count;
+        }
+        if (count < m_blocks.count)
+            ERROR("Pool leaked memory");
+        if (count > m_blocks.count)
+            ERROR("Pool had double frees");
+#endif
+    }
+
+private:
+    Slice<Block> m_blocks{};
+    usize m_next = 0;
+};
+
 class Arena {
 public:
     Arena() = default;
@@ -307,6 +397,14 @@ public:
         m_head = 0;
         return memory;
     }
+
+    [[nodiscard]] static Arena create(const usize count) {
+        Slice<byte> memory{reinterpret_cast<byte*>(std::malloc(count)), count};
+        if (memory.data == nullptr)
+            ERROR("Could not allocate memory");
+        return Arena{memory};
+    }
+    void destroy() { std::free(m_memory.data); }
 
     Arena(const Arena&) = delete;
     Arena& operator=(const Arena&) = delete;
@@ -382,85 +480,6 @@ public:
 private:
     Slice<byte> m_memory{};
     usize m_head = 0;
-};
-
-template <typename T> class Pool {
-public:
-    union Block {
-        T data;
-        usize next;
-    };
-
-    Pool() = default;
-    Pool(Slice<Block> memory) : m_blocks{memory} {
-        for (usize i = 0; i < m_blocks.count; ++i) {
-            m_blocks[i].next = i + 1;
-        }
-    }
-    Slice<Block> release() {
-        Slice<Block> memory{m_blocks};
-        m_blocks = Slice<Block>{};
-        m_next = 0;
-        return memory;
-    }
-
-    Pool(const Pool&) = delete;
-    Pool& operator=(const Pool&) = delete;
-    Pool(Pool&& other) noexcept
-        : m_blocks{other.m_blocks}
-        , m_next{other.m_next}
-    {
-        other.m_blocks = Slice<Block>{};
-        other.m_next = 0;
-    }
-    Pool& operator=(Pool&& other) noexcept {
-        if (this == &other)
-            return *this;
-        if (m_blocks.data != nullptr)
-            ERROR("Occupied pool cannot be moved into");
-        new (this) Pool(std::move(other));
-        return *this;
-    }
-
-    T* alloc() {
-        usize index = m_next;
-        if (index >= m_blocks.count)
-            ERROR("Pool out of memory");
-
-        m_next = m_blocks[index].next;
-        return &m_blocks[index].data;
-    }
-
-    void dealloc(T* ptr) {
-        ASSERT(ptr != nullptr);
-
-        Block* block = reinterpret_cast<Block*>(ptr);
-
-        if (block < m_blocks.begin() || block >= m_blocks.end())
-            ERROR("Pool cannot deallocate block outside of pool");
-
-        block->next = m_next;
-        m_next = block - m_blocks.data;
-    }
-
-    void check_leaks() const {
-#ifndef NDEBUG
-        usize count = 0;
-        usize index = m_next;
-        while (index != m_blocks.count && count <= m_blocks.count) {
-            index = m_blocks[index].next;
-            ++count;
-        }
-        if (count < m_blocks.count)
-            ERROR("Pool leaked memory");
-        if (count > m_blocks.count)
-            ERROR("Pool had double frees");
-#endif
-    }
-
-private:
-    Slice<Block> m_blocks{};
-    usize m_next = 0;
 };
 
 class Clock {

@@ -3,21 +3,33 @@
 #include "hg_utils.h"
 
 #include <filesystem>
-#include <memory>
 
 namespace hg {
 
 struct ImageData {
-private:
-    static constexpr auto FreeDeleter = [](u8* ptr) { std::free(ptr); };
+    void* pixels = nullptr;
+    u32 alignment = 0;
+    glm::uvec3 size{};
+};
 
+class ImageLoader {
 public:
-    std::unique_ptr<u8[], decltype(FreeDeleter)> pixels;
-    i32 width = 0;
-    i32 height = 0;
-    i32 channels = 0;
+    struct Handle { Pool<ImageData>::Handle handle; };
 
-    [[nodiscard]] static Result<ImageData> load(std::filesystem::path path);
+    struct Config {
+        usize max_images = 0;
+    };
+    ImageLoader() = default;
+    ImageLoader(const Config& config) : m_pool{Pool<ImageData>::create(config.max_images)} {}
+    void destroy() { m_pool.destroy(); }
+
+    ImageData& get(const Handle image) { return m_pool[image.handle]; }
+
+    Result<Handle> load(std::filesystem::path path);
+    void unload(Handle image);
+
+private:
+    Pool<ImageData> m_pool{};
 };
 
 struct Vertex {

@@ -1,12 +1,19 @@
 #pragma once
 
 #include "hg_utils.h"
+#include "hg_load.h"
+#include "hg_window.h"
 #include "hg_vulkan.h"
 
 namespace hg {
 
 class Engine {
+private:
+    bool m_moved_from = false;
 public:
+    ImageLoader image_loader;
+    Vk vk;
+
     [[nodiscard]] static Result<Engine> create();
 
     Engine() = default;
@@ -15,12 +22,6 @@ public:
     Engine& operator=(const Engine&) = delete;
     Engine(Engine&& other) noexcept;
     Engine& operator=(Engine&& other) noexcept;
-
-    [[nodiscard]] Vk& vk() { return m_vk; }
-
-private:
-    bool m_moved_from = false;
-    Vk m_vk{};
 };
 
 } // namespace hg

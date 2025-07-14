@@ -66,7 +66,7 @@ static Result<Slice<const char*>> get_instance_extensions(Vk& vk) {
     switch (extensions.result) {
         case vk::Result::eSuccess: break;
         case vk::Result::eIncomplete: {
-            LOG_WARN("Vulkan incomplete enumeration");
+            LOG_WARN("Vulkan incomplete instance extension enumeration");
             break;
         }
         case vk::Result::eErrorLayerNotPresent: {
@@ -111,9 +111,18 @@ static Result<vk::Instance> create_instance(Vk& vk) {
     });
     switch (instance.result) {
         case vk::Result::eSuccess: break;
-        case vk::Result::eErrorLayerNotPresent: return Err::VulkanLayerUnavailable;
-        case vk::Result::eErrorExtensionNotPresent: return Err::VulkanExtensionUnavailable;
-        case vk::Result::eErrorIncompatibleDriver: return Err::VulkanIncompatibleDriver;
+        case vk::Result::eErrorLayerNotPresent: {
+            LOG_WARN("Vulkan layer not present");
+            return Err::VulkanLayerUnavailable;
+        }
+        case vk::Result::eErrorExtensionNotPresent: {
+            LOG_WARN("Vulkan extension not present");
+            return Err::VulkanExtensionUnavailable;
+        }
+        case vk::Result::eErrorIncompatibleDriver: {
+            LOG_WARN("Vulkan incompatible driver");
+            return Err::VulkanIncompatibleDriver;
+        }
         case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
         case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
         case vk::Result::eErrorInitializationFailed: ERROR("Vulkan initialization failed");
@@ -168,21 +177,29 @@ static Result<vk::PhysicalDevice> find_gpu(Vk& vk) {
     auto gpu_count_result = vk.instance.enumeratePhysicalDevices(&gpu_count, nullptr);
     switch (gpu_count_result) {
         case vk::Result::eSuccess: break;
-        case vk::Result::eIncomplete: LOG_WARN("Vulkan incomplete"); break;
+        case vk::Result::eIncomplete: {
+            LOG_WARN("Vulkan incomplete gpu enumeration");
+            break;
+        }
         case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
         case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
         case vk::Result::eErrorInitializationFailed: ERROR("Vulkan initialization failed");
         default: ERROR("Unexpected Vulkan error");
     }
+    if (gpu_count == 0) {
+        LOG_WARN("No gpu found");
+        return Err::NoCompatibleVkPhysicalDevice;
+    }
 
     auto gpus = vk.stack.alloc<vk::PhysicalDevice>(gpu_count);
     defer(vk.stack.dealloc(gpus));
     auto gpu_result = vk.instance.enumeratePhysicalDevices(&gpu_count, gpus.data);
-    if (gpus.data[0] == nullptr)
-        return Err::NoCompatibleVkPhysicalDevice;
     switch (gpu_result) {
         case vk::Result::eSuccess: break;
-        case vk::Result::eIncomplete: LOG_WARN("Vulkan incomplete"); break;
+        case vk::Result::eIncomplete: {
+            LOG_WARN("Vulkan incomplete gpu enumeration");
+            break;
+        }
         case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
         case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
         case vk::Result::eErrorInitializationFailed: ERROR("Vulkan initialization failed");
@@ -195,13 +212,19 @@ static Result<vk::PhysicalDevice> find_gpu(Vk& vk) {
             continue;
 
         const auto extensions = gpu.enumerateDeviceExtensionProperties();
-            switch (extensions.result) {
-                case vk::Result::eSuccess: break;
-                case vk::Result::eIncomplete: LOG_WARN("Vulkan incomplete"); break;
-                case vk::Result::eErrorLayerNotPresent: return Err::VulkanLayerUnavailable;
-                case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
-                case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
-                default: ERROR("Unexpected Vulkan error");
+        switch (extensions.result) {
+            case vk::Result::eSuccess: break;
+            case vk::Result::eIncomplete: {
+                LOG_WARN("Vulkan incomplete gpu extension enumeration");
+                break;
+            }
+            case vk::Result::eErrorLayerNotPresent: {
+                LOG_WARN("Vulkan layer not present");
+                return Err::VulkanLayerUnavailable;
+            }
+            case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
+            case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
+            default: ERROR("Unexpected Vulkan error");
         }
 
         if (!std::ranges::all_of(DeviceExtensions, [&](const char* required) {
@@ -275,8 +298,14 @@ static Result<vk::Device> create_device(Vk& vk) {
     });
     switch (device.result) {
         case vk::Result::eSuccess: break;
-        case vk::Result::eErrorExtensionNotPresent: return Err::VulkanExtensionUnavailable;
-        case vk::Result::eErrorFeatureNotPresent: return Err::VulkanFeatureUnavailable;
+        case vk::Result::eErrorExtensionNotPresent: {
+            LOG_WARN("Vulkan extension not present");
+            return Err::VulkanExtensionUnavailable;
+        }
+        case vk::Result::eErrorFeatureNotPresent: {
+            LOG_WARN("Vulkan feature not present");
+            return Err::VulkanFeatureUnavailable;
+        }
         case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
         case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
         case vk::Result::eErrorInitializationFailed: ERROR("Vulkan initialization failed");
@@ -327,9 +356,7 @@ vk::CommandPool create_command_pool(Vk& vk, const vk::CommandPoolCreateFlags fla
 Result<Vk> Vk::create() {
     auto vk = ok<Vk>();
 
-    constexpr usize stack_size = 1024 * 64;
-    auto stack_memory = static_cast<byte*>(malloc(stack_size));
-    vk->stack = Arena{{stack_memory, stack_size}};
+    vk->stack = Arena::create(1024 * 64);
 
     const auto glfw_success = glfwInit();
     if (glfw_success == GLFW_FALSE)
@@ -415,8 +442,7 @@ void Vk::destroy() {
 #endif
     instance.destroy();
 
-    auto stack_memory = stack.release();
-    std::free(stack_memory.data);
+    stack.destroy();
 }
 
 GpuBuffer GpuBuffer::create(Vk& vk, const Config& config) {
@@ -511,7 +537,7 @@ GpuImage GpuImage::create(Vk& vk, const Config& config) {
 
     VkImageCreateInfo image_info{};
     image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    image_info.imageType = static_cast<VkImageType>(config.dimensions);
+    image_info.imageType = VK_IMAGE_TYPE_2D;
     image_info.format = static_cast<VkFormat>(config.format);
     image_info.extent = config.extent;
     image_info.mipLevels = config.mip_levels;
@@ -594,29 +620,29 @@ void GpuImage::write(Vk& vk, const WriteConfig& config) const {
     ASSERT(m_image != nullptr);
 
     const auto& data = config.data;
-    ASSERT(data.ptr != nullptr);
+    ASSERT(data.pixels != nullptr);
     ASSERT(data.alignment > 0);
-    ASSERT(data.extent.width > 0);
-    ASSERT(data.extent.height > 0);
-    ASSERT(data.extent.depth > 0);
+    ASSERT(data.size.x > 0);
+    ASSERT(data.size.y > 0);
+    ASSERT(data.size.z == 1);
 
-    const VkDeviceSize size = data.extent.width * data.extent.height * data.extent.depth * data.alignment;
+    const VkDeviceSize size = data.size.x * data.size.y * data.size.z * data.alignment;
 
     const auto staging_buffer = GpuBuffer::create(vk, {
         size, vk::BufferUsageFlagBits::eTransferSrc, GpuBuffer::MemoryType::LinearAccess
     });
     defer(staging_buffer.destroy(vk));
-    staging_buffer.write_void(vk, data.ptr, size, 0);
+    staging_buffer.write_void(vk, data.pixels, size, 0);
 
     submit_single_time_commands(vk, [&](const vk::CommandBuffer cmd) {
         BarrierBuilder(vk, {.cmd = cmd, .image_barriers = 1})
-            .add_image_barrier(0, m_image, config.subresource)
+            .add_image_barrier(0, m_image, {config.aspect_flags, 0, vk::RemainingMipLevels, 0, 1})
             .set_image_dst(0, vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
             .build_and_run(vk);
 
         const vk::BufferImageCopy2 copy_region{
-            .imageSubresource{config.subresource.aspectMask, 0, 0, 1},
-            .imageExtent = data.extent
+            .imageSubresource{config.aspect_flags, 0, 0, 1},
+            .imageExtent = {data.size.x, data.size.y, data.size.z},
         };
         cmd.copyBufferToImage2({
             .srcBuffer = staging_buffer.get(),
@@ -627,12 +653,101 @@ void GpuImage::write(Vk& vk, const WriteConfig& config) const {
         });
 
         BarrierBuilder(vk, {.cmd = cmd, .image_barriers = 1})
-            .add_image_barrier(0, m_image, config.subresource)
+            .add_image_barrier(0, m_image, {config.aspect_flags, 0, vk::RemainingMipLevels, 0, 1})
             .set_image_src(0, vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
             .set_image_dst(0, vk::PipelineStageFlagBits2::eNone, vk::AccessFlagBits2::eNone, config.final_layout)
             .build_and_run(vk);
     });
 }
+
+void GpuImage::write_cubemap(Vk& vk, const WriteConfig& config) const {
+    ASSERT(m_allocation != nullptr);
+    ASSERT(m_image != nullptr);
+
+    const auto& data = config.data;
+    ASSERT(data.pixels != nullptr);
+    ASSERT(data.alignment > 0);
+    ASSERT(data.size.x > 0);
+    ASSERT(data.size.y > 0);
+    ASSERT(data.size.z == 1);
+
+    const vk::Extent3D staging_extent{data.size.x, data.size.y, data.size.z};
+    const vk::Extent3D face_extent{staging_extent.width / 4, staging_extent.height / 3, 1};
+
+    const auto staging_image = GpuImage::create(vk, {
+        .extent = staging_extent, 
+        .format = config.format,
+        .usage = vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eTransferSrc
+    });
+    defer(staging_image.destroy(vk));
+    staging_image.write(vk, {
+        .data = config.data,
+        .format = config.format,
+        .final_layout = vk::ImageLayout::eTransferSrcOptimal,
+        .aspect_flags = config.aspect_flags,
+    });
+
+    submit_single_time_commands(vk, [&](const vk::CommandBuffer cmd) {
+        BarrierBuilder(vk, {.cmd = cmd, .image_barriers = 1})
+            .add_image_barrier(0, m_image, {config.aspect_flags, 0, 1, 0, 6})
+            .set_image_dst(0, vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
+            .build_and_run(vk);
+
+        std::array copies{
+            vk::ImageCopy2{
+                .srcSubresource{config.aspect_flags, 0, 0, 1},
+                .srcOffset{to_i32(config.data.size.x) * 2 / 4, to_i32(config.data.size.y) * 1 / 3, 0},
+                .dstSubresource{config.aspect_flags, 0, 0, 1},
+                .extent = face_extent,
+            },
+            vk::ImageCopy2{
+                .srcSubresource{config.aspect_flags, 0, 0, 1},
+                .srcOffset{to_i32(config.data.size.x) * 0 / 4, to_i32(config.data.size.y) * 1 / 3, 0},
+                .dstSubresource{config.aspect_flags, 0, 1, 1},
+                .extent = face_extent,
+            },
+            vk::ImageCopy2{
+                .srcSubresource{config.aspect_flags, 0, 0, 1},
+                .srcOffset{to_i32(config.data.size.x) * 1 / 4, to_i32(config.data.size.y) * 0 / 3, 0},
+                .dstSubresource{config.aspect_flags, 0, 2, 1},
+                .extent = face_extent,
+            },
+            vk::ImageCopy2{
+                .srcSubresource{config.aspect_flags, 0, 0, 1},
+                .srcOffset{to_i32(config.data.size.x) * 1 / 4, to_i32(config.data.size.y) * 2 / 3, 0},
+                .dstSubresource{config.aspect_flags, 0, 3, 1},
+                .extent = face_extent,
+            },
+            vk::ImageCopy2{
+                .srcSubresource{config.aspect_flags, 0, 0, 1},
+                .srcOffset{to_i32(config.data.size.x) * 1 / 4, to_i32(config.data.size.y) * 1 / 3, 0},
+                .dstSubresource{config.aspect_flags, 0, 4, 1},
+                .extent = face_extent,
+            },
+            vk::ImageCopy2{
+                .srcSubresource{config.aspect_flags, 0, 0, 1},
+                .srcOffset{to_i32(config.data.size.x) * 3 / 4, to_i32(config.data.size.y) * 1 / 3, 0},
+                .dstSubresource{config.aspect_flags, 0, 5, 1},
+                .extent = face_extent,
+            },
+        };
+        cmd.copyImage2({
+            .srcImage = staging_image.get(),
+            .srcImageLayout = vk::ImageLayout::eTransferSrcOptimal,
+            .dstImage = m_image,
+            .dstImageLayout = vk::ImageLayout::eTransferDstOptimal,
+            .regionCount = to_u32(copies.size()),
+            .pRegions = copies.data(),
+        });
+
+        BarrierBuilder(vk, {.cmd = cmd, .image_barriers = 1})
+            .add_image_barrier(0, m_image, {config.aspect_flags, 0, 1, 0, 6})
+            .set_image_src(0, vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
+            .set_image_dst(0, vk::PipelineStageFlagBits2::eFragmentShader, vk::AccessFlagBits2::eShaderRead, vk::ImageLayout::eShaderReadOnlyOptimal)
+            .build_and_run(vk);
+    });
+}
+
 
 GpuImageView GpuImageView::create(Vk& vk, const Config& config) {
     ASSERT(config.image != nullptr);
@@ -640,9 +755,32 @@ GpuImageView GpuImageView::create(Vk& vk, const Config& config) {
 
     const auto vk_view = vk.device.createImageView({
         .image = config.image,
-        .viewType = config.dimensions,
+        .viewType = vk::ImageViewType::e2D,
         .format = config.format,
-        .subresourceRange = config.subresource,
+        .subresourceRange = {config.aspect_flags, 0, vk::RemainingMipLevels, 0, 1},
+    });
+    switch (vk_view.result) {
+        case vk::Result::eSuccess: break;
+        case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
+        case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
+        case vk::Result::eErrorInvalidOpaqueCaptureAddress: ERROR("Vulkan invalid opaque capture address");
+        default: ERROR("Unexpected Vulkan error");
+    }
+
+    GpuImageView view{};
+    view.m_view = vk_view.value;
+    return view;
+}
+
+GpuImageView GpuImageView::create_cubemap(Vk& vk, const Config& config) {
+    ASSERT(config.image != nullptr);
+    ASSERT(config.format != vk::Format::eUndefined);
+
+    const auto vk_view = vk.device.createImageView({
+        .image = config.image,
+        .viewType = vk::ImageViewType::eCube,
+        .format = config.format,
+        .subresourceRange = {config.aspect_flags, 0, vk::RemainingMipLevels, 0, 6},
     });
     switch (vk_view.result) {
         case vk::Result::eSuccess: break;
@@ -667,149 +805,61 @@ GpuImageAndView GpuImageAndView::create(Vk& vk, const Config& config) {
     ASSERT(config.sample_count != vk::SampleCountFlagBits{});
     ASSERT(config.mip_levels > 0);
 
-    vk::ImageType image_dimensions = vk::ImageType::e3D;
-    if (config.extent.depth == 1) {
-        image_dimensions = static_cast<vk::ImageType>(static_cast<int>(image_dimensions) - 1);
-        if (config.extent.height == 1)
-            image_dimensions = static_cast<vk::ImageType>(static_cast<int>(image_dimensions) - 1);
-    }
-    const auto image = GpuImage::create(vk, {
+    GpuImageAndView image_and_view{};
+
+    image_and_view.m_image = GpuImage::create(vk, {
         .extent = config.extent,
-        .dimensions = image_dimensions,
         .format = config.format,
         .usage = config.usage,
-        .sample_count = config.sample_count,
         .mip_levels = config.mip_levels,
+        .sample_count = config.sample_count,
     });
-
     if (config.layout != vk::ImageLayout::eUndefined) {
         submit_single_time_commands(vk, [&](const vk::CommandBuffer cmd) {
             BarrierBuilder(vk, {.cmd = cmd, .image_barriers = 1})
-                .add_image_barrier(0, image.get(), {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
+                .add_image_barrier(0, image_and_view.m_image.get(), {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
                 .set_image_dst(0, vk::PipelineStageFlagBits2::eNone, vk::AccessFlagBits2::eNone, config.layout)
                 .build_and_run(vk);
         });
     }
 
-    vk::ImageViewType view_dimensions = vk::ImageViewType::e3D;
-    if (config.extent.depth == 1) {
-        view_dimensions = static_cast<vk::ImageViewType>(static_cast<int>(view_dimensions) - 1);
-        if (config.extent.height == 1)
-            view_dimensions = static_cast<vk::ImageViewType>(static_cast<int>(view_dimensions) - 1);
-    }
-    const auto view = GpuImageView::create(vk, {
-        .image = image.get(),
-        .dimensions = view_dimensions,
+    image_and_view.m_view = GpuImageView::create(vk, {
+        .image = image_and_view.m_image.get(),
         .format = config.format,
-        .subresource{.aspectMask = config.aspect_flags, .levelCount = config.mip_levels, .layerCount = 1},
+        .aspect_flags = config.aspect_flags,
     });
 
-    GpuImageAndView image_and_view{};
-    image_and_view.m_image = image;
-    image_and_view.m_view = view;
     return image_and_view;
 }
 
 GpuImageAndView GpuImageAndView::create_cubemap(Vk& vk, const CubemapConfig& config) {
     ASSERT(config.data.pixels != nullptr);
-    ASSERT(config.data.width > 0);
-    ASSERT(config.data.height > 0);
-    ASSERT(config.data.channels > 0);
+    ASSERT(config.data.alignment > 0);
+    ASSERT(config.data.size.x > 0);
+    ASSERT(config.data.size.y > 0);
+    ASSERT(config.data.size.z == 1);
     ASSERT(config.format != vk::Format::eUndefined);
     ASSERT(config.aspect_flags != vk::ImageAspectFlagBits{});
 
-    const vk::Extent3D staging_extent{to_u32(config.data.width), to_u32(config.data.height), 1};
+    GpuImageAndView cubemap{};
 
-    const auto staging_image = GpuImage::create(vk, {
-        .extent = staging_extent, 
-        .dimensions = vk::ImageType::e2D,
-        .format = config.format,
-        .usage = vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eTransferSrc
-    });
-    defer(staging_image.destroy(vk));
-    staging_image.write(vk, {
-        {config.data.pixels.get(), 4, staging_extent},
-        vk::ImageLayout::eTransferSrcOptimal
-    });
-
-    const vk::Extent3D face_extent{staging_extent.width / 4, staging_extent.height / 3, 1};
-
-    const auto image = GpuImage::create_cubemap(vk, {
+    const vk::Extent3D face_extent{config.data.size.x / 4, config.data.size.y / 3, 1};
+    cubemap.m_image = GpuImage::create_cubemap(vk, {
         .face_extent = face_extent,
         .format = config.format,
         .usage = vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
     });
+    cubemap.m_image.write_cubemap(vk, {
+        .data = config.data,
+        .final_layout = vk::ImageLayout::eShaderReadOnlyOptimal
+    });
 
-    const auto view = GpuImageView::create(vk, {
-        .image = image.get(),
-        .dimensions = vk::ImageViewType::eCube,
+    cubemap.m_view = GpuImageView::create_cubemap(vk, {
+        .image = cubemap.m_image.get(),
         .format = config.format,
-        .subresource{.aspectMask = config.aspect_flags, .levelCount = 1, .layerCount = 6},
+        .aspect_flags = config.aspect_flags,
     });
 
-    submit_single_time_commands(vk, [&](const vk::CommandBuffer cmd) {
-        BarrierBuilder(vk, {.cmd = cmd, .image_barriers = 1})
-            .add_image_barrier(0, image.get(), {config.aspect_flags, 0, 1, 0, 6})
-            .set_image_dst(0, vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
-            .build_and_run(vk);
-
-        std::array copies{
-            vk::ImageCopy2{
-                .srcSubresource{config.aspect_flags, 0, 0, 1},
-                .srcOffset{config.data.width * 2 / 4, config.data.height * 1 / 3, 0},
-                .dstSubresource{config.aspect_flags, 0, 0, 1},
-                .extent = face_extent,
-            },
-            vk::ImageCopy2{
-                .srcSubresource{config.aspect_flags, 0, 0, 1},
-                .srcOffset{config.data.width * 0 / 4, config.data.height * 1 / 3, 0},
-                .dstSubresource{config.aspect_flags, 0, 1, 1},
-                .extent = face_extent,
-            },
-            vk::ImageCopy2{
-                .srcSubresource{config.aspect_flags, 0, 0, 1},
-                .srcOffset{config.data.width * 1 / 4, config.data.height * 0 / 3, 0},
-                .dstSubresource{config.aspect_flags, 0, 2, 1},
-                .extent = face_extent,
-            },
-            vk::ImageCopy2{
-                .srcSubresource{config.aspect_flags, 0, 0, 1},
-                .srcOffset{config.data.width * 1 / 4, config.data.height * 2 / 3, 0},
-                .dstSubresource{config.aspect_flags, 0, 3, 1},
-                .extent = face_extent,
-            },
-            vk::ImageCopy2{
-                .srcSubresource{config.aspect_flags, 0, 0, 1},
-                .srcOffset{config.data.width * 1 / 4, config.data.height * 1 / 3, 0},
-                .dstSubresource{config.aspect_flags, 0, 4, 1},
-                .extent = face_extent,
-            },
-            vk::ImageCopy2{
-                .srcSubresource{config.aspect_flags, 0, 0, 1},
-                .srcOffset{config.data.width * 3 / 4, config.data.height * 1 / 3, 0},
-                .dstSubresource{config.aspect_flags, 0, 5, 1},
-                .extent = face_extent,
-            },
-        };
-        cmd.copyImage2({
-            .srcImage = staging_image.get(),
-            .srcImageLayout = vk::ImageLayout::eTransferSrcOptimal,
-            .dstImage = image.get(),
-            .dstImageLayout = vk::ImageLayout::eTransferDstOptimal,
-            .regionCount = to_u32(copies.size()),
-            .pRegions = copies.data(),
-        });
-
-        BarrierBuilder(vk, {.cmd = cmd, .image_barriers = 1})
-            .add_image_barrier(0, image.get(), {config.aspect_flags, 0, 1, 0, 6})
-            .set_image_src(0, vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
-            .set_image_dst(0, vk::PipelineStageFlagBits2::eFragmentShader, vk::AccessFlagBits2::eShaderRead, vk::ImageLayout::eShaderReadOnlyOptimal)
-            .build_and_run(vk);
-    });
-
-    GpuImageAndView cubemap{};
-    cubemap.m_image = image;
-    cubemap.m_view = view;
     return cubemap;
 }
 
@@ -923,11 +973,20 @@ Sampler Sampler::create(Vk& vk, const Config& config) {
     return sampler;
 }
 
-Texture Texture::from_data(Vk& vk, const GpuImage::Data& data, const Config& config) {
-    const u32 mip_levels = config.create_mips ? get_mip_count(data.extent) : 1;
+Texture Texture::create(Vk& vk, const ImageData& data, const Config& config) {
+    ASSERT(data.pixels != nullptr);
+    ASSERT(data.alignment > 0);
+    ASSERT(data.size.x > 0);
+    ASSERT(data.size.y > 0);
+    ASSERT(data.size.z == 1);
 
-    const auto image = GpuImageAndView::create(vk, {
-        .extent = data.extent,
+    Texture texture{};
+
+    vk::Extent3D extent{data.size.x, data.size.y, data.size.z};
+    const u32 mip_levels = config.create_mips ? get_mip_count(extent) : 1;
+
+    texture.m_image = GpuImageAndView::create(vk, {
+        .extent = extent,
         .format = config.format,
         .usage = vk::ImageUsageFlagBits::eSampled
                | vk::ImageUsageFlagBits::eTransferSrc
@@ -935,70 +994,40 @@ Texture Texture::from_data(Vk& vk, const GpuImage::Data& data, const Config& con
         .aspect_flags = config.aspect_flags,
         .mip_levels = mip_levels,
     });
-    image.write(vk, {
+    texture.m_image.write(vk, {
         .data = data,
+        .format = config.format,
         .final_layout = vk::ImageLayout::eShaderReadOnlyOptimal,
-        .subresource{config.aspect_flags, 0, vk::RemainingMipLevels, 0, 1},
+        .aspect_flags = config.aspect_flags,
     });
-
-    if (mip_levels > 1) {
-        image.generate_mipmaps(
-            vk,
-            mip_levels,
-            data.extent,
-            vk::Format::eR8G8B8A8Srgb,
-            vk::ImageLayout::eShaderReadOnlyOptimal
+    if (mip_levels > 1)
+        texture.m_image.generate_mipmaps(
+            vk, mip_levels, extent, vk::Format::eR8G8B8A8Srgb, vk::ImageLayout::eShaderReadOnlyOptimal
         );
-    }
 
-    const auto sampler = Sampler::create(vk, {
+    texture.m_sampler = Sampler::create(vk, {
         .type = config.sampler_type,
         .edge_mode = config.edge_mode,
         .mip_levels = mip_levels,
     });
 
-    Texture texture{};
-    texture.m_image = image;
-    texture.m_sampler = sampler;
     return texture;
 }
 
-Result<Texture> Texture::from_file(Vk& vk, const std::filesystem::path path, const Config& config) {
-    ASSERT(!path.empty());
-
-    const auto data = ImageData::load(path);
-    if (data.has_err())
-        return data.err();
-
-    return ok(from_data(vk, {
-        .ptr = data->pixels.get(),
-        .alignment = 4,
-        .extent{to_u32(data->width), to_u32(data->height), 1}
-    }, config));
-}
-
-Result<Texture> Texture::from_cubemap_file(Vk& vk, const std::filesystem::path path, const Config& config) {
-    ASSERT(!path.empty());
+Texture Texture::create_cubemap(Vk& vk, const ImageData& data, const Config& config) {
     ASSERT(config.create_mips == false);
 
-    auto data = ImageData::load(path);
-    if (data.has_err())
-        return data.err();
-
-    const auto cubemap = GpuImageAndView::create_cubemap(vk, {
-        .data = std::move(*data),
+    Texture texture{};
+    texture.m_image = GpuImageAndView::create_cubemap(vk, {
+        .data = data,
         .format = config.format,
         .aspect_flags = config.aspect_flags,
     });
-    const auto sampler = Sampler::create(vk, {
+    texture.m_sampler = Sampler::create(vk, {
         .type = config.sampler_type,
         .edge_mode = config.edge_mode,
         .mip_levels = 1,
     });
-
-    auto texture = ok<Texture>();
-    texture->m_image = cubemap;
-    texture->m_sampler = sampler;
     return texture;
 }
 
@@ -1161,8 +1190,10 @@ static Result<Slice<char>> read_shader(Vk& vk, const std::filesystem::path path)
     ASSERT(!path.empty());
 
     auto file = std::ifstream{path, std::ios::ate | std::ios::binary};
-    if (!file.is_open())
+    if (!file.is_open()) {
+        LOGF_ERROR("Could not open shader file: {}", path.string());
         return Err::ShaderFileNotFound;
+    }
 
     auto code = ok<Slice<char>>(vk.stack.alloc<char>(file.tellg()));
     file.seekg(0);
@@ -1218,7 +1249,9 @@ Result<GraphicsPipeline> GraphicsPipeline::create(Vk& vk, const Config& config) 
     ASSERT(!config.fragment_shader_path.empty());
     ASSERT(config.code_type == vk::ShaderCodeTypeEXT::eSpirv && "binary shader code types untested");
 
-    const auto layout = PipelineLayout::create(vk, {
+    auto pipeline = ok<GraphicsPipeline>();
+
+    pipeline->m_layout = PipelineLayout::create(vk, {
         .set_layouts = config.set_layouts,
         .push_ranges = config.push_ranges,
     });
@@ -1265,20 +1298,25 @@ Result<GraphicsPipeline> GraphicsPipeline::create(Vk& vk, const Config& config) 
         },
     };
 
-    std::array<vk::ShaderEXT, 2> shaders{};
-    const auto shader_result = vk.device.createShadersEXT(to_u32(shader_infos.size()), shader_infos.data(), nullptr, shaders.data());
+    const auto shader_result = vk.device.createShadersEXT(
+        to_u32(shader_infos.size()), shader_infos.data(), nullptr, pipeline->m_shaders.data()
+    );
     switch (shader_result) {
         case vk::Result::eSuccess: break;
-        case vk::Result::eIncompatibleShaderBinaryEXT: return Err::ShaderFileInvalid;
+        case vk::Result::eIncompatibleShaderBinaryEXT: {
+            LOGF_ERROR(
+                "Could not create shaders: {} and {}",
+                config.vertex_shader_path.string(),
+                config.fragment_shader_path.string()
+            );
+            return Err::ShaderFileInvalid;
+        }
         case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
         case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
         case vk::Result::eErrorInitializationFailed: ERROR("Vulkan initialization failed");
         default: ERROR("Unexpected Vulkan error");
     }
 
-    auto pipeline = ok<GraphicsPipeline>();
-    pipeline->m_layout = layout;
-    pipeline->m_shaders = shaders;
 
     return pipeline;
 }
@@ -1305,7 +1343,10 @@ void Fence::wait(Vk& vk) const {
     const auto wait_result = vk.device.waitForFences({m_fence}, vk::True, 1'000'000'000);
     switch (wait_result) {
         case vk::Result::eSuccess: break;
-        case vk::Result::eTimeout: LOG_WARN("Vulkan timed out"); break;
+        case vk::Result::eTimeout: {
+            LOG_WARN("Vulkan timed out waiting for fence");
+            break;
+        }
         case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
         case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
         case vk::Result::eErrorDeviceLost: ERROR("Vulkan device lost");
@@ -1392,20 +1433,14 @@ void end_single_time_commands(Vk& vk, vk::CommandBuffer cmd) {
         default: ERROR("Unexpected Vulkan error");
     }
 
-    const auto fence = vk.device.createFence({});
-    switch (fence.result) {
-        case vk::Result::eSuccess: break;
-        case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
-        case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
-        default: ERROR("Unexpected Vulkan error");
-    }
-    defer(vk.device.destroyFence(fence.value));
+    const auto fence = Fence::create(vk, {});
+    defer(fence.destroy(vk));
 
     vk::SubmitInfo submit_info{
         .commandBufferCount = 1,
         .pCommandBuffers = &cmd,
     };
-    const auto submit_result = vk.queue.submit({submit_info}, fence.value);
+    const auto submit_result = vk.queue.submit({submit_info}, fence.get());
     switch (submit_result) {
         case vk::Result::eSuccess: break;
         case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
@@ -1414,22 +1449,12 @@ void end_single_time_commands(Vk& vk, vk::CommandBuffer cmd) {
         default: ERROR("Unexpected Vulkan error");
     }
 
-    const auto wait_result = vk.device.waitForFences({fence.value}, vk::True, 1'000'000'000);
-    switch (wait_result) {
-        case vk::Result::eSuccess: break;
-        case vk::Result::eTimeout: LOG_WARN("Vulkan fence timed out"); break;
-        case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
-        case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
-        case vk::Result::eErrorDeviceLost: ERROR("Vulkan device lost");
-        default: ERROR("Unexpected Vulkan error");
-    }
+    fence.wait(vk);
 
     vk.device.freeCommandBuffers(vk.single_time_command_pool, {cmd});
 }
 
 Result<Surface> Surface::create(Vk& vk, GLFWwindow* window) {
-    auto surface = ok<Surface>();
-
     VkSurfaceKHR vk_surface = VK_NULL_HANDLE;
     const auto surface_result = glfwCreateWindowSurface(vk.instance, window, nullptr, &vk_surface);
     switch (surface_result) {
@@ -1439,6 +1464,8 @@ Result<Surface> Surface::create(Vk& vk, GLFWwindow* window) {
         case VK_ERROR_NATIVE_WINDOW_IN_USE_KHR: ERROR("Window surface creation requires the window to have the client API set to GLFW_NO_API");
         default: ERROR("Unexpected Vulkan error");
     }
+
+    auto surface = ok<Surface>();
     surface->m_surface = vk_surface;
 
     ASSERT(surface->m_surface != nullptr);
@@ -1448,9 +1475,9 @@ Result<Surface> Surface::create(Vk& vk, GLFWwindow* window) {
 Result<Swapchain> Swapchain::create(Vk& vk, const vk::SurfaceKHR surface) {
     auto swapchain = ok<Swapchain>();
 
-    const auto window_result = swapchain->resize(vk, surface);
-    if (window_result.has_err())
-        return window_result.err();
+    const auto create_result = swapchain->resize(vk, surface);
+    if (create_result.has_err())
+        return create_result.err();
 
     allocate_command_buffers(vk, swapchain->m_command_buffers);
 
@@ -1610,7 +1637,9 @@ Result<Swapchain::DrawInfo> Swapchain::begin_frame(Vk& vk) {
     }
     m_current_image_index = acquire_result.value;
 
-    const auto begin_result = current_cmd().begin({.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
+    auto cmd = current_cmd();
+
+    const auto begin_result = cmd.begin({.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
     switch (begin_result) {
         case vk::Result::eSuccess: break;
         case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
@@ -1624,31 +1653,31 @@ Result<Swapchain::DrawInfo> Swapchain::begin_frame(Vk& vk) {
         static_cast<f32>(m_extent.width), static_cast<f32>(m_extent.height),
         0.0f, 1.0f,
     };
-    current_cmd().setViewportWithCount({viewport});
+    cmd.setViewportWithCount({viewport});
     const vk::Rect2D scissor{{0, 0}, m_extent};
-    current_cmd().setScissorWithCount({scissor});
+    cmd.setScissorWithCount({scissor});
 
-    current_cmd().setRasterizerDiscardEnable(vk::False);
-    current_cmd().setPrimitiveRestartEnable(vk::False);
-    current_cmd().setPrimitiveTopology(vk::PrimitiveTopology::eTriangleList);
-    current_cmd().setPolygonModeEXT(vk::PolygonMode::eFill);
-    current_cmd().setFrontFace(vk::FrontFace::eCounterClockwise);
-    current_cmd().setCullMode(vk::CullModeFlagBits::eNone);
-    current_cmd().setDepthTestEnable(vk::True);
-    current_cmd().setDepthWriteEnable(vk::True);
-    current_cmd().setDepthCompareOp(vk::CompareOp::eLess);
-    current_cmd().setDepthBiasEnable(vk::False);
-    current_cmd().setStencilTestEnable(vk::False);
-    current_cmd().setRasterizationSamplesEXT(vk::SampleCountFlagBits::e1);
-    current_cmd().setSampleMaskEXT(vk::SampleCountFlagBits::e1, vk::SampleMask{0xff});
-    current_cmd().setAlphaToCoverageEnableEXT(vk::False);
-    current_cmd().setColorWriteMaskEXT(0, {
+    cmd.setRasterizerDiscardEnable(vk::False);
+    cmd.setPrimitiveRestartEnable(vk::False);
+    cmd.setPrimitiveTopology(vk::PrimitiveTopology::eTriangleList);
+    cmd.setPolygonModeEXT(vk::PolygonMode::eFill);
+    cmd.setFrontFace(vk::FrontFace::eCounterClockwise);
+    cmd.setCullMode(vk::CullModeFlagBits::eNone);
+    cmd.setDepthTestEnable(vk::True);
+    cmd.setDepthWriteEnable(vk::True);
+    cmd.setDepthCompareOp(vk::CompareOp::eLess);
+    cmd.setDepthBiasEnable(vk::False);
+    cmd.setStencilTestEnable(vk::False);
+    cmd.setRasterizationSamplesEXT(vk::SampleCountFlagBits::e1);
+    cmd.setSampleMaskEXT(vk::SampleCountFlagBits::e1, vk::SampleMask{0xff});
+    cmd.setAlphaToCoverageEnableEXT(vk::False);
+    cmd.setColorWriteMaskEXT(0, {
         vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
         vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA
     });
-    current_cmd().setColorBlendEnableEXT(0, {vk::False});
+    cmd.setColorBlendEnableEXT(0, {vk::False});
 
-    return ok<DrawInfo>(current_cmd(), current_image(), m_extent);
+    return ok<DrawInfo>(cmd, current_image(), m_extent);
 }
 
 Result<void> Swapchain::end_frame(Vk& vk) {

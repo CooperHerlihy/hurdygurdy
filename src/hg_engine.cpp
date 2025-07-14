@@ -5,10 +5,12 @@ namespace hg {
 Result<Engine> Engine::create() {
     auto engine = ok<Engine>();
 
+    engine->image_loader = ImageLoader{{ .max_images = 32 }};
+
     auto vk = Vk::create();
     if (vk.has_err())
         return vk.err();
-    engine->m_vk = std::move(*vk);
+    engine->vk = std::move(*vk);
 
     return engine;
 }
@@ -17,12 +19,14 @@ Engine::~Engine() noexcept {
     if (m_moved_from)
         return;
 
-    m_vk.destroy();
+    vk.destroy();
+    image_loader.destroy();
 }
 
 Engine::Engine(Engine&& other) noexcept
     : m_moved_from{other.m_moved_from}
-    , m_vk{std::move(other.m_vk)}
+    , image_loader{std::move(other.image_loader)}
+    , vk{std::move(other.vk)}
 {
     other.m_moved_from = true;
 }

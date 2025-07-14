@@ -55,18 +55,16 @@ public:
         MemoryType memory_type = DeviceLocal;
     };
     [[nodiscard]] static GpuBuffer create(Vk& vk, const Config& config);
-
     void destroy(Vk& vk) const {
         ASSERT(m_allocation != nullptr);
         ASSERT(m_buffer != nullptr);
-
         vmaDestroyBuffer(vk.gpu_allocator, m_buffer, m_allocation);
     }
 
     void write_void(Vk& vk, const void* data, vk::DeviceSize size, vk::DeviceSize offset) const;
 
-    template <typename T> void write_span(Vk& vk, const std::span<T> data, vk::DeviceSize offset = 0) const {
-        write_void(vk, data.data(), data.size() * sizeof(T), offset);
+    template <typename T> void write_slice(Vk& vk, const Slice<const T> data, vk::DeviceSize offset = 0) const {
+        write_void(vk, data.data, data.count * sizeof(T), offset);
     }
     template <typename T> void write(Vk& vk, const T& data, vk::DeviceSize offset = 0) const {
         write_void(vk, &data, sizeof(T), offset);
@@ -87,11 +85,10 @@ public:
 
     struct Config {
         vk::Extent3D extent{};
-        vk::ImageType dimensions{vk::ImageType::e1D};
         vk::Format format{vk::Format::eUndefined};
         vk::ImageUsageFlags usage{};
-        vk::SampleCountFlagBits sample_count{vk::SampleCountFlagBits::e1};
         u32 mip_levels = 1;
+        vk::SampleCountFlagBits sample_count{vk::SampleCountFlagBits::e1};
     };
     [[nodiscard]] static GpuImage create(Vk& vk, const Config& config);
 
@@ -105,22 +102,17 @@ public:
     void destroy(Vk& vk) const {
         ASSERT(m_allocation != nullptr);
         ASSERT(m_image != nullptr);
-
         vmaDestroyImage(vk.gpu_allocator, m_image, m_allocation);
     }
 
-    struct Data {
-        const void* ptr = nullptr;
-        u64 alignment = 0;
-        vk::Extent3D extent{};
-    };
-
     struct WriteConfig {
-        Data data{};
+        ImageData data{};
+        vk::Format format{vk::Format::eR8G8B8A8Srgb};
         vk::ImageLayout final_layout{vk::ImageLayout::eShaderReadOnlyOptimal};
-        vk::ImageSubresourceRange subresource{vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1};
+        vk::ImageAspectFlagBits aspect_flags{vk::ImageAspectFlagBits::eColor};
     };
     void write(Vk& vk, const WriteConfig& config) const;
+    void write_cubemap(Vk& vk, const WriteConfig& config) const;
 
 private:
     VmaAllocation m_allocation = nullptr;
@@ -136,15 +128,14 @@ public:
 
     struct Config {
         vk::Image image{};
-        vk::ImageViewType dimensions{vk::ImageViewType::e1D};
-        vk::Format format{vk::Format::eUndefined};
-        vk::ImageSubresourceRange subresource{vk::ImageAspectFlagBits::eColor, 0, vk::RemainingMipLevels, 0, 1};
+        vk::Format format{};
+        vk::ImageAspectFlagBits aspect_flags{vk::ImageAspectFlagBits::eColor};
     };
     [[nodiscard]] static GpuImageView create(Vk& vk, const Config& config);
+    [[nodiscard]] static GpuImageView create_cubemap(Vk& vk, const Config& config);
 
     void destroy(Vk& vk) const {
         ASSERT(m_view != nullptr);
-
         vk.device.destroyImageView(m_view);
     }
 
@@ -168,10 +159,10 @@ public:
         vk::Extent3D extent{};
         vk::Format format{vk::Format::eUndefined};
         vk::ImageUsageFlags usage{};
-        vk::ImageAspectFlagBits aspect_flags{vk::ImageAspectFlagBits::eColor};
-        vk::SampleCountFlagBits sample_count{vk::SampleCountFlagBits::e1};
         vk::ImageLayout layout{vk::ImageLayout::eUndefined};
+        vk::ImageAspectFlagBits aspect_flags{vk::ImageAspectFlagBits::eColor};
         u32 mip_levels = 1;
+        vk::SampleCountFlagBits sample_count{vk::SampleCountFlagBits::e1};
     };
     [[nodiscard]] static GpuImageAndView create(Vk& vk, const Config& config);
 
@@ -256,9 +247,8 @@ public:
         Sampler::Type sampler_type = Sampler::Nearest;
         vk::SamplerAddressMode edge_mode{vk::SamplerAddressMode::eRepeat};
     };
-    [[nodiscard]] static Texture from_data(Vk& vk, const GpuImage::Data& data, const Config& config);
-    [[nodiscard]] static Result<Texture> from_file(Vk& vk, std::filesystem::path path, const Config& config);
-    [[nodiscard]] static Result<Texture> from_cubemap_file(Vk& vk, std::filesystem::path path, const Config& config);
+    [[nodiscard]] static Texture create(Vk& vk, const ImageData& data, const Config& config);
+    [[nodiscard]] static Texture create_cubemap(Vk& vk, const ImageData& data, const Config& config);
 
     void destroy(Vk& vk) const {
         m_image.destroy(vk);

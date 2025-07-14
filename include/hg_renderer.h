@@ -2,8 +2,7 @@
 
 #include "hg_utils.h"
 #include "hg_math.h"
-#include "hg_window.h"
-#include "hg_vulkan.h"
+#include "hg_engine.h"
 
 namespace hg {
 
@@ -43,17 +42,17 @@ public:
         bool fullscreen = false;
         glm::uvec2 window_size{1920, 1080};
     };
-    [[nodiscard]] static Result<DefaultRenderer> create(Vk& vk, const Config& config);
-    Result<void> resize(Vk& vk);
-    void destroy(Vk& vk) const;
+    [[nodiscard]] static Result<DefaultRenderer> create(Engine& engine, const Config& config);
+    Result<void> resize(Engine& engine);
+    void destroy(Engine& engine) const;
 
-    Result<void> draw(Vk& vk, std::span<Pipeline*> pipelines);
+    Result<void> draw(Engine& engine, std::span<Pipeline*> pipelines);
 
-    void update_projection(Vk& vk, const glm::mat4& projection) const {
-        m_vp_buffer.write(vk, projection, offsetof(ViewProjectionUniform, projection));
+    void update_projection(Engine& engine, const glm::mat4& projection) const {
+        m_vp_buffer.write(engine.vk, projection, offsetof(ViewProjectionUniform, projection));
     }
 
-    void update_camera_and_lights(Vk& vk, const Cameraf& camera);
+    void update_camera_and_lights(Engine& engine, const Cameraf& camera);
 
     void queue_light(const glm::vec3 position, const glm::vec3 color) {
         ASSERT(m_light_queue.size() <= MaxLights);
@@ -78,11 +77,12 @@ private:
 
 class SkyboxPipeline : public DefaultRenderer::Pipeline {
 public:
-    [[nodiscard]] static SkyboxPipeline create(Vk& vk, const DefaultRenderer& pipeline);
-    void destroy(Vk& vk) const;
+    [[nodiscard]] static SkyboxPipeline create(Engine& engine, const DefaultRenderer& pipeline);
+    void destroy(Engine& engine) const;
     void draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) override;
 
-    [[nodiscard]] Result<void> load_skybox(Vk& vk, const std::filesystem::path path);
+    void load_skybox(Engine& engine, const ImageData& data);
+    Result<void> load_skybox(Engine& engine, const std::filesystem::path path);
 
 private:
     DescriptorSetLayout m_set_layout{};
@@ -98,8 +98,8 @@ private:
 
 class PbrPipeline : public DefaultRenderer::Pipeline {
 public:
-    [[nodiscard]] static PbrPipeline create(Vk& vk, const DefaultRenderer& pipeline);
-    void destroy(Vk& vk) const;
+    [[nodiscard]] static PbrPipeline create(Engine& engine, const DefaultRenderer& pipeline);
+    void destroy(Engine& engine) const;
 
     struct PushConstant {
         glm::mat4 model{1.0f};
@@ -116,11 +116,11 @@ public:
         usize index = SIZE_MAX;
     };
 
-    [[nodiscard]] Result<TextureHandle> load_texture(
-        Vk& vk, std::filesystem::path path, vk::Format format = vk::Format::eR8G8B8A8Srgb
+    [[nodiscard]] TextureHandle load_texture(
+        Engine& engine, const ImageData& data, vk::Format format = vk::Format::eR8G8B8A8Srgb
     );
-    [[nodiscard]] TextureHandle load_texture_from_data(
-        Vk& vk, const GpuImage::Data& data, vk::Format format = vk::Format::eR8G8B8A8Srgb
+    [[nodiscard]] Result<TextureHandle> load_texture(
+        Engine& engine, const std::filesystem::path path, vk::Format format = vk::Format::eR8G8B8A8Srgb
     );
 
     struct Model {
@@ -132,9 +132,9 @@ public:
         float roughness = 0.0;
         float metalness = 0.0;
 
-        void destroy(Vk& vk) const {
-            vertex_buffer.destroy(vk);
-            index_buffer.destroy(vk);
+        void destroy(Engine& engine) const {
+            vertex_buffer.destroy(engine.vk);
+            index_buffer.destroy(engine.vk);
         }
     };
 
@@ -142,17 +142,17 @@ public:
         usize index = SIZE_MAX;
     };
 
-    [[nodiscard]] Result<ModelHandle> load_model(
-        Vk& vk, std::filesystem::path path,
-        TextureHandle normal_map, TextureHandle texture
-    );
-    [[nodiscard]] ModelHandle load_model_from_data(
-        Vk& vk,
-        const Mesh& data,
+    [[nodiscard]] ModelHandle load_model(
+        Engine& engine,
+        const GltfData& data,
         TextureHandle normal_map,
-        TextureHandle texture,
-        float roughness,
-        float metalness
+        TextureHandle texture
+    );
+    [[nodiscard]] Result<ModelHandle> load_model(
+        Engine& engine,
+        const std::filesystem::path path,
+        TextureHandle normal_map,
+        TextureHandle texture
     );
 
     struct RenderTicket {
