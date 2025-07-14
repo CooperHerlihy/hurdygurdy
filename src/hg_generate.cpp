@@ -12,7 +12,7 @@ Mesh generate_square() {
         { {-1.0f, -1.0f,  0.0f}, { 0.0f,  0.0f, -1.0f}, {}, { 0.0f,  0.0f}, },
     };
     create_tangents(square);
-    return Mesh::from_primitives(square);
+    return create_mesh(square);
 }
 
 Mesh generate_cube() {
@@ -60,7 +60,7 @@ Mesh generate_cube() {
         { {-1.0f,  1.0f, -1.0f}, { 0.0f,  1.0f,  0.0f}, {}, {0.0f, 0.0f}, },
     };
     create_tangents(cube);
-    return Mesh::from_primitives(cube);
+    return create_mesh(cube);
 }
 
 Mesh generate_sphere(const glm::uvec2 fidelity) {
@@ -131,7 +131,7 @@ Mesh generate_sphere(const glm::uvec2 fidelity) {
     }
 
     create_tangents(primitives);
-    auto sphere = Mesh::from_primitives(primitives);
+    auto sphere = create_mesh(primitives);
 
     ASSERT(!sphere.indices.empty());
     ASSERT(!sphere.vertices.empty());

@@ -27,21 +27,21 @@ struct Vertex {
     glm::vec2 tex_coord{};
 };
 
+void create_tangents(std::span<Vertex> primitives);
+
 struct Mesh {
     std::vector<u32> indices{};
     std::vector<Vertex> vertices{};
-
-    [[nodiscard]] static Mesh from_primitives(std::span<const Vertex> primitives);
 };
 
-struct GltfModelData {
+[[nodiscard]] Mesh create_mesh(std::span<const Vertex> primitives);
+
+struct GltfData {
     Mesh mesh{};
     float roughness = 0.0f;
     float metalness = 0.0f;
-
-    [[nodiscard]] static Result<GltfModelData> load_gltf(std::filesystem::path path);
 };
 
-void create_tangents(std::span<Vertex> primitives);
+[[nodiscard]] Result<GltfData> load_gltf(std::filesystem::path path);
 
 } // namespace hg

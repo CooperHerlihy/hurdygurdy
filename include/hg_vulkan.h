@@ -2,7 +2,6 @@
 
 #include "hg_pch.h"
 #include "hg_utils.h"
-#include "hg_memory.h"
 #include "hg_load.h"
 
 #include <array>
@@ -12,7 +11,7 @@
 namespace hg {
 
 struct Vk {
-    Stack stack = Stack::create({1024 * 1024});
+    Arena stack{};
 
     vk::Instance instance{};
     vk::DebugUtilsMessengerEXT debug_messenger{};
@@ -28,7 +27,7 @@ struct Vk {
     vk::CommandPool single_time_command_pool{};
 
     [[nodiscard]] static Result<Vk> create();
-    void destroy() const;
+    void destroy();
 };
 
 class GpuBuffer {

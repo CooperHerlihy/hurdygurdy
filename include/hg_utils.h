@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstddef>
 #include <string_view>
 #include <type_traits>
 #include <chrono>
@@ -18,8 +19,10 @@ using u64 = std::uint64_t;
 using uptr = std::uintptr_t;
 using usize = std::size_t;
 
-using f32 = float;
-using f64 = double;
+using byte = std::byte;
+
+using f32 = std::float_t;
+using f64 = std::double_t;
 
 namespace hg {
 
@@ -273,6 +276,192 @@ requires(std::is_trivially_copyable_v<U> || std::is_rvalue_reference_v<T>) {
 template <typename T, typename... Args> constexpr Result<T> ok(Args&&... args) {
     return Result<T>{std::in_place_type_t<T>(), std::forward<Args>(args)...};
 }
+
+template <typename T> struct Slice {
+    T* data = nullptr;
+    usize count = 0;
+
+    T& operator[](const usize index) const {
+        ASSERT(index < count);
+        return data[index];
+    }
+};
+
+template <typename T> T* begin(const Slice<T> slice) { return slice.data; }
+template <typename T> T* end(const Slice<T> slice) { return slice.data + slice.count; }
+
+inline constexpr usize align_up(const usize size, const usize alignment) {
+    return (size + alignment - 1) & ~(alignment - 1);
+}
+inline constexpr usize align_down(const usize size, const usize alignment) {
+    return size & ~(alignment - 1);
+}
+
+class Arena {
+public:
+    Arena() = default;
+    Arena(Slice<byte> memory) : m_memory{memory}, m_head{0} {}
+    [[nodiscard]] Slice<byte> release() {
+        Slice<byte> memory{m_memory};
+        m_memory = Slice<byte>{};
+        m_head = 0;
+        return memory;
+    }
+
+    Arena(const Arena&) = delete;
+    Arena& operator=(const Arena&) = delete;
+    Arena(Arena&& other) noexcept
+        : m_memory{other.m_memory}
+        , m_head{other.m_head}
+    {
+        other.m_memory = Slice<byte>{};
+        other.m_head = 0;
+    }
+    Arena& operator=(Arena&& other) noexcept {
+        if (this == &other)
+            return *this;
+        if (m_memory.data != nullptr)
+            ERROR("Occupied arena cannot be moved into");
+        new (this) Arena(std::move(other));
+        return *this;
+    }
+
+    [[nodiscard]] Slice<byte> alloc(usize size) {
+        Slice<byte> allocation{m_memory.data + m_head, align_up(size, 16)};
+        if (end(allocation) > end(m_memory))
+            ERROR("Arena out of memory");
+        m_head = end(allocation) - m_memory.data;
+
+        return allocation;
+    }
+
+    template <typename T> [[nodiscard]] T* alloc() {
+        return reinterpret_cast<T*>(alloc(sizeof(T)).data);
+    }
+    template <typename T> [[nodiscard]] Slice<T> alloc(usize count) {
+        return {reinterpret_cast<T*>(alloc(count * sizeof(T)).data), count};
+    }
+
+    [[nodiscard]] Slice<byte> realloc(Slice<byte> original, usize new_size) {
+        ASSERT(original.data != nullptr);
+
+        if (end(original) != m_memory.data + m_head)
+            ERROR("Arena can only reallocate top allocation");
+
+        Slice<byte> allocation{original.data, align_up(new_size, 16)};
+        if (end(allocation) > end(m_memory))
+            ERROR("Arena out of memory");
+        m_head = end(allocation) - m_memory.data;
+
+        return allocation;
+    }
+
+    template <typename T> [[nodiscard]] Slice<T> realloc(Slice<T> original, usize new_count) {
+        return {reinterpret_cast<T*>(realloc(
+            Slice<byte>{reinterpret_cast<byte*>(original.data), align_up(original.count * sizeof(T), 16)},
+            new_count * sizeof(T)
+        ).data), new_count};
+    }
+
+    void dealloc(Slice<byte> allocation) {
+        ASSERT(allocation.data != nullptr);
+
+        if (end(allocation) != m_memory.data + m_head)
+            ERROR("Arena can only deallocate top allocation");
+
+        m_head = allocation.data - m_memory.data;
+    }
+
+    template <typename T> void dealloc(T* ptr) {
+        dealloc({reinterpret_cast<byte*>(ptr), align_up(sizeof(T), 16)});
+    }
+    template <typename T> void dealloc(Slice<T> slice) {
+        dealloc({reinterpret_cast<byte*>(slice.data), align_up(slice.count * sizeof(T), 16)});
+    }
+
+private:
+    Slice<byte> m_memory{};
+    usize m_head = 0;
+};
+
+template <typename T> class Pool {
+public:
+    union Block {
+        T data;
+        usize next;
+    };
+
+    Pool() = default;
+    Pool(Slice<Block> memory) : m_blocks{memory} {
+        for (usize i = 0; i < m_blocks.count; ++i) {
+            m_blocks[i].next = i + 1;
+        }
+    }
+    Slice<Block> release() {
+        Slice<Block> memory{m_blocks};
+        m_blocks = Slice<Block>{};
+        m_next = 0;
+        return memory;
+    }
+
+    Pool(const Pool&) = delete;
+    Pool& operator=(const Pool&) = delete;
+    Pool(Pool&& other) noexcept
+        : m_blocks{other.m_blocks}
+        , m_next{other.m_next}
+    {
+        other.m_blocks = Slice<Block>{};
+        other.m_next = 0;
+    }
+    Pool& operator=(Pool&& other) noexcept {
+        if (this == &other)
+            return *this;
+        if (m_blocks.data != nullptr)
+            ERROR("Occupied pool cannot be moved into");
+        new (this) Pool(std::move(other));
+        return *this;
+    }
+
+    T* alloc() {
+        usize index = m_next;
+        if (index >= m_blocks.count)
+            ERROR("Pool out of memory");
+
+        m_next = m_blocks[index].next;
+        return &m_blocks[index].data;
+    }
+
+    void dealloc(T* ptr) {
+        ASSERT(ptr != nullptr);
+
+        Block* block = reinterpret_cast<Block*>(ptr);
+
+        if (block < m_blocks.begin() || block >= m_blocks.end())
+            ERROR("Pool cannot deallocate block outside of pool");
+
+        block->next = m_next;
+        m_next = block - m_blocks.data;
+    }
+
+    void check_leaks() const {
+#ifndef NDEBUG
+        usize count = 0;
+        usize index = m_next;
+        while (index != m_blocks.count && count <= m_blocks.count) {
+            index = m_blocks[index].next;
+            ++count;
+        }
+        if (count < m_blocks.count)
+            ERROR("Pool leaked memory");
+        if (count > m_blocks.count)
+            ERROR("Pool had double frees");
+#endif
+    }
+
+private:
+    Slice<Block> m_blocks{};
+    usize m_next = 0;
+};
 
 class Clock {
 public:

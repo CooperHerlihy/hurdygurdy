@@ -9,10 +9,7 @@ constexpr double sqrt3 = 1.73205080757;
 #define errf(e) "{} error: {}", #e, to_string(e.err())
 
 int main() {
-
-    Memory memory = Memory::create({});
-
-    auto engine = Engine::create({});
+    auto engine = Engine::create();
     if (engine.has_err())
         LOGF_ERROR(errf(engine));
 
@@ -34,15 +31,6 @@ int main() {
 
     const auto perlin_normal_image = create_normals_from_heightmap(generate_fractal_perlin_noise({512, 512}, {16, 16}));
     const auto perlin_normal_texture = model_pipeline.load_texture_from_data(engine->vk(), {perlin_normal_image.data(), sizeof(glm::vec4), {512, 512, 1}}, vk::Format::eR32G32B32A32Sfloat);
-
-    // const auto perlin_noise_color_image = map_image<u32>(generate_fractal_perlin_noise({512, 512}, {8, 8}), [](const f32 val) -> u32 {
-    //     return (static_cast<u32>(val * 255.0f) << 0) + (static_cast<u32>(val * 255.0f) << 8) + (static_cast<u32>(val * 255.0f) << 16) + 0xff000000;
-    // });
-    // const auto perlin_noise_texture = model_renderer->load_texture_from_data({perlin_noise_color_image.data(), sizeof(u32), {512, 512, 1}});
-
-    // std::array<u32, 4> gold_color = {};
-    // gold_color.fill(0xff44ccff);
-    // const auto gold_texture = model_renderer->load_texture_from_data({gold_color.data(), 4, {2, 2, 1}});
 
     std::array<u32, 4> gray_color{};
     gray_color.fill(0xff777777);

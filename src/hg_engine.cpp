@@ -2,15 +2,13 @@
 
 namespace hg {
 
-Result<Engine> Engine::create(const Config& config) {
+Result<Engine> Engine::create() {
     auto engine = ok<Engine>();
-
-    engine->m_memory = Memory::create(config);
 
     auto vk = Vk::create();
     if (vk.has_err())
         return vk.err();
-    engine->m_vk = new (engine->memory().heap.alloc<Vk>()) Vk{std::move(*vk)};
+    engine->m_vk = std::move(*vk);
 
     return engine;
 }
@@ -19,13 +17,11 @@ Engine::~Engine() noexcept {
     if (m_moved_from)
         return;
 
-    m_vk->destroy();
-    m_memory.destroy();
+    m_vk.destroy();
 }
 
 Engine::Engine(Engine&& other) noexcept
     : m_moved_from{other.m_moved_from}
-    , m_memory{std::move(other.m_memory)}
     , m_vk{std::move(other.m_vk)}
 {
     other.m_moved_from = true;

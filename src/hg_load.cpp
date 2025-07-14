@@ -32,7 +32,63 @@ Result<ImageData> ImageData::load(const std::filesystem::path path) {
     return ok<ImageData>(std::unique_ptr<u8[], decltype(FreeDeleter)>{pixels}, width, height, channels);
 }
 
-Result<GltfModelData> GltfModelData::load_gltf(const std::filesystem::path path) {
+void create_tangents(std::span<Vertex> primitives) {
+    ASSERT(primitives.size() % 3 == 0);
+
+    SMikkTSpaceInterface mikk_functions{
+        .m_getNumFaces = [](const SMikkTSpaceContext* pContext) {
+            return static_cast<int>(static_cast<std::span<Vertex>*>(pContext->m_pUserData)->size() / 3);
+        },
+        .m_getNumVerticesOfFace = [](const SMikkTSpaceContext*, const int) {
+            return 3;
+        },
+        .m_getPosition = [](const SMikkTSpaceContext * pContext, float fvPosOut[], const int iFace, const int iVert) {
+            glm::vec3 pos = (*static_cast<std::span<Vertex>*>(pContext->m_pUserData))[iFace * 3 + iVert].position;
+            fvPosOut[0] = pos.x;
+            fvPosOut[1] = pos.y;
+            fvPosOut[2] = pos.z;
+        },
+        .m_getNormal = [](const SMikkTSpaceContext * pContext, float fvNormOut[], const int iFace, const int iVert) {
+            glm::vec3 normal = (*static_cast<std::span<Vertex>*>(pContext->m_pUserData))[iFace * 3 + iVert].normal;
+            fvNormOut[0] = normal.x;
+            fvNormOut[1] = normal.y;
+            fvNormOut[2] = normal.z;
+        } ,
+        .m_getTexCoord = [](const SMikkTSpaceContext * pContext, float fvTexcOut[], const int iFace, const int iVert) {
+            glm::vec2 tex = (*static_cast<std::span<Vertex>*>(pContext->m_pUserData))[iFace * 3 + iVert].tex_coord;
+            fvTexcOut[0] = tex.x;
+            fvTexcOut[1] = tex.y;
+        },
+        .m_setTSpaceBasic = [](const SMikkTSpaceContext * pContext, const float fvTangent[], const float fSign, const int iFace, const int iVert) {
+            (*static_cast<std::span<Vertex>*>(pContext->m_pUserData))[iFace * 3 + iVert].tangent = {fvTangent[0], fvTangent[1], fvTangent[2], fSign};
+        },
+        .m_setTSpace = nullptr,
+    };
+    SMikkTSpaceContext mikk_context{
+        .m_pInterface = &mikk_functions,
+        .m_pUserData = reinterpret_cast<void*>(&primitives),
+    };
+    genTangSpaceDefault(&mikk_context);
+}
+
+Mesh create_mesh(const std::span<const Vertex> primitives) {
+    ASSERT(primitives.size() % 3 == 0);
+
+    Mesh mesh{};
+    mesh.indices.resize(primitives.size());
+    mesh.vertices.resize(primitives.size());
+    WeldMesh(
+        reinterpret_cast<int*>(mesh.indices.data()),
+        reinterpret_cast<float*>(mesh.vertices.data()),
+        reinterpret_cast<const float*>(primitives.data()),
+        static_cast<i32>(primitives.size()),
+        sizeof(Vertex) / sizeof(float)
+    );
+
+    return mesh;
+}
+
+Result<GltfData> load_gltf(const std::filesystem::path path) {
     ASSERT(!path.empty());
 
     fastgltf::Parser parser;
@@ -63,7 +119,7 @@ Result<GltfModelData> GltfModelData::load_gltf(const std::filesystem::path path)
         }
     }
 
-    auto model = ok<GltfModelData>();
+    auto model = ok<GltfData>();
     model->roughness = 0.5f;
     model->metalness = 0.0f;
 
@@ -127,67 +183,11 @@ Result<GltfModelData> GltfModelData::load_gltf(const std::filesystem::path path)
     }
 
     create_tangents(primitives);
-    model->mesh = Mesh::from_primitives(primitives);
+    model->mesh = create_mesh(primitives);
 
     ASSERT(!model->mesh.indices.empty());
     ASSERT(!model->mesh.vertices.empty());
     return model;
-}
-
-void create_tangents(std::span<Vertex> primitives) {
-    ASSERT(primitives.size() % 3 == 0);
-
-    SMikkTSpaceInterface mikk_functions{
-        .m_getNumFaces = [](const SMikkTSpaceContext* pContext) {
-            return static_cast<int>(static_cast<std::span<Vertex>*>(pContext->m_pUserData)->size() / 3);
-        },
-        .m_getNumVerticesOfFace = [](const SMikkTSpaceContext*, const int) {
-            return 3;
-        },
-        .m_getPosition = [](const SMikkTSpaceContext * pContext, float fvPosOut[], const int iFace, const int iVert) {
-            glm::vec3 pos = (*static_cast<std::span<Vertex>*>(pContext->m_pUserData))[iFace * 3 + iVert].position;
-            fvPosOut[0] = pos.x;
-            fvPosOut[1] = pos.y;
-            fvPosOut[2] = pos.z;
-        },
-        .m_getNormal = [](const SMikkTSpaceContext * pContext, float fvNormOut[], const int iFace, const int iVert) {
-            glm::vec3 normal = (*static_cast<std::span<Vertex>*>(pContext->m_pUserData))[iFace * 3 + iVert].normal;
-            fvNormOut[0] = normal.x;
-            fvNormOut[1] = normal.y;
-            fvNormOut[2] = normal.z;
-        } ,
-        .m_getTexCoord = [](const SMikkTSpaceContext * pContext, float fvTexcOut[], const int iFace, const int iVert) {
-            glm::vec2 tex = (*static_cast<std::span<Vertex>*>(pContext->m_pUserData))[iFace * 3 + iVert].tex_coord;
-            fvTexcOut[0] = tex.x;
-            fvTexcOut[1] = tex.y;
-        },
-        .m_setTSpaceBasic = [](const SMikkTSpaceContext * pContext, const float fvTangent[], const float fSign, const int iFace, const int iVert) {
-            (*static_cast<std::span<Vertex>*>(pContext->m_pUserData))[iFace * 3 + iVert].tangent = {fvTangent[0], fvTangent[1], fvTangent[2], fSign};
-        },
-        .m_setTSpace = nullptr,
-    };
-    SMikkTSpaceContext mikk_context{
-        .m_pInterface = &mikk_functions,
-        .m_pUserData = reinterpret_cast<void*>(&primitives),
-    };
-    genTangSpaceDefault(&mikk_context);
-}
-
-Mesh Mesh::from_primitives(const std::span<const Vertex> primitives) {
-    ASSERT(primitives.size() % 3 == 0);
-
-    Mesh mesh{};
-    mesh.indices.resize(primitives.size());
-    mesh.vertices.resize(primitives.size());
-    WeldMesh(
-        reinterpret_cast<int*>(mesh.indices.data()),
-        reinterpret_cast<float*>(mesh.vertices.data()),
-        reinterpret_cast<const float*>(primitives.data()),
-        static_cast<i32>(primitives.size()),
-        sizeof(Vertex) / sizeof(float)
-    );
-
-    return mesh;
 }
 
 } // namespace hg

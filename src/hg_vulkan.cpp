@@ -155,10 +155,10 @@ static Result<u32> find_queue_family(Vk& vk, const vk::PhysicalDevice gpu) {
     const auto queue_family = std::ranges::find_if(queue_families, [](const vk::QueueFamilyProperties family) {
         return static_cast<bool>(family.queueFlags & (vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eCompute));
     });
-    if (queue_family == queue_families.end())
+    if (queue_family == end(queue_families))
         return Err::VkQueueFamilyUnavailable;
 
-    return ok(static_cast<u32>(queue_family - queue_families.begin()));
+    return ok(static_cast<u32>(queue_family - begin(queue_families)));
 }
 
 static Result<vk::PhysicalDevice> find_gpu(Vk& vk) {
@@ -327,6 +327,10 @@ vk::CommandPool create_command_pool(Vk& vk, const vk::CommandPoolCreateFlags fla
 Result<Vk> Vk::create() {
     auto vk = ok<Vk>();
 
+    constexpr usize stack_size = 1024 * 64;
+    auto stack_memory = static_cast<byte*>(malloc(stack_size));
+    vk->stack = Arena{{stack_memory, stack_size}};
+
     const auto glfw_success = glfwInit();
     if (glfw_success == GLFW_FALSE)
         ERROR("Could not initialize GLFW");
@@ -383,7 +387,7 @@ Result<Vk> Vk::create() {
     return vk;
 }
 
-void Vk::destroy() const {
+void Vk::destroy() {
     const auto wait_result = device.waitIdle();
     switch (wait_result) {
         case vk::Result::eSuccess: break;
@@ -410,6 +414,9 @@ void Vk::destroy() const {
     instance.destroyDebugUtilsMessengerEXT(debug_messenger);
 #endif
     instance.destroy();
+
+    auto stack_memory = stack.release();
+    std::free(stack_memory.data);
 }
 
 GpuBuffer GpuBuffer::create(Vk& vk, const Config& config) {
