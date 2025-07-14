@@ -8,6 +8,11 @@
 
 namespace hg {
 
+struct Mesh {
+    std::vector<u32> indices{};
+    std::vector<Vertex> vertices{};
+};
+
 [[nodiscard]] Mesh generate_square();
 [[nodiscard]] Mesh generate_cube();
 [[nodiscard]] Mesh generate_sphere(glm::uvec2 fidelity);

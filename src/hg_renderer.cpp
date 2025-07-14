@@ -277,6 +277,53 @@ SkyboxPipeline SkyboxPipeline::create(Engine& engine, const DefaultRenderer& ren
     return pipeline;
 }
 
+void SkyboxPipeline::destroy(Engine& engine) const {
+    const auto wait_result = engine.vk.queue.waitIdle();
+    switch (wait_result) {
+        case vk::Result::eSuccess: break;
+        case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
+        case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
+        case vk::Result::eErrorDeviceLost: ERROR("Vulkan device lost");
+        default: ERROR("Unexpected Vulkan error");
+    }
+
+    if (m_vertex_buffer.get() != nullptr)
+        m_vertex_buffer.destroy(engine.vk);
+    if (m_index_buffer.get() != nullptr)
+        m_index_buffer.destroy(engine.vk);
+    if (m_cubemap.get_image() != nullptr)
+        m_cubemap.destroy(engine.vk);
+
+    m_descriptor_pool.destroy(engine.vk);
+    m_pipeline.destroy(engine.vk);
+    m_set_layout.destroy(engine.vk);
+}
+
+void SkyboxPipeline::draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) {
+    ASSERT(m_set != nullptr);
+    ASSERT(cmd != nullptr);
+    ASSERT(global_set != nullptr);
+
+    cmd.setDepthTestEnable(vk::False);
+    cmd.setDepthWriteEnable(vk::False);
+    cmd.setCullMode(vk::CullModeFlagBits::eFront);
+
+    cmd.bindShadersEXT({vk::ShaderStageFlagBits::eVertex, vk::ShaderStageFlagBits::eFragment}, m_pipeline.get_shaders());
+    cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipeline.get_layout(), 0, {global_set, m_set}, {});
+
+    cmd.setVertexInputEXT(
+        {vk::VertexInputBindingDescription2EXT{.stride = sizeof(glm::vec3), .inputRate = vk::VertexInputRate::eVertex, .divisor = 1}},
+        {vk::VertexInputAttributeDescription2EXT{.location = 0, .format = vk::Format::eR32G32B32Sfloat}}
+    );
+    cmd.bindVertexBuffers(0, {m_vertex_buffer.get()}, {vk::DeviceSize{0}});
+    cmd.bindIndexBuffer(m_index_buffer.get(), 0, vk::IndexType::eUint32);
+    cmd.drawIndexed(36, 1, 0, 0, 1);
+
+    cmd.setDepthTestEnable(vk::True);
+    cmd.setDepthWriteEnable(vk::True);
+    cmd.setCullMode(vk::CullModeFlagBits::eNone);
+}
+
 void SkyboxPipeline::load_skybox(Engine& engine, const ImageData& data) {
     ASSERT(data.pixels != nullptr);
 
@@ -308,57 +355,13 @@ void SkyboxPipeline::load_skybox(Engine& engine, const ImageData& data) {
 Result<void> SkyboxPipeline::load_skybox(Engine& engine, const std::filesystem::path path) {
     ASSERT(!path.empty());
 
-    auto image = engine.image_loader.load(path);
+    auto image = engine.loader.load_image(path);
     if (image.has_err())
         return image.err();
-    defer(engine.image_loader.unload(*image));
+    defer(engine.loader.unload_image(*image));
 
-    load_skybox(engine, engine.image_loader.get(*image));
+    load_skybox(engine, engine.loader.get(*image));
     return ok();
-}
-
-void SkyboxPipeline::destroy(Engine& engine) const {
-    const auto wait_result = engine.vk.queue.waitIdle();
-    switch (wait_result) {
-        case vk::Result::eSuccess: break;
-        case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
-        case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
-        case vk::Result::eErrorDeviceLost: ERROR("Vulkan device lost");
-        default: ERROR("Unexpected Vulkan error");
-    }
-
-    m_vertex_buffer.destroy(engine.vk);
-    m_index_buffer.destroy(engine.vk);
-    m_cubemap.destroy(engine.vk);
-
-    m_descriptor_pool.destroy(engine.vk);
-    m_pipeline.destroy(engine.vk);
-    m_set_layout.destroy(engine.vk);
-}
-
-void SkyboxPipeline::draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) {
-    ASSERT(m_set != nullptr);
-    ASSERT(cmd != nullptr);
-    ASSERT(global_set != nullptr);
-
-    cmd.setDepthTestEnable(vk::False);
-    cmd.setDepthWriteEnable(vk::False);
-    cmd.setCullMode(vk::CullModeFlagBits::eFront);
-
-    cmd.bindShadersEXT({vk::ShaderStageFlagBits::eVertex, vk::ShaderStageFlagBits::eFragment}, m_pipeline.get_shaders());
-    cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipeline.get_layout(), 0, {global_set, m_set}, {});
-
-    cmd.setVertexInputEXT(
-        {vk::VertexInputBindingDescription2EXT{.stride = sizeof(glm::vec3), .inputRate = vk::VertexInputRate::eVertex, .divisor = 1}},
-        {vk::VertexInputAttributeDescription2EXT{.location = 0, .format = vk::Format::eR32G32B32Sfloat}}
-    );
-    cmd.bindVertexBuffers(0, {m_vertex_buffer.get()}, {vk::DeviceSize{0}});
-    cmd.bindIndexBuffer(m_index_buffer.get(), 0, vk::IndexType::eUint32);
-    cmd.drawIndexed(36, 1, 0, 0, 1);
-
-    cmd.setDepthTestEnable(vk::True);
-    cmd.setDepthWriteEnable(vk::True);
-    cmd.setCullMode(vk::CullModeFlagBits::eNone);
 }
 
 PbrPipeline PbrPipeline::create(Engine& engine, const DefaultRenderer& renderer) {
@@ -478,12 +481,12 @@ Result<PbrPipeline::TextureHandle> PbrPipeline::load_texture(
 ) {
     ASSERT(!path.empty());
 
-    auto image = engine.image_loader.load(path);
+    auto image = engine.loader.load_image(path);
     if (image.has_err())
         return image.err();
-    defer(engine.image_loader.unload(*image));
+    defer(engine.loader.unload_image(*image));
 
-    return ok(load_texture(engine, engine.image_loader.get(*image), format));
+    return ok(load_texture(engine, engine.loader.get(*image), format));
 }
 
 PbrPipeline::ModelHandle PbrPipeline::load_model(
@@ -492,26 +495,24 @@ PbrPipeline::ModelHandle PbrPipeline::load_model(
     const TextureHandle normal_map,
     const TextureHandle texture
 ) {
-    ASSERT(!data.mesh.indices.empty());
-    ASSERT(!data.mesh.vertices.empty());
     ASSERT(texture.index < m_textures.size());
     ASSERT(data.roughness >= 0.0 && data.roughness <= 1.0);
     ASSERT(data.metalness >= 0.0 && data.metalness <= 1.0);
 
     const auto index_buffer = GpuBuffer::create(engine.vk, {
-        data.mesh.indices.size() * sizeof(data.mesh.indices[0]),
+        data.indices.count * sizeof(data.indices[0]),
         vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst
     });
     const auto vertex_buffer = GpuBuffer::create(engine.vk, {
-        data.mesh.vertices.size() * sizeof(data.mesh.vertices[0]),
+        data.vertices.count * sizeof(data.vertices[0]),
         vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst
     });
 
-    index_buffer.write_slice(engine.vk, Slice<const u32>{data.mesh.indices.data(), data.mesh.indices.size()});
-    vertex_buffer.write_slice(engine.vk, Slice<const Vertex>{data.mesh.vertices.data(), data.mesh.vertices.size()});
+    index_buffer.write_slice(engine.vk, Slice<const u32>{data.indices.data, data.indices.count});
+    vertex_buffer.write_slice(engine.vk, Slice<const Vertex>{data.vertices.data, data.vertices.count});
 
     m_models.emplace_back(
-        to_u32(data.mesh.indices.size()),
+        to_u32(data.indices.count),
         index_buffer, vertex_buffer,
         normal_map, texture,
         data.roughness, data.metalness
@@ -528,11 +529,12 @@ Result<PbrPipeline::ModelHandle> PbrPipeline::load_model(
     ASSERT(!path.empty());
     ASSERT(texture.index < m_textures.size());
 
-    auto model = load_gltf(path);
+    auto model = engine.loader.load_gltf(path);
     if (model.has_err())
         return model.err();
+    defer(engine.loader.unload_gltf(*model));
 
-    return ok(load_model(engine, *model, normal_map, texture));
+    return ok(load_model(engine, engine.loader.get(*model), normal_map, texture));
 }
 
 } // namespace hg

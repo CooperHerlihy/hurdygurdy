@@ -11,7 +11,7 @@ class Engine {
 private:
     bool m_moved_from = false;
 public:
-    ImageLoader image_loader;
+    AssetLoader loader;
     Vk vk;
 
     [[nodiscard]] static Result<Engine> create();

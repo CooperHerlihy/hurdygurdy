@@ -38,8 +38,22 @@ int main() {
 
     const auto hex_texture = *model_pipeline.load_texture(*engine, "../assets/hexagon_models/Textures/hexagons_medieval.png");
 
-    const auto cube = model_pipeline.load_model(*engine, {generate_cube(), 0.2f, 0.0f}, perlin_normal_texture, gray_texture);
-    const auto sphere = model_pipeline.load_model(*engine, {generate_sphere({64, 32}), 0.2f, 1.0f}, perlin_normal_texture, gray_texture);
+    const auto cube = [&] {
+        auto cube = generate_cube();
+        return model_pipeline.load_model(*engine, {
+            {cube.indices.data(), cube.indices.size()},
+            {cube.vertices.data(), cube.vertices.size()},
+            0.2f, 0.0f,
+        }, perlin_normal_texture, gray_texture);
+    }();
+    const auto sphere = [&] {
+        auto sphere = generate_sphere({64, 32});
+        return model_pipeline.load_model(*engine, {
+            {sphere.indices.data(), sphere.indices.size()},
+            {sphere.vertices.data(), sphere.vertices.size()},
+            0.2f, 1.0f,
+        }, perlin_normal_texture, gray_texture);
+    }();
     const auto grass = *model_pipeline.load_model(*engine, "../assets/hexagon_models/Assets/gltf/tiles/base/hex_grass.gltf", default_normal_texture, hex_texture);
     const auto building = *model_pipeline.load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_home_A_blue.gltf", default_normal_texture, hex_texture);
     const auto tower = *model_pipeline.load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_tower_A_blue.gltf", default_normal_texture, hex_texture);

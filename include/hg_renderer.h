@@ -165,8 +165,7 @@ public:
         m_render_queue.emplace_back(model, transform);
     }
 
-    void clear_queue() {
-    }
+    void clear_queue() { m_render_queue.clear(); }
 
 private:
     DescriptorSetLayout m_set_layout{};

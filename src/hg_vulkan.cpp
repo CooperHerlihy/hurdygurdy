@@ -356,7 +356,7 @@ vk::CommandPool create_command_pool(Vk& vk, const vk::CommandPoolCreateFlags fla
 Result<Vk> Vk::create() {
     auto vk = ok<Vk>();
 
-    vk->stack = Arena::create(1024 * 64);
+    vk->stack = Arena{malloc_slice<byte>(1024 * 64)};
 
     const auto glfw_success = glfwInit();
     if (glfw_success == GLFW_FALSE)
@@ -442,7 +442,7 @@ void Vk::destroy() {
 #endif
     instance.destroy();
 
-    stack.destroy();
+    free_slice(stack.release());
 }
 
 GpuBuffer GpuBuffer::create(Vk& vk, const Config& config) {

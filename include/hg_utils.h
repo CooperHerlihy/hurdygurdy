@@ -281,6 +281,10 @@ template <typename T> struct Slice {
     T* data = nullptr;
     usize count = 0;
 
+    Slice() = default;
+    template <typename U> Slice(U* data, usize count) : data{static_cast<T*>(data)}, count{count} {}
+    template <typename U> Slice(const Slice<U>& other) : data{static_cast<T*>(other.data)}, count{other.count} {}
+
     T& operator[](const usize index) const {
         ASSERT(index < count);
         return data[index];
@@ -295,6 +299,13 @@ inline constexpr usize align_up(const usize size, const usize alignment) {
 }
 inline constexpr usize align_down(const usize size, const usize alignment) {
     return size & ~(alignment - 1);
+}
+
+template <typename T> Slice<T> malloc_slice(const usize count) {
+    return {reinterpret_cast<T*>(std::malloc(count * sizeof(T))), count};
+}
+template <typename T> void free_slice(Slice<T> slice) {
+    std::free(slice.data);
 }
 
 template <typename T> class Pool {
@@ -313,19 +324,12 @@ public:
         }
     }
     Slice<Block> release() {
+        check_leaks();
         Slice<Block> memory{m_blocks};
         m_blocks = Slice<Block>{};
         m_next = 0;
         return memory;
     }
-
-    [[nodiscard]] static Pool create(const usize count) {
-        Slice<Block> memory{reinterpret_cast<Block*>(std::malloc(sizeof(Block) * count)), count};
-        if (memory.data == nullptr)
-            ERROR("Could not allocate memory");
-        return Pool{memory};
-    }
-    void destroy() { std::free(m_blocks.data); }
 
     Pool(const Pool&) = delete;
     Pool& operator=(const Pool&) = delete;
@@ -397,14 +401,6 @@ public:
         m_head = 0;
         return memory;
     }
-
-    [[nodiscard]] static Arena create(const usize count) {
-        Slice<byte> memory{reinterpret_cast<byte*>(std::malloc(count)), count};
-        if (memory.data == nullptr)
-            ERROR("Could not allocate memory");
-        return Arena{memory};
-    }
-    void destroy() { std::free(m_memory.data); }
 
     Arena(const Arena&) = delete;
     Arena& operator=(const Arena&) = delete;

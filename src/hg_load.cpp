@@ -14,7 +14,7 @@
 
 namespace hg {
 
-Result<ImageLoader::Handle> ImageLoader::load(const std::filesystem::path path) {
+Result<AssetLoader::ImageHandle> AssetLoader::load_image(const std::filesystem::path path) {
     ASSERT(!path.empty());
 
     int width = 0, height = 0, channels = 0;
@@ -29,22 +29,17 @@ Result<ImageLoader::Handle> ImageLoader::load(const std::filesystem::path path) 
         return Err::ImageFileInvalid;
     }
 
-    const auto image = m_pool.alloc();
-    m_pool[image] = {
+    const auto image = m_images.alloc();
+    m_images[image] = {
         .pixels = pixels,
         .alignment = 4,
         .size = {to_u32(width), to_u32(height), 1},
     };
-    return ok<Handle>(image);
+    return ok<ImageHandle>(image);
 }
 
-void ImageLoader::unload(const Handle image) {
-    std::free(get(image).pixels);
-    m_pool.dealloc(image.handle);
-}
-
-void create_tangents(std::span<Vertex> primitives) {
-    ASSERT(primitives.size() % 3 == 0);
+void generate_tangents(Slice<Vertex> primitives) {
+    ASSERT(primitives.count % 3 == 0);
 
     SMikkTSpaceInterface mikk_functions{
         .m_getNumFaces = [](const SMikkTSpaceContext* pContext) {
@@ -77,29 +72,26 @@ void create_tangents(std::span<Vertex> primitives) {
     };
     SMikkTSpaceContext mikk_context{
         .m_pInterface = &mikk_functions,
-        .m_pUserData = reinterpret_cast<void*>(&primitives),
+        .m_pUserData = &primitives,
     };
     genTangSpaceDefault(&mikk_context);
 }
 
-Mesh create_mesh(const std::span<const Vertex> primitives) {
-    ASSERT(primitives.size() % 3 == 0);
+void weld_mesh(Slice<Vertex> out_vertices, Slice<u32> out_indices, const Slice<const Vertex> primitives) {
+    ASSERT(out_vertices.count >= primitives.count);
+    ASSERT(out_indices.count >= primitives.count);
+    ASSERT(primitives.count % 3 == 0);
 
-    Mesh mesh{};
-    mesh.indices.resize(primitives.size());
-    mesh.vertices.resize(primitives.size());
     WeldMesh(
-        reinterpret_cast<int*>(mesh.indices.data()),
-        reinterpret_cast<float*>(mesh.vertices.data()),
-        reinterpret_cast<const float*>(primitives.data()),
-        static_cast<i32>(primitives.size()),
+        reinterpret_cast<int*>(out_indices.data),
+        reinterpret_cast<float*>(out_vertices.data),
+        reinterpret_cast<const float*>(primitives.data),
+        static_cast<i32>(primitives.count),
         sizeof(Vertex) / sizeof(float)
     );
-
-    return mesh;
 }
 
-Result<GltfData> load_gltf(const std::filesystem::path path) {
+Result<AssetLoader::GltfHandle> AssetLoader::load_gltf(const std::filesystem::path path) {
     ASSERT(!path.empty());
 
     fastgltf::Parser parser;
@@ -193,12 +185,15 @@ Result<GltfData> load_gltf(const std::filesystem::path path) {
         }
     }
 
-    create_tangents(primitives);
-    model->mesh = create_mesh(primitives);
+    Slice<Vertex> primitive_slice{primitives.data(), primitives.size()};
+    generate_tangents(primitive_slice);
+    model->vertices = malloc_slice<Vertex>(primitives.size());
+    model->indices = malloc_slice<u32>(primitives.size());
+    weld_mesh(model->vertices, model->indices, primitive_slice);
 
-    ASSERT(!model->mesh.indices.empty());
-    ASSERT(!model->mesh.vertices.empty());
-    return model;
+    auto gltf = m_gltfs.alloc();
+    m_gltfs[gltf] = *model;
+    return ok<GltfHandle>(gltf);
 }
 
 } // namespace hg

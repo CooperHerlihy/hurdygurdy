@@ -11,8 +11,16 @@ Mesh generate_square() {
         { { 1.0f, -1.0f,  0.0f}, { 0.0f,  0.0f, -1.0f}, {}, { 1.0f,  0.0f}, },
         { {-1.0f, -1.0f,  0.0f}, { 0.0f,  0.0f, -1.0f}, {}, { 0.0f,  0.0f}, },
     };
-    create_tangents(square);
-    return create_mesh(square);
+    generate_tangents({square.data(), square.size()});
+    Mesh mesh{};
+    mesh.indices.resize(square.size());
+    mesh.vertices.resize(square.size());
+    weld_mesh(
+        {mesh.vertices.data(), mesh.vertices.size()},
+        {mesh.indices.data(), mesh.indices.size()},
+        {square.data(), square.size()}
+    );
+    return mesh;
 }
 
 Mesh generate_cube() {
@@ -59,8 +67,16 @@ Mesh generate_cube() {
         { { 1.0f,  1.0f, -1.0f}, { 0.0f,  1.0f,  0.0f}, {}, {1.0f, 0.0f}, },
         { {-1.0f,  1.0f, -1.0f}, { 0.0f,  1.0f,  0.0f}, {}, {0.0f, 0.0f}, },
     };
-    create_tangents(cube);
-    return create_mesh(cube);
+    generate_tangents({cube.data(), cube.size()});
+    Mesh mesh{};
+    mesh.indices.resize(cube.size());
+    mesh.vertices.resize(cube.size());
+    weld_mesh(
+        {mesh.vertices.data(), mesh.vertices.size()},
+        {mesh.indices.data(), mesh.indices.size()},
+        {cube.data(), cube.size()}
+    );
+    return mesh;
 }
 
 Mesh generate_sphere(const glm::uvec2 fidelity) {
@@ -130,11 +146,15 @@ Mesh generate_sphere(const glm::uvec2 fidelity) {
         }
     }
 
-    create_tangents(primitives);
-    auto sphere = create_mesh(primitives);
-
-    ASSERT(!sphere.indices.empty());
-    ASSERT(!sphere.vertices.empty());
+    generate_tangents({primitives.data(), primitives.size()});
+    Mesh sphere{};
+    sphere.indices.resize(primitives.size());
+    sphere.vertices.resize(primitives.size());
+    weld_mesh(
+        {sphere.vertices.data(), sphere.vertices.size()},
+        {sphere.indices.data(), sphere.indices.size()},
+        {primitives.data(), primitives.size()}
+    );
     return sphere;
 }
 
