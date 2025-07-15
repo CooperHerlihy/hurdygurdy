@@ -14,59 +14,35 @@
 
 namespace hg {
 
-Result<AssetLoader::ImageHandle> AssetLoader::load_image(const std::filesystem::path path) {
-    ASSERT(!path.empty());
-
-    int width = 0, height = 0, channels = 0;
-    const auto pixels = stbi_load(path.string().data(), &width, &height, &channels, STBI_rgb_alpha);
-    if (pixels == nullptr) {
-        LOGF_WARN("Image file not found: {}", path.string());
-        return Err::ImageFileNotFound;
-    }
-    if (width <= 0 || height <= 0 || channels <= 0) {
-        LOGF_WARN("Image file invalid; width, height, and/or channels are zero: {}", path.string());
-        std::free(pixels);
-        return Err::ImageFileInvalid;
-    }
-
-    const auto image = m_images.alloc();
-    m_images[image] = {
-        .pixels = pixels,
-        .alignment = 4,
-        .size = {to_u32(width), to_u32(height), 1},
-    };
-    return ok<ImageHandle>(image);
-}
-
 void generate_tangents(Slice<Vertex> primitives) {
     ASSERT(primitives.count % 3 == 0);
 
     SMikkTSpaceInterface mikk_functions{
         .m_getNumFaces = [](const SMikkTSpaceContext* pContext) {
-            return static_cast<int>(static_cast<std::span<Vertex>*>(pContext->m_pUserData)->size() / 3);
+            return static_cast<int>(static_cast<Slice<Vertex>*>(pContext->m_pUserData)->count / 3);
         },
         .m_getNumVerticesOfFace = [](const SMikkTSpaceContext*, const int) {
             return 3;
         },
         .m_getPosition = [](const SMikkTSpaceContext * pContext, float fvPosOut[], const int iFace, const int iVert) {
-            glm::vec3 pos = (*static_cast<std::span<Vertex>*>(pContext->m_pUserData))[iFace * 3 + iVert].position;
+            glm::vec3 pos = (*static_cast<Slice<Vertex>*>(pContext->m_pUserData))[iFace * 3 + iVert].position;
             fvPosOut[0] = pos.x;
             fvPosOut[1] = pos.y;
             fvPosOut[2] = pos.z;
         },
         .m_getNormal = [](const SMikkTSpaceContext * pContext, float fvNormOut[], const int iFace, const int iVert) {
-            glm::vec3 normal = (*static_cast<std::span<Vertex>*>(pContext->m_pUserData))[iFace * 3 + iVert].normal;
+            glm::vec3 normal = (*static_cast<Slice<Vertex>*>(pContext->m_pUserData))[iFace * 3 + iVert].normal;
             fvNormOut[0] = normal.x;
             fvNormOut[1] = normal.y;
             fvNormOut[2] = normal.z;
         } ,
         .m_getTexCoord = [](const SMikkTSpaceContext * pContext, float fvTexcOut[], const int iFace, const int iVert) {
-            glm::vec2 tex = (*static_cast<std::span<Vertex>*>(pContext->m_pUserData))[iFace * 3 + iVert].tex_coord;
+            glm::vec2 tex = (*static_cast<Slice<Vertex>*>(pContext->m_pUserData))[iFace * 3 + iVert].tex_coord;
             fvTexcOut[0] = tex.x;
             fvTexcOut[1] = tex.y;
         },
         .m_setTSpaceBasic = [](const SMikkTSpaceContext * pContext, const float fvTangent[], const float fSign, const int iFace, const int iVert) {
-            (*static_cast<std::span<Vertex>*>(pContext->m_pUserData))[iFace * 3 + iVert].tangent = {fvTangent[0], fvTangent[1], fvTangent[2], fSign};
+            (*static_cast<Slice<Vertex>*>(pContext->m_pUserData))[iFace * 3 + iVert].tangent = {fvTangent[0], fvTangent[1], fvTangent[2], fSign};
         },
         .m_setTSpace = nullptr,
     };
@@ -89,6 +65,30 @@ void weld_mesh(Slice<Vertex> out_vertices, Slice<u32> out_indices, const Slice<c
         static_cast<i32>(primitives.count),
         sizeof(Vertex) / sizeof(float)
     );
+}
+
+Result<AssetLoader::ImageHandle> AssetLoader::load_image(const std::filesystem::path path) {
+    ASSERT(!path.empty());
+
+    int width = 0, height = 0, channels = 0;
+    const auto pixels = stbi_load(path.string().data(), &width, &height, &channels, STBI_rgb_alpha);
+    if (pixels == nullptr) {
+        LOGF_WARN("Image file not found: {}", path.string());
+        return Err::ImageFileNotFound;
+    }
+    if (width <= 0 || height <= 0 || channels <= 0) {
+        LOGF_WARN("Image file invalid; width, height, and/or channels are zero: {}", path.string());
+        std::free(pixels);
+        return Err::ImageFileInvalid;
+    }
+
+    const auto image = m_images.alloc();
+    m_images[image] = {
+        .pixels = pixels,
+        .alignment = 4,
+        .size = {to_u32(width), to_u32(height), 1},
+    };
+    return ok<ImageHandle>(image);
 }
 
 Result<AssetLoader::GltfHandle> AssetLoader::load_gltf(const std::filesystem::path path) {

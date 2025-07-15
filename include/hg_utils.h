@@ -285,6 +285,12 @@ template <typename T> struct Slice {
     template <typename U> Slice(U* data, usize count) : data{static_cast<T*>(data)}, count{count} {}
     template <typename U> Slice(const Slice<U>& other) : data{static_cast<T*>(other.data)}, count{other.count} {}
 
+    template <typename U> Slice(const std::span<U>& other) : data{static_cast<T*>(other.data())}, count{other.size()} {}
+    template <typename U, usize N> Slice(std::array<U, N>& other) : data{static_cast<T*>(other.data())}, count{other.size()} {}
+    template <typename U, usize N> Slice(const std::array<U, N>& other) : data{static_cast<T*>(other.data())}, count{other.size()} {}
+
+    template <typename U> operator std::span<U>() const { return {static_cast<U*>(data), count}; }
+
     T& operator[](const usize index) const {
         ASSERT(index < count);
         return data[index];

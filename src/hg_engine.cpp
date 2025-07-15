@@ -27,10 +27,11 @@ Engine::~Engine() noexcept {
 }
 
 Engine::Engine(Engine&& other) noexcept
-    : m_moved_from{other.m_moved_from}
-    , loader{std::move(other.loader)}
+    : loader{std::move(other.loader)}
     , vk{std::move(other.vk)}
 {
+    if (other.m_moved_from)
+        ERROR("Engine already moved from");
     other.m_moved_from = true;
 }
 

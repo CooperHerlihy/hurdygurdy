@@ -64,7 +64,6 @@ public:
         m_gltfs.dealloc(gltf.handle);
     }
 
-
 private:
     Pool<ImageData> m_images{};
     Pool<GltfData> m_gltfs{};

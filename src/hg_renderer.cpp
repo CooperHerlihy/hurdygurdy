@@ -121,7 +121,7 @@ void DefaultRenderer::destroy(Engine& engine) const {
     m_window.destroy();
 }
 
-[[nodiscard]] Result<void> DefaultRenderer::draw(Engine& engine, const std::span<Pipeline*> pipelines) {
+[[nodiscard]] Result<void> DefaultRenderer::draw(Engine& engine, const Slice<Pipeline*> pipelines) {
     const auto frame_result = [&]() -> Result<void> {
         const auto begin = m_swapchain.begin_frame(engine.vk);
         if (begin.has_err())
@@ -308,7 +308,7 @@ void SkyboxPipeline::draw(const vk::CommandBuffer cmd, const vk::DescriptorSet g
     cmd.setDepthWriteEnable(vk::False);
     cmd.setCullMode(vk::CullModeFlagBits::eFront);
 
-    cmd.bindShadersEXT({vk::ShaderStageFlagBits::eVertex, vk::ShaderStageFlagBits::eFragment}, m_pipeline.get_shaders());
+    cmd.bindShadersEXT({vk::ShaderStageFlagBits::eVertex, vk::ShaderStageFlagBits::eFragment}, std::span{m_pipeline.get_shaders()});
     cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipeline.get_layout(), 0, {global_set, m_set}, {});
 
     cmd.setVertexInputEXT(
@@ -433,7 +433,7 @@ void PbrPipeline::draw(const vk::CommandBuffer cmd, const vk::DescriptorSet glob
         vk::VertexInputAttributeDescription2EXT{.location = 2, .format = vk::Format::eR32G32B32A32Sfloat, .offset = offsetof(Vertex, tangent)},
         vk::VertexInputAttributeDescription2EXT{.location = 3, .format = vk::Format::eR32G32Sfloat, .offset = offsetof(Vertex, tex_coord)}
     });
-    cmd.bindShadersEXT({vk::ShaderStageFlagBits::eVertex, vk::ShaderStageFlagBits::eFragment}, m_pipeline.get_shaders());
+    cmd.bindShadersEXT({vk::ShaderStageFlagBits::eVertex, vk::ShaderStageFlagBits::eFragment}, std::span{m_pipeline.get_shaders()});
 
     cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipeline.get_layout(), 0, {global_set, m_texture_set}, {});
     for (const auto& ticket : m_render_queue) {

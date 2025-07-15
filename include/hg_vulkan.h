@@ -6,7 +6,6 @@
 
 #include <array>
 #include <filesystem>
-#include <span>
 
 namespace hg {
 
@@ -268,8 +267,8 @@ public:
     }
 
     struct Config {
-        std::span<const vk::DescriptorSetLayoutBinding> bindings;
-        std::span<const vk::DescriptorBindingFlags> flags = {};
+        Slice<const vk::DescriptorSetLayoutBinding> bindings;
+        Slice<const vk::DescriptorBindingFlags> flags = {};
     };
     [[nodiscard]] static DescriptorSetLayout create(Vk& vk, const Config& config);
 
@@ -292,7 +291,7 @@ public:
 
     struct Config {
         u32 max_sets = 0;
-        std::span<const vk::DescriptorPoolSize> descriptors{};
+        Slice<const vk::DescriptorPoolSize> descriptors{};
     };
     [[nodiscard]] static DescriptorPool create(Vk& vk, const Config& config);
 
@@ -304,8 +303,8 @@ public:
 
     [[nodiscard]] Result<void> allocate_sets(
         Vk& vk,
-        std::span<const vk::DescriptorSetLayout> layouts,
-        std::span<vk::DescriptorSet> out_sets
+        Slice<const vk::DescriptorSetLayout> layouts,
+        Slice<vk::DescriptorSet> out_sets
     );
     [[nodiscard]] inline Result<vk::DescriptorSet> allocate_set(Vk& vk, const vk::DescriptorSetLayout layout) {
         auto set = ok<vk::DescriptorSet>();
@@ -337,8 +336,8 @@ public:
     }
 
     struct Config {
-        std::span<const vk::DescriptorSetLayout> set_layouts{};
-        std::span<const vk::PushConstantRange> push_ranges{};
+        Slice<const vk::DescriptorSetLayout> set_layouts{};
+        Slice<const vk::PushConstantRange> push_ranges{};
     };
     [[nodiscard]] static PipelineLayout create(Vk& vk, const Config& config);
 
@@ -364,8 +363,8 @@ public:
         vk::ShaderCodeTypeEXT code_type{vk::ShaderCodeTypeEXT::eSpirv};
         vk::ShaderStageFlagBits stage{};
         vk::ShaderStageFlagBits next_stage{};
-        std::span<const vk::DescriptorSetLayout> set_layouts{};
-        std::span<const vk::PushConstantRange> push_ranges{};
+        Slice<const vk::DescriptorSetLayout> set_layouts{};
+        Slice<const vk::PushConstantRange> push_ranges{};
     };
     [[nodiscard]] static Result<UnlinkedShader> create(Vk& vk, const Config& config);
 
@@ -382,7 +381,7 @@ private:
 class GraphicsPipeline {
 public:
     vk::PipelineLayout get_layout() const { return m_layout.get(); }
-    std::span<const vk::ShaderEXT> get_shaders() const {
+    Slice<const vk::ShaderEXT> get_shaders() const {
         for (const auto shader : m_shaders) {
             ASSERT(shader != nullptr);
         }
@@ -390,8 +389,8 @@ public:
     }
 
     struct Config {
-        std::span<const vk::DescriptorSetLayout> set_layouts{};
-        std::span<const vk::PushConstantRange> push_ranges{};
+        Slice<const vk::DescriptorSetLayout> set_layouts{};
+        Slice<const vk::PushConstantRange> push_ranges{};
         std::filesystem::path vertex_shader_path{};
         std::filesystem::path fragment_shader_path{};
         vk::ShaderCodeTypeEXT code_type{vk::ShaderCodeTypeEXT::eSpirv};
@@ -460,7 +459,7 @@ private:
     vk::Semaphore m_semaphore = nullptr;
 };
 
-void allocate_command_buffers(Vk& vk, const std::span<vk::CommandBuffer> out_cmds);
+void allocate_command_buffers(Vk& vk, const Slice<vk::CommandBuffer> out_cmds);
 
 [[nodiscard]] vk::CommandBuffer begin_single_time_commands(Vk& vk);
 void end_single_time_commands(Vk& vk, vk::CommandBuffer cmd);

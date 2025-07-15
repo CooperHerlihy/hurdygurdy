@@ -46,7 +46,7 @@ public:
     Result<void> resize(Engine& engine);
     void destroy(Engine& engine) const;
 
-    Result<void> draw(Engine& engine, std::span<Pipeline*> pipelines);
+    Result<void> draw(Engine& engine, Slice<Pipeline*> pipelines);
 
     void update_projection(Engine& engine, const glm::mat4& projection) const {
         m_vp_buffer.write(engine.vk, projection, offsetof(ViewProjectionUniform, projection));

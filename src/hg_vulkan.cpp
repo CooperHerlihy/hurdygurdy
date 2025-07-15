@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <array>
 #include <fstream>
-#include <span>
 
 namespace hg {
 
@@ -1032,18 +1031,18 @@ Texture Texture::create_cubemap(Vk& vk, const ImageData& data, const Config& con
 }
 
 DescriptorSetLayout DescriptorSetLayout::create(Vk& vk, const Config& config) {
-    ASSERT(!config.bindings.empty());
-    if (!config.flags.empty())
-        ASSERT(config.flags.size() == config.bindings.size());
+    ASSERT(config.bindings.count > 0);
+    if (config.flags.count > 0)
+        ASSERT(config.flags.count == config.bindings.count);
 
     const vk::DescriptorSetLayoutBindingFlagsCreateInfo flag_info{
-        .bindingCount = to_u32(config.flags.size()),
-        .pBindingFlags = config.flags.data(),
+        .bindingCount = to_u32(config.flags.count),
+        .pBindingFlags = config.flags.data,
     };
     const auto vk_layout = vk.device.createDescriptorSetLayout({
-        .pNext = config.flags.empty() ? nullptr : &flag_info,
-        .bindingCount = to_u32(config.bindings.size()),
-        .pBindings = config.bindings.data(),
+        .pNext = config.flags.count == 0 ? nullptr : &flag_info,
+        .bindingCount = to_u32(config.bindings.count),
+        .pBindings = config.bindings.data,
     });
     switch (vk_layout.result) {
         case vk::Result::eSuccess: break;
@@ -1061,15 +1060,15 @@ DescriptorSetLayout DescriptorSetLayout::create(Vk& vk, const Config& config) {
 
 DescriptorPool DescriptorPool::create(Vk& vk, const Config& config) {
     ASSERT(config.max_sets >= 1);
-    ASSERT(!config.descriptors.empty());
+    ASSERT(config.descriptors.count > 0);
     for (const auto& descriptor : config.descriptors) {
         ASSERT(descriptor.descriptorCount > 0);
     }
 
     const auto pool = vk.device.createDescriptorPool({
         .maxSets = config.max_sets, 
-        .poolSizeCount = to_u32(config.descriptors.size()), 
-        .pPoolSizes = config.descriptors.data(),
+        .poolSizeCount = to_u32(config.descriptors.count), 
+        .pPoolSizes = config.descriptors.data,
     });
     switch (pool.result) {
         case vk::Result::eSuccess: break;
@@ -1088,26 +1087,26 @@ DescriptorPool DescriptorPool::create(Vk& vk, const Config& config) {
 
 Result<void> DescriptorPool::allocate_sets(
     Vk& vk,
-    const std::span<const vk::DescriptorSetLayout> layouts,
-    const std::span<vk::DescriptorSet> out_sets
+    const Slice<const vk::DescriptorSetLayout> layouts,
+    const Slice<vk::DescriptorSet> out_sets
 ) {
     ASSERT(m_pool != nullptr);
-    ASSERT(!layouts.empty());
+    ASSERT(layouts.count > 0);
     for (const auto& layout : layouts) {
         ASSERT(layout != nullptr);
     }
-    ASSERT(!out_sets.empty());
+    ASSERT(out_sets.count > 0);
     for (const auto& set : out_sets) {
         ASSERT(set == nullptr);
     }
-    ASSERT(layouts.size() == out_sets.size());
+    ASSERT(layouts.count == out_sets.count);
 
     const vk::DescriptorSetAllocateInfo alloc_info{
         .descriptorPool = m_pool,
-        .descriptorSetCount = to_u32(layouts.size()),
-        .pSetLayouts = layouts.data(),
+        .descriptorSetCount = to_u32(layouts.count),
+        .pSetLayouts = layouts.data,
     };
-    const auto set_result = vk.device.allocateDescriptorSets(&alloc_info, out_sets.data());
+    const auto set_result = vk.device.allocateDescriptorSets(&alloc_info, out_sets.data);
     switch (set_result) {
         case vk::Result::eSuccess: break;
         case vk::Result::eErrorOutOfPoolMemory: return Err::OutOfDescriptorSets;
@@ -1166,10 +1165,10 @@ void write_image_sampler_descriptor(
 
 PipelineLayout PipelineLayout::create(Vk& vk, const Config& config) {
     vk::PipelineLayoutCreateInfo layout_info{
-        .setLayoutCount = to_u32(config.set_layouts.size()),
-        .pSetLayouts = config.set_layouts.data(),
-        .pushConstantRangeCount = to_u32(config.push_ranges.size()),
-        .pPushConstantRanges = config.push_ranges.data(),
+        .setLayoutCount = to_u32(config.set_layouts.count),
+        .pSetLayouts = config.set_layouts.data,
+        .pushConstantRangeCount = to_u32(config.push_ranges.count),
+        .pPushConstantRanges = config.push_ranges.data,
     };
     const auto vk_layout= vk.device.createPipelineLayout(layout_info, nullptr);
     switch (vk_layout.result) {
@@ -1220,10 +1219,10 @@ Result<UnlinkedShader> UnlinkedShader::create(Vk& vk, const Config& config) {
         .codeSize = code->count,
         .pCode = code->data,
         .pName = "main",
-        .setLayoutCount = to_u32(config.set_layouts.size()),
-        .pSetLayouts = config.set_layouts.data(),
-        .pushConstantRangeCount = to_u32(config.push_ranges.size()),
-        .pPushConstantRanges = config.push_ranges.data(),
+        .setLayoutCount = to_u32(config.set_layouts.count),
+        .pSetLayouts = config.set_layouts.data,
+        .pushConstantRangeCount = to_u32(config.push_ranges.count),
+        .pPushConstantRanges = config.push_ranges.data,
     });
     switch (vk_shader.result) {
         case vk::Result::eSuccess: break;
@@ -1278,10 +1277,10 @@ Result<GraphicsPipeline> GraphicsPipeline::create(Vk& vk, const Config& config) 
             .codeSize = vertex_code->count,
             .pCode = vertex_code->data,
             .pName = "main",
-            .setLayoutCount = to_u32(config.set_layouts.size()),
-            .pSetLayouts = config.set_layouts.data(),
-            .pushConstantRangeCount = to_u32(config.push_ranges.size()),
-            .pPushConstantRanges = config.push_ranges.data(),
+            .setLayoutCount = to_u32(config.set_layouts.count),
+            .pSetLayouts = config.set_layouts.data,
+            .pushConstantRangeCount = to_u32(config.push_ranges.count),
+            .pPushConstantRanges = config.push_ranges.data,
         },
         vk::ShaderCreateInfoEXT{
             .flags = vk::ShaderCreateFlagBitsEXT::eLinkStage,
@@ -1291,10 +1290,10 @@ Result<GraphicsPipeline> GraphicsPipeline::create(Vk& vk, const Config& config) 
             .codeSize = fragment_code->count,
             .pCode = fragment_code->data,
             .pName = "main",
-            .setLayoutCount = to_u32(config.set_layouts.size()),
-            .pSetLayouts = config.set_layouts.data(),
-            .pushConstantRangeCount = to_u32(config.push_ranges.size()),
-            .pPushConstantRanges = config.push_ranges.data(),
+            .setLayoutCount = to_u32(config.set_layouts.count),
+            .pSetLayouts = config.set_layouts.data,
+            .pushConstantRangeCount = to_u32(config.push_ranges.count),
+            .pPushConstantRanges = config.push_ranges.data,
         },
     };
 
@@ -1381,12 +1380,12 @@ Semaphore Semaphore::create(Vk& vk) {
     return semaphore;
 }
 
-void allocate_command_buffers(Vk& vk, const std::span<vk::CommandBuffer> out_cmds) {
+void allocate_command_buffers(Vk& vk, const Slice<vk::CommandBuffer> out_cmds) {
     const vk::CommandBufferAllocateInfo alloc_info{
         .commandPool = vk.command_pool,
-        .commandBufferCount = to_u32(out_cmds.size()),
+        .commandBufferCount = to_u32(out_cmds.count),
     };
-    const auto cmd_result = vk.device.allocateCommandBuffers(&alloc_info, out_cmds.data());
+    const auto cmd_result = vk.device.allocateCommandBuffers(&alloc_info, out_cmds.data);
     switch (cmd_result) {
         case vk::Result::eSuccess: break;
         case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");

@@ -29,8 +29,8 @@ public:
     [[nodiscard]] constexpr usize width() const { return m_stride; }
     [[nodiscard]] constexpr usize height() const { return m_vals.size() / m_stride; }
 
-    [[nodiscard]] constexpr std::span<T> operator[](usize y) { return {&m_vals[y * m_stride], m_stride}; }
-    [[nodiscard]] constexpr std::span<const T> operator[](usize y) const { return {&m_vals[y * m_stride], m_stride}; }
+    [[nodiscard]] constexpr Slice<T> operator[](usize y) { return {&m_vals[y * m_stride], m_stride}; }
+    [[nodiscard]] constexpr Slice<const T> operator[](usize y) const { return {&m_vals[y * m_stride], m_stride}; }
 
     [[nodiscard]] constexpr T* data() { return m_vals.data(); }
     [[nodiscard]] constexpr const T* data() const { return m_vals.data(); }
