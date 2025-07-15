@@ -53,12 +53,12 @@ void generate_tangents(Slice<Vertex> primitives) {
     genTangSpaceDefault(&mikk_context);
 }
 
-void weld_mesh(Slice<Vertex> out_vertices, Slice<u32> out_indices, const Slice<const Vertex> primitives) {
+int weld_mesh(Slice<Vertex> out_vertices, Slice<u32> out_indices, const Slice<const Vertex> primitives) {
     ASSERT(out_vertices.count >= primitives.count);
     ASSERT(out_indices.count >= primitives.count);
     ASSERT(primitives.count % 3 == 0);
 
-    WeldMesh(
+    return WeldMesh(
         reinterpret_cast<int*>(out_indices.data),
         reinterpret_cast<float*>(out_vertices.data),
         reinterpret_cast<const float*>(primitives.data),
@@ -122,16 +122,15 @@ Result<AssetLoader::GltfHandle> AssetLoader::load_gltf(const std::filesystem::pa
         }
     }
 
-    auto model = ok<GltfData>();
-    model->roughness = 0.5f;
-    model->metalness = 0.0f;
-
-    std::vector<Vertex> primitives{};
+    f32 roughness = 0.5f;
+    f32 metalness = 0.0f;
+    Slice<Vertex> primitives{};
+    defer(free_slice(primitives));
     for (const auto& mesh : asset->meshes) {
         for (const auto& primitive : mesh.primitives) {
             if (primitive.materialIndex.has_value()) {
-                model->roughness = asset->materials[*primitive.materialIndex].pbrData.roughnessFactor;
-                model->metalness = asset->materials[*primitive.materialIndex].pbrData.metallicFactor;
+                roughness = asset->materials[*primitive.materialIndex].pbrData.roughnessFactor;
+                metalness = asset->materials[*primitive.materialIndex].pbrData.metallicFactor;
             }
 
             if (!primitive.indicesAccessor.has_value()) {
@@ -144,6 +143,10 @@ Result<AssetLoader::GltfHandle> AssetLoader::load_gltf(const std::filesystem::pa
             auto& normal_accessor = asset->accessors[primitive.findAttribute("NORMAL")->accessorIndex];
             auto& tex_coord_accessor = asset->accessors[primitive.findAttribute("TEXCOORD_0")->accessorIndex];
 
+            if (index_accessor.count % 3 != 0) {
+                LOGF_ERROR("Gltf file invalid; primitives are not a multiple of 3: {}", path.string());
+                return Err::GltfFileInvalid;
+            }
             if (!position_accessor.bufferViewIndex.has_value()) {
                 LOGF_ERROR("Gltf file invalid; primitive has no position accessor: {}", path.string());
                 return Err::GltfFileInvalid;
@@ -169,30 +172,32 @@ Result<AssetLoader::GltfHandle> AssetLoader::load_gltf(const std::filesystem::pa
                 return Err::GltfFileInvalid;
             }
 
-            fastgltf::iterateAccessor<u32>(asset.get(), index_accessor, [&](u32 index) { 
-                primitives.emplace_back(
+            usize begin = primitives.count;
+            primitives = realloc_slice(primitives, primitives.count + index_accessor.count);
+
+            fastgltf::iterateAccessorWithIndex<u32>(asset.get(), index_accessor, [&](u32 index, usize i) { 
+                primitives[begin + i] = {
                     fastgltf::getAccessorElement<glm::vec3>(asset.get(), position_accessor, index) * glm::vec3{1.0f, -1.0f, -1.0f},
                     fastgltf::getAccessorElement<glm::vec3>(asset.get(), normal_accessor, index) * glm::vec3{1.0f, -1.0f, -1.0f},
                     glm::vec4{},
                     fastgltf::getAccessorElement<glm::vec2>(asset.get(), tex_coord_accessor, index)
-                );
+                };
             });
-
-            if (primitives.size() % 3 != 0) {
-                LOGF_ERROR("Gltf file invalid; primitives are not a multiple of 3: {}", path.string());
-                return Err::GltfFileInvalid;
-            }
         }
     }
 
-    Slice<Vertex> primitive_slice{primitives.data(), primitives.size()};
-    generate_tangents(primitive_slice);
-    model->vertices = malloc_slice<Vertex>(primitives.size());
-    model->indices = malloc_slice<u32>(primitives.size());
-    weld_mesh(model->vertices, model->indices, primitive_slice);
-
     auto gltf = m_gltfs.alloc();
-    m_gltfs[gltf] = *model;
+    auto& model = m_gltfs[gltf];
+    model = {
+        .indices = malloc_slice<u32>(primitives.count),
+        .vertices = malloc_slice<Vertex>(primitives.count),
+        .roughness = roughness,
+        .metalness = metalness,
+    };
+
+    generate_tangents(primitives);
+    weld_mesh(model.vertices, model.indices, primitives);
+
     return ok<GltfHandle>(gltf);
 }
 

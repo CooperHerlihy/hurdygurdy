@@ -20,7 +20,7 @@ struct Vertex {
 };
 
 void generate_tangents(Slice<Vertex> primitives);
-void weld_mesh(Slice<Vertex> out_vertices, Slice<u32> out_indices, Slice<const Vertex> primitives);
+int weld_mesh(Slice<Vertex> out_vertices, Slice<u32> out_indices, Slice<const Vertex> primitives);
 
 struct GltfData {
     Slice<u32> indices{};

@@ -2,90 +2,91 @@
 
 namespace hg {
 
-Mesh generate_square() {
-    std::vector<Vertex> square{
-        { {-1.0f, -1.0f,  0.0f}, { 0.0f,  0.0f, -1.0f}, {}, { 0.0f,  0.0f}, },
-        { {-1.0f,  1.0f,  0.0f}, { 0.0f,  0.0f, -1.0f}, {}, { 0.0f,  1.0f}, },
-        { { 1.0f,  1.0f,  0.0f}, { 0.0f,  0.0f, -1.0f}, {}, { 1.0f,  1.0f}, },
-        { { 1.0f,  1.0f,  0.0f}, { 0.0f,  0.0f, -1.0f}, {}, { 1.0f,  1.0f}, },
-        { { 1.0f, -1.0f,  0.0f}, { 0.0f,  0.0f, -1.0f}, {}, { 1.0f,  0.0f}, },
-        { {-1.0f, -1.0f,  0.0f}, { 0.0f,  0.0f, -1.0f}, {}, { 0.0f,  0.0f}, },
-    };
-    generate_tangents({square.data(), square.size()});
-    Mesh mesh{};
-    mesh.indices.resize(square.size());
-    mesh.vertices.resize(square.size());
-    weld_mesh(
-        {mesh.vertices.data(), mesh.vertices.size()},
-        {mesh.indices.data(), mesh.indices.size()},
-        {square.data(), square.size()}
-    );
+Generator::MeshHandle Generator::generate_square(MeshHandle mesh) {
+    Slice<Vertex> primitives = m_stack.alloc<Vertex>(6);
+    defer(m_stack.dealloc(primitives));
+
+    primitives[0] = { {-1.0f, -1.0f,  0.0f}, { 0.0f,  0.0f, -1.0f}, {}, { 0.0f,  0.0f}, };
+    primitives[1] = { {-1.0f,  1.0f,  0.0f}, { 0.0f,  0.0f, -1.0f}, {}, { 0.0f,  1.0f}, };
+    primitives[2] = { { 1.0f,  1.0f,  0.0f}, { 0.0f,  0.0f, -1.0f}, {}, { 1.0f,  1.0f}, };
+    primitives[3] = { { 1.0f,  1.0f,  0.0f}, { 0.0f,  0.0f, -1.0f}, {}, { 1.0f,  1.0f}, };
+    primitives[4] = { { 1.0f, -1.0f,  0.0f}, { 0.0f,  0.0f, -1.0f}, {}, { 1.0f,  0.0f}, };
+    primitives[5] = { {-1.0f, -1.0f,  0.0f}, { 0.0f,  0.0f, -1.0f}, {}, { 0.0f,  0.0f}, };
+    generate_tangents(primitives);
+
+    auto& square = get(mesh);
+    square.indices = malloc_slice<u32>(primitives.count);
+    square.vertices = malloc_slice<Vertex>(primitives.count);
+    int count = weld_mesh(square.vertices, square.indices, primitives);
+    square.vertices = realloc_slice(square.vertices, count);
+
     return mesh;
 }
 
-Mesh generate_cube() {
-    std::vector<Vertex> cube{
-        { {-1.0f, -1.0f,  1.0f}, { 0.0f, -1.0f,  0.0f}, {}, {0.0f, 0.0f}, },
-        { {-1.0f, -1.0f, -1.0f}, { 0.0f, -1.0f,  0.0f}, {}, {0.0f, 1.0f}, },
-        { { 1.0f, -1.0f, -1.0f}, { 0.0f, -1.0f,  0.0f}, {}, {1.0f, 1.0f}, },
-        { { 1.0f, -1.0f, -1.0f}, { 0.0f, -1.0f,  0.0f}, {}, {1.0f, 1.0f}, },
-        { { 1.0f, -1.0f,  1.0f}, { 0.0f, -1.0f,  0.0f}, {}, {1.0f, 0.0f}, },
-        { {-1.0f, -1.0f,  1.0f}, { 0.0f, -1.0f,  0.0f}, {}, {0.0f, 0.0f}, },
+Generator::MeshHandle Generator::generate_cube(MeshHandle mesh) {
+    Slice<Vertex> primitives = m_stack.alloc<Vertex>(36);
+    defer(m_stack.dealloc(primitives));
 
-        { {-1.0f, -1.0f,  1.0f}, {-1.0f,  0.0f,  0.0f}, {}, {0.0f, 0.0f}, },
-        { {-1.0f,  1.0f,  1.0f}, {-1.0f,  0.0f,  0.0f}, {}, {0.0f, 1.0f}, },
-        { {-1.0f,  1.0f, -1.0f}, {-1.0f,  0.0f,  0.0f}, {}, {1.0f, 1.0f}, },
-        { {-1.0f,  1.0f, -1.0f}, {-1.0f,  0.0f,  0.0f}, {}, {1.0f, 1.0f}, },
-        { {-1.0f, -1.0f, -1.0f}, {-1.0f,  0.0f,  0.0f}, {}, {1.0f, 0.0f}, },
-        { {-1.0f, -1.0f,  1.0f}, {-1.0f,  0.0f,  0.0f}, {}, {0.0f, 0.0f}, },
+    primitives[ 0] = { {-1.0f, -1.0f,  1.0f}, { 0.0f, -1.0f,  0.0f}, {}, {0.0f, 0.0f}, };
+    primitives[ 1] = { {-1.0f, -1.0f, -1.0f}, { 0.0f, -1.0f,  0.0f}, {}, {0.0f, 1.0f}, };
+    primitives[ 2] = { { 1.0f, -1.0f, -1.0f}, { 0.0f, -1.0f,  0.0f}, {}, {1.0f, 1.0f}, };
+    primitives[ 3] = { { 1.0f, -1.0f, -1.0f}, { 0.0f, -1.0f,  0.0f}, {}, {1.0f, 1.0f}, };
+    primitives[ 4] = { { 1.0f, -1.0f,  1.0f}, { 0.0f, -1.0f,  0.0f}, {}, {1.0f, 0.0f}, };
+    primitives[ 5] = { {-1.0f, -1.0f,  1.0f}, { 0.0f, -1.0f,  0.0f}, {}, {0.0f, 0.0f}, };
 
-        { {-1.0f, -1.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}, {}, {0.0f, 0.0f}, },
-        { {-1.0f,  1.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}, {}, {0.0f, 1.0f}, },
-        { { 1.0f,  1.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}, {}, {1.0f, 1.0f}, },
-        { { 1.0f,  1.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}, {}, {1.0f, 1.0f}, },
-        { { 1.0f, -1.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}, {}, {1.0f, 0.0f}, },
-        { {-1.0f, -1.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}, {}, {0.0f, 0.0f}, },
+    primitives[ 6] = { {-1.0f, -1.0f,  1.0f}, {-1.0f,  0.0f,  0.0f}, {}, {0.0f, 0.0f}, };
+    primitives[ 7] = { {-1.0f,  1.0f,  1.0f}, {-1.0f,  0.0f,  0.0f}, {}, {0.0f, 1.0f}, };
+    primitives[ 8] = { {-1.0f,  1.0f, -1.0f}, {-1.0f,  0.0f,  0.0f}, {}, {1.0f, 1.0f}, };
+    primitives[ 9] = { {-1.0f,  1.0f, -1.0f}, {-1.0f,  0.0f,  0.0f}, {}, {1.0f, 1.0f}, };
+    primitives[10] = { {-1.0f, -1.0f, -1.0f}, {-1.0f,  0.0f,  0.0f}, {}, {1.0f, 0.0f}, };
+    primitives[11] = { {-1.0f, -1.0f,  1.0f}, {-1.0f,  0.0f,  0.0f}, {}, {0.0f, 0.0f}, };
 
-        { { 1.0f, -1.0f, -1.0f}, { 1.0f,  0.0f,  0.0f}, {}, {0.0f, 0.0f}, },
-        { { 1.0f,  1.0f, -1.0f}, { 1.0f,  0.0f,  0.0f}, {}, {0.0f, 1.0f}, },
-        { { 1.0f,  1.0f,  1.0f}, { 1.0f,  0.0f,  0.0f}, {}, {1.0f, 1.0f}, },
-        { { 1.0f,  1.0f,  1.0f}, { 1.0f,  0.0f,  0.0f}, {}, {1.0f, 1.0f}, },
-        { { 1.0f, -1.0f,  1.0f}, { 1.0f,  0.0f,  0.0f}, {}, {1.0f, 0.0f}, },
-        { { 1.0f, -1.0f, -1.0f}, { 1.0f,  0.0f,  0.0f}, {}, {0.0f, 0.0f}, },
+    primitives[12] = { {-1.0f, -1.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}, {}, {0.0f, 0.0f}, };
+    primitives[13] = { {-1.0f,  1.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}, {}, {0.0f, 1.0f}, };
+    primitives[14] = { { 1.0f,  1.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}, {}, {1.0f, 1.0f}, };
+    primitives[15] = { { 1.0f,  1.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}, {}, {1.0f, 1.0f}, };
+    primitives[16] = { { 1.0f, -1.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}, {}, {1.0f, 0.0f}, };
+    primitives[17] = { {-1.0f, -1.0f, -1.0f}, { 0.0f,  0.0f, -1.0f}, {}, {0.0f, 0.0f}, };
 
-        { { 1.0f, -1.0f,  1.0f}, { 0.0f,  0.0f,  1.0f}, {}, {0.0f, 0.0f}, },
-        { { 1.0f,  1.0f,  1.0f}, { 0.0f,  0.0f,  1.0f}, {}, {0.0f, 1.0f}, },
-        { {-1.0f,  1.0f,  1.0f}, { 0.0f,  0.0f,  1.0f}, {}, {1.0f, 1.0f}, },
-        { {-1.0f,  1.0f,  1.0f}, { 0.0f,  0.0f,  1.0f}, {}, {1.0f, 1.0f}, },
-        { {-1.0f, -1.0f,  1.0f}, { 0.0f,  0.0f,  1.0f}, {}, {1.0f, 0.0f}, },
-        { { 1.0f, -1.0f,  1.0f}, { 0.0f,  0.0f,  1.0f}, {}, {0.0f, 0.0f}, },
+    primitives[18] = { { 1.0f, -1.0f, -1.0f}, { 1.0f,  0.0f,  0.0f}, {}, {0.0f, 0.0f}, };
+    primitives[19] = { { 1.0f,  1.0f, -1.0f}, { 1.0f,  0.0f,  0.0f}, {}, {0.0f, 1.0f}, };
+    primitives[20] = { { 1.0f,  1.0f,  1.0f}, { 1.0f,  0.0f,  0.0f}, {}, {1.0f, 1.0f}, };
+    primitives[21] = { { 1.0f,  1.0f,  1.0f}, { 1.0f,  0.0f,  0.0f}, {}, {1.0f, 1.0f}, };
+    primitives[22] = { { 1.0f, -1.0f,  1.0f}, { 1.0f,  0.0f,  0.0f}, {}, {1.0f, 0.0f}, };
+    primitives[23] = { { 1.0f, -1.0f, -1.0f}, { 1.0f,  0.0f,  0.0f}, {}, {0.0f, 0.0f}, };
 
-        { {-1.0f,  1.0f, -1.0f}, { 0.0f,  1.0f,  0.0f}, {}, {0.0f, 0.0f}, },
-        { {-1.0f,  1.0f,  1.0f}, { 0.0f,  1.0f,  0.0f}, {}, {0.0f, 1.0f}, },
-        { { 1.0f,  1.0f,  1.0f}, { 0.0f,  1.0f,  0.0f}, {}, {1.0f, 1.0f}, },
-        { { 1.0f,  1.0f,  1.0f}, { 0.0f,  1.0f,  0.0f}, {}, {1.0f, 1.0f}, },
-        { { 1.0f,  1.0f, -1.0f}, { 0.0f,  1.0f,  0.0f}, {}, {1.0f, 0.0f}, },
-        { {-1.0f,  1.0f, -1.0f}, { 0.0f,  1.0f,  0.0f}, {}, {0.0f, 0.0f}, },
-    };
-    generate_tangents({cube.data(), cube.size()});
-    Mesh mesh{};
-    mesh.indices.resize(cube.size());
-    mesh.vertices.resize(cube.size());
-    weld_mesh(
-        {mesh.vertices.data(), mesh.vertices.size()},
-        {mesh.indices.data(), mesh.indices.size()},
-        {cube.data(), cube.size()}
-    );
+    primitives[24] = { { 1.0f, -1.0f,  1.0f}, { 0.0f,  0.0f,  1.0f}, {}, {0.0f, 0.0f}, };
+    primitives[25] = { { 1.0f,  1.0f,  1.0f}, { 0.0f,  0.0f,  1.0f}, {}, {0.0f, 1.0f}, };
+    primitives[26] = { {-1.0f,  1.0f,  1.0f}, { 0.0f,  0.0f,  1.0f}, {}, {1.0f, 1.0f}, };
+    primitives[27] = { {-1.0f,  1.0f,  1.0f}, { 0.0f,  0.0f,  1.0f}, {}, {1.0f, 1.0f}, };
+    primitives[28] = { {-1.0f, -1.0f,  1.0f}, { 0.0f,  0.0f,  1.0f}, {}, {1.0f, 0.0f}, };
+    primitives[29] = { { 1.0f, -1.0f,  1.0f}, { 0.0f,  0.0f,  1.0f}, {}, {0.0f, 0.0f}, };
+
+    primitives[30] = { {-1.0f,  1.0f, -1.0f}, { 0.0f,  1.0f,  0.0f}, {}, {0.0f, 0.0f}, };
+    primitives[31] = { {-1.0f,  1.0f,  1.0f}, { 0.0f,  1.0f,  0.0f}, {}, {0.0f, 1.0f}, };
+    primitives[32] = { { 1.0f,  1.0f,  1.0f}, { 0.0f,  1.0f,  0.0f}, {}, {1.0f, 1.0f}, };
+    primitives[33] = { { 1.0f,  1.0f,  1.0f}, { 0.0f,  1.0f,  0.0f}, {}, {1.0f, 1.0f}, };
+    primitives[34] = { { 1.0f,  1.0f, -1.0f}, { 0.0f,  1.0f,  0.0f}, {}, {1.0f, 0.0f}, };
+    primitives[35] = { {-1.0f,  1.0f, -1.0f}, { 0.0f,  1.0f,  0.0f}, {}, {0.0f, 0.0f}, };
+    generate_tangents(primitives);
+
+    auto& cube = get(mesh);
+    cube.indices = malloc_slice<u32>(primitives.count);
+    cube.vertices = malloc_slice<Vertex>(primitives.count);
+    int count = weld_mesh(cube.vertices, cube.indices, primitives);
+    cube.vertices = realloc_slice(cube.vertices, count);
+
     return mesh;
 }
 
-Mesh generate_sphere(const glm::uvec2 fidelity) {
+Generator::MeshHandle Generator::generate_sphere(MeshHandle mesh, const glm::uvec2 fidelity) {
     ASSERT(fidelity.x >= 3);
     ASSERT(fidelity.y >= 2);
 
-    std::vector<Vertex> primitives{};
-    primitives.reserve((fidelity.x + 1) * (fidelity.y + 1) * 6);
+    Slice<Vertex> primitives = m_stack.alloc<Vertex>((fidelity.x + 1) * (fidelity.y + 1) * 6);
+    defer(m_stack.dealloc(primitives));
 
+    usize index = 0;
     f32 h_next = -1.0f;
     f32 r_next = 0.0f;
     f32 x_next = 0.0f;
@@ -107,55 +108,53 @@ Mesh generate_sphere(const glm::uvec2 fidelity) {
             const f32 u_next = static_cast<f32>(j + 1) / fidelity.x;
             const f32 v_next = static_cast<f32>(i + 1) / fidelity.y;
 
-            primitives.emplace_back(
+            primitives[index++] = {
                 glm::vec3{x * r, h, y * r},
                 glm::vec3{x * r, h, y * r},
                 glm::vec4{},
                 glm::vec2{u, v}
-            );
-            primitives.emplace_back(
+            };
+            primitives[index++] = {
                 glm::vec3{x * r_next, h_next, y * r_next},
                 glm::vec3{x * r_next, h_next, y * r_next},
                 glm::vec4{},
                 glm::vec2{u, v_next}
-            );
-            primitives.emplace_back(
+            };
+            primitives[index++] = {
                 glm::vec3{x_next * r_next, h_next, y_next * r_next},
                 glm::vec3{x_next * r_next, h_next, y_next * r_next},
                 glm::vec4{},
                 glm::vec2{u_next, v_next}
-            );
-            primitives.emplace_back(
+            };
+            primitives[index++] = {
                 glm::vec3{x_next * r_next, h_next, y_next * r_next},
                 glm::vec3{x_next * r_next, h_next, y_next * r_next},
                 glm::vec4{},
                 glm::vec2{u_next, v_next}
-            );
-            primitives.emplace_back(
+            };
+            primitives[index++] = {
                 glm::vec3{x_next * r, h, y_next * r},
                 glm::vec3{x_next * r, h, y_next * r},
                 glm::vec4{},
                 glm::vec2{u_next, v}
-            );
-            primitives.emplace_back(
+            };
+            primitives[index++] = {
                 glm::vec3{x * r, h, y * r},
                 glm::vec3{x * r, h, y * r},
                 glm::vec4{},
                 glm::vec2{u, v}
-            );
+            };
         }
     }
+    generate_tangents(primitives);
 
-    generate_tangents({primitives.data(), primitives.size()});
-    Mesh sphere{};
-    sphere.indices.resize(primitives.size());
-    sphere.vertices.resize(primitives.size());
-    weld_mesh(
-        {sphere.vertices.data(), sphere.vertices.size()},
-        {sphere.indices.data(), sphere.indices.size()},
-        {primitives.data(), primitives.size()}
-    );
-    return sphere;
+    auto& sphere = get(mesh);
+    sphere.indices = malloc_slice<u32>(primitives.count);
+    sphere.vertices = malloc_slice<Vertex>(primitives.count);
+    int count = weld_mesh(sphere.vertices, sphere.indices, primitives);
+    sphere.vertices = realloc_slice(sphere.vertices, count);
+
+    return mesh;
 }
 
 Image<glm::vec4> create_normals_from_heightmap(const Image<f32>& heightmap) {

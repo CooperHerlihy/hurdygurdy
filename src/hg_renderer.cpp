@@ -1,7 +1,5 @@
 #include "hg_renderer.h"
 
-#include "hg_generate.h"
-
 namespace hg {
 
 Result<DefaultRenderer> DefaultRenderer::create(Engine& engine, const Config& config) {
@@ -63,8 +61,12 @@ Result<DefaultRenderer> DefaultRenderer::create(Engine& engine, const Config& co
         vk::BufferUsageFlagBits::eUniformBuffer, GpuBuffer::RandomAccess
     });
 
-    write_uniform_buffer_descriptor(engine.vk, {renderer->m_vp_buffer.get(), sizeof(ViewProjectionUniform)}, renderer->m_global_set, 0);
-    write_uniform_buffer_descriptor(engine.vk, {renderer->m_light_buffer.get(), sizeof(LightUniform)}, renderer->m_global_set, 1);
+    write_uniform_buffer_descriptor(
+        engine.vk, {renderer->m_vp_buffer.get(), sizeof(ViewProjectionUniform)}, renderer->m_global_set, 0
+    );
+    write_uniform_buffer_descriptor(
+        engine.vk, {renderer->m_light_buffer.get(), sizeof(LightUniform)}, renderer->m_global_set, 1
+    );
 
     ASSERT(renderer->m_global_set != nullptr);
     return renderer;
@@ -167,7 +169,7 @@ void DefaultRenderer::destroy(Engine& engine) const {
         cmd.setSampleMaskEXT(vk::SampleCountFlagBits::e4, vk::SampleMask{0xff});
 
         for (auto pipeline : pipelines) {
-            pipeline->draw(cmd, m_global_set);
+            pipeline->draw(*this, cmd);
         }
 
         cmd.endRendering();
@@ -299,17 +301,16 @@ void SkyboxPipeline::destroy(Engine& engine) const {
     m_set_layout.destroy(engine.vk);
 }
 
-void SkyboxPipeline::draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) {
+void SkyboxPipeline::draw(const DefaultRenderer& renderer, const vk::CommandBuffer cmd) {
     ASSERT(m_set != nullptr);
     ASSERT(cmd != nullptr);
-    ASSERT(global_set != nullptr);
 
     cmd.setDepthTestEnable(vk::False);
     cmd.setDepthWriteEnable(vk::False);
     cmd.setCullMode(vk::CullModeFlagBits::eFront);
 
     cmd.bindShadersEXT({vk::ShaderStageFlagBits::eVertex, vk::ShaderStageFlagBits::eFragment}, std::span{m_pipeline.get_shaders()});
-    cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipeline.get_layout(), 0, {global_set, m_set}, {});
+    cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipeline.get_layout(), 0, {renderer.get_global_set(), m_set}, {});
 
     cmd.setVertexInputEXT(
         {vk::VertexInputBindingDescription2EXT{.stride = sizeof(glm::vec3), .inputRate = vk::VertexInputRate::eVertex, .divisor = 1}},
@@ -334,22 +335,32 @@ void SkyboxPipeline::load_skybox(Engine& engine, const ImageData& data) {
     });
     hg::write_image_sampler_descriptor(engine.vk, m_cubemap, m_set, 0);
 
-    const auto mesh = generate_cube();
-    std::vector<glm::vec3> positions{};
-    positions.reserve(mesh.vertices.size());
-    for (const auto& vertex : mesh.vertices) {
-        positions.emplace_back(vertex.position);
-    }
+    std::array<glm::vec3, 24> positions{
+        glm::vec3{-1.0f, -1.0f,  1.0f}, glm::vec3{-1.0f, -1.0f, -1.0f}, glm::vec3{ 1.0f, -1.0f, -1.0f}, glm::vec3{ 1.0f, -1.0f,  1.0f},
+        glm::vec3{-1.0f, -1.0f,  1.0f}, glm::vec3{-1.0f,  1.0f,  1.0f}, glm::vec3{-1.0f,  1.0f, -1.0f}, glm::vec3{-1.0f, -1.0f, -1.0f},
+        glm::vec3{-1.0f, -1.0f, -1.0f}, glm::vec3{-1.0f,  1.0f, -1.0f}, glm::vec3{ 1.0f,  1.0f, -1.0f}, glm::vec3{ 1.0f, -1.0f, -1.0f},
+        glm::vec3{ 1.0f, -1.0f, -1.0f}, glm::vec3{ 1.0f,  1.0f, -1.0f}, glm::vec3{ 1.0f,  1.0f,  1.0f}, glm::vec3{ 1.0f, -1.0f,  1.0f},
+        glm::vec3{ 1.0f, -1.0f,  1.0f}, glm::vec3{ 1.0f,  1.0f,  1.0f}, glm::vec3{-1.0f,  1.0f,  1.0f}, glm::vec3{-1.0f, -1.0f,  1.0f},
+        glm::vec3{-1.0f,  1.0f, -1.0f}, glm::vec3{-1.0f,  1.0f,  1.0f}, glm::vec3{ 1.0f,  1.0f,  1.0f}, glm::vec3{ 1.0f,  1.0f, -1.0f},
+    };
+    std::array<u32, 36> indices{
+         0,  1,  2,  2,  3,  0,
+         4,  5,  6,  6,  7,  4,
+         8,  9, 10, 10, 11,  8,
+        12, 13, 14, 14, 15, 12,
+        16, 17, 18, 18, 19, 16,
+        20, 21, 22, 22, 23, 20,
+    };
     m_vertex_buffer = GpuBuffer::create(engine.vk, {
         positions.size() * sizeof(positions[0]),
         vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst
     });
     m_index_buffer = GpuBuffer::create(engine.vk, {
-        mesh.indices.size() * sizeof(mesh.indices[0]),
+        indices.size() * sizeof(indices[0]),
         vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst
     });
-    m_vertex_buffer.write_slice(engine.vk, Slice<const glm::vec3>{positions.data(), positions.size()});
-    m_index_buffer.write_slice(engine.vk, Slice<const u32>{mesh.indices.data(), mesh.indices.size()});
+    m_vertex_buffer.write_slice<glm::vec3>(engine.vk, positions);
+    m_index_buffer.write_slice<u32>(engine.vk, indices);
 }
 
 Result<void> SkyboxPipeline::load_skybox(Engine& engine, const std::filesystem::path path) {
@@ -370,7 +381,7 @@ PbrPipeline PbrPipeline::create(Engine& engine, const DefaultRenderer& renderer)
     PbrPipeline pipeline{};
 
     pipeline.m_set_layout = DescriptorSetLayout::create(engine.vk, {
-        std::array{vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, MaxTextures, vk::ShaderStageFlagBits::eFragment},},
+        std::array{vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, MaxTextures, vk::ShaderStageFlagBits::eFragment}},
         std::array{vk::DescriptorBindingFlags{vk::DescriptorBindingFlagBits::ePartiallyBound}}
     });
 
@@ -419,9 +430,8 @@ void PbrPipeline::destroy(Engine& engine) const {
     m_set_layout.destroy(engine.vk);
 }
 
-void PbrPipeline::draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) {
+void PbrPipeline::draw(const DefaultRenderer& renderer, const vk::CommandBuffer cmd) {
     ASSERT(cmd != nullptr);
-    ASSERT(global_set != nullptr);
 
     cmd.setCullMode(vk::CullModeFlagBits::eBack);
 
@@ -433,9 +443,19 @@ void PbrPipeline::draw(const vk::CommandBuffer cmd, const vk::DescriptorSet glob
         vk::VertexInputAttributeDescription2EXT{.location = 2, .format = vk::Format::eR32G32B32A32Sfloat, .offset = offsetof(Vertex, tangent)},
         vk::VertexInputAttributeDescription2EXT{.location = 3, .format = vk::Format::eR32G32Sfloat, .offset = offsetof(Vertex, tex_coord)}
     });
-    cmd.bindShadersEXT({vk::ShaderStageFlagBits::eVertex, vk::ShaderStageFlagBits::eFragment}, std::span{m_pipeline.get_shaders()});
+    cmd.bindShadersEXT(
+        {vk::ShaderStageFlagBits::eVertex, vk::ShaderStageFlagBits::eFragment},
+        std::span{m_pipeline.get_shaders()}
+    );
 
-    cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipeline.get_layout(), 0, {global_set, m_texture_set}, {});
+    cmd.bindDescriptorSets(
+        vk::PipelineBindPoint::eGraphics,
+        m_pipeline.get_layout(),
+        0, {
+            renderer.get_global_set(),
+            m_texture_set
+        }, {}
+    );
     for (const auto& ticket : m_render_queue) {
         const auto& model = m_models[ticket.model.index];
 

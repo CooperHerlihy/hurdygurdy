@@ -310,6 +310,9 @@ inline constexpr usize align_down(const usize size, const usize alignment) {
 template <typename T> Slice<T> malloc_slice(const usize count) {
     return {reinterpret_cast<T*>(std::malloc(count * sizeof(T))), count};
 }
+template <typename T> Slice<T> realloc_slice(Slice<T> slice, const usize new_count) {
+    return {reinterpret_cast<T*>(std::realloc(slice.data, new_count * sizeof(T))), new_count};
+}
 template <typename T> void free_slice(Slice<T> slice) {
     std::free(slice.data);
 }

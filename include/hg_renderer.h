@@ -1,6 +1,5 @@
 #pragma once
 
-#include "hg_utils.h"
 #include "hg_math.h"
 #include "hg_engine.h"
 
@@ -14,7 +13,7 @@ public:
     public:
         virtual ~Pipeline() = default;
 
-        virtual void draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) = 0;
+        virtual void draw(const DefaultRenderer& renderer, const vk::CommandBuffer cmd) = 0;
     };
 
     struct ViewProjectionUniform {
@@ -35,8 +34,9 @@ public:
 
     [[nodiscard]] GLFWwindow* get_window() const { return m_window.get(); }
     [[nodiscard]] vk::Extent2D get_extent() const { return m_window.get_extent(); }
-    [[nodiscard]] vk::SurfaceKHR get_surface() const { return m_surface.get(); }
+
     [[nodiscard]] vk::DescriptorSetLayout get_global_set_layout() const { return m_set_layout.get(); }
+    [[nodiscard]] vk::DescriptorSet get_global_set() const { return m_global_set; }
 
     struct Config {
         bool fullscreen = false;
@@ -79,7 +79,7 @@ class SkyboxPipeline : public DefaultRenderer::Pipeline {
 public:
     [[nodiscard]] static SkyboxPipeline create(Engine& engine, const DefaultRenderer& pipeline);
     void destroy(Engine& engine) const;
-    void draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) override;
+    void draw(const DefaultRenderer& renderer, const vk::CommandBuffer cmd) override;
 
     void load_skybox(Engine& engine, const ImageData& data);
     Result<void> load_skybox(Engine& engine, const std::filesystem::path path);
@@ -109,7 +109,7 @@ public:
         float metalness = 0.0f;
     };
 
-    void draw(const vk::CommandBuffer cmd, const vk::DescriptorSet global_set) override;
+    void draw(const DefaultRenderer& renderer, const vk::CommandBuffer cmd) override;
 
     static constexpr usize MaxTextures = 256;
     struct TextureHandle {

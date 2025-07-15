@@ -1,5 +1,6 @@
 #pragma once
 
+#include "hg_pch.h"
 #include "hg_utils.h"
 
 #include <GLFW/glfw3.h>

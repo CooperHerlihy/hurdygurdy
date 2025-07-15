@@ -13,6 +13,9 @@ int main() {
     if (engine.has_err())
         LOGF_ERROR(errf(engine));
 
+    auto generator = Generator{{.max_meshes = 64, .max_images = 64}};
+    defer(generator.destroy());
+
     auto renderer = DefaultRenderer::create(*engine, {.fullscreen = true});
     defer(renderer->destroy(*engine));
 
@@ -39,18 +42,20 @@ int main() {
     const auto hex_texture = *model_pipeline.load_texture(*engine, "../assets/hexagon_models/Textures/hexagons_medieval.png");
 
     const auto cube = [&] {
-        auto cube = generate_cube();
+        auto cube = generator.generate_cube(generator.alloc_mesh());
+        defer(generator.free_mesh(cube));
         return model_pipeline.load_model(*engine, {
-            {cube.indices.data(), cube.indices.size()},
-            {cube.vertices.data(), cube.vertices.size()},
+            generator.get(cube).indices,
+            generator.get(cube).vertices,
             0.2f, 0.0f,
         }, perlin_normal_texture, gray_texture);
     }();
     const auto sphere = [&] {
-        auto sphere = generate_sphere({64, 32});
+        auto sphere = generator.generate_sphere(generator.alloc_mesh(), {64, 32});
+        defer(generator.free_mesh(sphere));
         return model_pipeline.load_model(*engine, {
-            {sphere.indices.data(), sphere.indices.size()},
-            {sphere.vertices.data(), sphere.vertices.size()},
+            generator.get(sphere).indices,
+            generator.get(sphere).vertices,
             0.2f, 1.0f,
         }, perlin_normal_texture, gray_texture);
     }();

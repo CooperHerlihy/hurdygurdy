@@ -1,21 +1,128 @@
 #pragma once
 
-#include "hg_utils.h"
 #include "hg_math.h"
-#include "hg_load.h"
+#include "hg_engine.h"
+#include "hg_utils.h"
 
 #include <random>
 
 namespace hg {
 
 struct Mesh {
-    std::vector<u32> indices{};
-    std::vector<Vertex> vertices{};
+    Slice<u32> indices{};
+    Slice<Vertex> vertices{};
 };
 
-[[nodiscard]] Mesh generate_square();
-[[nodiscard]] Mesh generate_cube();
-[[nodiscard]] Mesh generate_sphere(glm::uvec2 fidelity);
+template <typename T> struct Image2 {
+    T* pixels = nullptr;
+    usize width = 0;
+    usize height = 0;
+
+    [[nodiscard]] constexpr usize count() const { return width * height; }
+    [[nodiscard]] constexpr glm::vec<2, usize> size() const { return {width, height}; }
+
+    [[nodiscard]] constexpr Slice<T> operator[](usize y) { return {&pixels[y * width], width}; }
+    [[nodiscard]] constexpr Slice<const T> operator[](usize y) const { return {&pixels[y * width], width}; }
+
+    constexpr Image2& operator+=(const Image2& other) {
+        ASSERT(width == other.width);
+        ASSERT(height == other.height);
+        for (usize i = 0; i < count(); ++i) {
+            pixels[i] += other.pixels[i];
+        }
+        return *this;
+    }
+    constexpr Image2& operator-=(const Image2& other) {
+        ASSERT(width == other.width);
+        ASSERT(height == other.height);
+        for (usize i = 0; i < count(); ++i) {
+            pixels[i] -= other.pixels[i];
+        }
+        return *this;
+    }
+    constexpr Image2& operator*=(const Image2& other) {
+        ASSERT(width == other.width);
+        ASSERT(height == other.height);
+        for (usize i = 0; i < count(); ++i) {
+            pixels[i] *= other.pixels[i];
+        }
+        return *this;
+    }
+    constexpr Image2& operator/=(const Image2& other) {
+        ASSERT(width == other.width);
+        ASSERT(height == other.height);
+        for (usize i = 0; i < count(); ++i) {
+            pixels[i] /= other.pixels[i];
+        }
+        return *this;
+    }
+};
+
+struct ByteImage {
+    byte* pixels = nullptr;
+    usize alignment = 0;
+    usize width = 0;
+    usize height = 0;
+
+    template <typename T> ByteImage(const Image2<T>& image)
+        : pixels{reinterpret_cast<byte*>(image.pixels)}
+        , alignment{sizeof(T)}
+        , width{image.width}
+        , height{image.height}
+    {}
+    template <typename T> operator Image2<T>() {
+        ASSERT(sizeof(T) == alignment);
+        return {reinterpret_cast<T>(pixels), width, height};
+    }
+};
+
+class Generator {
+public:
+    struct Config {
+        usize max_meshes = 0;
+        usize max_images = 0;
+        usize internal_stack_size = 1024 * 1024;
+    };
+    Generator(const Config& config)
+        : m_stack{malloc_slice<byte>(config.internal_stack_size)}
+        , m_meshes{malloc_slice<Pool<Mesh>::Block>(config.max_meshes)}
+        , m_images{malloc_slice<Pool<ByteImage>::Block>(config.max_images)}
+    {}
+    void destroy() {
+        free_slice(m_stack.release());
+        free_slice(m_meshes.release());
+        free_slice(m_images.release());
+    }
+
+    struct MeshHandle { Pool<Mesh>::Handle handle; };
+    struct ImageHandle { Pool<ByteImage>::Handle handle; };
+
+    Mesh& get(MeshHandle mesh) { return m_meshes[mesh.handle]; }
+    ByteImage& get(ImageHandle image) { return m_images[image.handle]; }
+
+    MeshHandle alloc_mesh() {
+        auto mesh = m_meshes.alloc();
+        m_meshes[mesh] = {};
+        return {mesh};
+    }
+    void free_mesh(MeshHandle mesh) { m_meshes.dealloc(mesh.handle); }
+
+    MeshHandle generate_square(MeshHandle mesh);
+    MeshHandle generate_cube(MeshHandle mesh);
+    MeshHandle generate_sphere(MeshHandle mesh, const glm::uvec2 fidelity);
+
+    template <typename T> ImageHandle alloc_image() {
+        auto image = m_images.alloc();
+        m_images[image] = Image2<T>{};
+        return {image};
+    }
+    void free_image(ImageHandle image) { m_images.dealloc(image.handle); }
+
+private:
+    Arena m_stack{};
+    Pool<Mesh> m_meshes{};
+    Pool<ByteImage> m_images{};
+};
 
 template<typename T>
 class Image {

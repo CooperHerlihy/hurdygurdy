@@ -6,8 +6,8 @@ Result<Engine> Engine::create() {
     auto engine = ok<Engine>();
 
     engine->loader = AssetLoader{{
-        .max_images = 32,
-        .max_gltfs = 32,
+        .max_images = 16,
+        .max_gltfs = 16,
     }};
 
     auto vk = Vk::create();
