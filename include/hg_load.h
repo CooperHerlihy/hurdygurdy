@@ -19,12 +19,16 @@ struct Vertex {
     glm::vec2 tex_coord{};
 };
 
-void generate_tangents(Slice<Vertex> primitives);
-int weld_mesh(Slice<Vertex> out_vertices, Slice<u32> out_indices, Slice<const Vertex> primitives);
-
-struct GltfData {
+struct Mesh {
     Slice<u32> indices{};
     Slice<Vertex> vertices{};
+};
+
+void generate_tangents(Slice<Vertex> primitives);
+int weld_mesh(Mesh out_mesh, Slice<const Vertex> primitives);
+
+struct GltfData {
+    Mesh mesh{};
     float roughness = 0.0f;
     float metalness = 0.0f;
 };
@@ -59,8 +63,9 @@ public:
 
     Result<GltfHandle> load_gltf(std::filesystem::path path);
     void unload_gltf(const GltfHandle gltf) {
-        free_slice(m_gltfs[gltf.handle].vertices);
-        free_slice(m_gltfs[gltf.handle].indices);
+        auto mesh = m_gltfs[gltf.handle].mesh;
+        free_slice(mesh.vertices);
+        free_slice(mesh.indices);
         m_gltfs.dealloc(gltf.handle);
     }
 

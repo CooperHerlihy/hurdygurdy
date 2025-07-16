@@ -28,37 +28,52 @@ int main() {
     if (skybox.has_err())
         LOGF_ERROR(errf(skybox));
 
-    std::array<glm::vec4, 4> default_normal_image{};
-    default_normal_image.fill(glm::vec4{0.0f, 0.0f, -1.0f, 0.0f});
-    const auto default_normal_texture = model_pipeline.load_texture(*engine, {default_normal_image.data(), sizeof(glm::vec4), {2, 2, 1}}, vk::Format::eR32G32B32A32Sfloat);
+    const auto default_normal_texture = [&] {
+        auto default_normals = generator.alloc_image<glm::vec4>({2, 2}, [](...) {
+            return glm::vec4{0.0f, 0.0f, -1.0f, 0.0f};
+        });
+        defer(generator.dealloc_image(default_normals));
 
-    auto perlin_normal_image = create_normals_from_heightmap(generate_fractal_perlin_noise({512, 512}, {16, 16}));
-    const auto perlin_normal_texture = model_pipeline.load_texture(*engine, {perlin_normal_image.data(), sizeof(glm::vec4), {512, 512, 1}}, vk::Format::eR32G32B32A32Sfloat);
+        return model_pipeline.load_texture(*engine, generator.get(default_normals), vk::Format::eR32G32B32A32Sfloat);
+    }();
 
-    std::array<u32, 4> gray_color{};
-    gray_color.fill(0xff777777);
-    const auto gray_texture = model_pipeline.load_texture(*engine, {gray_color.data(), 4, {2, 2, 1}});
+    const auto perlin_normal_texture = [&] {
+        auto perlin_noise = generator.alloc_image<f32>({512, 512}, [&](const auto pos) {
+            return get_fractal_noise(pos, 1.0f, 32.0f, get_perlin_noise);
+        });
+        defer(generator.dealloc_image(perlin_noise));
+
+        auto perlin_normals = generator.alloc_image<glm::vec4>({512, 512}, [&](const auto pos) {
+            return get_normal_from_heightmap(pos, generator.get(perlin_noise));
+        });
+        defer(generator.dealloc_image(perlin_normals));
+
+        return model_pipeline.load_texture(*engine, generator.get(perlin_normals), vk::Format::eR32G32B32A32Sfloat);
+    }();
+
+    const auto gray_texture = [&] {
+        auto gray = generator.alloc_image<u32>({2, 2}, [](...) { return 0xff777777; });
+        defer(generator.dealloc_image(gray));
+
+        return model_pipeline.load_texture(*engine, generator.get(gray), vk::Format::eR8G8B8A8Srgb);
+    }();
 
     const auto hex_texture = *model_pipeline.load_texture(*engine, "../assets/hexagon_models/Textures/hexagons_medieval.png");
 
     const auto cube = [&] {
         auto cube = generator.generate_cube(generator.alloc_mesh());
-        defer(generator.free_mesh(cube));
-        return model_pipeline.load_model(*engine, {
-            generator.get(cube).indices,
-            generator.get(cube).vertices,
-            0.2f, 0.0f,
-        }, perlin_normal_texture, gray_texture);
+        defer(generator.dealloc_mesh(cube));
+
+        return model_pipeline.load_model(*engine, {generator.get(cube), 0.2f, 0.0f}, perlin_normal_texture, gray_texture);
     }();
+
     const auto sphere = [&] {
         auto sphere = generator.generate_sphere(generator.alloc_mesh(), {64, 32});
-        defer(generator.free_mesh(sphere));
-        return model_pipeline.load_model(*engine, {
-            generator.get(sphere).indices,
-            generator.get(sphere).vertices,
-            0.2f, 1.0f,
-        }, perlin_normal_texture, gray_texture);
+        defer(generator.dealloc_mesh(sphere));
+
+        return model_pipeline.load_model(*engine, {generator.get(sphere), 0.2f, 1.0f}, perlin_normal_texture, gray_texture);
     }();
+
     const auto grass = *model_pipeline.load_model(*engine, "../assets/hexagon_models/Assets/gltf/tiles/base/hex_grass.gltf", default_normal_texture, hex_texture);
     const auto building = *model_pipeline.load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_home_A_blue.gltf", default_normal_texture, hex_texture);
     const auto tower = *model_pipeline.load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_tower_A_blue.gltf", default_normal_texture, hex_texture);

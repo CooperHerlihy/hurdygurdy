@@ -17,14 +17,36 @@ template <typename T> constexpr mat<3, 3, T> operator*(qua<T> lhs, mat<3, 3, T> 
 
 namespace hg {
 
-template <std::floating_point T> T lerp(const T a, const T b, const T t) { return a + t * (b - a); }
+template <typename Ret, typename Pos, typename Seed> constexpr Ret rng(Pos pos, Seed seed);
 
-template <std::floating_point T> T smoothstep(const T t) {
+template <> [[nodiscard]] constexpr u64 rng(u64 pos, u64 seed) {
+    pos++; seed++;
+    seed *= u64{0xf1eafdfd};
+    seed ^= seed >> 12;
+    pos *= seed;
+    pos ^= pos >> 41;
+    pos *= usize{0x1b037387};
+    seed *= pos;
+    seed ^= seed >> 21;
+    return pos ^ seed;
+}
+
+template <> [[nodiscard]] constexpr u32 rng(u64 pos, u64 seed) { return static_cast<u32>(rng<u64>(pos, seed)); }
+
+template <> [[nodiscard]] constexpr f64 rng(u64 pos, u64 seed) { return static_cast<f64>(rng<u64>(pos, seed)) / static_cast<f64>(UINT64_MAX); }
+template <> [[nodiscard]] constexpr f32 rng(u64 pos, u64 seed) { return static_cast<f32>(rng<u64>(pos, seed)) / static_cast<f32>(UINT64_MAX); }
+
+template <> [[nodiscard]] constexpr glm::vec2 rng(u64 pos, u64 seed) {
+    const f32 angle = rng<f32>(pos, seed) * glm::two_pi<f32>();
+    return {std::cos(angle), std::sin(angle)};
+}
+
+template <std::floating_point T> constexpr T smoothstep(const T t) {
     ASSERT(t >= 0 && t <= 1);
     return t * t * (3 - 2 * t);
 }
 
-template <std::floating_point T> T smoothstep_quintic(const T t) {
+template <std::floating_point T> constexpr T smoothstep_quintic(const T t) {
     ASSERT(t >= 0 && t <= 1);
     return t * t * t * (t * (t * 6 - 15) + 10);
 }

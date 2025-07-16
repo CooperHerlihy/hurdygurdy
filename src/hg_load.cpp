@@ -53,14 +53,14 @@ void generate_tangents(Slice<Vertex> primitives) {
     genTangSpaceDefault(&mikk_context);
 }
 
-int weld_mesh(Slice<Vertex> out_vertices, Slice<u32> out_indices, const Slice<const Vertex> primitives) {
-    ASSERT(out_vertices.count >= primitives.count);
-    ASSERT(out_indices.count >= primitives.count);
+int weld_mesh(Mesh out_mesh, const Slice<const Vertex> primitives) {
+    ASSERT(out_mesh.vertices.count >= primitives.count);
+    ASSERT(out_mesh.indices.count >= primitives.count);
     ASSERT(primitives.count % 3 == 0);
 
     return WeldMesh(
-        reinterpret_cast<int*>(out_indices.data),
-        reinterpret_cast<float*>(out_vertices.data),
+        reinterpret_cast<int*>(out_mesh.indices.data),
+        reinterpret_cast<float*>(out_mesh.vertices.data),
         reinterpret_cast<const float*>(primitives.data),
         static_cast<i32>(primitives.count),
         sizeof(Vertex) / sizeof(float)
@@ -189,14 +189,17 @@ Result<AssetLoader::GltfHandle> AssetLoader::load_gltf(const std::filesystem::pa
     auto gltf = m_gltfs.alloc();
     auto& model = m_gltfs[gltf];
     model = {
-        .indices = malloc_slice<u32>(primitives.count),
-        .vertices = malloc_slice<Vertex>(primitives.count),
+        .mesh = {
+            .indices = malloc_slice<u32>(primitives.count),
+            .vertices = malloc_slice<Vertex>(primitives.count),
+        },
         .roughness = roughness,
         .metalness = metalness,
     };
 
     generate_tangents(primitives);
-    weld_mesh(model.vertices, model.indices, primitives);
+    int count = weld_mesh(model.mesh, primitives);
+    model.mesh.vertices = realloc_slice(model.mesh.vertices, count);
 
     return ok<GltfHandle>(gltf);
 }

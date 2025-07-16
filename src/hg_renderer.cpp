@@ -520,19 +520,19 @@ PbrPipeline::ModelHandle PbrPipeline::load_model(
     ASSERT(data.metalness >= 0.0 && data.metalness <= 1.0);
 
     const auto index_buffer = GpuBuffer::create(engine.vk, {
-        data.indices.count * sizeof(data.indices[0]),
+        data.mesh.indices.count * sizeof(data.mesh.indices[0]),
         vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst
     });
     const auto vertex_buffer = GpuBuffer::create(engine.vk, {
-        data.vertices.count * sizeof(data.vertices[0]),
+        data.mesh.vertices.count * sizeof(data.mesh.vertices[0]),
         vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst
     });
 
-    index_buffer.write_slice(engine.vk, Slice<const u32>{data.indices.data, data.indices.count});
-    vertex_buffer.write_slice(engine.vk, Slice<const Vertex>{data.vertices.data, data.vertices.count});
+    index_buffer.write_slice(engine.vk, Slice<const u32>{data.mesh.indices.data, data.mesh.indices.count});
+    vertex_buffer.write_slice(engine.vk, Slice<const Vertex>{data.mesh.vertices.data, data.mesh.vertices.count});
 
     m_models.emplace_back(
-        to_u32(data.indices.count),
+        to_u32(data.mesh.indices.count),
         index_buffer, vertex_buffer,
         normal_map, texture,
         data.roughness, data.metalness

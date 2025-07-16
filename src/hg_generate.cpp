@@ -1,5 +1,7 @@
 #include "hg_generate.h"
 
+#include "hg_math.h"
+
 namespace hg {
 
 Generator::MeshHandle Generator::generate_square(MeshHandle mesh) {
@@ -17,7 +19,7 @@ Generator::MeshHandle Generator::generate_square(MeshHandle mesh) {
     auto& square = get(mesh);
     square.indices = malloc_slice<u32>(primitives.count);
     square.vertices = malloc_slice<Vertex>(primitives.count);
-    int count = weld_mesh(square.vertices, square.indices, primitives);
+    int count = weld_mesh(square, primitives);
     square.vertices = realloc_slice(square.vertices, count);
 
     return mesh;
@@ -73,7 +75,7 @@ Generator::MeshHandle Generator::generate_cube(MeshHandle mesh) {
     auto& cube = get(mesh);
     cube.indices = malloc_slice<u32>(primitives.count);
     cube.vertices = malloc_slice<Vertex>(primitives.count);
-    int count = weld_mesh(cube.vertices, cube.indices, primitives);
+    int count = weld_mesh(cube, primitives);
     cube.vertices = realloc_slice(cube.vertices, count);
 
     return mesh;
@@ -151,155 +153,132 @@ Generator::MeshHandle Generator::generate_sphere(MeshHandle mesh, const glm::uve
     auto& sphere = get(mesh);
     sphere.indices = malloc_slice<u32>(primitives.count);
     sphere.vertices = malloc_slice<Vertex>(primitives.count);
-    int count = weld_mesh(sphere.vertices, sphere.indices, primitives);
+    int count = weld_mesh(sphere, primitives);
     sphere.vertices = realloc_slice(sphere.vertices, count);
 
     return mesh;
 }
 
-Image<glm::vec4> create_normals_from_heightmap(const Image<f32>& heightmap) {
-    Image<glm::vec4> normals{{heightmap.width(), heightmap.height()}};
-
-    for (usize v = 0; v < heightmap.height(); ++v) {
-        for (usize u = 0; u < heightmap.width(); ++u) {
-            const f32 height = heightmap[v][u];
-
-            const usize v_up = v == 0 ? heightmap.height() - 1 : v - 1;
-            const usize u_left = u == 0 ? heightmap.width() - 1 : u - 1;
-            const glm::vec3 up  = {0.0f, -1.0f, heightmap[v_up][u] - height};
-            const glm::vec3 left  = {-1.0f, 0.0f, heightmap[v][u_left] - height};
-
-            const usize v_down = (v + 1) % heightmap.height();
-            const usize u_right = (u + 1) % heightmap.width();
-            const glm::vec3 down = {0.0f, 1.0f, heightmap[v_down][u] - height};
-            const glm::vec3 right  = {1.0f, 0.0f, heightmap[v][u_right] - height};
-
-            normals[v][u] = glm::vec4{glm::normalize(glm::cross(up, left) + glm::cross(down, right)), 0.0f};
-        }
-    }
-
-    return normals;
-}
-
-Image<f32> generate_value_noise(const glm::vec<2, usize> size, const Image<f32>& fixed_points) {
-    ASSERT(fixed_points.width() < size.x);
-    ASSERT(fixed_points.height() < size.y);
-    Image<f32> interpolated{size};
-    for (usize v = 0; v < size.y; ++v) {
-        for (usize u = 0; u < size.x; ++u) {
-            const f32 x = static_cast<f32>(u) * static_cast<f32>(fixed_points.width()) / static_cast<f32>(size.x);
-            const f32 y = static_cast<f32>(v) * static_cast<f32>(fixed_points.height()) / static_cast<f32>(size.y);
-            const usize x_floor = static_cast<usize>(std::floor(x));
-            const usize y_floor = static_cast<usize>(std::floor(y));
-            const usize x_ceil = (x_floor + 1) % fixed_points.width();
-            const usize y_ceil = (y_floor + 1) % fixed_points.height();
-            interpolated[v][u] = lerp(
-                lerp(
-                    fixed_points[y_floor][x_floor],
-                    fixed_points[y_floor][x_ceil],
-                    smoothstep(static_cast<f32>(x - std::floor(x)))
-                ),
-                lerp(
-                    fixed_points[y_ceil][x_floor],
-                    fixed_points[y_ceil][x_ceil],
-                    smoothstep(static_cast<f32>(x - std::floor(x)))
-                ),
-                smoothstep(static_cast<f32>(y - std::floor(y)))
-            );
-        }
-    }
-    return interpolated;
-}
-
-Image<f32> generate_perlin_noise(const glm::vec<2, usize> size, const Image<glm::vec2>& gradients) {
-    ASSERT(gradients.width() < size.x);
-    ASSERT(gradients.height() < size.y);
-    Image<f32> interpolated{size};
-    for (usize v = 0; v < size.y; ++v) {
-        for (usize u = 0; u < size.x; ++u) {
-            const f32 x = static_cast<f32>(u) * static_cast<f32>(gradients.width()) / static_cast<f32>(size.x);
-            const f32 y = static_cast<f32>(v) * static_cast<f32>(gradients.height()) / static_cast<f32>(size.y);
-            const f32 x_t = x - std::floor(x);
-            const f32 y_t = y - std::floor(y);
-            const usize x_floor = static_cast<usize>(std::floor(x));
-            const usize y_floor = static_cast<usize>(std::floor(y));
-            const usize x_ceil = (x_floor + 1) % gradients.width();
-            const usize y_ceil = (y_floor + 1) % gradients.height();
-
-            interpolated[v][u] = lerp(
-                lerp(
-                    glm::dot(gradients[y_floor][x_floor], glm::vec2{x_t       , y_t}),
-                    glm::dot(gradients[y_floor][x_ceil] , glm::vec2{x_t - 1.0f, y_t}),
-                    smoothstep_quintic(x_t)
-                ),
-                lerp(
-                    glm::dot(gradients[y_ceil][x_floor], glm::vec2{x_t       , y_t - 1.0f}),
-                    glm::dot(gradients[y_ceil][x_ceil] , glm::vec2{x_t - 1.0f, y_t - 1.0f}),
-                    smoothstep_quintic(x_t)
-                ),
-                smoothstep_quintic(y_t)
-            ) * 0.5f + 0.5f;
-        }
-    }
-    return interpolated;
-}
-
-Image<f32> generate_fractal_value_noise(
-    const glm::vec<2, usize> size, const glm::vec<2, usize> initial_size, const usize max_octaves
-) {
-    ASSERT(size.x > initial_size.x && size.y > initial_size.y);
-    ASSERT(initial_size.x > 0 && initial_size.y > 0);
-    ASSERT(max_octaves > 0);
-
-    Image<f32> image{size};
-    auto octave_size = initial_size;
-    const usize octaves = std::min(
-        max_octaves, static_cast<usize>(
-            std::floor(std::log2(std::min(
-                static_cast<f32>(size.x) / static_cast<f32>(initial_size.x),
-                static_cast<f32>(size.y) / static_cast<f32>(initial_size.y)
-            )))
-        )
+f32 get_value_noise(const glm::vec<2, usize> pos, const f32 point_width) {
+    const f32 x = pos.x / point_width;
+    const f32 y = pos.y / point_width;
+    const f32 x_t = x - std::floor(x);
+    const f32 y_t = y - std::floor(y);
+    const usize x_floor = static_cast<usize>(x);
+    const usize y_floor = static_cast<usize>(y);
+    const usize x_ceil = x_floor + 1;
+    const usize y_ceil = y_floor + 1;
+    return std::lerp(
+        std::lerp(
+            rng<f32>(x_floor, y_floor),
+            rng<f32>(x_ceil , y_floor),
+            smoothstep(x_t)
+        ),
+        std::lerp(
+            rng<f32>(x_floor, y_ceil),
+            rng<f32>(x_ceil , y_ceil),
+            smoothstep(x_t)
+        ),
+        smoothstep(y_t)
     );
-    const f32 divisions = std::exp2f(static_cast<f32>(octaves)) - 1.0f;
-    f32 amplitude = std::floor(divisions / 2.0f) / divisions;
-    for (usize i = 0; i < octaves; ++i, octave_size *= 2, amplitude *= 0.5f) {
-        image += generate_value_noise(size,
-            generate_white_noise<f32>(
-                octave_size,
-                [amplitude]() -> f32 { return rng<f32>() * amplitude; }
-            )
-        );
-    }
-    return image;
 }
 
-Image<f32> generate_fractal_perlin_noise(
-    const glm::vec<2, usize> size, const glm::vec<2, usize> initial_size, const usize max_octaves
-) {
-    ASSERT(size.x > initial_size.x && size.y > initial_size.y);
-    ASSERT(initial_size.x > 0 && initial_size.y > 0);
-    ASSERT(max_octaves > 0);
-
-    Image<f32> image{size};
-    auto octave_size = initial_size;
-    const usize octaves = std::min(
-        max_octaves, static_cast<usize>(
-            std::floor(std::log2(std::min(
-                static_cast<f32>(size.x) / static_cast<f32>(initial_size.x),
-                static_cast<f32>(size.y) / static_cast<f32>(initial_size.y)
-            )))
-        )
+f32 get_perlin_noise(const glm::vec<2, usize> pos, const f32 gradient_width) {
+    const f32 x = pos.x / gradient_width;
+    const f32 y = pos.y / gradient_width;
+    const f32 x_t = x - std::floor(x);
+    const f32 y_t = y - std::floor(y);
+    const usize x_floor = static_cast<usize>(x);
+    const usize y_floor = static_cast<usize>(y);
+    const usize x_ceil = x_floor + 1;
+    const usize y_ceil = y_floor + 1;
+    return std::lerp(
+        std::lerp(
+            glm::dot(rng<glm::vec2>(x_floor, y_floor), glm::vec2{x_t       , y_t}),
+            glm::dot(rng<glm::vec2>(x_ceil , y_floor), glm::vec2{x_t - 1.0f, y_t}),
+            smoothstep_quintic(x_t)
+        ),
+        std::lerp(
+            glm::dot(rng<glm::vec2>(x_floor, y_ceil), glm::vec2{x_t       , y_t - 1.0f}),
+            glm::dot(rng<glm::vec2>(x_ceil , y_ceil), glm::vec2{x_t - 1.0f, y_t - 1.0f}),
+            smoothstep_quintic(x_t)
+        ),
+        smoothstep_quintic(y_t)
     );
-    const f32 divisions = std::exp2f(static_cast<f32>(octaves)) - 1.0f;
-    f32 amplitude = std::floor(divisions / 2.0f) / divisions;
-    for (usize i = 0; i < octaves; ++i, octave_size *= 2, amplitude *= 0.5f) {
-        image += transform_image(
-            generate_perlin_noise(size, generate_white_noise<glm::vec2>(octave_size)),
-            [amplitude](const f32 val) -> f32 { return val * amplitude; }
-        );
-    }
-    return image;
 }
+
+glm::vec4 get_normal_from_heightmap(const glm::vec<2, usize> pos, const Image<f32>& heightmap) {
+    const f32 height = heightmap[pos.y][pos.x];
+
+    const usize v_up = pos.y == 0 ? heightmap.size.y - 1 : pos.y - 1;
+    const usize u_left = pos.x == 0 ? heightmap.size.x - 1 : pos.x - 1;
+    const glm::vec3 up  = {0.0f, -1.0f, heightmap[v_up][pos.x] - height};
+    const glm::vec3 left  = {-1.0f, 0.0f, heightmap[pos.y][u_left] - height};
+
+    const usize v_down = (pos.y + 1) % heightmap.size.y;
+    const usize u_right = (pos.x + 1) % heightmap.size.x;
+    const glm::vec3 down = {0.0f, 1.0f, heightmap[v_down][pos.x] - height};
+    const glm::vec3 right  = {1.0f, 0.0f, heightmap[pos.y][u_right] - height};
+
+    return glm::vec4{glm::normalize(glm::cross(up, left) + glm::cross(down, right)), 0.0f};
+}
+
+// Image<f32> generate_fractal_value_noise(
+//     const glm::vec<2, usize> size, const glm::vec<2, usize> initial_size, const usize max_octaves
+// ) {
+//     ASSERT(size.x > initial_size.x && size.y > initial_size.y);
+//     ASSERT(initial_size.x > 0 && initial_size.y > 0);
+//     ASSERT(max_octaves > 0);
+//
+//     Image<f32> image{size};
+//     auto octave_size = initial_size;
+//     const usize octaves = std::min(
+//         max_octaves, static_cast<usize>(
+//             std::floor(std::log2(std::min(
+//                 static_cast<f32>(size.x) / static_cast<f32>(initial_size.x),
+//                 static_cast<f32>(size.y) / static_cast<f32>(initial_size.y)
+//             )))
+//         )
+//     );
+//     const f32 divisions = std::exp2f(static_cast<f32>(octaves)) - 1.0f;
+//     f32 amplitude = std::floor(divisions / 2.0f) / divisions;
+//     for (usize i = 0; i < octaves; ++i, octave_size *= 2, amplitude *= 0.5f) {
+//         image += generate_value_noise(size,
+//             generate_white_noise<f32>(
+//                 octave_size,
+//                 [amplitude]() -> f32 { return rng<f32>() * amplitude; }
+//             )
+//         );
+//     }
+//     return image;
+// }
+
+// Image<f32> generate_fractal_perlin_noise(
+//     const glm::vec<2, usize> size, const glm::vec<2, usize> initial_size, const usize max_octaves
+// ) {
+//     ASSERT(size.x > initial_size.x && size.y > initial_size.y);
+//     ASSERT(initial_size.x > 0 && initial_size.y > 0);
+//     ASSERT(max_octaves > 0);
+//
+//     Image<f32> image{size};
+//     auto octave_size = initial_size;
+//     const usize octaves = std::min(
+//         max_octaves, static_cast<usize>(
+//             std::floor(std::log2(std::min(
+//                 static_cast<f32>(size.x) / static_cast<f32>(initial_size.x),
+//                 static_cast<f32>(size.y) / static_cast<f32>(initial_size.y)
+//             )))
+//         )
+//     );
+//     const f32 divisions = std::exp2f(static_cast<f32>(octaves)) - 1.0f;
+//     f32 amplitude = std::floor(divisions / 2.0f) / divisions;
+//     for (usize i = 0; i < octaves; ++i, octave_size *= 2, amplitude *= 0.5f) {
+//         image += transform_image(
+//             generate_perlin_noise(size, generate_white_noise<glm::vec2>(octave_size)),
+//             [amplitude](const f32 val) -> f32 { return val * amplitude; }
+//         );
+//     }
+//     return image;
+// }
 
 } // namespace hg
