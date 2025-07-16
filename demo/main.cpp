@@ -28,7 +28,7 @@ int main() {
     if (skybox.has_err())
         LOGF_ERROR(errf(skybox));
 
-    const auto default_normal_texture = [&] {
+    const auto default_normals = [&] {
         auto default_normals = generator.alloc_image<glm::vec4>({2, 2}, [](...) {
             return glm::vec4{0.0f, 0.0f, -1.0f, 0.0f};
         });
@@ -37,7 +37,7 @@ int main() {
         return model_pipeline.load_texture(*engine, generator.get(default_normals), vk::Format::eR32G32B32A32Sfloat);
     }();
 
-    const auto perlin_normal_texture = [&] {
+    const auto perlin_normals = [&] {
         auto perlin_noise = generator.alloc_image<f32>({512, 512}, [&](const auto pos) {
             return get_fractal_noise(pos, 1.0f, 32.0f, get_perlin_noise);
         });
@@ -55,7 +55,7 @@ int main() {
         auto gray = generator.alloc_image<u32>({2, 2}, [](...) { return 0xff777777; });
         defer(generator.dealloc_image(gray));
 
-        return model_pipeline.load_texture(*engine, generator.get(gray), vk::Format::eR8G8B8A8Srgb);
+        return model_pipeline.load_texture(*engine, generator.get(gray));
     }();
 
     const auto hex_texture = *model_pipeline.load_texture(*engine, "../assets/hexagon_models/Textures/hexagons_medieval.png");
@@ -64,19 +64,19 @@ int main() {
         auto cube = generator.generate_cube(generator.alloc_mesh());
         defer(generator.dealloc_mesh(cube));
 
-        return model_pipeline.load_model(*engine, {generator.get(cube), 0.2f, 0.0f}, perlin_normal_texture, gray_texture);
+        return model_pipeline.load_model(*engine, {generator.get(cube), 0.2f, 0.0f}, perlin_normals, gray_texture);
     }();
 
     const auto sphere = [&] {
         auto sphere = generator.generate_sphere(generator.alloc_mesh(), {64, 32});
         defer(generator.dealloc_mesh(sphere));
 
-        return model_pipeline.load_model(*engine, {generator.get(sphere), 0.2f, 1.0f}, perlin_normal_texture, gray_texture);
+        return model_pipeline.load_model(*engine, {generator.get(sphere), 0.2f, 1.0f}, perlin_normals, gray_texture);
     }();
 
-    const auto grass = *model_pipeline.load_model(*engine, "../assets/hexagon_models/Assets/gltf/tiles/base/hex_grass.gltf", default_normal_texture, hex_texture);
-    const auto building = *model_pipeline.load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_home_A_blue.gltf", default_normal_texture, hex_texture);
-    const auto tower = *model_pipeline.load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_tower_A_blue.gltf", default_normal_texture, hex_texture);
+    const auto grass = *model_pipeline.load_model(*engine, "../assets/hexagon_models/Assets/gltf/tiles/base/hex_grass.gltf", default_normals, hex_texture);
+    const auto building = *model_pipeline.load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_home_A_blue.gltf", default_normals, hex_texture);
+    const auto tower = *model_pipeline.load_model(*engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_tower_A_blue.gltf", default_normals, hex_texture);
 
     const auto extent = renderer->get_extent();
     const f32 aspect_ratio = static_cast<f32>(extent.width) / static_cast<f32>(extent.height);
