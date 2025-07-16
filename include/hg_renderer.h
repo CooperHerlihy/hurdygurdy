@@ -32,7 +32,7 @@ public:
         alignas(16) Light vals[MaxLights]{};
     };
 
-    [[nodiscard]] GLFWwindow* get_window() const { return m_window.get(); }
+    [[nodiscard]] SDL_Window* get_window() const { return m_window.get(); }
     [[nodiscard]] vk::Extent2D get_extent() const { return m_window.get_extent(); }
 
     [[nodiscard]] vk::DescriptorSetLayout get_global_set_layout() const { return m_set_layout.get(); }

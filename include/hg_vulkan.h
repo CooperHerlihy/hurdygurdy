@@ -583,7 +583,7 @@ public:
         return m_surface;
     }
 
-    [[nodiscard]] static Result<Surface> create(Vk& vk, GLFWwindow* window);
+    [[nodiscard]] static Surface create(Vk& vk, SDL_Window* window);
     void destroy(Vk& vk) const {
         ASSERT(m_surface != nullptr);
         vk.instance.destroySurfaceKHR(m_surface);

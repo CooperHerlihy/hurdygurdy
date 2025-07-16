@@ -1,5 +1,6 @@
 #include "hg_vulkan.h"
 
+#include "SDL3/SDL_vulkan.h"
 #include "hg_pch.h"
 #include "hg_utils.h"
 #include "hg_load.h"
@@ -50,15 +51,16 @@ const vk::DebugUtilsMessengerCreateInfoEXT DebugUtilsMessengerCreateInfo{
 };
 
 static Result<Slice<const char*>> get_instance_extensions(Vk& vk) {
-    u32 glfw_extension_count = 0;
-    const char** glfw_extensions = glfwGetRequiredInstanceExtensions(&glfw_extension_count);
-    if (glfw_extensions == nullptr)
-        ERROR("Failed to get required instance extensions from GLFW");
 
-    auto required_extensions = ok(vk.stack.alloc<const char*>(glfw_extension_count + 1));
-    std::copy(glfw_extensions, glfw_extensions + glfw_extension_count, required_extensions->data);
+    u32 sdl_extension_count = 0;
+    const char* const* sdl_extensions = SDL_Vulkan_GetInstanceExtensions(&sdl_extension_count);
+    if (sdl_extensions == nullptr)
+        ERRORF("Failed to get required instance extensions from SDL: {}", SDL_GetError());
+
+    auto required_extensions = ok(vk.stack.alloc<const char*>(sdl_extension_count + 1));
+    std::copy(sdl_extensions, sdl_extensions + sdl_extension_count, required_extensions->data);
 #ifndef NDEBUG
-    required_extensions->data[glfw_extension_count] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
+    required_extensions->data[sdl_extension_count] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
 #endif
 
     const auto extensions = vk::enumerateInstanceExtensionProperties();
@@ -356,11 +358,6 @@ Result<Vk> Vk::create() {
     auto vk = ok<Vk>();
 
     vk->stack = Arena{malloc_slice<byte>(1024 * 64)};
-
-    const auto glfw_success = glfwInit();
-    if (glfw_success == GLFW_FALSE)
-        ERROR("Could not initialize GLFW");
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
     VULKAN_HPP_DEFAULT_DISPATCHER.init();
 
@@ -1453,21 +1450,17 @@ void end_single_time_commands(Vk& vk, vk::CommandBuffer cmd) {
     vk.device.freeCommandBuffers(vk.single_time_command_pool, {cmd});
 }
 
-Result<Surface> Surface::create(Vk& vk, GLFWwindow* window) {
+Surface Surface::create(Vk& vk, SDL_Window* window) {
+    ASSERT(window != nullptr);
+
     VkSurfaceKHR vk_surface = VK_NULL_HANDLE;
-    const auto surface_result = glfwCreateWindowSurface(vk.instance, window, nullptr, &vk_surface);
-    switch (surface_result) {
-        case VK_SUCCESS: break;
-        case VK_ERROR_INITIALIZATION_FAILED: ERROR("Vulkan initialization failed");
-        case VK_ERROR_EXTENSION_NOT_PRESENT: return Err::VulkanExtensionUnavailable;
-        case VK_ERROR_NATIVE_WINDOW_IN_USE_KHR: ERROR("Window surface creation requires the window to have the client API set to GLFW_NO_API");
-        default: ERROR("Unexpected Vulkan error");
-    }
+    bool sdl_success = SDL_Vulkan_CreateSurface(window, vk.instance, nullptr, &vk_surface);
+    if (!sdl_success)
+        ERRORF("Could not create Vulkan surface: {}", SDL_GetError());
 
-    auto surface = ok<Surface>();
-    surface->m_surface = vk_surface;
+    Surface surface{};
+    surface.m_surface = vk_surface;
 
-    ASSERT(surface->m_surface != nullptr);
     return surface;
 }
 

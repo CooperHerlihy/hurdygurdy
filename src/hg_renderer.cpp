@@ -10,15 +10,8 @@ Result<DefaultRenderer> DefaultRenderer::create(Engine& engine, const Config& co
 
     auto renderer = ok<DefaultRenderer>();
 
-    const auto window = Window::create(config.fullscreen, config.window_size.x, config.window_size.y);
-    if (window.has_err())
-        return window.err();
-    renderer->m_window = *window;
-
-    const auto surface = Surface::create(engine.vk, renderer->m_window.get());
-    if (surface.has_err())
-        return surface.err();
-    renderer->m_surface = *surface;
+    renderer->m_window = Window::create(config.fullscreen, config.window_size.x, config.window_size.y);
+    renderer->m_surface = Surface::create(engine.vk, renderer->m_window.get());
 
     const auto swapchain = Swapchain::create(engine.vk, renderer->m_surface.get());
     if (swapchain.has_err())
@@ -214,9 +207,7 @@ void DefaultRenderer::destroy(Engine& engine) const {
         switch (frame_result.err()) {
             case Err::FrameTimeout: return frame_result.err();
             case Err::InvalidWindow: {
-                for (int w = 0, h = 0; w <= 1 || h <= 1; glfwGetWindowSize(m_window.get(), &w, &h)) {
-                    glfwPollEvents();
-                }
+                // TODO: handle window minimizing and resizing
 
                 const auto resize_result = resize(engine);
                 if (resize_result.has_err()) {

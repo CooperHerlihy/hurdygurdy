@@ -57,6 +57,8 @@ template <typename F> [[nodiscard]] f32 get_fractal_noise(
 
 class Generator {
 public:
+    Generator() = default;
+
     struct Config {
         usize max_meshes = 0;
         usize max_images = 0;

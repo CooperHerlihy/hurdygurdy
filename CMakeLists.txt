@@ -5,7 +5,11 @@ set(CMAKE_C_STANDARD 17)
 project(HurdyGurdy LANGUAGES C CXX)
 
 find_package(Vulkan REQUIRED)
-add_subdirectory(vendor/glfw EXCLUDE_FROM_ALL)
+
+set(SDL_STATIC ON)
+set(SDL_SHARED OFF)
+add_subdirectory(vendor/SDL EXCLUDE_FROM_ALL)
+
 add_subdirectory(vendor/fastgltf EXCLUDE_FROM_ALL)
 
 add_library(mikktspace STATIC "vendor/mikktspace/mikktspace.c")
@@ -15,7 +19,7 @@ file(GLOB_RECURSE HG_SRC "src/*.cpp" "include/*.h")
 add_library(hurdy_gurdy STATIC ${HG_SRC})
 target_include_directories(hurdy_gurdy PUBLIC include)
 target_include_directories(hurdy_gurdy PUBLIC SYSTEM vendor)
-target_link_libraries(hurdy_gurdy PUBLIC Vulkan::Vulkan glfw fastgltf mikktspace welder)
+target_link_libraries(hurdy_gurdy PUBLIC Vulkan::Vulkan SDL3::SDL3 fastgltf mikktspace welder)
 target_precompile_headers(hurdy_gurdy PUBLIC "include/hg_pch.h")
 
 file(GLOB_RECURSE DEMO_SRC "demo/*.cpp" "demo/*.h")

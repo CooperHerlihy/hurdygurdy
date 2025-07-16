@@ -99,7 +99,6 @@ enum class Err : u8 {
     VkQueueUnavailable,
 
     // Window
-    MonitorUnvailable,
     InvalidWindow,
     FrameTimeout,
 
@@ -132,7 +131,6 @@ constexpr std::string_view to_string(Err code) {
         HG_MAKE_ERROR_STRING(VkQueueUnavailable);
 
         // Window
-        HG_MAKE_ERROR_STRING(MonitorUnvailable);
         HG_MAKE_ERROR_STRING(InvalidWindow);
         HG_MAKE_ERROR_STRING(FrameTimeout);
 

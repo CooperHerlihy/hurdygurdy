@@ -1,35 +1,19 @@
 #include "hg_window.h"
+#include "SDL3/SDL_video.h"
 
 namespace hg {
 
-Result<Window> Window::create(const bool fullscreen, const i32 width, const i32 height) {
-    if (!fullscreen) {
-        ASSERT(width > 0);
-        ASSERT(height > 0);
-    }
+Window Window::create(const bool fullscreen, const i32 width, const i32 height) {
+    if (!fullscreen)
+        ASSERT(width > 0 && height > 0);
 
-    auto window = ok<Window>();
-
-    if (fullscreen) {
-        const auto monitor = glfwGetPrimaryMonitor();
-        if (monitor == nullptr)
-            return Err::MonitorUnvailable;
-
-        const auto video_mode = glfwGetVideoMode(monitor);
-        if (video_mode == nullptr)
-            ERROR("Could not find video mode");
-
-        window->m_window = glfwCreateWindow(video_mode->width, video_mode->width, "Hurdy Gurdy", monitor, nullptr);
-        if (window->m_window == nullptr)
-            ERROR("Could not create window");
-
-    } else {
-        window->m_window = glfwCreateWindow(width, height, "Hurdy Gurdy", nullptr, nullptr);
-        if (window->m_window == nullptr)
-            ERROR("Could not create window");
-    }
-
-    ASSERT(window->m_window != nullptr);
+    Window window{};
+    window.m_window = SDL_CreateWindow(
+        "Hurdy Gurdy", width, height, SDL_WINDOW_VULKAN
+        | (fullscreen ? SDL_WINDOW_FULLSCREEN : SDL_WINDOW_RESIZABLE)
+    );
+    if (window.m_window == nullptr)
+        ERRORF("Could not create window: {}", SDL_GetError());
     return window;
 }
 
