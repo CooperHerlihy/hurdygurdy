@@ -12,13 +12,13 @@ public:
         return m_window;
     }
 
-    [[nodiscard]] vk::Extent2D get_extent() const {
+    [[nodiscard]] glm::ivec2 get_extent() const {
         int width = 0, height = 0;
         SDL_GetWindowSize(m_window, &width, &height);
-        return {to_u32(width), to_u32(height)};
+        return {width, height};
     }
 
-    [[nodiscard]] static Window create(bool fullscreen, i32 width, i32 height);
+    [[nodiscard]] static Window create(bool fullscreen, glm::ivec2 size);
     void destroy() const {
         ASSERT(m_window != nullptr);
         SDL_DestroyWindow(m_window);

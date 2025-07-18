@@ -13,7 +13,7 @@ public:
     public:
         virtual ~Pipeline() = default;
 
-        virtual void draw(const DefaultRenderer& renderer, const vk::CommandBuffer cmd) = 0;
+        virtual void draw(const DefaultRenderer& renderer, const VkCommandBuffer cmd) = 0;
     };
 
     struct ViewProjectionUniform {
@@ -33,14 +33,14 @@ public:
     };
 
     [[nodiscard]] SDL_Window* get_window() const { return m_window.get(); }
-    [[nodiscard]] vk::Extent2D get_extent() const { return m_window.get_extent(); }
+    [[nodiscard]] glm::ivec2 get_extent() const { return m_window.get_extent(); }
 
-    [[nodiscard]] vk::DescriptorSetLayout get_global_set_layout() const { return m_set_layout.get(); }
-    [[nodiscard]] vk::DescriptorSet get_global_set() const { return m_global_set; }
+    [[nodiscard]] VkDescriptorSetLayout get_global_set_layout() const { return m_set_layout.get(); }
+    [[nodiscard]] VkDescriptorSet get_global_set() const { return m_global_set; }
 
     struct Config {
         bool fullscreen = false;
-        glm::uvec2 window_size{1920, 1080};
+        glm::ivec2 window_size{1920, 1080};
     };
     [[nodiscard]] static Result<DefaultRenderer> create(Engine& engine, const Config& config);
     Result<void> resize(Engine& engine);
@@ -69,7 +69,7 @@ private:
 
     DescriptorSetLayout m_set_layout{};
     DescriptorPool m_descriptor_pool{};
-    vk::DescriptorSet m_global_set{};
+    VkDescriptorSet m_global_set{};
     GpuBuffer m_vp_buffer{};
     GpuBuffer m_light_buffer{};
     std::vector<Light> m_light_queue{};
@@ -79,7 +79,7 @@ class SkyboxPipeline : public DefaultRenderer::Pipeline {
 public:
     [[nodiscard]] static SkyboxPipeline create(Engine& engine, const DefaultRenderer& pipeline);
     void destroy(Engine& engine) const;
-    void draw(const DefaultRenderer& renderer, const vk::CommandBuffer cmd) override;
+    void draw(const DefaultRenderer& renderer, const VkCommandBuffer cmd) override;
 
     void load_skybox(Engine& engine, const ImageData& data);
     Result<void> load_skybox(Engine& engine, const std::filesystem::path path);
@@ -89,7 +89,7 @@ private:
     GraphicsPipeline m_pipeline{};
 
     DescriptorPool m_descriptor_pool{};
-    vk::DescriptorSet m_set{};
+    VkDescriptorSet m_set{};
 
     Texture m_cubemap{};
     GpuBuffer m_index_buffer{};
@@ -109,7 +109,7 @@ public:
         float metalness = 0.0f;
     };
 
-    void draw(const DefaultRenderer& renderer, const vk::CommandBuffer cmd) override;
+    void draw(const DefaultRenderer& renderer, const VkCommandBuffer cmd) override;
 
     static constexpr usize MaxTextures = 256;
     struct TextureHandle {
@@ -117,10 +117,10 @@ public:
     };
 
     [[nodiscard]] TextureHandle load_texture(
-        Engine& engine, const ImageData& data, vk::Format format = vk::Format::eR8G8B8A8Srgb
+        Engine& engine, const ImageData& data, VkFormat format = VK_FORMAT_R8G8B8A8_SRGB
     );
     [[nodiscard]] Result<TextureHandle> load_texture(
-        Engine& engine, const std::filesystem::path path, vk::Format format = vk::Format::eR8G8B8A8Srgb
+        Engine& engine, const std::filesystem::path path, VkFormat format = VK_FORMAT_R8G8B8A8_SRGB
     );
 
     struct Model {
@@ -172,7 +172,7 @@ private:
     GraphicsPipeline m_pipeline{};
 
     DescriptorPool m_descriptor_pool{};
-    vk::DescriptorSet m_texture_set{};
+    VkDescriptorSet m_texture_set{};
 
     std::vector<Texture> m_textures{};
     std::vector<Model> m_models{};

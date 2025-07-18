@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <span>
 #include <string_view>
 #include <type_traits>
 #include <chrono>
@@ -483,6 +484,11 @@ public:
 private:
     Slice<byte> m_memory{};
     usize m_head = 0;
+};
+
+template <typename T> class Flags {
+public:
+private:
 };
 
 class Clock {

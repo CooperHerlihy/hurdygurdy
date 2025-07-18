@@ -47,17 +47,21 @@ struct InputState {
 static InputState input_state{};
 
 SDL_AppResult SDL_AppInit(void**, int, char**) {
-    auto engine_res = Engine::create();
-    if (engine_res.has_err())
-        LOGF_ERROR(errf(engine_res));
-    engine = std::move(*engine_res);
+    engine = [] {
+        auto engine_res = Engine::create();
+        if (engine_res.has_err())
+            LOGF_ERROR(errf(engine_res));
+        return std::move(*engine_res);
+    }();
 
     generator = Generator{{.max_meshes = 64, .max_images = 64}};
 
-    auto renderer_res = DefaultRenderer::create(engine, {.fullscreen = true});
-    if (renderer_res.has_err())
-        LOGF_ERROR(errf(renderer_res));
-    renderer = std::move(*renderer_res);
+    renderer = [] {
+        auto renderer_res = DefaultRenderer::create(engine, {.fullscreen = true});
+        if (renderer_res.has_err())
+            LOGF_ERROR(errf(renderer_res));
+        return std::move(*renderer_res);
+    }();
 
     skybox_pipeline = SkyboxPipeline::create(engine, renderer);
     model_pipeline = PbrPipeline::create(engine, renderer);
@@ -72,7 +76,7 @@ SDL_AppResult SDL_AppInit(void**, int, char**) {
         });
         defer(generator.dealloc_image(default_normal_image));
 
-        return model_pipeline.load_texture(engine, generator.get(default_normal_image), vk::Format::eR32G32B32A32Sfloat);
+        return model_pipeline.load_texture(engine, generator.get(default_normal_image), VK_FORMAT_R32G32B32A32_SFLOAT);
     }();
 
     perlin_normals = [&] {
@@ -86,7 +90,7 @@ SDL_AppResult SDL_AppInit(void**, int, char**) {
         });
         defer(generator.dealloc_image(perlin_normal_image));
 
-        return model_pipeline.load_texture(engine, generator.get(perlin_normal_image), vk::Format::eR32G32B32A32Sfloat);
+        return model_pipeline.load_texture(engine, generator.get(perlin_normal_image), VK_FORMAT_R32G32B32A32_SFLOAT);
     }();
 
     gray_texture = [&] {
@@ -116,7 +120,7 @@ SDL_AppResult SDL_AppInit(void**, int, char**) {
     tower = *model_pipeline.load_model(engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_tower_A_blue.gltf", default_normals, hex_texture);
 
     const auto extent = renderer.get_extent();
-    const f32 aspect_ratio = static_cast<f32>(extent.width) / static_cast<f32>(extent.height);
+    const f32 aspect_ratio = static_cast<f32>(extent.x) / static_cast<f32>(extent.y);
     renderer.update_projection(engine, glm::perspective(glm::pi<f32>() / 4.0f, aspect_ratio, 0.1f, 100.f));
 
     camera.translate({0.0f, -2.0f, -4.0f});
@@ -126,6 +130,7 @@ SDL_AppResult SDL_AppInit(void**, int, char**) {
 }
 
 void SDL_AppQuit(void*, SDL_AppResult) {
+    defer(engine.destroy());
     defer(generator.destroy());
     defer(renderer.destroy(engine));
     defer(skybox_pipeline.destroy(engine));

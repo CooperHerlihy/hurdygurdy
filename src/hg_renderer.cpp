@@ -1,4 +1,5 @@
 #include "hg_renderer.h"
+#include <vulkan/vulkan_core.h>
 
 namespace hg {
 
@@ -10,7 +11,7 @@ Result<DefaultRenderer> DefaultRenderer::create(Engine& engine, const Config& co
 
     auto renderer = ok<DefaultRenderer>();
 
-    renderer->m_window = Window::create(config.fullscreen, config.window_size.x, config.window_size.y);
+    renderer->m_window = Window::create(config.fullscreen, config.window_size);
     renderer->m_surface = Surface::create(engine.vk, renderer->m_window.get());
 
     const auto swapchain = Swapchain::create(engine.vk, renderer->m_surface.get());
@@ -18,40 +19,40 @@ Result<DefaultRenderer> DefaultRenderer::create(Engine& engine, const Config& co
         return swapchain.err();
     renderer->m_swapchain = *swapchain;
 
-    const auto window_size = renderer->m_window.get_extent();
+    const glm::ivec2 window_size = renderer->m_window.get_extent();
 
     renderer->m_color_image = GpuImageAndView::create(engine.vk, {
-        .extent{window_size.width, window_size.height, 1},
+        .extent{to_u32(window_size.x), to_u32(window_size.y), 1},
         .format = Swapchain::SwapchainImageFormat,
-        .usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc,
-        .sample_count = vk::SampleCountFlagBits::e4,
+        .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+        .sample_count = VK_SAMPLE_COUNT_4_BIT,
     });
     renderer->m_depth_image = GpuImageAndView::create(engine.vk, {
-        .extent{window_size.width, window_size.height, 1},
-        .format = vk::Format::eD32Sfloat,
-        .usage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
-        .aspect_flags = vk::ImageAspectFlagBits::eDepth,
-        .sample_count = vk::SampleCountFlagBits::e4,
+        .extent{to_u32(window_size.x), to_u32(window_size.y), 1},
+        .format = VK_FORMAT_D32_SFLOAT,
+        .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+        .aspect_flags = VK_IMAGE_ASPECT_DEPTH_BIT,
+        .sample_count = VK_SAMPLE_COUNT_4_BIT,
     });
 
     renderer->m_set_layout = DescriptorSetLayout::create(engine.vk, {std::array{
-        vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex},
-        vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eFragment},
+        VkDescriptorSetLayoutBinding{0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT},
+        VkDescriptorSetLayoutBinding{1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
     }});
 
     renderer->m_descriptor_pool = DescriptorPool::create(engine.vk, {1, std::array{
-        vk::DescriptorPoolSize{vk::DescriptorType::eUniformBuffer, 2}
+        VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2}
     }});
 
     renderer->m_global_set = *renderer->m_descriptor_pool.allocate_set(engine.vk, renderer->m_set_layout.get());;
 
     renderer->m_vp_buffer = GpuBuffer::create(engine.vk, {
         sizeof(ViewProjectionUniform),
-        vk::BufferUsageFlagBits::eUniformBuffer, GpuBuffer::RandomAccess
+        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, GpuBuffer::RandomAccess
     });
     renderer->m_light_buffer = GpuBuffer::create(engine.vk, {
         sizeof(LightUniform) * MaxLights,
-        vk::BufferUsageFlagBits::eUniformBuffer, GpuBuffer::RandomAccess
+        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, GpuBuffer::RandomAccess
     });
 
     write_uniform_buffer_descriptor(
@@ -74,31 +75,31 @@ Result<void> DefaultRenderer::resize(Engine& engine) {
 
     m_color_image.destroy(engine.vk);
     m_color_image = GpuImageAndView::create(engine.vk, {
-        .extent{window_size.width, window_size.height, 1},
+        .extent{to_u32(window_size.x), to_u32(window_size.y), 1},
         .format = Swapchain::SwapchainImageFormat,
-        .usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc,
-        .sample_count = vk::SampleCountFlagBits::e4,
+        .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+        .sample_count = VK_SAMPLE_COUNT_4_BIT,
     });
 
     m_depth_image.destroy(engine.vk);
     m_depth_image = GpuImageAndView::create(engine.vk, {
-        .extent{window_size.width, window_size.height, 1},
-        .format = vk::Format::eD32Sfloat,
-        .usage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
-        .aspect_flags = vk::ImageAspectFlagBits::eDepth,
-        .sample_count = vk::SampleCountFlagBits::e4,
+        .extent{to_u32(window_size.x), to_u32(window_size.y), 1},
+        .format = VK_FORMAT_D32_SFLOAT,
+        .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+        .aspect_flags = VK_IMAGE_ASPECT_DEPTH_BIT,
+        .sample_count = VK_SAMPLE_COUNT_4_BIT,
     });
 
     return ok();
 }
 
 void DefaultRenderer::destroy(Engine& engine) const {
-    const auto wait_result = engine.vk.queue.waitIdle();
+    const auto wait_result = vkQueueWaitIdle(engine.vk.queue);
     switch (wait_result) {
-        case vk::Result::eSuccess: break;
-        case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
-        case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
-        case vk::Result::eErrorDeviceLost: ERROR("Vulkan device lost");
+        case VK_SUCCESS: break;
+        case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
+        case VK_ERROR_OUT_OF_DEVICE_MEMORY: ERROR("Vulkan ran out of device memory");
+        case VK_ERROR_DEVICE_LOST: ERROR("Vulkan device lost");
         default: ERROR("Unexpected Vulkan error");
     }
 
@@ -126,74 +127,86 @@ void DefaultRenderer::destroy(Engine& engine) const {
         const auto render_target = begin->render_target;
         const auto extent = begin->extent;
 
-        BarrierBuilder(engine.vk, {.cmd = cmd, .image_barriers = 2})
-            .add_image_barrier(0, m_color_image.get_image(), {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
-            .set_image_dst(0, vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::AccessFlagBits2::eColorAttachmentWrite, vk::ImageLayout::eColorAttachmentOptimal)
-            .add_image_barrier(1, m_depth_image.get_image(), {vk::ImageAspectFlagBits::eDepth, 0, 1, 0, 1})
+        BarrierBuilder(engine.vk, {.image_barriers = 2})
+            .add_image_barrier(0, m_color_image.get_image(), {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
+            .set_image_dst(0, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+            .add_image_barrier(1, m_depth_image.get_image(), {VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1})
             .set_image_dst(1,
-                vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
-                vk::AccessFlagBits2::eDepthStencilAttachmentWrite, vk::ImageLayout::eDepthStencilAttachmentOptimal
+                VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+                VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
             )
-            .build_and_run(engine.vk);
+            .build_and_run(engine.vk, cmd);
 
-        const vk::RenderingAttachmentInfo color_attachment{
+        const VkRenderingAttachmentInfo color_attachment{
+            .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
             .imageView = m_color_image.get_view(),
-            .imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
-            .loadOp = vk::AttachmentLoadOp::eDontCare,
-            .storeOp = vk::AttachmentStoreOp::eStore,
-            .clearValue{{std::array{0.0f, 0.0f, 0.0f, 1.0f}}},
+            .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .clearValue{
+                .color{{0.0f, 0.0f, 0.0f, 1.0f}}
+            },
         };
-        const vk::RenderingAttachmentInfo depth_attachment{
+        const VkRenderingAttachmentInfo depth_attachment{
+            .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
             .imageView = m_depth_image.get_view(),
-            .imageLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
-            .loadOp = vk::AttachmentLoadOp::eClear,
-            .storeOp = vk::AttachmentStoreOp::eDontCare,
-            .clearValue{.depthStencil{.depth = 1.0f, .stencil = 0}},
+            .imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+            .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            .clearValue{
+                .depthStencil{.depth = 1.0f, .stencil = 0}
+            },
         };
-        cmd.beginRendering({
-            .renderArea{{0, 0}, extent},
+        const VkRenderingInfo render_info{
+            .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+            .renderArea{{}, extent},
             .layerCount = 1,
             .colorAttachmentCount = 1,
             .pColorAttachments = &color_attachment,
             .pDepthAttachment = &depth_attachment,
-        });
+        };
+        vkCmdBeginRendering(cmd, &render_info);
 
-        cmd.setRasterizationSamplesEXT(vk::SampleCountFlagBits::e4);
-        cmd.setSampleMaskEXT(vk::SampleCountFlagBits::e4, vk::SampleMask{0xff});
+        const VkSampleMask sample_mask = 0xff;
+        g_pfn.vkCmdSetSampleMaskEXT(cmd, VK_SAMPLE_COUNT_4_BIT, &sample_mask);
+        g_pfn.vkCmdSetRasterizationSamplesEXT(cmd, VK_SAMPLE_COUNT_4_BIT);
 
         for (auto pipeline : pipelines) {
             pipeline->draw(*this, cmd);
         }
 
-        cmd.endRendering();
+        vkCmdEndRendering(cmd);
 
-        BarrierBuilder(engine.vk, {.cmd = cmd, .image_barriers = 2})
-            .add_image_barrier(0, m_color_image.get_image(), {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
-            .set_image_src(0, vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::AccessFlagBits2::eColorAttachmentWrite, vk::ImageLayout::eColorAttachmentOptimal)
-            .set_image_dst(0, vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferRead, vk::ImageLayout::eTransferSrcOptimal)
-            .add_image_barrier(1, render_target, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
-            .set_image_dst(1, vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
-            .build_and_run(engine.vk);
+        BarrierBuilder(engine.vk, {.image_barriers = 2})
+            .add_image_barrier(0, m_color_image.get_image(), {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
+            .set_image_src(0, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+            .set_image_dst(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
+            .add_image_barrier(1, render_target, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
+            .set_image_dst(1, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+            .build_and_run(engine.vk, cmd);
 
-        const vk::ImageResolve2 resolve{
-            .srcSubresource{vk::ImageAspectFlagBits::eColor, 0, 0, 1},
-            .dstSubresource{vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+        const VkImageResolve2 resolve{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_RESOLVE_2,
+            .srcSubresource{VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+            .dstSubresource{VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
             .extent{extent.width, extent.height, 1},
         };
-        cmd.resolveImage2({
+        const VkResolveImageInfo2 resolve_info{
+            .sType = VK_STRUCTURE_TYPE_RESOLVE_IMAGE_INFO_2,
             .srcImage = m_color_image.get_image(),
-            .srcImageLayout = vk::ImageLayout::eTransferSrcOptimal,
+            .srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
             .dstImage = render_target,
-            .dstImageLayout = vk::ImageLayout::eTransferDstOptimal,
+            .dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             .regionCount = 1,
             .pRegions = &resolve,
-        });
+        };
+        vkCmdResolveImage2(cmd, &resolve_info);
 
-        BarrierBuilder(engine.vk, {.cmd = cmd, .image_barriers = 1})
-            .add_image_barrier(0, render_target, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1})
-            .set_image_src(0, vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)
-            .set_image_dst(0, vk::PipelineStageFlagBits2::eAllGraphics, vk::AccessFlagBits2::eNone, vk::ImageLayout::ePresentSrcKHR)
-            .build_and_run(engine.vk);
+        BarrierBuilder(engine.vk, {.image_barriers = 1})
+            .add_image_barrier(0, render_target, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
+            .set_image_src(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+            .set_image_dst(0, VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, VK_ACCESS_2_NONE, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
+            .build_and_run(engine.vk, cmd);
 
         m_light_queue.clear();
 
@@ -245,7 +258,7 @@ SkyboxPipeline SkyboxPipeline::create(Engine& engine, const DefaultRenderer& ren
     SkyboxPipeline pipeline{};
 
     pipeline.m_set_layout = DescriptorSetLayout::create(engine.vk, {{std::array{
-        vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment},
+        VkDescriptorSetLayoutBinding{0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
     }}});
 
     std::array set_layouts{renderer.get_global_set_layout(), pipeline.m_set_layout.get()};
@@ -261,7 +274,7 @@ SkyboxPipeline SkyboxPipeline::create(Engine& engine, const DefaultRenderer& ren
     pipeline.m_pipeline= *graphics_pipeline;
 
     pipeline.m_descriptor_pool = DescriptorPool::create(engine.vk, {1, std::array{
-        vk::DescriptorPoolSize{vk::DescriptorType::eCombinedImageSampler, 1}
+        VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1}
     }});
 
     pipeline.m_set = *pipeline.m_descriptor_pool.allocate_set(engine.vk, pipeline.m_set_layout.get());;
@@ -271,12 +284,12 @@ SkyboxPipeline SkyboxPipeline::create(Engine& engine, const DefaultRenderer& ren
 }
 
 void SkyboxPipeline::destroy(Engine& engine) const {
-    const auto wait_result = engine.vk.queue.waitIdle();
+    const VkResult wait_result = vkQueueWaitIdle(engine.vk.queue);
     switch (wait_result) {
-        case vk::Result::eSuccess: break;
-        case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
-        case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
-        case vk::Result::eErrorDeviceLost: ERROR("Vulkan device lost");
+        case VK_SUCCESS: break;
+        case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
+        case VK_ERROR_OUT_OF_DEVICE_MEMORY: ERROR("Vulkan ran out of device memory");
+        case VK_ERROR_DEVICE_LOST: ERROR("Vulkan device lost");
         default: ERROR("Unexpected Vulkan error");
     }
 
@@ -292,36 +305,61 @@ void SkyboxPipeline::destroy(Engine& engine) const {
     m_set_layout.destroy(engine.vk);
 }
 
-void SkyboxPipeline::draw(const DefaultRenderer& renderer, const vk::CommandBuffer cmd) {
+void SkyboxPipeline::draw(const DefaultRenderer& renderer, const VkCommandBuffer cmd) {
     ASSERT(m_set != nullptr);
     ASSERT(cmd != nullptr);
 
-    cmd.setDepthTestEnable(vk::False);
-    cmd.setDepthWriteEnable(vk::False);
-    cmd.setCullMode(vk::CullModeFlagBits::eFront);
+    vkCmdSetDepthTestEnable(cmd, VK_FALSE);
+    vkCmdSetDepthWriteEnable(cmd, VK_FALSE);
+    vkCmdSetCullMode(cmd, VK_CULL_MODE_FRONT_BIT);
 
-    cmd.bindShadersEXT({vk::ShaderStageFlagBits::eVertex, vk::ShaderStageFlagBits::eFragment}, std::span{m_pipeline.get_shaders()});
-    cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipeline.get_layout(), 0, {renderer.get_global_set(), m_set}, {});
-
-    cmd.setVertexInputEXT(
-        {vk::VertexInputBindingDescription2EXT{.stride = sizeof(glm::vec3), .inputRate = vk::VertexInputRate::eVertex, .divisor = 1}},
-        {vk::VertexInputAttributeDescription2EXT{.location = 0, .format = vk::Format::eR32G32B32Sfloat}}
+    const std::array shader_stages{VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT};
+    g_pfn.vkCmdBindShadersEXT(cmd, 2, shader_stages.data(), m_pipeline.get_shaders().data);
+    const std::array descriptor_sets{renderer.get_global_set(), m_set};
+    vkCmdBindDescriptorSets(cmd,
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        m_pipeline.get_layout(),
+        0, to_u32(descriptor_sets.size()), descriptor_sets.data(),
+        0, nullptr
     );
-    cmd.bindVertexBuffers(0, {m_vertex_buffer.get()}, {vk::DeviceSize{0}});
-    cmd.bindIndexBuffer(m_index_buffer.get(), 0, vk::IndexType::eUint32);
-    cmd.drawIndexed(36, 1, 0, 0, 1);
 
-    cmd.setDepthTestEnable(vk::True);
-    cmd.setDepthWriteEnable(vk::True);
-    cmd.setCullMode(vk::CullModeFlagBits::eNone);
+    const std::array vertex_bindings = {
+        VkVertexInputBindingDescription2EXT{
+            .sType = VK_STRUCTURE_TYPE_VERTEX_INPUT_BINDING_DESCRIPTION_2_EXT,
+            .stride = sizeof(glm::vec3), .inputRate = VK_VERTEX_INPUT_RATE_VERTEX, .divisor = 1
+        }
+    };
+    const std::array vertex_attributes = {
+        VkVertexInputAttributeDescription2EXT{
+            .sType = VK_STRUCTURE_TYPE_VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT,
+            .location = 0, .format = VK_FORMAT_R32G32B32_SFLOAT
+        },
+    };
+    g_pfn.vkCmdSetVertexInputEXT(cmd,
+        to_u32(vertex_bindings.size()),
+        vertex_bindings.data(),
+        to_u32(vertex_attributes.size()),
+        vertex_attributes.data()
+    );
+
+    const std::array vertex_buffers = {m_vertex_buffer.get()};
+    const std::array offsets = {usize{0}};
+    vkCmdBindVertexBuffers(cmd, 0, to_u32(vertex_buffers.size()), vertex_buffers.data(), offsets.data());
+
+    vkCmdBindIndexBuffer(cmd, m_index_buffer.get(), 0, VK_INDEX_TYPE_UINT32);
+    vkCmdDrawIndexed(cmd, 36, 1, 0, 0, 1);
+
+    vkCmdSetDepthTestEnable(cmd, VK_TRUE);
+    vkCmdSetDepthWriteEnable(cmd, VK_TRUE);
+    vkCmdSetCullMode(cmd, VK_CULL_MODE_NONE);
 }
 
 void SkyboxPipeline::load_skybox(Engine& engine, const ImageData& data) {
     ASSERT(data.pixels != nullptr);
 
     m_cubemap = Texture::create_cubemap(engine.vk, data, {
-        .format = vk::Format::eR8G8B8A8Srgb,
-        .aspect_flags = vk::ImageAspectFlagBits::eColor,
+        .format = VK_FORMAT_R8G8B8A8_SRGB,
+        .aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT,
         .sampler_type = Sampler::Linear,
     });
     hg::write_image_sampler_descriptor(engine.vk, m_cubemap, m_set, 0);
@@ -344,11 +382,11 @@ void SkyboxPipeline::load_skybox(Engine& engine, const ImageData& data) {
     };
     m_vertex_buffer = GpuBuffer::create(engine.vk, {
         positions.size() * sizeof(positions[0]),
-        vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
     });
     m_index_buffer = GpuBuffer::create(engine.vk, {
         indices.size() * sizeof(indices[0]),
-        vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst
+        VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
     });
     m_vertex_buffer.write_slice<glm::vec3>(engine.vk, positions);
     m_index_buffer.write_slice<u32>(engine.vk, indices);
@@ -372,13 +410,13 @@ PbrPipeline PbrPipeline::create(Engine& engine, const DefaultRenderer& renderer)
     PbrPipeline pipeline{};
 
     pipeline.m_set_layout = DescriptorSetLayout::create(engine.vk, {
-        std::array{vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, MaxTextures, vk::ShaderStageFlagBits::eFragment}},
-        std::array{vk::DescriptorBindingFlags{vk::DescriptorBindingFlagBits::ePartiallyBound}}
+        std::array{VkDescriptorSetLayoutBinding{0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MaxTextures, VK_SHADER_STAGE_FRAGMENT_BIT}},
+        std::array{VkDescriptorBindingFlags{VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT}}
     });
 
     std::array set_layouts{renderer.get_global_set_layout(), pipeline.m_set_layout.get()};
-    std::array push_ranges{vk::PushConstantRange{
-        vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, 0, sizeof(PushConstant)
+    std::array push_ranges{VkPushConstantRange{
+        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstant)
     }};
 
     const auto graphics_pipeline = GraphicsPipeline::create(engine.vk, {
@@ -392,7 +430,7 @@ PbrPipeline PbrPipeline::create(Engine& engine, const DefaultRenderer& renderer)
     pipeline.m_pipeline = *graphics_pipeline;
 
     pipeline.m_descriptor_pool = DescriptorPool::create(engine.vk, {1, std::array{
-        vk::DescriptorPoolSize{vk::DescriptorType::eCombinedImageSampler, MaxTextures}
+        VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MaxTextures}
     }});
     pipeline.m_texture_set = *pipeline.m_descriptor_pool.allocate_set(engine.vk, pipeline.m_set_layout.get());;
 
@@ -401,12 +439,12 @@ PbrPipeline PbrPipeline::create(Engine& engine, const DefaultRenderer& renderer)
 }
 
 void PbrPipeline::destroy(Engine& engine) const {
-    const auto wait_result = engine.vk.queue.waitIdle();
+    const auto wait_result = vkQueueWaitIdle(engine.vk.queue);
     switch (wait_result) {
-        case vk::Result::eSuccess: break;
-        case vk::Result::eErrorOutOfHostMemory: ERROR("Vulkan ran out of host memory");
-        case vk::Result::eErrorOutOfDeviceMemory: ERROR("Vulkan ran out of device memory");
-        case vk::Result::eErrorDeviceLost: ERROR("Vulkan device lost");
+        case VK_SUCCESS: break;
+        case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
+        case VK_ERROR_OUT_OF_DEVICE_MEMORY: ERROR("Vulkan ran out of device memory");
+        case VK_ERROR_DEVICE_LOST: ERROR("Vulkan device lost");
         default: ERROR("Unexpected Vulkan error");
     }
 
@@ -421,32 +459,50 @@ void PbrPipeline::destroy(Engine& engine) const {
     m_set_layout.destroy(engine.vk);
 }
 
-void PbrPipeline::draw(const DefaultRenderer& renderer, const vk::CommandBuffer cmd) {
+void PbrPipeline::draw(const DefaultRenderer& renderer, const VkCommandBuffer cmd) {
     ASSERT(cmd != nullptr);
 
-    cmd.setCullMode(vk::CullModeFlagBits::eBack);
+    vkCmdSetCullMode(cmd, VK_CULL_MODE_BACK_BIT);
 
-    cmd.setVertexInputEXT({
-        vk::VertexInputBindingDescription2EXT{.stride = sizeof(Vertex), .inputRate = vk::VertexInputRate::eVertex, .divisor = 1}
-    }, {
-        vk::VertexInputAttributeDescription2EXT{.location = 0, .format = vk::Format::eR32G32B32Sfloat, .offset = offsetof(Vertex, position)},
-        vk::VertexInputAttributeDescription2EXT{.location = 1, .format = vk::Format::eR32G32B32Sfloat, .offset = offsetof(Vertex, normal)},
-        vk::VertexInputAttributeDescription2EXT{.location = 2, .format = vk::Format::eR32G32B32A32Sfloat, .offset = offsetof(Vertex, tangent)},
-        vk::VertexInputAttributeDescription2EXT{.location = 3, .format = vk::Format::eR32G32Sfloat, .offset = offsetof(Vertex, tex_coord)}
-    });
-    cmd.bindShadersEXT(
-        {vk::ShaderStageFlagBits::eVertex, vk::ShaderStageFlagBits::eFragment},
-        std::span{m_pipeline.get_shaders()}
+    std::array vertex_bindings = {
+        VkVertexInputBindingDescription2EXT{
+            .sType = VK_STRUCTURE_TYPE_VERTEX_INPUT_BINDING_DESCRIPTION_2_EXT,
+            .stride = sizeof(Vertex), .inputRate = VK_VERTEX_INPUT_RATE_VERTEX, .divisor = 1
+        }
+    };
+    std::array vertex_attributes = {
+        VkVertexInputAttributeDescription2EXT{
+           .sType = VK_STRUCTURE_TYPE_VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT,
+           .location = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, position)
+       },
+        VkVertexInputAttributeDescription2EXT{
+           .sType = VK_STRUCTURE_TYPE_VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT,
+           .location = 1, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, normal)
+       },
+        VkVertexInputAttributeDescription2EXT{
+           .sType = VK_STRUCTURE_TYPE_VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT,
+           .location = 2, .format = VK_FORMAT_R32G32B32A32_SFLOAT, .offset = offsetof(Vertex, tangent)
+       },
+        VkVertexInputAttributeDescription2EXT{
+           .sType = VK_STRUCTURE_TYPE_VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT,
+           .location = 3, .format = VK_FORMAT_R32G32_SFLOAT, .offset = offsetof(Vertex, tex_coord)
+       },
+    };
+    g_pfn.vkCmdSetVertexInputEXT(cmd,
+        to_u32(vertex_bindings.size()), vertex_bindings.data(),
+        to_u32(vertex_attributes.size()), vertex_attributes.data()
     );
 
-    cmd.bindDescriptorSets(
-        vk::PipelineBindPoint::eGraphics,
+    std::array shader_stages = {VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT};
+    g_pfn.vkCmdBindShadersEXT(cmd, 2, shader_stages.data(), m_pipeline.get_shaders().data);
+    std::array descriptor_sets = {renderer.get_global_set(), m_texture_set};
+    vkCmdBindDescriptorSets(cmd,
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
         m_pipeline.get_layout(),
-        0, {
-            renderer.get_global_set(),
-            m_texture_set
-        }, {}
+        0, to_u32(descriptor_sets.size()), descriptor_sets.data(),
+        0, nullptr
     );
+
     for (const auto& ticket : m_render_queue) {
         const auto& model = m_models[ticket.model.index];
 
@@ -457,24 +513,27 @@ void PbrPipeline::draw(const DefaultRenderer& renderer, const vk::CommandBuffer 
             .roughness = model.roughness,
             .metalness = model.metalness
         };
-        cmd.pushConstants(
-            m_pipeline.get_layout(),
-            vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+        vkCmdPushConstants(
+            cmd, m_pipeline.get_layout(),
+            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
             0, sizeof(model_push), &model_push
         );
 
-        cmd.bindIndexBuffer(model.index_buffer.get(), 0, vk::IndexType::eUint32);
-        cmd.bindVertexBuffers(0, {model.vertex_buffer.get()}, {vk::DeviceSize{0}});
-        cmd.drawIndexed(model.index_count, 1, 0, 0, 1);
+        std::array vertex_buffers = {model.vertex_buffer.get()};
+        std::array offsets = {usize{0}};
+        vkCmdBindVertexBuffers(cmd, 0, to_u32(vertex_buffers.size()), vertex_buffers.data(), offsets.data());
+
+        vkCmdBindIndexBuffer(cmd, model.index_buffer.get(), 0, VK_INDEX_TYPE_UINT32);
+        vkCmdDrawIndexed(cmd, model.index_count, 1, 0, 0, 1);
     }
 
-    cmd.setCullMode(vk::CullModeFlagBits::eNone);
+    vkCmdSetCullMode(cmd, VK_CULL_MODE_NONE);
 
     m_render_queue.clear();
 }
 
 PbrPipeline::TextureHandle PbrPipeline::load_texture(
-    Engine& engine, const ImageData& data, const vk::Format format
+    Engine& engine, const ImageData& data, const VkFormat format
 ) {
     ASSERT(m_textures.size() < MaxTextures);
 
@@ -488,7 +547,7 @@ PbrPipeline::TextureHandle PbrPipeline::load_texture(
 }
 
 Result<PbrPipeline::TextureHandle> PbrPipeline::load_texture(
-    Engine& engine, const std::filesystem::path path, const vk::Format format
+    Engine& engine, const std::filesystem::path path, const VkFormat format
 ) {
     ASSERT(!path.empty());
 
@@ -512,11 +571,11 @@ PbrPipeline::ModelHandle PbrPipeline::load_model(
 
     const auto index_buffer = GpuBuffer::create(engine.vk, {
         data.mesh.indices.count * sizeof(data.mesh.indices[0]),
-        vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst
+        VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
     });
     const auto vertex_buffer = GpuBuffer::create(engine.vk, {
         data.mesh.vertices.count * sizeof(data.mesh.vertices[0]),
-        vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
     });
 
     index_buffer.write_slice(engine.vk, Slice<const u32>{data.mesh.indices.data, data.mesh.indices.count});
