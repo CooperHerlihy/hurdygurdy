@@ -1,14 +1,7 @@
 #pragma once
 
-#include "hg_pch.h"
 #include "hg_utils.h"
 #include "hg_load.h"
-
-#include <vulkan/vulkan.h>
-#include <vma/vk_mem_alloc.h>
-
-#include <array>
-#include <filesystem>
 
 namespace hg {
 

@@ -1,5 +1,4 @@
 #include "hg_renderer.h"
-#include <vulkan/vulkan_core.h>
 
 namespace hg {
 

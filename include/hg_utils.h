@@ -1,11 +1,6 @@
 #pragma once
 
-#include <cstdint>
-#include <cstddef>
-#include <span>
-#include <string_view>
-#include <type_traits>
-#include <chrono>
+#include "hg_pch.h"
 
 using i8 = std::int8_t;
 using i16 = std::int16_t;

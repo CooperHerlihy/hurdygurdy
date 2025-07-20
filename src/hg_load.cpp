@@ -10,8 +10,6 @@
 #include <mikktspace/mikktspace.h>
 #include <welder/weldmesh.h>
 
-#include <filesystem>
-
 namespace hg {
 
 void generate_tangents(Slice<Vertex> primitives) {

@@ -1,15 +1,7 @@
 #include "hg_vulkan.h"
 
-#include "hg_pch.h"
 #include "hg_utils.h"
 #include "hg_load.h"
-
-#include <algorithm>
-#include <array>
-#include <fstream>
-
-#include <SDL3/SDL_vulkan.h>
-#include <vulkan/vulkan_core.h>
 
 namespace hg {
 
