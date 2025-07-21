@@ -22,7 +22,7 @@ Result<DefaultRenderer> DefaultRenderer::create(Engine& engine, const Config& co
 
     renderer->m_color_image = GpuImageAndView::create(engine.vk, {
         .extent{to_u32(window_size.x), to_u32(window_size.y), 1},
-        .format = Swapchain::SwapchainImageFormat,
+        .format = renderer->m_swapchain.get_format(),
         .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
         .sample_count = VK_SAMPLE_COUNT_4_BIT,
     });
@@ -75,7 +75,7 @@ Result<void> DefaultRenderer::resize(Engine& engine) {
     m_color_image.destroy(engine.vk);
     m_color_image = GpuImageAndView::create(engine.vk, {
         .extent{to_u32(window_size.x), to_u32(window_size.y), 1},
-        .format = Swapchain::SwapchainImageFormat,
+        .format = m_swapchain.get_format(),
         .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
         .sample_count = VK_SAMPLE_COUNT_4_BIT,
     });
@@ -265,8 +265,8 @@ SkyboxPipeline SkyboxPipeline::create(Engine& engine, const DefaultRenderer& ren
     const auto graphics_pipeline = GraphicsPipeline::create(engine.vk, {
         .set_layouts = set_layouts,
         .push_ranges{},
-        .vertex_shader_path = "../shaders/skybox.vert.spv",
-        .fragment_shader_path = "../shaders/skybox.frag.spv",
+        .vertex_shader_path = "shaders/skybox.vert.spv",
+        .fragment_shader_path = "shaders/skybox.frag.spv",
     });
     if (graphics_pipeline.has_err())
         ERRORF("Could not create skybox shaders: {}", to_string(graphics_pipeline.err()));
@@ -421,8 +421,8 @@ PbrPipeline PbrPipeline::create(Engine& engine, const DefaultRenderer& renderer)
     const auto graphics_pipeline = GraphicsPipeline::create(engine.vk, {
         .set_layouts = set_layouts,
         .push_ranges = push_ranges,
-        .vertex_shader_path = "../shaders/pbr.vert.spv",
-        .fragment_shader_path = "../shaders/pbr.frag.spv",
+        .vertex_shader_path = "shaders/pbr.vert.spv",
+        .fragment_shader_path = "shaders/pbr.frag.spv",
     });
     if (graphics_pipeline.has_err())
         ERROR("Could not find valid pbr shaders");

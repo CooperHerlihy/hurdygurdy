@@ -519,7 +519,7 @@ public:
         }
     }
     void build_and_run(Vk& vk, const VkCommandBuffer cmd, const VkDependencyFlags flags = {}) {
-        VkDependencyInfo dependency_info{
+        const VkDependencyInfo dependency_info{
             .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
             .dependencyFlags = flags,
             .memoryBarrierCount = to_u32(m_memories.count),
@@ -624,13 +624,13 @@ public:
     static constexpr u32 MaxFramesInFlight = 2;
     static constexpr u32 MaxImages = 3;
 
-    static constexpr VkFormat SwapchainImageFormat{VK_FORMAT_R8G8B8A8_SRGB};
     static constexpr VkColorSpaceKHR SwapchainColorSpace{VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
 
     [[nodiscard]] static Result<Swapchain> create(Vk& vk, VkSurfaceKHR surface);
     void destroy(Vk& vk) const;
     [[nodiscard]] Result<void> resize(Vk& vk, VkSurfaceKHR surface);
 
+    VkFormat get_format() const { return m_format; }
     struct DrawInfo {
         VkCommandBuffer cmd{};
         VkImage render_target{};
@@ -641,20 +641,21 @@ public:
 
 private:
     [[nodiscard]] VkCommandBuffer& current_cmd() { return m_command_buffers[m_current_frame_index]; }
-    [[nodiscard]] VkImage& current_image() { return m_swapchain_images[m_current_image_index]; }
+    [[nodiscard]] VkImage& current_image() { return m_images[m_current_image_index]; }
     [[nodiscard]] Fence& is_frame_finished() { return m_frame_finished_fences[m_current_frame_index]; }
     [[nodiscard]] Semaphore& is_image_available() { return m_image_available_semaphores[m_current_frame_index]; }
     [[nodiscard]] Semaphore& is_ready_to_present() { return m_ready_to_present_semaphores[m_current_image_index]; }
     [[nodiscard]] const VkCommandBuffer& current_cmd() const { return m_command_buffers[m_current_frame_index]; }
-    [[nodiscard]] const VkImage& current_image() const { return m_swapchain_images[m_current_image_index]; }
+    [[nodiscard]] const VkImage& current_image() const { return m_images[m_current_image_index]; }
     [[nodiscard]] const Fence& is_frame_finished() const { return m_frame_finished_fences[m_current_frame_index]; }
     [[nodiscard]] const Semaphore& is_image_available() const { return m_image_available_semaphores[m_current_frame_index]; }
     [[nodiscard]] const Semaphore& is_ready_to_present() const { return m_ready_to_present_semaphores[m_current_image_index]; }
 
     VkExtent2D m_extent{};
     VkSwapchainKHR m_swapchain{};
-    std::array<VkImage, MaxImages> m_swapchain_images{};
+    std::array<VkImage, MaxImages> m_images{};
     u32 m_image_count = 0;
+    VkFormat m_format = VK_FORMAT_UNDEFINED;
     u32 m_current_image_index = 0;
     u32 m_current_frame_index = 0;
     bool m_recording = false;

@@ -12,6 +12,7 @@ inline constexpr std::array ValidationLayers{"VK_LAYER_KHRONOS_validation"};
 #endif
 constexpr std::array DeviceExtensions{
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+    VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
     VK_EXT_SHADER_OBJECT_EXTENSION_NAME,
     VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
 };
@@ -1582,7 +1583,7 @@ Result<Swapchain> Swapchain::create(Vk& vk, const VkSurfaceKHR surface) {
     ASSERT(swapchain->m_extent.height > 0);
     ASSERT(swapchain->m_swapchain != nullptr);
     for (usize i = 0; i < swapchain->m_image_count; ++i) {
-        ASSERT(swapchain->m_swapchain_images[i] != nullptr);
+        ASSERT(swapchain->m_images[i] != nullptr);
     }
     for (const auto& cmd : swapchain->m_command_buffers) {
         ASSERT(cmd != nullptr);
@@ -1611,6 +1612,47 @@ void Swapchain::destroy(Vk& vk) const {
 }
 
 Result<void> Swapchain::resize(Vk& vk, const VkSurfaceKHR surface) {
+    u32 format_count = 0;
+    const VkResult format_count_res = vkGetPhysicalDeviceSurfaceFormatsKHR(vk.gpu, surface, &format_count, nullptr);
+    switch (format_count_res) {
+        case VK_SUCCESS: break;
+        case VK_INCOMPLETE: {
+            LOG_WARN("Vulkan get swapchain formats incomplete");
+            break;
+        }
+        case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
+        case VK_ERROR_OUT_OF_DEVICE_MEMORY: ERROR("Vulkan ran out of device memory");
+        case VK_ERROR_SURFACE_LOST_KHR: ERROR("Vulkan surface lost");
+        case VK_ERROR_UNKNOWN: ERROR("Vulkan unknown error");
+        case VK_ERROR_VALIDATION_FAILED_EXT: ERROR("Vulkan validation failed");
+        default: ERROR("Unexpected Vulkan error");
+    }
+    if (format_count == 0)
+        ERROR("No swapchain formats available");
+
+    auto formats = vk.stack.alloc<VkSurfaceFormatKHR>(format_count);
+    defer(vk.stack.dealloc(formats));
+
+    const VkResult format_result = vkGetPhysicalDeviceSurfaceFormatsKHR(vk.gpu, surface, &format_count, formats.data);
+    switch (format_result) {
+        case VK_SUCCESS: break;
+        case VK_INCOMPLETE: {
+            LOG_WARN("Vulkan get swapchain formats incomplete");
+            break;
+        }
+        case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
+        case VK_ERROR_OUT_OF_DEVICE_MEMORY: ERROR("Vulkan ran out of device memory");
+        case VK_ERROR_SURFACE_LOST_KHR: ERROR("Vulkan surface lost");
+        case VK_ERROR_UNKNOWN: ERROR("Vulkan unknown error");
+        case VK_ERROR_VALIDATION_FAILED_EXT: ERROR("Vulkan validation failed");
+        default: ERROR("Unexpected Vulkan error");
+    }
+    if (std::ranges::any_of(formats, [](const VkSurfaceFormatKHR format) { return format.format == VK_FORMAT_R8G8B8A8_SRGB; }))
+        m_format = VK_FORMAT_R8G8B8A8_SRGB;
+    else if (std::ranges::any_of(formats, [](const VkSurfaceFormatKHR format) { return format.format == VK_FORMAT_B8G8R8A8_SRGB; }))
+        m_format = VK_FORMAT_B8G8R8A8_SRGB;
+    else
+        ERROR("No supported swapchain formats");
 
     VkSurfaceCapabilitiesKHR surface_capabilities{};
     const VkResult surface_result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vk.gpu, surface, &surface_capabilities);
@@ -1631,6 +1673,8 @@ Result<void> Swapchain::resize(Vk& vk, const VkSurfaceKHR surface) {
         return Err::InvalidWindow;
     if (surface_capabilities.currentExtent.height > surface_capabilities.maxImageExtent.height)
         return Err::InvalidWindow;
+
+    std::printf("Swapchain extent: %d x %d\n", surface_capabilities.currentExtent.width, surface_capabilities.currentExtent.height);
 
     u32 present_mode_count = 0;
     const VkResult present_count_res = vkGetPhysicalDeviceSurfacePresentModesKHR(vk.gpu, surface, &present_mode_count, nullptr);
@@ -1661,8 +1705,11 @@ Result<void> Swapchain::resize(Vk& vk, const VkSurfaceKHR surface) {
         .surface = surface,
         .minImageCount = surface_capabilities.maxImageCount == 0
                          ? MaxImages
-                         : std::min(surface_capabilities.minImageCount + 1, surface_capabilities.maxImageCount),
-        .imageFormat = static_cast<VkFormat>(SwapchainImageFormat),
+                         : std::min(
+                             std::min(surface_capabilities.minImageCount + 1, surface_capabilities.maxImageCount),
+                             MaxImages
+                         ),
+        .imageFormat = static_cast<VkFormat>(m_format),
         .imageColorSpace = static_cast<VkColorSpaceKHR>(SwapchainColorSpace),
         .imageExtent = surface_capabilities.currentExtent,
         .imageArrayLayers = 1,
@@ -1718,7 +1765,7 @@ Result<void> Swapchain::resize(Vk& vk, const VkSurfaceKHR surface) {
         default: ERROR("Unexpected Vulkan error");
     }
 
-    const auto image_result = vkGetSwapchainImagesKHR(vk.device, m_swapchain, &m_image_count, reinterpret_cast<VkImage*>(m_swapchain_images.data()));
+    const auto image_result = vkGetSwapchainImagesKHR(vk.device, m_swapchain, &m_image_count, reinterpret_cast<VkImage*>(m_images.data()));
     switch (image_result) {
         case VK_SUCCESS: break;
         case VK_INCOMPLETE: {
@@ -1731,7 +1778,7 @@ Result<void> Swapchain::resize(Vk& vk, const VkSurfaceKHR surface) {
     }
 
     ASSERT(m_swapchain != nullptr);
-    for (const auto& image : m_swapchain_images) {
+    for (const auto& image : m_images) {
         ASSERT(image != nullptr);
     }
     return ok();

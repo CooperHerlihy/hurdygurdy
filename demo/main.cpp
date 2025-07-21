@@ -3,11 +3,11 @@
 #define SDL_MAIN_USE_CALLBACKS
 #include <SDL3/SDL_main.h>
 
+#define perr(e) LOG_ERROR(to_string(e.err()))
+
 using namespace hg;
 
 constexpr double sqrt3 = 1.73205080757;
-
-#define errf(e) "{} error: {}", #e, to_string(e.err())
 
 static Engine engine{};
 static Generator generator{};
@@ -48,7 +48,7 @@ SDL_AppResult SDL_AppInit(void**, int, char**) {
     engine = [] {
         auto engine_res = Engine::create();
         if (engine_res.has_err())
-            LOGF_ERROR(errf(engine_res));
+            perr(engine_res);
         return std::move(*engine_res);
     }();
 
@@ -57,16 +57,16 @@ SDL_AppResult SDL_AppInit(void**, int, char**) {
     renderer = [] {
         auto renderer_res = DefaultRenderer::create(engine, {.fullscreen = true});
         if (renderer_res.has_err())
-            LOGF_ERROR(errf(renderer_res));
+            perr(renderer_res);
         return std::move(*renderer_res);
     }();
 
     skybox_pipeline = SkyboxPipeline::create(engine, renderer);
     model_pipeline = PbrPipeline::create(engine, renderer);
 
-    auto skybox_res = skybox_pipeline.load_skybox(engine, "../assets/cloudy_skyboxes/Cubemap/Cubemap_Sky_06-512x512.png");
+    auto skybox_res = skybox_pipeline.load_skybox(engine, "assets/cloudy_skyboxes/Cubemap/Cubemap_Sky_06-512x512.png");
     if (skybox_res.has_err())
-        LOGF_ERROR(errf(skybox_res));
+        perr(skybox_res);
 
     default_normals = [&] {
         auto default_normal_image = generator.alloc_image<glm::vec4>({2, 2}, [](...) {
@@ -112,10 +112,10 @@ SDL_AppResult SDL_AppInit(void**, int, char**) {
         return model_pipeline.load_model(engine, {generator.get(sphere_mesh), 0.2f, 1.0f}, perlin_normals, gray_texture);
     }();
 
-    hex_texture = *model_pipeline.load_texture(engine, "../assets/hexagon_models/Textures/hexagons_medieval.png");
-    grass = *model_pipeline.load_model(engine, "../assets/hexagon_models/Assets/gltf/tiles/base/hex_grass.gltf", default_normals, hex_texture);
-    building = *model_pipeline.load_model(engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_home_A_blue.gltf", default_normals, hex_texture);
-    tower = *model_pipeline.load_model(engine, "../assets/hexagon_models/Assets/gltf/buildings/blue/building_tower_A_blue.gltf", default_normals, hex_texture);
+    hex_texture = *model_pipeline.load_texture(engine, "assets/hexagon_models/Textures/hexagons_medieval.png");
+    grass = *model_pipeline.load_model(engine, "assets/hexagon_models/Assets/gltf/tiles/base/hex_grass.gltf", default_normals, hex_texture);
+    building = *model_pipeline.load_model(engine, "assets/hexagon_models/Assets/gltf/buildings/blue/building_home_A_blue.gltf", default_normals, hex_texture);
+    tower = *model_pipeline.load_model(engine, "assets/hexagon_models/Assets/gltf/buildings/blue/building_tower_A_blue.gltf", default_normals, hex_texture);
 
     const auto extent = renderer.get_extent();
     const f32 aspect_ratio = static_cast<f32>(extent.x) / static_cast<f32>(extent.y);

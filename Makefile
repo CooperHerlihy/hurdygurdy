@@ -6,10 +6,10 @@ SPV_FILES := $(SPV_FILES:.comp=.comp.spv)
 shaders: $(SPV_FILES)
 
 %.vert.spv: %.vert
-	$(VULKAN_SDK)/Bin/glslc.exe $< -o $@
+	glslc $< -o $@
 
 %.frag.spv: %.frag
-	$(VULKAN_SDK)/Bin/glslc.exe $< -o $@
+	glslc $< -o $@
 
 %.comp.spv: %.comp
-	$(VULKAN_SDK)/Bin/glslc.exe $< -o $@
+	glslc $< -o $@

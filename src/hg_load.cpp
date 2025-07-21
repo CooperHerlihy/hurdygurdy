@@ -132,7 +132,7 @@ Result<AssetLoader::GltfHandle> AssetLoader::load_gltf(const std::filesystem::pa
             }
 
             if (!primitive.indicesAccessor.has_value()) {
-                LOGF_ERROR("Gltf file invalid; primitive has no indices accessor");
+                LOGF_ERROR("Gltf file invalid; primitive has no indices accessor: {}", path.string());
                 return Err::GltfFileInvalid;
             }
 

@@ -49,19 +49,19 @@ inline std::string_view to_string(LogLevel level) {
 }
 
 #define LOG(level, message) {                                                                                       \
-    std::fprintf(stderr, "%s: %s : %d %s(): %s\n", to_string(level).data(), __FILE__, __LINE__, __func__, message); \
+    std::println("{}: {} : {} {}(): {}", to_string(level), __FILE__, __LINE__, __func__, message); \
 }
 #define LOG_INFO(message) { LOG(LogLevel::Info, message) }
 #define LOG_WARN(message) { LOG(LogLevel::Warning, message) }
 #define LOG_ERROR(message) { LOG(LogLevel::Error, message) }
 
-#define LOGF(level, message, ...) { LOG(level, std::format(message, __VA_ARGS__).c_str()) }
+#define LOGF(level, message, ...) { LOG(level, std::format(message, __VA_ARGS__)) }
 #define LOGF_INFO(message, ...) { LOGF(LogLevel::Info, message, __VA_ARGS__) }
 #define LOGF_WARN(message, ...) { LOGF(LogLevel::Warning, message, __VA_ARGS__) }
 #define LOGF_ERROR(message, ...) { LOGF(LogLevel::Error, message, __VA_ARGS__) }
 
-#define ERROR(message, ...) { LOG_ERROR(message); terminate(); }
-#define ERRORF(message, ...) { LOGF_ERROR(message, __VA_ARGS__); terminate(); }
+#define ERROR(message, ...) { LOG_ERROR(message); std::terminate(); }
+#define ERRORF(message, ...) { LOGF_ERROR(message, __VA_ARGS__); std::terminate(); }
 
 #ifdef NDEBUG
 #define ASSERT(condition) ((void)0)
