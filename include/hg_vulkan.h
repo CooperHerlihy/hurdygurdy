@@ -5,22 +5,7 @@
 
 namespace hg {
 
-struct Vk {
-    Arena stack{};
-
-    VkInstance instance{};
-    VkDebugUtilsMessengerEXT debug_messenger{};
-
-    VkPhysicalDevice gpu{};
-    VkDevice device{};
-    VmaAllocator gpu_allocator = nullptr;
-
-    u32 queue_family_index = UINT32_MAX;
-    VkQueue queue{};
-
-    VkCommandPool command_pool{};
-    VkCommandPool single_time_command_pool{};
-};
+struct Vk;
 [[nodiscard]] Result<Vk> create_vk();
 void destroy_vk(Vk& vk);
 
@@ -235,40 +220,8 @@ public:
         usize buffer_barriers = 0;
         usize image_barriers = 0;
     };
-    BarrierBuilder(Vk& vk, const Config& config) {
-        if (config.memory_barriers > 0) {
-            m_memories = vk.stack.alloc<VkMemoryBarrier2>(config.memory_barriers);
-            for (auto& barrier : m_memories) { barrier = {.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2}; }
-        }
-        if (config.buffer_barriers > 0) {
-            m_buffers = vk.stack.alloc<VkBufferMemoryBarrier2>(config.buffer_barriers);
-            for (auto& barrier : m_buffers) { barrier = {.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2}; }
-        }
-        if (config.image_barriers > 0) {
-            m_images = vk.stack.alloc<VkImageMemoryBarrier2>(config.image_barriers);
-            for (auto& barrier : m_images) { barrier = {.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2}; }
-        }
-    }
-    void build_and_run(Vk& vk, const VkCommandBuffer cmd, const VkDependencyFlags flags = {}) {
-        const VkDependencyInfo dependency_info{
-            .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-            .dependencyFlags = flags,
-            .memoryBarrierCount = to_u32(m_memories.count),
-            .pMemoryBarriers = m_memories.data,
-            .bufferMemoryBarrierCount = to_u32(m_buffers.count),
-            .pBufferMemoryBarriers = m_buffers.data,
-            .imageMemoryBarrierCount = to_u32(m_images.count),
-            .pImageMemoryBarriers = m_images.data,
-        };
-        vkCmdPipelineBarrier2(cmd, &dependency_info);
-
-        if (m_images.data != nullptr)
-            vk.stack.dealloc(m_images);
-        if (m_buffers.data != nullptr)
-            vk.stack.dealloc(m_buffers);
-        if (m_memories.data != nullptr)
-            vk.stack.dealloc(m_memories);
-    }
+    BarrierBuilder(Vk& vk, const Config& config);
+    void build_and_run(Vk& vk, const VkCommandBuffer cmd, const VkDependencyFlags flags = {});
 
     BarrierBuilder& add_memory_barrier(const usize index, const VkMemoryBarrier2& barrier) {
         ASSERT(index < m_memories.count);
@@ -399,5 +352,22 @@ inline VulkanPFNs g_pfn;
 
 void load_instance_procedures(VkInstance instance);
 void load_device_procedures(VkDevice device);
+
+struct Vk {
+    Arena stack{};
+
+    VkInstance instance{};
+    VkDebugUtilsMessengerEXT debug_messenger{};
+
+    VkPhysicalDevice gpu{};
+    VkDevice device{};
+    VmaAllocator gpu_allocator = nullptr;
+
+    u32 queue_family_index = UINT32_MAX;
+    VkQueue queue{};
+
+    VkCommandPool command_pool{};
+    VkCommandPool single_time_command_pool{};
+};
 
 } // namespace hg

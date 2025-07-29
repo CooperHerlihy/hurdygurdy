@@ -12,15 +12,18 @@ Result<DefaultRenderer> DefaultRenderer::create(Engine& engine, const Config& co
 
     auto renderer = ok<DefaultRenderer>();
 
-    renderer->m_window = Window::create(config.fullscreen, config.window_size);
-    renderer->m_surface = create_surface(engine.vk, renderer->m_window.get());
+    if (config.fullscreen)
+        renderer->m_window = create_fullscreen_window();
+    else
+        renderer->m_window = create_window(config.window_size);
+    renderer->m_surface = create_surface(engine.vk, renderer->m_window);
 
     const auto swapchain = create_swapchain(engine.vk, renderer->m_surface);
     if (swapchain.has_err())
         return swapchain.err();
     renderer->m_swapchain = *swapchain;
 
-    const glm::ivec2 window_size = renderer->m_window.get_extent();
+    const glm::ivec2 window_size = get_window_extent(renderer->m_window);
 
     renderer->m_color_image = create_image_and_view(engine.vk, {
         .extent{to_u32(window_size.x), to_u32(window_size.y), 1},
@@ -68,7 +71,7 @@ Result<DefaultRenderer> DefaultRenderer::create(Engine& engine, const Config& co
 }
 
 Result<void> DefaultRenderer::resize(Engine& engine) {
-    const auto window_size = m_window.get_extent();
+    const auto window_size = get_window_extent(m_window);
 
     auto swapchain_result = resize_swapchain(engine.vk, m_swapchain, m_surface);
     if (swapchain_result.has_err())
@@ -115,7 +118,7 @@ void DefaultRenderer::destroy(Engine& engine) const {
 
     destroy_swapchain(engine.vk, m_swapchain);
     vkDestroySurfaceKHR(engine.vk.instance, m_surface, nullptr);
-    m_window.destroy();
+    SDL_DestroyWindow(m_window);
 }
 
 [[nodiscard]] Result<void> DefaultRenderer::draw(Engine& engine, const Slice<Pipeline*> pipelines) {

@@ -32,8 +32,8 @@ public:
         alignas(16) Light vals[MaxLights]{};
     };
 
-    [[nodiscard]] SDL_Window* get_window() const { return m_window.get(); }
-    [[nodiscard]] glm::ivec2 get_extent() const { return m_window.get_extent(); }
+    [[nodiscard]] SDL_Window* get_window() const { return m_window; }
+    [[nodiscard]] glm::ivec2 get_extent() const { return get_window_extent(m_window); }
 
     [[nodiscard]] VkDescriptorSetLayout get_global_set_layout() const { return m_set_layout; }
     [[nodiscard]] VkDescriptorSet get_global_set() const { return m_global_set; }
@@ -66,7 +66,7 @@ public:
     }
 
 private:
-    Window m_window{};
+    SDL_Window* m_window{};
     VkSurfaceKHR m_surface{};
     Swapchain m_swapchain{};
 

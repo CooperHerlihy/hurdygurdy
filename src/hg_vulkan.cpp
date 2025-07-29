@@ -1541,6 +1541,42 @@ void end_single_time_commands(Vk& vk, VkCommandBuffer cmdpp) {
     vkFreeCommandBuffers(vk.device, vk.single_time_command_pool, 1, &cmd);
 }
 
+BarrierBuilder::BarrierBuilder(Vk& vk, const Config& config) {
+    if (config.memory_barriers > 0) {
+        m_memories = vk.stack.alloc<VkMemoryBarrier2>(config.memory_barriers);
+        for (auto& barrier : m_memories) { barrier = {.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2}; }
+    }
+    if (config.buffer_barriers > 0) {
+        m_buffers = vk.stack.alloc<VkBufferMemoryBarrier2>(config.buffer_barriers);
+        for (auto& barrier : m_buffers) { barrier = {.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2}; }
+    }
+    if (config.image_barriers > 0) {
+        m_images = vk.stack.alloc<VkImageMemoryBarrier2>(config.image_barriers);
+        for (auto& barrier : m_images) { barrier = {.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2}; }
+    }
+}
+
+void BarrierBuilder::build_and_run(Vk& vk, const VkCommandBuffer cmd, const VkDependencyFlags flags) {
+    const VkDependencyInfo dependency_info{
+        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .dependencyFlags = flags,
+        .memoryBarrierCount = to_u32(m_memories.count),
+        .pMemoryBarriers = m_memories.data,
+        .bufferMemoryBarrierCount = to_u32(m_buffers.count),
+        .pBufferMemoryBarriers = m_buffers.data,
+        .imageMemoryBarrierCount = to_u32(m_images.count),
+        .pImageMemoryBarriers = m_images.data,
+    };
+    vkCmdPipelineBarrier2(cmd, &dependency_info);
+
+    if (m_images.data != nullptr)
+        vk.stack.dealloc(m_images);
+    if (m_buffers.data != nullptr)
+        vk.stack.dealloc(m_buffers);
+    if (m_memories.data != nullptr)
+        vk.stack.dealloc(m_memories);
+}
+
 VkSurfaceKHR create_surface(Vk& vk, SDL_Window* window) {
     ASSERT(window != nullptr);
 

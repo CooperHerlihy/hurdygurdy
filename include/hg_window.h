@@ -5,27 +5,18 @@
 
 namespace hg {
 
-class Window {
-public:
-    [[nodiscard]] SDL_Window* get() const {
-        ASSERT(m_window != nullptr);
-        return m_window;
-    }
+SDL_Window* create_window(const glm::ivec2 size);
+SDL_Window* create_fullscreen_window();
 
-    [[nodiscard]] glm::ivec2 get_extent() const {
-        int width = 0, height = 0;
-        SDL_GetWindowSize(m_window, &width, &height);
-        return {width, height};
-    }
+inline void destroy_window(SDL_Window* window) {
+    ASSERT(window != nullptr);
+    SDL_DestroyWindow(window);
+}
 
-    [[nodiscard]] static Window create(bool fullscreen, glm::ivec2 size);
-    void destroy() const {
-        ASSERT(m_window != nullptr);
-        SDL_DestroyWindow(m_window);
-    }
-
-private:
-    SDL_Window* m_window = nullptr;
-};
+[[nodiscard]] inline glm::ivec2 get_window_extent(SDL_Window* window) {
+    int width = 0, height = 0;
+    SDL_GetWindowSize(window, &width, &height);
+    return {width, height};
+}
 
 } // namespace hg
