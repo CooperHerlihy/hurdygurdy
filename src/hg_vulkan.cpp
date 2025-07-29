@@ -411,7 +411,7 @@ static VkCommandPool create_command_pool(Vk& vk, const VkCommandPoolCreateFlags 
     return pool;
 }
 
-Result<Vk> Vk::create() {
+Result<Vk> create_vk() {
     auto vk = ok<Vk>();
 
     vk->stack = Arena{malloc_slice<byte>(1024 * 64)};
@@ -467,8 +467,8 @@ Result<Vk> Vk::create() {
     return vk;
 }
 
-void Vk::destroy() {
-    const VkResult wait_result = vkDeviceWaitIdle(device);
+void destroy_vk(Vk& vk) {
+    const VkResult wait_result = vkDeviceWaitIdle(vk.device);
     switch (wait_result) {
         case VK_SUCCESS: break;
         case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
@@ -477,53 +477,70 @@ void Vk::destroy() {
         default: ERROR("Unexpected Vulkan error");
     }
 
-    ASSERT(instance != nullptr);
+    ASSERT(vk.instance != nullptr);
 #ifndef NDEBUG
-    ASSERT(debug_messenger != nullptr);
+    ASSERT(vk.debug_messenger != nullptr);
 #endif
-    ASSERT(device != nullptr);
-    ASSERT(gpu_allocator != nullptr);
-    ASSERT(command_pool != nullptr);
-    ASSERT(single_time_command_pool != nullptr);
+    ASSERT(vk.device != nullptr);
+    ASSERT(vk.gpu_allocator != nullptr);
+    ASSERT(vk.command_pool != nullptr);
+    ASSERT(vk.single_time_command_pool != nullptr);
 
-    vkDestroyCommandPool(device, single_time_command_pool, nullptr);
-    vkDestroyCommandPool(device, command_pool, nullptr);
-    vmaDestroyAllocator(gpu_allocator);
-    vkDestroyDevice(device, nullptr);
+    vkDestroyCommandPool(vk.device, vk.single_time_command_pool, nullptr);
+    vkDestroyCommandPool(vk.device, vk.command_pool, nullptr);
+    vmaDestroyAllocator(vk.gpu_allocator);
+    vkDestroyDevice(vk.device, nullptr);
 #ifndef NDEBUG
-    g_pfn.vkDestroyDebugUtilsMessengerEXT(instance, debug_messenger, nullptr);
+    g_pfn.vkDestroyDebugUtilsMessengerEXT(vk.instance, vk.debug_messenger, nullptr);
 #endif
-    vkDestroyInstance(instance, nullptr);
+    vkDestroyInstance(vk.instance, nullptr);
 
-    free_slice(stack.release());
+    free_slice(vk.stack.release());
 }
 
-GpuBuffer GpuBuffer::create(Vk& vk, const Config& config) {
+void destroy_buffer(Vk& vk, const GpuBuffer& buffer) {
+    ASSERT(buffer.allocation != nullptr);
+    ASSERT(buffer.buffer != nullptr);
+
+    vmaDestroyBuffer(vk.gpu_allocator, buffer.buffer, buffer.allocation);
+}
+
+GpuBuffer create_buffer(Vk& vk, const GpuBufferConfig& config) {
     ASSERT(config.size != 0);
     ASSERT(config.usage != 0);
 
-    VkBufferCreateInfo buffer_info{};
-    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    buffer_info.size = config.size;
-    buffer_info.usage = static_cast<u32>(config.usage);
+    const VkBufferCreateInfo buffer_info{
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = config.size,
+        .usage = static_cast<u32>(config.usage),
+    };
 
     VmaAllocationCreateInfo alloc_info{};
-    if (config.memory_type == RandomAccess) {
-        alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
-        alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
-    } else if (config.memory_type == LinearAccess) {
-        alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
-        alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    } else if (config.memory_type == DeviceLocal) {
+    if (config.memory_type == GpuMemoryType::DeviceLocal) {
         alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
         alloc_info.flags = 0;
+    } else if (config.memory_type == GpuMemoryType::LinearAccess) {
+        alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
+        alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    } else if (config.memory_type == GpuMemoryType::RandomAccess) {
+        alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
+        alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
     } else {
         ERROR("Invalid memory type");
     }
 
-    VkBuffer vk_buffer = nullptr;
-    VmaAllocation vma_allocation = nullptr;
-    const auto buffer_result = vmaCreateBuffer(vk.gpu_allocator, &buffer_info, &alloc_info, &vk_buffer, &vma_allocation, nullptr);
+    GpuBuffer buffer{
+        .size = config.size,
+        .type = config.memory_type,
+    };
+    const auto buffer_result = vmaCreateBuffer(
+            vk.gpu_allocator,
+            &buffer_info,
+            &alloc_info,
+            &buffer.buffer,
+            &buffer.allocation,
+            nullptr
+    );
     switch (buffer_result) {
         case VK_SUCCESS: break;
         case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
@@ -533,26 +550,19 @@ GpuBuffer GpuBuffer::create(Vk& vk, const Config& config) {
         default: ERROR("Unexpected Vulkan error");
     }
 
-    GpuBuffer buffer{};
-    buffer.m_allocation = vma_allocation;
-    buffer.m_buffer = vk_buffer;
-    buffer.m_type = config.memory_type;
-
-    ASSERT(buffer.m_allocation != nullptr);
-    ASSERT(buffer.m_buffer != nullptr);
     return buffer;
 }
 
-void GpuBuffer::write_void(Vk& vk, const void* data, const usize size, const usize offset) const {
-    ASSERT(m_allocation != nullptr);
-    ASSERT(m_buffer != nullptr);
-    ASSERT(data != nullptr);
+void write_buffer(Vk& vk, const GpuBuffer& dst, const void* src, usize size, usize offset) {
+    ASSERT(dst.allocation != nullptr);
+    ASSERT(dst.buffer != nullptr);
+    ASSERT(src != nullptr);
     ASSERT(size != 0);
-    if (m_type == LinearAccess)
+    if (dst.type == GpuMemoryType::LinearAccess)
         ASSERT(offset == 0);
 
-    if (m_type == RandomAccess || m_type == LinearAccess) {
-        const auto copy_result = vmaCopyMemoryToAllocation(vk.gpu_allocator, data, m_allocation, offset, size);
+    if (dst.type == GpuMemoryType::RandomAccess || dst.type == GpuMemoryType::LinearAccess) {
+        const auto copy_result = vmaCopyMemoryToAllocation(vk.gpu_allocator, src, dst.allocation, offset, size);
         switch (copy_result) {
             case VK_SUCCESS: return;
             case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
@@ -561,26 +571,28 @@ void GpuBuffer::write_void(Vk& vk, const void* data, const usize size, const usi
             default: ERROR("Unexpected Vulkan error");
         }
     }
-    ASSERT(m_type == DeviceLocal);
+    ASSERT(dst.type == GpuMemoryType::DeviceLocal);
 
-    const auto staging_buffer = create(vk, {size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, LinearAccess});
-    defer(vmaDestroyBuffer(vk.gpu_allocator, staging_buffer.m_buffer, staging_buffer.m_allocation));
-    const auto copy_result = vmaCopyMemoryToAllocation(vk.gpu_allocator, data, staging_buffer.m_allocation, 0, size);
-    switch (copy_result) {
-        case VK_SUCCESS: break;
-        case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
-        case VK_ERROR_OUT_OF_DEVICE_MEMORY: ERROR("Vulkan ran out of device memory");
-        case VK_ERROR_MEMORY_MAP_FAILED: ERROR("Vulkan memory map failed");
-        default: ERROR("Unexpected Vulkan error");
-    }
+    const auto staging_buffer = create_buffer(vk, {
+        size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, GpuMemoryType::LinearAccess
+    });
+    defer(destroy_buffer(vk, staging_buffer));
+    write_buffer(vk, staging_buffer, src, size, 0);
 
     submit_single_time_commands(vk, [&](const VkCommandBuffer cmd) {
         const VkBufferCopy copy_region{offset, 0, size};
-        vkCmdCopyBuffer(cmd, staging_buffer.m_buffer, m_buffer, 1, &copy_region);
+        vkCmdCopyBuffer(cmd, staging_buffer.buffer, dst.buffer, 1, &copy_region);
     });
 }
 
-GpuImage GpuImage::create(Vk& vk, const Config& config) {
+void destroy_image(Vk& vk, const GpuImage& image) {
+    ASSERT(image.allocation != nullptr);
+    ASSERT(image.image != nullptr);
+
+    vmaDestroyImage(vk.gpu_allocator, image.image, image.allocation);
+}
+
+GpuImage create_image(Vk& vk, const GpuImageConfig& config) {
     ASSERT(config.extent.width > 0);
     ASSERT(config.extent.height > 0);
     ASSERT(config.extent.depth > 0);
@@ -589,23 +601,34 @@ GpuImage GpuImage::create(Vk& vk, const Config& config) {
     ASSERT(config.sample_count != 0);
     ASSERT(config.mip_levels > 0);
 
-    VkImageCreateInfo image_info{};
-    image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    image_info.imageType = VK_IMAGE_TYPE_2D;
-    image_info.format = static_cast<VkFormat>(config.format);
-    image_info.extent = config.extent;
-    image_info.mipLevels = config.mip_levels;
-    image_info.arrayLayers = 1;
-    image_info.samples = static_cast<VkSampleCountFlagBits>(config.sample_count);
-    image_info.usage = static_cast<VkImageUsageFlags>(config.usage);
+    const VkImageCreateInfo image_info{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = static_cast<VkFormat>(config.format),
+        .extent = config.extent,
+        .mipLevels = config.mip_levels,
+        .arrayLayers = 1,
+        .samples = static_cast<VkSampleCountFlagBits>(config.sample_count),
+        .usage = static_cast<VkImageUsageFlags>(config.usage),
+    };
+    const VmaAllocationCreateInfo alloc_info{
+        .flags = 0,
+        .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+    };
 
-    VmaAllocationCreateInfo alloc_info{};
-    alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-    alloc_info.flags = 0;
-
-    VkImage vk_image = VK_NULL_HANDLE;
-    VmaAllocation vma_allocation = VK_NULL_HANDLE;
-    const auto image_result = vmaCreateImage(vk.gpu_allocator, &image_info, &alloc_info, &vk_image, &vma_allocation, nullptr);
+    GpuImage image{
+        .extent = config.extent,
+        .format = config.format,
+        .mip_levels = config.mip_levels,
+    };
+    const auto image_result = vmaCreateImage(
+            vk.gpu_allocator,
+            &image_info,
+            &alloc_info,
+            &image.image,
+            &image.allocation,
+            nullptr
+    );
     switch (image_result) {
         case VK_SUCCESS: break;
         case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
@@ -616,40 +639,45 @@ GpuImage GpuImage::create(Vk& vk, const Config& config) {
         default: ERROR("Unexpected Vulkan error");
     }
 
-    GpuImage image{};
-    image.m_image = vk_image;
-    image.m_allocation = vma_allocation;
-
-    ASSERT(image.m_image != nullptr);
-    ASSERT(image.m_allocation != nullptr);
     return image;
 }
 
-GpuImage GpuImage::create_cubemap(Vk& vk, const CubemapConfig& config) {
+GpuImage create_cubemap(Vk& vk, const GpuCubemapConfig& config) {
     ASSERT(config.face_extent.width > 0);
     ASSERT(config.face_extent.height > 0);
     ASSERT(config.face_extent.depth > 0);
     ASSERT(config.format != VK_FORMAT_UNDEFINED);
     ASSERT(config.usage != 0);
 
-    VkImageCreateInfo image_info{};
-    image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    image_info.imageType = VK_IMAGE_TYPE_2D;
-    image_info.format = static_cast<VkFormat>(config.format);
-    image_info.extent = config.face_extent;
-    image_info.mipLevels = 1;
-    image_info.arrayLayers = 6;
-    image_info.samples = VK_SAMPLE_COUNT_1_BIT;
-    image_info.usage = static_cast<VkImageUsageFlags>(config.usage);
-    image_info.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+    VkImageCreateInfo image_info{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = static_cast<VkFormat>(config.format),
+        .extent = config.face_extent,
+        .mipLevels = 1,
+        .arrayLayers = 6,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .usage = static_cast<VkImageUsageFlags>(config.usage),
+    };
+    VmaAllocationCreateInfo alloc_info{
+        .flags = 0,
+        .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+    };
 
-    VmaAllocationCreateInfo alloc_info{};
-    alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-    alloc_info.flags = 0;
-
-    VkImage image = VK_NULL_HANDLE;
-    VmaAllocation allocation = VK_NULL_HANDLE;
-    const auto image_result = vmaCreateImage(vk.gpu_allocator, &image_info, &alloc_info, &image, &allocation, nullptr);
+    GpuImage cubemap{
+        .extent = config.face_extent,
+        .format = config.format,
+        .mip_levels = 1,
+    };
+    const auto image_result = vmaCreateImage(
+            vk.gpu_allocator,
+            &image_info,
+            &alloc_info,
+            &cubemap.image,
+            &cubemap.allocation,
+            nullptr
+    );
     switch (image_result) {
         case VK_SUCCESS: break;
         case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
@@ -660,49 +688,41 @@ GpuImage GpuImage::create_cubemap(Vk& vk, const CubemapConfig& config) {
         default: ERROR("Unexpected Vulkan error");
     }
 
-    GpuImage cubemap{};
-    cubemap.m_allocation = allocation;
-    cubemap.m_image = image;
-
-    ASSERT(cubemap.m_image != nullptr);
-    ASSERT(cubemap.m_allocation != nullptr);
     return cubemap;
 }
 
-void GpuImage::write(Vk& vk, const WriteConfig& config) const {
-    ASSERT(m_allocation != nullptr);
-    ASSERT(m_image != nullptr);
+void write_image(Vk& vk, GpuImage& dst, const ImageData& src, const GpuImageWriteConfig& config) {
+    ASSERT(dst.allocation != nullptr);
+    ASSERT(dst.image != nullptr);
+    ASSERT(src.pixels != nullptr);
+    ASSERT(src.alignment > 0);
+    ASSERT(src.size.x > 0);
+    ASSERT(src.size.y > 0);
+    ASSERT(src.size.z == 1);
 
-    const auto& data = config.data;
-    ASSERT(data.pixels != nullptr);
-    ASSERT(data.alignment > 0);
-    ASSERT(data.size.x > 0);
-    ASSERT(data.size.y > 0);
-    ASSERT(data.size.z == 1);
+    const VkDeviceSize size = src.size.x * src.size.y * src.size.z * src.alignment;
 
-    const VkDeviceSize size = data.size.x * data.size.y * data.size.z * data.alignment;
-
-    const auto staging_buffer = GpuBuffer::create(vk, {
-        size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, GpuBuffer::MemoryType::LinearAccess
+    const auto staging_buffer = create_buffer(vk, {
+        size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, GpuMemoryType::LinearAccess
     });
-    defer(staging_buffer.destroy(vk));
-    staging_buffer.write_void(vk, data.pixels, size, 0);
+    defer(destroy_buffer(vk, staging_buffer));
+    write_buffer(vk, staging_buffer, src.pixels, size, 0);
 
     submit_single_time_commands(vk, [&](const VkCommandBuffer cmd) {
         BarrierBuilder(vk, {.image_barriers = 1})
-            .add_image_barrier(0, m_image, {config.aspect_flags, 0, VK_REMAINING_MIP_LEVELS, 0, 1})
+            .add_image_barrier(0, dst.image, {config.aspect_flags, 0, VK_REMAINING_MIP_LEVELS, 0, 1})
             .set_image_dst(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
             .build_and_run(vk, cmd);
 
         const VkBufferImageCopy2 copy_region{
             .sType = VK_STRUCTURE_TYPE_BUFFER_IMAGE_COPY_2,
             .imageSubresource{config.aspect_flags, 0, 0, 1},
-            .imageExtent = {data.size.x, data.size.y, data.size.z},
+            .imageExtent = {src.size.x, src.size.y, src.size.z},
         };
         const VkCopyBufferToImageInfo2 copy_region_info{
             .sType = VK_STRUCTURE_TYPE_COPY_BUFFER_TO_IMAGE_INFO_2,
-            .srcBuffer = staging_buffer.get(),
-            .dstImage = m_image,
+            .srcBuffer = staging_buffer.buffer,
+            .dstImage = dst.image,
             .dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             .regionCount = 1,
             .pRegions = &copy_region,
@@ -710,43 +730,41 @@ void GpuImage::write(Vk& vk, const WriteConfig& config) const {
         vkCmdCopyBufferToImage2(cmd, &copy_region_info);
 
         BarrierBuilder(vk, {.image_barriers = 1})
-            .add_image_barrier(0, m_image, {config.aspect_flags, 0, VK_REMAINING_MIP_LEVELS, 0, 1})
+            .add_image_barrier(0, dst.image, {config.aspect_flags, 0, VK_REMAINING_MIP_LEVELS, 0, 1})
             .set_image_src(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
             .set_image_dst(0, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE, config.final_layout)
             .build_and_run(vk, cmd);
     });
+
+    dst.layout = config.final_layout;
 }
 
-void GpuImage::write_cubemap(Vk& vk, const WriteConfig& config) const {
-    ASSERT(m_allocation != nullptr);
-    ASSERT(m_image != nullptr);
+void write_cubemap(Vk& vk, GpuImage& dst, const ImageData& src, const GpuImageWriteConfig& config) {
+    ASSERT(dst.allocation != nullptr);
+    ASSERT(dst.image != nullptr);
+    ASSERT(src.pixels != nullptr);
+    ASSERT(src.alignment > 0);
+    ASSERT(src.size.x > 0);
+    ASSERT(src.size.y > 0);
+    ASSERT(src.size.z == 1);
 
-    const auto& data = config.data;
-    ASSERT(data.pixels != nullptr);
-    ASSERT(data.alignment > 0);
-    ASSERT(data.size.x > 0);
-    ASSERT(data.size.y > 0);
-    ASSERT(data.size.z == 1);
-
-    const VkExtent3D staging_extent{data.size.x, data.size.y, data.size.z};
+    const VkExtent3D staging_extent{src.size.x, src.size.y, src.size.z};
     const VkExtent3D face_extent{staging_extent.width / 4, staging_extent.height / 3, 1};
 
-    const auto staging_image = GpuImage::create(vk, {
+    auto staging_image = create_image(vk, {
         .extent = staging_extent, 
-        .format = config.format,
+        .format = dst.format,
         .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
     });
-    defer(staging_image.destroy(vk));
-    staging_image.write(vk, {
-        .data = config.data,
-        .format = config.format,
+    defer(destroy_image(vk, staging_image));
+    write_image(vk, staging_image, src, {
         .final_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         .aspect_flags = config.aspect_flags,
     });
 
     submit_single_time_commands(vk, [&](const VkCommandBuffer cmd) {
         BarrierBuilder(vk, {.image_barriers = 1})
-            .add_image_barrier(0, m_image, {config.aspect_flags, 0, 1, 0, 6})
+            .add_image_barrier(0, dst.image, {config.aspect_flags, 0, 1, 0, 6})
             .set_image_dst(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
             .build_and_run(vk, cmd);
 
@@ -754,51 +772,51 @@ void GpuImage::write_cubemap(Vk& vk, const WriteConfig& config) const {
             VkImageCopy2{
                 .sType = VK_STRUCTURE_TYPE_IMAGE_COPY_2,
                 .srcSubresource{config.aspect_flags, 0, 0, 1},
-                .srcOffset{to_i32(config.data.size.x) * 2 / 4, to_i32(config.data.size.y) * 1 / 3, 0},
+                .srcOffset{to_i32(src.size.x) * 2 / 4, to_i32(src.size.y) * 1 / 3, 0},
                 .dstSubresource{config.aspect_flags, 0, 0, 1},
                 .extent = face_extent,
             },
             VkImageCopy2{
                 .sType = VK_STRUCTURE_TYPE_IMAGE_COPY_2,
                 .srcSubresource{config.aspect_flags, 0, 0, 1},
-                .srcOffset{to_i32(config.data.size.x) * 0 / 4, to_i32(config.data.size.y) * 1 / 3, 0},
+                .srcOffset{to_i32(src.size.x) * 0 / 4, to_i32(src.size.y) * 1 / 3, 0},
                 .dstSubresource{config.aspect_flags, 0, 1, 1},
                 .extent = face_extent,
             },
             VkImageCopy2{
                 .sType = VK_STRUCTURE_TYPE_IMAGE_COPY_2,
                 .srcSubresource{config.aspect_flags, 0, 0, 1},
-                .srcOffset{to_i32(config.data.size.x) * 1 / 4, to_i32(config.data.size.y) * 0 / 3, 0},
+                .srcOffset{to_i32(src.size.x) * 1 / 4, to_i32(src.size.y) * 0 / 3, 0},
                 .dstSubresource{config.aspect_flags, 0, 2, 1},
                 .extent = face_extent,
             },
             VkImageCopy2{
                 .sType = VK_STRUCTURE_TYPE_IMAGE_COPY_2,
                 .srcSubresource{config.aspect_flags, 0, 0, 1},
-                .srcOffset{to_i32(config.data.size.x) * 1 / 4, to_i32(config.data.size.y) * 2 / 3, 0},
+                .srcOffset{to_i32(src.size.x) * 1 / 4, to_i32(src.size.y) * 2 / 3, 0},
                 .dstSubresource{config.aspect_flags, 0, 3, 1},
                 .extent = face_extent,
             },
             VkImageCopy2{
                 .sType = VK_STRUCTURE_TYPE_IMAGE_COPY_2,
                 .srcSubresource{config.aspect_flags, 0, 0, 1},
-                .srcOffset{to_i32(config.data.size.x) * 1 / 4, to_i32(config.data.size.y) * 1 / 3, 0},
+                .srcOffset{to_i32(src.size.x) * 1 / 4, to_i32(src.size.y) * 1 / 3, 0},
                 .dstSubresource{config.aspect_flags, 0, 4, 1},
                 .extent = face_extent,
             },
             VkImageCopy2{
                 .sType = VK_STRUCTURE_TYPE_IMAGE_COPY_2,
                 .srcSubresource{config.aspect_flags, 0, 0, 1},
-                .srcOffset{to_i32(config.data.size.x) * 3 / 4, to_i32(config.data.size.y) * 1 / 3, 0},
+                .srcOffset{to_i32(src.size.x) * 3 / 4, to_i32(src.size.y) * 1 / 3, 0},
                 .dstSubresource{config.aspect_flags, 0, 5, 1},
                 .extent = face_extent,
             },
         };
         VkCopyImageInfo2 copy_region_info{
             .sType = VK_STRUCTURE_TYPE_COPY_IMAGE_INFO_2,
-            .srcImage = staging_image.get(),
+            .srcImage = staging_image.image,
             .srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            .dstImage = m_image,
+            .dstImage = dst.image,
             .dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             .regionCount = to_u32(copies.size()),
             .pRegions = copies.data(),
@@ -806,15 +824,89 @@ void GpuImage::write_cubemap(Vk& vk, const WriteConfig& config) const {
         vkCmdCopyImage2(cmd, &copy_region_info);
 
         BarrierBuilder(vk, {.image_barriers = 1})
-            .add_image_barrier(0, m_image, {config.aspect_flags, 0, 1, 0, 6})
+            .add_image_barrier(0, dst.image, {config.aspect_flags, 0, 1, 0, 6})
             .set_image_src(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
             .set_image_dst(0, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
             .build_and_run(vk, cmd);
     });
+
+    dst.layout = config.final_layout;
 }
 
+void generate_mipmaps(Vk& vk, GpuImage& image, VkImageLayout final_layout) {
+    ASSERT(image.mip_levels > 1);
+    ASSERT(image.extent.width > 0);
+    ASSERT(image.extent.height > 0);
+    ASSERT(image.extent.depth > 0);
+    ASSERT(image.format != VK_FORMAT_UNDEFINED);
+    ASSERT(final_layout != VK_IMAGE_LAYOUT_UNDEFINED);
 
-GpuImageView GpuImageView::create(Vk& vk, const Config& config) {
+    VkFormatProperties format_properties{};
+    vkGetPhysicalDeviceFormatProperties(vk.gpu, image.format, &format_properties);
+    if (!(format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT))
+        ERROR("Format does not support optimal tiling with linear filtering");
+
+    submit_single_time_commands(vk, [&](const VkCommandBuffer cmd) {
+        VkOffset3D mip_offset{to_i32(image.extent.width), to_i32(image.extent.height), to_i32(image.extent.depth)};
+
+        BarrierBuilder(vk, {.image_barriers = 1})
+            .add_image_barrier(0, image.image, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
+            .set_image_dst(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
+            .build_and_run(vk, cmd);
+
+        for (u32 level = 0; level < image.mip_levels - 1; ++level) {
+            BarrierBuilder(vk, {.image_barriers = 1})
+                .add_image_barrier(0, image.image, {VK_IMAGE_ASPECT_COLOR_BIT, level + 1, 1, 0, 1})
+                .set_image_dst(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+                .build_and_run(vk, cmd);
+
+            VkImageBlit2 region{
+                .sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2,
+                .srcSubresource{VK_IMAGE_ASPECT_COLOR_BIT, level, 0, 1},
+                .dstSubresource{VK_IMAGE_ASPECT_COLOR_BIT, level + 1, 0, 1},
+            };
+            region.srcOffsets[1] = mip_offset;
+            if (mip_offset.x > 1)
+                mip_offset.x /= 2;
+            if (mip_offset.y > 1)
+                mip_offset.y /= 2;
+            if (mip_offset.z > 1)
+                mip_offset.z /= 2;
+            region.dstOffsets[1] = mip_offset;
+
+            VkBlitImageInfo2 blit_image_info{
+                .sType = VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2,
+                .srcImage = image.image,
+                .srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                .dstImage = image.image,
+                .dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                .regionCount = 1,
+                .pRegions = &region,
+                .filter = VK_FILTER_LINEAR,
+            };
+            vkCmdBlitImage2(cmd, &blit_image_info);
+
+            BarrierBuilder(vk, {.image_barriers = 1})
+                .add_image_barrier(0, image.image, {VK_IMAGE_ASPECT_COLOR_BIT, level + 1, 1, 0, 1})
+                .set_image_src(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+                .set_image_dst(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT,
+                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
+                .build_and_run(vk, cmd);
+        }
+
+        BarrierBuilder(vk, {.image_barriers = 1})
+            .add_image_barrier(0, image.image, {VK_IMAGE_ASPECT_COLOR_BIT, 0, image.mip_levels, 0, 1})
+            .set_image_src(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT,
+                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
+            .set_image_dst(0, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE, final_layout)
+            .build_and_run(vk, cmd);
+    });
+
+    image.layout = final_layout;
+}
+
+VkImageView create_image_view(Vk& vk, const GpuImageViewConfig& config) {
     ASSERT(config.image != nullptr);
     ASSERT(config.format != VK_FORMAT_UNDEFINED);
 
@@ -839,7 +931,7 @@ GpuImageView GpuImageView::create(Vk& vk, const Config& config) {
     return view;
 }
 
-GpuImageView GpuImageView::create_cubemap(Vk& vk, const Config& config) {
+VkImageView create_cubemap_view(Vk& vk, const GpuImageViewConfig& config) {
     ASSERT(config.image != nullptr);
     ASSERT(config.format != VK_FORMAT_UNDEFINED);
 
@@ -864,7 +956,12 @@ GpuImageView GpuImageView::create_cubemap(Vk& vk, const Config& config) {
     return view;
 }
 
-GpuImageAndView GpuImageAndView::create(Vk& vk, const Config& config) {
+void destroy_image_and_view(Vk& vk, const GpuImageAndView& image_and_view) {
+    vkDestroyImageView(vk.device, image_and_view.view, nullptr);
+    destroy_image(vk, image_and_view.image);
+}
+
+GpuImageAndView create_image_and_view(Vk& vk, const GpuImageAndViewConfig& config) {
     ASSERT(config.extent.width > 0);
     ASSERT(config.extent.height > 0);
     ASSERT(config.extent.depth > 0);
@@ -876,7 +973,7 @@ GpuImageAndView GpuImageAndView::create(Vk& vk, const Config& config) {
 
     GpuImageAndView image_and_view{};
 
-    image_and_view.m_image = GpuImage::create(vk, {
+    image_and_view.image = create_image(vk, {
         .extent = config.extent,
         .format = config.format,
         .usage = config.usage,
@@ -886,14 +983,15 @@ GpuImageAndView GpuImageAndView::create(Vk& vk, const Config& config) {
     if (config.layout != VK_IMAGE_LAYOUT_UNDEFINED) {
         submit_single_time_commands(vk, [&](const VkCommandBuffer cmd) {
             BarrierBuilder(vk, {.image_barriers = 1})
-                .add_image_barrier(0, image_and_view.m_image.get(), {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
+                .add_image_barrier(0, image_and_view.image.image, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
                 .set_image_dst(0, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE, config.layout)
                 .build_and_run(vk, cmd);
         });
+        image_and_view.image.layout = config.layout;
     }
 
-    image_and_view.m_view = GpuImageView::create(vk, {
-        .image = image_and_view.m_image.get(),
+    image_and_view.view = create_image_view(vk, {
+        .image = image_and_view.image.image,
         .format = config.format,
         .aspect_flags = config.aspect_flags,
     });
@@ -901,7 +999,7 @@ GpuImageAndView GpuImageAndView::create(Vk& vk, const Config& config) {
     return image_and_view;
 }
 
-GpuImageAndView GpuImageAndView::create_cubemap(Vk& vk, const CubemapConfig& config) {
+GpuImageAndView create_cubemap_and_view(Vk& vk, const GpuCubemapAndViewConfig& config) {
     ASSERT(config.data.pixels != nullptr);
     ASSERT(config.data.alignment > 0);
     ASSERT(config.data.size.x > 0);
@@ -913,18 +1011,17 @@ GpuImageAndView GpuImageAndView::create_cubemap(Vk& vk, const CubemapConfig& con
     GpuImageAndView cubemap{};
 
     const VkExtent3D face_extent{config.data.size.x / 4, config.data.size.y / 3, 1};
-    cubemap.m_image = GpuImage::create_cubemap(vk, {
+    cubemap.image = create_cubemap(vk, {
         .face_extent = face_extent,
         .format = config.format,
         .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
     });
-    cubemap.m_image.write_cubemap(vk, {
-        .data = config.data,
+    write_cubemap(vk, cubemap.image, config.data, {
         .final_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
     });
 
-    cubemap.m_view = GpuImageView::create_cubemap(vk, {
-        .image = cubemap.m_image.get(),
+    cubemap.view = create_cubemap_view(vk, {
+        .image = cubemap.image.image,
         .format = config.format,
         .aspect_flags = config.aspect_flags,
     });
@@ -932,81 +1029,7 @@ GpuImageAndView GpuImageAndView::create_cubemap(Vk& vk, const CubemapConfig& con
     return cubemap;
 }
 
-void GpuImageAndView::generate_mipmaps(
-    Vk& vk,
-    const u32 mip_levels,
-    const VkExtent3D extent,
-    const VkFormat format,
-    const VkImageLayout final_layout
-) const {
-    ASSERT(mip_levels > 1);
-    ASSERT(extent.width > 0);
-    ASSERT(extent.height > 0);
-    ASSERT(extent.depth > 0);
-    ASSERT(format != VK_FORMAT_UNDEFINED);
-    ASSERT(final_layout != VK_IMAGE_LAYOUT_UNDEFINED);
-
-    VkFormatProperties format_properties{};
-    vkGetPhysicalDeviceFormatProperties(vk.gpu, format, &format_properties);
-    if (!(format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT))
-        ERROR("Format does not support optimal tiling with linear filtering");
-
-    submit_single_time_commands(vk, [&](const VkCommandBuffer cmd) {
-        VkOffset3D mip_offset{to_i32(extent.width), to_i32(extent.height), to_i32(extent.depth)};
-
-        BarrierBuilder(vk, {.image_barriers = 1})
-            .add_image_barrier(0, m_image.get(), {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
-            .set_image_dst(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
-            .build_and_run(vk, cmd);
-
-        for (u32 level = 0; level < mip_levels - 1; ++level) {
-            BarrierBuilder(vk, {.image_barriers = 1})
-                .add_image_barrier(0, m_image.get(), {VK_IMAGE_ASPECT_COLOR_BIT, level + 1, 1, 0, 1})
-                .set_image_dst(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
-                .build_and_run(vk, cmd);
-
-            VkImageBlit2 region{
-                .sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2,
-                .srcSubresource{VK_IMAGE_ASPECT_COLOR_BIT, level, 0, 1},
-                .dstSubresource{VK_IMAGE_ASPECT_COLOR_BIT, level + 1, 0, 1},
-            };
-            region.srcOffsets[1] = mip_offset;
-            if (mip_offset.x > 1)
-                mip_offset.x /= 2;
-            if (mip_offset.y > 1)
-                mip_offset.y /= 2;
-            if (mip_offset.z > 1)
-                mip_offset.z /= 2;
-            region.dstOffsets[1] = mip_offset;
-
-            VkBlitImageInfo2 blit_image_info{
-                .sType = VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2,
-                .srcImage = m_image.get(),
-                .srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                .dstImage = m_image.get(),
-                .dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                .regionCount = 1,
-                .pRegions = &region,
-                .filter = VK_FILTER_LINEAR,
-            };
-            vkCmdBlitImage2(cmd, &blit_image_info);
-
-            BarrierBuilder(vk, {.image_barriers = 1})
-                .add_image_barrier(0, m_image.get(), {VK_IMAGE_ASPECT_COLOR_BIT, level + 1, 1, 0, 1})
-                .set_image_src(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
-                .set_image_dst(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
-                .build_and_run(vk, cmd);
-        }
-
-        BarrierBuilder(vk, {.image_barriers = 1})
-            .add_image_barrier(0, m_image.get(), {VK_IMAGE_ASPECT_COLOR_BIT, 0, mip_levels, 0, 1})
-            .set_image_src(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
-            .set_image_dst(0, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE, final_layout)
-            .build_and_run(vk, cmd);
-    });
-}
-
-Sampler Sampler::create(Vk& vk, const Config& config) {
+VkSampler create_sampler(Vk& vk, const SamplerConfig& config) {
     ASSERT(config.mip_levels >= 1);
 
     VkPhysicalDeviceProperties gpu_properties{};
@@ -1015,25 +1038,26 @@ Sampler Sampler::create(Vk& vk, const Config& config) {
 
     VkSamplerCreateInfo sampler_info{
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-        .addressModeU = static_cast<VkSamplerAddressMode>(config.edge_mode),
-        .addressModeV = static_cast<VkSamplerAddressMode>(config.edge_mode),
-        .addressModeW = static_cast<VkSamplerAddressMode>(config.edge_mode),
+        .addressModeU = config.edge_mode,
+        .addressModeV = config.edge_mode,
+        .addressModeW = config.edge_mode,
         .anisotropyEnable = VK_TRUE,
         .maxAnisotropy = limits.maxSamplerAnisotropy,
         .maxLod = static_cast<f32>(config.mip_levels),
         .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
     };
-    if (config.type == Linear) {
+    if (config.type == SamplerType::Linear) {
         sampler_info.magFilter = VK_FILTER_LINEAR;
         sampler_info.minFilter = VK_FILTER_LINEAR;
         sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-    } else if (config.type == Nearest) {
+    } else if (config.type == SamplerType::Nearest) {
         sampler_info.magFilter = VK_FILTER_NEAREST;
         sampler_info.minFilter = VK_FILTER_NEAREST;
         sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
     } else {
         ERROR("Invalid sampler type");
     }
+
     VkSampler sampler = nullptr;
     const VkResult result = vkCreateSampler(vk.device, &sampler_info, nullptr, &sampler);
     switch (result) {
@@ -1047,7 +1071,14 @@ Sampler Sampler::create(Vk& vk, const Config& config) {
     return sampler;
 }
 
-Texture Texture::create(Vk& vk, const ImageData& data, const Config& config) {
+void destroy_texture(Vk& vk, const Texture& texture) {
+    ASSERT(texture.sampler != nullptr);
+
+    vkDestroySampler(vk.device, texture.sampler, nullptr);
+    destroy_image_and_view(vk, texture.image);
+}
+
+Texture create_texture(Vk& vk, const ImageData& data, const TextureConfig& config) {
     ASSERT(data.pixels != nullptr);
     ASSERT(data.alignment > 0);
     ASSERT(data.size.x > 0);
@@ -1059,7 +1090,7 @@ Texture Texture::create(Vk& vk, const ImageData& data, const Config& config) {
     VkExtent3D extent{data.size.x, data.size.y, data.size.z};
     const u32 mip_levels = config.create_mips ? get_mip_count(extent) : 1;
 
-    texture.m_image = GpuImageAndView::create(vk, {
+    texture.image = create_image_and_view(vk, {
         .extent = extent,
         .format = config.format,
         .usage = VK_IMAGE_USAGE_SAMPLED_BIT
@@ -1068,18 +1099,14 @@ Texture Texture::create(Vk& vk, const ImageData& data, const Config& config) {
         .aspect_flags = config.aspect_flags,
         .mip_levels = mip_levels,
     });
-    texture.m_image.write(vk, {
-        .data = data,
-        .format = config.format,
+    write_image(vk, texture.image.image, data, {
         .final_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         .aspect_flags = config.aspect_flags,
     });
     if (mip_levels > 1)
-        texture.m_image.generate_mipmaps(
-            vk, mip_levels, extent, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-        );
+        generate_mipmaps(vk, texture.image.image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-    texture.m_sampler = Sampler::create(vk, {
+    texture.sampler = create_sampler(vk, {
         .type = config.sampler_type,
         .edge_mode = config.edge_mode,
         .mip_levels = mip_levels,
@@ -1088,16 +1115,16 @@ Texture Texture::create(Vk& vk, const ImageData& data, const Config& config) {
     return texture;
 }
 
-Texture Texture::create_cubemap(Vk& vk, const ImageData& data, const Config& config) {
+Texture create_texture_cubemap(Vk& vk, const ImageData& data, const TextureConfig& config) {
     ASSERT(config.create_mips == false);
 
     Texture texture{};
-    texture.m_image = GpuImageAndView::create_cubemap(vk, {
+    texture.image = create_cubemap_and_view(vk, {
         .data = data,
         .format = config.format,
         .aspect_flags = config.aspect_flags,
     });
-    texture.m_sampler = Sampler::create(vk, {
+    texture.sampler = create_sampler(vk, {
         .type = config.sampler_type,
         .edge_mode = config.edge_mode,
         .mip_levels = 1,
@@ -1105,7 +1132,7 @@ Texture Texture::create_cubemap(Vk& vk, const ImageData& data, const Config& con
     return texture;
 }
 
-DescriptorSetLayout DescriptorSetLayout::create(Vk& vk, const Config& config) {
+VkDescriptorSetLayout create_descriptor_set_layout(Vk& vk, const DescriptorSetLayoutConfig& config) {
     ASSERT(config.bindings.count > 0);
     if (config.flags.count > 0)
         ASSERT(config.flags.count == config.bindings.count);
@@ -1113,13 +1140,13 @@ DescriptorSetLayout DescriptorSetLayout::create(Vk& vk, const Config& config) {
     const VkDescriptorSetLayoutBindingFlagsCreateInfo flag_info{
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
         .bindingCount = to_u32(config.flags.count),
-        .pBindingFlags = reinterpret_cast<const VkDescriptorBindingFlags*>(config.flags.data),
+        .pBindingFlags = config.flags.data,
     };
     const VkDescriptorSetLayoutCreateInfo layout_info{
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
         .pNext = config.flags.count == 0 ? nullptr : &flag_info,
         .bindingCount = to_u32(config.bindings.count),
-        .pBindings = reinterpret_cast<const VkDescriptorSetLayoutBinding*>(config.bindings.data),
+        .pBindings = config.bindings.data,
     };
 
     VkDescriptorSetLayout layout = nullptr;
@@ -1134,7 +1161,7 @@ DescriptorSetLayout DescriptorSetLayout::create(Vk& vk, const Config& config) {
     return layout;
 }
 
-DescriptorPool DescriptorPool::create(Vk& vk, const Config& config) {
+VkDescriptorPool create_descriptor_pool(Vk& vk, const DescriptorPoolConfig& config) {
     ASSERT(config.max_sets >= 1);
     ASSERT(config.descriptors.count > 0);
     for (const auto& descriptor : config.descriptors) {
@@ -1145,7 +1172,7 @@ DescriptorPool DescriptorPool::create(Vk& vk, const Config& config) {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
         .maxSets = config.max_sets,
         .poolSizeCount = to_u32(config.descriptors.count),
-        .pPoolSizes = reinterpret_cast<const VkDescriptorPoolSize*>(config.descriptors.data),
+        .pPoolSizes = config.descriptors.data,
     };
 
     VkDescriptorPool pool = nullptr;
@@ -1161,12 +1188,13 @@ DescriptorPool DescriptorPool::create(Vk& vk, const Config& config) {
     return pool;
 }
 
-Result<void> DescriptorPool::allocate_sets(
+Result<void> allocate_descriptor_sets(
     Vk& vk,
+    const VkDescriptorPool pool,
     const Slice<const VkDescriptorSetLayout> layouts,
     const Slice<VkDescriptorSet> out_sets
 ) {
-    ASSERT(m_pool != nullptr);
+    ASSERT(pool != nullptr);
     ASSERT(layouts.count > 0);
     for (const auto& layout : layouts) {
         ASSERT(layout != nullptr);
@@ -1179,11 +1207,11 @@ Result<void> DescriptorPool::allocate_sets(
 
     const VkDescriptorSetAllocateInfo alloc_info{
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-        .descriptorPool = m_pool,
+        .descriptorPool = pool,
         .descriptorSetCount = to_u32(layouts.count),
-        .pSetLayouts = reinterpret_cast<const VkDescriptorSetLayout*>(layouts.data),
+        .pSetLayouts = layouts.data,
     };
-    const VkResult result = vkAllocateDescriptorSets(vk.device, &alloc_info, reinterpret_cast<VkDescriptorSet*>(out_sets.data));
+    const VkResult result = vkAllocateDescriptorSets(vk.device, &alloc_info, out_sets.data);
     switch (result) {
         case VK_SUCCESS: break;
         case VK_ERROR_OUT_OF_POOL_MEMORY: return Err::OutOfDescriptorSets;
@@ -1196,20 +1224,17 @@ Result<void> DescriptorPool::allocate_sets(
     return ok();
 }
 
-void write_uniform_buffer_descriptor(
-    Vk& vk, const GpuBuffer::View& buffer,
-    const VkDescriptorSet set, const u32 binding, const u32 binding_array_index
-) {
-    ASSERT(set != nullptr);
+void write_uniform_buffer_descriptor(Vk& vk, const DescriptorSetBinding& binding, const GpuBufferView& buffer) {
     ASSERT(buffer.buffer != nullptr);
     ASSERT(buffer.range != 0);
+    ASSERT(binding.set != nullptr);
 
     const VkDescriptorBufferInfo buffer_info{buffer.buffer, buffer.offset, buffer.range};
     const VkWriteDescriptorSet descriptor_write{
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstSet = set,
-        .dstBinding = binding,
-        .dstArrayElement = binding_array_index,
+        .dstSet = binding.set,
+        .dstBinding = binding.binding_index,
+        .dstArrayElement = binding.array_index,
         .descriptorCount = 1,
         .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
         .pBufferInfo = &buffer_info,
@@ -1217,22 +1242,21 @@ void write_uniform_buffer_descriptor(
     vkUpdateDescriptorSets(vk.device, 1, &descriptor_write, 0, nullptr);
 }
 
-void write_image_sampler_descriptor(
-    Vk& vk, const Texture& texture,
-    const VkDescriptorSet set, const u32 binding, const u32 binding_array_index
-) {
-    ASSERT(set != nullptr);
+void write_image_sampler_descriptor(Vk& vk, const DescriptorSetBinding& binding, const Texture& texture) {
+    ASSERT(texture.sampler != nullptr);
+    ASSERT(texture.image.view != nullptr);
+    ASSERT(binding.set != nullptr);
 
     const VkDescriptorImageInfo image_info{
-        .sampler = texture.get_sampler(),
-        .imageView = texture.get_view(),
+        .sampler = texture.sampler,
+        .imageView = texture.image.view,
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
     };
     const VkWriteDescriptorSet descriptor_write{
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstSet = set,
-        .dstBinding = binding,
-        .dstArrayElement = binding_array_index,
+        .dstSet = binding.set,
+        .dstBinding = binding.binding_index,
+        .dstArrayElement = binding.array_index,
         .descriptorCount = 1,
         .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
         .pImageInfo = &image_info,
@@ -1240,13 +1264,14 @@ void write_image_sampler_descriptor(
     vkUpdateDescriptorSets(vk.device, 1, &descriptor_write, 0, nullptr);
 }
 
-PipelineLayout PipelineLayout::create(Vk& vk, const Config& config) {
+
+VkPipelineLayout create_pipeline_layout(Vk& vk, const PipelineLayoutConfig& config) {
     VkPipelineLayoutCreateInfo layout_info{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = to_u32(config.set_layouts.count),
-        .pSetLayouts = reinterpret_cast<const VkDescriptorSetLayout*>(config.set_layouts.data),
+        .pSetLayouts = config.set_layouts.data,
         .pushConstantRangeCount = to_u32(config.push_ranges.count),
-        .pPushConstantRanges = reinterpret_cast<const VkPushConstantRange*>(config.push_ranges.data),
+        .pPushConstantRanges = config.push_ranges.data,
     };
 
     VkPipelineLayout layout = nullptr;
@@ -1278,55 +1303,24 @@ static Result<Slice<char>> read_shader(Vk& vk, const std::filesystem::path path)
     return code;
 }
 
-Result<UnlinkedShader> UnlinkedShader::create(Vk& vk, const Config& config) {
-    ASSERT(!config.path.empty());
-    ASSERT(config.code_type == VK_SHADER_CODE_TYPE_SPIRV_EXT && "binary shader code types untested");
-    ASSERT(config.stage != 0);
+void destroy_graphics_pipeline(Vk& vk, const GraphicsPipeline& pipeline) {
+    ASSERT(pipeline.layout != nullptr);
+    vkDestroyPipelineLayout(vk.device, pipeline.layout, nullptr);
 
-    auto code = read_shader(vk, config.path);
-    defer(vk.stack.dealloc(*code));
-    if (code.has_err())
-        return code.err();
-
-    const VkShaderCreateInfoEXT shader_info{
-        .sType = VK_STRUCTURE_TYPE_SHADER_CREATE_INFO_EXT,
-        .stage = static_cast<VkShaderStageFlagBits>(config.stage),
-        .nextStage = static_cast<VkShaderStageFlags>(config.next_stage),
-        .codeType = static_cast<VkShaderCodeTypeEXT>(config.code_type),
-        .codeSize = code->count,
-        .pCode = code->data,
-        .pName = "main",
-        .setLayoutCount = to_u32(config.set_layouts.count),
-        .pSetLayouts = reinterpret_cast<const VkDescriptorSetLayout*>(config.set_layouts.data),
-        .pushConstantRangeCount = to_u32(config.push_ranges.count),
-        .pPushConstantRanges = reinterpret_cast<const VkPushConstantRange*>(config.push_ranges.data),
-    };
-
-    VkShaderEXT shader = nullptr;
-    const VkResult result = g_pfn.vkCreateShadersEXT(vk.device, 1, &shader_info, nullptr, &shader);
-    switch (result) {
-        case VK_SUCCESS: break;
-        case VK_ERROR_INCOMPATIBLE_SHADER_BINARY_EXT: {
-            LOGF_ERROR("Could not load shader; shader invalid: {}", config.path.string());
-            return Err::ShaderFileInvalid;
-        }
-        case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
-        case VK_ERROR_OUT_OF_DEVICE_MEMORY: ERROR("Vulkan ran out of device memory");
-        case VK_ERROR_INITIALIZATION_FAILED: ERROR("Vulkan initialization failed");
-        default: ERROR("Unexpected Vulkan error");
+    for (const auto& shader : pipeline.shaders) {
+        ASSERT(shader != nullptr);
+        g_pfn.vkDestroyShaderEXT(vk.device, shader, nullptr);
     }
-
-    return ok<UnlinkedShader>(shader);
 }
 
-Result<GraphicsPipeline> GraphicsPipeline::create(Vk& vk, const Config& config) {
+Result<GraphicsPipeline> create_graphics_pipeline(Vk& vk, const GraphicsPipelineConfig& config) {
     ASSERT(!config.vertex_shader_path.empty());
     ASSERT(!config.fragment_shader_path.empty());
     ASSERT(config.code_type == VK_SHADER_CODE_TYPE_SPIRV_EXT && "binary shader code types untested");
 
     auto pipeline = ok<GraphicsPipeline>();
 
-    pipeline->m_layout = PipelineLayout::create(vk, {
+    pipeline->layout = create_pipeline_layout(vk, {
         .set_layouts = config.set_layouts,
         .push_ranges = config.push_ranges,
     });
@@ -1355,9 +1349,9 @@ Result<GraphicsPipeline> GraphicsPipeline::create(Vk& vk, const Config& config) 
             .pCode = vertex_code->data,
             .pName = "main",
             .setLayoutCount = to_u32(config.set_layouts.count),
-            .pSetLayouts = reinterpret_cast<const VkDescriptorSetLayout*>(config.set_layouts.data),
+            .pSetLayouts = config.set_layouts.data,
             .pushConstantRangeCount = to_u32(config.push_ranges.count),
-            .pPushConstantRanges = reinterpret_cast<const VkPushConstantRange*>(config.push_ranges.data),
+            .pPushConstantRanges = config.push_ranges.data,
         },
         VkShaderCreateInfoEXT{
             .sType = VK_STRUCTURE_TYPE_SHADER_CREATE_INFO_EXT,
@@ -1369,15 +1363,15 @@ Result<GraphicsPipeline> GraphicsPipeline::create(Vk& vk, const Config& config) 
             .pCode = fragment_code->data,
             .pName = "main",
             .setLayoutCount = to_u32(config.set_layouts.count),
-            .pSetLayouts = reinterpret_cast<const VkDescriptorSetLayout*>(config.set_layouts.data),
+            .pSetLayouts = config.set_layouts.data,
             .pushConstantRangeCount = to_u32(config.push_ranges.count),
-            .pPushConstantRanges = reinterpret_cast<const VkPushConstantRange*>(config.push_ranges.data),
+            .pPushConstantRanges = config.push_ranges.data,
         },
     };
 
     const auto result = g_pfn.vkCreateShadersEXT(vk.device,
         to_u32(shader_infos.size()), shader_infos.data(),
-        nullptr, pipeline->m_shaders.data()
+        nullptr, pipeline->shaders.data()
     );
     switch (result) {
         case VK_SUCCESS: break;
@@ -1398,10 +1392,15 @@ Result<GraphicsPipeline> GraphicsPipeline::create(Vk& vk, const Config& config) 
     return pipeline;
 }
 
-Fence Fence::create(Vk& vk, const Config& config) {
+void bind_shaders(VkCommandBuffer cmd, const GraphicsPipeline& pipeline) {
+    const std::array shader_stages{VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT};
+    g_pfn.vkCmdBindShadersEXT(cmd, 2, shader_stages.data(), pipeline.shaders.data());
+}
+
+VkFence create_fence(Vk& vk, const VkFenceCreateFlags flags) {
     const VkFenceCreateInfo fence_info{
         .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-        .flags = static_cast<u32>(config.flags),
+        .flags = static_cast<u32>(flags),
     };
     VkFence fence = VK_NULL_HANDLE;
     const auto result = vkCreateFence(vk.device, &fence_info, nullptr, &fence);
@@ -1414,9 +1413,7 @@ Fence Fence::create(Vk& vk, const Config& config) {
     return fence;
 }
 
-void Fence::wait(Vk& vk) const {
-    VkFence fence = m_fence;
-
+void wait_for_fence(Vk& vk, const VkFence fence) {
     ASSERT(fence != nullptr);
 
     const auto result = vkWaitForFences(vk.device, 1, &fence, VK_TRUE, 1'000'000'000);
@@ -1433,9 +1430,7 @@ void Fence::wait(Vk& vk) const {
     }
 }
 
-void Fence::reset(Vk& vk) const {
-    VkFence fence = m_fence;
-
+void reset_fence(Vk& vk, const VkFence fence) {
     ASSERT(fence != nullptr);
 
     const auto reset_result = vkResetFences(vk.device, 1, &fence);
@@ -1446,7 +1441,7 @@ void Fence::reset(Vk& vk) const {
     }
 }
 
-Semaphore Semaphore::create(Vk& vk) {
+VkSemaphore create_semaphore(Vk& vk) {
     const VkSemaphoreCreateInfo semaphore_info{
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
     };
@@ -1470,7 +1465,7 @@ void allocate_command_buffers(Vk& vk, const Slice<VkCommandBuffer> out_cmds) {
         .commandBufferCount = to_u32(out_cmds.count),
     };
 
-    const VkResult result = vkAllocateCommandBuffers(vk.device, &alloc_info, reinterpret_cast<VkCommandBuffer*>(out_cmds.data));
+    const VkResult result = vkAllocateCommandBuffers(vk.device, &alloc_info, out_cmds.data);
     switch (result) {
         case VK_SUCCESS: break;
         case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
@@ -1524,15 +1519,15 @@ void end_single_time_commands(Vk& vk, VkCommandBuffer cmdpp) {
         default: ERROR("Unexpected Vulkan error");
     }
 
-    const auto fence = Fence::create(vk, {});
-    defer(fence.destroy(vk));
+    const auto fence = create_fence(vk, {});
+    defer(vkDestroyFence(vk.device, fence, nullptr));
 
     VkSubmitInfo submit_info{
         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
         .commandBufferCount = 1,
         .pCommandBuffers = &cmd,
     };
-    const auto submit_result = vkQueueSubmit(vk.queue, 1, &submit_info, fence.get());
+    const auto submit_result = vkQueueSubmit(vk.queue, 1, &submit_info, fence);
     switch (submit_result) {
         case VK_SUCCESS: break;
         case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
@@ -1541,77 +1536,51 @@ void end_single_time_commands(Vk& vk, VkCommandBuffer cmdpp) {
         default: ERROR("Unexpected Vulkan error");
     }
 
-    fence.wait(vk);
+    wait_for_fence(vk, fence);
 
     vkFreeCommandBuffers(vk.device, vk.single_time_command_pool, 1, &cmd);
 }
 
-Surface Surface::create(Vk& vk, SDL_Window* window) {
+VkSurfaceKHR create_surface(Vk& vk, SDL_Window* window) {
     ASSERT(window != nullptr);
 
-    VkSurfaceKHR vk_surface = VK_NULL_HANDLE;
-    bool sdl_success = SDL_Vulkan_CreateSurface(window, vk.instance, nullptr, &vk_surface);
+    VkSurfaceKHR surface = VK_NULL_HANDLE;
+    bool sdl_success = SDL_Vulkan_CreateSurface(window, vk.instance, nullptr, &surface);
     if (!sdl_success)
         ERRORF("Could not create Vulkan surface: {}", SDL_GetError());
-
-    Surface surface{};
-    surface.m_surface = vk_surface;
 
     return surface;
 }
 
-Result<Swapchain> Swapchain::create(Vk& vk, const VkSurfaceKHR surface) {
-    auto swapchain = ok<Swapchain>();
-
-    const auto create_result = swapchain->resize(vk, surface);
-    if (create_result.has_err())
-        return create_result.err();
-
-    allocate_command_buffers(vk, swapchain->m_command_buffers);
-
-    for (auto& fence : swapchain->m_frame_finished_fences) {
-        fence = Fence::create(vk, {VK_FENCE_CREATE_SIGNALED_BIT});
+void destroy_swapchain(Vk& vk, const Swapchain& swapchain) {
+    for (const auto& fence : swapchain.frame_finished_fences) {
+        ASSERT(fence != nullptr);
+        vkDestroyFence(vk.device, fence, nullptr);
     }
-    for (auto& semaphore : swapchain->m_image_available_semaphores) {
-        semaphore = Semaphore::create(vk);
+    for (const auto& semaphore : swapchain.image_available_semaphores) {
+        ASSERT(semaphore != nullptr);
+        vkDestroySemaphore(vk.device, semaphore, nullptr);
     }
-    for (auto& semaphore : swapchain->m_ready_to_present_semaphores) {
-        semaphore = Semaphore::create(vk);
+    for (const auto& semaphore : swapchain.ready_to_present_semaphores) {
+        ASSERT(semaphore != nullptr);
+        vkDestroySemaphore(vk.device, semaphore, nullptr);
     }
 
-    ASSERT(swapchain->m_extent.width > 0);
-    ASSERT(swapchain->m_extent.height > 0);
-    ASSERT(swapchain->m_swapchain != nullptr);
-    for (usize i = 0; i < swapchain->m_image_count; ++i) {
-        ASSERT(swapchain->m_images[i] != nullptr);
-    }
-    for (const auto& cmd : swapchain->m_command_buffers) {
+    for (const auto& cmd : swapchain.command_buffers) {
         ASSERT(cmd != nullptr);
     }
-    return swapchain;
+    vkFreeCommandBuffers(
+        vk.device,
+        vk.command_pool,
+        to_u32(swapchain.command_buffers.size()),
+        swapchain.command_buffers.data()
+    );
+
+    ASSERT(swapchain.swapchain != nullptr);
+    vkDestroySwapchainKHR(vk.device, swapchain.swapchain, nullptr);
 }
 
-void Swapchain::destroy(Vk& vk) const {
-    for (const auto& fence : m_frame_finished_fences) {
-        fence.destroy(vk);
-    }
-    for (const auto& semaphore : m_image_available_semaphores) {
-        semaphore.destroy(vk);
-    }
-    for (const auto& semaphore : m_ready_to_present_semaphores) {
-        semaphore.destroy(vk);
-    }
-
-    for (const auto& cmd : m_command_buffers) {
-        ASSERT(cmd != nullptr);
-    }
-    vkFreeCommandBuffers(vk.device, vk.command_pool, to_u32(m_command_buffers.size()), reinterpret_cast<const VkCommandBuffer*>(m_command_buffers.data()));
-
-    ASSERT(m_swapchain != nullptr);
-    vkDestroySwapchainKHR(vk.device, m_swapchain, nullptr);
-}
-
-Result<void> Swapchain::resize(Vk& vk, const VkSurfaceKHR surface) {
+[[nodiscard]] static VkFormat get_swapchain_format(Vk& vk, const VkSurfaceKHR surface) {
     u32 format_count = 0;
     const VkResult format_count_res = vkGetPhysicalDeviceSurfaceFormatsKHR(vk.gpu, surface, &format_count, nullptr);
     switch (format_count_res) {
@@ -1647,35 +1616,43 @@ Result<void> Swapchain::resize(Vk& vk, const VkSurfaceKHR surface) {
         case VK_ERROR_VALIDATION_FAILED_EXT: ERROR("Vulkan validation failed");
         default: ERROR("Unexpected Vulkan error");
     }
-    if (std::ranges::any_of(formats, [](const VkSurfaceFormatKHR format) { return format.format == VK_FORMAT_R8G8B8A8_SRGB; }))
-        m_format = VK_FORMAT_R8G8B8A8_SRGB;
-    else if (std::ranges::any_of(formats, [](const VkSurfaceFormatKHR format) { return format.format == VK_FORMAT_B8G8R8A8_SRGB; }))
-        m_format = VK_FORMAT_B8G8R8A8_SRGB;
+    if (std::ranges::any_of(formats, [](const VkSurfaceFormatKHR format) {
+        return format.format == VK_FORMAT_R8G8B8A8_SRGB;
+    }))
+        return VK_FORMAT_R8G8B8A8_SRGB;
+    else if (std::ranges::any_of(formats, [](const VkSurfaceFormatKHR format) {
+        return format.format == VK_FORMAT_B8G8R8A8_SRGB;
+    }))
+        return VK_FORMAT_B8G8R8A8_SRGB;
     else
         ERROR("No supported swapchain formats");
+}
 
-    VkSurfaceCapabilitiesKHR surface_capabilities{};
-    const VkResult surface_result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vk.gpu, surface, &surface_capabilities);
-    switch (surface_result) {
-        case VK_SUCCESS: break;
-        case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
-        case VK_ERROR_OUT_OF_DEVICE_MEMORY: ERROR("Vulkan ran out of device memory");
-        case VK_ERROR_SURFACE_LOST_KHR: ERROR("Vulkan surface lost");
-        default: ERROR("Unexpected Vulkan error");
+Result<Swapchain> create_swapchain(Vk& vk, const VkSurfaceKHR surface) {
+    auto swapchain = ok<Swapchain>();
+
+    swapchain->format = get_swapchain_format(vk, surface);
+
+    const auto result = resize_swapchain(vk, *swapchain, surface);
+    if (result.has_err())
+        return result.err();
+
+    allocate_command_buffers(vk, swapchain->command_buffers);
+
+    for (auto& fence : swapchain->frame_finished_fences) {
+        fence = create_fence(vk, VK_FENCE_CREATE_SIGNALED_BIT);
     }
-    if (surface_capabilities.currentExtent.width == 0 || surface_capabilities.currentExtent.height == 0)
-        return Err::InvalidWindow;
-    if (surface_capabilities.currentExtent.width < surface_capabilities.minImageExtent.width)
-        return Err::InvalidWindow;
-    if (surface_capabilities.currentExtent.height < surface_capabilities.minImageExtent.height)
-        return Err::InvalidWindow;
-    if (surface_capabilities.currentExtent.width > surface_capabilities.maxImageExtent.width)
-        return Err::InvalidWindow;
-    if (surface_capabilities.currentExtent.height > surface_capabilities.maxImageExtent.height)
-        return Err::InvalidWindow;
+    for (auto& semaphore : swapchain->image_available_semaphores) {
+        semaphore = create_semaphore(vk);
+    }
+    for (auto& semaphore : swapchain->ready_to_present_semaphores) {
+        semaphore = create_semaphore(vk);
+    }
 
-    std::printf("Swapchain extent: %d x %d\n", surface_capabilities.currentExtent.width, surface_capabilities.currentExtent.height);
+    return swapchain;
+}
 
+[[nodiscard]] static VkPresentModeKHR get_swapchain_present_mode(Vk& vk, const VkSurfaceKHR surface) {
     u32 present_mode_count = 0;
     const VkResult present_count_res = vkGetPhysicalDeviceSurfacePresentModesKHR(vk.gpu, surface, &present_mode_count, nullptr);
     switch (present_count_res) {
@@ -1700,28 +1677,57 @@ Result<void> Swapchain::resize(Vk& vk, const VkSurfaceKHR surface) {
         default: ERROR("Unexpected Vulkan error");
     }
 
+    return std::ranges::any_of(present_modes, [](const VkPresentModeKHR mode) {
+        return mode == VK_PRESENT_MODE_MAILBOX_KHR;
+    })
+        // ? VK_PRESENT_MODE_MAILBOX_KHR
+        ? VK_PRESENT_MODE_FIFO_KHR
+        : VK_PRESENT_MODE_FIFO_KHR;
+}
+
+Result<void> resize_swapchain(Vk& vk, Swapchain& swapchain, const VkSurfaceKHR surface) {
+    const VkPresentModeKHR present_mode = get_swapchain_present_mode(vk, surface);
+
+    VkSurfaceCapabilitiesKHR surface_capabilities{};
+    const VkResult surface_result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vk.gpu, surface, &surface_capabilities);
+    switch (surface_result) {
+        case VK_SUCCESS: break;
+        case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
+        case VK_ERROR_OUT_OF_DEVICE_MEMORY: ERROR("Vulkan ran out of device memory");
+        case VK_ERROR_SURFACE_LOST_KHR: ERROR("Vulkan surface lost");
+        default: ERROR("Unexpected Vulkan error");
+    }
+    if (surface_capabilities.currentExtent.width == 0 || surface_capabilities.currentExtent.height == 0)
+        return Err::InvalidWindow;
+    if (surface_capabilities.currentExtent.width < surface_capabilities.minImageExtent.width)
+        return Err::InvalidWindow;
+    if (surface_capabilities.currentExtent.height < surface_capabilities.minImageExtent.height)
+        return Err::InvalidWindow;
+    if (surface_capabilities.currentExtent.width > surface_capabilities.maxImageExtent.width)
+        return Err::InvalidWindow;
+    if (surface_capabilities.currentExtent.height > surface_capabilities.maxImageExtent.height)
+        return Err::InvalidWindow;
+    swapchain.extent = surface_capabilities.currentExtent;
+
     const VkSwapchainCreateInfoKHR new_swapchain_info{
         .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
         .surface = surface,
         .minImageCount = surface_capabilities.maxImageCount == 0
-                         ? MaxImages
+                         ? Swapchain::MaxImages
                          : std::min(
                              std::min(surface_capabilities.minImageCount + 1, surface_capabilities.maxImageCount),
-                             MaxImages
+                             Swapchain::MaxImages
                          ),
-        .imageFormat = static_cast<VkFormat>(m_format),
-        .imageColorSpace = static_cast<VkColorSpaceKHR>(SwapchainColorSpace),
-        .imageExtent = surface_capabilities.currentExtent,
+        .imageFormat = swapchain.format,
+        .imageColorSpace = Swapchain::ColorSpace,
+        .imageExtent = swapchain.extent,
         .imageArrayLayers = 1,
         .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
         .preTransform = surface_capabilities.currentTransform,
         .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-        .presentMode = std::ranges::any_of(present_modes, [](const VkPresentModeKHR mode) { return mode == VK_PRESENT_MODE_MAILBOX_KHR; })
-            // ? VK_PRESENT_MODE_MAILBOX_KHR
-            ? VK_PRESENT_MODE_FIFO_KHR
-            : VK_PRESENT_MODE_FIFO_KHR,
+        .presentMode = present_mode,
         .clipped = VK_TRUE,
-        .oldSwapchain = m_swapchain,
+        .oldSwapchain = swapchain.swapchain,
     };
 
     VkSwapchainKHR new_swapchain = nullptr;
@@ -1747,13 +1753,17 @@ Result<void> Swapchain::resize(Vk& vk, const VkSurfaceKHR surface) {
         default: ERROR("Unexpected Vulkan error");
     }
 
-    if (m_swapchain != nullptr) {
-        vkDestroySwapchainKHR(vk.device, m_swapchain, nullptr);
+    if (swapchain.swapchain != nullptr) {
+        vkDestroySwapchainKHR(vk.device, swapchain.swapchain, nullptr);
     }
-    m_swapchain = new_swapchain;
-    m_extent = surface_capabilities.currentExtent;
+    swapchain.swapchain = new_swapchain;
 
-    const auto image_count_result = vkGetSwapchainImagesKHR(vk.device, m_swapchain, &m_image_count, nullptr);
+    const auto image_count_result = vkGetSwapchainImagesKHR(
+        vk.device,
+        swapchain.swapchain,
+        &swapchain.image_count,
+        nullptr
+    );
     switch (image_count_result) {
         case VK_SUCCESS: break;
         case VK_INCOMPLETE: {
@@ -1765,7 +1775,12 @@ Result<void> Swapchain::resize(Vk& vk, const VkSurfaceKHR surface) {
         default: ERROR("Unexpected Vulkan error");
     }
 
-    const auto image_result = vkGetSwapchainImagesKHR(vk.device, m_swapchain, &m_image_count, reinterpret_cast<VkImage*>(m_images.data()));
+    const auto image_result = vkGetSwapchainImagesKHR(
+        vk.device,
+        swapchain.swapchain,
+        &swapchain.image_count,
+        swapchain.images.data()
+    );
     switch (image_result) {
         case VK_SUCCESS: break;
         case VK_INCOMPLETE: {
@@ -1777,23 +1792,26 @@ Result<void> Swapchain::resize(Vk& vk, const VkSurfaceKHR surface) {
         default: ERROR("Unexpected Vulkan error");
     }
 
-    ASSERT(m_swapchain != nullptr);
-    for (const auto& image : m_images) {
-        ASSERT(image != nullptr);
-    }
     return ok();
 }
 
-Result<Swapchain::DrawInfo> Swapchain::begin_frame(Vk& vk) {
-    ASSERT(!m_recording);
-    ASSERT(current_cmd() != nullptr);
+Result<VkCommandBuffer> begin_frame(Vk& vk, Swapchain& swapchain) {
+    ASSERT(!swapchain.recording);
+    ASSERT(swapchain.current_cmd() != nullptr);
 
-    m_current_frame_index = (m_current_frame_index + 1) % MaxFramesInFlight;
+    swapchain.current_frame_index = (swapchain.current_frame_index + 1) % Swapchain::MaxFramesInFlight;
 
-    is_frame_finished().wait(vk);
-    is_frame_finished().reset(vk);
+    wait_for_fence(vk, swapchain.is_frame_finished());
+    reset_fence(vk, swapchain.is_frame_finished());
 
-    const VkResult acquire_result = vkAcquireNextImageKHR(vk.device, m_swapchain, 1'000'000'000, is_image_available().get(), nullptr, &m_current_image_index);
+    const VkResult acquire_result = vkAcquireNextImageKHR(
+        vk.device,
+        swapchain.swapchain,
+        1'000'000'000,
+        swapchain.is_image_available(),
+        nullptr,
+        &swapchain.current_image_index
+    );
     switch (acquire_result) {
         case VK_SUCCESS: break;
         case VK_TIMEOUT: return Err::FrameTimeout;
@@ -1807,7 +1825,7 @@ Result<Swapchain::DrawInfo> Swapchain::begin_frame(Vk& vk) {
         default: ERROR("Unexpected Vulkan error");
     }
 
-    auto cmd = current_cmd();
+    auto cmd = swapchain.current_cmd();
 
     const VkCommandBufferBeginInfo begin_info{
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -1820,15 +1838,15 @@ Result<Swapchain::DrawInfo> Swapchain::begin_frame(Vk& vk) {
         case VK_ERROR_OUT_OF_DEVICE_MEMORY: ERROR("Vulkan ran out of device memory");
         default: ERROR("Unexpected Vulkan error");
     }
-    m_recording = true;
+    swapchain.recording = true;
 
     const VkViewport viewport{
         0.0f, 0.0f,
-        static_cast<f32>(m_extent.width), static_cast<f32>(m_extent.height),
+        static_cast<f32>(swapchain.extent.width), static_cast<f32>(swapchain.extent.height),
         0.0f, 1.0f,
     };
     vkCmdSetViewportWithCount(cmd, 1, &viewport);
-    const VkRect2D scissor{{0, 0}, m_extent};
+    const VkRect2D scissor{{0, 0}, swapchain.extent};
     vkCmdSetScissorWithCount(cmd, 1, &scissor);
 
     vkCmdSetRasterizerDiscardEnable(cmd, VK_FALSE);
@@ -1857,15 +1875,15 @@ Result<Swapchain::DrawInfo> Swapchain::begin_frame(Vk& vk) {
         | VK_COLOR_COMPONENT_A_BIT;
     g_pfn.vkCmdSetColorWriteMaskEXT(cmd, 0, 1, &color_write_mask);
 
-    return ok<DrawInfo>(cmd, current_image(), m_extent);
+    return ok(cmd);
 }
 
-Result<void> Swapchain::end_frame(Vk& vk) {
-    ASSERT(m_recording);
-    ASSERT(m_swapchain != nullptr);
-    ASSERT(current_cmd() != nullptr);
+Result<void> end_frame(Vk& vk, Swapchain& swapchain) {
+    ASSERT(swapchain.recording);
+    ASSERT(swapchain.swapchain != nullptr);
+    ASSERT(swapchain.current_cmd() != nullptr);
 
-    const VkResult end_result = vkEndCommandBuffer(current_cmd());
+    const VkResult end_result = vkEndCommandBuffer(swapchain.current_cmd());
     switch (end_result) {
         case VK_SUCCESS: break;
         case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
@@ -1873,21 +1891,21 @@ Result<void> Swapchain::end_frame(Vk& vk) {
         case VK_ERROR_INVALID_VIDEO_STD_PARAMETERS_KHR: ERROR("Vulkan invalid video parameters");
         default: ERROR("Unexpected Vulkan error");
     }
-    m_recording = false;
+    swapchain.recording = false;
 
     constexpr VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     VkSubmitInfo submit_info{
         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
         .waitSemaphoreCount = 1,
-        .pWaitSemaphores = reinterpret_cast<const VkSemaphore*>(is_image_available().ptr()),
+        .pWaitSemaphores = &swapchain.is_image_available(),
         .pWaitDstStageMask = &wait_stage,
         .commandBufferCount = 1,
-        .pCommandBuffers = reinterpret_cast<const VkCommandBuffer*>(&current_cmd()),
+        .pCommandBuffers = &swapchain.current_cmd(),
         .signalSemaphoreCount = 1,
-        .pSignalSemaphores = reinterpret_cast<const VkSemaphore*>(is_ready_to_present().ptr()),
+        .pSignalSemaphores = &swapchain.is_ready_to_present(),
     };
 
-    const auto submit_result = vkQueueSubmit(vk.queue, 1, &submit_info, is_frame_finished().get());
+    const auto submit_result = vkQueueSubmit(vk.queue, 1, &submit_info, swapchain.is_frame_finished());
     switch (submit_result) {
         case VK_SUCCESS: break;
         case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
@@ -1899,10 +1917,10 @@ Result<void> Swapchain::end_frame(Vk& vk) {
     const VkPresentInfoKHR present_info{
         .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
         .waitSemaphoreCount = 1,
-        .pWaitSemaphores = reinterpret_cast<const VkSemaphore*>(is_ready_to_present().ptr()),
+        .pWaitSemaphores = &swapchain.is_ready_to_present(),
         .swapchainCount = 1,
-        .pSwapchains = reinterpret_cast<const VkSwapchainKHR*>(&m_swapchain),
-        .pImageIndices = &m_current_image_index,
+        .pSwapchains = &swapchain.swapchain,
+        .pImageIndices = &swapchain.current_image_index,
     };
     const VkResult present_result = vkQueuePresentKHR(vk.queue, &present_info);
     switch (present_result) {

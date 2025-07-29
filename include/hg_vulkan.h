@@ -20,472 +20,203 @@ struct Vk {
 
     VkCommandPool command_pool{};
     VkCommandPool single_time_command_pool{};
+};
+[[nodiscard]] Result<Vk> create_vk();
+void destroy_vk(Vk& vk);
 
-    [[nodiscard]] static Result<Vk> create();
-    void destroy();
+enum class GpuMemoryType {
+    DeviceLocal = 0,
+    RandomAccess,
+    LinearAccess,
 };
 
-class GpuBuffer {
-public:
-    VkBuffer get() const {
-        ASSERT(m_buffer != nullptr);
-        return m_buffer;
-    }
-
-    struct View {
-        VkBuffer buffer = nullptr;
-        VkDeviceSize range = 0;
-        VkDeviceSize offset = 0;
-    };
-
-    enum MemoryType {
-        DeviceLocal,
-        RandomAccess,
-        LinearAccess,
-    };
-
-    struct Config {
-        VkDeviceSize size = 0;
-        VkBufferUsageFlags usage{};
-        MemoryType memory_type = DeviceLocal;
-    };
-    [[nodiscard]] static GpuBuffer create(Vk& vk, const Config& config);
-    void destroy(Vk& vk) const {
-        ASSERT(m_allocation != nullptr);
-        ASSERT(m_buffer != nullptr);
-        vmaDestroyBuffer(vk.gpu_allocator, m_buffer, m_allocation);
-    }
-
-    void write_void(Vk& vk, const void* data, usize size, usize offset) const;
-
-    template <typename T> void write_slice(Vk& vk, const Slice<const T> data, VkDeviceSize offset = 0) const {
-        write_void(vk, data.data, data.count * sizeof(T), offset);
-    }
-    template <typename T> void write(Vk& vk, const T& data, usize offset = 0) const {
-        write_void(vk, &data, sizeof(T), offset);
-    }
-
-private:
-    VmaAllocation m_allocation = nullptr;
-    VkBuffer m_buffer{};
-    MemoryType m_type = DeviceLocal;
+struct GpuBuffer {
+    VmaAllocation allocation = nullptr;
+    VkBuffer buffer{};
+    VkDeviceSize size = 0;
+    GpuMemoryType type{};
 };
+void destroy_buffer(Vk& vk, const GpuBuffer& buffer);
 
-class GpuImage {
-public:
-    VkImage get() const {
-        ASSERT(m_image != nullptr);
-        return m_image;
-    }
-
-    struct Config {
-        VkExtent3D extent{};
-        VkFormat format{VK_FORMAT_UNDEFINED};
-        VkImageUsageFlags usage{};
-        u32 mip_levels = 1;
-        VkSampleCountFlagBits sample_count{VK_SAMPLE_COUNT_1_BIT};
-    };
-    [[nodiscard]] static GpuImage create(Vk& vk, const Config& config);
-
-    struct CubemapConfig {
-        VkExtent3D face_extent{};
-        VkFormat format{VK_FORMAT_UNDEFINED};
-        VkImageUsageFlags usage{};
-    };
-    [[nodiscard]] static GpuImage create_cubemap(Vk& vk, const CubemapConfig& config);
-
-    void destroy(Vk& vk) const {
-        ASSERT(m_allocation != nullptr);
-        ASSERT(m_image != nullptr);
-        vmaDestroyImage(vk.gpu_allocator, m_image, m_allocation);
-    }
-
-    struct WriteConfig {
-        ImageData data{};
-        VkFormat format{VK_FORMAT_R8G8B8A8_SRGB};
-        VkImageLayout final_layout{VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-        VkImageAspectFlags aspect_flags{VK_IMAGE_ASPECT_COLOR_BIT};
-    };
-    void write(Vk& vk, const WriteConfig& config) const;
-    void write_cubemap(Vk& vk, const WriteConfig& config) const;
-
-private:
-    VmaAllocation m_allocation = nullptr;
-    VkImage m_image{};
+struct GpuBufferConfig {
+    VkDeviceSize size = 0;
+    VkBufferUsageFlags usage{};
+    GpuMemoryType memory_type = GpuMemoryType::DeviceLocal;
 };
+[[nodiscard]] GpuBuffer create_buffer(Vk& vk, const GpuBufferConfig& config);
+void write_buffer(Vk& vk, const GpuBuffer& dst, const void* src, usize size, usize offset = 0);
 
-class GpuImageView {
-public:
-    VkImageView get() const {
-        ASSERT(m_view != nullptr);
-        return m_view;
-    }
-
-    GpuImageView() = default;
-    GpuImageView(VkImageView view) : m_view{view} {}
-
-    struct Config {
-        VkImage image{};
-        VkFormat format{};
-        VkImageAspectFlags aspect_flags{VK_IMAGE_ASPECT_COLOR_BIT};
-    };
-    [[nodiscard]] static GpuImageView create(Vk& vk, const Config& config);
-    [[nodiscard]] static GpuImageView create_cubemap(Vk& vk, const Config& config);
-
-    void destroy(Vk& vk) const {
-        ASSERT(m_view != nullptr);
-        vkDestroyImageView(vk.device, m_view, nullptr);
-    }
-
-private:
-    VkImageView m_view{};
+struct GpuImage {
+    VmaAllocation allocation = nullptr;
+    VkImage image{};
+    VkExtent3D extent{};
+    VkFormat format{};
+    u32 mip_levels = 0;
+    VkImageLayout layout{};
 };
+void destroy_image(Vk& vk, const GpuImage& image);
 
-class GpuImageAndView {
-public:
-    VkImage get_image() const { return m_image.get(); }
-    VkImageView get_view() const { return m_view.get(); }
-
-    [[nodiscard]] static GpuImageAndView from_parts(GpuImage&& image, GpuImageView&& view) {
-        GpuImageAndView image_and_view{};
-        image_and_view.m_image = image;
-        image_and_view.m_view = view;
-        return image_and_view;
-    }
-
-    struct Config {
-        VkExtent3D extent{};
-        VkFormat format{VK_FORMAT_UNDEFINED};
-        VkImageUsageFlags usage{};
-        VkImageLayout layout{VK_IMAGE_LAYOUT_UNDEFINED};
-        VkImageAspectFlags aspect_flags{VK_IMAGE_ASPECT_COLOR_BIT};
-        u32 mip_levels = 1;
-        VkSampleCountFlagBits sample_count{VK_SAMPLE_COUNT_1_BIT};
-    };
-    [[nodiscard]] static GpuImageAndView create(Vk& vk, const Config& config);
-
-    struct CubemapConfig {
-        ImageData data{};
-        VkFormat format{VK_FORMAT_R8G8B8A8_SRGB};
-        VkImageAspectFlags aspect_flags{VK_IMAGE_ASPECT_COLOR_BIT};
-    };
-    [[nodiscard]] static GpuImageAndView create_cubemap(Vk& vk, const CubemapConfig& config);
-
-    void destroy(Vk& vk) const {
-        m_image.destroy(vk);
-        m_view.destroy(vk);
-    }
-
-    void write(Vk& vk, const GpuImage::WriteConfig& config) const {
-        m_image.write(vk, config);
-    }
-
-    void generate_mipmaps(Vk& vk, u32 levels, VkExtent3D extent, VkFormat format, VkImageLayout final_layout) const;
-
-private:
-    GpuImage m_image{};
-    GpuImageView m_view{};
+struct GpuImageConfig {
+    VkExtent3D extent{};
+    VkFormat format{VK_FORMAT_UNDEFINED};
+    VkImageUsageFlags usage{};
+    u32 mip_levels = 1;
+    VkSampleCountFlagBits sample_count{VK_SAMPLE_COUNT_1_BIT};
 };
+[[nodiscard]] GpuImage create_image(Vk& vk, const GpuImageConfig& config);
+
+struct GpuCubemapConfig {
+    VkExtent3D face_extent{};
+    VkFormat format{VK_FORMAT_UNDEFINED};
+    VkImageUsageFlags usage{};
+};
+[[nodiscard]] GpuImage create_cubemap(Vk& vk, const GpuImageConfig& config);
+
+struct GpuImageWriteConfig {
+    VkImageLayout final_layout{VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    VkImageAspectFlags aspect_flags{VK_IMAGE_ASPECT_COLOR_BIT};
+};
+void write_image(Vk& vk, GpuImage& dst, const ImageData& src, const GpuImageWriteConfig& config);
+void write_cubemap(Vk& vk, GpuImage& dst, const ImageData& src, const GpuImageWriteConfig& config);
 
 inline u32 get_mip_count(const VkExtent3D extent) {
     ASSERT(extent.width > 0 || extent.height > 0 || extent.depth > 0);
-
     return static_cast<u32>(std::floor(std::log2(std::max(std::max(extent.width, extent.height), extent.depth)))) + 1;
 }
+void generate_mipmaps(Vk& vk, GpuImage& image, VkImageLayout final_layout);
 
-class Sampler {
-public:
-    VkSampler get() const {
-        ASSERT(m_sampler != nullptr);
-        return m_sampler;
-    }
+struct GpuImageViewConfig {
+    VkImage image{};
+    VkFormat format{};
+    VkImageAspectFlags aspect_flags{VK_IMAGE_ASPECT_COLOR_BIT};
+};
+[[nodiscard]] VkImageView create_image_view(Vk& vk, const GpuImageViewConfig& config);
+[[nodiscard]] VkImageView create_cubemap_view(Vk& vk, const GpuImageViewConfig& config);
 
-    Sampler() = default;
-    Sampler(VkSampler sampler) : m_sampler{sampler} {}
+struct GpuImageAndView {
+    GpuImage image;
+    VkImageView view;
+};
+void destroy_image_and_view(Vk& vk, const GpuImageAndView& image_and_view);
 
-    enum Type {
-        Nearest = VK_FILTER_NEAREST,
-        Linear = VK_FILTER_LINEAR,
-    };
+struct GpuImageAndViewConfig {
+    VkExtent3D extent{};
+    VkFormat format{VK_FORMAT_UNDEFINED};
+    VkImageUsageFlags usage{};
+    VkImageLayout layout{VK_IMAGE_LAYOUT_UNDEFINED};
+    VkImageAspectFlags aspect_flags{VK_IMAGE_ASPECT_COLOR_BIT};
+    u32 mip_levels = 1;
+    VkSampleCountFlagBits sample_count{VK_SAMPLE_COUNT_1_BIT};
+};
+[[nodiscard]] GpuImageAndView create_image_and_view(Vk& vk, const GpuImageAndViewConfig& config);
 
-    struct Config {
-        Type type = Nearest;
-        VkSamplerAddressMode edge_mode{VK_SAMPLER_ADDRESS_MODE_REPEAT};
-        u32 mip_levels = 1;
-    };
-    [[nodiscard]] static Sampler create(Vk& vk, const Config& config);
+struct GpuCubemapAndViewConfig {
+    ImageData data{};
+    VkFormat format{VK_FORMAT_R8G8B8A8_SRGB};
+    VkImageAspectFlags aspect_flags{VK_IMAGE_ASPECT_COLOR_BIT};
+};
+[[nodiscard]] GpuImageAndView create_cubemap_and_view(Vk& vk, const GpuCubemapAndViewConfig& config);
 
-    void destroy(Vk& vk) const {
-        ASSERT(m_sampler != nullptr);
-        vkDestroySampler(vk.device, m_sampler, nullptr);
-    }
-
-private:
-    VkSampler m_sampler{};
+enum class SamplerType {
+    Nearest = VK_FILTER_NEAREST,
+    Linear = VK_FILTER_LINEAR,
 };
 
-class Texture {
-public:
-    VkImage get_image() const { return m_image.get_image(); }
-    VkImageView get_view() const { return m_image.get_view(); }
-    VkSampler get_sampler() const { return m_sampler.get(); }
-
-    [[nodiscard]] static Texture from_parts(GpuImageAndView&& image, Sampler&& sampler) {
-        Texture texture{};
-        texture.m_image = image;
-        texture.m_sampler = sampler;
-        return texture;
-    }
-    [[nodiscard]] static Texture from_parts(GpuImage&& image, GpuImageView&& view, Sampler&& sampler) {
-        return from_parts(GpuImageAndView::from_parts(std::move(image), std::move(view)), std::move(sampler));
-    }
-
-    struct Config {
-        VkFormat format{VK_FORMAT_UNDEFINED};
-        VkImageAspectFlags aspect_flags{VK_IMAGE_ASPECT_COLOR_BIT};
-        bool create_mips = false;
-        Sampler::Type sampler_type = Sampler::Nearest;
-        VkSamplerAddressMode edge_mode{VK_SAMPLER_ADDRESS_MODE_REPEAT};
-    };
-    [[nodiscard]] static Texture create(Vk& vk, const ImageData& data, const Config& config);
-    [[nodiscard]] static Texture create_cubemap(Vk& vk, const ImageData& data, const Config& config);
-
-    void destroy(Vk& vk) const {
-        m_image.destroy(vk);
-        m_sampler.destroy(vk);
-    }
-
-private:
-    GpuImageAndView m_image{};
-    Sampler m_sampler{};
+struct SamplerConfig {
+    SamplerType type = SamplerType::Nearest;
+    VkSamplerAddressMode edge_mode{VK_SAMPLER_ADDRESS_MODE_REPEAT};
+    u32 mip_levels = 1;
 };
+[[nodiscard]] VkSampler create_sampler(Vk& vk, const SamplerConfig& config);
 
-class DescriptorSetLayout {
-public:
-    VkDescriptorSetLayout get() const {
-        ASSERT(m_descriptor_set_layout != nullptr);
-        return m_descriptor_set_layout;
-    }
-
-    DescriptorSetLayout() = default;
-    DescriptorSetLayout(VkDescriptorSetLayout layout) : m_descriptor_set_layout{layout} {}
-
-    struct Config {
-        Slice<const VkDescriptorSetLayoutBinding> bindings;
-        Slice<const VkDescriptorBindingFlags> flags = {};
-    };
-    [[nodiscard]] static DescriptorSetLayout create(Vk& vk, const Config& config);
-
-    void destroy(Vk& vk) const {
-        ASSERT(m_descriptor_set_layout != nullptr);
-
-        vkDestroyDescriptorSetLayout(vk.device, m_descriptor_set_layout, nullptr);
-    }
-
-private:
-    VkDescriptorSetLayout m_descriptor_set_layout{};
+struct Texture {
+    GpuImageAndView image;
+    VkSampler sampler;
 };
+void destroy_texture(Vk& vk, const Texture& texture);
 
-class DescriptorPool {
-public:
-    VkDescriptorPool get() const {
-        ASSERT(m_pool != nullptr);
-        return m_pool;
-    }
-
-    DescriptorPool() = default;
-    DescriptorPool(VkDescriptorPool pool) : m_pool{pool} {}
-
-    struct Config {
-        u32 max_sets = 0;
-        Slice<const VkDescriptorPoolSize> descriptors{};
-    };
-    [[nodiscard]] static DescriptorPool create(Vk& vk, const Config& config);
-
-    void destroy(Vk& vk) const {
-        ASSERT(m_pool != nullptr);
-
-        vkDestroyDescriptorPool(vk.device, m_pool, nullptr);
-    }
-
-    [[nodiscard]] Result<void> allocate_sets(
-        Vk& vk,
-        Slice<const VkDescriptorSetLayout> layouts,
-        Slice<VkDescriptorSet> out_sets
-    );
-    [[nodiscard]] inline Result<VkDescriptorSet> allocate_set(Vk& vk, const VkDescriptorSetLayout layout) {
-        auto set = ok<VkDescriptorSet>();
-        const auto alloc_result = allocate_sets(vk, {&layout, 1}, {&*set, 1});
-        if (alloc_result.has_err())
-            return alloc_result.err();
-        return set;
-    }
-
-private:
-    VkDescriptorPool m_pool{};
+struct TextureConfig {
+    VkFormat format{VK_FORMAT_UNDEFINED};
+    VkImageAspectFlags aspect_flags{VK_IMAGE_ASPECT_COLOR_BIT};
+    bool create_mips = false;
+    SamplerType sampler_type = SamplerType::Nearest;
+    VkSamplerAddressMode edge_mode{VK_SAMPLER_ADDRESS_MODE_REPEAT};
 };
+[[nodiscard]] Texture create_texture(Vk& vk, const ImageData& data, const TextureConfig& config);
+[[nodiscard]] Texture create_texture_cubemap(Vk& vk, const ImageData& data, const TextureConfig& config);
 
-void write_uniform_buffer_descriptor(
-    Vk& vk, const GpuBuffer::View& buffer,
-    VkDescriptorSet set, u32 binding, u32 binding_array_index = 0
+struct DescriptorSetLayoutConfig {
+    Slice<const VkDescriptorSetLayoutBinding> bindings;
+    Slice<const VkDescriptorBindingFlags> flags = {};
+};
+[[nodiscard]] VkDescriptorSetLayout create_descriptor_set_layout(Vk& vk, const DescriptorSetLayoutConfig& config);
+
+struct DescriptorPoolConfig {
+    u32 max_sets = 0;
+    Slice<const VkDescriptorPoolSize> descriptors{};
+};
+[[nodiscard]] VkDescriptorPool create_descriptor_pool(Vk& vk, const DescriptorPoolConfig& config);
+
+[[nodiscard]] Result<void> allocate_descriptor_sets(
+    Vk& vk,
+    const VkDescriptorPool pool,
+    const Slice<const VkDescriptorSetLayout> layouts,
+    const Slice<VkDescriptorSet> out_sets
 );
+[[nodiscard]] inline Result<VkDescriptorSet> allocate_descriptor_set(
+    Vk& vk,
+    const VkDescriptorPool pool,
+    const VkDescriptorSetLayout layout
+) {
+    auto set = ok<VkDescriptorSet>();
+    const auto alloc_result = allocate_descriptor_sets(vk, pool, {&layout, 1}, {&*set, 1});
+    if (alloc_result.has_err())
+        return alloc_result.err();
+    return set;
+}
 
-void write_image_sampler_descriptor(
-    Vk& vk, const Texture& texture,
-    VkDescriptorSet set, u32 binding, u32 binding_array_index = 0
-);
-
-class PipelineLayout {
-public:
-    VkPipelineLayout get() const {
-        ASSERT(m_pipeline_layout != nullptr);
-        return m_pipeline_layout;
-    }
-
-    PipelineLayout() = default;
-    PipelineLayout(VkPipelineLayout layout) : m_pipeline_layout{layout} {}
-
-    struct Config {
-        Slice<const VkDescriptorSetLayout> set_layouts{};
-        Slice<const VkPushConstantRange> push_ranges{};
-    };
-    [[nodiscard]] static PipelineLayout create(Vk& vk, const Config& config);
-
-    void destroy(Vk& vk) const {
-        ASSERT(m_pipeline_layout != nullptr);
-        vkDestroyPipelineLayout(vk.device, m_pipeline_layout, nullptr);
-    }
-
-private:
-    VkPipelineLayout m_pipeline_layout{};
+struct DescriptorSetBinding {
+    VkDescriptorSet set;
+    u32 binding_index;
+    u32 array_index = 0;
 };
+void write_image_sampler_descriptor(Vk& vk, const DescriptorSetBinding& binding, const Texture& texture);
 
-class UnlinkedShader {
-public:
-    VkShaderEXT get() const {
-        ASSERT(m_shader != nullptr);
-        return m_shader;
-    }
-
-    UnlinkedShader() = default;
-    UnlinkedShader(VkShaderEXT shader) : m_shader{shader} {}
-
-    struct Config {
-        std::filesystem::path path{};
-        VkShaderCodeTypeEXT code_type{VK_SHADER_CODE_TYPE_SPIRV_EXT};
-        VkShaderStageFlagBits stage{};
-        VkShaderStageFlagBits next_stage{};
-        Slice<const VkDescriptorSetLayout> set_layouts{};
-        Slice<const VkPushConstantRange> push_ranges{};
-    };
-    [[nodiscard]] static Result<UnlinkedShader> create(Vk& vk, const Config& config);
-
-    void destroy(Vk& vk) const {
-        ASSERT(m_shader != nullptr);
-
-        auto vkDestroyShaderEXT = reinterpret_cast<PFN_vkDestroyShaderEXT>(
-            vkGetDeviceProcAddr(vk.device, "vkDestroyShaderEXT")
-        );
-        if (vkDestroyShaderEXT == nullptr)
-            ERROR("Could not find vkDestroyShaderEXT");
-
-        vkDestroyShaderEXT(vk.device, m_shader, nullptr);
-    }
-
-private:
-    VkShaderEXT m_shader{};
+struct GpuBufferView {
+    VkBuffer buffer = nullptr;
+    VkDeviceSize range = 0;
+    VkDeviceSize offset = 0;
 };
+void write_uniform_buffer_descriptor(Vk& vk, const DescriptorSetBinding& binding, const GpuBufferView& buffer);
 
-class GraphicsPipeline {
-public:
-    VkPipelineLayout get_layout() const { return m_layout.get(); }
-    Slice<const VkShaderEXT> get_shaders() const {
-        for (const auto shader : m_shaders) {
-            ASSERT(shader != nullptr);
-        }
-        return m_shaders;
-    }
-
-    struct Config {
-        Slice<const VkDescriptorSetLayout> set_layouts{};
-        Slice<const VkPushConstantRange> push_ranges{};
-        std::filesystem::path vertex_shader_path{};
-        std::filesystem::path fragment_shader_path{};
-        VkShaderCodeTypeEXT code_type{VK_SHADER_CODE_TYPE_SPIRV_EXT};
-    };
-    [[nodiscard]] static Result<GraphicsPipeline> create(Vk& vk, const Config& config);
-
-    void destroy(Vk& vk) const {
-        for (const auto shader : m_shaders) {
-            ASSERT(shader != nullptr);
-
-            auto vkDestroyShaderEXT = reinterpret_cast<PFN_vkDestroyShaderEXT>(
-                vkGetDeviceProcAddr(vk.device, "vkDestroyShaderEXT")
-            );
-            if (vkDestroyShaderEXT == nullptr)
-                ERROR("Could not find vkDestroyShaderEXT");
-
-            vkDestroyShaderEXT(vk.device, shader, nullptr);
-        }
-        m_layout.destroy(vk);
-    }
-
-private:
-    PipelineLayout m_layout{};
-    std::array<VkShaderEXT, 2> m_shaders{};
+struct PipelineLayoutConfig {
+    Slice<const VkDescriptorSetLayout> set_layouts{};
+    Slice<const VkPushConstantRange> push_ranges{};
 };
+[[nodiscard]] VkPipelineLayout create_pipeline_layout(Vk& vk, const PipelineLayoutConfig& config);
 
-class Fence {
-public:
-    VkFence get() const {
-        ASSERT(m_fence != nullptr);
-        return m_fence;
-    }
-
-    Fence() = default;
-    Fence(VkFence fence) : m_fence{fence} {}
-
-    struct Config {
-        VkFenceCreateFlags flags{};
-    };
-    [[nodiscard]] static Fence create(Vk& vk, const Config& config);
-
-    void destroy(Vk& vk) const {
-        ASSERT(m_fence != nullptr);
-        vkDestroyFence(vk.device, m_fence, nullptr);
-    }
-
-    void wait(Vk& vk) const;
-    void reset(Vk& vk) const;
-
-private:
-    VkFence m_fence = nullptr;
+struct GraphicsPipeline {
+    VkPipelineLayout layout{};
+    std::array<VkShaderEXT, 2> shaders{};
 };
+void destroy_graphics_pipeline(Vk& vk, const GraphicsPipeline& pipeline);
 
-class Semaphore {
-public:
-    VkSemaphore get() const {
-        ASSERT(m_semaphore != nullptr);
-        return m_semaphore;
-    }
-    VkSemaphore* ptr() {
-        ASSERT(m_semaphore != nullptr);
-        return &m_semaphore;
-    }
-
-    Semaphore() = default;
-    Semaphore(VkSemaphore semaphore) : m_semaphore{semaphore} {}
-
-    [[nodiscard]] static Semaphore create(Vk& vk);
-
-    void destroy(Vk& vk) const {
-        ASSERT(m_semaphore != nullptr);
-        vkDestroySemaphore(vk.device, m_semaphore, nullptr);
-    }
-
-private:
-    VkSemaphore m_semaphore = nullptr;
+struct GraphicsPipelineConfig {
+    Slice<const VkDescriptorSetLayout> set_layouts{};
+    Slice<const VkPushConstantRange> push_ranges{};
+    std::filesystem::path vertex_shader_path{};
+    std::filesystem::path fragment_shader_path{};
+    VkShaderCodeTypeEXT code_type{VK_SHADER_CODE_TYPE_SPIRV_EXT};
 };
+[[nodiscard]] Result<GraphicsPipeline> create_graphics_pipeline(Vk& vk, const GraphicsPipelineConfig& config);
+
+void bind_shaders(VkCommandBuffer cmd, const GraphicsPipeline& pipeline);
+
+[[nodiscard]] VkFence create_fence(Vk& vk, const VkFenceCreateFlags flags = {});
+void wait_for_fence(Vk& vk, const VkFence fence);
+void reset_fence(Vk& vk, const VkFence fence);
+
+[[nodiscard]] VkSemaphore create_semaphore(Vk& vk);
 
 void allocate_command_buffers(Vk& vk, const Slice<VkCommandBuffer> out_cmds);
 
@@ -602,68 +333,50 @@ private:
     Slice<VkImageMemoryBarrier2> m_images{};
 };
 
-class Surface {
-public:
-    [[nodiscard]] VkSurfaceKHR get() const {
-        ASSERT(m_surface != nullptr);
-        return m_surface;
-    }
+[[nodiscard]] VkSurfaceKHR create_surface(Vk& vk, SDL_Window* window);
 
-    [[nodiscard]] static Surface create(Vk& vk, SDL_Window* window);
-    void destroy(Vk& vk) const {
-        ASSERT(m_surface != nullptr);
-        vkDestroySurfaceKHR(vk.instance, m_surface, nullptr);
-    }
-
-private:
-    VkSurfaceKHR m_surface{};
-};
-
-class Swapchain {
-public:
+struct Swapchain {
     static constexpr u32 MaxFramesInFlight = 2;
     static constexpr u32 MaxImages = 3;
+    static constexpr VkColorSpaceKHR ColorSpace{VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
 
-    static constexpr VkColorSpaceKHR SwapchainColorSpace{VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
+    VkExtent2D extent{};
+    VkSwapchainKHR swapchain{};
+    std::array<VkImage, MaxImages> images{};
+    u32 image_count = 0;
+    VkFormat format = VK_FORMAT_UNDEFINED;
 
-    [[nodiscard]] static Result<Swapchain> create(Vk& vk, VkSurfaceKHR surface);
-    void destroy(Vk& vk) const;
-    [[nodiscard]] Result<void> resize(Vk& vk, VkSurfaceKHR surface);
+    u32 current_image_index = 0;
+    u32 current_frame_index = 0;
+    bool recording = false;
 
-    VkFormat get_format() const { return m_format; }
-    struct DrawInfo {
-        VkCommandBuffer cmd{};
-        VkImage render_target{};
-        VkExtent2D extent{};
-    };
-    [[nodiscard]] Result<DrawInfo> begin_frame(Vk& vk);
-    [[nodiscard]] Result<void> end_frame(Vk& vk);
+    std::array<VkCommandBuffer, MaxFramesInFlight> command_buffers{};
+    std::array<VkFence, MaxFramesInFlight> frame_finished_fences{};
+    std::array<VkSemaphore, MaxFramesInFlight> image_available_semaphores{};
+    std::array<VkSemaphore, MaxImages> ready_to_present_semaphores{};
 
-private:
-    [[nodiscard]] VkCommandBuffer& current_cmd() { return m_command_buffers[m_current_frame_index]; }
-    [[nodiscard]] VkImage& current_image() { return m_images[m_current_image_index]; }
-    [[nodiscard]] Fence& is_frame_finished() { return m_frame_finished_fences[m_current_frame_index]; }
-    [[nodiscard]] Semaphore& is_image_available() { return m_image_available_semaphores[m_current_frame_index]; }
-    [[nodiscard]] Semaphore& is_ready_to_present() { return m_ready_to_present_semaphores[m_current_image_index]; }
-    [[nodiscard]] const VkCommandBuffer& current_cmd() const { return m_command_buffers[m_current_frame_index]; }
-    [[nodiscard]] const VkImage& current_image() const { return m_images[m_current_image_index]; }
-    [[nodiscard]] const Fence& is_frame_finished() const { return m_frame_finished_fences[m_current_frame_index]; }
-    [[nodiscard]] const Semaphore& is_image_available() const { return m_image_available_semaphores[m_current_frame_index]; }
-    [[nodiscard]] const Semaphore& is_ready_to_present() const { return m_ready_to_present_semaphores[m_current_image_index]; }
-
-    VkExtent2D m_extent{};
-    VkSwapchainKHR m_swapchain{};
-    std::array<VkImage, MaxImages> m_images{};
-    u32 m_image_count = 0;
-    VkFormat m_format = VK_FORMAT_UNDEFINED;
-    u32 m_current_image_index = 0;
-    u32 m_current_frame_index = 0;
-    bool m_recording = false;
-    std::array<VkCommandBuffer, MaxFramesInFlight> m_command_buffers{};
-    std::array<Fence, MaxFramesInFlight> m_frame_finished_fences{};
-    std::array<Semaphore, MaxFramesInFlight> m_image_available_semaphores{};
-    std::array<Semaphore, MaxImages> m_ready_to_present_semaphores{};
+    [[nodiscard]] VkCommandBuffer& current_cmd() { return command_buffers[current_frame_index]; }
+    [[nodiscard]] VkImage& current_image() { return images[current_image_index]; }
+    [[nodiscard]] VkFence& is_frame_finished() { return frame_finished_fences[current_frame_index]; }
+    [[nodiscard]] VkSemaphore& is_image_available() { return image_available_semaphores[current_frame_index]; }
+    [[nodiscard]] VkSemaphore& is_ready_to_present() { return ready_to_present_semaphores[current_image_index]; }
+    [[nodiscard]] const VkCommandBuffer& current_cmd() const { return command_buffers[current_frame_index]; }
+    [[nodiscard]] const VkImage& current_image() const { return images[current_image_index]; }
+    [[nodiscard]] const VkFence& is_frame_finished() const { return frame_finished_fences[current_frame_index]; }
+    [[nodiscard]] const VkSemaphore& is_image_available() const {
+        return image_available_semaphores[current_frame_index];
+    }
+    [[nodiscard]] const VkSemaphore& is_ready_to_present() const {
+        return ready_to_present_semaphores[current_image_index];
+    }
 };
+void destroy_swapchain(Vk& vk, const Swapchain& swapchain);
+
+[[nodiscard]] Result<Swapchain> create_swapchain(Vk& vk, const VkSurfaceKHR surface);
+[[nodiscard]] Result<void> resize_swapchain(Vk& vk, Swapchain& swapchain, const VkSurfaceKHR surface);
+
+[[nodiscard]] Result<VkCommandBuffer> begin_frame(Vk& vk, Swapchain& swapchain);
+[[nodiscard]] Result<void> end_frame(Vk& vk, Swapchain& swapchain);
 
 struct VulkanPFNs {
     PFN_vkCreateDebugUtilsMessengerEXT vkCreateDebugUtilsMessengerEXT{};

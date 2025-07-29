@@ -16,7 +16,7 @@ public:
 
     [[nodiscard]] static Result<Engine> create();
     void destroy() {
-        vk.destroy();
+        destroy_vk(vk);
         loader.destroy();
 
         SDL_Quit();

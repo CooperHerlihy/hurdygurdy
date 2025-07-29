@@ -14,7 +14,7 @@ Result<Engine> Engine::create() {
         .max_gltfs = 16,
     }};
 
-    auto vk = Vk::create();
+    auto vk = create_vk();
     if (vk.has_err())
         return vk.err();
     engine->vk = std::move(*vk);

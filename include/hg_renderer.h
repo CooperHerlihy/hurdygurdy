@@ -35,7 +35,7 @@ public:
     [[nodiscard]] SDL_Window* get_window() const { return m_window.get(); }
     [[nodiscard]] glm::ivec2 get_extent() const { return m_window.get_extent(); }
 
-    [[nodiscard]] VkDescriptorSetLayout get_global_set_layout() const { return m_set_layout.get(); }
+    [[nodiscard]] VkDescriptorSetLayout get_global_set_layout() const { return m_set_layout; }
     [[nodiscard]] VkDescriptorSet get_global_set() const { return m_global_set; }
 
     struct Config {
@@ -49,7 +49,13 @@ public:
     Result<void> draw(Engine& engine, Slice<Pipeline*> pipelines);
 
     void update_projection(Engine& engine, const glm::mat4& projection) const {
-        m_vp_buffer.write(engine.vk, projection, offsetof(ViewProjectionUniform, projection));
+        write_buffer(
+            engine.vk,
+            m_vp_buffer,
+            &projection,
+            sizeof(projection),
+            offsetof(ViewProjectionUniform, projection)
+        );
     }
 
     void update_camera_and_lights(Engine& engine, const Cameraf& camera);
@@ -61,14 +67,14 @@ public:
 
 private:
     Window m_window{};
-    Surface m_surface{};
+    VkSurfaceKHR m_surface{};
     Swapchain m_swapchain{};
 
     GpuImageAndView m_color_image{};
     GpuImageAndView m_depth_image{};
 
-    DescriptorSetLayout m_set_layout{};
-    DescriptorPool m_descriptor_pool{};
+    VkDescriptorSetLayout m_set_layout{};
+    VkDescriptorPool m_descriptor_pool{};
     VkDescriptorSet m_global_set{};
     GpuBuffer m_vp_buffer{};
     GpuBuffer m_light_buffer{};
@@ -85,10 +91,10 @@ public:
     Result<void> load_skybox(Engine& engine, const std::filesystem::path path);
 
 private:
-    DescriptorSetLayout m_set_layout{};
+    VkDescriptorSetLayout m_set_layout{};
     GraphicsPipeline m_pipeline{};
 
-    DescriptorPool m_descriptor_pool{};
+    VkDescriptorPool m_descriptor_pool{};
     VkDescriptorSet m_set{};
 
     Texture m_cubemap{};
@@ -133,8 +139,8 @@ public:
         float metalness = 0.0;
 
         void destroy(Engine& engine) const {
-            vertex_buffer.destroy(engine.vk);
-            index_buffer.destroy(engine.vk);
+            destroy_buffer(engine.vk, vertex_buffer);
+            destroy_buffer(engine.vk, index_buffer);
         }
     };
 
@@ -168,10 +174,10 @@ public:
     void clear_queue() { m_render_queue.clear(); }
 
 private:
-    DescriptorSetLayout m_set_layout{};
+    VkDescriptorSetLayout m_set_layout{};
     GraphicsPipeline m_pipeline{};
 
-    DescriptorPool m_descriptor_pool{};
+    VkDescriptorPool m_descriptor_pool{};
     VkDescriptorSet m_texture_set{};
 
     std::vector<Texture> m_textures{};
