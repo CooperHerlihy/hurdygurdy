@@ -1,16 +1,15 @@
 #include "hg_renderer.h"
 #include "hg_vulkan.h"
-#include <vulkan/vulkan_core.h>
 
 namespace hg {
 
-Result<DefaultRenderer> DefaultRenderer::create(Engine& engine, const Config& config) {
+Result<PbrRenderer> PbrRenderer::create(Engine& engine, const Config& config) {
     if (!config.fullscreen) {
         ASSERT(config.window_size.x > 0);
         ASSERT(config.window_size.y > 0);
     }
 
-    auto renderer = ok<DefaultRenderer>();
+    auto renderer = ok<PbrRenderer>();
 
     if (config.fullscreen)
         renderer->m_window = create_fullscreen_window();
@@ -60,17 +59,17 @@ Result<DefaultRenderer> DefaultRenderer::create(Engine& engine, const Config& co
     });
 
     write_uniform_buffer_descriptor(
-        engine.vk, {renderer->m_global_set, 0}, {renderer->m_vp_buffer.buffer, sizeof(ViewProjectionUniform)}
+        engine.vk, {renderer->m_global_set, 0}, {&renderer->m_vp_buffer, sizeof(ViewProjectionUniform)}
     );
     write_uniform_buffer_descriptor(
-        engine.vk, {renderer->m_global_set, 1}, {renderer->m_light_buffer.buffer, sizeof(LightUniform)}
+        engine.vk, {renderer->m_global_set, 1}, {&renderer->m_light_buffer, sizeof(LightUniform)}
     );
 
     ASSERT(renderer->m_global_set != nullptr);
     return renderer;
 }
 
-Result<void> DefaultRenderer::resize(Engine& engine) {
+Result<void> PbrRenderer::resize(Engine& engine) {
     const auto window_size = get_window_extent(m_window);
 
     auto swapchain_result = resize_swapchain(engine.vk, m_swapchain, m_surface);
@@ -97,7 +96,7 @@ Result<void> DefaultRenderer::resize(Engine& engine) {
     return ok();
 }
 
-void DefaultRenderer::destroy(Engine& engine) const {
+void PbrRenderer::destroy(Engine& engine) const {
     const auto wait_result = vkQueueWaitIdle(engine.vk.queue);
     switch (wait_result) {
         case VK_SUCCESS: break;
@@ -121,7 +120,7 @@ void DefaultRenderer::destroy(Engine& engine) const {
     SDL_DestroyWindow(m_window);
 }
 
-[[nodiscard]] Result<void> DefaultRenderer::draw(Engine& engine, const Slice<Pipeline*> pipelines) {
+[[nodiscard]] Result<void> PbrRenderer::draw(Engine& engine, const Slice<Pipeline*> pipelines) {
     const auto frame_result = [&]() -> Result<void> {
         const auto begin = begin_frame(engine.vk, m_swapchain);
         if (begin.has_err())
@@ -240,7 +239,7 @@ void DefaultRenderer::destroy(Engine& engine) const {
     return ok();
 }
 
-void DefaultRenderer::update_camera_and_lights(Engine& engine, const Cameraf& camera) {
+void PbrRenderer::update_camera_and_lights(Engine& engine, const Cameraf& camera) {
     const glm::mat4 view{camera.view()};
 
     ASSERT(m_light_queue.size() < MaxLights);
@@ -256,7 +255,7 @@ void DefaultRenderer::update_camera_and_lights(Engine& engine, const Cameraf& ca
     write_buffer(engine.vk, m_vp_buffer, &view, sizeof(view), offsetof(ViewProjectionUniform, view));
 }
 
-SkyboxPipeline SkyboxPipeline::create(Engine& engine, const DefaultRenderer& renderer) {
+SkyboxPipeline SkyboxPipeline::create(Engine& engine, const PbrRenderer& renderer) {
     ASSERT(renderer.get_global_set_layout() != nullptr);
 
     SkyboxPipeline pipeline{};
@@ -309,7 +308,7 @@ void SkyboxPipeline::destroy(Engine& engine) const {
     vkDestroyDescriptorSetLayout(engine.vk.device, m_set_layout, nullptr);
 }
 
-void SkyboxPipeline::draw(const DefaultRenderer& renderer, const VkCommandBuffer cmd) {
+void SkyboxPipeline::draw(const PbrRenderer& renderer, const VkCommandBuffer cmd) {
     ASSERT(m_set != nullptr);
     ASSERT(cmd != nullptr);
 
@@ -407,7 +406,7 @@ Result<void> SkyboxPipeline::load_skybox(Engine& engine, const std::filesystem::
     return ok();
 }
 
-PbrPipeline PbrPipeline::create(Engine& engine, const DefaultRenderer& renderer) {
+PbrPipeline PbrPipeline::create(Engine& engine, const PbrRenderer& renderer) {
     ASSERT(renderer.get_global_set_layout() != nullptr);
 
     PbrPipeline pipeline{};
@@ -462,7 +461,7 @@ void PbrPipeline::destroy(Engine& engine) const {
     vkDestroyDescriptorSetLayout(engine.vk.device, m_set_layout, nullptr);
 }
 
-void PbrPipeline::draw(const DefaultRenderer& renderer, const VkCommandBuffer cmd) {
+void PbrPipeline::draw(const PbrRenderer& renderer, const VkCommandBuffer cmd) {
     ASSERT(cmd != nullptr);
 
     vkCmdSetCullMode(cmd, VK_CULL_MODE_BACK_BIT);

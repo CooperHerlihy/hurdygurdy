@@ -23,6 +23,12 @@ struct GpuBuffer {
 };
 void destroy_buffer(Vk& vk, const GpuBuffer& buffer);
 
+struct GpuBufferView {
+    const GpuBuffer* buffer = nullptr;
+    VkDeviceSize range = 0;
+    VkDeviceSize offset = 0;
+};
+
 struct GpuBufferConfig {
     VkDeviceSize size = 0;
     VkBufferUsageFlags usage{};
@@ -166,12 +172,6 @@ struct DescriptorSetBinding {
     u32 array_index = 0;
 };
 void write_image_sampler_descriptor(Vk& vk, const DescriptorSetBinding& binding, const Texture& texture);
-
-struct GpuBufferView {
-    VkBuffer buffer = nullptr;
-    VkDeviceSize range = 0;
-    VkDeviceSize offset = 0;
-};
 void write_uniform_buffer_descriptor(Vk& vk, const DescriptorSetBinding& binding, const GpuBufferView& buffer);
 
 struct PipelineLayoutConfig {
@@ -285,6 +285,9 @@ private:
     Slice<VkBufferMemoryBarrier2> m_buffers{};
     Slice<VkImageMemoryBarrier2> m_images{};
 };
+
+void copy_to_buffer(VkCommandBuffer cmd, const GpuBufferView& dst, const GpuBufferView& src);
+void copy_to_image(VkCommandBuffer cmd, GpuImage& dst, const GpuBuffer& src, VkImageAspectFlags aspect);
 
 [[nodiscard]] VkSurfaceKHR create_surface(Vk& vk, SDL_Window* window);
 

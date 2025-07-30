@@ -5,499 +5,6 @@
 
 namespace hg {
 
-#ifdef NDEBUG
-inline constexpr std::array<const char*, 0> ValidationLayers{};
-#else
-inline constexpr std::array ValidationLayers{"VK_LAYER_KHRONOS_validation"};
-#endif
-constexpr std::array DeviceExtensions{
-    VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-    VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
-    VK_EXT_SHADER_OBJECT_EXTENSION_NAME,
-    VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
-};
-
-static VkBool32 debug_callback(
-    const VkDebugUtilsMessageSeverityFlagBitsEXT severity,
-    const VkDebugUtilsMessageTypeFlagsEXT,
-    const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void*
-) {
-    if (severity & (VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT
-                 |  VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT)) {
-        std::printf("Vulkan Info: %s\n", callback_data->pMessage);
-    } else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
-        std::printf("Vulkan Warning: %s\n", callback_data->pMessage);
-    } else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
-        std::printf("Vulkan Error: %s\n", callback_data->pMessage);
-    } else {
-        std::printf("Vulkan Unknown: %s\n", callback_data->pMessage);
-    }
-    return VK_FALSE;
-}
-
-const VkDebugUtilsMessengerCreateInfoEXT DebugUtilsMessengerCreateInfo{
-    .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
-    .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT
-                     | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT
-                     | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
-    .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
-                 | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT
-                 | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
-    .pfnUserCallback = debug_callback,
-};
-
-static Result<Slice<const char*>> get_instance_extensions(Vk& vk) {
-    u32 sdl_extension_count = 0;
-    const char* const* sdl_extensions = SDL_Vulkan_GetInstanceExtensions(&sdl_extension_count);
-    if (sdl_extensions == nullptr)
-        ERRORF("Failed to get required instance extensions from SDL: {}", SDL_GetError());
-
-    auto required_extensions = ok(vk.stack.alloc<const char*>(sdl_extension_count + 1));
-    std::copy(sdl_extensions, sdl_extensions + sdl_extension_count, required_extensions->data);
-#ifndef NDEBUG
-    required_extensions->data[sdl_extension_count] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
-#endif
-
-    u32 extension_count = 0;
-    VkResult ext_count_res = vkEnumerateInstanceExtensionProperties(nullptr, &extension_count, nullptr);
-    switch (ext_count_res) {
-        case VK_SUCCESS: break;
-        case VK_INCOMPLETE: {
-            LOG_WARN("Vulkan incomplete instance extension enumeration");
-            break;
-        }
-        case VK_ERROR_LAYER_NOT_PRESENT: {
-            LOG_ERROR("Vulkan layer not present");
-            return Err::VulkanLayerUnavailable;
-        }
-        case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
-        case VK_ERROR_OUT_OF_DEVICE_MEMORY: ERROR("Vulkan ran out of device memory");
-        default: ERROR("Unexpected Vulkan error");
-    }
-
-    auto extensions = vk.stack.alloc<VkExtensionProperties>(extension_count);
-    defer(vk.stack.dealloc(extensions));
-
-    VkResult ext_res = vkEnumerateInstanceExtensionProperties(nullptr, &extension_count, extensions.data);
-    switch (ext_res) {
-        case VK_SUCCESS: break;
-        case VK_INCOMPLETE: {
-            LOG_WARN("Vulkan incomplete instance extension enumeration");
-            break;
-        }
-        case VK_ERROR_LAYER_NOT_PRESENT: {
-            LOG_ERROR("Vulkan layer not present");
-            return Err::VulkanLayerUnavailable;
-        }
-        case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
-        case VK_ERROR_OUT_OF_DEVICE_MEMORY: ERROR("Vulkan ran out of device memory");
-        default: ERROR("Unexpected Vulkan error");
-    }
-
-    if (!std::ranges::all_of(*required_extensions, [&](const char* required) {
-        return std::ranges::any_of(extensions, [&](const VkExtensionProperties& extension) {
-            return strcmp(required, extension.extensionName) == 0;
-        });
-    })) return Err::VulkanExtensionUnavailable;
-
-    return required_extensions;
-}
-
-static Result<VkInstance> create_instance(Vk& vk) {
-    const VkApplicationInfo app_info{
-        .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-        .pApplicationName = "Hurdy Gurdy",
-        .applicationVersion = 0,
-        .pEngineName = "Hurdy Gurdy",
-        .engineVersion = 0,
-        .apiVersion = VK_API_VERSION_1_3,
-    };
-
-    const auto extensions = get_instance_extensions(vk);
-    defer(vk.stack.dealloc(*extensions));
-    if (extensions.has_err())
-        return extensions.err();
-
-    const VkInstanceCreateInfo instance_info = {
-        .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-        .pNext = &DebugUtilsMessengerCreateInfo,
-        .pApplicationInfo = &app_info,
-        .enabledLayerCount = to_u32(ValidationLayers.size()),
-        .ppEnabledLayerNames = ValidationLayers.data(),
-        .enabledExtensionCount = to_u32(extensions->count),
-        .ppEnabledExtensionNames = extensions->data,
-    };
-
-    VkInstance instance;
-    const VkResult result = vkCreateInstance(&instance_info, nullptr, &instance);
-    switch (result) {
-        case VK_SUCCESS: break;
-        case VK_ERROR_LAYER_NOT_PRESENT: {
-            LOG_WARN("Vulkan layer not present");
-            return Err::VulkanLayerUnavailable;
-        }
-        case VK_ERROR_EXTENSION_NOT_PRESENT: {
-            LOG_WARN("Vulkan extension not present");
-            return Err::VulkanExtensionUnavailable;
-        }
-        case VK_ERROR_INCOMPATIBLE_DRIVER: {
-            LOG_WARN("Vulkan incompatible driver");
-            return Err::VulkanIncompatibleDriver;
-        }
-        case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
-        case VK_ERROR_OUT_OF_DEVICE_MEMORY: ERROR("Vulkan ran out of device memory");
-        case VK_ERROR_INITIALIZATION_FAILED: ERROR("Vulkan initialization failed");
-        default: ERROR("Unexpected Vulkan error");
-    }
-
-    return ok(instance);
-}
-
-static VkDebugUtilsMessengerEXT create_debug_messenger(Vk& vk) {
-#ifdef NDEBUG
-    return nullptr;
-#else
-    ASSERT(vk.instance != nullptr);
-
-    VkDebugUtilsMessengerEXT messenger = nullptr;
-    const VkResult result = g_pfn.vkCreateDebugUtilsMessengerEXT(
-        vk.instance,
-        &DebugUtilsMessengerCreateInfo,
-        nullptr,
-        &messenger
-    );
-    switch (result) {
-        case VK_SUCCESS: break;
-        case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
-        default: ERROR("Unexpected Vulkan error");
-    }
-
-    return messenger;
-#endif
-}
-
-static Result<u32> find_queue_family(Vk& vk, const VkPhysicalDevice gpu) {
-    ASSERT(gpu != nullptr);
-
-    u32 queue_family_count = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(gpu, &queue_family_count, nullptr);
-    if (queue_family_count == 0)
-        return Err::VkQueueFamilyUnavailable;
-
-    auto queue_families = vk.stack.alloc<VkQueueFamilyProperties>(queue_family_count);
-    defer(vk.stack.dealloc(queue_families));
-    vkGetPhysicalDeviceQueueFamilyProperties(gpu, &queue_family_count, queue_families.data);
-
-    const auto queue_family = std::ranges::find_if(queue_families, [](const VkQueueFamilyProperties family) {
-        return static_cast<bool>(family.queueFlags & (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT));
-    });
-    if (queue_family == end(queue_families))
-        return Err::VkQueueFamilyUnavailable;
-
-    return ok(static_cast<u32>(queue_family - begin(queue_families)));
-}
-
-static Result<VkPhysicalDevice> find_gpu(Vk& vk) {
-    ASSERT(vk.instance != nullptr);
-
-    u32 gpu_count = 0;
-    VkResult gpu_count_res = vkEnumeratePhysicalDevices(vk.instance, &gpu_count, nullptr);
-    switch (gpu_count_res) {
-        case VK_SUCCESS: break;
-        case VK_INCOMPLETE: {
-            LOG_WARN("Vulkan incomplete gpu enumeration");
-            break;
-        }
-        case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
-        case VK_ERROR_OUT_OF_DEVICE_MEMORY: ERROR("Vulkan ran out of device memory");
-        case VK_ERROR_INITIALIZATION_FAILED: ERROR("Vulkan initialization failed");
-        default: ERROR("Unexpected Vulkan error");
-    }
-    if (gpu_count == 0) {
-        LOG_WARN("No gpu found");
-        return Err::NoCompatibleVkPhysicalDevice;
-    }
-
-    auto gpus = vk.stack.alloc<VkPhysicalDevice>(gpu_count);
-    defer(vk.stack.dealloc(gpus));
-    auto gpu_result = vkEnumeratePhysicalDevices(vk.instance, &gpu_count, gpus.data);
-    switch (gpu_result) {
-        case VK_SUCCESS: break;
-        case VK_INCOMPLETE: {
-            LOG_WARN("Vulkan incomplete gpu enumeration");
-            break;
-        }
-        case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
-        case VK_ERROR_OUT_OF_DEVICE_MEMORY: ERROR("Vulkan ran out of device memory");
-        case VK_ERROR_INITIALIZATION_FAILED: ERROR("Vulkan initialization failed");
-        default: ERROR("Unexpected Vulkan error");
-    }
-
-    for (const auto gpu : gpus) {
-        VkPhysicalDeviceFeatures features{};
-        vkGetPhysicalDeviceFeatures(gpu, &features);
-        if (features.sampleRateShading != VK_TRUE || features.samplerAnisotropy != VK_TRUE)
-            continue;
-
-        u32 extension_count = 0;
-        const VkResult ext_count_res = vkEnumerateDeviceExtensionProperties(gpu, nullptr, &extension_count, nullptr);
-        switch (ext_count_res) {
-            case VK_SUCCESS: break;
-            case VK_INCOMPLETE: {
-                LOG_WARN("Vulkan incomplete gpu extension enumeration");
-                break;
-            }
-            case VK_ERROR_LAYER_NOT_PRESENT: {
-                LOG_WARN("Vulkan layer not present");
-                return Err::VulkanLayerUnavailable;
-            }
-            case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
-            case VK_ERROR_OUT_OF_DEVICE_MEMORY: ERROR("Vulkan ran out of device memory");
-            default: ERROR("Unexpected Vulkan error");
-        }
-
-        auto extensions = vk.stack.alloc<VkExtensionProperties>(extension_count);
-        defer(vk.stack.dealloc(extensions));
-        const VkResult ext_res = vkEnumerateDeviceExtensionProperties(gpu, nullptr, &extension_count, extensions.data);
-        switch (ext_res) {
-            case VK_SUCCESS: break;
-            case VK_INCOMPLETE: {
-                LOG_WARN("Vulkan incomplete gpu extension enumeration");
-                break;
-            }
-            case VK_ERROR_LAYER_NOT_PRESENT: {
-                LOG_WARN("Vulkan layer not present");
-                return Err::VulkanLayerUnavailable;
-            }
-            case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
-            case VK_ERROR_OUT_OF_DEVICE_MEMORY: ERROR("Vulkan ran out of device memory");
-            default: ERROR("Unexpected Vulkan error");
-        }
-
-        if (!std::ranges::all_of(DeviceExtensions, [&](const char* required) -> bool {
-            return std::ranges::any_of(extensions, [&](const VkExtensionProperties extension) -> bool {
-                return strcmp(required, extension.extensionName);
-            });
-        })) continue;
-
-        if (find_queue_family(vk, gpu).has_err())
-            continue;
-
-        ASSERT(gpu != nullptr);
-        return ok(gpu);
-    }
-
-    return Err::NoCompatibleVkPhysicalDevice;
-}
-
-static Result<VkDevice> create_device(Vk& vk) {
-    ASSERT(vk.gpu != nullptr);
-    ASSERT(vk.queue_family_index != UINT32_MAX);
-
-    VkPhysicalDeviceBufferAddressFeaturesEXT buffer_address_feature{
-        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_ADDRESS_FEATURES_EXT,
-        .pNext = nullptr,
-        .bufferDeviceAddress = VK_TRUE,
-        .bufferDeviceAddressCaptureReplay = VK_FALSE,
-        .bufferDeviceAddressMultiDevice = VK_FALSE,
-    };
-    VkPhysicalDeviceDescriptorIndexingFeatures descriptor_indexing_features{
-        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
-        .pNext = &buffer_address_feature,
-        .shaderSampledImageArrayNonUniformIndexing = VK_TRUE,
-        .descriptorBindingPartiallyBound = VK_TRUE,
-        .runtimeDescriptorArray = VK_TRUE,
-    };
-    VkPhysicalDeviceShaderObjectFeaturesEXT shader_object_feature{
-        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_OBJECT_FEATURES_EXT,
-        .pNext = &descriptor_indexing_features,
-        .shaderObject = VK_TRUE,
-    };
-    VkPhysicalDeviceDynamicRenderingFeatures dynamic_rendering_feature{
-        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
-        .pNext = &shader_object_feature,
-        .dynamicRendering = VK_TRUE,
-    };
-    VkPhysicalDeviceSynchronization2Features synchronization2_feature{
-        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,
-        .pNext = &dynamic_rendering_feature,
-        .synchronization2 = VK_TRUE,
-    };
-    VkPhysicalDeviceFeatures features{
-        .sampleRateShading = VK_TRUE,
-        .samplerAnisotropy = VK_TRUE,
-    };
-
-    constexpr float queue_priority = 1.0f;
-    const VkDeviceQueueCreateInfo queue_info{
-        .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-        .queueFamilyIndex = vk.queue_family_index,
-        .queueCount = 1,
-        .pQueuePriorities = &queue_priority
-    };
-    
-    const VkDeviceCreateInfo device_info{
-        .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-        .pNext = &synchronization2_feature,
-        .queueCreateInfoCount = 1,
-        .pQueueCreateInfos = &queue_info,
-        .enabledLayerCount = to_u32(ValidationLayers.size()),
-        .ppEnabledLayerNames = ValidationLayers.data(),
-        .enabledExtensionCount = to_u32(DeviceExtensions.size()),
-        .ppEnabledExtensionNames = DeviceExtensions.data(),
-        .pEnabledFeatures = &features,
-    };
-
-    VkDevice device = nullptr;
-    const VkResult result = vkCreateDevice(vk.gpu, &device_info, nullptr, &device);
-    switch (result) {
-        case VK_SUCCESS: break;
-        case VK_ERROR_EXTENSION_NOT_PRESENT: {
-            LOG_WARN("Vulkan extension not present");
-            return Err::VulkanExtensionUnavailable;
-        }
-        case VK_ERROR_FEATURE_NOT_PRESENT: {
-            LOG_WARN("Vulkan feature not present");
-            return Err::VulkanFeatureUnavailable;
-        }
-        case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
-        case VK_ERROR_OUT_OF_DEVICE_MEMORY: ERROR("Vulkan ran out of device memory");
-        case VK_ERROR_INITIALIZATION_FAILED: ERROR("Vulkan initialization failed");
-        case VK_ERROR_TOO_MANY_OBJECTS: ERROR("Vulkan too many objects");
-        case VK_ERROR_DEVICE_LOST: ERROR("Vulkan device lost");
-        default: ERROR("Unexpected Vulkan error");
-    }
-
-    ASSERT(device != nullptr);
-    return ok(device);
-}
-
-static VmaAllocator create_gpu_allocator(Vk& vk) {
-    ASSERT(vk.instance != nullptr);
-    ASSERT(vk.gpu != nullptr);
-    ASSERT(vk.device != nullptr);
-
-    VmaAllocatorCreateInfo info{};
-    info.physicalDevice = vk.gpu;
-    info.device = vk.device;
-    info.instance = vk.instance;
-    info.vulkanApiVersion = VK_API_VERSION_1_3;
-
-    VmaAllocator allocator = nullptr;
-    const auto result = vmaCreateAllocator(&info, &allocator);
-    if (result != VK_SUCCESS)
-        ERROR("Could not create Vma allocator");
-    return allocator;
-}
-
-static VkCommandPool create_command_pool(Vk& vk, const VkCommandPoolCreateFlags flags) {
-    ASSERT(vk.device != nullptr);
-    ASSERT(vk.queue_family_index != UINT32_MAX);
-
-    const VkCommandPoolCreateInfo info{
-        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-        .flags = flags,
-        .queueFamilyIndex = vk.queue_family_index,
-    };
-    VkCommandPool pool = nullptr;
-    const auto result = vkCreateCommandPool(vk.device, &info, nullptr, &pool);
-    switch (result) {
-        case VK_SUCCESS: break;
-        case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
-        case VK_ERROR_OUT_OF_DEVICE_MEMORY: ERROR("Vulkan ran out of device memory");
-        case VK_ERROR_INITIALIZATION_FAILED: ERROR("Vulkan failed to initialize");
-        default: ERROR("Vulkan failed to create command pool");
-    }
-    return pool;
-}
-
-Result<Vk> create_vk() {
-    auto vk = ok<Vk>();
-
-    vk->stack = Arena{malloc_slice<byte>(1024 * 64)};
-
-    const auto instance = create_instance(*vk);
-    if (instance.has_err())
-        return instance.err();
-    vk->instance = *instance;
-
-    load_instance_procedures(vk->instance);
-
-    vk->debug_messenger = create_debug_messenger(*vk);
-
-    const auto gpu = find_gpu(*vk);
-    if (gpu.has_err())
-        return gpu.err();
-    vk->gpu = *gpu;
-
-    const auto queue_family = find_queue_family(*vk, vk->gpu);
-    if (queue_family.has_err())
-        return queue_family.err();
-    vk->queue_family_index = *queue_family;
-
-    const auto device = create_device(*vk);
-    if (device.has_err())
-        return device.err();
-    vk->device = *device;
-
-    load_device_procedures(vk->device);
-
-    vkGetDeviceQueue(vk->device, vk->queue_family_index, 0, &vk->queue);
-    if (vk->queue == nullptr)
-        return Err::VkQueueUnavailable;
-
-    vk->gpu_allocator = create_gpu_allocator(*vk);
-
-    vk->command_pool = create_command_pool(
-        *vk, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT
-    );
-    vk->single_time_command_pool = create_command_pool(
-        *vk, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT
-    );
-
-    ASSERT(vk->instance != nullptr);
-    ASSERT(vk->debug_messenger != nullptr);
-    ASSERT(vk->gpu != nullptr);
-    ASSERT(vk->device != nullptr);
-    ASSERT(vk->gpu_allocator != nullptr);
-    ASSERT(vk->queue_family_index != UINT32_MAX);
-    ASSERT(vk->queue != nullptr);
-    ASSERT(vk->command_pool != nullptr);
-    ASSERT(vk->single_time_command_pool != nullptr);
-    return vk;
-}
-
-void destroy_vk(Vk& vk) {
-    const VkResult wait_result = vkDeviceWaitIdle(vk.device);
-    switch (wait_result) {
-        case VK_SUCCESS: break;
-        case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
-        case VK_ERROR_OUT_OF_DEVICE_MEMORY: ERROR("Vulkan ran out of device memory");
-        case VK_ERROR_DEVICE_LOST: ERROR("Vulkan device lost");
-        default: ERROR("Unexpected Vulkan error");
-    }
-
-    ASSERT(vk.instance != nullptr);
-#ifndef NDEBUG
-    ASSERT(vk.debug_messenger != nullptr);
-#endif
-    ASSERT(vk.device != nullptr);
-    ASSERT(vk.gpu_allocator != nullptr);
-    ASSERT(vk.command_pool != nullptr);
-    ASSERT(vk.single_time_command_pool != nullptr);
-
-    vkDestroyCommandPool(vk.device, vk.single_time_command_pool, nullptr);
-    vkDestroyCommandPool(vk.device, vk.command_pool, nullptr);
-    vmaDestroyAllocator(vk.gpu_allocator);
-    vkDestroyDevice(vk.device, nullptr);
-#ifndef NDEBUG
-    g_pfn.vkDestroyDebugUtilsMessengerEXT(vk.instance, vk.debug_messenger, nullptr);
-#endif
-    vkDestroyInstance(vk.instance, nullptr);
-
-    free_slice(vk.stack.release());
-}
-
 void destroy_buffer(Vk& vk, const GpuBuffer& buffer) {
     ASSERT(buffer.allocation != nullptr);
     ASSERT(buffer.buffer != nullptr);
@@ -534,12 +41,12 @@ GpuBuffer create_buffer(Vk& vk, const GpuBufferConfig& config) {
         .type = config.memory_type,
     };
     const auto buffer_result = vmaCreateBuffer(
-            vk.gpu_allocator,
-            &buffer_info,
-            &alloc_info,
-            &buffer.buffer,
-            &buffer.allocation,
-            nullptr
+        vk.gpu_allocator,
+        &buffer_info,
+        &alloc_info,
+        &buffer.buffer,
+        &buffer.allocation,
+        nullptr
     );
     switch (buffer_result) {
         case VK_SUCCESS: break;
@@ -580,8 +87,7 @@ void write_buffer(Vk& vk, const GpuBuffer& dst, const void* src, usize size, usi
     write_buffer(vk, staging_buffer, src, size, 0);
 
     submit_single_time_commands(vk, [&](const VkCommandBuffer cmd) {
-        const VkBufferCopy copy_region{offset, 0, size};
-        vkCmdCopyBuffer(cmd, staging_buffer.buffer, dst.buffer, 1, &copy_region);
+        copy_to_buffer(cmd, GpuBufferView{&dst, size, offset}, GpuBufferView{&staging_buffer, size});
     });
 }
 
@@ -714,20 +220,7 @@ void write_image(Vk& vk, GpuImage& dst, const ImageData& src, const GpuImageWrit
             .set_image_dst(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
             .build_and_run(vk, cmd);
 
-        const VkBufferImageCopy2 copy_region{
-            .sType = VK_STRUCTURE_TYPE_BUFFER_IMAGE_COPY_2,
-            .imageSubresource{config.aspect_flags, 0, 0, 1},
-            .imageExtent = {src.size.x, src.size.y, src.size.z},
-        };
-        const VkCopyBufferToImageInfo2 copy_region_info{
-            .sType = VK_STRUCTURE_TYPE_COPY_BUFFER_TO_IMAGE_INFO_2,
-            .srcBuffer = staging_buffer.buffer,
-            .dstImage = dst.image,
-            .dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            .regionCount = 1,
-            .pRegions = &copy_region,
-        };
-        vkCmdCopyBufferToImage2(cmd, &copy_region_info);
+        copy_to_image(cmd, dst, staging_buffer, config.aspect_flags);
 
         BarrierBuilder(vk, {.image_barriers = 1})
             .add_image_barrier(0, dst.image, {config.aspect_flags, 0, VK_REMAINING_MIP_LEVELS, 0, 1})
@@ -825,8 +318,10 @@ void write_cubemap(Vk& vk, GpuImage& dst, const ImageData& src, const GpuImageWr
 
         BarrierBuilder(vk, {.image_barriers = 1})
             .add_image_barrier(0, dst.image, {config.aspect_flags, 0, 1, 0, 6})
-            .set_image_src(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
-            .set_image_dst(0, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+            .set_image_src(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+            .set_image_dst(0, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT,
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
             .build_and_run(vk, cmd);
     });
 
@@ -851,13 +346,15 @@ void generate_mipmaps(Vk& vk, GpuImage& image, VkImageLayout final_layout) {
 
         BarrierBuilder(vk, {.image_barriers = 1})
             .add_image_barrier(0, image.image, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
-            .set_image_dst(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
+            .set_image_dst(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
             .build_and_run(vk, cmd);
 
         for (u32 level = 0; level < image.mip_levels - 1; ++level) {
             BarrierBuilder(vk, {.image_barriers = 1})
                 .add_image_barrier(0, image.image, {VK_IMAGE_ASPECT_COLOR_BIT, level + 1, 1, 0, 1})
-                .set_image_dst(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+                .set_image_dst(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
                 .build_and_run(vk, cmd);
 
             VkImageBlit2 region{
@@ -1226,10 +723,11 @@ Result<void> allocate_descriptor_sets(
 
 void write_uniform_buffer_descriptor(Vk& vk, const DescriptorSetBinding& binding, const GpuBufferView& buffer) {
     ASSERT(buffer.buffer != nullptr);
+    ASSERT(buffer.buffer->buffer != nullptr);
     ASSERT(buffer.range != 0);
     ASSERT(binding.set != nullptr);
 
-    const VkDescriptorBufferInfo buffer_info{buffer.buffer, buffer.offset, buffer.range};
+    const VkDescriptorBufferInfo buffer_info{buffer.buffer->buffer, buffer.offset, buffer.range};
     const VkWriteDescriptorSet descriptor_write{
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
         .dstSet = binding.set,
@@ -1575,6 +1073,44 @@ void BarrierBuilder::build_and_run(Vk& vk, const VkCommandBuffer cmd, const VkDe
         vk.stack.dealloc(m_buffers);
     if (m_memories.data != nullptr)
         vk.stack.dealloc(m_memories);
+}
+
+void copy_to_buffer(const VkCommandBuffer cmd, const GpuBufferView& dst, const GpuBufferView& src) {
+    ASSERT(dst.buffer != nullptr);
+    ASSERT(dst.buffer->buffer != nullptr);
+    ASSERT(src.buffer != nullptr);
+    ASSERT(src.buffer->buffer != nullptr);
+    ASSERT(src.range == dst.range);
+    if (dst.range == 0)
+        return;
+
+    const VkBufferCopy copy_region{src.offset, dst.offset, dst.range};
+    vkCmdCopyBuffer(cmd, src.buffer->buffer, dst.buffer->buffer, 1, &copy_region);
+}
+
+void copy_to_image(VkCommandBuffer cmd, GpuImage& dst, const GpuBuffer& src, VkImageAspectFlags aspect) {
+    const VkBufferImageCopy2 copy_region{
+        .sType = VK_STRUCTURE_TYPE_BUFFER_IMAGE_COPY_2,
+        .imageSubresource{aspect, 0, 0, 1},
+        .imageExtent = dst.extent,
+    };
+    const VkCopyBufferToImageInfo2 copy_region_info{
+        .sType = VK_STRUCTURE_TYPE_COPY_BUFFER_TO_IMAGE_INFO_2,
+        .srcBuffer = src.buffer,
+        .dstImage = dst.image,
+        .dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        .regionCount = 1,
+        .pRegions = &copy_region,
+    };
+    vkCmdCopyBufferToImage2(cmd, &copy_region_info);
+}
+
+void blit_image(VkCommandBuffer cmd, GpuImage& dst, VkRect2D dst_rect, const GpuImage& src, VkRect2D src_rect) {
+
+}
+
+void resolve_image(VkCommandBuffer cmd, GpuImage& dst, const GpuImage& src) {
+
 }
 
 VkSurfaceKHR create_surface(Vk& vk, SDL_Window* window) {
@@ -1973,82 +1509,6 @@ Result<void> end_frame(Vk& vk, Swapchain& swapchain) {
     }
 
     return ok();
-}
-
-void load_instance_procedures(VkInstance instance) {
-    g_pfn.vkCreateDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
-        vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT")
-    );
-    if (g_pfn.vkCreateDebugUtilsMessengerEXT == nullptr)
-        ERROR("Could not find vkCreateDebugUtilsMessengerEXT");
-
-    g_pfn.vkDestroyDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
-        vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT")
-    );
-    if (g_pfn.vkDestroyDebugUtilsMessengerEXT == nullptr)
-        ERROR("Could not find vkDestroyDebugUtilsMessengerEXT");
-}
-
-void load_device_procedures(VkDevice device) {
-    g_pfn.vkCreateShadersEXT = reinterpret_cast<PFN_vkCreateShadersEXT>(
-        vkGetDeviceProcAddr(device, "vkCreateShadersEXT")
-    );
-    if (g_pfn.vkCreateShadersEXT == nullptr)
-        ERROR("Could not find vkCreateShadersEXT");
-
-    g_pfn.vkDestroyShaderEXT = reinterpret_cast<PFN_vkDestroyShaderEXT>(
-        vkGetDeviceProcAddr(device, "vkDestroyShaderEXT")
-    );
-    if (g_pfn.vkDestroyShaderEXT == nullptr)
-        ERROR("Could not find vkDestroyShaderEXT");
-
-    g_pfn.vkCmdSetPolygonModeEXT = reinterpret_cast<PFN_vkCmdSetPolygonModeEXT>(
-        vkGetDeviceProcAddr(device, "vkCmdSetPolygonModeEXT")
-    );
-    if (g_pfn.vkCmdSetPolygonModeEXT == nullptr)
-        ERROR("Could not find vkCmdSetPolygonModeEXT");
-
-    g_pfn.vkCmdSetRasterizationSamplesEXT = reinterpret_cast<PFN_vkCmdSetRasterizationSamplesEXT>(
-        vkGetDeviceProcAddr(device, "vkCmdSetRasterizationSamplesEXT")
-    );
-    if (g_pfn.vkCmdSetRasterizationSamplesEXT == nullptr)
-        ERROR("Could not find vkCmdSetRasterizationSamplesEXT");
-
-    g_pfn.vkCmdSetSampleMaskEXT = reinterpret_cast<PFN_vkCmdSetSampleMaskEXT>(
-        vkGetDeviceProcAddr(device, "vkCmdSetSampleMaskEXT")
-    );
-    if (g_pfn.vkCmdSetSampleMaskEXT == nullptr)
-        ERROR("Could not find vkCmdSetSampleMaskEXT");
-
-    g_pfn.vkCmdSetAlphaToCoverageEnableEXT = reinterpret_cast<PFN_vkCmdSetAlphaToCoverageEnableEXT>(
-        vkGetDeviceProcAddr(device, "vkCmdSetAlphaToCoverageEnableEXT")
-    );
-    if (g_pfn.vkCmdSetAlphaToCoverageEnableEXT == nullptr)
-        ERROR("Could not find vkCmdSetAlphaToCoverageEnableEXT");
-
-    g_pfn.vkCmdSetColorWriteMaskEXT = reinterpret_cast<PFN_vkCmdSetColorWriteMaskEXT>(
-        vkGetDeviceProcAddr(device, "vkCmdSetColorWriteMaskEXT")
-    );
-    if (g_pfn.vkCmdSetColorWriteMaskEXT == nullptr)
-        ERROR("Could not find vkCmdSetColorWriteMaskEXT");
-
-    g_pfn.vkCmdSetColorBlendEnableEXT = reinterpret_cast<PFN_vkCmdSetColorBlendEnableEXT>(
-        vkGetDeviceProcAddr(device, "vkCmdSetColorBlendEnableEXT")
-    );
-    if (g_pfn.vkCmdSetColorBlendEnableEXT == nullptr)
-        ERROR("Could not find vkCmdSetColorBlendEnableEXT");
-
-    g_pfn.vkCmdBindShadersEXT = reinterpret_cast<PFN_vkCmdBindShadersEXT>(
-        vkGetDeviceProcAddr(device, "vkCmdBindShadersEXT")
-    );
-    if (g_pfn.vkCmdBindShadersEXT == nullptr)
-        ERROR("Could not find vkCmdBindShadersEXT");
-
-    g_pfn.vkCmdSetVertexInputEXT = reinterpret_cast<PFN_vkCmdSetVertexInputEXT>(
-        vkGetDeviceProcAddr(device, "vkCmdSetVertexInputEXT")
-    );
-    if (g_pfn.vkCmdSetVertexInputEXT == nullptr)
-        ERROR("Could not find vkCmdSetVertexInputEXT");
 }
 
 } // namespace hg

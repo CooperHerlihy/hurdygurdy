@@ -5,15 +5,15 @@
 
 namespace hg {
 
-class DefaultRenderer {
+class PbrRenderer {
 public:
-    DefaultRenderer() = default;
+    PbrRenderer() = default;
 
     class Pipeline {
     public:
         virtual ~Pipeline() = default;
 
-        virtual void draw(const DefaultRenderer& renderer, const VkCommandBuffer cmd) = 0;
+        virtual void draw(const PbrRenderer& renderer, const VkCommandBuffer cmd) = 0;
     };
 
     struct ViewProjectionUniform {
@@ -42,7 +42,7 @@ public:
         bool fullscreen = false;
         glm::ivec2 window_size{1920, 1080};
     };
-    [[nodiscard]] static Result<DefaultRenderer> create(Engine& engine, const Config& config);
+    [[nodiscard]] static Result<PbrRenderer> create(Engine& engine, const Config& config);
     Result<void> resize(Engine& engine);
     void destroy(Engine& engine) const;
 
@@ -81,11 +81,11 @@ private:
     std::vector<Light> m_light_queue{};
 };
 
-class SkyboxPipeline : public DefaultRenderer::Pipeline {
+class SkyboxPipeline : public PbrRenderer::Pipeline {
 public:
-    [[nodiscard]] static SkyboxPipeline create(Engine& engine, const DefaultRenderer& pipeline);
+    [[nodiscard]] static SkyboxPipeline create(Engine& engine, const PbrRenderer& pipeline);
     void destroy(Engine& engine) const;
-    void draw(const DefaultRenderer& renderer, const VkCommandBuffer cmd) override;
+    void draw(const PbrRenderer& renderer, const VkCommandBuffer cmd) override;
 
     void load_skybox(Engine& engine, const ImageData& data);
     Result<void> load_skybox(Engine& engine, const std::filesystem::path path);
@@ -102,9 +102,9 @@ private:
     GpuBuffer m_vertex_buffer{};
 };
 
-class PbrPipeline : public DefaultRenderer::Pipeline {
+class PbrPipeline : public PbrRenderer::Pipeline {
 public:
-    [[nodiscard]] static PbrPipeline create(Engine& engine, const DefaultRenderer& pipeline);
+    [[nodiscard]] static PbrPipeline create(Engine& engine, const PbrRenderer& pipeline);
     void destroy(Engine& engine) const;
 
     struct PushConstant {
@@ -115,7 +115,7 @@ public:
         float metalness = 0.0f;
     };
 
-    void draw(const DefaultRenderer& renderer, const VkCommandBuffer cmd) override;
+    void draw(const PbrRenderer& renderer, const VkCommandBuffer cmd) override;
 
     static constexpr usize MaxTextures = 256;
     struct TextureHandle {

@@ -11,7 +11,7 @@ constexpr double sqrt3 = 1.73205080757;
 
 static Engine engine{};
 static Generator generator{};
-static DefaultRenderer renderer{};
+static PbrRenderer renderer{};
 static SkyboxPipeline skybox_pipeline{};
 static PbrPipeline model_pipeline{};
 
@@ -55,7 +55,7 @@ SDL_AppResult SDL_AppInit(void**, int, char**) {
     generator = Generator{{.max_meshes = 64, .max_images = 64}};
 
     renderer = [] {
-        auto renderer_res = DefaultRenderer::create(engine, {.fullscreen = true});
+        auto renderer_res = PbrRenderer::create(engine, {.fullscreen = true});
         if (renderer_res.has_err())
             perr(renderer_res);
         return std::move(*renderer_res);
@@ -175,7 +175,7 @@ SDL_AppResult SDL_AppIterate(void*) {
 
     renderer.update_camera_and_lights(engine, camera);
 
-    std::array<DefaultRenderer::Pipeline*, 2> pipelines{&skybox_pipeline, &model_pipeline};
+    std::array<PbrRenderer::Pipeline*, 2> pipelines{&skybox_pipeline, &model_pipeline};
     (void)renderer.draw(engine, pipelines);
 
     return SDL_APP_CONTINUE;
