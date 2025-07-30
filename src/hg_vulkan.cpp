@@ -357,31 +357,24 @@ void generate_mipmaps(Vk& vk, GpuImage& image, VkImageLayout final_layout) {
                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
                 .build_and_run(vk, cmd);
 
-            VkImageBlit2 region{
-                .sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2,
-                .srcSubresource{VK_IMAGE_ASPECT_COLOR_BIT, level, 0, 1},
-                .dstSubresource{VK_IMAGE_ASPECT_COLOR_BIT, level + 1, 0, 1},
+            GpuImageView src_view{
+                .image = &image,
+                .end = mip_offset,
+                .mipLevel = level,
             };
-            region.srcOffsets[1] = mip_offset;
             if (mip_offset.x > 1)
                 mip_offset.x /= 2;
             if (mip_offset.y > 1)
                 mip_offset.y /= 2;
             if (mip_offset.z > 1)
                 mip_offset.z /= 2;
-            region.dstOffsets[1] = mip_offset;
-
-            VkBlitImageInfo2 blit_image_info{
-                .sType = VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2,
-                .srcImage = image.image,
-                .srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                .dstImage = image.image,
-                .dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                .regionCount = 1,
-                .pRegions = &region,
-                .filter = VK_FILTER_LINEAR,
+            GpuImageView dst_view{
+                .image = &image,
+                .end = mip_offset,
+                .mipLevel = level + 1,
             };
-            vkCmdBlitImage2(cmd, &blit_image_info);
+
+            blit_image(cmd, dst_view, src_view, VK_FILTER_LINEAR);
 
             BarrierBuilder(vk, {.image_barriers = 1})
                 .add_image_barrier(0, image.image, {VK_IMAGE_ASPECT_COLOR_BIT, level + 1, 1, 0, 1})
@@ -1105,12 +1098,30 @@ void copy_to_image(VkCommandBuffer cmd, GpuImage& dst, const GpuBuffer& src, VkI
     vkCmdCopyBufferToImage2(cmd, &copy_region_info);
 }
 
-void blit_image(VkCommandBuffer cmd, GpuImage& dst, VkRect2D dst_rect, const GpuImage& src, VkRect2D src_rect) {
+void blit_image(VkCommandBuffer cmd, const GpuImageView& dst, const GpuImageView& src, VkFilter filter) {
+    ASSERT(dst.image != nullptr);
+    ASSERT(dst.image->image != nullptr);
+    ASSERT(src.image != nullptr);
+    ASSERT(src.image->image != nullptr);
 
-}
-
-void resolve_image(VkCommandBuffer cmd, GpuImage& dst, const GpuImage& src) {
-
+    VkImageBlit2 region{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2,
+        .srcSubresource{src.aspectMask, src.mipLevel, src.baseArrayLayer, src.layerCount},
+        .srcOffsets = {src.begin, src.end},
+        .dstSubresource{dst.aspectMask, dst.mipLevel, dst.baseArrayLayer, dst.layerCount},
+        .dstOffsets = {dst.begin, dst.end},
+    };
+    VkBlitImageInfo2 blit_image_info{
+        .sType = VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2,
+        .srcImage = src.image->image,
+        .srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        .dstImage = dst.image->image,
+        .dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        .regionCount = 1,
+        .pRegions = &region,
+        .filter = filter,
+    };
+    vkCmdBlitImage2(cmd, &blit_image_info);
 }
 
 VkSurfaceKHR create_surface(Vk& vk, SDL_Window* window) {

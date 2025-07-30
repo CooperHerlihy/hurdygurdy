@@ -289,6 +289,17 @@ private:
 void copy_to_buffer(VkCommandBuffer cmd, const GpuBufferView& dst, const GpuBufferView& src);
 void copy_to_image(VkCommandBuffer cmd, GpuImage& dst, const GpuBuffer& src, VkImageAspectFlags aspect);
 
+struct GpuImageView {
+    const GpuImage* image = nullptr;
+    VkOffset3D begin{};
+    VkOffset3D end{};
+    VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    uint32_t mipLevel = 0;
+    uint32_t baseArrayLayer = 0;
+    uint32_t layerCount = 1;
+};
+void blit_image(VkCommandBuffer cmd, const GpuImageView& dst, const GpuImageView& src, VkFilter filter);
+
 [[nodiscard]] VkSurfaceKHR create_surface(Vk& vk, SDL_Window* window);
 
 struct Swapchain {
