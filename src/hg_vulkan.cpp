@@ -357,10 +357,10 @@ void generate_mipmaps(Vk& vk, GpuImage& image, VkImageLayout final_layout) {
                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
                 .build_and_run(vk, cmd);
 
-            GpuImageView src_view{
-                .image = &image,
+            BlitConfig src_view{
+                .image = image.image,
                 .end = mip_offset,
-                .mipLevel = level,
+                .mip_level = level,
             };
             if (mip_offset.x > 1)
                 mip_offset.x /= 2;
@@ -368,12 +368,11 @@ void generate_mipmaps(Vk& vk, GpuImage& image, VkImageLayout final_layout) {
                 mip_offset.y /= 2;
             if (mip_offset.z > 1)
                 mip_offset.z /= 2;
-            GpuImageView dst_view{
-                .image = &image,
+            BlitConfig dst_view{
+                .image = image.image,
                 .end = mip_offset,
-                .mipLevel = level + 1,
+                .mip_level = level + 1,
             };
-
             blit_image(cmd, dst_view, src_view, VK_FILTER_LINEAR);
 
             BarrierBuilder(vk, {.image_barriers = 1})
@@ -859,7 +858,6 @@ Result<GraphicsPipeline> create_graphics_pipeline(Vk& vk, const GraphicsPipeline
             .pPushConstantRanges = config.push_ranges.data,
         },
     };
-
     const auto result = g_pfn.vkCreateShadersEXT(vk.device,
         to_u32(shader_infos.size()), shader_infos.data(),
         nullptr, pipeline->shaders.data()
@@ -996,12 +994,10 @@ VkCommandBuffer begin_single_time_commands(Vk& vk) {
     return cmd;
 }
 
-void end_single_time_commands(Vk& vk, VkCommandBuffer cmdpp) {
-    VkCommandBuffer cmd = cmdpp;
-
+void end_single_time_commands(Vk& vk, VkCommandBuffer cmd) {
     ASSERT(cmd != nullptr);
 
-    const auto end_result = vkEndCommandBuffer(cmdpp);
+    const auto end_result = vkEndCommandBuffer(cmd);
     switch (end_result) {
         case VK_SUCCESS: break;
         case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
@@ -1098,24 +1094,22 @@ void copy_to_image(VkCommandBuffer cmd, GpuImage& dst, const GpuBuffer& src, VkI
     vkCmdCopyBufferToImage2(cmd, &copy_region_info);
 }
 
-void blit_image(VkCommandBuffer cmd, const GpuImageView& dst, const GpuImageView& src, VkFilter filter) {
+void blit_image(VkCommandBuffer cmd, const BlitConfig& dst, const BlitConfig& src, VkFilter filter) {
     ASSERT(dst.image != nullptr);
-    ASSERT(dst.image->image != nullptr);
     ASSERT(src.image != nullptr);
-    ASSERT(src.image->image != nullptr);
 
     VkImageBlit2 region{
         .sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2,
-        .srcSubresource{src.aspectMask, src.mipLevel, src.baseArrayLayer, src.layerCount},
+        .srcSubresource{src.aspect, src.mip_level, src.array_layer, src.layer_count},
         .srcOffsets = {src.begin, src.end},
-        .dstSubresource{dst.aspectMask, dst.mipLevel, dst.baseArrayLayer, dst.layerCount},
+        .dstSubresource{dst.aspect, dst.mip_level, dst.array_layer, dst.layer_count},
         .dstOffsets = {dst.begin, dst.end},
     };
     VkBlitImageInfo2 blit_image_info{
         .sType = VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2,
-        .srcImage = src.image->image,
+        .srcImage = src.image,
         .srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        .dstImage = dst.image->image,
+        .dstImage = dst.image,
         .dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .regionCount = 1,
         .pRegions = &region,
@@ -1133,6 +1127,31 @@ VkSurfaceKHR create_surface(Vk& vk, SDL_Window* window) {
         ERRORF("Could not create Vulkan surface: {}", SDL_GetError());
 
     return surface;
+}
+
+void resolve_image(VkCommandBuffer cmd, const ResolveConfig& dst, const ResolveConfig& src) {
+    ASSERT(dst.image != nullptr);
+    ASSERT(src.image != nullptr);
+    ASSERT(src.extent.width == dst.extent.width);
+    ASSERT(src.extent.height == dst.extent.height);
+    ASSERT(src.extent.depth == dst.extent.depth);
+
+    const VkImageResolve2 resolve{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_RESOLVE_2,
+        .srcSubresource{src.aspect, src.mip_level, src.array_layer, src.layer_count},
+        .dstSubresource{src.aspect, src.mip_level, src.array_layer, src.layer_count},
+        .extent = dst.extent,
+    };
+    const VkResolveImageInfo2 resolve_info{
+        .sType = VK_STRUCTURE_TYPE_RESOLVE_IMAGE_INFO_2,
+        .srcImage = src.image,
+        .srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        .dstImage = dst.image,
+        .dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        .regionCount = 1,
+        .pRegions = &resolve,
+    };
+    vkCmdResolveImage2(cmd, &resolve_info);
 }
 
 void destroy_swapchain(Vk& vk, const Swapchain& swapchain) {
@@ -1240,7 +1259,10 @@ Result<Swapchain> create_swapchain(Vk& vk, const VkSurfaceKHR surface) {
     const VkResult present_count_res = vkGetPhysicalDeviceSurfacePresentModesKHR(vk.gpu, surface, &present_mode_count, nullptr);
     switch (present_count_res) {
         case VK_SUCCESS: break;
-        case VK_INCOMPLETE: LOG_WARN("Vulkan get present modes incomplete"); break;
+        case VK_INCOMPLETE: {
+            LOG_WARN("Vulkan get present modes incomplete");
+            break;
+        }
         case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
         case VK_ERROR_OUT_OF_DEVICE_MEMORY: ERROR("Vulkan ran out of device memory");
         case VK_ERROR_SURFACE_LOST_KHR: ERROR("Vulkan surface lost");
@@ -1253,7 +1275,10 @@ Result<Swapchain> create_swapchain(Vk& vk, const VkSurfaceKHR surface) {
     const VkResult present_res = vkGetPhysicalDeviceSurfacePresentModesKHR(vk.gpu, surface, &present_mode_count, present_modes.data);
     switch (present_res) {
         case VK_SUCCESS: break;
-        case VK_INCOMPLETE: LOG_WARN("Vulkan get present modes incomplete"); break;
+        case VK_INCOMPLETE: {
+            LOG_WARN("Vulkan get present modes incomplete");
+            break;
+        }
         case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
         case VK_ERROR_OUT_OF_DEVICE_MEMORY: ERROR("Vulkan ran out of device memory");
         case VK_ERROR_SURFACE_LOST_KHR: ERROR("Vulkan surface lost");
@@ -1268,7 +1293,9 @@ Result<Swapchain> create_swapchain(Vk& vk, const VkSurfaceKHR surface) {
         : VK_PRESENT_MODE_FIFO_KHR;
 }
 
-Result<void> resize_swapchain(Vk& vk, Swapchain& swapchain, const VkSurfaceKHR surface) {
+static Result<VkSwapchainKHR> create_new_swapchain(Vk& vk, Swapchain& swapchain, const VkSurfaceKHR surface) {
+    ASSERT(surface != nullptr);
+
     const VkPresentModeKHR present_mode = get_swapchain_present_mode(vk, surface);
 
     VkSurfaceCapabilitiesKHR surface_capabilities{};
@@ -1327,19 +1354,27 @@ Result<void> resize_swapchain(Vk& vk, Swapchain& swapchain, const VkSurfaceKHR s
         default: ERROR("Unexpected Vulkan error");
     }
 
-    const auto wait_result = vkQueueWaitIdle(vk.queue);
-    switch (wait_result) {
-        case VK_SUCCESS: break;
-        case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
-        case VK_ERROR_OUT_OF_DEVICE_MEMORY: ERROR("Vulkan ran out of device memory");
-        case VK_ERROR_DEVICE_LOST: ERROR("Vulkan device lost");
-        default: ERROR("Unexpected Vulkan error");
-    }
+    return ok(new_swapchain);
+}
+
+Result<void> resize_swapchain(Vk& vk, Swapchain& swapchain, const VkSurfaceKHR surface) {
+    auto new_swapchain = create_new_swapchain(vk, swapchain, surface);
+    if (new_swapchain.has_err())
+        return new_swapchain.err();
 
     if (swapchain.swapchain != nullptr) {
+        const auto wait_result = vkQueueWaitIdle(vk.queue);
+        switch (wait_result) {
+            case VK_SUCCESS: break;
+            case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
+            case VK_ERROR_OUT_OF_DEVICE_MEMORY: ERROR("Vulkan ran out of device memory");
+            case VK_ERROR_DEVICE_LOST: ERROR("Vulkan device lost");
+            default: ERROR("Unexpected Vulkan error");
+        }
+
         vkDestroySwapchainKHR(vk.device, swapchain.swapchain, nullptr);
     }
-    swapchain.swapchain = new_swapchain;
+    swapchain.swapchain = *new_swapchain;
 
     const auto image_count_result = vkGetSwapchainImagesKHR(
         vk.device,

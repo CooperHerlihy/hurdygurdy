@@ -125,10 +125,7 @@ void PbrRenderer::destroy(Engine& engine) const {
         const auto begin = begin_frame(engine.vk, m_swapchain);
         if (begin.has_err())
             return begin.err();
-
         const VkCommandBuffer cmd = *begin;
-        const VkImage render_target = m_swapchain.current_image();
-        const VkExtent2D extent = m_swapchain.extent;
 
         BarrierBuilder(engine.vk, {.image_barriers = 2})
             .add_image_barrier(0, m_color_image.image.image, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
@@ -162,7 +159,7 @@ void PbrRenderer::destroy(Engine& engine) const {
         };
         const VkRenderingInfo render_info{
             .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-            .renderArea{{}, extent},
+            .renderArea{{}, m_swapchain.extent},
             .layerCount = 1,
             .colorAttachmentCount = 1,
             .pColorAttachments = &color_attachment,
@@ -182,32 +179,27 @@ void PbrRenderer::destroy(Engine& engine) const {
 
         BarrierBuilder(engine.vk, {.image_barriers = 2})
             .add_image_barrier(0, m_color_image.image.image, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
-            .set_image_src(0, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
-            .set_image_dst(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
-            .add_image_barrier(1, render_target, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
-            .set_image_dst(1, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+            .set_image_src(0, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, 
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+            .set_image_dst(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT, 
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
+            .add_image_barrier(1, m_swapchain.current_image(), {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
+            .set_image_dst(1, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, 
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
             .build_and_run(engine.vk, cmd);
 
-        const VkImageResolve2 resolve{
-            .sType = VK_STRUCTURE_TYPE_IMAGE_RESOLVE_2,
-            .srcSubresource{VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-            .dstSubresource{VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-            .extent{extent.width, extent.height, 1},
-        };
-        const VkResolveImageInfo2 resolve_info{
-            .sType = VK_STRUCTURE_TYPE_RESOLVE_IMAGE_INFO_2,
-            .srcImage = m_color_image.image.image,
-            .srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            .dstImage = render_target,
-            .dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            .regionCount = 1,
-            .pRegions = &resolve,
-        };
-        vkCmdResolveImage2(cmd, &resolve_info);
+        resolve_image(cmd, {
+            .image = m_swapchain.current_image(),
+            .extent = {m_swapchain.extent.width, m_swapchain.extent.height, 1},
+        }, {
+            .image = m_color_image.image.image,
+            .extent = m_color_image.image.extent,
+        });
 
         BarrierBuilder(engine.vk, {.image_barriers = 1})
-            .add_image_barrier(0, render_target, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
-            .set_image_src(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+            .add_image_barrier(0, m_swapchain.current_image(), {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
+            .set_image_src(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, 
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
             .set_image_dst(0, VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, VK_ACCESS_2_NONE, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
             .build_and_run(engine.vk, cmd);
 
@@ -367,12 +359,36 @@ void SkyboxPipeline::load_skybox(Engine& engine, const ImageData& data) {
     hg::write_image_sampler_descriptor(engine.vk, {m_set, 0}, m_cubemap);
 
     std::array<glm::vec3, 24> positions{
-        glm::vec3{-1.0f, -1.0f,  1.0f}, glm::vec3{-1.0f, -1.0f, -1.0f}, glm::vec3{ 1.0f, -1.0f, -1.0f}, glm::vec3{ 1.0f, -1.0f,  1.0f},
-        glm::vec3{-1.0f, -1.0f,  1.0f}, glm::vec3{-1.0f,  1.0f,  1.0f}, glm::vec3{-1.0f,  1.0f, -1.0f}, glm::vec3{-1.0f, -1.0f, -1.0f},
-        glm::vec3{-1.0f, -1.0f, -1.0f}, glm::vec3{-1.0f,  1.0f, -1.0f}, glm::vec3{ 1.0f,  1.0f, -1.0f}, glm::vec3{ 1.0f, -1.0f, -1.0f},
-        glm::vec3{ 1.0f, -1.0f, -1.0f}, glm::vec3{ 1.0f,  1.0f, -1.0f}, glm::vec3{ 1.0f,  1.0f,  1.0f}, glm::vec3{ 1.0f, -1.0f,  1.0f},
-        glm::vec3{ 1.0f, -1.0f,  1.0f}, glm::vec3{ 1.0f,  1.0f,  1.0f}, glm::vec3{-1.0f,  1.0f,  1.0f}, glm::vec3{-1.0f, -1.0f,  1.0f},
-        glm::vec3{-1.0f,  1.0f, -1.0f}, glm::vec3{-1.0f,  1.0f,  1.0f}, glm::vec3{ 1.0f,  1.0f,  1.0f}, glm::vec3{ 1.0f,  1.0f, -1.0f},
+        glm::vec3{-1.0f, -1.0f,  1.0f},
+        glm::vec3{-1.0f, -1.0f, -1.0f},
+        glm::vec3{ 1.0f, -1.0f, -1.0f},
+        glm::vec3{ 1.0f, -1.0f,  1.0f},
+
+        glm::vec3{-1.0f, -1.0f,  1.0f},
+        glm::vec3{-1.0f,  1.0f,  1.0f},
+        glm::vec3{-1.0f,  1.0f, -1.0f},
+        glm::vec3{-1.0f, -1.0f, -1.0f},
+
+        glm::vec3{-1.0f, -1.0f, -1.0f},
+        glm::vec3{-1.0f,  1.0f, -1.0f},
+        glm::vec3{ 1.0f,  1.0f, -1.0f},
+        glm::vec3{ 1.0f, -1.0f, -1.0f},
+
+        glm::vec3{ 1.0f, -1.0f, -1.0f},
+        glm::vec3{ 1.0f,  1.0f, -1.0f},
+        glm::vec3{ 1.0f,  1.0f,  1.0f},
+        glm::vec3{ 1.0f, -1.0f,  1.0f},
+
+        glm::vec3{ 1.0f, -1.0f,  1.0f},
+        glm::vec3{ 1.0f,  1.0f,  1.0f},
+        glm::vec3{-1.0f,  1.0f,  1.0f},
+        glm::vec3{-1.0f, -1.0f,  1.0f},
+
+        glm::vec3{-1.0f,  1.0f, -1.0f},
+        glm::vec3{-1.0f,  1.0f,  1.0f},
+        glm::vec3{ 1.0f,  1.0f,  1.0f},
+        glm::vec3{ 1.0f,  1.0f, -1.0f},
+
     };
     std::array<u32, 36> indices{
          0,  1,  2,  2,  3,  0,
