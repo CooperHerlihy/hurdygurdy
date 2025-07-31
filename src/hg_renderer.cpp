@@ -3,35 +3,17 @@
 
 namespace hg {
 
-Result<PbrRenderer> PbrRenderer::create(Engine& engine, const Config& config) {
-    if (!config.fullscreen) {
-        ASSERT(config.window_size.x > 0);
-        ASSERT(config.window_size.y > 0);
-    }
-
+Result<PbrRenderer> PbrRenderer::create(Engine& engine, const Window& window) {
     auto renderer = ok<PbrRenderer>();
 
-    if (config.fullscreen)
-        renderer->m_window = create_fullscreen_window();
-    else
-        renderer->m_window = create_window(config.window_size);
-    renderer->m_surface = create_surface(engine.vk, renderer->m_window);
-
-    const auto swapchain = create_swapchain(engine.vk, renderer->m_surface);
-    if (swapchain.has_err())
-        return swapchain.err();
-    renderer->m_swapchain = *swapchain;
-
-    const glm::ivec2 window_size = get_window_extent(renderer->m_window);
-
     renderer->m_color_image = create_image_and_view(engine.vk, {
-        .extent{to_u32(window_size.x), to_u32(window_size.y), 1},
-        .format = renderer->m_swapchain.format,
+        .extent{window.swapchain.extent.width, window.swapchain.extent.height, 1},
+        .format = window.swapchain.format,
         .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
         .sample_count = VK_SAMPLE_COUNT_4_BIT,
     });
     renderer->m_depth_image = create_image_and_view(engine.vk, {
-        .extent{to_u32(window_size.x), to_u32(window_size.y), 1},
+        .extent{window.swapchain.extent.width, window.swapchain.extent.height, 1},
         .format = VK_FORMAT_D32_SFLOAT,
         .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
         .aspect_flags = VK_IMAGE_ASPECT_DEPTH_BIT,
@@ -59,34 +41,28 @@ Result<PbrRenderer> PbrRenderer::create(Engine& engine, const Config& config) {
     });
 
     write_uniform_buffer_descriptor(
-        engine.vk, {renderer->m_global_set, 0}, {&renderer->m_vp_buffer, sizeof(ViewProjectionUniform)}
+        engine.vk, {renderer->m_global_set, 0}, {renderer->m_vp_buffer.handle, sizeof(ViewProjectionUniform)}
     );
     write_uniform_buffer_descriptor(
-        engine.vk, {renderer->m_global_set, 1}, {&renderer->m_light_buffer, sizeof(LightUniform)}
+        engine.vk, {renderer->m_global_set, 1}, {renderer->m_light_buffer.handle, sizeof(LightUniform)}
     );
 
     ASSERT(renderer->m_global_set != nullptr);
     return renderer;
 }
 
-Result<void> PbrRenderer::resize(Engine& engine) {
-    const auto window_size = get_window_extent(m_window);
-
-    auto swapchain_result = resize_swapchain(engine.vk, m_swapchain, m_surface);
-    if (swapchain_result.has_err())
-        return swapchain_result.err();
-
+Result<void> PbrRenderer::resize(Engine& engine, const Window& window) {
     destroy_image_and_view(engine.vk, m_color_image);
     m_color_image = create_image_and_view(engine.vk, {
-        .extent{to_u32(window_size.x), to_u32(window_size.y), 1},
-        .format = m_swapchain.format,
+        .extent{window.swapchain.extent.width, window.swapchain.extent.height, 1},
+        .format = window.swapchain.format,
         .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
         .sample_count = VK_SAMPLE_COUNT_4_BIT,
     });
 
     destroy_image_and_view(engine.vk, m_depth_image);
     m_depth_image = create_image_and_view(engine.vk, {
-        .extent{to_u32(window_size.x), to_u32(window_size.y), 1},
+        .extent{window.swapchain.extent.width, window.swapchain.extent.height, 1},
         .format = VK_FORMAT_D32_SFLOAT,
         .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
         .aspect_flags = VK_IMAGE_ASPECT_DEPTH_BIT,
@@ -114,22 +90,19 @@ void PbrRenderer::destroy(Engine& engine) const {
 
     destroy_image_and_view(engine.vk, m_depth_image);
     destroy_image_and_view(engine.vk, m_color_image);
-
-    destroy_swapchain(engine.vk, m_swapchain);
-    vkDestroySurfaceKHR(engine.vk.instance, m_surface, nullptr);
-    SDL_DestroyWindow(m_window);
 }
 
-[[nodiscard]] Result<void> PbrRenderer::draw(Engine& engine, const Slice<Pipeline*> pipelines) {
+[[nodiscard]] Result<void> PbrRenderer::draw(Engine& engine, Window& window, const Slice<Pipeline*> pipelines) {
     const auto frame_result = [&]() -> Result<void> {
-        const auto begin = begin_frame(engine.vk, m_swapchain);
+        const auto begin = begin_frame(engine.vk, window.swapchain);
         if (begin.has_err())
             return begin.err();
         const VkCommandBuffer cmd = *begin;
 
         BarrierBuilder(engine.vk, {.image_barriers = 2})
             .add_image_barrier(0, m_color_image.image.image, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
-            .set_image_dst(0, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+            .set_image_dst(0, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
             .add_image_barrier(1, m_depth_image.image.image, {VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1})
             .set_image_dst(1,
                 VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
@@ -159,7 +132,7 @@ void PbrRenderer::destroy(Engine& engine) const {
         };
         const VkRenderingInfo render_info{
             .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-            .renderArea{{}, m_swapchain.extent},
+            .renderArea{{}, window.swapchain.extent},
             .layerCount = 1,
             .colorAttachmentCount = 1,
             .pColorAttachments = &color_attachment,
@@ -183,21 +156,21 @@ void PbrRenderer::destroy(Engine& engine) const {
                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
             .set_image_dst(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT, 
                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
-            .add_image_barrier(1, m_swapchain.current_image(), {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
+            .add_image_barrier(1, window.swapchain.current_image(), {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
             .set_image_dst(1, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, 
                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
             .build_and_run(engine.vk, cmd);
 
         resolve_image(cmd, {
-            .image = m_swapchain.current_image(),
-            .extent = {m_swapchain.extent.width, m_swapchain.extent.height, 1},
+            .image = window.swapchain.current_image(),
+            .extent = {window.swapchain.extent.width, window.swapchain.extent.height, 1},
         }, {
             .image = m_color_image.image.image,
             .extent = m_color_image.image.extent,
         });
 
         BarrierBuilder(engine.vk, {.image_barriers = 1})
-            .add_image_barrier(0, m_swapchain.current_image(), {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
+            .add_image_barrier(0, window.swapchain.current_image(), {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
             .set_image_src(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, 
                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
             .set_image_dst(0, VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, VK_ACCESS_2_NONE, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
@@ -205,7 +178,7 @@ void PbrRenderer::destroy(Engine& engine) const {
 
         m_light_queue.clear();
 
-        const auto end = end_frame(engine.vk, m_swapchain);
+        const auto end = end_frame(engine.vk, window.swapchain);
         if (end.has_err())
             return end.err();
         return ok();
@@ -217,7 +190,15 @@ void PbrRenderer::destroy(Engine& engine) const {
             case Err::InvalidWindow: {
                 // TODO: handle window minimizing and resizing
 
-                const auto resize_result = resize(engine);
+                printf("resized\n");
+
+                const auto window_result = resize_window(engine, window);
+                if (window_result.has_err()) {
+                    LOGF_ERROR("Could not resize window: {}", to_string(window_result.err()));
+                    return window_result.err();
+                }
+
+                const auto resize_result = resize(engine, window);
                 if (resize_result.has_err()) {
                     LOGF_ERROR("Could not resize window: {}", to_string(resize_result.err()));
                     return resize_result.err();
@@ -288,9 +269,9 @@ void SkyboxPipeline::destroy(Engine& engine) const {
         default: ERROR("Unexpected Vulkan error");
     }
 
-    if (m_vertex_buffer.buffer != nullptr)
+    if (m_vertex_buffer.handle != nullptr)
         destroy_buffer(engine.vk, m_vertex_buffer);
-    if (m_index_buffer.buffer != nullptr)
+    if (m_index_buffer.handle != nullptr)
         destroy_buffer(engine.vk, m_index_buffer);
     if (m_cubemap.image.image.image != nullptr)
         destroy_texture(engine.vk, m_cubemap);
@@ -336,11 +317,11 @@ void SkyboxPipeline::draw(const PbrRenderer& renderer, const VkCommandBuffer cmd
         vertex_attributes.data()
     );
 
-    const std::array vertex_buffers = {m_vertex_buffer.buffer};
+    const std::array vertex_buffers = {m_vertex_buffer.handle};
     const std::array offsets = {usize{0}};
     vkCmdBindVertexBuffers(cmd, 0, to_u32(vertex_buffers.size()), vertex_buffers.data(), offsets.data());
 
-    vkCmdBindIndexBuffer(cmd, m_index_buffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdBindIndexBuffer(cmd, m_index_buffer.handle, 0, VK_INDEX_TYPE_UINT32);
     vkCmdDrawIndexed(cmd, 36, 1, 0, 0, 1);
 
     vkCmdSetDepthTestEnable(cmd, VK_TRUE);
@@ -536,11 +517,11 @@ void PbrPipeline::draw(const PbrRenderer& renderer, const VkCommandBuffer cmd) {
             0, sizeof(model_push), &model_push
         );
 
-        std::array vertex_buffers = {model.vertex_buffer.buffer};
+        std::array vertex_buffers = {model.vertex_buffer.handle};
         std::array offsets = {usize{0}};
         vkCmdBindVertexBuffers(cmd, 0, to_u32(vertex_buffers.size()), vertex_buffers.data(), offsets.data());
 
-        vkCmdBindIndexBuffer(cmd, model.index_buffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdBindIndexBuffer(cmd, model.index_buffer.handle, 0, VK_INDEX_TYPE_UINT32);
         vkCmdDrawIndexed(cmd, model.index_count, 1, 0, 0, 1);
     }
 

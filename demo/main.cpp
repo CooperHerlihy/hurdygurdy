@@ -11,6 +11,7 @@ constexpr double sqrt3 = 1.73205080757;
 
 static Engine engine{};
 static Generator generator{};
+static Window window{};
 static PbrRenderer renderer{};
 static SkyboxPipeline skybox_pipeline{};
 static PbrPipeline model_pipeline{};
@@ -54,8 +55,15 @@ SDL_AppResult SDL_AppInit(void**, int, char**) {
 
     generator = Generator{{.max_meshes = 64, .max_images = 64}};
 
+    window = [] {
+        auto window_res = create_fullscreen_window(engine);
+        if (window_res.has_err())
+            perr(window_res);
+        return std::move(*window_res);
+    }();
+
     renderer = [] {
-        auto renderer_res = PbrRenderer::create(engine, {.fullscreen = true});
+        auto renderer_res = PbrRenderer::create(engine, window);
         if (renderer_res.has_err())
             perr(renderer_res);
         return std::move(*renderer_res);
@@ -117,8 +125,8 @@ SDL_AppResult SDL_AppInit(void**, int, char**) {
     building = *model_pipeline.load_model(engine, "assets/hexagon_models/Assets/gltf/buildings/blue/building_home_A_blue.gltf", default_normals, hex_texture);
     tower = *model_pipeline.load_model(engine, "assets/hexagon_models/Assets/gltf/buildings/blue/building_tower_A_blue.gltf", default_normals, hex_texture);
 
-    const auto extent = renderer.get_extent();
-    const f32 aspect_ratio = static_cast<f32>(extent.x) / static_cast<f32>(extent.y);
+    const auto window_size = get_window_size(window);
+    const f32 aspect_ratio = static_cast<f32>(window_size.x) / static_cast<f32>(window_size.y);
     renderer.update_projection(engine, glm::perspective(glm::pi<f32>() / 4.0f, aspect_ratio, 0.1f, 100.f));
 
     camera.translate({0.0f, -2.0f, -4.0f});
@@ -127,13 +135,16 @@ SDL_AppResult SDL_AppInit(void**, int, char**) {
     return SDL_APP_CONTINUE;
 }
 
+#ifndef NDEBUG
 void SDL_AppQuit(void*, SDL_AppResult) {
-    defer(engine.destroy());
-    defer(generator.destroy());
-    defer(renderer.destroy(engine));
-    defer(skybox_pipeline.destroy(engine));
-    defer(model_pipeline.destroy(engine));
+    model_pipeline.destroy(engine);
+    skybox_pipeline.destroy(engine);
+    renderer.destroy(engine);
+    destroy_window(engine, window);
+    generator.destroy();
+    engine.destroy();
 }
+#endif
 
 SDL_AppResult SDL_AppIterate(void*) {
     game_clock.update();
@@ -176,7 +187,7 @@ SDL_AppResult SDL_AppIterate(void*) {
     renderer.update_camera_and_lights(engine, camera);
 
     std::array<PbrRenderer::Pipeline*, 2> pipelines{&skybox_pipeline, &model_pipeline};
-    (void)renderer.draw(engine, pipelines);
+    (void)renderer.draw(engine, window, pipelines);
 
     return SDL_APP_CONTINUE;
 }

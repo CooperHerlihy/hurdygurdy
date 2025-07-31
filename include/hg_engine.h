@@ -2,7 +2,6 @@
 
 #include "hg_utils.h"
 #include "hg_load.h"
-#include "hg_window.h"
 #include "hg_vulkan.h"
 
 namespace hg {

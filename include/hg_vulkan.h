@@ -17,14 +17,14 @@ enum class GpuMemoryType {
 
 struct GpuBuffer {
     VmaAllocation allocation = nullptr;
-    VkBuffer buffer{};
+    VkBuffer handle = nullptr;
     VkDeviceSize size = 0;
     GpuMemoryType type{};
 };
 void destroy_buffer(Vk& vk, const GpuBuffer& buffer);
 
 struct GpuBufferView {
-    const GpuBuffer* buffer = nullptr;
+    VkBuffer handle = nullptr;
     VkDeviceSize range = 0;
     VkDeviceSize offset = 0;
 };

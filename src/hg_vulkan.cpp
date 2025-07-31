@@ -7,9 +7,9 @@ namespace hg {
 
 void destroy_buffer(Vk& vk, const GpuBuffer& buffer) {
     ASSERT(buffer.allocation != nullptr);
-    ASSERT(buffer.buffer != nullptr);
+    ASSERT(buffer.handle != nullptr);
 
-    vmaDestroyBuffer(vk.gpu_allocator, buffer.buffer, buffer.allocation);
+    vmaDestroyBuffer(vk.gpu_allocator, buffer.handle, buffer.allocation);
 }
 
 GpuBuffer create_buffer(Vk& vk, const GpuBufferConfig& config) {
@@ -44,7 +44,7 @@ GpuBuffer create_buffer(Vk& vk, const GpuBufferConfig& config) {
         vk.gpu_allocator,
         &buffer_info,
         &alloc_info,
-        &buffer.buffer,
+        &buffer.handle,
         &buffer.allocation,
         nullptr
     );
@@ -62,7 +62,7 @@ GpuBuffer create_buffer(Vk& vk, const GpuBufferConfig& config) {
 
 void write_buffer(Vk& vk, const GpuBuffer& dst, const void* src, usize size, usize offset) {
     ASSERT(dst.allocation != nullptr);
-    ASSERT(dst.buffer != nullptr);
+    ASSERT(dst.handle != nullptr);
     ASSERT(src != nullptr);
     ASSERT(size != 0);
     if (dst.type == GpuMemoryType::LinearAccess)
@@ -87,7 +87,7 @@ void write_buffer(Vk& vk, const GpuBuffer& dst, const void* src, usize size, usi
     write_buffer(vk, staging_buffer, src, size, 0);
 
     submit_single_time_commands(vk, [&](const VkCommandBuffer cmd) {
-        copy_to_buffer(cmd, GpuBufferView{&dst, size, offset}, GpuBufferView{&staging_buffer, size});
+        copy_to_buffer(cmd, GpuBufferView{dst.handle, size, offset}, GpuBufferView{staging_buffer.handle, size});
     });
 }
 
@@ -714,12 +714,11 @@ Result<void> allocate_descriptor_sets(
 }
 
 void write_uniform_buffer_descriptor(Vk& vk, const DescriptorSetBinding& binding, const GpuBufferView& buffer) {
-    ASSERT(buffer.buffer != nullptr);
-    ASSERT(buffer.buffer->buffer != nullptr);
+    ASSERT(buffer.handle != nullptr);
     ASSERT(buffer.range != 0);
     ASSERT(binding.set != nullptr);
 
-    const VkDescriptorBufferInfo buffer_info{buffer.buffer->buffer, buffer.offset, buffer.range};
+    const VkDescriptorBufferInfo buffer_info{buffer.handle, buffer.offset, buffer.range};
     const VkWriteDescriptorSet descriptor_write{
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
         .dstSet = binding.set,
@@ -1065,16 +1064,14 @@ void BarrierBuilder::build_and_run(Vk& vk, const VkCommandBuffer cmd, const VkDe
 }
 
 void copy_to_buffer(const VkCommandBuffer cmd, const GpuBufferView& dst, const GpuBufferView& src) {
-    ASSERT(dst.buffer != nullptr);
-    ASSERT(dst.buffer->buffer != nullptr);
-    ASSERT(src.buffer != nullptr);
-    ASSERT(src.buffer->buffer != nullptr);
+    ASSERT(dst.handle != nullptr);
+    ASSERT(src.handle != nullptr);
     ASSERT(src.range == dst.range);
     if (dst.range == 0)
         return;
 
     const VkBufferCopy copy_region{src.offset, dst.offset, dst.range};
-    vkCmdCopyBuffer(cmd, src.buffer->buffer, dst.buffer->buffer, 1, &copy_region);
+    vkCmdCopyBuffer(cmd, src.handle, dst.handle, 1, &copy_region);
 }
 
 void copy_to_image(VkCommandBuffer cmd, GpuImage& dst, const GpuBuffer& src, VkImageAspectFlags aspect) {
@@ -1085,7 +1082,7 @@ void copy_to_image(VkCommandBuffer cmd, GpuImage& dst, const GpuBuffer& src, VkI
     };
     const VkCopyBufferToImageInfo2 copy_region_info{
         .sType = VK_STRUCTURE_TYPE_COPY_BUFFER_TO_IMAGE_INFO_2,
-        .srcBuffer = src.buffer,
+        .srcBuffer = src.handle,
         .dstImage = dst.image,
         .dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .regionCount = 1,

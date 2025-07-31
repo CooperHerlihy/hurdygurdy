@@ -1,22 +1,22 @@
 #pragma once
 
-#include "hg_pch.h"
 #include "hg_utils.h"
+#include "hg_engine.h"
 
 namespace hg {
 
-SDL_Window* create_window(const glm::ivec2 size);
-SDL_Window* create_fullscreen_window();
+struct Window {
+    SDL_Window* window{};
+    VkSurfaceKHR surface{};
+    Swapchain swapchain{};
+};
+void destroy_window(Engine& engine, Window& window);
 
-inline void destroy_window(SDL_Window* window) {
-    ASSERT(window != nullptr);
-    SDL_DestroyWindow(window);
-}
+[[nodiscard]] Result<Window> create_window(Engine& engine, glm::ivec2 size);
+[[nodiscard]] Result<Window> create_fullscreen_window(Engine& engine);
 
-[[nodiscard]] inline glm::ivec2 get_window_extent(SDL_Window* window) {
-    int width = 0, height = 0;
-    SDL_GetWindowSize(window, &width, &height);
-    return {width, height};
-}
+[[nodiscard]] Result<void> resize_window(Engine& engine, Window& window);
+
+[[nodiscard]] glm::ivec2 get_window_size(Window window);
 
 } // namespace hg

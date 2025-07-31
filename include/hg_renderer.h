@@ -2,6 +2,7 @@
 
 #include "hg_math.h"
 #include "hg_engine.h"
+#include "hg_window.h"
 
 namespace hg {
 
@@ -32,21 +33,14 @@ public:
         alignas(16) Light vals[MaxLights]{};
     };
 
-    [[nodiscard]] SDL_Window* get_window() const { return m_window; }
-    [[nodiscard]] glm::ivec2 get_extent() const { return get_window_extent(m_window); }
-
     [[nodiscard]] VkDescriptorSetLayout get_global_set_layout() const { return m_set_layout; }
     [[nodiscard]] VkDescriptorSet get_global_set() const { return m_global_set; }
 
-    struct Config {
-        bool fullscreen = false;
-        glm::ivec2 window_size{1920, 1080};
-    };
-    [[nodiscard]] static Result<PbrRenderer> create(Engine& engine, const Config& config);
-    Result<void> resize(Engine& engine);
+    [[nodiscard]] static Result<PbrRenderer> create(Engine& engine, const Window& window);
+    Result<void> resize(Engine& engine, const Window& window);
     void destroy(Engine& engine) const;
 
-    Result<void> draw(Engine& engine, Slice<Pipeline*> pipelines);
+    Result<void> draw(Engine& engine, Window& window, Slice<Pipeline*> pipelines);
 
     void update_projection(Engine& engine, const glm::mat4& projection) const {
         write_buffer(
@@ -66,16 +60,13 @@ public:
     }
 
 private:
-    SDL_Window* m_window{};
-    VkSurfaceKHR m_surface{};
-    Swapchain m_swapchain{};
-
     GpuImageAndView m_color_image{};
     GpuImageAndView m_depth_image{};
 
     VkDescriptorSetLayout m_set_layout{};
     VkDescriptorPool m_descriptor_pool{};
     VkDescriptorSet m_global_set{};
+
     GpuBuffer m_vp_buffer{};
     GpuBuffer m_light_buffer{};
     std::vector<Light> m_light_queue{};
