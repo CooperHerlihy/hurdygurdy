@@ -1,7 +1,7 @@
 #pragma once
 
 #include "hg_math.h"
-#include "hg_engine.h"
+#include "hg_vulkan.h"
 #include "hg_window.h"
 
 namespace hg {
@@ -36,15 +36,15 @@ public:
     [[nodiscard]] VkDescriptorSetLayout get_global_set_layout() const { return m_set_layout; }
     [[nodiscard]] VkDescriptorSet get_global_set() const { return m_global_set; }
 
-    [[nodiscard]] static Result<PbrRenderer> create(Engine& engine, const Window& window);
-    Result<void> resize(Engine& engine, const Window& window);
-    void destroy(Engine& engine) const;
+    [[nodiscard]] static Result<PbrRenderer> create(Vk& vk, const Window& window);
+    Result<void> resize(Vk& vk, const Window& window);
+    void destroy(Vk& vk) const;
 
-    Result<void> draw(Engine& engine, Window& window, Slice<Pipeline*> pipelines);
+    Result<void> draw(Vk& vk, Window& window, Slice<Pipeline*> pipelines);
 
-    void update_projection(Engine& engine, const glm::mat4& projection) const {
+    void update_projection(Vk& vk, const glm::mat4& projection) const {
         write_buffer(
-            engine.vk,
+            vk,
             m_vp_buffer,
             &projection,
             sizeof(projection),
@@ -52,7 +52,7 @@ public:
         );
     }
 
-    void update_camera_and_lights(Engine& engine, const Cameraf& camera);
+    void update_camera_and_lights(Vk& vk, const Cameraf& camera);
 
     void queue_light(const glm::vec3 position, const glm::vec3 color) {
         ASSERT(m_light_queue.size() <= MaxLights);
@@ -74,12 +74,12 @@ private:
 
 class SkyboxPipeline : public PbrRenderer::Pipeline {
 public:
-    [[nodiscard]] static SkyboxPipeline create(Engine& engine, const PbrRenderer& pipeline);
-    void destroy(Engine& engine) const;
+    [[nodiscard]] static SkyboxPipeline create(Vk& vk, const PbrRenderer& pipeline);
+    void destroy(Vk& vk) const;
     void draw(const PbrRenderer& renderer, const VkCommandBuffer cmd) override;
 
-    void load_skybox(Engine& engine, const ImageData& data);
-    Result<void> load_skybox(Engine& engine, const std::filesystem::path path);
+    void load_skybox(Vk& vk, const ImageData& data);
+    Result<void> load_skybox(Vk& vk, AssetLoader& loader, const std::filesystem::path path);
 
 private:
     VkDescriptorSetLayout m_set_layout{};
@@ -95,8 +95,8 @@ private:
 
 class PbrPipeline : public PbrRenderer::Pipeline {
 public:
-    [[nodiscard]] static PbrPipeline create(Engine& engine, const PbrRenderer& pipeline);
-    void destroy(Engine& engine) const;
+    [[nodiscard]] static PbrPipeline create(Vk& vk, const PbrRenderer& pipeline);
+    void destroy(Vk& vk) const;
 
     struct PushConstant {
         glm::mat4 model{1.0f};
@@ -112,10 +112,10 @@ public:
     struct TextureHandle { usize index = SIZE_MAX; };
 
     [[nodiscard]] TextureHandle load_texture(
-        Engine& engine, const ImageData& data, VkFormat format = VK_FORMAT_R8G8B8A8_SRGB
+        Vk& vk, const ImageData& data, VkFormat format = VK_FORMAT_R8G8B8A8_SRGB
     );
     [[nodiscard]] Result<TextureHandle> load_texture(
-        Engine& engine, const std::filesystem::path path, VkFormat format = VK_FORMAT_R8G8B8A8_SRGB
+        Vk& vk, AssetLoader& loader, const std::filesystem::path path, VkFormat format = VK_FORMAT_R8G8B8A8_SRGB
     );
 
     struct Model {
@@ -127,9 +127,9 @@ public:
         float roughness = 0.0;
         float metalness = 0.0;
 
-        void destroy(Engine& engine) const {
-            destroy_buffer(engine.vk, vertex_buffer);
-            destroy_buffer(engine.vk, index_buffer);
+        void destroy(Vk& vk) const {
+            destroy_buffer(vk, vertex_buffer);
+            destroy_buffer(vk, index_buffer);
         }
     };
 
@@ -138,13 +138,14 @@ public:
     };
 
     [[nodiscard]] ModelHandle load_model(
-        Engine& engine,
+        Vk& vk,
         const GltfData& data,
         TextureHandle normal_map,
         TextureHandle texture
     );
     [[nodiscard]] Result<ModelHandle> load_model(
-        Engine& engine,
+        Vk& vk,
+        AssetLoader& loader,
         const std::filesystem::path path,
         TextureHandle normal_map,
         TextureHandle texture

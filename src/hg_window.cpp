@@ -2,17 +2,17 @@
 
 namespace hg {
 
-void destroy_window(Engine& engine, Window& window) {
+void destroy_window(Vk& vk, Window& window) {
     ASSERT(window.window != nullptr);
     ASSERT(window.surface != nullptr);
     ASSERT(window.swapchain.swapchain != nullptr);
 
-    destroy_swapchain(engine.vk, window.swapchain);
-    vkDestroySurfaceKHR(engine.vk.instance, window.surface, nullptr);
+    destroy_swapchain(vk, window.swapchain);
+    vkDestroySurfaceKHR(vk.instance, window.surface, nullptr);
     SDL_DestroyWindow(window.window);
 }
 
-Result<Window> create_window(Engine& engine, glm::ivec2 size) {
+Result<Window> create_window(Vk& vk, glm::ivec2 size) {
     ASSERT(size.x > 0 && size.y > 0);
 
     auto window = ok<Window>();
@@ -25,9 +25,9 @@ Result<Window> create_window(Engine& engine, glm::ivec2 size) {
     if (window->window == nullptr)
         ERRORF("Could not create window: {}", SDL_GetError());
 
-    window->surface = create_surface(engine.vk, window->window);
+    window->surface = create_surface(vk, window->window);
 
-    auto swapchain = create_swapchain(engine.vk, window->surface);
+    auto swapchain = create_swapchain(vk, window->surface);
     if (swapchain.has_err())
         ERRORF("Could not create swapchain: {}", to_string(swapchain.err()));
     window->swapchain = *swapchain;
@@ -35,7 +35,7 @@ Result<Window> create_window(Engine& engine, glm::ivec2 size) {
     return window;
 }
 
-Result<Window> create_fullscreen_window(Engine& engine) {
+Result<Window> create_fullscreen_window(Vk& vk) {
     auto window = ok<Window>();
 
     SDL_DisplayID display = SDL_GetPrimaryDisplay();
@@ -57,9 +57,9 @@ Result<Window> create_fullscreen_window(Engine& engine) {
     if (window->window == nullptr)
         ERRORF("Could not create window: {}", SDL_GetError());
 
-    window->surface = create_surface(engine.vk, window->window);
+    window->surface = create_surface(vk, window->window);
 
-    auto swapchain = create_swapchain(engine.vk, window->surface);
+    auto swapchain = create_swapchain(vk, window->surface);
     if (swapchain.has_err())
         ERRORF("Could not create swapchain: {}", to_string(swapchain.err()));
     window->swapchain = *swapchain;
@@ -67,12 +67,12 @@ Result<Window> create_fullscreen_window(Engine& engine) {
     return window;
 }
 
-Result<void> resize_window(Engine& engine, Window& window) {
+Result<void> resize_window(Vk& vk, Window& window) {
     ASSERT(window.window != nullptr);
     ASSERT(window.surface != nullptr);
     ASSERT(window.swapchain.swapchain != nullptr);
 
-    auto swapchain = resize_swapchain(engine.vk, window.swapchain, window.surface);
+    auto swapchain = resize_swapchain(vk, window.swapchain, window.surface);
     if (swapchain.has_err())
         return swapchain.err();
     return ok();

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "hg_utils.h"
-#include "hg_engine.h"
+#include "hg_vulkan.h"
 
 namespace hg {
 
@@ -10,12 +10,12 @@ struct Window {
     VkSurfaceKHR surface{};
     Swapchain swapchain{};
 };
-void destroy_window(Engine& engine, Window& window);
+void destroy_window(Vk& vk, Window& window);
 
-[[nodiscard]] Result<Window> create_window(Engine& engine, glm::ivec2 size);
-[[nodiscard]] Result<Window> create_fullscreen_window(Engine& engine);
+[[nodiscard]] Result<Window> create_window(Vk& vk, glm::ivec2 size);
+[[nodiscard]] Result<Window> create_fullscreen_window(Vk& vk);
 
-[[nodiscard]] Result<void> resize_window(Engine& engine, Window& window);
+[[nodiscard]] Result<void> resize_window(Vk& vk, Window& window);
 
 [[nodiscard]] glm::ivec2 get_window_size(Window window);
 

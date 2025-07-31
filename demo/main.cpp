@@ -9,7 +9,8 @@ using namespace hg;
 
 constexpr double sqrt3 = 1.73205080757;
 
-static Engine engine{};
+static AssetLoader loader{};
+static Vk vk{};
 static Generator generator{};
 static Window window{};
 static PbrRenderer renderer{};
@@ -46,33 +47,42 @@ struct InputState {
 static InputState input_state{};
 
 SDL_AppResult SDL_AppInit(void**, int, char**) {
-    engine = [] {
-        auto engine_res = Engine::create();
-        if (engine_res.has_err())
-            perr(engine_res);
-        return std::move(*engine_res);
+    auto sdl_success = SDL_Init(SDL_INIT_VIDEO);
+    if (!sdl_success)
+        ERRORF("Could not initialize SDL: {}", SDL_GetError());
+
+    loader = AssetLoader{{
+        .max_images = 16,
+        .max_gltfs = 16,
+    }};
+
+    vk = [] {
+        auto vk_res = create_vk();
+        if (vk_res.has_err())
+            ERRORF("Could not create Vulkan: {}", to_string(vk_res.err()));
+        return std::move(*vk_res);
     }();
 
     generator = Generator{{.max_meshes = 64, .max_images = 64}};
 
     window = [] {
-        auto window_res = create_fullscreen_window(engine);
+        auto window_res = create_fullscreen_window(vk);
         if (window_res.has_err())
             perr(window_res);
         return std::move(*window_res);
     }();
 
     renderer = [] {
-        auto renderer_res = PbrRenderer::create(engine, window);
+        auto renderer_res = PbrRenderer::create(vk, window);
         if (renderer_res.has_err())
             perr(renderer_res);
         return std::move(*renderer_res);
     }();
 
-    skybox_pipeline = SkyboxPipeline::create(engine, renderer);
-    model_pipeline = PbrPipeline::create(engine, renderer);
+    skybox_pipeline = SkyboxPipeline::create(vk, renderer);
+    model_pipeline = PbrPipeline::create(vk, renderer);
 
-    auto skybox_res = skybox_pipeline.load_skybox(engine, "assets/cloudy_skyboxes/Cubemap/Cubemap_Sky_06-512x512.png");
+    auto skybox_res = skybox_pipeline.load_skybox(vk, loader, "assets/cloudy_skyboxes/Cubemap/Cubemap_Sky_06-512x512.png");
     if (skybox_res.has_err())
         perr(skybox_res);
 
@@ -82,7 +92,7 @@ SDL_AppResult SDL_AppInit(void**, int, char**) {
         });
         defer(generator.dealloc_image(default_normal_image));
 
-        return model_pipeline.load_texture(engine, generator.get(default_normal_image), VK_FORMAT_R32G32B32A32_SFLOAT);
+        return model_pipeline.load_texture(vk, generator.get(default_normal_image), VK_FORMAT_R32G32B32A32_SFLOAT);
     }();
 
     perlin_normals = [&] {
@@ -96,38 +106,38 @@ SDL_AppResult SDL_AppInit(void**, int, char**) {
         });
         defer(generator.dealloc_image(perlin_normal_image));
 
-        return model_pipeline.load_texture(engine, generator.get(perlin_normal_image), VK_FORMAT_R32G32B32A32_SFLOAT);
+        return model_pipeline.load_texture(vk, generator.get(perlin_normal_image), VK_FORMAT_R32G32B32A32_SFLOAT);
     }();
 
     gray_texture = [&] {
         auto gray_image = generator.alloc_image<u32>({2, 2}, [](...) { return 0xff777777; });
         defer(generator.dealloc_image(gray_image));
 
-        return model_pipeline.load_texture(engine, generator.get(gray_image));
+        return model_pipeline.load_texture(vk, generator.get(gray_image));
     }();
 
     cube = [&] {
         auto cube_mesh = generator.generate_cube(generator.alloc_mesh());
         defer(generator.dealloc_mesh(cube_mesh));
 
-        return model_pipeline.load_model(engine, {generator.get(cube_mesh), 0.2f, 0.0f}, perlin_normals, gray_texture);
+        return model_pipeline.load_model(vk, {generator.get(cube_mesh), 0.2f, 0.0f}, perlin_normals, gray_texture);
     }();
 
     sphere = [&] {
         auto sphere_mesh = generator.generate_sphere(generator.alloc_mesh(), {64, 32});
         defer(generator.dealloc_mesh(sphere_mesh));
 
-        return model_pipeline.load_model(engine, {generator.get(sphere_mesh), 0.2f, 1.0f}, perlin_normals, gray_texture);
+        return model_pipeline.load_model(vk, {generator.get(sphere_mesh), 0.2f, 1.0f}, perlin_normals, gray_texture);
     }();
 
-    hex_texture = *model_pipeline.load_texture(engine, "assets/hexagon_models/Textures/hexagons_medieval.png");
-    grass = *model_pipeline.load_model(engine, "assets/hexagon_models/Assets/gltf/tiles/base/hex_grass.gltf", default_normals, hex_texture);
-    building = *model_pipeline.load_model(engine, "assets/hexagon_models/Assets/gltf/buildings/blue/building_home_A_blue.gltf", default_normals, hex_texture);
-    tower = *model_pipeline.load_model(engine, "assets/hexagon_models/Assets/gltf/buildings/blue/building_tower_A_blue.gltf", default_normals, hex_texture);
+    hex_texture = *model_pipeline.load_texture(vk, loader, "assets/hexagon_models/Textures/hexagons_medieval.png");
+    grass = *model_pipeline.load_model(vk, loader, "assets/hexagon_models/Assets/gltf/tiles/base/hex_grass.gltf", default_normals, hex_texture);
+    building = *model_pipeline.load_model(vk, loader, "assets/hexagon_models/Assets/gltf/buildings/blue/building_home_A_blue.gltf", default_normals, hex_texture);
+    tower = *model_pipeline.load_model(vk, loader, "assets/hexagon_models/Assets/gltf/buildings/blue/building_tower_A_blue.gltf", default_normals, hex_texture);
 
     const auto window_size = get_window_size(window);
     const f32 aspect_ratio = static_cast<f32>(window_size.x) / static_cast<f32>(window_size.y);
-    renderer.update_projection(engine, glm::perspective(glm::pi<f32>() / 4.0f, aspect_ratio, 0.1f, 100.f));
+    renderer.update_projection(vk, glm::perspective(glm::pi<f32>() / 4.0f, aspect_ratio, 0.1f, 100.f));
 
     camera.translate({0.0f, -2.0f, -4.0f});
     game_clock.update();
@@ -137,12 +147,15 @@ SDL_AppResult SDL_AppInit(void**, int, char**) {
 
 #ifndef NDEBUG
 void SDL_AppQuit(void*, SDL_AppResult) {
-    model_pipeline.destroy(engine);
-    skybox_pipeline.destroy(engine);
-    renderer.destroy(engine);
-    destroy_window(engine, window);
+    model_pipeline.destroy(vk);
+    skybox_pipeline.destroy(vk);
+    renderer.destroy(vk);
+    destroy_window(vk, window);
     generator.destroy();
-    engine.destroy();
+    destroy_vk(vk);
+    loader.destroy();
+
+    SDL_Quit();
 }
 #endif
 
@@ -184,10 +197,10 @@ SDL_AppResult SDL_AppIterate(void*) {
 
     renderer.queue_light({-2.0f, -3.0f, -2.0f}, {glm::vec3{1.0f, 1.0f, 1.0f} * 300.0f});
 
-    renderer.update_camera_and_lights(engine, camera);
+    renderer.update_camera_and_lights(vk, camera);
 
     std::array<PbrRenderer::Pipeline*, 2> pipelines{&skybox_pipeline, &model_pipeline};
-    (void)renderer.draw(engine, window, pipelines);
+    (void)renderer.draw(vk, window, pipelines);
 
     return SDL_APP_CONTINUE;
 }
