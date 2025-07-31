@@ -109,9 +109,7 @@ public:
     void draw(const PbrRenderer& renderer, const VkCommandBuffer cmd) override;
 
     static constexpr usize MaxTextures = 256;
-    struct TextureHandle {
-        usize index = SIZE_MAX;
-    };
+    struct TextureHandle { usize index = SIZE_MAX; };
 
     [[nodiscard]] TextureHandle load_texture(
         Engine& engine, const ImageData& data, VkFormat format = VK_FORMAT_R8G8B8A8_SRGB

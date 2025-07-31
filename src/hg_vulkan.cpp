@@ -1151,6 +1151,21 @@ void resolve_image(VkCommandBuffer cmd, const ResolveConfig& dst, const ResolveC
     vkCmdResolveImage2(cmd, &resolve_info);
 }
 
+void draw_vertices(VkCommandBuffer cmd, VkBuffer vertex_buffer, u32 vertex_count) {
+    std::array vertex_buffers = {vertex_buffer};
+    std::array offsets = {usize{0}};
+    vkCmdBindVertexBuffers(cmd, 0, to_u32(vertex_buffers.size()), vertex_buffers.data(), offsets.data());
+    vkCmdDraw(cmd, vertex_count, 1, 0, 0);
+}
+
+void draw_indexed(VkCommandBuffer cmd, VkBuffer vertex_buffer, VkBuffer index_buffer, u32 index_count) {
+    std::array vertex_buffers = {vertex_buffer};
+    std::array offsets = {usize{0}};
+    vkCmdBindVertexBuffers(cmd, 0, to_u32(vertex_buffers.size()), vertex_buffers.data(), offsets.data());
+    vkCmdBindIndexBuffer(cmd, index_buffer, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdDrawIndexed(cmd, index_count, 1, 0, 0, 1);
+}
+
 void destroy_swapchain(Vk& vk, const Swapchain& swapchain) {
     for (const auto& fence : swapchain.frame_finished_fences) {
         ASSERT(fence != nullptr);

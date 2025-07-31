@@ -310,6 +310,9 @@ struct ResolveConfig {
 };
 void resolve_image(VkCommandBuffer cmd, const ResolveConfig& dst, const ResolveConfig& src);
 
+void draw_vertices(VkCommandBuffer cmd, VkBuffer vertex_buffer, u32 vertex_count);
+void draw_indexed(VkCommandBuffer cmd, VkBuffer vertex_buffer, VkBuffer index_buffer, u32 index_count);
+
 [[nodiscard]] VkSurfaceKHR create_surface(Vk& vk, SDL_Window* window);
 
 struct Swapchain {

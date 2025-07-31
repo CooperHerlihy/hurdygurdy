@@ -116,9 +116,6 @@ void PbrRenderer::destroy(Engine& engine) const {
             .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
             .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-            .clearValue{
-                .color{{0.0f, 0.0f, 0.0f, 1.0f}}
-            },
         };
         const VkRenderingAttachmentInfo depth_attachment{
             .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
@@ -317,12 +314,7 @@ void SkyboxPipeline::draw(const PbrRenderer& renderer, const VkCommandBuffer cmd
         vertex_attributes.data()
     );
 
-    const std::array vertex_buffers = {m_vertex_buffer.handle};
-    const std::array offsets = {usize{0}};
-    vkCmdBindVertexBuffers(cmd, 0, to_u32(vertex_buffers.size()), vertex_buffers.data(), offsets.data());
-
-    vkCmdBindIndexBuffer(cmd, m_index_buffer.handle, 0, VK_INDEX_TYPE_UINT32);
-    vkCmdDrawIndexed(cmd, 36, 1, 0, 0, 1);
+    draw_indexed(cmd, m_vertex_buffer.handle, m_index_buffer.handle, 36);
 
     vkCmdSetDepthTestEnable(cmd, VK_TRUE);
     vkCmdSetDepthWriteEnable(cmd, VK_TRUE);
@@ -463,13 +455,13 @@ void PbrPipeline::draw(const PbrRenderer& renderer, const VkCommandBuffer cmd) {
 
     vkCmdSetCullMode(cmd, VK_CULL_MODE_BACK_BIT);
 
-    std::array vertex_bindings = {
+    constexpr std::array vertex_bindings = {
         VkVertexInputBindingDescription2EXT{
             .sType = VK_STRUCTURE_TYPE_VERTEX_INPUT_BINDING_DESCRIPTION_2_EXT,
             .stride = sizeof(Vertex), .inputRate = VK_VERTEX_INPUT_RATE_VERTEX, .divisor = 1
         }
     };
-    std::array vertex_attributes = {
+    constexpr std::array vertex_attributes = {
         VkVertexInputAttributeDescription2EXT{
            .sType = VK_STRUCTURE_TYPE_VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT,
            .location = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, position)
@@ -493,7 +485,7 @@ void PbrPipeline::draw(const PbrRenderer& renderer, const VkCommandBuffer cmd) {
     );
 
     bind_shaders(cmd, m_pipeline);
-    std::array descriptor_sets = {renderer.get_global_set(), m_texture_set};
+    const std::array descriptor_sets = {renderer.get_global_set(), m_texture_set};
     vkCmdBindDescriptorSets(cmd,
         VK_PIPELINE_BIND_POINT_GRAPHICS,
         m_pipeline.layout,
@@ -517,12 +509,7 @@ void PbrPipeline::draw(const PbrRenderer& renderer, const VkCommandBuffer cmd) {
             0, sizeof(model_push), &model_push
         );
 
-        std::array vertex_buffers = {model.vertex_buffer.handle};
-        std::array offsets = {usize{0}};
-        vkCmdBindVertexBuffers(cmd, 0, to_u32(vertex_buffers.size()), vertex_buffers.data(), offsets.data());
-
-        vkCmdBindIndexBuffer(cmd, model.index_buffer.handle, 0, VK_INDEX_TYPE_UINT32);
-        vkCmdDrawIndexed(cmd, model.index_count, 1, 0, 0, 1);
+        draw_indexed(cmd, model.vertex_buffer.handle, model.index_buffer.handle, model.index_count);
     }
 
     vkCmdSetCullMode(cmd, VK_CULL_MODE_NONE);
