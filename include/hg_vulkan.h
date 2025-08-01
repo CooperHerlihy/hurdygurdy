@@ -39,7 +39,7 @@ void write_buffer(Vk& vk, const GpuBuffer& dst, const void* src, usize size, usi
 
 struct GpuImage {
     VmaAllocation allocation = nullptr;
-    VkImage image{};
+    VkImage handle{};
     VkExtent3D extent{};
     VkFormat format{};
     u32 mip_levels = 0;
@@ -52,7 +52,6 @@ struct GpuImageConfig {
     VkFormat format{VK_FORMAT_UNDEFINED};
     VkImageUsageFlags usage{};
     u32 mip_levels = 1;
-    VkSampleCountFlagBits sample_count{VK_SAMPLE_COUNT_1_BIT};
 };
 [[nodiscard]] GpuImage create_image(Vk& vk, const GpuImageConfig& config);
 
@@ -97,7 +96,6 @@ struct GpuImageAndViewConfig {
     VkImageLayout layout{VK_IMAGE_LAYOUT_UNDEFINED};
     VkImageAspectFlags aspect_flags{VK_IMAGE_ASPECT_COLOR_BIT};
     u32 mip_levels = 1;
-    VkSampleCountFlagBits sample_count{VK_SAMPLE_COUNT_1_BIT};
 };
 [[nodiscard]] GpuImageAndView create_image_and_view(Vk& vk, const GpuImageAndViewConfig& config);
 
@@ -323,6 +321,7 @@ struct Swapchain {
     VkExtent2D extent{};
     VkSwapchainKHR swapchain{};
     std::array<VkImage, MaxImages> images{};
+    std::array<VkImageView, MaxImages> image_views{};
     u32 image_count = 0;
     VkFormat format = VK_FORMAT_UNDEFINED;
 
@@ -337,11 +336,13 @@ struct Swapchain {
 
     [[nodiscard]] VkCommandBuffer& current_cmd() { return command_buffers[current_frame_index]; }
     [[nodiscard]] VkImage& current_image() { return images[current_image_index]; }
+    [[nodiscard]] VkImageView& current_image_view() { return image_views[current_image_index]; }
     [[nodiscard]] VkFence& is_frame_finished() { return frame_finished_fences[current_frame_index]; }
     [[nodiscard]] VkSemaphore& is_image_available() { return image_available_semaphores[current_frame_index]; }
     [[nodiscard]] VkSemaphore& is_ready_to_present() { return ready_to_present_semaphores[current_image_index]; }
     [[nodiscard]] const VkCommandBuffer& current_cmd() const { return command_buffers[current_frame_index]; }
     [[nodiscard]] const VkImage& current_image() const { return images[current_image_index]; }
+    [[nodiscard]] const VkImageView& current_image_view() const { return image_views[current_image_index]; }
     [[nodiscard]] const VkFence& is_frame_finished() const { return frame_finished_fences[current_frame_index]; }
     [[nodiscard]] const VkSemaphore& is_image_available() const {
         return image_available_semaphores[current_frame_index];

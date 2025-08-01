@@ -93,9 +93,9 @@ void write_buffer(Vk& vk, const GpuBuffer& dst, const void* src, usize size, usi
 
 void destroy_image(Vk& vk, const GpuImage& image) {
     ASSERT(image.allocation != nullptr);
-    ASSERT(image.image != nullptr);
+    ASSERT(image.handle != nullptr);
 
-    vmaDestroyImage(vk.gpu_allocator, image.image, image.allocation);
+    vmaDestroyImage(vk.gpu_allocator, image.handle, image.allocation);
 }
 
 GpuImage create_image(Vk& vk, const GpuImageConfig& config) {
@@ -104,18 +104,17 @@ GpuImage create_image(Vk& vk, const GpuImageConfig& config) {
     ASSERT(config.extent.depth > 0);
     ASSERT(config.format != VK_FORMAT_UNDEFINED);
     ASSERT(config.usage != 0);
-    ASSERT(config.sample_count != 0);
     ASSERT(config.mip_levels > 0);
 
     const VkImageCreateInfo image_info{
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = VK_IMAGE_TYPE_2D,
-        .format = static_cast<VkFormat>(config.format),
+        .format = config.format,
         .extent = config.extent,
         .mipLevels = config.mip_levels,
         .arrayLayers = 1,
-        .samples = static_cast<VkSampleCountFlagBits>(config.sample_count),
-        .usage = static_cast<VkImageUsageFlags>(config.usage),
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .usage = config.usage,
     };
     const VmaAllocationCreateInfo alloc_info{
         .flags = 0,
@@ -131,7 +130,7 @@ GpuImage create_image(Vk& vk, const GpuImageConfig& config) {
             vk.gpu_allocator,
             &image_info,
             &alloc_info,
-            &image.image,
+            &image.handle,
             &image.allocation,
             nullptr
     );
@@ -180,7 +179,7 @@ GpuImage create_cubemap(Vk& vk, const GpuCubemapConfig& config) {
             vk.gpu_allocator,
             &image_info,
             &alloc_info,
-            &cubemap.image,
+            &cubemap.handle,
             &cubemap.allocation,
             nullptr
     );
@@ -199,7 +198,7 @@ GpuImage create_cubemap(Vk& vk, const GpuCubemapConfig& config) {
 
 void write_image(Vk& vk, GpuImage& dst, const ImageData& src, const GpuImageWriteConfig& config) {
     ASSERT(dst.allocation != nullptr);
-    ASSERT(dst.image != nullptr);
+    ASSERT(dst.handle != nullptr);
     ASSERT(src.pixels != nullptr);
     ASSERT(src.alignment > 0);
     ASSERT(src.size.x > 0);
@@ -216,14 +215,14 @@ void write_image(Vk& vk, GpuImage& dst, const ImageData& src, const GpuImageWrit
 
     submit_single_time_commands(vk, [&](const VkCommandBuffer cmd) {
         BarrierBuilder(vk, {.image_barriers = 1})
-            .add_image_barrier(0, dst.image, {config.aspect_flags, 0, VK_REMAINING_MIP_LEVELS, 0, 1})
+            .add_image_barrier(0, dst.handle, {config.aspect_flags, 0, VK_REMAINING_MIP_LEVELS, 0, 1})
             .set_image_dst(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
             .build_and_run(vk, cmd);
 
         copy_to_image(cmd, dst, staging_buffer, config.aspect_flags);
 
         BarrierBuilder(vk, {.image_barriers = 1})
-            .add_image_barrier(0, dst.image, {config.aspect_flags, 0, VK_REMAINING_MIP_LEVELS, 0, 1})
+            .add_image_barrier(0, dst.handle, {config.aspect_flags, 0, VK_REMAINING_MIP_LEVELS, 0, 1})
             .set_image_src(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
             .set_image_dst(0, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE, config.final_layout)
             .build_and_run(vk, cmd);
@@ -234,7 +233,7 @@ void write_image(Vk& vk, GpuImage& dst, const ImageData& src, const GpuImageWrit
 
 void write_cubemap(Vk& vk, GpuImage& dst, const ImageData& src, const GpuImageWriteConfig& config) {
     ASSERT(dst.allocation != nullptr);
-    ASSERT(dst.image != nullptr);
+    ASSERT(dst.handle != nullptr);
     ASSERT(src.pixels != nullptr);
     ASSERT(src.alignment > 0);
     ASSERT(src.size.x > 0);
@@ -257,7 +256,7 @@ void write_cubemap(Vk& vk, GpuImage& dst, const ImageData& src, const GpuImageWr
 
     submit_single_time_commands(vk, [&](const VkCommandBuffer cmd) {
         BarrierBuilder(vk, {.image_barriers = 1})
-            .add_image_barrier(0, dst.image, {config.aspect_flags, 0, 1, 0, 6})
+            .add_image_barrier(0, dst.handle, {config.aspect_flags, 0, 1, 0, 6})
             .set_image_dst(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
             .build_and_run(vk, cmd);
 
@@ -307,9 +306,9 @@ void write_cubemap(Vk& vk, GpuImage& dst, const ImageData& src, const GpuImageWr
         };
         VkCopyImageInfo2 copy_region_info{
             .sType = VK_STRUCTURE_TYPE_COPY_IMAGE_INFO_2,
-            .srcImage = staging_image.image,
+            .srcImage = staging_image.handle,
             .srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            .dstImage = dst.image,
+            .dstImage = dst.handle,
             .dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             .regionCount = to_u32(copies.size()),
             .pRegions = copies.data(),
@@ -317,7 +316,7 @@ void write_cubemap(Vk& vk, GpuImage& dst, const ImageData& src, const GpuImageWr
         vkCmdCopyImage2(cmd, &copy_region_info);
 
         BarrierBuilder(vk, {.image_barriers = 1})
-            .add_image_barrier(0, dst.image, {config.aspect_flags, 0, 1, 0, 6})
+            .add_image_barrier(0, dst.handle, {config.aspect_flags, 0, 1, 0, 6})
             .set_image_src(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
             .set_image_dst(0, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT,
@@ -345,20 +344,20 @@ void generate_mipmaps(Vk& vk, GpuImage& image, VkImageLayout final_layout) {
         VkOffset3D mip_offset{to_i32(image.extent.width), to_i32(image.extent.height), to_i32(image.extent.depth)};
 
         BarrierBuilder(vk, {.image_barriers = 1})
-            .add_image_barrier(0, image.image, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
+            .add_image_barrier(0, image.handle, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
             .set_image_dst(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT,
                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
             .build_and_run(vk, cmd);
 
         for (u32 level = 0; level < image.mip_levels - 1; ++level) {
             BarrierBuilder(vk, {.image_barriers = 1})
-                .add_image_barrier(0, image.image, {VK_IMAGE_ASPECT_COLOR_BIT, level + 1, 1, 0, 1})
+                .add_image_barrier(0, image.handle, {VK_IMAGE_ASPECT_COLOR_BIT, level + 1, 1, 0, 1})
                 .set_image_dst(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
                 .build_and_run(vk, cmd);
 
             BlitConfig src_view{
-                .image = image.image,
+                .image = image.handle,
                 .end = mip_offset,
                 .mip_level = level,
             };
@@ -369,14 +368,14 @@ void generate_mipmaps(Vk& vk, GpuImage& image, VkImageLayout final_layout) {
             if (mip_offset.z > 1)
                 mip_offset.z /= 2;
             BlitConfig dst_view{
-                .image = image.image,
+                .image = image.handle,
                 .end = mip_offset,
                 .mip_level = level + 1,
             };
             blit_image(cmd, dst_view, src_view, VK_FILTER_LINEAR);
 
             BarrierBuilder(vk, {.image_barriers = 1})
-                .add_image_barrier(0, image.image, {VK_IMAGE_ASPECT_COLOR_BIT, level + 1, 1, 0, 1})
+                .add_image_barrier(0, image.handle, {VK_IMAGE_ASPECT_COLOR_BIT, level + 1, 1, 0, 1})
                 .set_image_src(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
                 .set_image_dst(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT,
@@ -385,7 +384,7 @@ void generate_mipmaps(Vk& vk, GpuImage& image, VkImageLayout final_layout) {
         }
 
         BarrierBuilder(vk, {.image_barriers = 1})
-            .add_image_barrier(0, image.image, {VK_IMAGE_ASPECT_COLOR_BIT, 0, image.mip_levels, 0, 1})
+            .add_image_barrier(0, image.handle, {VK_IMAGE_ASPECT_COLOR_BIT, 0, image.mip_levels, 0, 1})
             .set_image_src(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT,
                     VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
             .set_image_dst(0, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE, final_layout)
@@ -457,7 +456,6 @@ GpuImageAndView create_image_and_view(Vk& vk, const GpuImageAndViewConfig& confi
     ASSERT(config.format != VK_FORMAT_UNDEFINED);
     ASSERT(config.usage != 0);
     ASSERT(config.aspect_flags != 0);
-    ASSERT(config.sample_count != 0);
     ASSERT(config.mip_levels > 0);
 
     GpuImageAndView image_and_view{};
@@ -467,12 +465,11 @@ GpuImageAndView create_image_and_view(Vk& vk, const GpuImageAndViewConfig& confi
         .format = config.format,
         .usage = config.usage,
         .mip_levels = config.mip_levels,
-        .sample_count = config.sample_count,
     });
     if (config.layout != VK_IMAGE_LAYOUT_UNDEFINED) {
         submit_single_time_commands(vk, [&](const VkCommandBuffer cmd) {
             BarrierBuilder(vk, {.image_barriers = 1})
-                .add_image_barrier(0, image_and_view.image.image, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
+                .add_image_barrier(0, image_and_view.image.handle, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
                 .set_image_dst(0, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE, config.layout)
                 .build_and_run(vk, cmd);
         });
@@ -480,7 +477,7 @@ GpuImageAndView create_image_and_view(Vk& vk, const GpuImageAndViewConfig& confi
     }
 
     image_and_view.view = create_image_view(vk, {
-        .image = image_and_view.image.image,
+        .image = image_and_view.image.handle,
         .format = config.format,
         .aspect_flags = config.aspect_flags,
     });
@@ -510,7 +507,7 @@ GpuImageAndView create_cubemap_and_view(Vk& vk, const GpuCubemapAndViewConfig& c
     });
 
     cubemap.view = create_cubemap_view(vk, {
-        .image = cubemap.image.image,
+        .image = cubemap.image.handle,
         .format = config.format,
         .aspect_flags = config.aspect_flags,
     });
@@ -1083,7 +1080,7 @@ void copy_to_image(VkCommandBuffer cmd, GpuImage& dst, const GpuBuffer& src, VkI
     const VkCopyBufferToImageInfo2 copy_region_info{
         .sType = VK_STRUCTURE_TYPE_COPY_BUFFER_TO_IMAGE_INFO_2,
         .srcBuffer = src.handle,
-        .dstImage = dst.image,
+        .dstImage = dst.handle,
         .dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .regionCount = 1,
         .pRegions = &copy_region,
@@ -1190,6 +1187,10 @@ void destroy_swapchain(Vk& vk, const Swapchain& swapchain) {
         swapchain.command_buffers.data()
     );
 
+    for (usize i = 0; i < swapchain.image_count; ++i) {
+        vkDestroyImageView(vk.device, swapchain.image_views[i], nullptr);
+    }
+
     ASSERT(swapchain.swapchain != nullptr);
     vkDestroySwapchainKHR(vk.device, swapchain.swapchain, nullptr);
 }
@@ -1268,7 +1269,9 @@ Result<Swapchain> create_swapchain(Vk& vk, const VkSurfaceKHR surface) {
 
 [[nodiscard]] static VkPresentModeKHR get_swapchain_present_mode(Vk& vk, const VkSurfaceKHR surface) {
     u32 present_mode_count = 0;
-    const VkResult present_count_res = vkGetPhysicalDeviceSurfacePresentModesKHR(vk.gpu, surface, &present_mode_count, nullptr);
+    const VkResult present_count_res = vkGetPhysicalDeviceSurfacePresentModesKHR(
+        vk.gpu, surface, &present_mode_count, nullptr
+    );
     switch (present_count_res) {
         case VK_SUCCESS: break;
         case VK_INCOMPLETE: {
@@ -1420,6 +1423,15 @@ Result<void> resize_swapchain(Vk& vk, Swapchain& swapchain, const VkSurfaceKHR s
         case VK_ERROR_OUT_OF_HOST_MEMORY: ERROR("Vulkan ran out of host memory");
         case VK_ERROR_OUT_OF_DEVICE_MEMORY: ERROR("Vulkan ran out of device memory");
         default: ERROR("Unexpected Vulkan error");
+    }
+
+    for (usize i = 0; i < swapchain.image_count; ++i) {
+        if (swapchain.image_views[i] != nullptr)
+            vkDestroyImageView(vk.device, swapchain.image_views[i], nullptr);
+        swapchain.image_views[i] = create_image_view(vk, {
+            .image = swapchain.images[i],
+            .format = swapchain.format,
+        });
     }
 
     return ok();

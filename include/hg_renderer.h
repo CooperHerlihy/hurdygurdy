@@ -23,7 +23,7 @@ struct PbrRenderer {
     };
 
     struct SkyboxPush {
-        Pool<Texture>::Handle cubemap{};
+        u32 cubemap = UINT32_MAX;
     };
     struct Skybox {
         Pool<Texture>::Handle cubemap{};
@@ -52,22 +52,27 @@ struct PbrRenderer {
         Transform3Df transform{};
     };
 
-    GpuImageAndView buffer_image{};
-    GpuImageAndView depth_image{};
+    struct PostProcessPush {
+        u32 input = UINT32_MAX;
+    };
 
     GraphicsPipeline skybox_pipeline{};
     GraphicsPipeline model_pipeline{};
+    GraphicsPipeline post_process_pipeline{};
 
     VkDescriptorPool descriptor_pool{};
     VkDescriptorSetLayout descriptor_layout{};
     VkDescriptorSet descriptor_set{};
 
+    Pool<Texture> textures{};
+    Pool<Model> models{};
+
+    Pool<Texture>::Handle buffer_image{};
+    Pool<Texture>::Handle depth_image{};
+
     GpuBuffer vp_buffer{};
     GpuBuffer light_buffer{};
     Skybox skybox{};
-
-    Pool<Texture> textures{};
-    Pool<Model> models{};
 };
 
 using PbrTextureHandle = Pool<Texture>::Handle;

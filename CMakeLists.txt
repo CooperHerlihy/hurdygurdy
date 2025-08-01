@@ -38,7 +38,9 @@ target_precompile_headers(demo REUSE_FROM hurdy_gurdy)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     message(STATUS "Configuring for GCC or Clang...")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic -Wno-missing-field-initializers")
+    set(CMAKE_CXX_FLAGS
+        "${CMAKE_CXX_FLAGS} -fno-exceptions -fno-rtti -Wall -Wextra -pedantic -Wno-missing-field-initializers"
+    )
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
     message(STATUS "Configuring for MSVC...")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
