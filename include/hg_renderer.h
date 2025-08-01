@@ -6,17 +6,7 @@
 
 namespace hg {
 
-class PbrRenderer {
-public:
-    PbrRenderer() = default;
-
-    class Pipeline {
-    public:
-        virtual ~Pipeline() = default;
-
-        virtual void draw(const PbrRenderer& renderer, const VkCommandBuffer cmd) = 0;
-    };
-
+struct PbrRenderer {
     struct ViewProjectionUniform {
         glm::mat4 projection{1.0f};
         glm::mat4 view{1.0f};
@@ -27,152 +17,94 @@ public:
         glm::vec4 position{};
         glm::vec4 color{};
     };
-
     struct LightUniform {
         alignas(16) usize count = 0;
         alignas(16) Light vals[MaxLights]{};
     };
 
-    [[nodiscard]] VkDescriptorSetLayout get_global_set_layout() const { return m_set_layout; }
-    [[nodiscard]] VkDescriptorSet get_global_set() const { return m_global_set; }
+    struct SkyboxPush {
+        Pool<Texture>::Handle cubemap{};
+    };
+    struct Skybox {
+        Pool<Texture>::Handle cubemap{};
+        GpuBuffer index_buffer{};
+        GpuBuffer vertex_buffer{};
+    };
 
-    [[nodiscard]] static Result<PbrRenderer> create(Vk& vk, const Window& window);
-    Result<void> resize(Vk& vk, const Window& window);
-    void destroy(Vk& vk) const;
-
-    Result<void> draw(Vk& vk, Window& window, Slice<Pipeline*> pipelines);
-
-    void update_projection(Vk& vk, const glm::mat4& projection) const {
-        write_buffer(
-            vk,
-            m_vp_buffer,
-            &projection,
-            sizeof(projection),
-            offsetof(ViewProjectionUniform, projection)
-        );
-    }
-
-    void update_camera_and_lights(Vk& vk, const Cameraf& camera);
-
-    void queue_light(const glm::vec3 position, const glm::vec3 color) {
-        ASSERT(m_light_queue.size() <= MaxLights);
-        m_light_queue.emplace_back(glm::vec4{position, 1.0f}, glm::vec4{color, 1.0});
-    }
-
-private:
-    GpuImageAndView m_color_image{};
-    GpuImageAndView m_depth_image{};
-
-    VkDescriptorSetLayout m_set_layout{};
-    VkDescriptorPool m_descriptor_pool{};
-    VkDescriptorSet m_global_set{};
-
-    GpuBuffer m_vp_buffer{};
-    GpuBuffer m_light_buffer{};
-    std::vector<Light> m_light_queue{};
-};
-
-class SkyboxPipeline : public PbrRenderer::Pipeline {
-public:
-    [[nodiscard]] static SkyboxPipeline create(Vk& vk, const PbrRenderer& pipeline);
-    void destroy(Vk& vk) const;
-    void draw(const PbrRenderer& renderer, const VkCommandBuffer cmd) override;
-
-    void load_skybox(Vk& vk, const ImageData& data);
-    Result<void> load_skybox(Vk& vk, AssetLoader& loader, const std::filesystem::path path);
-
-private:
-    VkDescriptorSetLayout m_set_layout{};
-    GraphicsPipeline m_pipeline{};
-
-    VkDescriptorPool m_descriptor_pool{};
-    VkDescriptorSet m_set{};
-
-    Texture m_cubemap{};
-    GpuBuffer m_index_buffer{};
-    GpuBuffer m_vertex_buffer{};
-};
-
-class PbrPipeline : public PbrRenderer::Pipeline {
-public:
-    [[nodiscard]] static PbrPipeline create(Vk& vk, const PbrRenderer& pipeline);
-    void destroy(Vk& vk) const;
-
-    struct PushConstant {
+    struct ModelPush {
         glm::mat4 model{1.0f};
         u32 normal_map_index = UINT32_MAX;
         u32 texture_index = UINT32_MAX;
         float roughness = 0.0f;
         float metalness = 0.0f;
     };
-
-    void draw(const PbrRenderer& renderer, const VkCommandBuffer cmd) override;
-
-    static constexpr usize MaxTextures = 256;
-    struct TextureHandle { usize index = SIZE_MAX; };
-
-    [[nodiscard]] TextureHandle load_texture(
-        Vk& vk, const ImageData& data, VkFormat format = VK_FORMAT_R8G8B8A8_SRGB
-    );
-    [[nodiscard]] Result<TextureHandle> load_texture(
-        Vk& vk, AssetLoader& loader, const std::filesystem::path path, VkFormat format = VK_FORMAT_R8G8B8A8_SRGB
-    );
-
     struct Model {
         u32 index_count = 0;
         GpuBuffer index_buffer{};
         GpuBuffer vertex_buffer{};
-        TextureHandle normal_map{};
-        TextureHandle texture{};
+        Pool<Texture>::Handle normal_map{};
+        Pool<Texture>::Handle color_map{};
         float roughness = 0.0;
         float metalness = 0.0;
-
-        void destroy(Vk& vk) const {
-            destroy_buffer(vk, vertex_buffer);
-            destroy_buffer(vk, index_buffer);
-        }
     };
-
-    struct ModelHandle {
-        usize index = SIZE_MAX;
-    };
-
-    [[nodiscard]] ModelHandle load_model(
-        Vk& vk,
-        const GltfData& data,
-        TextureHandle normal_map,
-        TextureHandle texture
-    );
-    [[nodiscard]] Result<ModelHandle> load_model(
-        Vk& vk,
-        AssetLoader& loader,
-        const std::filesystem::path path,
-        TextureHandle normal_map,
-        TextureHandle texture
-    );
-
-    struct RenderTicket {
-        ModelHandle model{};
+    struct ModelTicket {
+        Pool<Model>::Handle model{};
         Transform3Df transform{};
     };
 
-    void queue_model(const ModelHandle model, const Transform3Df& transform) {
-        ASSERT(model.index < m_models.size());
-        m_render_queue.emplace_back(model, transform);
-    }
+    GpuImageAndView buffer_image{};
+    GpuImageAndView depth_image{};
 
-    void clear_queue() { m_render_queue.clear(); }
+    GraphicsPipeline skybox_pipeline{};
+    GraphicsPipeline model_pipeline{};
 
-private:
-    VkDescriptorSetLayout m_set_layout{};
-    GraphicsPipeline m_pipeline{};
+    VkDescriptorPool descriptor_pool{};
+    VkDescriptorSetLayout descriptor_layout{};
+    VkDescriptorSet descriptor_set{};
 
-    VkDescriptorPool m_descriptor_pool{};
-    VkDescriptorSet m_texture_set{};
+    GpuBuffer vp_buffer{};
+    GpuBuffer light_buffer{};
+    Skybox skybox{};
 
-    std::vector<Texture> m_textures{};
-    std::vector<Model> m_models{};
-    std::vector<RenderTicket> m_render_queue{};
+    Pool<Texture> textures{};
+    Pool<Model> models{};
 };
+
+using PbrTextureHandle = Pool<Texture>::Handle;
+using PbrModelHandle = Pool<PbrRenderer::Model>::Handle;
+
+struct PbrRendererConfig {
+    const Window& window;
+    u32 max_textures = 256;
+    u32 max_models = 256;
+};
+PbrRenderer create_pbr_renderer(Vk& vk, const PbrRendererConfig& config);
+void resize_pbr_renderer(Vk& vk, PbrRenderer& renderer, const Window& window);
+void destroy_pbr_renderer(Vk& vk, PbrRenderer& renderer);
+
+Result<void> draw_pbr(Vk& vk, Window& window, PbrRenderer& renderer, Slice<const PbrRenderer::ModelTicket> models);
+
+void update_projection(Vk& vk, const PbrRenderer& renderer, const glm::mat4& projection);
+
+PbrRenderer::Light make_light(glm::vec3 position, glm::vec3 color, f32 intensity);
+struct PbrLightData {
+    const Cameraf& camera;
+    Slice<const PbrRenderer::Light> lights;
+};
+void update_camera_and_lights(Vk& vk, PbrRenderer& renderer, const PbrLightData& config);
+
+PbrTextureHandle load_texture(Vk& vk, PbrRenderer& renderer, const ImageData& data, const VkFormat format);
+void unload_texture(Vk& vk, PbrRenderer& renderer, const PbrTextureHandle texture);
+
+void load_skybox(Vk& vk, PbrRenderer& renderer, const ImageData& cubemap);
+void unload_skybox(Vk& vk, PbrRenderer& renderer);
+
+struct PbrModelConfig {
+    const GltfData& data;
+    PbrTextureHandle normal_map;
+    PbrTextureHandle color_map;
+};
+PbrModelHandle load_model(Vk& vk, PbrRenderer& renderer, const PbrModelConfig& config);
+void unload_model(Vk& vk, PbrRenderer& renderer, const PbrModelHandle model);
 
 } // namespace hg

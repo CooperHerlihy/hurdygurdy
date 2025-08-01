@@ -22,7 +22,7 @@ layout(set = 0, binding = 1) uniform LightUniform {
     Light vals[MaxLights];
 } u_light;
 
-layout(set = 1, binding = 0) uniform sampler2D u_samplers[];
+layout(set = 0, binding = 2) uniform sampler2D u_samplers[];
 
 layout(push_constant) uniform PushConstant {
     mat4 model;
@@ -78,8 +78,14 @@ vec3 calc_reflection(const Light light, const vec3 normal, const vec3 albedo, co
 }
 
 void main() {
-    const mat3 tbn = mat3(normalize(v_tangent.xyz), normalize(v_tangent.w * cross(v_normal, v_tangent.xyz)), normalize(v_normal));
-    const vec3 normal = v_tangent == vec4(0.0) ? normalize(v_normal) : tbn * -texture(u_samplers[push.normal_map_index], v_uv).xyz;
+    const mat3 tbn = mat3(
+        normalize(v_tangent.xyz),
+        normalize(v_tangent.w * cross(v_normal, v_tangent.xyz)),
+        normalize(v_normal)
+    );
+    const vec3 normal = v_tangent == vec4(0.0)
+        ? normalize(v_normal)
+        : tbn * -texture(u_samplers[push.normal_map_index], v_uv).xyz;
 
     const vec4 tex = texture(u_samplers[push.texture_index], v_uv);
     const vec3 albedo = tex.xyz;
