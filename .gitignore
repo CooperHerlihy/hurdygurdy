@@ -1,6 +1,4 @@
 .cache/
 build/
-build-vs/
 shaders/*.spv
-*.bat
 *.sh
