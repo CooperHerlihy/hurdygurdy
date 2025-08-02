@@ -1,8 +1,91 @@
 #include "hg_renderer.h"
 #include "hg_vulkan.h"
-#include <vulkan/vulkan_core.h>
 
 namespace hg {
+
+Result<Window> create_window(Vk& vk, glm::ivec2 size) {
+    ASSERT(size.x > 0 && size.y > 0);
+
+    auto window = ok<Window>();
+
+    window->window = SDL_CreateWindow(
+        "Hurdy Gurdy",
+        size.x, size.y,
+        SDL_WINDOW_RESIZABLE | SDL_WINDOW_VULKAN
+    );
+    if (window->window == nullptr)
+        ERRORF("Could not create window: {}", SDL_GetError());
+
+    window->surface = create_surface(vk, window->window);
+
+    auto swapchain = create_swapchain(vk, window->surface);
+    if (swapchain.has_err())
+        ERRORF("Could not create swapchain: {}", to_string(swapchain.err()));
+    window->swapchain = *swapchain;
+
+    return window;
+}
+
+Result<Window> create_fullscreen_window(Vk& vk) {
+    auto window = ok<Window>();
+
+    SDL_DisplayID display = SDL_GetPrimaryDisplay();
+    if (display == 0)
+        ERRORF("Could not get primary display: {}", SDL_GetError());
+
+    int count = 0;
+    SDL_DisplayMode** mode = SDL_GetFullscreenDisplayModes(display, &count);
+    if (mode == nullptr)
+        ERRORF("Could not get display modes: {}", SDL_GetError());
+    if (count == 0)
+        ERROR("No fullscreen modes available");
+
+    window->window = SDL_CreateWindow(
+        "Hurdy Gurdy",
+        mode[0]->w, mode[0]->h,
+        SDL_WINDOW_FULLSCREEN | SDL_WINDOW_VULKAN
+    );
+    if (window->window == nullptr)
+        ERRORF("Could not create window: {}", SDL_GetError());
+
+    window->surface = create_surface(vk, window->window);
+
+    auto swapchain = create_swapchain(vk, window->surface);
+    if (swapchain.has_err())
+        ERRORF("Could not create swapchain: {}", to_string(swapchain.err()));
+    window->swapchain = *swapchain;
+
+    return window;
+}
+
+Result<void> resize_window(Vk& vk, Window& window) {
+    ASSERT(window.window != nullptr);
+    ASSERT(window.surface != nullptr);
+    ASSERT(window.swapchain.swapchain != nullptr);
+
+    auto swapchain = resize_swapchain(vk, window.swapchain, window.surface);
+    if (swapchain.has_err())
+        return swapchain.err();
+    return ok();
+}
+
+void destroy_window(Vk& vk, Window& window) {
+    ASSERT(window.window != nullptr);
+    ASSERT(window.surface != nullptr);
+    ASSERT(window.swapchain.swapchain != nullptr);
+
+    destroy_swapchain(vk, window.swapchain);
+    vkDestroySurfaceKHR(vk.instance, window.surface, nullptr);
+    SDL_DestroyWindow(window.window);
+}
+
+glm::ivec2 get_window_size(Window window) {
+    ASSERT(window.window != nullptr);
+
+    int width = 0, height = 0;
+    SDL_GetWindowSize(window.window, &width, &height);
+    return {width, height};
+}
 
 PbrRenderer create_pbr_renderer(Vk& vk, const PbrRendererConfig& config) {
     PbrRenderer renderer{};
@@ -82,19 +165,25 @@ PbrRenderer create_pbr_renderer(Vk& vk, const PbrRendererConfig& config) {
             .edge_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
         }),
     };
-    write_image_sampler_descriptor(vk, {
-        renderer.descriptor_set, 2, to_u32(renderer.buffer_image.index)
-    }, renderer.textures[renderer.buffer_image]);
-
     renderer.textures[renderer.depth_image] = {
         create_image_and_view(vk, {
             .extent{config.window.swapchain.extent.width, config.window.swapchain.extent.height, 1},
             .format = VK_FORMAT_D32_SFLOAT,
-            .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+            .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
             .aspect_flags = VK_IMAGE_ASPECT_DEPTH_BIT,
         }),
-        nullptr,
+        create_sampler(vk, {
+            .type = SamplerType::Linear,
+            .edge_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        }),
     };
+
+    write_image_sampler_descriptor(vk, {
+        renderer.descriptor_set, 2, to_u32(renderer.buffer_image.index)
+    }, renderer.textures[renderer.buffer_image]);
+    write_image_sampler_descriptor(vk, {
+        renderer.descriptor_set, 2, to_u32(renderer.depth_image.index)
+    }, renderer.textures[renderer.depth_image]);
 
     renderer.vp_buffer = create_buffer(vk, {
         sizeof(PbrRenderer::ViewProjectionUniform),
@@ -168,7 +257,7 @@ PbrRenderer create_pbr_renderer(Vk& vk, const PbrRendererConfig& config) {
 
 void resize_pbr_renderer(Vk& vk, PbrRenderer& renderer, const Window& window) {
     destroy_texture(vk, renderer.textures[renderer.buffer_image]);
-    destroy_image_and_view(vk, renderer.textures[renderer.depth_image].image);
+    destroy_texture(vk, renderer.textures[renderer.depth_image]);
 
     renderer.textures[renderer.buffer_image] = {
         create_image_and_view(vk, {
@@ -181,19 +270,25 @@ void resize_pbr_renderer(Vk& vk, PbrRenderer& renderer, const Window& window) {
             .edge_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
         }),
     };
-    write_image_sampler_descriptor(vk, {
-        renderer.descriptor_set, 2, to_u32(renderer.buffer_image.index)
-    }, renderer.textures[renderer.buffer_image]);
-
     renderer.textures[renderer.depth_image] = {
         create_image_and_view(vk, {
             .extent{window.swapchain.extent.width, window.swapchain.extent.height, 1},
             .format = VK_FORMAT_D32_SFLOAT,
-            .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+            .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
             .aspect_flags = VK_IMAGE_ASPECT_DEPTH_BIT,
         }),
-        nullptr,
+        create_sampler(vk, {
+            .type = SamplerType::Linear,
+            .edge_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        }),
     };
+
+    write_image_sampler_descriptor(vk, {
+        renderer.descriptor_set, 2, to_u32(renderer.buffer_image.index)
+    }, renderer.textures[renderer.buffer_image]);
+    write_image_sampler_descriptor(vk, {
+        renderer.descriptor_set, 2, to_u32(renderer.depth_image.index)
+    }, renderer.textures[renderer.depth_image]);
 }
 
 void destroy_pbr_renderer(Vk& vk, PbrRenderer& renderer) {
@@ -216,8 +311,7 @@ void destroy_pbr_renderer(Vk& vk, PbrRenderer& renderer) {
     destroy_buffer(vk, renderer.light_buffer);
 
     destroy_texture(vk, renderer.textures[renderer.buffer_image]);
-    destroy_image_and_view(vk, renderer.textures[renderer.depth_image].image);
-
+    destroy_texture(vk, renderer.textures[renderer.depth_image]);
     renderer.textures.dealloc(renderer.buffer_image);
     renderer.textures.dealloc(renderer.depth_image);
 
@@ -371,10 +465,8 @@ Result<void> draw_pbr(Vk& vk, Window& window, PbrRenderer& renderer, Slice<const
             .imageView = depth_image.image.view,
             .imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
             .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-            .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-            .clearValue{
-                .depthStencil{.depth = 1.0f, .stencil = 0}
-            },
+            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .clearValue{.depthStencil{1.0f, 0}},
         };
         const VkRenderingInfo render_info{
             .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
@@ -391,14 +483,21 @@ Result<void> draw_pbr(Vk& vk, Window& window, PbrRenderer& renderer, Slice<const
 
         vkCmdEndRendering(cmd);
 
-        BarrierBuilder(vk, {.image_barriers = 2})
+        BarrierBuilder(vk, {.image_barriers = 3})
             .add_image_barrier(0, buffer_image.image.image.handle, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
             .set_image_src(0, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, 
                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
             .set_image_dst(0, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, 
                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-            .add_image_barrier(1, window.swapchain.current_image(), {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
-            .set_image_dst(1, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+            .add_image_barrier(1, depth_image.image.image.handle, {VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1})
+            .set_image_src(1,
+                VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+                VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+            )
+            .set_image_dst(1, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, 
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+            .add_image_barrier(2, window.swapchain.current_image(), {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
+            .set_image_dst(2, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
             .build_and_run(vk, cmd);
 
@@ -428,7 +527,9 @@ Result<void> draw_pbr(Vk& vk, Window& window, PbrRenderer& renderer, Slice<const
             0, nullptr
         );
         PbrRenderer::PostProcessPush post_process_push{
-            .input = to_u32(renderer.buffer_image.index),
+            to_u32(renderer.buffer_image.index),
+            to_u32(renderer.depth_image.index),
+            {window.swapchain.extent.width, window.swapchain.extent.height},
         };
         vkCmdPushConstants(cmd, renderer.post_process_pipeline.layout,
             VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT,

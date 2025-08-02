@@ -6,5 +6,4 @@
 #include "hg_load.h"
 #include "hg_vulkan.h"
 #include "hg_generate.h"
-#include "hg_window.h"
 #include "hg_renderer.h"

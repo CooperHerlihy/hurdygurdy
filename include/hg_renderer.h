@@ -2,9 +2,20 @@
 
 #include "hg_math.h"
 #include "hg_vulkan.h"
-#include "hg_window.h"
 
 namespace hg {
+
+struct Window {
+    SDL_Window* window{};
+    VkSurfaceKHR surface{};
+    Swapchain swapchain{};
+};
+[[nodiscard]] Result<Window> create_window(Vk& vk, glm::ivec2 size);
+[[nodiscard]] Result<Window> create_fullscreen_window(Vk& vk);
+[[nodiscard]] Result<void> resize_window(Vk& vk, Window& window);
+void destroy_window(Vk& vk, Window& window);
+
+[[nodiscard]] glm::ivec2 get_window_size(Window window);
 
 struct PbrRenderer {
     struct ViewProjectionUniform {
@@ -54,6 +65,8 @@ struct PbrRenderer {
 
     struct PostProcessPush {
         u32 input = UINT32_MAX;
+        u32 depth = UINT32_MAX;
+        glm::uvec2 input_size{};
     };
 
     GraphicsPipeline skybox_pipeline{};
