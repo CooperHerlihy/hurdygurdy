@@ -100,7 +100,5 @@ void main() {
         total_light += calc_reflection(u_light.vals[i], normal, albedo, metal, roughness, f0);
     }
 
-    const vec3 hdr_color = total_light * tex.xyz;
-    const vec3 ldr_color = vec3(1.0) - exp(-hdr_color);
-    out_color = vec4(ldr_color, tex.w);
+    out_color = vec4(total_light * tex.xyz, tex.w);
 }

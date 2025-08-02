@@ -12,5 +12,5 @@ layout(push_constant) uniform PushConstant {
 } push;
 
 void main() {
-    out_color = texture(u_samplers[push.cubemap_index], v_pos);
+    out_color = texture(u_samplers[push.cubemap_index], v_pos);;
 }

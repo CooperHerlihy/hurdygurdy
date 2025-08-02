@@ -1,5 +1,6 @@
 #include "hg_renderer.h"
 #include "hg_vulkan.h"
+#include <vulkan/vulkan_core.h>
 
 namespace hg {
 
@@ -157,7 +158,7 @@ PbrRenderer create_pbr_renderer(Vk& vk, const PbrRendererConfig& config) {
     renderer.textures[renderer.buffer_image] = {
         create_image_and_view(vk, {
             .extent{config.window.swapchain.extent.width, config.window.swapchain.extent.height, 1},
-            .format = config.window.swapchain.format,
+            .format = VK_FORMAT_R16G16B16A16_SFLOAT,
             .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
         }),
         create_sampler(vk, {
@@ -262,7 +263,7 @@ void resize_pbr_renderer(Vk& vk, PbrRenderer& renderer, const Window& window) {
     renderer.textures[renderer.buffer_image] = {
         create_image_and_view(vk, {
             .extent{window.swapchain.extent.width, window.swapchain.extent.height, 1},
-            .format = window.swapchain.format,
+            .format = VK_FORMAT_R16G16B16A16_SFLOAT,
             .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
         }),
         create_sampler(vk, {
