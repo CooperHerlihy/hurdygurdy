@@ -2,6 +2,7 @@
 
 #include "hg_utils.h"
 #include "hg_load.h"
+#include <vulkan/vulkan_core.h>
 
 namespace hg {
 
@@ -1287,7 +1288,12 @@ Result<Swapchain> create_swapchain(Vk& vk, const VkSurfaceKHR surface) {
     auto present_modes = vk.stack.alloc<VkPresentModeKHR>(present_mode_count);
     defer(vk.stack.dealloc(present_modes));
 
-    const VkResult present_res = vkGetPhysicalDeviceSurfacePresentModesKHR(vk.gpu, surface, &present_mode_count, present_modes.data);
+    const VkResult present_res = vkGetPhysicalDeviceSurfacePresentModesKHR(
+        vk.gpu,
+        surface,
+        &present_mode_count,
+        present_modes.data
+    );
     switch (present_res) {
         case VK_SUCCESS: break;
         case VK_INCOMPLETE: {
@@ -1303,8 +1309,7 @@ Result<Swapchain> create_swapchain(Vk& vk, const VkSurfaceKHR surface) {
     return std::ranges::any_of(present_modes, [](const VkPresentModeKHR mode) {
         return mode == VK_PRESENT_MODE_MAILBOX_KHR;
     })
-        // ? VK_PRESENT_MODE_MAILBOX_KHR
-        ? VK_PRESENT_MODE_FIFO_KHR
+        ? VK_PRESENT_MODE_MAILBOX_KHR
         : VK_PRESENT_MODE_FIFO_KHR;
 }
 

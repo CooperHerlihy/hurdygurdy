@@ -1,6 +1,5 @@
 #include "hg_renderer.h"
 #include "hg_vulkan.h"
-#include <vulkan/vulkan_core.h>
 
 namespace hg {
 
@@ -129,18 +128,31 @@ PbrRenderer create_pbr_renderer(Vk& vk, const PbrRendererConfig& config) {
         ERROR("Could not find valid pbr shaders");
     renderer.model_pipeline = *model_pipeline;
 
-    constexpr VkPushConstantRange post_proc_push{
-        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PbrRenderer::PostProcessPush)
+    constexpr VkPushConstantRange tonemap_push{
+        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PbrRenderer::TonemapPush)
     };
-    const auto post_pipeline = create_graphics_pipeline(vk, {
+    const auto tonemap_pipeline = create_graphics_pipeline(vk, {
         .set_layouts{&renderer.descriptor_layout, 1},
-        .push_ranges{&post_proc_push, 1},
+        .push_ranges{&tonemap_push, 1},
         .vertex_shader_path = "shaders/fullscreen.vert.spv",
-        .fragment_shader_path = "shaders/post_process.frag.spv",
+        .fragment_shader_path = "shaders/tonemap.frag.spv",
     });
-    if (post_pipeline.has_err())
+    if (tonemap_pipeline.has_err())
+        ERROR("Could not find valid tonemap shaders");
+    renderer.tonemap_pipeline = *tonemap_pipeline;
+
+    constexpr VkPushConstantRange antialias_push{
+        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PbrRenderer::AntialiasPush)
+    };
+    const auto antialias_pipeline = create_graphics_pipeline(vk, {
+        .set_layouts{&renderer.descriptor_layout, 1},
+        .push_ranges{&antialias_push, 1},
+        .vertex_shader_path = "shaders/fullscreen.vert.spv",
+        .fragment_shader_path = "shaders/antialias.frag.spv",
+    });
+    if (antialias_pipeline.has_err())
         ERROR("Could not find valid post process shaders");
-    renderer.post_process_pipeline = *post_pipeline;
+    renderer.antialias_pipeline = *antialias_pipeline;
 
     renderer.descriptor_pool = create_descriptor_pool(vk, {1, std::array{
         VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2},
@@ -152,20 +164,7 @@ PbrRenderer create_pbr_renderer(Vk& vk, const PbrRendererConfig& config) {
     renderer.textures = malloc_slice<Pool<Texture>::Block>(config.max_textures);
     renderer.models = malloc_slice<Pool<PbrRenderer::Model>::Block>(config.max_models);
 
-    renderer.buffer_image = renderer.textures.alloc();
     renderer.depth_image = renderer.textures.alloc();
-
-    renderer.textures[renderer.buffer_image] = {
-        create_image_and_view(vk, {
-            .extent{config.window.swapchain.extent.width, config.window.swapchain.extent.height, 1},
-            .format = VK_FORMAT_R16G16B16A16_SFLOAT,
-            .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-        }),
-        create_sampler(vk, {
-            .type = SamplerType::Linear,
-            .edge_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-        }),
-    };
     renderer.textures[renderer.depth_image] = {
         create_image_and_view(vk, {
             .extent{config.window.swapchain.extent.width, config.window.swapchain.extent.height, 1},
@@ -179,9 +178,26 @@ PbrRenderer create_pbr_renderer(Vk& vk, const PbrRendererConfig& config) {
         }),
     };
 
-    write_image_sampler_descriptor(vk, {
-        renderer.descriptor_set, 2, to_u32(renderer.buffer_image.index)
-    }, renderer.textures[renderer.buffer_image]);
+    for (auto& image : renderer.color_images) {
+        image = renderer.textures.alloc();
+        renderer.textures[image] = {
+            create_image_and_view(vk, {
+                .extent{config.window.swapchain.extent.width, config.window.swapchain.extent.height, 1},
+                .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+                .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+                       | VK_IMAGE_USAGE_SAMPLED_BIT
+                       | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+            }),
+            create_sampler(vk, {
+                .type = SamplerType::Linear,
+                .edge_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+            }),
+        };
+        write_image_sampler_descriptor(vk, {
+            renderer.descriptor_set, 2, to_u32(image.index)
+        }, renderer.textures[image]);
+    }
+
     write_image_sampler_descriptor(vk, {
         renderer.descriptor_set, 2, to_u32(renderer.depth_image.index)
     }, renderer.textures[renderer.depth_image]);
@@ -257,20 +273,7 @@ PbrRenderer create_pbr_renderer(Vk& vk, const PbrRendererConfig& config) {
 }
 
 void resize_pbr_renderer(Vk& vk, PbrRenderer& renderer, const Window& window) {
-    destroy_texture(vk, renderer.textures[renderer.buffer_image]);
     destroy_texture(vk, renderer.textures[renderer.depth_image]);
-
-    renderer.textures[renderer.buffer_image] = {
-        create_image_and_view(vk, {
-            .extent{window.swapchain.extent.width, window.swapchain.extent.height, 1},
-            .format = VK_FORMAT_R16G16B16A16_SFLOAT,
-            .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-        }),
-        create_sampler(vk, {
-            .type = SamplerType::Linear,
-            .edge_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-        }),
-    };
     renderer.textures[renderer.depth_image] = {
         create_image_and_view(vk, {
             .extent{window.swapchain.extent.width, window.swapchain.extent.height, 1},
@@ -284,12 +287,25 @@ void resize_pbr_renderer(Vk& vk, PbrRenderer& renderer, const Window& window) {
         }),
     };
 
-    write_image_sampler_descriptor(vk, {
-        renderer.descriptor_set, 2, to_u32(renderer.buffer_image.index)
-    }, renderer.textures[renderer.buffer_image]);
-    write_image_sampler_descriptor(vk, {
-        renderer.descriptor_set, 2, to_u32(renderer.depth_image.index)
-    }, renderer.textures[renderer.depth_image]);
+    for (auto& image : renderer.color_images) {
+        destroy_texture(vk, renderer.textures[image]);
+        renderer.textures[image] = {
+            create_image_and_view(vk, {
+                .extent{window.swapchain.extent.width, window.swapchain.extent.height, 1},
+                .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+                .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+                       | VK_IMAGE_USAGE_SAMPLED_BIT
+                       | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+            }),
+            create_sampler(vk, {
+                .type = SamplerType::Linear,
+                .edge_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+            }),
+        };
+        write_image_sampler_descriptor(vk, {
+            renderer.descriptor_set, 2, to_u32(image.index)
+        }, renderer.textures[image]);
+    }
 }
 
 void destroy_pbr_renderer(Vk& vk, PbrRenderer& renderer) {
@@ -311,17 +327,20 @@ void destroy_pbr_renderer(Vk& vk, PbrRenderer& renderer) {
     destroy_buffer(vk, renderer.vp_buffer);
     destroy_buffer(vk, renderer.light_buffer);
 
-    destroy_texture(vk, renderer.textures[renderer.buffer_image]);
     destroy_texture(vk, renderer.textures[renderer.depth_image]);
-    renderer.textures.dealloc(renderer.buffer_image);
     renderer.textures.dealloc(renderer.depth_image);
+    for (auto& image : renderer.color_images) {
+        destroy_texture(vk, renderer.textures[image]);
+        renderer.textures.dealloc(image);
+    }
 
     vkDestroyDescriptorPool(vk.device, renderer.descriptor_pool, nullptr);
     vkDestroyDescriptorSetLayout(vk.device, renderer.descriptor_layout, nullptr);
 
     destroy_graphics_pipeline(vk, renderer.skybox_pipeline);
     destroy_graphics_pipeline(vk, renderer.model_pipeline);
-    destroy_graphics_pipeline(vk, renderer.post_process_pipeline);
+    destroy_graphics_pipeline(vk, renderer.tonemap_pipeline);
+    destroy_graphics_pipeline(vk, renderer.antialias_pipeline);
 
     free_slice(renderer.textures.release());
     free_slice(renderer.models.release());
@@ -433,30 +452,43 @@ static void draw_models(VkCommandBuffer cmd, PbrRenderer& renderer, Slice<const 
     }
 }
 
-Result<void> draw_pbr(Vk& vk, Window& window, PbrRenderer& renderer, Slice<const PbrRenderer::ModelTicket> models) {
+Result<void> draw_pbr(Vk& vk, Window& window, PbrRenderer& renderer, const Scene& scene) {
+    ASSERT(scene.lights.count < PbrRenderer::MaxLights);
+    const glm::mat4 view = scene.camera->view();
+    PbrRenderer::LightUniform lights{.count = scene.lights.count};
+    for (usize i = 0; i < scene.lights.count; ++i) {
+        lights.vals[i] = {
+            .position = view * scene.lights[i].position,
+            .color = scene.lights[i].color,
+        };
+    }
+    write_buffer(vk, renderer.light_buffer, &lights, sizeof(lights));
+    write_buffer(vk, renderer.vp_buffer, &view, sizeof(view), offsetof(PbrRenderer::ViewProjectionUniform, view));
+
     const auto frame_result = [&]() -> Result<void> {
         const auto begin = begin_frame(vk, window.swapchain);
         if (begin.has_err())
             return begin.err();
         const VkCommandBuffer cmd = *begin;
 
-        Texture& buffer_image = renderer.textures[renderer.buffer_image];
+        Texture& color_image_0 = renderer.textures[renderer.color_images[0]];
+        Texture& color_image_1 = renderer.textures[renderer.color_images[1]];
         Texture& depth_image = renderer.textures[renderer.depth_image];
 
         BarrierBuilder(vk, {.image_barriers = 2})
-            .add_image_barrier(0, buffer_image.image.image.handle, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
-            .set_image_dst(0, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
-            .add_image_barrier(1, depth_image.image.image.handle, {VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1})
-            .set_image_dst(1,
+            .add_image_barrier(0, depth_image.image.image.handle, {VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1})
+            .set_image_dst(0,
                 VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
                 VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
             )
+            .add_image_barrier(1, color_image_0.image.image.handle, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
+            .set_image_dst(1, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
             .build_and_run(vk, cmd);
 
         const VkRenderingAttachmentInfo color_attachment{
             .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-            .imageView = buffer_image.image.view,
+            .imageView = color_image_0.image.view,
             .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
             .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -480,70 +512,152 @@ Result<void> draw_pbr(Vk& vk, Window& window, PbrRenderer& renderer, Slice<const
         vkCmdBeginRendering(cmd, &render_info);
 
         draw_skybox(cmd, renderer);
-        draw_models(cmd, renderer, models);
+        draw_models(cmd, renderer, scene.models);
 
         vkCmdEndRendering(cmd);
 
         BarrierBuilder(vk, {.image_barriers = 3})
-            .add_image_barrier(0, buffer_image.image.image.handle, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
-            .set_image_src(0, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, 
-                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
-            .set_image_dst(0, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, 
-                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-            .add_image_barrier(1, depth_image.image.image.handle, {VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1})
-            .set_image_src(1,
+            .add_image_barrier(0, depth_image.image.image.handle, {VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1})
+            .set_image_src(0,
                 VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
                 VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
             )
+            .set_image_dst(0, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, 
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+            .add_image_barrier(1, color_image_0.image.image.handle, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
+            .set_image_src(1, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, 
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
             .set_image_dst(1, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, 
                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-            .add_image_barrier(2, window.swapchain.current_image(), {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
+            .add_image_barrier(2, color_image_1.image.image.handle, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
             .set_image_dst(2, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
             .build_and_run(vk, cmd);
 
-        const VkRenderingAttachmentInfo post_process_attachment{
+        const VkRenderingAttachmentInfo tonemap_attachment{
             .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-            .imageView = window.swapchain.current_image_view(),
+            .imageView = color_image_1.image.view,
             .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
             .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
         };
-        const VkRenderingInfo post_processing_render_info{
+        const VkRenderingInfo tonemap_render_info{
             .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
             .renderArea{{}, window.swapchain.extent},
             .layerCount = 1,
             .colorAttachmentCount = 1,
-            .pColorAttachments = &post_process_attachment,
+            .pColorAttachments = &tonemap_attachment,
         };
-        vkCmdBeginRendering(cmd, &post_processing_render_info);
+        vkCmdBeginRendering(cmd, &tonemap_render_info);
 
         vkCmdSetCullMode(cmd, VK_CULL_MODE_NONE);
 
-        bind_shaders(cmd, renderer.post_process_pipeline);
+        bind_shaders(cmd, renderer.tonemap_pipeline);
+        ASSERT(renderer.tonemap_pipeline.layout != VK_NULL_HANDLE);
         vkCmdBindDescriptorSets(cmd,
             VK_PIPELINE_BIND_POINT_GRAPHICS,
-            renderer.post_process_pipeline.layout,
+            renderer.tonemap_pipeline.layout,
             0, 1, &renderer.descriptor_set,
             0, nullptr
         );
-        PbrRenderer::PostProcessPush post_process_push{
-            to_u32(renderer.buffer_image.index),
-            to_u32(renderer.depth_image.index),
-            {window.swapchain.extent.width, window.swapchain.extent.height},
-        };
-        vkCmdPushConstants(cmd, renderer.post_process_pipeline.layout,
+        PbrRenderer::TonemapPush tonemap_push{to_u32(renderer.color_images[0].index)};
+        vkCmdPushConstants(cmd, renderer.tonemap_pipeline.layout,
             VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT,
-            0, sizeof(PbrRenderer::PostProcessPush), &post_process_push
+            0, sizeof(PbrRenderer::TonemapPush), &tonemap_push
         );
         vkCmdDraw(cmd, 3, 1, 0, 0);
 
         vkCmdEndRendering(cmd);
 
+        BarrierBuilder(vk, {.image_barriers = 2})
+            .add_image_barrier(0, color_image_1.image.image.handle, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
+            .set_image_src(0, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, 
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+            .set_image_dst(0, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, 
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+            .add_image_barrier(1, color_image_0.image.image.handle, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
+            .set_image_dst(1, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+            .build_and_run(vk, cmd);
+
+        const VkRenderingAttachmentInfo antialias_attachment{
+            .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+            .imageView = color_image_0.image.view,
+            .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        };
+        const VkRenderingInfo antialias_render_info{
+            .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+            .renderArea{{}, window.swapchain.extent},
+            .layerCount = 1,
+            .colorAttachmentCount = 1,
+            .pColorAttachments = &antialias_attachment,
+        };
+        vkCmdBeginRendering(cmd, &antialias_render_info);
+
+        vkCmdSetCullMode(cmd, VK_CULL_MODE_NONE);
+
+        bind_shaders(cmd, renderer.antialias_pipeline);
+        ASSERT(renderer.antialias_pipeline.layout != VK_NULL_HANDLE);
+        vkCmdBindDescriptorSets(cmd,
+            VK_PIPELINE_BIND_POINT_GRAPHICS,
+            renderer.antialias_pipeline.layout,
+            0, 1, &renderer.descriptor_set,
+            0, nullptr
+        );
+        PbrRenderer::AntialiasPush antialias_push{
+            {1.0f / window.swapchain.extent.width, 1.0f / window.swapchain.extent.height},
+            to_u32(renderer.color_images[1].index),
+        };
+        vkCmdPushConstants(cmd, renderer.antialias_pipeline.layout,
+            VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT,
+            0, sizeof(PbrRenderer::AntialiasPush), &antialias_push
+        );
+        vkCmdDraw(cmd, 3, 1, 0, 0);
+
+        vkCmdEndRendering(cmd);
+
+        BarrierBuilder(vk, {.image_barriers = 2})
+            .add_image_barrier(0, color_image_0.image.image.handle, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
+            .set_image_src(0, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+            .set_image_dst(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
+            .add_image_barrier(1, window.swapchain.current_image(), {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
+            .set_image_dst(1, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+            .build_and_run(vk, cmd);
+
+        VkImageBlit2 blit{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2,
+            .srcSubresource{VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+            .srcOffsets = {
+                {0, 0, 0},
+                {to_i32(window.swapchain.extent.width), to_i32(window.swapchain.extent.height), 1}
+            },
+            .dstSubresource{VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+            .dstOffsets = {
+                {0, 0, 0},
+                {to_i32(window.swapchain.extent.width), to_i32(window.swapchain.extent.height), 1}
+            },
+        };
+        VkBlitImageInfo2 blit_info{
+            .sType = VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2,
+            .srcImage = color_image_0.image.image.handle,
+            .srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            .dstImage = window.swapchain.current_image(),
+            .dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .regionCount = 1,
+            .pRegions = &blit,
+            .filter = VK_FILTER_NEAREST,
+        };
+        vkCmdBlitImage2(cmd, &blit_info);
+
         BarrierBuilder(vk, {.image_barriers = 1})
             .add_image_barrier(0, window.swapchain.current_image(), {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
-            .set_image_dst(0, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+            .set_image_src(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
             .set_image_dst(0, VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, VK_ACCESS_2_NONE,
                 VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
             .build_and_run(vk, cmd);
@@ -578,6 +692,10 @@ Result<void> draw_pbr(Vk& vk, Window& window, PbrRenderer& renderer, Slice<const
     return ok();
 }
 
+PbrRenderer::Light make_light(const glm::vec3 position, const glm::vec3 color, const f32 intensity) {
+    return {glm::vec4{position, 1.0f}, glm::vec4{color * intensity, 1.0f}};
+}
+
 void update_projection(Vk& vk, const PbrRenderer& renderer, const glm::mat4& projection) {
     write_buffer(
         vk,
@@ -586,30 +704,6 @@ void update_projection(Vk& vk, const PbrRenderer& renderer, const glm::mat4& pro
         sizeof(projection),
         offsetof(PbrRenderer::ViewProjectionUniform, projection)
     );
-}
-
-PbrRenderer::Light make_light(glm::vec3 position, glm::vec3 color, f32 intensity) {
-    color *= intensity;
-    return {
-        .position = glm::vec4{position, 1.0f},
-        .color = glm::vec4{color, 1.0f},
-    };
-}
-
-void update_camera_and_lights(Vk& vk, PbrRenderer& renderer, const PbrLightData& config) {
-    const glm::mat4 view = config.camera.view();
-
-    ASSERT(config.lights.count < PbrRenderer::MaxLights);
-    PbrRenderer::LightUniform lights{.count = config.lights.count};
-    for (usize i = 0; i < config.lights.count; ++i) {
-        lights.vals[i] = {
-            .position = view * config.lights[i].position,
-            .color = config.lights[i].color,
-        };
-    }
-
-    write_buffer(vk, renderer.light_buffer, &lights, sizeof(lights));
-    write_buffer(vk, renderer.vp_buffer, &view, sizeof(view), offsetof(PbrRenderer::ViewProjectionUniform, view));
 }
 
 PbrTextureHandle load_texture(Vk& vk, PbrRenderer& renderer, const ImageData& data, const VkFormat format) {

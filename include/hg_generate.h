@@ -62,7 +62,7 @@ public:
     struct Config {
         usize max_meshes = 0;
         usize max_images = 0;
-        usize internal_stack_size = 1024 * 1024;
+        usize internal_stack_size = 4 * 1024 * 1024;
     };
     Generator(const Config& config)
         : m_stack{malloc_slice<byte>(config.internal_stack_size)}

@@ -120,7 +120,7 @@ SDL_AppResult SDL_AppInit(void**, int, char**) {
     }();
 
     sphere = [&] {
-        auto sphere_mesh = generator.generate_sphere(generator.alloc_mesh(), {64, 32});
+        auto sphere_mesh = generator.generate_sphere(generator.alloc_mesh(), {128, 64});
         defer(generator.dealloc_mesh(sphere_mesh));
 
         return load_model(vk, renderer, {{generator.get(sphere_mesh), 0.2f, 1.0f}, perlin_normals, gray_texture});
@@ -213,7 +213,7 @@ SDL_AppResult SDL_AppIterate(void*) {
     time_count += delta;
     ++frame_count;
 
-    constexpr f32 speed = 2.0f;
+    constexpr f32 speed = 1.0f;
     if (input_state.up)
         camera.move({0.0f, -1.0f, 0.0f}, speed * delta32);
     if (input_state.down)
@@ -230,8 +230,6 @@ SDL_AppResult SDL_AppIterate(void*) {
     std::array lights{
         make_light({-2.0f, -3.0f, -2.0f}, {1.0f, 1.0f, 1.0f}, 300.0f),
     };
-    update_camera_and_lights(vk, renderer, {camera, lights});
-
     std::array models{
         PbrRenderer::ModelTicket{grass, {.position{0.0f, 0.0f, 0.0f}}},
         PbrRenderer::ModelTicket{sphere, {.position{-0.5f, -0.5f, 0.0f}, .scale{0.25f, 0.25f, 0.25f}}},
@@ -243,7 +241,7 @@ SDL_AppResult SDL_AppIterate(void*) {
         PbrRenderer::ModelTicket{grass, {.position{1.0f, -0.5f, sqrt3}}},
         PbrRenderer::ModelTicket{tower, {.position{1.0f, -0.5f, sqrt3}}},
     };
-    auto draw_res = draw_pbr(vk, window, renderer, models);
+    auto draw_res = draw_pbr(vk, window, renderer, {&camera, lights, models});
     if (draw_res.has_err())
         perr(draw_res);
 

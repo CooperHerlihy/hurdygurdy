@@ -10,6 +10,7 @@ struct Window {
     VkSurfaceKHR surface{};
     Swapchain swapchain{};
 };
+
 [[nodiscard]] Result<Window> create_window(Vk& vk, glm::ivec2 size);
 [[nodiscard]] Result<Window> create_fullscreen_window(Vk& vk);
 [[nodiscard]] Result<void> resize_window(Vk& vk, Window& window);
@@ -63,15 +64,19 @@ struct PbrRenderer {
         Transform3Df transform{};
     };
 
-    struct PostProcessPush {
-        u32 input = UINT32_MAX;
-        u32 depth = UINT32_MAX;
-        glm::uvec2 input_size{};
+    struct AntialiasPush {
+        glm::vec2 pixel_size{};
+        u32 input_index = UINT32_MAX;
+    };
+
+    struct TonemapPush {
+        u32 input_index = UINT32_MAX;
     };
 
     GraphicsPipeline skybox_pipeline{};
     GraphicsPipeline model_pipeline{};
-    GraphicsPipeline post_process_pipeline{};
+    GraphicsPipeline tonemap_pipeline{};
+    GraphicsPipeline antialias_pipeline{};
 
     VkDescriptorPool descriptor_pool{};
     VkDescriptorSetLayout descriptor_layout{};
@@ -80,8 +85,8 @@ struct PbrRenderer {
     Pool<Texture> textures{};
     Pool<Model> models{};
 
-    Pool<Texture>::Handle buffer_image{};
     Pool<Texture>::Handle depth_image{};
+    std::array<Pool<Texture>::Handle, 2> color_images{};
 
     GpuBuffer vp_buffer{};
     GpuBuffer light_buffer{};
@@ -100,16 +105,16 @@ PbrRenderer create_pbr_renderer(Vk& vk, const PbrRendererConfig& config);
 void resize_pbr_renderer(Vk& vk, PbrRenderer& renderer, const Window& window);
 void destroy_pbr_renderer(Vk& vk, PbrRenderer& renderer);
 
-Result<void> draw_pbr(Vk& vk, Window& window, PbrRenderer& renderer, Slice<const PbrRenderer::ModelTicket> models);
-
-void update_projection(Vk& vk, const PbrRenderer& renderer, const glm::mat4& projection);
+struct Scene {
+    const Cameraf* camera;
+    Slice<const PbrRenderer::Light> lights;
+    Slice<const PbrRenderer::ModelTicket> models;
+};
+Result<void> draw_pbr(Vk& vk, Window& window, PbrRenderer& renderer, const Scene& scene);
 
 PbrRenderer::Light make_light(glm::vec3 position, glm::vec3 color, f32 intensity);
-struct PbrLightData {
-    const Cameraf& camera;
-    Slice<const PbrRenderer::Light> lights;
-};
-void update_camera_and_lights(Vk& vk, PbrRenderer& renderer, const PbrLightData& config);
+
+void update_projection(Vk& vk, const PbrRenderer& renderer, const glm::mat4& projection);
 
 PbrTextureHandle load_texture(Vk& vk, PbrRenderer& renderer, const ImageData& data, const VkFormat format);
 void unload_texture(Vk& vk, PbrRenderer& renderer, const PbrTextureHandle texture);
