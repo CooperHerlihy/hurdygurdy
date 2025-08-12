@@ -276,12 +276,17 @@ template <typename T> struct Slice {
     usize count = 0;
 
     constexpr Slice() = default;
-    template <typename U> constexpr Slice(U* data, usize count) : data{static_cast<T*>(data)}, count{count} {}
-    template <typename U> constexpr Slice(const Slice<U>& other) : data{static_cast<T*>(other.data)}, count{other.count} {}
+    template <typename U> constexpr Slice(U* data, usize count)
+        : data{static_cast<T*>(data)}, count{count} {}
+    template <typename U> constexpr Slice(const Slice<U>& other)
+        : data{static_cast<T*>(other.data)}, count{other.count} {}
 
-    template <typename U> constexpr Slice(const std::span<U>& other) : data{static_cast<T*>(other.data())}, count{other.size()} {}
-    template <typename U, usize N> constexpr Slice(std::array<U, N>& other) : data{static_cast<T*>(other.data())}, count{other.size()} {}
-    template <typename U, usize N> constexpr Slice(const std::array<U, N>& other) : data{static_cast<T*>(other.data())}, count{other.size()} {}
+    template <typename U> constexpr Slice(const std::span<U>& other)
+        : data{static_cast<T*>(other.data())}, count{other.size()} {}
+    template <typename U, usize N> constexpr Slice(std::array<U, N>& other)
+        : data{static_cast<T*>(other.data())}, count{other.size()} {}
+    template <typename U, usize N> constexpr Slice(const std::array<U, N>& other)
+        : data{static_cast<T*>(other.data())}, count{other.size()} {}
 
     template <typename U> constexpr operator std::span<U>() const { return {static_cast<U*>(data), count}; }
 
@@ -289,6 +294,26 @@ template <typename T> struct Slice {
         ASSERT(index < count);
         return data[index];
     }
+};
+
+template <> struct Slice<void> {
+    void* data = nullptr;
+    usize count = 0;
+
+    constexpr Slice() = default;
+    template <typename U> constexpr Slice(U* data, usize count)
+        : data{static_cast<void*>(data)}, count{count} {}
+    template <typename U> constexpr Slice(const Slice<U>& other)
+        : data{static_cast<void*>(other.data)}, count{other.count} {}
+
+    template <typename U> constexpr Slice(const std::span<U>& other)
+        : data{static_cast<void*>(other.data())}, count{other.size()} {}
+    template <typename U, usize N> constexpr Slice(std::array<U, N>& other)
+        : data{static_cast<void*>(other.data())}, count{other.size()} {}
+    template <typename U, usize N> constexpr Slice(const std::array<U, N>& other)
+        : data{static_cast<void*>(other.data())}, count{other.size()} {}
+
+    template <typename U> constexpr operator std::span<U>() const { return {static_cast<U*>(data), count}; }
 };
 
 template <typename T> T* begin(const Slice<T> slice) { return slice.data; }
