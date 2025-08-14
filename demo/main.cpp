@@ -90,7 +90,7 @@ SDL_AppResult SDL_AppInit(void**, int, char**) {
         DEFER(destroy_image(assets, perlin_noise));
 
         auto perlin_normal_image = generate_image<glm::vec4>(assets, {512, 512}, [&](const auto pos) {
-            return get_normal_from_heightmap(pos, assets.images[perlin_noise.handle]);
+            return get_normal_from_heightmap(pos, get_image(assets, perlin_noise));
         });
         DEFER(destroy_image(assets, perlin_normal_image));
 

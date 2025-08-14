@@ -13,7 +13,7 @@ struct Window {
 };
 
 struct WindowConfig {
-    bool windowed = true;
+    bool windowed = false;
     glm::ivec2 size{};
 };
 [[nodiscard]] Result<Window> create_window(Vk& vk, const WindowConfig& config);

@@ -113,42 +113,41 @@ static void destroy_pbr_renderer_images(PbrRenderer& renderer) {
 static void create_pbr_renderer_images(PbrRenderer& renderer, VkExtent2D extent) {
     Vk& vk = *renderer.vk;
 
-    renderer.textures[renderer.depth_image] = {
-        create_gpu_image(vk, {
-            .extent{extent.width, extent.height, 1},
-            .format = VK_FORMAT_D32_SFLOAT,
-            .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-        }),
-        create_gpu_image_view(vk, {
-            .image = renderer.textures[renderer.depth_image].image.handle,
-            .format = VK_FORMAT_D32_SFLOAT,
-            .aspect_flags = VK_IMAGE_ASPECT_DEPTH_BIT,
-        }),
-        create_sampler(vk, {
-            .type = SamplerType::Linear,
-            .edge_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-        }),
-    };
+    GpuImage depth_image = create_gpu_image(vk, {
+        .extent{extent.width, extent.height, 1},
+        .format = VK_FORMAT_D32_SFLOAT,
+        .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+    });
+    VkImageView depth_image_view = create_gpu_image_view(vk, {
+        .image = depth_image.handle,
+        .format = VK_FORMAT_D32_SFLOAT,
+        .aspect_flags = VK_IMAGE_ASPECT_DEPTH_BIT,
+    });
+    VkSampler depth_sampler = create_sampler(vk, {
+        .type = SamplerType::Linear,
+        .edge_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+    });
+    renderer.textures[renderer.depth_image] = {depth_image, depth_image_view, depth_sampler};
 
     for (auto& image : renderer.color_images) {
-        renderer.textures[image] = {
-            create_gpu_image(vk, {
-                .extent{extent.width, extent.height, 1},
-                .format = VK_FORMAT_R16G16B16A16_SFLOAT,
-                .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
-                       | VK_IMAGE_USAGE_SAMPLED_BIT
-                       | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-            }),
-            create_gpu_image_view(vk, {
-                .image = renderer.textures[image].image.handle,
-                .format = VK_FORMAT_R16G16B16A16_SFLOAT,
-                .aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT,
-            }),
-            create_sampler(vk, {
-                .type = SamplerType::Linear,
-                .edge_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-            }),
-        };
+        GpuImage color_image = create_gpu_image(vk, {
+            .extent{extent.width, extent.height, 1},
+            .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+            .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+                   | VK_IMAGE_USAGE_SAMPLED_BIT
+                   | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+        });
+        VkImageView color_image_view = create_gpu_image_view(vk, {
+            .image = color_image.handle,
+            .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+            .aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT,
+        });
+        VkSampler color_sampler = create_sampler(vk, {
+            .type = SamplerType::Linear,
+            .edge_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        });
+        renderer.textures[image] = {color_image, color_image_view, color_sampler};
+
         write_image_sampler_descriptor(vk, {
             renderer.descriptor_set, 2, to_u32(image.index)
         }, renderer.textures[image].view, renderer.textures[image].sampler);
@@ -578,7 +577,7 @@ static void draw_effect(VkCommandBuffer cmd, PbrRenderer& renderer, const Effect
     vkCmdEndRendering(cmd);
 }
 
-Result<void> draw_pbr(Window& window, PbrRenderer& renderer, const Scene& scene) {
+Result<void> draw_pbr(PbrRenderer& renderer, Window& window, const Scene& scene) {
     ASSERT(scene.lights.count < PbrRenderer::MaxLights);
 
     Vk& vk = *renderer.vk;
@@ -703,7 +702,7 @@ PbrRenderer::Light make_light(const glm::vec3 position, const glm::vec3 color, c
     return {glm::vec4{position, 1.0f}, glm::vec4{color * intensity, 1.0f}};
 }
 
-void update_projection(const PbrRenderer& renderer, const glm::mat4& projection) {
+void update_projection(PbrRenderer& renderer, const glm::mat4& projection) {
     write_buffer(
         *renderer.vk,
         renderer.vp_buffer,
@@ -719,31 +718,31 @@ PbrTextureHandle create_texture(PbrRenderer& renderer, AssetManager& assets, con
     Vk& vk = *renderer.vk;
     ImageData& data = assets[config.data];
 
-    PbrTextureHandle texture = renderer.textures.alloc();
-    renderer.textures[texture] = {
-        create_gpu_image(vk, {
-            .extent = {to_u32(data.size.x), to_u32(data.size.y), 1},
-            .format = config.format,
-            .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-        }),
-        create_gpu_image_view(vk, {
-            .image = renderer.textures[texture].image.handle,
-            .format = config.format,
-        }),
-        create_sampler(vk, {
-            .type = SamplerType::Linear,
-            .edge_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-        }),
-    };
-    write_gpu_image(vk, renderer.textures[texture].image, {
+    GpuImage image = create_gpu_image(vk, {
+        .extent = {to_u32(data.size.x), to_u32(data.size.y), 1},
+        .format = config.format,
+        .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+    });
+    VkImageView image_view = create_gpu_image_view(vk, {
+        .image = image.handle,
+        .format = config.format,
+    });
+    VkSampler sampler = create_sampler(vk, {
+        .type = SamplerType::Linear,
+        .edge_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+    });
+    write_gpu_image(vk, image, {
         {data.pixels, data.size.x * data.size.y * data.alignment},
         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
     });
+
+    PbrTextureHandle texture = renderer.textures.alloc();
+    renderer.textures[texture] = {image, image_view, sampler};
     write_image_sampler_descriptor(
         vk,
         {renderer.descriptor_set, 2, to_u32(texture.index)},
-        renderer.textures[texture].view,
-        renderer.textures[texture].sampler
+        image_view,
+        sampler
     );
     return texture;
 }
@@ -760,29 +759,29 @@ void load_skybox(PbrRenderer& renderer, AssetManager& assets, const ImageHandle<
     Vk& vk = *renderer.vk;
     ImageData& data = assets[cubemap];
 
-    renderer.skybox.cubemap = renderer.textures.alloc();
-    renderer.textures[renderer.skybox.cubemap] = {
-        create_gpu_cubemap(vk, GpuCubemapConfig{
-            .face_extent = {to_u32(data.size.x), to_u32(data.size.y), 1},
-            .format = VK_FORMAT_R8G8B8A8_SRGB,
-            .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-        }),
-        create_gpu_cubemap_view(vk, {
-            .image = renderer.textures[renderer.skybox.cubemap].image.handle,
-            .format = VK_FORMAT_R8G8B8A8_SRGB,
-        }),
-        create_sampler(vk, {
-            .type = SamplerType::Linear,
-            .edge_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-        }),
-    };
-    write_gpu_cubemap(vk, renderer.textures[renderer.skybox.cubemap].image, {
+    GpuImage image = create_gpu_cubemap(vk, {
+        .face_extent = {to_u32(data.size.x) / 4, to_u32(data.size.y) / 3, 1},
+        .format = VK_FORMAT_R8G8B8A8_SRGB,
+        .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+    });
+    VkImageView view = create_gpu_cubemap_view(vk, {
+        .image = image.handle,
+        .format = VK_FORMAT_R8G8B8A8_SRGB,
+    });
+    VkSampler sampler = create_sampler(vk, {
+        .type = SamplerType::Linear,
+        .edge_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+    });
+    write_gpu_cubemap(vk, image, {
         {data.pixels, data.size.x * data.size.y * data.alignment},
         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
     });
+
+    renderer.skybox.cubemap = renderer.textures.alloc();
+    renderer.textures[renderer.skybox.cubemap] = {image, view, sampler};
     write_image_sampler_descriptor(vk, {
         renderer.descriptor_set, 2, to_u32(renderer.skybox.cubemap.index)
-    }, renderer.textures[renderer.skybox.cubemap].view, renderer.textures[renderer.skybox.cubemap].sampler);
+    }, view, sampler);
 }
 
 void unload_skybox(PbrRenderer& renderer) {

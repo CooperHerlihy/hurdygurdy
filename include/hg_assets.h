@@ -50,9 +50,14 @@ struct AssetManager {
     Pool<ImageData> images{};
     Arena stack{};
 
-    MeshData& operator[](const MeshHandle mesh) { return meshes[mesh]; }
-    ImageData& operator[](const ImageHandle<void> image) { return images[image.handle]; }
+    MeshData& operator[](const MeshHandle mesh) const { return meshes[mesh]; }
+    ImageData& operator[](const ImageHandle<void> image) const { return images[image.handle]; }
 };
+
+template <typename T> Image<T> get_image(AssetManager& assets, const ImageHandle<T> image) {
+    ASSERT(assets[image].alignment == sizeof(T));
+    return {static_cast<T*>(assets[image].pixels), assets[image].size};
+}
 
 struct AssetMangagerConfig {
     usize max_meshes = 64;
@@ -93,8 +98,8 @@ template <typename T> void destroy_image(AssetManager& assets, const ImageHandle
 [[nodiscard]] Result<ImageHandle<u32>> load_image(AssetManager& assets, std::filesystem::path path);
 
 template <typename T, typename F> ImageHandle<T> generate_image(AssetManager& assets, glm::vec<2, usize> size, F pred) {
-    ImageHandle<T> image_handle = create_image(assets, size, sizeof(T));
-    ImageData& image = assets.images[image_handle];
+    ImageHandle<T> image_handle = create_image<T>(assets, size);
+    ImageData& image = assets[image_handle];
     T* pixel = reinterpret_cast<T*>(image.pixels);
     for (usize y = 0; y < image.size.y; ++y) {
         for (usize x = 0; x < image.size.x; ++x) {

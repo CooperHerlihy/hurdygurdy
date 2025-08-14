@@ -37,28 +37,33 @@ template <typename Func> DeferInternal<Func> defer_function(Func f) { return Def
 #define DEFER_INTERMEDIATE_3(x) DEFER_INTERMEDIATE_2(x, __COUNTER__)
 #define DEFER(code) auto DEFER_INTERMEDIATE_3(_defer_) = defer_function([&] { code; })
 
-enum class LogLevel { Info, Warning, Error };
+enum LogLevel {
+    LogInfo,
+    LogWarning,
+    LogError
+};
 
-inline std::string_view to_string(LogLevel level) {
+inline const char* to_string(LogLevel level) {
     switch (level) {
-        case LogLevel::Info: return "Info";
-        case LogLevel::Warning: return "Warning";
-        case LogLevel::Error: return "Error";
+        case LogInfo: return "Info";
+        case LogWarning: return "Warning";
+        case LogError: return "Error";
         default: return "Invalid log level";
     }
 }
 
-#define LOG(level, message) {                                                                                       \
+#define LOG(level, message) {                                                                      \
     std::println("{}: {} : {} {}(): {}", to_string(level), __FILE__, __LINE__, __func__, message); \
 }
-#define LOG_INFO(message) { LOG(LogLevel::Info, message) }
-#define LOG_WARN(message) { LOG(LogLevel::Warning, message) }
-#define LOG_ERROR(message) { LOG(LogLevel::Error, message) }
+    // printf("%s: %s : %d %s(): %s", to_string(level), __FILE__, __LINE__, __func__, message);
+#define LOG_INFO(message) { LOG(LogInfo, message) }
+#define LOG_WARN(message) { LOG(LogWarning, message) }
+#define LOG_ERROR(message) { LOG(LogError, message) }
 
 #define LOGF(level, message, ...) { LOG(level, std::format(message, __VA_ARGS__)) }
-#define LOGF_INFO(message, ...) { LOGF(LogLevel::Info, message, __VA_ARGS__) }
-#define LOGF_WARN(message, ...) { LOGF(LogLevel::Warning, message, __VA_ARGS__) }
-#define LOGF_ERROR(message, ...) { LOGF(LogLevel::Error, message, __VA_ARGS__) }
+#define LOGF_INFO(message, ...) { LOGF(LogInfo, message, __VA_ARGS__) }
+#define LOGF_WARN(message, ...) { LOGF(LogWarning, message, __VA_ARGS__) }
+#define LOGF_ERROR(message, ...) { LOGF(LogError, message, __VA_ARGS__) }
 
 #define ERROR(message, ...) { LOG_ERROR(message); std::terminate(); }
 #define ERRORF(message, ...) { LOGF_ERROR(message, __VA_ARGS__); std::terminate(); }
@@ -496,7 +501,7 @@ public:
         return *this;
     }
 
-    [[nodiscard]] T& operator[](Handle handle) {
+    [[nodiscard]] T& operator[](Handle handle) const {
         ASSERT(handle.index < m_blocks.count);
         return m_blocks[handle.index].data;
     }
@@ -539,7 +544,8 @@ private:
 };
 
 template <typename T> [[nodiscard]] Pool<T> malloc_pool(const usize count) {
-    return {malloc_slice<T>(count)};
+    using Block = Pool<T>::Block;
+    return Pool<T>{malloc_slice<Block>(count)};
 }
 template <typename T> [[nodiscard]] Pool<T> realloc_pool(Pool<T>& pool, const usize new_count) {
     return {realloc_slice(pool.release(), new_count)};
