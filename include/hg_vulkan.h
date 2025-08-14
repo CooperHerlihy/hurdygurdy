@@ -1,7 +1,6 @@
 #pragma once
 
 #include "hg_utils.h"
-#include "hg_load.h"
 
 namespace hg {
 
@@ -45,7 +44,7 @@ struct GpuImage {
     u32 mip_levels = 0;
     VkImageLayout layout{};
 };
-void destroy_image(Vk& vk, const GpuImage& image);
+void destroy_gpu_image(Vk& vk, const GpuImage& image);
 
 struct GpuImageConfig {
     VkExtent3D extent{};
@@ -53,58 +52,36 @@ struct GpuImageConfig {
     VkImageUsageFlags usage{};
     u32 mip_levels = 1;
 };
-[[nodiscard]] GpuImage create_image(Vk& vk, const GpuImageConfig& config);
+[[nodiscard]] GpuImage create_gpu_image(Vk& vk, const GpuImageConfig& config);
 
 struct GpuCubemapConfig {
     VkExtent3D face_extent{};
     VkFormat format{VK_FORMAT_UNDEFINED};
     VkImageUsageFlags usage{};
 };
-[[nodiscard]] GpuImage create_cubemap(Vk& vk, const GpuImageConfig& config);
+[[nodiscard]] GpuImage create_gpu_cubemap(Vk& vk, const GpuCubemapConfig& config);
 
 struct GpuImageWriteConfig {
+    Slice<const void> src;
     VkImageLayout final_layout{VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
     VkImageAspectFlags aspect_flags{VK_IMAGE_ASPECT_COLOR_BIT};
 };
-void write_image(Vk& vk, GpuImage& dst, const ImageData& src, const GpuImageWriteConfig& config);
-void write_cubemap(Vk& vk, GpuImage& dst, const ImageData& src, const GpuImageWriteConfig& config);
+void write_gpu_image(Vk& vk, GpuImage& dst, const GpuImageWriteConfig& config);
+void write_gpu_cubemap(Vk& vk, GpuImage& dst, const GpuImageWriteConfig& config);
 
 inline u32 get_mip_count(const VkExtent3D extent) {
     ASSERT(extent.width > 0 || extent.height > 0 || extent.depth > 0);
     return static_cast<u32>(std::floor(std::log2(std::max(std::max(extent.width, extent.height), extent.depth)))) + 1;
 }
-void generate_mipmaps(Vk& vk, GpuImage& image, VkImageLayout final_layout);
+void generate_gpu_image_mipmaps(Vk& vk, GpuImage& image, VkImageLayout final_layout);
 
 struct GpuImageViewConfig {
     VkImage image{};
     VkFormat format{};
     VkImageAspectFlags aspect_flags{VK_IMAGE_ASPECT_COLOR_BIT};
 };
-[[nodiscard]] VkImageView create_image_view(Vk& vk, const GpuImageViewConfig& config);
-[[nodiscard]] VkImageView create_cubemap_view(Vk& vk, const GpuImageViewConfig& config);
-
-struct GpuImageAndView {
-    GpuImage image;
-    VkImageView view;
-};
-void destroy_image_and_view(Vk& vk, const GpuImageAndView& image_and_view);
-
-struct GpuImageAndViewConfig {
-    VkExtent3D extent{};
-    VkFormat format{VK_FORMAT_UNDEFINED};
-    VkImageUsageFlags usage{};
-    VkImageLayout layout{VK_IMAGE_LAYOUT_UNDEFINED};
-    VkImageAspectFlags aspect_flags{VK_IMAGE_ASPECT_COLOR_BIT};
-    u32 mip_levels = 1;
-};
-[[nodiscard]] GpuImageAndView create_image_and_view(Vk& vk, const GpuImageAndViewConfig& config);
-
-struct GpuCubemapAndViewConfig {
-    ImageData data{};
-    VkFormat format{VK_FORMAT_R8G8B8A8_SRGB};
-    VkImageAspectFlags aspect_flags{VK_IMAGE_ASPECT_COLOR_BIT};
-};
-[[nodiscard]] GpuImageAndView create_cubemap_and_view(Vk& vk, const GpuCubemapAndViewConfig& config);
+[[nodiscard]] VkImageView create_gpu_image_view(Vk& vk, const GpuImageViewConfig& config);
+[[nodiscard]] VkImageView create_gpu_cubemap_view(Vk& vk, const GpuImageViewConfig& config);
 
 enum class SamplerType {
     Nearest = VK_FILTER_NEAREST,
@@ -117,22 +94,6 @@ struct SamplerConfig {
     u32 mip_levels = 1;
 };
 [[nodiscard]] VkSampler create_sampler(Vk& vk, const SamplerConfig& config);
-
-struct Texture {
-    GpuImageAndView image;
-    VkSampler sampler;
-};
-void destroy_texture(Vk& vk, const Texture& texture);
-
-struct TextureConfig {
-    VkFormat format{VK_FORMAT_UNDEFINED};
-    VkImageAspectFlags aspect_flags{VK_IMAGE_ASPECT_COLOR_BIT};
-    bool create_mips = false;
-    SamplerType sampler_type = SamplerType::Nearest;
-    VkSamplerAddressMode edge_mode{VK_SAMPLER_ADDRESS_MODE_REPEAT};
-};
-[[nodiscard]] Texture create_texture(Vk& vk, const ImageData& data, const TextureConfig& config);
-[[nodiscard]] Texture create_texture_cubemap(Vk& vk, const ImageData& data, const TextureConfig& config);
 
 struct DescriptorSetLayoutConfig {
     Slice<const VkDescriptorSetLayoutBinding> bindings;
@@ -169,7 +130,7 @@ struct DescriptorSetBinding {
     u32 binding_index;
     u32 array_index = 0;
 };
-void write_image_sampler_descriptor(Vk& vk, const DescriptorSetBinding& binding, const Texture& texture);
+void write_image_sampler_descriptor(Vk& vk, const DescriptorSetBinding& binding, VkImageView image, VkSampler sampler);
 void write_uniform_buffer_descriptor(Vk& vk, const DescriptorSetBinding& binding, const GpuBufferView& buffer);
 
 struct PipelineLayoutConfig {

@@ -75,7 +75,7 @@ static Result<Slice<const char*>> get_instance_extensions(Vk& vk) {
     }
 
     auto extensions = vk.stack.alloc<VkExtensionProperties>(extension_count);
-    defer(vk.stack.dealloc(extensions));
+    DEFER(vk.stack.dealloc(extensions));
 
     VkResult ext_res = vkEnumerateInstanceExtensionProperties(nullptr, &extension_count, extensions.data);
     switch (ext_res) {
@@ -113,7 +113,7 @@ static Result<VkInstance> create_instance(Vk& vk) {
     };
 
     const auto extensions = get_instance_extensions(vk);
-    defer(vk.stack.dealloc(*extensions));
+    DEFER(vk.stack.dealloc(*extensions));
     if (extensions.has_err())
         return extensions.err();
 
@@ -184,7 +184,7 @@ static Result<u32> find_queue_family(Vk& vk, const VkPhysicalDevice gpu) {
         return Err::VkQueueFamilyUnavailable;
 
     auto queue_families = vk.stack.alloc<VkQueueFamilyProperties>(queue_family_count);
-    defer(vk.stack.dealloc(queue_families));
+    DEFER(vk.stack.dealloc(queue_families));
     vkGetPhysicalDeviceQueueFamilyProperties(gpu, &queue_family_count, queue_families.data);
 
     const auto queue_family = std::ranges::find_if(queue_families, [](const VkQueueFamilyProperties family) {
@@ -236,7 +236,7 @@ static Result<VkPhysicalDevice> find_gpu(Vk& vk) {
     auto gpus = get_gpus(vk);
     if (gpus.count == 0)
         return Err::NoCompatibleVkPhysicalDevice;
-    defer(vk.stack.dealloc(gpus));
+    DEFER(vk.stack.dealloc(gpus));
 
     for (const auto gpu : gpus) {
         VkPhysicalDeviceFeatures features{};
@@ -262,7 +262,7 @@ static Result<VkPhysicalDevice> find_gpu(Vk& vk) {
         }
 
         auto extensions = vk.stack.alloc<VkExtensionProperties>(extension_count);
-        defer(vk.stack.dealloc(extensions));
+        DEFER(vk.stack.dealloc(extensions));
         const VkResult ext_res = vkEnumerateDeviceExtensionProperties(gpu, nullptr, &extension_count, extensions.data);
         switch (ext_res) {
             case VK_SUCCESS: break;

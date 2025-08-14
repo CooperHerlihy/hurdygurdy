@@ -1,50 +1,68 @@
 #include "hg_renderer.h"
-#include "hg_vulkan.h"
 
 namespace hg {
 
-Result<Window> create_window(Vk& vk, glm::ivec2 size) {
-    ASSERT(size.x > 0 && size.y > 0);
+struct ViewProjectionUniform {
+    glm::mat4 projection{1.0f};
+    glm::mat4 view{1.0f};
+};
+
+struct LightUniform {
+    alignas(16) usize count = 0;
+    alignas(16) PbrRenderer::Light vals[PbrRenderer::MaxLights]{};
+};
+
+struct SkyboxPush {
+    u32 cubemap = UINT32_MAX;
+};
+
+struct ModelPush {
+    glm::mat4 model{1.0f};
+    u32 normal_map_index = UINT32_MAX;
+    u32 texture_index = UINT32_MAX;
+    float roughness = 0.0f;
+    float metalness = 0.0f;
+};
+
+struct AntialiasPush {
+    glm::vec2 pixel_size{};
+    u32 input_index = UINT32_MAX;
+};
+
+struct TonemapPush {
+    u32 input_index = UINT32_MAX;
+};
+
+Result<Window> create_window(Vk& vk, const WindowConfig& config) {
+    if (config.windowed)
+        ASSERT(config.size.x > 0 && config.size.y > 0);
 
     auto window = ok<Window>();
 
-    window->window = SDL_CreateWindow(
-        "Hurdy Gurdy",
-        size.x, size.y,
-        SDL_WINDOW_RESIZABLE | SDL_WINDOW_VULKAN
-    );
-    if (window->window == nullptr)
-        ERRORF("Could not create window: {}", SDL_GetError());
+    if (config.windowed) {
+        window->window = SDL_CreateWindow(
+            "Hurdy Gurdy",
+            config.size.x, config.size.y,
+            SDL_WINDOW_RESIZABLE | SDL_WINDOW_VULKAN
+        );
+    } else {
+        SDL_DisplayID display = SDL_GetPrimaryDisplay();
+        if (display == 0)
+            ERRORF("Could not get primary display: {}", SDL_GetError());
 
-    window->surface = create_surface(vk, window->window);
+        int count = 0;
+        SDL_DisplayMode** mode = SDL_GetFullscreenDisplayModes(display, &count);
+        if (mode == nullptr)
+            ERRORF("Could not get display modes: {}", SDL_GetError());
+        if (count == 0)
+            ERROR("No fullscreen modes available");
 
-    auto swapchain = create_swapchain(vk, window->surface);
-    if (swapchain.has_err())
-        ERRORF("Could not create swapchain: {}", to_string(swapchain.err()));
-    window->swapchain = *swapchain;
-
-    return window;
-}
-
-Result<Window> create_fullscreen_window(Vk& vk) {
-    auto window = ok<Window>();
-
-    SDL_DisplayID display = SDL_GetPrimaryDisplay();
-    if (display == 0)
-        ERRORF("Could not get primary display: {}", SDL_GetError());
-
-    int count = 0;
-    SDL_DisplayMode** mode = SDL_GetFullscreenDisplayModes(display, &count);
-    if (mode == nullptr)
-        ERRORF("Could not get display modes: {}", SDL_GetError());
-    if (count == 0)
-        ERROR("No fullscreen modes available");
-
-    window->window = SDL_CreateWindow(
-        "Hurdy Gurdy",
-        mode[0]->w, mode[0]->h,
-        SDL_WINDOW_FULLSCREEN | SDL_WINDOW_VULKAN
-    );
+        window->window = SDL_CreateWindow(
+            "Hurdy Gurdy",
+            mode[0]->w, mode[0]->h,
+            SDL_WINDOW_FULLSCREEN | SDL_WINDOW_VULKAN
+        );
+    }
     if (window->window == nullptr)
         ERRORF("Could not create window: {}", SDL_GetError());
 
@@ -79,16 +97,67 @@ void destroy_window(Vk& vk, Window& window) {
     SDL_DestroyWindow(window.window);
 }
 
-glm::ivec2 get_window_size(Window window) {
-    ASSERT(window.window != nullptr);
+static void destroy_pbr_renderer_images(PbrRenderer& renderer) {
+    Vk& vk = *renderer.vk;
 
-    int width = 0, height = 0;
-    SDL_GetWindowSize(window.window, &width, &height);
-    return {width, height};
+    for (auto& image : renderer.color_images) {
+        destroy_gpu_image(vk, renderer.textures[image].image);
+        vkDestroyImageView(vk.device, renderer.textures[image].view, nullptr);
+        vkDestroySampler(vk.device, renderer.textures[image].sampler, nullptr);
+    }
+    destroy_gpu_image(vk, renderer.textures[renderer.depth_image].image);
+    vkDestroyImageView(vk.device, renderer.textures[renderer.depth_image].view, nullptr);
+    vkDestroySampler(vk.device, renderer.textures[renderer.depth_image].sampler, nullptr);
+}
+
+static void create_pbr_renderer_images(PbrRenderer& renderer, VkExtent2D extent) {
+    Vk& vk = *renderer.vk;
+
+    renderer.textures[renderer.depth_image] = {
+        create_gpu_image(vk, {
+            .extent{extent.width, extent.height, 1},
+            .format = VK_FORMAT_D32_SFLOAT,
+            .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        }),
+        create_gpu_image_view(vk, {
+            .image = renderer.textures[renderer.depth_image].image.handle,
+            .format = VK_FORMAT_D32_SFLOAT,
+            .aspect_flags = VK_IMAGE_ASPECT_DEPTH_BIT,
+        }),
+        create_sampler(vk, {
+            .type = SamplerType::Linear,
+            .edge_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        }),
+    };
+
+    for (auto& image : renderer.color_images) {
+        renderer.textures[image] = {
+            create_gpu_image(vk, {
+                .extent{extent.width, extent.height, 1},
+                .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+                .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+                       | VK_IMAGE_USAGE_SAMPLED_BIT
+                       | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+            }),
+            create_gpu_image_view(vk, {
+                .image = renderer.textures[image].image.handle,
+                .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+                .aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT,
+            }),
+            create_sampler(vk, {
+                .type = SamplerType::Linear,
+                .edge_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+            }),
+        };
+        write_image_sampler_descriptor(vk, {
+            renderer.descriptor_set, 2, to_u32(image.index)
+        }, renderer.textures[image].view, renderer.textures[image].sampler);
+    }
+
 }
 
 PbrRenderer create_pbr_renderer(Vk& vk, const PbrRendererConfig& config) {
-    PbrRenderer renderer{};
+    PbrRenderer renderer{.vk = &vk,};
 
     renderer.descriptor_layout = create_descriptor_set_layout(vk, {
         std::array<VkDescriptorSetLayoutBinding, 3>{{
@@ -102,8 +171,15 @@ PbrRenderer create_pbr_renderer(Vk& vk, const PbrRendererConfig& config) {
         }}
     });
 
+    renderer.descriptor_pool = create_descriptor_pool(vk, {1, std::array{
+        VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2},
+        VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, config.max_textures},
+    }});
+
+    renderer.descriptor_set = *allocate_descriptor_set(vk, renderer.descriptor_pool, renderer.descriptor_layout);
+
     constexpr VkPushConstantRange skybox_push{
-        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PbrRenderer::SkyboxPush)
+        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(SkyboxPush)
     };
     const auto skybox_pipeline = create_graphics_pipeline(vk, {
         .set_layouts{&renderer.descriptor_layout, 1},
@@ -116,7 +192,7 @@ PbrRenderer create_pbr_renderer(Vk& vk, const PbrRendererConfig& config) {
     renderer.skybox_pipeline= *skybox_pipeline;
 
     constexpr VkPushConstantRange model_push{
-        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PbrRenderer::ModelPush)
+        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ModelPush)
     };
     const auto model_pipeline = create_graphics_pipeline(vk, {
         .set_layouts{&renderer.descriptor_layout, 1},
@@ -125,11 +201,11 @@ PbrRenderer create_pbr_renderer(Vk& vk, const PbrRendererConfig& config) {
         .fragment_shader_path = "shaders/pbr.frag.spv",
     });
     if (model_pipeline.has_err())
-        ERROR("Could not find valid pbr shaders");
+        ERRORF("Could not find valid pbr shaders: {}", to_string(model_pipeline.err()));
     renderer.model_pipeline = *model_pipeline;
 
     constexpr VkPushConstantRange tonemap_push{
-        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PbrRenderer::TonemapPush)
+        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(TonemapPush)
     };
     const auto tonemap_pipeline = create_graphics_pipeline(vk, {
         .set_layouts{&renderer.descriptor_layout, 1},
@@ -138,11 +214,11 @@ PbrRenderer create_pbr_renderer(Vk& vk, const PbrRendererConfig& config) {
         .fragment_shader_path = "shaders/tonemap.frag.spv",
     });
     if (tonemap_pipeline.has_err())
-        ERROR("Could not find valid tonemap shaders");
+        ERRORF("Could not find valid tonemap shaders: {}", to_string(tonemap_pipeline.err()));
     renderer.tonemap_pipeline = *tonemap_pipeline;
 
     constexpr VkPushConstantRange antialias_push{
-        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PbrRenderer::AntialiasPush)
+        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(AntialiasPush)
     };
     const auto antialias_pipeline = create_graphics_pipeline(vk, {
         .set_layouts{&renderer.descriptor_layout, 1},
@@ -151,71 +227,30 @@ PbrRenderer create_pbr_renderer(Vk& vk, const PbrRendererConfig& config) {
         .fragment_shader_path = "shaders/antialias.frag.spv",
     });
     if (antialias_pipeline.has_err())
-        ERROR("Could not find valid post process shaders");
+        ERRORF("Could not find valid post process shaders: {}", to_string(antialias_pipeline.err()));
     renderer.antialias_pipeline = *antialias_pipeline;
 
-    renderer.descriptor_pool = create_descriptor_pool(vk, {1, std::array{
-        VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2},
-        VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, config.max_textures},
-    }});
-
-    renderer.descriptor_set = *allocate_descriptor_set(vk, renderer.descriptor_pool, renderer.descriptor_layout);
-
-    renderer.textures = malloc_slice<Pool<Texture>::Block>(config.max_textures);
+    renderer.textures = malloc_slice<Pool<PbrRenderer::Texture>::Block>(config.max_textures);
     renderer.models = malloc_slice<Pool<PbrRenderer::Model>::Block>(config.max_models);
 
     renderer.depth_image = renderer.textures.alloc();
-    renderer.textures[renderer.depth_image] = {
-        create_image_and_view(vk, {
-            .extent{config.window.swapchain.extent.width, config.window.swapchain.extent.height, 1},
-            .format = VK_FORMAT_D32_SFLOAT,
-            .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-            .aspect_flags = VK_IMAGE_ASPECT_DEPTH_BIT,
-        }),
-        create_sampler(vk, {
-            .type = SamplerType::Linear,
-            .edge_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-        }),
-    };
-
     for (auto& image : renderer.color_images) {
         image = renderer.textures.alloc();
-        renderer.textures[image] = {
-            create_image_and_view(vk, {
-                .extent{config.window.swapchain.extent.width, config.window.swapchain.extent.height, 1},
-                .format = VK_FORMAT_R16G16B16A16_SFLOAT,
-                .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
-                       | VK_IMAGE_USAGE_SAMPLED_BIT
-                       | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-            }),
-            create_sampler(vk, {
-                .type = SamplerType::Linear,
-                .edge_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-            }),
-        };
-        write_image_sampler_descriptor(vk, {
-            renderer.descriptor_set, 2, to_u32(image.index)
-        }, renderer.textures[image]);
     }
-
-    write_image_sampler_descriptor(vk, {
-        renderer.descriptor_set, 2, to_u32(renderer.depth_image.index)
-    }, renderer.textures[renderer.depth_image]);
+    create_pbr_renderer_images(renderer, config.window.swapchain.extent);
 
     renderer.vp_buffer = create_buffer(vk, {
-        sizeof(PbrRenderer::ViewProjectionUniform),
-        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, GpuMemoryType::RandomAccess
+        sizeof(ViewProjectionUniform), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, GpuMemoryType::RandomAccess
     });
     renderer.light_buffer = create_buffer(vk, {
-        sizeof(PbrRenderer::LightUniform) * PbrRenderer::MaxLights,
-        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, GpuMemoryType::RandomAccess
+        sizeof(LightUniform) * PbrRenderer::MaxLights, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, GpuMemoryType::RandomAccess
     });
 
     write_uniform_buffer_descriptor(
-        vk, {renderer.descriptor_set, 0}, {renderer.vp_buffer.handle, sizeof(PbrRenderer::ViewProjectionUniform)}
+        vk, {renderer.descriptor_set, 0}, {renderer.vp_buffer.handle, sizeof(ViewProjectionUniform)}
     );
     write_uniform_buffer_descriptor(
-        vk, {renderer.descriptor_set, 1}, {renderer.light_buffer.handle, sizeof(PbrRenderer::LightUniform)}
+        vk, {renderer.descriptor_set, 1}, {renderer.light_buffer.handle, sizeof(LightUniform)}
     );
 
     std::array<glm::vec3, 24> positions{
@@ -272,43 +307,14 @@ PbrRenderer create_pbr_renderer(Vk& vk, const PbrRendererConfig& config) {
     return renderer;
 }
 
-void resize_pbr_renderer(Vk& vk, PbrRenderer& renderer, const Window& window) {
-    destroy_texture(vk, renderer.textures[renderer.depth_image]);
-    renderer.textures[renderer.depth_image] = {
-        create_image_and_view(vk, {
-            .extent{window.swapchain.extent.width, window.swapchain.extent.height, 1},
-            .format = VK_FORMAT_D32_SFLOAT,
-            .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-            .aspect_flags = VK_IMAGE_ASPECT_DEPTH_BIT,
-        }),
-        create_sampler(vk, {
-            .type = SamplerType::Linear,
-            .edge_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-        }),
-    };
-
-    for (auto& image : renderer.color_images) {
-        destroy_texture(vk, renderer.textures[image]);
-        renderer.textures[image] = {
-            create_image_and_view(vk, {
-                .extent{window.swapchain.extent.width, window.swapchain.extent.height, 1},
-                .format = VK_FORMAT_R16G16B16A16_SFLOAT,
-                .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
-                       | VK_IMAGE_USAGE_SAMPLED_BIT
-                       | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-            }),
-            create_sampler(vk, {
-                .type = SamplerType::Linear,
-                .edge_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-            }),
-        };
-        write_image_sampler_descriptor(vk, {
-            renderer.descriptor_set, 2, to_u32(image.index)
-        }, renderer.textures[image]);
-    }
+void resize_pbr_renderer(PbrRenderer& renderer, VkExtent2D extent) {
+    destroy_pbr_renderer_images(renderer);
+    create_pbr_renderer_images(renderer, extent);
 }
 
-void destroy_pbr_renderer(Vk& vk, PbrRenderer& renderer) {
+void destroy_pbr_renderer(PbrRenderer& renderer) {
+    Vk& vk = *renderer.vk;
+
     const auto wait_result = vkQueueWaitIdle(vk.queue);
     switch (wait_result) {
         case VK_SUCCESS: break;
@@ -319,7 +325,7 @@ void destroy_pbr_renderer(Vk& vk, PbrRenderer& renderer) {
     }
 
     if (renderer.skybox.cubemap.index != PbrTextureHandle{}.index)
-        unload_texture(vk, renderer, renderer.skybox.cubemap);
+        destroy_texture(renderer, renderer.skybox.cubemap);
 
     destroy_buffer(vk, renderer.skybox.index_buffer);
     destroy_buffer(vk, renderer.skybox.vertex_buffer);
@@ -327,20 +333,19 @@ void destroy_pbr_renderer(Vk& vk, PbrRenderer& renderer) {
     destroy_buffer(vk, renderer.vp_buffer);
     destroy_buffer(vk, renderer.light_buffer);
 
-    destroy_texture(vk, renderer.textures[renderer.depth_image]);
+    destroy_pbr_renderer_images(renderer);
     renderer.textures.dealloc(renderer.depth_image);
     for (auto& image : renderer.color_images) {
-        destroy_texture(vk, renderer.textures[image]);
         renderer.textures.dealloc(image);
     }
-
-    vkDestroyDescriptorPool(vk.device, renderer.descriptor_pool, nullptr);
-    vkDestroyDescriptorSetLayout(vk.device, renderer.descriptor_layout, nullptr);
 
     destroy_graphics_pipeline(vk, renderer.skybox_pipeline);
     destroy_graphics_pipeline(vk, renderer.model_pipeline);
     destroy_graphics_pipeline(vk, renderer.tonemap_pipeline);
     destroy_graphics_pipeline(vk, renderer.antialias_pipeline);
+
+    vkDestroyDescriptorPool(vk.device, renderer.descriptor_pool, nullptr);
+    vkDestroyDescriptorSetLayout(vk.device, renderer.descriptor_layout, nullptr);
 
     free_slice(renderer.textures.release());
     free_slice(renderer.models.release());
@@ -378,7 +383,7 @@ static void draw_skybox(VkCommandBuffer cmd, PbrRenderer& renderer) {
         vertex_attributes.data()
     );
 
-    PbrRenderer::SkyboxPush push{
+    SkyboxPush push{
         .cubemap = to_u32(renderer.skybox.cubemap.index),
     };
     vkCmdPushConstants(
@@ -435,7 +440,7 @@ static void draw_models(VkCommandBuffer cmd, PbrRenderer& renderer, Slice<const 
     for (const auto& ticket : models) {
         const auto& model = renderer.models[ticket.model];
 
-        PbrRenderer::ModelPush model_push{
+        ModelPush model_push{
             .model = ticket.transform.matrix(),
             .normal_map_index = to_u32(model.normal_map.index),
             .texture_index = to_u32(model.color_map.index),
@@ -452,31 +457,33 @@ static void draw_models(VkCommandBuffer cmd, PbrRenderer& renderer, Slice<const 
     }
 }
 
-static void draw_opaque(Vk& vk, VkCommandBuffer cmd, PbrRenderer& renderer, VkExtent2D extent, const Scene& scene) {
-    Texture& depth_image = renderer.textures[renderer.depth_image];
-    Texture& color_image = renderer.textures[renderer.color_images[0]];
+static void draw_opaque(VkCommandBuffer cmd, PbrRenderer& renderer, VkExtent2D extent, const Scene& scene) {
+    Vk& vk = *renderer.vk;
+
+    PbrRenderer::Texture& depth_image = renderer.textures[renderer.depth_image];
+    PbrRenderer::Texture& color_image = renderer.textures[renderer.color_images[0]];
 
     BarrierBuilder(vk, {.image_barriers = 2})
-        .add_image_barrier(0, depth_image.image.image.handle, {VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1})
+        .add_image_barrier(0, depth_image.image.handle, {VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1})
         .set_image_dst(0,
             VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
             VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
         )
-        .add_image_barrier(1, color_image.image.image.handle, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
+        .add_image_barrier(1, color_image.image.handle, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
         .set_image_dst(1, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
         .build_and_run(vk, cmd);
 
     const VkRenderingAttachmentInfo color_attachment{
         .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .imageView = color_image.image.view,
+        .imageView = color_image.view,
         .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
     };
     const VkRenderingAttachmentInfo depth_attachment{
         .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .imageView = depth_image.image.view,
+        .imageView = depth_image.view,
         .imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
         .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -504,13 +511,15 @@ struct EffectConfig {
     u32 output_image;
     u32 input_image;
 };
-static void draw_effect(Vk& vk, VkCommandBuffer cmd, PbrRenderer& renderer, const EffectConfig& config) {
-    Texture& output_image = renderer.textures[renderer.color_images[config.output_image]];
-    Texture& input_image = renderer.textures[renderer.color_images[config.input_image]];
+static void draw_effect(VkCommandBuffer cmd, PbrRenderer& renderer, const EffectConfig& config) {
+    Vk& vk = *renderer.vk;
+
+    PbrRenderer::Texture& output_image = renderer.textures[renderer.color_images[config.output_image]];
+    PbrRenderer::Texture& input_image = renderer.textures[renderer.color_images[config.input_image]];
 
     BarrierBuilder(vk, {.image_barriers = 2})
         .add_image_barrier(0,
-            input_image.image.image.handle,
+            input_image.image.handle,
             {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
         )
         .set_image_src(0,
@@ -522,7 +531,7 @@ static void draw_effect(Vk& vk, VkCommandBuffer cmd, PbrRenderer& renderer, cons
             VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, 
             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
         .add_image_barrier(1,
-            output_image.image.image.handle,
+            output_image.image.handle,
             {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
         )
         .set_image_dst(1,
@@ -533,7 +542,7 @@ static void draw_effect(Vk& vk, VkCommandBuffer cmd, PbrRenderer& renderer, cons
 
     const VkRenderingAttachmentInfo attachment{
         .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .imageView = output_image.image.view,
+        .imageView = output_image.view,
         .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -543,8 +552,8 @@ static void draw_effect(Vk& vk, VkCommandBuffer cmd, PbrRenderer& renderer, cons
         .renderArea{
             {},
             {
-                output_image.image.image.extent.width,
-                output_image.image.image.extent.height,
+                output_image.image.extent.width,
+                output_image.image.extent.height,
             }
         },
         .layerCount = 1,
@@ -569,10 +578,13 @@ static void draw_effect(Vk& vk, VkCommandBuffer cmd, PbrRenderer& renderer, cons
     vkCmdEndRendering(cmd);
 }
 
-Result<void> draw_pbr(Vk& vk, Window& window, PbrRenderer& renderer, const Scene& scene) {
+Result<void> draw_pbr(Window& window, PbrRenderer& renderer, const Scene& scene) {
     ASSERT(scene.lights.count < PbrRenderer::MaxLights);
+
+    Vk& vk = *renderer.vk;
+
     const glm::mat4 view = scene.camera->view();
-    PbrRenderer::LightUniform lights{.count = scene.lights.count};
+    LightUniform lights{.count = scene.lights.count};
     for (usize i = 0; i < scene.lights.count; ++i) {
         lights.vals[i] = {
             .position = view * scene.lights[i].position,
@@ -580,7 +592,7 @@ Result<void> draw_pbr(Vk& vk, Window& window, PbrRenderer& renderer, const Scene
         };
     }
     write_buffer(vk, renderer.light_buffer, &lights, sizeof(lights));
-    write_buffer(vk, renderer.vp_buffer, &view, sizeof(view), offsetof(PbrRenderer::ViewProjectionUniform, view));
+    write_buffer(vk, renderer.vp_buffer, &view, sizeof(view), offsetof(ViewProjectionUniform, view));
 
     const auto frame_result = [&]() -> Result<void> {
         const auto begin = begin_frame(vk, window.swapchain);
@@ -588,11 +600,11 @@ Result<void> draw_pbr(Vk& vk, Window& window, PbrRenderer& renderer, const Scene
             return begin.err();
         const VkCommandBuffer cmd = *begin;
 
-        draw_opaque(vk, cmd, renderer, window.swapchain.extent, scene);
+        draw_opaque(cmd, renderer, window.swapchain.extent, scene);
 
         BarrierBuilder(vk, {.image_barriers = 1})
             .add_image_barrier(0,
-                renderer.textures[renderer.depth_image].image.image.handle, {VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1}
+                renderer.textures[renderer.depth_image].image.handle, {VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1}
             )
             .set_image_src(0,
                 VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
@@ -602,21 +614,21 @@ Result<void> draw_pbr(Vk& vk, Window& window, PbrRenderer& renderer, const Scene
                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
             .build_and_run(vk, cmd);
 
-        PbrRenderer::TonemapPush tonemap_push{
+        TonemapPush tonemap_push{
             to_u32(renderer.color_images[0].index)
         };
-        draw_effect(vk, cmd, renderer, {
+        draw_effect(cmd, renderer, {
             .pipeline = renderer.tonemap_pipeline,
             .push_constant = {&tonemap_push, sizeof(tonemap_push)},
             .output_image = 1,
             .input_image = 0,
         });
 
-        PbrRenderer::AntialiasPush antialias_push{
+        AntialiasPush antialias_push{
             {1.0f / window.swapchain.extent.width, 1.0f / window.swapchain.extent.height},
             to_u32(renderer.color_images[1].index),
         };
-        draw_effect(vk, cmd, renderer, {
+        draw_effect(cmd, renderer, {
             .pipeline = renderer.antialias_pipeline,
             .push_constant = {&antialias_push, sizeof(antialias_push)},
             .output_image = 0,
@@ -625,7 +637,7 @@ Result<void> draw_pbr(Vk& vk, Window& window, PbrRenderer& renderer, const Scene
 
         BarrierBuilder(vk, {.image_barriers = 2})
             .add_image_barrier(0,
-                renderer.textures[renderer.color_images[0]].image.image.handle,
+                renderer.textures[renderer.color_images[0]].image.handle,
                 {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
             )
             .set_image_src(0, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
@@ -643,7 +655,7 @@ Result<void> draw_pbr(Vk& vk, Window& window, PbrRenderer& renderer, const Scene
                 .end = {to_i32(window.swapchain.extent.width), to_i32(window.swapchain.extent.height), 1},
             },
             {
-                .image = renderer.textures[renderer.color_images[0]].image.image.handle,
+                .image = renderer.textures[renderer.color_images[0]].image.handle,
                 .end = {to_i32(window.swapchain.extent.width), to_i32(window.swapchain.extent.height), 1},
             },
             VK_FILTER_NEAREST
@@ -669,7 +681,7 @@ Result<void> draw_pbr(Vk& vk, Window& window, PbrRenderer& renderer, const Scene
             case Err::InvalidWindow: {
                 // properly handle window minimizing and resizing : TODO
 
-                printf("resized\n");
+                std::printf("resized\n");
 
                 const auto window_result = resize_window(vk, window);
                 if (window_result.has_err()) {
@@ -677,7 +689,7 @@ Result<void> draw_pbr(Vk& vk, Window& window, PbrRenderer& renderer, const Scene
                     return window_result.err();
                 }
 
-                resize_pbr_renderer(vk, renderer, window);
+                resize_pbr_renderer(renderer, window.swapchain.extent);
                 break;
             }
             default: ERRORF("Unexpected error: {}", to_string(frame_result.err()));
@@ -691,80 +703,125 @@ PbrRenderer::Light make_light(const glm::vec3 position, const glm::vec3 color, c
     return {glm::vec4{position, 1.0f}, glm::vec4{color * intensity, 1.0f}};
 }
 
-void update_projection(Vk& vk, const PbrRenderer& renderer, const glm::mat4& projection) {
+void update_projection(const PbrRenderer& renderer, const glm::mat4& projection) {
     write_buffer(
-        vk,
+        *renderer.vk,
         renderer.vp_buffer,
         &projection,
         sizeof(projection),
-        offsetof(PbrRenderer::ViewProjectionUniform, projection)
+        offsetof(ViewProjectionUniform, projection)
     );
 }
 
-PbrTextureHandle load_texture(Vk& vk, PbrRenderer& renderer, const ImageData& data, const VkFormat format) {
-    ASSERT(data.pixels != nullptr);
+PbrTextureHandle create_texture(PbrRenderer& renderer, AssetManager& assets, const PbrTextureConfig& config) {
+    ASSERT(config.format != VK_FORMAT_UNDEFINED);
+
+    Vk& vk = *renderer.vk;
+    ImageData& data = assets[config.data];
 
     PbrTextureHandle texture = renderer.textures.alloc();
-    renderer.textures[texture] = create_texture(vk, data, {
-        .format = format,
-        .sampler_type = SamplerType::Linear
+    renderer.textures[texture] = {
+        create_gpu_image(vk, {
+            .extent = {to_u32(data.size.x), to_u32(data.size.y), 1},
+            .format = config.format,
+            .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        }),
+        create_gpu_image_view(vk, {
+            .image = renderer.textures[texture].image.handle,
+            .format = config.format,
+        }),
+        create_sampler(vk, {
+            .type = SamplerType::Linear,
+            .edge_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        }),
+    };
+    write_gpu_image(vk, renderer.textures[texture].image, {
+        {data.pixels, data.size.x * data.size.y * data.alignment},
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
     });
-    write_image_sampler_descriptor(vk, {renderer.descriptor_set, 2, to_u32(texture.index)}, renderer.textures[texture]);
+    write_image_sampler_descriptor(
+        vk,
+        {renderer.descriptor_set, 2, to_u32(texture.index)},
+        renderer.textures[texture].view,
+        renderer.textures[texture].sampler
+    );
     return texture;
 }
 
-void unload_texture(Vk& vk, PbrRenderer& renderer, const PbrTextureHandle texture) {
-    destroy_texture(vk, renderer.textures[texture]);
+void destroy_texture(PbrRenderer& renderer, const PbrTextureHandle texture) {
+    Vk& vk = *renderer.vk;
+    destroy_gpu_image(vk, renderer.textures[texture].image);
+    vkDestroyImageView(vk.device, renderer.textures[texture].view, nullptr);
+    vkDestroySampler(vk.device, renderer.textures[texture].sampler, nullptr);
     renderer.textures.dealloc(texture);
 }
 
-void load_skybox(Vk& vk, PbrRenderer& renderer, const ImageData& cubemap) {
-    ASSERT(renderer.skybox.cubemap.index == PbrTextureHandle{}.index);
-    ASSERT(cubemap.pixels != nullptr);
+void load_skybox(PbrRenderer& renderer, AssetManager& assets, const ImageHandle<u32> cubemap) {
+    Vk& vk = *renderer.vk;
+    ImageData& data = assets[cubemap];
 
     renderer.skybox.cubemap = renderer.textures.alloc();
-    renderer.textures[renderer.skybox.cubemap] = create_texture_cubemap(vk, cubemap, {
-        .format = VK_FORMAT_R8G8B8A8_SRGB,
-        .sampler_type = SamplerType::Linear,
+    renderer.textures[renderer.skybox.cubemap] = {
+        create_gpu_cubemap(vk, GpuCubemapConfig{
+            .face_extent = {to_u32(data.size.x), to_u32(data.size.y), 1},
+            .format = VK_FORMAT_R8G8B8A8_SRGB,
+            .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        }),
+        create_gpu_cubemap_view(vk, {
+            .image = renderer.textures[renderer.skybox.cubemap].image.handle,
+            .format = VK_FORMAT_R8G8B8A8_SRGB,
+        }),
+        create_sampler(vk, {
+            .type = SamplerType::Linear,
+            .edge_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        }),
+    };
+    write_gpu_cubemap(vk, renderer.textures[renderer.skybox.cubemap].image, {
+        {data.pixels, data.size.x * data.size.y * data.alignment},
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
     });
     write_image_sampler_descriptor(vk, {
         renderer.descriptor_set, 2, to_u32(renderer.skybox.cubemap.index)
-    }, renderer.textures[renderer.skybox.cubemap]);
+    }, renderer.textures[renderer.skybox.cubemap].view, renderer.textures[renderer.skybox.cubemap].sampler);
 }
 
-void unload_skybox(Vk& vk, PbrRenderer& renderer) {
-    unload_texture(vk, renderer, renderer.skybox.cubemap);
+void unload_skybox(PbrRenderer& renderer) {
+    destroy_texture(renderer, renderer.skybox.cubemap);
 }
 
-PbrModelHandle load_model(Vk& vk, PbrRenderer& renderer, const PbrModelConfig& config) {
+PbrModelHandle create_model(PbrRenderer& renderer, AssetManager& assets, const PbrModelConfig& config) {
     ASSERT(config.data.roughness >= 0.0 && config.data.roughness <= 1.0);
     ASSERT(config.data.metalness >= 0.0 && config.data.metalness <= 1.0);
 
+    Vk& vk = *renderer.vk;
+
+    MeshData& mesh = assets[config.data.mesh];
+
     const auto index_buffer = create_buffer(vk, {
-        config.data.mesh.indices.count * sizeof(config.data.mesh.indices[0]),
+        mesh.indices.count * sizeof(mesh.indices[0]),
         VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
     });
     const auto vertex_buffer = create_buffer(vk, {
-        config.data.mesh.vertices.count * sizeof(config.data.mesh.vertices[0]),
+        mesh.vertices.count * sizeof(mesh.vertices[0]),
         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
     });
 
     write_buffer(
         vk,
         index_buffer,
-        config.data.mesh.indices.data,
-        config.data.mesh.indices.count * sizeof(config.data.mesh.indices[0])
+        mesh.indices.data,
+        mesh.indices.count * sizeof(mesh.indices[0])
     );
     write_buffer(
         vk,
         vertex_buffer,
-        config.data.mesh.vertices.data,
-        config.data.mesh.vertices.count * sizeof(config.data.mesh.vertices[0])
+        mesh.vertices.data,
+        mesh.vertices.count * sizeof(mesh.vertices[0])
     );
 
     auto model = renderer.models.alloc();
     renderer.models[model] = PbrRenderer::Model{
-        .index_count = to_u32(config.data.mesh.indices.count),
+        .index_count = to_u32(mesh.indices.count),
         .index_buffer = index_buffer,
         .vertex_buffer = vertex_buffer,
         .normal_map = config.normal_map,
@@ -775,7 +832,8 @@ PbrModelHandle load_model(Vk& vk, PbrRenderer& renderer, const PbrModelConfig& c
     return model;
 }
 
-void unload_model(Vk& vk, PbrRenderer& renderer, const PbrModelHandle model) {
+void destroy_model(PbrRenderer& renderer, const PbrModelHandle model) {
+    Vk& vk = *renderer.vk;
     auto& data = renderer.models[model];
     destroy_buffer(vk, data.index_buffer);
     destroy_buffer(vk, data.vertex_buffer);

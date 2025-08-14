@@ -2,6 +2,8 @@
 
 #include "hg_pch.h"
 
+namespace hg {
+
 using i8 = std::int8_t;
 using i16 = std::int16_t;
 using i32 = std::int32_t;
@@ -20,8 +22,6 @@ using byte = std::byte;
 using f32 = std::float_t;
 using f64 = std::double_t;
 
-namespace hg {
-
 template <typename Func> class DeferInternal {
 public:
     explicit DeferInternal(Func func) : m_func(func) {}
@@ -35,7 +35,7 @@ template <typename Func> DeferInternal<Func> defer_function(Func f) { return Def
 #define DEFER_INTERMEDIATE_1(x, y) x##y
 #define DEFER_INTERMEDIATE_2(x, y) DEFER_INTERMEDIATE_1(x, y)
 #define DEFER_INTERMEDIATE_3(x) DEFER_INTERMEDIATE_2(x, __COUNTER__)
-#define defer(code) auto DEFER_INTERMEDIATE_3(_defer_) = defer_function([&] { code; })
+#define DEFER(code) auto DEFER_INTERMEDIATE_3(_defer_) = defer_function([&] { code; })
 
 enum class LogLevel { Info, Warning, Error };
 
@@ -161,22 +161,32 @@ public:
                 m_ok.~T();
     }
 
-    Result(const Result&) = delete;
-    Result& operator=(const Result&) = delete;
-
-    constexpr Result(Result&& other) noexcept
-        : m_err{other.m_err}
-        , m_is_ok{other.m_is_ok}
-    {
+    Result(const Result& other) : m_is_ok{other.m_is_ok} {
         if (m_is_ok)
-            new (&m_ok) T{std::move(other.m_ok)};
+            new (&m_ok) T{other.m_ok};
+        else
+            m_err = other.m_err;
     }
-    constexpr Result& operator=(Result&& other) noexcept {
-        if (this == &other)
-            return *this;
-        new (this) Result(std::move(other));
+
+    Result& operator=(const Result& other) {
+        if (this != &other)
+            new (this) Result(other);
+        return *this;
+    }
+
+    Result(Result&& other) noexcept : m_is_ok{other.m_is_ok} {
         if (m_is_ok)
             new (&m_ok) T{std::move(other.m_ok)};
+        else
+            m_err = other.m_err;
+        other.~Result();
+        other.m_err = Err::Unknown;
+        other.m_is_ok = false;
+    }
+
+    Result& operator=(Result&& other) noexcept {
+        if (this != &other)
+            new (this) Result(std::move(other));
         return *this;
     }
 
@@ -250,8 +260,7 @@ public:
 
     constexpr bool has_err() const { return !m_is_ok; }
     constexpr Err err() const {
-        if (!has_err())
-            ERROR("Result does not have an error");
+        ASSERT(has_err());
         return m_err;
     }
 
@@ -316,6 +325,26 @@ template <> struct Slice<void> {
     template <typename U> constexpr operator std::span<U>() const { return {static_cast<U*>(data), count}; }
 };
 
+template <> struct Slice<const void> {
+    const void* data = nullptr;
+    usize count = 0;
+
+    constexpr Slice() = default;
+    template <typename U> constexpr Slice(U* data, usize count)
+        : data{static_cast<void*>(data)}, count{count} {}
+    template <typename U> constexpr Slice(const Slice<U>& other)
+        : data{static_cast<void*>(other.data)}, count{other.count} {}
+
+    template <typename U> constexpr Slice(const std::span<U>& other)
+        : data{static_cast<void*>(other.data())}, count{other.size()} {}
+    template <typename U, usize N> constexpr Slice(std::array<U, N>& other)
+        : data{static_cast<void*>(other.data())}, count{other.size()} {}
+    template <typename U, usize N> constexpr Slice(const std::array<U, N>& other)
+        : data{static_cast<void*>(other.data())}, count{other.size()} {}
+
+    template <typename U> constexpr operator std::span<U>() const { return {static_cast<U*>(data), count}; }
+};
+
 template <typename T> T* begin(const Slice<T> slice) { return slice.data; }
 template <typename T> T* end(const Slice<T> slice) { return slice.data + slice.count; }
 
@@ -327,13 +356,106 @@ inline constexpr usize align_down(const usize size, const usize alignment) {
 }
 
 template <typename T> Slice<T> malloc_slice(const usize count) {
-    return {reinterpret_cast<T*>(std::malloc(count * sizeof(T))), count};
+    return {static_cast<T*>(std::malloc(count * sizeof(T))), count};
 }
 template <typename T> Slice<T> realloc_slice(Slice<T> slice, const usize new_count) {
-    return {reinterpret_cast<T*>(std::realloc(slice.data, new_count * sizeof(T))), new_count};
+    return {static_cast<T*>(std::realloc(slice.data, new_count * sizeof(T))), new_count};
 }
 template <typename T> void free_slice(Slice<T> slice) {
     std::free(slice.data);
+}
+
+class Arena {
+public:
+    Arena() = default;
+    Arena(Slice<byte> memory) : m_memory{memory} {}
+    [[nodiscard]] Slice<byte> release() {
+        Slice<byte> memory{m_memory};
+        m_memory = Slice<byte>{};
+        m_head = 0;
+        return memory;
+    }
+
+    Arena(const Arena&) = delete;
+    Arena& operator=(const Arena&) = delete;
+    Arena(Arena&& other) noexcept : m_memory{other.m_memory}, m_head{other.m_head} {
+        other.m_memory = Slice<byte>{};
+        other.m_head = 0;
+    }
+    Arena& operator=(Arena&& other) noexcept {
+        if (this == &other)
+            return *this;
+        if (m_memory.data != nullptr)
+            ERROR("Occupied arena cannot be moved into");
+        new (this) Arena{std::move(other)};
+        return *this;
+    }
+
+    [[nodiscard]] Slice<byte> alloc(usize size) {
+        Slice<byte> allocation{m_memory.data + m_head, align_up(size, 16)};
+
+        if (end(allocation) > end(m_memory))
+            ERROR("Arena out of memory");
+        m_head = end(allocation) - m_memory.data;
+
+        return allocation;
+    }
+    template <typename T> [[nodiscard]] T* alloc() {
+        return reinterpret_cast<T*>(alloc(sizeof(T)).data);
+    }
+    template <typename T> [[nodiscard]] Slice<T> alloc(usize count) {
+        return {reinterpret_cast<T*>(alloc(count * sizeof(T)).data), count};
+    }
+
+    [[nodiscard]] Slice<byte> realloc(Slice<byte> original, usize new_size) {
+        ASSERT(original.data != nullptr);
+
+        if (end(original) != m_memory.data + m_head)
+            ERROR("Arena can only reallocate top allocation");
+
+        Slice<byte> allocation{original.data, align_up(new_size, 16)};
+        if (end(allocation) > end(m_memory))
+            ERROR("Arena out of memory");
+        m_head = end(allocation) - m_memory.data;
+
+        return allocation;
+    }
+    template <typename T> [[nodiscard]] Slice<T> realloc(Slice<T> original, usize new_count) {
+        return {reinterpret_cast<T*>(realloc(
+            Slice<byte>{reinterpret_cast<byte*>(original.data), align_up(original.count * sizeof(T), 16)},
+            new_count * sizeof(T)
+        ).data), new_count};
+    }
+
+    void dealloc(Slice<byte> allocation) {
+        ASSERT(allocation.data != nullptr);
+
+        if (end(allocation) != m_memory.data + m_head)
+            ERROR("Arena can only deallocate top allocation");
+
+        m_head = allocation.data - m_memory.data;
+    }
+
+    template <typename T> void dealloc(T* ptr) {
+        dealloc({reinterpret_cast<byte*>(ptr), align_up(sizeof(T), 16)});
+    }
+    template <typename T> void dealloc(Slice<T> slice) {
+        dealloc({reinterpret_cast<byte*>(slice.data), align_up(slice.count * sizeof(T), 16)});
+    }
+
+private:
+    Slice<byte> m_memory{};
+    usize m_head = 0;
+};
+
+inline Arena malloc_arena(const usize size) {
+    return {malloc_slice<byte>(size)};
+}
+inline Arena realloc_arena(Arena& arena, const usize new_size) {
+    return {realloc_slice(arena.release(), new_size)};
+}
+inline void free_arena(Arena& arena) {
+    free_slice(arena.release());
 }
 
 template <typename T> class Pool {
@@ -361,10 +483,7 @@ public:
 
     Pool(const Pool&) = delete;
     Pool& operator=(const Pool&) = delete;
-    Pool(Pool&& other) noexcept
-        : m_blocks{other.m_blocks}
-        , m_next{other.m_next}
-    {
+    Pool(Pool&& other) noexcept : m_blocks{other.m_blocks}, m_next{other.m_next} {
         other.m_blocks = Slice<Block>{};
         other.m_next = 0;
     }
@@ -399,6 +518,7 @@ public:
         m_next = handle.index;
     }
 
+private:
     void check_leaks() const {
 #ifndef NDEBUG
         usize count = 0;
@@ -414,102 +534,19 @@ public:
 #endif
     }
 
-private:
     Slice<Block> m_blocks{};
     usize m_next = 0;
 };
 
-class Arena {
-public:
-    Arena() = default;
-    Arena(Slice<byte> memory) : m_memory{memory}, m_head{0} {}
-    [[nodiscard]] Slice<byte> release() {
-        Slice<byte> memory{m_memory};
-        m_memory = Slice<byte>{};
-        m_head = 0;
-        return memory;
-    }
-
-    Arena(const Arena&) = delete;
-    Arena& operator=(const Arena&) = delete;
-    Arena(Arena&& other) noexcept
-        : m_memory{other.m_memory}
-        , m_head{other.m_head}
-    {
-        other.m_memory = Slice<byte>{};
-        other.m_head = 0;
-    }
-    Arena& operator=(Arena&& other) noexcept {
-        if (this == &other)
-            return *this;
-        if (m_memory.data != nullptr)
-            ERROR("Occupied arena cannot be moved into");
-        new (this) Arena(std::move(other));
-        return *this;
-    }
-
-    [[nodiscard]] Slice<byte> alloc(usize size) {
-        Slice<byte> allocation{m_memory.data + m_head, align_up(size, 16)};
-        if (end(allocation) > end(m_memory))
-            ERROR("Arena out of memory");
-        m_head = end(allocation) - m_memory.data;
-
-        return allocation;
-    }
-
-    template <typename T> [[nodiscard]] T* alloc() {
-        return reinterpret_cast<T*>(alloc(sizeof(T)).data);
-    }
-    template <typename T> [[nodiscard]] Slice<T> alloc(usize count) {
-        return {reinterpret_cast<T*>(alloc(count * sizeof(T)).data), count};
-    }
-
-    [[nodiscard]] Slice<byte> realloc(Slice<byte> original, usize new_size) {
-        ASSERT(original.data != nullptr);
-
-        if (end(original) != m_memory.data + m_head)
-            ERROR("Arena can only reallocate top allocation");
-
-        Slice<byte> allocation{original.data, align_up(new_size, 16)};
-        if (end(allocation) > end(m_memory))
-            ERROR("Arena out of memory");
-        m_head = end(allocation) - m_memory.data;
-
-        return allocation;
-    }
-
-    template <typename T> [[nodiscard]] Slice<T> realloc(Slice<T> original, usize new_count) {
-        return {reinterpret_cast<T*>(realloc(
-            Slice<byte>{reinterpret_cast<byte*>(original.data), align_up(original.count * sizeof(T), 16)},
-            new_count * sizeof(T)
-        ).data), new_count};
-    }
-
-    void dealloc(Slice<byte> allocation) {
-        ASSERT(allocation.data != nullptr);
-
-        if (end(allocation) != m_memory.data + m_head)
-            ERROR("Arena can only deallocate top allocation");
-
-        m_head = allocation.data - m_memory.data;
-    }
-
-    template <typename T> void dealloc(T* ptr) {
-        dealloc({reinterpret_cast<byte*>(ptr), align_up(sizeof(T), 16)});
-    }
-    template <typename T> void dealloc(Slice<T> slice) {
-        dealloc({reinterpret_cast<byte*>(slice.data), align_up(slice.count * sizeof(T), 16)});
-    }
-
-private:
-    Slice<byte> m_memory{};
-    usize m_head = 0;
-};
-
-template <typename T> class Flags {
-public:
-private:
-};
+template <typename T> [[nodiscard]] Pool<T> malloc_pool(const usize count) {
+    return {malloc_slice<T>(count)};
+}
+template <typename T> [[nodiscard]] Pool<T> realloc_pool(Pool<T>& pool, const usize new_count) {
+    return {realloc_slice(pool.release(), new_count)};
+}
+template <typename T> void free_pool(Pool<T>& pool) {
+    free_slice(pool.release());
+}
 
 class Clock {
 public:

@@ -1,9 +1,5 @@
 #include "hg_vulkan.h"
 
-#include "hg_utils.h"
-#include "hg_load.h"
-#include <vulkan/vulkan_core.h>
-
 namespace hg {
 
 void destroy_buffer(Vk& vk, const GpuBuffer& buffer) {
@@ -84,7 +80,7 @@ void write_buffer(Vk& vk, const GpuBuffer& dst, const void* src, usize size, usi
     const auto staging_buffer = create_buffer(vk, {
         size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, GpuMemoryType::LinearAccess
     });
-    defer(destroy_buffer(vk, staging_buffer));
+    DEFER(destroy_buffer(vk, staging_buffer));
     write_buffer(vk, staging_buffer, src, size, 0);
 
     submit_single_time_commands(vk, [&](const VkCommandBuffer cmd) {
@@ -92,14 +88,14 @@ void write_buffer(Vk& vk, const GpuBuffer& dst, const void* src, usize size, usi
     });
 }
 
-void destroy_image(Vk& vk, const GpuImage& image) {
+void destroy_gpu_image(Vk& vk, const GpuImage& image) {
     ASSERT(image.allocation != nullptr);
     ASSERT(image.handle != nullptr);
 
     vmaDestroyImage(vk.gpu_allocator, image.handle, image.allocation);
 }
 
-GpuImage create_image(Vk& vk, const GpuImageConfig& config) {
+GpuImage create_gpu_image(Vk& vk, const GpuImageConfig& config) {
     ASSERT(config.extent.width > 0);
     ASSERT(config.extent.height > 0);
     ASSERT(config.extent.depth > 0);
@@ -148,7 +144,7 @@ GpuImage create_image(Vk& vk, const GpuImageConfig& config) {
     return image;
 }
 
-GpuImage create_cubemap(Vk& vk, const GpuCubemapConfig& config) {
+GpuImage create_gpu_cubemap(Vk& vk, const GpuCubemapConfig& config) {
     ASSERT(config.face_extent.width > 0);
     ASSERT(config.face_extent.height > 0);
     ASSERT(config.face_extent.depth > 0);
@@ -197,34 +193,30 @@ GpuImage create_cubemap(Vk& vk, const GpuCubemapConfig& config) {
     return cubemap;
 }
 
-void write_image(Vk& vk, GpuImage& dst, const ImageData& src, const GpuImageWriteConfig& config) {
+void write_gpu_image(Vk& vk, GpuImage& dst, const GpuImageWriteConfig& config) {
     ASSERT(dst.allocation != nullptr);
     ASSERT(dst.handle != nullptr);
-    ASSERT(src.pixels != nullptr);
-    ASSERT(src.alignment > 0);
-    ASSERT(src.size.x > 0);
-    ASSERT(src.size.y > 0);
-    ASSERT(src.size.z == 1);
-
-    const VkDeviceSize size = src.size.x * src.size.y * src.size.z * src.alignment;
+    ASSERT(config.src.data != nullptr);
 
     const auto staging_buffer = create_buffer(vk, {
-        size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, GpuMemoryType::LinearAccess
+        config.src.count, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, GpuMemoryType::LinearAccess
     });
-    defer(destroy_buffer(vk, staging_buffer));
-    write_buffer(vk, staging_buffer, src.pixels, size, 0);
+    DEFER(destroy_buffer(vk, staging_buffer));
+    write_buffer(vk, staging_buffer, config.src.data, config.src.count, 0);
 
     submit_single_time_commands(vk, [&](const VkCommandBuffer cmd) {
         BarrierBuilder(vk, {.image_barriers = 1})
             .add_image_barrier(0, dst.handle, {config.aspect_flags, 0, VK_REMAINING_MIP_LEVELS, 0, 1})
-            .set_image_dst(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+            .set_image_dst(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
             .build_and_run(vk, cmd);
 
         copy_to_image(cmd, dst, staging_buffer, config.aspect_flags);
 
         BarrierBuilder(vk, {.image_barriers = 1})
             .add_image_barrier(0, dst.handle, {config.aspect_flags, 0, VK_REMAINING_MIP_LEVELS, 0, 1})
-            .set_image_src(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+            .set_image_src(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
             .set_image_dst(0, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE, config.final_layout)
             .build_and_run(vk, cmd);
     });
@@ -232,25 +224,21 @@ void write_image(Vk& vk, GpuImage& dst, const ImageData& src, const GpuImageWrit
     dst.layout = config.final_layout;
 }
 
-void write_cubemap(Vk& vk, GpuImage& dst, const ImageData& src, const GpuImageWriteConfig& config) {
+void write_gpu_cubemap(Vk& vk, GpuImage& dst, const GpuImageWriteConfig& config) {
     ASSERT(dst.allocation != nullptr);
     ASSERT(dst.handle != nullptr);
-    ASSERT(src.pixels != nullptr);
-    ASSERT(src.alignment > 0);
-    ASSERT(src.size.x > 0);
-    ASSERT(src.size.y > 0);
-    ASSERT(src.size.z == 1);
+    ASSERT(config.src.data != nullptr);
 
-    const VkExtent3D staging_extent{src.size.x, src.size.y, src.size.z};
-    const VkExtent3D face_extent{staging_extent.width / 4, staging_extent.height / 3, 1};
+    const VkExtent3D staging_extent{dst.extent.width * 4, dst.extent.height * 3, dst.extent.depth};
 
-    auto staging_image = create_image(vk, {
+    auto staging_image = create_gpu_image(vk, {
         .extent = staging_extent, 
         .format = dst.format,
         .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
     });
-    defer(destroy_image(vk, staging_image));
-    write_image(vk, staging_image, src, {
+    DEFER(destroy_gpu_image(vk, staging_image));
+    write_gpu_image(vk, staging_image, {
+        .src = config.src,
         .final_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         .aspect_flags = config.aspect_flags,
     });
@@ -265,44 +253,44 @@ void write_cubemap(Vk& vk, GpuImage& dst, const ImageData& src, const GpuImageWr
             VkImageCopy2{
                 .sType = VK_STRUCTURE_TYPE_IMAGE_COPY_2,
                 .srcSubresource{config.aspect_flags, 0, 0, 1},
-                .srcOffset{to_i32(src.size.x) * 2 / 4, to_i32(src.size.y) * 1 / 3, 0},
+                .srcOffset{to_i32(dst.extent.width) * 2, to_i32(dst.extent.height) * 1, 0},
                 .dstSubresource{config.aspect_flags, 0, 0, 1},
-                .extent = face_extent,
+                .extent = dst.extent,
             },
             VkImageCopy2{
                 .sType = VK_STRUCTURE_TYPE_IMAGE_COPY_2,
                 .srcSubresource{config.aspect_flags, 0, 0, 1},
-                .srcOffset{to_i32(src.size.x) * 0 / 4, to_i32(src.size.y) * 1 / 3, 0},
+                .srcOffset{to_i32(dst.extent.width) * 0, to_i32(dst.extent.height) * 1, 0},
                 .dstSubresource{config.aspect_flags, 0, 1, 1},
-                .extent = face_extent,
+                .extent = dst.extent,
             },
             VkImageCopy2{
                 .sType = VK_STRUCTURE_TYPE_IMAGE_COPY_2,
                 .srcSubresource{config.aspect_flags, 0, 0, 1},
-                .srcOffset{to_i32(src.size.x) * 1 / 4, to_i32(src.size.y) * 0 / 3, 0},
+                .srcOffset{to_i32(dst.extent.width) * 1, to_i32(dst.extent.height) * 0, 0},
                 .dstSubresource{config.aspect_flags, 0, 2, 1},
-                .extent = face_extent,
+                .extent = dst.extent,
             },
             VkImageCopy2{
                 .sType = VK_STRUCTURE_TYPE_IMAGE_COPY_2,
                 .srcSubresource{config.aspect_flags, 0, 0, 1},
-                .srcOffset{to_i32(src.size.x) * 1 / 4, to_i32(src.size.y) * 2 / 3, 0},
+                .srcOffset{to_i32(dst.extent.width) * 1, to_i32(dst.extent.height) * 2, 0},
                 .dstSubresource{config.aspect_flags, 0, 3, 1},
-                .extent = face_extent,
+                .extent = dst.extent,
             },
             VkImageCopy2{
                 .sType = VK_STRUCTURE_TYPE_IMAGE_COPY_2,
                 .srcSubresource{config.aspect_flags, 0, 0, 1},
-                .srcOffset{to_i32(src.size.x) * 1 / 4, to_i32(src.size.y) * 1 / 3, 0},
+                .srcOffset{to_i32(dst.extent.width) * 1, to_i32(dst.extent.height) * 1, 0},
                 .dstSubresource{config.aspect_flags, 0, 4, 1},
-                .extent = face_extent,
+                .extent = dst.extent,
             },
             VkImageCopy2{
                 .sType = VK_STRUCTURE_TYPE_IMAGE_COPY_2,
                 .srcSubresource{config.aspect_flags, 0, 0, 1},
-                .srcOffset{to_i32(src.size.x) * 3 / 4, to_i32(src.size.y) * 1 / 3, 0},
+                .srcOffset{to_i32(dst.extent.width) * 3, to_i32(dst.extent.height) * 1, 0},
                 .dstSubresource{config.aspect_flags, 0, 5, 1},
-                .extent = face_extent,
+                .extent = dst.extent,
             },
         };
         VkCopyImageInfo2 copy_region_info{
@@ -328,7 +316,7 @@ void write_cubemap(Vk& vk, GpuImage& dst, const ImageData& src, const GpuImageWr
     dst.layout = config.final_layout;
 }
 
-void generate_mipmaps(Vk& vk, GpuImage& image, VkImageLayout final_layout) {
+void generate_gpu_image_mipmaps(Vk& vk, GpuImage& image, VkImageLayout final_layout) {
     ASSERT(image.mip_levels > 1);
     ASSERT(image.extent.width > 0);
     ASSERT(image.extent.height > 0);
@@ -395,7 +383,7 @@ void generate_mipmaps(Vk& vk, GpuImage& image, VkImageLayout final_layout) {
     image.layout = final_layout;
 }
 
-VkImageView create_image_view(Vk& vk, const GpuImageViewConfig& config) {
+VkImageView create_gpu_image_view(Vk& vk, const GpuImageViewConfig& config) {
     ASSERT(config.image != nullptr);
     ASSERT(config.format != VK_FORMAT_UNDEFINED);
 
@@ -420,7 +408,7 @@ VkImageView create_image_view(Vk& vk, const GpuImageViewConfig& config) {
     return view;
 }
 
-VkImageView create_cubemap_view(Vk& vk, const GpuImageViewConfig& config) {
+VkImageView create_gpu_cubemap_view(Vk& vk, const GpuImageViewConfig& config) {
     ASSERT(config.image != nullptr);
     ASSERT(config.format != VK_FORMAT_UNDEFINED);
 
@@ -443,77 +431,6 @@ VkImageView create_cubemap_view(Vk& vk, const GpuImageViewConfig& config) {
     }
 
     return view;
-}
-
-void destroy_image_and_view(Vk& vk, const GpuImageAndView& image_and_view) {
-    vkDestroyImageView(vk.device, image_and_view.view, nullptr);
-    destroy_image(vk, image_and_view.image);
-}
-
-GpuImageAndView create_image_and_view(Vk& vk, const GpuImageAndViewConfig& config) {
-    ASSERT(config.extent.width > 0);
-    ASSERT(config.extent.height > 0);
-    ASSERT(config.extent.depth > 0);
-    ASSERT(config.format != VK_FORMAT_UNDEFINED);
-    ASSERT(config.usage != 0);
-    ASSERT(config.aspect_flags != 0);
-    ASSERT(config.mip_levels > 0);
-
-    GpuImageAndView image_and_view{};
-
-    image_and_view.image = create_image(vk, {
-        .extent = config.extent,
-        .format = config.format,
-        .usage = config.usage,
-        .mip_levels = config.mip_levels,
-    });
-    if (config.layout != VK_IMAGE_LAYOUT_UNDEFINED) {
-        submit_single_time_commands(vk, [&](const VkCommandBuffer cmd) {
-            BarrierBuilder(vk, {.image_barriers = 1})
-                .add_image_barrier(0, image_and_view.image.handle, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
-                .set_image_dst(0, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE, config.layout)
-                .build_and_run(vk, cmd);
-        });
-        image_and_view.image.layout = config.layout;
-    }
-
-    image_and_view.view = create_image_view(vk, {
-        .image = image_and_view.image.handle,
-        .format = config.format,
-        .aspect_flags = config.aspect_flags,
-    });
-
-    return image_and_view;
-}
-
-GpuImageAndView create_cubemap_and_view(Vk& vk, const GpuCubemapAndViewConfig& config) {
-    ASSERT(config.data.pixels != nullptr);
-    ASSERT(config.data.alignment > 0);
-    ASSERT(config.data.size.x > 0);
-    ASSERT(config.data.size.y > 0);
-    ASSERT(config.data.size.z == 1);
-    ASSERT(config.format != VK_FORMAT_UNDEFINED);
-    ASSERT(config.aspect_flags != 0);
-
-    GpuImageAndView cubemap{};
-
-    const VkExtent3D face_extent{config.data.size.x / 4, config.data.size.y / 3, 1};
-    cubemap.image = create_cubemap(vk, {
-        .face_extent = face_extent,
-        .format = config.format,
-        .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-    });
-    write_cubemap(vk, cubemap.image, config.data, {
-        .final_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-    });
-
-    cubemap.view = create_cubemap_view(vk, {
-        .image = cubemap.image.handle,
-        .format = config.format,
-        .aspect_flags = config.aspect_flags,
-    });
-
-    return cubemap;
 }
 
 VkSampler create_sampler(Vk& vk, const SamplerConfig& config) {
@@ -556,67 +473,6 @@ VkSampler create_sampler(Vk& vk, const SamplerConfig& config) {
     }
 
     return sampler;
-}
-
-void destroy_texture(Vk& vk, const Texture& texture) {
-    ASSERT(texture.sampler != nullptr);
-
-    vkDestroySampler(vk.device, texture.sampler, nullptr);
-    destroy_image_and_view(vk, texture.image);
-}
-
-Texture create_texture(Vk& vk, const ImageData& data, const TextureConfig& config) {
-    ASSERT(data.pixels != nullptr);
-    ASSERT(data.alignment > 0);
-    ASSERT(data.size.x > 0);
-    ASSERT(data.size.y > 0);
-    ASSERT(data.size.z == 1);
-
-    Texture texture{};
-
-    VkExtent3D extent{data.size.x, data.size.y, data.size.z};
-    const u32 mip_levels = config.create_mips ? get_mip_count(extent) : 1;
-
-    texture.image = create_image_and_view(vk, {
-        .extent = extent,
-        .format = config.format,
-        .usage = VK_IMAGE_USAGE_SAMPLED_BIT
-               | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
-               | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-        .aspect_flags = config.aspect_flags,
-        .mip_levels = mip_levels,
-    });
-    write_image(vk, texture.image.image, data, {
-        .final_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .aspect_flags = config.aspect_flags,
-    });
-    if (mip_levels > 1)
-        generate_mipmaps(vk, texture.image.image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-    texture.sampler = create_sampler(vk, {
-        .type = config.sampler_type,
-        .edge_mode = config.edge_mode,
-        .mip_levels = mip_levels,
-    });
-
-    return texture;
-}
-
-Texture create_texture_cubemap(Vk& vk, const ImageData& data, const TextureConfig& config) {
-    ASSERT(config.create_mips == false);
-
-    Texture texture{};
-    texture.image = create_cubemap_and_view(vk, {
-        .data = data,
-        .format = config.format,
-        .aspect_flags = config.aspect_flags,
-    });
-    texture.sampler = create_sampler(vk, {
-        .type = config.sampler_type,
-        .edge_mode = config.edge_mode,
-        .mip_levels = 1,
-    });
-    return texture;
 }
 
 VkDescriptorSetLayout create_descriptor_set_layout(Vk& vk, const DescriptorSetLayoutConfig& config) {
@@ -729,14 +585,14 @@ void write_uniform_buffer_descriptor(Vk& vk, const DescriptorSetBinding& binding
     vkUpdateDescriptorSets(vk.device, 1, &descriptor_write, 0, nullptr);
 }
 
-void write_image_sampler_descriptor(Vk& vk, const DescriptorSetBinding& binding, const Texture& texture) {
-    ASSERT(texture.sampler != nullptr);
-    ASSERT(texture.image.view != nullptr);
+void write_image_sampler_descriptor(Vk& vk, const DescriptorSetBinding& binding, VkImageView image, VkSampler sampler) {
+    ASSERT(image != nullptr);
+    ASSERT(sampler != nullptr);
     ASSERT(binding.set != nullptr);
 
     const VkDescriptorImageInfo image_info{
-        .sampler = texture.sampler,
-        .imageView = texture.image.view,
+        .sampler = sampler,
+        .imageView = image,
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
     };
     const VkWriteDescriptorSet descriptor_write{
@@ -750,7 +606,6 @@ void write_image_sampler_descriptor(Vk& vk, const DescriptorSetBinding& binding,
     };
     vkUpdateDescriptorSets(vk.device, 1, &descriptor_write, 0, nullptr);
 }
-
 
 VkPipelineLayout create_pipeline_layout(Vk& vk, const PipelineLayoutConfig& config) {
     VkPipelineLayoutCreateInfo layout_info{
@@ -813,13 +668,13 @@ Result<GraphicsPipeline> create_graphics_pipeline(Vk& vk, const GraphicsPipeline
     });
 
     const auto vertex_code = read_shader(vk, config.vertex_shader_path);
-    defer(vk.stack.dealloc(*vertex_code));
+    DEFER(vk.stack.dealloc(*vertex_code));
     if (vertex_code.has_err()) {
         LOGF_ERROR("Could not load vertex shader: {}", config.vertex_shader_path.string());
         return vertex_code.err();
     }
     const auto fragment_code = read_shader(vk, config.fragment_shader_path);
-    defer(vk.stack.dealloc(*fragment_code));
+    DEFER(vk.stack.dealloc(*fragment_code));
     if (fragment_code.has_err()) {
         LOGF_ERROR("Could not load fragment shader: {}", config.fragment_shader_path.string());
         return fragment_code.err();
@@ -1004,7 +859,7 @@ void end_single_time_commands(Vk& vk, VkCommandBuffer cmd) {
     }
 
     const auto fence = create_fence(vk, {});
-    defer(vkDestroyFence(vk.device, fence, nullptr));
+    DEFER(vkDestroyFence(vk.device, fence, nullptr));
 
     VkSubmitInfo submit_info{
         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -1216,7 +1071,7 @@ void destroy_swapchain(Vk& vk, const Swapchain& swapchain) {
         ERROR("No swapchain formats available");
 
     auto formats = vk.stack.alloc<VkSurfaceFormatKHR>(format_count);
-    defer(vk.stack.dealloc(formats));
+    DEFER(vk.stack.dealloc(formats));
 
     const VkResult format_result = vkGetPhysicalDeviceSurfaceFormatsKHR(vk.gpu, surface, &format_count, formats.data);
     switch (format_result) {
@@ -1286,7 +1141,7 @@ Result<Swapchain> create_swapchain(Vk& vk, const VkSurfaceKHR surface) {
     }
 
     auto present_modes = vk.stack.alloc<VkPresentModeKHR>(present_mode_count);
-    defer(vk.stack.dealloc(present_modes));
+    DEFER(vk.stack.dealloc(present_modes));
 
     const VkResult present_res = vkGetPhysicalDeviceSurfacePresentModesKHR(
         vk.gpu,
@@ -1433,7 +1288,7 @@ Result<void> resize_swapchain(Vk& vk, Swapchain& swapchain, const VkSurfaceKHR s
     for (usize i = 0; i < swapchain.image_count; ++i) {
         if (swapchain.image_views[i] != nullptr)
             vkDestroyImageView(vk.device, swapchain.image_views[i], nullptr);
-        swapchain.image_views[i] = create_image_view(vk, {
+        swapchain.image_views[i] = create_gpu_image_view(vk, {
             .image = swapchain.images[i],
             .format = swapchain.format,
         });

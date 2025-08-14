@@ -2,6 +2,7 @@
 
 #include "hg_math.h"
 #include "hg_vulkan.h"
+#include "hg_assets.h"
 
 namespace hg {
 
@@ -11,45 +12,27 @@ struct Window {
     Swapchain swapchain{};
 };
 
-[[nodiscard]] Result<Window> create_window(Vk& vk, glm::ivec2 size);
-[[nodiscard]] Result<Window> create_fullscreen_window(Vk& vk);
+struct WindowConfig {
+    bool windowed = true;
+    glm::ivec2 size{};
+};
+[[nodiscard]] Result<Window> create_window(Vk& vk, const WindowConfig& config);
 [[nodiscard]] Result<void> resize_window(Vk& vk, Window& window);
 void destroy_window(Vk& vk, Window& window);
 
-[[nodiscard]] glm::ivec2 get_window_size(Window window);
-
 struct PbrRenderer {
-    struct ViewProjectionUniform {
-        glm::mat4 projection{1.0f};
-        glm::mat4 view{1.0f};
-    };
-
     static constexpr usize MaxLights = 10;
     struct Light {
         glm::vec4 position{};
         glm::vec4 color{};
     };
-    struct LightUniform {
-        alignas(16) usize count = 0;
-        alignas(16) Light vals[MaxLights]{};
+
+    struct Texture {
+        GpuImage image;
+        VkImageView view;
+        VkSampler sampler;
     };
 
-    struct SkyboxPush {
-        u32 cubemap = UINT32_MAX;
-    };
-    struct Skybox {
-        Pool<Texture>::Handle cubemap{};
-        GpuBuffer index_buffer{};
-        GpuBuffer vertex_buffer{};
-    };
-
-    struct ModelPush {
-        glm::mat4 model{1.0f};
-        u32 normal_map_index = UINT32_MAX;
-        u32 texture_index = UINT32_MAX;
-        float roughness = 0.0f;
-        float metalness = 0.0f;
-    };
     struct Model {
         u32 index_count = 0;
         GpuBuffer index_buffer{};
@@ -59,28 +42,28 @@ struct PbrRenderer {
         float roughness = 0.0;
         float metalness = 0.0;
     };
+
     struct ModelTicket {
         Pool<Model>::Handle model{};
         Transform3Df transform{};
     };
 
-    struct AntialiasPush {
-        glm::vec2 pixel_size{};
-        u32 input_index = UINT32_MAX;
+    struct Skybox {
+        Pool<Texture>::Handle cubemap{};
+        GpuBuffer index_buffer{};
+        GpuBuffer vertex_buffer{};
     };
 
-    struct TonemapPush {
-        u32 input_index = UINT32_MAX;
-    };
+    Vk* vk = nullptr;
+
+    VkDescriptorSetLayout descriptor_layout{};
+    VkDescriptorPool descriptor_pool{};
+    VkDescriptorSet descriptor_set{};
 
     GraphicsPipeline skybox_pipeline{};
     GraphicsPipeline model_pipeline{};
     GraphicsPipeline tonemap_pipeline{};
     GraphicsPipeline antialias_pipeline{};
-
-    VkDescriptorPool descriptor_pool{};
-    VkDescriptorSetLayout descriptor_layout{};
-    VkDescriptorSet descriptor_set{};
 
     Pool<Texture> textures{};
     Pool<Model> models{};
@@ -93,7 +76,7 @@ struct PbrRenderer {
     Skybox skybox{};
 };
 
-using PbrTextureHandle = Pool<Texture>::Handle;
+using PbrTextureHandle = Pool<PbrRenderer::Texture>::Handle;
 using PbrModelHandle = Pool<PbrRenderer::Model>::Handle;
 
 struct PbrRendererConfig {
@@ -102,32 +85,36 @@ struct PbrRendererConfig {
     u32 max_models = 256;
 };
 PbrRenderer create_pbr_renderer(Vk& vk, const PbrRendererConfig& config);
-void resize_pbr_renderer(Vk& vk, PbrRenderer& renderer, const Window& window);
-void destroy_pbr_renderer(Vk& vk, PbrRenderer& renderer);
+void resize_pbr_renderer(PbrRenderer& renderer, VkExtent2D extent);
+void destroy_pbr_renderer(PbrRenderer& renderer);
 
 struct Scene {
     const Cameraf* camera;
     Slice<const PbrRenderer::Light> lights;
     Slice<const PbrRenderer::ModelTicket> models;
 };
-Result<void> draw_pbr(Vk& vk, Window& window, PbrRenderer& renderer, const Scene& scene);
+Result<void> draw_pbr(PbrRenderer& renderer, Window& window, const Scene& scene);
 
 PbrRenderer::Light make_light(glm::vec3 position, glm::vec3 color, f32 intensity);
 
-void update_projection(Vk& vk, const PbrRenderer& renderer, const glm::mat4& projection);
+void update_projection(PbrRenderer& renderer, const glm::mat4& projection);
 
-PbrTextureHandle load_texture(Vk& vk, PbrRenderer& renderer, const ImageData& data, const VkFormat format);
-void unload_texture(Vk& vk, PbrRenderer& renderer, const PbrTextureHandle texture);
+struct PbrTextureConfig {
+    ImageHandle<void> data{};
+    VkFormat format = VK_FORMAT_UNDEFINED;
+};
+PbrTextureHandle create_texture(PbrRenderer& renderer, AssetManager& assets, const PbrTextureConfig& config);
+void destroy_texture(PbrRenderer& renderer, const PbrTextureHandle texture);
 
-void load_skybox(Vk& vk, PbrRenderer& renderer, const ImageData& cubemap);
-void unload_skybox(Vk& vk, PbrRenderer& renderer);
+void load_skybox(PbrRenderer& renderer, AssetManager& assets, const ImageHandle<u32> cubemap);
+void unload_skybox(PbrRenderer& renderer);
 
 struct PbrModelConfig {
     const GltfData& data;
     PbrTextureHandle normal_map;
     PbrTextureHandle color_map;
 };
-PbrModelHandle load_model(Vk& vk, PbrRenderer& renderer, const PbrModelConfig& config);
-void unload_model(Vk& vk, PbrRenderer& renderer, const PbrModelHandle model);
+PbrModelHandle create_model(PbrRenderer& renderer, AssetManager& assets, const PbrModelConfig& config);
+void destroy_model(PbrRenderer& renderer, PbrModelHandle model);
 
 } // namespace hg

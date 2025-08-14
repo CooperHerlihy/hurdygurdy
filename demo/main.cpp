@@ -1,6 +1,4 @@
-#include "hg_renderer.h"
 #include <hurdy_gurdy.h>
-#include <vulkan/vulkan_core.h>
 
 #define SDL_MAIN_USE_CALLBACKS
 #include <SDL3/SDL_main.h>
@@ -11,9 +9,8 @@ using namespace hg;
 
 constexpr double sqrt3 = 1.73205080757;
 
-static AssetLoader loader{};
 static Vk vk{};
-static Generator generator{};
+static AssetManager assets{};
 static Window window{};
 static PbrRenderer renderer{};
 
@@ -47,14 +44,9 @@ struct InputState {
 static InputState input_state{};
 
 SDL_AppResult SDL_AppInit(void**, int, char**) {
-    auto sdl_success = SDL_Init(SDL_INIT_VIDEO);
+    bool sdl_success = SDL_Init(SDL_INIT_VIDEO);
     if (!sdl_success)
         ERRORF("Could not initialize SDL: {}", SDL_GetError());
-
-    loader = AssetLoader{{
-        .max_images = 16,
-        .max_gltfs = 16,
-    }};
 
     vk = [] {
         auto vk_res = create_vk();
@@ -63,10 +55,10 @@ SDL_AppResult SDL_AppInit(void**, int, char**) {
         return std::move(*vk_res);
     }();
 
-    generator = Generator{{.max_meshes = 64, .max_images = 64}};
+    assets = create_asset_manager({});
 
     window = [] {
-        auto window_res = create_fullscreen_window(vk);
+        auto window_res = create_window(vk, {});
         if (window_res.has_err())
             perr(window_res);
         return *window_res;
@@ -74,101 +66,101 @@ SDL_AppResult SDL_AppInit(void**, int, char**) {
 
     renderer = create_pbr_renderer(vk, {window});
     {
-        auto cubemap = loader.load_image("assets/cloudy_skyboxes/Cubemap/Cubemap_Sky_06-512x512.png");
+        auto cubemap = load_image(assets, "assets/cloudy_skyboxes/Cubemap/Cubemap_Sky_06-512x512.png");
         if (cubemap.has_err())
             perr(cubemap);
-        defer(loader.unload_image(*cubemap));
+        DEFER(destroy_image(assets, *cubemap));
 
-        load_skybox(vk, renderer, loader.get(*cubemap));
+        load_skybox(renderer, assets, *cubemap);
     };
 
     default_normals = [&] {
-        auto default_normal_image = generator.alloc_image<glm::vec4>({2, 2}, [](...) {
+        auto default_normal_image = generate_image<glm::vec4>(assets, {2, 2}, [](...) {
             return glm::vec4{0.0f, 0.0f, -1.0f, 0.0f};
         });
-        defer(generator.dealloc_image(default_normal_image));
+        DEFER(destroy_image(assets, default_normal_image));
 
-        return load_texture(vk, renderer, generator.get(default_normal_image), VK_FORMAT_R32G32B32A32_SFLOAT);
+        return create_texture(renderer, assets, {default_normal_image, VK_FORMAT_R32G32B32A32_SFLOAT});
     }();
 
     perlin_normals = [&] {
-        auto perlin_noise = generator.alloc_image<f32>({512, 512}, [&](const auto pos) {
+        auto perlin_noise = generate_image<f32>(assets, {512, 512}, [&](const auto pos) {
             return get_fractal_noise(pos, 1.0f, 32.0f, get_perlin_noise);
         });
-        defer(generator.dealloc_image(perlin_noise));
+        DEFER(destroy_image(assets, perlin_noise));
 
-        auto perlin_normal_image = generator.alloc_image<glm::vec4>({512, 512}, [&](const auto pos) {
-            return get_normal_from_heightmap(pos, generator.get(perlin_noise));
+        auto perlin_normal_image = generate_image<glm::vec4>(assets, {512, 512}, [&](const auto pos) {
+            return get_normal_from_heightmap(pos, assets.images[perlin_noise.handle]);
         });
-        defer(generator.dealloc_image(perlin_normal_image));
+        DEFER(destroy_image(assets, perlin_normal_image));
 
-        return load_texture(vk, renderer, generator.get(perlin_normal_image), VK_FORMAT_R32G32B32A32_SFLOAT);
+        return create_texture(renderer, assets, {perlin_normal_image, VK_FORMAT_R32G32B32A32_SFLOAT});
     }();
 
     gray_texture = [&] {
-        auto gray_image = generator.alloc_image<u32>({2, 2}, [](...) { return 0xff777777; });
-        defer(generator.dealloc_image(gray_image));
+        auto gray_image = generate_image<u32>(assets, {2, 2}, [](...) { return 0xff777777; });
+        DEFER(destroy_image(assets, gray_image));
 
-        return load_texture(vk, renderer, generator.get(gray_image), VK_FORMAT_R8G8B8A8_SRGB);
+        return create_texture(renderer, assets, {gray_image, VK_FORMAT_R8G8B8A8_SRGB});
     }();
 
     cube = [&] {
-        auto cube_mesh = generator.generate_cube(generator.alloc_mesh());
-        defer(generator.dealloc_mesh(cube_mesh));
+        auto cube_mesh = generate_cube(assets);
+        DEFER(destroy_mesh(assets, cube_mesh));
 
-        return load_model(vk, renderer, {{generator.get(cube_mesh), 0.2f, 0.0f}, perlin_normals, gray_texture});
+        return create_model(renderer, assets, {{cube_mesh, 0.2f, 0.0f}, perlin_normals, gray_texture});
     }();
 
     sphere = [&] {
-        auto sphere_mesh = generator.generate_sphere(generator.alloc_mesh(), {128, 64});
-        defer(generator.dealloc_mesh(sphere_mesh));
+        auto sphere_mesh = generate_sphere(assets, {128, 64});
+        DEFER(destroy_mesh(assets, sphere_mesh));
 
-        return load_model(vk, renderer, {{generator.get(sphere_mesh), 0.2f, 1.0f}, perlin_normals, gray_texture});
+        return create_model(renderer, assets, {{sphere_mesh, 0.2f, 1.0f}, perlin_normals, gray_texture});
     }();
 
     hex_texture = [&] {
-        auto hex_image = loader.load_image("assets/hexagon_models/Textures/hexagons_medieval.png");
+        auto hex_image = load_image(assets, "assets/hexagon_models/Textures/hexagons_medieval.png");
         if (hex_image.has_err())
             perr(hex_image);
-        defer(loader.unload_image(*hex_image));
+        DEFER(destroy_image(assets, *hex_image));
 
-        return load_texture(vk, renderer, loader.get(*hex_image), VK_FORMAT_R8G8B8A8_SRGB);
+        return create_texture(renderer, assets, {*hex_image, VK_FORMAT_R8G8B8A8_SRGB});
     }();
 
     grass = [&] {
-        auto grass_mesh = loader.load_gltf("assets/hexagon_models/Assets/gltf/tiles/base/hex_grass.gltf");
+        auto grass_mesh = load_gltf(assets, "assets/hexagon_models/Assets/gltf/tiles/base/hex_grass.gltf");
         if (grass_mesh.has_err())
             perr(grass_mesh);
-        defer(loader.unload_gltf(*grass_mesh));
+        DEFER(unload_gltf(assets, *grass_mesh));
 
-        return load_model(vk, renderer, {loader.get(*grass_mesh), default_normals, hex_texture});
+        return create_model(renderer, assets, {*grass_mesh, default_normals, hex_texture});
     }();
 
     building = [&] {
-        auto building_mesh = loader.load_gltf(
+        auto building_mesh = load_gltf(assets,
             "assets/hexagon_models/Assets/gltf/buildings/blue/building_home_A_blue.gltf"
         );
         if (building_mesh.has_err())
             perr(building_mesh);
-        defer(loader.unload_gltf(*building_mesh));
+        DEFER(unload_gltf(assets, *building_mesh));
 
-        return load_model(vk, renderer, {loader.get(*building_mesh), default_normals, hex_texture});
+        return create_model(renderer, assets, {*building_mesh, default_normals, hex_texture});
     }();
 
     tower = [&] {
-        auto tower_mesh = loader.load_gltf(
+        auto tower_mesh = load_gltf(assets,
             "assets/hexagon_models/Assets/gltf/buildings/blue/building_tower_A_blue.gltf"
         );
         if (tower_mesh.has_err())
             perr(tower_mesh);
-        defer(loader.unload_gltf(*tower_mesh));
+        DEFER(unload_gltf(assets, *tower_mesh));
 
-        return load_model(vk, renderer, {loader.get(*tower_mesh), default_normals, hex_texture});
+        return create_model(renderer, assets, {*tower_mesh, default_normals, hex_texture});
     }();
 
-    const auto window_size = get_window_size(window);
-    const f32 aspect_ratio = static_cast<f32>(window_size.x) / static_cast<f32>(window_size.y);
-    update_projection(vk, renderer, glm::perspective(glm::pi<f32>() / 4.0f, aspect_ratio, 0.1f, 100.f));
+    const auto window_size = window.swapchain.extent;
+    const f32 aspect_ratio = static_cast<f32>(window_size.width) / static_cast<f32>(window_size.height);
+    update_projection(renderer, glm::perspective(glm::pi<f32>() / 4.0f, aspect_ratio, 0.1f, 100.f));
 
     camera.translate({0.0f, -2.0f, -4.0f});
     game_clock.update();
@@ -180,22 +172,21 @@ SDL_AppResult SDL_AppInit(void**, int, char**) {
 void SDL_AppQuit(void*, SDL_AppResult) {
     vkQueueWaitIdle(vk.queue);
 
-    unload_texture(vk, renderer, default_normals);
-    unload_texture(vk, renderer, perlin_normals);
-    unload_texture(vk, renderer, gray_texture);
-    unload_model(vk, renderer, cube);
-    unload_model(vk, renderer, sphere);
+    destroy_texture(renderer, default_normals);
+    destroy_texture(renderer, perlin_normals);
+    destroy_texture(renderer, gray_texture);
+    destroy_model(renderer, cube);
+    destroy_model(renderer, sphere);
 
-    unload_texture(vk, renderer, hex_texture);
-    unload_model(vk, renderer, grass);
-    unload_model(vk, renderer, building);
-    unload_model(vk, renderer, tower);
+    destroy_texture(renderer, hex_texture);
+    destroy_model(renderer, grass);
+    destroy_model(renderer, building);
+    destroy_model(renderer, tower);
 
-    destroy_pbr_renderer(vk, renderer);
+    destroy_pbr_renderer(renderer);
     destroy_window(vk, window);
-    generator.destroy();
+    destroy_asset_manager(assets);
     destroy_vk(vk);
-    loader.destroy();
 
     SDL_Quit();
 }
@@ -241,7 +232,7 @@ SDL_AppResult SDL_AppIterate(void*) {
         PbrRenderer::ModelTicket{grass, {.position{1.0f, -0.5f, sqrt3}}},
         PbrRenderer::ModelTicket{tower, {.position{1.0f, -0.5f, sqrt3}}},
     };
-    auto draw_res = draw_pbr(vk, window, renderer, {&camera, lights, models});
+    auto draw_res = draw_pbr(renderer, window, {&camera, lights, models});
     if (draw_res.has_err())
         perr(draw_res);
 
