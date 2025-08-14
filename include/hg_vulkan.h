@@ -8,63 +8,63 @@ struct Vk;
 [[nodiscard]] Result<Vk> create_vk();
 void destroy_vk(Vk& vk);
 
-enum class GpuMemoryType {
-    DeviceLocal = 0,
-    RandomAccess,
-    LinearAccess,
+enum GpuMemoryType {
+    GpuMemoryDeviceLocal = 0,
+    GpuMemoryRandomAccess,
+    GpuMemoryLinearAccess,
 };
 
 struct GpuBuffer {
-    VmaAllocation allocation = nullptr;
-    VkBuffer handle = nullptr;
-    VkDeviceSize size = 0;
-    GpuMemoryType type{};
+    VmaAllocation allocation;
+    VkBuffer handle;
+    VkDeviceSize size;
+    GpuMemoryType type;
 };
 void destroy_buffer(Vk& vk, const GpuBuffer& buffer);
 
 struct GpuBufferView {
-    VkBuffer handle = nullptr;
-    VkDeviceSize range = 0;
-    VkDeviceSize offset = 0;
+    VkBuffer handle;
+    VkDeviceSize range;
+    VkDeviceSize offset;
 };
 
 struct GpuBufferConfig {
-    VkDeviceSize size = 0;
-    VkBufferUsageFlags usage{};
-    GpuMemoryType memory_type = GpuMemoryType::DeviceLocal;
+    VkDeviceSize size;
+    VkBufferUsageFlags usage;
+    GpuMemoryType memory_type;
 };
 [[nodiscard]] GpuBuffer create_buffer(Vk& vk, const GpuBufferConfig& config);
 void write_buffer(Vk& vk, const GpuBuffer& dst, const void* src, usize size, usize offset = 0);
 
 struct GpuImage {
-    VmaAllocation allocation = nullptr;
-    VkImage handle{};
-    VkExtent3D extent{};
-    VkFormat format{};
-    u32 mip_levels = 0;
-    VkImageLayout layout{};
+    VmaAllocation allocation;
+    VkImage handle;
+    VkExtent3D extent;
+    VkFormat format;
+    u32 mip_levels;
+    VkImageLayout layout;
 };
 void destroy_gpu_image(Vk& vk, const GpuImage& image);
 
 struct GpuImageConfig {
-    VkExtent3D extent{};
-    VkFormat format{VK_FORMAT_UNDEFINED};
-    VkImageUsageFlags usage{};
+    VkExtent3D extent;
+    VkFormat format;
+    VkImageUsageFlags usage;
     u32 mip_levels = 1;
 };
 [[nodiscard]] GpuImage create_gpu_image(Vk& vk, const GpuImageConfig& config);
 
 struct GpuCubemapConfig {
-    VkExtent3D face_extent{};
-    VkFormat format{VK_FORMAT_UNDEFINED};
-    VkImageUsageFlags usage{};
+    VkExtent3D face_extent;
+    VkFormat format;
+    VkImageUsageFlags usage;
 };
 [[nodiscard]] GpuImage create_gpu_cubemap(Vk& vk, const GpuCubemapConfig& config);
 
 struct GpuImageWriteConfig {
     Slice<const void> src;
-    VkImageLayout final_layout{VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-    VkImageAspectFlags aspect_flags{VK_IMAGE_ASPECT_COLOR_BIT};
+    VkImageLayout final_layout;
+    VkImageAspectFlags aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT;
 };
 void write_gpu_image(Vk& vk, GpuImage& dst, const GpuImageWriteConfig& config);
 void write_gpu_cubemap(Vk& vk, GpuImage& dst, const GpuImageWriteConfig& config);
@@ -76,34 +76,34 @@ inline u32 get_mip_count(const VkExtent3D extent) {
 void generate_gpu_image_mipmaps(Vk& vk, GpuImage& image, VkImageLayout final_layout);
 
 struct GpuImageViewConfig {
-    VkImage image{};
-    VkFormat format{};
-    VkImageAspectFlags aspect_flags{VK_IMAGE_ASPECT_COLOR_BIT};
+    VkImage image;
+    VkFormat format;
+    VkImageAspectFlags aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT;
 };
 [[nodiscard]] VkImageView create_gpu_image_view(Vk& vk, const GpuImageViewConfig& config);
 [[nodiscard]] VkImageView create_gpu_cubemap_view(Vk& vk, const GpuImageViewConfig& config);
 
-enum class SamplerType {
-    Nearest = VK_FILTER_NEAREST,
-    Linear = VK_FILTER_LINEAR,
+enum SamplerType {
+    SamplerNearest = VK_FILTER_NEAREST,
+    SamplerLinear = VK_FILTER_LINEAR,
 };
 
 struct SamplerConfig {
-    SamplerType type = SamplerType::Nearest;
-    VkSamplerAddressMode edge_mode{VK_SAMPLER_ADDRESS_MODE_REPEAT};
+    SamplerType type;
+    VkSamplerAddressMode edge_mode;
     u32 mip_levels = 1;
 };
 [[nodiscard]] VkSampler create_sampler(Vk& vk, const SamplerConfig& config);
 
 struct DescriptorSetLayoutConfig {
     Slice<const VkDescriptorSetLayoutBinding> bindings;
-    Slice<const VkDescriptorBindingFlags> flags = {};
+    Slice<const VkDescriptorBindingFlags> flags;
 };
 [[nodiscard]] VkDescriptorSetLayout create_descriptor_set_layout(Vk& vk, const DescriptorSetLayoutConfig& config);
 
 struct DescriptorPoolConfig {
-    u32 max_sets = 0;
-    Slice<const VkDescriptorPoolSize> descriptors{};
+    u32 max_sets;
+    Slice<const VkDescriptorPoolSize> descriptors;
 };
 [[nodiscard]] VkDescriptorPool create_descriptor_pool(Vk& vk, const DescriptorPoolConfig& config);
 
@@ -128,29 +128,29 @@ struct DescriptorPoolConfig {
 struct DescriptorSetBinding {
     VkDescriptorSet set;
     u32 binding_index;
-    u32 array_index = 0;
+    u32 array_index;
 };
 void write_image_sampler_descriptor(Vk& vk, const DescriptorSetBinding& binding, VkImageView image, VkSampler sampler);
 void write_uniform_buffer_descriptor(Vk& vk, const DescriptorSetBinding& binding, const GpuBufferView& buffer);
 
 struct PipelineLayoutConfig {
-    Slice<const VkDescriptorSetLayout> set_layouts{};
-    Slice<const VkPushConstantRange> push_ranges{};
+    Slice<const VkDescriptorSetLayout> set_layouts;
+    Slice<const VkPushConstantRange> push_ranges;
 };
 [[nodiscard]] VkPipelineLayout create_pipeline_layout(Vk& vk, const PipelineLayoutConfig& config);
 
 struct GraphicsPipeline {
-    VkPipelineLayout layout{};
-    std::array<VkShaderEXT, 2> shaders{};
+    VkPipelineLayout layout;
+    std::array<VkShaderEXT, 2> shaders;
 };
 void destroy_graphics_pipeline(Vk& vk, const GraphicsPipeline& pipeline);
 
 struct GraphicsPipelineConfig {
-    Slice<const VkDescriptorSetLayout> set_layouts{};
-    Slice<const VkPushConstantRange> push_ranges{};
-    std::filesystem::path vertex_shader_path{};
-    std::filesystem::path fragment_shader_path{};
-    VkShaderCodeTypeEXT code_type{VK_SHADER_CODE_TYPE_SPIRV_EXT};
+    Slice<const VkDescriptorSetLayout> set_layouts;
+    Slice<const VkPushConstantRange> push_ranges;
+    std::filesystem::path vertex_shader_path;
+    std::filesystem::path fragment_shader_path;
+    VkShaderCodeTypeEXT code_type = VK_SHADER_CODE_TYPE_SPIRV_EXT;
 };
 [[nodiscard]] Result<GraphicsPipeline> create_graphics_pipeline(Vk& vk, const GraphicsPipelineConfig& config);
 
@@ -175,9 +175,9 @@ void submit_single_time_commands(Vk& vk, auto commands) {
 class BarrierBuilder {
 public:
     struct Config {
-        usize memory_barriers = 0;
-        usize buffer_barriers = 0;
-        usize image_barriers = 0;
+        usize memory_barriers;
+        usize buffer_barriers;
+        usize image_barriers;
     };
     BarrierBuilder(Vk& vk, const Config& config);
     void build_and_run(Vk& vk, const VkCommandBuffer cmd, const VkDependencyFlags flags = {});
@@ -249,22 +249,22 @@ void copy_to_buffer(VkCommandBuffer cmd, const GpuBufferView& dst, const GpuBuff
 void copy_to_image(VkCommandBuffer cmd, GpuImage& dst, const GpuBuffer& src, VkImageAspectFlags aspect);
 
 struct BlitConfig {
-    VkImage image = nullptr;
-    VkOffset3D begin{};
-    VkOffset3D end{};
+    VkImage image;
+    VkOffset3D begin;
+    VkOffset3D end;
     VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
-    uint32_t mip_level = 0;
-    uint32_t array_layer = 0;
+    uint32_t mip_level;
+    uint32_t array_layer;
     uint32_t layer_count = 1;
 };
 void blit_image(VkCommandBuffer cmd, const BlitConfig& dst, const BlitConfig& src, VkFilter filter);
 
 struct ResolveConfig {
-    VkImage image = nullptr;
-    VkExtent3D extent{};
+    VkImage image;
+    VkExtent3D extent;
     VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
-    uint32_t mip_level = 0;
-    uint32_t array_layer = 0;
+    uint32_t mip_level;
+    uint32_t array_layer;
     uint32_t layer_count = 1;
 };
 void resolve_image(VkCommandBuffer cmd, const ResolveConfig& dst, const ResolveConfig& src);
@@ -274,26 +274,26 @@ void draw_indexed(VkCommandBuffer cmd, VkBuffer vertex_buffer, VkBuffer index_bu
 
 [[nodiscard]] VkSurfaceKHR create_surface(Vk& vk, SDL_Window* window);
 
+static constexpr u32 SwapchainMaxFramesInFlight = 2;
+static constexpr u32 SwapchainMaxImages = 3;
+static constexpr VkColorSpaceKHR SwapchainColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+
 struct Swapchain {
-    static constexpr u32 MaxFramesInFlight = 2;
-    static constexpr u32 MaxImages = 3;
-    static constexpr VkColorSpaceKHR ColorSpace{VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
-
-    VkExtent2D extent{};
+    VkExtent2D extent;
     VkSwapchainKHR swapchain{};
-    std::array<VkImage, MaxImages> images{};
-    std::array<VkImageView, MaxImages> image_views{};
-    u32 image_count = 0;
-    VkFormat format = VK_FORMAT_UNDEFINED;
+    std::array<VkImage, SwapchainMaxImages> images;
+    std::array<VkImageView, SwapchainMaxImages> image_views;
+    u32 image_count;
+    VkFormat format;
 
-    u32 current_image_index = 0;
-    u32 current_frame_index = 0;
-    bool recording = false;
+    u32 current_image_index;
+    u32 current_frame_index;
+    bool recording;
 
-    std::array<VkCommandBuffer, MaxFramesInFlight> command_buffers{};
-    std::array<VkFence, MaxFramesInFlight> frame_finished_fences{};
-    std::array<VkSemaphore, MaxFramesInFlight> image_available_semaphores{};
-    std::array<VkSemaphore, MaxImages> ready_to_present_semaphores{};
+    VkCommandBuffer command_buffers[SwapchainMaxFramesInFlight];
+    VkFence frame_finished_fences[SwapchainMaxFramesInFlight];
+    VkSemaphore image_available_semaphores[SwapchainMaxFramesInFlight];
+    VkSemaphore ready_to_present_semaphores[SwapchainMaxImages];
 
     [[nodiscard]] VkCommandBuffer& current_cmd() { return command_buffers[current_frame_index]; }
     [[nodiscard]] VkImage& current_image() { return images[current_image_index]; }
@@ -321,20 +321,20 @@ void destroy_swapchain(Vk& vk, const Swapchain& swapchain);
 [[nodiscard]] Result<void> end_frame(Vk& vk, Swapchain& swapchain);
 
 struct VulkanPFNs {
-    PFN_vkCreateDebugUtilsMessengerEXT vkCreateDebugUtilsMessengerEXT{};
-    PFN_vkDestroyDebugUtilsMessengerEXT vkDestroyDebugUtilsMessengerEXT{};
+    PFN_vkCreateDebugUtilsMessengerEXT vkCreateDebugUtilsMessengerEXT;
+    PFN_vkDestroyDebugUtilsMessengerEXT vkDestroyDebugUtilsMessengerEXT;
 
-    PFN_vkCreateShadersEXT vkCreateShadersEXT{};
-    PFN_vkDestroyShaderEXT vkDestroyShaderEXT{};
+    PFN_vkCreateShadersEXT vkCreateShadersEXT;
+    PFN_vkDestroyShaderEXT vkDestroyShaderEXT;
 
-    PFN_vkCmdSetPolygonModeEXT vkCmdSetPolygonModeEXT{};
-    PFN_vkCmdSetRasterizationSamplesEXT vkCmdSetRasterizationSamplesEXT{};
-    PFN_vkCmdSetSampleMaskEXT vkCmdSetSampleMaskEXT{};
-    PFN_vkCmdSetAlphaToCoverageEnableEXT vkCmdSetAlphaToCoverageEnableEXT{};
-    PFN_vkCmdSetColorWriteMaskEXT vkCmdSetColorWriteMaskEXT{};
-    PFN_vkCmdSetColorBlendEnableEXT vkCmdSetColorBlendEnableEXT{};
-    PFN_vkCmdBindShadersEXT vkCmdBindShadersEXT{};
-    PFN_vkCmdSetVertexInputEXT vkCmdSetVertexInputEXT{};
+    PFN_vkCmdSetPolygonModeEXT vkCmdSetPolygonModeEXT;
+    PFN_vkCmdSetRasterizationSamplesEXT vkCmdSetRasterizationSamplesEXT;
+    PFN_vkCmdSetSampleMaskEXT vkCmdSetSampleMaskEXT;
+    PFN_vkCmdSetAlphaToCoverageEnableEXT vkCmdSetAlphaToCoverageEnableEXT;
+    PFN_vkCmdSetColorWriteMaskEXT vkCmdSetColorWriteMaskEXT;
+    PFN_vkCmdSetColorBlendEnableEXT vkCmdSetColorBlendEnableEXT;
+    PFN_vkCmdBindShadersEXT vkCmdBindShadersEXT;
+    PFN_vkCmdSetVertexInputEXT vkCmdSetVertexInputEXT;
 };
 
 inline VulkanPFNs g_pfn;
@@ -343,20 +343,20 @@ void load_instance_procedures(VkInstance instance);
 void load_device_procedures(VkDevice device);
 
 struct Vk {
-    Arena stack{};
+    Arena stack;
 
-    VkInstance instance{};
-    VkDebugUtilsMessengerEXT debug_messenger{};
+    VkInstance instance;
+    VkDebugUtilsMessengerEXT debug_messenger;
 
-    VkPhysicalDevice gpu{};
-    VkDevice device{};
-    VmaAllocator gpu_allocator = nullptr;
+    VkPhysicalDevice gpu;
+    VkDevice device;
+    VmaAllocator gpu_allocator;
 
     u32 queue_family_index = UINT32_MAX;
-    VkQueue queue{};
+    VkQueue queue;
 
-    VkCommandPool command_pool{};
-    VkCommandPool single_time_command_pool{};
+    VkCommandPool command_pool;
+    VkCommandPool single_time_command_pool;
 };
 
 } // namespace hg

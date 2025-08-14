@@ -43,7 +43,7 @@ enum LogLevel {
     LogError
 };
 
-inline const char* to_string(LogLevel level) {
+inline std::string_view to_string(LogLevel level) {
     switch (level) {
         case LogInfo: return "Info";
         case LogWarning: return "Warning";
@@ -55,7 +55,6 @@ inline const char* to_string(LogLevel level) {
 #define LOG(level, message) {                                                                      \
     std::println("{}: {} : {} {}(): {}", to_string(level), __FILE__, __LINE__, __func__, message); \
 }
-    // printf("%s: %s : %d %s(): %s", to_string(level), __FILE__, __LINE__, __func__, message);
 #define LOG_INFO(message) { LOG(LogInfo, message) }
 #define LOG_WARN(message) { LOG(LogWarning, message) }
 #define LOG_ERROR(message) { LOG(LogError, message) }
@@ -297,11 +296,6 @@ template <typename T> struct Slice {
 
     template <typename U> constexpr Slice(const std::span<U>& other)
         : data{static_cast<T*>(other.data())}, count{other.size()} {}
-    template <typename U, usize N> constexpr Slice(std::array<U, N>& other)
-        : data{static_cast<T*>(other.data())}, count{other.size()} {}
-    template <typename U, usize N> constexpr Slice(const std::array<U, N>& other)
-        : data{static_cast<T*>(other.data())}, count{other.size()} {}
-
     template <typename U> constexpr operator std::span<U>() const { return {static_cast<U*>(data), count}; }
 
     constexpr T& operator[](const usize index) const {
@@ -322,11 +316,6 @@ template <> struct Slice<void> {
 
     template <typename U> constexpr Slice(const std::span<U>& other)
         : data{static_cast<void*>(other.data())}, count{other.size()} {}
-    template <typename U, usize N> constexpr Slice(std::array<U, N>& other)
-        : data{static_cast<void*>(other.data())}, count{other.size()} {}
-    template <typename U, usize N> constexpr Slice(const std::array<U, N>& other)
-        : data{static_cast<void*>(other.data())}, count{other.size()} {}
-
     template <typename U> constexpr operator std::span<U>() const { return {static_cast<U*>(data), count}; }
 };
 
@@ -342,11 +331,6 @@ template <> struct Slice<const void> {
 
     template <typename U> constexpr Slice(const std::span<U>& other)
         : data{static_cast<void*>(other.data())}, count{other.size()} {}
-    template <typename U, usize N> constexpr Slice(std::array<U, N>& other)
-        : data{static_cast<void*>(other.data())}, count{other.size()} {}
-    template <typename U, usize N> constexpr Slice(const std::array<U, N>& other)
-        : data{static_cast<void*>(other.data())}, count{other.size()} {}
-
     template <typename U> constexpr operator std::span<U>() const { return {static_cast<U*>(data), count}; }
 };
 

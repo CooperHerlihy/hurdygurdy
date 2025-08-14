@@ -20,13 +20,13 @@ GpuBuffer create_buffer(Vk& vk, const GpuBufferConfig& config) {
     };
 
     VmaAllocationCreateInfo alloc_info{};
-    if (config.memory_type == GpuMemoryType::DeviceLocal) {
+    if (config.memory_type == GpuMemoryDeviceLocal) {
         alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
         alloc_info.flags = 0;
-    } else if (config.memory_type == GpuMemoryType::LinearAccess) {
+    } else if (config.memory_type == GpuMemoryLinearAccess) {
         alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
         alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    } else if (config.memory_type == GpuMemoryType::RandomAccess) {
+    } else if (config.memory_type == GpuMemoryRandomAccess) {
         alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
         alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
     } else {
@@ -62,10 +62,10 @@ void write_buffer(Vk& vk, const GpuBuffer& dst, const void* src, usize size, usi
     ASSERT(dst.handle != nullptr);
     ASSERT(src != nullptr);
     ASSERT(size != 0);
-    if (dst.type == GpuMemoryType::LinearAccess)
+    if (dst.type == GpuMemoryLinearAccess)
         ASSERT(offset == 0);
 
-    if (dst.type == GpuMemoryType::RandomAccess || dst.type == GpuMemoryType::LinearAccess) {
+    if (dst.type == GpuMemoryRandomAccess || dst.type == GpuMemoryLinearAccess) {
         const auto copy_result = vmaCopyMemoryToAllocation(vk.gpu_allocator, src, dst.allocation, offset, size);
         switch (copy_result) {
             case VK_SUCCESS: return;
@@ -75,16 +75,18 @@ void write_buffer(Vk& vk, const GpuBuffer& dst, const void* src, usize size, usi
             default: ERROR("Unexpected Vulkan error");
         }
     }
-    ASSERT(dst.type == GpuMemoryType::DeviceLocal);
+    ASSERT(dst.type == GpuMemoryDeviceLocal);
 
     const auto staging_buffer = create_buffer(vk, {
-        size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, GpuMemoryType::LinearAccess
+        .size = size,
+        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        .memory_type = GpuMemoryLinearAccess
     });
     DEFER(destroy_buffer(vk, staging_buffer));
     write_buffer(vk, staging_buffer, src, size, 0);
 
     submit_single_time_commands(vk, [&](const VkCommandBuffer cmd) {
-        copy_to_buffer(cmd, GpuBufferView{dst.handle, size, offset}, GpuBufferView{staging_buffer.handle, size});
+        copy_to_buffer(cmd, {dst.handle, size, offset}, {staging_buffer.handle, size});
     });
 }
 
@@ -124,12 +126,12 @@ GpuImage create_gpu_image(Vk& vk, const GpuImageConfig& config) {
         .mip_levels = config.mip_levels,
     };
     const auto image_result = vmaCreateImage(
-            vk.gpu_allocator,
-            &image_info,
-            &alloc_info,
-            &image.handle,
-            &image.allocation,
-            nullptr
+        vk.gpu_allocator,
+        &image_info,
+        &alloc_info,
+        &image.handle,
+        &image.allocation,
+        nullptr
     );
     switch (image_result) {
         case VK_SUCCESS: break;
@@ -173,12 +175,12 @@ GpuImage create_gpu_cubemap(Vk& vk, const GpuCubemapConfig& config) {
         .mip_levels = 1,
     };
     const auto image_result = vmaCreateImage(
-            vk.gpu_allocator,
-            &image_info,
-            &alloc_info,
-            &cubemap.handle,
-            &cubemap.allocation,
-            nullptr
+        vk.gpu_allocator,
+        &image_info,
+        &alloc_info,
+        &cubemap.handle,
+        &cubemap.allocation,
+        nullptr
     );
     switch (image_result) {
         case VK_SUCCESS: break;
@@ -199,7 +201,9 @@ void write_gpu_image(Vk& vk, GpuImage& dst, const GpuImageWriteConfig& config) {
     ASSERT(config.src.data != nullptr);
 
     const auto staging_buffer = create_buffer(vk, {
-        config.src.count, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, GpuMemoryType::LinearAccess
+        .size = config.src.count,
+        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        .memory_type = GpuMemoryLinearAccess,
     });
     DEFER(destroy_buffer(vk, staging_buffer));
     write_buffer(vk, staging_buffer, config.src.data, config.src.count, 0);
@@ -207,7 +211,9 @@ void write_gpu_image(Vk& vk, GpuImage& dst, const GpuImageWriteConfig& config) {
     submit_single_time_commands(vk, [&](const VkCommandBuffer cmd) {
         BarrierBuilder(vk, {.image_barriers = 1})
             .add_image_barrier(0, dst.handle, {config.aspect_flags, 0, VK_REMAINING_MIP_LEVELS, 0, 1})
-            .set_image_dst(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            .set_image_dst(0,
+                VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                VK_ACCESS_2_TRANSFER_WRITE_BIT,
                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
             .build_and_run(vk, cmd);
 
@@ -215,7 +221,9 @@ void write_gpu_image(Vk& vk, GpuImage& dst, const GpuImageWriteConfig& config) {
 
         BarrierBuilder(vk, {.image_barriers = 1})
             .add_image_barrier(0, dst.handle, {config.aspect_flags, 0, VK_REMAINING_MIP_LEVELS, 0, 1})
-            .set_image_src(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            .set_image_src(0,
+                VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                VK_ACCESS_2_TRANSFER_WRITE_BIT,
                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
             .set_image_dst(0, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE, config.final_layout)
             .build_and_run(vk, cmd);
@@ -246,7 +254,10 @@ void write_gpu_cubemap(Vk& vk, GpuImage& dst, const GpuImageWriteConfig& config)
     submit_single_time_commands(vk, [&](const VkCommandBuffer cmd) {
         BarrierBuilder(vk, {.image_barriers = 1})
             .add_image_barrier(0, dst.handle, {config.aspect_flags, 0, 1, 0, 6})
-            .set_image_dst(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+            .set_image_dst(0,
+                VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
             .build_and_run(vk, cmd);
 
         std::array copies{
@@ -306,9 +317,13 @@ void write_gpu_cubemap(Vk& vk, GpuImage& dst, const GpuImageWriteConfig& config)
 
         BarrierBuilder(vk, {.image_barriers = 1})
             .add_image_barrier(0, dst.handle, {config.aspect_flags, 0, 1, 0, 6})
-            .set_image_src(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            .set_image_src(0,
+                VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                VK_ACCESS_2_TRANSFER_WRITE_BIT,
                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
-            .set_image_dst(0, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT,
+            .set_image_dst(0,
+                VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                VK_ACCESS_2_SHADER_READ_BIT,
                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
             .build_and_run(vk, cmd);
     });
@@ -334,14 +349,18 @@ void generate_gpu_image_mipmaps(Vk& vk, GpuImage& image, VkImageLayout final_lay
 
         BarrierBuilder(vk, {.image_barriers = 1})
             .add_image_barrier(0, image.handle, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
-            .set_image_dst(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT,
+            .set_image_dst(0,
+                VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                VK_ACCESS_2_TRANSFER_READ_BIT,
                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
             .build_and_run(vk, cmd);
 
         for (u32 level = 0; level < image.mip_levels - 1; ++level) {
             BarrierBuilder(vk, {.image_barriers = 1})
                 .add_image_barrier(0, image.handle, {VK_IMAGE_ASPECT_COLOR_BIT, level + 1, 1, 0, 1})
-                .set_image_dst(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                .set_image_dst(0,
+                    VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                    VK_ACCESS_2_TRANSFER_WRITE_BIT,
                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
                 .build_and_run(vk, cmd);
 
@@ -365,17 +384,23 @@ void generate_gpu_image_mipmaps(Vk& vk, GpuImage& image, VkImageLayout final_lay
 
             BarrierBuilder(vk, {.image_barriers = 1})
                 .add_image_barrier(0, image.handle, {VK_IMAGE_ASPECT_COLOR_BIT, level + 1, 1, 0, 1})
-                .set_image_src(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
-                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
-                .set_image_dst(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT,
-                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
+                .set_image_src(0,
+                    VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                    VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+                .set_image_dst(0,
+                    VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                    VK_ACCESS_2_TRANSFER_READ_BIT,
+                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
                 .build_and_run(vk, cmd);
         }
 
         BarrierBuilder(vk, {.image_barriers = 1})
             .add_image_barrier(0, image.handle, {VK_IMAGE_ASPECT_COLOR_BIT, 0, image.mip_levels, 0, 1})
-            .set_image_src(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT,
-                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
+            .set_image_src(0,
+                VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                VK_ACCESS_2_TRANSFER_READ_BIT,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
             .set_image_dst(0, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE, final_layout)
             .build_and_run(vk, cmd);
     });
@@ -450,11 +475,11 @@ VkSampler create_sampler(Vk& vk, const SamplerConfig& config) {
         .maxLod = static_cast<f32>(config.mip_levels),
         .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
     };
-    if (config.type == SamplerType::Linear) {
+    if (config.type == SamplerLinear) {
         sampler_info.magFilter = VK_FILTER_LINEAR;
         sampler_info.minFilter = VK_FILTER_LINEAR;
         sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-    } else if (config.type == SamplerType::Nearest) {
+    } else if (config.type == SamplerNearest) {
         sampler_info.magFilter = VK_FILTER_NEAREST;
         sampler_info.minFilter = VK_FILTER_NEAREST;
         sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
@@ -631,16 +656,35 @@ VkPipelineLayout create_pipeline_layout(Vk& vk, const PipelineLayoutConfig& conf
 static Result<Slice<char>> read_shader(Vk& vk, const std::filesystem::path path) {
     ASSERT(!path.empty());
 
-    auto file = std::ifstream{path, std::ios::ate | std::ios::binary};
-    if (!file.is_open()) {
+    FILE* file = std::fopen(path.string().data(), "rb");
+    if (file == nullptr) {
         LOGF_ERROR("Could not open shader file: {}", path.string());
         return Err::ShaderFileNotFound;
     }
+    DEFER(std::fclose(file));
 
-    auto code = ok<Slice<char>>(vk.stack.alloc<char>(file.tellg()));
-    file.seekg(0);
-    file.read(code->data, static_cast<std::streamsize>(code->count));
-    file.close();
+    std::fseek(file, 0, SEEK_END);
+    i64 file_size = std::ftell(file);
+    std::rewind(file);
+
+    if (file_size == -1) {
+        LOGF_ERROR("Invalid shader file: {}", path.string());
+        return Err::ShaderFileInvalid;
+    }
+    auto code = ok(vk.stack.alloc<char>(file_size));
+    std::fread(code->data, 1, code->count, file);
+
+    // REMOVE
+    // auto file = std::ifstream{path, std::ios::ate | std::ios::binary};
+    // if (!file.is_open()) {
+    //     LOGF_ERROR("Could not open shader file: {}", path.string());
+    //     return Err::ShaderFileNotFound;
+    // }
+    //
+    // auto code = ok<Slice<char>>(vk.stack.alloc<char>(file.tellg()));
+    // file.seekg(0);
+    // file.read(code->data, static_cast<std::streamsize>(code->count));
+    // file.close();
 
     return code;
 }
@@ -734,8 +778,8 @@ Result<GraphicsPipeline> create_graphics_pipeline(Vk& vk, const GraphicsPipeline
 }
 
 void bind_shaders(VkCommandBuffer cmd, const GraphicsPipeline& pipeline) {
-    const std::array shader_stages{VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT};
-    g_pfn.vkCmdBindShadersEXT(cmd, 2, shader_stages.data(), pipeline.shaders.data());
+    const VkShaderStageFlagBits shader_stages[]{VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT};
+    g_pfn.vkCmdBindShadersEXT(cmd, 2, shader_stages, pipeline.shaders.data());
 }
 
 VkFence create_fence(Vk& vk, const VkFenceCreateFlags flags) {
@@ -951,9 +995,9 @@ void blit_image(VkCommandBuffer cmd, const BlitConfig& dst, const BlitConfig& sr
     VkImageBlit2 region{
         .sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2,
         .srcSubresource{src.aspect, src.mip_level, src.array_layer, src.layer_count},
-        .srcOffsets = {src.begin, src.end},
+        .srcOffsets{src.begin, src.end},
         .dstSubresource{dst.aspect, dst.mip_level, dst.array_layer, dst.layer_count},
-        .dstOffsets = {dst.begin, dst.end},
+        .dstOffsets{dst.begin, dst.end},
     };
     VkBlitImageInfo2 blit_image_info{
         .sType = VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2,
@@ -1005,16 +1049,16 @@ void resolve_image(VkCommandBuffer cmd, const ResolveConfig& dst, const ResolveC
 }
 
 void draw_vertices(VkCommandBuffer cmd, VkBuffer vertex_buffer, u32 vertex_count) {
-    std::array vertex_buffers = {vertex_buffer};
-    std::array offsets = {usize{0}};
-    vkCmdBindVertexBuffers(cmd, 0, to_u32(vertex_buffers.size()), vertex_buffers.data(), offsets.data());
+    const VkBuffer vertex_buffers[]{vertex_buffer};
+    const usize offsets[]{0};
+    vkCmdBindVertexBuffers(cmd, 0, to_u32(std::size(vertex_buffers)), vertex_buffers, offsets);
     vkCmdDraw(cmd, vertex_count, 1, 0, 0);
 }
 
 void draw_indexed(VkCommandBuffer cmd, VkBuffer vertex_buffer, VkBuffer index_buffer, u32 index_count) {
-    std::array vertex_buffers = {vertex_buffer};
-    std::array offsets = {usize{0}};
-    vkCmdBindVertexBuffers(cmd, 0, to_u32(vertex_buffers.size()), vertex_buffers.data(), offsets.data());
+    const VkBuffer vertex_buffers[]{vertex_buffer};
+    const usize offsets[]{0};
+    vkCmdBindVertexBuffers(cmd, 0, to_u32(std::size(vertex_buffers)), vertex_buffers, offsets);
     vkCmdBindIndexBuffer(cmd, index_buffer, 0, VK_INDEX_TYPE_UINT32);
     vkCmdDrawIndexed(cmd, index_count, 1, 0, 0, 1);
 }
@@ -1039,8 +1083,8 @@ void destroy_swapchain(Vk& vk, const Swapchain& swapchain) {
     vkFreeCommandBuffers(
         vk.device,
         vk.command_pool,
-        to_u32(swapchain.command_buffers.size()),
-        swapchain.command_buffers.data()
+        to_u32(std::size(swapchain.command_buffers)),
+        swapchain.command_buffers
     );
 
     for (usize i = 0; i < swapchain.image_count; ++i) {
@@ -1087,16 +1131,13 @@ void destroy_swapchain(Vk& vk, const Swapchain& swapchain) {
         case VK_ERROR_VALIDATION_FAILED_EXT: ERROR("Vulkan validation failed");
         default: ERROR("Unexpected Vulkan error");
     }
-    if (std::ranges::any_of(formats, [](const VkSurfaceFormatKHR format) {
-        return format.format == VK_FORMAT_R8G8B8A8_SRGB;
-    }))
-        return VK_FORMAT_R8G8B8A8_SRGB;
-    else if (std::ranges::any_of(formats, [](const VkSurfaceFormatKHR format) {
-        return format.format == VK_FORMAT_B8G8R8A8_SRGB;
-    }))
-        return VK_FORMAT_B8G8R8A8_SRGB;
-    else
-        ERROR("No supported swapchain formats");
+    for (const auto& format : formats) {
+        if (format.format == VK_FORMAT_R8G8B8A8_SRGB)
+            return VK_FORMAT_R8G8B8A8_SRGB;
+        if (format.format == VK_FORMAT_B8G8R8A8_SRGB)
+            return VK_FORMAT_B8G8R8A8_SRGB;
+    }
+    ERROR("No supported swapchain formats");
 }
 
 Result<Swapchain> create_swapchain(Vk& vk, const VkSurfaceKHR surface) {
@@ -1108,7 +1149,7 @@ Result<Swapchain> create_swapchain(Vk& vk, const VkSurfaceKHR surface) {
     if (result.has_err())
         return result.err();
 
-    allocate_command_buffers(vk, swapchain->command_buffers);
+    allocate_command_buffers(vk, {swapchain->command_buffers, std::size(swapchain->command_buffers)});
 
     for (auto& fence : swapchain->frame_finished_fences) {
         fence = create_fence(vk, VK_FENCE_CREATE_SIGNALED_BIT);
@@ -1140,14 +1181,11 @@ Result<Swapchain> create_swapchain(Vk& vk, const VkSurfaceKHR surface) {
         default: ERROR("Unexpected Vulkan error");
     }
 
-    auto present_modes = vk.stack.alloc<VkPresentModeKHR>(present_mode_count);
+    const auto present_modes = vk.stack.alloc<VkPresentModeKHR>(present_mode_count);
     DEFER(vk.stack.dealloc(present_modes));
 
     const VkResult present_res = vkGetPhysicalDeviceSurfacePresentModesKHR(
-        vk.gpu,
-        surface,
-        &present_mode_count,
-        present_modes.data
+        vk.gpu, surface, &present_mode_count, present_modes.data
     );
     switch (present_res) {
         case VK_SUCCESS: break;
@@ -1161,11 +1199,11 @@ Result<Swapchain> create_swapchain(Vk& vk, const VkSurfaceKHR surface) {
         default: ERROR("Unexpected Vulkan error");
     }
 
-    return std::ranges::any_of(present_modes, [](const VkPresentModeKHR mode) {
-        return mode == VK_PRESENT_MODE_MAILBOX_KHR;
-    })
-        ? VK_PRESENT_MODE_MAILBOX_KHR
-        : VK_PRESENT_MODE_FIFO_KHR;
+    for (const auto& mode : present_modes) {
+        if (mode == VK_PRESENT_MODE_MAILBOX_KHR)
+            return VK_PRESENT_MODE_MAILBOX_KHR;
+    }
+    return VK_PRESENT_MODE_FIFO_KHR;
 }
 
 static Result<VkSwapchainKHR> create_new_swapchain(Vk& vk, Swapchain& swapchain, const VkSurfaceKHR surface) {
@@ -1198,13 +1236,13 @@ static Result<VkSwapchainKHR> create_new_swapchain(Vk& vk, Swapchain& swapchain,
         .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
         .surface = surface,
         .minImageCount = surface_capabilities.maxImageCount == 0
-                         ? Swapchain::MaxImages
-                         : std::min(
-                             std::min(surface_capabilities.minImageCount + 1, surface_capabilities.maxImageCount),
-                             Swapchain::MaxImages
-                         ),
+                       ? SwapchainMaxImages
+                       : std::min(std::min(
+                             surface_capabilities.minImageCount + 1,
+                             surface_capabilities.maxImageCount),
+                             SwapchainMaxImages),
         .imageFormat = swapchain.format,
-        .imageColorSpace = Swapchain::ColorSpace,
+        .imageColorSpace = SwapchainColorSpace,
         .imageExtent = swapchain.extent,
         .imageArrayLayers = 1,
         .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
@@ -1301,7 +1339,7 @@ Result<VkCommandBuffer> begin_frame(Vk& vk, Swapchain& swapchain) {
     ASSERT(!swapchain.recording);
     ASSERT(swapchain.current_cmd() != nullptr);
 
-    swapchain.current_frame_index = (swapchain.current_frame_index + 1) % Swapchain::MaxFramesInFlight;
+    swapchain.current_frame_index = (swapchain.current_frame_index + 1) % SwapchainMaxFramesInFlight;
 
     wait_for_fence(vk, swapchain.is_frame_finished());
     reset_fence(vk, swapchain.is_frame_finished());

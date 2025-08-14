@@ -2,37 +2,6 @@
 
 namespace hg {
 
-struct ViewProjectionUniform {
-    glm::mat4 projection{1.0f};
-    glm::mat4 view{1.0f};
-};
-
-struct LightUniform {
-    alignas(16) usize count = 0;
-    alignas(16) PbrRenderer::Light vals[PbrRenderer::MaxLights]{};
-};
-
-struct SkyboxPush {
-    u32 cubemap = UINT32_MAX;
-};
-
-struct ModelPush {
-    glm::mat4 model{1.0f};
-    u32 normal_map_index = UINT32_MAX;
-    u32 texture_index = UINT32_MAX;
-    float roughness = 0.0f;
-    float metalness = 0.0f;
-};
-
-struct AntialiasPush {
-    glm::vec2 pixel_size{};
-    u32 input_index = UINT32_MAX;
-};
-
-struct TonemapPush {
-    u32 input_index = UINT32_MAX;
-};
-
 Result<Window> create_window(Vk& vk, const WindowConfig& config) {
     if (config.windowed)
         ASSERT(config.size.x > 0 && config.size.y > 0);
@@ -97,18 +66,36 @@ void destroy_window(Vk& vk, Window& window) {
     SDL_DestroyWindow(window.window);
 }
 
-static void destroy_pbr_renderer_images(PbrRenderer& renderer) {
-    Vk& vk = *renderer.vk;
+struct ViewProjectionUniform {
+    glm::mat4 projection;
+    glm::mat4 view;
+};
 
-    for (auto& image : renderer.color_images) {
-        destroy_gpu_image(vk, renderer.textures[image].image);
-        vkDestroyImageView(vk.device, renderer.textures[image].view, nullptr);
-        vkDestroySampler(vk.device, renderer.textures[image].sampler, nullptr);
-    }
-    destroy_gpu_image(vk, renderer.textures[renderer.depth_image].image);
-    vkDestroyImageView(vk.device, renderer.textures[renderer.depth_image].view, nullptr);
-    vkDestroySampler(vk.device, renderer.textures[renderer.depth_image].sampler, nullptr);
-}
+struct LightUniform {
+    alignas(16) usize count;
+    alignas(16) PbrLight vals[PbrMaxLights];
+};
+
+struct SkyboxPush {
+    u32 cubemap;
+};
+
+struct ModelPush {
+    glm::mat4 model;
+    u32 normal_map_index;
+    u32 texture_index;
+    float roughness;
+    float metalness;
+};
+
+struct AntialiasPush {
+    glm::vec2 pixel_size;
+    u32 input_index;
+};
+
+struct TonemapPush {
+    u32 input_index;
+};
 
 static void create_pbr_renderer_images(PbrRenderer& renderer, VkExtent2D extent) {
     Vk& vk = *renderer.vk;
@@ -124,12 +111,12 @@ static void create_pbr_renderer_images(PbrRenderer& renderer, VkExtent2D extent)
         .aspect_flags = VK_IMAGE_ASPECT_DEPTH_BIT,
     });
     VkSampler depth_sampler = create_sampler(vk, {
-        .type = SamplerType::Linear,
+        .type = SamplerType::SamplerLinear,
         .edge_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
     });
     renderer.textures[renderer.depth_image] = {depth_image, depth_image_view, depth_sampler};
 
-    for (auto& image : renderer.color_images) {
+    for (const auto& image : renderer.color_images) {
         GpuImage color_image = create_gpu_image(vk, {
             .extent{extent.width, extent.height, 1},
             .format = VK_FORMAT_R16G16B16A16_SFLOAT,
@@ -143,7 +130,7 @@ static void create_pbr_renderer_images(PbrRenderer& renderer, VkExtent2D extent)
             .aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT,
         });
         VkSampler color_sampler = create_sampler(vk, {
-            .type = SamplerType::Linear,
+            .type = SamplerType::SamplerLinear,
             .edge_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
         });
         renderer.textures[image] = {color_image, color_image_view, color_sampler};
@@ -152,28 +139,45 @@ static void create_pbr_renderer_images(PbrRenderer& renderer, VkExtent2D extent)
             renderer.descriptor_set, 2, to_u32(image.index)
         }, renderer.textures[image].view, renderer.textures[image].sampler);
     }
+}
 
+static void destroy_pbr_renderer_images(PbrRenderer& renderer) {
+    Vk& vk = *renderer.vk;
+
+    for (auto& image : renderer.color_images) {
+        destroy_gpu_image(vk, renderer.textures[image].image);
+        vkDestroyImageView(vk.device, renderer.textures[image].view, nullptr);
+        vkDestroySampler(vk.device, renderer.textures[image].sampler, nullptr);
+    }
+    destroy_gpu_image(vk, renderer.textures[renderer.depth_image].image);
+    vkDestroyImageView(vk.device, renderer.textures[renderer.depth_image].view, nullptr);
+    vkDestroySampler(vk.device, renderer.textures[renderer.depth_image].sampler, nullptr);
 }
 
 PbrRenderer create_pbr_renderer(Vk& vk, const PbrRendererConfig& config) {
-    PbrRenderer renderer{.vk = &vk,};
+    PbrRenderer renderer;
+    renderer.vk = &vk;
 
+    const VkDescriptorSetLayoutBinding bindings[]{
+        {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT},
+        {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+        {2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, config.max_textures, VK_SHADER_STAGE_FRAGMENT_BIT},
+    };
+    const VkDescriptorBindingFlags flags[]{
+        {},
+        {},
+        VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT,
+    };
     renderer.descriptor_layout = create_descriptor_set_layout(vk, {
-        std::array<VkDescriptorSetLayoutBinding, 3>{{
-            {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT},
-            {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
-            {2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, config.max_textures, VK_SHADER_STAGE_FRAGMENT_BIT},
-        }}, std::array<VkDescriptorBindingFlags, 3>{{
-            {},
-            {},
-            VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT,
-        }}
+        {bindings, std::size(bindings)},
+        {flags, std::size(flags)}
     });
 
-    renderer.descriptor_pool = create_descriptor_pool(vk, {1, std::array{
-        VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2},
-        VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, config.max_textures},
-    }});
+    const VkDescriptorPoolSize pool_sizes[]{
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, config.max_textures},
+    };
+    renderer.descriptor_pool = create_descriptor_pool(vk, {1, {pool_sizes, std::size(pool_sizes)}});
 
     renderer.descriptor_set = *allocate_descriptor_set(vk, renderer.descriptor_pool, renderer.descriptor_layout);
 
@@ -229,8 +233,8 @@ PbrRenderer create_pbr_renderer(Vk& vk, const PbrRendererConfig& config) {
         ERRORF("Could not find valid post process shaders: {}", to_string(antialias_pipeline.err()));
     renderer.antialias_pipeline = *antialias_pipeline;
 
-    renderer.textures = malloc_slice<Pool<PbrRenderer::Texture>::Block>(config.max_textures);
-    renderer.models = malloc_slice<Pool<PbrRenderer::Model>::Block>(config.max_models);
+    renderer.textures = malloc_pool<PbrTexture>(config.max_textures);
+    renderer.models = malloc_pool<PbrModel>(config.max_models);
 
     renderer.depth_image = renderer.textures.alloc();
     for (auto& image : renderer.color_images) {
@@ -239,10 +243,10 @@ PbrRenderer create_pbr_renderer(Vk& vk, const PbrRendererConfig& config) {
     create_pbr_renderer_images(renderer, config.window.swapchain.extent);
 
     renderer.vp_buffer = create_buffer(vk, {
-        sizeof(ViewProjectionUniform), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, GpuMemoryType::RandomAccess
+        sizeof(ViewProjectionUniform), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, GpuMemoryRandomAccess
     });
     renderer.light_buffer = create_buffer(vk, {
-        sizeof(LightUniform) * PbrRenderer::MaxLights, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, GpuMemoryType::RandomAccess
+        sizeof(LightUniform) * PbrMaxLights, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, GpuMemoryRandomAccess
     });
 
     write_uniform_buffer_descriptor(
@@ -252,7 +256,7 @@ PbrRenderer create_pbr_renderer(Vk& vk, const PbrRendererConfig& config) {
         vk, {renderer.descriptor_set, 1}, {renderer.light_buffer.handle, sizeof(LightUniform)}
     );
 
-    std::array<glm::vec3, 24> positions{
+    const glm::vec3 positions[]{
         glm::vec3{-1.0f, -1.0f,  1.0f},
         glm::vec3{-1.0f, -1.0f, -1.0f},
         glm::vec3{ 1.0f, -1.0f, -1.0f},
@@ -284,7 +288,7 @@ PbrRenderer create_pbr_renderer(Vk& vk, const PbrRendererConfig& config) {
         glm::vec3{ 1.0f,  1.0f, -1.0f},
 
     };
-    std::array<u32, 36> indices{
+    const u32 indices[]{
          0,  1,  2,  2,  3,  0,
          4,  5,  6,  6,  7,  4,
          8,  9, 10, 10, 11,  8,
@@ -293,15 +297,13 @@ PbrRenderer create_pbr_renderer(Vk& vk, const PbrRendererConfig& config) {
         20, 21, 22, 22, 23, 20,
     };
     renderer.skybox.vertex_buffer = create_buffer(vk, {
-        positions.size() * sizeof(positions[0]),
-        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+        sizeof(positions), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
     });
     renderer.skybox.index_buffer = create_buffer(vk, {
-        indices.size() * sizeof(indices[0]),
-        VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+        sizeof(indices), VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
     });
-    write_buffer(vk, renderer.skybox.vertex_buffer, positions.data(), positions.size() * sizeof(positions[0]));
-    write_buffer(vk, renderer.skybox.index_buffer, indices.data(), indices.size() * sizeof(indices[0]));
+    write_buffer(vk, renderer.skybox.vertex_buffer, positions, sizeof(positions));
+    write_buffer(vk, renderer.skybox.index_buffer, indices, sizeof(indices));
 
     return renderer;
 }
@@ -363,23 +365,21 @@ static void draw_skybox(VkCommandBuffer cmd, PbrRenderer& renderer) {
         0, nullptr
     );
 
-    const std::array vertex_bindings = {
-        VkVertexInputBindingDescription2EXT{
+    const VkVertexInputBindingDescription2EXT vertex_bindings[]{
+        {
             .sType = VK_STRUCTURE_TYPE_VERTEX_INPUT_BINDING_DESCRIPTION_2_EXT,
             .stride = sizeof(glm::vec3), .inputRate = VK_VERTEX_INPUT_RATE_VERTEX, .divisor = 1
         }
     };
-    const std::array vertex_attributes = {
-        VkVertexInputAttributeDescription2EXT{
+    const VkVertexInputAttributeDescription2EXT vertex_attributes[]{
+        {
             .sType = VK_STRUCTURE_TYPE_VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT,
             .location = 0, .format = VK_FORMAT_R32G32B32_SFLOAT
         },
     };
     g_pfn.vkCmdSetVertexInputEXT(cmd,
-        to_u32(vertex_bindings.size()),
-        vertex_bindings.data(),
-        to_u32(vertex_attributes.size()),
-        vertex_attributes.data()
+        to_u32(std::size(vertex_bindings)), vertex_bindings,
+        to_u32(std::size(vertex_attributes)), vertex_attributes
     );
 
     SkyboxPush push{
@@ -398,34 +398,27 @@ static void draw_skybox(VkCommandBuffer cmd, PbrRenderer& renderer) {
     vkCmdSetCullMode(cmd, VK_CULL_MODE_BACK_BIT);
 }
 
-static void draw_models(VkCommandBuffer cmd, PbrRenderer& renderer, Slice<const PbrRenderer::ModelTicket> models) {
-    constexpr std::array vertex_bindings = {
-        VkVertexInputBindingDescription2EXT{
-            .sType = VK_STRUCTURE_TYPE_VERTEX_INPUT_BINDING_DESCRIPTION_2_EXT,
-            .stride = sizeof(Vertex), .inputRate = VK_VERTEX_INPUT_RATE_VERTEX, .divisor = 1
-        }
-    };
-    constexpr std::array vertex_attributes = {
-        VkVertexInputAttributeDescription2EXT{
-           .sType = VK_STRUCTURE_TYPE_VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT,
-           .location = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, position)
-       },
-        VkVertexInputAttributeDescription2EXT{
-           .sType = VK_STRUCTURE_TYPE_VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT,
-           .location = 1, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, normal)
-       },
-        VkVertexInputAttributeDescription2EXT{
-           .sType = VK_STRUCTURE_TYPE_VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT,
-           .location = 2, .format = VK_FORMAT_R32G32B32A32_SFLOAT, .offset = offsetof(Vertex, tangent)
-       },
-        VkVertexInputAttributeDescription2EXT{
-           .sType = VK_STRUCTURE_TYPE_VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT,
-           .location = 3, .format = VK_FORMAT_R32G32_SFLOAT, .offset = offsetof(Vertex, tex_coord)
-       },
-    };
+static void draw_models(VkCommandBuffer cmd, PbrRenderer& renderer, Slice<const PbrModelTicket> models) {
+    constexpr VkVertexInputBindingDescription2EXT vertex_bindings[]{{
+        .sType = VK_STRUCTURE_TYPE_VERTEX_INPUT_BINDING_DESCRIPTION_2_EXT,
+        .stride = sizeof(Vertex), .inputRate = VK_VERTEX_INPUT_RATE_VERTEX, .divisor = 1
+    }};
+    constexpr VkVertexInputAttributeDescription2EXT vertex_attributes[]{{
+       .sType = VK_STRUCTURE_TYPE_VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT,
+       .location = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, position)
+    }, {
+       .sType = VK_STRUCTURE_TYPE_VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT,
+       .location = 1, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, normal)
+    }, {
+       .sType = VK_STRUCTURE_TYPE_VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT,
+       .location = 2, .format = VK_FORMAT_R32G32B32A32_SFLOAT, .offset = offsetof(Vertex, tangent)
+    }, {
+       .sType = VK_STRUCTURE_TYPE_VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT,
+       .location = 3, .format = VK_FORMAT_R32G32_SFLOAT, .offset = offsetof(Vertex, tex_coord)
+    }};
     g_pfn.vkCmdSetVertexInputEXT(cmd,
-        to_u32(vertex_bindings.size()), vertex_bindings.data(),
-        to_u32(vertex_attributes.size()), vertex_attributes.data()
+        to_u32(std::size(vertex_bindings)), vertex_bindings,
+        to_u32(std::size(vertex_attributes)), vertex_attributes
     );
 
     bind_shaders(cmd, renderer.model_pipeline);
@@ -458,18 +451,19 @@ static void draw_models(VkCommandBuffer cmd, PbrRenderer& renderer, Slice<const 
 
 static void draw_opaque(VkCommandBuffer cmd, PbrRenderer& renderer, VkExtent2D extent, const Scene& scene) {
     Vk& vk = *renderer.vk;
-
-    PbrRenderer::Texture& depth_image = renderer.textures[renderer.depth_image];
-    PbrRenderer::Texture& color_image = renderer.textures[renderer.color_images[0]];
+    PbrTexture& depth_image = renderer.textures[renderer.depth_image];
+    PbrTexture& color_image = renderer.textures[renderer.color_images[0]];
 
     BarrierBuilder(vk, {.image_barriers = 2})
         .add_image_barrier(0, depth_image.image.handle, {VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1})
         .set_image_dst(0,
             VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-            VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-        )
+            VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+            VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
         .add_image_barrier(1, color_image.image.handle, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
-        .set_image_dst(1, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+        .set_image_dst(1,
+            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+            VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
         .build_and_run(vk, cmd);
 
@@ -512,9 +506,8 @@ struct EffectConfig {
 };
 static void draw_effect(VkCommandBuffer cmd, PbrRenderer& renderer, const EffectConfig& config) {
     Vk& vk = *renderer.vk;
-
-    PbrRenderer::Texture& output_image = renderer.textures[renderer.color_images[config.output_image]];
-    PbrRenderer::Texture& input_image = renderer.textures[renderer.color_images[config.input_image]];
+    PbrTexture& output_image = renderer.textures[renderer.color_images[config.output_image]];
+    PbrTexture& input_image = renderer.textures[renderer.color_images[config.input_image]];
 
     BarrierBuilder(vk, {.image_barriers = 2})
         .add_image_barrier(0,
@@ -550,10 +543,7 @@ static void draw_effect(VkCommandBuffer cmd, PbrRenderer& renderer, const Effect
         .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
         .renderArea{
             {},
-            {
-                output_image.image.extent.width,
-                output_image.image.extent.height,
-            }
+            {output_image.image.extent.width, output_image.image.extent.height}
         },
         .layerCount = 1,
         .colorAttachmentCount = 1,
@@ -578,7 +568,7 @@ static void draw_effect(VkCommandBuffer cmd, PbrRenderer& renderer, const Effect
 }
 
 Result<void> draw_pbr(PbrRenderer& renderer, Window& window, const Scene& scene) {
-    ASSERT(scene.lights.count < PbrRenderer::MaxLights);
+    ASSERT(scene.lights.count < PbrMaxLights);
 
     Vk& vk = *renderer.vk;
 
@@ -607,9 +597,11 @@ Result<void> draw_pbr(PbrRenderer& renderer, Window& window, const Scene& scene)
             )
             .set_image_src(0,
                 VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-                VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-            )
-            .set_image_dst(0, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, 
+                VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+            .set_image_dst(0,
+                VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
+                VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
             .build_and_run(vk, cmd);
 
@@ -639,32 +631,38 @@ Result<void> draw_pbr(PbrRenderer& renderer, Window& window, const Scene& scene)
                 renderer.textures[renderer.color_images[0]].image.handle,
                 {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
             )
-            .set_image_src(0, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+            .set_image_src(0,
+                VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
-            .set_image_dst(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT,
+            .set_image_dst(0,
+                VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                VK_ACCESS_2_TRANSFER_READ_BIT,
                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
             .add_image_barrier(1, window.swapchain.current_image(), {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
-            .set_image_dst(1, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            .set_image_dst(1,
+                VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                VK_ACCESS_2_TRANSFER_WRITE_BIT,
                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
             .build_and_run(vk, cmd);
 
-        blit_image(cmd,
-            {
-                .image = window.swapchain.current_image(),
-                .end = {to_i32(window.swapchain.extent.width), to_i32(window.swapchain.extent.height), 1},
-            },
-            {
-                .image = renderer.textures[renderer.color_images[0]].image.handle,
-                .end = {to_i32(window.swapchain.extent.width), to_i32(window.swapchain.extent.height), 1},
-            },
-            VK_FILTER_NEAREST
-        );
+        blit_image(cmd, {
+            .image = window.swapchain.current_image(),
+            .end = {to_i32(window.swapchain.extent.width), to_i32(window.swapchain.extent.height), 1},
+        }, {
+            .image = renderer.textures[renderer.color_images[0]].image.handle,
+            .end = {to_i32(window.swapchain.extent.width), to_i32(window.swapchain.extent.height), 1},
+        }, VK_FILTER_NEAREST);
 
         BarrierBuilder(vk, {.image_barriers = 1})
             .add_image_barrier(0, window.swapchain.current_image(), {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1})
-            .set_image_src(0, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            .set_image_src(0,
+                VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                VK_ACCESS_2_TRANSFER_WRITE_BIT,
                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
-            .set_image_dst(0, VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, VK_ACCESS_2_NONE,
+            .set_image_dst(0,
+                VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
+                VK_ACCESS_2_NONE,
                 VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
             .build_and_run(vk, cmd);
 
@@ -698,7 +696,7 @@ Result<void> draw_pbr(PbrRenderer& renderer, Window& window, const Scene& scene)
     return ok();
 }
 
-PbrRenderer::Light make_light(const glm::vec3 position, const glm::vec3 color, const f32 intensity) {
+PbrLight make_light(const glm::vec3 position, const glm::vec3 color, const f32 intensity) {
     return {glm::vec4{position, 1.0f}, glm::vec4{color * intensity, 1.0f}};
 }
 
@@ -728,12 +726,12 @@ PbrTextureHandle create_texture(PbrRenderer& renderer, AssetManager& assets, con
         .format = config.format,
     });
     VkSampler sampler = create_sampler(vk, {
-        .type = SamplerType::Linear,
+        .type = SamplerType::SamplerLinear,
         .edge_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
     });
     write_gpu_image(vk, image, {
-        {data.pixels, data.size.x * data.size.y * data.alignment},
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .src = {data.pixels, data.size.x * data.size.y * data.alignment},
+        .final_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
     });
 
     PbrTextureHandle texture = renderer.textures.alloc();
@@ -769,7 +767,7 @@ void load_skybox(PbrRenderer& renderer, AssetManager& assets, const ImageHandle<
         .format = VK_FORMAT_R8G8B8A8_SRGB,
     });
     VkSampler sampler = create_sampler(vk, {
-        .type = SamplerType::Linear,
+        .type = SamplerType::SamplerLinear,
         .edge_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
     });
     write_gpu_cubemap(vk, image, {
@@ -793,7 +791,6 @@ PbrModelHandle create_model(PbrRenderer& renderer, AssetManager& assets, const P
     ASSERT(config.data.metalness >= 0.0 && config.data.metalness <= 1.0);
 
     Vk& vk = *renderer.vk;
-
     MeshData& mesh = assets[config.data.mesh];
 
     const auto index_buffer = create_buffer(vk, {
@@ -819,7 +816,7 @@ PbrModelHandle create_model(PbrRenderer& renderer, AssetManager& assets, const P
     );
 
     auto model = renderer.models.alloc();
-    renderer.models[model] = PbrRenderer::Model{
+    renderer.models[model] = PbrModel{
         .index_count = to_u32(mesh.indices.count),
         .index_buffer = index_buffer,
         .vertex_buffer = vertex_buffer,

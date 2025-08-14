@@ -1,3 +1,4 @@
+#include "hg_renderer.h"
 #include <hurdy_gurdy.h>
 
 #define SDL_MAIN_USE_CALLBACKS
@@ -218,21 +219,25 @@ SDL_AppResult SDL_AppIterate(void*) {
     if (input_state.forward)
         camera.move({0.0f, 0.0f, 1.0f}, speed * delta32);
 
-    std::array lights{
+    const PbrLight lights[]{
         make_light({-2.0f, -3.0f, -2.0f}, {1.0f, 1.0f, 1.0f}, 300.0f),
     };
-    std::array models{
-        PbrRenderer::ModelTicket{grass, {.position{0.0f, 0.0f, 0.0f}}},
-        PbrRenderer::ModelTicket{sphere, {.position{-0.5f, -0.5f, 0.0f}, .scale{0.25f, 0.25f, 0.25f}}},
-        PbrRenderer::ModelTicket{cube, {.position{0.5f, -0.5f, 0.0f}, .scale{0.25f, 0.25f, 0.25f}}},
+    const PbrModelTicket models[]{
+        {grass, {.position{0.0f, 0.0f, 0.0f}}},
+        {sphere, {.position{-0.5f, -0.5f, 0.0f}, .scale{0.25f, 0.25f, 0.25f}}},
+        {cube, {.position{0.5f, -0.5f, 0.0f}, .scale{0.25f, 0.25f, 0.25f}}},
 
-        PbrRenderer::ModelTicket{grass, {.position{-1.0f, -0.25f, sqrt3}}},
-        PbrRenderer::ModelTicket{building, {.position{-1.0f, -0.25f, sqrt3}}},
+        {grass, {.position{-1.0f, -0.25f, sqrt3}}},
+        {building, {.position{-1.0f, -0.25f, sqrt3}}},
 
-        PbrRenderer::ModelTicket{grass, {.position{1.0f, -0.5f, sqrt3}}},
-        PbrRenderer::ModelTicket{tower, {.position{1.0f, -0.5f, sqrt3}}},
+        {grass, {.position{1.0f, -0.5f, sqrt3}}},
+        {tower, {.position{1.0f, -0.5f, sqrt3}}},
     };
-    auto draw_res = draw_pbr(renderer, window, {&camera, lights, models});
+    auto draw_res = draw_pbr(renderer, window, {
+        &camera,
+        {lights, std::size(lights)},
+        {models, std::size(models)},
+    });
     if (draw_res.has_err())
         perr(draw_res);
 

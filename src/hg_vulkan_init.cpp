@@ -7,9 +7,9 @@ namespace hg {
 #ifdef NDEBUG
 inline constexpr std::array<const char*, 0> ValidationLayers{};
 #else
-inline constexpr std::array ValidationLayers{"VK_LAYER_KHRONOS_validation"};
+inline constexpr const char* ValidationLayers[]{"VK_LAYER_KHRONOS_validation"};
 #endif
-constexpr std::array DeviceExtensions{
+constexpr const char* DeviceExtensions[]{
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
     VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
     VK_EXT_SHADER_OBJECT_EXTENSION_NAME,
@@ -46,15 +46,15 @@ const VkDebugUtilsMessengerCreateInfoEXT DebugUtilsMessengerCreateInfo{
 };
 
 static Result<Slice<const char*>> get_instance_extensions(Vk& vk) {
-    u32 sdl_extension_count = 0;
-    const char* const* sdl_extensions = SDL_Vulkan_GetInstanceExtensions(&sdl_extension_count);
-    if (sdl_extensions == nullptr)
+    Slice<const char* const> sdl_extensions;
+    sdl_extensions.data = SDL_Vulkan_GetInstanceExtensions(reinterpret_cast<u32*>(&sdl_extensions.count));
+    if (sdl_extensions.data == nullptr)
         ERRORF("Failed to get required instance extensions from SDL: {}", SDL_GetError());
 
-    auto required_extensions = ok(vk.stack.alloc<const char*>(sdl_extension_count + 1));
-    std::copy(sdl_extensions, sdl_extensions + sdl_extension_count, required_extensions->data);
+    auto required_extensions = ok(vk.stack.alloc<const char*>(sdl_extensions.count + 1));
+    std::ranges::copy(sdl_extensions, required_extensions->data);
 #ifndef NDEBUG
-    required_extensions->data[sdl_extension_count] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
+    required_extensions->data[sdl_extensions.count] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
 #endif
 
     u32 extension_count = 0;
@@ -121,8 +121,8 @@ static Result<VkInstance> create_instance(Vk& vk) {
         .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         .pNext = &DebugUtilsMessengerCreateInfo,
         .pApplicationInfo = &app_info,
-        .enabledLayerCount = to_u32(ValidationLayers.size()),
-        .ppEnabledLayerNames = ValidationLayers.data(),
+        .enabledLayerCount = to_u32(std::size(ValidationLayers)),
+        .ppEnabledLayerNames = ValidationLayers,
         .enabledExtensionCount = to_u32(extensions->count),
         .ppEnabledExtensionNames = extensions->data,
     };
@@ -187,13 +187,11 @@ static Result<u32> find_queue_family(Vk& vk, const VkPhysicalDevice gpu) {
     DEFER(vk.stack.dealloc(queue_families));
     vkGetPhysicalDeviceQueueFamilyProperties(gpu, &queue_family_count, queue_families.data);
 
-    const auto queue_family = std::ranges::find_if(queue_families, [](const VkQueueFamilyProperties family) {
-        return static_cast<bool>(family.queueFlags & (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT));
-    });
-    if (queue_family == end(queue_families))
-        return Err::VkQueueFamilyUnavailable;
-
-    return ok(static_cast<u32>(queue_family - begin(queue_families)));
+    for (u32 i = 0; i < queue_family_count; ++i) {
+        if (queue_families[i].queueFlags & (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT))
+            return ok(i);
+    }
+    return Err::VkQueueFamilyUnavailable;
 }
 
 static Slice<VkPhysicalDevice> get_gpus(Vk& vk) {
@@ -346,10 +344,10 @@ static Result<VkDevice> create_device(Vk& vk) {
         .pNext = &synchronization2_feature,
         .queueCreateInfoCount = 1,
         .pQueueCreateInfos = &queue_info,
-        .enabledLayerCount = to_u32(ValidationLayers.size()),
-        .ppEnabledLayerNames = ValidationLayers.data(),
-        .enabledExtensionCount = to_u32(DeviceExtensions.size()),
-        .ppEnabledExtensionNames = DeviceExtensions.data(),
+        .enabledLayerCount = to_u32(std::size(ValidationLayers)),
+        .ppEnabledLayerNames = ValidationLayers,
+        .enabledExtensionCount = to_u32(std::size(DeviceExtensions)),
+        .ppEnabledExtensionNames = DeviceExtensions,
         .pEnabledFeatures = &features,
     };
 
@@ -382,12 +380,12 @@ static VmaAllocator create_gpu_allocator(Vk& vk) {
     ASSERT(vk.gpu != nullptr);
     ASSERT(vk.device != nullptr);
 
-    VmaAllocatorCreateInfo info{};
-    info.physicalDevice = vk.gpu;
-    info.device = vk.device;
-    info.instance = vk.instance;
-    info.vulkanApiVersion = VK_API_VERSION_1_3;
-
+    VmaAllocatorCreateInfo info{
+        .physicalDevice = vk.gpu,
+        .device = vk.device,
+        .instance = vk.instance,
+        .vulkanApiVersion = VK_API_VERSION_1_3,
+    };
     VmaAllocator allocator = nullptr;
     const auto result = vmaCreateAllocator(&info, &allocator);
     if (result != VK_SUCCESS)
@@ -419,7 +417,7 @@ static VkCommandPool create_command_pool(Vk& vk, const VkCommandPoolCreateFlags 
 Result<Vk> create_vk() {
     auto vk = ok<Vk>();
 
-    vk->stack = Arena{malloc_slice<byte>(1024 * 64)};
+    vk->stack = malloc_arena(1024 * 64);
 
     const auto instance = create_instance(*vk);
     if (instance.has_err())
@@ -491,7 +489,7 @@ void destroy_vk(Vk& vk) {
 #endif
     vkDestroyInstance(vk.instance, nullptr);
 
-    free_slice(vk.stack.release());
+    free_arena(vk.stack);
 }
 
 void load_instance_procedures(VkInstance instance) {

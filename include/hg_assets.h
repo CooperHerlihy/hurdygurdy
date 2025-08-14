@@ -5,30 +5,30 @@
 namespace hg {
 
 struct Vertex {
-    glm::vec3 position{};
-    glm::vec3 normal{};
-    glm::vec4 tangent{};
-    glm::vec2 tex_coord{};
+    glm::vec3 position;
+    glm::vec3 normal;
+    glm::vec4 tangent;
+    glm::vec2 tex_coord;
 };
 
 void generate_vertex_tangents(Slice<Vertex> primitives);
 
 struct MeshData {
-    Slice<u32> indices{};
-    Slice<Vertex> vertices{};
+    Slice<u32> indices;
+    Slice<Vertex> vertices;
 };
 
 void weld_mesh(MeshData& out_mesh, int& out_index_count, Slice<const Vertex> primitives);
 
 struct ImageData {
-    void* pixels = nullptr;
-    usize alignment = 0;
-    glm::vec<2, usize> size{};
+    void* pixels;
+    usize alignment;
+    glm::vec<2, usize> size;
 };
 
 template <typename T> struct Image {
-    T* pixels = nullptr;
-    glm::vec<2, usize> size{};
+    T* pixels;
+    glm::vec<2, usize> size;
 
     [[nodiscard]] constexpr usize count() const { return size.x * size.y; }
 
@@ -46,9 +46,9 @@ template <typename T> struct ImageHandle {
 };
 
 struct AssetManager {
-    Pool<MeshData> meshes{};
-    Pool<ImageData> images{};
-    Arena stack{};
+    Pool<MeshData> meshes;
+    Pool<ImageData> images;
+    Arena stack;
 
     MeshData& operator[](const MeshHandle mesh) const { return meshes[mesh]; }
     ImageData& operator[](const ImageHandle<void> image) const { return images[image.handle]; }
@@ -75,7 +75,7 @@ void destroy_mesh(AssetManager& assets, const MeshHandle mesh);
 [[nodiscard]] MeshHandle generate_sphere(AssetManager& assets, const glm::uvec2 fidelity);
 
 struct GltfData {
-    MeshHandle mesh{};
+    MeshHandle mesh;
     float roughness = 0.0f;
     float metalness = 0.0f;
 };

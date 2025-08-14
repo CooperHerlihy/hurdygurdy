@@ -91,6 +91,7 @@ void destroy_asset_manager(AssetManager& assets) {
 MeshHandle create_mesh(AssetManager& assets) {
     return assets.meshes.alloc();
 }
+
 void destroy_mesh(AssetManager& assets, const MeshHandle mesh) {
     MeshData& mesh_data = assets[mesh];
     free_slice(mesh_data.vertices);
@@ -376,6 +377,7 @@ Result<GltfData> load_gltf(AssetManager& assets, std::filesystem::path path) {
 
     return gltf;
 }
+
 void unload_gltf(AssetManager& assets, const GltfData gltf) {
     destroy_mesh(assets, gltf.mesh);
 }
@@ -383,6 +385,7 @@ void unload_gltf(AssetManager& assets, const GltfData gltf) {
 ImageHandle<void> create_image(AssetManager& assets) {
     return {assets.images.alloc()};
 }
+
 ImageHandle<void> create_image(AssetManager& assets, glm::vec<2, usize> size, u32 alignment) {
     ImageHandle<void> image = create_image(assets);
     assets[image] = {
@@ -392,6 +395,7 @@ ImageHandle<void> create_image(AssetManager& assets, glm::vec<2, usize> size, u3
     };
     return image;
 }
+
 void destroy_image(AssetManager& assets, const ImageHandle<void> image) {
     std::free(assets[image].pixels);
     assets.images.dealloc(image.handle);
