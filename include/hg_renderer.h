@@ -62,7 +62,7 @@ struct PbrRenderer {
 
     GraphicsPipeline skybox_pipeline;
     GraphicsPipeline model_pipeline;
-    GraphicsPipeline tonemap_pipeline;
+    GraphicsPipeline color_grading_pipeline;
     GraphicsPipeline antialias_pipeline;
 
     Pool<PbrTexture> textures;

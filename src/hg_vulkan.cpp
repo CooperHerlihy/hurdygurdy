@@ -674,18 +674,6 @@ static Result<Slice<char>> read_shader(Vk& vk, const std::filesystem::path path)
     auto code = ok(vk.stack.alloc<char>(file_size));
     std::fread(code->data, 1, code->count, file);
 
-    // REMOVE
-    // auto file = std::ifstream{path, std::ios::ate | std::ios::binary};
-    // if (!file.is_open()) {
-    //     LOGF_ERROR("Could not open shader file: {}", path.string());
-    //     return Err::ShaderFileNotFound;
-    // }
-    //
-    // auto code = ok<Slice<char>>(vk.stack.alloc<char>(file.tellg()));
-    // file.seekg(0);
-    // file.read(code->data, static_cast<std::streamsize>(code->count));
-    // file.close();
-
     return code;
 }
 

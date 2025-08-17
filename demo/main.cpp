@@ -116,7 +116,7 @@ SDL_AppResult SDL_AppInit(void**, int, char**) {
         auto sphere_mesh = generate_sphere(assets, {128, 64});
         DEFER(destroy_mesh(assets, sphere_mesh));
 
-        return create_model(renderer, assets, {{sphere_mesh, 0.2f, 1.0f}, perlin_normals, gray_texture});
+        return create_model(renderer, assets, {{sphere_mesh, 0.2f, 0.0f}, perlin_normals, gray_texture});
     }();
 
     hex_texture = [&] {
@@ -205,7 +205,7 @@ SDL_AppResult SDL_AppIterate(void*) {
     time_count += delta;
     ++frame_count;
 
-    constexpr f32 speed = 1.0f;
+    constexpr f32 speed = 2.0f;
     if (input_state.up)
         camera.move({0.0f, -1.0f, 0.0f}, speed * delta32);
     if (input_state.down)

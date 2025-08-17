@@ -93,8 +93,17 @@ struct AntialiasPush {
     u32 input_index;
 };
 
-struct TonemapPush {
+enum Tonemapper : u32 {
+    TonemapReinhard = 0,
+    TonemapUncharted2 = 1,
+    TonemapACESApprox = 2,
+    TonemapACESFitted = 3,
+    TonemapPBRNeutral = 4,
+};
+
+struct ColorGradingPush {
     u32 input_index;
+    Tonemapper tonemapper;
 };
 
 static void create_pbr_renderer_images(PbrRenderer& renderer, VkExtent2D extent) {
@@ -207,18 +216,18 @@ PbrRenderer create_pbr_renderer(Vk& vk, const PbrRendererConfig& config) {
         ERRORF("Could not find valid pbr shaders: {}", to_string(model_pipeline.err()));
     renderer.model_pipeline = *model_pipeline;
 
-    constexpr VkPushConstantRange tonemap_push{
-        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(TonemapPush)
+    constexpr VkPushConstantRange color_grading_push{
+        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ColorGradingPush)
     };
-    const auto tonemap_pipeline = create_graphics_pipeline(vk, {
-        .set_layouts{&renderer.descriptor_layout, 1},
-        .push_ranges{&tonemap_push, 1},
-        .vertex_shader_path = "shaders/fullscreen.vert.spv",
-        .fragment_shader_path = "shaders/tonemap.frag.spv",
-    });
-    if (tonemap_pipeline.has_err())
-        ERRORF("Could not find valid tonemap shaders: {}", to_string(tonemap_pipeline.err()));
-    renderer.tonemap_pipeline = *tonemap_pipeline;
+    const auto color_grading_pipeline = create_graphics_pipeline(vk, {
+            .set_layouts{&renderer.descriptor_layout, 1},
+            .push_ranges{&color_grading_push, 1},
+            .vertex_shader_path = "shaders/fullscreen.vert.spv",
+            .fragment_shader_path = "shaders/color_grading.frag.spv",
+            });
+    if (color_grading_pipeline.has_err())
+        ERRORF("Could not find valid post process shaders: {}", to_string(color_grading_pipeline.err()));
+    renderer.color_grading_pipeline = *color_grading_pipeline;
 
     constexpr VkPushConstantRange antialias_push{
         VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(AntialiasPush)
@@ -342,7 +351,7 @@ void destroy_pbr_renderer(PbrRenderer& renderer) {
 
     destroy_graphics_pipeline(vk, renderer.skybox_pipeline);
     destroy_graphics_pipeline(vk, renderer.model_pipeline);
-    destroy_graphics_pipeline(vk, renderer.tonemap_pipeline);
+    destroy_graphics_pipeline(vk, renderer.color_grading_pipeline);
     destroy_graphics_pipeline(vk, renderer.antialias_pipeline);
 
     vkDestroyDescriptorPool(vk.device, renderer.descriptor_pool, nullptr);
@@ -605,19 +614,20 @@ Result<void> draw_pbr(PbrRenderer& renderer, Window& window, const Scene& scene)
                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
             .build_and_run(vk, cmd);
 
-        TonemapPush tonemap_push{
-            to_u32(renderer.color_images[0].index)
+        ColorGradingPush color_grading_push{
+            .input_index = to_u32(renderer.color_images[0].index),
+            .tonemapper = TonemapPBRNeutral,
         };
         draw_effect(cmd, renderer, {
-            .pipeline = renderer.tonemap_pipeline,
-            .push_constant = {&tonemap_push, sizeof(tonemap_push)},
-            .output_image = 1,
-            .input_image = 0,
-        });
+                .pipeline = renderer.color_grading_pipeline,
+                .push_constant = {&color_grading_push, sizeof(color_grading_push)},
+                .output_image = 1,
+                .input_image = 0,
+                });
 
         AntialiasPush antialias_push{
-            {1.0f / window.swapchain.extent.width, 1.0f / window.swapchain.extent.height},
-            to_u32(renderer.color_images[1].index),
+            .pixel_size = {1.0f / window.swapchain.extent.width, 1.0f / window.swapchain.extent.height},
+            .input_index = to_u32(renderer.color_images[1].index),
         };
         draw_effect(cmd, renderer, {
             .pipeline = renderer.antialias_pipeline,
