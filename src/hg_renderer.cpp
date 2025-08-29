@@ -629,11 +629,11 @@ Result<void> draw_pbr(PbrRenderer& renderer, Window& window, const Scene& scene)
             .tint = 0.03f,
         };
         draw_effect(cmd, renderer, {
-                .pipeline = renderer.color_grading_pipeline,
-                .push_constant = {&color_grading_push, sizeof(color_grading_push)},
-                .output_image = 1,
-                .input_image = 0,
-                });
+            .pipeline = renderer.color_grading_pipeline,
+            .push_constant = {&color_grading_push, sizeof(color_grading_push)},
+            .output_image = 1,
+            .input_image = 0,
+        });
 
         AntialiasPush antialias_push{
             .pixel_size = {1.0f / window.swapchain.extent.width, 1.0f / window.swapchain.extent.height},
