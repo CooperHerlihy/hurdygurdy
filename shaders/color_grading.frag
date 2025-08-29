@@ -9,23 +9,12 @@ layout(set = 0, binding = 2) uniform sampler2D u_samplers[];
 
 layout(push_constant) uniform Push {
     uint input_index;
-
     uint tonemapper;
-
     float exposure;
     float saturation;
     float contrast;
-
-    float lift;
-    float gamma;
-    float gain;
-
     float temperature;
     float tint;
-    // float red_filter;
-    // float green_filter;
-    // float blue_filter;
-
 } push;
 
 const uint Reinhard = 0;
@@ -44,27 +33,30 @@ float luma(vec3 color) {
 
 // see John Hable http://filmicworlds.com/blog/minimal-color-grading-tools/
 
-#define TEMPERATURE_COUNT 5
-const vec3 temperatures[TEMPERATURE_COUNT] = vec3[](
-    vec3(0.5, 0.5, 1.0),
-    vec3(0.8, 0.8, 1.0),
-    vec3(1.0, 1.0, 1.0),
-    vec3(1.0, 0.8, 0.3),
-    vec3(1.0, 0.3, 0.0)
-);
-
-#define TINT_COUNT 3
-const vec3 tints[TINT_COUNT] = vec3[](
-    vec3(0.0, 1.0, 0.0),
-    vec3(1.0, 1.0, 1.0),
-    vec3(1.0, 0.0, 1.0)
-);
-
 vec3 color_correct(vec3 color) {
+
+#define TEMPERATURE_COUNT 9
+    const vec3 temperatures[TEMPERATURE_COUNT] = vec3[](
+        vec3(76.0 / 255.0, 210.0 / 255.0, 1.0),
+        vec3(84.0 / 255.0, 224.0 / 255.0, 1.0),
+        vec3(140.0 / 255.0, 227.0 / 255.0, 1.0),
+        vec3(182.0 / 255.0, 1.0 / 255.0, 1.0),
+        vec3(1.0, 1.0, 1.0),
+        vec3(1.0, 233.0 / 255.0, 118.0 / 255.0),
+        vec3(1.0, 214.0 / 255.0, 37.0 / 255.0),
+        vec3(1.0, 154.0 / 255.0, 2.0 / 255.0),
+        vec3(1.0, 93.0 / 255.0, 0.0 / 255.0)
+    );
     float temperature = (push.temperature * 0.5 + 0.5) * (TEMPERATURE_COUNT - 1);
     int temp_floor = int(temperature);
     vec3 temp_color = mix(temperatures[temp_floor], temperatures[temp_floor + 1], temperature - temp_floor);
 
+#define TINT_COUNT 3
+    const vec3 tints[TINT_COUNT] = vec3[](
+        vec3(0.0, 1.0, 0.0),
+        vec3(1.0, 1.0, 1.0),
+        vec3(1.0, 0.0, 1.0)
+    );
     float tint = (push.tint * 0.5 + 0.5) * (TINT_COUNT - 1);
     int tint_floor = int(tint);
     vec3 tint_color = mix(tints[tint_floor], tints[tint_floor + 1], tint - tint_floor);
@@ -82,18 +74,6 @@ vec3 saturation(vec3 color) {
 
 vec3 contrast(vec3 color) {
     return clamp(mix(vec3(0.5), color, push.contrast), 0.0, 1.0);
-}
-
-vec3 lift(vec3 color) {
-    return color;
-}
-
-vec3 gamma(vec3 color) {
-    return color;
-}
-
-vec3 gain(vec3 color) {
-    return color;
 }
 
 float luminance(vec3 color) {
@@ -194,8 +174,8 @@ void main() {
     const vec3 color =
         contrast(
         saturation(
-        tonemap(
         color_correct(
+        tonemap(
         exposure(
         sample_color(
         ))))))

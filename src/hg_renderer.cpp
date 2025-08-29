@@ -103,17 +103,10 @@ enum Tonemapper : u32 {
 
 struct ColorGradingPush {
     u32 input_index;
-
     Tonemapper tonemapper;
-
     float exposure;
     float saturation;
     float contrast;
-
-    float lift;
-    float gamma;
-    float gain;
-
     float temperature;
     float tint;
 };
@@ -628,17 +621,10 @@ Result<void> draw_pbr(PbrRenderer& renderer, Window& window, const Scene& scene)
 
         ColorGradingPush color_grading_push{
             .input_index = to_u32(renderer.color_images[0].index),
-
             .tonemapper = TonemapACESFitted,
-
             .exposure = 1.1f,
             .saturation = 0.95f,
             .contrast = 1.05f,
-
-            .lift = 1.0f,
-            .gamma = 1.0f,
-            .gain = 1.0f,
-
             .temperature = 0.1f,
             .tint = 0.03f,
         };
