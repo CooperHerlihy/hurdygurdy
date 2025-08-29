@@ -9,7 +9,23 @@ layout(set = 0, binding = 2) uniform sampler2D u_samplers[];
 
 layout(push_constant) uniform Push {
     uint input_index;
+
     uint tonemapper;
+
+    float exposure;
+    float saturation;
+    float contrast;
+
+    float lift;
+    float gamma;
+    float gain;
+
+    float temperature;
+    float tint;
+    // float red_filter;
+    // float green_filter;
+    // float blue_filter;
+
 } push;
 
 const uint Reinhard = 0;
@@ -23,11 +39,69 @@ vec3 sample_color() {
 }
 
 float luma(vec3 color) {
+    return dot(color, vec3(0.299, 0.587, 0.114));
+}
+
+// see John Hable http://filmicworlds.com/blog/minimal-color-grading-tools/
+
+#define TEMPERATURE_COUNT 5
+const vec3 temperatures[TEMPERATURE_COUNT] = vec3[](
+    vec3(0.5, 0.5, 1.0),
+    vec3(0.8, 0.8, 1.0),
+    vec3(1.0, 1.0, 1.0),
+    vec3(1.0, 0.8, 0.3),
+    vec3(1.0, 0.3, 0.0)
+);
+
+#define TINT_COUNT 3
+const vec3 tints[TINT_COUNT] = vec3[](
+    vec3(0.0, 1.0, 0.0),
+    vec3(1.0, 1.0, 1.0),
+    vec3(1.0, 0.0, 1.0)
+);
+
+vec3 color_correct(vec3 color) {
+    float temperature = (push.temperature * 0.5 + 0.5) * (TEMPERATURE_COUNT - 1);
+    int temp_floor = int(temperature);
+    vec3 temp_color = mix(temperatures[temp_floor], temperatures[temp_floor + 1], temperature - temp_floor);
+
+    float tint = (push.tint * 0.5 + 0.5) * (TINT_COUNT - 1);
+    int tint_floor = int(tint);
+    vec3 tint_color = mix(tints[tint_floor], tints[tint_floor + 1], tint - tint_floor);
+
+    return temp_color * tint_color * color;
+}
+
+vec3 exposure(vec3 color) {
+    return color * push.exposure;
+}
+
+vec3 saturation(vec3 color) {
+    return mix(vec3(luma(color)), color, push.saturation);
+}
+
+vec3 contrast(vec3 color) {
+    return clamp(mix(vec3(0.5), color, push.contrast), 0.0, 1.0);
+}
+
+vec3 lift(vec3 color) {
+    return color;
+}
+
+vec3 gamma(vec3 color) {
+    return color;
+}
+
+vec3 gain(vec3 color) {
+    return color;
+}
+
+float luminance(vec3 color) {
     return dot(color, vec3(0.2126, 0.7152, 0.0722));
 }
 
 vec3 reinhard(vec3 color) {
-    return color / (vec3(1.0) + luma(color));
+    return color / (vec3(1.0) + luminance(color));
 }
 
 // John Hable https://64.github.io/tonemapping/#uncharted-2 (find original source?)
@@ -118,9 +192,14 @@ vec3 tonemap(vec3 color) {
 
 void main() {
     const vec3 color =
+        contrast(
+        saturation(
         tonemap(
-            sample_color()
-        );
+        color_correct(
+        exposure(
+        sample_color(
+        ))))))
+    ;
 
     out_color = vec4(color, 1.0);
 }
