@@ -45,6 +45,7 @@ struct InputState {
 static InputState input_state{};
 
 SDL_AppResult SDL_AppInit(void**, int, char**) {
+
     bool sdl_success = SDL_Init(SDL_INIT_VIDEO);
     if (!sdl_success)
         ERRORF("Could not initialize SDL: {}", SDL_GetError());

@@ -12,6 +12,8 @@
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
 
+#include <cstdint>
+#include <cmath>
 #include <utility>
 #include <algorithm>
 #include <span>
