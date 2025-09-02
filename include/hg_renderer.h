@@ -14,7 +14,7 @@ struct Window {
 
 struct WindowConfig {
     bool windowed;
-    glm::ivec2 size;
+    Vec2i size;
 };
 [[nodiscard]] Result<Window> create_window(Vk& vk, const WindowConfig& config);
 [[nodiscard]] Result<void> resize_window(Vk& vk, Window& window);
@@ -22,8 +22,8 @@ void destroy_window(Vk& vk, Window& window);
 
 static constexpr usize PbrMaxLights = 10;
 struct PbrLight {
-    glm::vec4 position;
-    glm::vec4 color;
+    Vec4f position;
+    Vec4f color;
 };
 
 struct PbrTexture {
@@ -95,9 +95,9 @@ struct Scene {
 };
 [[nodiscard]] Result<void> draw_pbr(PbrRenderer& renderer, Window& window, const Scene& scene);
 
-[[nodiscard]] PbrLight make_light(glm::vec3 position, glm::vec3 color, f32 intensity);
+[[nodiscard]] PbrLight make_light(const Vec3f position, const Vec3f color, f32 intensity);
 
-void update_projection(PbrRenderer& renderer, const glm::mat4& projection);
+void update_projection(PbrRenderer& renderer, const Mat4f& projection);
 
 struct PbrTextureConfig {
     ImageHandle<void> data;
@@ -120,3 +120,4 @@ struct PbrModelConfig {
 void destroy_model(PbrRenderer& renderer, PbrModelHandle model);
 
 } // namespace hg
+

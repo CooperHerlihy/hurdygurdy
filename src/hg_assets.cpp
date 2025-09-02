@@ -6,11 +6,21 @@
 
 #define FASTGLTF_COMPILE_AS_CPP20
 #include <fastgltf/core.hpp>
-#include <fastgltf/glm_element_traits.hpp>
 #include <fastgltf/tools.hpp>
 
 #include <mikktspace/mikktspace.h>
 #include <welder/weldmesh.h>
+
+namespace fastgltf {
+
+template <> struct ElementTraits<hg::Vec2f> : ElementTraitsBase<hg::Vec2f, AccessorType::Vec2, float> {};
+template <> struct ElementTraits<hg::Vec3f> : ElementTraitsBase<hg::Vec3f, AccessorType::Vec3, float> {};
+template <> struct ElementTraits<hg::Vec4f> : ElementTraitsBase<hg::Vec4f, AccessorType::Vec4, float> {};
+template <> struct ElementTraits<hg::Mat2f> : ElementTraitsBase<hg::Mat2f, AccessorType::Mat2, float> {};
+template <> struct ElementTraits<hg::Mat3f> : ElementTraitsBase<hg::Mat3f, AccessorType::Mat3, float> {};
+template <> struct ElementTraits<hg::Mat4f> : ElementTraitsBase<hg::Mat4f, AccessorType::Mat4, float> {};
+
+} // namespace fastgltf
 
 namespace hg {
 
@@ -25,21 +35,21 @@ void generate_vertex_tangents(Slice<Vertex> primitives) {
             return 3;
         },
         .m_getPosition = [](const SMikkTSpaceContext * pContext, float fvPosOut[], const int iFace, const int iVert) {
-            glm::vec3 pos = (*static_cast<Slice<Vertex>*>(pContext->m_pUserData))[iFace * 3 + iVert].position;
-            fvPosOut[0] = pos.x;
-            fvPosOut[1] = pos.y;
-            fvPosOut[2] = pos.z;
+            Vec3f pos = (*static_cast<Slice<Vertex>*>(pContext->m_pUserData))[iFace * 3 + iVert].position;
+            fvPosOut[0] = pos[0];
+            fvPosOut[1] = pos[1];
+            fvPosOut[2] = pos[2];
         },
         .m_getNormal = [](const SMikkTSpaceContext * pContext, float fvNormOut[], const int iFace, const int iVert) {
-            glm::vec3 normal = (*static_cast<Slice<Vertex>*>(pContext->m_pUserData))[iFace * 3 + iVert].normal;
-            fvNormOut[0] = normal.x;
-            fvNormOut[1] = normal.y;
-            fvNormOut[2] = normal.z;
+            Vec3f normal = (*static_cast<Slice<Vertex>*>(pContext->m_pUserData))[iFace * 3 + iVert].normal;
+            fvNormOut[0] = normal[0];
+            fvNormOut[1] = normal[1];
+            fvNormOut[2] = normal[2];
         } ,
         .m_getTexCoord = [](const SMikkTSpaceContext * pContext, float fvTexcOut[], const int iFace, const int iVert) {
-            glm::vec2 tex = (*static_cast<Slice<Vertex>*>(pContext->m_pUserData))[iFace * 3 + iVert].tex_coord;
-            fvTexcOut[0] = tex.x;
-            fvTexcOut[1] = tex.y;
+            Vec2f tex = (*static_cast<Slice<Vertex>*>(pContext->m_pUserData))[iFace * 3 + iVert].tex_coord;
+            fvTexcOut[0] = tex[0];
+            fvTexcOut[1] = tex[1];
         },
         .m_setTSpaceBasic = [](
             const SMikkTSpaceContext * pContext,
@@ -49,7 +59,7 @@ void generate_vertex_tangents(Slice<Vertex> primitives) {
             const int iVert
         ) {
             Slice<Vertex>& vertices = *static_cast<Slice<Vertex>*>(pContext->m_pUserData);
-            vertices[iFace * 3 + iVert].tangent = {fvTangent[0], fvTangent[1], fvTangent[2], fSign};
+            vertices[iFace * 3 + iVert].tangent = Vec4f{fvTangent[0], fvTangent[1], fvTangent[2], fSign};
         },
         .m_setTSpace = nullptr,
     };
@@ -184,11 +194,11 @@ MeshHandle generate_cube(AssetManager& assets) {
     return mesh;
 }
 
-MeshHandle generate_sphere(AssetManager& assets, const glm::uvec2 fidelity) {
-    ASSERT(fidelity.x >= 3);
-    ASSERT(fidelity.y >= 2);
+MeshHandle generate_sphere(AssetManager& assets, const Vec2p fidelity) {
+    ASSERT(fidelity[0] >= 3);
+    ASSERT(fidelity[1] >= 2);
 
-    Slice<Vertex> primitives = assets.stack.alloc<Vertex>((fidelity.x + 1) * (fidelity.y + 1) * 6);
+    Slice<Vertex> primitives = assets.stack.alloc<Vertex>((fidelity[0] + 1) * (fidelity[1] + 1) * 6);
     DEFER(assets.stack.dealloc(primitives));
 
     usize index = 0;
@@ -196,58 +206,58 @@ MeshHandle generate_sphere(AssetManager& assets, const glm::uvec2 fidelity) {
     f32 r_next = 0.0f;
     f32 x_next = 0.0f;
     f32 y_next = 1.0f;
-    for (u32 i = 0; i < fidelity.y; ++i) {
+    for (u32 i = 0; i < fidelity[1]; ++i) {
         const f32 h = h_next;
         const f32 r = r_next;
-        h_next = -std::cos(glm::pi<f32>() * (i + 1) / fidelity.y);
-        r_next = std::sin(glm::pi<f32>() * (i + 1) / fidelity.y);
+        h_next = -std::cos((f32)Pi * (i + 1) / fidelity[1]);
+        r_next = std::sin((f32)Pi * (i + 1) / fidelity[1]);
 
-        for (u32 j = 0; j < fidelity.x; ++j) {
+        for (u32 j = 0; j < fidelity[0]; ++j) {
             const f32 x = x_next;
             const f32 y = y_next;
-            x_next = -std::sin(glm::tau<f32>() * (j + 1) / fidelity.x);
-            y_next = std::cos(glm::tau<f32>() * (j + 1) / fidelity.x);
+            x_next = -std::sin((f32)Tau * (j + 1) / fidelity[0]);
+            y_next = std::cos((f32)Tau * (j + 1) / fidelity[0]);
 
-            const f32 u = static_cast<f32>(j) / fidelity.x;
-            const f32 v = static_cast<f32>(i) / fidelity.y;
-            const f32 u_next = static_cast<f32>(j + 1) / fidelity.x;
-            const f32 v_next = static_cast<f32>(i + 1) / fidelity.y;
+            const f32 u = static_cast<f32>(j) / fidelity[0];
+            const f32 v = static_cast<f32>(i) / fidelity[1];
+            const f32 u_next = static_cast<f32>(j + 1) / fidelity[0];
+            const f32 v_next = static_cast<f32>(i + 1) / fidelity[1];
 
             primitives[index++] = {
-                glm::vec3{x * r, h, y * r},
-                glm::vec3{x * r, h, y * r},
-                glm::vec4{},
-                glm::vec2{u, v}
+                {x * r, h, y * r},
+                {x * r, h, y * r},
+                {},
+                {u, v}
             };
             primitives[index++] = {
-                glm::vec3{x * r_next, h_next, y * r_next},
-                glm::vec3{x * r_next, h_next, y * r_next},
-                glm::vec4{},
-                glm::vec2{u, v_next}
+                {x * r_next, h_next, y * r_next},
+                {x * r_next, h_next, y * r_next},
+                {},
+                {u, v_next}
             };
             primitives[index++] = {
-                glm::vec3{x_next * r_next, h_next, y_next * r_next},
-                glm::vec3{x_next * r_next, h_next, y_next * r_next},
-                glm::vec4{},
-                glm::vec2{u_next, v_next}
+                {x_next * r_next, h_next, y_next * r_next},
+                {x_next * r_next, h_next, y_next * r_next},
+                {},
+                {u_next, v_next}
             };
             primitives[index++] = {
-                glm::vec3{x_next * r_next, h_next, y_next * r_next},
-                glm::vec3{x_next * r_next, h_next, y_next * r_next},
-                glm::vec4{},
-                glm::vec2{u_next, v_next}
+                {x_next * r_next, h_next, y_next * r_next},
+                {x_next * r_next, h_next, y_next * r_next},
+                {},
+                {u_next, v_next}
             };
             primitives[index++] = {
-                glm::vec3{x_next * r, h, y_next * r},
-                glm::vec3{x_next * r, h, y_next * r},
-                glm::vec4{},
-                glm::vec2{u_next, v}
+                {x_next * r, h, y_next * r},
+                {x_next * r, h, y_next * r},
+                {},
+                {u_next, v}
             };
             primitives[index++] = {
-                glm::vec3{x * r, h, y * r},
-                glm::vec3{x * r, h, y * r},
-                glm::vec4{},
-                glm::vec2{u, v}
+                {x * r, h, y * r},
+                {x * r, h, y * r},
+                {},
+                {u, v}
             };
         }
     }
@@ -352,12 +362,12 @@ Result<GltfData> load_gltf(AssetManager& assets, std::filesystem::path path) {
 
             fastgltf::iterateAccessorWithIndex<u32>(asset.get(), index_accessor, [&](u32 index, usize i) { 
                 primitives[begin + i] = {
-                    fastgltf::getAccessorElement<glm::vec3>(asset.get(), position_accessor, index)
-                        * glm::vec3{1.0f, -1.0f, -1.0f},
-                    fastgltf::getAccessorElement<glm::vec3>(asset.get(), normal_accessor, index)
-                        * glm::vec3{1.0f, -1.0f, -1.0f},
-                    glm::vec4{},
-                    fastgltf::getAccessorElement<glm::vec2>(asset.get(), tex_coord_accessor, index)
+                    fastgltf::getAccessorElement<Vec3f>(asset.get(), position_accessor, index)
+                        * Vec3f{1.0f, -1.0f, -1.0f},
+                    fastgltf::getAccessorElement<Vec3f>(asset.get(), normal_accessor, index)
+                        * Vec3f{1.0f, -1.0f, -1.0f},
+                    Vec4f{},
+                    fastgltf::getAccessorElement<Vec2f>(asset.get(), tex_coord_accessor, index)
                 };
             });
         }
@@ -386,10 +396,10 @@ ImageHandle<void> create_image(AssetManager& assets) {
     return {assets.images.alloc()};
 }
 
-ImageHandle<void> create_image(AssetManager& assets, glm::vec<2, usize> size, u32 alignment) {
+ImageHandle<void> create_image(AssetManager& assets, Vec2p size, u32 alignment) {
     ImageHandle<void> image = create_image(assets);
     assets[image] = {
-        .pixels = malloc_slice<byte>(size.x * size.y * alignment).data,
+        .pixels = malloc_slice<byte>(size[0] * size[1] * alignment).data,
         .alignment = alignment,
         .size = size,
     };
@@ -417,7 +427,7 @@ Result<ImageHandle<u32>> load_image(AssetManager& assets, std::filesystem::path 
     }
 
     auto image = ok(create_image<u32>(assets));
-    assets[*image] = {
+    assets[*image] = ImageData{
         .pixels = pixels,
         .alignment = 4,
         .size = {to_u32(width), to_u32(height)},
@@ -425,9 +435,9 @@ Result<ImageHandle<u32>> load_image(AssetManager& assets, std::filesystem::path 
     return image;
 }
 
-f32 get_value_noise(const glm::vec<2, usize> pos, const f32 point_width) {
-    const f32 x = pos.x / point_width;
-    const f32 y = pos.y / point_width;
+f32 get_value_noise(const Vec2p pos, const f32 point_width) {
+    const f32 x = pos[0] / point_width;
+    const f32 y = pos[1] / point_width;
     const f32 x_t = x - std::floor(x);
     const f32 y_t = y - std::floor(y);
     const usize x_floor = static_cast<usize>(x);
@@ -449,9 +459,9 @@ f32 get_value_noise(const glm::vec<2, usize> pos, const f32 point_width) {
     );
 }
 
-f32 get_perlin_noise(const glm::vec<2, usize> pos, const f32 gradient_width) {
-    const f32 x = pos.x / gradient_width;
-    const f32 y = pos.y / gradient_width;
+f32 get_perlin_noise(const Vec2p pos, const f32 gradient_width) {
+    const f32 x = pos[0] / gradient_width;
+    const f32 y = pos[1] / gradient_width;
     const f32 x_t = x - std::floor(x);
     const f32 y_t = y - std::floor(y);
     const usize x_floor = static_cast<usize>(x);
@@ -460,33 +470,33 @@ f32 get_perlin_noise(const glm::vec<2, usize> pos, const f32 gradient_width) {
     const usize y_ceil = y_floor + 1;
     return std::lerp(
         std::lerp(
-            glm::dot(rng<glm::vec2>(x_floor, y_floor), glm::vec2{x_t       , y_t}),
-            glm::dot(rng<glm::vec2>(x_ceil , y_floor), glm::vec2{x_t - 1.0f, y_t}),
+            dot(rng<Vec2f>(x_floor, y_floor), Vec2f{x_t       , y_t}),
+            dot(rng<Vec2f>(x_ceil , y_floor), Vec2f{x_t - 1.0f, y_t}),
             smoothstep_quintic(x_t)
         ),
         std::lerp(
-            glm::dot(rng<glm::vec2>(x_floor, y_ceil), glm::vec2{x_t       , y_t - 1.0f}),
-            glm::dot(rng<glm::vec2>(x_ceil , y_ceil), glm::vec2{x_t - 1.0f, y_t - 1.0f}),
+            dot(rng<Vec2f>(x_floor, y_ceil), Vec2f{x_t       , y_t - 1.0f}),
+            dot(rng<Vec2f>(x_ceil , y_ceil), Vec2f{x_t - 1.0f, y_t - 1.0f}),
             smoothstep_quintic(x_t)
         ),
         smoothstep_quintic(y_t)
     );
 }
 
-glm::vec4 get_normal_from_heightmap(const glm::vec<2, usize> pos, const Image<f32>& heightmap) {
-    const f32 height = heightmap[pos.y][pos.x];
+Vec4f get_normal_from_heightmap(const Vec2p pos, const Image<f32>& heightmap) {
+    const f32 height = heightmap[pos[1]][pos[0]];
 
-    const usize v_up = pos.y == 0 ? heightmap.size.y - 1 : pos.y - 1;
-    const usize u_left = pos.x == 0 ? heightmap.size.x - 1 : pos.x - 1;
-    const glm::vec3 up  = {0.0f, -1.0f, heightmap[v_up][pos.x] - height};
-    const glm::vec3 left  = {-1.0f, 0.0f, heightmap[pos.y][u_left] - height};
+    const usize v_up = pos[1] == 0 ? heightmap.size[1] - 1 : pos[1] - 1;
+    const usize u_left = pos[0] == 0 ? heightmap.size[0] - 1 : pos[0] - 1;
+    const Vec3f up  = {0.0f, -1.0f, heightmap[v_up][pos[0]] - height};
+    const Vec3f left  = {-1.0f, 0.0f, heightmap[pos[1]][u_left] - height};
 
-    const usize v_down = (pos.y + 1) % heightmap.size.y;
-    const usize u_right = (pos.x + 1) % heightmap.size.x;
-    const glm::vec3 down = {0.0f, 1.0f, heightmap[v_down][pos.x] - height};
-    const glm::vec3 right  = {1.0f, 0.0f, heightmap[pos.y][u_right] - height};
+    const usize v_down = (pos[1] + 1) % heightmap.size[1];
+    const usize u_right = (pos[0] + 1) % heightmap.size[0];
+    const Vec3f down = {0.0f, 1.0f, heightmap[v_down][pos[0]] - height};
+    const Vec3f right  = {1.0f, 0.0f, heightmap[pos[1]][u_right] - height};
 
-    return glm::vec4{glm::normalize(glm::cross(up, left) + glm::cross(down, right)), 0.0f};
+    return Vec4f{normalize(cross(up, left) + cross(down, right)), 0.0f};
 }
 
 } // namespace hg

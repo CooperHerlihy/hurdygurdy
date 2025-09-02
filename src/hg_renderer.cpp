@@ -4,14 +4,14 @@ namespace hg {
 
 Result<Window> create_window(Vk& vk, const WindowConfig& config) {
     if (config.windowed)
-        ASSERT(config.size.x > 0 && config.size.y > 0);
+        ASSERT(config.size[0] > 0 && config.size[1] > 0);
 
     auto window = ok<Window>();
 
     if (config.windowed) {
         window->window = SDL_CreateWindow(
             "Hurdy Gurdy",
-            config.size.x, config.size.y,
+            config.size[0], config.size[1],
             SDL_WINDOW_RESIZABLE | SDL_WINDOW_VULKAN
         );
     } else {
@@ -67,8 +67,8 @@ void destroy_window(Vk& vk, Window& window) {
 }
 
 struct ViewProjectionUniform {
-    glm::mat4 projection;
-    glm::mat4 view;
+    Mat4f projection;
+    Mat4f view;
 };
 
 struct LightUniform {
@@ -81,7 +81,7 @@ struct SkyboxPush {
 };
 
 struct ModelPush {
-    glm::mat4 model;
+    Mat4f model;
     u32 normal_map_index;
     u32 texture_index;
     float roughness;
@@ -89,7 +89,7 @@ struct ModelPush {
 };
 
 struct AntialiasPush {
-    glm::vec2 pixel_size;
+    Vec2f pixel_size;
     u32 input_index;
 };
 
@@ -270,36 +270,36 @@ PbrRenderer create_pbr_renderer(Vk& vk, const PbrRendererConfig& config) {
         vk, {renderer.descriptor_set, 1}, {renderer.light_buffer.handle, sizeof(LightUniform)}
     );
 
-    const glm::vec3 positions[]{
-        glm::vec3{-1.0f, -1.0f,  1.0f},
-        glm::vec3{-1.0f, -1.0f, -1.0f},
-        glm::vec3{ 1.0f, -1.0f, -1.0f},
-        glm::vec3{ 1.0f, -1.0f,  1.0f},
+    const Vec3f positions[]{
+        {-1.0f, -1.0f,  1.0f},
+        {-1.0f, -1.0f, -1.0f},
+        { 1.0f, -1.0f, -1.0f},
+        { 1.0f, -1.0f,  1.0f},
 
-        glm::vec3{-1.0f, -1.0f,  1.0f},
-        glm::vec3{-1.0f,  1.0f,  1.0f},
-        glm::vec3{-1.0f,  1.0f, -1.0f},
-        glm::vec3{-1.0f, -1.0f, -1.0f},
+        {-1.0f, -1.0f,  1.0f},
+        {-1.0f,  1.0f,  1.0f},
+        {-1.0f,  1.0f, -1.0f},
+        {-1.0f, -1.0f, -1.0f},
 
-        glm::vec3{-1.0f, -1.0f, -1.0f},
-        glm::vec3{-1.0f,  1.0f, -1.0f},
-        glm::vec3{ 1.0f,  1.0f, -1.0f},
-        glm::vec3{ 1.0f, -1.0f, -1.0f},
+        {-1.0f, -1.0f, -1.0f},
+        {-1.0f,  1.0f, -1.0f},
+        { 1.0f,  1.0f, -1.0f},
+        { 1.0f, -1.0f, -1.0f},
 
-        glm::vec3{ 1.0f, -1.0f, -1.0f},
-        glm::vec3{ 1.0f,  1.0f, -1.0f},
-        glm::vec3{ 1.0f,  1.0f,  1.0f},
-        glm::vec3{ 1.0f, -1.0f,  1.0f},
+        { 1.0f, -1.0f, -1.0f},
+        { 1.0f,  1.0f, -1.0f},
+        { 1.0f,  1.0f,  1.0f},
+        { 1.0f, -1.0f,  1.0f},
 
-        glm::vec3{ 1.0f, -1.0f,  1.0f},
-        glm::vec3{ 1.0f,  1.0f,  1.0f},
-        glm::vec3{-1.0f,  1.0f,  1.0f},
-        glm::vec3{-1.0f, -1.0f,  1.0f},
+        { 1.0f, -1.0f,  1.0f},
+        { 1.0f,  1.0f,  1.0f},
+        {-1.0f,  1.0f,  1.0f},
+        {-1.0f, -1.0f,  1.0f},
 
-        glm::vec3{-1.0f,  1.0f, -1.0f},
-        glm::vec3{-1.0f,  1.0f,  1.0f},
-        glm::vec3{ 1.0f,  1.0f,  1.0f},
-        glm::vec3{ 1.0f,  1.0f, -1.0f},
+        {-1.0f,  1.0f, -1.0f},
+        {-1.0f,  1.0f,  1.0f},
+        { 1.0f,  1.0f,  1.0f},
+        { 1.0f,  1.0f, -1.0f},
 
     };
     const u32 indices[]{
@@ -382,7 +382,7 @@ static void draw_skybox(VkCommandBuffer cmd, PbrRenderer& renderer) {
     const VkVertexInputBindingDescription2EXT vertex_bindings[]{
         {
             .sType = VK_STRUCTURE_TYPE_VERTEX_INPUT_BINDING_DESCRIPTION_2_EXT,
-            .stride = sizeof(glm::vec3), .inputRate = VK_VERTEX_INPUT_RATE_VERTEX, .divisor = 1
+            .stride = sizeof(Vec3f), .inputRate = VK_VERTEX_INPUT_RATE_VERTEX, .divisor = 1
         }
     };
     const VkVertexInputAttributeDescription2EXT vertex_attributes[]{
@@ -586,7 +586,7 @@ Result<void> draw_pbr(PbrRenderer& renderer, Window& window, const Scene& scene)
 
     Vk& vk = *renderer.vk;
 
-    const glm::mat4 view = scene.camera->view();
+    const Mat4f view = scene.camera->view();
     LightUniform lights{.count = scene.lights.count};
     for (usize i = 0; i < scene.lights.count; ++i) {
         lights.vals[i] = {
@@ -716,11 +716,11 @@ Result<void> draw_pbr(PbrRenderer& renderer, Window& window, const Scene& scene)
     return ok();
 }
 
-PbrLight make_light(const glm::vec3 position, const glm::vec3 color, const f32 intensity) {
-    return {glm::vec4{position, 1.0f}, glm::vec4{color * intensity, 1.0f}};
+PbrLight make_light(const Vec3f position, const Vec3f color, const f32 intensity) {
+    return {Vec4f{position, 1.0f}, Vec4f{color * intensity, 1.0f}};
 }
 
-void update_projection(PbrRenderer& renderer, const glm::mat4& projection) {
+void update_projection(PbrRenderer& renderer, const Mat4f& projection) {
     write_buffer(
         *renderer.vk,
         renderer.vp_buffer,
@@ -737,7 +737,7 @@ PbrTextureHandle create_texture(PbrRenderer& renderer, AssetManager& assets, con
     ImageData& data = assets[config.data];
 
     GpuImage image = create_gpu_image(vk, {
-        .extent = {to_u32(data.size.x), to_u32(data.size.y), 1},
+        .extent = {to_u32(data.size[0]), to_u32(data.size[1]), 1},
         .format = config.format,
         .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
     });
@@ -750,7 +750,7 @@ PbrTextureHandle create_texture(PbrRenderer& renderer, AssetManager& assets, con
         .edge_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
     });
     write_gpu_image(vk, image, {
-        .src = {data.pixels, data.size.x * data.size.y * data.alignment},
+        .src = {data.pixels, data.size[0] * data.size[1] * data.alignment},
         .final_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
     });
 
@@ -778,7 +778,7 @@ void load_skybox(PbrRenderer& renderer, AssetManager& assets, const ImageHandle<
     ImageData& data = assets[cubemap];
 
     GpuImage image = create_gpu_cubemap(vk, {
-        .face_extent = {to_u32(data.size.x) / 4, to_u32(data.size.y) / 3, 1},
+        .face_extent = {to_u32(data.size[0]) / 4, to_u32(data.size[1]) / 3, 1},
         .format = VK_FORMAT_R8G8B8A8_SRGB,
         .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
     });
@@ -791,7 +791,7 @@ void load_skybox(PbrRenderer& renderer, AssetManager& assets, const ImageHandle<
         .edge_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
     });
     write_gpu_cubemap(vk, image, {
-        {data.pixels, data.size.x * data.size.y * data.alignment},
+        {data.pixels, data.size[0] * data.size[1] * data.alignment},
         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
     });
 

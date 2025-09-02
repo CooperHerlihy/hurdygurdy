@@ -10,7 +10,6 @@ set(SDL_STATIC ON)
 set(SDL_SHARED OFF)
 add_subdirectory(vendor/SDL EXCLUDE_FROM_ALL)
 add_subdirectory(vendor/VulkanMemoryAllocator EXCLUDE_FROM_ALL)
-add_subdirectory(vendor/glm EXCLUDE_FROM_ALL)
 add_subdirectory(vendor/fastgltf)
 
 add_library(mikktspace STATIC "vendor/mikktspace/mikktspace.c")
@@ -24,7 +23,6 @@ target_link_libraries(hurdy_gurdy PUBLIC
     Vulkan::Vulkan
     SDL3::SDL3
     VulkanMemoryAllocator
-    glm
     fastgltf
     mikktspace
     welder

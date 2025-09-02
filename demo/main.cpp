@@ -1,4 +1,3 @@
-#include "hg_renderer.h"
 #include <hurdy_gurdy.h>
 
 #define SDL_MAIN_USE_CALLBACKS
@@ -77,8 +76,8 @@ SDL_AppResult SDL_AppInit(void**, int, char**) {
     };
 
     default_normals = [&] {
-        auto default_normal_image = generate_image<glm::vec4>(assets, {2, 2}, [](...) {
-            return glm::vec4{0.0f, 0.0f, -1.0f, 0.0f};
+        auto default_normal_image = generate_image<Vec4f>(assets, Vec2p{2, 2}, [](...) {
+            return Vec4f{0.0f, 0.0f, -1.0f, 0.0f};
         });
         DEFER(destroy_image(assets, default_normal_image));
 
@@ -86,12 +85,12 @@ SDL_AppResult SDL_AppInit(void**, int, char**) {
     }();
 
     perlin_normals = [&] {
-        auto perlin_noise = generate_image<f32>(assets, {512, 512}, [&](const auto pos) {
+        auto perlin_noise = generate_image<f32>(assets, Vec2p{512, 512}, [&](const auto pos) {
             return get_fractal_noise(pos, 1.0f, 32.0f, get_perlin_noise);
         });
         DEFER(destroy_image(assets, perlin_noise));
 
-        auto perlin_normal_image = generate_image<glm::vec4>(assets, {512, 512}, [&](const auto pos) {
+        auto perlin_normal_image = generate_image<Vec4f>(assets, Vec2p{512, 512}, [&](const auto pos) {
             return get_normal_from_heightmap(pos, get_image(assets, perlin_noise));
         });
         DEFER(destroy_image(assets, perlin_normal_image));
@@ -100,7 +99,7 @@ SDL_AppResult SDL_AppInit(void**, int, char**) {
     }();
 
     gray_texture = [&] {
-        auto gray_image = generate_image<u32>(assets, {2, 2}, [](...) { return 0xff777777; });
+        auto gray_image = generate_image<u32>(assets, Vec2p{2, 2}, [](...) { return 0xff777777; });
         DEFER(destroy_image(assets, gray_image));
 
         return create_texture(renderer, assets, {gray_image, VK_FORMAT_R8G8B8A8_SRGB});
@@ -114,7 +113,7 @@ SDL_AppResult SDL_AppInit(void**, int, char**) {
     }();
 
     sphere = [&] {
-        auto sphere_mesh = generate_sphere(assets, {128, 64});
+        auto sphere_mesh = generate_sphere(assets, Vec2p{128, 64});
         DEFER(destroy_mesh(assets, sphere_mesh));
 
         return create_model(renderer, assets, {{sphere_mesh, 0.2f, 0.0f}, perlin_normals, gray_texture});
@@ -162,9 +161,9 @@ SDL_AppResult SDL_AppInit(void**, int, char**) {
 
     const auto window_size = window.swapchain.extent;
     const f32 aspect_ratio = static_cast<f32>(window_size.width) / static_cast<f32>(window_size.height);
-    update_projection(renderer, glm::perspective(glm::pi<f32>() / 4.0f, aspect_ratio, 0.1f, 100.f));
+    update_projection(renderer, perspective((f32)Pi / 4.0f, aspect_ratio, 0.1f, 100.f));
 
-    camera.translate({0.0f, -2.0f, -4.0f});
+    camera.translate(Vec3f{0.0f, -2.0f, -4.0f});
     game_clock.update();
 
     return SDL_APP_CONTINUE;
@@ -288,8 +287,8 @@ SDL_AppResult SDL_AppEvent(void*, SDL_Event* event) {
         case SDL_EVENT_MOUSE_MOTION: {
             if (input_state.left_mouse) {
                 constexpr f32 turn_speed = 0.003f;
-                camera.rotate_external(glm::angleAxis<f32, glm::defaultp>(event->motion.xrel * turn_speed, {0.0f, 1.0f, 0.0f}));
-                camera.rotate_internal(glm::angleAxis<f32, glm::defaultp>(event->motion.yrel * turn_speed, {-1.0f, 0.0f, 0.0f}));
+                camera.rotate_external(angle_axis(event->motion.xrel * turn_speed, Vec3f{0.0f, 1.0f, 0.0f}));
+                camera.rotate_internal(angle_axis(event->motion.yrel * turn_speed, Vec3f{-1.0f, 0.0f, 0.0f}));
             }
             break;
         }

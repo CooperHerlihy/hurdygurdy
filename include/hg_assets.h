@@ -1,14 +1,15 @@
 #pragma once
 
 #include "hg_utils.h"
+#include "hg_math.h"
 
 namespace hg {
 
 struct Vertex {
-    glm::vec3 position;
-    glm::vec3 normal;
-    glm::vec4 tangent;
-    glm::vec2 tex_coord;
+    Vec3f position;
+    Vec3f normal;
+    Vec4f tangent;
+    Vec2f tex_coord;
 };
 
 void generate_vertex_tangents(Slice<Vertex> primitives);
@@ -23,17 +24,17 @@ void weld_mesh(MeshData& out_mesh, int& out_index_count, Slice<const Vertex> pri
 struct ImageData {
     void* pixels;
     usize alignment;
-    glm::vec<2, usize> size;
+    Vec2p size;
 };
 
 template <typename T> struct Image {
     T* pixels;
-    glm::vec<2, usize> size;
+    Vec2p size;
 
-    [[nodiscard]] constexpr usize count() const { return size.x * size.y; }
+    [[nodiscard]] constexpr usize count() const { return size[0] * size[1]; }
 
-    [[nodiscard]] constexpr Slice<T> operator[](usize y) { return {&pixels[y * size.x], size.x}; }
-    [[nodiscard]] constexpr Slice<const T> operator[](usize y) const { return {&pixels[y * size.x], size.x}; }
+    [[nodiscard]] constexpr Slice<T> operator[](usize y) { return {&pixels[y * size[0]], size[0]}; }
+    [[nodiscard]] constexpr Slice<const T> operator[](usize y) const { return {&pixels[y * size[0]], size[0]}; }
 };
 
 using MeshHandle = Pool<MeshData>::Handle;
@@ -72,7 +73,7 @@ void destroy_mesh(AssetManager& assets, const MeshHandle mesh);
 
 [[nodiscard]] MeshHandle generate_square(AssetManager& assets);
 [[nodiscard]] MeshHandle generate_cube(AssetManager& assets);
-[[nodiscard]] MeshHandle generate_sphere(AssetManager& assets, const glm::uvec2 fidelity);
+[[nodiscard]] MeshHandle generate_sphere(AssetManager& assets, const Vec2p fidelity);
 
 struct GltfData {
     MeshHandle mesh;
@@ -86,8 +87,8 @@ void unload_gltf(AssetManager& assets, const GltfData gltf);
 template <typename T> [[nodiscard]] ImageHandle<T> create_image(AssetManager& assets) {
     return {create_image(assets).handle};
 }
-[[nodiscard]] ImageHandle<void> create_image(AssetManager& assets, glm::vec<2, usize> size, u32 alignment);
-template <typename T> [[nodiscard]] ImageHandle<T> create_image(AssetManager& assets, glm::vec<2, usize> size) {
+[[nodiscard]] ImageHandle<void> create_image(AssetManager& assets, Vec2p size, u32 alignment);
+template <typename T> [[nodiscard]] ImageHandle<T> create_image(AssetManager& assets, Vec2p size) {
     return {create_image(assets, size, sizeof(T)).handle};
 }
 void destroy_image(AssetManager& assets, const ImageHandle<void> image);
@@ -97,13 +98,13 @@ template <typename T> void destroy_image(AssetManager& assets, const ImageHandle
 
 [[nodiscard]] Result<ImageHandle<u32>> load_image(AssetManager& assets, std::filesystem::path path);
 
-template <typename T, typename F> ImageHandle<T> generate_image(AssetManager& assets, glm::vec<2, usize> size, F pred) {
+template <typename T, typename F> ImageHandle<T> generate_image(AssetManager& assets, Vec2p size, F pred) {
     ImageHandle<T> image_handle = create_image<T>(assets, size);
     ImageData& image = assets[image_handle];
     T* pixel = reinterpret_cast<T*>(image.pixels);
-    for (usize y = 0; y < image.size.y; ++y) {
-        for (usize x = 0; x < image.size.x; ++x) {
-            *pixel = pred(glm::vec<2, usize>{x, y});
+    for (usize y = 0; y < image.size[1]; ++y) {
+        for (usize x = 0; x < image.size[0]; ++x) {
+            *pixel = pred(Vec2p{x, y});
             ++pixel;
         }
     }
@@ -111,10 +112,10 @@ template <typename T, typename F> ImageHandle<T> generate_image(AssetManager& as
 }
 
 // TODO: tiling versions
-[[nodiscard]] f32 get_value_noise(const glm::vec<2, usize> pos, const f32 point_width);
-[[nodiscard]] f32 get_perlin_noise(const glm::vec<2, usize> pos, const f32 gradient_width);
+[[nodiscard]] f32 get_value_noise(const Vec2p pos, const f32 point_width);
+[[nodiscard]] f32 get_perlin_noise(const Vec2p pos, const f32 gradient_width);
 template <typename F> [[nodiscard]] f32 get_fractal_noise(
-    const glm::vec<2, usize> pos, const f32 min_width, const f32 max_width, F noise
+    const Vec2p pos, const f32 min_width, const f32 max_width, F noise
 ) {
     ASSERT(max_width > min_width);
     ASSERT(min_width >= 1.0);
@@ -130,6 +131,6 @@ template <typename F> [[nodiscard]] f32 get_fractal_noise(
     return value;
 }
 
-[[nodiscard]] glm::vec4 get_normal_from_heightmap(const glm::vec<2, usize> pos, const Image<f32>& heightmap);
+[[nodiscard]] Vec4f get_normal_from_heightmap(const Vec2p pos, const Image<f32>& heightmap);
 
 } // namespace hg

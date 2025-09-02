@@ -1,19 +1,6 @@
 #pragma once
 
-#include "hg_pch.h"
 #include "hg_utils.h"
-
-namespace glm {
-
-template <typename T> constexpr mat<3, 3, T> operator*(qua<T> lhs, mat<3, 3, T> rhs) noexcept {
-    return mat<3, 3, T>{
-        lhs * rhs[0],
-        lhs * rhs[1],
-        lhs * rhs[2],
-    };
-}
-
-} // namespace glm
 
 namespace hg {
 
@@ -38,10 +25,21 @@ template <typename T, usize N> struct Vec {
     constexpr Vec& operator=(const Vec& other) = default;
     constexpr Vec& operator=(Vec&& other) noexcept = default;
 
+    constexpr Vec(std::initializer_list<T> list) {
+        ASSERT(list.size() <= N);
+        usize i = 0;
+        for (const T& item : list) {
+            data[i] = item;
+            ++i;
+        }
+        for (; i < N; ++i)
+            data[i] = 0;
+    }
     template <typename... Args> explicit constexpr Vec(Args&&... args) {
         usize i = 0;
-        ((memcpy(reinterpret_cast<byte*>(&data) + i, &args, sizeof(args)), i += sizeof(args)), ...);
-        memset(reinterpret_cast<byte*>(&data) + i, 0, (N * sizeof(T) - i));
+        ((memcpy(data + i, &args, sizeof(args)), i += sizeof(args) / sizeof(T)), ...);
+        ASSERT(i <= N);
+        memset(data + i, 0, (N - i) * sizeof(T));
     }
 
     [[nodiscard]] constexpr T& operator[](const usize index) {
@@ -91,6 +89,7 @@ template <typename T, usize N> struct Vec {
         return *this;
     }
     constexpr Vec& operator/=(T scalar) {
+        ASSERT(scalar != 0);
         for (usize i = 0; i < N; ++i)
             data[i] /= scalar;
         return *this;
@@ -193,6 +192,7 @@ template <typename T, usize W, usize H> struct Mat {
 
     constexpr Mat(T scalar) {
         static_assert(W == H);
+        memset(data, 0, sizeof(data));
         for (usize i = 0; i < W; ++i)
             data[i][i] = scalar;
     }
@@ -203,7 +203,8 @@ template <typename T, usize W, usize H> struct Mat {
             data[i++] = vec;
     }
     template <usize WO, usize HO> Mat(const Mat<T, WO, HO>& other) {
-        static_assert(W == H);
+        static_assert(W == H && WO == HO);
+        static_assert(WO <= W && HO <= H);
         usize x;
         for (x = 0; x < WO; ++x) {
             usize y;
@@ -215,7 +216,7 @@ template <typename T, usize W, usize H> struct Mat {
             }
         }
         for (; x < W; ++x) {
-            for (usize y = HO; y < W; ++y) {
+            for (usize y = 0; y < H; ++y) {
                 data[x][y] = x == y ? 1 : 0;
             }
         }
@@ -249,6 +250,7 @@ template <typename T, usize W, usize H> struct Mat {
         return *this;
     }
     constexpr Mat& operator/=(T scalar) {
+        ASSERT(scalar != 0);
         for (usize i = 0; i < W; ++i)
             for (usize j = 0; j < H; ++j)
                 data[i][j] /= scalar;
@@ -256,24 +258,22 @@ template <typename T, usize W, usize H> struct Mat {
     }
 };
 
-// check for correctness : TODO
-template <typename T, usize WA, usize HA, usize WB, usize HB>
-Mat<T, WA, HB> operator*(const Mat<T, WA, HA>& lhs, const Mat<T, WB, HB>& rhs) {
-    static_assert(HA == WB);
-    Mat<T, WA, HB> out{};
-    for (usize i = 0; i < WA; ++i)
-        for (usize j = 0; j < HB; ++j)
-            for (usize k = 0; k < WB; ++k)
-                out[i][j] += lhs[i][k] * rhs[k][j];
+template <typename T, usize WL, usize HL, usize WR, usize HR>
+Mat<T, WL, HR> operator*(const Mat<T, WL, HL>& lhs, const Mat<T, WR, HR>& rhs) {
+    static_assert(WR == HL);
+    Mat<T, WR, HL> out{};
+    for (usize i = 0; i < WL; ++i)
+        for (usize j = 0; j < HL; ++j)
+            for (usize k = 0; k < WR; ++k)
+                out[i][j] += lhs[k][j] * rhs[i][k];
     return out;
 }
 
-// check for correctness : TODO
-template <typename T, usize W, usize H> Vec<T, H> operator*(const Mat<T, W, H>& lhs, const Vec<T, H>& rhs) {
-    Vec<T, H> out{0};
-    for (usize i = 0; i < W; ++i)
-        for (usize j = 0; j < H; ++j)
-            out[i] += lhs[i][j] * rhs[j];
+template <typename T, usize W, usize H> Vec<T, W> operator*(const Mat<T, W, H>& lhs, const Vec<T, H>& rhs) {
+    Vec<T, H> out{};
+    for (usize i = 0; i < H; ++i)
+        for (usize j = 0; j < W; ++j)
+            out[i] += lhs[j][i] * rhs[j];
     return out;
 }
 
@@ -397,6 +397,7 @@ template <typename T> struct Quat {
         return *this;
     }
     constexpr Quat& operator/=(T scalar) {
+        ASSERT(scalar != 0);
         i /= scalar;
         j /= scalar;
         k /= scalar;
@@ -520,9 +521,9 @@ template <> [[nodiscard]] constexpr f32 rng(u64 pos, u64 seed) {
     return static_cast<f32>(rng<u64>(pos, seed)) / static_cast<f32>(UINT64_MAX);
 }
 
-template <> [[nodiscard]] constexpr glm::vec2 rng(u64 pos, u64 seed) {
-    const f32 angle = rng<f32>(pos, seed) * glm::two_pi<f32>();
-    return {std::cos(angle), std::sin(angle)};
+template <> [[nodiscard]] constexpr Vec2f rng(u64 pos, u64 seed) {
+    const f32 angle = rng<f32>(pos, seed) * (f32)Tau;
+    return Vec2f{std::cos(angle), std::sin(angle)};
 }
 
 template <std::floating_point T> constexpr T smoothstep(const T t) {
@@ -536,24 +537,24 @@ template <std::floating_point T> constexpr T smoothstep_quintic(const T t) {
 }
 
 template <typename T> struct Transform2D {
-    glm::vec<3, T> position{0, 0, 0};
-    glm::vec<2, T> scale{1, 1};
+    Vec3<T> position{0, 0, 0};
+    Vec2<T> scale{1, 1};
     T radians = 0;
 
-    [[nodiscard]] constexpr glm::mat<4, 4, T> matrix() const noexcept {
-        glm::mat<2, 2, T> m2{1};
+    [[nodiscard]] constexpr Mat4<T> matrix() const noexcept {
+        Mat2<T> m2{1};
         m2[0].x = scale.x;
         m2[1].y = scale.y;
-        glm::mat<2, 2, T> rot{std::cos(radians), std::sin(radians), -std::sin(radians), std::cos(radians)};
+        Mat2<T> rot{std::cos(radians), std::sin(radians), -std::sin(radians), std::cos(radians)};
         m2 = rot * m2;
-        glm::mat<4, 4, T> m4{m2};
+        Mat4<T> m4{m2};
         m4[3].x = position.x;
         m4[3].y = position.y;
         m4[3].z = position.z;
         return m4;
     }
 
-    constexpr Transform2D& translate(const glm::vec<2, T> delta) noexcept {
+    constexpr Transform2D& translate(const Vec2<T> delta) noexcept {
         position += delta;
         return *this;
     }
@@ -566,104 +567,82 @@ template <typename T> struct Transform2D {
 using Transform2Df = Transform2D<f32>;
 
 template <typename T> struct Transform3D {
-    glm::vec<3, T> position{0, 0, 0};
-    glm::vec<3, T> scale{1, 1, 1};
-    glm::qua<T> rotation{1, 0, 0, 0};
+    Vec3<T> position{0, 0, 0};
+    Vec3<T> scale{1, 1, 1};
+    Quat<T> rotation{1, 0, 0, 0};
 
-    [[nodiscard]] constexpr glm::mat<4, 4, T> matrix() const noexcept {
-        glm::mat<3, 3, T> m3{1};
-        m3[0].x = scale.x;
-        m3[1].y = scale.y;
-        m3[2].z = scale.z;
+    [[nodiscard]] constexpr Mat4<T> matrix() const noexcept {
+        Mat3<T> m3{1};
+        m3[0][0] = scale[0];
+        m3[1][1] = scale[1];
+        m3[2][2] = scale[2];
         m3 = rotation * m3;
-        glm::mat<4, 4, T> m4{m3};
-        m4[3].x = position.x;
-        m4[3].y = position.y;
-        m4[3].z = position.z;
+        Mat4<T> m4{m3};
+        m4[3][0] = position[0];
+        m4[3][1] = position[1];
+        m4[3][2] = position[2];
         return m4;
     }
 
-    constexpr Transform3D& translate(const glm::vec<3, T> delta) noexcept {
+    constexpr Transform3D& translate(const Vec3<T> delta) noexcept {
         position += delta;
         return *this;
     }
-    constexpr Transform3D& rotate_external(const glm::qua<T> delta) noexcept {
+    constexpr Transform3D& rotate_external(const Quat<T> delta) noexcept {
         rotation = delta * rotation;
         return *this;
     }
-    constexpr Transform3D& rotate_internal(const glm::qua<T> delta) noexcept {
+    constexpr Transform3D& rotate_internal(const Quat<T> delta) noexcept {
         rotation = rotation * delta;
         return *this;
     }
 };
 
-// template <typename T> struct Transform3D {
-//     Vec3<T> position{0, 0, 0};
-//     Vec3<T> scale{1, 1, 1};
-//     Quat<T> rotation{1, 0, 0, 0};
-//
-//     [[nodiscard]] constexpr glm::mat<4, 4, T> matrix() const noexcept {
-//         Mat3<T> m3{1};
-//         m3[0][0] = scale[0];
-//         m3[1][1] = scale[1];
-//         m3[2][2] = scale[2];
-//         m3 = rotation * m3;
-//         Mat3<T> m4{m3};
-//         m4[3][0] = position[0];
-//         m4[3][1] = position[1];
-//         m4[3][2] = position[2];
-//         return *reinterpret_cast<glm::mat<4, 4, T>*>(&m4);
-//     }
-//
-//     constexpr Transform3D& translate(const glm::vec<3, T> delta) noexcept {
-//         position += *reinterpret_cast<const Vec3<T>*>(&delta);
-//         return *this;
-//     }
-//     constexpr Transform3D& rotate_external(const glm::qua<T> delta) noexcept {
-//         rotation = *reinterpret_cast<const Quat<T>*>(&delta) * rotation;
-//         return *this;
-//     }
-//     constexpr Transform3D& rotate_internal(const glm::qua<T> delta) noexcept {
-//         rotation = rotation * *reinterpret_cast<const Quat<T>*>(&delta);
-//         return *this;
-//     }
-// };
-
 using Transform3Df = Transform3D<f32>;
 
 template <typename T> struct Camera {
-    glm::vec<3, T> position{0, 0, 0};
-    glm::qua<T> rotation{1, 0, 0, 0};
+    Vec3<T> position{0, 0, 0};
+    Quat<T> rotation{1, 0, 0, 0};
 
-    [[nodiscard]] constexpr glm::mat<4, 4, T> view() const noexcept {
-        glm::mat<4, 4, T> rot{glm::conjugate(rotation) * glm::mat<3, 3, T>{1}};
-        glm::mat<4, 4, T> pos{1};
-        pos[3].x = -position.x;
-        pos[3].y = -position.y;
-        pos[3].z = -position.z;
+    [[nodiscard]] constexpr Mat4<T> view() const noexcept {
+        Mat4<T> rot{conjugate(rotation) * Mat3<T>{1}};
+        Mat4<T> pos{1};
+        pos[3][0] = -position[0];
+        pos[3][1] = -position[1];
+        pos[3][2] = -position[2];
         return rot * pos;
     }
 
-    constexpr Camera& translate(const glm::vec<3, T> delta) noexcept {
+    constexpr Camera& translate(const Vec3<T> delta) noexcept {
         position += delta;
         return *this;
     }
-    constexpr Camera& move(const glm::vec<3, T> dir, T distance) noexcept {
-        glm::vec<3, T> d{rotation * glm::vec<3, T>{dir.x, 0, dir.z}};
-        d.y = dir.y;
-        position += glm::normalize(d) * distance;
+    constexpr Camera& move(const Vec3<T> dir, T distance) noexcept {
+        Vec3<T> d{rotation * Vec3<T>{dir[0], 0, dir[2]}};
+        d[1] = dir[1];
+        position += normalize(d) * distance;
         return *this;
     }
-    constexpr Camera& rotate_external(const glm::qua<T> delta) noexcept {
+    constexpr Camera& rotate_external(const Quat<T> delta) noexcept {
         rotation = delta * rotation;
         return *this;
     }
-    constexpr Camera& rotate_internal(const glm::qua<T> delta) noexcept {
+    constexpr Camera& rotate_internal(const Quat<T> delta) noexcept {
         rotation = rotation * delta;
         return *this;
     }
 };
 
 using Cameraf = Camera<f32>;
+
+template <typename T> [[nodiscard]] constexpr Mat4<T> perspective(T fov_radians, T aspect, T near, T far) {
+    T scale = 1 / std::tan(fov_radians / 2);
+    return Mat4<T>{
+        {scale / aspect, 0, 0, 0},
+        {0, scale, 0, 0},
+        {0, 0, far / (far - near), 1},
+        {0, 0, -(far * near) / (far - near), 0}
+    };
+}
 
 } // namespace hg
