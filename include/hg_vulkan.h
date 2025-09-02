@@ -148,8 +148,8 @@ void destroy_graphics_pipeline(Vk& vk, const GraphicsPipeline& pipeline);
 struct GraphicsPipelineConfig {
     Slice<const VkDescriptorSetLayout> set_layouts;
     Slice<const VkPushConstantRange> push_ranges;
-    std::filesystem::path vertex_shader_path;
-    std::filesystem::path fragment_shader_path;
+    std::string_view vertex_shader_path;
+    std::string_view fragment_shader_path;
     VkShaderCodeTypeEXT code_type = VK_SHADER_CODE_TYPE_SPIRV_EXT;
 };
 [[nodiscard]] Result<GraphicsPipeline> create_graphics_pipeline(Vk& vk, const GraphicsPipelineConfig& config);

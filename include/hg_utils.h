@@ -22,6 +22,7 @@ using byte = std::byte;
 using f32 = std::float_t;
 using f64 = std::double_t;
 
+// Ginger Bill https://www.gingerbill.org/article/2015/08/19/defer-in-cpp/
 template <typename Func> class DeferInternal {
 public:
     explicit DeferInternal(Func func) : m_func(func) {}
@@ -29,7 +30,6 @@ public:
 private:
     Func m_func;
 };
-
 template <typename Func> DeferInternal<Func> defer_function(Func f) { return DeferInternal<Func>(f); }
 
 #define DEFER_INTERMEDIATE_1(x, y) x##y

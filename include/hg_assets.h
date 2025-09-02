@@ -1,6 +1,5 @@
 #pragma once
 
-#include "hg_utils.h"
 #include "hg_math.h"
 
 namespace hg {
@@ -80,7 +79,7 @@ struct GltfData {
     float roughness = 0.0f;
     float metalness = 0.0f;
 };
-Result<GltfData> load_gltf(AssetManager& assets, std::filesystem::path path);
+Result<GltfData> load_gltf(AssetManager& assets, std::string_view path);
 void unload_gltf(AssetManager& assets, const GltfData gltf);
 
 [[nodiscard]] ImageHandle<void> create_image(AssetManager& assets);
@@ -96,7 +95,7 @@ template <typename T> void destroy_image(AssetManager& assets, const ImageHandle
     destroy_image(assets, {image.handle});
 }
 
-[[nodiscard]] Result<ImageHandle<u32>> load_image(AssetManager& assets, std::filesystem::path path);
+[[nodiscard]] Result<ImageHandle<u32>> load_image(AssetManager& assets, std::string_view path);
 
 template <typename T, typename F> ImageHandle<T> generate_image(AssetManager& assets, Vec2p size, F pred) {
     ImageHandle<T> image_handle = create_image<T>(assets, size);

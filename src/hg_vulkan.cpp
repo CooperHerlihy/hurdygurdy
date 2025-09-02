@@ -1217,12 +1217,12 @@ VkPipelineLayout create_pipeline_layout(Vk& vk, const PipelineLayoutConfig& conf
     return layout;
 }
 
-static Result<Slice<char>> read_shader(Vk& vk, const std::filesystem::path path) {
+static Result<Slice<char>> read_shader(Vk& vk, const std::string_view path) {
     ASSERT(!path.empty());
 
-    FILE* file = std::fopen(path.string().data(), "rb");
+    FILE* file = std::fopen(path.data(), "rb");
     if (file == nullptr) {
-        LOGF_ERROR("Could not open shader file: {}", path.string());
+        LOGF_ERROR("Could not open shader file: {}", path);
         return Err::ShaderFileNotFound;
     }
     DEFER(std::fclose(file));
@@ -1232,7 +1232,7 @@ static Result<Slice<char>> read_shader(Vk& vk, const std::filesystem::path path)
     std::rewind(file);
 
     if (file_size == -1) {
-        LOGF_ERROR("Invalid shader file: {}", path.string());
+        LOGF_ERROR("Invalid shader file: {}", path);
         return Err::ShaderFileInvalid;
     }
     auto code = ok(vk.stack.alloc<char>(file_size));
@@ -1266,13 +1266,13 @@ Result<GraphicsPipeline> create_graphics_pipeline(Vk& vk, const GraphicsPipeline
     const auto vertex_code = read_shader(vk, config.vertex_shader_path);
     DEFER(vk.stack.dealloc(*vertex_code));
     if (vertex_code.has_err()) {
-        LOGF_ERROR("Could not load vertex shader: {}", config.vertex_shader_path.string());
+        LOGF_ERROR("Could not load vertex shader: {}", config.vertex_shader_path);
         return vertex_code.err();
     }
     const auto fragment_code = read_shader(vk, config.fragment_shader_path);
     DEFER(vk.stack.dealloc(*fragment_code));
     if (fragment_code.has_err()) {
-        LOGF_ERROR("Could not load fragment shader: {}", config.fragment_shader_path.string());
+        LOGF_ERROR("Could not load fragment shader: {}", config.fragment_shader_path);
         return fragment_code.err();
     }
 
@@ -1315,8 +1315,8 @@ Result<GraphicsPipeline> create_graphics_pipeline(Vk& vk, const GraphicsPipeline
         case VK_ERROR_INCOMPATIBLE_SHADER_BINARY_EXT: {
             LOGF_ERROR(
                 "Could not create shaders: {} and {}",
-                config.vertex_shader_path.string(),
-                config.fragment_shader_path.string()
+                config.vertex_shader_path,
+                config.fragment_shader_path
             );
             return Err::ShaderFileInvalid;
         }

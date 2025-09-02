@@ -276,7 +276,7 @@ MeshHandle generate_sphere(AssetManager& assets, const Vec2p fidelity) {
     return mesh;
 }
 
-Result<GltfData> load_gltf(AssetManager& assets, std::filesystem::path path) {
+Result<GltfData> load_gltf(AssetManager& assets, std::string_view path) {
     ASSERT(!path.empty());
 
     fastgltf::Parser parser;
@@ -285,11 +285,11 @@ Result<GltfData> load_gltf(AssetManager& assets, std::filesystem::path path) {
     switch (buffer.error()) {
         case fastgltf::Error::None: break;
         case fastgltf::Error::InvalidPath: {
-            LOGF_ERROR("Gltf file not found; invalid path: {}", path.string());
+            LOGF_ERROR("Gltf file not found; invalid path: {}", path);
             return Err::GltfFileNotFound;
         }
         default: {
-            LOGF_ERROR("Gltf file invalid; could not load: {}", path.string());
+            LOGF_ERROR("Gltf file invalid; could not load: {}", path);
             return Err::GltfFileInvalid;
         }
     }
@@ -298,11 +298,11 @@ Result<GltfData> load_gltf(AssetManager& assets, std::filesystem::path path) {
                        | fastgltf::Options::GenerateMeshIndices
                        // | fastgltf::Options::LoadExternalImages
                        | fastgltf::Options::LoadExternalBuffers;
-    auto asset = parser.loadGltf(buffer.get(), path.parent_path(), options);
+    auto asset = parser.loadGltf(buffer.get(), std::filesystem::path(path).parent_path(), options);
     switch (asset.error()) {
         case fastgltf::Error::None: break;
         default: {
-            LOGF_ERROR("Gltf file invalid; could not parse: {}", path.string());
+            LOGF_ERROR("Gltf file invalid; could not parse: {}", path);
             return Err::GltfFileInvalid;
         }
     }
@@ -319,7 +319,7 @@ Result<GltfData> load_gltf(AssetManager& assets, std::filesystem::path path) {
             }
 
             if (!primitive.indicesAccessor.has_value()) {
-                LOGF_ERROR("Gltf file invalid; primitive has no indices accessor: {}", path.string());
+                LOGF_ERROR("Gltf file invalid; primitive has no indices accessor: {}", path);
                 return Err::GltfFileInvalid;
             }
 
@@ -329,31 +329,31 @@ Result<GltfData> load_gltf(AssetManager& assets, std::filesystem::path path) {
             auto& tex_coord_accessor = asset->accessors[primitive.findAttribute("TEXCOORD_0")->accessorIndex];
 
             if (index_accessor.count % 3 != 0) {
-                LOGF_ERROR("Gltf file invalid; primitives are not a multiple of 3: {}", path.string());
+                LOGF_ERROR("Gltf file invalid; primitives are not a multiple of 3: {}", path);
                 return Err::GltfFileInvalid;
             }
             if (!position_accessor.bufferViewIndex.has_value()) {
-                LOGF_ERROR("Gltf file invalid; primitive has no position accessor: {}", path.string());
+                LOGF_ERROR("Gltf file invalid; primitive has no position accessor: {}", path);
                 return Err::GltfFileInvalid;
             }
             if (position_accessor.type != fastgltf::AccessorType::Vec3) {
-                LOGF_ERROR("Gltf file invalid; primitive has invalid position accessor: {}", path.string());
+                LOGF_ERROR("Gltf file invalid; primitive has invalid position accessor: {}", path);
                 return Err::GltfFileInvalid;
             }
             if (!normal_accessor.bufferViewIndex.has_value()) {
-                LOGF_ERROR("Gltf file invalid; primitive has no normal accessor: {}", path.string());
+                LOGF_ERROR("Gltf file invalid; primitive has no normal accessor: {}", path);
                 return Err::GltfFileInvalid;
             }
             if (normal_accessor.type != fastgltf::AccessorType::Vec3) {
-                LOGF_ERROR("Gltf file invalid; primitive has invalid normal accessor: {}", path.string());
+                LOGF_ERROR("Gltf file invalid; primitive has invalid normal accessor: {}", path);
                 return Err::GltfFileInvalid;
             }
             if (!tex_coord_accessor.bufferViewIndex.has_value()) {
-                LOGF_ERROR("Gltf file invalid; primitive has no tex coord accessor: {}", path.string());
+                LOGF_ERROR("Gltf file invalid; primitive has no tex coord accessor: {}", path);
                 return Err::GltfFileInvalid;
             }
             if (tex_coord_accessor.type != fastgltf::AccessorType::Vec2) {
-                LOGF_ERROR("Gltf file invalid; primitive has invalid tex coord accessor: {}", path.string());
+                LOGF_ERROR("Gltf file invalid; primitive has invalid tex coord accessor: {}", path);
                 return Err::GltfFileInvalid;
             }
 
@@ -411,17 +411,17 @@ void destroy_image(AssetManager& assets, const ImageHandle<void> image) {
     assets.images.dealloc(image.handle);
 }
 
-Result<ImageHandle<u32>> load_image(AssetManager& assets, std::filesystem::path path) {
+Result<ImageHandle<u32>> load_image(AssetManager& assets, std::string_view path) {
     ASSERT(!path.empty());
 
     int width = 0, height = 0, channels = 0;
-    const auto pixels = stbi_load(path.string().data(), &width, &height, &channels, STBI_rgb_alpha);
+    const auto pixels = stbi_load(path.data(), &width, &height, &channels, STBI_rgb_alpha);
     if (pixels == nullptr) {
-        LOGF_WARN("Image file not found: {}", path.string());
+        LOGF_WARN("Image file not found: {}", path);
         return Err::ImageFileNotFound;
     }
     if (width <= 0 || height <= 0 || channels <= 0) {
-        LOGF_WARN("Image file invalid; width, height, and/or channels are zero: {}", path.string());
+        LOGF_WARN("Image file invalid; width, height, and/or channels are zero: {}", path);
         std::free(pixels);
         return Err::ImageFileInvalid;
     }
