@@ -1,0 +1,15 @@
+-g
+-O0
+-std=c11
+-Wall
+-Wextra
+-Wconversion
+-Wshadow
+-pedantic
+-Iinclude
+-Ivendor/SDL/include
+-Ivendor/VulkanMemoryAllocator/include
+-Ivendor/fastgltf/include
+-Ivendor/stb
+-Ivendor/mikktspace
+-Ivendor/welder
