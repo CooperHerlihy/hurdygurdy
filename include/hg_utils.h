@@ -100,14 +100,20 @@ typedef enum HgError {
     HG_SUCCESS = 0,
     HG_ERROR_UNKNOWN,
     HG_FILE_NOT_FOUND,
-    HG_FILE_NOT_READABLE,
+    HG_FILE_READ_FAILURE,
+    HG_FILE_WRITE_FAILURE,
 } HgError;
 
 void* hg_heap_alloc(usize size);
 void hg_heap_free(void* ptr, usize size);
 
-HgError hg_file_load(const char* path, byte** data, usize* size);
-void hg_file_unload(byte* data, usize size);
+HgError hg_file_load_binary(const char* path, byte** data, usize* size);
+HgError hg_file_save_binary(const char* path, const byte* data, usize size);
+void hg_file_unload_binary(byte* data, usize size);
+
+HgError hg_file_load_image(const char* path, u32** data, u32* width, u32* height);
+HgError hg_file_save_image(const char* path, const u32* data, u32 width, u32 height);
+void hg_file_unload_image(u32* data, u32 width, u32 height);
 
 typedef struct HgClock {
     struct timespec time;

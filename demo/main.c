@@ -135,11 +135,25 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
 
     byte* vertex_shader;
     usize vertex_shader_size;
-    hg_file_load("build/shaders/test.vert.spv", &vertex_shader, &vertex_shader_size);
+    HgError vertex_shader_error =
+        hg_file_load_binary("build/shaders/test.vert.spv", &vertex_shader, &vertex_shader_size);
+    switch (vertex_shader_error) {
+        case HG_SUCCESS: break;
+        case HG_FILE_NOT_FOUND: HG_ERROR("vertex shader not found");
+        case HG_FILE_READ_FAILURE: HG_ERROR("vertex shader not readable");
+        default: HG_ERROR("unknown error");
+    }
 
     byte* fragment_shader;
     usize fragment_shader_size;
-    hg_file_load("build/shaders/test.frag.spv", &fragment_shader, &fragment_shader_size);
+    HgError fragment_shader_error =
+        hg_file_load_binary("build/shaders/test.frag.spv", &fragment_shader, &fragment_shader_size);
+    switch (fragment_shader_error) {
+        case HG_SUCCESS: break;
+        case HG_FILE_NOT_FOUND: HG_ERROR("fragment shader not found");
+        case HG_FILE_READ_FAILURE: HG_ERROR("fragment shader not readable");
+        default: HG_ERROR("unknown error");
+    }
 
     shader = hg_shader_create(&(HgShaderConfig){
         .color_format = VK_FORMAT_R8G8B8A8_UNORM,
@@ -162,8 +176,8 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
         .enable_color_blend = true,
     });
 
-    hg_file_unload(vertex_shader, vertex_shader_size);
-    hg_file_unload(fragment_shader, fragment_shader_size);
+    hg_file_unload_binary(vertex_shader, vertex_shader_size);
+    hg_file_unload_binary(fragment_shader, fragment_shader_size);
 
     descriptor_set = hg_allocate_descriptor_set(shader, 0);
     hg_update_descriptor_set(descriptor_set, 0, 0, HG_DESCRIPTOR_TYPE_TEXTURE, NULL, texture, NULL);
@@ -250,7 +264,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     time_elapsed += delta;
     ++frame_count;
     if (time_elapsed > 1.0) {
-        HG_LOGF("avg: %fms, fps: %lu", 1.0e3 / (f64)frame_count, frame_count);
+        HG_LOGF("avg: %fms, fps: %" PRIu64, 1.0e3 / (f64)frame_count, frame_count);
         time_elapsed -= 1.0;
         frame_count = 0;
     }

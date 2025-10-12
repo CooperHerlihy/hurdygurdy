@@ -13,12 +13,14 @@ cmake --build build/fastgltf
 echo "Building VulkanMemoryAllocator..."
 c++ -std=c++20 -g -O0 -Ivendor/VulkanMemoryAllocator/include -o build/vk_mem_alloc.o -c src/vk_mem_alloc.cpp
 
-echo "Building stb_image..."
-cc -std=c11 -g -O0 -Ivendor/stb -o build/stb_image.o -c src/stb_image.c
+echo "Building stb libraries..."
+cc -std=c11 -g -O0 -Ivendor/stb -o build/stb.o -c src/stb.c
 
 echo "Building MikkTSpace..."
 cc -std=c11 -g -O0 -o build/mikktspace.o -c vendor/mikktspace/mikktspace.c
 
 echo "Building Welder..."
 cc -std=c11 -g -O0 -o build/weldmesh.o -c vendor/welder/weldmesh.c
+
+echo "Dependencies complete."
 

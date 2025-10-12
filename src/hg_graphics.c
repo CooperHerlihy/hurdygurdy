@@ -457,15 +457,9 @@ static VkCommandPool create_command_pool(void) {
 // Create properly dynamic descriptor pool : TODO
 static VkDescriptorPool hg_create_descriptor_pool(void) {
     VkDescriptorPoolSize pool_sizes[] = {
-        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 128 },
-        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 128 },
-        { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 128 },
-        { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 128 },
-        { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 128 },
-        { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 128 },
-        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 128 },
-        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 128 },
-        { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 128 }
+        { VK_DESCRIPTOR_TYPE_SAMPLER, 255 },
+        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 255 },
+        { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 255 },
     };
     VkDescriptorPoolCreateInfo pool_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
