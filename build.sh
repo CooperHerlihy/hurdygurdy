@@ -31,6 +31,7 @@ echo "Building hurdy_gurdy..."
 SRCS=(
     src/hurdy_gurdy.c
     src/hg_utils.c
+    src/hg_math.c
     src/hg_graphics.c
 )
 OBJS=()

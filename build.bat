@@ -4,9 +4,9 @@ setlocal enabledelayedexpansion
 set starttime=%time%
 
 if "%1"=="release" (
-    set CFLAGS=/O2 /DNDEBUG /std:c11 /WX /W3 /experimental:c11atomics
+    set CFLAGS=/nologo /O2 /DNDEBUG /std:c11 /WX /W3 /experimental:c11atomics
 ) else (
-    set CFLAGS=/Zi /Od /std:c11 /WX /W3 /experimental:c11atomics
+    set CFLAGS=/nologo /Zi /Od /std:c11 /WX /W3 /experimental:c11atomics
 )
 
 set INCLUDES=^
@@ -52,26 +52,25 @@ echo Building hurdy_gurdy...
 set SRCS=^
     src\hurdy_gurdy.c^
     src\hg_utils.c^
+    src\hg_math.c^
     src\hg_graphics.c
 
 set OBJS=
 
 for %%F in (%SRCS%) do (
-    echo Compiling %%F...
     cl %CFLAGS% %INCLUDES% /c %%F /Fo:build\%%~nF.obj /Fd:build\%%~nF.pdb
     set OBJS=!OBJS! build\%%~nF.obj
 )
 
 echo Archiving...
-lib /OUT:build\hurdy_gurdy.lib build\vk_mem_alloc.obj build\stb.obj build\mikktspace.obj build\weldmesh.obj %OBJS%
+lib /nologo /OUT:build\hurdy_gurdy.lib build\vk_mem_alloc.obj build\stb.obj build\mikktspace.obj build\weldmesh.obj %OBJS%
 
 echo Building demo...
 
-echo Compiling demo\main.c...
 cl %CFLAGS% %INCLUDES% /c demo\main.c /Fo:build\demo.obj /Fd:build\demo.pdb
 
 echo Linking...
-link build\demo.obj %LIBS% /subsystem:console /OUT:build\out.exe
+cl %CFLAGS% %LIBS% build\demo.obj /Fe:build\out.exe /link /subsystem:console
 
 set endtime=%time%
 

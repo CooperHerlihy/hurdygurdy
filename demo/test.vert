@@ -7,19 +7,22 @@ layout(location = 0) in vec3 in_pos;
 layout(location = 1) in vec2 in_uv;
 
 layout(push_constant) uniform Push {
-    vec2 offset;
+    mat4 model;
 } push;
+
+layout(set = 0, binding = 0) uniform ViewProj {
+    mat4 view;
+    mat4 proj;
+} u_vp;
 
 void main() {
     f_uv = in_uv;
 
-    vec3 pos = vec3(
-        in_pos.x + push.offset.x,
-        in_pos.y + push.offset.y,
-        in_pos.z
-    );
+    vec4 vertex = vec4(in_pos, 1.0);
+    vec4 world = push.model * vertex;
+    vec4 view = u_vp.view * world;
 
-    f_pos = pos;
-    gl_Position = vec4(pos, 1.0);
+    f_pos = view.xyz;
+    gl_Position = u_vp.proj * view;
 }
 

@@ -1,5 +1,10 @@
 #include "hg_graphics.h"
 
+#include "hg_math.h"
+
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_vulkan.h>
+
 #include <vk_mem_alloc.h>
 
 static VkInstance s_instance;
@@ -1234,9 +1239,6 @@ HgTexture* hg_texture_create(const HgTextureConfig* config) {
         .view = VK_NULL_HANDLE,
     };
 
-    HG_ASSERT(VK_IMAGE_TYPE_2D == VK_IMAGE_TYPE_3D - 1);
-    HG_ASSERT(VK_IMAGE_TYPE_1D == VK_IMAGE_TYPE_2D - 1);
-
     VkImageCreateInfo image_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .flags = config->make_cubemap ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0,
@@ -2069,7 +2071,7 @@ HgDescriptorSet* hg_allocate_descriptor_set(HgShader* shader, u32 set_index) {
     return (HgDescriptorSet*)descriptor_set;
 }
 
-void hg_update_descriptor_set(
+void hg_write_descriptor_set(
     HgDescriptorSet* descriptor_set,
     u32 binding,
     u32 array_index,

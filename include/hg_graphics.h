@@ -3,6 +3,8 @@
 
 #include "hg_utils.h"
 
+#include <vulkan/vulkan.h>
+
 HgError hg_init_graphics(void);
 void hg_shutdown_graphics(void);
 void hg_wait_graphics(void);
@@ -125,7 +127,7 @@ typedef struct HgDescriptorSet HgDescriptorSet;
 HgDescriptorSet* hg_allocate_descriptor_set(HgShader* shader, u32 set_index);
 // free descriptor sets : TODO
 
-void hg_update_descriptor_set(
+void hg_write_descriptor_set(
     HgDescriptorSet* descriptor_set,
     u32 binding,
     u32 array_index,
@@ -166,4 +168,4 @@ typedef struct HgRenderDescription {
 
 bool hg_draw(HgWindow* window, const HgRenderDescription* scene);
 
-#endif
+#endif // HG_GRAPHICS_H

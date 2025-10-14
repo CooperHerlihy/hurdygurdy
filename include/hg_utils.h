@@ -16,11 +16,6 @@
 #include <threads.h>
 #include <time.h>
 
-#include <vulkan/vulkan.h>
-
-#include <SDL3/SDL.h>
-#include <SDL3/SDL_vulkan.h>
-
 typedef uint8_t u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
@@ -121,7 +116,4 @@ typedef struct HgClock {
 
 f64 hg_clock_tick(HgClock* clock);
 
-#define HG_MAX(a, b) ((a) > (b) ? (a) : (b))
-#define HG_MIN(a, b) ((a) < (b) ? (a) : (b))
-
-#endif
+#endif // HG_UTILS_H
