@@ -67,7 +67,7 @@ lib /nologo /OUT:build\hurdy_gurdy.lib build\vk_mem_alloc.obj build\stb.obj buil
 
 echo Building demo...
 
-cl %CFLAGS% %INCLUDES% /c demo\main.c /Fo:build\demo.obj /Fd:build\demo.pdb
+cl %CFLAGS% /I include /I vendor\SDL\include /c demo\main.c /Fo:build\demo.obj /Fd:build\demo.pdb
 
 echo Linking...
 cl %CFLAGS% %LIBS% build\demo.obj /Fe:build\out.exe /link /subsystem:console

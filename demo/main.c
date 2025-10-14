@@ -55,13 +55,13 @@ static const Vertex vertices[] = {{
     .uv = {0.0f, 0.0f},
 }, {
     .pos = {-0.5f, 0.5f, 0.0f},
-    .uv = {0.0f, 1.0f},
+    .uv = {0.0f, 2.0f},
 }, {
     .pos = {0.5f, 0.5f, 0.0f},
-    .uv = {1.0f, 1.0f},
+    .uv = {2.0f, 2.0f},
 }, {
     .pos = {0.5f, -0.5f, 0.0f},
-    .uv = {1.0f, 0.0f},
+    .uv = {2.0f, 0.0f},
 }};
 static HgBuffer* vertex_buffer;
 
@@ -100,34 +100,34 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
         .width = window_width,
         .height = window_height,
         .depth = 1,
-        .format = VK_FORMAT_R8G8B8A8_UNORM,
-        .aspect = VK_IMAGE_ASPECT_COLOR_BIT,
-        .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+        .format = HG_FORMAT_R8G8B8A8_UNORM,
+        .aspect = HG_TEXTURE_ASPECT_COLOR_BIT,
+        .usage = HG_TEXTURE_USAGE_RENDER_TARGET_BIT | HG_TEXTURE_USAGE_TRANSFER_SRC_BIT,
     });
 
     depth_buffer = hg_texture_create(&(HgTextureConfig){
         .width = window_width,
         .height = window_height,
         .depth = 1,
-        .format = VK_FORMAT_D32_SFLOAT,
-        .aspect = VK_IMAGE_ASPECT_DEPTH_BIT,
-        .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+        .format = HG_FORMAT_D32_SFLOAT,
+        .aspect = HG_TEXTURE_ASPECT_DEPTH_BIT,
+        .usage = HG_TEXTURE_USAGE_DEPTH_BUFFER_BIT | HG_TEXTURE_USAGE_TRANSFER_SRC_BIT,
     });
 
-    VkVertexInputBindingDescription vertex_bindings[] = {{
+    HgVertexInputBindingDescription vertex_bindings[] = {{
         .binding = 0,
         .stride = sizeof(Vertex),
-        .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+        .input_rate_instance = false,
     }};
-    VkVertexInputAttributeDescription vertex_attributes[] = {{
+    HgVertexInputAttributeDescription vertex_attributes[] = {{
         .binding = 0,
         .location = 0,
-        .format = VK_FORMAT_R32G32B32_SFLOAT,
+        .format = HG_FORMAT_R32G32B32_SFLOAT,
         .offset = offsetof(Vertex, pos),
     }, {
         .binding = 0,
         .location = 1,
-        .format = VK_FORMAT_R32G32_SFLOAT,
+        .format = HG_FORMAT_R32G32_SFLOAT,
         .offset = offsetof(Vertex, uv),
     }};
 
@@ -148,8 +148,8 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
         .descriptor_count = 1,
     }};
 
-    VkPushConstantRange push_constants[] = {{
-        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+    HgPushConstantRange push_constants[] = {{
+        .stage_flags = HG_SHADER_STAGE_VERTEX_BIT | HG_SHADER_STAGE_FRAGMENT_BIT,
         .size = sizeof(push_data),
     }};
 
@@ -176,8 +176,8 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     }
 
     shader = hg_shader_create(&(HgShaderConfig){
-        .color_format = VK_FORMAT_R8G8B8A8_UNORM,
-        .depth_format = VK_FORMAT_D32_SFLOAT,
+        .color_format = HG_FORMAT_R8G8B8A8_UNORM,
+        .depth_format = HG_FORMAT_D32_SFLOAT,
         .spirv_vertex_shader = vertex_shader,
         .vertex_shader_size = (u32)vertex_shader_size,
         .spirv_fragment_shader = fragment_shader,
@@ -190,8 +190,8 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
         .push_constants = push_constants,
         .descriptor_binding_count = HG_ARRAY_SIZE(descriptor_set_bindings),
         .push_constant_count = HG_ARRAY_SIZE(push_constants),
-        .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-        .cull_mode = VK_CULL_MODE_NONE,
+        .topology = HG_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+        .cull_mode = HG_CULL_MODE_NONE,
         .enable_depth_buffer = true,
         .enable_color_blend = true,
     });
@@ -201,7 +201,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
 
     vp_buffer = hg_buffer_create(&(HgBufferConfig){
         .size = sizeof(VPUniform),
-        .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        .usage = HG_BUFFER_USAGE_UNIFORM_BUFFER_BIT | HG_BUFFER_USAGE_TRANSFER_DST_BIT,
     });
     camera_position = (HgVec3){0.0f, 0.0f, -1.0f};
     camera_zoom = 1.0f;
@@ -222,15 +222,15 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
         .depth = 1,
         .array_layers = 1,
         .mip_levels = 1,
-        .format = VK_FORMAT_R8G8B8A8_UNORM,
-        .aspect = VK_IMAGE_ASPECT_COLOR_BIT,
-        .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        .format = HG_FORMAT_R8G8B8A8_UNORM,
+        .aspect = HG_TEXTURE_ASPECT_COLOR_BIT,
+        .usage = HG_TEXTURE_USAGE_SAMPLED_BIT | HG_TEXTURE_USAGE_TRANSFER_DST_BIT,
     });
-    hg_texture_write(texture, texture_data, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    hg_texture_write(texture, texture_data, HG_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
     sampler = hg_sampler_create(&(HgSamplerConfig){
-        .type = VK_FILTER_LINEAR,
-        .edge_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        .bilinear_filter = false,
+        .edge_mode = HG_SAMPLER_EDGE_MODE_REPEAT,
     });
 
     object_descriptor_set = hg_allocate_descriptor_set(shader, 1);
@@ -239,13 +239,13 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
 
     vertex_buffer = hg_buffer_create(&(HgBufferConfig){
         .size = sizeof(vertices),
-        .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        .usage = HG_BUFFER_USAGE_VERTEX_BUFFER_BIT | HG_BUFFER_USAGE_TRANSFER_DST_BIT,
     });
     hg_buffer_write(vertex_buffer, 0, vertices, sizeof(vertices));
 
     index_buffer = hg_buffer_create(&(HgBufferConfig){
         .size = sizeof(indices),
-        .usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        .usage = HG_BUFFER_USAGE_INDEX_BUFFER_BIT | HG_BUFFER_USAGE_TRANSFER_DST_BIT,
     });
     hg_buffer_write(index_buffer, 0, indices, sizeof(indices));
 
@@ -355,9 +355,9 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
                 .depth = 1,
                 .array_layers = 1,
                 .mip_levels = 1,
-                .format = VK_FORMAT_R8G8B8A8_UNORM,
-                .aspect = VK_IMAGE_ASPECT_COLOR_BIT,
-                .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                .format = HG_FORMAT_R8G8B8A8_UNORM,
+                .aspect = HG_TEXTURE_ASPECT_COLOR_BIT,
+                .usage = HG_TEXTURE_USAGE_RENDER_TARGET_BIT | HG_TEXTURE_USAGE_TRANSFER_SRC_BIT,
             });
 
             hg_texture_destroy(depth_buffer);
@@ -367,9 +367,9 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
                 .depth = 1,
                 .array_layers = 1,
                 .mip_levels = 1,
-                .format = VK_FORMAT_D32_SFLOAT,
-                .aspect = VK_IMAGE_ASPECT_DEPTH_BIT,
-                .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                .format = HG_FORMAT_D32_SFLOAT,
+                .aspect = HG_TEXTURE_ASPECT_DEPTH_BIT,
+                .usage = HG_TEXTURE_USAGE_DEPTH_BUFFER_BIT | HG_TEXTURE_USAGE_TRANSFER_SRC_BIT,
             });
 
             HgMat4 proj = hg_projection_matrix_perspective(
@@ -472,14 +472,14 @@ void SDL_AppQuit(void* appstate, SDL_AppResult result) {
 #if !defined(NDEBUG)
     hg_wait_graphics();
 
-    hg_texture_destroy(depth_buffer);
-    hg_texture_destroy(target);
-    hg_shader_destroy(shader);
+    hg_buffer_destroy(index_buffer);
+    hg_buffer_destroy(vertex_buffer);
     hg_sampler_destroy(sampler);
     hg_texture_destroy(texture);
     hg_buffer_destroy(vp_buffer);
-    hg_buffer_destroy(index_buffer);
-    hg_buffer_destroy(vertex_buffer);
+    hg_texture_destroy(depth_buffer);
+    hg_texture_destroy(target);
+    hg_shader_destroy(shader);
 
     hg_window_destroy(window);
     hg_shutdown();

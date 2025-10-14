@@ -2,6 +2,8 @@
 
 #include "hg_math.h"
 
+#include <vulkan/vulkan.h>
+
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
 
@@ -1071,14 +1073,22 @@ typedef struct HgBuffer {
     HgGpuMemoryType memory_type;
 } HgBuffer;
 
+static VkBufferUsageFlags hg_buffer_usage_flags_to_vk(HgBufferUsageFlags usage) {
+    return (usage & HG_BUFFER_USAGE_TRANSFER_SRC_BIT ? VK_BUFFER_USAGE_TRANSFER_SRC_BIT : 0)
+         | (usage & HG_BUFFER_USAGE_TRANSFER_DST_BIT ? VK_BUFFER_USAGE_TRANSFER_DST_BIT : 0)
+         | (usage & HG_BUFFER_USAGE_UNIFORM_BUFFER_BIT ? VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT : 0)
+         | (usage & HG_BUFFER_USAGE_VERTEX_BUFFER_BIT ? VK_BUFFER_USAGE_VERTEX_BUFFER_BIT : 0)
+         | (usage & HG_BUFFER_USAGE_INDEX_BUFFER_BIT ? VK_BUFFER_USAGE_INDEX_BUFFER_BIT : 0);
+}
+
 HgBuffer* hg_buffer_create(const HgBufferConfig* config) {
     HG_ASSERT(config->size != 0);
-    HG_ASSERT(config->usage != 0);
+    HG_ASSERT(config->usage != HG_BUFFER_USAGE_NONE);
 
     VkBufferCreateInfo buffer_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = config->size,
-        .usage = config->usage,
+        .usage = hg_buffer_usage_flags_to_vk(config->usage),
     };
 
     VmaAllocationCreateInfo alloc_info = {0};
@@ -1151,7 +1161,7 @@ void hg_buffer_write(HgBuffer* dst, usize offset, const void* src, usize size) {
 
     HgBuffer* staging_buffer = hg_buffer_create(&(HgBufferConfig){
         .size = size,
-        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        .usage = HG_BUFFER_USAGE_TRANSFER_SRC_BIT,
         .memory_type = HG_GPU_MEMORY_TYPE_LINEAR_ACCESS
     });
     hg_buffer_write(staging_buffer, 0, src, size);
@@ -1185,7 +1195,7 @@ void hg_buffer_read(const HgBuffer* src, usize offset, usize size, void* dst) {
 
     HgBuffer* staging_buffer = hg_buffer_create(&(HgBufferConfig){
         .size = size,
-        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        .usage = HG_BUFFER_USAGE_TRANSFER_SRC_BIT,
         .memory_type = HG_GPU_MEMORY_TYPE_LINEAR_ACCESS
     });
 
@@ -1213,13 +1223,77 @@ typedef struct HgTexture {
     bool is_cubemap;
 } HgTexture;
 
+static VkFormat hg_format_to_vk(HgFormat format) {
+    return (VkFormat)format;
+    // const VkFormat texture_formats[] = {
+    //     ...
+    // };
+    // return texture_formats[format];
+}
+
+static HgFormat hg_format_from_vk(VkFormat format) {
+    return (HgFormat)format;
+    // const VkFormat texture_formats[] = {
+    //     ...
+    // };
+    // return texture_formats[format];
+}
+
+static VkImageUsageFlags hg_texture_usage_flags_to_vk(HgTextureUsageFlags usage) {
+    return (usage & HG_TEXTURE_USAGE_TRANSFER_SRC_BIT ? VK_IMAGE_USAGE_TRANSFER_SRC_BIT : 0)
+         | (usage & HG_TEXTURE_USAGE_TRANSFER_DST_BIT ? VK_IMAGE_USAGE_TRANSFER_DST_BIT : 0)
+         | (usage & HG_TEXTURE_USAGE_SAMPLED_BIT ? VK_IMAGE_USAGE_SAMPLED_BIT : 0)
+         | (usage & HG_TEXTURE_USAGE_RENDER_TARGET_BIT ? VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT : 0)
+         | (usage & HG_TEXTURE_USAGE_DEPTH_BUFFER_BIT ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT : 0);
+}
+
+static VkImageAspectFlags hg_texture_aspect_flags_to_vk(HgTextureAspectFlags aspect) {
+    return (aspect & HG_TEXTURE_ASPECT_COLOR_BIT ? VK_IMAGE_ASPECT_COLOR_BIT : 0)
+         | (aspect & HG_TEXTURE_ASPECT_DEPTH_BIT ? VK_IMAGE_ASPECT_DEPTH_BIT : 0);
+}
+
+static HgTextureAspectFlags hg_texture_aspect_flags_from_vk(VkImageAspectFlags aspect) {
+    return (aspect & VK_IMAGE_ASPECT_COLOR_BIT ? HG_TEXTURE_ASPECT_COLOR_BIT : 0)
+         | (aspect & VK_IMAGE_ASPECT_DEPTH_BIT ? HG_TEXTURE_ASPECT_DEPTH_BIT : 0);
+}
+
+static VkImageLayout hg_texture_layout_to_vk(HgTextureLayout layout) {
+    return (VkImageLayout)layout;
+    // const VkImageLayout image_layouts[] = {
+    //     [HG_IMAGE_LAYOUT_UNDEFINED] = VK_IMAGE_LAYOUT_UNDEFINED,
+    //     [HG_IMAGE_LAYOUT_GENERAL] = VK_IMAGE_LAYOUT_GENERAL,
+    //     [HG_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL] = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    //     [HG_IMAGE_LAYOUT_DEPTH_BUFFER_OPTIMAL] = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+    //     [HG_IMAGE_LAYOUT_DEPTH_BUFFER_READ_ONLY_OPTIMAL] = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+    //     [HG_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL] = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+    //     [HG_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL] = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+    //     [HG_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL] = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+    // };
+    // return image_layouts[layout];
+}
+
+// static HgTextureLayout hg_texture_layout_from_vk(VkImageLayout layout) {
+//     return (HgTextureLayout)layout;
+//     // const VkImageLayout texture_layouts[] = {
+//     //     [VK_IMAGE_LAYOUT_UNDEFINED] = VK_IMAGE_LAYOUT_UNDEFINED,
+//     //     [VK_IMAGE_LAYOUT_GENERAL] = VK_IMAGE_LAYOUT_GENERAL,
+//     //     [VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL] = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+//     //     [VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL] = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+//     //     [VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL] = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+//     //     [VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL] = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+//     //     [VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL] = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+//     //     [VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL] = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+//     // };
+//     // return texture_layouts[layout];
+// }
+
 HgTexture* hg_texture_create(const HgTextureConfig* config) {
     HG_ASSERT(config->width > 0);
     HG_ASSERT(config->height > 0);
     HG_ASSERT(config->depth > 0);
-    HG_ASSERT(config->format != VK_FORMAT_UNDEFINED);
-    HG_ASSERT(config->aspect != 0);
-    HG_ASSERT(config->usage != 0);
+    HG_ASSERT(config->format != HG_FORMAT_UNDEFINED);
+    HG_ASSERT(config->aspect != HG_TEXTURE_ASPECT_NONE);
+    HG_ASSERT(config->usage != HG_TEXTURE_USAGE_NONE);
     if (config->make_cubemap) {
         HG_ASSERT(config->array_layers == 6);
         HG_ASSERT(config->width == config->height);
@@ -1233,8 +1307,8 @@ HgTexture* hg_texture_create(const HgTextureConfig* config) {
         .depth = config->depth,
         .array_layers = config->array_layers > 0 ? config->array_layers : 1,
         .mip_levels = config->mip_levels > 0 ? config->mip_levels : 1,
-        .format = config->format,
-        .aspect = config->aspect,
+        .format = hg_format_to_vk(config->format),
+        .aspect = hg_texture_aspect_flags_to_vk(config->aspect),
         .layout = VK_IMAGE_LAYOUT_UNDEFINED,
         .view = VK_NULL_HANDLE,
     };
@@ -1245,7 +1319,7 @@ HgTexture* hg_texture_create(const HgTextureConfig* config) {
         .imageType = VK_IMAGE_TYPE_3D
                    - (config->depth == 1)
                    - (config->height == 1),
-        .format = config->format,
+        .format = hg_format_to_vk(config->format),
         .extent = (VkExtent3D){
             .width = config->width,
             .height = config->height,
@@ -1254,7 +1328,7 @@ HgTexture* hg_texture_create(const HgTextureConfig* config) {
         .mipLevels = config->mip_levels > 0 ? config->mip_levels : 1,
         .arrayLayers = config->array_layers > 0 ? config->array_layers : 1,
         .samples = VK_SAMPLE_COUNT_1_BIT,
-        .usage = config->usage,
+        .usage = hg_texture_usage_flags_to_vk(config->usage),
     };
     VmaAllocationCreateInfo alloc_info = {
         .flags = 0,
@@ -1289,7 +1363,7 @@ HgTexture* hg_texture_create(const HgTextureConfig* config) {
             - (config->height == 1),
         .format = texture->format,
         .subresourceRange = (VkImageSubresourceRange){
-            .aspectMask = config->aspect,
+            .aspectMask = texture->aspect,
             .baseMipLevel = 0,
             .levelCount = VK_REMAINING_MIP_LEVELS,
             .baseArrayLayer = 0,
@@ -1355,11 +1429,11 @@ static void hg_write_cubemap(HgTexture* dst, const void* src, VkImageLayout layo
         .depth = staging_extent.depth,
         .array_layers = 1,
         .mip_levels = 1,
-        .format = dst->format,
-        .aspect = dst->aspect,
-        .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+        .format = hg_format_from_vk(dst->format),
+        .aspect = hg_texture_aspect_flags_from_vk(dst->aspect),
+        .usage = HG_TEXTURE_USAGE_TRANSFER_SRC_BIT | HG_TEXTURE_USAGE_TRANSFER_DST_BIT,
     });
-    hg_texture_write(staging_image, src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+    hg_texture_write(staging_image, src, HG_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
     VkCommandBuffer cmd = hg_begin_single_time_cmd();
 
@@ -1454,7 +1528,7 @@ static void hg_write_image(HgTexture* dst, const void* src, VkImageLayout layout
 
         HgBuffer* staging_buffer = hg_buffer_create(&(HgBufferConfig){
             .size = dst->width * dst->height * dst->depth * 4,
-            .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            .usage = HG_BUFFER_USAGE_TRANSFER_SRC_BIT,
             .memory_type = HG_GPU_MEMORY_TYPE_LINEAR_ACCESS,
         });
         hg_buffer_write(staging_buffer, 0, src, dst->width * dst->height * dst->depth * 4);
@@ -1499,11 +1573,11 @@ static void hg_write_image(HgTexture* dst, const void* src, VkImageLayout layout
         hg_buffer_destroy(staging_buffer);
 }
 
-void hg_texture_write(HgTexture* dst, const void* src, VkImageLayout layout) {
+void hg_texture_write(HgTexture* dst, const void* src, HgTextureLayout layout) {
     if (dst->is_cubemap) {
-        hg_write_cubemap(dst, src, layout);
+        hg_write_cubemap(dst, src, hg_texture_layout_to_vk(layout));
     } else {
-        hg_write_image(dst, src, layout);
+        hg_write_image(dst, src, hg_texture_layout_to_vk(layout));
     }
 }
 
@@ -1547,13 +1621,13 @@ void hg_blit_image(VkCommandBuffer cmd, const BlitConfig* dst, const BlitConfig*
     vkCmdBlitImage2(cmd, &blit_image_info);
 }
 
-void hg_texture_generate_mipmaps(HgTexture* texture, VkImageLayout layout) {
+void hg_texture_generate_mipmaps(HgTexture* texture, HgTextureLayout layout) {
     HG_ASSERT(texture->mip_levels > 1);
     HG_ASSERT(texture->width > 0);
     HG_ASSERT(texture->height > 0);
     HG_ASSERT(texture->depth > 0);
     HG_ASSERT(texture->format != VK_FORMAT_UNDEFINED);
-    HG_ASSERT(layout != VK_IMAGE_LAYOUT_UNDEFINED);
+    HG_ASSERT(layout != HG_IMAGE_LAYOUT_UNDEFINED);
 
     VkFormatProperties format_properties = {0};
     vkGetPhysicalDeviceFormatProperties(s_gpu, texture->format, &format_properties);
@@ -1640,7 +1714,7 @@ void hg_texture_generate_mipmaps(HgTexture* texture, VkImageLayout layout) {
         .srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
         .srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
         .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        .newLayout = layout,
+        .newLayout = hg_texture_layout_to_vk(layout),
         .image = texture->handle,
         .subresourceRange = {texture->aspect, 0, texture->mip_levels, 0, 1},
     };
@@ -1652,7 +1726,19 @@ void hg_texture_generate_mipmaps(HgTexture* texture, VkImageLayout layout) {
 
     hg_end_single_time_cmd(cmd);
 
-    texture->layout = layout;
+    texture->layout = hg_texture_layout_to_vk(layout);
+}
+
+VkSamplerAddressMode hg_sampler_edge_mode_to_vk(HgSamplerEdgeMode edge_mode) {
+    return (VkSamplerAddressMode)edge_mode;
+    // const VkSamplerAddressMode texture_edge_modes[] = {
+    //     [HG_SAMPLER_EDGE_MODE_REPEAT] = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+    //     [HG_SAMPLER_EDGE_MODE_MIRRORED_REPEAT] = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT,
+    //     [HG_SAMPLER_EDGE_MODE_CLAMP_TO_EDGE] = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+    //     [HG_SAMPLER_EDGE_MODE_CLAMP_TO_BORDER] = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+    //     [HG_SAMPLER_EDGE_MODE_MIRROR_CLAMP_TO_EDGE] = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE,
+    // };
+    // return texture_edge_modes[edge_mode];
 }
 
 HgSampler* hg_sampler_create(const HgSamplerConfig* config) {
@@ -1663,22 +1749,20 @@ HgSampler* hg_sampler_create(const HgSamplerConfig* config) {
 
     VkSamplerCreateInfo sampler_info = {
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-        .magFilter = config->type,
-        .minFilter = config->type,
-        .addressModeU = config->edge_mode,
-        .addressModeV = config->edge_mode,
-        .addressModeW = config->edge_mode,
+        .magFilter = config->bilinear_filter ? VK_FILTER_LINEAR : VK_FILTER_NEAREST,
+        .minFilter = config->bilinear_filter ? VK_FILTER_LINEAR : VK_FILTER_NEAREST,
+        .addressModeU = hg_sampler_edge_mode_to_vk(config->edge_mode),
+        .addressModeV = hg_sampler_edge_mode_to_vk(config->edge_mode),
+        .addressModeW = hg_sampler_edge_mode_to_vk(config->edge_mode),
         .anisotropyEnable = VK_TRUE,
         .maxAnisotropy = gpu_properties.limits.maxSamplerAnisotropy,
         .maxLod = (f32)mip_levels,
         .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
     };
-    if (config->type == VK_FILTER_LINEAR)
+    if (config->bilinear_filter)
         sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-    else if (config->type == VK_FILTER_NEAREST)
-        sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
     else
-        HG_ERROR("Invalid sampler type");
+        sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
 
     VkSampler sampler = VK_NULL_HANDLE;
     const VkResult result = vkCreateSampler(s_device, &sampler_info, NULL, &sampler);
@@ -1695,8 +1779,7 @@ HgSampler* hg_sampler_create(const HgSamplerConfig* config) {
 
 void hg_sampler_destroy(HgSampler* sampler) {
     HG_ASSERT(sampler != NULL);
-    VkSampler vk_sampler = (VkSampler)sampler;
-    vkDestroySampler(s_device, vk_sampler, NULL);
+    vkDestroySampler(s_device, (VkSampler)sampler, NULL);
 }
 
 typedef struct HgShader {
@@ -1761,6 +1844,40 @@ static VkPipelineLayout hg_create_pipeline_layout(
     return layout;
 }
 
+// static VkShaderStageFlags hg_shader_stage_to_vk(HgShaderStageFlags stage) {
+//     return stage & HG_SHADER_STAGE_ALL_GRAPHICS ? VK_SHADER_STAGE_ALL_GRAPHICS
+//          : (stage & HG_SHADER_STAGE_VERTEX_BIT ? VK_SHADER_STAGE_VERTEX_BIT : 0)
+//          | (stage & HG_SHADER_STAGE_TESSELLATION_CONTROL_BIT ? VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT : 0)
+//          | (stage & HG_SHADER_STAGE_TESSELLATION_EVALUATION_BIT ? VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT : 0)
+//          | (stage & HG_SHADER_STAGE_GEOMETRY_BIT ? VK_SHADER_STAGE_GEOMETRY_BIT : 0)
+//          | (stage & HG_SHADER_STAGE_FRAGMENT_BIT ? VK_SHADER_STAGE_FRAGMENT_BIT : 0)
+//          | (stage & HG_SHADER_STAGE_COMPUTE_BIT ? VK_SHADER_STAGE_COMPUTE_BIT : 0);
+// }
+
+static VkPrimitiveTopology hg_primitive_topology_to_vk(HgPrimitiveTopology topology) {
+    return (VkPrimitiveTopology)topology;
+    // const VkPrimitiveTopology primitive_topologies[] = {
+    //     [HG_PRIMITIVE_TOPOLOGY_POINT_LIST] = VK_PRIMITIVE_TOPOLOGY_POINT_LIST,
+    //     [HG_PRIMITIVE_TOPOLOGY_LINE_LIST] = VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
+    //     [HG_PRIMITIVE_TOPOLOGY_LINE_STRIP] = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP,
+    //     [HG_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST] = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+    //     [HG_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP] = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
+    //     [HG_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN] = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN,
+    // };
+    // return primitive_topologies[topology];
+}
+
+static VkCullModeFlags hg_cull_mode_to_vk(HgCullModeFlagBits cull_mode) {
+    return (VkCullModeFlags)cull_mode;
+    // const VkCullModeFlags cull_modes[] = {
+    //     [HG_CULL_MODE_NONE] = VK_CULL_MODE_NONE,
+    //     [HG_CULL_MODE_FRONT_BIT] = VK_CULL_MODE_FRONT_BIT,
+    //     [HG_CULL_MODE_BACK_BIT] = VK_CULL_MODE_BACK_BIT,
+    //     [HG_CULL_MODE_FRONT_AND_BACK] = VK_CULL_MODE_FRONT_AND_BACK,
+    // };
+    // return cull_modes[cull_mode];
+}
+
 static VkShaderModule hg_create_shader_module(const byte* code, usize size) {
     HG_ASSERT(code != NULL);
     HG_ASSERT(size > 0);
@@ -1800,7 +1917,7 @@ HgShader* hg_shader_create(const HgShaderConfig* config) {
     if (config->push_constant_count > 0)
         HG_ASSERT(config->push_constants != NULL);
     if (config->enable_depth_buffer)
-        HG_ASSERT(config->depth_format != VK_FORMAT_UNDEFINED);
+        HG_ASSERT(config->depth_format != HG_FORMAT_UNDEFINED);
 
 #define HG_MAX_DESCRIPTOR_SETS 8
 #define HG_MAX_DESCRIPTOR_BINDINGS 8
@@ -1868,7 +1985,7 @@ HgShader* hg_shader_create(const HgShaderConfig* config) {
     shader->layout = hg_create_pipeline_layout(
         shader->descriptor_layouts,
         shader->descriptor_layout_count,
-        config->push_constants,
+        (VkPushConstantRange*)config->push_constants,
         config->push_constant_count
     );
 
@@ -1892,14 +2009,14 @@ HgShader* hg_shader_create(const HgShaderConfig* config) {
     VkPipelineVertexInputStateCreateInfo vertex_input_state = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
         .vertexBindingDescriptionCount = config->vertex_binding_count,
-        .pVertexBindingDescriptions = config->vertex_bindings,
+        .pVertexBindingDescriptions = (VkVertexInputBindingDescription*)config->vertex_bindings,
         .vertexAttributeDescriptionCount = config->vertex_attribute_count,
-        .pVertexAttributeDescriptions = config->vertex_attributes,
+        .pVertexAttributeDescriptions = (VkVertexInputAttributeDescription*)config->vertex_attributes,
     };
 
     VkPipelineInputAssemblyStateCreateInfo input_assembly_state = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-        .topology = config->topology,
+        .topology = hg_primitive_topology_to_vk(config->topology),
         .primitiveRestartEnable = VK_FALSE,
     };
 
@@ -1918,7 +2035,7 @@ HgShader* hg_shader_create(const HgShaderConfig* config) {
         .depthClampEnable = VK_FALSE,
         .rasterizerDiscardEnable = VK_FALSE,
         .polygonMode = VK_POLYGON_MODE_FILL,
-        .cullMode = config->cull_mode,
+        .cullMode = hg_cull_mode_to_vk(config->cull_mode),
         .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
         .depthBiasEnable = VK_FALSE,
         .depthBiasConstantFactor = 0.0f,
@@ -1930,7 +2047,7 @@ HgShader* hg_shader_create(const HgShaderConfig* config) {
     VkPipelineMultisampleStateCreateInfo multisample_state = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
         .sampleShadingEnable = VK_FALSE,
-        .rasterizationSamples = config->MSAA == 0 ? VK_SAMPLE_COUNT_1_BIT : config->MSAA,
+        .rasterizationSamples = config->MSAA_sample_count == 0 ? VK_SAMPLE_COUNT_1_BIT : config->MSAA_sample_count,
         .minSampleShading = 1.0f,
         .pSampleMask = NULL,
         .alphaToCoverageEnable = VK_FALSE,
@@ -1983,12 +2100,12 @@ HgShader* hg_shader_create(const HgShaderConfig* config) {
         .dynamicStateCount = HG_ARRAY_SIZE(dynamic_states),
     };
 
+    VkFormat color_format = hg_format_to_vk(config->color_format);
     VkPipelineRenderingCreateInfo rendering_info = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-        .colorAttachmentCount = config->color_format != VK_FORMAT_UNDEFINED ? 1 : 0,
-        .pColorAttachmentFormats = &config->color_format,
-        .depthAttachmentFormat = config->depth_format,
-        .stencilAttachmentFormat = config->stencil_format,
+        .colorAttachmentCount = color_format != VK_FORMAT_UNDEFINED ? 1 : 0,
+        .pColorAttachmentFormats = &color_format,
+        .depthAttachmentFormat = hg_format_to_vk(config->depth_format),
     };
 
     VkGraphicsPipelineCreateInfo pipeline_info = {

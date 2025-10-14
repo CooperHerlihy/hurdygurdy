@@ -48,10 +48,10 @@ ar rcs build/libhurdy_gurdy.a build/vk_mem_alloc.o build/stb.o build/mikktspace.
 echo "Building demo..."
 
 echo "Compiling demo/main.c..."
-cc $CFLAGS $INCLUDES $LIBS -o build/demo.o -c demo/main.c
+cc $CFLAGS -Iinclude -Ivendor/SDL/include $LIBS -o build/demo.o -c demo/main.c
 
 echo "Linking..."
-c++ build/demo.o $CFLAGS -std=c++20 $INCLUDES $LIBS -o build/out
+c++ build/demo.o $CFLAGS -std=c++20 $LIBS -o build/out
 
 END_TIME=$(date +%s.%N)
 printf "Build complete: %.6f seconds\n" "$(echo "$END_TIME - $START_TIME" | bc)"
