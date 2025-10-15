@@ -1,3 +1,4 @@
+#include "hg_graphics.h"
 #include "hurdy_gurdy.h"
 
 #define SDL_MAIN_USE_CALLBACKS
@@ -19,26 +20,26 @@ typedef enum InputState {
 } InputState;
 static i32 input_state;
 
-static HgWindow* window;
 static HgTexture* target;
 static HgTexture* depth_buffer;
 
 typedef struct Vertex {
-    float pos[3];
-    float uv[2];
+    HgVec3 pos;
+    HgVec2 uv;
 } Vertex;
 
-static HgShader* shader;
-
-static HgVec3 camera_position;
-static f32 camera_zoom;
-static HgQuat camera_rotation;
 typedef struct VPUniform {
     HgMat4 view;
     HgMat4 proj;
 } VPUniform;
+
+typedef struct Push {
+    HgMat4 model;
+} Push;
+
+static HgShader* shader;
+
 static HgBuffer* vp_buffer;
-static HgDescriptorSet* vp_descriptor_set;
 
 static const u32 texture_data[] = {
     0xffff0000,
@@ -47,8 +48,6 @@ static const u32 texture_data[] = {
     0xff00ffff,
 };
 static HgTexture* texture;
-static HgSampler* sampler;
-static HgDescriptorSet* object_descriptor_set;
 
 static const Vertex vertices[] = {{
     .pos = {-0.5f, -0.5f, 0.0f},
@@ -70,13 +69,15 @@ static const u32 indices[] = {
 };
 static HgBuffer* index_buffer;
 
+static f32 camera_fov;
+
+static HgVec3 camera_position;
+static f32 camera_zoom;
+static HgQuat camera_rotation;
+
 static HgVec3 object_position;
 static HgVec2 object_scale;
 static f32 object_rotation;
-typedef struct Push {
-    HgMat4 model;
-} Push;
-static Push push_data;
 
 static HgClock game_clock;
 static f64 time_elapsed;
@@ -88,13 +89,15 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     (void)argv;
 
     hg_init();
-
-    window = hg_window_create(&(HgWindowConfig){
+    hg_window_open(&(HgWindowConfig){
         .title = "Hurdy Gurdy",
+        .width = 600,
+        .height = 400,
+        .windowed = true,
     });
 
     u32 window_width, window_height;
-    hg_window_get_size(window, &window_width, &window_height);
+    hg_window_get_size(&window_width, &window_height);
 
     target = hg_texture_create(&(HgTextureConfig){
         .width = window_width,
@@ -114,43 +117,33 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
         .usage = HG_TEXTURE_USAGE_DEPTH_BUFFER_BIT | HG_TEXTURE_USAGE_TRANSFER_SRC_BIT,
     });
 
-    HgVertexInputBindingDescription vertex_bindings[] = {{
-        .binding = 0,
-        .stride = sizeof(Vertex),
-        .input_rate_instance = false,
-    }};
-    HgVertexInputAttributeDescription vertex_attributes[] = {{
-        .binding = 0,
-        .location = 0,
+    HgVertexAttribute vertex_attributes[] = {{
         .format = HG_FORMAT_R32G32B32_SFLOAT,
         .offset = offsetof(Vertex, pos),
     }, {
-        .binding = 0,
-        .location = 1,
         .format = HG_FORMAT_R32G32_SFLOAT,
         .offset = offsetof(Vertex, uv),
     }};
-
-    HgDescriptorSetBinding descriptor_set_bindings[] = {{
-        .set = 0,
-        .binding = 0,
-        .descriptor_type = HG_DESCRIPTOR_TYPE_BUFFER,
-        .descriptor_count = 1,
-    }, {
-        .set = 1,
-        .binding = 0,
-        .descriptor_type = HG_DESCRIPTOR_TYPE_TEXTURE,
-        .descriptor_count = 1,
-    }, {
-        .set = 1,
-        .binding = 1,
-        .descriptor_type = HG_DESCRIPTOR_TYPE_SAMPLER,
-        .descriptor_count = 1,
+    HgVertexBinding vertex_bindings[] = {{
+        .attributes = vertex_attributes,
+        .attribute_count = HG_ARRAY_SIZE(vertex_attributes),
+        .stride = sizeof(Vertex),
     }};
 
-    HgPushConstantRange push_constants[] = {{
-        .stage_flags = HG_SHADER_STAGE_VERTEX_BIT | HG_SHADER_STAGE_FRAGMENT_BIT,
-        .size = sizeof(push_data),
+    HgDescriptorSetBinding vp_set_bindings[] = {{
+        .descriptor_type = HG_DESCRIPTOR_TYPE_BUFFER,
+        .descriptor_count = 1,
+    }};
+    HgDescriptorSetBinding object_set_bindings[] = {{
+        .descriptor_type = HG_DESCRIPTOR_TYPE_TEXTURE,
+        .descriptor_count = 1,
+    }};
+    HgDescriptorSet descriptor_sets[] = {{
+        .bindings = vp_set_bindings,
+        .binding_count = HG_ARRAY_SIZE(vp_set_bindings),
+    }, {
+        .bindings = object_set_bindings,
+        .binding_count = HG_ARRAY_SIZE(object_set_bindings),
     }};
 
     byte* vertex_shader;
@@ -183,13 +176,10 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
         .spirv_fragment_shader = fragment_shader,
         .fragment_shader_size = (u32)fragment_shader_size,
         .vertex_bindings = vertex_bindings,
-        .vertex_attributes = vertex_attributes,
         .vertex_binding_count = HG_ARRAY_SIZE(vertex_bindings),
-        .vertex_attribute_count = HG_ARRAY_SIZE(vertex_attributes),
-        .descriptor_set_bindings = descriptor_set_bindings,
-        .push_constants = push_constants,
-        .descriptor_binding_count = HG_ARRAY_SIZE(descriptor_set_bindings),
-        .push_constant_count = HG_ARRAY_SIZE(push_constants),
+        .descriptor_sets = descriptor_sets,
+        .descriptor_set_count = HG_ARRAY_SIZE(descriptor_sets),
+        .push_constant_size = sizeof(Push),
         .topology = HG_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         .cull_mode = HG_CULL_MODE_NONE,
         .enable_depth_buffer = true,
@@ -203,18 +193,6 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
         .size = sizeof(VPUniform),
         .usage = HG_BUFFER_USAGE_UNIFORM_BUFFER_BIT | HG_BUFFER_USAGE_TRANSFER_DST_BIT,
     });
-    camera_position = (HgVec3){0.0f, 0.0f, -1.0f};
-    camera_zoom = 1.0f;
-    camera_rotation = (HgQuat){1.0f, 0.0f, 0.0f, 0.0f};
-    hg_buffer_write(vp_buffer, 0, &(VPUniform){
-        .view = hg_view_matrix(camera_position, camera_zoom, camera_rotation),
-        .proj = hg_projection_matrix_perspective(
-            (f32)HG_PI / 3.0f, (f32)window_width / (f32)window_height, 0.1f, 100.0f
-        ),
-    }, sizeof(VPUniform));
-
-    vp_descriptor_set = hg_allocate_descriptor_set(shader, 0);
-    hg_write_descriptor_set(vp_descriptor_set, 0, 0, HG_DESCRIPTOR_TYPE_BUFFER, vp_buffer, NULL, NULL);
 
     texture = hg_texture_create(&(HgTextureConfig){
         .width = 2,
@@ -225,17 +203,10 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
         .format = HG_FORMAT_R8G8B8A8_UNORM,
         .aspect = HG_TEXTURE_ASPECT_COLOR_BIT,
         .usage = HG_TEXTURE_USAGE_SAMPLED_BIT | HG_TEXTURE_USAGE_TRANSFER_DST_BIT,
+        .edge_mode = HG_SAMPLER_EDGE_MODE_REPEAT,
+        .bilinear_filter = false,
     });
     hg_texture_write(texture, texture_data, HG_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-    sampler = hg_sampler_create(&(HgSamplerConfig){
-        .bilinear_filter = false,
-        .edge_mode = HG_SAMPLER_EDGE_MODE_REPEAT,
-    });
-
-    object_descriptor_set = hg_allocate_descriptor_set(shader, 1);
-    hg_write_descriptor_set(object_descriptor_set, 0, 0, HG_DESCRIPTOR_TYPE_TEXTURE, NULL, texture, NULL);
-    hg_write_descriptor_set(object_descriptor_set, 1, 0, HG_DESCRIPTOR_TYPE_SAMPLER, NULL, NULL, sampler);
 
     vertex_buffer = hg_buffer_create(&(HgBufferConfig){
         .size = sizeof(vertices),
@@ -249,10 +220,19 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     });
     hg_buffer_write(index_buffer, 0, indices, sizeof(indices));
 
+    camera_fov = (f32)HG_PI / 3.0f;
+    HgMat4 proj = hg_projection_matrix_perspective(camera_fov, (f32)window_width / (f32)window_height, 0.1f, 100.0f);
+    hg_buffer_write(vp_buffer, offsetof(VPUniform, proj), &proj, sizeof(proj));
+
+    camera_position = (HgVec3){0.0f, 0.0f, -1.0f};
+    camera_zoom = 1.0f;
+    camera_rotation = (HgQuat){1.0f, 0.0f, 0.0f, 0.0f};
+    HgMat4 view = hg_view_matrix(camera_position, camera_zoom, camera_rotation);
+    hg_buffer_write(vp_buffer, offsetof(VPUniform, view), &view, sizeof(view));
+
     object_position = (HgVec3){0.0f, 0.0f, 0.0f};
     object_scale = (HgVec2){1.0f, 1.0f};
     object_rotation = 0.0f;
-    push_data.model = hg_model_matrix_2d(object_position, object_scale, object_rotation);
 
     (void)hg_clock_tick(&game_clock);
 
@@ -345,8 +325,8 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
         } break;
         case SDL_EVENT_WINDOW_RESIZED: {
             u32 window_width, window_height;
-            hg_window_update_size(window);
-            hg_window_get_size(window, &window_width, &window_height);
+            hg_window_update_size();
+            hg_window_get_size(&window_width, &window_height);
 
             hg_texture_destroy(target);
             target = hg_texture_create(&(HgTextureConfig){
@@ -372,9 +352,8 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
                 .usage = HG_TEXTURE_USAGE_DEPTH_BUFFER_BIT | HG_TEXTURE_USAGE_TRANSFER_SRC_BIT,
             });
 
-            HgMat4 proj = hg_projection_matrix_perspective(
-                (f32)HG_PI / 3.0f, (f32)window_width / (f32)window_height, 0.1f, 100.0f
-            );
+            f32 aspect = (f32)window_width / (f32)window_height;
+            HgMat4 proj = hg_projection_matrix_perspective(camera_fov, aspect, 0.1f, 100.0f);
             hg_buffer_write(vp_buffer, offsetof(VPUniform, proj), &proj, sizeof(proj));
         } break;
     }
@@ -428,38 +407,43 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     HgMat4 view = hg_view_matrix(camera_position, camera_zoom, camera_rotation);
     hg_buffer_write(vp_buffer, offsetof(VPUniform, view), &view, sizeof(view));
 
-    HgObject objects[] = {{
-        .vertex_buffer = vertex_buffer,
-        .index_buffer = index_buffer,
-        .descriptor_sets = &object_descriptor_set,
-        .descriptor_set_count = 1,
-        .push_data = &push_data,
-        .push_size = sizeof(Push),
+    bool success = hg_render_begin();
+    if (!success) {
+        HG_DEBUG("Failed to render");
+        return SDL_APP_CONTINUE;
+    }
+
+    hg_renderpass_begin(target, depth_buffer);
+
+    hg_shader_bind(shader);
+
+    HgDescriptor vp_descriptor_set[] = {{
+        .type = HG_DESCRIPTOR_TYPE_BUFFER,
+        .count = 1,
+        .buffers = &vp_buffer,
     }};
+    hg_bind_descriptor_set(0, vp_descriptor_set, HG_ARRAY_SIZE(vp_descriptor_set));
 
-    HgPipeline pipeline = {
-        .shader = shader,
-        .objects = objects,
-        .object_count = HG_ARRAY_SIZE(objects),
-        .global_descriptor_sets = &vp_descriptor_set,
-        .global_descriptor_set_count = 1,
+    HgDescriptor object_descriptor_set[] = {{
+        .type = HG_DESCRIPTOR_TYPE_TEXTURE,
+        .count = 1,
+        .textures = &texture,
+    }};
+    hg_bind_descriptor_set(1, object_descriptor_set, HG_ARRAY_SIZE(object_descriptor_set));
+
+    Push push_data = {
+        .model = hg_model_matrix_2d(object_position, object_scale, object_rotation),
     };
+    hg_draw(vertex_buffer, index_buffer, &push_data, sizeof(push_data));
 
-    HgRenderPass render_pass = {
-        .target = target,
-        .depth_buffer = depth_buffer,
-        .pipelines = &pipeline,
-        .pipeline_count = 1,
-    };
+    hg_shader_unbind();
 
-    HgRenderDescription scene = {
-        .render_passes = &render_pass,
-        .render_pass_count = 1,
-    };
+    hg_renderpass_end();
 
-    bool success = hg_draw(window, &scene);
+    success = hg_render_end();
     if (!success) {
         HG_DEBUG("Failed to draw");
+        return SDL_APP_CONTINUE;
     }
 
     return SDL_APP_CONTINUE;
@@ -470,18 +454,17 @@ void SDL_AppQuit(void* appstate, SDL_AppResult result) {
     (void)result;
 
 #if !defined(NDEBUG)
-    hg_wait_graphics();
+    hg_graphics_wait();
 
     hg_buffer_destroy(index_buffer);
     hg_buffer_destroy(vertex_buffer);
-    hg_sampler_destroy(sampler);
     hg_texture_destroy(texture);
     hg_buffer_destroy(vp_buffer);
+    hg_shader_destroy(shader);
     hg_texture_destroy(depth_buffer);
     hg_texture_destroy(target);
-    hg_shader_destroy(shader);
 
-    hg_window_destroy(window);
+    hg_window_close();
     hg_shutdown();
 #endif
 }

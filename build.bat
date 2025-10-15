@@ -53,7 +53,8 @@ set SRCS=^
     src\hurdy_gurdy.c^
     src\hg_utils.c^
     src\hg_math.c^
-    src\hg_graphics.c
+    src\hg_graphics.c^
+    src\hg_2d_renderer.c
 
 set OBJS=
 

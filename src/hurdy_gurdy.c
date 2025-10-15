@@ -5,13 +5,13 @@
 
 HgError hg_init(void) {
     SDL_Init(SDL_INIT_VIDEO);
-    hg_init_graphics();
+    hg_graphics_init();
 
     return HG_SUCCESS;
 }
 
 void hg_shutdown(void) {
-    hg_shutdown_graphics();
+    hg_graphics_shutdown();
     SDL_Quit();
 }
 
