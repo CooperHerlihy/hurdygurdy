@@ -12,18 +12,19 @@ INCLUDES="-Iinclude -Ivendor/SDL/include -Ivendor/VulkanMemoryAllocator/include 
 LIBS="-Lbuild -Lbuild/SDL -Lbuild/fastgltf -lhurdy_gurdy -lSDL3 -lfastgltf -lvulkan -lc -lm"
 
 mkdir -p build
-mkdir -p build/shaders
 
 echo "Compiling shaders..."
 
 SHADERS=(
     demo/test.vert
     demo/test.frag
+    src/sprite.vert
+    src/sprite.frag
 )
 
 for shader in "${SHADERS[@]}"; do
     echo "Compiling $shader..."
-    glslc -o build/shaders/$(basename $shader).spv $shader
+    glslc -o build/$(basename $shader).spv $shader
 done
 
 echo "Building hurdy_gurdy..."

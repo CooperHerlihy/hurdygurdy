@@ -1120,8 +1120,8 @@ typedef struct HgBuffer {
 } HgBuffer;
 
 static VkBufferUsageFlags hg_buffer_usage_flags_to_vk(HgBufferUsageFlags usage) {
-    return (usage & HG_BUFFER_USAGE_TRANSFER_SRC_BIT ? VK_BUFFER_USAGE_TRANSFER_SRC_BIT : 0)
-         | (usage & HG_BUFFER_USAGE_TRANSFER_DST_BIT ? VK_BUFFER_USAGE_TRANSFER_DST_BIT : 0)
+    return (usage & HG_BUFFER_USAGE_READ_WRITE_SRC_BIT ? VK_BUFFER_USAGE_TRANSFER_SRC_BIT : 0)
+         | (usage & HG_BUFFER_USAGE_READ_WRITE_DST_BIT ? VK_BUFFER_USAGE_TRANSFER_DST_BIT : 0)
          | (usage & HG_BUFFER_USAGE_UNIFORM_BUFFER_BIT ? VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT : 0)
          | (usage & HG_BUFFER_USAGE_VERTEX_BUFFER_BIT ? VK_BUFFER_USAGE_VERTEX_BUFFER_BIT : 0)
          | (usage & HG_BUFFER_USAGE_INDEX_BUFFER_BIT ? VK_BUFFER_USAGE_INDEX_BUFFER_BIT : 0);
@@ -1207,7 +1207,7 @@ void hg_buffer_write(HgBuffer* dst, usize offset, const void* src, usize size) {
 
     HgBuffer* staging_buffer = hg_buffer_create(&(HgBufferConfig){
         .size = size,
-        .usage = HG_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        .usage = HG_BUFFER_USAGE_READ_WRITE_SRC_BIT,
         .memory_type = HG_GPU_MEMORY_TYPE_LINEAR_ACCESS
     });
     hg_buffer_write(staging_buffer, 0, src, size);
@@ -1241,7 +1241,7 @@ void hg_buffer_read(const HgBuffer* src, usize offset, usize size, void* dst) {
 
     HgBuffer* staging_buffer = hg_buffer_create(&(HgBufferConfig){
         .size = size,
-        .usage = HG_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        .usage = HG_BUFFER_USAGE_READ_WRITE_SRC_BIT,
         .memory_type = HG_GPU_MEMORY_TYPE_LINEAR_ACCESS
     });
 
@@ -1626,7 +1626,7 @@ static void hg_write_image(HgTexture* dst, const void* src, VkImageLayout layout
 
     HgBuffer* staging_buffer = hg_buffer_create(&(HgBufferConfig){
         .size = dst->width * dst->height * dst->depth * 4,
-        .usage = HG_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        .usage = HG_BUFFER_USAGE_READ_WRITE_SRC_BIT,
         .memory_type = HG_GPU_MEMORY_TYPE_LINEAR_ACCESS,
     });
     hg_buffer_write(staging_buffer, 0, src, dst->width * dst->height * dst->depth * 4);

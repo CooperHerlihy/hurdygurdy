@@ -34,17 +34,18 @@ if "%1"=="release" (
 )
 
 if not exist build mkdir build
-if not exist build\shaders mkdir build\shaders
 
 echo Compiling shaders...
 
 set SHADERS=^
     demo\test.vert^
-    demo\test.frag
+    demo\test.frag^
+    src\sprite.vert^
+    src\sprite.frag
 
 for %%S in (%SHADERS%) do (
     echo Compiling %%S...
-    glslc -o build\shaders\%%~nxS.spv %%S
+    glslc -o build\%%~nxS.spv %%S
 )
 
 echo Building hurdy_gurdy...

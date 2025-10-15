@@ -100,6 +100,7 @@ typedef enum HgError {
 } HgError;
 
 void* hg_heap_alloc(usize size);
+void* hg_heap_realloc(void* ptr, usize size);
 void hg_heap_free(void* ptr, usize size);
 
 HgError hg_file_load_binary(const char* path, byte** data, usize* size);

@@ -523,9 +523,9 @@ HgMat4 hg_view_matrix(HgVec3 position, f32 zoom, HgQuat rotation) {
 HgMat4 hg_projection_matrix_orthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far) {
     return (HgMat4){
         {2.0f / (right - left), 0.0f, 0.0f, 0.0f},
-        {0.0f, 2.0f / (top - bottom), 0.0f, 0.0f},
+        {0.0f, 2.0f / (bottom - top), 0.0f, 0.0f},
         {0.0f, 0.0f, -2.0f / (far - near), 0.0f},
-        {(left + right) / (left - right), (top + bottom) / (bottom - top), near / (near - far), 1.0f},
+        {(left + right) / (left - right), (bottom + top) / (bottom - top), near / (near - far), 1.0f},
     };
 }
 

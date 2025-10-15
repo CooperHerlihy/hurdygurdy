@@ -14,6 +14,13 @@ void* hg_heap_alloc(usize size) {
     return ptr;
 }
 
+void* hg_heap_realloc(void* ptr, usize size) {
+    void* new_ptr = realloc(ptr, size);
+    if (new_ptr == NULL)
+        HG_ERRORF("Failed to reallocate %zu bytes", size);
+    return new_ptr;
+}
+
 void hg_heap_free(void* ptr, usize size) {
     if (ptr == NULL)
         HG_ASSERT(size == 0);
