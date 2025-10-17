@@ -493,7 +493,7 @@ HgMat4 hg_model_matrix_2d(HgVec3 position, HgVec2 scale, f32 rotation) {
     m4.w.x = position.x;
     m4.w.y = position.y;
     m4.w.z = position.z;
-    return hg_mmul4(m4, hg_mat2to4(m2));
+    return m4;
 }
 
 HgMat4 hg_model_matrix_3d(HgVec3 position, HgVec3 scale, HgQuat rotation) {
@@ -506,7 +506,7 @@ HgMat4 hg_model_matrix_3d(HgVec3 position, HgVec3 scale, HgQuat rotation) {
     m4.w.x = position.x;
     m4.w.y = position.y;
     m4.w.z = position.z;
-    return hg_mmul4(m4, hg_mat3to4(m3));
+    return m4;
 }
 
 HgMat4 hg_view_matrix(HgVec3 position, f32 zoom, HgQuat rotation) {

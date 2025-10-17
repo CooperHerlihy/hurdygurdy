@@ -22,6 +22,8 @@ SHADERS=(
     src/hg_sprite.frag
     src/hg_model.vert
     src/hg_model.frag
+    src/ray_marcher.vert
+    src/ray_marcher.frag
 )
 
 for shader in "${SHADERS[@]}"; do
@@ -39,6 +41,7 @@ SRCS=(
     src/hg_depth_renderer.c
     src/hg_2d_renderer.c
     src/hg_3d_renderer.c
+    src/hg_ray_marcher.c
 )
 OBJS=()
 

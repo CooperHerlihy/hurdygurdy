@@ -44,6 +44,8 @@ set SHADERS=^
     src\hg_sprite.frag^
     src\hg_model.vert^
     src\hg_model.frag
+    src\ray_marcher.vert^
+    src\ray_marcher.frag
 
 for %%S in (%SHADERS%) do (
     echo Compiling %%S...
@@ -59,7 +61,8 @@ set SRCS=^
     src\hg_graphics.c^
     src\hg_depth_renderer.c^
     src\hg_2d_renderer.c^
-    src\hg_3d_renderer.c
+    src\hg_3d_renderer.c^
+    src\hg_ray_marcher.c
 
 set OBJS=
 
