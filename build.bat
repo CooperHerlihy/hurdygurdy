@@ -38,10 +38,12 @@ if not exist build mkdir build
 echo Compiling shaders...
 
 set SHADERS=^
-    demo\test.vert^
-    demo\test.frag^
-    src\sprite.vert^
-    src\sprite.frag
+    src\hg_depth.vert^
+    src\hg_depth.frag^
+    src\hg_sprite.vert^
+    src\hg_sprite.frag^
+    src\hg_model.vert^
+    src\hg_model.frag
 
 for %%S in (%SHADERS%) do (
     echo Compiling %%S...
@@ -55,7 +57,9 @@ set SRCS=^
     src\hg_utils.c^
     src\hg_math.c^
     src\hg_graphics.c^
-    src\hg_2d_renderer.c
+    src\hg_depth_renderer.c^
+    src\hg_2d_renderer.c^
+    src\hg_3d_renderer.c
 
 set OBJS=
 

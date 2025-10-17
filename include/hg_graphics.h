@@ -129,6 +129,7 @@ typedef struct HgDescriptor {
 
 void hg_bind_descriptor_set(u32 set_index, HgDescriptor* descriptors, u32 descriptor_count);
 
-void hg_draw(HgBuffer* vertex_buffer, HgBuffer* index_buffer, void* push_data, u32 push_size);
+void hg_draw_indexed(HgBuffer* vertex_buffer, HgBuffer* index_buffer, void* push_data, u32 push_size);
+void hg_draw(HgBuffer* vertex_buffer, u32 count, void* push_data, u32 push_size);
 
 #endif // HG_GRAPHICS_H

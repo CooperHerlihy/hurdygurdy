@@ -524,12 +524,15 @@ HgMat4 hg_projection_matrix_orthographic(f32 left, f32 right, f32 top, f32 botto
     return (HgMat4){
         {2.0f / (right - left), 0.0f, 0.0f, 0.0f},
         {0.0f, 2.0f / (bottom - top), 0.0f, 0.0f},
-        {0.0f, 0.0f, -2.0f / (far - near), 0.0f},
-        {(left + right) / (left - right), (bottom + top) / (bottom - top), near / (near - far), 1.0f},
+        {0.0f, 0.0f, 1.0f / (far - near), 0.0f},
+        {-(right + left) / (right - left), -(bottom + top) / (bottom - top), -(near) / (far - near), 1.0f},
     };
 }
 
 HgMat4 hg_projection_matrix_perspective(f32 fov, f32 aspect, f32 near, f32 far) {
+    HG_ASSERT(near > 0.0f);
+    HG_ASSERT(far > 0.0f);
+    HG_ASSERT(near < far);
     f32 scale = 1 / tanf(fov / 2);
     return (HgMat4){
         {scale / aspect, 0.0f, 0.0f, 0.0f},

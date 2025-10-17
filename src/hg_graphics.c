@@ -498,7 +498,9 @@ static VkDescriptorPool hg_create_descriptor_pool(void) {
 
     VkDescriptorPoolSize pool_sizes[] = {
         { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 512 },
+        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 512 },
         { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 512 },
+        { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 512 },
     };
     VkDescriptorPoolCreateInfo pool_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
@@ -1123,6 +1125,7 @@ static VkBufferUsageFlags hg_buffer_usage_flags_to_vk(HgBufferUsageFlags usage) 
     return (usage & HG_BUFFER_USAGE_READ_WRITE_SRC_BIT ? VK_BUFFER_USAGE_TRANSFER_SRC_BIT : 0)
          | (usage & HG_BUFFER_USAGE_READ_WRITE_DST_BIT ? VK_BUFFER_USAGE_TRANSFER_DST_BIT : 0)
          | (usage & HG_BUFFER_USAGE_UNIFORM_BUFFER_BIT ? VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT : 0)
+         | (usage & HG_BUFFER_USAGE_STORAGE_BUFFER_BIT ? VK_BUFFER_USAGE_STORAGE_BUFFER_BIT : 0)
          | (usage & HG_BUFFER_USAGE_VERTEX_BUFFER_BIT ? VK_BUFFER_USAGE_VERTEX_BUFFER_BIT : 0)
          | (usage & HG_BUFFER_USAGE_INDEX_BUFFER_BIT ? VK_BUFFER_USAGE_INDEX_BUFFER_BIT : 0);
 }
@@ -1286,10 +1289,148 @@ static HgFormat hg_format_from_vk(VkFormat format) {
     // return texture_formats[format];
 }
 
+static u32 hg_format_size(HgFormat format) {
+    static const u32 texture_format_sizes[] = {
+        [HG_FORMAT_UNDEFINED] = 0,
+        [HG_FORMAT_R4G4_UNORM_PACK8 ] = 1,
+        [HG_FORMAT_R4G4B4A4_UNORM_PACK16] = 2,
+        [HG_FORMAT_B4G4R4A4_UNORM_PACK16] = 2,
+        [HG_FORMAT_R5G6B5_UNORM_PACK16] = 2,
+        [HG_FORMAT_B5G6R5_UNORM_PACK16] = 2,
+        [HG_FORMAT_R5G5B5A1_UNORM_PACK16] = 2,
+        [HG_FORMAT_B5G5R5A1_UNORM_PACK16] = 2,
+        [HG_FORMAT_A1R5G5B5_UNORM_PACK16] = 2,
+        [HG_FORMAT_R8_UNORM] = 1,
+        [HG_FORMAT_R8_SNORM] = 1,
+        [HG_FORMAT_R8_USCALED] = 1,
+        [HG_FORMAT_R8_SSCALED] = 1,
+        [HG_FORMAT_R8_UINT] = 1,
+        [HG_FORMAT_R8_SINT] = 1,
+        [HG_FORMAT_R8_SRGB] = 1,
+        [HG_FORMAT_R8G8_UNORM] = 2,
+        [HG_FORMAT_R8G8_SNORM] = 2,
+        [HG_FORMAT_R8G8_USCALED] = 2,
+        [HG_FORMAT_R8G8_SSCALED] = 2,
+        [HG_FORMAT_R8G8_UINT] = 2,
+        [HG_FORMAT_R8G8_SINT] = 2,
+        [HG_FORMAT_R8G8_SRGB] = 2,
+        [HG_FORMAT_R8G8B8_UNORM] = 3,
+        [HG_FORMAT_R8G8B8_SNORM] = 3,
+        [HG_FORMAT_R8G8B8_USCALED] = 3,
+        [HG_FORMAT_R8G8B8_SSCALED] = 3,
+        [HG_FORMAT_R8G8B8_UINT] = 3,
+        [HG_FORMAT_R8G8B8_SINT] = 3,
+        [HG_FORMAT_R8G8B8_SRGB] = 3,
+        [HG_FORMAT_B8G8R8_UNORM] = 3,
+        [HG_FORMAT_B8G8R8_SNORM] = 3,
+        [HG_FORMAT_B8G8R8_USCALED] = 3,
+        [HG_FORMAT_B8G8R8_SSCALED] = 3,
+        [HG_FORMAT_B8G8R8_UINT] = 3,
+        [HG_FORMAT_B8G8R8_SINT] = 3,
+        [HG_FORMAT_B8G8R8_SRGB] = 3,
+        [HG_FORMAT_R8G8B8A8_UNORM] = 4,
+        [HG_FORMAT_R8G8B8A8_SNORM] = 4,
+        [HG_FORMAT_R8G8B8A8_USCALED] = 4,
+        [HG_FORMAT_R8G8B8A8_SSCALED] = 4,
+        [HG_FORMAT_R8G8B8A8_UINT] = 4,
+        [HG_FORMAT_R8G8B8A8_SINT] = 4,
+        [HG_FORMAT_R8G8B8A8_SRGB] = 4,
+        [HG_FORMAT_B8G8R8A8_UNORM] = 4,
+        [HG_FORMAT_B8G8R8A8_SNORM] = 4,
+        [HG_FORMAT_B8G8R8A8_USCALED] = 4,
+        [HG_FORMAT_B8G8R8A8_SSCALED] = 4,
+        [HG_FORMAT_B8G8R8A8_UINT] = 4,
+        [HG_FORMAT_B8G8R8A8_SINT] = 4,
+        [HG_FORMAT_B8G8R8A8_SRGB] = 4,
+        [HG_FORMAT_A8B8G8R8_UNORM_PACK32] = 4,
+        [HG_FORMAT_A8B8G8R8_SNORM_PACK32] = 4,
+        [HG_FORMAT_A8B8G8R8_USCALED_PACK32] = 4,
+        [HG_FORMAT_A8B8G8R8_SSCALED_PACK32] = 4,
+        [HG_FORMAT_A8B8G8R8_UINT_PACK32] = 4,
+        [HG_FORMAT_A8B8G8R8_SINT_PACK32] = 4,
+        [HG_FORMAT_A8B8G8R8_SRGB_PACK32] = 4,
+        [HG_FORMAT_A2R10G10B10_UNORM_PACK32] = 4,
+        [HG_FORMAT_A2R10G10B10_SNORM_PACK32] = 4,
+        [HG_FORMAT_A2R10G10B10_USCALED_PACK32] = 4,
+        [HG_FORMAT_A2R10G10B10_SSCALED_PACK32] = 4,
+        [HG_FORMAT_A2R10G10B10_UINT_PACK32] = 4,
+        [HG_FORMAT_A2R10G10B10_SINT_PACK32] = 4,
+        [HG_FORMAT_A2B10G10R10_UNORM_PACK32] = 4,
+        [HG_FORMAT_A2B10G10R10_SNORM_PACK32] = 4,
+        [HG_FORMAT_A2B10G10R10_USCALED_PACK32] = 4,
+        [HG_FORMAT_A2B10G10R10_SSCALED_PACK32] = 4,
+        [HG_FORMAT_A2B10G10R10_UINT_PACK32] = 4,
+        [HG_FORMAT_A2B10G10R10_SINT_PACK32] = 4,
+        [HG_FORMAT_R16_UNORM] = 2,
+        [HG_FORMAT_R16_SNORM] = 2,
+        [HG_FORMAT_R16_USCALED] = 2,
+        [HG_FORMAT_R16_SSCALED] = 2,
+        [HG_FORMAT_R16_UINT] = 2,
+        [HG_FORMAT_R16_SINT] = 2,
+        [HG_FORMAT_R16_SFLOAT] = 2,
+        [HG_FORMAT_R16G16_UNORM] = 4,
+        [HG_FORMAT_R16G16_SNORM] = 4,
+        [HG_FORMAT_R16G16_USCALED] = 4,
+        [HG_FORMAT_R16G16_SSCALED] = 4,
+        [HG_FORMAT_R16G16_UINT] = 4,
+        [HG_FORMAT_R16G16_SINT] = 4,
+        [HG_FORMAT_R16G16_SFLOAT] = 4,
+        [HG_FORMAT_R16G16B16_UNORM] = 6,
+        [HG_FORMAT_R16G16B16_SNORM] = 6,
+        [HG_FORMAT_R16G16B16_USCALED] = 6,
+        [HG_FORMAT_R16G16B16_SSCALED] = 6,
+        [HG_FORMAT_R16G16B16_UINT] = 6,
+        [HG_FORMAT_R16G16B16_SINT] = 6,
+        [HG_FORMAT_R16G16B16_SFLOAT] = 6,
+        [HG_FORMAT_R16G16B16A16_UNORM] = 8,
+        [HG_FORMAT_R16G16B16A16_SNORM] = 8,
+        [HG_FORMAT_R16G16B16A16_USCALED] = 8,
+        [HG_FORMAT_R16G16B16A16_SSCALED] = 8,
+        [HG_FORMAT_R16G16B16A16_UINT] = 8,
+        [HG_FORMAT_R16G16B16A16_SINT] = 8,
+        [HG_FORMAT_R16G16B16A16_SFLOAT] = 8,
+        [HG_FORMAT_R32_UINT] = 4,
+        [HG_FORMAT_R32_SINT] = 4,
+        [HG_FORMAT_R32_SFLOAT] = 4,
+        [HG_FORMAT_R32G32_UINT] = 8,
+        [HG_FORMAT_R32G32_SINT] = 8,
+        [HG_FORMAT_R32G32_SFLOAT] = 8,
+        [HG_FORMAT_R32G32B32_UINT] = 12,
+        [HG_FORMAT_R32G32B32_SINT] = 12,
+        [HG_FORMAT_R32G32B32_SFLOAT] = 12,
+        [HG_FORMAT_R32G32B32A32_UINT] = 16,
+        [HG_FORMAT_R32G32B32A32_SINT] = 16,
+        [HG_FORMAT_R32G32B32A32_SFLOAT] = 16,
+        [HG_FORMAT_R64_UINT] = 8,
+        [HG_FORMAT_R64_SINT] = 8,
+        [HG_FORMAT_R64_SFLOAT] = 8,
+        [HG_FORMAT_R64G64_UINT] = 16,
+        [HG_FORMAT_R64G64_SINT] = 16,
+        [HG_FORMAT_R64G64_SFLOAT] = 16,
+        [HG_FORMAT_R64G64B64_UINT] = 24,
+        [HG_FORMAT_R64G64B64_SINT] = 24,
+        [HG_FORMAT_R64G64B64_SFLOAT] = 24,
+        [HG_FORMAT_R64G64B64A64_UINT] = 32,
+        [HG_FORMAT_R64G64B64A64_SINT] = 32,
+        [HG_FORMAT_R64G64B64A64_SFLOAT] = 32,
+        [HG_FORMAT_B10G11R11_UFLOAT_PACK32] = 4,
+        [HG_FORMAT_E5B9G9R9_UFLOAT_PACK32] = 4,
+        [HG_FORMAT_D16_UNORM] = 2,
+        [HG_FORMAT_X8_D24_UNORM_PACK32] = 4,
+        [HG_FORMAT_D32_SFLOAT] = 4,
+        [HG_FORMAT_S8_UINT] = 1,
+        [HG_FORMAT_D16_UNORM_S8_UINT] = 2,
+        [HG_FORMAT_D24_UNORM_S8_UINT] = 4,
+        [HG_FORMAT_D32_SFLOAT_S8_UINT] = 4,
+    };
+    return texture_format_sizes[format];
+}
+
 static VkImageUsageFlags hg_texture_usage_flags_to_vk(HgTextureUsageFlags usage) {
     return (usage & HG_TEXTURE_USAGE_TRANSFER_SRC_BIT ? VK_IMAGE_USAGE_TRANSFER_SRC_BIT : 0)
          | (usage & HG_TEXTURE_USAGE_TRANSFER_DST_BIT ? VK_IMAGE_USAGE_TRANSFER_DST_BIT : 0)
          | (usage & HG_TEXTURE_USAGE_SAMPLED_BIT ? VK_IMAGE_USAGE_SAMPLED_BIT : 0)
+         | (usage & HG_TEXTURE_USAGE_STORAGE_BIT ? VK_IMAGE_USAGE_STORAGE_BIT : 0)
          | (usage & HG_TEXTURE_USAGE_RENDER_TARGET_BIT ? VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT : 0)
          | (usage & HG_TEXTURE_USAGE_DEPTH_BUFFER_BIT ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT : 0);
 }
@@ -1414,6 +1555,7 @@ HgTexture* hg_texture_create(const HgTextureConfig* config) {
 
     if (config->usage & (
             HG_TEXTURE_USAGE_SAMPLED_BIT |
+            HG_TEXTURE_USAGE_STORAGE_BIT |
             HG_TEXTURE_USAGE_RENDER_TARGET_BIT |
             HG_TEXTURE_USAGE_DEPTH_BUFFER_BIT
         )) {
@@ -1624,12 +1766,15 @@ static void hg_write_image(HgTexture* dst, const void* src, VkImageLayout layout
     HG_ASSERT(dst->handle != NULL);
     HG_ASSERT(src != NULL);
 
+    u32 pixel_size = hg_format_size(hg_format_from_vk(dst->format));
+    HG_ASSERT(pixel_size > 0);
+
     HgBuffer* staging_buffer = hg_buffer_create(&(HgBufferConfig){
-        .size = dst->width * dst->height * dst->depth * 4,
+        .size = dst->width * dst->height * dst->depth * pixel_size,
         .usage = HG_BUFFER_USAGE_READ_WRITE_SRC_BIT,
         .memory_type = HG_GPU_MEMORY_TYPE_LINEAR_ACCESS,
     });
-    hg_buffer_write(staging_buffer, 0, src, dst->width * dst->height * dst->depth * 4);
+    hg_buffer_write(staging_buffer, 0, src, dst->width * dst->height * dst->depth * pixel_size);
 
     VkCommandBuffer cmd = hg_begin_single_time_cmd();
 
@@ -1843,8 +1988,10 @@ typedef struct HgShader {
 
 static VkDescriptorType hg_descriptor_type_to_vk(HgDescriptorType type) {
     const VkDescriptorType descriptor_types[] = {
-        [HG_DESCRIPTOR_TYPE_BUFFER] = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        [HG_DESCRIPTOR_TYPE_TEXTURE] = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        [HG_DESCRIPTOR_TYPE_UNIFORM_BUFFER] = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        [HG_DESCRIPTOR_TYPE_STORAGE_BUFFER] = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        [HG_DESCRIPTOR_TYPE_SAMPLED_TEXTURE] = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        [HG_DESCRIPTOR_TYPE_STORAGE_TEXTURE] = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
     };
     return descriptor_types[type];
 }
@@ -2061,7 +2208,7 @@ HgShader* hg_shader_create(const HgShaderConfig* config) {
             .inputRate = hg_vertex_input_rate_to_vk(binding->input_rate),
         };
         for (u32 j = 0; j < binding->attribute_count; ++j) {
-            HG_ASSERT(binding->attributes[j].offset < HG_MAX_VERTEX_ATTRIBUTES);
+            HG_ASSERT(vertex_attribute_count < HG_MAX_VERTEX_ATTRIBUTES);
             HgVertexAttribute* attribute = &binding->attributes[j];
 
             vertex_attribute_descriptions[vertex_attribute_count] = (VkVertexInputAttributeDescription){
@@ -2129,11 +2276,9 @@ HgShader* hg_shader_create(const HgShaderConfig* config) {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
         .depthTestEnable = config->enable_depth_buffer ? VK_TRUE : VK_FALSE,
         .depthWriteEnable = config->enable_depth_buffer ? VK_TRUE : VK_FALSE,
-        .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
+        .depthCompareOp = VK_COMPARE_OP_LESS,
         .depthBoundsTestEnable = VK_FALSE,
         .stencilTestEnable = VK_FALSE,
-        .front = {0},
-        .back = {0},
         .minDepthBounds = 0.0f,
         .maxDepthBounds = 1.0f,
     };
@@ -2539,7 +2684,7 @@ void hg_renderpass_begin(HgTexture* target, HgTexture* depth_buffer) {
             .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
             .imageView = target->view,
             .imageLayout = target->layout,
-            .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+            .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR, // VK_ATTACHMENT_LOAD_OP_LOAD : TODO
             .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
             .clearValue = (VkClearValue){
                 .color = {{0.0f, 0.0f, 0.0f, 0.0f}}
@@ -2635,26 +2780,34 @@ void hg_bind_descriptor_set(u32 set_index, HgDescriptor* descriptors, u32 descri
                 .dstBinding = i,
                 .dstArrayElement = j,
                 .descriptorCount = 1,
+                .descriptorType = hg_descriptor_type_to_vk(type),
             };
 
             switch (type) {
-                case HG_DESCRIPTOR_TYPE_BUFFER: {
+                case HG_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+                case HG_DESCRIPTOR_TYPE_STORAGE_BUFFER: {
                     HG_ASSERT(descriptors[i].buffers[j]->handle != VK_NULL_HANDLE);
-                    descriptor_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
                     descriptor_write.pBufferInfo = &(VkDescriptorBufferInfo){
                         .buffer = descriptors[i].buffers[j]->handle,
                         .offset = 0,
                         .range = descriptors[i].buffers[j]->size,
                     };
                 } break;
-                case HG_DESCRIPTOR_TYPE_TEXTURE: {
+                case HG_DESCRIPTOR_TYPE_SAMPLED_TEXTURE: {
                     HG_ASSERT(descriptors[i].textures[j]->sampler != VK_NULL_HANDLE);
                     HG_ASSERT(descriptors[i].textures[j]->view != VK_NULL_HANDLE);
-                    descriptor_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
                     descriptor_write.pImageInfo = &(VkDescriptorImageInfo){
                         .sampler = descriptors[i].textures[j]->sampler,
                         .imageView = descriptors[i].textures[j]->view,
                         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    };
+                } break;
+                case HG_DESCRIPTOR_TYPE_STORAGE_TEXTURE: {
+                    HG_ASSERT(descriptors[i].textures[j]->sampler != VK_NULL_HANDLE);
+                    HG_ASSERT(descriptors[i].textures[j]->view != VK_NULL_HANDLE);
+                    descriptor_write.pImageInfo = &(VkDescriptorImageInfo){
+                        .imageView = descriptors[i].textures[j]->view,
+                        .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
                     };
                 } break;
                 default: HG_ERROR("Unhandled descriptor type");
@@ -2676,8 +2829,25 @@ void hg_bind_descriptor_set(u32 set_index, HgDescriptor* descriptors, u32 descri
     );
 }
 
-void hg_draw(HgBuffer* vertex_buffer, HgBuffer* index_buffer, void* push_data, u32 push_size) {
-    HG_ASSERT(vertex_buffer != NULL);
+void hg_draw(HgBuffer* vertex_buffer, u32 vertex_count, void* push_data, u32 push_size) {
+    HG_ASSERT(vertex_count > 0);
+
+    VkCommandBuffer cmd = hg_current_cmd();
+
+    if (push_size > 0) {
+        HG_ASSERT(push_data != NULL);
+        vkCmdPushConstants(cmd,
+            s_current_shader->layout,
+            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+            0, push_size, push_data
+        );
+    }
+    if (vertex_buffer != NULL)
+        vkCmdBindVertexBuffers(cmd, 0, 1, &vertex_buffer->handle, &(VkDeviceSize){0});
+    vkCmdDraw(cmd, vertex_count, 1, 0, 0);
+}
+
+void hg_draw_indexed(HgBuffer* vertex_buffer, HgBuffer* index_buffer, void* push_data, u32 push_size) {
     HG_ASSERT(index_buffer != NULL);
 
     VkCommandBuffer cmd = hg_current_cmd();
@@ -2690,7 +2860,8 @@ void hg_draw(HgBuffer* vertex_buffer, HgBuffer* index_buffer, void* push_data, u
             0, push_size, push_data
         );
     }
-    vkCmdBindVertexBuffers(cmd, 0, 1, &vertex_buffer->handle, &(VkDeviceSize){0});
+    if (vertex_buffer != NULL)
+        vkCmdBindVertexBuffers(cmd, 0, 1, &vertex_buffer->handle, &(VkDeviceSize){0});
     vkCmdBindIndexBuffer(cmd, index_buffer->handle, 0, VK_INDEX_TYPE_UINT32);
     vkCmdDrawIndexed(cmd, (u32)(index_buffer->size / sizeof(u32)), 1, 0, 0, 0);
 }

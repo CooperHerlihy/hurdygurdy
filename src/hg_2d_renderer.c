@@ -1,16 +1,13 @@
 #include "hg_2d_renderer.h"
 
-HgTexture* hg_2d_renderer_g_target;
-HgTexture* hg_2d_renderer_g_depth_buffer;
-
-typedef struct HgSpriteVertex {
-    HgVec2 pos;
-} HgSpriteVertex;
-
 typedef struct HgVPUniform {
     HgMat4 view;
     HgMat4 proj;
 } HgVPUniform;
+
+typedef struct HgSpriteVertex {
+    HgVec2 pos;
+} HgSpriteVertex;
 
 typedef struct HgSpritePush {
     HgMat4 model;
@@ -22,22 +19,14 @@ static HgShader* s_sprite_shader;
 
 static HgBuffer* s_vp_buffer;
 
-static const HgSpriteVertex s_quad_vertices[] = {{
-    .pos = {0.0f, 0.0f},
-}, {
-    .pos = {1.0f, 0.0f},
-}, {
-    .pos = {1.0f, 1.0f},
-}, {
-    .pos = {0.0f, 1.0f},
-}};
+static const HgSpriteVertex s_quad_vertices[] = {
+    {{0.0f, 0.0f}}, {{0.0f, 1.0f}}, {{1.0f, 1.0f}}, {{1.0f, 0.0f}},
+};
 
 static const u32 s_quad_indices[] = {0, 1, 2, 3};
 
 static HgBuffer* s_quad_vertex_buffer;
 static HgBuffer* s_quad_index_buffer;
-
-static HgVec3 s_camera_position;
 
 typedef struct HgSpriteTicket {
     HgTexture* texture;
@@ -50,29 +39,7 @@ static HgSpriteTicket* s_sprite_tickets;
 static u32 s_sprite_ticket_capacity;
 static u32 s_sprite_ticket_count;
 
-void hg_2d_renderer_init(u32 width, u32 height) {
-    hg_2d_renderer_g_target = hg_texture_create(&(HgTextureConfig){
-        .width = width,
-        .height = height,
-        .depth = 1,
-        .array_layers = 1,
-        .mip_levels = 1,
-        .format = HG_FORMAT_R8G8B8A8_UNORM,
-        .aspect = HG_TEXTURE_ASPECT_COLOR_BIT,
-        .usage = HG_TEXTURE_USAGE_RENDER_TARGET_BIT | HG_TEXTURE_USAGE_TRANSFER_SRC_BIT,
-    });
-
-    hg_2d_renderer_g_depth_buffer = hg_texture_create(&(HgTextureConfig){
-        .width = width,
-        .height = height,
-        .depth = 1,
-        .array_layers = 1,
-        .mip_levels = 1,
-        .format = HG_FORMAT_D32_SFLOAT,
-        .aspect = HG_TEXTURE_ASPECT_DEPTH_BIT,
-        .usage = HG_TEXTURE_USAGE_DEPTH_BUFFER_BIT | HG_TEXTURE_USAGE_TRANSFER_SRC_BIT,
-    });
-
+void hg_2d_renderer_init(void) {
     HgVertexAttribute vertex_attributes[] = {{
         .format = HG_FORMAT_R32G32_SFLOAT,
         .offset = offsetof(HgSpriteVertex, pos),
@@ -84,11 +51,11 @@ void hg_2d_renderer_init(u32 width, u32 height) {
     }};
 
     HgDescriptorSetBinding vp_set_bindings[] = {{
-        .descriptor_type = HG_DESCRIPTOR_TYPE_BUFFER,
+        .descriptor_type = HG_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
         .descriptor_count = 1,
     }};
     HgDescriptorSetBinding texture_set_bindings[] = {{
-        .descriptor_type = HG_DESCRIPTOR_TYPE_TEXTURE,
+        .descriptor_type = HG_DESCRIPTOR_TYPE_SAMPLED_TEXTURE,
         .descriptor_count = 1,
     }};
     HgDescriptorSet descriptor_sets[] = {{
@@ -102,7 +69,7 @@ void hg_2d_renderer_init(u32 width, u32 height) {
     byte* vertex_shader;
     usize vertex_shader_size;
     HgError vertex_shader_error = hg_file_load_binary(
-        "build/sprite.vert.spv", &vertex_shader, &vertex_shader_size
+        "build/hg_sprite.vert.spv", &vertex_shader, &vertex_shader_size
     );
     switch (vertex_shader_error) {
         case HG_SUCCESS: break;
@@ -114,7 +81,7 @@ void hg_2d_renderer_init(u32 width, u32 height) {
     byte* fragment_shader;
     usize fragment_shader_size;
     HgError fragment_shader_error = hg_file_load_binary(
-        "build/sprite.frag.spv", &fragment_shader, &fragment_shader_size
+        "build/hg_sprite.frag.spv", &fragment_shader, &fragment_shader_size
     );
     switch (fragment_shader_error) {
         case HG_SUCCESS: break;
@@ -148,9 +115,11 @@ void hg_2d_renderer_init(u32 width, u32 height) {
         .size = sizeof(HgVPUniform),
         .usage = HG_BUFFER_USAGE_UNIFORM_BUFFER_BIT | HG_BUFFER_USAGE_READ_WRITE_DST_BIT,
     });
-    f32 aspect = (f32)width / (f32)height;
-    HgMat4 proj = hg_projection_matrix_orthographic(-aspect, aspect, -1.0f, 1.0f, 0.0f, 1.0f);
-    hg_buffer_write(s_vp_buffer, offsetof(HgVPUniform, proj), &proj, sizeof(proj));
+    HgVPUniform vp_uniform = {
+        .view = hg_smat4(1.0f),
+        .proj = hg_smat4(1.0f),
+    };
+    hg_buffer_write(s_vp_buffer, 0, &vp_uniform, sizeof(vp_uniform));
 
     s_quad_vertex_buffer = hg_buffer_create(&(HgBufferConfig){
         .size = sizeof(s_quad_vertices),
@@ -164,18 +133,25 @@ void hg_2d_renderer_init(u32 width, u32 height) {
     });
     hg_buffer_write(s_quad_index_buffer, 0, s_quad_indices, sizeof(s_quad_indices));
 
-    s_camera_position = (HgVec3){0.0f, 0.0f, 0.0f};
-
     s_sprite_ticket_capacity = 1024;
     s_sprite_ticket_count = 0;
     s_sprite_tickets = hg_heap_alloc(sizeof(HgSpriteTicket) * s_sprite_ticket_capacity);
 }
 
-void hg_2d_renderer_update_size(u32 width, u32 height) {
-    hg_texture_destroy(hg_2d_renderer_g_target);
-    hg_texture_destroy(hg_2d_renderer_g_depth_buffer);
+void hg_2d_renderer_shutdown(void) {
+    hg_buffer_destroy(s_quad_vertex_buffer);
+    hg_buffer_destroy(s_quad_index_buffer);
+    hg_buffer_destroy(s_vp_buffer);
+    hg_shader_destroy(s_sprite_shader);
+}
 
-    hg_2d_renderer_g_target = hg_texture_create(&(HgTextureConfig){
+void hg_2d_renderer_target_create(u32 width, u32 height, HgTexture** target, HgTexture** depth_buffer) {
+    HG_ASSERT(target != NULL);
+    HG_ASSERT(depth_buffer != NULL);
+    HG_ASSERT(width > 0);
+    HG_ASSERT(height > 0);
+
+    *target = hg_texture_create(&(HgTextureConfig){
         .width = width,
         .height = height,
         .depth = 1,
@@ -185,7 +161,8 @@ void hg_2d_renderer_update_size(u32 width, u32 height) {
         .aspect = HG_TEXTURE_ASPECT_COLOR_BIT,
         .usage = HG_TEXTURE_USAGE_RENDER_TARGET_BIT | HG_TEXTURE_USAGE_TRANSFER_SRC_BIT,
     });
-    hg_2d_renderer_g_depth_buffer = hg_texture_create(&(HgTextureConfig){
+
+    *depth_buffer = hg_texture_create(&(HgTextureConfig){
         .width = width,
         .height = height,
         .depth = 1,
@@ -197,16 +174,7 @@ void hg_2d_renderer_update_size(u32 width, u32 height) {
     });
 }
 
-void hg_2d_renderer_shutdown(void) {
-    hg_buffer_destroy(s_quad_vertex_buffer);
-    hg_buffer_destroy(s_quad_index_buffer);
-    hg_buffer_destroy(s_vp_buffer);
-    hg_shader_destroy(s_sprite_shader);
-    hg_texture_destroy(hg_2d_renderer_g_depth_buffer);
-    hg_texture_destroy(hg_2d_renderer_g_target);
-}
-
-HgTexture* hg_sprite_create(const u32* data, u32 width, u32 height, HgFormat format, bool filter) {
+HgTexture* hg_2d_sprite_create(const u32* data, u32 width, u32 height, HgFormat format, bool filter) {
     HG_ASSERT(data != NULL);
     HG_ASSERT(width > 0);
     HG_ASSERT(height > 0);
@@ -228,22 +196,17 @@ HgTexture* hg_sprite_create(const u32* data, u32 width, u32 height, HgFormat for
     return texture;
 }
 
-void hg_sprite_destroy(HgTexture* texture) {
-    HG_ASSERT(texture != NULL);
-    hg_texture_destroy(texture);
+void hg_2d_renderer_update_projection(f32 aspect, f32 near, f32 far) {
+    HgMat4 proj = hg_projection_matrix_orthographic(-aspect, aspect, -1.0f, 1.0f, near, far);
+    hg_buffer_write(s_vp_buffer, offsetof(HgVPUniform, proj), &proj, sizeof(proj));
 }
 
-void hg_2d_renderer_camera_position(HgVec2 position) {
-    s_camera_position.x = position.x;
-    s_camera_position.y = position.y;
+void hg_2d_renderer_update_view(HgVec3 position, f32 zoom, HgQuat rotation) {
+    HgMat4 view = hg_view_matrix(position, zoom, rotation);
+    hg_buffer_write(s_vp_buffer, offsetof(HgVPUniform, view), &view, sizeof(view));
 }
 
-void hg_2d_renderer_camera_move(HgVec2 delta) {
-    s_camera_position.x += delta.x;
-    s_camera_position.y += delta.y;
-}
-
-void hg_2d_renderer_queue_sprite(HgTexture* texture, HgVec2 offset, HgVec2 extent, HgTransform2D transform) {
+void hg_2d_renderer_queue_sprite(HgTexture* texture, HgVec2 offset, HgVec2 extent, HgTransform2D* transform) {
     HG_ASSERT(texture != NULL);
 
     if (s_sprite_ticket_count >= s_sprite_ticket_capacity) {
@@ -255,21 +218,18 @@ void hg_2d_renderer_queue_sprite(HgTexture* texture, HgVec2 offset, HgVec2 exten
         .texture = texture,
         .offset = offset,
         .size = extent,
-        .transform = transform,
+        .transform = *transform,
     };
     ++s_sprite_ticket_count;
 }
 
-void hg_2d_renderer_draw(void) {
-    HgMat4 view = hg_view_matrix(s_camera_position, 1.0f, (HgQuat){1.0f, 0.0f, 0.0f, 0.0f});
-    hg_buffer_write(s_vp_buffer, offsetof(HgVPUniform, view), &view, sizeof(view));
-
-    hg_renderpass_begin(hg_2d_renderer_g_target, hg_2d_renderer_g_depth_buffer);
+void hg_2d_renderer_draw(HgTexture* target, HgTexture* depth_buffer) {
+    hg_renderpass_begin(target, depth_buffer);
 
     hg_shader_bind(s_sprite_shader);
 
     HgDescriptor vp_descriptor_set[] = {{
-        .type = HG_DESCRIPTOR_TYPE_BUFFER,
+        .type = HG_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
         .count = 1,
         .buffers = &s_vp_buffer,
     }};
@@ -279,7 +239,7 @@ void hg_2d_renderer_draw(void) {
         HgSpriteTicket* ticket = &s_sprite_tickets[i];
 
         HgDescriptor texture_descriptor_set[] = {{
-            .type = HG_DESCRIPTOR_TYPE_TEXTURE,
+            .type = HG_DESCRIPTOR_TYPE_SAMPLED_TEXTURE,
             .count = 1,
             .textures = &ticket->texture,
         }};
@@ -292,7 +252,7 @@ void hg_2d_renderer_draw(void) {
             .offset = ticket->offset,
             .size = ticket->size,
         };
-        hg_draw(s_quad_vertex_buffer, s_quad_index_buffer, &push_data, sizeof(push_data));
+        hg_draw_indexed(s_quad_vertex_buffer, s_quad_index_buffer, &push_data, sizeof(push_data));
     }
 
     hg_shader_unbind();
