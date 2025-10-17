@@ -34,17 +34,18 @@ if "%1"=="release" (
 )
 
 if not exist build mkdir build
-if not exist build\shaders mkdir build\shaders
 
 echo Compiling shaders...
 
 set SHADERS=^
     demo\test.vert^
-    demo\test.frag
+    demo\test.frag^
+    src\ray_marcher.vert^
+    src\ray_marcher.frag
 
 for %%S in (%SHADERS%) do (
     echo Compiling %%S...
-    glslc -o build\shaders\%%~nxS.spv %%S
+    glslc -o build\%%~nxS.spv %%S
 )
 
 echo Building hurdy_gurdy...
@@ -54,7 +55,8 @@ set SRCS=^
     src\hg_utils.c^
     src\hg_math.c^
     src\hg_graphics.c^
-    src\hg_2d_renderer.c
+    src\hg_2d_renderer.c^
+    src\hg_ray_marcher.c
 
 set OBJS=
 

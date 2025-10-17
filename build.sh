@@ -12,18 +12,19 @@ INCLUDES="-Iinclude -Ivendor/SDL/include -Ivendor/VulkanMemoryAllocator/include 
 LIBS="-Lbuild -Lbuild/SDL -Lbuild/fastgltf -lhurdy_gurdy -lSDL3 -lfastgltf -lvulkan -lc -lm"
 
 mkdir -p build
-mkdir -p build/shaders
 
 echo "Compiling shaders..."
 
 SHADERS=(
     demo/test.vert
     demo/test.frag
+    src/ray_marcher.vert
+    src/ray_marcher.frag
 )
 
 for shader in "${SHADERS[@]}"; do
     echo "Compiling $shader..."
-    glslc -o build/shaders/$(basename $shader).spv $shader
+    glslc -o build/$(basename $shader).spv $shader
 done
 
 echo "Building hurdy_gurdy..."
@@ -34,6 +35,7 @@ SRCS=(
     src/hg_math.c
     src/hg_graphics.c
     src/hg_2d_renderer.c
+    src/hg_ray_marcher.c
 )
 OBJS=()
 
