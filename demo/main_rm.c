@@ -146,7 +146,7 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
             }
         } break;
         case SDL_EVENT_MOUSE_MOTION: {
-            // if (input_state & INPUT_STATE_LMOUSE) {
+            if (input_state & INPUT_STATE_LMOUSE) {
                 camera_rotation = hg_qmul(
                     hg_axis_angle((HgVec3){0.0f, 1.0f, 0.0f}, event->motion.xrel * MOUSE_SPEED),
                     camera_rotation
@@ -155,7 +155,7 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
                     camera_rotation,
                     hg_axis_angle((HgVec3){-1.0f, 0.0f, 0.0f}, event->motion.yrel * MOUSE_SPEED)
                 );
-            // }
+            }
         } break;
         case SDL_EVENT_WINDOW_RESIZED: {
             u32 window_width, window_height;
@@ -225,7 +225,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
         );
     }
 
-    bool success = hg_render_begin();
+    bool success = hg_commands_begin();
     if (!success) {
         HG_DEBUG("Failed to render");
         return SDL_APP_CONTINUE;
@@ -234,7 +234,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     HgMat4 camera = hg_model_matrix_3d(camera_position, camera_scale, camera_rotation);
     hg_ray_marcher_draw(target, &camera, camera_aspect);
 
-    success = hg_render_end();
+    success = hg_commands_end();
     if (!success) {
         HG_DEBUG("Failed to draw");
         return SDL_APP_CONTINUE;

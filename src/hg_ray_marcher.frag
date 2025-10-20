@@ -51,7 +51,7 @@ void main() {
         }
 
         if (distance < MIN_DISTANCE) {
-            out_color = -dot(normalize(lights[0] - ray.origin), sphere_normal(spheres[sphere_index], ray.origin)) * vec4(1.0, 0.0, 0.0, 1.0);
+            out_color = dot(normalize(ray.origin - lights[0]), sphere_normal(spheres[sphere_index], ray.origin)) * vec4(1.0, 0.0, 0.0, 1.0);
             return;
         }
 

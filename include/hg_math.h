@@ -3,9 +3,6 @@
 
 #include "hg_utils.h"
 
-#define HG_MAX(a, b) ((a) > (b) ? (a) : (b))
-#define HG_MIN(a, b) ((a) < (b) ? (a) : (b))
-
 #define HG_PI      3.1415926535897932
 #define HG_TAU     6.2831853071795864
 #define HG_E       2.7182818284590452

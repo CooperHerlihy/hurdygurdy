@@ -22,8 +22,8 @@ SHADERS=(
     src/hg_sprite.frag
     src/hg_model.vert
     src/hg_model.frag
-    src/ray_marcher.vert
-    src/ray_marcher.frag
+    src/hg_ray_marcher.vert
+    src/hg_ray_marcher.frag
 )
 
 for shader in "${SHADERS[@]}"; do

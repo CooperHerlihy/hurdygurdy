@@ -36,7 +36,7 @@ HgTexture* hg_3d_texture_map_create(const void* data, u32 width, u32 height, HgF
 void hg_3d_renderer_update_projection(f32 fov, f32 aspect, f32 near, f32 far);
 void hg_3d_renderer_update_view(HgVec3 position, f32 zoom, HgQuat rotation);
 
-void hg_3d_renderer_set_directional_light(HgVec3 direction, HgVec3 color, f32 intensity);
+void hg_3d_renderer_queue_directional_light(HgVec3 direction, HgVec3 color, f32 intensity);
 void hg_3d_renderer_queue_point_light(HgVec3 position, HgVec3 color, f32 intensity);
 
 void hg_3d_renderer_queue_model(HgModel3D* model, HgTransform3D* transform);

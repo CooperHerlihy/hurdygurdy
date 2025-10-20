@@ -1,9 +1,5 @@
 #include "hg_graphics.h"
 
-#include "hg_graphics_enums.h"
-#include "hg_math.h"
-#include "vulkan/vulkan_core.h"
-
 #include <vulkan/vulkan.h>
 
 #include <SDL3/SDL.h>
@@ -2276,7 +2272,7 @@ HgShader* hg_shader_create(const HgShaderConfig* config) {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
         .depthTestEnable = config->enable_depth_buffer ? VK_TRUE : VK_FALSE,
         .depthWriteEnable = config->enable_depth_buffer ? VK_TRUE : VK_FALSE,
-        .depthCompareOp = VK_COMPARE_OP_LESS,
+        .depthCompareOp = config->enable_color_blend ? VK_COMPARE_OP_LESS_OR_EQUAL : VK_COMPARE_OP_LESS,
         .depthBoundsTestEnable = VK_FALSE,
         .stencilTestEnable = VK_FALSE,
         .minDepthBounds = 0.0f,
@@ -2410,7 +2406,7 @@ static void hg_reset_fence(VkFence fence) {
     }
 }
 
-bool hg_render_begin(void) {
+bool hg_commands_begin(void) {
     HG_ASSERT(!s_recording);
     HG_ASSERT(hg_current_cmd() != VK_NULL_HANDLE);
 
@@ -2466,9 +2462,10 @@ bool hg_render_begin(void) {
     return true;
 }
 
-bool hg_render_end(void) {
+bool hg_commands_end(void) {
     HG_ASSERT(s_recording);
-    HG_ASSERT(!s_recording_pass);
+    if (s_recording_pass)
+        hg_renderpass_end();
     HG_ASSERT(s_previous_target != NULL);
 
     VkCommandBuffer cmd = hg_current_cmd();
@@ -2590,7 +2587,8 @@ bool hg_render_end(void) {
 }
 
 void hg_renderpass_begin(HgTexture* target, HgTexture* depth_buffer) {
-    HG_ASSERT(!s_recording_pass);
+    if (s_recording_pass)
+        hg_renderpass_end();
     s_recording_pass = true;
 
     HG_ASSERT(target != NULL);

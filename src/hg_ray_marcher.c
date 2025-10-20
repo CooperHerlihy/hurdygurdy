@@ -39,7 +39,7 @@ void hg_ray_marcher_init(void) {
     usize vertex_shader_size = 0;
     byte* vertex_shader = NULL;
     HgError vertex_shader_error = hg_file_load_binary(
-        "build/ray_marcher.vert.spv", &vertex_shader, &vertex_shader_size
+        "build/hg_ray_marcher.vert.spv", &vertex_shader, &vertex_shader_size
     );
     switch (vertex_shader_error) {
         case HG_SUCCESS: break;
@@ -51,7 +51,7 @@ void hg_ray_marcher_init(void) {
     usize fragment_shader_size = 0;
     byte* fragment_shader = NULL;
     HgError fragment_shader_error = hg_file_load_binary(
-        "build/ray_marcher.frag.spv", &fragment_shader, &fragment_shader_size
+        "build/hg_ray_marcher.frag.spv", &fragment_shader, &fragment_shader_size
     );
     switch (fragment_shader_error) {
         case HG_SUCCESS: break;
@@ -80,13 +80,13 @@ void hg_ray_marcher_init(void) {
 
     s_vertex_buffer = hg_buffer_create(&(HgBufferConfig){
         .size = sizeof(s_vertices),
-        .usage = HG_BUFFER_USAGE_VERTEX_BUFFER_BIT | HG_BUFFER_USAGE_TRANSFER_DST_BIT,
+        .usage = HG_BUFFER_USAGE_VERTEX_BUFFER_BIT | HG_BUFFER_USAGE_READ_WRITE_DST_BIT,
     });
     hg_buffer_write(s_vertex_buffer, 0, s_vertices, sizeof(s_vertices));
 
     s_index_buffer = hg_buffer_create(&(HgBufferConfig){
         .size = sizeof(s_indices),
-        .usage = HG_BUFFER_USAGE_INDEX_BUFFER_BIT | HG_BUFFER_USAGE_TRANSFER_DST_BIT,
+        .usage = HG_BUFFER_USAGE_INDEX_BUFFER_BIT | HG_BUFFER_USAGE_READ_WRITE_DST_BIT,
     });
     hg_buffer_write(s_index_buffer, 0, s_indices, sizeof(s_indices));
 }
@@ -106,7 +106,7 @@ void hg_ray_marcher_draw(HgTexture* target, HgMat4* view, f32 aspect) {
         .view = *view,
         .aspect = aspect,
     };
-    hg_draw(s_vertex_buffer, s_index_buffer, &push_data, sizeof(push_data));
+    hg_draw_indexed(s_vertex_buffer, s_index_buffer, &push_data, sizeof(push_data));
 
     hg_renderpass_end();
 }

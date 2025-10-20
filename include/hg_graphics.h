@@ -109,8 +109,8 @@ typedef struct HgShaderConfig {
 HgShader* hg_shader_create(const HgShaderConfig* config);
 void hg_shader_destroy(HgShader* shader);
 
-bool hg_render_begin(void);
-bool hg_render_end(void);
+bool hg_commands_begin(void);
+bool hg_commands_end(void);
 
 void hg_renderpass_begin(HgTexture* target, HgTexture* depth_buffer);
 void hg_renderpass_end(void);

@@ -58,7 +58,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
 
     s_camera_position = (HgVec3){0.0f, 0.0f, 0.0f};
     s_transform = (HgTransform2D){
-        .position = (HgVec3){-0.1f, -0.1f, 0.0f},
+        .position = (HgVec3){-0.2f, -0.2f, 0.0f},
         .scale = (HgVec2){0.4f, 0.4f},
         .rotation = 0.0f,
     };
@@ -180,23 +180,23 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
         s_transform.position.z -= (f32)delta * MOVE_SPEED;
     }
 
-    bool success = hg_render_begin();
+    bool success = hg_commands_begin();
     if (!success) {
         HG_DEBUG("Failed to render");
         return SDL_APP_CONTINUE;
     }
 
-    // hg_2d_renderer_queue_sprite(s_texture, (HgVec2){0.5f, 0.0f}, (HgVec2){0.5f, 0.5f}, &(HgTransform2D){
-    //     .position = (HgVec3){-0.5f, -0.5f, 0.0f},
-    //     .scale = (HgVec2){1.0f, 1.0f},
-    //     .rotation = 0.0f,
-    // });
+    hg_2d_renderer_queue_sprite(s_texture, (HgVec2){0.5f, 0.0f}, (HgVec2){0.5f, 0.5f}, &(HgTransform2D){
+        .position = (HgVec3){-0.5f, -0.5f, 1.0f},
+        .scale = (HgVec2){1.0f, 1.0f},
+        .rotation = 0.0f,
+    });
 
     hg_2d_renderer_queue_sprite(s_texture, (HgVec2){0.0f, 0.0f}, (HgVec2){1.0f, 1.0f}, &s_transform);
 
     hg_2d_renderer_draw(s_target, s_depth_buffer);
 
-    success = hg_render_end();
+    success = hg_commands_end();
     if (!success) {
         HG_DEBUG("Failed to draw");
         return SDL_APP_CONTINUE;

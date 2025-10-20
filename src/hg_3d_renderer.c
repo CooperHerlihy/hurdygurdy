@@ -1,26 +1,50 @@
 #include "hg_3d_renderer.h"
 #include "hg_graphics_enums.h"
 
-typedef struct HgVPUniform {
+typedef struct HgWorldUniform {
     HgMat4 view;
     HgMat4 proj;
-} HgVPUniform;
+    u32 dir_light_count;
+    u32 point_light_count;
+} HgWorldUniform;
 
 typedef struct HgModelPush {
     HgMat4 model;
 } HgModelPush;
 
-static HgShader* shader;
-static HgBuffer* vp_buffer;
+static HgShader* s_shader;
+static HgBuffer* s_world_buffer;
+
+typedef struct HgDirectionalLight {
+    HgVec3 direction;
+    HgVec3 color;
+    f32 intensity;
+} HgDirectionalLight;
+static HgBuffer* s_dir_light_buffer;
+
+static u32 s_dir_light_capacity;
+static u32 s_dir_light_count;
+static HgDirectionalLight* s_dir_lights;
+
+typedef struct HgPointLight {
+    HgVec3 position;
+    HgVec3 color;
+    f32 intensity;
+} HgPointLight;
+static HgBuffer* s_point_light_buffer;
+
+static u32 s_point_light_capacity;
+static u32 s_point_light_count;
+static HgPointLight* s_point_lights;
 
 typedef struct HgModelTicket {
     HgModel3D model;
     HgModelPush push;
 } HgModelTicket;
 
-static u32 model_ticket_capacity;
-static u32 model_ticket_count;
-static HgModelTicket* model_tickets;
+static u32 s_model_ticket_capacity;
+static u32 s_model_ticket_count;
+static HgModelTicket* s_model_tickets;
 
 typedef struct HgColor {
     u8 r;
@@ -29,18 +53,17 @@ typedef struct HgColor {
     u8 a;
 } HgColor;
 
-static const HgColor default_color_data[] = {
-    {0xff, 0x00, 0xff, 0xff}, {0x00, 0x00, 0x00, 0xff}, {0xff, 0x00, 0xff, 0xff},
-    {0x00, 0x00, 0x00, 0xff}, {0xff, 0x00, 0xff, 0xff}, {0x00, 0x00, 0x00, 0xff},
-    {0xff, 0x00, 0xff, 0xff}, {0x00, 0x00, 0x00, 0xff}, {0xff, 0x00, 0xff, 0xff},
+static const HgColor s_default_color_data[] = {
+    {0xff, 0x00, 0xff, 0xff}, {0x00, 0x00, 0x00, 0xff},
+    {0x00, 0x00, 0x00, 0xff}, {0xff, 0x00, 0xff, 0xff},
 };
-static HgTexture* default_color_map;
+static HgTexture* s_default_color_map;
 
-static const HgVec4 default_normal_data[] = {
+static const HgVec4 s_default_normal_data[] = {
     {0.0f, 0.0f, -1.0f, 1.0f}, {0.0f, 0.0f, -1.0f, 1.0f},
     {0.0f, 0.0f, -1.0f, 1.0f}, {0.0f, 0.0f, -1.0f, 1.0f},
 };
-static HgTexture* default_normal_map;
+static HgTexture* s_default_normal_map;
 
 void hg_3d_renderer_init(void) {
     HgVertexAttribute vertex_attributes[] = {{
@@ -62,8 +85,14 @@ void hg_3d_renderer_init(void) {
         .stride = sizeof(HgVertex3D),
     }};
 
-    HgDescriptorSetBinding vp_set_bindings[] = {{
+    HgDescriptorSetBinding world_set_bindings[] = {{
         .descriptor_type = HG_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .descriptor_count = 1,
+    }, {
+        .descriptor_type = HG_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        .descriptor_count = 1,
+    }, {
+        .descriptor_type = HG_DESCRIPTOR_TYPE_STORAGE_BUFFER,
         .descriptor_count = 1,
     }};
     HgDescriptorSetBinding object_set_bindings[] = {{
@@ -71,8 +100,8 @@ void hg_3d_renderer_init(void) {
         .descriptor_count = 2,
     }};
     HgDescriptorSet descriptor_sets[] = {{
-        .bindings = vp_set_bindings,
-        .binding_count = HG_ARRAY_SIZE(vp_set_bindings),
+        .bindings = world_set_bindings,
+        .binding_count = HG_ARRAY_SIZE(world_set_bindings),
     }, {
         .bindings = object_set_bindings,
         .binding_count = HG_ARRAY_SIZE(object_set_bindings),
@@ -102,7 +131,7 @@ void hg_3d_renderer_init(void) {
         default: HG_ERROR("unknown error");
     }
 
-    shader = hg_shader_create(&(HgShaderConfig){
+    s_shader = hg_shader_create(&(HgShaderConfig){
         .color_format = HG_FORMAT_R8G8B8A8_UNORM,
         .depth_format = HG_FORMAT_D32_SFLOAT,
         .spirv_vertex_shader = vertex_shader,
@@ -115,31 +144,53 @@ void hg_3d_renderer_init(void) {
         .descriptor_set_count = HG_ARRAY_SIZE(descriptor_sets),
         .push_constant_size = sizeof(HgModelPush),
         .topology = HG_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-        .cull_mode = HG_CULL_MODE_NONE, // HG_CULL_MODE_BACK_BIT,
+        .cull_mode = HG_CULL_MODE_BACK_BIT,
         .enable_depth_buffer = true,
-        .enable_color_blend = true,
+        .enable_color_blend = false,
     });
 
     hg_file_unload_binary(vertex_shader, vertex_shader_size);
     hg_file_unload_binary(fragment_shader, fragment_shader_size);
 
-    vp_buffer = hg_buffer_create(&(HgBufferConfig){
-        .size = sizeof(HgVPUniform),
+    s_world_buffer = hg_buffer_create(&(HgBufferConfig){
+        .size = sizeof(HgWorldUniform),
         .usage = HG_BUFFER_USAGE_UNIFORM_BUFFER_BIT | HG_BUFFER_USAGE_READ_WRITE_DST_BIT,
     });
 
-    model_ticket_capacity = 1024;
-    model_ticket_count = 0;
-    model_tickets = hg_heap_alloc(model_ticket_capacity * sizeof(HgModelTicket));
+    s_dir_light_capacity = 32;
+    s_dir_light_count = 0;
+    s_dir_lights = hg_heap_alloc(s_dir_light_capacity * sizeof(HgDirectionalLight));
+    memset(s_dir_lights, 0, sizeof(HgDirectionalLight) * s_dir_light_capacity);
 
-    default_color_map = hg_3d_texture_map_create(
-        default_color_data,
-        3, 3,
+    s_dir_light_buffer = hg_buffer_create(&(HgBufferConfig){
+        .size = sizeof(HgDirectionalLight) * s_dir_light_capacity,
+        .usage = HG_BUFFER_USAGE_STORAGE_BUFFER_BIT | HG_BUFFER_USAGE_READ_WRITE_DST_BIT,
+    });
+    hg_buffer_write(s_dir_light_buffer, 0, s_dir_lights, sizeof(HgDirectionalLight) * s_dir_light_capacity);
+
+    s_point_light_capacity = 128;
+    s_point_light_count = 0;
+    s_point_lights = hg_heap_alloc(s_point_light_capacity * sizeof(HgPointLight));
+    memset(s_point_lights, 0, sizeof(HgPointLight) * s_point_light_capacity);
+
+    s_point_light_buffer = hg_buffer_create(&(HgBufferConfig){
+        .size = sizeof(HgPointLight) * s_point_light_capacity,
+        .usage = HG_BUFFER_USAGE_STORAGE_BUFFER_BIT | HG_BUFFER_USAGE_READ_WRITE_DST_BIT,
+    });
+    hg_buffer_write(s_point_light_buffer, 0, s_point_lights, sizeof(HgPointLight) * s_point_light_capacity);
+
+    s_model_ticket_capacity = 1024;
+    s_model_ticket_count = 0;
+    s_model_tickets = hg_heap_alloc(s_model_ticket_capacity * sizeof(HgModelTicket));
+
+    s_default_color_map = hg_3d_texture_map_create(
+        s_default_color_data,
+        2, 2,
         HG_FORMAT_R8G8B8A8_UNORM,
         false
     );
-    default_normal_map = hg_3d_texture_map_create(
-        default_normal_data, 
+    s_default_normal_map = hg_3d_texture_map_create(
+        s_default_normal_data, 
         2, 2,
         HG_FORMAT_R32G32B32A32_SFLOAT,
         false
@@ -147,10 +198,12 @@ void hg_3d_renderer_init(void) {
 }
 
 void hg_3d_renderer_shutdown(void) {
-    hg_texture_destroy(default_normal_map);
-    hg_texture_destroy(default_color_map);
-    hg_buffer_destroy(vp_buffer);
-    hg_shader_destroy(shader);
+    hg_texture_destroy(s_default_normal_map);
+    hg_texture_destroy(s_default_color_map);
+    hg_buffer_destroy(s_point_light_buffer);
+    hg_buffer_destroy(s_dir_light_buffer);
+    hg_buffer_destroy(s_world_buffer);
+    hg_shader_destroy(s_shader);
 }
 
 void hg_3d_renderer_target_create(u32 width, u32 height, HgTexture** target, HgTexture** depth_buffer) {
@@ -220,7 +273,7 @@ HgTexture* hg_3d_texture_map_create(const void* data, u32 width, u32 height, HgF
         .format = format,
         .aspect = HG_TEXTURE_ASPECT_COLOR_BIT,
         .usage = HG_TEXTURE_USAGE_SAMPLED_BIT | HG_TEXTURE_USAGE_TRANSFER_DST_BIT,
-        .edge_mode = HG_SAMPLER_EDGE_MODE_CLAMP_TO_EDGE,
+        .edge_mode = HG_SAMPLER_EDGE_MODE_REPEAT,
         .bilinear_filter = filter,
     });
     hg_texture_write(texture, data, HG_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
@@ -230,68 +283,105 @@ HgTexture* hg_3d_texture_map_create(const void* data, u32 width, u32 height, HgF
 
 void hg_3d_renderer_update_projection(f32 fov, f32 aspect, f32 near, f32 far) {
     HgMat4 proj = hg_projection_matrix_perspective(fov, aspect, near, far);
-    hg_buffer_write(vp_buffer, offsetof(HgVPUniform, proj), &proj, sizeof(proj));
+    hg_buffer_write(s_world_buffer, offsetof(HgWorldUniform, proj), &proj, sizeof(proj));
 }
 
 void hg_3d_renderer_update_view(HgVec3 position, f32 zoom, HgQuat rotation) {
     HgMat4 view = hg_view_matrix(position, zoom, rotation);
-    hg_buffer_write(vp_buffer, offsetof(HgVPUniform, view), &view, sizeof(view));
+    hg_buffer_write(s_world_buffer, offsetof(HgWorldUniform, view), &view, sizeof(view));
 }
 
-void hg_3d_renderer_set_directional_light(HgVec3 direction, HgVec3 color, f32 intensity) {
-    (void)direction;
-    (void)color;
-    (void)intensity;
-    HG_ERROR("3d renderer does not yet support directional lights");
+void hg_3d_renderer_queue_directional_light(HgVec3 direction, HgVec3 color, f32 intensity) {
+    if (s_dir_light_count >= s_dir_light_capacity) {
+        HG_ERROR("3d renderer directional light capacity exceeded, increase not implemented"); // : TODO
+        // s_dir_light_capacity *= 2;
+        // s_dir_lights = hg_heap_realloc(s_dir_lights, s_dir_light_capacity * sizeof(HgDirectionalLight));
+    }
+
+    s_dir_lights[s_dir_light_count] = (HgDirectionalLight){
+        .direction = direction,
+        .color = color,
+        .intensity = intensity,
+    };
+    ++s_dir_light_count;
 }
 
 void hg_3d_renderer_queue_point_light(HgVec3 position, HgVec3 color, f32 intensity) {
-    (void)position;
-    (void)color;
-    (void)intensity;
-    HG_ERROR("3d renderer does not yet support point lights");
+    if (s_point_light_count >= s_point_light_capacity) {
+        HG_ERROR("3d renderer point light capacity exceeded, increase not implemented"); // : TODO
+        // s_point_light_capacity *= 2;
+        // s_point_lights = hg_heap_realloc(s_point_lights, s_point_light_capacity * sizeof(HgPointLight));
+    }
+
+    s_point_lights[s_point_light_count] = (HgPointLight){
+        .position = position,
+        .color = color,
+        .intensity = intensity,
+    };
+    ++s_point_light_count;
 }
 
 void hg_3d_renderer_queue_model(HgModel3D* model, HgTransform3D* transform) {
     HG_ASSERT(model != NULL);
     HG_ASSERT(transform != NULL);
 
-    if (model_ticket_count >= model_ticket_capacity) {
-        model_ticket_capacity *= 2;
-        model_tickets = hg_heap_realloc(model_tickets, model_ticket_capacity * sizeof(HgModelTicket));
+    if (s_model_ticket_count >= s_model_ticket_capacity) {
+        s_model_ticket_capacity *= 2;
+        s_model_tickets = hg_heap_realloc(s_model_tickets, s_model_ticket_capacity * sizeof(HgModelTicket));
     }
 
-    model_tickets[model_ticket_count] = (HgModelTicket){
+    s_model_tickets[s_model_ticket_count] = (HgModelTicket){
         .model = *model,
         .push = (HgModelPush){
             .model = hg_model_matrix_3d(transform->position, transform->scale, transform->rotation),
         },
     };
-    ++model_ticket_count;
+    ++s_model_ticket_count;
 }
 
 void hg_3d_renderer_draw(HgTexture* target, HgTexture* depth_buffer) {
     HG_ASSERT(target != NULL);
     HG_ASSERT(depth_buffer != NULL);
 
+    hg_buffer_write(
+        s_world_buffer, offsetof(HgWorldUniform, dir_light_count), &s_dir_light_count, sizeof(s_dir_light_count)
+    );
+    hg_buffer_write(
+        s_world_buffer, offsetof(HgWorldUniform, point_light_count), &s_point_light_count, sizeof(s_point_light_count)
+    );
+
+    if (s_dir_light_count > 0)
+        hg_buffer_write(s_dir_light_buffer, 0, s_dir_lights, sizeof(HgDirectionalLight) * s_dir_light_count);
+    if (s_point_light_count > 0) {
+        hg_buffer_write(s_point_light_buffer, 0, s_point_lights, sizeof(HgPointLight) * s_point_light_count);
+    }
+
     hg_renderpass_begin(target, depth_buffer);
 
-    hg_shader_bind(shader);
+    hg_shader_bind(s_shader);
 
-    HgDescriptor vp_descriptor_set[] = {{
+    HgDescriptor world_descriptor_set[] = {{
         .type = HG_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
         .count = 1,
-        .buffers = &vp_buffer,
+        .buffers = &s_world_buffer,
+    }, {
+        .type = HG_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        .count = 1,
+        .buffers = &s_dir_light_buffer,
+    }, {
+        .type = HG_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        .count = 1,
+        .buffers = &s_point_light_buffer,
     }};
-    hg_bind_descriptor_set(0, vp_descriptor_set, HG_ARRAY_SIZE(vp_descriptor_set));
+    hg_bind_descriptor_set(0, world_descriptor_set, HG_ARRAY_SIZE(world_descriptor_set));
 
-    for (u32 i = 0; i < model_ticket_count; ++i) {
-        HgModel3D* model = &model_tickets[i].model;
-        HgModelPush* push = &model_tickets[i].push;
+    for (u32 i = 0; i < s_model_ticket_count; ++i) {
+        HgModel3D* model = &s_model_tickets[i].model;
+        HgModelPush* push = &s_model_tickets[i].push;
 
         HgTexture* textures[] = {
-            model->color_map != NULL ? model->color_map : default_color_map,
-            model->normal_map != NULL ? model->normal_map : default_normal_map,
+            model->color_map != NULL ? model->color_map : s_default_color_map,
+            model->normal_map != NULL ? model->normal_map : s_default_normal_map,
         };
         HgDescriptor object_descriptor_set[] = {{
             .type = HG_DESCRIPTOR_TYPE_SAMPLED_TEXTURE,
@@ -303,10 +393,10 @@ void hg_3d_renderer_draw(HgTexture* target, HgTexture* depth_buffer) {
         hg_draw_indexed(model->vertex_buffer, model->index_buffer, push, sizeof(HgModelPush));
     }
 
-    hg_shader_unbind();
-
     hg_renderpass_end();
 
-    model_ticket_count = 0;
+    s_dir_light_count = 0;
+    s_point_light_count = 0;
+    s_model_ticket_count = 0;
 }
 

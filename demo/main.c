@@ -1,7 +1,5 @@
 #include "hurdy_gurdy.h"
 
-#include <vulkan/vulkan.h>
-
 #define SDL_MAIN_USE_CALLBACKS
 #include <SDL3/SDL_main.h>
 
@@ -25,7 +23,6 @@ static HgTexture* s_target;
 static HgTexture* s_depth_buffer;
 
 static f32 s_camera_fov;
-
 static HgVec3 s_camera_position;
 static f32 s_camera_zoom;
 static HgQuat s_camera_rotation;
@@ -39,17 +36,17 @@ static const HgVertex3D s_vertices[] = {{
     .position = {-0.5f, 0.5f, 0.0f},
     .normal = {0.0f, 0.0f, -1.0f},
     .tangent = {1.0f, 0.0f, 0.0f, 1.0f},
-    .uv = {0.0f, 1.0f},
+    .uv = {0.0f, 2.0f},
 }, {
     .position = {0.5f, 0.5f, 0.0f},
     .normal = {0.0f, 0.0f, -1.0f},
     .tangent = {1.0f, 0.0f, 0.0f, 1.0f},
-    .uv = {1.0f, 1.0f},
+    .uv = {2.0f, 2.0f},
 }, {
     .position = {0.5f, -0.5f, 0.0f},
     .normal = {0.0f, 0.0f, -1.0f},
     .tangent = {1.0f, 0.0f, 0.0f, 1.0f},
-    .uv = {1.0f, 0.0f},
+    .uv = {2.0f, 0.0f},
 }};
 static HgBuffer* s_vertex_buffer;
 
@@ -254,11 +251,14 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     }
     hg_3d_renderer_update_view(s_camera_position, s_camera_zoom, s_camera_rotation);
 
-    bool success = hg_render_begin();
+    bool success = hg_commands_begin();
     if (!success) {
         HG_DEBUG("Failed to render");
         return SDL_APP_CONTINUE;
     }
+
+    // hg_3d_renderer_queue_directional_light((HgVec3){1.0f, 1.0f, 1.0f}, (HgVec3){1.0f, 1.0f, 1.0f}, 1.0f);
+    hg_3d_renderer_queue_point_light((HgVec3){3.0f, -3.0f, 0.0f}, (HgVec3){0.0f, 0.5f, 0.1f}, 1.0f);
 
     HgModel3D model = {
         .vertex_buffer = s_vertex_buffer,
@@ -267,25 +267,22 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
         .normal_map = NULL,
     };
 
-    HgTransform3D transform_a = {
+    hg_3d_renderer_queue_model(&model, &(HgTransform3D){
         .position = (HgVec3){-0.2f, 0.0f, -0.2f},
         .scale = (HgVec3){1.0f, 1.0f, 1.0f},
         .rotation = (HgQuat){1.0f, 0.0f, 0.0f, 0.0f},
-    };
-    hg_3d_renderer_queue_model(&model, &transform_a);
-
-    HgTransform3D transform_b = {
+    });
+    hg_3d_renderer_queue_model(&model, &(HgTransform3D){
         .position = (HgVec3){0.2f, 0.0f, 0.2f},
         .scale = (HgVec3){1.0f, 1.0f, 1.0f},
         .rotation = (HgQuat){1.0f, 0.0f, 0.0f, 0.0f},
-    };
-    hg_3d_renderer_queue_model(&model, &transform_b);
+    });
 
     hg_3d_renderer_draw(s_target, s_depth_buffer);
 
     // hg_depth_render_draw(target, depth_buffer);
 
-    success = hg_render_end();
+    success = hg_commands_end();
     if (!success) {
         HG_DEBUG("Failed to draw");
         return SDL_APP_CONTINUE;

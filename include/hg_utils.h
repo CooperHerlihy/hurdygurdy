@@ -1,10 +1,11 @@
 #ifndef HG_UTILS_H
 #define HG_UTILS_H
 
-#include <stdalign.h>
 #include <float.h>
+#include <inttypes.h>
 #include <limits.h>
 #include <math.h>
+#include <stdalign.h>
 #include <stdarg.h>
 #include <stdatomic.h>
 #include <stdbool.h>
@@ -34,6 +35,9 @@ typedef size_t usize;
 typedef intptr_t iptr;
 
 #define HG_ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
+
+#define HG_MAX(a, b) ((a) > (b) ? (a) : (b))
+#define HG_MIN(a, b) ((a) < (b) ? (a) : (b))
 
 #if defined(NDEBUG)
 #define HG_LOG(message) { fprintf(stdout, "Log: " message "\n"); }
