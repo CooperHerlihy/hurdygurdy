@@ -43,7 +43,7 @@ void main() {
     // vec3 normal = normalize(tangent_to_world * texture(u_textures[1], v_uv).xyz);
     // vec3 normal = normalize(v_normal);
 
-    // vec3 lighting = vec3(0.0);
+    vec3 lighting = vec3(0.0);
     // for (uint i = 0; i < u_dir_light_count; ++i) {
     //     vec3 light_dir = normalize(u_directional_lights[i].direction);
     //
@@ -59,7 +59,8 @@ void main() {
     //     lighting += diffuse * u_point_lights[i].intensity * u_point_lights[i].color;
     // }
 
-    vec4 color = texture(u_textures[0], v_uv);
+    vec3 light_dir = normalize(u_directional_lights[0].direction);
+    vec4 color = dot(v_normal, -light_dir) * texture(u_textures[0], v_uv);
     out_color = color;
 }
 

@@ -8,8 +8,8 @@ else
     CFLAGS="-g -O0 -fsanitize=undefined -std=c11 -Werror -Wall -Wextra -Wconversion -Wshadow -pedantic"
 fi
 
-INCLUDES="-Iinclude -Ivendor/SDL/include -Ivendor/VulkanMemoryAllocator/include -Ivendor/fastgltf/include -Ivendor/stb -Ivendor/mikktspace -Ivendor/welder"
-LIBS="-Lbuild -Lbuild/SDL -Lbuild/fastgltf -lhurdy_gurdy -lSDL3 -lfastgltf -lvulkan -lc -lm"
+INCLUDES="-Iinclude -Ivendor/SDL/include -Ivendor/VulkanMemoryAllocator/include -Ivendor/stb -Ivendor/cgltf -Ivendor/mikktspace -Ivendor/welder"
+LIBS="-Lbuild -Lbuild/SDL -lhurdy_gurdy -lSDL3 -lvulkan -lc -lm"
 
 mkdir -p build
 
@@ -52,7 +52,7 @@ for file in "${SRCS[@]}"; do
 done
 
 echo "Archiving..."
-ar rcs build/libhurdy_gurdy.a build/vk_mem_alloc.o build/stb.o build/mikktspace.o build/weldmesh.o $OBJS
+ar rcs build/libhurdy_gurdy.a build/vk_mem_alloc.o build/stb.o build\cgltf.o build/mikktspace.o build/weldmesh.o $OBJS
 
 echo "Building demo..."
 

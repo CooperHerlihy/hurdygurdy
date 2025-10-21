@@ -257,8 +257,13 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
         return SDL_APP_CONTINUE;
     }
 
-    // hg_3d_renderer_queue_directional_light((HgVec3){1.0f, 1.0f, 1.0f}, (HgVec3){1.0f, 1.0f, 1.0f}, 1.0f);
-    hg_3d_renderer_queue_point_light((HgVec3){3.0f, -3.0f, 0.0f}, (HgVec3){0.0f, 0.5f, 0.1f}, 1.0f);
+    static f32 s_time = 0.0f;
+    s_time += (f32)delta * 2.0f;
+    if (s_time > (f32)HG_PI * 2.0f) {
+        s_time -= (f32)HG_PI * 2.0f;
+    }
+    hg_3d_renderer_queue_directional_light((HgVec3){1.0f, 1.0f, sinf(s_time)}, (HgVec3){1.0f, 1.0f, 1.0f}, 1.0f);
+    // hg_3d_renderer_queue_point_light((HgVec3){3.0f, -3.0f, 0.0f}, (HgVec3){0.0f, 0.5f, 0.1f}, 1.0f);
 
     HgModel3D model = {
         .vertex_buffer = s_vertex_buffer,

@@ -4,9 +4,9 @@
 [submodule "vendor/stb"]
 	path = vendor/stb
 	url = https://github.com/nothings/stb
-[submodule "vendor/fastgltf"]
-	path = vendor/fastgltf
-	url = https://github.com/spnda/fastgltf
+[submodule "vendor/cgltf"]
+	path = vendor/cgltf
+	url = https://gitub.com/jkuhlmann/cgltf
 [submodule "vendor/mikktspace"]
 	path = vendor/mikktspace
 	url = https://github.com/mmikk/MikkTSpace

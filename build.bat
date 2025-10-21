@@ -13,8 +13,8 @@ set INCLUDES=^
     /I include^
     /I vendor\SDL\include^
     /I vendor\VulkanMemoryAllocator\include^
-    /I vendor\fastgltf\include^
     /I vendor\stb^
+    /I vendor\cgltf^
     /I vendor\mikktspace^
     /I vendor\welder^
     /I %VULKAN_SDK%\Include
@@ -23,13 +23,11 @@ if "%1"=="release" (
     set LIBS=^
         build\hurdy_gurdy.lib^
         build\SDL\Release\SDL3.lib^
-        build\fastgltf\Release\fastgltf.lib^
         %VULKAN_SDK%\Lib\vulkan-1.lib
 ) else (
     set LIBS=^
         build\hurdy_gurdy.lib^
         build\SDL\Debug\SDL3.lib^
-        build\fastgltf\Debug\fastgltf.lib^
         %VULKAN_SDK%\Lib\vulkan-1.lib
 )
 
@@ -72,7 +70,7 @@ for %%F in (%SRCS%) do (
 )
 
 echo Archiving...
-lib /nologo /OUT:build\hurdy_gurdy.lib build\vk_mem_alloc.obj build\stb.obj build\mikktspace.obj build\weldmesh.obj %OBJS%
+lib /nologo /OUT:build\hurdy_gurdy.lib build\vk_mem_alloc.obj build\stb.obj build\cgltf.obj build\mikktspace.obj build\weldmesh.obj %OBJS%
 
 echo Building demo...
 
