@@ -158,24 +158,20 @@ void hg_3d_renderer_init(void) {
     s_dir_light_capacity = 32;
     s_dir_light_count = 0;
     s_dir_lights = hg_heap_alloc(s_dir_light_capacity * sizeof(HgDirectionalLight));
-    memset(s_dir_lights, 0, sizeof(HgDirectionalLight) * s_dir_light_capacity);
 
     s_dir_light_buffer = hg_buffer_create(&(HgBufferConfig){
         .size = sizeof(HgDirectionalLight) * s_dir_light_capacity,
         .usage = HG_BUFFER_USAGE_STORAGE_BUFFER_BIT | HG_BUFFER_USAGE_READ_WRITE_DST_BIT,
     });
-    hg_buffer_write(s_dir_light_buffer, 0, s_dir_lights, sizeof(HgDirectionalLight) * s_dir_light_capacity);
 
     s_point_light_capacity = 128;
     s_point_light_count = 0;
     s_point_lights = hg_heap_alloc(s_point_light_capacity * sizeof(HgPointLight));
-    memset(s_point_lights, 0, sizeof(HgPointLight) * s_point_light_capacity);
 
     s_point_light_buffer = hg_buffer_create(&(HgBufferConfig){
         .size = sizeof(HgPointLight) * s_point_light_capacity,
         .usage = HG_BUFFER_USAGE_STORAGE_BUFFER_BIT | HG_BUFFER_USAGE_READ_WRITE_DST_BIT,
     });
-    hg_buffer_write(s_point_light_buffer, 0, s_point_lights, sizeof(HgPointLight) * s_point_light_capacity);
 
     s_model_ticket_capacity = 1024;
     s_model_ticket_count = 0;
@@ -291,28 +287,38 @@ void hg_3d_renderer_update_view(HgVec3 position, f32 zoom, HgQuat rotation) {
 
 void hg_3d_renderer_queue_directional_light(HgVec3 direction, HgVec3 color, f32 intensity) {
     if (s_dir_light_count >= s_dir_light_capacity) {
-        HG_ERROR("3d renderer directional light capacity exceeded, increase not implemented"); // : TODO
-        // s_dir_light_capacity *= 2;
-        // s_dir_lights = hg_heap_realloc(s_dir_lights, s_dir_light_capacity * sizeof(HgDirectionalLight));
+        s_dir_light_capacity *= 2;
+        s_dir_lights = hg_heap_realloc(s_dir_lights, s_dir_light_capacity * sizeof(HgDirectionalLight));
+
+        hg_buffer_destroy(s_dir_light_buffer);
+        s_dir_light_buffer = hg_buffer_create(&(HgBufferConfig){
+            .size = sizeof(HgDirectionalLight) * s_dir_light_capacity,
+            .usage = HG_BUFFER_USAGE_STORAGE_BUFFER_BIT | HG_BUFFER_USAGE_READ_WRITE_DST_BIT,
+        });
     }
 
     s_dir_lights[s_dir_light_count] = (HgDirectionalLight){
         .direction = {direction.x, direction.y, direction.z, 1.0f},
-        .color = {color.x * intensity, color.y * intensity, color.z * intensity, 1.0f},
+            .color = {color.x, color.y, color.z, intensity},
     };
     ++s_dir_light_count;
 }
 
 void hg_3d_renderer_queue_point_light(HgVec3 position, HgVec3 color, f32 intensity) {
     if (s_point_light_count >= s_point_light_capacity) {
-        HG_ERROR("3d renderer point light capacity exceeded, increase not implemented"); // : TODO
-        // s_point_light_capacity *= 2;
-        // s_point_lights = hg_heap_realloc(s_point_lights, s_point_light_capacity * sizeof(HgPointLight));
+        s_point_light_capacity *= 2;
+        s_point_lights = hg_heap_realloc(s_point_lights, s_point_light_capacity * sizeof(HgPointLight));
+
+        hg_buffer_destroy(s_point_light_buffer);
+        s_point_light_buffer = hg_buffer_create(&(HgBufferConfig){
+            .size = sizeof(HgPointLight) * s_point_light_capacity,
+            .usage = HG_BUFFER_USAGE_STORAGE_BUFFER_BIT | HG_BUFFER_USAGE_READ_WRITE_DST_BIT,
+        });
     }
 
     s_point_lights[s_point_light_count] = (HgPointLight){
         .position = {position.x, position.y, position.z, 1.0f},
-        .color = {color.x * intensity, color.y * intensity, color.z * intensity, 1.0f},
+        .color = {color.x, color.y, color.z, intensity},
     };
     ++s_point_light_count;
 }

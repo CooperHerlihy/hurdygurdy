@@ -5,7 +5,7 @@ layout(location = 1) in vec3 in_normal;
 layout(location = 2) in vec4 in_tangent;
 layout(location = 3) in vec2 in_uv;
 
-layout(location = 0) out vec4 f_position;
+layout(location = 0) out vec3 f_pos;
 layout(location = 1) out vec3 f_normal;
 layout(location = 2) out vec4 f_tangent;
 layout(location = 3) out vec2 f_uv;
@@ -28,15 +28,27 @@ struct Space {
 };
 
 void main() {
-    vec4 model_space = vec4(in_pos, 1.0);
-    vec4 world_space = p_model * model_space;
-    vec4 view_space = u_view * world_space;
+    // vec4 model_space = vec4(in_pos, 1.0);
+    // vec4 world_space = p_model * model_space;
+    // vec4 view_space = u_view * world_space;
+    //
+    // vec4 position = p_model * vec4(in_pos, 1.0);
+    // f_pos = position.xyz;
+    // f_normal = in_normal;
+    // f_tangent = in_tangent;
+    // f_uv = in_uv;
+    //
+    // gl_Position = u_proj * u_view * position;
 
-    f_position = p_model * vec4(in_pos, 1.0);
-    f_normal = in_normal;
-    f_tangent = in_tangent;
+    const mat4 mv = u_view * p_model;
+    const mat3 imv = mat3(transpose(inverse(mv)));
+    const vec4 pos = mv * vec4(in_pos, 1.0);
+
+    f_pos = pos.xyz;
+    f_normal = imv * in_normal;
+    f_tangent = vec4(imv * in_tangent.xyz, in_tangent.w);
     f_uv = in_uv;
 
-    gl_Position = u_proj * u_view * f_position;
+    gl_Position = u_proj * pos;
 }
 

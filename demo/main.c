@@ -36,17 +36,17 @@ static const HgVertex3D s_vertices[] = {{
     .position = {-0.5f, 0.5f, 0.0f},
     .normal = {0.0f, 0.0f, -1.0f},
     .tangent = {1.0f, 0.0f, 0.0f, 1.0f},
-    .uv = {0.0f, 2.0f},
+    .uv = {0.0f, 1.0f},
 }, {
     .position = {0.5f, 0.5f, 0.0f},
     .normal = {0.0f, 0.0f, -1.0f},
     .tangent = {1.0f, 0.0f, 0.0f, 1.0f},
-    .uv = {2.0f, 2.0f},
+    .uv = {1.0f, 1.0f},
 }, {
     .position = {0.5f, -0.5f, 0.0f},
     .normal = {0.0f, 0.0f, -1.0f},
     .tangent = {1.0f, 0.0f, 0.0f, 1.0f},
-    .uv = {2.0f, 0.0f},
+    .uv = {1.0f, 0.0f},
 }};
 static HgBuffer* s_vertex_buffer;
 
@@ -259,16 +259,16 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 
     static f32 s_time = 0.0f;
     s_time += (f32)delta * 2.0f;
-    if (s_time > (f32)HG_PI * 2.0f) {
-        s_time -= (f32)HG_PI * 2.0f;
+    if (s_time > (f32)HG_TAU) {
+        s_time -= (f32)HG_TAU;
     }
-    hg_3d_renderer_queue_directional_light((HgVec3){1.0f, 1.0f, sinf(s_time)}, (HgVec3){1.0f, 1.0f, 1.0f}, 1.0f);
-    hg_3d_renderer_queue_point_light((HgVec3){1.0f, -1.0f, -1.0f}, (HgVec3){1.0f, 0.5f, 0.1f}, 5.0f);
+    hg_3d_renderer_queue_directional_light((HgVec3){1.0f, 1.0f, 1.0f}, (HgVec3){1.0f, 0.3f, 0.1f}, 0.5f);
+    hg_3d_renderer_queue_point_light((HgVec3){cosf(s_time) * 3.0f, -1.0f, -sinf(s_time)}, (HgVec3){1.0f, 1.0f, 1.0f}, 5.0f);
 
     HgModel3D model = {
         .vertex_buffer = s_vertex_buffer,
         .index_buffer = s_index_buffer,
-        .color_map = NULL,
+        .color_map = s_texture,
         .normal_map = NULL,
     };
 
