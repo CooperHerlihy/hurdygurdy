@@ -52,7 +52,7 @@ for file in "${SRCS[@]}"; do
 done
 
 echo "Archiving..."
-ar rcs build/libhurdy_gurdy.a build/vk_mem_alloc.o build/stb.o build\cgltf.o build/mikktspace.o build/weldmesh.o $OBJS
+ar rcs build/libhurdy_gurdy.a build/vk_mem_alloc.o build/stb.o build/cgltf.o build/mikktspace.o build/weldmesh.o $OBJS
 
 echo "Building demo..."
 
