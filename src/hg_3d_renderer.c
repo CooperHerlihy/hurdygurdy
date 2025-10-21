@@ -16,9 +16,8 @@ static HgShader* s_shader;
 static HgBuffer* s_world_buffer;
 
 typedef struct HgDirectionalLight {
-    HgVec3 direction;
-    HgVec3 color;
-    f32 intensity;
+    HgVec4 direction;
+    HgVec4 color;
 } HgDirectionalLight;
 static HgBuffer* s_dir_light_buffer;
 
@@ -27,9 +26,8 @@ static u32 s_dir_light_count;
 static HgDirectionalLight* s_dir_lights;
 
 typedef struct HgPointLight {
-    HgVec3 position;
-    HgVec3 color;
-    f32 intensity;
+    HgVec4 position;
+    HgVec4 color;
 } HgPointLight;
 static HgBuffer* s_point_light_buffer;
 
@@ -299,9 +297,8 @@ void hg_3d_renderer_queue_directional_light(HgVec3 direction, HgVec3 color, f32 
     }
 
     s_dir_lights[s_dir_light_count] = (HgDirectionalLight){
-        .direction = direction,
-        .color = color,
-        .intensity = intensity,
+        .direction = {direction.x, direction.y, direction.z, 1.0f},
+        .color = {color.x * intensity, color.y * intensity, color.z * intensity, 1.0f},
     };
     ++s_dir_light_count;
 }
@@ -314,9 +311,8 @@ void hg_3d_renderer_queue_point_light(HgVec3 position, HgVec3 color, f32 intensi
     }
 
     s_point_lights[s_point_light_count] = (HgPointLight){
-        .position = position,
-        .color = color,
-        .intensity = intensity,
+        .position = {position.x, position.y, position.z, 1.0f},
+        .color = {color.x * intensity, color.y * intensity, color.z * intensity, 1.0f},
     };
     ++s_point_light_count;
 }

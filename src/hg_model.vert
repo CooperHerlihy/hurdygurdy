@@ -5,7 +5,7 @@ layout(location = 1) in vec3 in_normal;
 layout(location = 2) in vec4 in_tangent;
 layout(location = 3) in vec2 in_uv;
 
-layout(location = 0) out vec3 f_position;
+layout(location = 0) out vec4 f_position;
 layout(location = 1) out vec3 f_normal;
 layout(location = 2) out vec4 f_tangent;
 layout(location = 3) out vec2 f_uv;
@@ -21,16 +21,22 @@ layout(push_constant) uniform ModelPush {
     mat4 p_model;
 };
 
+struct Space {
+    vec4 position;
+    vec3 normal;
+    vec3 tangent;
+};
+
 void main() {
     vec4 model_space = vec4(in_pos, 1.0);
     vec4 world_space = p_model * model_space;
     vec4 view_space = u_view * world_space;
 
-    f_position = view_space.xyz;
+    f_position = p_model * vec4(in_pos, 1.0);
     f_normal = in_normal;
     f_tangent = in_tangent;
     f_uv = in_uv;
 
-    gl_Position = u_proj * view_space;
+    gl_Position = u_proj * u_view * f_position;
 }
 

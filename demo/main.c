@@ -263,7 +263,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
         s_time -= (f32)HG_PI * 2.0f;
     }
     hg_3d_renderer_queue_directional_light((HgVec3){1.0f, 1.0f, sinf(s_time)}, (HgVec3){1.0f, 1.0f, 1.0f}, 1.0f);
-    // hg_3d_renderer_queue_point_light((HgVec3){3.0f, -3.0f, 0.0f}, (HgVec3){0.0f, 0.5f, 0.1f}, 1.0f);
+    hg_3d_renderer_queue_point_light((HgVec3){1.0f, -1.0f, -1.0f}, (HgVec3){1.0f, 0.5f, 0.1f}, 5.0f);
 
     HgModel3D model = {
         .vertex_buffer = s_vertex_buffer,
@@ -285,7 +285,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 
     hg_3d_renderer_draw(s_target, s_depth_buffer);
 
-    // hg_depth_render_draw(target, depth_buffer);
+    // hg_depth_render_draw(s_target, s_depth_buffer);
 
     success = hg_commands_end();
     if (!success) {
