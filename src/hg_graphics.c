@@ -6,6 +6,7 @@
 #include <SDL3/SDL_vulkan.h>
 
 #include <vk_mem_alloc.h>
+#include <vulkan/vulkan_core.h>
 
 static VkInstance s_instance;
 static VkDebugUtilsMessengerEXT s_debug_messenger;
@@ -40,16 +41,14 @@ static VkSemaphore s_ready_to_present_semaphores[HG_SWAPCHAIN_MAX_IMAGES];
 
 static u32 s_current_image_index;
 static u32 s_current_frame_index;
-static bool s_recording;
+static bool s_recording_frame;
 
 static HgTexture* s_previous_target;
 static HgTexture* s_previous_depth_buffer;
 static bool s_recording_pass;
 
+static VkCommandBuffer s_current_cmd;
 static HgShader* s_current_shader;
-
-static bool s_recording_compute;
-static VkCommandBuffer s_compute_cmd;
 
 #ifndef NDEBUG
 static const char* const ValidationLayers[] = {
@@ -540,8 +539,7 @@ void hg_graphics_init(void) {
         s_descriptor_pools[i] = hg_create_descriptor_pool();
     }
 
-    s_recording_compute = false;
-    s_compute_cmd = VK_NULL_HANDLE;
+    s_current_cmd = VK_NULL_HANDLE;
 }
 
 void hg_graphics_shutdown(void) {
@@ -925,7 +923,7 @@ void hg_window_open(const HgWindowConfig* config) {
 
     s_current_image_index = 0;
     s_current_frame_index = 0;
-    s_recording = false;
+    s_recording_frame = false;
 
     s_previous_target = NULL;
     s_previous_depth_buffer = NULL;
@@ -938,7 +936,7 @@ void hg_window_close(void) {
     HG_ASSERT(s_window != NULL);
     HG_ASSERT(s_surface != VK_NULL_HANDLE);
     HG_ASSERT(s_swapchain != VK_NULL_HANDLE);
-    HG_ASSERT(!s_recording);
+    HG_ASSERT(!s_recording_frame);
 
     for (usize i = 0; i < HG_ARRAY_SIZE(s_image_available_semaphores); ++i) {
         HG_ASSERT(s_image_available_semaphores[i] != VK_NULL_HANDLE);
@@ -2022,6 +2020,7 @@ typedef struct HgShader {
     VkPipelineLayout layout;
     VkPipeline pipeline;
     u32 descriptor_layout_count;
+    VkPipelineBindPoint bind_point;
     VkDescriptorSetLayout descriptor_layouts[];
 } HgShader;
 
@@ -2058,6 +2057,35 @@ static VkDescriptorSetLayout hg_create_descriptor_set_layout(
     }
 
     return layout;
+}
+
+static void hg_create_descriptor_set_layouts(
+    VkDescriptorSetLayout* layouts,
+    HgDescriptorSet* descriptor_sets,
+    u32 descriptor_set_count,
+    VkPipelineStageFlags stage_flags
+) {
+#define HG_MAX_DESCRIPTOR_BINDINGS 32
+    for (u32 i = 0; i < descriptor_set_count; ++i) {
+        HgDescriptorSet* set = &descriptor_sets[i];
+        HG_ASSERT(set->binding_count < HG_MAX_DESCRIPTOR_BINDINGS);
+
+        VkDescriptorSetLayoutBinding bindings[HG_MAX_DESCRIPTOR_BINDINGS];
+        for (u32 j = 0; j < set->binding_count; ++j) {
+            bindings[j] = (VkDescriptorSetLayoutBinding){
+                .binding = j,
+                .descriptorType = hg_descriptor_type_to_vk(set->bindings[j].descriptor_type),
+                .descriptorCount = set->bindings[j].descriptor_count,
+                .stageFlags = stage_flags,
+            };
+        }
+
+        layouts[i] = hg_create_descriptor_set_layout(
+            bindings,
+            descriptor_sets[i].binding_count
+        );
+    }
+#undef HG_MAX_DESCRIPTOR_BINDINGS
 }
 
 static VkPipelineLayout hg_create_pipeline_layout(
@@ -2175,29 +2203,15 @@ HgShader* hg_shader_create(const HgShaderConfig* config) {
     );
     *shader = (HgShader){
         .descriptor_layout_count = config->descriptor_set_count,
+        .bind_point = VK_PIPELINE_BIND_POINT_GRAPHICS,
     };
 
-#define HG_MAX_DESCRIPTOR_BINDINGS 32
-    for (u32 i = 0; i < config->descriptor_set_count; ++i) {
-        HgDescriptorSet* set = &config->descriptor_sets[i];
-        HG_ASSERT(set->binding_count < HG_MAX_DESCRIPTOR_BINDINGS);
-
-        VkDescriptorSetLayoutBinding bindings[HG_MAX_DESCRIPTOR_BINDINGS];
-        for (u32 j = 0; j < set->binding_count; ++j) {
-            bindings[j] = (VkDescriptorSetLayoutBinding){
-                .binding = j,
-                .descriptorType = hg_descriptor_type_to_vk(set->bindings[j].descriptor_type),
-                .descriptorCount = set->bindings[j].descriptor_count,
-                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-            };
-        }
-
-        shader->descriptor_layouts[i] = hg_create_descriptor_set_layout(
-            bindings,
-            config->descriptor_sets[i].binding_count
-        );
-    }
-#undef HG_MAX_DESCRIPTOR_BINDINGS
+    hg_create_descriptor_set_layouts(
+        shader->descriptor_layouts,
+        config->descriptor_sets,
+        config->descriptor_set_count,
+        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT
+    );
 
     VkPushConstantRange push_constant = {
         .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -2414,29 +2428,15 @@ HgShader* hg_compute_shader_create(const HgComputeShaderConfig* config) {
     );
     *shader = (HgShader){
         .descriptor_layout_count = config->descriptor_set_count,
+        .bind_point = VK_PIPELINE_BIND_POINT_COMPUTE,
     };
 
-#define HG_MAX_DESCRIPTOR_BINDINGS 32
-    for (u32 i = 0; i < config->descriptor_set_count; ++i) {
-        HgDescriptorSet* set = &config->descriptor_sets[i];
-        HG_ASSERT(set->binding_count < HG_MAX_DESCRIPTOR_BINDINGS);
-
-        VkDescriptorSetLayoutBinding bindings[HG_MAX_DESCRIPTOR_BINDINGS];
-        for (u32 j = 0; j < set->binding_count; ++j) {
-            bindings[j] = (VkDescriptorSetLayoutBinding){
-                .binding = j,
-                .descriptorType = hg_descriptor_type_to_vk(set->bindings[j].descriptor_type),
-                .descriptorCount = set->bindings[j].descriptor_count,
-                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-            };
-        }
-
-        shader->descriptor_layouts[i] = hg_create_descriptor_set_layout(
-            bindings,
-            config->descriptor_sets[i].binding_count
-        );
-    }
-#undef HG_MAX_DESCRIPTOR_BINDINGS
+    hg_create_descriptor_set_layouts(
+        shader->descriptor_layouts,
+        config->descriptor_sets,
+        config->descriptor_set_count,
+        VK_SHADER_STAGE_COMPUTE_BIT
+    );
 
     VkPushConstantRange push_constant = {
         .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
@@ -2506,15 +2506,6 @@ static VkDescriptorPool hg_current_descriptor_pool(void) {
     return s_descriptor_pools[s_current_frame_index];
 }
 
-static VkCommandBuffer hg_current_cmd(void) {
-    if (s_recording)
-        return s_command_buffers[s_current_frame_index];
-    else if (s_recording_compute)
-        return s_compute_cmd;
-    else
-        HG_ERROR("Must begin rendering or compute before acquring command buffer");
-}
-
 static VkImage hg_current_image(void) {
     return s_swapchain_images[s_current_image_index];
 }
@@ -2539,8 +2530,8 @@ static void hg_reset_fence(VkFence fence) {
 }
 
 HgError hg_frame_begin(void) {
-    HG_ASSERT(!s_recording);
-    HG_ASSERT(!s_recording_compute);
+    HG_ASSERT(!s_recording_frame);
+    HG_ASSERT(s_current_cmd == VK_NULL_HANDLE);
 
     s_current_frame_index = (s_current_frame_index + 1) % HG_SWAPCHAIN_MAX_FRAMES_IN_FLIGHT;
 
@@ -2576,14 +2567,13 @@ HgError hg_frame_begin(void) {
         default: HG_ERROR("Unexpected Vulkan error");
     }
 
-    s_recording = true;
-    VkCommandBuffer cmd = hg_current_cmd();
+    s_current_cmd = s_command_buffers[s_current_frame_index];
 
     const VkCommandBufferBeginInfo begin_info = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
     };
-    VkResult begin_result = vkBeginCommandBuffer(cmd, &begin_info);
+    VkResult begin_result = vkBeginCommandBuffer(s_current_cmd, &begin_info);
     switch (begin_result) {
         case VK_SUCCESS: break;
         case VK_ERROR_OUT_OF_HOST_MEMORY: HG_ERROR("Vulkan ran out of host memory");
@@ -2591,17 +2581,17 @@ HgError hg_frame_begin(void) {
         default: HG_ERROR("Unexpected Vulkan error");
     }
 
+    s_recording_frame = true;
+
     return HG_SUCCESS;
 }
 
 HgError hg_frame_end(void) {
-    HG_ASSERT(s_recording);
-    HG_ASSERT(!s_recording_compute);
+    HG_ASSERT(s_recording_frame);
+    HG_ASSERT(s_current_cmd != VK_NULL_HANDLE);
     if (s_recording_pass)
         hg_renderpass_end();
     HG_ASSERT(s_previous_target != NULL);
-
-    VkCommandBuffer cmd = hg_current_cmd();
 
     VkImageMemoryBarrier2 barriers[] = {{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -2623,7 +2613,7 @@ HgError hg_frame_end(void) {
     }};
     s_previous_target->layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 
-    vkCmdPipelineBarrier2(cmd, &(VkDependencyInfo){
+    vkCmdPipelineBarrier2(s_current_cmd, &(VkDependencyInfo){
         .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
         .imageMemoryBarrierCount = HG_ARRAY_SIZE(barriers),
         .pImageMemoryBarriers = barriers,
@@ -2647,7 +2637,7 @@ HgError hg_frame_end(void) {
         .array_layer = 0,
         .layer_count = 1,
     };
-    hg_blit_image(cmd, &blit_dst, &blit_src, VK_FILTER_NEAREST);
+    hg_blit_image(s_current_cmd, &blit_dst, &blit_src, VK_FILTER_NEAREST);
 
     s_previous_target = NULL;
     s_previous_depth_buffer = NULL;
@@ -2661,13 +2651,13 @@ HgError hg_frame_end(void) {
         .image = hg_current_image(),
         .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
     };
-    vkCmdPipelineBarrier2(cmd, &(VkDependencyInfo){
+    vkCmdPipelineBarrier2(s_current_cmd, &(VkDependencyInfo){
         .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
         .imageMemoryBarrierCount = 1,
         .pImageMemoryBarriers = &final_barrier,
     });
 
-    VkResult end_result = vkEndCommandBuffer(cmd);
+    VkResult end_result = vkEndCommandBuffer(s_current_cmd);
     switch (end_result) {
         case VK_SUCCESS: break;
         case VK_ERROR_OUT_OF_HOST_MEMORY: HG_ERROR("Vulkan ran out of host memory");
@@ -2675,7 +2665,8 @@ HgError hg_frame_end(void) {
         case VK_ERROR_INVALID_VIDEO_STD_PARAMETERS_KHR: HG_ERROR("Vulkan invalid video parameters");
         default: HG_ERROR("Unexpected Vulkan error");
     }
-    s_recording = false;
+    s_current_cmd = VK_NULL_HANDLE;
+    s_recording_frame = false;
 
     VkSubmitInfo submit_info = {
         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -2725,8 +2716,6 @@ void hg_renderpass_begin(HgTexture* target, HgTexture* depth_buffer) {
     s_recording_pass = true;
 
     HG_ASSERT(target != NULL);
-
-    VkCommandBuffer cmd = hg_current_cmd();
 
     VkImageMemoryBarrier2 barriers[4];
     u32 barrier_count = 0;
@@ -2798,7 +2787,7 @@ void hg_renderpass_begin(HgTexture* target, HgTexture* depth_buffer) {
     }
 
     if (barrier_count > 0) {
-        vkCmdPipelineBarrier2(cmd, &(VkDependencyInfo){
+        vkCmdPipelineBarrier2(s_current_cmd, &(VkDependencyInfo){
             .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
             .imageMemoryBarrierCount = barrier_count,
             .pImageMemoryBarriers = barriers,
@@ -2835,14 +2824,14 @@ void hg_renderpass_begin(HgTexture* target, HgTexture* depth_buffer) {
             : NULL,
     };
 
-    vkCmdBeginRendering(cmd, &render_info);
+    vkCmdBeginRendering(s_current_cmd, &render_info);
 
-    vkCmdSetViewport(cmd, 0, 1, &(VkViewport){
+    vkCmdSetViewport(s_current_cmd, 0, 1, &(VkViewport){
         0.0f, 0.0f,
         (f32)target->width, (f32)target->height,
         0.0f, 1.0f,
     });
-    vkCmdSetScissor(cmd, 0, 1, &(VkRect2D){
+    vkCmdSetScissor(s_current_cmd, 0, 1, &(VkRect2D){
         {0, 0},
         {target->width, target->height}
     });
@@ -2853,22 +2842,15 @@ void hg_renderpass_begin(HgTexture* target, HgTexture* depth_buffer) {
 
 void hg_renderpass_end(void) {
     HG_ASSERT(s_recording_pass);
-    vkCmdEndRendering(hg_current_cmd());
+
+    vkCmdEndRendering(s_current_cmd);
     s_recording_pass = false;
 }
 
 void hg_shader_bind(HgShader* shader) {
     HG_ASSERT(shader != NULL);
 
-    VkPipelineBindPoint bind_point;
-    if (s_recording)
-        bind_point = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    else if (s_recording_compute)
-        bind_point = VK_PIPELINE_BIND_POINT_COMPUTE;
-    else
-        HG_ERROR("Must begin rendering or compute before binding shader");
-
-    vkCmdBindPipeline(hg_current_cmd(), bind_point, shader->pipeline);
+    vkCmdBindPipeline(s_current_cmd, shader->bind_point, shader->pipeline);
     s_current_shader = shader;
 }
 
@@ -2956,69 +2938,62 @@ void hg_bind_descriptor_set(u32 set_index, HgDescriptor* descriptors, u32 descri
         }
     }
 
-    VkCommandBuffer cmd = hg_current_cmd();
-
-    VkPipelineBindPoint bind_point;
-    if (s_recording)
-        bind_point = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    else if (s_recording_compute)
-        bind_point = VK_PIPELINE_BIND_POINT_COMPUTE;
-    else
-        HG_ERROR("Must begin rendering or compute before binding descriptor sets");
-
-    vkCmdBindDescriptorSets(cmd, bind_point, s_current_shader->layout, set_index, 1, &descriptor_set, 0, NULL);
+    vkCmdBindDescriptorSets(
+        s_current_cmd,
+        s_current_shader->bind_point,
+        s_current_shader->layout,
+        set_index,
+        1, &descriptor_set,
+        0, NULL
+    );
 }
 
 void hg_draw(HgBuffer* vertex_buffer, u32 vertex_count, void* push_data, u32 push_size) {
     HG_ASSERT(vertex_count > 0);
 
-    VkCommandBuffer cmd = hg_current_cmd();
-
     if (push_size > 0) {
         HG_ASSERT(push_data != NULL);
-        vkCmdPushConstants(cmd,
+        vkCmdPushConstants(s_current_cmd,
             s_current_shader->layout,
             VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
             0, push_size, push_data
         );
     }
     if (vertex_buffer != NULL)
-        vkCmdBindVertexBuffers(cmd, 0, 1, &vertex_buffer->handle, &(VkDeviceSize){0});
-    vkCmdDraw(cmd, vertex_count, 1, 0, 0);
+        vkCmdBindVertexBuffers(s_current_cmd, 0, 1, &vertex_buffer->handle, &(VkDeviceSize){0});
+    vkCmdDraw(s_current_cmd, vertex_count, 1, 0, 0);
 }
 
 void hg_draw_indexed(HgBuffer* vertex_buffer, HgBuffer* index_buffer, void* push_data, u32 push_size) {
     HG_ASSERT(index_buffer != NULL);
 
-    VkCommandBuffer cmd = hg_current_cmd();
-
     if (push_size > 0) {
         HG_ASSERT(push_data != NULL);
-        vkCmdPushConstants(cmd,
+        vkCmdPushConstants(s_current_cmd,
             s_current_shader->layout,
             VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
             0, push_size, push_data
         );
     }
     if (vertex_buffer != NULL)
-        vkCmdBindVertexBuffers(cmd, 0, 1, &vertex_buffer->handle, &(VkDeviceSize){0});
-    vkCmdBindIndexBuffer(cmd, index_buffer->handle, 0, VK_INDEX_TYPE_UINT32);
-    vkCmdDrawIndexed(cmd, (u32)(index_buffer->size / sizeof(u32)), 1, 0, 0, 0);
+        vkCmdBindVertexBuffers(s_current_cmd, 0, 1, &vertex_buffer->handle, &(VkDeviceSize){0});
+    vkCmdBindIndexBuffer(s_current_cmd, index_buffer->handle, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdDrawIndexed(s_current_cmd, (u32)(index_buffer->size / sizeof(u32)), 1, 0, 0, 0);
 }
 
-void hg_compute_begin(void) {
-    HG_ASSERT(!s_recording);
-    HG_ASSERT(!s_recording_compute);
-    s_compute_cmd = hg_begin_single_time_cmd();
-    s_recording_compute = true;
+void hg_commands_begin(void) {
+    HG_ASSERT(!s_recording_frame);
+    HG_ASSERT(s_current_cmd == VK_NULL_HANDLE);
+
+    s_current_cmd = hg_begin_single_time_cmd();
 }
 
-void hg_compute_end(void) {
-    HG_ASSERT(!s_recording);
-    HG_ASSERT(s_recording_compute);
-    hg_end_single_time_cmd(s_compute_cmd);
-    s_compute_cmd = VK_NULL_HANDLE;
-    s_recording_compute = false;
+void hg_commands_end(void) {
+    HG_ASSERT(!s_recording_frame);
+    HG_ASSERT(s_current_cmd != VK_NULL_HANDLE);
+
+    hg_end_single_time_cmd(s_current_cmd);
+    s_current_cmd = VK_NULL_HANDLE;
 }
 
 void hg_compute_dispatch(u32 group_count_x, u32 group_count_y, u32 group_count_z) {
@@ -3026,6 +3001,6 @@ void hg_compute_dispatch(u32 group_count_x, u32 group_count_y, u32 group_count_z
     HG_ASSERT(group_count_y > 0);
     HG_ASSERT(group_count_z > 0);
 
-    vkCmdDispatch(hg_current_cmd(), group_count_x, group_count_y, group_count_z);
+    vkCmdDispatch(s_current_cmd, group_count_x, group_count_y, group_count_z);
 }
 

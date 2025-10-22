@@ -37,7 +37,7 @@ int main(void) {
         .memory_type = HG_GPU_MEMORY_TYPE_DEVICE_LOCAL,
     });
 
-    hg_compute_begin();
+    hg_commands_begin();
 
     hg_shader_bind(shader);
     hg_bind_descriptor_set(0, &(HgDescriptor){
@@ -47,7 +47,7 @@ int main(void) {
     }, 1);
     hg_compute_dispatch(8, 8, 1);
 
-    hg_compute_end();
+    hg_commands_end();
 
     u32* dst = hg_heap_alloc(256 * 256 * 4);
     hg_buffer_read(pixels, 0, sizeof(u32) * 256 * 256, dst);
