@@ -1830,9 +1830,10 @@ static void hg_write_image(HgTexture* dst, const void* src, VkImageLayout layout
             .imageMemoryBarrierCount = 1,
             .pImageMemoryBarriers = &post_barrier,
         });
-        hg_buffer_destroy(staging_buffer);
 
         hg_end_single_time_cmd(cmd);
+
+        hg_buffer_destroy(staging_buffer);
     } else {
         VkCommandBuffer cmd = hg_begin_single_time_cmd();
 
@@ -2539,7 +2540,7 @@ static void hg_reset_fence(VkFence fence) {
 
 HgError hg_frame_begin(void) {
     HG_ASSERT(!s_recording);
-    HG_ASSERT(hg_current_cmd() != VK_NULL_HANDLE);
+    HG_ASSERT(!s_recording_compute);
 
     s_current_frame_index = (s_current_frame_index + 1) % HG_SWAPCHAIN_MAX_FRAMES_IN_FLIGHT;
 
@@ -2575,6 +2576,7 @@ HgError hg_frame_begin(void) {
         default: HG_ERROR("Unexpected Vulkan error");
     }
 
+    s_recording = true;
     VkCommandBuffer cmd = hg_current_cmd();
 
     const VkCommandBufferBeginInfo begin_info = {
@@ -2588,13 +2590,13 @@ HgError hg_frame_begin(void) {
         case VK_ERROR_OUT_OF_DEVICE_MEMORY: HG_ERROR("Vulkan ran out of device memory");
         default: HG_ERROR("Unexpected Vulkan error");
     }
-    s_recording = true;
 
-    return true;
+    return HG_SUCCESS;
 }
 
 HgError hg_frame_end(void) {
     HG_ASSERT(s_recording);
+    HG_ASSERT(!s_recording_compute);
     if (s_recording_pass)
         hg_renderpass_end();
     HG_ASSERT(s_previous_target != NULL);
@@ -2706,7 +2708,7 @@ HgError hg_frame_end(void) {
     const VkResult present_result = vkQueuePresentKHR(s_queue, &present_info);
 
     switch (present_result) {
-        case VK_SUCCESS: return true;
+        case VK_SUCCESS: return HG_SUCCESS;
         case VK_SUBOPTIMAL_KHR: return HG_ERROR_WINDOW_INVALID;
         case VK_ERROR_OUT_OF_DATE_KHR: return HG_ERROR_WINDOW_INVALID;
         case VK_ERROR_OUT_OF_HOST_MEMORY: HG_ERROR("Vulkan ran out of host memory");
@@ -3005,12 +3007,14 @@ void hg_draw_indexed(HgBuffer* vertex_buffer, HgBuffer* index_buffer, void* push
 }
 
 void hg_compute_begin(void) {
+    HG_ASSERT(!s_recording);
     HG_ASSERT(!s_recording_compute);
     s_compute_cmd = hg_begin_single_time_cmd();
     s_recording_compute = true;
 }
 
 void hg_compute_end(void) {
+    HG_ASSERT(!s_recording);
     HG_ASSERT(s_recording_compute);
     hg_end_single_time_cmd(s_compute_cmd);
     s_compute_cmd = VK_NULL_HANDLE;

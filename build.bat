@@ -3,11 +3,7 @@ setlocal enabledelayedexpansion
 
 set starttime=%time%
 
-if "%1"=="release" (
-    set CFLAGS=/nologo /O2 /DNDEBUG /std:c11 /WX /W3 /experimental:c11atomics
-) else (
-    set CFLAGS=/nologo /Zi /Od /std:c11 /WX /W3 /experimental:c11atomics
-)
+set CFLAGS=/nologo /Zi /Od /std:c11 /WX /W3 /experimental:c11atomics
 
 set INCLUDES=^
     /I include^
@@ -19,17 +15,10 @@ set INCLUDES=^
     /I vendor\welder^
     /I %VULKAN_SDK%\Include
 
-if "%1"=="release" (
-    set LIBS=^
-        build\hurdy_gurdy.lib^
-        build\SDL\Release\SDL3.lib^
-        %VULKAN_SDK%\Lib\vulkan-1.lib
-) else (
-    set LIBS=^
-        build\hurdy_gurdy.lib^
-        build\SDL\Debug\SDL3.lib^
-        %VULKAN_SDK%\Lib\vulkan-1.lib
-)
+set LIBS=^
+    build\hurdy_gurdy.lib^
+    build\SDL\Debug\SDL3.lib^
+    %VULKAN_SDK%\Lib\vulkan-1.lib
 
 if not exist build mkdir build
 

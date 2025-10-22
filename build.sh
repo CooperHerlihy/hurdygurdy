@@ -2,12 +2,7 @@
 
 START_TIME=$(date +%s.%N)
 
-if [ "$1" == "release" ]; then
-    CFLAGS="-O3 -DNDEBUG -std=c11 -Werror -Wall -Wextra -Wconversion -Wshadow -pedantic"
-else
-    CFLAGS="-g -O0 -fsanitize=undefined -std=c11 -Werror -Wall -Wextra -Wconversion -Wshadow -pedantic"
-fi
-
+CFLAGS="-g -O0 -fsanitize=undefined -std=c11 -Werror -Wall -Wextra -Wconversion -Wshadow -pedantic"
 INCLUDES="-Iinclude -Ivendor/SDL/include -Ivendor/VulkanMemoryAllocator/include -Ivendor/stb -Ivendor/cgltf -Ivendor/mikktspace -Ivendor/welder"
 LIBS="-Lbuild -Lbuild/SDL -lhurdy_gurdy -lSDL3 -lvulkan -lc -lm"
 
@@ -61,7 +56,7 @@ echo "Compiling demo/main.c..."
 cc $CFLAGS -Iinclude -Ivendor/SDL/include $LIBS -o build/demo.o -c demo/main.c
 
 echo "Linking..."
-c++ build/demo.o $CFLAGS -std=c++20 $LIBS -o build/out
+c++ build/demo.o $CFLAGS -std=c++20 $LIBS -o build/out -Wl,-rpath=./build/SDL
 
 END_TIME=$(date +%s.%N)
 printf "Build complete: %.6f seconds\n" "$(echo "$END_TIME - $START_TIME" | bc)"

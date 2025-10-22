@@ -28,18 +28,6 @@ struct Space {
 };
 
 void main() {
-    // vec4 model_space = vec4(in_pos, 1.0);
-    // vec4 world_space = p_model * model_space;
-    // vec4 view_space = u_view * world_space;
-    //
-    // vec4 position = p_model * vec4(in_pos, 1.0);
-    // f_pos = position.xyz;
-    // f_normal = in_normal;
-    // f_tangent = in_tangent;
-    // f_uv = in_uv;
-    //
-    // gl_Position = u_proj * u_view * position;
-
     const mat4 mv = u_view * p_model;
     const mat3 imv = mat3(transpose(inverse(mv)));
     const vec4 pos = mv * vec4(in_pos, 1.0);
