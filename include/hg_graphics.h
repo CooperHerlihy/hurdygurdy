@@ -33,7 +33,7 @@ HgBuffer* hg_buffer_create(const HgBufferConfig* config);
 void hg_buffer_destroy(HgBuffer* buffer);
 
 void hg_buffer_write(HgBuffer* dst, usize offset, const void* src, usize size);
-void hg_buffer_read(const HgBuffer* src, usize offset, usize size, void* dst);
+void hg_buffer_read(void* dst, usize size, const HgBuffer* src, usize offset);
 
 typedef struct HgTexture HgTexture;
 
@@ -55,7 +55,7 @@ HgTexture* hg_texture_create(const HgTextureConfig* config);
 void hg_texture_destroy(HgTexture* texture);
 
 void hg_texture_write(HgTexture* dst, const void* src, HgTextureLayout layout);
-void hg_texture_read(HgTexture* src, void* dst, HgTextureLayout layout);
+void hg_texture_read(void* dst, HgTexture* src, HgTextureLayout layout);
 
 u32 hg_get_max_mip_count(u32 width, u32 height, u32 depth);
 void hg_texture_generate_mipmaps(HgTexture* texture, HgTextureLayout layout);
@@ -120,10 +120,13 @@ HgShader* hg_compute_shader_create(const HgComputeShaderConfig* config);
 
 void hg_shader_destroy(HgShader* shader);
 
-HgError hg_frame_begin(void);
-HgError hg_frame_end(void);
+void hg_commands_begin(void);
+void hg_commands_end(void);
 
-void hg_renderpass_begin(HgTexture* target, HgTexture* depth_buffer);
+HgError hg_frame_begin(void);
+HgError hg_frame_end(HgTexture* framebuffer);
+
+void hg_renderpass_begin(HgTexture* target, HgTexture* depth_buffer, bool clear_target, bool clear_depth);
 void hg_renderpass_end(void);
 
 void hg_shader_bind(HgShader* shader);
@@ -139,13 +142,9 @@ typedef struct HgDescriptor {
 } HgDescriptor;
 
 void hg_bind_descriptor_set(u32 set_index, HgDescriptor* descriptors, u32 descriptor_count);
+void hg_bind_push_constant(void* data, u32 size);
 
-void hg_draw_indexed(HgBuffer* vertex_buffer, HgBuffer* index_buffer, void* push_data, u32 push_size);
-void hg_draw(HgBuffer* vertex_buffer, u32 count, void* push_data, u32 push_size);
-
-void hg_commands_begin(void);
-void hg_commands_end(void);
-
+void hg_draw(HgBuffer* vertex_buffer, HgBuffer* index_buffer, u32 count);
 void hg_compute_dispatch(u32 group_count_x, u32 group_count_y, u32 group_count_z);
 
 #endif // HG_GRAPHICS_H

@@ -224,7 +224,7 @@ void hg_2d_renderer_queue_sprite(HgTexture* texture, HgVec2 offset, HgVec2 exten
 }
 
 void hg_2d_renderer_draw(HgTexture* target, HgTexture* depth_buffer) {
-    hg_renderpass_begin(target, depth_buffer);
+    hg_renderpass_begin(target, depth_buffer, true, true);
 
     hg_shader_bind(s_sprite_shader);
 
@@ -252,7 +252,8 @@ void hg_2d_renderer_draw(HgTexture* target, HgTexture* depth_buffer) {
             .offset = ticket->offset,
             .size = ticket->size,
         };
-        hg_draw_indexed(s_quad_vertex_buffer, s_quad_index_buffer, &push_data, sizeof(push_data));
+        hg_bind_push_constant(&push_data, sizeof(push_data));
+        hg_draw(s_quad_vertex_buffer, s_quad_index_buffer, 0);
     }
 
     hg_shader_unbind();

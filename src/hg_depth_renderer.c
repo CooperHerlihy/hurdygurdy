@@ -92,7 +92,7 @@ void hg_depth_render_draw(HgTexture* target, HgTexture* depth_buffer) {
     HG_ASSERT(target != NULL);
     HG_ASSERT(depth_buffer != NULL);
 
-    hg_renderpass_begin(target, NULL);
+    hg_renderpass_begin(target, NULL, false, false);
 
     hg_shader_bind(s_shader);
 
@@ -103,7 +103,7 @@ void hg_depth_render_draw(HgTexture* target, HgTexture* depth_buffer) {
     }};
     hg_bind_descriptor_set(0, depth_descriptor_set, HG_ARRAY_SIZE(depth_descriptor_set));
 
-    hg_draw(NULL, 3, NULL, 0);
+    hg_draw(NULL, NULL, 3);
 
     hg_renderpass_end();
 }

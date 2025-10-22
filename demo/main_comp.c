@@ -50,7 +50,7 @@ int main(void) {
     hg_commands_end();
 
     u32* dst = hg_heap_alloc(256 * 256 * 4);
-    hg_buffer_read(pixels, 0, sizeof(u32) * 256 * 256, dst);
+    hg_buffer_read(dst, sizeof(u32) * 256 * 256, pixels, 0);
     hg_file_save_image("build/test.png", dst, 256, 256);
     hg_heap_free(dst, 256 * 256 * 4);
 

@@ -86,7 +86,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     u32 window_width, window_height;
     hg_window_get_size(&window_width, &window_height);
 
-    // hg_3d_renderer_target_create(window_width, window_height, &target, &depth_buffer);
+    // hg_3d_renderer_target_create(window_width, window_height, &s_target, &s_depth_buffer);
     hg_depth_renderer_target_create(window_width, window_height, &s_target, &s_depth_buffer);
 
     s_camera_fov = (f32)HG_PI / 3.0f;
@@ -287,7 +287,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 
     // hg_depth_render_draw(s_target, s_depth_buffer);
 
-    HgError end_result = hg_frame_end();
+    HgError end_result = hg_frame_end(s_target);
     if (end_result != HG_SUCCESS) {
         HG_DEBUG("Failed to end frame");
         return SDL_APP_CONTINUE;

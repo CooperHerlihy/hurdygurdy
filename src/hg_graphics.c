@@ -1222,13 +1222,18 @@ void hg_buffer_write(HgBuffer* dst, usize offset, const void* src, usize size) {
     hg_buffer_destroy(staging_buffer);
 }
 
-void hg_buffer_read(const HgBuffer* src, usize offset, usize size, void* dst) {
+void hg_buffer_read(void* dst, usize size, const HgBuffer* src, usize offset) {
+    HG_ASSERT(dst != NULL);
+    HG_ASSERT(src != NULL);
     HG_ASSERT(src->allocation != NULL);
     HG_ASSERT(src->handle != NULL);
-    HG_ASSERT(dst != NULL);
-    HG_ASSERT(size != 0);
     if (src->memory_type == HG_GPU_MEMORY_TYPE_LINEAR_ACCESS)
         HG_ASSERT(offset == 0);
+
+    if (size == 0)
+        return;
+    if (size == SIZE_MAX)
+        size = src->size - offset;
 
     if (src->memory_type == HG_GPU_MEMORY_TYPE_RANDOM_ACCESS|| src->memory_type == HG_GPU_MEMORY_TYPE_LINEAR_ACCESS) {
         VkResult copy_result = vmaCopyAllocationToMemory(s_allocator, src->allocation, offset, dst, size);
@@ -1252,7 +1257,7 @@ void hg_buffer_read(const HgBuffer* src, usize offset, usize size, void* dst) {
     vkCmdCopyBuffer(cmd, src->handle, staging_buffer->handle, 1, &(VkBufferCopy){offset, 0, size});
     hg_end_single_time_cmd(cmd);
 
-    hg_buffer_read(staging_buffer, 0, size, dst);
+    hg_buffer_read(dst, size, staging_buffer, 0);
 
     hg_buffer_destroy(staging_buffer);
 }
@@ -1861,11 +1866,79 @@ void hg_texture_write(HgTexture* dst, const void* src, HgTextureLayout layout) {
     }
 }
 
-void hg_texture_read(HgTexture* src, void* dst, HgTextureLayout layout) {
-    (void)src;
-    (void)dst;
-    (void)layout;
-    HG_ERROR("hg_texture_read not implemented"); // implement : TODO
+static void hg_copy_image_to_buffer(VkCommandBuffer cmd, HgBuffer* dst, HgTexture* src) {
+    HG_ASSERT(dst->allocation != NULL);
+    HG_ASSERT(dst->handle != NULL);
+    HG_ASSERT(src->allocation != NULL);
+    HG_ASSERT(src->handle != NULL);
+
+    vkCmdCopyImageToBuffer2(cmd, &(VkCopyImageToBufferInfo2){
+        .sType = VK_STRUCTURE_TYPE_COPY_IMAGE_TO_BUFFER_INFO_2,
+        .srcImage = src->handle,
+        .srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        .dstBuffer = dst->handle,
+        .regionCount = 1,
+        .pRegions = &(VkBufferImageCopy2){
+            .sType = VK_STRUCTURE_TYPE_BUFFER_IMAGE_COPY_2,
+            .imageSubresource = {src->aspect, 0, 0, 1},
+            .imageExtent = {src->width, src->height, src->depth},
+        },
+    });
+}
+
+void hg_texture_read(void* dst, HgTexture* src, HgTextureLayout layout) {
+    HG_ASSERT(src->handle != VK_NULL_HANDLE);
+    HG_ASSERT(dst != NULL);
+    HG_ASSERT(layout != HG_IMAGE_LAYOUT_UNDEFINED);
+
+    u32 pixel_size = hg_format_size(hg_format_from_vk(src->format));
+    HG_ASSERT(pixel_size > 0);
+
+    HgBuffer* staging_buffer = hg_buffer_create(&(HgBufferConfig){
+        .size = src->width * src->height * src->depth * pixel_size,
+        .usage = HG_BUFFER_USAGE_READ_WRITE_DST_BIT,
+        .memory_type = HG_GPU_MEMORY_TYPE_LINEAR_ACCESS,
+    });
+
+    VkCommandBuffer cmd = hg_begin_single_time_cmd();
+
+    VkImageMemoryBarrier2 pre_barrier = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        .dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT,
+        .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        .image = src->handle,
+        .subresourceRange = {src->aspect, 0, VK_REMAINING_MIP_LEVELS, 0, 1},
+    };
+    vkCmdPipelineBarrier2(cmd, &(VkDependencyInfo){
+        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .imageMemoryBarrierCount = 1,
+        .pImageMemoryBarriers = &pre_barrier,
+    });
+
+    hg_copy_image_to_buffer(cmd, staging_buffer, src);
+
+    VkImageMemoryBarrier2 post_barrier = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        .srcAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT,
+        .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        .newLayout = hg_texture_layout_to_vk(layout),
+        .image = src->handle,
+        .subresourceRange = {src->aspect, 0, VK_REMAINING_MIP_LEVELS, 0, 1},
+    };
+    vkCmdPipelineBarrier2(cmd, &(VkDependencyInfo){
+        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .imageMemoryBarrierCount = 1,
+        .pImageMemoryBarriers = &post_barrier,
+    });
+
+    hg_end_single_time_cmd(cmd);
+
+    src->layout = hg_texture_layout_to_vk(layout);
+
+    hg_buffer_read(dst, staging_buffer->size, staging_buffer, 0);
+    hg_buffer_destroy(staging_buffer);
 }
 
 u32 hg_get_max_mip_count(u32 width, u32 height, u32 depth) {
@@ -2529,6 +2602,21 @@ static void hg_reset_fence(VkFence fence) {
     }
 }
 
+void hg_commands_begin(void) {
+    HG_ASSERT(!s_recording_frame);
+    HG_ASSERT(s_current_cmd == VK_NULL_HANDLE);
+
+    s_current_cmd = hg_begin_single_time_cmd();
+}
+
+void hg_commands_end(void) {
+    HG_ASSERT(!s_recording_frame);
+    HG_ASSERT(s_current_cmd != VK_NULL_HANDLE);
+
+    hg_end_single_time_cmd(s_current_cmd);
+    s_current_cmd = VK_NULL_HANDLE;
+}
+
 HgError hg_frame_begin(void) {
     HG_ASSERT(!s_recording_frame);
     HG_ASSERT(s_current_cmd == VK_NULL_HANDLE);
@@ -2586,23 +2674,69 @@ HgError hg_frame_begin(void) {
     return HG_SUCCESS;
 }
 
-HgError hg_frame_end(void) {
+HgError hg_frame_end(HgTexture* framebuffer) {
     HG_ASSERT(s_recording_frame);
     HG_ASSERT(s_current_cmd != VK_NULL_HANDLE);
     if (s_recording_pass)
         hg_renderpass_end();
-    HG_ASSERT(s_previous_target != NULL);
+
+    if (framebuffer == NULL) {
+        VkResult end_result = vkEndCommandBuffer(s_current_cmd);
+        switch (end_result) {
+            case VK_SUCCESS: break;
+            case VK_ERROR_OUT_OF_HOST_MEMORY: HG_ERROR("Vulkan ran out of host memory");
+            case VK_ERROR_OUT_OF_DEVICE_MEMORY: HG_ERROR("Vulkan ran out of device memory");
+            case VK_ERROR_INVALID_VIDEO_STD_PARAMETERS_KHR: HG_ERROR("Vulkan invalid video parameters");
+            default: HG_ERROR("Unexpected Vulkan error");
+        }
+        s_current_cmd = VK_NULL_HANDLE;
+        s_recording_frame = false;
+
+        VkSubmitInfo submit_info = {
+            .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+            .waitSemaphoreCount = 1,
+            .pWaitSemaphores = &s_image_available_semaphores[s_current_frame_index],
+            .pWaitDstStageMask = &(VkPipelineStageFlags){VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT},
+            .commandBufferCount = 1,
+            .pCommandBuffers = &s_command_buffers[s_current_frame_index],
+            .signalSemaphoreCount = 1,
+            .pSignalSemaphores = &s_ready_to_present_semaphores[s_current_image_index],
+        };
+
+        VkResult submit_result = vkQueueSubmit(s_queue, 1, &submit_info, hg_is_frame_finished());
+        switch (submit_result) {
+            case VK_SUCCESS: break;
+            case VK_ERROR_OUT_OF_HOST_MEMORY: HG_ERROR("Vulkan ran out of host memory");
+            case VK_ERROR_OUT_OF_DEVICE_MEMORY: HG_ERROR("Vulkan ran out of device memory");
+            case VK_ERROR_DEVICE_LOST: HG_ERROR("Vulkan device lost");
+            default: HG_ERROR("Unexpected Vulkan error");
+        }
+
+        return HG_SUCCESS;
+    }
 
     VkImageMemoryBarrier2 barriers[] = {{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-        .srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+        .srcStageMask = framebuffer->layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+                      ? VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT
+                      : framebuffer->layout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+                      ? VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT
+                      : framebuffer->layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+                      ? VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT
+                      : VK_PIPELINE_STAGE_2_NONE,
+        .srcAccessMask = framebuffer->layout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+                       ? VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT
+                       : framebuffer->layout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+                       ? VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
+                       : framebuffer->layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+                       ? VK_ACCESS_2_SHADER_READ_BIT
+                       : VK_ACCESS_2_NONE,
         .dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
         .dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT,
-        .oldLayout = s_previous_target->layout,
+        .oldLayout = framebuffer->layout,
         .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        .image = s_previous_target->handle,
-        .subresourceRange = {s_previous_target->aspect, 0, 1, 0, 1},
+        .image = framebuffer->handle,
+        .subresourceRange = {framebuffer->aspect, 0, 1, 0, 1},
     }, {
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
         .dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
@@ -2611,7 +2745,7 @@ HgError hg_frame_end(void) {
         .image = hg_current_image(),
         .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
     }};
-    s_previous_target->layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    framebuffer->layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 
     vkCmdPipelineBarrier2(s_current_cmd, &(VkDependencyInfo){
         .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
@@ -2620,10 +2754,10 @@ HgError hg_frame_end(void) {
     });
 
     BlitConfig blit_src = {
-        .image = s_previous_target->handle,
-        .aspect = s_previous_target->aspect,
+        .image = framebuffer->handle,
+        .aspect = framebuffer->aspect,
         .begin = {0, 0, 0},
-        .end = {(i32)s_previous_target->width, (i32)s_previous_target->height, 1},
+        .end = {(i32)framebuffer->width, (i32)framebuffer->height, 1},
         .mip_level = 0,
         .array_layer = 0,
         .layer_count = 1,
@@ -2710,7 +2844,7 @@ HgError hg_frame_end(void) {
     }
 }
 
-void hg_renderpass_begin(HgTexture* target, HgTexture* depth_buffer) {
+void hg_renderpass_begin(HgTexture* target, HgTexture* depth_buffer, bool clear_target, bool clear_depth) {
     if (s_recording_pass)
         hg_renderpass_end();
     s_recording_pass = true;
@@ -2804,7 +2938,7 @@ void hg_renderpass_begin(HgTexture* target, HgTexture* depth_buffer) {
             .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
             .imageView = target->view,
             .imageLayout = target->layout,
-            .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR, // VK_ATTACHMENT_LOAD_OP_LOAD : TODO
+            .loadOp = clear_target ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
             .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
             .clearValue = (VkClearValue){
                 .color = {{0.0f, 0.0f, 0.0f, 0.0f}}
@@ -2815,7 +2949,7 @@ void hg_renderpass_begin(HgTexture* target, HgTexture* depth_buffer) {
                 .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
                 .imageView = depth_buffer->view,
                 .imageLayout = depth_buffer->layout,
-                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .loadOp = clear_depth ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
                 .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
                 .clearValue = (VkClearValue){
                     .depthStencil = {1.0f, 0},
@@ -2948,52 +3082,25 @@ void hg_bind_descriptor_set(u32 set_index, HgDescriptor* descriptors, u32 descri
     );
 }
 
-void hg_draw(HgBuffer* vertex_buffer, u32 vertex_count, void* push_data, u32 push_size) {
-    HG_ASSERT(vertex_count > 0);
+void hg_bind_push_constant(void* data, u32 size) {
+    HG_ASSERT(data != NULL);
+    HG_ASSERT(size > 0);
 
-    if (push_size > 0) {
-        HG_ASSERT(push_data != NULL);
-        vkCmdPushConstants(s_current_cmd,
-            s_current_shader->layout,
-            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-            0, push_size, push_data
-        );
-    }
+    VkShaderStageFlags stages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    if (s_current_shader->bind_point == VK_PIPELINE_BIND_POINT_COMPUTE)
+        stages = VK_SHADER_STAGE_COMPUTE_BIT;
+    vkCmdPushConstants(s_current_cmd, s_current_shader->layout, stages, 0, size, data);
+}
+
+void hg_draw(HgBuffer* vertex_buffer, HgBuffer* index_buffer, u32 vertex_count) {
     if (vertex_buffer != NULL)
         vkCmdBindVertexBuffers(s_current_cmd, 0, 1, &vertex_buffer->handle, &(VkDeviceSize){0});
-    vkCmdDraw(s_current_cmd, vertex_count, 1, 0, 0);
-}
-
-void hg_draw_indexed(HgBuffer* vertex_buffer, HgBuffer* index_buffer, void* push_data, u32 push_size) {
-    HG_ASSERT(index_buffer != NULL);
-
-    if (push_size > 0) {
-        HG_ASSERT(push_data != NULL);
-        vkCmdPushConstants(s_current_cmd,
-            s_current_shader->layout,
-            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-            0, push_size, push_data
-        );
+    if (index_buffer != NULL) {
+        vkCmdBindIndexBuffer(s_current_cmd, index_buffer->handle, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdDrawIndexed(s_current_cmd, (u32)(index_buffer->size / sizeof(u32)), 1, 0, 0, 0);
+    } else {
+        vkCmdDraw(s_current_cmd, vertex_count, 1, 0, 0);
     }
-    if (vertex_buffer != NULL)
-        vkCmdBindVertexBuffers(s_current_cmd, 0, 1, &vertex_buffer->handle, &(VkDeviceSize){0});
-    vkCmdBindIndexBuffer(s_current_cmd, index_buffer->handle, 0, VK_INDEX_TYPE_UINT32);
-    vkCmdDrawIndexed(s_current_cmd, (u32)(index_buffer->size / sizeof(u32)), 1, 0, 0, 0);
-}
-
-void hg_commands_begin(void) {
-    HG_ASSERT(!s_recording_frame);
-    HG_ASSERT(s_current_cmd == VK_NULL_HANDLE);
-
-    s_current_cmd = hg_begin_single_time_cmd();
-}
-
-void hg_commands_end(void) {
-    HG_ASSERT(!s_recording_frame);
-    HG_ASSERT(s_current_cmd != VK_NULL_HANDLE);
-
-    hg_end_single_time_cmd(s_current_cmd);
-    s_current_cmd = VK_NULL_HANDLE;
 }
 
 void hg_compute_dispatch(u32 group_count_x, u32 group_count_y, u32 group_count_z) {

@@ -19,20 +19,20 @@ typedef enum InputState {
     INPUT_STATE_LMOUSE = 0x40,
     INPUT_STATE_RMOUSE = 0x80,
 } InputState;
-static i32 input_state;
+static i32 s_input_state;
 
-static HgTexture* target;
+static HgTexture* s_target;
 
-static f32 camera_fov;
-static f32 camera_aspect;
+static f32 s_camera_fov;
+static f32 s_camera_aspect;
 
-static HgVec3 camera_position;
-static HgVec3 camera_scale;
-static HgQuat camera_rotation;
+static HgVec3 s_camera_position;
+static HgVec3 s_camera_scale;
+static HgQuat s_camera_rotation;
 
-static HgClock game_clock;
-static f64 time_elapsed;
-static u64 frame_count;
+static HgClock s_game_clock;
+static f64 s_time_elapsed;
+static u64 s_frame_count;
 
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     (void)appstate;
@@ -52,7 +52,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     u32 window_width, window_height;
     hg_window_get_size(&window_width, &window_height);
 
-    target = hg_texture_create(&(HgTextureConfig){
+    s_target = hg_texture_create(&(HgTextureConfig){
         .width = window_width,
         .height = window_height,
         .depth = 1,
@@ -61,14 +61,14 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
         .usage = HG_TEXTURE_USAGE_RENDER_TARGET_BIT | HG_TEXTURE_USAGE_TRANSFER_SRC_BIT,
     });
 
-    camera_fov = (f32)HG_PI / 3.0f;
-    camera_aspect = (f32)window_width / (f32)window_height;
+    s_camera_fov = (f32)HG_PI / 3.0f;
+    s_camera_aspect = (f32)window_width / (f32)window_height;
 
-    camera_position = (HgVec3){0.0f, 0.0f, 0.0f};
-    camera_scale = (HgVec3){1.0f, 1.0f, 1.0f};
-    camera_rotation = (HgQuat){1.0f, 0.0f, 0.0f, 0.0f};
+    s_camera_position = (HgVec3){0.0f, 0.0f, 0.0f};
+    s_camera_scale = (HgVec3){1.0f, 1.0f, 1.0f};
+    s_camera_rotation = (HgQuat){1.0f, 0.0f, 0.0f, 0.0f};
 
-    (void)hg_clock_tick(&game_clock);
+    (void)hg_clock_tick(&s_game_clock);
 
     return SDL_APP_CONTINUE;
 }
@@ -84,75 +84,75 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
             switch (event->key.key) {
                 case SDLK_ESCAPE: return SDL_APP_SUCCESS;
                 case SDLK_SPACE: {
-                    input_state |= INPUT_STATE_UP;
+                    s_input_state |= INPUT_STATE_UP;
                 } break;
                 case SDLK_LSHIFT: {
-                    input_state |= INPUT_STATE_DOWN;
+                    s_input_state |= INPUT_STATE_DOWN;
                 } break;
                 case SDLK_W: {
-                    input_state |= INPUT_STATE_FORWARD;
+                    s_input_state |= INPUT_STATE_FORWARD;
                 } break;
                 case SDLK_S: {
-                    input_state |= INPUT_STATE_BACKWARD;
+                    s_input_state |= INPUT_STATE_BACKWARD;
                 } break;
                 case SDLK_A: {
-                    input_state |= INPUT_STATE_LEFT;
+                    s_input_state |= INPUT_STATE_LEFT;
                 } break;
                 case SDLK_D: {
-                    input_state |= INPUT_STATE_RIGHT;
+                    s_input_state |= INPUT_STATE_RIGHT;
                 } break;
             }
         } break;
         case SDL_EVENT_KEY_UP: {
             switch (event->key.key) {
                 case SDLK_SPACE: {
-                    input_state &= ~INPUT_STATE_UP;
+                    s_input_state &= ~INPUT_STATE_UP;
                 } break;
                 case SDLK_LSHIFT: {
-                    input_state &= ~INPUT_STATE_DOWN;
+                    s_input_state &= ~INPUT_STATE_DOWN;
                 } break;
                 case SDLK_W: {
-                    input_state &= ~INPUT_STATE_FORWARD;
+                    s_input_state &= ~INPUT_STATE_FORWARD;
                 } break;
                 case SDLK_S: {
-                    input_state &= ~INPUT_STATE_BACKWARD;
+                    s_input_state &= ~INPUT_STATE_BACKWARD;
                 } break;
                 case SDLK_A: {
-                    input_state &= ~INPUT_STATE_LEFT;
+                    s_input_state &= ~INPUT_STATE_LEFT;
                 } break;
                 case SDLK_D: {
-                    input_state &= ~INPUT_STATE_RIGHT;
+                    s_input_state &= ~INPUT_STATE_RIGHT;
                 } break;
             }
         } break;
         case SDL_EVENT_MOUSE_BUTTON_DOWN: {
             switch (event->button.button) {
                 case SDL_BUTTON_LEFT: {
-                    input_state |= INPUT_STATE_LMOUSE;
+                    s_input_state |= INPUT_STATE_LMOUSE;
                 } break;
                 case SDL_BUTTON_RIGHT: {
-                    input_state |= INPUT_STATE_RMOUSE;
+                    s_input_state |= INPUT_STATE_RMOUSE;
                 } break;
             }
         } break;
         case SDL_EVENT_MOUSE_BUTTON_UP: {
             switch (event->button.button) {
                 case SDL_BUTTON_LEFT: {
-                    input_state &= ~INPUT_STATE_LMOUSE;
+                    s_input_state &= ~INPUT_STATE_LMOUSE;
                 } break;
                 case SDL_BUTTON_RIGHT: {
-                    input_state &= ~INPUT_STATE_RMOUSE;
+                    s_input_state &= ~INPUT_STATE_RMOUSE;
                 } break;
             }
         } break;
         case SDL_EVENT_MOUSE_MOTION: {
-            if (input_state & INPUT_STATE_LMOUSE) {
-                camera_rotation = hg_qmul(
+            if (s_input_state & INPUT_STATE_LMOUSE) {
+                s_camera_rotation = hg_qmul(
                     hg_axis_angle((HgVec3){0.0f, 1.0f, 0.0f}, event->motion.xrel * MOUSE_SPEED),
-                    camera_rotation
+                    s_camera_rotation
                 );
-                camera_rotation = hg_qmul(
-                    camera_rotation,
+                s_camera_rotation = hg_qmul(
+                    s_camera_rotation,
                     hg_axis_angle((HgVec3){-1.0f, 0.0f, 0.0f}, event->motion.yrel * MOUSE_SPEED)
                 );
             }
@@ -162,8 +162,8 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
             hg_window_update_size();
             hg_window_get_size(&window_width, &window_height);
 
-            hg_texture_destroy(target);
-            target = hg_texture_create(&(HgTextureConfig){
+            hg_texture_destroy(s_target);
+            s_target = hg_texture_create(&(HgTextureConfig){
                 .width = window_width,
                 .height = window_height,
                 .depth = 1,
@@ -174,7 +174,7 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
                 .usage = HG_TEXTURE_USAGE_RENDER_TARGET_BIT | HG_TEXTURE_USAGE_TRANSFER_SRC_BIT,
             });
 
-            camera_aspect = (f32)window_width / (f32)window_height;
+            s_camera_aspect = (f32)window_width / (f32)window_height;
             // HgMat4 proj = hg_projection_matrix_perspective(camera_fov, aspect, 0.1f, 100.0f);
         } break;
     }
@@ -185,43 +185,43 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
 SDL_AppResult SDL_AppIterate(void* appstate) {
     (void)appstate;
 
-    f64 delta = hg_clock_tick(&game_clock);
-    time_elapsed += delta;
-    ++frame_count;
-    if (time_elapsed > 1.0) {
-        HG_LOGF("avg: %fms, fps: %" PRIu64, 1.0e3 / (f64)frame_count, frame_count);
-        time_elapsed -= 1.0;
-        frame_count = 0;
+    f64 delta = hg_clock_tick(&s_game_clock);
+    s_time_elapsed += delta;
+    ++s_frame_count;
+    if (s_time_elapsed > 1.0) {
+        HG_LOGF("avg: %fms, fps: %" PRIu64, 1.0e3 / (f64)s_frame_count, s_frame_count);
+        s_time_elapsed -= 1.0;
+        s_frame_count = 0;
     }
 
-    if (input_state & INPUT_STATE_UP) {
-        camera_position = hg_vadd3(
-            camera_position, (HgVec3){0.0f, -(f32)delta * MOVE_SPEED, 0.0f}
+    if (s_input_state & INPUT_STATE_UP) {
+        s_camera_position = hg_vadd3(
+            s_camera_position, (HgVec3){0.0f, -(f32)delta * MOVE_SPEED, 0.0f}
         );
     }
-    if (input_state & INPUT_STATE_DOWN) {
-        camera_position = hg_vadd3(
-            camera_position, (HgVec3){0.0f, (f32)delta * MOVE_SPEED, 0.0f}
+    if (s_input_state & INPUT_STATE_DOWN) {
+        s_camera_position = hg_vadd3(
+            s_camera_position, (HgVec3){0.0f, (f32)delta * MOVE_SPEED, 0.0f}
         );
     }
-    if (input_state & INPUT_STATE_FORWARD) {
-        camera_position = hg_vadd3(
-            camera_position, hg_rotate_vec3(camera_rotation, (HgVec3){0.0f, 0.0f, (f32)delta * MOVE_SPEED})
+    if (s_input_state & INPUT_STATE_FORWARD) {
+        s_camera_position = hg_vadd3(
+            s_camera_position, hg_rotate_vec3(s_camera_rotation, (HgVec3){0.0f, 0.0f, (f32)delta * MOVE_SPEED})
         );
     }
-    if (input_state & INPUT_STATE_BACKWARD) {
-        camera_position = hg_vadd3(
-            camera_position, hg_rotate_vec3(camera_rotation, (HgVec3){0.0f, 0.0f, -(f32)delta * MOVE_SPEED})
+    if (s_input_state & INPUT_STATE_BACKWARD) {
+        s_camera_position = hg_vadd3(
+            s_camera_position, hg_rotate_vec3(s_camera_rotation, (HgVec3){0.0f, 0.0f, -(f32)delta * MOVE_SPEED})
         );
     }
-    if (input_state & INPUT_STATE_LEFT) {
-        camera_position = hg_vadd3(
-            camera_position, hg_rotate_vec3(camera_rotation, (HgVec3){-(f32)delta * MOVE_SPEED, 0.0f, 0.0f})
+    if (s_input_state & INPUT_STATE_LEFT) {
+        s_camera_position = hg_vadd3(
+            s_camera_position, hg_rotate_vec3(s_camera_rotation, (HgVec3){-(f32)delta * MOVE_SPEED, 0.0f, 0.0f})
         );
     }
-    if (input_state & INPUT_STATE_RIGHT) {
-        camera_position = hg_vadd3(
-            camera_position, hg_rotate_vec3(camera_rotation, (HgVec3){(f32)delta * MOVE_SPEED, 0.0f, 0.0f})
+    if (s_input_state & INPUT_STATE_RIGHT) {
+        s_camera_position = hg_vadd3(
+            s_camera_position, hg_rotate_vec3(s_camera_rotation, (HgVec3){(f32)delta * MOVE_SPEED, 0.0f, 0.0f})
         );
     }
 
@@ -231,10 +231,10 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
         return SDL_APP_CONTINUE;
     }
 
-    HgMat4 camera = hg_model_matrix_3d(camera_position, camera_scale, camera_rotation);
-    hg_ray_marcher_draw(target, &camera, camera_aspect);
+    HgMat4 camera = hg_model_matrix_3d(s_camera_position, s_camera_scale, s_camera_rotation);
+    hg_ray_marcher_draw(s_target, &camera, s_camera_aspect);
 
-    HgError end_result = hg_frame_end();
+    HgError end_result = hg_frame_end(s_target);
     if (end_result != HG_SUCCESS) {
         HG_DEBUG("Failed to end frame");
         return SDL_APP_CONTINUE;
@@ -250,7 +250,7 @@ void SDL_AppQuit(void* appstate, SDL_AppResult result) {
 #if !defined(NDEBUG)
     hg_graphics_wait();
 
-    hg_texture_destroy(target);
+    hg_texture_destroy(s_target);
     hg_ray_marcher_shutdown();
 
     hg_window_close();

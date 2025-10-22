@@ -98,7 +98,7 @@ void hg_ray_marcher_shutdown(void) {
 }
 
 void hg_ray_marcher_draw(HgTexture* target, HgMat4* view, f32 aspect) {
-    hg_renderpass_begin(target, NULL);
+    hg_renderpass_begin(target, NULL, false, false);
 
     hg_shader_bind(s_shader);
 
@@ -106,7 +106,8 @@ void hg_ray_marcher_draw(HgTexture* target, HgMat4* view, f32 aspect) {
         .view = *view,
         .aspect = aspect,
     };
-    hg_draw_indexed(s_vertex_buffer, s_index_buffer, &push_data, sizeof(push_data));
+    hg_bind_push_constant(&push_data, sizeof(push_data));
+    hg_draw(s_vertex_buffer, s_index_buffer, 0);
 
     hg_renderpass_end();
 }

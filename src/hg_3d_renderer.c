@@ -358,7 +358,7 @@ void hg_3d_renderer_draw(HgTexture* target, HgTexture* depth_buffer) {
         hg_buffer_write(s_point_light_buffer, 0, s_point_lights, sizeof(HgPointLight) * s_point_light_count);
     }
 
-    hg_renderpass_begin(target, depth_buffer);
+    hg_renderpass_begin(target, depth_buffer, true, true);
 
     hg_shader_bind(s_shader);
 
@@ -379,7 +379,6 @@ void hg_3d_renderer_draw(HgTexture* target, HgTexture* depth_buffer) {
 
     for (u32 i = 0; i < s_model_ticket_count; ++i) {
         HgModel3D* model = &s_model_tickets[i].model;
-        HgModelPush* push = &s_model_tickets[i].push;
 
         HgTexture* textures[] = {
             model->color_map != NULL ? model->color_map : s_default_color_map,
@@ -392,7 +391,8 @@ void hg_3d_renderer_draw(HgTexture* target, HgTexture* depth_buffer) {
         }};
         hg_bind_descriptor_set(1, object_descriptor_set, HG_ARRAY_SIZE(object_descriptor_set));
 
-        hg_draw_indexed(model->vertex_buffer, model->index_buffer, push, sizeof(HgModelPush));
+        hg_bind_push_constant(&s_model_tickets[i].push, sizeof(HgModelPush));
+        hg_draw(model->vertex_buffer, model->index_buffer, 0);
     }
 
     hg_renderpass_end();

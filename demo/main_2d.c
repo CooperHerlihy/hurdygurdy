@@ -196,7 +196,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 
     hg_2d_renderer_draw(s_target, s_depth_buffer);
 
-    HgError end_result = hg_frame_end();
+    HgError end_result = hg_frame_end(s_target);
     if (end_result != HG_SUCCESS) {
         HG_DEBUG("Failed to end frame");
         return SDL_APP_CONTINUE;
