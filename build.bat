@@ -36,6 +36,7 @@ if not exist build mkdir build
 echo Compiling shaders...
 
 set SHADERS=^
+    demo\test.comp^
     src\hg_depth.vert^
     src\hg_depth.frag^
     src\hg_sprite.vert^

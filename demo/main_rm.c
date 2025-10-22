@@ -225,18 +225,18 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
         );
     }
 
-    bool success = hg_commands_begin();
-    if (!success) {
-        HG_DEBUG("Failed to render");
+    HgError begin_result = hg_frame_begin();
+    if (begin_result != HG_SUCCESS) {
+        HG_DEBUG("Failed to begin frame");
         return SDL_APP_CONTINUE;
     }
 
     HgMat4 camera = hg_model_matrix_3d(camera_position, camera_scale, camera_rotation);
     hg_ray_marcher_draw(target, &camera, camera_aspect);
 
-    success = hg_commands_end();
-    if (!success) {
-        HG_DEBUG("Failed to draw");
+    HgError end_result = hg_frame_end();
+    if (end_result != HG_SUCCESS) {
+        HG_DEBUG("Failed to end frame");
         return SDL_APP_CONTINUE;
     }
 

@@ -107,10 +107,21 @@ typedef struct HgShaderConfig {
 } HgShaderConfig;
 
 HgShader* hg_shader_create(const HgShaderConfig* config);
+
+typedef struct HgComputeShaderConfig {
+    const byte* spirv_shader;
+    HgDescriptorSet* descriptor_sets;
+    u32 shader_size;
+    u32 descriptor_set_count;
+    u32 push_constant_size;
+} HgComputeShaderConfig;
+
+HgShader* hg_compute_shader_create(const HgComputeShaderConfig* config);
+
 void hg_shader_destroy(HgShader* shader);
 
-bool hg_commands_begin(void);
-bool hg_commands_end(void);
+HgError hg_frame_begin(void);
+HgError hg_frame_end(void);
 
 void hg_renderpass_begin(HgTexture* target, HgTexture* depth_buffer);
 void hg_renderpass_end(void);
@@ -131,5 +142,10 @@ void hg_bind_descriptor_set(u32 set_index, HgDescriptor* descriptors, u32 descri
 
 void hg_draw_indexed(HgBuffer* vertex_buffer, HgBuffer* index_buffer, void* push_data, u32 push_size);
 void hg_draw(HgBuffer* vertex_buffer, u32 count, void* push_data, u32 push_size);
+
+void hg_compute_begin(void);
+void hg_compute_end(void);
+void hg_compute_dispatch(u32 group_count_x, u32 group_count_y, u32 group_count_z);
+
 
 #endif // HG_GRAPHICS_H

@@ -37,7 +37,7 @@ HgError hg_file_load_binary(const char* path, byte** data, usize* size) {
 
     FILE* file = fopen(path, "rb");
     if (file == NULL)
-        return HG_FILE_NOT_FOUND;
+        return HG_ERROR_FILE_NOT_FOUND;
 
     fseek(file, 0, SEEK_END);
     usize file_size = (usize)ftell(file);
@@ -47,7 +47,7 @@ HgError hg_file_load_binary(const char* path, byte** data, usize* size) {
     if (fread(file_data, 1, file_size, file) != file_size) {
         fclose(file);
         hg_heap_free(*data, file_size);
-        return HG_FILE_READ_FAILURE;
+        return HG_ERROR_FILE_READ_FAILURE;
     }
 
     *data = file_data;
@@ -62,11 +62,11 @@ HgError hg_file_save_binary(const char* path, const byte* data, usize size) {
 
     FILE* file = fopen(path, "wb");
     if (file == NULL)
-        return HG_FILE_NOT_FOUND;
+        return HG_ERROR_FILE_NOT_FOUND;
 
     if (fwrite(data, 1, size, file) != size) {
         fclose(file);
-        return HG_FILE_WRITE_FAILURE;
+        return HG_ERROR_FILE_WRITE_FAILURE;
     }
 
     fclose(file);
@@ -92,10 +92,10 @@ HgError hg_file_load_image(const char* path, u32** data, u32* width, u32* height
     int file_width, file_height, file_channels;
     stbi_uc* file_data = stbi_load(path, &file_width, &file_height, &file_channels, STBI_rgb_alpha);
     if (file_data == NULL)
-        return HG_FILE_NOT_FOUND;
+        return HG_ERROR_FILE_NOT_FOUND;
     if (file_width <= 0 || file_height <= 0 || file_channels <= 0) {
         stbi_image_free(file_data);
-        return HG_FILE_READ_FAILURE;
+        return HG_ERROR_FILE_READ_FAILURE;
     }
 
     *data = (u32*)file_data;
@@ -112,7 +112,7 @@ HgError hg_file_save_image(const char* path, const u32* data, u32 width, u32 hei
 
     int result = stbi_write_png(path, (int)width, (int)height, 4, (void*)data, (int)(width * sizeof(u32)));
     if (result == 0)
-        return HG_FILE_WRITE_FAILURE;
+        return HG_ERROR_FILE_WRITE_FAILURE;
 
     return HG_SUCCESS;
 }

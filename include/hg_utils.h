@@ -98,9 +98,10 @@ typedef intptr_t iptr;
 typedef enum HgError {
     HG_SUCCESS = 0,
     HG_ERROR_UNKNOWN,
-    HG_FILE_NOT_FOUND,
-    HG_FILE_READ_FAILURE,
-    HG_FILE_WRITE_FAILURE,
+    HG_ERROR_FILE_NOT_FOUND,
+    HG_ERROR_FILE_READ_FAILURE,
+    HG_ERROR_FILE_WRITE_FAILURE,
+    HG_ERROR_WINDOW_INVALID,
 } HgError;
 
 void* hg_heap_alloc(usize size);

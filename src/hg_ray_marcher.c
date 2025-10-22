@@ -43,8 +43,8 @@ void hg_ray_marcher_init(void) {
     );
     switch (vertex_shader_error) {
         case HG_SUCCESS: break;
-        case HG_FILE_NOT_FOUND: HG_ERROR("vertex shader not found");
-        case HG_FILE_READ_FAILURE: HG_ERROR("vertex shader not readable");
+        case HG_ERROR_FILE_NOT_FOUND: HG_ERROR("vertex shader not found");
+        case HG_ERROR_FILE_READ_FAILURE: HG_ERROR("vertex shader not readable");
         default: HG_ERROR("unknown error");
     }
 
@@ -55,8 +55,8 @@ void hg_ray_marcher_init(void) {
     );
     switch (fragment_shader_error) {
         case HG_SUCCESS: break;
-        case HG_FILE_NOT_FOUND: HG_ERROR("fragment shader not found");
-        case HG_FILE_READ_FAILURE: HG_ERROR("fragment shader not readable");
+        case HG_ERROR_FILE_NOT_FOUND: HG_ERROR("fragment shader not found");
+        case HG_ERROR_FILE_READ_FAILURE: HG_ERROR("fragment shader not readable");
         default: HG_ERROR("unknown error");
     }
 

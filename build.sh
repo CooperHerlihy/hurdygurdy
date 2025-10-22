@@ -16,6 +16,7 @@ mkdir -p build
 echo "Compiling shaders..."
 
 SHADERS=(
+    demo/test.comp
     src/hg_depth.vert
     src/hg_depth.frag
     src/hg_sprite.vert

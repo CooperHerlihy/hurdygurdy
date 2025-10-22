@@ -180,9 +180,9 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
         s_transform.position.z -= (f32)delta * MOVE_SPEED;
     }
 
-    bool success = hg_commands_begin();
-    if (!success) {
-        HG_DEBUG("Failed to render");
+    HgError begin_result = hg_frame_begin();
+    if (begin_result != HG_SUCCESS) {
+        HG_DEBUG("Failed to begin frame");
         return SDL_APP_CONTINUE;
     }
 
@@ -196,9 +196,9 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 
     hg_2d_renderer_draw(s_target, s_depth_buffer);
 
-    success = hg_commands_end();
-    if (!success) {
-        HG_DEBUG("Failed to draw");
+    HgError end_result = hg_frame_end();
+    if (end_result != HG_SUCCESS) {
+        HG_DEBUG("Failed to end frame");
         return SDL_APP_CONTINUE;
     }
 
