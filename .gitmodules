@@ -6,7 +6,7 @@
 	url = https://github.com/nothings/stb
 [submodule "vendor/cgltf"]
 	path = vendor/cgltf
-	url = https://gitub.com/jkuhlmann/cgltf
+	url = https://github.com/jkuhlmann/cgltf
 [submodule "vendor/mikktspace"]
 	path = vendor/mikktspace
 	url = https://github.com/mmikk/MikkTSpace
