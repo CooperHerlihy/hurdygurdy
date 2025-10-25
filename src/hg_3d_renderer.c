@@ -1,6 +1,9 @@
 #include "hg_3d_renderer.h"
 #include "hg_graphics_enums.h"
 
+#include "hg_model.vert.spv.h"
+#include "hg_model.frag.spv.h"
+
 typedef struct HgWorldUniform {
     HgMat4 view;
     HgMat4 proj;
@@ -105,37 +108,13 @@ void hg_3d_renderer_init(void) {
         .binding_count = HG_ARRAY_SIZE(object_set_bindings),
     }};
 
-    byte* vertex_shader;
-    usize vertex_shader_size;
-    HgError vertex_shader_error = hg_file_load_binary(
-        "build/hg_model.vert.spv", &vertex_shader, &vertex_shader_size
-    );
-    switch (vertex_shader_error) {
-        case HG_SUCCESS: break;
-        case HG_ERROR_FILE_NOT_FOUND: HG_ERROR("vertex shader not found");
-        case HG_ERROR_FILE_READ_FAILURE: HG_ERROR("vertex shader not readable");
-        default: HG_ERROR("unknown error");
-    }
-
-    byte* fragment_shader;
-    usize fragment_shader_size;
-    HgError fragment_shader_error = hg_file_load_binary(
-        "build/hg_model.frag.spv", &fragment_shader, &fragment_shader_size
-    );
-    switch (fragment_shader_error) {
-        case HG_SUCCESS: break;
-        case HG_ERROR_FILE_NOT_FOUND: HG_ERROR("fragment shader not found");
-        case HG_ERROR_FILE_READ_FAILURE: HG_ERROR("fragment shader not readable");
-        default: HG_ERROR("unknown error");
-    }
-
     s_shader = hg_shader_create(&(HgShaderConfig){
         .color_format = HG_FORMAT_R8G8B8A8_UNORM,
         .depth_format = HG_FORMAT_D32_SFLOAT,
-        .spirv_vertex_shader = vertex_shader,
-        .vertex_shader_size = (u32)vertex_shader_size,
-        .spirv_fragment_shader = fragment_shader,
-        .fragment_shader_size = (u32)fragment_shader_size,
+        .spirv_vertex_shader = hg_model_vert_spv,
+        .vertex_shader_size = (u32)hg_model_vert_spv_size,
+        .spirv_fragment_shader = hg_model_frag_spv,
+        .fragment_shader_size = (u32)hg_model_frag_spv_size,
         .vertex_bindings = vertex_bindings,
         .vertex_binding_count = HG_ARRAY_SIZE(vertex_bindings),
         .descriptor_sets = descriptor_sets,
@@ -146,9 +125,6 @@ void hg_3d_renderer_init(void) {
         .enable_depth_buffer = true,
         .enable_color_blend = false,
     });
-
-    hg_file_unload_binary(vertex_shader, vertex_shader_size);
-    hg_file_unload_binary(fragment_shader, fragment_shader_size);
 
     s_world_buffer = hg_buffer_create(&(HgBufferConfig){
         .size = sizeof(HgWorldUniform),

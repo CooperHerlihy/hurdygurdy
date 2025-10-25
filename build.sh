@@ -2,44 +2,60 @@
 
 START_TIME=$(date +%s.%N)
 
-CFLAGS="-g -O0 -fsanitize=undefined -std=c11 -Werror -Wall -Wextra -Wconversion -Wshadow -pedantic"
-INCLUDES="-Iinclude -Ivendor/SDL/include -Ivendor/VulkanMemoryAllocator/include -Ivendor/stb -Ivendor/cgltf -Ivendor/mikktspace -Ivendor/welder"
+CFLAGS="-g -O1 -fsanitize=undefined -std=c11 -Werror -Wall -Wextra -Wconversion -Wshadow -pedantic"
+
 LIBS="-Lbuild -Lbuild/SDL -lhurdy_gurdy -lSDL3 -lvulkan -lc -lm"
-
-mkdir -p build
-
-echo "Compiling shaders..."
+INCLUDES=" \
+    -Iinclude \
+    -Ivendor/SDL/include \
+    -Ivendor/VulkanMemoryAllocator/include \
+    -Ivendor/stb \
+    -Ivendor/cgltf \
+    -Ivendor/mikktspace \
+    -Ivendor/welder \
+    -Ibuild/shaders \
+"
 
 SHADERS=(
-    demo/test.comp
-    src/hg_depth.vert
-    src/hg_depth.frag
-    src/hg_sprite.vert
-    src/hg_sprite.frag
+    # demo/test.comp
+    # src/hg_depth.vert
+    # src/hg_depth.frag
+    # src/hg_sprite.vert
+    # src/hg_sprite.frag
     src/hg_model.vert
     src/hg_model.frag
-    src/hg_ray_marcher.vert
-    src/hg_ray_marcher.frag
+    # src/hg_ray_marcher.vert
+    # src/hg_ray_marcher.frag
 )
-
-for shader in "${SHADERS[@]}"; do
-    echo "Compiling $shader..."
-    glslc -o build/$(basename $shader).spv $shader
-done
-
-echo "Building hurdy_gurdy..."
 
 SRCS=(
     src/hurdy_gurdy.c
     src/hg_utils.c
     src/hg_math.c
     src/hg_graphics.c
-    src/hg_depth_renderer.c
-    src/hg_2d_renderer.c
+    # src/hg_depth_renderer.c
+    # src/hg_2d_renderer.c
     src/hg_3d_renderer.c
-    src/hg_ray_marcher.c
+    # src/hg_ray_marcher.c
 )
+
 OBJS=()
+
+mkdir -p build
+
+echo "Compiling shaders..."
+
+mkdir -p build/shaders
+
+cc $CFLAGS $INCLUDES -o build/hg_embed_file src/hg_embed_file.c
+
+for shader in "${SHADERS[@]}"; do
+    echo "Compiling $shader..."
+    glslc -o build/shaders/$(basename $shader).spv $shader
+    build/hg_embed_file build/shaders/$(basename $shader).spv $(basename $shader)_spv > build/shaders/$(basename $shader).spv.h
+done
+
+echo "Building hurdy_gurdy..."
 
 for file in "${SRCS[@]}"; do
     echo "Compiling $file..."

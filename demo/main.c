@@ -73,7 +73,6 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     (void)argv;
 
     hg_init();
-    hg_depth_renderer_init();
     hg_3d_renderer_init();
 
     hg_window_open(&(HgWindowConfig){
@@ -86,8 +85,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     u32 window_width, window_height;
     hg_window_get_size(&window_width, &window_height);
 
-    // hg_3d_renderer_target_create(window_width, window_height, &s_target, &s_depth_buffer);
-    hg_depth_renderer_target_create(window_width, window_height, &s_target, &s_depth_buffer);
+    hg_3d_renderer_target_create(window_width, window_height, &s_target, &s_depth_buffer);
 
     s_camera_fov = (f32)HG_PI / 3.0f;
     hg_3d_renderer_update_projection(s_camera_fov, (f32)window_width / (f32)window_height, 0.1f, 100.0f);
@@ -197,7 +195,7 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
 
             hg_texture_destroy(s_target);
             hg_texture_destroy(s_depth_buffer);
-            hg_depth_renderer_target_create(window_width, window_height, &s_target, &s_depth_buffer);
+            hg_3d_renderer_target_create(window_width, window_height, &s_target, &s_depth_buffer);
 
             f32 aspect = (f32)window_width / (f32)window_height;
             hg_3d_renderer_update_projection(s_camera_fov, aspect, 0.1f, 100.0f);
@@ -285,8 +283,6 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 
     hg_3d_renderer_draw(s_target, s_depth_buffer);
 
-    // hg_depth_render_draw(s_target, s_depth_buffer);
-
     HgError end_result = hg_frame_end(s_target);
     if (end_result != HG_SUCCESS) {
         HG_DEBUG("Failed to end frame");
@@ -311,7 +307,6 @@ void SDL_AppQuit(void* appstate, SDL_AppResult result) {
 
     hg_window_close();
     hg_3d_renderer_shutdown();
-    hg_depth_renderer_shutdown();
     hg_shutdown();
 #endif
 }

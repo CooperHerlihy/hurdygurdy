@@ -3028,7 +3028,8 @@ void hg_bind_descriptor_set(u32 set_index, HgDescriptor* descriptors, u32 descri
     // write descriptors more efficiently : TODO
     for (u32 i = 0; i < descriptor_count; ++i) {
         for (u32 j = 0; j < descriptors[i].count; ++j) {
-            HgDescriptorType type = descriptors[i].type;
+            VkDescriptorBufferInfo buffer_info;
+            VkDescriptorImageInfo image_info;
 
             VkWriteDescriptorSet descriptor_write = {
                 .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -3036,14 +3037,16 @@ void hg_bind_descriptor_set(u32 set_index, HgDescriptor* descriptors, u32 descri
                 .dstBinding = i,
                 .dstArrayElement = j,
                 .descriptorCount = 1,
-                .descriptorType = hg_descriptor_type_to_vk(type),
+                .descriptorType = hg_descriptor_type_to_vk(descriptors[i].type),
+                .pBufferInfo = &buffer_info,
+                .pImageInfo = &image_info,
             };
 
-            switch (type) {
+            switch (descriptors[i].type) {
                 case HG_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
                 case HG_DESCRIPTOR_TYPE_STORAGE_BUFFER: {
                     HG_ASSERT(descriptors[i].buffers[j]->handle != VK_NULL_HANDLE);
-                    descriptor_write.pBufferInfo = &(VkDescriptorBufferInfo){
+                    buffer_info = (VkDescriptorBufferInfo){
                         .buffer = descriptors[i].buffers[j]->handle,
                         .offset = 0,
                         .range = descriptors[i].buffers[j]->size,
@@ -3052,7 +3055,7 @@ void hg_bind_descriptor_set(u32 set_index, HgDescriptor* descriptors, u32 descri
                 case HG_DESCRIPTOR_TYPE_SAMPLED_TEXTURE: {
                     HG_ASSERT(descriptors[i].textures[j]->sampler != VK_NULL_HANDLE);
                     HG_ASSERT(descriptors[i].textures[j]->view != VK_NULL_HANDLE);
-                    descriptor_write.pImageInfo = &(VkDescriptorImageInfo){
+                    image_info = (VkDescriptorImageInfo){
                         .sampler = descriptors[i].textures[j]->sampler,
                         .imageView = descriptors[i].textures[j]->view,
                         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -3060,7 +3063,7 @@ void hg_bind_descriptor_set(u32 set_index, HgDescriptor* descriptors, u32 descri
                 } break;
                 case HG_DESCRIPTOR_TYPE_STORAGE_TEXTURE: {
                     HG_ASSERT(descriptors[i].textures[j]->view != VK_NULL_HANDLE);
-                    descriptor_write.pImageInfo = &(VkDescriptorImageInfo){
+                    image_info = (VkDescriptorImageInfo){
                         .imageView = descriptors[i].textures[j]->view,
                         .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
                     };
