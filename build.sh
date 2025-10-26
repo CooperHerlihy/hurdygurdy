@@ -2,78 +2,226 @@
 
 START_TIME=$(date +%s.%N)
 
-CFLAGS="-g -O1 -fsanitize=undefined -std=c11 -Werror -Wall -Wextra -Wconversion -Wshadow -pedantic"
+EXIT_CODE=0
 
-LIBS="-Lbuild -Lbuild/SDL -lhurdy_gurdy -lSDL3 -lvulkan -lc -lm"
+echo "Building HurdyHurdy..."
+
+SRC_DIR=.
+BUILD_DIR=build
+CONFIG="debug"
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        "--source" | "-s")
+            SRC_DIR=$2
+            shift 2
+            ;;
+        "--build" | "-b")
+            BUILD_DIR=$2
+            shift 2
+            ;;
+        "--config" | "-c")
+            CONFIG=$2
+            shift 2
+            ;;
+        "--help" | "-h")
+            echo "Usage: $0 [Options]"
+            echo "Options:"
+            echo "  --source | -s <dir>   Source directory"
+            echo "  --build | -b <dir>    Build directory"
+            echo "  --config | -c <type>  Build type (debug, rel-with-debug-info, release)"
+            echo "  --help | -h           Show this help message"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            exit 1
+            ;;
+    esac
+    shift
+done
+
+CVERSION="-std=c11"
+CXXVERSION="-std=c++20"
+CONFIG_FLAGS=""
+WARNING_FLAGS="-Werror -Wall -Wextra -Wconversion -Wshadow -pedantic"
+
+case "${CONFIG}" in
+    "debug")
+        CONFIG_FLAGS="-g -O0 -fsanitize=undefined"
+        ;;
+    "rel-with-debug-info")
+        CONFIG_FLAGS="-g -O3"
+        ;;
+    "release")
+        CONFIG_FLAGS="-O3 -DNDEBUG"
+        ;;
+    *)
+        echo "Invalid config: ${CONFIG}"
+        echo "Valid configs: debug, rel-with-debug-info, release"
+        exit 1
+        ;;
+esac
+
+LIBS="-L${BUILD_DIR} -L${BUILD_DIR}/SDL -lhurdygurdy -lSDL3 -lvulkan -lc -lm"
 INCLUDES=" \
-    -Iinclude \
-    -Ivendor/SDL/include \
-    -Ivendor/VulkanMemoryAllocator/include \
-    -Ivendor/stb \
-    -Ivendor/cgltf \
-    -Ivendor/mikktspace \
-    -Ivendor/welder \
-    -Ibuild/shaders \
+    -I${SRC_DIR}/include \
+    -I${SRC_DIR}/vendor/SDL/include \
+    -I${SRC_DIR}/vendor/VulkanMemoryAllocator/include \
+    -I${SRC_DIR}/vendor/stb \
+    -I${SRC_DIR}/vendor/cgltf \
+    -I${SRC_DIR}/vendor/mikktspace \
+    -I${SRC_DIR}/vendor/welder \
+    -I${BUILD_DIR}/shaders \
 "
 
 SHADERS=(
-    # demo/test.comp
-    # src/hg_depth.vert
-    # src/hg_depth.frag
-    # src/hg_sprite.vert
-    # src/hg_sprite.frag
-    src/hg_model.vert
-    src/hg_model.frag
-    # src/hg_ray_marcher.vert
-    # src/hg_ray_marcher.frag
+    # ${SRC_DIR}/demo/test.comp
+    # ${SRC_DIR}/src/hg_depth.vert
+    # ${SRC_DIR}/src/hg_depth.frag
+    # ${SRC_DIR}/src/hg_sprite.vert
+    # ${SRC_DIR}/src/hg_sprite.frag
+    ${SRC_DIR}/src/hg_model.vert
+    ${SRC_DIR}/src/hg_model.frag
+    # ${SRC_DIR}/src/hg_ray_marcher.vert
+    # ${SRC_DIR}/src/hg_ray_marcher.frag
 )
 
 SRCS=(
-    src/hurdy_gurdy.c
-    src/hg_utils.c
-    src/hg_math.c
-    src/hg_graphics.c
-    # src/hg_depth_renderer.c
-    # src/hg_2d_renderer.c
-    src/hg_3d_renderer.c
-    # src/hg_ray_marcher.c
+    ${SRC_DIR}/src/hurdygurdy.c
+    ${SRC_DIR}/src/hg_utils.c
+    ${SRC_DIR}/src/hg_math.c
+    ${SRC_DIR}/src/hg_graphics.c
+    # ${SRC_DIR}/src/hg_depth_renderer.c
+    # ${SRC_DIR}/src/hg_2d_renderer.c
+    ${SRC_DIR}/src/hg_3d_renderer.c
+    # ${SRC_DIR}/src/hg_ray_marcher.c
 )
 
-OBJS=()
+OBJS=""
 
-mkdir -p build
+mkdir -p ${BUILD_DIR}
+
+echo "Compiling external libraries..."
+
+mkdir -p ${BUILD_DIR}/obj
+
+if [ ! -d "${BUILD_DIR}/SDL" ]; then
+    echo "Building SDL..."
+    cmake -S ${SRC_DIR}/vendor/SDL -B ${BUILD_DIR}/SDL
+    if [ $? -ne 0 ]; then EXIT_CODE=1; fi
+    if [ "${CONFIG}" == "debug" ]; then
+        cmake --build build/SDL --config Debug
+    elif [ "${CONFIG}" == "rel-with-debug-info" ]; then
+        cmake --build build/SDL --config RelWithDebInfo
+    elif [ "${CONFIG}" == "release" ]; then
+        cmake --build build/SDL --config Release
+    fi
+    if [ $? -ne 0 ]; then EXIT_CODE=1; fi
+fi
+
+if [ ! -f "${BUILD_DIR}/obj/vk_mem_alloc.o" ]; then
+    echo "VulkanMemoryAllocator..."
+    c++ ${CXXVERSION} ${CONFIG_FLAGS} \
+        -Ivendor/VulkanMemoryAllocator/include \
+        -o ${BUILD_DIR}/obj/vk_mem_alloc.o \
+        -c ${SRC_DIR}/src/vk_mem_alloc.cpp
+    if [ $? -ne 0 ]; then EXIT_CODE=1; fi
+    OBJS+=" ${BUILD_DIR}/obj/vk_mem_alloc.o"
+fi
+
+if [ ! -f "${BUILD_DIR}/obj/stb.o" ]; then
+    echo "stb libraries..."
+    cc ${CVERSION} ${CONFIG_FLAGS} \
+        -Ivendor/stb \
+        -o ${BUILD_DIR}/obj/stb.o \
+        -c ${SRC_DIR}/src/stb.c
+    if [ $? -ne 0 ]; then EXIT_CODE=1; fi
+    OBJS+=" ${BUILD_DIR}/obj/stb.o"
+fi
+
+if [ ! -f "${BUILD_DIR}/obj/cgltf.o" ]; then
+    echo "cgltf..."
+    cc ${CVERSION} ${CONFIG_FLAGS} \
+        -Ivendor/cgltf \
+        -o ${BUILD_DIR}/obj/cgltf.o \
+        -c ${SRC_DIR}/src/cgltf.c
+    if [ $? -ne 0 ]; then EXIT_CODE=1; fi
+    OBJS+=" ${BUILD_DIR}/obj/cgltf.o"
+fi
+
+if [ ! -f "${BUILD_DIR}/obj/mikktspace.o" ]; then
+    echo "MikkTSpace..."
+    cc ${CVERSION} ${CONFIG_FLAGS} \
+        -o ${BUILD_DIR}/obj/mikktspace.o \
+        -c ${SRC_DIR}/vendor/mikktspace/mikktspace.c
+    if [ $? -ne 0 ]; then EXIT_CODE=1; fi
+    OBJS+=" ${BUILD_DIR}/obj/mikktspace.o"
+fi
+
+if [ ! -f "${BUILD_DIR}/obj/weldmesh.o" ]; then
+    echo "Welder..."
+    cc ${CVERSION} ${CONFIG_FLAGS} \
+        -o ${BUILD_DIR}/obj/weldmesh.o \
+        -c ${SRC_DIR}/vendor/welder/weldmesh.c
+    if [ $? -ne 0 ]; then EXIT_CODE=1; fi
+    OBJS+=" ${BUILD_DIR}/obj/weldmesh.o"
+fi
 
 echo "Compiling shaders..."
 
-mkdir -p build/shaders
+mkdir -p ${BUILD_DIR}/shaders
 
-cc $CFLAGS $INCLUDES -o build/hg_embed_file src/hg_embed_file.c
+cc ${CVERSION} ${CONFIG_FLAGS} ${WARNING_FLAGS} ${INCLUDES} \
+    -o ${BUILD_DIR}/hg_embed_file \
+    ${SRC_DIR}/src/hg_embed_file.c
+if [ $? -ne 0 ]; then EXIT_CODE=1; fi
 
 for shader in "${SHADERS[@]}"; do
-    echo "Compiling $shader..."
-    glslc -o build/shaders/$(basename $shader).spv $shader
-    build/hg_embed_file build/shaders/$(basename $shader).spv $(basename $shader)_spv > build/shaders/$(basename $shader).spv.h
+    name=$(basename ${shader})
+    echo "${name}..."
+    glslc -o ${BUILD_DIR}/shaders/${name}.spv ${shader}
+    if [ $? -ne 0 ]; then EXIT_CODE=1; fi
+    build/hg_embed_file \
+        ${BUILD_DIR}/shaders/${name}.spv \
+        ${name}.spv \
+        > ${BUILD_DIR}/shaders/${name}.spv.h
+    if [ $? -ne 0 ]; then EXIT_CODE=1; fi
 done
 
-echo "Building hurdy_gurdy..."
+echo "Compiling source..."
 
 for file in "${SRCS[@]}"; do
-    echo "Compiling $file..."
-    cc $CFLAGS $INCLUDES -o "build/$(basename $file .c).o" -c $file
-    OBJS+=" build/$(basename $file .c).o"
+    name=$(basename ${file} .c)
+    echo "${name}.c..."
+    cc ${CVERSION} ${CONFIG_FLAGS} ${WARNING_FLAGS} ${INCLUDES} \
+        -o "${BUILD_DIR}/obj/${name}.o" \
+        -c ${file}
+    if [ $? -ne 0 ]; then EXIT_CODE=1; fi
+    OBJS+=" ${BUILD_DIR}/obj/${name}.o"
 done
 
 echo "Archiving..."
-ar rcs build/libhurdy_gurdy.a build/vk_mem_alloc.o build/stb.o build/cgltf.o build/mikktspace.o build/weldmesh.o $OBJS
+ar rcs build/libhurdygurdy.a $OBJS
+if [ $? -ne 0 ]; then EXIT_CODE=1; fi
 
 echo "Building demo..."
 
 echo "Compiling demo/main.c..."
-cc $CFLAGS -Iinclude -Ivendor/SDL/include $LIBS -o build/demo.o -c demo/main.c
+cc ${CVERSION} ${CONFIG_FLAGS} ${WARNING_FLAGS} \
+    -Iinclude -Ivendor/SDL/include \
+    -o ${BUILD_DIR}/obj/demo.o \
+    -c demo/main.c
+if [ $? -ne 0 ]; then EXIT_CODE=1; fi
 
 echo "Linking..."
-c++ build/demo.o $CFLAGS -std=c++20 $LIBS -o build/out -Wl,-rpath=./build/SDL
+c++ ${BUILD_DIR}/obj/demo.o ${LIBS} \
+    ${CVERSION} ${CXXVERSION} ${CONFIG_FLAGS} ${WARNING_FLAGS} \
+    -Wl,-rpath=${BUILD_DIR}/SDL \
+    -o ${BUILD_DIR}/out
+if [ $? -ne 0 ]; then EXIT_CODE=1; fi
 
 END_TIME=$(date +%s.%N)
 printf "Build complete: %.6f seconds\n" "$(echo "$END_TIME - $START_TIME" | bc)"
 
+exit $EXIT_CODE

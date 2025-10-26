@@ -1,4 +1,4 @@
-#include "hurdy_gurdy.h"
+#include "hurdygurdy.h"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
