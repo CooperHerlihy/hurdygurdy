@@ -4,8 +4,6 @@ START_TIME=$(date +%s.%N)
 
 EXIT_CODE=0
 
-echo "Building HurdyHurdy..."
-
 SRC_DIR=.
 BUILD_DIR=build
 CONFIG="debug"
@@ -63,15 +61,12 @@ case "${CONFIG}" in
         ;;
 esac
 
-LIBS="-L${BUILD_DIR} -L${BUILD_DIR}/SDL -lhurdygurdy -lSDL3 -lvulkan -lc -lm"
 INCLUDES=" \
     -I${SRC_DIR}/include \
     -I${SRC_DIR}/vendor/SDL/include \
     -I${SRC_DIR}/vendor/VulkanMemoryAllocator/include \
     -I${SRC_DIR}/vendor/stb \
     -I${SRC_DIR}/vendor/cgltf \
-    -I${SRC_DIR}/vendor/mikktspace \
-    -I${SRC_DIR}/vendor/welder \
     -I${BUILD_DIR}/shaders \
 "
 
@@ -107,7 +102,7 @@ echo "Compiling external libraries..."
 mkdir -p ${BUILD_DIR}/obj
 
 if [ ! -d "${BUILD_DIR}/SDL" ]; then
-    echo "Building SDL..."
+    echo "SDL..."
     cmake -S ${SRC_DIR}/vendor/SDL -B ${BUILD_DIR}/SDL
     if [ $? -ne 0 ]; then EXIT_CODE=1; fi
     if [ "${CONFIG}" == "debug" ]; then
@@ -121,52 +116,34 @@ if [ ! -d "${BUILD_DIR}/SDL" ]; then
 fi
 
 if [ ! -f "${BUILD_DIR}/obj/vk_mem_alloc.o" ]; then
-    echo "VulkanMemoryAllocator..."
+    echo "VulkanMemoryAllocator"
     c++ ${CXXVERSION} ${CONFIG_FLAGS} \
         -Ivendor/VulkanMemoryAllocator/include \
         -o ${BUILD_DIR}/obj/vk_mem_alloc.o \
         -c ${SRC_DIR}/src/vk_mem_alloc.cpp
     if [ $? -ne 0 ]; then EXIT_CODE=1; fi
-    OBJS+=" ${BUILD_DIR}/obj/vk_mem_alloc.o"
 fi
+OBJS+=" ${BUILD_DIR}/obj/vk_mem_alloc.o"
 
 if [ ! -f "${BUILD_DIR}/obj/stb.o" ]; then
-    echo "stb libraries..."
+    echo "stb"
     cc ${CVERSION} ${CONFIG_FLAGS} \
         -Ivendor/stb \
         -o ${BUILD_DIR}/obj/stb.o \
         -c ${SRC_DIR}/src/stb.c
     if [ $? -ne 0 ]; then EXIT_CODE=1; fi
-    OBJS+=" ${BUILD_DIR}/obj/stb.o"
 fi
+OBJS+=" ${BUILD_DIR}/obj/stb.o"
 
 if [ ! -f "${BUILD_DIR}/obj/cgltf.o" ]; then
-    echo "cgltf..."
+    echo "cgltf"
     cc ${CVERSION} ${CONFIG_FLAGS} \
         -Ivendor/cgltf \
         -o ${BUILD_DIR}/obj/cgltf.o \
         -c ${SRC_DIR}/src/cgltf.c
     if [ $? -ne 0 ]; then EXIT_CODE=1; fi
-    OBJS+=" ${BUILD_DIR}/obj/cgltf.o"
 fi
-
-if [ ! -f "${BUILD_DIR}/obj/mikktspace.o" ]; then
-    echo "MikkTSpace..."
-    cc ${CVERSION} ${CONFIG_FLAGS} \
-        -o ${BUILD_DIR}/obj/mikktspace.o \
-        -c ${SRC_DIR}/vendor/mikktspace/mikktspace.c
-    if [ $? -ne 0 ]; then EXIT_CODE=1; fi
-    OBJS+=" ${BUILD_DIR}/obj/mikktspace.o"
-fi
-
-if [ ! -f "${BUILD_DIR}/obj/weldmesh.o" ]; then
-    echo "Welder..."
-    cc ${CVERSION} ${CONFIG_FLAGS} \
-        -o ${BUILD_DIR}/obj/weldmesh.o \
-        -c ${SRC_DIR}/vendor/welder/weldmesh.c
-    if [ $? -ne 0 ]; then EXIT_CODE=1; fi
-    OBJS+=" ${BUILD_DIR}/obj/weldmesh.o"
-fi
+OBJS+=" ${BUILD_DIR}/obj/cgltf.o"
 
 echo "Compiling shaders..."
 
@@ -179,7 +156,7 @@ if [ $? -ne 0 ]; then EXIT_CODE=1; fi
 
 for shader in "${SHADERS[@]}"; do
     name=$(basename ${shader})
-    echo "${name}..."
+    echo "${name}"
     glslc -o ${BUILD_DIR}/shaders/${name}.spv ${shader}
     if [ $? -ne 0 ]; then EXIT_CODE=1; fi
     build/hg_embed_file \
@@ -193,7 +170,7 @@ echo "Compiling source..."
 
 for file in "${SRCS[@]}"; do
     name=$(basename ${file} .c)
-    echo "${name}.c..."
+    echo "${name}.c"
     cc ${CVERSION} ${CONFIG_FLAGS} ${WARNING_FLAGS} ${INCLUDES} \
         -o "${BUILD_DIR}/obj/${name}.o" \
         -c ${file}
@@ -202,23 +179,9 @@ for file in "${SRCS[@]}"; do
 done
 
 echo "Archiving..."
+
+echo "libhurdygurdy.a"
 ar rcs build/libhurdygurdy.a $OBJS
-if [ $? -ne 0 ]; then EXIT_CODE=1; fi
-
-echo "Building demo..."
-
-echo "Compiling demo/main.c..."
-cc ${CVERSION} ${CONFIG_FLAGS} ${WARNING_FLAGS} \
-    -Iinclude -Ivendor/SDL/include \
-    -o ${BUILD_DIR}/obj/demo.o \
-    -c demo/main.c
-if [ $? -ne 0 ]; then EXIT_CODE=1; fi
-
-echo "Linking..."
-c++ ${BUILD_DIR}/obj/demo.o ${LIBS} \
-    ${CVERSION} ${CXXVERSION} ${CONFIG_FLAGS} ${WARNING_FLAGS} \
-    -Wl,-rpath=${BUILD_DIR}/SDL \
-    -o ${BUILD_DIR}/out
 if [ $? -ne 0 ]; then EXIT_CODE=1; fi
 
 END_TIME=$(date +%s.%N)
