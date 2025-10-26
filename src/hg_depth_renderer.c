@@ -1,6 +1,9 @@
 #include "hg_depth_renderer.h"
 #include "hg_graphics_enums.h"
 
+#include "hg_depth.vert.spv.h"
+#include "hg_depth.frag.spv.h"
+
 static HgShader* s_shader;
 
 void hg_depth_renderer_init(void) {
@@ -13,45 +16,17 @@ void hg_depth_renderer_init(void) {
         .binding_count = HG_ARRAY_SIZE(descriptor_set_bindings),
     }};
 
-    byte* vertex_shader;
-    usize vertex_shader_size;
-    HgError vertex_shader_error = hg_file_load_binary(
-        "build/hg_depth.vert.spv", &vertex_shader, &vertex_shader_size
-    );
-    switch (vertex_shader_error) {
-        case HG_SUCCESS: break;
-        case HG_ERROR_FILE_NOT_FOUND: HG_ERROR("depth vertex shader not found");
-        case HG_ERROR_FILE_READ_FAILURE: HG_ERROR("depth vertex shader not readable");
-        default: HG_ERROR("unknown error");
-    }
-
-    byte* fragment_shader;
-    usize fragment_shader_size;
-    HgError fragment_shader_error = hg_file_load_binary(
-        "build/hg_depth.frag.spv", &fragment_shader, &fragment_shader_size
-    );
-    switch (fragment_shader_error) {
-        case HG_SUCCESS: break;
-        case HG_ERROR_FILE_NOT_FOUND: HG_ERROR("depth fragment shader not found");
-        case HG_ERROR_FILE_READ_FAILURE: HG_ERROR("depth fragment shader not readable");
-        default: HG_ERROR("unknown error");
-    }
-
     s_shader = hg_shader_create(&(HgShaderConfig){
         .color_format = HG_FORMAT_R8G8B8A8_UNORM,
-        .spirv_vertex_shader = vertex_shader,
-        .vertex_shader_size = (u32)vertex_shader_size,
-        .spirv_fragment_shader = fragment_shader,
-        .fragment_shader_size = (u32)fragment_shader_size,
+        .spirv_vertex_shader = hg_depth_vert_spv,
+        .vertex_shader_size = (u32)hg_depth_vert_spv_size,
+        .spirv_fragment_shader = hg_depth_frag_spv,
+        .fragment_shader_size = (u32)hg_depth_frag_spv_size,
         .descriptor_sets = descriptor_sets,
         .descriptor_set_count = HG_ARRAY_SIZE(descriptor_sets),
         .topology = HG_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         .cull_mode = HG_CULL_MODE_NONE,
     });
-
-    hg_file_unload_binary(vertex_shader, vertex_shader_size);
-    hg_file_unload_binary(fragment_shader, fragment_shader_size);
-
 }
 
 void hg_depth_renderer_shutdown(void) {

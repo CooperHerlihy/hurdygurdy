@@ -1,5 +1,8 @@
 #include "hg_ray_marcher.h"
 
+#include "hg_ray_marcher.vert.spv.h"
+#include "hg_ray_marcher.frag.spv.h"
+
 typedef struct HgVertex {
     HgVec2 pos;
 } HgVertex;
@@ -36,37 +39,13 @@ void hg_ray_marcher_init(void) {
         .input_rate = HG_VERTEX_INPUT_RATE_VERTEX,
     }};
 
-    usize vertex_shader_size = 0;
-    byte* vertex_shader = NULL;
-    HgError vertex_shader_error = hg_file_load_binary(
-        "build/hg_ray_marcher.vert.spv", &vertex_shader, &vertex_shader_size
-    );
-    switch (vertex_shader_error) {
-        case HG_SUCCESS: break;
-        case HG_ERROR_FILE_NOT_FOUND: HG_ERROR("vertex shader not found");
-        case HG_ERROR_FILE_READ_FAILURE: HG_ERROR("vertex shader not readable");
-        default: HG_ERROR("unknown error");
-    }
-
-    usize fragment_shader_size = 0;
-    byte* fragment_shader = NULL;
-    HgError fragment_shader_error = hg_file_load_binary(
-        "build/hg_ray_marcher.frag.spv", &fragment_shader, &fragment_shader_size
-    );
-    switch (fragment_shader_error) {
-        case HG_SUCCESS: break;
-        case HG_ERROR_FILE_NOT_FOUND: HG_ERROR("fragment shader not found");
-        case HG_ERROR_FILE_READ_FAILURE: HG_ERROR("fragment shader not readable");
-        default: HG_ERROR("unknown error");
-    }
-
     s_shader = hg_shader_create(&(HgShaderConfig){
         .color_format = HG_FORMAT_R8G8B8A8_UNORM,
         .depth_format = HG_FORMAT_D32_SFLOAT,
-        .spirv_vertex_shader = vertex_shader,
-        .vertex_shader_size = (u32)vertex_shader_size,
-        .spirv_fragment_shader = fragment_shader,
-        .fragment_shader_size = (u32)fragment_shader_size,
+        .spirv_vertex_shader = hg_ray_marcher_vert_spv,
+        .vertex_shader_size = (u32)hg_ray_marcher_vert_spv_size,
+        .spirv_fragment_shader = hg_ray_marcher_frag_spv,
+        .fragment_shader_size = (u32)hg_ray_marcher_frag_spv_size,
         .vertex_bindings = vertex_bindings,
         .vertex_binding_count = HG_ARRAY_SIZE(vertex_bindings),
         .descriptor_sets = NULL,
