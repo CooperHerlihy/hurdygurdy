@@ -68,8 +68,8 @@ esac
 
 INCLUDES=" \
     -I${SRC_DIR}/include \
-    -I${SRC_DIR}/vendor/Vulkan-Headers/include \
     -I${SRC_DIR}/vendor/SDL/include \
+    -I${SRC_DIR}/vendor/Vulkan-Headers/include \
     -I${SRC_DIR}/vendor/VulkanMemoryAllocator/include \
     -I${SRC_DIR}/vendor/stb \
     -I${SRC_DIR}/vendor/cgltf \
@@ -84,6 +84,7 @@ SRCS=(
     ${SRC_DIR}/src/hg_utils.c
     ${SRC_DIR}/src/hg_math.c
     ${SRC_DIR}/src/hg_graphics.c
+    ${SRC_DIR}/src/hg_events.c
 )
 
 OBJS=""
@@ -94,7 +95,7 @@ echo "Compiling external libraries..."
 
 mkdir -p ${BUILD_DIR}/obj
 
-if [ ! -d "${BUILD_DIR}/SDL" ]; then
+if [ ! -d "${BUILD_DIR}/obj/SDL" ]; then
     echo "SDL..."
     cmake -S ${SRC_DIR}/vendor/SDL -B ${BUILD_DIR}/SDL -DSDL_SHARED=OFF -DSDL_STATIC=ON
     if [ $? -ne 0 ]; then EXIT_CODE=1; fi
@@ -107,7 +108,15 @@ if [ ! -d "${BUILD_DIR}/SDL" ]; then
     fi
     cmake --build ${BUILD_DIR}/SDL --config ${SDL_CONFIG}
     if [ $? -ne 0 ]; then EXIT_CODE=1; fi
+
+    mkdir -p ${BUILD_DIR}/obj/SDL
+    (
+        cd ${BUILD_DIR}/obj/SDL
+        ar -x ../../SDL/libSDL3.a
+        if [ $? -ne 0 ]; then EXIT_CODE=1; fi
+    )
 fi
+OBJS+=" $(find ${BUILD_DIR}/obj/SDL -name '*.o')"
 
 if [ ! -f "${BUILD_DIR}/obj/vk_mem_alloc.o" ]; then
     echo "VulkanMemoryAllocator"
@@ -182,20 +191,6 @@ echo "Installing..."
 
 mkdir -p ${INSTALL_DIR}
 
-if [ ! -d "${INSTALL_DIR}/SDL" ]; then
-    mkdir -p ${INSTALL_DIR}/SDL
-    echo "SDL"
-    if [ "${CONFIG}" == "debug" ]; then
-        SDL_CONFIG="Debug"
-    elif [ "${CONFIG}" == "rel-with-debug-info" ]; then
-        SDL_CONFIG="RelWithDebInfo"
-    elif [ "${CONFIG}" == "release" ]; then
-        SDL_CONFIG="Release"
-    fi
-    cmake --install ${BUILD_DIR}/SDL --config ${SDL_CONFIG} --prefix ${INSTALL_DIR}/SDL
-    if [ $? -ne 0 ]; then EXIT_CODE=1; fi
-fi
-
 mkdir -p ${INSTALL_DIR}/lib
 echo "libhurdygurdy.a"
 cp ${BUILD_DIR}/libhurdygurdy.a ${INSTALL_DIR}/lib/
@@ -205,7 +200,6 @@ echo "hg_emded_file"
 cp ${BUILD_DIR}/hg_embed_file ${INSTALL_DIR}/bin/
 
 echo "headers"
-
 cp -r ${SRC_DIR}/include ${INSTALL_DIR}/
 
 END_TIME=$(date +%s.%N)
