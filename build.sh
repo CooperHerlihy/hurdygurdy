@@ -68,6 +68,7 @@ esac
 
 INCLUDES=" \
     -I${SRC_DIR}/include \
+    -I${SRC_DIR}/vendor/Vulkan-Headers/include \
     -I${SRC_DIR}/vendor/SDL/include \
     -I${SRC_DIR}/vendor/VulkanMemoryAllocator/include \
     -I${SRC_DIR}/vendor/stb \
@@ -76,15 +77,6 @@ INCLUDES=" \
 "
 
 SHADERS=(
-    ${SRC_DIR}/src/hg_depth.vert
-    ${SRC_DIR}/src/hg_depth.frag
-    ${SRC_DIR}/src/hg_sprite.vert
-    ${SRC_DIR}/src/hg_sprite.frag
-    ${SRC_DIR}/src/hg_model.vert
-    ${SRC_DIR}/src/hg_model.frag
-    ${SRC_DIR}/src/hg_ray_marcher.vert
-    ${SRC_DIR}/src/hg_ray_marcher.frag
-    ${SRC_DIR}/src/hg_test.comp
 )
 
 SRCS=(
@@ -92,10 +84,6 @@ SRCS=(
     ${SRC_DIR}/src/hg_utils.c
     ${SRC_DIR}/src/hg_math.c
     ${SRC_DIR}/src/hg_graphics.c
-    ${SRC_DIR}/src/hg_depth_renderer.c
-    ${SRC_DIR}/src/hg_2d_renderer.c
-    ${SRC_DIR}/src/hg_3d_renderer.c
-    ${SRC_DIR}/src/hg_ray_marcher.c
 )
 
 OBJS=""
@@ -108,21 +96,23 @@ mkdir -p ${BUILD_DIR}/obj
 
 if [ ! -d "${BUILD_DIR}/SDL" ]; then
     echo "SDL..."
-    cmake -S ${SRC_DIR}/vendor/SDL -B ${BUILD_DIR}/SDL
+    cmake -S ${SRC_DIR}/vendor/SDL -B ${BUILD_DIR}/SDL -DSDL_SHARED=OFF -DSDL_STATIC=ON
     if [ $? -ne 0 ]; then EXIT_CODE=1; fi
     if [ "${CONFIG}" == "debug" ]; then
-        cmake --build ${BUILD_DIR}/SDL --config Debug
+        SDL_CONFIG="Debug"
     elif [ "${CONFIG}" == "rel-with-debug-info" ]; then
-        cmake --build ${BUILD_DIR}/SDL --config RelWithDebInfo
+        SDL_CONFIG="RelWithDebInfo"
     elif [ "${CONFIG}" == "release" ]; then
-        cmake --build ${BUILD_DIR}/SDL --config Release
+        SDL_CONFIG="Release"
     fi
+    cmake --build ${BUILD_DIR}/SDL --config ${SDL_CONFIG}
     if [ $? -ne 0 ]; then EXIT_CODE=1; fi
 fi
 
 if [ ! -f "${BUILD_DIR}/obj/vk_mem_alloc.o" ]; then
     echo "VulkanMemoryAllocator"
     c++ ${CXXVERSION} ${CONFIG_FLAGS} \
+        -I ${SRC_DIR}/vendor/Vulkan-Headers/include \
         -I ${SRC_DIR}/vendor/VulkanMemoryAllocator/include \
         -o ${BUILD_DIR}/obj/vk_mem_alloc.o \
         -c ${SRC_DIR}/src/vk_mem_alloc.cpp
@@ -154,7 +144,7 @@ echo "Compiling..."
 
 mkdir -p ${BUILD_DIR}/shaders
 
-echo "hg_embed_file.c..."
+echo "hg_embed_file.c"
 cc ${CVERSION} ${CONFIG_FLAGS} ${WARNING_FLAGS} ${INCLUDES} \
     -o ${BUILD_DIR}/hg_embed_file \
     ${SRC_DIR}/src/hg_embed_file.c
@@ -196,19 +186,23 @@ if [ ! -d "${INSTALL_DIR}/SDL" ]; then
     mkdir -p ${INSTALL_DIR}/SDL
     echo "SDL"
     if [ "${CONFIG}" == "debug" ]; then
-        cmake --install ${BUILD_DIR}/SDL --config Debug --prefix ${INSTALL_DIR}/SDL
+        SDL_CONFIG="Debug"
     elif [ "${CONFIG}" == "rel-with-debug-info" ]; then
-        cmake --install ${BUILD_DIR}/SDL --config RelWithDebInfo --prefix ${INSTALL_DIR}/SDL
+        SDL_CONFIG="RelWithDebInfo"
     elif [ "${CONFIG}" == "release" ]; then
-        cmake --install ${BUILD_DIR}/SDL --config Release --prefix ${INSTALL_DIR}/SDL
+        SDL_CONFIG="Release"
     fi
+    cmake --install ${BUILD_DIR}/SDL --config ${SDL_CONFIG} --prefix ${INSTALL_DIR}/SDL
     if [ $? -ne 0 ]; then EXIT_CODE=1; fi
 fi
 
-echo "libhurdygurdy.a"
-
 mkdir -p ${INSTALL_DIR}/lib
-cp ${BUILD_DIR}/libhurdygurdy.a ${INSTALL_DIR}/lib
+echo "libhurdygurdy.a"
+cp ${BUILD_DIR}/libhurdygurdy.a ${INSTALL_DIR}/lib/
+
+mkdir -p ${INSTALL_DIR}/bin
+echo "hg_emded_file"
+cp ${BUILD_DIR}/hg_embed_file ${INSTALL_DIR}/bin/
 
 echo "headers"
 

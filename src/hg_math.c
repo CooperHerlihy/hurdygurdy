@@ -357,6 +357,7 @@ void hg_mmul(f32* dst, u32 wl, u32 hl, f32* lhs, u32 wr, u32 hr, f32* rhs) {
     HG_ASSERT(wr > 0);
     HG_ASSERT(hr > 0);
     HG_ASSERT(wr == hl);
+    (void)hr;
     for (u32 i = 0; i < wl; ++i) {
         for (u32 j = 0; j < wr; ++j) {
             dst[i * wl + j] = 0.0f;
