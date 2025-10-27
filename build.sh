@@ -97,8 +97,12 @@ mkdir -p ${BUILD_DIR}/obj
 
 if [ ! -d "${BUILD_DIR}/obj/SDL" ]; then
     echo "SDL..."
-    cmake -S ${SRC_DIR}/vendor/SDL -B ${BUILD_DIR}/SDL -DSDL_SHARED=OFF -DSDL_STATIC=ON
+
+    cmake -S ${SRC_DIR}/vendor/SDL -B ${BUILD_DIR}/SDL \
+        -DSDL_STATIC=ON -DSDL_SHARED=OFF \
+        -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF
     if [ $? -ne 0 ]; then EXIT_CODE=1; fi
+
     if [ "${CONFIG}" == "debug" ]; then
         SDL_CONFIG="Debug"
     elif [ "${CONFIG}" == "rel-with-debug-info" ]; then
@@ -162,23 +166,28 @@ if [ $? -ne 0 ]; then EXIT_CODE=1; fi
 for shader in "${SHADERS[@]}"; do
     name=$(basename ${shader})
     echo "${name}"
+
     glslc -o ${BUILD_DIR}/shaders/${name}.spv ${shader}
     if [ $? -ne 0 ]; then EXIT_CODE=1; fi
+
     ${BUILD_DIR}/hg_embed_file \
         ${BUILD_DIR}/shaders/${name}.spv \
         ${name}.spv \
         > ${BUILD_DIR}/shaders/${name}.spv.h
     if [ $? -ne 0 ]; then EXIT_CODE=1; fi
+
 done
 
 for file in "${SRCS[@]}"; do
     name=$(basename ${file} .c)
     echo "${name}.c"
+
     cc ${CVERSION} ${CONFIG_FLAGS} ${WARNING_FLAGS} ${INCLUDES} \
         -o "${BUILD_DIR}/obj/${name}.o" \
         -c ${file}
     if [ $? -ne 0 ]; then EXIT_CODE=1; fi
     OBJS+=" ${BUILD_DIR}/obj/${name}.o"
+
 done
 
 echo "Archiving..."
@@ -191,6 +200,12 @@ echo "Installing..."
 
 mkdir -p ${INSTALL_DIR}
 
+mkdir -p ${INSTALL_DIR}/include
+for file in $(find ${SRC_DIR}/include -name '*.h'); do
+    echo $(basename ${file})
+done
+cp -r ${SRC_DIR}/include ${INSTALL_DIR}/
+
 mkdir -p ${INSTALL_DIR}/lib
 echo "libhurdygurdy.a"
 cp ${BUILD_DIR}/libhurdygurdy.a ${INSTALL_DIR}/lib/
@@ -198,9 +213,6 @@ cp ${BUILD_DIR}/libhurdygurdy.a ${INSTALL_DIR}/lib/
 mkdir -p ${INSTALL_DIR}/bin
 echo "hg_emded_file"
 cp ${BUILD_DIR}/hg_embed_file ${INSTALL_DIR}/bin/
-
-echo "headers"
-cp -r ${SRC_DIR}/include ${INSTALL_DIR}/
 
 END_TIME=$(date +%s.%N)
 printf "Build complete: %.6f seconds\n" "$(echo "$END_TIME - $START_TIME" | bc)"
