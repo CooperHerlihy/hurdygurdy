@@ -68,7 +68,7 @@ esac
 
 INCLUDES=" \
     -I${SRC_DIR}/include \
-    -I${SRC_DIR}/vendor/SDL/include \
+    -I${SRC_DIR}/vendor/libX11/include \
     -I${SRC_DIR}/vendor/Vulkan-Headers/include \
     -I${SRC_DIR}/vendor/VulkanMemoryAllocator/include \
     -I${SRC_DIR}/vendor/stb \
@@ -84,7 +84,7 @@ SRCS=(
     ${SRC_DIR}/src/hg_utils.c
     ${SRC_DIR}/src/hg_math.c
     ${SRC_DIR}/src/hg_graphics.c
-    ${SRC_DIR}/src/hg_events.c
+    ${SRC_DIR}/src/hg_platform_linux.c
 )
 
 OBJS=""
@@ -95,32 +95,32 @@ echo "Compiling external libraries..."
 
 mkdir -p ${BUILD_DIR}/obj
 
-if [ ! -d "${BUILD_DIR}/obj/SDL" ]; then
-    echo "SDL..."
-
-    cmake -S ${SRC_DIR}/vendor/SDL -B ${BUILD_DIR}/SDL \
-        -DSDL_STATIC=ON -DSDL_SHARED=OFF \
-        -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF
-    if [ $? -ne 0 ]; then EXIT_CODE=1; fi
-
-    if [ "${CONFIG}" == "debug" ]; then
-        SDL_CONFIG="Debug"
-    elif [ "${CONFIG}" == "rel-with-debug-info" ]; then
-        SDL_CONFIG="RelWithDebInfo"
-    elif [ "${CONFIG}" == "release" ]; then
-        SDL_CONFIG="Release"
-    fi
-    cmake --build ${BUILD_DIR}/SDL --config ${SDL_CONFIG}
-    if [ $? -ne 0 ]; then EXIT_CODE=1; fi
-
-    mkdir -p ${BUILD_DIR}/obj/SDL
-    (
-        cd ${BUILD_DIR}/obj/SDL
-        ar -x ../../SDL/libSDL3.a
-        if [ $? -ne 0 ]; then EXIT_CODE=1; fi
-    )
-fi
-OBJS+=" $(find ${BUILD_DIR}/obj/SDL -name '*.o')"
+# if [ ! -d "${BUILD_DIR}/obj/SDL" ]; then
+#     echo "SDL..."
+#
+#     cmake -S ${SRC_DIR}/vendor/SDL -B ${BUILD_DIR}/SDL \
+#         -DSDL_STATIC=ON -DSDL_SHARED=OFF \
+#         -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF
+#     if [ $? -ne 0 ]; then EXIT_CODE=1; fi
+#
+#     if [ "${CONFIG}" == "debug" ]; then
+#         SDL_CONFIG="Debug"
+#     elif [ "${CONFIG}" == "rel-with-debug-info" ]; then
+#         SDL_CONFIG="RelWithDebInfo"
+#     elif [ "${CONFIG}" == "release" ]; then
+#         SDL_CONFIG="Release"
+#     fi
+#     cmake --build ${BUILD_DIR}/SDL --config ${SDL_CONFIG}
+#     if [ $? -ne 0 ]; then EXIT_CODE=1; fi
+#
+#     mkdir -p ${BUILD_DIR}/obj/SDL
+#     (
+#         cd ${BUILD_DIR}/obj/SDL
+#         ar -x ../../SDL/libSDL3.a
+#         if [ $? -ne 0 ]; then EXIT_CODE=1; fi
+#     )
+# fi
+# OBJS+=" $(find ${BUILD_DIR}/obj/SDL -name '*.o')"
 
 if [ ! -f "${BUILD_DIR}/obj/vk_mem_alloc.o" ]; then
     echo "VulkanMemoryAllocator"

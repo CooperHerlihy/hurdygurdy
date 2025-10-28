@@ -1,10 +1,9 @@
 #include "hurdygurdy.h"
 
-#include <SDL3/SDL.h>
-#include <SDL3/SDL_vulkan.h>
+#include "hg_platform.h"
 
 HgError hg_init(void) {
-    SDL_Init(SDL_INIT_VIDEO);
+    hg_platform_init();
     hg_graphics_init();
 
     return HG_SUCCESS;
@@ -12,6 +11,6 @@ HgError hg_init(void) {
 
 void hg_shutdown(void) {
     hg_graphics_shutdown();
-    SDL_Quit();
+    hg_platform_shutdown();
 }
 

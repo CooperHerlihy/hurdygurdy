@@ -4,7 +4,7 @@
 #include "hg_utils.h"
 #include "hg_math.h"
 #include "hg_graphics.h"
-#include "hg_events.h"
+#include "hg_input.h"
 
 HgError hg_init(void);
 void hg_shutdown(void);

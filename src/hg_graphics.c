@@ -1,12 +1,9 @@
 #include "hg_graphics.h"
 
+#include "hg_platform.h"
+
 #include <vulkan/vulkan.h>
-
-#include <SDL3/SDL.h>
-#include <SDL3/SDL_vulkan.h>
-
 #include <vk_mem_alloc.h>
-#include <vulkan/vulkan_core.h>
 
 static void hg_load_vulkan(void);
 static void hg_load_vulkan_instance(VkInstance instance);
@@ -26,7 +23,6 @@ static VkQueue s_queue;
 static VmaAllocator s_allocator;
 static VkCommandPool s_command_pool;
 
-static SDL_Window* s_window;
 static VkSurfaceKHR s_surface;
 
 #define HG_SWAPCHAIN_MAX_IMAGES 3
@@ -102,15 +98,7 @@ void hg_get_instance_extensions(u32 buffer_count, const char** extensions, u32* 
     HG_ASSERT(extension_count != NULL);
     *extension_count = 0;
 
-    u32 sdl_extension_count = 0;
-    char const* const* sdl_extensions = SDL_Vulkan_GetInstanceExtensions(&sdl_extension_count);
-    if (sdl_extensions == NULL)
-        HG_ERRORF("Failed to get required instance extensions from SDL: %s", SDL_GetError());
-
-    if (sdl_extension_count > buffer_count)
-        HG_ERROR("Vulkan extension buffer too small");
-    memcpy(extensions, sdl_extensions, sdl_extension_count * sizeof(char*));
-    *extension_count += sdl_extension_count;
+    hg_platform_get_vulkan_instance_extensions(buffer_count, extensions, extension_count);
 
 #ifndef NDEBUG
     if (*extension_count >= buffer_count)
@@ -629,42 +617,6 @@ void hg_graphics_wait(void) {
     }
 }
 
-SDL_Window* hg_create_sdl_window(const char* title, int width, int height, bool windowed) {
-    if (windowed)
-        HG_ASSERT(width > 0 && height > 0);
-
-    SDL_Window* window;
-
-    if (windowed) {
-        window = SDL_CreateWindow(
-            title,
-            width, height,
-            SDL_WINDOW_RESIZABLE | SDL_WINDOW_VULKAN
-        );
-    } else {
-        SDL_DisplayID display = SDL_GetPrimaryDisplay();
-        if (display == 0)
-            HG_ERRORF("Could not get primary display: %s", SDL_GetError());
-
-        int count = 0;
-        SDL_DisplayMode** mode = SDL_GetFullscreenDisplayModes(display, &count);
-        if (mode == NULL)
-            HG_ERRORF("Could not get display modes: %s", SDL_GetError());
-        if (count == 0)
-            HG_ERROR("No fullscreen modes available");
-
-        window = SDL_CreateWindow(
-            title,
-            mode[0]->w, mode[0]->h,
-            SDL_WINDOW_FULLSCREEN | SDL_WINDOW_VULKAN
-        );
-    }
-    if (window == NULL)
-        HG_ERRORF("Could not create window: %s", SDL_GetError());
-
-    return window;
-}
-
 static VkFormat hg_find_swapchain_format(VkSurfaceKHR surface) {
     u32 formats_count = 0;
     VkResult formats_count_res = vkGetPhysicalDeviceSurfaceFormatsKHR(s_gpu, surface, &formats_count, NULL);
@@ -910,7 +862,6 @@ static VkSemaphore hg_create_semaphore(void) {
 }
 
 void hg_window_open(const HgWindowConfig* config) {
-    HG_ASSERT(s_window == NULL);
     HG_ASSERT(s_surface == VK_NULL_HANDLE);
 
     HG_ASSERT(s_swapchain == VK_NULL_HANDLE);
@@ -931,16 +882,8 @@ void hg_window_open(const HgWindowConfig* config) {
         HG_ASSERT(s_ready_to_present_semaphores[i] == VK_NULL_HANDLE);
     }
 
-    s_window = hg_create_sdl_window(
-        config->title,
-        (i32)config->width,
-        (i32)config->height,
-        config->windowed
-    );
-
-    bool sdl_success = SDL_Vulkan_CreateSurface(s_window, s_instance, NULL, &s_surface);
-    if (!sdl_success)
-        HG_ERRORF("Could not create Vulkan surface: %s", SDL_GetError());
+    hg_platform_open_window(config->title, config->width, config->height, config->windowed);
+    s_surface = hg_platform_create_vulkan_surface(s_instance);
 
     s_swapchain_format = hg_find_swapchain_format(s_surface);
 
@@ -980,7 +923,6 @@ void hg_window_open(const HgWindowConfig* config) {
 }
 
 void hg_window_close(void) {
-    HG_ASSERT(s_window != NULL);
     HG_ASSERT(s_surface != VK_NULL_HANDLE);
     HG_ASSERT(s_swapchain != VK_NULL_HANDLE);
     HG_ASSERT(!s_recording_frame);
@@ -1005,10 +947,9 @@ void hg_window_close(void) {
 
     vkDestroySwapchainKHR(s_device, s_swapchain, NULL);
     vkDestroySurfaceKHR(s_instance, s_surface, NULL);
-    SDL_DestroyWindow(s_window);
+    hg_platform_close_window();
 
 #ifndef NDEBUG
-    s_window = NULL;
     s_surface = VK_NULL_HANDLE;
 
     s_swapchain = VK_NULL_HANDLE;
@@ -1036,7 +977,8 @@ void hg_window_close(void) {
 }
 
 void hg_window_update_size(void) {
-    HG_ASSERT(s_window != NULL);
+    HG_ASSERT(s_swapchain != VK_NULL_HANDLE);
+    HG_ASSERT(s_surface != VK_NULL_HANDLE);
 
     VkSwapchainKHR new_swapchain = hg_create_new_swapchain(
         s_swapchain,

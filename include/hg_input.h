@@ -1,5 +1,5 @@
-#ifndef HG_EVENTS_H
-#define HG_EVENTS_H
+#ifndef HG_INPUT_H
+#define HG_INPUT_H
 
 #include "hg_utils.h"
 
@@ -13,6 +13,7 @@ typedef enum HgKey {
     HG_KEY_BACKSPACE,
     HG_KEY_LMOUSE,
     HG_KEY_RMOUSE,
+    HG_KEY_MMOUSE,
     HG_KEY_UP,
     HG_KEY_DOWN,
     HG_KEY_LEFT,
@@ -57,11 +58,11 @@ void hg_process_events(void);
 bool hg_was_window_closed(void);
 bool hg_was_window_resized(void);
 
-bool hg_get_key_pressed(HgKey key);
-bool hg_get_key_down(HgKey key);
-bool hg_get_key_up(HgKey key);
+bool hg_is_key_down(HgKey key);
+bool hg_was_key_pressed(HgKey key);
+bool hg_was_key_released(HgKey key);
 
 void hg_get_mouse_pos(f32* x, f32* y);
 void hg_get_mouse_delta(f32* x, f32* y);
 
-#endif // HG_EVENTS_H
+#endif // HG_INPUT_H
