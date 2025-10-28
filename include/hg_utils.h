@@ -5,16 +5,12 @@
 #include <inttypes.h>
 #include <limits.h>
 #include <math.h>
-#include <stdalign.h>
-#include <stdarg.h>
-#include <stdatomic.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <threads.h>
 #include <time.h>
 
 typedef uint8_t u8;
@@ -117,7 +113,7 @@ HgError hg_file_save_image(const char* path, const u32* data, u32 width, u32 hei
 void hg_file_unload_image(u32* data, u32 width, u32 height);
 
 typedef struct HgClock {
-    struct timespec time;
+    clock_t time;
 } HgClock;
 
 f64 hg_clock_tick(HgClock* clock);

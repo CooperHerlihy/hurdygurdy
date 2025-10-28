@@ -135,10 +135,8 @@ void hg_shader_unbind(void);
 typedef struct HgDescriptor {
     HgDescriptorType type;
     u32 count;
-    union {
-        HgBuffer** buffers;
-        HgTexture** textures;
-    };
+    HgBuffer** buffers;
+    HgTexture** textures;
 } HgDescriptor;
 
 void hg_bind_descriptor_set(u32 set_index, HgDescriptor* descriptors, u32 descriptor_count);

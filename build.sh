@@ -44,7 +44,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-CVERSION="-std=c11"
+CVERSION="-std=c99"
 CXXVERSION="-std=c++20"
 CONFIG_FLAGS=""
 WARNING_FLAGS="-Werror -Wall -Wextra -Wconversion -Wshadow -pedantic"
@@ -69,6 +69,7 @@ esac
 INCLUDES=" \
     -I${SRC_DIR}/include \
     -I${SRC_DIR}/vendor/libX11/include \
+    -I${SRC_DIR}/vendor/SDL/include \
     -I${SRC_DIR}/vendor/Vulkan-Headers/include \
     -I${SRC_DIR}/vendor/VulkanMemoryAllocator/include \
     -I${SRC_DIR}/vendor/stb \

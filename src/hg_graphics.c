@@ -1103,12 +1103,12 @@ static void hg_end_single_time_cmd(VkCommandBuffer cmd) {
     vkFreeCommandBuffers(s_device, s_command_pool, 1, &cmd);
 }
 
-typedef struct HgBuffer {
+struct HgBuffer {
     VmaAllocation allocation;
     VkBuffer handle;
     usize size;
     HgGpuMemoryType memory_type;
-} HgBuffer;
+};
 
 static VkBufferUsageFlags hg_buffer_usage_flags_to_vk(HgBufferUsageFlags usage) {
     return (usage & HG_BUFFER_USAGE_READ_WRITE_SRC_BIT ? VK_BUFFER_USAGE_TRANSFER_SRC_BIT : 0)
@@ -1251,7 +1251,7 @@ void hg_buffer_read(void* dst, usize size, const HgBuffer* src, usize offset) {
     hg_buffer_destroy(staging_buffer);
 }
 
-typedef struct HgTexture {
+struct HgTexture {
     VmaAllocation allocation;
     VkImage handle;
     VkImageView view;
@@ -1265,7 +1265,7 @@ typedef struct HgTexture {
     u32 array_layers;
     u32 mip_levels;
     bool is_cubemap;
-} HgTexture;
+};
 
 static VkFormat hg_format_to_vk(HgFormat format) {
     return (VkFormat)format;
@@ -2078,13 +2078,13 @@ void hg_texture_generate_mipmaps(HgTexture* texture, HgTextureLayout layout) {
     texture->layout = hg_texture_layout_to_vk(layout);
 }
 
-typedef struct HgShader {
+struct HgShader {
     VkPipelineLayout layout;
     VkPipeline pipeline;
     u32 descriptor_layout_count;
     VkPipelineBindPoint bind_point;
     VkDescriptorSetLayout descriptor_layouts[];
-} HgShader;
+};
 
 static VkDescriptorType hg_descriptor_type_to_vk(HgDescriptorType type) {
     const VkDescriptorType descriptor_types[] = {

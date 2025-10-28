@@ -123,16 +123,9 @@ void hg_file_unload_image(u32* data, u32 width, u32 height) {
     (void)height;
 }
 
-f64 hg_clock_tick(HgClock* clock) {
-    struct timespec time;
-    int result = timespec_get(&time, TIME_UTC);
-    if (result == 0)
-        HG_ERROR("Failed to get time");
-
-    f64 delta = (f64)(time.tv_sec - clock->time.tv_sec);
-    delta += (f64)(time.tv_nsec - clock->time.tv_nsec) / 1.0e9;
-
-    clock->time = time;
-    return delta;
+f64 hg_clock_tick(HgClock* hgclock) {
+    clock_t past = hgclock->time;
+    hgclock->time = clock();
+    return (f64)(hgclock->time - past) / CLOCKS_PER_SEC;
 }
 
