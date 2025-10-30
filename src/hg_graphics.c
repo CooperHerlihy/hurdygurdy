@@ -25,7 +25,7 @@ static VkCommandPool s_command_pool;
 
 static VkSurfaceKHR s_surface;
 
-#define HG_SWAPCHAIN_MAX_IMAGES 3
+#define HG_SWAPCHAIN_MAX_IMAGES 4
 #define HG_SWAPCHAIN_MAX_FRAMES_IN_FLIGHT 2
 
 static VkDescriptorPool s_descriptor_pools[HG_SWAPCHAIN_MAX_FRAMES_IN_FLIGHT];
