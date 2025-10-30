@@ -44,7 +44,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-CVERSION="-std=c99"
+CVERSION="-std=c11"
 CXXVERSION="-std=c++20"
 CONFIG_FLAGS=""
 WARNING_FLAGS="-Werror -Wall -Wextra -Wconversion -Wshadow -pedantic"

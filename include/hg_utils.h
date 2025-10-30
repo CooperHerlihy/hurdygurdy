@@ -113,7 +113,7 @@ HgError hg_file_save_image(const char* path, const u32* data, u32 width, u32 hei
 void hg_file_unload_image(u32* data, u32 width, u32 height);
 
 typedef struct HgClock {
-    clock_t time;
+    struct timespec time;
 } HgClock;
 
 f64 hg_clock_tick(HgClock* clock);
