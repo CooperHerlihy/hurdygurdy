@@ -3,6 +3,9 @@
 
 #include "hg_utils.h"
 
+/**
+ * A key on the keyboard or button on the mouse
+ */
 typedef enum HgKey {
     HG_KEY_NONE = 0,
     HG_KEY_ESCAPE,
@@ -53,16 +56,70 @@ typedef enum HgKey {
     HG_KEY_LAST,
 } HgKey;
 
+/**
+ * Processes all events since the last call to hg_process_events() or since the window was opened
+ *
+ * This function must be called every frame before querying input
+ * A window must be open before this function can be called
+ */
 void hg_process_events(void);
 
+/**
+ * Checks if the window was closed via close button or window manager
+ *
+ * hg_window_close() is not automatically called when this function returns true, and may be called manually
+ *
+ * \return whether the window was closed
+ */
 bool hg_was_window_closed(void);
+
+/**
+ * Checks if the window was resized
+ *
+ * hg_window_update_size() should be called when this function returns true
+ *
+ * \return whether the window was resized
+ */
 bool hg_was_window_resized(void);
 
+/**
+ * Checks if the key is being held down
+ *
+ * \param key The key to check
+ * \return whether the key is being held down
+ */
 bool hg_is_key_down(HgKey key);
+
+/**
+ * Checks if the key was pressed this frame
+ *
+ * \param key The key to check
+ * \return whether the key was pressed this frame
+ */
 bool hg_was_key_pressed(HgKey key);
+
+/**
+ * Checks if the key was released this frame
+ *
+ * \param key The key to check
+ * \return whether the key was released this frame
+ */
 bool hg_was_key_released(HgKey key);
 
+/**
+ * Gets the most recent mouse position
+ *
+ * \param x A pointer to store the x position, must not be NULL
+ * \param y A pointer to store the y position, must not be NULL
+ */
 void hg_get_mouse_pos(f32* x, f32* y);
+
+/**
+ * Gets the most recent mouse delta
+ *
+ * \param x A pointer to store the x delta, must not be NULL
+ * \param y A pointer to store the y delta, must not be NULL
+ */
 void hg_get_mouse_delta(f32* x, f32* y);
 
 #endif // HG_INPUT_H

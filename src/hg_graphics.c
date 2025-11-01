@@ -310,12 +310,12 @@ static bool find_queue_family(VkPhysicalDevice gpu, u32* queue_family) {
     return *queue_family != UINT32_MAX;
 }
 
-static VkPhysicalDevice* get_gpus(u32* count) {
+static void get_gpus(u32 buffer_count, VkPhysicalDevice* gpu_buffer, u32* gpu_count) {
     HG_ASSERT(s_instance != VK_NULL_HANDLE);
-    HG_ASSERT(count != NULL);
+    HG_ASSERT(gpu_buffer != NULL);
+    HG_ASSERT(gpu_count != NULL);
 
-    u32 gpu_count = 0;
-    VkResult gpu_count_res = vkEnumeratePhysicalDevices(s_instance, &gpu_count, NULL);
+    VkResult gpu_count_res = vkEnumeratePhysicalDevices(s_instance, gpu_count, NULL);
     switch (gpu_count_res) {
         case VK_SUCCESS: break;
         case VK_INCOMPLETE: {
@@ -328,8 +328,10 @@ static VkPhysicalDevice* get_gpus(u32* count) {
         default: HG_ERROR("Unexpected Vulkan error");
     }
 
-    VkPhysicalDevice* gpus = hg_heap_alloc(gpu_count * sizeof(VkPhysicalDevice));
-    VkResult gpu_result = vkEnumeratePhysicalDevices(s_instance, &gpu_count, gpus);
+    if (*gpu_count > buffer_count)
+        HG_ERROR("Vulkan gpu buffer too small");
+
+    VkResult gpu_result = vkEnumeratePhysicalDevices(s_instance, gpu_count, gpu_buffer);
     switch (gpu_result) {
         case VK_SUCCESS: break;
         case VK_INCOMPLETE: {
@@ -341,16 +343,16 @@ static VkPhysicalDevice* get_gpus(u32* count) {
         case VK_ERROR_INITIALIZATION_FAILED: HG_ERROR("Vulkan initialization failed");
         default: HG_ERROR("Unexpected Vulkan error");
     }
-
-    *count = gpu_count;
-    return gpus;
 }
 
 static VkPhysicalDevice find_gpu(void) {
     HG_ASSERT(s_instance != NULL);
 
+#define HG_MAX_GPUS 16
+
     u32 gpu_count = 0;
-    VkPhysicalDevice* gpus = get_gpus(&gpu_count);
+    VkPhysicalDevice* gpus = hg_heap_alloc(HG_MAX_GPUS * sizeof(VkPhysicalDevice));
+        get_gpus(HG_MAX_GPUS, gpus, &gpu_count);
     if (gpu_count == 0)
         return VK_NULL_HANDLE;
 
@@ -428,7 +430,8 @@ static VkPhysicalDevice find_gpu(void) {
     }
 
     hg_heap_free(extension_properties, extension_properties_count * sizeof(VkExtensionProperties));
-    hg_heap_free(gpus, gpu_count * sizeof(VkPhysicalDevice));
+    hg_heap_free(gpus, HG_MAX_GPUS * sizeof(VkPhysicalDevice));
+#undef HG_MAX_GPUS
     return suitable_gpu;
 }
 
@@ -706,8 +709,10 @@ static VkPresentModeKHR hg_get_swapchain_present_mode(VkSurfaceKHR surface) {
 
     VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
     for (usize i = 0; i < present_mode_count; ++i) {
-        if (present_modes[i] == VK_PRESENT_MODE_MAILBOX_KHR)
-            return VK_PRESENT_MODE_MAILBOX_KHR;
+        if (present_modes[i] == VK_PRESENT_MODE_MAILBOX_KHR) {
+            present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
+            break;
+        }
     }
 
     hg_heap_free(present_modes, present_mode_count * sizeof(VkPresentModeKHR));
@@ -751,12 +756,7 @@ static VkSwapchainKHR hg_create_new_swapchain(
     VkSwapchainCreateInfoKHR new_swapchain_info = {
         .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
         .surface = surface,
-        .minImageCount = surface_capabilities.maxImageCount == 0
-                       ? HG_SWAPCHAIN_MAX_IMAGES
-                       : HG_MIN(HG_MIN(
-                             surface_capabilities.minImageCount + 1,
-                             surface_capabilities.maxImageCount),
-                             HG_SWAPCHAIN_MAX_IMAGES),
+        .minImageCount = surface_capabilities.minImageCount,
         .imageFormat = format,
         .imageColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR,
         .imageExtent = surface_capabilities.currentExtent,
@@ -976,6 +976,13 @@ void hg_window_close(void) {
     s_swapchain_height = 0;
 }
 
+void hg_window_get_size(u32* width, u32* height) {
+    HG_ASSERT(width != NULL);
+    HG_ASSERT(height != NULL);
+    *width = s_swapchain_width;
+    *height = s_swapchain_height;
+}
+
 void hg_window_update_size(void) {
     HG_ASSERT(s_swapchain != VK_NULL_HANDLE);
     HG_ASSERT(s_surface != VK_NULL_HANDLE);
@@ -987,7 +994,7 @@ void hg_window_update_size(void) {
         &s_swapchain_width,
         &s_swapchain_height
     );
-    if (new_swapchain == VK_NULL_HANDLE)
+    if (new_swapchain == VK_NULL_HANDLE) // maybe we can just warn and return : TODO
         HG_ERROR("Could not create new swapchain");
 
     hg_graphics_wait();
@@ -1012,13 +1019,6 @@ void hg_window_update_size(void) {
 
     vkFreeCommandBuffers(s_device, s_command_pool, HG_ARRAY_SIZE(s_command_buffers), s_command_buffers);
     hg_allocate_command_buffers(s_command_buffers, HG_ARRAY_SIZE(s_command_buffers));
-}
-
-void hg_window_get_size(u32* width, u32* height) {
-    HG_ASSERT(width != NULL);
-    HG_ASSERT(height != NULL);
-    *width = s_swapchain_width;
-    *height = s_swapchain_height;
 }
 
 static VkCommandBuffer hg_begin_single_time_cmd(void) {
@@ -1178,6 +1178,7 @@ void hg_buffer_destroy(HgBuffer* buffer) {
 }
 
 void hg_buffer_write(HgBuffer* dst, usize offset, const void* src, usize size) {
+    HG_ASSERT(dst != NULL);
     HG_ASSERT(dst->allocation != NULL);
     HG_ASSERT(dst->handle != NULL);
     HG_ASSERT(src != NULL);
@@ -1489,7 +1490,6 @@ HgTexture* hg_texture_create(const HgTextureConfig* config) {
     HG_ASSERT(config->aspect != HG_TEXTURE_ASPECT_NONE);
     HG_ASSERT(config->usage != HG_TEXTURE_USAGE_NONE);
     if (config->make_cubemap) {
-        HG_ASSERT(config->array_layers == 6);
         HG_ASSERT(config->width == config->height);
         HG_ASSERT(config->depth == 1);
     }
@@ -1499,7 +1499,7 @@ HgTexture* hg_texture_create(const HgTextureConfig* config) {
         .width = config->width,
         .height = config->height,
         .depth = config->depth,
-        .array_layers = config->array_layers > 0 ? config->array_layers : 1,
+        .array_layers = config->make_cubemap ? 6 : config->array_layers > 0 ? config->array_layers : 1,
         .mip_levels = config->mip_levels > 0 ? config->mip_levels : 1,
         .format = hg_format_to_vk(config->format),
         .aspect = hg_texture_aspect_flags_to_vk(config->aspect),
@@ -2257,8 +2257,6 @@ HgShader* hg_shader_create(const HgShaderConfig* config) {
         HG_ASSERT(config->vertex_bindings != NULL);
     if (config->descriptor_set_count > 0)
         HG_ASSERT(config->descriptor_sets != NULL);
-    if (config->enable_depth_buffer)
-        HG_ASSERT(config->depth_format != HG_FORMAT_UNDEFINED);
 
     HgShader* shader = hg_heap_alloc(
         sizeof(HgShader) + config->descriptor_set_count * sizeof(VkDescriptorSetLayout)
@@ -2389,8 +2387,8 @@ HgShader* hg_shader_create(const HgShaderConfig* config) {
 
     VkPipelineDepthStencilStateCreateInfo depth_stencil_state = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-        .depthTestEnable = config->enable_depth_buffer ? VK_TRUE : VK_FALSE,
-        .depthWriteEnable = config->enable_depth_buffer ? VK_TRUE : VK_FALSE,
+        .depthTestEnable = config->depth_format != HG_FORMAT_UNDEFINED ? VK_TRUE : VK_FALSE,
+        .depthWriteEnable = config->depth_format != HG_FORMAT_UNDEFINED ? VK_TRUE : VK_FALSE,
         .depthCompareOp = config->enable_color_blend ? VK_COMPARE_OP_LESS_OR_EQUAL : VK_COMPARE_OP_LESS,
         .depthBoundsTestEnable = VK_FALSE,
         .stencilTestEnable = VK_FALSE,
@@ -2615,6 +2613,9 @@ HgError hg_frame_begin(void) {
     hg_wait_for_fence(hg_is_frame_finished());
     hg_reset_fence(hg_is_frame_finished());
 
+    HgClock frame_timer;
+    (void)hg_clock_tick(&frame_timer);
+
     const VkResult acquire_result = vkAcquireNextImageKHR(
         s_device,
         s_swapchain,
@@ -2623,6 +2624,7 @@ HgError hg_frame_begin(void) {
         NULL,
         &s_current_image_index
     );
+
     switch (acquire_result) {
         case VK_SUCCESS: break;
         case VK_SUBOPTIMAL_KHR: return HG_ERROR_WINDOW_INVALID;

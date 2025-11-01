@@ -14,6 +14,9 @@ static Display* s_display = NULL;
 static Window s_window;
 static Atom s_delete_window_atom;
 
+static u32 s_window_width;
+static u32 s_window_height;
+
 static bool s_window_closed = false;
 static bool s_window_resized = false;
 
@@ -44,6 +47,9 @@ void hg_platform_shutdown(void) {
 void hg_platform_open_window(const char* title, u32 width, u32 height, bool windowed) {
     HG_ASSERT(s_display != NULL);
 
+    s_window_width = windowed ? width : (u32)DisplayWidth(s_display, DefaultScreen(s_display));
+    s_window_height = windowed ? height : (u32)DisplayHeight(s_display, DefaultScreen(s_display));
+
     XSetWindowAttributes window_attributes = {
         .event_mask
             = KeyPressMask
@@ -56,8 +62,8 @@ void hg_platform_open_window(const char* title, u32 width, u32 height, bool wind
     s_window = XCreateWindow(
         s_display, RootWindow(s_display, DefaultScreen(s_display)),
         0, 0,
-        windowed ? width : (u32)DisplayWidth(s_display, DefaultScreen(s_display)),
-        windowed ? height : (u32)DisplayHeight(s_display, DefaultScreen(s_display)),
+        s_window_width,
+        s_window_height,
         1,
         CopyFromParent,
         InputOutput,
@@ -212,6 +218,9 @@ void hg_process_events(void) {
     s_mouse_delta_x = 0.0f;
     s_mouse_delta_y = 0.0f;
 
+    u32 new_window_width = s_window_width;
+    u32 new_window_height = s_window_height;
+
     while (XPending(s_display)) {
         XEvent event;
         int event_result = XNextEvent(s_display, &event);
@@ -220,7 +229,8 @@ void hg_process_events(void) {
 
         switch (event.type) {
             case ConfigureNotify: {
-                s_window_resized = true;
+                new_window_width = (u32)event.xconfigure.width;
+                new_window_height = (u32)event.xconfigure.height;
             } break;
             case ClientMessage: {
                 if ((Atom)event.xclient.data.l[0] == s_delete_window_atom)
@@ -610,6 +620,12 @@ void hg_process_events(void) {
             } break;
             default: break;
         }
+    }
+
+    if (new_window_width != s_window_width || new_window_height != s_window_height) {
+        s_window_resized = true;
+        s_window_width = new_window_width;
+        s_window_height = new_window_height;
     }
 }
 

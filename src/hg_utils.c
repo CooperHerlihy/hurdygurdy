@@ -8,6 +8,8 @@
 // }
 
 void* hg_heap_alloc(usize size) {
+    if (size == 0)
+        return NULL;
     void* ptr = malloc(size);
     if (ptr == NULL)
         HG_ERRORF("Failed to allocate %zu bytes", size);
@@ -15,6 +17,10 @@ void* hg_heap_alloc(usize size) {
 }
 
 void* hg_heap_realloc(void* ptr, usize size) {
+    if (size == 0) {
+        hg_heap_free(ptr, 0);
+        return NULL;
+    }
     void* new_ptr = realloc(ptr, size);
     if (new_ptr == NULL)
         HG_ERRORF("Failed to reallocate %zu bytes", size);
@@ -118,6 +124,8 @@ HgError hg_file_save_image(const char* path, const u32* data, u32 width, u32 hei
 }
 
 void hg_file_unload_image(u32* data, u32 width, u32 height) {
+    if (data == NULL)
+        HG_ASSERT(width == 0 && height == 0);
     stbi_image_free(data);
     (void)width;
     (void)height;

@@ -140,12 +140,12 @@ HgVec4 hg_vmul4(HgVec4 lhs, HgVec4 rhs){
     return (HgVec4){lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z, lhs.w * rhs.w};
 }
 
-void hg_svmul(u32 size, f32* dst, f32 scalar, f32* rhs) {
+void hg_svmul(u32 size, f32* dst, f32 scalar, f32* vec) {
     HG_ASSERT(size > 0);
     HG_ASSERT(dst != NULL);
-    HG_ASSERT(rhs != NULL);
+    HG_ASSERT(vec != NULL);
     for (u32 i = 0; i < size; ++i) {
-        dst[i] = scalar * rhs[i];
+        dst[i] = scalar * vec[i];
     }
 }
 
@@ -183,12 +183,12 @@ HgVec4 hg_vdiv4(HgVec4 lhs, HgVec4 rhs){
     return (HgVec4){lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z, lhs.w / rhs.w};
 }
 
-void hg_svdiv(u32 size, f32* dst, f32 scalar, f32* rhs) {
+void hg_svdiv(u32 size, f32* dst, f32 scalar, f32* vec) {
     HG_ASSERT(size > 0);
     HG_ASSERT(dst != NULL);
-    HG_ASSERT(rhs != NULL);
+    HG_ASSERT(vec != NULL);
     for (u32 i = 0; i < size; ++i) {
-        dst[i] = scalar / rhs[i];
+        dst[i] = scalar / vec[i];
     }
 }
 
@@ -476,7 +476,7 @@ HgMat3 hg_rotate_mat3(HgQuat lhs, HgMat3 rhs) {
     };
 }
 
-HgVec3 hg_move_first_person(HgVec3 position, HgQuat rotation, HgVec3 direction, f32 distance) {
+HgVec3 hg_move_camera_first_person(HgVec3 position, HgQuat rotation, HgVec3 direction, f32 distance) {
     HgVec3 d = hg_rotate_vec3(rotation, (HgVec3){direction.x, 0.0f, direction.z});
     d.y = direction.y;
     return hg_vadd3(position, hg_svmul3(distance, hg_vnorm3(d)));

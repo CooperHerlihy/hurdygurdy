@@ -1,12 +1,22 @@
 #ifndef HG_GRAPHICS_ENUMS_H
 #define HG_GRAPHICS_ENUMS_H
 
+/**
+ * The type of memory to allocate for a buffer
+ *
+ * HG_GPU_MEMORY_TYPE_DEVICE_LOCAL suggests to put the buffer on the GPU, and is the most efficient
+ * HG_GPU_MEMORY_TYPE_LINEAR_ACCESS optimizes for sequential CPU access, but is less efficient than device local
+ * HG_GPU_MEMORY_TYPE_RANDOM_ACCESS keeps the buffer available to the CPU, but is the least efficient
+ */
 typedef enum HgGpuMemoryType {
     HG_GPU_MEMORY_TYPE_DEVICE_LOCAL = 0,
-    HG_GPU_MEMORY_TYPE_RANDOM_ACCESS,
     HG_GPU_MEMORY_TYPE_LINEAR_ACCESS,
+    HG_GPU_MEMORY_TYPE_RANDOM_ACCESS,
 } HgGpuMemoryType;
 
+/**
+ * How a buffer will be used
+ */
 typedef enum HgBufferUsageFlags {
     HG_BUFFER_USAGE_NONE = 0x0,
     HG_BUFFER_USAGE_READ_WRITE_SRC_BIT = 0x1,
@@ -17,6 +27,9 @@ typedef enum HgBufferUsageFlags {
     HG_BUFFER_USAGE_INDEX_BUFFER_BIT = 0x20,
 } HgBufferUsageFlags;
 
+/**
+ * The memory format of a pixel or vertex attribute
+ */
 typedef enum HgFormat {
     HG_FORMAT_UNDEFINED = 0,
     HG_FORMAT_R4G4_UNORM_PACK8 = 1,
@@ -151,12 +164,18 @@ typedef enum HgFormat {
     HG_FORMAT_D32_SFLOAT_S8_UINT = 130,
 } HgFormat;
 
+/**
+ * The aspect of a texture
+ */
 typedef enum HgTextureAspectFlags {
     HG_TEXTURE_ASPECT_NONE = 0x0,
     HG_TEXTURE_ASPECT_COLOR_BIT = 0x1,
     HG_TEXTURE_ASPECT_DEPTH_BIT = 0x2,
 } HgTextureAspectFlags;
 
+/**
+ * How a texture will be used
+ */
 typedef enum HgTextureUsageFlags {
     HG_TEXTURE_USAGE_NONE = 0x0,
     HG_TEXTURE_USAGE_TRANSFER_SRC_BIT = 0x1,
@@ -167,6 +186,9 @@ typedef enum HgTextureUsageFlags {
     HG_TEXTURE_USAGE_DEPTH_BUFFER_BIT = 0x20,
 } HgTextureUsageFlags;
 
+/**
+ * How a texture is laid out in video memory
+ */
 typedef enum HgTextureLayout {
     HG_IMAGE_LAYOUT_UNDEFINED = 0,
     HG_IMAGE_LAYOUT_GENERAL = 1,
@@ -178,6 +200,9 @@ typedef enum HgTextureLayout {
     HG_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL = 7,
 } HgTextureLayout;
 
+/**
+ * How a sampler handles texture edges
+ */
 typedef enum HgSamplerEdgeMode {
     HG_SAMPLER_EDGE_MODE_REPEAT = 0,
     HG_SAMPLER_EDGE_MODE_MIRRORED_REPEAT = 1,
@@ -186,11 +211,17 @@ typedef enum HgSamplerEdgeMode {
     HG_SAMPLER_EDGE_MODE_MIRROR_CLAMP_TO_EDGE = 4,
 } HgSamplerEdgeMode;
 
+/**
+ * Whether a vertex input is per vertex or per instance
+ */
 typedef enum HgVertexInputRate {
     HG_VERTEX_INPUT_RATE_VERTEX = 0,
     HG_VERTEX_INPUT_RATE_INSTANCE = 1,
 } HgVertexInputRate;
 
+/**
+ * The type of a descriptor
+ */
 typedef enum HgDescriptorType {
     HG_DESCRIPTOR_TYPE_UNIFORM_BUFFER = 0,
     HG_DESCRIPTOR_TYPE_STORAGE_BUFFER = 1,
@@ -198,6 +229,11 @@ typedef enum HgDescriptorType {
     HG_DESCRIPTOR_TYPE_STORAGE_TEXTURE = 3,
 } HgDescriptorType;
 
+/**
+ * The shader stages
+ *
+ * Tesselation and geometry are not supported yet
+ */
 typedef enum HgShaderStageFlags {
     HG_SHADER_STAGE_NONE = 0,
     HG_SHADER_STAGE_VERTEX_BIT = 0x1,
@@ -209,6 +245,9 @@ typedef enum HgShaderStageFlags {
     HG_SHADER_STAGE_ALL_GRAPHICS = 0x1F,
 } HgShaderStageFlags;
 
+/**
+ * The vertices are understood as primitives
+ */
 typedef enum HgPrimitiveTopology {
     HG_PRIMITIVE_TOPOLOGY_POINT_LIST = 0,
     HG_PRIMITIVE_TOPOLOGY_LINE_LIST = 1,
@@ -218,6 +257,9 @@ typedef enum HgPrimitiveTopology {
     HG_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN = 5,
 } HgPrimitiveTopology;
 
+/**
+ * Which sides (if any) of a primitive are culled
+ */
 typedef enum HgCullModeFlagBits {
     HG_CULL_MODE_NONE = 0,
     HG_CULL_MODE_FRONT_BIT = 0x1,
