@@ -1111,8 +1111,8 @@ struct HgBuffer {
 };
 
 static VkBufferUsageFlags hg_buffer_usage_flags_to_vk(HgBufferUsageFlags usage) {
-    return (usage & HG_BUFFER_USAGE_READ_WRITE_SRC_BIT ? VK_BUFFER_USAGE_TRANSFER_SRC_BIT : 0)
-         | (usage & HG_BUFFER_USAGE_READ_WRITE_DST_BIT ? VK_BUFFER_USAGE_TRANSFER_DST_BIT : 0)
+    return (usage & HG_BUFFER_USAGE_TRANSFER_SRC_BIT ? VK_BUFFER_USAGE_TRANSFER_SRC_BIT : 0)
+         | (usage & HG_BUFFER_USAGE_TRANSFER_DST_BIT ? VK_BUFFER_USAGE_TRANSFER_DST_BIT : 0)
          | (usage & HG_BUFFER_USAGE_UNIFORM_BUFFER_BIT ? VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT : 0)
          | (usage & HG_BUFFER_USAGE_STORAGE_BUFFER_BIT ? VK_BUFFER_USAGE_STORAGE_BUFFER_BIT : 0)
          | (usage & HG_BUFFER_USAGE_VERTEX_BUFFER_BIT ? VK_BUFFER_USAGE_VERTEX_BUFFER_BIT : 0)
@@ -1200,7 +1200,7 @@ void hg_buffer_write(HgBuffer* dst, usize offset, const void* src, usize size) {
 
     HgBuffer* staging_buffer = hg_buffer_create(&(HgBufferConfig){
         .size = size,
-        .usage = HG_BUFFER_USAGE_READ_WRITE_SRC_BIT,
+        .usage = HG_BUFFER_USAGE_TRANSFER_SRC_BIT,
         .memory_type = HG_GPU_MEMORY_TYPE_LINEAR_ACCESS
     });
     hg_buffer_write(staging_buffer, 0, src, size);
@@ -1239,7 +1239,7 @@ void hg_buffer_read(void* dst, usize size, const HgBuffer* src, usize offset) {
 
     HgBuffer* staging_buffer = hg_buffer_create(&(HgBufferConfig){
         .size = size,
-        .usage = HG_BUFFER_USAGE_READ_WRITE_DST_BIT,
+        .usage = HG_BUFFER_USAGE_TRANSFER_DST_BIT,
         .memory_type = HG_GPU_MEMORY_TYPE_LINEAR_ACCESS
     });
 
@@ -1785,7 +1785,7 @@ static void hg_write_image(HgTexture* dst, const void* src, VkImageLayout layout
 
         HgBuffer* staging_buffer = hg_buffer_create(&(HgBufferConfig){
             .size = dst->width * dst->height * dst->depth * pixel_size,
-            .usage = HG_BUFFER_USAGE_READ_WRITE_SRC_BIT,
+            .usage = HG_BUFFER_USAGE_TRANSFER_SRC_BIT,
             .memory_type = HG_GPU_MEMORY_TYPE_LINEAR_ACCESS,
         });
         hg_buffer_write(staging_buffer, 0, src, dst->width * dst->height * dst->depth * pixel_size);
@@ -1885,7 +1885,7 @@ void hg_texture_read(void* dst, HgTexture* src, HgTextureLayout layout) {
 
     HgBuffer* staging_buffer = hg_buffer_create(&(HgBufferConfig){
         .size = src->width * src->height * src->depth * pixel_size,
-        .usage = HG_BUFFER_USAGE_READ_WRITE_DST_BIT,
+        .usage = HG_BUFFER_USAGE_TRANSFER_DST_BIT,
         .memory_type = HG_GPU_MEMORY_TYPE_LINEAR_ACCESS,
     });
 
@@ -1946,7 +1946,7 @@ typedef struct BlitConfig {
     uint32_t layer_count;
 } BlitConfig;
 
-void hg_blit_image(VkCommandBuffer cmd, const BlitConfig* dst, const BlitConfig* src, VkFilter filter) {
+static void hg_blit_image(VkCommandBuffer cmd, const BlitConfig* dst, const BlitConfig* src, VkFilter filter) {
     HG_ASSERT(dst->image != NULL);
     HG_ASSERT(src->image != NULL);
 
@@ -2604,6 +2604,134 @@ void hg_commands_end(void) {
     s_current_cmd = VK_NULL_HANDLE;
 }
 
+void hg_shader_bind(HgShader* shader) {
+    HG_ASSERT(s_current_cmd != VK_NULL_HANDLE);
+    HG_ASSERT(shader != NULL);
+
+    vkCmdBindPipeline(s_current_cmd, shader->bind_point, shader->pipeline);
+    s_current_shader = shader;
+}
+
+void hg_shader_unbind(void) {
+    HG_ASSERT(s_current_cmd != VK_NULL_HANDLE);
+
+    s_current_shader = NULL;
+}
+
+static VkDescriptorSet hg_allocate_descriptor_set(HgShader* shader, u32 set_index) {
+    HG_ASSERT(shader != NULL);
+    HG_ASSERT(set_index < shader->descriptor_layout_count);
+
+    VkDescriptorSetAllocateInfo alloc_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .descriptorPool = hg_current_descriptor_pool(),
+        .descriptorSetCount = 1,
+        .pSetLayouts = &shader->descriptor_layouts[set_index],
+    };
+    VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
+    VkResult result = vkAllocateDescriptorSets(s_device, &alloc_info, &descriptor_set);
+    switch (result) {
+        case VK_SUCCESS: break;
+        case VK_ERROR_FRAGMENTED_POOL: HG_ERROR("Vulkan fragmented pool"); // : TODO
+        case VK_ERROR_OUT_OF_POOL_MEMORY: HG_ERROR("Vulkan ran out of descriptor pool memory"); // : TODO
+        case VK_ERROR_OUT_OF_HOST_MEMORY: HG_ERROR("Vulkan ran out of host memory");
+        case VK_ERROR_OUT_OF_DEVICE_MEMORY: HG_ERROR("Vulkan ran out of device memory");
+        case VK_ERROR_VALIDATION_FAILED: HG_ERROR("Vulkan validation failed");
+        case VK_ERROR_UNKNOWN: HG_ERROR("Vulkan unknown error");
+        default: HG_ERROR("Unexpected Vulkan error");
+    }
+    return descriptor_set;
+}
+
+void hg_bind_descriptor_set(u32 set_index, HgDescriptor* descriptors, u32 descriptor_count) {
+    HG_ASSERT(s_current_cmd != VK_NULL_HANDLE);
+    HG_ASSERT(set_index < s_current_shader->descriptor_layout_count);
+    HG_ASSERT(descriptors != NULL);
+    HG_ASSERT(descriptor_count > 0);
+
+    VkDescriptorSet descriptor_set = hg_allocate_descriptor_set(s_current_shader, set_index);
+    HG_ASSERT(descriptor_set != VK_NULL_HANDLE);
+
+    // write descriptors more efficiently : TODO
+    for (u32 i = 0; i < descriptor_count; ++i) {
+        for (u32 j = 0; j < descriptors[i].count; ++j) {
+            VkDescriptorBufferInfo buffer_info;
+            VkDescriptorImageInfo image_info;
+
+            VkWriteDescriptorSet descriptor_write = {
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstSet = descriptor_set,
+                .dstBinding = i,
+                .dstArrayElement = j,
+                .descriptorCount = 1,
+                .descriptorType = hg_descriptor_type_to_vk(descriptors[i].type),
+                .pBufferInfo = &buffer_info,
+                .pImageInfo = &image_info,
+            };
+
+            switch (descriptors[i].type) {
+                case HG_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+                case HG_DESCRIPTOR_TYPE_STORAGE_BUFFER: {
+                    HG_ASSERT(descriptors[i].buffers[j]->handle != VK_NULL_HANDLE);
+                    buffer_info = (VkDescriptorBufferInfo){
+                        .buffer = descriptors[i].buffers[j]->handle,
+                        .offset = 0,
+                        .range = descriptors[i].buffers[j]->size,
+                    };
+                } break;
+                case HG_DESCRIPTOR_TYPE_SAMPLED_TEXTURE: {
+                    HG_ASSERT(descriptors[i].textures[j]->sampler != VK_NULL_HANDLE);
+                    HG_ASSERT(descriptors[i].textures[j]->view != VK_NULL_HANDLE);
+                    image_info = (VkDescriptorImageInfo){
+                        .sampler = descriptors[i].textures[j]->sampler,
+                        .imageView = descriptors[i].textures[j]->view,
+                        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    };
+                } break;
+                case HG_DESCRIPTOR_TYPE_STORAGE_TEXTURE: {
+                    HG_ASSERT(descriptors[i].textures[j]->view != VK_NULL_HANDLE);
+                    image_info = (VkDescriptorImageInfo){
+                        .imageView = descriptors[i].textures[j]->view,
+                        .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+                    };
+                } break;
+                default: HG_ERROR("Unhandled descriptor type");
+            }
+
+            vkUpdateDescriptorSets(s_device, 1, &descriptor_write, 0, NULL);
+        }
+    }
+
+    vkCmdBindDescriptorSets(
+        s_current_cmd,
+        s_current_shader->bind_point,
+        s_current_shader->layout,
+        set_index,
+        1, &descriptor_set,
+        0, NULL
+    );
+}
+
+void hg_bind_push_constant(void* data, u32 size) {
+    HG_ASSERT(s_current_cmd != VK_NULL_HANDLE);
+    HG_ASSERT(data != NULL);
+    HG_ASSERT(size > 0);
+
+    VkShaderStageFlags stages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    if (s_current_shader->bind_point == VK_PIPELINE_BIND_POINT_COMPUTE)
+        stages = VK_SHADER_STAGE_COMPUTE_BIT;
+    vkCmdPushConstants(s_current_cmd, s_current_shader->layout, stages, 0, size, data);
+}
+
+void hg_compute_dispatch(u32 group_count_x, u32 group_count_y, u32 group_count_z) {
+    HG_ASSERT(s_current_cmd != VK_NULL_HANDLE);
+    HG_ASSERT(group_count_x > 0);
+    HG_ASSERT(group_count_y > 0);
+    HG_ASSERT(group_count_z > 0);
+
+    vkCmdDispatch(s_current_cmd, group_count_x, group_count_y, group_count_z);
+}
+
 HgError hg_frame_begin(void) {
     HG_ASSERT(!s_recording_frame);
     HG_ASSERT(s_current_cmd == VK_NULL_HANDLE);
@@ -2836,6 +2964,7 @@ HgError hg_frame_end(HgTexture* framebuffer) {
 }
 
 void hg_renderpass_begin(HgTexture* target, HgTexture* depth_buffer, bool clear_target, bool clear_depth) {
+    HG_ASSERT(s_recording_frame);
     if (s_recording_pass)
         hg_renderpass_end();
     s_recording_pass = true;
@@ -2921,7 +3050,7 @@ void hg_renderpass_begin(HgTexture* target, HgTexture* depth_buffer, bool clear_
 
     VkRenderingInfo render_info = {
         .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-        .renderArea = {{0, 0}, {s_swapchain_width, s_swapchain_height}},
+        .renderArea = {{0, 0}, {target->width, target->height}},
         .layerCount = 1,
         .viewMask = 0,
         .colorAttachmentCount = 1,
@@ -2966,127 +3095,16 @@ void hg_renderpass_begin(HgTexture* target, HgTexture* depth_buffer, bool clear_
 }
 
 void hg_renderpass_end(void) {
+    HG_ASSERT(s_recording_frame);
     HG_ASSERT(s_recording_pass);
 
     vkCmdEndRendering(s_current_cmd);
     s_recording_pass = false;
 }
 
-void hg_shader_bind(HgShader* shader) {
-    HG_ASSERT(shader != NULL);
-
-    vkCmdBindPipeline(s_current_cmd, shader->bind_point, shader->pipeline);
-    s_current_shader = shader;
-}
-
-void hg_shader_unbind(void) {
-    s_current_shader = NULL;
-}
-
-static VkDescriptorSet hg_allocate_descriptor_set(HgShader* shader, u32 set_index) {
-    HG_ASSERT(shader != NULL);
-    HG_ASSERT(set_index < shader->descriptor_layout_count);
-
-    VkDescriptorSetAllocateInfo alloc_info = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-        .descriptorPool = hg_current_descriptor_pool(),
-        .descriptorSetCount = 1,
-        .pSetLayouts = &shader->descriptor_layouts[set_index],
-    };
-    VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
-    VkResult result = vkAllocateDescriptorSets(s_device, &alloc_info, &descriptor_set);
-    switch (result) {
-        case VK_SUCCESS: break;
-        case VK_ERROR_FRAGMENTED_POOL: HG_ERROR("Vulkan fragmented pool"); // : TODO
-        case VK_ERROR_OUT_OF_POOL_MEMORY: HG_ERROR("Vulkan ran out of descriptor pool memory"); // : TODO
-        case VK_ERROR_OUT_OF_HOST_MEMORY: HG_ERROR("Vulkan ran out of host memory");
-        case VK_ERROR_OUT_OF_DEVICE_MEMORY: HG_ERROR("Vulkan ran out of device memory");
-        case VK_ERROR_VALIDATION_FAILED: HG_ERROR("Vulkan validation failed");
-        case VK_ERROR_UNKNOWN: HG_ERROR("Vulkan unknown error");
-        default: HG_ERROR("Unexpected Vulkan error");
-    }
-    return descriptor_set;
-}
-
-void hg_bind_descriptor_set(u32 set_index, HgDescriptor* descriptors, u32 descriptor_count) {
-    HG_ASSERT(set_index < s_current_shader->descriptor_layout_count);
-    HG_ASSERT(descriptors != NULL);
-    HG_ASSERT(descriptor_count > 0);
-
-    VkDescriptorSet descriptor_set = hg_allocate_descriptor_set(s_current_shader, set_index);
-    HG_ASSERT(descriptor_set != VK_NULL_HANDLE);
-
-    // write descriptors more efficiently : TODO
-    for (u32 i = 0; i < descriptor_count; ++i) {
-        for (u32 j = 0; j < descriptors[i].count; ++j) {
-            VkDescriptorBufferInfo buffer_info;
-            VkDescriptorImageInfo image_info;
-
-            VkWriteDescriptorSet descriptor_write = {
-                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .dstSet = descriptor_set,
-                .dstBinding = i,
-                .dstArrayElement = j,
-                .descriptorCount = 1,
-                .descriptorType = hg_descriptor_type_to_vk(descriptors[i].type),
-                .pBufferInfo = &buffer_info,
-                .pImageInfo = &image_info,
-            };
-
-            switch (descriptors[i].type) {
-                case HG_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
-                case HG_DESCRIPTOR_TYPE_STORAGE_BUFFER: {
-                    HG_ASSERT(descriptors[i].buffers[j]->handle != VK_NULL_HANDLE);
-                    buffer_info = (VkDescriptorBufferInfo){
-                        .buffer = descriptors[i].buffers[j]->handle,
-                        .offset = 0,
-                        .range = descriptors[i].buffers[j]->size,
-                    };
-                } break;
-                case HG_DESCRIPTOR_TYPE_SAMPLED_TEXTURE: {
-                    HG_ASSERT(descriptors[i].textures[j]->sampler != VK_NULL_HANDLE);
-                    HG_ASSERT(descriptors[i].textures[j]->view != VK_NULL_HANDLE);
-                    image_info = (VkDescriptorImageInfo){
-                        .sampler = descriptors[i].textures[j]->sampler,
-                        .imageView = descriptors[i].textures[j]->view,
-                        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                    };
-                } break;
-                case HG_DESCRIPTOR_TYPE_STORAGE_TEXTURE: {
-                    HG_ASSERT(descriptors[i].textures[j]->view != VK_NULL_HANDLE);
-                    image_info = (VkDescriptorImageInfo){
-                        .imageView = descriptors[i].textures[j]->view,
-                        .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-                    };
-                } break;
-                default: HG_ERROR("Unhandled descriptor type");
-            }
-
-            vkUpdateDescriptorSets(s_device, 1, &descriptor_write, 0, NULL);
-        }
-    }
-
-    vkCmdBindDescriptorSets(
-        s_current_cmd,
-        s_current_shader->bind_point,
-        s_current_shader->layout,
-        set_index,
-        1, &descriptor_set,
-        0, NULL
-    );
-}
-
-void hg_bind_push_constant(void* data, u32 size) {
-    HG_ASSERT(data != NULL);
-    HG_ASSERT(size > 0);
-
-    VkShaderStageFlags stages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-    if (s_current_shader->bind_point == VK_PIPELINE_BIND_POINT_COMPUTE)
-        stages = VK_SHADER_STAGE_COMPUTE_BIT;
-    vkCmdPushConstants(s_current_cmd, s_current_shader->layout, stages, 0, size, data);
-}
-
 void hg_draw(HgBuffer* vertex_buffer, HgBuffer* index_buffer, u32 vertex_count) {
+    HG_ASSERT(s_recording_frame);
+
     if (vertex_buffer != NULL)
         vkCmdBindVertexBuffers(s_current_cmd, 0, 1, &vertex_buffer->handle, &(VkDeviceSize){0});
     if (index_buffer != NULL) {
@@ -3095,14 +3113,6 @@ void hg_draw(HgBuffer* vertex_buffer, HgBuffer* index_buffer, u32 vertex_count) 
     } else {
         vkCmdDraw(s_current_cmd, vertex_count, 1, 0, 0);
     }
-}
-
-void hg_compute_dispatch(u32 group_count_x, u32 group_count_y, u32 group_count_z) {
-    HG_ASSERT(group_count_x > 0);
-    HG_ASSERT(group_count_y > 0);
-    HG_ASSERT(group_count_z > 0);
-
-    vkCmdDispatch(s_current_cmd, group_count_x, group_count_y, group_count_z);
 }
 
 #ifdef __unix__
@@ -3118,125 +3128,125 @@ static void hg_stub_fn(void) {
 
 static void* s_libvulkan = NULL;
 
-#define HG_MAKE_VULKAN_FUNC(name) static PFN_##name s_pfn_##name = (PFN_##name)hg_stub_fn;
+#define HG_MAKE_VULKAN_FUNC(name) static PFN_##name s_pfn_##name = (PFN_##name)hg_stub_fn
 
-HG_MAKE_VULKAN_FUNC(vkGetInstanceProcAddr)
-HG_MAKE_VULKAN_FUNC(vkEnumerateInstanceExtensionProperties)
-HG_MAKE_VULKAN_FUNC(vkEnumerateInstanceLayerProperties)
-HG_MAKE_VULKAN_FUNC(vkCreateInstance)
-HG_MAKE_VULKAN_FUNC(vkDestroyInstance)
+HG_MAKE_VULKAN_FUNC(vkGetInstanceProcAddr);
+HG_MAKE_VULKAN_FUNC(vkEnumerateInstanceExtensionProperties);
+HG_MAKE_VULKAN_FUNC(vkEnumerateInstanceLayerProperties);
+HG_MAKE_VULKAN_FUNC(vkCreateInstance);
+HG_MAKE_VULKAN_FUNC(vkDestroyInstance);
 #ifndef NDEBUG
-HG_MAKE_VULKAN_FUNC(vkCreateDebugUtilsMessengerEXT)
-HG_MAKE_VULKAN_FUNC(vkDestroyDebugUtilsMessengerEXT)
+HG_MAKE_VULKAN_FUNC(vkCreateDebugUtilsMessengerEXT);
+HG_MAKE_VULKAN_FUNC(vkDestroyDebugUtilsMessengerEXT);
 #endif
 
-HG_MAKE_VULKAN_FUNC(vkEnumeratePhysicalDevices)
-HG_MAKE_VULKAN_FUNC(vkEnumerateDeviceExtensionProperties)
-HG_MAKE_VULKAN_FUNC(vkGetPhysicalDeviceQueueFamilyProperties)
-HG_MAKE_VULKAN_FUNC(vkGetPhysicalDeviceFeatures)
-HG_MAKE_VULKAN_FUNC(vkGetPhysicalDeviceProperties)
-HG_MAKE_VULKAN_FUNC(vkGetPhysicalDeviceFormatProperties)
-HG_MAKE_VULKAN_FUNC(vkGetPhysicalDeviceMemoryProperties)
-HG_MAKE_VULKAN_FUNC(vkGetPhysicalDeviceMemoryProperties2)
-HG_MAKE_VULKAN_FUNC(vkGetPhysicalDeviceSurfaceFormatsKHR)
-HG_MAKE_VULKAN_FUNC(vkGetPhysicalDeviceSurfacePresentModesKHR)
-HG_MAKE_VULKAN_FUNC(vkGetPhysicalDeviceSurfaceCapabilitiesKHR)
-HG_MAKE_VULKAN_FUNC(vkDestroySurfaceKHR)
+HG_MAKE_VULKAN_FUNC(vkEnumeratePhysicalDevices);
+HG_MAKE_VULKAN_FUNC(vkEnumerateDeviceExtensionProperties);
+HG_MAKE_VULKAN_FUNC(vkGetPhysicalDeviceQueueFamilyProperties);
+HG_MAKE_VULKAN_FUNC(vkGetPhysicalDeviceFeatures);
+HG_MAKE_VULKAN_FUNC(vkGetPhysicalDeviceProperties);
+HG_MAKE_VULKAN_FUNC(vkGetPhysicalDeviceFormatProperties);
+HG_MAKE_VULKAN_FUNC(vkGetPhysicalDeviceMemoryProperties);
+HG_MAKE_VULKAN_FUNC(vkGetPhysicalDeviceMemoryProperties2);
+HG_MAKE_VULKAN_FUNC(vkGetPhysicalDeviceSurfaceFormatsKHR);
+HG_MAKE_VULKAN_FUNC(vkGetPhysicalDeviceSurfacePresentModesKHR);
+HG_MAKE_VULKAN_FUNC(vkGetPhysicalDeviceSurfaceCapabilitiesKHR);
+HG_MAKE_VULKAN_FUNC(vkDestroySurfaceKHR);
 
-HG_MAKE_VULKAN_FUNC(vkGetDeviceProcAddr)
-HG_MAKE_VULKAN_FUNC(vkCreateDevice)
-HG_MAKE_VULKAN_FUNC(vkDestroyDevice)
+HG_MAKE_VULKAN_FUNC(vkGetDeviceProcAddr);
+HG_MAKE_VULKAN_FUNC(vkCreateDevice);
+HG_MAKE_VULKAN_FUNC(vkDestroyDevice);
 
-HG_MAKE_VULKAN_FUNC(vkGetDeviceQueue)
-HG_MAKE_VULKAN_FUNC(vkQueueWaitIdle)
-HG_MAKE_VULKAN_FUNC(vkQueueSubmit)
-HG_MAKE_VULKAN_FUNC(vkQueuePresentKHR)
+HG_MAKE_VULKAN_FUNC(vkGetDeviceQueue);
+HG_MAKE_VULKAN_FUNC(vkQueueWaitIdle);
+HG_MAKE_VULKAN_FUNC(vkQueueSubmit);
+HG_MAKE_VULKAN_FUNC(vkQueuePresentKHR);
 
-HG_MAKE_VULKAN_FUNC(vkCreateCommandPool)
-HG_MAKE_VULKAN_FUNC(vkDestroyCommandPool)
-HG_MAKE_VULKAN_FUNC(vkAllocateCommandBuffers)
-HG_MAKE_VULKAN_FUNC(vkFreeCommandBuffers)
-HG_MAKE_VULKAN_FUNC(vkBeginCommandBuffer)
-HG_MAKE_VULKAN_FUNC(vkEndCommandBuffer)
-HG_MAKE_VULKAN_FUNC(vkResetCommandBuffer)
+HG_MAKE_VULKAN_FUNC(vkCreateCommandPool);
+HG_MAKE_VULKAN_FUNC(vkDestroyCommandPool);
+HG_MAKE_VULKAN_FUNC(vkAllocateCommandBuffers);
+HG_MAKE_VULKAN_FUNC(vkFreeCommandBuffers);
+HG_MAKE_VULKAN_FUNC(vkBeginCommandBuffer);
+HG_MAKE_VULKAN_FUNC(vkEndCommandBuffer);
+HG_MAKE_VULKAN_FUNC(vkResetCommandBuffer);
 
-HG_MAKE_VULKAN_FUNC(vkCreateDescriptorPool)
-HG_MAKE_VULKAN_FUNC(vkDestroyDescriptorPool)
-HG_MAKE_VULKAN_FUNC(vkResetDescriptorPool)
-HG_MAKE_VULKAN_FUNC(vkAllocateDescriptorSets)
-HG_MAKE_VULKAN_FUNC(vkUpdateDescriptorSets)
+HG_MAKE_VULKAN_FUNC(vkCreateDescriptorPool);
+HG_MAKE_VULKAN_FUNC(vkDestroyDescriptorPool);
+HG_MAKE_VULKAN_FUNC(vkResetDescriptorPool);
+HG_MAKE_VULKAN_FUNC(vkAllocateDescriptorSets);
+HG_MAKE_VULKAN_FUNC(vkUpdateDescriptorSets);
 
-HG_MAKE_VULKAN_FUNC(vkAllocateMemory)
-HG_MAKE_VULKAN_FUNC(vkFreeMemory)
-HG_MAKE_VULKAN_FUNC(vkMapMemory)
-HG_MAKE_VULKAN_FUNC(vkUnmapMemory)
-HG_MAKE_VULKAN_FUNC(vkFlushMappedMemoryRanges)
-HG_MAKE_VULKAN_FUNC(vkInvalidateMappedMemoryRanges)
+HG_MAKE_VULKAN_FUNC(vkAllocateMemory);
+HG_MAKE_VULKAN_FUNC(vkFreeMemory);
+HG_MAKE_VULKAN_FUNC(vkMapMemory);
+HG_MAKE_VULKAN_FUNC(vkUnmapMemory);
+HG_MAKE_VULKAN_FUNC(vkFlushMappedMemoryRanges);
+HG_MAKE_VULKAN_FUNC(vkInvalidateMappedMemoryRanges);
 
-HG_MAKE_VULKAN_FUNC(vkCreateBuffer)
-HG_MAKE_VULKAN_FUNC(vkDestroyBuffer)
-HG_MAKE_VULKAN_FUNC(vkBindBufferMemory)
-HG_MAKE_VULKAN_FUNC(vkBindBufferMemory2)
-HG_MAKE_VULKAN_FUNC(vkGetBufferMemoryRequirements)
-HG_MAKE_VULKAN_FUNC(vkGetBufferMemoryRequirements2)
-HG_MAKE_VULKAN_FUNC(vkGetDeviceBufferMemoryRequirements)
+HG_MAKE_VULKAN_FUNC(vkCreateBuffer);
+HG_MAKE_VULKAN_FUNC(vkDestroyBuffer);
+HG_MAKE_VULKAN_FUNC(vkBindBufferMemory);
+HG_MAKE_VULKAN_FUNC(vkBindBufferMemory2);
+HG_MAKE_VULKAN_FUNC(vkGetBufferMemoryRequirements);
+HG_MAKE_VULKAN_FUNC(vkGetBufferMemoryRequirements2);
+HG_MAKE_VULKAN_FUNC(vkGetDeviceBufferMemoryRequirements);
 
-HG_MAKE_VULKAN_FUNC(vkCreateImage)
-HG_MAKE_VULKAN_FUNC(vkDestroyImage)
-HG_MAKE_VULKAN_FUNC(vkBindImageMemory)
-HG_MAKE_VULKAN_FUNC(vkBindImageMemory2)
-HG_MAKE_VULKAN_FUNC(vkGetImageMemoryRequirements)
-HG_MAKE_VULKAN_FUNC(vkGetImageMemoryRequirements2)
-HG_MAKE_VULKAN_FUNC(vkGetDeviceImageMemoryRequirements)
+HG_MAKE_VULKAN_FUNC(vkCreateImage);
+HG_MAKE_VULKAN_FUNC(vkDestroyImage);
+HG_MAKE_VULKAN_FUNC(vkBindImageMemory);
+HG_MAKE_VULKAN_FUNC(vkBindImageMemory2);
+HG_MAKE_VULKAN_FUNC(vkGetImageMemoryRequirements);
+HG_MAKE_VULKAN_FUNC(vkGetImageMemoryRequirements2);
+HG_MAKE_VULKAN_FUNC(vkGetDeviceImageMemoryRequirements);
 
-HG_MAKE_VULKAN_FUNC(vkCreateImageView)
-HG_MAKE_VULKAN_FUNC(vkDestroyImageView)
-HG_MAKE_VULKAN_FUNC(vkCreateSampler)
-HG_MAKE_VULKAN_FUNC(vkDestroySampler)
+HG_MAKE_VULKAN_FUNC(vkCreateImageView);
+HG_MAKE_VULKAN_FUNC(vkDestroyImageView);
+HG_MAKE_VULKAN_FUNC(vkCreateSampler);
+HG_MAKE_VULKAN_FUNC(vkDestroySampler);
 
-HG_MAKE_VULKAN_FUNC(vkCreateShaderModule)
-HG_MAKE_VULKAN_FUNC(vkDestroyShaderModule)
-HG_MAKE_VULKAN_FUNC(vkCreateDescriptorSetLayout)
-HG_MAKE_VULKAN_FUNC(vkDestroyDescriptorSetLayout)
-HG_MAKE_VULKAN_FUNC(vkCreatePipelineLayout)
-HG_MAKE_VULKAN_FUNC(vkDestroyPipelineLayout)
-HG_MAKE_VULKAN_FUNC(vkCreateGraphicsPipelines)
-HG_MAKE_VULKAN_FUNC(vkCreateComputePipelines)
-HG_MAKE_VULKAN_FUNC(vkDestroyPipeline)
+HG_MAKE_VULKAN_FUNC(vkCreateShaderModule);
+HG_MAKE_VULKAN_FUNC(vkDestroyShaderModule);
+HG_MAKE_VULKAN_FUNC(vkCreateDescriptorSetLayout);
+HG_MAKE_VULKAN_FUNC(vkDestroyDescriptorSetLayout);
+HG_MAKE_VULKAN_FUNC(vkCreatePipelineLayout);
+HG_MAKE_VULKAN_FUNC(vkDestroyPipelineLayout);
+HG_MAKE_VULKAN_FUNC(vkCreateGraphicsPipelines);
+HG_MAKE_VULKAN_FUNC(vkCreateComputePipelines);
+HG_MAKE_VULKAN_FUNC(vkDestroyPipeline);
 
-HG_MAKE_VULKAN_FUNC(vkCreateSwapchainKHR)
-HG_MAKE_VULKAN_FUNC(vkDestroySwapchainKHR)
-HG_MAKE_VULKAN_FUNC(vkGetSwapchainImagesKHR)
-HG_MAKE_VULKAN_FUNC(vkAcquireNextImageKHR)
+HG_MAKE_VULKAN_FUNC(vkCreateSwapchainKHR);
+HG_MAKE_VULKAN_FUNC(vkDestroySwapchainKHR);
+HG_MAKE_VULKAN_FUNC(vkGetSwapchainImagesKHR);
+HG_MAKE_VULKAN_FUNC(vkAcquireNextImageKHR);
 
-HG_MAKE_VULKAN_FUNC(vkCreateFence)
-HG_MAKE_VULKAN_FUNC(vkDestroyFence)
-HG_MAKE_VULKAN_FUNC(vkResetFences)
-HG_MAKE_VULKAN_FUNC(vkWaitForFences)
-HG_MAKE_VULKAN_FUNC(vkCreateSemaphore)
-HG_MAKE_VULKAN_FUNC(vkDestroySemaphore)
+HG_MAKE_VULKAN_FUNC(vkCreateFence);
+HG_MAKE_VULKAN_FUNC(vkDestroyFence);
+HG_MAKE_VULKAN_FUNC(vkResetFences);
+HG_MAKE_VULKAN_FUNC(vkWaitForFences);
+HG_MAKE_VULKAN_FUNC(vkCreateSemaphore);
+HG_MAKE_VULKAN_FUNC(vkDestroySemaphore);
 
-HG_MAKE_VULKAN_FUNC(vkCmdCopyBuffer)
-HG_MAKE_VULKAN_FUNC(vkCmdCopyBuffer2)
-HG_MAKE_VULKAN_FUNC(vkCmdCopyImage)
-HG_MAKE_VULKAN_FUNC(vkCmdCopyImage2)
-HG_MAKE_VULKAN_FUNC(vkCmdBlitImage2)
-HG_MAKE_VULKAN_FUNC(vkCmdCopyBufferToImage2)
-HG_MAKE_VULKAN_FUNC(vkCmdCopyImageToBuffer2)
-HG_MAKE_VULKAN_FUNC(vkCmdPipelineBarrier2)
+HG_MAKE_VULKAN_FUNC(vkCmdCopyBuffer);
+HG_MAKE_VULKAN_FUNC(vkCmdCopyBuffer2);
+HG_MAKE_VULKAN_FUNC(vkCmdCopyImage);
+HG_MAKE_VULKAN_FUNC(vkCmdCopyImage2);
+HG_MAKE_VULKAN_FUNC(vkCmdBlitImage2);
+HG_MAKE_VULKAN_FUNC(vkCmdCopyBufferToImage2);
+HG_MAKE_VULKAN_FUNC(vkCmdCopyImageToBuffer2);
+HG_MAKE_VULKAN_FUNC(vkCmdPipelineBarrier2);
 
-HG_MAKE_VULKAN_FUNC(vkCmdBeginRendering)
-HG_MAKE_VULKAN_FUNC(vkCmdEndRendering)
-HG_MAKE_VULKAN_FUNC(vkCmdSetViewport)
-HG_MAKE_VULKAN_FUNC(vkCmdSetScissor)
-HG_MAKE_VULKAN_FUNC(vkCmdBindPipeline)
-HG_MAKE_VULKAN_FUNC(vkCmdBindDescriptorSets)
-HG_MAKE_VULKAN_FUNC(vkCmdPushConstants)
-HG_MAKE_VULKAN_FUNC(vkCmdBindVertexBuffers)
-HG_MAKE_VULKAN_FUNC(vkCmdBindIndexBuffer)
-HG_MAKE_VULKAN_FUNC(vkCmdDraw)
-HG_MAKE_VULKAN_FUNC(vkCmdDrawIndexed)
-HG_MAKE_VULKAN_FUNC(vkCmdDispatch)
+HG_MAKE_VULKAN_FUNC(vkCmdBeginRendering);
+HG_MAKE_VULKAN_FUNC(vkCmdEndRendering);
+HG_MAKE_VULKAN_FUNC(vkCmdSetViewport);
+HG_MAKE_VULKAN_FUNC(vkCmdSetScissor);
+HG_MAKE_VULKAN_FUNC(vkCmdBindPipeline);
+HG_MAKE_VULKAN_FUNC(vkCmdBindDescriptorSets);
+HG_MAKE_VULKAN_FUNC(vkCmdPushConstants);
+HG_MAKE_VULKAN_FUNC(vkCmdBindVertexBuffers);
+HG_MAKE_VULKAN_FUNC(vkCmdBindIndexBuffer);
+HG_MAKE_VULKAN_FUNC(vkCmdDraw);
+HG_MAKE_VULKAN_FUNC(vkCmdDrawIndexed);
+HG_MAKE_VULKAN_FUNC(vkCmdDispatch);
 
 #undef HG_MAKE_VULKAN_FUNC
 
@@ -3268,9 +3278,9 @@ static void hg_load_vulkan(void) {
 #error Windows not supported yet
 #endif
 
-    HG_LOAD_VULKAN_FUNC(vkEnumerateInstanceExtensionProperties)
-    HG_LOAD_VULKAN_FUNC(vkEnumerateInstanceLayerProperties)
-    HG_LOAD_VULKAN_FUNC(vkCreateInstance)
+    HG_LOAD_VULKAN_FUNC(vkEnumerateInstanceExtensionProperties);
+    HG_LOAD_VULKAN_FUNC(vkEnumerateInstanceLayerProperties);
+    HG_LOAD_VULKAN_FUNC(vkCreateInstance);
 }
 
 #undef HG_LOAD_VULKAN_FUNC
@@ -3279,29 +3289,29 @@ static void hg_load_vulkan(void) {
     if (s_pfn_##name == NULL) { HG_ERROR("Could not load " #name); }
 
 static void hg_load_vulkan_instance(VkInstance instance) {
-    HG_LOAD_VULKAN_INSTANCE_FUNC(vkDestroyInstance)
+    HG_LOAD_VULKAN_INSTANCE_FUNC(vkDestroyInstance);
 #ifndef NDEBUG
-    HG_LOAD_VULKAN_INSTANCE_FUNC(vkCreateDebugUtilsMessengerEXT)
-    HG_LOAD_VULKAN_INSTANCE_FUNC(vkDestroyDebugUtilsMessengerEXT)
+    HG_LOAD_VULKAN_INSTANCE_FUNC(vkCreateDebugUtilsMessengerEXT);
+    HG_LOAD_VULKAN_INSTANCE_FUNC(vkDestroyDebugUtilsMessengerEXT);
 #endif
 
-    HG_LOAD_VULKAN_INSTANCE_FUNC(vkEnumeratePhysicalDevices)
-    HG_LOAD_VULKAN_INSTANCE_FUNC(vkEnumerateDeviceExtensionProperties)
-    HG_LOAD_VULKAN_INSTANCE_FUNC(vkGetPhysicalDeviceQueueFamilyProperties)
-    HG_LOAD_VULKAN_INSTANCE_FUNC(vkGetPhysicalDeviceFeatures)
-    HG_LOAD_VULKAN_INSTANCE_FUNC(vkGetPhysicalDeviceProperties)
-    HG_LOAD_VULKAN_INSTANCE_FUNC(vkGetPhysicalDeviceFormatProperties)
-    HG_LOAD_VULKAN_INSTANCE_FUNC(vkGetPhysicalDeviceMemoryProperties)
-    HG_LOAD_VULKAN_INSTANCE_FUNC(vkGetPhysicalDeviceMemoryProperties2)
-    HG_LOAD_VULKAN_INSTANCE_FUNC(vkGetPhysicalDeviceSurfaceFormatsKHR)
-    HG_LOAD_VULKAN_INSTANCE_FUNC(vkGetPhysicalDeviceSurfacePresentModesKHR)
-    HG_LOAD_VULKAN_INSTANCE_FUNC(vkGetPhysicalDeviceSurfaceCapabilitiesKHR)
+    HG_LOAD_VULKAN_INSTANCE_FUNC(vkEnumeratePhysicalDevices);
+    HG_LOAD_VULKAN_INSTANCE_FUNC(vkEnumerateDeviceExtensionProperties);
+    HG_LOAD_VULKAN_INSTANCE_FUNC(vkGetPhysicalDeviceQueueFamilyProperties);
+    HG_LOAD_VULKAN_INSTANCE_FUNC(vkGetPhysicalDeviceFeatures);
+    HG_LOAD_VULKAN_INSTANCE_FUNC(vkGetPhysicalDeviceProperties);
+    HG_LOAD_VULKAN_INSTANCE_FUNC(vkGetPhysicalDeviceFormatProperties);
+    HG_LOAD_VULKAN_INSTANCE_FUNC(vkGetPhysicalDeviceMemoryProperties);
+    HG_LOAD_VULKAN_INSTANCE_FUNC(vkGetPhysicalDeviceMemoryProperties2);
+    HG_LOAD_VULKAN_INSTANCE_FUNC(vkGetPhysicalDeviceSurfaceFormatsKHR);
+    HG_LOAD_VULKAN_INSTANCE_FUNC(vkGetPhysicalDeviceSurfacePresentModesKHR);
+    HG_LOAD_VULKAN_INSTANCE_FUNC(vkGetPhysicalDeviceSurfaceCapabilitiesKHR);
 
-    HG_LOAD_VULKAN_INSTANCE_FUNC(vkGetDeviceProcAddr)
-    HG_LOAD_VULKAN_INSTANCE_FUNC(vkCreateDevice)
-    HG_LOAD_VULKAN_INSTANCE_FUNC(vkDestroyDevice)
+    HG_LOAD_VULKAN_INSTANCE_FUNC(vkGetDeviceProcAddr);
+    HG_LOAD_VULKAN_INSTANCE_FUNC(vkCreateDevice);
+    HG_LOAD_VULKAN_INSTANCE_FUNC(vkDestroyDevice);
 
-    HG_LOAD_VULKAN_INSTANCE_FUNC(vkDestroySurfaceKHR)
+    HG_LOAD_VULKAN_INSTANCE_FUNC(vkDestroySurfaceKHR);
 }
 
 #undef HG_LOAD_VULKAN_INSTANCE_FUNC
@@ -3310,96 +3320,96 @@ static void hg_load_vulkan_instance(VkInstance instance) {
     if (s_pfn_##name == NULL) { HG_ERROR("Could not load " #name); }
 
 static void hg_load_vulkan_device(VkDevice device) {
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkGetDeviceQueue)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkQueueWaitIdle)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkQueueSubmit)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkQueuePresentKHR)
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkGetDeviceQueue);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkQueueWaitIdle);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkQueueSubmit);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkQueuePresentKHR);
 
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCreateCommandPool)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkDestroyCommandPool)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkAllocateCommandBuffers)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkFreeCommandBuffers)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkBeginCommandBuffer)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkEndCommandBuffer)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkResetCommandBuffer)
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCreateCommandPool);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkDestroyCommandPool);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkAllocateCommandBuffers);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkFreeCommandBuffers);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkBeginCommandBuffer);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkEndCommandBuffer);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkResetCommandBuffer);
 
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCreateDescriptorPool)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkDestroyDescriptorPool)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkResetDescriptorPool)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkAllocateDescriptorSets)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkUpdateDescriptorSets)
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCreateDescriptorPool);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkDestroyDescriptorPool);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkResetDescriptorPool);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkAllocateDescriptorSets);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkUpdateDescriptorSets);
 
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkAllocateMemory)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkFreeMemory)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkMapMemory)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkUnmapMemory)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkFlushMappedMemoryRanges)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkInvalidateMappedMemoryRanges)
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkAllocateMemory);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkFreeMemory);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkMapMemory);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkUnmapMemory);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkFlushMappedMemoryRanges);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkInvalidateMappedMemoryRanges);
 
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCreateBuffer)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkDestroyBuffer)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkBindBufferMemory)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkBindBufferMemory2)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkGetBufferMemoryRequirements)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkGetBufferMemoryRequirements2)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkGetDeviceBufferMemoryRequirements)
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCreateBuffer);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkDestroyBuffer);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkBindBufferMemory);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkBindBufferMemory2);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkGetBufferMemoryRequirements);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkGetBufferMemoryRequirements2);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkGetDeviceBufferMemoryRequirements);
 
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCreateImage)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkDestroyImage)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkBindImageMemory)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkBindImageMemory2)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkGetImageMemoryRequirements)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkGetImageMemoryRequirements2)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkGetDeviceImageMemoryRequirements)
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCreateImage);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkDestroyImage);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkBindImageMemory);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkBindImageMemory2);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkGetImageMemoryRequirements);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkGetImageMemoryRequirements2);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkGetDeviceImageMemoryRequirements);
 
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCreateImageView)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkDestroyImageView)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCreateSampler)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkDestroySampler)
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCreateImageView);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkDestroyImageView);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCreateSampler);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkDestroySampler);
 
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCreateShaderModule)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkDestroyShaderModule)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCreateDescriptorSetLayout)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkDestroyDescriptorSetLayout)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCreatePipelineLayout)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkDestroyPipelineLayout)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCreateGraphicsPipelines)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCreateComputePipelines)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkDestroyPipeline)
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCreateShaderModule);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkDestroyShaderModule);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCreateDescriptorSetLayout);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkDestroyDescriptorSetLayout);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCreatePipelineLayout);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkDestroyPipelineLayout);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCreateGraphicsPipelines);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCreateComputePipelines);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkDestroyPipeline);
 
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCreateSwapchainKHR)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkDestroySwapchainKHR)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkGetSwapchainImagesKHR)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkAcquireNextImageKHR)
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCreateSwapchainKHR);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkDestroySwapchainKHR);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkGetSwapchainImagesKHR);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkAcquireNextImageKHR);
 
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCreateFence)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkDestroyFence)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkResetFences)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkWaitForFences)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCreateSemaphore)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkDestroySemaphore)
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCreateFence);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkDestroyFence);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkResetFences);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkWaitForFences);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCreateSemaphore);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkDestroySemaphore);
 
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdCopyBuffer)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdCopyBuffer2)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdCopyImage)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdCopyImage2)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdBlitImage2)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdCopyBufferToImage2)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdCopyImageToBuffer2)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdPipelineBarrier2)
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdCopyBuffer);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdCopyBuffer2);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdCopyImage);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdCopyImage2);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdBlitImage2);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdCopyBufferToImage2);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdCopyImageToBuffer2);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdPipelineBarrier2);
 
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdBeginRendering)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdEndRendering)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdSetViewport)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdSetScissor)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdBindPipeline)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdBindDescriptorSets)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdPushConstants)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdBindVertexBuffers)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdBindIndexBuffer)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdDraw)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdDrawIndexed)
-    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdDispatch)
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdBeginRendering);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdEndRendering);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdSetViewport);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdSetScissor);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdBindPipeline);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdBindDescriptorSets);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdPushConstants);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdBindVertexBuffers);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdBindIndexBuffer);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdDraw);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdDrawIndexed);
+    HG_LOAD_VULKAN_DEVICE_FUNC(vkCmdDispatch);
 }
 
 PFN_vkVoidFunction vkGetInstanceProcAddr(

@@ -21,7 +21,8 @@ void hg_graphics_shutdown(void);
 /**
  * Waits for the graphics subsystem to finish rendering
  *
- * This function can be called to ensure that the resources are not being used before destruction
+ * This function can be called to ensure that the resources are not being used
+ * before destruction
  */
 void hg_graphics_wait(void);
 
@@ -106,7 +107,8 @@ void hg_buffer_destroy(HgBuffer* buffer);
 /**
  * Writes data to an HgBuffer
  *
- * If the buffer memory type is HG_GPU_MEMORY_TYPE_LINEAR_ACCESS, the offset must be 0
+ * If the buffer memory type is HG_GPU_MEMORY_TYPE_LINEAR_ACCESS, the offset
+ * must be 0
  *
  * \param dst The buffer to write to, must not be NULL
  * \param offset The offset into the dst buffer
@@ -341,52 +343,152 @@ void hg_commands_begin(void);
 void hg_commands_end(void);
 
 /**
- * Begins a command buffer for this frame
+ * Creates a buffer memory barrier
  *
- * This function must be called before rendering a frame
+ * Ensures read/writes are complete and cashes are flushed
+ * Must be in a command buffer
  *
- * \return HG_SUCCESS if the frame was started successfully
- * \return HG_ERROR_WINDOW_INVALID if the window was closed
+ * \param buffer The buffer to use, must not be NULL
  */
-HgError hg_frame_begin(void);
+void hg_memory_barrier_buffer(HgBuffer* buffer);
 
 /**
- * Ends this frame and presents to the window
+ * Creates a texture memory barrier
  *
- * hg_frame_begin() must be called before this function
+ * Ensures read/writes are complete and cashes are flushed
+ * Changes texture layout manually
+ * Must be in a command texture
  *
- * \param framebuffer The framebuffer to present to the window, does not present if NULL
- * \return HG_SUCCESS if the frame was ended successfully
- * \return HG_ERROR_WINDOW_INVALID if the window was closed
+ * Note, texture barriers for render targets and depth buffers are done
+ * automatically in a frame
+ *
+ * \param texture The texture to use, must not be NULL
+ * \param begin_layout The layout the texture was in before the barrier, may be
+ * NULL if the memory need not be preserved
+ * \param end_layout The layout the texture will be set to
  */
-HgError hg_frame_end(HgTexture* framebuffer);
+void hg_memory_barrier_texture(
+    HgTexture* texture,
+    HgTextureLayout begin_layout,
+    HgTextureLayout end_layout
+);
 
 /**
- * Begins a render pass in a frame
+ * Copies from one buffer to another
  *
- * \param target The target texture to render to, must not be NULL
- * \param depth_buffer The depth buffer to render to, may be NULL if no depth buffer is used
- * \param clear_target Whether to clear the target texture before rendering
- * \param clear_depth Whether to clear the depth buffer before rendering, ignored if depth_buffer is NULL
+ * Must be in a command buffer
+ * dst must be at least dst_offset + size bytes long
+ * src must be at least src_offset + size bytes long
+ *
+ * \param dst The destination written to
+ * \param dst_offset The offset into dst
+ * \param src The source read from
+ * \param src_offset The offset into src
+ * \param size The number of bytes to copy
  */
-void hg_renderpass_begin(HgTexture* target, HgTexture* depth_buffer, bool clear_target, bool clear_depth);
+void hg_buffer_copy(
+    HgBuffer* dst,
+    usize dst_offset,
+    HgBuffer* src,
+    usize src_offset,
+    usize size
+);
 
 /**
- * Ends a render pass in a frame
+ * Configuration for hg_texture_blit
  *
- * hg_renderpass_begin() must be called before this function
+ * Coordinates are pixels in the texture
+ * x, y, and z are the begin coordinates of the target area
+ * w, h, and d are the width, height, and depth of the target area
+ * mip_level and array_layer are ignored if the texture does not use them
  */
-void hg_renderpass_end(void);
+typedef struct HgBlitConfig {
+    HgTexture* texture;
+    u32 x, y, z, w, h, d;
+    u32 mip_level;
+    u32 array_layer;
+} HgBlitConfig;
 
 /**
- * Binds a shader in a command buffer
+ * Copies from one texture to another
+ *
+ * Must be in a command buffer
+ *
+ * \param dst The destination written to
+ * \param src The source read from
+ * \param bilinear_filter Whether to smooth out the result
+ */
+void hg_texture_blit(
+    HgBlitConfig* dst,
+    HgBlitConfig* src,
+    bool bilinear_filter
+);
+
+/**
+ * Configuration for hg_texture_blit_norm
+ *
+ * Coordinates are normalized 0.0 to 1.0
+ * x, y, and z are the begin coordinates of the target area
+ * w, h, and d are the width, height, and depth of the target area
+ * mip_level and array_layer are ignored if the texture does not use them
+ */
+typedef struct HgBlitNormConfig {
+    HgTexture* texture;
+    f32 x, y, z, w, h, d;
+    u32 mip_level;
+    u32 array_layer;
+} HgBlitNormConfig;
+
+/**
+ * Copies from one texture to another, using normalized coordinates
+ *
+ * Must be in a command buffer
+ *
+ * \param dst The destination written to
+ * \param src The source read from
+ * \param bilinear_filter Whether to smooth out the result
+ */
+void hg_texture_blit_norm(
+    HgBlitNormConfig* dst,
+    HgBlitNormConfig* src,
+    bool bilinear_filter
+);
+
+/**
+ * Copies into a buffer from a texture
+ *
+ * Copies the whole texture, so dst must be large enough
+ * Must be in a command buffer
+ *
+ * \param dst The destination written to
+ * \param src The source read from
+ */
+void hg_buffer_copy_from_texture(HgBuffer* dst, HgTexture* src);
+
+/**
+ * Copies into a texture from a buffer
+ *
+ * Copies the size of the whole texture, so src must be large enough
+ * Must be in a command buffer
+ *
+ * \param dst The destination written to
+ * \param src The source read from
+ */
+void hg_texture_copy_from_buffer(HgTexture* dst, HgBuffer* src);
+
+/**
+ * Binds a shader
+ *
+ * Must be in a command buffer
  *
  * \param shader The shader to bind, must not be NULL
  */
 void hg_shader_bind(HgShader* shader);
 
 /**
- * Unbinds a shader in a command buffer
+ * Unbinds a shader
+ *
+ * Must be in a command buffer
  *
  * Using this function is optional
  */
@@ -403,7 +505,9 @@ typedef struct HgDescriptor {
 } HgDescriptor;
 
 /**
- * Binds a descriptor set in a command buffer
+ * Binds a descriptor set
+ *
+ * Must be in a command buffer
  *
  * \param set_index The index of the descriptor set in the shader
  * \param descriptors The descriptors to bind, must not be NULL
@@ -412,7 +516,9 @@ typedef struct HgDescriptor {
 void hg_bind_descriptor_set(u32 set_index, HgDescriptor* descriptors, u32 descriptor_count);
 
 /**
- * Binds a push constant in a command buffer
+ * Binds a push constant
+ *
+ * Must be in a command buffer
  *
  * \param data The data to bind, must not be NULL
  * \param size The size of the data to bind, must be greater than 0
@@ -420,24 +526,66 @@ void hg_bind_descriptor_set(u32 set_index, HgDescriptor* descriptors, u32 descri
 void hg_bind_push_constant(void* data, u32 size);
 
 /**
- * Draws a set of vertices in a render pass, using a shader
+ * Dispatches a compute shader
  *
- * hg_renderpass_begin() must be called before this function
- * hg_shader_bind() must be called before this function
- *
- * \param vertex_buffer The vertex buffer to draw from, may be NULL if no vertex buffer is used
- * \param index_buffer The index buffer to draw from, may be NULL if no index buffer is used
- * \param vertex_count The number of vertices to draw, only used if index_buffer is NULL
- */
-void hg_draw(HgBuffer* vertex_buffer, HgBuffer* index_buffer, u32 count);
-
-/**
- * Dispatches a compute shader in a command buffer
+ * Must be in a command buffer
  *
  * \param group_count_x The number of groups to dispatch in the x direction
  * \param group_count_y The number of groups to dispatch in the y direction
  * \param group_count_z The number of groups to dispatch in the z direction
  */
 void hg_compute_dispatch(u32 group_count_x, u32 group_count_y, u32 group_count_z);
+
+/**
+ * Begins a frame command buffer
+ *
+ * \return HG_SUCCESS if the frame was started successfully
+ * \return HG_ERROR_WINDOW_INVALID if the window was closed
+ */
+HgError hg_frame_begin(void);
+
+/**
+ * Ends this frame and presents to the window
+ *
+ * hg_frame_begin() must be called before this function
+ * cannot be called while recording a generic command buffer
+ *
+ * \param framebuffer The framebuffer to present to the window, does not present if NULL
+ * \return HG_SUCCESS if the frame was ended successfully
+ * \return HG_ERROR_WINDOW_INVALID if the window was closed
+ */
+HgError hg_frame_end(HgTexture* framebuffer);
+
+/**
+ * Begins a render pass
+ *
+ * Must be in a frame
+ *
+ * \param target The target texture to render to, must not be NULL
+ * \param depth_buffer The depth buffer to render to, may be NULL if no depth buffer is used
+ * \param clear_target Whether to clear the target texture before rendering
+ * \param clear_depth Whether to clear the depth buffer before rendering, ignored if depth_buffer is NULL
+ */
+void hg_renderpass_begin(HgTexture* target, HgTexture* depth_buffer, bool clear_target, bool clear_depth);
+
+/**
+ * Ends a render pass
+ *
+ * Must be in a frame
+ * hg_renderpass_begin() must be called before this function
+ */
+void hg_renderpass_end(void);
+
+/**
+ * Draws a set of vertices in a render pass, using a shader
+ *
+ * Must be in a renderpass
+ * Must have a shader bound
+ *
+ * \param vertex_buffer The vertex buffer to draw from, may be NULL if no vertex buffer is used
+ * \param index_buffer The index buffer to draw from, may be NULL if no index buffer is used
+ * \param vertex_count The number of vertices to draw, only used if index_buffer is NULL
+ */
+void hg_draw(HgBuffer* vertex_buffer, HgBuffer* index_buffer, u32 count);
 
 #endif // HG_GRAPHICS_H

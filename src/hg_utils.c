@@ -62,6 +62,12 @@ HgError hg_file_load_binary(const char* path, byte** data, usize* size) {
     return HG_SUCCESS;
 }
 
+void hg_file_unload_binary(byte* file_data, usize file_size) {
+    if (file_data == NULL)
+        HG_ASSERT(file_size == 0);
+    hg_heap_free(file_data, file_size);
+}
+
 HgError hg_file_save_binary(const char* path, const byte* data, usize size) {
     HG_ASSERT(path != NULL);
     HG_ASSERT(data != NULL);
@@ -77,12 +83,6 @@ HgError hg_file_save_binary(const char* path, const byte* data, usize size) {
 
     fclose(file);
     return HG_SUCCESS;
-}
-
-void hg_file_unload_binary(byte* file_data, usize file_size) {
-    if (file_data == NULL)
-        HG_ASSERT(file_size == 0);
-    hg_heap_free(file_data, file_size);
 }
 
 HgError hg_file_load_image(const char* path, u32** data, u32* width, u32* height) {
@@ -110,6 +110,14 @@ HgError hg_file_load_image(const char* path, u32** data, u32* width, u32* height
     return HG_SUCCESS;
 }
 
+void hg_file_unload_image(u32* data, u32 width, u32 height) {
+    if (data == NULL)
+        HG_ASSERT(width == 0 && height == 0);
+    stbi_image_free(data);
+    (void)width;
+    (void)height;
+}
+
 HgError hg_file_save_image(const char* path, const u32* data, u32 width, u32 height) {
     HG_ASSERT(path != NULL);
     HG_ASSERT(data != NULL);
@@ -121,14 +129,6 @@ HgError hg_file_save_image(const char* path, const u32* data, u32 width, u32 hei
         return HG_ERROR_FILE_WRITE_FAILURE;
 
     return HG_SUCCESS;
-}
-
-void hg_file_unload_image(u32* data, u32 width, u32 height) {
-    if (data == NULL)
-        HG_ASSERT(width == 0 && height == 0);
-    stbi_image_free(data);
-    (void)width;
-    (void)height;
 }
 
 f64 hg_clock_tick(HgClock* clock) {
