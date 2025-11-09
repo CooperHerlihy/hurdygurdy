@@ -83,9 +83,8 @@ SHADERS=(
 SRCS=(
     ${SRC_DIR}/src/hurdygurdy.c
     ${SRC_DIR}/src/hg_utils.c
-    ${SRC_DIR}/src/hg_math.c
-    ${SRC_DIR}/src/hg_graphics.c
-    ${SRC_DIR}/src/hg_platform_linux.c
+    ${SRC_DIR}/src/hg_vulkan.c
+    ${SRC_DIR}/src/hg_x11.c
 )
 
 OBJS=""

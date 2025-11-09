@@ -1,23 +1,11 @@
-#ifndef HURDY_GURDY_H
-#define HURDY_GURDY_H
+#ifndef HURDYGURDY_H
+#define HURDYGURDY_H
 
+#include "hg_enums.h"
 #include "hg_utils.h"
 #include "hg_math.h"
+#include "hg_init.h"
 #include "hg_graphics.h"
-#include "hg_input.h"
+#include "hg_window.h"
 
-/**
- * Initializes all hurdygurdy subsystems
- *
- * @return HG_SUCCESS if the library was initialized successfully
- */
-HgError hg_init(void);
-
-/**
- * Shuts down all hurdygurdy subsystems
- *
- * This function can be called in order to reinitialize the library
- */
-void hg_shutdown(void);
-
-#endif // HURDY_GURDY_H
+#endif // HURDYGURDY_H

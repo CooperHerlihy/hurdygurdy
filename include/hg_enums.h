@@ -2,57 +2,15 @@
 #define HG_ENUMS_H
 
 /**
- * A key on the keyboard or button on the mouse
+ * Hurdy Gurdy error codes
  */
-typedef enum HgKey {
-    HG_KEY_NONE = 0,
-    HG_KEY_ESCAPE,
-    HG_KEY_SPACE,
-    HG_KEY_ENTER,
-    HG_KEY_TAB,
-    HG_KEY_DELETE,
-    HG_KEY_BACKSPACE,
-    HG_KEY_LMOUSE,
-    HG_KEY_RMOUSE,
-    HG_KEY_MMOUSE,
-    HG_KEY_UP,
-    HG_KEY_DOWN,
-    HG_KEY_LEFT,
-    HG_KEY_RIGHT,
-    HG_KEY_Q,
-    HG_KEY_W,
-    HG_KEY_E,
-    HG_KEY_R,
-    HG_KEY_T,
-    HG_KEY_Y,
-    HG_KEY_U,
-    HG_KEY_I,
-    HG_KEY_O,
-    HG_KEY_P,
-    HG_KEY_A,
-    HG_KEY_S,
-    HG_KEY_D,
-    HG_KEY_F,
-    HG_KEY_G,
-    HG_KEY_H,
-    HG_KEY_J,
-    HG_KEY_K,
-    HG_KEY_L,
-    HG_KEY_Z,
-    HG_KEY_X,
-    HG_KEY_C,
-    HG_KEY_V,
-    HG_KEY_B,
-    HG_KEY_N,
-    HG_KEY_M,
-    HG_KEY_LSHIFT,
-    HG_KEY_RSHIFT,
-    HG_KEY_LCTRL,
-    HG_KEY_RCTRL,
-    HG_KEY_LALT,
-    HG_KEY_RALT,
-    HG_KEY_LAST,
-} HgKey;
+typedef enum HgError {
+    HG_SUCCESS = 0,
+    HG_ERROR_UNKNOWN,
+    HG_ERROR_FILE_NOT_FOUND,
+    HG_ERROR_FILE_READ_FAILURE,
+    HG_ERROR_FILE_WRITE_FAILURE,
+} HgError;
 
 /**
  * How a buffer will be used
@@ -218,15 +176,6 @@ typedef enum HgFormat {
 } HgFormat;
 
 /**
- * The aspect of a texture
- */
-typedef enum HgTextureAspectFlags {
-    HG_TEXTURE_ASPECT_NONE = 0x0,
-    HG_TEXTURE_ASPECT_COLOR_BIT = 0x1,
-    HG_TEXTURE_ASPECT_DEPTH_BIT = 0x2,
-} HgTextureAspectFlags;
-
-/**
  * How a texture will be used
  */
 typedef enum HgTextureUsageFlags {
@@ -243,14 +192,14 @@ typedef enum HgTextureUsageFlags {
  * How a texture is laid out in video memory
  */
 typedef enum HgTextureLayout {
-    HG_IMAGE_LAYOUT_UNDEFINED = 0,
-    HG_IMAGE_LAYOUT_GENERAL = 1,
-    HG_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL = 2,
-    HG_IMAGE_LAYOUT_DEPTH_BUFFER_OPTIMAL = 3,
-    HG_IMAGE_LAYOUT_DEPTH_BUFFER_READ_ONLY_OPTIMAL = 4,
-    HG_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL = 5,
-    HG_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL = 6,
-    HG_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL = 7,
+    HG_TEXTURE_LAYOUT_UNDEFINED = 0,
+    HG_TEXTURE_LAYOUT_GENERAL = 1,
+    HG_TEXTURE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL = 2,
+    HG_TEXTURE_LAYOUT_DEPTH_BUFFER_OPTIMAL = 3,
+    HG_TEXTURE_LAYOUT_DEPTH_BUFFER_READ_ONLY_OPTIMAL = 4,
+    HG_TEXTURE_LAYOUT_SHADER_READ_ONLY_OPTIMAL = 5,
+    HG_TEXTURE_LAYOUT_TRANSFER_SRC_OPTIMAL = 6,
+    HG_TEXTURE_LAYOUT_TRANSFER_DST_OPTIMAL = 7,
 } HgTextureLayout;
 
 /**
@@ -265,14 +214,6 @@ typedef enum HgSamplerEdgeMode {
 } HgSamplerEdgeMode;
 
 /**
- * Whether a vertex input is per vertex or per instance
- */
-typedef enum HgVertexInputRate {
-    HG_VERTEX_INPUT_RATE_VERTEX = 0,
-    HG_VERTEX_INPUT_RATE_INSTANCE = 1,
-} HgVertexInputRate;
-
-/**
  * The type of a descriptor
  */
 typedef enum HgDescriptorType {
@@ -283,20 +224,12 @@ typedef enum HgDescriptorType {
 } HgDescriptorType;
 
 /**
- * The shader stages
- *
- * Tesselation and geometry are not supported yet
+ * Whether a vertex input is per vertex or per instance
  */
-typedef enum HgShaderStageFlags {
-    HG_SHADER_STAGE_NONE = 0,
-    HG_SHADER_STAGE_VERTEX_BIT = 0x1,
-    // HG_SHADER_STAGE_TESSELLATION_CONTROL_BIT = 0x2,
-    // HG_SHADER_STAGE_TESSELLATION_EVALUATION_BIT = 0x4,
-    // HG_SHADER_STAGE_GEOMETRY_BIT = 0x8,
-    HG_SHADER_STAGE_FRAGMENT_BIT = 0x10,
-    HG_SHADER_STAGE_COMPUTE_BIT = 0x20,
-    HG_SHADER_STAGE_ALL_GRAPHICS = 0x1F,
-} HgShaderStageFlags;
+typedef enum HgVertexInputRate {
+    HG_VERTEX_INPUT_RATE_VERTEX = 0,
+    HG_VERTEX_INPUT_RATE_INSTANCE = 1,
+} HgVertexInputRate;
 
 /**
  * The vertices are understood as primitives
@@ -319,5 +252,58 @@ typedef enum HgCullModeFlagBits {
     HG_CULL_MODE_BACK_BIT = 0x2,
     HG_CULL_MODE_FRONT_AND_BACK = 0x3,
 } HgCullModeFlagBits;
+
+/**
+ * A key on the keyboard or button on the mouse
+ */
+typedef enum HgKey {
+    HG_KEY_NONE = 0,
+    HG_KEY_ESCAPE,
+    HG_KEY_SPACE,
+    HG_KEY_ENTER,
+    HG_KEY_TAB,
+    HG_KEY_DELETE,
+    HG_KEY_BACKSPACE,
+    HG_KEY_LMOUSE,
+    HG_KEY_RMOUSE,
+    HG_KEY_MMOUSE,
+    HG_KEY_UP,
+    HG_KEY_DOWN,
+    HG_KEY_LEFT,
+    HG_KEY_RIGHT,
+    HG_KEY_Q,
+    HG_KEY_W,
+    HG_KEY_E,
+    HG_KEY_R,
+    HG_KEY_T,
+    HG_KEY_Y,
+    HG_KEY_U,
+    HG_KEY_I,
+    HG_KEY_O,
+    HG_KEY_P,
+    HG_KEY_A,
+    HG_KEY_S,
+    HG_KEY_D,
+    HG_KEY_F,
+    HG_KEY_G,
+    HG_KEY_H,
+    HG_KEY_J,
+    HG_KEY_K,
+    HG_KEY_L,
+    HG_KEY_Z,
+    HG_KEY_X,
+    HG_KEY_C,
+    HG_KEY_V,
+    HG_KEY_B,
+    HG_KEY_N,
+    HG_KEY_M,
+    HG_KEY_LSHIFT,
+    HG_KEY_RSHIFT,
+    HG_KEY_LCTRL,
+    HG_KEY_RCTRL,
+    HG_KEY_LALT,
+    HG_KEY_RALT,
+    HG_KEY_LAST,
+} HgKey;
 
 #endif // HG_ENUMS_H

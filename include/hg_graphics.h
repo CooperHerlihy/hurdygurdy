@@ -1,75 +1,20 @@
 #ifndef HG_GRAPHICS_H
 #define HG_GRAPHICS_H
 
+#include "hg_enums.h"
 #include "hg_utils.h"
-#include "hg_graphics_enums.h"
+#include "hg_init.h"
 
 /**
- * Initializes the graphics subsystem
+ * Waits for the graphics subsystem
  *
- * This function must be called before any other graphics function
+ * Can be called to ensure that resources are not being used before destruction
+ *
+ * \param hg The HurdyGurdy context, must not be NULL
  */
-void hg_graphics_init(void);
-
-/**
- * Shuts down the graphics subsystem
- *
- * This function can be called in order to reinitialize the graphics subsystem
- */
-void hg_graphics_shutdown(void);
-
-/**
- * Waits for the graphics subsystem to finish rendering
- *
- * This function can be called to ensure that the resources are not being used
- * before destruction
- */
-void hg_graphics_wait(void);
-
-/**
- * Configuration for a window
- *
- * width and height are only used when windowed is true
- */
-typedef struct HgWindowConfig {
-    const char* title;
-    u32 width;
-    u32 height;
-    bool windowed;
-} HgWindowConfig;
-
-/**
- * Opens the window
- *
- * This function must be called before rendering a frame
- *
- * \param config The window configuration, must not be NULL
- */
-void hg_window_open(const HgWindowConfig* config);
-
-/**
- * Closes the window
- *
- * This function can be called in order to reinitialize the window
- * This function must be called before shutting down the graphics subsystem
- */
-void hg_window_close(void);
-
-/**
- * Gets the size of the window
- *
- * \param width A pointer to store the width of the window, must not be NULL
- * \param height A pointer to store the height of the window, must not be NULL
- */
-void hg_window_get_size(u32* width, u32* height);
-
-/**
- * Updates the size of the window
- *
- * This function updates the swapchain to match the new size of the window
- * This function must be called after the window has changed size
- */
-void hg_window_update_size(void);
+void hg_graphics_wait(
+    const HurdyGurdy* hg
+);
 
 /**
  * A buffer on the GPU
@@ -79,9 +24,9 @@ typedef struct HgBuffer HgBuffer;
 /**
  * Configuration for an HgBuffer
  *
- * size is the size of the buffer in bytes
- * size must be greater than 0
- * usage must not be 0
+ * size is the size of the buffer in bytes, must be greater than 0
+ * usage lists how the buffer will be used, must not be HG_BUFFER_USAGE_NONE
+ * memory_type is how to store memory, defaults to HG_MEMORY_TYPE_DEVICE_LOCAL
  */
 typedef struct HgBufferConfig {
     usize size;
@@ -92,17 +37,25 @@ typedef struct HgBufferConfig {
 /**
  * Creates an HgBuffer
  *
- * \param config The buffer configuration, must not be NULL
- * \return The created buffer
+ * \param hg The HurdyGurdy context, must not be NULL
+ * \param config The configuration for the buffer
+ * \return The created buffer, is never NULL
  */
-HgBuffer* hg_buffer_create(const HgBufferConfig* config);
+HgBuffer* hg_buffer_create(
+    const HurdyGurdy* hg,
+    const HgBufferConfig* config
+);
 
 /**
  * Destroys an HgBuffer
  *
+ * \param hg The HurdyGurdy context, must not be NULL
  * \param buffer The buffer to destroy, must not be NULL
  */
-void hg_buffer_destroy(HgBuffer* buffer);
+void hg_buffer_destroy(
+    const HurdyGurdy* hg,
+    HgBuffer* buffer
+);
 
 /**
  * Writes data to an HgBuffer
@@ -110,22 +63,38 @@ void hg_buffer_destroy(HgBuffer* buffer);
  * If the buffer memory type is HG_GPU_MEMORY_TYPE_LINEAR_ACCESS, the offset
  * must be 0
  *
+ * \param hg The HurdyGurdy context, must not be NULL
  * \param dst The buffer to write to, must not be NULL
  * \param offset The offset into the dst buffer
  * \param src The data to write, must not be NULL
- * \param size The size of the data to write, must be greater than 0
+ * \param size The size of the data to read, may be 0 to do nothing, or SIZE_MAX
+ * to copy the size of the buffer
  */
-void hg_buffer_write(HgBuffer* dst, usize offset, const void* src, usize size);
+void hg_buffer_write(
+    const HurdyGurdy* hg,
+    HgBuffer* dst,
+    usize offset,
+    const void* src,
+    usize size
+);
 
 /**
  * Reads data from an HgBuffer
  *
+ * \param hg The HurdyGurdy context, must not be NULL
  * \param dst The data to read, must not be NULL
- * \param size The size of the data to read, must be greater than 0
  * \param src The buffer to read from, must not be NULL
  * \param offset The offset into the src buffer
+ * \param size The size of the data to read, may be 0 to do nothing, or SIZE_MAX
+ * to copy the size of the buffer
  */
-void hg_buffer_read(void* dst, usize size, const HgBuffer* src, usize offset);
+void hg_buffer_read(
+    const HurdyGurdy* hg,
+    const HgBuffer* src,
+    usize offset,
+    void* dst,
+    usize size
+);
 
 /**
  * A texture on the GPU
@@ -135,19 +104,25 @@ typedef struct HgTexture HgTexture;
 /**
  * Configuration for an HgTexture
  *
- * width, height, and depth must be greater than 0
- * format, aspect, and usage must not be 0
- * array_layers is ignored if make_cubemap is true
- * if make_cubemap is true, width and height must be equal, and depth must be 1
+ * width, height, and depth are the size in pixels, must not be 0
+ * dimensions is 1, 2, or 3, for 1D, 2D or 3D, defaults to 2
+ * mip_levels creates space for mipmaps, which can be filled in with
+ * hg_texture_generate_mipmaps(), defaults to 1 (no mips)
+ * format is the format of each pixel, must not be to HG_FORMAT_UNDEFINED
+ * usage lists how the texture will be used, must not be HG_TEXTURE_USAGE_NONE
+ * edge_mode is how sampling behaves outside the edge of the texture behaves,
+ * defaults to HG_SAMPLER_EDGE_MODE_REPEAT
+ * bilinear_filter is whether samples are smoothed
+ * make_cubemap creates a cubemap, width must equal height, depth must be 1,
+ * dimensions must be 2D, and mip_levels must be 1
  */
 typedef struct HgTextureConfig {
     u32 width;
     u32 height;
     u32 depth;
-    u32 array_layers;
+    u32 dimensions;
     u32 mip_levels;
     HgFormat format;
-    HgTextureAspectFlags aspect;
     HgTextureUsageFlags usage;
     HgSamplerEdgeMode edge_mode;
     bool bilinear_filter;
@@ -157,39 +132,59 @@ typedef struct HgTextureConfig {
 /**
  * Creates an HgTexture
  *
+ * \param hg The HurdyGurdy context, must not be NULL
  * \param config The texture configuration, must not be NULL
- * \return The created texture
+ * \return The created texture, is never NULL
  */
-HgTexture* hg_texture_create(const HgTextureConfig* config);
+HgTexture* hg_texture_create(
+    const HurdyGurdy* hg,
+    const HgTextureConfig* config
+);
 
 /**
  * Destroys an HgTexture
  *
+ * \param hg The HurdyGurdy context, must not be NULL
  * \param texture The texture to destroy, must not be NULL
  */
-void hg_texture_destroy(HgTexture* texture);
+void hg_texture_destroy(
+    const HurdyGurdy* hg,
+    HgTexture* texture
+);
 
 /**
  * Writes data to an HgTexture
  *
- * The size of the data must match the size of the texture
+ * Copies into the whole texture, so src must be large enough
  *
+ * \param hg The HurdyGurdy context, must not be NULL
  * \param dst The texture to write to, must not be NULL
- * \param src The data to write, must not be NULL
+ * \param src The data to write, may be NULL to only set layout
  * \param layout The layout the texture will be set to after writing
  */
-void hg_texture_write(HgTexture* dst, const void* src, HgTextureLayout layout);
+void hg_texture_write(
+    const HurdyGurdy* hg,
+    HgTexture* dst,
+    const void* src,
+    HgTextureLayout layout
+);
 
 /**
  * Reads data from an HgTexture
  *
  * The size of the dst buffer must match the size of the texture
  *
+ * \param hg The HurdyGurdy context, must not be NULL
  * \param dst A buffer to read to, must not be NULL
  * \param src The texture to read from, must not be NULL
  * \param layout The layout the texture will be set to after reading
  */
-void hg_texture_read(void* dst, HgTexture* src, HgTextureLayout layout);
+void hg_texture_read(
+    const HurdyGurdy* hg,
+    HgTexture* src,
+    void* dst,
+    HgTextureLayout layout
+);
 
 /**
  * Gets the maximum number of mip levels a texture can have
@@ -204,10 +199,15 @@ u32 hg_get_max_mip_count(u32 width, u32 height, u32 depth);
 /**
  * Generates mipmaps in a texture
  *
+ * \param hg The HurdyGurdy context, must not be NULL
  * \param texture The texture to generate mipmaps in, must not be NULL
  * \param layout The layout the texture will be set to after generating mipmaps
  */
-void hg_texture_generate_mipmaps(HgTexture* texture, HgTextureLayout layout);
+void hg_texture_generate_mipmaps(
+    const HurdyGurdy* hg,
+    HgTexture* texture,
+    HgTextureLayout layout
+);
 
 /**
  * A shader on the GPU
@@ -251,34 +251,40 @@ typedef struct HgDescriptorSet {
 /**
  * Configuration for an HgShader
  *
- * color_format must not be HG_FORMAT_UNDEFINED
- * if depth_format is HG_FORMAT_UNDEFINED, there is no depth buffer
+ * color_format is the format of the render target, must not be
+ * HG_FORMAT_UNDEFINED
+ * depth_format is the format of the depth buffer, if it is HG_FORMAT_UNDEFINED,
+ * then there is no depth buffer
  *
- * spirv_vertex_shader and spirv_fragment_shader must not be NULL
- * vertex_shader_size and fragment_shader_size must be greater than 0
+ * vertex_shader is a pointer to spirv bytecode, must not be NULL
+ * vertex_shader_size is the size in bytes, must be greater than 0
+ * fragment_shader is a pointer to spirv bytecode, must not be NULL
+ * fragment_shader_size is the size in bytes, must be greater than 0
  *
- * if vertex_bindings is NULL, there are no vertex bindings
- * otherwise, vertex_binding_count must be greater than 0
+ * vertex_bindings points to descriptions of the vertex bindings, may be NULL
+ * vertex_binding_count is the number of vertex bindings, may be 0
+ * desciptor_sets points to descriptions of the descriptor sets, may be NULL
+ * descriptor_set_count is the number of descriptor sets, may be 0
+ * push_constant_size is the size in bytes of the push constant, if 0, then
+ * there is no push constant
  *
- * if descriptor_sets is NULL, there are no descriptor sets
- * otherwise, descriptor_set_count must be greater than 0
- *
- * if push_constant_size is 0, there is no push constant
+ * topology is how vertices are interpreted, HG_PRIMITIVE_TOPOLOGY_POINT_LIST
+ * cull_mode enables face culling, defaults to HG_CULL_MODE_NONE
+ * enable_color_blend enables color blending using pixel alpha values
  */
 typedef struct HgShaderConfig {
     HgFormat color_format;
     HgFormat depth_format;
 
-    const byte* spirv_vertex_shader;
-    const byte* spirv_fragment_shader;
+    const byte* vertex_shader;
     u32 vertex_shader_size;
+    const byte* fragment_shader;
     u32 fragment_shader_size;
 
     HgVertexBinding* vertex_bindings;
-    HgDescriptorSet* descriptor_sets;
     u32 vertex_binding_count;
+    HgDescriptorSet* descriptor_sets;
     u32 descriptor_set_count;
-
     u32 push_constant_size;
 
     HgPrimitiveTopology topology;
@@ -289,26 +295,29 @@ typedef struct HgShaderConfig {
 /**
  * Creates an HgShader for graphics
  *
+ * \param hg The HurdyGurdy context, must not be NULL
  * \param config The shader configuration, must not be NULL
- * \return The created shader
+ * \return The created shader, is never NULL
  */
-HgShader* hg_shader_create(const HgShaderConfig* config);
+HgShader* hg_shader_create(
+    const HurdyGurdy* hg,
+    const HgShaderConfig* config
+);
 
 /**
  * Configuration for an HgShader for compute
  *
- * spirv_shader must not be NULL
- * shader_size must be greater than 0
- *
- * if descriptor_sets is NULL, there are no descriptor sets
- * otherwise, descriptor_set_count must be greater than 0
- *
- * if push_constant_size is 0, there is no push constant
+ * shader is a pointer to spirv bytecode, must not be NULL
+ * shader_size is the size in bytes, must be greater than 0
+ * desciptor_sets points to descriptions of the descriptor sets, may be NULL
+ * descriptor_set_count is the number of descriptor sets, may be 0
+ * push_constant_size is the size in bytes of the push constant, if 0, then
+ * there is no push constant
  */
 typedef struct HgComputeShaderConfig {
-    const byte* spirv_shader;
+    const byte* shader;
+    usize shader_size;
     HgDescriptorSet* descriptor_sets;
-    u32 shader_size;
     u32 descriptor_set_count;
     u32 push_constant_size;
 } HgComputeShaderConfig;
@@ -316,183 +325,101 @@ typedef struct HgComputeShaderConfig {
 /**
  * Creates an HgShader for compute
  *
+ * \param hg The HurdyGurdy context, must not be NULL
  * \param config The shader configuration, must not be NULL
- * \return The created shader
+ * \return The created shader, is never NULL
  */
-HgShader* hg_compute_shader_create(const HgComputeShaderConfig* config);
+HgShader* hg_compute_shader_create(
+    const HurdyGurdy* hg,
+    const HgComputeShaderConfig* config
+);
 
 /**
  * Destroys an HgShader
  *
+ * \param hg The HurdyGurdy context, must not be NULL
  * \param shader The shader to destroy, must not be NULL
  */
-void hg_shader_destroy(HgShader* shader);
-
-/**
- * Begins generic a command buffer
- *
- * cannot be called while recording a frame
- */
-void hg_commands_begin(void);
-
-/**
- * Ends a command buffer
- *
- * hg_commands_begin() must be called before this function
- */
-void hg_commands_end(void);
-
-/**
- * Creates a buffer memory barrier
- *
- * Ensures read/writes are complete and cashes are flushed
- * Must be in a command buffer
- *
- * \param buffer The buffer to use, must not be NULL
- */
-void hg_memory_barrier_buffer(HgBuffer* buffer);
-
-/**
- * Creates a texture memory barrier
- *
- * Ensures read/writes are complete and cashes are flushed
- * Changes texture layout manually
- * Must be in a command texture
- *
- * Note, texture barriers for render targets and depth buffers are done
- * automatically in a frame
- *
- * \param texture The texture to use, must not be NULL
- * \param begin_layout The layout the texture was in before the barrier, may be
- * NULL if the memory need not be preserved
- * \param end_layout The layout the texture will be set to
- */
-void hg_memory_barrier_texture(
-    HgTexture* texture,
-    HgTextureLayout begin_layout,
-    HgTextureLayout end_layout
+void hg_shader_destroy(
+    const HurdyGurdy* hg,
+    HgShader* shader
 );
 
 /**
- * Copies from one buffer to another
- *
- * Must be in a command buffer
- * dst must be at least dst_offset + size bytes long
- * src must be at least src_offset + size bytes long
- *
- * \param dst The destination written to
- * \param dst_offset The offset into dst
- * \param src The source read from
- * \param src_offset The offset into src
- * \param size The number of bytes to copy
+ * A command buffer
  */
-void hg_buffer_copy(
-    HgBuffer* dst,
-    usize dst_offset,
-    HgBuffer* src,
-    usize src_offset,
-    usize size
+typedef struct HgCommands HgCommands;
+
+/**
+ * Begins a generic command buffer
+ *
+ * \param hg The HurdyGurdy context, must not be NULL
+ * \return The created command buffer, is never NULL
+ */
+HgCommands* hg_commands_begin(
+    const HurdyGurdy* hg
 );
 
 /**
- * Configuration for hg_texture_blit
+ * Ends a command buffer created by hg_commands_begin()
  *
- * Coordinates are pixels in the texture
- * x, y, and z are the begin coordinates of the target area
- * w, h, and d are the width, height, and depth of the target area
- * mip_level and array_layer are ignored if the texture does not use them
+ * \param hg The HurdyGurdy context, must not be NULL
+ * \param commands The command buffer, must not be NULL
  */
-typedef struct HgBlitConfig {
-    HgTexture* texture;
-    u32 x, y, z, w, h, d;
-    u32 mip_level;
-    u32 array_layer;
-} HgBlitConfig;
-
-/**
- * Copies from one texture to another
- *
- * Must be in a command buffer
- *
- * \param dst The destination written to
- * \param src The source read from
- * \param bilinear_filter Whether to smooth out the result
- */
-void hg_texture_blit(
-    HgBlitConfig* dst,
-    HgBlitConfig* src,
-    bool bilinear_filter
+void hg_commands_end(
+    const HurdyGurdy* hg,
+    HgCommands* commands
 );
 
 /**
- * Configuration for hg_texture_blit_norm
+ * Begins a render pass
  *
- * Coordinates are normalized 0.0 to 1.0
- * x, y, and z are the begin coordinates of the target area
- * w, h, and d are the width, height, and depth of the target area
- * mip_level and array_layer are ignored if the texture does not use them
+ * \param commands The command buffer, must not be NULL
+ * \param target The target texture to render to, must not be NULL
+ * \param depth_buffer The depth buffer to render to, may be NULL if a depth
+ * buffer is not being used
+ * \param clear_target Whether to clear the target texture before rendering
+ * \param clear_depth Whether to clear the depth buffer before rendering,
+ * ignored if depth_buffer is NULL
  */
-typedef struct HgBlitNormConfig {
-    HgTexture* texture;
-    f32 x, y, z, w, h, d;
-    u32 mip_level;
-    u32 array_layer;
-} HgBlitNormConfig;
-
-/**
- * Copies from one texture to another, using normalized coordinates
- *
- * Must be in a command buffer
- *
- * \param dst The destination written to
- * \param src The source read from
- * \param bilinear_filter Whether to smooth out the result
- */
-void hg_texture_blit_norm(
-    HgBlitNormConfig* dst,
-    HgBlitNormConfig* src,
-    bool bilinear_filter
+void hg_renderpass_begin(
+    HgCommands* commands,
+    HgTexture* target,
+    HgTexture* depth_buffer,
+    bool clear_target,
+    bool clear_depth
 );
 
 /**
- * Copies into a buffer from a texture
+ * Ends a render pass
  *
- * Copies the whole texture, so dst must be large enough
- * Must be in a command buffer
- *
- * \param dst The destination written to
- * \param src The source read from
+ * \param command The command buffer, must not be NULL
  */
-void hg_buffer_copy_from_texture(HgBuffer* dst, HgTexture* src);
-
-/**
- * Copies into a texture from a buffer
- *
- * Copies the size of the whole texture, so src must be large enough
- * Must be in a command buffer
- *
- * \param dst The destination written to
- * \param src The source read from
- */
-void hg_texture_copy_from_buffer(HgTexture* dst, HgBuffer* src);
+void hg_renderpass_end(
+    HgCommands* commands
+);
 
 /**
  * Binds a shader
  *
- * Must be in a command buffer
- *
+ * \param commands The command buffer, must not be NULL
  * \param shader The shader to bind, must not be NULL
  */
-void hg_shader_bind(HgShader* shader);
+void hg_shader_bind(
+    HgCommands* commands,
+    HgShader* shader
+);
 
 /**
  * Unbinds a shader
  *
- * Must be in a command buffer
- *
  * Using this function is optional
+ *
+ * \param commands The command buffer, must not be NULL
  */
-void hg_shader_unbind(void);
+void hg_shader_unbind(
+    HgCommands* commands
+);
 
 /**
  * A descriptor to bind to a descriptor set
@@ -507,85 +434,184 @@ typedef struct HgDescriptor {
 /**
  * Binds a descriptor set
  *
- * Must be in a command buffer
+ * Must be called with a shader bound, after hg_shader_bind()
  *
+ * \param commands The command buffer, must not be NULL
  * \param set_index The index of the descriptor set in the shader
  * \param descriptors The descriptors to bind, must not be NULL
  * \param descriptor_count The number of descriptors to bind
  */
-void hg_bind_descriptor_set(u32 set_index, HgDescriptor* descriptors, u32 descriptor_count);
+void hg_descriptor_set_bind(
+    HgCommands* commands,
+    u32 set_index,
+    HgDescriptor* descriptors,
+    u32 descriptor_count
+);
 
 /**
  * Binds a push constant
  *
- * Must be in a command buffer
+ * Must be called with a shader bound, after hg_shader_bind()
  *
+ * \param commands The command buffer, must not be NULL
  * \param data The data to bind, must not be NULL
  * \param size The size of the data to bind, must be greater than 0
  */
-void hg_bind_push_constant(void* data, u32 size);
+void hg_push_constant_bind(
+    HgCommands* commands,
+    void* data,
+    u32 size
+);
+
+/**
+ * Draws a set of vertices
+ *
+ * Must be called during a renderpass, after hg_renderpass_begin()
+ * Must be called with a shader bound, after hg_shader_bind()
+ *
+ * \param command The command buffer, must not be NULL
+ * \param vertex_buffer The vertices to draw, may be NULL
+ * \param index_buffer Indices to order the vertices, may be NULL
+ * \param vertex_count The number of vertices to draw, ignored if index_buffer
+ * is present
+ */
+void hg_draw(
+    HgCommands* commands,
+    HgBuffer* vertex_buffer,
+    HgBuffer* index_buffer,
+    u32 vertex_count
+);
 
 /**
  * Dispatches a compute shader
  *
- * Must be in a command buffer
+ * Must be called with a shader bound, after hg_shader_bind()
  *
+ * \param commands The command buffer, must not be NULL
  * \param group_count_x The number of groups to dispatch in the x direction
  * \param group_count_y The number of groups to dispatch in the y direction
  * \param group_count_z The number of groups to dispatch in the z direction
  */
-void hg_compute_dispatch(u32 group_count_x, u32 group_count_y, u32 group_count_z);
+void hg_compute_dispatch(
+    HgCommands* commands,
+    u32 group_count_x,
+    u32 group_count_y,
+    u32 group_count_z
+);
 
 /**
- * Begins a frame command buffer
+ * Copies from one buffer to another
  *
- * \return HG_SUCCESS if the frame was started successfully
- * \return HG_ERROR_WINDOW_INVALID if the window was closed
+ * \param commands The command buffer, must not be NULL
+ * \param dst The destination written to, must not be NULL
+ * \param dst_offset The offset into dst
+ * \param src The source read from, must not be NULL
+ * \param src_offset The offset into src
+ * \param size The number of bytes to copy
  */
-HgError hg_frame_begin(void);
+void hg_buffer_copy(
+    HgCommands* commands,
+    HgBuffer* dst,
+    usize dst_offset,
+    HgBuffer* src,
+    usize src_offset,
+    usize size
+);
 
 /**
- * Ends this frame and presents to the window
+ * Configuration for hg_texture_blit()
  *
- * hg_frame_begin() must be called before this function
- * cannot be called while recording a generic command buffer
+ * Coordinates are in normalized space, from 0.0 to 1.0
  *
- * \param framebuffer The framebuffer to present to the window, does not present if NULL
- * \return HG_SUCCESS if the frame was ended successfully
- * \return HG_ERROR_WINDOW_INVALID if the window was closed
+ * x, y, and z are the begin coordinates of the target area
+ * w, h, and d are the width, height, and depth of the target area
+ * mip_level and array_layer are ignored if the texture does not use them
  */
-HgError hg_frame_end(HgTexture* framebuffer);
+typedef struct HgBlitConfig {
+    HgTexture* texture;
+    f32 x, y, z, w, h, d;
+    u32 mip_level;
+    u32 array_layer;
+} HgBlitNormConfig;
 
 /**
- * Begins a render pass
+ * Copies from one texture to another
  *
- * Must be in a frame
- *
- * \param target The target texture to render to, must not be NULL
- * \param depth_buffer The depth buffer to render to, may be NULL if no depth buffer is used
- * \param clear_target Whether to clear the target texture before rendering
- * \param clear_depth Whether to clear the depth buffer before rendering, ignored if depth_buffer is NULL
+ * \param commands The command buffer, must not be NULL
+ * \param dst The destination written to, must not be NULL
+ * \param src The source read from, must not be NULL
+ * \param bilinear_filter Whether to smooth out the result
  */
-void hg_renderpass_begin(HgTexture* target, HgTexture* depth_buffer, bool clear_target, bool clear_depth);
+void hg_texture_blit(
+    HgCommands* commands,
+    HgBlitNormConfig* dst,
+    HgBlitNormConfig* src,
+    bool bilinear_filter
+);
 
 /**
- * Ends a render pass
+ * Copies into a buffer from a texture
  *
- * Must be in a frame
- * hg_renderpass_begin() must be called before this function
+ * Copies the whole texture, so dst must be large enough
+ *
+ * \param commands The command buffer, must not be NULL
+ * \param dst The destination written to, must not be NULL
+ * \param src The source read from, must not be NULL
  */
-void hg_renderpass_end(void);
+void hg_buffer_copy_from_texture(
+    HgCommands* commands,
+    HgBuffer* dst,
+    HgTexture* src
+);
 
 /**
- * Draws a set of vertices in a render pass, using a shader
+ * Copies into a texture from a buffer
  *
- * Must be in a renderpass
- * Must have a shader bound
+ * Copies the size of the whole texture, so src must be large enough
  *
- * \param vertex_buffer The vertex buffer to draw from, may be NULL if no vertex buffer is used
- * \param index_buffer The index buffer to draw from, may be NULL if no index buffer is used
- * \param vertex_count The number of vertices to draw, only used if index_buffer is NULL
+ * \param commands The command buffer, must not be NULL
+ * \param dst The destination written to, must not be NULL
+ * \param src The source read from, must not be NULL
  */
-void hg_draw(HgBuffer* vertex_buffer, HgBuffer* index_buffer, u32 count);
+void hg_texture_copy_from_buffer(
+    HgCommands* commands,
+    HgTexture* dst,
+    HgBuffer* src
+);
+
+/**
+ * Creates a buffer memory barrier
+ *
+ * Ensures read/writes are complete and cashes are flushed
+ *
+ * \param commands The command buffer, must not be NULL
+ * \param buffer The buffer to use, must not be NULL
+ */
+void hg_memory_barrier_buffer(
+    const HgCommands* commands,
+    HgBuffer* buffer
+);
+
+/**
+ * Creates a texture memory barrier
+ *
+ * Ensures read/writes are complete and cashes are flushed
+ * Changes texture layout manually
+ *
+ * Note, texture barriers for render targets and depth buffers are done
+ * automatically in a frame
+ *
+ * \param commands The command buffer, must not be NULL
+ * \param texture The texture to use, must not be NULL
+ * \param begin_layout The layout the texture was in before the barrier, may be
+ * NULL if the memory need not be preserved
+ * \param end_layout The layout the texture will be set to
+ */
+void hg_memory_barrier_texture(
+    const HgCommands* commands,
+    HgTexture* texture,
+    HgTextureLayout begin_layout,
+    HgTextureLayout end_layout
+);
 
 #endif // HG_GRAPHICS_H

@@ -1,6 +1,9 @@
 #ifndef HG_INIT_H
 #define HG_INIT_H
 
+#include "hg_enums.h"
+#include "hg_utils.h"
+
 /**
  * The context for the HurdyGurdy library
  */
@@ -9,12 +12,9 @@ typedef struct HurdyGurdy HurdyGurdy;
 /**
  * Initializes HurdyGurdy
  *
- * \param hg A pointer to store HurdyGurdy's context, must not be NULL
- * \return HG_SUCCESS if the context was created successfully
+ * \return The created HurdyGurdy context, is never NULL
  */
-HgError* hg_init(
-    HurdyGurdy* hg
-);
+HurdyGurdy* hg_init(void);
 
 /**
  * Shuts down HurdyGurdy

@@ -1,6 +1,8 @@
 #ifndef HG_UTILS_H
 #define HG_UTILS_H
 
+#include "hg_enums.h"
+
 #include <float.h>
 #include <inttypes.h>
 #include <limits.h>
@@ -197,18 +199,6 @@ typedef intptr_t iptr;
 #define HG_ASSERT(condition) { if (!(condition)) { HG_ERROR("ASSERT failed: " #condition); } }
 
 #endif
-
-/**
- * Hurdy Gurdy error codes
- */
-typedef enum HgError {
-    HG_SUCCESS = 0,
-    HG_ERROR_UNKNOWN,
-    HG_ERROR_FILE_NOT_FOUND,
-    HG_ERROR_FILE_READ_FAILURE,
-    HG_ERROR_FILE_WRITE_FAILURE,
-    HG_ERROR_WINDOW_INVALID,
-} HgError;
 
 /**
  * Allocates memory from the heap
