@@ -1,15 +1,3 @@
-[submodule "vendor/SDL"]
-	path = vendor/SDL
-	url = https://github.com/libsdl-org/SDL
-[submodule "vendor/VulkanMemoryAllocator"]
-	path = vendor/VulkanMemoryAllocator
-	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator
-[submodule "vendor/stb"]
-	path = vendor/stb
-	url = https://github.com/nothings/stb
-[submodule "vendor/cgltf"]
-	path = vendor/cgltf
-	url = https://github.com/jkuhlmann/cgltf
 [submodule "vendor/Vulkan-Headers"]
 	path = vendor/Vulkan-Headers
 	url = https://github.com/KhronosGroup/Vulkan-Headers
