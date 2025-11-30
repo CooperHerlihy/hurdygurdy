@@ -828,6 +828,8 @@ static const VkDebugUtilsMessengerCreateInfoEXT hg_debug_utils_messenger_create_
 };
 
 VkInstance hg_vk_create_instance(const char *app_name) {
+    hg_vk_load();
+
     VkApplicationInfo app_info = {
         .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
         .pApplicationName = app_name != NULL ? app_name : "Hurdy Gurdy Application",
@@ -875,6 +877,7 @@ VkInstance hg_vk_create_instance(const char *app_name) {
     hg_vk_check(vkCreateInstance(&instance_info, NULL, &instance));
 
     hg_assert(instance != NULL);
+    hg_vk_load_instance(instance);
     return instance;
 }
 
@@ -902,7 +905,7 @@ static const char *const hg_vk_device_extensions[] = {
     "VK_KHR_swapchain",
 };
 
-VkPhysicalDevice hg_vk_find_single_queue_gpu(VkInstance instance, u32 *queue_family) {
+static VkPhysicalDevice hg_internal_find_single_queue_gpu(VkInstance instance, u32 *queue_family) {
     hg_assert(instance != VK_NULL_HANDLE);
     if (queue_family == NULL)
         hg_debug("queue_family is NULL, but the physical device's queue family should be stored somewhere\n");
@@ -959,7 +962,7 @@ next_gpu:
     return suitable_gpu;
 }
 
-VkDevice hg_vk_create_single_queue_device(VkPhysicalDevice gpu, u32 queue_family) {
+static VkDevice hg_internal_create_single_queue_device(VkPhysicalDevice gpu, u32 queue_family) {
     hg_assert(gpu != NULL);
 
     VkPhysicalDeviceDynamicRenderingFeatures dynamic_rendering_feature = {
@@ -995,6 +998,18 @@ VkDevice hg_vk_create_single_queue_device(VkPhysicalDevice gpu, u32 queue_family
     hg_vk_check(vkCreateDevice(gpu, &device_info, NULL, &device));
 
     hg_assert(device != VK_NULL_HANDLE);
+    return device;
+}
+
+HgSingleQueueDeviceData hg_vk_create_single_queue_device(VkInstance instance) {
+    hg_assert(instance != VK_NULL_HANDLE);
+
+    HgSingleQueueDeviceData device = {0};
+    device.gpu = hg_internal_find_single_queue_gpu(instance, &device.queue_family);
+    device.handle = hg_internal_create_single_queue_device(device.gpu, device.queue_family);
+    hg_vk_load_device(device.handle);
+    device.queue = hg_vk_get_queue(device.handle, device.queue_family, 0);
+
     return device;
 }
 
@@ -1048,26 +1063,20 @@ static VkPresentModeKHR hg_vk_find_swapchain_present_mode(
     return VK_PRESENT_MODE_FIFO_KHR;
 }
 
-VkSwapchainKHR hg_vk_create_swapchain(
+HgSwapchainData hg_vk_create_swapchain(
     VkDevice device,
     VkPhysicalDevice gpu,
     VkSwapchainKHR old_swapchain,
     VkSurfaceKHR surface,
     VkImageUsageFlags image_usage,
-    VkPresentModeKHR desired_mode,
-    u32 *width,
-    u32 *height,
-    VkFormat *format,
-    u32 *image_count
+    VkPresentModeKHR desired_mode
 ) {
     hg_assert(device != VK_NULL_HANDLE);
     hg_assert(gpu != VK_NULL_HANDLE);
     hg_assert(surface != VK_NULL_HANDLE);
     hg_assert(image_usage != 0);
-    hg_assert(width != NULL);
-    hg_assert(height != NULL);
-    hg_assert(format != NULL);
-    hg_assert(image_count != NULL);
+
+    HgSwapchainData swapchain = {0};
 
     VkSurfaceCapabilitiesKHR surface_capabilities = {0};
     hg_vk_check(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &surface_capabilities));
@@ -1080,18 +1089,18 @@ VkSwapchainKHR hg_vk_create_swapchain(
         surface_capabilities.currentExtent.height > surface_capabilities.maxImageExtent.height
     ) {
         hg_warn("Could not create swapchain from the surface's size\n");
-        return VK_NULL_HANDLE;
+        return swapchain;
     }
 
-    *width = surface_capabilities.currentExtent.width;
-    *height = surface_capabilities.currentExtent.height;
-    *format = hg_vk_find_swapchain_format(gpu, surface);
+    swapchain.width = surface_capabilities.currentExtent.width;
+    swapchain.height = surface_capabilities.currentExtent.height;
+    swapchain.format = hg_vk_find_swapchain_format(gpu, surface);
 
-    VkSwapchainCreateInfoKHR new_swapchain_info = {
+    VkSwapchainCreateInfoKHR swapchain_info = {
         .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
         .surface = surface,
         .minImageCount = surface_capabilities.minImageCount,
-        .imageFormat = *format,
+        .imageFormat = swapchain.format,
         .imageColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR,
         .imageExtent = surface_capabilities.currentExtent,
         .imageArrayLayers = 1,
@@ -1102,12 +1111,11 @@ VkSwapchainKHR hg_vk_create_swapchain(
         .clipped = VK_TRUE,
         .oldSwapchain = old_swapchain,
     };
-    VkSwapchainKHR new_swapchain = NULL;
-    hg_vk_check(vkCreateSwapchainKHR(device, &new_swapchain_info, NULL, &new_swapchain));
-    hg_vk_check(vkGetSwapchainImagesKHR(device, new_swapchain, image_count, NULL));
+    hg_vk_check(vkCreateSwapchainKHR(device, &swapchain_info, NULL, &swapchain.handle));
+    hg_vk_check(vkGetSwapchainImagesKHR(device, swapchain.handle, &swapchain.image_count, NULL));
 
-    hg_assert(new_swapchain != NULL);
-    return new_swapchain;
+    hg_assert(swapchain.handle != NULL);
+    return swapchain;
 }
 
 void hg_vk_destroy_swapchain(VkDevice device, VkSwapchainKHR swapchain) {
@@ -2245,7 +2253,7 @@ HgFrameSync hg_frame_sync_create(VkDevice device, u32 queue_family, u32 image_co
     return sync;
 }
 
-void hg_frame_sync_destroy(HgFrameSync *sync, VkDevice device) {
+void hg_frame_sync_destroy(VkDevice device, HgFrameSync *sync) {
     hg_assert(device != VK_NULL_HANDLE);
     hg_assert(sync != NULL);
 
@@ -2263,7 +2271,7 @@ void hg_frame_sync_destroy(HgFrameSync *sync, VkDevice device) {
     free(sync->cmds);
 }
 
-VkCommandBuffer hg_frame_sync_begin_frame(HgFrameSync *sync, VkDevice device, VkSwapchainKHR swapchain) {
+VkCommandBuffer hg_frame_sync_begin_frame(VkDevice device, HgFrameSync *sync, VkSwapchainKHR swapchain) {
     hg_assert(sync != NULL);
     hg_assert(device != VK_NULL_HANDLE);
     hg_assert(swapchain != VK_NULL_HANDLE);
@@ -2285,7 +2293,7 @@ VkCommandBuffer hg_frame_sync_begin_frame(HgFrameSync *sync, VkDevice device, Vk
     return cmd;
 }
 
-void hg_frame_sync_end_frame_and_present(HgFrameSync *sync, VkQueue queue, VkSwapchainKHR swapchain) {
+void hg_frame_sync_end_frame_and_present(VkQueue queue, HgFrameSync *sync, VkSwapchainKHR swapchain) {
     VkCommandBuffer cmd = sync->cmds[sync->current_frame];
     hg_vk_end_cmd(cmd);
 

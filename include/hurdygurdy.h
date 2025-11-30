@@ -1329,6 +1329,8 @@ void hg_vk_check(VkResult result);
  * 
  * In debug mode, enables debug messaging
  *
+ * Note, loads Vulkan function pointers automatically
+ *
  * Parameters
  * - app_name The name of the application, may be NULL
  * Returns
@@ -1364,31 +1366,25 @@ VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger(VkInstance instance);
 void hg_vk_destroy_debug_messenger(VkInstance instance, VkDebugUtilsMessengerEXT messenger);
 
 // find gpu with multiple potential queues : TODO
-
-/**
- * Finds a suitable Vulkan physical device
- *
- * Searches for a physical device which supports the swapchain extension, and
- * has at least one queue family which supports both graphics and compute
- *
- * Parameters
- * - instance The Vulkan instance, must not be VK_NULL_HANDLE
- * - queue_family A pointer to store the queue family, should not be NULL
- * Returns
- * - The found gpu, may be VK_NULL_HANDLE if no suitable gpu can be found
- */
-VkPhysicalDevice hg_vk_find_single_queue_gpu(VkInstance instance, u32 *queue_family);
-
 // create device with multiple potential queues : TODO
 
 /**
- * Creates a Vulkan logical device with sensible defaults and only one queue
+ * A Vulkan device with a single general-purpose queue
+ */
+typedef struct HgSingleQueueDevice {
+    VkDevice handle;
+    VkPhysicalDevice gpu;
+    VkQueue queue;
+    u32 queue_family;
+} HgSingleQueueDeviceData;
+
+/**
+ * Creates a Vulkan device with a single general-purpose queue
  *
  * Enables the swapchain extension, and the synchronization 2 and dynamic
  * rendering features
- * Creates 1 queue on the given queue_family
  *
- * Note, Vulkan functions will be loaded using this device
+ * Note, loads Vulkan function pointers automatically
  *
  * Parameters
  * - gpu The physical device, must not be VK_NULL_HANDLE
@@ -1396,7 +1392,7 @@ VkPhysicalDevice hg_vk_find_single_queue_gpu(VkInstance instance, u32 *queue_fam
  * Returns
  * - The created Vulkan device, will never be VK_NULL_HANDLE
  */
-VkDevice hg_vk_create_single_queue_device(VkPhysicalDevice gpu, u32 queue_family);
+HgSingleQueueDeviceData hg_vk_create_single_queue_device(VkInstance instance);
 
 /**
  * Destroy a Vulkan logical device
@@ -1415,6 +1411,32 @@ void hg_vk_destroy_device(VkDevice device);
 void hg_vk_wait_for_device(VkDevice device);
 
 /**
+ * A Vulkan swapchain and associated data
+ */
+typedef struct HgSwapchain {
+    /**
+     * The handle to the Vulkan object
+     */
+    VkSwapchainKHR handle;
+    /**
+     * The number of images in the swapchain
+     */
+    u32 image_count;
+    /**
+     * The width of the swapchain's images
+     */
+    u32 width;
+    /**
+     * The height of the swapchain's images
+     */
+    u32 height;
+    /**
+     * The pixel format of the swapchain's images
+     */
+    VkFormat format;
+} HgSwapchainData;
+
+/**
  * Creates a Vulkan swapchain
  *
  * Parameters
@@ -1424,24 +1446,16 @@ void hg_vk_wait_for_device(VkDevice device);
  * - surface The surface to create from
  * - image_usage How the swapchain's images will be used
  * - desired_mode The preferred present mode (fallback to FIFO)
- * - width A pointer to store the width of the swapchain, must not be NULL
- * - height A pointer to store the height of the swapchain, must not be NULL
- * - format A pointer to store the format of the swapchain, must not be NULL
- * - image_count A pointer to store the number of images, must not be NULL
  * Returns
  * - The created Vulkan swapchain
  */
-VkSwapchainKHR hg_vk_create_swapchain(
+HgSwapchainData hg_vk_create_swapchain(
     VkDevice device,
     VkPhysicalDevice gpu,
     VkSwapchainKHR old_swapchain,
     VkSurfaceKHR surface,
     VkImageUsageFlags image_usage,
-    VkPresentModeKHR desired_mode,
-    u32 *width,
-    u32 *height,
-    VkFormat *format,
-    u32 *image_count);
+    VkPresentModeKHR desired_mode);
 
 /**
  * Destroys a Vulkan swapchain
@@ -2460,9 +2474,9 @@ void hg_vk_draw_indexed(
 void hg_vk_dispatch(VkCommandBuffer cmd, u32 x, u32 y, u32 z);
 
 /**
- * The system to synchronize rendering to multiple swapchain images at once
+ * A system to synchronize frames rendering to multiple swapchain images at once
  */
-typedef struct HgRenderSync {
+typedef struct HgFrameSync {
     VkCommandBuffer *cmds;
     VkFence *frame_finished;
     VkSemaphore *image_available;
@@ -2474,25 +2488,25 @@ typedef struct HgRenderSync {
 } HgFrameSync;
 
 /**
- * Creates a render sync system
+ * Creates a frame sync system
  *
  * Parameters
  * - device The Vulkan device, must not be VK_NULL_HANDLE
  * - queue_family The queue_family to allocate command buffers in
  * - image_count The number of swapchain images, must be greater than 0
  * Returns
- * - The created render sync system
+ * - The created frame sync system
  */
 HgFrameSync hg_frame_sync_create(VkDevice device, u32 queue_family, u32 image_count);
 
 /**
- * Destroys a render sync system
+ * Destroys a frame sync system
  *
  * Parameters
- * - sync The render sync system to destroy, must not be NULL
+ * - sync The frame sync system to destroy, must not be NULL
  * - device The Vulkan device, must not be VK_NULL_HANDLE
  */
-void hg_frame_sync_destroy(HgFrameSync *sync, VkDevice device);
+void hg_frame_sync_destroy(VkDevice device, HgFrameSync *sync);
 
 /**
  * Acquires the next swapchain image and begins its command buffer
@@ -2504,7 +2518,7 @@ void hg_frame_sync_destroy(HgFrameSync *sync, VkDevice device);
  * Returns
  * - The command buffer to record this frame
  */
-VkCommandBuffer hg_frame_sync_begin_frame(HgFrameSync *sync, VkDevice device, VkSwapchainKHR swapchain);
+VkCommandBuffer hg_frame_sync_begin_frame(VkDevice device, HgFrameSync *sync, VkSwapchainKHR swapchain);
 
 /**
  * Finishes recording the command buffer and presents the swapchain image
@@ -2514,7 +2528,7 @@ VkCommandBuffer hg_frame_sync_begin_frame(HgFrameSync *sync, VkDevice device, Vk
  * - queue The Vulkan queue, must not be VK_NULL_HANDLE
  * - swapchain The Vulkan swapchain to present, must not be VK_NULL_HANDLE
  */
-void hg_frame_sync_end_frame_and_present(HgFrameSync *sync, VkQueue queue, VkSwapchainKHR swapchain);
+void hg_frame_sync_end_frame_and_present(VkQueue queue, HgFrameSync *sync, VkSwapchainKHR swapchain);
 
 /**
  * Platform specific internal resources
