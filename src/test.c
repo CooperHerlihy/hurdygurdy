@@ -3,6 +3,133 @@
 #include "test.frag.spv.h"
 #include "test.vert.spv.h"
 
+typedef struct HgRenderSync {
+    void *allocation;
+    VkCommandPool pool;
+    VkCommandBuffer *cmds;
+    VkFence *frame_finished;
+    VkSemaphore *image_available;
+    VkSemaphore *ready_to_present;
+    u32 frames_in_flight;
+    u32 swapchain_image_count;
+    u32 current_frame;
+    u32 current_image;
+} HgRenderSync;
+
+static HgRenderSync hg_render_sync_create(
+    VkDevice device,
+    u32 queue_family,
+    u32 frames_in_flight,
+    u32 swapchain_image_count
+) {
+    hg_assert(device != VK_NULL_HANDLE);
+    hg_assert(frames_in_flight > 0);
+    hg_assert(swapchain_image_count > 0);
+
+    HgRenderSync sync = {
+        .frames_in_flight = frames_in_flight,
+        .swapchain_image_count = swapchain_image_count,
+    };
+
+    HgArena arena = hg_arena_create(
+        (frames_in_flight * sizeof(*sync.cmds)) +
+        (frames_in_flight * sizeof(*sync.frame_finished)) +
+        (frames_in_flight * sizeof(*sync.image_available)) +
+        (swapchain_image_count * sizeof(*sync.ready_to_present)));
+
+    sync.allocation = arena.data;
+
+    sync.pool = hg_vk_create_command_pool(device, queue_family, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+
+    sync.cmds = hg_arena_alloc(&arena, frames_in_flight * sizeof(*sync.cmds));
+    hg_vk_allocate_command_buffers(
+        device, sync.pool, sync.cmds, frames_in_flight, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+
+    sync.frame_finished = hg_arena_alloc(&arena, frames_in_flight * sizeof(*sync.frame_finished));
+    for (usize i = 0; i < frames_in_flight; ++i) {
+        sync.frame_finished[i] = hg_vk_create_fence(device, VK_FENCE_CREATE_SIGNALED_BIT);
+    }
+    sync.image_available = hg_arena_alloc(&arena, frames_in_flight * sizeof(*sync.image_available));
+    for (usize i = 0; i < frames_in_flight; ++i) {
+        sync.image_available[i] = hg_vk_create_semaphore(device, 0);
+    }
+    sync.ready_to_present = hg_arena_alloc(&arena, frames_in_flight * sizeof(*sync.ready_to_present));
+    for (usize i = 0; i < swapchain_image_count; ++i) {
+        sync.ready_to_present[i] = hg_vk_create_semaphore(device, 0);
+    }
+
+    return sync;
+}
+
+void hg_render_sync_destroy(HgRenderSync *sync, VkDevice device) {
+    hg_assert(device != VK_NULL_HANDLE);
+    hg_assert(sync != NULL);
+
+    hg_vk_free_command_buffers(device, sync->pool, sync->cmds, sync->frames_in_flight);
+    for (usize i = 0; i < sync->frames_in_flight; ++i) {
+        hg_vk_destroy_fence(device, sync->frame_finished[i]);
+    }
+    for (usize i = 0; i < sync->frames_in_flight; ++i) {
+        hg_vk_destroy_semaphore(device, sync->image_available[i]);
+    }
+    for (usize i = 0; i < sync->swapchain_image_count; ++i) {
+        hg_vk_destroy_semaphore(device, sync->ready_to_present[i]);
+    }
+    hg_vk_destroy_command_pool(device, sync->pool);
+    free(sync->allocation);
+}
+
+VkCommandBuffer hg_render_sync_begin_frame(HgRenderSync *sync, VkDevice device, VkSwapchainKHR swapchain) {
+    hg_assert(sync != NULL);
+    hg_assert(device != VK_NULL_HANDLE);
+    hg_assert(swapchain != VK_NULL_HANDLE);
+
+    sync->current_frame = (sync->current_frame + 1) % sync->frames_in_flight;
+
+    hg_vk_wait_for_fences(device, &sync->frame_finished[sync->current_frame], 1);
+    hg_vk_reset_fences(device, &sync->frame_finished[sync->current_frame], 1);
+
+    hg_vk_acquire_next_image(
+        device,
+        swapchain,
+        &sync->current_image,
+        sync->image_available[sync->current_frame],
+        VK_NULL_HANDLE);
+
+    VkCommandBuffer cmd = sync->cmds[sync->current_frame];
+    hg_vk_begin_cmd(cmd, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+    return cmd;
+}
+
+void hg_render_sync_end_frame_and_present(HgRenderSync *sync, VkQueue queue, VkSwapchainKHR swapchain) {
+    VkCommandBuffer cmd = sync->cmds[sync->current_frame];
+    hg_vk_end_cmd(cmd);
+
+    VkSubmitInfo submit = {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores = &sync->image_available[sync->current_frame],
+        .pWaitDstStageMask = &(VkPipelineStageFlags){VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT},
+        .commandBufferCount = 1,
+        .pCommandBuffers = &cmd,
+        .signalSemaphoreCount = 1,
+        .pSignalSemaphores = &sync->ready_to_present[sync->current_image],
+    };
+    hg_vk_submit_commands(queue, &submit, 1, sync->frame_finished[sync->current_frame]);
+
+    hg_vk_present(queue, swapchain, sync->current_image, &sync->ready_to_present[sync->current_image], 1);
+}
+
+u32 hg_render_sync_frame_index(HgRenderSync *sync) {
+    hg_assert(sync != NULL);
+    return sync->current_frame;
+}
+
+u32 hg_render_sync_image_index(HgRenderSync *sync) {
+    hg_assert(sync != NULL);
+    return sync->current_image;
+}
+
 int main(void) {
     HgPlatform *platform = hg_platform_create();
     HgWindow *window = hg_window_create(platform, &(HgWindowConfig){
@@ -41,15 +168,6 @@ int main(void) {
             device, swap_images[i], swap_format, VK_IMAGE_VIEW_TYPE_2D,
             (VkImageSubresourceRange){.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT});
     }
-
-    VkCommandPool command_pool = hg_vk_create_command_pool(
-        device, queue_family, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
-    VkCommandBuffer cmd;
-    hg_vk_allocate_command_buffers(device, command_pool, &cmd, 1, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-
-    VkSemaphore acquire_semaphore = hg_vk_create_semaphore(device, 0);
-    VkSemaphore render_semaphore = hg_vk_create_semaphore(device, 0);
-    VkFence render_fence = hg_vk_create_fence(device, VK_FENCE_CREATE_SIGNALED_BIT);
 
     VkPipelineLayout pipeline_layout = hg_vk_create_pipeline_layout(device, NULL, 0, NULL, 0);
 
@@ -114,6 +232,8 @@ int main(void) {
     memcpy(vertex_memory_map, vertices, sizeof(vertices));
     hg_vk_unmap_memory(device, vertex_buffer_memory);
 
+    HgRenderSync render_sync = hg_render_sync_create(device, queue_family, 2, swap_image_count);
+
     u32 frame_count = 0;
     f64 frame_time = 0.0f;
     HgClock hclock;
@@ -160,22 +280,15 @@ int main(void) {
         }
 
         if (swapchain != NULL) {
-            hg_vk_wait_for_fences(device, &render_fence, 1);
-            hg_vk_reset_fences(device, &render_fence, 1);
-
-            u32 image_index;
-            if (!hg_vk_acquire_next_image(device, swapchain, &image_index, acquire_semaphore, VK_NULL_HANDLE))
-                continue;
-            VkImage current_image = swap_images[image_index];
-
-            hg_vk_begin_cmd(cmd, 0);
+            VkCommandBuffer cmd = hg_render_sync_begin_frame(&render_sync, device, swapchain);
+            u32 image_index = hg_render_sync_image_index(&render_sync);
 
             VkImageMemoryBarrier2 color_barrier = {
                 .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
                 .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                 .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
                 .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                .image = current_image,
+                .image = swap_images[image_index],
                 .subresourceRange = (VkImageSubresourceRange){VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
             };
             hg_vk_pipeline_barrier(cmd, &(VkDependencyInfo){
@@ -216,7 +329,7 @@ int main(void) {
                 .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
                 .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                 .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                .image = current_image,
+                .image = swap_images[image_index],
                 .subresourceRange = (VkImageSubresourceRange){VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
             };
             hg_vk_pipeline_barrier(cmd, &(VkDependencyInfo){
@@ -225,37 +338,19 @@ int main(void) {
                 .pImageMemoryBarriers = &present_barrier,
             });
 
-            hg_vk_end_cmd(cmd);
-
-            hg_vk_submit_commands(queue, &(VkSubmitInfo){
-                .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-                .waitSemaphoreCount = 1,
-                .pWaitSemaphores = &acquire_semaphore,
-                .pWaitDstStageMask = &(VkPipelineStageFlags){VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT},
-                .commandBufferCount = 1,
-                .pCommandBuffers = &cmd,
-                .signalSemaphoreCount = 1,
-                .pSignalSemaphores = &render_semaphore,
-            }, 1, render_fence);
-
-            hg_vk_present(queue, swapchain, image_index, &render_semaphore, 1);
+            hg_render_sync_end_frame_and_present(&render_sync, queue, swapchain);
         }
     }
 
     hg_vk_wait_for_device(device);
+
+    hg_render_sync_destroy(&render_sync, device);
 
     hg_vk_destroy_buffer(device, vertex_buffer);
     hg_vk_free_memory(device, vertex_buffer_memory);
 
     hg_vk_destroy_pipeline(device, pipeline);
     hg_vk_destroy_pipeline_layout(device, pipeline_layout);
-
-    hg_vk_destroy_fence(device, render_fence);
-    hg_vk_destroy_semaphore(device, render_semaphore);
-    hg_vk_destroy_semaphore(device, acquire_semaphore);
-
-    hg_vk_free_command_buffers(device, command_pool, &cmd, 1);
-    hg_vk_destroy_command_pool(device, command_pool);
 
     for (usize i = 0; i < swap_image_count; ++i) {
         hg_vk_destroy_image_view(device, swap_views[i]);

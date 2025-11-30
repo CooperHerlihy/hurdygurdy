@@ -554,6 +554,65 @@ HgMat4 hg_perspective_projection(f32 fov, f32 aspect, f32 near, f32 far) {
     };
 }
 
+HgArena hg_arena_create(usize capacity) {
+    return (HgArena){
+        .data = malloc(capacity),
+        .capacity = capacity,
+    };
+}
+
+void hg_arena_destroy(HgArena *arena) {
+    free(arena->data);
+}
+
+void hg_arena_reset(HgArena *arena) {
+    hg_assert(arena != NULL);
+    arena->head = 0;
+}
+
+void *hg_arena_alloc(HgArena *arena, usize size) {
+    hg_assert(arena != NULL);
+    if (size == 0)
+        return NULL;
+
+    usize new_head = arena->head + hg_align(size, 16);
+    if (new_head > arena->capacity)
+        return NULL;
+
+    void *allocation = (u8 *)arena->data + arena->head;
+    arena->head = new_head;
+    return allocation;
+}
+
+void *hg_arena_realloc(HgArena *arena, void *allocation, usize old_size, usize new_size) {
+    hg_assert(arena != NULL);
+    if (new_size == 0) {
+        arena->head = (usize)allocation - (usize)arena->data;
+        return NULL;
+    }
+
+    if ((usize)allocation + hg_align(old_size, 16) == arena->head) {
+        usize new_head = (usize)allocation
+                       - (usize)arena->data
+                       + hg_align(new_size, 16);
+        if (new_head > arena->capacity)
+            return NULL;
+        arena->head = new_head;
+        return allocation;
+    }
+
+    void *new_allocation = hg_arena_alloc(arena, new_size);
+    memcpy(new_allocation, allocation, old_size);
+    return new_allocation;
+}
+
+void hg_arena_free(HgArena *arena, void *allocation, usize size) {
+    hg_assert(arena != NULL);
+    if ((usize)allocation + hg_align(size, 16) == arena->head)
+        arena->head = (usize)allocation - (usize)arena->data;
+}
+
+
 f64 hg_clock_tick(HgClock *hclock) {
     hg_assert(hclock != NULL);
     f64 prev = (f64)hclock->time.tv_sec + (f64)hclock->time.tv_nsec / 1.0e9;
@@ -845,7 +904,7 @@ static const char *const hg_vk_device_extensions[] = {
 
 VkPhysicalDevice hg_vk_find_single_queue_gpu(VkInstance instance, u32 *queue_family) {
     hg_assert(instance != VK_NULL_HANDLE);
-    if (queue_family != NULL)
+    if (queue_family == NULL)
         hg_debug("queue_family is NULL, but the physical device's queue family should be stored somewhere\n");
 
     u32 gpu_count;

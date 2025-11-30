@@ -1144,6 +1144,100 @@ HgMat4 hg_orthographic_projection(f32 left, f32 right, f32 top, f32 bottom, f32 
 HgMat4 hg_perspective_projection(f32 fov, f32 aspect, f32 near, f32 far);
 
 /**
+ * An arena allocator
+ *
+ * Allocations are made very quickly, and are not freed individually, instead
+ * the whole block is freed at once
+ *
+ * Note, is not thread safe
+ */
+typedef struct HgArena{
+    /*
+     * A pointer to the memory being allocated
+     */
+    void *data;
+    /*
+     * The total capacity of the data in bytes
+     */
+    usize capacity;
+    /*
+     * The next allocation to be given out
+     */
+    usize head;
+} HgArena;
+
+/**
+ * Allocates an arena with capacity
+ *
+ * Parameters
+ * - hg The hg context to allocate from
+ * - capacity The size of the block to allocate and use
+ * Returns
+ * - The allocated arena
+ */
+HgArena hg_arena_create(usize capacity);
+
+/**
+ * Frees an arena's memory
+ *
+ * Parameters
+ * - hg The hg context to free to
+ * - arena The arena to destroy
+ */
+void hg_arena_destroy(HgArena *arena);
+
+/**
+ * Frees all allocations from an arena
+ *
+ * Parameters
+ * - arena The arena to reset, must not be NULL
+ */
+void hg_arena_reset(HgArena *arena);
+
+/**
+ * Allocates memory from an arena
+ *
+ * Allocations are not individually freed, hg_arena() is
+ * called instead to free all allocations at once
+ *
+ * Parameters
+ * - arena The arena to allocate from, must not be NULL
+ * - size The size in bytes of the allocation
+ * Returns
+ * - The allocation if successful
+ * - NULL if the allocation exceeds capacity, or size is 0
+ */
+void *hg_arena_alloc(HgArena *arena, usize size);
+
+/**
+ * Reallocates memory from a arena
+ *
+ * Simply increases the size if allocation is the most recent allocation
+ *
+ * Parameters
+ * - arena The to allocate from, must not be NULL
+ * - allocation The allocation to grow, must be the last allocation made
+ * - old_size The original size in bytes of the allocation
+ * - new_size The new size in bytes of the allocation
+ * Returns
+ * - The allocation if successful
+ * - NULL if the allocation exceeds capacity
+ */
+void *hg_arena_realloc(HgArena *arena, void *allocation, usize old_size, usize new_size);
+
+/**
+ * Frees an allocation from a arena
+ *
+ * Can only deallocate the most recent allocation, otherwise does nothing
+ *
+ * Parameters
+ * - arena The to free from, must not be NULL
+ * - allocation The allocation to free, must be the last allocation made
+ * - size The size of the allocation
+ */
+void hg_arena_free(HgArena *arena, void *allocation, usize size);
+
+/**
  * A high precision clock for timers and game deltas
  */
 typedef struct HgClock {
