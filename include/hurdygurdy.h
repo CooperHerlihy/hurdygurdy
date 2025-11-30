@@ -2459,6 +2459,66 @@ void hg_vk_draw_indexed(
  */
 void hg_vk_dispatch(VkCommandBuffer cmd, u32 x, u32 y, u32 z);
 
+/**
+ * The system to synchronize rendering to multiple swapchain images at once
+ */
+typedef struct HgRenderSync {
+    VkCommandBuffer *cmds;
+    VkFence *frame_finished;
+    VkSemaphore *image_available;
+    VkSemaphore *ready_to_present;
+    VkCommandPool pool;
+    u32 frame_count;
+    u32 current_frame;
+    u32 current_image;
+} HgRenderSync;
+
+/**
+ * Creates a render sync system
+ *
+ * Parameters
+ * - device The Vulkan device, must not be VK_NULL_HANDLE
+ * - queue_family The queue_family to allocate command buffers in
+ * - image_count The number of swapchain images, must be greater than 0
+ * Returns
+ * - The created render sync system
+ */
+HgRenderSync hg_render_sync_create(VkDevice device, u32 queue_family, u32 image_count);
+
+/**
+ * Destroys a render sync system
+ *
+ * Parameters
+ * - sync The render sync system to destroy, must not be NULL
+ * - device The Vulkan device, must not be VK_NULL_HANDLE
+ */
+void hg_render_sync_destroy(HgRenderSync *sync, VkDevice device);
+
+/**
+ * Acquires the next swapchain image and begins its command buffer
+ *
+ * Parameters
+ * - sync The render sync system, must not be NULL
+ * - device The Vulkan device, must not be VK_NULL_HANDLE
+ * - swapchain The Vulkan swapchain to acquire from, must not be VK_NULL_HANDLE
+ * Returns
+ * - The command buffer to record this frame
+ */
+VkCommandBuffer hg_render_sync_begin_frame(HgRenderSync *sync, VkDevice device, VkSwapchainKHR swapchain);
+
+/**
+ * Finishes recording the command buffer and presents the swapchain image
+ *
+ * Parameters
+ * - sync The render sync system, must not be NULL
+ * - queue The Vulkan queue, must not be VK_NULL_HANDLE
+ * - swapchain The Vulkan swapchain to present, must not be VK_NULL_HANDLE
+ */
+void hg_render_sync_end_frame_and_present(HgRenderSync *sync, VkQueue queue, VkSwapchainKHR swapchain);
+
+/**
+ * Platform specific internal resources
+ */
 typedef struct HgPlatform HgPlatform;
 
 /**
@@ -2598,7 +2658,7 @@ typedef enum HgKey {
 } HgKey;
 
 /**
- * A window
+ * Platform specific resources for a window
  */
 typedef struct HgWindow HgWindow;
 

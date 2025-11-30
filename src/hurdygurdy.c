@@ -2210,6 +2210,100 @@ void hg_vk_dispatch(VkCommandBuffer cmd, u32 x, u32 y, u32 z) {
     vkCmdDispatch(cmd, x, y, z);
 }
 
+HgRenderSync hg_render_sync_create(VkDevice device, u32 queue_family, u32 image_count) {
+    hg_assert(device != VK_NULL_HANDLE);
+    hg_assert(image_count > 0);
+
+    HgRenderSync sync = {.frame_count = image_count};
+
+    sync.pool = hg_vk_create_command_pool(
+        device, queue_family, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+
+    HgArena arena = hg_arena_create(
+        (sync.frame_count * sizeof(*sync.cmds)) +
+        (sync.frame_count * sizeof(*sync.frame_finished)) +
+        (sync.frame_count * sizeof(*sync.image_available)) +
+        (sync.frame_count * sizeof(*sync.ready_to_present)));
+
+    sync.cmds = hg_arena_alloc(&arena, sync.frame_count * sizeof(*sync.cmds));
+    hg_vk_allocate_command_buffers(
+        device, sync.pool, sync.cmds, sync.frame_count, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+
+    sync.frame_finished = hg_arena_alloc(&arena, sync.frame_count * sizeof(*sync.frame_finished));
+    for (usize i = 0; i < sync.frame_count; ++i) {
+        sync.frame_finished[i] = hg_vk_create_fence(device, VK_FENCE_CREATE_SIGNALED_BIT);
+    }
+    sync.image_available = hg_arena_alloc(&arena, sync.frame_count * sizeof(*sync.image_available));
+    for (usize i = 0; i < sync.frame_count; ++i) {
+        sync.image_available[i] = hg_vk_create_semaphore(device, 0);
+    }
+    sync.ready_to_present = hg_arena_alloc(&arena, sync.frame_count * sizeof(*sync.ready_to_present));
+    for (usize i = 0; i < sync.frame_count; ++i) {
+        sync.ready_to_present[i] = hg_vk_create_semaphore(device, 0);
+    }
+
+    return sync;
+}
+
+void hg_render_sync_destroy(HgRenderSync *sync, VkDevice device) {
+    hg_assert(device != VK_NULL_HANDLE);
+    hg_assert(sync != NULL);
+
+    hg_vk_free_command_buffers(device, sync->pool, sync->cmds, sync->frame_count);
+    for (usize i = 0; i < sync->frame_count; ++i) {
+        hg_vk_destroy_fence(device, sync->frame_finished[i]);
+    }
+    for (usize i = 0; i < sync->frame_count; ++i) {
+        hg_vk_destroy_semaphore(device, sync->image_available[i]);
+    }
+    for (usize i = 0; i < sync->frame_count; ++i) {
+        hg_vk_destroy_semaphore(device, sync->ready_to_present[i]);
+    }
+    hg_vk_destroy_command_pool(device, sync->pool);
+    free(sync->cmds);
+}
+
+VkCommandBuffer hg_render_sync_begin_frame(HgRenderSync *sync, VkDevice device, VkSwapchainKHR swapchain) {
+    hg_assert(sync != NULL);
+    hg_assert(device != VK_NULL_HANDLE);
+    hg_assert(swapchain != VK_NULL_HANDLE);
+
+    sync->current_frame = (sync->current_frame + 1) % sync->frame_count;
+
+    hg_vk_wait_for_fences(device, &sync->frame_finished[sync->current_frame], 1);
+    hg_vk_reset_fences(device, &sync->frame_finished[sync->current_frame], 1);
+
+    hg_vk_acquire_next_image(
+        device,
+        swapchain,
+        &sync->current_image,
+        sync->image_available[sync->current_frame],
+        VK_NULL_HANDLE);
+
+    VkCommandBuffer cmd = sync->cmds[sync->current_frame];
+    hg_vk_begin_cmd(cmd, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+    return cmd;
+}
+
+void hg_render_sync_end_frame_and_present(HgRenderSync *sync, VkQueue queue, VkSwapchainKHR swapchain) {
+    VkCommandBuffer cmd = sync->cmds[sync->current_frame];
+    hg_vk_end_cmd(cmd);
+
+    VkSubmitInfo submit = {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores = &sync->image_available[sync->current_frame],
+        .pWaitDstStageMask = &(VkPipelineStageFlags){VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT},
+        .commandBufferCount = 1,
+        .pCommandBuffers = &cmd,
+        .signalSemaphoreCount = 1,
+        .pSignalSemaphores = &sync->ready_to_present[sync->current_image],
+    };
+    hg_vk_submit_commands(queue, &submit, 1, sync->frame_finished[sync->current_frame]);
+
+    hg_vk_present(queue, swapchain, sync->current_image, &sync->ready_to_present[sync->current_image], 1);
+}
+
 void hg_vk_destroy_surface(VkInstance instance, VkSurfaceKHR surface) {
     hg_assert(instance != VK_NULL_HANDLE);
     vkDestroySurfaceKHR(instance, surface, NULL);
