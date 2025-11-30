@@ -105,7 +105,7 @@ int main(void) {
     memcpy(vertex_memory_map, vertices, sizeof(vertices));
     hg_vk_unmap_memory(device, vertex_buffer_memory);
 
-    HgRenderSync render_sync = hg_render_sync_create(device, queue_family, swap_image_count);
+    HgFrameSync frame_sync = hg_frame_sync_create(device, queue_family, swap_image_count);
 
     u32 frame_count = 0;
     f64 frame_time = 0.0f;
@@ -153,8 +153,8 @@ int main(void) {
         }
 
         if (swapchain != NULL) {
-            VkCommandBuffer cmd = hg_render_sync_begin_frame(&render_sync, device, swapchain);
-            u32 image_index = render_sync.current_image;
+            VkCommandBuffer cmd = hg_frame_sync_begin_frame(&frame_sync, device, swapchain);
+            u32 image_index = frame_sync.current_image;
 
             VkImageMemoryBarrier2 color_barrier = {
                 .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -211,13 +211,13 @@ int main(void) {
                 .pImageMemoryBarriers = &present_barrier,
             });
 
-            hg_render_sync_end_frame_and_present(&render_sync, queue, swapchain);
+            hg_frame_sync_end_frame_and_present(&frame_sync, queue, swapchain);
         }
     }
 
     hg_vk_wait_for_device(device);
 
-    hg_render_sync_destroy(&render_sync, device);
+    hg_frame_sync_destroy(&frame_sync, device);
 
     hg_vk_destroy_buffer(device, vertex_buffer);
     hg_vk_free_memory(device, vertex_buffer_memory);

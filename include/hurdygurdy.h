@@ -2471,7 +2471,7 @@ typedef struct HgRenderSync {
     u32 frame_count;
     u32 current_frame;
     u32 current_image;
-} HgRenderSync;
+} HgFrameSync;
 
 /**
  * Creates a render sync system
@@ -2483,7 +2483,7 @@ typedef struct HgRenderSync {
  * Returns
  * - The created render sync system
  */
-HgRenderSync hg_render_sync_create(VkDevice device, u32 queue_family, u32 image_count);
+HgFrameSync hg_frame_sync_create(VkDevice device, u32 queue_family, u32 image_count);
 
 /**
  * Destroys a render sync system
@@ -2492,7 +2492,7 @@ HgRenderSync hg_render_sync_create(VkDevice device, u32 queue_family, u32 image_
  * - sync The render sync system to destroy, must not be NULL
  * - device The Vulkan device, must not be VK_NULL_HANDLE
  */
-void hg_render_sync_destroy(HgRenderSync *sync, VkDevice device);
+void hg_frame_sync_destroy(HgFrameSync *sync, VkDevice device);
 
 /**
  * Acquires the next swapchain image and begins its command buffer
@@ -2504,7 +2504,7 @@ void hg_render_sync_destroy(HgRenderSync *sync, VkDevice device);
  * Returns
  * - The command buffer to record this frame
  */
-VkCommandBuffer hg_render_sync_begin_frame(HgRenderSync *sync, VkDevice device, VkSwapchainKHR swapchain);
+VkCommandBuffer hg_frame_sync_begin_frame(HgFrameSync *sync, VkDevice device, VkSwapchainKHR swapchain);
 
 /**
  * Finishes recording the command buffer and presents the swapchain image
@@ -2514,7 +2514,7 @@ VkCommandBuffer hg_render_sync_begin_frame(HgRenderSync *sync, VkDevice device, 
  * - queue The Vulkan queue, must not be VK_NULL_HANDLE
  * - swapchain The Vulkan swapchain to present, must not be VK_NULL_HANDLE
  */
-void hg_render_sync_end_frame_and_present(HgRenderSync *sync, VkQueue queue, VkSwapchainKHR swapchain);
+void hg_frame_sync_end_frame_and_present(HgFrameSync *sync, VkQueue queue, VkSwapchainKHR swapchain);
 
 /**
  * Platform specific internal resources

@@ -1567,10 +1567,10 @@ VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineCon
 
     VkPipelineMultisampleStateCreateInfo multisample_state = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-        .sampleShadingEnable = VK_FALSE,
         .rasterizationSamples = config->multisample_count != 0
             ? config->multisample_count
             : VK_SAMPLE_COUNT_1_BIT,
+        .sampleShadingEnable = VK_FALSE,
         .minSampleShading = 1.0f,
         .pSampleMask = NULL,
         .alphaToCoverageEnable = VK_FALSE,
@@ -2210,11 +2210,11 @@ void hg_vk_dispatch(VkCommandBuffer cmd, u32 x, u32 y, u32 z) {
     vkCmdDispatch(cmd, x, y, z);
 }
 
-HgRenderSync hg_render_sync_create(VkDevice device, u32 queue_family, u32 image_count) {
+HgFrameSync hg_frame_sync_create(VkDevice device, u32 queue_family, u32 image_count) {
     hg_assert(device != VK_NULL_HANDLE);
     hg_assert(image_count > 0);
 
-    HgRenderSync sync = {.frame_count = image_count};
+    HgFrameSync sync = {.frame_count = image_count};
 
     sync.pool = hg_vk_create_command_pool(
         device, queue_family, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
@@ -2245,7 +2245,7 @@ HgRenderSync hg_render_sync_create(VkDevice device, u32 queue_family, u32 image_
     return sync;
 }
 
-void hg_render_sync_destroy(HgRenderSync *sync, VkDevice device) {
+void hg_frame_sync_destroy(HgFrameSync *sync, VkDevice device) {
     hg_assert(device != VK_NULL_HANDLE);
     hg_assert(sync != NULL);
 
@@ -2263,7 +2263,7 @@ void hg_render_sync_destroy(HgRenderSync *sync, VkDevice device) {
     free(sync->cmds);
 }
 
-VkCommandBuffer hg_render_sync_begin_frame(HgRenderSync *sync, VkDevice device, VkSwapchainKHR swapchain) {
+VkCommandBuffer hg_frame_sync_begin_frame(HgFrameSync *sync, VkDevice device, VkSwapchainKHR swapchain) {
     hg_assert(sync != NULL);
     hg_assert(device != VK_NULL_HANDLE);
     hg_assert(swapchain != VK_NULL_HANDLE);
@@ -2285,7 +2285,7 @@ VkCommandBuffer hg_render_sync_begin_frame(HgRenderSync *sync, VkDevice device, 
     return cmd;
 }
 
-void hg_render_sync_end_frame_and_present(HgRenderSync *sync, VkQueue queue, VkSwapchainKHR swapchain) {
+void hg_frame_sync_end_frame_and_present(HgFrameSync *sync, VkQueue queue, VkSwapchainKHR swapchain) {
     VkCommandBuffer cmd = sync->cmds[sync->current_frame];
     hg_vk_end_cmd(cmd);
 
