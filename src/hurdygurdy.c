@@ -8,7 +8,7 @@
 #endif
 
 usize hg_align(usize value, usize alignment) {
-    hg_assert(alignment > 0 && (alignment & (alignment - 1)) == 0);
+    assert(alignment > 0 && (alignment & (alignment - 1)) == 0);
     return (value + alignment - 1) & ~(alignment - 1);
 }
 
@@ -87,11 +87,9 @@ HgMat4 hg_mat3to4(HgMat3 lhs) {
 }
 
 void hg_vadd(u32 size, f32* dst, f32* lhs, f32* rhs){
-    if (size == 0)
-        return;
-    hg_assert(dst != NULL);
-    hg_assert(lhs != NULL);
-    hg_assert(rhs != NULL);
+    assert(dst != NULL);
+    assert(lhs != NULL);
+    assert(rhs != NULL);
     for (u32 i = 0; i < size; ++i) {
         dst[i] = lhs[i] + rhs[i];
     }
@@ -110,11 +108,9 @@ HgVec4 hg_vadd4(HgVec4 lhs, HgVec4 rhs){
 }
 
 void hg_vsub(u32 size, f32* dst, f32* lhs, f32* rhs){
-    if (size == 0)
-        return;
-    hg_assert(dst != NULL);
-    hg_assert(lhs != NULL);
-    hg_assert(rhs != NULL);
+    assert(dst != NULL);
+    assert(lhs != NULL);
+    assert(rhs != NULL);
     for (u32 i = 0; i < size; ++i) {
         dst[i] = lhs[i] - rhs[i];
     }
@@ -133,11 +129,9 @@ HgVec4 hg_vsub4(HgVec4 lhs, HgVec4 rhs){
 }
 
 void hg_vmul(u32 size, f32* dst, f32* lhs, f32* rhs){
-    if (size == 0)
-        return;
-    hg_assert(dst != NULL);
-    hg_assert(lhs != NULL);
-    hg_assert(rhs != NULL);
+    assert(dst != NULL);
+    assert(lhs != NULL);
+    assert(rhs != NULL);
     for (u32 i = 0; i < size; ++i) {
         dst[i] = lhs[i] * rhs[i];
     }
@@ -156,10 +150,8 @@ HgVec4 hg_vmul4(HgVec4 lhs, HgVec4 rhs){
 }
 
 void hg_svmul(u32 size, f32* dst, f32 scalar, f32* vec) {
-    if (size == 0)
-        return;
-    hg_assert(dst != NULL);
-    hg_assert(vec != NULL);
+    assert(dst != NULL);
+    assert(vec != NULL);
     for (u32 i = 0; i < size; ++i) {
         dst[i] = scalar * vec[i];
     }
@@ -178,11 +170,9 @@ HgVec4 hg_svmul4(f32 scalar, HgVec4 vec) {
 }
 
 void hg_vdiv(u32 size, f32* dst, f32* lhs, f32* rhs) {
-    if (size == 0)
-        return;
-    hg_assert(dst != NULL);
-    hg_assert(lhs != NULL);
-    hg_assert(rhs != NULL);
+    assert(dst != NULL);
+    assert(lhs != NULL);
+    assert(rhs != NULL);
     for (u32 i = 0; i < size; ++i) {
         dst[i] = lhs[i] / rhs[i];
     }
@@ -201,10 +191,8 @@ HgVec4 hg_vdiv4(HgVec4 lhs, HgVec4 rhs) {
 }
 
 void hg_svdiv(u32 size, f32* dst, f32 scalar, f32* vec) {
-    if (size == 0)
-        return;
-    hg_assert(dst != NULL);
-    hg_assert(vec != NULL);
+    assert(dst != NULL);
+    assert(vec != NULL);
     for (u32 i = 0; i < size; ++i) {
         dst[i] = scalar / vec[i];
     }
@@ -223,11 +211,9 @@ HgVec4 hg_svdiv4(f32 scalar, HgVec4 vec) {
 }
 
 void hg_vdot(u32 size, f32* dst, f32* lhs, f32* rhs) {
-    if (size == 0)
-        return;
-    hg_assert(dst != NULL);
-    hg_assert(lhs != NULL);
-    hg_assert(rhs != NULL);
+    assert(dst != NULL);
+    assert(lhs != NULL);
+    assert(rhs != NULL);
     *dst = 0.0f;
     for (u32 i = 0; i < size; ++i) {
         *dst += lhs[i] * rhs[i];
@@ -247,10 +233,8 @@ float hg_vdot4(HgVec4 lhs, HgVec4 rhs) {
 }
 
 void hg_vlen(u32 size, f32* dst, f32* vec) {
-    if (size == 0)
-        return;
-    hg_assert(dst != NULL);
-    hg_assert(vec != NULL);
+    assert(dst != NULL);
+    assert(vec != NULL);
     hg_vdot(size, dst, vec, vec);
     *dst = sqrtf(*dst);
 }
@@ -268,10 +252,8 @@ float hg_vlen4(HgVec4 vec) {
 }
 
 void hg_vnorm(u32 size, f32* dst, f32* vec) {
-    if (size == 0)
-        return;
-    hg_assert(dst != NULL);
-    hg_assert(vec != NULL);
+    assert(dst != NULL);
+    assert(vec != NULL);
     f32 len;
     hg_vlen(size, &len, vec);
     for (u32 i = 0; i < size; ++i) {
@@ -295,9 +277,9 @@ HgVec4 hg_vnorm4(HgVec4 vec) {
 }
 
 void hg_vcross(f32* dst, f32* lhs, f32* rhs) {
-    hg_assert(dst != NULL);
-    hg_assert(lhs != NULL);
-    hg_assert(rhs != NULL);
+    assert(dst != NULL);
+    assert(lhs != NULL);
+    assert(rhs != NULL);
     dst[0] = lhs[1] * rhs[2] - lhs[2] * rhs[1];
     dst[1] = lhs[2] * rhs[0] - lhs[0] * rhs[2];
     dst[2] = lhs[0] * rhs[1] - lhs[1] * rhs[0];
@@ -308,11 +290,9 @@ HgVec3 hg_vcross3(HgVec3 lhs, HgVec3 rhs) {
 }
 
 void hg_madd(u32 width, u32 height, f32* dst, f32* lhs, f32* rhs) {
-    if (width == 0 || height == 0)
-        return;
-    hg_assert(dst != NULL);
-    hg_assert(lhs != NULL);
-    hg_assert(rhs != NULL);
+    assert(dst != NULL);
+    assert(lhs != NULL);
+    assert(rhs != NULL);
     for (u32 i = 0; i < width; ++i) {
         for (u32 j = 0; j < height; ++j) {
             dst[i * width + j] = lhs[i * width + j] + rhs[i * width + j];
@@ -339,11 +319,9 @@ HgMat4 hg_madd4(HgMat4 lhs, HgMat4 rhs) {
 }
 
 void hg_msub(u32 width, u32 height, f32* dst, f32* lhs, f32* rhs) {
-    if (width == 0 || height == 0)
-        return;
-    hg_assert(dst != NULL);
-    hg_assert(lhs != NULL);
-    hg_assert(rhs != NULL);
+    assert(dst != NULL);
+    assert(lhs != NULL);
+    assert(rhs != NULL);
     for (u32 i = 0; i < width; ++i) {
         for (u32 j = 0; j < height; ++j) {
             dst[i * width + j] = lhs[i * width + j] - rhs[i * width + j];
@@ -370,12 +348,10 @@ HgMat4 hg_msub4(HgMat4 lhs, HgMat4 rhs) {
 }
 
 void hg_mmul(f32* dst, u32 wl, u32 hl, f32* lhs, u32 wr, u32 hr, f32* rhs) {
-    if (wl == 0 || hl == 0 || wr == 0 || hr == 0)
-        return;
-    hg_assert(hr == wl);
-    hg_assert(dst != NULL);
-    hg_assert(lhs != NULL);
-    hg_assert(rhs != NULL);
+    assert(hr == wl);
+    assert(dst != NULL);
+    assert(lhs != NULL);
+    assert(rhs != NULL);
     (void)hr;
     for (u32 i = 0; i < wl; ++i) {
         for (u32 j = 0; j < wr; ++j) {
@@ -406,11 +382,9 @@ HgMat4 hg_mmul4(HgMat4 lhs, HgMat4 rhs) {
 }
 
 void hg_mvmul(u32 width, u32 height, f32* dst, f32* mat, f32* vec) {
-    if (width == 0 || height == 0)
-        return;
-    hg_assert(dst != NULL);
-    hg_assert(mat != NULL);
-    hg_assert(vec != NULL);
+    assert(dst != NULL);
+    assert(mat != NULL);
+    assert(vec != NULL);
     for (u32 i = 0; i < height; ++i) {
         dst[i] = 0.0f;
         for (u32 j = 0; j < width; ++j) {
@@ -543,8 +517,8 @@ HgMat4 hg_orthographic_projection(f32 left, f32 right, f32 top, f32 bottom, f32 
 }
 
 HgMat4 hg_perspective_projection(f32 fov, f32 aspect, f32 near, f32 far) {
-    hg_assert(near > 0.0f);
-    hg_assert(far > near);
+    assert(near > 0.0f);
+    assert(far > near);
     f32 scale = 1 / tanf(fov / 2);
     return (HgMat4){
         {scale / aspect, 0.0f, 0.0f, 0.0f},
@@ -552,6 +526,10 @@ HgMat4 hg_perspective_projection(f32 fov, f32 aspect, f32 near, f32 far) {
         {0.0f, 0.0f, far / (far - near), 1.0f},
         {0.0f, 0.0f, -(far * near) / (far - near), 0.0f},
     };
+}
+
+u32 hg_max_mipmaps(u32 width, u32 height, u32 depth) {
+    return (u32)log2f((f32)hg_max(hg_max(width, height), depth)) + 1;
 }
 
 HgArena hg_arena_create(usize capacity) {
@@ -562,16 +540,17 @@ HgArena hg_arena_create(usize capacity) {
 }
 
 void hg_arena_destroy(HgArena *arena) {
+    assert(arena != NULL);
     free(arena->data);
 }
 
 void hg_arena_reset(HgArena *arena) {
-    hg_assert(arena != NULL);
+    assert(arena != NULL);
     arena->head = 0;
 }
 
 void *hg_arena_alloc(HgArena *arena, usize size) {
-    hg_assert(arena != NULL);
+    assert(arena != NULL);
     if (size == 0)
         return NULL;
 
@@ -585,7 +564,7 @@ void *hg_arena_alloc(HgArena *arena, usize size) {
 }
 
 void *hg_arena_realloc(HgArena *arena, void *allocation, usize old_size, usize new_size) {
-    hg_assert(arena != NULL);
+    assert(arena != NULL);
     if (new_size == 0) {
         arena->head = (usize)allocation - (usize)arena->data;
         return NULL;
@@ -607,14 +586,14 @@ void *hg_arena_realloc(HgArena *arena, void *allocation, usize old_size, usize n
 }
 
 void hg_arena_free(HgArena *arena, void *allocation, usize size) {
-    hg_assert(arena != NULL);
+    assert(arena != NULL);
     if ((usize)allocation + hg_align(size, 16) == arena->head)
         arena->head = (usize)allocation - (usize)arena->data;
 }
 
 
 f64 hg_clock_tick(HgClock *hclock) {
-    hg_assert(hclock != NULL);
+    assert(hclock != NULL);
     f64 prev = (f64)hclock->time.tv_sec + (f64)hclock->time.tv_nsec / 1.0e9;
     if (timespec_get(&hclock->time, TIME_UTC) == 0)
         hg_warn("timespec_get failed\n");
@@ -622,9 +601,9 @@ f64 hg_clock_tick(HgClock *hclock) {
 }
 
 bool hg_file_load_binary(u8** data, usize* size, const char *path) {
-    hg_assert(data != NULL);
-    hg_assert(size != NULL);
-    hg_assert(path != NULL);
+    assert(data != NULL);
+    assert(size != NULL);
+    assert(path != NULL);
     *data = NULL;
     *size = 0;
 
@@ -658,8 +637,8 @@ void hg_file_unload_binary(u8* data, usize size) {
 
 bool hg_file_save_binary(const u8* data, usize size, const char *path) {
     if (size == 0)
-        hg_assert(data != NULL);
-    hg_assert(path != NULL);
+        assert(data != NULL);
+    assert(path != NULL);
 
     FILE* file = fopen(path, "wb");
     if (file == NULL) {
@@ -677,124 +656,113 @@ bool hg_file_save_binary(const u8* data, usize size, const char *path) {
     return true;
 }
 
-void hg_vk_check(VkResult result) {
+const char *hg_vk_result_string(VkResult result) {
     switch (result) {
         case VK_SUCCESS:
-            break;
-
+            return "VK_SUCCESS";
         case VK_NOT_READY:
-            hg_warn("Vulkan result not ready\n");
-            break;
+            return "VK_NOT_READY";
         case VK_TIMEOUT:
-            hg_warn("Vulkan result timeout\n");
-            break;
+            return "VK_TIMEOUT";
         case VK_EVENT_SET:
-            hg_warn("Vulkan result event set\n");
-            break;
+            return "VK_EVENT_SET";
         case VK_EVENT_RESET:
-            hg_warn("Vulkan result event reset\n");
-            break;
+            return "VK_EVENT_RESET";
         case VK_INCOMPLETE:
-            hg_warn("Vulkan result incomplete\n");
-            break;
-        case VK_SUBOPTIMAL_KHR:
-            hg_warn("Vulkan result suboptimal\n");
-            break;
-        case VK_THREAD_IDLE_KHR:
-            hg_warn("Vulkan result thread idle\n");
-            break;
-        case VK_THREAD_DONE_KHR:
-            hg_warn("Vulkan result thread done\n");
-            break;
-        case VK_OPERATION_DEFERRED_KHR:
-            hg_warn("Vulkan result operation deferred\n");
-            break;
-        case VK_OPERATION_NOT_DEFERRED_KHR:
-            hg_warn("Vulkan result operation not deferred\n");
-            break;
-
+            return "VK_INCOMPLETE";
         case VK_ERROR_OUT_OF_HOST_MEMORY:
-            hg_error("Vulkan error out of host memory\n");
+            return "VK_ERROR_OUT_OF_HOST_MEMORY";
         case VK_ERROR_OUT_OF_DEVICE_MEMORY:
-            hg_error("Vulkan error out of device memory\n");
+            return "VK_ERROR_OUT_OF_DEVICE_MEMORY";
         case VK_ERROR_INITIALIZATION_FAILED:
-            hg_error("Vulkan error initialization failed\n");
+            return "VK_ERROR_INITIALIZATION_FAILED";
         case VK_ERROR_DEVICE_LOST:
-            hg_error("Vulkan error device lost\n");
+            return "VK_ERROR_DEVICE_LOST";
         case VK_ERROR_MEMORY_MAP_FAILED:
-            hg_error("Vulkan error memory map failed\n");
+            return "VK_ERROR_MEMORY_MAP_FAILED";
         case VK_ERROR_LAYER_NOT_PRESENT:
-            hg_error("Vulkan error layer not present\n");
+            return "VK_ERROR_LAYER_NOT_PRESENT";
         case VK_ERROR_EXTENSION_NOT_PRESENT:
-            hg_error("Vulkan error extension not present\n");
+            return "VK_ERROR_EXTENSION_NOT_PRESENT";
         case VK_ERROR_FEATURE_NOT_PRESENT:
-            hg_error("Vulkan error feature not present\n");
+            return "VK_ERROR_FEATURE_NOT_PRESENT";
         case VK_ERROR_INCOMPATIBLE_DRIVER:
-            hg_error("Vulkan error incompatible driver\n");
+            return "VK_ERROR_INCOMPATIBLE_DRIVER";
         case VK_ERROR_TOO_MANY_OBJECTS:
-            hg_error("Vulkan error too many objects\n");
+            return "VK_ERROR_TOO_MANY_OBJECTS";
         case VK_ERROR_FORMAT_NOT_SUPPORTED:
-            hg_error("Vulkan error format not supported\n");
+            return "VK_ERROR_FORMAT_NOT_SUPPORTED";
         case VK_ERROR_FRAGMENTED_POOL:
-            hg_error("Vulkan error fragmented pool\n");
+            return "VK_ERROR_FRAGMENTED_POOL";
         case VK_ERROR_UNKNOWN:
-            hg_error("Vulkan error unknown\n");
+            return "VK_ERROR_UNKNOWN";
         case VK_ERROR_VALIDATION_FAILED:
-            hg_error("Vulkan error validation failed\n");
+            return "VK_ERROR_VALIDATION_FAILED";
         case VK_ERROR_OUT_OF_POOL_MEMORY:
-            hg_error("Vulkan error out of pool memory\n");
+            return "VK_ERROR_OUT_OF_POOL_MEMORY";
         case VK_ERROR_INVALID_EXTERNAL_HANDLE:
-            hg_error("Vulkan error invalid external handle\n");
+            return "VK_ERROR_INVALID_EXTERNAL_HANDLE";
         case VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS:
-            hg_error("Vulkan error invalid opaque capture address\n");
+            return "VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS";
         case VK_ERROR_FRAGMENTATION:
-            hg_error("Vulkan error fragmentation\n");
+            return "VK_ERROR_FRAGMENTATION";
         case VK_PIPELINE_COMPILE_REQUIRED:
-            hg_error("Vulkan error pipeline compile required\n");
+            return "VK_PIPELINE_COMPILE_REQUIRED";
         case VK_ERROR_NOT_PERMITTED:
-            hg_error("Vulkan error not permitted\n");
+            return "VK_ERROR_NOT_PERMITTED";
         case VK_ERROR_SURFACE_LOST_KHR:
-            hg_error("Vulkan error surface lost\n");
+            return "VK_ERROR_SURFACE_LOST_KHR";
         case VK_ERROR_NATIVE_WINDOW_IN_USE_KHR:
-            hg_error("Vulkan error native window in use\n");
+            return "VK_ERROR_NATIVE_WINDOW_IN_USE_KHR";
+        case VK_SUBOPTIMAL_KHR:
+            return "VK_SUBOPTIMAL_KHR";
         case VK_ERROR_OUT_OF_DATE_KHR:
-            hg_error("Vulkan error out of date\n");
+            return "VK_ERROR_OUT_OF_DATE_KHR";
         case VK_ERROR_INCOMPATIBLE_DISPLAY_KHR:
-            hg_error("Vulkan error incompatible display\n");
+            return "VK_ERROR_INCOMPATIBLE_DISPLAY_KHR";
         case VK_ERROR_INVALID_SHADER_NV:
-            hg_error("Vulkan error invalid shader (NV)\n");
+            return "VK_ERROR_INVALID_SHADER_NV";
         case VK_ERROR_IMAGE_USAGE_NOT_SUPPORTED_KHR:
-            hg_error("Vulkan error image usage not supported\n");
+            return "VK_ERROR_IMAGE_USAGE_NOT_SUPPORTED_KHR";
         case VK_ERROR_VIDEO_PICTURE_LAYOUT_NOT_SUPPORTED_KHR:
-            hg_error("Vulkan error video picture layout not supported\n");
+            return "VK_ERROR_VIDEO_PICTURE_LAYOUT_NOT_SUPPORTED_KHR";
         case VK_ERROR_VIDEO_PROFILE_OPERATION_NOT_SUPPORTED_KHR:
-            hg_error("Vulkan error video profile operation not supported\n");
+            return "VK_ERROR_VIDEO_PROFILE_OPERATION_NOT_SUPPORTED_KHR";
         case VK_ERROR_VIDEO_PROFILE_FORMAT_NOT_SUPPORTED_KHR:
-            hg_error("Vulkan error video profile format not supported\n");
+            return "VK_ERROR_VIDEO_PROFILE_FORMAT_NOT_SUPPORTED_KHR";
         case VK_ERROR_VIDEO_PROFILE_CODEC_NOT_SUPPORTED_KHR:
-            hg_error("Vulkan error video profile codec not supported\n");
+            return "VK_ERROR_VIDEO_PROFILE_CODEC_NOT_SUPPORTED_KHR";
         case VK_ERROR_VIDEO_STD_VERSION_NOT_SUPPORTED_KHR:
-            hg_error("Vulkan error video std version not supported\n");
+            return "VK_ERROR_VIDEO_STD_VERSION_NOT_SUPPORTED_KHR";
         case VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT:
-            hg_error("Vulkan error invalid DRM format modifier plane layout\n");
+            return "VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT";
         case VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT:
-            hg_error("Vulkan error full screen exclusive mode lost\n");
+            return "VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT";
+        case VK_THREAD_IDLE_KHR:
+            return "VK_THREAD_IDLE_KHR";
+        case VK_THREAD_DONE_KHR:
+            return "VK_THREAD_DONE_KHR";
+        case VK_OPERATION_DEFERRED_KHR:
+            return "VK_OPERATION_DEFERRED_KHR";
+        case VK_OPERATION_NOT_DEFERRED_KHR:
+            return "VK_OPERATION_NOT_DEFERRED_KHR";
         case VK_ERROR_INVALID_VIDEO_STD_PARAMETERS_KHR:
-            hg_error("Vulkan error invalid video std parameters\n");
+            return "VK_ERROR_INVALID_VIDEO_STD_PARAMETERS_KHR";
         case VK_ERROR_COMPRESSION_EXHAUSTED_EXT:
-            hg_error("Vulkan error compression exhausted\n");
+            return "VK_ERROR_COMPRESSION_EXHAUSTED_EXT";
         case VK_INCOMPATIBLE_SHADER_BINARY_EXT:
-            hg_error("Vulkan error incompatible shader binary\n");
+            return "VK_INCOMPATIBLE_SHADER_BINARY_EXT";
         case VK_PIPELINE_BINARY_MISSING_KHR:
-            hg_error("Vulkan error pipeline binary missing\n");
+            return "VK_PIPELINE_BINARY_MISSING_KHR";
         case VK_ERROR_NOT_ENOUGH_SPACE_KHR:
-            hg_error("Vulkan error not enough space\n");
-        default:
-            hg_error("Vulkan unrecognized error code\n");
+            return "VK_ERROR_NOT_ENOUGH_SPACE_KHR";
+        case VK_RESULT_MAX_ENUM:
+            return "VK_RESULT_MAX_ENUM";
     }
+    return "Unrecognized Vulkan result";
 }
 
-static VkBool32 hg_debug_callback(
+static VkBool32 hg_internal_debug_callback(
     const VkDebugUtilsMessageSeverityFlagBitsEXT severity,
     const VkDebugUtilsMessageTypeFlagsEXT type,
     const VkDebugUtilsMessengerCallbackDataEXT* callback_data,
@@ -816,7 +784,7 @@ static VkBool32 hg_debug_callback(
     return VK_FALSE;
 }
 
-static const VkDebugUtilsMessengerCreateInfoEXT hg_debug_utils_messenger_create_info = {
+static const VkDebugUtilsMessengerCreateInfoEXT hg_internal_debug_utils_messenger_info = {
     .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
     .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT
                      | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT
@@ -824,7 +792,7 @@ static const VkDebugUtilsMessengerCreateInfoEXT hg_debug_utils_messenger_create_
     .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
                  | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT
                  | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
-    .pfnUserCallback = hg_debug_callback,
+    .pfnUserCallback = hg_internal_debug_callback,
 };
 
 VkInstance hg_vk_create_instance(const char *app_name) {
@@ -832,7 +800,9 @@ VkInstance hg_vk_create_instance(const char *app_name) {
 
     VkApplicationInfo app_info = {
         .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-        .pApplicationName = app_name != NULL ? app_name : "Hurdy Gurdy Application",
+        .pApplicationName = app_name != NULL
+            ? app_name
+            : "Hurdy Gurdy Application",
         .applicationVersion = 0,
         .pEngineName = "Hurdy Gurdy Engine",
         .engineVersion = 0,
@@ -862,7 +832,7 @@ VkInstance hg_vk_create_instance(const char *app_name) {
     VkInstanceCreateInfo instance_info = {
         .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
 #ifndef NDEBUG
-        .pNext = &hg_debug_utils_messenger_create_info,
+        .pNext = &hg_internal_debug_utils_messenger_info,
 #endif
         .pApplicationInfo = &app_info,
 #ifndef NDEBUG
@@ -874,46 +844,55 @@ VkInstance hg_vk_create_instance(const char *app_name) {
     };
 
     VkInstance instance = VK_NULL_HANDLE;
-    hg_vk_check(vkCreateInstance(&instance_info, NULL, &instance));
+    VkResult result = vkCreateInstance(&instance_info, NULL, &instance);
+    if (instance == VK_NULL_HANDLE)
+        hg_error("Failed to create Vulkan instance: %s\n", hg_vk_result_string(result));
 
-    hg_assert(instance != NULL);
     hg_vk_load_instance(instance);
     return instance;
 }
 
-void hg_vk_destroy_instance(VkInstance instance) {
-    vkDestroyInstance(instance, NULL);
-}
-
 VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger(VkInstance instance) {
-    hg_assert(instance != VK_NULL_HANDLE);
+    assert(instance != VK_NULL_HANDLE);
 
-    VkDebugUtilsMessengerEXT messenger = NULL;
-    hg_vk_check(vkCreateDebugUtilsMessengerEXT(
-        instance, &hg_debug_utils_messenger_create_info, NULL, &messenger));
+    VkDebugUtilsMessengerEXT messenger = VK_NULL_HANDLE;
+    VkResult result = vkCreateDebugUtilsMessengerEXT(
+        instance, &hg_internal_debug_utils_messenger_info, NULL, &messenger);
+    if (messenger == VK_NULL_HANDLE)
+        hg_error("Failed to create Vulkan debug messenger: %s\n", hg_vk_result_string(result));
 
-    hg_assert(messenger != VK_NULL_HANDLE);
     return messenger;
 }
 
-void hg_vk_destroy_debug_messenger(VkInstance instance, VkDebugUtilsMessengerEXT messenger) {
-    hg_assert(instance != VK_NULL_HANDLE);
-    vkDestroyDebugUtilsMessengerEXT(instance, messenger, NULL);
+bool hg_vk_find_queue_family(VkPhysicalDevice gpu, u32 *queue_family, VkQueueFlags queue_flags) {
+    assert(gpu != VK_NULL_HANDLE);
+
+    u32 family_count = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, NULL);
+    VkQueueFamilyProperties *families = alloca(family_count * sizeof(*families));
+    vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, families);
+
+    for (u32 i = 0; i < family_count; ++i) {
+        if (families[i].queueFlags & queue_flags) {
+            if (queue_family != NULL)
+                *queue_family = i;
+            return true;
+        }
+    }
+    return false;
 }
 
-static const char *const hg_vk_device_extensions[] = {
+static const char *const hg_internal_vk_device_extensions[] = {
     "VK_KHR_swapchain",
 };
 
 static VkPhysicalDevice hg_internal_find_single_queue_gpu(VkInstance instance, u32 *queue_family) {
-    hg_assert(instance != VK_NULL_HANDLE);
-    if (queue_family == NULL)
-        hg_debug("queue_family is NULL, but the physical device's queue family should be stored somewhere\n");
+    assert(instance != VK_NULL_HANDLE);
 
     u32 gpu_count;
-    hg_vk_check(vkEnumeratePhysicalDevices(instance, &gpu_count, NULL));
+    vkEnumeratePhysicalDevices(instance, &gpu_count, NULL);
     VkPhysicalDevice *gpus = alloca(gpu_count * sizeof(*gpus));
-    hg_vk_check(vkEnumeratePhysicalDevices(instance, &gpu_count, gpus));
+    vkEnumeratePhysicalDevices(instance, &gpu_count, gpus);
 
     u32 ext_prop_count = 0;
     VkExtensionProperties* ext_props = NULL;
@@ -923,19 +902,16 @@ static VkPhysicalDevice hg_internal_find_single_queue_gpu(VkInstance instance, u
         VkPhysicalDevice gpu = gpus[i];
 
         u32 new_prop_count = 0;
-        VkResult ext_count_res = vkEnumerateDeviceExtensionProperties(gpu, NULL, &new_prop_count, NULL);
-        hg_vk_check(ext_count_res);
-
+        vkEnumerateDeviceExtensionProperties(gpu, NULL, &new_prop_count, NULL);
         if (new_prop_count > ext_prop_count) {
             ext_prop_count = new_prop_count;
             ext_props = realloc(ext_props, ext_prop_count * sizeof(VkExtensionProperties));
         }
+        vkEnumerateDeviceExtensionProperties(gpu, NULL, &new_prop_count, ext_props);
 
-        hg_vk_check(vkEnumerateDeviceExtensionProperties(gpu, NULL, &new_prop_count, ext_props));
-
-        for (usize j = 0; j < hg_countof(hg_vk_device_extensions); j++) {
+        for (usize j = 0; j < hg_countof(hg_internal_vk_device_extensions); j++) {
             for (usize k = 0; k < new_prop_count; k++) {
-                if (strcmp(hg_vk_device_extensions[j], ext_props[k].extensionName) == 0)
+                if (strcmp(hg_internal_vk_device_extensions[j], ext_props[k].extensionName) == 0)
                     goto next_ext;
             }
             goto next_gpu;
@@ -943,11 +919,8 @@ next_ext:
             continue;
         }
 
-        u32 tmp_queue_family;
-        if (!hg_vk_find_queue_family(gpu, &tmp_queue_family, VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT))
+        if (!hg_vk_find_queue_family(gpu, queue_family, VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT))
             goto next_gpu;
-        if (queue_family != NULL)
-            *queue_family = tmp_queue_family;
 
         suitable_gpu = gpu;
         break;
@@ -963,7 +936,7 @@ next_gpu:
 }
 
 static VkDevice hg_internal_create_single_queue_device(VkPhysicalDevice gpu, u32 queue_family) {
-    hg_assert(gpu != NULL);
+    assert(gpu != NULL);
 
     VkPhysicalDeviceDynamicRenderingFeatures dynamic_rendering_feature = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
@@ -989,47 +962,39 @@ static VkDevice hg_internal_create_single_queue_device(VkPhysicalDevice gpu, u32
         .pNext = &synchronization2_feature,
         .queueCreateInfoCount = 1,
         .pQueueCreateInfos = &queue_info,
-        .enabledExtensionCount = hg_countof(hg_vk_device_extensions),
-        .ppEnabledExtensionNames = hg_vk_device_extensions,
+        .enabledExtensionCount = hg_countof(hg_internal_vk_device_extensions),
+        .ppEnabledExtensionNames = hg_internal_vk_device_extensions,
         .pEnabledFeatures = &features,
     };
 
     VkDevice device = VK_NULL_HANDLE;
-    hg_vk_check(vkCreateDevice(gpu, &device_info, NULL, &device));
+    VkResult result = vkCreateDevice(gpu, &device_info, NULL, &device);
 
-    hg_assert(device != VK_NULL_HANDLE);
+    if (device == VK_NULL_HANDLE)
+        hg_error("Could not create Vulkan device: %s\n", hg_vk_result_string(result));
     return device;
 }
 
 HgSingleQueueDeviceData hg_vk_create_single_queue_device(VkInstance instance) {
-    hg_assert(instance != VK_NULL_HANDLE);
+    assert(instance != VK_NULL_HANDLE);
 
     HgSingleQueueDeviceData device = {0};
     device.gpu = hg_internal_find_single_queue_gpu(instance, &device.queue_family);
     device.handle = hg_internal_create_single_queue_device(device.gpu, device.queue_family);
     hg_vk_load_device(device.handle);
-    device.queue = hg_vk_get_queue(device.handle, device.queue_family, 0);
+    vkGetDeviceQueue(device.handle, device.queue_family, 0, &device.queue);
 
     return device;
 }
 
-void hg_vk_destroy_device(VkDevice device) {
-    vkDestroyDevice(device, NULL);
-}
-
-void hg_vk_wait_for_device(VkDevice device) {
-    hg_assert(device != VK_NULL_HANDLE);
-    hg_vk_check(vkDeviceWaitIdle(device));
-}
-
-static VkFormat hg_vk_find_swapchain_format(VkPhysicalDevice gpu, VkSurfaceKHR surface) {
+static VkFormat hg_internal_vk_find_swapchain_format(VkPhysicalDevice gpu, VkSurfaceKHR surface) {
     assert(gpu != VK_NULL_HANDLE);
     assert(surface != VK_NULL_HANDLE);
 
     u32 format_count = 0;
-    hg_vk_check(vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &format_count, NULL));
+    vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &format_count, NULL);
     VkSurfaceFormatKHR *formats = alloca(format_count * sizeof(*formats));
-    hg_vk_check(vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &format_count, formats));
+    vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &format_count, formats);
 
     for (usize i = 0; i < format_count; ++i) {
         if (formats[i].format == VK_FORMAT_R8G8B8A8_SRGB)
@@ -1037,10 +1002,16 @@ static VkFormat hg_vk_find_swapchain_format(VkPhysicalDevice gpu, VkSurfaceKHR s
         if (formats[i].format == VK_FORMAT_B8G8R8A8_SRGB)
             return VK_FORMAT_B8G8R8A8_SRGB;
     }
+    for (usize i = 0; i < format_count; ++i) {
+        if (formats[i].format == VK_FORMAT_R8G8B8A8_UNORM)
+            return VK_FORMAT_R8G8B8A8_UNORM;
+        if (formats[i].format == VK_FORMAT_B8G8R8A8_UNORM)
+            return VK_FORMAT_B8G8R8A8_UNORM;
+    }
     hg_error("No supported swapchain formats\n");
 }
 
-static VkPresentModeKHR hg_vk_find_swapchain_present_mode(
+static VkPresentModeKHR hg_internal_vk_find_swapchain_present_mode(
     VkPhysicalDevice gpu,
     VkSurfaceKHR surface,
     VkPresentModeKHR desired_mode
@@ -1052,9 +1023,9 @@ static VkPresentModeKHR hg_vk_find_swapchain_present_mode(
         return desired_mode;
 
     u32 mode_count = 0;
-    hg_vk_check(vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &mode_count, NULL));
+    vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &mode_count, NULL);
     VkPresentModeKHR *present_modes = alloca(mode_count * sizeof(*present_modes));
-    hg_vk_check(vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &mode_count, present_modes));
+    vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &mode_count, present_modes);
 
     for (usize i = 0; i < mode_count; ++i) {
         if (present_modes[i] == desired_mode)
@@ -1071,15 +1042,15 @@ HgSwapchainData hg_vk_create_swapchain(
     VkImageUsageFlags image_usage,
     VkPresentModeKHR desired_mode
 ) {
-    hg_assert(device != VK_NULL_HANDLE);
-    hg_assert(gpu != VK_NULL_HANDLE);
-    hg_assert(surface != VK_NULL_HANDLE);
-    hg_assert(image_usage != 0);
+    assert(device != VK_NULL_HANDLE);
+    assert(gpu != VK_NULL_HANDLE);
+    assert(surface != VK_NULL_HANDLE);
+    assert(image_usage != 0);
 
     HgSwapchainData swapchain = {0};
 
     VkSurfaceCapabilitiesKHR surface_capabilities = {0};
-    hg_vk_check(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &surface_capabilities));
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &surface_capabilities);
 
     if (surface_capabilities.currentExtent.width == 0 ||
         surface_capabilities.currentExtent.height == 0 ||
@@ -1088,13 +1059,13 @@ HgSwapchainData hg_vk_create_swapchain(
         surface_capabilities.currentExtent.width > surface_capabilities.maxImageExtent.width ||
         surface_capabilities.currentExtent.height > surface_capabilities.maxImageExtent.height
     ) {
-        hg_warn("Could not create swapchain from the surface's size\n");
+        hg_warn("Could not create swapchain of the surface's size\n");
         return swapchain;
     }
 
     swapchain.width = surface_capabilities.currentExtent.width;
     swapchain.height = surface_capabilities.currentExtent.height;
-    swapchain.format = hg_vk_find_swapchain_format(gpu, surface);
+    swapchain.format = hg_internal_vk_find_swapchain_format(gpu, surface);
 
     VkSwapchainCreateInfoKHR swapchain_info = {
         .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
@@ -1107,432 +1078,29 @@ HgSwapchainData hg_vk_create_swapchain(
         .imageUsage = image_usage,
         .preTransform = surface_capabilities.currentTransform,
         .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-        .presentMode = hg_vk_find_swapchain_present_mode(gpu, surface, desired_mode),
+        .presentMode = hg_internal_vk_find_swapchain_present_mode(gpu, surface, desired_mode),
         .clipped = VK_TRUE,
         .oldSwapchain = old_swapchain,
     };
-    hg_vk_check(vkCreateSwapchainKHR(device, &swapchain_info, NULL, &swapchain.handle));
-    hg_vk_check(vkGetSwapchainImagesKHR(device, swapchain.handle, &swapchain.image_count, NULL));
+    VkResult result = vkCreateSwapchainKHR(device, &swapchain_info, NULL, &swapchain.handle);
+    if (swapchain.handle == NULL)
+        hg_error("Failed to create swapchain: %s\n", hg_vk_result_string(result));
 
-    hg_assert(swapchain.handle != NULL);
+    vkGetSwapchainImagesKHR(device, swapchain.handle, &swapchain.image_count, NULL);
+
     return swapchain;
 }
 
-void hg_vk_destroy_swapchain(VkDevice device, VkSwapchainKHR swapchain) {
-    hg_assert(device != VK_NULL_HANDLE);
-    vkDestroySwapchainKHR(device, swapchain, NULL);
-}
-
-void hg_vk_get_swapchain_images(VkDevice device, VkSwapchainKHR swapchain, VkImage *images, u32 count) {
-    hg_assert(device != VK_NULL_HANDLE);
-    hg_assert(swapchain != VK_NULL_HANDLE);
-    hg_assert(images != NULL);
-    hg_vk_check(vkGetSwapchainImagesKHR(device, swapchain, &count, images));
-}
-
-bool hg_vk_acquire_next_image(
-    VkDevice device,
-    VkSwapchainKHR swapchain,
-    u32 *image_index,
-    VkSemaphore signal_semaphore,
-    VkFence signal_fence
-) {
-    hg_assert(device != VK_NULL_HANDLE);
-    hg_assert(swapchain != VK_NULL_HANDLE);
-    hg_assert(image_index != NULL);
-
-    VkResult result = vkAcquireNextImageKHR(
-        device,
-        swapchain,
-        UINT64_MAX,
-        signal_semaphore,
-        signal_fence,
-        image_index
-    );
-    if (result == VK_SUBOPTIMAL_KHR || result == VK_ERROR_OUT_OF_DATE_KHR)
-        return false;
-
-    hg_vk_check(result);
-    return true;
-}
-
-void hg_vk_present(
-    VkQueue queue,
-    VkSwapchainKHR swapchain,
-    u32 image_index,
-    VkSemaphore *wait_semaphores,
-    u32 semaphore_count
-) {
-    hg_assert(queue != VK_NULL_HANDLE);
-    hg_assert(swapchain != VK_NULL_HANDLE);
-    if (semaphore_count > 0)
-        hg_assert(wait_semaphores != NULL);
-
-    VkPresentInfoKHR present_info = {
-        .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-        .waitSemaphoreCount = semaphore_count,
-        .pWaitSemaphores = wait_semaphores,
-        .swapchainCount = 1,
-        .pSwapchains = &swapchain,
-        .pImageIndices = &image_index,
-    };
-    hg_vk_check(vkQueuePresentKHR(queue, &present_info));
-}
-
-VkSemaphore hg_vk_create_semaphore(VkDevice device, VkSemaphoreCreateFlags flags) {
-    hg_assert(device != VK_NULL_HANDLE);
-
-    VkSemaphoreCreateInfo semaphore_info = {
-        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-        .flags = flags,
-    };
-    VkSemaphore semaphore = VK_NULL_HANDLE;
-    hg_vk_check(vkCreateSemaphore(device, &semaphore_info, NULL, &semaphore));
-
-    hg_assert(semaphore != VK_NULL_HANDLE);
-    return semaphore;
-}
-
-void hg_vk_destroy_semaphore(VkDevice device, VkSemaphore semaphore) {
-    hg_assert(device != VK_NULL_HANDLE);
-    vkDestroySemaphore(device, semaphore, NULL);
-}
-
-VkFence hg_vk_create_fence(VkDevice device, VkFenceCreateFlags flags) {
-    hg_assert(device != VK_NULL_HANDLE);
-
-    VkFenceCreateInfo fence_info = {
-        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-        .flags = flags,
-    };
-    VkFence fence = VK_NULL_HANDLE;
-    hg_vk_check(vkCreateFence(device, &fence_info, NULL, &fence));
-
-    hg_assert(fence != VK_NULL_HANDLE);
-    return fence;
-}
-
-void hg_vk_destroy_fence(VkDevice device, VkFence fence) {
-    hg_assert(device != VK_NULL_HANDLE);
-    vkDestroyFence(device, fence, NULL);
-}
-
-void hg_vk_wait_for_fences(VkDevice device, VkFence *fences, u32 count) {
-    hg_assert(device != VK_NULL_HANDLE);
-    if (count > 0) {
-        hg_assert(fences != NULL);
-    } else {
-        return;
-    }
-    hg_vk_check(vkWaitForFences(device, count, fences, VK_TRUE, UINT64_MAX));
-}
-
-void hg_vk_reset_fences(VkDevice device, VkFence *fences, u32 count) {
-    hg_assert(device != VK_NULL_HANDLE);
-    if (count > 0) {
-        hg_assert(fences != NULL);
-    } else {
-        return;
-    }
-    hg_vk_check(vkResetFences(device, count, fences));
-}
-
-bool hg_vk_find_queue_family(VkPhysicalDevice gpu, u32 *queue_family, VkQueueFlags queue_flags) {
-    if (gpu == VK_NULL_HANDLE)
-        return false;
-    hg_assert(queue_family != NULL);
-
-    *queue_family = UINT32_MAX;
-
-    u32 family_count = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, NULL);
-    VkQueueFamilyProperties *families = alloca(family_count * sizeof(*families));
-    vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, families);
-
-    for (u32 i = 0; i < family_count; ++i) {
-        if (families[i].queueFlags & queue_flags) {
-            *queue_family = i;
-            return true;
-        }
-    }
-    return false;
-}
-
-VkQueue hg_vk_get_queue(VkDevice device, u32 queue_family, u32 queue_index) {
-    hg_assert(device != VK_NULL_HANDLE);
-
-    VkQueue queue = VK_NULL_HANDLE;
-    vkGetDeviceQueue(device, queue_family, queue_index, &queue);
-    return queue;
-}
-
-void hg_vk_queue_wait(VkQueue queue) {
-    if (queue != VK_NULL_HANDLE)
-        return;
-    hg_vk_check(vkQueueWaitIdle(queue));
-}
-
-void hg_vk_submit_commands(VkQueue queue, const VkSubmitInfo *submits, u32 submit_count, VkFence fence) {
-    hg_assert(queue != VK_NULL_HANDLE);
-    hg_vk_check(vkQueueSubmit(queue, submit_count, submits, fence));
-}
-
-VkCommandPool hg_vk_create_command_pool(VkDevice device, u32 queue_family, VkCommandPoolCreateFlags flags) {
-    hg_assert(device != VK_NULL_HANDLE);
-
-    VkCommandPoolCreateInfo info = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-        .flags = flags,
-        .queueFamilyIndex = queue_family,
-    };
-    VkCommandPool pool = VK_NULL_HANDLE;
-    hg_vk_check(vkCreateCommandPool(device, &info, NULL, &pool));
-
-    hg_assert(pool != VK_NULL_HANDLE);
-    return pool;
-}
-
-void hg_vk_destroy_command_pool(VkDevice device, VkCommandPool pool) {
-    hg_assert(device != VK_NULL_HANDLE);
-    vkDestroyCommandPool(device, pool, NULL);
-}
-
-void hg_vk_allocate_command_buffers(
-    VkDevice device,
-    VkCommandPool pool,
-    VkCommandBuffer *cmds,
-    u32 count,
-    VkCommandBufferLevel level
-) {
-    hg_assert(device != VK_NULL_HANDLE);
-    hg_assert(pool != VK_NULL_HANDLE);
-    if (count > 0) {
-        hg_assert(cmds != NULL);
-    } else {
-        return;
-    }
-
-    VkCommandBufferAllocateInfo alloc_info = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .commandPool = pool,
-        .level = level,
-        .commandBufferCount = count,
-    };
-    hg_vk_check(vkAllocateCommandBuffers(device, &alloc_info, cmds));
-}
-
-void hg_vk_free_command_buffers(VkDevice device, VkCommandPool pool, VkCommandBuffer *cmds, u32 count) {
-    hg_assert(device != VK_NULL_HANDLE);
-    hg_assert(pool != VK_NULL_HANDLE);
-    if (count > 0) {
-        hg_assert(cmds != NULL);
-    } else {
-        return;
-    }
-    vkFreeCommandBuffers(device, pool, count, cmds);
-}
-
-void hg_vk_reset_command_buffer(VkCommandBuffer cmd, VkCommandBufferResetFlags flags) {
-    hg_assert(cmd != NULL);
-    vkResetCommandBuffer(cmd, flags);
-}
-
-VkDescriptorPool hg_vk_create_descriptor_pool(
-    VkDevice device,
-    u32 max_sets,
-    VkDescriptorPoolSize *sizes,
-    u32 count
-) {
-    hg_assert(device != VK_NULL_HANDLE);
-    hg_assert(max_sets > 0);
-    hg_assert(sizes != NULL);
-    hg_assert(count > 0);
-
-    VkDescriptorPoolCreateInfo pool_info = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-        .maxSets = max_sets,
-        .poolSizeCount = count,
-        .pPoolSizes = sizes
-    };
-    VkDescriptorPool pool = VK_NULL_HANDLE;
-    hg_vk_check(vkCreateDescriptorPool(device, &pool_info, NULL, &pool));
-
-    hg_assert(pool != VK_NULL_HANDLE);
-    return pool;
-}
-
-void hg_vk_destroy_descriptor_pool(VkDevice device, VkDescriptorPool pool) {
-    hg_assert(device != VK_NULL_HANDLE);
-    vkDestroyDescriptorPool(device, pool, NULL);
-}
-
-void hg_vk_reset_descriptor_pool(VkDevice device, VkDescriptorPool pool) {
-    hg_assert(device != VK_NULL_HANDLE);
-    hg_assert(pool != VK_NULL_HANDLE);
-    vkResetDescriptorPool(device, pool, 0);
-}
-
-bool hg_vk_allocate_descriptor_sets(
-    VkDevice device,
-    VkDescriptorPool pool,
-    VkDescriptorSetLayout *layouts,
-    VkDescriptorSet *sets,
-    u32 count
-) {
-    hg_assert(device != VK_NULL_HANDLE);
-    hg_assert(pool != VK_NULL_HANDLE);
-    hg_assert(layouts != NULL);
-    hg_assert(sets != NULL);
-    hg_assert(count > 0);
-
-    VkDescriptorSetAllocateInfo alloc_info = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-        .descriptorPool = pool,
-        .descriptorSetCount = count,
-        .pSetLayouts = layouts,
-    };
-    VkResult result = vkAllocateDescriptorSets(device, &alloc_info, sets);
-    if (result == VK_ERROR_OUT_OF_POOL_MEMORY || result == VK_ERROR_FRAGMENTED_POOL)
-        return false;
-    hg_vk_check(result);
-    return true;
-}
-
-void hg_vk_update_descriptor_sets(
-    VkDevice device,
-    const VkWriteDescriptorSet* writes,
-    u32 write_count,
-    const VkCopyDescriptorSet* copies,
-    u32 copy_count
-) {
-    hg_assert(device != NULL);
-    hg_assert(write_count > 0 || copy_count > 0);
-    hg_assert(writes != NULL || copies != NULL);
-    if (write_count > 0)
-        hg_assert(writes != NULL);
-    if (copy_count > 0)
-        hg_assert(copies != NULL);
-    vkUpdateDescriptorSets(device, write_count, writes, copy_count, copies);
-}
-
-void hg_vk_write_descriptor_set(
-    VkDevice device,
-    VkDescriptorSet set,
-    u32 binding,
-    u32 first_array_elem,
-    u32 descriptor_count,
-    VkDescriptorType descriptor_type,
-    const VkDescriptorImageInfo *image_info,
-    const VkDescriptorBufferInfo *buffer_info,
-    const VkBufferView *texel_buffer_view
-) {
-    hg_assert(device != VK_NULL_HANDLE);
-    hg_assert(descriptor_count > 0);
-    hg_assert(image_info != NULL || buffer_info != NULL || texel_buffer_view != NULL);
-
-    VkWriteDescriptorSet write = {
-        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstSet = set,
-        .dstBinding = binding,
-        .dstArrayElement = first_array_elem,
-        .descriptorCount = descriptor_count,
-        .descriptorType = descriptor_type,
-        .pImageInfo = image_info,
-        .pBufferInfo = buffer_info,
-        .pTexelBufferView = texel_buffer_view
-    };
-    vkUpdateDescriptorSets(device, 1, &write, 0, NULL);
-}
-
-VkDescriptorSetLayout hg_vk_create_descriptor_set_layout(
-    VkDevice device,
-    const VkDescriptorSetLayoutBinding *bindings,
-    u32 count
-) {
-    hg_assert(device != VK_NULL_HANDLE);
-    hg_assert(bindings != NULL);
-    hg_assert(count > 0);
-
-    VkDescriptorSetLayoutCreateInfo layout_info = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = count,
-        .pBindings = bindings,
-    };
-    VkDescriptorSetLayout layout = VK_NULL_HANDLE;
-    hg_vk_check(vkCreateDescriptorSetLayout(device, &layout_info, NULL, &layout));
-
-    return layout;
-}
-
-void hg_vk_destroy_descriptor_set_layout(VkDevice device, VkDescriptorSetLayout layout) {
-    hg_assert(device != VK_NULL_HANDLE);
-    vkDestroyDescriptorSetLayout(device, layout, NULL);
-}
-
-VkPipelineLayout hg_vk_create_pipeline_layout(
-    VkDevice device,
-    const VkDescriptorSetLayout* layouts,
-    u32 layout_count,
-    const VkPushConstantRange* push_constants,
-    u32 push_constant_count
-) {
-    hg_assert(device != VK_NULL_HANDLE);
-    if (layout_count > 0)
-        hg_assert(layouts != NULL);
-    if (push_constant_count > 0)
-        hg_assert(push_constants != NULL);
-
-    VkPipelineLayoutCreateInfo pipeline_layout_info = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .setLayoutCount = layout_count,
-        .pSetLayouts = layouts,
-        .pushConstantRangeCount = push_constant_count,
-        .pPushConstantRanges = push_constants,
-    };
-    VkPipelineLayout layout = VK_NULL_HANDLE;
-    hg_vk_check(vkCreatePipelineLayout(device, &pipeline_layout_info, NULL, &layout));
-
-    hg_assert(layout != VK_NULL_HANDLE);
-    return layout;
-}
-
-void hg_vk_destroy_pipeline_layout(VkDevice device, VkPipelineLayout layout) {
-    hg_assert(device != VK_NULL_HANDLE);
-    vkDestroyPipelineLayout(device, layout, NULL);
-}
-
-VkShaderModule hg_vk_create_shader_module(VkDevice device, const u8 *code, usize size) {
-    hg_assert(device != VK_NULL_HANDLE);
-    hg_assert(code != NULL);
-    hg_assert(size > 0);
-
-    VkShaderModuleCreateInfo shader_module_info = {
-        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-        .codeSize = size,
-        .pCode = (const u32*)code,
-    };
-    VkShaderModule shader_module = VK_NULL_HANDLE;
-    hg_vk_check(vkCreateShaderModule(device, &shader_module_info, NULL, &shader_module));
-
-    hg_assert(shader_module != VK_NULL_HANDLE);
-    return shader_module;
-}
-
-void hg_vk_destroy_shader_module(VkDevice device, VkShaderModule shader_module) {
-    hg_assert(device != VK_NULL_HANDLE);
-    vkDestroyShaderModule(device, shader_module, NULL);
-}
-
 VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineConfig *config) {
-    hg_assert(device != VK_NULL_HANDLE);
-    hg_assert(config != NULL);
-    hg_assert(config->layout != NULL);
-    hg_assert(config->shader_stages != NULL);
-    hg_assert(config->shader_count > 0);
+    assert(device != VK_NULL_HANDLE);
+    assert(config != NULL);
+    assert(config->layout != NULL);
+    assert(config->shader_stages != NULL);
+    assert(config->shader_count > 0);
     if (config->vertex_binding_count > 0)
-        hg_assert(config->vertex_bindings != NULL);
+        assert(config->vertex_bindings != NULL);
     if (config->color_attachment_count > 0)
-        hg_assert(config->color_attachment_formats != NULL);
+        assert(config->color_attachment_formats != NULL);
 
     VkPipelineVertexInputStateCreateInfo vertex_input_state = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
@@ -1668,25 +1236,26 @@ VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineCon
         .basePipelineIndex = -1,
     };
     VkPipeline pipeline = VK_NULL_HANDLE;
-    hg_vk_check(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipeline_info, NULL, &pipeline));
+    VkResult result = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipeline_info, NULL, &pipeline);
+    if (pipeline == VK_NULL_HANDLE)
+        hg_error("Failed to create Vulkan graphics pipeline: %s\n", hg_vk_result_string(result));
 
-    hg_assert(pipeline != VK_NULL_HANDLE);
     return pipeline;
 }
 
 VkPipeline hg_vk_create_compute_pipeline(VkDevice device, const HgVkPipelineConfig *config) {
-    hg_assert(device != VK_NULL_HANDLE);
-    hg_assert(config != NULL);
-    hg_assert(config->layout != NULL);
-    hg_assert(config->shader_stages != NULL);
-    hg_assert(config->shader_stages[0].stage == VK_SHADER_STAGE_COMPUTE_BIT);
-    hg_assert(config->shader_count == 1);
+    assert(device != VK_NULL_HANDLE);
+    assert(config != NULL);
+    assert(config->layout != NULL);
+    assert(config->shader_stages != NULL);
+    assert(config->shader_stages[0].stage == VK_SHADER_STAGE_COMPUTE_BIT);
+    assert(config->shader_count == 1);
     if (config->vertex_binding_count > 0)
-        hg_assert(config->vertex_bindings != NULL);
-    hg_assert(config->color_attachment_count == 0);
-    hg_assert(config->color_attachment_formats == NULL);
-    hg_assert(config->depth_attachment_format == VK_FORMAT_UNDEFINED);
-    hg_assert(config->stencil_attachment_format == VK_FORMAT_UNDEFINED);
+        assert(config->vertex_bindings != NULL);
+    assert(config->color_attachment_count == 0);
+    assert(config->color_attachment_formats == NULL);
+    assert(config->depth_attachment_format == VK_FORMAT_UNDEFINED);
+    assert(config->stencil_attachment_format == VK_FORMAT_UNDEFINED);
 
     VkComputePipelineCreateInfo pipeline_info = {
         .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
@@ -1696,110 +1265,104 @@ VkPipeline hg_vk_create_compute_pipeline(VkDevice device, const HgVkPipelineConf
         .basePipelineIndex = -1,
     };
     VkPipeline pipeline = VK_NULL_HANDLE;
-    hg_vk_check(vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipeline_info, NULL, &pipeline));
+    VkResult result = vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipeline_info, NULL, &pipeline);
+    if (pipeline == VK_NULL_HANDLE)
+        hg_error("Failed to create Vulkan compute pipeline: %s\n", hg_vk_result_string(result));
 
-    hg_assert(pipeline != VK_NULL_HANDLE);
     return pipeline;
 }
 
-void hg_vk_destroy_pipeline(VkDevice device, VkPipeline pipeline) {
-    hg_assert(device != VK_NULL_HANDLE);
-    vkDestroyPipeline(device, pipeline, NULL);
-}
+u32 hg_vk_find_memory_type_index(
+    VkPhysicalDevice gpu,
+    u32 bitmask,
+    VkMemoryPropertyFlags desired_flags,
+    VkMemoryPropertyFlags undesired_flags
+) {
+    assert(gpu != VK_NULL_HANDLE);
+    assert(bitmask != 0);
 
-VkBuffer hg_vk_create_buffer(VkDevice device, const VkBufferCreateInfo *config) {
-    hg_assert(device != VK_NULL_HANDLE);
-    hg_assert(config != NULL);
+    VkPhysicalDeviceMemoryProperties mem_props;
+    vkGetPhysicalDeviceMemoryProperties(gpu, &mem_props);
 
-    VkBuffer buffer = VK_NULL_HANDLE;
-    hg_vk_check(vkCreateBuffer(device, config, NULL, &buffer));
-
-    hg_assert(buffer != VK_NULL_HANDLE);
-    return buffer;
-}
-
-void hg_vk_destroy_buffer(VkDevice device, VkBuffer buffer) {
-    hg_assert(device != VK_NULL_HANDLE);
-    vkDestroyBuffer(device, buffer, NULL);
+    for (u32 i = 0; i < mem_props.memoryTypeCount; ++i) {
+        if ((bitmask & (1 << i)) == 0)
+            continue;
+        if ((mem_props.memoryTypes[i].propertyFlags & undesired_flags) != 0)
+            continue;
+        if ((mem_props.memoryTypes[i].propertyFlags & desired_flags) == 0)
+            continue;
+        return i;
+    }
+    for (u32 i = 0; i < mem_props.memoryTypeCount; ++i) {
+        if ((bitmask & (1 << i)) == 0)
+            continue;
+        if ((mem_props.memoryTypes[i].propertyFlags & desired_flags) == 0)
+            continue;
+        hg_warn("Could not find Vulkan memory type without undesired flags\n");
+        return i;
+    }
+    for (u32 i = 0; i < mem_props.memoryTypeCount; ++i) {
+        if ((bitmask & (1 << i)) == 0)
+            continue;
+        hg_warn("Could not find Vulkan memory type with desired flags\n");
+        return i;
+    }
+    hg_error("Could not find Vulkan memory type\n");
 }
 
 VkImage hg_vk_create_image(VkDevice device, const VkImageCreateInfo *config) {
-    hg_assert(device != VK_NULL_HANDLE);
-    hg_assert(config != NULL);
-    hg_assert(config->format != VK_FORMAT_UNDEFINED);
-    hg_assert(config->usage != 0);
+    assert(device != VK_NULL_HANDLE);
+    assert(config != NULL);
+    assert(config->format != VK_FORMAT_UNDEFINED);
+    assert(config->usage != 0);
 
-    VkImageCreateInfo create_info = *config;
-    create_info.extent.width = hg_max(config->extent.width, 1);
-    create_info.extent.height = hg_max(config->extent.height, 1);
-    create_info.extent.depth = hg_max(config->extent.depth, 1);
-    create_info.mipLevels = hg_max(config->mipLevels, 1);
+    VkImageCreateInfo info = *config;
+    info.extent.width = hg_max(config->extent.width, 1);
+    info.extent.height = hg_max(config->extent.height, 1);
+    info.extent.depth = hg_max(config->extent.depth, 1);
+    info.mipLevels = hg_max(config->mipLevels, 1);
     if (config->mipLevels == UINT32_MAX) {
-        u32 max_length = hg_max(hg_max(
+        info.mipLevels = hg_max_mipmaps(
             config->extent.width,
-            config->extent.height),
-            config->extent.depth
-        );
-        create_info.mipLevels = (u32)log2f((f32)max_length) + 1;
+            config->extent.height,
+            config->extent.depth);
     }
-    create_info.arrayLayers = hg_max(config->arrayLayers, 1);
-    create_info.samples = hg_max(config->samples, VK_SAMPLE_COUNT_1_BIT);
+    info.arrayLayers = hg_max(config->arrayLayers, 1);
+    info.samples = hg_max(config->samples, VK_SAMPLE_COUNT_1_BIT);
 
     VkImage image = VK_NULL_HANDLE;
-    hg_vk_check(vkCreateImage(device, config, NULL, &image));
+    VkResult result = vkCreateImage(device, config, NULL, &image);
+    if (image == VK_NULL_HANDLE)
+        hg_error("Failed to create Vulkan image: %s\n", hg_vk_result_string(result));
 
-    hg_assert(image != VK_NULL_HANDLE);
     return image;
 }
 
-void hg_vk_destroy_image(VkDevice device, VkImage image) {
-    hg_assert(device != VK_NULL_HANDLE);
-    vkDestroyImage(device, image, NULL);
-}
+VkImageView hg_vk_create_image_view(VkDevice device, const VkImageViewCreateInfo *config) {
+    assert(device != VK_NULL_HANDLE);
+    assert(config != NULL);
+    assert(config->subresourceRange.aspectMask != 0);
 
-VkImageView hg_vk_create_image_view(
-    VkDevice device,
-    VkImage image,
-    VkFormat format,
-    VkImageViewType type,
-    VkImageSubresourceRange subresource
-) {
-    hg_assert(device != VK_NULL_HANDLE);
-    hg_assert(image != VK_NULL_HANDLE);
-    hg_assert(format != VK_FORMAT_UNDEFINED);
-    hg_assert(subresource.aspectMask != 0);
+    VkImageViewCreateInfo info = *config;
+    info.subresourceRange.levelCount
+        = config->subresourceRange.levelCount != 0
+        ? config->subresourceRange.levelCount
+        : VK_REMAINING_MIP_LEVELS;
+    info.subresourceRange.layerCount
+        = config->subresourceRange.layerCount != 0
+        ? config->subresourceRange.layerCount
+        : VK_REMAINING_ARRAY_LAYERS;
 
-    VkImageViewCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .image = image,
-        .viewType = type,
-        .format = format,
-        .subresourceRange = {
-            .aspectMask = subresource.aspectMask,
-            .baseMipLevel = subresource.baseMipLevel,
-            .levelCount = subresource.levelCount != 0
-                ? subresource.levelCount
-                : VK_REMAINING_MIP_LEVELS,
-            .baseArrayLayer = subresource.baseArrayLayer,
-            .layerCount = subresource.layerCount != 0
-                ? subresource.layerCount
-                : VK_REMAINING_ARRAY_LAYERS,
-        },
-    };
     VkImageView view = VK_NULL_HANDLE;
-    hg_vk_check(vkCreateImageView(device, &create_info, NULL, &view));
+    VkResult result = vkCreateImageView(device, &info, NULL, &view);
+    if (view == VK_NULL_HANDLE)
+        hg_error("Failed to create Vulkan image view: %s\n", hg_vk_result_string(result));
 
-    hg_assert(view != VK_NULL_HANDLE);
     return view;
 }
 
-void hg_vk_destroy_image_view(VkDevice device, VkImageView view) {
-    hg_assert(device != VK_NULL_HANDLE);
-    vkDestroyImageView(device, view, NULL);
-}
-
 VkSampler hg_vk_create_sampler(VkDevice device, VkFilter filter, VkSamplerAddressMode edge_mode) {
-    hg_assert(device != VK_NULL_HANDLE);
+    assert(device != VK_NULL_HANDLE);
 
     VkSamplerCreateInfo sampler_info = {
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
@@ -1812,420 +1375,25 @@ VkSampler hg_vk_create_sampler(VkDevice device, VkFilter filter, VkSamplerAddres
         .maxLod = VK_LOD_CLAMP_NONE,
     };
     VkSampler sampler = VK_NULL_HANDLE;
-    hg_vk_check(vkCreateSampler(device, &sampler_info, NULL, &sampler));
+    VkResult result = vkCreateSampler(device, &sampler_info, NULL, &sampler);
+    if (sampler == VK_NULL_HANDLE)
+        hg_error("Failed to create Vulkan sampler: %s\n", hg_vk_result_string(result));
 
-    hg_assert(sampler != VK_NULL_HANDLE);
     return sampler;
 }
 
-void hg_vk_destroy_sampler(VkDevice device, VkSampler sampler) {
-    hg_assert(device != VK_NULL_HANDLE);
-    vkDestroySampler(device, sampler, NULL);
-}
-
-VkMemoryRequirements hg_vk_get_buffer_mem_reqs(VkDevice device, VkBuffer buffer) {
-    hg_assert(device != VK_NULL_HANDLE);
-    hg_assert(buffer != VK_NULL_HANDLE);
-    VkMemoryRequirements reqs;
-    vkGetBufferMemoryRequirements(device, buffer, &reqs);
-    return reqs;
-}
-
-VkMemoryRequirements hg_vk_get_image_mem_reqs(VkDevice device, VkImage image) {
-    hg_assert(device != VK_NULL_HANDLE);
-    hg_assert(image != VK_NULL_HANDLE);
-    VkMemoryRequirements reqs;
-    vkGetImageMemoryRequirements(device, image, &reqs);
-    return reqs;
-}
-
-static u32 hg_vk_find_memory_type_index(
-    VkPhysicalDevice gpu,
-    u32 bitmask,
-    VkMemoryPropertyFlags desired_flags,
-    VkMemoryPropertyFlags undesired_flags
-) {
-    hg_assert(gpu != VK_NULL_HANDLE);
-    hg_assert(bitmask != 0);
-
-    VkPhysicalDeviceMemoryProperties mem_props;
-    vkGetPhysicalDeviceMemoryProperties(gpu, &mem_props);
-
-    for (u32 i = 0; i < mem_props.memoryTypeCount; ++i) {
-        if ((bitmask & (1 << i))) {
-            if ((mem_props.memoryTypes[i].propertyFlags & undesired_flags) != 0)
-                continue;
-            if ((mem_props.memoryTypes[i].propertyFlags & desired_flags) == 0)
-                continue;
-            return i;
-        }
-    }
-    for (u32 i = 0; i < mem_props.memoryTypeCount; ++i) {
-        if ((bitmask & (1 << i))) {
-            if ((mem_props.memoryTypes[i].propertyFlags & desired_flags) == 0)
-                continue;
-            hg_warn("Could not find Vulkan memory type without undesired flags\n");
-            return i;
-        }
-    }
-    for (u32 i = 0; i < mem_props.memoryTypeCount; ++i) {
-        if ((bitmask & (1 << i))) {
-            hg_warn("Could not find Vulkan memory type with desired flags\n");
-            return i;
-        }
-    }
-    hg_error("Could not find Vulkan memory type\n");
-}
-
-VkDeviceMemory hg_vk_allocate_memory(
-    VkDevice device,
-    VkPhysicalDevice gpu,
-    VkMemoryRequirements *mem_reqs,
-    VkMemoryPropertyFlags desired_flags,
-    VkMemoryPropertyFlags undesired_flags
-) {
-    hg_assert(device != VK_NULL_HANDLE);
-    hg_assert(mem_reqs != NULL);
-
-    VkMemoryAllocateInfo alloc_info = {
-        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-        .allocationSize = mem_reqs->size,
-        .memoryTypeIndex = hg_vk_find_memory_type_index(
-            gpu, mem_reqs->memoryTypeBits, desired_flags, undesired_flags),
-    };
-    VkDeviceMemory memory = VK_NULL_HANDLE;
-    hg_vk_check(vkAllocateMemory(device, &alloc_info, NULL, &memory));
-
-    hg_assert(memory != VK_NULL_HANDLE);
-    return memory;
-}
-
-void hg_vk_free_memory(VkDevice device, VkDeviceMemory memory) {
-    hg_assert(device != VK_NULL_HANDLE);
-    vkFreeMemory(device, memory, NULL);
-}
-
-void hg_vk_bind_buffer_memory(VkDevice device, VkBuffer buffer, VkDeviceMemory memory, usize offset) {
-    hg_assert(device != VK_NULL_HANDLE);
-    hg_assert(buffer != VK_NULL_HANDLE);
-    hg_assert(memory != VK_NULL_HANDLE);
-    hg_vk_check(vkBindBufferMemory(device, buffer, memory, offset));
-}
-
-void hg_vk_bind_image_memory(VkDevice device, VkImage image, VkDeviceMemory memory, usize offset) {
-    hg_assert(device != VK_NULL_HANDLE);
-    hg_assert(image != VK_NULL_HANDLE);
-    hg_assert(memory != VK_NULL_HANDLE);
-    hg_vk_check(vkBindImageMemory(device, image, memory, offset));
-}
-
-void *hg_vk_map_memory(VkDevice device, VkDeviceMemory memory, usize offset, usize size) {
-    hg_assert(device != VK_NULL_HANDLE);
-    hg_assert(memory != VK_NULL_HANDLE);
-    hg_assert(size > 0);
-
-    void *data;
-    hg_vk_check(vkMapMemory(device, memory, offset, size, 0, &data));
-    return data;
-}
-
-void hg_vk_unmap_memory(VkDevice device, VkDeviceMemory memory) {
-    hg_assert(device != VK_NULL_HANDLE);
-    hg_assert(memory != VK_NULL_HANDLE);
-    vkUnmapMemory(device, memory);
-}
-
-void hg_vk_flush_memory(VkDevice device, VkDeviceMemory memory, usize offset, usize size) {
-    hg_assert(device != VK_NULL_HANDLE);
-    hg_assert(memory != VK_NULL_HANDLE);
-    hg_assert(size > 0);
-
-    VkMappedMemoryRange range = {
-        .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-        .memory = memory,
-        .offset = offset,
-        .size = size,
-    };
-    hg_vk_check(vkFlushMappedMemoryRanges(device, 1, &range));
-}
-
-void hg_vk_invalidate_memory(VkDevice device, VkDeviceMemory memory, usize offset, usize size) {
-    hg_assert(device != VK_NULL_HANDLE);
-    hg_assert(memory != VK_NULL_HANDLE);
-    hg_assert(size > 0);
-
-    VkMappedMemoryRange range = {
-        .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-        .memory = memory,
-        .offset = offset,
-        .size = size,
-    };
-    hg_vk_check(vkInvalidateMappedMemoryRanges(device, 1, &range));
-}
-
-void hg_vk_begin_cmd(VkCommandBuffer cmd, VkCommandBufferUsageFlags flags) {
-    hg_assert(cmd != VK_NULL_HANDLE);
-
-    const VkCommandBufferBeginInfo begin_info = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        .flags = flags,
-    };
-    hg_vk_check(vkBeginCommandBuffer(cmd, &begin_info));
-}
-
-void hg_vk_end_cmd(VkCommandBuffer cmd) {
-    hg_assert(cmd != VK_NULL_HANDLE);
-    hg_vk_check(vkEndCommandBuffer(cmd));
-}
-
-void hg_vk_copy_buffer(
-    VkCommandBuffer cmd,
-    VkBuffer dst,
-    VkBuffer src,
-    const VkBufferCopy *regions,
-    u32 region_count
-) {
-    hg_assert(cmd != VK_NULL_HANDLE);
-    hg_assert(dst != NULL);
-    hg_assert(src != NULL);
-    hg_assert(regions != NULL);
-    hg_assert(region_count > 0);
-    vkCmdCopyBuffer(cmd, src, dst, region_count, regions);
-}
-
-void hg_vk_copy_image(
-    VkCommandBuffer cmd,
-    VkImage dst,
-    VkImage src,
-    const VkImageCopy *regions,
-    u32 region_count
-) {
-    hg_assert(cmd != VK_NULL_HANDLE);
-    hg_assert(dst != NULL);
-    hg_assert(src != NULL);
-    hg_assert(regions != NULL);
-    hg_assert(region_count > 0);
-    vkCmdCopyImage(
-        cmd,
-        src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        region_count,
-        regions);
-}
-
-void hg_vk_blit_image(
-    VkCommandBuffer cmd,
-    VkImage dst,
-    VkImage src,
-    const VkImageBlit *regions,
-    u32 region_count,
-    VkFilter filter
-) {
-    hg_assert(cmd != VK_NULL_HANDLE);
-    hg_assert(dst != NULL);
-    hg_assert(src != NULL);
-    hg_assert(regions != NULL);
-    hg_assert(region_count > 0);
-    vkCmdBlitImage(
-        cmd,
-        src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        region_count,
-        regions,
-        filter);
-}
-
-void hg_vk_copy_buffer_to_image(
-    VkCommandBuffer cmd,
-    VkImage dst,
-    VkBuffer src,
-    VkBufferImageCopy *regions,
-    u32 region_count
-) {
-    hg_assert(cmd != VK_NULL_HANDLE);
-    hg_assert(dst != NULL);
-    hg_assert(src != NULL);
-    hg_assert(regions != NULL);
-    hg_assert(region_count > 0);
-    vkCmdCopyBufferToImage(
-        cmd,
-        src,
-        dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        region_count,
-        regions);
-}
-
-void hg_vk_copy_image_to_buffer(
-    VkCommandBuffer cmd,
-    VkBuffer dst,
-    VkImage src,
-    VkBufferImageCopy *regions,
-    u32 region_count
-) {
-    hg_assert(cmd != VK_NULL_HANDLE);
-    hg_assert(dst != NULL);
-    hg_assert(src != NULL);
-    hg_assert(regions != NULL);
-    hg_assert(region_count > 0);
-    vkCmdCopyImageToBuffer(
-        cmd,
-        src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        dst,
-        region_count,
-        regions);
-}
-
-void hg_vk_pipeline_barrier(VkCommandBuffer cmd, const VkDependencyInfo *dependencies) {
-    hg_assert(cmd != VK_NULL_HANDLE);
-    hg_assert(dependencies != NULL);
-    vkCmdPipelineBarrier2(cmd, dependencies);
-}
-
-void hg_vk_begin_rendering(VkCommandBuffer cmd, const VkRenderingInfo *info) {
-    hg_assert(cmd != VK_NULL_HANDLE);
-    hg_assert(info != NULL);
-    vkCmdBeginRendering(cmd, info);
-}
-
-void hg_vk_end_rendering(VkCommandBuffer cmd) {
-    hg_assert(cmd != VK_NULL_HANDLE);
-    vkCmdEndRendering(cmd);
-}
-
-void hg_vk_set_viewport(
-    VkCommandBuffer cmd,
-    f32 x,
-    f32 y,
-    f32 width,
-    f32 height,
-    f32 near,
-    f32 far
-) {
-    hg_assert(cmd != VK_NULL_HANDLE);
-    VkViewport viewport = {x, y, width, height, near, far};
-    vkCmdSetViewport(cmd, 0, 1, &viewport);
-}
-
-void hg_vk_set_scissor(VkCommandBuffer cmd, i32 x, i32 y, u32 width, u32 height) {
-    hg_assert(cmd != VK_NULL_HANDLE);
-    VkRect2D scissor = {{x, y}, {width, height}};
-    vkCmdSetScissor(cmd, 0, 1, &scissor);
-}
-
-void hg_vk_bind_pipeline(
-    VkCommandBuffer cmd,
-    VkPipeline pipeline,
-    VkPipelineBindPoint bind_point
-) {
-    hg_assert(cmd != VK_NULL_HANDLE);
-    hg_assert(pipeline != VK_NULL_HANDLE);
-    vkCmdBindPipeline(cmd, bind_point, pipeline);
-}
-
-void hg_vk_bind_descriptor_sets(
-    VkCommandBuffer cmd,
-    VkPipelineLayout layout,
-    VkPipelineBindPoint bind_point,
-    u32 begin_index,
-    u32 set_count,
-    const VkDescriptorSet *descriptor_sets
-) {
-    hg_assert(cmd != VK_NULL_HANDLE);
-    hg_assert(layout != VK_NULL_HANDLE);
-    vkCmdBindDescriptorSets(cmd, bind_point, layout, begin_index, set_count, descriptor_sets, 0, NULL);
-}
-
-void hg_vk_push_constants(
-    VkCommandBuffer cmd,
-    VkPipelineLayout layout,
-    VkShaderStageFlags stages,
-    u32 offset,
-    u32 size,
-    const void *data
-) {
-    hg_assert(cmd != VK_NULL_HANDLE);
-    hg_assert(layout != VK_NULL_HANDLE);
-    hg_assert(stages != 0);
-    hg_assert(data != NULL);
-    hg_assert(size > 0);
-    vkCmdPushConstants(cmd, layout, stages, offset, size, data);
-}
-
-void hg_vk_bind_vertex_buffers(
-    VkCommandBuffer cmd,
-    u32 begin_index,
-    u32 count,
-    VkBuffer *vertex_buffers,
-    usize *offsets
-
-) {
-    hg_assert(cmd != VK_NULL_HANDLE);
-    hg_assert(count > 0);
-    hg_assert(vertex_buffers != NULL);
-    hg_assert(offsets != NULL);
-    vkCmdBindVertexBuffers(cmd, begin_index, count, vertex_buffers, offsets);
-}
-
-void hg_vk_bind_vertex_buffer(VkCommandBuffer cmd, VkBuffer vertex_buffer) {
-    hg_assert(cmd != VK_NULL_HANDLE);
-    hg_assert(vertex_buffer != VK_NULL_HANDLE);
-    vkCmdBindVertexBuffers(cmd, 0, 1, &vertex_buffer, &(usize){0});
-}
-
-void hg_vk_bind_index_buffer(
-    VkCommandBuffer cmd,
-    VkBuffer index_buffer,
-    usize offset,
-    VkIndexType type
-) {
-    hg_assert(cmd != VK_NULL_HANDLE);
-    hg_assert(index_buffer != VK_NULL_HANDLE);
-    vkCmdBindIndexBuffer(cmd, index_buffer, offset, type);
-}
-
-void hg_vk_draw(
-    VkCommandBuffer cmd,
-    u32 first_vertex,
-    u32 vertex_count,
-    u32 first_instance,
-    u32 instance_count
-) {
-    hg_assert(cmd != VK_NULL_HANDLE);
-    hg_assert(vertex_count > 0);
-    hg_assert(instance_count > 0);
-    vkCmdDraw(cmd, vertex_count, instance_count, first_vertex, first_instance);
-}
-
-void hg_vk_draw_indexed(
-    VkCommandBuffer cmd,
-    u32 vertex_offset,
-    u32 first_index,
-    u32 index_count,
-    u32 first_instance,
-    u32 instance_count
-) {
-    hg_assert(cmd != VK_NULL_HANDLE);
-    hg_assert(index_count > 0);
-    hg_assert(instance_count > 0);
-    vkCmdDrawIndexed(cmd, index_count, instance_count, first_index, (i32)vertex_offset, first_instance);
-}
-
-void hg_vk_dispatch(VkCommandBuffer cmd, u32 x, u32 y, u32 z) {
-    hg_assert(cmd != VK_NULL_HANDLE);
-    hg_assert(x > 0);
-    hg_assert(y > 0);
-    hg_assert(z > 0);
-    vkCmdDispatch(cmd, x, y, z);
-}
-
 HgFrameSync hg_frame_sync_create(VkDevice device, u32 queue_family, u32 image_count) {
-    hg_assert(device != VK_NULL_HANDLE);
-    hg_assert(image_count > 0);
+    assert(device != VK_NULL_HANDLE);
+    assert(image_count > 0);
 
     HgFrameSync sync = {.frame_count = image_count};
 
-    sync.pool = hg_vk_create_command_pool(
-        device, queue_family, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+    VkCommandPoolCreateInfo pool_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+        .queueFamilyIndex = queue_family,
+    };
+    vkCreateCommandPool(device, &pool_info, NULL, &sync.pool);
 
     HgArena arena = hg_arena_create(
         (sync.frame_count * sizeof(*sync.cmds)) +
@@ -2234,68 +1402,84 @@ HgFrameSync hg_frame_sync_create(VkDevice device, u32 queue_family, u32 image_co
         (sync.frame_count * sizeof(*sync.ready_to_present)));
 
     sync.cmds = hg_arena_alloc(&arena, sync.frame_count * sizeof(*sync.cmds));
-    hg_vk_allocate_command_buffers(
-        device, sync.pool, sync.cmds, sync.frame_count, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+    VkCommandBufferAllocateInfo cmd_alloc_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool = sync.pool,
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = sync.frame_count,
+    };
+    vkAllocateCommandBuffers(device, &cmd_alloc_info, sync.cmds);
 
     sync.frame_finished = hg_arena_alloc(&arena, sync.frame_count * sizeof(*sync.frame_finished));
     for (usize i = 0; i < sync.frame_count; ++i) {
-        sync.frame_finished[i] = hg_vk_create_fence(device, VK_FENCE_CREATE_SIGNALED_BIT);
+        VkFenceCreateInfo info = {
+            .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+            .flags = VK_FENCE_CREATE_SIGNALED_BIT,
+        };
+        vkCreateFence(device, &info, NULL, &sync.frame_finished[i]);
     }
     sync.image_available = hg_arena_alloc(&arena, sync.frame_count * sizeof(*sync.image_available));
     for (usize i = 0; i < sync.frame_count; ++i) {
-        sync.image_available[i] = hg_vk_create_semaphore(device, 0);
+        VkSemaphoreCreateInfo info = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+        vkCreateSemaphore(device, &info, NULL, &sync.image_available[i]);
     }
     sync.ready_to_present = hg_arena_alloc(&arena, sync.frame_count * sizeof(*sync.ready_to_present));
     for (usize i = 0; i < sync.frame_count; ++i) {
-        sync.ready_to_present[i] = hg_vk_create_semaphore(device, 0);
+        VkSemaphoreCreateInfo info = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+        vkCreateSemaphore(device, &info, NULL, &sync.ready_to_present[i]);
     }
 
     return sync;
 }
 
 void hg_frame_sync_destroy(VkDevice device, HgFrameSync *sync) {
-    hg_assert(device != VK_NULL_HANDLE);
-    hg_assert(sync != NULL);
+    assert(device != VK_NULL_HANDLE);
+    assert(sync != NULL);
 
-    hg_vk_free_command_buffers(device, sync->pool, sync->cmds, sync->frame_count);
+    vkFreeCommandBuffers(device, sync->pool, sync->frame_count, sync->cmds);
     for (usize i = 0; i < sync->frame_count; ++i) {
-        hg_vk_destroy_fence(device, sync->frame_finished[i]);
+        vkDestroyFence(device, sync->frame_finished[i], NULL);
     }
     for (usize i = 0; i < sync->frame_count; ++i) {
-        hg_vk_destroy_semaphore(device, sync->image_available[i]);
+        vkDestroySemaphore(device, sync->image_available[i], NULL);
     }
     for (usize i = 0; i < sync->frame_count; ++i) {
-        hg_vk_destroy_semaphore(device, sync->ready_to_present[i]);
+        vkDestroySemaphore(device, sync->ready_to_present[i], NULL);
     }
-    hg_vk_destroy_command_pool(device, sync->pool);
     free(sync->cmds);
+    vkDestroyCommandPool(device, sync->pool, NULL);
 }
 
 VkCommandBuffer hg_frame_sync_begin_frame(VkDevice device, HgFrameSync *sync, VkSwapchainKHR swapchain) {
-    hg_assert(sync != NULL);
-    hg_assert(device != VK_NULL_HANDLE);
-    hg_assert(swapchain != VK_NULL_HANDLE);
+    assert(sync != NULL);
+    assert(device != VK_NULL_HANDLE);
+    assert(swapchain != VK_NULL_HANDLE);
 
     sync->current_frame = (sync->current_frame + 1) % sync->frame_count;
 
-    hg_vk_wait_for_fences(device, &sync->frame_finished[sync->current_frame], 1);
-    hg_vk_reset_fences(device, &sync->frame_finished[sync->current_frame], 1);
+    vkWaitForFences(device, 1, &sync->frame_finished[sync->current_frame], VK_TRUE, UINT64_MAX);
+    vkResetFences(device, 1, &sync->frame_finished[sync->current_frame]);
 
-    hg_vk_acquire_next_image(
+    vkAcquireNextImageKHR(
         device,
         swapchain,
-        &sync->current_image,
+        UINT64_MAX,
         sync->image_available[sync->current_frame],
-        VK_NULL_HANDLE);
+        VK_NULL_HANDLE,
+        &sync->current_image);
 
     VkCommandBuffer cmd = sync->cmds[sync->current_frame];
-    hg_vk_begin_cmd(cmd, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+    VkCommandBufferBeginInfo begin_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+    };
+    vkBeginCommandBuffer(cmd, &begin_info);
     return cmd;
 }
 
 void hg_frame_sync_end_frame_and_present(VkQueue queue, HgFrameSync *sync, VkSwapchainKHR swapchain) {
     VkCommandBuffer cmd = sync->cmds[sync->current_frame];
-    hg_vk_end_cmd(cmd);
+    vkEndCommandBuffer(cmd);
 
     VkSubmitInfo submit = {
         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -2307,14 +1491,17 @@ void hg_frame_sync_end_frame_and_present(VkQueue queue, HgFrameSync *sync, VkSwa
         .signalSemaphoreCount = 1,
         .pSignalSemaphores = &sync->ready_to_present[sync->current_image],
     };
-    hg_vk_submit_commands(queue, &submit, 1, sync->frame_finished[sync->current_frame]);
+    vkQueueSubmit(queue, 1, &submit, sync->frame_finished[sync->current_frame]);
 
-    hg_vk_present(queue, swapchain, sync->current_image, &sync->ready_to_present[sync->current_image], 1);
-}
-
-void hg_vk_destroy_surface(VkInstance instance, VkSurfaceKHR surface) {
-    hg_assert(instance != VK_NULL_HANDLE);
-    vkDestroySurfaceKHR(instance, surface, NULL);
+    VkPresentInfoKHR present_info = {
+        .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores = &sync->ready_to_present[sync->current_image],
+        .swapchainCount = 1,
+        .pSwapchains = &swapchain,
+        .pImageIndices = &sync->current_image,
+    };
+    vkQueuePresentKHR(queue, &present_info);
 }
 
 typedef struct HgWindowInput {
@@ -2464,7 +1651,7 @@ void hg_platform_destroy(HgPlatform *platform) {
     XCloseDisplay((Display *)platform);
 }
 
-static Window hg_create_x11_window(
+static Window hg_internal_create_x11_window(
     Display *display,
     u32 width,
     u32 height,
@@ -2507,7 +1694,7 @@ static Window hg_create_x11_window(
     return window;
 }
 
-static Atom hg_set_delete_behavior(
+static Atom hg_internal_set_delete_behavior(
     Display* display,
     Window window
 ) {
@@ -2527,7 +1714,7 @@ static Atom hg_set_delete_behavior(
     return delete_atom;
 }
 
-static void hg_set_fullscreen(
+static void hg_internal_set_fullscreen(
     Display* display,
     Window window
 ) {
@@ -2569,8 +1756,8 @@ struct HgWindow {
 };
 
 HgWindow *hg_window_create(const HgPlatform *platform, const HgWindowConfig *config) {
-    hg_assert(platform != NULL);
-    hg_assert(config != NULL);
+    assert(platform != NULL);
+    assert(config != NULL);
 
     u32 width = config->windowed ? config->width
         : (u32)DisplayWidth((Display *)platform, DefaultScreen((Display *)platform));
@@ -2583,12 +1770,12 @@ HgWindow *hg_window_create(const HgPlatform *platform, const HgWindowConfig *con
         .height = height,
     };
 
-    window->x11_window = hg_create_x11_window((Display *)platform, width, height, config->title);
+    window->x11_window = hg_internal_create_x11_window((Display *)platform, width, height, config->title);
 
-    window->delete_atom = hg_set_delete_behavior((Display *)platform, window->x11_window);
+    window->delete_atom = hg_internal_set_delete_behavior((Display *)platform, window->x11_window);
 
     if (!config->windowed)
-        hg_set_fullscreen((Display *)platform, window->x11_window);
+        hg_internal_set_fullscreen((Display *)platform, window->x11_window);
 
     int flush_result = XFlush((Display *)platform);
     if (flush_result == 0)
@@ -2598,7 +1785,7 @@ HgWindow *hg_window_create(const HgPlatform *platform, const HgWindowConfig *con
 }
 
 void hg_window_destroy(const HgPlatform *platform, HgWindow *window) {
-    hg_assert(platform != NULL);
+    assert(platform != NULL);
     if (window != NULL)
         XDestroyWindow((Display *)platform, window->x11_window);
     XFlush((Display *)platform);
@@ -2620,32 +1807,32 @@ VkSurfaceKHR hg_vk_create_surface(
     const HgPlatform *platform,
     const HgWindow *window
 ) {
-    hg_assert(instance != VK_NULL_HANDLE);
-    hg_assert(platform != NULL);
-    hg_assert(window != NULL);
-
-    VkSurfaceKHR surface = VK_NULL_HANDLE;
+    assert(instance != VK_NULL_HANDLE);
+    assert(platform != NULL);
+    assert(window != NULL);
 
     PFN_vkCreateXlibSurfaceKHR pfn_vkCreateXlibSurfaceKHR
         = (PFN_vkCreateXlibSurfaceKHR)vkGetInstanceProcAddr(instance, "vkCreateXlibSurfaceKHR");
     if (pfn_vkCreateXlibSurfaceKHR == NULL)
         hg_error("Could not load vkCreateXlibSurfaceKHR\n");
 
-    VkXlibSurfaceCreateInfoKHR create_info = {
+    VkXlibSurfaceCreateInfoKHR info = {
         .sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR,
         .dpy = (Display *)platform,
         .window = window->x11_window,
     };
-    hg_vk_check(pfn_vkCreateXlibSurfaceKHR(instance, &create_info, NULL, &surface));
+    VkSurfaceKHR surface = VK_NULL_HANDLE;
+    VkResult result = pfn_vkCreateXlibSurfaceKHR(instance, &info, NULL, &surface);
+    if (surface == VK_NULL_HANDLE)
+        hg_error("Failed to create Vulkan surface: %s\n", hg_vk_result_string(result));
 
-    hg_assert(surface != NULL);
     return surface;
 }
 
 void hg_window_process_events(const HgPlatform *platform, HgWindow **windows, u32 window_count) {
-    hg_assert(platform != NULL);
-    hg_assert(windows != NULL);
-    hg_assert(window_count > 0);
+    assert(platform != NULL);
+    assert(windows != NULL);
+    assert(window_count > 0);
 
     if (window_count > 1)
         hg_error("Multiple windows unsupported\n"); // : TODO
@@ -3095,7 +2282,7 @@ struct HgWindow {
     HWND hwnd;
 };
 
-static LRESULT CALLBACK window_callback(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
+static LRESULT CALLBACK hg_internal_window_callback(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     HgWindow *window = (HgWindow *)GetWindowLongPtrA(hwnd, GWLP_USERDATA);
 
     switch (msg) {
@@ -3456,7 +2643,7 @@ HgWindow *hg_window_create(const HgPlatform *platform, const HgWindowConfig *con
             .hIcon = LoadIcon(NULL, IDI_APPLICATION),
             .hCursor = LoadCursor(NULL, IDC_ARROW),
             .lpszClassName = title,
-            .lpfnWndProc = window_callback,
+            .lpfnWndProc = hg_internal_window_callback,
     };
     if (!RegisterClassA(&window_class))
         hg_error("Win32 failed to register window class for window: %s\n", config->title);
@@ -3522,25 +2709,26 @@ VkSurfaceKHR hg_vk_create_surface(
     const HgPlatform *platform,
     const HgWindow *window
 ) {
-    hg_assert(instance != VK_NULL_HANDLE);
-    hg_assert(platform != NULL);
-    hg_assert(window != NULL);
-
-    VkSurfaceKHR surface = VK_NULL_HANDLE;
+    assert(instance != VK_NULL_HANDLE);
+    assert(platform != NULL);
+    assert(window != NULL);
 
     PFN_vkCreateWin32SurfaceKHR pfn_vkCreateWin32SurfaceKHR
         = (PFN_vkCreateWin32SurfaceKHR)vkGetInstanceProcAddr(instance, "vkCreateWin32SurfaceKHR");
     if (pfn_vkCreateWin32SurfaceKHR == NULL)
         hg_error("Could not load vkCreateWin32SurfaceKHR\n");
 
-    VkWin32SurfaceCreateInfoKHR create_info = {
+    VkWin32SurfaceCreateInfoKHR info = {
         .sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
         .hinstance = (HINSTANCE)platform,
         .hwnd = window->hwnd,
     };
-    hg_vk_check(pfn_vkCreateWin32SurfaceKHR(instance, &create_info, NULL, &surface));
+    VkSurfaceKHR surface = VK_NULL_HANDLE;
+    VkResult result = pfn_vkCreateWin32SurfaceKHR(instance, &info, NULL, &surface);
+    if (surface == VK_NULL_HANDLE)
+        hg_error("Failed to create Vulkan surface: %s\n", hg_vk_result_string(result));
 
-    hg_assert(surface != NULL);
+    assert(surface != NULL);
     return surface;
 }
 
@@ -3592,52 +2780,52 @@ void hg_window_process_events(const HgPlatform *platform, HgWindow **windows, u3
 #endif
 
 bool hg_window_was_closed(const HgWindow *window) {
-    hg_assert(window != NULL);
+    assert(window != NULL);
     return window->input.was_closed;
 }
 
 bool hg_window_was_resized(const HgWindow *window) {
-    hg_assert(window != NULL);
+    assert(window != NULL);
     return window->input.was_resized;
 }
 
 void hg_window_get_size(const HgWindow *window, u32 *width, u32 *height) {
-    hg_assert(window != NULL);
+    assert(window != NULL);
     *width = window->input.width;
     *height = window->input.height;
 }
 
 void hg_window_get_mouse_pos(const HgWindow *window, f64 *x, f64 *y) {
-    hg_assert(window != NULL);
-    hg_assert(x != NULL);
-    hg_assert(y != NULL);
+    assert(window != NULL);
+    assert(x != NULL);
+    assert(y != NULL);
     *x = window->input.mouse_pos_x;
     *y = window->input.mouse_pos_y;
 }
 
 void hg_window_get_mouse_delta(const HgWindow *window, f64 *x, f64 *y) {
-    hg_assert(window != NULL);
-    hg_assert(x != NULL);
-    hg_assert(y != NULL);
+    assert(window != NULL);
+    assert(x != NULL);
+    assert(y != NULL);
     *x = window->input.mouse_delta_x;
     *y = window->input.mouse_delta_y;
 }
 
 bool hg_window_is_key_down(const HgWindow *window, HgKey key) {
-    hg_assert(window != NULL);
-    hg_assert(key >= 0 && key < HG_KEY_COUNT);
+    assert(window != NULL);
+    assert(key >= 0 && key < HG_KEY_COUNT);
     return window->input.keys_down[key];
 }
 
 bool hg_window_was_key_pressed(const HgWindow *window, HgKey key) {
-    hg_assert(window != NULL);
-    hg_assert(key >= 0 && key < HG_KEY_COUNT);
+    assert(window != NULL);
+    assert(key >= 0 && key < HG_KEY_COUNT);
     return window->input.keys_pressed[key];
 }
 
 bool hg_window_was_key_released(const HgWindow *window, HgKey key) {
-    hg_assert(window != NULL);
-    hg_assert(key >= 0 && key < HG_KEY_COUNT);
+    assert(window != NULL);
+    assert(key >= 0 && key < HG_KEY_COUNT);
     return window->input.keys_released[key];
 }
 
@@ -3801,7 +2989,7 @@ void hg_vk_load(void) {
     if (hg_vk_pfn. name == NULL) { hg_error("Could not load " #name "\n"); }
 
 void hg_vk_load_instance(VkInstance instance) {
-    hg_assert(instance != VK_NULL_HANDLE);
+    assert(instance != VK_NULL_HANDLE);
 
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetDeviceProcAddr);
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkDestroyInstance);
@@ -3826,7 +3014,7 @@ void hg_vk_load_instance(VkInstance instance) {
     if (hg_vk_pfn. name == NULL) { hg_error("Could not load " #name "\n"); }
 
 void hg_vk_load_device(VkDevice device) {
-    hg_assert(device != VK_NULL_HANDLE);
+    assert(device != VK_NULL_HANDLE);
 
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyDevice)
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDeviceWaitIdle)

@@ -162,17 +162,6 @@ typedef double f64;
 #define hg_error(...) { (void)fprintf(stderr, "Hurdygurdy Error: " __VA_ARGS__); abort(); }
 
 /**
- * Crashes on failure with an error message, in both debug and release builds
- *
- * Parameters
- * - cond The condition to check
- * - ... The message to print and its format parameters
- */
-#define hg_assert(cond) hg_debug_mode({ if (!(cond)) { \
-    (void)fprintf(stderr, "Hurdygurdy Assertion Error in %s(): " #cond "\n", __func__); \
-} })
-
-/**
  * Aligns a pointer to an alignment
  *
  * Parameters
@@ -1144,6 +1133,18 @@ HgMat4 hg_orthographic_projection(f32 left, f32 right, f32 top, f32 bottom, f32 
 HgMat4 hg_perspective_projection(f32 fov, f32 aspect, f32 near, f32 far);
 
 /**
+ * Calculates the maximum number of mipmap levels that an image can have
+ *
+ * Parameters
+ * - width The width of the image
+ * - width The width of the image
+ * - width The width of the image
+ * Returns
+ * - The maximum number of mipmap levels the image can have
+ */
+u32 hg_max_mipmaps(u32 width, u32 height, u32 depth);
+
+/**
  * An arena allocator
  *
  * Allocations are made very quickly, and are not freed individually, instead
@@ -1297,11 +1298,15 @@ bool hg_file_save_binary(const u8* data, usize size, const char *path);
 
 /**
  * Loads the Vulkan library and the functions required to create an instance
+ *
+ * Note, this function is automatically called from hg_vk_create_instance
  */
 void hg_vk_load(void);
 
 /**
  * Loads the Vulkan functions which use the instance
+ *
+ * Note, this function is automatically called from hg_vk_create_instance
  *
  * Parameters
  * - instance The Vulkan instance, must not be VK_NULL_HANDLE
@@ -1311,18 +1316,23 @@ void hg_vk_load_instance(VkInstance instance);
 /**
  * Loads the Vulkan functions which use the Device
  *
+ * Note, this function is automatically called from
+ * hg_vk_create_single_queue_device
+ *
  * Parameters
  * - device The Vulkan device, must not be VK_NULL_HANDLE
  */
 void hg_vk_load_device(VkDevice device);
 
 /**
- * Checks a VkResult enum, and terminates on errors
+ * Turns a VkResult into a string
  *
  * Parameters
- * - result The VkResult to check
+ * - result The result enum to stringify
+ * Returns
+ * - The string of the enum value's name
  */
-void hg_vk_check(VkResult result);
+const char *hg_vk_result_string(VkResult result);
 
 /**
  * Creates a Vulkan instance with sensible defaults
@@ -1339,14 +1349,6 @@ void hg_vk_check(VkResult result);
 VkInstance hg_vk_create_instance(const char *app_name);
 
 /**
- * Destroys a Vulkan instance
- * 
- * Parameters
- * - instance The VkInstance to destroy, noop if VK_NULL_HANDLE
- */
-void hg_vk_destroy_instance(VkInstance instance);
-
-/**
  * Creates a Vulkan debug messenger
  *
  * Parameters
@@ -1357,13 +1359,16 @@ void hg_vk_destroy_instance(VkInstance instance);
 VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger(VkInstance instance);
 
 /**
- * Destroys a Vulkan debug messenger
+ * Find the first queue family index which supports the the queue flags
  *
  * Parameters
- * - instance The Vulkan instance, must not be VK_NULL_HANDLE
- * - messenger The debug messenger to destroy, noop if VK_NULL_HANDLE
+ * - gpu The physical device, must not be VK_NULL_HANDLE
+ * - queue_family A pointer to store the found queue family
+ * - queue_flags The flags required of the queue family
+ * Returns
+ * - Whether a family was found
  */
-void hg_vk_destroy_debug_messenger(VkInstance instance, VkDebugUtilsMessengerEXT messenger);
+bool hg_vk_find_queue_family(VkPhysicalDevice gpu, u32 *queue_family, VkQueueFlags queue_flags);
 
 // find gpu with multiple potential queues : TODO
 // create device with multiple potential queues : TODO
@@ -1393,22 +1398,6 @@ typedef struct HgSingleQueueDevice {
  * - The created Vulkan device, will never be VK_NULL_HANDLE
  */
 HgSingleQueueDeviceData hg_vk_create_single_queue_device(VkInstance instance);
-
-/**
- * Destroy a Vulkan logical device
- *
- * Parameters
- * - device The Vulkan device to destroy, noop if VK_NULL_HANDLE
- */
-void hg_vk_destroy_device(VkDevice device);
-
-/**
- * Waits for the device to idle
- *
- * Paramaters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- */
-void hg_vk_wait_for_device(VkDevice device);
 
 /**
  * A Vulkan swapchain and associated data
@@ -1456,393 +1445,6 @@ HgSwapchainData hg_vk_create_swapchain(
     VkSurfaceKHR surface,
     VkImageUsageFlags image_usage,
     VkPresentModeKHR desired_mode);
-
-/**
- * Destroys a Vulkan swapchain
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - swapchain The swapchain to destroy, noop if VK_NULL_HANDLE
- */
-void hg_vk_destroy_swapchain(VkDevice device, VkSwapchainKHR swapchain);
-
-/**
- * Gets the images from a swapchain
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - swapchain The swapchain to get the images from, must not be VK_NULL_HANDLE
- * - images A buffer to store the images in, must not be NULL
- * - count The number of images, must be equal to the number the swapchain has
- */
-void hg_vk_get_swapchain_images(VkDevice device, VkSwapchainKHR swapchain, VkImage *images, u32 count);
-
-/**
- * Gets the index of the next image in the Swapchain, signaling a semaphore
- * and/or fence when it becomes available
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - swapchain The swapchain to get from, must not be VK_NULL_HANDLE
- * - image_index A pointer to store the index, must not be NULL
- * - signal_semaphore The semaphore to signal, may be VK_NULL_HANDLE
- * - signal_fence The fence to signal, may be VK_NULL_HANDLE
- * Returns
- * - Whether the image was acquired successfully
- */
-bool hg_vk_acquire_next_image(
-    VkDevice device,
-    VkSwapchainKHR swapchain,
-    u32 *image_index,
-    VkSemaphore signal_semaphore,
-    VkFence signal_fence);
-
-/**
- * Presents the swapchain to the display
- *
- * Parameters
- * - queue The queue to use to present, must not be VK_NULL_HANDLE
- * - swapchain The swapchain to present, must not be VK_NULL_HANDLE
- * - image_index The image in the swapchain
- * - wait_semaphores The semaphores to wait for, may be NULL
- * - semaphore_count The number of semaphores in wait_semaphores, may be 0
- */
-void hg_vk_present(
-    VkQueue queue,
-    VkSwapchainKHR swapchain,
-    u32 image_index,
-    VkSemaphore *wait_semaphores,
-    u32 semaphore_count);
-
-/**
- * Creates a Vulkan semaphore
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - flags The optional flags to use
- * Returns
- * - The created Vulkan semaphore, will never be VK_NULL_HANDLE
- */
-VkSemaphore hg_vk_create_semaphore(VkDevice device, VkSemaphoreCreateFlags flags);
-
-/**
- * Destroys a Vulkan semaphore
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - semaphore The Vulkan semaphore to destroy, noop if VK_NULL_HANDLE
- */
-void hg_vk_destroy_semaphore(VkDevice device, VkSemaphore semaphore);
-
-/**
- * Creates a Vulkan fence
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - flags The optional flags to use
- * Returns
- * - The created Vulkan fence, will never be VK_NULL_HANDLE
- */
-VkFence hg_vk_create_fence(VkDevice device, VkFenceCreateFlags flags);
-
-/**
- * Destroys a Vulkan fence
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - semaphore The Vulkan fence to destroy, noop if VK_NULL_HANDLE
- */
-void hg_vk_destroy_fence(VkDevice device, VkFence fence);
-
-/**
- * Waits for Vulkan fences to be signaled
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - fences The fences to wait for, may be NULL if count is 0
- * - count The number of fences, noop if 0
- */
-void hg_vk_wait_for_fences(VkDevice device, VkFence *fences, u32 count);
-
-/**
- * Resets (unsignals) fences
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - fences The fences to reset, may be NULL if count is 0
- * - count The number of fences, noop if 0
- */
-void hg_vk_reset_fences(VkDevice device, VkFence *fences, u32 count);
-
-/**
- * Find the first queue family index which supports the the queue flags
- *
- * Parameters
- * - gpu The physical device, if 0 returns false
- * - queue_family A pointer to store the found queue family, must not be NULL
- * - queue_flags The flags required of the queue family
- * Returns
- * - Whether a family was found
- */
-bool hg_vk_find_queue_family(VkPhysicalDevice gpu, u32 *queue_family, VkQueueFlags queue_flags);
-
-/**
- * Gets a created queue from the device
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - queue_family The queue_family to get from
- * - queue_index The index within the family
- * Returns
- * - The queue, may be VK_NULL_HANDLE if queue_famiy or queue_index are out of
- *   range for the device
- */
-VkQueue hg_vk_get_queue(VkDevice device, u32 queue_family, u32 queue_index);
-
-/**
- * Wait for a queue to finish commands
- *
- * Can be used to ensure resources are free before destruction
- *
- * Parameters
- * - queue The Vulkan queue to wait for, noop if VK_NULL_HANDLE
- */
-void hg_vk_queue_wait(VkQueue queue);
-
-/**
- * Submits a command buffer for execution
- *
- * Parameters
- * - queue The queue to submit to, must not be VK_NULL_HANDLE
- * - submits The submissions, may be NULL if count is 0
- * - submit_count The number of submissions, noop if 0
- * - fence The fence to signal upon completion, may be VK_NULL_HANDLE
- */
-void hg_vk_submit_commands(VkQueue queue, const VkSubmitInfo *submits, u32 submit_count, VkFence fence);
-
-/**
- * Creates a Vulkan command pool
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - queue_family The index of the queue family to allocate in
- * - flags The optional flags to use
- * Returns
- * - The created Vulkan command pool, will never be VK_NULL_HANDLE
- */
-VkCommandPool hg_vk_create_command_pool(VkDevice device, u32 queue_family, VkCommandPoolCreateFlags flags);
-
-/**
- * Destroys a Vulkan command pool
- *
- * Parameters
- * - vk The hg Vulkan context, must not be VK_NULL_HANDLE
- * - pool The Vulkan command pool to destroy, noop if VK_NULL_HANDLE
- */
-void hg_vk_destroy_command_pool(VkDevice device, VkCommandPool pool);
-
-/**
- * Creates Vulkan commands buffers, filling a buffer
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - pool The command pool to allocate from, must not be VK_NULL_HANDLE
- * - cmds A pointer to store the command buffers, may be NULL if count is 0
- * - count The number of command buffers to create, noop if 0
- */
-void hg_vk_allocate_command_buffers(
-    VkDevice device,
-    VkCommandPool pool,
-    VkCommandBuffer *cmds,
-    u32 count,
-    VkCommandBufferLevel level);
-
-/**
- * Frees Vulkan commands buffers
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - pool The command pool to free to, must not be VK_NULL_HANDLE
- * - cmds The command buffers to free, must not be NULL
- * - count The size of cmds and the number of command buffers to free
- */
-void hg_vk_free_command_buffers(VkDevice device, VkCommandPool pool, VkCommandBuffer *cmds, u32 count);
-
-/**
- * Resets a Vulkan command buffer
- *
- * Parameters
- * - cmd The command buffer to reset
- * - flags The optional flags to use
- */
-void hg_vk_reset_command_buffer(VkCommandBuffer cmd, VkCommandBufferResetFlags flags);
-
-/**
- * Creates a Vulkan descriptor pool
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - max_sets The maximum number of sets which can be allocated
- * - sizes The numbers of each descriptor type to allocate, must not be NULL
- * - count The count of sizes, must be greater than 0
- * Returns
- * - The created Vulkan descriptor pool, will never be VK_NULL_HANDLE
- */
-VkDescriptorPool hg_vk_create_descriptor_pool(
-    VkDevice device,
-    u32 max_sets,
-    VkDescriptorPoolSize *sizes,
-    u32 count);
-
-/**
- * Destroys a Vulkan descriptor pool
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - pool The Vulkan descriptor pool to destroy, noop if VK_NULL_HANDLE
- */
-void hg_vk_destroy_descriptor_pool(VkDevice device, VkDescriptorPool pool);
-
-/**
- * Resets a Vulkan descriptor pool, freeing all sets
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - pool The descriptor pool to reset, must not be VK_NULL_HANDLE
- */
-void hg_vk_reset_descriptor_pool(VkDevice device, VkDescriptorPool pool);
-
-/**
- * Allocates Vulkan descriptor sets from a descriptor pool
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - pool The descriptor pool to allocate from, must not be VK_NULL_HANDLE
- * - layouts The layouts of the sets to allocate, must not be NULL
- * - sets A pointer to store the allocated sets, must not be NULL
- * - count The number of sets to allocate, must be greater than 0
- * Returns
- * - Whether the allocation succeeded, or the pool is empty or fragmented
- */
-bool hg_vk_allocate_descriptor_sets(
-    VkDevice device,
-    VkDescriptorPool pool,
-    VkDescriptorSetLayout *layouts,
-    VkDescriptorSet *sets,
-    u32 count);
-
-/**
- * Updates Vulkan descriptor sets by writing and copying
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - writes The writes to make
- * - write_count The number of writes
- * - copies The copies to make
- * - copy_count The number of copies
- */
-void hg_vk_update_descriptor_sets(
-    VkDevice device,
-    const VkWriteDescriptorSet* writes,
-    u32 write_count,
-    const VkCopyDescriptorSet* copies,
-    u32 copy_count);
-
-/**
- * Writes to a single descriptor set
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - set The descriptor set to write to, must not be VK_NULL_HANDLE
- * - binding The binding in the descriptor set
- * - first_array_elem The index of the first array element to write to
- * - descriptor_type The type of descriptor
- * - image_info The image info if the type is an image type
- * - buffer_info The buffer info if the type is an buffer type
- * - texel_buffer_view The texel buffer view if the type is a texel buffer
- */
-void hg_vk_write_descriptor_set(
-    VkDevice device,
-    VkDescriptorSet set,
-    u32 binding,
-    u32 first_array_elem,
-    u32 descriptor_count,
-    VkDescriptorType descriptor_type,
-    const VkDescriptorImageInfo *image_info,
-    const VkDescriptorBufferInfo *buffer_info,
-    const VkBufferView *texel_buffer_view);
-
-/**
- * Creates a Vulkan descriptor set layout
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - bindings Descriptions of each binding in the layout, must not be NULL
- * - count The number of bindings, must be greater than 0
- */
-VkDescriptorSetLayout hg_vk_create_descriptor_set_layout(
-    VkDevice device,
-    const VkDescriptorSetLayoutBinding *bindings,
-    u32 count);
-
-/**
- * Destroys a Vulkan descriptor set layout
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - layout The layout to destroy, noop if VK_NULL_HANDLE
- */
-void hg_vk_destroy_descriptor_set_layout(VkDevice device, VkDescriptorSetLayout layout);
-
-/**
- * Creates a Vulkan pipeline layout
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - layouts The descriptor set layouts to include, may be NULL if none
- * - layout_count The number of descriptor set layouts, may be 0
- * - push_constants The push constant ranges to include, may be NULL
- * - push_constant_count The number of push constant ranges, may be 0
- * Returns
- * - The created Vulkan pipeline layout, will never be VK_NULL_HANDLE
- */
-VkPipelineLayout hg_vk_create_pipeline_layout(
-    VkDevice device,
-    const VkDescriptorSetLayout* layouts,
-    u32 layout_count,
-    const VkPushConstantRange* push_constants,
-    u32 push_constant_count
-);
-
-/**
- * Destroys a Vulkan pipeline layout
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - layout The layout to destroy, noop if VK_NULL_HANDLE
- */
-void hg_vk_destroy_pipeline_layout(VkDevice device, VkPipelineLayout layout);
-
-/**
- * Creates a Vulkan shader module
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - code The SPIR-V bytecode of the shader, must not be NULL
- * - size The size of the bytecode in bytes, must be greater than 0
- * Returns
- * - The created Vulkan shader module, will never be VK_NULL_HANDLE
- */
-VkShaderModule hg_vk_create_shader_module(VkDevice device, const u8 *code, usize size);
-
-/**
- * Destroys a Vulkan shader module
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - shader_module The shader module to destroy, noop if VK_NULL_HANDLE
- */
-void hg_vk_destroy_shader_module(VkDevice device, VkShaderModule shader_module);
 
 /**
  * Configuration for Vulkan pipelines
@@ -1945,33 +1547,27 @@ VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineCon
 VkPipeline hg_vk_create_compute_pipeline(VkDevice device, const HgVkPipelineConfig *config);
 
 /**
- * Destroys a Vulkan pipeline
+ * Attempts to find the index of a memory type which has the desired flags and
+ * does not have the undesired flags
+ *
+ * Note, if no such memory type exists, the next best thing will be found
  *
  * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - pipeline The pipeline to destroy, noop if VK_NULL_HANDLE
- */
-void hg_vk_destroy_pipeline(VkDevice device, VkPipeline pipeline);
-
-/**
- * Creates a Vulkan buffer
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - config The configuration for the buffer, must not be VK_NULL_HANDLE
+ * - gpu The Vulkan physical device, must not be VK_NULL_HANDLE
+ * - bitmask A bitmask of which memory types cannot be used, must not be 0
+ * - desired_flags The flags which the type should 
+ * - undesired_flags The flags which the type should not have, though may have
  * Returns
- * - The created Vulkan buffer, will never be VK_NULL_HANDLE
+ * - The found index of the memory type
  */
-VkBuffer hg_vk_create_buffer(VkDevice device, const VkBufferCreateInfo *config);
+u32 hg_vk_find_memory_type_index(
+    VkPhysicalDevice gpu,
+    u32 bitmask,
+    VkMemoryPropertyFlags desired_flags,
+    VkMemoryPropertyFlags undesired_flags);
 
-/**
- * Destroys a Vulkan buffer
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - buffer The buffer to destroy, noop if VK_NULL_HANDLE
- */
-void hg_vk_destroy_buffer(VkDevice device, VkBuffer buffer);
+
+// Vulkan allocator : TODO?
 
 /**
  * Creates a Vulkan image
@@ -1994,44 +1590,19 @@ void hg_vk_destroy_buffer(VkDevice device, VkBuffer buffer);
 VkImage hg_vk_create_image(VkDevice device, const VkImageCreateInfo *config);
 
 /**
- * Destroys a Vulkan image
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - image The Vulkan image to destroy, noop if VK_NULL_HANDLE
- */
-void hg_vk_destroy_image(VkDevice device, VkImage image);
-
-/**
  * Creates an image view for a Vulkan image
  *
- * Note, subresource.levelCount 0 defaults to REMAINING_MIP_LEVELS, and
- * subresource.layerCount 0 defaults to REMAINING_ARRAY_LAYERS
+ * Default configs:
+ * - subresource.levelCount 0 defaults to REMAINING_MIP_LEVELS
+ * - subresource.layerCount 0 defaults to REMAINING_ARRAY_LAYERS
  *
  * Parameters
  * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - image The image to view, must not be VK_NULL_HANDLE
- * - format The pixel format of the image, must not be UNDEFINED
- * - type The type of image
- * - subresource The range of subresources in the image to view
+ * - create_info The configuration for the view, must not be VK_NULL_HANDLE
  * Returns
  * - The created image view, will never be VK_NULL_HANDLE
  */
-VkImageView hg_vk_create_image_view(
-    VkDevice device,
-    VkImage image,
-    VkFormat format,
-    VkImageViewType type,
-    VkImageSubresourceRange subresource);
-
-/**
- * Destroys a Vulkan image view
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - image_view The image view to destroy, noop if VK_NULL_HANDLE
- */
-void hg_vk_destroy_image_view(VkDevice device, VkImageView image_view);
+VkImageView hg_vk_create_image_view(VkDevice device, const VkImageViewCreateInfo *config);
 
 /**
  * Creates a Vulkan sampler
@@ -2044,434 +1615,6 @@ void hg_vk_destroy_image_view(VkDevice device, VkImageView image_view);
  * - The created sampler, will never be VK_NULL_HANDLE
  */
 VkSampler hg_vk_create_sampler(VkDevice device, VkFilter filter, VkSamplerAddressMode edge_mode);
-
-/**
- * Destroys a Vulkan sampler
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - sampler The Vulkan sampler to destroy, noop if VK_NULL_HANDLE
- */
-void hg_vk_destroy_sampler(VkDevice device, VkSampler sampler);
-
-/**
- * Gets memory requirements for a buffer
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - buffer The buffer to query, must not be VK_NULL_HANDLE
- * Returns
- * - The memory requirements for the buffer
- */
-VkMemoryRequirements hg_vk_get_buffer_mem_reqs(VkDevice device, VkBuffer buffer);
-
-/**
- * Gets memory requirements for an image
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - image The image to query, must not be VK_NULL_HANDLE
- * Returns
- * - The memory requirements for the image
- */
-VkMemoryRequirements hg_vk_get_image_mem_reqs(VkDevice device, VkImage image);
-
-/**
- * Allocates device memory matching the requirements
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - gpu The physical device to query memory types
- * - mem_reqs The required memory properties, must not be NULL
- * - desired_flags The flags the memory should have
- * - undesired_flags Flags that the memory should avoid
- * Returns
- * - The allocated memory, will never be VK_NULL_HANDLE
- */
-VkDeviceMemory hg_vk_allocate_memory(
-    VkDevice device,
-    VkPhysicalDevice gpu,
-    VkMemoryRequirements *mem_reqs,
-    VkMemoryPropertyFlags desired_flags,
-    VkMemoryPropertyFlags undesired_flags);
-
-/**
- * Frees device memory
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - memory The memory to free, noop if VK_NULL_HANDLE
- */
-void hg_vk_free_memory(VkDevice device, VkDeviceMemory memory);
-
-/**
- * Binds device memory to a buffer
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - buffer The buffer to bind to, must not be VK_NULL_HANDLE
- * - memory The memory to bind, must not be VK_NULL_HANDLE
- * - offset Offset into memory
- */
-void hg_vk_bind_buffer_memory(VkDevice device, VkBuffer buffer, VkDeviceMemory memory, usize offset);
-
-/**
- * Binds device memory to an image
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - image The image to bind to, must not be VK_NULL_HANDLE
- * - memory The memory to bind, must not be VK_NULL_HANDLE
- * - offset Offset into memory
- */
-void hg_vk_bind_image_memory(VkDevice device, VkImage image, VkDeviceMemory memory, usize offset);
-
-/**
- * Maps device memory for CPU access
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - memory The memory to map, must not be VK_NULL_HANDLE
- * - offset The offset into memory
- * - size The region to map, must be greater than 0
- * Returns
- * - A pointer to mapped memory, never NULL unless mapping failed
- */
-void *hg_vk_map_memory(VkDevice device, VkDeviceMemory memory, usize offset, usize size);
-
-/**
- * Unmaps device memory
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - memory The memory to unmap, must not be VK_NULL_HANDLE
- */
-void hg_vk_unmap_memory(VkDevice device, VkDeviceMemory memory);
-
-/**
- * Flushes a range of device memory to make host writes visible to the GPU
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - memory The memory to flush, must not be VK_NULL_HANDLE
- * - offset Offset into the memory
- * - size Size of the memory region to flush, must be greater than 0
- */
-void hg_vk_flush_memory(VkDevice device, VkDeviceMemory memory, usize offset, usize size);
-
-/**
- * Invalidates a range of device memory to make GPU writes visible to the CPU
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - memory The memory to invalidate, must not be VK_NULL_HANDLE
- * - offset Offset into the memory
- * - size Size of the memory region to invalidate, must be greater than 0
- */
-void hg_vk_invalidate_memory(VkDevice device, VkDeviceMemory memory, usize offset, usize size);
-
-/**
- * Begins recording a command buffer
- *
- * Parameters
- * - cmd The command buffer to begin recording, must not be VK_NULL_HANDLE
- * - flags Optional usage flags
- */
-void hg_vk_begin_cmd(VkCommandBuffer cmd, VkCommandBufferUsageFlags flags);
-
-/**
- * Ends recording of a command buffer
- *
- * Parameters
- * - cmd The command buffer to finish, must not be VK_NULL_HANDLE
- */
-void hg_vk_end_cmd(VkCommandBuffer cmd);
-
-/**
- * Copies data from one buffer to another
- *
- * Parameters
- * - cmd The command buffer to write the command to, must not be VK_NULL_HANDLE
- * - dst The destination buffer, must not be VK_NULL_HANDLE
- * - src The source buffer, must not be VK_NULL_HANDLE
- * - regions Copy regions, must not be NULL
- * - region_count Number of regions, must be greater than 0
- */
-void hg_vk_copy_buffer(
-    VkCommandBuffer cmd,
-    VkBuffer dst,
-    VkBuffer src,
-    const VkBufferCopy *regions,
-    u32 region_count);
-
-/**
- * Copies data from one image to another
- *
- * Parameters
- * - cmd The command buffer to write to, must not be VK_NULL_HANDLE
- * - dst The destination image, must not be VK_NULL_HANDLE
- * - src The source image, must not be VK_NULL_HANDLE
- * - regions Copy regions, must not be NULL
- * - region_count Number of copy regions, must be greater than 0
- */
-void hg_vk_copy_image(
-    VkCommandBuffer cmd,
-    VkImage dst,
-    VkImage src,
-    const VkImageCopy *regions,
-    u32 region_count);
-
-/**
- * Performs a blit between images
- *
- * Parameters
- * - cmd The command buffer to write to, must not be VK_NULL_HANDLE
- * - dst The destination image, must not be VK_NULL_HANDLE
- * - src The source image, must not be VK_NULL_HANDLE
- * - regions The blit regions, must not be NULL
- * - region_count Number of blit regions, must be greater than 0
- * - filter The filtering method to use
- */
-void hg_vk_blit_image(
-    VkCommandBuffer cmd,
-    VkImage dst,
-    VkImage src,
-    const VkImageBlit *regions,
-    u32 region_count,
-    VkFilter filter);
-
-/**
- * Copies data from a buffer to an image
- *
- * Parameters
- * - cmd The command buffer, must not be VK_NULL_HANDLE
- * - dst The destination image, must not be VK_NULL_HANDLE
- * - src The source buffer, must not be VK_NULL_HANDLE
- * - regions Copy regions, must not be NULL
- * - region_count Count of regions, must be greater than 0
- */
-void hg_vk_copy_buffer_to_image(
-    VkCommandBuffer cmd,
-    VkImage dst,
-    VkBuffer src,
-    VkBufferImageCopy *regions,
-    u32 region_count);
-
-/**
- * Copies data from an image to a buffer
- *
- * Parameters
- * - cmd The command buffer, must not be VK_NULL_HANDLE
- * - dst The destination buffer, must not be VK_NULL_HANDLE
- * - src The source image, must not be VK_NULL_HANDLE
- * - regions Copy regions, must not be NULL
- * - region_count Count of regions, must be greater than 0
- */
-void hg_vk_copy_image_to_buffer(
-    VkCommandBuffer cmd,
-    VkBuffer dst,
-    VkImage src,
-    VkBufferImageCopy *regions,
-    u32 region_count);
-
-/**
- * Inserts a pipeline barrier using Vulkan synchronization2
- *
- * Parameters
- * - cmd The command buffer to write to, must not be VK_NULL_HANDLE
- * - dependencies The dependency info, must not be NULL
- */
-void hg_vk_pipeline_barrier(VkCommandBuffer cmd, const VkDependencyInfo *dependencies);
-
-/**
- * Begins a dynamic rendering pass
- *
- * Parameters
- * - cmd The command buffer, must not be VK_NULL_HANDLE
- * - info The rendering info, must not be NULL
- */
-void hg_vk_begin_rendering(VkCommandBuffer cmd, const VkRenderingInfo *info);
-
-/**
- * Ends a dynamic rendering pass
- *
- * Parameters
- * - cmd The command buffer, must not be VK_NULL_HANDLE
- */
-void hg_vk_end_rendering(VkCommandBuffer cmd);
-
-/**
- * Sets the viewport dynamically
- *
- * Parameters
- * - cmd The command buffer to write the command to, must not be VK_NULL_HANDLE
- * - x Left coordinate of viewport
- * - y Top coordinate of viewport
- * - width Width of viewport
- * - height Height of viewport
- * - near Minimum depth value
- * - far Maximum depth value
- */
-void hg_vk_set_viewport(
-    VkCommandBuffer cmd,
-    f32 x,
-    f32 y,
-    f32 width,
-    f32 height,
-    f32 near,
-    f32 far);
-
-/**
- * Sets the scissor rectangle dynamically
- *
- * Parameters
- * - cmd The command buffer to write to, must not be VK_NULL_HANDLE
- * - x Left coordinate of scissor
- * - y Top coordinate of scissor
- * - width Width of scissor
- * - height Height of scissor
- */
-void hg_vk_set_scissor(VkCommandBuffer cmd, i32 x, i32 y, u32 width, u32 height);
-
-/**
- * Binds a pipeline to a command buffer
- *
- * Parameters
- * - cmd The command buffer to bind to, must not be VK_NULL_HANDLE
- * - pipeline The Vulkan pipeline to bind, must not be VK_NULL_HANDLE
- * - bind_point Graphics or compute bind point
- */
-void hg_vk_bind_pipeline(
-    VkCommandBuffer cmd,
-    VkPipeline pipeline,
-    VkPipelineBindPoint bind_point
-);
-
-/**
- * Binds descriptor sets to a pipeline
- *
- * Parameters
- * - cmd The command buffer, must not be VK_NULL_HANDLE
- * - layout The pipeline layout, must not be VK_NULL_HANDLE
- * - bind_point Graphics or compute bind point
- * - begin_index First set index
- * - set_count Number of sets
- * - descriptor_sets The descriptor sets to bind, must not be NULL
- */
-void hg_vk_bind_descriptor_sets(
-    VkCommandBuffer cmd,
-    VkPipelineLayout layout,
-    VkPipelineBindPoint bind_point,
-    u32 begin_index,
-    u32 set_count,
-    const VkDescriptorSet *descriptor_sets);
-
-/**
- * Pushes constant values into the command buffer
- *
- * Parameters
- * - cmd The command buffer, must not be VK_NULL_HANDLE
- * - layout The pipeline layout, must not be VK_NULL_HANDLE
- * - stages Shader stages to update
- * - offset Byte offset into push constant range
- * - size Size of data, must be greater than 0
- * - data Pointer to constant data, must not be NULL
- */
-void hg_vk_push_constants(
-    VkCommandBuffer cmd,
-    VkPipelineLayout layout,
-    VkShaderStageFlags stages,
-    u32 offset,
-    u32 size,
-    const void *data);
-
-/**
- * Binds multiple vertex buffers
- *
- * Parameters
- * - cmd The command buffer, must not be VK_NULL_HANDLE
- * - begin_index First binding index
- * - count Number of vertex buffers, must be greater than 0
- * - vertex_buffers Buffers to bind, must not be NULL
- * - offsets Byte offsets for each buffer, must not be NULL
- */
-void hg_vk_bind_vertex_buffers(
-    VkCommandBuffer cmd,
-    u32 begin_index,
-    u32 count,
-    VkBuffer *vertex_buffers,
-    usize *offsets);
-
-/**
- * Binds a single vertex buffer
- *
- * Parameters
- * - cmd The command buffer, must not be VK_NULL_HANDLE
- * - vertex_buffer The vertex buffer to bind, must not be VK_NULL_HANDLE
- */
-void hg_vk_bind_vertex_buffer(VkCommandBuffer cmd, VkBuffer vertex_buffer);
-
-/**
- * Binds an index buffer for indexed drawing
- *
- * Parameters
- * - cmd The command buffer, must not be VK_NULL_HANDLE
- * - index_buffer The buffer containing indices, must not be VK_NULL_HANDLE
- * - offset Byte offset into the index buffer
- * - type The index type
- */
-void hg_vk_bind_index_buffer(
-    VkCommandBuffer cmd,
-    VkBuffer index_buffer,
-    usize offset,
-    VkIndexType type);
-
-/**
- * Draws the vertices to the framebuffer
- *
- * Parameters
- * - cmd The command buffer to write, must not be VK_NULL_HANDLE
- * - first_vertex The beginning vertex in the vertex buffer to use
- * - vertex_count The number of vertices to read, must be greater than 0
- * - first_instance The beginning instance in to use
- * - instance_count The number of instances to draw, must be greater than 0
- */
-void hg_vk_draw(
-    VkCommandBuffer cmd,
-    u32 first_vertex,
-    u32 vertex_count,
-    u32 first_instance,
-    u32 instance_count);
-
-/**
- * Draws the vertices to the framebuffer, using an index buffer
- *
- * Parameters
- * - cmd The command buffer to write, must not be VK_NULL_HANDLE
- * - vertex_offset The offset into the vertices
- * - first_index The beginning index in the index buffer to use
- * - index_count The number of indices to read, must be greater than 0
- * - first_instance The beginning instance in to use
- * - instance_count The number of instances to draw, must be greater than 0
- */
-void hg_vk_draw_indexed(
-    VkCommandBuffer cmd,
-    u32 vertex_offset,
-    u32 first_index,
-    u32 index_count,
-    u32 first_instance,
-    u32 instance_count);
-
-/**
- * Dispatches the bound compute shader
- *
- * Parameters
- * - cmd The command buffer to write, must not be VK_NULL_HANDLE
- * - x The number of local workgroups in the x direction
- * - y The number of local workgroups in the x direction
- * - z The number of local workgroups in the x direction
- */
-void hg_vk_dispatch(VkCommandBuffer cmd, u32 x, u32 y, u32 z);
 
 /**
  * A system to synchronize frames rendering to multiple swapchain images at once
@@ -2787,15 +1930,6 @@ VkSurfaceKHR hg_vk_create_surface(
     VkInstance instance,
     const HgPlatform *platform,
     const HgWindow *window);
-
-/**
- * Destroys a Vulkan surface
- *
- * Parameters
- * - instance The Vulkan instance, must not be VK_NULL_HANDLE
- * - surface The surface to destroy, noop if VK_NULL_HANDLE
- */
-void hg_vk_destroy_surface(VkInstance instance, VkSurfaceKHR surface);
 
 /**
  * Processes all events since the last call to process events or startup
