@@ -1,0 +1,9 @@
+-std=c11
+-Wall
+-Wextra
+-Wconversion
+-Wshadow
+-pedantic
+-Iinclude
+-Ivendor/libX11/include
+-Ibuild/shaders

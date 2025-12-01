@@ -25,6 +25,8 @@ cc ${STD} ${CONFIG} ${WARNINGS} ${INCLUDES} \
 mkdir -p ${BUILD_DIR}/shaders
 
 SHADERS=(
+    ${SRC_DIR}/src/test.vert
+    ${SRC_DIR}/src/test.frag
 )
 
 for shader in "${SHADERS[@]}"; do
@@ -33,7 +35,7 @@ for shader in "${SHADERS[@]}"; do
 
     glslc -o ${BUILD_DIR}/shaders/${name}.spv ${shader}
 
-    ${BUILD_DIR}/hg_embed_file \
+    ${BUILD_DIR}/embed_file \
         ${BUILD_DIR}/shaders/${name}.spv \
         ${name}.spv > ${BUILD_DIR}/shaders/${name}.spv.h
 done

@@ -1331,7 +1331,7 @@ VkImage hg_vk_create_image(VkDevice device, const VkImageCreateInfo *config) {
     info.samples = hg_max(config->samples, VK_SAMPLE_COUNT_1_BIT);
 
     VkImage image = VK_NULL_HANDLE;
-    VkResult result = vkCreateImage(device, config, NULL, &image);
+    VkResult result = vkCreateImage(device, &info, NULL, &image);
     if (image == VK_NULL_HANDLE)
         hg_error("Failed to create Vulkan image: %s\n", hg_vk_result_string(result));
 
@@ -1396,10 +1396,10 @@ HgFrameSync hg_frame_sync_create(VkDevice device, u32 queue_family, u32 image_co
     vkCreateCommandPool(device, &pool_info, NULL, &sync.pool);
 
     HgArena arena = hg_arena_create(
-        (sync.frame_count * sizeof(*sync.cmds)) +
-        (sync.frame_count * sizeof(*sync.frame_finished)) +
-        (sync.frame_count * sizeof(*sync.image_available)) +
-        (sync.frame_count * sizeof(*sync.ready_to_present)));
+        hg_align(sync.frame_count * sizeof(*sync.cmds), 16) +
+        hg_align(sync.frame_count * sizeof(*sync.frame_finished), 16) +
+        hg_align(sync.frame_count * sizeof(*sync.image_available), 16) +
+        hg_align(sync.frame_count * sizeof(*sync.ready_to_present), 16));
 
     sync.cmds = hg_arena_alloc(&arena, sync.frame_count * sizeof(*sync.cmds));
     VkCommandBufferAllocateInfo cmd_alloc_info = {
