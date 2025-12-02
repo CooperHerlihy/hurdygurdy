@@ -1137,8 +1137,8 @@ HgMat4 hg_perspective_projection(f32 fov, f32 aspect, f32 near, f32 far);
  *
  * Parameters
  * - width The width of the image
- * - width The width of the image
- * - width The width of the image
+ * - height The height of the image
+ * - depth The depth of the image
  * Returns
  * - The maximum number of mipmap levels the image can have
  */
@@ -1298,8 +1298,6 @@ bool hg_file_save_binary(const u8* data, usize size, const char *path);
 
 /**
  * Loads the Vulkan library and the functions required to create an instance
- *
- * Note, this function is automatically called from hg_vk_create_instance
  */
 void hg_vk_load(void);
 
@@ -1376,10 +1374,22 @@ bool hg_vk_find_queue_family(VkPhysicalDevice gpu, u32 *queue_family, VkQueueFla
 /**
  * A Vulkan device with a single general-purpose queue
  */
-typedef struct HgSingleQueueDevice {
+typedef struct HgSingleQueueDeviceData {
+    /**
+     * The handle to the Vulkan device object
+     */
     VkDevice handle;
+    /**
+     * The handle to the associated Vulkan physical device
+     */
     VkPhysicalDevice gpu;
+    /**
+     * The created Vulkan queue
+     */
     VkQueue queue;
+    /**
+     * The index of the queue family that the queue is from
+     */
     u32 queue_family;
 } HgSingleQueueDeviceData;
 
@@ -1402,9 +1412,9 @@ HgSingleQueueDeviceData hg_vk_create_single_queue_device(VkInstance instance);
 /**
  * A Vulkan swapchain and associated data
  */
-typedef struct HgSwapchain {
+typedef struct HgSwapchainData {
     /**
-     * The handle to the Vulkan object
+     * The handle to the Vulkan swapchain object
      */
     VkSwapchainKHR handle;
     /**
@@ -1467,10 +1477,6 @@ typedef struct HgVkPipelineConfig {
      */
     VkFormat stencil_attachment_format;
     /**
-     * The pipeline layout
-     */
-    VkPipelineLayout layout;
-    /**
      * The shaders
      */
     const VkPipelineShaderStageCreateInfo *shader_stages;
@@ -1478,6 +1484,10 @@ typedef struct HgVkPipelineConfig {
      * The number of shaders and their stages
      */
     u32 shader_count;
+    /**
+     * The pipeline layout
+     */
+    VkPipelineLayout layout;
     /**
      * Descriptions of the vertex bindings, may be NULL
      */
@@ -1538,6 +1548,10 @@ VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineCon
 /**
  * Creates a compute pipeline
  *
+ * There cannot be any attachments
+ * There can only be one shader stage, COMPUTE
+ * There cannot be any vertex inputs
+ *
  * Parameters
  * - device The Vulkan device, must not be VK_NULL_HANDLE
  * - config The pipeline configuration, must not be NULL
@@ -1566,55 +1580,7 @@ u32 hg_vk_find_memory_type_index(
     VkMemoryPropertyFlags desired_flags,
     VkMemoryPropertyFlags undesired_flags);
 
-
 // Vulkan allocator : TODO?
-
-/**
- * Creates a Vulkan image
- *
- * Default configs:
- * - extent.width 0 defaults to 1
- * - extent.height 0 defaults to 1
- * - extent.depth 0 defaults to 1
- * - mipLevels 0 defaults to 1
- * - mipLevels UINT32_MAX defaults to max mips for the extent
- * - arrayLayers 0 defaults to 1
- * - sampler 0 default to 1
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - create_info The configuration for the image, must not be VK_NULL_HANDLE
- * Returns
- * - The created Vulkan image, will never be VK_NULL_HANDLE
- */
-VkImage hg_vk_create_image(VkDevice device, const VkImageCreateInfo *config);
-
-/**
- * Creates an image view for a Vulkan image
- *
- * Default configs:
- * - subresource.levelCount 0 defaults to REMAINING_MIP_LEVELS
- * - subresource.layerCount 0 defaults to REMAINING_ARRAY_LAYERS
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - create_info The configuration for the view, must not be VK_NULL_HANDLE
- * Returns
- * - The created image view, will never be VK_NULL_HANDLE
- */
-VkImageView hg_vk_create_image_view(VkDevice device, const VkImageViewCreateInfo *config);
-
-/**
- * Creates a Vulkan sampler
- *
- * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - filter The filtering method to use
- * - edge_mode The addressing mode for texture edges
- * Returns
- * - The created sampler, will never be VK_NULL_HANDLE
- */
-VkSampler hg_vk_create_sampler(VkDevice device, VkFilter filter, VkSamplerAddressMode edge_mode);
 
 /**
  * A system to synchronize frames rendering to multiple swapchain images at once

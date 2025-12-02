@@ -796,8 +796,6 @@ static const VkDebugUtilsMessengerCreateInfoEXT hg_internal_debug_utils_messenge
 };
 
 VkInstance hg_vk_create_instance(const char *app_name) {
-    hg_vk_load();
-
     VkApplicationInfo app_info = {
         .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
         .pApplicationName = app_name != NULL
@@ -1002,12 +1000,6 @@ static VkFormat hg_internal_vk_find_swapchain_format(VkPhysicalDevice gpu, VkSur
         if (formats[i].format == VK_FORMAT_B8G8R8A8_SRGB)
             return VK_FORMAT_B8G8R8A8_SRGB;
     }
-    for (usize i = 0; i < format_count; ++i) {
-        if (formats[i].format == VK_FORMAT_R8G8B8A8_UNORM)
-            return VK_FORMAT_R8G8B8A8_UNORM;
-        if (formats[i].format == VK_FORMAT_B8G8R8A8_UNORM)
-            return VK_FORMAT_B8G8R8A8_UNORM;
-    }
     hg_error("No supported swapchain formats\n");
 }
 
@@ -1072,7 +1064,6 @@ HgSwapchainData hg_vk_create_swapchain(
         .surface = surface,
         .minImageCount = surface_capabilities.minImageCount,
         .imageFormat = swapchain.format,
-        .imageColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR,
         .imageExtent = surface_capabilities.currentExtent,
         .imageArrayLayers = 1,
         .imageUsage = image_usage,
@@ -1094,13 +1085,13 @@ HgSwapchainData hg_vk_create_swapchain(
 VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineConfig *config) {
     assert(device != VK_NULL_HANDLE);
     assert(config != NULL);
-    assert(config->layout != NULL);
-    assert(config->shader_stages != NULL);
-    assert(config->shader_count > 0);
-    if (config->vertex_binding_count > 0)
-        assert(config->vertex_bindings != NULL);
     if (config->color_attachment_count > 0)
         assert(config->color_attachment_formats != NULL);
+    assert(config->shader_stages != NULL);
+    assert(config->shader_count > 0);
+    assert(config->layout != NULL);
+    if (config->vertex_binding_count > 0)
+        assert(config->vertex_bindings != NULL);
 
     VkPipelineVertexInputStateCreateInfo vertex_input_state = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
@@ -1246,16 +1237,16 @@ VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineCon
 VkPipeline hg_vk_create_compute_pipeline(VkDevice device, const HgVkPipelineConfig *config) {
     assert(device != VK_NULL_HANDLE);
     assert(config != NULL);
-    assert(config->layout != NULL);
-    assert(config->shader_stages != NULL);
-    assert(config->shader_stages[0].stage == VK_SHADER_STAGE_COMPUTE_BIT);
-    assert(config->shader_count == 1);
-    if (config->vertex_binding_count > 0)
-        assert(config->vertex_bindings != NULL);
     assert(config->color_attachment_count == 0);
     assert(config->color_attachment_formats == NULL);
     assert(config->depth_attachment_format == VK_FORMAT_UNDEFINED);
     assert(config->stencil_attachment_format == VK_FORMAT_UNDEFINED);
+    assert(config->shader_stages != NULL);
+    assert(config->shader_stages[0].stage == VK_SHADER_STAGE_COMPUTE_BIT);
+    assert(config->shader_count == 1);
+    assert(config->layout != NULL);
+    assert(config->vertex_binding_count == 0);
+    assert(config->vertex_bindings == NULL);
 
     VkComputePipelineCreateInfo pipeline_info = {
         .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
@@ -1308,78 +1299,6 @@ u32 hg_vk_find_memory_type_index(
         return i;
     }
     hg_error("Could not find Vulkan memory type\n");
-}
-
-VkImage hg_vk_create_image(VkDevice device, const VkImageCreateInfo *config) {
-    assert(device != VK_NULL_HANDLE);
-    assert(config != NULL);
-    assert(config->format != VK_FORMAT_UNDEFINED);
-    assert(config->usage != 0);
-
-    VkImageCreateInfo info = *config;
-    info.extent.width = hg_max(config->extent.width, 1);
-    info.extent.height = hg_max(config->extent.height, 1);
-    info.extent.depth = hg_max(config->extent.depth, 1);
-    info.mipLevels = hg_max(config->mipLevels, 1);
-    if (config->mipLevels == UINT32_MAX) {
-        info.mipLevels = hg_max_mipmaps(
-            config->extent.width,
-            config->extent.height,
-            config->extent.depth);
-    }
-    info.arrayLayers = hg_max(config->arrayLayers, 1);
-    info.samples = hg_max(config->samples, VK_SAMPLE_COUNT_1_BIT);
-
-    VkImage image = VK_NULL_HANDLE;
-    VkResult result = vkCreateImage(device, &info, NULL, &image);
-    if (image == VK_NULL_HANDLE)
-        hg_error("Failed to create Vulkan image: %s\n", hg_vk_result_string(result));
-
-    return image;
-}
-
-VkImageView hg_vk_create_image_view(VkDevice device, const VkImageViewCreateInfo *config) {
-    assert(device != VK_NULL_HANDLE);
-    assert(config != NULL);
-    assert(config->subresourceRange.aspectMask != 0);
-
-    VkImageViewCreateInfo info = *config;
-    info.subresourceRange.levelCount
-        = config->subresourceRange.levelCount != 0
-        ? config->subresourceRange.levelCount
-        : VK_REMAINING_MIP_LEVELS;
-    info.subresourceRange.layerCount
-        = config->subresourceRange.layerCount != 0
-        ? config->subresourceRange.layerCount
-        : VK_REMAINING_ARRAY_LAYERS;
-
-    VkImageView view = VK_NULL_HANDLE;
-    VkResult result = vkCreateImageView(device, &info, NULL, &view);
-    if (view == VK_NULL_HANDLE)
-        hg_error("Failed to create Vulkan image view: %s\n", hg_vk_result_string(result));
-
-    return view;
-}
-
-VkSampler hg_vk_create_sampler(VkDevice device, VkFilter filter, VkSamplerAddressMode edge_mode) {
-    assert(device != VK_NULL_HANDLE);
-
-    VkSamplerCreateInfo sampler_info = {
-        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-        .magFilter = filter,
-        .minFilter = filter,
-        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-        .addressModeU = edge_mode,
-        .addressModeV = edge_mode,
-        .addressModeW = edge_mode,
-        .maxLod = VK_LOD_CLAMP_NONE,
-    };
-    VkSampler sampler = VK_NULL_HANDLE;
-    VkResult result = vkCreateSampler(device, &sampler_info, NULL, &sampler);
-    if (sampler == VK_NULL_HANDLE)
-        hg_error("Failed to create Vulkan sampler: %s\n", hg_vk_result_string(result));
-
-    return sampler;
 }
 
 HgFrameSync hg_frame_sync_create(VkDevice device, u32 queue_family, u32 image_count) {
@@ -1549,15 +1468,15 @@ typedef struct HgX11Funcs {
     KeySym (*XLookupKeysym)(XKeyEvent*, int);
 } HgX11Funcs;
 
-static void *hg_libx11 = NULL;
-static HgX11Funcs hg_x11_pfn = {0};
+static void *hg_internal_libx11 = NULL;
+static HgX11Funcs hg_internal_x11_funcs = {0};
 
 Display *XOpenDisplay(_Xconst char *name) {
-    return hg_x11_pfn.XOpenDisplay(name);
+    return hg_internal_x11_funcs.XOpenDisplay(name);
 }
 
 int XCloseDisplay(Display *dpy) {
-    return hg_x11_pfn.XCloseDisplay(dpy);
+    return hg_internal_x11_funcs.XCloseDisplay(dpy);
 }
 
 Window XCreateWindow(
@@ -1574,62 +1493,62 @@ Window XCreateWindow(
     unsigned long valuemask,
     XSetWindowAttributes *attributes
 ) {
-    return hg_x11_pfn.XCreateWindow(
+    return hg_internal_x11_funcs.XCreateWindow(
         dpy, parent, x, y, width, height, border_width,
         depth, class, visual, valuemask, attributes
     );
 }
 
 int XDestroyWindow(Display *dpy, Window w) {
-    return hg_x11_pfn.XDestroyWindow(dpy, w);
+    return hg_internal_x11_funcs.XDestroyWindow(dpy, w);
 }
 
 int XStoreName(Display *dpy, Window w, _Xconst char *name) {
-    return hg_x11_pfn.XStoreName(dpy, w, name);
+    return hg_internal_x11_funcs.XStoreName(dpy, w, name);
 }
 
 Atom XInternAtom(Display *dpy, _Xconst char *name, Bool only_if_exists) {
-    return hg_x11_pfn.XInternAtom(dpy, name, only_if_exists);
+    return hg_internal_x11_funcs.XInternAtom(dpy, name, only_if_exists);
 }
 
 Status XSetWMProtocols(Display *dpy, Window w, Atom *protocols, int count) {
-    return hg_x11_pfn.XSetWMProtocols(dpy, w, protocols, count);
+    return hg_internal_x11_funcs.XSetWMProtocols(dpy, w, protocols, count);
 }
 
 int XMapWindow(Display *dpy, Window w) {
-    return hg_x11_pfn.XMapWindow(dpy, w);
+    return hg_internal_x11_funcs.XMapWindow(dpy, w);
 }
 
 Status XSendEvent(Display *dpy, Window w, Bool propagate, long event_mask, XEvent *event) {
-    return hg_x11_pfn.XSendEvent(dpy, w, propagate, event_mask, event);
+    return hg_internal_x11_funcs.XSendEvent(dpy, w, propagate, event_mask, event);
 }
 
 int XFlush(Display *dpy) {
-    return hg_x11_pfn.XFlush(dpy);
+    return hg_internal_x11_funcs.XFlush(dpy);
 }
 
 int XNextEvent(Display *dpy, XEvent *event) {
-    return hg_x11_pfn.XNextEvent(dpy, event);
+    return hg_internal_x11_funcs.XNextEvent(dpy, event);
 }
 
 int XPending(Display *dpy) {
-    return hg_x11_pfn.XPending(dpy);
+    return hg_internal_x11_funcs.XPending(dpy);
 }
 
 KeySym XLookupKeysym(XKeyEvent *key_event, int index) {
-    return hg_x11_pfn.XLookupKeysym(key_event, index);
+    return hg_internal_x11_funcs.XLookupKeysym(key_event, index);
 }
 
-#define HG_LOAD_X11_FUNC(name) *(void **)&hg_x11_pfn. name \
-    = dlsym(hg_libx11, #name); \
-    if (hg_x11_pfn. name == NULL) { hg_error("Could not load Xlib function: \n" #name) }
+#define HG_LOAD_X11_FUNC(name) *(void **)&hg_internal_x11_funcs. name \
+    = dlsym(hg_internal_libx11, #name); \
+    if (hg_internal_x11_funcs. name == NULL) { hg_error("Could not load Xlib function: \n" #name) }
 
 HgPlatform *hg_platform_create(void) {
     HgPlatform *platform = NULL;
 
-    if (hg_libx11 == NULL) {
-        hg_libx11 = dlopen("libX11.so.6", RTLD_LAZY);
-        if (hg_libx11 == NULL)
+    if (hg_internal_libx11 == NULL) {
+        hg_internal_libx11 = dlopen("libX11.so.6", RTLD_LAZY);
+        if (hg_internal_libx11 == NULL)
             hg_error("Could not open Xlib\n");
 
         HG_LOAD_X11_FUNC(XOpenDisplay);
@@ -2948,12 +2867,12 @@ typedef struct hgVulkanFuncs {
 
 #undef HG_MAKE_VULKAN_FUNC
 
-static void *hg_libvulkan = NULL;
-static hgVulkanFuncs hg_vk_pfn = {0};
+static void *hg_internal_libvulkan = NULL;
+static hgVulkanFuncs hg_internal_vulkan_funcs = {0};
 
 #define HG_LOAD_VULKAN_FUNC(name) \
-    hg_vk_pfn. name = (PFN_##name)hg_vk_pfn.vkGetInstanceProcAddr(NULL, #name); \
-    if (hg_vk_pfn. name == NULL) { \
+    hg_internal_vulkan_funcs. name = (PFN_##name)hg_internal_vulkan_funcs.vkGetInstanceProcAddr(NULL, #name); \
+    if (hg_internal_vulkan_funcs. name == NULL) { \
         hg_error("Could not load " #name "\n"); \
     }
 
@@ -2961,23 +2880,23 @@ void hg_vk_load(void) {
 
 #if defined(__unix__)
 
-    hg_libvulkan = dlopen("libvulkan.so.1", RTLD_LAZY);
-    if (hg_libvulkan == NULL)
+    hg_internal_libvulkan = dlopen("libvulkan.so.1", RTLD_LAZY);
+    if (hg_internal_libvulkan == NULL)
         hg_error("Could not load vulkan dynamic lib: %s\n", dlerror());
 
-    *(void **)&hg_vk_pfn.vkGetInstanceProcAddr = dlsym(hg_libvulkan, "vkGetInstanceProcAddr");
-    if (hg_vk_pfn.vkGetInstanceProcAddr == NULL)
+    *(void **)&hg_internal_vulkan_funcs.vkGetInstanceProcAddr = dlsym(hg_internal_libvulkan, "vkGetInstanceProcAddr");
+    if (hg_internal_vulkan_funcs.vkGetInstanceProcAddr == NULL)
         hg_error("Could not load vkGetInstanceProcAddr: %s\n", dlerror());
 
 #elif defined(_WIN32)
 
-    hg_libvulkan = (void *)LoadLibraryA("vulkan-1.dll");
-    if (hg_libvulkan == NULL)
+    hg_internal_libvulkan = (void *)LoadLibraryA("vulkan-1.dll");
+    if (hg_internal_libvulkan == NULL)
         hg_error("Could not load vulkan dynamic lib\n");
 
-    hg_vk_pfn.vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr)
-        GetProcAddress(hg_libvulkan, "vkGetInstanceProcAddr");
-    if (hg_vk_pfn.vkGetInstanceProcAddr == NULL)
+    hg_internal_vulkan_funcs.vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr)
+        GetProcAddress(hg_internal_libvulkan, "vkGetInstanceProcAddr");
+    if (hg_internal_vulkan_funcs.vkGetInstanceProcAddr == NULL)
         hg_error("Could not load vkGetInstanceProcAddr\n");
 
 #else
@@ -2992,8 +2911,8 @@ void hg_vk_load(void) {
 #undef HG_LOAD_VULKAN_FUNC
 
 #define HG_LOAD_VULKAN_INSTANCE_FUNC(instance, name) \
-    hg_vk_pfn. name = (PFN_##name)hg_vk_pfn.vkGetInstanceProcAddr(instance, #name); \
-    if (hg_vk_pfn. name == NULL) { hg_error("Could not load " #name "\n"); }
+    hg_internal_vulkan_funcs. name = (PFN_##name)hg_internal_vulkan_funcs.vkGetInstanceProcAddr(instance, #name); \
+    if (hg_internal_vulkan_funcs. name == NULL) { hg_error("Could not load " #name "\n"); }
 
 void hg_vk_load_instance(VkInstance instance) {
     assert(instance != VK_NULL_HANDLE);
@@ -3017,8 +2936,8 @@ void hg_vk_load_instance(VkInstance instance) {
 #undef HG_LOAD_VULKAN_INSTANCE_FUNC
 
 #define HG_LOAD_VULKAN_DEVICE_FUNC(device, name) \
-    hg_vk_pfn. name = (PFN_##name)hg_vk_pfn.vkGetDeviceProcAddr(device, #name); \
-    if (hg_vk_pfn. name == NULL) { hg_error("Could not load " #name "\n"); }
+    hg_internal_vulkan_funcs. name = (PFN_##name)hg_internal_vulkan_funcs.vkGetDeviceProcAddr(device, #name); \
+    if (hg_internal_vulkan_funcs. name == NULL) { hg_error("Could not load " #name "\n"); }
 
 void hg_vk_load_device(VkDevice device) {
     assert(device != VK_NULL_HANDLE);
@@ -3113,354 +3032,354 @@ void hg_vk_load_device(VkDevice device) {
 #undef HG_LOAD_VULKAN_DEVICE_FUNC
 
 PFN_vkVoidFunction vkGetInstanceProcAddr(VkInstance instance, const char *pName) {
-    return hg_vk_pfn.vkGetInstanceProcAddr(instance, pName);
+    return hg_internal_vulkan_funcs.vkGetInstanceProcAddr(instance, pName);
 }
 
 PFN_vkVoidFunction vkGetDeviceProcAddr(VkDevice device, const char *pName) {
-    return hg_vk_pfn.vkGetDeviceProcAddr(device, pName);
+    return hg_internal_vulkan_funcs.vkGetDeviceProcAddr(device, pName);
 }
 
 VkResult vkCreateInstance(const VkInstanceCreateInfo *pCreateInfo, const VkAllocationCallbacks *pAllocator, VkInstance *pInstance) {
-    return hg_vk_pfn.vkCreateInstance(pCreateInfo, pAllocator, pInstance);
+    return hg_internal_vulkan_funcs.vkCreateInstance(pCreateInfo, pAllocator, pInstance);
 }
 
 void vkDestroyInstance(VkInstance instance, const VkAllocationCallbacks *pAllocator) {
-    hg_vk_pfn.vkDestroyInstance(instance, pAllocator);
+    hg_internal_vulkan_funcs.vkDestroyInstance(instance, pAllocator);
 }
 
 VkResult vkCreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo, const VkAllocationCallbacks *pAllocator, VkDebugUtilsMessengerEXT *pMessenger) {
-    return hg_vk_pfn.vkCreateDebugUtilsMessengerEXT(instance, pCreateInfo, pAllocator, pMessenger);
+    return hg_internal_vulkan_funcs.vkCreateDebugUtilsMessengerEXT(instance, pCreateInfo, pAllocator, pMessenger);
 }
 
 void vkDestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT messenger, const VkAllocationCallbacks *pAllocator) {
-    hg_vk_pfn.vkDestroyDebugUtilsMessengerEXT(instance, messenger, pAllocator);
+    hg_internal_vulkan_funcs.vkDestroyDebugUtilsMessengerEXT(instance, messenger, pAllocator);
 }
 
 VkResult vkEnumeratePhysicalDevices(VkInstance instance, uint32_t *pCount, VkPhysicalDevice *pDevices) {
-    return hg_vk_pfn.vkEnumeratePhysicalDevices(instance, pCount, pDevices);
+    return hg_internal_vulkan_funcs.vkEnumeratePhysicalDevices(instance, pCount, pDevices);
 }
 
 VkResult vkEnumerateDeviceExtensionProperties(VkPhysicalDevice device, const char *pLayerName, uint32_t *pCount, VkExtensionProperties *pProps) {
-    return hg_vk_pfn.vkEnumerateDeviceExtensionProperties(device, pLayerName, pCount, pProps);
+    return hg_internal_vulkan_funcs.vkEnumerateDeviceExtensionProperties(device, pLayerName, pCount, pProps);
 }
 
 void vkGetPhysicalDeviceQueueFamilyProperties(VkPhysicalDevice device, uint32_t *pCount, VkQueueFamilyProperties *pProps) {
-    hg_vk_pfn.vkGetPhysicalDeviceQueueFamilyProperties(device, pCount, pProps);
+    hg_internal_vulkan_funcs.vkGetPhysicalDeviceQueueFamilyProperties(device, pCount, pProps);
 }
 
 void vkDestroySurfaceKHR(VkInstance instance, VkSurfaceKHR surface, const VkAllocationCallbacks *pAllocator) {
-    hg_vk_pfn.vkDestroySurfaceKHR(instance, surface, pAllocator);
+    hg_internal_vulkan_funcs.vkDestroySurfaceKHR(instance, surface, pAllocator);
 }
 
 VkResult vkCreateDevice(VkPhysicalDevice device, const VkDeviceCreateInfo *pCreateInfo, const VkAllocationCallbacks *pAllocator, VkDevice *pDevice) {
-    return hg_vk_pfn.vkCreateDevice(device, pCreateInfo, pAllocator, pDevice);
+    return hg_internal_vulkan_funcs.vkCreateDevice(device, pCreateInfo, pAllocator, pDevice);
 }
 
 void vkDestroyDevice(VkDevice device, const VkAllocationCallbacks *pAllocator) {
-    hg_vk_pfn.vkDestroyDevice(device, pAllocator);
+    hg_internal_vulkan_funcs.vkDestroyDevice(device, pAllocator);
 }
 
 VkResult vkDeviceWaitIdle(VkDevice device) {
-    return hg_vk_pfn.vkDeviceWaitIdle(device);
+    return hg_internal_vulkan_funcs.vkDeviceWaitIdle(device);
 }
 
 VkResult vkGetPhysicalDeviceSurfaceFormatsKHR(VkPhysicalDevice device, VkSurfaceKHR surface, uint32_t *pCount, VkSurfaceFormatKHR *pFormats) {
-    return hg_vk_pfn.vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, pCount, pFormats);
+    return hg_internal_vulkan_funcs.vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, pCount, pFormats);
 }
 
 VkResult vkGetPhysicalDeviceSurfacePresentModesKHR(VkPhysicalDevice device, VkSurfaceKHR surface, uint32_t *pCount, VkPresentModeKHR *pModes) {
-    return hg_vk_pfn.vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, pCount, pModes);
+    return hg_internal_vulkan_funcs.vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, pCount, pModes);
 }
 
 VkResult vkGetPhysicalDeviceSurfaceCapabilitiesKHR(VkPhysicalDevice device, VkSurfaceKHR surface, VkSurfaceCapabilitiesKHR *pCaps) {
-    return hg_vk_pfn.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, pCaps);
+    return hg_internal_vulkan_funcs.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, pCaps);
 }
 
 VkResult vkCreateSwapchainKHR(VkDevice device, const VkSwapchainCreateInfoKHR *pCreateInfo, const VkAllocationCallbacks *pAllocator, VkSwapchainKHR *pSwapchain) {
-    return hg_vk_pfn.vkCreateSwapchainKHR(device, pCreateInfo, pAllocator, pSwapchain);
+    return hg_internal_vulkan_funcs.vkCreateSwapchainKHR(device, pCreateInfo, pAllocator, pSwapchain);
 }
 
 void vkDestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain, const VkAllocationCallbacks *pAllocator) {
-    hg_vk_pfn.vkDestroySwapchainKHR(device, swapchain, pAllocator);
+    hg_internal_vulkan_funcs.vkDestroySwapchainKHR(device, swapchain, pAllocator);
 }
 
 VkResult vkGetSwapchainImagesKHR(VkDevice device, VkSwapchainKHR swapchain, uint32_t *pCount, VkImage *pImages) {
-    return hg_vk_pfn.vkGetSwapchainImagesKHR(device, swapchain, pCount, pImages);
+    return hg_internal_vulkan_funcs.vkGetSwapchainImagesKHR(device, swapchain, pCount, pImages);
 }
 
 VkResult vkAcquireNextImageKHR(VkDevice device, VkSwapchainKHR swapchain, uint64_t timeout, VkSemaphore sem, VkFence fence, uint32_t *pIndex) {
-    return hg_vk_pfn.vkAcquireNextImageKHR(device, swapchain, timeout, sem, fence, pIndex);
+    return hg_internal_vulkan_funcs.vkAcquireNextImageKHR(device, swapchain, timeout, sem, fence, pIndex);
 }
 
 VkResult vkCreateSemaphore(VkDevice device, const VkSemaphoreCreateInfo *pCreateInfo, const VkAllocationCallbacks *pAllocator, VkSemaphore *pSemaphore) {
-    return hg_vk_pfn.vkCreateSemaphore(device, pCreateInfo, pAllocator, pSemaphore);
+    return hg_internal_vulkan_funcs.vkCreateSemaphore(device, pCreateInfo, pAllocator, pSemaphore);
 }
 
 void vkDestroySemaphore(VkDevice device, VkSemaphore sem, const VkAllocationCallbacks *pAllocator) {
-    hg_vk_pfn.vkDestroySemaphore(device, sem, pAllocator);
+    hg_internal_vulkan_funcs.vkDestroySemaphore(device, sem, pAllocator);
 }
 
 VkResult vkCreateFence(VkDevice device, const VkFenceCreateInfo *pCreateInfo, const VkAllocationCallbacks *pAllocator, VkFence *pFence) {
-    return hg_vk_pfn.vkCreateFence(device, pCreateInfo, pAllocator, pFence);
+    return hg_internal_vulkan_funcs.vkCreateFence(device, pCreateInfo, pAllocator, pFence);
 }
 
 void vkDestroyFence(VkDevice device, VkFence fence, const VkAllocationCallbacks *pAllocator) {
-    hg_vk_pfn.vkDestroyFence(device, fence, pAllocator);
+    hg_internal_vulkan_funcs.vkDestroyFence(device, fence, pAllocator);
 }
 
 VkResult vkResetFences(VkDevice device, uint32_t count, const VkFence *pFences) {
-    return hg_vk_pfn.vkResetFences(device, count, pFences);
+    return hg_internal_vulkan_funcs.vkResetFences(device, count, pFences);
 }
 
 VkResult vkWaitForFences(VkDevice device, uint32_t count, const VkFence *pFences, VkBool32 waitAll, uint64_t timeout) {
-    return hg_vk_pfn.vkWaitForFences(device, count, pFences, waitAll, timeout);
+    return hg_internal_vulkan_funcs.vkWaitForFences(device, count, pFences, waitAll, timeout);
 }
 
 void vkGetDeviceQueue(VkDevice device, uint32_t family, uint32_t index, VkQueue *pQueue) {
-    hg_vk_pfn.vkGetDeviceQueue(device, family, index, pQueue);
+    hg_internal_vulkan_funcs.vkGetDeviceQueue(device, family, index, pQueue);
 }
 
 VkResult vkQueueWaitIdle(VkQueue queue) {
-    return hg_vk_pfn.vkQueueWaitIdle(queue);
+    return hg_internal_vulkan_funcs.vkQueueWaitIdle(queue);
 }
 
 VkResult vkQueueSubmit(VkQueue queue, uint32_t count, const VkSubmitInfo *pSubmits, VkFence fence) {
-    return hg_vk_pfn.vkQueueSubmit(queue, count, pSubmits, fence);
+    return hg_internal_vulkan_funcs.vkQueueSubmit(queue, count, pSubmits, fence);
 }
 
 VkResult vkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR *pInfo) {
-    return hg_vk_pfn.vkQueuePresentKHR(queue, pInfo);
+    return hg_internal_vulkan_funcs.vkQueuePresentKHR(queue, pInfo);
 }
 
 VkResult vkCreateCommandPool(VkDevice device, const VkCommandPoolCreateInfo *pCreateInfo, const VkAllocationCallbacks *pAllocator, VkCommandPool *pPool) {
-    return hg_vk_pfn.vkCreateCommandPool(device, pCreateInfo, pAllocator, pPool);
+    return hg_internal_vulkan_funcs.vkCreateCommandPool(device, pCreateInfo, pAllocator, pPool);
 }
 
 void vkDestroyCommandPool(VkDevice device, VkCommandPool pool, const VkAllocationCallbacks *pAllocator) {
-    hg_vk_pfn.vkDestroyCommandPool(device, pool, pAllocator);
+    hg_internal_vulkan_funcs.vkDestroyCommandPool(device, pool, pAllocator);
 }
 
 VkResult vkAllocateCommandBuffers(VkDevice device, const VkCommandBufferAllocateInfo *pInfo, VkCommandBuffer *pBufs) {
-    return hg_vk_pfn.vkAllocateCommandBuffers(device, pInfo, pBufs);
+    return hg_internal_vulkan_funcs.vkAllocateCommandBuffers(device, pInfo, pBufs);
 }
 
 void vkFreeCommandBuffers(VkDevice device, VkCommandPool pool, uint32_t count, const VkCommandBuffer *pBufs) {
-    hg_vk_pfn.vkFreeCommandBuffers(device, pool, count, pBufs);
+    hg_internal_vulkan_funcs.vkFreeCommandBuffers(device, pool, count, pBufs);
 }
 
 VkResult vkCreateDescriptorPool(VkDevice device, const VkDescriptorPoolCreateInfo *pInfo, const VkAllocationCallbacks *pAllocator, VkDescriptorPool *pPool) {
-    return hg_vk_pfn.vkCreateDescriptorPool(device, pInfo, pAllocator, pPool);
+    return hg_internal_vulkan_funcs.vkCreateDescriptorPool(device, pInfo, pAllocator, pPool);
 }
 
 void vkDestroyDescriptorPool(VkDevice device, VkDescriptorPool pool, const VkAllocationCallbacks *pAllocator) {
-    hg_vk_pfn.vkDestroyDescriptorPool(device, pool, pAllocator);
+    hg_internal_vulkan_funcs.vkDestroyDescriptorPool(device, pool, pAllocator);
 }
 
 VkResult vkResetDescriptorPool(VkDevice device, VkDescriptorPool pool, uint32_t flags) {
-    return hg_vk_pfn.vkResetDescriptorPool(device, pool, flags);
+    return hg_internal_vulkan_funcs.vkResetDescriptorPool(device, pool, flags);
 }
 
 VkResult vkAllocateDescriptorSets(VkDevice device, const VkDescriptorSetAllocateInfo *pInfo, VkDescriptorSet *pSets) {
-    return hg_vk_pfn.vkAllocateDescriptorSets(device, pInfo, pSets);
+    return hg_internal_vulkan_funcs.vkAllocateDescriptorSets(device, pInfo, pSets);
 }
 
 void vkUpdateDescriptorSets(VkDevice device, uint32_t writeCount, const VkWriteDescriptorSet *pWrites, uint32_t copyCount, const VkCopyDescriptorSet *pCopies) {
-    hg_vk_pfn.vkUpdateDescriptorSets(device, writeCount, pWrites, copyCount, pCopies);
+    hg_internal_vulkan_funcs.vkUpdateDescriptorSets(device, writeCount, pWrites, copyCount, pCopies);
 }
 
 VkResult vkCreateDescriptorSetLayout(VkDevice device, const VkDescriptorSetLayoutCreateInfo *pInfo, const VkAllocationCallbacks *pAllocator, VkDescriptorSetLayout *pLayout) {
-    return hg_vk_pfn.vkCreateDescriptorSetLayout(device, pInfo, pAllocator, pLayout);
+    return hg_internal_vulkan_funcs.vkCreateDescriptorSetLayout(device, pInfo, pAllocator, pLayout);
 }
 
 void vkDestroyDescriptorSetLayout(VkDevice device, VkDescriptorSetLayout layout, const VkAllocationCallbacks *pAllocator) {
-    hg_vk_pfn.vkDestroyDescriptorSetLayout(device, layout, pAllocator);
+    hg_internal_vulkan_funcs.vkDestroyDescriptorSetLayout(device, layout, pAllocator);
 }
 
 VkResult vkCreatePipelineLayout(VkDevice device, const VkPipelineLayoutCreateInfo *pInfo, const VkAllocationCallbacks *pAllocator, VkPipelineLayout *pLayout) {
-    return hg_vk_pfn.vkCreatePipelineLayout(device, pInfo, pAllocator, pLayout);
+    return hg_internal_vulkan_funcs.vkCreatePipelineLayout(device, pInfo, pAllocator, pLayout);
 }
 
 void vkDestroyPipelineLayout(VkDevice device, VkPipelineLayout layout, const VkAllocationCallbacks *pAllocator) {
-    hg_vk_pfn.vkDestroyPipelineLayout(device, layout, pAllocator);
+    hg_internal_vulkan_funcs.vkDestroyPipelineLayout(device, layout, pAllocator);
 }
 
 VkResult vkCreateShaderModule(VkDevice device, const VkShaderModuleCreateInfo *pInfo, const VkAllocationCallbacks *pAllocator, VkShaderModule *pModule) {
-    return hg_vk_pfn.vkCreateShaderModule(device, pInfo, pAllocator, pModule);
+    return hg_internal_vulkan_funcs.vkCreateShaderModule(device, pInfo, pAllocator, pModule);
 }
 
 void vkDestroyShaderModule(VkDevice device, VkShaderModule module, const VkAllocationCallbacks *pAllocator) {
-    hg_vk_pfn.vkDestroyShaderModule(device, module, pAllocator);
+    hg_internal_vulkan_funcs.vkDestroyShaderModule(device, module, pAllocator);
 }
 
 VkResult vkCreateGraphicsPipelines(VkDevice device, VkPipelineCache cache, uint32_t count, const VkGraphicsPipelineCreateInfo *pInfos, const VkAllocationCallbacks *pAllocator, VkPipeline *pPipelines) {
-    return hg_vk_pfn.vkCreateGraphicsPipelines(device, cache, count, pInfos, pAllocator, pPipelines);
+    return hg_internal_vulkan_funcs.vkCreateGraphicsPipelines(device, cache, count, pInfos, pAllocator, pPipelines);
 }
 
 VkResult vkCreateComputePipelines(VkDevice device, VkPipelineCache cache, uint32_t count, const VkComputePipelineCreateInfo *pInfos, const VkAllocationCallbacks *pAllocator, VkPipeline *pPipelines) {
-    return hg_vk_pfn.vkCreateComputePipelines(device, cache, count, pInfos, pAllocator, pPipelines);
+    return hg_internal_vulkan_funcs.vkCreateComputePipelines(device, cache, count, pInfos, pAllocator, pPipelines);
 }
 
 void vkDestroyPipeline(VkDevice device, VkPipeline pipeline, const VkAllocationCallbacks *pAllocator) {
-    hg_vk_pfn.vkDestroyPipeline(device, pipeline, pAllocator);
+    hg_internal_vulkan_funcs.vkDestroyPipeline(device, pipeline, pAllocator);
 }
 
 VkResult vkCreateBuffer(VkDevice device, const VkBufferCreateInfo *pInfo, const VkAllocationCallbacks *pAllocator, VkBuffer *pBuf) {
-    return hg_vk_pfn.vkCreateBuffer(device, pInfo, pAllocator, pBuf);
+    return hg_internal_vulkan_funcs.vkCreateBuffer(device, pInfo, pAllocator, pBuf);
 }
 
 void vkDestroyBuffer(VkDevice device, VkBuffer buf, const VkAllocationCallbacks *pAllocator) {
-    hg_vk_pfn.vkDestroyBuffer(device, buf, pAllocator);
+    hg_internal_vulkan_funcs.vkDestroyBuffer(device, buf, pAllocator);
 }
 
 VkResult vkCreateImage(VkDevice device, const VkImageCreateInfo *pInfo, const VkAllocationCallbacks *pAllocator, VkImage *pImage) {
-    return hg_vk_pfn.vkCreateImage(device, pInfo, pAllocator, pImage);
+    return hg_internal_vulkan_funcs.vkCreateImage(device, pInfo, pAllocator, pImage);
 }
 
 void vkDestroyImage(VkDevice device, VkImage img, const VkAllocationCallbacks *pAllocator) {
-    hg_vk_pfn.vkDestroyImage(device, img, pAllocator);
+    hg_internal_vulkan_funcs.vkDestroyImage(device, img, pAllocator);
 }
 
 VkResult vkCreateImageView(VkDevice device, const VkImageViewCreateInfo *pInfo, const VkAllocationCallbacks *pAllocator, VkImageView *pView) {
-    return hg_vk_pfn.vkCreateImageView(device, pInfo, pAllocator, pView);
+    return hg_internal_vulkan_funcs.vkCreateImageView(device, pInfo, pAllocator, pView);
 }
 
 void vkDestroyImageView(VkDevice device, VkImageView view, const VkAllocationCallbacks *pAllocator) {
-    hg_vk_pfn.vkDestroyImageView(device, view, pAllocator);
+    hg_internal_vulkan_funcs.vkDestroyImageView(device, view, pAllocator);
 }
 
 VkResult vkCreateSampler(VkDevice device, const VkSamplerCreateInfo *pInfo, const VkAllocationCallbacks *pAllocator, VkSampler *pSampler) {
-    return hg_vk_pfn.vkCreateSampler(device, pInfo, pAllocator, pSampler);
+    return hg_internal_vulkan_funcs.vkCreateSampler(device, pInfo, pAllocator, pSampler);
 }
 
 void vkDestroySampler(VkDevice device, VkSampler sampler, const VkAllocationCallbacks *pAllocator) {
-    hg_vk_pfn.vkDestroySampler(device, sampler, pAllocator);
+    hg_internal_vulkan_funcs.vkDestroySampler(device, sampler, pAllocator);
 }
 
 void vkGetPhysicalDeviceMemoryProperties(VkPhysicalDevice device, VkPhysicalDeviceMemoryProperties *pProps) {
-    hg_vk_pfn.vkGetPhysicalDeviceMemoryProperties(device, pProps);
+    hg_internal_vulkan_funcs.vkGetPhysicalDeviceMemoryProperties(device, pProps);
 }
 
 void vkGetBufferMemoryRequirements(VkDevice device, VkBuffer buffer, VkMemoryRequirements *pReq) {
-    hg_vk_pfn.vkGetBufferMemoryRequirements(device, buffer, pReq);
+    hg_internal_vulkan_funcs.vkGetBufferMemoryRequirements(device, buffer, pReq);
 }
 
 void vkGetImageMemoryRequirements(VkDevice device, VkImage image, VkMemoryRequirements *pReq) {
-    hg_vk_pfn.vkGetImageMemoryRequirements(device, image, pReq);
+    hg_internal_vulkan_funcs.vkGetImageMemoryRequirements(device, image, pReq);
 }
 
 VkResult vkAllocateMemory(VkDevice device, const VkMemoryAllocateInfo *pInfo, const VkAllocationCallbacks *pAllocator, VkDeviceMemory *pMem) {
-    return hg_vk_pfn.vkAllocateMemory(device, pInfo, pAllocator, pMem);
+    return hg_internal_vulkan_funcs.vkAllocateMemory(device, pInfo, pAllocator, pMem);
 }
 
 void vkFreeMemory(VkDevice device, VkDeviceMemory mem, const VkAllocationCallbacks *pAllocator) {
-    hg_vk_pfn.vkFreeMemory(device, mem, pAllocator);
+    hg_internal_vulkan_funcs.vkFreeMemory(device, mem, pAllocator);
 }
 
 VkResult vkBindBufferMemory(VkDevice device, VkBuffer buf, VkDeviceMemory mem, VkDeviceSize offset) {
-    return hg_vk_pfn.vkBindBufferMemory(device, buf, mem, offset);
+    return hg_internal_vulkan_funcs.vkBindBufferMemory(device, buf, mem, offset);
 }
 
 VkResult vkBindImageMemory(VkDevice device, VkImage img, VkDeviceMemory mem, VkDeviceSize offset) {
-    return hg_vk_pfn.vkBindImageMemory(device, img, mem, offset);
+    return hg_internal_vulkan_funcs.vkBindImageMemory(device, img, mem, offset);
 }
 
 VkResult vkMapMemory(VkDevice device, VkDeviceMemory mem, VkDeviceSize offset, VkDeviceSize size, VkMemoryMapFlags flags, void **ppData) {
-    return hg_vk_pfn.vkMapMemory(device, mem, offset, size, flags, ppData);
+    return hg_internal_vulkan_funcs.vkMapMemory(device, mem, offset, size, flags, ppData);
 }
 
 void vkUnmapMemory(VkDevice device, VkDeviceMemory mem) {
-    hg_vk_pfn.vkUnmapMemory(device, mem);
+    hg_internal_vulkan_funcs.vkUnmapMemory(device, mem);
 }
 
 VkResult vkFlushMappedMemoryRanges(VkDevice device, uint32_t count, const VkMappedMemoryRange *pRanges) {
-    return hg_vk_pfn.vkFlushMappedMemoryRanges(device, count, pRanges);
+    return hg_internal_vulkan_funcs.vkFlushMappedMemoryRanges(device, count, pRanges);
 }
 
 VkResult vkInvalidateMappedMemoryRanges(VkDevice device, uint32_t count, const VkMappedMemoryRange *pRanges) {
-    return hg_vk_pfn.vkInvalidateMappedMemoryRanges(device, count, pRanges);
+    return hg_internal_vulkan_funcs.vkInvalidateMappedMemoryRanges(device, count, pRanges);
 }
 
 VkResult vkBeginCommandBuffer(VkCommandBuffer cmd, const VkCommandBufferBeginInfo *pInfo) {
-    return hg_vk_pfn.vkBeginCommandBuffer(cmd, pInfo);
+    return hg_internal_vulkan_funcs.vkBeginCommandBuffer(cmd, pInfo);
 }
 
 VkResult vkEndCommandBuffer(VkCommandBuffer cmd) {
-    return hg_vk_pfn.vkEndCommandBuffer(cmd);
+    return hg_internal_vulkan_funcs.vkEndCommandBuffer(cmd);
 }
 
 VkResult vkResetCommandBuffer(VkCommandBuffer cmd, VkCommandBufferResetFlags flags) {
-    return hg_vk_pfn.vkResetCommandBuffer(cmd, flags);
+    return hg_internal_vulkan_funcs.vkResetCommandBuffer(cmd, flags);
 }
 
 void vkCmdCopyBuffer(VkCommandBuffer cmd, VkBuffer src, VkBuffer dst, uint32_t count, const VkBufferCopy *pRegions) {
-    hg_vk_pfn.vkCmdCopyBuffer(cmd, src, dst, count, pRegions);
+    hg_internal_vulkan_funcs.vkCmdCopyBuffer(cmd, src, dst, count, pRegions);
 }
 
 void vkCmdCopyImage(VkCommandBuffer cmd, VkImage src, VkImageLayout srcLayout, VkImage dst, VkImageLayout dstLayout, uint32_t count, const VkImageCopy *pRegions) {
-    hg_vk_pfn.vkCmdCopyImage(cmd, src, srcLayout, dst, dstLayout, count, pRegions);
+    hg_internal_vulkan_funcs.vkCmdCopyImage(cmd, src, srcLayout, dst, dstLayout, count, pRegions);
 }
 
 void vkCmdBlitImage(VkCommandBuffer cmd, VkImage src, VkImageLayout srcLayout, VkImage dst, VkImageLayout dstLayout, uint32_t count, const VkImageBlit *pRegions, VkFilter filter) {
-    hg_vk_pfn.vkCmdBlitImage(cmd, src, srcLayout, dst, dstLayout, count, pRegions, filter);
+    hg_internal_vulkan_funcs.vkCmdBlitImage(cmd, src, srcLayout, dst, dstLayout, count, pRegions, filter);
 }
 
 void vkCmdCopyBufferToImage(VkCommandBuffer cmd, VkBuffer src, VkImage dst, VkImageLayout dstLayout, uint32_t count, const VkBufferImageCopy *pRegions) {
-    hg_vk_pfn.vkCmdCopyBufferToImage(cmd, src, dst, dstLayout, count, pRegions);
+    hg_internal_vulkan_funcs.vkCmdCopyBufferToImage(cmd, src, dst, dstLayout, count, pRegions);
 }
 
 void vkCmdCopyImageToBuffer(VkCommandBuffer cmd, VkImage src, VkImageLayout srcLayout, VkBuffer dst, uint32_t count, const VkBufferImageCopy *pRegions) {
-    hg_vk_pfn.vkCmdCopyImageToBuffer(cmd, src, srcLayout, dst, count, pRegions);
+    hg_internal_vulkan_funcs.vkCmdCopyImageToBuffer(cmd, src, srcLayout, dst, count, pRegions);
 }
 
 void vkCmdPipelineBarrier2(VkCommandBuffer cmd, const VkDependencyInfo *pInfo) {
-    hg_vk_pfn.vkCmdPipelineBarrier2(cmd, pInfo);
+    hg_internal_vulkan_funcs.vkCmdPipelineBarrier2(cmd, pInfo);
 }
 
 void vkCmdBeginRendering(VkCommandBuffer cmd, const VkRenderingInfo *pInfo) {
-    hg_vk_pfn.vkCmdBeginRendering(cmd, pInfo);
+    hg_internal_vulkan_funcs.vkCmdBeginRendering(cmd, pInfo);
 }
 
 void vkCmdEndRendering(VkCommandBuffer cmd) {
-    hg_vk_pfn.vkCmdEndRendering(cmd);
+    hg_internal_vulkan_funcs.vkCmdEndRendering(cmd);
 }
 
 void vkCmdSetViewport(VkCommandBuffer cmd, uint32_t first, uint32_t count, const VkViewport *pViewports) {
-    hg_vk_pfn.vkCmdSetViewport(cmd, first, count, pViewports);
+    hg_internal_vulkan_funcs.vkCmdSetViewport(cmd, first, count, pViewports);
 }
 
 void vkCmdSetScissor(VkCommandBuffer cmd, uint32_t first, uint32_t count, const VkRect2D *pScissors) {
-    hg_vk_pfn.vkCmdSetScissor(cmd, first, count, pScissors);
+    hg_internal_vulkan_funcs.vkCmdSetScissor(cmd, first, count, pScissors);
 }
 
 void vkCmdBindPipeline(VkCommandBuffer cmd, VkPipelineBindPoint bindPoint, VkPipeline pipeline) {
-    hg_vk_pfn.vkCmdBindPipeline(cmd, bindPoint, pipeline);
+    hg_internal_vulkan_funcs.vkCmdBindPipeline(cmd, bindPoint, pipeline);
 }
 
 void vkCmdBindDescriptorSets(VkCommandBuffer cmd, VkPipelineBindPoint bindPoint, VkPipelineLayout layout, uint32_t firstSet, uint32_t count, const VkDescriptorSet *pSets, uint32_t dynCount, const uint32_t *pDyn) {
-    hg_vk_pfn.vkCmdBindDescriptorSets(cmd, bindPoint, layout, firstSet, count, pSets, dynCount, pDyn);
+    hg_internal_vulkan_funcs.vkCmdBindDescriptorSets(cmd, bindPoint, layout, firstSet, count, pSets, dynCount, pDyn);
 }
 
 void vkCmdPushConstants(VkCommandBuffer cmd, VkPipelineLayout layout, VkShaderStageFlags stages, uint32_t offset, uint32_t size, const void *pData) {
-    hg_vk_pfn.vkCmdPushConstants(cmd, layout, stages, offset, size, pData);
+    hg_internal_vulkan_funcs.vkCmdPushConstants(cmd, layout, stages, offset, size, pData);
 }
 
 void vkCmdBindVertexBuffers(VkCommandBuffer cmd, uint32_t first, uint32_t count, const VkBuffer *pBufs, const VkDeviceSize *pOffsets) {
-    hg_vk_pfn.vkCmdBindVertexBuffers(cmd, first, count, pBufs, pOffsets);
+    hg_internal_vulkan_funcs.vkCmdBindVertexBuffers(cmd, first, count, pBufs, pOffsets);
 }
 
 void vkCmdBindIndexBuffer(VkCommandBuffer cmd, VkBuffer buf, VkDeviceSize offset, VkIndexType type) {
-    hg_vk_pfn.vkCmdBindIndexBuffer(cmd, buf, offset, type);
+    hg_internal_vulkan_funcs.vkCmdBindIndexBuffer(cmd, buf, offset, type);
 }
 
 void vkCmdDraw(VkCommandBuffer cmd, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance) {
-    hg_vk_pfn.vkCmdDraw(cmd, vertexCount, instanceCount, firstVertex, firstInstance);
+    hg_internal_vulkan_funcs.vkCmdDraw(cmd, vertexCount, instanceCount, firstVertex, firstInstance);
 }
 
 void vkCmdDrawIndexed(VkCommandBuffer cmd, uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t vertexOffset, uint32_t firstInstance) {
-    hg_vk_pfn.vkCmdDrawIndexed(cmd, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
+    hg_internal_vulkan_funcs.vkCmdDrawIndexed(cmd, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
 }
 
 void vkCmdDispatch(VkCommandBuffer cmd, uint32_t x, uint32_t y, uint32_t z) {
-    hg_vk_pfn.vkCmdDispatch(cmd, x, y, z);
+    hg_internal_vulkan_funcs.vkCmdDispatch(cmd, x, y, z);
 }
 

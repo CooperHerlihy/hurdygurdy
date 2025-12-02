@@ -27,6 +27,8 @@ mkdir -p ${BUILD_DIR}/shaders
 SHADERS=(
     ${SRC_DIR}/src/test.vert
     ${SRC_DIR}/src/test.frag
+    ${SRC_DIR}/src/sprite.vert
+    ${SRC_DIR}/src/sprite.frag
 )
 
 for shader in "${SHADERS[@]}"; do

@@ -3,26 +3,150 @@
 #include "test.frag.spv.h"
 #include "test.vert.spv.h"
 
-typedef struct HgTestRenderer {
+typedef struct HgPipelineSprite {
+    VkDescriptorSetLayout descriptor_layout;
     VkPipelineLayout pipeline_layout;
     VkPipeline pipeline;
-} HgTestRenderer;
 
-typedef struct HgTestRendererTriangle {
+    VkDescriptorSet vp_set;
+    VkBuffer vp_buffer;
+    VkDeviceMemory vp_buffer_memory;
+} HgPipelineSprite;
+
+typedef struct HgPipelineSpriteData {
+    VkImage image;
+    VkImageView view;
+    VkSampler sampler;
+} HgPipelineSpriteData;
+
+HgPipelineSprite hg_pipeline_sprite_create(VkDevice device, VkFormat color_format, VkFormat depth_format) {
+    assert(device != VK_NULL_HANDLE);
+    assert(color_format != VK_FORMAT_UNDEFINED);
+    assert(depth_format != VK_FORMAT_UNDEFINED);
+
+    HgPipelineSprite pipeline;
+
+    VkDescriptorSetLayoutBinding desc_bindings[] = {{
+        .binding = 0,
+        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .descriptorCount = 1,
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+    }, {
+        .binding = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+        .descriptorCount = 1,
+        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+    }};
+    VkDescriptorSetLayoutCreateInfo desc_layout_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = hg_countof(desc_bindings),
+        .pBindings = desc_bindings,
+    };
+    vkCreateDescriptorSetLayout(device, &desc_layout_info, NULL, &pipeline.descriptor_layout);
+
+    VkPushConstantRange push_range = {
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+        .size = sizeof(HgMat4),
+    };
+
+    VkPipelineLayoutCreateInfo layout_info = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = 1,
+        .pSetLayouts = &pipeline.descriptor_layout,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges = &push_range,
+    };
+    vkCreatePipelineLayout(device, &layout_info, NULL, &pipeline.pipeline_layout);
+
+    VkShaderModuleCreateInfo vertex_shader_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = test_vert_spv_size,
+        .pCode = (u32 *)test_vert_spv,
+    };
+    VkShaderModule vertex_shader;
+    vkCreateShaderModule(device, &vertex_shader_info, NULL, &vertex_shader);
+
+    VkShaderModuleCreateInfo fragment_shader_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = test_frag_spv_size,
+        .pCode = (u32 *)test_frag_spv,
+    };
+    VkShaderModule fragment_shader;
+    vkCreateShaderModule(device, &fragment_shader_info, NULL, &fragment_shader);
+
+    VkPipelineShaderStageCreateInfo shader_stages[] = {{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .stage = VK_SHADER_STAGE_VERTEX_BIT,
+        .module = vertex_shader,
+        .pName = "main",
+    }, {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+        .module = fragment_shader,
+        .pName = "main",
+    }};
+
+    HgVkPipelineConfig pipeline_config = {
+        .color_attachment_formats = &color_format,
+        .color_attachment_count = 1,
+        .depth_attachment_format = depth_format,
+        .shader_stages = shader_stages,
+        .shader_count = hg_countof(shader_stages),
+        .layout = pipeline.pipeline_layout,
+        .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN,
+        .enable_color_blend = true,
+    };
+    pipeline.pipeline = hg_vk_create_graphics_pipeline(device, &pipeline_config);
+
+    vkDestroyShaderModule(device, fragment_shader, NULL);
+    vkDestroyShaderModule(device, vertex_shader, NULL);
+
+    return pipeline;
+}
+
+void hg_pipeline_sprite_destroy(VkDevice device, HgPipelineSprite *pipeline) {
+    assert(device != VK_NULL_HANDLE);
+    if (pipeline == NULL)
+        return;
+
+    vkDestroyPipeline(device, pipeline->pipeline, NULL);
+    vkDestroyPipelineLayout(device, pipeline->pipeline_layout, NULL);
+    vkDestroyDescriptorSetLayout(device, pipeline->descriptor_layout, NULL);
+}
+
+void hg_pipeline_sprite_bind(VkCommandBuffer cmd, HgPipelineSprite *pipeline) {
+    assert(cmd != VK_NULL_HANDLE);
+    assert(pipeline != NULL);
+
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->pipeline);
+}
+
+void hg_pipeline_sprite_draw(VkCommandBuffer cmd) {
+    assert(cmd != VK_NULL_HANDLE);
+
+    vkCmdDraw(cmd, 4, 1, 0, 0);
+}
+
+typedef struct HgPipelineTest {
+    VkPipelineLayout layout;
+    VkPipeline pipeline;
+} HgPipelineTest;
+
+typedef struct HgPipelineTestTriangle {
     VkBuffer vertex_buffer;
     VkDeviceMemory vertex_buffer_memory;
-} HgTestRendererTriangle;
+} HgPipelineTestTriangle;
 
-HgTestRenderer hg_test_renderer_create(VkDevice device, VkFormat target_format) {
+HgPipelineTest hg_pipeline_test_create(VkDevice device, VkFormat color_format) {
     assert(device != VK_NULL_HANDLE);
-    assert(target_format != VK_FORMAT_UNDEFINED);
+    assert(color_format != VK_FORMAT_UNDEFINED);
 
-    HgTestRenderer renderer = {0};
+    HgPipelineTest renderer = {0};
 
     VkPipelineLayoutCreateInfo layout_info = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
     };
-    vkCreatePipelineLayout(device, &layout_info, NULL, &renderer.pipeline_layout);
+    vkCreatePipelineLayout(device, &layout_info, NULL, &renderer.layout);
 
     VkShaderModuleCreateInfo vertex_shader_info = {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
@@ -60,11 +184,11 @@ HgTestRenderer hg_test_renderer_create(VkDevice device, VkFormat target_format) 
     };
 
     HgVkPipelineConfig pipeline_config = {
-        .color_attachment_formats = &target_format,
+        .color_attachment_formats = &color_format,
         .color_attachment_count = 1,
-        .layout = renderer.pipeline_layout,
         .shader_stages = shader_stages,
         .shader_count = hg_countof(shader_stages),
+        .layout = renderer.layout,
         .vertex_bindings = vertex_bindings,
         .vertex_binding_count = hg_countof(vertex_bindings),
         .vertex_attributes = vertex_attributes,
@@ -79,24 +203,24 @@ HgTestRenderer hg_test_renderer_create(VkDevice device, VkFormat target_format) 
     return renderer;
 }
 
-void hg_test_renderer_destroy(VkDevice device, HgTestRenderer *renderer) {
+void hg_pipeline_test_destroy(VkDevice device, HgPipelineTest *renderer) {
     assert(device != VK_NULL_HANDLE);
     assert(renderer != NULL);
 
     vkDestroyPipeline(device, renderer->pipeline, NULL);
-    vkDestroyPipelineLayout(device, renderer->pipeline_layout, NULL);
+    vkDestroyPipelineLayout(device, renderer->layout, NULL);
 }
 
-HgTestRendererTriangle hg_test_renderer_triangle_create(
+HgPipelineTestTriangle hg_pipeline_test_triangle_create(
     VkDevice device,
-    HgTestRenderer *renderer,
+    HgPipelineTest *renderer,
     VkPhysicalDevice gpu
 ) {
     assert(device != VK_NULL_HANDLE);
     assert(renderer != NULL);
     assert(gpu != VK_NULL_HANDLE);
 
-    HgTestRendererTriangle triangle = {0};
+    HgPipelineTestTriangle triangle = {0};
 
     f32 vertices[] = {
         0.0f, -0.5f,
@@ -117,7 +241,7 @@ HgTestRendererTriangle hg_test_renderer_triangle_create(
         .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
         .allocationSize = mem_reqs.size,
         .memoryTypeIndex = hg_vk_find_memory_type_index(gpu, mem_reqs.memoryTypeBits,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 0)
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 0)
     };
     vkAllocateMemory(device, &alloc_info, NULL, &triangle.vertex_buffer_memory);
 
@@ -131,7 +255,7 @@ HgTestRendererTriangle hg_test_renderer_triangle_create(
     return triangle;
 }
 
-void hg_test_renderer_triangle_destroy(VkDevice device, HgTestRenderer *renderer, HgTestRendererTriangle *triangle) {
+void hg_pipeline_test_triangle_destroy(VkDevice device, HgPipelineTest *renderer, HgPipelineTestTriangle *triangle) {
     assert(device != VK_NULL_HANDLE);
     assert(renderer != NULL);
     assert(triangle != NULL);
@@ -140,48 +264,17 @@ void hg_test_renderer_triangle_destroy(VkDevice device, HgTestRenderer *renderer
     vkFreeMemory(device, triangle->vertex_buffer_memory, NULL);
 }
 
-void hg_test_renderer_draw(
-    VkCommandBuffer cmd,
-    HgTestRenderer *renderer,
-    HgTestRendererTriangle *triangle,
-    VkImageView target_image,
-    u32 target_width,
-    u32 target_height
-) {
+void hg_pipeline_test_bind(VkCommandBuffer cmd, HgPipelineTest *renderer) {
     assert(cmd != VK_NULL_HANDLE);
     assert(renderer != NULL);
-    assert(triangle != NULL);
-    assert(target_image != VK_NULL_HANDLE);
-    assert(target_width > 0);
-    assert(target_height > 0);
-
-    VkRenderingAttachmentInfo color_attachment = {
-        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .imageView = target_image,
-        .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-    };
-    VkRenderingInfo rendering_info = {
-        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-        .renderArea = {.extent = {target_width, target_height}},
-        .layerCount = 1,
-        .colorAttachmentCount = 1,
-        .pColorAttachments = &color_attachment,
-    };
-    vkCmdBeginRendering(cmd, &rendering_info);
-
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, renderer->pipeline);
+}
 
-    vkCmdSetViewport(cmd, 0, 1, &(VkViewport){
-        0.0f, 0.0f, (f32)target_width, (f32)target_height, 0.0f, 1.0f});
-    vkCmdSetScissor(cmd, 0, 1, &(VkRect2D){
-        {0, 0}, {target_width, target_height}});
-
+void hg_pipeline_test_draw(VkCommandBuffer cmd, HgPipelineTestTriangle *triangle) {
+    assert(cmd != VK_NULL_HANDLE);
+    assert(triangle != NULL);
     vkCmdBindVertexBuffers(cmd, 0, 1, &triangle->vertex_buffer, &(VkDeviceSize){0});
     vkCmdDraw(cmd, 3, 1, 0, 0);
-
-    vkCmdEndRendering(cmd);
 }
 
 int main(void) {
@@ -192,6 +285,8 @@ int main(void) {
         .width = 800,
         .height = 600,
     });
+
+    hg_vk_load();
 
     VkInstance instance = hg_vk_create_instance("HurdyGurdy Test");
     hg_debug_mode(VkDebugUtilsMessengerEXT debug_messenger = hg_vk_create_debug_messenger(instance));
@@ -209,15 +304,19 @@ int main(void) {
             .image = swap_images[i],
             .viewType = VK_IMAGE_VIEW_TYPE_2D,
             .format = swapchain.format,
-            .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT}
+            .subresourceRange = {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .levelCount = 1,
+                .layerCount = 1,
+            }
         };
-        swap_views[i] = hg_vk_create_image_view(device.handle, &create_info);
+        vkCreateImageView(device.handle, &create_info, VK_NULL_HANDLE, &swap_views[i]);
     }
 
     HgFrameSync frame_sync = hg_frame_sync_create(device.handle, device.queue_family, swapchain.image_count);
 
-    HgTestRenderer renderer = hg_test_renderer_create(device.handle, swapchain.format);
-    HgTestRendererTriangle triangle = hg_test_renderer_triangle_create(device.handle, &renderer, device.gpu);
+    HgPipelineTest test_pipeline = hg_pipeline_test_create(device.handle, swapchain.format);
+    HgPipelineTestTriangle triangle = hg_pipeline_test_triangle_create(device.handle, &test_pipeline, device.gpu);
 
     u32 frame_count = 0;
     f64 frame_time = 0.0f;
@@ -239,6 +338,8 @@ int main(void) {
             break;
 
         if (hg_window_was_resized(window)) {
+            vkQueueWaitIdle(device.queue);
+
             u32 old_count = swapchain.image_count;
             VkSwapchainKHR old_swapchain = swapchain.handle;
             swapchain = hg_vk_create_swapchain(device.handle, device.gpu, old_swapchain, surface,
@@ -258,12 +359,15 @@ int main(void) {
                         .image = swap_images[i],
                         .viewType = VK_IMAGE_VIEW_TYPE_2D,
                         .format = swapchain.format,
-                        .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT}
+                        .subresourceRange = {
+                            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                            .levelCount = 1,
+                            .layerCount = 1,
+                        }
                     };
-                    swap_views[i] = hg_vk_create_image_view(device.handle, &create_info);
+                    vkCreateImageView(device.handle, &create_info, VK_NULL_HANDLE, &swap_views[i]);
                 }
 
-                vkQueueWaitIdle(device.queue);
                 hg_frame_sync_destroy(device.handle, &frame_sync);
                 frame_sync = hg_frame_sync_create(device.handle, device.queue_family, swapchain.image_count);
             }
@@ -290,7 +394,31 @@ int main(void) {
                 .pImageMemoryBarriers = &color_barrier,
             });
 
-            hg_test_renderer_draw(cmd, &renderer, &triangle, swap_views[image_index], swapchain.width, swapchain.height);
+            VkRenderingAttachmentInfo color_attachment = {
+                .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+                .imageView = swap_views[image_index],
+                .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            };
+            VkRenderingInfo rendering_info = {
+                .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+                .renderArea = {.extent = {swapchain.width, swapchain.height}},
+                .layerCount = 1,
+                .colorAttachmentCount = 1,
+                .pColorAttachments = &color_attachment,
+            };
+            vkCmdBeginRendering(cmd, &rendering_info);
+
+            VkViewport viewport = {0.0f, 0.0f, (f32)swapchain.width, (f32)swapchain.height, 0.0f, 1.0f};
+            vkCmdSetViewport(cmd, 0, 1, &viewport);
+            VkRect2D scissor = {{0, 0}, {swapchain.width, swapchain.height}};
+            vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+            hg_pipeline_test_bind(cmd, &test_pipeline);
+            hg_pipeline_test_draw(cmd, &triangle);
+
+            vkCmdEndRendering(cmd);
 
             VkImageMemoryBarrier2 present_barrier = {
                 .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -313,8 +441,8 @@ int main(void) {
 
     vkDeviceWaitIdle(device.handle);
 
-    hg_test_renderer_triangle_destroy(device.handle, &renderer, &triangle);
-    hg_test_renderer_destroy(device.handle, &renderer);
+    hg_pipeline_test_triangle_destroy(device.handle, &test_pipeline, &triangle);
+    hg_pipeline_test_destroy(device.handle, &test_pipeline);
 
     hg_frame_sync_destroy(device.handle, &frame_sync);
 
