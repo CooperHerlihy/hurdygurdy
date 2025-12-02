@@ -1646,8 +1646,8 @@ HgFrameSync hg_frame_sync_create(VkDevice device, u32 queue_family, u32 image_co
  * Destroys a frame sync system
  *
  * Parameters
- * - sync The frame sync system to destroy, must not be NULL
  * - device The Vulkan device, must not be VK_NULL_HANDLE
+ * - sync The frame sync system to destroy, must not be NULL
  */
 void hg_frame_sync_destroy(VkDevice device, HgFrameSync *sync);
 
@@ -1655,11 +1655,12 @@ void hg_frame_sync_destroy(VkDevice device, HgFrameSync *sync);
  * Acquires the next swapchain image and begins its command buffer
  *
  * Parameters
- * - sync The render sync system, must not be NULL
  * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - swapchain The Vulkan swapchain to acquire from, must not be VK_NULL_HANDLE
+ * - sync The frame sync system, must not be NULL
+ * - swapchain The Vulkan swapchain to acquire from
  * Returns
  * - The command buffer to record this frame
+ * - VK_NULL_HANDLE if the swapchain is out of date
  */
 VkCommandBuffer hg_frame_sync_begin_frame(VkDevice device, HgFrameSync *sync, VkSwapchainKHR swapchain);
 
@@ -1667,8 +1668,8 @@ VkCommandBuffer hg_frame_sync_begin_frame(VkDevice device, HgFrameSync *sync, Vk
  * Finishes recording the command buffer and presents the swapchain image
  *
  * Parameters
- * - sync The render sync system, must not be NULL
  * - queue The Vulkan queue, must not be VK_NULL_HANDLE
+ * - sync The frame sync system, must not be VK_NULL_HANDLE
  * - swapchain The Vulkan swapchain to present, must not be VK_NULL_HANDLE
  */
 void hg_frame_sync_end_frame_and_present(VkQueue queue, HgFrameSync *sync, VkSwapchainKHR swapchain);

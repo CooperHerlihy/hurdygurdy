@@ -241,7 +241,7 @@ int main(void) {
         if (hg_window_was_resized(window)) {
             u32 old_count = swapchain.image_count;
             VkSwapchainKHR old_swapchain = swapchain.handle;
-            swapchain = hg_vk_create_swapchain(device.handle, device.gpu, NULL, surface,
+            swapchain = hg_vk_create_swapchain(device.handle, device.gpu, old_swapchain, surface,
                 VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_PRESENT_MODE_FIFO_KHR);
 
             if (swapchain.handle != VK_NULL_HANDLE) {
@@ -262,14 +262,18 @@ int main(void) {
                     };
                     swap_views[i] = hg_vk_create_image_view(device.handle, &create_info);
                 }
+
+                vkQueueWaitIdle(device.queue);
+                hg_frame_sync_destroy(device.handle, &frame_sync);
+                frame_sync = hg_frame_sync_create(device.handle, device.queue_family, swapchain.image_count);
             }
 
             vkDestroySwapchainKHR(device.handle, old_swapchain, NULL);
             hg_info("window resized\n");
         }
 
-        if (swapchain.handle != NULL) {
-            VkCommandBuffer cmd = hg_frame_sync_begin_frame(device.handle, &frame_sync, swapchain.handle);
+        VkCommandBuffer cmd = hg_frame_sync_begin_frame(device.handle, &frame_sync, swapchain.handle);
+        if (cmd != VK_NULL_HANDLE) {
             u32 image_index = frame_sync.current_image;
 
             VkImageMemoryBarrier2 color_barrier = {

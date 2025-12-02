@@ -1453,20 +1453,23 @@ void hg_frame_sync_destroy(VkDevice device, HgFrameSync *sync) {
 VkCommandBuffer hg_frame_sync_begin_frame(VkDevice device, HgFrameSync *sync, VkSwapchainKHR swapchain) {
     assert(sync != NULL);
     assert(device != VK_NULL_HANDLE);
-    assert(swapchain != VK_NULL_HANDLE);
+    if (swapchain == VK_NULL_HANDLE)
+        return VK_NULL_HANDLE;
 
     sync->current_frame = (sync->current_frame + 1) % sync->frame_count;
 
     vkWaitForFences(device, 1, &sync->frame_finished[sync->current_frame], VK_TRUE, UINT64_MAX);
     vkResetFences(device, 1, &sync->frame_finished[sync->current_frame]);
 
-    vkAcquireNextImageKHR(
+    VkResult result = vkAcquireNextImageKHR(
         device,
         swapchain,
         UINT64_MAX,
         sync->image_available[sync->current_frame],
         VK_NULL_HANDLE,
         &sync->current_image);
+    if (result == VK_ERROR_OUT_OF_DATE_KHR)
+        return VK_NULL_HANDLE;
 
     VkCommandBuffer cmd = sync->cmds[sync->current_frame];
     VkCommandBufferBeginInfo begin_info = {
@@ -1478,6 +1481,10 @@ VkCommandBuffer hg_frame_sync_begin_frame(VkDevice device, HgFrameSync *sync, Vk
 }
 
 void hg_frame_sync_end_frame_and_present(VkQueue queue, HgFrameSync *sync, VkSwapchainKHR swapchain) {
+    assert(queue != VK_NULL_HANDLE);
+    assert(sync != NULL);
+    assert(swapchain != VK_NULL_HANDLE);
+
     VkCommandBuffer cmd = sync->cmds[sync->current_frame];
     vkEndCommandBuffer(cmd);
 
