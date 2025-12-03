@@ -4,3 +4,6 @@
 [submodule "vendor/libX11"]
 	path = vendor/libX11
 	url = https://github.com/mirror/libX11
+[submodule "vendor/VulkanMemoryAllocator"]
+	path = vendor/VulkanMemoryAllocator
+	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator

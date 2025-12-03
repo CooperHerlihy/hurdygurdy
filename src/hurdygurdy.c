@@ -2769,6 +2769,7 @@ typedef struct hgVulkanFuncs {
 
     HG_MAKE_VULKAN_FUNC(vkEnumeratePhysicalDevices)
     HG_MAKE_VULKAN_FUNC(vkEnumerateDeviceExtensionProperties)
+    HG_MAKE_VULKAN_FUNC(vkGetPhysicalDeviceProperties)
     HG_MAKE_VULKAN_FUNC(vkGetPhysicalDeviceQueueFamilyProperties)
 
     HG_MAKE_VULKAN_FUNC(vkDestroySurfaceKHR)
@@ -2806,6 +2807,7 @@ typedef struct hgVulkanFuncs {
     HG_MAKE_VULKAN_FUNC(vkDestroyDescriptorPool)
     HG_MAKE_VULKAN_FUNC(vkResetDescriptorPool)
     HG_MAKE_VULKAN_FUNC(vkAllocateDescriptorSets)
+    HG_MAKE_VULKAN_FUNC(vkFreeDescriptorSets)
     HG_MAKE_VULKAN_FUNC(vkUpdateDescriptorSets)
 
     HG_MAKE_VULKAN_FUNC(vkCreateDescriptorSetLayout)
@@ -2828,13 +2830,20 @@ typedef struct hgVulkanFuncs {
     HG_MAKE_VULKAN_FUNC(vkDestroySampler)
 
     HG_MAKE_VULKAN_FUNC(vkGetPhysicalDeviceMemoryProperties)
+    HG_MAKE_VULKAN_FUNC(vkGetPhysicalDeviceMemoryProperties2)
     HG_MAKE_VULKAN_FUNC(vkGetBufferMemoryRequirements)
+    HG_MAKE_VULKAN_FUNC(vkGetBufferMemoryRequirements2)
     HG_MAKE_VULKAN_FUNC(vkGetImageMemoryRequirements)
+    HG_MAKE_VULKAN_FUNC(vkGetImageMemoryRequirements2)
+    HG_MAKE_VULKAN_FUNC(vkGetDeviceBufferMemoryRequirements)
+    HG_MAKE_VULKAN_FUNC(vkGetDeviceImageMemoryRequirements)
 
     HG_MAKE_VULKAN_FUNC(vkAllocateMemory)
     HG_MAKE_VULKAN_FUNC(vkFreeMemory)
     HG_MAKE_VULKAN_FUNC(vkBindBufferMemory)
+    HG_MAKE_VULKAN_FUNC(vkBindBufferMemory2)
     HG_MAKE_VULKAN_FUNC(vkBindImageMemory)
+    HG_MAKE_VULKAN_FUNC(vkBindImageMemory2)
     HG_MAKE_VULKAN_FUNC(vkMapMemory)
     HG_MAKE_VULKAN_FUNC(vkUnmapMemory)
     HG_MAKE_VULKAN_FUNC(vkFlushMappedMemoryRanges)
@@ -2923,8 +2932,10 @@ void hg_vk_load_instance(VkInstance instance) {
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkDestroyDebugUtilsMessengerEXT);
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkEnumeratePhysicalDevices);
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkEnumerateDeviceExtensionProperties);
+    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetPhysicalDeviceProperties);
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetPhysicalDeviceQueueFamilyProperties);
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetPhysicalDeviceMemoryProperties);
+    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetPhysicalDeviceMemoryProperties2);
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetPhysicalDeviceSurfaceFormatsKHR);
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetPhysicalDeviceSurfacePresentModesKHR);
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetPhysicalDeviceSurfaceCapabilitiesKHR);
@@ -2971,6 +2982,7 @@ void hg_vk_load_device(VkDevice device) {
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyDescriptorPool);
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkResetDescriptorPool);
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkAllocateDescriptorSets);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkFreeDescriptorSets);
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkUpdateDescriptorSets);
 
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreateDescriptorSetLayout);
@@ -2993,12 +3005,18 @@ void hg_vk_load_device(VkDevice device) {
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroySampler);
 
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkGetBufferMemoryRequirements);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkGetBufferMemoryRequirements2);
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkGetImageMemoryRequirements);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkGetImageMemoryRequirements2);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkGetDeviceBufferMemoryRequirements);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkGetDeviceImageMemoryRequirements);
 
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkAllocateMemory);
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkFreeMemory);
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkBindBufferMemory);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkBindBufferMemory2);
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkBindImageMemory);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkBindImageMemory2);
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkMapMemory);
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkUnmapMemory);
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkFlushMappedMemoryRanges);
@@ -3061,6 +3079,10 @@ VkResult vkEnumeratePhysicalDevices(VkInstance instance, uint32_t *pCount, VkPhy
 
 VkResult vkEnumerateDeviceExtensionProperties(VkPhysicalDevice device, const char *pLayerName, uint32_t *pCount, VkExtensionProperties *pProps) {
     return hg_internal_vulkan_funcs.vkEnumerateDeviceExtensionProperties(device, pLayerName, pCount, pProps);
+}
+
+void vkGetPhysicalDeviceProperties(VkPhysicalDevice physicalDevice, VkPhysicalDeviceProperties *pProperties) {
+    hg_internal_vulkan_funcs.vkGetPhysicalDeviceProperties(physicalDevice, pProperties);
 }
 
 void vkGetPhysicalDeviceQueueFamilyProperties(VkPhysicalDevice device, uint32_t *pCount, VkQueueFamilyProperties *pProps) {
@@ -3183,6 +3205,10 @@ VkResult vkAllocateDescriptorSets(VkDevice device, const VkDescriptorSetAllocate
     return hg_internal_vulkan_funcs.vkAllocateDescriptorSets(device, pInfo, pSets);
 }
 
+VkResult vkFreeDescriptorSets(VkDevice device, VkDescriptorPool descriptorPool, uint32_t descriptorSetCount, const VkDescriptorSet* pDescriptorSets) {
+    return hg_internal_vulkan_funcs.vkFreeDescriptorSets(device, descriptorPool, descriptorSetCount, pDescriptorSets);
+}
+
 void vkUpdateDescriptorSets(VkDevice device, uint32_t writeCount, const VkWriteDescriptorSet *pWrites, uint32_t copyCount, const VkCopyDescriptorSet *pCopies) {
     hg_internal_vulkan_funcs.vkUpdateDescriptorSets(device, writeCount, pWrites, copyCount, pCopies);
 }
@@ -3255,20 +3281,40 @@ void vkDestroySampler(VkDevice device, VkSampler sampler, const VkAllocationCall
     hg_internal_vulkan_funcs.vkDestroySampler(device, sampler, pAllocator);
 }
 
-void vkGetPhysicalDeviceMemoryProperties(VkPhysicalDevice device, VkPhysicalDeviceMemoryProperties *pProps) {
-    hg_internal_vulkan_funcs.vkGetPhysicalDeviceMemoryProperties(device, pProps);
+void vkGetPhysicalDeviceMemoryProperties(VkPhysicalDevice physicalDevice, VkPhysicalDeviceMemoryProperties *pMemoryProperties) {
+    hg_internal_vulkan_funcs.vkGetPhysicalDeviceMemoryProperties(physicalDevice, pMemoryProperties);
 }
 
-void vkGetBufferMemoryRequirements(VkDevice device, VkBuffer buffer, VkMemoryRequirements *pReq) {
-    hg_internal_vulkan_funcs.vkGetBufferMemoryRequirements(device, buffer, pReq);
+void vkGetPhysicalDeviceMemoryProperties2(VkPhysicalDevice physicalDevice, VkPhysicalDeviceMemoryProperties2*pMemoryProperties) {
+    hg_internal_vulkan_funcs.vkGetPhysicalDeviceMemoryProperties2(physicalDevice, pMemoryProperties);
 }
 
-void vkGetImageMemoryRequirements(VkDevice device, VkImage image, VkMemoryRequirements *pReq) {
-    hg_internal_vulkan_funcs.vkGetImageMemoryRequirements(device, image, pReq);
+void vkGetBufferMemoryRequirements(VkDevice device, VkBuffer buffer, VkMemoryRequirements *pMemoryRequirements) {
+    hg_internal_vulkan_funcs.vkGetBufferMemoryRequirements(device, buffer, pMemoryRequirements);
 }
 
-VkResult vkAllocateMemory(VkDevice device, const VkMemoryAllocateInfo *pInfo, const VkAllocationCallbacks *pAllocator, VkDeviceMemory *pMem) {
-    return hg_internal_vulkan_funcs.vkAllocateMemory(device, pInfo, pAllocator, pMem);
+void vkGetBufferMemoryRequirements2(VkDevice device, const VkBufferMemoryRequirementsInfo2* pInfo, VkMemoryRequirements2* pMemoryRequirements) {
+    hg_internal_vulkan_funcs.vkGetBufferMemoryRequirements2(device, pInfo, pMemoryRequirements);
+}
+
+void vkGetImageMemoryRequirements(VkDevice device, VkImage image, VkMemoryRequirements *pMemoryRequirements) {
+    hg_internal_vulkan_funcs.vkGetImageMemoryRequirements(device, image, pMemoryRequirements);
+}
+
+void vkGetImageMemoryRequirements2(VkDevice device, const VkImageMemoryRequirementsInfo2* pInfo, VkMemoryRequirements2* pMemoryRequirements) {
+    hg_internal_vulkan_funcs.vkGetImageMemoryRequirements2(device, pInfo, pMemoryRequirements);
+}
+
+void vkGetDeviceBufferMemoryRequirements(VkDevice device, const VkDeviceBufferMemoryRequirements* pInfo, VkMemoryRequirements2* pMemoryRequirements) {
+    hg_internal_vulkan_funcs.vkGetDeviceBufferMemoryRequirements(device, pInfo, pMemoryRequirements);
+}
+
+void vkGetDeviceImageMemoryRequirements(VkDevice device, const VkDeviceImageMemoryRequirements* pInfo, VkMemoryRequirements2* pMemoryRequirements) {
+    hg_internal_vulkan_funcs.vkGetDeviceImageMemoryRequirements(device, pInfo, pMemoryRequirements);
+}
+
+VkResult vkAllocateMemory(VkDevice device, const VkMemoryAllocateInfo *pInfo, const VkAllocationCallbacks *pAllocator, VkDeviceMemory *pMemory) {
+    return hg_internal_vulkan_funcs.vkAllocateMemory(device, pInfo, pAllocator, pMemory);
 }
 
 void vkFreeMemory(VkDevice device, VkDeviceMemory mem, const VkAllocationCallbacks *pAllocator) {
@@ -3279,8 +3325,16 @@ VkResult vkBindBufferMemory(VkDevice device, VkBuffer buf, VkDeviceMemory mem, V
     return hg_internal_vulkan_funcs.vkBindBufferMemory(device, buf, mem, offset);
 }
 
+VkResult vkBindBufferMemory2(VkDevice device, uint32_t bindInfoCount, const VkBindBufferMemoryInfo* pBindInfos) {
+    return hg_internal_vulkan_funcs.vkBindBufferMemory2(device, bindInfoCount, pBindInfos);
+}
+
 VkResult vkBindImageMemory(VkDevice device, VkImage img, VkDeviceMemory mem, VkDeviceSize offset) {
     return hg_internal_vulkan_funcs.vkBindImageMemory(device, img, mem, offset);
+}
+
+VkResult vkBindImageMemory2(VkDevice device, uint32_t bindInfoCount, const VkBindImageMemoryInfo* pBindInfos) {
+    return hg_internal_vulkan_funcs.vkBindImageMemory2(device, bindInfoCount, pBindInfos);
 }
 
 VkResult vkMapMemory(VkDevice device, VkDeviceMemory mem, VkDeviceSize offset, VkDeviceSize size, VkMemoryMapFlags flags, void **ppData) {

@@ -44,11 +44,16 @@ cl /c "%SRC_DIR%\src\hurdygurdy.c" ^
 
 lib /nologo /OUT:"%BUILD_DIR%\hurdygurdy.lib" "%BUILD_DIR%\hurdygurdy.obj"
 
+cl /c "%SRC_DIR%\src\vk_mem_alloc.cpp" ^
+    /Fd:"%BUILD_DIR%\vk_mem_alloc.pdb" ^
+    /Fo:"%BUILD_DIR%\vk_mem_alloc.obj" ^
+    /std:c++17 %CONFIG% %INCLUDES%
+
 cl "%SRC_DIR%\src\test.c" ^
     /Fd:"%BUILD_DIR%\test.pdb" ^
     /Fo:"%BUILD_DIR%\test.obj" ^
     /Fe:"%BUILD_DIR%\test.exe" ^
     %STD% %WARNINGS% %CONFIG% %INCLUDES% ^
-    "%BUILD_DIR%\hurdygurdy.lib" User32.lib
+    "%BUILD_DIR%\vk_mem_alloc.obj" "%BUILD_DIR%\hurdygurdy.lib" User32.lib
 
 endlocal

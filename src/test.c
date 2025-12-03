@@ -1,58 +1,83 @@
 #include "hurdygurdy.h"
 
+#include "vk_mem_alloc.h"
+
 #include "test.frag.spv.h"
 #include "test.vert.spv.h"
 
 typedef struct HgPipelineSprite {
-    VkDescriptorSetLayout descriptor_layout;
+    VkDescriptorSetLayout vp_layout;
+    VkDescriptorSetLayout image_layout;
     VkPipelineLayout pipeline_layout;
     VkPipeline pipeline;
 
+    VkDescriptorPool descriptor_pool;
     VkDescriptorSet vp_set;
+
     VkBuffer vp_buffer;
-    VkDeviceMemory vp_buffer_memory;
+    VmaAllocation vp_buffer_allocation;
 } HgPipelineSprite;
 
-typedef struct HgPipelineSpriteData {
+typedef struct HgPipelineSpriteVPUniform {
+    HgMat4 proj;
+    HgMat4 view;
+} HgPipelineSpriteVPUniform;
+
+typedef struct HgPipelineSpriteTexture {
+    VmaAllocation allocation;
     VkImage image;
     VkImageView view;
     VkSampler sampler;
-} HgPipelineSpriteData;
+    VkDescriptorSet set;
+} HgPipelineSpriteTexture;
 
-HgPipelineSprite hg_pipeline_sprite_create(VkDevice device, VkFormat color_format, VkFormat depth_format) {
+HgPipelineSprite hg_pipeline_sprite_create(
+    VkDevice device,
+    VmaAllocator allocator,
+    VkFormat color_format,
+    VkFormat depth_format
+) {
     assert(device != VK_NULL_HANDLE);
     assert(color_format != VK_FORMAT_UNDEFINED);
     assert(depth_format != VK_FORMAT_UNDEFINED);
 
     HgPipelineSprite pipeline;
 
-    VkDescriptorSetLayoutBinding desc_bindings[] = {{
+    VkDescriptorSetLayoutBinding vp_bindings[] = {{
         .binding = 0,
         .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
         .descriptorCount = 1,
         .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-    }, {
+    }};
+    VkDescriptorSetLayoutCreateInfo vp_layout_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = hg_countof(vp_bindings),
+        .pBindings = vp_bindings,
+    };
+    vkCreateDescriptorSetLayout(device, &vp_layout_info, NULL, &pipeline.vp_layout);
+
+    VkDescriptorSetLayoutBinding image_bindings[] = {{
         .binding = 1,
-        .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
         .descriptorCount = 1,
         .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
     }};
-    VkDescriptorSetLayoutCreateInfo desc_layout_info = {
+    VkDescriptorSetLayoutCreateInfo image_layout_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = hg_countof(desc_bindings),
-        .pBindings = desc_bindings,
+        .bindingCount = hg_countof(image_bindings),
+        .pBindings = image_bindings,
     };
-    vkCreateDescriptorSetLayout(device, &desc_layout_info, NULL, &pipeline.descriptor_layout);
+    vkCreateDescriptorSetLayout(device, &image_layout_info, NULL, &pipeline.image_layout);
 
+    VkDescriptorSetLayout set_layouts[] = {pipeline.vp_layout, pipeline.image_layout};
     VkPushConstantRange push_range = {
         .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
         .size = sizeof(HgMat4),
     };
-
     VkPipelineLayoutCreateInfo layout_info = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .setLayoutCount = 1,
-        .pSetLayouts = &pipeline.descriptor_layout,
+        .setLayoutCount = hg_countof(set_layouts),
+        .pSetLayouts = set_layouts,
         .pushConstantRangeCount = 1,
         .pPushConstantRanges = &push_range,
     };
@@ -85,7 +110,6 @@ HgPipelineSprite hg_pipeline_sprite_create(VkDevice device, VkFormat color_forma
         .module = fragment_shader,
         .pName = "main",
     }};
-
     HgVkPipelineConfig pipeline_config = {
         .color_attachment_formats = &color_format,
         .color_attachment_count = 1,
@@ -101,6 +125,53 @@ HgPipelineSprite hg_pipeline_sprite_create(VkDevice device, VkFormat color_forma
     vkDestroyShaderModule(device, fragment_shader, NULL);
     vkDestroyShaderModule(device, vertex_shader, NULL);
 
+    VkDescriptorPoolSize desc_pool_sizes[] = {{
+        .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .descriptorCount = 1,
+    }, {
+        .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+        .descriptorCount = 255,
+    }};
+    VkDescriptorPoolCreateInfo desc_pool_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
+        .maxSets = 256,
+        .poolSizeCount = hg_countof(desc_pool_sizes),
+        .pPoolSizes = desc_pool_sizes,
+    };
+    vkCreateDescriptorPool(device, &desc_pool_info, NULL, &pipeline.descriptor_pool);
+
+    VkDescriptorSetAllocateInfo vp_set_alloc_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .descriptorPool = pipeline.descriptor_pool,
+        .descriptorSetCount = 1,
+        .pSetLayouts = &pipeline.vp_layout,
+    };
+    vkAllocateDescriptorSets(device, &vp_set_alloc_info, &pipeline.vp_set);
+
+    VkBufferCreateInfo vp_buffer_info = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = sizeof(HgPipelineSpriteVPUniform),
+        .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+    };
+    VmaAllocationCreateInfo vp_alloc_info = {
+        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+        .usage = VMA_MEMORY_USAGE_AUTO,
+    };
+    vmaCreateBuffer(
+        allocator,
+        &vp_buffer_info,
+        &vp_alloc_info,
+        &pipeline.vp_buffer,
+        &pipeline.vp_buffer_allocation,
+        NULL);
+
+    HgPipelineSpriteVPUniform vp_data = {
+        .proj = hg_smat4(1.0f),
+        .view = hg_smat4(1.0f),
+    };
+    vmaCopyMemoryToAllocation(allocator, &vp_data, pipeline.vp_buffer_allocation, 0, sizeof(vp_data));
+
     return pipeline;
 }
 
@@ -109,9 +180,134 @@ void hg_pipeline_sprite_destroy(VkDevice device, HgPipelineSprite *pipeline) {
     if (pipeline == NULL)
         return;
 
+    vkFreeDescriptorSets(device, pipeline->descriptor_pool, 1, &pipeline->vp_set);
+    vkDestroyDescriptorPool(device, pipeline->descriptor_pool, NULL);
+
     vkDestroyPipeline(device, pipeline->pipeline, NULL);
     vkDestroyPipelineLayout(device, pipeline->pipeline_layout, NULL);
-    vkDestroyDescriptorSetLayout(device, pipeline->descriptor_layout, NULL);
+    vkDestroyDescriptorSetLayout(device, pipeline->image_layout, NULL);
+    vkDestroyDescriptorSetLayout(device, pipeline->vp_layout, NULL);
+}
+
+void hg_pipeline_sprite_update_projection(
+    VkDevice device,
+    HgPipelineSprite *pipeline,
+    VmaAllocator allocator,
+    HgMat4 *projection
+) {
+    (void)device;
+    assert(device != VK_NULL_HANDLE);
+    assert(pipeline != NULL);
+    assert(allocator != VK_NULL_HANDLE);
+    assert(projection != NULL);
+
+    vmaCopyMemoryToAllocation(
+        allocator,
+        projection,
+        pipeline->vp_buffer_allocation,
+        offsetof(HgPipelineSpriteVPUniform, proj),
+        sizeof(*projection));
+}
+
+void hg_pipeline_sprite_update_view(
+    HgPipelineSprite *pipeline,
+    VmaAllocator allocator,
+    HgMat4 *view
+) {
+    assert(pipeline != NULL);
+    assert(allocator != VK_NULL_HANDLE);
+    assert(view != NULL);
+
+    vmaCopyMemoryToAllocation(
+        allocator,
+        view,
+        pipeline->vp_buffer_allocation,
+        offsetof(HgPipelineSpriteVPUniform, view),
+        sizeof(*view));
+}
+
+HgPipelineSpriteTexture hg_pipeline_sprite_create_texture(
+    VkDevice device,
+    HgPipelineSprite *pipeline,
+    VmaAllocator allocator,
+    void *tex_data,
+    u32 width,
+    u32 height,
+    VkFormat pixel_format,
+    VkFilter sampler_filter,
+    VkSamplerAddressMode edge_mode
+) {
+    assert(device != VK_NULL_HANDLE);
+    assert(pipeline != NULL);
+    assert(allocator != VK_NULL_HANDLE);
+    assert(tex_data != NULL);
+    assert(width > 0);
+    assert(height > 0);
+
+    HgPipelineSpriteTexture tex;
+
+    VkImageCreateInfo image_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = pixel_format,
+        .extent = {width, height, 1},
+        .mipLevels = 1,
+        .arrayLayers = 1,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+    };
+    VmaAllocationCreateInfo alloc_info = {
+        .usage = VMA_MEMORY_USAGE_AUTO,
+    };
+    vmaCreateImage(allocator, &image_info, &alloc_info, &tex.image, &tex.allocation, NULL);
+
+    VkImageViewCreateInfo view_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image = tex.image,
+        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+        .format = pixel_format,
+        .subresourceRange = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .levelCount = 1,
+            .layerCount = 1,
+        },
+    };
+    vkCreateImageView(device, &view_info, NULL, &tex.view);
+
+    VkSamplerCreateInfo sampler_info = {
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .magFilter = sampler_filter,
+        .minFilter = sampler_filter,
+        .addressModeU = edge_mode,
+        .addressModeV = edge_mode,
+        .addressModeW = edge_mode,
+    };
+    vkCreateSampler(device, &sampler_info, NULL, &tex.sampler);
+
+    VkDescriptorSetAllocateInfo set_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .descriptorPool = pipeline->descriptor_pool,
+        .descriptorSetCount = 1,
+        .pSetLayouts = &pipeline->image_layout,
+    };
+    vkAllocateDescriptorSets(device, &set_info, &tex.set);
+
+    VkDescriptorImageInfo desc_info = {
+        .sampler = tex.sampler,
+        .imageView = tex.view,
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+    };
+    VkWriteDescriptorSet desc_write = {
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = tex.set,
+        .dstBinding = 0,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        .pImageInfo = &desc_info,
+    };
+    vkUpdateDescriptorSets(device, 1, &desc_write, 0, NULL);
+
+    return tex;
 }
 
 void hg_pipeline_sprite_bind(VkCommandBuffer cmd, HgPipelineSprite *pipeline) {
@@ -119,10 +315,41 @@ void hg_pipeline_sprite_bind(VkCommandBuffer cmd, HgPipelineSprite *pipeline) {
     assert(pipeline != NULL);
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->pipeline);
+    vkCmdBindDescriptorSets(cmd,
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        pipeline->pipeline_layout,
+        0,
+        1,
+        &pipeline->vp_set,
+        0,
+        NULL);
 }
 
-void hg_pipeline_sprite_draw(VkCommandBuffer cmd) {
+void hg_pipeline_sprite_draw(
+    VkCommandBuffer cmd,
+    HgPipelineSprite *pipeline,
+    HgPipelineSpriteTexture *texture,
+    HgMat4 *model
+) {
     assert(cmd != VK_NULL_HANDLE);
+
+    vkCmdBindDescriptorSets(
+        cmd,
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        pipeline->pipeline_layout,
+        1,
+        1,
+        &texture->set,
+        0,
+        NULL);
+
+    vkCmdPushConstants(
+        cmd,
+        pipeline->pipeline_layout,
+        VK_SHADER_STAGE_VERTEX_BIT,
+        0,
+        sizeof(HgPipelineSpriteVPUniform),
+        model);
 
     vkCmdDraw(cmd, 4, 1, 0, 0);
 }
@@ -291,6 +518,15 @@ int main(void) {
     VkInstance instance = hg_vk_create_instance("HurdyGurdy Test");
     hg_debug_mode(VkDebugUtilsMessengerEXT debug_messenger = hg_vk_create_debug_messenger(instance));
     HgSingleQueueDeviceData device = hg_vk_create_single_queue_device(instance);
+
+    VmaAllocatorCreateInfo allocator_info = {
+        .physicalDevice = device.gpu,
+        .device = device.handle,
+        .instance = instance,
+        .vulkanApiVersion = VK_API_VERSION_1_3,
+    };
+    VmaAllocator allocator;
+    vmaCreateAllocator(&allocator_info, &allocator);
 
     VkSurfaceKHR surface = hg_vk_create_surface(instance, platform, window);
     HgSwapchainData swapchain = hg_vk_create_swapchain(device.handle, device.gpu, NULL, surface,
