@@ -507,7 +507,7 @@ HgMat4 hg_view_matrix(HgVec3 position, f32 zoom, HgQuat rotation) {
     return hg_mmul4(rot, pos);
 }
 
-HgMat4 hg_orthographic_projection(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far) {
+HgMat4 hg_projection_orthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far) {
     return (HgMat4){
         {2.0f / (right - left), 0.0f, 0.0f, 0.0f},
         {0.0f, 2.0f / (bottom - top), 0.0f, 0.0f},
@@ -516,7 +516,7 @@ HgMat4 hg_orthographic_projection(f32 left, f32 right, f32 top, f32 bottom, f32 
     };
 }
 
-HgMat4 hg_perspective_projection(f32 fov, f32 aspect, f32 near, f32 far) {
+HgMat4 hg_projection_perspective(f32 fov, f32 aspect, f32 near, f32 far) {
     assert(near > 0.0f);
     assert(far > near);
     f32 scale = 1 / tanf(fov / 2);
@@ -841,9 +841,9 @@ VkInstance hg_vk_create_instance(const char *app_name) {
         .ppEnabledExtensionNames = exts,
     };
 
-    VkInstance instance = VK_NULL_HANDLE;
+    VkInstance instance = NULL;
     VkResult result = vkCreateInstance(&instance_info, NULL, &instance);
-    if (instance == VK_NULL_HANDLE)
+    if (instance == NULL)
         hg_error("Failed to create Vulkan instance: %s\n", hg_vk_result_string(result));
 
     hg_vk_load_instance(instance);
@@ -851,19 +851,19 @@ VkInstance hg_vk_create_instance(const char *app_name) {
 }
 
 VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger(VkInstance instance) {
-    assert(instance != VK_NULL_HANDLE);
+    assert(instance != NULL);
 
-    VkDebugUtilsMessengerEXT messenger = VK_NULL_HANDLE;
+    VkDebugUtilsMessengerEXT messenger = NULL;
     VkResult result = vkCreateDebugUtilsMessengerEXT(
         instance, &hg_internal_debug_utils_messenger_info, NULL, &messenger);
-    if (messenger == VK_NULL_HANDLE)
+    if (messenger == NULL)
         hg_error("Failed to create Vulkan debug messenger: %s\n", hg_vk_result_string(result));
 
     return messenger;
 }
 
 bool hg_vk_find_queue_family(VkPhysicalDevice gpu, u32 *queue_family, VkQueueFlags queue_flags) {
-    assert(gpu != VK_NULL_HANDLE);
+    assert(gpu != NULL);
 
     u32 family_count = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, NULL);
@@ -885,7 +885,7 @@ static const char *const hg_internal_vk_device_extensions[] = {
 };
 
 static VkPhysicalDevice hg_internal_find_single_queue_gpu(VkInstance instance, u32 *queue_family) {
-    assert(instance != VK_NULL_HANDLE);
+    assert(instance != NULL);
 
     u32 gpu_count;
     vkEnumeratePhysicalDevices(instance, &gpu_count, NULL);
@@ -895,7 +895,7 @@ static VkPhysicalDevice hg_internal_find_single_queue_gpu(VkInstance instance, u
     u32 ext_prop_count = 0;
     VkExtensionProperties* ext_props = NULL;
 
-    VkPhysicalDevice suitable_gpu = VK_NULL_HANDLE;
+    VkPhysicalDevice suitable_gpu = NULL;
     for (u32 i = 0; i < gpu_count; ++i) {
         VkPhysicalDevice gpu = gpus[i];
 
@@ -928,7 +928,7 @@ next_gpu:
     }
 
     free(ext_props);
-    if (suitable_gpu == VK_NULL_HANDLE)
+    if (suitable_gpu == NULL)
         hg_warn("Could not find a suitable gpu\n");
     return suitable_gpu;
 }
@@ -965,16 +965,16 @@ static VkDevice hg_internal_create_single_queue_device(VkPhysicalDevice gpu, u32
         .pEnabledFeatures = &features,
     };
 
-    VkDevice device = VK_NULL_HANDLE;
+    VkDevice device = NULL;
     VkResult result = vkCreateDevice(gpu, &device_info, NULL, &device);
 
-    if (device == VK_NULL_HANDLE)
+    if (device == NULL)
         hg_error("Could not create Vulkan device: %s\n", hg_vk_result_string(result));
     return device;
 }
 
 HgSingleQueueDeviceData hg_vk_create_single_queue_device(VkInstance instance) {
-    assert(instance != VK_NULL_HANDLE);
+    assert(instance != NULL);
 
     HgSingleQueueDeviceData device = {0};
     device.gpu = hg_internal_find_single_queue_gpu(instance, &device.queue_family);
@@ -986,8 +986,8 @@ HgSingleQueueDeviceData hg_vk_create_single_queue_device(VkInstance instance) {
 }
 
 static VkFormat hg_internal_vk_find_swapchain_format(VkPhysicalDevice gpu, VkSurfaceKHR surface) {
-    assert(gpu != VK_NULL_HANDLE);
-    assert(surface != VK_NULL_HANDLE);
+    assert(gpu != NULL);
+    assert(surface != NULL);
 
     u32 format_count = 0;
     vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &format_count, NULL);
@@ -1008,8 +1008,8 @@ static VkPresentModeKHR hg_internal_vk_find_swapchain_present_mode(
     VkSurfaceKHR surface,
     VkPresentModeKHR desired_mode
 ) {
-    assert(gpu != VK_NULL_HANDLE);
-    assert(surface != VK_NULL_HANDLE);
+    assert(gpu != NULL);
+    assert(surface != NULL);
 
     if (desired_mode == VK_PRESENT_MODE_FIFO_KHR)
         return desired_mode;
@@ -1034,9 +1034,9 @@ HgSwapchainData hg_vk_create_swapchain(
     VkImageUsageFlags image_usage,
     VkPresentModeKHR desired_mode
 ) {
-    assert(device != VK_NULL_HANDLE);
-    assert(gpu != VK_NULL_HANDLE);
-    assert(surface != VK_NULL_HANDLE);
+    assert(device != NULL);
+    assert(gpu != NULL);
+    assert(surface != NULL);
     assert(image_usage != 0);
 
     HgSwapchainData swapchain = {0};
@@ -1083,7 +1083,7 @@ HgSwapchainData hg_vk_create_swapchain(
 }
 
 VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineConfig *config) {
-    assert(device != VK_NULL_HANDLE);
+    assert(device != NULL);
     assert(config != NULL);
     if (config->color_attachment_count > 0)
         assert(config->color_attachment_formats != NULL);
@@ -1223,19 +1223,19 @@ VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineCon
         .pColorBlendState = &color_blend_state,
         .pDynamicState = &dynamic_state,
         .layout = config->layout,
-        .basePipelineHandle = VK_NULL_HANDLE,
+        .basePipelineHandle = NULL,
         .basePipelineIndex = -1,
     };
-    VkPipeline pipeline = VK_NULL_HANDLE;
-    VkResult result = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipeline_info, NULL, &pipeline);
-    if (pipeline == VK_NULL_HANDLE)
+    VkPipeline pipeline = NULL;
+    VkResult result = vkCreateGraphicsPipelines(device, NULL, 1, &pipeline_info, NULL, &pipeline);
+    if (pipeline == NULL)
         hg_error("Failed to create Vulkan graphics pipeline: %s\n", hg_vk_result_string(result));
 
     return pipeline;
 }
 
 VkPipeline hg_vk_create_compute_pipeline(VkDevice device, const HgVkPipelineConfig *config) {
-    assert(device != VK_NULL_HANDLE);
+    assert(device != NULL);
     assert(config != NULL);
     assert(config->color_attachment_count == 0);
     assert(config->color_attachment_formats == NULL);
@@ -1252,12 +1252,12 @@ VkPipeline hg_vk_create_compute_pipeline(VkDevice device, const HgVkPipelineConf
         .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
         .stage = config->shader_stages[0],
         .layout = config->layout,
-        .basePipelineHandle = VK_NULL_HANDLE,
+        .basePipelineHandle = NULL,
         .basePipelineIndex = -1,
     };
-    VkPipeline pipeline = VK_NULL_HANDLE;
-    VkResult result = vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipeline_info, NULL, &pipeline);
-    if (pipeline == VK_NULL_HANDLE)
+    VkPipeline pipeline = NULL;
+    VkResult result = vkCreateComputePipelines(device, NULL, 1, &pipeline_info, NULL, &pipeline);
+    if (pipeline == NULL)
         hg_error("Failed to create Vulkan compute pipeline: %s\n", hg_vk_result_string(result));
 
     return pipeline;
@@ -1269,7 +1269,7 @@ u32 hg_vk_find_memory_type_index(
     VkMemoryPropertyFlags desired_flags,
     VkMemoryPropertyFlags undesired_flags
 ) {
-    assert(gpu != VK_NULL_HANDLE);
+    assert(gpu != NULL);
     assert(bitmask != 0);
 
     VkPhysicalDeviceMemoryProperties mem_props;
@@ -1302,7 +1302,7 @@ u32 hg_vk_find_memory_type_index(
 }
 
 HgFrameSync hg_frame_sync_create(VkDevice device, u32 queue_family, u32 image_count) {
-    assert(device != VK_NULL_HANDLE);
+    assert(device != NULL);
     assert(image_count > 0);
 
     HgFrameSync sync = {.frame_count = image_count};
@@ -1352,7 +1352,7 @@ HgFrameSync hg_frame_sync_create(VkDevice device, u32 queue_family, u32 image_co
 }
 
 void hg_frame_sync_destroy(VkDevice device, HgFrameSync *sync) {
-    assert(device != VK_NULL_HANDLE);
+    assert(device != NULL);
     assert(sync != NULL);
 
     vkFreeCommandBuffers(device, sync->pool, sync->frame_count, sync->cmds);
@@ -1369,11 +1369,467 @@ void hg_frame_sync_destroy(VkDevice device, HgFrameSync *sync) {
     vkDestroyCommandPool(device, sync->pool, NULL);
 }
 
+#include "sprite.frag.spv.h"
+#include "sprite.vert.spv.h"
+
+typedef struct HgPipelineSpriteVPUniform {
+    HgMat4 proj;
+    HgMat4 view;
+} HgPipelineSpriteVPUniform;
+
+HgPipelineSprite hg_pipeline_sprite_create(
+    VkDevice device,
+    VmaAllocator allocator,
+    VkFormat color_format,
+    VkFormat depth_format
+) {
+    assert(device != NULL);
+    assert(color_format != VK_FORMAT_UNDEFINED);
+
+    HgPipelineSprite pipeline = {
+        .device = device,
+        .allocator = allocator,
+    };
+
+    VkDescriptorSetLayoutBinding vp_bindings[] = {{
+        .binding = 0,
+        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .descriptorCount = 1,
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+    }};
+    VkDescriptorSetLayoutCreateInfo vp_layout_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = hg_countof(vp_bindings),
+        .pBindings = vp_bindings,
+    };
+    vkCreateDescriptorSetLayout(device, &vp_layout_info, NULL, &pipeline.vp_layout);
+
+    VkDescriptorSetLayoutBinding image_bindings[] = {{
+        .binding = 0,
+        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        .descriptorCount = 1,
+        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+    }};
+    VkDescriptorSetLayoutCreateInfo image_layout_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = hg_countof(image_bindings),
+        .pBindings = image_bindings,
+    };
+    vkCreateDescriptorSetLayout(device, &image_layout_info, NULL, &pipeline.image_layout);
+
+    VkDescriptorSetLayout set_layouts[] = {pipeline.vp_layout, pipeline.image_layout};
+    VkPushConstantRange push_ranges[] = {{
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+        .offset = 0,
+        .size = sizeof(HgPipelineSpritePush),
+    }};
+    VkPipelineLayoutCreateInfo layout_info = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = hg_countof(set_layouts),
+        .pSetLayouts = set_layouts,
+        .pushConstantRangeCount = hg_countof(push_ranges),
+        .pPushConstantRanges = push_ranges,
+    };
+    vkCreatePipelineLayout(device, &layout_info, NULL, &pipeline.pipeline_layout);
+
+    VkShaderModuleCreateInfo vertex_shader_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = sprite_vert_spv_size,
+        .pCode = (u32 *)sprite_vert_spv,
+    };
+    VkShaderModule vertex_shader;
+    vkCreateShaderModule(device, &vertex_shader_info, NULL, &vertex_shader);
+
+    VkShaderModuleCreateInfo fragment_shader_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = sprite_frag_spv_size,
+        .pCode = (u32 *)sprite_frag_spv,
+    };
+    VkShaderModule fragment_shader;
+    vkCreateShaderModule(device, &fragment_shader_info, NULL, &fragment_shader);
+
+    VkPipelineShaderStageCreateInfo shader_stages[] = {{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .stage = VK_SHADER_STAGE_VERTEX_BIT,
+        .module = vertex_shader,
+        .pName = "main",
+    }, {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+        .module = fragment_shader,
+        .pName = "main",
+    }};
+    HgVkPipelineConfig pipeline_config = {
+        .color_attachment_formats = &color_format,
+        .color_attachment_count = 1,
+        .depth_attachment_format = depth_format,
+        .shader_stages = shader_stages,
+        .shader_count = hg_countof(shader_stages),
+        .layout = pipeline.pipeline_layout,
+        .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN,
+        .enable_color_blend = true,
+    };
+    pipeline.pipeline = hg_vk_create_graphics_pipeline(device, &pipeline_config);
+
+    vkDestroyShaderModule(device, fragment_shader, NULL);
+    vkDestroyShaderModule(device, vertex_shader, NULL);
+
+    VkDescriptorPoolSize desc_pool_sizes[] = {{
+        .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .descriptorCount = 1,
+    }, {
+        .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+        .descriptorCount = 255,
+    }};
+    VkDescriptorPoolCreateInfo desc_pool_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
+        .maxSets = 256,
+        .poolSizeCount = hg_countof(desc_pool_sizes),
+        .pPoolSizes = desc_pool_sizes,
+    };
+    vkCreateDescriptorPool(device, &desc_pool_info, NULL, &pipeline.descriptor_pool);
+
+    VkDescriptorSetAllocateInfo vp_set_alloc_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .descriptorPool = pipeline.descriptor_pool,
+        .descriptorSetCount = 1,
+        .pSetLayouts = &pipeline.vp_layout,
+    };
+    vkAllocateDescriptorSets(device, &vp_set_alloc_info, &pipeline.vp_set);
+
+    VkBufferCreateInfo vp_buffer_info = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = sizeof(HgPipelineSpriteVPUniform),
+        .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+    };
+    VmaAllocationCreateInfo vp_alloc_info = {
+        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+        .usage = VMA_MEMORY_USAGE_AUTO,
+    };
+    vmaCreateBuffer(
+        allocator,
+        &vp_buffer_info,
+        &vp_alloc_info,
+        &pipeline.vp_buffer,
+        &pipeline.vp_buffer_allocation,
+        NULL);
+
+    HgPipelineSpriteVPUniform vp_data = {
+        .proj = hg_smat4(1.0f),
+        .view = hg_smat4(1.0f),
+    };
+    vmaCopyMemoryToAllocation(allocator, &vp_data, pipeline.vp_buffer_allocation, 0, sizeof(vp_data));
+
+    VkDescriptorBufferInfo desc_info = {
+        .buffer = pipeline.vp_buffer,
+        .range = sizeof(HgPipelineSpriteVPUniform),
+    };
+    VkWriteDescriptorSet desc_write = {
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = pipeline.vp_set,
+        .dstBinding = 0,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .pBufferInfo = &desc_info,
+    };
+    vkUpdateDescriptorSets(device, 1, &desc_write, 0, NULL);
+
+    return pipeline;
+}
+
+void hg_pipeline_sprite_destroy(HgPipelineSprite *pipeline) {
+    if (pipeline == NULL)
+        return;
+
+    vmaDestroyBuffer(pipeline->allocator, pipeline->vp_buffer, pipeline->vp_buffer_allocation);
+    vkFreeDescriptorSets(pipeline->device, pipeline->descriptor_pool, 1, &pipeline->vp_set);
+    vkDestroyDescriptorPool(pipeline->device, pipeline->descriptor_pool, NULL);
+    vkDestroyPipeline(pipeline->device, pipeline->pipeline, NULL);
+    vkDestroyPipelineLayout(pipeline->device, pipeline->pipeline_layout, NULL);
+    vkDestroyDescriptorSetLayout(pipeline->device, pipeline->image_layout, NULL);
+    vkDestroyDescriptorSetLayout(pipeline->device, pipeline->vp_layout, NULL);
+}
+
+void hg_pipeline_sprite_update_projection(HgPipelineSprite *pipeline, HgMat4 *projection) {
+    assert(pipeline != NULL);
+    assert(projection != NULL);
+
+    vmaCopyMemoryToAllocation(
+        pipeline->allocator,
+        projection,
+        pipeline->vp_buffer_allocation,
+        offsetof(HgPipelineSpriteVPUniform, proj),
+        sizeof(*projection));
+}
+
+void hg_pipeline_sprite_update_view(HgPipelineSprite *pipeline, HgMat4 *view) {
+    assert(pipeline != NULL);
+    assert(view != NULL);
+
+    vmaCopyMemoryToAllocation(
+        pipeline->allocator,
+        view,
+        pipeline->vp_buffer_allocation,
+        offsetof(HgPipelineSpriteVPUniform, view),
+        sizeof(*view));
+}
+
+HgPipelineSpriteTexture hg_pipeline_sprite_create_texture(
+    HgPipelineSprite *pipeline,
+    VkCommandPool cmd_pool,
+    VkQueue transfer_queue,
+    HgPipelineSpriteTextureConfig *config
+) {
+    assert(pipeline != NULL);
+    assert(config != NULL);
+    assert(config->tex_data != NULL);
+    assert(config->width > 0);
+    assert(config->height > 0);
+    assert(config->format != VK_FORMAT_UNDEFINED);
+
+    HgPipelineSpriteTexture tex;
+
+    VkImageCreateInfo image_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = config->format,
+        .extent = {config->width, config->height, 1},
+        .mipLevels = 1,
+        .arrayLayers = 1,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+    };
+    VmaAllocationCreateInfo alloc_info = {
+        .usage = VMA_MEMORY_USAGE_AUTO,
+    };
+    vmaCreateImage(pipeline->allocator, &image_info, &alloc_info, &tex.image, &tex.allocation, NULL);
+
+    VkBufferCreateInfo stage_info = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = config->width * config->height * config->pixel_width,
+        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+    };
+    VmaAllocationCreateInfo stage_alloc_info = {
+        .usage = VMA_MEMORY_USAGE_AUTO,
+        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+    };
+    VkBuffer stage;
+    VmaAllocation stage_alloc;
+    vmaCreateBuffer(pipeline->allocator, &stage_info, &stage_alloc_info, &stage, &stage_alloc, NULL);
+    vmaCopyMemoryToAllocation(
+        pipeline->allocator,
+        config->tex_data,
+        stage_alloc,
+        0,
+        config->width * config->height * config->pixel_width);
+
+    VkCommandBufferAllocateInfo cmd_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool = cmd_pool,
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1,
+    };
+    VkCommandBuffer cmd;
+    vkAllocateCommandBuffers(pipeline->device, &cmd_info, &cmd);
+
+    VkCommandBufferBeginInfo cmd_begin_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+    };
+    vkBeginCommandBuffer(cmd, &cmd_begin_info);
+
+    VkBufferMemoryBarrier2 stage_barrier = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
+        .srcStageMask = VK_PIPELINE_STAGE_HOST_BIT,
+        .srcAccessMask = VK_ACCESS_HOST_WRITE_BIT,
+        .dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT,
+        .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+        .buffer = stage,
+        .offset = 0,
+        .size = config->width * config->height * config->pixel_width,
+    };
+    VkImageMemoryBarrier2 transfer_barrier = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT,
+        .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+        .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        .image = tex.image,
+        .subresourceRange = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .levelCount = VK_REMAINING_MIP_LEVELS,
+            .layerCount = 1,
+        },
+    };
+    VkDependencyInfo transfer_dep = {
+        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .bufferMemoryBarrierCount = 1,
+        .pBufferMemoryBarriers = &stage_barrier,
+        .imageMemoryBarrierCount = 1,
+        .pImageMemoryBarriers = &transfer_barrier,
+    };
+    vkCmdPipelineBarrier2(cmd, &transfer_dep);
+
+    VkBufferImageCopy region = {
+        .imageSubresource = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .layerCount = 1,
+        },
+        .imageExtent = {config->width, config->height, 1},
+    };
+    vkCmdCopyBufferToImage(cmd, stage, tex.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+    VkImageMemoryBarrier2 shader_barrier = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT,
+        .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+        .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+        .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .image = tex.image,
+        .subresourceRange = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .levelCount = VK_REMAINING_MIP_LEVELS,
+            .layerCount = 1,
+        },
+    };
+    VkDependencyInfo shader_dep = {
+        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .imageMemoryBarrierCount = 1,
+        .pImageMemoryBarriers = &shader_barrier,
+    };
+    vkCmdPipelineBarrier2(cmd, &shader_dep);
+
+    vkEndCommandBuffer(cmd);
+
+    VkFenceCreateInfo fence_info = {
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+    };
+    VkFence fence;
+    vkCreateFence(pipeline->device, &fence_info, NULL, &fence);
+
+    VkSubmitInfo submit_info = {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &cmd,
+    };
+    vkQueueSubmit(transfer_queue, 1, &submit_info, fence);
+
+    VkImageViewCreateInfo view_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image = tex.image,
+        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+        .format = config->format,
+        .subresourceRange = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .levelCount = 1,
+            .layerCount = 1,
+        },
+    };
+    vkCreateImageView(pipeline->device, &view_info, NULL, &tex.view);
+
+    VkSamplerCreateInfo sampler_info = {
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .magFilter = config->filter,
+        .minFilter = config->filter,
+        .addressModeU = config->edge_mode,
+        .addressModeV = config->edge_mode,
+        .addressModeW = config->edge_mode,
+    };
+    vkCreateSampler(pipeline->device, &sampler_info, NULL, &tex.sampler);
+
+    VkDescriptorSetAllocateInfo set_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .descriptorPool = pipeline->descriptor_pool,
+        .descriptorSetCount = 1,
+        .pSetLayouts = &pipeline->image_layout,
+    };
+    vkAllocateDescriptorSets(pipeline->device, &set_info, &tex.set);
+
+    VkDescriptorImageInfo desc_info = {
+        .sampler = tex.sampler,
+        .imageView = tex.view,
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+    };
+    VkWriteDescriptorSet desc_write = {
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = tex.set,
+        .dstBinding = 0,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        .pImageInfo = &desc_info,
+    };
+    vkUpdateDescriptorSets(pipeline->device, 1, &desc_write, 0, NULL);
+
+    vkWaitForFences(pipeline->device, 1, &fence, VK_TRUE, UINT64_MAX);
+    vkDestroyFence(pipeline->device, fence, NULL);
+    vkDestroyCommandPool(pipeline->device, cmd_pool, NULL);
+    vmaDestroyBuffer(pipeline->allocator, stage, stage_alloc);
+
+    return tex;
+}
+
+void hg_pipeline_sprite_destroy_texture(HgPipelineSprite *pipeline, HgPipelineSpriteTexture *texture) {
+    assert(pipeline != NULL);
+    assert(texture != NULL);
+
+    vkFreeDescriptorSets(pipeline->device, pipeline->descriptor_pool, 1, &texture->set);
+    vkDestroySampler(pipeline->device, texture->sampler, NULL);
+    vkDestroyImageView(pipeline->device, texture->view, NULL);
+    vmaDestroyImage(pipeline->allocator, texture->image, texture->allocation);
+}
+
+void hg_pipeline_sprite_bind(HgPipelineSprite *pipeline, VkCommandBuffer cmd) {
+    assert(cmd != NULL);
+    assert(pipeline != NULL);
+
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->pipeline);
+    vkCmdBindDescriptorSets(
+        cmd,
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        pipeline->pipeline_layout,
+        0,
+        1,
+        &pipeline->vp_set,
+        0,
+        NULL);
+}
+
+void hg_pipeline_sprite_draw(
+    HgPipelineSprite *pipeline,
+    VkCommandBuffer cmd,
+    HgPipelineSpriteTexture *texture,
+    HgPipelineSpritePush *push_data
+) {
+    assert(cmd != NULL);
+
+    vkCmdBindDescriptorSets(
+        cmd,
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        pipeline->pipeline_layout,
+        1,
+        1,
+        &texture->set,
+        0,
+        NULL);
+
+    vkCmdPushConstants(
+        cmd,
+        pipeline->pipeline_layout,
+        VK_SHADER_STAGE_VERTEX_BIT,
+        0,
+        sizeof(*push_data),
+        push_data);
+
+    vkCmdDraw(cmd, 4, 1, 0, 0);
+}
+
 VkCommandBuffer hg_frame_sync_begin_frame(VkDevice device, HgFrameSync *sync, VkSwapchainKHR swapchain) {
     assert(sync != NULL);
-    assert(device != VK_NULL_HANDLE);
-    if (swapchain == VK_NULL_HANDLE)
-        return VK_NULL_HANDLE;
+    assert(device != NULL);
+    if (swapchain == NULL)
+        return NULL;
 
     sync->current_frame = (sync->current_frame + 1) % sync->frame_count;
 
@@ -1385,10 +1841,10 @@ VkCommandBuffer hg_frame_sync_begin_frame(VkDevice device, HgFrameSync *sync, Vk
         swapchain,
         UINT64_MAX,
         sync->image_available[sync->current_frame],
-        VK_NULL_HANDLE,
+        NULL,
         &sync->current_image);
     if (result == VK_ERROR_OUT_OF_DATE_KHR)
-        return VK_NULL_HANDLE;
+        return NULL;
 
     VkCommandBuffer cmd = sync->cmds[sync->current_frame];
     VkCommandBufferBeginInfo begin_info = {
@@ -1400,9 +1856,9 @@ VkCommandBuffer hg_frame_sync_begin_frame(VkDevice device, HgFrameSync *sync, Vk
 }
 
 void hg_frame_sync_end_frame_and_present(VkQueue queue, HgFrameSync *sync, VkSwapchainKHR swapchain) {
-    assert(queue != VK_NULL_HANDLE);
+    assert(queue != NULL);
     assert(sync != NULL);
-    assert(swapchain != VK_NULL_HANDLE);
+    assert(swapchain != NULL);
 
     VkCommandBuffer cmd = sync->cmds[sync->current_frame];
     vkEndCommandBuffer(cmd);
@@ -1733,7 +2189,7 @@ VkSurfaceKHR hg_vk_create_surface(
     const HgPlatform *platform,
     const HgWindow *window
 ) {
-    assert(instance != VK_NULL_HANDLE);
+    assert(instance != NULL);
     assert(platform != NULL);
     assert(window != NULL);
 
@@ -1747,9 +2203,9 @@ VkSurfaceKHR hg_vk_create_surface(
         .dpy = (Display *)platform,
         .window = window->x11_window,
     };
-    VkSurfaceKHR surface = VK_NULL_HANDLE;
+    VkSurfaceKHR surface = NULL;
     VkResult result = pfn_vkCreateXlibSurfaceKHR(instance, &info, NULL, &surface);
-    if (surface == VK_NULL_HANDLE)
+    if (surface == NULL)
         hg_error("Failed to create Vulkan surface: %s\n", hg_vk_result_string(result));
 
     return surface;
@@ -2635,7 +3091,7 @@ VkSurfaceKHR hg_vk_create_surface(
     const HgPlatform *platform,
     const HgWindow *window
 ) {
-    assert(instance != VK_NULL_HANDLE);
+    assert(instance != NULL);
     assert(platform != NULL);
     assert(window != NULL);
 
@@ -2649,9 +3105,9 @@ VkSurfaceKHR hg_vk_create_surface(
         .hinstance = (HINSTANCE)platform,
         .hwnd = window->hwnd,
     };
-    VkSurfaceKHR surface = VK_NULL_HANDLE;
+    VkSurfaceKHR surface = NULL;
     VkResult result = pfn_vkCreateWin32SurfaceKHR(instance, &info, NULL, &surface);
-    if (surface == VK_NULL_HANDLE)
+    if (surface == NULL)
         hg_error("Failed to create Vulkan surface: %s\n", hg_vk_result_string(result));
 
     assert(surface != NULL);
@@ -2924,7 +3380,7 @@ void hg_vk_load(void) {
     if (hg_internal_vulkan_funcs. name == NULL) { hg_error("Could not load " #name "\n"); }
 
 void hg_vk_load_instance(VkInstance instance) {
-    assert(instance != VK_NULL_HANDLE);
+    assert(instance != NULL);
 
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetDeviceProcAddr);
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkDestroyInstance);
@@ -2951,7 +3407,7 @@ void hg_vk_load_instance(VkInstance instance) {
     if (hg_internal_vulkan_funcs. name == NULL) { hg_error("Could not load " #name "\n"); }
 
 void hg_vk_load_device(VkDevice device) {
-    assert(device != VK_NULL_HANDLE);
+    assert(device != NULL);
 
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyDevice)
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDeviceWaitIdle)

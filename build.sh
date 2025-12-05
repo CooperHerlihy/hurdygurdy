@@ -25,8 +25,6 @@ cc ${STD} ${CONFIG} ${WARNINGS} ${INCLUDES} \
 mkdir -p ${BUILD_DIR}/shaders
 
 SHADERS=(
-    ${SRC_DIR}/src/test.vert
-    ${SRC_DIR}/src/test.frag
     ${SRC_DIR}/src/sprite.vert
     ${SRC_DIR}/src/sprite.frag
 )
@@ -47,14 +45,21 @@ cc ${STD} ${CONFIG} ${WARNINGS} ${INCLUDES} \
     -c ${SRC_DIR}/src/hurdygurdy.c \
     -o ${BUILD_DIR}/hurdygurdy.o
 
+if [ ! -f "${BUILD_DIR}/vk_mem_alloc.o" ]; then
+    echo "vk_mem_alloc.cpp"
+    c++ -std=c++17 ${CONFIG} ${INCLUDES} \
+        -c ${SRC_DIR}/src/vk_mem_alloc.cpp \
+        -o ${BUILD_DIR}/vk_mem_alloc.o
+fi
+
 echo "libhurdygurdy.a"
-ar rcs ${BUILD_DIR}/libhurdygurdy.a ${BUILD_DIR}/hurdygurdy.o
+ar rcs ${BUILD_DIR}/libhurdygurdy.a ${BUILD_DIR}/hurdygurdy.o ${BUILD_DIR}/vk_mem_alloc.o
 
 echo "test.c"
 cc ${SRC_DIR}/src/test.c \
-    ${STD} ${CONFIG} ${WARNINGS} ${INCLUDES} \
     -o ${BUILD_DIR}/test \
-    -lc -lm -L"${BUILD_DIR}" -lhurdygurdy
+    ${STD} ${CONFIG} ${WARNINGS} ${INCLUDES} \
+    -lm -lc -lstdc++ -L"${BUILD_DIR}" -lhurdygurdy
 
 END_TIME=$(date +%s.%N)
 printf "Build complete: %.6f seconds\n" "$(echo "$END_TIME - $START_TIME" | bc)"

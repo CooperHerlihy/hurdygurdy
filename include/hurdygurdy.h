@@ -46,6 +46,7 @@ extern "C" {
 #include <time.h>
 
 #include <vulkan/vulkan.h>
+#include <vk_mem_alloc.h>
 
 typedef int8_t i8;
 typedef int16_t i16;
@@ -1117,7 +1118,7 @@ HgMat4 hg_view_matrix(HgVec3 position, f32 zoom, HgQuat rotation);
  * Returns
  * - The created matrix
  */
-HgMat4 hg_orthographic_projection(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far);
+HgMat4 hg_projection_orthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far);
 
 /**
  * Creates a perspective projection matrix
@@ -1130,7 +1131,7 @@ HgMat4 hg_orthographic_projection(f32 left, f32 right, f32 top, f32 bottom, f32 
  * Returns
  * - The created matrix
  */
-HgMat4 hg_perspective_projection(f32 fov, f32 aspect, f32 near, f32 far);
+HgMat4 hg_projection_perspective(f32 fov, f32 aspect, f32 near, f32 far);
 
 /**
  * Calculates the maximum number of mipmap levels that an image can have
@@ -1307,7 +1308,7 @@ void hg_vk_load(void);
  * Note, this function is automatically called from hg_vk_create_instance
  *
  * Parameters
- * - instance The Vulkan instance, must not be VK_NULL_HANDLE
+ * - instance The Vulkan instance, must not be NULL
  */
 void hg_vk_load_instance(VkInstance instance);
 
@@ -1318,7 +1319,7 @@ void hg_vk_load_instance(VkInstance instance);
  * hg_vk_create_single_queue_device
  *
  * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
+ * - device The Vulkan device, must not be NULL
  */
 void hg_vk_load_device(VkDevice device);
 
@@ -1342,7 +1343,7 @@ const char *hg_vk_result_string(VkResult result);
  * Parameters
  * - app_name The name of the application, may be NULL
  * Returns
- * - The created VkInstance, will never be VK_NULL_HANDLE
+ * - The created VkInstance, will never be NULL
  */
 VkInstance hg_vk_create_instance(const char *app_name);
 
@@ -1350,9 +1351,9 @@ VkInstance hg_vk_create_instance(const char *app_name);
  * Creates a Vulkan debug messenger
  *
  * Parameters
- * - instance The Vulkan instance, must not be VK_NULL_HANDLE
+ * - instance The Vulkan instance, must not be NULL
  * Returns
- * - The created debug messenger, will never be VK_NULL_HANDLE
+ * - The created debug messenger, will never be NULL
  */
 VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger(VkInstance instance);
 
@@ -1360,7 +1361,7 @@ VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger(VkInstance instance);
  * Find the first queue family index which supports the the queue flags
  *
  * Parameters
- * - gpu The physical device, must not be VK_NULL_HANDLE
+ * - gpu The physical device, must not be NULL
  * - queue_family A pointer to store the found queue family
  * - queue_flags The flags required of the queue family
  * Returns
@@ -1402,10 +1403,10 @@ typedef struct HgSingleQueueDeviceData {
  * Note, loads Vulkan function pointers automatically
  *
  * Parameters
- * - gpu The physical device, must not be VK_NULL_HANDLE
+ * - gpu The physical device, must not be NULL
  * - queue_family Which family to create the queue in
  * Returns
- * - The created Vulkan device, will never be VK_NULL_HANDLE
+ * - The created Vulkan device, will never be NULL
  */
 HgSingleQueueDeviceData hg_vk_create_single_queue_device(VkInstance instance);
 
@@ -1439,9 +1440,9 @@ typedef struct HgSwapchainData {
  * Creates a Vulkan swapchain
  *
  * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
- * - gpu The physical device to query capabilities, must not be VK_NULL_HANDLE
- * - old_swapchain The old swapchain, may be VK_NULL_HANDLE
+ * - device The Vulkan device, must not be NULL
+ * - gpu The physical device to query capabilities, must not be NULL
+ * - old_swapchain The old swapchain, may be NULL
  * - surface The surface to create from
  * - image_usage How the swapchain's images will be used
  * - desired_mode The preferred present mode (fallback to FIFO)
@@ -1538,10 +1539,10 @@ typedef struct HgVkPipelineConfig {
  * Creates a graphics pipeline
  *
  * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
+ * - device The Vulkan device, must not be NULL
  * - config The pipeline configuration, must not be NULL
  * Returns
- * - The created graphics pipeline, will never be VK_NULL_HANDLE
+ * - The created graphics pipeline, will never be NULL
  */
 VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineConfig *config);
 
@@ -1553,10 +1554,10 @@ VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineCon
  * There cannot be any vertex inputs
  *
  * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
+ * - device The Vulkan device, must not be NULL
  * - config The pipeline configuration, must not be NULL
  * Returns
- * - The created compute pipeline, will never be VK_NULL_HANDLE
+ * - The created compute pipeline, will never be NULL
  */
 VkPipeline hg_vk_create_compute_pipeline(VkDevice device, const HgVkPipelineConfig *config);
 
@@ -1567,7 +1568,7 @@ VkPipeline hg_vk_create_compute_pipeline(VkDevice device, const HgVkPipelineConf
  * Note, if no such memory type exists, the next best thing will be found
  *
  * Parameters
- * - gpu The Vulkan physical device, must not be VK_NULL_HANDLE
+ * - gpu The Vulkan physical device, must not be NULL
  * - bitmask A bitmask of which memory types cannot be used, must not be 0
  * - desired_flags The flags which the type should 
  * - undesired_flags The flags which the type should not have, though may have
@@ -1600,7 +1601,7 @@ typedef struct HgFrameSync {
  * Creates a frame sync system
  *
  * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
+ * - device The Vulkan device, must not be NULL
  * - queue_family The queue_family to allocate command buffers in
  * - image_count The number of swapchain images, must be greater than 0
  * Returns
@@ -1612,7 +1613,7 @@ HgFrameSync hg_frame_sync_create(VkDevice device, u32 queue_family, u32 image_co
  * Destroys a frame sync system
  *
  * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
+ * - device The Vulkan device, must not be NULL
  * - sync The frame sync system to destroy, must not be NULL
  */
 void hg_frame_sync_destroy(VkDevice device, HgFrameSync *sync);
@@ -1621,12 +1622,12 @@ void hg_frame_sync_destroy(VkDevice device, HgFrameSync *sync);
  * Acquires the next swapchain image and begins its command buffer
  *
  * Parameters
- * - device The Vulkan device, must not be VK_NULL_HANDLE
+ * - device The Vulkan device, must not be NULL
  * - sync The frame sync system, must not be NULL
  * - swapchain The Vulkan swapchain to acquire from
  * Returns
  * - The command buffer to record this frame
- * - VK_NULL_HANDLE if the swapchain is out of date
+ * - NULL if the swapchain is out of date
  */
 VkCommandBuffer hg_frame_sync_begin_frame(VkDevice device, HgFrameSync *sync, VkSwapchainKHR swapchain);
 
@@ -1634,11 +1635,192 @@ VkCommandBuffer hg_frame_sync_begin_frame(VkDevice device, HgFrameSync *sync, Vk
  * Finishes recording the command buffer and presents the swapchain image
  *
  * Parameters
- * - queue The Vulkan queue, must not be VK_NULL_HANDLE
- * - sync The frame sync system, must not be VK_NULL_HANDLE
- * - swapchain The Vulkan swapchain to present, must not be VK_NULL_HANDLE
+ * - queue The Vulkan queue, must not be NULL
+ * - sync The frame sync system, must not be NULL
+ * - swapchain The Vulkan swapchain to present, must not be NULL
  */
 void hg_frame_sync_end_frame_and_present(VkQueue queue, HgFrameSync *sync, VkSwapchainKHR swapchain);
+
+/**
+ * A pipeline to render 2D sprites
+ */
+typedef struct HgPipelineSprite {
+    VkDevice device;
+    VmaAllocator allocator;
+    VkDescriptorSetLayout vp_layout;
+    VkDescriptorSetLayout image_layout;
+    VkPipelineLayout pipeline_layout;
+    VkPipeline pipeline;
+    VkDescriptorPool descriptor_pool;
+    VkDescriptorSet vp_set;
+    VkBuffer vp_buffer;
+    VmaAllocation vp_buffer_allocation;
+} HgPipelineSprite;
+
+/**
+ * Creates a pipeline abstraction to render 2D sprites
+ * 
+ * Parameters
+ * - device The Vulkan device, must not be NULL
+ * - allocator The VMA allocator, must not be NULL,
+ * - color_format The format of the color attachment which will be rendered to,
+ *   must not be VK_FORMAT_UNDEFINED
+ * - depth_format The format of the depth attachment, may be VK_FORMAT_UNDEFINED
+ * Returns
+ * - The created pipeline
+ */
+HgPipelineSprite hg_pipeline_sprite_create(
+    VkDevice device,
+    VmaAllocator allocator,
+    VkFormat color_format,
+    VkFormat depth_format);
+
+/**
+ * Destroys the sprite pipeline
+ *
+ * Parameters
+ * - pipeline The pipeline to destroy
+ */
+void hg_pipeline_sprite_destroy(HgPipelineSprite *pipeline);
+
+/**
+ * Updates the sprite pipeline's projection matrix
+ *
+ * Parameters
+ * - pipeline The pipeline to update, must not be NULL
+ * - projection The value to update to, must not be NULL
+ */
+void hg_pipeline_sprite_update_projection(HgPipelineSprite *pipeline, HgMat4 *projection);
+
+/**
+ * Updates the sprite pipeline's view matrix
+ *
+ * Parameters
+ * - pipeline The pipeline to update, must not be NULL
+ * - view The value to update to, must not be NULL
+ */
+void hg_pipeline_sprite_update_view(HgPipelineSprite *pipeline, HgMat4 *view);
+
+/**
+ * Configuration for a hgSpritePipelineTexture
+ */
+typedef struct HgPipelineSpriteTextureConfig {
+    /**
+     * The pixel data to use, must not be NULL
+     */
+    void *tex_data;
+    /**
+     * The width of the texture in pixels, must be greater than 0
+     */
+    u32 width;
+    /**
+     * The height of the texture in pixels, must be greater than 0
+     */
+    u32 height;
+    /**
+     * The size in bytes of each pixel, must be greater than 0
+     */
+    u32 pixel_width;
+    /**
+     * The Vulkan format of each pixel, must not be UNDEFINED
+     */
+    VkFormat format;
+    /**
+     * The filter to use when sampling the texture
+     */
+    VkFilter filter;
+    /**
+     * How to sample beyond the edge of the texture
+     */
+    VkSamplerAddressMode edge_mode;
+} HgPipelineSpriteTextureConfig;
+
+/**
+ * The texture resources used by HgPipelineSprite
+ */
+typedef struct HgPipelineSpriteTexture {
+    VmaAllocation allocation;
+    VkImage image;
+    VkImageView view;
+    VkSampler sampler;
+    VkDescriptorSet set;
+} HgPipelineSpriteTexture;
+
+/**
+ * Creates a texture for HgPipelineSprite
+ *
+ * Note, if for some reason there are multiple HgPipelineSprite objects,
+ * textures are compatible between them, so need not be duplicated
+ *
+ * Parameters
+ * - pipeline The pipeline to create for, must not be NULL
+ * - cmd_pool The command pool to get a command buffer from, must not be NULL
+ * - transfer_queue The queue to transfer the data on, must not be NULL
+ * - config The configuration for the texture, must not be NULL
+ * Returns
+ * - The created texture
+ */
+HgPipelineSpriteTexture hg_pipeline_sprite_create_texture(
+    HgPipelineSprite *pipeline,
+    VkCommandPool cmd_pool,
+    VkQueue transfer_queue,
+    HgPipelineSpriteTextureConfig *config);
+
+/**
+ * Destroys a texture for HgPipelineSprite
+ *
+ * Parameters
+ * - pipeline The pipeline, must not be NULL
+ * - texture The texture to destroy, must not be NULL
+ */
+void hg_pipeline_sprite_destroy_texture(HgPipelineSprite *pipeline, HgPipelineSpriteTexture *texture);
+
+/**
+ * Binds the pipeline in a command buffer
+ *
+ * Note, the command buffer should be in a render pass, and the dynamic viewport
+ * and scissor must be set
+ *
+ * Parameters
+ * - pipeline The pipeline to bind, must not be NULL
+ * - cmd The command buffer, must not be NULL
+ */
+void hg_pipeline_sprite_bind(HgPipelineSprite *pipeline, VkCommandBuffer cmd);
+
+/**
+ * The data passed to each sprite draw call
+ */
+typedef struct HgPipelineSpritePush {
+    /**
+     * The sprite's model matrix (position, scale, rotation, etc.)
+     */
+    HgMat4 model;
+    /**
+     * The beginning coordinates of the texture to read from (0.0f to 1.0f)
+     */
+    HgVec2 uv_pos;
+    /**
+     * The size within the texture to read (0.0f to 1.0f)
+     */
+    HgVec2 uv_size;
+} HgPipelineSpritePush;
+
+/**
+ * Draws a sprite using the sprite pipeline
+ *
+ * The HpPipelineSprite must already be bound
+ *
+ * Parameters
+ * - pipeline The pipeline, must not be NULL
+ * - cmd The command buffer, must not be NULL
+ * - texture The texture to read from, must not be NULL
+ * - push_data The data to push to the draw call, must not be NULL
+ */
+void hg_pipeline_sprite_draw(
+    HgPipelineSprite *pipeline,
+    VkCommandBuffer cmd,
+    HgPipelineSpriteTexture *texture,
+    HgPipelineSpritePush *push_data);
 
 /**
  * Platform specific internal resources
@@ -1824,7 +2006,7 @@ HgWindow *hg_window_create(const HgPlatform *platform, const HgWindowConfig *con
  *
  * Parameters
  * - platform The platform resources, must not be NULL
- * - window The window to destroy, noop if VK_NULL_HANDLE
+ * - window The window to destroy, noop if NULL
  */
 void hg_window_destroy(const HgPlatform *platform, HgWindow *window);
 
@@ -1887,7 +2069,7 @@ void hg_window_set_cursor_image(const HgPlatform *platform, HgWindow *window, u3
  * Create a Vulkan surface for the window, according to the platform
  *
  * Parameters
- * - instance The Vulkan instance, must not be VK_NULL_HANDLE
+ * - instance The Vulkan instance, must not be NULL
  * - platform The hg platform context, must not be NULL
  * - window The window to create a surface for, must not be NULL
  * Returns

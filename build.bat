@@ -23,8 +23,8 @@ cl "%SRC_DIR%\src\embed_file.c" ^
     %STD% %WARNINGS% %CONFIG% %INCLUDES%
 
 set SHADERS= ^
-    %SRC_DIR%\src\test.vert ^
-    %SRC_DIR%\src\test.frag
+    %SRC_DIR%\src\sprite.vert ^
+    %SRC_DIR%\src\sprite.frag
 
 for %%S in (%SHADERS%) do (
     for %%N in (%%~nxS) do (
@@ -42,18 +42,18 @@ cl /c "%SRC_DIR%\src\hurdygurdy.c" ^
     /Fo:"%BUILD_DIR%\hurdygurdy.obj" ^
     %STD% %WARNINGS% %CONFIG% %INCLUDES%
 
-lib /nologo /OUT:"%BUILD_DIR%\hurdygurdy.lib" "%BUILD_DIR%\hurdygurdy.obj"
-
 cl /c "%SRC_DIR%\src\vk_mem_alloc.cpp" ^
     /Fd:"%BUILD_DIR%\vk_mem_alloc.pdb" ^
     /Fo:"%BUILD_DIR%\vk_mem_alloc.obj" ^
     /std:c++17 %CONFIG% %INCLUDES%
+
+lib /nologo /OUT:"%BUILD_DIR%\hurdygurdy.lib" "%BUILD_DIR%\hurdygurdy.obj" "%BUILD_DIR%\vk_mem_alloc.obj"
 
 cl "%SRC_DIR%\src\test.c" ^
     /Fd:"%BUILD_DIR%\test.pdb" ^
     /Fo:"%BUILD_DIR%\test.obj" ^
     /Fe:"%BUILD_DIR%\test.exe" ^
     %STD% %WARNINGS% %CONFIG% %INCLUDES% ^
-    "%BUILD_DIR%\vk_mem_alloc.obj" "%BUILD_DIR%\hurdygurdy.lib" User32.lib
+    "%BUILD_DIR%\hurdygurdy.lib" User32.lib
 
 endlocal
