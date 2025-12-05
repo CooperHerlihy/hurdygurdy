@@ -1077,8 +1077,6 @@ HgSwapchainData hg_vk_create_swapchain(
     if (swapchain.handle == NULL)
         hg_error("Failed to create swapchain: %s\n", hg_vk_result_string(result));
 
-    vkGetSwapchainImagesKHR(device, swapchain.handle, &swapchain.image_count, NULL);
-
     return swapchain;
 }
 
@@ -1301,18 +1299,18 @@ u32 hg_vk_find_memory_type_index(
     hg_error("Could not find Vulkan memory type\n");
 }
 
-HgFrameSync hg_frame_sync_create(VkDevice device, u32 queue_family, u32 image_count) {
+HgFrameSync hg_frame_sync_create(VkDevice device, VkCommandPool cmd_pool, VkSwapchainKHR swapchain) {
     assert(device != NULL);
-    assert(image_count > 0);
+    assert(cmd_pool != NULL);
+    assert(swapchain != NULL);
 
-    HgFrameSync sync = {.frame_count = image_count};
-
-    VkCommandPoolCreateInfo pool_info = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-        .queueFamilyIndex = queue_family,
+    HgFrameSync sync = {
+        .device = device,
+        .cmd_pool = cmd_pool,
+        .swapchain = swapchain,
     };
-    vkCreateCommandPool(device, &pool_info, NULL, &sync.pool);
+
+    vkGetSwapchainImagesKHR(device, swapchain, &sync.frame_count, NULL);
 
     HgArena arena = hg_arena_create(
         hg_align(sync.frame_count * sizeof(*sync.cmds), 16) +
@@ -1320,10 +1318,12 @@ HgFrameSync hg_frame_sync_create(VkDevice device, u32 queue_family, u32 image_co
         hg_align(sync.frame_count * sizeof(*sync.image_available), 16) +
         hg_align(sync.frame_count * sizeof(*sync.ready_to_present), 16));
 
+    sync.allocation = arena.data;
+
     sync.cmds = hg_arena_alloc(&arena, sync.frame_count * sizeof(*sync.cmds));
     VkCommandBufferAllocateInfo cmd_alloc_info = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .commandPool = sync.pool,
+        .commandPool = cmd_pool,
         .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
         .commandBufferCount = sync.frame_count,
     };
@@ -1351,22 +1351,84 @@ HgFrameSync hg_frame_sync_create(VkDevice device, u32 queue_family, u32 image_co
     return sync;
 }
 
-void hg_frame_sync_destroy(VkDevice device, HgFrameSync *sync) {
-    assert(device != NULL);
+void hg_frame_sync_destroy(HgFrameSync *sync) {
     assert(sync != NULL);
 
-    vkFreeCommandBuffers(device, sync->pool, sync->frame_count, sync->cmds);
+    vkFreeCommandBuffers(sync->device, sync->cmd_pool, sync->frame_count, sync->cmds);
     for (usize i = 0; i < sync->frame_count; ++i) {
-        vkDestroyFence(device, sync->frame_finished[i], NULL);
+        vkDestroyFence(sync->device, sync->frame_finished[i], NULL);
     }
     for (usize i = 0; i < sync->frame_count; ++i) {
-        vkDestroySemaphore(device, sync->image_available[i], NULL);
+        vkDestroySemaphore(sync->device, sync->image_available[i], NULL);
     }
     for (usize i = 0; i < sync->frame_count; ++i) {
-        vkDestroySemaphore(device, sync->ready_to_present[i], NULL);
+        vkDestroySemaphore(sync->device, sync->ready_to_present[i], NULL);
     }
-    free(sync->cmds);
-    vkDestroyCommandPool(device, sync->pool, NULL);
+    free(sync->allocation);
+
+    memset(sync, 0, sizeof(*sync));
+}
+
+VkCommandBuffer hg_frame_sync_begin_frame(HgFrameSync *sync) {
+    assert(sync != NULL);
+    if (sync->swapchain == NULL)
+        return NULL;
+
+    sync->current_frame = (sync->current_frame + 1) % sync->frame_count;
+
+    vkWaitForFences(sync->device, 1, &sync->frame_finished[sync->current_frame], VK_TRUE, UINT64_MAX);
+    vkResetFences(sync->device, 1, &sync->frame_finished[sync->current_frame]);
+
+    VkResult result = vkAcquireNextImageKHR(
+        sync->device,
+        sync->swapchain,
+        UINT64_MAX,
+        sync->image_available[sync->current_frame],
+        NULL,
+        &sync->current_image);
+    if (result == VK_ERROR_OUT_OF_DATE_KHR)
+        return NULL;
+
+
+    VkCommandBuffer cmd = sync->cmds[sync->current_frame];
+    vkResetCommandBuffer(cmd, 0);
+
+    VkCommandBufferBeginInfo begin_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+    };
+    vkBeginCommandBuffer(cmd, &begin_info);
+    return cmd;
+}
+
+void hg_frame_sync_end_frame_and_present(HgFrameSync *sync, VkQueue queue) {
+    assert(queue != NULL);
+    assert(sync != NULL);
+
+    VkCommandBuffer cmd = sync->cmds[sync->current_frame];
+    vkEndCommandBuffer(cmd);
+
+    VkSubmitInfo submit = {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores = &sync->image_available[sync->current_frame],
+        .pWaitDstStageMask = &(VkPipelineStageFlags){VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT},
+        .commandBufferCount = 1,
+        .pCommandBuffers = &cmd,
+        .signalSemaphoreCount = 1,
+        .pSignalSemaphores = &sync->ready_to_present[sync->current_image],
+    };
+    vkQueueSubmit(queue, 1, &submit, sync->frame_finished[sync->current_frame]);
+
+    VkPresentInfoKHR present_info = {
+        .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores = &sync->ready_to_present[sync->current_image],
+        .swapchainCount = 1,
+        .pSwapchains = &sync->swapchain,
+        .pImageIndices = &sync->current_image,
+    };
+    vkQueuePresentKHR(queue, &present_info);
 }
 
 #include "sprite.frag.spv.h"
@@ -1478,7 +1540,7 @@ HgPipelineSprite hg_pipeline_sprite_create(
         .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
         .descriptorCount = 1,
     }, {
-        .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+        .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
         .descriptorCount = 255,
     }};
     VkDescriptorPoolCreateInfo desc_pool_info = {
@@ -1764,7 +1826,7 @@ HgPipelineSpriteTexture hg_pipeline_sprite_create_texture(
 
     vkWaitForFences(pipeline->device, 1, &fence, VK_TRUE, UINT64_MAX);
     vkDestroyFence(pipeline->device, fence, NULL);
-    vkDestroyCommandPool(pipeline->device, cmd_pool, NULL);
+    vkFreeCommandBuffers(pipeline->device, cmd_pool, 1, &cmd);
     vmaDestroyBuffer(pipeline->allocator, stage, stage_alloc);
 
     return tex;
@@ -1823,67 +1885,6 @@ void hg_pipeline_sprite_draw(
         push_data);
 
     vkCmdDraw(cmd, 4, 1, 0, 0);
-}
-
-VkCommandBuffer hg_frame_sync_begin_frame(VkDevice device, HgFrameSync *sync, VkSwapchainKHR swapchain) {
-    assert(sync != NULL);
-    assert(device != NULL);
-    if (swapchain == NULL)
-        return NULL;
-
-    sync->current_frame = (sync->current_frame + 1) % sync->frame_count;
-
-    vkWaitForFences(device, 1, &sync->frame_finished[sync->current_frame], VK_TRUE, UINT64_MAX);
-    vkResetFences(device, 1, &sync->frame_finished[sync->current_frame]);
-
-    VkResult result = vkAcquireNextImageKHR(
-        device,
-        swapchain,
-        UINT64_MAX,
-        sync->image_available[sync->current_frame],
-        NULL,
-        &sync->current_image);
-    if (result == VK_ERROR_OUT_OF_DATE_KHR)
-        return NULL;
-
-    VkCommandBuffer cmd = sync->cmds[sync->current_frame];
-    VkCommandBufferBeginInfo begin_info = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-    };
-    vkBeginCommandBuffer(cmd, &begin_info);
-    return cmd;
-}
-
-void hg_frame_sync_end_frame_and_present(VkQueue queue, HgFrameSync *sync, VkSwapchainKHR swapchain) {
-    assert(queue != NULL);
-    assert(sync != NULL);
-    assert(swapchain != NULL);
-
-    VkCommandBuffer cmd = sync->cmds[sync->current_frame];
-    vkEndCommandBuffer(cmd);
-
-    VkSubmitInfo submit = {
-        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .waitSemaphoreCount = 1,
-        .pWaitSemaphores = &sync->image_available[sync->current_frame],
-        .pWaitDstStageMask = &(VkPipelineStageFlags){VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT},
-        .commandBufferCount = 1,
-        .pCommandBuffers = &cmd,
-        .signalSemaphoreCount = 1,
-        .pSignalSemaphores = &sync->ready_to_present[sync->current_image],
-    };
-    vkQueueSubmit(queue, 1, &submit, sync->frame_finished[sync->current_frame]);
-
-    VkPresentInfoKHR present_info = {
-        .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-        .waitSemaphoreCount = 1,
-        .pWaitSemaphores = &sync->ready_to_present[sync->current_image],
-        .swapchainCount = 1,
-        .pSwapchains = &swapchain,
-        .pImageIndices = &sync->current_image,
-    };
-    vkQueuePresentKHR(queue, &present_info);
 }
 
 typedef struct HgWindowInput {

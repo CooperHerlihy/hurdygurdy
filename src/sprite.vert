@@ -23,7 +23,7 @@ const vec2 positions[] = vec2[](
 void main() {
     f_uv = positions[gl_VertexIndex] * p_uv_size + p_uv_pos;
 
-    vec2 vertex_pos = (positions[gl_VertexIndex] * 2.0) - vec2(1.0, 1.0);
+    vec2 vertex_pos = positions[gl_VertexIndex] - vec2(0.5);
     gl_Position = u_proj * u_view * p_model * vec4(vertex_pos, 0.0, 1.0);
 }
 

@@ -136,7 +136,7 @@ typedef double f64;
  * Parameters
  * - ... The message to print and its format parameters
  */
-#define hg_debug(...) hg_debug_mode({ (void)fprintf(stderr, "Hurdygurdy Debug: " __VA_ARGS__); })
+#define hg_debug(...) hg_debug_mode({ (void)fprintf(stderr, "HurdyGurdy Debug: " __VA_ARGS__); })
 
 /**
  * Formats and logs an info message to stderr
@@ -144,7 +144,7 @@ typedef double f64;
  * Parameters
  * - ... The message to print and its format parameters
  */
-#define hg_info(...) { (void)fprintf(stderr, "Hurdygurdy Info: " __VA_ARGS__); }
+#define hg_info(...) { (void)fprintf(stderr, "HurdyGurdy Info: " __VA_ARGS__); }
 
 /**
  * Formats and logs a warning message to stderr
@@ -152,7 +152,7 @@ typedef double f64;
  * Parameters
  * - ... The message to print and its format parameters
  */
-#define hg_warn(...) { (void)fprintf(stderr, "Hurdygurdy Warning: " __VA_ARGS__); }
+#define hg_warn(...) { (void)fprintf(stderr, "HurdyGurdy Warning: " __VA_ARGS__); }
 
 /**
  * Formats and logs an error message to stderr and aborts the program
@@ -160,7 +160,7 @@ typedef double f64;
  * Parameters
  * - ... The message to print and its format parameters
  */
-#define hg_error(...) { (void)fprintf(stderr, "Hurdygurdy Error: " __VA_ARGS__); abort(); }
+#define hg_error(...) { (void)fprintf(stderr, "HurdyGurdy Error: " __VA_ARGS__); abort(); }
 
 /**
  * Aligns a pointer to an alignment
@@ -1419,10 +1419,6 @@ typedef struct HgSwapchainData {
      */
     VkSwapchainKHR handle;
     /**
-     * The number of images in the swapchain
-     */
-    u32 image_count;
-    /**
      * The width of the swapchain's images
      */
     u32 width;
@@ -1587,11 +1583,14 @@ u32 hg_vk_find_memory_type_index(
  * A system to synchronize frames rendering to multiple swapchain images at once
  */
 typedef struct HgFrameSync {
+    VkDevice device;
+    VkCommandPool cmd_pool;
+    VkSwapchainKHR swapchain;
+    void *allocation;
     VkCommandBuffer *cmds;
     VkFence *frame_finished;
     VkSemaphore *image_available;
     VkSemaphore *ready_to_present;
-    VkCommandPool pool;
     u32 frame_count;
     u32 current_frame;
     u32 current_image;
@@ -1602,34 +1601,32 @@ typedef struct HgFrameSync {
  *
  * Parameters
  * - device The Vulkan device, must not be NULL
- * - queue_family The queue_family to allocate command buffers in
+ * - cmd_pool The Vulkan command pool to allocate cmds from, must not be NULL
  * - image_count The number of swapchain images, must be greater than 0
  * Returns
  * - The created frame sync system
  */
-HgFrameSync hg_frame_sync_create(VkDevice device, u32 queue_family, u32 image_count);
+HgFrameSync hg_frame_sync_create(VkDevice device, VkCommandPool cmd_pool, VkSwapchainKHR swapchain);
 
 /**
  * Destroys a frame sync system
  *
  * Parameters
- * - device The Vulkan device, must not be NULL
  * - sync The frame sync system to destroy, must not be NULL
  */
-void hg_frame_sync_destroy(VkDevice device, HgFrameSync *sync);
+void hg_frame_sync_destroy(HgFrameSync *sync);
 
 /**
  * Acquires the next swapchain image and begins its command buffer
  *
  * Parameters
- * - device The Vulkan device, must not be NULL
  * - sync The frame sync system, must not be NULL
  * - swapchain The Vulkan swapchain to acquire from
  * Returns
  * - The command buffer to record this frame
  * - NULL if the swapchain is out of date
  */
-VkCommandBuffer hg_frame_sync_begin_frame(VkDevice device, HgFrameSync *sync, VkSwapchainKHR swapchain);
+VkCommandBuffer hg_frame_sync_begin_frame(HgFrameSync *sync);
 
 /**
  * Finishes recording the command buffer and presents the swapchain image
@@ -1639,7 +1636,7 @@ VkCommandBuffer hg_frame_sync_begin_frame(VkDevice device, HgFrameSync *sync, Vk
  * - sync The frame sync system, must not be NULL
  * - swapchain The Vulkan swapchain to present, must not be NULL
  */
-void hg_frame_sync_end_frame_and_present(VkQueue queue, HgFrameSync *sync, VkSwapchainKHR swapchain);
+void hg_frame_sync_end_frame_and_present(HgFrameSync *sync, VkQueue queue);
 
 /**
  * A pipeline to render 2D sprites

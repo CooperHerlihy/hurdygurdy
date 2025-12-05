@@ -29,10 +29,13 @@ int main(void) {
     VkSurfaceKHR surface = hg_vk_create_surface(instance, platform, window);
     HgSwapchainData swapchain = hg_vk_create_swapchain(device.handle, device.gpu, NULL, surface,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_PRESENT_MODE_FIFO_KHR);
-    VkImage *swap_images = malloc(swapchain.image_count * sizeof(*swap_images));
-    VkImageView *swap_views = malloc(swapchain.image_count * sizeof(*swap_views));
-    vkGetSwapchainImagesKHR(device.handle, swapchain.handle, &swapchain.image_count, swap_images);
-    for (usize i = 0; i < swapchain.image_count; ++i) {
+
+    u32 swap_image_count;
+    vkGetSwapchainImagesKHR(device.handle, swapchain.handle, &swap_image_count, NULL);
+    VkImage *swap_images = malloc(swap_image_count * sizeof(*swap_images));
+    VkImageView *swap_views = malloc(swap_image_count * sizeof(*swap_views));
+    vkGetSwapchainImagesKHR(device.handle, swapchain.handle, &swap_image_count, swap_images);
+    for (usize i = 0; i < swap_image_count; ++i) {
         VkImageViewCreateInfo create_info = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
             .image = swap_images[i],
@@ -49,12 +52,13 @@ int main(void) {
 
     VkCommandPoolCreateInfo cmd_pool_info = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
         .queueFamilyIndex = device.queue_family,
     };
     VkCommandPool cmd_pool;
     vkCreateCommandPool(device.handle, &cmd_pool_info, NULL, &cmd_pool);
 
-    HgFrameSync frame_sync = hg_frame_sync_create(device.handle, device.queue_family, swapchain.image_count);
+    HgFrameSync frame_sync = hg_frame_sync_create(device.handle, cmd_pool, swapchain.handle);
 
     HgPipelineSprite sprite_pipeline = hg_pipeline_sprite_create(
         device.handle, allocator, swapchain.format, 0);
@@ -115,20 +119,24 @@ int main(void) {
         if (hg_window_was_resized(window)) {
             vkQueueWaitIdle(device.queue);
 
-            u32 old_count = swapchain.image_count;
+            u32 old_count = swap_image_count;
             VkSwapchainKHR old_swapchain = swapchain.handle;
             swapchain = hg_vk_create_swapchain(device.handle, device.gpu, old_swapchain, surface,
                 VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_PRESENT_MODE_FIFO_KHR);
 
-            if (swapchain.handle != NULL) {
-                if (swapchain.image_count != old_count) {
-                    swap_images = realloc(swap_images, swapchain.image_count * sizeof(*swap_images));
-                    swap_views = realloc(swap_views, swapchain.image_count * sizeof(*swap_images));
-                }
+            for (usize i = 0; i < old_count; ++i) {
+                vkDestroyImageView(device.handle, swap_views[i], NULL);
+            }
+            hg_frame_sync_destroy(&frame_sync);
 
-                vkGetSwapchainImagesKHR(device.handle, swapchain.handle, &swapchain.image_count, swap_images);
-                for (usize i = 0; i < swapchain.image_count; ++i) {
-                    vkDestroyImageView(device.handle, swap_views[i], NULL);
+            if (swapchain.handle != NULL) {
+                vkGetSwapchainImagesKHR(device.handle, swapchain.handle, &swap_image_count, NULL);
+                if (swap_image_count != old_count) {
+                    swap_images = realloc(swap_images, swap_image_count * sizeof(*swap_images));
+                    swap_views = realloc(swap_views, swap_image_count * sizeof(*swap_images));
+                }
+                vkGetSwapchainImagesKHR(device.handle, swapchain.handle, &swap_image_count, swap_images);
+                for (usize i = 0; i < swap_image_count; ++i) {
                     VkImageViewCreateInfo create_info = {
                         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
                         .image = swap_images[i],
@@ -142,17 +150,18 @@ int main(void) {
                     };
                     vkCreateImageView(device.handle, &create_info, NULL, &swap_views[i]);
                 }
+                frame_sync = hg_frame_sync_create(device.handle, cmd_pool, swapchain.handle);
 
-                hg_frame_sync_destroy(device.handle, &frame_sync);
-                frame_sync = hg_frame_sync_create(device.handle, device.queue_family, swapchain.image_count);
+                aspect = (f32)swapchain.width / (f32)swapchain.height;
+                proj = hg_projection_orthographic(-aspect, aspect, -1.0f, 1.0f, 0.0f, 1.0f);
+                hg_pipeline_sprite_update_projection(&sprite_pipeline, &proj);
             }
 
             vkDestroySwapchainKHR(device.handle, old_swapchain, NULL);
             hg_info("window resized\n");
         }
 
-
-        VkCommandBuffer cmd = hg_frame_sync_begin_frame(device.handle, &frame_sync, swapchain.handle);
+        VkCommandBuffer cmd = hg_frame_sync_begin_frame(&frame_sync);
         if (cmd != NULL) {
             u32 image_index = frame_sync.current_image;
 
@@ -217,7 +226,7 @@ int main(void) {
                 .pImageMemoryBarriers = &present_barrier,
             });
 
-            hg_frame_sync_end_frame_and_present(device.queue, &frame_sync, swapchain.handle);
+            hg_frame_sync_end_frame_and_present(&frame_sync, device.queue);
         }
     }
 
@@ -226,9 +235,11 @@ int main(void) {
     hg_pipeline_sprite_destroy_texture(&sprite_pipeline, &texture);
     hg_pipeline_sprite_destroy(&sprite_pipeline);
 
-    hg_frame_sync_destroy(device.handle, &frame_sync);
+    hg_frame_sync_destroy(&frame_sync);
 
-    for (usize i = 0; i < swapchain.image_count; ++i) {
+    vkDestroyCommandPool(device.handle, cmd_pool, NULL);
+
+    for (usize i = 0; i < swap_image_count; ++i) {
         vkDestroyImageView(device.handle, swap_views[i], NULL);
     }
     free(swap_views);
