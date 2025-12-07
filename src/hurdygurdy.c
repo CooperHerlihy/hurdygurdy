@@ -1421,16 +1421,14 @@ HgFrameSync hg_frame_sync_create(VkDevice device, VkCommandPool cmd_pool, VkSwap
 
     vkGetSwapchainImagesKHR(device, swapchain, &sync.frame_count, NULL);
 
-    HgArena arena = hg_arena_create(
+    void *allocation = hg_std_alloc(NULL,
         sync.frame_count * sizeof(*sync.cmds) +
         sync.frame_count * sizeof(*sync.frame_finished) +
         sync.frame_count * sizeof(*sync.image_available) +
-        sync.frame_count * sizeof(*sync.ready_to_present));
+        sync.frame_count * sizeof(*sync.ready_to_present),
+        16);
 
-    sync.allocation = arena.data;
-
-    sync.cmds = hg_arena_alloc(
-        &arena, sync.frame_count * sizeof(*sync.cmds), alignof(*sync.cmds));
+    sync.cmds = allocation;
     VkCommandBufferAllocateInfo cmd_alloc_info = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         .commandPool = cmd_pool,
@@ -1439,8 +1437,7 @@ HgFrameSync hg_frame_sync_create(VkDevice device, VkCommandPool cmd_pool, VkSwap
     };
     vkAllocateCommandBuffers(device, &cmd_alloc_info, sync.cmds);
 
-    sync.frame_finished = hg_arena_alloc(
-        &arena, sync.frame_count * sizeof(*sync.frame_finished), alignof(*sync.frame_finished));
+    sync.frame_finished = (void *)(sync.cmds + sync.frame_count);
     for (usize i = 0; i < sync.frame_count; ++i) {
         VkFenceCreateInfo info = {
             .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
@@ -1449,8 +1446,7 @@ HgFrameSync hg_frame_sync_create(VkDevice device, VkCommandPool cmd_pool, VkSwap
         vkCreateFence(device, &info, NULL, &sync.frame_finished[i]);
     }
 
-    sync.image_available = hg_arena_alloc(
-        &arena, sync.frame_count * sizeof(*sync.image_available), alignof(*sync.image_available));
+    sync.image_available = (void *)(sync.frame_finished + sync.frame_count);
     for (usize i = 0; i < sync.frame_count; ++i) {
         VkSemaphoreCreateInfo info = {
             .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
@@ -1458,8 +1454,7 @@ HgFrameSync hg_frame_sync_create(VkDevice device, VkCommandPool cmd_pool, VkSwap
         vkCreateSemaphore(device, &info, NULL, &sync.image_available[i]);
     }
 
-    sync.ready_to_present = hg_arena_alloc(
-        &arena, sync.frame_count * sizeof(*sync.ready_to_present), alignof(*sync.ready_to_present));
+    sync.ready_to_present = (void *)(sync.image_available + sync.frame_count);
     for (usize i = 0; i < sync.frame_count; ++i) {
         VkSemaphoreCreateInfo info = {
             .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
@@ -1483,14 +1478,13 @@ void hg_frame_sync_destroy(VkDevice device, HgFrameSync *sync) {
     for (usize i = 0; i < sync->frame_count; ++i) {
         vkDestroySemaphore(device, sync->ready_to_present[i], NULL);
     }
-    hg_arena_destroy(&(HgArena){
-        .data = sync->allocation,
-        .capacity = (u8 *)sync->allocation +
-            sync->frame_count * sizeof(*sync->cmds) +
-            sync->frame_count * sizeof(*sync->frame_finished) +
-            sync->frame_count * sizeof(*sync->image_available) +
-            sync->frame_count * sizeof(*sync->ready_to_present)
-    });
+    hg_std_free(NULL,
+        sync->cmds,
+        sync->frame_count * sizeof(*sync->cmds) +
+        sync->frame_count * sizeof(*sync->frame_finished) +
+        sync->frame_count * sizeof(*sync->image_available) +
+        sync->frame_count * sizeof(*sync->ready_to_present),
+        16);
     memset(sync, 0, sizeof(*sync));
 }
 

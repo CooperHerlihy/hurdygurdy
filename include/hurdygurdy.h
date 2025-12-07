@@ -2282,7 +2282,6 @@ HgSwapchainData hg_vk_create_swapchain(
 typedef struct HgFrameSync {
     VkCommandPool cmd_pool;
     VkSwapchainKHR swapchain;
-    void *allocation;
     VkCommandBuffer *cmds;
     VkFence *frame_finished;
     VkSemaphore *image_available;
