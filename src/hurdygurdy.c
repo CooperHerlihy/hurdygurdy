@@ -1427,12 +1427,12 @@ HgSwapchainData hg_vk_create_swapchain(
     return swapchain;
 }
 
-HgFrameSync hg_frame_sync_create(VkDevice device, VkCommandPool cmd_pool, VkSwapchainKHR swapchain) {
+HgSwapchainCommands hg_swapchain_commands_create(VkDevice device, VkSwapchainKHR swapchain, VkCommandPool cmd_pool) {
     assert(device != NULL);
     assert(cmd_pool != NULL);
     assert(swapchain != NULL);
 
-    HgFrameSync sync = {
+    HgSwapchainCommands sync = {
         .cmd_pool = cmd_pool,
         .swapchain = swapchain,
     };
@@ -1483,7 +1483,7 @@ HgFrameSync hg_frame_sync_create(VkDevice device, VkCommandPool cmd_pool, VkSwap
     return sync;
 }
 
-void hg_frame_sync_destroy(VkDevice device, HgFrameSync *sync) {
+void hg_swapchain_commands_destroy(VkDevice device, HgSwapchainCommands *sync) {
     assert(sync != NULL);
 
     vkFreeCommandBuffers(device, sync->cmd_pool, sync->frame_count, sync->cmds);
@@ -1506,7 +1506,7 @@ void hg_frame_sync_destroy(VkDevice device, HgFrameSync *sync) {
     memset(sync, 0, sizeof(*sync));
 }
 
-VkCommandBuffer hg_frame_sync_begin_frame(VkDevice device, HgFrameSync *sync) {
+VkCommandBuffer hg_swapchain_commands_acquire_and_begin(VkDevice device, HgSwapchainCommands *sync) {
     assert(sync != NULL);
     if (sync->swapchain == NULL)
         return NULL;
@@ -1538,7 +1538,7 @@ VkCommandBuffer hg_frame_sync_begin_frame(VkDevice device, HgFrameSync *sync) {
     return cmd;
 }
 
-void hg_frame_sync_end_frame_and_present(VkQueue queue, HgFrameSync *sync) {
+void hg_swapchain_commands_end_and_present(VkQueue queue, HgSwapchainCommands *sync) {
     assert(queue != NULL);
     assert(sync != NULL);
 

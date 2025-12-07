@@ -57,7 +57,8 @@ int main(void) {
         };
         vkCreateImageView(device.handle, &create_info, NULL, &swap_views[i]);
     }
-    HgFrameSync frame_sync = hg_frame_sync_create(device.handle, cmd_pool, swapchain.handle);
+    HgSwapchainCommands swapchain_commands = hg_swapchain_commands_create(
+        device.handle, swapchain.handle, cmd_pool);
 
     HgPipelineSprite sprite_pipeline = hg_pipeline_sprite_create(
         device.handle, allocator, swapchain.format, 0);
@@ -86,18 +87,25 @@ int main(void) {
 
     u32 frame_count = 0;
     f64 frame_time = 0.0f;
-    HgClock hclock;
-    hg_clock_tick(&hclock);
+    f64 cpu_time = 0.0f;
+    HgClock game_clock;
+    HgClock cpu_clock;
+    hg_clock_tick(&game_clock);
+    hg_clock_tick(&cpu_clock);
 
     while(true) {
-        f64 delta = hg_clock_tick(&hclock);
+        f64 delta = hg_clock_tick(&game_clock);
         f32 deltaf = (f32)delta;
         ++frame_count;
         frame_time += delta;
         if (frame_time > 1.0f) {
-            hg_info("fps: %d, avg: %fms\n", frame_count, 1.0e3 / (f64)frame_count);
+            hg_info("fps: %d, total avg: %fms, cpu avg: %fms\n",
+                frame_count,
+                1.0e3 / (f64)frame_count,
+                cpu_time * 1.0e3 / (f64)frame_count);
             frame_count = 0;
-            frame_time -= 1.0f;
+            frame_time -= 1.0;
+            cpu_time = 0.0;
         }
 
         hg_window_process_events(platform, &window, 1);
@@ -125,7 +133,7 @@ int main(void) {
             for (usize i = 0; i < old_count; ++i) {
                 vkDestroyImageView(device.handle, swap_views[i], NULL);
             }
-            hg_frame_sync_destroy(device.handle, &frame_sync);
+            hg_swapchain_commands_destroy(device.handle, &swapchain_commands);
 
             if (swapchain.handle != NULL) {
                 vkGetSwapchainImagesKHR(device.handle, swapchain.handle, &swap_image_count, NULL);
@@ -148,7 +156,8 @@ int main(void) {
                     };
                     vkCreateImageView(device.handle, &create_info, NULL, &swap_views[i]);
                 }
-                frame_sync = hg_frame_sync_create(device.handle, cmd_pool, swapchain.handle);
+                swapchain_commands = hg_swapchain_commands_create(
+                    device.handle, swapchain.handle, cmd_pool);
 
                 aspect = (f32)swapchain.width / (f32)swapchain.height;
                 proj = hg_projection_orthographic(-aspect, aspect, -1.0f, 1.0f, 0.0f, 1.0f);
@@ -159,9 +168,11 @@ int main(void) {
             hg_info("window resized\n");
         }
 
-        VkCommandBuffer cmd = hg_frame_sync_begin_frame(device.handle, &frame_sync);
+        cpu_time += hg_clock_tick(&cpu_clock);
+        VkCommandBuffer cmd = hg_swapchain_commands_acquire_and_begin(device.handle, &swapchain_commands);
+        hg_clock_tick(&cpu_clock);
         if (cmd != NULL) {
-            u32 image_index = frame_sync.current_image;
+            u32 image_index = swapchain_commands.current_image;
 
             VkImageMemoryBarrier2 color_barrier = {
                 .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -224,7 +235,7 @@ int main(void) {
                 .pImageMemoryBarriers = &present_barrier,
             });
 
-            hg_frame_sync_end_frame_and_present(device.queue, &frame_sync);
+            hg_swapchain_commands_end_and_present(device.queue, &swapchain_commands);
         }
     }
 
@@ -233,7 +244,7 @@ int main(void) {
     hg_pipeline_sprite_destroy_texture(&sprite_pipeline, &texture);
     hg_pipeline_sprite_destroy(&sprite_pipeline);
 
-    hg_frame_sync_destroy(device.handle, &frame_sync);
+    hg_swapchain_commands_destroy(device.handle, &swapchain_commands);
     for (usize i = 0; i < swap_image_count; ++i) {
         vkDestroyImageView(device.handle, swap_views[i], NULL);
     }

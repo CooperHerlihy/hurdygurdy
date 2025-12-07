@@ -1081,10 +1081,6 @@ HgVec3 hg_rotate_vec3(HgQuat lhs, HgVec3 rhs);
  */
 HgMat3 hg_rotate_mat3(HgQuat lhs, HgMat3 rhs);
 
-// random number generators : TODO
-
-// hash functions : TODO
-
 /**
  * Creates a model matrix for 2D graphics
  *
@@ -1148,6 +1144,12 @@ HgMat4 hg_projection_orthographic(f32 left, f32 right, f32 top, f32 bottom, f32 
  * - The created matrix
  */
 HgMat4 hg_projection_perspective(f32 fov, f32 aspect, f32 near, f32 far);
+
+// random number generators : TODO
+
+// hash functions : TODO
+
+// sort and search algorithms : TODO
 
 /**
  * Calculates the maximum number of mipmap levels that an image can have
@@ -1540,6 +1542,7 @@ HgAllocator hg_stack_allocator(HgStack *stack);
  * - The created struct type of the dynamic array
  */
 #define HgArray(type) struct { \
+    HgAllocator *allocator; \
     type *items; \
     usize count; \
     usize capacity; \
@@ -1555,7 +1558,8 @@ HgAllocator hg_stack_allocator(HgStack *stack);
  * Returns
  * - The created dynamic array
  */
-#define hg_array_create(type, count, capacity) {malloc(capacity * sizeof(type)), count, capacity}
+#define hg_array_create(allocator, type, count, capacity) { \
+    allocator, hg_alloc(allocator, capacity * sizeof(type), alignof(type)), count, capacity}
 
 /**
  * Frees a dynamic array
@@ -1564,7 +1568,11 @@ HgAllocator hg_stack_allocator(HgStack *stack);
  * - array The array to free, must not be NULL
  */
 #define hg_array_destroy(array) do { \
-    free((array)->items); \
+    hg_free( \
+        (array)->allocator, \
+        (array)->items, \
+        (array)->capacity * sizeof(*(array)->items), \
+        alignof(*(array)->items)); \
 } while(0)
 
 /**
@@ -1576,8 +1584,13 @@ HgAllocator hg_stack_allocator(HgStack *stack);
  */
 #define hg_array_push(array, item) do { \
     if ((array)->count == (array)->capacity) { \
-        (array)->capacity = ((array)->capacity + 1) * 2; \
-        (array)->items = realloc((array)->items, (array)->capacity * sizeof(*(array)->items)); \
+        (array)->items = hg_realloc( \
+            (array)->allocator, \
+            (array)->items, \
+            (array)->capacity * sizeof(*(array)->items), \
+            (array)->capacity * sizeof(*(array)->items * 2), \
+            alignof(*(array)->items)); \
+        (array)->capacity *= 2; \
     } \
     (array)->items[(array)->count] = item; \
     ++(array)->count; \
@@ -1605,10 +1618,18 @@ HgAllocator hg_stack_allocator(HgStack *stack);
 #define hg_array_insert(array, index, item) do { \
     assert(index >= 0 && index < (array)->count); \
     if ((array)->count == (array)->capacity) { \
-        (array)->capacity = ((array)->capacity + 1) * 2; \
-        (array)->items = realloc((array)->items, (array)->capacity * sizeof(*(array)->items)); \
+        (array)->items = hg_realloc( \
+            (array)->allocator, \
+            (array)->items, \
+            (array)->capacity * sizeof(*(array)->items), \
+            (array)->capacity * sizeof(*(array)->items * 2), \
+            alignof(*(array)->items)); \
+        (array)->capacity *= 2; \
     } \
-    memmove((array)->items + index + 1, (array)->items + index, ((array)->count - index) * sizeof(*(array)->items)); \
+    memmove( \
+        (array)->items + index + 1, \
+        (array)->items + index, \
+        ((array)->count - index) * sizeof(*(array)->items)); \
     ++(array)->count; \
     (array)->items[index] = item; \
 } while(0)
@@ -1623,7 +1644,10 @@ HgAllocator hg_stack_allocator(HgStack *stack);
 #define hg_array_delete(array, index) do { \
     assert(index >= 0 && index < (array)->count); \
     --(array)->count; \
-    memmove((array)->items + index, (array)->items + index + 1, ((array)->count - index) * sizeof(*(array)->items)); \
+    memmove( \
+        (array)->items + index, \
+        (array)->items + index + 1, \
+        ((array)->count - index) * sizeof(*(array)->items)); \
 } while (0)
 
 /**
@@ -2314,7 +2338,7 @@ HgSwapchainData hg_vk_create_swapchain(
 /**
  * A system to synchronize frames rendering to multiple swapchain images at once
  */
-typedef struct HgFrameSync {
+typedef struct HgSwapchainCommands {
     VkCommandPool cmd_pool;
     VkSwapchainKHR swapchain;
     VkCommandBuffer *cmds;
@@ -2324,52 +2348,52 @@ typedef struct HgFrameSync {
     u32 frame_count;
     u32 current_frame;
     u32 current_image;
-} HgFrameSync;
+} HgSwapchainCommands;
 
 /**
- * Creates a frame sync system
+ * Creates a swaphchain command buffer system
  *
  * Parameters
  * - device The Vulkan device, must not be NULL
- * - cmd_pool The Vulkan command pool to allocate cmds from, must not be NULL
  * - swapchain The Vulkan swapchain to create frames for, must not be NULL
+ * - cmd_pool The Vulkan command pool to allocate cmds from, must not be NULL
  * Returns
- * - The created frame sync system
+ * - The created swaphchain command buffer system
  */
-HgFrameSync hg_frame_sync_create(VkDevice device, VkCommandPool cmd_pool, VkSwapchainKHR swapchain);
+HgSwapchainCommands hg_swapchain_commands_create(VkDevice device, VkSwapchainKHR swapchain, VkCommandPool cmd_pool);
 
 /**
- * Destroys a frame sync system
+ * Destroys a swaphchain command buffer system
  *
- * Note, it is safe to call begin_frame with a destroyed frame sync, it will
- * simply return NULL, but it is not safe to call end_frame_and_present
+ * Note, it is safe to call acquire_and_begin with a destroyed frame sync, it
+ * will simply return NULL, but it is not safe to call end_and_present
  *
  * Parameters
  * - device The Vulkan device, must not be NULL
- * - sync The frame sync system to destroy, must not be NULL
+ * - sync The swaphchain command buffer system to destroy, must not be NULL
  */
-void hg_frame_sync_destroy(VkDevice device, HgFrameSync *sync);
+void hg_swapchain_commands_destroy(VkDevice device, HgSwapchainCommands *sync);
 
 /**
  * Acquires the next swapchain image and begins its command buffer
  *
  * Parameters
  * - device The Vulkan device, must not be NULL
- * - sync The frame sync system, must not be NULL
+ * - sync The swapchain command buffer system, must not be NULL
  * Returns
  * - The command buffer to record this frame
  * - NULL if the swapchain is out of date
  */
-VkCommandBuffer hg_frame_sync_begin_frame(VkDevice device, HgFrameSync *sync);
+VkCommandBuffer hg_swapchain_commands_acquire_and_begin(VkDevice device, HgSwapchainCommands *sync);
 
 /**
  * Finishes recording the command buffer and presents the swapchain image
  *
  * Parameters
  * - queue The Vulkan queue, must not be NULL
- * - sync The frame sync system, must not be NULL
+ * - sync The swapchain command buffer system, must not be NULL
  */
-void hg_frame_sync_end_frame_and_present(VkQueue queue, HgFrameSync *sync);
+void hg_swapchain_commands_end_and_present(VkQueue queue, HgSwapchainCommands *sync);
 
 // Vulkan resource utilities : TODO
 
