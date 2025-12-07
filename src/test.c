@@ -26,6 +26,14 @@ int main(void) {
     VmaAllocator allocator;
     vmaCreateAllocator(&allocator_info, &allocator);
 
+    VkCommandPoolCreateInfo cmd_pool_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+        .queueFamilyIndex = device.queue_family,
+    };
+    VkCommandPool cmd_pool;
+    vkCreateCommandPool(device.handle, &cmd_pool_info, NULL, &cmd_pool);
+
     VkSurfaceKHR surface = hg_vk_create_surface(instance, platform, window);
     HgSwapchainData swapchain = hg_vk_create_swapchain(device.handle, device.gpu, NULL, surface,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_PRESENT_MODE_FIFO_KHR);
@@ -49,29 +57,15 @@ int main(void) {
         };
         vkCreateImageView(device.handle, &create_info, NULL, &swap_views[i]);
     }
-
-    VkCommandPoolCreateInfo cmd_pool_info = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-        .queueFamilyIndex = device.queue_family,
-    };
-    VkCommandPool cmd_pool;
-    vkCreateCommandPool(device.handle, &cmd_pool_info, NULL, &cmd_pool);
-
     HgFrameSync frame_sync = hg_frame_sync_create(device.handle, cmd_pool, swapchain.handle);
 
     HgPipelineSprite sprite_pipeline = hg_pipeline_sprite_create(
         device.handle, allocator, swapchain.format, 0);
 
-    f32 aspect = (f32)swapchain.width / (f32)swapchain.height;
-    HgMat4 proj = hg_projection_orthographic(-aspect, aspect, -1.0f, 1.0f, 0.0f, 1.0f);
-    hg_pipeline_sprite_update_projection(&sprite_pipeline, &proj);
-
     struct {u8 r, g, b, a;} tex_data[] = {
         {0xff, 0x00, 0x00, 0xff}, {0x00, 0xff, 0x00, 0xff},
         {0x00, 0x00, 0xff, 0xff}, {0xff, 0xff, 0x00, 0xff},
     };
-
     HgPipelineSpriteTextureConfig tex_config = {
         .tex_data = tex_data,
         .width = 2,
@@ -85,6 +79,10 @@ int main(void) {
         &sprite_pipeline, cmd_pool, device.queue, &tex_config);
 
     HgVec3 position = {0.0f, 0.0f, 0.0f};
+
+    f32 aspect = (f32)swapchain.width / (f32)swapchain.height;
+    HgMat4 proj = hg_projection_orthographic(-aspect, aspect, -1.0f, 1.0f, 0.0f, 1.0f);
+    hg_pipeline_sprite_update_projection(&sprite_pipeline, &proj);
 
     u32 frame_count = 0;
     f64 frame_time = 0.0f;
@@ -127,7 +125,7 @@ int main(void) {
             for (usize i = 0; i < old_count; ++i) {
                 vkDestroyImageView(device.handle, swap_views[i], NULL);
             }
-            hg_frame_sync_destroy(&frame_sync);
+            hg_frame_sync_destroy(device.handle, &frame_sync);
 
             if (swapchain.handle != NULL) {
                 vkGetSwapchainImagesKHR(device.handle, swapchain.handle, &swap_image_count, NULL);
@@ -161,7 +159,7 @@ int main(void) {
             hg_info("window resized\n");
         }
 
-        VkCommandBuffer cmd = hg_frame_sync_begin_frame(&frame_sync);
+        VkCommandBuffer cmd = hg_frame_sync_begin_frame(device.handle, &frame_sync);
         if (cmd != NULL) {
             u32 image_index = frame_sync.current_image;
 
@@ -226,7 +224,7 @@ int main(void) {
                 .pImageMemoryBarriers = &present_barrier,
             });
 
-            hg_frame_sync_end_frame_and_present(&frame_sync, device.queue);
+            hg_frame_sync_end_frame_and_present(device.queue, &frame_sync);
         }
     }
 
@@ -235,10 +233,7 @@ int main(void) {
     hg_pipeline_sprite_destroy_texture(&sprite_pipeline, &texture);
     hg_pipeline_sprite_destroy(&sprite_pipeline);
 
-    hg_frame_sync_destroy(&frame_sync);
-
-    vkDestroyCommandPool(device.handle, cmd_pool, NULL);
-
+    hg_frame_sync_destroy(device.handle, &frame_sync);
     for (usize i = 0; i < swap_image_count; ++i) {
         vkDestroyImageView(device.handle, swap_views[i], NULL);
     }
@@ -246,6 +241,7 @@ int main(void) {
     free(swap_images);
     vkDestroySwapchainKHR(device.handle, swapchain.handle, NULL);
 
+    vkDestroyCommandPool(device.handle, cmd_pool, NULL);
     vmaDestroyAllocator(allocator);
     vkDestroyDevice(device.handle, NULL);
     vkDestroySurfaceKHR(instance, surface, NULL);

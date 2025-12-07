@@ -12,6 +12,14 @@ usize hg_align(usize value, usize alignment) {
     return (value + alignment - 1) & ~(alignment - 1);
 }
 
+f64 hg_clock_tick(HgClock *hclock) {
+    assert(hclock != NULL);
+    f64 prev = (f64)hclock->tv_sec + (f64)hclock->tv_nsec / 1.0e9;
+    if (timespec_get(hclock, TIME_UTC) == 0)
+        hg_warn("timespec_get failed\n");
+    return ((f64)hclock->tv_sec + (f64)hclock->tv_nsec / 1.0e9) - prev;
+}
+
 HgVec2 hg_svec2(f32 scalar) {
     return (HgVec2){scalar, scalar};
 }
@@ -592,14 +600,6 @@ void hg_arena_free(HgArena *arena, void *allocation, usize size) {
 }
 
 
-f64 hg_clock_tick(HgClock *hclock) {
-    assert(hclock != NULL);
-    f64 prev = (f64)hclock->time.tv_sec + (f64)hclock->time.tv_nsec / 1.0e9;
-    if (timespec_get(&hclock->time, TIME_UTC) == 0)
-        hg_warn("timespec_get failed\n");
-    return ((f64)hclock->time.tv_sec + (f64)hclock->time.tv_nsec / 1.0e9) - prev;
-}
-
 bool hg_file_load_binary(u8** data, usize* size, const char *path) {
     assert(data != NULL);
     assert(size != NULL);
@@ -985,101 +985,6 @@ HgSingleQueueDeviceData hg_vk_create_single_queue_device(VkInstance instance) {
     return device;
 }
 
-static VkFormat hg_internal_vk_find_swapchain_format(VkPhysicalDevice gpu, VkSurfaceKHR surface) {
-    assert(gpu != NULL);
-    assert(surface != NULL);
-
-    u32 format_count = 0;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &format_count, NULL);
-    VkSurfaceFormatKHR *formats = alloca(format_count * sizeof(*formats));
-    vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &format_count, formats);
-
-    for (usize i = 0; i < format_count; ++i) {
-        if (formats[i].format == VK_FORMAT_R8G8B8A8_SRGB)
-            return VK_FORMAT_R8G8B8A8_SRGB;
-        if (formats[i].format == VK_FORMAT_B8G8R8A8_SRGB)
-            return VK_FORMAT_B8G8R8A8_SRGB;
-    }
-    hg_error("No supported swapchain formats\n");
-}
-
-static VkPresentModeKHR hg_internal_vk_find_swapchain_present_mode(
-    VkPhysicalDevice gpu,
-    VkSurfaceKHR surface,
-    VkPresentModeKHR desired_mode
-) {
-    assert(gpu != NULL);
-    assert(surface != NULL);
-
-    if (desired_mode == VK_PRESENT_MODE_FIFO_KHR)
-        return desired_mode;
-
-    u32 mode_count = 0;
-    vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &mode_count, NULL);
-    VkPresentModeKHR *present_modes = alloca(mode_count * sizeof(*present_modes));
-    vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &mode_count, present_modes);
-
-    for (usize i = 0; i < mode_count; ++i) {
-        if (present_modes[i] == desired_mode)
-            return desired_mode;
-    }
-    return VK_PRESENT_MODE_FIFO_KHR;
-}
-
-HgSwapchainData hg_vk_create_swapchain(
-    VkDevice device,
-    VkPhysicalDevice gpu,
-    VkSwapchainKHR old_swapchain,
-    VkSurfaceKHR surface,
-    VkImageUsageFlags image_usage,
-    VkPresentModeKHR desired_mode
-) {
-    assert(device != NULL);
-    assert(gpu != NULL);
-    assert(surface != NULL);
-    assert(image_usage != 0);
-
-    HgSwapchainData swapchain = {0};
-
-    VkSurfaceCapabilitiesKHR surface_capabilities = {0};
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &surface_capabilities);
-
-    if (surface_capabilities.currentExtent.width == 0 ||
-        surface_capabilities.currentExtent.height == 0 ||
-        surface_capabilities.currentExtent.width < surface_capabilities.minImageExtent.width ||
-        surface_capabilities.currentExtent.height < surface_capabilities.minImageExtent.height ||
-        surface_capabilities.currentExtent.width > surface_capabilities.maxImageExtent.width ||
-        surface_capabilities.currentExtent.height > surface_capabilities.maxImageExtent.height
-    ) {
-        hg_warn("Could not create swapchain of the surface's size\n");
-        return swapchain;
-    }
-
-    swapchain.width = surface_capabilities.currentExtent.width;
-    swapchain.height = surface_capabilities.currentExtent.height;
-    swapchain.format = hg_internal_vk_find_swapchain_format(gpu, surface);
-
-    VkSwapchainCreateInfoKHR swapchain_info = {
-        .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-        .surface = surface,
-        .minImageCount = surface_capabilities.minImageCount,
-        .imageFormat = swapchain.format,
-        .imageExtent = surface_capabilities.currentExtent,
-        .imageArrayLayers = 1,
-        .imageUsage = image_usage,
-        .preTransform = surface_capabilities.currentTransform,
-        .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-        .presentMode = hg_internal_vk_find_swapchain_present_mode(gpu, surface, desired_mode),
-        .clipped = VK_TRUE,
-        .oldSwapchain = old_swapchain,
-    };
-    VkResult result = vkCreateSwapchainKHR(device, &swapchain_info, NULL, &swapchain.handle);
-    if (swapchain.handle == NULL)
-        hg_error("Failed to create swapchain: %s\n", hg_vk_result_string(result));
-
-    return swapchain;
-}
-
 VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineConfig *config) {
     assert(device != NULL);
     assert(config != NULL);
@@ -1299,13 +1204,107 @@ u32 hg_vk_find_memory_type_index(
     hg_error("Could not find Vulkan memory type\n");
 }
 
+static VkFormat hg_internal_vk_find_swapchain_format(VkPhysicalDevice gpu, VkSurfaceKHR surface) {
+    assert(gpu != NULL);
+    assert(surface != NULL);
+
+    u32 format_count = 0;
+    vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &format_count, NULL);
+    VkSurfaceFormatKHR *formats = alloca(format_count * sizeof(*formats));
+    vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &format_count, formats);
+
+    for (usize i = 0; i < format_count; ++i) {
+        if (formats[i].format == VK_FORMAT_R8G8B8A8_SRGB)
+            return VK_FORMAT_R8G8B8A8_SRGB;
+        if (formats[i].format == VK_FORMAT_B8G8R8A8_SRGB)
+            return VK_FORMAT_B8G8R8A8_SRGB;
+    }
+    hg_error("No supported swapchain formats\n");
+}
+
+static VkPresentModeKHR hg_internal_vk_find_swapchain_present_mode(
+    VkPhysicalDevice gpu,
+    VkSurfaceKHR surface,
+    VkPresentModeKHR desired_mode
+) {
+    assert(gpu != NULL);
+    assert(surface != NULL);
+
+    if (desired_mode == VK_PRESENT_MODE_FIFO_KHR)
+        return desired_mode;
+
+    u32 mode_count = 0;
+    vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &mode_count, NULL);
+    VkPresentModeKHR *present_modes = alloca(mode_count * sizeof(*present_modes));
+    vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &mode_count, present_modes);
+
+    for (usize i = 0; i < mode_count; ++i) {
+        if (present_modes[i] == desired_mode)
+            return desired_mode;
+    }
+    return VK_PRESENT_MODE_FIFO_KHR;
+}
+
+HgSwapchainData hg_vk_create_swapchain(
+    VkDevice device,
+    VkPhysicalDevice gpu,
+    VkSwapchainKHR old_swapchain,
+    VkSurfaceKHR surface,
+    VkImageUsageFlags image_usage,
+    VkPresentModeKHR desired_mode
+) {
+    assert(device != NULL);
+    assert(gpu != NULL);
+    assert(surface != NULL);
+    assert(image_usage != 0);
+
+    HgSwapchainData swapchain = {0};
+
+    VkSurfaceCapabilitiesKHR surface_capabilities = {0};
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &surface_capabilities);
+
+    if (surface_capabilities.currentExtent.width == 0 ||
+        surface_capabilities.currentExtent.height == 0 ||
+        surface_capabilities.currentExtent.width < surface_capabilities.minImageExtent.width ||
+        surface_capabilities.currentExtent.height < surface_capabilities.minImageExtent.height ||
+        surface_capabilities.currentExtent.width > surface_capabilities.maxImageExtent.width ||
+        surface_capabilities.currentExtent.height > surface_capabilities.maxImageExtent.height
+    ) {
+        hg_warn("Could not create swapchain of the surface's size\n");
+        return swapchain;
+    }
+
+    swapchain.width = surface_capabilities.currentExtent.width;
+    swapchain.height = surface_capabilities.currentExtent.height;
+    swapchain.format = hg_internal_vk_find_swapchain_format(gpu, surface);
+
+    VkSwapchainCreateInfoKHR swapchain_info = {
+        .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+        .surface = surface,
+        .minImageCount = surface_capabilities.minImageCount,
+        .imageFormat = swapchain.format,
+        .imageExtent = surface_capabilities.currentExtent,
+        .imageArrayLayers = 1,
+        .imageUsage = image_usage,
+        .preTransform = surface_capabilities.currentTransform,
+        .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+        .presentMode = hg_internal_vk_find_swapchain_present_mode(gpu, surface, desired_mode),
+        .clipped = VK_TRUE,
+        .oldSwapchain = old_swapchain,
+    };
+    VkResult result = vkCreateSwapchainKHR(device, &swapchain_info, NULL, &swapchain.handle);
+    if (swapchain.handle == NULL)
+        hg_error("Failed to create swapchain: %s\n", hg_vk_result_string(result));
+
+    return swapchain;
+}
+
 HgFrameSync hg_frame_sync_create(VkDevice device, VkCommandPool cmd_pool, VkSwapchainKHR swapchain) {
     assert(device != NULL);
     assert(cmd_pool != NULL);
     assert(swapchain != NULL);
 
     HgFrameSync sync = {
-        .device = device,
         .cmd_pool = cmd_pool,
         .swapchain = swapchain,
     };
@@ -1351,36 +1350,36 @@ HgFrameSync hg_frame_sync_create(VkDevice device, VkCommandPool cmd_pool, VkSwap
     return sync;
 }
 
-void hg_frame_sync_destroy(HgFrameSync *sync) {
+void hg_frame_sync_destroy(VkDevice device, HgFrameSync *sync) {
     assert(sync != NULL);
 
-    vkFreeCommandBuffers(sync->device, sync->cmd_pool, sync->frame_count, sync->cmds);
+    vkFreeCommandBuffers(device, sync->cmd_pool, sync->frame_count, sync->cmds);
     for (usize i = 0; i < sync->frame_count; ++i) {
-        vkDestroyFence(sync->device, sync->frame_finished[i], NULL);
+        vkDestroyFence(device, sync->frame_finished[i], NULL);
     }
     for (usize i = 0; i < sync->frame_count; ++i) {
-        vkDestroySemaphore(sync->device, sync->image_available[i], NULL);
+        vkDestroySemaphore(device, sync->image_available[i], NULL);
     }
     for (usize i = 0; i < sync->frame_count; ++i) {
-        vkDestroySemaphore(sync->device, sync->ready_to_present[i], NULL);
+        vkDestroySemaphore(device, sync->ready_to_present[i], NULL);
     }
     free(sync->allocation);
 
     memset(sync, 0, sizeof(*sync));
 }
 
-VkCommandBuffer hg_frame_sync_begin_frame(HgFrameSync *sync) {
+VkCommandBuffer hg_frame_sync_begin_frame(VkDevice device, HgFrameSync *sync) {
     assert(sync != NULL);
     if (sync->swapchain == NULL)
         return NULL;
 
     sync->current_frame = (sync->current_frame + 1) % sync->frame_count;
 
-    vkWaitForFences(sync->device, 1, &sync->frame_finished[sync->current_frame], VK_TRUE, UINT64_MAX);
-    vkResetFences(sync->device, 1, &sync->frame_finished[sync->current_frame]);
+    vkWaitForFences(device, 1, &sync->frame_finished[sync->current_frame], VK_TRUE, UINT64_MAX);
+    vkResetFences(device, 1, &sync->frame_finished[sync->current_frame]);
 
     VkResult result = vkAcquireNextImageKHR(
-        sync->device,
+        device,
         sync->swapchain,
         UINT64_MAX,
         sync->image_available[sync->current_frame],
@@ -1401,7 +1400,7 @@ VkCommandBuffer hg_frame_sync_begin_frame(HgFrameSync *sync) {
     return cmd;
 }
 
-void hg_frame_sync_end_frame_and_present(HgFrameSync *sync, VkQueue queue) {
+void hg_frame_sync_end_frame_and_present(VkQueue queue, HgFrameSync *sync) {
     assert(queue != NULL);
     assert(sync != NULL);
 
@@ -1998,7 +1997,7 @@ KeySym XLookupKeysym(XKeyEvent *key_event, int index) {
 
 #define HG_LOAD_X11_FUNC(name) *(void **)&hg_internal_x11_funcs. name \
     = dlsym(hg_internal_libx11, #name); \
-    if (hg_internal_x11_funcs. name == NULL) { hg_error("Could not load Xlib function: \n" #name) }
+    if (hg_internal_x11_funcs. name == NULL) { hg_error("Could not load Xlib function: \n" #name); }
 
 HgPlatform *hg_platform_create(void) {
     HgPlatform *platform = NULL;
