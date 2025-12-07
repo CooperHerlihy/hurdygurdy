@@ -540,6 +540,27 @@ u32 hg_max_mipmaps(u32 width, u32 height, u32 depth) {
     return (u32)log2f((f32)hg_max(hg_max(width, height), depth)) + 1;
 }
 
+static const HgAllocator hg_internal_std_allocator = {
+    .user_data = NULL,
+    .alloc = hg_std_alloc,
+    .realloc = hg_std_realloc,
+    .free = hg_std_free,
+};
+
+const HgAllocator *hg_persistent_allocator(void) {
+    return &hg_internal_std_allocator;
+}
+
+thread_local HgAllocator hg_internal_temp_allocator = hg_internal_std_allocator;
+
+HgAllocator *hg_temp_allocator_get(void) {
+    return &hg_internal_temp_allocator;
+}
+
+void hg_temp_allocator_set(HgAllocator allocator) {
+    hg_internal_temp_allocator = allocator;
+}
+
 void *hg_std_alloc(void *dummy, usize size, usize alignment) {
     (void)dummy;
     (void)alignment;
@@ -564,18 +585,11 @@ void hg_std_free(void *dummy, void *allocation, usize size, usize alignment) {
     free(allocation);
 }
 
-HgAllocator hg_std_allocator(void) {
-    return (HgAllocator){
-        .user_data = NULL,
-        .alloc = hg_std_alloc,
-        .realloc = hg_std_realloc,
-        .free = hg_std_free,
-    };
-}
-
-HgArena hg_arena_create(usize capacity) {
-    void *data = hg_std_alloc(NULL, capacity, 16);
+HgArena hg_arena_create(HgAllocator *allocator, usize capacity) {
+    assert(allocator != NULL);
+    void *data = hg_alloc(allocator, capacity, 16);
     return (HgArena) {
+        .allocator = allocator,
         .data = data,
         .capacity = (u8 *)data + capacity,
         .head = data,
@@ -584,7 +598,7 @@ HgArena hg_arena_create(usize capacity) {
 
 void hg_arena_destroy(HgArena *arena) {
     assert(arena != NULL);
-    hg_std_free(NULL, arena->data, (usize)arena->capacity - (usize)arena->data, 16);
+    hg_free(arena->allocator, arena->data, (usize)arena->capacity - (usize)arena->data, 16);
 }
 
 void hg_arena_reset(HgArena *arena) {
@@ -637,16 +651,18 @@ HgAllocator hg_arena_allocator(HgArena *arena) {
     };
 }
 
-HgStack hg_stack_create(usize capacity) {
+HgStack hg_stack_create(HgAllocator *allocator, usize capacity) {
+    assert(allocator != NULL);
     return (HgStack){
-        .data = hg_std_alloc(NULL, capacity, 16),
+        .allocator = allocator,
+        .data = hg_alloc(allocator, capacity, 16),
         .capacity = capacity,
     };
 }
 
 void hg_stack_destroy(HgStack *stack) {
     assert(stack != NULL);
-    hg_std_free(NULL, stack->data, stack->capacity, 16);
+    hg_std_free(stack->allocator, stack->data, stack->capacity, 16);
 }
 
 void hg_stack_reset(HgStack *stack) {
@@ -711,7 +727,8 @@ HgAllocator hg_stack_allocator(HgStack *stack) {
     };
 }
 
-bool hg_file_load_binary(u8** data, usize* size, const char *path) {
+bool hg_file_load_binary(HgAllocator *allocator, u8** data, usize* size, const char *path) {
+    assert(allocator != NULL);
     assert(data != NULL);
     assert(size != NULL);
     assert(path != NULL);
@@ -728,7 +745,7 @@ bool hg_file_load_binary(u8** data, usize* size, const char *path) {
     usize file_size = (usize)ftell(file);
     rewind(file);
 
-    u8* file_data = hg_std_alloc(NULL, file_size, 16);
+    u8* file_data = hg_alloc(allocator, file_size, 16);
     if (fread(file_data, 1, file_size, file) != file_size) {
         fclose(file);
         hg_warn("Failed to read binary from file: %s\n", path);
@@ -741,8 +758,9 @@ bool hg_file_load_binary(u8** data, usize* size, const char *path) {
     return true;
 }
 
-void hg_file_unload_binary(u8* data, usize size) {
-    hg_std_free(NULL, data, size, 16);
+void hg_file_unload_binary(HgAllocator *allocator, u8* data, usize size) {
+    assert(allocator != NULL);
+    hg_free(allocator, data, size, 16);
 }
 
 bool hg_file_save_binary(const u8* data, usize size, const char *path) {
@@ -1421,7 +1439,7 @@ HgFrameSync hg_frame_sync_create(VkDevice device, VkCommandPool cmd_pool, VkSwap
 
     vkGetSwapchainImagesKHR(device, swapchain, &sync.frame_count, NULL);
 
-    void *allocation = hg_std_alloc(NULL,
+    void *allocation = hg_alloc(hg_persistent_allocator(),
         sync.frame_count * sizeof(*sync.cmds) +
         sync.frame_count * sizeof(*sync.frame_finished) +
         sync.frame_count * sizeof(*sync.image_available) +
@@ -2266,7 +2284,7 @@ HgWindow *hg_window_create(const HgPlatform *platform, const HgWindowConfig *con
     u32 height = config->windowed ? config->height
         : (u32)DisplayHeight((Display *)platform, DefaultScreen((Display *)platform));
 
-    HgWindow *window = hg_std_alloc(NULL, sizeof(*window), 16);
+    HgWindow *window = hg_alloc(hg_persistent_allocator(), sizeof(*window), 16);
     window->input = (HgWindowInput){
         .width = width,
         .height = height,
@@ -3134,7 +3152,7 @@ static LRESULT CALLBACK hg_internal_window_callback(HWND hwnd, UINT msg, WPARAM 
 HgWindow *hg_window_create(const HgPlatform *platform, const HgWindowConfig *config) {
     const char *title = config->title != NULL ? config->title : "Hurdy Gurdy";
 
-    HgWindow *window = hg_std_alloc(NULL, sizeof(*window), 16);
+    HgWindow *window = hg_alloc(hg_persisten_allocator(), sizeof(*window), 16);
     window->input = (HgWindowInput){
         .width = config->width,
         .height = config->height,

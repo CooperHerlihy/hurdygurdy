@@ -1203,6 +1203,37 @@ typedef struct HgAllocator {
 } HgAllocator;
 
 /**
+ * Get the global allocator for malloc/free
+ *
+ * Returns
+ * - The global allocator
+ */
+const HgAllocator *hg_persistent_allocator(void);
+
+/**
+ * Gets the current temporary allocator on this thread
+ *
+ * Returns
+ * - This thread's temporary allocator
+ */
+const HgAllocator *hg_temp_allocator(void);
+
+/**
+ * Sets the current temporary allocator on this thread
+ *
+ * Note, if this function is never called, the temp allocator default to be the
+ * same as the global allocator
+ *
+ * Note, this function will never be called within the library, the user can
+ * expect that the temporary allocator will stay the same until calling this
+ * function again
+ *
+ * Parameters
+ * - The allocator to set for this thread
+ */
+void hg_temp_allocator_set(HgAllocator allocator);
+
+/**
  * A convenience to call alloc from the interface
  *
  * Parameters
@@ -1294,26 +1325,25 @@ void *hg_std_realloc(void *dummy, void *allocation, usize old_size, usize new_si
 void hg_std_free(void *dummy, void *allocation, usize size, usize alignment);
 
 /**
- * Creates the interface for an HgAllocator using malloc, realloc, and free
- */
-HgAllocator hg_std_allocator(void);
-
-/**
  * An arena allocator
  *
  * Allocations are made very quickly, and are not freed individually, instead
  * the whole block is freed at once
  */
 typedef struct HgArena {
-    /*
+    /**
+     * The allocator used to create the arena
+     */
+    HgAllocator *allocator;
+    /**
      * A pointer to the memory being allocated
      */
     void *data;
-    /*
+    /**
      * The total capacity of the data in bytes
      */
     void *capacity;
-    /*
+    /**
      * The next allocation to be given out
      */
     void *head;
@@ -1323,19 +1353,18 @@ typedef struct HgArena {
  * Allocates an arena with capacity
  *
  * Parameters
- * - hg The hg context to allocate from
+ * - allocator The allocator to allocate memory from, must not be NULL
  * - capacity The size of the block to allocate and use
  * Returns
  * - The allocated arena
  */
-HgArena hg_arena_create(usize capacity);
+HgArena hg_arena_create(HgAllocator *allocator, usize capacity);
 
 /**
  * Frees an arena's memory
  *
  * Parameters
- * - hg The hg context to free to
- * - arena The arena to destroy
+ * - arena The arena to destroy, must not be NULL
  */
 void hg_arena_destroy(HgArena *arena);
 
@@ -1405,6 +1434,10 @@ HgAllocator hg_arena_allocator(HgArena *arena);
  * Allocations are made very quickly, but must be freed in reverse order
  */
 typedef struct HgStack {
+    /**
+     * The allocator used to create the stack
+     */
+    HgAllocator *allocator;
     /*
      * A pointer to the memory being allocated
      */
@@ -1423,19 +1456,19 @@ typedef struct HgStack {
  * Allocates a stack allocator with capacity
  *
  * Parameters
- * - hg The hg context to allocate from
+ * - allocator The allocator to allocate memory from, must not be NULL
  * - capacity The size of the block to allocate and use
  * Returns
  * - The allocated stack
  */
-HgStack hg_stack_create(usize capacity);
+HgStack hg_stack_create(HgAllocator *allocator, usize capacity);
 
 /**
  * Frees a stack's memory
  *
  * Parameters
- * - hg The hg context to free to
  * - stack The stack to destroy
+ * - allocator The allocator to free memory
  */
 void hg_stack_destroy(HgStack *stack);
 
@@ -1597,6 +1630,7 @@ HgAllocator hg_stack_allocator(HgStack *stack);
  * Loads a binary file
  *
  * Parameters
+ * - allocator Where to allocate the memory from, must not be NULL
  * - data A pointer to store the loaded data, must not be NULL
  * - size A pointer to store the size of the loaded data, must not be NULL
  * - path The null terminated path to the file to load, must not be NULL
@@ -1604,16 +1638,17 @@ HgAllocator hg_stack_allocator(HgStack *stack);
  * - true if the file was loaded successfully
  * - false if the file was not found or could not be read
  */
-bool hg_file_load_binary(u8** data, usize* size, const char *path);
+bool hg_file_load_binary(HgAllocator *allocator, u8** data, usize* size, const char *path);
 
 /**
  * Unloads a binary file
  *
  * Parameters
+ * - allocator Where to free the memory to, must not be NULL
  * - data The data to unload, noop if NULL
  * - size The size of the data to unload
  */
-void hg_file_unload_binary(u8* data, usize size);
+void hg_file_unload_binary(HgAllocator *allocator, u8* data, usize size);
 
 /**
  * Saves a binary file
