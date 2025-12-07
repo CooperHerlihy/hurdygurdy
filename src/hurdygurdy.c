@@ -540,16 +540,51 @@ u32 hg_max_mipmaps(u32 width, u32 height, u32 depth) {
     return (u32)log2f((f32)hg_max(hg_max(width, height), depth)) + 1;
 }
 
+void *hg_std_alloc(void *dummy, usize size, usize alignment) {
+    (void)dummy;
+    (void)alignment;
+    void *allocation = malloc(size);
+    assert(allocation != NULL);
+    return allocation;
+}
+
+void *hg_std_realloc(void *dummy, void *allocation, usize old_size, usize new_size, usize alignment) {
+    (void)old_size;
+    (void)dummy;
+    (void)alignment;
+    void *new_allocation = realloc(allocation, new_size);
+    assert(new_allocation != NULL);
+    return new_allocation;
+}
+
+void hg_std_free(void *dummy, void *allocation, usize size, usize alignment) {
+    (void)size;
+    (void)dummy;
+    (void)alignment;
+    free(allocation);
+}
+
+HgAllocator hg_std_allocator(void) {
+    return (HgAllocator){
+        .user_data = NULL,
+        .alloc = hg_std_alloc,
+        .realloc = hg_std_realloc,
+        .free = hg_std_free,
+    };
+}
+
 HgArena hg_arena_create(usize capacity) {
-    return (HgArena){
-        .data = malloc(capacity),
-        .capacity = capacity,
+    void *data = hg_std_alloc(NULL, capacity, 16);
+    return (HgArena) {
+        .data = data,
+        .capacity = (u8 *)data + capacity,
+        .head = data,
     };
 }
 
 void hg_arena_destroy(HgArena *arena) {
     assert(arena != NULL);
-    free(arena->data);
+    hg_std_free(NULL, arena->data, (usize)arena->capacity - (usize)arena->data, 16);
 }
 
 void hg_arena_reset(HgArena *arena) {
@@ -557,48 +592,124 @@ void hg_arena_reset(HgArena *arena) {
     arena->head = 0;
 }
 
-void *hg_arena_alloc(HgArena *arena, usize size) {
+void *hg_arena_alloc(HgArena *arena, usize size, usize alignment) {
     assert(arena != NULL);
-    if (size == 0)
-        return NULL;
 
-    usize new_head = arena->head + hg_align(size, 16);
+    void *allocation = (void *)hg_align((usize)arena->head, alignment);
+
+    void *new_head = (u8 *)allocation + size;
     if (new_head > arena->capacity)
         return NULL;
-
-    void *allocation = (u8 *)arena->data + arena->head;
     arena->head = new_head;
+
     return allocation;
 }
 
-void *hg_arena_realloc(HgArena *arena, void *allocation, usize old_size, usize new_size) {
+void *hg_arena_realloc(HgArena *arena, void *allocation, usize old_size, usize new_size, usize alignment) {
     assert(arena != NULL);
-    if (new_size == 0) {
-        arena->head = (usize)allocation - (usize)arena->data;
-        return NULL;
-    }
 
-    if ((usize)allocation + hg_align(old_size, 16) == arena->head) {
-        usize new_head = (usize)allocation
-                       - (usize)arena->data
-                       + hg_align(new_size, 16);
+    if ((u8 *)allocation + old_size == arena->head) {
+        void *new_head = (u8 *)allocation + new_size;
         if (new_head > arena->capacity)
             return NULL;
         arena->head = new_head;
         return allocation;
     }
 
-    void *new_allocation = hg_arena_alloc(arena, new_size);
+    void *new_allocation = hg_arena_alloc(arena, new_size, alignment);
     memcpy(new_allocation, allocation, old_size);
     return new_allocation;
 }
 
-void hg_arena_free(HgArena *arena, void *allocation, usize size) {
-    assert(arena != NULL);
-    if ((usize)allocation + hg_align(size, 16) == arena->head)
-        arena->head = (usize)allocation - (usize)arena->data;
+void hg_arena_free(HgArena *arena, void *allocation, usize size, usize alignment) {
+    (void)arena;
+    (void)allocation;
+    (void)size;
+    (void)alignment;
 }
 
+HgAllocator hg_arena_allocator(HgArena *arena) {
+    return (HgAllocator){
+        .user_data = arena,
+        .alloc = (void *(*)(void *, usize, usize))hg_arena_alloc,
+        .realloc = (void *(*)(void *, void *, usize, usize, usize))hg_arena_realloc,
+        .free = (void (*)(void *, void *, usize, usize))hg_arena_free,
+    };
+}
+
+HgStack hg_stack_create(usize capacity) {
+    return (HgStack){
+        .data = hg_std_alloc(NULL, capacity, 16),
+        .capacity = capacity,
+    };
+}
+
+void hg_stack_destroy(HgStack *stack) {
+    assert(stack != NULL);
+    hg_std_free(NULL, stack->data, stack->capacity, 16);
+}
+
+void hg_stack_reset(HgStack *stack) {
+    assert(stack != NULL);
+    stack->head = 0;
+}
+
+void *hg_stack_alloc(HgStack *stack, usize size, usize alignment) {
+    (void)alignment;
+    assert(stack != NULL);
+    if (size == 0)
+        return NULL;
+
+    usize new_head = stack->head + hg_align(size, 16);
+    if (new_head > stack->capacity)
+        return NULL;
+
+    void *allocation = (u8 *)stack->data + stack->head;
+    stack->head = new_head;
+    return allocation;
+}
+
+void *hg_stack_realloc(HgStack *stack, void *allocation, usize old_size, usize new_size, usize alignment) {
+    (void)alignment;
+    assert(stack != NULL);
+    if (new_size == 0) {
+        stack->head = (usize)allocation - (usize)stack->data;
+        return NULL;
+    }
+
+    if ((usize)allocation + hg_align(old_size, 16) == stack->head) {
+        usize new_head = (usize)allocation
+                       - (usize)stack->data
+                       + hg_align(new_size, 16);
+        if (new_head > stack->capacity)
+            return NULL;
+        stack->head = new_head;
+        return allocation;
+    }
+
+    void *new_allocation = hg_stack_alloc(stack, new_size, 16);
+    memcpy(new_allocation, allocation, old_size);
+    return new_allocation;
+}
+
+void hg_stack_free(HgStack *stack, void *allocation, usize size, usize alignment) {
+    (void)alignment;
+    assert(stack != NULL);
+    if ((usize)allocation + hg_align(size, 16) == stack->head)
+        stack->head = (usize)allocation - (usize)stack->data;
+    else
+        hg_warn("Attempt to free a stack allocation not at the head\n");
+}
+
+HgAllocator hg_stack_allocator(HgStack *stack) {
+    assert(stack != NULL);
+    return (HgAllocator){
+        .user_data = stack,
+        .alloc = (void *(*)(void *, usize, usize))hg_stack_alloc,
+        .realloc = (void *(*)(void *, void *, usize, usize, usize))hg_stack_realloc,
+        .free = (void (*)(void *, void *, usize, usize))hg_stack_free,
+    };
+}
 
 bool hg_file_load_binary(u8** data, usize* size, const char *path) {
     assert(data != NULL);
@@ -617,7 +728,7 @@ bool hg_file_load_binary(u8** data, usize* size, const char *path) {
     usize file_size = (usize)ftell(file);
     rewind(file);
 
-    u8* file_data = malloc(file_size);
+    u8* file_data = hg_std_alloc(NULL, file_size, 16);
     if (fread(file_data, 1, file_size, file) != file_size) {
         fclose(file);
         hg_warn("Failed to read binary from file: %s\n", path);
@@ -631,8 +742,7 @@ bool hg_file_load_binary(u8** data, usize* size, const char *path) {
 }
 
 void hg_file_unload_binary(u8* data, usize size) {
-    (void)size;
-    free(data);
+    hg_std_free(NULL, data, size, 16);
 }
 
 bool hg_file_save_binary(const u8* data, usize size, const char *path) {
@@ -1312,14 +1422,15 @@ HgFrameSync hg_frame_sync_create(VkDevice device, VkCommandPool cmd_pool, VkSwap
     vkGetSwapchainImagesKHR(device, swapchain, &sync.frame_count, NULL);
 
     HgArena arena = hg_arena_create(
-        hg_align(sync.frame_count * sizeof(*sync.cmds), 16) +
-        hg_align(sync.frame_count * sizeof(*sync.frame_finished), 16) +
-        hg_align(sync.frame_count * sizeof(*sync.image_available), 16) +
-        hg_align(sync.frame_count * sizeof(*sync.ready_to_present), 16));
+        sync.frame_count * sizeof(*sync.cmds) +
+        sync.frame_count * sizeof(*sync.frame_finished) +
+        sync.frame_count * sizeof(*sync.image_available) +
+        sync.frame_count * sizeof(*sync.ready_to_present));
 
     sync.allocation = arena.data;
 
-    sync.cmds = hg_arena_alloc(&arena, sync.frame_count * sizeof(*sync.cmds));
+    sync.cmds = hg_arena_alloc(
+        &arena, sync.frame_count * sizeof(*sync.cmds), alignof(*sync.cmds));
     VkCommandBufferAllocateInfo cmd_alloc_info = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         .commandPool = cmd_pool,
@@ -1328,7 +1439,8 @@ HgFrameSync hg_frame_sync_create(VkDevice device, VkCommandPool cmd_pool, VkSwap
     };
     vkAllocateCommandBuffers(device, &cmd_alloc_info, sync.cmds);
 
-    sync.frame_finished = hg_arena_alloc(&arena, sync.frame_count * sizeof(*sync.frame_finished));
+    sync.frame_finished = hg_arena_alloc(
+        &arena, sync.frame_count * sizeof(*sync.frame_finished), alignof(*sync.frame_finished));
     for (usize i = 0; i < sync.frame_count; ++i) {
         VkFenceCreateInfo info = {
             .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
@@ -1336,14 +1448,22 @@ HgFrameSync hg_frame_sync_create(VkDevice device, VkCommandPool cmd_pool, VkSwap
         };
         vkCreateFence(device, &info, NULL, &sync.frame_finished[i]);
     }
-    sync.image_available = hg_arena_alloc(&arena, sync.frame_count * sizeof(*sync.image_available));
+
+    sync.image_available = hg_arena_alloc(
+        &arena, sync.frame_count * sizeof(*sync.image_available), alignof(*sync.image_available));
     for (usize i = 0; i < sync.frame_count; ++i) {
-        VkSemaphoreCreateInfo info = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+        VkSemaphoreCreateInfo info = {
+            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
+        };
         vkCreateSemaphore(device, &info, NULL, &sync.image_available[i]);
     }
-    sync.ready_to_present = hg_arena_alloc(&arena, sync.frame_count * sizeof(*sync.ready_to_present));
+
+    sync.ready_to_present = hg_arena_alloc(
+        &arena, sync.frame_count * sizeof(*sync.ready_to_present), alignof(*sync.ready_to_present));
     for (usize i = 0; i < sync.frame_count; ++i) {
-        VkSemaphoreCreateInfo info = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+        VkSemaphoreCreateInfo info = {
+            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
+        };
         vkCreateSemaphore(device, &info, NULL, &sync.ready_to_present[i]);
     }
 
@@ -1363,8 +1483,14 @@ void hg_frame_sync_destroy(VkDevice device, HgFrameSync *sync) {
     for (usize i = 0; i < sync->frame_count; ++i) {
         vkDestroySemaphore(device, sync->ready_to_present[i], NULL);
     }
-    free(sync->allocation);
-
+    hg_arena_destroy(&(HgArena){
+        .data = sync->allocation,
+        .capacity = (u8 *)sync->allocation +
+            sync->frame_count * sizeof(*sync->cmds) +
+            sync->frame_count * sizeof(*sync->frame_finished) +
+            sync->frame_count * sizeof(*sync->image_available) +
+            sync->frame_count * sizeof(*sync->ready_to_present)
+    });
     memset(sync, 0, sizeof(*sync));
 }
 
@@ -2146,7 +2272,7 @@ HgWindow *hg_window_create(const HgPlatform *platform, const HgWindowConfig *con
     u32 height = config->windowed ? config->height
         : (u32)DisplayHeight((Display *)platform, DefaultScreen((Display *)platform));
 
-    HgWindow *window = malloc(sizeof(*window));
+    HgWindow *window = hg_std_alloc(NULL, sizeof(*window), 16);
     window->input = (HgWindowInput){
         .width = width,
         .height = height,
@@ -2171,7 +2297,7 @@ void hg_window_destroy(const HgPlatform *platform, HgWindow *window) {
     if (window != NULL)
         XDestroyWindow((Display *)platform, window->x11_window);
     XFlush((Display *)platform);
-    free(window);
+    hg_std_free(NULL, window, sizeof(*window), 16);
 }
 
 void hg_window_set_icon(const HgPlatform *platform, HgWindow *window, u32 *icon_data, u32 width, u32 height);
@@ -3014,7 +3140,7 @@ static LRESULT CALLBACK hg_internal_window_callback(HWND hwnd, UINT msg, WPARAM 
 HgWindow *hg_window_create(const HgPlatform *platform, const HgWindowConfig *config) {
     const char *title = config->title != NULL ? config->title : "Hurdy Gurdy";
 
-    HgWindow *window = malloc(sizeof(*window));
+    HgWindow *window = hg_std_alloc(NULL, sizeof(*window), 16);
     window->input = (HgWindowInput){
         .width = config->width,
         .height = config->height,

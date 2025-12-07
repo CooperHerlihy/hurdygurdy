@@ -35,6 +35,7 @@ extern "C" {
 #include <float.h>
 #include <inttypes.h>
 #include <math.h>
+#include <stdalign.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -1161,12 +1162,149 @@ HgMat4 hg_projection_perspective(f32 fov, f32 aspect, f32 near, f32 far);
 u32 hg_max_mipmaps(u32 width, u32 height, u32 depth);
 
 /**
+ * The interface for generic allocators
+ */
+typedef struct HgAllocator {
+    /**
+     * Opaque data passed to all functions
+     */
+    void *user_data;
+    /**
+     * Allocates memory
+     *
+     * Parameters
+     * - user_data Custom data used by the allocator
+     * - size The size to allocate in bytes
+     * - alignment The alignment in bytes of the allocation
+     */
+    void *(*alloc)(void *user_data, usize size, usize alignment);
+    /**
+     * Changes the size of an allocation, potentially returning a different
+     * allocation, with the data copied over
+     *
+     * Parameters
+     * - user_data Custom data used by the allocator
+     * - allocation The allocation to free
+     * - old_size The original size of the allocation in bytes
+     * - new_size The size to allocate in bytes
+     * - alignment The alignment in bytes of the allocation
+     */
+    void *(*realloc)(void *user_data, void *allocation, usize old_size, usize new_size, usize alignment);
+    /**
+     * Frees allocated memory
+     *
+     * Parameters
+     * - user_data Custom data used by the allocator
+     * - allocation The allocation to free
+     * - size The size of the allocation in bytes
+     * - alignment The alignment in bytes of the allocation
+     */
+    void (*free)(void *user_data, void *allocation, usize size, usize alignment);
+} HgAllocator;
+
+/**
+ * A convenience to call alloc from the interface
+ *
+ * Parameters
+ * - allocator The allocator to allocate from
+ * - size The size in bytes to allocate
+ * - alignment The alignment in bytes of the allocation
+ * Returns
+ * - The allocation
+ * - NULL if the allocation failed
+ */
+static inline void *hg_alloc(const HgAllocator *allocator, usize size, usize alignment) {
+    assert(allocator != NULL);
+    return allocator->alloc(allocator->user_data, size, alignment);
+}
+
+/**
+ * A convenience to call realloc from the interface
+ *
+ * Parameters
+ * - allocator The allocator to reallocate from
+ * - allocation The allocation to resize
+ * - new_size The new size in bytes for the allocation
+ * - old_size The original size in bytes of the allocation
+ * - alignment The alignment in bytes of the allocation
+ * Returns
+ * - The allocation
+ * - NULL if the allocation failed
+ */
+static inline void *hg_realloc(
+    const HgAllocator *allocator,
+    void *allocation,
+    usize new_size,
+    usize old_size,
+    usize alignment
+) {
+    assert(allocator != NULL);
+    return allocator->realloc(allocator->user_data, allocation, old_size, new_size, alignment);
+}
+
+/**
+ * A convenience to call alloc from the interface
+ *
+ * Parameters
+ * - allocator The allocator to free to
+ * - allocation The allocation to resize
+ * - size The size in bytes of the allocation
+ * - alignment The alignment in bytes of the allocation
+ */
+static inline void hg_free(const HgAllocator *allocator, void *allocation, usize size, usize alignment) {
+    assert(allocator != NULL);
+    allocator->free(allocator->user_data, allocation, size, alignment);
+}
+
+/**
+ * Calls malloc, checking for NULL in debug mode
+ *
+ * Parameters
+ * - dummy A dummy value to fit the HgAllocator interface
+ * - size The size of the allocation in bytes
+ * - alignment The alignment in bytes of the allocation
+ * Returns
+ * - The allocated memory
+ */
+void *hg_std_alloc(void *dummy, usize size, usize alignment);
+
+/**
+ * Calls realloc, checking for NULL in debug mode
+ *
+ * Parameters
+ * - dummy A dummy value to fit the HgAllocator interface
+ * - allocation The allocation to resize
+ * - old_size The size of the original allocation in bytes
+ * - new_size The size of the new allocation in bytes
+ * - alignment The alignment in bytes of the allocation
+ * Returns
+ * - The allocated memory
+ */
+void *hg_std_realloc(void *dummy, void *allocation, usize old_size, usize new_size, usize alignment);
+
+/**
+ * Calls free
+ *
+ * Parameters
+ * - allocation The allocation to free
+ * - size The size of the allocation in bytes
+ * - alignment The alignment in bytes of the allocation
+ * - dummy A dummy value to fit the HgAllocator interface
+ */
+void hg_std_free(void *dummy, void *allocation, usize size, usize alignment);
+
+/**
+ * Creates the interface for an HgAllocator using malloc, realloc, and free
+ */
+HgAllocator hg_std_allocator(void);
+
+/**
  * An arena allocator
  *
  * Allocations are made very quickly, and are not freed individually, instead
  * the whole block is freed at once
  */
-typedef struct HgArena{
+typedef struct HgArena {
     /*
      * A pointer to the memory being allocated
      */
@@ -1174,11 +1312,11 @@ typedef struct HgArena{
     /*
      * The total capacity of the data in bytes
      */
-    usize capacity;
+    void *capacity;
     /*
      * The next allocation to be given out
      */
-    usize head;
+    void *head;
 } HgArena;
 
 /**
@@ -1218,11 +1356,12 @@ void hg_arena_reset(HgArena *arena);
  * Parameters
  * - arena The arena to allocate from, must not be NULL
  * - size The size in bytes of the allocation
+ * - alignment The required alignment of the allocation in bytes
  * Returns
  * - The allocation if successful
  * - NULL if the allocation exceeds capacity, or size is 0
  */
-void *hg_arena_alloc(HgArena *arena, usize size);
+void *hg_arena_alloc(HgArena *arena, usize size, usize alignment);
 
 /**
  * Reallocates memory from a arena
@@ -1234,23 +1373,130 @@ void *hg_arena_alloc(HgArena *arena, usize size);
  * - allocation The allocation to grow, must be the last allocation made
  * - old_size The original size in bytes of the allocation
  * - new_size The new size in bytes of the allocation
+ * - alignment The required alignment of the allocation in bytes
  * Returns
  * - The allocation if successful
  * - NULL if the allocation exceeds capacity
  */
-void *hg_arena_realloc(HgArena *arena, void *allocation, usize old_size, usize new_size);
+void *hg_arena_realloc(HgArena *arena, void *allocation, usize old_size, usize new_size, usize alignment);
 
 /**
- * Frees an allocation from a arena
- *
- * Can only deallocate the most recent allocation, otherwise does nothing
+ * Does nothing, only exists to fit allocator interface
  *
  * Parameters
  * - arena The to free from, must not be NULL
  * - allocation The allocation to free, must be the last allocation made
  * - size The size of the allocation
+ * - alignment The required alignment of the allocation in bytes
  */
-void hg_arena_free(HgArena *arena, void *allocation, usize size);
+void hg_arena_free(HgArena *arena, void *allocation, usize size, usize alignment);
+
+/**
+ * Fills an allocator interface for an arena allocator
+ *
+ * Parameters
+ * - arena The arena to use to create the allocator, must not be NULL
+ */
+HgAllocator hg_arena_allocator(HgArena *arena);
+
+/**
+ * A stack allocator
+ *
+ * Allocations are made very quickly, but must be freed in reverse order
+ */
+typedef struct HgStack {
+    /*
+     * A pointer to the memory being allocated
+     */
+    void *data;
+    /*
+     * The total capacity of the data in bytes
+     */
+    usize capacity;
+    /*
+     * The next allocation to be given out
+     */
+    usize head;
+} HgStack;
+
+/**
+ * Allocates a stack allocator with capacity
+ *
+ * Parameters
+ * - hg The hg context to allocate from
+ * - capacity The size of the block to allocate and use
+ * Returns
+ * - The allocated stack
+ */
+HgStack hg_stack_create(usize capacity);
+
+/**
+ * Frees a stack's memory
+ *
+ * Parameters
+ * - hg The hg context to free to
+ * - stack The stack to destroy
+ */
+void hg_stack_destroy(HgStack *stack);
+
+/**
+ * Frees all allocations from an stack
+ *
+ * Parameters
+ * - stack The stack to reset, must not be NULL
+ */
+void hg_stack_reset(HgStack *stack);
+
+/**
+ * Allocates memory from a stack
+ *
+ * Parameters
+ * - stack The stack to allocate from, must not be NULL
+ * - size The size in bytes of the allocation
+ * - alignment The required alignment of the allocation in bytes
+ * Returns
+ * - The allocation if successful
+ * - NULL if the allocation exceeds capacity, or size is 0
+ */
+void *hg_stack_alloc(HgStack *stack, usize size, usize alignment);
+
+/**
+ * Reallocates memory from a stack
+ *
+ * Simply increases the size if allocation is the most recent allocation
+ *
+ * Parameters
+ * - stack The stack to allocate from, must not be NULL
+ * - allocation The allocation to grow, must be the last allocation made
+ * - old_size The original size in bytes of the allocation
+ * - new_size The new size in bytes of the allocation
+ * - alignment The required alignment of the allocation in bytes
+ * Returns
+ * - The allocation if successful
+ * - NULL if the allocation exceeds capacity
+ */
+void *hg_stack_realloc(HgStack *stack, void *allocation, usize old_size, usize new_size, usize alignment);
+
+/**
+ * Frees an allocation from a stack
+ *
+ * Can only deallocate the most recent allocation, otherwise does nothing
+ *
+ * Parameters
+ * - stack The to free from, must not be NULL
+ * - allocation The allocation to free, must be the last allocation made
+ * - size The size of the allocation
+ * - alignment The required alignment of the allocation in bytes
+ */
+void hg_stack_free(HgStack *stack, void *allocation, usize size, usize alignment);
+
+/**
+ * Fills an allocator interface for a stack allocator
+ *
+ * Parameters
+ * - stack The stack to use to create the allocator, must not be NULL
+ */
+HgAllocator hg_stack_allocator(HgStack *stack);
 
 /**
  * Creates a dynamic array type
