@@ -1883,7 +1883,7 @@ void hg_vk_buffer_staging_write(
     VkBufferCreateInfo stage_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = size,
-        .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
     };
     VmaAllocationCreateInfo stage_alloc_info = {
         .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
@@ -2143,6 +2143,7 @@ void hg_vk_image_staging_read(
     assert(cmd_pool != NULL);
     assert(transfer_queue != NULL);
     assert(config->src_image != NULL);
+    assert(config->layout != VK_IMAGE_LAYOUT_UNDEFINED);
     assert(config->dst != NULL);
     assert(config->width > 0);
     assert(config->height > 0);
@@ -2254,6 +2255,8 @@ void hg_vk_image_staging_read(
     vkFreeCommandBuffers(device, cmd_pool, 1, &cmd);
     vmaDestroyBuffer(allocator, stage, stage_alloc);
 }
+
+// ecs implementation : TODO
 
 #include "sprite.frag.spv.h"
 #include "sprite.vert.spv.h"
