@@ -890,6 +890,302 @@ const char *hg_vk_result_string(VkResult result) {
     return "Unrecognized Vulkan result";
 }
 
+u32 hg_vk_format_to_size(VkFormat format) {
+    switch (format) {
+        case VK_FORMAT_UNDEFINED:
+            return 0;
+
+        case VK_FORMAT_R8_UNORM:
+        case VK_FORMAT_R8_SNORM:
+        case VK_FORMAT_R8_USCALED:
+        case VK_FORMAT_R8_SSCALED:
+        case VK_FORMAT_R8_UINT:
+        case VK_FORMAT_R8_SINT:
+        case VK_FORMAT_R8_SRGB:
+        case VK_FORMAT_A8_UNORM:
+        case VK_FORMAT_R8_BOOL_ARM:
+            return 1;
+
+        case VK_FORMAT_R4G4_UNORM_PACK8: return 1;
+        case VK_FORMAT_R4G4B4A4_UNORM_PACK16:
+        case VK_FORMAT_B4G4R4A4_UNORM_PACK16:
+        case VK_FORMAT_R5G6B5_UNORM_PACK16:
+        case VK_FORMAT_B5G6R5_UNORM_PACK16:
+        case VK_FORMAT_R5G5B5A1_UNORM_PACK16:
+        case VK_FORMAT_B5G5R5A1_UNORM_PACK16:
+        case VK_FORMAT_A1R5G5B5_UNORM_PACK16:
+        case VK_FORMAT_A4R4G4B4_UNORM_PACK16:
+        case VK_FORMAT_A4B4G4R4_UNORM_PACK16:
+        case VK_FORMAT_A1B5G5R5_UNORM_PACK16:
+            return 2;
+
+        case VK_FORMAT_R16_UNORM:
+        case VK_FORMAT_R16_SNORM:
+        case VK_FORMAT_R16_USCALED:
+        case VK_FORMAT_R16_SSCALED:
+        case VK_FORMAT_R16_UINT:
+        case VK_FORMAT_R16_SINT:
+        case VK_FORMAT_R16_SFLOAT:
+            return 2;
+
+        case VK_FORMAT_R8G8_UNORM:
+        case VK_FORMAT_R8G8_SNORM:
+        case VK_FORMAT_R8G8_USCALED:
+        case VK_FORMAT_R8G8_SSCALED:
+        case VK_FORMAT_R8G8_UINT:
+        case VK_FORMAT_R8G8_SINT:
+        case VK_FORMAT_R8G8_SRGB:
+            return 2;
+
+        case VK_FORMAT_R8G8B8_UNORM:
+        case VK_FORMAT_R8G8B8_SNORM:
+        case VK_FORMAT_R8G8B8_USCALED:
+        case VK_FORMAT_R8G8B8_SSCALED:
+        case VK_FORMAT_R8G8B8_UINT:
+        case VK_FORMAT_R8G8B8_SINT:
+        case VK_FORMAT_R8G8B8_SRGB:
+        case VK_FORMAT_B8G8R8_UNORM:
+        case VK_FORMAT_B8G8R8_SNORM:
+        case VK_FORMAT_B8G8R8_USCALED:
+        case VK_FORMAT_B8G8R8_SSCALED:
+        case VK_FORMAT_B8G8R8_UINT:
+        case VK_FORMAT_B8G8R8_SINT:
+        case VK_FORMAT_B8G8R8_SRGB:
+            return 3;
+
+        case VK_FORMAT_R8G8B8A8_UNORM:
+        case VK_FORMAT_R8G8B8A8_SNORM:
+        case VK_FORMAT_R8G8B8A8_USCALED:
+        case VK_FORMAT_R8G8B8A8_SSCALED:
+        case VK_FORMAT_R8G8B8A8_UINT:
+        case VK_FORMAT_R8G8B8A8_SINT:
+        case VK_FORMAT_R8G8B8A8_SRGB:
+        case VK_FORMAT_B8G8R8A8_UNORM:
+        case VK_FORMAT_B8G8R8A8_SNORM:
+        case VK_FORMAT_B8G8R8A8_USCALED:
+        case VK_FORMAT_B8G8R8A8_SSCALED:
+        case VK_FORMAT_B8G8R8A8_UINT:
+        case VK_FORMAT_B8G8R8A8_SINT:
+        case VK_FORMAT_B8G8R8A8_SRGB:
+        case VK_FORMAT_A8B8G8R8_UNORM_PACK32:
+        case VK_FORMAT_A8B8G8R8_SNORM_PACK32:
+        case VK_FORMAT_A8B8G8R8_USCALED_PACK32:
+        case VK_FORMAT_A8B8G8R8_SSCALED_PACK32:
+        case VK_FORMAT_A8B8G8R8_UINT_PACK32:
+        case VK_FORMAT_A8B8G8R8_SINT_PACK32:
+        case VK_FORMAT_A8B8G8R8_SRGB_PACK32:
+        case VK_FORMAT_B10G11R11_UFLOAT_PACK32:
+        case VK_FORMAT_E5B9G9R9_UFLOAT_PACK32:
+            return 4;
+
+        case VK_FORMAT_A2R10G10B10_UNORM_PACK32:
+        case VK_FORMAT_A2R10G10B10_SNORM_PACK32:
+        case VK_FORMAT_A2R10G10B10_USCALED_PACK32:
+        case VK_FORMAT_A2R10G10B10_SSCALED_PACK32:
+        case VK_FORMAT_A2R10G10B10_UINT_PACK32:
+        case VK_FORMAT_A2R10G10B10_SINT_PACK32:
+        case VK_FORMAT_A2B10G10R10_UNORM_PACK32:
+        case VK_FORMAT_A2B10G10R10_SNORM_PACK32:
+        case VK_FORMAT_A2B10G10R10_USCALED_PACK32:
+        case VK_FORMAT_A2B10G10R10_SSCALED_PACK32:
+        case VK_FORMAT_A2B10G10R10_UINT_PACK32:
+        case VK_FORMAT_A2B10G10R10_SINT_PACK32:
+            return 4;
+
+        case VK_FORMAT_R16G16_UNORM:
+        case VK_FORMAT_R16G16_SNORM:
+        case VK_FORMAT_R16G16_USCALED:
+        case VK_FORMAT_R16G16_SSCALED:
+        case VK_FORMAT_R16G16_UINT:
+        case VK_FORMAT_R16G16_SINT:
+        case VK_FORMAT_R16G16_SFLOAT:
+            return 4;
+
+        case VK_FORMAT_R16G16B16_UNORM:
+        case VK_FORMAT_R16G16B16_SNORM:
+        case VK_FORMAT_R16G16B16_USCALED:
+        case VK_FORMAT_R16G16B16_SSCALED:
+        case VK_FORMAT_R16G16B16_UINT:
+        case VK_FORMAT_R16G16B16_SINT:
+        case VK_FORMAT_R16G16B16_SFLOAT:
+            return 6;
+
+        case VK_FORMAT_R16G16B16A16_UNORM:
+        case VK_FORMAT_R16G16B16A16_SNORM:
+        case VK_FORMAT_R16G16B16A16_USCALED:
+        case VK_FORMAT_R16G16B16A16_SSCALED:
+        case VK_FORMAT_R16G16B16A16_UINT:
+        case VK_FORMAT_R16G16B16A16_SINT:
+        case VK_FORMAT_R16G16B16A16_SFLOAT:
+            return 8;
+
+        case VK_FORMAT_R32_UINT:
+        case VK_FORMAT_R32_SINT:
+        case VK_FORMAT_R32_SFLOAT:
+            return 4;
+
+        case VK_FORMAT_R32G32_UINT:
+        case VK_FORMAT_R32G32_SINT:
+        case VK_FORMAT_R32G32_SFLOAT:
+            return 8;
+
+        case VK_FORMAT_R32G32B32_UINT:
+        case VK_FORMAT_R32G32B32_SINT:
+        case VK_FORMAT_R32G32B32_SFLOAT:
+            return 12;
+
+        case VK_FORMAT_R32G32B32A32_UINT:
+        case VK_FORMAT_R32G32B32A32_SINT:
+        case VK_FORMAT_R32G32B32A32_SFLOAT:
+            return 16;
+
+        case VK_FORMAT_R64_UINT:
+        case VK_FORMAT_R64_SINT:
+        case VK_FORMAT_R64_SFLOAT:
+            return 8;
+
+        case VK_FORMAT_R64G64_UINT:
+        case VK_FORMAT_R64G64_SINT:
+        case VK_FORMAT_R64G64_SFLOAT:
+            return 16;
+
+        case VK_FORMAT_R64G64B64_UINT:
+        case VK_FORMAT_R64G64B64_SINT:
+        case VK_FORMAT_R64G64B64_SFLOAT:
+            return 24;
+
+        case VK_FORMAT_R64G64B64A64_UINT:
+        case VK_FORMAT_R64G64B64A64_SINT:
+        case VK_FORMAT_R64G64B64A64_SFLOAT:
+            return 32;
+
+        case VK_FORMAT_D16_UNORM: return 2;
+        case VK_FORMAT_X8_D24_UNORM_PACK32: return 4;
+        case VK_FORMAT_D32_SFLOAT: return 4;
+        case VK_FORMAT_S8_UINT: return 1;
+        case VK_FORMAT_D16_UNORM_S8_UINT: return 3;
+        case VK_FORMAT_D24_UNORM_S8_UINT: return 4;
+        case VK_FORMAT_D32_SFLOAT_S8_UINT: return 5;
+
+        case VK_FORMAT_BC1_RGB_UNORM_BLOCK:
+        case VK_FORMAT_BC1_RGB_SRGB_BLOCK:
+        case VK_FORMAT_BC1_RGBA_UNORM_BLOCK:
+        case VK_FORMAT_BC1_RGBA_SRGB_BLOCK:
+            return 8;
+
+        case VK_FORMAT_BC2_UNORM_BLOCK:
+        case VK_FORMAT_BC2_SRGB_BLOCK:
+        case VK_FORMAT_BC3_UNORM_BLOCK:
+        case VK_FORMAT_BC3_SRGB_BLOCK:
+            return 16;
+
+        case VK_FORMAT_BC4_UNORM_BLOCK:
+        case VK_FORMAT_BC4_SNORM_BLOCK:
+        case VK_FORMAT_BC5_UNORM_BLOCK:
+        case VK_FORMAT_BC5_SNORM_BLOCK:
+            return 16;
+
+        case VK_FORMAT_BC6H_UFLOAT_BLOCK:
+        case VK_FORMAT_BC6H_SFLOAT_BLOCK:
+        case VK_FORMAT_BC7_UNORM_BLOCK:
+        case VK_FORMAT_BC7_SRGB_BLOCK:
+            return 16;
+
+        case VK_FORMAT_ETC2_R8G8B8_UNORM_BLOCK:
+        case VK_FORMAT_ETC2_R8G8B8_SRGB_BLOCK:
+            return 8;
+
+        case VK_FORMAT_ETC2_R8G8B8A1_UNORM_BLOCK:
+        case VK_FORMAT_ETC2_R8G8B8A1_SRGB_BLOCK:
+            return 8;
+
+        case VK_FORMAT_ETC2_R8G8B8A8_UNORM_BLOCK:
+        case VK_FORMAT_ETC2_R8G8B8A8_SRGB_BLOCK:
+            return 16;
+
+        case VK_FORMAT_EAC_R11_UNORM_BLOCK:
+        case VK_FORMAT_EAC_R11_SNORM_BLOCK:
+            return 8;
+
+        case VK_FORMAT_EAC_R11G11_UNORM_BLOCK:
+        case VK_FORMAT_EAC_R11G11_SNORM_BLOCK:
+            return 16;
+
+        case VK_FORMAT_ASTC_4x4_UNORM_BLOCK:
+        case VK_FORMAT_ASTC_4x4_SRGB_BLOCK:
+        case VK_FORMAT_ASTC_5x4_UNORM_BLOCK:
+        case VK_FORMAT_ASTC_5x4_SRGB_BLOCK:
+        case VK_FORMAT_ASTC_5x5_UNORM_BLOCK:
+        case VK_FORMAT_ASTC_5x5_SRGB_BLOCK:
+        case VK_FORMAT_ASTC_6x5_UNORM_BLOCK:
+        case VK_FORMAT_ASTC_6x5_SRGB_BLOCK:
+        case VK_FORMAT_ASTC_6x6_UNORM_BLOCK:
+        case VK_FORMAT_ASTC_6x6_SRGB_BLOCK:
+        case VK_FORMAT_ASTC_8x5_UNORM_BLOCK:
+        case VK_FORMAT_ASTC_8x5_SRGB_BLOCK:
+        case VK_FORMAT_ASTC_8x6_UNORM_BLOCK:
+        case VK_FORMAT_ASTC_8x6_SRGB_BLOCK:
+        case VK_FORMAT_ASTC_8x8_UNORM_BLOCK:
+        case VK_FORMAT_ASTC_8x8_SRGB_BLOCK:
+        case VK_FORMAT_ASTC_10x5_UNORM_BLOCK:
+        case VK_FORMAT_ASTC_10x5_SRGB_BLOCK:
+        case VK_FORMAT_ASTC_10x6_UNORM_BLOCK:
+        case VK_FORMAT_ASTC_10x6_SRGB_BLOCK:
+        case VK_FORMAT_ASTC_10x8_UNORM_BLOCK:
+        case VK_FORMAT_ASTC_10x8_SRGB_BLOCK:
+        case VK_FORMAT_ASTC_10x10_UNORM_BLOCK:
+        case VK_FORMAT_ASTC_10x10_SRGB_BLOCK:
+        case VK_FORMAT_ASTC_12x10_UNORM_BLOCK:
+        case VK_FORMAT_ASTC_12x10_SRGB_BLOCK:
+        case VK_FORMAT_ASTC_12x12_UNORM_BLOCK:
+        case VK_FORMAT_ASTC_12x12_SRGB_BLOCK:
+            return 16;
+
+        case VK_FORMAT_PVRTC1_2BPP_UNORM_BLOCK_IMG:
+        case VK_FORMAT_PVRTC1_2BPP_SRGB_BLOCK_IMG:
+            return 8;
+        case VK_FORMAT_PVRTC1_4BPP_UNORM_BLOCK_IMG:
+        case VK_FORMAT_PVRTC1_4BPP_SRGB_BLOCK_IMG:
+            return 8;
+        case VK_FORMAT_PVRTC2_2BPP_UNORM_BLOCK_IMG:
+        case VK_FORMAT_PVRTC2_2BPP_SRGB_BLOCK_IMG:
+            return 8;
+        case VK_FORMAT_PVRTC2_4BPP_UNORM_BLOCK_IMG:
+        case VK_FORMAT_PVRTC2_4BPP_SRGB_BLOCK_IMG:
+            return 8;
+
+        case VK_FORMAT_G8B8G8R8_422_UNORM:
+        case VK_FORMAT_B8G8R8G8_422_UNORM:
+        case VK_FORMAT_G8_B8_R8_3PLANE_420_UNORM:
+        case VK_FORMAT_G8_B8R8_2PLANE_420_UNORM:
+        case VK_FORMAT_G8_B8_R8_3PLANE_422_UNORM:
+        case VK_FORMAT_G8_B8R8_2PLANE_422_UNORM:
+        case VK_FORMAT_G8_B8_R8_3PLANE_444_UNORM:
+        case VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_420_UNORM_3PACK16:
+        case VK_FORMAT_G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16:
+        case VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_422_UNORM_3PACK16:
+        case VK_FORMAT_G10X6_B10X6R10X6_2PLANE_422_UNORM_3PACK16:
+        case VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_444_UNORM_3PACK16:
+        case VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_420_UNORM_3PACK16:
+        case VK_FORMAT_G12X4_B12X4R12X4_2PLANE_420_UNORM_3PACK16:
+        case VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_422_UNORM_3PACK16:
+        case VK_FORMAT_G12X4_B12X4R12X4_2PLANE_422_UNORM_3PACK16:
+        case VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_444_UNORM_3PACK16:
+        case VK_FORMAT_G16B16G16R16_422_UNORM:
+        case VK_FORMAT_B16G16R16G16_422_UNORM:
+        case VK_FORMAT_G16_B16_R16_3PLANE_420_UNORM:
+        case VK_FORMAT_G16_B16R16_2PLANE_420_UNORM:
+        case VK_FORMAT_G16_B16_R16_3PLANE_422_UNORM:
+        case VK_FORMAT_G16_B16R16_2PLANE_422_UNORM:
+        case VK_FORMAT_G16_B16_R16_3PLANE_444_UNORM:
+            return 0;
+
+        default:
+            hg_warn("Unrecognized Vulkan format value\n");
+            return 0;
+    }
+}
+
 static VkBool32 hg_internal_debug_callback(
     const VkDebugUtilsMessageSeverityFlagBitsEXT severity,
     const VkDebugUtilsMessageTypeFlagsEXT type,
@@ -1506,10 +1802,8 @@ void hg_swapchain_commands_destroy(VkDevice device, HgSwapchainCommands *sync) {
     memset(sync, 0, sizeof(*sync));
 }
 
-VkCommandBuffer hg_swapchain_commands_acquire_and_begin(VkDevice device, HgSwapchainCommands *sync) {
+VkCommandBuffer hg_swapchain_commands_record(VkDevice device, HgSwapchainCommands *sync) {
     assert(sync != NULL);
-    if (sync->swapchain == NULL)
-        return NULL;
 
     sync->current_frame = (sync->current_frame + 1) % sync->frame_count;
 
@@ -1538,7 +1832,7 @@ VkCommandBuffer hg_swapchain_commands_acquire_and_begin(VkDevice device, HgSwapc
     return cmd;
 }
 
-void hg_swapchain_commands_end_and_present(VkQueue queue, HgSwapchainCommands *sync) {
+void hg_swapchain_commands_present(VkQueue queue, HgSwapchainCommands *sync) {
     assert(queue != NULL);
     assert(sync != NULL);
 
@@ -1566,6 +1860,399 @@ void hg_swapchain_commands_end_and_present(VkQueue queue, HgSwapchainCommands *s
         .pImageIndices = &sync->current_image,
     };
     vkQueuePresentKHR(queue, &present_info);
+}
+
+void hg_vk_buffer_staging_write(
+    VkDevice device,
+    VmaAllocator allocator,
+    VkCommandPool cmd_pool,
+    VkQueue transfer_queue,
+    VkBuffer dst,
+    usize offset,
+    void *src,
+    usize size
+) {
+    assert(device != NULL);
+    assert(allocator != NULL);
+    assert(cmd_pool != NULL);
+    assert(transfer_queue != NULL);
+    assert(dst != NULL);
+    assert(src != NULL);
+    assert(size > 0);
+
+    VkBufferCreateInfo stage_info = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = size,
+        .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+    };
+    VmaAllocationCreateInfo stage_alloc_info = {
+        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+        .usage = VMA_MEMORY_USAGE_AUTO,
+    };
+    VkBuffer stage = NULL;
+    VmaAllocation stage_alloc = NULL;
+    vmaCreateBuffer(allocator, &stage_info, &stage_alloc_info, &stage, &stage_alloc, NULL);
+    vmaCopyMemoryToAllocation(allocator, src, stage_alloc, offset, size);
+
+    VkCommandBufferAllocateInfo cmd_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool = cmd_pool,
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1,
+    };
+    VkCommandBuffer cmd = NULL;
+    vkAllocateCommandBuffers(device, &cmd_info, &cmd);
+
+    VkCommandBufferBeginInfo begin_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+    };
+    vkBeginCommandBuffer(cmd, &begin_info);
+    VkBufferCopy region = {
+        .dstOffset = offset,
+        .size = size,
+    };
+    vkCmdCopyBuffer(cmd, stage, dst, 1, &region);
+    vkEndCommandBuffer(cmd);
+
+    VkFenceCreateInfo fence_info = {
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO
+    };
+    VkFence fence = NULL;
+    vkCreateFence(device, &fence_info, NULL, &fence);
+
+    VkSubmitInfo submit = {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &cmd,
+    };
+    vkQueueSubmit(transfer_queue, 1, &submit, fence);
+    vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+
+    vkDestroyFence(device, fence, NULL);
+    vkFreeCommandBuffers(device, cmd_pool, 1, &cmd);
+    vmaDestroyBuffer(allocator, stage, stage_alloc);
+}
+
+void hg_vk_buffer_staging_read(
+    VkDevice device,
+    VmaAllocator allocator,
+    VkCommandPool cmd_pool,
+    VkQueue transfer_queue,
+    void *dst,
+    VkBuffer src,
+    usize offset,
+    usize size
+) {
+    assert(device != NULL);
+    assert(allocator != NULL);
+    assert(cmd_pool != NULL);
+    assert(transfer_queue != NULL);
+    assert(dst != NULL);
+    assert(src != NULL);
+    assert(size > 0);
+
+    VkBufferCreateInfo stage_info = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = size,
+        .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+    };
+    VmaAllocationCreateInfo stage_alloc_info = {
+        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT,
+        .usage = VMA_MEMORY_USAGE_AUTO,
+    };
+    VkBuffer stage = NULL;
+    VmaAllocation stage_alloc = NULL;
+    vmaCreateBuffer(allocator, &stage_info, &stage_alloc_info, &stage, &stage_alloc, NULL);
+
+    VkCommandBufferAllocateInfo cmd_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool = cmd_pool,
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1,
+    };
+    VkCommandBuffer cmd = NULL;
+    vkAllocateCommandBuffers(device, &cmd_info, &cmd);
+
+    VkCommandBufferBeginInfo begin_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+    };
+    vkBeginCommandBuffer(cmd, &begin_info);
+    VkBufferCopy region = {
+        .srcOffset = offset,
+        .size = size,
+    };
+    vkCmdCopyBuffer(cmd, src, stage, 1, &region);
+    vkEndCommandBuffer(cmd);
+
+    VkFenceCreateInfo fence_info = {
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO
+    };
+    VkFence fence = NULL;
+    vkCreateFence(device, &fence_info, NULL, &fence);
+
+    VkSubmitInfo submit = {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &cmd,
+    };
+    vkQueueSubmit(transfer_queue, 1, &submit, fence);
+    vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+
+    vmaCopyAllocationToMemory(allocator, stage_alloc, offset, src, size);
+
+    vkDestroyFence(device, fence, NULL);
+    vkFreeCommandBuffers(device, cmd_pool, 1, &cmd);
+    vmaDestroyBuffer(allocator, stage, stage_alloc);
+}
+
+void hg_vk_image_staging_write(
+    VkDevice device,
+    VmaAllocator allocator,
+    VkCommandPool cmd_pool,
+    VkQueue transfer_queue,
+    HgVkImageStagingWriteConfig *config
+) {
+    assert(device != NULL);
+    assert(allocator != NULL);
+    assert(cmd_pool != NULL);
+    assert(transfer_queue != NULL);
+    assert(config->dst_image != NULL);
+    assert(config->src_data != NULL);
+    assert(config->width > 0);
+    assert(config->height > 0);
+    assert(config->depth > 0);
+    assert(config->format != VK_FORMAT_UNDEFINED);
+
+    usize size = config->width
+               * config->height
+               * config->depth
+               * hg_vk_format_to_size(config->format);
+
+    VkBufferCreateInfo stage_info = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = size,
+        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+    };
+    VmaAllocationCreateInfo stage_alloc_info = {
+        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+        .usage = VMA_MEMORY_USAGE_AUTO,
+    };
+    VkBuffer stage = NULL;
+    VmaAllocation stage_alloc = NULL;
+    vmaCreateBuffer(allocator, &stage_info, &stage_alloc_info, &stage, &stage_alloc, NULL);
+    vmaCopyMemoryToAllocation(allocator, config->src_data, stage_alloc, 0, size);
+
+    VkCommandBufferAllocateInfo cmd_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool = cmd_pool,
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1,
+    };
+    VkCommandBuffer cmd = NULL;
+    vkAllocateCommandBuffers(device, &cmd_info, &cmd);
+
+    VkCommandBufferBeginInfo begin_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+    };
+    vkBeginCommandBuffer(cmd, &begin_info);
+
+    VkImageMemoryBarrier2 transfer_barrier = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT,
+        .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+        .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        .image = config->dst_image,
+        .subresourceRange = {
+            .aspectMask = config->subresource.aspectMask,
+            .baseMipLevel = config->subresource.mipLevel,
+            .levelCount = 1,
+            .baseArrayLayer = config->subresource.baseArrayLayer, 
+            .layerCount = config->subresource.layerCount,
+        },
+    };
+    VkDependencyInfo transfer_dep = {
+        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .imageMemoryBarrierCount = 1,
+        .pImageMemoryBarriers = &transfer_barrier,
+    };
+    vkCmdPipelineBarrier2(cmd, &transfer_dep);
+
+    VkBufferImageCopy region = {
+        .imageSubresource = config->subresource,
+        .imageExtent = {config->width, config->height, config->depth},
+    };
+    vkCmdCopyBufferToImage(cmd, stage, config->dst_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+    if (config->layout != VK_IMAGE_LAYOUT_UNDEFINED) {
+        VkImageMemoryBarrier2 end_barrier = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+            .srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT,
+            .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+            .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .newLayout = config->layout,
+            .image = config->dst_image,
+            .subresourceRange = {
+                .aspectMask = config->subresource.aspectMask,
+                .baseMipLevel = config->subresource.mipLevel,
+                .levelCount = 1,
+                .baseArrayLayer = config->subresource.baseArrayLayer, 
+                .layerCount = config->subresource.layerCount,
+            },
+        };
+        VkDependencyInfo end_dep = {
+            .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+            .imageMemoryBarrierCount = 1,
+            .pImageMemoryBarriers = &end_barrier,
+        };
+        vkCmdPipelineBarrier2(cmd, &end_dep);
+    }
+
+    vkEndCommandBuffer(cmd);
+
+    VkFenceCreateInfo fence_info = {
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO
+    };
+    VkFence fence = NULL;
+    vkCreateFence(device, &fence_info, NULL, &fence);
+
+    VkSubmitInfo submit = {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &cmd,
+    };
+    vkQueueSubmit(transfer_queue, 1, &submit, fence);
+    vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+
+    vkDestroyFence(device, fence, NULL);
+    vkFreeCommandBuffers(device, cmd_pool, 1, &cmd);
+    vmaDestroyBuffer(allocator, stage, stage_alloc);
+}
+
+void hg_vk_image_staging_read(
+    VkDevice device,
+    VmaAllocator allocator,
+    VkCommandPool cmd_pool,
+    VkQueue transfer_queue,
+    HgVkImageStagingReadConfig *config
+) {
+    assert(device != NULL);
+    assert(allocator != NULL);
+    assert(cmd_pool != NULL);
+    assert(transfer_queue != NULL);
+    assert(config->src_image != NULL);
+    assert(config->dst != NULL);
+    assert(config->width > 0);
+    assert(config->height > 0);
+    assert(config->depth > 0);
+    assert(config->format != VK_FORMAT_UNDEFINED);
+
+    usize size = config->width
+               * config->height
+               * config->depth
+               * hg_vk_format_to_size(config->format);
+
+    VkBufferCreateInfo stage_info = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = size,
+        .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+    };
+    VmaAllocationCreateInfo stage_alloc_info = {
+        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+        .usage = VMA_MEMORY_USAGE_AUTO,
+    };
+    VkBuffer stage = NULL;
+    VmaAllocation stage_alloc = NULL;
+    vmaCreateBuffer(allocator, &stage_info, &stage_alloc_info, &stage, &stage_alloc, NULL);
+
+    VkCommandBufferAllocateInfo cmd_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool = cmd_pool,
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1,
+    };
+    VkCommandBuffer cmd = NULL;
+    vkAllocateCommandBuffers(device, &cmd_info, &cmd);
+
+    VkCommandBufferBeginInfo begin_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+    };
+    vkBeginCommandBuffer(cmd, &begin_info);
+
+    VkImageMemoryBarrier2 transfer_barrier = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT,
+        .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+        .oldLayout = config->layout,
+        .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        .image = config->src_image,
+        .subresourceRange = {
+            .aspectMask = config->subresource.aspectMask,
+            .baseMipLevel = config->subresource.mipLevel,
+            .levelCount = 1,
+            .baseArrayLayer = config->subresource.baseArrayLayer, 
+            .layerCount = config->subresource.layerCount,
+        },
+    };
+    VkDependencyInfo transfer_dep = {
+        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .imageMemoryBarrierCount = 1,
+        .pImageMemoryBarriers = &transfer_barrier,
+    };
+    vkCmdPipelineBarrier2(cmd, &transfer_dep);
+
+    VkBufferImageCopy region = {
+        .imageSubresource = config->subresource,
+        .imageExtent = {config->width, config->height, config->depth},
+    };
+    vkCmdCopyImageToBuffer(cmd, config->src_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, stage, 1, &region);
+
+    VkImageMemoryBarrier2 end_barrier = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT,
+        .srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+        .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        .newLayout = config->layout,
+        .image = config->src_image,
+        .subresourceRange = {
+            .aspectMask = config->subresource.aspectMask,
+            .baseMipLevel = config->subresource.mipLevel,
+            .levelCount = 1,
+            .baseArrayLayer = config->subresource.baseArrayLayer, 
+            .layerCount = config->subresource.layerCount,
+        },
+    };
+    VkDependencyInfo end_dep = {
+        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .imageMemoryBarrierCount = 1,
+        .pImageMemoryBarriers = &end_barrier,
+    };
+    vkCmdPipelineBarrier2(cmd, &end_dep);
+
+    vkEndCommandBuffer(cmd);
+
+    VkFenceCreateInfo fence_info = {
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO
+    };
+    VkFence fence = NULL;
+    vkCreateFence(device, &fence_info, NULL, &fence);
+
+    VkSubmitInfo submit = {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &cmd,
+    };
+    vkQueueSubmit(transfer_queue, 1, &submit, fence);
+    vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+
+    vmaCopyAllocationToMemory(allocator, stage_alloc, 0, config->dst, size);
+
+    vkDestroyFence(device, fence, NULL);
+    vkFreeCommandBuffers(device, cmd_pool, 1, &cmd);
+    vmaDestroyBuffer(allocator, stage, stage_alloc);
 }
 
 #include "sprite.frag.spv.h"
@@ -1804,116 +2491,22 @@ HgPipelineSpriteTexture hg_pipeline_sprite_create_texture(
     };
     vmaCreateImage(pipeline->allocator, &image_info, &alloc_info, &tex.image, &tex.allocation, NULL);
 
-    VkBufferCreateInfo stage_info = {
-        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .size = config->width * config->height * config->pixel_width,
-        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-    };
-    VmaAllocationCreateInfo stage_alloc_info = {
-        .usage = VMA_MEMORY_USAGE_AUTO,
-        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
-    };
-    VkBuffer stage;
-    VmaAllocation stage_alloc;
-    vmaCreateBuffer(pipeline->allocator, &stage_info, &stage_alloc_info, &stage, &stage_alloc, NULL);
-    vmaCopyMemoryToAllocation(
-        pipeline->allocator,
-        config->tex_data,
-        stage_alloc,
-        0,
-        config->width * config->height * config->pixel_width);
-
-    VkCommandBufferAllocateInfo cmd_info = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .commandPool = cmd_pool,
-        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-        .commandBufferCount = 1,
-    };
-    VkCommandBuffer cmd;
-    vkAllocateCommandBuffers(pipeline->device, &cmd_info, &cmd);
-
-    VkCommandBufferBeginInfo cmd_begin_info = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-    };
-    vkBeginCommandBuffer(cmd, &cmd_begin_info);
-
-    VkBufferMemoryBarrier2 stage_barrier = {
-        .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
-        .srcStageMask = VK_PIPELINE_STAGE_HOST_BIT,
-        .srcAccessMask = VK_ACCESS_HOST_WRITE_BIT,
-        .dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT,
-        .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
-        .buffer = stage,
-        .offset = 0,
-        .size = config->width * config->height * config->pixel_width,
-    };
-    VkImageMemoryBarrier2 transfer_barrier = {
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT,
-        .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-        .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        .image = tex.image,
-        .subresourceRange = {
+    HgVkImageStagingWriteConfig staging_config = {
+        .dst_image = tex.image,
+        .subresource = {
             .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-            .levelCount = VK_REMAINING_MIP_LEVELS,
+            .mipLevel = 0,
+            .baseArrayLayer = 0,
             .layerCount = 1,
         },
+        .src_data = config->tex_data,
+        .width = config->width,
+        .height = config->height,
+        .depth = 1,
+        .format = config->format,
+        .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
     };
-    VkDependencyInfo transfer_dep = {
-        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-        .bufferMemoryBarrierCount = 1,
-        .pBufferMemoryBarriers = &stage_barrier,
-        .imageMemoryBarrierCount = 1,
-        .pImageMemoryBarriers = &transfer_barrier,
-    };
-    vkCmdPipelineBarrier2(cmd, &transfer_dep);
-
-    VkBufferImageCopy region = {
-        .imageSubresource = {
-            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-            .layerCount = 1,
-        },
-        .imageExtent = {config->width, config->height, 1},
-    };
-    vkCmdCopyBufferToImage(cmd, stage, tex.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-
-    VkImageMemoryBarrier2 shader_barrier = {
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT,
-        .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-        .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-        .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .image = tex.image,
-        .subresourceRange = {
-            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-            .levelCount = VK_REMAINING_MIP_LEVELS,
-            .layerCount = 1,
-        },
-    };
-    VkDependencyInfo shader_dep = {
-        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-        .imageMemoryBarrierCount = 1,
-        .pImageMemoryBarriers = &shader_barrier,
-    };
-    vkCmdPipelineBarrier2(cmd, &shader_dep);
-
-    vkEndCommandBuffer(cmd);
-
-    VkFenceCreateInfo fence_info = {
-        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-    };
-    VkFence fence;
-    vkCreateFence(pipeline->device, &fence_info, NULL, &fence);
-
-    VkSubmitInfo submit_info = {
-        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .commandBufferCount = 1,
-        .pCommandBuffers = &cmd,
-    };
-    vkQueueSubmit(transfer_queue, 1, &submit_info, fence);
+    hg_vk_image_staging_write(pipeline->device, pipeline->allocator, cmd_pool, transfer_queue, &staging_config);
 
     VkImageViewCreateInfo view_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -1960,11 +2553,6 @@ HgPipelineSpriteTexture hg_pipeline_sprite_create_texture(
         .pImageInfo = &desc_info,
     };
     vkUpdateDescriptorSets(pipeline->device, 1, &desc_write, 0, NULL);
-
-    vkWaitForFences(pipeline->device, 1, &fence, VK_TRUE, UINT64_MAX);
-    vkDestroyFence(pipeline->device, fence, NULL);
-    vkFreeCommandBuffers(pipeline->device, cmd_pool, 1, &cmd);
-    vmaDestroyBuffer(pipeline->allocator, stage, stage_alloc);
 
     return tex;
 }

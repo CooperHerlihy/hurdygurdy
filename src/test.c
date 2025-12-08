@@ -71,7 +71,6 @@ int main(void) {
         .tex_data = tex_data,
         .width = 2,
         .height = 2,
-        .pixel_width = 4,
         .format = VK_FORMAT_R8G8B8A8_UNORM,
         .filter = VK_FILTER_NEAREST,
         .edge_mode = VK_SAMPLER_ADDRESS_MODE_REPEAT,
@@ -168,10 +167,10 @@ int main(void) {
             hg_info("window resized\n");
         }
 
+        VkCommandBuffer cmd;
         cpu_time += hg_clock_tick(&cpu_clock);
-        VkCommandBuffer cmd = hg_swapchain_commands_acquire_and_begin(device.handle, &swapchain_commands);
-        hg_clock_tick(&cpu_clock);
-        if (cmd != NULL) {
+        if (swapchain.handle && (cmd = hg_swapchain_commands_record(device.handle, &swapchain_commands))) {
+            hg_clock_tick(&cpu_clock);
             u32 image_index = swapchain_commands.current_image;
 
             VkImageMemoryBarrier2 color_barrier = {
@@ -235,7 +234,7 @@ int main(void) {
                 .pImageMemoryBarriers = &present_barrier,
             });
 
-            hg_swapchain_commands_end_and_present(device.queue, &swapchain_commands);
+            hg_swapchain_commands_present(device.queue, &swapchain_commands);
         }
     }
 

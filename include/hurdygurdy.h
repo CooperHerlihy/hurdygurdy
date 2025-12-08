@@ -1223,12 +1223,11 @@ const HgAllocator *hg_temp_allocator(void);
 /**
  * Sets the current temporary allocator on this thread
  *
- * Note, if this function is never called, the temp allocator default to be the
- * same as the global allocator
+ * Note, if this function is never called, the default temp allocator is the
+ * global allocator
  *
- * Note, this function will never be called within the library, the user can
- * expect that the temporary allocator will stay the same until calling this
- * function again
+ * Note, the temp allocator will remain stable between library calls, i.e. even
+ * if it is changed within a function it will be changed by before returning
  *
  * Parameters
  * - The allocator to set for this thread
@@ -2090,6 +2089,16 @@ void hg_vk_load_device(VkDevice device);
 const char *hg_vk_result_string(VkResult result);
 
 /**
+ * Turns a VkFormat into the size in bytes
+ * 
+ * Parameters
+ * - format The format to get the size of
+ * Returns
+ * - The size of the format in bytes
+ */
+u32 hg_vk_format_to_size(VkFormat format);
+
+/**
  * Creates a Vulkan instance with sensible defaults
  * 
  * In debug mode, enables debug messaging
@@ -2365,9 +2374,6 @@ HgSwapchainCommands hg_swapchain_commands_create(VkDevice device, VkSwapchainKHR
 /**
  * Destroys a swaphchain command buffer system
  *
- * Note, it is safe to call acquire_and_begin with a destroyed frame sync, it
- * will simply return NULL, but it is not safe to call end_and_present
- *
  * Parameters
  * - device The Vulkan device, must not be NULL
  * - sync The swaphchain command buffer system to destroy, must not be NULL
@@ -2384,7 +2390,7 @@ void hg_swapchain_commands_destroy(VkDevice device, HgSwapchainCommands *sync);
  * - The command buffer to record this frame
  * - NULL if the swapchain is out of date
  */
-VkCommandBuffer hg_swapchain_commands_acquire_and_begin(VkDevice device, HgSwapchainCommands *sync);
+VkCommandBuffer hg_swapchain_commands_record(VkDevice device, HgSwapchainCommands *sync);
 
 /**
  * Finishes recording the command buffer and presents the swapchain image
@@ -2393,13 +2399,166 @@ VkCommandBuffer hg_swapchain_commands_acquire_and_begin(VkDevice device, HgSwapc
  * - queue The Vulkan queue, must not be NULL
  * - sync The swapchain command buffer system, must not be NULL
  */
-void hg_swapchain_commands_end_and_present(VkQueue queue, HgSwapchainCommands *sync);
+void hg_swapchain_commands_present(VkQueue queue, HgSwapchainCommands *sync);
 
-// Vulkan resource utilities : TODO
+/**
+ * Writes to a Vulkan device local buffer through a staging buffer
+ *
+ * Parameters
+ * - device The Vulkan device, must not be NULL
+ * - allocator The Vulkan allocator, must not be NULL
+ * - cmd_pool The command pool for the queue, must not be NULL
+ * - transfer_queue The Vulkan queue to transfer on, must not be NULL
+ * - dst The buffer to write to, must not be NULL
+ * - offset The offset in bytes into the dst buffer
+ * - src The data to write, must not be NULL
+ * - size The size to write in bytes, must be greater than 0
+ */
+void hg_vk_buffer_staging_write(
+    VkDevice device,
+    VmaAllocator allocator,
+    VkCommandPool cmd_pool,
+    VkQueue transfer_queue,
+    VkBuffer dst,
+    usize offset,
+    void *src,
+    usize size);
 
-// staging buffer read/write : TOD
-// staging image read/write : TOD
+/**
+ * Reads from a Vulkan device local buffer through a staging buffer
+ *
+ * Parameters
+ * - device The Vulkan device, must not be NULL
+ * - allocator The Vulkan allocator, must not be NULL
+ * - cmd_pool The command pool for the queue, must not be NULL
+ * - transfer_queue The Vulkan queue to transfer on, must not be NULL
+ * - dst The location to write to, must not be NULL
+ * - src The buffer to read from, must not be NULL
+ * - offset The offset in bytes into the dst buffer
+ * - size The size to write in bytes
+ */
+void hg_vk_buffer_staging_read(
+    VkDevice device,
+    VmaAllocator allocator,
+    VkCommandPool cmd_pool,
+    VkQueue transfer_queue,
+    void *dst,
+    VkBuffer src,
+    usize offset,
+    usize size);
+
+/**
+ * Configuration for a staging image write
+ */
+typedef struct HgVkImageStagingWriteConfig {
+    /**
+     * The image to write to, must not be NULL
+     */
+    VkImage dst_image;
+    /**
+     * The subresource of the image to write to
+     */
+    VkImageSubresourceLayers subresource;
+    /**
+     * The data to write, must not be NULL
+     */
+    void *src_data;
+    /**
+     * The width of the image in pixels, must be greater than 0
+     */
+    u32 width;
+    /**
+     * The width of the image in pixels, must be greater than 0
+     */
+    u32 height;
+    /**
+     * The width of the image in pixels, must be greater than 0
+     */
+    u32 depth;
+    /**
+     * The format of each pixel, must not be UNDEFINED
+     */
+    VkFormat format;
+    /**
+     * The layout to transition to after transfering
+     */
+    VkImageLayout layout;
+} HgVkImageStagingWriteConfig;
+
+/**
+ * Writes to a Vulkan device local image through a staging buffer
+ *
+ * Parameters
+ * - device The Vulkan device, must not be NULL
+ * - allocator The Vulkan allocator, must not be NULL
+ * - cmd_pool The command pool for the queue, must not be NULL
+ * - transfer_queue The Vulkan queue to transfer on, must not be NULL
+ * - config The configuration for the write, must not be NULL
+ */
+void hg_vk_image_staging_write(
+    VkDevice device,
+    VmaAllocator allocator,
+    VkCommandPool cmd_pool,
+    VkQueue transfer_queue,
+    HgVkImageStagingWriteConfig *config);
+
+/**
+ * Configuration for a staging image write
+ */
+typedef struct HgVkImageStagingReadConfig {
+    /**
+     * The location to write to, must not be NULL
+     */
+    void *dst;
+    /**
+     * The image to read from, must not be NULL
+     */
+    VkImage src_image;
+    /**
+     * The layout the image was in before reading, must not be UNDEFINED
+     */
+    VkImageLayout layout;
+    /**
+     * The subresource of the image to read from
+     */
+    VkImageSubresourceLayers subresource;
+    /**
+     * The width of the image in pixels, must be greater than 0
+     */
+    u32 width;
+    /**
+     * The width of the image in pixels, must be greater than 0
+     */
+    u32 height;
+    /**
+     * The width of the image in pixels, must be greater than 0
+     */
+    u32 depth;
+    /**
+     * The format of each pixel, must not be UNDEFINED
+     */
+    VkFormat format;
+} HgVkImageStagingReadConfig;
+
+/**
+ * Reads from a Vulkan device local image through a staging buffer
+ *
+ * Parameters
+ * - device The Vulkan device, must not be NULL
+ * - allocator The Vulkan allocator, must not be NULL
+ * - cmd_pool The command pool for the queue, must not be NULL
+ * - transfer_queue The Vulkan queue to transfer on, must not be NULL
+ * - config The configuration for the read, must not be NULL
+ */
+void hg_vk_image_staging_read(
+    VkDevice device,
+    VmaAllocator allocator,
+    VkCommandPool cmd_pool,
+    VkQueue transfer_queue,
+    HgVkImageStagingReadConfig *config);
+
 // cubemap read/write : TODO
+
 // mipmap generation : TODO
 
 /**
@@ -2489,10 +2648,6 @@ typedef struct HgPipelineSpriteTextureConfig {
      * The height of the texture in pixels, must be greater than 0
      */
     u32 height;
-    /**
-     * The size in bytes of each pixel, must be greater than 0
-     */
-    u32 pixel_width;
     /**
      * The Vulkan format of each pixel, must not be UNDEFINED
      */
