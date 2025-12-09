@@ -1,8 +1,76 @@
 #include "hurdygurdy.h"
 
-#include "vk_mem_alloc.h"
-
 int main(void) {
+    {
+        HgSystemDescription systems[] = {{
+            .max_components = 1 << 16,
+            .component_size = sizeof(u32),
+            .component_alignment = alignof(u32),
+        }, {
+            .max_components = 1 << 16,
+            .component_size = sizeof(u64),
+            .component_alignment = alignof(u64),
+        }};
+        HgUniverse universe = hg_universe_create(hg_persistent_allocator(), 1 << 16, systems, hg_countof(systems));
+        HgUniverse *ecs = &universe;
+
+        HgEntity e1 = hg_entity_create(ecs);
+        HgEntity e2 = hg_entity_create(ecs);
+        HgEntity e3;
+        hg_debug("e1: %" PRIx64 ", e2: %" PRIx64 "\n", e1, e2);
+        hg_entity_destroy(ecs, e1);
+        hg_entity_destroy(ecs, e2);
+        e1 = hg_entity_create(ecs);
+        e2 = hg_entity_create(ecs);
+        e3 = hg_entity_create(ecs);
+        hg_debug("e1: %" PRIx64 ", e2: %" PRIx64 ", e3: %" PRIx64 "\n", e1, e2, e3);
+
+        hg_debug("0 first iteration\n");
+        for (u32 *it = NULL; hg_system_iterate(ecs, 0, (void **)&it);) {
+            hg_debug("iterator: %" PRIu32 "\n", *it);
+        }
+
+        u32 *e1comp0 = hg_entity_add_component(ecs, e1, 0);
+        *e1comp0 = 12;
+        u32 *e2comp0 = hg_entity_add_component(ecs, e2, 0);
+        *e2comp0 = 42;
+        u32 *e3comp0 = hg_entity_add_component(ecs, e3, 0);
+        *e3comp0 = 100;
+
+        hg_debug("0 second iteration\n");
+        for (u32 *it = NULL; hg_system_iterate(ecs, 0, (void **)&it);) {
+            hg_debug("iterator: %" PRIu32 "\n", *it);
+        }
+
+        hg_entity_destroy(ecs, e1);
+
+        hg_debug("0 third iteration\n");
+        for (u32 *it = NULL; hg_system_iterate(ecs, 0, (void **)&it);) {
+            hg_debug("iterator: %" PRIu32 "\n", *it);
+        }
+
+        hg_system_flush_removals(ecs, 0);
+
+        hg_debug("0 fourth iteration\n");
+        for (u32 *it = NULL; hg_system_iterate(ecs, 0, (void **)&it);) {
+            hg_debug("iterator: %" PRIu32 "\n", *it);
+        }
+
+        u64 *e2comp1 = hg_entity_add_component(ecs, e2, 1);
+        *e2comp1 = 2042;
+        u64 *e3comp1 = hg_entity_add_component(ecs, e3, 1);
+        *e3comp1 = 2100;
+
+        hg_debug("1 first iteration\n");
+        for (u64 *it = NULL; hg_system_iterate(ecs, 1, (void **)&it);) {
+            HgEntity e = hg_component_get_entity(ecs, it, 1);
+            u32 *comp0 = hg_entity_get_component(ecs, e, 0);
+            hg_debug("sys 1: %" PRIu64 ", sys 0: %" PRIu32 "\n", *it, *comp0);
+        }
+
+        hg_universe_destroy(ecs);
+    }
+
     HgPlatform *platform = hg_platform_create();
     HgWindow *window = hg_window_create(platform, &(HgWindowConfig){
         .title = "Hg Test",

@@ -1692,6 +1692,8 @@ bool hg_file_save_binary(const u8* data, usize size, const char *path);
 // 3d model files : TODO
 // audio files : TODO
 
+// thread pool : TODO
+
 /**
  * Platform specific internal resources
  */
@@ -2561,6 +2563,8 @@ void hg_vk_image_staging_read(
 
 // mipmap generation : TODO
 
+// ecs multithreading support : TODO
+
 /**
  * The handle for an ECS entity
  */
@@ -2576,7 +2580,7 @@ typedef struct HgComponentSystem {
      */
     u32 *entity_indices;
     /**
-     * Each index corresponds to and index into components, containing it entity
+     * Each index is the entity associated with components[index]
      */
     HgEntity *component_entities;
     /**
@@ -2587,6 +2591,10 @@ typedef struct HgComponentSystem {
      * The size of each component in bytes
      */
     u32 component_size;
+    /**
+     * The memory alignment of each component
+     */
+    u32 component_alignment;
     /**
      * The max number of components in the array
      */
@@ -2604,25 +2612,25 @@ typedef struct HgUniverse {
     /**
      * The allocator used by the ECS
      */
-    HgAllocator *allocator;
+    const HgAllocator *allocator;
     /**
      * The pool of entity ids
      *
      * The pool index is the id, and the value at the index is the next id
      */
-    u64 *entity_pool;
+    HgEntity *entity_pool;
     /**
      * The next entity in the pool
      */
-    usize entity_next;
+    HgEntity entity_next;
     /**
      * The max number of entities in the pool
      */
-    usize entity_capacity;
+    u32 entity_capacity;
     /**
      * The component systems
      */
-    HgComponentSystem *component_systems;
+    HgComponentSystem *systems;
     /**
      * The number of component systems
      */
@@ -2630,15 +2638,39 @@ typedef struct HgUniverse {
 } HgUniverse;
 
 /**
+ * A description of a system in an entity component system
+ */
+typedef struct HgSystemDescription {
+    /**
+     * The max number of components the system can have
+     */
+    u32 max_components;
+    /**
+     * The size of each component in bytes
+     */
+    usize component_size;
+    /**
+     * The memory alignment of each component
+     */
+    usize component_alignment;
+} HgSystemDescription;
+
+/**
  * Creates an entity component system
  *
  * Parameters
  * - allocator The allocator the ecs will use, must not be NULL
- * - max_entities The max entities that can exist, must greater than 0
+ * - max_systems The max systems that can exist, must be greater than 0
+ * - system A description of each system in the ecs
+ * - system_count the number of systems
  * Returns
  * - The created entity component system
  */
-HgUniverse hg_universe_create(HgAllocator *allocator, usize max_entities);
+HgUniverse hg_universe_create(
+    const HgAllocator *allocator,
+    u32 max_entities,
+    const HgSystemDescription *systems,
+    u32 system_count);
 
 /**
  * Destroys an entity component system
@@ -2649,7 +2681,7 @@ HgUniverse hg_universe_create(HgAllocator *allocator, usize max_entities);
 void hg_universe_destroy(HgUniverse *ecs);
 
 /**
- * Flushes component removals in an ecs
+ * Flushes component removals in an ecs system
  *
  * When a component is removed, it is only flagged dead, so removals must be
  * flushed to keep components contiguous
@@ -2658,32 +2690,10 @@ void hg_universe_destroy(HgUniverse *ecs);
  * or in a multithreaded context, while simple removal can be
  *
  * Parameters
- * - ecs The entity component system to flush
- */
-void hg_universe_flush_removals(HgUniverse *ecs);
-
-/**
- * Adds a system to an ecs, and returns its index
- *
- * Parameters
- * - ecs The entity component system to add to, must not be NULL
- * - component_size The size the system's components, must be greater than 0
- * - max_components The max components that can exist, must be greater than 0
- * Returns
- * - The index of the created system
- */
-u32 hg_universe_add_system(HgUniverse *ecs, usize component_size, u32 max_components);
-
-/**
- * Gets the begin iterator, the first component in a system from an ecs
- *
- * Parameters
  * - ecs The entity component system, must not be NULL
- * - system_index The index of the system to traverse
- * Returns
- * - The begin iterator, the first component
+ * - system_index The system to flush
  */
-void *hg_universe_system_begin(HgUniverse *ecs, u32 system_index);
+void hg_system_flush_removals(HgUniverse *ecs, u32 system_index);
 
 /**
  * Gets the next iterator, the next component in a system from an ecs
@@ -2691,21 +2701,12 @@ void *hg_universe_system_begin(HgUniverse *ecs, u32 system_index);
  * Parameters
  * - ecs The entity component system, must not be NULL
  * - system_index The index of the system to traverse
+ * - iterator The previous component, NULL component to begin, must not be NULL
  * Returns
- * - The next iterator, the next component
+ * - true if another component is available
+ * - false if iteration is complete
  */
-void *hg_universe_system_next(HgUniverse *ecs, u32 system_index, void *current);
-
-/**
- * Gets the end iterator, an invalid component in a system from an ecs
- *
- * Parameters
- * - ecs The entity component system, must not be NULL
- * - system_index The index of the system to traverse
- * Returns
- * - The end iterator, an invalid component
- */
-void *hg_universe_system_end(HgUniverse *ecs, u32 system_index);
+bool hg_system_iterate(HgUniverse *ecs, u32 system_index, void **iterator);
 
 /**
  * Creates an entity in an ECS, and returns its id
@@ -2713,7 +2714,7 @@ void *hg_universe_system_end(HgUniverse *ecs, u32 system_index);
  * Parameters
  * - ecs The entity component system, must not be NULL
  * Returns
- * - The id of the created entity, will never be NULL
+ * - The id of the created entity, will never be 0
  */
 HgEntity hg_entity_create(HgUniverse *ecs);
 
@@ -2744,7 +2745,7 @@ bool hg_entity_is_alive(HgUniverse *ecs, HgEntity entity);
  *
  * Parameters
  * - ecs The entity component system, must not be NULL
- * - entity The id of the entity, must not be NULL
+ * - entity The id of the entity, must not be 0
  * - system_index The system to add the component in
  * Returns
  * - A pointer to the created component
@@ -2758,7 +2759,7 @@ void *hg_entity_add_component(HgUniverse *ecs, HgEntity entity, u32 system_index
  *
  * Parameters
  * - ecs The entity component system, must not be NULL
- * - entity The id of the entity, must not be NULL
+ * - entity The id of the entity, must not be 0
  * - system_index The system to remove the component from
  */
 void hg_entity_remove_component(HgUniverse *ecs, HgEntity entity, u32 system_index);
@@ -2768,7 +2769,7 @@ void hg_entity_remove_component(HgUniverse *ecs, HgEntity entity, u32 system_ind
  *
  * Parameters
  * - ecs The entity component system, must not be NULL
- * - entity The id of the entity, must not be NULL
+ * - entity The id of the entity, must not be 0
  * - system_index The system to get the component from
  * Returns
  * - The entity's component
@@ -2784,7 +2785,7 @@ void *hg_entity_get_component(HgUniverse *ecs, HgEntity entity, u32 system_index
  * - component The component to lookup, must be a valid component
  * - system_index The system to get the component from
  * Returns
- * - The components's entity, will never be NULL
+ * - The components's entity, will never be 0
  */
 HgEntity hg_component_get_entity(HgUniverse *ecs, void *component, u32 system_index);
 

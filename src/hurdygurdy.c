@@ -2256,7 +2256,232 @@ void hg_vk_image_staging_read(
     vmaDestroyBuffer(allocator, stage, stage_alloc);
 }
 
-// ecs implementation : TODO
+HgUniverse hg_universe_create(
+    const HgAllocator *allocator,
+    u32 max_entities,
+    const HgSystemDescription *systems,
+    u32 system_count
+) {
+    assert(allocator != NULL);
+    assert(max_entities > 0);
+
+    max_entities += 1;
+    HgUniverse ecs = {
+        .allocator = allocator,
+        .entity_pool = hg_alloc(allocator, max_entities * sizeof(HgEntity), alignof(HgEntity)),
+        .entity_capacity = (u32)max_entities,
+        .systems = hg_alloc(allocator, max_entities * sizeof(HgComponentSystem), alignof(HgComponentSystem)),
+        .system_count = (u32)system_count,
+    };
+
+    for (u32 i = 0; i < ecs.entity_capacity; ++i) {
+        ecs.entity_pool[i] = i + 1;
+    }
+    HgEntity reserved_null_entity = hg_entity_create(&ecs);
+    (void)reserved_null_entity;
+
+    for (u32 i = 0; i < ecs.system_count; ++i) {
+        u32 max_components = systems[i].max_components + 1;
+        ecs.systems[i] = (HgComponentSystem){
+            .entity_indices = hg_alloc(
+                ecs.allocator,
+                ecs.entity_capacity * sizeof(u32),
+                alignof(u32)),
+            .component_entities = hg_alloc(
+                ecs.allocator,
+                max_components * sizeof(HgEntity),
+                alignof(HgEntity)),
+            .components = hg_alloc(
+                ecs.allocator,
+                max_components * systems[i].component_size,
+                systems[i].component_alignment),
+            .component_size = (u32)systems[i].component_size,
+            .component_alignment = (u32)systems[i].component_alignment,
+            .component_capacity = max_components,
+            .component_count = 1,
+        };
+        memset(ecs.systems[i].entity_indices, 0, max_components);
+        memset(ecs.systems[i].component_entities, 0, max_components);
+    }
+
+    return ecs;
+}
+
+void hg_universe_destroy(HgUniverse *ecs) {
+    assert(ecs != NULL);
+
+    for (u32 i = 0; i < ecs->system_count; ++i) {
+        hg_free(
+            ecs->allocator,
+            ecs->systems[i].entity_indices,
+            ecs->entity_capacity * sizeof(u32),
+            alignof(u32)),
+        hg_free(
+            ecs->allocator,
+            ecs->systems[i].component_entities,
+            ecs->systems[i].component_capacity * sizeof(HgEntity),
+            alignof(HgEntity)),
+        hg_free(
+            ecs->allocator,
+            ecs->systems[i].components,
+            ecs->systems[i].component_capacity * ecs->systems[i].component_size,
+            ecs->systems[i].component_alignment);
+    }
+
+    hg_free(
+        ecs->allocator,
+        ecs->entity_pool,
+        ecs->entity_capacity * sizeof(HgEntity),
+        alignof(HgEntity));
+    hg_free(
+        ecs->allocator,
+        ecs->systems,
+        ecs->system_count * sizeof(HgComponentSystem),
+        alignof(HgComponentSystem));
+}
+
+// add component removal queue : TODO
+void hg_system_flush_removals(HgUniverse *ecs, u32 system_index) {
+    assert(ecs != NULL);
+    assert(system_index < ecs->system_count);
+
+    HgComponentSystem *system = &ecs->systems[system_index];
+    for (u32 i = 1; i < system->component_count; ++i) {
+        if (system->component_entities[i] == 0) {
+            --system->component_count;
+
+            void *current = (u8 *)system->components + i * system->component_size;
+            void *last = (u8 *)system->components + system->component_count * system->component_size;
+            memcpy(current, last, system->component_size);
+
+            HgEntity entity = system->component_entities[i];
+            HgEntity last_entity = system->component_entities[system->component_count];
+
+            system->component_entities[i] = last_entity;
+            system->component_entities[system->component_count] = 0;
+
+            system->entity_indices[entity] = 0;
+            system->entity_indices[last_entity] = i;
+        }
+    }
+}
+
+bool hg_system_iterate(HgUniverse *ecs, u32 system_index, void **iterator) {
+    assert(ecs != NULL);
+    assert(system_index < ecs->system_count);
+    assert(iterator != NULL);
+
+    HgComponentSystem *system = &ecs->systems[system_index];
+    if (*iterator == NULL) {
+        *iterator = system->components;
+    } else {
+        assert((u8 *)*iterator > (u8 *)system->components);
+        assert((u8 *)*iterator <= (u8 *)system->components + system->component_count * system->component_size);
+        assert(((u8 *)*iterator - (u8 *)system->components) % system->component_size == 0);
+    }
+
+    *(u8 **)iterator += system->component_size;
+    u32 index = (u32)(((usize)*iterator - (usize)system->components) / system->component_size);
+
+    while (index != system->component_count) {
+        if (system->component_entities[index] != 0)
+            return true;
+        *(u8 **)iterator += system->component_size;
+        ++index;
+    }
+    return false;
+}
+
+HgEntity hg_entity_create(HgUniverse *ecs) {
+    assert(ecs != NULL);
+
+    HgEntity entity = ecs->entity_next;
+    ecs->entity_next = ecs->entity_pool[entity & 0xffffffff];
+    ecs->entity_pool[entity & 0xffffffff] = 0;
+    return entity;
+}
+
+void hg_entity_destroy(HgUniverse *ecs, HgEntity entity) {
+    assert(ecs != NULL);
+    assert(entity != 0);
+
+    for (u32 i = 0; i < ecs->system_count; ++i) {
+        HgComponentSystem *system = &ecs->systems[i];
+        system->component_entities[system->entity_indices[entity & 0xffffffff]] = 0;
+        system->entity_indices[entity & 0xffffffff] = 0;
+    }
+    ecs->entity_pool[entity & 0xffffffff] = ecs->entity_next;
+    ecs->entity_next = entity + ((u64)0x1 << 32);
+}
+
+bool hg_entity_is_alive(HgUniverse *ecs, HgEntity entity) {
+    assert(ecs != NULL);
+    return entity != 0 && ecs->entity_pool[entity & 0xffffffff] == 0;
+}
+
+void *hg_entity_add_component(HgUniverse *ecs, HgEntity entity, u32 system_index) {
+    assert(ecs != NULL);
+    assert(entity != 0);
+    assert(system_index < ecs->system_count);
+
+    HgComponentSystem *system = &ecs->systems[system_index];
+    assert(system->entity_indices[entity & 0xffffffff] == 0);
+
+    u32 index = system->component_count;
+    ++system->component_count;
+
+    assert(system->entity_indices[entity & 0xffffff] == 0);
+    system->entity_indices[entity & 0xffffffff] = index;
+
+    assert(system->component_entities[index] == 0);
+    system->component_entities[index] = entity;
+
+    return (u8 *)system->components + index * system->component_size;
+}
+
+void hg_entity_remove_component(HgUniverse *ecs, HgEntity entity, u32 system_index) {
+    assert(ecs != NULL);
+    assert(entity != 0);
+    assert(system_index < ecs->system_count);
+
+    HgComponentSystem *system = &ecs->systems[system_index];
+
+    u32 index = system->entity_indices[entity & 0xffffffff];
+
+    assert(index != 0);
+    system->entity_indices[entity & 0xffffffff] = 0;
+
+    assert(system->component_entities[index] == entity);
+    system->component_entities[index] = 0;
+}
+
+void *hg_entity_get_component(HgUniverse *ecs, HgEntity entity, u32 system_index) {
+    assert(ecs != NULL);
+    assert(entity != 0);
+    assert(system_index < ecs->system_count);
+
+    HgComponentSystem *system = &ecs->systems[system_index];
+    u32 index = system->entity_indices[entity & 0xffffffff];
+
+    assert(index != 0);
+    assert(system->component_entities[index] == entity);
+    return (u8 *)system->components + index * system->component_size;
+}
+
+HgEntity hg_component_get_entity(HgUniverse *ecs, void *component, u32 system_index) {
+    assert(ecs != NULL);
+    assert(component != NULL);
+    assert(system_index < ecs->system_count);
+
+    HgComponentSystem *system = &ecs->systems[system_index];
+
+    u32 index = (u32)(((usize)component - (usize)system->components) / system->component_size);
+    HgEntity entity = system->component_entities[index];
+
+    assert(entity != 0);
+    assert(system->entity_indices[entity & 0xffffffff] == index);
+    return entity;
+}
 
 #include "sprite.frag.spv.h"
 #include "sprite.vert.spv.h"
