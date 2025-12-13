@@ -1,16 +1,15 @@
-#include "hurdygurdy.h"
+#include "hurdygurdy.hpp"
 
 int main(void) {
     {
-        HgSystemDescription systems[] = {{
-            .max_components = 1 << 16,
-            .component_size = sizeof(u32),
-            .component_alignment = alignof(u32),
-        }, {
-            .max_components = 1 << 16,
-            .component_size = sizeof(u64),
-            .component_alignment = alignof(u64),
-        }};
+        HgSystemDescription systems[2]{};
+        systems[0].max_components = 1 << 16;
+        systems[0].component_size = sizeof(u32);
+        systems[0].component_alignment = alignof(u32);
+        systems[1].max_components = 1 << 16;
+        systems[1].component_size = sizeof(u64);
+        systems[1].component_alignment = alignof(u64);
+
         HgECS ecs = hg_ecs_create(hg_persistent_allocator(), 1 << 16, systems, hg_countof(systems));
 
         HgEntityID e1 = hg_entity_create(&ecs);
@@ -26,20 +25,20 @@ int main(void) {
 
         hg_info("0 first iteration\n");
         for (HgEntityID *e = NULL; hg_ecs_iterate_system(&ecs, 0, &e);) {
-            u32 *comp = hg_entity_get_component(&ecs, *e, 0);
+            u32 *comp = (u32 *)hg_entity_get_component(&ecs, *e, 0);
             hg_info("iterator: %" PRIu32 "\n", *comp);
         }
 
-        u32 *e1comp0 = hg_entity_add_component(&ecs, e1, 0);
+        u32 *e1comp0 = (u32 *)hg_entity_add_component(&ecs, e1, 0);
         *e1comp0 = 12;
-        u32 *e2comp0 = hg_entity_add_component(&ecs, e2, 0);
+        u32 *e2comp0 = (u32 *)hg_entity_add_component(&ecs, e2, 0);
         *e2comp0 = 42;
-        u32 *e3comp0 = hg_entity_add_component(&ecs, e3, 0);
+        u32 *e3comp0 = (u32 *)hg_entity_add_component(&ecs, e3, 0);
         *e3comp0 = 100;
 
         hg_info("0 second iteration\n");
         for (HgEntityID *e = NULL; hg_ecs_iterate_system(&ecs, 0, &e);) {
-            u32 *comp = hg_entity_get_component(&ecs, *e, 0);
+            u32 *comp = (u32 *)hg_entity_get_component(&ecs, *e, 0);
             hg_info("iterator: %" PRIu32 "\n", *comp);
         }
 
@@ -47,7 +46,7 @@ int main(void) {
 
         hg_info("0 third iteration\n");
         for (HgEntityID *e = NULL; hg_ecs_iterate_system(&ecs, 0, &e);) {
-            u32 *comp = hg_entity_get_component(&ecs, *e, 0);
+            u32 *comp = (u32 *)hg_entity_get_component(&ecs, *e, 0);
             hg_info("iterator: %" PRIu32 "\n", *comp);
         }
 
@@ -55,19 +54,19 @@ int main(void) {
 
         hg_info("0 fourth iteration\n");
         for (HgEntityID *e = NULL; hg_ecs_iterate_system(&ecs, 0, &e);) {
-            u32 *comp = hg_entity_get_component(&ecs, *e, 0);
+            u32 *comp = (u32 *)hg_entity_get_component(&ecs, *e, 0);
             hg_info("iterator: %" PRIu32 "\n", *comp);
         }
 
-        u64 *e2comp1 = hg_entity_add_component(&ecs, e2, 1);
+        u64 *e2comp1 = (u64 *)hg_entity_add_component(&ecs, e2, 1);
         *e2comp1 = 2042;
-        u64 *e3comp1 = hg_entity_add_component(&ecs, e3, 1);
+        u64 *e3comp1 = (u64 *)hg_entity_add_component(&ecs, e3, 1);
         *e3comp1 = 2100;
 
         hg_info("1 first iteration\n");
         for (HgEntityID *e = NULL; hg_ecs_iterate_system(&ecs, 1, &e);) {
-            u32 *comp0 = hg_entity_get_component(&ecs, *e, 0);
-            u64 *comp1 = hg_entity_get_component(&ecs, *e, 1);
+            u32 *comp0 = (u32 *)hg_entity_get_component(&ecs, *e, 0);
+            u64 *comp1 = (u64 *)hg_entity_get_component(&ecs, *e, 1);
             hg_info("sys 1: %" PRIu64 ", sys 0: %" PRIu32 "\n", *comp1, *comp0);
         }
 
@@ -76,31 +75,32 @@ int main(void) {
 
     hg_init();
 
-    HgWindow *window = hg_window_create(&(HgWindowConfig){
-        .title = "Hg Test",
-        .windowed = true,
-        .width = 800,
-        .height = 600,
-    });
+    HgWindowConfig window_config{};
+    window_config.title = "Hg Test";
+    window_config.windowed = true;
+    window_config.width = 800;
+    window_config.height = 600;
+
+    HgWindow *window = hg_window_create(&window_config);
 
     VkInstance instance = hg_vk_create_instance("HurdyGurdy Test");
     hg_debug_mode(VkDebugUtilsMessengerEXT debug_messenger = hg_vk_create_debug_messenger(instance));
     HgSingleQueueDeviceData device = hg_vk_create_single_queue_device(instance);
 
-    VmaAllocatorCreateInfo allocator_info = {
-        .physicalDevice = device.gpu,
-        .device = device.handle,
-        .instance = instance,
-        .vulkanApiVersion = VK_API_VERSION_1_3,
-    };
+    VmaAllocatorCreateInfo allocator_info{};
+    allocator_info.physicalDevice = device.gpu;
+    allocator_info.device = device.handle;
+    allocator_info.instance = instance;
+    allocator_info.vulkanApiVersion = VK_API_VERSION_1_3;
+
     VmaAllocator allocator;
     vmaCreateAllocator(&allocator_info, &allocator);
 
-    VkCommandPoolCreateInfo cmd_pool_info = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-        .queueFamilyIndex = device.queue_family,
-    };
+    VkCommandPoolCreateInfo cmd_pool_info{};
+    cmd_pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    cmd_pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    cmd_pool_info.queueFamilyIndex = device.queue_family;
+
     VkCommandPool cmd_pool;
     vkCreateCommandPool(device.handle, &cmd_pool_info, NULL, &cmd_pool);
 
@@ -110,41 +110,41 @@ int main(void) {
 
     u32 swap_image_count;
     vkGetSwapchainImagesKHR(device.handle, swapchain.handle, &swap_image_count, NULL);
-    VkImage *swap_images = malloc(swap_image_count * sizeof(*swap_images));
-    VkImageView *swap_views = malloc(swap_image_count * sizeof(*swap_views));
+    VkImage *swap_images = (VkImage *)malloc(swap_image_count * sizeof(*swap_images));
+    VkImageView *swap_views = (VkImageView *)malloc(swap_image_count * sizeof(*swap_views));
     vkGetSwapchainImagesKHR(device.handle, swapchain.handle, &swap_image_count, swap_images);
     for (usize i = 0; i < swap_image_count; ++i) {
-        VkImageViewCreateInfo create_info = {
-            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            .image = swap_images[i],
-            .viewType = VK_IMAGE_VIEW_TYPE_2D,
-            .format = swapchain.format,
-            .subresourceRange = {
-                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                .levelCount = 1,
-                .layerCount = 1,
-            }
-        };
+        VkImageViewCreateInfo create_info{};
+        create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        create_info.image = swap_images[i];
+        create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        create_info.format = swapchain.format;
+        create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        create_info.subresourceRange.baseMipLevel = 0;
+        create_info.subresourceRange.levelCount = 1;
+        create_info.subresourceRange.baseArrayLayer = 0;
+        create_info.subresourceRange.layerCount = 1;
+
         vkCreateImageView(device.handle, &create_info, NULL, &swap_views[i]);
     }
     HgSwapchainCommands swapchain_commands = hg_swapchain_commands_create(
         device.handle, swapchain.handle, cmd_pool);
 
     HgPipelineSprite sprite_pipeline = hg_pipeline_sprite_create(
-        device.handle, allocator, swapchain.format, 0);
+        device.handle, allocator, swapchain.format, VK_FORMAT_UNDEFINED);
 
     struct {u8 r, g, b, a;} tex_data[] = {
         {0xff, 0x00, 0x00, 0xff}, {0x00, 0xff, 0x00, 0xff},
         {0x00, 0x00, 0xff, 0xff}, {0xff, 0xff, 0x00, 0xff},
     };
-    HgPipelineSpriteTextureConfig tex_config = {
-        .tex_data = tex_data,
-        .width = 2,
-        .height = 2,
-        .format = VK_FORMAT_R8G8B8A8_UNORM,
-        .filter = VK_FILTER_NEAREST,
-        .edge_mode = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-    };
+    HgPipelineSpriteTextureConfig tex_config{};
+    tex_config.tex_data = tex_data;
+    tex_config.width = 2;
+    tex_config.height = 2;
+    tex_config.format = VK_FORMAT_R8G8B8A8_UNORM;
+    tex_config.filter = VK_FILTER_NEAREST;
+    tex_config.edge_mode = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+
     HgPipelineSpriteTexture texture = hg_pipeline_sprite_create_texture(
         &sprite_pipeline, cmd_pool, device.queue, &tex_config);
 
@@ -207,22 +207,22 @@ int main(void) {
             if (swapchain.handle != NULL) {
                 vkGetSwapchainImagesKHR(device.handle, swapchain.handle, &swap_image_count, NULL);
                 if (swap_image_count != old_count) {
-                    swap_images = realloc(swap_images, swap_image_count * sizeof(*swap_images));
-                    swap_views = realloc(swap_views, swap_image_count * sizeof(*swap_images));
+                    swap_images = (VkImage *)realloc(swap_images, swap_image_count * sizeof(*swap_images));
+                    swap_views = (VkImageView *)realloc(swap_views, swap_image_count * sizeof(*swap_images));
                 }
                 vkGetSwapchainImagesKHR(device.handle, swapchain.handle, &swap_image_count, swap_images);
                 for (usize i = 0; i < swap_image_count; ++i) {
-                    VkImageViewCreateInfo create_info = {
-                        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-                        .image = swap_images[i],
-                        .viewType = VK_IMAGE_VIEW_TYPE_2D,
-                        .format = swapchain.format,
-                        .subresourceRange = {
-                            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                            .levelCount = 1,
-                            .layerCount = 1,
-                        }
-                    };
+                    VkImageViewCreateInfo create_info{};
+                    create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+                    create_info.image = swap_images[i];
+                    create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+                    create_info.format = swapchain.format;
+                    create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                    create_info.subresourceRange.baseMipLevel = 0;
+                    create_info.subresourceRange.levelCount = 1;
+                    create_info.subresourceRange.baseArrayLayer = 0;
+                    create_info.subresourceRange.layerCount = 1;
+
                     vkCreateImageView(device.handle, &create_info, NULL, &swap_views[i]);
                 }
                 swapchain_commands = hg_swapchain_commands_create(
@@ -243,34 +243,37 @@ int main(void) {
             hg_clock_tick(&cpu_clock);
             u32 image_index = swapchain_commands.current_image;
 
-            VkImageMemoryBarrier2 color_barrier = {
-                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-                .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                .image = swap_images[image_index],
-                .subresourceRange = (VkImageSubresourceRange){VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
-            };
-            vkCmdPipelineBarrier2(cmd, &(VkDependencyInfo){
-                .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-                .imageMemoryBarrierCount = 1,
-                .pImageMemoryBarriers = &color_barrier,
-            });
+            VkImageMemoryBarrier2 color_barrier{};
+            color_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+            color_barrier.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            color_barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            color_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            color_barrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            color_barrier.image = swap_images[image_index];
+            color_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
 
-            VkRenderingAttachmentInfo color_attachment = {
-                .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-                .imageView = swap_views[image_index],
-                .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-            };
-            VkRenderingInfo rendering_info = {
-                .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-                .renderArea = {.extent = {swapchain.width, swapchain.height}},
-                .layerCount = 1,
-                .colorAttachmentCount = 1,
-                .pColorAttachments = &color_attachment,
-            };
+            VkDependencyInfo color_dependency{};
+            color_dependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+            color_dependency.imageMemoryBarrierCount = 1;
+            color_dependency.pImageMemoryBarriers = &color_barrier;
+
+            vkCmdPipelineBarrier2(cmd, &color_dependency);
+
+            VkRenderingAttachmentInfo color_attachment{};
+            color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+            color_attachment.imageView = swap_views[image_index];
+            color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+
+            VkRenderingInfo rendering_info{};
+            rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+            rendering_info.pNext = NULL;
+            rendering_info.renderArea.extent = {swapchain.width, swapchain.height};
+            rendering_info.layerCount = 1;
+            rendering_info.colorAttachmentCount = 1;
+            rendering_info.pColorAttachments = &color_attachment;
+
             vkCmdBeginRendering(cmd, &rendering_info);
 
             VkViewport viewport = {0.0f, 0.0f, (f32)swapchain.width, (f32)swapchain.height, 0.0f, 1.0f};
@@ -280,29 +283,30 @@ int main(void) {
 
             hg_pipeline_sprite_bind(&sprite_pipeline, cmd);
 
-            HgPipelineSpritePush push = {
-                .model = hg_model_matrix_2d(position, hg_svec2(0.5f), 0.0f),
-                .uv_pos = {0.0f, 0.0f},
-                .uv_size = {1.0f, 1.0f},
-            };
+            HgPipelineSpritePush push{};
+            push.model = hg_model_matrix_2d(position, hg_svec2(0.5f), 0.0f);
+            push.uv_pos = {0.0f, 0.0f};
+            push.uv_size = {1.0f, 1.0f};
+
             hg_pipeline_sprite_draw(&sprite_pipeline, cmd, &texture, &push);
 
             vkCmdEndRendering(cmd);
 
-            VkImageMemoryBarrier2 present_barrier = {
-                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-                .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                .image = swap_images[image_index],
-                .subresourceRange = (VkImageSubresourceRange){VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
-            };
-            vkCmdPipelineBarrier2(cmd, &(VkDependencyInfo){
-                .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-                .imageMemoryBarrierCount = 1,
-                .pImageMemoryBarriers = &present_barrier,
-            });
+            VkImageMemoryBarrier2 present_barrier{};
+            present_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+            present_barrier.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            present_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            present_barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            present_barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+            present_barrier.image = swap_images[image_index];
+            present_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+
+            VkDependencyInfo present_dependency{};
+            present_dependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+            present_dependency.imageMemoryBarrierCount = 1;
+            present_dependency.pImageMemoryBarriers = &present_barrier;
+
+            vkCmdPipelineBarrier2(cmd, &present_dependency);
 
             hg_swapchain_commands_present(device.queue, &swapchain_commands);
         }

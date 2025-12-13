@@ -1,5 +1,5 @@
-#include <stdint.h>
-#include <stdio.h>
+#include <cstdint>
+#include <cstdio>
 
 /**
  * A small script which takes a file and turns its data into a C file which can

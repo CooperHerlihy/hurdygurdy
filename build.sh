@@ -5,13 +5,13 @@ START_TIME=$(date +%s.%N)
 SRC_DIR=.
 BUILD_DIR=build
 
-STD="-std=c11"
+STD="-std=c++17"
 WARNINGS="-Werror -Wall -Wextra -Wconversion -Wshadow -pedantic"
-CONFIG="-g -O0 -fsanitize=undefined"
+CONFIG="-g -O0 -fsanitize=undefined -fno-exceptions -fno-rtti"
 
 for arg in "$@"; do
     if [ "$1" == "release" ]; then
-        CONFIG="-O3 -DNDEBUG"
+        CONFIG="-O3 -DNDEBUG -fno-exceptions -fno-rtti"
     fi
     shift
 done
@@ -24,9 +24,9 @@ INCLUDES=" \
 
 mkdir -p ${BUILD_DIR}
 
-echo "embed_file.c"
-cc ${STD} ${CONFIG} ${WARNINGS} ${INCLUDES} \
-    ${SRC_DIR}/src/embed_file.c \
+echo "embed_file.cpp"
+c++ ${STD} ${CONFIG} ${WARNINGS} ${INCLUDES} \
+    ${SRC_DIR}/src/embed_file.cpp \
     -o ${BUILD_DIR}/embed_file
 
 mkdir -p ${BUILD_DIR}/shaders
@@ -47,14 +47,14 @@ for shader in "${SHADERS[@]}"; do
         ${name}.spv > ${BUILD_DIR}/shaders/${name}.spv.h
 done
 
-echo "hurdygurdy.c"
-cc ${STD} ${CONFIG} ${WARNINGS} ${INCLUDES} \
-    -c ${SRC_DIR}/src/hurdygurdy.c \
+echo "hurdygurdy.cpp"
+c++ ${STD} ${CONFIG} ${WARNINGS} ${INCLUDES} \
+    -c ${SRC_DIR}/src/hurdygurdy.cpp \
     -o ${BUILD_DIR}/hurdygurdy.o
 
 if [ ! -f "${BUILD_DIR}/vk_mem_alloc.o" ]; then
     echo "vk_mem_alloc.cpp"
-    c++ -std=c++17 ${CONFIG} ${INCLUDES} \
+    c++ ${STD} ${CONFIG} ${INCLUDES} \
         -c ${SRC_DIR}/src/vk_mem_alloc.cpp \
         -o ${BUILD_DIR}/vk_mem_alloc.o
 fi
@@ -62,15 +62,16 @@ fi
 echo "libhurdygurdy.a"
 ar rcs ${BUILD_DIR}/libhurdygurdy.a ${BUILD_DIR}/hurdygurdy.o ${BUILD_DIR}/vk_mem_alloc.o
 
-echo "test.c"
-cc ${STD} ${CONFIG} ${WARNINGS} ${INCLUDES} \
-    -c ${SRC_DIR}/src/test.c \
+echo "test.cpp"
+c++ ${STD} ${CONFIG} ${WARNINGS} ${INCLUDES} \
+    -c ${SRC_DIR}/src/test.cpp \
     -o ${BUILD_DIR}/test.o
 
 echo "test"
-c++ -std=c++17 ${CONFIG} ${WARNINGS} \
+c++ ${STD} ${CONFIG} ${WARNINGS} \
     -o ${BUILD_DIR}/test \
     ${BUILD_DIR}/test.o -L"${BUILD_DIR}" -lhurdygurdy
 
 END_TIME=$(date +%s.%N)
 printf "Build complete: %.6f seconds\n" "$(echo "$END_TIME - $START_TIME" | bc)"
+

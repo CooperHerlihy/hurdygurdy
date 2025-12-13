@@ -27,24 +27,19 @@
 #ifndef HURDYGURDY_H
 #define HURDYGURDY_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-#include <assert.h>
-#include <float.h>
-#include <inttypes.h>
-#include <math.h>
-#include <stdalign.h>
-#include <stdarg.h>
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <threads.h>
-#include <time.h>
+#include <cassert>
+#include <cfloat>
+#include <cinttypes>
+#include <cmath>
+#include <cstdalign>
+#include <cstdarg>
+#include <cstdbool>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <ctime>
 
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
@@ -186,7 +181,10 @@ typedef double f64;
  * Returns
  * - The aligned size
  */
-usize hg_align(usize value, usize alignment);
+inline usize hg_align(usize value, usize alignment) {
+    assert(alignment > 0 && (alignment & (alignment - 1)) == 0);
+    return (value + alignment - 1) & ~(alignment - 1);
+}
 
 /**
  * A high precision clock for timers and game deltas
@@ -275,7 +273,9 @@ typedef struct HgQuat {
  * Returns
  * - The created vector
  */
-HgVec2 hg_svec2(f32 scalar);
+inline HgVec2 hg_svec2(f32 scalar) {
+    return {scalar, scalar};
+}
 
 /**
  * Creates a 3D vector with the given scalar
@@ -285,7 +285,9 @@ HgVec2 hg_svec2(f32 scalar);
  * Returns
  * - The created vector
  */
-HgVec3 hg_svec3(f32 scalar);
+inline HgVec3 hg_svec3(f32 scalar) {
+    return {scalar, scalar, scalar};
+}
 
 /**
  * Creates a 4D vector with the given scalar
@@ -295,7 +297,9 @@ HgVec3 hg_svec3(f32 scalar);
  * Returns
  * - The created vector
  */
-HgVec4 hg_svec4(f32 scalar);
+inline HgVec4 hg_svec4(f32 scalar) {
+    return {scalar, scalar, scalar, scalar};
+}
 
 /**
  * Creates a 2x2 matrix with the given scalar
@@ -307,7 +311,12 @@ HgVec4 hg_svec4(f32 scalar);
  * Returns
  * - The created matrix
  */
-HgMat2 hg_smat2(f32 scalar);
+inline HgMat2 hg_smat2(f32 scalar) {
+    return {
+        {scalar, 0.0f},
+        {0.0f, scalar},
+    };
+}
 
 /**
  * Creates a 3x3 matrix with the given scalar
@@ -319,7 +328,13 @@ HgMat2 hg_smat2(f32 scalar);
  * Returns
  * - The created matrix
  */
-HgMat3 hg_smat3(f32 scalar);
+inline HgMat3 hg_smat3(f32 scalar) {
+    return {
+        {scalar, 0.0f, 0.0f},
+        {0.0f, scalar, 0.0f},
+        {0.0f, 0.0f, scalar},
+    };
+}
 
 /**
  * Creates a 4x4 matrix with the given scalar
@@ -331,7 +346,14 @@ HgMat3 hg_smat3(f32 scalar);
  * Returns
  * - The created matrix
  */
-HgMat4 hg_smat4(f32 scalar);
+inline HgMat4 hg_smat4(f32 scalar) {
+    return {
+        {scalar, 0.0f, 0.0f, 0.0f},
+        {0.0f, scalar, 0.0f, 0.0f},
+        {0.0f, 0.0f, scalar, 0.0f},
+        {0.0f, 0.0f, 0.0f, scalar},
+    };
+}
 
 /**
  * Creates a 3D vector from a 2D vector and 0 for the z component
@@ -341,7 +363,9 @@ HgMat4 hg_smat4(f32 scalar);
  * Returns
  * - The converted vector
  */
-HgVec3 hg_vec2to3(HgVec2 lhs);
+inline HgVec3 hg_vec2to3(HgVec2 lhs) {
+    return {lhs.x, lhs.y, 0.0f};
+}
 
 /**
  * Creates a 4D vector from a 2D vector and 0 for the z and w components
@@ -351,7 +375,9 @@ HgVec3 hg_vec2to3(HgVec2 lhs);
  * Returns
  * - The converted vector
  */
-HgVec4 hg_vec2to4(HgVec2 lhs);
+inline HgVec4 hg_vec2to4(HgVec2 lhs) {
+    return {lhs.x, lhs.y, 0.0f, 0.0f};
+}
 
 /**
  * Creates a 3D vector from a 3D vector and 0 for the w component
@@ -361,7 +387,9 @@ HgVec4 hg_vec2to4(HgVec2 lhs);
  * Returns
  * - The converted vector
  */
-HgVec4 hg_vec3to4(HgVec3 lhs);
+inline HgVec4 hg_vec3to4(HgVec3 lhs) {
+    return {lhs.x, lhs.y, lhs.z, 0.0f};
+}
 
 /**
  * Scales a 2x2 matrix to a 3x3 matrix with 1 on the diagonal
@@ -371,7 +399,13 @@ HgVec4 hg_vec3to4(HgVec3 lhs);
  * Returns
  * - The converted matrix
  */
-HgMat3 hg_mat2to3(HgMat2 lhs);
+inline HgMat3 hg_mat2to3(HgMat2 lhs) {
+    return {
+        {lhs.x.x, lhs.x.y, 0.0f},
+        {lhs.y.x, lhs.y.y, 0.0f},
+        {0.0f,    0.0f,    1.0f},
+    };
+}
 
 /**
  * Scales a 2x2 matrix to a 4x4 matrix with 1 on the diagonal
@@ -381,7 +415,14 @@ HgMat3 hg_mat2to3(HgMat2 lhs);
  * Returns
  * - The converted matrix
  */
-HgMat4 hg_mat2to4(HgMat2 lhs);
+inline HgMat4 hg_mat2to4(HgMat2 lhs) {
+    return {
+        {lhs.x.x, lhs.x.y, 0.0f, 0.0f},
+        {lhs.y.x, lhs.y.y, 0.0f, 0.0f},
+        {0.0f,    0.0f,    1.0f, 0.0f},
+        {0.0f,    0.0f,    0.0f, 1.0f},
+    };
+}
 
 /**
  * Scales a 3x3 matrix to a 4x4 matrix with 1 on the diagonal
@@ -391,7 +432,14 @@ HgMat4 hg_mat2to4(HgMat2 lhs);
  * Returns
  * - The converted matrix
  */
-HgMat4 hg_mat3to4(HgMat3 lhs);
+inline HgMat4 hg_mat3to4(HgMat3 lhs) {
+    return {
+        {lhs.x.x, lhs.x.y, lhs.x.z, 0.0f},
+        {lhs.y.x, lhs.y.y, lhs.y.z, 0.0f},
+        {lhs.z.x, lhs.z.y, lhs.z.z, 0.0f},
+        {0.0f,    0.0f,    0.0f,    1.0f},
+    };
+}
 
 /**
  * Adds two arbitrary size vectors
@@ -402,7 +450,14 @@ HgMat4 hg_mat3to4(HgMat3 lhs);
  * - lhs The left-hand side vector, must not be NULL
  * - rhs The right-hand side vector, must not be NULL
  */
-void hg_vadd(u32 size, f32* dst, f32* lhs, f32* rhs);
+inline void hg_vadd(u32 size, f32* dst, f32* lhs, f32* rhs) {
+    assert(dst != NULL);
+    assert(lhs != NULL);
+    assert(rhs != NULL);
+    for (u32 i = 0; i < size; ++i) {
+        dst[i] = lhs[i] + rhs[i];
+    }
+}
 
 /**
  * Adds two 2D vectors
@@ -413,7 +468,9 @@ void hg_vadd(u32 size, f32* dst, f32* lhs, f32* rhs);
  * Returns
  * - The added vector
  */
-HgVec2 hg_vadd2(HgVec2 lhs, HgVec2 rhs);
+inline HgVec2 hg_vadd2(HgVec2 lhs, HgVec2 rhs) {
+    return {lhs.x + rhs.x, lhs.y + rhs.y};
+}
 
 /**
  * Adds two 3D vectors
@@ -424,7 +481,9 @@ HgVec2 hg_vadd2(HgVec2 lhs, HgVec2 rhs);
  * Returns
  * - The added vector
  */
-HgVec3 hg_vadd3(HgVec3 lhs, HgVec3 rhs);
+inline HgVec3 hg_vadd3(HgVec3 lhs, HgVec3 rhs) {
+    return {lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z};
+}
 
 /**
  * Adds two 4D vectors
@@ -435,7 +494,9 @@ HgVec3 hg_vadd3(HgVec3 lhs, HgVec3 rhs);
  * Returns
  * - The added vector
  */
-HgVec4 hg_vadd4(HgVec4 lhs, HgVec4 rhs);
+inline HgVec4 hg_vadd4(HgVec4 lhs, HgVec4 rhs) {
+    return {lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z, lhs.w + rhs.w};
+}
 
 /**
  * Subtracts two arbitrary size vectors
@@ -446,7 +507,14 @@ HgVec4 hg_vadd4(HgVec4 lhs, HgVec4 rhs);
  * - lhs The left-hand side vector, must not be NULL
  * - rhs The right-hand side vector, must not be NULL
  */
-void hg_vsub(u32 size, f32* dst, f32* lhs, f32* rhs);
+inline void hg_vsub(u32 size, f32* dst, f32* lhs, f32* rhs) {
+    assert(dst != NULL);
+    assert(lhs != NULL);
+    assert(rhs != NULL);
+    for (u32 i = 0; i < size; ++i) {
+        dst[i] = lhs[i] - rhs[i];
+    }
+}
 
 /**
  * Subtracts two 2D vectors
@@ -457,7 +525,9 @@ void hg_vsub(u32 size, f32* dst, f32* lhs, f32* rhs);
  * Returns
  * - The subtracted vector
  */
-HgVec2 hg_vsub2(HgVec2 lhs, HgVec2 rhs);
+inline HgVec2 hg_vsub2(HgVec2 lhs, HgVec2 rhs) {
+    return {lhs.x - rhs.x, lhs.y - rhs.y};
+}
 
 /**
  * Subtracts two 3D vectors
@@ -468,7 +538,9 @@ HgVec2 hg_vsub2(HgVec2 lhs, HgVec2 rhs);
  * Returns
  * - The subtracted vector
  */
-HgVec3 hg_vsub3(HgVec3 lhs, HgVec3 rhs);
+inline HgVec3 hg_vsub3(HgVec3 lhs, HgVec3 rhs) {
+    return {lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z};
+}
 
 /**
  * Subtracts two 4D vectors
@@ -479,7 +551,9 @@ HgVec3 hg_vsub3(HgVec3 lhs, HgVec3 rhs);
  * Returns
  * - The subtracted vector
  */
-HgVec4 hg_vsub4(HgVec4 lhs, HgVec4 rhs);
+inline HgVec4 hg_vsub4(HgVec4 lhs, HgVec4 rhs) {
+    return {lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z, lhs.w - rhs.w};
+}
 
 /**
  * Multiplies pairwise two arbitrary size vectors
@@ -490,7 +564,14 @@ HgVec4 hg_vsub4(HgVec4 lhs, HgVec4 rhs);
  * - lhs The left-hand side vector, must not be NULL
  * - rhs The right-hand side vector, must not be NULL
  */
-void hg_vmul(u32 size, f32* dst, f32* lhs, f32* rhs);
+inline void hg_vmul(u32 size, f32* dst, f32* lhs, f32* rhs) {
+    assert(dst != NULL);
+    assert(lhs != NULL);
+    assert(rhs != NULL);
+    for (u32 i = 0; i < size; ++i) {
+        dst[i] = lhs[i] * rhs[i];
+    }
+}
 
 /**
  * Multiplies pairwise two 2D vectors
@@ -501,7 +582,9 @@ void hg_vmul(u32 size, f32* dst, f32* lhs, f32* rhs);
  * Returns
  * - The multiplied vector
  */
-HgVec2 hg_vmul2(HgVec2 lhs, HgVec2 rhs);
+inline HgVec2 hg_vmul2(HgVec2 lhs, HgVec2 rhs) {
+    return {lhs.x * rhs.x, lhs.y * rhs.y};
+}
 
 /**
  * Multiplies pairwise two 3D vectors
@@ -512,7 +595,9 @@ HgVec2 hg_vmul2(HgVec2 lhs, HgVec2 rhs);
  * Returns
  * - The multiplied vector
  */
-HgVec3 hg_vmul3(HgVec3 lhs, HgVec3 rhs);
+inline HgVec3 hg_vmul3(HgVec3 lhs, HgVec3 rhs) {
+    return {lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z};
+}
 
 /**
  * Multiplies pairwise two 4D vectors
@@ -523,7 +608,9 @@ HgVec3 hg_vmul3(HgVec3 lhs, HgVec3 rhs);
  * Returns
  * - The multiplied vector
  */
-HgVec4 hg_vmul4(HgVec4 lhs, HgVec4 rhs);
+inline HgVec4 hg_vmul4(HgVec4 lhs, HgVec4 rhs) {
+    return {lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z, lhs.w * rhs.w};
+}
 
 /**
  * Multiplies a scalar and a vector
@@ -534,7 +621,13 @@ HgVec4 hg_vmul4(HgVec4 lhs, HgVec4 rhs);
  * - scalar The scalar to multiply with
  * - vec The vector to multiply with, must not be NULL
  */
-void hg_svmul(u32 size, f32* dst, f32 scalar, f32* vec);
+inline void hg_svmul(u32 size, f32* dst, f32 scalar, f32* vec) {
+    assert(dst != NULL);
+    assert(vec != NULL);
+    for (u32 i = 0; i < size; ++i) {
+        dst[i] = scalar * vec[i];
+    }
+}
 
 /**
  * Multiplies a scalar and a 2D vector
@@ -545,7 +638,9 @@ void hg_svmul(u32 size, f32* dst, f32 scalar, f32* vec);
  * Returns
  * - The multiplied vector
  */
-HgVec2 hg_svmul2(f32 scalar, HgVec2 vec);
+inline HgVec2 hg_svmul2(f32 scalar, HgVec2 vec) {
+    return {scalar * vec.x, scalar * vec.y};
+}
 
 /**
  * Multiplies a scalar and a 3D vector
@@ -556,7 +651,9 @@ HgVec2 hg_svmul2(f32 scalar, HgVec2 vec);
  * Returns
  * - The multiplied vector
  */
-HgVec3 hg_svmul3(f32 scalar, HgVec3 vec);
+inline HgVec3 hg_svmul3(f32 scalar, HgVec3 vec) {
+    return {scalar * vec.x, scalar * vec.y, scalar * vec.z};
+}
 
 /**
  * Multiplies a scalar and a 4D vector
@@ -567,7 +664,9 @@ HgVec3 hg_svmul3(f32 scalar, HgVec3 vec);
  * Returns
  * - The multiplied vector
  */
-HgVec4 hg_svmul4(f32 scalar, HgVec4 vec);
+inline HgVec4 hg_svmul4(f32 scalar, HgVec4 vec) {
+    return {scalar * vec.x, scalar * vec.y, scalar * vec.z, scalar * vec.w};
+}
 
 /**
  * Divides pairwise two arbitrary size vectors
@@ -578,7 +677,14 @@ HgVec4 hg_svmul4(f32 scalar, HgVec4 vec);
  * - lhs The left-hand side vector, must not be NULL
  * - rhs The right-hand side vector, must not be NULL
  */
-void hg_vdiv(u32 size, f32* dst, f32* lhs, f32* rhs);
+inline void hg_vdiv(u32 size, f32* dst, f32* lhs, f32* rhs) {
+    assert(dst != NULL);
+    assert(lhs != NULL);
+    assert(rhs != NULL);
+    for (u32 i = 0; i < size; ++i) {
+        dst[i] = lhs[i] / rhs[i];
+    }
+}
 
 /**
  * Divides pairwise two 2D vectors
@@ -589,7 +695,9 @@ void hg_vdiv(u32 size, f32* dst, f32* lhs, f32* rhs);
  * Returns
  * - The divided vector
  */
-HgVec2 hg_vdiv2(HgVec2 lhs, HgVec2 rhs);
+inline HgVec2 hg_vdiv2(HgVec2 lhs, HgVec2 rhs) {
+    return {lhs.x / rhs.x, lhs.y / rhs.y};
+}
 
 /**
  * Divides pairwise two 3D vectors
@@ -600,7 +708,9 @@ HgVec2 hg_vdiv2(HgVec2 lhs, HgVec2 rhs);
  * Returns
  * - The divided vector
  */
-HgVec3 hg_vdiv3(HgVec3 lhs, HgVec3 rhs);
+inline HgVec3 hg_vdiv3(HgVec3 lhs, HgVec3 rhs) {
+    return {lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z};
+}
 
 /**
  * Divides pairwise two 4D vectors
@@ -611,7 +721,9 @@ HgVec3 hg_vdiv3(HgVec3 lhs, HgVec3 rhs);
  * Returns
  * - The divided vector
  */
-HgVec4 hg_vdiv4(HgVec4 lhs, HgVec4 rhs);
+inline HgVec4 hg_vdiv4(HgVec4 lhs, HgVec4 rhs) {
+    return {lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z, lhs.w / rhs.w};
+}
 
 /**
  * Divides a vector by a scalar
@@ -622,7 +734,13 @@ HgVec4 hg_vdiv4(HgVec4 lhs, HgVec4 rhs);
  * - scalar The scalar to divide by
  * - vec The vector to divide, must not be NULL
  */
-void hg_svdiv(u32 size, f32* dst, f32 scalar, f32* vec);
+inline void hg_svdiv(u32 size, f32* dst, f32 scalar, f32* vec) {
+    assert(dst != NULL);
+    assert(vec != NULL);
+    for (u32 i = 0; i < size; ++i) {
+        dst[i] = scalar / vec[i];
+    }
+}
 
 /**
  * Divides a 2D vector by a scalar
@@ -633,7 +751,9 @@ void hg_svdiv(u32 size, f32* dst, f32 scalar, f32* vec);
  * Returns
  * - The divided vector
  */
-HgVec2 hg_svdiv2(f32 scalar, HgVec2 vec);
+inline HgVec2 hg_svdiv2(f32 scalar, HgVec2 vec) {
+    return {scalar / vec.x, scalar / vec.y};
+}
 
 /**
  * Divides a 3D vector by a scalar
@@ -644,7 +764,9 @@ HgVec2 hg_svdiv2(f32 scalar, HgVec2 vec);
  * Returns
  * - The divided vector
  */
-HgVec3 hg_svdiv3(f32 scalar, HgVec3 vec);
+inline HgVec3 hg_svdiv3(f32 scalar, HgVec3 vec) {
+    return {scalar / vec.x, scalar / vec.y, scalar / vec.z};
+}
 
 /**
  * Divides a 4D vector by a scalar
@@ -655,7 +777,9 @@ HgVec3 hg_svdiv3(f32 scalar, HgVec3 vec);
  * Returns
  * - The divided vector
  */
-HgVec4 hg_svdiv4(f32 scalar, HgVec4 vec);
+inline HgVec4 hg_svdiv4(f32 scalar, HgVec4 vec) {
+    return {scalar / vec.x, scalar / vec.y, scalar / vec.z, scalar / vec.w};
+}
 
 /**
  * Computes the dot product of two arbitrary size vectors
@@ -666,7 +790,15 @@ HgVec4 hg_svdiv4(f32 scalar, HgVec4 vec);
  * - lhs The left-hand side vector, must not be NULL
  * - rhs The right-hand side vector, must not be NULL
  */
-void hg_vdot(u32 size, f32* dst, f32* lhs, f32* rhs);
+inline void hg_vdot(u32 size, f32* dst, f32* lhs, f32* rhs) {
+    assert(dst != NULL);
+    assert(lhs != NULL);
+    assert(rhs != NULL);
+    *dst = 0.0f;
+    for (u32 i = 0; i < size; ++i) {
+        *dst += lhs[i] * rhs[i];
+    }
+}
 
 /**
  * Computes the dot product of two 2D vectors
@@ -677,7 +809,9 @@ void hg_vdot(u32 size, f32* dst, f32* lhs, f32* rhs);
  * Returns
  * - The dot product
  */
-f32 hg_vdot2(HgVec2 lhs, HgVec2 rhs);
+inline float hg_vdot2(HgVec2 lhs, HgVec2 rhs) {
+    return lhs.x * rhs.x + lhs.y * rhs.y;
+}
 
 /**
  * Computes the dot product of two 3D vectors
@@ -688,7 +822,9 @@ f32 hg_vdot2(HgVec2 lhs, HgVec2 rhs);
  * Returns
  * - The dot product
  */
-f32 hg_vdot3(HgVec3 lhs, HgVec3 rhs);
+inline float hg_vdot3(HgVec3 lhs, HgVec3 rhs) {
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
+}
 
 /**
  * Computes the dot product of two 4D vectors
@@ -699,7 +835,9 @@ f32 hg_vdot3(HgVec3 lhs, HgVec3 rhs);
  * Returns
  * - The dot product
  */
-f32 hg_vdot4(HgVec4 lhs, HgVec4 rhs);
+inline float hg_vdot4(HgVec4 lhs, HgVec4 rhs) {
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z + lhs.w * rhs.w;
+}
 
 /**
  * Computes the length of a vector
@@ -709,7 +847,12 @@ f32 hg_vdot4(HgVec4 lhs, HgVec4 rhs);
  * - dst The destination vector, must not be NULL
  * - vec The vector to compute the length of, must not be NULL
  */
-void hg_vlen(u32 size, f32* dst, f32* vec);
+inline void hg_vlen(u32 size, f32* dst, f32* vec) {
+    assert(dst != NULL);
+    assert(vec != NULL);
+    hg_vdot(size, dst, vec, vec);
+    *dst = sqrtf(*dst);
+}
 
 /**
  * Computes the length of a 2D vector
@@ -719,7 +862,9 @@ void hg_vlen(u32 size, f32* dst, f32* vec);
  * Returns
  * - The length of the vector
  */
-f32 hg_vlen2(HgVec2 vec);
+inline float hg_vlen2(HgVec2 vec) {
+    return sqrtf(hg_vdot2(vec, vec));
+}
 
 /**
  * Computes the length of a 3D vector
@@ -729,7 +874,9 @@ f32 hg_vlen2(HgVec2 vec);
  * Returns
  * - The length of the vector
  */
-f32 hg_vlen3(HgVec3 vec);
+inline float hg_vlen3(HgVec3 vec) {
+    return sqrtf(hg_vdot3(vec, vec));
+}
 
 /**
  * Computes the length of a 4D vector
@@ -739,7 +886,9 @@ f32 hg_vlen3(HgVec3 vec);
  * Returns
  * - The length of the vector
  */
-f32 hg_vlen4(HgVec4 vec);
+inline float hg_vlen4(HgVec4 vec) {
+    return sqrtf(hg_vdot4(vec, vec));
+}
 
 /**
  * Normalizes a vector
@@ -749,8 +898,15 @@ f32 hg_vlen4(HgVec4 vec);
  * - dst The destination vector, must not be NULL
  * - vec The vector to normalize, must not be NULL
  */
-void hg_vnorm(u32 size, f32* dst, f32* vec);
-
+inline void hg_vnorm(u32 size, f32* dst, f32* vec) {
+    assert(dst != NULL);
+    assert(vec != NULL);
+    f32 len;
+    hg_vlen(size, &len, vec);
+    for (u32 i = 0; i < size; ++i) {
+        dst[i] = vec[i] / len;
+    }
+}
 
 /**
  * Normalizes a 2D vector
@@ -760,7 +916,10 @@ void hg_vnorm(u32 size, f32* dst, f32* vec);
  * Returns
  * - The normalized vector
  */
-HgVec2 hg_vnorm2(HgVec2 vec);
+inline HgVec2 hg_vnorm2(HgVec2 vec) {
+    f32 len = hg_vlen2(vec);
+    return {vec.x / len, vec.y / len};
+}
 
 /**
  * Normalizes a 3D vector
@@ -770,7 +929,10 @@ HgVec2 hg_vnorm2(HgVec2 vec);
  * Returns
  * - The normalized vector
  */
-HgVec3 hg_vnorm3(HgVec3 vec);
+inline HgVec3 hg_vnorm3(HgVec3 vec) {
+    f32 len = hg_vlen3(vec);
+    return {vec.x / len, vec.y / len, vec.z / len};
+}
 
 /**
  * Normalizes a 4D vector
@@ -780,7 +942,10 @@ HgVec3 hg_vnorm3(HgVec3 vec);
  * Returns
  * - The normalized vector
  */
-HgVec4 hg_vnorm4(HgVec4 vec);
+inline HgVec4 hg_vnorm4(HgVec4 vec) {
+    f32 len = hg_vlen4(vec);
+    return {vec.x / len, vec.y / len, vec.z / len, vec.w / len};
+}
 
 /**
  * Computes the cross product of two 3D vectors
@@ -790,7 +955,14 @@ HgVec4 hg_vnorm4(HgVec4 vec);
  * - lhs The left-hand side vector, must not be NULL
  * - rhs The right-hand side vector, must not be NULL
  */
-void hg_vcross(f32* dst, f32* lhs, f32* rhs);
+inline void hg_vcross(f32* dst, f32* lhs, f32* rhs) {
+    assert(dst != NULL);
+    assert(lhs != NULL);
+    assert(rhs != NULL);
+    dst[0] = lhs[1] * rhs[2] - lhs[2] * rhs[1];
+    dst[1] = lhs[2] * rhs[0] - lhs[0] * rhs[2];
+    dst[2] = lhs[0] * rhs[1] - lhs[1] * rhs[0];
+}
 
 /**
  * Computes the cross product of two 3D vectors
@@ -801,7 +973,9 @@ void hg_vcross(f32* dst, f32* lhs, f32* rhs);
  * Returns
  * - The cross product
  */
-HgVec3 hg_vcross3(HgVec3 lhs, HgVec3 rhs);
+inline HgVec3 hg_vcross3(HgVec3 lhs, HgVec3 rhs) {
+    return {lhs.y * rhs.z - lhs.z * rhs.y, lhs.z * rhs.x - lhs.x * rhs.z, lhs.x * rhs.y - lhs.y * rhs.x};
+}
 
 /**
  * Adds two arbitrary size matrices
@@ -813,7 +987,16 @@ HgVec3 hg_vcross3(HgVec3 lhs, HgVec3 rhs);
  * - lhs The left-hand side matrix, must not be NULL
  * - rhs The right-hand side matrix, must not be NULL
  */
-void hg_madd(u32 width, u32 height, f32* dst, f32* lhs, f32* rhs);
+inline void hg_madd(u32 width, u32 height, f32* dst, f32* lhs, f32* rhs) {
+    assert(dst != NULL);
+    assert(lhs != NULL);
+    assert(rhs != NULL);
+    for (u32 i = 0; i < width; ++i) {
+        for (u32 j = 0; j < height; ++j) {
+            dst[i * width + j] = lhs[i * width + j] + rhs[i * width + j];
+        }
+    }
+}
 
 /**
  * Adds two 2x2 matrices
@@ -824,7 +1007,11 @@ void hg_madd(u32 width, u32 height, f32* dst, f32* lhs, f32* rhs);
  * Returns
  * - The added matrix
  */
-HgMat2 hg_madd2(HgMat2 lhs, HgMat2 rhs);
+inline HgMat2 hg_madd2(HgMat2 lhs, HgMat2 rhs) {
+    HgMat2 result;
+    hg_madd(2, 2, (f32*)&result, (f32*)&lhs, (f32*)&rhs);
+    return result;
+}
 
 /**
  * Adds two 3x3 matrices
@@ -835,7 +1022,11 @@ HgMat2 hg_madd2(HgMat2 lhs, HgMat2 rhs);
  * Returns
  * - The added matrix
  */
-HgMat3 hg_madd3(HgMat3 lhs, HgMat3 rhs);
+inline HgMat3 hg_madd3(HgMat3 lhs, HgMat3 rhs) {
+    HgMat3 result;
+    hg_madd(3, 3, (f32*)&result, (f32*)&lhs, (f32*)&rhs);
+    return result;
+}
 
 /**
  * Adds two 4x4 matrices
@@ -846,7 +1037,11 @@ HgMat3 hg_madd3(HgMat3 lhs, HgMat3 rhs);
  * Returns
  * - The added matrix
  */
-HgMat4 hg_madd4(HgMat4 lhs, HgMat4 rhs);
+inline HgMat4 hg_madd4(HgMat4 lhs, HgMat4 rhs) {
+    HgMat4 result;
+    hg_madd(4, 4, (f32*)&result, (f32*)&lhs, (f32*)&rhs);
+    return result;
+}
 
 /**
  * Subtracts two arbitrary size matrices
@@ -858,7 +1053,16 @@ HgMat4 hg_madd4(HgMat4 lhs, HgMat4 rhs);
  * - lhs The left-hand side matrix, must not be NULL
  * - rhs The right-hand side matrix, must not be NULL
  */
-void hg_msub(u32 width, u32 height, f32* dst, f32* lhs, f32* rhs);
+inline void hg_msub(u32 width, u32 height, f32* dst, f32* lhs, f32* rhs) {
+    assert(dst != NULL);
+    assert(lhs != NULL);
+    assert(rhs != NULL);
+    for (u32 i = 0; i < width; ++i) {
+        for (u32 j = 0; j < height; ++j) {
+            dst[i * width + j] = lhs[i * width + j] - rhs[i * width + j];
+        }
+    }
+}
 
 /**
  * Subtracts two 2x2 matrices
@@ -869,7 +1073,11 @@ void hg_msub(u32 width, u32 height, f32* dst, f32* lhs, f32* rhs);
  * Returns
  * - The subtracted matrix
  */
-HgMat2 hg_msub2(HgMat2 lhs, HgMat2 rhs);
+inline HgMat2 hg_msub2(HgMat2 lhs, HgMat2 rhs) {
+    HgMat2 result;
+    hg_msub(2, 2, (f32*)&result, (f32*)&lhs, (f32*)&rhs);
+    return result;
+}
 
 /**
  * Subtracts two 3x3 matrices
@@ -880,8 +1088,11 @@ HgMat2 hg_msub2(HgMat2 lhs, HgMat2 rhs);
  * Returns
  * - The subtracted matrix
  */
-HgMat3 hg_msub3(HgMat3 lhs, HgMat3 rhs);
-
+inline HgMat3 hg_msub3(HgMat3 lhs, HgMat3 rhs) {
+    HgMat3 result;
+    hg_msub(3, 3, (f32*)&result, (f32*)&lhs, (f32*)&rhs);
+    return result;
+}
 
 /**
  * Subtracts two 4x4 matrices
@@ -892,7 +1103,11 @@ HgMat3 hg_msub3(HgMat3 lhs, HgMat3 rhs);
  * Returns
  * - The subtracted matrix
  */
-HgMat4 hg_msub4(HgMat4 lhs, HgMat4 rhs);
+inline HgMat4 hg_msub4(HgMat4 lhs, HgMat4 rhs) {
+    HgMat4 result;
+    hg_msub(4, 4, (f32*)&result, (f32*)&lhs, (f32*)&rhs);
+    return result;
+}
 
 /**
  * Multiplies two arbitrary size matrices
@@ -906,7 +1121,21 @@ HgMat4 hg_msub4(HgMat4 lhs, HgMat4 rhs);
  * - hr The height of the right-hand side matrix
  * - rhs The right-hand side matrix, must not be NULL
  */
-void hg_mmul(f32* dst, u32 wl, u32 hl, f32* lhs, u32 wr, u32 hr, f32* rhs);
+inline void hg_mmul(f32* dst, u32 wl, u32 hl, f32* lhs, u32 wr, u32 hr, f32* rhs) {
+    assert(hr == wl);
+    assert(dst != NULL);
+    assert(lhs != NULL);
+    assert(rhs != NULL);
+    (void)hr;
+    for (u32 i = 0; i < wl; ++i) {
+        for (u32 j = 0; j < wr; ++j) {
+            dst[i * wl + j] = 0.0f;
+            for (u32 k = 0; k < hl; ++k) {
+                dst[i * wl + j] += lhs[k * wl + j] * rhs[i * wr + k];
+            }
+        }
+    }
+}
 
 /**
  * Multiplies two 2x2 matrices
@@ -917,7 +1146,11 @@ void hg_mmul(f32* dst, u32 wl, u32 hl, f32* lhs, u32 wr, u32 hr, f32* rhs);
  * Returns
  * - The multiplied matrix
  */
-HgMat2 hg_mmul2(HgMat2 lhs, HgMat2 rhs);
+inline HgMat2 hg_mmul2(HgMat2 lhs, HgMat2 rhs) {
+    HgMat2 result;
+    hg_mmul((f32*)&result, 2, 2, (f32*)&lhs, 2, 2, (f32*)&rhs);
+    return result;
+}
 
 /**
  * Multiplies two 3x3 matrices
@@ -928,7 +1161,11 @@ HgMat2 hg_mmul2(HgMat2 lhs, HgMat2 rhs);
  * Returns
  * - The multiplied matrix
  */
-HgMat3 hg_mmul3(HgMat3 lhs, HgMat3 rhs);
+inline HgMat3 hg_mmul3(HgMat3 lhs, HgMat3 rhs) {
+    HgMat3 result;
+    hg_mmul((f32*)&result, 3, 3, (f32*)&lhs, 3, 3, (f32*)&rhs);
+    return result;
+}
 
 /**
  * Multiplies two 4x4 matrices
@@ -939,7 +1176,11 @@ HgMat3 hg_mmul3(HgMat3 lhs, HgMat3 rhs);
  * Returns
  * - The multiplied matrix
  */
-HgMat4 hg_mmul4(HgMat4 lhs, HgMat4 rhs);
+inline HgMat4 hg_mmul4(HgMat4 lhs, HgMat4 rhs) {
+    HgMat4 result;
+    hg_mmul((f32*)&result, 4, 4, (f32*)&lhs, 4, 4, (f32*)&rhs);
+    return result;
+}
 
 /**
  * Multiplies a matrix and a vector
@@ -951,7 +1192,17 @@ HgMat4 hg_mmul4(HgMat4 lhs, HgMat4 rhs);
  * - mat The matrix to multiply with, must not be NULL
  * - vec The vector to multiply with, must not be NULL
  */
-void hg_mvmul(u32 width, u32 height, f32* dst, f32* mat, f32* vec);
+inline void hg_mvmul(u32 width, u32 height, f32* dst, f32* mat, f32* vec) {
+    assert(dst != NULL);
+    assert(mat != NULL);
+    assert(vec != NULL);
+    for (u32 i = 0; i < height; ++i) {
+        dst[i] = 0.0f;
+        for (u32 j = 0; j < width; ++j) {
+            dst[i] += mat[j * width + i] * vec[j];
+        }
+    }
+}
 
 /**
  * Multiplies a 2x2 matrix and a 2D vector
@@ -962,7 +1213,11 @@ void hg_mvmul(u32 width, u32 height, f32* dst, f32* mat, f32* vec);
  * Returns
  * - The multiplied vector
  */
-HgVec2 hg_mvmul2(HgMat2 lhs, HgVec2 rhs);
+inline HgVec2 hg_mvmul2(HgMat2 lhs, HgVec2 rhs) {
+    HgVec2 result;
+    hg_mvmul(2, 2, (f32*)&result, (f32*)&lhs, (f32*)&rhs);
+    return result;
+}
 
 /**
  * Multiplies a 3x3 matrix and a 3D vector
@@ -973,7 +1228,11 @@ HgVec2 hg_mvmul2(HgMat2 lhs, HgVec2 rhs);
  * Returns
  * - The multiplied vector
  */
-HgVec3 hg_mvmul3(HgMat3 lhs, HgVec3 rhs);
+inline HgVec3 hg_mvmul3(HgMat3 lhs, HgVec3 rhs) {
+    HgVec3 result;
+    hg_mvmul(3, 3, (f32*)&result, (f32*)&lhs, (f32*)&rhs);
+    return result;
+}
 
 /**
  * Multiplies a 4x4 matrix and a 4D vector
@@ -984,7 +1243,11 @@ HgVec3 hg_mvmul3(HgMat3 lhs, HgVec3 rhs);
  * Returns
  * - The multiplied vector
  */
-HgVec4 hg_mvmul4(HgMat4 lhs, HgVec4 rhs);
+inline HgVec4 hg_mvmul4(HgMat4 lhs, HgVec4 rhs) {
+    HgVec4 result;
+    hg_mvmul(4, 4, (f32*)&result, (f32*)&lhs, (f32*)&rhs);
+    return result;
+}
 
 /**
  * Adds two complex numbers
@@ -995,7 +1258,9 @@ HgVec4 hg_mvmul4(HgMat4 lhs, HgVec4 rhs);
  * Returns
  * - The added complex number
  */
-HgComplex hg_cadd(HgComplex lhs, HgComplex rhs);
+inline HgComplex hg_cadd(HgComplex lhs, HgComplex rhs) {
+    return {lhs.r + rhs.r, lhs.i + rhs.i};
+}
 
 /**
  * Subtracts two complex numbers
@@ -1006,7 +1271,9 @@ HgComplex hg_cadd(HgComplex lhs, HgComplex rhs);
  * Returns
  * - The subtracted complex number
  */
-HgComplex hg_csub(HgComplex lhs, HgComplex rhs);
+inline HgComplex hg_csub(HgComplex lhs, HgComplex rhs) {
+    return {lhs.r - rhs.r, lhs.i - rhs.i};
+}
 
 /**
  * Multiplies two complex numbers
@@ -1017,7 +1284,9 @@ HgComplex hg_csub(HgComplex lhs, HgComplex rhs);
  * Returns
  * - The multiplied complex number
  */
-HgComplex hg_cmul(HgComplex lhs, HgComplex rhs);
+inline HgComplex hg_cmul(HgComplex lhs, HgComplex rhs) {
+    return {lhs.r * rhs.r - lhs.i * rhs.i, lhs.r * rhs.i + lhs.i * rhs.r};
+}
 
 /**
  * Adds two quaternions
@@ -1028,8 +1297,9 @@ HgComplex hg_cmul(HgComplex lhs, HgComplex rhs);
  * Returns
  * - The added quaternion
  */
-HgQuat hg_qadd(HgQuat lhs, HgQuat rhs);
-
+inline HgQuat hg_qadd(HgQuat lhs, HgQuat rhs) {
+    return {lhs.r + rhs.r, lhs.i + rhs.i, lhs.j + rhs.j, lhs.k + rhs.k};
+}
 /**
  * Subtracts two quaternions
  *
@@ -1039,7 +1309,9 @@ HgQuat hg_qadd(HgQuat lhs, HgQuat rhs);
  * Returns
  * - The subtracted quaternion
  */
-HgQuat hg_qsub(HgQuat lhs, HgQuat rhs);
+inline HgQuat hg_qsub(HgQuat lhs, HgQuat rhs) {
+    return {lhs.r - rhs.r, lhs.i - rhs.i, lhs.j - rhs.j, lhs.k - rhs.k};
+}
 
 /**
  * Multiplies two quaternions
@@ -1050,7 +1322,14 @@ HgQuat hg_qsub(HgQuat lhs, HgQuat rhs);
  * Returns
  * - The multiplied quaternion
  */
-HgQuat hg_qmul(HgQuat lhs, HgQuat rhs);
+inline HgQuat hg_qmul(HgQuat lhs, HgQuat rhs) {
+    return {
+        lhs.r * rhs.r - lhs.i * rhs.i - lhs.j * rhs.j - lhs.k * rhs.k,
+        lhs.r * rhs.i + lhs.i * rhs.r + lhs.j * rhs.k - lhs.k * rhs.j,
+        lhs.r * rhs.j - lhs.i * rhs.k + lhs.j * rhs.r + lhs.k * rhs.i,
+        lhs.r * rhs.k + lhs.i * rhs.j - lhs.j * rhs.i + lhs.k * rhs.r,
+    };
+}
 
 /**
  * Computes the conjugate of a quaternion
@@ -1060,7 +1339,9 @@ HgQuat hg_qmul(HgQuat lhs, HgQuat rhs);
  * Returns
  * - The conjugate of the quaternion
  */
-HgQuat hg_qconj(HgQuat quat);
+inline HgQuat hg_qconj(HgQuat quat) {
+    return {quat.r, -quat.i, -quat.j, -quat.k};
+}
 
 /**
  * Creates a rotation quaternion from an axis and angle
@@ -1071,7 +1352,16 @@ HgQuat hg_qconj(HgQuat quat);
  * Returns
  * - The created quaternion
  */
-HgQuat hg_axis_angle(HgVec3 axis, f32 angle);
+inline HgQuat hg_axis_angle(HgVec3 axis, f32 angle) {
+    f32 half_angle = angle / 2.0f;
+    f32 sin_half_angle = sinf(half_angle);
+    return {
+        cosf(half_angle),
+        axis.x * sin_half_angle,
+        axis.y * sin_half_angle,
+        axis.z * sin_half_angle,
+    };
+}
 
 /**
  * Rotates a 3D vector using a quaternion
@@ -1082,7 +1372,10 @@ HgQuat hg_axis_angle(HgVec3 axis, f32 angle);
  * Returns
  * - The rotated vector
  */
-HgVec3 hg_rotate_vec3(HgQuat lhs, HgVec3 rhs);
+inline HgVec3 hg_rotate_vec3(HgQuat lhs, HgVec3 rhs) {
+    HgQuat q = hg_qmul(lhs, hg_qmul({0.0f, rhs.x, rhs.y, rhs.z}, hg_qconj(lhs)));
+    return {q.i, q.j, q.k};
+}
 
 /**
  * Rotates a 3x3 matrix using a quaternion
@@ -1093,7 +1386,13 @@ HgVec3 hg_rotate_vec3(HgQuat lhs, HgVec3 rhs);
  * Returns
  * - The rotated matrix
  */
-HgMat3 hg_rotate_mat3(HgQuat lhs, HgMat3 rhs);
+inline HgMat3 hg_rotate_mat3(HgQuat lhs, HgMat3 rhs) {
+    return {
+        hg_rotate_vec3(lhs, rhs.x),
+        hg_rotate_vec3(lhs, rhs.y),
+        hg_rotate_vec3(lhs, rhs.z),
+    };
+}
 
 /**
  * Creates a model matrix for 2D graphics
@@ -2996,9 +3295,5 @@ void hg_pipeline_sprite_draw(
     VkCommandBuffer cmd,
     HgPipelineSpriteTexture *texture,
     HgPipelineSpritePush *push_data);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif // HURDYGURDY_H

@@ -4,7 +4,7 @@ setlocal enabledelayedexpansion
 set SRC_DIR=.
 set BUILD_DIR=build
 
-set STD=/std:c11
+set STD=/std:c++17
 set WARNINGS=/W4 /WX
 set CONFIG=/nologo /Zi /Od
 
@@ -51,7 +51,7 @@ cl /c "%SRC_DIR%\src\hurdygurdy.c" ^
 cl /c "%SRC_DIR%\src\vk_mem_alloc.cpp" ^
     /Fd:"%BUILD_DIR%\vk_mem_alloc.pdb" ^
     /Fo:"%BUILD_DIR%\vk_mem_alloc.obj" ^
-    /std:c++17 %CONFIG% %INCLUDES%
+    %STD% %CONFIG% %INCLUDES%
 
 lib /nologo /OUT:"%BUILD_DIR%\hurdygurdy.lib" "%BUILD_DIR%\hurdygurdy.obj" "%BUILD_DIR%\vk_mem_alloc.obj"
 

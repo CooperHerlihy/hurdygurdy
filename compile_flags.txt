@@ -1,9 +1,11 @@
--std=c11
+-std=c++17
 -Wall
 -Wextra
 -Wconversion
 -Wshadow
 -pedantic
+-fno-exceptions
+-fno-rtti
 -Iinclude
 -Ivendor/libX11/include
 -Ibuild/shaders
