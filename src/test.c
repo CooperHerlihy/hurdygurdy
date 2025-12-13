@@ -74,15 +74,14 @@ int main(void) {
         hg_ecs_destroy(&ecs);
     }
 
-    HgPlatform *platform = hg_platform_create();
-    HgWindow *window = hg_window_create(platform, &(HgWindowConfig){
+    hg_init();
+
+    HgWindow *window = hg_window_create(&(HgWindowConfig){
         .title = "Hg Test",
         .windowed = true,
         .width = 800,
         .height = 600,
     });
-
-    hg_vk_load();
 
     VkInstance instance = hg_vk_create_instance("HurdyGurdy Test");
     hg_debug_mode(VkDebugUtilsMessengerEXT debug_messenger = hg_vk_create_debug_messenger(instance));
@@ -105,7 +104,7 @@ int main(void) {
     VkCommandPool cmd_pool;
     vkCreateCommandPool(device.handle, &cmd_pool_info, NULL, &cmd_pool);
 
-    VkSurfaceKHR surface = hg_vk_create_surface(instance, platform, window);
+    VkSurfaceKHR surface = hg_vk_create_surface(instance, window);
     HgSwapchainData swapchain = hg_vk_create_swapchain(device.handle, device.gpu, NULL, surface,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_PRESENT_MODE_FIFO_KHR);
 
@@ -178,7 +177,7 @@ int main(void) {
             cpu_time = 0.0;
         }
 
-        hg_window_process_events(platform, &window, 1);
+        hg_window_process_events(&window, 1);
         if (hg_window_was_closed(window) || hg_window_is_key_down(window, HG_KEY_ESCAPE))
             break;
 
@@ -329,8 +328,9 @@ int main(void) {
     hg_debug_mode(vkDestroyDebugUtilsMessengerEXT(instance, debug_messenger, NULL));
     vkDestroyInstance(instance, NULL);
 
-    hg_window_destroy(platform, window);
-    hg_platform_destroy(platform);
+    hg_window_destroy(window);
+
+    hg_exit();
 
     hg_info("Tests complete\n");
 }

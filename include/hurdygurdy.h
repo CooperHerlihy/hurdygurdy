@@ -49,6 +49,20 @@ extern "C" {
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
 
+/**
+ * Initializes the HurdyGurdy library
+ *
+ * Run this function before any Vulkan, windowing, or audio functions
+ *
+ * Note, calls hg_vk_load
+ */
+void hg_init(void);
+
+/**
+ * Shuts down the HurdyGurdy library
+ */
+void hg_exit(void);
+
 typedef int8_t i8;
 typedef int16_t i16;
 typedef int32_t i32;
@@ -1695,27 +1709,6 @@ bool hg_file_save_binary(const u8* data, usize size, const char *path);
 // thread pool : TODO
 
 /**
- * Platform specific internal resources
- */
-typedef struct HgPlatform HgPlatform;
-
-/**
- * Creates platform specific internal resources for audio, window, etc.
- *
- * Returns
- * - An opaque pointer to the platform's resources, will never be NULL
- */
-HgPlatform *hg_platform_create(void);
-
-/**
- * Destroys the platform specific internal resources
- *
- * Parameters
- * - platform The platform resources
- */
-void hg_platform_destroy(HgPlatform *platform);
-
-/**
  * A key on the keyboard or button on the mouse
  */
 typedef enum HgKey {
@@ -1871,7 +1864,7 @@ typedef struct HgWindowConfig {
  * Returns
  * - The created window, will never be NULL
  */
-HgWindow *hg_window_create(const HgPlatform *platform, const HgWindowConfig *config);
+HgWindow *hg_window_create(const HgWindowConfig *config);
 
 /**
  * Destroys a window
@@ -1880,7 +1873,7 @@ HgWindow *hg_window_create(const HgPlatform *platform, const HgWindowConfig *con
  * - platform The platform resources, must not be NULL
  * - window The window to destroy, noop if NULL
  */
-void hg_window_destroy(const HgPlatform *platform, HgWindow *window);
+void hg_window_destroy(HgWindow *window);
 
 /**
  * Sets the windows icons : TODO
@@ -1892,7 +1885,7 @@ void hg_window_destroy(const HgPlatform *platform, HgWindow *window);
  * - width The width in pixels of the icon
  * - height The height in pixels of the icon
  */
-void hg_window_set_icon(const HgPlatform *platform, HgWindow *window, u32 *icon_data, u32 width, u32 height);
+void hg_window_set_icon(HgWindow *window, u32 *icon_data, u32 width, u32 height);
 
 /**
  * Gets whether the window is fullscreen or not : TODO
@@ -1903,7 +1896,7 @@ void hg_window_set_icon(const HgPlatform *platform, HgWindow *window, u32 *icon_
  * Returns
  * - Whether the window is fullscreen
  */
-bool hg_window_get_fullscreen(const HgPlatform *platform, HgWindow *window);
+bool hg_window_get_fullscreen(HgWindow *window);
 
 /**
  * Sets the window to fullscreen of windowed mode : TODO
@@ -1913,7 +1906,7 @@ bool hg_window_get_fullscreen(const HgPlatform *platform, HgWindow *window);
  * - window The window to set, must not be NULL
  * - fullscreen Whether to set fullscreen, or set windowed
  */
-void hg_window_set_fullscreen(const HgPlatform *platform, HgWindow *window, bool fullscreen);
+void hg_window_set_fullscreen(HgWindow *window, bool fullscreen);
 
 /**
  * The builtin cursor images
@@ -1930,12 +1923,12 @@ typedef enum HgCursor {
 /**
  * Sets the window's cursor to a platform defined icon : TODO
  */
-void hg_window_set_cursor(const HgPlatform *platform, HgWindow *window, HgCursor cursor);
+void hg_window_set_cursor(HgWindow *window, HgCursor cursor);
 
 /**
  * Sets the window's cursor to a custom image : TODO
  */
-void hg_window_set_cursor_image(const HgPlatform *platform, HgWindow *window, u32 *data, u32 width, u32 height);
+void hg_window_set_cursor_image(HgWindow *window, u32 *data, u32 width, u32 height);
 
 /**
  * Create a Vulkan surface for the window, according to the platform
@@ -1947,10 +1940,7 @@ void hg_window_set_cursor_image(const HgPlatform *platform, HgWindow *window, u3
  * Returns
  * - The created Vulkan surface, will never be NULL
  */
-VkSurfaceKHR hg_vk_create_surface(
-    VkInstance instance,
-    const HgPlatform *platform,
-    const HgWindow *window);
+VkSurfaceKHR hg_vk_create_surface(VkInstance instance, const HgWindow *window);
 
 /**
  * Processes all events since the last call to process events or startup
@@ -1964,7 +1954,7 @@ VkSurfaceKHR hg_vk_create_surface(
  * - windows All open windows
  * - window_count The number of windows
  */
-void hg_window_process_events(const HgPlatform *platform, HgWindow **windows, u32 window_count);
+void hg_window_process_events(HgWindow **windows, u32 window_count);
 
 /**
  * Checks if the window was closed via close button or window manager

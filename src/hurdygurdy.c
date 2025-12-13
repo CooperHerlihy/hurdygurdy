@@ -2990,9 +2990,9 @@ KeySym XLookupKeysym(XKeyEvent *key_event, int index) {
     = dlsym(hg_internal_libx11, #name); \
     if (hg_internal_x11_funcs. name == NULL) { hg_error("Could not load Xlib function: \n" #name); }
 
-HgPlatform *hg_platform_create(void) {
-    HgPlatform *platform = NULL;
+Display *hg_internal_x11_display = NULL;
 
+static void hg_internal_platform_init(void) {
     if (hg_internal_libx11 == NULL) {
         hg_internal_libx11 = dlopen("libX11.so.6", RTLD_LAZY);
         if (hg_internal_libx11 == NULL)
@@ -3013,15 +3013,13 @@ HgPlatform *hg_platform_create(void) {
         HG_LOAD_X11_FUNC(XLookupKeysym);
     }
 
-    platform = (HgPlatform *)XOpenDisplay(NULL);
-    if (platform == NULL)
+    hg_internal_x11_display = XOpenDisplay(NULL);
+    if (hg_internal_x11_display == NULL)
         hg_error("Could not open X display\n");
-
-    return platform;
 }
 
-void hg_platform_destroy(HgPlatform *platform) {
-    XCloseDisplay((Display *)platform);
+static void hg_internal_platform_exit(void) {
+    XCloseDisplay(hg_internal_x11_display);
 }
 
 static Window hg_internal_create_x11_window(
@@ -3128,14 +3126,13 @@ struct HgWindow {
     Atom delete_atom;
 };
 
-HgWindow *hg_window_create(const HgPlatform *platform, const HgWindowConfig *config) {
-    assert(platform != NULL);
+HgWindow *hg_window_create(const HgWindowConfig *config) {
     assert(config != NULL);
 
     u32 width = config->windowed ? config->width
-        : (u32)DisplayWidth((Display *)platform, DefaultScreen((Display *)platform));
+        : (u32)DisplayWidth(hg_internal_x11_display, DefaultScreen(hg_internal_x11_display));
     u32 height = config->windowed ? config->height
-        : (u32)DisplayHeight((Display *)platform, DefaultScreen((Display *)platform));
+        : (u32)DisplayHeight(hg_internal_x11_display, DefaultScreen(hg_internal_x11_display));
 
     HgWindow *window = hg_alloc(hg_persistent_allocator(), sizeof(*window), 16);
     window->input = (HgWindowInput){
@@ -3143,45 +3140,39 @@ HgWindow *hg_window_create(const HgPlatform *platform, const HgWindowConfig *con
         .height = height,
     };
 
-    window->x11_window = hg_internal_create_x11_window((Display *)platform, width, height, config->title);
+    window->x11_window = hg_internal_create_x11_window(hg_internal_x11_display, width, height, config->title);
 
-    window->delete_atom = hg_internal_set_delete_behavior((Display *)platform, window->x11_window);
+    window->delete_atom = hg_internal_set_delete_behavior(hg_internal_x11_display, window->x11_window);
 
     if (!config->windowed)
-        hg_internal_set_fullscreen((Display *)platform, window->x11_window);
+        hg_internal_set_fullscreen(hg_internal_x11_display, window->x11_window);
 
-    int flush_result = XFlush((Display *)platform);
+    int flush_result = XFlush(hg_internal_x11_display);
     if (flush_result == 0)
         hg_error("X11 could not flush window\n");
 
     return window;
 }
 
-void hg_window_destroy(const HgPlatform *platform, HgWindow *window) {
-    assert(platform != NULL);
+void hg_window_destroy(HgWindow *window) {
     if (window != NULL)
-        XDestroyWindow((Display *)platform, window->x11_window);
-    XFlush((Display *)platform);
+        XDestroyWindow(hg_internal_x11_display, window->x11_window);
+    XFlush(hg_internal_x11_display);
     hg_std_free(NULL, window, sizeof(*window), 16);
 }
 
-void hg_window_set_icon(const HgPlatform *platform, HgWindow *window, u32 *icon_data, u32 width, u32 height);
+void hg_window_set_icon(HgWindow *window, u32 *icon_data, u32 width, u32 height);
 
-bool hg_window_get_fullscreen(const HgPlatform *platform, HgWindow *window);
+bool hg_window_get_fullscreen(HgWindow *window);
 
-void hg_window_set_fullscreen(const HgPlatform *platform, HgWindow *window, bool fullscreen);
+void hg_window_set_fullscreen(HgWindow *window, bool fullscreen);
 
-void hg_window_set_cursor(const HgPlatform *platform, HgWindow *window, HgCursor cursor);
+void hg_window_set_cursor(HgWindow *window, HgCursor cursor);
 
-void hg_window_set_cursor_image(const HgPlatform *platform, HgWindow *window, u32 *data, u32 width, u32 height);
+void hg_window_set_cursor_image(HgWindow *window, u32 *data, u32 width, u32 height);
 
-VkSurfaceKHR hg_vk_create_surface(
-    VkInstance instance,
-    const HgPlatform *platform,
-    const HgWindow *window
-) {
+VkSurfaceKHR hg_vk_create_surface(VkInstance instance, const HgWindow *window) {
     assert(instance != NULL);
-    assert(platform != NULL);
     assert(window != NULL);
 
     PFN_vkCreateXlibSurfaceKHR pfn_vkCreateXlibSurfaceKHR
@@ -3191,7 +3182,7 @@ VkSurfaceKHR hg_vk_create_surface(
 
     VkXlibSurfaceCreateInfoKHR info = {
         .sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR,
-        .dpy = (Display *)platform,
+        .dpy = hg_internal_x11_display,
         .window = window->x11_window,
     };
     VkSurfaceKHR surface = NULL;
@@ -3202,8 +3193,7 @@ VkSurfaceKHR hg_vk_create_surface(
     return surface;
 }
 
-void hg_window_process_events(const HgPlatform *platform, HgWindow **windows, u32 window_count) {
-    assert(platform != NULL);
+void hg_window_process_events(HgWindow **windows, u32 window_count) {
     assert(windows != NULL);
     assert(window_count > 0);
 
@@ -3220,9 +3210,9 @@ void hg_window_process_events(const HgPlatform *platform, HgWindow **windows, u3
     f64 old_mouse_pos_x = window->input.mouse_pos_x;
     f64 old_mouse_pos_y = window->input.mouse_pos_y;
 
-    while (XPending((Display *)platform)) {
+    while (XPending(hg_internal_x11_display)) {
         XEvent event;
-        int event_result = XNextEvent((Display *)platform, &event);
+        int event_result = XNextEvent(hg_internal_x11_display, &event);
         if (event_result != 0)
             hg_error("X11 could not get next event\n");
 
@@ -3642,12 +3632,13 @@ void hg_window_process_events(const HgPlatform *platform, HgWindow **windows, u3
 #include <windows.h>
 #include <vulkan/vulkan_win32.h>
 
-HgPlatform *hg_platform_create(void) {
-    return (HgPlatform *)GetModuleHandle(NULL);
+HINSTANCE hg_internal_win32_instance = NULL;
+
+void hg_internal_platform_init(void) {
+    hg_internal_win32_instance = GetModuleHandle(NULL);
 }
 
-void hg_platform_destroy(HgPlatform *platform) {
-    (void)platform;
+void hg_internal_platform_exit(void) {
 }
 
 struct HgWindow {
@@ -4002,7 +3993,7 @@ static LRESULT CALLBACK hg_internal_window_callback(HWND hwnd, UINT msg, WPARAM 
     return DefWindowProcA(hwnd, msg, wparam, lparam);
 }
 
-HgWindow *hg_window_create(const HgPlatform *platform, const HgWindowConfig *config) {
+HgWindow *hg_window_create(const HgWindowConfig *config) {
     const char *title = config->title != NULL ? config->title : "Hurdy Gurdy";
 
     HgWindow *window = hg_alloc(hg_persistent_allocator(), sizeof(*window), 16);
@@ -4012,7 +4003,7 @@ HgWindow *hg_window_create(const HgPlatform *platform, const HgWindowConfig *con
     };
 
     WNDCLASSA window_class = {
-        .hInstance = (HINSTANCE)platform,
+        .hInstance = hg_internal_win32_instance,
             .hIcon = LoadIcon(NULL, IDI_APPLICATION),
             .hCursor = LoadCursor(NULL, IDC_ARROW),
             .lpszClassName = title,
@@ -4033,7 +4024,7 @@ HgWindow *hg_window_create(const HgPlatform *platform, const HgWindowConfig *con
             window->input.height,
             NULL,
             NULL,
-            (HINSTANCE)platform,
+            hg_internal_win32_instance,
             window
         );
     } else {
@@ -4050,7 +4041,7 @@ HgWindow *hg_window_create(const HgPlatform *platform, const HgWindowConfig *con
             window->input.height,
             NULL,
             NULL,
-            (HINSTANCE)platform,
+            hg_internal_win32_instance,
             window
         );
     }
@@ -4061,29 +4052,23 @@ HgWindow *hg_window_create(const HgPlatform *platform, const HgWindowConfig *con
     return window;
 }
 
-void hg_window_destroy(const HgPlatform *platform, HgWindow *window) {
-    (void)platform;
+void hg_window_destroy(HgWindow *window) {
     if (window != NULL)
         DestroyWindow(window->hwnd);
 }
 
-void hg_window_set_icon(const HgPlatform *platform, HgWindow *window, u32 *icon_data, u32 width, u32 height);
+void hg_window_set_icon(HgWindow *window, u32 *icon_data, u32 width, u32 height);
 
-bool hg_window_get_fullscreen(const HgPlatform *platform, HgWindow *window);
+bool hg_window_get_fullscreen(HgWindow *window);
 
-void hg_window_set_fullscreen(const HgPlatform *platform, HgWindow *window, bool fullscreen);
+void hg_window_set_fullscreen(HgWindow *window, bool fullscreen);
 
-void hg_window_set_cursor(const HgPlatform *platform, HgWindow *window, HgCursor cursor);
+void hg_window_set_cursor(HgWindow *window, HgCursor cursor);
 
-void hg_window_set_cursor_image(const HgPlatform *platform, HgWindow *window, u32 *data, u32 width, u32 height);
+void hg_window_set_cursor_image(HgWindow *window, u32 *data, u32 width, u32 height);
 
-VkSurfaceKHR hg_vk_create_surface(
-    VkInstance instance,
-    const HgPlatform *platform,
-    const HgWindow *window
-) {
+VkSurfaceKHR hg_vk_create_surface(VkInstance instance, const HgWindow *window) {
     assert(instance != NULL);
-    assert(platform != NULL);
     assert(window != NULL);
 
     PFN_vkCreateWin32SurfaceKHR pfn_vkCreateWin32SurfaceKHR
@@ -4093,7 +4078,7 @@ VkSurfaceKHR hg_vk_create_surface(
 
     VkWin32SurfaceCreateInfoKHR info = {
         .sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
-        .hinstance = (HINSTANCE)platform,
+        .hinstance = hg_internal_win32_instance,
         .hwnd = window->hwnd,
     };
     VkSurfaceKHR surface = NULL;
@@ -4105,9 +4090,7 @@ VkSurfaceKHR hg_vk_create_surface(
     return surface;
 }
 
-void hg_window_process_events(const HgPlatform *platform, HgWindow **windows, u32 window_count) {
-    (void)platform;
-
+void hg_window_process_events(HgWindow **windows, u32 window_count) {
     for (usize i = 0; i < window_count; ++i) {
         memset(windows[i]->input.keys_pressed, 0, sizeof(windows[i]->input.keys_pressed));
         memset(windows[i]->input.keys_released, 0, sizeof(windows[i]->input.keys_released));
@@ -4882,5 +4865,14 @@ void vkCmdDrawIndexed(VkCommandBuffer cmd, uint32_t indexCount, uint32_t instanc
 
 void vkCmdDispatch(VkCommandBuffer cmd, uint32_t x, uint32_t y, uint32_t z) {
     hg_internal_vulkan_funcs.vkCmdDispatch(cmd, x, y, z);
+}
+
+void hg_init(void) {
+    hg_vk_load();
+    hg_internal_platform_init();
+}
+
+void hg_exit(void) {
+    hg_internal_platform_exit();
 }
 
