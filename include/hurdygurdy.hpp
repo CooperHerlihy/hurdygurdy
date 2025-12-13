@@ -51,12 +51,12 @@
  *
  * Note, calls hg_vk_load
  */
-void hg_init(void);
+void hg_init();
 
 /**
  * Shuts down the HurdyGurdy library
  */
-void hg_exit(void);
+void hg_exit();
 
 typedef int8_t i8;
 typedef int16_t i16;
@@ -189,17 +189,20 @@ inline usize hg_align(usize value, usize alignment) {
 /**
  * A high precision clock for timers and game deltas
  */
-typedef struct timespec HgClock;
+struct HgClock {
+    struct timespec time;
 
-/**
- * Resets the clock and gets the delta since the last tick in seconds
- *
- * Parameters
- * - clock The clock to tick, must not be NULL
- * Returns
- * - Seconds since last tick
- */
-f64 hg_clock_tick(HgClock *hclock);
+    /**
+     * Resets the clock and gets the delta since the last tick in seconds
+     *
+     * Parameters
+     * - clock The clock to tick, must not be NULL
+     * Returns
+     * - Seconds since last tick
+     */
+    f64 tick();
+};
+
 
 #define HG_PI      3.1415926535897932
 #define HG_TAU     6.2831853071795864
@@ -210,60 +213,60 @@ f64 hg_clock_tick(HgClock *hclock);
 /**
  * A 2D vector
  */
-typedef struct HgVec2 {
+struct HgVec2 {
     f32 x, y;
-} HgVec2;
+};
 
 /**
  * A 3D vector
  */
-typedef struct HgVec3 {
+struct HgVec3 {
     f32 x, y, z;
-} HgVec3;
+};
 
 /**
  * A 4D vector
  */
-typedef struct HgVec4 {
+struct HgVec4 {
     f32 x, y, z, w;
-} HgVec4;
+};
 
 /**
  * A 2x2 matrix
  */
-typedef struct HgMat2 {
+struct HgMat2 {
     HgVec2 x, y;
-} HgMat2;
+};
 
 /**
  * A 3x3 matrix
  */
-typedef struct HgMat3 {
+struct HgMat3 {
     HgVec3 x, y, z;
-} HgMat3;
+};
 
 /**
  * A 4x4 matrix
  */
-typedef struct HgMat4 {
+struct HgMat4 {
     HgVec4 x, y, z, w;
-} HgMat4;
+};
 
 /**
  * A complex number
  */
-typedef struct HgComplex {
+struct HgComplex {
     f32 r, i;
-} HgComplex;
+};
 
 /**
  * A quaternion
  *
  * r is the real part
  */
-typedef struct HgQuat {
+struct HgQuat {
     f32 r, i, j, k;
-} HgQuat;
+};
 
 /**
  * Creates a 2D vector with the given scalar
@@ -1479,43 +1482,38 @@ u32 hg_max_mipmaps(u32 width, u32 height, u32 depth);
 /**
  * The interface for generic allocators
  */
-typedef struct HgAllocator {
-    /**
-     * Opaque data passed to all functions
-     */
-    void *user_data;
+struct HgAllocator {
     /**
      * Allocates memory
      *
      * Parameters
-     * - user_data Custom data used by the allocator
      * - size The size to allocate in bytes
      * - alignment The alignment in bytes of the allocation
      */
-    void *(*alloc)(void *user_data, usize size, usize alignment);
+    virtual void *alloc(usize size, usize alignment) = 0;
+
     /**
      * Changes the size of an allocation, potentially returning a different
      * allocation, with the data copied over
      *
      * Parameters
-     * - user_data Custom data used by the allocator
      * - allocation The allocation to free
      * - old_size The original size of the allocation in bytes
      * - new_size The size to allocate in bytes
      * - alignment The alignment in bytes of the allocation
      */
-    void *(*realloc)(void *user_data, void *allocation, usize old_size, usize new_size, usize alignment);
+    virtual void *realloc(void *allocation, usize old_size, usize new_size, usize alignment) = 0;
+
     /**
      * Frees allocated memory
      *
      * Parameters
-     * - user_data Custom data used by the allocator
      * - allocation The allocation to free
      * - size The size of the allocation in bytes
      * - alignment The alignment in bytes of the allocation
      */
-    void (*free)(void *user_data, void *allocation, usize size, usize alignment);
-} HgAllocator;
+    virtual void free(void *allocation, usize size, usize alignment) = 0;
+};
 
 /**
  * Get the global allocator for malloc/free
@@ -1523,7 +1521,7 @@ typedef struct HgAllocator {
  * Returns
  * - The global allocator
  */
-const HgAllocator *hg_persistent_allocator(void);
+HgAllocator *hg_persistent_allocator();
 
 /**
  * Gets the current temporary allocator on this thread
@@ -1531,7 +1529,7 @@ const HgAllocator *hg_persistent_allocator(void);
  * Returns
  * - This thread's temporary allocator
  */
-const HgAllocator *hg_temp_allocator(void);
+HgAllocator *hg_temp_allocator();
 
 /**
  * Sets the current temporary allocator on this thread
@@ -1547,96 +1545,41 @@ const HgAllocator *hg_temp_allocator(void);
  */
 void hg_temp_allocator_set(HgAllocator allocator);
 
-/**
- * A convenience to call alloc from the interface
- *
- * Parameters
- * - allocator The allocator to allocate from
- * - size The size in bytes to allocate
- * - alignment The alignment in bytes of the allocation
- * Returns
- * - The allocation
- * - NULL if the allocation failed
- */
-static inline void *hg_alloc(const HgAllocator *allocator, usize size, usize alignment) {
-    assert(allocator != NULL);
-    return allocator->alloc(allocator->user_data, size, alignment);
-}
+struct HgStdAllocator : public HgAllocator {
+    /**
+     * Calls malloc, checking for NULL in debug mode
+     *
+     * Parameters
+     * - size The size of the allocation in bytes
+     * - alignment The alignment in bytes of the allocation
+     * Returns
+     * - The allocated memory
+     */
+    void *alloc(usize size, usize alignment) override;
 
-/**
- * A convenience to call realloc from the interface
- *
- * Parameters
- * - allocator The allocator to reallocate from
- * - allocation The allocation to resize
- * - new_size The new size in bytes for the allocation
- * - old_size The original size in bytes of the allocation
- * - alignment The alignment in bytes of the allocation
- * Returns
- * - The allocation
- * - NULL if the allocation failed
- */
-static inline void *hg_realloc(
-    const HgAllocator *allocator,
-    void *allocation,
-    usize new_size,
-    usize old_size,
-    usize alignment
-) {
-    assert(allocator != NULL);
-    return allocator->realloc(allocator->user_data, allocation, old_size, new_size, alignment);
-}
+    /**
+     * Calls realloc, checking for NULL in debug mode
+     *
+     * Parameters
+     * - allocation The allocation to resize
+     * - old_size The size of the original allocation in bytes
+     * - new_size The size of the new allocation in bytes
+     * - alignment The alignment in bytes of the allocation
+     * Returns
+     * - The allocated memory
+     */
+    void *realloc(void *allocation, usize old_size, usize new_size, usize alignment) override;
 
-/**
- * A convenience to call alloc from the interface
- *
- * Parameters
- * - allocator The allocator to free to
- * - allocation The allocation to resize
- * - size The size in bytes of the allocation
- * - alignment The alignment in bytes of the allocation
- */
-static inline void hg_free(const HgAllocator *allocator, void *allocation, usize size, usize alignment) {
-    assert(allocator != NULL);
-    allocator->free(allocator->user_data, allocation, size, alignment);
-}
-
-/**
- * Calls malloc, checking for NULL in debug mode
- *
- * Parameters
- * - dummy A dummy value to fit the HgAllocator interface
- * - size The size of the allocation in bytes
- * - alignment The alignment in bytes of the allocation
- * Returns
- * - The allocated memory
- */
-void *hg_std_alloc(void *dummy, usize size, usize alignment);
-
-/**
- * Calls realloc, checking for NULL in debug mode
- *
- * Parameters
- * - dummy A dummy value to fit the HgAllocator interface
- * - allocation The allocation to resize
- * - old_size The size of the original allocation in bytes
- * - new_size The size of the new allocation in bytes
- * - alignment The alignment in bytes of the allocation
- * Returns
- * - The allocated memory
- */
-void *hg_std_realloc(void *dummy, void *allocation, usize old_size, usize new_size, usize alignment);
-
-/**
- * Calls free
- *
- * Parameters
- * - allocation The allocation to free
- * - size The size of the allocation in bytes
- * - alignment The alignment in bytes of the allocation
- * - dummy A dummy value to fit the HgAllocator interface
- */
-void hg_std_free(void *dummy, void *allocation, usize size, usize alignment);
+    /**
+     * Calls free
+     *
+     * Parameters
+     * - allocation The allocation to free
+     * - size The size of the allocation in bytes
+     * - alignment The alignment in bytes of the allocation
+     */
+    void free(void *allocation, usize size, usize alignment) override;
+};
 
 /**
  * An arena allocator
@@ -1644,7 +1587,7 @@ void hg_std_free(void *dummy, void *allocation, usize size, usize alignment);
  * Allocations are made very quickly, and are not freed individually, instead
  * the whole block is freed at once
  */
-typedef struct HgArena {
+struct HgArena : public HgAllocator {
     /**
      * The allocator used to create the arena
      */
@@ -1661,93 +1604,76 @@ typedef struct HgArena {
      * The next allocation to be given out
      */
     void *head;
-} HgArena;
 
-/**
- * Allocates an arena with capacity
- *
- * Parameters
- * - allocator The allocator to allocate memory from, must not be NULL
- * - capacity The size of the block to allocate and use
- * Returns
- * - The allocated arena
- */
-HgArena hg_arena_create(HgAllocator *allocator, usize capacity);
+    /**
+     * Allocates an arena with capacity
+     *
+     * Parameters
+     * - allocator The allocator to use to create the arena, must not be NULL
+     * - capacity The size of the block to allocate and use
+     * Returns
+     * - The allocated arena
+     */
+    static HgArena create(HgAllocator *allocator, usize capacity);
 
-/**
- * Frees an arena's memory
- *
- * Parameters
- * - arena The arena to destroy, must not be NULL
- */
-void hg_arena_destroy(HgArena *arena);
+    /**
+     * Frees an arena's memory
+     */
+    void destroy();
 
-/**
- * Frees all allocations from an arena
- *
- * Parameters
- * - arena The arena to reset, must not be NULL
- */
-void hg_arena_reset(HgArena *arena);
+    /**
+     * Frees all allocations from an arena
+     */
+    void reset();
 
-/**
- * Allocates memory from an arena
- *
- * Allocations are not individually freed, hg_arena() is
- * called instead to free all allocations at once
- *
- * Parameters
- * - arena The arena to allocate from, must not be NULL
- * - size The size in bytes of the allocation
- * - alignment The required alignment of the allocation in bytes
- * Returns
- * - The allocation if successful
- * - NULL if the allocation exceeds capacity, or size is 0
- */
-void *hg_arena_alloc(HgArena *arena, usize size, usize alignment);
+    /**
+     * Allocates memory from an arena
+     *
+     * Allocations are not individually freed, hg_arena() is
+     * called instead to free all allocations at once
+     *
+     * Parameters
+     * - size The size in bytes of the allocation
+     * - alignment The required alignment of the allocation in bytes
+     * Returns
+     * - The allocation if successful
+     * - NULL if the allocation exceeds capacity, or size is 0
+     */
+    void *alloc(usize size, usize alignment) override;
 
-/**
- * Reallocates memory from a arena
- *
- * Simply increases the size if allocation is the most recent allocation
- *
- * Parameters
- * - arena The to allocate from, must not be NULL
- * - allocation The allocation to grow, must be the last allocation made
- * - old_size The original size in bytes of the allocation
- * - new_size The new size in bytes of the allocation
- * - alignment The required alignment of the allocation in bytes
- * Returns
- * - The allocation if successful
- * - NULL if the allocation exceeds capacity
- */
-void *hg_arena_realloc(HgArena *arena, void *allocation, usize old_size, usize new_size, usize alignment);
+    /**
+     * Reallocates memory from a arena
+     *
+     * Simply increases the size if allocation is the most recent allocation
+     *
+     * Parameters
+     * - allocation The allocation to grow, must be the last allocation made
+     * - old_size The original size in bytes of the allocation
+     * - new_size The new size in bytes of the allocation
+     * - alignment The required alignment of the allocation in bytes
+     * Returns
+     * - The allocation if successful
+     * - NULL if the allocation exceeds capacity
+     */
+    void *realloc(void *allocation, usize old_size, usize new_size, usize alignment) override;
 
-/**
- * Does nothing, only exists to fit allocator interface
- *
- * Parameters
- * - arena The to free from, must not be NULL
- * - allocation The allocation to free, must be the last allocation made
- * - size The size of the allocation
- * - alignment The required alignment of the allocation in bytes
- */
-void hg_arena_free(HgArena *arena, void *allocation, usize size, usize alignment);
-
-/**
- * Fills an allocator interface for an arena allocator
- *
- * Parameters
- * - arena The arena to use to create the allocator, must not be NULL
- */
-HgAllocator hg_arena_allocator(HgArena *arena);
+    /**
+     * Does nothing, only exists to fit allocator interface
+     *
+     * Parameters
+     * - allocation The allocation to free, must be the last allocation made
+     * - size The size of the allocation
+     * - alignment The required alignment of the allocation in bytes
+     */
+    void free(void *allocation, usize size, usize alignment) override;
+};
 
 /**
  * A stack allocator
  *
  * Allocations are made very quickly, but must be freed in reverse order
  */
-typedef struct HgStack {
+struct HgStack : public HgAllocator {
     /**
      * The allocator used to create the stack
      */
@@ -1764,86 +1690,68 @@ typedef struct HgStack {
      * The next allocation to be given out
      */
     usize head;
-} HgStack;
 
-/**
- * Allocates a stack allocator with capacity
- *
- * Parameters
- * - allocator The allocator to allocate memory from, must not be NULL
- * - capacity The size of the block to allocate and use
- * Returns
- * - The allocated stack
- */
-HgStack hg_stack_create(HgAllocator *allocator, usize capacity);
+    /**
+     * Allocates a stack allocator with capacity
+     *
+     * Parameters
+     * - allocator The allocator to allocate memory from, must not be NULL
+     * - capacity The size of the block to allocate and use
+     * Returns
+     * - The allocated stack
+     */
+    static HgStack create(HgAllocator *allocator, usize capacity);
 
-/**
- * Frees a stack's memory
- *
- * Parameters
- * - stack The stack to destroy
- * - allocator The allocator to free memory
- */
-void hg_stack_destroy(HgStack *stack);
+    /**
+     * Frees a stack's memory
+     */
+    void destroy();
 
-/**
- * Frees all allocations from an stack
- *
- * Parameters
- * - stack The stack to reset, must not be NULL
- */
-void hg_stack_reset(HgStack *stack);
+    /**
+     * Frees all allocations from an stack
+     */
+    void reset();
 
-/**
- * Allocates memory from a stack
- *
- * Parameters
- * - stack The stack to allocate from, must not be NULL
- * - size The size in bytes of the allocation
- * - alignment The required alignment of the allocation in bytes
- * Returns
- * - The allocation if successful
- * - NULL if the allocation exceeds capacity, or size is 0
- */
-void *hg_stack_alloc(HgStack *stack, usize size, usize alignment);
+    /**
+     * Allocates memory from a stack
+     *
+     * Parameters
+     * - size The size in bytes of the allocation
+     * - alignment The required alignment of the allocation in bytes
+     * Returns
+     * - The allocation if successful
+     * - NULL if the allocation exceeds capacity, or size is 0
+     */
+    void *alloc(usize size, usize alignment) override;
 
-/**
- * Reallocates memory from a stack
- *
- * Simply increases the size if allocation is the most recent allocation
- *
- * Parameters
- * - stack The stack to allocate from, must not be NULL
- * - allocation The allocation to grow, must be the last allocation made
- * - old_size The original size in bytes of the allocation
- * - new_size The new size in bytes of the allocation
- * - alignment The required alignment of the allocation in bytes
- * Returns
- * - The allocation if successful
- * - NULL if the allocation exceeds capacity
- */
-void *hg_stack_realloc(HgStack *stack, void *allocation, usize old_size, usize new_size, usize alignment);
+    /**
+     * Reallocates memory from a stack
+     *
+     * Simply increases the size if allocation is the most recent allocation
+     *
+     * Parameters
+     * - allocation The allocation to grow, must be the last allocation made
+     * - old_size The original size in bytes of the allocation
+     * - new_size The new size in bytes of the allocation
+     * - alignment The required alignment of the allocation in bytes
+     * Returns
+     * - The allocation if successful
+     * - NULL if the allocation exceeds capacity
+     */
+    void *realloc(void *allocation, usize old_size, usize new_size, usize alignment) override;
 
-/**
- * Frees an allocation from a stack
- *
- * Can only deallocate the most recent allocation, otherwise does nothing
- *
- * Parameters
- * - stack The to free from, must not be NULL
- * - allocation The allocation to free, must be the last allocation made
- * - size The size of the allocation
- * - alignment The required alignment of the allocation in bytes
- */
-void hg_stack_free(HgStack *stack, void *allocation, usize size, usize alignment);
-
-/**
- * Fills an allocator interface for a stack allocator
- *
- * Parameters
- * - stack The stack to use to create the allocator, must not be NULL
- */
-HgAllocator hg_stack_allocator(HgStack *stack);
+    /**
+     * Frees an allocation from a stack
+     *
+     * Can only deallocate the most recent allocation, otherwise does nothing
+     *
+     * Parameters
+     * - allocation The allocation to free, must be the last allocation made
+     * - size The size of the allocation
+     * - alignment The required alignment of the allocation in bytes
+     */
+    void free(void *allocation, usize size, usize alignment) override;
+};
 
 /**
  * Creates a dynamic array type
@@ -2135,7 +2043,7 @@ typedef struct HgWindow HgWindow;
 /**
  * Configuration for a window
  */
-typedef struct HgWindowConfig {
+struct HgWindowConfig {
     /**
      * The title of the window
      */
@@ -2152,7 +2060,7 @@ typedef struct HgWindowConfig {
      * The height in pixels if windowed, otherwise ignored
      */
     u32 height;
-} HgWindowConfig;
+};
 
 /**
  * Creates a window
@@ -2346,7 +2254,7 @@ bool hg_window_was_key_released(const HgWindow *window, HgKey key);
 /**
  * Loads the Vulkan library and the functions required to create an instance
  */
-void hg_vk_load(void);
+void hg_vk_load();
 
 /**
  * Loads the Vulkan functions which use the instance
@@ -2431,7 +2339,7 @@ bool hg_vk_find_queue_family(VkPhysicalDevice gpu, u32 *queue_family, VkQueueFla
 /**
  * A Vulkan device with a single general-purpose queue
  */
-typedef struct HgSingleQueueDeviceData {
+struct HgSingleQueueDeviceData {
     /**
      * The handle to the Vulkan device object
      */
@@ -2448,7 +2356,7 @@ typedef struct HgSingleQueueDeviceData {
      * The index of the queue family that the queue is from
      */
     u32 queue_family;
-} HgSingleQueueDeviceData;
+};
 
 /**
  * Creates a Vulkan device with a single general-purpose queue
@@ -2469,7 +2377,7 @@ HgSingleQueueDeviceData hg_vk_create_single_queue_device(VkInstance instance);
 /**
  * Configuration for Vulkan pipelines
  */
-typedef struct HgVkPipelineConfig {
+struct HgVkPipelineConfig {
     /**
      * The format of the color attachments, none can be UNDEFINED
      */
@@ -2542,7 +2450,7 @@ typedef struct HgVkPipelineConfig {
      * Enables color blending using pixel alpha values
      */
     bool enable_color_blend;
-} HgVkPipelineConfig;
+};
 
 /**
  * Creates a graphics pipeline
@@ -2595,7 +2503,7 @@ u32 hg_vk_find_memory_type_index(
 /**
  * A Vulkan swapchain and associated data
  */
-typedef struct HgSwapchainData {
+struct HgSwapchainData {
     /**
      * The handle to the Vulkan swapchain object
      */
@@ -2612,7 +2520,7 @@ typedef struct HgSwapchainData {
      * The pixel format of the swapchain's images
      */
     VkFormat format;
-} HgSwapchainData;
+};
 
 /**
  * Creates a Vulkan swapchain
@@ -2638,7 +2546,7 @@ HgSwapchainData hg_vk_create_swapchain(
 /**
  * A system to synchronize frames rendering to multiple swapchain images at once
  */
-typedef struct HgSwapchainCommands {
+struct HgSwapchainCommands {
     VkCommandPool cmd_pool;
     VkSwapchainKHR swapchain;
     VkCommandBuffer *cmds;
@@ -2648,7 +2556,7 @@ typedef struct HgSwapchainCommands {
     u32 frame_count;
     u32 current_frame;
     u32 current_image;
-} HgSwapchainCommands;
+};
 
 /**
  * Creates a swaphchain command buffer system
@@ -2741,7 +2649,7 @@ void hg_vk_buffer_staging_read(
 /**
  * Configuration for a staging image write
  */
-typedef struct HgVkImageStagingWriteConfig {
+struct HgVkImageStagingWriteConfig {
     /**
      * The image to write to, must not be NULL
      */
@@ -2774,7 +2682,7 @@ typedef struct HgVkImageStagingWriteConfig {
      * The layout to transition to after transfering
      */
     VkImageLayout layout;
-} HgVkImageStagingWriteConfig;
+};
 
 /**
  * Writes to a Vulkan device local image through a staging buffer
@@ -2796,7 +2704,7 @@ void hg_vk_image_staging_write(
 /**
  * Configuration for a staging image write
  */
-typedef struct HgVkImageStagingReadConfig {
+struct HgVkImageStagingReadConfig {
     /**
      * The location to write to, must not be NULL
      */
@@ -2829,7 +2737,7 @@ typedef struct HgVkImageStagingReadConfig {
      * The format of each pixel, must not be UNDEFINED
      */
     VkFormat format;
-} HgVkImageStagingReadConfig;
+};
 
 /**
  * Reads from a Vulkan device local image through a staging buffer
@@ -2862,7 +2770,7 @@ typedef u64 HgEntityID;
 /**
  * A system of components in an entity component system
  */
-typedef struct HgComponentSystem {
+struct HgSystem {
     /**
      * Unique data used by the system
      */
@@ -2900,16 +2808,16 @@ typedef struct HgComponentSystem {
      * The current number of components
      */
     u32 component_count;
-} HgSystem;
+};
 
 /**
  * An entity component system
  */
-typedef struct HgECS {
+struct HgECS {
     /**
      * The allocator used by the ECS
      */
-    const HgAllocator *allocator;
+    HgAllocator *allocator;
     /**
      * The pool of entity ids
      */
@@ -2930,12 +2838,12 @@ typedef struct HgECS {
      * The number of component systems
      */
     u32 system_count;
-} HgECS;
+};
 
 /**
  * A description of a system in an entity component system
  */
-typedef struct HgSystemDescription {
+struct HgSystemDescription {
     /**
      * The size of the uninque data used by the system
      */
@@ -2952,7 +2860,7 @@ typedef struct HgSystemDescription {
      * The memory alignment of each component
      */
     usize component_alignment;
-} HgSystemDescription;
+};
 
 /**
  * Creates an entity component system
@@ -2966,7 +2874,7 @@ typedef struct HgSystemDescription {
  * - The created entity component system
  */
 HgECS hg_ecs_create(
-    const HgAllocator *allocator,
+    HgAllocator *allocator,
     u32 max_entities,
     const HgSystemDescription *systems,
     u32 system_count);
@@ -3122,7 +3030,7 @@ HgEntityID hg_entity_from_component(HgECS *ecs, void *component, u32 system_inde
 /**
  * A pipeline to render 2D sprites
  */
-typedef struct HgPipelineSprite {
+struct HgPipelineSprite {
     VkDevice device;
     VmaAllocator allocator;
     VkDescriptorSetLayout vp_layout;
@@ -3133,7 +3041,7 @@ typedef struct HgPipelineSprite {
     VkDescriptorSet vp_set;
     VkBuffer vp_buffer;
     VmaAllocation vp_buffer_allocation;
-} HgPipelineSprite;
+};
 
 /**
  * Creates a pipeline abstraction to render 2D sprites
@@ -3182,18 +3090,18 @@ void hg_pipeline_sprite_update_view(HgPipelineSprite *pipeline, HgMat4 *view);
 /**
  * The texture resources used by HgPipelineSprite
  */
-typedef struct HgPipelineSpriteTexture {
+struct HgPipelineSpriteTexture {
     VmaAllocation allocation;
     VkImage image;
     VkImageView view;
     VkSampler sampler;
     VkDescriptorSet set;
-} HgPipelineSpriteTexture;
+};
 
 /**
  * Configuration for a hgSpritePipelineTexture
  */
-typedef struct HgPipelineSpriteTextureConfig {
+struct HgPipelineSpriteTextureConfig {
     /**
      * The pixel data to use, must not be NULL
      */
@@ -3218,7 +3126,7 @@ typedef struct HgPipelineSpriteTextureConfig {
      * How to sample beyond the edge of the texture
      */
     VkSamplerAddressMode edge_mode;
-} HgPipelineSpriteTextureConfig;
+};
 
 /**
  * Creates a texture for HgPipelineSprite
@@ -3264,7 +3172,7 @@ void hg_pipeline_sprite_bind(HgPipelineSprite *pipeline, VkCommandBuffer cmd);
 /**
  * The data pushed to each sprite draw call
  */
-typedef struct HgPipelineSpritePush {
+struct HgPipelineSpritePush {
     /**
      * The sprite's model matrix (position, scale, rotation, etc.)
      */
@@ -3277,7 +3185,7 @@ typedef struct HgPipelineSpritePush {
      * The size within the texture to read (0.0f to 1.0f)
      */
     HgVec2 uv_size;
-} HgPipelineSpritePush;
+};
 
 /**
  * Draws a sprite using the sprite pipeline

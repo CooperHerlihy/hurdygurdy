@@ -7,12 +7,11 @@
 #include <alloca.h>
 #endif
 
-f64 hg_clock_tick(HgClock *hclock) {
-    assert(hclock != NULL);
-    f64 prev = (f64)hclock->tv_sec + (f64)hclock->tv_nsec / 1.0e9;
-    if (timespec_get(hclock, TIME_UTC) == 0)
+f64 HgClock::tick() {
+    f64 prev = (f64)time.tv_sec + (f64)time.tv_nsec / 1.0e9;
+    if (timespec_get(&time, TIME_UTC) == 0)
         hg_warn("timespec_get failed\n");
-    return ((f64)hclock->tv_sec + (f64)hclock->tv_nsec / 1.0e9) - prev;
+    return ((f64)time.tv_sec + (f64)time.tv_nsec / 1.0e9) - prev;
 }
 
 HgMat4 hg_model_matrix_2d(HgVec3 position, HgVec2 scale, f32 rotation) {
@@ -79,191 +78,152 @@ u32 hg_max_mipmaps(u32 width, u32 height, u32 depth) {
     return (u32)log2f((f32)hg_max(hg_max(width, height), depth)) + 1;
 }
 
-static const HgAllocator hg_internal_std_allocator = {NULL, hg_std_alloc, hg_std_realloc, hg_std_free};
+static HgStdAllocator hg_internal_std_allocator;
 
-const HgAllocator *hg_persistent_allocator(void) {
+HgAllocator *hg_persistent_allocator(void) {
     return &hg_internal_std_allocator;
 }
 
-thread_local HgAllocator hg_internal_temp_allocator = {NULL, hg_std_alloc, hg_std_realloc, hg_std_free};
+thread_local HgAllocator *hg_internal_temp_allocator;
 
 HgAllocator *hg_temp_allocator_get(void) {
-    return &hg_internal_temp_allocator;
+    return hg_internal_temp_allocator;
 }
 
-void hg_temp_allocator_set(HgAllocator allocator) {
+void hg_temp_allocator_set(HgAllocator *allocator) {
     hg_internal_temp_allocator = allocator;
 }
 
-void *hg_std_alloc(void *dummy, usize size, usize alignment) {
-    (void)dummy;
+void *HgStdAllocator::alloc(usize size, usize alignment) {
     (void)alignment;
-    void *allocation = malloc(size);
+    void *allocation = std::malloc(size);
     assert(allocation != NULL);
     return allocation;
 }
 
-void *hg_std_realloc(void *dummy, void *allocation, usize old_size, usize new_size, usize alignment) {
+void *HgStdAllocator::realloc(void *allocation, usize old_size, usize new_size, usize alignment) {
     (void)old_size;
-    (void)dummy;
     (void)alignment;
-    void *new_allocation = realloc(allocation, new_size);
+    void *new_allocation = std::realloc(allocation, new_size);
     assert(new_allocation != NULL);
     return new_allocation;
 }
 
-void hg_std_free(void *dummy, void *allocation, usize size, usize alignment) {
+void HgStdAllocator::free(void *allocation, usize size, usize alignment) {
     (void)size;
-    (void)dummy;
     (void)alignment;
-    free(allocation);
+    std::free(allocation);
 }
 
-HgArena hg_arena_create(HgAllocator *allocator, usize capacity) {
-    assert(allocator != NULL);
-
+HgArena HgArena::create(HgAllocator *allocator, usize capacity) {
     HgArena arena;
     arena.allocator = allocator;
-    arena.data = hg_alloc(allocator, capacity, 16);
+    arena.data = allocator->alloc(capacity, 16);
     arena.capacity = (u8 *)arena.data + capacity;
     arena.head = arena.data;
     return arena;
 }
 
-void hg_arena_destroy(HgArena *arena) {
-    assert(arena != NULL);
-    hg_free(arena->allocator, arena->data, (usize)arena->capacity - (usize)arena->data, 16);
+void HgArena::destroy() {
+    allocator->free(data, (usize)capacity - (usize)data, 16);
 }
 
-void hg_arena_reset(HgArena *arena) {
-    assert(arena != NULL);
-    arena->head = 0;
+void HgArena::reset() {
+    head = 0;
 }
 
-void *hg_arena_alloc(HgArena *arena, usize size, usize alignment) {
-    assert(arena != NULL);
-
-    void *allocation = (void *)hg_align((usize)arena->head, alignment);
+void *HgArena::alloc(usize size, usize alignment) {
+    void *allocation = (void *)hg_align((usize)head, alignment);
 
     void *new_head = (u8 *)allocation + size;
-    if (new_head > arena->capacity)
+    if (new_head > capacity)
         return NULL;
-    arena->head = new_head;
+    head = new_head;
 
     return allocation;
 }
 
-void *hg_arena_realloc(HgArena *arena, void *allocation, usize old_size, usize new_size, usize alignment) {
-    assert(arena != NULL);
-
-    if ((u8 *)allocation + old_size == arena->head) {
+void *HgArena::realloc(void *allocation, usize old_size, usize new_size, usize alignment) {
+    if ((u8 *)allocation + old_size == head) {
         void *new_head = (u8 *)allocation + new_size;
-        if (new_head > arena->capacity)
+        if (new_head > capacity)
             return NULL;
-        arena->head = new_head;
+        head = new_head;
         return allocation;
     }
 
-    void *new_allocation = hg_arena_alloc(arena, new_size, alignment);
+    void *new_allocation = alloc(new_size, alignment);
     memcpy(new_allocation, allocation, old_size);
     return new_allocation;
 }
 
-void hg_arena_free(HgArena *arena, void *allocation, usize size, usize alignment) {
-    (void)arena;
+void HgArena::free(void *allocation, usize size, usize alignment) {
     (void)allocation;
     (void)size;
     (void)alignment;
 }
 
-HgAllocator hg_arena_allocator(HgArena *arena) {
-    assert(arena != NULL);
-
-    HgAllocator allocator;
-    allocator.user_data = arena;
-    allocator.alloc = (void *(*)(void *, usize, usize))hg_arena_alloc;
-    allocator.realloc = (void *(*)(void *, void *, usize, usize, usize))hg_arena_realloc;
-    allocator.free = (void (*)(void *, void *, usize, usize))hg_arena_free;
-    return allocator;
-}
-
-HgStack hg_stack_create(HgAllocator *allocator, usize capacity) {
+HgStack HgStack::create(HgAllocator *allocator, usize capacity) {
     assert(allocator != NULL);
 
     HgStack stack;
     stack.allocator = allocator;
-    stack.data = hg_alloc(allocator, capacity, 16);
+    stack.data = allocator->alloc(capacity, 16);
     stack.capacity = capacity;
     stack.head = 0;
     return stack;
 }
 
-void hg_stack_destroy(HgStack *stack) {
-    assert(stack != NULL);
-    hg_std_free(stack->allocator, stack->data, stack->capacity, 16);
+void HgStack::destroy() {
+    allocator->free(data, capacity, 16);
 }
 
-void hg_stack_reset(HgStack *stack) {
-    assert(stack != NULL);
-    stack->head = 0;
+void HgStack::reset() {
+    head = 0;
 }
 
-void *hg_stack_alloc(HgStack *stack, usize size, usize alignment) {
+void *HgStack::alloc(usize size, usize alignment) {
     (void)alignment;
-    assert(stack != NULL);
     if (size == 0)
         return NULL;
 
-    usize new_head = stack->head + hg_align(size, 16);
-    if (new_head > stack->capacity)
+    usize new_head = head + hg_align(size, 16);
+    if (new_head > capacity)
         return NULL;
 
-    void *allocation = (u8 *)stack->data + stack->head;
-    stack->head = new_head;
+    void *allocation = (u8 *)data + head;
+    head = new_head;
     return allocation;
 }
 
-void *hg_stack_realloc(HgStack *stack, void *allocation, usize old_size, usize new_size, usize alignment) {
+void *HgStack::realloc(void *allocation, usize old_size, usize new_size, usize alignment) {
     (void)alignment;
-    assert(stack != NULL);
     if (new_size == 0) {
-        stack->head = (usize)allocation - (usize)stack->data;
+        head = (usize)allocation - (usize)data;
         return NULL;
     }
 
-    if ((usize)allocation + hg_align(old_size, 16) == stack->head) {
+    if ((usize)allocation + hg_align(old_size, 16) == head) {
         usize new_head = (usize)allocation
-                       - (usize)stack->data
+                       - (usize)data
                        + hg_align(new_size, 16);
-        if (new_head > stack->capacity)
+        if (new_head > capacity)
             return NULL;
-        stack->head = new_head;
+        head = new_head;
         return allocation;
     }
 
-    void *new_allocation = hg_stack_alloc(stack, new_size, 16);
+    void *new_allocation = alloc(new_size, 16);
     memcpy(new_allocation, allocation, old_size);
     return new_allocation;
 }
 
-void hg_stack_free(HgStack *stack, void *allocation, usize size, usize alignment) {
+void HgStack::free(void *allocation, usize size, usize alignment) {
     (void)alignment;
-    assert(stack != NULL);
-    if ((usize)allocation + hg_align(size, 16) == stack->head)
-        stack->head = (usize)allocation - (usize)stack->data;
+    if ((usize)allocation + hg_align(size, 16) == head)
+        head = (usize)allocation - (usize)data;
     else
         hg_warn("Attempt to free a stack allocation not at the head\n");
-}
-
-HgAllocator hg_stack_allocator(HgStack *stack) {
-    assert(stack != NULL);
-
-    HgAllocator allocator;
-    allocator.user_data = stack;
-    allocator.alloc = (void *(*)(void *, usize, usize))hg_stack_alloc;
-    allocator.realloc = (void *(*)(void *, void *, usize, usize, usize))hg_stack_realloc;
-    allocator.free = (void (*)(void *, void *, usize, usize))hg_stack_free;
-    return allocator;
 }
 
 bool hg_file_load_binary(HgAllocator *allocator, u8** data, usize* size, const char *path) {
@@ -284,7 +244,7 @@ bool hg_file_load_binary(HgAllocator *allocator, u8** data, usize* size, const c
     usize file_size = (usize)ftell(file);
     rewind(file);
 
-    u8* file_data = (u8 *)hg_alloc(allocator, file_size, 16);
+    u8* file_data = (u8 *)allocator->alloc(file_size, 16);
     if (fread(file_data, 1, file_size, file) != file_size) {
         fclose(file);
         hg_warn("Failed to read binary from file: %s\n", path);
@@ -299,7 +259,7 @@ bool hg_file_load_binary(HgAllocator *allocator, u8** data, usize* size, const c
 
 void hg_file_unload_binary(HgAllocator *allocator, u8* data, usize size) {
     assert(allocator != NULL);
-    hg_free(allocator, data, size, 16);
+    allocator->free(data, size, 16);
 }
 
 bool hg_file_save_binary(const u8* data, usize size, const char *path) {
@@ -1259,7 +1219,7 @@ HgSwapchainCommands hg_swapchain_commands_create(VkDevice device, VkSwapchainKHR
 
     vkGetSwapchainImagesKHR(device, swapchain, &sync.frame_count, NULL);
 
-    void *allocation = hg_alloc(hg_persistent_allocator(),
+    void *allocation = hg_persistent_allocator()->alloc(
         sync.frame_count * sizeof(*sync.cmds) +
         sync.frame_count * sizeof(*sync.frame_finished) +
         sync.frame_count * sizeof(*sync.image_available) +
@@ -1314,7 +1274,7 @@ void hg_swapchain_commands_destroy(VkDevice device, HgSwapchainCommands *sync) {
     for (usize i = 0; i < sync->frame_count; ++i) {
         vkDestroySemaphore(device, sync->ready_to_present[i], NULL);
     }
-    hg_std_free(NULL,
+    hg_persistent_allocator()->free(
         sync->cmds,
         sync->frame_count * sizeof(*sync->cmds) +
         sync->frame_count * sizeof(*sync->frame_finished) +
@@ -1774,7 +1734,7 @@ void hg_vk_image_staging_read(
 }
 
 HgECS hg_ecs_create(
-    const HgAllocator *allocator,
+    HgAllocator *allocator,
     u32 max_entities,
     const HgSystemDescription *systems,
     u32 system_count
@@ -1785,9 +1745,9 @@ HgECS hg_ecs_create(
     max_entities += 1;
     HgECS ecs{};
     ecs.allocator = allocator;
-    ecs.entity_pool = (HgEntityID *)hg_alloc(allocator, max_entities * sizeof(HgEntityID), alignof(HgEntityID));
+    ecs.entity_pool = (HgEntityID *)allocator->alloc(max_entities * sizeof(HgEntityID), alignof(HgEntityID));
     ecs.entity_capacity = (u32)max_entities;
-    ecs.systems = (HgSystem *)hg_alloc(allocator, max_entities * sizeof(HgSystem), alignof(HgSystem));
+    ecs.systems = (HgSystem *)allocator->alloc(max_entities * sizeof(HgSystem), alignof(HgSystem));
     ecs.system_count = (u32)system_count;
 
     for (u32 i = 0; i < ecs.entity_capacity; ++i) {
@@ -1799,19 +1759,16 @@ HgECS hg_ecs_create(
     for (u32 i = 0; i < ecs.system_count; ++i) {
         u32 max_components = systems[i].max_components + 1;
 
-        ecs.systems[i].data = hg_alloc(ecs.allocator, systems[i].data_size, 16);
+        ecs.systems[i].data = ecs.allocator->alloc(systems[i].data_size, 16);
         ecs.systems[i].data_size = systems[i].data_size;
 
-        ecs.systems[i].entity_indices = (u32 *)hg_alloc(
-            ecs.allocator,
+        ecs.systems[i].entity_indices = (u32 *)ecs.allocator->alloc(
             ecs.entity_capacity * sizeof(u32),
             alignof(u32));
-        ecs.systems[i].component_entities = (HgEntityID *)hg_alloc(
-            ecs.allocator,
+        ecs.systems[i].component_entities = (HgEntityID *)ecs.allocator->alloc(
             max_components * sizeof(HgEntityID),
             alignof(HgEntityID));
-        ecs.systems[i].components = hg_alloc(
-            ecs.allocator,
+        ecs.systems[i].components = ecs.allocator->alloc(
             max_components * systems[i].component_size,
             systems[i].component_alignment);
 
@@ -1831,35 +1788,29 @@ void hg_ecs_destroy(HgECS *ecs) {
     assert(ecs != NULL);
 
     for (u32 i = 0; i < ecs->system_count; ++i) {
-        hg_free(
-            ecs->allocator,
+        ecs->allocator->free(
             ecs->systems[i].data,
             ecs->systems[i].data_size,
             16);
-        hg_free(
-            ecs->allocator,
+        ecs->allocator->free(
             ecs->systems[i].entity_indices,
             ecs->entity_capacity * sizeof(u32),
             alignof(u32)),
-        hg_free(
-            ecs->allocator,
+        ecs->allocator->free(
             ecs->systems[i].component_entities,
             ecs->systems[i].component_capacity * sizeof(HgEntityID),
             alignof(HgEntityID)),
-        hg_free(
-            ecs->allocator,
+        ecs->allocator->free(
             ecs->systems[i].components,
             ecs->systems[i].component_capacity * ecs->systems[i].component_size,
             ecs->systems[i].component_alignment);
     }
 
-    hg_free(
-        ecs->allocator,
+    ecs->allocator->free(
         ecs->entity_pool,
         ecs->entity_capacity * sizeof(HgEntityID),
         alignof(HgEntityID));
-    hg_free(
-        ecs->allocator,
+    ecs->allocator->free(
         ecs->systems,
         ecs->system_count * sizeof(HgSystem),
         alignof(HgSystem));
@@ -2630,7 +2581,7 @@ HgWindow *hg_window_create(const HgWindowConfig *config) {
     u32 height = config->windowed ? config->height
         : (u32)DisplayHeight(hg_internal_x11_display, DefaultScreen(hg_internal_x11_display));
 
-    HgWindow *window = (HgWindow *)hg_alloc(hg_persistent_allocator(), sizeof(*window), 16);
+    HgWindow *window = (HgWindow *)hg_persistent_allocator()->alloc(sizeof(*window), 16);
     *window = {};
     window->input.width = width;
     window->input.height = height;
@@ -2653,7 +2604,7 @@ void hg_window_destroy(HgWindow *window) {
     if (window != NULL)
         XDestroyWindow(hg_internal_x11_display, window->x11_window);
     XFlush(hg_internal_x11_display);
-    hg_std_free(NULL, window, sizeof(*window), 16);
+    hg_persistent_allocator()->free(window, sizeof(*window), 16);
 }
 
 void hg_window_set_icon(HgWindow *window, u32 *icon_data, u32 width, u32 height);
@@ -4361,6 +4312,8 @@ void vkCmdDispatch(VkCommandBuffer cmd, uint32_t x, uint32_t y, uint32_t z) {
 }
 
 void hg_init(void) {
+    hg_internal_temp_allocator = hg_persistent_allocator();
+
     hg_vk_load();
     hg_internal_platform_init();
 }

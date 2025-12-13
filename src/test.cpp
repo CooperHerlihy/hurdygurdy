@@ -158,12 +158,12 @@ int main(void) {
     f64 frame_time = 0.0f;
     f64 cpu_time = 0.0f;
     HgClock game_clock;
+    game_clock.tick();
     HgClock cpu_clock;
-    hg_clock_tick(&game_clock);
-    hg_clock_tick(&cpu_clock);
+    cpu_clock.tick();
 
     while(true) {
-        f64 delta = hg_clock_tick(&game_clock);
+        f64 delta = game_clock.tick();
         f32 deltaf = (f32)delta;
         ++frame_count;
         frame_time += delta;
@@ -238,9 +238,9 @@ int main(void) {
         }
 
         VkCommandBuffer cmd;
-        cpu_time += hg_clock_tick(&cpu_clock);
+        cpu_time += cpu_clock.tick();
         if (swapchain.handle && (cmd = hg_swapchain_commands_record(device.handle, &swapchain_commands))) {
-            hg_clock_tick(&cpu_clock);
+            cpu_clock.tick();
             u32 image_index = swapchain_commands.current_image;
 
             VkImageMemoryBarrier2 color_barrier{};
