@@ -8,6 +8,12 @@ set STD=/std:c11
 set WARNINGS=/W4 /WX
 set CONFIG=/nologo /Zi /Od
 
+for %%a in (%*) do (
+    if "%%a"=="release" (
+        set CONFIG=/nologo /O2 /D NDEBUG
+    )
+)
+
 set INCLUDES= ^
     /I "%BUILD_DIR%\shaders" ^
     /I "%SRC_DIR%\include" ^

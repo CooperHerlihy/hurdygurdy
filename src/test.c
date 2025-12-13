@@ -16,18 +16,18 @@ int main(void) {
         HgEntityID e1 = hg_entity_create(&ecs);
         HgEntityID e2 = hg_entity_create(&ecs);
         HgEntityID e3;
-        hg_debug("e1: %" PRIx64 ", e2: %" PRIx64 "\n", e1, e2);
+        hg_info("e1: %" PRIx64 ", e2: %" PRIx64 "\n", e1, e2);
         hg_entity_destroy(&ecs, e1);
         hg_entity_destroy(&ecs, e2);
         e1 = hg_entity_create(&ecs);
         e2 = hg_entity_create(&ecs);
         e3 = hg_entity_create(&ecs);
-        hg_debug("e1: %" PRIx64 ", e2: %" PRIx64 ", e3: %" PRIx64 "\n", e1, e2, e3);
+        hg_info("e1: %" PRIx64 ", e2: %" PRIx64 ", e3: %" PRIx64 "\n", e1, e2, e3);
 
-        hg_debug("0 first iteration\n");
+        hg_info("0 first iteration\n");
         for (HgEntityID *e = NULL; hg_ecs_iterate_system(&ecs, 0, &e);) {
             u32 *comp = hg_entity_get_component(&ecs, *e, 0);
-            hg_debug("iterator: %" PRIu32 "\n", *comp);
+            hg_info("iterator: %" PRIu32 "\n", *comp);
         }
 
         u32 *e1comp0 = hg_entity_add_component(&ecs, e1, 0);
@@ -37,26 +37,26 @@ int main(void) {
         u32 *e3comp0 = hg_entity_add_component(&ecs, e3, 0);
         *e3comp0 = 100;
 
-        hg_debug("0 second iteration\n");
+        hg_info("0 second iteration\n");
         for (HgEntityID *e = NULL; hg_ecs_iterate_system(&ecs, 0, &e);) {
             u32 *comp = hg_entity_get_component(&ecs, *e, 0);
-            hg_debug("iterator: %" PRIu32 "\n", *comp);
+            hg_info("iterator: %" PRIu32 "\n", *comp);
         }
 
         hg_entity_destroy(&ecs, e1);
 
-        hg_debug("0 third iteration\n");
+        hg_info("0 third iteration\n");
         for (HgEntityID *e = NULL; hg_ecs_iterate_system(&ecs, 0, &e);) {
             u32 *comp = hg_entity_get_component(&ecs, *e, 0);
-            hg_debug("iterator: %" PRIu32 "\n", *comp);
+            hg_info("iterator: %" PRIu32 "\n", *comp);
         }
 
         hg_ecs_flush_system(&ecs, 0);
 
-        hg_debug("0 fourth iteration\n");
+        hg_info("0 fourth iteration\n");
         for (HgEntityID *e = NULL; hg_ecs_iterate_system(&ecs, 0, &e);) {
             u32 *comp = hg_entity_get_component(&ecs, *e, 0);
-            hg_debug("iterator: %" PRIu32 "\n", *comp);
+            hg_info("iterator: %" PRIu32 "\n", *comp);
         }
 
         u64 *e2comp1 = hg_entity_add_component(&ecs, e2, 1);
@@ -64,11 +64,11 @@ int main(void) {
         u64 *e3comp1 = hg_entity_add_component(&ecs, e3, 1);
         *e3comp1 = 2100;
 
-        hg_debug("1 first iteration\n");
+        hg_info("1 first iteration\n");
         for (HgEntityID *e = NULL; hg_ecs_iterate_system(&ecs, 1, &e);) {
             u32 *comp0 = hg_entity_get_component(&ecs, *e, 0);
             u64 *comp1 = hg_entity_get_component(&ecs, *e, 1);
-            hg_debug("sys 1: %" PRIu64 ", sys 0: %" PRIu32 "\n", *comp1, *comp0);
+            hg_info("sys 1: %" PRIu64 ", sys 0: %" PRIu32 "\n", *comp1, *comp0);
         }
 
         hg_ecs_destroy(&ecs);

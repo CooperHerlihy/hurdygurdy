@@ -9,6 +9,13 @@ STD="-std=c11"
 WARNINGS="-Werror -Wall -Wextra -Wconversion -Wshadow -pedantic"
 CONFIG="-g -O0 -fsanitize=undefined"
 
+for arg in "$@"; do
+    if [ "$1" == "release" ]; then
+        CONFIG="-O3 -DNDEBUG"
+    fi
+    shift
+done
+
 INCLUDES=" \
     -I${BUILD_DIR}/shaders \
     -I${SRC_DIR}/include \
@@ -56,10 +63,14 @@ echo "libhurdygurdy.a"
 ar rcs ${BUILD_DIR}/libhurdygurdy.a ${BUILD_DIR}/hurdygurdy.o ${BUILD_DIR}/vk_mem_alloc.o
 
 echo "test.c"
-cc ${SRC_DIR}/src/test.c \
+cc ${STD} ${CONFIG} ${WARNINGS} ${INCLUDES} \
+    -c ${SRC_DIR}/src/test.c \
+    -o ${BUILD_DIR}/test.o
+
+echo "test"
+c++ -std=c++17 ${CONFIG} ${WARNINGS} \
     -o ${BUILD_DIR}/test \
-    ${STD} ${CONFIG} ${WARNINGS} ${INCLUDES} \
-    -lm -lc -lstdc++ -L"${BUILD_DIR}" -lhurdygurdy
+    ${BUILD_DIR}/test.o -L"${BUILD_DIR}" -lhurdygurdy
 
 END_TIME=$(date +%s.%N)
 printf "Build complete: %.6f seconds\n" "$(echo "$END_TIME - $START_TIME" | bc)"
