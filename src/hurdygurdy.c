@@ -2256,7 +2256,7 @@ void hg_vk_image_staging_read(
     vmaDestroyBuffer(allocator, stage, stage_alloc);
 }
 
-HgUniverse hg_universe_create(
+HgECS hg_ecs_create(
     const HgAllocator *allocator,
     u32 max_entities,
     const HgSystemDescription *systems,
@@ -2266,31 +2266,36 @@ HgUniverse hg_universe_create(
     assert(max_entities > 0);
 
     max_entities += 1;
-    HgUniverse ecs = {
+    HgECS ecs = {
         .allocator = allocator,
-        .entity_pool = hg_alloc(allocator, max_entities * sizeof(HgEntity), alignof(HgEntity)),
+        .entity_pool = hg_alloc(allocator, max_entities * sizeof(HgEntityID), alignof(HgEntityID)),
         .entity_capacity = (u32)max_entities,
-        .systems = hg_alloc(allocator, max_entities * sizeof(HgComponentSystem), alignof(HgComponentSystem)),
+        .systems = hg_alloc(allocator, max_entities * sizeof(HgSystem), alignof(HgSystem)),
         .system_count = (u32)system_count,
     };
 
     for (u32 i = 0; i < ecs.entity_capacity; ++i) {
         ecs.entity_pool[i] = i + 1;
     }
-    HgEntity reserved_null_entity = hg_entity_create(&ecs);
+    HgEntityID reserved_null_entity = hg_entity_create(&ecs);
     (void)reserved_null_entity;
 
     for (u32 i = 0; i < ecs.system_count; ++i) {
         u32 max_components = systems[i].max_components + 1;
-        ecs.systems[i] = (HgComponentSystem){
+        ecs.systems[i] = (HgSystem){
+            .data = hg_alloc(
+                ecs.allocator,
+                systems[i].data_size,
+                16),
+            .data_size = systems[i].data_size,
             .entity_indices = hg_alloc(
                 ecs.allocator,
                 ecs.entity_capacity * sizeof(u32),
                 alignof(u32)),
             .component_entities = hg_alloc(
                 ecs.allocator,
-                max_components * sizeof(HgEntity),
-                alignof(HgEntity)),
+                max_components * sizeof(HgEntityID),
+                alignof(HgEntityID)),
             .components = hg_alloc(
                 ecs.allocator,
                 max_components * systems[i].component_size,
@@ -2307,10 +2312,15 @@ HgUniverse hg_universe_create(
     return ecs;
 }
 
-void hg_universe_destroy(HgUniverse *ecs) {
+void hg_ecs_destroy(HgECS *ecs) {
     assert(ecs != NULL);
 
     for (u32 i = 0; i < ecs->system_count; ++i) {
+        hg_free(
+            ecs->allocator,
+            ecs->systems[i].data,
+            ecs->systems[i].data_size,
+            16);
         hg_free(
             ecs->allocator,
             ecs->systems[i].entity_indices,
@@ -2319,8 +2329,8 @@ void hg_universe_destroy(HgUniverse *ecs) {
         hg_free(
             ecs->allocator,
             ecs->systems[i].component_entities,
-            ecs->systems[i].component_capacity * sizeof(HgEntity),
-            alignof(HgEntity)),
+            ecs->systems[i].component_capacity * sizeof(HgEntityID),
+            alignof(HgEntityID)),
         hg_free(
             ecs->allocator,
             ecs->systems[i].components,
@@ -2331,21 +2341,41 @@ void hg_universe_destroy(HgUniverse *ecs) {
     hg_free(
         ecs->allocator,
         ecs->entity_pool,
-        ecs->entity_capacity * sizeof(HgEntity),
-        alignof(HgEntity));
+        ecs->entity_capacity * sizeof(HgEntityID),
+        alignof(HgEntityID));
     hg_free(
         ecs->allocator,
         ecs->systems,
-        ecs->system_count * sizeof(HgComponentSystem),
-        alignof(HgComponentSystem));
+        ecs->system_count * sizeof(HgSystem),
+        alignof(HgSystem));
+}
+
+void hg_ecs_reset(HgECS *ecs) {
+    assert(ecs != NULL);
+
+    for (u32 i = 0; i < ecs->entity_capacity; ++i) {
+        ecs->entity_pool[i] = i + 1;
+    }
+    HgEntityID reserved_null_entity = hg_entity_create(ecs);
+    (void)reserved_null_entity;
+
+    for (u32 i = 0; i < ecs->system_count; ++i) {
+        memset(ecs->systems[i].entity_indices, 0, ecs->systems[i].component_count);
+        memset(ecs->systems[i].component_entities, 0, ecs->systems[i].component_count);
+        ecs->systems[i].component_count = 1;
+    }
+}
+
+void *hg_ecs_get_system(HgECS *ecs, u32 system_index) {
+    return ecs->systems[system_index].data;
 }
 
 // add component removal queue : TODO
-void hg_system_flush_removals(HgUniverse *ecs, u32 system_index) {
+void hg_ecs_flush_system(HgECS *ecs, u32 system_index) {
     assert(ecs != NULL);
     assert(system_index < ecs->system_count);
 
-    HgComponentSystem *system = &ecs->systems[system_index];
+    HgSystem *system = &ecs->systems[system_index];
     for (u32 i = 1; i < system->component_count; ++i) {
         if (system->component_entities[i] == 0) {
             --system->component_count;
@@ -2354,8 +2384,8 @@ void hg_system_flush_removals(HgUniverse *ecs, u32 system_index) {
             void *last = (u8 *)system->components + system->component_count * system->component_size;
             memcpy(current, last, system->component_size);
 
-            HgEntity entity = system->component_entities[i];
-            HgEntity last_entity = system->component_entities[system->component_count];
+            HgEntityID entity = system->component_entities[i];
+            HgEntityID last_entity = system->component_entities[system->component_count];
 
             system->component_entities[i] = last_entity;
             system->component_entities[system->component_count] = 0;
@@ -2366,47 +2396,42 @@ void hg_system_flush_removals(HgUniverse *ecs, u32 system_index) {
     }
 }
 
-bool hg_system_iterate(HgUniverse *ecs, u32 system_index, void **iterator) {
+bool hg_ecs_iterate_system(HgECS *ecs, u32 system_index, HgEntityID **iterator) {
     assert(ecs != NULL);
     assert(system_index < ecs->system_count);
     assert(iterator != NULL);
 
-    HgComponentSystem *system = &ecs->systems[system_index];
+    HgSystem *system = &ecs->systems[system_index];
     if (*iterator == NULL) {
-        *iterator = system->components;
+        *iterator = system->component_entities;
     } else {
-        assert((u8 *)*iterator > (u8 *)system->components);
-        assert((u8 *)*iterator <= (u8 *)system->components + system->component_count * system->component_size);
-        assert(((u8 *)*iterator - (u8 *)system->components) % system->component_size == 0);
+        assert(*iterator > system->component_entities);
+        assert(*iterator <= system->component_entities + system->component_count);
     }
 
-    *(u8 **)iterator += system->component_size;
-    u32 index = (u32)(((usize)*iterator - (usize)system->components) / system->component_size);
-
-    while (index != system->component_count) {
-        if (system->component_entities[index] != 0)
+    while (*iterator != system->component_entities + system->component_count) {
+        *iterator += 1;
+        if (**iterator != 0)
             return true;
-        *(u8 **)iterator += system->component_size;
-        ++index;
     }
     return false;
 }
 
-HgEntity hg_entity_create(HgUniverse *ecs) {
+HgEntityID hg_entity_create(HgECS *ecs) {
     assert(ecs != NULL);
 
-    HgEntity entity = ecs->entity_next;
+    HgEntityID entity = ecs->entity_next;
     ecs->entity_next = ecs->entity_pool[entity & 0xffffffff];
     ecs->entity_pool[entity & 0xffffffff] = 0;
     return entity;
 }
 
-void hg_entity_destroy(HgUniverse *ecs, HgEntity entity) {
+void hg_entity_destroy(HgECS *ecs, HgEntityID entity) {
     assert(ecs != NULL);
-    assert(entity != 0);
+    assert(entity != 0 && ecs->entity_pool[entity & 0xffffffff] == 0);
 
     for (u32 i = 0; i < ecs->system_count; ++i) {
-        HgComponentSystem *system = &ecs->systems[i];
+        HgSystem *system = &ecs->systems[i];
         system->component_entities[system->entity_indices[entity & 0xffffffff]] = 0;
         system->entity_indices[entity & 0xffffffff] = 0;
     }
@@ -2414,17 +2439,17 @@ void hg_entity_destroy(HgUniverse *ecs, HgEntity entity) {
     ecs->entity_next = entity + ((u64)0x1 << 32);
 }
 
-bool hg_entity_is_alive(HgUniverse *ecs, HgEntity entity) {
+bool hg_entity_is_alive(HgECS *ecs, HgEntityID entity) {
     assert(ecs != NULL);
     return entity != 0 && ecs->entity_pool[entity & 0xffffffff] == 0;
 }
 
-void *hg_entity_add_component(HgUniverse *ecs, HgEntity entity, u32 system_index) {
+void *hg_entity_add_component(HgECS *ecs, HgEntityID entity, u32 system_index) {
     assert(ecs != NULL);
     assert(entity != 0);
     assert(system_index < ecs->system_count);
 
-    HgComponentSystem *system = &ecs->systems[system_index];
+    HgSystem *system = &ecs->systems[system_index];
     assert(system->entity_indices[entity & 0xffffffff] == 0);
 
     u32 index = system->component_count;
@@ -2439,12 +2464,12 @@ void *hg_entity_add_component(HgUniverse *ecs, HgEntity entity, u32 system_index
     return (u8 *)system->components + index * system->component_size;
 }
 
-void hg_entity_remove_component(HgUniverse *ecs, HgEntity entity, u32 system_index) {
+void hg_entity_remove_component(HgECS *ecs, HgEntityID entity, u32 system_index) {
     assert(ecs != NULL);
     assert(entity != 0);
     assert(system_index < ecs->system_count);
 
-    HgComponentSystem *system = &ecs->systems[system_index];
+    HgSystem *system = &ecs->systems[system_index];
 
     u32 index = system->entity_indices[entity & 0xffffffff];
 
@@ -2455,12 +2480,19 @@ void hg_entity_remove_component(HgUniverse *ecs, HgEntity entity, u32 system_ind
     system->component_entities[index] = 0;
 }
 
-void *hg_entity_get_component(HgUniverse *ecs, HgEntity entity, u32 system_index) {
+bool hg_entity_has_component(HgECS *ecs, HgEntityID entity, u32 system_index) {
+    assert(ecs != NULL);
+    assert(entity != 0);
+    assert(system_index < ecs->system_count);
+    return ecs->systems[system_index].entity_indices[entity & 0xffffffff] != 0;
+}
+
+void *hg_entity_get_component(HgECS *ecs, HgEntityID entity, u32 system_index) {
     assert(ecs != NULL);
     assert(entity != 0);
     assert(system_index < ecs->system_count);
 
-    HgComponentSystem *system = &ecs->systems[system_index];
+    HgSystem *system = &ecs->systems[system_index];
     u32 index = system->entity_indices[entity & 0xffffffff];
 
     assert(index != 0);
@@ -2468,15 +2500,15 @@ void *hg_entity_get_component(HgUniverse *ecs, HgEntity entity, u32 system_index
     return (u8 *)system->components + index * system->component_size;
 }
 
-HgEntity hg_component_get_entity(HgUniverse *ecs, void *component, u32 system_index) {
+HgEntityID hg_entity_from_component(HgECS *ecs, void *component, u32 system_index) {
     assert(ecs != NULL);
     assert(component != NULL);
     assert(system_index < ecs->system_count);
 
-    HgComponentSystem *system = &ecs->systems[system_index];
+    HgSystem *system = &ecs->systems[system_index];
 
     u32 index = (u32)(((usize)component - (usize)system->components) / system->component_size);
-    HgEntity entity = system->component_entities[index];
+    HgEntityID entity = system->component_entities[index];
 
     assert(entity != 0);
     assert(system->entity_indices[entity & 0xffffffff] == index);
