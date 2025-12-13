@@ -551,7 +551,12 @@ const HgAllocator *hg_persistent_allocator(void) {
     return &hg_internal_std_allocator;
 }
 
-thread_local HgAllocator hg_internal_temp_allocator = hg_internal_std_allocator;
+thread_local HgAllocator hg_internal_temp_allocator = {
+    .user_data = NULL,
+    .alloc = hg_std_alloc,
+    .realloc = hg_std_realloc,
+    .free = hg_std_free,
+};
 
 HgAllocator *hg_temp_allocator_get(void) {
     return &hg_internal_temp_allocator;
@@ -4000,7 +4005,7 @@ static LRESULT CALLBACK hg_internal_window_callback(HWND hwnd, UINT msg, WPARAM 
 HgWindow *hg_window_create(const HgPlatform *platform, const HgWindowConfig *config) {
     const char *title = config->title != NULL ? config->title : "Hurdy Gurdy";
 
-    HgWindow *window = hg_alloc(hg_persisten_allocator(), sizeof(*window), 16);
+    HgWindow *window = hg_alloc(hg_persistent_allocator(), sizeof(*window), 16);
     window->input = (HgWindowInput){
         .width = config->width,
         .height = config->height,
