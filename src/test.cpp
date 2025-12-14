@@ -1,6 +1,30 @@
 #include "hurdygurdy.hpp"
 
 int main(void) {
+
+    HgArray<u32> arr = HgArray<u32>::create(hg_persistent_allocator(), 1, 1);
+
+    for (usize i = 0; i < arr.count; ++i) {
+        hg_info("elem %d: %d\n", (int)i, arr[i]);
+    }
+
+    arr.push((u32)12);
+    arr.push((u32)42);
+    arr.push((u32)100);
+    arr.push((u32)1000);
+    arr.push((u32)999999999999);
+
+    for (usize i = 0; i < arr.count; ++i) {
+        hg_info("elem %d: %d\n", (int)i, arr[i]);
+    }
+
+    arr.remove(2);
+    arr.pop();
+
+    for (usize i = 0; i < arr.count; ++i) {
+        hg_info("elem %d: %d\n", (int)i, arr[i]);
+    }
+
     {
         HgSystemDescription systems[2]{};
         systems[0].max_components = 1 << 16;
@@ -10,7 +34,7 @@ int main(void) {
         systems[1].component_size = sizeof(u64);
         systems[1].component_alignment = alignof(u64);
 
-        HgECS ecs = hg_ecs_create(hg_persistent_allocator(), 1 << 16, systems, hg_countof(systems));
+        HgECS ecs = hg_ecs_create(hg_persistent_allocator(), 1 << 16, {systems, hg_countof(systems)});
 
         HgEntityID e1 = hg_entity_create(&ecs);
         HgEntityID e2 = hg_entity_create(&ecs);
@@ -24,7 +48,7 @@ int main(void) {
         hg_info("e1: %" PRIx64 ", e2: %" PRIx64 ", e3: %" PRIx64 "\n", e1, e2, e3);
 
         hg_info("0 first iteration\n");
-        for (HgEntityID *e = NULL; hg_ecs_iterate_system(&ecs, 0, &e);) {
+        for (HgEntityID *e = nullptr; hg_ecs_iterate_system(&ecs, 0, &e);) {
             u32 *comp = (u32 *)hg_entity_get_component(&ecs, *e, 0);
             hg_info("iterator: %" PRIu32 "\n", *comp);
         }
@@ -37,7 +61,7 @@ int main(void) {
         *e3comp0 = 100;
 
         hg_info("0 second iteration\n");
-        for (HgEntityID *e = NULL; hg_ecs_iterate_system(&ecs, 0, &e);) {
+        for (HgEntityID *e = nullptr; hg_ecs_iterate_system(&ecs, 0, &e);) {
             u32 *comp = (u32 *)hg_entity_get_component(&ecs, *e, 0);
             hg_info("iterator: %" PRIu32 "\n", *comp);
         }
@@ -45,7 +69,7 @@ int main(void) {
         hg_entity_destroy(&ecs, e1);
 
         hg_info("0 third iteration\n");
-        for (HgEntityID *e = NULL; hg_ecs_iterate_system(&ecs, 0, &e);) {
+        for (HgEntityID *e = nullptr; hg_ecs_iterate_system(&ecs, 0, &e);) {
             u32 *comp = (u32 *)hg_entity_get_component(&ecs, *e, 0);
             hg_info("iterator: %" PRIu32 "\n", *comp);
         }
@@ -53,7 +77,7 @@ int main(void) {
         hg_ecs_flush_system(&ecs, 0);
 
         hg_info("0 fourth iteration\n");
-        for (HgEntityID *e = NULL; hg_ecs_iterate_system(&ecs, 0, &e);) {
+        for (HgEntityID *e = nullptr; hg_ecs_iterate_system(&ecs, 0, &e);) {
             u32 *comp = (u32 *)hg_entity_get_component(&ecs, *e, 0);
             hg_info("iterator: %" PRIu32 "\n", *comp);
         }
@@ -64,7 +88,7 @@ int main(void) {
         *e3comp1 = 2100;
 
         hg_info("1 first iteration\n");
-        for (HgEntityID *e = NULL; hg_ecs_iterate_system(&ecs, 1, &e);) {
+        for (HgEntityID *e = nullptr; hg_ecs_iterate_system(&ecs, 1, &e);) {
             u32 *comp0 = (u32 *)hg_entity_get_component(&ecs, *e, 0);
             u64 *comp1 = (u64 *)hg_entity_get_component(&ecs, *e, 1);
             hg_info("sys 1: %" PRIu64 ", sys 0: %" PRIu32 "\n", *comp1, *comp0);
@@ -102,14 +126,14 @@ int main(void) {
     cmd_pool_info.queueFamilyIndex = device.queue_family;
 
     VkCommandPool cmd_pool;
-    vkCreateCommandPool(device.handle, &cmd_pool_info, NULL, &cmd_pool);
+    vkCreateCommandPool(device.handle, &cmd_pool_info, nullptr, &cmd_pool);
 
     VkSurfaceKHR surface = hg_vk_create_surface(instance, window);
-    HgSwapchainData swapchain = hg_vk_create_swapchain(device.handle, device.gpu, NULL, surface,
+    HgSwapchainData swapchain = hg_vk_create_swapchain(device.handle, device.gpu, nullptr, surface,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_PRESENT_MODE_FIFO_KHR);
 
     u32 swap_image_count;
-    vkGetSwapchainImagesKHR(device.handle, swapchain.handle, &swap_image_count, NULL);
+    vkGetSwapchainImagesKHR(device.handle, swapchain.handle, &swap_image_count, nullptr);
     VkImage *swap_images = (VkImage *)malloc(swap_image_count * sizeof(*swap_images));
     VkImageView *swap_views = (VkImageView *)malloc(swap_image_count * sizeof(*swap_views));
     vkGetSwapchainImagesKHR(device.handle, swapchain.handle, &swap_image_count, swap_images);
@@ -125,7 +149,7 @@ int main(void) {
         create_info.subresourceRange.baseArrayLayer = 0;
         create_info.subresourceRange.layerCount = 1;
 
-        vkCreateImageView(device.handle, &create_info, NULL, &swap_views[i]);
+        vkCreateImageView(device.handle, &create_info, nullptr, &swap_views[i]);
     }
     HgSwapchainCommands swapchain_commands = hg_swapchain_commands_create(
         device.handle, swapchain.handle, cmd_pool);
@@ -177,7 +201,7 @@ int main(void) {
             cpu_time = 0.0;
         }
 
-        hg_window_process_events(&window, 1);
+        hg_window_process_events({&window, 1});
         if (hg_window_was_closed(window) || hg_window_is_key_down(window, HG_KEY_ESCAPE))
             break;
 
@@ -200,12 +224,12 @@ int main(void) {
                 VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_PRESENT_MODE_FIFO_KHR);
 
             for (usize i = 0; i < old_count; ++i) {
-                vkDestroyImageView(device.handle, swap_views[i], NULL);
+                vkDestroyImageView(device.handle, swap_views[i], nullptr);
             }
             hg_swapchain_commands_destroy(device.handle, &swapchain_commands);
 
-            if (swapchain.handle != NULL) {
-                vkGetSwapchainImagesKHR(device.handle, swapchain.handle, &swap_image_count, NULL);
+            if (swapchain.handle != nullptr) {
+                vkGetSwapchainImagesKHR(device.handle, swapchain.handle, &swap_image_count, nullptr);
                 if (swap_image_count != old_count) {
                     swap_images = (VkImage *)realloc(swap_images, swap_image_count * sizeof(*swap_images));
                     swap_views = (VkImageView *)realloc(swap_views, swap_image_count * sizeof(*swap_images));
@@ -223,7 +247,7 @@ int main(void) {
                     create_info.subresourceRange.baseArrayLayer = 0;
                     create_info.subresourceRange.layerCount = 1;
 
-                    vkCreateImageView(device.handle, &create_info, NULL, &swap_views[i]);
+                    vkCreateImageView(device.handle, &create_info, nullptr, &swap_views[i]);
                 }
                 swapchain_commands = hg_swapchain_commands_create(
                     device.handle, swapchain.handle, cmd_pool);
@@ -233,7 +257,7 @@ int main(void) {
                 hg_pipeline_sprite_update_projection(&sprite_pipeline, &proj);
             }
 
-            vkDestroySwapchainKHR(device.handle, old_swapchain, NULL);
+            vkDestroySwapchainKHR(device.handle, old_swapchain, nullptr);
             hg_info("window resized\n");
         }
 
@@ -268,7 +292,7 @@ int main(void) {
 
             VkRenderingInfo rendering_info{};
             rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-            rendering_info.pNext = NULL;
+            rendering_info.pNext = nullptr;
             rendering_info.renderArea.extent = {swapchain.width, swapchain.height};
             rendering_info.layerCount = 1;
             rendering_info.colorAttachmentCount = 1;
@@ -319,18 +343,18 @@ int main(void) {
 
     hg_swapchain_commands_destroy(device.handle, &swapchain_commands);
     for (usize i = 0; i < swap_image_count; ++i) {
-        vkDestroyImageView(device.handle, swap_views[i], NULL);
+        vkDestroyImageView(device.handle, swap_views[i], nullptr);
     }
     free(swap_views);
     free(swap_images);
-    vkDestroySwapchainKHR(device.handle, swapchain.handle, NULL);
+    vkDestroySwapchainKHR(device.handle, swapchain.handle, nullptr);
 
-    vkDestroyCommandPool(device.handle, cmd_pool, NULL);
+    vkDestroyCommandPool(device.handle, cmd_pool, nullptr);
     vmaDestroyAllocator(allocator);
-    vkDestroyDevice(device.handle, NULL);
-    vkDestroySurfaceKHR(instance, surface, NULL);
-    hg_debug_mode(vkDestroyDebugUtilsMessengerEXT(instance, debug_messenger, NULL));
-    vkDestroyInstance(instance, NULL);
+    vkDestroyDevice(device.handle, nullptr);
+    vkDestroySurfaceKHR(instance, surface, nullptr);
+    hg_debug_mode(vkDestroyDebugUtilsMessengerEXT(instance, debug_messenger, nullptr));
+    vkDestroyInstance(instance, nullptr);
 
     hg_window_destroy(window);
 

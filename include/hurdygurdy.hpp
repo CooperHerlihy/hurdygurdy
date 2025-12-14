@@ -41,6 +41,12 @@
 #include <cstring>
 #include <ctime>
 
+#include <algorithm>
+#include <new>
+#include <optional>
+#include <utility>
+#include <type_traits>
+
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
 
@@ -101,46 +107,6 @@ typedef double f64;
 #define hg_countof(array) (sizeof(array) / sizeof((array)[0]))
 
 /**
- * Takes the minimum of two values
- *
- * Note, if the values are expressions, they will be evaluated twice
- *
- * Parameters
- * - a The first value to compare
- * - b The second value to compare
- * Returns
- * - The lower value
- */
-#define hg_min(a, b) ((a) < (b) ? (a) : (b))
-
-/**
- * Takes the maximum of two values
- *
- * Note, if the values are expressions, they will be evaluated twice
- *
- * Parameters
- * - a The first value to compare
- * - b The second value to compare
- * Returns
- * - The higher value
- */
-#define hg_max(a, b) ((a) > (b) ? (a) : (b))
-
-/**
- * Clamps a value between two bounds
- *
- * Note, if the values are expressions, they will be multiple times
- *
- * Parameters
- * - x The value to clamp
- * - a The lower bound
- * - b The upper bound
- * Returns
- * - The clamped value
- */
-#define hg_clamp(x, a, b) hg_max((a), hg_min((b), (x)))
-
-/**
  * Formats and logs a debug message to stderr in debug mode only
  *
  * Parameters
@@ -196,7 +162,7 @@ struct HgClock {
      * Resets the clock and gets the delta since the last tick in seconds
      *
      * Parameters
-     * - clock The clock to tick, must not be NULL
+     * - clock The clock to tick, must not be nullptr
      * Returns
      * - Seconds since last tick
      */
@@ -449,14 +415,14 @@ inline HgMat4 hg_mat3to4(HgMat3 lhs) {
  *
  * Parameters
  * - size The size of the vectors
- * - dst The destination vector, must not be NULL
- * - lhs The left-hand side vector, must not be NULL
- * - rhs The right-hand side vector, must not be NULL
+ * - dst The destination vector, must not be nullptr
+ * - lhs The left-hand side vector, must not be nullptr
+ * - rhs The right-hand side vector, must not be nullptr
  */
 inline void hg_vadd(u32 size, f32* dst, f32* lhs, f32* rhs) {
-    assert(dst != NULL);
-    assert(lhs != NULL);
-    assert(rhs != NULL);
+    assert(dst != nullptr);
+    assert(lhs != nullptr);
+    assert(rhs != nullptr);
     for (u32 i = 0; i < size; ++i) {
         dst[i] = lhs[i] + rhs[i];
     }
@@ -506,14 +472,14 @@ inline HgVec4 hg_vadd4(HgVec4 lhs, HgVec4 rhs) {
  *
  * Parameters
  * - size The size of the vectors
- * - dst The destination vector, must not be NULL
- * - lhs The left-hand side vector, must not be NULL
- * - rhs The right-hand side vector, must not be NULL
+ * - dst The destination vector, must not be nullptr
+ * - lhs The left-hand side vector, must not be nullptr
+ * - rhs The right-hand side vector, must not be nullptr
  */
 inline void hg_vsub(u32 size, f32* dst, f32* lhs, f32* rhs) {
-    assert(dst != NULL);
-    assert(lhs != NULL);
-    assert(rhs != NULL);
+    assert(dst != nullptr);
+    assert(lhs != nullptr);
+    assert(rhs != nullptr);
     for (u32 i = 0; i < size; ++i) {
         dst[i] = lhs[i] - rhs[i];
     }
@@ -563,14 +529,14 @@ inline HgVec4 hg_vsub4(HgVec4 lhs, HgVec4 rhs) {
  *
  * Parameters
  * - size The size of the vectors
- * - dst The destination vector, must not be NULL
- * - lhs The left-hand side vector, must not be NULL
- * - rhs The right-hand side vector, must not be NULL
+ * - dst The destination vector, must not be nullptr
+ * - lhs The left-hand side vector, must not be nullptr
+ * - rhs The right-hand side vector, must not be nullptr
  */
 inline void hg_vmul(u32 size, f32* dst, f32* lhs, f32* rhs) {
-    assert(dst != NULL);
-    assert(lhs != NULL);
-    assert(rhs != NULL);
+    assert(dst != nullptr);
+    assert(lhs != nullptr);
+    assert(rhs != nullptr);
     for (u32 i = 0; i < size; ++i) {
         dst[i] = lhs[i] * rhs[i];
     }
@@ -620,13 +586,13 @@ inline HgVec4 hg_vmul4(HgVec4 lhs, HgVec4 rhs) {
  *
  * Parameters
  * - size The size of the vector
- * - dst The destination vector, must not be NULL
+ * - dst The destination vector, must not be nullptr
  * - scalar The scalar to multiply with
- * - vec The vector to multiply with, must not be NULL
+ * - vec The vector to multiply with, must not be nullptr
  */
 inline void hg_svmul(u32 size, f32* dst, f32 scalar, f32* vec) {
-    assert(dst != NULL);
-    assert(vec != NULL);
+    assert(dst != nullptr);
+    assert(vec != nullptr);
     for (u32 i = 0; i < size; ++i) {
         dst[i] = scalar * vec[i];
     }
@@ -676,14 +642,14 @@ inline HgVec4 hg_svmul4(f32 scalar, HgVec4 vec) {
  *
  * Parameters
  * - size The size of the vectors
- * - dst The destination vector, must not be NULL
- * - lhs The left-hand side vector, must not be NULL
- * - rhs The right-hand side vector, must not be NULL
+ * - dst The destination vector, must not be nullptr
+ * - lhs The left-hand side vector, must not be nullptr
+ * - rhs The right-hand side vector, must not be nullptr
  */
 inline void hg_vdiv(u32 size, f32* dst, f32* lhs, f32* rhs) {
-    assert(dst != NULL);
-    assert(lhs != NULL);
-    assert(rhs != NULL);
+    assert(dst != nullptr);
+    assert(lhs != nullptr);
+    assert(rhs != nullptr);
     for (u32 i = 0; i < size; ++i) {
         dst[i] = lhs[i] / rhs[i];
     }
@@ -733,13 +699,13 @@ inline HgVec4 hg_vdiv4(HgVec4 lhs, HgVec4 rhs) {
  *
  * Parameters
  * - size The size of the vector
- * - dst The destination vector, must not be NULL
+ * - dst The destination vector, must not be nullptr
  * - scalar The scalar to divide by
- * - vec The vector to divide, must not be NULL
+ * - vec The vector to divide, must not be nullptr
  */
 inline void hg_svdiv(u32 size, f32* dst, f32 scalar, f32* vec) {
-    assert(dst != NULL);
-    assert(vec != NULL);
+    assert(dst != nullptr);
+    assert(vec != nullptr);
     for (u32 i = 0; i < size; ++i) {
         dst[i] = scalar / vec[i];
     }
@@ -789,14 +755,14 @@ inline HgVec4 hg_svdiv4(f32 scalar, HgVec4 vec) {
  *
  * Parameters
  * - size The size of the vectors
- * - dst The destination vector, must not be NULL
- * - lhs The left-hand side vector, must not be NULL
- * - rhs The right-hand side vector, must not be NULL
+ * - dst The destination vector, must not be nullptr
+ * - lhs The left-hand side vector, must not be nullptr
+ * - rhs The right-hand side vector, must not be nullptr
  */
 inline void hg_vdot(u32 size, f32* dst, f32* lhs, f32* rhs) {
-    assert(dst != NULL);
-    assert(lhs != NULL);
-    assert(rhs != NULL);
+    assert(dst != nullptr);
+    assert(lhs != nullptr);
+    assert(rhs != nullptr);
     *dst = 0.0f;
     for (u32 i = 0; i < size; ++i) {
         *dst += lhs[i] * rhs[i];
@@ -847,12 +813,12 @@ inline float hg_vdot4(HgVec4 lhs, HgVec4 rhs) {
  *
  * Parameters
  * - size The size of the vector
- * - dst The destination vector, must not be NULL
- * - vec The vector to compute the length of, must not be NULL
+ * - dst The destination vector, must not be nullptr
+ * - vec The vector to compute the length of, must not be nullptr
  */
 inline void hg_vlen(u32 size, f32* dst, f32* vec) {
-    assert(dst != NULL);
-    assert(vec != NULL);
+    assert(dst != nullptr);
+    assert(vec != nullptr);
     hg_vdot(size, dst, vec, vec);
     *dst = sqrtf(*dst);
 }
@@ -898,12 +864,12 @@ inline float hg_vlen4(HgVec4 vec) {
  *
  * Parameters
  * - size The size of the vector
- * - dst The destination vector, must not be NULL
- * - vec The vector to normalize, must not be NULL
+ * - dst The destination vector, must not be nullptr
+ * - vec The vector to normalize, must not be nullptr
  */
 inline void hg_vnorm(u32 size, f32* dst, f32* vec) {
-    assert(dst != NULL);
-    assert(vec != NULL);
+    assert(dst != nullptr);
+    assert(vec != nullptr);
     f32 len;
     hg_vlen(size, &len, vec);
     for (u32 i = 0; i < size; ++i) {
@@ -954,14 +920,14 @@ inline HgVec4 hg_vnorm4(HgVec4 vec) {
  * Computes the cross product of two 3D vectors
  *
  * Parameters
- * - dst The destination vector, must not be NULL
- * - lhs The left-hand side vector, must not be NULL
- * - rhs The right-hand side vector, must not be NULL
+ * - dst The destination vector, must not be nullptr
+ * - lhs The left-hand side vector, must not be nullptr
+ * - rhs The right-hand side vector, must not be nullptr
  */
 inline void hg_vcross(f32* dst, f32* lhs, f32* rhs) {
-    assert(dst != NULL);
-    assert(lhs != NULL);
-    assert(rhs != NULL);
+    assert(dst != nullptr);
+    assert(lhs != nullptr);
+    assert(rhs != nullptr);
     dst[0] = lhs[1] * rhs[2] - lhs[2] * rhs[1];
     dst[1] = lhs[2] * rhs[0] - lhs[0] * rhs[2];
     dst[2] = lhs[0] * rhs[1] - lhs[1] * rhs[0];
@@ -986,14 +952,14 @@ inline HgVec3 hg_vcross3(HgVec3 lhs, HgVec3 rhs) {
  * Parameters
  * - width The width of the matrices
  * - height The height of the matrices
- * - dst The destination matrix, must not be NULL
- * - lhs The left-hand side matrix, must not be NULL
- * - rhs The right-hand side matrix, must not be NULL
+ * - dst The destination matrix, must not be nullptr
+ * - lhs The left-hand side matrix, must not be nullptr
+ * - rhs The right-hand side matrix, must not be nullptr
  */
 inline void hg_madd(u32 width, u32 height, f32* dst, f32* lhs, f32* rhs) {
-    assert(dst != NULL);
-    assert(lhs != NULL);
-    assert(rhs != NULL);
+    assert(dst != nullptr);
+    assert(lhs != nullptr);
+    assert(rhs != nullptr);
     for (u32 i = 0; i < width; ++i) {
         for (u32 j = 0; j < height; ++j) {
             dst[i * width + j] = lhs[i * width + j] + rhs[i * width + j];
@@ -1052,14 +1018,14 @@ inline HgMat4 hg_madd4(HgMat4 lhs, HgMat4 rhs) {
  * Parameters
  * - width The width of the matrices
  * - height The height of the matrices
- * - dst The destination matrix, must not be NULL
- * - lhs The left-hand side matrix, must not be NULL
- * - rhs The right-hand side matrix, must not be NULL
+ * - dst The destination matrix, must not be nullptr
+ * - lhs The left-hand side matrix, must not be nullptr
+ * - rhs The right-hand side matrix, must not be nullptr
  */
 inline void hg_msub(u32 width, u32 height, f32* dst, f32* lhs, f32* rhs) {
-    assert(dst != NULL);
-    assert(lhs != NULL);
-    assert(rhs != NULL);
+    assert(dst != nullptr);
+    assert(lhs != nullptr);
+    assert(rhs != nullptr);
     for (u32 i = 0; i < width; ++i) {
         for (u32 j = 0; j < height; ++j) {
             dst[i * width + j] = lhs[i * width + j] - rhs[i * width + j];
@@ -1116,19 +1082,19 @@ inline HgMat4 hg_msub4(HgMat4 lhs, HgMat4 rhs) {
  * Multiplies two arbitrary size matrices
  *
  * Parameters
- * - dst The destination matrix, must not be NULL
+ * - dst The destination matrix, must not be nullptr
  * - wl The width of the left-hand side matrix
  * - hl The height of the left-hand side matrix
- * - lhs The left-hand side matrix, must not be NULL
+ * - lhs The left-hand side matrix, must not be nullptr
  * - wr The width of the right-hand side matrix
  * - hr The height of the right-hand side matrix
- * - rhs The right-hand side matrix, must not be NULL
+ * - rhs The right-hand side matrix, must not be nullptr
  */
 inline void hg_mmul(f32* dst, u32 wl, u32 hl, f32* lhs, u32 wr, u32 hr, f32* rhs) {
     assert(hr == wl);
-    assert(dst != NULL);
-    assert(lhs != NULL);
-    assert(rhs != NULL);
+    assert(dst != nullptr);
+    assert(lhs != nullptr);
+    assert(rhs != nullptr);
     (void)hr;
     for (u32 i = 0; i < wl; ++i) {
         for (u32 j = 0; j < wr; ++j) {
@@ -1191,14 +1157,14 @@ inline HgMat4 hg_mmul4(HgMat4 lhs, HgMat4 rhs) {
  * Parameters
  * - width The width of the matrix
  * - height The height of the matrix
- * - dst The destination vector, must not be NULL
- * - mat The matrix to multiply with, must not be NULL
- * - vec The vector to multiply with, must not be NULL
+ * - dst The destination vector, must not be nullptr
+ * - mat The matrix to multiply with, must not be nullptr
+ * - vec The vector to multiply with, must not be nullptr
  */
 inline void hg_mvmul(u32 width, u32 height, f32* dst, f32* mat, f32* vec) {
-    assert(dst != NULL);
-    assert(mat != NULL);
-    assert(vec != NULL);
+    assert(dst != nullptr);
+    assert(mat != nullptr);
+    assert(vec != nullptr);
     for (u32 i = 0; i < height; ++i) {
         dst[i] = 0.0f;
         for (u32 j = 0; j < width; ++j) {
@@ -1480,6 +1446,107 @@ HgMat4 hg_projection_perspective(f32 fov, f32 aspect, f32 near, f32 far);
 u32 hg_max_mipmaps(u32 width, u32 height, u32 depth);
 
 /**
+ * A pointer-count pair
+ */
+template<typename T>
+struct HgSpan {
+    /**
+     * The array
+     */
+    T *data;
+    /**
+     * The number of items in the array
+     */
+    usize count;
+
+    /**
+     * Convenience to index into the array with debug bounds checking
+     */
+    T& operator[](usize index) {
+        assert(data != nullptr);
+        assert(index < count);
+        return data[index];
+    }
+
+    /**
+     * Convenience to index into the array with debug bounds checking
+     */
+    const T& operator[](usize index) const {
+        assert(data != nullptr);
+        assert(index < count);
+        return data[index];
+    }
+
+    /**
+     * Implicit conversion can add const
+     */
+    operator HgSpan<std::add_const<T>>() const {
+        return {(const T*)data, count};
+    }
+};
+
+template<>
+struct HgSpan<const void> {
+    /**
+     * The array
+     */
+    const void *data;
+    /**
+     * The number of items in the array
+     */
+    usize count;
+};
+
+template<>
+struct HgSpan<void> {
+    /**
+     * The array
+     */
+    void *data;
+    /**
+     * The number of items in the array
+     */
+    usize count;
+
+    /**
+     * Implicit conversion can add const
+     */
+    operator HgSpan<const void>() const {
+        return {(const void*)data, count};
+    }
+};
+
+template<typename T>
+bool operator==(HgSpan<T> lhs, HgSpan<T> rhs) {
+    return lhs.data == rhs.data && lhs.count == rhs.count;
+}
+
+template<typename T>
+bool operator!=(HgSpan<T> lhs, HgSpan<T> rhs) {
+    return lhs.data != rhs.data || lhs.count != rhs.count;
+}
+
+template<typename T>
+bool operator==(HgSpan<T> lhs, std::nullptr_t rhs) {
+    return lhs.data == rhs;
+}
+
+template<typename T>
+bool operator==(std::nullptr_t lhs, HgSpan<T> rhs) {
+    return rhs.data == lhs;
+}
+
+template<typename T>
+bool operator!=(HgSpan<T> lhs, std::nullptr_t rhs) {
+    return lhs.data != rhs;
+}
+
+template<typename T>
+bool operator!=(std::nullptr_t lhs, HgSpan<T> rhs) {
+    return rhs.data != lhs;
+}
+
+/**
  * The interface for generic allocators
  */
 struct HgAllocator {
@@ -1490,7 +1557,7 @@ struct HgAllocator {
      * - size The size to allocate in bytes
      * - alignment The alignment in bytes of the allocation
      */
-    virtual void *alloc(usize size, usize alignment) = 0;
+    virtual void *alloc_fn(usize size, usize alignment) = 0;
 
     /**
      * Changes the size of an allocation, potentially returning a different
@@ -1502,7 +1569,7 @@ struct HgAllocator {
      * - new_size The size to allocate in bytes
      * - alignment The alignment in bytes of the allocation
      */
-    virtual void *realloc(void *allocation, usize old_size, usize new_size, usize alignment) = 0;
+    virtual void *realloc_fn(void *allocation, usize old_size, usize new_size, usize alignment) = 0;
 
     /**
      * Frees allocated memory
@@ -1512,7 +1579,119 @@ struct HgAllocator {
      * - size The size of the allocation in bytes
      * - alignment The alignment in bytes of the allocation
      */
-    virtual void free(void *allocation, usize size, usize alignment) = 0;
+    virtual void free_fn(void *allocation, usize size, usize alignment) = 0;
+
+    /**
+     * A convenience to allocate using a type
+     *
+     * Returns
+     * - The allocated item
+     */
+    template<typename T>
+    T *alloc() {
+        static_assert(std::is_pod_v<T>);
+        return (T *)alloc_fn(sizeof(T), alignof(T));
+    }
+
+    /**
+     * A convenience to allocate an array using a type
+     *
+     * Parameters
+     * - count The number of T to allocate
+     * Returns
+     * - The allocated array
+     */
+    template<typename T>
+    HgSpan<T> alloc(usize count) {
+        static_assert(std::is_pod_v<T>);
+        HgSpan<T> span;
+        span.data = (T *)alloc_fn(count * sizeof(T), alignof(T));
+        span.count = count;
+        return span;
+    }
+
+    /**
+     * A convenience to allocate a void array
+     *
+     * Parameters
+     * - size The size in bytes to allocate
+     * Returns
+     * - The allocated array
+     */
+    HgSpan<void> alloc(usize size, usize alignment) {
+        HgSpan<void> span;
+        span.data = alloc_fn(size, alignment);
+        span.count = size;
+        return span;
+    }
+
+    /**
+     * A convenience to reallocate an array using a type
+     *
+     * Parameters
+     * - allocation The allocation to reallocate
+     * - count The new number of T to allocate
+     * Returns
+     * - The rallocated array
+     */
+    template<typename T>
+    HgSpan<T> realloc(HgSpan<T> allocation, usize count) {
+        static_assert(std::is_pod_v<T>);
+        HgSpan<T> span;
+        span.data = (T *)realloc_fn(allocation.data, allocation.count * sizeof(T), count * sizeof(T), alignof(T));
+        span.count = count;
+        return span;
+    }
+
+    /**
+     * A convenience to reallocate a void array
+     *
+     * Parameters
+     * - allocation The alloation to reallocate
+     * - size The new size to allocate
+     * Returns
+     * - The rallocated array
+     */
+    HgSpan<void> realloc(HgSpan<void> allocation, usize size, usize alignment) {
+        HgSpan<void> span;
+        span.data = realloc_fn(allocation.data, allocation.count, size, alignment);
+        span.count = size;
+        return span;
+    }
+
+    /**
+     * A convenience to free using a type
+     *
+     * Parameters
+     * - allocation The allocation to free
+     */
+    template<typename T>
+    void free(T *allocation) {
+        static_assert(std::is_pod_v<T>);
+        free_fn(allocation, sizeof(T), alignof(T));
+    }
+
+    /**
+     * A convenience to free an array using a type
+     *
+     * Parameters
+     * - allocation The allocation to free
+     */
+    template<typename T>
+    void free(HgSpan<T> allocation) {
+        static_assert(std::is_pod_v<T>);
+        free_fn(allocation.data, allocation.count * sizeof(T), alignof(T));
+    }
+
+    /**
+     * A convenience to free a void array
+     *
+     * Parameters
+     * - allocation The allocation to free
+     */
+    void free(HgSpan<void> allocation, usize alignment) {
+        free_fn(allocation.data, allocation.count, alignment);
+    }
 };
 
 /**
@@ -1543,11 +1722,14 @@ HgAllocator *hg_temp_allocator();
  * Parameters
  * - The allocator to set for this thread
  */
-void hg_temp_allocator_set(HgAllocator allocator);
+void hg_temp_allocator_set(HgAllocator *allocator);
 
+/**
+ * C malloc, realloc, and free in the HgAllocator interface
+ */
 struct HgStdAllocator : public HgAllocator {
     /**
-     * Calls malloc, checking for NULL in debug mode
+     * Calls malloc, checking for nullptr in debug mode
      *
      * Parameters
      * - size The size of the allocation in bytes
@@ -1555,10 +1737,10 @@ struct HgStdAllocator : public HgAllocator {
      * Returns
      * - The allocated memory
      */
-    void *alloc(usize size, usize alignment) override;
+    void *alloc_fn(usize size, usize alignment) override;
 
     /**
-     * Calls realloc, checking for NULL in debug mode
+     * Calls realloc, checking for nullptr in debug mode
      *
      * Parameters
      * - allocation The allocation to resize
@@ -1568,7 +1750,7 @@ struct HgStdAllocator : public HgAllocator {
      * Returns
      * - The allocated memory
      */
-    void *realloc(void *allocation, usize old_size, usize new_size, usize alignment) override;
+    void *realloc_fn(void *allocation, usize old_size, usize new_size, usize alignment) override;
 
     /**
      * Calls free
@@ -1578,7 +1760,7 @@ struct HgStdAllocator : public HgAllocator {
      * - size The size of the allocation in bytes
      * - alignment The alignment in bytes of the allocation
      */
-    void free(void *allocation, usize size, usize alignment) override;
+    void free_fn(void *allocation, usize size, usize alignment) override;
 };
 
 /**
@@ -1595,11 +1777,7 @@ struct HgArena : public HgAllocator {
     /**
      * A pointer to the memory being allocated
      */
-    void *data;
-    /**
-     * The total capacity of the data in bytes
-     */
-    void *capacity;
+    HgSpan<void> memory;
     /**
      * The next allocation to be given out
      */
@@ -1609,7 +1787,7 @@ struct HgArena : public HgAllocator {
      * Allocates an arena with capacity
      *
      * Parameters
-     * - allocator The allocator to use to create the arena, must not be NULL
+     * - allocator The allocator to use to create the arena, must not be nullptr
      * - capacity The size of the block to allocate and use
      * Returns
      * - The allocated arena
@@ -1637,9 +1815,9 @@ struct HgArena : public HgAllocator {
      * - alignment The required alignment of the allocation in bytes
      * Returns
      * - The allocation if successful
-     * - NULL if the allocation exceeds capacity, or size is 0
+     * - nullptr if the allocation exceeds capacity, or size is 0
      */
-    void *alloc(usize size, usize alignment) override;
+    void *alloc_fn(usize size, usize alignment) override;
 
     /**
      * Reallocates memory from a arena
@@ -1653,9 +1831,9 @@ struct HgArena : public HgAllocator {
      * - alignment The required alignment of the allocation in bytes
      * Returns
      * - The allocation if successful
-     * - NULL if the allocation exceeds capacity
+     * - nullptr if the allocation exceeds capacity
      */
-    void *realloc(void *allocation, usize old_size, usize new_size, usize alignment) override;
+    void *realloc_fn(void *allocation, usize old_size, usize new_size, usize alignment) override;
 
     /**
      * Does nothing, only exists to fit allocator interface
@@ -1665,7 +1843,7 @@ struct HgArena : public HgAllocator {
      * - size The size of the allocation
      * - alignment The required alignment of the allocation in bytes
      */
-    void free(void *allocation, usize size, usize alignment) override;
+    void free_fn(void *allocation, usize size, usize alignment) override;
 };
 
 /**
@@ -1681,11 +1859,7 @@ struct HgStack : public HgAllocator {
     /*
      * A pointer to the memory being allocated
      */
-    void *data;
-    /*
-     * The total capacity of the data in bytes
-     */
-    usize capacity;
+    HgSpan<void> memory;
     /*
      * The next allocation to be given out
      */
@@ -1695,7 +1869,7 @@ struct HgStack : public HgAllocator {
      * Allocates a stack allocator with capacity
      *
      * Parameters
-     * - allocator The allocator to allocate memory from, must not be NULL
+     * - allocator The allocator to allocate memory from, must not be nullptr
      * - capacity The size of the block to allocate and use
      * Returns
      * - The allocated stack
@@ -1720,9 +1894,9 @@ struct HgStack : public HgAllocator {
      * - alignment The required alignment of the allocation in bytes
      * Returns
      * - The allocation if successful
-     * - NULL if the allocation exceeds capacity, or size is 0
+     * - nullptr if the allocation exceeds capacity, or size is 0
      */
-    void *alloc(usize size, usize alignment) override;
+    void *alloc_fn(usize size, usize alignment) override;
 
     /**
      * Reallocates memory from a stack
@@ -1736,9 +1910,9 @@ struct HgStack : public HgAllocator {
      * - alignment The required alignment of the allocation in bytes
      * Returns
      * - The allocation if successful
-     * - NULL if the allocation exceeds capacity
+     * - nullptr if the allocation exceeds capacity
      */
-    void *realloc(void *allocation, usize old_size, usize new_size, usize alignment) override;
+    void *realloc_fn(void *allocation, usize old_size, usize new_size, usize alignment) override;
 
     /**
      * Frees an allocation from a stack
@@ -1750,162 +1924,140 @@ struct HgStack : public HgAllocator {
      * - size The size of the allocation
      * - alignment The required alignment of the allocation in bytes
      */
-    void free(void *allocation, usize size, usize alignment) override;
+    void free_fn(void *allocation, usize size, usize alignment) override;
 };
 
-/**
- * Creates a dynamic array type
- *
- * Parameters
- * - type The type of the elements in the dynamic array
- * Returns
- * - The created struct type of the dynamic array
- */
-#define HgArray(type) struct { \
-    HgAllocator *allocator; \
-    type *items; \
-    usize count; \
-    usize capacity; \
-}
+template<typename T>
+struct HgOption {
+    static_assert(std::is_pod_v<T>);
 
-/**
- * Allocates a new dynamic array
- *
- * Parameters
- * - type The type of the elements in the dynamic array
- * - count The number of elements to already be in the array
- * - capacity The number of possible elements before reallocating
- * Returns
- * - The created dynamic array
- */
-#define hg_array_create(allocator, type, count, capacity) { \
-    allocator, hg_alloc(allocator, capacity * sizeof(type), alignof(type)), count, capacity}
+    T value;
+    bool has_value;
 
-/**
- * Frees a dynamic array
- *
- * Parameters
- * - array The array to free, must not be NULL
- */
-#define hg_array_destroy(array) do { \
-    hg_free( \
-        (array)->allocator, \
-        (array)->items, \
-        (array)->capacity * sizeof(*(array)->items), \
-        alignof(*(array)->items)); \
-} while(0)
+    T& operator*() {
+        assert(has_value);
+        return value;
+    }
 
-/**
- * Pushes an item onto the end of a dynamic array, resizing if needed
- *
- * Parameters
- * - array The array to push to, must not be NULL
- * - item The value of the item to push
- */
-#define hg_array_push(array, item) do { \
-    if ((array)->count == (array)->capacity) { \
-        (array)->items = hg_realloc( \
-            (array)->allocator, \
-            (array)->items, \
-            (array)->capacity * sizeof(*(array)->items), \
-            (array)->capacity * sizeof(*(array)->items * 2), \
-            alignof(*(array)->items)); \
-        (array)->capacity *= 2; \
-    } \
-    (array)->items[(array)->count] = item; \
-    ++(array)->count; \
-} while(0)
+    const T& operator*() const {
+        assert(has_value);
+        return value;
+    }
 
-/**
- * Removes the end item of a dynamic array
- *
- * Parameters
- * - array The array to remove from, must not be NULL
- */
-#define hg_array_pop(array) do { \
-    --(array)->count; \
-} while(0)
+    T& operator->() {
+        assert(has_value);
+        return value;
+    }
 
-/**
- * Inserts an item to the index in a dynamic array, moving elements forward and
- * resizing if needed
- *
- * Parameters
- * - array The array to push to, must not be NULL
- * - index The index to insert into
- * - item The value of the item to push
- */
-#define hg_array_insert(array, index, item) do { \
-    assert(index >= 0 && index < (array)->count); \
-    if ((array)->count == (array)->capacity) { \
-        (array)->items = hg_realloc( \
-            (array)->allocator, \
-            (array)->items, \
-            (array)->capacity * sizeof(*(array)->items), \
-            (array)->capacity * sizeof(*(array)->items * 2), \
-            alignof(*(array)->items)); \
-        (array)->capacity *= 2; \
-    } \
-    memmove( \
-        (array)->items + index + 1, \
-        (array)->items + index, \
-        ((array)->count - index) * sizeof(*(array)->items)); \
-    ++(array)->count; \
-    (array)->items[index] = item; \
-} while(0)
+    const T& operator->() const {
+        assert(has_value);
+        return value;
+    }
 
-/**
- * Deletes an item at the index in a dynamic array
- *
- * Parameters
- * - array The array to delete from, must not be NULL
- * - index The index in the array to delete
- */
-#define hg_array_delete(array, index) do { \
-    assert(index >= 0 && index < (array)->count); \
-    --(array)->count; \
-    memmove( \
-        (array)->items + index, \
-        (array)->items + index + 1, \
-        ((array)->count - index) * sizeof(*(array)->items)); \
-} while (0)
+    operator bool() const {
+        return has_value;
+    }
+};
+
+template<typename T>
+struct HgArray {
+    static_assert(std::is_pod_v<T>);
+
+    HgAllocator *allocator;
+    HgSpan<T> items;
+    usize count;
+
+    T& operator[](usize index) {
+        return items[index];
+    }
+
+    const T& operator[](usize index) const {
+        assert(index < count);
+        return items[index];
+    }
+
+    static HgArray<T> create(HgAllocator *allocator, usize count, usize capacity) {
+        assert(capacity > 0);
+        assert(count <= capacity);
+
+        HgArray arr{};
+        arr.allocator = allocator;
+        arr.items = allocator->alloc<T>(capacity);
+        arr.count = count;
+        memset(arr.items.data, 0, count * sizeof(T));
+        return arr;
+    }
+
+    void destroy() {
+        allocator->free(items);
+    }
+
+    template<typename... U>
+    void push(U&&... args) {
+        if (count >= items.count) {
+            assert(items.count > 0);
+            items = allocator->realloc(items, items.count * 2);
+        }
+        new (&items[count]) T{std::forward<U>(args)...};
+        ++count;
+    }
+
+    void pop() {
+        assert(count > 0);
+        --count;
+    }
+
+    template<typename... U>
+    void insert(usize index, U&&... args) {
+        assert(index <= count);
+        if (count >= items.count) {
+            assert(items.count > 0);
+            items = allocator->realloc(items, items.count * 2);
+        }
+        memmove(items.data + index + 1, items.data + index, (count - index) * sizeof(*items.data));
+        ++count;
+        new (&items[index]) T{std::forward<U>(args)...};
+    }
+
+    void remove(usize index) {
+        assert(index < count);
+        --count;
+        memmove(items.data + index, items.data + index + 1, (count - index) * sizeof(*items.data));
+    }
+};
 
 /**
  * Loads a binary file
  *
  * Parameters
- * - allocator Where to allocate the memory from, must not be NULL
- * - data A pointer to store the loaded data, must not be NULL
- * - size A pointer to store the size of the loaded data, must not be NULL
- * - path The null terminated path to the file to load, must not be NULL
+ * - allocator Where to allocate the memory from, must not be nullptr
+ * - path The null terminated path to the file to load, must not be nullptr
  * Returns
- * - true if the file was loaded successfully
- * - false if the file was not found or could not be read
+ * - The loaded file data if successful
+ * - nullptr if the file was not found or could not be read
  */
-bool hg_file_load_binary(HgAllocator *allocator, u8** data, usize* size, const char *path);
+HgSpan<void> hg_file_load_binary(HgAllocator *allocator, const char *path);
 
 /**
  * Unloads a binary file
  *
  * Parameters
- * - allocator Where to free the memory to, must not be NULL
- * - data The data to unload, noop if NULL
- * - size The size of the data to unload
+ * - allocator Where to free the memory to, must not be nullptr
+ * - data The data to unload, noop if nullptr
  */
-void hg_file_unload_binary(HgAllocator *allocator, u8* data, usize size);
+void hg_file_unload_binary(HgAllocator *allocator, HgSpan<void> data);
 
 /**
  * Saves a binary file
  *
  * Parameters
+ * - data The data to save, may be nullptr if size is 0
  * - path The path to the file to save, must not be empty
- * - data The data to save, may be NULL if size is 0
- * - size The size of the data to save, may be 0 to write an empty file
  * Returns
- * - hg_SUCCESS if the file was saved successfully
- * - hg_ERROR_FILE_WRITE_FAILURE if the file could not be written
+ * - true if the file was saved successfully
+ * - false if the file could not be written
  */
-bool hg_file_save_binary(const u8* data, usize size, const char *path);
+bool hg_file_save_binary(HgSpan<const void> data, const char *path);
 
 // text files : TODO
 // json files : TODO
@@ -2066,10 +2218,10 @@ struct HgWindowConfig {
  * Creates a window
  *
  * Parameters
- * - platform The platform resources, must not be NULL
- * - config The window configuration, must not be NULL
+ * - platform The platform resources, must not be nullptr
+ * - config The window configuration, must not be nullptr
  * Returns
- * - The created window, will never be NULL
+ * - The created window, will never be nullptr
  */
 HgWindow *hg_window_create(const HgWindowConfig *config);
 
@@ -2077,8 +2229,8 @@ HgWindow *hg_window_create(const HgWindowConfig *config);
  * Destroys a window
  *
  * Parameters
- * - platform The platform resources, must not be NULL
- * - window The window to destroy, noop if NULL
+ * - platform The platform resources, must not be nullptr
+ * - window The window to destroy, noop if nullptr
  */
 void hg_window_destroy(HgWindow *window);
 
@@ -2086,9 +2238,9 @@ void hg_window_destroy(HgWindow *window);
  * Sets the windows icons : TODO
  *
  * Parameters
- * - platform The platform resources, must not be NULL
- * - window The window to modify, must not be NULL
- * - icon_data The pixels of the image to set the icon to, must not be NULL
+ * - platform The platform resources, must not be nullptr
+ * - window The window to modify, must not be nullptr
+ * - icon_data The pixels of the image to set the icon to, must not be nullptr
  * - width The width in pixels of the icon
  * - height The height in pixels of the icon
  */
@@ -2098,8 +2250,8 @@ void hg_window_set_icon(HgWindow *window, u32 *icon_data, u32 width, u32 height)
  * Gets whether the window is fullscreen or not : TODO
  *
  * Parameters
- * - platform The platform resources, must not be NULL
- * - window The window to check, must not be NULL
+ * - platform The platform resources, must not be nullptr
+ * - window The window to check, must not be nullptr
  * Returns
  * - Whether the window is fullscreen
  */
@@ -2109,8 +2261,8 @@ bool hg_window_get_fullscreen(HgWindow *window);
  * Sets the window to fullscreen of windowed mode : TODO
  *
  * Parameters
- * - platform The platform resources, must not be NULL
- * - window The window to set, must not be NULL
+ * - platform The platform resources, must not be nullptr
+ * - window The window to set, must not be nullptr
  * - fullscreen Whether to set fullscreen, or set windowed
  */
 void hg_window_set_fullscreen(HgWindow *window, bool fullscreen);
@@ -2141,11 +2293,11 @@ void hg_window_set_cursor_image(HgWindow *window, u32 *data, u32 width, u32 heig
  * Create a Vulkan surface for the window, according to the platform
  *
  * Parameters
- * - instance The Vulkan instance, must not be NULL
- * - platform The hg platform context, must not be NULL
- * - window The window to create a surface for, must not be NULL
+ * - instance The Vulkan instance, must not be nullptr
+ * - platform The hg platform context, must not be nullptr
+ * - window The window to create a surface for, must not be nullptr
  * Returns
- * - The created Vulkan surface, will never be NULL
+ * - The created Vulkan surface, will never be nullptr
  */
 VkSurfaceKHR hg_vk_create_surface(VkInstance instance, const HgWindow *window);
 
@@ -2157,11 +2309,10 @@ VkSurfaceKHR hg_vk_create_surface(VkInstance instance, const HgWindow *window);
  * Updates the each window's input state
  *
  * Parameters
- * - hg The hg context, must not be NULL
+ * - hg The hg context, must not be nullptr
  * - windows All open windows
- * - window_count The number of windows
  */
-void hg_window_process_events(HgWindow **windows, u32 window_count);
+void hg_window_process_events(HgSpan<HgWindow *> windows);
 
 /**
  * Checks if the window was closed via close button or window manager
@@ -2170,7 +2321,7 @@ void hg_window_process_events(HgWindow **windows, u32 window_count);
  * true, and may be called manually
  *
  * Parameters
- * - window The window, must not be NULL
+ * - window The window, must not be nullptr
  * Returns
  * - whether the window was closed
  */
@@ -2180,7 +2331,7 @@ bool hg_window_was_closed(const HgWindow *window);
  * Checks if the window was resized
  *
  * Parameters
- * - window The window, must not be NULL
+ * - window The window, must not be nullptr
  * Returns
  * - whether the window was resized
  */
@@ -2190,9 +2341,9 @@ bool hg_window_was_resized(const HgWindow *window);
  * Gets the size of the window in pixels
  *
  * Parameters
- * - window The window, must not be NULL
- * - width A pointer to store the width, must not be NULL
- * - height A pointer to store the height, must not be NULL
+ * - window The window, must not be nullptr
+ * - width A pointer to store the width, must not be nullptr
+ * - height A pointer to store the height, must not be nullptr
  */
 void hg_window_get_size(const HgWindow *window, u32 *width, u32 *height);
 
@@ -2200,9 +2351,9 @@ void hg_window_get_size(const HgWindow *window, u32 *width, u32 *height);
  * Gets the most recent mouse position
  *
  * Parameters
- * - window The window, must not be NULL
- * - x A pointer to store the x position, must not be NULL
- * - y A pointer to store the y position, must not be NULL
+ * - window The window, must not be nullptr
+ * - x A pointer to store the x position, must not be nullptr
+ * - y A pointer to store the y position, must not be nullptr
  */
 void hg_window_get_mouse_pos(const HgWindow *window, f64 *x, f64 *y);
 
@@ -2210,9 +2361,9 @@ void hg_window_get_mouse_pos(const HgWindow *window, f64 *x, f64 *y);
  * Gets the most recent mouse delta
  *
  * Parameters
- * - window The window, must not be NULL
- * - x A pointer to store the x delta, must not be NULL
- * - y A pointer to store the y delta, must not be NULL
+ * - window The window, must not be nullptr
+ * - x A pointer to store the x delta, must not be nullptr
+ * - y A pointer to store the y delta, must not be nullptr
  */
 void hg_window_get_mouse_delta(const HgWindow *window, f64 *x, f64 *y);
 
@@ -2220,7 +2371,7 @@ void hg_window_get_mouse_delta(const HgWindow *window, f64 *x, f64 *y);
  * Checks if a key is being held down
  *
  * Parameters
- * - window The window, must not be NULL
+ * - window The window, must not be nullptr
  * - key The key to check
  * Returns
  * - whether the key is being held down
@@ -2231,7 +2382,7 @@ bool hg_window_is_key_down(const HgWindow *window, HgKey key);
  * Checks if a key was pressed this frame
  *
  * Parameters
- * - window The window, must not be NULL
+ * - window The window, must not be nullptr
  * - key The key to check
  * Returns
  * - whether the key was pressed this frame
@@ -2242,7 +2393,7 @@ bool hg_window_was_key_pressed(const HgWindow *window, HgKey key);
  * Checks if a key was released this frame
  *
  * Parameters
- * - window The window, must not be NULL
+ * - window The window, must not be nullptr
  * - key The key to check
  * Returns
  * - whether the key was released this frame
@@ -2262,7 +2413,7 @@ void hg_vk_load();
  * Note, this function is automatically called from hg_vk_create_instance
  *
  * Parameters
- * - instance The Vulkan instance, must not be NULL
+ * - instance The Vulkan instance, must not be nullptr
  */
 void hg_vk_load_instance(VkInstance instance);
 
@@ -2273,7 +2424,7 @@ void hg_vk_load_instance(VkInstance instance);
  * hg_vk_create_single_queue_device
  *
  * Parameters
- * - device The Vulkan device, must not be NULL
+ * - device The Vulkan device, must not be nullptr
  */
 void hg_vk_load_device(VkDevice device);
 
@@ -2305,9 +2456,9 @@ u32 hg_vk_format_to_size(VkFormat format);
  * Note, loads Vulkan function pointers automatically
  *
  * Parameters
- * - app_name The name of the application, may be NULL
+ * - app_name The name of the application, may be nullptr
  * Returns
- * - The created VkInstance, will never be NULL
+ * - The created VkInstance, will never be nullptr
  */
 VkInstance hg_vk_create_instance(const char *app_name);
 
@@ -2315,9 +2466,9 @@ VkInstance hg_vk_create_instance(const char *app_name);
  * Creates a Vulkan debug messenger
  *
  * Parameters
- * - instance The Vulkan instance, must not be NULL
+ * - instance The Vulkan instance, must not be nullptr
  * Returns
- * - The created debug messenger, will never be NULL
+ * - The created debug messenger, will never be nullptr
  */
 VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger(VkInstance instance);
 
@@ -2325,13 +2476,13 @@ VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger(VkInstance instance);
  * Find the first queue family index which supports the the queue flags
  *
  * Parameters
- * - gpu The physical device, must not be NULL
- * - queue_family A pointer to store the found queue family
+ * - gpu The physical device, must not be nullptr
  * - queue_flags The flags required of the queue family
  * Returns
- * - Whether a family was found
+ * - The queue family if found
+ * - No value if not found
  */
-bool hg_vk_find_queue_family(VkPhysicalDevice gpu, u32 *queue_family, VkQueueFlags queue_flags);
+HgOption<u32> hg_vk_find_queue_family(VkPhysicalDevice gpu, VkQueueFlags queue_flags);
 
 // find gpu with multiple potential queues : TODO
 // create device with multiple potential queues : TODO
@@ -2367,10 +2518,10 @@ struct HgSingleQueueDeviceData {
  * Note, loads Vulkan function pointers automatically
  *
  * Parameters
- * - gpu The physical device, must not be NULL
+ * - gpu The physical device, must not be nullptr
  * - queue_family Which family to create the queue in
  * Returns
- * - The created Vulkan device, will never be NULL
+ * - The created Vulkan device, will never be nullptr
  */
 HgSingleQueueDeviceData hg_vk_create_single_queue_device(VkInstance instance);
 
@@ -2381,11 +2532,7 @@ struct HgVkPipelineConfig {
     /**
      * The format of the color attachments, none can be UNDEFINED
      */
-    VkFormat *color_attachment_formats;
-    /**
-     * The number of color attachments to use
-     */
-    u32 color_attachment_count;
+    HgSpan<const VkFormat> color_attachment_formats;
     /**
      * The format of the depth attachment, if UNDEFINED no depth attachment
      */
@@ -2397,31 +2544,19 @@ struct HgVkPipelineConfig {
     /**
      * The shaders
      */
-    const VkPipelineShaderStageCreateInfo *shader_stages;
-    /**
-     * The number of shaders and their stages
-     */
-    u32 shader_count;
+    HgSpan<const VkPipelineShaderStageCreateInfo> shader_stages;
     /**
      * The pipeline layout
      */
     VkPipelineLayout layout;
     /**
-     * Descriptions of the vertex bindings, may be NULL
+     * Descriptions of the vertex bindings, may be nullptr
      */
-    const VkVertexInputBindingDescription* vertex_bindings;
+    HgSpan<const VkVertexInputBindingDescription> vertex_bindings;
     /**
-     * The number of vertex bindings, may be 0
+     * Descriptions of the vertex attributes, may be nullptr
      */
-    u32 vertex_binding_count;
-    /**
-     * Descriptions of the vertex attributes, may be NULL
-     */
-    const VkVertexInputAttributeDescription* vertex_attributes;
-    /**
-     * The number of vertex attributes, may be 0
-     */
-    u32 vertex_attribute_count;
+    HgSpan<const VkVertexInputAttributeDescription> vertex_attributes;
     /**
      * How to interpret vertices into topology, defaults to POINT_LIST
      */
@@ -2456,10 +2591,10 @@ struct HgVkPipelineConfig {
  * Creates a graphics pipeline
  *
  * Parameters
- * - device The Vulkan device, must not be NULL
- * - config The pipeline configuration, must not be NULL
+ * - device The Vulkan device, must not be nullptr
+ * - config The pipeline configuration, must not be nullptr
  * Returns
- * - The created graphics pipeline, will never be NULL
+ * - The created graphics pipeline, will never be nullptr
  */
 VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineConfig *config);
 
@@ -2471,10 +2606,10 @@ VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineCon
  * There cannot be any vertex inputs
  *
  * Parameters
- * - device The Vulkan device, must not be NULL
- * - config The pipeline configuration, must not be NULL
+ * - device The Vulkan device, must not be nullptr
+ * - config The pipeline configuration, must not be nullptr
  * Returns
- * - The created compute pipeline, will never be NULL
+ * - The created compute pipeline, will never be nullptr
  */
 VkPipeline hg_vk_create_compute_pipeline(VkDevice device, const HgVkPipelineConfig *config);
 
@@ -2484,8 +2619,10 @@ VkPipeline hg_vk_create_compute_pipeline(VkDevice device, const HgVkPipelineConf
  *
  * Note, if no such memory type exists, the next best thing will be found
  *
+ * The bitmask must not mask out all memory types
+ *
  * Parameters
- * - gpu The Vulkan physical device, must not be NULL
+ * - gpu The Vulkan physical device, must not be nullptr
  * - bitmask A bitmask of which memory types cannot be used, must not be 0
  * - desired_flags The flags which the type should 
  * - undesired_flags The flags which the type should not have, though may have
@@ -2526,9 +2663,9 @@ struct HgSwapchainData {
  * Creates a Vulkan swapchain
  *
  * Parameters
- * - device The Vulkan device, must not be NULL
- * - gpu The physical device to query capabilities, must not be NULL
- * - old_swapchain The old swapchain, may be NULL
+ * - device The Vulkan device, must not be nullptr
+ * - gpu The physical device to query capabilities, must not be nullptr
+ * - old_swapchain The old swapchain, may be nullptr
  * - surface The surface to create from
  * - image_usage How the swapchain's images will be used
  * - desired_mode The preferred present mode (fallback to FIFO)
@@ -2562,9 +2699,9 @@ struct HgSwapchainCommands {
  * Creates a swaphchain command buffer system
  *
  * Parameters
- * - device The Vulkan device, must not be NULL
- * - swapchain The Vulkan swapchain to create frames for, must not be NULL
- * - cmd_pool The Vulkan command pool to allocate cmds from, must not be NULL
+ * - device The Vulkan device, must not be nullptr
+ * - swapchain The Vulkan swapchain to create frames for, must not be nullptr
+ * - cmd_pool The Vulkan command pool to allocate cmds from, must not be nullptr
  * Returns
  * - The created swaphchain command buffer system
  */
@@ -2574,8 +2711,8 @@ HgSwapchainCommands hg_swapchain_commands_create(VkDevice device, VkSwapchainKHR
  * Destroys a swaphchain command buffer system
  *
  * Parameters
- * - device The Vulkan device, must not be NULL
- * - sync The swaphchain command buffer system to destroy, must not be NULL
+ * - device The Vulkan device, must not be nullptr
+ * - sync The swaphchain command buffer system to destroy, must not be nullptr
  */
 void hg_swapchain_commands_destroy(VkDevice device, HgSwapchainCommands *sync);
 
@@ -2583,11 +2720,11 @@ void hg_swapchain_commands_destroy(VkDevice device, HgSwapchainCommands *sync);
  * Acquires the next swapchain image and begins its command buffer
  *
  * Parameters
- * - device The Vulkan device, must not be NULL
- * - sync The swapchain command buffer system, must not be NULL
+ * - device The Vulkan device, must not be nullptr
+ * - sync The swapchain command buffer system, must not be nullptr
  * Returns
  * - The command buffer to record this frame
- * - NULL if the swapchain is out of date
+ * - nullptr if the swapchain is out of date
  */
 VkCommandBuffer hg_swapchain_commands_record(VkDevice device, HgSwapchainCommands *sync);
 
@@ -2595,8 +2732,8 @@ VkCommandBuffer hg_swapchain_commands_record(VkDevice device, HgSwapchainCommand
  * Finishes recording the command buffer and presents the swapchain image
  *
  * Parameters
- * - queue The Vulkan queue, must not be NULL
- * - sync The swapchain command buffer system, must not be NULL
+ * - queue The Vulkan queue, must not be nullptr
+ * - sync The swapchain command buffer system, must not be nullptr
  */
 void hg_swapchain_commands_present(VkQueue queue, HgSwapchainCommands *sync);
 
@@ -2604,14 +2741,13 @@ void hg_swapchain_commands_present(VkQueue queue, HgSwapchainCommands *sync);
  * Writes to a Vulkan device local buffer through a staging buffer
  *
  * Parameters
- * - device The Vulkan device, must not be NULL
- * - allocator The Vulkan allocator, must not be NULL
- * - cmd_pool The command pool for the queue, must not be NULL
- * - transfer_queue The Vulkan queue to transfer on, must not be NULL
- * - dst The buffer to write to, must not be NULL
+ * - device The Vulkan device, must not be nullptr
+ * - allocator The Vulkan allocator, must not be nullptr
+ * - cmd_pool The command pool for the queue, must not be nullptr
+ * - transfer_queue The Vulkan queue to transfer on, must not be nullptr
+ * - dst The buffer to write to, must not be nullptr
  * - offset The offset in bytes into the dst buffer
- * - src The data to write, must not be NULL
- * - size The size to write in bytes, must be greater than 0
+ * - src The data to write, must not be nullptr
  */
 void hg_vk_buffer_staging_write(
     VkDevice device,
@@ -2620,38 +2756,35 @@ void hg_vk_buffer_staging_write(
     VkQueue transfer_queue,
     VkBuffer dst,
     usize offset,
-    void *src,
-    usize size);
+    HgSpan<const void> src);
 
 /**
  * Reads from a Vulkan device local buffer through a staging buffer
  *
  * Parameters
- * - device The Vulkan device, must not be NULL
- * - allocator The Vulkan allocator, must not be NULL
- * - cmd_pool The command pool for the queue, must not be NULL
- * - transfer_queue The Vulkan queue to transfer on, must not be NULL
- * - dst The location to write to, must not be NULL
- * - src The buffer to read from, must not be NULL
+ * - device The Vulkan device, must not be nullptr
+ * - allocator The Vulkan allocator, must not be nullptr
+ * - cmd_pool The command pool for the queue, must not be nullptr
+ * - transfer_queue The Vulkan queue to transfer on, must not be nullptr
+ * - dst The location to write to, must not be nullptr
+ * - src The buffer to read from, must not be nullptr
  * - offset The offset in bytes into the dst buffer
- * - size The size to write in bytes
  */
 void hg_vk_buffer_staging_read(
     VkDevice device,
     VmaAllocator allocator,
     VkCommandPool cmd_pool,
     VkQueue transfer_queue,
-    void *dst,
+    HgSpan<void> dst,
     VkBuffer src,
-    usize offset,
-    usize size);
+    usize offset);
 
 /**
  * Configuration for a staging image write
  */
 struct HgVkImageStagingWriteConfig {
     /**
-     * The image to write to, must not be NULL
+     * The image to write to, must not be nullptr
      */
     VkImage dst_image;
     /**
@@ -2659,7 +2792,7 @@ struct HgVkImageStagingWriteConfig {
      */
     VkImageSubresourceLayers subresource;
     /**
-     * The data to write, must not be NULL
+     * The data to write, must not be nullptr
      */
     void *src_data;
     /**
@@ -2688,11 +2821,11 @@ struct HgVkImageStagingWriteConfig {
  * Writes to a Vulkan device local image through a staging buffer
  *
  * Parameters
- * - device The Vulkan device, must not be NULL
- * - allocator The Vulkan allocator, must not be NULL
- * - cmd_pool The command pool for the queue, must not be NULL
- * - transfer_queue The Vulkan queue to transfer on, must not be NULL
- * - config The configuration for the write, must not be NULL
+ * - device The Vulkan device, must not be nullptr
+ * - allocator The Vulkan allocator, must not be nullptr
+ * - cmd_pool The command pool for the queue, must not be nullptr
+ * - transfer_queue The Vulkan queue to transfer on, must not be nullptr
+ * - config The configuration for the write, must not be nullptr
  */
 void hg_vk_image_staging_write(
     VkDevice device,
@@ -2706,11 +2839,11 @@ void hg_vk_image_staging_write(
  */
 struct HgVkImageStagingReadConfig {
     /**
-     * The location to write to, must not be NULL
+     * The location to write to, must not be nullptr
      */
     void *dst;
     /**
-     * The image to read from, must not be NULL
+     * The image to read from, must not be nullptr
      */
     VkImage src_image;
     /**
@@ -2743,11 +2876,11 @@ struct HgVkImageStagingReadConfig {
  * Reads from a Vulkan device local image through a staging buffer
  *
  * Parameters
- * - device The Vulkan device, must not be NULL
- * - allocator The Vulkan allocator, must not be NULL
- * - cmd_pool The command pool for the queue, must not be NULL
- * - transfer_queue The Vulkan queue to transfer on, must not be NULL
- * - config The configuration for the read, must not be NULL
+ * - device The Vulkan device, must not be nullptr
+ * - allocator The Vulkan allocator, must not be nullptr
+ * - cmd_pool The command pool for the queue, must not be nullptr
+ * - transfer_queue The Vulkan queue to transfer on, must not be nullptr
+ * - config The configuration for the read, must not be nullptr
  */
 void hg_vk_image_staging_read(
     VkDevice device,
@@ -2774,24 +2907,20 @@ struct HgSystem {
     /**
      * Unique data used by the system
      */
-    void *data;
-    /**
-     * The size in bytes of the system's data
-     */
-    usize data_size;
+    HgSpan<void> system_data;
     /**
      * entity_indices[entity id] is the index into components and
      * component_entities for that entity id
      */
-    u32 *entity_indices;
+    HgSpan<u32> entity_indices;
     /**
      * Each index is the entity associated with components[index]
      */
-    HgEntityID *component_entities;
+    HgSpan<HgEntityID> component_entities;
     /**
      * The data for the components
      */
-    void *components;
+    HgSpan<void> components;
     /**
      * The size of each component in bytes
      */
@@ -2800,10 +2929,6 @@ struct HgSystem {
      * The memory alignment of each component
      */
     u32 component_alignment;
-    /**
-     * The max number of components in the array
-     */
-    u32 component_capacity;
     /**
      * The current number of components
      */
@@ -2821,23 +2946,15 @@ struct HgECS {
     /**
      * The pool of entity ids
      */
-    HgEntityID *entity_pool;
+    HgSpan<HgEntityID> entity_pool;
     /**
      * The next entity in the pool
      */
     HgEntityID entity_next;
     /**
-     * The max number of entities in the pool
-     */
-    u32 entity_capacity;
-    /**
      * The component systems
      */
-    HgSystem *systems;
-    /**
-     * The number of component systems
-     */
-    u32 system_count;
+    HgSpan<HgSystem> systems;
 };
 
 /**
@@ -2866,7 +2983,7 @@ struct HgSystemDescription {
  * Creates an entity component system
  *
  * Parameters
- * - allocator The allocator the ecs will use, must not be NULL
+ * - allocator The allocator the ecs will use, must not be nullptr
  * - max_systems The max systems that can exist, must be greater than 0
  * - system A description of each system in the ecs
  * - system_count the number of systems
@@ -2876,14 +2993,13 @@ struct HgSystemDescription {
 HgECS hg_ecs_create(
     HgAllocator *allocator,
     u32 max_entities,
-    const HgSystemDescription *systems,
-    u32 system_count);
+    HgSpan<const HgSystemDescription> systems);
 
 /**
  * Destroys an entity component system
  *
  * Parameters
- * - ecs The entity component system to destroy, must not be NULL
+ * - ecs The entity component system to destroy, must not be nullptr
  */
 void hg_ecs_destroy(HgECS *ecs);
 
@@ -2891,7 +3007,7 @@ void hg_ecs_destroy(HgECS *ecs);
  * Resets an entity component system, removing all entities and components
  *
  * Parameters
- * - ecs The entity component system to reset, must not be NULL
+ * - ecs The entity component system to reset, must not be nullptr
  */
 void hg_ecs_reset(HgECS *ecs);
 
@@ -2899,7 +3015,7 @@ void hg_ecs_reset(HgECS *ecs);
  * Gets a pointer the the system's unique data
  *
  * Parameters
- * - ecs The entity component system, must not be NULL
+ * - ecs The entity component system, must not be nullptr
  * - system_index The system to get the data of
  * Returns
  * - The data
@@ -2916,7 +3032,7 @@ void *hg_ecs_get_system(HgECS *ecs, u32 system_index);
  * or in a multithreaded context, while simple removal can be
  *
  * Parameters
- * - ecs The entity component system, must not be NULL
+ * - ecs The entity component system, must not be nullptr
  * - system_index The system to flush
  */
 void hg_ecs_flush_system(HgECS *ecs, u32 system_index);
@@ -2925,9 +3041,9 @@ void hg_ecs_flush_system(HgECS *ecs, u32 system_index);
  * Gets the next iterator, the next entity in a system from an ecs
  *
  * Parameters
- * - ecs The entity component system, must not be NULL
+ * - ecs The entity component system, must not be nullptr
  * - system_index The index of the system to traverse
- * - iterator The previous entity, point to NULL to begin, iter must not be NULL
+ * - iterator The previous entity, point to nullptr to begin, iter must not be nullptr
  * Returns
  * - true if another component is available
  * - false if iteration is complete
@@ -2938,7 +3054,7 @@ bool hg_ecs_iterate_system(HgECS *ecs, u32 system_index, HgEntityID **iterator);
  * Creates an entity in an ECS, and returns its id
  *
  * Parameters
- * - ecs The entity component system, must not be NULL
+ * - ecs The entity component system, must not be nullptr
  * Returns
  * - The id of the created entity, will never be 0
  */
@@ -2948,7 +3064,7 @@ HgEntityID hg_entity_create(HgECS *ecs);
  * Destroys an entity in an ECS
  *
  * Parameters
- * - ecs The entity component system, must not be NULL
+ * - ecs The entity component system, must not be nullptr
  * - entity The id of the entity to destroy
  */
 void hg_entity_destroy(HgECS *ecs, HgEntityID entity);
@@ -2957,7 +3073,7 @@ void hg_entity_destroy(HgECS *ecs, HgEntityID entity);
  * Checks whether an entity id is alive and can be used
  *
  * Parameters
- * - ecs The entity component system, must not be NULL
+ * - ecs The entity component system, must not be nullptr
  * - entity The id of the entity to check
  * Returns
  * - Whether the entity is alive and can be used
@@ -2970,7 +3086,7 @@ bool hg_entity_is_alive(HgECS *ecs, HgEntityID entity);
  * Note, the component must not already exist
  *
  * Parameters
- * - ecs The entity component system, must not be NULL
+ * - ecs The entity component system, must not be nullptr
  * - entity The id of the entity, must not be 0
  * - system_index The system to add the component in
  * Returns
@@ -2984,7 +3100,7 @@ void *hg_entity_add_component(HgECS *ecs, HgEntityID entity, u32 system_index);
  * Note, the component must exist
  *
  * Parameters
- * - ecs The entity component system, must not be NULL
+ * - ecs The entity component system, must not be nullptr
  * - entity The id of the entity, must not be 0
  * - system_index The system to remove the component from
  */
@@ -2994,7 +3110,7 @@ void hg_entity_remove_component(HgECS *ecs, HgEntityID entity, u32 system_index)
  * Checks whether an entity has a component or not
  *
  * Parameters
- * - ecs The entity component system, must not be NULL
+ * - ecs The entity component system, must not be nullptr
  * - entity The id of the entity, must not be 0
  * - system_index The system to check
  * Returns
@@ -3006,12 +3122,12 @@ bool hg_entity_has_component(HgECS *ecs, HgEntityID entity, u32 system_index);
  * Gets a pointer to the entity's component
  *
  * Parameters
- * - ecs The entity component system, must not be NULL
+ * - ecs The entity component system, must not be nullptr
  * - entity The id of the entity, must not be 0
  * - system_index The system to get the component from
  * Returns
  * - The entity's component
- * - NULL if the entity has no component in the system
+ * - nullptr if the entity has no component in the system
  */
 void *hg_entity_get_component(HgECS *ecs, HgEntityID entity, u32 system_index);
 
@@ -3019,7 +3135,7 @@ void *hg_entity_get_component(HgECS *ecs, HgEntityID entity, u32 system_index);
  * Gets the entity id from it's component
  *
  * Parameters
- * - ecs The entity component system, must not be NULL
+ * - ecs The entity component system, must not be nullptr
  * - component The component to lookup, must be a valid component
  * - system_index The system to get the component from
  * Returns
@@ -3047,8 +3163,8 @@ struct HgPipelineSprite {
  * Creates a pipeline abstraction to render 2D sprites
  * 
  * Parameters
- * - device The Vulkan device, must not be NULL
- * - allocator The VMA allocator, must not be NULL,
+ * - device The Vulkan device, must not be nullptr
+ * - allocator The VMA allocator, must not be nullptr,
  * - color_format The format of the color attachment which will be rendered to,
  *   must not be VK_FORMAT_UNDEFINED
  * - depth_format The format of the depth attachment, may be VK_FORMAT_UNDEFINED
@@ -3073,8 +3189,8 @@ void hg_pipeline_sprite_destroy(HgPipelineSprite *pipeline);
  * Updates the sprite pipeline's projection matrix
  *
  * Parameters
- * - pipeline The pipeline to update, must not be NULL
- * - projection The value to update to, must not be NULL
+ * - pipeline The pipeline to update, must not be nullptr
+ * - projection The value to update to, must not be nullptr
  */
 void hg_pipeline_sprite_update_projection(HgPipelineSprite *pipeline, HgMat4 *projection);
 
@@ -3082,8 +3198,8 @@ void hg_pipeline_sprite_update_projection(HgPipelineSprite *pipeline, HgMat4 *pr
  * Updates the sprite pipeline's view matrix
  *
  * Parameters
- * - pipeline The pipeline to update, must not be NULL
- * - view The value to update to, must not be NULL
+ * - pipeline The pipeline to update, must not be nullptr
+ * - view The value to update to, must not be nullptr
  */
 void hg_pipeline_sprite_update_view(HgPipelineSprite *pipeline, HgMat4 *view);
 
@@ -3103,7 +3219,7 @@ struct HgPipelineSpriteTexture {
  */
 struct HgPipelineSpriteTextureConfig {
     /**
-     * The pixel data to use, must not be NULL
+     * The pixel data to use, must not be nullptr
      */
     void *tex_data;
     /**
@@ -3135,10 +3251,10 @@ struct HgPipelineSpriteTextureConfig {
  * textures are compatible between them, so need not be duplicated
  *
  * Parameters
- * - pipeline The pipeline to create for, must not be NULL
- * - cmd_pool The command pool to get a command buffer from, must not be NULL
- * - transfer_queue The queue to transfer the data on, must not be NULL
- * - config The configuration for the texture, must not be NULL
+ * - pipeline The pipeline to create for, must not be nullptr
+ * - cmd_pool The command pool to get a command buffer from, must not be nullptr
+ * - transfer_queue The queue to transfer the data on, must not be nullptr
+ * - config The configuration for the texture, must not be nullptr
  * Returns
  * - The created texture
  */
@@ -3152,8 +3268,8 @@ HgPipelineSpriteTexture hg_pipeline_sprite_create_texture(
  * Destroys a texture for HgPipelineSprite
  *
  * Parameters
- * - pipeline The pipeline, must not be NULL
- * - texture The texture to destroy, must not be NULL
+ * - pipeline The pipeline, must not be nullptr
+ * - texture The texture to destroy, must not be nullptr
  */
 void hg_pipeline_sprite_destroy_texture(HgPipelineSprite *pipeline, HgPipelineSpriteTexture *texture);
 
@@ -3164,8 +3280,8 @@ void hg_pipeline_sprite_destroy_texture(HgPipelineSprite *pipeline, HgPipelineSp
  * and scissor must be set
  *
  * Parameters
- * - pipeline The pipeline to bind, must not be NULL
- * - cmd The command buffer, must not be NULL
+ * - pipeline The pipeline to bind, must not be nullptr
+ * - cmd The command buffer, must not be nullptr
  */
 void hg_pipeline_sprite_bind(HgPipelineSprite *pipeline, VkCommandBuffer cmd);
 
@@ -3193,10 +3309,10 @@ struct HgPipelineSpritePush {
  * The HpPipelineSprite must already be bound
  *
  * Parameters
- * - pipeline The pipeline, must not be NULL
- * - cmd The command buffer, must not be NULL
- * - texture The texture to read from, must not be NULL
- * - push_data The data to push to the draw call, must not be NULL
+ * - pipeline The pipeline, must not be nullptr
+ * - cmd The command buffer, must not be nullptr
+ * - texture The texture to read from, must not be nullptr
+ * - push_data The data to push to the draw call, must not be nullptr
  */
 void hg_pipeline_sprite_draw(
     HgPipelineSprite *pipeline,

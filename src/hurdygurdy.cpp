@@ -75,7 +75,7 @@ HgMat4 hg_projection_perspective(f32 fov, f32 aspect, f32 near, f32 far) {
 }
 
 u32 hg_max_mipmaps(u32 width, u32 height, u32 depth) {
-    return (u32)log2f((f32)hg_max(hg_max(width, height), depth)) + 1;
+    return (u32)log2f((f32)std::max(std::max(width, height), depth)) + 1;
 }
 
 static HgStdAllocator hg_internal_std_allocator;
@@ -94,22 +94,22 @@ void hg_temp_allocator_set(HgAllocator *allocator) {
     hg_internal_temp_allocator = allocator;
 }
 
-void *HgStdAllocator::alloc(usize size, usize alignment) {
+void *HgStdAllocator::alloc_fn(usize size, usize alignment) {
     (void)alignment;
     void *allocation = std::malloc(size);
-    assert(allocation != NULL);
+    assert(allocation != nullptr);
     return allocation;
 }
 
-void *HgStdAllocator::realloc(void *allocation, usize old_size, usize new_size, usize alignment) {
+void *HgStdAllocator::realloc_fn(void *allocation, usize old_size, usize new_size, usize alignment) {
     (void)old_size;
     (void)alignment;
     void *new_allocation = std::realloc(allocation, new_size);
-    assert(new_allocation != NULL);
+    assert(new_allocation != nullptr);
     return new_allocation;
 }
 
-void HgStdAllocator::free(void *allocation, usize size, usize alignment) {
+void HgStdAllocator::free_fn(void *allocation, usize size, usize alignment) {
     (void)size;
     (void)alignment;
     std::free(allocation);
@@ -118,162 +118,153 @@ void HgStdAllocator::free(void *allocation, usize size, usize alignment) {
 HgArena HgArena::create(HgAllocator *allocator, usize capacity) {
     HgArena arena;
     arena.allocator = allocator;
-    arena.data = allocator->alloc(capacity, 16);
-    arena.capacity = (u8 *)arena.data + capacity;
-    arena.head = arena.data;
+    arena.memory = allocator->alloc(capacity, 16);
+    arena.head = arena.memory.data;
     return arena;
 }
 
 void HgArena::destroy() {
-    allocator->free(data, (usize)capacity - (usize)data, 16);
+    allocator->free(memory, 16);
 }
 
 void HgArena::reset() {
     head = 0;
 }
 
-void *HgArena::alloc(usize size, usize alignment) {
+void *HgArena::alloc_fn(usize size, usize alignment) {
     void *allocation = (void *)hg_align((usize)head, alignment);
 
     void *new_head = (u8 *)allocation + size;
-    if (new_head > capacity)
-        return NULL;
+    if (new_head > (u8 *)memory.data + memory.count)
+        return nullptr;
     head = new_head;
 
     return allocation;
 }
 
-void *HgArena::realloc(void *allocation, usize old_size, usize new_size, usize alignment) {
+void *HgArena::realloc_fn(void *allocation, usize old_size, usize new_size, usize alignment) {
     if ((u8 *)allocation + old_size == head) {
         void *new_head = (u8 *)allocation + new_size;
-        if (new_head > capacity)
-            return NULL;
+        if (new_head > (u8 *)memory.data + memory.count)
+            return nullptr;
         head = new_head;
         return allocation;
     }
 
-    void *new_allocation = alloc(new_size, alignment);
+    void *new_allocation = alloc_fn(new_size, alignment);
     memcpy(new_allocation, allocation, old_size);
     return new_allocation;
 }
 
-void HgArena::free(void *allocation, usize size, usize alignment) {
+void HgArena::free_fn(void *allocation, usize size, usize alignment) {
     (void)allocation;
     (void)size;
     (void)alignment;
 }
 
 HgStack HgStack::create(HgAllocator *allocator, usize capacity) {
-    assert(allocator != NULL);
+    assert(allocator != nullptr);
 
     HgStack stack;
     stack.allocator = allocator;
-    stack.data = allocator->alloc(capacity, 16);
-    stack.capacity = capacity;
+    stack.memory = allocator->alloc(capacity, 16);
     stack.head = 0;
     return stack;
 }
 
 void HgStack::destroy() {
-    allocator->free(data, capacity, 16);
+    allocator->free(memory, 16);
 }
 
 void HgStack::reset() {
     head = 0;
 }
 
-void *HgStack::alloc(usize size, usize alignment) {
+void *HgStack::alloc_fn(usize size, usize alignment) {
     (void)alignment;
     if (size == 0)
-        return NULL;
+        return nullptr;
 
     usize new_head = head + hg_align(size, 16);
-    if (new_head > capacity)
-        return NULL;
+    if (new_head > memory.count)
+        return nullptr;
 
-    void *allocation = (u8 *)data + head;
+    void *allocation = (u8 *)memory.data + head;
     head = new_head;
     return allocation;
 }
 
-void *HgStack::realloc(void *allocation, usize old_size, usize new_size, usize alignment) {
+void *HgStack::realloc_fn(void *allocation, usize old_size, usize new_size, usize alignment) {
     (void)alignment;
     if (new_size == 0) {
-        head = (usize)allocation - (usize)data;
-        return NULL;
+        head = (usize)allocation - (usize)memory.data;
+        return nullptr;
     }
 
     if ((usize)allocation + hg_align(old_size, 16) == head) {
         usize new_head = (usize)allocation
-                       - (usize)data
+                       - (usize)memory.data
                        + hg_align(new_size, 16);
-        if (new_head > capacity)
-            return NULL;
+        if (new_head > memory.count)
+            return nullptr;
         head = new_head;
         return allocation;
     }
 
-    void *new_allocation = alloc(new_size, 16);
+    void *new_allocation = alloc_fn(new_size, 16);
     memcpy(new_allocation, allocation, old_size);
     return new_allocation;
 }
 
-void HgStack::free(void *allocation, usize size, usize alignment) {
+void HgStack::free_fn(void *allocation, usize size, usize alignment) {
     (void)alignment;
     if ((usize)allocation + hg_align(size, 16) == head)
-        head = (usize)allocation - (usize)data;
+        head = (usize)allocation - (usize)memory.data;
     else
         hg_warn("Attempt to free a stack allocation not at the head\n");
 }
 
-bool hg_file_load_binary(HgAllocator *allocator, u8** data, usize* size, const char *path) {
-    assert(allocator != NULL);
-    assert(data != NULL);
-    assert(size != NULL);
-    assert(path != NULL);
-    *data = NULL;
-    *size = 0;
+HgSpan<void> hg_file_load_binary(HgAllocator *allocator, const char *path) {
+    assert(allocator != nullptr);
+    assert(path != nullptr);
 
     FILE* file = fopen(path, "rb");
-    if (file == NULL) {
+    if (file == nullptr) {
         hg_warn("Could not find file to read binary: %s\n", path);
-        return false;
+        return {};
     }
 
     fseek(file, 0, SEEK_END);
-    usize file_size = (usize)ftell(file);
+    HgSpan<void> data = allocator->alloc((usize)ftell(file), 16);
     rewind(file);
 
-    u8* file_data = (u8 *)allocator->alloc(file_size, 16);
-    if (fread(file_data, 1, file_size, file) != file_size) {
+    if (fread(data.data, 1, data.count, file) != data.count) {
         fclose(file);
         hg_warn("Failed to read binary from file: %s\n", path);
-        return false;
+        return {};
     }
 
-    *data = file_data;
-    *size = file_size;
     fclose(file);
-    return true;
+    return data;
 }
 
-void hg_file_unload_binary(HgAllocator *allocator, u8* data, usize size) {
-    assert(allocator != NULL);
-    allocator->free(data, size, 16);
+void hg_file_unload_binary(HgAllocator *allocator, HgSpan<void> data) {
+    assert(allocator != nullptr);
+    allocator->free(data, 16);
 }
 
-bool hg_file_save_binary(const u8* data, usize size, const char *path) {
-    if (size == 0)
-        assert(data != NULL);
-    assert(path != NULL);
+bool hg_file_save_binary(HgSpan<const void> data, const char *path) {
+    if (data.count == 0)
+        assert(data.data == nullptr);
+    assert(path != nullptr);
 
     FILE* file = fopen(path, "wb");
-    if (file == NULL) {
+    if (file == nullptr) {
         hg_warn("Failed to create file to write binary: %s\n", path);
         return false;
     }
 
-    if (fwrite(data, 1, size, file) != size) {
+    if (fwrite(data.data, 1, data.count, file) != data.count) {
         fclose(file);
         hg_warn("Failed to write binary data to file: %s\n", path);
         return false;
@@ -709,20 +700,20 @@ static VkBool32 hg_internal_debug_callback(
 
 static const VkDebugUtilsMessengerCreateInfoEXT hg_internal_debug_utils_messenger_info = {
     VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
-    NULL, 0,
+    nullptr, 0,
     VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
     VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
     VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
     VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
     VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
     VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
-    hg_internal_debug_callback, NULL,
+    hg_internal_debug_callback, nullptr,
 };
 
 VkInstance hg_vk_create_instance(const char *app_name) {
     VkApplicationInfo app_info{};
     app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    app_info.pApplicationName = app_name != NULL ? app_name : "Hurdy Gurdy Application",
+    app_info.pApplicationName = app_name != nullptr ? app_name : "Hurdy Gurdy Application",
     app_info.applicationVersion = 0;
     app_info.pEngineName = "Hurdy Gurdy Engine";
     app_info.engineVersion = 0;
@@ -762,9 +753,9 @@ VkInstance hg_vk_create_instance(const char *app_name) {
     instance_info.enabledExtensionCount = hg_countof(exts);
     instance_info.ppEnabledExtensionNames = exts;
 
-    VkInstance instance = NULL;
-    VkResult result = vkCreateInstance(&instance_info, NULL, &instance);
-    if (instance == NULL)
+    VkInstance instance = nullptr;
+    VkResult result = vkCreateInstance(&instance_info, nullptr, &instance);
+    if (instance == nullptr)
         hg_error("Failed to create Vulkan instance: %s\n", hg_vk_result_string(result));
 
     hg_vk_load_instance(instance);
@@ -772,33 +763,31 @@ VkInstance hg_vk_create_instance(const char *app_name) {
 }
 
 VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger(VkInstance instance) {
-    assert(instance != NULL);
+    assert(instance != nullptr);
 
-    VkDebugUtilsMessengerEXT messenger = NULL;
+    VkDebugUtilsMessengerEXT messenger = nullptr;
     VkResult result = vkCreateDebugUtilsMessengerEXT(
-        instance, &hg_internal_debug_utils_messenger_info, NULL, &messenger);
-    if (messenger == NULL)
+        instance, &hg_internal_debug_utils_messenger_info, nullptr, &messenger);
+    if (messenger == nullptr)
         hg_error("Failed to create Vulkan debug messenger: %s\n", hg_vk_result_string(result));
 
     return messenger;
 }
 
-bool hg_vk_find_queue_family(VkPhysicalDevice gpu, u32 *queue_family, VkQueueFlags queue_flags) {
-    assert(gpu != NULL);
+HgOption<u32> hg_vk_find_queue_family(VkPhysicalDevice gpu, VkQueueFlags queue_flags) {
+    assert(gpu != nullptr);
 
     u32 family_count = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, NULL);
+    vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, nullptr);
     VkQueueFamilyProperties *families = (VkQueueFamilyProperties *)alloca(family_count * sizeof(*families));
     vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, families);
 
     for (u32 i = 0; i < family_count; ++i) {
         if (families[i].queueFlags & queue_flags) {
-            if (queue_family != NULL)
-                *queue_family = i;
-            return true;
+            return {i, true};
         }
     }
-    return false;
+    return {};
 }
 
 static const char *const hg_internal_vk_device_extensions[] = {
@@ -806,27 +795,28 @@ static const char *const hg_internal_vk_device_extensions[] = {
 };
 
 static VkPhysicalDevice hg_internal_find_single_queue_gpu(VkInstance instance, u32 *queue_family) {
-    assert(instance != NULL);
+    assert(instance != nullptr);
 
     u32 gpu_count;
-    vkEnumeratePhysicalDevices(instance, &gpu_count, NULL);
+    vkEnumeratePhysicalDevices(instance, &gpu_count, nullptr);
     VkPhysicalDevice *gpus = (VkPhysicalDevice *)alloca(gpu_count * sizeof(*gpus));
     vkEnumeratePhysicalDevices(instance, &gpu_count, gpus);
 
     u32 ext_prop_count = 0;
-    VkExtensionProperties* ext_props = NULL;
+    VkExtensionProperties* ext_props = nullptr;
 
-    VkPhysicalDevice suitable_gpu = NULL;
+    VkPhysicalDevice suitable_gpu = nullptr;
+    HgOption<u32> family;
     for (u32 i = 0; i < gpu_count; ++i) {
         VkPhysicalDevice gpu = gpus[i];
 
         u32 new_prop_count = 0;
-        vkEnumerateDeviceExtensionProperties(gpu, NULL, &new_prop_count, NULL);
+        vkEnumerateDeviceExtensionProperties(gpu, nullptr, &new_prop_count, nullptr);
         if (new_prop_count > ext_prop_count) {
             ext_prop_count = new_prop_count;
             ext_props = (VkExtensionProperties *)realloc(ext_props, ext_prop_count * sizeof(*ext_props));
         }
-        vkEnumerateDeviceExtensionProperties(gpu, NULL, &new_prop_count, ext_props);
+        vkEnumerateDeviceExtensionProperties(gpu, nullptr, &new_prop_count, ext_props);
 
         for (usize j = 0; j < hg_countof(hg_internal_vk_device_extensions); j++) {
             for (usize k = 0; k < new_prop_count; k++) {
@@ -838,7 +828,8 @@ next_ext:
             continue;
         }
 
-        if (!hg_vk_find_queue_family(gpu, queue_family, VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT))
+        family = hg_vk_find_queue_family(gpu, VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT);
+        if (!family)
             goto next_gpu;
 
         suitable_gpu = gpu;
@@ -849,13 +840,15 @@ next_gpu:
     }
 
     free(ext_props);
-    if (suitable_gpu == NULL)
+    if (suitable_gpu != nullptr)
+        *queue_family = *family;
+    else
         hg_warn("Could not find a suitable gpu\n");
     return suitable_gpu;
 }
 
 static VkDevice hg_internal_create_single_queue_device(VkPhysicalDevice gpu, u32 queue_family) {
-    assert(gpu != NULL);
+    assert(gpu != nullptr);
 
     VkPhysicalDeviceDynamicRenderingFeatures dynamic_rendering_feature{};
     dynamic_rendering_feature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
@@ -884,16 +877,16 @@ static VkDevice hg_internal_create_single_queue_device(VkPhysicalDevice gpu, u32
     device_info.ppEnabledExtensionNames = hg_internal_vk_device_extensions;
     device_info.pEnabledFeatures = &features;
 
-    VkDevice device = NULL;
-    VkResult result = vkCreateDevice(gpu, &device_info, NULL, &device);
+    VkDevice device = nullptr;
+    VkResult result = vkCreateDevice(gpu, &device_info, nullptr, &device);
 
-    if (device == NULL)
+    if (device == nullptr)
         hg_error("Could not create Vulkan device: %s\n", hg_vk_result_string(result));
     return device;
 }
 
 HgSingleQueueDeviceData hg_vk_create_single_queue_device(VkInstance instance) {
-    assert(instance != NULL);
+    assert(instance != nullptr);
 
     HgSingleQueueDeviceData device{};
     device.gpu = hg_internal_find_single_queue_gpu(instance, &device.queue_family);
@@ -905,22 +898,21 @@ HgSingleQueueDeviceData hg_vk_create_single_queue_device(VkInstance instance) {
 }
 
 VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineConfig *config) {
-    assert(device != NULL);
-    assert(config != NULL);
-    if (config->color_attachment_count > 0)
-        assert(config->color_attachment_formats != NULL);
-    assert(config->shader_stages != NULL);
-    assert(config->shader_count > 0);
-    assert(config->layout != NULL);
-    if (config->vertex_binding_count > 0)
-        assert(config->vertex_bindings != NULL);
+    assert(device != nullptr);
+    assert(config != nullptr);
+    if (config->color_attachment_formats.count > 0)
+        assert(config->color_attachment_formats.data != nullptr);
+    assert(config->shader_stages != nullptr);
+    assert(config->layout != nullptr);
+    if (config->vertex_bindings.count > 0)
+        assert(config->vertex_bindings.data != nullptr);
 
     VkPipelineVertexInputStateCreateInfo vertex_input_state{};
     vertex_input_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertex_input_state.vertexBindingDescriptionCount = config->vertex_binding_count;
-    vertex_input_state.pVertexBindingDescriptions = config->vertex_bindings;
-    vertex_input_state.vertexAttributeDescriptionCount = config->vertex_attribute_count;
-    vertex_input_state.pVertexAttributeDescriptions = config->vertex_attributes;
+    vertex_input_state.vertexBindingDescriptionCount = (u32)config->vertex_bindings.count;
+    vertex_input_state.pVertexBindingDescriptions = config->vertex_bindings.data;
+    vertex_input_state.vertexAttributeDescriptionCount = (u32)config->vertex_attributes.count;
+    vertex_input_state.pVertexAttributeDescriptions = config->vertex_attributes.data;
 
     VkPipelineInputAssemblyStateCreateInfo input_assembly_state{};
     input_assembly_state.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -956,7 +948,7 @@ VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineCon
         : VK_SAMPLE_COUNT_1_BIT,
     multisample_state.sampleShadingEnable = VK_FALSE;
     multisample_state.minSampleShading = 1.0f;
-    multisample_state.pSampleMask = NULL;
+    multisample_state.pSampleMask = nullptr;
     multisample_state.alphaToCoverageEnable = VK_FALSE;
     multisample_state.alphaToOneEnable = VK_FALSE;
 
@@ -1015,16 +1007,16 @@ VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineCon
 
     VkPipelineRenderingCreateInfo rendering_info{};
     rendering_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
-    rendering_info.colorAttachmentCount = config->color_attachment_count;
-    rendering_info.pColorAttachmentFormats = config->color_attachment_formats;
+    rendering_info.colorAttachmentCount = (u32)config->color_attachment_formats.count;
+    rendering_info.pColorAttachmentFormats = config->color_attachment_formats.data;
     rendering_info.depthAttachmentFormat = config->depth_attachment_format;
     rendering_info.stencilAttachmentFormat = config->stencil_attachment_format;
 
     VkGraphicsPipelineCreateInfo pipeline_info{};
     pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     pipeline_info.pNext = &rendering_info;
-    pipeline_info.stageCount = config->shader_count;
-    pipeline_info.pStages = config->shader_stages;
+    pipeline_info.stageCount = (u32)config->shader_stages.count;
+    pipeline_info.pStages = config->shader_stages.data;
     pipeline_info.pVertexInputState = &vertex_input_state;
     pipeline_info.pInputAssemblyState = &input_assembly_state;
     pipeline_info.pTessellationState = &tessellation_state;
@@ -1035,41 +1027,39 @@ VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineCon
     pipeline_info.pColorBlendState = &color_blend_state;
     pipeline_info.pDynamicState = &dynamic_state;
     pipeline_info.layout = config->layout;
-    pipeline_info.basePipelineHandle = NULL;
+    pipeline_info.basePipelineHandle = nullptr;
     pipeline_info.basePipelineIndex = -1;
 
-    VkPipeline pipeline = NULL;
-    VkResult result = vkCreateGraphicsPipelines(device, NULL, 1, &pipeline_info, NULL, &pipeline);
-    if (pipeline == NULL)
+    VkPipeline pipeline = nullptr;
+    VkResult result = vkCreateGraphicsPipelines(device, nullptr, 1, &pipeline_info, nullptr, &pipeline);
+    if (pipeline == nullptr)
         hg_error("Failed to create Vulkan graphics pipeline: %s\n", hg_vk_result_string(result));
 
     return pipeline;
 }
 
 VkPipeline hg_vk_create_compute_pipeline(VkDevice device, const HgVkPipelineConfig *config) {
-    assert(device != NULL);
-    assert(config != NULL);
-    assert(config->color_attachment_count == 0);
-    assert(config->color_attachment_formats == NULL);
+    assert(device != nullptr);
+    assert(config != nullptr);
+    assert(config->color_attachment_formats == nullptr);
     assert(config->depth_attachment_format == VK_FORMAT_UNDEFINED);
     assert(config->stencil_attachment_format == VK_FORMAT_UNDEFINED);
-    assert(config->shader_stages != NULL);
+    assert(config->shader_stages != nullptr);
+    assert(config->shader_stages.count == 1);
     assert(config->shader_stages[0].stage == VK_SHADER_STAGE_COMPUTE_BIT);
-    assert(config->shader_count == 1);
-    assert(config->layout != NULL);
-    assert(config->vertex_binding_count == 0);
-    assert(config->vertex_bindings == NULL);
+    assert(config->layout != nullptr);
+    assert(config->vertex_bindings == nullptr);
 
     VkComputePipelineCreateInfo pipeline_info{};
     pipeline_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
     pipeline_info.stage = config->shader_stages[0];
     pipeline_info.layout = config->layout;
-    pipeline_info.basePipelineHandle = NULL;
+    pipeline_info.basePipelineHandle = nullptr;
     pipeline_info.basePipelineIndex = -1;
 
-    VkPipeline pipeline = NULL;
-    VkResult result = vkCreateComputePipelines(device, NULL, 1, &pipeline_info, NULL, &pipeline);
-    if (pipeline == NULL)
+    VkPipeline pipeline = nullptr;
+    VkResult result = vkCreateComputePipelines(device, nullptr, 1, &pipeline_info, nullptr, &pipeline);
+    if (pipeline == nullptr)
         hg_error("Failed to create Vulkan compute pipeline: %s\n", hg_vk_result_string(result));
 
     return pipeline;
@@ -1081,7 +1071,7 @@ u32 hg_vk_find_memory_type_index(
     VkMemoryPropertyFlags desired_flags,
     VkMemoryPropertyFlags undesired_flags
 ) {
-    assert(gpu != NULL);
+    assert(gpu != nullptr);
     assert(bitmask != 0);
 
     VkPhysicalDeviceMemoryProperties mem_props;
@@ -1114,11 +1104,11 @@ u32 hg_vk_find_memory_type_index(
 }
 
 static VkFormat hg_internal_vk_find_swapchain_format(VkPhysicalDevice gpu, VkSurfaceKHR surface) {
-    assert(gpu != NULL);
-    assert(surface != NULL);
+    assert(gpu != nullptr);
+    assert(surface != nullptr);
 
     u32 format_count = 0;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &format_count, NULL);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &format_count, nullptr);
     VkSurfaceFormatKHR *formats = (VkSurfaceFormatKHR *)alloca(format_count * sizeof(*formats));
     vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &format_count, formats);
 
@@ -1136,14 +1126,14 @@ static VkPresentModeKHR hg_internal_vk_find_swapchain_present_mode(
     VkSurfaceKHR surface,
     VkPresentModeKHR desired_mode
 ) {
-    assert(gpu != NULL);
-    assert(surface != NULL);
+    assert(gpu != nullptr);
+    assert(surface != nullptr);
 
     if (desired_mode == VK_PRESENT_MODE_FIFO_KHR)
         return desired_mode;
 
     u32 mode_count = 0;
-    vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &mode_count, NULL);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &mode_count, nullptr);
     VkPresentModeKHR *present_modes = (VkPresentModeKHR *)alloca(mode_count * sizeof(*present_modes));
     vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &mode_count, present_modes);
 
@@ -1162,9 +1152,9 @@ HgSwapchainData hg_vk_create_swapchain(
     VkImageUsageFlags image_usage,
     VkPresentModeKHR desired_mode
 ) {
-    assert(device != NULL);
-    assert(gpu != NULL);
-    assert(surface != NULL);
+    assert(device != nullptr);
+    assert(gpu != nullptr);
+    assert(surface != nullptr);
     assert(image_usage != 0);
 
     HgSwapchainData swapchain{};
@@ -1201,25 +1191,25 @@ HgSwapchainData hg_vk_create_swapchain(
     swapchain_info.clipped = VK_TRUE;
     swapchain_info.oldSwapchain = old_swapchain;
 
-    VkResult result = vkCreateSwapchainKHR(device, &swapchain_info, NULL, &swapchain.handle);
-    if (swapchain.handle == NULL)
+    VkResult result = vkCreateSwapchainKHR(device, &swapchain_info, nullptr, &swapchain.handle);
+    if (swapchain.handle == nullptr)
         hg_error("Failed to create swapchain: %s\n", hg_vk_result_string(result));
 
     return swapchain;
 }
 
 HgSwapchainCommands hg_swapchain_commands_create(VkDevice device, VkSwapchainKHR swapchain, VkCommandPool cmd_pool) {
-    assert(device != NULL);
-    assert(cmd_pool != NULL);
-    assert(swapchain != NULL);
+    assert(device != nullptr);
+    assert(cmd_pool != nullptr);
+    assert(swapchain != nullptr);
 
     HgSwapchainCommands sync;
     sync.cmd_pool = cmd_pool;
     sync.swapchain = swapchain;
 
-    vkGetSwapchainImagesKHR(device, swapchain, &sync.frame_count, NULL);
+    vkGetSwapchainImagesKHR(device, swapchain, &sync.frame_count, nullptr);
 
-    void *allocation = hg_persistent_allocator()->alloc(
+    void *allocation = hg_persistent_allocator()->alloc_fn(
         sync.frame_count * sizeof(*sync.cmds) +
         sync.frame_count * sizeof(*sync.frame_finished) +
         sync.frame_count * sizeof(*sync.image_available) +
@@ -1229,7 +1219,7 @@ HgSwapchainCommands hg_swapchain_commands_create(VkDevice device, VkSwapchainKHR
     sync.cmds = (VkCommandBuffer *)allocation;
     VkCommandBufferAllocateInfo cmd_alloc_info{};
     cmd_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    cmd_alloc_info.pNext = NULL;
+    cmd_alloc_info.pNext = nullptr;
     cmd_alloc_info.commandPool = cmd_pool;
     cmd_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     cmd_alloc_info.commandBufferCount = sync.frame_count;
@@ -1241,40 +1231,40 @@ HgSwapchainCommands hg_swapchain_commands_create(VkDevice device, VkSwapchainKHR
         VkFenceCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
         info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-        vkCreateFence(device, &info, NULL, &sync.frame_finished[i]);
+        vkCreateFence(device, &info, nullptr, &sync.frame_finished[i]);
     }
 
     sync.image_available = (VkSemaphore *)(sync.frame_finished + sync.frame_count);
     for (usize i = 0; i < sync.frame_count; ++i) {
         VkSemaphoreCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-        vkCreateSemaphore(device, &info, NULL, &sync.image_available[i]);
+        vkCreateSemaphore(device, &info, nullptr, &sync.image_available[i]);
     }
 
     sync.ready_to_present = (VkSemaphore *)(sync.image_available + sync.frame_count);
     for (usize i = 0; i < sync.frame_count; ++i) {
         VkSemaphoreCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-        vkCreateSemaphore(device, &info, NULL, &sync.ready_to_present[i]);
+        vkCreateSemaphore(device, &info, nullptr, &sync.ready_to_present[i]);
     }
 
     return sync;
 }
 
 void hg_swapchain_commands_destroy(VkDevice device, HgSwapchainCommands *sync) {
-    assert(sync != NULL);
+    assert(sync != nullptr);
 
     vkFreeCommandBuffers(device, sync->cmd_pool, sync->frame_count, sync->cmds);
     for (usize i = 0; i < sync->frame_count; ++i) {
-        vkDestroyFence(device, sync->frame_finished[i], NULL);
+        vkDestroyFence(device, sync->frame_finished[i], nullptr);
     }
     for (usize i = 0; i < sync->frame_count; ++i) {
-        vkDestroySemaphore(device, sync->image_available[i], NULL);
+        vkDestroySemaphore(device, sync->image_available[i], nullptr);
     }
     for (usize i = 0; i < sync->frame_count; ++i) {
-        vkDestroySemaphore(device, sync->ready_to_present[i], NULL);
+        vkDestroySemaphore(device, sync->ready_to_present[i], nullptr);
     }
-    hg_persistent_allocator()->free(
+    hg_persistent_allocator()->free_fn(
         sync->cmds,
         sync->frame_count * sizeof(*sync->cmds) +
         sync->frame_count * sizeof(*sync->frame_finished) +
@@ -1285,7 +1275,7 @@ void hg_swapchain_commands_destroy(VkDevice device, HgSwapchainCommands *sync) {
 }
 
 VkCommandBuffer hg_swapchain_commands_record(VkDevice device, HgSwapchainCommands *sync) {
-    assert(sync != NULL);
+    assert(sync != nullptr);
 
     sync->current_frame = (sync->current_frame + 1) % sync->frame_count;
 
@@ -1297,10 +1287,10 @@ VkCommandBuffer hg_swapchain_commands_record(VkDevice device, HgSwapchainCommand
         sync->swapchain,
         UINT64_MAX,
         sync->image_available[sync->current_frame],
-        NULL,
+        nullptr,
         &sync->current_image);
     if (result == VK_ERROR_OUT_OF_DATE_KHR)
-        return NULL;
+        return nullptr;
 
 
     VkCommandBuffer cmd = sync->cmds[sync->current_frame];
@@ -1315,8 +1305,8 @@ VkCommandBuffer hg_swapchain_commands_record(VkDevice device, HgSwapchainCommand
 }
 
 void hg_swapchain_commands_present(VkQueue queue, HgSwapchainCommands *sync) {
-    assert(queue != NULL);
-    assert(sync != NULL);
+    assert(queue != nullptr);
+    assert(sync != nullptr);
 
     VkCommandBuffer cmd = sync->cmds[sync->current_frame];
     vkEndCommandBuffer(cmd);
@@ -1352,30 +1342,28 @@ void hg_vk_buffer_staging_write(
     VkQueue transfer_queue,
     VkBuffer dst,
     usize offset,
-    void *src,
-    usize size
+    HgSpan<const void> src
 ) {
-    assert(device != NULL);
-    assert(allocator != NULL);
-    assert(cmd_pool != NULL);
-    assert(transfer_queue != NULL);
-    assert(dst != NULL);
-    assert(src != NULL);
-    assert(size > 0);
+    assert(device != nullptr);
+    assert(allocator != nullptr);
+    assert(cmd_pool != nullptr);
+    assert(transfer_queue != nullptr);
+    assert(dst != nullptr);
+    assert(src != nullptr);
 
     VkBufferCreateInfo stage_info{};
     stage_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    stage_info.size = size;
+    stage_info.size = src.count;
     stage_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 
     VmaAllocationCreateInfo stage_alloc_info{};
     stage_alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
     stage_alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
 
-    VkBuffer stage = NULL;
-    VmaAllocation stage_alloc = NULL;
-    vmaCreateBuffer(allocator, &stage_info, &stage_alloc_info, &stage, &stage_alloc, NULL);
-    vmaCopyMemoryToAllocation(allocator, src, stage_alloc, offset, size);
+    VkBuffer stage = nullptr;
+    VmaAllocation stage_alloc = nullptr;
+    vmaCreateBuffer(allocator, &stage_info, &stage_alloc_info, &stage, &stage_alloc, nullptr);
+    vmaCopyMemoryToAllocation(allocator, src.data, stage_alloc, offset, src.count);
 
     VkCommandBufferAllocateInfo cmd_info{};
     cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -1383,7 +1371,7 @@ void hg_vk_buffer_staging_write(
     cmd_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     cmd_info.commandBufferCount = 1;
 
-    VkCommandBuffer cmd = NULL;
+    VkCommandBuffer cmd = nullptr;
     vkAllocateCommandBuffers(device, &cmd_info, &cmd);
 
     VkCommandBufferBeginInfo begin_info{};
@@ -1393,7 +1381,7 @@ void hg_vk_buffer_staging_write(
     vkBeginCommandBuffer(cmd, &begin_info);
     VkBufferCopy region{};
     region.dstOffset = offset;
-    region.size = size;
+    region.size = src.count;
 
     vkCmdCopyBuffer(cmd, stage, dst, 1, &region);
     vkEndCommandBuffer(cmd);
@@ -1401,8 +1389,8 @@ void hg_vk_buffer_staging_write(
     VkFenceCreateInfo fence_info{};
     fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 
-    VkFence fence = NULL;
-    vkCreateFence(device, &fence_info, NULL, &fence);
+    VkFence fence = nullptr;
+    vkCreateFence(device, &fence_info, nullptr, &fence);
 
     VkSubmitInfo submit{};
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1412,7 +1400,7 @@ void hg_vk_buffer_staging_write(
     vkQueueSubmit(transfer_queue, 1, &submit, fence);
     vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
 
-    vkDestroyFence(device, fence, NULL);
+    vkDestroyFence(device, fence, nullptr);
     vkFreeCommandBuffers(device, cmd_pool, 1, &cmd);
     vmaDestroyBuffer(allocator, stage, stage_alloc);
 }
@@ -1422,31 +1410,29 @@ void hg_vk_buffer_staging_read(
     VmaAllocator allocator,
     VkCommandPool cmd_pool,
     VkQueue transfer_queue,
-    void *dst,
+    HgSpan<void> dst,
     VkBuffer src,
-    usize offset,
-    usize size
+    usize offset
 ) {
-    assert(device != NULL);
-    assert(allocator != NULL);
-    assert(cmd_pool != NULL);
-    assert(transfer_queue != NULL);
-    assert(dst != NULL);
-    assert(src != NULL);
-    assert(size > 0);
+    assert(device != nullptr);
+    assert(allocator != nullptr);
+    assert(cmd_pool != nullptr);
+    assert(transfer_queue != nullptr);
+    assert(dst != nullptr);
+    assert(src != nullptr);
 
     VkBufferCreateInfo stage_info{};
     stage_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    stage_info.size = size;
+    stage_info.size = dst.count;
     stage_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
     VmaAllocationCreateInfo stage_alloc_info{};
     stage_alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
     stage_alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
 
-    VkBuffer stage = NULL;
-    VmaAllocation stage_alloc = NULL;
-    vmaCreateBuffer(allocator, &stage_info, &stage_alloc_info, &stage, &stage_alloc, NULL);
+    VkBuffer stage = nullptr;
+    VmaAllocation stage_alloc = nullptr;
+    vmaCreateBuffer(allocator, &stage_info, &stage_alloc_info, &stage, &stage_alloc, nullptr);
 
     VkCommandBufferAllocateInfo cmd_info{};
     cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -1454,7 +1440,7 @@ void hg_vk_buffer_staging_read(
     cmd_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     cmd_info.commandBufferCount = 1;
 
-    VkCommandBuffer cmd = NULL;
+    VkCommandBuffer cmd = nullptr;
     vkAllocateCommandBuffers(device, &cmd_info, &cmd);
 
     VkCommandBufferBeginInfo begin_info{};
@@ -1464,7 +1450,7 @@ void hg_vk_buffer_staging_read(
     vkBeginCommandBuffer(cmd, &begin_info);
     VkBufferCopy region{};
     region.srcOffset = offset;
-    region.size = size;
+    region.size = dst.count;
 
     vkCmdCopyBuffer(cmd, src, stage, 1, &region);
     vkEndCommandBuffer(cmd);
@@ -1472,8 +1458,8 @@ void hg_vk_buffer_staging_read(
     VkFenceCreateInfo fence_info{};
     fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 
-    VkFence fence = NULL;
-    vkCreateFence(device, &fence_info, NULL, &fence);
+    VkFence fence = nullptr;
+    vkCreateFence(device, &fence_info, nullptr, &fence);
 
     VkSubmitInfo submit{};
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1483,9 +1469,9 @@ void hg_vk_buffer_staging_read(
     vkQueueSubmit(transfer_queue, 1, &submit, fence);
     vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
 
-    vmaCopyAllocationToMemory(allocator, stage_alloc, offset, dst, size);
+    vmaCopyAllocationToMemory(allocator, stage_alloc, offset, dst.data, dst.count);
 
-    vkDestroyFence(device, fence, NULL);
+    vkDestroyFence(device, fence, nullptr);
     vkFreeCommandBuffers(device, cmd_pool, 1, &cmd);
     vmaDestroyBuffer(allocator, stage, stage_alloc);
 }
@@ -1497,12 +1483,12 @@ void hg_vk_image_staging_write(
     VkQueue transfer_queue,
     HgVkImageStagingWriteConfig *config
 ) {
-    assert(device != NULL);
-    assert(allocator != NULL);
-    assert(cmd_pool != NULL);
-    assert(transfer_queue != NULL);
-    assert(config->dst_image != NULL);
-    assert(config->src_data != NULL);
+    assert(device != nullptr);
+    assert(allocator != nullptr);
+    assert(cmd_pool != nullptr);
+    assert(transfer_queue != nullptr);
+    assert(config->dst_image != nullptr);
+    assert(config->src_data != nullptr);
     assert(config->width > 0);
     assert(config->height > 0);
     assert(config->depth > 0);
@@ -1522,9 +1508,9 @@ void hg_vk_image_staging_write(
     stage_alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
     stage_alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
 
-    VkBuffer stage = NULL;
-    VmaAllocation stage_alloc = NULL;
-    vmaCreateBuffer(allocator, &stage_info, &stage_alloc_info, &stage, &stage_alloc, NULL);
+    VkBuffer stage = nullptr;
+    VmaAllocation stage_alloc = nullptr;
+    vmaCreateBuffer(allocator, &stage_info, &stage_alloc_info, &stage, &stage_alloc, nullptr);
     vmaCopyMemoryToAllocation(allocator, config->src_data, stage_alloc, 0, size);
 
     VkCommandBufferAllocateInfo cmd_info{};
@@ -1533,7 +1519,7 @@ void hg_vk_image_staging_write(
     cmd_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     cmd_info.commandBufferCount = 1;
 
-    VkCommandBuffer cmd = NULL;
+    VkCommandBuffer cmd = nullptr;
     vkAllocateCommandBuffers(device, &cmd_info, &cmd);
 
     VkCommandBufferBeginInfo begin_info{};
@@ -1596,8 +1582,8 @@ void hg_vk_image_staging_write(
 
     VkFenceCreateInfo fence_info{};
     fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    VkFence fence = NULL;
-    vkCreateFence(device, &fence_info, NULL, &fence);
+    VkFence fence = nullptr;
+    vkCreateFence(device, &fence_info, nullptr, &fence);
 
     VkSubmitInfo submit{};
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1607,7 +1593,7 @@ void hg_vk_image_staging_write(
     vkQueueSubmit(transfer_queue, 1, &submit, fence);
     vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
 
-    vkDestroyFence(device, fence, NULL);
+    vkDestroyFence(device, fence, nullptr);
     vkFreeCommandBuffers(device, cmd_pool, 1, &cmd);
     vmaDestroyBuffer(allocator, stage, stage_alloc);
 }
@@ -1619,13 +1605,13 @@ void hg_vk_image_staging_read(
     VkQueue transfer_queue,
     HgVkImageStagingReadConfig *config
 ) {
-    assert(device != NULL);
-    assert(allocator != NULL);
-    assert(cmd_pool != NULL);
-    assert(transfer_queue != NULL);
-    assert(config->src_image != NULL);
+    assert(device != nullptr);
+    assert(allocator != nullptr);
+    assert(cmd_pool != nullptr);
+    assert(transfer_queue != nullptr);
+    assert(config->src_image != nullptr);
     assert(config->layout != VK_IMAGE_LAYOUT_UNDEFINED);
-    assert(config->dst != NULL);
+    assert(config->dst != nullptr);
     assert(config->width > 0);
     assert(config->height > 0);
     assert(config->depth > 0);
@@ -1645,9 +1631,9 @@ void hg_vk_image_staging_read(
     stage_alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
     stage_alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
 
-    VkBuffer stage = NULL;
-    VmaAllocation stage_alloc = NULL;
-    vmaCreateBuffer(allocator, &stage_info, &stage_alloc_info, &stage, &stage_alloc, NULL);
+    VkBuffer stage = nullptr;
+    VmaAllocation stage_alloc = nullptr;
+    vmaCreateBuffer(allocator, &stage_info, &stage_alloc_info, &stage, &stage_alloc, nullptr);
 
     VkCommandBufferAllocateInfo cmd_info{};
     cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -1655,7 +1641,7 @@ void hg_vk_image_staging_read(
     cmd_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     cmd_info.commandBufferCount = 1;
 
-    VkCommandBuffer cmd = NULL;
+    VkCommandBuffer cmd = nullptr;
     vkAllocateCommandBuffers(device, &cmd_info, &cmd);
 
     VkCommandBufferBeginInfo begin_info{};
@@ -1715,8 +1701,8 @@ void hg_vk_image_staging_read(
     VkFenceCreateInfo fence_info{};
     fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 
-    VkFence fence = NULL;
-    vkCreateFence(device, &fence_info, NULL, &fence);
+    VkFence fence = nullptr;
+    vkCreateFence(device, &fence_info, nullptr, &fence);
 
     VkSubmitInfo submit{};
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1728,7 +1714,7 @@ void hg_vk_image_staging_read(
 
     vmaCopyAllocationToMemory(allocator, stage_alloc, 0, config->dst, size);
 
-    vkDestroyFence(device, fence, NULL);
+    vkDestroyFence(device, fence, nullptr);
     vkFreeCommandBuffers(device, cmd_pool, 1, &cmd);
     vmaDestroyBuffer(allocator, stage, stage_alloc);
 }
@@ -1736,118 +1722,90 @@ void hg_vk_image_staging_read(
 HgECS hg_ecs_create(
     HgAllocator *allocator,
     u32 max_entities,
-    const HgSystemDescription *systems,
-    u32 system_count
+    HgSpan<const HgSystemDescription> systems
 ) {
-    assert(allocator != NULL);
+    assert(allocator != nullptr);
     assert(max_entities > 0);
 
     max_entities += 1;
     HgECS ecs{};
     ecs.allocator = allocator;
-    ecs.entity_pool = (HgEntityID *)allocator->alloc(max_entities * sizeof(HgEntityID), alignof(HgEntityID));
-    ecs.entity_capacity = (u32)max_entities;
-    ecs.systems = (HgSystem *)allocator->alloc(max_entities * sizeof(HgSystem), alignof(HgSystem));
-    ecs.system_count = (u32)system_count;
+    ecs.entity_pool = allocator->alloc<HgEntityID>(max_entities);
+    ecs.systems = allocator->alloc<HgSystem>(systems.count);
 
-    for (u32 i = 0; i < ecs.entity_capacity; ++i) {
+    for (u32 i = 0; i < ecs.entity_pool.count; ++i) {
         ecs.entity_pool[i] = i + 1;
     }
     HgEntityID reserved_null_entity = hg_entity_create(&ecs);
     (void)reserved_null_entity;
 
-    for (u32 i = 0; i < ecs.system_count; ++i) {
+    for (u32 i = 0; i < systems.count; ++i) {
         u32 max_components = systems[i].max_components + 1;
 
-        ecs.systems[i].data = ecs.allocator->alloc(systems[i].data_size, 16);
-        ecs.systems[i].data_size = systems[i].data_size;
+        ecs.systems[i].system_data = ecs.allocator->alloc(systems[i].data_size, 16);
 
-        ecs.systems[i].entity_indices = (u32 *)ecs.allocator->alloc(
-            ecs.entity_capacity * sizeof(u32),
-            alignof(u32));
-        ecs.systems[i].component_entities = (HgEntityID *)ecs.allocator->alloc(
-            max_components * sizeof(HgEntityID),
-            alignof(HgEntityID));
+        ecs.systems[i].entity_indices = ecs.allocator->alloc<u32>(ecs.entity_pool.count);
+        ecs.systems[i].component_entities = ecs.allocator->alloc<HgEntityID>(max_components);
         ecs.systems[i].components = ecs.allocator->alloc(
             max_components * systems[i].component_size,
             systems[i].component_alignment);
 
         ecs.systems[i].component_size = (u32)systems[i].component_size;
         ecs.systems[i].component_alignment = (u32)systems[i].component_alignment;
-        ecs.systems[i].component_capacity = max_components;
         ecs.systems[i].component_count = 1;
 
-        memset(ecs.systems[i].entity_indices, 0, max_components);
-        memset(ecs.systems[i].component_entities, 0, max_components);
+        memset(ecs.systems[i].entity_indices.data, 0, max_components);
+        memset(ecs.systems[i].component_entities.data, 0, max_components);
     }
 
     return ecs;
 }
 
 void hg_ecs_destroy(HgECS *ecs) {
-    assert(ecs != NULL);
+    assert(ecs != nullptr);
 
-    for (u32 i = 0; i < ecs->system_count; ++i) {
-        ecs->allocator->free(
-            ecs->systems[i].data,
-            ecs->systems[i].data_size,
-            16);
-        ecs->allocator->free(
-            ecs->systems[i].entity_indices,
-            ecs->entity_capacity * sizeof(u32),
-            alignof(u32)),
-        ecs->allocator->free(
-            ecs->systems[i].component_entities,
-            ecs->systems[i].component_capacity * sizeof(HgEntityID),
-            alignof(HgEntityID)),
-        ecs->allocator->free(
-            ecs->systems[i].components,
-            ecs->systems[i].component_capacity * ecs->systems[i].component_size,
-            ecs->systems[i].component_alignment);
+    for (u32 i = 0; i < ecs->systems.count; ++i) {
+        ecs->allocator->free(ecs->systems[i].system_data, 16);
+        ecs->allocator->free(ecs->systems[i].entity_indices);
+        ecs->allocator->free(ecs->systems[i].component_entities);
+        ecs->allocator->free(ecs->systems[i].components, ecs->systems[i].component_alignment);
     }
-
-    ecs->allocator->free(
-        ecs->entity_pool,
-        ecs->entity_capacity * sizeof(HgEntityID),
-        alignof(HgEntityID));
-    ecs->allocator->free(
-        ecs->systems,
-        ecs->system_count * sizeof(HgSystem),
-        alignof(HgSystem));
+    ecs->allocator->free(ecs->entity_pool);
+    ecs->allocator->free(ecs->systems);
 }
 
 void hg_ecs_reset(HgECS *ecs) {
-    assert(ecs != NULL);
+    assert(ecs != nullptr);
 
-    for (u32 i = 0; i < ecs->entity_capacity; ++i) {
+    for (u32 i = 0; i < ecs->entity_pool.count; ++i) {
         ecs->entity_pool[i] = i + 1;
     }
     HgEntityID reserved_null_entity = hg_entity_create(ecs);
     (void)reserved_null_entity;
 
-    for (u32 i = 0; i < ecs->system_count; ++i) {
-        memset(ecs->systems[i].entity_indices, 0, ecs->systems[i].component_count);
-        memset(ecs->systems[i].component_entities, 0, ecs->systems[i].component_count);
+    for (u32 i = 0; i < ecs->systems.count; ++i) {
+        memset(ecs->systems[i].entity_indices.data, 0, ecs->systems[i].component_count);
+        memset(ecs->systems[i].component_entities.data, 0, ecs->systems[i].component_count);
         ecs->systems[i].component_count = 1;
     }
 }
 
 void *hg_ecs_get_system(HgECS *ecs, u32 system_index) {
-    return ecs->systems[system_index].data;
+    return ecs->systems[system_index].system_data.data;
 }
 
 // add component removal queue : TODO
 void hg_ecs_flush_system(HgECS *ecs, u32 system_index) {
-    assert(ecs != NULL);
-    assert(system_index < ecs->system_count);
+    assert(ecs != nullptr);
+    assert(system_index < ecs->systems.count);
 
     HgSystem *system = &ecs->systems[system_index];
     for (u32 i = 1; i < system->component_count; ++i) {
         if (system->component_entities[i] == 0) {
             --system->component_count;
 
-            void *current = (u8 *)system->components + i * system->component_size;
-            void *last = (u8 *)system->components + system->component_count * system->component_size;
+            void *current = (u8 *)system->components.data + i * system->component_size;
+            void *last = (u8 *)system->components.data + system->component_count * system->component_size;
             memcpy(current, last, system->component_size);
 
             HgEntityID entity = system->component_entities[i];
@@ -1863,19 +1821,19 @@ void hg_ecs_flush_system(HgECS *ecs, u32 system_index) {
 }
 
 bool hg_ecs_iterate_system(HgECS *ecs, u32 system_index, HgEntityID **iterator) {
-    assert(ecs != NULL);
-    assert(system_index < ecs->system_count);
-    assert(iterator != NULL);
+    assert(ecs != nullptr);
+    assert(system_index < ecs->systems.count);
+    assert(iterator != nullptr);
 
     HgSystem *system = &ecs->systems[system_index];
-    if (*iterator == NULL) {
-        *iterator = system->component_entities;
+    if (*iterator == nullptr) {
+        *iterator = system->component_entities.data;
     } else {
-        assert(*iterator > system->component_entities);
-        assert(*iterator <= system->component_entities + system->component_count);
+        assert(*iterator > system->component_entities.data);
+        assert(*iterator <= system->component_entities.data + system->component_count);
     }
 
-    while (*iterator != system->component_entities + system->component_count) {
+    while (*iterator != system->component_entities.data + system->component_count) {
         *iterator += 1;
         if (**iterator != 0)
             return true;
@@ -1884,7 +1842,7 @@ bool hg_ecs_iterate_system(HgECS *ecs, u32 system_index, HgEntityID **iterator) 
 }
 
 HgEntityID hg_entity_create(HgECS *ecs) {
-    assert(ecs != NULL);
+    assert(ecs != nullptr);
 
     HgEntityID entity = ecs->entity_next;
     ecs->entity_next = ecs->entity_pool[entity & 0xffffffff];
@@ -1893,10 +1851,10 @@ HgEntityID hg_entity_create(HgECS *ecs) {
 }
 
 void hg_entity_destroy(HgECS *ecs, HgEntityID entity) {
-    assert(ecs != NULL);
+    assert(ecs != nullptr);
     assert(entity != 0 && ecs->entity_pool[entity & 0xffffffff] == 0);
 
-    for (u32 i = 0; i < ecs->system_count; ++i) {
+    for (u32 i = 0; i < ecs->systems.count; ++i) {
         HgSystem *system = &ecs->systems[i];
         system->component_entities[system->entity_indices[entity & 0xffffffff]] = 0;
         system->entity_indices[entity & 0xffffffff] = 0;
@@ -1906,14 +1864,14 @@ void hg_entity_destroy(HgECS *ecs, HgEntityID entity) {
 }
 
 bool hg_entity_is_alive(HgECS *ecs, HgEntityID entity) {
-    assert(ecs != NULL);
+    assert(ecs != nullptr);
     return entity != 0 && ecs->entity_pool[entity & 0xffffffff] == 0;
 }
 
 void *hg_entity_add_component(HgECS *ecs, HgEntityID entity, u32 system_index) {
-    assert(ecs != NULL);
+    assert(ecs != nullptr);
     assert(entity != 0);
-    assert(system_index < ecs->system_count);
+    assert(system_index < ecs->systems.count);
 
     HgSystem *system = &ecs->systems[system_index];
     assert(system->entity_indices[entity & 0xffffffff] == 0);
@@ -1927,13 +1885,13 @@ void *hg_entity_add_component(HgECS *ecs, HgEntityID entity, u32 system_index) {
     assert(system->component_entities[index] == 0);
     system->component_entities[index] = entity;
 
-    return (u8 *)system->components + index * system->component_size;
+    return (u8 *)system->components.data + index * system->component_size;
 }
 
 void hg_entity_remove_component(HgECS *ecs, HgEntityID entity, u32 system_index) {
-    assert(ecs != NULL);
+    assert(ecs != nullptr);
     assert(entity != 0);
-    assert(system_index < ecs->system_count);
+    assert(system_index < ecs->systems.count);
 
     HgSystem *system = &ecs->systems[system_index];
 
@@ -1947,33 +1905,33 @@ void hg_entity_remove_component(HgECS *ecs, HgEntityID entity, u32 system_index)
 }
 
 bool hg_entity_has_component(HgECS *ecs, HgEntityID entity, u32 system_index) {
-    assert(ecs != NULL);
+    assert(ecs != nullptr);
     assert(entity != 0);
-    assert(system_index < ecs->system_count);
+    assert(system_index < ecs->systems.count);
     return ecs->systems[system_index].entity_indices[entity & 0xffffffff] != 0;
 }
 
 void *hg_entity_get_component(HgECS *ecs, HgEntityID entity, u32 system_index) {
-    assert(ecs != NULL);
+    assert(ecs != nullptr);
     assert(entity != 0);
-    assert(system_index < ecs->system_count);
+    assert(system_index < ecs->systems.count);
 
     HgSystem *system = &ecs->systems[system_index];
     u32 index = system->entity_indices[entity & 0xffffffff];
 
     assert(index != 0);
     assert(system->component_entities[index] == entity);
-    return (u8 *)system->components + index * system->component_size;
+    return (u8 *)system->components.data + index * system->component_size;
 }
 
 HgEntityID hg_entity_from_component(HgECS *ecs, void *component, u32 system_index) {
-    assert(ecs != NULL);
-    assert(component != NULL);
-    assert(system_index < ecs->system_count);
+    assert(ecs != nullptr);
+    assert(component != nullptr);
+    assert(system_index < ecs->systems.count);
 
     HgSystem *system = &ecs->systems[system_index];
 
-    u32 index = (u32)(((usize)component - (usize)system->components) / system->component_size);
+    u32 index = (u32)(((usize)component - (usize)system->components.data) / system->component_size);
     HgEntityID entity = system->component_entities[index];
 
     assert(entity != 0);
@@ -1995,7 +1953,7 @@ HgPipelineSprite hg_pipeline_sprite_create(
     VkFormat color_format,
     VkFormat depth_format
 ) {
-    assert(device != NULL);
+    assert(device != nullptr);
     assert(color_format != VK_FORMAT_UNDEFINED);
 
     HgPipelineSprite pipeline;
@@ -2013,7 +1971,7 @@ HgPipelineSprite hg_pipeline_sprite_create(
     vp_layout_info.bindingCount = hg_countof(vp_bindings);
     vp_layout_info.pBindings = vp_bindings;
 
-    vkCreateDescriptorSetLayout(device, &vp_layout_info, NULL, &pipeline.vp_layout);
+    vkCreateDescriptorSetLayout(device, &vp_layout_info, nullptr, &pipeline.vp_layout);
 
     VkDescriptorSetLayoutBinding image_bindings[1]{};
     image_bindings[0].binding = 0;
@@ -2026,7 +1984,7 @@ HgPipelineSprite hg_pipeline_sprite_create(
     image_layout_info.bindingCount = hg_countof(image_bindings);
     image_layout_info.pBindings = image_bindings;
 
-    vkCreateDescriptorSetLayout(device, &image_layout_info, NULL, &pipeline.image_layout);
+    vkCreateDescriptorSetLayout(device, &image_layout_info, nullptr, &pipeline.image_layout);
 
     VkDescriptorSetLayout set_layouts[] = {pipeline.vp_layout, pipeline.image_layout};
     VkPushConstantRange push_ranges[1]{};
@@ -2040,7 +1998,7 @@ HgPipelineSprite hg_pipeline_sprite_create(
     layout_info.pushConstantRangeCount = hg_countof(push_ranges);
     layout_info.pPushConstantRanges = push_ranges;
 
-    vkCreatePipelineLayout(device, &layout_info, NULL, &pipeline.pipeline_layout);
+    vkCreatePipelineLayout(device, &layout_info, nullptr, &pipeline.pipeline_layout);
 
     VkShaderModuleCreateInfo vertex_shader_info{};
     vertex_shader_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -2048,7 +2006,7 @@ HgPipelineSprite hg_pipeline_sprite_create(
     vertex_shader_info.pCode = (u32 *)sprite_vert_spv;
 
     VkShaderModule vertex_shader;
-    vkCreateShaderModule(device, &vertex_shader_info, NULL, &vertex_shader);
+    vkCreateShaderModule(device, &vertex_shader_info, nullptr, &vertex_shader);
 
     VkShaderModuleCreateInfo fragment_shader_info{};
     fragment_shader_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -2056,7 +2014,7 @@ HgPipelineSprite hg_pipeline_sprite_create(
     fragment_shader_info.pCode = (u32 *)sprite_frag_spv;
 
     VkShaderModule fragment_shader;
-    vkCreateShaderModule(device, &fragment_shader_info, NULL, &fragment_shader);
+    vkCreateShaderModule(device, &fragment_shader_info, nullptr, &fragment_shader);
 
     VkPipelineShaderStageCreateInfo shader_stages[2]{};
     shader_stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -2069,20 +2027,18 @@ HgPipelineSprite hg_pipeline_sprite_create(
     shader_stages[1].pName = "main";
 
     HgVkPipelineConfig pipeline_config{};
-    pipeline_config.color_attachment_formats = &color_format;
-    pipeline_config.color_attachment_count = 1;
+    pipeline_config.color_attachment_formats = {&color_format, 1};
     pipeline_config.depth_attachment_format = depth_format;
     pipeline_config.stencil_attachment_format = VK_FORMAT_UNDEFINED;
-    pipeline_config.shader_stages = shader_stages;
-    pipeline_config.shader_count = hg_countof(shader_stages);
+    pipeline_config.shader_stages = {shader_stages, hg_countof(shader_stages)};
     pipeline_config.layout = pipeline.pipeline_layout;
     pipeline_config.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
     pipeline_config.enable_color_blend = true;
 
     pipeline.pipeline = hg_vk_create_graphics_pipeline(device, &pipeline_config);
 
-    vkDestroyShaderModule(device, fragment_shader, NULL);
-    vkDestroyShaderModule(device, vertex_shader, NULL);
+    vkDestroyShaderModule(device, fragment_shader, nullptr);
+    vkDestroyShaderModule(device, vertex_shader, nullptr);
 
     VkDescriptorPoolSize desc_pool_sizes[2]{};
     desc_pool_sizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -2097,7 +2053,7 @@ HgPipelineSprite hg_pipeline_sprite_create(
     desc_pool_info.poolSizeCount = hg_countof(desc_pool_sizes);
     desc_pool_info.pPoolSizes = desc_pool_sizes;
 
-    vkCreateDescriptorPool(device, &desc_pool_info, NULL, &pipeline.descriptor_pool);
+    vkCreateDescriptorPool(device, &desc_pool_info, nullptr, &pipeline.descriptor_pool);
 
     VkDescriptorSetAllocateInfo vp_set_alloc_info{};
     vp_set_alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -2122,7 +2078,7 @@ HgPipelineSprite hg_pipeline_sprite_create(
         &vp_alloc_info,
         &pipeline.vp_buffer,
         &pipeline.vp_buffer_allocation,
-        NULL);
+        nullptr);
 
     HgPipelineSpriteVPUniform vp_data{};
     vp_data.proj = hg_smat4(1.0f);
@@ -2143,27 +2099,27 @@ HgPipelineSprite hg_pipeline_sprite_create(
     desc_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     desc_write.pBufferInfo = &desc_info;
 
-    vkUpdateDescriptorSets(device, 1, &desc_write, 0, NULL);
+    vkUpdateDescriptorSets(device, 1, &desc_write, 0, nullptr);
 
     return pipeline;
 }
 
 void hg_pipeline_sprite_destroy(HgPipelineSprite *pipeline) {
-    if (pipeline == NULL)
+    if (pipeline == nullptr)
         return;
 
     vmaDestroyBuffer(pipeline->allocator, pipeline->vp_buffer, pipeline->vp_buffer_allocation);
     vkFreeDescriptorSets(pipeline->device, pipeline->descriptor_pool, 1, &pipeline->vp_set);
-    vkDestroyDescriptorPool(pipeline->device, pipeline->descriptor_pool, NULL);
-    vkDestroyPipeline(pipeline->device, pipeline->pipeline, NULL);
-    vkDestroyPipelineLayout(pipeline->device, pipeline->pipeline_layout, NULL);
-    vkDestroyDescriptorSetLayout(pipeline->device, pipeline->image_layout, NULL);
-    vkDestroyDescriptorSetLayout(pipeline->device, pipeline->vp_layout, NULL);
+    vkDestroyDescriptorPool(pipeline->device, pipeline->descriptor_pool, nullptr);
+    vkDestroyPipeline(pipeline->device, pipeline->pipeline, nullptr);
+    vkDestroyPipelineLayout(pipeline->device, pipeline->pipeline_layout, nullptr);
+    vkDestroyDescriptorSetLayout(pipeline->device, pipeline->image_layout, nullptr);
+    vkDestroyDescriptorSetLayout(pipeline->device, pipeline->vp_layout, nullptr);
 }
 
 void hg_pipeline_sprite_update_projection(HgPipelineSprite *pipeline, HgMat4 *projection) {
-    assert(pipeline != NULL);
-    assert(projection != NULL);
+    assert(pipeline != nullptr);
+    assert(projection != nullptr);
 
     vmaCopyMemoryToAllocation(
         pipeline->allocator,
@@ -2174,8 +2130,8 @@ void hg_pipeline_sprite_update_projection(HgPipelineSprite *pipeline, HgMat4 *pr
 }
 
 void hg_pipeline_sprite_update_view(HgPipelineSprite *pipeline, HgMat4 *view) {
-    assert(pipeline != NULL);
-    assert(view != NULL);
+    assert(pipeline != nullptr);
+    assert(view != nullptr);
 
     vmaCopyMemoryToAllocation(
         pipeline->allocator,
@@ -2191,9 +2147,9 @@ HgPipelineSpriteTexture hg_pipeline_sprite_create_texture(
     VkQueue transfer_queue,
     HgPipelineSpriteTextureConfig *config
 ) {
-    assert(pipeline != NULL);
-    assert(config != NULL);
-    assert(config->tex_data != NULL);
+    assert(pipeline != nullptr);
+    assert(config != nullptr);
+    assert(config->tex_data != nullptr);
     assert(config->width > 0);
     assert(config->height > 0);
     assert(config->format != VK_FORMAT_UNDEFINED);
@@ -2213,7 +2169,7 @@ HgPipelineSpriteTexture hg_pipeline_sprite_create_texture(
     VmaAllocationCreateInfo alloc_info{};
     alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
 
-    vmaCreateImage(pipeline->allocator, &image_info, &alloc_info, &tex.image, &tex.allocation, NULL);
+    vmaCreateImage(pipeline->allocator, &image_info, &alloc_info, &tex.image, &tex.allocation, nullptr);
 
     HgVkImageStagingWriteConfig staging_config{};
     staging_config.dst_image = tex.image;
@@ -2237,7 +2193,7 @@ HgPipelineSpriteTexture hg_pipeline_sprite_create_texture(
     view_info.subresourceRange.levelCount = 1;
     view_info.subresourceRange.layerCount = 1;
 
-    vkCreateImageView(pipeline->device, &view_info, NULL, &tex.view);
+    vkCreateImageView(pipeline->device, &view_info, nullptr, &tex.view);
 
     VkSamplerCreateInfo sampler_info{};
     sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -2247,7 +2203,7 @@ HgPipelineSpriteTexture hg_pipeline_sprite_create_texture(
     sampler_info.addressModeV = config->edge_mode;
     sampler_info.addressModeW = config->edge_mode;
 
-    vkCreateSampler(pipeline->device, &sampler_info, NULL, &tex.sampler);
+    vkCreateSampler(pipeline->device, &sampler_info, nullptr, &tex.sampler);
 
     VkDescriptorSetAllocateInfo set_info{};
     set_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -2270,24 +2226,24 @@ HgPipelineSpriteTexture hg_pipeline_sprite_create_texture(
     desc_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     desc_write.pImageInfo = &desc_info;
 
-    vkUpdateDescriptorSets(pipeline->device, 1, &desc_write, 0, NULL);
+    vkUpdateDescriptorSets(pipeline->device, 1, &desc_write, 0, nullptr);
 
     return tex;
 }
 
 void hg_pipeline_sprite_destroy_texture(HgPipelineSprite *pipeline, HgPipelineSpriteTexture *texture) {
-    assert(pipeline != NULL);
-    assert(texture != NULL);
+    assert(pipeline != nullptr);
+    assert(texture != nullptr);
 
     vkFreeDescriptorSets(pipeline->device, pipeline->descriptor_pool, 1, &texture->set);
-    vkDestroySampler(pipeline->device, texture->sampler, NULL);
-    vkDestroyImageView(pipeline->device, texture->view, NULL);
+    vkDestroySampler(pipeline->device, texture->sampler, nullptr);
+    vkDestroyImageView(pipeline->device, texture->view, nullptr);
     vmaDestroyImage(pipeline->allocator, texture->image, texture->allocation);
 }
 
 void hg_pipeline_sprite_bind(HgPipelineSprite *pipeline, VkCommandBuffer cmd) {
-    assert(cmd != NULL);
-    assert(pipeline != NULL);
+    assert(cmd != nullptr);
+    assert(pipeline != nullptr);
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->pipeline);
     vkCmdBindDescriptorSets(
@@ -2298,7 +2254,7 @@ void hg_pipeline_sprite_bind(HgPipelineSprite *pipeline, VkCommandBuffer cmd) {
         1,
         &pipeline->vp_set,
         0,
-        NULL);
+        nullptr);
 }
 
 void hg_pipeline_sprite_draw(
@@ -2307,7 +2263,7 @@ void hg_pipeline_sprite_draw(
     HgPipelineSpriteTexture *texture,
     HgPipelineSpritePush *push_data
 ) {
-    assert(cmd != NULL);
+    assert(cmd != nullptr);
 
     vkCmdBindDescriptorSets(
         cmd,
@@ -2317,7 +2273,7 @@ void hg_pipeline_sprite_draw(
         1,
         &texture->set,
         0,
-        NULL);
+        nullptr);
 
     vkCmdPushConstants(
         cmd,
@@ -2368,7 +2324,7 @@ typedef struct HgX11Funcs {
     KeySym (*XLookupKeysym)(XKeyEvent*, int);
 } HgX11Funcs;
 
-static void *hg_internal_libx11 = NULL;
+static void *hg_internal_libx11 = nullptr;
 static HgX11Funcs hg_internal_x11_funcs{};
 
 Display *XOpenDisplay(_Xconst char *name) {
@@ -2441,14 +2397,14 @@ KeySym XLookupKeysym(XKeyEvent *key_event, int index) {
 
 #define HG_LOAD_X11_FUNC(name) *(void **)&hg_internal_x11_funcs. name \
     = dlsym(hg_internal_libx11, #name); \
-    if (hg_internal_x11_funcs. name == NULL) { hg_error("Could not load Xlib function: \n" #name); }
+    if (hg_internal_x11_funcs. name == nullptr) { hg_error("Could not load Xlib function: \n" #name); }
 
-Display *hg_internal_x11_display = NULL;
+Display *hg_internal_x11_display = nullptr;
 
 static void hg_internal_platform_init(void) {
-    if (hg_internal_libx11 == NULL) {
+    if (hg_internal_libx11 == nullptr) {
         hg_internal_libx11 = dlopen("libX11.so.6", RTLD_LAZY);
-        if (hg_internal_libx11 == NULL)
+        if (hg_internal_libx11 == nullptr)
             hg_error("Could not open Xlib\n");
 
         HG_LOAD_X11_FUNC(XOpenDisplay);
@@ -2466,8 +2422,8 @@ static void hg_internal_platform_init(void) {
         HG_LOAD_X11_FUNC(XLookupKeysym);
     }
 
-    hg_internal_x11_display = XOpenDisplay(NULL);
-    if (hg_internal_x11_display == NULL)
+    hg_internal_x11_display = XOpenDisplay(nullptr);
+    if (hg_internal_x11_display == nullptr)
         hg_error("Could not open X display\n");
 }
 
@@ -2503,7 +2459,7 @@ static Window hg_internal_create_x11_window(
     if (window == ~0U)
         hg_error("X11 could not create window\n");
 
-    if (title != NULL) {
+    if (title != nullptr) {
         int name_result = XStoreName(display, window, title);
         if (name_result == 0)
             hg_error("X11 could not set window title\n");
@@ -2574,14 +2530,14 @@ struct HgWindow {
 };
 
 HgWindow *hg_window_create(const HgWindowConfig *config) {
-    assert(config != NULL);
+    assert(config != nullptr);
 
     u32 width = config->windowed ? config->width
         : (u32)DisplayWidth(hg_internal_x11_display, DefaultScreen(hg_internal_x11_display));
     u32 height = config->windowed ? config->height
         : (u32)DisplayHeight(hg_internal_x11_display, DefaultScreen(hg_internal_x11_display));
 
-    HgWindow *window = (HgWindow *)hg_persistent_allocator()->alloc(sizeof(*window), 16);
+    HgWindow *window = hg_persistent_allocator()->alloc<HgWindow>();
     *window = {};
     window->input.width = width;
     window->input.height = height;
@@ -2601,10 +2557,11 @@ HgWindow *hg_window_create(const HgWindowConfig *config) {
 }
 
 void hg_window_destroy(HgWindow *window) {
-    if (window != NULL)
+    if (window != nullptr) {
         XDestroyWindow(hg_internal_x11_display, window->x11_window);
+        hg_persistent_allocator()->free(window);
+    }
     XFlush(hg_internal_x11_display);
-    hg_persistent_allocator()->free(window, sizeof(*window), 16);
 }
 
 void hg_window_set_icon(HgWindow *window, u32 *icon_data, u32 width, u32 height);
@@ -2618,12 +2575,12 @@ void hg_window_set_cursor(HgWindow *window, HgCursor cursor);
 void hg_window_set_cursor_image(HgWindow *window, u32 *data, u32 width, u32 height);
 
 VkSurfaceKHR hg_vk_create_surface(VkInstance instance, const HgWindow *window) {
-    assert(instance != NULL);
-    assert(window != NULL);
+    assert(instance != nullptr);
+    assert(window != nullptr);
 
     PFN_vkCreateXlibSurfaceKHR pfn_vkCreateXlibSurfaceKHR
         = (PFN_vkCreateXlibSurfaceKHR)vkGetInstanceProcAddr(instance, "vkCreateXlibSurfaceKHR");
-    if (pfn_vkCreateXlibSurfaceKHR == NULL)
+    if (pfn_vkCreateXlibSurfaceKHR == nullptr)
         hg_error("Could not load vkCreateXlibSurfaceKHR\n");
 
     VkXlibSurfaceCreateInfoKHR info{};
@@ -2631,19 +2588,18 @@ VkSurfaceKHR hg_vk_create_surface(VkInstance instance, const HgWindow *window) {
     info.dpy = hg_internal_x11_display;
     info.window = window->x11_window;
 
-    VkSurfaceKHR surface = NULL;
-    VkResult result = pfn_vkCreateXlibSurfaceKHR(instance, &info, NULL, &surface);
-    if (surface == NULL)
+    VkSurfaceKHR surface = nullptr;
+    VkResult result = pfn_vkCreateXlibSurfaceKHR(instance, &info, nullptr, &surface);
+    if (surface == nullptr)
         hg_error("Failed to create Vulkan surface: %s\n", hg_vk_result_string(result));
 
     return surface;
 }
 
-void hg_window_process_events(HgWindow **windows, u32 window_count) {
-    assert(windows != NULL);
-    assert(window_count > 0);
+void hg_window_process_events(HgSpan<HgWindow *>windows) {
+    assert(windows != nullptr);
 
-    if (window_count > 1)
+    if (windows.count > 1)
         hg_error("Multiple windows unsupported\n"); // : TODO
     HgWindow* window = windows[0];
 
@@ -3078,10 +3034,10 @@ void hg_window_process_events(HgWindow **windows, u32 window_count) {
 #include <windows.h>
 #include <vulkan/vulkan_win32.h>
 
-HINSTANCE hg_internal_win32_instance = NULL;
+HINSTANCE hg_internal_win32_instance = nullptr;
 
 void hg_internal_platform_init(void) {
-    hg_internal_win32_instance = GetModuleHandle(NULL);
+    hg_internal_win32_instance = GetModuleHandle(nullptr);
 }
 
 void hg_internal_platform_exit(void) {
@@ -3440,17 +3396,17 @@ static LRESULT CALLBACK hg_internal_window_callback(HWND hwnd, UINT msg, WPARAM 
 }
 
 HgWindow *hg_window_create(const HgWindowConfig *config) {
-    const char *title = config->title != NULL ? config->title : "Hurdy Gurdy";
+    const char *title = config->title != nullptr ? config->title : "Hurdy Gurdy";
 
-    HgWindow *window = hg_alloc(hg_persistent_allocator(), sizeof(*window), 16);
+    HgWindow *window = hg_persistent_allocator()->alloc<HgWindow>();
     *window = {};
     window->input.width = width;
     window->input.height = height;
 
     WNDCLASSA window_class{};
     window_class.hInstance = hg_internal_win32_instance;
-    window_class.hIcon = LoadIcon(NULL, IDI_APPLICATION);
-    window_class.hCursor = LoadCursor(NULL, IDC_ARROW);
+    window_class.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
+    window_class.hCursor = LoadCursor(nullptr, IDC_ARROW);
     window_class.lpszClassName = title;
     window_class.lpfnWndProc = hg_internal_window_callback;
     if (!RegisterClassA(&window_class))
@@ -3466,8 +3422,8 @@ HgWindow *hg_window_create(const HgWindowConfig *config) {
             CW_USEDEFAULT,
             window->input.width,
             window->input.height,
-            NULL,
-            NULL,
+            nullptr,
+            nullptr,
             hg_internal_win32_instance,
             window
         );
@@ -3483,13 +3439,13 @@ HgWindow *hg_window_create(const HgWindowConfig *config) {
             0,
             window->input.width,
             window->input.height,
-            NULL,
-            NULL,
+            nullptr,
+            nullptr,
             hg_internal_win32_instance,
             window
         );
     }
-    if (window->hwnd == NULL)
+    if (window->hwnd == nullptr)
         hg_error("Win32 window creation failed\n");
 
     ShowWindow(window->hwnd, SW_SHOW);
@@ -3497,8 +3453,10 @@ HgWindow *hg_window_create(const HgWindowConfig *config) {
 }
 
 void hg_window_destroy(HgWindow *window) {
-    if (window != NULL)
+    if (window != nullptr) {
         DestroyWindow(window->hwnd);
+        hg_persistent_allocator()->free(window);
+    }
 }
 
 void hg_window_set_icon(HgWindow *window, u32 *icon_data, u32 width, u32 height);
@@ -3512,12 +3470,12 @@ void hg_window_set_cursor(HgWindow *window, HgCursor cursor);
 void hg_window_set_cursor_image(HgWindow *window, u32 *data, u32 width, u32 height);
 
 VkSurfaceKHR hg_vk_create_surface(VkInstance instance, const HgWindow *window) {
-    assert(instance != NULL);
-    assert(window != NULL);
+    assert(instance != nullptr);
+    assert(window != nullptr);
 
     PFN_vkCreateWin32SurfaceKHR pfn_vkCreateWin32SurfaceKHR
         = (PFN_vkCreateWin32SurfaceKHR)vkGetInstanceProcAddr(instance, "vkCreateWin32SurfaceKHR");
-    if (pfn_vkCreateWin32SurfaceKHR == NULL)
+    if (pfn_vkCreateWin32SurfaceKHR == nullptr)
         hg_error("Could not load vkCreateWin32SurfaceKHR\n");
 
     VkWin32SurfaceCreateInfoKHR info{};
@@ -3525,12 +3483,12 @@ VkSurfaceKHR hg_vk_create_surface(VkInstance instance, const HgWindow *window) {
     info.hinstance = hg_internal_win32_instance;
     info.hwnd = window->hwnd;
 
-    VkSurfaceKHR surface = NULL;
-    VkResult result = pfn_vkCreateWin32SurfaceKHR(instance, &info, NULL, &surface);
-    if (surface == NULL)
+    VkSurfaceKHR surface = nullptr;
+    VkResult result = pfn_vkCreateWin32SurfaceKHR(instance, &info, nullptr, &surface);
+    if (surface == nullptr)
         hg_error("Failed to create Vulkan surface: %s\n", hg_vk_result_string(result));
 
-    assert(surface != NULL);
+    assert(surface != nullptr);
     return surface;
 }
 
@@ -3580,51 +3538,51 @@ void hg_window_process_events(HgWindow **windows, u32 window_count) {
 #endif
 
 bool hg_window_was_closed(const HgWindow *window) {
-    assert(window != NULL);
+    assert(window != nullptr);
     return window->input.was_closed;
 }
 
 bool hg_window_was_resized(const HgWindow *window) {
-    assert(window != NULL);
+    assert(window != nullptr);
     return window->input.was_resized;
 }
 
 void hg_window_get_size(const HgWindow *window, u32 *width, u32 *height) {
-    assert(window != NULL);
+    assert(window != nullptr);
     *width = window->input.width;
     *height = window->input.height;
 }
 
 void hg_window_get_mouse_pos(const HgWindow *window, f64 *x, f64 *y) {
-    assert(window != NULL);
-    assert(x != NULL);
-    assert(y != NULL);
+    assert(window != nullptr);
+    assert(x != nullptr);
+    assert(y != nullptr);
     *x = window->input.mouse_pos_x;
     *y = window->input.mouse_pos_y;
 }
 
 void hg_window_get_mouse_delta(const HgWindow *window, f64 *x, f64 *y) {
-    assert(window != NULL);
-    assert(x != NULL);
-    assert(y != NULL);
+    assert(window != nullptr);
+    assert(x != nullptr);
+    assert(y != nullptr);
     *x = window->input.mouse_delta_x;
     *y = window->input.mouse_delta_y;
 }
 
 bool hg_window_is_key_down(const HgWindow *window, HgKey key) {
-    assert(window != NULL);
+    assert(window != nullptr);
     assert(key >= 0 && key < HG_KEY_COUNT);
     return window->input.keys_down[key];
 }
 
 bool hg_window_was_key_pressed(const HgWindow *window, HgKey key) {
-    assert(window != NULL);
+    assert(window != nullptr);
     assert(key >= 0 && key < HG_KEY_COUNT);
     return window->input.keys_pressed[key];
 }
 
 bool hg_window_was_key_released(const HgWindow *window, HgKey key) {
-    assert(window != NULL);
+    assert(window != nullptr);
     assert(key >= 0 && key < HG_KEY_COUNT);
     return window->input.keys_released[key];
 }
@@ -3750,12 +3708,12 @@ typedef struct hgVulkanFuncs {
 
 #undef HG_MAKE_VULKAN_FUNC
 
-static void *hg_internal_libvulkan = NULL;
+static void *hg_internal_libvulkan = nullptr;
 static hgVulkanFuncs hg_internal_vulkan_funcs{};
 
 #define HG_LOAD_VULKAN_FUNC(name) \
-    hg_internal_vulkan_funcs. name = (PFN_##name)hg_internal_vulkan_funcs.vkGetInstanceProcAddr(NULL, #name); \
-    if (hg_internal_vulkan_funcs. name == NULL) { \
+    hg_internal_vulkan_funcs. name = (PFN_##name)hg_internal_vulkan_funcs.vkGetInstanceProcAddr(nullptr, #name); \
+    if (hg_internal_vulkan_funcs. name == nullptr) { \
         hg_error("Could not load " #name "\n"); \
     }
 
@@ -3764,22 +3722,22 @@ void hg_vk_load(void) {
 #if defined(__unix__)
 
     hg_internal_libvulkan = dlopen("libvulkan.so.1", RTLD_LAZY);
-    if (hg_internal_libvulkan == NULL)
+    if (hg_internal_libvulkan == nullptr)
         hg_error("Could not load vulkan dynamic lib: %s\n", dlerror());
 
     *(void **)&hg_internal_vulkan_funcs.vkGetInstanceProcAddr = dlsym(hg_internal_libvulkan, "vkGetInstanceProcAddr");
-    if (hg_internal_vulkan_funcs.vkGetInstanceProcAddr == NULL)
+    if (hg_internal_vulkan_funcs.vkGetInstanceProcAddr == nullptr)
         hg_error("Could not load vkGetInstanceProcAddr: %s\n", dlerror());
 
 #elif defined(_WIN32)
 
     hg_internal_libvulkan = (void *)LoadLibraryA("vulkan-1.dll");
-    if (hg_internal_libvulkan == NULL)
+    if (hg_internal_libvulkan == nullptr)
         hg_error("Could not load vulkan dynamic lib\n");
 
     hg_internal_vulkan_funcs.vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr)
         GetProcAddress(hg_internal_libvulkan, "vkGetInstanceProcAddr");
-    if (hg_internal_vulkan_funcs.vkGetInstanceProcAddr == NULL)
+    if (hg_internal_vulkan_funcs.vkGetInstanceProcAddr == nullptr)
         hg_error("Could not load vkGetInstanceProcAddr\n");
 
 #else
@@ -3795,10 +3753,10 @@ void hg_vk_load(void) {
 
 #define HG_LOAD_VULKAN_INSTANCE_FUNC(instance, name) \
     hg_internal_vulkan_funcs. name = (PFN_##name)hg_internal_vulkan_funcs.vkGetInstanceProcAddr(instance, #name); \
-    if (hg_internal_vulkan_funcs. name == NULL) { hg_error("Could not load " #name "\n"); }
+    if (hg_internal_vulkan_funcs. name == nullptr) { hg_error("Could not load " #name "\n"); }
 
 void hg_vk_load_instance(VkInstance instance) {
-    assert(instance != NULL);
+    assert(instance != nullptr);
 
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetDeviceProcAddr);
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkDestroyInstance);
@@ -3822,10 +3780,10 @@ void hg_vk_load_instance(VkInstance instance) {
 
 #define HG_LOAD_VULKAN_DEVICE_FUNC(device, name) \
     hg_internal_vulkan_funcs. name = (PFN_##name)hg_internal_vulkan_funcs.vkGetDeviceProcAddr(device, #name); \
-    if (hg_internal_vulkan_funcs. name == NULL) { hg_error("Could not load " #name "\n"); }
+    if (hg_internal_vulkan_funcs. name == nullptr) { hg_error("Could not load " #name "\n"); }
 
 void hg_vk_load_device(VkDevice device) {
-    assert(device != NULL);
+    assert(device != nullptr);
 
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyDevice)
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDeviceWaitIdle)
