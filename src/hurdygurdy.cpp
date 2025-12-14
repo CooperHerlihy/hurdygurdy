@@ -1715,121 +1715,131 @@ void hg_vk_image_staging_read(
     vmaDestroyBuffer(allocator, stage, stage_alloc);
 }
 
-HgECS hg_ecs_create(
+HgECS HgECS::create(
     HgAllocator *allocator,
     u32 max_entities,
-    HgSpan<const HgSystemDescription> systems
+    u32 max_systems
 ) {
     assert(allocator != nullptr);
     assert(max_entities > 0);
+    assert(max_systems > 0);
 
     max_entities += 1;
     HgECS ecs{};
     ecs.allocator = allocator;
     ecs.entity_pool = allocator->alloc<HgEntityID>(max_entities);
-    ecs.systems = allocator->alloc<HgSystem>(systems.count);
+    ecs.systems = allocator->alloc<System>(max_systems);
 
     for (u32 i = 0; i < ecs.entity_pool.count; ++i) {
         ecs.entity_pool[i] = i + 1;
     }
-    HgEntityID reserved_null_entity = hg_entity_create(&ecs);
+    HgEntityID reserved_null_entity = ecs.create_entity();
     (void)reserved_null_entity;
-
-    for (u32 i = 0; i < systems.count; ++i) {
-        u32 max_components = systems[i].max_components + 1;
-
-        ecs.systems[i].system_data = ecs.allocator->alloc(systems[i].data_size, 16);
-
-        ecs.systems[i].entity_indices = ecs.allocator->alloc<u32>(ecs.entity_pool.count);
-        ecs.systems[i].component_entities = ecs.allocator->alloc<HgEntityID>(max_components);
-        ecs.systems[i].components = ecs.allocator->alloc(
-            max_components * systems[i].component_size,
-            systems[i].component_alignment);
-
-        ecs.systems[i].component_size = (u32)systems[i].component_size;
-        ecs.systems[i].component_alignment = (u32)systems[i].component_alignment;
-        ecs.systems[i].component_count = 1;
-
-        std::memset(ecs.systems[i].entity_indices.data, 0, max_components);
-        std::memset(ecs.systems[i].component_entities.data, 0, max_components);
-    }
 
     return ecs;
 }
 
-void hg_ecs_destroy(HgECS *ecs) {
-    assert(ecs != nullptr);
-
-    for (u32 i = 0; i < ecs->systems.count; ++i) {
-        ecs->allocator->free(ecs->systems[i].system_data, 16);
-        ecs->allocator->free(ecs->systems[i].entity_indices);
-        ecs->allocator->free(ecs->systems[i].component_entities);
-        ecs->allocator->free(ecs->systems[i].components, ecs->systems[i].component_alignment);
+void HgECS::destroy() {
+    for (u32 i = 0; i < system_count; ++i) {
+        if (systems[i].system_data != nullptr)
+            allocator->free(systems[i].system_data, systems[i].system_data_alignment);
+        allocator->free(systems[i].entity_indices);
+        allocator->free(systems[i].component_entities);
+        allocator->free(systems[i].components, systems[i].component_alignment);
     }
-    ecs->allocator->free(ecs->entity_pool);
-    ecs->allocator->free(ecs->systems);
+    allocator->free(entity_pool);
+    allocator->free(systems);
 }
 
-void hg_ecs_reset(HgECS *ecs) {
-    assert(ecs != nullptr);
-
-    for (u32 i = 0; i < ecs->entity_pool.count; ++i) {
-        ecs->entity_pool[i] = i + 1;
+void HgECS::reset() {
+    for (u32 i = 0; i < entity_pool.count; ++i) {
+        entity_pool[i] = i + 1;
     }
-    HgEntityID reserved_null_entity = hg_entity_create(ecs);
+    HgEntityID reserved_null_entity = create_entity();
     (void)reserved_null_entity;
 
-    for (u32 i = 0; i < ecs->systems.count; ++i) {
-        std::memset(ecs->systems[i].entity_indices.data, 0, ecs->systems[i].component_count);
-        std::memset(ecs->systems[i].component_entities.data, 0, ecs->systems[i].component_count);
-        ecs->systems[i].component_count = 1;
+    for (u32 i = 0; i < system_count; ++i) {
+        std::memset(systems[i].entity_indices.data, 0, systems[i].component_count);
+        std::memset(systems[i].component_entities.data, 0, systems[i].component_count);
+        systems[i].component_count = 1;
     }
 }
 
-void *hg_ecs_get_system(HgECS *ecs, u32 system_index) {
-    return ecs->systems[system_index].system_data.data;
+u32 HgECS::add_system_untyped(
+    usize data_size,
+    usize data_alignment,
+    u32 component_size,
+    u32 component_alignment,
+    u32 max_components
+) {
+    assert(system_count < systems.count);
+
+    u32 index = system_count;
+    HgECS::System *system = &systems[index];
+    ++system_count;
+
+    system->system_data = allocator->alloc(data_size, data_alignment);
+    system->system_data_alignment = data_alignment;
+
+    system->entity_indices = allocator->alloc<u32>(entity_pool.count);
+    system->component_entities = allocator->alloc<HgEntityID>(max_components);
+    system->components = allocator->alloc(max_components * component_size, component_alignment);
+
+    system->component_size = component_size;
+    system->component_alignment = component_alignment;
+    system->component_count = 1;
+
+    std::memset(system->entity_indices.data, 0, max_components);
+    std::memset(system->component_entities.data, 0, max_components);
+
+    return index;
+}
+
+void *HgECS::get_system_untyped(u32 system) {
+    assert(system < systems.count);
+    return systems[system].system_data.data;
 }
 
 // add component removal queue : TODO
-void hg_ecs_flush_system(HgECS *ecs, u32 system_index) {
-    assert(ecs != nullptr);
-    assert(system_index < ecs->systems.count);
+void HgECS::flush_system(u32 system) {
+    assert(system < systems.count);
 
-    HgSystem *system = &ecs->systems[system_index];
-    for (u32 i = 1; i < system->component_count; ++i) {
-        if (system->component_entities[i] == 0) {
-            --system->component_count;
+    for (u32 i = 1; i < systems[system].component_count; ++i) {
+        if (systems[system].component_entities[i] == 0) {
+            --systems[system].component_count;
 
-            void *current = (u8 *)system->components.data + i * system->component_size;
-            void *last = (u8 *)system->components.data + system->component_count * system->component_size;
-            std::memcpy(current, last, system->component_size);
+            void *current = (u8 *)systems[system].components.data
+                          + i
+                          * systems[system].component_size;
+            void *last = (u8 *)systems[system].components.data
+                       + systems[system].component_count
+                       * systems[system].component_size;
+            std::memcpy(current, last, systems[system].component_size);
 
-            HgEntityID entity = system->component_entities[i];
-            HgEntityID last_entity = system->component_entities[system->component_count];
+            HgEntityID entity = systems[system].component_entities[i];
+            HgEntityID last_entity = systems[system].component_entities[systems[system].component_count];
 
-            system->component_entities[i] = last_entity;
-            system->component_entities[system->component_count] = 0;
+            systems[system].component_entities[i] = last_entity;
+            systems[system].component_entities[systems[system].component_count] = 0;
 
-            system->entity_indices[entity] = 0;
-            system->entity_indices[last_entity] = i;
+            systems[system].entity_indices[entity] = 0;
+            systems[system].entity_indices[last_entity] = i;
         }
     }
 }
 
-bool hg_ecs_iterate_system(HgECS *ecs, u32 system_index, HgEntityID **iterator) {
-    assert(ecs != nullptr);
-    assert(system_index < ecs->systems.count);
+bool HgECS::iterate_system(u32 system, HgEntityID **iterator) {
+    assert(system < systems.count);
     assert(iterator != nullptr);
 
-    HgSystem *system = &ecs->systems[system_index];
     if (*iterator == nullptr) {
-        *iterator = system->component_entities.data;
+        *iterator = systems[system].component_entities.data;
     } else {
-        assert(*iterator > system->component_entities.data);
-        assert(*iterator <= system->component_entities.data + system->component_count);
+        assert(*iterator > systems[system].component_entities.data);
+        assert(*iterator <= systems[system].component_entities.data + systems[system].component_count);
     }
 
-    while (*iterator != system->component_entities.data + system->component_count) {
+    while (*iterator != systems[system].component_entities.data + systems[system].component_count) {
         *iterator += 1;
         if (**iterator != 0)
             return true;
@@ -1837,101 +1847,86 @@ bool hg_ecs_iterate_system(HgECS *ecs, u32 system_index, HgEntityID **iterator) 
     return false;
 }
 
-HgEntityID hg_entity_create(HgECS *ecs) {
-    assert(ecs != nullptr);
-
-    HgEntityID entity = ecs->entity_next;
-    ecs->entity_next = ecs->entity_pool[entity & 0xffffffff];
-    ecs->entity_pool[entity & 0xffffffff] = 0;
+HgEntityID HgECS::create_entity() {
+    HgEntityID entity = entity_next;
+    entity_next = entity_pool[entity & 0xffffffff];
+    entity_pool[entity & 0xffffffff] = 0;
     return entity;
 }
 
-void hg_entity_destroy(HgECS *ecs, HgEntityID entity) {
-    assert(ecs != nullptr);
-    assert(entity != 0 && ecs->entity_pool[entity & 0xffffffff] == 0);
+void HgECS::destroy_entity(HgEntityID entity) {
+    assert(entity != 0 && entity_pool[entity & 0xffffffff] == 0);
 
-    for (u32 i = 0; i < ecs->systems.count; ++i) {
-        HgSystem *system = &ecs->systems[i];
-        system->component_entities[system->entity_indices[entity & 0xffffffff]] = 0;
-        system->entity_indices[entity & 0xffffffff] = 0;
+    for (u32 i = 0; i < systems.count; ++i) {
+        systems[i].component_entities[systems[i].entity_indices[entity & 0xffffffff]] = 0;
+        systems[i].entity_indices[entity & 0xffffffff] = 0;
     }
-    ecs->entity_pool[entity & 0xffffffff] = ecs->entity_next;
-    ecs->entity_next = entity + ((u64)0x1 << 32);
+    entity_pool[entity & 0xffffffff] = entity_next;
+    entity_next = entity + ((u64)0x1 << 32);
 }
 
-bool hg_entity_is_alive(HgECS *ecs, HgEntityID entity) {
-    assert(ecs != nullptr);
-    return entity != 0 && ecs->entity_pool[entity & 0xffffffff] == 0;
+bool HgECS::is_entity_alive(HgEntityID entity) {
+    return entity != 0 && entity_pool[entity & 0xffffffff] == 0;
 }
 
-void *hg_entity_add_component(HgECS *ecs, HgEntityID entity, u32 system_index) {
-    assert(ecs != nullptr);
+void *HgECS::add_component_untyped(HgEntityID entity, u32 system) {
     assert(entity != 0);
-    assert(system_index < ecs->systems.count);
+    assert(system < systems.count);
 
-    HgSystem *system = &ecs->systems[system_index];
-    assert(system->entity_indices[entity & 0xffffffff] == 0);
+    assert(systems[system].entity_indices[entity & 0xffffffff] == 0);
 
-    u32 index = system->component_count;
-    ++system->component_count;
+    u32 index = systems[system].component_count;
+    ++systems[system].component_count;
 
-    assert(system->entity_indices[entity & 0xffffff] == 0);
-    system->entity_indices[entity & 0xffffffff] = index;
+    assert(systems[system].entity_indices[entity & 0xffffff] == 0);
+    systems[system].entity_indices[entity & 0xffffffff] = index;
 
-    assert(system->component_entities[index] == 0);
-    system->component_entities[index] = entity;
+    assert(systems[system].component_entities[index] == 0);
+    systems[system].component_entities[index] = entity;
 
-    return (u8 *)system->components.data + index * system->component_size;
+    return (u8 *)systems[system].components.data + index * systems[system].component_size;
 }
 
-void hg_entity_remove_component(HgECS *ecs, HgEntityID entity, u32 system_index) {
-    assert(ecs != nullptr);
+void HgECS::remove_component(HgEntityID entity, u32 system) {
     assert(entity != 0);
-    assert(system_index < ecs->systems.count);
+    assert(system < systems.count);
 
-    HgSystem *system = &ecs->systems[system_index];
-
-    u32 index = system->entity_indices[entity & 0xffffffff];
+    u32 index = systems[system].entity_indices[entity & 0xffffffff];
 
     assert(index != 0);
-    system->entity_indices[entity & 0xffffffff] = 0;
+    systems[system].entity_indices[entity & 0xffffffff] = 0;
 
-    assert(system->component_entities[index] == entity);
-    system->component_entities[index] = 0;
+    assert(systems[system].component_entities[index] == entity);
+    systems[system].component_entities[index] = 0;
 }
 
-bool hg_entity_has_component(HgECS *ecs, HgEntityID entity, u32 system_index) {
-    assert(ecs != nullptr);
+bool HgECS::has_component(HgEntityID entity, u32 system) {
     assert(entity != 0);
-    assert(system_index < ecs->systems.count);
-    return ecs->systems[system_index].entity_indices[entity & 0xffffffff] != 0;
+    assert(system < systems.count);
+    return systems[system].entity_indices[entity & 0xffffffff] != 0;
 }
 
-void *hg_entity_get_component(HgECS *ecs, HgEntityID entity, u32 system_index) {
-    assert(ecs != nullptr);
+void *HgECS::get_component_untyped(HgEntityID entity, u32 system) {
     assert(entity != 0);
-    assert(system_index < ecs->systems.count);
+    assert(system < systems.count);
 
-    HgSystem *system = &ecs->systems[system_index];
-    u32 index = system->entity_indices[entity & 0xffffffff];
+    u32 index = systems[system].entity_indices[entity & 0xffffffff];
 
     assert(index != 0);
-    assert(system->component_entities[index] == entity);
-    return (u8 *)system->components.data + index * system->component_size;
+    assert(systems[system].component_entities[index] == entity);
+    return (u8 *)systems[system].components.data + index * systems[system].component_size;
 }
 
-HgEntityID hg_entity_from_component(HgECS *ecs, void *component, u32 system_index) {
-    assert(ecs != nullptr);
+HgEntityID HgECS::get_entity(void *component, u32 system) {
     assert(component != nullptr);
-    assert(system_index < ecs->systems.count);
+    assert(system < systems.count);
 
-    HgSystem *system = &ecs->systems[system_index];
-
-    u32 index = (u32)(((usize)component - (usize)system->components.data) / system->component_size);
-    HgEntityID entity = system->component_entities[index];
+    u32 index = (u32)((usize)component - (usize)systems[system].components.data)
+              / systems[system].component_size;
+    HgEntityID entity = systems[system].component_entities[index];
 
     assert(entity != 0);
-    assert(system->entity_indices[entity & 0xffffffff] == index);
+    assert(systems[system].entity_indices[entity & 0xffffffff] == index);
     return entity;
 }
 

@@ -2879,47 +2879,65 @@ void hg_vk_image_staging_read(
 /**
  * The handle for an ECS entity
  */
-typedef u64 HgEntityID;
+using HgEntityID = u64;
 
 /**
- * A system of components in an entity component system
+ * An ECS system index with type info
  */
-struct HgSystem {
-    /**
-     * Unique data used by the system
-     */
-    HgSpan<void> system_data;
-    /**
-     * entity_indices[entity id] is the index into components and
-     * component_entities for that entity id
-     */
-    HgSpan<u32> entity_indices;
-    /**
-     * Each index is the entity associated with components[index]
-     */
-    HgSpan<HgEntityID> component_entities;
-    /**
-     * The data for the components
-     */
-    HgSpan<void> components;
-    /**
-     * The size of each component in bytes
-     */
-    u32 component_size;
-    /**
-     * The memory alignment of each component
-     */
-    u32 component_alignment;
-    /**
-     * The current number of components
-     */
-    u32 component_count;
+template<typename SystemType, typename ComponentType>
+struct HgSystemID {
+    static_assert((std::is_pod_v<SystemType> || std::is_void_v<SystemType>) && std::is_pod_v<ComponentType>);
+
+    u32 index;
+
+    operator u32() const {
+        return index;
+    }
 };
 
 /**
  * An entity component system
  */
 struct HgECS {
+    /**
+     * A system of components in an entity component system
+     */
+    struct System {
+        /**
+         * Unique data used by the system
+         */
+        HgSpan<void> system_data;
+        /**
+         * The alignment of the system's unique data
+         */
+        usize system_data_alignment;
+        /**
+         * entity_indices[entity id] is the index into components and
+         * component_entities for that entity id
+         */
+        HgSpan<u32> entity_indices;
+        /**
+         * Each index is the entity associated with components[index]
+         */
+        HgSpan<HgEntityID> component_entities;
+        /**
+         * The data for the components
+         */
+        HgSpan<void> components;
+        /**
+         * The size of each component in bytes
+         */
+        u32 component_size;
+        /**
+         * The memory alignment of each component
+         */
+        u32 component_alignment;
+        /**
+         * The current number of components
+         */
+        u32 component_count;
+    };
+
     /**
      * The allocator used by the ECS
      */
@@ -2935,194 +2953,245 @@ struct HgECS {
     /**
      * The component systems
      */
-    HgSpan<HgSystem> systems;
+    HgSpan<System> systems;
+    /**
+     * The number of systems
+     */
+    u32 system_count;
+
+    /**
+     * Creates an entity component system
+     *
+     * Parameters
+     * - allocator The allocator the ecs will use, must not be nullptr
+     * - max_entities The max entities that can exist, must be greater than 0
+     * - max_systems The max systems that can exist, must be greater than 0
+     * Returns
+     * - The created entity component system
+     */
+    static HgECS create(HgAllocator *allocator, u32 max_entities, u32 max_systems);
+
+    /**
+     * Destroys an entity component system
+     */
+    void destroy();
+
+    /**
+     * Resets an entity component system, removing all entities and components
+     */
+    void reset();
+
+    /**
+     * Adds a component system to the ecs
+     *
+     * Parameters
+     * - data_size The size in bytes of the unique data used by the system
+     * - data_alignment The alignment of the unique data used by the system
+     * - component_size The size in bytes of each component
+     * - component_alignment The alignment of each component
+     * - max_component The maximum number of components in the system
+     * Result
+     * - The index of the new system
+     */
+    u32 add_system_untyped(
+        usize data_size,
+        usize data_alignment,
+        u32 component_size,
+        u32 component_alignment,
+        u32 max_components);
+
+    /**
+     * Adds a component system using the given type
+     *
+     * Parameters
+     * - max_component The maximum number of components in the system
+     * Result
+     * - The index of the new system with type info
+     */
+    template<typename SystemType, typename ComponentType>
+    HgSystemID<SystemType, ComponentType> add_system(u32 max_components) {
+        if constexpr (std::is_void_v<SystemType>) {
+            return {add_system_untyped(
+                0, 0,
+                sizeof(ComponentType),
+                alignof(ComponentType),
+                max_components)};
+        } else {
+            return {add_system_untyped(
+                sizeof(SystemType),
+                alignof(SystemType),
+                sizeof(ComponentType),
+                alignof(ComponentType),
+                max_components)};
+        }
+    }
+
+    /**
+     * Gets a pointer to the system's unique data
+     *
+     * Parameters
+     * - system_index The system to get the data of
+     * Returns
+     * - The system's data
+     */
+    void *get_system_untyped(u32 system);
+
+    /**
+     * Gets a typed pointer to the system's unique data
+     *
+     * Parameters
+     * - system_id The system to get the data of
+     * Returns
+     * - The system's data
+     */
+    template<typename SystemType, typename ComponentType>
+    SystemType *get_system(HgSystemID<SystemType, ComponentType> system) {
+        return (SystemType *)get_system_untyped(system);
+    }
+
+    /**
+     * Flushes component removals in an ecs system
+     *
+     * When a component is removed, it is only flagged dead, so removals must be
+     * flushed to keep components contiguous
+     *
+     * Note, this function moves components, so should not be used while iterating
+     * or in a multithreaded context, while simple removal can be
+     *
+     * Parameters
+     * - system_index The system to flush
+     */
+    void flush_system(u32 system);
+
+    /**
+     * Gets the next iterator, the next entity in a system from an ecs
+     *
+     * Parameters
+     * - system_index The index of the system to traverse
+     * - iterator The previous entity, point to nullptr to begin, iter must not be nullptr
+     * Returns
+     * - true if another component is available
+     * - false if iteration is complete
+     */
+    bool iterate_system(u32 system_index, HgEntityID **iterator);
+
+    /**
+     * Creates an entity in an ECS, and returns its id
+     *
+     * Returns
+     * - The id of the created entity, will never be 0
+     */
+    HgEntityID create_entity();
+
+    /**
+     * Destroys an entity in an ECS
+     *
+     * Parameters
+     * - entity The id of the entity to destroy
+     */
+    void destroy_entity(HgEntityID entity);
+
+    /**
+     * Checks whether an entity id is alive and can be used
+     *
+     * Parameters
+     * - entity The id of the entity to check
+     * Returns
+     * - Whether the entity is alive and can be used
+     */
+    bool is_entity_alive(HgEntityID entity);
+
+    /**
+     * Adds a component to an entity
+     *
+     * Note, the component must not already exist
+     *
+     * Parameters
+     * - entity The id of the entity, must not be 0
+     * - system_index The system to add the component in
+     * Returns
+     * - A pointer to the created component
+     */
+    void *add_component_untyped(HgEntityID entity, u32 system);
+
+    /**
+     * Casts the component to the given type
+     *
+     * Note, the component must not already exist
+     *
+     * Parameters
+     * - entity The id of the entity, must not be 0
+     * - system_index The system to add the component in
+     * Returns
+     * - A pointer to the created component
+     */
+    template<typename SystemType, typename ComponentType>
+    ComponentType *add_component(HgEntityID entity, HgSystemID<SystemType, ComponentType> system) {
+        return (ComponentType *)add_component_untyped(entity, system);
+    }
+
+    /**
+     * Removes a component from an entity
+     *
+     * Note, the component must already exist
+     *
+     * Parameters
+     * - entity The id of the entity, must not be 0
+     * - system_index The system to remove the component from
+     */
+    void remove_component(HgEntityID entity, u32 system);
+
+    /**
+     * Checks whether an entity has a component or not
+     *
+     * Parameters
+     * - entity The id of the entity, must not be 0
+     * - system_index The system to check
+     * Returns
+     * - Whether the entity has a component in the system
+     */
+    bool has_component(HgEntityID entity, u32 system);
+
+    /**
+     * Gets a pointer to the entity's component
+     *
+     * Note, the entity must have a component in the system
+     *
+     * Parameters
+     * - entity The id of the entity, must not be 0
+     * - system_index The system to get the component from
+     * Returns
+     * - The entity's component, will never be 0
+     */
+    void *get_component_untyped(HgEntityID entity, u32 system);
+
+    /**
+     * Casts the pointer to the given type
+     *
+     * Note, the entity must have a component in the system
+     *
+     * Parameters
+     * - entity The id of the entity, must not be 0
+     * - system_index The system to get the component from
+     * Returns
+     * - The entity's component, will never be 0
+     */
+    template<typename SystemType, typename ComponentType>
+    ComponentType *get_component(HgEntityID entity, HgSystemID<SystemType, ComponentType> system) {
+        return (ComponentType *)get_component_untyped(entity, system);
+    }
+
+    /**
+     * Gets the entity id from it's component
+     *
+     * Parameters
+     * - component The component to lookup, must be a valid component
+     * - system_index The system to get the component from
+     * Returns
+     * - The components's entity, will never be 0
+     */
+    HgEntityID get_entity(void *component, u32 system_index);
 };
-
-/**
- * A description of a system in an entity component system
- */
-struct HgSystemDescription {
-    /**
-     * The size of the uninque data used by the system
-     */
-    usize data_size;
-    /**
-     * The max number of components the system can have
-     */
-    u32 max_components;
-    /**
-     * The size of each component in bytes
-     */
-    usize component_size;
-    /**
-     * The memory alignment of each component
-     */
-    usize component_alignment;
-};
-
-/**
- * Creates an entity component system
- *
- * Parameters
- * - allocator The allocator the ecs will use, must not be nullptr
- * - max_systems The max systems that can exist, must be greater than 0
- * - system A description of each system in the ecs
- * - system_count the number of systems
- * Returns
- * - The created entity component system
- */
-HgECS hg_ecs_create(
-    HgAllocator *allocator,
-    u32 max_entities,
-    HgSpan<const HgSystemDescription> systems);
-
-/**
- * Destroys an entity component system
- *
- * Parameters
- * - ecs The entity component system to destroy, must not be nullptr
- */
-void hg_ecs_destroy(HgECS *ecs);
-
-/**
- * Resets an entity component system, removing all entities and components
- *
- * Parameters
- * - ecs The entity component system to reset, must not be nullptr
- */
-void hg_ecs_reset(HgECS *ecs);
-
-/**
- * Gets a pointer the the system's unique data
- *
- * Parameters
- * - ecs The entity component system, must not be nullptr
- * - system_index The system to get the data of
- * Returns
- * - The data
- */
-void *hg_ecs_get_system(HgECS *ecs, u32 system_index);
-
-/**
- * Flushes component removals in an ecs system
- *
- * When a component is removed, it is only flagged dead, so removals must be
- * flushed to keep components contiguous
- *
- * Note, this function moves components, so should not be used while iterating
- * or in a multithreaded context, while simple removal can be
- *
- * Parameters
- * - ecs The entity component system, must not be nullptr
- * - system_index The system to flush
- */
-void hg_ecs_flush_system(HgECS *ecs, u32 system_index);
-
-/**
- * Gets the next iterator, the next entity in a system from an ecs
- *
- * Parameters
- * - ecs The entity component system, must not be nullptr
- * - system_index The index of the system to traverse
- * - iterator The previous entity, point to nullptr to begin, iter must not be nullptr
- * Returns
- * - true if another component is available
- * - false if iteration is complete
- */
-bool hg_ecs_iterate_system(HgECS *ecs, u32 system_index, HgEntityID **iterator);
-
-/**
- * Creates an entity in an ECS, and returns its id
- *
- * Parameters
- * - ecs The entity component system, must not be nullptr
- * Returns
- * - The id of the created entity, will never be 0
- */
-HgEntityID hg_entity_create(HgECS *ecs);
-
-/**
- * Destroys an entity in an ECS
- *
- * Parameters
- * - ecs The entity component system, must not be nullptr
- * - entity The id of the entity to destroy
- */
-void hg_entity_destroy(HgECS *ecs, HgEntityID entity);
-
-/**
- * Checks whether an entity id is alive and can be used
- *
- * Parameters
- * - ecs The entity component system, must not be nullptr
- * - entity The id of the entity to check
- * Returns
- * - Whether the entity is alive and can be used
- */
-bool hg_entity_is_alive(HgECS *ecs, HgEntityID entity);
-
-/**
- * Adds a component to an entity
- *
- * Note, the component must not already exist
- *
- * Parameters
- * - ecs The entity component system, must not be nullptr
- * - entity The id of the entity, must not be 0
- * - system_index The system to add the component in
- * Returns
- * - A pointer to the created component
- */
-void *hg_entity_add_component(HgECS *ecs, HgEntityID entity, u32 system_index);
-
-/**
- * Removes a component from an entity
- *
- * Note, the component must exist
- *
- * Parameters
- * - ecs The entity component system, must not be nullptr
- * - entity The id of the entity, must not be 0
- * - system_index The system to remove the component from
- */
-void hg_entity_remove_component(HgECS *ecs, HgEntityID entity, u32 system_index);
-
-/**
- * Checks whether an entity has a component or not
- *
- * Parameters
- * - ecs The entity component system, must not be nullptr
- * - entity The id of the entity, must not be 0
- * - system_index The system to check
- * Returns
- * - Whether the entity has a component in the system
- */
-bool hg_entity_has_component(HgECS *ecs, HgEntityID entity, u32 system_index);
-
-/**
- * Gets a pointer to the entity's component
- *
- * Parameters
- * - ecs The entity component system, must not be nullptr
- * - entity The id of the entity, must not be 0
- * - system_index The system to get the component from
- * Returns
- * - The entity's component
- * - nullptr if the entity has no component in the system
- */
-void *hg_entity_get_component(HgECS *ecs, HgEntityID entity, u32 system_index);
-
-/**
- * Gets the entity id from it's component
- *
- * Parameters
- * - ecs The entity component system, must not be nullptr
- * - component The component to lookup, must be a valid component
- * - system_index The system to get the component from
- * Returns
- * - The components's entity, will never be 0
- */
-HgEntityID hg_entity_from_component(HgECS *ecs, void *component, u32 system_index);
 
 /**
  * A pipeline to render 2D sprites
