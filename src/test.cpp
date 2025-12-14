@@ -99,13 +99,13 @@ int main(void) {
 
     hg_init();
 
-    HgWindowConfig window_config{};
+    HgWindow::Config window_config{};
     window_config.title = "Hg Test";
     window_config.windowed = true;
     window_config.width = 800;
     window_config.height = 600;
 
-    HgWindow *window = hg_window_create(&window_config);
+    HgWindow window = HgWindow::create(&window_config);
 
     VkInstance instance = hg_vk_create_instance("HurdyGurdy Test");
     hg_debug_mode(VkDebugUtilsMessengerEXT debug_messenger = hg_vk_create_debug_messenger(instance));
@@ -201,21 +201,22 @@ int main(void) {
             cpu_time = 0.0;
         }
 
-        hg_window_process_events({&window, 1});
-        if (hg_window_was_closed(window) || hg_window_is_key_down(window, HG_KEY_ESCAPE))
+        HgSpan<const HgWindow> windows = {&window, 1};
+        hg_window_process_events(windows);
+        if (window.was_closed() || window.is_key_down(HG_KEY_ESCAPE))
             break;
 
         static const f32 speed = 1.0f;
-        if (hg_window_is_key_down(window, HG_KEY_W))
+        if (window.is_key_down(HG_KEY_W))
             position.y -= speed * deltaf;
-        if (hg_window_is_key_down(window, HG_KEY_A))
+        if (window.is_key_down(HG_KEY_A))
             position.x -= speed * deltaf;
-        if (hg_window_is_key_down(window, HG_KEY_S))
+        if (window.is_key_down(HG_KEY_S))
             position.y += speed * deltaf;
-        if (hg_window_is_key_down(window, HG_KEY_D))
+        if (window.is_key_down(HG_KEY_D))
             position.x += speed * deltaf;
 
-        if (hg_window_was_resized(window)) {
+        if (window.was_resized()) {
             vkQueueWaitIdle(device.queue);
 
             u32 old_count = swap_image_count;
@@ -356,7 +357,7 @@ int main(void) {
     hg_debug_mode(vkDestroyDebugUtilsMessengerEXT(instance, debug_messenger, nullptr));
     vkDestroyInstance(instance, nullptr);
 
-    hg_window_destroy(window);
+    window.destroy();
 
     hg_exit();
 

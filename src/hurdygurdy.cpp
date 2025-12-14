@@ -9,7 +9,7 @@
 
 f64 HgClock::tick() {
     f64 prev = (f64)time.tv_sec + (f64)time.tv_nsec / 1.0e9;
-    if (timespec_get(&time, TIME_UTC) == 0)
+    if (std::timespec_get(&time, TIME_UTC) == 0)
         hg_warn("timespec_get failed\n");
     return ((f64)time.tv_sec + (f64)time.tv_nsec / 1.0e9) - prev;
 }
@@ -19,8 +19,8 @@ HgMat4 hg_model_matrix_2d(HgVec3 position, HgVec2 scale, f32 rotation) {
     m2.x.x = scale.x;
     m2.y.y = scale.y;
     m2 = hg_mmul2({
-        {cosf(rotation), sinf(rotation)},
-        {-sinf(rotation), cosf(rotation)},
+        {std::cosf(rotation), std::sinf(rotation)},
+        {-std::sinf(rotation), std::cosf(rotation)},
     }, m2);
     HgMat4 m4 = hg_mat2to4(m2);
     m4.w.x = position.x;
@@ -65,7 +65,7 @@ HgMat4 hg_projection_orthographic(f32 left, f32 right, f32 top, f32 bottom, f32 
 HgMat4 hg_projection_perspective(f32 fov, f32 aspect, f32 near, f32 far) {
     assert(near > 0.0f);
     assert(far > near);
-    f32 scale = 1 / tanf(fov / 2);
+    f32 scale = 1 / std::tanf(fov / 2);
     return {
         {scale / aspect, 0.0f, 0.0f, 0.0f},
         {0.0f, scale, 0.0f, 0.0f},
@@ -75,7 +75,7 @@ HgMat4 hg_projection_perspective(f32 fov, f32 aspect, f32 near, f32 far) {
 }
 
 u32 hg_max_mipmaps(u32 width, u32 height, u32 depth) {
-    return (u32)log2f((f32)std::max(std::max(width, height), depth)) + 1;
+    return (u32)std::log2f((f32)std::max(std::max(width, height), depth)) + 1;
 }
 
 static HgStdAllocator hg_internal_std_allocator;
@@ -86,7 +86,7 @@ HgAllocator *hg_persistent_allocator(void) {
 
 thread_local HgAllocator *hg_internal_temp_allocator;
 
-HgAllocator *hg_temp_allocator_get(void) {
+HgAllocator *hg_temp_allocator(void) {
     return hg_internal_temp_allocator;
 }
 
@@ -152,7 +152,7 @@ void *HgArena::realloc_fn(void *allocation, usize old_size, usize new_size, usiz
     }
 
     void *new_allocation = alloc_fn(new_size, alignment);
-    memcpy(new_allocation, allocation, old_size);
+    std::memcpy(new_allocation, allocation, old_size);
     return new_allocation;
 }
 
@@ -212,7 +212,7 @@ void *HgStack::realloc_fn(void *allocation, usize old_size, usize new_size, usiz
     }
 
     void *new_allocation = alloc_fn(new_size, 16);
-    memcpy(new_allocation, allocation, old_size);
+    std::memcpy(new_allocation, allocation, old_size);
     return new_allocation;
 }
 
@@ -228,23 +228,23 @@ HgSpan<void> hg_file_load_binary(HgAllocator *allocator, const char *path) {
     assert(allocator != nullptr);
     assert(path != nullptr);
 
-    FILE* file = fopen(path, "rb");
+    FILE* file = std::fopen(path, "rb");
     if (file == nullptr) {
         hg_warn("Could not find file to read binary: %s\n", path);
         return {};
     }
 
-    fseek(file, 0, SEEK_END);
-    HgSpan<void> data = allocator->alloc((usize)ftell(file), 16);
-    rewind(file);
+    std::fseek(file, 0, SEEK_END);
+    HgSpan<void> data = allocator->alloc((usize)std::ftell(file), 16);
+    std::rewind(file);
 
-    if (fread(data.data, 1, data.count, file) != data.count) {
-        fclose(file);
+    if (std::fread(data.data, 1, data.count, file) != data.count) {
+        std::fclose(file);
         hg_warn("Failed to read binary from file: %s\n", path);
         return {};
     }
 
-    fclose(file);
+    std::fclose(file);
     return data;
 }
 
@@ -258,19 +258,19 @@ bool hg_file_save_binary(HgSpan<const void> data, const char *path) {
         assert(data.data == nullptr);
     assert(path != nullptr);
 
-    FILE* file = fopen(path, "wb");
+    FILE* file = std::fopen(path, "wb");
     if (file == nullptr) {
         hg_warn("Failed to create file to write binary: %s\n", path);
         return false;
     }
 
-    if (fwrite(data.data, 1, data.count, file) != data.count) {
-        fclose(file);
+    if (std::fwrite(data.data, 1, data.count, file) != data.count) {
+        std::fclose(file);
         hg_warn("Failed to write binary data to file: %s\n", path);
         return false;
     }
 
-    fclose(file);
+    std::fclose(file);
     return true;
 }
 
@@ -686,14 +686,14 @@ static VkBool32 hg_internal_debug_callback(
     (void)user_data;
 
     if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
-        (void)fprintf(stderr, "Vulkan Error: %s\n", callback_data->pMessage);
+        (void)std::fprintf(stderr, "Vulkan Error: %s\n", callback_data->pMessage);
     } else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
-        (void)fprintf(stderr, "Vulkan Warning: %s\n", callback_data->pMessage);
+        (void)std::fprintf(stderr, "Vulkan Warning: %s\n", callback_data->pMessage);
     } else if (severity & (VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT
                         |  VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT)) {
-        (void)fprintf(stderr, "Vulkan Info: %s\n", callback_data->pMessage);
+        (void)std::fprintf(stderr, "Vulkan Info: %s\n", callback_data->pMessage);
     } else {
-        (void)fprintf(stderr, "Vulkan Unknown: %s\n", callback_data->pMessage);
+        (void)std::fprintf(stderr, "Vulkan Unknown: %s\n", callback_data->pMessage);
     }
     return VK_FALSE;
 }
@@ -802,8 +802,7 @@ static VkPhysicalDevice hg_internal_find_single_queue_gpu(VkInstance instance, u
     VkPhysicalDevice *gpus = (VkPhysicalDevice *)alloca(gpu_count * sizeof(*gpus));
     vkEnumeratePhysicalDevices(instance, &gpu_count, gpus);
 
-    u32 ext_prop_count = 0;
-    VkExtensionProperties* ext_props = nullptr;
+    HgSpan<VkExtensionProperties> ext_props{};
 
     VkPhysicalDevice suitable_gpu = nullptr;
     HgOption<u32> family;
@@ -812,11 +811,10 @@ static VkPhysicalDevice hg_internal_find_single_queue_gpu(VkInstance instance, u
 
         u32 new_prop_count = 0;
         vkEnumerateDeviceExtensionProperties(gpu, nullptr, &new_prop_count, nullptr);
-        if (new_prop_count > ext_prop_count) {
-            ext_prop_count = new_prop_count;
-            ext_props = (VkExtensionProperties *)realloc(ext_props, ext_prop_count * sizeof(*ext_props));
+        if (new_prop_count > ext_props.count) {
+            ext_props = hg_temp_allocator()->realloc(ext_props, new_prop_count);
         }
-        vkEnumerateDeviceExtensionProperties(gpu, nullptr, &new_prop_count, ext_props);
+        vkEnumerateDeviceExtensionProperties(gpu, nullptr, &new_prop_count, ext_props.data);
 
         for (usize j = 0; j < hg_countof(hg_internal_vk_device_extensions); j++) {
             for (usize k = 0; k < new_prop_count; k++) {
@@ -839,7 +837,7 @@ next_gpu:
         continue;
     }
 
-    free(ext_props);
+    hg_temp_allocator()->free(ext_props);
     if (suitable_gpu != nullptr)
         *queue_family = *family;
     else
@@ -1271,7 +1269,7 @@ void hg_swapchain_commands_destroy(VkDevice device, HgSwapchainCommands *sync) {
         sync->frame_count * sizeof(*sync->image_available) +
         sync->frame_count * sizeof(*sync->ready_to_present),
         16);
-    memset(sync, 0, sizeof(*sync));
+    std::memset(sync, 0, sizeof(*sync));
 }
 
 VkCommandBuffer hg_swapchain_commands_record(VkDevice device, HgSwapchainCommands *sync) {
@@ -1561,8 +1559,6 @@ void hg_vk_image_staging_write(
         end_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
         end_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
         end_barrier.newLayout = config->layout;
-        end_barrier.srcQueueFamilyIndex = 0;
-        end_barrier.dstQueueFamilyIndex = 0;
         end_barrier.image = config->dst_image;
         end_barrier.subresourceRange.aspectMask = config->subresource.aspectMask;
         end_barrier.subresourceRange.baseMipLevel = config->subresource.mipLevel;
@@ -1754,8 +1750,8 @@ HgECS hg_ecs_create(
         ecs.systems[i].component_alignment = (u32)systems[i].component_alignment;
         ecs.systems[i].component_count = 1;
 
-        memset(ecs.systems[i].entity_indices.data, 0, max_components);
-        memset(ecs.systems[i].component_entities.data, 0, max_components);
+        std::memset(ecs.systems[i].entity_indices.data, 0, max_components);
+        std::memset(ecs.systems[i].component_entities.data, 0, max_components);
     }
 
     return ecs;
@@ -1784,8 +1780,8 @@ void hg_ecs_reset(HgECS *ecs) {
     (void)reserved_null_entity;
 
     for (u32 i = 0; i < ecs->systems.count; ++i) {
-        memset(ecs->systems[i].entity_indices.data, 0, ecs->systems[i].component_count);
-        memset(ecs->systems[i].component_entities.data, 0, ecs->systems[i].component_count);
+        std::memset(ecs->systems[i].entity_indices.data, 0, ecs->systems[i].component_count);
+        std::memset(ecs->systems[i].component_entities.data, 0, ecs->systems[i].component_count);
         ecs->systems[i].component_count = 1;
     }
 }
@@ -1806,7 +1802,7 @@ void hg_ecs_flush_system(HgECS *ecs, u32 system_index) {
 
             void *current = (u8 *)system->components.data + i * system->component_size;
             void *last = (u8 *)system->components.data + system->component_count * system->component_size;
-            memcpy(current, last, system->component_size);
+            std::memcpy(current, last, system->component_size);
 
             HgEntityID entity = system->component_entities[i];
             HgEntityID last_entity = system->component_entities[system->component_count];
@@ -2523,13 +2519,13 @@ static void hg_internal_set_fullscreen(
         hg_error("X11 could not send fullscreen message\n");
 }
 
-struct HgWindow {
+struct HgWindow::Internals {
     HgWindowInput input;
     Window x11_window;
     Atom delete_atom;
 };
 
-HgWindow *hg_window_create(const HgWindowConfig *config) {
+HgWindow HgWindow::create(const HgWindow::Config *config) {
     assert(config != nullptr);
 
     u32 width = config->windowed ? config->width
@@ -2537,17 +2533,20 @@ HgWindow *hg_window_create(const HgWindowConfig *config) {
     u32 height = config->windowed ? config->height
         : (u32)DisplayHeight(hg_internal_x11_display, DefaultScreen(hg_internal_x11_display));
 
-    HgWindow *window = hg_persistent_allocator()->alloc<HgWindow>();
-    *window = {};
-    window->input.width = width;
-    window->input.height = height;
+    HgWindow window;
+    window.internals = hg_persistent_allocator()->alloc<HgWindow::Internals>();
+    *window.internals = {};
 
-    window->x11_window = hg_internal_create_x11_window(hg_internal_x11_display, width, height, config->title);
+    window.internals->input.width = width;
+    window.internals->input.height = height;
 
-    window->delete_atom = hg_internal_set_delete_behavior(hg_internal_x11_display, window->x11_window);
+    window.internals->x11_window = hg_internal_create_x11_window(
+        hg_internal_x11_display, width, height, config->title);
+    window.internals->delete_atom = hg_internal_set_delete_behavior(
+        hg_internal_x11_display, window.internals->x11_window);
 
     if (!config->windowed)
-        hg_internal_set_fullscreen(hg_internal_x11_display, window->x11_window);
+        hg_internal_set_fullscreen(hg_internal_x11_display, window.internals->x11_window);
 
     int flush_result = XFlush(hg_internal_x11_display);
     if (flush_result == 0)
@@ -2556,27 +2555,46 @@ HgWindow *hg_window_create(const HgWindowConfig *config) {
     return window;
 }
 
-void hg_window_destroy(HgWindow *window) {
-    if (window != nullptr) {
-        XDestroyWindow(hg_internal_x11_display, window->x11_window);
-        hg_persistent_allocator()->free(window);
+void HgWindow::destroy() {
+    if (internals != nullptr) {
+        XDestroyWindow(hg_internal_x11_display, internals->x11_window);
+        hg_persistent_allocator()->free(internals);
     }
     XFlush(hg_internal_x11_display);
 }
 
-void hg_window_set_icon(HgWindow *window, u32 *icon_data, u32 width, u32 height);
+void HgWindow::set_icon(u32 *icon_data, u32 width, u32 height) {
+    // window set_icon : TODO
+    (void)icon_data;
+    (void)width;
+    (void)height;
+}
 
-bool hg_window_get_fullscreen(HgWindow *window);
+bool HgWindow::is_fullscreen() {
+    // window is_fullscreen : TODO
+    return false;
+}
 
-void hg_window_set_fullscreen(HgWindow *window, bool fullscreen);
+void HgWindow::set_fullscreen(bool fullscreen) {
+    // window set_fullscreen : TODO
+    (void)fullscreen;
+}
 
-void hg_window_set_cursor(HgWindow *window, HgCursor cursor);
+void HgWindow::set_cursor(HgWindow::Cursor cursor) {
+    // window set_cursor : TODO
+    (void)cursor;
+}
 
-void hg_window_set_cursor_image(HgWindow *window, u32 *data, u32 width, u32 height);
+void HgWindow::set_cursor_image(u32 *data, u32 width, u32 height) {
+    // window set_cursor_image : TODO
+    (void)data;
+    (void)width;
+    (void)height;
+}
 
-VkSurfaceKHR hg_vk_create_surface(VkInstance instance, const HgWindow *window) {
+VkSurfaceKHR hg_vk_create_surface(VkInstance instance, const HgWindow window) {
     assert(instance != nullptr);
-    assert(window != nullptr);
+    assert(window.internals != nullptr);
 
     PFN_vkCreateXlibSurfaceKHR pfn_vkCreateXlibSurfaceKHR
         = (PFN_vkCreateXlibSurfaceKHR)vkGetInstanceProcAddr(instance, "vkCreateXlibSurfaceKHR");
@@ -2586,7 +2604,7 @@ VkSurfaceKHR hg_vk_create_surface(VkInstance instance, const HgWindow *window) {
     VkXlibSurfaceCreateInfoKHR info{};
     info.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
     info.dpy = hg_internal_x11_display;
-    info.window = window->x11_window;
+    info.window = window.internals->x11_window;
 
     VkSurfaceKHR surface = nullptr;
     VkResult result = pfn_vkCreateXlibSurfaceKHR(instance, &info, nullptr, &surface);
@@ -2596,21 +2614,21 @@ VkSurfaceKHR hg_vk_create_surface(VkInstance instance, const HgWindow *window) {
     return surface;
 }
 
-void hg_window_process_events(HgSpan<HgWindow *>windows) {
+void hg_window_process_events(HgSpan<const HgWindow> windows) {
     assert(windows != nullptr);
 
     if (windows.count > 1)
         hg_error("Multiple windows unsupported\n"); // : TODO
-    HgWindow* window = windows[0];
+    HgWindow window = windows[0];
 
-    memset(window->input.keys_pressed, 0, sizeof(window->input.keys_pressed));
-    memset(window->input.keys_released, 0, sizeof(window->input.keys_released));
-    window->input.was_resized = false;
+    std::memset(window.internals->input.keys_pressed, 0, sizeof(window.internals->input.keys_pressed));
+    std::memset(window.internals->input.keys_released, 0, sizeof(window.internals->input.keys_released));
+    window.internals->input.was_resized = false;
 
-    u32 old_window_width = window->input.width;
-    u32 old_window_height = window->input.height;
-    f64 old_mouse_pos_x = window->input.mouse_pos_x;
-    f64 old_mouse_pos_y = window->input.mouse_pos_y;
+    u32 old_window_width = window.internals->input.width;
+    u32 old_window_height = window.internals->input.height;
+    f64 old_mouse_pos_x = window.internals->input.mouse_pos_x;
+    f64 old_mouse_pos_y = window.internals->input.mouse_pos_y;
 
     while (XPending(hg_internal_x11_display)) {
         XEvent event;
@@ -2620,12 +2638,12 @@ void hg_window_process_events(HgSpan<HgWindow *>windows) {
 
         switch (event.type) {
             case ClientMessage:
-                if ((Atom)event.xclient.data.l[0] == window->delete_atom)
-                    window->input.was_closed = true;
+                if ((Atom)event.xclient.data.l[0] == window.internals->delete_atom)
+                    window.internals->input.was_closed = true;
                 break;
             case ConfigureNotify:
-                window->input.width = (u32)event.xconfigure.width;
-                window->input.height = (u32)event.xconfigure.height;
+                window.internals->input.width = (u32)event.xconfigure.width;
+                window.internals->input.height = (u32)event.xconfigure.height;
                 break;
             case KeyPress:
             case KeyRelease: {
@@ -2976,11 +2994,11 @@ void hg_window_process_events(HgSpan<HgWindow *>windows) {
                         break;
                 }
                 if (event.type == KeyPress) {
-                    window->input.keys_pressed[key] = true;
-                    window->input.keys_down[key] = true;
+                    window.internals->input.keys_pressed[key] = true;
+                    window.internals->input.keys_down[key] = true;
                 } else if (event.type == KeyRelease) {
-                    window->input.keys_released[key] = true;
-                    window->input.keys_down[key] = false;
+                    window.internals->input.keys_released[key] = true;
+                    window.internals->input.keys_down[key] = false;
                 }
             } break;
             case ButtonPress:
@@ -3004,28 +3022,28 @@ void hg_window_process_events(HgSpan<HgWindow *>windows) {
                         break;
                 }
                 if (event.type == ButtonPress) {
-                    window->input.keys_pressed[key] = true;
-                    window->input.keys_down[key] = true;
+                    window.internals->input.keys_pressed[key] = true;
+                    window.internals->input.keys_down[key] = true;
                 } else if (event.type == ButtonRelease) {
-                    window->input.keys_released[key] = true;
-                    window->input.keys_down[key] = false;
+                    window.internals->input.keys_released[key] = true;
+                    window.internals->input.keys_down[key] = false;
                 }
             } break;
             case MotionNotify:
-                window->input.mouse_pos_x = (f64)event.xmotion.x / (f64)window->input.height;
-                window->input.mouse_pos_y = (f64)event.xmotion.y / (f64)window->input.height;
+                window.internals->input.mouse_pos_x = (f64)event.xmotion.x / (f64)window.internals->input.height;
+                window.internals->input.mouse_pos_y = (f64)event.xmotion.y / (f64)window.internals->input.height;
                 break;
             default:
                 break;
         }
     }
 
-    if (window->input.width != old_window_width || window->input.height != old_window_height) {
-        window->input.was_resized = true;
+    if (window.internals->input.width != old_window_width || window.internals->input.height != old_window_height) {
+        window.internals->input.was_resized = true;
     }
 
-    window->input.mouse_delta_x = window->input.mouse_pos_x - old_mouse_pos_x;
-    window->input.mouse_delta_y = window->input.mouse_pos_y - old_mouse_pos_y;
+    window.internals->input.mouse_delta_x = window.internals->input.mouse_pos_x - old_mouse_pos_x;
+    window.internals->input.mouse_delta_y = window.internals->input.mouse_pos_y - old_mouse_pos_y;
 }
 
 #elif defined(_WIN32)
@@ -3036,20 +3054,20 @@ void hg_window_process_events(HgSpan<HgWindow *>windows) {
 
 HINSTANCE hg_internal_win32_instance = nullptr;
 
-void hg_internal_platform_init(void) {
+void hg_internal_platform_init() {
     hg_internal_win32_instance = GetModuleHandle(nullptr);
 }
 
-void hg_internal_platform_exit(void) {
+void hg_internal_platform_exit() {
 }
 
-struct HgWindow {
+struct HgWindow::Internals {
     HgWindowInput input;
     HWND hwnd;
 };
 
 static LRESULT CALLBACK hg_internal_window_callback(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
-    HgWindow *window = (HgWindow *)GetWindowLongPtrA(hwnd, GWLP_USERDATA);
+    HgWindow::Internals *window = (HgWindow::Internals *)GetWindowLongPtrA(hwnd, GWLP_USERDATA);
 
     switch (msg) {
         case WM_NCCREATE:
@@ -3063,7 +3081,7 @@ static LRESULT CALLBACK hg_internal_window_callback(HWND hwnd, UINT msg, WPARAM 
             window->input.height = HIWORD(lparam);
             break;
         case WM_KILLFOCUS:
-            memset(window->input.keys_down, 0, sizeof(window->input.keys_down));
+            std::memset(window->input.keys_down, 0, sizeof(window->input.keys_down));
                 break;
         case WM_SYSKEYDOWN:
         case WM_SYSKEYUP:
@@ -3395,13 +3413,14 @@ static LRESULT CALLBACK hg_internal_window_callback(HWND hwnd, UINT msg, WPARAM 
     return DefWindowProcA(hwnd, msg, wparam, lparam);
 }
 
-HgWindow *hg_window_create(const HgWindowConfig *config) {
+HgWindow HgWindow::create(const HgWindow::Config *config) {
     const char *title = config->title != nullptr ? config->title : "Hurdy Gurdy";
 
-    HgWindow *window = hg_persistent_allocator()->alloc<HgWindow>();
-    *window = {};
-    window->input.width = width;
-    window->input.height = height;
+    HgWindow window;
+    window.internals = hg_persistent_allocator()->alloc<HgWindow::Internals>();
+    *window.internals = {};
+    window.internals->input.width = width;
+    window.internals->input.height = height;
 
     WNDCLASSA window_class{};
     window_class.hInstance = hg_internal_win32_instance;
@@ -3413,65 +3432,84 @@ HgWindow *hg_window_create(const HgWindowConfig *config) {
         hg_error("Win32 failed to register window class for window: %s\n", config->title);
 
     if (config->windowed) {
-        window->hwnd = CreateWindowExA(
+        window.internals->hwnd = CreateWindowExA(
             0,
             title,
             title,
             WS_OVERLAPPEDWINDOW,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
-            window->input.width,
-            window->input.height,
+            window.internals->input.width,
+            window.internals->input.height,
             nullptr,
             nullptr,
             hg_internal_win32_instance,
             window
         );
     } else {
-        window->input.width = GetSystemMetrics(SM_CXSCREEN);
-        window->input.height = GetSystemMetrics(SM_CYSCREEN);
-        window->hwnd = CreateWindowExA(
+        window.internals->input.width = GetSystemMetrics(SM_CXSCREEN);
+        window.internals->input.height = GetSystemMetrics(SM_CYSCREEN);
+        window.internals->hwnd = CreateWindowExA(
             0,
             title,
             title,
             WS_POPUP,
             0,
             0,
-            window->input.width,
-            window->input.height,
+            window.internals->input.width,
+            window.internals->input.height,
             nullptr,
             nullptr,
             hg_internal_win32_instance,
             window
         );
     }
-    if (window->hwnd == nullptr)
+    if (window.internals->hwnd == nullptr)
         hg_error("Win32 window creation failed\n");
 
-    ShowWindow(window->hwnd, SW_SHOW);
+    ShowWindow(window.internals->hwnd, SW_SHOW);
     return window;
 }
 
-void hg_window_destroy(HgWindow *window) {
-    if (window != nullptr) {
-        DestroyWindow(window->hwnd);
-        hg_persistent_allocator()->free(window);
+void HgWindow::destroy() {
+    if (internals != nullptr) {
+        DestroyWindow(internals->hwnd);
+        hg_persistent_allocator()->free(internals);
     }
 }
 
-void hg_window_set_icon(HgWindow *window, u32 *icon_data, u32 width, u32 height);
+void HgWindow::set_icon(u32 *icon_data, u32 width, u32 height) {
+    // window set_icon : TODO
+    (void)icon_data;
+    (void)width;
+    (void)height;
+}
 
-bool hg_window_get_fullscreen(HgWindow *window);
+bool HgWindow::is_fullscreen() {
+    // window is_fullscreen : TODO
+    return false;
+}
 
-void hg_window_set_fullscreen(HgWindow *window, bool fullscreen);
+void HgWindow::set_fullscreen(bool fullscreen) {
+    // window set_fullscreen : TODO
+    (void)fullscreen;
+}
 
-void hg_window_set_cursor(HgWindow *window, HgCursor cursor);
+void HgWindow::set_cursor(HgWindow::Cursor cursor) {
+    // window set_cursor : TODO
+    (void)cursor;
+}
 
-void hg_window_set_cursor_image(HgWindow *window, u32 *data, u32 width, u32 height);
+void HgWindow::set_cursor_image(u32 *data, u32 width, u32 height) {
+    // window set_cursor_image : TODO
+    (void)data;
+    (void)width;
+    (void)height;
+}
 
-VkSurfaceKHR hg_vk_create_surface(VkInstance instance, const HgWindow *window) {
+VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window) {
     assert(instance != nullptr);
-    assert(window != nullptr);
+    assert(window.internals != nullptr);
 
     PFN_vkCreateWin32SurfaceKHR pfn_vkCreateWin32SurfaceKHR
         = (PFN_vkCreateWin32SurfaceKHR)vkGetInstanceProcAddr(instance, "vkCreateWin32SurfaceKHR");
@@ -3481,7 +3519,7 @@ VkSurfaceKHR hg_vk_create_surface(VkInstance instance, const HgWindow *window) {
     VkWin32SurfaceCreateInfoKHR info{};
     info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
     info.hinstance = hg_internal_win32_instance;
-    info.hwnd = window->hwnd;
+    info.hwnd = window.internals->hwnd;
 
     VkSurfaceKHR surface = nullptr;
     VkResult result = pfn_vkCreateWin32SurfaceKHR(instance, &info, nullptr, &surface);
@@ -3492,10 +3530,10 @@ VkSurfaceKHR hg_vk_create_surface(VkInstance instance, const HgWindow *window) {
     return surface;
 }
 
-void hg_window_process_events(HgWindow **windows, u32 window_count) {
-    for (usize i = 0; i < window_count; ++i) {
-        memset(windows[i]->input.keys_pressed, 0, sizeof(windows[i]->input.keys_pressed));
-        memset(windows[i]->input.keys_released, 0, sizeof(windows[i]->input.keys_released));
+void hg_window_process_events(HgSpan<HgWindow const> windows) {
+    for (usize i = 0; i < windows.count; ++i) {
+        std::memset(windows[i]->input.keys_pressed, 0, sizeof(windows[i]->input.keys_pressed));
+        std::memset(windows[i]->input.keys_released, 0, sizeof(windows[i]->input.keys_released));
         windows[i]->input.was_resized = false;
 
         u32 old_window_width = windows[i]->input.width;
@@ -3537,54 +3575,46 @@ void hg_window_process_events(HgWindow **windows, u32 window_count) {
 
 #endif
 
-bool hg_window_was_closed(const HgWindow *window) {
-    assert(window != nullptr);
-    return window->input.was_closed;
+bool HgWindow::was_closed() {
+    return internals->input.was_closed;
 }
 
-bool hg_window_was_resized(const HgWindow *window) {
-    assert(window != nullptr);
-    return window->input.was_resized;
+bool HgWindow::was_resized() {
+    return internals->input.was_resized;
 }
 
-void hg_window_get_size(const HgWindow *window, u32 *width, u32 *height) {
-    assert(window != nullptr);
-    *width = window->input.width;
-    *height = window->input.height;
+void HgWindow::get_size(u32 *width, u32 *height) {
+    *width = internals->input.width;
+    *height = internals->input.height;
 }
 
-void hg_window_get_mouse_pos(const HgWindow *window, f64 *x, f64 *y) {
-    assert(window != nullptr);
+void HgWindow::get_mouse_pos(f64 *x, f64 *y) {
     assert(x != nullptr);
     assert(y != nullptr);
-    *x = window->input.mouse_pos_x;
-    *y = window->input.mouse_pos_y;
+    *x = internals->input.mouse_pos_x;
+    *y = internals->input.mouse_pos_y;
 }
 
-void hg_window_get_mouse_delta(const HgWindow *window, f64 *x, f64 *y) {
-    assert(window != nullptr);
+void HgWindow::get_mouse_delta(f64 *x, f64 *y) {
     assert(x != nullptr);
     assert(y != nullptr);
-    *x = window->input.mouse_delta_x;
-    *y = window->input.mouse_delta_y;
+    *x = internals->input.mouse_delta_x;
+    *y = internals->input.mouse_delta_y;
 }
 
-bool hg_window_is_key_down(const HgWindow *window, HgKey key) {
-    assert(window != nullptr);
+bool HgWindow::is_key_down(HgKey key) {
     assert(key >= 0 && key < HG_KEY_COUNT);
-    return window->input.keys_down[key];
+    return internals->input.keys_down[key];
 }
 
-bool hg_window_was_key_pressed(const HgWindow *window, HgKey key) {
-    assert(window != nullptr);
+bool HgWindow::was_key_pressed(HgKey key) {
     assert(key >= 0 && key < HG_KEY_COUNT);
-    return window->input.keys_pressed[key];
+    return internals->input.keys_pressed[key];
 }
 
-bool hg_window_was_key_released(const HgWindow *window, HgKey key) {
-    assert(window != nullptr);
+bool HgWindow::was_key_released(HgKey key) {
     assert(key >= 0 && key < HG_KEY_COUNT);
-    return window->input.keys_released[key];
+    return internals->input.keys_released[key];
 }
 
 #define HG_MAKE_VULKAN_FUNC(name) PFN_##name name

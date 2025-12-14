@@ -112,7 +112,7 @@ typedef double f64;
  * Parameters
  * - ... The message to print and its format parameters
  */
-#define hg_debug(...) do { hg_debug_mode({ (void)fprintf(stderr, "HurdyGurdy Debug: " __VA_ARGS__); }) } while(0)
+#define hg_debug(...) do { hg_debug_mode({ (void)std::fprintf(stderr, "HurdyGurdy Debug: " __VA_ARGS__); }) } while(0)
 
 /**
  * Formats and logs an info message to stderr
@@ -120,7 +120,7 @@ typedef double f64;
  * Parameters
  * - ... The message to print and its format parameters
  */
-#define hg_info(...) do { (void)fprintf(stderr, "HurdyGurdy Info: " __VA_ARGS__); } while(0)
+#define hg_info(...) do { (void)std::fprintf(stderr, "HurdyGurdy Info: " __VA_ARGS__); } while(0)
 
 /**
  * Formats and logs a warning message to stderr
@@ -128,7 +128,7 @@ typedef double f64;
  * Parameters
  * - ... The message to print and its format parameters
  */
-#define hg_warn(...) do { (void)fprintf(stderr, "HurdyGurdy Warning: " __VA_ARGS__); } while(0)
+#define hg_warn(...) do { (void)std::fprintf(stderr, "HurdyGurdy Warning: " __VA_ARGS__); } while(0)
 
 /**
  * Formats and logs an error message to stderr and aborts the program
@@ -136,7 +136,7 @@ typedef double f64;
  * Parameters
  * - ... The message to print and its format parameters
  */
-#define hg_error(...) do { (void)fprintf(stderr, "HurdyGurdy Error: " __VA_ARGS__); abort(); } while(0)
+#define hg_error(...) do { (void)std::fprintf(stderr, "HurdyGurdy Error: " __VA_ARGS__); abort(); } while(0)
 
 /**
  * Aligns a pointer to an alignment
@@ -1984,7 +1984,7 @@ struct HgArray {
         arr.allocator = allocator;
         arr.items = allocator->alloc<T>(capacity);
         arr.count = count;
-        memset(arr.items.data, 0, count * sizeof(T));
+        std::memset(arr.items.data, 0, count * sizeof(T));
         return arr;
     }
 
@@ -2014,7 +2014,7 @@ struct HgArray {
             assert(items.count > 0);
             items = allocator->realloc(items, items.count * 2);
         }
-        memmove(items.data + index + 1, items.data + index, (count - index) * sizeof(*items.data));
+        std::memmove(items.data + index + 1, items.data + index, (count - index) * sizeof(*items.data));
         ++count;
         new (&items[index]) T{std::forward<U>(args)...};
     }
@@ -2022,7 +2022,7 @@ struct HgArray {
     void remove(usize index) {
         assert(index < count);
         --count;
-        memmove(items.data + index, items.data + index + 1, (count - index) * sizeof(*items.data));
+        std::memmove(items.data + index, items.data + index + 1, (count - index) * sizeof(*items.data));
     }
 };
 
@@ -2187,119 +2187,186 @@ typedef enum HgKey {
     HG_KEY_COUNT,
 } HgKey;
 
-/**
- * Platform specific resources for a window
- */
-typedef struct HgWindow HgWindow;
+struct HgWindow {
+    struct Internals;
 
-/**
- * Configuration for a window
- */
-struct HgWindowConfig {
     /**
-     * The title of the window
+     * Platform specific resources for a window
      */
-    const char* title;
+    Internals *internals;
+
     /**
-     * Whether the window should be windowed or fullscreen
+     * Configuration for a window
      */
-    bool windowed;
+    struct Config {
+        /**
+         * The title of the window
+         */
+        const char* title;
+        /**
+         * Whether the window should be windowed or fullscreen
+         */
+        bool windowed;
+        /**
+         * The width in pixels if windowed, otherwise ignored
+         */
+        u32 width;
+        /**
+         * The height in pixels if windowed, otherwise ignored
+         */
+        u32 height;
+    };
+
     /**
-     * The width in pixels if windowed, otherwise ignored
+     * Creates a window
+     *
+     * Parameters
+     * - config The window configuration, must not be nullptr
+     * Returns
+     * - The created window, will never be nullptr
      */
-    u32 width;
+    static HgWindow create(const Config *config);
+
     /**
-     * The height in pixels if windowed, otherwise ignored
+     * Destroys a window
      */
-    u32 height;
+    void destroy();
+
+    /**
+     * Sets the windows icons : TODO
+     *
+     * Parameters
+     * - icon_data The pixels of the image to set the icon to, must not be nullptr
+     * - width The width in pixels of the icon
+     * - height The height in pixels of the icon
+     */
+    void set_icon(u32 *icon_data, u32 width, u32 height);
+
+    /**
+     * Gets whether the window is fullscreen or not : TODO
+     *
+     * Returns
+     * - Whether the window is fullscreen
+     */
+    bool is_fullscreen();
+
+    /**
+     * Sets the window to fullscreen of windowed mode : TODO
+     *
+     * Parameters
+     * - fullscreen Whether to set fullscreen, or set windowed
+     */
+    void set_fullscreen(bool fullscreen);
+
+    /**
+     * The builtin cursor images
+     */
+    typedef enum Cursor {
+        HG_CURSOR_NONE = 0,
+        HG_CURSOR_ARROW,
+        HG_CURSOR_TEXT,
+        HG_CURSOR_WAIT,
+        HG_CURSOR_CROSS,
+        HG_CURSOR_HAND,
+    } Cursor;
+
+    /**
+     * Sets the window's cursor to a platform defined icon : TODO
+     */
+    void set_cursor(Cursor cursor);
+
+    /**
+     * Sets the window's cursor to a custom image : TODO
+     */
+    void set_cursor_image(u32 *data, u32 width, u32 height);
+
+    /**
+     * Checks if the window was closed via close button or window manager
+     *
+     * hg_window_close() is not automatically called when this function returns
+     * true, and may be called manually
+     *
+     * Returns
+     * - whether the window was closed
+     */
+    bool was_closed();
+
+    /**
+     * Checks if the window was resized
+     *
+     * Returns
+     * - whether the window was resized
+     */
+    bool was_resized();
+
+    /**
+     * Gets the size of the window in pixels
+     *
+     * Parameters
+     * - width A pointer to store the width, must not be nullptr
+     * - height A pointer to store the height, must not be nullptr
+     */
+    void get_size(u32 *width, u32 *height);
+
+    /**
+     * Gets the most recent mouse position
+     *
+     * Parameters
+     * - x A pointer to store the x position, must not be nullptr
+     * - y A pointer to store the y position, must not be nullptr
+     */
+    void get_mouse_pos(f64 *x, f64 *y);
+
+    /**
+     * Gets the most recent mouse delta
+     *
+     * Parameters
+     * - x A pointer to store the x delta, must not be nullptr
+     * - y A pointer to store the y delta, must not be nullptr
+     */
+    void get_mouse_delta(f64 *x, f64 *y);
+
+    /**
+     * Checks if a key is being held down
+     *
+     * Parameters
+     * - key The key to check
+     * Returns
+     * - whether the key is being held down
+     */
+    bool is_key_down(HgKey key);
+
+    /**
+     * Checks if a key was pressed this frame
+     *
+     * Parameters
+     * - key The key to check
+     * Returns
+     * - whether the key was pressed this frame
+     */
+    bool was_key_pressed(HgKey key);
+
+    /**
+     * Checks if a key was released this frame
+     *
+     * Parameters
+     * - key The key to check
+     * Returns
+     * - whether the key was released this frame
+     */
+    bool was_key_released(HgKey key);
 };
-
-/**
- * Creates a window
- *
- * Parameters
- * - platform The platform resources, must not be nullptr
- * - config The window configuration, must not be nullptr
- * Returns
- * - The created window, will never be nullptr
- */
-HgWindow *hg_window_create(const HgWindowConfig *config);
-
-/**
- * Destroys a window
- *
- * Parameters
- * - platform The platform resources, must not be nullptr
- * - window The window to destroy, noop if nullptr
- */
-void hg_window_destroy(HgWindow *window);
-
-/**
- * Sets the windows icons : TODO
- *
- * Parameters
- * - platform The platform resources, must not be nullptr
- * - window The window to modify, must not be nullptr
- * - icon_data The pixels of the image to set the icon to, must not be nullptr
- * - width The width in pixels of the icon
- * - height The height in pixels of the icon
- */
-void hg_window_set_icon(HgWindow *window, u32 *icon_data, u32 width, u32 height);
-
-/**
- * Gets whether the window is fullscreen or not : TODO
- *
- * Parameters
- * - platform The platform resources, must not be nullptr
- * - window The window to check, must not be nullptr
- * Returns
- * - Whether the window is fullscreen
- */
-bool hg_window_get_fullscreen(HgWindow *window);
-
-/**
- * Sets the window to fullscreen of windowed mode : TODO
- *
- * Parameters
- * - platform The platform resources, must not be nullptr
- * - window The window to set, must not be nullptr
- * - fullscreen Whether to set fullscreen, or set windowed
- */
-void hg_window_set_fullscreen(HgWindow *window, bool fullscreen);
-
-/**
- * The builtin cursor images
- */
-typedef enum HgCursor {
-    HG_CURSOR_NONE = 0,
-    HG_CURSOR_ARROW,
-    HG_CURSOR_TEXT,
-    HG_CURSOR_WAIT,
-    HG_CURSOR_CROSS,
-    HG_CURSOR_HAND,
-} HgCursor;
-
-/**
- * Sets the window's cursor to a platform defined icon : TODO
- */
-void hg_window_set_cursor(HgWindow *window, HgCursor cursor);
-
-/**
- * Sets the window's cursor to a custom image : TODO
- */
-void hg_window_set_cursor_image(HgWindow *window, u32 *data, u32 width, u32 height);
 
 /**
  * Create a Vulkan surface for the window, according to the platform
  *
  * Parameters
  * - instance The Vulkan instance, must not be nullptr
- * - platform The hg platform context, must not be nullptr
- * - window The window to create a surface for, must not be nullptr
+ * - window The window to create a surface for
  * Returns
  * - The created Vulkan surface, will never be nullptr
  */
-VkSurfaceKHR hg_vk_create_surface(VkInstance instance, const HgWindow *window);
+VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window);
 
 /**
  * Processes all events since the last call to process events or startup
@@ -2312,93 +2379,7 @@ VkSurfaceKHR hg_vk_create_surface(VkInstance instance, const HgWindow *window);
  * - hg The hg context, must not be nullptr
  * - windows All open windows
  */
-void hg_window_process_events(HgSpan<HgWindow *> windows);
-
-/**
- * Checks if the window was closed via close button or window manager
- *
- * hg_window_close() is not automatically called when this function returns
- * true, and may be called manually
- *
- * Parameters
- * - window The window, must not be nullptr
- * Returns
- * - whether the window was closed
- */
-bool hg_window_was_closed(const HgWindow *window);
-
-/**
- * Checks if the window was resized
- *
- * Parameters
- * - window The window, must not be nullptr
- * Returns
- * - whether the window was resized
- */
-bool hg_window_was_resized(const HgWindow *window);
-
-/**
- * Gets the size of the window in pixels
- *
- * Parameters
- * - window The window, must not be nullptr
- * - width A pointer to store the width, must not be nullptr
- * - height A pointer to store the height, must not be nullptr
- */
-void hg_window_get_size(const HgWindow *window, u32 *width, u32 *height);
-
-/**
- * Gets the most recent mouse position
- *
- * Parameters
- * - window The window, must not be nullptr
- * - x A pointer to store the x position, must not be nullptr
- * - y A pointer to store the y position, must not be nullptr
- */
-void hg_window_get_mouse_pos(const HgWindow *window, f64 *x, f64 *y);
-
-/**
- * Gets the most recent mouse delta
- *
- * Parameters
- * - window The window, must not be nullptr
- * - x A pointer to store the x delta, must not be nullptr
- * - y A pointer to store the y delta, must not be nullptr
- */
-void hg_window_get_mouse_delta(const HgWindow *window, f64 *x, f64 *y);
-
-/**
- * Checks if a key is being held down
- *
- * Parameters
- * - window The window, must not be nullptr
- * - key The key to check
- * Returns
- * - whether the key is being held down
- */
-bool hg_window_is_key_down(const HgWindow *window, HgKey key);
-
-/**
- * Checks if a key was pressed this frame
- *
- * Parameters
- * - window The window, must not be nullptr
- * - key The key to check
- * Returns
- * - whether the key was pressed this frame
- */
-bool hg_window_was_key_pressed(const HgWindow *window, HgKey key);
-
-/**
- * Checks if a key was released this frame
- *
- * Parameters
- * - window The window, must not be nullptr
- * - key The key to check
- * Returns
- * - whether the key was released this frame
- */
-bool hg_window_was_key_released(const HgWindow *window, HgKey key);
+void hg_window_process_events(HgSpan<const HgWindow> windows);
 
 // audio system : TODO
 
