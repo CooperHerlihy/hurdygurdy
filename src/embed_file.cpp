@@ -28,8 +28,9 @@ int main(int argc, char** argv) {
         }
     }
 
-    FILE *file = fopen(argv[1], "rb");
-    if (file == NULL) {
+    FILE *file = nullptr;
+    (void)fopen_s(&file, argv[1], "rb");
+    if (file == nullptr) {
         fprintf(stderr, "Failed to open file: %s\n", argv[1]);
         return -1;
     }

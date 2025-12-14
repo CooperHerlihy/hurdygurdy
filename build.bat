@@ -5,7 +5,7 @@ set SRC_DIR=.
 set BUILD_DIR=build
 
 set STD=/std:c++17
-set WARNINGS=/W4 /WX
+set WARNINGS=/W4 /WX /D _CRT_SECURE_NO_WARNINGS
 set CONFIG=/nologo /Zi /Od
 
 for %%a in (%*) do (
@@ -22,7 +22,7 @@ set INCLUDES= ^
 if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
 if not exist "%BUILD_DIR%\shaders" mkdir "%BUILD_DIR%\shaders"
 
-cl "%SRC_DIR%\src\embed_file.c" ^
+cl "%SRC_DIR%\src\embed_file.cpp" ^
     /Fd:"%BUILD_DIR%\embed_file.pdb" ^
     /Fo:"%BUILD_DIR%\embed_file.obj" ^
     /Fe:"%BUILD_DIR%\embed_file.exe" ^
@@ -43,7 +43,7 @@ for %%S in (%SHADERS%) do (
     )
 )
 
-cl /c "%SRC_DIR%\src\hurdygurdy.c" ^
+cl /c "%SRC_DIR%\src\hurdygurdy.cpp" ^
     /Fd:"%BUILD_DIR%\hurdygurdy.pdb" ^
     /Fo:"%BUILD_DIR%\hurdygurdy.obj" ^
     %STD% %WARNINGS% %CONFIG% %INCLUDES%
@@ -55,7 +55,7 @@ cl /c "%SRC_DIR%\src\vk_mem_alloc.cpp" ^
 
 lib /nologo /OUT:"%BUILD_DIR%\hurdygurdy.lib" "%BUILD_DIR%\hurdygurdy.obj" "%BUILD_DIR%\vk_mem_alloc.obj"
 
-cl "%SRC_DIR%\src\test.c" ^
+cl "%SRC_DIR%\src\test.cpp" ^
     /Fd:"%BUILD_DIR%\test.pdb" ^
     /Fo:"%BUILD_DIR%\test.obj" ^
     /Fe:"%BUILD_DIR%\test.exe" ^

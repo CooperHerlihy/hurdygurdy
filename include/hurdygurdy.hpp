@@ -31,9 +31,7 @@
 #include <cfloat>
 #include <cinttypes>
 #include <cmath>
-#include <cstdalign>
 #include <cstdarg>
-#include <cstdbool>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>

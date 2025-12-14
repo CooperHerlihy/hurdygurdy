@@ -13,7 +13,7 @@ int main(void) {
     arr.push((u32)42);
     arr.push((u32)100);
     arr.push((u32)1000);
-    arr.push((u32)999999999999);
+    arr.push((u32)999999999);
 
     for (usize i = 0; i < arr.count; ++i) {
         hg_info("elem %d: %d\n", (int)i, arr[i]);

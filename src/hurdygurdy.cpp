@@ -3414,8 +3414,9 @@ HgWindow HgWindow::create(const HgWindow::Config *config) {
     HgWindow window;
     window.internals = hg_persistent_allocator()->alloc<HgWindow::Internals>();
     *window.internals = {};
-    window.internals->input.width = width;
-    window.internals->input.height = height;
+
+    window.internals->input.width = config->width;
+    window.internals->input.height = config->height;
 
     WNDCLASSA window_class{};
     window_class.hInstance = hg_internal_win32_instance;
@@ -3439,7 +3440,7 @@ HgWindow HgWindow::create(const HgWindow::Config *config) {
             nullptr,
             nullptr,
             hg_internal_win32_instance,
-            window
+            window.internals
         );
     } else {
         window.internals->input.width = GetSystemMetrics(SM_CXSCREEN);
@@ -3456,7 +3457,7 @@ HgWindow HgWindow::create(const HgWindow::Config *config) {
             nullptr,
             nullptr,
             hg_internal_win32_instance,
-            window
+            window.internals
         );
     }
     if (window.internals->hwnd == nullptr)
@@ -3527,38 +3528,40 @@ VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window) {
 
 void hg_window_process_events(HgSpan<HgWindow const> windows) {
     for (usize i = 0; i < windows.count; ++i) {
-        std::memset(windows[i]->input.keys_pressed, 0, sizeof(windows[i]->input.keys_pressed));
-        std::memset(windows[i]->input.keys_released, 0, sizeof(windows[i]->input.keys_released));
-        windows[i]->input.was_resized = false;
+        HgWindow::Internals *window = windows[i].internals;
 
-        u32 old_window_width = windows[i]->input.width;
-        u32 old_window_height = windows[i]->input.height;
-        f64 old_mouse_pos_x = windows[i]->input.mouse_pos_x;
-        f64 old_mouse_pos_y = windows[i]->input.mouse_pos_y;
+        std::memset(window->input.keys_pressed, 0, sizeof(window->input.keys_pressed));
+        std::memset(window->input.keys_released, 0, sizeof(window->input.keys_released));
+        window->input.was_resized = false;
+
+        u32 old_window_width = window->input.width;
+        u32 old_window_height = window->input.height;
+        f64 old_mouse_pos_x = window->input.mouse_pos_x;
+        f64 old_mouse_pos_y = window->input.mouse_pos_y;
 
         MSG msg;
-        while (PeekMessageA(&msg, windows[i]->hwnd, 0, 0, PM_REMOVE) != 0) {
+        while (PeekMessageA(&msg, window->hwnd, 0, 0, PM_REMOVE) != 0) {
             TranslateMessage(&msg);
             DispatchMessageA(&msg);
         }
 
-        if (windows[i]->input.width != old_window_width || windows[i]->input.height != old_window_height) {
-            windows[i]->input.was_resized = true;
+        if (window->input.width != old_window_width || window->input.height != old_window_height) {
+            window->input.was_resized = true;
         }
 
-        windows[i]->input.mouse_delta_x = windows[i]->input.mouse_pos_x - old_mouse_pos_x;
-        windows[i]->input.mouse_delta_y = windows[i]->input.mouse_pos_y - old_mouse_pos_y;
+        window->input.mouse_delta_x = window->input.mouse_pos_x - old_mouse_pos_x;
+        window->input.mouse_delta_y = window->input.mouse_pos_y - old_mouse_pos_y;
 
-        if (windows[i]->input.keys_down[HG_KEY_LSHIFT] && windows[i]->input.keys_down[HG_KEY_RSHIFT]) {
+        if (window->input.keys_down[HG_KEY_LSHIFT] && window->input.keys_down[HG_KEY_RSHIFT]) {
             bool lshift = (GetAsyncKeyState(VK_LSHIFT) & 0x8000) != 0;
             bool rshift = (GetAsyncKeyState(VK_RSHIFT) & 0x8000) != 0;
             if (!lshift) {
-                windows[i]->input.keys_released[HG_KEY_LSHIFT] = true;
-                windows[i]->input.keys_down[HG_KEY_LSHIFT] = false;
+                window->input.keys_released[HG_KEY_LSHIFT] = true;
+                window->input.keys_down[HG_KEY_LSHIFT] = false;
             }
             if (!rshift) {
-                windows[i]->input.keys_released[HG_KEY_RSHIFT] = true;
-                windows[i]->input.keys_down[HG_KEY_RSHIFT] = false;
+                window->input.keys_released[HG_KEY_RSHIFT] = true;
+                window->input.keys_down[HG_KEY_RSHIFT] = false;
             }
         }
     }
@@ -3761,7 +3764,7 @@ void hg_vk_load(void) {
         hg_error("Could not load vulkan dynamic lib\n");
 
     hg_internal_vulkan_funcs.vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr)
-        GetProcAddress(hg_internal_libvulkan, "vkGetInstanceProcAddr");
+        GetProcAddress((HMODULE)hg_internal_libvulkan, "vkGetInstanceProcAddr");
     if (hg_internal_vulkan_funcs.vkGetInstanceProcAddr == nullptr)
         hg_error("Could not load vkGetInstanceProcAddr\n");
 
