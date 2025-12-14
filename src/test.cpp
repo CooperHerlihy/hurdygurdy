@@ -1,9 +1,49 @@
 #include "hurdygurdy.hpp"
 
+/**
+ * The transform component for all entities with a position
+ *
+ * Note, 2D entities can just ignore scale.z and rotation.i,j,k
+ */
+struct HgTransform {
+    /**
+     * The 3D position
+     */
+    HgVec3 pos;
+    /**
+     * The 3D scale
+     */
+    HgVec3 scale;
+    /**
+     * The 3D rotation
+     */
+    HgQuat rotation;
+};
+
+struct HgSpriteSystem {
+    struct Texture {
+        VmaAllocation allocation;
+        VkImage image;
+        VkImageView view;
+        VkSampler sampler;
+        VkDescriptorSet set;
+    };
+
+    HgSpan<Texture> texture_pool;
+
+};
+
+struct HgSprite {
+    u32 texture;
+    HgVec2 uv_begin;
+    HgVec2 uv_end;
+};
+
 int main(void) {
     hg_init();
+    HgAllocator& mem = hg_persistent_allocator();
 
-    HgArray<u32> arr = HgArray<u32>::create(hg_persistent_allocator(), 1, 1);
+    HgArray<u32> arr = HgArray<u32>::create(mem, 1, 1);
 
     for (usize i = 0; i < arr.count; ++i) {
         hg_info("elem %d: %d\n", (int)i, arr[i]);
@@ -27,10 +67,10 @@ int main(void) {
     }
 
     {
-        HgECS ecs = HgECS::create(hg_persistent_allocator(), 1 << 16, 2);
+        HgECS ecs = HgECS::create(mem, 1 << 16, 2);
         HgSystemID<void, u32> u32_system = ecs.add_system<void, u32>(1 << 16);
         HgSystemID<u8, u64> u64_system = ecs.add_system<u8, u64>(1 << 16);
-        *ecs.get_system(u64_system) = 5;
+        ecs.get_system(u64_system) = 5;
 
         HgEntityID e1 = ecs.create_entity();
         HgEntityID e2 = ecs.create_entity();
@@ -45,55 +85,51 @@ int main(void) {
 
         hg_info("u32_system first iteration\n");
         for (HgEntityID *e = nullptr; ecs.iterate_system(u32_system, &e);) {
-            u32 *comp = ecs.get_component(*e, u32_system);
-            hg_info("iterator: %" PRIu32 "\n", *comp);
+            u32& comp = ecs.get_component(*e, u32_system);
+            hg_info("iterator: %" PRIu32 "\n", comp);
         }
 
-        u32 *e1compu32 = ecs.add_component(e1, u32_system);
-        *e1compu32 = 12;
-        u32 *e2compu32 = ecs.add_component(e2, u32_system);
-        *e2compu32 = 42;
-        u32 *e3compu32 = ecs.add_component(e3, u32_system);
-        *e3compu32 = 100;
+        ecs.add_component(e1, u32_system) = 12;
+        ecs.add_component(e2, u32_system) = 42;
+        ecs.add_component(e3, u32_system) = 100;
 
         hg_info("u32_system second iteration\n");
         for (HgEntityID *e = nullptr; ecs.iterate_system(u32_system, &e);) {
-            u32 *comp = ecs.get_component(*e, u32_system);
-            hg_info("iterator: %" PRIu32 "\n", *comp);
+            hg_info("iterator: %" PRIu32 "\n", ecs.get_component(*e, u32_system));
         }
 
         ecs.destroy_entity(e1);
 
         hg_info("u32_system third iteration\n");
         for (HgEntityID *e = nullptr; ecs.iterate_system(u32_system, &e);) {
-            u32 *comp = ecs.get_component(*e, u32_system);
-            hg_info("iterator: %" PRIu32 "\n", *comp);
+            hg_info("iterator: %" PRIu32 "\n", ecs.get_component(*e, u32_system));
         }
 
         ecs.flush_system(u32_system);
 
         hg_info("u32_system fourth iteration\n");
         for (HgEntityID *e = nullptr; ecs.iterate_system(u32_system, &e);) {
-            u32 *comp = ecs.get_component(*e, u32_system);
-            hg_info("iterator: %" PRIu32 "\n", *comp);
+            hg_info("iterator: %" PRIu32 "\n", ecs.get_component(*e, u32_system));
         }
 
-        u64 *e2compu64_system = ecs.add_component(e2, u64_system);
-        *e2compu64_system = 2042;
-        u64 *e3compu64_system = ecs.add_component(e3, u64_system);
-        *e3compu64_system = 2100;
+        ecs.add_component(e2, u64_system) = 2042;
+        ecs.add_component(e3, u64_system) = 2100;
 
         hg_info("u64_system first iteration\n");
         for (HgEntityID *e = nullptr; ecs.iterate_system(u64_system, &e);) {
-            u32 *compu32_system = ecs.get_component(*e, u32_system);
-            u64 *compu64_system = ecs.get_component(*e, u64_system);
-            hg_info("sys u64_system: %" PRIu64 ", sys u32_system: %" PRIu32 "\n", *compu64_system, *compu32_system);
+            hg_info("sys u64_system: %" PRIu64 ", sys u32_system: %" PRIu32 "\n",
+                    ecs.get_component(*e, u64_system),
+                    ecs.get_component(*e, u32_system));
         }
 
-        hg_info("u64_system data: %d\n", *ecs.get_system(u64_system));
+        hg_info("u64_system data: %d\n", ecs.get_system(u64_system));
 
         ecs.destroy();
     }
+
+    // HgECS ecs = HgECS::create(mem, 10000, 16);
+    // auto transform_system = ecs.add_system<void, HgTransform>(10000);
+    // auto sprite_system = ecs.add_system<HgSpriteSystem, HgSprite>(1000);
 
     HgWindow::Config window_config{};
     window_config.title = "Hg Test";
@@ -101,7 +137,7 @@ int main(void) {
     window_config.width = 800;
     window_config.height = 600;
 
-    HgWindow window = HgWindow::create(&window_config);
+    HgWindow window = HgWindow::create(window_config);
 
     VkInstance instance = hg_vk_create_instance("HurdyGurdy Test");
     hg_debug_mode(VkDebugUtilsMessengerEXT debug_messenger = hg_vk_create_debug_messenger(instance));
@@ -113,8 +149,8 @@ int main(void) {
     allocator_info.instance = instance;
     allocator_info.vulkanApiVersion = VK_API_VERSION_1_3;
 
-    VmaAllocator allocator;
-    vmaCreateAllocator(&allocator_info, &allocator);
+    VmaAllocator vma;
+    vmaCreateAllocator(&allocator_info, &vma);
 
     VkCommandPoolCreateInfo cmd_pool_info{};
     cmd_pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -130,28 +166,24 @@ int main(void) {
 
     u32 swap_image_count;
     vkGetSwapchainImagesKHR(device.handle, swapchain.handle, &swap_image_count, nullptr);
-    VkImage *swap_images = (VkImage *)malloc(swap_image_count * sizeof(*swap_images));
-    VkImageView *swap_views = (VkImageView *)malloc(swap_image_count * sizeof(*swap_views));
-    vkGetSwapchainImagesKHR(device.handle, swapchain.handle, &swap_image_count, swap_images);
+    HgSpan<VkImage> swap_images = mem.alloc<VkImage>(swap_image_count);
+    HgSpan<VkImageView> swap_views = mem.alloc<VkImageView>(swap_image_count);
+    vkGetSwapchainImagesKHR(device.handle, swapchain.handle, &swap_image_count, swap_images.data);
     for (usize i = 0; i < swap_image_count; ++i) {
         VkImageViewCreateInfo create_info{};
         create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         create_info.image = swap_images[i];
         create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
         create_info.format = swapchain.format;
-        create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        create_info.subresourceRange.baseMipLevel = 0;
-        create_info.subresourceRange.levelCount = 1;
-        create_info.subresourceRange.baseArrayLayer = 0;
-        create_info.subresourceRange.layerCount = 1;
+        create_info.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
 
         vkCreateImageView(device.handle, &create_info, nullptr, &swap_views[i]);
     }
-    HgSwapchainCommands swapchain_commands = hg_swapchain_commands_create(
+    HgSwapchainCommands swapchain_commands = HgSwapchainCommands::create(
         device.handle, swapchain.handle, cmd_pool);
 
     HgPipelineSprite sprite_pipeline = hg_pipeline_sprite_create(
-        device.handle, allocator, swapchain.format, VK_FORMAT_UNDEFINED);
+        device.handle, vma, swapchain.format, VK_FORMAT_UNDEFINED);
 
     struct {u8 r, g, b, a;} tex_data[]{
         {0xff, 0x00, 0x00, 0xff}, {0x00, 0xff, 0x00, 0xff},
@@ -214,38 +246,33 @@ int main(void) {
         if (window.was_resized()) {
             vkQueueWaitIdle(device.queue);
 
-            u32 old_count = swap_image_count;
             VkSwapchainKHR old_swapchain = swapchain.handle;
             swapchain = hg_vk_create_swapchain(device.handle, device.gpu, old_swapchain, surface,
                 VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_PRESENT_MODE_FIFO_KHR);
 
-            for (usize i = 0; i < old_count; ++i) {
+            for (usize i = 0; i < swap_views.count; ++i) {
                 vkDestroyImageView(device.handle, swap_views[i], nullptr);
             }
-            hg_swapchain_commands_destroy(device.handle, &swapchain_commands);
+            swapchain_commands.destroy(device.handle);
 
             if (swapchain.handle != nullptr) {
                 vkGetSwapchainImagesKHR(device.handle, swapchain.handle, &swap_image_count, nullptr);
-                if (swap_image_count != old_count) {
-                    swap_images = (VkImage *)realloc(swap_images, swap_image_count * sizeof(*swap_images));
-                    swap_views = (VkImageView *)realloc(swap_views, swap_image_count * sizeof(*swap_images));
+                if (swap_images.count != swap_image_count) {
+                    swap_images = mem.realloc(swap_images, swap_image_count);
+                    swap_views = mem.realloc(swap_views, swap_image_count);
                 }
-                vkGetSwapchainImagesKHR(device.handle, swapchain.handle, &swap_image_count, swap_images);
+                vkGetSwapchainImagesKHR(device.handle, swapchain.handle, &swap_image_count, swap_images.data);
                 for (usize i = 0; i < swap_image_count; ++i) {
                     VkImageViewCreateInfo create_info{};
                     create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
                     create_info.image = swap_images[i];
                     create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
                     create_info.format = swapchain.format;
-                    create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                    create_info.subresourceRange.baseMipLevel = 0;
-                    create_info.subresourceRange.levelCount = 1;
-                    create_info.subresourceRange.baseArrayLayer = 0;
-                    create_info.subresourceRange.layerCount = 1;
+                    create_info.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
 
                     vkCreateImageView(device.handle, &create_info, nullptr, &swap_views[i]);
                 }
-                swapchain_commands = hg_swapchain_commands_create(
+                swapchain_commands = HgSwapchainCommands::create(
                     device.handle, swapchain.handle, cmd_pool);
 
                 aspect = (f32)swapchain.width / (f32)swapchain.height;
@@ -259,7 +286,7 @@ int main(void) {
 
         VkCommandBuffer cmd;
         cpu_time += cpu_clock.tick();
-        if (swapchain.handle && (cmd = hg_swapchain_commands_record(device.handle, &swapchain_commands))) {
+        if (swapchain.handle && (cmd = swapchain_commands.acquire_and_record(device.handle))) {
             cpu_clock.tick();
             u32 image_index = swapchain_commands.current_image;
 
@@ -328,7 +355,7 @@ int main(void) {
 
             vkCmdPipelineBarrier2(cmd, &present_dependency);
 
-            hg_swapchain_commands_present(device.queue, &swapchain_commands);
+            swapchain_commands.end_and_present(device.queue);
         }
     }
 
@@ -337,16 +364,16 @@ int main(void) {
     hg_pipeline_sprite_destroy_texture(&sprite_pipeline, &texture);
     hg_pipeline_sprite_destroy(&sprite_pipeline);
 
-    hg_swapchain_commands_destroy(device.handle, &swapchain_commands);
+    swapchain_commands.destroy(device.handle);
     for (usize i = 0; i < swap_image_count; ++i) {
         vkDestroyImageView(device.handle, swap_views[i], nullptr);
     }
-    free(swap_views);
-    free(swap_images);
+    mem.free(swap_views);
+    mem.free(swap_images);
     vkDestroySwapchainKHR(device.handle, swapchain.handle, nullptr);
 
     vkDestroyCommandPool(device.handle, cmd_pool, nullptr);
-    vmaDestroyAllocator(allocator);
+    vmaDestroyAllocator(vma);
     vkDestroyDevice(device.handle, nullptr);
     vkDestroySurfaceKHR(instance, surface, nullptr);
     hg_debug_mode(vkDestroyDebugUtilsMessengerEXT(instance, debug_messenger, nullptr));

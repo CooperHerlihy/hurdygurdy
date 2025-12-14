@@ -8,13 +8,11 @@
 #endif
 
 f64 HgClock::tick() {
-    f64 prev = (f64)time.tv_sec + (f64)time.tv_nsec / 1.0e9;
-    if (std::timespec_get(&time, TIME_UTC) == 0)
-        hg_warn("timespec_get failed\n");
-    return ((f64)time.tv_sec + (f64)time.tv_nsec / 1.0e9) - prev;
+    auto prev = std::exchange(time, std::chrono::high_resolution_clock::now());
+    return std::chrono::duration<f64>{time - prev}.count();
 }
 
-HgMat4 hg_model_matrix_2d(HgVec3 position, HgVec2 scale, f32 rotation) {
+HgMat4 hg_model_matrix_2d(const HgVec3& position, const HgVec2& scale, f32 rotation) {
     HgMat2 m2{{scale.x, 0.0f}, {0.0f, scale.y}};
     f32 rot_sin = std::sinf(rotation);
     f32 rot_cos = std::cosf(rotation);
@@ -26,7 +24,7 @@ HgMat4 hg_model_matrix_2d(HgVec3 position, HgVec2 scale, f32 rotation) {
     return m4;
 }
 
-HgMat4 hg_model_matrix_3d(HgVec3 position, HgVec3 scale, HgQuat rotation) {
+HgMat4 hg_model_matrix_3d(const HgVec3& position, const HgVec3& scale, const HgQuat& rotation) {
     HgMat3 m3{};
     m3.x.x = scale.x;
     m3.y.y = scale.y;
@@ -39,7 +37,7 @@ HgMat4 hg_model_matrix_3d(HgVec3 position, HgVec3 scale, HgQuat rotation) {
     return m4;
 }
 
-HgMat4 hg_view_matrix(HgVec3 position, f32 zoom, HgQuat rotation) {
+HgMat4 hg_view_matrix(const HgVec3& position, f32 zoom, const HgQuat& rotation) {
     HgMat4 rot = hg_mat3to4(hg_rotate_mat3(hg_qconj(rotation), hg_smat3(1.0f)));
     HgMat4 pos = hg_smat4(1.0f);
     pos.x.x = zoom;
@@ -73,14 +71,14 @@ HgMat4 hg_projection_perspective(f32 fov, f32 aspect, f32 near, f32 far) {
 
 static HgStdAllocator hg_internal_std_allocator;
 
-HgAllocator *hg_persistent_allocator(void) {
-    return &hg_internal_std_allocator;
+HgAllocator& hg_persistent_allocator(void) {
+    return hg_internal_std_allocator;
 }
 
 thread_local HgAllocator *hg_internal_temp_allocator;
 
-HgAllocator *hg_temp_allocator(void) {
-    return hg_internal_temp_allocator;
+HgAllocator& hg_temp_allocator(void) {
+    return *hg_internal_temp_allocator;
 }
 
 void hg_temp_allocator_set(HgAllocator *allocator) {
@@ -108,10 +106,10 @@ void HgStdAllocator::free_fn(void *allocation, usize size, usize alignment) {
     std::free(allocation);
 }
 
-HgArena HgArena::create(HgAllocator *allocator, usize capacity) {
+HgArena HgArena::create(HgAllocator& allocator, usize capacity) {
     HgArena arena;
-    arena.allocator = allocator;
-    arena.memory = allocator->alloc(capacity, 16);
+    arena.allocator = &allocator;
+    arena.memory = allocator.alloc(capacity, 16);
     arena.head = arena.memory.data;
     return arena;
 }
@@ -155,12 +153,10 @@ void HgArena::free_fn(void *allocation, usize size, usize alignment) {
     (void)alignment;
 }
 
-HgStack HgStack::create(HgAllocator *allocator, usize capacity) {
-    assert(allocator != nullptr);
-
+HgStack HgStack::create(HgAllocator& allocator, usize capacity) {
     HgStack stack;
-    stack.allocator = allocator;
-    stack.memory = allocator->alloc(capacity, 16);
+    stack.allocator = &allocator;
+    stack.memory = allocator.alloc(capacity, 16);
     stack.head = 0;
     return stack;
 }
@@ -217,8 +213,7 @@ void HgStack::free_fn(void *allocation, usize size, usize alignment) {
         hg_warn("Attempt to free a stack allocation not at the head\n");
 }
 
-HgSpan<void> hg_file_load_binary(HgAllocator *allocator, const char *path) {
-    assert(allocator != nullptr);
+HgSpan<void> hg_file_load_binary(HgAllocator& allocator, const char *path) {
     assert(path != nullptr);
 
     FILE* file = std::fopen(path, "rb");
@@ -228,7 +223,7 @@ HgSpan<void> hg_file_load_binary(HgAllocator *allocator, const char *path) {
     }
 
     std::fseek(file, 0, SEEK_END);
-    HgSpan<void> data = allocator->alloc((usize)std::ftell(file), 16);
+    HgSpan<void> data = allocator.alloc((usize)std::ftell(file), 16);
     std::rewind(file);
 
     if (std::fread(data.data, 1, data.count, file) != data.count) {
@@ -241,9 +236,8 @@ HgSpan<void> hg_file_load_binary(HgAllocator *allocator, const char *path) {
     return data;
 }
 
-void hg_file_unload_binary(HgAllocator *allocator, HgSpan<void> data) {
-    assert(allocator != nullptr);
-    allocator->free(data, 16);
+void hg_file_unload_binary(HgAllocator& allocator, HgSpan<void> data) {
+    allocator.free(data, 16);
 }
 
 bool hg_file_save_binary(HgSpan<const void> data, const char *path) {
@@ -790,6 +784,8 @@ static const char *const hg_internal_vk_device_extensions[]{
 static VkPhysicalDevice hg_internal_find_single_queue_gpu(VkInstance instance, u32 *queue_family) {
     assert(instance != nullptr);
 
+    HgAllocator& allocator = hg_temp_allocator();
+
     u32 gpu_count;
     vkEnumeratePhysicalDevices(instance, &gpu_count, nullptr);
     VkPhysicalDevice *gpus = (VkPhysicalDevice *)alloca(gpu_count * sizeof(*gpus));
@@ -805,7 +801,7 @@ static VkPhysicalDevice hg_internal_find_single_queue_gpu(VkInstance instance, u
         u32 new_prop_count = 0;
         vkEnumerateDeviceExtensionProperties(gpu, nullptr, &new_prop_count, nullptr);
         if (new_prop_count > ext_props.count) {
-            ext_props = hg_temp_allocator()->realloc(ext_props, new_prop_count);
+            ext_props = allocator.realloc(ext_props, new_prop_count);
         }
         vkEnumerateDeviceExtensionProperties(gpu, nullptr, &new_prop_count, ext_props.data);
 
@@ -830,7 +826,7 @@ next_gpu:
         continue;
     }
 
-    hg_temp_allocator()->free(ext_props);
+    allocator.free(ext_props);
     if (suitable_gpu != nullptr)
         *queue_family = *family;
     else
@@ -888,31 +884,30 @@ HgSingleQueueDeviceData hg_vk_create_single_queue_device(VkInstance instance) {
     return device;
 }
 
-VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineConfig *config) {
+VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineConfig& config) {
     assert(device != nullptr);
-    assert(config != nullptr);
-    if (config->color_attachment_formats.count > 0)
-        assert(config->color_attachment_formats.data != nullptr);
-    assert(config->shader_stages != nullptr);
-    assert(config->layout != nullptr);
-    if (config->vertex_bindings.count > 0)
-        assert(config->vertex_bindings.data != nullptr);
+    if (config.color_attachment_formats.count > 0)
+        assert(config.color_attachment_formats.data != nullptr);
+    assert(config.shader_stages != nullptr);
+    assert(config.layout != nullptr);
+    if (config.vertex_bindings.count > 0)
+        assert(config.vertex_bindings.data != nullptr);
 
     VkPipelineVertexInputStateCreateInfo vertex_input_state{};
     vertex_input_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertex_input_state.vertexBindingDescriptionCount = (u32)config->vertex_bindings.count;
-    vertex_input_state.pVertexBindingDescriptions = config->vertex_bindings.data;
-    vertex_input_state.vertexAttributeDescriptionCount = (u32)config->vertex_attributes.count;
-    vertex_input_state.pVertexAttributeDescriptions = config->vertex_attributes.data;
+    vertex_input_state.vertexBindingDescriptionCount = (u32)config.vertex_bindings.count;
+    vertex_input_state.pVertexBindingDescriptions = config.vertex_bindings.data;
+    vertex_input_state.vertexAttributeDescriptionCount = (u32)config.vertex_attributes.count;
+    vertex_input_state.pVertexAttributeDescriptions = config.vertex_attributes.data;
 
     VkPipelineInputAssemblyStateCreateInfo input_assembly_state{};
     input_assembly_state.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    input_assembly_state.topology = config->topology;
+    input_assembly_state.topology = config.topology;
     input_assembly_state.primitiveRestartEnable = VK_FALSE;
 
     VkPipelineTessellationStateCreateInfo tessellation_state{};
     tessellation_state.sType = VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO;
-    tessellation_state.patchControlPoints = config->tesselation_patch_control_points;
+    tessellation_state.patchControlPoints = config.tesselation_patch_control_points;
 
     VkPipelineViewportStateCreateInfo viewport_state{};
     viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -923,9 +918,9 @@ VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineCon
     rasterization_state.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rasterization_state.depthClampEnable = VK_FALSE;
     rasterization_state.rasterizerDiscardEnable = VK_FALSE;
-    rasterization_state.polygonMode = config->polygon_mode;
-    rasterization_state.cullMode = config->cull_mode;
-    rasterization_state.frontFace = config->front_face;
+    rasterization_state.polygonMode = config.polygon_mode;
+    rasterization_state.cullMode = config.cull_mode;
+    rasterization_state.frontFace = config.front_face;
     rasterization_state.depthBiasEnable = VK_FALSE;
     rasterization_state.depthBiasConstantFactor = 0.0f;
     rasterization_state.depthBiasClamp = 0.0f;
@@ -934,8 +929,8 @@ VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineCon
 
     VkPipelineMultisampleStateCreateInfo multisample_state{};
     multisample_state.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-    multisample_state.rasterizationSamples = config->multisample_count != 0
-        ? config->multisample_count
+    multisample_state.rasterizationSamples = config.multisample_count != 0
+        ? config.multisample_count
         : VK_SAMPLE_COUNT_1_BIT,
     multisample_state.sampleShadingEnable = VK_FALSE;
     multisample_state.minSampleShading = 1.0f;
@@ -945,19 +940,19 @@ VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineCon
 
     VkPipelineDepthStencilStateCreateInfo depth_stencil_state{};
     depth_stencil_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    depth_stencil_state.depthTestEnable = config->depth_attachment_format != VK_FORMAT_UNDEFINED
+    depth_stencil_state.depthTestEnable = config.depth_attachment_format != VK_FORMAT_UNDEFINED
             ? VK_TRUE
             : VK_FALSE;
-    depth_stencil_state.depthWriteEnable = config->depth_attachment_format != VK_FORMAT_UNDEFINED
+    depth_stencil_state.depthWriteEnable = config.depth_attachment_format != VK_FORMAT_UNDEFINED
             ? VK_TRUE
             : VK_FALSE;
-    depth_stencil_state.depthCompareOp = config->enable_color_blend
+    depth_stencil_state.depthCompareOp = config.enable_color_blend
             ? VK_COMPARE_OP_LESS_OR_EQUAL
             : VK_COMPARE_OP_LESS;
-    depth_stencil_state.depthBoundsTestEnable = config->depth_attachment_format != VK_FORMAT_UNDEFINED
+    depth_stencil_state.depthBoundsTestEnable = config.depth_attachment_format != VK_FORMAT_UNDEFINED
             ? VK_TRUE
             : VK_FALSE;
-    depth_stencil_state.stencilTestEnable = config->stencil_attachment_format != VK_FORMAT_UNDEFINED
+    depth_stencil_state.stencilTestEnable = config.stencil_attachment_format != VK_FORMAT_UNDEFINED
             ? VK_TRUE
             : VK_FALSE,
     // depth_stencil_state.front = {}; : TODO
@@ -966,7 +961,7 @@ VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineCon
     depth_stencil_state.maxDepthBounds = 1.0f;
 
     VkPipelineColorBlendAttachmentState color_blend_attachment{};
-    color_blend_attachment.blendEnable = config->enable_color_blend ? VK_TRUE : VK_FALSE;
+    color_blend_attachment.blendEnable = config.enable_color_blend ? VK_TRUE : VK_FALSE;
     color_blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
     color_blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
     color_blend_attachment.colorBlendOp = VK_BLEND_OP_ADD;
@@ -998,16 +993,16 @@ VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineCon
 
     VkPipelineRenderingCreateInfo rendering_info{};
     rendering_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
-    rendering_info.colorAttachmentCount = (u32)config->color_attachment_formats.count;
-    rendering_info.pColorAttachmentFormats = config->color_attachment_formats.data;
-    rendering_info.depthAttachmentFormat = config->depth_attachment_format;
-    rendering_info.stencilAttachmentFormat = config->stencil_attachment_format;
+    rendering_info.colorAttachmentCount = (u32)config.color_attachment_formats.count;
+    rendering_info.pColorAttachmentFormats = config.color_attachment_formats.data;
+    rendering_info.depthAttachmentFormat = config.depth_attachment_format;
+    rendering_info.stencilAttachmentFormat = config.stencil_attachment_format;
 
     VkGraphicsPipelineCreateInfo pipeline_info{};
     pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     pipeline_info.pNext = &rendering_info;
-    pipeline_info.stageCount = (u32)config->shader_stages.count;
-    pipeline_info.pStages = config->shader_stages.data;
+    pipeline_info.stageCount = (u32)config.shader_stages.count;
+    pipeline_info.pStages = config.shader_stages.data;
     pipeline_info.pVertexInputState = &vertex_input_state;
     pipeline_info.pInputAssemblyState = &input_assembly_state;
     pipeline_info.pTessellationState = &tessellation_state;
@@ -1017,7 +1012,7 @@ VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineCon
     pipeline_info.pDepthStencilState = &depth_stencil_state;
     pipeline_info.pColorBlendState = &color_blend_state;
     pipeline_info.pDynamicState = &dynamic_state;
-    pipeline_info.layout = config->layout;
+    pipeline_info.layout = config.layout;
     pipeline_info.basePipelineHandle = nullptr;
     pipeline_info.basePipelineIndex = -1;
 
@@ -1029,22 +1024,21 @@ VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineCon
     return pipeline;
 }
 
-VkPipeline hg_vk_create_compute_pipeline(VkDevice device, const HgVkPipelineConfig *config) {
+VkPipeline hg_vk_create_compute_pipeline(VkDevice device, const HgVkPipelineConfig& config) {
     assert(device != nullptr);
-    assert(config != nullptr);
-    assert(config->color_attachment_formats == nullptr);
-    assert(config->depth_attachment_format == VK_FORMAT_UNDEFINED);
-    assert(config->stencil_attachment_format == VK_FORMAT_UNDEFINED);
-    assert(config->shader_stages != nullptr);
-    assert(config->shader_stages.count == 1);
-    assert(config->shader_stages[0].stage == VK_SHADER_STAGE_COMPUTE_BIT);
-    assert(config->layout != nullptr);
-    assert(config->vertex_bindings == nullptr);
+    assert(config.color_attachment_formats == nullptr);
+    assert(config.depth_attachment_format == VK_FORMAT_UNDEFINED);
+    assert(config.stencil_attachment_format == VK_FORMAT_UNDEFINED);
+    assert(config.shader_stages != nullptr);
+    assert(config.shader_stages.count == 1);
+    assert(config.shader_stages[0].stage == VK_SHADER_STAGE_COMPUTE_BIT);
+    assert(config.layout != nullptr);
+    assert(config.vertex_bindings == nullptr);
 
     VkComputePipelineCreateInfo pipeline_info{};
     pipeline_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-    pipeline_info.stage = config->shader_stages[0];
-    pipeline_info.layout = config->layout;
+    pipeline_info.stage = config.shader_stages[0];
+    pipeline_info.layout = config.layout;
     pipeline_info.basePipelineHandle = nullptr;
     pipeline_info.basePipelineIndex = -1;
 
@@ -1189,7 +1183,7 @@ HgSwapchainData hg_vk_create_swapchain(
     return swapchain;
 }
 
-HgSwapchainCommands hg_swapchain_commands_create(VkDevice device, VkSwapchainKHR swapchain, VkCommandPool cmd_pool) {
+HgSwapchainCommands HgSwapchainCommands::create(VkDevice device, VkSwapchainKHR swapchain, VkCommandPool cmd_pool) {
     assert(device != nullptr);
     assert(cmd_pool != nullptr);
     assert(swapchain != nullptr);
@@ -1200,7 +1194,7 @@ HgSwapchainCommands hg_swapchain_commands_create(VkDevice device, VkSwapchainKHR
 
     vkGetSwapchainImagesKHR(device, swapchain, &sync.frame_count, nullptr);
 
-    void *allocation = hg_persistent_allocator()->alloc_fn(
+    void *allocation = hg_persistent_allocator().alloc_fn(
         sync.frame_count * sizeof(*sync.cmds) +
         sync.frame_count * sizeof(*sync.frame_finished) +
         sync.frame_count * sizeof(*sync.image_available) +
@@ -1242,49 +1236,44 @@ HgSwapchainCommands hg_swapchain_commands_create(VkDevice device, VkSwapchainKHR
     return sync;
 }
 
-void hg_swapchain_commands_destroy(VkDevice device, HgSwapchainCommands *sync) {
-    assert(sync != nullptr);
+void HgSwapchainCommands::destroy(VkDevice device) {
+    assert(device != nullptr);
 
-    vkFreeCommandBuffers(device, sync->cmd_pool, sync->frame_count, sync->cmds);
-    for (usize i = 0; i < sync->frame_count; ++i) {
-        vkDestroyFence(device, sync->frame_finished[i], nullptr);
+    vkFreeCommandBuffers(device, cmd_pool, frame_count, cmds);
+    for (usize i = 0; i < frame_count; ++i) {
+        vkDestroyFence(device, frame_finished[i], nullptr);
     }
-    for (usize i = 0; i < sync->frame_count; ++i) {
-        vkDestroySemaphore(device, sync->image_available[i], nullptr);
+    for (usize i = 0; i < frame_count; ++i) {
+        vkDestroySemaphore(device, image_available[i], nullptr);
     }
-    for (usize i = 0; i < sync->frame_count; ++i) {
-        vkDestroySemaphore(device, sync->ready_to_present[i], nullptr);
+    for (usize i = 0; i < frame_count; ++i) {
+        vkDestroySemaphore(device, ready_to_present[i], nullptr);
     }
-    hg_persistent_allocator()->free_fn(
-        sync->cmds,
-        sync->frame_count * sizeof(*sync->cmds) +
-        sync->frame_count * sizeof(*sync->frame_finished) +
-        sync->frame_count * sizeof(*sync->image_available) +
-        sync->frame_count * sizeof(*sync->ready_to_present),
+    hg_persistent_allocator().free_fn(
+        cmds,
+        frame_count * sizeof(*cmds) +
+        frame_count * sizeof(*frame_finished) +
+        frame_count * sizeof(*image_available) +
+        frame_count * sizeof(*ready_to_present),
         16);
-    std::memset(sync, 0, sizeof(*sync));
+    std::memset(this, 0, sizeof(*this));
 }
 
-VkCommandBuffer hg_swapchain_commands_record(VkDevice device, HgSwapchainCommands *sync) {
-    assert(sync != nullptr);
+VkCommandBuffer HgSwapchainCommands::acquire_and_record(VkDevice device) {
+    assert(device != nullptr);
 
-    sync->current_frame = (sync->current_frame + 1) % sync->frame_count;
+    current_frame = (current_frame + 1) % frame_count;
 
-    vkWaitForFences(device, 1, &sync->frame_finished[sync->current_frame], VK_TRUE, UINT64_MAX);
-    vkResetFences(device, 1, &sync->frame_finished[sync->current_frame]);
+    vkWaitForFences(device, 1, &frame_finished[current_frame], VK_TRUE, UINT64_MAX);
+    vkResetFences(device, 1, &frame_finished[current_frame]);
 
     VkResult result = vkAcquireNextImageKHR(
-        device,
-        sync->swapchain,
-        UINT64_MAX,
-        sync->image_available[sync->current_frame],
-        nullptr,
-        &sync->current_image);
+        device, swapchain, UINT64_MAX, image_available[current_frame], nullptr, &current_image);
     if (result == VK_ERROR_OUT_OF_DATE_KHR)
         return nullptr;
 
 
-    VkCommandBuffer cmd = sync->cmds[sync->current_frame];
+    VkCommandBuffer cmd = cmds[current_frame];
     vkResetCommandBuffer(cmd, 0);
 
     VkCommandBufferBeginInfo begin_info{};
@@ -1295,33 +1284,32 @@ VkCommandBuffer hg_swapchain_commands_record(VkDevice device, HgSwapchainCommand
     return cmd;
 }
 
-void hg_swapchain_commands_present(VkQueue queue, HgSwapchainCommands *sync) {
+void HgSwapchainCommands::end_and_present(VkQueue queue) {
     assert(queue != nullptr);
-    assert(sync != nullptr);
 
-    VkCommandBuffer cmd = sync->cmds[sync->current_frame];
+    VkCommandBuffer cmd = cmds[current_frame];
     vkEndCommandBuffer(cmd);
 
     VkSubmitInfo submit{};
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submit.waitSemaphoreCount = 1;
-    submit.pWaitSemaphores = &sync->image_available[sync->current_frame];
+    submit.pWaitSemaphores = &image_available[current_frame];
     VkPipelineStageFlags stage_flags{VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT};
     submit.pWaitDstStageMask = &stage_flags;
     submit.commandBufferCount = 1;
     submit.pCommandBuffers = &cmd;
     submit.signalSemaphoreCount = 1;
-    submit.pSignalSemaphores = &sync->ready_to_present[sync->current_image];
+    submit.pSignalSemaphores = &ready_to_present[current_image];
 
-    vkQueueSubmit(queue, 1, &submit, sync->frame_finished[sync->current_frame]);
+    vkQueueSubmit(queue, 1, &submit, frame_finished[current_frame]);
 
     VkPresentInfoKHR present_info{};
     present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     present_info.waitSemaphoreCount = 1;
-    present_info.pWaitSemaphores = &sync->ready_to_present[sync->current_image];
+    present_info.pWaitSemaphores = &ready_to_present[current_image];
     present_info.swapchainCount = 1;
-    present_info.pSwapchains = &sync->swapchain;
-    present_info.pImageIndices = &sync->current_image;
+    present_info.pSwapchains = &swapchain;
+    present_info.pImageIndices = &current_image;
 
     vkQueuePresentKHR(queue, &present_info);
 }
@@ -1472,23 +1460,23 @@ void hg_vk_image_staging_write(
     VmaAllocator allocator,
     VkCommandPool cmd_pool,
     VkQueue transfer_queue,
-    HgVkImageStagingWriteConfig *config
+    const HgVkImageStagingWriteConfig& config
 ) {
     assert(device != nullptr);
     assert(allocator != nullptr);
     assert(cmd_pool != nullptr);
     assert(transfer_queue != nullptr);
-    assert(config->dst_image != nullptr);
-    assert(config->src_data != nullptr);
-    assert(config->width > 0);
-    assert(config->height > 0);
-    assert(config->depth > 0);
-    assert(config->format != VK_FORMAT_UNDEFINED);
+    assert(config.dst_image != nullptr);
+    assert(config.src_data != nullptr);
+    assert(config.width > 0);
+    assert(config.height > 0);
+    assert(config.depth > 0);
+    assert(config.format != VK_FORMAT_UNDEFINED);
 
-    usize size = config->width
-               * config->height
-               * config->depth
-               * hg_vk_format_to_size(config->format);
+    usize size = config.width
+               * config.height
+               * config.depth
+               * hg_vk_format_to_size(config.format);
 
     VkBufferCreateInfo stage_info{};
     stage_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -1502,7 +1490,7 @@ void hg_vk_image_staging_write(
     VkBuffer stage = nullptr;
     VmaAllocation stage_alloc = nullptr;
     vmaCreateBuffer(allocator, &stage_info, &stage_alloc_info, &stage, &stage_alloc, nullptr);
-    vmaCopyMemoryToAllocation(allocator, config->src_data, stage_alloc, 0, size);
+    vmaCopyMemoryToAllocation(allocator, config.src_data, stage_alloc, 0, size);
 
     VkCommandBufferAllocateInfo cmd_info{};
     cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -1525,12 +1513,12 @@ void hg_vk_image_staging_write(
     transfer_barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
     transfer_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     transfer_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    transfer_barrier.image = config->dst_image;
-    transfer_barrier.subresourceRange.aspectMask = config->subresource.aspectMask;
-    transfer_barrier.subresourceRange.baseMipLevel = config->subresource.mipLevel;
+    transfer_barrier.image = config.dst_image;
+    transfer_barrier.subresourceRange.aspectMask = config.subresource.aspectMask;
+    transfer_barrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
     transfer_barrier.subresourceRange.levelCount = 1;
-    transfer_barrier.subresourceRange.baseArrayLayer = config->subresource.baseArrayLayer;
-    transfer_barrier.subresourceRange.layerCount = config->subresource.layerCount;
+    transfer_barrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
+    transfer_barrier.subresourceRange.layerCount = config.subresource.layerCount;
 
     VkDependencyInfo transfer_dep{};
     transfer_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
@@ -1540,24 +1528,24 @@ void hg_vk_image_staging_write(
     vkCmdPipelineBarrier2(cmd, &transfer_dep);
 
     VkBufferImageCopy region{};
-    region.imageSubresource = config->subresource;
-    region.imageExtent = {config->width, config->height, config->depth};
+    region.imageSubresource = config.subresource;
+    region.imageExtent = {config.width, config.height, config.depth};
 
-    vkCmdCopyBufferToImage(cmd, stage, config->dst_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    vkCmdCopyBufferToImage(cmd, stage, config.dst_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
-    if (config->layout != VK_IMAGE_LAYOUT_UNDEFINED) {
+    if (config.layout != VK_IMAGE_LAYOUT_UNDEFINED) {
         VkImageMemoryBarrier2 end_barrier{};
         end_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
         end_barrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
         end_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
         end_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        end_barrier.newLayout = config->layout;
-        end_barrier.image = config->dst_image;
-        end_barrier.subresourceRange.aspectMask = config->subresource.aspectMask;
-        end_barrier.subresourceRange.baseMipLevel = config->subresource.mipLevel;
+        end_barrier.newLayout = config.layout;
+        end_barrier.image = config.dst_image;
+        end_barrier.subresourceRange.aspectMask = config.subresource.aspectMask;
+        end_barrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
         end_barrier.subresourceRange.levelCount = 1;
-        end_barrier.subresourceRange.baseArrayLayer = config->subresource.baseArrayLayer;
-        end_barrier.subresourceRange.layerCount = config->subresource.layerCount;
+        end_barrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
+        end_barrier.subresourceRange.layerCount = config.subresource.layerCount;
 
         VkDependencyInfo end_dep{};
         end_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
@@ -1592,24 +1580,24 @@ void hg_vk_image_staging_read(
     VmaAllocator allocator,
     VkCommandPool cmd_pool,
     VkQueue transfer_queue,
-    HgVkImageStagingReadConfig *config
+    const HgVkImageStagingReadConfig& config
 ) {
     assert(device != nullptr);
     assert(allocator != nullptr);
     assert(cmd_pool != nullptr);
     assert(transfer_queue != nullptr);
-    assert(config->src_image != nullptr);
-    assert(config->layout != VK_IMAGE_LAYOUT_UNDEFINED);
-    assert(config->dst != nullptr);
-    assert(config->width > 0);
-    assert(config->height > 0);
-    assert(config->depth > 0);
-    assert(config->format != VK_FORMAT_UNDEFINED);
+    assert(config.src_image != nullptr);
+    assert(config.layout != VK_IMAGE_LAYOUT_UNDEFINED);
+    assert(config.dst != nullptr);
+    assert(config.width > 0);
+    assert(config.height > 0);
+    assert(config.depth > 0);
+    assert(config.format != VK_FORMAT_UNDEFINED);
 
-    usize size = config->width
-               * config->height
-               * config->depth
-               * hg_vk_format_to_size(config->format);
+    usize size = config.width
+               * config.height
+               * config.depth
+               * hg_vk_format_to_size(config.format);
 
     VkBufferCreateInfo stage_info{};
     stage_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -1643,14 +1631,14 @@ void hg_vk_image_staging_read(
     transfer_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
     transfer_barrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
     transfer_barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-    transfer_barrier.oldLayout = config->layout;
+    transfer_barrier.oldLayout = config.layout;
     transfer_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    transfer_barrier.image = config->src_image;
-    transfer_barrier.subresourceRange.aspectMask = config->subresource.aspectMask;
-    transfer_barrier.subresourceRange.baseMipLevel = config->subresource.mipLevel;
+    transfer_barrier.image = config.src_image;
+    transfer_barrier.subresourceRange.aspectMask = config.subresource.aspectMask;
+    transfer_barrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
     transfer_barrier.subresourceRange.levelCount = 1;
-    transfer_barrier.subresourceRange.baseArrayLayer = config->subresource.baseArrayLayer;
-    transfer_barrier.subresourceRange.layerCount = config->subresource.layerCount;
+    transfer_barrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
+    transfer_barrier.subresourceRange.layerCount = config.subresource.layerCount;
 
     VkDependencyInfo transfer_dep{};
     transfer_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
@@ -1660,23 +1648,23 @@ void hg_vk_image_staging_read(
     vkCmdPipelineBarrier2(cmd, &transfer_dep);
 
     VkBufferImageCopy region{};
-    region.imageSubresource = config->subresource;
-    region.imageExtent = {config->width, config->height, config->depth};
+    region.imageSubresource = config.subresource;
+    region.imageExtent = {config.width, config.height, config.depth};
 
-    vkCmdCopyImageToBuffer(cmd, config->src_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, stage, 1, &region);
+    vkCmdCopyImageToBuffer(cmd, config.src_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, stage, 1, &region);
 
     VkImageMemoryBarrier2 end_barrier{};
     end_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
     end_barrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
     end_barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
     end_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    end_barrier.newLayout = config->layout;
-    end_barrier.image = config->src_image;
-    end_barrier.subresourceRange.aspectMask = config->subresource.aspectMask;
-    end_barrier.subresourceRange.baseMipLevel = config->subresource.mipLevel;
+    end_barrier.newLayout = config.layout;
+    end_barrier.image = config.src_image;
+    end_barrier.subresourceRange.aspectMask = config.subresource.aspectMask;
+    end_barrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
     end_barrier.subresourceRange.levelCount = 1;
-    end_barrier.subresourceRange.baseArrayLayer = config->subresource.baseArrayLayer;
-    end_barrier.subresourceRange.layerCount = config->subresource.layerCount;
+    end_barrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
+    end_barrier.subresourceRange.layerCount = config.subresource.layerCount;
 
     VkDependencyInfo end_dep{};
     end_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
@@ -1701,7 +1689,7 @@ void hg_vk_image_staging_read(
     vkQueueSubmit(transfer_queue, 1, &submit, fence);
     vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
 
-    vmaCopyAllocationToMemory(allocator, stage_alloc, 0, config->dst, size);
+    vmaCopyAllocationToMemory(allocator, stage_alloc, 0, config.dst, size);
 
     vkDestroyFence(device, fence, nullptr);
     vkFreeCommandBuffers(device, cmd_pool, 1, &cmd);
@@ -1709,19 +1697,18 @@ void hg_vk_image_staging_read(
 }
 
 HgECS HgECS::create(
-    HgAllocator *allocator,
+    HgAllocator& allocator,
     u32 max_entities,
     u32 max_systems
 ) {
-    assert(allocator != nullptr);
     assert(max_entities > 0);
     assert(max_systems > 0);
 
     max_entities += 1;
     HgECS ecs{};
-    ecs.allocator = allocator;
-    ecs.entity_pool = allocator->alloc<HgEntityID>(max_entities);
-    ecs.systems = allocator->alloc<System>(max_systems);
+    ecs.allocator = &allocator;
+    ecs.entity_pool = allocator.alloc<HgEntityID>(max_entities);
+    ecs.systems = allocator.alloc<System>(max_systems);
 
     for (u32 i = 0; i < ecs.entity_pool.count; ++i) {
         ecs.entity_pool[i] = i + 1;
@@ -2019,7 +2006,7 @@ HgPipelineSprite hg_pipeline_sprite_create(
     pipeline_config.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
     pipeline_config.enable_color_blend = true;
 
-    pipeline.pipeline = hg_vk_create_graphics_pipeline(device, &pipeline_config);
+    pipeline.pipeline = hg_vk_create_graphics_pipeline(device, pipeline_config);
 
     vkDestroyShaderModule(device, fragment_shader, nullptr);
     vkDestroyShaderModule(device, vertex_shader, nullptr);
@@ -2166,7 +2153,7 @@ HgPipelineSpriteTexture hg_pipeline_sprite_create_texture(
     staging_config.format = config->format;
     staging_config.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    hg_vk_image_staging_write(pipeline->device, pipeline->allocator, cmd_pool, transfer_queue, &staging_config);
+    hg_vk_image_staging_write(pipeline->device, pipeline->allocator, cmd_pool, transfer_queue, staging_config);
 
     VkImageViewCreateInfo view_info{};
     view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -2513,27 +2500,25 @@ struct HgWindow::Internals {
     Atom delete_atom;
 };
 
-HgWindow HgWindow::create(const HgWindow::Config *config) {
-    assert(config != nullptr);
-
-    u32 width = config->windowed ? config->width
+HgWindow HgWindow::create(const HgWindow::Config& config) {
+    u32 width = config.windowed ? config.width
         : (u32)DisplayWidth(hg_internal_x11_display, DefaultScreen(hg_internal_x11_display));
-    u32 height = config->windowed ? config->height
+    u32 height = config.windowed ? config.height
         : (u32)DisplayHeight(hg_internal_x11_display, DefaultScreen(hg_internal_x11_display));
 
     HgWindow window;
-    window.internals = hg_persistent_allocator()->alloc<HgWindow::Internals>();
+    window.internals = hg_persistent_allocator().alloc<HgWindow::Internals>();
     *window.internals = {};
 
     window.internals->input.width = width;
     window.internals->input.height = height;
 
     window.internals->x11_window = hg_internal_create_x11_window(
-        hg_internal_x11_display, width, height, config->title);
+        hg_internal_x11_display, width, height, config.title);
     window.internals->delete_atom = hg_internal_set_delete_behavior(
         hg_internal_x11_display, window.internals->x11_window);
 
-    if (!config->windowed)
+    if (!config.windowed)
         hg_internal_set_fullscreen(hg_internal_x11_display, window.internals->x11_window);
 
     int flush_result = XFlush(hg_internal_x11_display);
@@ -2546,7 +2531,7 @@ HgWindow HgWindow::create(const HgWindow::Config *config) {
 void HgWindow::destroy() {
     if (internals != nullptr) {
         XDestroyWindow(hg_internal_x11_display, internals->x11_window);
-        hg_persistent_allocator()->free(internals);
+        hg_persistent_allocator().free(internals);
     }
     XFlush(hg_internal_x11_display);
 }
@@ -3401,15 +3386,15 @@ static LRESULT CALLBACK hg_internal_window_callback(HWND hwnd, UINT msg, WPARAM 
     return DefWindowProcA(hwnd, msg, wparam, lparam);
 }
 
-HgWindow HgWindow::create(const HgWindow::Config *config) {
-    const char *title = config->title != nullptr ? config->title : "Hurdy Gurdy";
+HgWindow HgWindow::create(const HgWindow::Config& config) {
+    const char *title = config.title != nullptr ? config.title : "Hurdy Gurdy";
 
     HgWindow window;
-    window.internals = hg_persistent_allocator()->alloc<HgWindow::Internals>();
+    window.internals = hg_persistent_allocator().alloc<HgWindow::Internals>();
     *window.internals = {};
 
-    window.internals->input.width = config->width;
-    window.internals->input.height = config->height;
+    window.internals->input.width = config.width;
+    window.internals->input.height = config.height;
 
     WNDCLASSA window_class{};
     window_class.hInstance = hg_internal_win32_instance;
@@ -3418,9 +3403,9 @@ HgWindow HgWindow::create(const HgWindow::Config *config) {
     window_class.lpszClassName = title;
     window_class.lpfnWndProc = hg_internal_window_callback;
     if (!RegisterClassA(&window_class))
-        hg_error("Win32 failed to register window class for window: %s\n", config->title);
+        hg_error("Win32 failed to register window class for window: %s\n", config.title);
 
-    if (config->windowed) {
+    if (config.windowed) {
         window.internals->hwnd = CreateWindowExA(
             0,
             title,
@@ -3463,7 +3448,7 @@ HgWindow HgWindow::create(const HgWindow::Config *config) {
 void HgWindow::destroy() {
     if (internals != nullptr) {
         DestroyWindow(internals->hwnd);
-        hg_persistent_allocator()->free(internals);
+        hg_persistent_allocator().free(internals);
     }
 }
 
@@ -3579,18 +3564,14 @@ void HgWindow::get_size(u32 *width, u32 *height) {
     *height = internals->input.height;
 }
 
-void HgWindow::get_mouse_pos(f64 *x, f64 *y) {
-    assert(x != nullptr);
-    assert(y != nullptr);
-    *x = internals->input.mouse_pos_x;
-    *y = internals->input.mouse_pos_y;
+void HgWindow::get_mouse_pos(f64& x, f64& y) {
+    x = internals->input.mouse_pos_x;
+    y = internals->input.mouse_pos_y;
 }
 
-void HgWindow::get_mouse_delta(f64 *x, f64 *y) {
-    assert(x != nullptr);
-    assert(y != nullptr);
-    *x = internals->input.mouse_delta_x;
-    *y = internals->input.mouse_delta_y;
+void HgWindow::get_mouse_delta(f64& x, f64& y) {
+    x = internals->input.mouse_delta_x;
+    y = internals->input.mouse_delta_y;
 }
 
 bool HgWindow::is_key_down(HgKey key) {
@@ -4291,7 +4272,7 @@ void vkCmdDispatch(VkCommandBuffer cmd, uint32_t x, uint32_t y, uint32_t z) {
 }
 
 void hg_init(void) {
-    hg_internal_temp_allocator = hg_persistent_allocator();
+    hg_internal_temp_allocator = &hg_persistent_allocator();
 
     hg_vk_load();
     hg_internal_platform_init();
