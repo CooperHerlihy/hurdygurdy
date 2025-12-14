@@ -12,7 +12,7 @@
  */
 int main(int argc, char** argv) {
     if (argc < 3) {
-        fprintf(stderr, "Usage: %s <file> <symbol name>\n", argv[0]);
+        std::fprintf(stderr, "Usage: %s <file> <symbol name>\n", argv[0]);
         return -1;
     }
 
@@ -28,30 +28,29 @@ int main(int argc, char** argv) {
         }
     }
 
-    FILE *file = nullptr;
-    (void)fopen_s(&file, argv[1], "rb");
+    FILE *file = std::fopen(argv[1], "rb");
     if (file == nullptr) {
-        fprintf(stderr, "Failed to open file: %s\n", argv[1]);
+        std::fprintf(stderr, "Failed to open file: %s\n", argv[1]);
         return -1;
     }
 
-    printf("const unsigned char %s[] = {", argv[2]);
+    std::printf("const unsigned char %s[] = {", argv[2]);
 
     uint8_t byte;
     uint32_t line_count = 0;
-    while (fread(&byte, 1, 1, file) > 0) {
+    while (std::fread(&byte, 1, 1, file) > 0) {
         if (line_count % 16 == 0)
-            printf("\n\t");
+            std::printf("\n\t");
         else
-            printf(" ");
+            std::printf(" ");
         ++line_count;
 
-        printf("0x%02x,", byte);
+        std::printf("0x%02x,", byte);
     }
 
-    printf("\n};\n");
+    std::printf("\n};\n");
 
-    printf("const unsigned long %s_size = %ld;\n", argv[2], ftell(file));
+    std::printf("const unsigned long %s_size = %ld;\n", argv[2], std::ftell(file));
 
     return 0;
 }

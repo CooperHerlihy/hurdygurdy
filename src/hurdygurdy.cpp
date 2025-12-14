@@ -15,14 +15,11 @@ f64 HgClock::tick() {
 }
 
 HgMat4 hg_model_matrix_2d(HgVec3 position, HgVec2 scale, f32 rotation) {
-    HgMat2 m2 = hg_smat2(1.0f);
-    m2.x.x = scale.x;
-    m2.y.y = scale.y;
-    m2 = hg_mmul2({
-        {std::cosf(rotation), std::sinf(rotation)},
-        {-std::sinf(rotation), std::cosf(rotation)},
-    }, m2);
-    HgMat4 m4 = hg_mat2to4(m2);
+    HgMat2 m2{{scale.x, 0.0f}, {0.0f, scale.y}};
+    f32 rot_sin = std::sinf(rotation);
+    f32 rot_cos = std::cosf(rotation);
+    HgMat2 rot{{rot_cos, rot_sin}, {-rot_sin, rot_cos}};
+    HgMat4 m4 = hg_mat2to4(rot * m2);
     m4.w.x = position.x;
     m4.w.y = position.y;
     m4.w.z = position.z;
@@ -30,7 +27,7 @@ HgMat4 hg_model_matrix_2d(HgVec3 position, HgVec2 scale, f32 rotation) {
 }
 
 HgMat4 hg_model_matrix_3d(HgVec3 position, HgVec3 scale, HgQuat rotation) {
-    HgMat3 m3 = hg_smat3(1.0f);
+    HgMat3 m3{};
     m3.x.x = scale.x;
     m3.y.y = scale.y;
     m3.z.z = scale.z;
@@ -50,7 +47,7 @@ HgMat4 hg_view_matrix(HgVec3 position, f32 zoom, HgQuat rotation) {
     pos.w.x = -position.x;
     pos.w.y = -position.y;
     pos.w.z = -position.z;
-    return hg_mmul4(rot, pos);
+    return rot * pos;
 }
 
 HgMat4 hg_projection_orthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far) {
@@ -65,17 +62,13 @@ HgMat4 hg_projection_orthographic(f32 left, f32 right, f32 top, f32 bottom, f32 
 HgMat4 hg_projection_perspective(f32 fov, f32 aspect, f32 near, f32 far) {
     assert(near > 0.0f);
     assert(far > near);
-    f32 scale = 1 / std::tanf(fov / 2);
+    f32 scale = 1.0f / std::tanf(fov * 0.5f);
     return {
         {scale / aspect, 0.0f, 0.0f, 0.0f},
         {0.0f, scale, 0.0f, 0.0f},
         {0.0f, 0.0f, far / (far - near), 1.0f},
         {0.0f, 0.0f, -(far * near) / (far - near), 0.0f},
     };
-}
-
-u32 hg_max_mipmaps(u32 width, u32 height, u32 depth) {
-    return (u32)std::log2f((f32)std::max(std::max(width, height), depth)) + 1;
 }
 
 static HgStdAllocator hg_internal_std_allocator;
@@ -698,7 +691,7 @@ static VkBool32 hg_internal_debug_callback(
     return VK_FALSE;
 }
 
-static const VkDebugUtilsMessengerCreateInfoEXT hg_internal_debug_utils_messenger_info = {
+static const VkDebugUtilsMessengerCreateInfoEXT hg_internal_debug_utils_messenger_info{
     VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
     nullptr, 0,
     VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
@@ -720,12 +713,12 @@ VkInstance hg_vk_create_instance(const char *app_name) {
     app_info.apiVersion = VK_API_VERSION_1_3;
 
 #ifndef NDEBUG
-    const char* layers[] = {
+    const char* layers[]{
         "VK_LAYER_KHRONOS_validation",
     };
 #endif
 
-    const char *exts[] = {
+    const char *exts[]{
 #ifndef NDEBUG
         "VK_EXT_debug_utils",
 #endif
@@ -790,7 +783,7 @@ HgOption<u32> hg_vk_find_queue_family(VkPhysicalDevice gpu, VkQueueFlags queue_f
     return {};
 }
 
-static const char *const hg_internal_vk_device_extensions[] = {
+static const char *const hg_internal_vk_device_extensions[]{
     "VK_KHR_swapchain",
 };
 
@@ -997,7 +990,7 @@ VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineCon
     color_blend_state.blendConstants[2] = {1.0f};
     color_blend_state.blendConstants[3] = {1.0f};
 
-    VkDynamicState dynamic_states[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+    VkDynamicState dynamic_states[]{VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
     VkPipelineDynamicStateCreateInfo dynamic_state{};
     dynamic_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
     dynamic_state.dynamicStateCount = hg_countof(dynamic_states);
@@ -1313,7 +1306,7 @@ void hg_swapchain_commands_present(VkQueue queue, HgSwapchainCommands *sync) {
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submit.waitSemaphoreCount = 1;
     submit.pWaitSemaphores = &sync->image_available[sync->current_frame];
-    VkPipelineStageFlags stage_flags = {VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT};
+    VkPipelineStageFlags stage_flags{VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT};
     submit.pWaitDstStageMask = &stage_flags;
     submit.commandBufferCount = 1;
     submit.pCommandBuffers = &cmd;
@@ -1977,7 +1970,7 @@ HgPipelineSprite hg_pipeline_sprite_create(
 
     vkCreateDescriptorSetLayout(device, &image_layout_info, nullptr, &pipeline.image_layout);
 
-    VkDescriptorSetLayout set_layouts[] = {pipeline.vp_layout, pipeline.image_layout};
+    VkDescriptorSetLayout set_layouts[]{pipeline.vp_layout, pipeline.image_layout};
     VkPushConstantRange push_ranges[1]{};
     push_ranges[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     push_ranges[0].size = sizeof(HgPipelineSpritePush);

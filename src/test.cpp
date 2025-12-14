@@ -153,7 +153,7 @@ int main(void) {
     HgPipelineSprite sprite_pipeline = hg_pipeline_sprite_create(
         device.handle, allocator, swapchain.format, VK_FORMAT_UNDEFINED);
 
-    struct {u8 r, g, b, a;} tex_data[] = {
+    struct {u8 r, g, b, a;} tex_data[]{
         {0xff, 0x00, 0x00, 0xff}, {0x00, 0xff, 0x00, 0xff},
         {0x00, 0x00, 0xff, 0xff}, {0xff, 0xff, 0x00, 0xff},
     };
@@ -168,7 +168,7 @@ int main(void) {
     HgPipelineSpriteTexture texture = hg_pipeline_sprite_create_texture(
         &sprite_pipeline, cmd_pool, device.queue, &tex_config);
 
-    HgVec3 position = {0.0f, 0.0f, 0.0f};
+    HgVec3 position{0.0f, 0.0f, 0.0f};
 
     f32 aspect = (f32)swapchain.width / (f32)swapchain.height;
     HgMat4 proj = hg_projection_orthographic(-aspect, aspect, -1.0f, 1.0f, 0.0f, 1.0f);
@@ -197,8 +197,7 @@ int main(void) {
             cpu_time = 0.0;
         }
 
-        HgSpan<const HgWindow> windows = {&window, 1};
-        hg_window_process_events(windows);
+        hg_window_process_events({&window, 1});
         if (window.was_closed() || window.is_key_down(HG_KEY_ESCAPE))
             break;
 
@@ -297,9 +296,9 @@ int main(void) {
 
             vkCmdBeginRendering(cmd, &rendering_info);
 
-            VkViewport viewport = {0.0f, 0.0f, (f32)swapchain.width, (f32)swapchain.height, 0.0f, 1.0f};
+            VkViewport viewport{0.0f, 0.0f, (f32)swapchain.width, (f32)swapchain.height, 0.0f, 1.0f};
             vkCmdSetViewport(cmd, 0, 1, &viewport);
-            VkRect2D scissor = {{0, 0}, {swapchain.width, swapchain.height}};
+            VkRect2D scissor{{0, 0}, {swapchain.width, swapchain.height}};
             vkCmdSetScissor(cmd, 0, 1, &scissor);
 
             hg_pipeline_sprite_bind(&sprite_pipeline, cmd);
