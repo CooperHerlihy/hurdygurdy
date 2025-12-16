@@ -39,7 +39,17 @@ struct HgSprite {
     HgVec2 uv_end;
 };
 
+hg_make_test(hg_test_success) {
+    return true;
+}
+
+hg_make_test(hg_test_failure) {
+    return false;
+}
+
 int main(void) {
+    hg_run_tests();
+
     hg_init();
     HgAllocator& mem = hg_persistent_allocator();
 

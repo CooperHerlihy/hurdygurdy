@@ -7,6 +7,37 @@
 #include <alloca.h>
 #endif
 
+#define HG_MAX_TESTS 1024
+
+static HgTest hg_internal_tests[HG_MAX_TESTS];
+static usize hg_internal_test_count;
+
+HgTest::HgTest(const char *test_name, bool (*test_function)()) : name(test_name), function(test_function) {
+    assert(hg_internal_test_count < HG_MAX_TESTS);
+    hg_internal_tests[hg_internal_test_count] = *this;
+    ++hg_internal_test_count;
+}
+
+bool hg_run_tests() {
+    bool all_succeeded = true;
+    std::printf("HurdyGurdy: Tests Begun\n");
+    for (usize i = 0; i < hg_internal_test_count; ++i) {
+        std::printf("%s...\n", hg_internal_tests[i].name);
+        if (hg_internal_tests[i].function()) {
+            std::printf("\x1b[32mSuccess\n\x1b[0m");
+        } else {
+            all_succeeded = false;
+            std::printf("\x1b[31mFailure\n\x1b[0m");
+        }
+    }
+    if (all_succeeded) {
+        std::printf("HurdyGurdy: Tests Complete \x1b[32m[Success]\x1b[0m\n");
+    } else {
+        std::printf("HurdyGurdy: Tests Complete \x1b[31m[Failure]\x1b[0m\n");
+    }
+    return all_succeeded;
+}
+
 f64 HgClock::tick() {
     auto prev = std::exchange(time, std::chrono::high_resolution_clock::now());
     return std::chrono::duration<f64>{time - prev}.count();

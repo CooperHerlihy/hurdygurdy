@@ -46,20 +46,6 @@
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
 
-/**
- * Initializes the HurdyGurdy library
- *
- * Run this function before any Vulkan, windowing, or audio functions
- *
- * Note, calls hg_vk_load
- */
-void hg_init();
-
-/**
- * Shuts down the HurdyGurdy library
- */
-void hg_exit();
-
 using i8 = std::int8_t;
 using i16 = std::int16_t;
 using i32 = std::int32_t;
@@ -75,6 +61,70 @@ using isize = std::intptr_t;
 
 using f32 = std::float_t;
 using f64 = std::double_t;
+
+/**
+ * The struct used to declare and run tests
+ */
+struct HgTest {
+    /**
+     * The name of the test
+     */
+    const char *name;
+    /**
+     * A pointer to the test function
+     */
+    bool (*function)();
+
+    HgTest() {};
+
+    /**
+     * Creates and registers the test globally
+     *
+     * Parameters
+     * - test_name The name of the test
+     * - test_function A pointer to the test function
+     */
+    HgTest(const char *test_name, bool (*test_function)());
+};
+
+/**
+ * Automatically declares and registers a test function
+ *
+ * Example:
+ * hg_make_test(hg_example_test) {
+ *     bool success = true;
+ *     return success;
+ * }
+ */
+#define hg_make_test(name) \
+    static bool hg_test_function_##name(); \
+    static HgTest hg_test_struct_##name{#name, hg_test_function_##name}; \
+    static bool hg_test_function_##name() 
+
+/**
+ * Runs all tests registered globally
+ *
+ * Note, tests are rendered through static init, so this should be called after
+ * static init is completed
+ *
+ * Returns:
+ * - Whether all tests passed
+ */
+bool hg_run_tests();
+
+/**
+ * Initializes the HurdyGurdy library
+ *
+ * Run this function before any Vulkan, windowing, or audio functions
+ *
+ * Note, calls hg_vk_load
+ */
+void hg_init();
+
+/**
+ * Shuts down the HurdyGurdy library
+ */
+void hg_exit();
 
 #ifdef NDEBUG
 
@@ -1807,7 +1857,7 @@ struct HgAllocator {
      */
     template<typename T>
     T *alloc() {
-        static_assert(std::is_pod_v<T>);
+        static_assert(std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T>);
         return (T *)alloc_fn(sizeof(T), alignof(T));
     }
 
@@ -1821,7 +1871,7 @@ struct HgAllocator {
      */
     template<typename T>
     HgSpan<T> alloc(usize count) {
-        static_assert(std::is_pod_v<T>);
+        static_assert(std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T>);
         HgSpan<T> span;
         span.data = (T *)alloc_fn(count * sizeof(T), alignof(T));
         span.count = count;
@@ -1854,7 +1904,7 @@ struct HgAllocator {
      */
     template<typename T>
     HgSpan<T> realloc(HgSpan<T> allocation, usize count) {
-        static_assert(std::is_pod_v<T>);
+        static_assert(std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T>);
         HgSpan<T> span;
         span.data = (T *)realloc_fn(allocation.data, allocation.count * sizeof(T), count * sizeof(T), alignof(T));
         span.count = count;
@@ -1885,7 +1935,7 @@ struct HgAllocator {
      */
     template<typename T>
     void free(T *allocation) {
-        static_assert(std::is_pod_v<T>);
+        static_assert(std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T>);
         free_fn(allocation, sizeof(T), alignof(T));
     }
 
@@ -1897,7 +1947,7 @@ struct HgAllocator {
      */
     template<typename T>
     void free(HgSpan<T> allocation) {
-        static_assert(std::is_pod_v<T>);
+        static_assert(std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T>);
         free_fn(allocation.data, allocation.count * sizeof(T), alignof(T));
     }
 
@@ -2150,7 +2200,7 @@ struct HgStack : public HgAllocator {
  */
 template<typename T>
 struct HgArray {
-    static_assert(std::is_pod_v<T>);
+    static_assert(std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T>);
 
     /**
      * The allocator used to create, destroy, and resize the array
@@ -2270,7 +2320,7 @@ struct HgArray {
  */
 template<typename T>
 struct HgOption {
-    static_assert(std::is_pod_v<T>);
+    static_assert(std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T>);
 
     /**
      * The value stored, may not be valid if has_value == false
@@ -3178,7 +3228,8 @@ using HgEntityID = u64;
  */
 template<typename SystemType, typename ComponentType>
 struct HgSystemID {
-    static_assert((std::is_pod_v<SystemType> || std::is_void_v<SystemType>) && std::is_pod_v<ComponentType>);
+    static_assert(std::is_trivially_copyable_v<ComponentType> && std::is_standard_layout_v<ComponentType>);
+    static_assert((std::is_trivially_copyable_v<SystemType> && std::is_standard_layout_v<SystemType>) || std::is_void_v<SystemType>);
 
     u32 index;
 
