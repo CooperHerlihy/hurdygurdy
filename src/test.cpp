@@ -40,36 +40,45 @@ struct HgSprite {
 };
 
 int main(void) {
+    hg_defer(hg_info("All testing complete\n"));
+
     hg_run_tests();
 
     hg_init();
+    hg_defer(hg_exit());
+
     HgAllocator& mem = hg_persistent_allocator();
 
-    HgArray<u32> arr = HgArray<u32>::create(mem, 1, 1);
+    {
+        HgArray<u32> arr = HgArray<u32>::create(mem, 1, 1);
+        hg_defer(arr.destroy());
 
-    for (usize i = 0; i < arr.count; ++i) {
-        hg_info("elem %d: %d\n", (int)i, arr[i]);
-    }
+        for (usize i = 0; i < arr.count; ++i) {
+            hg_info("elem %d: %d\n", (int)i, arr[i]);
+        }
 
-    arr.push((u32)12);
-    arr.push((u32)42);
-    arr.push((u32)100);
-    arr.push((u32)1000);
-    arr.push((u32)999999999);
+        arr.push((u32)12);
+        arr.push((u32)42);
+        arr.push((u32)100);
+        arr.push((u32)1000);
+        arr.push((u32)999999999);
 
-    for (usize i = 0; i < arr.count; ++i) {
-        hg_info("elem %d: %d\n", (int)i, arr[i]);
-    }
+        for (usize i = 0; i < arr.count; ++i) {
+            hg_info("elem %d: %d\n", (int)i, arr[i]);
+        }
 
-    arr.remove(2);
-    arr.pop();
+        arr.remove(2);
+        arr.pop();
 
-    for (usize i = 0; i < arr.count; ++i) {
-        hg_info("elem %d: %d\n", (int)i, arr[i]);
+        for (usize i = 0; i < arr.count; ++i) {
+            hg_info("elem %d: %d\n", (int)i, arr[i]);
+        }
     }
 
     {
         HgECS ecs = HgECS::create(mem, 1 << 16, 2);
+        hg_defer(ecs.destroy());
+
         HgSystemID<void, u32> u32_system = ecs.add_system<void, u32>(1 << 16);
         HgSystemID<u8, u64> u64_system = ecs.add_system<u8, u64>(1 << 16);
         ecs.get_system(u64_system) = 5;
@@ -125,8 +134,6 @@ int main(void) {
         }
 
         hg_info("u64_system data: %d\n", ecs.get_system(u64_system));
-
-        ecs.destroy();
     }
 
     // HgECS ecs = HgECS::create(mem, 10000, 16);
@@ -140,10 +147,16 @@ int main(void) {
     window_config.height = 600;
 
     HgWindow window = HgWindow::create(window_config);
+    hg_defer(window.destroy());
 
     VkInstance instance = hg_vk_create_instance("HurdyGurdy Test");
-    hg_debug_mode(VkDebugUtilsMessengerEXT debug_messenger = hg_vk_create_debug_messenger(instance));
+    hg_defer(vkDestroyInstance(instance, nullptr));
+    hg_debug_mode(
+        VkDebugUtilsMessengerEXT debug_messenger = hg_vk_create_debug_messenger(instance);
+        vkDestroyDebugUtilsMessengerEXT(instance, debug_messenger, nullptr);
+    )
     HgSingleQueueDeviceData device = hg_vk_create_single_queue_device(instance);
+    hg_defer(vkDestroyDevice(device.handle, nullptr));
 
     VmaAllocatorCreateInfo allocator_info{};
     allocator_info.physicalDevice = device.gpu;
@@ -153,6 +166,7 @@ int main(void) {
 
     VmaAllocator vma;
     vmaCreateAllocator(&allocator_info, &vma);
+    hg_defer(vmaDestroyAllocator(vma));
 
     VkCommandPoolCreateInfo cmd_pool_info{};
     cmd_pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -161,15 +175,21 @@ int main(void) {
 
     VkCommandPool cmd_pool;
     vkCreateCommandPool(device.handle, &cmd_pool_info, nullptr, &cmd_pool);
+    hg_defer(vkDestroyCommandPool(device.handle, cmd_pool, nullptr));
 
     VkSurfaceKHR surface = hg_vk_create_surface(instance, window);
+    hg_defer(vkDestroySurfaceKHR(instance, surface, nullptr));
+
     HgSwapchainData swapchain = hg_vk_create_swapchain(device.handle, device.gpu, nullptr, surface,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_PRESENT_MODE_FIFO_KHR);
+    hg_defer(vkDestroySwapchainKHR(device.handle, swapchain.handle, nullptr));
 
     u32 swap_image_count;
     vkGetSwapchainImagesKHR(device.handle, swapchain.handle, &swap_image_count, nullptr);
     HgSpan<VkImage> swap_images = mem.alloc<VkImage>(swap_image_count);
+    hg_defer(mem.free(swap_images));
     HgSpan<VkImageView> swap_views = mem.alloc<VkImageView>(swap_image_count);
+    hg_defer(mem.free(swap_views));
     vkGetSwapchainImagesKHR(device.handle, swapchain.handle, &swap_image_count, swap_images.data);
     for (usize i = 0; i < swap_image_count; ++i) {
         VkImageViewCreateInfo create_info{};
@@ -181,11 +201,18 @@ int main(void) {
 
         vkCreateImageView(device.handle, &create_info, nullptr, &swap_views[i]);
     }
+    hg_defer(
+        for (usize i = 0; i < swap_image_count; ++i) {
+            vkDestroyImageView(device.handle, swap_views[i], nullptr);
+        }
+    )
     HgSwapchainCommands swapchain_commands = HgSwapchainCommands::create(
         device.handle, swapchain.handle, cmd_pool);
+    hg_defer(swapchain_commands.destroy(device.handle));
 
     HgPipelineSprite sprite_pipeline = hg_pipeline_sprite_create(
         device.handle, vma, swapchain.format, VK_FORMAT_UNDEFINED);
+    hg_defer(hg_pipeline_sprite_destroy(&sprite_pipeline));
 
     struct {u8 r, g, b, a;} tex_data[]{
         {0xff, 0x00, 0x00, 0xff}, {0x00, 0xff, 0x00, 0xff},
@@ -201,6 +228,7 @@ int main(void) {
 
     HgPipelineSpriteTexture texture = hg_pipeline_sprite_create_texture(
         &sprite_pipeline, cmd_pool, device.queue, &tex_config);
+    hg_defer(hg_pipeline_sprite_destroy_texture(&sprite_pipeline, &texture));
 
     HgVec3 position{0.0f, 0.0f, 0.0f};
 
@@ -362,29 +390,5 @@ int main(void) {
     }
 
     vkDeviceWaitIdle(device.handle);
-
-    hg_pipeline_sprite_destroy_texture(&sprite_pipeline, &texture);
-    hg_pipeline_sprite_destroy(&sprite_pipeline);
-
-    swapchain_commands.destroy(device.handle);
-    for (usize i = 0; i < swap_image_count; ++i) {
-        vkDestroyImageView(device.handle, swap_views[i], nullptr);
-    }
-    mem.free(swap_views);
-    mem.free(swap_images);
-    vkDestroySwapchainKHR(device.handle, swapchain.handle, nullptr);
-
-    vkDestroyCommandPool(device.handle, cmd_pool, nullptr);
-    vmaDestroyAllocator(vma);
-    vkDestroyDevice(device.handle, nullptr);
-    vkDestroySurfaceKHR(instance, surface, nullptr);
-    hg_debug_mode(vkDestroyDebugUtilsMessengerEXT(instance, debug_messenger, nullptr));
-    vkDestroyInstance(instance, nullptr);
-
-    window.destroy();
-
-    hg_exit();
-
-    hg_info("Tests complete\n");
 }
 

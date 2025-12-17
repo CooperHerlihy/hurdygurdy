@@ -166,7 +166,7 @@ struct HgDeferInternal {
  * Parameters
  * - code The code to run, may be placed inside braces or not
  */
-#define hg_defer(code) [[maybe_unused]] auto hg_concat_macros(hg_defer_, __COUNTER__) = HgDeferInternal{[&]{code;}}
+#define hg_defer(code) [[maybe_unused]] auto hg_concat_macros(hg_defer_, __COUNTER__) = HgDeferInternal{[&]{code;}};
 
 /**
  * Gets the number of elements in a stack allocated array
