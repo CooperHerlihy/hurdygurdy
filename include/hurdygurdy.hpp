@@ -2353,7 +2353,7 @@ struct HgArray {
             assert(items.count > 0);
             items = allocator->realloc(items, items.count * 2);
         }
-        std::memmove(items.data + index + 1, items.data + index, (count - index) * sizeof(*items.data));
+        std::move(items.data + index, items.data + count, items.data + index + 1);
         ++count;
         new (&items[index]) T{std::forward<U>(args)...};
     }
@@ -2366,8 +2366,8 @@ struct HgArray {
      */
     void remove(usize index) {
         assert(index < count);
+        std::move(items.data + index + 1, items.data + count, items.data + index);
         --count;
-        std::memmove(items.data + index, items.data + index + 1, (count - index) * sizeof(*items.data));
     }
 };
 
@@ -2788,6 +2788,11 @@ void hg_window_process_events(HgSpan<const HgWindow> windows);
  * Loads the Vulkan library and the functions required to create an instance
  */
 void hg_vk_load();
+
+/**
+ * Unloads the Vulkan library
+ */
+void hg_vk_unload();
 
 /**
  * Loads the Vulkan functions which use the instance

@@ -42,6 +42,20 @@ hg_test(hg_test) {
     return true;
 }
 
+hg_test(hg_init_and_exit) {
+    hg_init();
+    hg_exit();
+    hg_init();
+    hg_exit();
+    hg_init();
+    hg_exit();
+    hg_init();
+    hg_exit();
+    hg_init();
+    hg_exit();
+    return true;
+}
+
 f64 HgClock::tick() {
     auto prev = std::exchange(time, std::chrono::high_resolution_clock::now());
     return std::chrono::duration<f64>{time - prev}.count();
@@ -208,7 +222,7 @@ void HgArena::destroy() {
 }
 
 void HgArena::reset() {
-    head = 0;
+    head = memory.data;
 }
 
 void *HgArena::alloc_fn(usize size, usize alignment) {
@@ -245,51 +259,56 @@ void HgArena::free_fn(void *allocation, usize size, usize alignment) {
 
 hg_test(hg_arena) {
     HgArena arena = arena.create(hg_persistent_allocator(), 1024);
-    hg_test_assert(arena.allocator != nullptr);
-    hg_test_assert(arena.memory != nullptr);
-    hg_test_assert(arena.memory.count == 1024);
-    hg_test_assert(arena.head == arena.memory.data);
+    hg_defer(arena.destroy());
 
-    u32 *alloc_u32 = arena.alloc<u32>();
-    hg_test_assert(alloc_u32 == arena.memory.data);
+    for (usize i = 0; i < 3; ++i) {
+        hg_test_assert(arena.allocator != nullptr);
+        hg_test_assert(arena.memory != nullptr);
+        hg_test_assert(arena.memory.count == 1024);
+        hg_test_assert(arena.head == arena.memory.data);
 
-    void *head = arena.head;
-    arena.free(alloc_u32);
-    hg_test_assert(alloc_u32 == arena.memory.data);
-    hg_test_assert(head == arena.head);
+        u32 *alloc_u32 = arena.alloc<u32>();
+        hg_test_assert(alloc_u32 == arena.memory.data);
 
-    HgSpan<u64> alloc_u64 = arena.alloc<u64>(2);
-    hg_test_assert((u8 *)alloc_u64.data == (u8 *)alloc_u32 + 8);
+        void *head = arena.head;
+        arena.free(alloc_u32);
+        hg_test_assert(alloc_u32 == arena.memory.data);
+        hg_test_assert(head == arena.head);
 
-    u8 *alloc_u8 = arena.alloc<u8>();
-    hg_test_assert(alloc_u8 == (u8 *)alloc_u32 + 24);
+        HgSpan<u64> alloc_u64 = arena.alloc<u64>(2);
+        hg_test_assert((u8 *)alloc_u64.data == (u8 *)alloc_u32 + 8);
 
-    struct Big {
-        u8 data[32];
-    };
-    Big *alloc_big = arena.alloc<Big>();
-    hg_test_assert((u8 *)alloc_big == (u8 *)alloc_u32 + 25);
+        u8 *alloc_u8 = arena.alloc<u8>();
+        hg_test_assert(alloc_u8 == (u8 *)alloc_u32 + 24);
 
-    HgSpan<Big> realloc_big = arena.realloc(HgSpan<Big>{alloc_big, 1}, 2);
-    hg_test_assert(realloc_big.data == alloc_big);
+        struct Big {
+            u8 data[32];
+        };
+        Big *alloc_big = arena.alloc<Big>();
+        hg_test_assert((u8 *)alloc_big == (u8 *)alloc_u32 + 25);
 
-    memset(realloc_big.data, 2, realloc_big.size());
+        HgSpan<Big> realloc_big = arena.realloc(HgSpan<Big>{alloc_big, 1}, 2);
+        hg_test_assert(realloc_big.data == alloc_big);
 
-    HgSpan<Big> realloc_big2 = arena.realloc(realloc_big, 2);
-    hg_test_assert(realloc_big2.data == realloc_big.data);
-    hg_test_assert(memcmp(realloc_big.data, realloc_big2.data, realloc_big2.size()) == 0);
+        memset(realloc_big.data, 2, realloc_big.size());
 
-    u8 *alloc_little = arena.alloc<u8>();
-    arena.free(alloc_little);
+        HgSpan<Big> realloc_big2 = arena.realloc(realloc_big, 2);
+        hg_test_assert(realloc_big2.data == realloc_big.data);
+        hg_test_assert(memcmp(realloc_big.data, realloc_big2.data, realloc_big2.size()) == 0);
 
-    realloc_big2 = arena.realloc(realloc_big, 2);
-    hg_test_assert(realloc_big2.data != realloc_big.data);
-    hg_test_assert(memcmp(realloc_big.data, realloc_big2.data, realloc_big2.size()) == 0);
+        u8 *alloc_little = arena.alloc<u8>();
+        arena.free(alloc_little);
 
-    HgSpan<Big> big_alloc_big = arena.alloc<Big>(100);
-    hg_test_assert(big_alloc_big == nullptr);
+        realloc_big2 = arena.realloc(realloc_big, 2);
+        hg_test_assert(realloc_big2.data != realloc_big.data);
+        hg_test_assert(memcmp(realloc_big.data, realloc_big2.data, realloc_big2.size()) == 0);
 
-    arena.destroy();
+        HgSpan<Big> big_alloc_big = arena.alloc<Big>(100);
+        hg_test_assert(big_alloc_big == nullptr);
+
+        arena.reset();
+    }
+
     return true;
 }
 
@@ -347,10 +366,96 @@ void *HgStack::realloc_fn(void *allocation, usize old_size, usize new_size, usiz
 
 void HgStack::free_fn(void *allocation, usize size, usize alignment) {
     (void)alignment;
-    if ((usize)allocation + hg_align(size, 16) == head)
+    if ((usize)allocation + hg_align(size, 16) == (usize)memory.data + head)
         head = (usize)allocation - (usize)memory.data;
     else
         hg_warn("Attempt to free a stack allocation not at the head\n");
+}
+
+hg_test(hg_stack) {
+    HgStack stack = stack.create(hg_persistent_allocator(), 1024);
+    hg_defer(stack.destroy());
+
+    for (usize i = 0; i < 3; ++i) {
+        hg_test_assert(stack.allocator != nullptr);
+        hg_test_assert(stack.memory != nullptr);
+        hg_test_assert(stack.memory.count == 1024);
+        hg_test_assert(stack.head == 0);
+
+        u8 *alloc_u8_1 = stack.alloc<u8>();
+        hg_test_assert(alloc_u8_1 == (u8 *)stack.memory.data);
+
+        u8 *alloc_u8_2 = stack.alloc<u8>();
+        hg_test_assert(alloc_u8_2 == alloc_u8_1 + 16);
+
+        stack.free(alloc_u8_2);
+        u8 *alloc_u8_3 = stack.alloc<u8>();
+        hg_test_assert(alloc_u8_3 == alloc_u8_2);
+
+        HgSpan<u64> alloc_u64 = stack.alloc<u64>(2);
+        hg_test_assert((u8 *)alloc_u64.data == alloc_u8_3 + 16);
+
+        HgSpan<u64> realloc_u64 = stack.realloc(alloc_u64, 3);
+        hg_test_assert(realloc_u64.data = alloc_u64.data);
+
+        memset(realloc_u64.data, 2, realloc_u64.size());
+        (void)stack.alloc<u8>();
+        HgSpan<u64> realloc_u64_2 = stack.realloc(realloc_u64, 3);
+        hg_test_assert(realloc_u64_2.data != realloc_u64.data);
+        hg_test_assert(memcmp(realloc_u64_2.data, realloc_u64.data, realloc_u64.size()) == 0);
+
+        stack.reset();
+    }
+
+    return true;
+}
+
+hg_test(hg_array) {
+    HgAllocator& mem = hg_persistent_allocator();
+
+    HgArray<u16> arr_u16 = arr_u16.create(mem, 0, 2);
+    hg_defer(arr_u16.destroy());
+    hg_test_assert(arr_u16.allocator != nullptr);
+    hg_test_assert(arr_u16.items != nullptr);
+    hg_test_assert(arr_u16.items.count == 2);
+    hg_test_assert(arr_u16.count == 0);
+
+    arr_u16.push((u16)2);
+    hg_test_assert(arr_u16[0] == 2);
+    hg_test_assert(arr_u16.count == 1);
+    arr_u16.push((u16)4);
+    hg_test_assert(arr_u16[1] == 4);
+    hg_test_assert(arr_u16.count == 2);
+    hg_test_assert(arr_u16.items.count == 2);
+    arr_u16.push((u16)8);
+    hg_test_assert(arr_u16[2] == 8);
+    hg_test_assert(arr_u16.count == 3);
+    hg_test_assert(arr_u16.items.count == 4);
+
+    arr_u16.pop();
+    hg_test_assert(arr_u16.count == 2);
+    hg_test_assert(arr_u16.items.count == 4);
+
+    arr_u16.insert(0, (u16)1);
+    hg_test_assert(arr_u16.count == 3);
+    hg_test_assert(arr_u16.items.count == 4);
+    hg_test_assert(arr_u16[0] == 1);
+    hg_test_assert(arr_u16[1] == 2);
+    hg_test_assert(arr_u16[2] == 4);
+
+    arr_u16.remove(1);
+    hg_test_assert(arr_u16.count == 2);
+    hg_test_assert(arr_u16.items.count == 4);
+    hg_test_assert(arr_u16[0] == 1);
+    hg_test_assert(arr_u16[1] == 4);
+
+    for (usize i = 0; i < 100; ++i) {
+        arr_u16.push((u16)42);
+    }
+    hg_test_assert(arr_u16.count == 102);
+    hg_test_assert(arr_u16.items.count == 128);
+
+    return true;
 }
 
 HgSpan<void> hg_file_load_binary(HgAllocator& allocator, const char *path) {
@@ -361,18 +466,21 @@ HgSpan<void> hg_file_load_binary(HgAllocator& allocator, const char *path) {
         hg_warn("Could not find file to read binary: %s\n", path);
         return {};
     }
+    hg_defer(std::fclose(file));
 
-    std::fseek(file, 0, SEEK_END);
-    HgSpan<void> data = allocator.alloc((usize)std::ftell(file), 16);
-    std::rewind(file);
-
-    if (std::fread(data.data, 1, data.count, file) != data.count) {
-        std::fclose(file);
+    if (std::fseek(file, 0, SEEK_END) != 0) {
         hg_warn("Failed to read binary from file: %s\n", path);
         return {};
     }
 
-    std::fclose(file);
+    HgSpan<void> data = allocator.alloc((usize)std::ftell(file), 16);
+    std::rewind(file);
+
+    if (std::fread(data.data, 1, data.count, file) != data.count) {
+        hg_warn("Failed to read binary from file: %s\n", path);
+        return {};
+    }
+
     return data;
 }
 
@@ -390,14 +498,28 @@ bool hg_file_save_binary(HgSpan<const void> data, const char *path) {
         hg_warn("Failed to create file to write binary: %s\n", path);
         return false;
     }
+    hg_defer(std::fclose(file));
 
     if (std::fwrite(data.data, 1, data.count, file) != data.count) {
-        std::fclose(file);
         hg_warn("Failed to write binary data to file: %s\n", path);
         return false;
     }
 
-    std::fclose(file);
+    return true;
+}
+
+hg_test(hg_file_binary) {
+    HgAllocator& mem = hg_persistent_allocator();
+
+    u32 save_data[] = {12, 42, 100, 128};
+
+    hg_file_save_binary({save_data, sizeof(save_data)}, "hg_file_test.bin");
+
+    HgSpan<void> load_data = hg_file_load_binary(mem, "hg_file_test.bin");
+    hg_defer(hg_file_unload_binary(mem, load_data));
+    hg_test_assert(load_data.size() == sizeof(save_data));
+    hg_test_assert(memcmp(save_data, load_data.data, load_data.size()) == 0);
+
     return true;
 }
 
@@ -932,11 +1054,11 @@ static VkPhysicalDevice hg_internal_find_single_queue_gpu(VkInstance instance, u
     vkEnumeratePhysicalDevices(instance, &gpu_count, gpus);
 
     HgSpan<VkExtensionProperties> ext_props{};
+    hg_defer(allocator.free(ext_props));
 
-    VkPhysicalDevice suitable_gpu = nullptr;
-    HgOption<u32> family;
     for (u32 i = 0; i < gpu_count; ++i) {
         VkPhysicalDevice gpu = gpus[i];
+        HgOption<u32> family;
 
         u32 new_prop_count = 0;
         vkEnumerateDeviceExtensionProperties(gpu, nullptr, &new_prop_count, nullptr);
@@ -959,19 +1081,15 @@ next_ext:
         if (!family)
             goto next_gpu;
 
-        suitable_gpu = gpu;
-        break;
+        *queue_family = *family;
+        return gpu;
 
 next_gpu:
         continue;
     }
 
-    allocator.free(ext_props);
-    if (suitable_gpu != nullptr)
-        *queue_family = *family;
-    else
-        hg_warn("Could not find a suitable gpu\n");
-    return suitable_gpu;
+    hg_warn("Could not find a suitable gpu\n");
+    return nullptr;
 }
 
 static VkDevice hg_internal_create_single_queue_device(VkPhysicalDevice gpu, u32 queue_family) {
@@ -1396,6 +1514,7 @@ void HgSwapchainCommands::destroy(VkDevice device) {
         frame_count * sizeof(*image_available) +
         frame_count * sizeof(*ready_to_present),
         16);
+
     std::memset(this, 0, sizeof(*this));
 }
 
@@ -1483,6 +1602,7 @@ void hg_vk_buffer_staging_write(
     VmaAllocation stage_alloc = nullptr;
     vmaCreateBuffer(allocator, &stage_info, &stage_alloc_info, &stage, &stage_alloc, nullptr);
     vmaCopyMemoryToAllocation(allocator, src.data, stage_alloc, offset, src.count);
+    hg_defer(vmaDestroyBuffer(allocator, stage, stage_alloc));
 
     VkCommandBufferAllocateInfo cmd_info{};
     cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -1492,6 +1612,7 @@ void hg_vk_buffer_staging_write(
 
     VkCommandBuffer cmd = nullptr;
     vkAllocateCommandBuffers(device, &cmd_info, &cmd);
+    hg_defer(vkFreeCommandBuffers(device, cmd_pool, 1, &cmd));
 
     VkCommandBufferBeginInfo begin_info{};
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -1510,6 +1631,7 @@ void hg_vk_buffer_staging_write(
 
     VkFence fence = nullptr;
     vkCreateFence(device, &fence_info, nullptr, &fence);
+    hg_defer(vkDestroyFence(device, fence, nullptr));
 
     VkSubmitInfo submit{};
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1518,10 +1640,6 @@ void hg_vk_buffer_staging_write(
 
     vkQueueSubmit(transfer_queue, 1, &submit, fence);
     vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-    vkDestroyFence(device, fence, nullptr);
-    vkFreeCommandBuffers(device, cmd_pool, 1, &cmd);
-    vmaDestroyBuffer(allocator, stage, stage_alloc);
 }
 
 void hg_vk_buffer_staging_read(
@@ -1552,6 +1670,7 @@ void hg_vk_buffer_staging_read(
     VkBuffer stage = nullptr;
     VmaAllocation stage_alloc = nullptr;
     vmaCreateBuffer(allocator, &stage_info, &stage_alloc_info, &stage, &stage_alloc, nullptr);
+    hg_defer(vmaDestroyBuffer(allocator, stage, stage_alloc));
 
     VkCommandBufferAllocateInfo cmd_info{};
     cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -1561,6 +1680,7 @@ void hg_vk_buffer_staging_read(
 
     VkCommandBuffer cmd = nullptr;
     vkAllocateCommandBuffers(device, &cmd_info, &cmd);
+    hg_defer(vkFreeCommandBuffers(device, cmd_pool, 1, &cmd));
 
     VkCommandBufferBeginInfo begin_info{};
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -1579,6 +1699,7 @@ void hg_vk_buffer_staging_read(
 
     VkFence fence = nullptr;
     vkCreateFence(device, &fence_info, nullptr, &fence);
+    hg_defer(vkDestroyFence(device, fence, nullptr));
 
     VkSubmitInfo submit{};
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1589,10 +1710,6 @@ void hg_vk_buffer_staging_read(
     vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
 
     vmaCopyAllocationToMemory(allocator, stage_alloc, offset, dst.data, dst.count);
-
-    vkDestroyFence(device, fence, nullptr);
-    vkFreeCommandBuffers(device, cmd_pool, 1, &cmd);
-    vmaDestroyBuffer(allocator, stage, stage_alloc);
 }
 
 void hg_vk_image_staging_write(
@@ -1631,6 +1748,7 @@ void hg_vk_image_staging_write(
     VmaAllocation stage_alloc = nullptr;
     vmaCreateBuffer(allocator, &stage_info, &stage_alloc_info, &stage, &stage_alloc, nullptr);
     vmaCopyMemoryToAllocation(allocator, config.src_data, stage_alloc, 0, size);
+    hg_defer(vmaDestroyBuffer(allocator, stage, stage_alloc));
 
     VkCommandBufferAllocateInfo cmd_info{};
     cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -1640,6 +1758,7 @@ void hg_vk_image_staging_write(
 
     VkCommandBuffer cmd = nullptr;
     vkAllocateCommandBuffers(device, &cmd_info, &cmd);
+    hg_defer(vkFreeCommandBuffers(device, cmd_pool, 1, &cmd));
 
     VkCommandBufferBeginInfo begin_info{};
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -1701,6 +1820,7 @@ void hg_vk_image_staging_write(
     fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     VkFence fence = nullptr;
     vkCreateFence(device, &fence_info, nullptr, &fence);
+    hg_defer(vkDestroyFence(device, fence, nullptr));
 
     VkSubmitInfo submit{};
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1709,10 +1829,6 @@ void hg_vk_image_staging_write(
 
     vkQueueSubmit(transfer_queue, 1, &submit, fence);
     vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-    vkDestroyFence(device, fence, nullptr);
-    vkFreeCommandBuffers(device, cmd_pool, 1, &cmd);
-    vmaDestroyBuffer(allocator, stage, stage_alloc);
 }
 
 void hg_vk_image_staging_read(
@@ -1751,6 +1867,7 @@ void hg_vk_image_staging_read(
     VkBuffer stage = nullptr;
     VmaAllocation stage_alloc = nullptr;
     vmaCreateBuffer(allocator, &stage_info, &stage_alloc_info, &stage, &stage_alloc, nullptr);
+    hg_defer(vmaDestroyBuffer(allocator, stage, stage_alloc));
 
     VkCommandBufferAllocateInfo cmd_info{};
     cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -1760,6 +1877,7 @@ void hg_vk_image_staging_read(
 
     VkCommandBuffer cmd = nullptr;
     vkAllocateCommandBuffers(device, &cmd_info, &cmd);
+    hg_defer(vkFreeCommandBuffers(device, cmd_pool, 1, &cmd));
 
     VkCommandBufferBeginInfo begin_info{};
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -1820,6 +1938,7 @@ void hg_vk_image_staging_read(
 
     VkFence fence = nullptr;
     vkCreateFence(device, &fence_info, nullptr, &fence);
+    hg_defer(vkDestroyFence(device, fence, nullptr));
 
     VkSubmitInfo submit{};
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1830,10 +1949,6 @@ void hg_vk_image_staging_read(
     vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
 
     vmaCopyAllocationToMemory(allocator, stage_alloc, 0, config.dst, size);
-
-    vkDestroyFence(device, fence, nullptr);
-    vkFreeCommandBuffers(device, cmd_pool, 1, &cmd);
-    vmaDestroyBuffer(allocator, stage, stage_alloc);
 }
 
 HgECS HgECS::create(
@@ -2513,25 +2628,23 @@ KeySym XLookupKeysym(XKeyEvent *key_event, int index) {
 Display *hg_internal_x11_display = nullptr;
 
 static void hg_internal_platform_init(void) {
-    if (hg_internal_libx11 == nullptr) {
-        hg_internal_libx11 = dlopen("libX11.so.6", RTLD_LAZY);
-        if (hg_internal_libx11 == nullptr)
-            hg_error("Could not open Xlib\n");
+    hg_internal_libx11 = dlopen("libX11.so.6", RTLD_LAZY);
+    if (hg_internal_libx11 == nullptr)
+        hg_error("Could not open Xlib\n");
 
-        HG_LOAD_X11_FUNC(XOpenDisplay);
-        HG_LOAD_X11_FUNC(XCloseDisplay);
-        HG_LOAD_X11_FUNC(XCreateWindow);
-        HG_LOAD_X11_FUNC(XDestroyWindow);
-        HG_LOAD_X11_FUNC(XStoreName);
-        HG_LOAD_X11_FUNC(XInternAtom);
-        HG_LOAD_X11_FUNC(XSetWMProtocols);
-        HG_LOAD_X11_FUNC(XMapWindow);
-        HG_LOAD_X11_FUNC(XSendEvent);
-        HG_LOAD_X11_FUNC(XFlush);
-        HG_LOAD_X11_FUNC(XPending);
-        HG_LOAD_X11_FUNC(XNextEvent);
-        HG_LOAD_X11_FUNC(XLookupKeysym);
-    }
+    HG_LOAD_X11_FUNC(XOpenDisplay);
+    HG_LOAD_X11_FUNC(XCloseDisplay);
+    HG_LOAD_X11_FUNC(XCreateWindow);
+    HG_LOAD_X11_FUNC(XDestroyWindow);
+    HG_LOAD_X11_FUNC(XStoreName);
+    HG_LOAD_X11_FUNC(XInternAtom);
+    HG_LOAD_X11_FUNC(XSetWMProtocols);
+    HG_LOAD_X11_FUNC(XMapWindow);
+    HG_LOAD_X11_FUNC(XSendEvent);
+    HG_LOAD_X11_FUNC(XFlush);
+    HG_LOAD_X11_FUNC(XPending);
+    HG_LOAD_X11_FUNC(XNextEvent);
+    HG_LOAD_X11_FUNC(XLookupKeysym);
 
     hg_internal_x11_display = XOpenDisplay(nullptr);
     if (hg_internal_x11_display == nullptr)
@@ -2540,6 +2653,7 @@ static void hg_internal_platform_init(void) {
 
 static void hg_internal_platform_exit(void) {
     XCloseDisplay(hg_internal_x11_display);
+    dlclose(hg_internal_libx11);
 }
 
 static Window hg_internal_create_x11_window(
@@ -3891,6 +4005,24 @@ void hg_vk_load(void) {
     HG_LOAD_VULKAN_FUNC(vkCreateInstance);
 }
 
+void hg_vk_unload() {
+
+#if defined(__unix__)
+
+    dlclose(hg_internal_libvulkan);
+
+#elif defined(_WIN32)
+
+    FreeLibrary((HMODULE)hg_internal_libvulkan);
+
+#else
+
+#error "unsupported platform"
+
+#endif
+
+}
+
 #undef HG_LOAD_VULKAN_FUNC
 
 #define HG_LOAD_VULKAN_INSTANCE_FUNC(instance, name) \
@@ -4420,5 +4552,6 @@ void hg_init(void) {
 
 void hg_exit(void) {
     hg_internal_platform_exit();
+    hg_vk_unload();
 }
 
