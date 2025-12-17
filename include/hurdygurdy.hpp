@@ -101,6 +101,14 @@ struct HgTest {
     static HgTest hg_test_struct_##name{#name, hg_test_function_##name}; \
     static bool hg_test_function_##name() 
 
+#define hg_test_assert(cond) { \
+    if (!(cond)) { \
+        std::printf("HurdyGurdy Test assertion failed: " #cond "\n"); \
+        return false; \
+    } \
+}
+
+
 /**
  * Runs all tests registered globally
  *
@@ -952,7 +960,7 @@ constexpr HgVec4 operator/(const HgVec4& lhs, f32 rhs) {
  * - lhs The left-hand side vector, must not be nullptr
  * - rhs The right-hand side vector, must not be nullptr
  */
-constexpr void hg_vdot(u32 size, f32 *dst, const f32 *lhs, const f32 *rhs) {
+constexpr void hg_dot(u32 size, f32 *dst, const f32 *lhs, const f32 *rhs) {
     assert(dst != nullptr);
     assert(lhs != nullptr);
     assert(rhs != nullptr);
@@ -971,7 +979,7 @@ constexpr void hg_vdot(u32 size, f32 *dst, const f32 *lhs, const f32 *rhs) {
  * Returns
  * - The dot product
  */
-constexpr float hg_vdot2(const HgVec2& lhs, const HgVec2& rhs) {
+constexpr float hg_dot(const HgVec2& lhs, const HgVec2& rhs) {
     return lhs.x * rhs.x + lhs.y * rhs.y;
 }
 
@@ -984,7 +992,7 @@ constexpr float hg_vdot2(const HgVec2& lhs, const HgVec2& rhs) {
  * Returns
  * - The dot product
  */
-constexpr float hg_vdot3(const HgVec3& lhs, const HgVec3& rhs) {
+constexpr float hg_dot(const HgVec3& lhs, const HgVec3& rhs) {
     return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
 }
 
@@ -997,7 +1005,7 @@ constexpr float hg_vdot3(const HgVec3& lhs, const HgVec3& rhs) {
  * Returns
  * - The dot product
  */
-constexpr float hg_vdot4(const HgVec4& lhs, const HgVec4& rhs) {
+constexpr float hg_dot(const HgVec4& lhs, const HgVec4& rhs) {
     return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z + lhs.w * rhs.w;
 }
 
@@ -1009,10 +1017,10 @@ constexpr float hg_vdot4(const HgVec4& lhs, const HgVec4& rhs) {
  * - dst The destination vector, must not be nullptr
  * - vec The vector to compute the length of, must not be nullptr
  */
-constexpr void hg_vlen(u32 size, f32 *dst, const f32 *vec) {
+constexpr void hg_len(u32 size, f32 *dst, const f32 *vec) {
     assert(dst != nullptr);
     assert(vec != nullptr);
-    hg_vdot(size, dst, vec, vec);
+    hg_dot(size, dst, vec, vec);
     *dst = sqrtf(*dst);
 }
 
@@ -1024,8 +1032,8 @@ constexpr void hg_vlen(u32 size, f32 *dst, const f32 *vec) {
  * Returns
  * - The length of the vector
  */
-constexpr float hg_vlen2(const HgVec2& vec) {
-    return sqrtf(hg_vdot2(vec, vec));
+constexpr float hg_len(const HgVec2& vec) {
+    return sqrtf(hg_dot(vec, vec));
 }
 
 /**
@@ -1036,8 +1044,8 @@ constexpr float hg_vlen2(const HgVec2& vec) {
  * Returns
  * - The length of the vector
  */
-constexpr float hg_vlen3(const HgVec3& vec) {
-    return sqrtf(hg_vdot3(vec, vec));
+constexpr float hg_len(const HgVec3& vec) {
+    return sqrtf(hg_dot(vec, vec));
 }
 
 /**
@@ -1048,8 +1056,8 @@ constexpr float hg_vlen3(const HgVec3& vec) {
  * Returns
  * - The length of the vector
  */
-constexpr float hg_vlen4(const HgVec4& vec) {
-    return sqrtf(hg_vdot4(vec, vec));
+constexpr float hg_len(const HgVec4& vec) {
+    return sqrtf(hg_dot(vec, vec));
 }
 
 /**
@@ -1060,11 +1068,11 @@ constexpr float hg_vlen4(const HgVec4& vec) {
  * - dst The destination vector, must not be nullptr
  * - vec The vector to normalize, must not be nullptr
  */
-constexpr void hg_vnorm(u32 size, f32 *dst, const f32 *vec) {
+constexpr void hg_norm(u32 size, f32 *dst, const f32 *vec) {
     assert(dst != nullptr);
     assert(vec != nullptr);
     f32 len = 0.0f;
-    hg_vlen(size, &len, vec);
+    hg_len(size, &len, vec);
     for (u32 i = 0; i < size; ++i) {
         dst[i] = vec[i] / len;
     }
@@ -1078,8 +1086,8 @@ constexpr void hg_vnorm(u32 size, f32 *dst, const f32 *vec) {
  * Returns
  * - The normalized vector
  */
-constexpr HgVec2 hg_vnorm2(const HgVec2& vec) {
-    f32 len = hg_vlen2(vec);
+constexpr HgVec2 hg_norm(const HgVec2& vec) {
+    f32 len = hg_len(vec);
     return {vec.x / len, vec.y / len};
 }
 
@@ -1091,8 +1099,8 @@ constexpr HgVec2 hg_vnorm2(const HgVec2& vec) {
  * Returns
  * - The normalized vector
  */
-constexpr HgVec3 hg_vnorm3(const HgVec3& vec) {
-    f32 len = hg_vlen3(vec);
+constexpr HgVec3 hg_norm(const HgVec3& vec) {
+    f32 len = hg_len(vec);
     return {vec.x / len, vec.y / len, vec.z / len};
 }
 
@@ -1104,8 +1112,8 @@ constexpr HgVec3 hg_vnorm3(const HgVec3& vec) {
  * Returns
  * - The normalized vector
  */
-constexpr HgVec4 hg_vnorm4(const HgVec4& vec) {
-    f32 len = hg_vlen4(vec);
+constexpr HgVec4 hg_norm(const HgVec4& vec) {
+    f32 len = hg_len(vec);
     return {vec.x / len, vec.y / len, vec.z / len, vec.w / len};
 }
 
@@ -1117,7 +1125,7 @@ constexpr HgVec4 hg_vnorm4(const HgVec4& vec) {
  * - lhs The left-hand side vector, must not be nullptr
  * - rhs The right-hand side vector, must not be nullptr
  */
-constexpr void hg_vcross(f32 *dst, const f32 *lhs, const f32 *rhs) {
+constexpr void hg_cross(f32 *dst, const f32 *lhs, const f32 *rhs) {
     assert(dst != nullptr);
     assert(lhs != nullptr);
     assert(rhs != nullptr);
@@ -1135,7 +1143,7 @@ constexpr void hg_vcross(f32 *dst, const f32 *lhs, const f32 *rhs) {
  * Returns
  * - The cross product
  */
-constexpr HgVec3 hg_vcross3(const HgVec3& lhs, const HgVec3& rhs) {
+constexpr HgVec3 hg_cross(const HgVec3& lhs, const HgVec3& rhs) {
     return {lhs.y * rhs.z - lhs.z * rhs.y, lhs.z * rhs.x - lhs.x * rhs.z, lhs.x * rhs.y - lhs.y * rhs.x};
 }
 
@@ -1607,7 +1615,7 @@ constexpr HgQuat hg_axis_angle(const HgVec3& axis, f32 angle) {
  * Returns
  * - The rotated vector
  */
-constexpr HgVec3 hg_rotate_vec3(const HgQuat& lhs, const HgVec3& rhs) {
+constexpr HgVec3 hg_rotate(const HgQuat& lhs, const HgVec3& rhs) {
     HgQuat q = hg_qmul(lhs, hg_qmul({0.0f, rhs.x, rhs.y, rhs.z}, hg_qconj(lhs)));
     return {q.i, q.j, q.k};
 }
@@ -1621,11 +1629,11 @@ constexpr HgVec3 hg_rotate_vec3(const HgQuat& lhs, const HgVec3& rhs) {
  * Returns
  * - The rotated matrix
  */
-constexpr HgMat3 hg_rotate_mat3(const HgQuat& lhs, const HgMat3& rhs) {
+constexpr HgMat3 hg_rotate(const HgQuat& lhs, const HgMat3& rhs) {
     return {
-        hg_rotate_vec3(lhs, rhs.x),
-        hg_rotate_vec3(lhs, rhs.y),
-        hg_rotate_vec3(lhs, rhs.z),
+        hg_rotate(lhs, rhs.x),
+        hg_rotate(lhs, rhs.y),
+        hg_rotate(lhs, rhs.z),
     };
 }
 
@@ -1728,6 +1736,16 @@ struct HgSpan {
     usize count;
 
     /**
+     * The size of the array in bytes
+     *
+     * Returns
+     * - The size of the array in bytes
+     */
+    constexpr usize size() {
+        return count * sizeof(*data);
+    }
+
+    /**
      * Convenience to index into the array with debug bounds checking
      */
     constexpr T& operator[](usize index) {
@@ -1763,6 +1781,16 @@ struct HgSpan<const void> {
      * The number of items in the array
      */
     usize count;
+
+    /**
+     * The size of the array in bytes
+     *
+     * Returns
+     * - The size of the array in bytes
+     */
+    constexpr usize size() {
+        return count;
+    }
 };
 
 template<>
@@ -1775,6 +1803,16 @@ struct HgSpan<void> {
      * The number of items in the array
      */
     usize count;
+
+    /**
+     * The size of the array in bytes
+     *
+     * Returns
+     * - The size of the array in bytes
+     */
+    constexpr usize size() {
+        return count;
+    }
 
     /**
      * Implicit conversion can add const
@@ -1796,7 +1834,7 @@ constexpr bool operator!=(HgSpan<T> lhs, HgSpan<T> rhs) {
 
 template<typename T>
 constexpr bool operator==(HgSpan<T> lhs, std::nullptr_t rhs) {
-    return lhs.data == rhs;
+    return lhs.data == rhs && lhs.count == 0;
 }
 
 template<typename T>
@@ -1874,7 +1912,7 @@ struct HgAllocator {
         static_assert(std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T>);
         HgSpan<T> span;
         span.data = (T *)alloc_fn(count * sizeof(T), alignof(T));
-        span.count = count;
+        span.count = span.data != nullptr ? count : 0;
         return span;
     }
 
@@ -1889,7 +1927,7 @@ struct HgAllocator {
     HgSpan<void> alloc(usize size, usize alignment) {
         HgSpan<void> span;
         span.data = alloc_fn(size, alignment);
-        span.count = size;
+        span.count = span.data != nullptr ? size : 0;
         return span;
     }
 
@@ -1907,7 +1945,7 @@ struct HgAllocator {
         static_assert(std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T>);
         HgSpan<T> span;
         span.data = (T *)realloc_fn(allocation.data, allocation.count * sizeof(T), count * sizeof(T), alignof(T));
-        span.count = count;
+        span.count = span.data != nullptr ? count : 0;
         return span;
     }
 
@@ -1923,7 +1961,7 @@ struct HgAllocator {
     HgSpan<void> realloc(HgSpan<void> allocation, usize size, usize alignment) {
         HgSpan<void> span;
         span.data = realloc_fn(allocation.data, allocation.count, size, alignment);
-        span.count = size;
+        span.count = span.data != nullptr ? size : 0;
         return span;
     }
 

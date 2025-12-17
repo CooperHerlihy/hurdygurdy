@@ -38,9 +38,67 @@ bool hg_run_tests() {
     return all_succeeded;
 }
 
+hg_make_test(hg_test) {
+    return true;
+}
+
 f64 HgClock::tick() {
     auto prev = std::exchange(time, std::chrono::high_resolution_clock::now());
     return std::chrono::duration<f64>{time - prev}.count();
+}
+
+hg_make_test(hg_matrix_mul) {
+    HgMat2 mat = {
+        {1.0f, 0.0f},
+        {1.0f, 0.0f},
+    };
+    HgVec2 vec = {1.0f, 1.0f};
+
+    HgMat2 identity = {
+        {1.0f, 0.0f},
+        {0.0f, 1.0f},
+    };
+    hg_test_assert(identity * mat == mat);
+    hg_test_assert(identity * vec == vec);
+
+    HgMat2 mat_rotated = {
+        {0.0f, 1.0f},
+        {0.0f, 1.0f},
+    };
+    HgVec2 vec_rotated = {-1.0f, 1.0f};
+
+    HgMat2 rotation = {
+        {0.0f, 1.0f},
+        {-1.0f, 0.0f},
+    };
+    hg_test_assert(rotation * mat == mat_rotated);
+    hg_test_assert(rotation * vec == vec_rotated);
+
+    hg_test_assert((identity * rotation) * mat == identity * (rotation * mat));
+    hg_test_assert((identity * rotation) * vec == identity * (rotation * vec));
+
+    return true;
+}
+
+hg_make_test(hg_quat) {
+    HgMat3 identity_mat = hg_smat3(1.0f);
+    HgVec3 up_vec = {0.0f, -1.0f, 0.0f};
+    HgQuat rotation = hg_axis_angle({0.0f, 0.0f, -1.0f}, -(f32)HgPi * 0.5f);
+
+    HgVec3 rotated_vec = hg_rotate(rotation, up_vec);
+    HgMat3 rotated_mat = hg_rotate(rotation, identity_mat);
+
+    HgVec3 mat_rotated_vec = rotated_mat * up_vec;
+
+    hg_test_assert(std::abs(rotated_vec.x - 1.0f) < FLT_EPSILON
+                && std::abs(rotated_vec.y - 0.0f) < FLT_EPSILON
+                && std::abs(rotated_vec.y - 0.0f) < FLT_EPSILON);
+
+    hg_test_assert(std::abs(mat_rotated_vec.x - rotated_vec.x) < FLT_EPSILON
+                && std::abs(mat_rotated_vec.y - rotated_vec.y) < FLT_EPSILON
+                && std::abs(mat_rotated_vec.y - rotated_vec.z) < FLT_EPSILON);
+
+    return true;
 }
 
 HgMat4 hg_model_matrix_2d(const HgVec3& position, const HgVec2& scale, f32 rotation) {
@@ -60,7 +118,7 @@ HgMat4 hg_model_matrix_3d(const HgVec3& position, const HgVec3& scale, const HgQ
     m3.x.x = scale.x;
     m3.y.y = scale.y;
     m3.z.z = scale.z;
-    m3 = hg_rotate_mat3(rotation, m3);
+    m3 = hg_rotate(rotation, m3);
     HgMat4 m4 = hg_mat3to4(m3);
     m4.w.x = position.x;
     m4.w.y = position.y;
@@ -69,7 +127,7 @@ HgMat4 hg_model_matrix_3d(const HgVec3& position, const HgVec3& scale, const HgQ
 }
 
 HgMat4 hg_view_matrix(const HgVec3& position, f32 zoom, const HgQuat& rotation) {
-    HgMat4 rot = hg_mat3to4(hg_rotate_mat3(hg_qconj(rotation), hg_smat3(1.0f)));
+    HgMat4 rot = hg_mat3to4(hg_rotate(hg_qconj(rotation), hg_smat3(1.0f)));
     HgMat4 pos = hg_smat4(1.0f);
     pos.x.x = zoom;
     pos.y.y = zoom;
@@ -174,7 +232,8 @@ void *HgArena::realloc_fn(void *allocation, usize old_size, usize new_size, usiz
     }
 
     void *new_allocation = alloc_fn(new_size, alignment);
-    std::memcpy(new_allocation, allocation, old_size);
+    if (new_allocation != nullptr)
+        std::memcpy(new_allocation, allocation, old_size);
     return new_allocation;
 }
 
@@ -182,6 +241,56 @@ void HgArena::free_fn(void *allocation, usize size, usize alignment) {
     (void)allocation;
     (void)size;
     (void)alignment;
+}
+
+hg_make_test(hg_arena) {
+    HgArena arena = arena.create(hg_persistent_allocator(), 1024);
+    hg_test_assert(arena.allocator != nullptr);
+    hg_test_assert(arena.memory != nullptr);
+    hg_test_assert(arena.memory.count == 1024);
+    hg_test_assert(arena.head == arena.memory.data);
+
+    u32 *alloc_u32 = arena.alloc<u32>();
+    hg_test_assert(alloc_u32 == arena.memory.data);
+
+    void *head = arena.head;
+    arena.free(alloc_u32);
+    hg_test_assert(alloc_u32 == arena.memory.data);
+    hg_test_assert(head == arena.head);
+
+    HgSpan<u64> alloc_u64 = arena.alloc<u64>(2);
+    hg_test_assert((u8 *)alloc_u64.data == (u8 *)alloc_u32 + 8);
+
+    u8 *alloc_u8 = arena.alloc<u8>();
+    hg_test_assert(alloc_u8 == (u8 *)alloc_u32 + 24);
+
+    struct Big {
+        u8 data[32];
+    };
+    Big *alloc_big = arena.alloc<Big>();
+    hg_test_assert((u8 *)alloc_big == (u8 *)alloc_u32 + 25);
+
+    HgSpan<Big> realloc_big = arena.realloc(HgSpan<Big>{alloc_big, 1}, 2);
+    hg_test_assert(realloc_big.data == alloc_big);
+
+    memset(realloc_big.data, 2, realloc_big.size());
+
+    HgSpan<Big> realloc_big2 = arena.realloc(realloc_big, 2);
+    hg_test_assert(realloc_big2.data == realloc_big.data);
+    hg_test_assert(memcmp(realloc_big.data, realloc_big2.data, realloc_big2.size()) == 0);
+
+    u8 *alloc_little = arena.alloc<u8>();
+    arena.free(alloc_little);
+
+    realloc_big2 = arena.realloc(realloc_big, 2);
+    hg_test_assert(realloc_big2.data != realloc_big.data);
+    hg_test_assert(memcmp(realloc_big.data, realloc_big2.data, realloc_big2.size()) == 0);
+
+    HgSpan<Big> big_alloc_big = arena.alloc<Big>(100);
+    hg_test_assert(big_alloc_big == nullptr);
+
+    arena.destroy();
+    return true;
 }
 
 HgStack HgStack::create(HgAllocator& allocator, usize capacity) {
