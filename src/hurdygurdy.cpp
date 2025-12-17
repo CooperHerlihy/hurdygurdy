@@ -38,7 +38,7 @@ bool hg_run_tests() {
     return all_succeeded;
 }
 
-hg_make_test(hg_test) {
+hg_test(hg_test) {
     return true;
 }
 
@@ -47,7 +47,7 @@ f64 HgClock::tick() {
     return std::chrono::duration<f64>{time - prev}.count();
 }
 
-hg_make_test(hg_matrix_mul) {
+hg_test(hg_matrix_mul) {
     HgMat2 mat = {
         {1.0f, 0.0f},
         {1.0f, 0.0f},
@@ -80,7 +80,7 @@ hg_make_test(hg_matrix_mul) {
     return true;
 }
 
-hg_make_test(hg_quat) {
+hg_test(hg_quat) {
     HgMat3 identity_mat = hg_smat3(1.0f);
     HgVec3 up_vec = {0.0f, -1.0f, 0.0f};
     HgQuat rotation = hg_axis_angle({0.0f, 0.0f, -1.0f}, -(f32)HgPi * 0.5f);
@@ -243,7 +243,7 @@ void HgArena::free_fn(void *allocation, usize size, usize alignment) {
     (void)alignment;
 }
 
-hg_make_test(hg_arena) {
+hg_test(hg_arena) {
     HgArena arena = arena.create(hg_persistent_allocator(), 1024);
     hg_test_assert(arena.allocator != nullptr);
     hg_test_assert(arena.memory != nullptr);

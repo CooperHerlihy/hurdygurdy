@@ -91,12 +91,12 @@ struct HgTest {
  * Automatically declares and registers a test function
  *
  * Example:
- * hg_make_test(hg_example_test) {
+ * hg_test(hg_example_test) {
  *     bool success = true;
  *     return success;
  * }
  */
-#define hg_make_test(name) \
+#define hg_test(name) \
     static bool hg_test_function_##name(); \
     static HgTest hg_test_struct_##name{#name, hg_test_function_##name}; \
     static bool hg_test_function_##name() 
@@ -149,6 +149,24 @@ void hg_exit();
 #define hg_debug_mode(code) code
 
 #endif // NDEBUG
+
+template<typename F>
+struct HgDeferInternal {
+    F fn;
+    HgDeferInternal(F defer_function) : fn(defer_function) {}
+    ~HgDeferInternal() { fn(); }
+};
+
+#define hg_concat_macros_internal(x, y) x##y
+#define hg_concat_macros(x, y) hg_concat_macros_internal(x, y)
+
+/**
+ * Defers a piece of code until the end of the scope
+ *
+ * Parameters
+ * - code The code to run, may be placed inside braces or not
+ */
+#define hg_defer(code) [[maybe_unused]] auto hg_concat_macros(hg_defer_, __COUNTER__) = HgDeferInternal{[&]{code;}}
 
 /**
  * Gets the number of elements in a stack allocated array
@@ -1839,7 +1857,7 @@ constexpr bool operator==(HgSpan<T> lhs, std::nullptr_t rhs) {
 
 template<typename T>
 constexpr bool operator==(std::nullptr_t lhs, HgSpan<T> rhs) {
-    return rhs.data == lhs;
+    return rhs.data == lhs && rhs.count == 0;
 }
 
 template<typename T>
