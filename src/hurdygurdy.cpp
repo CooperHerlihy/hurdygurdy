@@ -117,8 +117,8 @@ hg_test(hg_quat) {
 
 HgMat4 hg_model_matrix_2d(const HgVec3& position, const HgVec2& scale, f32 rotation) {
     HgMat2 m2{{scale.x, 0.0f}, {0.0f, scale.y}};
-    f32 rot_sin = std::sinf(rotation);
-    f32 rot_cos = std::cosf(rotation);
+    f32 rot_sin = std::sin(rotation);
+    f32 rot_cos = std::cos(rotation);
     HgMat2 rot{{rot_cos, rot_sin}, {-rot_sin, rot_cos}};
     HgMat4 m4 = hg_mat2to4(rot * m2);
     m4.w.x = position.x;
@@ -163,7 +163,7 @@ HgMat4 hg_projection_orthographic(f32 left, f32 right, f32 top, f32 bottom, f32 
 HgMat4 hg_projection_perspective(f32 fov, f32 aspect, f32 near, f32 far) {
     assert(near > 0.0f);
     assert(far > near);
-    f32 scale = 1.0f / std::tanf(fov * 0.5f);
+    f32 scale = 1.0f / std::tan(fov * 0.5f);
     return {
         {scale / aspect, 0.0f, 0.0f, 0.0f},
         {0.0f, scale, 0.0f, 0.0f},
@@ -378,7 +378,7 @@ hg_test(hg_stack) {
         HgSpan<u64> realloc_u64 = stack.realloc(alloc_u64, 3);
         hg_test_assert(realloc_u64.data = alloc_u64.data);
 
-        memset(realloc_u64.data, 2, realloc_u64.size());
+        std::fill_n(realloc_u64.data, realloc_u64.count, 2);
         (void)stack.alloc<u8>();
         HgSpan<u64> realloc_u64_2 = stack.realloc(realloc_u64, 3);
         hg_test_assert(realloc_u64_2.data != realloc_u64.data);
