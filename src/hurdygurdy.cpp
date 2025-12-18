@@ -172,35 +172,15 @@ HgMat4 hg_projection_perspective(f32 fov, f32 aspect, f32 near, f32 far) {
     };
 }
 
-static HgStdAllocator hg_internal_std_allocator;
-
-HgAllocator& hg_persistent_allocator(void) {
-    return hg_internal_std_allocator;
-}
-
-thread_local HgAllocator *hg_internal_temp_allocator;
-
-HgAllocator& hg_temp_allocator(void) {
-    return *hg_internal_temp_allocator;
-}
-
-void hg_temp_allocator_set(HgAllocator *allocator) {
-    hg_internal_temp_allocator = allocator;
-}
-
 void *HgStdAllocator::alloc_fn(usize size, usize alignment) {
     (void)alignment;
-    void *allocation = std::malloc(size);
-    assert(allocation != nullptr);
-    return allocation;
+    return std::malloc(size);
 }
 
 void *HgStdAllocator::realloc_fn(void *allocation, usize old_size, usize new_size, usize alignment) {
     (void)old_size;
     (void)alignment;
-    void *new_allocation = std::realloc(allocation, new_size);
-    assert(new_allocation != nullptr);
-    return new_allocation;
+    return std::realloc(allocation, new_size);
 }
 
 void HgStdAllocator::free_fn(void *allocation, usize size, usize alignment) {
@@ -209,16 +189,15 @@ void HgStdAllocator::free_fn(void *allocation, usize size, usize alignment) {
     std::free(allocation);
 }
 
-HgArena HgArena::create(HgAllocator& allocator, usize capacity) {
+HgArena HgArena::create(HgAllocator& parent, usize capacity) {
     HgArena arena;
-    arena.allocator = &allocator;
-    arena.memory = allocator.alloc(capacity, 16);
+    arena.memory = parent.alloc(capacity, 16);
     arena.head = arena.memory.data;
     return arena;
 }
 
-void HgArena::destroy() {
-    allocator->free(memory, 16);
+void HgArena::destroy(HgAllocator& parent) {
+    parent.free(memory, 16);
 }
 
 void HgArena::reset() {
@@ -258,11 +237,12 @@ void HgArena::free_fn(void *allocation, usize size, usize alignment) {
 }
 
 hg_test(hg_arena) {
-    HgArena arena = arena.create(hg_persistent_allocator(), 1024);
-    hg_defer(arena.destroy());
+    HgStdAllocator mem;
+
+    HgArena arena = arena.create(mem, 1024);
+    hg_defer(arena.destroy(mem));
 
     for (usize i = 0; i < 3; ++i) {
-        hg_test_assert(arena.allocator != nullptr);
         hg_test_assert(arena.memory != nullptr);
         hg_test_assert(arena.memory.count == 1024);
         hg_test_assert(arena.head == arena.memory.data);
@@ -312,16 +292,15 @@ hg_test(hg_arena) {
     return true;
 }
 
-HgStack HgStack::create(HgAllocator& allocator, usize capacity) {
+HgStack HgStack::create(HgAllocator& parent, usize capacity) {
     HgStack stack;
-    stack.allocator = &allocator;
-    stack.memory = allocator.alloc(capacity, 16);
+    stack.memory = parent.alloc(capacity, 16);
     stack.head = 0;
     return stack;
 }
 
-void HgStack::destroy() {
-    allocator->free(memory, 16);
+void HgStack::destroy(HgAllocator& parent) {
+    parent.free(memory, 16);
 }
 
 void HgStack::reset() {
@@ -373,11 +352,12 @@ void HgStack::free_fn(void *allocation, usize size, usize alignment) {
 }
 
 hg_test(hg_stack) {
-    HgStack stack = stack.create(hg_persistent_allocator(), 1024);
-    hg_defer(stack.destroy());
+    HgStdAllocator mem;
+
+    HgStack stack = stack.create(mem, 1024);
+    hg_defer(stack.destroy(mem));
 
     for (usize i = 0; i < 3; ++i) {
-        hg_test_assert(stack.allocator != nullptr);
         hg_test_assert(stack.memory != nullptr);
         hg_test_assert(stack.memory.count == 1024);
         hg_test_assert(stack.head == 0);
@@ -411,23 +391,22 @@ hg_test(hg_stack) {
 }
 
 hg_test(hg_array) {
-    HgAllocator& mem = hg_persistent_allocator();
+    HgStdAllocator mem;
 
     HgArray<u16> arr_u16 = arr_u16.create(mem, 0, 2);
-    hg_defer(arr_u16.destroy());
-    hg_test_assert(arr_u16.allocator != nullptr);
+    hg_defer(arr_u16.destroy(mem));
     hg_test_assert(arr_u16.items != nullptr);
     hg_test_assert(arr_u16.items.count == 2);
     hg_test_assert(arr_u16.count == 0);
 
-    arr_u16.push((u16)2);
+    arr_u16.push(mem, (u16)2);
     hg_test_assert(arr_u16[0] == 2);
     hg_test_assert(arr_u16.count == 1);
-    arr_u16.push((u16)4);
+    arr_u16.push(mem, (u16)4);
     hg_test_assert(arr_u16[1] == 4);
     hg_test_assert(arr_u16.count == 2);
     hg_test_assert(arr_u16.items.count == 2);
-    arr_u16.push((u16)8);
+    arr_u16.push(mem, (u16)8);
     hg_test_assert(arr_u16[2] == 8);
     hg_test_assert(arr_u16.count == 3);
     hg_test_assert(arr_u16.items.count == 4);
@@ -436,7 +415,7 @@ hg_test(hg_array) {
     hg_test_assert(arr_u16.count == 2);
     hg_test_assert(arr_u16.items.count == 4);
 
-    arr_u16.insert(0, (u16)1);
+    arr_u16.insert(mem, 0, (u16)1);
     hg_test_assert(arr_u16.count == 3);
     hg_test_assert(arr_u16.items.count == 4);
     hg_test_assert(arr_u16[0] == 1);
@@ -450,7 +429,7 @@ hg_test(hg_array) {
     hg_test_assert(arr_u16[1] == 4);
 
     for (usize i = 0; i < 100; ++i) {
-        arr_u16.push((u16)42);
+        arr_u16.push(mem, (u16)42);
     }
     hg_test_assert(arr_u16.count == 102);
     hg_test_assert(arr_u16.items.count == 128);
@@ -509,7 +488,7 @@ bool hg_file_save_binary(HgSpan<const void> data, const char *path) {
 }
 
 hg_test(hg_file_binary) {
-    HgAllocator& mem = hg_persistent_allocator();
+    HgStdAllocator mem;
 
     u32 save_data[] = {12, 42, 100, 128};
 
@@ -1046,7 +1025,7 @@ static const char *const hg_internal_vk_device_extensions[]{
 static VkPhysicalDevice hg_internal_find_single_queue_gpu(VkInstance instance, u32 *queue_family) {
     assert(instance != nullptr);
 
-    HgAllocator& allocator = hg_temp_allocator();
+    HgStdAllocator mem; // replace with temporary allocator : TODO
 
     u32 gpu_count;
     vkEnumeratePhysicalDevices(instance, &gpu_count, nullptr);
@@ -1054,7 +1033,7 @@ static VkPhysicalDevice hg_internal_find_single_queue_gpu(VkInstance instance, u
     vkEnumeratePhysicalDevices(instance, &gpu_count, gpus);
 
     HgSpan<VkExtensionProperties> ext_props{};
-    hg_defer(allocator.free(ext_props));
+    hg_defer(mem.free(ext_props));
 
     for (u32 i = 0; i < gpu_count; ++i) {
         VkPhysicalDevice gpu = gpus[i];
@@ -1063,7 +1042,7 @@ static VkPhysicalDevice hg_internal_find_single_queue_gpu(VkInstance instance, u
         u32 new_prop_count = 0;
         vkEnumerateDeviceExtensionProperties(gpu, nullptr, &new_prop_count, nullptr);
         if (new_prop_count > ext_props.count) {
-            ext_props = allocator.realloc(ext_props, new_prop_count);
+            ext_props = mem.realloc(ext_props, new_prop_count);
         }
         vkEnumerateDeviceExtensionProperties(gpu, nullptr, &new_prop_count, ext_props.data);
 
@@ -1446,13 +1425,15 @@ HgSwapchainCommands HgSwapchainCommands::create(VkDevice device, VkSwapchainKHR 
     assert(cmd_pool != nullptr);
     assert(swapchain != nullptr);
 
+    HgStdAllocator mem;
+
     HgSwapchainCommands sync;
     sync.cmd_pool = cmd_pool;
     sync.swapchain = swapchain;
 
     vkGetSwapchainImagesKHR(device, swapchain, &sync.frame_count, nullptr);
 
-    void *allocation = hg_persistent_allocator().alloc_fn(
+    void *allocation = mem.alloc_fn(
         sync.frame_count * sizeof(*sync.cmds) +
         sync.frame_count * sizeof(*sync.frame_finished) +
         sync.frame_count * sizeof(*sync.image_available) +
@@ -1497,6 +1478,8 @@ HgSwapchainCommands HgSwapchainCommands::create(VkDevice device, VkSwapchainKHR 
 void HgSwapchainCommands::destroy(VkDevice device) {
     assert(device != nullptr);
 
+    HgStdAllocator mem;
+
     vkFreeCommandBuffers(device, cmd_pool, frame_count, cmds);
     for (usize i = 0; i < frame_count; ++i) {
         vkDestroyFence(device, frame_finished[i], nullptr);
@@ -1507,7 +1490,8 @@ void HgSwapchainCommands::destroy(VkDevice device) {
     for (usize i = 0; i < frame_count; ++i) {
         vkDestroySemaphore(device, ready_to_present[i], nullptr);
     }
-    hg_persistent_allocator().free_fn(
+
+    mem.free_fn(
         cmds,
         frame_count * sizeof(*cmds) +
         frame_count * sizeof(*frame_finished) +
@@ -1952,7 +1936,7 @@ void hg_vk_image_staging_read(
 }
 
 HgECS HgECS::create(
-    HgAllocator& allocator,
+    HgAllocator& mem,
     u32 max_entities,
     u32 max_systems
 ) {
@@ -1961,9 +1945,8 @@ HgECS HgECS::create(
 
     max_entities += 1;
     HgECS ecs{};
-    ecs.allocator = &allocator;
-    ecs.entity_pool = allocator.alloc<HgEntityID>(max_entities);
-    ecs.systems = allocator.alloc<System>(max_systems);
+    ecs.entity_pool = mem.alloc<HgEntityID>(max_entities);
+    ecs.systems = mem.alloc<System>(max_systems);
 
     for (u32 i = 0; i < ecs.entity_pool.count; ++i) {
         ecs.entity_pool[i] = i + 1;
@@ -1974,16 +1957,16 @@ HgECS HgECS::create(
     return ecs;
 }
 
-void HgECS::destroy() {
+void HgECS::destroy(HgAllocator& mem) {
     for (u32 i = 0; i < system_count; ++i) {
         if (systems[i].system_data != nullptr)
-            allocator->free(systems[i].system_data, systems[i].system_data_alignment);
-        allocator->free(systems[i].entity_indices);
-        allocator->free(systems[i].component_entities);
-        allocator->free(systems[i].components, systems[i].component_alignment);
+            mem.free(systems[i].system_data, systems[i].system_data_alignment);
+        mem.free(systems[i].entity_indices);
+        mem.free(systems[i].component_entities);
+        mem.free(systems[i].components, systems[i].component_alignment);
     }
-    allocator->free(entity_pool);
-    allocator->free(systems);
+    mem.free(entity_pool);
+    mem.free(systems);
 }
 
 void HgECS::reset() {
@@ -2001,6 +1984,7 @@ void HgECS::reset() {
 }
 
 u32 HgECS::add_system_untyped(
+    HgAllocator& mem,
     usize data_size,
     usize data_alignment,
     u32 component_size,
@@ -2009,25 +1993,24 @@ u32 HgECS::add_system_untyped(
 ) {
     assert(system_count < systems.count);
 
-    u32 index = system_count;
-    HgECS::System *system = &systems[index];
+    HgECS::System *system = &systems[system_count];
     ++system_count;
 
-    system->system_data = allocator->alloc(data_size, data_alignment);
+    system->system_data = mem.alloc(data_size, data_alignment);
     system->system_data_alignment = data_alignment;
 
-    system->entity_indices = allocator->alloc<u32>(entity_pool.count);
-    system->component_entities = allocator->alloc<HgEntityID>(max_components);
-    system->components = allocator->alloc(max_components * component_size, component_alignment);
+    system->entity_indices = mem.alloc<u32>(entity_pool.count);
+    system->component_entities = mem.alloc<HgEntityID>(max_components);
+    system->components = mem.alloc(max_components * component_size, component_alignment);
 
     system->component_size = component_size;
     system->component_alignment = component_alignment;
     system->component_count = 1;
 
-    std::memset(system->entity_indices.data, 0, max_components);
-    std::memset(system->component_entities.data, 0, max_components);
+    std::memset(system->entity_indices.data, 0, system->entity_indices.size());
+    std::memset(system->component_entities.data, 0, system->component_entities.size());
 
-    return index;
+    return system_count - 1;
 }
 
 void *HgECS::get_system_untyped(u32 system) {
@@ -2755,13 +2738,15 @@ struct HgWindow::Internals {
 };
 
 HgWindow HgWindow::create(const HgWindow::Config& config) {
+    HgStdAllocator mem;
+
     u32 width = config.windowed ? config.width
         : (u32)DisplayWidth(hg_internal_x11_display, DefaultScreen(hg_internal_x11_display));
     u32 height = config.windowed ? config.height
         : (u32)DisplayHeight(hg_internal_x11_display, DefaultScreen(hg_internal_x11_display));
 
     HgWindow window;
-    window.internals = hg_persistent_allocator().alloc<HgWindow::Internals>();
+    window.internals = mem.alloc<HgWindow::Internals>();
     *window.internals = {};
 
     window.internals->input.width = width;
@@ -2784,8 +2769,10 @@ HgWindow HgWindow::create(const HgWindow::Config& config) {
 
 void HgWindow::destroy() {
     if (internals != nullptr) {
+        HgStdAllocator mem;
+
         XDestroyWindow(hg_internal_x11_display, internals->x11_window);
-        hg_persistent_allocator().free(internals);
+        mem.free(internals);
     }
     XFlush(hg_internal_x11_display);
 }
@@ -3641,10 +3628,12 @@ static LRESULT CALLBACK hg_internal_window_callback(HWND hwnd, UINT msg, WPARAM 
 }
 
 HgWindow HgWindow::create(const HgWindow::Config& config) {
+    HgStdAllocator mem;
+
     const char *title = config.title != nullptr ? config.title : "Hurdy Gurdy";
 
     HgWindow window;
-    window.internals = hg_persistent_allocator().alloc<HgWindow::Internals>();
+    window.internals = mem.alloc<HgWindow::Internals>();
     *window.internals = {};
 
     window.internals->input.width = config.width;
@@ -3702,7 +3691,9 @@ HgWindow HgWindow::create(const HgWindow::Config& config) {
 void HgWindow::destroy() {
     if (internals != nullptr) {
         DestroyWindow(internals->hwnd);
-        hg_persistent_allocator().free(internals);
+
+        HgStdAllocator mem;
+        mem.free(internals);
     }
 }
 
@@ -4544,8 +4535,6 @@ void vkCmdDispatch(VkCommandBuffer cmd, uint32_t x, uint32_t y, uint32_t z) {
 }
 
 void hg_init(void) {
-    hg_internal_temp_allocator = &hg_persistent_allocator();
-
     hg_vk_load();
     hg_internal_platform_init();
 }

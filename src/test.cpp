@@ -47,14 +47,14 @@ int main(void) {
     hg_init();
     hg_defer(hg_exit());
 
-    HgAllocator& mem = hg_persistent_allocator();
+    HgStdAllocator mem;
 
     {
         HgECS ecs = HgECS::create(mem, 1 << 16, 2);
-        hg_defer(ecs.destroy());
+        hg_defer(ecs.destroy(mem));
 
-        HgSystemID<void, u32> u32_system = ecs.add_system<void, u32>(1 << 16);
-        HgSystemID<u8, u64> u64_system = ecs.add_system<u8, u64>(1 << 16);
+        HgSystemID<void, u32> u32_system = ecs.add_system<void, u32>(mem, 1 << 16);
+        HgSystemID<u8, u64> u64_system = ecs.add_system<u8, u64>(mem, 1 << 16);
         ecs.get_system(u64_system) = 5;
 
         HgEntityID e1 = ecs.create_entity();

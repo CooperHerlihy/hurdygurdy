@@ -108,7 +108,6 @@ struct HgTest {
     } \
 }
 
-
 /**
  * Runs all tests registered globally
  *
@@ -2019,36 +2018,6 @@ struct HgAllocator {
 };
 
 /**
- * Get the global allocator for malloc/free
- *
- * Returns
- * - The global allocator
- */
-HgAllocator& hg_persistent_allocator();
-
-/**
- * Gets the current temporary allocator on this thread
- *
- * Returns
- * - This thread's temporary allocator
- */
-HgAllocator& hg_temp_allocator();
-
-/**
- * Sets the current temporary allocator on this thread
- *
- * Note, if this function is never called, the default temp allocator is the
- * global allocator
- *
- * Note, the temp allocator will remain stable between library calls, i.e. even
- * if it is changed within a function it will be changed by before returning
- *
- * Parameters
- * - The allocator to set for this thread
- */
-void hg_temp_allocator_set(HgAllocator *allocator);
-
-/**
  * C malloc, realloc, and free in the HgAllocator interface
  */
 struct HgStdAllocator : public HgAllocator {
@@ -2095,10 +2064,6 @@ struct HgStdAllocator : public HgAllocator {
  */
 struct HgArena : public HgAllocator {
     /**
-     * The allocator used to create the arena
-     */
-    HgAllocator *allocator;
-    /**
      * A pointer to the memory being allocated
      */
     HgSpan<void> memory;
@@ -2116,12 +2081,12 @@ struct HgArena : public HgAllocator {
      * Returns
      * - The allocated arena
      */
-    static HgArena create(HgAllocator& allocator, usize capacity);
+    static HgArena create(HgAllocator& parent, usize capacity);
 
     /**
      * Frees an arena's memory
      */
-    void destroy();
+    void destroy(HgAllocator& parent);
 
     /**
      * Frees all allocations from an arena
@@ -2176,10 +2141,6 @@ struct HgArena : public HgAllocator {
  * Allocations are made very quickly, but must be freed in reverse order
  */
 struct HgStack : public HgAllocator {
-    /**
-     * The allocator used to create the stack
-     */
-    HgAllocator *allocator;
     /*
      * A pointer to the memory being allocated
      */
@@ -2198,12 +2159,12 @@ struct HgStack : public HgAllocator {
      * Returns
      * - The allocated stack
      */
-    static HgStack create(HgAllocator& allocator, usize capacity);
+    static HgStack create(HgAllocator& parent, usize capacity);
 
     /**
      * Frees a stack's memory
      */
-    void destroy();
+    void destroy(HgAllocator& parent);
 
     /**
      * Frees all allocations from an stack
@@ -2259,10 +2220,6 @@ struct HgArray {
     static_assert(std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T>);
 
     /**
-     * The allocator used to create, destroy, and resize the array
-     */
-    HgAllocator *allocator;
-    /**
      * The allocated space for the array
      */
     HgSpan<T> items;
@@ -2296,13 +2253,12 @@ struct HgArray {
      * Returns
      * - The allocated array
      */
-    static HgArray<T> create(HgAllocator& allocator, usize count, usize capacity) {
+    static HgArray<T> create(HgAllocator& mem, usize count, usize capacity) {
         assert(capacity > 0);
         assert(count <= capacity);
 
         HgArray arr{};
-        arr.allocator = &allocator;
-        arr.items = allocator.alloc<T>(capacity);
+        arr.items = mem.alloc<T>(capacity);
         arr.count = count;
         std::memset(arr.items.data, 0, count * sizeof(T));
         return arr;
@@ -2311,8 +2267,8 @@ struct HgArray {
     /**
      * Free the dynamic array
      */
-    void destroy() {
-        allocator->free(items);
+    void destroy(HgAllocator& mem) {
+        mem.free(items);
     }
 
     /**
@@ -2322,10 +2278,10 @@ struct HgArray {
      * - args The arguments to use to construct the new item
      */
     template<typename... U>
-    void push(U&&... args) {
+    void push(HgAllocator& mem, U&&... args) {
         if (count >= items.count) {
             assert(items.count > 0);
-            items = allocator->realloc(items, items.count * 2);
+            items = mem.realloc(items, items.count * 2);
         }
         new (&items[count]) T{std::forward<U>(args)...};
         ++count;
@@ -2347,11 +2303,11 @@ struct HgArray {
      * - args The arguments to use to construct the new item
      */
     template<typename... U>
-    void insert(usize index, U&&... args) {
+    void insert(HgAllocator& mem, usize index, U&&... args) {
         assert(index <= count);
         if (count >= items.count) {
             assert(items.count > 0);
-            items = allocator->realloc(items, items.count * 2);
+            items = mem.realloc(items, items.count * 2);
         }
         std::move(items.data + index, items.data + count, items.data + index + 1);
         ++count;
@@ -3290,7 +3246,8 @@ using HgEntityID = u64;
 template<typename SystemType, typename ComponentType>
 struct HgSystemID {
     static_assert(std::is_trivially_copyable_v<ComponentType> && std::is_standard_layout_v<ComponentType>);
-    static_assert((std::is_trivially_copyable_v<SystemType> && std::is_standard_layout_v<SystemType>) || std::is_void_v<SystemType>);
+    static_assert(( std::is_trivially_copyable_v<SystemType> && std::is_standard_layout_v<SystemType>)
+                 || std::is_void_v<SystemType>);
 
     u32 index;
 
@@ -3343,10 +3300,6 @@ struct HgECS {
     };
 
     /**
-     * The allocator used by the ECS
-     */
-    HgAllocator *allocator;
-    /**
      * The pool of entity ids
      */
     HgSpan<HgEntityID> entity_pool;
@@ -3373,12 +3326,12 @@ struct HgECS {
      * Returns
      * - The created entity component system
      */
-    static HgECS create(HgAllocator& allocator, u32 max_entities, u32 max_systems);
+    static HgECS create(HgAllocator& mem, u32 max_entities, u32 max_systems);
 
     /**
      * Destroys an entity component system
      */
-    void destroy();
+    void destroy(HgAllocator& mem);
 
     /**
      * Resets an entity component system, removing all entities and components
@@ -3398,6 +3351,7 @@ struct HgECS {
      * - The index of the new system
      */
     u32 add_system_untyped(
+        HgAllocator& mem,
         usize data_size,
         usize data_alignment,
         u32 component_size,
@@ -3413,15 +3367,18 @@ struct HgECS {
      * - The index of the new system with type info
      */
     template<typename SystemType, typename ComponentType>
-    HgSystemID<SystemType, ComponentType> add_system(u32 max_components) {
+    HgSystemID<SystemType, ComponentType> add_system(HgAllocator& mem, u32 max_components) {
         if constexpr (std::is_void_v<SystemType>) {
             return {add_system_untyped(
-                0, 0,
+                mem,
+                0,
+                0,
                 sizeof(ComponentType),
                 alignof(ComponentType),
                 max_components)};
         } else {
             return {add_system_untyped(
+                mem,
                 sizeof(SystemType),
                 alignof(SystemType),
                 sizeof(ComponentType),
