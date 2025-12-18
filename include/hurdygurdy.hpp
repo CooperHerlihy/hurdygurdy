@@ -1034,7 +1034,7 @@ constexpr float hg_dot(const HgVec4& lhs, const HgVec4& rhs) {
  * - dst The destination vector, must not be nullptr
  * - vec The vector to compute the length of, must not be nullptr
  */
-constexpr void hg_len(u32 size, f32 *dst, const f32 *vec) {
+inline void hg_len(u32 size, f32 *dst, const f32 *vec) {
     assert(dst != nullptr);
     assert(vec != nullptr);
     hg_dot(size, dst, vec, vec);
@@ -1049,7 +1049,7 @@ constexpr void hg_len(u32 size, f32 *dst, const f32 *vec) {
  * Returns
  * - The length of the vector
  */
-constexpr float hg_len(const HgVec2& vec) {
+inline float hg_len(const HgVec2& vec) {
     return sqrtf(hg_dot(vec, vec));
 }
 
@@ -1061,7 +1061,7 @@ constexpr float hg_len(const HgVec2& vec) {
  * Returns
  * - The length of the vector
  */
-constexpr float hg_len(const HgVec3& vec) {
+inline float hg_len(const HgVec3& vec) {
     return sqrtf(hg_dot(vec, vec));
 }
 
@@ -1073,7 +1073,7 @@ constexpr float hg_len(const HgVec3& vec) {
  * Returns
  * - The length of the vector
  */
-constexpr float hg_len(const HgVec4& vec) {
+inline float hg_len(const HgVec4& vec) {
     return sqrtf(hg_dot(vec, vec));
 }
 
@@ -1085,7 +1085,7 @@ constexpr float hg_len(const HgVec4& vec) {
  * - dst The destination vector, must not be nullptr
  * - vec The vector to normalize, must not be nullptr
  */
-constexpr void hg_norm(u32 size, f32 *dst, const f32 *vec) {
+inline void hg_norm(u32 size, f32 *dst, const f32 *vec) {
     assert(dst != nullptr);
     assert(vec != nullptr);
     f32 len = 0.0f;
@@ -1103,7 +1103,7 @@ constexpr void hg_norm(u32 size, f32 *dst, const f32 *vec) {
  * Returns
  * - The normalized vector
  */
-constexpr HgVec2 hg_norm(const HgVec2& vec) {
+inline HgVec2 hg_norm(const HgVec2& vec) {
     f32 len = hg_len(vec);
     return {vec.x / len, vec.y / len};
 }
@@ -1116,7 +1116,7 @@ constexpr HgVec2 hg_norm(const HgVec2& vec) {
  * Returns
  * - The normalized vector
  */
-constexpr HgVec3 hg_norm(const HgVec3& vec) {
+inline HgVec3 hg_norm(const HgVec3& vec) {
     f32 len = hg_len(vec);
     return {vec.x / len, vec.y / len, vec.z / len};
 }
@@ -1129,7 +1129,7 @@ constexpr HgVec3 hg_norm(const HgVec3& vec) {
  * Returns
  * - The normalized vector
  */
-constexpr HgVec4 hg_norm(const HgVec4& vec) {
+inline HgVec4 hg_norm(const HgVec4& vec) {
     f32 len = hg_len(vec);
     return {vec.x / len, vec.y / len, vec.z / len, vec.w / len};
 }
@@ -1612,7 +1612,7 @@ constexpr HgQuat hg_qconj(const HgQuat& quat) {
  * Returns
  * - The created quaternion
  */
-constexpr HgQuat hg_axis_angle(const HgVec3& axis, f32 angle) {
+inline HgQuat hg_axis_angle(const HgVec3& axis, f32 angle) {
     f32 half_angle = angle / 2.0f;
     f32 sin_half_angle = sinf(half_angle);
     return {
@@ -1734,7 +1734,7 @@ HgMat4 hg_projection_perspective(f32 fov, f32 aspect, f32 near, f32 far);
  * Returns
  * - The maximum number of mipmap levels the image can have
  */
-constexpr u32 hg_max_mipmaps(u32 width, u32 height, u32 depth) {
+inline u32 hg_max_mipmaps(u32 width, u32 height, u32 depth) {
     return (u32)std::log2f((f32)std::max({width, height, depth})) + 1;
 }
 
