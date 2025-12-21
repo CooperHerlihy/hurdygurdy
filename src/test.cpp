@@ -9,15 +9,15 @@ struct HgTransform {
     /**
      * The 3D position
      */
-    HgVec3 pos;
+    HgVec3f pos;
     /**
      * The 3D scale
      */
-    HgVec3 scale;
+    HgVec3f scale;
     /**
      * The 3D rotation
      */
-    HgQuat rotation;
+    HgQuatf rotation;
 };
 
 struct HgSpriteSystem {
@@ -35,8 +35,8 @@ struct HgSpriteSystem {
 
 struct HgSprite {
     u32 texture;
-    HgVec2 uv_begin;
-    HgVec2 uv_end;
+    HgVec2f uv_begin;
+    HgVec2f uv_end;
 };
 
 int main(void) {
@@ -335,7 +335,7 @@ int main(void) {
             hg_pipeline_sprite_bind(&sprite_pipeline, cmd);
 
             HgPipelineSpritePush push{};
-            push.model = hg_model_matrix_2d(position, hg_svec2(0.5f), 0.0f);
+            push.model = hg_model_matrix_2d(position, 0.5f, 0.0f);
             push.uv_pos = {0.0f, 0.0f};
             push.uv_size = {1.0f, 1.0f};
 

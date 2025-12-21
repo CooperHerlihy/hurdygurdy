@@ -62,26 +62,26 @@ f64 HgClock::tick() {
 }
 
 hg_test(hg_matrix_mul) {
-    HgMat2 mat = {
+    HgMat2f mat{
         {1.0f, 0.0f},
         {1.0f, 0.0f},
     };
-    HgVec2 vec = {1.0f, 1.0f};
+    HgVec2f vec{1.0f, 1.0f};
 
-    HgMat2 identity = {
+    HgMat2f identity{
         {1.0f, 0.0f},
         {0.0f, 1.0f},
     };
     hg_test_assert(identity * mat == mat);
     hg_test_assert(identity * vec == vec);
 
-    HgMat2 mat_rotated = {
+    HgMat2f mat_rotated{
         {0.0f, 1.0f},
         {0.0f, 1.0f},
     };
-    HgVec2 vec_rotated = {-1.0f, 1.0f};
+    HgVec2f vec_rotated{-1.0f, 1.0f};
 
-    HgMat2 rotation = {
+    HgMat2f rotation{
         {0.0f, 1.0f},
         {-1.0f, 0.0f},
     };
@@ -95,14 +95,14 @@ hg_test(hg_matrix_mul) {
 }
 
 hg_test(hg_quat) {
-    HgMat3 identity_mat = hg_smat3(1.0f);
-    HgVec3 up_vec = {0.0f, -1.0f, 0.0f};
-    HgQuat rotation = hg_axis_angle({0.0f, 0.0f, -1.0f}, -(f32)HgPi * 0.5f);
+    HgMat3f identity_mat = 1.0f;
+    HgVec3f up_vec{0.0f, -1.0f, 0.0f};
+    HgQuatf rotation = hg_axis_angle<f32>({0.0f, 0.0f, -1.0f}, -(f32)HgPi * 0.5f);
 
-    HgVec3 rotated_vec = hg_rotate(rotation, up_vec);
-    HgMat3 rotated_mat = hg_rotate(rotation, identity_mat);
+    HgVec3f rotated_vec = hg_rotate(rotation, up_vec);
+    HgMat3f rotated_mat = hg_rotate(rotation, identity_mat);
 
-    HgVec3 mat_rotated_vec = rotated_mat * up_vec;
+    HgVec3f mat_rotated_vec = rotated_mat * up_vec;
 
     hg_test_assert(std::abs(rotated_vec.x - 1.0f) < FLT_EPSILON
                 && std::abs(rotated_vec.y - 0.0f) < FLT_EPSILON
@@ -115,34 +115,34 @@ hg_test(hg_quat) {
     return true;
 }
 
-HgMat4 hg_model_matrix_2d(const HgVec3& position, const HgVec2& scale, f32 rotation) {
-    HgMat2 m2{{scale.x, 0.0f}, {0.0f, scale.y}};
+HgMat4f hg_model_matrix_2d(const HgVec3f& position, const HgVec2f& scale, f32 rotation) {
+    HgMat2f m2{{scale.x, 0.0f}, {0.0f, scale.y}};
     f32 rot_sin = std::sin(rotation);
     f32 rot_cos = std::cos(rotation);
-    HgMat2 rot{{rot_cos, rot_sin}, {-rot_sin, rot_cos}};
-    HgMat4 m4 = hg_mat2to4(rot * m2);
+    HgMat2f rot{{rot_cos, rot_sin}, {-rot_sin, rot_cos}};
+    HgMat4 m4 = rot * m2;
     m4.w.x = position.x;
     m4.w.y = position.y;
     m4.w.z = position.z;
     return m4;
 }
 
-HgMat4 hg_model_matrix_3d(const HgVec3& position, const HgVec3& scale, const HgQuat& rotation) {
-    HgMat3 m3{};
+HgMat4f hg_model_matrix_3d(const HgVec3f& position, const HgVec3f& scale, const HgQuatf& rotation) {
+    HgMat3f m3{};
     m3.x.x = scale.x;
     m3.y.y = scale.y;
     m3.z.z = scale.z;
     m3 = hg_rotate(rotation, m3);
-    HgMat4 m4 = hg_mat3to4(m3);
+    HgMat4f m4{m3};
     m4.w.x = position.x;
     m4.w.y = position.y;
     m4.w.z = position.z;
     return m4;
 }
 
-HgMat4 hg_view_matrix(const HgVec3& position, f32 zoom, const HgQuat& rotation) {
-    HgMat4 rot = hg_mat3to4(hg_rotate(hg_qconj(rotation), hg_smat3(1.0f)));
-    HgMat4 pos = hg_smat4(1.0f);
+HgMat4f hg_view_matrix(const HgVec3f& position, f32 zoom, const HgQuatf& rotation) {
+    HgMat4f rot{hg_rotate(hg_qconj(rotation), HgMat3f{1.0f})};
+    HgMat4f pos{1.0f};
     pos.x.x = zoom;
     pos.y.y = zoom;
     pos.w.x = -position.x;
@@ -151,7 +151,7 @@ HgMat4 hg_view_matrix(const HgVec3& position, f32 zoom, const HgQuat& rotation) 
     return rot * pos;
 }
 
-HgMat4 hg_projection_orthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far) {
+HgMat4f hg_projection_orthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far) {
     return {
         {2.0f / (right - left), 0.0f, 0.0f, 0.0f},
         {0.0f, 2.0f / (bottom - top), 0.0f, 0.0f},
@@ -160,7 +160,7 @@ HgMat4 hg_projection_orthographic(f32 left, f32 right, f32 top, f32 bottom, f32 
     };
 }
 
-HgMat4 hg_projection_perspective(f32 fov, f32 aspect, f32 near, f32 far) {
+HgMat4f hg_projection_perspective(f32 fov, f32 aspect, f32 near, f32 far) {
     assert(near > 0.0f);
     assert(far > near);
     f32 scale = 1.0f / std::tan(fov * 0.5f);
@@ -2152,8 +2152,8 @@ HgEntityID HgECS::get_entity(void *component, u32 system) {
 #include "sprite.vert.spv.h"
 
 typedef struct HgPipelineSpriteVPUniform {
-    HgMat4 proj;
-    HgMat4 view;
+    HgMat4f proj;
+    HgMat4f view;
 } HgPipelineSpriteVPUniform;
 
 HgPipelineSprite hg_pipeline_sprite_create(
@@ -2290,8 +2290,8 @@ HgPipelineSprite hg_pipeline_sprite_create(
         nullptr);
 
     HgPipelineSpriteVPUniform vp_data{};
-    vp_data.proj = hg_smat4(1.0f);
-    vp_data.view = hg_smat4(1.0f);
+    vp_data.proj = 1.0f;
+    vp_data.view = 1.0f;
 
     vmaCopyMemoryToAllocation(allocator, &vp_data, pipeline.vp_buffer_allocation, 0, sizeof(vp_data));
 
@@ -2326,7 +2326,7 @@ void hg_pipeline_sprite_destroy(HgPipelineSprite *pipeline) {
     vkDestroyDescriptorSetLayout(pipeline->device, pipeline->vp_layout, nullptr);
 }
 
-void hg_pipeline_sprite_update_projection(HgPipelineSprite *pipeline, HgMat4 *projection) {
+void hg_pipeline_sprite_update_projection(HgPipelineSprite *pipeline, HgMat4f *projection) {
     assert(pipeline != nullptr);
     assert(projection != nullptr);
 
@@ -2338,7 +2338,7 @@ void hg_pipeline_sprite_update_projection(HgPipelineSprite *pipeline, HgMat4 *pr
         sizeof(*projection));
 }
 
-void hg_pipeline_sprite_update_view(HgPipelineSprite *pipeline, HgMat4 *view) {
+void hg_pipeline_sprite_update_view(HgPipelineSprite *pipeline, HgMat4f *view) {
     assert(pipeline != nullptr);
     assert(view != nullptr);
 

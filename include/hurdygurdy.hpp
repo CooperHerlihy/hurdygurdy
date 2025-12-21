@@ -149,15 +149,15 @@ void hg_exit();
 
 #endif // NDEBUG
 
+#define hg_concat_macros_internal(x, y) x##y
+#define hg_concat_macros(x, y) hg_concat_macros_internal(x, y)
+
 template<typename F>
 struct HgDeferInternal {
     F fn;
     HgDeferInternal(F defer_function) : fn(defer_function) {}
     ~HgDeferInternal() { fn(); }
 };
-
-#define hg_concat_macros_internal(x, y) x##y
-#define hg_concat_macros(x, y) hg_concat_macros_internal(x, y)
 
 /**
  * Defers a piece of code until the end of the scope
@@ -216,7 +216,7 @@ struct HgClock {
     std::chrono::time_point<std::chrono::high_resolution_clock> time;
 
     /**
-     * Resets the clock and gets the delta since the last tick in seconds
+     * Resets the clock and returns the delta since the last tick in seconds
      *
      * Parameters
      * - clock The clock to tick, must not be nullptr
@@ -249,105 +249,317 @@ static constexpr f64 HgRoot3 = 1.7320508075688772;
 /**
  * A 2D vector
  */
+template<typename T>
 struct HgVec2 {
-    f32 x, y;
+    T x, y;
+
+    HgVec2() {}
+    constexpr HgVec2(T scalar) : x{scalar}, y{scalar} {}
+    constexpr HgVec2(T x_val, T y_val) : x{x_val}, y{y_val} {}
+    constexpr HgVec2(const HgVec2& other) : x{other.x}, y{other.y} {}
+
+    constexpr HgVec2& operator=(const HgVec2& other) {
+        x = other.x;
+        y = other.y;
+        return *this;
+    }
+
+    constexpr T& operator[](usize index) {
+        return *(&x + index);
+    }
+
+    constexpr const T& operator[](usize index) const {
+        return *(&x + index);
+    }
 };
 
-constexpr bool operator==(const HgVec2& lhs, const HgVec2& rhs) {
+using HgVec2f = HgVec2<f32>;
+using HgVec2d = HgVec2<f64>;
+using HgVec2i = HgVec2<i32>;
+using HgVec2u = HgVec2<u32>;
+
+template<typename T>
+constexpr bool operator==(const HgVec2<T>& lhs, const HgVec2<T>& rhs) {
     return lhs.x == rhs.x && lhs.y == rhs.y;
 }
 
-constexpr bool operator!=(const HgVec2& lhs, const HgVec2& rhs) {
+template<typename T>
+constexpr bool operator!=(const HgVec2<T>& lhs, const HgVec2<T>& rhs) {
     return lhs.x != rhs.x || lhs.y != rhs.y;
 }
 
 /**
  * A 3D vector
  */
+template<typename T>
 struct HgVec3 {
-    f32 x, y, z;
+    T x, y, z;
+ 
+    HgVec3() {}
+    constexpr HgVec3(T scalar) : x{scalar}, y{scalar}, z{scalar} {}
+    constexpr HgVec3(T x_val, T y_val) : x{x_val}, y{y_val}, z{0} {}
+    constexpr HgVec3(T x_val, T y_val, T z_val) : x{x_val}, y{y_val}, z{z_val} {}
+    constexpr HgVec3(const HgVec2<T>& other) : x{other.x}, y{other.y}, z{0} {}
+    constexpr HgVec3(const HgVec3<T>& other) : x{other.x}, y{other.y}, z{other.z} {}
+
+    constexpr HgVec3& operator=(const HgVec3& other) {
+        x = other.x;
+        y = other.y;
+        z = other.z;
+        return *this;
+    }
+
+    constexpr T& operator[](usize index) {
+        return *(&x + index);
+    }
+
+    constexpr const T& operator[](usize index) const {
+        return *(&x + index);
+    }
 };
 
-constexpr bool operator==(const HgVec3& lhs, const HgVec3& rhs) {
+using HgVec3f = HgVec3<f32>;
+using HgVec3d = HgVec3<f64>;
+using HgVec3i = HgVec3<i32>;
+using HgVec3u = HgVec3<u32>;
+
+template<typename T>
+constexpr bool operator==(const HgVec3<T>& lhs, const HgVec3<T>& rhs) {
     return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
 }
 
-constexpr bool operator!=(const HgVec3& lhs, const HgVec3& rhs) {
+template<typename T>
+constexpr bool operator!=(const HgVec3<T>& lhs, const HgVec3<T>& rhs) {
     return lhs.x != rhs.x || lhs.y != rhs.y || lhs.z != rhs.z;
 }
 
 /**
  * A 4D vector
  */
+template<typename T>
 struct HgVec4 {
-    f32 x, y, z, w;
+    T x, y, z, w;
+ 
+    HgVec4() {}
+    constexpr HgVec4(T scalar) : x{scalar}, y{scalar}, z{scalar}, w{scalar} {}
+    constexpr HgVec4(T x_val, T y_val) : x{x_val}, y{y_val}, z{0}, w{0} {}
+    constexpr HgVec4(T x_val, T y_val, T z_val) : x{x_val}, y{y_val}, z{z_val}, w{0} {}
+    constexpr HgVec4(T x_val, T y_val, T z_val, T w_val) : x{x_val}, y{y_val}, z{z_val}, w{w_val} {}
+    constexpr HgVec4(const HgVec2<T>& other) : x{other.x}, y{other.y}, z{0}, w{0} {}
+    constexpr HgVec4(const HgVec3<T>& other) : x{other.x}, y{other.y}, z{other.z}, w{0} {}
+    constexpr HgVec4(const HgVec4& other) : x{other.x}, y{other.y}, z{other.z}, w{other.w} {}
+
+    constexpr HgVec4& operator=(const HgVec4& other) {
+        x = other.x;
+        y = other.y;
+        z = other.z;
+        w = other.w;
+        return *this;
+    }
+
+    constexpr T& operator[](usize index) {
+        return *(&x + index);
+    }
+
+    constexpr const T& operator[](usize index) const {
+        return *(&x + index);
+    }
 };
 
-constexpr bool operator==(const HgVec4& lhs, const HgVec4& rhs) {
+using HgVec4f = HgVec4<f32>;
+using HgVec4d = HgVec4<f64>;
+using HgVec4i = HgVec4<i32>;
+using HgVec4u = HgVec4<u32>;
+
+template<typename T>
+constexpr bool operator==(const HgVec4<T>& lhs, const HgVec4<T>& rhs) {
     return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
 }
 
-constexpr bool operator!=(const HgVec4& lhs, const HgVec4& rhs) {
+template<typename T>
+constexpr bool operator!=(const HgVec4<T>& lhs, const HgVec4<T>& rhs) {
     return lhs.x != rhs.x || lhs.y != rhs.y || lhs.z != rhs.z || lhs.w != rhs.w;
 }
 
 /**
  * A 2x2 matrix
  */
+template<typename T>
 struct HgMat2 {
-    HgVec2 x, y;
+    HgVec2<T> x, y;
+
+    HgMat2() {}
+    constexpr HgMat2(T scalar) : x{scalar, 0}, y{0, scalar} {}
+    constexpr HgMat2(T xx, T xy, T yx, T yy) : x{xx, xy}, y{yx, yy} {}
+    constexpr HgMat2(const HgVec2<T>& x_val, const HgVec2<T>& y_val) : x{x_val}, y{y_val} {}
+    constexpr HgMat2(const HgMat2& other) : x{other.x}, y{other.y} {}
+
+    constexpr HgMat2& operator=(const HgMat2& other) {
+        x = other.x;
+        y = other.y;
+        return *this;
+    }
+
+    constexpr HgVec2<T>& operator[](usize index) {
+        return *(&x + index);
+    }
+
+    constexpr const T& operator[](usize index) const {
+        return *(&x + index);
+    }
 };
 
-constexpr bool operator==(const HgMat2& lhs, const HgMat2& rhs) {
+using HgMat2f = HgMat2<f32>;
+using HgMat2d = HgMat2<f64>;
+using HgMat2i = HgMat2<i32>;
+using HgMat2u = HgMat2<u32>;
+
+template<typename T>
+constexpr bool operator==(const HgMat2<T>& lhs, const HgMat2<T>& rhs) {
     return lhs.x == rhs.x && lhs.y == rhs.y;
 }
 
-constexpr bool operator!=(const HgMat2& lhs, const HgMat2& rhs) {
+template<typename T>
+constexpr bool operator!=(const HgMat2<T>& lhs, const HgMat2<T>& rhs) {
     return lhs.x != rhs.x || lhs.y != rhs.y;
 }
 
 /**
  * A 3x3 matrix
  */
+template<typename T>
 struct HgMat3 {
-    HgVec3 x, y, z;
+    HgVec3<T> x, y, z;
+
+    HgMat3() {}
+    constexpr HgMat3(T scalar)
+        : x{scalar, 0, 0}, y{0, scalar, 0}, z{0, 0, scalar} {}
+    constexpr HgMat3(const HgVec2<T>& x_val, const HgVec2<T>& y_val)
+        : x{x_val}, y{y_val}, z{0, 0, 1} {}
+    constexpr HgMat3(const HgVec3<T>& x_val, const HgVec3<T>& y_val, const HgVec3<T>& z_val)
+        : x{x_val}, y{y_val}, z{z_val} {}
+    constexpr HgMat3(const HgMat2<T>& other)
+        : x{other.x}, y{other.y}, z{0, 0, 1} {}
+    constexpr HgMat3(const HgMat3& other)
+        : x{other.x}, y{other.y}, z{other.z} {}
+
+    constexpr HgMat3& operator=(const HgMat3& other) {
+        x = other.x;
+        y = other.y;
+        z = other.z;
+        return *this;
+    }
+
+    constexpr HgVec3<T>& operator[](usize index) {
+        return *(&x + index);
+    }
+
+    constexpr const T& operator[](usize index) const {
+        return *(&x + index);
+    }
 };
 
-constexpr bool operator==(const HgMat3& lhs, const HgMat3& rhs) {
+using HgMat3f = HgMat3<f32>;
+using HgMat3d = HgMat3<f64>;
+using HgMat3i = HgMat3<i32>;
+using HgMat3u = HgMat3<u32>;
+
+template<typename T>
+constexpr bool operator==(const HgMat3<T>& lhs, const HgMat3<T>& rhs) {
     return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
 }
 
-constexpr bool operator!=(const HgMat3& lhs, const HgMat3& rhs) {
+template<typename T>
+constexpr bool operator!=(const HgMat3<T>& lhs, const HgMat3<T>& rhs) {
     return lhs.x != rhs.x || lhs.y != rhs.y || lhs.z != rhs.z;
 }
 
 /**
  * A 4x4 matrix
  */
+template<typename T>
 struct HgMat4 {
-    HgVec4 x, y, z, w;
+    HgVec4<T> x, y, z, w;
+
+    HgMat4() {}
+    constexpr HgMat4(T scalar)
+        : x{scalar, 0, 0, 0}, y{0, scalar, 0, 0}, z{0, 0, scalar, 0}, w{0, 0, 0, scalar} {}
+    constexpr HgMat4(const HgVec2<T>& x_val, const HgVec2<T>& y_val)
+        : x{x_val}, y{y_val}, z{0, 0, 1, 0}, w{0, 0, 0, 1} {}
+    constexpr HgMat4(const HgVec3<T>& x_val, const HgVec3<T>& y_val, const HgVec3<T>& z_val)
+        : x{x_val}, y{y_val}, z{z_val}, w{0, 0, 0, 1} {}
+    constexpr HgMat4(const HgVec4<T>& x_val, const HgVec4<T>& y_val, const HgVec4<T>& z_val, const HgVec4<T>& w_val)
+        : x{x_val}, y{y_val}, z{z_val}, w{w_val} {}
+    constexpr HgMat4(const HgMat2<T>& other)
+        : x{other.x}, y{other.y}, z{0, 0, 1, 0}, w{0, 0, 0, 1} {}
+    constexpr HgMat4(const HgMat3<T>& other)
+        : x{other.x}, y{other.y}, z{other.z}, w{0, 0, 0, 1} {}
+    constexpr HgMat4(const HgMat4& other)
+        : x{other.x}, y{other.y}, z{other.z}, w{other.w} {}
+
+    constexpr HgMat4& operator=(const HgMat4& other) {
+        x = other.x;
+        y = other.y;
+        z = other.z;
+        w = other.w;
+        return *this;
+    }
+
+    constexpr HgVec4<T>& operator[](usize index) {
+        return *(&x + index);
+    }
 };
 
-constexpr bool operator==(const HgMat4& lhs, const HgMat4& rhs) {
+using HgMat4f = HgMat4<f32>;
+using HgMat4d = HgMat4<f64>;
+using HgMat4i = HgMat4<i32>;
+using HgMat4u = HgMat4<u32>;
+
+template<typename T>
+constexpr bool operator==(const HgMat4<T>& lhs, const HgMat4<T>& rhs) {
     return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
 }
 
-constexpr bool operator!=(const HgMat4& lhs, const HgMat4& rhs) {
+template<typename T>
+constexpr bool operator!=(const HgMat4<T>& lhs, const HgMat4<T>& rhs) {
     return lhs.x != rhs.x || lhs.y != rhs.y || lhs.z != rhs.z || lhs.w != rhs.w;
 }
 
 /**
  * A complex number
  */
+template<typename T>
 struct HgComplex {
-    f32 r, i;
+    T r, i;
+
+    HgComplex() {}
+    constexpr HgComplex(T r_val) : r{r_val}, i{0} {}
+    constexpr HgComplex(T r_val, T i_val) : r{r_val}, i{i_val} {}
+    constexpr HgComplex(const HgComplex& other) : r{other.r}, i{other.i} {}
+
+    constexpr HgComplex& operator=(const HgComplex& other) {
+        r = other.r;
+        i = other.i;
+        return *this;
+    }
+
+    constexpr T& operator[](usize index) {
+        return *(&r + index);
+    }
 };
 
-constexpr bool operator==(const HgComplex& lhs, const HgComplex& rhs) {
+using HgComplexf = HgComplex<f32>;
+using HgComplexd = HgComplex<f64>;
+using HgComplexi = HgComplex<i32>;
+using HgComplexu = HgComplex<u32>;
+
+template<typename T>
+constexpr bool operator==(const HgComplex<T>& lhs, const HgComplex<T>& rhs) {
     return lhs.r == rhs.r && lhs.i == rhs.i;
 }
 
-constexpr bool operator!=(const HgComplex& lhs, const HgComplex& rhs) {
+template<typename T>
+constexpr bool operator!=(const HgComplex<T>& lhs, const HgComplex<T>& rhs) {
     return lhs.r != rhs.r || lhs.i != rhs.i;
 }
 
@@ -356,192 +568,41 @@ constexpr bool operator!=(const HgComplex& lhs, const HgComplex& rhs) {
  *
  * r is the real part
  */
+template<typename T>
 struct HgQuat {
-    f32 r, i, j, k;
+    T r, i, j, k;
+ 
+    HgQuat() {}
+    constexpr HgQuat(T r_val) : r{r_val}, i{0}, j{0}, k{0} {}
+    constexpr HgQuat(T r_val, T i_val, T j_val, T k_val) : r{r_val}, i{i_val}, j{j_val}, k{k_val} {}
+    constexpr HgQuat(const HgQuat& other) : r{other.r}, i{other.i}, j{other.j}, k{other.k} {}
+
+    constexpr HgQuat& operator=(const HgQuat& other) {
+        r = other.r;
+        i = other.i;
+        j = other.j;
+        k = other.k;
+        return *this;
+    }
+
+    constexpr T& operator[](usize index) {
+        return *(&r + index);
+    }
 };
 
-constexpr bool operator==(const HgQuat& lhs, const HgQuat& rhs) {
+using HgQuatf = HgQuat<f32>;
+using HgQuatd = HgQuat<f64>;
+using HgQuati = HgQuat<i32>;
+using HgQuatu = HgQuat<u32>;
+
+template<typename T>
+constexpr bool operator==(const HgQuat<T>& lhs, const HgQuat<T>& rhs) {
     return lhs.r == rhs.r && lhs.i == rhs.i && lhs.j == rhs.j && lhs.k == rhs.k;
 }
 
-constexpr bool operator!=(const HgQuat& lhs, const HgQuat& rhs) {
+template<typename T>
+constexpr bool operator!=(const HgQuat<T>& lhs, const HgQuat<T>& rhs) {
     return lhs.r != rhs.r || lhs.i != rhs.i || lhs.j != rhs.j || lhs.k != rhs.k;
-}
-
-/**
- * Creates a 2D vector with the given scalar
- *
- * Parameters
- * - scalar The scalar to create the vector with
- * Returns
- * - The created vector
- */
-constexpr HgVec2 hg_svec2(f32 scalar) {
-    return {scalar, scalar};
-}
-
-/**
- * Creates a 3D vector with the given scalar
- *
- * Parameters
- * - scalar The scalar to create the vector with
- * Returns
- * - The created vector
- */
-constexpr HgVec3 hg_svec3(f32 scalar) {
-    return {scalar, scalar, scalar};
-}
-
-/**
- * Creates a 4D vector with the given scalar
- *
- * Parameters
- * - scalar The scalar to create the vector with
- * Returns
- * - The created vector
- */
-constexpr HgVec4 hg_svec4(f32 scalar) {
-    return {scalar, scalar, scalar, scalar};
-}
-
-/**
- * Creates a 2x2 matrix with the given scalar
- *
- * Stores the scalar in the diagonal only
- *
- * Parameters
- * - scalar The scalar to create the matrix with
- * Returns
- * - The created matrix
- */
-constexpr HgMat2 hg_smat2(f32 scalar) {
-    return {
-        {scalar, 0.0f},
-        {0.0f, scalar},
-    };
-}
-
-/**
- * Creates a 3x3 matrix with the given scalar
- *
- * Stores the scalar in the diagonal only
- *
- * Parameters
- * - scalar The scalar to create the matrix with
- * Returns
- * - The created matrix
- */
-constexpr HgMat3 hg_smat3(f32 scalar) {
-    return {
-        {scalar, 0.0f, 0.0f},
-        {0.0f, scalar, 0.0f},
-        {0.0f, 0.0f, scalar},
-    };
-}
-
-/**
- * Creates a 4x4 matrix with the given scalar
- *
- * Stores the scalar in the diagonal only
- *
- * Parameters
- * - scalar The scalar to create the matrix with
- * Returns
- * - The created matrix
- */
-constexpr HgMat4 hg_smat4(f32 scalar) {
-    return {
-        {scalar, 0.0f, 0.0f, 0.0f},
-        {0.0f, scalar, 0.0f, 0.0f},
-        {0.0f, 0.0f, scalar, 0.0f},
-        {0.0f, 0.0f, 0.0f, scalar},
-    };
-}
-
-/**
- * Creates a 3D vector from a 2D vector and 0 for the z component
- *
- * Parameters
- * - lhs The vector to convert
- * Returns
- * - The converted vector
- */
-constexpr HgVec3 hg_vec2to3(const HgVec2& lhs) {
-    return {lhs.x, lhs.y, 0.0f};
-}
-
-/**
- * Creates a 4D vector from a 2D vector and 0 for the z and w components
- *
- * Parameters
- * - lhs The vector to convert
- * Returns
- * - The converted vector
- */
-constexpr HgVec4 hg_vec2to4(const HgVec2& lhs) {
-    return {lhs.x, lhs.y, 0.0f, 0.0f};
-}
-
-/**
- * Creates a 3D vector from a 3D vector and 0 for the w component
- *
- * Parameters
- * - lhs The vector to convert
- * Returns
- * - The converted vector
- */
-constexpr HgVec4 hg_vec3to4(const HgVec3& lhs) {
-    return {lhs.x, lhs.y, lhs.z, 0.0f};
-}
-
-/**
- * Scales a 2x2 matrix to a 3x3 matrix with 1 on the diagonal
- *
- * Parameters
- * - lhs The matrix to convert
- * Returns
- * - The converted matrix
- */
-constexpr HgMat3 hg_mat2to3(const HgMat2& lhs) {
-    return {
-        {lhs.x.x, lhs.x.y, 0.0f},
-        {lhs.y.x, lhs.y.y, 0.0f},
-        {0.0f,    0.0f,    1.0f},
-    };
-}
-
-/**
- * Scales a 2x2 matrix to a 4x4 matrix with 1 on the diagonal
- *
- * Parameters
- * - lhs The matrix to convert
- * Returns
- * - The converted matrix
- */
-constexpr HgMat4 hg_mat2to4(const HgMat2& lhs) {
-    return {
-        {lhs.x.x, lhs.x.y, 0.0f, 0.0f},
-        {lhs.y.x, lhs.y.y, 0.0f, 0.0f},
-        {0.0f,    0.0f,    1.0f, 0.0f},
-        {0.0f,    0.0f,    0.0f, 1.0f},
-    };
-}
-
-/**
- * Scales a 3x3 matrix to a 4x4 matrix with 1 on the diagonal
- *
- * Parameters
- * - lhs The matrix to convert
- * Returns
- * - The converted matrix
- */
-constexpr HgMat4 hg_mat3to4(const HgMat3& lhs) {
-    return {
-        {lhs.x.x, lhs.x.y, lhs.x.z, 0.0f},
-        {lhs.y.x, lhs.y.y, lhs.y.z, 0.0f},
-        {lhs.z.x, lhs.z.y, lhs.z.z, 0.0f},
-        {0.0f,    0.0f,    0.0f,    1.0f},
-    };
 }
 
 /**
@@ -553,7 +614,8 @@ constexpr HgMat4 hg_mat3to4(const HgMat3& lhs) {
  * - lhs The left-hand side vector, must not be nullptr
  * - rhs The right-hand side vector, must not be nullptr
  */
-constexpr void hg_vadd(u32 size, f32 *dst, const f32 *lhs, const f32 *rhs) {
+template<typename T>
+constexpr void hg_vadd(u32 size, T *dst, const T *lhs, const T *rhs) {
     assert(dst != nullptr);
     assert(lhs != nullptr);
     assert(rhs != nullptr);
@@ -571,12 +633,14 @@ constexpr void hg_vadd(u32 size, f32 *dst, const f32 *lhs, const f32 *rhs) {
  * Returns
  * - The added vector
  */
-constexpr HgVec2 hg_vadd2(const HgVec2& lhs, const HgVec2& rhs) {
+template<typename T>
+constexpr HgVec2<T> hg_vadd2(const HgVec2<T>& lhs, const HgVec2<T>& rhs) {
     return {lhs.x + rhs.x, lhs.y + rhs.y};
 }
 
-constexpr HgVec2 operator+(const HgVec2& lhs, const HgVec2& rhs) {
-    return hg_vadd2(lhs, rhs);
+template<typename T>
+constexpr HgVec2<T> operator+(const HgVec2<T>& lhs, const HgVec2<T>& rhs) {
+    return hg_vadd2<T>(lhs, rhs);
 }
 
 /**
@@ -588,12 +652,14 @@ constexpr HgVec2 operator+(const HgVec2& lhs, const HgVec2& rhs) {
  * Returns
  * - The added vector
  */
-constexpr HgVec3 hg_vadd3(const HgVec3& lhs, const HgVec3& rhs) {
+template<typename T>
+constexpr HgVec3<T> hg_vadd3(const HgVec3<T>& lhs, const HgVec3<T>& rhs) {
     return {lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z};
 }
 
-constexpr HgVec3 operator+(const HgVec3& lhs, const HgVec3& rhs) {
-    return hg_vadd3(lhs, rhs);
+template<typename T>
+constexpr HgVec3<T> operator+(const HgVec3<T>& lhs, const HgVec3<T>& rhs) {
+    return hg_vadd3<T>(lhs, rhs);
 }
 
 /**
@@ -605,12 +671,14 @@ constexpr HgVec3 operator+(const HgVec3& lhs, const HgVec3& rhs) {
  * Returns
  * - The added vector
  */
-constexpr HgVec4 hg_vadd4(const HgVec4& lhs, const HgVec4& rhs) {
+template<typename T>
+constexpr HgVec4<T> hg_vadd4(const HgVec4<T>& lhs, const HgVec4<T>& rhs) {
     return {lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z, lhs.w + rhs.w};
 }
 
-constexpr HgVec4 operator+(const HgVec4& lhs, const HgVec4& rhs) {
-    return hg_vadd4(lhs, rhs);
+template<typename T>
+constexpr HgVec4<T> operator+(const HgVec4<T>& lhs, const HgVec4<T>& rhs) {
+    return hg_vadd4<T>(lhs, rhs);
 }
 
 /**
@@ -622,7 +690,8 @@ constexpr HgVec4 operator+(const HgVec4& lhs, const HgVec4& rhs) {
  * - lhs The left-hand side vector, must not be nullptr
  * - rhs The right-hand side vector, must not be nullptr
  */
-constexpr void hg_vsub(u32 size, f32 *dst, const f32 *lhs, const f32 *rhs) {
+template<typename T>
+constexpr void hg_vsub(u32 size, T *dst, const T *lhs, const T *rhs) {
     assert(dst != nullptr);
     assert(lhs != nullptr);
     assert(rhs != nullptr);
@@ -640,12 +709,14 @@ constexpr void hg_vsub(u32 size, f32 *dst, const f32 *lhs, const f32 *rhs) {
  * Returns
  * - The subtracted vector
  */
-constexpr HgVec2 hg_vsub2(const HgVec2& lhs, const HgVec2& rhs) {
+template<typename T>
+constexpr HgVec2<T> hg_vsub2(const HgVec2<T>& lhs, const HgVec2<T>& rhs) {
     return {lhs.x - rhs.x, lhs.y - rhs.y};
 }
 
-constexpr HgVec2 operator-(const HgVec2& lhs, const HgVec2& rhs) {
-    return hg_vsub2(lhs, rhs);
+template<typename T>
+constexpr HgVec2<T> operator-(const HgVec2<T>& lhs, const HgVec2<T>& rhs) {
+    return hg_vsub2<T>(lhs, rhs);
 }
 
 /**
@@ -657,12 +728,14 @@ constexpr HgVec2 operator-(const HgVec2& lhs, const HgVec2& rhs) {
  * Returns
  * - The subtracted vector
  */
-constexpr HgVec3 hg_vsub3(const HgVec3& lhs, const HgVec3& rhs) {
+template<typename T>
+constexpr HgVec3<T> hg_vsub3(const HgVec3<T>& lhs, const HgVec3<T>& rhs) {
     return {lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z};
 }
 
-constexpr HgVec3 operator-(const HgVec3& lhs, const HgVec3& rhs) {
-    return hg_vsub3(lhs, rhs);
+template<typename T>
+constexpr HgVec3<T> operator-(const HgVec3<T>& lhs, const HgVec3<T>& rhs) {
+    return hg_vsub3<T>(lhs, rhs);
 }
 
 /**
@@ -674,12 +747,14 @@ constexpr HgVec3 operator-(const HgVec3& lhs, const HgVec3& rhs) {
  * Returns
  * - The subtracted vector
  */
-constexpr HgVec4 hg_vsub4(const HgVec4& lhs, const HgVec4& rhs) {
+template<typename T>
+constexpr HgVec4<T> hg_vsub4(const HgVec4<T>& lhs, const HgVec4<T>& rhs) {
     return {lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z, lhs.w - rhs.w};
 }
 
-constexpr HgVec4 operator-(const HgVec4& lhs, const HgVec4& rhs) {
-    return hg_vsub4(lhs, rhs);
+template<typename T>
+constexpr HgVec4<T> operator-(const HgVec4<T>& lhs, const HgVec4<T>& rhs) {
+    return hg_vsub4<T>(lhs, rhs);
 }
 
 /**
@@ -691,7 +766,8 @@ constexpr HgVec4 operator-(const HgVec4& lhs, const HgVec4& rhs) {
  * - lhs The left-hand side vector, must not be nullptr
  * - rhs The right-hand side vector, must not be nullptr
  */
-constexpr void hg_vmul(u32 size, f32 *dst, const f32 *lhs, const f32 *rhs) {
+template<typename T>
+constexpr void hg_vmul(u32 size, T *dst, const T *lhs, const T *rhs) {
     assert(dst != nullptr);
     assert(lhs != nullptr);
     assert(rhs != nullptr);
@@ -709,12 +785,14 @@ constexpr void hg_vmul(u32 size, f32 *dst, const f32 *lhs, const f32 *rhs) {
  * Returns
  * - The multiplied vector
  */
-constexpr HgVec2 hg_vmul2(const HgVec2& lhs, const HgVec2& rhs) {
+template<typename T>
+constexpr HgVec2<T> hg_vmul2(const HgVec2<T>& lhs, const HgVec2<T>& rhs) {
     return {lhs.x * rhs.x, lhs.y * rhs.y};
 }
 
-constexpr HgVec2 operator*(const HgVec2& lhs, const HgVec2& rhs) {
-    return hg_vmul2(lhs, rhs);
+template<typename T>
+constexpr HgVec2<T> operator*(const HgVec2<T>& lhs, const HgVec2<T>& rhs) {
+    return hg_vmul2<T>(lhs, rhs);
 }
 
 /**
@@ -726,12 +804,14 @@ constexpr HgVec2 operator*(const HgVec2& lhs, const HgVec2& rhs) {
  * Returns
  * - The multiplied vector
  */
-constexpr HgVec3 hg_vmul3(const HgVec3& lhs, const HgVec3& rhs) {
+template<typename T>
+constexpr HgVec3<T> hg_vmul3(const HgVec3<T>& lhs, const HgVec3<T>& rhs) {
     return {lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z};
 }
 
-constexpr HgVec3 operator*(const HgVec3& lhs, const HgVec3& rhs) {
-    return hg_vmul3(lhs, rhs);
+template<typename T>
+constexpr HgVec3<T> operator*(const HgVec3<T>& lhs, const HgVec3<T>& rhs) {
+    return hg_vmul3<T>(lhs, rhs);
 }
 
 /**
@@ -743,12 +823,14 @@ constexpr HgVec3 operator*(const HgVec3& lhs, const HgVec3& rhs) {
  * Returns
  * - The multiplied vector
  */
-constexpr HgVec4 hg_vmul4(const HgVec4& lhs, const HgVec4& rhs) {
+template<typename T>
+constexpr HgVec4<T> hg_vmul4(const HgVec4<T>& lhs, const HgVec4<T>& rhs) {
     return {lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z, lhs.w * rhs.w};
 }
 
-constexpr HgVec4 operator*(const HgVec4& lhs, const HgVec4& rhs) {
-    return hg_vmul4(lhs, rhs);
+template<typename T>
+constexpr HgVec4<T> operator*(const HgVec4<T>& lhs, const HgVec4<T>& rhs) {
+    return hg_vmul4<T>(lhs, rhs);
 }
 
 /**
@@ -760,7 +842,8 @@ constexpr HgVec4 operator*(const HgVec4& lhs, const HgVec4& rhs) {
  * - scalar The scalar to multiply with
  * - vec The vector to multiply with, must not be nullptr
  */
-constexpr void hg_svmul(u32 size, f32 *dst, f32 scalar, const f32 *vec) {
+template<typename T>
+constexpr void hg_svmul(u32 size, T *dst, T scalar, const T *vec) {
     assert(dst != nullptr);
     assert(vec != nullptr);
     for (u32 i = 0; i < size; ++i) {
@@ -777,16 +860,19 @@ constexpr void hg_svmul(u32 size, f32 *dst, f32 scalar, const f32 *vec) {
  * Returns
  * - The multiplied vector
  */
-constexpr HgVec2 hg_svmul2(f32 scalar, const HgVec2& vec) {
+template<typename T>
+constexpr HgVec2<T> hg_svmul2(T scalar, const HgVec2<T>& vec) {
     return {scalar * vec.x, scalar * vec.y};
 }
 
-constexpr HgVec2 operator*(f32 lhs, const HgVec2& rhs) {
-    return hg_svmul2(lhs, rhs);
+template<typename T>
+constexpr HgVec2<T> operator*(T lhs, const HgVec2<T>& rhs) {
+    return hg_svmul2<T>(lhs, rhs);
 }
 
-constexpr HgVec2 operator*(const HgVec2& lhs, f32 rhs) {
-    return hg_svmul2(rhs, lhs);
+template<typename T>
+constexpr HgVec2<T> operator*(const HgVec2<T>& lhs, T rhs) {
+    return hg_svmul2<T>(rhs, lhs);
 }
 
 /**
@@ -798,16 +884,19 @@ constexpr HgVec2 operator*(const HgVec2& lhs, f32 rhs) {
  * Returns
  * - The multiplied vector
  */
-constexpr HgVec3 hg_svmul3(f32 scalar, const HgVec3& vec) {
+template<typename T>
+constexpr HgVec3<T> hg_svmul3(T scalar, const HgVec3<T>& vec) {
     return {scalar * vec.x, scalar * vec.y, scalar * vec.z};
 }
 
-constexpr HgVec3 operator*(f32 lhs, const HgVec3& rhs) {
-    return hg_svmul3(lhs, rhs);
+template<typename T>
+constexpr HgVec3<T> operator*(T lhs, const HgVec3<T>& rhs) {
+    return hg_svmul3<T>(lhs, rhs);
 }
 
-constexpr HgVec3 operator*(const HgVec3& lhs, f32 rhs) {
-    return hg_svmul3(rhs, lhs);
+template<typename T>
+constexpr HgVec3<T> operator*(const HgVec3<T>& lhs, T rhs) {
+    return hg_svmul3<T>(rhs, lhs);
 }
 
 /**
@@ -819,16 +908,19 @@ constexpr HgVec3 operator*(const HgVec3& lhs, f32 rhs) {
  * Returns
  * - The multiplied vector
  */
-constexpr HgVec4 hg_svmul4(f32 scalar, const HgVec4& vec) {
+template<typename T>
+constexpr HgVec4<T> hg_svmul4(T scalar, const HgVec4<T>& vec) {
     return {scalar * vec.x, scalar * vec.y, scalar * vec.z, scalar * vec.w};
 }
 
-constexpr HgVec4 operator*(f32 lhs, const HgVec4& rhs) {
-    return hg_svmul4(lhs, rhs);
+template<typename T>
+constexpr HgVec4<T> operator*(T lhs, const HgVec4<T>& rhs) {
+    return hg_svmul4<T>(lhs, rhs);
 }
 
-constexpr HgVec4 operator*(const HgVec4& lhs, f32 rhs) {
-    return hg_svmul4(rhs, lhs);
+template<typename T>
+constexpr HgVec4<T> operator*(const HgVec4<T>& lhs, T rhs) {
+    return hg_svmul4<T>(rhs, lhs);
 }
 
 /**
@@ -840,7 +932,8 @@ constexpr HgVec4 operator*(const HgVec4& lhs, f32 rhs) {
  * - lhs The left-hand side vector, must not be nullptr
  * - rhs The right-hand side vector, must not be nullptr
  */
-constexpr void hg_vdiv(u32 size, f32 *dst, const f32 *lhs, const f32 *rhs) {
+template<typename T>
+constexpr void hg_vdiv(u32 size, T *dst, const T *lhs, const T *rhs) {
     assert(dst != nullptr);
     assert(lhs != nullptr);
     assert(rhs != nullptr);
@@ -858,12 +951,14 @@ constexpr void hg_vdiv(u32 size, f32 *dst, const f32 *lhs, const f32 *rhs) {
  * Returns
  * - The divided vector
  */
-constexpr HgVec2 hg_vdiv2(const HgVec2& lhs, const HgVec2& rhs) {
+template<typename T>
+constexpr HgVec2<T> hg_vdiv2(const HgVec2<T>& lhs, const HgVec2<T>& rhs) {
     return {lhs.x / rhs.x, lhs.y / rhs.y};
 }
 
-constexpr HgVec2 operator/(const HgVec2& lhs, const HgVec2& rhs) {
-    return hg_vdiv2(lhs, rhs);
+template<typename T>
+constexpr HgVec2<T> operator/(const HgVec2<T>& lhs, const HgVec2<T>& rhs) {
+    return hg_vdiv2<T>(lhs, rhs);
 }
 
 /**
@@ -875,12 +970,14 @@ constexpr HgVec2 operator/(const HgVec2& lhs, const HgVec2& rhs) {
  * Returns
  * - The divided vector
  */
-constexpr HgVec3 hg_vdiv3(const HgVec3& lhs, const HgVec3& rhs) {
+template<typename T>
+constexpr HgVec3<T> hg_vdiv3(const HgVec3<T>& lhs, const HgVec3<T>& rhs) {
     return {lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z};
 }
 
-constexpr HgVec3 operator/(const HgVec3& lhs, const HgVec3& rhs) {
-    return hg_vdiv3(lhs, rhs);
+template<typename T>
+constexpr HgVec3<T> operator/(const HgVec3<T>& lhs, const HgVec3<T>& rhs) {
+    return hg_vdiv3<T>(lhs, rhs);
 }
 
 /**
@@ -892,12 +989,14 @@ constexpr HgVec3 operator/(const HgVec3& lhs, const HgVec3& rhs) {
  * Returns
  * - The divided vector
  */
-constexpr HgVec4 hg_vdiv4(const HgVec4& lhs, const HgVec4& rhs) {
+template<typename T>
+constexpr HgVec4<T> hg_vdiv4(const HgVec4<T>& lhs, const HgVec4<T>& rhs) {
     return {lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z, lhs.w / rhs.w};
 }
 
-constexpr HgVec4 operator/(const HgVec4& lhs, const HgVec4& rhs) {
-    return hg_vdiv4(lhs, rhs);
+template<typename T>
+constexpr HgVec4<T> operator/(const HgVec4<T>& lhs, const HgVec4<T>& rhs) {
+    return hg_vdiv4<T>(lhs, rhs);
 }
 
 /**
@@ -909,7 +1008,8 @@ constexpr HgVec4 operator/(const HgVec4& lhs, const HgVec4& rhs) {
  * - vec The vector to divide, must not be nullptr
  * - scalar The scalar to divide by
  */
-constexpr void hg_svdiv(u32 size, f32 *dst, const f32 *vec, f32 scalar) {
+template<typename T>
+constexpr void hg_svdiv(u32 size, T *dst, const T *vec, T scalar) {
     assert(dst != nullptr);
     assert(vec != nullptr);
     for (u32 i = 0; i < size; ++i) {
@@ -926,12 +1026,14 @@ constexpr void hg_svdiv(u32 size, f32 *dst, const f32 *vec, f32 scalar) {
  * Returns
  * - The divided vector
  */
-constexpr HgVec2 hg_svdiv2(const HgVec2& vec, f32 scalar) {
+template<typename T>
+constexpr HgVec2<T> hg_svdiv2(const HgVec2<T>& vec, T scalar) {
     return {vec.x / scalar, vec.y / scalar};
 }
 
-constexpr HgVec2 operator/(const HgVec2& lhs, f32 rhs) {
-    return hg_svdiv2(lhs, rhs);
+template<typename T>
+constexpr HgVec2<T> operator/(const HgVec2<T>& lhs, T rhs) {
+    return hg_svdiv2<T>(lhs, rhs);
 }
 
 /**
@@ -943,12 +1045,14 @@ constexpr HgVec2 operator/(const HgVec2& lhs, f32 rhs) {
  * Returns
  * - The divided vector
  */
-constexpr HgVec3 hg_svdiv3(const HgVec3& vec, f32 scalar) {
+template<typename T>
+constexpr HgVec3<T> hg_svdiv3(const HgVec3<T>& vec, T scalar) {
     return {vec.x / scalar, vec.y / scalar, vec.z / scalar};
 }
 
-constexpr HgVec3 operator/(const HgVec3& lhs, f32 rhs) {
-    return hg_svdiv3(lhs, rhs);
+template<typename T>
+constexpr HgVec3<T> operator/(const HgVec3<T>& lhs, T rhs) {
+    return hg_svdiv3<T>(lhs, rhs);
 }
 
 /**
@@ -960,12 +1064,14 @@ constexpr HgVec3 operator/(const HgVec3& lhs, f32 rhs) {
  * Returns
  * - The divided vector
  */
-constexpr HgVec4 hg_svdiv4(const HgVec4& vec, f32 scalar) {
+template<typename T>
+constexpr HgVec4<T> hg_svdiv4(const HgVec4<T>& vec, T scalar) {
     return {vec.x / scalar, vec.y / scalar, vec.z / scalar, vec.w / scalar};
 }
 
-constexpr HgVec4 operator/(const HgVec4& lhs, f32 rhs) {
-    return hg_svdiv4(lhs, rhs);
+template<typename T>
+constexpr HgVec4<T> operator/(const HgVec4<T>& lhs, T rhs) {
+    return hg_svdiv4<T>(lhs, rhs);
 }
 
 /**
@@ -977,11 +1083,12 @@ constexpr HgVec4 operator/(const HgVec4& lhs, f32 rhs) {
  * - lhs The left-hand side vector, must not be nullptr
  * - rhs The right-hand side vector, must not be nullptr
  */
-constexpr void hg_dot(u32 size, f32 *dst, const f32 *lhs, const f32 *rhs) {
+template<typename T>
+constexpr void hg_dot(u32 size, T *dst, const T *lhs, const T *rhs) {
     assert(dst != nullptr);
     assert(lhs != nullptr);
     assert(rhs != nullptr);
-    *dst = 0.0f;
+    *dst = 0;
     for (u32 i = 0; i < size; ++i) {
         *dst += lhs[i] * rhs[i];
     }
@@ -996,7 +1103,8 @@ constexpr void hg_dot(u32 size, f32 *dst, const f32 *lhs, const f32 *rhs) {
  * Returns
  * - The dot product
  */
-constexpr float hg_dot(const HgVec2& lhs, const HgVec2& rhs) {
+template<typename T>
+constexpr float hg_dot(const HgVec2<T>& lhs, const HgVec2<T>& rhs) {
     return lhs.x * rhs.x + lhs.y * rhs.y;
 }
 
@@ -1009,7 +1117,8 @@ constexpr float hg_dot(const HgVec2& lhs, const HgVec2& rhs) {
  * Returns
  * - The dot product
  */
-constexpr float hg_dot(const HgVec3& lhs, const HgVec3& rhs) {
+template<typename T>
+constexpr float hg_dot(const HgVec3<T>& lhs, const HgVec3<T>& rhs) {
     return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
 }
 
@@ -1022,7 +1131,8 @@ constexpr float hg_dot(const HgVec3& lhs, const HgVec3& rhs) {
  * Returns
  * - The dot product
  */
-constexpr float hg_dot(const HgVec4& lhs, const HgVec4& rhs) {
+template<typename T>
+constexpr float hg_dot(const HgVec4<T>& lhs, const HgVec4<T>& rhs) {
     return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z + lhs.w * rhs.w;
 }
 
@@ -1034,11 +1144,12 @@ constexpr float hg_dot(const HgVec4& lhs, const HgVec4& rhs) {
  * - dst The destination vector, must not be nullptr
  * - vec The vector to compute the length of, must not be nullptr
  */
-inline void hg_len(u32 size, f32 *dst, const f32 *vec) {
+template<typename T>
+inline void hg_len(u32 size, T *dst, const T *vec) {
     assert(dst != nullptr);
     assert(vec != nullptr);
-    hg_dot(size, dst, vec, vec);
-    *dst = sqrtf(*dst);
+    hg_dot<T>(size, dst, vec, vec);
+    *dst = std::sqrt(*dst);
 }
 
 /**
@@ -1049,8 +1160,9 @@ inline void hg_len(u32 size, f32 *dst, const f32 *vec) {
  * Returns
  * - The length of the vector
  */
-inline float hg_len(const HgVec2& vec) {
-    return sqrtf(hg_dot(vec, vec));
+template<typename T>
+inline float hg_len(const HgVec2<T>& vec) {
+    return std::sqrt(hg_dot<T>(vec, vec));
 }
 
 /**
@@ -1061,8 +1173,9 @@ inline float hg_len(const HgVec2& vec) {
  * Returns
  * - The length of the vector
  */
-inline float hg_len(const HgVec3& vec) {
-    return sqrtf(hg_dot(vec, vec));
+template<typename T>
+inline float hg_len(const HgVec3<T>& vec) {
+    return std::sqrt(hg_dot<T>(vec, vec));
 }
 
 /**
@@ -1073,8 +1186,9 @@ inline float hg_len(const HgVec3& vec) {
  * Returns
  * - The length of the vector
  */
-inline float hg_len(const HgVec4& vec) {
-    return sqrtf(hg_dot(vec, vec));
+template<typename T>
+inline float hg_len(const HgVec4<T>& vec) {
+    return std::sqrt(hg_dot<T>(vec, vec));
 }
 
 /**
@@ -1085,11 +1199,12 @@ inline float hg_len(const HgVec4& vec) {
  * - dst The destination vector, must not be nullptr
  * - vec The vector to normalize, must not be nullptr
  */
-inline void hg_norm(u32 size, f32 *dst, const f32 *vec) {
+template<typename T>
+inline void hg_norm(u32 size, T *dst, const T *vec) {
     assert(dst != nullptr);
     assert(vec != nullptr);
-    f32 len = 0.0f;
-    hg_len(size, &len, vec);
+    T len = 0.0f;
+    hg_len<T>(size, &len, vec);
     for (u32 i = 0; i < size; ++i) {
         dst[i] = vec[i] / len;
     }
@@ -1103,8 +1218,9 @@ inline void hg_norm(u32 size, f32 *dst, const f32 *vec) {
  * Returns
  * - The normalized vector
  */
-inline HgVec2 hg_norm(const HgVec2& vec) {
-    f32 len = hg_len(vec);
+template<typename T>
+inline HgVec2<T> hg_norm(const HgVec2<T>& vec) {
+    T len = hg_len<T>(vec);
     return {vec.x / len, vec.y / len};
 }
 
@@ -1116,8 +1232,9 @@ inline HgVec2 hg_norm(const HgVec2& vec) {
  * Returns
  * - The normalized vector
  */
-inline HgVec3 hg_norm(const HgVec3& vec) {
-    f32 len = hg_len(vec);
+template<typename T>
+inline HgVec3<T> hg_norm(const HgVec3<T>& vec) {
+    T len = hg_len<T>(vec);
     return {vec.x / len, vec.y / len, vec.z / len};
 }
 
@@ -1129,8 +1246,9 @@ inline HgVec3 hg_norm(const HgVec3& vec) {
  * Returns
  * - The normalized vector
  */
-inline HgVec4 hg_norm(const HgVec4& vec) {
-    f32 len = hg_len(vec);
+template<typename T>
+inline HgVec4<T> hg_norm(const HgVec4<T>& vec) {
+    T len = hg_len<T>(vec);
     return {vec.x / len, vec.y / len, vec.z / len, vec.w / len};
 }
 
@@ -1142,7 +1260,8 @@ inline HgVec4 hg_norm(const HgVec4& vec) {
  * - lhs The left-hand side vector, must not be nullptr
  * - rhs The right-hand side vector, must not be nullptr
  */
-constexpr void hg_cross(f32 *dst, const f32 *lhs, const f32 *rhs) {
+template<typename T>
+constexpr void hg_cross(T *dst, const T *lhs, const T *rhs) {
     assert(dst != nullptr);
     assert(lhs != nullptr);
     assert(rhs != nullptr);
@@ -1160,7 +1279,8 @@ constexpr void hg_cross(f32 *dst, const f32 *lhs, const f32 *rhs) {
  * Returns
  * - The cross product
  */
-constexpr HgVec3 hg_cross(const HgVec3& lhs, const HgVec3& rhs) {
+template<typename T>
+constexpr HgVec3<T> hg_cross(const HgVec3<T>& lhs, const HgVec3<T>& rhs) {
     return {lhs.y * rhs.z - lhs.z * rhs.y, lhs.z * rhs.x - lhs.x * rhs.z, lhs.x * rhs.y - lhs.y * rhs.x};
 }
 
@@ -1174,7 +1294,8 @@ constexpr HgVec3 hg_cross(const HgVec3& lhs, const HgVec3& rhs) {
  * - lhs The left-hand side matrix, must not be nullptr
  * - rhs The right-hand side matrix, must not be nullptr
  */
-constexpr void hg_madd(u32 width, u32 height, f32 *dst, const f32 *lhs, const f32 *rhs) {
+template<typename T>
+constexpr void hg_madd(u32 width, u32 height, T *dst, const T *lhs, const T *rhs) {
     assert(dst != nullptr);
     assert(lhs != nullptr);
     assert(rhs != nullptr);
@@ -1194,14 +1315,16 @@ constexpr void hg_madd(u32 width, u32 height, f32 *dst, const f32 *lhs, const f3
  * Returns
  * - The added matrix
  */
-constexpr HgMat2 hg_madd2(const HgMat2& lhs, const HgMat2& rhs) {
-    HgMat2 result{};
-    hg_madd(2, 2, &result.x.x, &lhs.x.x, &rhs.x.x);
+template<typename T>
+constexpr HgMat2<T> hg_madd2(const HgMat2<T>& lhs, const HgMat2<T>& rhs) {
+    HgMat2<T> result{};
+    hg_madd<T>(2, 2, &result.x.x, &lhs.x.x, &rhs.x.x);
     return result;
 }
 
-constexpr HgMat2 operator+(const HgMat2& lhs, const HgMat2& rhs) {
-    return hg_madd2(lhs, rhs);
+template<typename T>
+constexpr HgMat2<T> operator+(const HgMat2<T>& lhs, const HgMat2<T>& rhs) {
+    return hg_madd2<T>(lhs, rhs);
 }
 
 /**
@@ -1213,14 +1336,16 @@ constexpr HgMat2 operator+(const HgMat2& lhs, const HgMat2& rhs) {
  * Returns
  * - The added matrix
  */
-constexpr HgMat3 hg_madd3(const HgMat3& lhs, const HgMat3& rhs) {
-    HgMat3 result{};
-    hg_madd(3, 3, &result.x.x, &lhs.x.x, &rhs.x.x);
+template<typename T>
+constexpr HgMat3<T> hg_madd3(const HgMat3<T>& lhs, const HgMat3<T>& rhs) {
+    HgMat3<T> result{};
+    hg_madd<T>(3, 3, &result.x.x, &lhs.x.x, &rhs.x.x);
     return result;
 }
 
-constexpr HgMat3 operator+(const HgMat3& lhs, const HgMat3& rhs) {
-    return hg_madd3(lhs, rhs);
+template<typename T>
+constexpr HgMat3<T> operator+(const HgMat3<T>& lhs, const HgMat3<T>& rhs) {
+    return hg_madd3<T>(lhs, rhs);
 }
 
 /**
@@ -1232,14 +1357,16 @@ constexpr HgMat3 operator+(const HgMat3& lhs, const HgMat3& rhs) {
  * Returns
  * - The added matrix
  */
-constexpr HgMat4 hg_madd4(const HgMat4& lhs, const HgMat4& rhs) {
-    HgMat4 result{};
-    hg_madd(4, 4, &result.x.x, &lhs.x.x, &rhs.x.x);
+template<typename T>
+constexpr HgMat4<T> hg_madd4(const HgMat4<T>& lhs, const HgMat4<T>& rhs) {
+    HgMat4<T> result{};
+    hg_madd<T>(4, 4, &result.x.x, &lhs.x.x, &rhs.x.x);
     return result;
 }
 
-constexpr HgMat4 operator+(const HgMat4& lhs, const HgMat4& rhs) {
-    return hg_madd4(lhs, rhs);
+template<typename T>
+constexpr HgMat4<T> operator+(const HgMat4<T>& lhs, const HgMat4<T>& rhs) {
+    return hg_madd4<T>(lhs, rhs);
 }
 
 /**
@@ -1252,7 +1379,8 @@ constexpr HgMat4 operator+(const HgMat4& lhs, const HgMat4& rhs) {
  * - lhs The left-hand side matrix, must not be nullptr
  * - rhs The right-hand side matrix, must not be nullptr
  */
-constexpr void hg_msub(u32 width, u32 height, f32 *dst, const f32 *lhs, const f32 *rhs) {
+template<typename T>
+constexpr void hg_msub(u32 width, u32 height, T *dst, const T *lhs, const T *rhs) {
     assert(dst != nullptr);
     assert(lhs != nullptr);
     assert(rhs != nullptr);
@@ -1272,14 +1400,16 @@ constexpr void hg_msub(u32 width, u32 height, f32 *dst, const f32 *lhs, const f3
  * Returns
  * - The subtracted matrix
  */
-constexpr HgMat2 hg_msub2(const HgMat2& lhs, const HgMat2& rhs) {
-    HgMat2 result{};
-    hg_msub(2, 2, &result.x.x, &lhs.x.x, &rhs.x.x);
+template<typename T>
+constexpr HgMat2<T> hg_msub2(const HgMat2<T>& lhs, const HgMat2<T>& rhs) {
+    HgMat2<T> result{};
+    hg_msub<T>(2, 2, &result.x.x, &lhs.x.x, &rhs.x.x);
     return result;
 }
 
-constexpr HgMat2 operator-(const HgMat2& lhs, const HgMat2& rhs) {
-    return hg_msub2(lhs, rhs);
+template<typename T>
+constexpr HgMat2<T> operator-(const HgMat2<T>& lhs, const HgMat2<T>& rhs) {
+    return hg_msub2<T>(lhs, rhs);
 }
 
 /**
@@ -1291,14 +1421,16 @@ constexpr HgMat2 operator-(const HgMat2& lhs, const HgMat2& rhs) {
  * Returns
  * - The subtracted matrix
  */
-constexpr HgMat3 hg_msub3(const HgMat3& lhs, const HgMat3& rhs) {
-    HgMat3 result{};
-    hg_msub(3, 3, &result.x.x, &lhs.x.x, &rhs.x.x);
+template<typename T>
+constexpr HgMat3<T> hg_msub3(const HgMat3<T>& lhs, const HgMat3<T>& rhs) {
+    HgMat3<T> result{};
+    hg_msub<T>(3, 3, &result.x.x, &lhs.x.x, &rhs.x.x);
     return result;
 }
 
-constexpr HgMat3 operator-(const HgMat3& lhs, const HgMat3& rhs) {
-    return hg_msub3(lhs, rhs);
+template<typename T>
+constexpr HgMat3<T> operator-(const HgMat3<T>& lhs, const HgMat3<T>& rhs) {
+    return hg_msub3<T>(lhs, rhs);
 }
 
 /**
@@ -1310,14 +1442,16 @@ constexpr HgMat3 operator-(const HgMat3& lhs, const HgMat3& rhs) {
  * Returns
  * - The subtracted matrix
  */
-constexpr HgMat4 hg_msub4(const HgMat4& lhs, const HgMat4& rhs) {
-    HgMat4 result{};
-    hg_msub(4, 4, &result.x.x, &lhs.x.x, &rhs.x.x);
+template<typename T>
+constexpr HgMat4<T> hg_msub4(const HgMat4<T>& lhs, const HgMat4<T>& rhs) {
+    HgMat4<T> result{};
+    hg_msub<T>(4, 4, &result.x.x, &lhs.x.x, &rhs.x.x);
     return result;
 }
 
-constexpr HgMat4 operator-(const HgMat4& lhs, const HgMat4& rhs) {
-    return hg_msub4(lhs, rhs);
+template<typename T>
+constexpr HgMat4<T> operator-(const HgMat4<T>& lhs, const HgMat4<T>& rhs) {
+    return hg_msub4<T>(lhs, rhs);
 }
 
 /**
@@ -1332,7 +1466,8 @@ constexpr HgMat4 operator-(const HgMat4& lhs, const HgMat4& rhs) {
  * - hr The height of the right-hand side matrix
  * - rhs The right-hand side matrix, must not be nullptr
  */
-constexpr void hg_mmul(f32 *dst, u32 wl, u32 hl, const f32 *lhs, u32 wr, u32 hr, const f32 *rhs) {
+template<typename T>
+constexpr void hg_mmul(T *dst, u32 wl, u32 hl, const T *lhs, u32 wr, u32 hr, const T *rhs) {
     assert(hr == wl);
     assert(dst != nullptr);
     assert(lhs != nullptr);
@@ -1357,14 +1492,16 @@ constexpr void hg_mmul(f32 *dst, u32 wl, u32 hl, const f32 *lhs, u32 wr, u32 hr,
  * Returns
  * - The multiplied matrix
  */
-constexpr HgMat2 hg_mmul2(const HgMat2& lhs, const HgMat2& rhs) {
-    HgMat2 result{};
-    hg_mmul(&result.x.x, 2, 2, &lhs.x.x, 2, 2, &rhs.x.x);
+template<typename T>
+constexpr HgMat2<T> hg_mmul2(const HgMat2<T>& lhs, const HgMat2<T>& rhs) {
+    HgMat2<T> result{};
+    hg_mmul<T>(&result.x.x, 2, 2, &lhs.x.x, 2, 2, &rhs.x.x);
     return result;
 }
 
-constexpr HgMat2 operator*(const HgMat2& lhs, const HgMat2& rhs) {
-    return hg_mmul2(lhs, rhs);
+template<typename T>
+constexpr HgMat2<T> operator*(const HgMat2<T>& lhs, const HgMat2<T>& rhs) {
+    return hg_mmul2<T>(lhs, rhs);
 }
 
 /**
@@ -1376,14 +1513,16 @@ constexpr HgMat2 operator*(const HgMat2& lhs, const HgMat2& rhs) {
  * Returns
  * - The multiplied matrix
  */
-constexpr HgMat3 hg_mmul3(const HgMat3& lhs, const HgMat3& rhs) {
-    HgMat3 result{};
-    hg_mmul(&result.x.x, 3, 3, &lhs.x.x, 3, 3, &rhs.x.x);
+template<typename T>
+constexpr HgMat3<T> hg_mmul3(const HgMat3<T>& lhs, const HgMat3<T>& rhs) {
+    HgMat3<T> result{};
+    hg_mmul<T>(&result.x.x, 3, 3, &lhs.x.x, 3, 3, &rhs.x.x);
     return result;
 }
 
-constexpr HgMat3 operator*(const HgMat3& lhs, const HgMat3& rhs) {
-    return hg_mmul3(lhs, rhs);
+template<typename T>
+constexpr HgMat3<T> operator*(const HgMat3<T>& lhs, const HgMat3<T>& rhs) {
+    return hg_mmul3<T>(lhs, rhs);
 }
 
 /**
@@ -1395,14 +1534,16 @@ constexpr HgMat3 operator*(const HgMat3& lhs, const HgMat3& rhs) {
  * Returns
  * - The multiplied matrix
  */
-constexpr HgMat4 hg_mmul4(const HgMat4& lhs, const HgMat4& rhs) {
-    HgMat4 result{};
-    hg_mmul(&result.x.x, 4, 4, &lhs.x.x, 4, 4, &rhs.x.x);
+template<typename T>
+constexpr HgMat4<T> hg_mmul4(const HgMat4<T>& lhs, const HgMat4<T>& rhs) {
+    HgMat4<T> result{};
+    hg_mmul<T>(&result.x.x, 4, 4, &lhs.x.x, 4, 4, &rhs.x.x);
     return result;
 }
 
-constexpr HgMat4 operator*(const HgMat4& lhs, const HgMat4& rhs) {
-    return hg_mmul4(lhs, rhs);
+template<typename T>
+constexpr HgMat4<T> operator*(const HgMat4<T>& lhs, const HgMat4<T>& rhs) {
+    return hg_mmul4<T>(lhs, rhs);
 }
 
 /**
@@ -1415,7 +1556,8 @@ constexpr HgMat4 operator*(const HgMat4& lhs, const HgMat4& rhs) {
  * - mat The matrix to multiply with, must not be nullptr
  * - vec The vector to multiply with, must not be nullptr
  */
-constexpr void hg_mvmul(u32 width, u32 height, f32 *dst, const f32 *mat, const f32 *vec) {
+template<typename T>
+constexpr void hg_mvmul(u32 width, u32 height, T *dst, const T *mat, const T *vec) {
     assert(dst != nullptr);
     assert(mat != nullptr);
     assert(vec != nullptr);
@@ -1436,14 +1578,16 @@ constexpr void hg_mvmul(u32 width, u32 height, f32 *dst, const f32 *mat, const f
  * Returns
  * - The multiplied vector
  */
-constexpr HgVec2 hg_mvmul2(const HgMat2& lhs, const HgVec2& rhs) {
-    HgVec2 result{};
-    hg_mvmul(2, 2, &result.x, &lhs.x.x, &rhs.x);
+template<typename T>
+constexpr HgVec2<T> hg_mvmul2(const HgMat2<T>& lhs, const HgVec2<T>& rhs) {
+    HgVec2<T> result{};
+    hg_mvmul<T>(2, 2, &result.x, &lhs.x.x, &rhs.x);
     return result;
 }
 
-constexpr HgVec2 operator*(const HgMat2& lhs, const HgVec2& rhs) {
-    return hg_mvmul2(lhs, rhs);
+template<typename T>
+constexpr HgVec2<T> operator*(const HgMat2<T>& lhs, const HgVec2<T>& rhs) {
+    return hg_mvmul2<T>(lhs, rhs);
 }
 
 /**
@@ -1455,14 +1599,16 @@ constexpr HgVec2 operator*(const HgMat2& lhs, const HgVec2& rhs) {
  * Returns
  * - The multiplied vector
  */
-constexpr HgVec3 hg_mvmul3(const HgMat3& lhs, const HgVec3& rhs) {
-    HgVec3 result{};
-    hg_mvmul(3, 3, &result.x, &lhs.x.x, &rhs.x);
+template<typename T>
+constexpr HgVec3<T> hg_mvmul3(const HgMat3<T>& lhs, const HgVec3<T>& rhs) {
+    HgVec3<T> result{};
+    hg_mvmul<T>(3, 3, &result.x, &lhs.x.x, &rhs.x);
     return result;
 }
 
-constexpr HgVec3 operator*(const HgMat3& lhs, const HgVec3& rhs) {
-    return hg_mvmul3(lhs, rhs);
+template<typename T>
+constexpr HgVec3<T> operator*(const HgMat3<T>& lhs, const HgVec3<T>& rhs) {
+    return hg_mvmul3<T>(lhs, rhs);
 }
 
 /**
@@ -1474,14 +1620,16 @@ constexpr HgVec3 operator*(const HgMat3& lhs, const HgVec3& rhs) {
  * Returns
  * - The multiplied vector
  */
-constexpr HgVec4 hg_mvmul4(const HgMat4& lhs, const HgVec4& rhs) {
-    HgVec4 result{};
-    hg_mvmul(4, 4, &result.x, &lhs.x.x, &rhs.x);
+template<typename T>
+constexpr HgVec4<T> hg_mvmul4(const HgMat4<T>& lhs, const HgVec4<T>& rhs) {
+    HgVec4<T> result{};
+    hg_mvmul<T>(4, 4, &result.x, &lhs.x.x, &rhs.x);
     return result;
 }
 
-constexpr HgVec4 operator*(const HgMat4& lhs, const HgVec4& rhs) {
-    return hg_mvmul4(lhs, rhs);
+template<typename T>
+constexpr HgVec4<T> operator*(const HgMat4<T>& lhs, const HgVec4<T>& rhs) {
+    return hg_mvmul4<T>(lhs, rhs);
 }
 
 /**
@@ -1493,12 +1641,14 @@ constexpr HgVec4 operator*(const HgMat4& lhs, const HgVec4& rhs) {
  * Returns
  * - The added complex number
  */
-constexpr HgComplex hg_cadd(const HgComplex& lhs, const HgComplex& rhs) {
+template<typename T>
+constexpr HgComplex<T> hg_cadd(const HgComplex<T>& lhs, const HgComplex<T>& rhs) {
     return {lhs.r + rhs.r, lhs.i + rhs.i};
 }
 
-constexpr HgComplex operator+(const HgComplex& lhs, const HgComplex& rhs) {
-    return hg_cadd(lhs, rhs);
+template<typename T>
+constexpr HgComplex<T> operator+(const HgComplex<T>& lhs, const HgComplex<T>& rhs) {
+    return hg_cadd<T>(lhs, rhs);
 }
 
 /**
@@ -1510,12 +1660,14 @@ constexpr HgComplex operator+(const HgComplex& lhs, const HgComplex& rhs) {
  * Returns
  * - The subtracted complex number
  */
-constexpr HgComplex hg_csub(const HgComplex& lhs, const HgComplex& rhs) {
+template<typename T>
+constexpr HgComplex<T> hg_csub(const HgComplex<T>& lhs, const HgComplex<T>& rhs) {
     return {lhs.r - rhs.r, lhs.i - rhs.i};
 }
 
-constexpr HgComplex operator-(const HgComplex& lhs, const HgComplex& rhs) {
-    return hg_csub(lhs, rhs);
+template<typename T>
+constexpr HgComplex<T> operator-(const HgComplex<T>& lhs, const HgComplex<T>& rhs) {
+    return hg_csub<T>(lhs, rhs);
 }
 
 /**
@@ -1527,12 +1679,14 @@ constexpr HgComplex operator-(const HgComplex& lhs, const HgComplex& rhs) {
  * Returns
  * - The multiplied complex number
  */
-constexpr HgComplex hg_cmul(const HgComplex& lhs, const HgComplex& rhs) {
+template<typename T>
+constexpr HgComplex<T> hg_cmul(const HgComplex<T>& lhs, const HgComplex<T>& rhs) {
     return {lhs.r * rhs.r - lhs.i * rhs.i, lhs.r * rhs.i + lhs.i * rhs.r};
 }
 
-constexpr HgComplex operator*(const HgComplex& lhs, const HgComplex& rhs) {
-    return hg_cmul(lhs, rhs);
+template<typename T>
+constexpr HgComplex<T> operator*(const HgComplex<T>& lhs, const HgComplex<T>& rhs) {
+    return hg_cmul<T>(lhs, rhs);
 }
 
 /**
@@ -1544,12 +1698,14 @@ constexpr HgComplex operator*(const HgComplex& lhs, const HgComplex& rhs) {
  * Returns
  * - The added quaternion
  */
-constexpr HgQuat hg_qadd(const HgQuat& lhs, const HgQuat& rhs) {
+template<typename T>
+constexpr HgQuat<T> hg_qadd(const HgQuat<T>& lhs, const HgQuat<T>& rhs) {
     return {lhs.r + rhs.r, lhs.i + rhs.i, lhs.j + rhs.j, lhs.k + rhs.k};
 }
 
-constexpr HgQuat operator+(const HgQuat& lhs, const HgQuat& rhs) {
-    return hg_qadd(lhs, rhs);
+template<typename T>
+constexpr HgQuat<T> operator+(const HgQuat<T>& lhs, const HgQuat<T>& rhs) {
+    return hg_qadd<T>(lhs, rhs);
 }
 
 /**
@@ -1561,12 +1717,14 @@ constexpr HgQuat operator+(const HgQuat& lhs, const HgQuat& rhs) {
  * Returns
  * - The subtracted quaternion
  */
-constexpr HgQuat hg_qsub(const HgQuat& lhs, const HgQuat& rhs) {
+template<typename T>
+constexpr HgQuat<T> hg_qsub(const HgQuat<T>& lhs, const HgQuat<T>& rhs) {
     return {lhs.r - rhs.r, lhs.i - rhs.i, lhs.j - rhs.j, lhs.k - rhs.k};
 }
 
-constexpr HgQuat operator-(const HgQuat& lhs, const HgQuat& rhs) {
-    return hg_qsub(lhs, rhs);
+template<typename T>
+constexpr HgQuat<T> operator-(const HgQuat<T>& lhs, const HgQuat<T>& rhs) {
+    return hg_qsub<T>(lhs, rhs);
 }
 
 /**
@@ -1578,7 +1736,8 @@ constexpr HgQuat operator-(const HgQuat& lhs, const HgQuat& rhs) {
  * Returns
  * - The multiplied quaternion
  */
-constexpr HgQuat hg_qmul(const HgQuat& lhs, const HgQuat& rhs) {
+template<typename T>
+constexpr HgQuat<T> hg_qmul(const HgQuat<T>& lhs, const HgQuat<T>& rhs) {
     return {
         lhs.r * rhs.r - lhs.i * rhs.i - lhs.j * rhs.j - lhs.k * rhs.k,
         lhs.r * rhs.i + lhs.i * rhs.r + lhs.j * rhs.k - lhs.k * rhs.j,
@@ -1587,8 +1746,9 @@ constexpr HgQuat hg_qmul(const HgQuat& lhs, const HgQuat& rhs) {
     };
 }
 
-constexpr HgQuat operator*(const HgQuat& lhs, const HgQuat& rhs) {
-    return hg_qmul(lhs, rhs);
+template<typename T>
+constexpr HgQuat<T> operator*(const HgQuat<T>& lhs, const HgQuat<T>& rhs) {
+    return hg_qmul<T>(lhs, rhs);
 }
 
 /**
@@ -1599,7 +1759,8 @@ constexpr HgQuat operator*(const HgQuat& lhs, const HgQuat& rhs) {
  * Returns
  * - The conjugate of the quaternion
  */
-constexpr HgQuat hg_qconj(const HgQuat& quat) {
+template<typename T>
+constexpr HgQuat<T> hg_qconj(const HgQuat<T>& quat) {
     return {quat.r, -quat.i, -quat.j, -quat.k};
 }
 
@@ -1612,11 +1773,12 @@ constexpr HgQuat hg_qconj(const HgQuat& quat) {
  * Returns
  * - The created quaternion
  */
-inline HgQuat hg_axis_angle(const HgVec3& axis, f32 angle) {
-    f32 half_angle = angle / 2.0f;
-    f32 sin_half_angle = sinf(half_angle);
+template<typename T>
+inline HgQuat<T> hg_axis_angle(const HgVec3<T>& axis, T angle) {
+    T half_angle = angle / 2.0f;
+    T sin_half_angle = std::sin(half_angle);
     return {
-        cosf(half_angle),
+        std::cos(half_angle),
         axis.x * sin_half_angle,
         axis.y * sin_half_angle,
         axis.z * sin_half_angle,
@@ -1632,8 +1794,9 @@ inline HgQuat hg_axis_angle(const HgVec3& axis, f32 angle) {
  * Returns
  * - The rotated vector
  */
-constexpr HgVec3 hg_rotate(const HgQuat& lhs, const HgVec3& rhs) {
-    HgQuat q = hg_qmul(lhs, hg_qmul({0.0f, rhs.x, rhs.y, rhs.z}, hg_qconj(lhs)));
+template<typename T>
+constexpr HgVec3<T> hg_rotate(const HgQuat<T>& lhs, const HgVec3<T>& rhs) {
+    HgQuat q = lhs * HgQuat<T>{0, rhs.x, rhs.y, rhs.z} * hg_qconj(lhs);
     return {q.i, q.j, q.k};
 }
 
@@ -1646,11 +1809,12 @@ constexpr HgVec3 hg_rotate(const HgQuat& lhs, const HgVec3& rhs) {
  * Returns
  * - The rotated matrix
  */
-constexpr HgMat3 hg_rotate(const HgQuat& lhs, const HgMat3& rhs) {
+template<typename T>
+constexpr HgMat3<T> hg_rotate(const HgQuat<T>& lhs, const HgMat3<T>& rhs) {
     return {
-        hg_rotate(lhs, rhs.x),
-        hg_rotate(lhs, rhs.y),
-        hg_rotate(lhs, rhs.z),
+        hg_rotate<T>(lhs, rhs.x),
+        hg_rotate<T>(lhs, rhs.y),
+        hg_rotate<T>(lhs, rhs.z),
     };
 }
 
@@ -1664,7 +1828,7 @@ constexpr HgMat3 hg_rotate(const HgQuat& lhs, const HgMat3& rhs) {
  * Returns
  * - The created matrix
  */
-HgMat4 hg_model_matrix_2d(const HgVec3& position, const HgVec2& scale, f32 rotation);
+HgMat4f hg_model_matrix_2d(const HgVec3f& position, const HgVec2f& scale, f32 rotation);
 
 /**
  * Creates a model matrix for 3D graphics
@@ -1676,7 +1840,7 @@ HgMat4 hg_model_matrix_2d(const HgVec3& position, const HgVec2& scale, f32 rotat
  * Returns
  * - The created matrix
  */
-HgMat4 hg_model_matrix_3d(const HgVec3& position, const HgVec3& scale, const HgQuat& rotation);
+HgMat4f hg_model_matrix_3d(const HgVec3f& position, const HgVec3f& scale, const HgQuatf& rotation);
 
 /**
  * Creates a view matrix
@@ -1688,7 +1852,7 @@ HgMat4 hg_model_matrix_3d(const HgVec3& position, const HgVec3& scale, const HgQ
  * Returns
  * - The created matrix
  */
-HgMat4 hg_view_matrix(const HgVec3& position, f32 zoom, const HgQuat& rotation);
+HgMat4f hg_view_matrix(const HgVec3f& position, f32 zoom, const HgQuatf& rotation);
 
 /**
  * Creates an orthographic projection matrix
@@ -1703,7 +1867,7 @@ HgMat4 hg_view_matrix(const HgVec3& position, f32 zoom, const HgQuat& rotation);
  * Returns
  * - The created matrix
  */
-HgMat4 hg_projection_orthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far);
+HgMat4f hg_projection_orthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far);
 
 /**
  * Creates a perspective projection matrix
@@ -1716,7 +1880,7 @@ HgMat4 hg_projection_orthographic(f32 left, f32 right, f32 top, f32 bottom, f32 
  * Returns
  * - The created matrix
  */
-HgMat4 hg_projection_perspective(f32 fov, f32 aspect, f32 near, f32 far);
+HgMat4f hg_projection_perspective(f32 fov, f32 aspect, f32 near, f32 far);
 
 // random number generators : TODO
 
@@ -3243,11 +3407,11 @@ using HgEntityID = u64;
 /**
  * An ECS system index with compile time type info
  */
-template<typename SystemType, typename ComponentType>
+template<typename System, typename Component>
 struct HgSystemID {
-    static_assert(std::is_trivially_copyable_v<ComponentType> && std::is_standard_layout_v<ComponentType>);
-    static_assert(( std::is_trivially_copyable_v<SystemType> && std::is_standard_layout_v<SystemType>)
-                 || std::is_void_v<SystemType>);
+    static_assert(std::is_void_v<System> ||
+                 (std::is_trivially_copyable_v<System> && std::is_standard_layout_v<System>));
+    static_assert(std::is_trivially_copyable_v<Component> && std::is_standard_layout_v<Component>);
 
     u32 index;
 
@@ -3603,7 +3767,7 @@ void hg_pipeline_sprite_destroy(HgPipelineSprite *pipeline);
  * - pipeline The pipeline to update, must not be nullptr
  * - projection The value to update to, must not be nullptr
  */
-void hg_pipeline_sprite_update_projection(HgPipelineSprite *pipeline, HgMat4 *projection);
+void hg_pipeline_sprite_update_projection(HgPipelineSprite *pipeline, HgMat4f *projection);
 
 /**
  * Updates the sprite pipeline's view matrix
@@ -3612,7 +3776,7 @@ void hg_pipeline_sprite_update_projection(HgPipelineSprite *pipeline, HgMat4 *pr
  * - pipeline The pipeline to update, must not be nullptr
  * - view The value to update to, must not be nullptr
  */
-void hg_pipeline_sprite_update_view(HgPipelineSprite *pipeline, HgMat4 *view);
+void hg_pipeline_sprite_update_view(HgPipelineSprite *pipeline, HgMat4f *view);
 
 /**
  * The texture resources used by HgPipelineSprite
@@ -3703,15 +3867,15 @@ struct HgPipelineSpritePush {
     /**
      * The sprite's model matrix (position, scale, rotation, etc.)
      */
-    HgMat4 model;
+    HgMat4f model;
     /**
      * The beginning coordinates of the texture to read from (0.0f to 1.0f)
      */
-    HgVec2 uv_pos;
+    HgVec2f uv_pos;
     /**
      * The size within the texture to read (0.0f to 1.0f)
      */
-    HgVec2 uv_size;
+    HgVec2f uv_size;
 };
 
 /**
