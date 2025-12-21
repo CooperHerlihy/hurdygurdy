@@ -7,23 +7,23 @@
 #include <alloca.h>
 #endif
 
-#define HG_MAX_TESTS 1024
-
-static HgTest hg_internal_tests[HG_MAX_TESTS];
-static usize hg_internal_test_count;
+static HgArray<HgTest>& hg_internal_get_tests() {
+    static HgArray<HgTest> internal_tests = internal_tests.create(HgStdAllocator::get(), 0, 1024);
+    return internal_tests;
+}
 
 HgTest::HgTest(const char *test_name, bool (*test_function)()) : name(test_name), function(test_function) {
-    assert(hg_internal_test_count < HG_MAX_TESTS);
-    hg_internal_tests[hg_internal_test_count] = *this;
-    ++hg_internal_test_count;
+    hg_internal_get_tests().push(HgStdAllocator::get(), *this);
 }
 
 bool hg_run_tests() {
+    HgArray<HgTest>& tests = hg_internal_get_tests();
+
     bool all_succeeded = true;
     std::printf("HurdyGurdy: Tests Begun\n");
-    for (usize i = 0; i < hg_internal_test_count; ++i) {
-        std::printf("%s...\n", hg_internal_tests[i].name);
-        if (hg_internal_tests[i].function()) {
+    for (usize i = 0; i < tests.count; ++i) {
+        std::printf("%s...\n", tests[i].name);
+        if (tests[i].function()) {
             std::printf("\x1b[32mSuccess\n\x1b[0m");
         } else {
             all_succeeded = false;

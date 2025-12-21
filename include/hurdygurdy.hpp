@@ -2230,6 +2230,17 @@ struct HgStdAllocator : public HgAllocator {
      * - alignment The alignment in bytes of the allocation
      */
     void free_fn(void *allocation, usize size, usize alignment) override;
+
+    /**
+     * Convenience to grab a statically constructed HgStdAllocator vtable
+     *
+     * Returns
+     * - The global standard allocator, no different from any other
+     */
+    static HgStdAllocator& get() {
+        static HgStdAllocator mem;
+        return mem;
+    }
 };
 
 /**
@@ -2436,7 +2447,9 @@ struct HgArray {
         HgArray arr{};
         arr.items = mem.alloc<T>(capacity);
         arr.count = count;
-        std::memset(arr.items.data, 0, count * sizeof(T));
+        for (usize i = 0; i < count; ++i) {
+            new (&arr.items[i]) T{};
+        }
         return arr;
     }
 
