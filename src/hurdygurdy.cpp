@@ -141,7 +141,7 @@ HgMat4f hg_model_matrix_3d(const HgVec3f& position, const HgVec3f& scale, const 
 }
 
 HgMat4f hg_view_matrix(const HgVec3f& position, f32 zoom, const HgQuatf& rotation) {
-    HgMat4f rot{hg_rotate(hg_qconj(rotation), HgMat3f{1.0f})};
+    HgMat4f rot{hg_rotate(hg_conj(rotation), HgMat3f{1.0f})};
     HgMat4f pos{1.0f};
     pos.x.x = zoom;
     pos.y.y = zoom;
