@@ -49,67 +49,6 @@ int main(void) {
 
     HgStdAllocator mem;
 
-    {
-        HgECS ecs = HgECS::create(mem, 1 << 16, 2);
-        hg_defer(ecs.destroy(mem));
-
-        HgSystemID<void, u32> u32_system = ecs.add_system<void, u32>(mem, 1 << 16);
-        HgSystemID<u8, u64> u64_system = ecs.add_system<u8, u64>(mem, 1 << 16);
-        ecs.get_system(u64_system) = 5;
-
-        HgEntityID e1 = ecs.create_entity();
-        HgEntityID e2 = ecs.create_entity();
-        HgEntityID e3;
-        hg_info("e1: %" PRIx64 ", e2: %" PRIx64 "\n", e1, e2);
-        ecs.destroy_entity(e1);
-        ecs.destroy_entity(e2);
-        e1 = ecs.create_entity();
-        e2 = ecs.create_entity();
-        e3 = ecs.create_entity();
-        hg_info("e1: %" PRIx64 ", e2: %" PRIx64 ", e3: %" PRIx64 "\n", e1, e2, e3);
-
-        hg_info("u32_system first iteration\n");
-        for (HgEntityID *e = nullptr; ecs.iterate_system(u32_system, &e);) {
-            u32& comp = ecs.get_component(*e, u32_system);
-            hg_info("iterator: %" PRIu32 "\n", comp);
-        }
-
-        ecs.add_component(e1, u32_system) = 12;
-        ecs.add_component(e2, u32_system) = 42;
-        ecs.add_component(e3, u32_system) = 100;
-
-        hg_info("u32_system second iteration\n");
-        for (HgEntityID *e = nullptr; ecs.iterate_system(u32_system, &e);) {
-            hg_info("iterator: %" PRIu32 "\n", ecs.get_component(*e, u32_system));
-        }
-
-        ecs.destroy_entity(e1);
-
-        hg_info("u32_system third iteration\n");
-        for (HgEntityID *e = nullptr; ecs.iterate_system(u32_system, &e);) {
-            hg_info("iterator: %" PRIu32 "\n", ecs.get_component(*e, u32_system));
-        }
-
-        ecs.flush_system(u32_system);
-
-        hg_info("u32_system fourth iteration\n");
-        for (HgEntityID *e = nullptr; ecs.iterate_system(u32_system, &e);) {
-            hg_info("iterator: %" PRIu32 "\n", ecs.get_component(*e, u32_system));
-        }
-
-        ecs.add_component(e2, u64_system) = 2042;
-        ecs.add_component(e3, u64_system) = 2100;
-
-        hg_info("u64_system first iteration\n");
-        for (HgEntityID *e = nullptr; ecs.iterate_system(u64_system, &e);) {
-            hg_info("sys u64_system: %" PRIu64 ", sys u32_system: %" PRIu32 "\n",
-                    ecs.get_component(*e, u64_system),
-                    ecs.get_component(*e, u32_system));
-        }
-
-        hg_info("u64_system data: %d\n", ecs.get_system(u64_system));
-    }
-
     // HgECS ecs = HgECS::create(mem, 10000, 16);
     // auto transform_system = ecs.add_system<void, HgTransform>(10000);
     // auto sprite_system = ecs.add_system<HgSpriteSystem, HgSprite>(1000);

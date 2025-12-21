@@ -256,13 +256,6 @@ struct HgVec2 {
     HgVec2() {}
     constexpr HgVec2(T scalar) : x{scalar}, y{scalar} {}
     constexpr HgVec2(T x_val, T y_val) : x{x_val}, y{y_val} {}
-    constexpr HgVec2(const HgVec2& other) : x{other.x}, y{other.y} {}
-
-    constexpr HgVec2& operator=(const HgVec2& other) {
-        x = other.x;
-        y = other.y;
-        return *this;
-    }
 
     constexpr T& operator[](usize index) {
         return *(&x + index);
@@ -300,14 +293,6 @@ struct HgVec3 {
     constexpr HgVec3(T x_val, T y_val) : x{x_val}, y{y_val}, z{0} {}
     constexpr HgVec3(T x_val, T y_val, T z_val) : x{x_val}, y{y_val}, z{z_val} {}
     constexpr HgVec3(const HgVec2<T>& other) : x{other.x}, y{other.y}, z{0} {}
-    constexpr HgVec3(const HgVec3<T>& other) : x{other.x}, y{other.y}, z{other.z} {}
-
-    constexpr HgVec3& operator=(const HgVec3& other) {
-        x = other.x;
-        y = other.y;
-        z = other.z;
-        return *this;
-    }
 
     constexpr T& operator[](usize index) {
         return *(&x + index);
@@ -347,15 +332,6 @@ struct HgVec4 {
     constexpr HgVec4(T x_val, T y_val, T z_val, T w_val) : x{x_val}, y{y_val}, z{z_val}, w{w_val} {}
     constexpr HgVec4(const HgVec2<T>& other) : x{other.x}, y{other.y}, z{0}, w{0} {}
     constexpr HgVec4(const HgVec3<T>& other) : x{other.x}, y{other.y}, z{other.z}, w{0} {}
-    constexpr HgVec4(const HgVec4& other) : x{other.x}, y{other.y}, z{other.z}, w{other.w} {}
-
-    constexpr HgVec4& operator=(const HgVec4& other) {
-        x = other.x;
-        y = other.y;
-        z = other.z;
-        w = other.w;
-        return *this;
-    }
 
     constexpr T& operator[](usize index) {
         return *(&x + index);
@@ -392,13 +368,6 @@ struct HgMat2 {
     constexpr HgMat2(T scalar) : x{scalar, 0}, y{0, scalar} {}
     constexpr HgMat2(T xx, T xy, T yx, T yy) : x{xx, xy}, y{yx, yy} {}
     constexpr HgMat2(const HgVec2<T>& x_val, const HgVec2<T>& y_val) : x{x_val}, y{y_val} {}
-    constexpr HgMat2(const HgMat2& other) : x{other.x}, y{other.y} {}
-
-    constexpr HgMat2& operator=(const HgMat2& other) {
-        x = other.x;
-        y = other.y;
-        return *this;
-    }
 
     constexpr HgVec2<T>& operator[](usize index) {
         return *(&x + index);
@@ -440,15 +409,6 @@ struct HgMat3 {
         : x{x_val}, y{y_val}, z{z_val} {}
     constexpr HgMat3(const HgMat2<T>& other)
         : x{other.x}, y{other.y}, z{0, 0, 1} {}
-    constexpr HgMat3(const HgMat3& other)
-        : x{other.x}, y{other.y}, z{other.z} {}
-
-    constexpr HgMat3& operator=(const HgMat3& other) {
-        x = other.x;
-        y = other.y;
-        z = other.z;
-        return *this;
-    }
 
     constexpr HgVec3<T>& operator[](usize index) {
         return *(&x + index);
@@ -494,16 +454,6 @@ struct HgMat4 {
         : x{other.x}, y{other.y}, z{0, 0, 1, 0}, w{0, 0, 0, 1} {}
     constexpr HgMat4(const HgMat3<T>& other)
         : x{other.x}, y{other.y}, z{other.z}, w{0, 0, 0, 1} {}
-    constexpr HgMat4(const HgMat4& other)
-        : x{other.x}, y{other.y}, z{other.z}, w{other.w} {}
-
-    constexpr HgMat4& operator=(const HgMat4& other) {
-        x = other.x;
-        y = other.y;
-        z = other.z;
-        w = other.w;
-        return *this;
-    }
 
     constexpr HgVec4<T>& operator[](usize index) {
         return *(&x + index);
@@ -542,13 +492,6 @@ struct HgComplex {
     HgComplex() {}
     constexpr HgComplex(T r_val) : r{r_val}, i{0} {}
     constexpr HgComplex(T r_val, T i_val) : r{r_val}, i{i_val} {}
-    constexpr HgComplex(const HgComplex& other) : r{other.r}, i{other.i} {}
-
-    constexpr HgComplex& operator=(const HgComplex& other) {
-        r = other.r;
-        i = other.i;
-        return *this;
-    }
 
     constexpr T& operator[](usize index) {
         return *(&r + index);
@@ -587,15 +530,6 @@ struct HgQuat {
     HgQuat() {}
     constexpr HgQuat(T r_val) : r{r_val}, i{0}, j{0}, k{0} {}
     constexpr HgQuat(T r_val, T i_val, T j_val, T k_val) : r{r_val}, i{i_val}, j{j_val}, k{k_val} {}
-    constexpr HgQuat(const HgQuat& other) : r{other.r}, i{other.i}, j{other.j}, k{other.k} {}
-
-    constexpr HgQuat& operator=(const HgQuat& other) {
-        r = other.r;
-        i = other.i;
-        j = other.j;
-        k = other.k;
-        return *this;
-    }
 
     constexpr T& operator[](usize index) {
         return *(&r + index);
@@ -2462,18 +2396,33 @@ struct HgArray {
 
     /**
      * Push an item to the end to the array, resizing if needed
+     */
+    template<typename... U>
+    T& push(HgAllocator& mem) {
+        if (count >= items.count) {
+            assert(items.count > 0);
+            items = mem.realloc(items, items.count * 2);
+        }
+        new (&items[count]) T{};
+        ++count;
+        return items[count - 1];
+    }
+
+    /**
+     * Push an item to the end to the array, resizing if needed
      *
      * Parameters
      * - args The arguments to use to construct the new item
      */
     template<typename... U>
-    void push(HgAllocator& mem, U&&... args) {
+    T& push(HgAllocator& mem, U&&... args) {
         if (count >= items.count) {
             assert(items.count > 0);
             items = mem.realloc(items, items.count * 2);
         }
         new (&items[count]) T{std::forward<U>(args)...};
         ++count;
+        return items[count - 1];
     }
 
     /**
@@ -2489,10 +2438,29 @@ struct HgArray {
      *
      * Parameters
      * - index The index the new item will be placed at
+     */
+    template<typename... U>
+    T& insert(HgAllocator& mem, usize index) {
+        assert(index <= count);
+        if (count >= items.count) {
+            assert(items.count > 0);
+            items = mem.realloc(items, items.count * 2);
+        }
+        std::move(items.data + index, items.data + count, items.data + index + 1);
+        ++count;
+        new (&items[index]) T{};
+        return items[index];
+    }
+
+    /**
+     * Inserts an item into the array, resizing if needed
+     *
+     * Parameters
+     * - index The index the new item will be placed at
      * - args The arguments to use to construct the new item
      */
     template<typename... U>
-    void insert(HgAllocator& mem, usize index, U&&... args) {
+    T& insert(HgAllocator& mem, usize index, U&&... args) {
         assert(index <= count);
         if (count >= items.count) {
             assert(items.count > 0);
@@ -2501,6 +2469,7 @@ struct HgArray {
         std::move(items.data + index, items.data + count, items.data + index + 1);
         ++count;
         new (&items[index]) T{std::forward<U>(args)...};
+        return items[index];
     }
 
     /**
@@ -3146,30 +3115,6 @@ VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineCon
 VkPipeline hg_vk_create_compute_pipeline(VkDevice device, const HgVkPipelineConfig& config);
 
 /**
- * Attempts to find the index of a memory type which has the desired flags and
- * does not have the undesired flags
- *
- * Note, if no such memory type exists, the next best thing will be found
- *
- * The bitmask must not mask out all memory types
- *
- * Parameters
- * - gpu The Vulkan physical device, must not be nullptr
- * - bitmask A bitmask of which memory types cannot be used, must not be 0
- * - desired_flags The flags which the type should 
- * - undesired_flags The flags which the type should not have, though may have
- * Returns
- * - The found index of the memory type
- */
-u32 hg_vk_find_memory_type_index(
-    VkPhysicalDevice gpu,
-    u32 bitmask,
-    VkMemoryPropertyFlags desired_flags,
-    VkMemoryPropertyFlags undesired_flags);
-
-// Vulkan allocator : TODO?
-
-/**
  * A Vulkan swapchain and associated data
  */
 struct HgSwapchainData {
@@ -3265,6 +3210,30 @@ struct HgSwapchainCommands {
      */
     void end_and_present(VkQueue queue);
 };
+
+/**
+ * Attempts to find the index of a memory type which has the desired flags and
+ * does not have the undesired flags
+ *
+ * Note, if no such memory type exists, the next best thing will be found
+ *
+ * The bitmask must not mask out all memory types
+ *
+ * Parameters
+ * - gpu The Vulkan physical device, must not be nullptr
+ * - bitmask A bitmask of which memory types cannot be used, must not be 0
+ * - desired_flags The flags which the type should 
+ * - undesired_flags The flags which the type should not have, though may have
+ * Returns
+ * - The found index of the memory type
+ */
+u32 hg_vk_find_memory_type_index(
+    VkPhysicalDevice gpu,
+    u32 bitmask,
+    VkMemoryPropertyFlags desired_flags,
+    VkMemoryPropertyFlags undesired_flags);
+
+// Vulkan allocator : TODO?
 
 /**
  * Writes to a Vulkan device local buffer through a staging buffer
@@ -3422,20 +3391,22 @@ void hg_vk_image_staging_read(
 
 // mipmap generation : TODO
 
-// ecs multithreading support : TODO
-
 /**
  * The handle for an ECS entity
  */
-using HgEntityID = u64;
+struct HgEntity {
+    u32 index;
+
+    operator u32() {
+        return index;
+    }
+};
 
 /**
  * An ECS system index with compile time type info
  */
-template<typename System, typename Component>
-struct HgSystemID {
-    static_assert(std::is_void_v<System> ||
-                 (std::is_trivially_copyable_v<System> && std::is_standard_layout_v<System>));
+template<typename Component>
+struct HgSystem {
     static_assert(std::is_trivially_copyable_v<Component> && std::is_standard_layout_v<Component>);
 
     u32 index;
@@ -3454,14 +3425,6 @@ struct HgECS {
      */
     struct System {
         /**
-         * Unique data used by the system
-         */
-        HgSpan<void> system_data;
-        /**
-         * The alignment of the system's unique data
-         */
-        usize system_data_alignment;
-        /**
          * entity_indices[entity id] is the index into components and
          * component_entities for that entity id
          */
@@ -3469,7 +3432,7 @@ struct HgECS {
         /**
          * Each index is the entity associated with components[index]
          */
-        HgSpan<HgEntityID> component_entities;
+        HgSpan<HgEntity> component_entities;
         /**
          * The data for the components
          */
@@ -3489,21 +3452,17 @@ struct HgECS {
     };
 
     /**
+     * The component systems
+     */
+    HgArray<System> systems;
+    /**
      * The pool of entity ids
      */
-    HgSpan<HgEntityID> entity_pool;
+    HgSpan<HgEntity> entity_pool;
     /**
      * The next entity in the pool
      */
-    HgEntityID entity_next;
-    /**
-     * The component systems
-     */
-    HgSpan<System> systems;
-    /**
-     * The number of systems
-     */
-    u32 system_count;
+    HgEntity entity_next;
 
     /**
      * Creates an entity component system
@@ -3511,11 +3470,10 @@ struct HgECS {
      * Parameters
      * - allocator The allocator the ecs will use
      * - max_entities The max entities that can exist, must be greater than 0
-     * - max_systems The max systems that can exist, must be greater than 0
      * Returns
      * - The created entity component system
      */
-    static HgECS create(HgAllocator& mem, u32 max_entities, u32 max_systems);
+    static HgECS create(HgAllocator& mem, u32 max_entities);
 
     /**
      * Destroys an entity component system
@@ -3531,21 +3489,13 @@ struct HgECS {
      * Adds a component system to the ecs
      *
      * Parameters
-     * - data_size The size in bytes of the unique data used by the system
-     * - data_alignment The alignment of the unique data used by the system
      * - component_size The size in bytes of each component
      * - component_alignment The alignment of each component
      * - max_component The maximum number of components in the system
      * Result
      * - The index of the new system
      */
-    u32 add_system_untyped(
-        HgAllocator& mem,
-        usize data_size,
-        usize data_alignment,
-        u32 component_size,
-        u32 component_alignment,
-        u32 max_components);
+    u32 add_system_untyped(HgAllocator& mem, u32 component_size, u32 component_alignment, u32 max_components);
 
     /**
      * Adds a component system using the given type
@@ -3555,63 +3505,10 @@ struct HgECS {
      * Result
      * - The index of the new system with type info
      */
-    template<typename SystemType, typename ComponentType>
-    HgSystemID<SystemType, ComponentType> add_system(HgAllocator& mem, u32 max_components) {
-        if constexpr (std::is_void_v<SystemType>) {
-            return {add_system_untyped(
-                mem,
-                0,
-                0,
-                sizeof(ComponentType),
-                alignof(ComponentType),
-                max_components)};
-        } else {
-            return {add_system_untyped(
-                mem,
-                sizeof(SystemType),
-                alignof(SystemType),
-                sizeof(ComponentType),
-                alignof(ComponentType),
-                max_components)};
-        }
+    template<typename ComponentType>
+    HgSystem<ComponentType> add_system(HgAllocator& mem, u32 max_components) {
+        return {add_system_untyped(mem, sizeof(ComponentType), alignof(ComponentType), max_components)};
     }
-
-    /**
-     * Gets a pointer to the system's unique data
-     *
-     * Parameters
-     * - system_index The system to get the data of
-     * Returns
-     * - The system's data
-     */
-    void *get_system_untyped(u32 system);
-
-    /**
-     * Gets a typed pointer to the system's unique data
-     *
-     * Parameters
-     * - system_id The system to get the data of
-     * Returns
-     * - The system's data
-     */
-    template<typename SystemType, typename ComponentType>
-    SystemType& get_system(HgSystemID<SystemType, ComponentType> system) {
-        return *(SystemType *)get_system_untyped(system);
-    }
-
-    /**
-     * Flushes component removals in an ecs system
-     *
-     * When a component is removed, it is only flagged dead, so removals must be
-     * flushed to keep components contiguous
-     *
-     * Note, this function moves components, so should not be used while iterating
-     * or in a multithreaded context, while simple removal can be
-     *
-     * Parameters
-     * - system_index The system to flush
-     */
-    void flush_system(u32 system);
 
     /**
      * Gets the next iterator, the next entity in a system from an ecs
@@ -3623,7 +3520,7 @@ struct HgECS {
      * - true if another component is available
      * - false if iteration is complete
      */
-    bool iterate_system(u32 system_index, HgEntityID **iterator);
+    bool iterate_system(u32 system_index, HgEntity **iterator);
 
     /**
      * Creates an entity in an ECS, and returns its id
@@ -3631,15 +3528,17 @@ struct HgECS {
      * Returns
      * - The id of the created entity, will never be 0
      */
-    HgEntityID create_entity();
+    HgEntity create_entity();
 
     /**
      * Destroys an entity in an ECS
      *
+     * Note, this function will invalidate iterators
+     *
      * Parameters
      * - entity The id of the entity to destroy
      */
-    void destroy_entity(HgEntityID entity);
+    void destroy_entity(HgEntity entity);
 
     /**
      * Checks whether an entity id is alive and can be used
@@ -3649,7 +3548,7 @@ struct HgECS {
      * Returns
      * - Whether the entity is alive and can be used
      */
-    bool is_entity_alive(HgEntityID entity);
+    bool is_entity_alive(HgEntity entity);
 
     /**
      * Adds a component to an entity
@@ -3662,7 +3561,7 @@ struct HgECS {
      * Returns
      * - A pointer to the created component
      */
-    void *add_component_untyped(HgEntityID entity, u32 system);
+    void *add_component_untyped(HgEntity entity, u32 system);
 
     /**
      * Casts the component to the given type
@@ -3675,21 +3574,23 @@ struct HgECS {
      * Returns
      * - A pointer to the created component
      */
-    template<typename SystemType, typename ComponentType>
-    ComponentType& add_component(HgEntityID entity, HgSystemID<SystemType, ComponentType> system) {
+    template<typename ComponentType>
+    ComponentType& add_component(HgEntity entity, HgSystem<ComponentType> system) {
         return *(ComponentType *)add_component_untyped(entity, system);
     }
 
     /**
      * Removes a component from an entity
      *
-     * Note, the component must already exist
+     * The entity must have an associated component in the system
+     *
+     * Note, this function will invalidate iterators
      *
      * Parameters
      * - entity The id of the entity, must not be 0
      * - system_index The system to remove the component from
      */
-    void remove_component(HgEntityID entity, u32 system);
+    void remove_component(HgEntity entity, u32 system);
 
     /**
      * Checks whether an entity has a component or not
@@ -3700,7 +3601,7 @@ struct HgECS {
      * Returns
      * - Whether the entity has a component in the system
      */
-    bool has_component(HgEntityID entity, u32 system);
+    bool has_component(HgEntity entity, u32 system);
 
     /**
      * Gets a pointer to the entity's component
@@ -3713,7 +3614,7 @@ struct HgECS {
      * Returns
      * - The entity's component, will never be 0
      */
-    void *get_component_untyped(HgEntityID entity, u32 system);
+    void *get_component_untyped(HgEntity entity, u32 system);
 
     /**
      * Casts the pointer to the given type
@@ -3726,8 +3627,8 @@ struct HgECS {
      * Returns
      * - The entity's component, will never be 0
      */
-    template<typename SystemType, typename ComponentType>
-    ComponentType& get_component(HgEntityID entity, HgSystemID<SystemType, ComponentType> system) {
+    template<typename ComponentType>
+    ComponentType& get_component(HgEntity entity, HgSystem<ComponentType> system) {
         return *(ComponentType *)get_component_untyped(entity, system);
     }
 
@@ -3740,7 +3641,7 @@ struct HgECS {
      * Returns
      * - The components's entity, will never be 0
      */
-    HgEntityID get_entity(void *component, u32 system_index);
+    HgEntity get_entity(void *component, u32 system_index);
 };
 
 /**
