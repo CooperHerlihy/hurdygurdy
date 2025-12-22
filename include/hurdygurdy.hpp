@@ -2353,6 +2353,7 @@ struct HgArray {
      * Access using the index operator
      */
     T& operator[](usize index) {
+        assert(index < count);
         return items[index];
     }
 
@@ -3403,20 +3404,6 @@ struct HgEntity {
 };
 
 /**
- * An ECS system index with compile time type info
- */
-template<typename Component>
-struct HgSystem {
-    static_assert(std::is_trivially_copyable_v<Component> && std::is_standard_layout_v<Component>);
-
-    u32 index;
-
-    operator u32() const {
-        return index;
-    }
-};
-
-/**
  * An entity component system
  */
 struct HgECS {
@@ -3454,7 +3441,7 @@ struct HgECS {
     /**
      * The component systems
      */
-    HgArray<System> systems;
+    HgSpan<System> systems;
     /**
      * The pool of entity ids
      */
@@ -3481,46 +3468,11 @@ struct HgECS {
     void destroy(HgAllocator& mem);
 
     /**
-     * Resets an entity component system, removing all entities and components
+     * Resets an entity component system, removing all entities
+     *
+     * Note, does not unregister components, just clears storage
      */
     void reset();
-
-    /**
-     * Adds a component system to the ecs
-     *
-     * Parameters
-     * - component_size The size in bytes of each component
-     * - component_alignment The alignment of each component
-     * - max_component The maximum number of components in the system
-     * Result
-     * - The index of the new system
-     */
-    u32 add_system_untyped(HgAllocator& mem, u32 component_size, u32 component_alignment, u32 max_components);
-
-    /**
-     * Adds a component system using the given type
-     *
-     * Parameters
-     * - max_component The maximum number of components in the system
-     * Result
-     * - The index of the new system with type info
-     */
-    template<typename ComponentType>
-    HgSystem<ComponentType> add_system(HgAllocator& mem, u32 max_components) {
-        return {add_system_untyped(mem, sizeof(ComponentType), alignof(ComponentType), max_components)};
-    }
-
-    /**
-     * Gets the next iterator, the next entity in a system from an ecs
-     *
-     * Parameters
-     * - system_index The index of the system to traverse
-     * - iterator The previous entity, point to nullptr to begin, iter must not be nullptr
-     * Returns
-     * - true if another component is available
-     * - false if iteration is complete
-     */
-    bool iterate_system(u32 system_index, HgEntity **iterator);
 
     /**
      * Creates an entity in an ECS, and returns its id
@@ -3548,7 +3500,78 @@ struct HgECS {
      * Returns
      * - Whether the entity is alive and can be used
      */
-    bool is_entity_alive(HgEntity entity);
+    bool alive(HgEntity entity);
+
+    /**
+     * Creates a new id for each component
+     *
+     * Should only be used by hg_component_id
+     */
+    static u32 create_component_id();
+
+    /**
+     * Gets the unique component id for a type
+     *
+     * Returns
+     * - The type's component id
+     */
+    template<typename T>
+    u32 get_component_id() {
+        static_assert(std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T>);
+
+        static const u32 id = create_component_id();
+        return id;
+    }
+
+    /**
+     * Registers a component in this ECS
+     *
+     * Parameters
+     * - mem The allocator to get memory from
+     * - max_component The max number of this component the ECS can hold
+     * - component_size The size in bytes of the component struct
+     * - component_alignment The alignment of the component struct
+     * - component_id The id of the component
+     */
+    void register_component_untyped(
+        HgAllocator& mem,
+        u32 max_components,
+        u32 component_size,
+        u32 component_alignment,
+        u32 component_id);
+
+    /**
+     * Registers a component in this ECS
+     *
+     * Parameters
+     * - mem The allocator to get memory from
+     * - max_component The max number of this component the ECS can hold
+     */
+    template<typename T>
+    void register_component(HgAllocator& mem, u32 max_components) {
+        register_component_untyped(mem, max_components, sizeof(T), alignof(T), get_component_id<T>());
+    }
+
+    /**
+     * Unregisters a component in this ECS
+     *
+     * Parameters
+     * - mem The allocator to get memory from
+     * - component_id The id of the component
+     */
+    void unregister_component_untyped(HgAllocator& mem, u32 component_id);
+
+    /**
+     * Unregisters a component in this ECS
+     *
+     * Parameters
+     * - mem The allocator to get memory from
+     */
+    template<typename T>
+    void unregister_component(HgAllocator& mem) {
+        unregister_component(mem, get_component_id<T>());
+    }
+
 
     /**
      * Adds a component to an entity
@@ -3557,11 +3580,11 @@ struct HgECS {
      *
      * Parameters
      * - entity The id of the entity, must not be 0
-     * - system_index The system to add the component in
+     * - componenet_id The id of the component
      * Returns
      * - A pointer to the created component
      */
-    void *add_component_untyped(HgEntity entity, u32 system);
+    void *add_untyped(HgEntity entity, u32 component_id);
 
     /**
      * Casts the component to the given type
@@ -3570,13 +3593,12 @@ struct HgECS {
      *
      * Parameters
      * - entity The id of the entity, must not be 0
-     * - system_index The system to add the component in
      * Returns
      * - A pointer to the created component
      */
-    template<typename ComponentType>
-    ComponentType& add_component(HgEntity entity, HgSystem<ComponentType> system) {
-        return *(ComponentType *)add_component_untyped(entity, system);
+    template<typename T>
+    T& add(HgEntity entity) {
+        return *(T *)add_untyped(entity, get_component_id<T>());
     }
 
     /**
@@ -3588,20 +3610,61 @@ struct HgECS {
      *
      * Parameters
      * - entity The id of the entity, must not be 0
-     * - system_index The system to remove the component from
+     * - component_id The id of the component
      */
-    void remove_component(HgEntity entity, u32 system);
+    void remove_untyped(HgEntity entity, u32 component_id);
+
+    /**
+     * Removes a component from an entity
+     *
+     * The entity must have an associated component in the system
+     *
+     * Note, this function will invalidate iterators
+     *
+     * Parameters
+     * - entity The id of the entity, must not be 0
+     */
+    template<typename T>
+    void remove(HgEntity entity) {
+        remove_untyped(entity, get_component_id<T>());
+    }
 
     /**
      * Checks whether an entity has a component or not
      *
      * Parameters
      * - entity The id of the entity, must not be 0
-     * - system_index The system to check
+     * - component_id The id of the component
      * Returns
      * - Whether the entity has a component in the system
      */
-    bool has_component(HgEntity entity, u32 system);
+    bool has_untyped(HgEntity entity, u32 component_id);
+
+    /**
+     * Checks whether an entity has a component or not
+     *
+     * Parameters
+     * - entity The id of the entity, must not be 0
+     * Returns
+     * - Whether the entity has a component in the system
+     */
+    template<typename T>
+    bool has(HgEntity entity) {
+        return has_untyped(entity, get_component_id<T>());
+    }
+
+    /**
+     * Checks whether an entity has a component or not
+     *
+     * Parameters
+     * - entity The id of the entity, must not be 0
+     * Returns
+     * - Whether the entity has a component in the system
+     */
+    template<typename... Ts>
+    bool has_all(HgEntity entity) {
+        return (has<Ts>(entity) && ...);
+    }
 
     /**
      * Gets a pointer to the entity's component
@@ -3610,26 +3673,68 @@ struct HgECS {
      *
      * Parameters
      * - entity The id of the entity, must not be 0
-     * - system_index The system to get the component from
+     * - component_id The id of the component
      * Returns
      * - The entity's component, will never be 0
      */
-    void *get_component_untyped(HgEntity entity, u32 system);
+    void *get_untyped(HgEntity entity, u32 component_id);
 
     /**
-     * Casts the pointer to the given type
+     * Gets a pointer to the entity's component
      *
      * Note, the entity must have a component in the system
      *
      * Parameters
      * - entity The id of the entity, must not be 0
-     * - system_index The system to get the component from
      * Returns
      * - The entity's component, will never be 0
      */
-    template<typename ComponentType>
-    ComponentType& get_component(HgEntity entity, HgSystem<ComponentType> system) {
-        return *(ComponentType *)get_component_untyped(entity, system);
+    template<typename T>
+    T& get(HgEntity entity) {
+        return *(T *)get_untyped(entity, get_component_id<T>());
+    }
+
+    /**
+     * Finds the index/id of the system with the fewest elements
+     *
+     * Parameters
+     * - ids The indices to check
+     * Returns
+     * - The index/id of the smallest in the array
+     */
+    u32 smallest_system_untyped(HgSpan<u32> ids);
+
+    /**
+     * Finds the index/id of the system with the fewest elements
+     *
+     * Returns
+     * - The index/id of the smallest in the array
+     */
+    template<typename... Ts>
+    u32 smallest_system() {
+        u32 ids[sizeof...(Ts)];
+
+        u32 index = 0;
+        ((ids[index++] = get_component_id<Ts>()), ...);
+
+        return smallest_system_untyped({ids, hg_countof(ids)});
+    }
+
+    /**
+     * Iterates over all entities with the given components
+     *
+     * Parameters
+     * - function The function to call, gets a reference to each component
+     */
+    template<typename... Ts, typename Fn>
+    void for_each(Fn function) {
+        u32 id = smallest_system<Ts...>();
+
+        for (u32 i = 1; i < systems[id].component_count; ++i) {
+            HgEntity e = systems[id].component_entities[i];
+            if (has_all<Ts...>(e))
+                function(get<Ts>(e)...);
+        }
     }
 
     /**
@@ -3637,11 +3742,25 @@ struct HgECS {
      *
      * Parameters
      * - component The component to lookup, must be a valid component
-     * - system_index The system to get the component from
+     * - component_id The id of the component
      * Returns
      * - The components's entity, will never be 0
      */
-    HgEntity get_entity(void *component, u32 system_index);
+    HgEntity get_entity_untyped(const void *component, u32 component_id);
+
+    /**
+     * Gets the entity id from it's component
+     *
+     * Parameters
+     * - component The component to lookup, must be a valid component
+     * Returns
+     * - The components's entity, will never be 0
+     */
+    template<typename T>
+    HgEntity get_entity_untyped(const T& component) {
+        u32 id = get_component_id<T>();
+        return get_entity_untyped(&component, id);
+    }
 };
 
 /**

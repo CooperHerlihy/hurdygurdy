@@ -1942,8 +1942,10 @@ HgECS HgECS::create(
     assert(max_entities > 0);
 
     HgECS ecs{};
-    ecs.systems = ecs.systems.create(mem, 0, 16);
+    ecs.systems = mem.alloc<System>(16);
     ecs.entity_pool = mem.alloc<HgEntity>(max_entities + 1);
+
+    std::fill_n(ecs.systems.data, ecs.systems.count, System{});
 
     for (u32 i = 0; i < ecs.entity_pool.count; ++i) {
         ecs.entity_pool[i] = {i + 1};
@@ -1957,11 +1959,13 @@ HgECS HgECS::create(
 void HgECS::destroy(HgAllocator& mem) {
     mem.free(entity_pool);
     for (u32 i = 0; i < systems.count; ++i) {
+        if (systems[i].component_count == 0)
+            continue;
         mem.free(systems[i].entity_indices);
         mem.free(systems[i].component_entities);
         mem.free(systems[i].components, systems[i].component_alignment);
     }
-    systems.destroy(mem);
+    mem.free(systems);
 }
 
 void HgECS::reset() {
@@ -1972,45 +1976,12 @@ void HgECS::reset() {
     (void)reserved_null_entity;
 
     for (u32 i = 0; i < systems.count; ++i) {
+        if (systems[i].component_count == 0)
+            continue;
         std::memset(systems[i].entity_indices.data, 0, systems[i].component_count);
         std::memset(systems[i].component_entities.data, 0, systems[i].component_count);
         systems[i].component_count = 1;
     }
-}
-
-u32 HgECS::add_system_untyped(
-    HgAllocator& mem,
-    u32 component_size,
-    u32 component_alignment,
-    u32 max_components
-) {
-    System& system = systems.push(mem);
-    system.entity_indices = mem.alloc<u32>(entity_pool.count);
-    system.component_entities = mem.alloc<HgEntity>(max_components);
-    system.components = mem.alloc(max_components * component_size, component_alignment);
-    system.component_size = component_size;
-    system.component_alignment = component_alignment;
-    system.component_count = 1;
-
-    std::memset(system.entity_indices.data, 0, system.entity_indices.size());
-    std::memset(system.component_entities.data, 0, system.component_entities.size());
-
-    return (u32)systems.count - 1;
-}
-
-bool HgECS::iterate_system(u32 system, HgEntity **iterator) {
-    assert(system < systems.count);
-    assert(iterator != nullptr);
-
-    if (*iterator == nullptr) {
-        *iterator = systems[system].component_entities.data;
-    } else {
-        assert(*iterator > systems[system].component_entities.data);
-        assert(*iterator <= systems[system].component_entities.data + systems[system].component_count);
-    }
-
-    *iterator += 1;
-    return *iterator < systems[system].component_entities.data + systems[system].component_count;
 }
 
 HgEntity HgECS::create_entity() {
@@ -2024,78 +1995,133 @@ void HgECS::destroy_entity(HgEntity entity) {
     assert(entity != 0 && entity_pool[entity] == 0);
 
     for (u32 i = 0; i < systems.count; ++i) {
-        if (has_component(entity, i))
-            remove_component(entity, i);
+        if (systems[i].component_count > 0 && has_untyped(entity, i))
+            remove_untyped(entity, i);
     }
     entity_pool[entity] = entity_next;
     entity_next = entity;
 }
 
-bool HgECS::is_entity_alive(HgEntity entity) {
+bool HgECS::alive(HgEntity entity) {
     return entity != 0 && entity_pool[entity] == 0;
 }
 
-void *HgECS::add_component_untyped(HgEntity entity, u32 system) {
-    assert(entity != 0);
-    assert(system < systems.count);
-
-    assert(systems[system].entity_indices[entity] == 0);
-
-    u32 index = systems[system].component_count;
-    ++systems[system].component_count;
-
-    assert(systems[system].entity_indices[entity] == 0);
-    systems[system].entity_indices[entity] = index;
-
-    assert(systems[system].component_entities[index] == 0);
-    systems[system].component_entities[index] = entity;
-
-    return (u8 *)systems[system].components.data + index * systems[system].component_size;
+u32& hg_internal_current_component_id() {
+    static u32 id = 0;
+    return id;
 }
 
-void HgECS::remove_component(HgEntity entity, u32 system) {
+u32 HgECS::create_component_id() {
+    u32 id = hg_internal_current_component_id();
+    ++hg_internal_current_component_id();
+    return id;
+}
+
+void HgECS::register_component_untyped(
+    HgAllocator& mem,
+    u32 max_components,
+    u32 component_size,
+    u32 component_alignment,
+    u32 component_id
+) {
+    assert(max_components > 0);
+    assert(component_size > 0);
+    assert(component_alignment > 0);
+
+    if (component_id > systems.count)
+        systems = mem.realloc(systems, component_id * 2);
+
+    systems[component_id].entity_indices = mem.alloc<u32>(entity_pool.count);
+    systems[component_id].component_entities = mem.alloc<HgEntity>(max_components);
+    systems[component_id].components = mem.alloc(max_components * component_size, component_alignment);
+    systems[component_id].component_size = component_size;
+    systems[component_id].component_alignment = component_alignment;
+    systems[component_id].component_count = 1;
+
+    std::memset(systems[component_id].entity_indices.data, 0, systems[component_id].entity_indices.size());
+    std::memset(systems[component_id].component_entities.data, 0, systems[component_id].component_entities.size());
+}
+
+void HgECS::unregister_component_untyped(HgAllocator& mem, u32 component_id) {
+    assert(systems[component_id].component_count > 0);
+
+    mem.free(systems[component_id].entity_indices);
+    mem.free(systems[component_id].component_entities);
+    mem.free(systems[component_id].components, systems[component_id].component_alignment);
+
+    std::fill_n(&systems[component_id], 1, System{});
+}
+
+void *HgECS::add_untyped(HgEntity entity, u32 component_id) {
     assert(entity != 0);
-    assert(system < systems.count);
+    assert(component_id < systems.count);
 
-    --systems[system].component_count;
+    assert(systems[component_id].entity_indices[entity] == 0);
 
-    HgEntity last_entity = systems[system].component_entities[systems[system].component_count];
+    u32 index = systems[component_id].component_count;
+    ++systems[component_id].component_count;
 
-    u32 index = systems[system].entity_indices[entity];
+    assert(systems[component_id].entity_indices[entity] == 0);
+    systems[component_id].entity_indices[entity] = index;
+
+    assert(systems[component_id].component_entities[index] == 0);
+    systems[component_id].component_entities[index] = entity;
+
+    return (u8 *)systems[component_id].components.data + index * systems[component_id].component_size;
+}
+
+void HgECS::remove_untyped(HgEntity entity, u32 component_id) {
+    assert(entity != 0);
+    assert(component_id < systems.count);
+
+    --systems[component_id].component_count;
+
+    HgEntity last_entity = systems[component_id].component_entities[systems[component_id].component_count];
+
+    u32 index = systems[component_id].entity_indices[entity];
     assert(index != 0);
-    assert(systems[system].component_entities[index] == entity);
+    assert(systems[component_id].component_entities[index] == entity);
 
-    u32 last_index = (u32)systems[system].component_count;
+    u32 last_index = (u32)systems[component_id].component_count;
 
-    void *current = (u8 *)systems[system].components.data + index * systems[system].component_size;
-    void *last = (u8 *)systems[system].components.data + last_index * systems[system].component_size;
-    std::memcpy(current, last, systems[system].component_size);
+    void *current = (u8 *)systems[component_id].components.data + index * systems[component_id].component_size;
+    void *last = (u8 *)systems[component_id].components.data + last_index * systems[component_id].component_size;
+    std::memcpy(current, last, systems[component_id].component_size);
 
-    systems[system].component_entities[index] = last_entity;
-    systems[system].component_entities[last_index] = {};
+    systems[component_id].component_entities[index] = last_entity;
+    systems[component_id].component_entities[last_index] = {};
 
-    systems[system].entity_indices[entity] = 0;
-    systems[system].entity_indices[last_entity] = index;
+    systems[component_id].entity_indices[entity] = 0;
+    systems[component_id].entity_indices[last_entity] = index;
 }
 
-bool HgECS::has_component(HgEntity entity, u32 system) {
+bool HgECS::has_untyped(HgEntity entity, u32 component_id) {
     assert(entity != 0);
-    assert(system < systems.count);
-    return systems[system].entity_indices[entity] != 0;
+    assert(component_id < systems.count);
+    return systems[component_id].entity_indices[entity] != 0;
 }
 
-void *HgECS::get_component_untyped(HgEntity entity, u32 system) {
+void *HgECS::get_untyped(HgEntity entity, u32 component_id) {
     assert(entity != 0);
-    assert(system < systems.count);
+    assert(component_id < systems.count);
 
-    u32 index = systems[system].entity_indices[entity];
+    u32 index = systems[component_id].entity_indices[entity];
 
     assert(index != 0);
-    assert(systems[system].component_entities[index] == entity);
-    return (u8 *)systems[system].components.data + index * systems[system].component_size;
+    assert(systems[component_id].component_entities[index] == entity);
+    return (u8 *)systems[component_id].components.data + index * systems[component_id].component_size;
 }
 
-HgEntity HgECS::get_entity(void *component, u32 system) {
+u32 HgECS::smallest_system_untyped(HgSpan<u32> ids) {
+    u32 smallest = ids[0];
+    for (usize i = 1; i < ids.count; ++i) {
+        if (systems[ids[i]].component_count < systems[smallest].component_count)
+            smallest = ids[i];
+    }
+    return smallest;
+}
+
+HgEntity HgECS::get_entity_untyped(const void *component, u32 system) {
     assert(component != nullptr);
     assert(system < systems.count);
 
@@ -2114,8 +2140,8 @@ hg_test(hg_ecs) {
     HgECS ecs = HgECS::create(mem, 1 << 16);
     hg_defer(ecs.destroy(mem));
 
-    HgSystem<u32> u32_system = ecs.add_system<u32>(mem, 1 << 16);
-    HgSystem<u64> u64_system = ecs.add_system<u64>(mem, 1 << 16);
+    ecs.register_component<u32>(mem, 1 << 16);
+    ecs.register_component<u64>(mem, 1 << 16);
 
     HgEntity e1 = ecs.create_entity();
     HgEntity e2 = ecs.create_entity();
@@ -2130,20 +2156,22 @@ hg_test(hg_ecs) {
     e1 = ecs.create_entity();
     hg_test_assert(e1 == 3);
 
-    for (HgEntity *e = nullptr; ecs.iterate_system(u32_system, &e);) {
-        hg_test_assert(false);
-    }
+    bool has_unknown = false;
+    ecs.for_each<u32>([&](u32 u) {
+        (void)u;
+        has_unknown = true;
+    });
+    hg_test_assert(!has_unknown);
 
-    ecs.add_component(e1, u32_system) = 12;
-    ecs.add_component(e2, u32_system) = 42;
-    ecs.add_component(e3, u32_system) = 100;
+    ecs.add<u32>(e1) = 12;
+    ecs.add<u32>(e2) = 42;
+    ecs.add<u32>(e3) = 100;
 
     bool has_12 = false;
     bool has_42 = false;
     bool has_100 = false;
-    for (HgEntity *e = nullptr; ecs.iterate_system(u32_system, &e);) {
-        u32& comp = ecs.get_component(*e, u32_system);
-        switch (comp) {
+    ecs.for_each<u32>([&](u32 u) {
+        switch (u) {
             case 12:
                 has_12 = true;
                 break;
@@ -2154,24 +2182,22 @@ hg_test(hg_ecs) {
                 has_100 = true;
                 break;
             default:
-                hg_test_assert(false && "unexpected component");
+                has_unknown = true;
                 break;
         }
-    }
-    hg_test_assert(has_12 && has_42 && has_100);
+    });
+    hg_test_assert(has_12 && has_42 && has_100 && !has_unknown);
 
-    ecs.add_component(e2, u64_system) = 2042;
-    ecs.add_component(e3, u64_system) = 2100;
+    ecs.add<u64>(e2) = 2042;
+    ecs.add<u64>(e3) = 2100;
 
     has_12 = false;
     has_42 = false;
     has_100 = false;
     bool has_2042 = false;
     bool has_2100 = false;
-    for (HgEntity *e = nullptr; ecs.iterate_system(u64_system, &e);) {
-        u64& comp_u64 = ecs.get_component(*e, u64_system);
-        u32& comp_u32 = ecs.get_component(*e, u32_system);
-        switch (comp_u32) {
+    ecs.for_each<u32, u64>([&](u32 comp32, u64 comp64) {
+        switch (comp32) {
             case 12:
                 has_12 = true;
                 break;
@@ -2182,10 +2208,10 @@ hg_test(hg_ecs) {
                 has_100 = true;
                 break;
             default:
-                hg_test_assert(false && "unexpected component");
+                has_unknown = true;
                 break;
         }
-        switch (comp_u64) {
+        switch (comp64) {
             case 2042:
                 has_2042 = true;
                 break;
@@ -2193,20 +2219,19 @@ hg_test(hg_ecs) {
                 has_2100 = true;
                 break;
             default:
-                hg_test_assert(false && "unexpected component");
+                has_unknown = true;
                 break;
         }
-    }
-    hg_test_assert(!has_12 && has_42 && has_100 && has_2042 && has_2100);
+    });
+    hg_test_assert(!has_12 && has_42 && has_100 && has_2042 && has_2100 && !has_unknown);
 
-    ecs.destroy_entity(e2);
+    ecs.destroy_entity(e1);
 
     has_12 = false;
     has_42 = false;
     has_100 = false;
-    for (HgEntity *e = nullptr; ecs.iterate_system(u32_system, &e);) {
-        u32& comp = ecs.get_component(*e, u32_system);
-        switch (comp) {
+    ecs.for_each<u32>([&](u32 u) {
+        switch (u) {
             case 12:
                 has_12 = true;
                 break;
@@ -2217,11 +2242,11 @@ hg_test(hg_ecs) {
                 has_100 = true;
                 break;
             default:
-                hg_test_assert(false && "unexpected component");
+                has_unknown = true;
                 break;
         }
-    }
-    hg_test_assert(has_12 && !has_42 && has_100);
+    });
+    hg_test_assert(!has_12 && has_42 && has_100 && !has_unknown);
 
     return true;
 }
