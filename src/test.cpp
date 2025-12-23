@@ -49,10 +49,6 @@ int main(void) {
 
     HgStdAllocator mem;
 
-    // HgECS ecs = HgECS::create(mem, 10000, 16);
-    // auto transform_system = ecs.add_system<void, HgTransform>(10000);
-    // auto sprite_system = ecs.add_system<HgSpriteSystem, HgSprite>(1000);
-
     HgWindow::Config window_config{};
     window_config.title = "Hg Test";
     window_config.windowed = true;
@@ -172,7 +168,7 @@ int main(void) {
             cpu_time = 0.0;
         }
 
-        hg_window_process_events({&window, 1});
+        hg_process_window_events({&window, 1});
         if (window.was_closed() || window.is_key_down(HG_KEY_ESCAPE))
             break;
 

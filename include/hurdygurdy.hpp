@@ -46,83 +46,12 @@
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
 
-using i8 = std::int8_t;
-using i16 = std::int16_t;
-using i32 = std::int32_t;
-using i64 = std::int64_t;
-
-using u8 = std::uint8_t;
-using u16 = std::uint16_t;
-using u32 = std::uint32_t;
-using u64 = std::uint64_t;
-
-using usize = std::size_t;
-using isize = std::intptr_t;
-
-using f32 = std::float_t;
-using f64 = std::double_t;
-
-/**
- * The struct used to declare and run tests
- */
-struct HgTest {
-    /**
-     * The name of the test
-     */
-    const char *name;
-    /**
-     * A pointer to the test function
-     */
-    bool (*function)();
-
-    HgTest() {};
-
-    /**
-     * Creates and registers the test globally
-     *
-     * Parameters
-     * - test_name The name of the test
-     * - test_function A pointer to the test function
-     */
-    HgTest(const char *test_name, bool (*test_function)());
-};
-
-/**
- * Automatically declares and registers a test function
- *
- * Example:
- * hg_test(hg_example_test) {
- *     bool success = true;
- *     return success;
- * }
- */
-#define hg_test(name) \
-    static bool hg_test_function_##name(); \
-    static HgTest hg_test_struct_##name{#name, hg_test_function_##name}; \
-    static bool hg_test_function_##name() 
-
-#define hg_test_assert(cond) { \
-    if (!(cond)) { \
-        std::printf("HurdyGurdy Test assertion failed: " #cond "\n"); \
-        return false; \
-    } \
-}
-
-/**
- * Runs all tests registered globally
- *
- * Note, tests are rendered through static init, so this should be called after
- * static init is completed
- *
- * Returns:
- * - Whether all tests passed
- */
-bool hg_run_tests();
-
 /**
  * Initializes the HurdyGurdy library
  *
- * Run this function before any Vulkan, windowing, or audio functions
+ * Run this function before calling functions from these sections:
+ * - Windowing
+ * - Vulkan
  *
  * Note, calls hg_vk_load
  */
@@ -210,21 +139,282 @@ struct HgDeferInternal {
 #define hg_error(...) do { (void)std::fprintf(stderr, "HurdyGurdy Error: " __VA_ARGS__); abort(); } while(0)
 
 /**
- * A high precision clock for timers and game deltas
+ * The struct used to declare and run tests
  */
-struct HgClock {
-    std::chrono::time_point<std::chrono::high_resolution_clock> time;
+struct HgTest {
+    /**
+     * The name of the test
+     */
+    const char *name;
+    /**
+     * A pointer to the test function
+     */
+    bool (*function)();
 
     /**
-     * Resets the clock and returns the delta since the last tick in seconds
+     * Default constructor to fill HgArray
+     */
+    HgTest() {};
+
+    /**
+     * Creates and registers the test globally
      *
      * Parameters
-     * - clock The clock to tick, must not be nullptr
-     * Returns
-     * - Seconds since last tick
+     * - test_name The name of the test
+     * - test_function A pointer to the test function
      */
-    f64 tick();
+    HgTest(const char *test_name, decltype(function) test_function);
 };
+
+/**
+ * Automatically declares and registers a test function
+ *
+ * Example:
+ * hg_test(hg_example_test) {
+ *     bool success = true;
+ *     return success;
+ * }
+ */
+#define hg_test(name) \
+    static bool hg_test_function_##name(); \
+    static HgTest hg_test_struct_##name{#name, hg_test_function_##name}; \
+    static bool hg_test_function_##name() 
+
+#define hg_test_assert(cond) { \
+    if (!(cond)) { \
+        std::printf("HurdyGurdy Test assertion failed: " #cond "\n"); \
+        return false; \
+    } \
+}
+
+/**
+ * Runs all tests registered globally
+ *
+ * Note, tests are rendered through static init, so this should be called after
+ * static init is completed
+ *
+ * Returns:
+ * - Whether all tests passed
+ */
+bool hg_run_tests();
+
+using i8 = std::int8_t;
+using i16 = std::int16_t;
+using i32 = std::int32_t;
+using i64 = std::int64_t;
+
+using u8 = std::uint8_t;
+using u16 = std::uint16_t;
+using u32 = std::uint32_t;
+using u64 = std::uint64_t;
+
+using usize = std::size_t;
+using uptr = std::uintptr_t;
+using iptr = std::intptr_t;
+
+using f32 = std::float_t;
+using f64 = std::double_t;
+
+/**
+ * A basic pair of two objects
+ */
+template<typename First, typename Second>
+struct HgPair {
+    /**
+     * The first object in the pair
+     */
+    First first;
+    /**
+     * The second object in the pair
+     */
+    Second second;
+};
+
+/**
+ * An option type wrapper, where the value may or may not exist
+ *
+ * Note, does not care about C++ object lifetime rules
+ */
+template<typename T>
+struct HgOption {
+    /**
+     * The value stored, may not be valid if has_value == false
+     */
+    T value;
+    /**
+     * Whether the container contains an item
+     */
+    bool has_value;
+
+    /**
+     * Access the value like a pointer
+     */
+    constexpr T& operator*() {
+        assert(has_value);
+        return value;
+    }
+
+    /**
+     * Access the value like a pointer in a const context
+     */
+    constexpr const T& operator*() const {
+        assert(has_value);
+        return value;
+    }
+
+    /**
+     * Access the value like a pointer
+     */
+    constexpr T *operator->() {
+        assert(has_value);
+        return &value;
+    }
+
+    /**
+     * Access the value like a pointer in a const context
+     */
+    constexpr const T *operator->() const {
+        assert(has_value);
+        return &value;
+    }
+};
+
+/**
+ * A pointer-count view into memory
+ */
+template<typename T>
+struct HgSpan {
+    /**
+     * The array
+     */
+    T *data;
+    /**
+     * The number of items in the array
+     */
+    usize count;
+
+    /**
+     * The size of the array in bytes
+     *
+     * Returns
+     * - The size of the array in bytes
+     */
+    constexpr usize size() {
+        return count * sizeof(*data);
+    }
+
+    /**
+     * Convenience to index into the array with debug bounds checking
+     */
+    constexpr T& operator[](usize index) {
+        assert(data != nullptr);
+        assert(index < count);
+        return data[index];
+    }
+
+    /**
+     * Convenience to index into the array with debug bounds checking
+     */
+    constexpr const T& operator[](usize index) const {
+        assert(data != nullptr);
+        assert(index < count);
+        return data[index];
+    }
+
+    /**
+     * Implicit conversion can add const
+     */
+    constexpr operator HgSpan<std::add_const<T>>() const {
+        return {(const T*)data, count};
+    }
+};
+
+template<>
+struct HgSpan<const void> {
+    /**
+     * The array
+     */
+    const void *data;
+    /**
+     * The number of items in the array
+     */
+    usize count;
+
+    /**
+     * The size of the array in bytes
+     *
+     * Returns
+     * - The size of the array in bytes
+     */
+    constexpr usize size() {
+        return count;
+    }
+};
+
+template<>
+struct HgSpan<void> {
+    /**
+     * The array
+     */
+    void *data;
+    /**
+     * The number of items in the array
+     */
+    usize count;
+
+    /**
+     * The size of the array in bytes
+     *
+     * Returns
+     * - The size of the array in bytes
+     */
+    constexpr usize size() {
+        return count;
+    }
+
+    /**
+     * Implicit conversion can add const
+     */
+    constexpr operator HgSpan<const void>() const {
+        return {(const void*)data, count};
+    }
+};
+
+template<typename T>
+constexpr bool operator==(HgSpan<T> lhs, HgSpan<T> rhs) {
+    return lhs.data == rhs.data && lhs.count == rhs.count;
+}
+
+template<typename T>
+constexpr bool operator!=(HgSpan<T> lhs, HgSpan<T> rhs) {
+    return !(lhs == rhs);
+}
+
+template<typename T>
+constexpr bool operator==(HgSpan<T> lhs, std::nullptr_t rhs) {
+    return lhs.data == rhs && lhs.count == 0;
+}
+
+template<typename T>
+constexpr bool operator!=(HgSpan<T> lhs, std::nullptr_t rhs) {
+    return !(lhs == rhs);
+}
+
+template<typename T>
+constexpr bool operator==(std::nullptr_t lhs, HgSpan<T> rhs) {
+    return lhs == rhs.data && 0 == rhs.count;
+}
+
+template<typename T>
+constexpr bool operator!=(std::nullptr_t lhs, HgSpan<T> rhs) {
+    return !(lhs == rhs);
+}
+
+static constexpr f64 HgPi    = 3.1415926535897932;
+static constexpr f64 HgTau   = 6.2831853071795864;
+static constexpr f64 HgE     = 2.7182818284590452;
+static constexpr f64 HgRoot2 = 1.4142135623730951;
+static constexpr f64 HgRoot3 = 1.7320508075688772;
 
 /**
  * Aligns a pointer to an alignment
@@ -235,16 +425,10 @@ struct HgClock {
  * Returns
  * - The aligned size
  */
-constexpr usize hg_align(usize value, usize alignment) {
+constexpr usize hg_align(uptr value, usize alignment) {
     assert(alignment > 0 && (alignment & (alignment - 1)) == 0);
     return (value + alignment - 1) & ~(alignment - 1);
 }
-
-static constexpr f64 HgPi    = 3.1415926535897932;
-static constexpr f64 HgTau   = 6.2831853071795864;
-static constexpr f64 HgE     = 2.7182818284590452;
-static constexpr f64 HgRoot2 = 1.4142135623730951;
-static constexpr f64 HgRoot3 = 1.7320508075688772;
 
 /**
  * A 2D vector
@@ -1721,7 +1905,7 @@ constexpr HgQuat<T> hg_conj(const HgQuat<T>& quat) {
  */
 template<typename T>
 inline HgQuat<T> hg_axis_angle(const HgVec3<T>& axis, T angle) {
-    T half_angle = angle / 2.0f;
+    T half_angle = angle * (T)0.5;
     T sin_half_angle = std::sin(half_angle);
     return {
         std::cos(half_angle),
@@ -1846,137 +2030,6 @@ HgMat4f hg_projection_perspective(f32 fov, f32 aspect, f32 near, f32 far);
  */
 inline u32 hg_max_mipmaps(u32 width, u32 height, u32 depth) {
     return (u32)std::log2f((f32)std::max({width, height, depth})) + 1;
-}
-
-/**
- * A pointer-count pair
- */
-template<typename T>
-struct HgSpan {
-    /**
-     * The array
-     */
-    T *data;
-    /**
-     * The number of items in the array
-     */
-    usize count;
-
-    /**
-     * The size of the array in bytes
-     *
-     * Returns
-     * - The size of the array in bytes
-     */
-    constexpr usize size() {
-        return count * sizeof(*data);
-    }
-
-    /**
-     * Convenience to index into the array with debug bounds checking
-     */
-    constexpr T& operator[](usize index) {
-        assert(data != nullptr);
-        assert(index < count);
-        return data[index];
-    }
-
-    /**
-     * Convenience to index into the array with debug bounds checking
-     */
-    constexpr const T& operator[](usize index) const {
-        assert(data != nullptr);
-        assert(index < count);
-        return data[index];
-    }
-
-    /**
-     * Implicit conversion can add const
-     */
-    constexpr operator HgSpan<std::add_const<T>>() const {
-        return {(const T*)data, count};
-    }
-};
-
-template<>
-struct HgSpan<const void> {
-    /**
-     * The array
-     */
-    const void *data;
-    /**
-     * The number of items in the array
-     */
-    usize count;
-
-    /**
-     * The size of the array in bytes
-     *
-     * Returns
-     * - The size of the array in bytes
-     */
-    constexpr usize size() {
-        return count;
-    }
-};
-
-template<>
-struct HgSpan<void> {
-    /**
-     * The array
-     */
-    void *data;
-    /**
-     * The number of items in the array
-     */
-    usize count;
-
-    /**
-     * The size of the array in bytes
-     *
-     * Returns
-     * - The size of the array in bytes
-     */
-    constexpr usize size() {
-        return count;
-    }
-
-    /**
-     * Implicit conversion can add const
-     */
-    constexpr operator HgSpan<const void>() const {
-        return {(const void*)data, count};
-    }
-};
-
-template<typename T>
-constexpr bool operator==(HgSpan<T> lhs, HgSpan<T> rhs) {
-    return lhs.data == rhs.data && lhs.count == rhs.count;
-}
-
-template<typename T>
-constexpr bool operator!=(HgSpan<T> lhs, HgSpan<T> rhs) {
-    return lhs.data != rhs.data || lhs.count != rhs.count;
-}
-
-template<typename T>
-constexpr bool operator==(HgSpan<T> lhs, std::nullptr_t rhs) {
-    return lhs.data == rhs && lhs.count == 0;
-}
-
-template<typename T>
-constexpr bool operator==(std::nullptr_t lhs, HgSpan<T> rhs) {
-    return rhs.data == lhs && rhs.count == 0;
-}
-
-template<typename T>
-constexpr bool operator!=(HgSpan<T> lhs, std::nullptr_t rhs) {
-    return lhs.data != rhs;
-}
-
-template<typename T>
-constexpr bool operator!=(std::nullptr_t lhs, HgSpan<T> rhs) {
-    return rhs.data != lhs;
 }
 
 /**
@@ -2487,59 +2540,395 @@ struct HgArray {
 };
 
 /**
- * An option type wrapper, where the value may or may not exist
+ * The handle for an ECS entity
  */
-template<typename T>
-struct HgOption {
-    static_assert(std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T>);
+struct HgEntity {
+    u32 index;
+
+    operator u32() {
+        return index;
+    }
+};
+
+/**
+ * An entity component system
+ */
+struct HgECS {
+    /**
+     * A component type in an entity component system
+     */
+    struct Component {
+        /**
+         * entity_indices[entity id] is the index into components and
+         * component_entities for that entity id
+         */
+        HgSpan<u32> entity_indices;
+        /**
+         * Each index is the entity associated with components[index]
+         */
+        HgSpan<HgEntity> component_entities;
+        /**
+         * The data for the components
+         */
+        HgSpan<void> components;
+        /**
+         * The size of each component in bytes
+         */
+        u32 component_size;
+        /**
+         * The memory alignment of each component
+         */
+        u32 component_alignment;
+        /**
+         * The current number of components
+         */
+        u32 component_count;
+    };
 
     /**
-     * The value stored, may not be valid if has_value == false
+     * The component systems
      */
-    T value;
+    HgSpan<Component> systems;
     /**
-     * Whether the container contains an item
+     * The pool of entity ids
      */
-    bool has_value;
+    HgSpan<HgEntity> entity_pool;
+    /**
+     * The next entity in the pool
+     */
+    HgEntity entity_next;
 
     /**
-     * Access the value like a pointer
+     * Creates an entity component system
+     *
+     * Parameters
+     * - allocator The allocator the ecs will use
+     * - max_entities The max entities that can exist, must be greater than 0
+     * Returns
+     * - The created entity component system
      */
-    constexpr T& operator*() {
-        assert(has_value);
-        return value;
+    static HgECS create(HgAllocator& mem, u32 max_entities);
+
+    /**
+     * Destroys an entity component system
+     */
+    void destroy(HgAllocator& mem);
+
+    /**
+     * Resets an entity component system, removing all entities
+     *
+     * Note, does not unregister components, just clears storage
+     */
+    void reset();
+
+    /**
+     * Creates an entity in an ECS, and returns its id
+     *
+     * Returns
+     * - The id of the created entity, will never be 0
+     */
+    HgEntity create_entity();
+
+    /**
+     * Destroys an entity in an ECS
+     *
+     * Note, this function will invalidate iterators
+     *
+     * Parameters
+     * - entity The id of the entity to destroy
+     */
+    void destroy_entity(HgEntity entity);
+
+    /**
+     * Checks whether an entity id is alive and can be used
+     *
+     * Parameters
+     * - entity The id of the entity to check
+     * Returns
+     * - Whether the entity is alive and can be used
+     */
+    bool alive(HgEntity entity);
+
+    /**
+     * Creates a new id for each component
+     *
+     * Should only be used by hg_component_id
+     */
+    static u32 create_component_id();
+
+    /**
+     * Gets the unique component id for a type
+     *
+     * Returns
+     * - The type's component id
+     */
+    template<typename T>
+    u32 get_component_id() {
+        static_assert(std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T>);
+
+        static const u32 id = create_component_id();
+        return id;
     }
 
     /**
-     * Access the value like a pointer in a const context
+     * Registers a component in this ECS
+     *
+     * Parameters
+     * - mem The allocator to get memory from
+     * - max_component The max number of this component the ECS can hold
+     * - component_size The size in bytes of the component struct
+     * - component_alignment The alignment of the component struct
+     * - component_id The id of the component
      */
-    constexpr const T& operator*() const {
-        assert(has_value);
-        return value;
+    void register_component_untyped(
+        HgAllocator& mem,
+        u32 max_components,
+        u32 component_size,
+        u32 component_alignment,
+        u32 component_id);
+
+    /**
+     * Registers a component in this ECS
+     *
+     * Parameters
+     * - mem The allocator to get memory from
+     * - max_component The max number of this component the ECS can hold
+     */
+    template<typename T>
+    void register_component(HgAllocator& mem, u32 max_components) {
+        register_component_untyped(mem, max_components, sizeof(T), alignof(T), get_component_id<T>());
     }
 
     /**
-     * Access the value like a pointer
+     * Unregisters a component in this ECS
+     *
+     * Parameters
+     * - mem The allocator to get memory from
+     * - component_id The id of the component
      */
-    constexpr T& operator->() {
-        assert(has_value);
-        return value;
+    void unregister_component_untyped(HgAllocator& mem, u32 component_id);
+
+    /**
+     * Unregisters a component in this ECS
+     *
+     * Parameters
+     * - mem The allocator to get memory from
+     */
+    template<typename T>
+    void unregister_component(HgAllocator& mem) {
+        unregister_component(mem, get_component_id<T>());
+    }
+
+
+    /**
+     * Adds a component to an entity
+     *
+     * Note, the component must not already exist
+     *
+     * Parameters
+     * - entity The id of the entity, must not be 0
+     * - componenet_id The id of the component
+     * Returns
+     * - A pointer to the created component
+     */
+    void *add_untyped(HgEntity entity, u32 component_id);
+
+    /**
+     * Casts the component to the given type
+     *
+     * Note, the component must not already exist
+     *
+     * Parameters
+     * - entity The id of the entity, must not be 0
+     * Returns
+     * - A pointer to the created component
+     */
+    template<typename T>
+    T& add(HgEntity entity) {
+        return *(T *)add_untyped(entity, get_component_id<T>());
     }
 
     /**
-     * Access the value like a pointer in a const context
+     * Removes a component from an entity
+     *
+     * The entity must have an associated component in the system
+     *
+     * Note, this function will invalidate iterators
+     *
+     * Parameters
+     * - entity The id of the entity, must not be 0
+     * - component_id The id of the component
      */
-    constexpr const T& operator->() const {
-        assert(has_value);
-        return value;
+    void remove_untyped(HgEntity entity, u32 component_id);
+
+    /**
+     * Removes a component from an entity
+     *
+     * The entity must have an associated component in the system
+     *
+     * Note, this function will invalidate iterators
+     *
+     * Parameters
+     * - entity The id of the entity, must not be 0
+     */
+    template<typename T>
+    void remove(HgEntity entity) {
+        remove_untyped(entity, get_component_id<T>());
     }
 
     /**
-     * Implicitly cast to bool
+     * Checks whether an entity has a component or not
+     *
+     * Parameters
+     * - entity The id of the entity, must not be 0
+     * - component_id The id of the component
+     * Returns
+     * - Whether the entity has a component in the system
      */
-    constexpr operator bool() const {
-        return has_value;
+    bool has_untyped(HgEntity entity, u32 component_id);
+
+    /**
+     * Checks whether an entity has a component or not
+     *
+     * Parameters
+     * - entity The id of the entity, must not be 0
+     * Returns
+     * - Whether the entity has a component in the system
+     */
+    template<typename T>
+    bool has(HgEntity entity) {
+        return has_untyped(entity, get_component_id<T>());
     }
+
+    /**
+     * Checks whether an entity has a component or not
+     *
+     * Parameters
+     * - entity The id of the entity, must not be 0
+     * Returns
+     * - Whether the entity has a component in the system
+     */
+    template<typename... Ts>
+    bool has_all(HgEntity entity) {
+        return (has<Ts>(entity) && ...);
+    }
+
+    /**
+     * Gets a pointer to the entity's component
+     *
+     * Note, the entity must have a component in the system
+     *
+     * Parameters
+     * - entity The id of the entity, must not be 0
+     * - component_id The id of the component
+     * Returns
+     * - The entity's component, will never be 0
+     */
+    void *get_untyped(HgEntity entity, u32 component_id);
+
+    /**
+     * Gets a pointer to the entity's component
+     *
+     * Note, the entity must have a component in the system
+     *
+     * Parameters
+     * - entity The id of the entity, must not be 0
+     * Returns
+     * - The entity's component, will never be 0
+     */
+    template<typename T>
+    T& get(HgEntity entity) {
+        return *(T *)get_untyped(entity, get_component_id<T>());
+    }
+
+    /**
+     * Finds the index/id of the system with the fewest elements
+     *
+     * Parameters
+     * - ids The indices to check
+     * Returns
+     * - The index/id of the smallest in the array
+     */
+    u32 smallest_system_untyped(HgSpan<u32> ids);
+
+    /**
+     * Finds the index/id of the system with the fewest elements
+     *
+     * Returns
+     * - The index/id of the smallest in the array
+     */
+    template<typename... Ts>
+    u32 smallest_system() {
+        u32 ids[sizeof...(Ts)];
+
+        u32 index = 0;
+        ((ids[index++] = get_component_id<Ts>()), ...);
+
+        return smallest_system_untyped({ids, hg_countof(ids)});
+    }
+
+    /**
+     * Iterates over all entities with the given components
+     *
+     * The function receives as parameters:
+     * - The entity id
+     * - A reference to each component...
+     *
+     * Parameters
+     * - function The function to call
+     */
+    template<typename... Ts, typename Fn>
+    void for_each(Fn function) {
+        u32 id = smallest_system<Ts...>();
+
+        for (u32 i = 1; i < systems[id].component_count; ++i) {
+            HgEntity e = systems[id].component_entities[i];
+            if (has_all<Ts...>(e))
+                function(e, get<Ts>(e)...);
+        }
+    }
+
+    /**
+     * Gets the entity id from it's component
+     *
+     * Parameters
+     * - component The component to lookup, must be a valid component
+     * - component_id The id of the component
+     * Returns
+     * - The components's entity, will never be 0
+     */
+    HgEntity get_entity_untyped(const void *component, u32 component_id);
+
+    /**
+     * Gets the entity id from it's component
+     *
+     * Parameters
+     * - component The component to lookup, must be a valid component
+     * Returns
+     * - The components's entity, will never be 0
+     */
+    template<typename T>
+    HgEntity get_entity_untyped(const T& component) {
+        u32 id = get_component_id<T>();
+        return get_entity_untyped(&component, id);
+    }
+};
+
+/**
+ * A high precision clock for timers and game deltas
+ */
+struct HgClock {
+    std::chrono::time_point<std::chrono::high_resolution_clock> time;
+
+    /**
+     * Resets the clock and returns the delta since the last tick in seconds
+     *
+     * Parameters
+     * - clock The clock to tick, must not be nullptr
+     * Returns
+     * - Seconds since last tick
+     */
+    f64 tick();
 };
 
 /**
@@ -2582,6 +2971,8 @@ bool hg_file_save_binary(HgSpan<const void> data, const char *path);
 // audio files : TODO
 
 // thread pool : TODO
+
+// audio system : TODO
 
 /**
  * A key on the keyboard or button on the mouse
@@ -2895,9 +3286,7 @@ VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window);
  * - hg The hg context, must not be nullptr
  * - windows All open windows
  */
-void hg_window_process_events(HgSpan<const HgWindow> windows);
-
-// audio system : TODO
+void hg_process_window_events(HgSpan<const HgWindow> windows);
 
 /**
  * Loads the Vulkan library and the functions required to create an instance
@@ -3391,377 +3780,6 @@ void hg_vk_image_staging_read(
 // cubemap read/write : TODO
 
 // mipmap generation : TODO
-
-/**
- * The handle for an ECS entity
- */
-struct HgEntity {
-    u32 index;
-
-    operator u32() {
-        return index;
-    }
-};
-
-/**
- * An entity component system
- */
-struct HgECS {
-    /**
-     * A system of components in an entity component system
-     */
-    struct System {
-        /**
-         * entity_indices[entity id] is the index into components and
-         * component_entities for that entity id
-         */
-        HgSpan<u32> entity_indices;
-        /**
-         * Each index is the entity associated with components[index]
-         */
-        HgSpan<HgEntity> component_entities;
-        /**
-         * The data for the components
-         */
-        HgSpan<void> components;
-        /**
-         * The size of each component in bytes
-         */
-        u32 component_size;
-        /**
-         * The memory alignment of each component
-         */
-        u32 component_alignment;
-        /**
-         * The current number of components
-         */
-        u32 component_count;
-    };
-
-    /**
-     * The component systems
-     */
-    HgSpan<System> systems;
-    /**
-     * The pool of entity ids
-     */
-    HgSpan<HgEntity> entity_pool;
-    /**
-     * The next entity in the pool
-     */
-    HgEntity entity_next;
-
-    /**
-     * Creates an entity component system
-     *
-     * Parameters
-     * - allocator The allocator the ecs will use
-     * - max_entities The max entities that can exist, must be greater than 0
-     * Returns
-     * - The created entity component system
-     */
-    static HgECS create(HgAllocator& mem, u32 max_entities);
-
-    /**
-     * Destroys an entity component system
-     */
-    void destroy(HgAllocator& mem);
-
-    /**
-     * Resets an entity component system, removing all entities
-     *
-     * Note, does not unregister components, just clears storage
-     */
-    void reset();
-
-    /**
-     * Creates an entity in an ECS, and returns its id
-     *
-     * Returns
-     * - The id of the created entity, will never be 0
-     */
-    HgEntity create_entity();
-
-    /**
-     * Destroys an entity in an ECS
-     *
-     * Note, this function will invalidate iterators
-     *
-     * Parameters
-     * - entity The id of the entity to destroy
-     */
-    void destroy_entity(HgEntity entity);
-
-    /**
-     * Checks whether an entity id is alive and can be used
-     *
-     * Parameters
-     * - entity The id of the entity to check
-     * Returns
-     * - Whether the entity is alive and can be used
-     */
-    bool alive(HgEntity entity);
-
-    /**
-     * Creates a new id for each component
-     *
-     * Should only be used by hg_component_id
-     */
-    static u32 create_component_id();
-
-    /**
-     * Gets the unique component id for a type
-     *
-     * Returns
-     * - The type's component id
-     */
-    template<typename T>
-    u32 get_component_id() {
-        static_assert(std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T>);
-
-        static const u32 id = create_component_id();
-        return id;
-    }
-
-    /**
-     * Registers a component in this ECS
-     *
-     * Parameters
-     * - mem The allocator to get memory from
-     * - max_component The max number of this component the ECS can hold
-     * - component_size The size in bytes of the component struct
-     * - component_alignment The alignment of the component struct
-     * - component_id The id of the component
-     */
-    void register_component_untyped(
-        HgAllocator& mem,
-        u32 max_components,
-        u32 component_size,
-        u32 component_alignment,
-        u32 component_id);
-
-    /**
-     * Registers a component in this ECS
-     *
-     * Parameters
-     * - mem The allocator to get memory from
-     * - max_component The max number of this component the ECS can hold
-     */
-    template<typename T>
-    void register_component(HgAllocator& mem, u32 max_components) {
-        register_component_untyped(mem, max_components, sizeof(T), alignof(T), get_component_id<T>());
-    }
-
-    /**
-     * Unregisters a component in this ECS
-     *
-     * Parameters
-     * - mem The allocator to get memory from
-     * - component_id The id of the component
-     */
-    void unregister_component_untyped(HgAllocator& mem, u32 component_id);
-
-    /**
-     * Unregisters a component in this ECS
-     *
-     * Parameters
-     * - mem The allocator to get memory from
-     */
-    template<typename T>
-    void unregister_component(HgAllocator& mem) {
-        unregister_component(mem, get_component_id<T>());
-    }
-
-
-    /**
-     * Adds a component to an entity
-     *
-     * Note, the component must not already exist
-     *
-     * Parameters
-     * - entity The id of the entity, must not be 0
-     * - componenet_id The id of the component
-     * Returns
-     * - A pointer to the created component
-     */
-    void *add_untyped(HgEntity entity, u32 component_id);
-
-    /**
-     * Casts the component to the given type
-     *
-     * Note, the component must not already exist
-     *
-     * Parameters
-     * - entity The id of the entity, must not be 0
-     * Returns
-     * - A pointer to the created component
-     */
-    template<typename T>
-    T& add(HgEntity entity) {
-        return *(T *)add_untyped(entity, get_component_id<T>());
-    }
-
-    /**
-     * Removes a component from an entity
-     *
-     * The entity must have an associated component in the system
-     *
-     * Note, this function will invalidate iterators
-     *
-     * Parameters
-     * - entity The id of the entity, must not be 0
-     * - component_id The id of the component
-     */
-    void remove_untyped(HgEntity entity, u32 component_id);
-
-    /**
-     * Removes a component from an entity
-     *
-     * The entity must have an associated component in the system
-     *
-     * Note, this function will invalidate iterators
-     *
-     * Parameters
-     * - entity The id of the entity, must not be 0
-     */
-    template<typename T>
-    void remove(HgEntity entity) {
-        remove_untyped(entity, get_component_id<T>());
-    }
-
-    /**
-     * Checks whether an entity has a component or not
-     *
-     * Parameters
-     * - entity The id of the entity, must not be 0
-     * - component_id The id of the component
-     * Returns
-     * - Whether the entity has a component in the system
-     */
-    bool has_untyped(HgEntity entity, u32 component_id);
-
-    /**
-     * Checks whether an entity has a component or not
-     *
-     * Parameters
-     * - entity The id of the entity, must not be 0
-     * Returns
-     * - Whether the entity has a component in the system
-     */
-    template<typename T>
-    bool has(HgEntity entity) {
-        return has_untyped(entity, get_component_id<T>());
-    }
-
-    /**
-     * Checks whether an entity has a component or not
-     *
-     * Parameters
-     * - entity The id of the entity, must not be 0
-     * Returns
-     * - Whether the entity has a component in the system
-     */
-    template<typename... Ts>
-    bool has_all(HgEntity entity) {
-        return (has<Ts>(entity) && ...);
-    }
-
-    /**
-     * Gets a pointer to the entity's component
-     *
-     * Note, the entity must have a component in the system
-     *
-     * Parameters
-     * - entity The id of the entity, must not be 0
-     * - component_id The id of the component
-     * Returns
-     * - The entity's component, will never be 0
-     */
-    void *get_untyped(HgEntity entity, u32 component_id);
-
-    /**
-     * Gets a pointer to the entity's component
-     *
-     * Note, the entity must have a component in the system
-     *
-     * Parameters
-     * - entity The id of the entity, must not be 0
-     * Returns
-     * - The entity's component, will never be 0
-     */
-    template<typename T>
-    T& get(HgEntity entity) {
-        return *(T *)get_untyped(entity, get_component_id<T>());
-    }
-
-    /**
-     * Finds the index/id of the system with the fewest elements
-     *
-     * Parameters
-     * - ids The indices to check
-     * Returns
-     * - The index/id of the smallest in the array
-     */
-    u32 smallest_system_untyped(HgSpan<u32> ids);
-
-    /**
-     * Finds the index/id of the system with the fewest elements
-     *
-     * Returns
-     * - The index/id of the smallest in the array
-     */
-    template<typename... Ts>
-    u32 smallest_system() {
-        u32 ids[sizeof...(Ts)];
-
-        u32 index = 0;
-        ((ids[index++] = get_component_id<Ts>()), ...);
-
-        return smallest_system_untyped({ids, hg_countof(ids)});
-    }
-
-    /**
-     * Iterates over all entities with the given components
-     *
-     * Parameters
-     * - function The function to call, gets a reference to each component
-     */
-    template<typename... Ts, typename Fn>
-    void for_each(Fn function) {
-        u32 id = smallest_system<Ts...>();
-
-        for (u32 i = 1; i < systems[id].component_count; ++i) {
-            HgEntity e = systems[id].component_entities[i];
-            if (has_all<Ts...>(e))
-                function(get<Ts>(e)...);
-        }
-    }
-
-    /**
-     * Gets the entity id from it's component
-     *
-     * Parameters
-     * - component The component to lookup, must be a valid component
-     * - component_id The id of the component
-     * Returns
-     * - The components's entity, will never be 0
-     */
-    HgEntity get_entity_untyped(const void *component, u32 component_id);
-
-    /**
-     * Gets the entity id from it's component
-     *
-     * Parameters
-     * - component The component to lookup, must be a valid component
-     * Returns
-     * - The components's entity, will never be 0
-     */
-    template<typename T>
-    HgEntity get_entity_untyped(const T& component) {
-        u32 id = get_component_id<T>();
-        return get_entity_untyped(&component, id);
-    }
-};
 
 /**
  * A pipeline to render 2D sprites

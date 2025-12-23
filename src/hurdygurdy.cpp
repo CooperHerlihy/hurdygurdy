@@ -1,11 +1,20 @@
 #include "hurdygurdy.hpp"
 
-#ifdef _WIN32
-#include <malloc.h>
-#endif
-#ifdef __unix__
+#if defined(__unix__)
 #include <alloca.h>
+#elif defined(_WIN32)
+#include <malloc.h>
+#elif
+#error "unsupported platform"
 #endif
+
+hg_test(hg_init_and_exit) {
+    for (usize i = 0; i < 16; ++i) {
+        hg_init();
+        hg_exit();
+    }
+    return true;
+}
 
 static HgArray<HgTest>& hg_internal_get_tests() {
     static HgArray<HgTest> internal_tests = internal_tests.create(HgStdAllocator::get(), 0, 1024);
@@ -40,25 +49,6 @@ bool hg_run_tests() {
 
 hg_test(hg_test) {
     return true;
-}
-
-hg_test(hg_init_and_exit) {
-    hg_init();
-    hg_exit();
-    hg_init();
-    hg_exit();
-    hg_init();
-    hg_exit();
-    hg_init();
-    hg_exit();
-    hg_init();
-    hg_exit();
-    return true;
-}
-
-f64 HgClock::tick() {
-    auto prev = std::exchange(time, std::chrono::high_resolution_clock::now());
-    return std::chrono::duration<f64>{time - prev}.count();
 }
 
 hg_test(hg_matrix_mul) {
@@ -435,6 +425,11 @@ hg_test(hg_array) {
     hg_test_assert(arr_u16.items.count == 128);
 
     return true;
+}
+
+f64 HgClock::tick() {
+    auto prev = std::exchange(time, std::chrono::high_resolution_clock::now());
+    return std::chrono::duration<f64>{time - prev}.count();
 }
 
 HgSpan<void> hg_file_load_binary(HgAllocator& allocator, const char *path) {
@@ -1057,7 +1052,7 @@ next_ext:
         }
 
         family = hg_vk_find_queue_family(gpu, VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT);
-        if (!family)
+        if (!family.has_value)
             goto next_gpu;
 
         *queue_family = *family;
@@ -1942,10 +1937,10 @@ HgECS HgECS::create(
     assert(max_entities > 0);
 
     HgECS ecs{};
-    ecs.systems = mem.alloc<System>(16);
+    ecs.systems = mem.alloc<Component>(16);
     ecs.entity_pool = mem.alloc<HgEntity>(max_entities + 1);
 
-    std::fill_n(ecs.systems.data, ecs.systems.count, System{});
+    std::fill_n(ecs.systems.data, ecs.systems.count, Component{});
 
     for (u32 i = 0; i < ecs.entity_pool.count; ++i) {
         ecs.entity_pool[i] = {i + 1};
@@ -2049,7 +2044,7 @@ void HgECS::unregister_component_untyped(HgAllocator& mem, u32 component_id) {
     mem.free(systems[component_id].component_entities);
     mem.free(systems[component_id].components, systems[component_id].component_alignment);
 
-    std::fill_n(&systems[component_id], 1, System{});
+    std::fill_n(&systems[component_id], 1, Component{});
 }
 
 void *HgECS::add_untyped(HgEntity entity, u32 component_id) {
@@ -2157,8 +2152,7 @@ hg_test(hg_ecs) {
     hg_test_assert(e1 == 3);
 
     bool has_unknown = false;
-    ecs.for_each<u32>([&](u32 u) {
-        (void)u;
+    ecs.for_each<u32>([&](HgEntity, u32) {
         has_unknown = true;
     });
     hg_test_assert(!has_unknown);
@@ -2170,16 +2164,16 @@ hg_test(hg_ecs) {
     bool has_12 = false;
     bool has_42 = false;
     bool has_100 = false;
-    ecs.for_each<u32>([&](u32 u) {
+    ecs.for_each<u32>([&](HgEntity e, u32 u) {
         switch (u) {
             case 12:
-                has_12 = true;
+                has_12 = e == e1;
                 break;
             case 42:
-                has_42 = true;
+                has_42 = e == e2;
                 break;
             case 100:
-                has_100 = true;
+                has_100 = e == e3;
                 break;
             default:
                 has_unknown = true;
@@ -2196,16 +2190,16 @@ hg_test(hg_ecs) {
     has_100 = false;
     bool has_2042 = false;
     bool has_2100 = false;
-    ecs.for_each<u32, u64>([&](u32 comp32, u64 comp64) {
+    ecs.for_each<u32, u64>([&](HgEntity e, u32 comp32, u64 comp64) {
         switch (comp32) {
             case 12:
-                has_12 = true;
+                has_12 = e == e1;
                 break;
             case 42:
-                has_42 = true;
+                has_42 = e == e2;
                 break;
             case 100:
-                has_100 = true;
+                has_100 = e == e3;
                 break;
             default:
                 has_unknown = true;
@@ -2213,10 +2207,10 @@ hg_test(hg_ecs) {
         }
         switch (comp64) {
             case 2042:
-                has_2042 = true;
+                has_2042 = e == e2;
                 break;
             case 2100:
-                has_2100 = true;
+                has_2100 = e == e3;
                 break;
             default:
                 has_unknown = true;
@@ -2230,16 +2224,16 @@ hg_test(hg_ecs) {
     has_12 = false;
     has_42 = false;
     has_100 = false;
-    ecs.for_each<u32>([&](u32 u) {
+    ecs.for_each<u32>([&](HgEntity e, u32 u) {
         switch (u) {
             case 12:
-                has_12 = true;
+                has_12 = e == e1;
                 break;
             case 42:
-                has_42 = true;
+                has_42 = e == e2;
                 break;
             case 100:
-                has_100 = true;
+                has_100 = e == e3;
                 break;
             default:
                 has_unknown = true;
@@ -2931,7 +2925,7 @@ VkSurfaceKHR hg_vk_create_surface(VkInstance instance, const HgWindow window) {
     return surface;
 }
 
-void hg_window_process_events(HgSpan<const HgWindow> windows) {
+void hg_process_window_events(HgSpan<const HgWindow> windows) {
     assert(windows != nullptr);
 
     if (windows.count > 1)
