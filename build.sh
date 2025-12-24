@@ -70,7 +70,7 @@ c++ ${STD} ${CONFIG} ${WARNINGS} ${INCLUDES} \
 echo "test"
 c++ ${STD} ${CONFIG} ${WARNINGS} \
     -o ${BUILD_DIR}/test \
-    ${BUILD_DIR}/test.o -L"${BUILD_DIR}" -lhurdygurdy
+    ${BUILD_DIR}/test.o -L${BUILD_DIR} -lhurdygurdy
 
 END_TIME=$(date +%s.%N)
 printf "Build complete: %.6f seconds\n" "$(echo "$END_TIME - $START_TIME" | bc)"

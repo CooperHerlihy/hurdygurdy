@@ -30,7 +30,6 @@ struct HgSpriteSystem {
     };
 
     HgSpan<Texture> texture_pool;
-
 };
 
 struct HgSprite {

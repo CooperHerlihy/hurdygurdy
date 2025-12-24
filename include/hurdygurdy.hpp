@@ -170,6 +170,7 @@ struct HgTest {
  * Example:
  * hg_test(hg_example_test) {
  *     bool success = true;
+ *     hg_test_assert(success != false);
  *     return success;
  * }
  *
@@ -177,9 +178,9 @@ struct HgTest {
  * - name The name of the test, should not be a string
  */
 #define hg_test(name) \
-    static bool hg_test_function_##name(); \
-    static HgTest hg_test_struct_##name{#name, hg_test_function_##name}; \
-    static bool hg_test_function_##name() 
+    inline bool hg_test_function_##name(); \
+    inline HgTest hg_test_struct_##name{#name, hg_test_function_##name}; \
+    inline bool hg_test_function_##name() 
 
 /**
  * Asserts a condition in a test
@@ -2903,6 +2904,28 @@ struct HgECS {
     template<typename T>
     bool is_registered() {
         return is_registered_untyped(hg_component_id<T>);
+    }
+
+    /**
+     * Gets the number of components that exist under the component id
+     *
+     * Parameters
+     * - component_id The component id to count
+     *
+     * Returns
+     * - The number of components under the id
+     */
+    u32 count_untyped(u32 component_id);
+
+    /**
+     * Gets the number of components that exist under the component id
+     *
+     * Returns
+     * - The number of components under the id
+     */
+    template<typename T>
+    u32 count() {
+        return count_untyped(hg_component_id<T>);
     }
 
     /**

@@ -63,6 +63,34 @@ bool hg_run_tests() {
 }
 
 hg_test(hg_test) {
+    hg_test_assert(true);
+    return true;
+}
+
+hg_test(hg_pair) {
+    auto [x, y] = [] {
+        return HgPair<u32, u64>{12, 42};
+    }();
+    hg_test_assert(x == 12 && y == 42);
+    return true;
+}
+
+hg_test(hg_option) {
+    auto has_val = [] {
+        return HgOption<u32>{12, true};
+    }();
+    hg_test_assert(has_val.has_value && *has_val == 12);
+
+    auto no_val = [] {
+        return HgOption<u64>{};
+    }();
+    hg_test_assert(!no_val.has_value);
+
+    auto [val, has] = [] {
+        return HgOption<f32>{1.0f, true};
+    }();
+    hg_test_assert(has && val == 1.0f);
+
     return true;
 }
 
@@ -563,6 +591,11 @@ bool HgECS::is_registered_untyped(u32 component_id) {
     return systems[component_id].component_count > 0;
 }
 
+u32 HgECS::count_untyped(u32 component_id) {
+    assert(is_registered_untyped(component_id));
+    return systems[component_id].component_count - 1;
+}
+
 void *HgECS::add_untyped(HgEntity entity, u32 component_id) {
     assert(alive(entity));
     assert(is_registered_untyped(component_id));
@@ -650,7 +683,7 @@ HgEntity HgECS::get_entity_untyped(const void *component, u32 component_id) {
 hg_test(hg_ecs) {
     HgStdAllocator mem;
 
-    HgECS ecs = HgECS::create(mem, 1 << 16);
+    HgECS ecs = ecs.create(mem, 1 << 16);
     hg_defer(ecs.destroy(mem));
 
     ecs.register_component<u32>(mem, 1 << 16);
@@ -675,9 +708,14 @@ hg_test(hg_ecs) {
     });
     hg_test_assert(!has_unknown);
 
+    hg_test_assert(ecs.count<u32>() == 0);
+    hg_test_assert(ecs.count<u64>() == 0);
+
     ecs.add<u32>(e1) = 12;
     ecs.add<u32>(e2) = 42;
     ecs.add<u32>(e3) = 100;
+    hg_test_assert(ecs.count<u32>() == 3);
+    hg_test_assert(ecs.count<u64>() == 0);
 
     bool has_12 = false;
     bool has_42 = false;
@@ -702,6 +740,8 @@ hg_test(hg_ecs) {
 
     ecs.add<u64>(e2) = 2042;
     ecs.add<u64>(e3) = 2100;
+    hg_test_assert(ecs.count<u32>() == 3);
+    hg_test_assert(ecs.count<u64>() == 2);
 
     has_12 = false;
     has_42 = false;
@@ -738,6 +778,8 @@ hg_test(hg_ecs) {
     hg_test_assert(!has_12 && has_42 && has_100 && has_2042 && has_2100 && !has_unknown);
 
     ecs.destroy_entity(e1);
+    hg_test_assert(ecs.count<u32>() == 2);
+    hg_test_assert(ecs.count<u64>() == 2);
 
     has_12 = false;
     has_42 = false;
@@ -759,6 +801,10 @@ hg_test(hg_ecs) {
         }
     });
     hg_test_assert(!has_12 && has_42 && has_100 && !has_unknown);
+
+    ecs.destroy_entity(e2);
+    hg_test_assert(ecs.count<u32>() == 1);
+    hg_test_assert(ecs.count<u64>() == 1);
 
     return true;
 }
