@@ -40,7 +40,7 @@ struct HgSprite {
 };
 
 int main(void) {
-    hg_defer(hg_info("All testing complete\n"));
+    hg_defer(hg_info("Exited successfully\n"));
 
     hg_run_tests();
 
@@ -62,7 +62,7 @@ int main(void) {
     hg_defer(vkDestroyInstance(instance, nullptr));
     hg_debug_mode(
         VkDebugUtilsMessengerEXT debug_messenger = hg_vk_create_debug_messenger(instance);
-        vkDestroyDebugUtilsMessengerEXT(instance, debug_messenger, nullptr);
+        hg_defer(vkDestroyDebugUtilsMessengerEXT(instance, debug_messenger, nullptr));
     )
     HgSingleQueueDeviceData device = hg_vk_create_single_queue_device(instance);
     hg_defer(vkDestroyDevice(device.handle, nullptr));

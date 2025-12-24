@@ -94,15 +94,16 @@ struct HgDeferInternal {
  * Parameters
  * - code The code to run, may be placed inside braces or not
  */
-#define hg_defer(code) [[maybe_unused]] auto hg_concat_macros(hg_defer_, __COUNTER__) = HgDeferInternal{[&]{code;}};
+#define hg_defer(code) [[maybe_unused]] HgDeferInternal hg_concat_macros(hg_defer_, __COUNTER__){[&]{code;}};
 
 /**
  * Gets the number of elements in a stack allocated array
  *
  * Parameters
- * - array The array to take the count of
+ * - array The array to get the count of
+ *
  * Returns
- * - The nuymber of elements
+ * - The number of elements
  */
 #define hg_countof(array) (sizeof(array) / sizeof((array)[0]))
 
@@ -152,11 +153,6 @@ struct HgTest {
     bool (*function)();
 
     /**
-     * Default constructor to fill HgArray
-     */
-    HgTest() {};
-
-    /**
      * Creates and registers the test globally
      *
      * Parameters
@@ -164,6 +160,8 @@ struct HgTest {
      * - test_function A pointer to the test function
      */
     HgTest(const char *test_name, decltype(function) test_function);
+
+    HgTest() = default;
 };
 
 /**
@@ -174,18 +172,29 @@ struct HgTest {
  *     bool success = true;
  *     return success;
  * }
+ *
+ * Parameters
+ * - name The name of the test, should not be a string
  */
 #define hg_test(name) \
     static bool hg_test_function_##name(); \
     static HgTest hg_test_struct_##name{#name, hg_test_function_##name}; \
     static bool hg_test_function_##name() 
 
-#define hg_test_assert(cond) { \
+/**
+ * Asserts a condition in a test
+ *
+ * Returns false to fail the test
+ *
+ * Parameters
+ * - cond The condition to check
+ */
+#define hg_test_assert(cond) do { \
     if (!(cond)) { \
-        std::printf("HurdyGurdy Test assertion failed: " #cond "\n"); \
+        hg_warn("Test assertion failed: " #cond "\n"); \
         return false; \
     } \
-}
+} while(0)
 
 /**
  * Runs all tests registered globally
@@ -248,6 +257,8 @@ struct HgOption {
 
     /**
      * Access the value like a pointer
+     *
+     * Note, has_value must be true
      */
     constexpr T& operator*() {
         assert(has_value);
@@ -256,6 +267,8 @@ struct HgOption {
 
     /**
      * Access the value like a pointer in a const context
+     *
+     * Note, has_value must be true
      */
     constexpr const T& operator*() const {
         assert(has_value);
@@ -264,6 +277,8 @@ struct HgOption {
 
     /**
      * Access the value like a pointer
+     *
+     * Note, has_value must be true
      */
     constexpr T *operator->() {
         assert(has_value);
@@ -272,6 +287,8 @@ struct HgOption {
 
     /**
      * Access the value like a pointer in a const context
+     *
+     * Note, has_value must be true
      */
     constexpr const T *operator->() const {
         assert(has_value);
@@ -299,7 +316,7 @@ struct HgSpan {
      * Returns
      * - The size of the array in bytes
      */
-    constexpr usize size() {
+    constexpr usize size() const {
         return count * sizeof(*data);
     }
 
@@ -346,7 +363,7 @@ struct HgSpan<const void> {
      * Returns
      * - The size of the array in bytes
      */
-    constexpr usize size() {
+    constexpr usize size() const {
         return count;
     }
 };
@@ -368,7 +385,7 @@ struct HgSpan<void> {
      * Returns
      * - The size of the array in bytes
      */
-    constexpr usize size() {
+    constexpr usize size() const {
         return count;
     }
 
@@ -421,7 +438,8 @@ static constexpr f64 HgRoot3 = 1.7320508075688772;
  *
  * Parameters
  * - value The value to align
- * - alignment The alignment, must be a multiple of 2
+ * - alignment The alignment, must be a power of two
+ *
  * Returns
  * - The aligned size
  */
@@ -760,6 +778,7 @@ constexpr void hg_vec_add(u32 size, T *dst, const T *lhs, const T *rhs) {
  * Parameters
  * - lhs The left-hand side vector
  * - rhs The right-hand side vector
+ *
  * Returns
  * - The added vector
  */
@@ -779,6 +798,7 @@ constexpr HgVec2<T> operator+(const HgVec2<T>& lhs, const HgVec2<T>& rhs) {
  * Parameters
  * - lhs The left-hand side vector
  * - rhs The right-hand side vector
+ *
  * Returns
  * - The added vector
  */
@@ -798,6 +818,7 @@ constexpr HgVec3<T> operator+(const HgVec3<T>& lhs, const HgVec3<T>& rhs) {
  * Parameters
  * - lhs The left-hand side vector
  * - rhs The right-hand side vector
+ *
  * Returns
  * - The added vector
  */
@@ -836,6 +857,7 @@ constexpr void hg_vec_sub(u32 size, T *dst, const T *lhs, const T *rhs) {
  * Parameters
  * - lhs The left-hand side vector
  * - rhs The right-hand side vector
+ *
  * Returns
  * - The subtracted vector
  */
@@ -855,6 +877,7 @@ constexpr HgVec2<T> operator-(const HgVec2<T>& lhs, const HgVec2<T>& rhs) {
  * Parameters
  * - lhs The left-hand side vector
  * - rhs The right-hand side vector
+ *
  * Returns
  * - The subtracted vector
  */
@@ -874,6 +897,7 @@ constexpr HgVec3<T> operator-(const HgVec3<T>& lhs, const HgVec3<T>& rhs) {
  * Parameters
  * - lhs The left-hand side vector
  * - rhs The right-hand side vector
+ *
  * Returns
  * - The subtracted vector
  */
@@ -912,6 +936,7 @@ constexpr void hg_vec_mul_pairwise(u32 size, T *dst, const T *lhs, const T *rhs)
  * Parameters
  * - lhs The left-hand side vector
  * - rhs The right-hand side vector
+ *
  * Returns
  * - The multiplied vector
  */
@@ -931,6 +956,7 @@ constexpr HgVec2<T> operator*(const HgVec2<T>& lhs, const HgVec2<T>& rhs) {
  * Parameters
  * - lhs The left-hand side vector
  * - rhs The right-hand side vector
+ *
  * Returns
  * - The multiplied vector
  */
@@ -950,6 +976,7 @@ constexpr HgVec3<T> operator*(const HgVec3<T>& lhs, const HgVec3<T>& rhs) {
  * Parameters
  * - lhs The left-hand side vector
  * - rhs The right-hand side vector
+ *
  * Returns
  * - The multiplied vector
  */
@@ -987,6 +1014,7 @@ constexpr void hg_vec_scalar_mul(u32 size, T *dst, T scalar, const T *vec) {
  * Parameters
  * - scalar The scalar to multiply with
  * - vec The vector to multiply with
+ *
  * Returns
  * - The multiplied vector
  */
@@ -1011,6 +1039,7 @@ constexpr HgVec2<T> operator*(const HgVec2<T>& lhs, T rhs) {
  * Parameters
  * - scalar The scalar to multiply with
  * - vec The vector to multiply with
+ *
  * Returns
  * - The multiplied vector
  */
@@ -1035,6 +1064,7 @@ constexpr HgVec3<T> operator*(const HgVec3<T>& lhs, T rhs) {
  * Parameters
  * - scalar The scalar to multiply with
  * - vec The vector to multiply with
+ *
  * Returns
  * - The multiplied vector
  */
@@ -1056,6 +1086,8 @@ constexpr HgVec4<T> operator*(const HgVec4<T>& lhs, T rhs) {
 /**
  * Divides pairwise two arbitrary size vectors
  *
+ * Note, cannot divide by 0
+ *
  * Parameters
  * - size The size of the vectors
  * - dst The destination vector, must not be nullptr
@@ -1068,6 +1100,7 @@ constexpr void hg_vec_div(u32 size, T *dst, const T *lhs, const T *rhs) {
     assert(lhs != nullptr);
     assert(rhs != nullptr);
     for (u32 i = 0; i < size; ++i) {
+        assert(rhs[i] != 0);
         dst[i] = lhs[i] / rhs[i];
     }
 }
@@ -1075,14 +1108,18 @@ constexpr void hg_vec_div(u32 size, T *dst, const T *lhs, const T *rhs) {
 /**
  * Divides pairwise two 2D vectors
  *
+ * Note, cannot divide by 0
+ *
  * Parameters
  * - lhs The left-hand side vector
  * - rhs The right-hand side vector
+ *
  * Returns
  * - The divided vector
  */
 template<typename T>
 constexpr HgVec2<T> hg_vec2_div(const HgVec2<T>& lhs, const HgVec2<T>& rhs) {
+    assert(rhs.x != 0 && rhs.y != 0);
     return {lhs.x / rhs.x, lhs.y / rhs.y};
 }
 
@@ -1094,14 +1131,18 @@ constexpr HgVec2<T> operator/(const HgVec2<T>& lhs, const HgVec2<T>& rhs) {
 /**
  * Divides pairwise two 3D vectors
  *
+ * Note, cannot divide by 0
+ *
  * Parameters
  * - lhs The left-hand side vector
  * - rhs The right-hand side vector
+ *
  * Returns
  * - The divided vector
  */
 template<typename T>
 constexpr HgVec3<T> hg_vec3_div(const HgVec3<T>& lhs, const HgVec3<T>& rhs) {
+    assert(rhs.x != 0 && rhs.y != 0 && rhs.z != 0);
     return {lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z};
 }
 
@@ -1113,14 +1154,18 @@ constexpr HgVec3<T> operator/(const HgVec3<T>& lhs, const HgVec3<T>& rhs) {
 /**
  * Divides pairwise two 4D vectors
  *
+ * Note, cannot divide by 0
+ *
  * Parameters
  * - lhs The left-hand side vector
  * - rhs The right-hand side vector
+ *
  * Returns
  * - The divided vector
  */
 template<typename T>
 constexpr HgVec4<T> hg_vec4_div(const HgVec4<T>& lhs, const HgVec4<T>& rhs) {
+    assert(rhs.x != 0 && rhs.y != 0 && rhs.z != 0 && rhs.w != 0);
     return {lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z, lhs.w / rhs.w};
 }
 
@@ -1132,6 +1177,8 @@ constexpr HgVec4<T> operator/(const HgVec4<T>& lhs, const HgVec4<T>& rhs) {
 /**
  * Divides a vector by a scalar
  *
+ * Note, cannot divide by 0
+ *
  * Parameters
  * - size The size of the vector
  * - dst The destination vector, must not be nullptr
@@ -1142,6 +1189,7 @@ template<typename T>
 constexpr void hg_vec_scalar_div(u32 size, T *dst, const T *vec, T scalar) {
     assert(dst != nullptr);
     assert(vec != nullptr);
+    assert(scalar != 0);
     for (u32 i = 0; i < size; ++i) {
         dst[i] = vec[i] / scalar;
     }
@@ -1150,14 +1198,18 @@ constexpr void hg_vec_scalar_div(u32 size, T *dst, const T *vec, T scalar) {
 /**
  * Divides a 2D vector by a scalar
  *
+ * Note, cannot divide by 0
+ *
  * Parameters
  * - vec The vector to divide
  * - scalar The scalar to divide by
+ *
  * Returns
  * - The divided vector
  */
 template<typename T>
 constexpr HgVec2<T> hg_vec2_scalar_div(const HgVec2<T>& vec, T scalar) {
+    assert(scalar != 0);
     return {vec.x / scalar, vec.y / scalar};
 }
 
@@ -1169,14 +1221,18 @@ constexpr HgVec2<T> operator/(const HgVec2<T>& lhs, T rhs) {
 /**
  * Divides a 3D vector by a scalar
  *
+ * Note, cannot divide by 0
+ *
  * Parameters
  * - vec The vector to divide
  * - scalar The scalar to divide by
+ *
  * Returns
  * - The divided vector
  */
 template<typename T>
 constexpr HgVec3<T> hg_vec3_scalar_div(const HgVec3<T>& vec, T scalar) {
+    assert(scalar != 0);
     return {vec.x / scalar, vec.y / scalar, vec.z / scalar};
 }
 
@@ -1188,14 +1244,18 @@ constexpr HgVec3<T> operator/(const HgVec3<T>& lhs, T rhs) {
 /**
  * Divides a 4D vector by a scalar
  *
+ * Note, cannot divide by 0
+ *
  * Parameters
  * - vec The vector to divide
  * - scalar The scalar to divide by
+ *
  * Returns
  * - The divided vector
  */
 template<typename T>
 constexpr HgVec4<T> hg_vec4_scalar_div(const HgVec4<T>& vec, T scalar) {
+    assert(scalar != 0);
     return {vec.x / scalar, vec.y / scalar, vec.z / scalar, vec.w / scalar};
 }
 
@@ -1230,6 +1290,7 @@ constexpr void hg_dot(u32 size, T *dst, const T *lhs, const T *rhs) {
  * Parameters
  * - lhs The left-hand side vector
  * - rhs The right-hand side vector
+ *
  * Returns
  * - The dot product
  */
@@ -1244,6 +1305,7 @@ constexpr float hg_dot(const HgVec2<T>& lhs, const HgVec2<T>& rhs) {
  * Parameters
  * - lhs The left-hand side vector
  * - rhs The right-hand side vector
+ *
  * Returns
  * - The dot product
  */
@@ -1258,6 +1320,7 @@ constexpr float hg_dot(const HgVec3<T>& lhs, const HgVec3<T>& rhs) {
  * Parameters
  * - lhs The left-hand side vector
  * - rhs The right-hand side vector
+ *
  * Returns
  * - The dot product
  */
@@ -1287,6 +1350,7 @@ inline void hg_len(u32 size, T *dst, const T *vec) {
  *
  * Parameters
  * - lhs The vector to compute the length of
+ *
  * Returns
  * - The length of the vector
  */
@@ -1300,6 +1364,7 @@ inline float hg_len(const HgVec2<T>& vec) {
  *
  * Parameters
  * - lhs The vector to compute the length of
+ *
  * Returns
  * - The length of the vector
  */
@@ -1313,6 +1378,7 @@ inline float hg_len(const HgVec3<T>& vec) {
  *
  * Parameters
  * - lhs The vector to compute the length of
+ *
  * Returns
  * - The length of the vector
  */
@@ -1324,6 +1390,8 @@ inline float hg_len(const HgVec4<T>& vec) {
 /**
  * Normalizes a vector
  *
+ * Note, cannot normalize 0
+ *
  * Parameters
  * - size The size of the vector
  * - dst The destination vector, must not be nullptr
@@ -1333,8 +1401,8 @@ template<typename T>
 inline void hg_norm(u32 size, T *dst, const T *vec) {
     assert(dst != nullptr);
     assert(vec != nullptr);
-    T len = 0;
-    hg_len<T>(size, &len, vec);
+    T len = hg_len<T>(size, &len, vec);
+    assert(len != 0);
     for (u32 i = 0; i < size; ++i) {
         dst[i] = vec[i] / len;
     }
@@ -1343,42 +1411,54 @@ inline void hg_norm(u32 size, T *dst, const T *vec) {
 /**
  * Normalizes a 2D vector
  *
+ * Note, cannot normalize 0
+ *
  * Parameters
  * - vec The vector to normalize
+ *
  * Returns
  * - The normalized vector
  */
 template<typename T>
 inline HgVec2<T> hg_norm(const HgVec2<T>& vec) {
     T len = hg_len<T>(vec);
+    assert(len != 0);
     return {vec.x / len, vec.y / len};
 }
 
 /**
  * Normalizes a 3D vector
  *
+ * Note, cannot normalize 0
+ *
  * Parameters
  * - vec The vector to normalize
+ *
  * Returns
  * - The normalized vector
  */
 template<typename T>
 inline HgVec3<T> hg_norm(const HgVec3<T>& vec) {
     T len = hg_len<T>(vec);
+    assert(len != 0);
     return {vec.x / len, vec.y / len, vec.z / len};
 }
 
 /**
  * Normalizes a 4D vector
  *
+ * Note, cannot normalize 0
+ *
  * Parameters
  * - vec The vector to normalize
+ *
  * Returns
  * - The normalized vector
  */
 template<typename T>
 inline HgVec4<T> hg_norm(const HgVec4<T>& vec) {
     T len = hg_len<T>(vec);
+    assert(len != 0);
     return {vec.x / len, vec.y / len, vec.z / len, vec.w / len};
 }
 
@@ -1406,6 +1486,7 @@ constexpr void hg_cross(T *dst, const T *lhs, const T *rhs) {
  * Parameters
  * - lhs The left-hand side vector
  * - rhs The right-hand side vector
+ *
  * Returns
  * - The cross product
  */
@@ -1442,6 +1523,7 @@ constexpr void hg_mat_add(u32 width, u32 height, T *dst, const T *lhs, const T *
  * Parameters
  * - lhs The left-hand side matrix
  * - rhs The right-hand side matrix
+ *
  * Returns
  * - The added matrix
  */
@@ -1463,6 +1545,7 @@ constexpr HgMat2<T> operator+(const HgMat2<T>& lhs, const HgMat2<T>& rhs) {
  * Parameters
  * - lhs The left-hand side matrix
  * - rhs The right-hand side matrix
+ *
  * Returns
  * - The added matrix
  */
@@ -1484,6 +1567,7 @@ constexpr HgMat3<T> operator+(const HgMat3<T>& lhs, const HgMat3<T>& rhs) {
  * Parameters
  * - lhs The left-hand side matrix
  * - rhs The right-hand side matrix
+ *
  * Returns
  * - The added matrix
  */
@@ -1527,6 +1611,7 @@ constexpr void hg_mat_sub(u32 width, u32 height, T *dst, const T *lhs, const T *
  * Parameters
  * - lhs The left-hand side matrix
  * - rhs The right-hand side matrix
+ *
  * Returns
  * - The subtracted matrix
  */
@@ -1548,6 +1633,7 @@ constexpr HgMat2<T> operator-(const HgMat2<T>& lhs, const HgMat2<T>& rhs) {
  * Parameters
  * - lhs The left-hand side matrix
  * - rhs The right-hand side matrix
+ *
  * Returns
  * - The subtracted matrix
  */
@@ -1569,6 +1655,7 @@ constexpr HgMat3<T> operator-(const HgMat3<T>& lhs, const HgMat3<T>& rhs) {
  * Parameters
  * - lhs The left-hand side matrix
  * - rhs The right-hand side matrix
+ *
  * Returns
  * - The subtracted matrix
  */
@@ -1619,6 +1706,7 @@ constexpr void hg_mat_mul(T *dst, u32 wl, u32 hl, const T *lhs, u32 wr, u32 hr, 
  * Parameters
  * - lhs The left-hand side matrix
  * - rhs The right-hand side matrix
+ *
  * Returns
  * - The multiplied matrix
  */
@@ -1640,6 +1728,7 @@ constexpr HgMat2<T> operator*(const HgMat2<T>& lhs, const HgMat2<T>& rhs) {
  * Parameters
  * - lhs The left-hand side matrix
  * - rhs The right-hand side matrix
+ *
  * Returns
  * - The multiplied matrix
  */
@@ -1661,6 +1750,7 @@ constexpr HgMat3<T> operator*(const HgMat3<T>& lhs, const HgMat3<T>& rhs) {
  * Parameters
  * - lhs The left-hand side matrix
  * - rhs The right-hand side matrix
+ *
  * Returns
  * - The multiplied matrix
  */
@@ -1705,6 +1795,7 @@ constexpr void hg_mat_vec_mul(u32 width, u32 height, T *dst, const T *mat, const
  * Parameters
  * - lhs The matrix to multiply with
  * - rhs The vector to multiply with
+ *
  * Returns
  * - The multiplied vector
  */
@@ -1726,6 +1817,7 @@ constexpr HgVec2<T> operator*(const HgMat2<T>& lhs, const HgVec2<T>& rhs) {
  * Parameters
  * - lhs The matrix to multiply with
  * - rhs The vector to multiply with
+ *
  * Returns
  * - The multiplied vector
  */
@@ -1747,6 +1839,7 @@ constexpr HgVec3<T> operator*(const HgMat3<T>& lhs, const HgVec3<T>& rhs) {
  * Parameters
  * - lhs The matrix to multiply with
  * - rhs The vector to multiply with
+ *
  * Returns
  * - The multiplied vector
  */
@@ -1768,6 +1861,7 @@ constexpr HgVec4<T> operator*(const HgMat4<T>& lhs, const HgVec4<T>& rhs) {
  * Parameters
  * - lhs The left-hand side complex number
  * - rhs The right-hand side complex number
+ *
  * Returns
  * - The added complex number
  */
@@ -1787,6 +1881,7 @@ constexpr HgComplex<T> operator+(const HgComplex<T>& lhs, const HgComplex<T>& rh
  * Parameters
  * - lhs The left-hand side complex number
  * - rhs The right-hand side complex number
+ *
  * Returns
  * - The subtracted complex number
  */
@@ -1806,6 +1901,7 @@ constexpr HgComplex<T> operator-(const HgComplex<T>& lhs, const HgComplex<T>& rh
  * Parameters
  * - lhs The left-hand side complex number
  * - rhs The right-hand side complex number
+ *
  * Returns
  * - The multiplied complex number
  */
@@ -1825,6 +1921,7 @@ constexpr HgComplex<T> operator*(const HgComplex<T>& lhs, const HgComplex<T>& rh
  * Parameters
  * - lhs The left-hand side quaternion
  * - rhs The right-hand side quaternion
+ *
  * Returns
  * - The added quaternion
  */
@@ -1844,6 +1941,7 @@ constexpr HgQuat<T> operator+(const HgQuat<T>& lhs, const HgQuat<T>& rhs) {
  * Parameters
  * - lhs The left-hand side quaternion
  * - rhs The right-hand side quaternion
+ *
  * Returns
  * - The subtracted quaternion
  */
@@ -1863,6 +1961,7 @@ constexpr HgQuat<T> operator-(const HgQuat<T>& lhs, const HgQuat<T>& rhs) {
  * Parameters
  * - lhs The left-hand side quaternion
  * - rhs The right-hand side quaternion
+ *
  * Returns
  * - The multiplied quaternion
  */
@@ -1886,6 +1985,7 @@ constexpr HgQuat<T> operator*(const HgQuat<T>& lhs, const HgQuat<T>& rhs) {
  *
  * Parameters
  * - quat The quaternion to compute the conjugate of
+ *
  * Returns
  * - The conjugate of the quaternion
  */
@@ -1900,6 +2000,7 @@ constexpr HgQuat<T> hg_conj(const HgQuat<T>& quat) {
  * Parameters
  * - axis The axis of the rotation
  * - angle The angle of the rotation
+ *
  * Returns
  * - The created quaternion
  */
@@ -1921,6 +2022,7 @@ inline HgQuat<T> hg_axis_angle(const HgVec3<T>& axis, T angle) {
  * Parameters
  * - lhs The quaternion to rotate with
  * - rhs The vector to rotate
+ *
  * Returns
  * - The rotated vector
  */
@@ -1936,6 +2038,7 @@ constexpr HgVec3<T> hg_rotate(const HgQuat<T>& lhs, const HgVec3<T>& rhs) {
  * Parameters
  * - lhs The quaternion to rotate with
  * - rhs The matrix to rotate
+ *
  * Returns
  * - The rotated matrix
  */
@@ -1955,6 +2058,7 @@ constexpr HgMat3<T> hg_rotate(const HgQuat<T>& lhs, const HgMat3<T>& rhs) {
  * - position The position of the model
  * - scale The scale of the model
  * - rotation The rotation of the model
+ *
  * Returns
  * - The created matrix
  */
@@ -1967,6 +2071,7 @@ HgMat4f hg_model_matrix_2d(const HgVec3f& position, const HgVec2f& scale, f32 ro
  * - position The position of the model
  * - scale The scale of the model
  * - rotation The rotation of the model
+ *
  * Returns
  * - The created matrix
  */
@@ -1979,6 +2084,7 @@ HgMat4f hg_model_matrix_3d(const HgVec3f& position, const HgVec3f& scale, const 
  * - position The position of the camera
  * - zoom The zoom of the camera
  * - rotation The rotation of the camera
+ *
  * Returns
  * - The created matrix
  */
@@ -1994,6 +2100,7 @@ HgMat4f hg_view_matrix(const HgVec3f& position, f32 zoom, const HgQuatf& rotatio
  * - bottom The bottom of the view frustum
  * - near The near plane of the view frustum
  * - far The far plane of the view frustum
+ *
  * Returns
  * - The created matrix
  */
@@ -2007,6 +2114,7 @@ HgMat4f hg_projection_orthographic(f32 left, f32 right, f32 top, f32 bottom, f32
  * - aspect The aspect ratio of the projection
  * - near The near plane of the projection, must be greater than 0.0f
  * - far The far plane of the projection, must be greater than near
+ *
  * Returns
  * - The created matrix
  */
@@ -2021,15 +2129,19 @@ HgMat4f hg_projection_perspective(f32 fov, f32 aspect, f32 near, f32 far);
 /**
  * Calculates the maximum number of mipmap levels that an image can have
  *
+ * At least one dimension must be greater than 0
+ *
  * Parameters
  * - width The width of the image
  * - height The height of the image
  * - depth The depth of the image
+ *
  * Returns
  * - The maximum number of mipmap levels the image can have
  */
 inline u32 hg_max_mipmaps(u32 width, u32 height, u32 depth) {
-    return (u32)std::log2f((f32)std::max({width, height, depth})) + 1;
+    assert(std::max({width, height, depth}) > 0);
+    return (u32)std::log2((f32)std::max({width, height, depth})) + 1;
 }
 
 /**
@@ -2041,7 +2153,11 @@ struct HgAllocator {
      *
      * Parameters
      * - size The size to allocate in bytes
-     * - alignment The alignment in bytes of the allocation
+     * - alignment The alignment of the allocation, must be a power of 2
+     *
+     * Returns
+     * - The allocated memory
+     * - nullptr on failure
      */
     virtual void *alloc_fn(usize size, usize alignment) = 0;
 
@@ -2053,7 +2169,11 @@ struct HgAllocator {
      * - allocation The allocation to free
      * - old_size The original size of the allocation in bytes
      * - new_size The size to allocate in bytes
-     * - alignment The alignment in bytes of the allocation
+     * - alignment The alignment of the allocation, must be a power of 2
+     *
+     * Returns
+     * - The reallocated memory
+     * - nullptr on failure
      */
     virtual void *realloc_fn(void *allocation, usize old_size, usize new_size, usize alignment) = 0;
 
@@ -2063,7 +2183,7 @@ struct HgAllocator {
      * Parameters
      * - allocation The allocation to free
      * - size The size of the allocation in bytes
-     * - alignment The alignment in bytes of the allocation
+     * - alignment The alignment of the allocation, must be a power of 2
      */
     virtual void free_fn(void *allocation, usize size, usize alignment) = 0;
 
@@ -2075,8 +2195,10 @@ struct HgAllocator {
      */
     template<typename T>
     T *alloc() {
-        static_assert(std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T>);
-        return (T *)alloc_fn(sizeof(T), alignof(T));
+        T *ptr = (T *)alloc_fn(sizeof(T), alignof(T));
+        if constexpr (!std::is_trivially_constructible_v<T>)
+            return new (ptr) T{};
+        return ptr;
     }
 
     /**
@@ -2084,15 +2206,20 @@ struct HgAllocator {
      *
      * Parameters
      * - count The number of T to allocate
+     *
      * Returns
      * - The allocated array
      */
     template<typename T>
     HgSpan<T> alloc(usize count) {
-        static_assert(std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T>);
         HgSpan<T> span;
         span.data = (T *)alloc_fn(count * sizeof(T), alignof(T));
         span.count = span.data != nullptr ? count : 0;
+        if constexpr (!std::is_trivially_constructible_v<T>) {
+            for (usize i = 0; i < span.count; ++i) {
+                new (&span[i]) T{};
+            }
+        }
         return span;
     }
 
@@ -2101,6 +2228,7 @@ struct HgAllocator {
      *
      * Parameters
      * - size The size in bytes to allocate
+     *
      * Returns
      * - The allocated array
      */
@@ -2117,15 +2245,20 @@ struct HgAllocator {
      * Parameters
      * - allocation The allocation to reallocate
      * - count The new number of T to allocate
+     *
      * Returns
-     * - The rallocated array
+     * - The reallocated array
      */
     template<typename T>
     HgSpan<T> realloc(HgSpan<T> allocation, usize count) {
-        static_assert(std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T>);
         HgSpan<T> span;
         span.data = (T *)realloc_fn(allocation.data, allocation.count * sizeof(T), count * sizeof(T), alignof(T));
         span.count = span.data != nullptr ? count : 0;
+        if constexpr (!std::is_trivially_constructible_v<T>) {
+            for (usize i = allocation.count; i < span.count; ++i) {
+                new (&span[i]) T{};
+            }
+        }
         return span;
     }
 
@@ -2133,10 +2266,11 @@ struct HgAllocator {
      * A convenience to reallocate a void array
      *
      * Parameters
-     * - allocation The alloation to reallocate
+     * - allocation The allocation to reallocate
      * - size The new size to allocate
+     *
      * Returns
-     * - The rallocated array
+     * - The reallocated array
      */
     HgSpan<void> realloc(HgSpan<void> allocation, usize size, usize alignment) {
         HgSpan<void> span;
@@ -2153,7 +2287,8 @@ struct HgAllocator {
      */
     template<typename T>
     void free(T *allocation) {
-        static_assert(std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T>);
+        if constexpr (std::is_destructible_v<T>)
+            allocation->~T();
         free_fn(allocation, sizeof(T), alignof(T));
     }
 
@@ -2165,7 +2300,11 @@ struct HgAllocator {
      */
     template<typename T>
     void free(HgSpan<T> allocation) {
-        static_assert(std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T>);
+        if constexpr (std::is_destructible_v<T>) {
+            for (usize i = 0; i < allocation.count; ++i) {
+                allocation[i].~T();
+            }
+        }
         free_fn(allocation.data, allocation.count * sizeof(T), alignof(T));
     }
 
@@ -2190,6 +2329,7 @@ struct HgStdAllocator : public HgAllocator {
      * Parameters
      * - size The size of the allocation in bytes
      * - alignment The alignment in bytes of the allocation
+     *
      * Returns
      * - The allocated memory
      */
@@ -2203,6 +2343,7 @@ struct HgStdAllocator : public HgAllocator {
      * - old_size The size of the original allocation in bytes
      * - new_size The size of the new allocation in bytes
      * - alignment The alignment in bytes of the allocation
+     *
      * Returns
      * - The allocated memory
      */
@@ -2252,6 +2393,7 @@ struct HgArena : public HgAllocator {
      * Parameters
      * - allocator The allocator to use to create the arena
      * - capacity The size of the block to allocate and use
+     *
      * Returns
      * - The allocated arena
      */
@@ -2276,6 +2418,7 @@ struct HgArena : public HgAllocator {
      * Parameters
      * - size The size in bytes of the allocation
      * - alignment The required alignment of the allocation in bytes
+     *
      * Returns
      * - The allocation if successful
      * - nullptr if the allocation exceeds capacity, or size is 0
@@ -2292,6 +2435,7 @@ struct HgArena : public HgAllocator {
      * - old_size The original size in bytes of the allocation
      * - new_size The new size in bytes of the allocation
      * - alignment The required alignment of the allocation in bytes
+     *
      * Returns
      * - The allocation if successful
      * - nullptr if the allocation exceeds capacity
@@ -2330,6 +2474,7 @@ struct HgStack : public HgAllocator {
      * Parameters
      * - allocator The allocator to allocate memory from
      * - capacity The size of the block to allocate and use
+     *
      * Returns
      * - The allocated stack
      */
@@ -2351,6 +2496,7 @@ struct HgStack : public HgAllocator {
      * Parameters
      * - size The size in bytes of the allocation
      * - alignment The required alignment of the allocation in bytes
+     *
      * Returns
      * - The allocation if successful
      * - nullptr if the allocation exceeds capacity, or size is 0
@@ -2367,6 +2513,7 @@ struct HgStack : public HgAllocator {
      * - old_size The original size in bytes of the allocation
      * - new_size The new size in bytes of the allocation
      * - alignment The required alignment of the allocation in bytes
+     *
      * Returns
      * - The allocation if successful
      * - nullptr if the allocation exceeds capacity
@@ -2423,20 +2570,24 @@ struct HgArray {
      *
      * Parameters
      * - allocator The allocator to use
-     * - count The number of active items to begin with
+     * - count The number of active items to begin with, must be <= capacity
      * - capacity The max number of items before reallocating
+     *
      * Returns
-     * - The allocated array
+     * - The allocated dynamic array
      */
     static HgArray<T> create(HgAllocator& mem, usize count, usize capacity) {
-        assert(capacity > 0);
         assert(count <= capacity);
 
         HgArray arr{};
         arr.items = mem.alloc<T>(capacity);
         arr.count = count;
-        for (usize i = 0; i < count; ++i) {
-            new (&arr.items[i]) T{};
+        if constexpr (std::is_default_constructible_v<T>) {
+            for (usize i = 0; i < count; ++i) {
+                new (&arr.items[i]) T{};
+            }
+        } else if constexpr (!std::is_trivially_constructible_v<T>) {
+            assert(count == 0);
         }
         return arr;
     }
@@ -2445,19 +2596,24 @@ struct HgArray {
      * Free the dynamic array
      */
     void destroy(HgAllocator& mem) {
+        if constexpr (std::is_destructible_v<T>) {
+            for (usize i = 0; i < count; ++i) {
+                items[i].~T();
+            }
+        }
         mem.free(items);
     }
 
     /**
      * Push an item to the end to the array, resizing if needed
      */
-    template<typename... U>
     T& push(HgAllocator& mem) {
         if (count >= items.count) {
             assert(items.count > 0);
-            items = mem.realloc(items, items.count * 2);
+            items = mem.realloc(items, (items.count + 1) * 2);
         }
-        new (&items[count]) T{};
+        if constexpr (!std::is_trivially_constructible_v<T>)
+            new (&items[count]) T{};
         ++count;
         return items[count - 1];
     }
@@ -2468,13 +2624,13 @@ struct HgArray {
      * Parameters
      * - args The arguments to use to construct the new item
      */
-    template<typename... U>
-    T& push(HgAllocator& mem, U&&... args) {
+    template<typename... Args>
+    T& push(HgAllocator& mem, Args&&... args) {
         if (count >= items.count) {
             assert(items.count > 0);
-            items = mem.realloc(items, items.count * 2);
+            items = mem.realloc(items, (items.count + 1) * 2);
         }
-        new (&items[count]) T{std::forward<U>(args)...};
+        new (&items[count]) T{std::forward<Args>(args)...};
         ++count;
         return items[count - 1];
     }
@@ -2485,6 +2641,9 @@ struct HgArray {
     void pop() {
         assert(count > 0);
         --count;
+        if constexpr (std::is_destructible_v<T>) {
+            items[count].~T();
+        }
     }
 
     /**
@@ -2493,7 +2652,6 @@ struct HgArray {
      * Parameters
      * - index The index the new item will be placed at
      */
-    template<typename... U>
     T& insert(HgAllocator& mem, usize index) {
         assert(index <= count);
         if (count >= items.count) {
@@ -2501,8 +2659,9 @@ struct HgArray {
             items = mem.realloc(items, items.count * 2);
         }
         std::move(items.data + index, items.data + count, items.data + index + 1);
+        if constexpr (!std::is_trivially_constructible_v<T>)
+            new (&items[index]) T{};
         ++count;
-        new (&items[index]) T{};
         return items[index];
     }
 
@@ -2513,16 +2672,16 @@ struct HgArray {
      * - index The index the new item will be placed at
      * - args The arguments to use to construct the new item
      */
-    template<typename... U>
-    T& insert(HgAllocator& mem, usize index, U&&... args) {
+    template<typename... Args>
+    T& insert(HgAllocator& mem, usize index, Args&&... args) {
         assert(index <= count);
         if (count >= items.count) {
             assert(items.count > 0);
             items = mem.realloc(items, items.count * 2);
         }
         std::move(items.data + index, items.data + count, items.data + index + 1);
+        new (&items[index]) T{std::forward<Args>(args)...};
         ++count;
-        new (&items[index]) T{std::forward<U>(args)...};
         return items[index];
     }
 
@@ -2534,6 +2693,9 @@ struct HgArray {
      */
     void remove(usize index) {
         assert(index < count);
+        if constexpr (std::is_destructible_v<T>) {
+            items[index].~T();
+        }
         std::move(items.data + index + 1, items.data + count, items.data + index);
         --count;
     }
@@ -2549,6 +2711,19 @@ struct HgEntity {
         return index;
     }
 };
+
+/**
+ * Creates a new id for each component
+ *
+ * Should only be used by hg_component_id
+ */
+u32 hg_create_component_id();
+
+/**
+ * The unique component id for a type
+ */
+template<typename T>
+inline const u32 hg_component_id = hg_create_component_id();
 
 /**
  * An entity component system
@@ -2602,8 +2777,9 @@ struct HgECS {
      * Creates an entity component system
      *
      * Parameters
-     * - allocator The allocator the ecs will use
-     * - max_entities The max entities that can exist, must be greater than 0
+     * - allocator The allocator to use
+     * - max_entities The max entities that can exist
+     *
      * Returns
      * - The created entity component system
      */
@@ -2625,7 +2801,8 @@ struct HgECS {
      * Creates an entity in an ECS, and returns its id
      *
      * Returns
-     * - The id of the created entity, will never be 0
+     * - The id of the created entity
+     * - 0 if max_entities has been reached
      */
     HgEntity create_entity();
 
@@ -2644,34 +2821,16 @@ struct HgECS {
      *
      * Parameters
      * - entity The id of the entity to check
+     *
      * Returns
      * - Whether the entity is alive and can be used
      */
     bool alive(HgEntity entity);
 
     /**
-     * Creates a new id for each component
-     *
-     * Should only be used by hg_component_id
-     */
-    static u32 create_component_id();
-
-    /**
-     * Gets the unique component id for a type
-     *
-     * Returns
-     * - The type's component id
-     */
-    template<typename T>
-    u32 get_component_id() {
-        static_assert(std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T>);
-
-        static const u32 id = create_component_id();
-        return id;
-    }
-
-    /**
      * Registers a component in this ECS
+     *
+     * Note, a component id must be unregistered before reregistering
      *
      * Parameters
      * - mem The allocator to get memory from
@@ -2690,13 +2849,15 @@ struct HgECS {
     /**
      * Registers a component in this ECS
      *
+     * Note, a component id must be unregistered before reregistering
+     *
      * Parameters
      * - mem The allocator to get memory from
      * - max_component The max number of this component the ECS can hold
      */
     template<typename T>
     void register_component(HgAllocator& mem, u32 max_components) {
-        register_component_untyped(mem, max_components, sizeof(T), alignof(T), get_component_id<T>());
+        register_component_untyped(mem, max_components, sizeof(T), alignof(T), hg_component_id<T>);
     }
 
     /**
@@ -2716,9 +2877,33 @@ struct HgECS {
      */
     template<typename T>
     void unregister_component(HgAllocator& mem) {
-        unregister_component(mem, get_component_id<T>());
+        unregister_component(mem, hg_component_id<T>);
     }
 
+    /**
+     * Checks whether a component is registered in this ECS
+     *
+     * Parameters
+     * - component_id The component id to check
+     *
+     * Returns
+     * - Whether the component id is registered
+     */
+    bool is_registered_untyped(u32 component_id);
+
+    /**
+     * Checks whether a component is registered in this ECS
+     *
+     * Parameters
+     * - component_id The component id to check
+     *
+     * Returns
+     * - Whether the component id is registered
+     */
+    template<typename T>
+    bool is_registered() {
+        return is_registered_untyped(hg_component_id<T>);
+    }
 
     /**
      * Adds a component to an entity
@@ -2726,8 +2911,9 @@ struct HgECS {
      * Note, the component must not already exist
      *
      * Parameters
-     * - entity The id of the entity, must not be 0
-     * - componenet_id The id of the component
+     * - entity The id of the entity, must be alive
+     * - component_id The id of the component, must be registered
+     *
      * Returns
      * - A pointer to the created component
      */
@@ -2739,13 +2925,14 @@ struct HgECS {
      * Note, the component must not already exist
      *
      * Parameters
-     * - entity The id of the entity, must not be 0
+     * - entity The id of the entity, must be alive
+     *
      * Returns
      * - A pointer to the created component
      */
     template<typename T>
     T& add(HgEntity entity) {
-        return *(T *)add_untyped(entity, get_component_id<T>());
+        return *(T *)add_untyped(entity, hg_component_id<T>);
     }
 
     /**
@@ -2756,8 +2943,8 @@ struct HgECS {
      * Note, this function will invalidate iterators
      *
      * Parameters
-     * - entity The id of the entity, must not be 0
-     * - component_id The id of the component
+     * - entity The id of the entity, must be alive
+     * - component_id The id of the component, must be registered
      */
     void remove_untyped(HgEntity entity, u32 component_id);
 
@@ -2769,19 +2956,20 @@ struct HgECS {
      * Note, this function will invalidate iterators
      *
      * Parameters
-     * - entity The id of the entity, must not be 0
+     * - entity The id of the entity, must be alive
      */
     template<typename T>
     void remove(HgEntity entity) {
-        remove_untyped(entity, get_component_id<T>());
+        remove_untyped(entity, hg_component_id<T>);
     }
 
     /**
      * Checks whether an entity has a component or not
      *
      * Parameters
-     * - entity The id of the entity, must not be 0
-     * - component_id The id of the component
+     * - entity The id of the entity, must be alive
+     * - component_id The id of the component, must be registered
+     *
      * Returns
      * - Whether the entity has a component in the system
      */
@@ -2791,26 +2979,42 @@ struct HgECS {
      * Checks whether an entity has a component or not
      *
      * Parameters
-     * - entity The id of the entity, must not be 0
+     * - entity The id of the entity, must be alive
+     *
      * Returns
      * - Whether the entity has a component in the system
      */
     template<typename T>
     bool has(HgEntity entity) {
-        return has_untyped(entity, get_component_id<T>());
+        return has_untyped(entity, hg_component_id<T>);
     }
 
     /**
-     * Checks whether an entity has a component or not
+     * Checks whether an entity has all given components
      *
      * Parameters
-     * - entity The id of the entity, must not be 0
+     * - entity The id of the entity, must be alive
+     *
      * Returns
-     * - Whether the entity has a component in the system
+     * - Whether the entity has all given components in the system
      */
     template<typename... Ts>
     bool has_all(HgEntity entity) {
         return (has<Ts>(entity) && ...);
+    }
+
+    /**
+     * Checks whether an entity has any of given components
+     *
+     * Parameters
+     * - entity The id of the entity, must be alive
+     *
+     * Returns
+     * - Whether the entity has any of given components in the system
+     */
+    template<typename... Ts>
+    bool has_any(HgEntity entity) {
+        return (has<Ts>(entity) || ...);
     }
 
     /**
@@ -2819,8 +3023,9 @@ struct HgECS {
      * Note, the entity must have a component in the system
      *
      * Parameters
-     * - entity The id of the entity, must not be 0
-     * - component_id The id of the component
+     * - entity The id of the entity, must be alive
+     * - component_id The id of the component, must be registered
+     *
      * Returns
      * - The entity's component, will never be 0
      */
@@ -2832,20 +3037,22 @@ struct HgECS {
      * Note, the entity must have a component in the system
      *
      * Parameters
-     * - entity The id of the entity, must not be 0
+     * - entity The id of the entity, must be alive
+     *
      * Returns
      * - The entity's component, will never be 0
      */
     template<typename T>
     T& get(HgEntity entity) {
-        return *(T *)get_untyped(entity, get_component_id<T>());
+        return *(T *)get_untyped(entity, hg_component_id<T>);
     }
 
     /**
      * Finds the index/id of the system with the fewest elements
      *
      * Parameters
-     * - ids The indices to check
+     * - ids The indices to check, must be registered
+     *
      * Returns
      * - The index/id of the smallest in the array
      */
@@ -2862,7 +3069,7 @@ struct HgECS {
         u32 ids[sizeof...(Ts)];
 
         u32 index = 0;
-        ((ids[index++] = get_component_id<Ts>()), ...);
+        ((ids[index++] = hg_component_id<Ts>), ...);
 
         return smallest_system_untyped({ids, hg_countof(ids)});
     }
@@ -2893,7 +3100,8 @@ struct HgECS {
      *
      * Parameters
      * - component The component to lookup, must be a valid component
-     * - component_id The id of the component
+     * - component_id The id of the component, must be registered
+     *
      * Returns
      * - The components's entity, will never be 0
      */
@@ -2904,12 +3112,13 @@ struct HgECS {
      *
      * Parameters
      * - component The component to lookup, must be a valid component
+     *
      * Returns
      * - The components's entity, will never be 0
      */
     template<typename T>
     HgEntity get_entity_untyped(const T& component) {
-        u32 id = get_component_id<T>();
+        u32 id = hg_component_id<T>;
         return get_entity_untyped(&component, id);
     }
 };
@@ -2925,6 +3134,7 @@ struct HgClock {
      *
      * Parameters
      * - clock The clock to tick, must not be nullptr
+     *
      * Returns
      * - Seconds since last tick
      */
@@ -2936,7 +3146,8 @@ struct HgClock {
  *
  * Parameters
  * - allocator Where to allocate the memory from
- * - path The null terminated path to the file to load, must not be nullptr
+ * - path The null terminated path to the file to load
+ *
  * Returns
  * - The loaded file data if successful
  * - nullptr if the file was not found or could not be read
@@ -2948,7 +3159,7 @@ HgSpan<void> hg_file_load_binary(HgAllocator& allocator, const char *path);
  *
  * Parameters
  * - allocator Where to free the memory to
- * - data The data to unload, noop if nullptr
+ * - data The data to unload
  */
 void hg_file_unload_binary(HgAllocator& allocator, HgSpan<void> data);
 
@@ -2956,8 +3167,9 @@ void hg_file_unload_binary(HgAllocator& allocator, HgSpan<void> data);
  * Saves a binary file
  *
  * Parameters
- * - data The data to save, may be nullptr if size is 0
- * - path The path to the file to save, must not be empty
+ * - data The data to save
+ * - path The path to the file to save
+ *
  * Returns
  * - true if the file was saved successfully
  * - false if the file could not be written
@@ -2972,324 +3184,10 @@ bool hg_file_save_binary(HgSpan<const void> data, const char *path);
 
 // thread pool : TODO
 
-// audio system : TODO
-
-/**
- * A key on the keyboard or button on the mouse
- */
-typedef enum HgKey {
-    HG_KEY_NONE = 0,
-    HG_KEY_0,
-    HG_KEY_1,
-    HG_KEY_2,
-    HG_KEY_3,
-    HG_KEY_4,
-    HG_KEY_5,
-    HG_KEY_6,
-    HG_KEY_7,
-    HG_KEY_8,
-    HG_KEY_9,
-    HG_KEY_Q,
-    HG_KEY_W,
-    HG_KEY_E,
-    HG_KEY_R,
-    HG_KEY_T,
-    HG_KEY_Y,
-    HG_KEY_U,
-    HG_KEY_I,
-    HG_KEY_O,
-    HG_KEY_P,
-    HG_KEY_A,
-    HG_KEY_S,
-    HG_KEY_D,
-    HG_KEY_F,
-    HG_KEY_G,
-    HG_KEY_H,
-    HG_KEY_J,
-    HG_KEY_K,
-    HG_KEY_L,
-    HG_KEY_Z,
-    HG_KEY_X,
-    HG_KEY_C,
-    HG_KEY_V,
-    HG_KEY_B,
-    HG_KEY_N,
-    HG_KEY_M,
-    HG_KEY_SEMICOLON,
-    HG_KEY_COLON,
-    HG_KEY_APOSTROPHE,
-    HG_KEY_QUOTATION,
-    HG_KEY_COMMA,
-    HG_KEY_PERIOD,
-    HG_KEY_QUESTION,
-    HG_KEY_GRAVE,
-    HG_KEY_TILDE,
-    HG_KEY_EXCLAMATION,
-    HG_KEY_AT,
-    HG_KEY_HASH,
-    HG_KEY_DOLLAR,
-    HG_KEY_PERCENT,
-    HG_KEY_CAROT,
-    HG_KEY_AMPERSAND,
-    HG_KEY_ASTERISK,
-    HG_KEY_LPAREN,
-    HG_KEY_RPAREN,
-    HG_KEY_LBRACKET,
-    HG_KEY_RBRACKET,
-    HG_KEY_LBRACE,
-    HG_KEY_RBRACE,
-    HG_KEY_EQUAL,
-    HG_KEY_LESS,
-    HG_KEY_GREATER,
-    HG_KEY_PLUS,
-    HG_KEY_MINUS,
-    HG_KEY_SLASH,
-    HG_KEY_BACKSLASH,
-    HG_KEY_UNDERSCORE,
-    HG_KEY_BAR,
-    HG_KEY_UP,
-    HG_KEY_DOWN,
-    HG_KEY_LEFT,
-    HG_KEY_RIGHT,
-    HG_KEY_MOUSE1,
-    HG_KEY_MOUSE2,
-    HG_KEY_MOUSE3,
-    HG_KEY_MOUSE4,
-    HG_KEY_MOUSE5,
-    HG_KEY_LMOUSE = HG_KEY_MOUSE1,
-    HG_KEY_RMOUSE = HG_KEY_MOUSE2,
-    HG_KEY_MMOUSE = HG_KEY_MOUSE3,
-    HG_KEY_ESCAPE,
-    HG_KEY_SPACE,
-    HG_KEY_ENTER,
-    HG_KEY_BACKSPACE,
-    HG_KEY_DELETE,
-    HG_KEY_INSERT,
-    HG_KEY_TAB,
-    HG_KEY_HOME,
-    HG_KEY_END,
-    HG_KEY_F1,
-    HG_KEY_F2,
-    HG_KEY_F3,
-    HG_KEY_F4,
-    HG_KEY_F5,
-    HG_KEY_F6,
-    HG_KEY_F7,
-    HG_KEY_F8,
-    HG_KEY_F9,
-    HG_KEY_F10,
-    HG_KEY_F11,
-    HG_KEY_F12,
-    HG_KEY_LSHIFT,
-    HG_KEY_RSHIFT,
-    HG_KEY_LCTRL,
-    HG_KEY_RCTRL,
-    HG_KEY_LMETA,
-    HG_KEY_RMETA,
-    HG_KEY_LALT,
-    HG_KEY_RALT,
-    HG_KEY_LSUPER,
-    HG_KEY_RSUPER,
-    HG_KEY_CAPSLOCK,
-    HG_KEY_COUNT,
-} HgKey;
-
-struct HgWindow {
-    struct Internals;
-
-    /**
-     * Platform specific resources for a window
-     */
-    Internals *internals;
-
-    /**
-     * Configuration for a window
-     */
-    struct Config {
-        /**
-         * The title of the window
-         */
-        const char* title;
-        /**
-         * Whether the window should be windowed or fullscreen
-         */
-        bool windowed;
-        /**
-         * The width in pixels if windowed, otherwise ignored
-         */
-        u32 width;
-        /**
-         * The height in pixels if windowed, otherwise ignored
-         */
-        u32 height;
-    };
-
-    /**
-     * Creates a window
-     *
-     * Parameters
-     * - config The window configuration
-     * Returns
-     * - The created window, will never be nullptr
-     */
-    static HgWindow create(const Config& config);
-
-    /**
-     * Destroys a window
-     */
-    void destroy();
-
-    /**
-     * Sets the windows icons : TODO
-     *
-     * Parameters
-     * - icon_data The pixels of the image to set the icon to, must not be nullptr
-     * - width The width in pixels of the icon
-     * - height The height in pixels of the icon
-     */
-    void set_icon(u32 *icon_data, u32 width, u32 height);
-
-    /**
-     * Gets whether the window is fullscreen or not : TODO
-     *
-     * Returns
-     * - Whether the window is fullscreen
-     */
-    bool is_fullscreen();
-
-    /**
-     * Sets the window to fullscreen of windowed mode : TODO
-     *
-     * Parameters
-     * - fullscreen Whether to set fullscreen, or set windowed
-     */
-    void set_fullscreen(bool fullscreen);
-
-    /**
-     * The builtin cursor images
-     */
-    typedef enum Cursor {
-        HG_CURSOR_NONE = 0,
-        HG_CURSOR_ARROW,
-        HG_CURSOR_TEXT,
-        HG_CURSOR_WAIT,
-        HG_CURSOR_CROSS,
-        HG_CURSOR_HAND,
-    } Cursor;
-
-    /**
-     * Sets the window's cursor to a platform defined icon : TODO
-     */
-    void set_cursor(Cursor cursor);
-
-    /**
-     * Sets the window's cursor to a custom image : TODO
-     */
-    void set_cursor_image(u32 *data, u32 width, u32 height);
-
-    /**
-     * Checks if the window was closed via close button or window manager
-     *
-     * hg_window_close() is not automatically called when this function returns
-     * true, and may be called manually
-     *
-     * Returns
-     * - whether the window was closed
-     */
-    bool was_closed();
-
-    /**
-     * Checks if the window was resized
-     *
-     * Returns
-     * - whether the window was resized
-     */
-    bool was_resized();
-
-    /**
-     * Gets the size of the window in pixels
-     *
-     * Parameters
-     * - width A pointer to store the width, must not be nullptr
-     * - height A pointer to store the height, must not be nullptr
-     */
-    void get_size(u32 *width, u32 *height);
-
-    /**
-     * Gets the most recent mouse position
-     *
-     * Parameters
-     * - x A pointer to store the x position
-     * - y A pointer to store the y position
-     */
-    void get_mouse_pos(f64& x, f64& y);
-
-    /**
-     * Gets the most recent mouse delta
-     *
-     * Parameters
-     * - x A pointer to store the x delta
-     * - y A pointer to store the y delta
-     */
-    void get_mouse_delta(f64& x, f64& y);
-
-    /**
-     * Checks if a key is being held down
-     *
-     * Parameters
-     * - key The key to check
-     * Returns
-     * - whether the key is being held down
-     */
-    bool is_key_down(HgKey key);
-
-    /**
-     * Checks if a key was pressed this frame
-     *
-     * Parameters
-     * - key The key to check
-     * Returns
-     * - whether the key was pressed this frame
-     */
-    bool was_key_pressed(HgKey key);
-
-    /**
-     * Checks if a key was released this frame
-     *
-     * Parameters
-     * - key The key to check
-     * Returns
-     * - whether the key was released this frame
-     */
-    bool was_key_released(HgKey key);
-};
-
-/**
- * Create a Vulkan surface for the window, according to the platform
- *
- * Parameters
- * - instance The Vulkan instance, must not be nullptr
- * - window The window to create a surface for
- * Returns
- * - The created Vulkan surface, will never be nullptr
- */
-VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window);
-
-/**
- * Processes all events since the last call to process events or startup
- *
- * Must be called every frame before querying input
- * Processes all events, so all windows must be given
- * Updates the each window's input state
- *
- * Parameters
- * - hg The hg context, must not be nullptr
- * - windows All open windows
- */
-void hg_process_window_events(HgSpan<const HgWindow> windows);
-
 /**
  * Loads the Vulkan library and the functions required to create an instance
+ *
+ * Note, this function is automatically called from hg_init
  */
 void hg_vk_load();
 
@@ -3324,6 +3222,7 @@ void hg_vk_load_device(VkDevice device);
  *
  * Parameters
  * - result The result enum to stringify
+ *
  * Returns
  * - The string of the enum value's name
  */
@@ -3334,6 +3233,7 @@ const char *hg_vk_result_string(VkResult result);
  * 
  * Parameters
  * - format The format to get the size of
+ *
  * Returns
  * - The size of the format in bytes
  */
@@ -3347,7 +3247,8 @@ u32 hg_vk_format_to_size(VkFormat format);
  * Note, loads Vulkan function pointers automatically
  *
  * Parameters
- * - app_name The name of the application, may be nullptr
+ * - app_name The name of the application, defaults to "Hurdy Gurdy Application"
+ *
  * Returns
  * - The created VkInstance, will never be nullptr
  */
@@ -3358,6 +3259,7 @@ VkInstance hg_vk_create_instance(const char *app_name);
  *
  * Parameters
  * - instance The Vulkan instance, must not be nullptr
+ *
  * Returns
  * - The created debug messenger, will never be nullptr
  */
@@ -3369,6 +3271,7 @@ VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger(VkInstance instance);
  * Parameters
  * - gpu The physical device, must not be nullptr
  * - queue_flags The flags required of the queue family
+ *
  * Returns
  * - The queue family if found
  * - No value if not found
@@ -3411,6 +3314,7 @@ struct HgSingleQueueDeviceData {
  * Parameters
  * - gpu The physical device, must not be nullptr
  * - queue_family Which family to create the queue in
+ *
  * Returns
  * - The created Vulkan device, will never be nullptr
  */
@@ -3484,6 +3388,7 @@ struct HgVkPipelineConfig {
  * Parameters
  * - device The Vulkan device, must not be nullptr
  * - config The pipeline configuration
+ *
  * Returns
  * - The created graphics pipeline, will never be nullptr
  */
@@ -3499,6 +3404,7 @@ VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineCon
  * Parameters
  * - device The Vulkan device, must not be nullptr
  * - config The pipeline configuration
+ *
  * Returns
  * - The created compute pipeline, will never be nullptr
  */
@@ -3536,6 +3442,7 @@ struct HgSwapchainData {
  * - surface The surface to create from
  * - image_usage How the swapchain's images will be used
  * - desired_mode The preferred present mode (fallback to FIFO)
+ *
  * Returns
  * - The created Vulkan swapchain
  */
@@ -3568,6 +3475,7 @@ struct HgSwapchainCommands {
      * - device The Vulkan device, must not be nullptr
      * - swapchain The Vulkan swapchain to create frames for, must not be nullptr
      * - cmd_pool The Vulkan command pool to allocate cmds from, must not be nullptr
+     *
      * Returns
      * - The created swaphchain command buffer system
      */
@@ -3586,6 +3494,7 @@ struct HgSwapchainCommands {
      *
      * Parameters
      * - device The Vulkan device, must not be nullptr
+     *
      * Returns
      * - The command buffer to record this frame
      * - nullptr if the swapchain is out of date
@@ -3614,6 +3523,7 @@ struct HgSwapchainCommands {
  * - bitmask A bitmask of which memory types cannot be used, must not be 0
  * - desired_flags The flags which the type should 
  * - undesired_flags The flags which the type should not have, though may have
+ *
  * Returns
  * - The found index of the memory type
  */
@@ -3782,6 +3692,326 @@ void hg_vk_image_staging_read(
 // mipmap generation : TODO
 
 /**
+ * A key on the keyboard or button on the mouse
+ */
+typedef enum HgKey {
+    HG_KEY_NONE = 0,
+    HG_KEY_0,
+    HG_KEY_1,
+    HG_KEY_2,
+    HG_KEY_3,
+    HG_KEY_4,
+    HG_KEY_5,
+    HG_KEY_6,
+    HG_KEY_7,
+    HG_KEY_8,
+    HG_KEY_9,
+    HG_KEY_Q,
+    HG_KEY_W,
+    HG_KEY_E,
+    HG_KEY_R,
+    HG_KEY_T,
+    HG_KEY_Y,
+    HG_KEY_U,
+    HG_KEY_I,
+    HG_KEY_O,
+    HG_KEY_P,
+    HG_KEY_A,
+    HG_KEY_S,
+    HG_KEY_D,
+    HG_KEY_F,
+    HG_KEY_G,
+    HG_KEY_H,
+    HG_KEY_J,
+    HG_KEY_K,
+    HG_KEY_L,
+    HG_KEY_Z,
+    HG_KEY_X,
+    HG_KEY_C,
+    HG_KEY_V,
+    HG_KEY_B,
+    HG_KEY_N,
+    HG_KEY_M,
+    HG_KEY_SEMICOLON,
+    HG_KEY_COLON,
+    HG_KEY_APOSTROPHE,
+    HG_KEY_QUOTATION,
+    HG_KEY_COMMA,
+    HG_KEY_PERIOD,
+    HG_KEY_QUESTION,
+    HG_KEY_GRAVE,
+    HG_KEY_TILDE,
+    HG_KEY_EXCLAMATION,
+    HG_KEY_AT,
+    HG_KEY_HASH,
+    HG_KEY_DOLLAR,
+    HG_KEY_PERCENT,
+    HG_KEY_CAROT,
+    HG_KEY_AMPERSAND,
+    HG_KEY_ASTERISK,
+    HG_KEY_LPAREN,
+    HG_KEY_RPAREN,
+    HG_KEY_LBRACKET,
+    HG_KEY_RBRACKET,
+    HG_KEY_LBRACE,
+    HG_KEY_RBRACE,
+    HG_KEY_EQUAL,
+    HG_KEY_LESS,
+    HG_KEY_GREATER,
+    HG_KEY_PLUS,
+    HG_KEY_MINUS,
+    HG_KEY_SLASH,
+    HG_KEY_BACKSLASH,
+    HG_KEY_UNDERSCORE,
+    HG_KEY_BAR,
+    HG_KEY_UP,
+    HG_KEY_DOWN,
+    HG_KEY_LEFT,
+    HG_KEY_RIGHT,
+    HG_KEY_MOUSE1,
+    HG_KEY_MOUSE2,
+    HG_KEY_MOUSE3,
+    HG_KEY_MOUSE4,
+    HG_KEY_MOUSE5,
+    HG_KEY_LMOUSE = HG_KEY_MOUSE1,
+    HG_KEY_RMOUSE = HG_KEY_MOUSE2,
+    HG_KEY_MMOUSE = HG_KEY_MOUSE3,
+    HG_KEY_ESCAPE,
+    HG_KEY_SPACE,
+    HG_KEY_ENTER,
+    HG_KEY_BACKSPACE,
+    HG_KEY_DELETE,
+    HG_KEY_INSERT,
+    HG_KEY_TAB,
+    HG_KEY_HOME,
+    HG_KEY_END,
+    HG_KEY_F1,
+    HG_KEY_F2,
+    HG_KEY_F3,
+    HG_KEY_F4,
+    HG_KEY_F5,
+    HG_KEY_F6,
+    HG_KEY_F7,
+    HG_KEY_F8,
+    HG_KEY_F9,
+    HG_KEY_F10,
+    HG_KEY_F11,
+    HG_KEY_F12,
+    HG_KEY_LSHIFT,
+    HG_KEY_RSHIFT,
+    HG_KEY_LCTRL,
+    HG_KEY_RCTRL,
+    HG_KEY_LMETA,
+    HG_KEY_RMETA,
+    HG_KEY_LALT,
+    HG_KEY_RALT,
+    HG_KEY_LSUPER,
+    HG_KEY_RSUPER,
+    HG_KEY_CAPSLOCK,
+    HG_KEY_COUNT,
+} HgKey;
+
+struct HgWindow {
+    struct Internals;
+
+    /**
+     * Platform specific resources for a window
+     */
+    Internals *internals;
+
+    /**
+     * Configuration for a window
+     */
+    struct Config {
+        /**
+         * The title of the window
+         */
+        const char* title;
+        /**
+         * Whether the window should be windowed or fullscreen
+         */
+        bool windowed;
+        /**
+         * The width in pixels if windowed, otherwise ignored
+         */
+        u32 width;
+        /**
+         * The height in pixels if windowed, otherwise ignored
+         */
+        u32 height;
+    };
+
+    /**
+     * Creates a window
+     *
+     * Parameters
+     * - config The window configuration
+     *
+     * Returns
+     * - The created window, will never be nullptr
+     */
+    static HgWindow create(const Config& config);
+
+    /**
+     * Destroys a window
+     */
+    void destroy();
+
+    /**
+     * Sets the windows icons : TODO
+     *
+     * Parameters
+     * - icon_data The pixels of the image to set the icon to, must not be nullptr
+     * - width The width in pixels of the icon
+     * - height The height in pixels of the icon
+     */
+    void set_icon(u32 *icon_data, u32 width, u32 height);
+
+    /**
+     * Gets whether the window is fullscreen or not : TODO
+     *
+     * Returns
+     * - Whether the window is fullscreen
+     */
+    bool is_fullscreen();
+
+    /**
+     * Sets the window to fullscreen of windowed mode : TODO
+     *
+     * Parameters
+     * - fullscreen Whether to set fullscreen, or set windowed
+     */
+    void set_fullscreen(bool fullscreen);
+
+    /**
+     * The builtin cursor images
+     */
+    typedef enum Cursor {
+        HG_CURSOR_NONE = 0,
+        HG_CURSOR_ARROW,
+        HG_CURSOR_TEXT,
+        HG_CURSOR_WAIT,
+        HG_CURSOR_CROSS,
+        HG_CURSOR_HAND,
+    } Cursor;
+
+    /**
+     * Sets the window's cursor to a platform defined icon : TODO
+     */
+    void set_cursor(Cursor cursor);
+
+    /**
+     * Sets the window's cursor to a custom image : TODO
+     */
+    void set_cursor_image(u32 *data, u32 width, u32 height);
+
+    /**
+     * Checks if the window was closed via close button or window manager
+     *
+     * hg_window_close() is not automatically called when this function returns
+     * true, and may be called manually
+     *
+     * Returns
+     * - whether the window was closed
+     */
+    bool was_closed();
+
+    /**
+     * Checks if the window was resized
+     *
+     * Returns
+     * - whether the window was resized
+     */
+    bool was_resized();
+
+    /**
+     * Gets the size of the window in pixels
+     *
+     * Parameters
+     * - width A pointer to store the width, must not be nullptr
+     * - height A pointer to store the height, must not be nullptr
+     */
+    void get_size(u32 *width, u32 *height);
+
+    /**
+     * Gets the most recent mouse position
+     *
+     * Parameters
+     * - x A pointer to store the x position
+     * - y A pointer to store the y position
+     */
+    void get_mouse_pos(f64& x, f64& y);
+
+    /**
+     * Gets the most recent mouse delta
+     *
+     * Parameters
+     * - x A pointer to store the x delta
+     * - y A pointer to store the y delta
+     */
+    void get_mouse_delta(f64& x, f64& y);
+
+    /**
+     * Checks if a key is being held down
+     *
+     * Parameters
+     * - key The key to check
+     *
+     * Returns
+     * - whether the key is being held down
+     */
+    bool is_key_down(HgKey key);
+
+    /**
+     * Checks if a key was pressed this frame
+     *
+     * Parameters
+     * - key The key to check
+     *
+     * Returns
+     * - whether the key was pressed this frame
+     */
+    bool was_key_pressed(HgKey key);
+
+    /**
+     * Checks if a key was released this frame
+     *
+     * Parameters
+     * - key The key to check
+     *
+     * Returns
+     * - whether the key was released this frame
+     */
+    bool was_key_released(HgKey key);
+};
+
+/**
+ * Create a Vulkan surface for the window, according to the platform
+ *
+ * Parameters
+ * - instance The Vulkan instance, must not be nullptr
+ * - window The window to create a surface for, must exist
+ *
+ * Returns
+ * - The created Vulkan surface, will never be nullptr
+ */
+VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window);
+
+/**
+ * Processes all events since the last call to process events or startup
+ *
+ * Must be called every frame before querying input
+ * Processes all events, so all windows must be given
+ * Updates the each window's input state
+ *
+ * Parameters
+ * - windows All open windows, must not be nullptr
+ */
+void hg_process_window_events(HgSpan<const HgWindow> windows);
+
+// audio system : TODO
+
+/**
  * A pipeline to render 2D sprites
  */
 struct HgPipelineSprite {
@@ -3806,6 +4036,7 @@ struct HgPipelineSprite {
  * - color_format The format of the color attachment which will be rendered to,
  *   must not be VK_FORMAT_UNDEFINED
  * - depth_format The format of the depth attachment, may be VK_FORMAT_UNDEFINED
+ *
  * Returns
  * - The created pipeline
  */
@@ -3893,6 +4124,7 @@ struct HgPipelineSpriteTextureConfig {
  * - cmd_pool The command pool to get a command buffer from, must not be nullptr
  * - transfer_queue The queue to transfer the data on, must not be nullptr
  * - config The configuration for the texture, must not be nullptr
+ *
  * Returns
  * - The created texture
  */
