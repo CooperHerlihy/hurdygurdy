@@ -2575,8 +2575,8 @@ u32 hg_vk_find_memory_type_index(
 void hg_vk_buffer_staging_write(
     VkDevice device,
     VmaAllocator allocator,
-    VkCommandPool cmd_pool,
     VkQueue transfer_queue,
+    VkCommandPool cmd_pool,
     VkBuffer dst,
     usize offset,
     HgSpan<const void> src
@@ -2644,8 +2644,8 @@ void hg_vk_buffer_staging_write(
 void hg_vk_buffer_staging_read(
     VkDevice device,
     VmaAllocator allocator,
-    VkCommandPool cmd_pool,
     VkQueue transfer_queue,
+    VkCommandPool cmd_pool,
     HgSpan<void> dst,
     VkBuffer src,
     usize offset
@@ -2714,8 +2714,8 @@ void hg_vk_buffer_staging_read(
 void hg_vk_image_staging_write(
     VkDevice device,
     VmaAllocator allocator,
-    VkCommandPool cmd_pool,
     VkQueue transfer_queue,
+    VkCommandPool cmd_pool,
     const HgVkImageStagingWriteConfig& config
 ) {
     assert(device != nullptr);
@@ -2833,8 +2833,8 @@ void hg_vk_image_staging_write(
 void hg_vk_image_staging_read(
     VkDevice device,
     VmaAllocator allocator,
-    VkCommandPool cmd_pool,
     VkQueue transfer_queue,
+    VkCommandPool cmd_pool,
     const HgVkImageStagingReadConfig& config
 ) {
     assert(device != nullptr);
@@ -2948,6 +2948,141 @@ void hg_vk_image_staging_read(
     vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
 
     vmaCopyAllocationToMemory(allocator, stage_alloc, 0, config.dst, size);
+}
+
+void hg_vk_image_generate_mipmaps(
+    VkDevice device,
+    VkQueue transfer_queue,
+    VkCommandPool cmd_pool,
+    VkImage image,
+    VkImageAspectFlags aspect_mask,
+    VkImageLayout old_layout,
+    VkImageLayout new_layout,
+    u32 width,
+    u32 height,
+    u32 depth,
+    u32 mip_count
+) {
+    assert(device != nullptr);
+    assert(transfer_queue != nullptr);
+    assert(cmd_pool != nullptr);
+    assert(image != nullptr);
+    assert(old_layout != VK_IMAGE_LAYOUT_UNDEFINED);
+    assert(new_layout != VK_IMAGE_LAYOUT_UNDEFINED);
+    assert(width > 0);
+    assert(height > 0);
+    assert(depth > 0);
+    assert(mip_count > 0);
+    if (mip_count == 1)
+        return;
+
+    VkCommandBufferAllocateInfo cmd_info{};
+    cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    cmd_info.commandPool = cmd_pool;
+    cmd_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    cmd_info.commandBufferCount = 1;
+
+    VkCommandBuffer cmd = nullptr;
+    vkAllocateCommandBuffers(device, &cmd_info, &cmd);
+    hg_defer(vkFreeCommandBuffers(device, cmd_pool, 1, &cmd));
+
+    VkCommandBufferBeginInfo begin_info{};
+    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    vkBeginCommandBuffer(cmd, &begin_info);
+
+    VkOffset3D mip_offset{};
+    mip_offset.x = (i32)width;
+    mip_offset.y = (i32)height;
+    mip_offset.z = (i32)depth;
+
+    VkImageMemoryBarrier2 barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    barrier.srcStageMask = VK_PIPELINE_STAGE_NONE;
+    barrier.srcAccessMask = VK_ACCESS_NONE;
+    barrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    barrier.oldLayout = old_layout;
+    barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barrier.image = image;
+    barrier.subresourceRange.aspectMask = aspect_mask;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.layerCount = 1;
+
+    VkDependencyInfo dep{};
+    dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    dep.imageMemoryBarrierCount = 1;
+    dep.pImageMemoryBarriers = &barrier;
+
+    vkCmdPipelineBarrier2(cmd, &dep);
+
+    for (u32 level = 0; level < mip_count - 1; ++level) {
+        barrier.srcStageMask = VK_PIPELINE_STAGE_NONE;
+        barrier.srcAccessMask = VK_ACCESS_NONE;
+        barrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        barrier.subresourceRange.aspectMask = aspect_mask;
+        barrier.subresourceRange.baseMipLevel = level + 1;
+
+        vkCmdPipelineBarrier2(cmd, &dep);
+
+        VkImageBlit blit{};
+        blit.srcSubresource.aspectMask = aspect_mask;
+        blit.srcSubresource.mipLevel = level;
+        blit.srcSubresource.layerCount = 1;
+        blit.srcOffsets[1] = mip_offset;
+        if (mip_offset.x > 1)
+            mip_offset.x /= 2;
+        if (mip_offset.y > 1)
+            mip_offset.y /= 2;
+        if (mip_offset.z > 1)
+            mip_offset.z /= 2;
+        blit.dstSubresource.aspectMask = aspect_mask;
+        blit.dstSubresource.mipLevel = level + 1;
+        blit.dstSubresource.layerCount = 1;
+        blit.dstOffsets[1] = mip_offset;
+
+        vkCmdBlitImage(cmd,
+            image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1, &blit,
+            VK_FILTER_LINEAR);
+
+        barrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        barrier.subresourceRange.aspectMask = aspect_mask;
+        barrier.subresourceRange.baseMipLevel = level + 1;
+
+        vkCmdPipelineBarrier2(cmd, &dep);
+    }
+
+    barrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    barrier.dstStageMask = VK_PIPELINE_STAGE_NONE;
+    barrier.dstAccessMask = VK_ACCESS_NONE;
+    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barrier.newLayout = new_layout;
+    barrier.subresourceRange.aspectMask = aspect_mask;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.levelCount = mip_count;
+
+    vkCmdPipelineBarrier2(cmd, &dep);
+
+    vkEndCommandBuffer(cmd);
+
+    VkSubmitInfo submit_info{};
+    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit_info.commandBufferCount = 1;
+    submit_info.pCommandBuffers = &cmd;
+
+    vkQueueSubmit(transfer_queue, 1, &submit_info, nullptr);
 }
 
 #include "sprite.frag.spv.h"
@@ -3193,7 +3328,7 @@ HgPipelineSpriteTexture hg_pipeline_sprite_create_texture(
     staging_config.format = config->format;
     staging_config.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    hg_vk_image_staging_write(pipeline->device, pipeline->allocator, cmd_pool, transfer_queue, staging_config);
+    hg_vk_image_staging_write(pipeline->device, pipeline->allocator, transfer_queue, cmd_pool, staging_config);
 
     VkImageViewCreateInfo view_info{};
     view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;

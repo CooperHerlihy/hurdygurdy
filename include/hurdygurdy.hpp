@@ -3564,8 +3564,8 @@ u32 hg_vk_find_memory_type_index(
  * Parameters
  * - device The Vulkan device, must not be nullptr
  * - allocator The Vulkan allocator, must not be nullptr
- * - cmd_pool The command pool for the queue, must not be nullptr
  * - transfer_queue The Vulkan queue to transfer on, must not be nullptr
+ * - cmd_pool The command pool for the queue, must not be nullptr
  * - dst The buffer to write to, must not be nullptr
  * - offset The offset in bytes into the dst buffer
  * - src The data to write, must not be nullptr
@@ -3573,8 +3573,8 @@ u32 hg_vk_find_memory_type_index(
 void hg_vk_buffer_staging_write(
     VkDevice device,
     VmaAllocator allocator,
-    VkCommandPool cmd_pool,
     VkQueue transfer_queue,
+    VkCommandPool cmd_pool,
     VkBuffer dst,
     usize offset,
     HgSpan<const void> src);
@@ -3585,8 +3585,8 @@ void hg_vk_buffer_staging_write(
  * Parameters
  * - device The Vulkan device, must not be nullptr
  * - allocator The Vulkan allocator, must not be nullptr
- * - cmd_pool The command pool for the queue, must not be nullptr
  * - transfer_queue The Vulkan queue to transfer on, must not be nullptr
+ * - cmd_pool The command pool for the queue, must not be nullptr
  * - dst The location to write to, must not be nullptr
  * - src The buffer to read from, must not be nullptr
  * - offset The offset in bytes into the dst buffer
@@ -3594,8 +3594,8 @@ void hg_vk_buffer_staging_write(
 void hg_vk_buffer_staging_read(
     VkDevice device,
     VmaAllocator allocator,
-    VkCommandPool cmd_pool,
     VkQueue transfer_queue,
+    VkCommandPool cmd_pool,
     HgSpan<void> dst,
     VkBuffer src,
     usize offset);
@@ -3644,15 +3644,15 @@ struct HgVkImageStagingWriteConfig {
  * Parameters
  * - device The Vulkan device, must not be nullptr
  * - allocator The Vulkan allocator, must not be nullptr
- * - cmd_pool The command pool for the queue, must not be nullptr
  * - transfer_queue The Vulkan queue to transfer on, must not be nullptr
+ * - cmd_pool The command pool for the queue, must not be nullptr
  * - config The configuration for the write
  */
 void hg_vk_image_staging_write(
     VkDevice device,
     VmaAllocator allocator,
-    VkCommandPool cmd_pool,
     VkQueue transfer_queue,
+    VkCommandPool cmd_pool,
     const HgVkImageStagingWriteConfig& config);
 
 /**
@@ -3699,20 +3699,47 @@ struct HgVkImageStagingReadConfig {
  * Parameters
  * - device The Vulkan device, must not be nullptr
  * - allocator The Vulkan allocator, must not be nullptr
- * - cmd_pool The command pool for the queue, must not be nullptr
  * - transfer_queue The Vulkan queue to transfer on, must not be nullptr
+ * - cmd_pool The command pool for the queue, must not be nullptr
  * - config The configuration for the read, must not be nullptr
  */
 void hg_vk_image_staging_read(
     VkDevice device,
     VmaAllocator allocator,
-    VkCommandPool cmd_pool,
     VkQueue transfer_queue,
+    VkCommandPool cmd_pool,
     const HgVkImageStagingReadConfig& config);
 
 // cubemap read/write : TODO
 
-// mipmap generation : TODO
+/**
+ * Generates mipmaps from the base level
+ *
+ * Parameters
+ * - device The Vulkan device, must not be nullptr
+ * - transfer_queue The Vulkan queue to transfer on, must not be nullptr
+ * - cmd_pool The command pool for the queue, must not be nullptr
+ * - image The image to generate mipmaps in, must not be nullptr
+ * - aspect_mask The image aspects to use, must not be 0
+ * - old_layout The layout the image was in before, must not be UNDEFINED
+ * - new_layout The layout the image will be set to, must not be UNDEFINED
+ * - width The width of the base level, must be greater than 0
+ * - height The width of the base level, must be greater than 0
+ * - depth The width of the base level, must be greater than 0
+ * - mip_count The total number of mips in the image, must be greater than 0
+ */
+void hg_vk_image_generate_mipmaps(
+    VkDevice device,
+    VkQueue transfer_queue,
+    VkCommandPool cmd_pool,
+    VkImage image,
+    VkImageAspectFlags aspect_mask,
+    VkImageLayout old_layout,
+    VkImageLayout new_layout,
+    u32 width,
+    u32 height,
+    u32 depth,
+    u32 mip_count);
 
 /**
  * A key on the keyboard or button on the mouse
