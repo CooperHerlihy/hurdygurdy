@@ -40,6 +40,7 @@
 #include <algorithm>
 #include <chrono>
 #include <new>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 
@@ -224,6 +225,14 @@ using iptr = std::intptr_t;
 
 using f32 = std::float_t;
 using f64 = std::double_t;
+
+template<typename First, typename... Rest>
+struct HgGetFirstType {
+    using Type = First;
+};
+
+template<typename First, typename... Rest>
+using HgFirstType = typename HgGetFirstType<First, Rest...>::Type;
 
 /**
  * A basic pair of two objects
@@ -2708,7 +2717,7 @@ struct HgArray {
 struct HgEntity {
     u32 index;
 
-    operator u32() {
+    operator u32() const {
         return index;
     }
 };
@@ -2724,7 +2733,13 @@ u32 hg_create_component_id();
  * The unique component id for a type
  */
 template<typename T>
-inline const u32 hg_component_id = hg_create_component_id();
+inline const u32 hg_internal_component_id = hg_create_component_id();
+
+/**
+ * The unique component id for a type, keeping const and non-const the same
+ */
+template<typename T>
+inline const u32 hg_component_id = hg_internal_component_id<std::remove_const_t<T>>;
 
 /**
  * An entity component system
@@ -2826,7 +2841,10 @@ struct HgECS {
      * Returns
      * - Whether the entity is alive and can be used
      */
-    bool alive(HgEntity entity);
+    bool is_alive(HgEntity entity) {
+        assert(entity < entity_pool.count);
+        return entity != 0 && entity_pool[entity] == 0;
+    }
 
     /**
      * Registers a component in this ECS
@@ -2840,7 +2858,7 @@ struct HgECS {
      * - component_alignment The alignment of the component struct
      * - component_id The id of the component
      */
-    void register_component_untyped(
+    void register_component(
         HgAllocator& mem,
         u32 max_components,
         u32 component_size,
@@ -2858,7 +2876,7 @@ struct HgECS {
      */
     template<typename T>
     void register_component(HgAllocator& mem, u32 max_components) {
-        register_component_untyped(mem, max_components, sizeof(T), alignof(T), hg_component_id<T>);
+        register_component(mem, max_components, sizeof(T), alignof(T), hg_component_id<T>);
     }
 
     /**
@@ -2868,7 +2886,7 @@ struct HgECS {
      * - mem The allocator to get memory from
      * - component_id The id of the component
      */
-    void unregister_component_untyped(HgAllocator& mem, u32 component_id);
+    void unregister_component(HgAllocator& mem, u32 component_id);
 
     /**
      * Unregisters a component in this ECS
@@ -2890,7 +2908,10 @@ struct HgECS {
      * Returns
      * - Whether the component id is registered
      */
-    bool is_registered_untyped(u32 component_id);
+    bool is_registered(u32 component_id) {
+        assert(component_id < systems.count);
+        return systems[component_id].component_count > 0;
+    }
 
     /**
      * Checks whether a component is registered in this ECS
@@ -2903,7 +2924,7 @@ struct HgECS {
      */
     template<typename T>
     bool is_registered() {
-        return is_registered_untyped(hg_component_id<T>);
+        return is_registered(hg_component_id<T>);
     }
 
     /**
@@ -2915,7 +2936,10 @@ struct HgECS {
      * Returns
      * - The number of components under the id
      */
-    u32 count_untyped(u32 component_id);
+    u32 component_count(u32 component_id) {
+        assert(is_registered(component_id));
+        return systems[component_id].component_count - 1;
+    }
 
     /**
      * Gets the number of components that exist under the component id
@@ -2924,8 +2948,35 @@ struct HgECS {
      * - The number of components under the id
      */
     template<typename T>
-    u32 count() {
-        return count_untyped(hg_component_id<T>);
+    u32 component_count() {
+        return component_count(hg_component_id<T>);
+    }
+
+    /**
+     * Finds the index/id of the system with the fewest elements
+     *
+     * Parameters
+     * - ids The indices to check, must be registered
+     *
+     * Returns
+     * - The index/id of the smallest in the array
+     */
+    u32 smallest_system_untyped(HgSpan<u32> ids);
+
+    /**
+     * Finds the index/id of the system with the fewest elements
+     *
+     * Returns
+     * - The index/id of the smallest in the array
+     */
+    template<typename... Ts>
+    u32 smallest_system() {
+        u32 ids[sizeof...(Ts)];
+
+        u32 index = 0;
+        ((ids[index++] = hg_component_id<Ts>), ...);
+
+        return smallest_system_untyped({ids, hg_countof(ids)});
     }
 
     /**
@@ -2940,7 +2991,7 @@ struct HgECS {
      * Returns
      * - A pointer to the created component
      */
-    void *add_untyped(HgEntity entity, u32 component_id);
+    void *add(HgEntity entity, u32 component_id);
 
     /**
      * Casts the component to the given type
@@ -2955,7 +3006,7 @@ struct HgECS {
      */
     template<typename T>
     T& add(HgEntity entity) {
-        return *(T *)add_untyped(entity, hg_component_id<T>);
+        return *(T *)add(entity, hg_component_id<T>);
     }
 
     /**
@@ -2969,7 +3020,7 @@ struct HgECS {
      * - entity The id of the entity, must be alive
      * - component_id The id of the component, must be registered
      */
-    void remove_untyped(HgEntity entity, u32 component_id);
+    void remove(HgEntity entity, u32 component_id);
 
     /**
      * Removes a component from an entity
@@ -2983,7 +3034,7 @@ struct HgECS {
      */
     template<typename T>
     void remove(HgEntity entity) {
-        remove_untyped(entity, hg_component_id<T>);
+        remove(entity, hg_component_id<T>);
     }
 
     /**
@@ -2996,7 +3047,11 @@ struct HgECS {
      * Returns
      * - Whether the entity has a component in the system
      */
-    bool has_untyped(HgEntity entity, u32 component_id);
+    bool has(HgEntity entity, u32 component_id) {
+        assert(is_alive(entity));
+        assert(is_registered(component_id));
+        return systems[component_id].entity_indices[entity] != 0;
+    }
 
     /**
      * Checks whether an entity has a component or not
@@ -3009,7 +3064,7 @@ struct HgECS {
      */
     template<typename T>
     bool has(HgEntity entity) {
-        return has_untyped(entity, hg_component_id<T>);
+        return has(entity, hg_component_id<T>);
     }
 
     /**
@@ -3052,7 +3107,14 @@ struct HgECS {
      * Returns
      * - The entity's component, will never be 0
      */
-    void *get_untyped(HgEntity entity, u32 component_id);
+    void *get(HgEntity entity, u32 component_id) {
+        assert(is_alive(entity));
+        assert(is_registered(component_id));
+        u32 index = systems[component_id].entity_indices[entity];
+        assert(index != 0);
+        assert(systems[component_id].component_entities[index] == entity);
+        return (u8 *)systems[component_id].components.data + index * systems[component_id].component_size;
+    }
 
     /**
      * Gets a pointer to the entity's component
@@ -3067,34 +3129,72 @@ struct HgECS {
      */
     template<typename T>
     T& get(HgEntity entity) {
-        return *(T *)get_untyped(entity, hg_component_id<T>);
+        return *(T *)get(entity, hg_component_id<T>);
     }
 
     /**
-     * Finds the index/id of the system with the fewest elements
+     * Gets the entity id from it's component
      *
      * Parameters
-     * - ids The indices to check, must be registered
+     * - component The component to lookup, must be a valid component
+     * - component_id The id of the component, must be registered
      *
      * Returns
-     * - The index/id of the smallest in the array
+     * - The components's entity, will never be 0
      */
-    u32 smallest_system_untyped(HgSpan<u32> ids);
+    HgEntity get_entity(const void *component, u32 component_id) {
+        assert(component != nullptr);
+        assert(is_registered(component_id));
+
+        u32 index = (u32)((uptr)component
+                  - (uptr)systems[component_id].components.data)
+                  / systems[component_id].component_size;
+        HgEntity entity = systems[component_id].component_entities[index];
+
+        assert(entity != 0);
+        assert(systems[component_id].entity_indices[entity] == index);
+        return entity;
+    }
 
     /**
-     * Finds the index/id of the system with the fewest elements
+     * Gets the entity id from it's component
+     *
+     * Parameters
+     * - component The component to lookup, must be a valid component
      *
      * Returns
-     * - The index/id of the smallest in the array
+     * - The components's entity, will never be 0
      */
-    template<typename... Ts>
-    u32 smallest_system() {
-        u32 ids[sizeof...(Ts)];
+    template<typename T>
+    HgEntity get_entity(const T& component) {
+        u32 id = hg_component_id<T>;
+        return get_entity(&component, id);
+    }
 
-        u32 index = 0;
-        ((ids[index++] = hg_component_id<Ts>), ...);
+    /**
+     * Iterates over all entities with the single given component
+     *
+     * Note, specifying only one component allows deterministic ordering (such
+     * as in the case of sorting), as well as extra optimization
+     *
+     * The function receives as parameters:
+     * - The entity id
+     * - A reference to the component
+     *
+     * Parameters
+     * - function The function to call
+     */
+    template<typename T, typename Fn>
+    void for_each_single(Fn&& function) {
+        static_assert(std::is_invocable_v<Fn, HgEntity&, T&>);
 
-        return smallest_system_untyped({ids, hg_countof(ids)});
+        u32 id = hg_component_id<T>;
+        HgEntity *entity = systems[id].component_entities.data + 1;
+        HgEntity *end = systems[id].component_entities.data + systems[id].component_count;
+        T *component = (T *)systems[id].components.data + 1;
+        for (; entity != end; ++entity, ++component) {
+            function(*entity, *component);
+        }
     }
 
     /**
@@ -3108,41 +3208,101 @@ struct HgECS {
      * - function The function to call
      */
     template<typename... Ts, typename Fn>
-    void for_each(Fn function) {
-        u32 id = smallest_system<Ts...>();
+    void for_each_multi(Fn&& function) {
+        static_assert(std::is_invocable_v<Fn, HgEntity&, Ts&...>);
 
-        for (u32 i = 1; i < systems[id].component_count; ++i) {
-            HgEntity e = systems[id].component_entities[i];
-            if (has_all<Ts...>(e))
-                function(e, get<Ts>(e)...);
+        u32 id = smallest_system<Ts...>();
+        HgEntity *entity = systems[id].component_entities.data + 1;
+        HgEntity *end = systems[id].component_entities.data + systems[id].component_count;
+        for (; entity != end; ++entity) {
+            if (has_all<Ts...>(*entity))
+                function(*entity, get<Ts>(*entity)...);
         }
     }
 
     /**
-     * Gets the entity id from it's component
+     * Iterates over all entities with the given components
+     *
+     * Note, calls the single of multi version from the number of components
      *
      * Parameters
-     * - component The component to lookup, must be a valid component
-     * - component_id The id of the component, must be registered
-     *
-     * Returns
-     * - The components's entity, will never be 0
+     * - function The function to call
      */
-    HgEntity get_entity_untyped(const void *component, u32 component_id);
+    template<typename... Ts, typename Fn>
+    void for_each(Fn&& function) {
+        static_assert(sizeof...(Ts) != 0);
+        static_assert(std::is_invocable_v<Fn, HgEntity&, Ts&...>);
+
+        if constexpr (sizeof...(Ts) == 1) {
+            for_each_single<Ts...>(std::forward<Fn>(function));
+        } else {
+            for_each_multi<Ts...>(std::forward<Fn>(function));
+        }
+    }
 
     /**
-     * Gets the entity id from it's component
-     *
-     * Parameters
-     * - component The component to lookup, must be a valid component
-     *
-     * Returns
-     * - The components's entity, will never be 0
+     * A view into component for c++ range based for loops
      */
     template<typename T>
-    HgEntity get_entity_untyped(const T& component) {
+    struct ComponentView {
+        struct Iter {
+            HgEntity *entity;
+            T *component;
+
+            Iter& operator++() {
+                ++entity;
+                ++component;
+                return *this;
+            }
+
+            bool operator!=(const Iter& other) {
+                return entity != other.entity;
+            }
+
+            struct Ref {
+                HgEntity& entity;
+                T& component;
+            };
+
+            Ref operator*() {
+                return {*entity, *component};
+            }
+        };
+
+        HgEntity *entity_begin;
+        HgEntity *entity_end;
+        T *component_begin;
+
+        constexpr Iter begin() {
+            return {entity_begin, component_begin};
+        }
+
+        constexpr Iter end() {
+            return {entity_end, nullptr};
+        }
+    };
+
+    /**
+     * Creates a view to iterate using c++ range based for loops
+     *
+     * Example:
+     * for (auto [entity, component] : ecs.component_iter<Component>()) {
+     *     foo(component);
+     * }
+     *
+     * Returns
+     * - A view with iterators into the component array
+     */
+    template<typename T>
+    ComponentView<T> component_iter() {
         u32 id = hg_component_id<T>;
-        return get_entity_untyped(&component, id);
+        assert(is_registered(id));
+
+        ComponentView<T> view;
+        view.entity_begin = systems[id].component_entities.data + 1;
+        view.entity_end = systems[id].component_entities.data + systems[id].component_count;
+        view.component_begin = (T *)systems[id].components.data + 1;
+        return view;
     }
 };
 
