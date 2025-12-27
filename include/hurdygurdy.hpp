@@ -3185,7 +3185,7 @@ struct HgECS {
      * - function The function to call
      */
     template<typename T, typename Fn>
-    void for_each_single(Fn&& function) {
+    void for_each_single(Fn& function) {
         static_assert(std::is_invocable_v<Fn, HgEntity&, T&>);
 
         u32 id = hg_component_id<T>;
@@ -3208,7 +3208,7 @@ struct HgECS {
      * - function The function to call
      */
     template<typename... Ts, typename Fn>
-    void for_each_multi(Fn&& function) {
+    void for_each_multi(Fn& function) {
         static_assert(std::is_invocable_v<Fn, HgEntity&, Ts&...>);
 
         u32 id = smallest_system<Ts...>();
@@ -3229,14 +3229,14 @@ struct HgECS {
      * - function The function to call
      */
     template<typename... Ts, typename Fn>
-    void for_each(Fn&& function) {
+    void for_each(Fn function) {
         static_assert(sizeof...(Ts) != 0);
         static_assert(std::is_invocable_v<Fn, HgEntity&, Ts&...>);
 
         if constexpr (sizeof...(Ts) == 1) {
-            for_each_single<Ts...>(std::forward<Fn>(function));
+            for_each_single<Ts...>(function);
         } else {
-            for_each_multi<Ts...>(std::forward<Fn>(function));
+            for_each_multi<Ts...>(function);
         }
     }
 
@@ -3303,6 +3303,94 @@ struct HgECS {
         view.entity_end = systems[id].component_entities.data + systems[id].component_count;
         view.component_begin = (T *)systems[id].components.data + 1;
         return view;
+    }
+
+    void swap_component_locations_idx(u32 lhs, u32 rhs, u32 component_id);
+
+    template<typename T>
+    void swap_component_locations_idx(u32 lhs, u32 rhs) {
+        swap_component_locations_idx(lhs, rhs, hg_component_id<T>);
+    }
+
+    void swap_component_locations(HgEntity lhs, HgEntity rhs, u32 component_id);
+
+    template<typename T>
+    void swap_component_locations(HgEntity lhs, HgEntity rhs) {
+        swap_component_locations(lhs, rhs, hg_component_id<T>);
+    }
+
+    template<typename T, typename Fn>
+    void bubblesort_components(u32 begin, u32 end, Fn& less_than) {
+        static_assert(std::is_invocable_v<Fn, T&, T&>);
+        for (u32 i = begin, count = 0; i < (end - 1); ++i, ++count) {
+            for (u32 j = begin; j < (end - 1) - count; ++j) {
+                T& first = *((T *)systems[hg_component_id<T>].components.data + j);
+                T& second = *((T *)systems[hg_component_id<T>].components.data + j + 1);
+                if (!less_than(first, second)) {
+                    swap_component_locations_idx(j, j + 1, hg_component_id<T>);
+                }
+            }
+        }
+    }
+
+    template<typename T, typename Fn>
+    void bubblesort_components(Fn less_than) {
+        static_assert(std::is_invocable_v<Fn, T&, T&>);
+        bubblesort_components<T>(1, systems[hg_component_id<T>].component_count, less_than);
+    }
+
+    template<typename T, typename Fn>
+    u32 quicksort_inter(u32 pivot, u32 inc, u32 dec, Fn& less_than) {
+        static_assert(std::is_invocable_v<Fn, T&, T&>);
+
+        u32 id = hg_component_id<T>;
+        assert(is_registered(id));
+        assert(inc > 0 && dec <= systems[id].component_count);
+
+#define hg_comp(idx) (*((T *)systems[id].components.data + (idx)))
+
+        while (inc != dec) {
+            while (!less_than(hg_comp(dec), hg_comp(pivot))) {
+                --dec;
+                if (dec == inc)
+                    goto finish;
+            }
+            while (!less_than(hg_comp(pivot), hg_comp(inc))) {
+                ++inc;
+                if (inc == dec)
+                    goto finish;
+            }
+            swap_component_locations_idx(inc, dec, id);
+        }
+
+finish:
+        if (less_than(hg_comp(inc), hg_comp(pivot)))
+            swap_component_locations_idx(pivot, inc, id);
+        return inc;
+
+#undef hg_comp
+
+    }
+
+    template<typename T, typename Fn>
+    void quicksort_components(u32 begin, u32 end, Fn& less_than) {
+        static_assert(std::is_invocable_v<Fn, T&, T&>);
+        assert(is_registered(hg_component_id<T>));
+
+        if (begin + 1 >= end)
+            return;
+
+        u32 middle = quicksort_inter<T>(begin, begin + 1, end - 1, less_than);
+        quicksort_components<T>(begin, middle, less_than);
+        quicksort_components<T>(middle, end, less_than);
+    }
+
+    template<typename T, typename Fn>
+    void quicksort_components(Fn less_than) {
+        static_assert(std::is_invocable_v<Fn, T&, T&>);
+        assert(is_registered(hg_component_id<T>));
+
+        quicksort_components<T>(1, systems[hg_component_id<T>].component_count, less_than);
     }
 };
 

@@ -493,6 +493,7 @@ HgECS HgECS::create(
     for (u32 i = 0; i < ecs.entity_pool.count; ++i) {
         ecs.entity_pool[i] = {i + 1};
     }
+    ecs.entity_next = {0};
     HgEntity reserved_null_entity = ecs.create_entity();
     (void)reserved_null_entity;
 
@@ -513,14 +514,15 @@ void HgECS::reset() {
     for (u32 i = 0; i < systems.count; ++i) {
         if (!is_registered(i))
             continue;
-        std::memset(systems[i].entity_indices.data, 0, systems[i].component_count);
-        std::memset(systems[i].component_entities.data, 0, systems[i].component_count);
+        std::memset(systems[i].entity_indices.data, 0, systems[i].component_count * systems[i].component_size);
+        std::memset(systems[i].component_entities.data, 0, systems[i].component_count * systems[i].component_size);
         systems[i].component_count = 1;
     }
 
     for (u32 i = 0; i < entity_pool.count; ++i) {
         entity_pool[i] = {i + 1};
     }
+    entity_next = {0};
     HgEntity reserved_null_entity = create_entity();
     (void)reserved_null_entity;
 }
@@ -633,6 +635,34 @@ void HgECS::remove(HgEntity entity, u32 component_id) {
 
     systems[component_id].entity_indices[entity] = 0;
     systems[component_id].entity_indices[last_entity] = index;
+}
+
+void HgECS::swap_component_locations_idx(u32 lhs, u32 rhs, u32 component_id) {
+    assert(is_registered(component_id));
+    Component& system = systems[component_id];
+    assert(lhs < system.component_count);
+    assert(rhs < system.component_count);
+    assert(is_alive(system.component_entities[lhs]));
+    assert(is_alive(system.component_entities[rhs]));
+
+    HgEntity temp_entity = system.component_entities[lhs];
+    system.component_entities[lhs] = system.component_entities[rhs];
+    system.component_entities[rhs] = temp_entity;
+
+    usize size = system.component_size;
+    void *temp = alloca(size);
+    memcpy(temp, (u8 *)system.components.data + lhs * size, size);
+    memcpy((u8 *)system.components.data + lhs * size, (u8 *)system.components.data + rhs * size, size);
+    memcpy((u8 *)system.components.data + rhs * size, temp, size);
+}
+
+void HgECS::swap_component_locations(HgEntity lhs, HgEntity rhs, u32 component_id) {
+    assert(is_registered(component_id));
+    assert(is_alive(lhs));
+    assert(is_alive(rhs));
+
+    Component& system = systems[component_id];
+    swap_component_locations_idx(system.entity_indices[lhs], system.entity_indices[rhs], component_id);
 }
 
 hg_test(hg_ecs) {
@@ -770,6 +800,113 @@ hg_test(hg_ecs) {
     ecs.destroy_entity(e2);
     hg_test_assert(ecs.component_count<u32>() == 1);
     hg_test_assert(ecs.component_count<u64>() == 1);
+
+    return true;
+}
+
+hg_test(hg_ecs_quicksort) {
+    HgStdAllocator mem;
+
+    HgECS ecs = ecs.create(mem, 128);
+    hg_defer(ecs.destroy(mem));
+
+    u32 elem;
+    ecs.register_component<u32>(mem, 128);
+
+    auto comparison = [](u32 lhs, u32 rhs) {
+        return lhs < rhs;
+    };
+
+    ecs.add<u32>(ecs.create_entity()) = 42;
+    ecs.quicksort_components<u32>(comparison);
+
+    for (auto [e, c] : ecs.component_iter<u32>()) {
+        (void) e;
+        hg_test_assert(c == 42);
+    }
+
+    ecs.reset();
+
+    u32 small_scramble_1[] = {1, 0};
+    for (u32 i = 0; i < hg_countof(small_scramble_1); ++i) {
+        ecs.add<u32>(ecs.create_entity()) = small_scramble_1[i];
+    }
+    ecs.quicksort_components<u32>(comparison);
+
+    elem = 0;
+    for (auto [e, c] : ecs.component_iter<u32>()) {
+        (void)e;
+        hg_test_assert(c == elem);
+        ++elem;
+    }
+    ecs.quicksort_components<u32>(comparison);
+
+    elem = 0;
+    for (auto [e, c] : ecs.component_iter<u32>()) {
+        (void)e;
+        hg_test_assert(c == elem);
+        ++elem;
+    }
+
+    ecs.reset();
+
+    u32 medium_scramble_1[] = {8, 9, 1, 6, 0, 3, 7, 2, 5, 4};
+    for (u32 i = 0; i < hg_countof(medium_scramble_1); ++i) {
+        ecs.add<u32>(ecs.create_entity()) = medium_scramble_1[i];
+    }
+    ecs.quicksort_components<u32>(comparison);
+
+    elem = 0;
+    for (auto [e, c] : ecs.component_iter<u32>()) {
+        (void)e;
+        hg_test_assert(c == elem);
+        ++elem;
+    }
+
+    ecs.reset();
+
+    u32 medium_scramble_2[] = {3, 9, 7, 6, 8, 5, 0, 1, 2, 4};
+    for (u32 i = 0; i < hg_countof(medium_scramble_2); ++i) {
+        ecs.add<u32>(ecs.create_entity()) = medium_scramble_2[i];
+    }
+    ecs.quicksort_components<u32>(comparison);
+    ecs.quicksort_components<u32>(comparison);
+
+    elem = 0;
+    for (auto [e, c] : ecs.component_iter<u32>()) {
+        (void)e;
+        hg_test_assert(c == elem);
+        ++elem;
+    }
+
+    ecs.reset();
+
+    for (u32 i = 127; i < 128; --i) {
+        ecs.add<u32>(ecs.create_entity()) = i;
+    }
+    ecs.quicksort_components<u32>(comparison);
+
+    elem = 0;
+    for (auto [e, c] : ecs.component_iter<u32>()) {
+        (void)e;
+        hg_test_assert(c == elem);
+        ++elem;
+    }
+
+    ecs.reset();
+
+    for (u32 i = 127; i < 128; --i) {
+        ecs.add<u32>(ecs.create_entity()) = i / 2;
+    }
+    ecs.quicksort_components<u32>(comparison);
+    ecs.quicksort_components<u32>(comparison);
+
+    elem = 0;
+    for (auto [e, c] : ecs.component_iter<u32>()) {
+        (void)e;
+        hg_test_assert(c == elem / 2);
+        ++elem;
+    }
 
     return true;
 }
