@@ -2750,6 +2750,43 @@ struct HgECS {
      */
     struct Component {
         /**
+         * The component constructor type called by HgECS::create
+         *
+         * Parameters
+         * - user_data Arbitrary data pointer passed to the function
+         * - ecs The entity component system
+         * - entity The entity to construct for
+         * - component_id The component id for type generic ctors
+         *
+         * Returns
+         * - A pointer to the constructed component
+         */
+        using Ctor = void *(*)(void *user_data, HgECS& ecs, HgEntity entity, u32 component_id);
+
+        /**
+         * The component destructor type called by HgECS::destroy
+         *
+         * Parameters
+         * - user_data Arbitrary data pointer passed to the function
+         * - ecs The entity component system
+         * - entity The entity to destruct for
+         * - component_id The component id for type generic dtors
+         */
+        using Dtor = void (*)(void *user_data, HgECS& ecs, HgEntity entity, u32 component_id);
+
+        /**
+         * The constructor called by HgECS::create
+         */
+        Ctor ctor;
+        /**
+         * The constructor called by HgECS::destroy
+         */
+        Dtor dtor;
+        /**
+         * The data passed to ctor and dtor
+         */
+        void *user_data;
+        /**
          * entity_indices[entity id] is the index into components and
          * component_entities for that entity id
          */
@@ -2777,10 +2814,6 @@ struct HgECS {
     };
 
     /**
-     * The component systems
-     */
-    HgSpan<Component> systems;
-    /**
      * The pool of entity ids
      */
     HgSpan<HgEntity> entity_pool;
@@ -2788,6 +2821,10 @@ struct HgECS {
      * The next entity in the pool
      */
     HgEntity entity_next;
+    /**
+     * The component systems
+     */
+    HgSpan<Component> systems;
 
     /**
      * Creates an entity component system
@@ -2799,12 +2836,12 @@ struct HgECS {
      * Returns
      * - The created entity component system
      */
-    static HgECS create(HgAllocator& mem, u32 max_entities);
+    static HgECS create_ecs(HgAllocator& mem, u32 max_entities);
 
     /**
      * Destroys an entity component system
      */
-    void destroy(HgAllocator& mem);
+    void destroy_ecs(HgAllocator& mem);
 
     /**
      * Resets an entity component system, removing all entities
@@ -2843,7 +2880,7 @@ struct HgECS {
      */
     bool is_alive(HgEntity entity) {
         assert(entity < entity_pool.count);
-        return entity != 0 && entity_pool[entity] == 0;
+        return entity != 0 && entity_pool[entity] == entity;
     }
 
     /**
@@ -2877,6 +2914,30 @@ struct HgECS {
     template<typename T>
     void register_component(HgAllocator& mem, u32 max_components) {
         register_component(mem, max_components, sizeof(T), alignof(T), hg_component_id<T>);
+    }
+
+    /**
+     * Overrides the ctor and dtor functions in a component system
+     *
+     * Parameters
+     * - user_data Abitrary data passed to ctor and dtor
+     * - ctor The function called by create, nullptr to leave default
+     * - dtor The function called by destroy, nullptr to leave default
+     * - component_id The component id, must be registered
+     */
+    void override_component_system(void *user_data, Component::Ctor ctor, Component::Dtor dtor, u32 component_id);
+
+    /**
+     * Overrides the ctor and dtor functions in a component system
+     *
+     * Parameters
+     * - user_data Abitrary data passed to ctor and dtor
+     * - ctor The function called by create, nullptr to leave default
+     * - dtor The function called by destroy, nullptr to leave default
+     */
+    template<typename T>
+    void override_component_system(void *user_data, Component::Ctor ctor, Component::Dtor dtor) {
+        override_component_system(user_data, ctor, dtor, hg_component_id<T>);
     }
 
     /**
@@ -2980,37 +3041,120 @@ struct HgECS {
     }
 
     /**
-     * Adds a component to an entity
+     * Adds a component to an entity at the given index
      *
-     * Note, the component must not already exist
+     * Note, the index must be empty, does not rearrange components
      *
      * Parameters
-     * - entity The id of the entity, must be alive
+     * - index The index to insert into, must not be occupied
+     * - entity The entity to add the component to, must be alive
      * - component_id The id of the component, must be registered
      *
      * Returns
      * - A pointer to the created component
      */
-    void *add(HgEntity entity, u32 component_id);
+    void *place(u32 index, HgEntity entity, u32 component_id);
 
     /**
-     * Casts the component to the given type
+     * Adds a component to an entity at the given index
      *
-     * Note, the component must not already exist
+     * Note, the index must be empty, does not rearrange components
      *
      * Parameters
-     * - entity The id of the entity, must be alive
+     * - index The index to insert into, must not be occupied
+     * - entity The entity to add the component to, must be alive
      *
      * Returns
      * - A pointer to the created component
      */
     template<typename T>
-    T& add(HgEntity entity) {
-        return *(T *)add(entity, hg_component_id<T>);
+    void *place(u32 index, HgEntity entity) {
+        return place(index, entity, hg_component_id<T>);
     }
 
     /**
-     * Removes a component from an entity
+     * Creates a component for an entity
+     *
+     * Note, the entity must not have a component of this type already
+     *
+     * Parameters
+     * - entity The entity to add to, must be alive
+     * - component_id The id of the component, must be registered
+     *
+     * Returns
+     * - A pointer to the created component
+     */
+    void *create(HgEntity entity, u32 component_id);
+
+    /**
+     * Creates a component for an entity
+     *
+     * Note, the entity must not have a component of this type already
+     *
+     * Parameters
+     * - entity The entity to add to, must be alive
+     *
+     * Returns
+     * - A pointer to the created component
+     */
+    template<typename T>
+    T& create(HgEntity entity) {
+        return *(T *)create(entity, hg_component_id<T>);
+    }
+
+    /**
+     * Erases the entity's component slot
+     *
+     * Note, this function leaves an invalid slot in the components
+     *
+     * Parameters
+     * - entity The id of the entity, must be alive
+     * - component_id The id of the component, must be registered
+     */
+    void erase(HgEntity entity, u32 component_id);
+
+    /**
+     * Erases the entity's component slot
+     *
+     * Note, this function leaves an invalid slot in the components
+     *
+     * Parameters
+     * - entity The id of the entity, must be alive
+     */
+    template<typename T>
+    void erase(HgEntity entity) {
+        erase(entity, hg_component_id<T>);
+    }
+
+    /**
+     * Moves a component from one location to another
+     *
+     * Note, there must not be a component at dst
+     *
+     * Parameters
+     * - dst The destination index, must not be 0
+     * - src The source index, must not be 0
+     * - component_id The component id, must be registered
+     */
+    void move(u32 dst, u32 src, u32 component_id);
+
+    /**
+     * Moves a component from one location to another
+     *
+     * Note, there must not be a component at dst
+     *
+     * Parameters
+     * - dst The destination index, must not be 0
+     * - src The source index, must not be 0
+     * - component_id The component id, must be registered
+     */
+    template<typename T>
+    void move(u32 dst, u32 src) {
+        move(dst, src, hg_component_id<T>);
+    }
+
+    /**
+     * Destroys a component from an entity
      *
      * The entity must have an associated component in the system
      *
@@ -3020,10 +3164,10 @@ struct HgECS {
      * - entity The id of the entity, must be alive
      * - component_id The id of the component, must be registered
      */
-    void remove(HgEntity entity, u32 component_id);
+    void destroy(HgEntity entity, u32 component_id);
 
     /**
-     * Removes a component from an entity
+     * Destroys a component from an entity
      *
      * The entity must have an associated component in the system
      *
@@ -3033,8 +3177,96 @@ struct HgECS {
      * - entity The id of the entity, must be alive
      */
     template<typename T>
-    void remove(HgEntity entity) {
-        remove(entity, hg_component_id<T>);
+    void destroy(HgEntity entity) {
+        destroy(entity, hg_component_id<T>);
+    }
+
+    /**
+     * Swaps the component data from each entity
+     * 
+     * Parameters
+     * - lhs The first entity to swap, must be alive
+     * - rhs The second entity to swap, must be alive
+     * - component_id The component id, must be registered
+     */
+    void swap(HgEntity lhs, HgEntity rhs, u32 component_id);
+
+    /**
+     * Swaps the component data from each entity
+     * 
+     * Parameters
+     * - lhs The first entity to swap, must be alive
+     * - rhs The second entity to swap, must be alive
+     */
+    template<typename T>
+    void swap(HgEntity lhs, HgEntity rhs) {
+        swap(lhs, rhs, hg_component_id<T>);
+    }
+
+    /**
+     * Swaps the component data from the given indices
+     * 
+     * Parameters
+     * - lhs The first component to swap
+     * - rhs The second component to swap
+     * - component_id The component id, must be registered
+     */
+    void swap_idx(u32 lhs, u32 rhs, u32 component_id);
+
+    /**
+     * Swaps the component data from the given indices
+     * 
+     * Parameters
+     * - lhs The first component to swap
+     * - rhs The second component to swap
+     */
+    template<typename T>
+    void swap_idx(u32 lhs, u32 rhs) {
+        swap_idx(lhs, rhs, hg_component_id<T>);
+    }
+
+    /**
+     * Swaps where the entities' component are located
+     *
+     * Parameters
+     * - lhs The first entity to swap
+     * - rhs The second entity to swap
+     * - component_id The component id, must be registered
+     */
+    void swap_location(HgEntity lhs, HgEntity rhs, u32 component_id);
+
+    /**
+     * Swaps where the entities' component are located
+     *
+     * Parameters
+     * - lhs The first entity to swap
+     * - rhs The second entity to swap
+     */
+    template<typename T>
+    void swap_location(HgEntity lhs, HgEntity rhs) {
+        swap_location(lhs, rhs, hg_component_id<T>);
+    }
+
+    /**
+     * Swaps the locations of components with their entities
+     *
+     * Parameters
+     * - lhs The first entity to swap
+     * - rhs The second entity to swap
+     * - component_id The component id, must be registered
+     */
+    void swap_location_idx(u32 lhs, u32 rhs, u32 component_id);
+
+    /**
+     * Swaps the locations of components with their entities
+     *
+     * Parameters
+     * - lhs The first entity to swap
+     * - rhs The second entity to swap
+     */
+    template<typename T>
+    void swap_location_idx(u32 lhs, u32 rhs) {
+        swap_location_idx(lhs, rhs, hg_component_id<T>);
     }
 
     /**
@@ -3050,7 +3282,7 @@ struct HgECS {
     bool has(HgEntity entity, u32 component_id) {
         assert(is_alive(entity));
         assert(is_registered(component_id));
-        return systems[component_id].entity_indices[entity] != 0;
+        return systems[component_id].component_entities[systems[component_id].entity_indices[entity]] == entity;
     }
 
     /**
@@ -3110,10 +3342,10 @@ struct HgECS {
     void *get(HgEntity entity, u32 component_id) {
         assert(is_alive(entity));
         assert(is_registered(component_id));
-        u32 index = systems[component_id].entity_indices[entity];
-        assert(index != 0);
-        assert(systems[component_id].component_entities[index] == entity);
-        return (u8 *)systems[component_id].components.data + index * systems[component_id].component_size;
+        assert(has(entity, component_id));
+        return (u8 *)systems[component_id].components.data
+                   + systems[component_id].entity_indices[entity]
+                   * systems[component_id].component_size;
     }
 
     /**
@@ -3129,7 +3361,11 @@ struct HgECS {
      */
     template<typename T>
     T& get(HgEntity entity) {
-        return *(T *)get(entity, hg_component_id<T>);
+        u32 id = hg_component_id<T>;
+        assert(is_alive(entity));
+        assert(is_registered(id));
+        assert(has(entity, id));
+        return *((T *)systems[id].components.data + systems[id].entity_indices[entity]);
     }
 
     /**
@@ -3149,9 +3385,9 @@ struct HgECS {
         u32 index = (u32)((uptr)component
                   - (uptr)systems[component_id].components.data)
                   / systems[component_id].component_size;
-        HgEntity entity = systems[component_id].component_entities[index];
+        assert(index != 0 && index < systems[component_id].component_count);
 
-        assert(entity != 0);
+        HgEntity entity = systems[component_id].component_entities[index];
         assert(systems[component_id].entity_indices[entity] == index);
         return entity;
     }
@@ -3168,7 +3404,14 @@ struct HgECS {
     template<typename T>
     HgEntity get_entity(const T& component) {
         u32 id = hg_component_id<T>;
-        return get_entity(&component, id);
+        assert(is_registered(id));
+
+        u32 index = (u32)(&component - (T *)systems[id].components.data);
+        assert(index != 0 && index < systems[id].component_count);
+
+        HgEntity entity = systems[id].component_entities[index];
+        assert(systems[id].entity_indices[entity] == index);
+        return entity;
     }
 
     /**
@@ -3305,94 +3548,127 @@ struct HgECS {
         return view;
     }
 
-    void swap_component_locations_idx(u32 lhs, u32 rhs, u32 component_id);
+#define hg_comp(idx) (*((T *)systems[hg_component_id<T>].components.data + (idx)))
 
-    template<typename T>
-    void swap_component_locations_idx(u32 lhs, u32 rhs) {
-        swap_component_locations_idx(lhs, rhs, hg_component_id<T>);
-    }
-
-    void swap_component_locations(HgEntity lhs, HgEntity rhs, u32 component_id);
-
-    template<typename T>
-    void swap_component_locations(HgEntity lhs, HgEntity rhs) {
-        swap_component_locations(lhs, rhs, hg_component_id<T>);
-    }
-
+    /**
+     * Sorts components using selection sort
+     *
+     * Parameters
+     * - begin The index of the first component
+     * - end The index of the last component
+     * - compare The comparison function
+     */
     template<typename T, typename Fn>
-    void bubblesort_components(u32 begin, u32 end, Fn& less_than) {
+    void selectionsort_components(u32 begin, u32 end, Fn& compare) {
         static_assert(std::is_invocable_v<Fn, T&, T&>);
-        for (u32 i = begin, count = 0; i < (end - 1); ++i, ++count) {
-            for (u32 j = begin; j < (end - 1) - count; ++j) {
-                T& first = *((T *)systems[hg_component_id<T>].components.data + j);
-                T& second = *((T *)systems[hg_component_id<T>].components.data + j + 1);
-                if (!less_than(first, second)) {
-                    swap_component_locations_idx(j, j + 1, hg_component_id<T>);
-                }
+        assert(is_registered(hg_component_id<T>));
+        assert(begin > 0 && end <= systems[hg_component_id<T>].component_count);
+
+        for (; begin < end; ++begin) {
+            u32 least = begin;
+            for (u32 i = begin + 1; i < end; ++i) {
+                if (compare(hg_comp(i), hg_comp(least)))
+                    least = i;
             }
+            if (least != begin)
+                swap_location_idx(begin, least, hg_component_id<T>);
         }
     }
 
+    /**
+     * Sorts components using selection sort
+     *
+     * Parameters
+     * - compare The comparison function
+     */
     template<typename T, typename Fn>
-    void bubblesort_components(Fn less_than) {
+    void selectionsort_components(Fn compare) {
         static_assert(std::is_invocable_v<Fn, T&, T&>);
-        bubblesort_components<T>(1, systems[hg_component_id<T>].component_count, less_than);
+        selectionsort_components<T>(1, systems[hg_component_id<T>].component_count, compare);
     }
 
+    /**
+     * Rearranges components between a pivot for quick sort
+     *
+     * Parameters
+     * - pivot The index of the pivot
+     * - inc The incrementing iterator, should be pivot + 1
+     * - dec The decrementing iterator, should be end - 1
+     * - compare The comparison function
+     */
     template<typename T, typename Fn>
-    u32 quicksort_inter(u32 pivot, u32 inc, u32 dec, Fn& less_than) {
+    u32 quicksort_inter(u32 pivot, u32 inc, u32 dec, Fn& compare) {
         static_assert(std::is_invocable_v<Fn, T&, T&>);
-
-        u32 id = hg_component_id<T>;
-        assert(is_registered(id));
-        assert(inc > 0 && dec <= systems[id].component_count);
-
-#define hg_comp(idx) (*((T *)systems[id].components.data + (idx)))
+        assert(is_registered(hg_component_id<T>));
+        assert(inc > 0 && dec <= systems[hg_component_id<T>].component_count);
 
         while (inc != dec) {
-            while (!less_than(hg_comp(dec), hg_comp(pivot))) {
+            while (!compare(hg_comp(dec), hg_comp(pivot))) {
                 --dec;
                 if (dec == inc)
                     goto finish;
             }
-            while (!less_than(hg_comp(pivot), hg_comp(inc))) {
+            while (!compare(hg_comp(pivot), hg_comp(inc))) {
                 ++inc;
                 if (inc == dec)
                     goto finish;
             }
-            swap_component_locations_idx(inc, dec, id);
+            swap_location_idx(inc, dec, hg_component_id<T>);
         }
 
 finish:
-        if (less_than(hg_comp(inc), hg_comp(pivot)))
-            swap_component_locations_idx(pivot, inc, id);
+        if (compare(hg_comp(inc), hg_comp(pivot)))
+            swap_location_idx(pivot, inc, hg_component_id<T>);
         return inc;
-
-#undef hg_comp
 
     }
 
+    /**
+     * Sorts components using quick sort
+     *
+     * Parameters
+     * - begin The index of the first component
+     * - end The index of the last component
+     * - compare The comparison function
+     */
     template<typename T, typename Fn>
-    void quicksort_components(u32 begin, u32 end, Fn& less_than) {
+    void quicksort_components(u32 begin, u32 end, Fn& compare) {
         static_assert(std::is_invocable_v<Fn, T&, T&>);
         assert(is_registered(hg_component_id<T>));
+        assert(begin > 0 && end <= systems[hg_component_id<T>].component_count);
 
         if (begin + 1 >= end)
             return;
 
-        u32 middle = quicksort_inter<T>(begin, begin + 1, end - 1, less_than);
-        quicksort_components<T>(begin, middle, less_than);
-        quicksort_components<T>(middle, end, less_than);
+        u32 middle = quicksort_inter<T>(begin, begin + 1, end - 1, compare);
+        quicksort_components<T>(begin, middle, compare);
+        quicksort_components<T>(middle, end, compare);
     }
 
+    /**
+     * Sorts components using quick sort
+     *
+     * Parameters
+     * - compare The comparison function
+     */
     template<typename T, typename Fn>
-    void quicksort_components(Fn less_than) {
+    void quicksort_components(Fn compare) {
         static_assert(std::is_invocable_v<Fn, T&, T&>);
-        assert(is_registered(hg_component_id<T>));
-
-        quicksort_components<T>(1, systems[hg_component_id<T>].component_count, less_than);
+        quicksort_components<T>(1, systems[hg_component_id<T>].component_count, compare);
     }
+
+#undef hg_comp
 };
+
+/**
+ * The default component constructor called by HgECS::create
+ */
+void *hg_default_component_ctor(void *user_data, HgECS& ecs, HgEntity entity, u32 component_id);
+
+/**
+ * The default component destructor called by HgECS::create
+ */
+void hg_default_component_dtor(void *user_data, HgECS& ecs, HgEntity entity, u32 component_id);
 
 /**
  * A high precision clock for timers and game deltas
