@@ -597,8 +597,10 @@ void HgECS::override_component(void *user_data, Component::Ctor ctor, Component:
     assert(is_registered(component_id));
 
     systems[component_id].user_data = user_data;
-    systems[component_id].ctor = ctor;
-    systems[component_id].dtor = dtor;
+    if (ctor != nullptr)
+        systems[component_id].ctor = ctor;
+    if (dtor != nullptr)
+        systems[component_id].dtor = dtor;
 }
 
 u32 HgECS::smallest_system_untyped(HgSpan<u32> ids) {
