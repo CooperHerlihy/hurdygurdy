@@ -593,7 +593,7 @@ void HgECS::unregister_component(HgAllocator& mem, u32 component_id) {
     systems[component_id] = {};
 }
 
-void HgECS::override_component_system(void *user_data, Component::Ctor ctor, Component::Dtor dtor, u32 component_id) {
+void HgECS::override_component(void *user_data, Component::Ctor ctor, Component::Dtor dtor, u32 component_id) {
     assert(is_registered(component_id));
 
     systems[component_id].user_data = user_data;
@@ -625,13 +625,6 @@ void *HgECS::place(u32 index, HgEntity entity, u32 component_id) {
     return (u8 *)systems[component_id].components.data + index * systems[component_id].component_size;
 }
 
-void *HgECS::create(HgEntity entity, u32 component_id) {
-    assert(is_alive(entity));
-    assert(is_registered(component_id));
-
-    return systems[component_id].ctor(systems[component_id].user_data, *this, entity, component_id);
-}
-
 void HgECS::erase(HgEntity entity, u32 component_id) {
     assert(is_alive(entity));
     assert(is_registered(component_id));
@@ -659,14 +652,6 @@ void HgECS::move(u32 dst, u32 src, u32 component_id) {
     void *dst_p = (u8 *)systems[component_id].components.data + dst * size;
     void *src_p = (u8 *)systems[component_id].components.data + src * size;
     memcpy(dst_p, src_p, size);
-}
-
-void HgECS::destroy(HgEntity entity, u32 component_id) {
-    assert(is_alive(entity));
-    assert(is_registered(component_id));
-    assert(has(entity, component_id));
-
-    systems[component_id].dtor(systems[component_id].user_data, *this, entity, component_id);
 }
 
 void HgECS::swap(HgEntity lhs, HgEntity rhs, u32 component_id) {
@@ -763,12 +748,12 @@ void hg_default_component_dtor(void *user_data, HgECS& ecs, HgEntity entity, u32
     --ecs.systems[component_id].component_count;
 }
 
-void *hg_test_component_ctor(void *user_data, HgECS& ecs, HgEntity entity, u32 component_id) {
+static void *hg_internal_test_component_ctor(void *user_data, HgECS& ecs, HgEntity entity, u32 component_id) {
     ++*(u32 *)user_data;
     return hg_default_component_ctor(user_data, ecs, entity, component_id);
 }
 
-void hg_test_component_dtor(void *user_data, HgECS& ecs, HgEntity entity, u32 component_id) {
+static void hg_internal_test_component_dtor(void *user_data, HgECS& ecs, HgEntity entity, u32 component_id) {
     --*(u32 *)user_data;
     hg_default_component_dtor(user_data, ecs, entity, component_id);
 }
@@ -777,15 +762,14 @@ hg_test(hg_ecs) {
     HgStdAllocator mem;
 
     HgECS ecs = ecs.create_ecs(mem, 1 << 16);
-    hg_defer(ecs.destroy_ecs(mem));
 
     ecs.register_component<u32>(mem, 1 << 16);
     ecs.register_component<u64>(mem, 1 << 16);
 
     u32 u32_comp_count = 0;
-    ecs.override_component_system<u32>(&u32_comp_count, hg_test_component_ctor, hg_test_component_dtor);
+    ecs.override_component<u32>(&u32_comp_count, hg_internal_test_component_ctor, hg_internal_test_component_dtor);
     u32 u64_comp_count = 0;
-    ecs.override_component_system<u64>(&u64_comp_count, hg_test_component_ctor, hg_test_component_dtor);
+    ecs.override_component<u64>(&u64_comp_count, hg_internal_test_component_ctor, hg_internal_test_component_dtor);
 
     HgEntity e1 = ecs.create_entity();
     HgEntity e2 = ecs.create_entity();
@@ -930,6 +914,10 @@ hg_test(hg_ecs) {
     assert(u64_comp_count == 1);
     hg_test_assert(ecs.component_count<u32>() == 1);
     hg_test_assert(ecs.component_count<u64>() == 1);
+
+    ecs.destroy_ecs(mem);
+    hg_test_assert(u32_comp_count == 0);
+    hg_test_assert(u64_comp_count == 0);
 
     return true;
 }

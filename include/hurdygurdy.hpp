@@ -2925,7 +2925,7 @@ struct HgECS {
      * - dtor The function called by destroy, nullptr to leave default
      * - component_id The component id, must be registered
      */
-    void override_component_system(void *user_data, Component::Ctor ctor, Component::Dtor dtor, u32 component_id);
+    void override_component(void *user_data, Component::Ctor ctor, Component::Dtor dtor, u32 component_id);
 
     /**
      * Overrides the ctor and dtor functions in a component system
@@ -2936,8 +2936,8 @@ struct HgECS {
      * - dtor The function called by destroy, nullptr to leave default
      */
     template<typename T>
-    void override_component_system(void *user_data, Component::Ctor ctor, Component::Dtor dtor) {
-        override_component_system(user_data, ctor, dtor, hg_component_id<T>);
+    void override_component(void *user_data, Component::Ctor ctor, Component::Dtor dtor) {
+        override_component(user_data, ctor, dtor, hg_component_id<T>);
     }
 
     /**
@@ -3041,6 +3041,73 @@ struct HgECS {
     }
 
     /**
+     * Creates a component for an entity
+     *
+     * Note, the entity must not have a component of this type already
+     *
+     * Parameters
+     * - entity The entity to add to, must be alive
+     * - component_id The id of the component, must be registered
+     *
+     * Returns
+     * - A pointer to the created component
+     */
+    void *create(HgEntity entity, u32 component_id) {
+        assert(is_alive(entity));
+        assert(is_registered(component_id));
+        return systems[component_id].ctor(systems[component_id].user_data, *this, entity, component_id);
+    }
+
+    /**
+     * Creates a component for an entity
+     *
+     * Note, the entity must not have a component of this type already
+     *
+     * Parameters
+     * - entity The entity to add to, must be alive
+     *
+     * Returns
+     * - A pointer to the created component
+     */
+    template<typename T>
+    T& create(HgEntity entity) {
+        return *(T *)create(entity, hg_component_id<T>);
+    }
+
+    /**
+     * Destroys a component from an entity
+     *
+     * The entity must have an associated component in the system
+     *
+     * Note, this function will invalidate iterators
+     *
+     * Parameters
+     * - entity The id of the entity, must be alive
+     * - component_id The id of the component, must be registered
+     */
+    void destroy(HgEntity entity, u32 component_id) {
+        assert(is_alive(entity));
+        assert(is_registered(component_id));
+        assert(has(entity, component_id));
+        systems[component_id].dtor(systems[component_id].user_data, *this, entity, component_id);
+    }
+
+    /**
+     * Destroys a component from an entity
+     *
+     * The entity must have an associated component in the system
+     *
+     * Note, this function will invalidate iterators
+     *
+     * Parameters
+     * - entity The id of the entity, must be alive
+     */
+    template<typename T>
+    void destroy(HgEntity entity) {
+        destroy(entity, hg_component_id<T>);
+    }
+
+    /**
      * Adds a component to an entity at the given index
      *
      * Note, the index must be empty, does not rearrange components
@@ -3070,36 +3137,6 @@ struct HgECS {
     template<typename T>
     void *place(u32 index, HgEntity entity) {
         return place(index, entity, hg_component_id<T>);
-    }
-
-    /**
-     * Creates a component for an entity
-     *
-     * Note, the entity must not have a component of this type already
-     *
-     * Parameters
-     * - entity The entity to add to, must be alive
-     * - component_id The id of the component, must be registered
-     *
-     * Returns
-     * - A pointer to the created component
-     */
-    void *create(HgEntity entity, u32 component_id);
-
-    /**
-     * Creates a component for an entity
-     *
-     * Note, the entity must not have a component of this type already
-     *
-     * Parameters
-     * - entity The entity to add to, must be alive
-     *
-     * Returns
-     * - A pointer to the created component
-     */
-    template<typename T>
-    T& create(HgEntity entity) {
-        return *(T *)create(entity, hg_component_id<T>);
     }
 
     /**
@@ -3151,34 +3188,6 @@ struct HgECS {
     template<typename T>
     void move(u32 dst, u32 src) {
         move(dst, src, hg_component_id<T>);
-    }
-
-    /**
-     * Destroys a component from an entity
-     *
-     * The entity must have an associated component in the system
-     *
-     * Note, this function will invalidate iterators
-     *
-     * Parameters
-     * - entity The id of the entity, must be alive
-     * - component_id The id of the component, must be registered
-     */
-    void destroy(HgEntity entity, u32 component_id);
-
-    /**
-     * Destroys a component from an entity
-     *
-     * The entity must have an associated component in the system
-     *
-     * Note, this function will invalidate iterators
-     *
-     * Parameters
-     * - entity The id of the entity, must be alive
-     */
-    template<typename T>
-    void destroy(HgEntity entity) {
-        destroy(entity, hg_component_id<T>);
     }
 
     /**
