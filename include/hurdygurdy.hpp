@@ -40,7 +40,7 @@
 #include <algorithm>
 #include <chrono>
 #include <new>
-#include <tuple>
+#include <optional>
 #include <type_traits>
 #include <utility>
 
@@ -226,86 +226,6 @@ using iptr = std::intptr_t;
 using f32 = std::float_t;
 using f64 = std::double_t;
 
-template<typename First, typename... Rest>
-struct HgGetFirstType {
-    using Type = First;
-};
-
-template<typename First, typename... Rest>
-using HgFirstType = typename HgGetFirstType<First, Rest...>::Type;
-
-/**
- * A basic pair of two objects
- */
-template<typename First, typename Second>
-struct HgPair {
-    /**
-     * The first object in the pair
-     */
-    First first;
-    /**
-     * The second object in the pair
-     */
-    Second second;
-};
-
-/**
- * An option type wrapper, where the value may or may not exist
- *
- * Note, does not care about C++ object lifetime rules
- */
-template<typename T>
-struct HgOption {
-    /**
-     * The value stored, may not be valid if has_value == false
-     */
-    T value;
-    /**
-     * Whether the container contains an item
-     */
-    bool has_value;
-
-    /**
-     * Access the value like a pointer
-     *
-     * Note, has_value must be true
-     */
-    constexpr T& operator*() {
-        assert(has_value);
-        return value;
-    }
-
-    /**
-     * Access the value like a pointer in a const context
-     *
-     * Note, has_value must be true
-     */
-    constexpr const T& operator*() const {
-        assert(has_value);
-        return value;
-    }
-
-    /**
-     * Access the value like a pointer
-     *
-     * Note, has_value must be true
-     */
-    constexpr T *operator->() {
-        assert(has_value);
-        return &value;
-    }
-
-    /**
-     * Access the value like a pointer in a const context
-     *
-     * Note, has_value must be true
-     */
-    constexpr const T *operator->() const {
-        assert(has_value);
-        return &value;
-    }
-};
-
 /**
  * A pointer-count view into memory
  */
@@ -346,6 +266,34 @@ struct HgSpan {
         assert(data != nullptr);
         assert(index < count);
         return data[index];
+    }
+
+    /**
+     * For c++ ranged based for
+     */
+    constexpr T *begin() {
+        return data;
+    }
+
+    /**
+     * For c++ ranged based for
+     */
+    constexpr T *end() {
+        return data + count;
+    }
+
+    /**
+     * For c++ ranged based for
+     */
+    constexpr const T *begin() const {
+        return data;
+    }
+
+    /**
+     * For c++ ranged based for
+     */
+    constexpr const T *end() const {
+        return data + count;
     }
 
     /**
@@ -2198,21 +2146,18 @@ struct HgAllocator {
     virtual void free_fn(void *allocation, usize size, usize alignment) = 0;
 
     /**
-     * A convenience to allocate using a type
+     * A convenience to allocate a type
      *
      * Returns
      * - The allocated item
      */
     template<typename T>
     T *alloc() {
-        T *ptr = (T *)alloc_fn(sizeof(T), alignof(T));
-        if constexpr (!std::is_trivially_constructible_v<T>)
-            return new (ptr) T{};
-        return ptr;
+        return new ((T *)alloc_fn(sizeof(T), alignof(T))) T;
     }
 
     /**
-     * A convenience to allocate an array using a type
+     * A convenience to allocate an array of a type
      *
      * Parameters
      * - count The number of T to allocate
@@ -2223,13 +2168,8 @@ struct HgAllocator {
     template<typename T>
     HgSpan<T> alloc(usize count) {
         HgSpan<T> span;
-        span.data = (T *)alloc_fn(count * sizeof(T), alignof(T));
+        span.data = new ((T *)alloc_fn(count * sizeof(T), alignof(T))) T[count];
         span.count = span.data != nullptr ? count : 0;
-        if constexpr (!std::is_trivially_constructible_v<T>) {
-            for (usize i = 0; i < span.count; ++i) {
-                new (&span[i]) T{};
-            }
-        }
         return span;
     }
 
@@ -2250,7 +2190,7 @@ struct HgAllocator {
     }
 
     /**
-     * A convenience to reallocate an array using a type
+     * A convenience to reallocate an array of a type
      *
      * Parameters
      * - allocation The allocation to reallocate
@@ -2263,12 +2203,8 @@ struct HgAllocator {
     HgSpan<T> realloc(HgSpan<T> allocation, usize count) {
         HgSpan<T> span;
         span.data = (T *)realloc_fn(allocation.data, allocation.count * sizeof(T), count * sizeof(T), alignof(T));
+        new (span.data + span.count) T[count - span.count];
         span.count = span.data != nullptr ? count : 0;
-        if constexpr (!std::is_trivially_constructible_v<T>) {
-            for (usize i = allocation.count; i < span.count; ++i) {
-                new (&span[i]) T{};
-            }
-        }
         return span;
     }
 
@@ -2290,20 +2226,21 @@ struct HgAllocator {
     }
 
     /**
-     * A convenience to free using a type
+     * A convenience to free a type
      *
      * Parameters
      * - allocation The allocation to free
      */
     template<typename T>
     void free(T *allocation) {
-        if constexpr (std::is_destructible_v<T>)
+        if constexpr (std::is_destructible_v<T>) {
             allocation->~T();
+        }
         free_fn(allocation, sizeof(T), alignof(T));
     }
 
     /**
-     * A convenience to free an array using a type
+     * A convenience to free an array of a type
      *
      * Parameters
      * - allocation The allocation to free
@@ -2545,11 +2482,12 @@ struct HgStack : public HgAllocator {
 
 /**
  * A dynamically sized array
+ *
+ * growth_factor is the factor used to reallocate the array
+ * init_size is the size to initialize to when capacity is 0
  */
-template<typename T>
+template<typename T, usize growth_factor = 2, usize init_size = 64>
 struct HgArray {
-    static_assert(std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T>);
-
     /**
      * The allocated space for the array
      */
@@ -2558,22 +2496,6 @@ struct HgArray {
      * The number of active items in the array
      */
     usize count;
-
-    /**
-     * Access using the index operator
-     */
-    T& operator[](usize index) {
-        assert(index < count);
-        return items[index];
-    }
-
-    /**
-     * Access using the index operator in a const context
-     */
-    const T& operator[](usize index) const {
-        assert(index < count);
-        return items[index];
-    }
 
     /**
      * Allocate a new dynamic array
@@ -2590,15 +2512,10 @@ struct HgArray {
         assert(count <= capacity);
 
         HgArray arr{};
-        arr.items = mem.alloc<T>(capacity);
+        arr.items.data = (T *)mem.alloc_fn(capacity * sizeof(T), alignof(T));
+        arr.items.count = capacity;
         arr.count = count;
-        if constexpr (std::is_default_constructible_v<T>) {
-            for (usize i = 0; i < count; ++i) {
-                new (&arr.items[i]) T{};
-            }
-        } else if constexpr (!std::is_trivially_constructible_v<T>) {
-            assert(count == 0);
-        }
+        new (arr.items.data) T[count];
         return arr;
     }
 
@@ -2606,43 +2523,55 @@ struct HgArray {
      * Free the dynamic array
      */
     void destroy(HgAllocator& mem) {
+        reset();
+        mem.free(items);
+    }
+
+    /**
+     * Destroys all contained objects, emptying the array
+     */
+    void reset() {
         if constexpr (std::is_destructible_v<T>) {
             for (usize i = 0; i < count; ++i) {
                 items[i].~T();
             }
         }
-        mem.free(items);
+        count = 0;
     }
 
     /**
-     * Push an item to the end to the array, resizing if needed
+     * Doubles the capacity of the array, or inits to init_size
+     *
+     * Parameters
+     * - mem The allocator to use
      */
-    T& push(HgAllocator& mem) {
-        if (count >= items.count) {
-            assert(items.count > 0);
-            items = mem.realloc(items, (items.count + 1) * 2);
-        }
-        if constexpr (!std::is_trivially_constructible_v<T>)
-            new (&items[count]) T{};
-        ++count;
-        return items[count - 1];
+    void realloc(HgAllocator& mem) {
+        usize new_capacity = items.count == 0 ? init_size : items.count * growth_factor;
+        items.data = (T *)mem.realloc_fn(items.data, items.size(), new_capacity * sizeof(T), alignof(T));
+        items.count = new_capacity;
     }
 
     /**
      * Push an item to the end to the array, resizing if needed
      *
      * Parameters
-     * - args The arguments to use to construct the new item
+     * - mem The allocator to use
+     * - args The arguments to use to construct the new item, if any
+     *
+     * Returns
+     * - A reference to the created object
      */
     template<typename... Args>
     T& push(HgAllocator& mem, Args&&... args) {
-        if (count >= items.count) {
-            assert(items.count > 0);
-            items = mem.realloc(items, (items.count + 1) * 2);
+        assert(count <= items.count);
+        if (count == items.count)
+            realloc(mem);
+
+        if constexpr (sizeof...(Args) == 0) {
+            return *(new (&items[count++]) T);
+        } else {
+            return *(new (&items[count++]) T{std::forward<Args>(args)...});
         }
-        new (&items[count]) T{std::forward<Args>(args)...};
-        ++count;
-        return items[count - 1];
     }
 
     /**
@@ -2657,42 +2586,29 @@ struct HgArray {
     }
 
     /**
-     * Inserts an item into the array, resizing if needed
+     * Inserts an item into the array, moving subsequent items back
      *
      * Parameters
-     * - index The index the new item will be placed at
-     */
-    T& insert(HgAllocator& mem, usize index) {
-        assert(index <= count);
-        if (count >= items.count) {
-            assert(items.count > 0);
-            items = mem.realloc(items, items.count * 2);
-        }
-        std::move(items.data + index, items.data + count, items.data + index + 1);
-        if constexpr (!std::is_trivially_constructible_v<T>)
-            new (&items[index]) T{};
-        ++count;
-        return items[index];
-    }
-
-    /**
-     * Inserts an item into the array, resizing if needed
+     * - mem The allocator to use
+     * - index The index the new item will be placed at, must be <= count
+     * - args The arguments to use to construct the new item, if any
      *
-     * Parameters
-     * - index The index the new item will be placed at
-     * - args The arguments to use to construct the new item
+     * Returns
+     * - A reference to the created object
      */
     template<typename... Args>
     T& insert(HgAllocator& mem, usize index, Args&&... args) {
         assert(index <= count);
-        if (count >= items.count) {
-            assert(items.count > 0);
-            items = mem.realloc(items, items.count * 2);
-        }
+        assert(count <= items.count);
+        if (count == items.count)
+            realloc(mem);
+
         std::move(items.data + index, items.data + count, items.data + index + 1);
-        new (&items[index]) T{std::forward<Args>(args)...};
         ++count;
-        return items[index];
+        if constexpr (sizeof...(Args) == 0)
+            return *(new (&items[index]) T);
+        else
+            return *(new (&items[index]) T{std::forward<Args>(args)...});
     }
 
     /**
@@ -2708,6 +2624,230 @@ struct HgArray {
         }
         std::move(items.data + index + 1, items.data + count, items.data + index);
         --count;
+    }
+
+    /**
+     * Inserts an item into the array, moving the item at index to the end
+     *
+     * Parameters
+     * - mem The allocator to use
+     * - index The index the new item will be placed at, must be <= count
+     * - args The arguments to use to construct the new item, if any
+     *
+     * Returns
+     * - A reference to the created object
+     */
+    template<typename... Args>
+    T& swap_insert(HgAllocator& mem, usize index, Args&&... args) {
+        assert(index <= count);
+        assert(count <= items.count);
+        if (count == items.count)
+            realloc(mem);
+
+        new (&items[count++]) T{std::move(items[index])};
+        if constexpr (sizeof...(Args) == 0)
+            return *(new (&items[index]) T);
+        else
+            return *(new (&items[index]) T{std::forward<Args>(args)...});
+    }
+
+    /**
+     * Removes the item at the index, moving the last item to take its place
+     *
+     * Parameters
+     * - index The index of the item to remove
+     */
+    void swap_remove(usize index) {
+        assert(index < count);
+        if constexpr (std::is_destructible_v<T>) {
+            items[index].~T();
+        }
+        --count;
+        new (&items[index]) T{std::move(items[count])};
+    }
+
+    /**
+     * Access the value at index
+     *
+     * Parameters
+     * - index The index to get from, must be < count
+     *
+     * Returns
+     * - A reference to the gotten value
+     */
+    constexpr T& get(usize index) {
+        assert(index < count);
+        return items[index];
+    }
+
+    /**
+     * Access the value at index in a const context
+     *
+     * Parameters
+     * - index The index to get from, must be < count
+     *
+     * Returns
+     * - A reference to the gotten value
+     */
+    constexpr const T& get(usize index) const {
+        assert(index < count);
+        return items[index];
+    }
+
+    /**
+     * Access using the index operator
+     */
+    constexpr T& operator[](usize index) {
+        return get(index);
+    }
+
+    /**
+     * Access using the index operator in a const context
+     */
+    constexpr const T& operator[](usize index) const {
+        return get(index);
+    }
+
+    /**
+     * For c++ ranged based for
+     */
+    constexpr T *begin() {
+        return items.data;
+    }
+
+    /**
+     * For c++ ranged based for
+     */
+    constexpr T *end() {
+        return items.data + items.count;
+    }
+
+    /**
+     * For c++ ranged based for
+     */
+    constexpr const T *begin() const {
+        return items.data;
+    }
+
+    /**
+     * For c++ ranged based for
+     */
+    constexpr const T *end() const {
+        return items.data + items.count;
+    }
+};
+
+/**
+ * A key-value hash map
+ *
+ * Key type must have an overload of hg_hash
+ */
+template<typename Key, typename Value>
+struct HgHashMap {
+    /**
+     * Where the values are stored
+     */
+    HgSpan<std::optional<Value>> slots;
+
+    /**
+     * Creates a new hash map
+     *
+     * Parameters
+     * - mem The allocator to use
+     * - slots The max number of slots to store values in
+     *
+     * Returns
+     * - The created empty hash map
+     */
+    static HgHashMap create(HgAllocator& mem, usize slots) {
+        HgHashMap map;
+        map.slots = mem.alloc<std::optional<Value>>(slots);
+        return map;
+    }
+
+    /**
+     * Destroys the hash map
+     *
+     * Parameters
+     * - mem The allocator to use
+     */
+    void destroy(HgAllocator& mem) {
+        mem.free(slots);
+    }
+
+    /**
+     * Inserts a value into the hash map
+     *
+     * Parameters
+     * - key The key to store at
+     * - args The arguments to construct the value
+     *
+     * Returns
+     * - A reference to the constructed object
+     */
+    template<typename... Args>
+    Value& insert(const Key& key, Args&&... args) {
+        usize index = hg_hash(key) % slots.count;
+        while (slots[index].has_value()) {
+            ++index;
+        }
+        slots[index].emplace(std::forward<Args>(args)...);
+        return slots[index].value();
+    }
+
+    /**
+     * Removes a value from the hash map
+     *
+     * Parameters
+     * - key The key to remove from
+     */
+    void remove(const Key& key) {
+        usize index = hg_hash(key) % slots.count;
+        slots[index].reset();
+    }
+
+    /**
+     * Checks whether a value exists
+     *
+     * Parameters
+     * - key The key to check at
+     *
+     * Returns
+     * - Whether a value exists at the key
+     */
+    bool has(const Key& key) {
+        usize index = hg_hash(key) % slots.count;
+        return slots[index].has_value();
+    }
+
+    /**
+     * Gets the value at key, asserting its existance
+     *
+     * Parameters
+     * - key The key to get from
+     *
+     * Returns
+     * - A reference to the value
+     */
+    Value& get(const Key& key) {
+        usize index = hg_hash(key) % slots.count;
+        assert(slots[index].has_value());
+        return slots[index].value();
+    }
+
+    /**
+     * Gets a pointer to the value at key, or nullptr if it does not exist
+     *
+     * Parameters
+     * - key The key to get from
+     *
+     * Returns
+     * - A pointer to the value
+     * - nullptr if it does not exist
+     */
+    Value* try_get(const Key& key) {
+        usize index = hg_hash(key) % slots.count;
+        return slots[index].has_value() ? &slots[index].value() : nullptr;
     }
 };
 
@@ -3832,7 +3972,7 @@ VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger(VkInstance instance);
  * - The queue family if found
  * - No value if not found
  */
-HgOption<u32> hg_vk_find_queue_family(VkPhysicalDevice gpu, VkQueueFlags queue_flags);
+std::optional<u32> hg_vk_find_queue_family(VkPhysicalDevice gpu, VkQueueFlags queue_flags);
 
 // find gpu with multiple potential queues : TODO
 // create device with multiple potential queues : TODO

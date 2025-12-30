@@ -67,33 +67,6 @@ hg_test(hg_test) {
     return true;
 }
 
-hg_test(hg_pair) {
-    auto [x, y] = [] {
-        return HgPair<u32, u64>{12, 42};
-    }();
-    hg_test_assert(x == 12 && y == 42);
-    return true;
-}
-
-hg_test(hg_option) {
-    auto has_val = [] {
-        return HgOption<u32>{12, true};
-    }();
-    hg_test_assert(has_val.has_value && *has_val == 12);
-
-    auto no_val = [] {
-        return HgOption<u64>{};
-    }();
-    hg_test_assert(!no_val.has_value);
-
-    auto [val, has] = [] {
-        return HgOption<f32>{1.0f, true};
-    }();
-    hg_test_assert(has && val == 1.0f);
-
-    return true;
-}
-
 hg_test(hg_matrix_mul) {
     HgMat2f mat{
         {1.0f, 0.0f},
@@ -461,10 +434,76 @@ hg_test(hg_array) {
     hg_test_assert(arr_u16[1] == 4);
 
     for (usize i = 0; i < 100; ++i) {
-        arr_u16.push(mem, (u16)42);
+        arr_u16.push(mem, (u16)i);
     }
     hg_test_assert(arr_u16.count == 102);
     hg_test_assert(arr_u16.items.count >= 102);
+
+    arr_u16.swap_remove(2);
+    hg_test_assert(arr_u16.count == 101);
+    hg_test_assert(arr_u16[2] == 99);
+    hg_test_assert(arr_u16[arr_u16.count - 1] == 98);
+
+    arr_u16.swap_insert(mem, 0, (u16)42);
+    hg_test_assert(arr_u16.count == 102);
+    hg_test_assert(arr_u16[0] == 42);
+    hg_test_assert(arr_u16[1] == 4);
+    hg_test_assert(arr_u16[2] == 99);
+    hg_test_assert(arr_u16[arr_u16.count - 1] == 1);
+
+    return true;
+}
+
+struct TestIndexHash {
+    usize index;
+};
+
+constexpr usize hg_hash(TestIndexHash val) {
+    return val.index;
+}
+
+hg_test(hg_hash_map) {
+    HgStdAllocator mem;
+
+    constexpr usize count = 128;
+
+    HgHashMap<TestIndexHash, u32> map = map.create(mem, count);
+    hg_defer(map.destroy(mem));
+
+    hg_test_assert(!map.has({0}));
+    hg_test_assert(!map.has({1}));
+    hg_test_assert(!map.has({12}));
+    hg_test_assert(!map.has({42}));
+    hg_test_assert(!map.has({100000}));
+
+    map.insert({1}, 1);
+    hg_test_assert(map.has({1}));
+    hg_test_assert(map.get({1}) == 1);
+    hg_test_assert(map.try_get({1}) != nullptr);
+    hg_test_assert(*map.try_get({1}) == 1);
+
+    map.remove({1});
+    hg_test_assert(!map.has({1}));
+    hg_test_assert(map.try_get({1}) == nullptr);
+
+    hg_test_assert(!map.has({12}));
+    hg_test_assert(!map.has({12 + count}));
+
+    map.insert({12}, 42);
+    hg_test_assert(map.has({12}) && map.get({12}) == 42);
+    hg_test_assert(!map.has({12 + count}));
+
+    map.insert({12 + count}, 100);
+    hg_test_assert(map.has({12}) && map.get({12}) == 42);
+    hg_test_assert(map.has({12 + count}) && map.get({12 + count}) == 100);
+
+    map.remove({12});
+    hg_test_assert(!map.has({12}));
+    hg_test_assert(map.has({12 + count}) && map.get({12 + count}) == 100);
+
+    map.remove({12 + count});
+    hg_test_assert(!map.has({12}));
+    hg_test_assert(!map.has({12 + count}));
 
     return true;
 }
@@ -2239,7 +2278,7 @@ VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger(VkInstance instance) {
     return messenger;
 }
 
-HgOption<u32> hg_vk_find_queue_family(VkPhysicalDevice gpu, VkQueueFlags queue_flags) {
+std::optional<u32> hg_vk_find_queue_family(VkPhysicalDevice gpu, VkQueueFlags queue_flags) {
     assert(gpu != nullptr);
 
     u32 family_count = 0;
@@ -2249,10 +2288,10 @@ HgOption<u32> hg_vk_find_queue_family(VkPhysicalDevice gpu, VkQueueFlags queue_f
 
     for (u32 i = 0; i < family_count; ++i) {
         if (families[i].queueFlags & queue_flags) {
-            return {i, true};
+            return i;
         }
     }
-    return {};
+    return std::nullopt;
 }
 
 static const char *const hg_internal_vk_device_extensions[]{
@@ -2274,7 +2313,7 @@ static VkPhysicalDevice hg_internal_find_single_queue_gpu(VkInstance instance, u
 
     for (u32 i = 0; i < gpu_count; ++i) {
         VkPhysicalDevice gpu = gpus[i];
-        HgOption<u32> family;
+        std::optional<u32> family;
 
         u32 new_prop_count = 0;
         vkEnumerateDeviceExtensionProperties(gpu, nullptr, &new_prop_count, nullptr);
@@ -2294,7 +2333,7 @@ next_ext:
         }
 
         family = hg_vk_find_queue_family(gpu, VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT);
-        if (!family.has_value)
+        if (!family.has_value())
             goto next_gpu;
 
         *queue_family = *family;
