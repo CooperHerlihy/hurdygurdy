@@ -2981,7 +2981,7 @@ struct HgHashMap {
  * The handle for an ECS entity
  */
 struct HgEntity {
-    u32 index;
+    u32 index = (u32)-1;
 
     operator u32() const {
         return index;
@@ -3145,8 +3145,7 @@ struct HgECS {
      * - Whether the entity is alive and can be used
      */
     bool is_alive(HgEntity entity) {
-        assert(entity < entity_pool.count);
-        return entity != 0 && entity_pool[entity] == entity;
+        return entity < entity_pool.count && entity_pool[entity] == entity;
     }
 
     /**
@@ -3237,7 +3236,7 @@ struct HgECS {
      */
     bool is_registered(u32 component_id) {
         assert(component_id < systems.count);
-        return systems[component_id].component_count > 0;
+        return systems[component_id].components != nullptr;
     }
 
     /**
@@ -3265,7 +3264,7 @@ struct HgECS {
      */
     u32 component_count(u32 component_id) {
         assert(is_registered(component_id));
-        return systems[component_id].component_count - 1;
+        return systems[component_id].component_count;
     }
 
     /**
@@ -3557,7 +3556,13 @@ struct HgECS {
     bool has(HgEntity entity, u32 component_id) {
         assert(is_alive(entity));
         assert(is_registered(component_id));
-        return systems[component_id].component_entities[systems[component_id].entity_indices[entity]] == entity;
+        Component& system = systems[component_id];
+#ifdef NDEBUG
+        return system.entity_indices[entity] < system.component_count;
+#else
+        return system.entity_indices[entity] < system.component_count
+            && system.component_entities[system.entity_indices[entity]] == entity;
+#endif
     }
 
     /**
@@ -3660,7 +3665,7 @@ struct HgECS {
         u32 index = (u32)((uptr)component
                   - (uptr)systems[component_id].components.data)
                   / systems[component_id].component_size;
-        assert(index != 0 && index < systems[component_id].component_count);
+        assert(index < systems[component_id].component_count);
 
         HgEntity entity = systems[component_id].component_entities[index];
         assert(systems[component_id].entity_indices[entity] == index);
@@ -3682,7 +3687,7 @@ struct HgECS {
         assert(is_registered(id));
 
         u32 index = (u32)(&component - (T *)systems[id].components.data);
-        assert(index != 0 && index < systems[id].component_count);
+        assert(index < systems[id].component_count);
 
         HgEntity entity = systems[id].component_entities[index];
         assert(systems[id].entity_indices[entity] == index);
@@ -3707,9 +3712,9 @@ struct HgECS {
         static_assert(std::is_invocable_v<Fn, HgEntity&, T&>);
 
         u32 id = hg_component_id<T>;
-        HgEntity *entity = systems[id].component_entities.data + 1;
+        HgEntity *entity = systems[id].component_entities.data;
         HgEntity *end = systems[id].component_entities.data + systems[id].component_count;
-        T *component = (T *)systems[id].components.data + 1;
+        T *component = (T *)systems[id].components.data;
         for (; entity != end; ++entity, ++component) {
             function(*entity, *component);
         }
@@ -3730,7 +3735,7 @@ struct HgECS {
         static_assert(std::is_invocable_v<Fn, HgEntity&, Ts&...>);
 
         u32 id = smallest_system<Ts...>();
-        HgEntity *entity = systems[id].component_entities.data + 1;
+        HgEntity *entity = systems[id].component_entities.data;
         HgEntity *end = systems[id].component_entities.data + systems[id].component_count;
         for (; entity != end; ++entity) {
             if (has_all<Ts...>(*entity))
@@ -3817,9 +3822,9 @@ struct HgECS {
         assert(is_registered(id));
 
         ComponentView<T> view;
-        view.entity_begin = systems[id].component_entities.data + 1;
+        view.entity_begin = systems[id].component_entities.data;
         view.entity_end = systems[id].component_entities.data + systems[id].component_count;
-        view.component_begin = (T *)systems[id].components.data + 1;
+        view.component_begin = (T *)systems[id].components.data;
         return view;
     }
 
@@ -3837,7 +3842,7 @@ struct HgECS {
     void selectionsort_components(u32 begin, u32 end, Fn& compare) {
         static_assert(std::is_invocable_v<Fn, T&, T&>);
         assert(is_registered(hg_component_id<T>));
-        assert(begin > 0 && end <= systems[hg_component_id<T>].component_count);
+        assert(begin <= end && end <= systems[hg_component_id<T>].component_count);
 
         for (; begin < end; ++begin) {
             u32 least = begin;
@@ -3859,7 +3864,7 @@ struct HgECS {
     template<typename T, typename Fn>
     void selectionsort_components(Fn compare) {
         static_assert(std::is_invocable_v<Fn, T&, T&>);
-        selectionsort_components<T>(1, systems[hg_component_id<T>].component_count, compare);
+        selectionsort_components<T>(0, systems[hg_component_id<T>].component_count, compare);
     }
 
     /**
@@ -3875,7 +3880,7 @@ struct HgECS {
     u32 quicksort_inter(u32 pivot, u32 inc, u32 dec, Fn& compare) {
         static_assert(std::is_invocable_v<Fn, T&, T&>);
         assert(is_registered(hg_component_id<T>));
-        assert(inc > 0 && dec <= systems[hg_component_id<T>].component_count);
+        assert(inc <= dec && dec <= systems[hg_component_id<T>].component_count);
 
         while (inc != dec) {
             while (!compare(hg_comp(dec), hg_comp(pivot))) {
@@ -3910,7 +3915,7 @@ finish:
     void quicksort_components(u32 begin, u32 end, Fn& compare) {
         static_assert(std::is_invocable_v<Fn, T&, T&>);
         assert(is_registered(hg_component_id<T>));
-        assert(begin > 0 && end <= systems[hg_component_id<T>].component_count);
+        assert(begin <= end && end <= systems[hg_component_id<T>].component_count);
 
         if (begin + 1 >= end)
             return;
@@ -3929,7 +3934,7 @@ finish:
     template<typename T, typename Fn>
     void quicksort_components(Fn compare) {
         static_assert(std::is_invocable_v<Fn, T&, T&>);
-        quicksort_components<T>(1, systems[hg_component_id<T>].component_count, compare);
+        quicksort_components<T>(0, systems[hg_component_id<T>].component_count, compare);
     }
 
 #undef hg_comp

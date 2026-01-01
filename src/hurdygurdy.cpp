@@ -543,15 +543,13 @@ HgECS HgECS::create_ecs(
     u32 max_entities
 ) {
     HgECS ecs{};
-    ecs.entity_pool = mem.alloc<HgEntity>(max_entities + 1);
+    ecs.entity_pool = mem.alloc<HgEntity>(max_entities);
     ecs.systems = mem.alloc<Component>(hg_internal_current_component_id());
 
     for (u32 i = 0; i < ecs.entity_pool.count; ++i) {
         ecs.entity_pool[i] = {i + 1};
     }
     ecs.entity_next = {0};
-    HgEntity reserved_null_entity = ecs.create_entity();
-    (void)reserved_null_entity;
 
     std::fill_n(ecs.systems.data, ecs.systems.count, Component{});
 
@@ -568,21 +566,12 @@ void HgECS::destroy_ecs(HgAllocator& mem) {
 }
 
 void HgECS::reset() {
-    for (u32 i = 0; i < systems.count; ++i) {
-        if (!is_registered(i))
-            continue;
-        std::memset(systems[i].entity_indices.data, 0, systems[i].component_count * systems[i].component_size);
-        std::memset(systems[i].component_entities.data, 0, systems[i].component_count * systems[i].component_size);
-        systems[i].component_count = 1;
-    }
-
     for (u32 i = 0; i < entity_pool.count; ++i) {
+        if (entity_pool[i] == i)
+            destroy_entity({i});
         entity_pool[i] = {i + 1};
     }
     entity_next = {0};
-
-    HgEntity reserved_null_entity = create_entity();
-    (void)reserved_null_entity;
 }
 
 HgEntity HgECS::create_entity() {
@@ -619,25 +608,27 @@ void HgECS::register_component(
 
     assert(!is_registered(component_id));
 
-    systems[component_id].user_data = nullptr;
-    systems[component_id].ctor = hg_default_component_ctor;
-    systems[component_id].dtor = hg_default_component_dtor;
-    systems[component_id].entity_indices = mem.alloc<u32>(entity_pool.count);
-    systems[component_id].component_entities = mem.alloc<HgEntity>(max_components + 1);
-    systems[component_id].components = mem.alloc((max_components + 1) * component_size, component_alignment);
-    systems[component_id].component_size = component_size;
-    systems[component_id].component_alignment = component_alignment;
-    systems[component_id].component_count = 1;
+    Component& system = systems[component_id];
 
-    std::memset(systems[component_id].entity_indices.data, 0, systems[component_id].entity_indices.size());
-    std::memset(systems[component_id].component_entities.data, 0, systems[component_id].component_entities.size());
+    system.user_data = nullptr;
+    system.ctor = hg_default_component_ctor;
+    system.dtor = hg_default_component_dtor;
+    system.entity_indices = mem.alloc<u32>(entity_pool.count);
+    system.component_entities = mem.alloc<HgEntity>(max_components);
+    system.components = mem.alloc(max_components * component_size, component_alignment);
+    system.component_size = component_size;
+    system.component_alignment = component_alignment;
+    system.component_count = 0;
+
+    std::fill_n(system.entity_indices.data, system.entity_indices.count, (u32)-1);
+    std::fill_n(system.component_entities.data, system.component_entities.count, HgEntity{(u32)-1});
 }
 
 void HgECS::unregister_component(HgAllocator& mem, u32 component_id) {
     if (!is_registered(component_id))
         return;
 
-    for (u32 i = 1; i < systems[component_id].component_count; ++i) {
+    for (u32 i = 0; i < systems[component_id].component_count; ++i) {
         HgEntity entity = systems[component_id].component_entities[i];
         assert(is_alive(entity));
         assert(has(entity, component_id));
@@ -676,8 +667,9 @@ void *HgECS::place(u32 index, HgEntity entity, u32 component_id) {
     assert(is_alive(entity));
     assert(is_registered(component_id));
     assert(index < systems[component_id].component_count);
-    assert(systems[component_id].entity_indices[entity] == 0);
-    assert(systems[component_id].component_entities[index] == 0);
+
+    assert(systems[component_id].entity_indices[entity] == (u32)-1);
+    assert(systems[component_id].component_entities[index] == (u32)-1);
 
     systems[component_id].entity_indices[entity] = index;
     systems[component_id].component_entities[index] = entity;
@@ -691,20 +683,21 @@ void HgECS::erase(HgEntity entity, u32 component_id) {
     assert(has(entity, component_id));
 
     u32 index = systems[component_id].entity_indices[entity];
-    systems[component_id].entity_indices[entity] = 0;
-    systems[component_id].component_entities[index] = {0};
+    systems[component_id].entity_indices[entity] = (u32)-1;
+    systems[component_id].component_entities[index] = {(u32)-1};
 }
 
 void HgECS::move(u32 dst, u32 src, u32 component_id) {
     assert(is_registered(component_id));
-    assert(dst > 0 && dst < systems[component_id].component_count);
-    assert(src > 0 && src < systems[component_id].component_count);
+    assert(dst < systems[component_id].component_count);
+    assert(src < systems[component_id].component_count);
 
-    assert(systems[component_id].component_entities[dst] == 0);
+    if (dst == src)
+        return;
 
-    HgEntity entity = systems[component_id].component_entities[src];
-    systems[component_id].component_entities[src] = {0};
+    assert(systems[component_id].component_entities[dst] == (u32)-1);
 
+    HgEntity entity = std::exchange(systems[component_id].component_entities[src], {(u32)-1});
     systems[component_id].component_entities[dst] = entity;
     systems[component_id].entity_indices[entity] = dst;
 
@@ -787,9 +780,7 @@ void *hg_default_component_ctor(void *user_data, HgECS& ecs, HgEntity entity, u3
     assert(ecs.is_alive(entity));
     assert(ecs.is_registered(component_id));
 
-    u32 index = ecs.systems[component_id].component_count;
-    ++ecs.systems[component_id].component_count;
-
+    u32 index = ecs.systems[component_id].component_count++;
     return ecs.place(index, entity, component_id);
 }
 
@@ -833,9 +824,9 @@ hg_test(hg_ecs) {
 
     HgEntity e1 = ecs.create_entity();
     HgEntity e2 = ecs.create_entity();
-    HgEntity e3 = {0};
-    hg_test_assert(e1 == 1);
-    hg_test_assert(e2 == 2);
+    HgEntity e3;
+    hg_test_assert(e1 == 0);
+    hg_test_assert(e2 == 1);
     hg_test_assert(ecs.is_alive(e1));
     hg_test_assert(ecs.is_alive(e2));
     hg_test_assert(!ecs.is_alive(e3));
@@ -848,7 +839,7 @@ hg_test(hg_ecs) {
 
     e1 = ecs.create_entity();
     hg_test_assert(ecs.is_alive(e1));
-    hg_test_assert(e1 == 3);
+    hg_test_assert(e1 == 2);
 
     bool has_unknown = false;
     ecs.for_each<u32>([&](HgEntity, u32&) {
