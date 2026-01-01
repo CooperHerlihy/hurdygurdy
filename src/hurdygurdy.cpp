@@ -1,11 +1,9 @@
 #include "hurdygurdy.hpp"
 
-#if defined(__unix__)
+#if defined(HG_PLATFORM_LINUX)
 #include <alloca.h>
-#elif defined(_WIN32)
+#elif defined(HG_PLATFORM_WINDOWS)
 #include <malloc.h>
-#elif
-#error "unsupported platform"
 #endif
 
 static void hg_internal_platform_init();
@@ -169,8 +167,8 @@ HgMat4f hg_projection_orthographic(f32 left, f32 right, f32 top, f32 bottom, f32
 }
 
 HgMat4f hg_projection_perspective(f32 fov, f32 aspect, f32 near, f32 far) {
-    assert(near > 0.0f);
-    assert(far > near);
+    hg_assert(near > 0.0f);
+    hg_assert(far > near);
     f32 scale = 1.0f / std::tan(fov * 0.5f);
     return {
         {scale / aspect, 0.0f, 0.0f, 0.0f},
@@ -606,7 +604,7 @@ void HgECS::register_component(
     if (component_id >= systems.count)
         systems = mem.realloc(systems, component_id + 1);
 
-    assert(!is_registered(component_id));
+    hg_assert(!is_registered(component_id));
 
     Component& system = systems[component_id];
 
@@ -630,8 +628,8 @@ void HgECS::unregister_component(HgAllocator& mem, u32 component_id) {
 
     for (u32 i = 0; i < systems[component_id].component_count; ++i) {
         HgEntity entity = systems[component_id].component_entities[i];
-        assert(is_alive(entity));
-        assert(has(entity, component_id));
+        hg_assert(is_alive(entity));
+        hg_assert(has(entity, component_id));
         destroy(entity, component_id);
     }
 
@@ -643,7 +641,7 @@ void HgECS::unregister_component(HgAllocator& mem, u32 component_id) {
 }
 
 void HgECS::override_component(void *user_data, Component::Ctor ctor, Component::Dtor dtor, u32 component_id) {
-    assert(is_registered(component_id));
+    hg_assert(is_registered(component_id));
 
     systems[component_id].user_data = user_data;
     if (ctor != nullptr)
@@ -654,9 +652,9 @@ void HgECS::override_component(void *user_data, Component::Ctor ctor, Component:
 
 u32 HgECS::smallest_system_untyped(HgSpan<u32> ids) {
     u32 smallest = ids[0];
-    assert(is_registered(ids[0]));
+    hg_assert(is_registered(ids[0]));
     for (usize i = 1; i < ids.count; ++i) {
-        assert(is_registered(ids[i]));
+        hg_assert(is_registered(ids[i]));
         if (systems[ids[i]].component_count < systems[smallest].component_count)
             smallest = ids[i];
     }
@@ -664,12 +662,12 @@ u32 HgECS::smallest_system_untyped(HgSpan<u32> ids) {
 }
 
 void *HgECS::place(u32 index, HgEntity entity, u32 component_id) {
-    assert(is_alive(entity));
-    assert(is_registered(component_id));
-    assert(index < systems[component_id].component_count);
+    hg_assert(is_alive(entity));
+    hg_assert(is_registered(component_id));
+    hg_assert(index < systems[component_id].component_count);
 
-    assert(systems[component_id].entity_indices[entity] == (u32)-1);
-    assert(systems[component_id].component_entities[index] == (u32)-1);
+    hg_assert(systems[component_id].entity_indices[entity] == (u32)-1);
+    hg_assert(systems[component_id].component_entities[index] == (u32)-1);
 
     systems[component_id].entity_indices[entity] = index;
     systems[component_id].component_entities[index] = entity;
@@ -678,9 +676,9 @@ void *HgECS::place(u32 index, HgEntity entity, u32 component_id) {
 }
 
 void HgECS::erase(HgEntity entity, u32 component_id) {
-    assert(is_alive(entity));
-    assert(is_registered(component_id));
-    assert(has(entity, component_id));
+    hg_assert(is_alive(entity));
+    hg_assert(is_registered(component_id));
+    hg_assert(has(entity, component_id));
 
     u32 index = systems[component_id].entity_indices[entity];
     systems[component_id].entity_indices[entity] = (u32)-1;
@@ -688,14 +686,14 @@ void HgECS::erase(HgEntity entity, u32 component_id) {
 }
 
 void HgECS::move(u32 dst, u32 src, u32 component_id) {
-    assert(is_registered(component_id));
-    assert(dst < systems[component_id].component_count);
-    assert(src < systems[component_id].component_count);
+    hg_assert(is_registered(component_id));
+    hg_assert(dst < systems[component_id].component_count);
+    hg_assert(src < systems[component_id].component_count);
 
     if (dst == src)
         return;
 
-    assert(systems[component_id].component_entities[dst] == (u32)-1);
+    hg_assert(systems[component_id].component_entities[dst] == (u32)-1);
 
     HgEntity entity = std::exchange(systems[component_id].component_entities[src], {(u32)-1});
     systems[component_id].component_entities[dst] = entity;
@@ -708,11 +706,11 @@ void HgECS::move(u32 dst, u32 src, u32 component_id) {
 }
 
 void HgECS::swap(HgEntity lhs, HgEntity rhs, u32 component_id) {
-    assert(is_registered(component_id));
-    assert(is_alive(lhs));
-    assert(is_alive(rhs));
-    assert(has(lhs, component_id));
-    assert(has(rhs, component_id));
+    hg_assert(is_registered(component_id));
+    hg_assert(is_alive(lhs));
+    hg_assert(is_alive(rhs));
+    hg_assert(has(lhs, component_id));
+    hg_assert(has(rhs, component_id));
 
     swap_idx(
         systems[component_id].entity_indices[lhs],
@@ -721,10 +719,10 @@ void HgECS::swap(HgEntity lhs, HgEntity rhs, u32 component_id) {
 }
 
 void HgECS::swap_idx(u32 lhs, u32 rhs, u32 component_id) {
-    assert(is_registered(component_id));
+    hg_assert(is_registered(component_id));
     Component& system = systems[component_id];
-    assert(lhs < system.component_count);
-    assert(rhs < system.component_count);
+    hg_assert(lhs < system.component_count);
+    hg_assert(rhs < system.component_count);
 
     usize size = system.component_size;
     void *temp = alloca(size);
@@ -734,12 +732,12 @@ void HgECS::swap_idx(u32 lhs, u32 rhs, u32 component_id) {
 }
 
 void HgECS::swap_location(HgEntity lhs, HgEntity rhs, u32 component_id) {
-    assert(is_registered(component_id));
+    hg_assert(is_registered(component_id));
     Component& system = systems[component_id];
-    assert(is_alive(lhs));
-    assert(is_alive(rhs));
-    assert(has(lhs, component_id));
-    assert(has(rhs, component_id));
+    hg_assert(is_alive(lhs));
+    hg_assert(is_alive(rhs));
+    hg_assert(has(lhs, component_id));
+    hg_assert(has(rhs, component_id));
 
     u32 lhs_index = system.entity_indices[lhs];
     u32 rhs_index = system.entity_indices[rhs];
@@ -753,18 +751,18 @@ void HgECS::swap_location(HgEntity lhs, HgEntity rhs, u32 component_id) {
 }
 
 void HgECS::swap_location_idx(u32 lhs, u32 rhs, u32 component_id) {
-    assert(is_registered(component_id));
+    hg_assert(is_registered(component_id));
     Component& system = systems[component_id];
-    assert(lhs < system.component_count);
-    assert(rhs < system.component_count);
+    hg_assert(lhs < system.component_count);
+    hg_assert(rhs < system.component_count);
 
     HgEntity lhs_entity = system.component_entities[lhs];
     HgEntity rhs_entity = system.component_entities[rhs];
 
-    assert(is_alive(lhs_entity));
-    assert(is_alive(rhs_entity));
-    assert(has(lhs_entity, component_id));
-    assert(has(rhs_entity, component_id));
+    hg_assert(is_alive(lhs_entity));
+    hg_assert(is_alive(rhs_entity));
+    hg_assert(has(lhs_entity, component_id));
+    hg_assert(has(rhs_entity, component_id));
 
     system.component_entities[lhs] = rhs_entity;
     system.component_entities[rhs] = lhs_entity;
@@ -777,8 +775,8 @@ void HgECS::swap_location_idx(u32 lhs, u32 rhs, u32 component_id) {
 void *hg_default_component_ctor(void *user_data, HgECS& ecs, HgEntity entity, u32 component_id) {
     (void)user_data;
 
-    assert(ecs.is_alive(entity));
-    assert(ecs.is_registered(component_id));
+    hg_assert(ecs.is_alive(entity));
+    hg_assert(ecs.is_registered(component_id));
 
     u32 index = ecs.systems[component_id].component_count++;
     return ecs.place(index, entity, component_id);
@@ -787,9 +785,9 @@ void *hg_default_component_ctor(void *user_data, HgECS& ecs, HgEntity entity, u3
 void hg_default_component_dtor(void *user_data, HgECS& ecs, HgEntity entity, u32 component_id) {
     (void)user_data;
 
-    assert(ecs.is_alive(entity));
-    assert(ecs.is_registered(component_id));
-    assert(ecs.has(entity, component_id));
+    hg_assert(ecs.is_alive(entity));
+    hg_assert(ecs.is_registered(component_id));
+    hg_assert(ecs.has(entity, component_id));
 
     u32 index = ecs.systems[component_id].entity_indices[entity];
     u32 last_index = ecs.systems[component_id].component_count - 1;
@@ -850,11 +848,11 @@ hg_test(hg_ecs) {
     hg_test_assert(ecs.component_count<u32>() == 0);
     hg_test_assert(ecs.component_count<u64>() == 0);
 
-    assert(u32_comp_count == 0);
+    hg_assert(u32_comp_count == 0);
     ecs.create<u32>(e1) = 12;
     ecs.create<u32>(e2) = 42;
     ecs.create<u32>(e3) = 100;
-    assert(u32_comp_count == 3);
+    hg_assert(u32_comp_count == 3);
     hg_test_assert(ecs.component_count<u32>() == 3);
     hg_test_assert(ecs.component_count<u64>() == 0);
 
@@ -882,10 +880,10 @@ hg_test(hg_ecs) {
     hg_test_assert(has_100);
     hg_test_assert(!has_unknown);
 
-    assert(u64_comp_count == 0);
+    hg_assert(u64_comp_count == 0);
     ecs.create<u64>(e2) = 2042;
     ecs.create<u64>(e3) = 2100;
-    assert(u64_comp_count == 2);
+    hg_assert(u64_comp_count == 2);
     hg_test_assert(ecs.component_count<u32>() == 3);
     hg_test_assert(ecs.component_count<u64>() == 2);
 
@@ -928,9 +926,9 @@ hg_test(hg_ecs) {
     hg_test_assert(has_2100);
     hg_test_assert(!has_unknown);
 
-    assert(u32_comp_count == 3);
+    hg_assert(u32_comp_count == 3);
     ecs.destroy_entity(e1);
-    assert(u32_comp_count == 2);
+    hg_assert(u32_comp_count == 2);
     hg_test_assert(ecs.component_count<u32>() == 2);
     hg_test_assert(ecs.component_count<u64>() == 2);
 
@@ -958,11 +956,11 @@ hg_test(hg_ecs) {
     hg_test_assert(has_100);
     hg_test_assert(!has_unknown);
 
-    assert(u32_comp_count == 2);
-    assert(u64_comp_count == 2);
+    hg_assert(u32_comp_count == 2);
+    hg_assert(u64_comp_count == 2);
     ecs.destroy_entity(e2);
-    assert(u32_comp_count == 1);
-    assert(u64_comp_count == 1);
+    hg_assert(u32_comp_count == 1);
+    hg_assert(u64_comp_count == 1);
     hg_test_assert(ecs.component_count<u32>() == 1);
     hg_test_assert(ecs.component_count<u64>() == 1);
 
@@ -1662,7 +1660,7 @@ void vkCmdDispatch(VkCommandBuffer cmd, uint32_t x, uint32_t y, uint32_t z) {
     if (hg_internal_vulkan_funcs. name == nullptr) { hg_error("Could not load " #name "\n"); }
 
 void hg_vk_load_instance(VkInstance instance) {
-    assert(instance != nullptr);
+    hg_assert(instance != nullptr);
 
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetDeviceProcAddr);
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkDestroyInstance);
@@ -1689,7 +1687,7 @@ void hg_vk_load_instance(VkInstance instance) {
     if (hg_internal_vulkan_funcs. name == nullptr) { hg_error("Could not load " #name "\n"); }
 
 void hg_vk_load_device(VkDevice device) {
-    assert(device != nullptr);
+    hg_assert(device != nullptr);
 
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyDevice)
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDeviceWaitIdle)
@@ -2233,34 +2231,32 @@ VkInstance hg_vk_create_instance(const char *app_name) {
     app_info.engineVersion = 0;
     app_info.apiVersion = VK_API_VERSION_1_3;
 
-#ifndef NDEBUG
+#ifdef HG_DEBUG_MODE
     const char* layers[]{
         "VK_LAYER_KHRONOS_validation",
     };
 #endif
 
     const char *exts[]{
-#ifndef NDEBUG
+#ifdef HG_DEBUG_MODE
         "VK_EXT_debug_utils",
 #endif
         "VK_KHR_surface",
-#if defined(__linux__)
+#if defined(HG_PLATFORM_LINUX)
         "VK_KHR_xlib_surface",
-#elif defined(_WIN32)
+#elif defined(HG_PLATFORM_WINDOWS)
         "VK_KHR_win32_surface",
-#else
-#error "unsupported platform"
 #endif
     };
 
     VkInstanceCreateInfo instance_info{};
     instance_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-#ifndef NDEBUG
+#ifdef HG_DEBUG_MODE
     instance_info.pNext = &hg_internal_debug_utils_messenger_info;
 #endif
     instance_info.flags = 0;
     instance_info.pApplicationInfo = &app_info;
-#ifndef NDEBUG
+#ifdef HG_DEBUG_MODE
     instance_info.enabledLayerCount = hg_countof(layers);
     instance_info.ppEnabledLayerNames = layers;
 #endif
@@ -2277,7 +2273,7 @@ VkInstance hg_vk_create_instance(const char *app_name) {
 }
 
 VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger(VkInstance instance) {
-    assert(instance != nullptr);
+    hg_assert(instance != nullptr);
 
     VkDebugUtilsMessengerEXT messenger = nullptr;
     VkResult result = vkCreateDebugUtilsMessengerEXT(
@@ -2289,7 +2285,7 @@ VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger(VkInstance instance) {
 }
 
 std::optional<u32> hg_vk_find_queue_family(VkPhysicalDevice gpu, VkQueueFlags queue_flags) {
-    assert(gpu != nullptr);
+    hg_assert(gpu != nullptr);
 
     u32 family_count = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, nullptr);
@@ -2309,7 +2305,7 @@ static const char *const hg_internal_vk_device_extensions[]{
 };
 
 static VkPhysicalDevice hg_internal_find_single_queue_gpu(VkInstance instance, u32 *queue_family) {
-    assert(instance != nullptr);
+    hg_assert(instance != nullptr);
 
     HgStdAllocator mem; // replace with temporary allocator : TODO
 
@@ -2358,7 +2354,7 @@ next_gpu:
 }
 
 static VkDevice hg_internal_create_single_queue_device(VkPhysicalDevice gpu, u32 queue_family) {
-    assert(gpu != nullptr);
+    hg_assert(gpu != nullptr);
 
     VkPhysicalDeviceDynamicRenderingFeatures dynamic_rendering_feature{};
     dynamic_rendering_feature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
@@ -2396,7 +2392,7 @@ static VkDevice hg_internal_create_single_queue_device(VkPhysicalDevice gpu, u32
 }
 
 HgSingleQueueDeviceData hg_vk_create_single_queue_device(VkInstance instance) {
-    assert(instance != nullptr);
+    hg_assert(instance != nullptr);
 
     HgSingleQueueDeviceData device{};
     device.gpu = hg_internal_find_single_queue_gpu(instance, &device.queue_family);
@@ -2408,13 +2404,13 @@ HgSingleQueueDeviceData hg_vk_create_single_queue_device(VkInstance instance) {
 }
 
 VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineConfig& config) {
-    assert(device != nullptr);
+    hg_assert(device != nullptr);
     if (config.color_attachment_formats.count > 0)
-        assert(config.color_attachment_formats.data != nullptr);
-    assert(config.shader_stages != nullptr);
-    assert(config.layout != nullptr);
+        hg_assert(config.color_attachment_formats.data != nullptr);
+    hg_assert(config.shader_stages != nullptr);
+    hg_assert(config.layout != nullptr);
     if (config.vertex_bindings.count > 0)
-        assert(config.vertex_bindings.data != nullptr);
+        hg_assert(config.vertex_bindings.data != nullptr);
 
     VkPipelineVertexInputStateCreateInfo vertex_input_state{};
     vertex_input_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -2548,15 +2544,15 @@ VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineCon
 }
 
 VkPipeline hg_vk_create_compute_pipeline(VkDevice device, const HgVkPipelineConfig& config) {
-    assert(device != nullptr);
-    assert(config.color_attachment_formats == nullptr);
-    assert(config.depth_attachment_format == VK_FORMAT_UNDEFINED);
-    assert(config.stencil_attachment_format == VK_FORMAT_UNDEFINED);
-    assert(config.shader_stages != nullptr);
-    assert(config.shader_stages.count == 1);
-    assert(config.shader_stages[0].stage == VK_SHADER_STAGE_COMPUTE_BIT);
-    assert(config.layout != nullptr);
-    assert(config.vertex_bindings == nullptr);
+    hg_assert(device != nullptr);
+    hg_assert(config.color_attachment_formats == nullptr);
+    hg_assert(config.depth_attachment_format == VK_FORMAT_UNDEFINED);
+    hg_assert(config.stencil_attachment_format == VK_FORMAT_UNDEFINED);
+    hg_assert(config.shader_stages != nullptr);
+    hg_assert(config.shader_stages.count == 1);
+    hg_assert(config.shader_stages[0].stage == VK_SHADER_STAGE_COMPUTE_BIT);
+    hg_assert(config.layout != nullptr);
+    hg_assert(config.vertex_bindings == nullptr);
 
     VkComputePipelineCreateInfo pipeline_info{};
     pipeline_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -2574,8 +2570,8 @@ VkPipeline hg_vk_create_compute_pipeline(VkDevice device, const HgVkPipelineConf
 }
 
 static VkFormat hg_internal_vk_find_swapchain_format(VkPhysicalDevice gpu, VkSurfaceKHR surface) {
-    assert(gpu != nullptr);
-    assert(surface != nullptr);
+    hg_assert(gpu != nullptr);
+    hg_assert(surface != nullptr);
 
     u32 format_count = 0;
     vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &format_count, nullptr);
@@ -2596,8 +2592,8 @@ static VkPresentModeKHR hg_internal_vk_find_swapchain_present_mode(
     VkSurfaceKHR surface,
     VkPresentModeKHR desired_mode
 ) {
-    assert(gpu != nullptr);
-    assert(surface != nullptr);
+    hg_assert(gpu != nullptr);
+    hg_assert(surface != nullptr);
 
     if (desired_mode == VK_PRESENT_MODE_FIFO_KHR)
         return desired_mode;
@@ -2622,10 +2618,10 @@ HgSwapchainData hg_vk_create_swapchain(
     VkImageUsageFlags image_usage,
     VkPresentModeKHR desired_mode
 ) {
-    assert(device != nullptr);
-    assert(gpu != nullptr);
-    assert(surface != nullptr);
-    assert(image_usage != 0);
+    hg_assert(device != nullptr);
+    hg_assert(gpu != nullptr);
+    hg_assert(surface != nullptr);
+    hg_assert(image_usage != 0);
 
     HgSwapchainData swapchain{};
 
@@ -2669,9 +2665,9 @@ HgSwapchainData hg_vk_create_swapchain(
 }
 
 HgSwapchainCommands HgSwapchainCommands::create(VkDevice device, VkSwapchainKHR swapchain, VkCommandPool cmd_pool) {
-    assert(device != nullptr);
-    assert(cmd_pool != nullptr);
-    assert(swapchain != nullptr);
+    hg_assert(device != nullptr);
+    hg_assert(cmd_pool != nullptr);
+    hg_assert(swapchain != nullptr);
 
     HgStdAllocator mem;
 
@@ -2724,7 +2720,7 @@ HgSwapchainCommands HgSwapchainCommands::create(VkDevice device, VkSwapchainKHR 
 }
 
 void HgSwapchainCommands::destroy(VkDevice device) {
-    assert(device != nullptr);
+    hg_assert(device != nullptr);
 
     HgStdAllocator mem;
 
@@ -2751,7 +2747,7 @@ void HgSwapchainCommands::destroy(VkDevice device) {
 }
 
 VkCommandBuffer HgSwapchainCommands::acquire_and_record(VkDevice device) {
-    assert(device != nullptr);
+    hg_assert(device != nullptr);
 
     current_frame = (current_frame + 1) % frame_count;
 
@@ -2776,7 +2772,7 @@ VkCommandBuffer HgSwapchainCommands::acquire_and_record(VkDevice device) {
 }
 
 void HgSwapchainCommands::end_and_present(VkQueue queue) {
-    assert(queue != nullptr);
+    hg_assert(queue != nullptr);
 
     VkCommandBuffer cmd = cmds[current_frame];
     vkEndCommandBuffer(cmd);
@@ -2811,8 +2807,8 @@ u32 hg_vk_find_memory_type_index(
     VkMemoryPropertyFlags desired_flags,
     VkMemoryPropertyFlags undesired_flags
 ) {
-    assert(gpu != nullptr);
-    assert(bitmask != 0);
+    hg_assert(gpu != nullptr);
+    hg_assert(bitmask != 0);
 
     VkPhysicalDeviceMemoryProperties mem_props;
     vkGetPhysicalDeviceMemoryProperties(gpu, &mem_props);
@@ -2852,12 +2848,12 @@ void hg_vk_buffer_staging_write(
     usize offset,
     HgSpan<const void> src
 ) {
-    assert(device != nullptr);
-    assert(allocator != nullptr);
-    assert(cmd_pool != nullptr);
-    assert(transfer_queue != nullptr);
-    assert(dst != nullptr);
-    assert(src != nullptr);
+    hg_assert(device != nullptr);
+    hg_assert(allocator != nullptr);
+    hg_assert(cmd_pool != nullptr);
+    hg_assert(transfer_queue != nullptr);
+    hg_assert(dst != nullptr);
+    hg_assert(src != nullptr);
 
     VkBufferCreateInfo stage_info{};
     stage_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -2921,12 +2917,12 @@ void hg_vk_buffer_staging_read(
     VkBuffer src,
     usize offset
 ) {
-    assert(device != nullptr);
-    assert(allocator != nullptr);
-    assert(cmd_pool != nullptr);
-    assert(transfer_queue != nullptr);
-    assert(dst != nullptr);
-    assert(src != nullptr);
+    hg_assert(device != nullptr);
+    hg_assert(allocator != nullptr);
+    hg_assert(cmd_pool != nullptr);
+    hg_assert(transfer_queue != nullptr);
+    hg_assert(dst != nullptr);
+    hg_assert(src != nullptr);
 
     VkBufferCreateInfo stage_info{};
     stage_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -2989,16 +2985,16 @@ void hg_vk_image_staging_write(
     VkCommandPool cmd_pool,
     const HgVkImageStagingWriteConfig& config
 ) {
-    assert(device != nullptr);
-    assert(allocator != nullptr);
-    assert(cmd_pool != nullptr);
-    assert(transfer_queue != nullptr);
-    assert(config.dst_image != nullptr);
-    assert(config.src_data != nullptr);
-    assert(config.width > 0);
-    assert(config.height > 0);
-    assert(config.depth > 0);
-    assert(config.format != VK_FORMAT_UNDEFINED);
+    hg_assert(device != nullptr);
+    hg_assert(allocator != nullptr);
+    hg_assert(cmd_pool != nullptr);
+    hg_assert(transfer_queue != nullptr);
+    hg_assert(config.dst_image != nullptr);
+    hg_assert(config.src_data != nullptr);
+    hg_assert(config.width > 0);
+    hg_assert(config.height > 0);
+    hg_assert(config.depth > 0);
+    hg_assert(config.format != VK_FORMAT_UNDEFINED);
 
     usize size = config.width
                * config.height
@@ -3108,17 +3104,17 @@ void hg_vk_image_staging_read(
     VkCommandPool cmd_pool,
     const HgVkImageStagingReadConfig& config
 ) {
-    assert(device != nullptr);
-    assert(allocator != nullptr);
-    assert(cmd_pool != nullptr);
-    assert(transfer_queue != nullptr);
-    assert(config.src_image != nullptr);
-    assert(config.layout != VK_IMAGE_LAYOUT_UNDEFINED);
-    assert(config.dst != nullptr);
-    assert(config.width > 0);
-    assert(config.height > 0);
-    assert(config.depth > 0);
-    assert(config.format != VK_FORMAT_UNDEFINED);
+    hg_assert(device != nullptr);
+    hg_assert(allocator != nullptr);
+    hg_assert(cmd_pool != nullptr);
+    hg_assert(transfer_queue != nullptr);
+    hg_assert(config.src_image != nullptr);
+    hg_assert(config.layout != VK_IMAGE_LAYOUT_UNDEFINED);
+    hg_assert(config.dst != nullptr);
+    hg_assert(config.width > 0);
+    hg_assert(config.height > 0);
+    hg_assert(config.depth > 0);
+    hg_assert(config.format != VK_FORMAT_UNDEFINED);
 
     usize size = config.width
                * config.height
@@ -3234,16 +3230,16 @@ void hg_vk_image_generate_mipmaps(
     u32 depth,
     u32 mip_count
 ) {
-    assert(device != nullptr);
-    assert(transfer_queue != nullptr);
-    assert(cmd_pool != nullptr);
-    assert(image != nullptr);
-    assert(old_layout != VK_IMAGE_LAYOUT_UNDEFINED);
-    assert(new_layout != VK_IMAGE_LAYOUT_UNDEFINED);
-    assert(width > 0);
-    assert(height > 0);
-    assert(depth > 0);
-    assert(mip_count > 0);
+    hg_assert(device != nullptr);
+    hg_assert(transfer_queue != nullptr);
+    hg_assert(cmd_pool != nullptr);
+    hg_assert(image != nullptr);
+    hg_assert(old_layout != VK_IMAGE_LAYOUT_UNDEFINED);
+    hg_assert(new_layout != VK_IMAGE_LAYOUT_UNDEFINED);
+    hg_assert(width > 0);
+    hg_assert(height > 0);
+    hg_assert(depth > 0);
+    hg_assert(mip_count > 0);
     if (mip_count == 1)
         return;
 
@@ -3370,8 +3366,8 @@ HgPipelineSprite hg_pipeline_sprite_create(
     VkFormat color_format,
     VkFormat depth_format
 ) {
-    assert(device != nullptr);
-    assert(color_format != VK_FORMAT_UNDEFINED);
+    hg_assert(device != nullptr);
+    hg_assert(color_format != VK_FORMAT_UNDEFINED);
 
     HgPipelineSprite pipeline;
     pipeline.device = device;
@@ -3535,8 +3531,8 @@ void hg_pipeline_sprite_destroy(HgPipelineSprite *pipeline) {
 }
 
 void hg_pipeline_sprite_update_projection(HgPipelineSprite *pipeline, HgMat4f *projection) {
-    assert(pipeline != nullptr);
-    assert(projection != nullptr);
+    hg_assert(pipeline != nullptr);
+    hg_assert(projection != nullptr);
 
     vmaCopyMemoryToAllocation(
         pipeline->allocator,
@@ -3547,8 +3543,8 @@ void hg_pipeline_sprite_update_projection(HgPipelineSprite *pipeline, HgMat4f *p
 }
 
 void hg_pipeline_sprite_update_view(HgPipelineSprite *pipeline, HgMat4f *view) {
-    assert(pipeline != nullptr);
-    assert(view != nullptr);
+    hg_assert(pipeline != nullptr);
+    hg_assert(view != nullptr);
 
     vmaCopyMemoryToAllocation(
         pipeline->allocator,
@@ -3564,12 +3560,12 @@ HgPipelineSpriteTexture hg_pipeline_sprite_create_texture(
     VkQueue transfer_queue,
     HgPipelineSpriteTextureConfig *config
 ) {
-    assert(pipeline != nullptr);
-    assert(config != nullptr);
-    assert(config->tex_data != nullptr);
-    assert(config->width > 0);
-    assert(config->height > 0);
-    assert(config->format != VK_FORMAT_UNDEFINED);
+    hg_assert(pipeline != nullptr);
+    hg_assert(config != nullptr);
+    hg_assert(config->tex_data != nullptr);
+    hg_assert(config->width > 0);
+    hg_assert(config->height > 0);
+    hg_assert(config->format != VK_FORMAT_UNDEFINED);
 
     HgPipelineSpriteTexture tex;
 
@@ -3649,8 +3645,8 @@ HgPipelineSpriteTexture hg_pipeline_sprite_create_texture(
 }
 
 void hg_pipeline_sprite_destroy_texture(HgPipelineSprite *pipeline, HgPipelineSpriteTexture *texture) {
-    assert(pipeline != nullptr);
-    assert(texture != nullptr);
+    hg_assert(pipeline != nullptr);
+    hg_assert(texture != nullptr);
 
     vkFreeDescriptorSets(pipeline->device, pipeline->descriptor_pool, 1, &texture->set);
     vkDestroySampler(pipeline->device, texture->sampler, nullptr);
@@ -3659,8 +3655,8 @@ void hg_pipeline_sprite_destroy_texture(HgPipelineSprite *pipeline, HgPipelineSp
 }
 
 void hg_pipeline_sprite_bind(HgPipelineSprite *pipeline, VkCommandBuffer cmd) {
-    assert(cmd != nullptr);
-    assert(pipeline != nullptr);
+    hg_assert(cmd != nullptr);
+    hg_assert(pipeline != nullptr);
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->pipeline);
     vkCmdBindDescriptorSets(
@@ -3680,7 +3676,7 @@ void hg_pipeline_sprite_draw(
     HgPipelineSpriteTexture *texture,
     HgPipelineSpritePush *push_data
 ) {
-    assert(cmd != nullptr);
+    hg_assert(cmd != nullptr);
 
     vkCmdBindDescriptorSets(
         cmd,
@@ -3717,7 +3713,7 @@ struct HgWindowInput {
     bool keys_released[HG_KEY_COUNT];
 };
 
-#if defined(__linux__)
+#if defined(HG_PLATFORM_LINUX)
 
 #include <dlfcn.h>
 #include <X11/Xlib.h>
@@ -4021,8 +4017,8 @@ void HgWindow::set_cursor_image(u32 *data, u32 width, u32 height) {
 }
 
 VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window) {
-    assert(instance != nullptr);
-    assert(window.internals != nullptr);
+    hg_assert(instance != nullptr);
+    hg_assert(window.internals != nullptr);
 
     PFN_vkCreateXlibSurfaceKHR pfn_vkCreateXlibSurfaceKHR
         = (PFN_vkCreateXlibSurfaceKHR)vkGetInstanceProcAddr(instance, "vkCreateXlibSurfaceKHR");
@@ -4043,7 +4039,7 @@ VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window) {
 }
 
 void hg_process_window_events(HgSpan<const HgWindow> windows) {
-    assert(windows != nullptr);
+    hg_assert(windows != nullptr);
 
     if (windows.count > 1)
         hg_error("Multiple windows unsupported\n"); // : TODO
@@ -4474,7 +4470,7 @@ void hg_process_window_events(HgSpan<const HgWindow> windows) {
     window.internals->input.mouse_delta_y = window.internals->input.mouse_pos_y - old_mouse_pos_y;
 }
 
-#elif defined(_WIN32)
+#elif defined(HG_PLATFORM_WINDOWS)
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -4941,8 +4937,8 @@ void HgWindow::set_cursor_image(u32 *data, u32 width, u32 height) {
 }
 
 VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window) {
-    assert(instance != nullptr);
-    assert(window.internals != nullptr);
+    hg_assert(instance != nullptr);
+    hg_assert(window.internals != nullptr);
 
     PFN_vkCreateWin32SurfaceKHR pfn_vkCreateWin32SurfaceKHR
         = (PFN_vkCreateWin32SurfaceKHR)vkGetInstanceProcAddr(instance, "vkCreateWin32SurfaceKHR");
@@ -4959,12 +4955,12 @@ VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window) {
     if (surface == nullptr)
         hg_error("Failed to create Vulkan surface: %s\n", hg_vk_result_string(result));
 
-    assert(surface != nullptr);
+    hg_assert(surface != nullptr);
     return surface;
 }
 
 void hg_window_process_events(HgSpan<HgWindow const> windows) {
-    assert(windows != nullptr);
+    hg_assert(windows != nullptr);
 
     for (usize i = 0; i < windows.count; ++i) {
         HgWindow::Internals *window = windows[i].internals;
@@ -5036,17 +5032,17 @@ void HgWindow::get_mouse_delta(f64& x, f64& y) {
 }
 
 bool HgWindow::is_key_down(HgKey key) {
-    assert(key >= 0 && key < HG_KEY_COUNT);
+    hg_assert(key >= 0 && key < HG_KEY_COUNT);
     return internals->input.keys_down[key];
 }
 
 bool HgWindow::was_key_pressed(HgKey key) {
-    assert(key >= 0 && key < HG_KEY_COUNT);
+    hg_assert(key >= 0 && key < HG_KEY_COUNT);
     return internals->input.keys_pressed[key];
 }
 
 bool HgWindow::was_key_released(HgKey key) {
-    assert(key >= 0 && key < HG_KEY_COUNT);
+    hg_assert(key >= 0 && key < HG_KEY_COUNT);
     return internals->input.keys_released[key];
 }
 
@@ -5062,7 +5058,7 @@ static void *hg_internal_libvulkan = nullptr;
 
 void hg_vk_load(void) {
 
-#if defined(__unix__)
+#if defined(HG_PLATFORM_LINUX)
 
     hg_internal_libvulkan = dlopen("libvulkan.so.1", RTLD_LAZY);
     if (hg_internal_libvulkan == nullptr)
@@ -5072,7 +5068,7 @@ void hg_vk_load(void) {
     if (hg_internal_vulkan_funcs.vkGetInstanceProcAddr == nullptr)
         hg_error("Could not load vkGetInstanceProcAddr: %s\n", dlerror());
 
-#elif defined(_WIN32)
+#elif defined(HG_PLATFORM_WINDOWS)
 
     hg_internal_libvulkan = (void *)LoadLibraryA("vulkan-1.dll");
     if (hg_internal_libvulkan == nullptr)
@@ -5083,10 +5079,6 @@ void hg_vk_load(void) {
     if (hg_internal_vulkan_funcs.vkGetInstanceProcAddr == nullptr)
         hg_error("Could not load vkGetInstanceProcAddr\n");
 
-#else
-
-#error "unsupported platform"
-
 #endif
 
     HG_LOAD_VULKAN_FUNC(vkCreateInstance);
@@ -5096,12 +5088,10 @@ void hg_vk_unload() {
 
     if (hg_internal_libvulkan != nullptr) {
 
-#if defined(__unix__)
+#if defined(HG_PLATFORM_LINUX)
         dlclose(hg_internal_libvulkan);
-#elif defined(_WIN32)
+#elif defined(HG_PLATFORM_WINDOWS)
         FreeLibrary((HMODULE)hg_internal_libvulkan);
-#else
-#error "unsupported platform"
 #endif
 
         hg_internal_libvulkan = nullptr;

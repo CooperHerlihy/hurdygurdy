@@ -27,7 +27,6 @@
 #ifndef HURDYGURDY_H
 #define HURDYGURDY_H
 
-#include <cassert>
 #include <cfloat>
 #include <cinttypes>
 #include <cmath>
@@ -47,6 +46,40 @@
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
 
+#ifdef __GNUC__
+#define HG_COMPILER_GCC 1
+#endif
+
+#ifdef __clang__
+#define HG_COMPILER_CLANG 1
+#endif
+
+#ifdef _MSC_VER
+#define HG_COMPILER_MSVC 1
+#endif
+
+#ifdef __linux__
+#define HG_PLATFORM_LINUX 1
+#endif
+
+#ifdef _WIN32
+#define HG_PLATFORM_WINDOWS 1
+#endif
+
+#if !defined(HG_PLATFORM_LINUX) && !defined(HG_PLATFORM_WINDOWS)
+#error "Unsupported platfom"
+#endif
+
+#ifdef NDEBUG
+#define HG_RELEASE_MODE 1
+#else
+#define HG_DEBUG_MODE 1
+#endif
+
+#ifdef HG_RELEASE_MODE
+#define HG_NO_ASSERTIONS 1
+#endif
+
 /**
  * Initializes the HurdyGurdy library
  *
@@ -63,21 +96,21 @@ void hg_init();
  */
 void hg_exit();
 
-#ifdef NDEBUG
-
-/**
- * Runs code only in debug mode
- */
-#define hg_debug_mode(code)
-
-#else // NDEBUG
+#ifdef HG_DEBUG_MODE
 
 /**
  * Runs code only in debug mode
  */
 #define hg_debug_mode(code) code
 
-#endif // NDEBUG
+#else
+
+/**
+ * Runs code only in debug mode
+ */
+#define hg_debug_mode(code)
+
+#endif
 
 #define hg_concat_macros_internal(x, y) x##y
 #define hg_concat_macros(x, y) hg_concat_macros_internal(x, y)
@@ -139,6 +172,26 @@ struct HgDeferInternal {
  * - ... The message to print and its format parameters
  */
 #define hg_error(...) do { (void)std::fprintf(stderr, "HurdyGurdy Error: " __VA_ARGS__); abort(); } while(0)
+
+#ifdef HG_NO_ASSERTIONS
+
+#define hg_assert(cond) (void)0
+
+#else
+
+/**
+ * Asserts condition, or aborts the program
+ *
+ * Parameters
+ * - cond The condition to assert
+ */
+#define hg_assert(cond) do { \
+    if (!(cond)) { \
+        hg_error("Assertion failed in " __FILE__ ":%d %s() " #cond "\n", __LINE__, __func__); \
+    } \
+} while(0)
+
+#endif
 
 /**
  * The struct used to declare and run tests
@@ -254,8 +307,8 @@ struct HgSpan {
      * Convenience to index into the array with debug bounds checking
      */
     constexpr T& operator[](usize index) {
-        assert(data != nullptr);
-        assert(index < count);
+        hg_assert(data != nullptr);
+        hg_assert(index < count);
         return data[index];
     }
 
@@ -263,8 +316,8 @@ struct HgSpan {
      * Convenience to index into the array with debug bounds checking
      */
     constexpr const T& operator[](usize index) const {
-        assert(data != nullptr);
-        assert(index < count);
+        hg_assert(data != nullptr);
+        hg_assert(index < count);
         return data[index];
     }
 
@@ -402,7 +455,7 @@ static constexpr f64 HgRoot3 = 1.7320508075688772;
  * - The aligned size
  */
 constexpr usize hg_align(uptr value, usize alignment) {
-    assert(alignment > 0 && (alignment & (alignment - 1)) == 0);
+    hg_assert(alignment > 0 && (alignment & (alignment - 1)) == 0);
     return (value + alignment - 1) & ~(alignment - 1);
 }
 
@@ -722,9 +775,9 @@ constexpr bool operator!=(const HgQuat<T>& lhs, const HgQuat<T>& rhs) {
  */
 template<typename T>
 constexpr void hg_vec_add(u32 size, T *dst, const T *lhs, const T *rhs) {
-    assert(dst != nullptr);
-    assert(lhs != nullptr);
-    assert(rhs != nullptr);
+    hg_assert(dst != nullptr);
+    hg_assert(lhs != nullptr);
+    hg_assert(rhs != nullptr);
     for (u32 i = 0; i < size; ++i) {
         dst[i] = lhs[i] + rhs[i];
     }
@@ -801,9 +854,9 @@ constexpr HgVec4<T> operator+(const HgVec4<T>& lhs, const HgVec4<T>& rhs) {
  */
 template<typename T>
 constexpr void hg_vec_sub(u32 size, T *dst, const T *lhs, const T *rhs) {
-    assert(dst != nullptr);
-    assert(lhs != nullptr);
-    assert(rhs != nullptr);
+    hg_assert(dst != nullptr);
+    hg_assert(lhs != nullptr);
+    hg_assert(rhs != nullptr);
     for (u32 i = 0; i < size; ++i) {
         dst[i] = lhs[i] - rhs[i];
     }
@@ -880,9 +933,9 @@ constexpr HgVec4<T> operator-(const HgVec4<T>& lhs, const HgVec4<T>& rhs) {
  */
 template<typename T>
 constexpr void hg_vec_mul_pairwise(u32 size, T *dst, const T *lhs, const T *rhs) {
-    assert(dst != nullptr);
-    assert(lhs != nullptr);
-    assert(rhs != nullptr);
+    hg_assert(dst != nullptr);
+    hg_assert(lhs != nullptr);
+    hg_assert(rhs != nullptr);
     for (u32 i = 0; i < size; ++i) {
         dst[i] = lhs[i] * rhs[i];
     }
@@ -959,8 +1012,8 @@ constexpr HgVec4<T> operator*(const HgVec4<T>& lhs, const HgVec4<T>& rhs) {
  */
 template<typename T>
 constexpr void hg_vec_scalar_mul(u32 size, T *dst, T scalar, const T *vec) {
-    assert(dst != nullptr);
-    assert(vec != nullptr);
+    hg_assert(dst != nullptr);
+    hg_assert(vec != nullptr);
     for (u32 i = 0; i < size; ++i) {
         dst[i] = scalar * vec[i];
     }
@@ -1054,11 +1107,11 @@ constexpr HgVec4<T> operator*(const HgVec4<T>& lhs, T rhs) {
  */
 template<typename T>
 constexpr void hg_vec_div(u32 size, T *dst, const T *lhs, const T *rhs) {
-    assert(dst != nullptr);
-    assert(lhs != nullptr);
-    assert(rhs != nullptr);
+    hg_assert(dst != nullptr);
+    hg_assert(lhs != nullptr);
+    hg_assert(rhs != nullptr);
     for (u32 i = 0; i < size; ++i) {
-        assert(rhs[i] != 0);
+        hg_assert(rhs[i] != 0);
         dst[i] = lhs[i] / rhs[i];
     }
 }
@@ -1077,7 +1130,7 @@ constexpr void hg_vec_div(u32 size, T *dst, const T *lhs, const T *rhs) {
  */
 template<typename T>
 constexpr HgVec2<T> hg_vec2_div(const HgVec2<T>& lhs, const HgVec2<T>& rhs) {
-    assert(rhs.x != 0 && rhs.y != 0);
+    hg_assert(rhs.x != 0 && rhs.y != 0);
     return {lhs.x / rhs.x, lhs.y / rhs.y};
 }
 
@@ -1100,7 +1153,7 @@ constexpr HgVec2<T> operator/(const HgVec2<T>& lhs, const HgVec2<T>& rhs) {
  */
 template<typename T>
 constexpr HgVec3<T> hg_vec3_div(const HgVec3<T>& lhs, const HgVec3<T>& rhs) {
-    assert(rhs.x != 0 && rhs.y != 0 && rhs.z != 0);
+    hg_assert(rhs.x != 0 && rhs.y != 0 && rhs.z != 0);
     return {lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z};
 }
 
@@ -1123,7 +1176,7 @@ constexpr HgVec3<T> operator/(const HgVec3<T>& lhs, const HgVec3<T>& rhs) {
  */
 template<typename T>
 constexpr HgVec4<T> hg_vec4_div(const HgVec4<T>& lhs, const HgVec4<T>& rhs) {
-    assert(rhs.x != 0 && rhs.y != 0 && rhs.z != 0 && rhs.w != 0);
+    hg_assert(rhs.x != 0 && rhs.y != 0 && rhs.z != 0 && rhs.w != 0);
     return {lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z, lhs.w / rhs.w};
 }
 
@@ -1145,9 +1198,9 @@ constexpr HgVec4<T> operator/(const HgVec4<T>& lhs, const HgVec4<T>& rhs) {
  */
 template<typename T>
 constexpr void hg_vec_scalar_div(u32 size, T *dst, const T *vec, T scalar) {
-    assert(dst != nullptr);
-    assert(vec != nullptr);
-    assert(scalar != 0);
+    hg_assert(dst != nullptr);
+    hg_assert(vec != nullptr);
+    hg_assert(scalar != 0);
     for (u32 i = 0; i < size; ++i) {
         dst[i] = vec[i] / scalar;
     }
@@ -1167,7 +1220,7 @@ constexpr void hg_vec_scalar_div(u32 size, T *dst, const T *vec, T scalar) {
  */
 template<typename T>
 constexpr HgVec2<T> hg_vec2_scalar_div(const HgVec2<T>& vec, T scalar) {
-    assert(scalar != 0);
+    hg_assert(scalar != 0);
     return {vec.x / scalar, vec.y / scalar};
 }
 
@@ -1190,7 +1243,7 @@ constexpr HgVec2<T> operator/(const HgVec2<T>& lhs, T rhs) {
  */
 template<typename T>
 constexpr HgVec3<T> hg_vec3_scalar_div(const HgVec3<T>& vec, T scalar) {
-    assert(scalar != 0);
+    hg_assert(scalar != 0);
     return {vec.x / scalar, vec.y / scalar, vec.z / scalar};
 }
 
@@ -1213,7 +1266,7 @@ constexpr HgVec3<T> operator/(const HgVec3<T>& lhs, T rhs) {
  */
 template<typename T>
 constexpr HgVec4<T> hg_vec4_scalar_div(const HgVec4<T>& vec, T scalar) {
-    assert(scalar != 0);
+    hg_assert(scalar != 0);
     return {vec.x / scalar, vec.y / scalar, vec.z / scalar, vec.w / scalar};
 }
 
@@ -1233,9 +1286,9 @@ constexpr HgVec4<T> operator/(const HgVec4<T>& lhs, T rhs) {
  */
 template<typename T>
 constexpr void hg_dot(u32 size, T *dst, const T *lhs, const T *rhs) {
-    assert(dst != nullptr);
-    assert(lhs != nullptr);
-    assert(rhs != nullptr);
+    hg_assert(dst != nullptr);
+    hg_assert(lhs != nullptr);
+    hg_assert(rhs != nullptr);
     *dst = 0;
     for (u32 i = 0; i < size; ++i) {
         *dst += lhs[i] * rhs[i];
@@ -1297,8 +1350,8 @@ constexpr float hg_dot(const HgVec4<T>& lhs, const HgVec4<T>& rhs) {
  */
 template<typename T>
 inline void hg_len(u32 size, T *dst, const T *vec) {
-    assert(dst != nullptr);
-    assert(vec != nullptr);
+    hg_assert(dst != nullptr);
+    hg_assert(vec != nullptr);
     hg_dot<T>(size, dst, vec, vec);
     *dst = std::sqrt(*dst);
 }
@@ -1357,10 +1410,10 @@ inline float hg_len(const HgVec4<T>& vec) {
  */
 template<typename T>
 inline void hg_norm(u32 size, T *dst, const T *vec) {
-    assert(dst != nullptr);
-    assert(vec != nullptr);
+    hg_assert(dst != nullptr);
+    hg_assert(vec != nullptr);
     T len = hg_len<T>(size, &len, vec);
-    assert(len != 0);
+    hg_assert(len != 0);
     for (u32 i = 0; i < size; ++i) {
         dst[i] = vec[i] / len;
     }
@@ -1380,7 +1433,7 @@ inline void hg_norm(u32 size, T *dst, const T *vec) {
 template<typename T>
 inline HgVec2<T> hg_norm(const HgVec2<T>& vec) {
     T len = hg_len<T>(vec);
-    assert(len != 0);
+    hg_assert(len != 0);
     return {vec.x / len, vec.y / len};
 }
 
@@ -1398,7 +1451,7 @@ inline HgVec2<T> hg_norm(const HgVec2<T>& vec) {
 template<typename T>
 inline HgVec3<T> hg_norm(const HgVec3<T>& vec) {
     T len = hg_len<T>(vec);
-    assert(len != 0);
+    hg_assert(len != 0);
     return {vec.x / len, vec.y / len, vec.z / len};
 }
 
@@ -1416,7 +1469,7 @@ inline HgVec3<T> hg_norm(const HgVec3<T>& vec) {
 template<typename T>
 inline HgVec4<T> hg_norm(const HgVec4<T>& vec) {
     T len = hg_len<T>(vec);
-    assert(len != 0);
+    hg_assert(len != 0);
     return {vec.x / len, vec.y / len, vec.z / len, vec.w / len};
 }
 
@@ -1430,9 +1483,9 @@ inline HgVec4<T> hg_norm(const HgVec4<T>& vec) {
  */
 template<typename T>
 constexpr void hg_cross(T *dst, const T *lhs, const T *rhs) {
-    assert(dst != nullptr);
-    assert(lhs != nullptr);
-    assert(rhs != nullptr);
+    hg_assert(dst != nullptr);
+    hg_assert(lhs != nullptr);
+    hg_assert(rhs != nullptr);
     dst[0] = lhs[1] * rhs[2] - lhs[2] * rhs[1];
     dst[1] = lhs[2] * rhs[0] - lhs[0] * rhs[2];
     dst[2] = lhs[0] * rhs[1] - lhs[1] * rhs[0];
@@ -1465,9 +1518,9 @@ constexpr HgVec3<T> hg_cross(const HgVec3<T>& lhs, const HgVec3<T>& rhs) {
  */
 template<typename T>
 constexpr void hg_mat_add(u32 width, u32 height, T *dst, const T *lhs, const T *rhs) {
-    assert(dst != nullptr);
-    assert(lhs != nullptr);
-    assert(rhs != nullptr);
+    hg_assert(dst != nullptr);
+    hg_assert(lhs != nullptr);
+    hg_assert(rhs != nullptr);
     for (u32 i = 0; i < width; ++i) {
         for (u32 j = 0; j < height; ++j) {
             dst[i * width + j] = lhs[i * width + j] + rhs[i * width + j];
@@ -1553,9 +1606,9 @@ constexpr HgMat4<T> operator+(const HgMat4<T>& lhs, const HgMat4<T>& rhs) {
  */
 template<typename T>
 constexpr void hg_mat_sub(u32 width, u32 height, T *dst, const T *lhs, const T *rhs) {
-    assert(dst != nullptr);
-    assert(lhs != nullptr);
-    assert(rhs != nullptr);
+    hg_assert(dst != nullptr);
+    hg_assert(lhs != nullptr);
+    hg_assert(rhs != nullptr);
     for (u32 i = 0; i < width; ++i) {
         for (u32 j = 0; j < height; ++j) {
             dst[i * width + j] = lhs[i * width + j] - rhs[i * width + j];
@@ -1643,10 +1696,10 @@ constexpr HgMat4<T> operator-(const HgMat4<T>& lhs, const HgMat4<T>& rhs) {
  */
 template<typename T>
 constexpr void hg_mat_mul(T *dst, u32 wl, u32 hl, const T *lhs, u32 wr, u32 hr, const T *rhs) {
-    assert(hr == wl);
-    assert(dst != nullptr);
-    assert(lhs != nullptr);
-    assert(rhs != nullptr);
+    hg_assert(hr == wl);
+    hg_assert(dst != nullptr);
+    hg_assert(lhs != nullptr);
+    hg_assert(rhs != nullptr);
     (void)hr;
     for (u32 i = 0; i < wl; ++i) {
         for (u32 j = 0; j < wr; ++j) {
@@ -1736,9 +1789,9 @@ constexpr HgMat4<T> operator*(const HgMat4<T>& lhs, const HgMat4<T>& rhs) {
  */
 template<typename T>
 constexpr void hg_mat_vec_mul(u32 width, u32 height, T *dst, const T *mat, const T *vec) {
-    assert(dst != nullptr);
-    assert(mat != nullptr);
-    assert(vec != nullptr);
+    hg_assert(dst != nullptr);
+    hg_assert(mat != nullptr);
+    hg_assert(vec != nullptr);
     for (u32 i = 0; i < height; ++i) {
         dst[i] = 0.0f;
         for (u32 j = 0; j < width; ++j) {
@@ -2098,7 +2151,7 @@ HgMat4f hg_projection_perspective(f32 fov, f32 aspect, f32 near, f32 far);
  * - The maximum number of mipmap levels the image can have
  */
 inline u32 hg_max_mipmaps(u32 width, u32 height, u32 depth) {
-    assert(std::max({width, height, depth}) > 0);
+    hg_assert(std::max({width, height, depth}) > 0);
     return (u32)std::log2((f32)std::max({width, height, depth})) + 1;
 }
 
@@ -2509,7 +2562,7 @@ struct HgArray {
      * - The allocated dynamic array
      */
     static HgArray<T> create(HgAllocator& mem, usize count, usize capacity) {
-        assert(count <= capacity);
+        hg_assert(count <= capacity);
 
         HgArray arr{};
         arr.items.data = (T *)mem.alloc_fn(capacity * sizeof(T), alignof(T));
@@ -2562,7 +2615,7 @@ struct HgArray {
      */
     template<typename... Args>
     T& push_unchecked(Args&&... args) {
-        assert(count < items.count);
+        hg_assert(count < items.count);
         if constexpr (sizeof...(Args) == 0) {
             return *(new (&items[count++]) T);
         } else {
@@ -2582,7 +2635,7 @@ struct HgArray {
      */
     template<typename... Args>
     T& push(HgAllocator& mem, Args&&... args) {
-        assert(count <= items.count);
+        hg_assert(count <= items.count);
         if (count == items.count)
             grow_array(mem);
 
@@ -2593,7 +2646,7 @@ struct HgArray {
      * Pops an item off the end of the array
      */
     void pop() {
-        assert(count > 0);
+        hg_assert(count > 0);
         --count;
         if constexpr (std::is_destructible_v<T>) {
             items[count].~T();
@@ -2612,8 +2665,8 @@ struct HgArray {
      */
     template<typename... Args>
     T& insert_unchecked(usize index, Args&&... args) {
-        assert(index < count);
-        assert(count < items.count);
+        hg_assert(index < count);
+        hg_assert(count < items.count);
 
         std::move(items.data + index, items.data + count, items.data + index + 1);
         ++count;
@@ -2636,8 +2689,8 @@ struct HgArray {
      */
     template<typename... Args>
     T& insert(HgAllocator& mem, usize index, Args&&... args) {
-        assert(index <= count);
-        assert(count <= items.count);
+        hg_assert(index <= count);
+        hg_assert(count <= items.count);
         if (count == items.count)
             grow_array(mem);
 
@@ -2651,7 +2704,7 @@ struct HgArray {
      * - index The index of the item to remove
      */
     void remove(usize index) {
-        assert(index < count);
+        hg_assert(index < count);
         if constexpr (std::is_destructible_v<T>) {
             items[index].~T();
         }
@@ -2671,8 +2724,8 @@ struct HgArray {
      */
     template<typename... Args>
     T& swap_insert_unchecked(usize index, Args&&... args) {
-        assert(index <= count);
-        assert(count <= items.count);
+        hg_assert(index <= count);
+        hg_assert(count <= items.count);
 
         new (&items[count++]) T{std::move(items[index])};
         if constexpr (sizeof...(Args) == 0)
@@ -2694,8 +2747,8 @@ struct HgArray {
      */
     template<typename... Args>
     T& swap_insert(HgAllocator& mem, usize index, Args&&... args) {
-        assert(index <= count);
-        assert(count <= items.count);
+        hg_assert(index <= count);
+        hg_assert(count <= items.count);
         if (count == items.count)
             grow_array(mem);
 
@@ -2709,7 +2762,7 @@ struct HgArray {
      * - index The index of the item to remove
      */
     void swap_remove(usize index) {
-        assert(index < count);
+        hg_assert(index < count);
         if constexpr (std::is_destructible_v<T>) {
             items[index].~T();
         }
@@ -2727,7 +2780,7 @@ struct HgArray {
      * - A reference to the gotten value
      */
     constexpr T& get(usize index) {
-        assert(index < count);
+        hg_assert(index < count);
         return items[index];
     }
 
@@ -2741,7 +2794,7 @@ struct HgArray {
      * - A reference to the gotten value
      */
     constexpr const T& get(usize index) const {
-        assert(index < count);
+        hg_assert(index < count);
         return items[index];
     }
 
@@ -2841,7 +2894,7 @@ struct HgHashMap {
      * - The created empty hash map
      */
     static HgHashMap create(HgAllocator& mem, usize slot_count) {
-        assert(slot_count > 0);
+        hg_assert(slot_count > 0);
 
         HgHashMap map;
         map.slots = mem.alloc<Slot>(slot_count);
@@ -2870,7 +2923,7 @@ struct HgHashMap {
      * - A reference to the constructed object
      */
     Value& insert(const Key& key, const Value& value) {
-        assert(load < slots.count - 1);
+        hg_assert(load < slots.count - 1);
 
         usize index = hg_hash(key) % slots.count;
         while (slots[index].has_value() && slots[index].value().key != key) {
@@ -2888,7 +2941,7 @@ struct HgHashMap {
      * - key The key to remove from
      */
     void remove(const Key& key) {
-        assert(load < slots.count);
+        hg_assert(load < slots.count);
 
         usize index = hg_hash(key) % slots.count;
         while (slots[index].has_value() && slots[index]->key != key) {
@@ -2922,7 +2975,7 @@ struct HgHashMap {
      * - Whether a value exists at the key
      */
     bool has(const Key& key) {
-        assert(load < slots.count);
+        hg_assert(load < slots.count);
 
         usize index = hg_hash(key) % slots.count;
         while (slots[index].has_value()) {
@@ -2944,7 +2997,7 @@ struct HgHashMap {
      * - nullptr if it does not exist
      */
     Value *try_get(const Key& key) {
-        assert(load < slots.count);
+        hg_assert(load < slots.count);
 
         usize index = hg_hash(key) % slots.count;
         while (slots[index].has_value()) {
@@ -2965,11 +3018,11 @@ struct HgHashMap {
      * - A reference to the value
      */
     Value& get(const Key& key) {
-        assert(load < slots.count);
+        hg_assert(load < slots.count);
 
         usize index = hg_hash(key) % slots.count;
         while (true) {
-            assert(slots[index].has_value());
+            hg_assert(slots[index].has_value());
             if (slots[index]->key == key)
                 return slots[index]->value;
             ++index;
@@ -3235,7 +3288,7 @@ struct HgECS {
      * - Whether the component id is registered
      */
     bool is_registered(u32 component_id) {
-        assert(component_id < systems.count);
+        hg_assert(component_id < systems.count);
         return systems[component_id].components != nullptr;
     }
 
@@ -3263,7 +3316,7 @@ struct HgECS {
      * - The number of components under the id
      */
     u32 component_count(u32 component_id) {
-        assert(is_registered(component_id));
+        hg_assert(is_registered(component_id));
         return systems[component_id].component_count;
     }
 
@@ -3318,8 +3371,8 @@ struct HgECS {
      * - A pointer to the created component
      */
     void *create(HgEntity entity, u32 component_id) {
-        assert(is_alive(entity));
-        assert(is_registered(component_id));
+        hg_assert(is_alive(entity));
+        hg_assert(is_registered(component_id));
         return systems[component_id].ctor(systems[component_id].user_data, *this, entity, component_id);
     }
 
@@ -3351,9 +3404,9 @@ struct HgECS {
      * - component_id The id of the component, must be registered
      */
     void destroy(HgEntity entity, u32 component_id) {
-        assert(is_alive(entity));
-        assert(is_registered(component_id));
-        assert(has(entity, component_id));
+        hg_assert(is_alive(entity));
+        hg_assert(is_registered(component_id));
+        hg_assert(has(entity, component_id));
         systems[component_id].dtor(systems[component_id].user_data, *this, entity, component_id);
     }
 
@@ -3554,14 +3607,14 @@ struct HgECS {
      * - Whether the entity has a component in the system
      */
     bool has(HgEntity entity, u32 component_id) {
-        assert(is_alive(entity));
-        assert(is_registered(component_id));
+        hg_assert(is_alive(entity));
+        hg_assert(is_registered(component_id));
         Component& system = systems[component_id];
-#ifdef NDEBUG
-        return system.entity_indices[entity] < system.component_count;
+#ifdef HG_DEBUG_MODE
+        return system.entity_indices[entity] < system.component_count &&
+               system.component_entities[system.entity_indices[entity]] == entity;
 #else
-        return system.entity_indices[entity] < system.component_count
-            && system.component_entities[system.entity_indices[entity]] == entity;
+        return system.entity_indices[entity] < system.component_count;
 #endif
     }
 
@@ -3620,9 +3673,9 @@ struct HgECS {
      * - The entity's component, will never be 0
      */
     void *get(HgEntity entity, u32 component_id) {
-        assert(is_alive(entity));
-        assert(is_registered(component_id));
-        assert(has(entity, component_id));
+        hg_assert(is_alive(entity));
+        hg_assert(is_registered(component_id));
+        hg_assert(has(entity, component_id));
         return (u8 *)systems[component_id].components.data
                    + systems[component_id].entity_indices[entity]
                    * systems[component_id].component_size;
@@ -3642,9 +3695,9 @@ struct HgECS {
     template<typename T>
     T& get(HgEntity entity) {
         u32 id = hg_component_id<T>;
-        assert(is_alive(entity));
-        assert(is_registered(id));
-        assert(has(entity, id));
+        hg_assert(is_alive(entity));
+        hg_assert(is_registered(id));
+        hg_assert(has(entity, id));
         return *((T *)systems[id].components.data + systems[id].entity_indices[entity]);
     }
 
@@ -3659,16 +3712,16 @@ struct HgECS {
      * - The components's entity, will never be 0
      */
     HgEntity get_entity(const void *component, u32 component_id) {
-        assert(component != nullptr);
-        assert(is_registered(component_id));
+        hg_assert(component != nullptr);
+        hg_assert(is_registered(component_id));
 
         u32 index = (u32)((uptr)component
                   - (uptr)systems[component_id].components.data)
                   / systems[component_id].component_size;
-        assert(index < systems[component_id].component_count);
+        hg_assert(index < systems[component_id].component_count);
 
         HgEntity entity = systems[component_id].component_entities[index];
-        assert(systems[component_id].entity_indices[entity] == index);
+        hg_assert(systems[component_id].entity_indices[entity] == index);
         return entity;
     }
 
@@ -3684,13 +3737,13 @@ struct HgECS {
     template<typename T>
     HgEntity get_entity(const T& component) {
         u32 id = hg_component_id<T>;
-        assert(is_registered(id));
+        hg_assert(is_registered(id));
 
         u32 index = (u32)(&component - (T *)systems[id].components.data);
-        assert(index < systems[id].component_count);
+        hg_assert(index < systems[id].component_count);
 
         HgEntity entity = systems[id].component_entities[index];
-        assert(systems[id].entity_indices[entity] == index);
+        hg_assert(systems[id].entity_indices[entity] == index);
         return entity;
     }
 
@@ -3819,7 +3872,7 @@ struct HgECS {
     template<typename T>
     ComponentView<T> component_iter() {
         u32 id = hg_component_id<T>;
-        assert(is_registered(id));
+        hg_assert(is_registered(id));
 
         ComponentView<T> view;
         view.entity_begin = systems[id].component_entities.data;
@@ -3841,8 +3894,8 @@ struct HgECS {
     template<typename T, typename Fn>
     void selectionsort_components(u32 begin, u32 end, Fn& compare) {
         static_assert(std::is_invocable_v<Fn, T&, T&>);
-        assert(is_registered(hg_component_id<T>));
-        assert(begin <= end && end <= systems[hg_component_id<T>].component_count);
+        hg_assert(is_registered(hg_component_id<T>));
+        hg_assert(begin <= end && end <= systems[hg_component_id<T>].component_count);
 
         for (; begin < end; ++begin) {
             u32 least = begin;
@@ -3879,8 +3932,8 @@ struct HgECS {
     template<typename T, typename Fn>
     u32 quicksort_inter(u32 pivot, u32 inc, u32 dec, Fn& compare) {
         static_assert(std::is_invocable_v<Fn, T&, T&>);
-        assert(is_registered(hg_component_id<T>));
-        assert(inc <= dec && dec <= systems[hg_component_id<T>].component_count);
+        hg_assert(is_registered(hg_component_id<T>));
+        hg_assert(inc <= dec && dec <= systems[hg_component_id<T>].component_count);
 
         while (inc != dec) {
             while (!compare(hg_comp(dec), hg_comp(pivot))) {
@@ -3914,8 +3967,8 @@ finish:
     template<typename T, typename Fn>
     void quicksort_components(u32 begin, u32 end, Fn& compare) {
         static_assert(std::is_invocable_v<Fn, T&, T&>);
-        assert(is_registered(hg_component_id<T>));
-        assert(begin <= end && end <= systems[hg_component_id<T>].component_count);
+        hg_assert(is_registered(hg_component_id<T>));
+        hg_assert(begin <= end && end <= systems[hg_component_id<T>].component_count);
 
         if (begin + 1 >= end)
             return;
@@ -3954,7 +4007,7 @@ void hg_default_component_dtor(void *user_data, HgECS& ecs, HgEntity entity, u32
  * A high precision clock for timers and game deltas
  */
 struct HgClock {
-    std::chrono::time_point<std::chrono::high_resolution_clock> time;
+    std::chrono::time_point<std::chrono::high_resolution_clock> time = std::chrono::high_resolution_clock::now();
 
     /**
      * Resets the clock and returns the delta since the last tick in seconds

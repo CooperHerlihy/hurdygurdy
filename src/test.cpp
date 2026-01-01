@@ -147,10 +147,8 @@ int main(void) {
     u32 frame_count = 0;
     f64 frame_time = 0.0f;
     f64 cpu_time = 0.0f;
-    HgClock game_clock;
-    game_clock.tick();
-    HgClock cpu_clock;
-    cpu_clock.tick();
+    HgClock game_clock{};
+    HgClock cpu_clock{};
 
     while(true) {
         f64 delta = game_clock.tick();
