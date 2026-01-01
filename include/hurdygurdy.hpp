@@ -2544,7 +2544,11 @@ struct HgArray {
     /**
      * The allocated space for the array
      */
-    HgSpan<T> items;
+    T *items;
+    /**
+     * The max number of items that can be stored in the array
+     */
+    usize capacity;
     /**
      * The number of active items in the array
      */
@@ -2565,10 +2569,10 @@ struct HgArray {
         hg_assert(count <= capacity);
 
         HgArray arr{};
-        arr.items.data = (T *)mem.alloc_fn(capacity * sizeof(T), alignof(T));
-        arr.items.count = capacity;
+        arr.items = (T *)mem.alloc_fn(capacity * sizeof(T), alignof(T));
+        arr.capacity = capacity;
         arr.count = count;
-        new (arr.items.data) T[count];
+        new (arr.items) T[count];
         return arr;
     }
 
@@ -2577,7 +2581,7 @@ struct HgArray {
      */
     void destroy(HgAllocator& mem) {
         reset();
-        mem.free(items);
+        mem.free(items, capacity * sizeof(T), alignof(T));
     }
 
     /**
@@ -2599,9 +2603,9 @@ struct HgArray {
      * - mem The allocator to use
      */
     void grow_array(HgAllocator& mem) {
-        usize new_capacity = items.count == 0 ? init_size : items.count * growth_factor;
-        items.data = (T *)mem.realloc_fn(items.data, items.size(), new_capacity * sizeof(T), alignof(T));
-        items.count = new_capacity;
+        usize new_capacity = capacity == 0 ? init_size : capacity * growth_factor;
+        items = (T *)mem.realloc_fn(items, capacity * sizeof(T), new_capacity * sizeof(T), alignof(T));
+        capacity = new_capacity;
     }
 
     /**
@@ -2615,7 +2619,7 @@ struct HgArray {
      */
     template<typename... Args>
     T& push_unchecked(Args&&... args) {
-        hg_assert(count < items.count);
+        hg_assert(count < capacity);
         if constexpr (sizeof...(Args) == 0) {
             return *(new (&items[count++]) T);
         } else {
@@ -2635,8 +2639,8 @@ struct HgArray {
      */
     template<typename... Args>
     T& push(HgAllocator& mem, Args&&... args) {
-        hg_assert(count <= items.count);
-        if (count == items.count)
+        hg_assert(count <= capacity);
+        if (count == capacity)
             grow_array(mem);
 
         return push_unchecked(std::forward<Args>(args)...);
@@ -2666,9 +2670,9 @@ struct HgArray {
     template<typename... Args>
     T& insert_unchecked(usize index, Args&&... args) {
         hg_assert(index < count);
-        hg_assert(count < items.count);
+        hg_assert(count < capacity);
 
-        std::move(items.data + index, items.data + count, items.data + index + 1);
+        std::move(items + index, items + count, items + index + 1);
         ++count;
         if constexpr (sizeof...(Args) == 0)
             return *(new (&items[index]) T);
@@ -2690,8 +2694,8 @@ struct HgArray {
     template<typename... Args>
     T& insert(HgAllocator& mem, usize index, Args&&... args) {
         hg_assert(index <= count);
-        hg_assert(count <= items.count);
-        if (count == items.count)
+        hg_assert(count <= capacity);
+        if (count == capacity)
             grow_array(mem);
 
         return insert_unchecked(index, std::forward<Args>(args)...);
@@ -2708,7 +2712,7 @@ struct HgArray {
         if constexpr (std::is_destructible_v<T>) {
             items[index].~T();
         }
-        std::move(items.data + index + 1, items.data + count, items.data + index);
+        std::move(items + index + 1, items + count, items + index);
         --count;
     }
 
@@ -2725,7 +2729,7 @@ struct HgArray {
     template<typename... Args>
     T& swap_insert_unchecked(usize index, Args&&... args) {
         hg_assert(index <= count);
-        hg_assert(count <= items.count);
+        hg_assert(count <= capacity);
 
         new (&items[count++]) T{std::move(items[index])};
         if constexpr (sizeof...(Args) == 0)
@@ -2748,8 +2752,8 @@ struct HgArray {
     template<typename... Args>
     T& swap_insert(HgAllocator& mem, usize index, Args&&... args) {
         hg_assert(index <= count);
-        hg_assert(count <= items.count);
-        if (count == items.count)
+        hg_assert(count <= capacity);
+        if (count == capacity)
             grow_array(mem);
 
         return swap_insert_unchecked(index, std::forward<Args>(args)...);
@@ -2813,31 +2817,31 @@ struct HgArray {
     }
 
     /**
-     * For c++ ranged based for
+     * For c++ ranged based for loop
      */
     constexpr T *begin() {
-        return items.data;
+        return items;
     }
 
     /**
-     * For c++ ranged based for
+     * For c++ ranged based for loop
      */
     constexpr T *end() {
-        return items.data + items.count;
+        return items + count;
     }
 
     /**
-     * For c++ ranged based for
+     * For c++ ranged based for loop in a const context
      */
     constexpr const T *begin() const {
-        return items.data;
+        return items;
     }
 
     /**
-     * For c++ ranged based for
+     * For c++ ranged based for loop in a const context
      */
     constexpr const T *end() const {
-        return items.data + items.count;
+        return items + count;
     }
 };
 

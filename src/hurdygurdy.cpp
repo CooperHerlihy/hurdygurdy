@@ -399,7 +399,7 @@ hg_test(hg_array) {
     HgArray<u16> arr_u16 = arr_u16.create(mem, 0, 2);
     hg_defer(arr_u16.destroy(mem));
     hg_test_assert(arr_u16.items != nullptr);
-    hg_test_assert(arr_u16.items.count == 2);
+    hg_test_assert(arr_u16.capacity == 2);
     hg_test_assert(arr_u16.count == 0);
 
     arr_u16.push(mem, (u16)2);
@@ -408,26 +408,26 @@ hg_test(hg_array) {
     arr_u16.push(mem, (u16)4);
     hg_test_assert(arr_u16[1] == 4);
     hg_test_assert(arr_u16.count == 2);
-    hg_test_assert(arr_u16.items.count >= 2);
+    hg_test_assert(arr_u16.capacity >= 2);
     arr_u16.push(mem, (u16)8);
     hg_test_assert(arr_u16[2] == 8);
     hg_test_assert(arr_u16.count == 3);
-    hg_test_assert(arr_u16.items.count >= 3);
+    hg_test_assert(arr_u16.capacity >= 3);
 
     arr_u16.pop();
     hg_test_assert(arr_u16.count == 2);
-    hg_test_assert(arr_u16.items.count >= 3);
+    hg_test_assert(arr_u16.capacity >= 3);
 
     arr_u16.insert(mem, 0, (u16)1);
     hg_test_assert(arr_u16.count == 3);
-    hg_test_assert(arr_u16.items.count >= 3);
+    hg_test_assert(arr_u16.capacity >= 3);
     hg_test_assert(arr_u16[0] == 1);
     hg_test_assert(arr_u16[1] == 2);
     hg_test_assert(arr_u16[2] == 4);
 
     arr_u16.remove(1);
     hg_test_assert(arr_u16.count == 2);
-    hg_test_assert(arr_u16.items.count >= 3);
+    hg_test_assert(arr_u16.capacity >= 3);
     hg_test_assert(arr_u16[0] == 1);
     hg_test_assert(arr_u16[1] == 4);
 
@@ -435,7 +435,7 @@ hg_test(hg_array) {
         arr_u16.push(mem, (u16)i);
     }
     hg_test_assert(arr_u16.count == 102);
-    hg_test_assert(arr_u16.items.count >= 102);
+    hg_test_assert(arr_u16.capacity >= 102);
 
     arr_u16.swap_remove(2);
     hg_test_assert(arr_u16.count == 101);
