@@ -2540,15 +2540,34 @@ struct HgArray {
     }
 
     /**
-     * Doubles the capacity of the array, or inits to init_size
+     * Increases the capacity of the array, or inits to init_size
      *
      * Parameters
      * - mem The allocator to use
      */
-    void realloc(HgAllocator& mem) {
+    void grow_array(HgAllocator& mem) {
         usize new_capacity = items.count == 0 ? init_size : items.count * growth_factor;
         items.data = (T *)mem.realloc_fn(items.data, items.size(), new_capacity * sizeof(T), alignof(T));
         items.count = new_capacity;
+    }
+
+    /**
+     * Push an item to the end to the array, asserting space is available
+     *
+     * Parameters
+     * - args The arguments to use to construct the new item, if any
+     *
+     * Returns
+     * - A reference to the created object
+     */
+    template<typename... Args>
+    T& push_unchecked(Args&&... args) {
+        assert(count < items.count);
+        if constexpr (sizeof...(Args) == 0) {
+            return *(new (&items[count++]) T);
+        } else {
+            return *(new (&items[count++]) T{std::forward<Args>(args)...});
+        }
     }
 
     /**
@@ -2565,13 +2584,9 @@ struct HgArray {
     T& push(HgAllocator& mem, Args&&... args) {
         assert(count <= items.count);
         if (count == items.count)
-            realloc(mem);
+            grow_array(mem);
 
-        if constexpr (sizeof...(Args) == 0) {
-            return *(new (&items[count++]) T);
-        } else {
-            return *(new (&items[count++]) T{std::forward<Args>(args)...});
-        }
+        return push_unchecked(std::forward<Args>(args)...);
     }
 
     /**
@@ -2583,6 +2598,29 @@ struct HgArray {
         if constexpr (std::is_destructible_v<T>) {
             items[count].~T();
         }
+    }
+
+    /**
+     * Inserts an item into the array, moving subsequent items back
+     *
+     * Parameters
+     * - index The index the new item will be placed at, must be <= count
+     * - args The arguments to use to construct the new item, if any
+     *
+     * Returns
+     * - A reference to the created object
+     */
+    template<typename... Args>
+    T& insert_unchecked(usize index, Args&&... args) {
+        assert(index < count);
+        assert(count < items.count);
+
+        std::move(items.data + index, items.data + count, items.data + index + 1);
+        ++count;
+        if constexpr (sizeof...(Args) == 0)
+            return *(new (&items[index]) T);
+        else
+            return *(new (&items[index]) T{std::forward<Args>(args)...});
     }
 
     /**
@@ -2601,14 +2639,9 @@ struct HgArray {
         assert(index <= count);
         assert(count <= items.count);
         if (count == items.count)
-            realloc(mem);
+            grow_array(mem);
 
-        std::move(items.data + index, items.data + count, items.data + index + 1);
-        ++count;
-        if constexpr (sizeof...(Args) == 0)
-            return *(new (&items[index]) T);
-        else
-            return *(new (&items[index]) T{std::forward<Args>(args)...});
+        return insert_unchecked(index, std::forward<Args>(args)...);
     }
 
     /**
@@ -2630,6 +2663,28 @@ struct HgArray {
      * Inserts an item into the array, moving the item at index to the end
      *
      * Parameters
+     * - index The index the new item will be placed at, must be <= count
+     * - args The arguments to use to construct the new item, if any
+     *
+     * Returns
+     * - A reference to the created object
+     */
+    template<typename... Args>
+    T& swap_insert_unchecked(usize index, Args&&... args) {
+        assert(index <= count);
+        assert(count <= items.count);
+
+        new (&items[count++]) T{std::move(items[index])};
+        if constexpr (sizeof...(Args) == 0)
+            return *(new (&items[index]) T);
+        else
+            return *(new (&items[index]) T{std::forward<Args>(args)...});
+    }
+
+    /**
+     * Inserts an item into the array, moving the item at index to the end
+     *
+     * Parameters
      * - mem The allocator to use
      * - index The index the new item will be placed at, must be <= count
      * - args The arguments to use to construct the new item, if any
@@ -2642,13 +2697,9 @@ struct HgArray {
         assert(index <= count);
         assert(count <= items.count);
         if (count == items.count)
-            realloc(mem);
+            grow_array(mem);
 
-        new (&items[count++]) T{std::move(items[index])};
-        if constexpr (sizeof...(Args) == 0)
-            return *(new (&items[index]) T);
-        else
-            return *(new (&items[index]) T{std::forward<Args>(args)...});
+        return swap_insert_unchecked(index, std::forward<Args>(args)...);
     }
 
     /**
