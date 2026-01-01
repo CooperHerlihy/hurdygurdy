@@ -2203,7 +2203,7 @@ struct HgAllocator {
     HgSpan<T> realloc(HgSpan<T> allocation, usize count) {
         HgSpan<T> span;
         span.data = (T *)realloc_fn(allocation.data, allocation.count * sizeof(T), count * sizeof(T), alignof(T));
-        new (span.data + span.count) T[count - span.count];
+        new (span.data + allocation.count) T[count - allocation.count];
         span.count = span.data != nullptr ? count : 0;
         return span;
     }
@@ -2737,6 +2737,23 @@ struct HgArray {
     }
 };
 
+template<typename T>
+typename std::enable_if_t<std::is_integral_v<T>, usize>
+hg_hash(T val) {
+    return (usize)val;
+}
+
+template<typename T>
+typename std::enable_if_t<std::is_floating_point_v<T>, usize>
+hg_hash(T val) {
+    union {
+        T as_float;
+        usize as_usize;
+    } u;
+    u.as_float = val;
+    return u.as_usize;
+}
+
 /**
  * A key-value hash map
  *
@@ -2744,24 +2761,40 @@ struct HgArray {
  */
 template<typename Key, typename Value>
 struct HgHashMap {
+    struct Pair {
+        Key key;
+        Value value;
+
+        Pair(const Key& k, const Value& v) : key{k}, value{v} {}
+    };
+
+    using Slot = std::optional<Pair>;
+
     /**
      * Where the values are stored
      */
-    HgSpan<std::optional<Value>> slots;
+    HgSpan<Slot> slots;
+    /**
+     * The current number of values that are stored
+     */
+    usize load;
 
     /**
      * Creates a new hash map
      *
      * Parameters
      * - mem The allocator to use
-     * - slots The max number of slots to store values in
+     * - slot_count The max number of slots to store values in
      *
      * Returns
      * - The created empty hash map
      */
-    static HgHashMap create(HgAllocator& mem, usize slots) {
+    static HgHashMap create(HgAllocator& mem, usize slot_count) {
+        assert(slot_count > 0);
+
         HgHashMap map;
-        map.slots = mem.alloc<std::optional<Value>>(slots);
+        map.slots = mem.alloc<Slot>(slot_count);
+        map.load = 0;
         return map;
     }
 
@@ -2780,19 +2813,21 @@ struct HgHashMap {
      *
      * Parameters
      * - key The key to store at
-     * - args The arguments to construct the value
+     * - value The value to store
      *
      * Returns
      * - A reference to the constructed object
      */
-    template<typename... Args>
-    Value& insert(const Key& key, Args&&... args) {
+    Value& insert(const Key& key, const Value& value) {
+        assert(load < slots.count - 1);
+
         usize index = hg_hash(key) % slots.count;
-        while (slots[index].has_value()) {
+        while (slots[index].has_value() && slots[index].value().key != key) {
             ++index;
         }
-        slots[index].emplace(std::forward<Args>(args)...);
-        return slots[index].value();
+        ++load;
+        slots[index].emplace(key, value);
+        return slots[index]->value;
     }
 
     /**
@@ -2802,8 +2837,28 @@ struct HgHashMap {
      * - key The key to remove from
      */
     void remove(const Key& key) {
+        assert(load < slots.count);
+
         usize index = hg_hash(key) % slots.count;
+        while (slots[index].has_value() && slots[index]->key != key) {
+            ++index;
+        }
+        if (!slots[index].has_value())
+            return;
+
         slots[index].reset();
+        --load;
+
+        ++index;
+        while (slots[index].has_value()) {
+            if (hg_hash(slots[index]->key) % slots.count != index) {
+                Slot temp{};
+                temp.swap(slots[index]);
+                --load;
+                insert(temp->key, temp->value);
+            }
+            ++index;
+        }
     }
 
     /**
@@ -2816,23 +2871,15 @@ struct HgHashMap {
      * - Whether a value exists at the key
      */
     bool has(const Key& key) {
-        usize index = hg_hash(key) % slots.count;
-        return slots[index].has_value();
-    }
+        assert(load < slots.count);
 
-    /**
-     * Gets the value at key, asserting its existance
-     *
-     * Parameters
-     * - key The key to get from
-     *
-     * Returns
-     * - A reference to the value
-     */
-    Value& get(const Key& key) {
         usize index = hg_hash(key) % slots.count;
-        assert(slots[index].has_value());
-        return slots[index].value();
+        while (slots[index].has_value()) {
+            if (slots[index]->key == key)
+                return true;
+            ++index;
+        }
+        return false;
     }
 
     /**
@@ -2845,9 +2892,37 @@ struct HgHashMap {
      * - A pointer to the value
      * - nullptr if it does not exist
      */
-    Value* try_get(const Key& key) {
+    Value *try_get(const Key& key) {
+        assert(load < slots.count);
+
         usize index = hg_hash(key) % slots.count;
-        return slots[index].has_value() ? &slots[index].value() : nullptr;
+        while (slots[index].has_value()) {
+            if (slots[index]->key == key)
+                return &slots[index]->value;
+            ++index;
+        }
+        return nullptr;
+    }
+
+    /**
+     * Gets a reference to the value at key, asserting its existance
+     *
+     * Parameters
+     * - key The key to get from
+     *
+     * Returns
+     * - A reference to the value
+     */
+    Value& get(const Key& key) {
+        assert(load < slots.count);
+
+        usize index = hg_hash(key) % slots.count;
+        while (true) {
+            assert(slots[index].has_value());
+            if (slots[index]->key == key)
+                return slots[index]->value;
+            ++index;
+        }
     }
 };
 

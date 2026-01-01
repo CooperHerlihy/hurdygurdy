@@ -454,56 +454,75 @@ hg_test(hg_array) {
     return true;
 }
 
-struct TestIndexHash {
-    usize index;
-};
-
-constexpr usize hg_hash(TestIndexHash val) {
-    return val.index;
-}
-
 hg_test(hg_hash_map) {
     HgStdAllocator mem;
 
     constexpr usize count = 128;
 
-    HgHashMap<TestIndexHash, u32> map = map.create(mem, count);
+    HgHashMap<u32, u32> map = map.create(mem, count);
     hg_defer(map.destroy(mem));
 
-    hg_test_assert(!map.has({0}));
-    hg_test_assert(!map.has({1}));
-    hg_test_assert(!map.has({12}));
-    hg_test_assert(!map.has({42}));
-    hg_test_assert(!map.has({100000}));
+    hg_test_assert(map.load == 0);
+    hg_test_assert(!map.has(0));
+    hg_test_assert(!map.has(1));
+    hg_test_assert(!map.has(12));
+    hg_test_assert(!map.has(42));
+    hg_test_assert(!map.has(100000));
 
-    map.insert({1}, 1);
-    hg_test_assert(map.has({1}));
-    hg_test_assert(map.get({1}) == 1);
-    hg_test_assert(map.try_get({1}) != nullptr);
-    hg_test_assert(*map.try_get({1}) == 1);
+    map.insert(1, 1);
+    hg_test_assert(map.load == 1);
+    hg_test_assert(map.has(1));
+    hg_test_assert(map.get(1) == 1);
+    hg_test_assert(map.try_get(1) != nullptr);
+    hg_test_assert(*map.try_get(1) == 1);
 
-    map.remove({1});
-    hg_test_assert(!map.has({1}));
-    hg_test_assert(map.try_get({1}) == nullptr);
+    map.remove(1);
+    hg_test_assert(map.load == 0);
+    hg_test_assert(!map.has(1));
+    hg_test_assert(map.try_get(1) == nullptr);
 
-    hg_test_assert(!map.has({12}));
-    hg_test_assert(!map.has({12 + count}));
+    hg_test_assert(!map.has(12));
+    hg_test_assert(!map.has(12 + count));
 
-    map.insert({12}, 42);
-    hg_test_assert(map.has({12}) && map.get({12}) == 42);
-    hg_test_assert(!map.has({12 + count}));
+    map.insert(12, 42);
+    hg_test_assert(map.load == 1);
+    hg_test_assert(map.has(12) && map.get(12) == 42);
+    hg_test_assert(!map.has(12 + count));
 
-    map.insert({12 + count}, 100);
-    hg_test_assert(map.has({12}) && map.get({12}) == 42);
-    hg_test_assert(map.has({12 + count}) && map.get({12 + count}) == 100);
+    map.insert(12 + count, 100);
+    hg_test_assert(map.load == 2);
+    hg_test_assert(map.has(12) && map.get(12) == 42);
+    hg_test_assert(map.has(12 + count) && map.get(12 + count) == 100);
 
-    map.remove({12});
-    hg_test_assert(!map.has({12}));
-    hg_test_assert(map.has({12 + count}) && map.get({12 + count}) == 100);
+    map.insert(12 + count * 2, 200);
+    hg_test_assert(map.load == 3);
+    hg_test_assert(map.has(12) && map.get(12) == 42);
+    hg_test_assert(map.has(12 + count) && map.get(12 + count) == 100);
+    hg_test_assert(map.has(12 + count * 2) && map.get(12 + count * 2) == 200);
 
-    map.remove({12 + count});
-    hg_test_assert(!map.has({12}));
-    hg_test_assert(!map.has({12 + count}));
+    map.remove(12);
+    hg_test_assert(map.load == 2);
+    hg_test_assert(!map.has(12));
+    hg_test_assert(map.has(12 + count) && map.get(12 + count) == 100);
+
+    map.insert(42, 12);
+    hg_test_assert(map.load == 3);
+    hg_test_assert(map.has(42) && map.get(42) == 12);
+
+    map.remove(12 + count);
+    hg_test_assert(map.load == 2);
+    hg_test_assert(!map.has(12));
+    hg_test_assert(!map.has(12 + count));
+
+    map.remove(42);
+    hg_test_assert(map.load == 1);
+    hg_test_assert(!map.has(42));
+
+    map.remove(12 + count * 2);
+    hg_test_assert(map.load == 0);
+    hg_test_assert(!map.has(12));
+    hg_test_assert(!map.has(12 + count));
+    hg_test_assert(!map.has(12 + count * 2));
 
     return true;
 }
