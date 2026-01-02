@@ -2581,7 +2581,7 @@ struct HgArray {
      */
     void destroy(HgAllocator& mem) {
         reset();
-        mem.free(items, capacity * sizeof(T), alignof(T));
+        mem.free_fn(items, capacity * sizeof(T), alignof(T));
     }
 
     /**
@@ -2597,15 +2597,27 @@ struct HgArray {
     }
 
     /**
+     * Increases the capacity to a minimum value
+     *
+     * Parameters
+     * - mem The allocator to use
+     * - min The new minimum capacity
+     */
+    void reserve(HgAllocator& mem, usize min) {
+        if (min > capacity) {
+            items = (T *)mem.realloc_fn(items, capacity * sizeof(T), min * sizeof(T), alignof(T));
+            capacity = min;
+        }
+    }
+
+    /**
      * Increases the capacity of the array, or inits to init_size
      *
      * Parameters
      * - mem The allocator to use
      */
     void grow_array(HgAllocator& mem) {
-        usize new_capacity = capacity == 0 ? init_size : capacity * growth_factor;
-        items = (T *)mem.realloc_fn(items, capacity * sizeof(T), new_capacity * sizeof(T), alignof(T));
-        capacity = new_capacity;
+        reserve(mem, capacity == 0 ? init_size : capacity * growth_factor);
     }
 
     /**
@@ -2845,6 +2857,277 @@ struct HgArray {
     }
 };
 
+/**
+ * A type erased dynamically sized array
+ *
+ * growth_factor is the factor used to reallocate the array
+ * init_size is the size to initialize to when capacity is 0
+ *
+ * Note, does not construct or destruct items
+ */
+template<usize growth_factor = 2, usize init_size = 64>
+struct HgArrayAny {
+    /**
+     * The allocated space for the array
+     */
+    void *items;
+    /**
+     * The size in bytes of the items
+     */
+    usize width;
+    /**
+     * The alignment of the items
+     */
+    usize alignment;
+    /**
+     * The max number of items that can be stored in the array
+     */
+    usize capacity;
+    /**
+     * The number of active items in the array
+     */
+    usize count;
+
+    /**
+     * Allocate a new dynamic array
+     *
+     * Parameters
+     * - allocator The allocator to use
+     * - width The size of the items in bytes
+     * - alignment The alignment of the items
+     * - count The number of active items to begin with, must be <= capacity
+     * - capacity The max number of items before reallocating
+     *
+     * Returns
+     * - The allocated dynamic array
+     */
+    static HgArrayAny create(HgAllocator& mem, usize width, usize alignment, usize count, usize capacity) {
+        hg_assert(count <= capacity);
+
+        HgArrayAny arr{};
+        arr.items = mem.alloc_fn(capacity * width, alignment);
+        arr.width = hg_align(width, alignment);
+        arr.alignment = alignment;
+        arr.capacity = capacity;
+        arr.count = count;
+        return arr;
+    }
+
+    /**
+     * Free the dynamic array
+     */
+    void destroy(HgAllocator& mem) {
+        mem.free_fn(items, capacity * width, alignment);
+    }
+
+    /**
+     * Destroys all contained objects, emptying the array
+     */
+    void reset() {
+        count = 0;
+    }
+
+    /**
+     * Increases the capacity to a minimum value
+     *
+     * Parameters
+     * - mem The allocator to use
+     * - min The new minimum capacity
+     */
+    void reserve(HgAllocator& mem, u32 min) {
+        if (min > capacity) {
+            items = mem.realloc_fn(items, capacity * width, min * width, alignment);
+            capacity = min;
+        }
+    }
+
+    /**
+     * Increases the capacity of the array, or inits to init_size
+     *
+     * Parameters
+     * - mem The allocator to use
+     */
+    void grow_array(HgAllocator& mem) {
+        reserve(mem, capacity == 0 ? init_size : capacity * growth_factor);
+    }
+
+    /**
+     * Push an item to the end to the array, asserting space is available
+     *
+     * Returns
+     * - A pointer to the created object
+     */
+    void *push_unchecked() {
+        hg_assert(count < capacity);
+        return (u8 *)items + count++ * width;
+    }
+
+    /**
+     * Push an item to the end to the array, resizing if needed
+     *
+     * Parameters
+     * - mem The allocator to use
+     *
+     * Returns
+     * - A pointer to the created object
+     */
+    void *push(HgAllocator& mem) {
+        hg_assert(count <= capacity);
+        if (count == capacity)
+            grow_array(mem);
+
+        return push_unchecked();
+    }
+
+    /**
+     * Pops an item off the end of the array
+     */
+    void pop() {
+        hg_assert(count > 0);
+        --count;
+    }
+
+    /**
+     * Inserts an item into the array, moving subsequent items back
+     *
+     * Parameters
+     * - index The index the new item will be placed at, must be <= count
+     *
+     * Returns
+     * - A pointer to the created object
+     */
+    void *insert_unchecked(usize index) {
+        hg_assert(index < count);
+        hg_assert(count < capacity);
+
+        std::memmove((u8 *)items + (index + 1) * width, (u8 *)items + index * width, (count - index) * width);
+        ++count;
+        return (u8 *)items + index * width;
+    }
+
+    /**
+     * Inserts an item into the array, moving subsequent items back
+     *
+     * Parameters
+     * - mem The allocator to use
+     * - index The index the new item will be placed at, must be <= count
+     *
+     * Returns
+     * - A pointer to the created object
+     */
+    void *insert(HgAllocator& mem, usize index) {
+        hg_assert(index <= count);
+        hg_assert(count <= capacity);
+        if (count == capacity)
+            grow_array(mem);
+
+        return insert_unchecked(index);
+    }
+
+    /**
+     * Removes the item at the index, subsequent items to taking its place
+     *
+     * Parameters
+     * - index The index of the item to remove
+     */
+    void remove(usize index) {
+        hg_assert(index < count);
+        --count;
+        std::memmove((u8 *)items + index * width, (u8 *)items + (index + 1) * width, (count - index) * width);
+    }
+
+    /**
+     * Inserts an item into the array, moving the item at index to the end
+     *
+     * Parameters
+     * - index The index the new item will be placed at, must be <= count
+     *
+     * Returns
+     * - A reference to the created object
+     */
+    void *swap_insert_unchecked(usize index) {
+        hg_assert(index <= count);
+        hg_assert(count <= capacity);
+
+        std::memcpy((u8 *)items + count * width, (u8 *)items + index * width, width);
+        ++count;
+        return (u8 *)items + index * width;
+    }
+
+    /**
+     * Inserts an item into the array, moving the item at index to the end
+     *
+     * Parameters
+     * - mem The allocator to use
+     * - index The index the new item will be placed at, must be <= count
+     *
+     * Returns
+     * - A reference to the created object
+     */
+    void *swap_insert(HgAllocator& mem, usize index) {
+        hg_assert(index <= count);
+        hg_assert(count <= capacity);
+        if (count == capacity)
+            grow_array(mem);
+
+        return swap_insert_unchecked(index);
+    }
+
+    /**
+     * Removes the item at the index, moving the last item to take its place
+     *
+     * Parameters
+     * - index The index of the item to remove
+     */
+    void swap_remove(usize index) {
+        hg_assert(index < count);
+        --count;
+        std::memcpy((u8 *)items + index * width, (u8 *)items + count * width, width);
+    }
+
+    /**
+     * Access the value at index
+     *
+     * Parameters
+     * - index The index to get from, must be < count
+     *
+     * Returns
+     * - A pointer to the gotten value
+     */
+    constexpr void *get(usize index) {
+        hg_assert(index < count);
+        return (u8 *)items + index * width;
+    }
+
+    /**
+     * Access the value at index in a const context
+     *
+     * Parameters
+     * - index The index to get from, must be < count
+     *
+     * Returns
+     * - A pointer to the gotten value
+     */
+    constexpr const void *get(usize index) const {
+        hg_assert(index < count);
+        return (u8 *)items + index * width;
+    }
+
+    /**
+     * Access using the index operator
+     */
+    constexpr void *operator[](usize index) {
+        return get(index);
+    }
+
+    /**
+     * Access using the index operator in a const context
+     */
+    constexpr const void *operator[](usize index) const {
+        return get(index);
+    }
+};
+
 template<typename T>
 typename std::enable_if_t<std::is_integral_v<T>, usize>
 hg_hash(T val) {
@@ -3073,67 +3356,17 @@ struct HgECS {
      */
     struct Component {
         /**
-         * The component constructor type called by HgECS::create
-         *
-         * Parameters
-         * - user_data Arbitrary data pointer passed to the function
-         * - ecs The entity component system
-         * - entity The entity to construct for
-         * - component_id The component id for type generic ctors
-         *
-         * Returns
-         * - A pointer to the constructed component
+         * sparse[entity] is the index into dense and components for that entity
          */
-        using Ctor = void *(*)(void *user_data, HgECS& ecs, HgEntity entity, u32 component_id);
-
+        HgSpan<u32> sparse;
         /**
-         * The component destructor type called by HgECS::destroy
-         *
-         * Parameters
-         * - user_data Arbitrary data pointer passed to the function
-         * - ecs The entity component system
-         * - entity The entity to destruct for
-         * - component_id The component id for type generic dtors
+         * dense[index] is the entity for that component
          */
-        using Dtor = void (*)(void *user_data, HgECS& ecs, HgEntity entity, u32 component_id);
-
-        /**
-         * The constructor called by HgECS::create
-         */
-        Ctor ctor;
-        /**
-         * The constructor called by HgECS::destroy
-         */
-        Dtor dtor;
-        /**
-         * The data passed to ctor and dtor
-         */
-        void *user_data;
-        /**
-         * entity_indices[entity id] is the index into components and
-         * component_entities for that entity id
-         */
-        HgSpan<u32> entity_indices;
-        /**
-         * Each index is the entity associated with components[index]
-         */
-        HgSpan<HgEntity> component_entities;
+        HgArray<HgEntity> dense;
         /**
          * The data for the components
          */
-        HgSpan<void> components;
-        /**
-         * The size of each component in bytes
-         */
-        u32 component_size;
-        /**
-         * The memory alignment of each component
-         */
-        u32 component_alignment;
-        /**
-         * The current number of components
-         */
-        u32 component_count;
+        HgArrayAny<> components;
     };
 
     /**
@@ -3143,7 +3376,7 @@ struct HgECS {
     /**
      * The next entity in the pool
      */
-    HgEntity entity_next;
+    HgEntity next_entity;
     /**
      * The component systems
      */
@@ -3239,30 +3472,6 @@ struct HgECS {
     }
 
     /**
-     * Overrides the ctor and dtor functions in a component system
-     *
-     * Parameters
-     * - user_data Abitrary data passed to ctor and dtor
-     * - ctor The function called by create, nullptr to leave default
-     * - dtor The function called by destroy, nullptr to leave default
-     * - component_id The component id, must be registered
-     */
-    void override_component(void *user_data, Component::Ctor ctor, Component::Dtor dtor, u32 component_id);
-
-    /**
-     * Overrides the ctor and dtor functions in a component system
-     *
-     * Parameters
-     * - user_data Abitrary data passed to ctor and dtor
-     * - ctor The function called by create, nullptr to leave default
-     * - dtor The function called by destroy, nullptr to leave default
-     */
-    template<typename T>
-    void override_component(void *user_data, Component::Ctor ctor, Component::Dtor dtor) {
-        override_component(user_data, ctor, dtor, hg_component_id<T>);
-    }
-
-    /**
      * Unregisters a component in this ECS
      *
      * Parameters
@@ -3293,7 +3502,7 @@ struct HgECS {
      */
     bool is_registered(u32 component_id) {
         hg_assert(component_id < systems.count);
-        return systems[component_id].components != nullptr;
+        return systems[component_id].components.items != nullptr;
     }
 
     /**
@@ -3321,7 +3530,7 @@ struct HgECS {
      */
     u32 component_count(u32 component_id) {
         hg_assert(is_registered(component_id));
-        return systems[component_id].component_count;
+        return (u32)systems[component_id].components.count;
     }
 
     /**
@@ -3374,10 +3583,14 @@ struct HgECS {
      * Returns
      * - A pointer to the created component
      */
-    void *create(HgEntity entity, u32 component_id) {
+    void *add(HgEntity entity, u32 component_id) {
         hg_assert(is_alive(entity));
         hg_assert(is_registered(component_id));
-        return systems[component_id].ctor(systems[component_id].user_data, *this, entity, component_id);
+        hg_assert(!has(entity, component_id));
+
+        systems[component_id].sparse[entity] = (u32)systems[component_id].dense.count;
+        systems[component_id].dense.push_unchecked(entity);
+        return systems[component_id].components.push_unchecked();
     }
 
     /**
@@ -3392,14 +3605,12 @@ struct HgECS {
      * - A pointer to the created component
      */
     template<typename T>
-    T& create(HgEntity entity) {
-        return *(T *)create(entity, hg_component_id<T>);
+    T& add(HgEntity entity) {
+        return *(T *)add(entity, hg_component_id<T>);
     }
 
     /**
      * Destroys a component from an entity
-     *
-     * The entity must have an associated component in the system
      *
      * Note, this function will invalidate iterators
      *
@@ -3407,11 +3618,14 @@ struct HgECS {
      * - entity The id of the entity, must be alive
      * - component_id The id of the component, must be registered
      */
-    void destroy(HgEntity entity, u32 component_id) {
+    void remove(HgEntity entity, u32 component_id) {
         hg_assert(is_alive(entity));
         hg_assert(is_registered(component_id));
         hg_assert(has(entity, component_id));
-        systems[component_id].dtor(systems[component_id].user_data, *this, entity, component_id);
+
+        u32 index = std::exchange(systems[component_id].sparse[entity], (u32)-1);
+        systems[component_id].dense.swap_remove(index);
+        systems[component_id].components.swap_remove(index);
     }
 
     /**
@@ -3425,113 +3639,8 @@ struct HgECS {
      * - entity The id of the entity, must be alive
      */
     template<typename T>
-    void destroy(HgEntity entity) {
-        destroy(entity, hg_component_id<T>);
-    }
-
-    /**
-     * Adds a component to an entity at the given index
-     *
-     * Note, the index must be empty, does not rearrange components
-     *
-     * Parameters
-     * - index The index to insert into, must not be occupied
-     * - entity The entity to add the component to, must be alive
-     * - component_id The id of the component, must be registered
-     *
-     * Returns
-     * - A pointer to the created component
-     */
-    void *place(u32 index, HgEntity entity, u32 component_id);
-
-    /**
-     * Adds a component to an entity at the given index
-     *
-     * Note, the index must be empty, does not rearrange components
-     *
-     * Parameters
-     * - index The index to insert into, must not be occupied
-     * - entity The entity to add the component to, must be alive
-     *
-     * Returns
-     * - A pointer to the created component
-     */
-    template<typename T>
-    void *place(u32 index, HgEntity entity) {
-        return place(index, entity, hg_component_id<T>);
-    }
-
-    /**
-     * Erases the entity's component slot
-     *
-     * Note, this function leaves an invalid slot in the components
-     *
-     * Parameters
-     * - entity The id of the entity, must be alive
-     * - component_id The id of the component, must be registered
-     */
-    void erase(HgEntity entity, u32 component_id);
-
-    /**
-     * Erases the entity's component slot
-     *
-     * Note, this function leaves an invalid slot in the components
-     *
-     * Parameters
-     * - entity The id of the entity, must be alive
-     */
-    template<typename T>
-    void erase(HgEntity entity) {
-        erase(entity, hg_component_id<T>);
-    }
-
-    /**
-     * Moves a component from one location to another
-     *
-     * Note, there must not be a component at dst
-     *
-     * Parameters
-     * - dst The destination index, must not be 0
-     * - src The source index, must not be 0
-     * - component_id The component id, must be registered
-     */
-    void move(u32 dst, u32 src, u32 component_id);
-
-    /**
-     * Moves a component from one location to another
-     *
-     * Note, there must not be a component at dst
-     *
-     * Parameters
-     * - dst The destination index, must not be 0
-     * - src The source index, must not be 0
-     * - component_id The component id, must be registered
-     */
-    template<typename T>
-    void move(u32 dst, u32 src) {
-        move(dst, src, hg_component_id<T>);
-    }
-
-    /**
-     * Swaps the component data from each entity
-     * 
-     * Parameters
-     * - lhs The first entity to swap, must be alive
-     * - rhs The second entity to swap, must be alive
-     * - component_id The component id, must be registered
-     */
-    void swap(HgEntity lhs, HgEntity rhs, u32 component_id);
-
-    /**
-     * Swaps the component data from each entity
-     * 
-     * Parameters
-     * - lhs The first entity to swap, must be alive
-     * - rhs The second entity to swap, must be alive
-     */
-    template<typename T>
-    void swap(HgEntity lhs, HgEntity rhs) {
-        swap(lhs, rhs, hg_component_id<T>);
+    void remove(HgEntity entity) {
+        remove(entity, hg_component_id<T>);
     }
 
     /**
@@ -3557,25 +3666,36 @@ struct HgECS {
     }
 
     /**
-     * Swaps where the entities' component are located
-     *
+     * Swaps the component data from each entity
+     * 
      * Parameters
-     * - lhs The first entity to swap
-     * - rhs The second entity to swap
+     * - lhs The first entity to swap, must be alive
+     * - rhs The second entity to swap, must be alive
      * - component_id The component id, must be registered
      */
-    void swap_location(HgEntity lhs, HgEntity rhs, u32 component_id);
+    void swap(HgEntity lhs, HgEntity rhs, u32 component_id) {
+        hg_assert(is_registered(component_id));
+        hg_assert(is_alive(lhs));
+        hg_assert(is_alive(rhs));
+        hg_assert(has(lhs, component_id));
+        hg_assert(has(rhs, component_id));
+
+        swap_idx(
+            systems[component_id].sparse[lhs],
+            systems[component_id].sparse[rhs],
+            component_id);
+    }
 
     /**
-     * Swaps where the entities' component are located
-     *
+     * Swaps the component data from each entity
+     * 
      * Parameters
-     * - lhs The first entity to swap
-     * - rhs The second entity to swap
+     * - lhs The first entity to swap, must be alive
+     * - rhs The second entity to swap, must be alive
      */
     template<typename T>
-    void swap_location(HgEntity lhs, HgEntity rhs) {
-        swap_location(lhs, rhs, hg_component_id<T>);
+    void swap(HgEntity lhs, HgEntity rhs) {
+        swap(lhs, rhs, hg_component_id<T>);
     }
 
     /**
@@ -3601,6 +3721,28 @@ struct HgECS {
     }
 
     /**
+     * Swaps where the entities' component are located
+     *
+     * Parameters
+     * - lhs The first entity to swap
+     * - rhs The second entity to swap
+     * - component_id The component id, must be registered
+     */
+    void swap_location(HgEntity lhs, HgEntity rhs, u32 component_id);
+
+    /**
+     * Swaps where the entities' component are located
+     *
+     * Parameters
+     * - lhs The first entity to swap
+     * - rhs The second entity to swap
+     */
+    template<typename T>
+    void swap_location(HgEntity lhs, HgEntity rhs) {
+        swap_location(lhs, rhs, hg_component_id<T>);
+    }
+
+    /**
      * Checks whether an entity has a component or not
      *
      * Parameters
@@ -3613,13 +3755,7 @@ struct HgECS {
     bool has(HgEntity entity, u32 component_id) {
         hg_assert(is_alive(entity));
         hg_assert(is_registered(component_id));
-        Component& system = systems[component_id];
-#ifdef HG_DEBUG_MODE
-        return system.entity_indices[entity] < system.component_count &&
-               system.component_entities[system.entity_indices[entity]] == entity;
-#else
-        return system.entity_indices[entity] < system.component_count;
-#endif
+        return systems[component_id].sparse[entity] < systems[component_id].dense.count;
     }
 
     /**
@@ -3680,9 +3816,7 @@ struct HgECS {
         hg_assert(is_alive(entity));
         hg_assert(is_registered(component_id));
         hg_assert(has(entity, component_id));
-        return (u8 *)systems[component_id].components.data
-                   + systems[component_id].entity_indices[entity]
-                   * systems[component_id].component_size;
+        return systems[component_id].components[systems[component_id].sparse[entity]];
     }
 
     /**
@@ -3698,11 +3832,7 @@ struct HgECS {
      */
     template<typename T>
     T& get(HgEntity entity) {
-        u32 id = hg_component_id<T>;
-        hg_assert(is_alive(entity));
-        hg_assert(is_registered(id));
-        hg_assert(has(entity, id));
-        return *((T *)systems[id].components.data + systems[id].entity_indices[entity]);
+        return *((T *)get(entity, hg_component_id<T>));
     }
 
     /**
@@ -3719,14 +3849,13 @@ struct HgECS {
         hg_assert(component != nullptr);
         hg_assert(is_registered(component_id));
 
-        u32 index = (u32)((uptr)component
-                  - (uptr)systems[component_id].components.data)
-                  / systems[component_id].component_size;
-        hg_assert(index < systems[component_id].component_count);
-
-        HgEntity entity = systems[component_id].component_entities[index];
-        hg_assert(systems[component_id].entity_indices[entity] == index);
-        return entity;
+        u32 index
+            = (u32)(
+                    (
+                     (uptr)component - (uptr)systems[component_id].components.items
+                    ) / systems[component_id].components.width
+                   );
+        return systems[component_id].dense[index];
     }
 
     /**
@@ -3740,84 +3869,11 @@ struct HgECS {
      */
     template<typename T>
     HgEntity get_entity(const T& component) {
-        u32 id = hg_component_id<T>;
-        hg_assert(is_registered(id));
+        u32 component_id = hg_component_id<T>;
+        hg_assert(is_registered(component_id));
 
-        u32 index = (u32)(&component - (T *)systems[id].components.data);
-        hg_assert(index < systems[id].component_count);
-
-        HgEntity entity = systems[id].component_entities[index];
-        hg_assert(systems[id].entity_indices[entity] == index);
-        return entity;
-    }
-
-    /**
-     * Iterates over all entities with the single given component
-     *
-     * Note, specifying only one component allows deterministic ordering (such
-     * as in the case of sorting), as well as extra optimization
-     *
-     * The function receives as parameters:
-     * - The entity id
-     * - A reference to the component
-     *
-     * Parameters
-     * - function The function to call
-     */
-    template<typename T, typename Fn>
-    void for_each_single(Fn& function) {
-        static_assert(std::is_invocable_v<Fn, HgEntity&, T&>);
-
-        u32 id = hg_component_id<T>;
-        HgEntity *entity = systems[id].component_entities.data;
-        HgEntity *end = systems[id].component_entities.data + systems[id].component_count;
-        T *component = (T *)systems[id].components.data;
-        for (; entity != end; ++entity, ++component) {
-            function(*entity, *component);
-        }
-    }
-
-    /**
-     * Iterates over all entities with the given components
-     *
-     * The function receives as parameters:
-     * - The entity id
-     * - A reference to each component...
-     *
-     * Parameters
-     * - function The function to call
-     */
-    template<typename... Ts, typename Fn>
-    void for_each_multi(Fn& function) {
-        static_assert(std::is_invocable_v<Fn, HgEntity&, Ts&...>);
-
-        u32 id = smallest_system<Ts...>();
-        HgEntity *entity = systems[id].component_entities.data;
-        HgEntity *end = systems[id].component_entities.data + systems[id].component_count;
-        for (; entity != end; ++entity) {
-            if (has_all<Ts...>(*entity))
-                function(*entity, get<Ts>(*entity)...);
-        }
-    }
-
-    /**
-     * Iterates over all entities with the given components
-     *
-     * Note, calls the single of multi version from the number of components
-     *
-     * Parameters
-     * - function The function to call
-     */
-    template<typename... Ts, typename Fn>
-    void for_each(Fn function) {
-        static_assert(sizeof...(Ts) != 0);
-        static_assert(std::is_invocable_v<Fn, HgEntity&, Ts&...>);
-
-        if constexpr (sizeof...(Ts) == 1) {
-            for_each_single<Ts...>(function);
-        } else {
-            for_each_multi<Ts...>(function);
-        }
+        u32 index = (u32)(&component - (T *)systems[component_id].components.items);
+        return systems[component_id].dense[index];
     }
 
     /**
@@ -3879,13 +3935,75 @@ struct HgECS {
         hg_assert(is_registered(id));
 
         ComponentView<T> view;
-        view.entity_begin = systems[id].component_entities.data;
-        view.entity_end = systems[id].component_entities.data + systems[id].component_count;
-        view.component_begin = (T *)systems[id].components.data;
+        view.entity_begin = systems[id].dense.begin();
+        view.entity_end = systems[id].dense.end();
+        view.component_begin = (T *)systems[id].components.items;
         return view;
     }
 
-#define hg_comp(idx) (*((T *)systems[hg_component_id<T>].components.data + (idx)))
+    /**
+     * Iterates over all entities with the single given component
+     *
+     * Note, specifying only one component allows deterministic ordering (such
+     * as in the case of sorting), as well as extra optimization
+     *
+     * The function receives as parameters:
+     * - The entity id
+     * - A reference to the component
+     *
+     * Parameters
+     * - function The function to call
+     */
+    template<typename T, typename Fn>
+    void for_each_single(Fn& function) {
+        static_assert(std::is_invocable_v<Fn, HgEntity&, T&>);
+        for (auto [e, c] : component_iter<T>()) {
+            function(e, c);
+        }
+    }
+
+    /**
+     * Iterates over all entities with the given components
+     *
+     * The function receives as parameters:
+     * - The entity id
+     * - A reference to each component...
+     *
+     * Parameters
+     * - function The function to call
+     */
+    template<typename... Ts, typename Fn>
+    void for_each_multi(Fn& function) {
+        static_assert(std::is_invocable_v<Fn, HgEntity&, Ts&...>);
+
+        u32 id = smallest_system<Ts...>();
+        for (HgEntity e : systems[id].dense) {
+            if (has_all<Ts...>(e))
+                function(e, get<Ts>(e)...);
+        }
+    }
+
+    /**
+     * Iterates over all entities with the given components
+     *
+     * Note, calls the single of multi version from the number of components
+     *
+     * Parameters
+     * - function The function to call
+     */
+    template<typename... Ts, typename Fn>
+    void for_each(Fn function) {
+        static_assert(sizeof...(Ts) != 0);
+        static_assert(std::is_invocable_v<Fn, HgEntity&, Ts&...>);
+
+        if constexpr (sizeof...(Ts) == 1) {
+            for_each_single<Ts...>(function);
+        } else {
+            for_each_multi<Ts...>(function);
+        }
+    }
+
+#define hg_comp(idx) (*(T *)systems[hg_component_id<T>].components[idx])
 
     /**
      * Sorts components using selection sort
@@ -3896,10 +4014,10 @@ struct HgECS {
      * - compare The comparison function
      */
     template<typename T, typename Fn>
-    void selectionsort_components(u32 begin, u32 end, Fn& compare) {
+    void selectionsort(u32 begin, u32 end, Fn& compare) {
         static_assert(std::is_invocable_v<Fn, T&, T&>);
         hg_assert(is_registered(hg_component_id<T>));
-        hg_assert(begin <= end && end <= systems[hg_component_id<T>].component_count);
+        hg_assert(begin <= end && end <= component_count<T>());
 
         for (; begin < end; ++begin) {
             u32 least = begin;
@@ -3919,9 +4037,9 @@ struct HgECS {
      * - compare The comparison function
      */
     template<typename T, typename Fn>
-    void selectionsort_components(Fn compare) {
+    void selectionsort(Fn compare) {
         static_assert(std::is_invocable_v<Fn, T&, T&>);
-        selectionsort_components<T>(0, systems[hg_component_id<T>].component_count, compare);
+        selectionsort<T>(0, component_count<T>(), compare);
     }
 
     /**
@@ -3937,7 +4055,7 @@ struct HgECS {
     u32 quicksort_inter(u32 pivot, u32 inc, u32 dec, Fn& compare) {
         static_assert(std::is_invocable_v<Fn, T&, T&>);
         hg_assert(is_registered(hg_component_id<T>));
-        hg_assert(inc <= dec && dec <= systems[hg_component_id<T>].component_count);
+        hg_assert(inc <= dec && dec <= component_count<T>());
 
         while (inc != dec) {
             while (!compare(hg_comp(dec), hg_comp(pivot))) {
@@ -3969,17 +4087,17 @@ finish:
      * - compare The comparison function
      */
     template<typename T, typename Fn>
-    void quicksort_components(u32 begin, u32 end, Fn& compare) {
+    void quicksort(u32 begin, u32 end, Fn& compare) {
         static_assert(std::is_invocable_v<Fn, T&, T&>);
         hg_assert(is_registered(hg_component_id<T>));
-        hg_assert(begin <= end && end <= systems[hg_component_id<T>].component_count);
+        hg_assert(begin <= end && end <= component_count<T>());
 
         if (begin + 1 >= end)
             return;
 
         u32 middle = quicksort_inter<T>(begin, begin + 1, end - 1, compare);
-        quicksort_components<T>(begin, middle, compare);
-        quicksort_components<T>(middle, end, compare);
+        quicksort<T>(begin, middle, compare);
+        quicksort<T>(middle, end, compare);
     }
 
     /**
@@ -3989,12 +4107,23 @@ finish:
      * - compare The comparison function
      */
     template<typename T, typename Fn>
-    void quicksort_components(Fn compare) {
+    void quicksort(Fn compare) {
         static_assert(std::is_invocable_v<Fn, T&, T&>);
-        quicksort_components<T>(0, systems[hg_component_id<T>].component_count, compare);
+        quicksort<T>(0, component_count<T>(), compare);
     }
 
 #undef hg_comp
+
+    /**
+     * Sorts components
+     *
+     * Parameters
+     * - compare The comparison function
+     */
+    template<typename T, typename Fn>
+    void sort(Fn compare) {
+        quicksort<T>(compare);
+    }
 };
 
 /**
