@@ -2535,11 +2535,8 @@ struct HgStack : public HgAllocator {
 
 /**
  * A dynamically sized array
- *
- * growth_factor is the factor used to reallocate the array
- * init_size is the size to initialize to when capacity is 0
  */
-template<typename T, usize growth_factor = 2, usize init_size = 64>
+template<typename T>
 struct HgArray {
     /**
      * The allocated space for the array
@@ -2572,7 +2569,13 @@ struct HgArray {
         arr.items = (T *)mem.alloc_fn(capacity * sizeof(T), alignof(T));
         arr.capacity = capacity;
         arr.count = count;
-        new (arr.items) T[count];
+        if constexpr (std::is_default_constructible_v<T>) {
+            for (usize i = 0; i < count; ++i) {
+                new (&arr.items[i]) T;
+            }
+        } else {
+            hg_assert(count == 0);
+        }
         return arr;
     }
 
@@ -2615,9 +2618,10 @@ struct HgArray {
      *
      * Parameters
      * - mem The allocator to use
+     * - factor The growth factor to increase by
      */
-    void grow_array(HgAllocator& mem) {
-        reserve(mem, capacity == 0 ? init_size : capacity * growth_factor);
+    void grow_array(HgAllocator& mem, usize factor = 2) {
+        reserve(mem, capacity == 0 ? 1 : capacity * factor);
     }
 
     /**
@@ -2684,7 +2688,7 @@ struct HgArray {
         hg_assert(index < count);
         hg_assert(count < capacity);
 
-        std::move(items + index, items + count, items + index + 1);
+        std::memmove((void *)&items[index + 1], (void *)&items[index], (count - index) * sizeof(T));
         ++count;
         if constexpr (sizeof...(Args) == 0)
             return *(new (&items[index]) T);
@@ -2724,7 +2728,7 @@ struct HgArray {
         if constexpr (std::is_destructible_v<T>) {
             items[index].~T();
         }
-        std::move(items + index + 1, items + count, items + index);
+        std::memmove((void *)&items[index], (void *)&items[index + 1], ((count - 1) - index) * sizeof(T));
         --count;
     }
 
@@ -2743,7 +2747,7 @@ struct HgArray {
         hg_assert(index <= count);
         hg_assert(count <= capacity);
 
-        new (&items[count++]) T{std::move(items[index])};
+        std::memmove((void *)&items[count++], (void *)&items[index], sizeof(T));
         if constexpr (sizeof...(Args) == 0)
             return *(new (&items[index]) T);
         else
@@ -2782,8 +2786,8 @@ struct HgArray {
         if constexpr (std::is_destructible_v<T>) {
             items[index].~T();
         }
+        std::memmove((void *)&items[index], (void *)&items[count - 1], sizeof(T));
         --count;
-        new (&items[index]) T{std::move(items[count])};
     }
 
     /**
@@ -2860,12 +2864,8 @@ struct HgArray {
 /**
  * A type erased dynamically sized array
  *
- * growth_factor is the factor used to reallocate the array
- * init_size is the size to initialize to when capacity is 0
- *
  * Note, does not construct or destruct items
  */
-template<usize growth_factor = 2, usize init_size = 64>
 struct HgArrayAny {
     /**
      * The allocated space for the array
@@ -2934,7 +2934,7 @@ struct HgArrayAny {
      * - mem The allocator to use
      * - min The new minimum capacity
      */
-    void reserve(HgAllocator& mem, u32 min) {
+    void reserve(HgAllocator& mem, usize min) {
         if (min > capacity) {
             items = mem.realloc_fn(items, capacity * width, min * width, alignment);
             capacity = min;
@@ -2946,9 +2946,10 @@ struct HgArrayAny {
      *
      * Parameters
      * - mem The allocator to use
+     * - factor The growth factor to increase by
      */
-    void grow_array(HgAllocator& mem) {
-        reserve(mem, capacity == 0 ? init_size : capacity * growth_factor);
+    void grow_array(HgAllocator& mem, usize factor = 2) {
+        reserve(mem, capacity == 0 ? 1 : capacity * factor);
     }
 
     /**
@@ -2959,7 +2960,8 @@ struct HgArrayAny {
      */
     void *push_unchecked() {
         hg_assert(count < capacity);
-        return (u8 *)items + count++ * width;
+        ++count;
+        return get(count - 1);
     }
 
     /**
@@ -3000,9 +3002,9 @@ struct HgArrayAny {
         hg_assert(index < count);
         hg_assert(count < capacity);
 
-        std::memmove((u8 *)items + (index + 1) * width, (u8 *)items + index * width, (count - index) * width);
+        std::memmove(get(index + 1), get(index), (count - index) * width);
         ++count;
-        return (u8 *)items + index * width;
+        return get(index);
     }
 
     /**
@@ -3032,8 +3034,8 @@ struct HgArrayAny {
      */
     void remove(usize index) {
         hg_assert(index < count);
+        std::memmove(get(index), get(index + 1), ((count - 1) - index) * width);
         --count;
-        std::memmove((u8 *)items + index * width, (u8 *)items + (index + 1) * width, (count - index) * width);
     }
 
     /**
@@ -3049,9 +3051,9 @@ struct HgArrayAny {
         hg_assert(index <= count);
         hg_assert(count <= capacity);
 
-        std::memcpy((u8 *)items + count * width, (u8 *)items + index * width, width);
         ++count;
-        return (u8 *)items + index * width;
+        std::memcpy(get(count - 1), get(index), width);
+        return get(index);
     }
 
     /**
@@ -3081,8 +3083,8 @@ struct HgArrayAny {
      */
     void swap_remove(usize index) {
         hg_assert(index < count);
+        std::memcpy(get(index), get(count - 1), width);
         --count;
-        std::memcpy((u8 *)items + index * width, (u8 *)items + count * width, width);
     }
 
     /**
@@ -3199,6 +3201,19 @@ struct HgHashMap {
         mem.free(slots);
     }
 
+    void resize(HgAllocator& mem, usize new_size) {
+        HgSpan<Slot> old_slots = slots;
+        slots = mem.alloc<Slot>(new_size);
+        for (Slot& slot : old_slots) {
+            insert(old_slots[index]->key, old_slots[index]->value);
+        }
+        mem.free(old_slots);
+    }
+
+    void grow(HgAllocator& mem, f32 factor = 2) {
+        resize(mem, (usize)((f32)slots.count * factor));
+    }
+
     /**
      * Inserts a value into the hash map
      *
@@ -3243,8 +3258,8 @@ struct HgHashMap {
         ++index;
         while (slots[index].has_value()) {
             if (hg_hash(slots[index]->key) % slots.count != index) {
-                Slot temp{};
-                temp.swap(slots[index]);
+                Slot temp = slots[index];
+                slots[index].reset();
                 --load;
                 insert(temp->key, temp->value);
             }
@@ -3349,6 +3364,9 @@ inline const u32 hg_component_id = hg_internal_component_id<std::remove_const_t<
 
 /**
  * An entity component system
+ *
+ * Note, components are treated as C structs, so are not constructed or
+ * destructed, and therefore should not hold resources
  */
 struct HgECS {
     /**
@@ -3366,7 +3384,7 @@ struct HgECS {
         /**
          * The data for the components
          */
-        HgArrayAny<> components;
+        HgArrayAny components;
     };
 
     /**
@@ -3392,12 +3410,12 @@ struct HgECS {
      * Returns
      * - The created entity component system
      */
-    static HgECS create_ecs(HgAllocator& mem, u32 max_entities);
+    static HgECS create(HgAllocator& mem, u32 max_entities);
 
     /**
      * Destroys an entity component system
      */
-    void destroy_ecs(HgAllocator& mem);
+    void destroy(HgAllocator& mem);
 
     /**
      * Resets an entity component system, removing all entities
@@ -3407,13 +3425,32 @@ struct HgECS {
     void reset();
 
     /**
-     * Creates an entity in an ECS, and returns its id
+     * Reallocates the entity pool, increasing the max number of entities
+     *
+     * Parameters
+     * - mem The allocator to use
+     * - new_max The new max number of entities
+     */
+    void resize_entities(HgAllocator& mem, u32 new_max);
+
+    /**
+     * Grows the entity pool to current * factor
+     *
+     * Parameters
+     * - mem The allocator to use
+     * - factor The factor to increase by
+     */
+    void grow_entities(HgAllocator& mem, f32 factor = 2.0f);
+
+    /**
+     * Creates a new entity in an ECS
+     *
+     * Note, there cannot be more than entities than allocated at creation
      *
      * Returns
-     * - The id of the created entity
-     * - 0 if max_entities has been reached
+     * - The created entity
      */
-    HgEntity create_entity();
+    HgEntity spawn();
 
     /**
      * Destroys an entity in an ECS
@@ -3421,9 +3458,9 @@ struct HgECS {
      * Note, this function will invalidate iterators
      *
      * Parameters
-     * - entity The id of the entity to destroy
+     * - entity The entity to destroy
      */
-    void destroy_entity(HgEntity entity);
+    void despawn(HgEntity entity);
 
     /**
      * Checks whether an entity id is alive and can be used
@@ -3849,12 +3886,8 @@ struct HgECS {
         hg_assert(component != nullptr);
         hg_assert(is_registered(component_id));
 
-        u32 index
-            = (u32)(
-                    (
-                     (uptr)component - (uptr)systems[component_id].components.items
-                    ) / systems[component_id].components.width
-                   );
+        usize index = ((uptr)component - (uptr)systems[component_id].components.items)
+                    / systems[component_id].components.width;
         return systems[component_id].dense[index];
     }
 
