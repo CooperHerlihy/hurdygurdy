@@ -2155,6 +2155,15 @@ inline u32 hg_max_mipmaps(u32 width, u32 height, u32 depth) {
     return (u32)std::log2((f32)std::max({width, height, depth})) + 1;
 }
 
+template<typename T>
+struct hg_is_memmove_safe : std::bool_constant<std::is_trivially_copyable_v<T> && std::is_trivially_destructible_v<T>> {};
+
+template<typename T>
+using hg_is_memmove_safe_t = typename hg_is_memmove_safe<T>::type;
+
+template<typename T>
+constexpr bool hg_is_memmove_safe_v = hg_is_memmove_safe<T>::value;
+
 /**
  * The interface for generic allocators
  */
@@ -2212,6 +2221,9 @@ struct HgAllocator {
     /**
      * A convenience to allocate an array of a type
      *
+     * Note, objects are default constructed if possible, otherwise they are
+     * left uninitialized
+     *
      * Parameters
      * - count The number of T to allocate
      *
@@ -2221,8 +2233,15 @@ struct HgAllocator {
     template<typename T>
     HgSpan<T> alloc(usize count) {
         HgSpan<T> span;
-        span.data = new ((T *)alloc_fn(count * sizeof(T), alignof(T))) T[count];
+        span.data = (T *)alloc_fn(count * sizeof(T), alignof(T));
         span.count = span.data != nullptr ? count : 0;
+
+        if constexpr (std::is_default_constructible_v<T>) {
+            for (usize i = 0; i < span.count; ++i) {
+                new (&span[i]) T;
+            }
+        }
+
         return span;
     }
 
@@ -2245,6 +2264,9 @@ struct HgAllocator {
     /**
      * A convenience to reallocate an array of a type
      *
+     * Note, objects are default constructed if possible, otherwise they are
+     * left uninitialized
+     *
      * Parameters
      * - allocation The allocation to reallocate
      * - count The new number of T to allocate
@@ -2254,10 +2276,18 @@ struct HgAllocator {
      */
     template<typename T>
     HgSpan<T> realloc(HgSpan<T> allocation, usize count) {
+        static_assert(hg_is_memmove_safe_v<T>);
+
         HgSpan<T> span;
         span.data = (T *)realloc_fn(allocation.data, allocation.count * sizeof(T), count * sizeof(T), alignof(T));
-        new (span.data + allocation.count) T[count - allocation.count];
         span.count = span.data != nullptr ? count : 0;
+
+        if constexpr (std::is_default_constructible_v<T>) {
+            for (usize i = allocation.count; i < span.count; ++i) {
+                new (&span[i]) T;
+            }
+        }
+
         return span;
     }
 
@@ -2538,6 +2568,8 @@ struct HgStack : public HgAllocator {
  */
 template<typename T>
 struct HgArray {
+    static_assert(hg_is_memmove_safe_v<T>);
+
     /**
      * The allocated space for the array
      */
@@ -2591,11 +2623,6 @@ struct HgArray {
      * Destroys all contained objects, emptying the array
      */
     void reset() {
-        if constexpr (std::is_destructible_v<T>) {
-            for (usize i = 0; i < count; ++i) {
-                items[i].~T();
-            }
-        }
         count = 0;
     }
 
@@ -2668,9 +2695,6 @@ struct HgArray {
     void pop() {
         hg_assert(count > 0);
         --count;
-        if constexpr (std::is_destructible_v<T>) {
-            items[count].~T();
-        }
     }
 
     /**
@@ -2725,9 +2749,6 @@ struct HgArray {
      */
     void remove(usize index) {
         hg_assert(index < count);
-        if constexpr (std::is_destructible_v<T>) {
-            items[index].~T();
-        }
         std::memmove((void *)&items[index], (void *)&items[index + 1], ((count - 1) - index) * sizeof(T));
         --count;
     }
@@ -2783,9 +2804,6 @@ struct HgArray {
      */
     void swap_remove(usize index) {
         hg_assert(index < count);
-        if constexpr (std::is_destructible_v<T>) {
-            items[index].~T();
-        }
         std::memmove((void *)&items[index], (void *)&items[count - 1], sizeof(T));
         --count;
     }
@@ -3154,6 +3172,8 @@ hg_hash(T val) {
  */
 template<typename Key, typename Value>
 struct HgHashMap {
+    static_assert(hg_is_memmove_safe_v<Key> && hg_is_memmove_safe_v<Value>);
+
     struct Pair {
         Key key;
         Value value;
@@ -3365,8 +3385,7 @@ inline const u32 hg_component_id = hg_internal_component_id<std::remove_const_t<
 /**
  * An entity component system
  *
- * Note, components are treated as C structs, so are not constructed or
- * destructed, and therefore should not hold resources
+ * Note, components are not constructed or destructed
  */
 struct HgECS {
     /**
@@ -3505,6 +3524,7 @@ struct HgECS {
      */
     template<typename T>
     void register_component(HgAllocator& mem, u32 max_components) {
+        static_assert(hg_is_memmove_safe_v<T>);
         register_component(mem, max_components, sizeof(T), alignof(T), hg_component_id<T>);
     }
 
@@ -3525,6 +3545,7 @@ struct HgECS {
      */
     template<typename T>
     void unregister_component(HgAllocator& mem) {
+        static_assert(hg_is_memmove_safe_v<T>);
         unregister_component(mem, hg_component_id<T>);
     }
 
@@ -3553,6 +3574,7 @@ struct HgECS {
      */
     template<typename T>
     bool is_registered() {
+        static_assert(hg_is_memmove_safe_v<T>);
         return is_registered(hg_component_id<T>);
     }
 
@@ -3578,6 +3600,7 @@ struct HgECS {
      */
     template<typename T>
     u32 component_count() {
+        static_assert(hg_is_memmove_safe_v<T>);
         return component_count(hg_component_id<T>);
     }
 
@@ -3643,6 +3666,7 @@ struct HgECS {
      */
     template<typename T>
     T& add(HgEntity entity) {
+        static_assert(hg_is_memmove_safe_v<T>);
         return *(T *)add(entity, hg_component_id<T>);
     }
 
@@ -3677,6 +3701,7 @@ struct HgECS {
      */
     template<typename T>
     void remove(HgEntity entity) {
+        static_assert(hg_is_memmove_safe_v<T>);
         remove(entity, hg_component_id<T>);
     }
 
@@ -3699,6 +3724,7 @@ struct HgECS {
      */
     template<typename T>
     void swap_idx(u32 lhs, u32 rhs) {
+        static_assert(hg_is_memmove_safe_v<T>);
         swap_idx(lhs, rhs, hg_component_id<T>);
     }
 
@@ -3732,6 +3758,7 @@ struct HgECS {
      */
     template<typename T>
     void swap(HgEntity lhs, HgEntity rhs) {
+        static_assert(hg_is_memmove_safe_v<T>);
         swap(lhs, rhs, hg_component_id<T>);
     }
 
@@ -3754,6 +3781,7 @@ struct HgECS {
      */
     template<typename T>
     void swap_location_idx(u32 lhs, u32 rhs) {
+        static_assert(hg_is_memmove_safe_v<T>);
         swap_location_idx(lhs, rhs, hg_component_id<T>);
     }
 
@@ -3776,6 +3804,7 @@ struct HgECS {
      */
     template<typename T>
     void swap_location(HgEntity lhs, HgEntity rhs) {
+        static_assert(hg_is_memmove_safe_v<T>);
         swap_location(lhs, rhs, hg_component_id<T>);
     }
 
@@ -3806,6 +3835,7 @@ struct HgECS {
      */
     template<typename T>
     bool has(HgEntity entity) {
+        static_assert(hg_is_memmove_safe_v<T>);
         return has(entity, hg_component_id<T>);
     }
 
@@ -3869,6 +3899,7 @@ struct HgECS {
      */
     template<typename T>
     T& get(HgEntity entity) {
+        static_assert(hg_is_memmove_safe_v<T>);
         return *((T *)get(entity, hg_component_id<T>));
     }
 
@@ -3902,6 +3933,8 @@ struct HgECS {
      */
     template<typename T>
     HgEntity get_entity(const T& component) {
+        static_assert(hg_is_memmove_safe_v<T>);
+
         u32 component_id = hg_component_id<T>;
         hg_assert(is_registered(component_id));
 
@@ -3914,6 +3947,8 @@ struct HgECS {
      */
     template<typename T>
     struct ComponentView {
+        static_assert(hg_is_memmove_safe_v<T>);
+
         struct Iter {
             HgEntity *entity;
             T *component;
@@ -3964,6 +3999,8 @@ struct HgECS {
      */
     template<typename T>
     ComponentView<T> component_iter() {
+        static_assert(hg_is_memmove_safe_v<T>);
+
         u32 id = hg_component_id<T>;
         hg_assert(is_registered(id));
 
@@ -3989,6 +4026,8 @@ struct HgECS {
      */
     template<typename T, typename Fn>
     void for_each_single(Fn& function) {
+        static_assert(hg_is_memmove_safe_v<T>);
+
         static_assert(std::is_invocable_v<Fn, HgEntity&, T&>);
         for (auto [e, c] : component_iter<T>()) {
             function(e, c);
@@ -4048,6 +4087,7 @@ struct HgECS {
      */
     template<typename T, typename Fn>
     void selectionsort(u32 begin, u32 end, Fn& compare) {
+        static_assert(hg_is_memmove_safe_v<T>);
         static_assert(std::is_invocable_v<Fn, T&, T&>);
         hg_assert(is_registered(hg_component_id<T>));
         hg_assert(begin <= end && end <= component_count<T>());
@@ -4086,6 +4126,7 @@ struct HgECS {
      */
     template<typename T, typename Fn>
     u32 quicksort_inter(u32 pivot, u32 inc, u32 dec, Fn& compare) {
+        static_assert(hg_is_memmove_safe_v<T>);
         static_assert(std::is_invocable_v<Fn, T&, T&>);
         hg_assert(is_registered(hg_component_id<T>));
         hg_assert(inc <= dec && dec <= component_count<T>());
@@ -4121,6 +4162,7 @@ finish:
      */
     template<typename T, typename Fn>
     void quicksort(u32 begin, u32 end, Fn& compare) {
+        static_assert(hg_is_memmove_safe_v<T>);
         static_assert(std::is_invocable_v<Fn, T&, T&>);
         hg_assert(is_registered(hg_component_id<T>));
         hg_assert(begin <= end && end <= component_count<T>());
@@ -4141,6 +4183,7 @@ finish:
      */
     template<typename T, typename Fn>
     void quicksort(Fn compare) {
+        static_assert(hg_is_memmove_safe_v<T>);
         static_assert(std::is_invocable_v<Fn, T&, T&>);
         quicksort<T>(0, component_count<T>(), compare);
     }
@@ -4155,19 +4198,11 @@ finish:
      */
     template<typename T, typename Fn>
     void sort(Fn compare) {
+        static_assert(hg_is_memmove_safe_v<T>);
+        static_assert(std::is_invocable_v<Fn, T&, T&>);
         quicksort<T>(compare);
     }
 };
-
-/**
- * The default component constructor called by HgECS::create
- */
-void *hg_default_component_ctor(void *user_data, HgECS& ecs, HgEntity entity, u32 component_id);
-
-/**
- * The default component destructor called by HgECS::create
- */
-void hg_default_component_dtor(void *user_data, HgECS& ecs, HgEntity entity, u32 component_id);
 
 /**
  * A high precision clock for timers and game deltas

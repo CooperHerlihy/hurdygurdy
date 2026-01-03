@@ -2608,7 +2608,7 @@ HgSwapchainCommands HgSwapchainCommands::create(VkDevice device, VkSwapchainKHR 
 
     HgStdAllocator mem;
 
-    HgSwapchainCommands sync;
+    HgSwapchainCommands sync{};
     sync.cmd_pool = cmd_pool;
     sync.swapchain = swapchain;
 
@@ -2695,7 +2695,6 @@ VkCommandBuffer HgSwapchainCommands::acquire_and_record(VkDevice device) {
         device, swapchain, UINT64_MAX, image_available[current_frame], nullptr, &current_image);
     if (result == VK_ERROR_OUT_OF_DATE_KHR)
         return nullptr;
-
 
     VkCommandBuffer cmd = cmds[current_frame];
     vkResetCommandBuffer(cmd, 0);
@@ -3752,7 +3751,8 @@ KeySym XLookupKeysym(XKeyEvent *key_event, int index) {
 Display *hg_internal_x11_display = nullptr;
 
 static void hg_internal_platform_init() {
-    hg_internal_libx11 = dlopen("libX11.so.6", RTLD_LAZY);
+    if (hg_internal_libx11 == nullptr)
+        hg_internal_libx11 = dlopen("libX11.so.6", RTLD_LAZY);
     if (hg_internal_libx11 == nullptr)
         hg_error("Could not open Xlib\n");
 
@@ -3770,7 +3770,8 @@ static void hg_internal_platform_init() {
     HG_LOAD_X11_FUNC(XNextEvent);
     HG_LOAD_X11_FUNC(XLookupKeysym);
 
-    hg_internal_x11_display = XOpenDisplay(nullptr);
+    if (hg_internal_x11_display == nullptr)
+        hg_internal_x11_display = XOpenDisplay(nullptr);
     if (hg_internal_x11_display == nullptr)
         hg_error("Could not open X display\n");
 }
@@ -4997,7 +4998,8 @@ void hg_vk_load(void) {
 
 #if defined(HG_PLATFORM_LINUX)
 
-    hg_internal_libvulkan = dlopen("libvulkan.so.1", RTLD_LAZY);
+    if (hg_internal_libvulkan == nullptr)
+        hg_internal_libvulkan = dlopen("libvulkan.so.1", RTLD_LAZY);
     if (hg_internal_libvulkan == nullptr)
         hg_error("Could not load vulkan dynamic lib: %s\n", dlerror());
 
@@ -5007,7 +5009,8 @@ void hg_vk_load(void) {
 
 #elif defined(HG_PLATFORM_WINDOWS)
 
-    hg_internal_libvulkan = (void *)LoadLibraryA("vulkan-1.dll");
+    if (hg_internal_libvulkan == nullptr)
+        hg_internal_libvulkan = (void *)LoadLibraryA("vulkan-1.dll");
     if (hg_internal_libvulkan == nullptr)
         hg_error("Could not load vulkan dynamic lib\n");
 
