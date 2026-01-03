@@ -1016,7 +1016,8 @@ hg_test(hg_ecs_sort) {
 }
 
 f64 HgClock::tick() {
-    auto prev = std::exchange(time, std::chrono::high_resolution_clock::now());
+    auto prev = time;
+    time = std::chrono::high_resolution_clock::now();
     return std::chrono::duration<f64>{time - prev}.count();
 }
 
