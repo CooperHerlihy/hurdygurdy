@@ -4905,7 +4905,7 @@ VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window) {
     return surface;
 }
 
-void hg_window_process_events(HgSpan<HgWindow const> windows) {
+void hg_process_window_events(HgSpan<HgWindow const> windows) {
     hg_assert(windows != nullptr);
 
     for (usize i = 0; i < windows.count; ++i) {

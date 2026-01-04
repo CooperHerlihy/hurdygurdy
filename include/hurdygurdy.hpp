@@ -2856,7 +2856,7 @@ struct HgArray {
      * - A reference to the created object
      */
     template<typename... Args>
-    constexpr T& insert(usize index, Args&&... args) {
+    T& insert(usize index, Args&&... args) {
         hg_assert(index <= count);
         hg_assert(count < capacity);
 
@@ -2870,7 +2870,7 @@ struct HgArray {
      * Parameters
      * - index The index of the item to remove
      */
-    constexpr void remove(usize index) {
+    void remove(usize index) {
         hg_assert(index < count);
         std::memmove((void *)&items[index], (void *)&items[index + 1], (count - index - 1) * sizeof(T));
         --count;
@@ -2887,7 +2887,7 @@ struct HgArray {
      * - A reference to the created object
      */
     template<typename... Args>
-    constexpr T& swap_insert(usize index, Args&&... args) {
+    T& swap_insert(usize index, Args&&... args) {
         hg_assert(index <= count);
         hg_assert(count < capacity);
         if (index == count)
@@ -2903,7 +2903,7 @@ struct HgArray {
      * Parameters
      * - index The index of the item to remove
      */
-    constexpr void swap_remove(usize index) {
+    void swap_remove(usize index) {
         hg_assert(index < count);
         std::memmove((void *)&items[index], (void *)&items[count - 1], sizeof(T));
         --count;
@@ -3149,7 +3149,7 @@ struct HgArrayAny {
      * Returns
      * - A pointer to the created object
      */
-    constexpr void *insert(usize index) {
+    void *insert(usize index) {
         hg_assert(index <= count);
         hg_assert(count < capacity);
 
@@ -3163,7 +3163,7 @@ struct HgArrayAny {
      * Parameters
      * - index The index of the item to remove
      */
-    constexpr void remove(usize index) {
+    void remove(usize index) {
         hg_assert(index < count);
         std::memmove(get(index), get(index + 1), (count - index - 1) * width);
         --count;
@@ -3178,7 +3178,7 @@ struct HgArrayAny {
      * Returns
      * - A reference to the created object
      */
-    constexpr void *swap_insert(usize index) {
+    void *swap_insert(usize index) {
         hg_assert(index <= count);
         hg_assert(count < capacity);
         if (index == count)
@@ -3194,7 +3194,7 @@ struct HgArrayAny {
      * Parameters
      * - index The index of the item to remove
      */
-    constexpr void swap_remove(usize index) {
+    void swap_remove(usize index) {
         hg_assert(index < count);
         std::memcpy(get(index), get(count - 1), width);
         --count;
