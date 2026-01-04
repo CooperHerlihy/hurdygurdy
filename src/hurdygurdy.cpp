@@ -35,7 +35,10 @@ static HgArray<HgTest>& hg_internal_get_tests() {
 }
 
 HgTest::HgTest(const char *test_name, bool (*test_function)()) : name(test_name), function(test_function) {
-    hg_internal_get_tests().push(HgStdAllocator::get(), *this);
+    HgArray<HgTest> internal_tests = hg_internal_get_tests();
+    if (internal_tests.is_full())
+        internal_tests.grow(HgStdAllocator::get());
+    internal_tests.push(*this);
 }
 
 bool hg_run_tests() {
@@ -103,7 +106,7 @@ hg_test(hg_matrix_mul) {
 hg_test(hg_quat) {
     HgMat3f identity_mat = 1.0f;
     HgVec3f up_vec{0.0f, -1.0f, 0.0f};
-    HgQuatf rotation = hg_axis_angle<f32>({0.0f, 0.0f, -1.0f}, -(f32)HgPi * 0.5f);
+    HgQuatf rotation = hg_axis_angle<f32>({0.0f, 0.0f, -1.0f}, -(f32)hg_pi * 0.5f);
 
     HgVec3f rotated_vec = hg_rotate(rotation, up_vec);
     HgMat3f rotated_mat = hg_rotate(rotation, identity_mat);
@@ -402,37 +405,39 @@ hg_test(hg_array) {
     hg_test_assert(arr.capacity == 2);
     hg_test_assert(arr.count == 0);
 
-    arr.push(mem, (u32)2);
+    arr.push((u32)2);
     hg_test_assert(arr[0] == 2);
-    hg_test_assert(arr.count >= 1);
-    arr.push(mem, (u32)4);
+    hg_test_assert(arr.count == 1);
+    arr.push((u32)4);
     hg_test_assert(arr[1] == 4);
     hg_test_assert(arr.count == 2);
-    hg_test_assert(arr.capacity >= 2);
-    arr.push(mem, (u32)8);
+
+    arr.grow(mem);
+    hg_test_assert(arr.capacity == 4);
+
+    arr.push((u32)8);
     hg_test_assert(arr[2] == 8);
     hg_test_assert(arr.count == 3);
-    hg_test_assert(arr.capacity >= 3);
 
     arr.pop();
     hg_test_assert(arr.count == 2);
-    hg_test_assert(arr.capacity >= 3);
+    hg_test_assert(arr.capacity == 4);
 
-    arr.insert(mem, 0, (u32)1);
+    arr.insert(0, (u32)1);
     hg_test_assert(arr.count == 3);
-    hg_test_assert(arr.capacity >= 3);
     hg_test_assert(arr[0] == 1);
     hg_test_assert(arr[1] == 2);
     hg_test_assert(arr[2] == 4);
 
     arr.remove(1);
     hg_test_assert(arr.count == 2);
-    hg_test_assert(arr.capacity >= 3);
     hg_test_assert(arr[0] == 1);
     hg_test_assert(arr[1] == 4);
 
     for (usize i = 0; i < 100; ++i) {
-        arr.push(mem, (u32)i);
+        if (arr.is_full())
+            arr.grow(mem);
+        arr.push((u32)i);
     }
     hg_test_assert(arr.count == 102);
     hg_test_assert(arr.capacity >= 102);
@@ -442,7 +447,7 @@ hg_test(hg_array) {
     hg_test_assert(arr[2] == 99);
     hg_test_assert(arr[arr.count - 1] == 98);
 
-    arr.swap_insert(mem, 0, (u32)42);
+    arr.swap_insert(0, (u32)42);
     hg_test_assert(arr.count == 102);
     hg_test_assert(arr[0] == 42);
     hg_test_assert(arr[1] == 4);
@@ -461,37 +466,39 @@ hg_test(hg_array_any) {
     hg_test_assert(arr.capacity == 2);
     hg_test_assert(arr.count == 0);
 
-    *(u32 *)arr.push(mem) = 2;
+    *(u32 *)arr.push() = 2;
     hg_test_assert(*(u32 *)arr[0] == 2);
-    hg_test_assert(arr.count >= 1);
-    *(u32 *)arr.push(mem) = 4;
+    hg_test_assert(arr.count == 1);
+    *(u32 *)arr.push() = 4;
     hg_test_assert(*(u32 *)arr[1] == 4);
     hg_test_assert(arr.count == 2);
-    hg_test_assert(arr.capacity >= 2);
-    *(u32 *)arr.push(mem) = 8;
+
+    arr.grow(mem);
+    hg_test_assert(arr.capacity == 4);
+
+    *(u32 *)arr.push() = 8;
     hg_test_assert(*(u32 *)arr[2] == 8);
     hg_test_assert(arr.count == 3);
-    hg_test_assert(arr.capacity >= 3);
 
     arr.pop();
     hg_test_assert(arr.count == 2);
-    hg_test_assert(arr.capacity >= 3);
+    hg_test_assert(arr.capacity == 4);
 
-    *(u32 *)arr.insert(mem, 0) = 1;
+    *(u32 *)arr.insert(0) = 1;
     hg_test_assert(arr.count == 3);
-    hg_test_assert(arr.capacity >= 3);
     hg_test_assert(*(u32 *)arr[0] == 1);
     hg_test_assert(*(u32 *)arr[1] == 2);
     hg_test_assert(*(u32 *)arr[2] == 4);
 
     arr.remove(1);
     hg_test_assert(arr.count == 2);
-    hg_test_assert(arr.capacity >= 3);
     hg_test_assert(*(u32 *)arr[0] == 1);
     hg_test_assert(*(u32 *)arr[1] == 4);
 
     for (u32 i = 0; i < 100; ++i) {
-        *(u32 *)arr.push(mem) = i;
+        if (arr.is_full())
+            arr.grow(mem);
+        *(u32 *)arr.push() = i;
     }
     hg_test_assert(arr.count == 102);
     hg_test_assert(arr.capacity >= 102);
@@ -501,7 +508,7 @@ hg_test(hg_array_any) {
     hg_test_assert(*(u32 *)arr[2] == 99);
     hg_test_assert(*(u32 *)arr[arr.count - 1] == 98);
 
-    *(u32 *)arr.swap_insert(mem, 0) = 42;
+    *(u32 *)arr.swap_insert(0) = 42;
     hg_test_assert(arr.count == 102);
     hg_test_assert(*(u32 *)arr[0] == 42);
     hg_test_assert(*(u32 *)arr[1] == 4);

@@ -214,8 +214,6 @@ struct HgTest {
      * - test_function A pointer to the test function
      */
     HgTest(const char *test_name, decltype(function) test_function);
-
-    HgTest() = default;
 };
 
 /**
@@ -352,7 +350,7 @@ struct HgSpan {
     /**
      * Implicit conversion can add const
      */
-    constexpr operator HgSpan<std::add_const<T>>() const {
+    constexpr operator HgSpan<const T>() const {
         return {(const T*)data, count};
     }
 };
@@ -420,7 +418,9 @@ constexpr bool operator!=(HgSpan<T> lhs, HgSpan<T> rhs) {
 
 template<typename T>
 constexpr bool operator==(HgSpan<T> lhs, std::nullptr_t rhs) {
-    return lhs.data == rhs && lhs.count == 0;
+    if (lhs.data == rhs)
+        hg_assert(lhs.count == 0);
+    return lhs.data == rhs;
 }
 
 template<typename T>
@@ -430,7 +430,9 @@ constexpr bool operator!=(HgSpan<T> lhs, std::nullptr_t rhs) {
 
 template<typename T>
 constexpr bool operator==(std::nullptr_t lhs, HgSpan<T> rhs) {
-    return lhs == rhs.data && 0 == rhs.count;
+    if (lhs == rhs.data)
+        hg_assert(rhs.count == 0);
+    return lhs == rhs.data;
 }
 
 template<typename T>
@@ -438,11 +440,11 @@ constexpr bool operator!=(std::nullptr_t lhs, HgSpan<T> rhs) {
     return !(lhs == rhs);
 }
 
-static constexpr f64 HgPi    = 3.1415926535897932;
-static constexpr f64 HgTau   = 6.2831853071795864;
-static constexpr f64 HgE     = 2.7182818284590452;
-static constexpr f64 HgRoot2 = 1.4142135623730951;
-static constexpr f64 HgRoot3 = 1.7320508075688772;
+static constexpr f64 hg_pi    = 3.1415926535897932;
+static constexpr f64 hg_tau   = 6.2831853071795864;
+static constexpr f64 hg_euler = 2.7182818284590452;
+static constexpr f64 hg_root2 = 1.4142135623730951;
+static constexpr f64 hg_root3 = 1.7320508075688772;
 
 /**
  * Aligns a pointer to an alignment
@@ -471,10 +473,12 @@ struct HgVec2 {
     constexpr HgVec2(T x_val, T y_val) : x{x_val}, y{y_val} {}
 
     constexpr T& operator[](usize index) {
+        hg_assert(index < 2);
         return *(&x + index);
     }
 
     constexpr const T& operator[](usize index) const {
+        hg_assert(index < 2);
         return *(&x + index);
     }
 };
@@ -508,10 +512,12 @@ struct HgVec3 {
     constexpr HgVec3(const HgVec2<T>& other) : x{other.x}, y{other.y}, z{0} {}
 
     constexpr T& operator[](usize index) {
+        hg_assert(index < 3);
         return *(&x + index);
     }
 
     constexpr const T& operator[](usize index) const {
+        hg_assert(index < 3);
         return *(&x + index);
     }
 };
@@ -547,10 +553,12 @@ struct HgVec4 {
     constexpr HgVec4(const HgVec3<T>& other) : x{other.x}, y{other.y}, z{other.z}, w{0} {}
 
     constexpr T& operator[](usize index) {
+        hg_assert(index < 4);
         return *(&x + index);
     }
 
     constexpr const T& operator[](usize index) const {
+        hg_assert(index < 4);
         return *(&x + index);
     }
 };
@@ -583,10 +591,12 @@ struct HgMat2 {
     constexpr HgMat2(const HgVec2<T>& x_val, const HgVec2<T>& y_val) : x{x_val}, y{y_val} {}
 
     constexpr HgVec2<T>& operator[](usize index) {
+        hg_assert(index < 2);
         return *(&x + index);
     }
 
     constexpr const T& operator[](usize index) const {
+        hg_assert(index < 2);
         return *(&x + index);
     }
 };
@@ -624,10 +634,12 @@ struct HgMat3 {
         : x{other.x}, y{other.y}, z{0, 0, 1} {}
 
     constexpr HgVec3<T>& operator[](usize index) {
+        hg_assert(index < 3);
         return *(&x + index);
     }
 
     constexpr const T& operator[](usize index) const {
+        hg_assert(index < 3);
         return *(&x + index);
     }
 };
@@ -669,6 +681,12 @@ struct HgMat4 {
         : x{other.x}, y{other.y}, z{other.z}, w{0, 0, 0, 1} {}
 
     constexpr HgVec4<T>& operator[](usize index) {
+        hg_assert(index < 4);
+        return *(&x + index);
+    }
+
+    constexpr const HgVec4<T>& operator[](usize index) const {
+        hg_assert(index < 4);
         return *(&x + index);
     }
 };
@@ -707,6 +725,12 @@ struct HgComplex {
     constexpr HgComplex(T r_val, T i_val) : r{r_val}, i{i_val} {}
 
     constexpr T& operator[](usize index) {
+        hg_assert(index < 2);
+        return *(&r + index);
+    }
+
+    constexpr const T& operator[](usize index) const {
+        hg_assert(index < 2);
         return *(&r + index);
     }
 };
@@ -745,6 +769,12 @@ struct HgQuat {
     constexpr HgQuat(T r_val, T i_val, T j_val, T k_val) : r{r_val}, i{i_val}, j{j_val}, k{k_val} {}
 
     constexpr T& operator[](usize index) {
+        hg_assert(index < 4);
+        return *(&r + index);
+    }
+
+    constexpr const T& operator[](usize index) const {
+        hg_assert(index < 4);
         return *(&r + index);
     }
 };
@@ -2589,6 +2619,13 @@ struct HgArray {
     usize count;
 
     /**
+     * Returns the size in bytes of the array
+     */
+    constexpr usize size() const {
+        return count * sizeof(T);
+    }
+
+    /**
      * Allocate a new dynamic array
      *
      * Parameters
@@ -2606,6 +2643,7 @@ struct HgArray {
         arr.items = (T *)mem.alloc_fn(capacity * sizeof(T), alignof(T));
         arr.capacity = capacity;
         arr.count = count;
+
         if constexpr (std::is_default_constructible_v<T>) {
             for (usize i = 0; i < count; ++i) {
                 new (&arr.items[i]) T;
@@ -2613,6 +2651,7 @@ struct HgArray {
         } else {
             hg_assert(count == 0);
         }
+
         return arr;
     }
 
@@ -2620,22 +2659,28 @@ struct HgArray {
      * Free the dynamic array
      */
     void destroy(HgAllocator& mem) {
-        reset();
         mem.free_fn(items, capacity * sizeof(T), alignof(T));
     }
 
     /**
-     * Destroys all contained objects, emptying the array
+     * Removes all contained objects, emptying the array
      */
-    void reset() {
+    constexpr void reset() {
         count = 0;
     }
 
     /**
-     * Returns the size in bytes of the array
+     * Returns whether capacity is filled
      */
-    usize size() {
-        return count * sizeof(T);
+    constexpr bool is_full() const {
+        return count == capacity;
+    }
+
+    /**
+     * Returns whether items can be added safely
+     */
+    constexpr bool has_space() const {
+        return count < capacity;
     }
 
     /**
@@ -2646,8 +2691,7 @@ struct HgArray {
      * - min The new minimum capacity
      *
      * Returns
-     * - true if the allocation was successful
-     * - false if the allocation failed
+     * - Whether the allocation succeeded
      */
     bool reserve(HgAllocator& mem, usize min) {
         if (min > capacity) {
@@ -2668,263 +2712,12 @@ struct HgArray {
      * - factor The growth factor to increase by
      *
      * Returns
-     * - true if the allocation was successful
-     * - false if the allocation failed
+     * - Whether the allocation succeeded
      */
-    bool grow_array(HgAllocator& mem, f32 factor = 2.0f) {
+    bool grow(HgAllocator& mem, f32 factor = 2.0f) {
+        hg_assert(factor > 1.0f);
         hg_assert(capacity <= (usize)((f32)SIZE_MAX / factor));
         return reserve(mem, capacity == 0 ? 1 : (usize)((f32)capacity * factor));
-    }
-
-    /**
-     * Push an item to the end to the array, asserting space is available
-     *
-     * Parameters
-     * - args The arguments to use to construct the new item, if any
-     *
-     * Returns
-     * - A reference to the created object
-     */
-    template<typename... Args>
-    T& push_unchecked(Args&&... args) {
-        hg_assert(count < capacity);
-        if constexpr (sizeof...(Args) == 0) {
-            return *(new (&items[count++]) T);
-        } else {
-            return *(new (&items[count++]) T{std::forward<Args>(args)...});
-        }
-    }
-
-    /**
-     * Push an item to the end to the array, resizing if needed
-     *
-     * Note, asserts that the allocation succeeded
-     *
-     * Parameters
-     * - mem The allocator to use
-     * - args The arguments to use to construct the new item, if any
-     *
-     * Returns
-     * - A reference to the created object
-     */
-    template<typename... Args>
-    T& push(HgAllocator& mem, Args&&... args) {
-        hg_assert(count <= capacity);
-        if (count == capacity) {
-#ifdef HG_DEBUG_MODE
-            hg_assert(grow_array(mem));
-#else
-            grow_array(mem);
-#endif
-        }
-
-        return push_unchecked(std::forward<Args>(args)...);
-    }
-
-    /**
-     * Push an item to the end to the array, resizing if needed
-     *
-     * Parameters
-     * - mem The allocator to use
-     * - args The arguments to use to construct the new item, if any
-     *
-     * Returns
-     * - true if the allocation succeeded
-     * - false if the allocation failed
-     */
-    template<typename... Args>
-    bool try_push(HgAllocator& mem, Args&&... args) {
-        hg_assert(count <= capacity);
-        if (count == capacity) {
-            if (!grow_array(mem))
-                return false;
-        }
-
-        push_unchecked(std::forward<Args>(args)...);
-        return true;
-    }
-
-    /**
-     * Pops an item off the end of the array
-     */
-    void pop() {
-        hg_assert(count > 0);
-        --count;
-    }
-
-    /**
-     * Inserts an item into the array, moving subsequent items back
-     *
-     * Parameters
-     * - index The index the new item will be placed at, must be <= count
-     * - args The arguments to use to construct the new item, if any
-     *
-     * Returns
-     * - A reference to the created object
-     */
-    template<typename... Args>
-    T& insert_unchecked(usize index, Args&&... args) {
-        hg_assert(index <= count);
-        hg_assert(count < capacity);
-
-        std::memmove((void *)&items[index + 1], (void *)&items[index], (count++ - index) * sizeof(T));
-        if constexpr (sizeof...(Args) == 0)
-            return *(new (&items[index]) T);
-        else
-            return *(new (&items[index]) T{std::forward<Args>(args)...});
-    }
-
-    /**
-     * Inserts an item into the array, moving subsequent items back
-     *
-     * Note, asserts that the allocation succeeded
-     *
-     * Parameters
-     * - mem The allocator to use
-     * - index The index the new item will be placed at, must be <= count
-     * - args The arguments to use to construct the new item, if any
-     *
-     * Returns
-     * - A reference to the created object
-     */
-    template<typename... Args>
-    T& insert(HgAllocator& mem, usize index, Args&&... args) {
-        hg_assert(index <= count);
-        hg_assert(count <= capacity);
-        if (count == capacity) {
-#ifdef HG_DEBUG_MODE
-            hg_assert(grow_array(mem));
-#else
-            grow_array(mem);
-#endif
-        }
-
-        return insert_unchecked(index, std::forward<Args>(args)...);
-    }
-
-    /**
-     * Inserts an item into the array, moving subsequent items back
-     *
-     * Parameters
-     * - mem The allocator to use
-     * - index The index the new item will be placed at, must be <= count
-     * - args The arguments to use to construct the new item, if any
-     *
-     * Returns
-     * - true if the allocation succeeded
-     * - false if the allocation failed
-     */
-    template<typename... Args>
-    bool try_insert(HgAllocator& mem, usize index, Args&&... args) {
-        hg_assert(index <= count);
-        hg_assert(count <= capacity);
-        if (count == capacity) {
-            if (!grow_array(mem))
-                return false;
-        }
-
-        insert_unchecked(index, std::forward<Args>(args)...);
-        return true;
-    }
-
-    /**
-     * Removes the item at the index, subsequent items to taking its place
-     *
-     * Parameters
-     * - index The index of the item to remove
-     */
-    void remove(usize index) {
-        hg_assert(index < count);
-        std::memmove((void *)&items[index], (void *)&items[index + 1], (count - index - 1) * sizeof(T));
-        --count;
-    }
-
-    /**
-     * Inserts an item into the array, moving the item at index to the end
-     *
-     * Parameters
-     * - index The index the new item will be placed at, must be <= count
-     * - args The arguments to use to construct the new item, if any
-     *
-     * Returns
-     * - A reference to the created object
-     */
-    template<typename... Args>
-    T& swap_insert_unchecked(usize index, Args&&... args) {
-        hg_assert(index <= count);
-        hg_assert(count <= capacity);
-        hg_assert(index != capacity);
-
-        std::memmove((void *)&items[count++], (void *)&items[index], sizeof(T));
-        if constexpr (sizeof...(Args) == 0)
-            return *(new (&items[index]) T);
-        else
-            return *(new (&items[index]) T{std::forward<Args>(args)...});
-    }
-
-    /**
-     * Inserts an item into the array, moving the item at index to the end
-     *
-     * Note, asserts that the allocation succeeded
-     *
-     * Parameters
-     * - mem The allocator to use
-     * - index The index the new item will be placed at, must be <= count
-     * - args The arguments to use to construct the new item, if any
-     *
-     * Returns
-     * - A reference to the created object
-     */
-    template<typename... Args>
-    T& swap_insert(HgAllocator& mem, usize index, Args&&... args) {
-        hg_assert(index <= count);
-        hg_assert(count <= capacity);
-        if (count == capacity) {
-#ifdef HG_DEBUG_MODE
-            hg_assert(grow_array(mem));
-#else
-            grow_array(mem);
-#endif
-        }
-
-        return swap_insert_unchecked(index, std::forward<Args>(args)...);
-    }
-
-    /**
-     * Inserts an item into the array, moving the item at index to the end
-     *
-     * Parameters
-     * - mem The allocator to use
-     * - index The index the new item will be placed at, must be <= count
-     * - args The arguments to use to construct the new item, if any
-     *
-     * Returns
-     * - true if the allocation succeeded
-     * - false if the allocation failed
-     */
-    template<typename... Args>
-    bool try_swap_insert(HgAllocator& mem, usize index, Args&&... args) {
-        hg_assert(index <= count);
-        hg_assert(count <= capacity);
-        if (count == capacity) {
-            if (!grow_array(mem))
-                return false;
-        }
-
-        swap_insert_unchecked(index, std::forward<Args>(args)...);
-        return true;
-    }
-
-    /**
-     * Removes the item at the index, moving the last item to take its place
-     *
-     * Parameters
-     * - index The index of the item to remove
-     */
-    void swap_remove(usize index) {
-        hg_assert(index < count);
-        std::memmove((void *)&items[index], (void *)&items[count - 1], sizeof(T));
-        --count;
     }
 
     /**
@@ -2970,9 +2763,44 @@ struct HgArray {
     }
 
     /**
+     * Returns a reference to the first item in the array
+     */
+    constexpr T& first() {
+        return get(0);
+    }
+
+    /**
+     * Returns a reference to the first item in the array in a const context
+     */
+    constexpr const T& first() const {
+        return get(0);
+    }
+
+    /**
+     * Returns a reference to the last item in the array
+     */
+    constexpr T& last() {
+        return get(count - 1);
+    }
+
+    /**
+     * Returns a reference to the last item in the array in a const context
+     */
+    constexpr const T& last() const {
+        return get(count - 1);
+    }
+
+    /**
      * For c++ ranged based for loop
      */
     constexpr T *begin() {
+        return items;
+    }
+
+    /**
+     * For c++ ranged based for loop in a const context
+     */
+    constexpr const T *begin() const {
         return items;
     }
 
@@ -2986,15 +2814,99 @@ struct HgArray {
     /**
      * For c++ ranged based for loop in a const context
      */
-    constexpr const T *begin() const {
-        return items;
+    constexpr const T *end() const {
+        return items + count;
     }
 
     /**
-     * For c++ ranged based for loop in a const context
+     * Push an item to the end to the array
+     *
+     * Note, space must be available
+     *
+     * Parameters
+     * - args The arguments to use to construct the new item, if any
+     *
+     * Returns
+     * - A reference to the created object
      */
-    constexpr const T *end() const {
-        return items + count;
+    template<typename... Args>
+    constexpr T& push(Args&&... args) {
+        hg_assert(count < capacity);
+        return *(new (&items[count++]) T{std::forward<Args>(args)...});
+    }
+
+    /**
+     * Pops an item off the end of the array
+     */
+    constexpr void pop() {
+        hg_assert(count > 0);
+        --count;
+    }
+
+    /**
+     * Inserts an item into the array, moving items back
+     *
+     * Note, space must be available
+     *
+     * Parameters
+     * - index The index the new item will be placed at, must be <= count
+     * - args The arguments to use to construct the new item, if any
+     *
+     * Returns
+     * - A reference to the created object
+     */
+    template<typename... Args>
+    constexpr T& insert(usize index, Args&&... args) {
+        hg_assert(index <= count);
+        hg_assert(count < capacity);
+
+        std::memmove((void *)&items[index + 1], (void *)&items[index], (count++ - index) * sizeof(T));
+        return *(new (&items[index]) T{std::forward<Args>(args)...});
+    }
+
+    /**
+     * Removes the item at the index, subsequent items to taking its place
+     *
+     * Parameters
+     * - index The index of the item to remove
+     */
+    constexpr void remove(usize index) {
+        hg_assert(index < count);
+        std::memmove((void *)&items[index], (void *)&items[index + 1], (count - index - 1) * sizeof(T));
+        --count;
+    }
+
+    /**
+     * Inserts an item into the array, moving the item at index to the end
+     *
+     * Parameters
+     * - index The index the new item will be placed at, must be <= count
+     * - args The arguments to use to construct the new item, if any
+     *
+     * Returns
+     * - A reference to the created object
+     */
+    template<typename... Args>
+    constexpr T& swap_insert(usize index, Args&&... args) {
+        hg_assert(index <= count);
+        hg_assert(count < capacity);
+        if (index == count)
+            return push(std::forward<Args>(args)...);
+
+        std::memmove((void *)&items[count++], (void *)&items[index], sizeof(T));
+        return *(new (&items[index]) T{std::forward<Args>(args)...});
+    }
+
+    /**
+     * Removes the item at the index, moving the last item to take its place
+     *
+     * Parameters
+     * - index The index of the item to remove
+     */
+    constexpr void swap_remove(usize index) {
+        hg_assert(index < count);
+        std::memmove((void *)&items[index], (void *)&items[count - 1], sizeof(T));
+        --count;
     }
 };
 
@@ -3024,6 +2936,13 @@ struct HgArrayAny {
     usize count;
 
     /**
+     * Returns the size in bytes of the array
+     */
+    constexpr usize size() {
+        return count * width;
+    }
+
+    /**
      * Allocate a new dynamic array
      *
      * Parameters
@@ -3041,7 +2960,7 @@ struct HgArrayAny {
 
         HgArrayAny arr{};
         arr.items = mem.alloc_fn(capacity * width, alignment);
-        arr.width = hg_align(width, alignment);
+        arr.width = width;
         arr.alignment = alignment;
         arr.capacity = capacity;
         arr.count = count;
@@ -3050,6 +2969,8 @@ struct HgArrayAny {
 
     /**
      * Allocate a new dynamic array using a type
+     *
+     * Note, does not construct items
      *
      * Parameters
      * - allocator The allocator to use
@@ -3075,15 +2996,22 @@ struct HgArrayAny {
     /**
      * Destroys all contained objects, emptying the array
      */
-    void reset() {
+    constexpr void reset() {
         count = 0;
     }
 
     /**
-     * Returns the size in bytes of the array
+     * Returns whether capacity is filled
      */
-    usize size() {
-        return count * width;
+    constexpr bool is_full() const {
+        return count == capacity;
+    }
+
+    /**
+     * Returns whether items can be added safely
+     */
+    constexpr bool has_space() const {
+        return count < capacity;
     }
 
     /**
@@ -3094,8 +3022,7 @@ struct HgArrayAny {
      * - min The new minimum capacity
      *
      * Returns
-     * - true if the allocation was successful
-     * - false if the allocation failed
+     * - Whether the allocation succeeded
      */
     bool reserve(HgAllocator& mem, usize min) {
         if (min > capacity) {
@@ -3116,226 +3043,12 @@ struct HgArrayAny {
      * - factor The growth factor to increase by
      *
      * Returns
-     * - true if the allocation was successful
-     * - false if the allocation failed
+     * - Whether the allocation succeeded
      */
-    bool grow_array(HgAllocator& mem, usize factor = 2) {
-        return reserve(mem, capacity == 0 ? 1 : capacity * factor);
-    }
-
-    /**
-     * Push an item to the end to the array, asserting space is available
-     *
-     * Returns
-     * - A pointer to the created object
-     */
-    void *push_unchecked() {
-        hg_assert(count < capacity);
-        return get(count++);
-    }
-
-    /**
-     * Push an item to the end to the array, resizing if needed
-     *
-     * Note, asserts that the allocation is successful
-     *
-     * Parameters
-     * - mem The allocator to use
-     *
-     * Returns
-     * - A pointer to the created object
-     */
-    void *push(HgAllocator& mem) {
-        hg_assert(count <= capacity);
-        if (count == capacity) {
-#ifdef HG_DEBUG_MODE
-            hg_assert(grow_array(mem));
-#else
-            grow_array(mem);
-#endif
-        }
-
-        return push_unchecked();
-    }
-
-    /**
-     * Push an item to the end to the array, resizing if needed
-     *
-     * Parameters
-     * - mem The allocator to use
-     *
-     * Returns
-     * - A pointer to the created object
-     * - nullptr if allocation failed
-     */
-    void *try_push(HgAllocator& mem) {
-        hg_assert(count <= capacity);
-        if (count == capacity) {
-            if (!grow_array(mem))
-                return nullptr;
-        }
-
-        return push_unchecked();
-    }
-
-    /**
-     * Pops an item off the end of the array
-     */
-    void pop() {
-        hg_assert(count > 0);
-        --count;
-    }
-
-    /**
-     * Inserts an item into the array, moving subsequent items back
-     *
-     * Parameters
-     * - index The index the new item will be placed at, must be <= count
-     *
-     * Returns
-     * - A pointer to the created object
-     */
-    void *insert_unchecked(usize index) {
-        hg_assert(index < count);
-        hg_assert(count < capacity);
-
-        std::memmove(get(index + 1), get(index), (count++ - index) * width);
-        return get(index);
-    }
-
-    /**
-     * Inserts an item into the array, moving subsequent items back
-     *
-     * Note, asserts that the allocation is successful
-     *
-     * Parameters
-     * - mem The allocator to use
-     * - index The index the new item will be placed at, must be <= count
-     *
-     * Returns
-     * - A pointer to the created object
-     */
-    void *insert(HgAllocator& mem, usize index) {
-        hg_assert(index <= count);
-        hg_assert(count <= capacity);
-        if (count == capacity) {
-#ifdef HG_DEBUG_MODE
-            hg_assert(grow_array(mem));
-#else
-            grow_array(mem);
-#endif
-        }
-
-        return insert_unchecked(index);
-    }
-
-    /**
-     * Inserts an item into the array, moving subsequent items back
-     *
-     * Parameters
-     * - mem The allocator to use
-     * - index The index the new item will be placed at, must be <= count
-     *
-     * Returns
-     * - A pointer to the created object
-     * - nullptr if the allocation failed
-     */
-    void *try_insert(HgAllocator& mem, usize index) {
-        hg_assert(index <= count);
-        hg_assert(count <= capacity);
-        if (count == capacity)
-            if (!grow_array(mem))
-                return nullptr;
-
-        return insert_unchecked(index);
-    }
-
-    /**
-     * Removes the item at the index, subsequent items to taking its place
-     *
-     * Parameters
-     * - index The index of the item to remove
-     */
-    void remove(usize index) {
-        hg_assert(index < count);
-        std::memmove(get(index), get(index + 1), (count - index - 1) * width);
-        --count;
-    }
-
-    /**
-     * Inserts an item into the array, moving the item at index to the end
-     *
-     * Parameters
-     * - index The index the new item will be placed at, must be <= count
-     *
-     * Returns
-     * - A reference to the created object
-     */
-    void *swap_insert_unchecked(usize index) {
-        hg_assert(index <= count);
-        hg_assert(count <= capacity);
-
-        std::memcpy(get(count++), get(index), width);
-        return get(index);
-    }
-
-    /**
-     * Inserts an item into the array, moving the item at index to the end
-     *
-     * Note, asserts that the allocation is successful
-     *
-     * Parameters
-     * - mem The allocator to use
-     * - index The index the new item will be placed at, must be <= count
-     *
-     * Returns
-     * - A reference to the created object
-     */
-    void *swap_insert(HgAllocator& mem, usize index) {
-        hg_assert(index <= count);
-        hg_assert(count <= capacity);
-        if (count == capacity) {
-#ifdef HG_DEBUG_MODE
-            hg_assert(grow_array(mem));
-#else
-            grow_array(mem);
-#endif
-        }
-
-        return swap_insert_unchecked(index);
-    }
-
-    /**
-     * Inserts an item into the array, moving the item at index to the end
-     *
-     * Parameters
-     * - mem The allocator to use
-     * - index The index the new item will be placed at, must be <= count
-     *
-     * Returns
-     * - A reference to the created object
-     * - nullptr if the allocation failed
-     */
-    void *try_swap_insert(HgAllocator& mem, usize index) {
-        hg_assert(index <= count);
-        hg_assert(count <= capacity);
-        if (count == capacity)
-            if (!grow_array(mem))
-                return nullptr;
-
-        return swap_insert_unchecked(index);
-    }
-
-    /**
-     * Removes the item at the index, moving the last item to take its place
-     *
-     * Parameters
-     * - index The index of the item to remove
-     */
-    void swap_remove(usize index) {
-        hg_assert(index < count);
-        std::memcpy(get(index), get(count - 1), width);
-        --count;
+    bool grow(HgAllocator& mem, f32 factor = 2.0f) {
+        hg_assert(factor > 1.0f);
+        hg_assert(capacity <= (usize)((f32)SIZE_MAX / factor));
+        return reserve(mem, capacity == 0 ? 1 : (usize)((f32)capacity * factor));
     }
 
     /**
@@ -3378,6 +3091,113 @@ struct HgArrayAny {
      */
     constexpr const void *operator[](usize index) const {
         return get(index);
+    }
+
+    /**
+     * Returns a reference to the first item in the array
+     */
+    constexpr void *first() {
+        return get(0);
+    }
+
+    /**
+     * Returns a reference to the first item in the array in a const context
+     */
+    constexpr const void *first() const {
+        return get(0);
+    }
+
+    /**
+     * Returns a reference to the last item in the array
+     */
+    constexpr void *last() {
+        return get(count - 1);
+    }
+
+    /**
+     * Returns a reference to the last item in the array in a const context
+     */
+    constexpr const void *last() const {
+        return get(count - 1);
+    }
+
+    /**
+     * Push an item to the end to the array, asserting space is available
+     *
+     * Returns
+     * - A pointer to the created object
+     */
+    constexpr void *push() {
+        hg_assert(count < capacity);
+        return get(count++);
+    }
+
+    /**
+     * Pops an item off the end of the array
+     */
+    constexpr void pop() {
+        hg_assert(count > 0);
+        --count;
+    }
+
+    /**
+     * Inserts an item into the array, moving subsequent items back
+     *
+     * Parameters
+     * - index The index the new item will be placed at, must be <= count
+     *
+     * Returns
+     * - A pointer to the created object
+     */
+    constexpr void *insert(usize index) {
+        hg_assert(index <= count);
+        hg_assert(count < capacity);
+
+        std::memmove(get(index + 1), get(index), (count++ - index) * width);
+        return get(index);
+    }
+
+    /**
+     * Removes the item at the index, subsequent items to taking its place
+     *
+     * Parameters
+     * - index The index of the item to remove
+     */
+    constexpr void remove(usize index) {
+        hg_assert(index < count);
+        std::memmove(get(index), get(index + 1), (count - index - 1) * width);
+        --count;
+    }
+
+    /**
+     * Inserts an item into the array, moving the item at index to the end
+     *
+     * Parameters
+     * - index The index the new item will be placed at, must be <= count
+     *
+     * Returns
+     * - A reference to the created object
+     */
+    constexpr void *swap_insert(usize index) {
+        hg_assert(index <= count);
+        hg_assert(count < capacity);
+        if (index == count)
+            return push();
+
+        std::memcpy(get(count++), get(index), width);
+        return get(index);
+    }
+
+    /**
+     * Removes the item at the index, moving the last item to take its place
+     *
+     * Parameters
+     * - index The index of the item to remove
+     */
+    constexpr void swap_remove(usize index) {
+        hg_assert(index < count);
+        std::memcpy(get(index), get(count - 1), width);
+        --count;
     }
 };
 
@@ -3454,17 +3274,40 @@ struct HgHashMap {
         mem.free(slots);
     }
 
-    void resize(HgAllocator& mem, usize new_size) {
+    /**
+     * Resizes the slots and rehashes all entries
+     *
+     * Parameters
+     * - mem The allocator to use
+     * - new_size The new number of slots
+     *
+     * Returns
+     * - Whether the allocation succeeded
+     */
+    bool resize(HgAllocator& mem, usize new_size) {
         HgSpan<Slot> old_slots = slots;
         slots = mem.alloc<Slot>(new_size);
+        if (slots == nullptr)
+            return false;
         for (Slot& slot : old_slots) {
             insert(old_slots[index]->key, old_slots[index]->value);
         }
         mem.free(old_slots);
+        return true;
     }
 
-    void grow(HgAllocator& mem, f32 factor = 2) {
-        resize(mem, (usize)((f32)slots.count * factor));
+    /**
+     * Grows the number of slots by a factor
+     *
+     * Parameters
+     * - mem The allocator to use
+     * - factor The factor to increase by
+     *
+     * Returns
+     * - Whether the allocation succeeded
+     */
+    bool grow(HgAllocator& mem, f32 factor = 2) {
+        return resize(mem, (usize)((f32)slots.count * factor));
     }
 
     /**
@@ -3880,8 +3723,8 @@ struct HgECS {
         hg_assert(!has(entity, component_id));
 
         systems[component_id].sparse[entity] = (u32)systems[component_id].dense.count;
-        systems[component_id].dense.push_unchecked(entity);
-        return systems[component_id].components.push_unchecked();
+        systems[component_id].dense.push(entity);
+        return systems[component_id].components.push();
     }
 
     /**
