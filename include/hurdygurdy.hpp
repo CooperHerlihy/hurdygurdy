@@ -3681,7 +3681,7 @@ struct HgHashMap {
 };
 
 /**
- * A key hash set
+ * A hash set
  *
  * T must have an overload of hg_hash
  */
@@ -3777,10 +3777,9 @@ struct HgHashSet {
     }
 
     /**
-     * Inserts a value into the hash map
+     * Inserts a value into the hash set
      *
      * Parameters
-     * - key The key to store at
      * - value The value to store
      *
      * Returns
@@ -3814,10 +3813,10 @@ struct HgHashSet {
     }
 
     /**
-     * Removes a value from the hash map
+     * Removes a value from the hash set
      *
      * Parameters
-     * - key The key to remove from
+     * - key The value to remove
      */
     void remove(const T& value) {
         hg_assert(load < slots.count);
@@ -3845,13 +3844,13 @@ struct HgHashSet {
     }
 
     /**
-     * Checks whether a value exists
+     * Checks whether a value is contained in the set
      *
      * Parameters
-     * - key The key to check at
+     * - value The value to check
      *
      * Returns
-     * - Whether a value exists at the key
+     * - Whether the value is present
      */
     bool has(const T& value) {
         hg_assert(load < slots.count);
