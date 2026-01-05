@@ -42,6 +42,7 @@
 #include <optional>
 #include <type_traits>
 #include <utility>
+#include <string_view>
 
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
@@ -2705,7 +2706,7 @@ struct HgArray {
     }
 
     /**
-     * Increases the capacity of the array, or inits to init_size
+     * Increases the capacity of the array, or inits to 1
      *
      * Parameters
      * - mem The allocator to use
@@ -3036,7 +3037,7 @@ struct HgArrayAny {
     }
 
     /**
-     * Increases the capacity of the array, or inits to init_size
+     * Increases the capacity of the array, or inits to 1
      *
      * Parameters
      * - mem The allocator to use
@@ -3201,12 +3202,215 @@ struct HgArrayAny {
     }
 };
 
+/**
+ * A dynamic string container
+ */
+struct HgString {
+    /**
+     * The character buffer
+     */
+    HgSpan<char> chars;
+    /**
+     * The number of characters currently in the string
+     */
+    usize length;
+
+    /**
+     * Returns the size in bytes
+     */
+    constexpr usize size() {
+        return length;
+    }
+
+    /**
+     * Creates a new string with empty capacity
+     *
+     * Parameters
+     * - mem The allocator to use
+     * - capacity The capacity to begin with
+     *
+     * Returns
+     * - The created empty string
+     */
+    static HgString create(HgAllocator& mem, usize capacity);
+
+    /**
+     * Creates a new string copied from an existing string
+     *
+     * Parameters
+     * - mem The allocator to use
+     * - init The initial string to copy from
+     *
+     * Returns
+     * - The created copied string
+     */
+    static HgString create(HgAllocator& mem, std::string_view init);
+
+    /**
+     * Frees the string
+     *
+     * Parameters
+     * - mem The allocator to use
+     */
+    void destroy(HgAllocator& mem) {
+        mem.free(chars);
+    }
+
+    /**
+     * Removes all characters
+     */
+    constexpr void reset() {
+        length = 0;
+    }
+
+    /**
+     * Access the character at index
+     *
+     * Parameters
+     * - index The index to get from, must be < length
+     *
+     * Returns
+     * - A reference to the gotten character
+     */
+    constexpr char& get(usize index) {
+        hg_assert(index < length);
+        return chars[index];
+    }
+
+    /**
+     * Access the character at index in a const context
+     *
+     * Parameters
+     * - index The index to get from, must be < count
+     *
+     * Returns
+     * - A reference to the gotten character
+     */
+    constexpr const char& get(usize index) const {
+        hg_assert(index < length);
+        return chars[index];
+    }
+
+    /**
+     * Access using the index operator
+     */
+    constexpr char& operator[](usize index) {
+        return get(index);
+    }
+
+    /**
+     * Access using the index operator in a const context
+     */
+    constexpr const char& operator[](usize index) const {
+        return get(index);
+    }
+
+    /**
+     * For c++ ranged based for loop
+     */
+    constexpr char *begin() {
+        return chars.data;
+    }
+
+    /**
+     * For c++ ranged based for loop in a const context
+     */
+    constexpr const char *begin() const {
+        return chars.data;
+    }
+
+    /**
+     * For c++ ranged based for loop
+     */
+    constexpr char *end() {
+        return chars.data + length;
+    }
+
+    /**
+     * For c++ ranged based for loop in a const context
+     */
+    constexpr const char *end() const {
+        return chars.data + length;
+    }
+
+    /**
+     * Increases the capacity to a minimum value
+     *
+     * Parameters
+     * - mem The allocator to use
+     * - min The new minimum capacity
+     *
+     * Returns
+     * - Whether the allocation succeeded
+     */
+    bool reserve(HgAllocator& mem, usize min);
+
+    /**
+     * Increases the capacity of the string, or inits to 1
+     *
+     * Parameters
+     * - mem The allocator to use
+     * - factor The growth factor to increase by
+     *
+     * Returns
+     * - Whether the allocation succeeded
+     */
+    bool grow(HgAllocator& mem, f32 factor = 2.0f) {
+        hg_assert(factor > 1.0f);
+        hg_assert(chars.count <= (usize)((f32)SIZE_MAX / factor));
+        return reserve(mem, chars.count == 0 ? 1 : (usize)((f32)chars.count * factor));
+    }
+
+    /**
+     * Copies another string into this string at index
+     * 
+     * Parameters
+     * - mem The allocator to use
+     */
+    void insert(HgAllocator& mem, usize index, std::string_view str);
+
+    /**
+     * Copies another string to the end of this string
+     */
+    void append(HgAllocator& mem, std::string_view str) {
+        insert(mem, length, str);
+    }
+
+    /**
+     * Copies another string to the beginning of this string
+     */
+    void prepend(HgAllocator& mem, std::string_view str) {
+        insert(mem, 0, str);
+    }
+
+    /**
+     * Implicit converts to string_view
+     */
+    operator std::string_view() {
+        return {chars.data, length};
+    }
+};
+
+inline bool operator==(HgString lhs, HgString rhs) {
+    return lhs.length == rhs.length && memcmp(lhs.chars.data, rhs.chars.data, lhs.length) == 0;
+}
+
+inline bool operator!=(HgString lhs, HgString rhs) {
+    return lhs.length != rhs.length || memcmp(lhs.chars.data, rhs.chars.data, lhs.length) != 0;
+}
+
+/**
+ * Hash map hashing for integral types
+ */
 template<typename T>
 typename std::enable_if_t<std::is_integral_v<T>, usize>
 hg_hash(T val) {
     return (usize)val;
 }
 
+/**
+ * Hash map hashing for floating point types
+ */
 template<typename T>
 typename std::enable_if_t<std::is_floating_point_v<T>, usize>
 hg_hash(T val) {
@@ -3216,6 +3420,27 @@ hg_hash(T val) {
     } u;
     u.as_float = val;
     return u.as_usize;
+}
+
+/**
+ * Hash map hashing for strings
+ */
+inline usize hg_hash(std::string_view str) {
+    constexpr u64 power = 257;
+    u64 mult = 1;
+    u64 res = 0;
+    for (char c : str) {
+        res += (u64)c * mult;
+        mult *= power;
+    }
+    return res;
+}
+
+/**
+ * Hash map hashing for HgString
+ */
+inline usize hg_hash(HgString str) {
+    return hg_hash((std::string_view)str);
 }
 
 /**
@@ -3272,6 +3497,16 @@ struct HgHashMap {
      */
     void destroy(HgAllocator& mem) {
         mem.free(slots);
+    }
+
+    /**
+     * Empties all slots
+     */
+    void reset() {
+        for (Slot& slot : slots) {
+            slot.reset();
+        }
+        load = 0;
     }
 
     /**

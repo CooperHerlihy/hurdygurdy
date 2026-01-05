@@ -35,7 +35,7 @@ static HgArray<HgTest>& hg_internal_get_tests() {
 }
 
 HgTest::HgTest(const char *test_name, bool (*test_function)()) : name(test_name), function(test_function) {
-    HgArray<HgTest> internal_tests = hg_internal_get_tests();
+    HgArray<HgTest>& internal_tests = hg_internal_get_tests();
     if (internal_tests.is_full())
         internal_tests.grow(HgStdAllocator::get());
     internal_tests.push(*this);
@@ -518,7 +518,87 @@ hg_test(hg_array_any) {
     return true;
 }
 
-hg_test(hg_hash_map) {
+HgString HgString::create(HgAllocator& mem, usize capacity) {
+    HgString str;
+    str.chars = mem.alloc<char>(capacity);
+    str.length = 0;
+    return str;
+}
+
+HgString HgString::create(HgAllocator& mem, std::string_view init) {
+    HgString str;
+    str.chars = mem.alloc<char>(init.length());
+    std::memcpy(str.chars.data, init.data(), init.length());
+    str.length = str.chars.count;
+    return str;
+}
+
+bool HgString::reserve(HgAllocator& mem, usize min) {
+    if (min > chars.count) {
+        HgSpan<char> new_items = mem.realloc(chars, min);
+        if (new_items == nullptr)
+            return false;
+        chars = new_items;
+    }
+    return true;
+}
+
+void HgString::insert(HgAllocator& mem, usize index, std::string_view str) {
+    hg_assert(index <= length);
+
+    usize new_length = length + str.length();
+
+    if (chars.count < new_length) {
+        usize new_count = chars.count == 0 ? 1 : chars.count;
+        while (new_count < new_length) {
+            new_count *= 2;
+        }
+        reserve(mem, new_count);
+    }
+
+    std::memmove(chars.data + index + str.length(), chars.data + index, length - index);
+    std::memcpy(chars.data + index, str.data(), str.length());
+    length = new_length;
+}
+
+hg_test(hg_string) {
+    HgArena mem = mem.create(HgStdAllocator::get(), 4096);
+    hg_defer(mem.destroy(HgStdAllocator::get()));
+
+    HgString a = a.create(mem, "a");
+    hg_test_assert(a[0] == 'a');
+    hg_test_assert(a.chars.count == 1);
+    hg_test_assert(a.length == 1);
+
+    HgString abc = abc.create(mem, "abc");
+    hg_test_assert(abc[0] == 'a');
+    hg_test_assert(abc[1] == 'b');
+    hg_test_assert(abc[2] == 'c');
+    hg_test_assert(abc.length == 3);
+    hg_test_assert(abc.chars.count == 3);
+
+    a.append(mem, "bc");
+    hg_test_assert(a == abc);
+
+    HgString str = str.create(mem, 16);
+    hg_test_assert(str == HgString::create(mem, 0));
+
+    str.append(mem, "hello");
+    hg_test_assert(str == HgString::create(mem, "hello"));
+
+    str.append(mem, " there");
+    hg_test_assert(str == HgString::create(mem, "hello there"));
+
+    str.prepend(mem, "why ");
+    hg_test_assert(str == HgString::create(mem, "why hello there"));
+
+    str.insert(mem, 3, ",");
+    hg_test_assert(str == HgString::create(mem, "why, hello there"));
+
+    return true;
+}
+
+hg_test(hg_hash_map_int) {
     HgStdAllocator mem;
 
     constexpr usize count = 128;
@@ -526,67 +606,225 @@ hg_test(hg_hash_map) {
     HgHashMap<u32, u32> map = map.create(mem, count);
     hg_defer(map.destroy(mem));
 
-    hg_test_assert(map.load == 0);
-    hg_test_assert(!map.has(0));
-    hg_test_assert(!map.has(1));
-    hg_test_assert(!map.has(12));
-    hg_test_assert(!map.has(42));
-    hg_test_assert(!map.has(100000));
+    for (usize i = 0; i < 3; ++i) {
+        hg_test_assert(map.load == 0);
+        hg_test_assert(!map.has(0));
+        hg_test_assert(!map.has(1));
+        hg_test_assert(!map.has(12));
+        hg_test_assert(!map.has(42));
+        hg_test_assert(!map.has(100000));
 
-    map.insert(1, 1);
-    hg_test_assert(map.load == 1);
-    hg_test_assert(map.has(1));
-    hg_test_assert(map.get(1) == 1);
-    hg_test_assert(map.try_get(1) != nullptr);
-    hg_test_assert(*map.try_get(1) == 1);
+        map.insert(1, 1);
+        hg_test_assert(map.load == 1);
+        hg_test_assert(map.has(1));
+        hg_test_assert(map.get(1) == 1);
+        hg_test_assert(map.try_get(1) != nullptr);
+        hg_test_assert(*map.try_get(1) == 1);
 
-    map.remove(1);
-    hg_test_assert(map.load == 0);
-    hg_test_assert(!map.has(1));
-    hg_test_assert(map.try_get(1) == nullptr);
+        map.remove(1);
+        hg_test_assert(map.load == 0);
+        hg_test_assert(!map.has(1));
+        hg_test_assert(map.try_get(1) == nullptr);
 
-    hg_test_assert(!map.has(12));
-    hg_test_assert(!map.has(12 + count));
+        hg_test_assert(!map.has(12));
+        hg_test_assert(!map.has(12 + count));
 
-    map.insert(12, 42);
-    hg_test_assert(map.load == 1);
-    hg_test_assert(map.has(12) && map.get(12) == 42);
-    hg_test_assert(!map.has(12 + count));
+        map.insert(12, 42);
+        hg_test_assert(map.load == 1);
+        hg_test_assert(map.has(12) && map.get(12) == 42);
+        hg_test_assert(!map.has(12 + count));
 
-    map.insert(12 + count, 100);
-    hg_test_assert(map.load == 2);
-    hg_test_assert(map.has(12) && map.get(12) == 42);
-    hg_test_assert(map.has(12 + count) && map.get(12 + count) == 100);
+        map.insert(12 + count, 100);
+        hg_test_assert(map.load == 2);
+        hg_test_assert(map.has(12) && map.get(12) == 42);
+        hg_test_assert(map.has(12 + count) && map.get(12 + count) == 100);
 
-    map.insert(12 + count * 2, 200);
-    hg_test_assert(map.load == 3);
-    hg_test_assert(map.has(12) && map.get(12) == 42);
-    hg_test_assert(map.has(12 + count) && map.get(12 + count) == 100);
-    hg_test_assert(map.has(12 + count * 2) && map.get(12 + count * 2) == 200);
+        map.insert(12 + count * 2, 200);
+        hg_test_assert(map.load == 3);
+        hg_test_assert(map.has(12) && map.get(12) == 42);
+        hg_test_assert(map.has(12 + count) && map.get(12 + count) == 100);
+        hg_test_assert(map.has(12 + count * 2) && map.get(12 + count * 2) == 200);
 
-    map.remove(12);
-    hg_test_assert(map.load == 2);
-    hg_test_assert(!map.has(12));
-    hg_test_assert(map.has(12 + count) && map.get(12 + count) == 100);
+        map.remove(12);
+        hg_test_assert(map.load == 2);
+        hg_test_assert(!map.has(12));
+        hg_test_assert(map.has(12 + count) && map.get(12 + count) == 100);
 
-    map.insert(42, 12);
-    hg_test_assert(map.load == 3);
-    hg_test_assert(map.has(42) && map.get(42) == 12);
+        map.insert(42, 12);
+        hg_test_assert(map.load == 3);
+        hg_test_assert(map.has(42) && map.get(42) == 12);
 
-    map.remove(12 + count);
-    hg_test_assert(map.load == 2);
-    hg_test_assert(!map.has(12));
-    hg_test_assert(!map.has(12 + count));
+        map.remove(12 + count);
+        hg_test_assert(map.load == 2);
+        hg_test_assert(!map.has(12));
+        hg_test_assert(!map.has(12 + count));
 
-    map.remove(42);
-    hg_test_assert(map.load == 1);
-    hg_test_assert(!map.has(42));
+        map.remove(42);
+        hg_test_assert(map.load == 1);
+        hg_test_assert(!map.has(42));
 
-    map.remove(12 + count * 2);
-    hg_test_assert(map.load == 0);
-    hg_test_assert(!map.has(12));
-    hg_test_assert(!map.has(12 + count));
-    hg_test_assert(!map.has(12 + count * 2));
+        map.remove(12 + count * 2);
+        hg_test_assert(map.load == 0);
+        hg_test_assert(!map.has(12));
+        hg_test_assert(!map.has(12 + count));
+        hg_test_assert(!map.has(12 + count * 2));
+
+        map.reset();
+    }
+
+    return true;
+}
+
+hg_test(hg_hash_map_str) {
+    HgStdAllocator mem;
+
+    {
+        using StrHash = usize;
+
+        HgHashMap<StrHash, u32> map = map.create(mem, 128);
+        hg_defer(map.destroy(mem));
+
+        StrHash a = hg_hash("a");
+        StrHash b = hg_hash("b");
+        StrHash ab = hg_hash("ab");
+        StrHash scf = hg_hash("supercalifragilisticexpialidocious");
+
+        hg_test_assert(!map.has(a));
+        hg_test_assert(!map.has(b));
+        hg_test_assert(!map.has(ab));
+        hg_test_assert(!map.has(scf));
+
+        map.insert(a, 1);
+        map.insert(b, 2);
+        map.insert(ab, 3);
+        map.insert(scf, 4);
+
+        hg_test_assert(map.has(a) && map.get(a) == 1);
+        hg_test_assert(map.has(b) && map.get(b) == 2);
+        hg_test_assert(map.has(ab) && map.get(ab) == 3);
+        hg_test_assert(map.has(scf) && map.get(scf) == 4);
+
+        map.remove(a);
+        map.remove(b);
+        map.remove(ab);
+        map.remove(scf);
+
+        hg_test_assert(!map.has(a));
+        hg_test_assert(!map.has(b));
+        hg_test_assert(!map.has(ab));
+        hg_test_assert(!map.has(scf));
+    }
+
+    {
+        HgHashMap<const char *, u32> map = map.create(mem, 128);
+        hg_defer(map.destroy(mem));
+
+        const char *a = "a";
+        const char *b = "b";
+        const char *ab = "ab";
+        const char *scf = "supercalifragilisticexpialidocious";
+
+        hg_test_assert(!map.has(a));
+        hg_test_assert(!map.has(b));
+        hg_test_assert(!map.has(ab));
+        hg_test_assert(!map.has(scf));
+
+        map.insert(a, 1);
+        map.insert(b, 2);
+        map.insert(ab, 3);
+        map.insert(scf, 4);
+
+        hg_test_assert(map.has(a) && map.get(a) == 1);
+        hg_test_assert(map.has(b) && map.get(b) == 2);
+        hg_test_assert(map.has(ab) && map.get(ab) == 3);
+        hg_test_assert(map.has(scf) && map.get(scf) == 4);
+
+        map.remove(a);
+        map.remove(b);
+        map.remove(ab);
+        map.remove(scf);
+
+        hg_test_assert(!map.has(a));
+        hg_test_assert(!map.has(b));
+        hg_test_assert(!map.has(ab));
+        hg_test_assert(!map.has(scf));
+    }
+
+    {
+        HgHashMap<HgString, u32> map = map.create(mem, 128);
+        hg_defer(map.destroy(mem));
+
+        HgString a = a.create(mem, "a");
+        hg_defer(a.destroy(mem));
+        HgString b = b.create(mem, "b");
+        hg_defer(b.destroy(mem));
+        HgString ab = ab.create(mem, "ab");
+        hg_defer(ab.destroy(mem));
+        HgString scf = scf.create(mem, "supercalifragilisticexpialidocious");
+        hg_defer(scf.destroy(mem));
+
+        hg_test_assert(!map.has(a));
+        hg_test_assert(!map.has(b));
+        hg_test_assert(!map.has(ab));
+        hg_test_assert(!map.has(scf));
+
+        map.insert(a, 1);
+        map.insert(b, 2);
+        map.insert(ab, 3);
+        map.insert(scf, 4);
+
+        hg_test_assert(map.has(a) && map.get(a) == 1);
+        hg_test_assert(map.has(b) && map.get(b) == 2);
+        hg_test_assert(map.has(ab) && map.get(ab) == 3);
+        hg_test_assert(map.has(scf) && map.get(scf) == 4);
+
+        map.remove(a);
+        map.remove(b);
+        map.remove(ab);
+        map.remove(scf);
+
+        hg_test_assert(!map.has(a));
+        hg_test_assert(!map.has(b));
+        hg_test_assert(!map.has(ab));
+        hg_test_assert(!map.has(scf));
+    }
+
+    {
+        HgArena arena = arena.create(mem, 4096);
+        hg_defer(arena.destroy(mem));
+
+        HgHashMap<HgString, u32> map = map.create(mem, 128);
+        hg_defer(map.destroy(mem));
+
+        hg_test_assert(!map.has(HgString::create(mem, "a")));
+        hg_test_assert(!map.has(HgString::create(mem, "b")));
+        hg_test_assert(!map.has(HgString::create(mem, "ab")));
+        hg_test_assert(!map.has(HgString::create(mem, "supercalifragilisticexpialidocious")));
+
+        map.insert(HgString::create(mem, "a"), 1);
+        map.insert(HgString::create(mem, "b"), 2);
+        map.insert(HgString::create(mem, "ab"), 3);
+        map.insert(HgString::create(mem, "supercalifragilisticexpialidocious"), 4);
+
+        hg_test_assert(map.has(HgString::create(mem, "a")));
+        hg_test_assert(map.get(HgString::create(mem, "a")) == 1);
+        hg_test_assert(map.has(HgString::create(mem, "b")));
+        hg_test_assert(map.get(HgString::create(mem, "b")) == 2);
+        hg_test_assert(map.has(HgString::create(mem, "ab")));
+        hg_test_assert(map.get(HgString::create(mem, "ab")) == 3);
+        hg_test_assert(map.has(HgString::create(mem, "supercalifragilisticexpialidocious")));
+        hg_test_assert(map.get(HgString::create(mem, "supercalifragilisticexpialidocious")) == 4);
+
+        map.remove(HgString::create(mem, "a"));
+        map.remove(HgString::create(mem, "b"));
+        map.remove(HgString::create(mem, "ab"));
+        map.remove(HgString::create(mem, "supercalifragilisticexpialidocious"));
+
+        hg_test_assert(!map.has(HgString::create(mem, "a")));
+        hg_test_assert(!map.has(HgString::create(mem, "b")));
+        hg_test_assert(!map.has(HgString::create(mem, "ab")));
+        hg_test_assert(!map.has(HgString::create(mem, "supercalifragilisticexpialidocious")));
+    }
 
     return true;
 }
