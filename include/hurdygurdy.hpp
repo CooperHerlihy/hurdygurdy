@@ -3521,13 +3521,14 @@ struct HgHashMap {
      */
     bool resize(HgAllocator& mem, usize new_size) {
         HgSpan<Slot> old_slots = slots;
+        hg_defer(mem.free(old_slots));
         slots = mem.alloc<Slot>(new_size);
         if (slots == nullptr)
             return false;
         for (Slot& slot : old_slots) {
-            insert(old_slots[index]->key, old_slots[index]->value);
+            if (old_slots[index].has_value())
+                insert(old_slots[index]->key, old_slots[index]->value);
         }
-        mem.free(old_slots);
         return true;
     }
 
@@ -3558,12 +3559,28 @@ struct HgHashMap {
     Value& insert(const Key& key, const Value& value) {
         hg_assert(load < slots.count - 1);
 
+        Slot temp;
+        temp.emplace(key, value);
+
         usize index = hg_hash(key) % slots.count;
-        while (slots[index].has_value() && slots[index].value().key != key) {
-            ++index;
+        usize dist = 0;
+        while (slots[index].has_value() && slots[index]->key != key) {
+            usize other_hash = hg_hash(slots[index]->key);
+            if (other_hash < index)
+                other_hash += slots.count;
+
+            usize other_dist = other_hash - index;
+            if (dist > other_dist) {
+                slots[index].swap(temp);
+                dist = other_dist;
+            }
+
+            index = (index + 1) % slots.count;
+            ++dist;
         }
+
         ++load;
-        slots[index].emplace(key, value);
+        slots[index].swap(temp);
         return slots[index]->value;
     }
 
@@ -3578,7 +3595,7 @@ struct HgHashMap {
 
         usize index = hg_hash(key) % slots.count;
         while (slots[index].has_value() && slots[index]->key != key) {
-            ++index;
+            index = (index + 1) % slots.count;
         }
         if (!slots[index].has_value())
             return;
@@ -3586,7 +3603,7 @@ struct HgHashMap {
         slots[index].reset();
         --load;
 
-        ++index;
+        index = (index + 1) % slots.count;
         while (slots[index].has_value()) {
             if (hg_hash(slots[index]->key) % slots.count != index) {
                 Slot temp = slots[index];
@@ -3594,7 +3611,7 @@ struct HgHashMap {
                 --load;
                 insert(temp->key, temp->value);
             }
-            ++index;
+            index = (index + 1) % slots.count;
         }
     }
 
@@ -3614,7 +3631,7 @@ struct HgHashMap {
         while (slots[index].has_value()) {
             if (slots[index]->key == key)
                 return true;
-            ++index;
+            index = (index + 1) % slots.count;
         }
         return false;
     }
@@ -3636,7 +3653,7 @@ struct HgHashMap {
         while (slots[index].has_value()) {
             if (slots[index]->key == key)
                 return &slots[index]->value;
-            ++index;
+            index = (index + 1) % slots.count;
         }
         return nullptr;
     }
@@ -3658,8 +3675,194 @@ struct HgHashMap {
             hg_assert(slots[index].has_value());
             if (slots[index]->key == key)
                 return slots[index]->value;
-            ++index;
+            index = (index + 1) % slots.count;
         }
+    }
+};
+
+/**
+ * A key hash set
+ *
+ * T must have an overload of hg_hash
+ */
+template<typename T>
+struct HgHashSet {
+    static_assert(hg_is_memmove_safe_v<T>);
+
+    using Slot = std::optional<T>;
+
+    /**
+     * Where the values are stored
+     */
+    HgSpan<Slot> slots;
+    /**
+     * The current number of values that are stored
+     */
+    usize load;
+
+    /**
+     * Creates a new hash set
+     *
+     * Parameters
+     * - mem The allocator to use
+     * - slot_count The max number of slots to store values in
+     *
+     * Returns
+     * - The created empty hash set
+     */
+    static HgHashSet create(HgAllocator& mem, usize slot_count) {
+        hg_assert(slot_count > 0);
+
+        HgHashSet set;
+        set.slots = mem.alloc<Slot>(slot_count);
+        set.load = 0;
+        return set;
+    }
+
+    /**
+     * Destroys the hash set
+     *
+     * Parameters
+     * - mem The allocator to use
+     */
+    void destroy(HgAllocator& mem) {
+        mem.free(slots);
+    }
+
+    /**
+     * Empties all slots
+     */
+    void reset() {
+        for (Slot& slot : slots) {
+            slot.reset();
+        }
+        load = 0;
+    }
+
+    /**
+     * Resizes the slots and rehashes all entries
+     *
+     * Parameters
+     * - mem The allocator to use
+     * - new_size The new number of slots
+     *
+     * Returns
+     * - Whether the allocation succeeded
+     */
+    bool resize(HgAllocator& mem, usize new_size) {
+        HgSpan<Slot> old_slots = slots;
+        hg_defer(mem.free(old_slots));
+        slots = mem.alloc<Slot>(new_size);
+        if (slots == nullptr)
+            return false;
+        for (Slot& slot : old_slots) {
+            if (old_slots[index].has_value())
+                insert(old_slots[index].value());
+        }
+        return true;
+    }
+
+    /**
+     * Grows the number of slots by a factor
+     *
+     * Parameters
+     * - mem The allocator to use
+     * - factor The factor to increase by
+     *
+     * Returns
+     * - Whether the allocation succeeded
+     */
+    bool grow(HgAllocator& mem, f32 factor = 2) {
+        return resize(mem, (usize)((f32)slots.count * factor));
+    }
+
+    /**
+     * Inserts a value into the hash map
+     *
+     * Parameters
+     * - key The key to store at
+     * - value The value to store
+     *
+     * Returns
+     * - A reference to the constructed object
+     */
+    void insert(const T& value) {
+        hg_assert(load < slots.count - 1);
+
+        Slot temp;
+        temp.emplace(value);
+
+        usize index = hg_hash(value) % slots.count;
+        usize dist = 0;
+        while (slots[index].has_value() && slots[index].value() != value) {
+            usize other_hash = hg_hash(slots[index].value());
+            if (other_hash < index)
+                other_hash += slots.count;
+
+            usize other_dist = index - other_hash;
+            if (dist > other_dist) {
+                slots[index].swap(temp);
+                dist = other_dist;
+            }
+
+            index = (index + 1) % slots.count;
+            ++dist;
+        }
+
+        ++load;
+        slots[index].swap(temp);
+    }
+
+    /**
+     * Removes a value from the hash map
+     *
+     * Parameters
+     * - key The key to remove from
+     */
+    void remove(const T& value) {
+        hg_assert(load < slots.count);
+
+        usize index = hg_hash(value) % slots.count;
+        while (slots[index].has_value() && slots[index].value() != value) {
+            index = (index + 1) % slots.count;
+        }
+        if (!slots[index].has_value())
+            return;
+
+        slots[index].reset();
+        --load;
+
+        index = (index + 1) % slots.count;
+        while (slots[index].has_value()) {
+            if (hg_hash(slots[index].value()) % slots.count != index) {
+                Slot temp = slots[index];
+                slots[index].reset();
+                --load;
+                insert(temp.value());
+            }
+            index = (index + 1) % slots.count;
+        }
+    }
+
+    /**
+     * Checks whether a value exists
+     *
+     * Parameters
+     * - key The key to check at
+     *
+     * Returns
+     * - Whether a value exists at the key
+     */
+    bool has(const T& value) {
+        hg_assert(load < slots.count);
+
+        usize index = hg_hash(value) % slots.count;
+        while (slots[index].has_value()) {
+            if (slots[index].value() == value)
+                return true;
+            index = (index + 1) % slots.count;
+        }
+        return false;
     }
 };
 

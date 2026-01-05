@@ -830,6 +830,90 @@ hg_test(hg_hash_map_str) {
     return true;
 }
 
+hg_test(hg_hash_set_int) {
+    HgStdAllocator mem;
+
+    u32 count = 128;
+
+    HgHashSet<u32> set = set.create(mem, count);
+    hg_defer(set.destroy(mem));
+
+    for (usize i = 0; i < 3; ++i) {
+        hg_test_assert(set.load == 0);
+        hg_test_assert(!set.has(0));
+        hg_test_assert(!set.has(1));
+        hg_test_assert(!set.has(12));
+        hg_test_assert(!set.has(42));
+        hg_test_assert(!set.has(100000));
+
+        set.insert(1);
+        hg_test_assert(set.load == 1);
+        hg_test_assert(set.has(1));
+
+        set.remove(1);
+        hg_test_assert(set.load == 0);
+        hg_test_assert(!set.has(1));
+
+        hg_test_assert(!set.has(12));
+        hg_test_assert(!set.has(12 + count));
+
+        set.insert(12);
+        hg_test_assert(set.load == 1);
+        hg_test_assert(set.has(12));
+        hg_test_assert(!set.has(12 + count));
+
+        set.insert(12 + count);
+        hg_test_assert(set.load == 2);
+        hg_test_assert(set.has(12));
+        hg_test_assert(set.has(12 + count));
+
+        set.insert(12 + count * 2);
+        hg_test_assert(set.load == 3);
+        hg_test_assert(set.has(12));
+        hg_test_assert(set.has(12 + count));
+        hg_test_assert(set.has(12 + count * 2));
+
+        set.remove(12);
+        hg_test_assert(set.load == 2);
+        hg_test_assert(!set.has(12));
+        hg_test_assert(set.has(12 + count));
+
+        set.insert(42);
+        hg_test_assert(set.load == 3);
+        hg_test_assert(set.has(42));
+
+        set.remove(12 + count);
+        hg_test_assert(set.load == 2);
+        hg_test_assert(!set.has(12));
+        hg_test_assert(!set.has(12 + count));
+
+        set.remove(42);
+        hg_test_assert(set.load == 1);
+        hg_test_assert(!set.has(42));
+
+        set.remove(12 + count * 2);
+        hg_test_assert(set.load == 0);
+        hg_test_assert(!set.has(12));
+        hg_test_assert(!set.has(12 + count));
+        hg_test_assert(!set.has(12 + count * 2));
+
+        for (u32 j = 0; j < 100; ++j) {
+            hg_test_assert(!set.has(j * 3));
+            set.insert(j * 3);
+            hg_test_assert(set.has(j * 3));
+        }
+        for (u32 j = 0; j < 100; ++j) {
+            hg_test_assert(set.has(j * 3));
+            set.remove(j * 3);
+            hg_test_assert(!set.has(j * 3));
+        }
+
+        set.reset();
+    }
+
+    return true;
+}
+
 static u32& hg_internal_current_component_id() {
     static u32 id = 0;
     return id;
