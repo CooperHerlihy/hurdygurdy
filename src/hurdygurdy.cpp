@@ -553,7 +553,9 @@ void HgString::insert(HgAllocator& mem, usize index, std::string_view str) {
         while (new_count < new_length) {
             new_count *= 2;
         }
-        reserve(mem, new_count);
+        [[maybe_unused]] bool string_insert_allocation_success
+            = reserve(mem, new_count);
+        hg_assert(string_insert_allocation_success);
     }
 
     std::memmove(chars.data + index + str.length(), chars.data + index, length - index);
@@ -790,40 +792,39 @@ hg_test(hg_hash_map_str) {
     }
 
     {
-        HgArena arena = arena.create(mem, 4096);
+        HgArena arena = arena.create(mem, 1 << 16);
         hg_defer(arena.destroy(mem));
 
-        HgHashMap<HgString, u32> map = map.create(mem, 128);
-        hg_defer(map.destroy(mem));
+        HgHashMap<HgString, u32> map = map.create(arena, 128);
 
-        hg_test_assert(!map.has(HgString::create(mem, "a")));
-        hg_test_assert(!map.has(HgString::create(mem, "b")));
-        hg_test_assert(!map.has(HgString::create(mem, "ab")));
-        hg_test_assert(!map.has(HgString::create(mem, "supercalifragilisticexpialidocious")));
+        hg_test_assert(!map.has(HgString::create(arena, "a")));
+        hg_test_assert(!map.has(HgString::create(arena, "b")));
+        hg_test_assert(!map.has(HgString::create(arena, "ab")));
+        hg_test_assert(!map.has(HgString::create(arena, "supercalifragilisticexpialidocious")));
 
-        map.insert(HgString::create(mem, "a"), 1);
-        map.insert(HgString::create(mem, "b"), 2);
-        map.insert(HgString::create(mem, "ab"), 3);
-        map.insert(HgString::create(mem, "supercalifragilisticexpialidocious"), 4);
+        map.insert(HgString::create(arena, "a"), 1);
+        map.insert(HgString::create(arena, "b"), 2);
+        map.insert(HgString::create(arena, "ab"), 3);
+        map.insert(HgString::create(arena, "supercalifragilisticexpialidocious"), 4);
 
-        hg_test_assert(map.has(HgString::create(mem, "a")));
-        hg_test_assert(map.get(HgString::create(mem, "a")) == 1);
-        hg_test_assert(map.has(HgString::create(mem, "b")));
-        hg_test_assert(map.get(HgString::create(mem, "b")) == 2);
-        hg_test_assert(map.has(HgString::create(mem, "ab")));
-        hg_test_assert(map.get(HgString::create(mem, "ab")) == 3);
-        hg_test_assert(map.has(HgString::create(mem, "supercalifragilisticexpialidocious")));
-        hg_test_assert(map.get(HgString::create(mem, "supercalifragilisticexpialidocious")) == 4);
+        hg_test_assert(map.has(HgString::create(arena, "a")));
+        hg_test_assert(map.get(HgString::create(arena, "a")) == 1);
+        hg_test_assert(map.has(HgString::create(arena, "b")));
+        hg_test_assert(map.get(HgString::create(arena, "b")) == 2);
+        hg_test_assert(map.has(HgString::create(arena, "ab")));
+        hg_test_assert(map.get(HgString::create(arena, "ab")) == 3);
+        hg_test_assert(map.has(HgString::create(arena, "supercalifragilisticexpialidocious")));
+        hg_test_assert(map.get(HgString::create(arena, "supercalifragilisticexpialidocious")) == 4);
 
-        map.remove(HgString::create(mem, "a"));
-        map.remove(HgString::create(mem, "b"));
-        map.remove(HgString::create(mem, "ab"));
-        map.remove(HgString::create(mem, "supercalifragilisticexpialidocious"));
+        map.remove(HgString::create(arena, "a"));
+        map.remove(HgString::create(arena, "b"));
+        map.remove(HgString::create(arena, "ab"));
+        map.remove(HgString::create(arena, "supercalifragilisticexpialidocious"));
 
-        hg_test_assert(!map.has(HgString::create(mem, "a")));
-        hg_test_assert(!map.has(HgString::create(mem, "b")));
-        hg_test_assert(!map.has(HgString::create(mem, "ab")));
-        hg_test_assert(!map.has(HgString::create(mem, "supercalifragilisticexpialidocious")));
+        hg_test_assert(!map.has(HgString::create(arena, "a")));
+        hg_test_assert(!map.has(HgString::create(arena, "b")));
+        hg_test_assert(!map.has(HgString::create(arena, "ab")));
+        hg_test_assert(!map.has(HgString::create(arena, "supercalifragilisticexpialidocious")));
     }
 
     return true;
