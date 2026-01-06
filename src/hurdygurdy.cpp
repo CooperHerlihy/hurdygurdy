@@ -6,17 +6,19 @@
 #include <malloc.h>
 #endif
 
-static void hg_internal_platform_init();
-static void hg_internal_platform_exit();
-
 void hg_init(void) {
-    hg_vk_load();
-    hg_internal_platform_init();
+    // u32 thread_count = std::thread::hardware_concurrency()
+    //     - 1; // main thread
+    //          // audio thread, render thread : TODO
+    // hg_thread_init(thread_count);
+    hg_platform_init();
+    hg_vulkan_init();
 }
 
 void hg_exit(void) {
-    hg_internal_platform_exit();
-    hg_vk_unload();
+    hg_vulkan_deinit();
+    hg_platform_deinit();
+    // hg_thread_deinit();
 }
 
 hg_test(hg_init_and_exit) {
@@ -46,6 +48,7 @@ bool hg_run_tests() {
 
     bool all_succeeded = true;
     std::printf("HurdyGurdy: Tests Begun\n");
+    HgClock timer{};
     for (usize i = 0; i < tests.count; ++i) {
         std::printf("%s...\n", tests[i].name);
         if (tests[i].function()) {
@@ -55,10 +58,11 @@ bool hg_run_tests() {
             std::printf("\x1b[31mFailure\n\x1b[0m");
         }
     }
+    f64 ms = timer.tick() * 1000.0f;
     if (all_succeeded) {
-        std::printf("HurdyGurdy: Tests Complete \x1b[32m[Success]\x1b[0m\n");
+        std::printf("HurdyGurdy: Tests Complete in %fms \x1b[32m[Success]\x1b[0m\n", ms);
     } else {
-        std::printf("HurdyGurdy: Tests Complete \x1b[31m[Failure]\x1b[0m\n");
+        std::printf("HurdyGurdy: Tests Complete in %fms \x1b[31m[Failure]\x1b[0m\n", ms);
     }
     return all_succeeded;
 }
@@ -533,6 +537,10 @@ HgString HgString::create(HgAllocator& mem, std::string_view init) {
     return str;
 }
 
+void HgString::destroy(HgAllocator& mem) {
+    mem.free(chars);
+}
+
 bool HgString::reserve(HgAllocator& mem, usize min) {
     if (min > chars.count) {
         HgSpan<char> new_items = mem.realloc(chars, min);
@@ -541,6 +549,12 @@ bool HgString::reserve(HgAllocator& mem, usize min) {
         chars = new_items;
     }
     return true;
+}
+
+bool HgString::grow(HgAllocator& mem, f32 factor) {
+    hg_assert(factor > 1.0f);
+    hg_assert(chars.count <= (usize)((f32)SIZE_MAX / factor));
+    return reserve(mem, chars.count == 0 ? 1 : (usize)((f32)chars.count * factor));
 }
 
 void HgString::insert(HgAllocator& mem, usize index, std::string_view str) {
@@ -1345,10 +1359,115 @@ hg_test(hg_ecs_sort) {
     return true;
 }
 
-f64 HgClock::tick() {
-    auto prev = time;
-    time = std::chrono::high_resolution_clock::now();
-    return std::chrono::duration<f64>{time - prev}.count();
+static HgSpan<std::thread> hg_internal_threads;
+static HgSpan<std::atomic_bool> hg_internal_threads_should_close;
+
+static std::mutex hg_internal_thread_work_mutex{};
+static HgArray<HgThreadWork> hg_internal_thread_work_queue;
+
+static void hg_internal_thread_fn(u32 index) {
+    for (;;) {
+        if (hg_internal_threads_should_close[index].load())
+            return;
+
+        if (hg_internal_thread_work_mutex.try_lock()) {
+            if (hg_internal_thread_work_queue.count > 0) {
+                HgThreadWork work = hg_internal_thread_work_queue.last();
+                hg_internal_thread_work_queue.pop();
+                hg_internal_thread_work_mutex.unlock();
+                work.function(work.data);
+            } else {
+                hg_internal_thread_work_mutex.unlock();
+            }
+        }
+    }
+}
+
+void hg_thread_init(u32 thread_pool_size) {
+    if (hg_internal_threads != nullptr)
+        return;
+    hg_assert(hg_internal_threads_should_close == nullptr);
+
+    HgStdAllocator mem;
+    hg_internal_threads = mem.alloc<std::thread>(thread_pool_size);
+    hg_internal_threads_should_close = mem.alloc<std::atomic<bool>>(thread_pool_size);
+    hg_internal_thread_work_queue = hg_internal_thread_work_queue.create(mem, 0, 1024);
+
+    for (u32 i = 0; i < thread_pool_size; ++i) {
+        hg_internal_threads_should_close[i].store(false);
+        hg_internal_threads_should_close[i].store(false);
+        hg_internal_threads[i] = std::thread{hg_internal_thread_fn, i};
+    }
+}
+
+void hg_thread_deinit() {
+    if (hg_internal_threads == nullptr)
+        return;
+    hg_assert(hg_internal_threads_should_close != nullptr);
+
+    for (auto& should_close : hg_internal_threads_should_close) {
+        should_close.store(true);
+    }
+    for (auto& thread : hg_internal_threads) {
+        thread.join();
+    }
+
+    HgStdAllocator mem;
+    mem.free(hg_internal_threads);
+    mem.free(hg_internal_threads_should_close);
+    hg_internal_threads = {};
+    hg_internal_threads_should_close = {};
+}
+
+void hg_thread_submit(HgThreadWork work) {
+    hg_assert(work.function != nullptr);
+
+    hg_internal_thread_work_mutex.lock();
+
+    if (hg_internal_thread_work_queue.is_full())
+        hg_internal_thread_work_queue.grow(HgStdAllocator::get());
+    hg_internal_thread_work_queue.push(work);
+
+    hg_internal_thread_work_mutex.unlock();
+}
+
+bool hg_thread_wait_all(f64 timeout_seconds) {
+    HgClock timer{};
+    for (f64 elapsed = 0.0f; elapsed < timeout_seconds; elapsed += timer.tick()) {
+        if (hg_internal_thread_work_mutex.try_lock()) {
+            if (hg_internal_thread_work_queue.count == 0)
+                return true;
+            hg_internal_thread_work_mutex.unlock();
+        }
+    }
+    return false;
+}
+
+hg_test(hg_thread) {
+    hg_thread_init();
+    hg_thread_deinit();
+
+    hg_thread_init(2);
+    hg_defer(hg_thread_deinit());
+
+    HgThreadWork work;
+    work.function = [](void *data) {
+        *(bool *)data = true;
+    };
+
+    bool vals[1000] = {};
+    for (bool& val : vals) {
+        work.data = &val;
+        hg_thread_submit(work);
+    }
+
+    hg_test_assert(hg_thread_wait_all(10.0));
+
+    for (bool& val : vals) {
+        hg_test_assert(val == true);
+    }
+
+    return true;
 }
 
 HgSpan<void> hg_file_load_binary(HgAllocator& allocator, const char *path) {
@@ -1412,6 +1531,12 @@ hg_test(hg_file_binary) {
     hg_test_assert(memcmp(save_data, load_data.data, load_data.size()) == 0);
 
     return true;
+}
+
+f64 HgClock::tick() {
+    auto prev = time;
+    time = std::chrono::high_resolution_clock::now();
+    return std::chrono::duration<f64>{time - prev}.count();
 }
 
 #define HG_MAKE_VULKAN_FUNC(name) PFN_##name name
@@ -2575,7 +2700,7 @@ static const char *const hg_internal_vk_device_extensions[]{
 static VkPhysicalDevice hg_internal_find_single_queue_gpu(VkInstance instance, u32 *queue_family) {
     hg_assert(instance != nullptr);
 
-    HgStdAllocator mem; // replace with temporary allocator : TODO
+    HgStdAllocator mem; // replace allocator : TODO
 
     u32 gpu_count;
     vkEnumeratePhysicalDevices(instance, &gpu_count, nullptr);
@@ -4081,7 +4206,7 @@ KeySym XLookupKeysym(XKeyEvent *key_event, int index) {
 
 Display *hg_internal_x11_display = nullptr;
 
-static void hg_internal_platform_init() {
+void hg_platform_init() {
     if (hg_internal_libx11 == nullptr)
         hg_internal_libx11 = dlopen("libX11.so.6", RTLD_LAZY);
     if (hg_internal_libx11 == nullptr)
@@ -4107,7 +4232,7 @@ static void hg_internal_platform_init() {
         hg_error("Could not open X display\n");
 }
 
-static void hg_internal_platform_exit() {
+void hg_platform_deinit() {
     if (hg_internal_x11_display != nullptr) {
         XCloseDisplay(hg_internal_x11_display);
         hg_internal_x11_display = nullptr;
@@ -4747,11 +4872,11 @@ void hg_process_window_events(HgSpan<const HgWindow> windows) {
 
 HINSTANCE hg_internal_win32_instance = nullptr;
 
-void hg_internal_platform_init() {
+void hg_platform_init() {
     hg_internal_win32_instance = GetModuleHandle(nullptr);
 }
 
-void hg_internal_platform_exit() {
+void hg_platform_deinit() {
     hg_internal_win32_instance = nullptr;
 }
 
@@ -5325,7 +5450,7 @@ static void *hg_internal_libvulkan = nullptr;
         hg_error("Could not load " #name "\n"); \
     }
 
-void hg_vk_load(void) {
+void hg_vulkan_init(void) {
 
 #if defined(HG_PLATFORM_LINUX)
 
@@ -5355,7 +5480,7 @@ void hg_vk_load(void) {
     HG_LOAD_VULKAN_FUNC(vkCreateInstance);
 }
 
-void hg_vk_unload() {
+void hg_vulkan_deinit() {
 
     if (hg_internal_libvulkan != nullptr) {
 

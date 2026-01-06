@@ -37,9 +37,12 @@
 #include <cstring>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
+#include <mutex>
 #include <new>
 #include <optional>
+#include <thread>
 #include <type_traits>
 #include <utility>
 #include <string_view>
@@ -85,10 +88,9 @@
  * Initializes the HurdyGurdy library
  *
  * Run this function before calling functions from these sections:
+ * - Threading
  * - Windowing
  * - Vulkan
- *
- * Note, calls hg_vk_load
  */
 void hg_init();
 
@@ -2164,8 +2166,6 @@ HgMat4f hg_projection_perspective(f32 fov, f32 aspect, f32 near, f32 far);
 
 // random number generators : TODO
 
-// hash functions : TODO
-
 // sort and search algorithms : TODO
 
 /**
@@ -2187,7 +2187,10 @@ inline u32 hg_max_mipmaps(u32 width, u32 height, u32 depth) {
 }
 
 template<typename T>
-struct hg_is_memmove_safe : std::bool_constant<std::is_trivially_copyable_v<T> && std::is_trivially_destructible_v<T>> {};
+struct hg_is_memmove_safe : std::bool_constant<
+    std::is_trivially_copyable_v<T> &&
+    std::is_trivially_destructible_v<T>
+> {};
 
 template<typename T>
 using hg_is_memmove_safe_t = typename hg_is_memmove_safe<T>::type;
@@ -3252,9 +3255,7 @@ struct HgString {
      * Parameters
      * - mem The allocator to use
      */
-    void destroy(HgAllocator& mem) {
-        mem.free(chars);
-    }
+    void destroy(HgAllocator& mem);
 
     /**
      * Removes all characters
@@ -3355,11 +3356,7 @@ struct HgString {
      * Returns
      * - Whether the allocation succeeded
      */
-    bool grow(HgAllocator& mem, f32 factor = 2.0f) {
-        hg_assert(factor > 1.0f);
-        hg_assert(chars.count <= (usize)((f32)SIZE_MAX / factor));
-        return reserve(mem, chars.count == 0 ? 1 : (usize)((f32)chars.count * factor));
-    }
+    bool grow(HgAllocator& mem, f32 factor = 2.0f);
 
     /**
      * Copies another string into this string at index
@@ -3403,8 +3400,7 @@ inline bool operator!=(HgString lhs, HgString rhs) {
  * Hash map hashing for integral types
  */
 template<typename T>
-typename std::enable_if_t<std::is_integral_v<T>, usize>
-hg_hash(T val) {
+constexpr typename std::enable_if_t<std::is_integral_v<T>, usize> hg_hash(T val) {
     return (usize)val;
 }
 
@@ -3412,8 +3408,7 @@ hg_hash(T val) {
  * Hash map hashing for floating point types
  */
 template<typename T>
-typename std::enable_if_t<std::is_floating_point_v<T>, usize>
-hg_hash(T val) {
+constexpr typename std::enable_if_t<std::is_floating_point_v<T>, usize> hg_hash(T val) {
     union {
         T as_float;
         usize as_usize;
@@ -3425,7 +3420,7 @@ hg_hash(T val) {
 /**
  * Hash map hashing for strings
  */
-inline usize hg_hash(std::string_view str) {
+constexpr usize hg_hash(std::string_view str) {
     constexpr u64 power = 257;
     u64 mult = 1;
     u64 res = 0;
@@ -3671,7 +3666,7 @@ struct HgHashMap {
         hg_assert(load < slots.count);
 
         usize index = hg_hash(key) % slots.count;
-        while (true) {
+        for (;;) {
             hg_assert(slots[index].has_value());
             if (slots[index]->key == key)
                 return slots[index]->value;
@@ -4718,22 +4713,57 @@ finish:
 };
 
 /**
- * A high precision clock for timers and game deltas
+ * Initializes global thread pool
+ *
+ * Parameters
+ * - thread_pool_size The number of threads to allocate for the thread pool
  */
-struct HgClock {
-    std::chrono::time_point<std::chrono::high_resolution_clock> time = std::chrono::high_resolution_clock::now();
+void hg_thread_init(u32 thread_pool_size = std::thread::hardware_concurrency() - 1);
 
+/**
+ * Waits for all thread submissions to be completed
+ *
+ * Parameters
+ * - timeout_seconds The number of seconds to wait before timing out
+ *
+ * Returns
+ * - true if all threads completed
+ * - false if the timeout was reached
+ */
+bool hg_thread_wait_all(f64 timeout_seconds = INFINITY);
+
+/**
+ * Deinitializes global thread pool
+ *
+ * Parameters
+ * - thread_pool_size The number of threads to allocate for the thread pool
+ */
+void hg_thread_deinit();
+
+/**
+ * A work submission to a thread
+ */
+struct HgThreadWork {
     /**
-     * Resets the clock and returns the delta since the last tick in seconds
+     * The function to be executed by the thread, must not be nullptr
      *
      * Parameters
-     * - clock The clock to tick, must not be nullptr
-     *
-     * Returns
-     * - Seconds since last tick
+     * - data An arbitrary data pointer
      */
-    f64 tick();
+    void (*function)(void *data);
+    /**
+     * The arbitrary data pointer passed to the function
+     */
+    void *data;
 };
+
+/**
+ * Pushes work to the thread queue to be executed
+ *
+ * Parameters
+ * - work The function to be executed
+ */
+void hg_thread_submit(HgThreadWork work);
 
 /**
  * Loads a binary file
@@ -4776,19 +4806,35 @@ bool hg_file_save_binary(HgSpan<const void> data, const char *path);
 // 3d model files : TODO
 // audio files : TODO
 
-// thread pool : TODO
+/**
+ * A high precision clock for timers and game deltas
+ */
+struct HgClock {
+    std::chrono::time_point<std::chrono::high_resolution_clock> time = std::chrono::high_resolution_clock::now();
+
+    /**
+     * Resets the clock and returns the delta since the last tick in seconds
+     *
+     * Parameters
+     * - clock The clock to tick, must not be nullptr
+     *
+     * Returns
+     * - Seconds since last tick
+     */
+    f64 tick();
+};
 
 /**
  * Loads the Vulkan library and the functions required to create an instance
  *
  * Note, this function is automatically called from hg_init
  */
-void hg_vk_load();
+void hg_vulkan_init();
 
 /**
  * Unloads the Vulkan library
  */
-void hg_vk_unload();
+void hg_vulkan_deinit();
 
 /**
  * Loads the Vulkan functions which use the instance
@@ -5311,6 +5357,16 @@ void hg_vk_image_generate_mipmaps(
     u32 height,
     u32 depth,
     u32 mip_count);
+
+/**
+ * Initializes global resources for windowing
+ */
+void hg_platform_init();
+
+/**
+ * Deinitializes global resources for windowing
+ */
+void hg_platform_deinit();
 
 /**
  * A key on the keyboard or button on the mouse
