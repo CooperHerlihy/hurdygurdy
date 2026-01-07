@@ -24,8 +24,8 @@
  * =============================================================================
  */
 
-#ifndef HURDYGURDY_H
-#define HURDYGURDY_H
+#ifndef HURDYGURDY_HPP
+#define HURDYGURDY_HPP
 
 #include <cfloat>
 #include <cinttypes>
@@ -37,15 +37,13 @@
 #include <cstring>
 
 #include <algorithm>
-#include <atomic>
 #include <chrono>
-#include <mutex>
-#include <new>
 #include <optional>
-#include <thread>
-#include <type_traits>
-#include <utility>
 #include <string_view>
+
+#include <atomic>
+#include <mutex>
+#include <thread>
 
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
@@ -4713,34 +4711,6 @@ finish:
 };
 
 /**
- * Initializes global thread pool
- *
- * Parameters
- * - thread_pool_size The number of threads to allocate for the thread pool
- */
-void hg_thread_init(u32 thread_pool_size = std::thread::hardware_concurrency() - 1);
-
-/**
- * Waits for all thread submissions to be completed
- *
- * Parameters
- * - timeout_seconds The number of seconds to wait before timing out
- *
- * Returns
- * - true if all threads completed
- * - false if the timeout was reached
- */
-bool hg_thread_wait_all(f64 timeout_seconds = INFINITY);
-
-/**
- * Deinitializes global thread pool
- *
- * Parameters
- * - thread_pool_size The number of threads to allocate for the thread pool
- */
-void hg_thread_deinit();
-
-/**
  * A work submission to a thread
  */
 struct HgThreadWork {
@@ -4755,15 +4725,85 @@ struct HgThreadWork {
      * The arbitrary data pointer passed to the function
      */
     void *data;
+
+    /**
+     * Creates a generic function pointer from a lambda
+     *
+     * Note, the lambda capture (if it exists) must outlive its execution
+     *
+     * Parameters
+     * - func The lambda function to use
+     */
+    template<typename F, typename = std::enable_if_t<std::is_invocable_v<F>>>
+    HgThreadWork(F& func) {
+        function = [](void *pfunc) {
+            (*(F *)pfunc)();
+        };
+        data = &func;
+    }
+
+    HgThreadWork() {}
 };
 
 /**
- * Pushes work to the thread queue to be executed
- *
- * Parameters
- * - work The function to be executed
+ * A thread pool
  */
-void hg_thread_submit(HgThreadWork work);
+struct HgThreadPool {
+    /**
+     * The threads in the pool
+     */
+    HgSpan<std::thread> threads;
+    /**
+     * Signals to the threads to close
+     */
+    HgSpan<std::atomic_bool> threads_should_close;
+    /**
+     * Mutex to protect the work queue
+     */
+    std::mutex work_queue_mutex;
+    /**
+     * The queue of work to be executed
+     */
+    HgArray<HgThreadWork> work_queue;
+
+    /**
+     * Creates a new thread pool
+     *
+     * Parameters
+     * - mem The allocator to use
+     * - thread_count The number of threads to spawn (recommended hardware - 1)
+     *
+     * Returns
+     * - The created thread pool
+     * - nullptr on failure
+     */
+    static HgThreadPool *create(HgAllocator& mem, usize thread_count, usize queue_size);
+
+    /**
+     * Destroys the thread pool
+     */
+    static void destroy(HgAllocator& mem, HgThreadPool *pool);
+
+    /**
+     * Pushes work to the queue to be executed
+     *
+     * Parameters
+     * - work The function to be executed
+     */
+    void submit_work(HgThreadWork work);
+
+    /**
+     * Waits for all thread submissions to be completed
+     *
+     * Parameters
+     * - timeout_seconds The time in seconds to wait before timing out
+     *
+     * Returns
+     * - true if all threads completed
+     * - false if the timeout was reached
+     */
+    bool wait_all(f64 timeout_seconds);
+};
 
 /**
  * Loads a binary file
@@ -5867,4 +5907,4 @@ void hg_pipeline_sprite_draw(
     HgPipelineSpriteTexture *texture,
     HgPipelineSpritePush *push_data);
 
-#endif // HURDYGURDY_H
+#endif // HURDYGURDY_HPP

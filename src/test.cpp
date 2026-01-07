@@ -295,8 +295,6 @@ int main(void) {
         }
     }
 
-    [[maybe_unused]] void *x = malloc(100);
-
     vkDeviceWaitIdle(device.handle);
 }
 
