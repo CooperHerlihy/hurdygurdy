@@ -278,6 +278,9 @@ using iptr = std::intptr_t;
 using f32 = std::float_t;
 using f64 = std::double_t;
 
+template<typename T>
+using HgOption = std::optional<T>;
+
 /**
  * A pointer-count view into memory
  */
@@ -2458,13 +2461,14 @@ struct HgArena : public HgAllocator {
      * Allocates an arena with capacity
      *
      * Parameters
-     * - allocator The allocator to use to create the arena
+     * - parent The allocator to create the arena from
      * - capacity The size of the block to allocate and use
      *
      * Returns
      * - The allocated arena
+     * - nullopt if allocation failed
      */
-    static HgArena create(HgAllocator& parent, usize capacity);
+    static HgOption<HgArena> create(HgAllocator& parent, usize capacity);
 
     /**
      * Frees an arena's memory
@@ -2474,7 +2478,24 @@ struct HgArena : public HgAllocator {
     /**
      * Frees all allocations from an arena
      */
-    void reset();
+    void reset() {
+        head = memory.data;
+    }
+
+    /**
+     * Returns the state of the arena
+     */
+    void *save() {
+        return head;
+    }
+
+    /**
+     * Loads the saved state of the arena
+     */
+    void load(void *save_state) {
+        hg_assert((uptr)head <= (uptr)save_state && (uptr)save_state <= (uptr)memory.data + memory.count);
+        head = save_state;
+    }
 
     /**
      * Allocates memory from an arena
@@ -2539,13 +2560,14 @@ struct HgStack : public HgAllocator {
      * Allocates a stack allocator with capacity
      *
      * Parameters
-     * - allocator The allocator to allocate memory from
+     * - parent The allocator to create the stack from
      * - capacity The size of the block to allocate and use
      *
      * Returns
      * - The allocated stack
+     * - nullopt if allocation failed
      */
-    static HgStack create(HgAllocator& parent, usize capacity);
+    static HgOption<HgStack> create(HgAllocator& parent, usize capacity);
 
     /**
      * Frees a stack's memory
@@ -2631,24 +2653,29 @@ struct HgArray {
      * Allocate a new dynamic array
      *
      * Parameters
-     * - allocator The allocator to use
+     * - mem The allocator to use
      * - count The number of active items to begin with, must be <= capacity
      * - capacity The max number of items before reallocating
      *
      * Returns
      * - The allocated dynamic array
+     * - nullopt if allocation failed
      */
-    static HgArray<T> create(HgAllocator& mem, usize count, usize capacity) {
+    static HgOption<HgArray<T>> create(HgAllocator& mem, usize count, usize capacity) {
         hg_assert(count <= capacity);
 
-        HgArray arr{};
-        arr.items = (T *)mem.alloc_fn(capacity * sizeof(T), alignof(T));
-        arr.capacity = capacity;
-        arr.count = count;
+        HgOption<HgArray> arr{std::in_place};
+
+        arr->items = (T *)mem.alloc_fn(capacity * sizeof(T), alignof(T));
+        if (arr->items == nullptr)
+            return std::nullopt;
+
+        arr->capacity = capacity;
+        arr->count = count;
 
         if constexpr (std::is_default_constructible_v<T>) {
             for (usize i = 0; i < count; ++i) {
-                new (&arr.items[i]) T;
+                new (&arr->items[i]) T;
             }
         } else {
             hg_assert(count == 0);
@@ -2956,16 +2983,28 @@ struct HgArrayAny {
      *
      * Returns
      * - The allocated dynamic array
+     * - nullopt if allocation failed
      */
-    static HgArrayAny create(HgAllocator& mem, usize width, usize alignment, usize count, usize capacity) {
+    static HgOption<HgArrayAny> create(
+        HgAllocator& mem,
+        usize width,
+        usize alignment,
+        usize count,
+        usize capacity
+    ) {
         hg_assert(count <= capacity);
 
-        HgArrayAny arr{};
-        arr.items = mem.alloc_fn(capacity * width, alignment);
-        arr.width = width;
-        arr.alignment = alignment;
-        arr.capacity = capacity;
-        arr.count = count;
+        HgOption<HgArrayAny> arr{std::in_place};
+
+        arr->items = mem.alloc_fn(capacity * width, alignment);
+        if (arr->items == nullptr)
+            return std::nullopt;
+
+        arr->width = width;
+        arr->alignment = alignment;
+        arr->capacity = capacity;
+        arr->count = count;
+
         return arr;
     }
 
@@ -2981,9 +3020,10 @@ struct HgArrayAny {
      *
      * Returns
      * - The allocated dynamic array
+     * - nullopt if allocation failed
      */
     template<typename T>
-    static HgArrayAny create(HgAllocator& mem, usize count, usize capacity) {
+    static HgOption<HgArrayAny> create(HgAllocator& mem, usize count, usize capacity) {
         static_assert(hg_is_memmove_safe_v<T>);
         return create(mem, sizeof(T), alignof(T), count, capacity);
     }
@@ -3232,8 +3272,9 @@ struct HgString {
      *
      * Returns
      * - The created empty string
+     * - nullopt if allocation failed
      */
-    static HgString create(HgAllocator& mem, usize capacity);
+    static HgOption<HgString> create(HgAllocator& mem, usize capacity);
 
     /**
      * Creates a new string copied from an existing string
@@ -3244,8 +3285,9 @@ struct HgString {
      *
      * Returns
      * - The created copied string
+     * - nullopt if allocation failed
      */
-    static HgString create(HgAllocator& mem, std::string_view init);
+    static HgOption<HgString> create(HgAllocator& mem, std::string_view init);
 
     /**
      * Frees the string
@@ -3452,7 +3494,7 @@ struct HgHashMap {
         Pair(const Key& k, const Value& v) : key{k}, value{v} {}
     };
 
-    using Slot = std::optional<Pair>;
+    using Slot = HgOption<Pair>;
 
     /**
      * Where the values are stored
@@ -3472,13 +3514,19 @@ struct HgHashMap {
      *
      * Returns
      * - The created empty hash map
+     * - nullopt if allocation failed
      */
-    static HgHashMap create(HgAllocator& mem, usize slot_count) {
+    static HgOption<HgHashMap> create(HgAllocator& mem, usize slot_count) {
         hg_assert(slot_count > 0);
 
-        HgHashMap map;
-        map.slots = mem.alloc<Slot>(slot_count);
-        map.load = 0;
+        HgOption<HgHashMap> map{std::in_place};
+
+        map->slots = mem.alloc<Slot>(slot_count);
+        if (map->slots == nullptr)
+            return std::nullopt;
+
+        map->load = 0;
+
         return map;
     }
 
@@ -3682,7 +3730,7 @@ template<typename T>
 struct HgHashSet {
     static_assert(hg_is_memmove_safe_v<T>);
 
-    using Slot = std::optional<T>;
+    using Slot = HgOption<T>;
 
     /**
      * Where the values are stored
@@ -3702,13 +3750,19 @@ struct HgHashSet {
      *
      * Returns
      * - The created empty hash set
+     * - nullopt if allocation failed
      */
-    static HgHashSet create(HgAllocator& mem, usize slot_count) {
+    static HgOption<HgHashSet> create(HgAllocator& mem, usize slot_count) {
         hg_assert(slot_count > 0);
 
-        HgHashSet set;
-        set.slots = mem.alloc<Slot>(slot_count);
-        set.load = 0;
+        HgOption<HgHashSet> set{std::in_place};
+
+        set->slots = mem.alloc<Slot>(slot_count);
+        if (set->slots == nullptr)
+            return std::nullopt;
+
+        set->load = 0;
+
         return set;
     }
 
@@ -3932,8 +3986,9 @@ struct HgECS {
      *
      * Returns
      * - The created entity component system
+     * - nullopt if allocation failed
      */
-    static HgECS create(HgAllocator& mem, u32 max_entities);
+    static HgOption<HgECS> create(HgAllocator& mem, u32 max_entities);
 
     /**
      * Destroys an entity component system
@@ -4009,8 +4064,11 @@ struct HgECS {
      * - component_size The size in bytes of the component struct
      * - component_alignment The alignment of the component struct
      * - component_id The id of the component
+     *
+     * Returns
+     * - Whether allocation was successful
      */
-    void register_component(
+    bool register_component(
         HgAllocator& mem,
         u32 max_components,
         u32 component_size,
@@ -4027,9 +4085,9 @@ struct HgECS {
      * - max_component The max number of this component the ECS can hold
      */
     template<typename T>
-    void register_component(HgAllocator& mem, u32 max_components) {
+    bool register_component(HgAllocator& mem, u32 max_components) {
         static_assert(hg_is_memmove_safe_v<T>);
-        register_component(mem, max_components, sizeof(T), alignof(T), hg_component_id<T>);
+        return register_component(mem, max_components, sizeof(T), alignof(T), hg_component_id<T>);
     }
 
     /**
@@ -4954,9 +5012,9 @@ VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger(VkInstance instance);
  *
  * Returns
  * - The queue family if found
- * - No value if not found
+ * - nullopt if not found
  */
-std::optional<u32> hg_vk_find_queue_family(VkPhysicalDevice gpu, VkQueueFlags queue_flags);
+HgOption<u32> hg_vk_find_queue_family(VkPhysicalDevice gpu, VkQueueFlags queue_flags);
 
 // find gpu with multiple potential queues : TODO
 // create device with multiple potential queues : TODO

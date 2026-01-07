@@ -32,7 +32,7 @@ hg_test(hg_init_and_exit) {
 }
 
 static HgArray<HgTest>& hg_internal_get_tests() {
-    static HgArray<HgTest> internal_tests = internal_tests.create(HgStdAllocator::get(), 0, 1024);
+    static HgArray<HgTest> internal_tests = internal_tests.create(HgStdAllocator::get(), 0, 1024).value();
     return internal_tests;
 }
 
@@ -202,19 +202,20 @@ void HgStdAllocator::free_fn(void *allocation, usize size, usize alignment) {
     std::free(allocation);
 }
 
-HgArena HgArena::create(HgAllocator& parent, usize capacity) {
-    HgArena arena;
-    arena.memory = parent.alloc(capacity, 16);
-    arena.head = arena.memory.data;
+HgOption<HgArena> HgArena::create(HgAllocator& parent, usize capacity) {
+    HgOption<HgArena> arena{std::in_place};
+
+    arena->memory = parent.alloc(capacity, 16);
+    if (arena->memory == nullptr)
+        return std::nullopt;
+
+    arena->head = arena->memory.data;
+
     return arena;
 }
 
 void HgArena::destroy(HgAllocator& parent) {
     parent.free(memory, 16);
-}
-
-void HgArena::reset() {
-    head = memory.data;
 }
 
 void *HgArena::alloc_fn(usize size, usize alignment) {
@@ -255,7 +256,7 @@ void HgArena::free_fn(void *allocation, usize size, usize alignment) {
 hg_test(hg_arena) {
     HgStdAllocator mem;
 
-    HgArena arena = arena.create(mem, 1024);
+    HgArena arena = arena.create(mem, 1024).value();
     hg_defer(arena.destroy(mem));
 
     for (usize i = 0; i < 3; ++i) {
@@ -308,10 +309,15 @@ hg_test(hg_arena) {
     return true;
 }
 
-HgStack HgStack::create(HgAllocator& parent, usize capacity) {
-    HgStack stack;
-    stack.memory = parent.alloc(capacity, 16);
-    stack.head = 0;
+HgOption<HgStack> HgStack::create(HgAllocator& parent, usize capacity) {
+    HgOption<HgStack> stack{std::in_place};
+
+    stack->memory = parent.alloc(capacity, 16);
+    if (stack->memory == nullptr)
+        return std::nullopt;
+
+    stack->head = 0;
+
     return stack;
 }
 
@@ -364,7 +370,7 @@ void HgStack::free_fn(void *allocation, usize size, usize alignment) {
 hg_test(hg_stack) {
     HgStdAllocator mem;
 
-    HgStack stack = stack.create(mem, 1024);
+    HgStack stack = stack.create(mem, 1024).value();
     hg_defer(stack.destroy(mem));
 
     for (usize i = 0; i < 3; ++i) {
@@ -403,7 +409,7 @@ hg_test(hg_stack) {
 hg_test(hg_array) {
     HgStdAllocator mem;
 
-    HgArray<u32> arr = arr.create(mem, 0, 2);
+    HgArray<u32> arr = arr.create(mem, 0, 2).value();
     hg_defer(arr.destroy(mem));
     hg_test_assert(arr.items != nullptr);
     hg_test_assert(arr.capacity == 2);
@@ -464,7 +470,7 @@ hg_test(hg_array) {
 hg_test(hg_array_any) {
     HgStdAllocator mem;
 
-    HgArrayAny arr = arr.create(mem, sizeof(u32), alignof(u32), 0, 2);
+    HgArrayAny arr = arr.create(mem, sizeof(u32), alignof(u32), 0, 2).value();
     hg_defer(arr.destroy(mem));
     hg_test_assert(arr.items != nullptr);
     hg_test_assert(arr.capacity == 2);
@@ -522,18 +528,29 @@ hg_test(hg_array_any) {
     return true;
 }
 
-HgString HgString::create(HgAllocator& mem, usize capacity) {
-    HgString str;
-    str.chars = mem.alloc<char>(capacity);
-    str.length = 0;
+HgOption<HgString> HgString::create(HgAllocator& mem, usize capacity) {
+    HgOption<HgString> str{std::in_place};
+
+    str->chars = mem.alloc<char>(capacity);
+    if (str->chars == nullptr)
+        return std::nullopt;
+
+    str->length = 0;
+
     return str;
 }
 
-HgString HgString::create(HgAllocator& mem, std::string_view init) {
-    HgString str;
-    str.chars = mem.alloc<char>(init.length());
-    std::memcpy(str.chars.data, init.data(), init.length());
-    str.length = str.chars.count;
+HgOption<HgString> HgString::create(HgAllocator& mem, std::string_view init) {
+    HgOption<HgString> str{std::in_place};
+
+    str->chars = mem.alloc<char>(init.length());
+    if (str->chars == nullptr)
+        return std::nullopt;
+
+    std::memcpy(str->chars.data, init.data(), init.length());
+
+    str->length = init.length();
+
     return str;
 }
 
@@ -578,38 +595,39 @@ void HgString::insert(HgAllocator& mem, usize index, std::string_view str) {
 }
 
 hg_test(hg_string) {
-    HgArena mem = mem.create(HgStdAllocator::get(), 4096);
-    hg_defer(mem.destroy(HgStdAllocator::get()));
+    HgStdAllocator mem;
+    HgArena arena = arena.create(mem, 4096).value();
+    hg_defer(arena.destroy(mem));
 
-    HgString a = a.create(mem, "a");
+    HgString a = a.create(arena, "a").value();
     hg_test_assert(a[0] == 'a');
     hg_test_assert(a.chars.count == 1);
     hg_test_assert(a.length == 1);
 
-    HgString abc = abc.create(mem, "abc");
+    HgString abc = abc.create(arena, "abc").value();
     hg_test_assert(abc[0] == 'a');
     hg_test_assert(abc[1] == 'b');
     hg_test_assert(abc[2] == 'c');
     hg_test_assert(abc.length == 3);
     hg_test_assert(abc.chars.count == 3);
 
-    a.append(mem, "bc");
+    a.append(arena, "bc");
     hg_test_assert(a == abc);
 
-    HgString str = str.create(mem, 16);
-    hg_test_assert(str == HgString::create(mem, 0));
+    HgString str = str.create(arena, 16).value();
+    hg_test_assert(str == HgString::create(arena, 0));
 
-    str.append(mem, "hello");
-    hg_test_assert(str == HgString::create(mem, "hello"));
+    str.append(arena, "hello");
+    hg_test_assert(str == HgString::create(arena, "hello"));
 
-    str.append(mem, " there");
-    hg_test_assert(str == HgString::create(mem, "hello there"));
+    str.append(arena, " there");
+    hg_test_assert(str == HgString::create(arena, "hello there"));
 
-    str.prepend(mem, "why ");
-    hg_test_assert(str == HgString::create(mem, "why hello there"));
+    str.prepend(arena, "why ");
+    hg_test_assert(str == HgString::create(arena, "why hello there"));
 
-    str.insert(mem, 3, ",");
-    hg_test_assert(str == HgString::create(mem, "why, hello there"));
+    str.insert(arena, 3, ",");
+    hg_test_assert(str == HgString::create(arena, "why, hello there"));
 
     return true;
 }
@@ -619,7 +637,7 @@ hg_test(hg_hash_map_int) {
 
     constexpr usize count = 128;
 
-    HgHashMap<u32, u32> map = map.create(mem, count);
+    HgHashMap<u32, u32> map = map.create(mem, count).value();
     hg_defer(map.destroy(mem));
 
     for (usize i = 0; i < 3; ++i) {
@@ -697,7 +715,7 @@ hg_test(hg_hash_map_str) {
     {
         using StrHash = usize;
 
-        HgHashMap<StrHash, u32> map = map.create(mem, 128);
+        HgHashMap<StrHash, u32> map = map.create(mem, 128).value();
         hg_defer(map.destroy(mem));
 
         StrHash a = hg_hash("a");
@@ -732,7 +750,7 @@ hg_test(hg_hash_map_str) {
     }
 
     {
-        HgHashMap<const char *, u32> map = map.create(mem, 128);
+        HgHashMap<const char *, u32> map = map.create(mem, 128).value();
         hg_defer(map.destroy(mem));
 
         const char *a = "a";
@@ -767,16 +785,16 @@ hg_test(hg_hash_map_str) {
     }
 
     {
-        HgHashMap<HgString, u32> map = map.create(mem, 128);
+        HgHashMap<HgString, u32> map = map.create(mem, 128).value();
         hg_defer(map.destroy(mem));
 
-        HgString a = a.create(mem, "a");
+        HgString a = a.create(mem, "a").value();
         hg_defer(a.destroy(mem));
-        HgString b = b.create(mem, "b");
+        HgString b = b.create(mem, "b").value();
         hg_defer(b.destroy(mem));
-        HgString ab = ab.create(mem, "ab");
+        HgString ab = ab.create(mem, "ab").value();
         hg_defer(ab.destroy(mem));
-        HgString scf = scf.create(mem, "supercalifragilisticexpialidocious");
+        HgString scf = scf.create(mem, "supercalifragilisticexpialidocious").value();
         hg_defer(scf.destroy(mem));
 
         hg_test_assert(!map.has(a));
@@ -806,39 +824,39 @@ hg_test(hg_hash_map_str) {
     }
 
     {
-        HgArena arena = arena.create(mem, 1 << 16);
+        HgArena arena = arena.create(mem, 1 << 16).value();
         hg_defer(arena.destroy(mem));
 
-        HgHashMap<HgString, u32> map = map.create(arena, 128);
+        HgHashMap<HgString, u32> map = map.create(arena, 128).value();
 
-        hg_test_assert(!map.has(HgString::create(arena, "a")));
-        hg_test_assert(!map.has(HgString::create(arena, "b")));
-        hg_test_assert(!map.has(HgString::create(arena, "ab")));
-        hg_test_assert(!map.has(HgString::create(arena, "supercalifragilisticexpialidocious")));
+        hg_test_assert(!map.has(HgString::create(arena, "a").value()));
+        hg_test_assert(!map.has(HgString::create(arena, "b").value()));
+        hg_test_assert(!map.has(HgString::create(arena, "ab").value()));
+        hg_test_assert(!map.has(HgString::create(arena, "supercalifragilisticexpialidocious").value()));
 
-        map.insert(HgString::create(arena, "a"), 1);
-        map.insert(HgString::create(arena, "b"), 2);
-        map.insert(HgString::create(arena, "ab"), 3);
-        map.insert(HgString::create(arena, "supercalifragilisticexpialidocious"), 4);
+        map.insert(HgString::create(arena, "a").value(), 1);
+        map.insert(HgString::create(arena, "b").value(), 2);
+        map.insert(HgString::create(arena, "ab").value(), 3);
+        map.insert(HgString::create(arena, "supercalifragilisticexpialidocious").value(), 4);
 
-        hg_test_assert(map.has(HgString::create(arena, "a")));
-        hg_test_assert(map.get(HgString::create(arena, "a")) == 1);
-        hg_test_assert(map.has(HgString::create(arena, "b")));
-        hg_test_assert(map.get(HgString::create(arena, "b")) == 2);
-        hg_test_assert(map.has(HgString::create(arena, "ab")));
-        hg_test_assert(map.get(HgString::create(arena, "ab")) == 3);
-        hg_test_assert(map.has(HgString::create(arena, "supercalifragilisticexpialidocious")));
-        hg_test_assert(map.get(HgString::create(arena, "supercalifragilisticexpialidocious")) == 4);
+        hg_test_assert(map.has(HgString::create(arena, "a").value()));
+        hg_test_assert(map.get(HgString::create(arena, "a").value()) == 1);
+        hg_test_assert(map.has(HgString::create(arena, "b").value()));
+        hg_test_assert(map.get(HgString::create(arena, "b").value()) == 2);
+        hg_test_assert(map.has(HgString::create(arena, "ab").value()));
+        hg_test_assert(map.get(HgString::create(arena, "ab").value()) == 3);
+        hg_test_assert(map.has(HgString::create(arena, "supercalifragilisticexpialidocious").value()));
+        hg_test_assert(map.get(HgString::create(arena, "supercalifragilisticexpialidocious").value()) == 4);
 
-        map.remove(HgString::create(arena, "a"));
-        map.remove(HgString::create(arena, "b"));
-        map.remove(HgString::create(arena, "ab"));
-        map.remove(HgString::create(arena, "supercalifragilisticexpialidocious"));
+        map.remove(HgString::create(arena, "a").value());
+        map.remove(HgString::create(arena, "b").value());
+        map.remove(HgString::create(arena, "ab").value());
+        map.remove(HgString::create(arena, "supercalifragilisticexpialidocious").value());
 
-        hg_test_assert(!map.has(HgString::create(arena, "a")));
-        hg_test_assert(!map.has(HgString::create(arena, "b")));
-        hg_test_assert(!map.has(HgString::create(arena, "ab")));
-        hg_test_assert(!map.has(HgString::create(arena, "supercalifragilisticexpialidocious")));
+        hg_test_assert(!map.has(HgString::create(arena, "a").value()));
+        hg_test_assert(!map.has(HgString::create(arena, "b").value()));
+        hg_test_assert(!map.has(HgString::create(arena, "ab").value()));
+        hg_test_assert(!map.has(HgString::create(arena, "supercalifragilisticexpialidocious").value()));
     }
 
     return true;
@@ -849,7 +867,7 @@ hg_test(hg_hash_set_int) {
 
     u32 count = 128;
 
-    HgHashSet<u32> set = set.create(mem, count);
+    HgHashSet<u32> set = set.create(mem, count).value();
     hg_defer(set.destroy(mem));
 
     for (usize i = 0; i < 3; ++i) {
@@ -928,6 +946,155 @@ hg_test(hg_hash_set_int) {
     return true;
 }
 
+hg_test(hg_hash_set_str) {
+    HgStdAllocator mem;
+
+    {
+        using StrHash = usize;
+
+        HgHashSet<StrHash> map = map.create(mem, 128).value();
+        hg_defer(map.destroy(mem));
+
+        StrHash a = hg_hash("a");
+        StrHash b = hg_hash("b");
+        StrHash ab = hg_hash("ab");
+        StrHash scf = hg_hash("supercalifragilisticexpialidocious");
+
+        hg_test_assert(!map.has(a));
+        hg_test_assert(!map.has(b));
+        hg_test_assert(!map.has(ab));
+        hg_test_assert(!map.has(scf));
+
+        map.insert(a);
+        map.insert(b);
+        map.insert(ab);
+        map.insert(scf);
+
+        hg_test_assert(map.has(a));
+        hg_test_assert(map.has(b));
+        hg_test_assert(map.has(ab));
+        hg_test_assert(map.has(scf));
+
+        map.remove(a);
+        map.remove(b);
+        map.remove(ab);
+        map.remove(scf);
+
+        hg_test_assert(!map.has(a));
+        hg_test_assert(!map.has(b));
+        hg_test_assert(!map.has(ab));
+        hg_test_assert(!map.has(scf));
+    }
+
+    {
+        HgHashSet<const char *> map = map.create(mem, 128).value();
+        hg_defer(map.destroy(mem));
+
+        const char *a = "a";
+        const char *b = "b";
+        const char *ab = "ab";
+        const char *scf = "supercalifragilisticexpialidocious";
+
+        hg_test_assert(!map.has(a));
+        hg_test_assert(!map.has(b));
+        hg_test_assert(!map.has(ab));
+        hg_test_assert(!map.has(scf));
+
+        map.insert(a);
+        map.insert(b);
+        map.insert(ab);
+        map.insert(scf);
+
+        hg_test_assert(map.has(a));
+        hg_test_assert(map.has(b));
+        hg_test_assert(map.has(ab));
+        hg_test_assert(map.has(scf));
+
+        map.remove(a);
+        map.remove(b);
+        map.remove(ab);
+        map.remove(scf);
+
+        hg_test_assert(!map.has(a));
+        hg_test_assert(!map.has(b));
+        hg_test_assert(!map.has(ab));
+        hg_test_assert(!map.has(scf));
+    }
+
+    {
+        HgHashSet<HgString> map = map.create(mem, 128).value();
+        hg_defer(map.destroy(mem));
+
+        HgString a = a.create(mem, "a").value();
+        hg_defer(a.destroy(mem));
+        HgString b = b.create(mem, "b").value();
+        hg_defer(b.destroy(mem));
+        HgString ab = ab.create(mem, "ab").value();
+        hg_defer(ab.destroy(mem));
+        HgString scf = scf.create(mem, "supercalifragilisticexpialidocious").value();
+        hg_defer(scf.destroy(mem));
+
+        hg_test_assert(!map.has(a));
+        hg_test_assert(!map.has(b));
+        hg_test_assert(!map.has(ab));
+        hg_test_assert(!map.has(scf));
+
+        map.insert(a);
+        map.insert(b);
+        map.insert(ab);
+        map.insert(scf);
+
+        hg_test_assert(map.has(a));
+        hg_test_assert(map.has(b));
+        hg_test_assert(map.has(ab));
+        hg_test_assert(map.has(scf));
+
+        map.remove(a);
+        map.remove(b);
+        map.remove(ab);
+        map.remove(scf);
+
+        hg_test_assert(!map.has(a));
+        hg_test_assert(!map.has(b));
+        hg_test_assert(!map.has(ab));
+        hg_test_assert(!map.has(scf));
+    }
+
+    {
+        HgArena arena = arena.create(mem, 1 << 16).value();
+        hg_defer(arena.destroy(mem));
+
+        HgHashSet<HgString> map = map.create(arena, 128).value();
+
+        hg_test_assert(!map.has(HgString::create(arena, "a").value()));
+        hg_test_assert(!map.has(HgString::create(arena, "b").value()));
+        hg_test_assert(!map.has(HgString::create(arena, "ab").value()));
+        hg_test_assert(!map.has(HgString::create(arena, "supercalifragilisticexpialidocious").value()));
+
+        map.insert(HgString::create(arena, "a").value());
+        map.insert(HgString::create(arena, "b").value());
+        map.insert(HgString::create(arena, "ab").value());
+        map.insert(HgString::create(arena, "supercalifragilisticexpialidocious").value());
+
+        hg_test_assert(map.has(HgString::create(arena, "a").value()));
+        hg_test_assert(map.has(HgString::create(arena, "b").value()));
+        hg_test_assert(map.has(HgString::create(arena, "ab").value()));
+        hg_test_assert(map.has(HgString::create(arena, "supercalifragilisticexpialidocious").value()));
+
+        map.remove(HgString::create(arena, "a").value());
+        map.remove(HgString::create(arena, "b").value());
+        map.remove(HgString::create(arena, "ab").value());
+        map.remove(HgString::create(arena, "supercalifragilisticexpialidocious").value());
+
+        hg_test_assert(!map.has(HgString::create(arena, "a").value()));
+        hg_test_assert(!map.has(HgString::create(arena, "b").value()));
+        hg_test_assert(!map.has(HgString::create(arena, "ab").value()));
+        hg_test_assert(!map.has(HgString::create(arena, "supercalifragilisticexpialidocious").value()));
+    }
+
+    return true;
+}
+
 static u32& hg_internal_current_component_id() {
     static u32 id = 0;
     return id;
@@ -939,22 +1106,33 @@ u32 hg_create_component_id() {
     return id;
 }
 
-HgECS HgECS::create(
+HgOption<HgECS> HgECS::create(
     HgAllocator& mem,
     u32 max_entities
 ) {
-    HgECS ecs{};
-    ecs.entity_pool = mem.alloc<HgEntity>(max_entities);
-    ecs.systems = mem.alloc<Component>(hg_internal_current_component_id());
+    HgOption<HgECS> ecs{std::in_place};
 
-    for (u32 i = 0; i < ecs.entity_pool.count; ++i) {
-        ecs.entity_pool[i] = {i + 1};
+    ecs->entity_pool = mem.alloc<HgEntity>(max_entities);
+    if (ecs->entity_pool == nullptr)
+        goto cleanup_entity_pool;
+
+    ecs->systems = mem.alloc<Component>(hg_internal_current_component_id());
+    if (ecs->systems == nullptr)
+        goto cleanup_systems;
+
+    for (u32 i = 0; i < ecs->entity_pool.count; ++i) {
+        ecs->entity_pool[i] = {i + 1};
     }
-    ecs.next_entity = {0};
+    ecs->next_entity = {0};
 
-    std::fill_n(ecs.systems.data, ecs.systems.count, Component{});
+    std::fill_n(ecs->systems.data, ecs->systems.count, Component{});
 
     return ecs;
+
+cleanup_systems:
+    mem.free(ecs->entity_pool);
+cleanup_entity_pool:
+    return std::nullopt;
 }
 
 void HgECS::destroy(HgAllocator& mem) {
@@ -1001,7 +1179,7 @@ void HgECS::despawn(HgEntity entity) {
     next_entity = entity;
 }
 
-void HgECS::register_component(
+bool HgECS::register_component(
     HgAllocator& mem,
     u32 max_components,
     u32 component_size,
@@ -1016,11 +1194,26 @@ void HgECS::register_component(
     Component& system = systems[component_id];
 
     system.sparse = mem.alloc<u32>(entity_pool.count);
+    if (system.sparse == nullptr)
+        goto cleanup_sparse;
+
+    system.dense = system.dense.create(mem, 0, max_components).value_or(HgArray<HgEntity>{});
+    if (system.dense.items == nullptr)
+        goto cleanup_dense;
+
+    system.components = system.components.create(mem, component_size, component_alignment, 0, max_components).value_or(HgArrayAny{});
+    if (system.components.items == nullptr)
+        goto cleanup_components;
+
     std::fill_n(system.sparse.data, system.sparse.count, (u32)-1);
+    return true;
 
-    system.dense = system.dense.create(mem, 0, max_components);
-    system.components = system.components.create(mem, component_size, component_alignment, 0, max_components);
-
+cleanup_components:
+    system.dense.destroy(mem);
+cleanup_dense:
+    mem.free(system.sparse);
+cleanup_sparse:
+    return false;
 }
 
 void HgECS::unregister_component(HgAllocator& mem, u32 component_id) {
@@ -1108,10 +1301,10 @@ void HgECS::swap_location(HgEntity lhs, HgEntity rhs, u32 component_id) {
 hg_test(hg_ecs) {
     HgStdAllocator mem;
 
-    HgECS ecs = ecs.create(mem, 1 << 16);
+    HgECS ecs = ecs.create(mem, 1 << 16).value();
 
-    ecs.register_component<u32>(mem, 1 << 16);
-    ecs.register_component<u64>(mem, 1 << 16);
+    hg_test_assert(ecs.register_component<u32>(mem, 1 << 16));
+    hg_test_assert(ecs.register_component<u64>(mem, 1 << 16));
 
     HgEntity e1 = ecs.spawn();
     HgEntity e2 = ecs.spawn();
@@ -1255,11 +1448,12 @@ hg_test(hg_ecs) {
 hg_test(hg_ecs_sort) {
     HgStdAllocator mem;
 
-    HgECS ecs = ecs.create(mem, 128);
+    HgECS ecs = ecs.create(mem, 128).value();
     hg_defer(ecs.destroy(mem));
 
     u32 elem;
-    ecs.register_component<u32>(mem, 128);
+
+    hg_test_assert(ecs.register_component<u32>(mem, 128));
 
     auto comparison = [](u32 lhs, u32 rhs) {
         return lhs < rhs;
@@ -1390,7 +1584,7 @@ HgThreadPool *HgThreadPool::create(HgAllocator& mem, usize thread_count, usize q
     if (pool->threads_should_close == nullptr)
         goto cleanup_threads_should_close;
 
-    pool->work_queue = pool->work_queue.create(mem, 0, queue_size);
+    pool->work_queue = pool->work_queue.create(mem, 0, queue_size).value_or(HgArray<HgThreadWork>{});
     if (pool->work_queue.items == nullptr)
         goto cleanup_work_queue;
 
@@ -2701,7 +2895,7 @@ VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger(VkInstance instance) {
     return messenger;
 }
 
-std::optional<u32> hg_vk_find_queue_family(VkPhysicalDevice gpu, VkQueueFlags queue_flags) {
+HgOption<u32> hg_vk_find_queue_family(VkPhysicalDevice gpu, VkQueueFlags queue_flags) {
     hg_assert(gpu != nullptr);
 
     u32 family_count = 0;
@@ -2736,7 +2930,7 @@ static VkPhysicalDevice hg_internal_find_single_queue_gpu(VkInstance instance, u
 
     for (u32 i = 0; i < gpu_count; ++i) {
         VkPhysicalDevice gpu = gpus[i];
-        std::optional<u32> family;
+        HgOption<u32> family;
 
         u32 new_prop_count = 0;
         vkEnumerateDeviceExtensionProperties(gpu, nullptr, &new_prop_count, nullptr);
