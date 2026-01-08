@@ -3948,16 +3948,10 @@ struct HgEntity {
 u32 hg_create_component_id();
 
 /**
- * The unique component id for a type
- */
-template<typename T>
-inline const u32 hg_internal_component_id = hg_create_component_id();
-
-/**
  * The unique component id for a type, keeping const and non-const the same
  */
 template<typename T>
-inline const u32 hg_component_id = hg_internal_component_id<std::remove_const_t<T>>;
+inline const u32 hg_component_id = hg_create_component_id();
 
 /**
  * An entity component system
@@ -4944,6 +4938,9 @@ struct HgFunctionView<R(Args...)> {
     }
 };
 
+/**
+ * A fence for basic thread synchronization
+ */
 struct HgFence {
     std::atomic<usize> counter;
 
@@ -5062,13 +5059,11 @@ struct HgThreadPool {
     void for_par(usize n, usize chunk_size, F fn) {
         static_assert(std::is_invocable_r_v<void, F, usize>);
 
-        auto fn_iter = [](void *pfn, usize begin, usize end) {
+        for_par(n, chunk_size, {&fn, [](void *pfn, usize begin, usize end) {
             for (usize i = begin; i < end; ++i) {
                 (*(F *)pfn)(i);
             }
-        };
-
-        for_par(n, chunk_size, HgFunctionView<void(usize, usize)>{&fn, fn_iter});
+        }});
     }
 };
 
