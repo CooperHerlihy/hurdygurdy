@@ -245,7 +245,7 @@ struct HgTest {
  */
 #define hg_test_assert(cond) do { \
     if (!(cond)) { \
-        hg_warn("Test assertion failed: " #cond "\n"); \
+        hg_warn(__FILE__ ":%d Test assertion failed: " #cond "\n", __LINE__); \
         return false; \
     } \
 } while(0)
@@ -280,6 +280,14 @@ using f64 = std::double_t;
 
 template<typename T>
 using HgOption = std::optional<T>;
+
+template<typename T>
+struct hg_remove_cvref {
+    using type = std::remove_cv_t<std::remove_reference_t<T>>;
+};
+
+template<typename T>
+using hg_remove_cvref_t = typename hg_remove_cvref<T>::type;
 
 /**
  * A pointer-count view into memory
@@ -4768,39 +4776,154 @@ finish:
     }
 };
 
+template<typename>
+struct HgFunction;
+
 /**
- * A work submission to a thread
+ * A generic function object
  */
-struct HgThreadWork {
+template<typename R, typename... Args>
+struct HgFunction<R(Args...)> {
     /**
-     * The function to be executed by the thread, must not be nullptr
+     * The function's capture
+     */
+    void *data;
+    /**
+     * The size in bytes of the capture
+     */
+    usize size;
+    /**
+     * The alignment of the capture
+     */
+    usize alignment;
+    /**
+     * The function pointer
+     */
+    R (*fn)(void *data, Args...);
+
+    /**
+     * Calls the function
+     */
+    R operator()(Args... args) {
+        if constexpr (std::is_same_v<R, void>) {
+            fn(data, args...);
+        } else {
+            return fn(data, args...);
+        }
+    }
+
+    /**
+     * Creates a function object, which owns its capture and must be destroyed
      *
      * Parameters
-     * - data An arbitrary data pointer
+     * - mem The allocator to use
+     * - fn The function to use
+     *
+     * Returns
+     * - The function object
+     * - nullopt if allocation failed
      */
-    void (*function)(void *data);
+    template<typename F>
+    static HgOption<HgFunction<R(Args...)>> create(HgAllocator& mem, F&& fn) {
+        static_assert(std::is_trivially_destructible_v<F>);
+
+        static_assert(std::is_invocable_r_v<R, F, Args...>);
+        static_assert(std::is_invocable_v<F, Args...>);
+
+        HgOption<HgFunction<R(Args...)>> func{std::in_place};
+
+        func->data = mem.alloc_fn(sizeof(F), alignof(F));
+        if (func->data == nullptr)
+            return std::nullopt;
+
+        func->size = sizeof(F);
+        func->alignment = alignof(F);
+
+        new ((F *)func->data) F{std::move(fn)};
+
+        func->fn = [](void *pdata, Args... args) -> R {
+            if constexpr (std::is_same_v<R, void>) {
+                (*(F *)pdata)(args...);
+            } else {
+                return (*(F *)pdata)(args...);
+            }
+        };
+
+        return func;
+    }
+
     /**
-     * The arbitrary data pointer passed to the function
+     * Destroys the function object
+     *
+     * Parameters
+     * - mem The allocator to use
+     */
+    void destroy(HgAllocator& mem) {
+        mem.free_fn(data, size, alignment);
+    }
+};
+
+template<typename>
+struct HgFunctionView;
+
+/**
+ * A generic function object view
+ */
+template<typename R, typename... Args>
+struct HgFunctionView<R(Args...)> {
+    /**
+     * The function pointer
+     */
+    R (*fn)(void *data, Args...);
+    /**
+     * The function's capture
      */
     void *data;
 
     /**
-     * Creates a generic function pointer from a lambda
-     *
-     * Note, the lambda capture (if it exists) must outlive its execution
-     *
-     * Parameters
-     * - func The lambda function to use
+     * Calls the function
      */
-    template<typename F, typename = std::enable_if_t<std::is_invocable_v<F>>>
-    HgThreadWork(F& func) {
-        function = [](void *pfunc) {
-            (*(F *)pfunc)();
-        };
-        data = &func;
+    R operator()(Args... args) {
+        if constexpr (std::is_same_v<R, void>) {
+            fn(data, args...);
+        } else {
+            return fn(data, args...);
+        }
     }
 
-    HgThreadWork() {}
+    HgFunctionView() = default;
+    HgFunctionView(const HgFunctionView&) = default;
+    HgFunctionView& operator=(const HgFunctionView&) = default;
+    HgFunctionView(HgFunctionView&&) = default;
+    HgFunctionView& operator=(HgFunctionView&&) = default;
+
+    HgFunctionView(decltype(fn) fn_val) : fn{fn_val}, data{} {}
+    HgFunctionView(decltype(fn) fn_val, void *data_val) : fn{fn_val}, data{data_val} {}
+    HgFunctionView(const HgFunction<R(Args...)>& func) : fn{func.fn}, data{func.data} {}
+
+    /**
+     * Constructs a function view from a lambda
+     *
+     * Parameters
+     * - func The function object to point to
+     *
+     * Returns
+     * - The function wrapper
+     */
+    template<typename F, typename = std::enable_if_t<
+        std::is_invocable_r_v<R, F, Args...> &&
+        !std::is_same_v<hg_remove_cvref_t<F>, HgFunctionView> &&
+        !std::is_same_v<hg_remove_cvref_t<F>, HgFunction<R(Args...)>>>>
+    HgFunctionView(F& func) {
+        data = &func;
+        fn = [](void *pdata, Args... args) -> R {
+            if constexpr (std::is_same_v<R, void>) {
+                (*(F *)pdata)(args...);
+            } else {
+                return (*(F *)pdata)(args...);
+            }
+        };
+    }
 };
 
 /**
@@ -4816,13 +4939,17 @@ struct HgThreadPool {
      */
     HgSpan<std::atomic_bool> threads_should_close;
     /**
+     * Signal whether each thread is currently working
+     */
+    HgSpan<std::atomic_bool> threads_are_working;
+    /**
      * Mutex to protect the work queue
      */
     std::mutex work_queue_mutex;
     /**
      * The queue of work to be executed
      */
-    HgArray<HgThreadWork> work_queue;
+    HgArray<HgFunctionView<void()>> work_queue;
 
     /**
      * Creates a new thread pool
@@ -4848,7 +4975,7 @@ struct HgThreadPool {
      * Parameters
      * - work The function to be executed
      */
-    void submit_work(HgThreadWork work);
+    void submit_work(HgFunctionView<void()> work);
 
     /**
      * Waits for all thread submissions to be completed

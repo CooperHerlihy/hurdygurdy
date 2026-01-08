@@ -1553,6 +1553,42 @@ hg_test(hg_ecs_sort) {
     return true;
 }
 
+hg_test(hg_function) {
+    HgStdAllocator mem;
+
+    HgArena arena = arena.create(mem, 4096).value();
+    hg_defer(arena.destroy(mem));
+
+    enum State {
+        state_no_mul = 0,
+        state_mul_2 = 1,
+        state_mul_3 = 2,
+    } state;
+
+    HgFunction<u32(u32)> mul_maybe = mul_maybe.create(arena, [&](u32 in) -> u32 {
+        switch (state) {
+            case state_no_mul: return in;
+            case state_mul_2: return in * 2;
+            case state_mul_3: return in * 3;
+            default: return 0;
+        }
+    }).value();
+
+    HgFunctionView<u32(u32)> mul_view = mul_maybe;
+    [[maybe_unused]] HgFunctionView<u32(u32)> other_view = mul_view;
+
+    state = state_no_mul;
+    hg_test_assert(mul_view(2) == 2);
+    state = state_mul_2;
+    hg_test_assert(mul_view(3) == 6);
+    state = state_mul_3;
+    hg_test_assert(mul_view(4) == 12);
+    state = (State)3;
+    hg_test_assert(mul_view(5) == 0);
+
+    return true;
+}
+
 static void hg_internal_thread_fn(HgThreadPool *pool, usize index) {
     for (;;) {
         if (pool->threads_should_close[index].load())
@@ -1560,10 +1596,13 @@ static void hg_internal_thread_fn(HgThreadPool *pool, usize index) {
 
         if (pool->work_queue_mutex.try_lock()) {
             if (pool->work_queue.count > 0) {
-                HgThreadWork work = pool->work_queue.last();
+                HgFunctionView<void()> work = pool->work_queue.last();
                 pool->work_queue.pop();
                 pool->work_queue_mutex.unlock();
-                work.function(work.data);
+
+                pool->threads_are_working[index].store(true);
+                work();
+                pool->threads_are_working[index].store(false);
             } else {
                 pool->work_queue_mutex.unlock();
             }
@@ -1584,19 +1623,25 @@ HgThreadPool *HgThreadPool::create(HgAllocator& mem, usize thread_count, usize q
     if (pool->threads_should_close == nullptr)
         goto cleanup_threads_should_close;
 
-    pool->work_queue = pool->work_queue.create(mem, 0, queue_size).value_or(HgArray<HgThreadWork>{});
+    pool->threads_are_working = mem.alloc<std::atomic<bool>>(thread_count);
+    if (pool->threads_are_working == nullptr)
+        goto cleanup_threads_are_working;
+
+    pool->work_queue = pool->work_queue.create(mem, 0, queue_size).value_or(HgArray<HgFunctionView<void()>>{});
     if (pool->work_queue.items == nullptr)
         goto cleanup_work_queue;
 
     for (u32 i = 0; i < thread_count; ++i) {
         pool->threads_should_close[i].store(false);
-        pool->threads_should_close[i].store(false);
+        pool->threads_are_working[i].store(false);
         pool->threads[i] = std::thread(hg_internal_thread_fn, pool, i);
     }
 
     return pool;
 
 cleanup_work_queue:
+    mem.free(pool->threads_are_working);
+cleanup_threads_are_working:
     mem.free(pool->threads_should_close);
 cleanup_threads_should_close:
     mem.free(pool->threads);
@@ -1618,13 +1663,14 @@ void HgThreadPool::destroy(HgAllocator& mem, HgThreadPool *pool) {
     }
 
     pool->work_queue.destroy(mem);
+    mem.free(pool->threads_are_working);
     mem.free(pool->threads_should_close);
     mem.free(pool->threads);
     mem.free(pool);
 }
 
-void HgThreadPool::submit_work(HgThreadWork work) {
-    hg_assert(work.function != nullptr);
+void HgThreadPool::submit_work(HgFunctionView<void()> work) {
+    hg_assert(work.fn != nullptr);
 
     work_queue_mutex.lock();
     work_queue.push(work);
@@ -1636,9 +1682,16 @@ bool HgThreadPool::wait_all(f64 timeout_seconds) {
     for (f64 elapsed = 0.0f; elapsed < timeout_seconds; elapsed += timer.tick()) {
         if (work_queue_mutex.try_lock()) {
             hg_defer(work_queue_mutex.unlock());
-            if (work_queue.count == 0)
-                return true;
+            if (work_queue.count != 0)
+                goto wait_longer;
+            for (auto& is_working : threads_are_working) {
+                if (is_working.load())
+                    goto wait_longer;
+            }
+            return true;
         }
+wait_longer:
+        continue;
     }
     return false;
 }
@@ -1651,39 +1704,58 @@ hg_test(hg_thread_pool) {
 
     hg_test_assert(pool != nullptr);
 
-    HgThreadWork work;
-    work.function = [](void *data) {
-        *(bool *)data = true;
-    };
+    {
+        bool vals[100] = {};
+        auto fn = [](void *data) {
+            *(bool *)data = true;
+        };
+        for (bool& val : vals) {
+            pool->submit_work({fn, &val});
+        }
 
-    bool vals[100] = {};
-    for (bool& val : vals) {
-        work.data = &val;
-        pool->submit_work(work);
+        hg_test_assert(pool->wait_all(2.0));
+
+        for (bool& val : vals) {
+            hg_test_assert(val == true);
+        }
     }
 
-    hg_test_assert(pool->wait_all(10.0));
+    {
+        HgArena arena = arena.create(mem, 1 << 16).value();
+        hg_defer(arena.destroy(mem));
 
-    for (bool& val : vals) {
-        hg_test_assert(val == true);
+        bool vals[100] = {};
+        for (u32 i = 0; i < hg_countof(vals); ++i) {
+            pool->submit_work(HgFunction<void()>::create(arena, [&vals, i]() {
+                vals[i] = true;
+            }).value());
+        }
+
+        hg_test_assert(pool->wait_all(2.0));
+
+        for (bool& val : vals) {
+            hg_test_assert(val == true);
+        }
     }
 
-    bool a = false;
-    auto a_fn = [&] {
-        a = true;
-    };
-    bool b = false;
-    auto b_fn = [&] {
-        b = true;
-    };
+    {
+        bool a = false;
+        auto a_fn = [&] {
+            a = true;
+        };
+        bool b = false;
+        auto b_fn = [&] {
+            b = true;
+        };
 
-    pool->submit_work(a_fn);
-    pool->submit_work(b_fn);
+        pool->submit_work(a_fn);
+        pool->submit_work(b_fn);
 
-    hg_test_assert(pool->wait_all(10.0));
+        hg_test_assert(pool->wait_all(2.0));
 
-    hg_test_assert(a == true);
-    hg_test_assert(b == true);
+        hg_test_assert(a == true);
+        hg_test_assert(b == true);
+    }
 
     return true;
 }
