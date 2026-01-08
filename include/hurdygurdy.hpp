@@ -4796,7 +4796,7 @@ struct HgFunction<R(Args...)> {
     /**
      * The function's capture
      */
-    HgSpan<void> data;
+    HgSpan<void> capture;
     /**
      * The function pointer
      */
@@ -4807,20 +4807,16 @@ struct HgFunction<R(Args...)> {
      */
     R operator()(Args... args) {
         if constexpr (std::is_same_v<R, void>) {
-            fn(data.data, args...);
+            fn(capture.data, args...);
         } else {
-            return fn(data.data, args...);
+            return fn(capture.data, args...);
         }
     }
 
-    HgFunction() = default;
-    HgFunction(const HgFunction&) = default;
-    HgFunction& operator=(const HgFunction&) = default;
-    HgFunction(HgFunction&&) = default;
-    HgFunction& operator=(HgFunction&&) = default;
-
     template<typename F, typename = std::enable_if_t<std::is_convertible_v<hg_remove_cvref_t<F>, decltype(fn)>>>
-    HgFunction(F func): data{}, fn{func} {}
+    HgFunction(F func): capture{}, fn{func} {}
+
+    HgFunction() = default;
 
     /**
      * Creates a function object, which owns its capture and must be destroyed
@@ -4834,23 +4830,23 @@ struct HgFunction<R(Args...)> {
      * - nullopt if allocation failed
      */
     template<typename F>
-    static HgOption<HgFunction<R(Args...)>> create(HgAllocator& mem, F&& fn) {
+    static HgOption<HgFunction<R(Args...)>> create(HgAllocator& mem, F fn) {
         static_assert(std::is_trivially_destructible_v<F>);
         static_assert(std::is_invocable_r_v<R, F, Args...>);
 
         HgOption<HgFunction<R(Args...)>> func{std::in_place};
 
-        func->data = mem.alloc(sizeof(F), alignof(F));
-        if (func->data == nullptr)
+        func->capture = mem.alloc(sizeof(F), alignof(F));
+        if (func->capture == nullptr)
             return std::nullopt;
 
-        new ((F *)func->data.data) F{std::move(fn)};
+        new ((F *)func->capture.data) F{std::move(fn)};
 
-        func->fn = [](void *pdata, Args... args) -> R {
+        func->fn = [](void *data, Args... args) -> R {
             if constexpr (std::is_same_v<R, void>) {
-                (*(F *)pdata)(args...);
+                (*(F *)data)(args...);
             } else {
-                return (*(F *)pdata)(args...);
+                return (*(F *)data)(args...);
             }
         };
 
@@ -4864,9 +4860,25 @@ struct HgFunction<R(Args...)> {
      * - mem The allocator to use
      */
     void destroy(HgAllocator& mem) {
-        mem.free(data);
+        mem.free(capture);
     }
 };
+
+/**
+ * Creates a function object, convenience over HgFunction<...>::create
+ * 
+ * Parameters
+ * - mem The allocator to use
+ * - fn The function to create from
+ *
+ * Returns
+ * - The created function object
+ * - nullopt if allocation failed
+ */
+template<typename Signature, typename F>
+HgOption<HgFunction<Signature>> hg_function(HgAllocator& mem, F&& fn) {
+    return HgFunction<Signature>::create(mem, std::forward<F>(fn));
+}
 
 template<typename>
 struct HgFunctionView;
@@ -4879,7 +4891,7 @@ struct HgFunctionView<R(Args...)> {
     /**
      * The function's capture
      */
-    void *data;
+    void *capture;
     /**
      * The function pointer
      */
@@ -4890,22 +4902,22 @@ struct HgFunctionView<R(Args...)> {
      */
     R operator()(Args... args) {
         if constexpr (std::is_same_v<R, void>) {
-            fn(data, args...);
+            fn(capture, args...);
         } else {
-            return fn(data, args...);
+            return fn(capture, args...);
         }
     }
 
     HgFunctionView() = default;
-    HgFunctionView(const HgFunctionView&) = default;
-    HgFunctionView& operator=(const HgFunctionView&) = default;
-    HgFunctionView(HgFunctionView&&) = default;
-    HgFunctionView& operator=(HgFunctionView&&) = default;
 
+    HgFunctionView(void *capture_val, decltype(fn) fn_val) : capture{capture_val}, fn{fn_val} {}
+    HgFunctionView(const HgFunction<R(Args...)>& func) : capture{func.capture.data}, fn{func.fn} {}
+
+    /**
+     * Construct from a captureless lambda that takes a void *data pointer
+     */
     template<typename F, typename = std::enable_if_t<std::is_convertible_v<hg_remove_cvref_t<F>, decltype(fn)>>>
-    HgFunctionView(F fn_val): data{}, fn{fn_val} {}
-    HgFunctionView(void *data_val, decltype(fn) fn_val) : data{data_val}, fn{fn_val} {}
-    HgFunctionView(const HgFunction<R(Args...)>& func) : data{func.data.data}, fn{func.fn} {}
+    HgFunctionView(F fn_val): capture{}, fn{fn_val} {}
 
     /**
      * Constructs a function view from a lambda
@@ -4921,21 +4933,53 @@ struct HgFunctionView<R(Args...)> {
         !std::is_same_v<hg_remove_cvref_t<F>, HgFunction<R(Args...)>> &&
         !std::is_same_v<hg_remove_cvref_t<F>, HgFunctionView>>>
     HgFunctionView(F& func) {
-        data = &func;
-        fn = [](void *pdata, Args... args) -> R {
+        capture = &func;
+        fn = [](void *data, Args... args) -> R {
             if constexpr (std::is_same_v<R, void>) {
-                (*(F *)pdata)(args...);
+                (*(F *)data)(args...);
             } else {
-                return (*(F *)pdata)(args...);
+                return (*(F *)data)(args...);
             }
         };
     }
+};
+
+struct HgFence {
+    std::atomic<usize> counter;
+
+    HgFence() {
+        counter.store(0);
+    }
+
+    /**
+     * Returns whether all work has been completed
+     */
+    bool complete() {
+        return counter.load() == 0;
+    }
+
+    /**
+     * Waits for all work submissions to be completed
+     *
+     * Parameters
+     * - timeout_seconds The time in seconds to wait before timing out
+     *
+     * Returns
+     * - true if all work completed
+     * - false if the timeout was reached
+     */
+    bool wait(f64 timeout_seconds);
 };
 
 /**
  * A thread pool
  */
 struct HgThreadPool {
+    struct Work {
+        HgFunctionView<void()> fn;
+        HgFence *fence;
+    };
+
     /**
      * The threads in the pool
      */
@@ -4955,7 +4999,7 @@ struct HgThreadPool {
     /**
      * The queue of work to be executed
      */
-    HgArray<HgFunctionView<void()>> work_queue;
+    HgArray<Work> work_queue;
 
     /**
      * Creates a new thread pool
@@ -4979,9 +5023,10 @@ struct HgThreadPool {
      * Pushes work to the queue to be executed
      *
      * Parameters
+     * - fence The fence to signal upon completion, may be nullptr
      * - work The function to be executed
      */
-    void submit_work(HgFunctionView<void()> work);
+    void submit_work(HgFence *fence, HgFunctionView<void()> work);
 
     /**
      * Waits for all thread submissions to be completed
@@ -4993,7 +5038,38 @@ struct HgThreadPool {
      * - true if all threads completed
      * - false if the timeout was reached
      */
-    bool wait_all(f64 timeout_seconds);
+    bool wait_idle(f64 timeout_seconds);
+
+    /**
+     * Iterates in parallel over a function n times in chunks
+     *
+     * Parameters
+     * - n The number of iterations
+     * - chunk_size The size of each chunk
+     * - fn The function to use to iterate, must take begin and end indices
+     */
+    void for_par(usize n, usize chunk_size, HgFunctionView<void(usize, usize)> fn);
+
+    /**
+     * Converts a function taking an index into an iterator with begin and end
+     *
+     * Parameters
+     * - n The number of iterations
+     * - chunk_size The size of each chunk
+     * - fn The function to use to iterate, must take an index
+     */
+    template<typename F, typename = std::enable_if_t<!std::is_convertible_v<F, HgFunctionView<void(usize, usize)>>>>
+    void for_par(usize n, usize chunk_size, F fn) {
+        static_assert(std::is_invocable_r_v<void, F, usize>);
+
+        auto fn_iter = [](void *pfn, usize begin, usize end) {
+            for (usize i = begin; i < end; ++i) {
+                (*(F *)pfn)(i);
+            }
+        };
+
+        for_par(n, chunk_size, HgFunctionView<void(usize, usize)>{&fn, fn_iter});
+    }
 };
 
 /**

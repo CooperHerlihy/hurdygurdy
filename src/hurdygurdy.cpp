@@ -1555,6 +1555,14 @@ hg_test(hg_ecs_sort) {
 
 hg_test(hg_function) {
     {
+        HgFunction<void()> f{};
+        HgFunction<void()> f_copy = f;
+        f = f_copy;
+        HgFunction<void()> f_move = std::move(f);
+        f = std::move(f_move);
+    }
+
+    {
         HgStdAllocator mem;
 
         HgArena arena = arena.create(mem, 4096).value();
@@ -1589,7 +1597,7 @@ hg_test(hg_function) {
         HgFunction<u32(u32)> mul_2 = [](void *, u32 x) {
             return x * 2;
         };
-        hg_test_assert(mul_2.data == nullptr);
+        hg_test_assert(mul_2.capture == nullptr);
 
         hg_test_assert(mul_2(2) == 4);
     }
@@ -1599,10 +1607,18 @@ hg_test(hg_function) {
 
 hg_test(hg_function_view) {
     {
+        HgFunctionView<void()> f{};
+        HgFunctionView<void()> f_copy = f;
+        f = f_copy;
+        HgFunctionView<void()> f_move = std::move(f);
+        f = std::move(f_move);
+    }
+
+    {
         HgFunctionView<u32(u32)> mul_2 = [](void *, u32 x) {
             return x * 2;
         };
-        hg_test_assert(mul_2.data == nullptr);
+        hg_test_assert(mul_2.capture == nullptr);
 
         hg_test_assert(mul_2(2) == 4);
     }
@@ -1623,6 +1639,15 @@ hg_test(hg_function_view) {
     return true;
 }
 
+bool HgFence::wait(f64 timeout_seconds) {
+    HgClock timer{};
+    for (f64 elapsed = 0.0f; elapsed < timeout_seconds; elapsed += timer.tick()) {
+        if (complete())
+            return true;
+    }
+    return false;
+}
+
 static void hg_internal_thread_fn(HgThreadPool *pool, usize index) {
     for (;;) {
         if (pool->threads_should_close[index].load())
@@ -1630,12 +1655,16 @@ static void hg_internal_thread_fn(HgThreadPool *pool, usize index) {
 
         if (pool->work_queue_mutex.try_lock()) {
             if (pool->work_queue.count > 0) {
-                HgFunctionView<void()> work = pool->work_queue.last();
+                HgThreadPool::Work work = pool->work_queue.last();
                 pool->work_queue.pop();
                 pool->work_queue_mutex.unlock();
 
                 pool->threads_are_working[index].store(true);
-                work();
+
+                work.fn();
+                if (work.fence != nullptr)
+                    --work.fence->counter;
+
                 pool->threads_are_working[index].store(false);
             } else {
                 pool->work_queue_mutex.unlock();
@@ -1661,7 +1690,7 @@ HgThreadPool *HgThreadPool::create(HgAllocator& mem, usize thread_count, usize q
     if (pool->threads_are_working == nullptr)
         goto cleanup_threads_are_working;
 
-    pool->work_queue = pool->work_queue.create(mem, 0, queue_size).value_or(HgArray<HgFunctionView<void()>>{});
+    pool->work_queue = pool->work_queue.create(mem, 0, queue_size).value_or(HgArray<Work>{});
     if (pool->work_queue.items == nullptr)
         goto cleanup_work_queue;
 
@@ -1703,15 +1732,18 @@ void HgThreadPool::destroy(HgAllocator& mem, HgThreadPool *pool) {
     mem.free(pool);
 }
 
-void HgThreadPool::submit_work(HgFunctionView<void()> work) {
+void HgThreadPool::submit_work(HgFence *fence, HgFunctionView<void()> work) {
     hg_assert(work.fn != nullptr);
 
+    if (fence != nullptr)
+        ++fence->counter;
+
     work_queue_mutex.lock();
-    work_queue.push(work);
+    work_queue.push(work, fence);
     work_queue_mutex.unlock();
 }
 
-bool HgThreadPool::wait_all(f64 timeout_seconds) {
+bool HgThreadPool::wait_idle(f64 timeout_seconds) {
     HgClock timer{};
     for (f64 elapsed = 0.0f; elapsed < timeout_seconds; elapsed += timer.tick()) {
         if (work_queue_mutex.try_lock()) {
@@ -1730,6 +1762,28 @@ wait_longer:
     return false;
 }
 
+void HgThreadPool::for_par(usize n, usize chunk_size, HgFunctionView<void(usize, usize)> fn) {
+    static constexpr auto fn_work = [fn_dummy = nullptr, begin = (usize)0, end = (usize)0]() {
+        (void)fn_dummy;
+        (void)begin;
+        (void)end;
+    };
+    static constexpr usize mem_align = alignof(decltype(fn_work));
+
+    HgArena arena{};
+    usize mem_size = (usize)std::ceil((f64)n / (f64)chunk_size) * sizeof(fn_work);
+    arena.memory = {alloca(mem_size), mem_size, mem_align};
+    arena.head = arena.memory.data;
+
+    HgFence fence;
+    for (usize i = 0; i < n; i += chunk_size) {
+        submit_work(&fence, hg_function<void()>(arena, [&fn, begin = i, end = std::min(n, i + chunk_size)]() {
+            fn(begin, end);
+        }).value());
+    }
+    fence.wait(INFINITY);
+}
+
 hg_test(hg_thread_pool) {
     HgStdAllocator mem;
 
@@ -1739,39 +1793,8 @@ hg_test(hg_thread_pool) {
     hg_test_assert(pool != nullptr);
 
     {
-        bool vals[100] = {};
-        for (bool& val : vals) {
-            pool->submit_work({&val, [](void *data) {
-                *(bool *)data = true;
-            }});
-        }
+        HgFence fence;
 
-        hg_test_assert(pool->wait_all(2.0));
-
-        for (bool& val : vals) {
-            hg_test_assert(val == true);
-        }
-    }
-
-    {
-        HgArena arena = arena.create(mem, 1 << 16).value();
-        hg_defer(arena.destroy(mem));
-
-        bool vals[100] = {};
-        for (u32 i = 0; i < hg_countof(vals); ++i) {
-            pool->submit_work(HgFunction<void()>::create(arena, [&vals, i]() {
-                vals[i] = true;
-            }).value());
-        }
-
-        hg_test_assert(pool->wait_all(2.0));
-
-        for (bool& val : vals) {
-            hg_test_assert(val == true);
-        }
-    }
-
-    {
         bool a = false;
         auto a_fn = [&] {
             a = true;
@@ -1781,14 +1804,64 @@ hg_test(hg_thread_pool) {
             b = true;
         };
 
-        pool->submit_work(a_fn);
-        pool->submit_work(b_fn);
+        pool->submit_work(&fence, a_fn);
+        pool->submit_work(&fence, b_fn);
 
-        hg_test_assert(pool->wait_all(2.0));
+        hg_test_assert(fence.wait(2.0));
 
         hg_test_assert(a == true);
         hg_test_assert(b == true);
     }
+
+    {
+        HgFence fence;
+
+        bool vals[100] = {};
+        for (bool& val : vals) {
+            pool->submit_work(&fence, {&val, [](void *data) {
+                *(bool *)data = true;
+            }});
+        }
+
+        hg_test_assert(fence.wait(2.0));
+
+        for (bool& val : vals) {
+            hg_test_assert(val == true);
+        }
+    }
+
+    {
+        HgFence fence;
+
+        HgArena arena = arena.create(mem, 1 << 16).value();
+        hg_defer(arena.destroy(mem));
+
+        bool vals[100] = {};
+        for (u32 i = 0; i < hg_countof(vals); ++i) {
+            pool->submit_work(&fence, hg_function<void()>(arena, [&vals, i]() {
+                vals[i] = true;
+            }).value());
+        }
+
+        hg_test_assert(fence.wait(2.0));
+
+        for (bool& val : vals) {
+            hg_test_assert(val == true);
+        }
+    }
+
+    {
+        bool vals[100] = {};
+        pool->for_par(hg_countof(vals), 16, [&](usize i) {
+            hg_assert(i < hg_countof(vals));
+            vals[i] = true;
+        });
+
+        for (bool& val : vals) {
+            hg_test_assert(val == true);
+        }
+    }
+
 
     return true;
 }
