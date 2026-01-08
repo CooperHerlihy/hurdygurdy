@@ -2330,7 +2330,7 @@ struct HgAllocator {
      * - The reallocated array
      * - nullptr on failure
      */
-    template<typename T, typename = std::enable_if_t<!std::is_same_v<T, void>>>
+    template<typename T>
     HgSpan<T> realloc(HgSpan<T> allocation, usize count) {
         static_assert(hg_is_memmove_safe_v<T>);
 
@@ -2385,7 +2385,7 @@ struct HgAllocator {
      * Parameters
      * - allocation The allocation to free
      */
-    template<typename T, typename = std::enable_if_t<!std::is_same_v<T, void>>>
+    template<typename T>
     void free(HgSpan<T> allocation) {
         if constexpr (std::is_destructible_v<T>) {
             for (usize i = 0; i < allocation.count; ++i) {
@@ -3440,7 +3440,7 @@ struct HgString {
     /**
      * Implicit converts to string_view
      */
-    operator std::string_view() {
+    constexpr operator std::string_view() {
         return {chars.data, length};
     }
 };
@@ -3457,7 +3457,7 @@ inline bool operator!=(HgString lhs, HgString rhs) {
  * Hash map hashing for integral types
  */
 template<typename T>
-constexpr typename std::enable_if_t<std::is_integral_v<T>, usize> hg_hash(T val) {
+constexpr std::enable_if_t<std::is_integral_v<T>, usize> hg_hash(T val) {
     return (usize)val;
 }
 
@@ -3465,7 +3465,7 @@ constexpr typename std::enable_if_t<std::is_integral_v<T>, usize> hg_hash(T val)
  * Hash map hashing for floating point types
  */
 template<typename T>
-constexpr typename std::enable_if_t<std::is_floating_point_v<T>, usize> hg_hash(T val) {
+constexpr std::enable_if_t<std::is_floating_point_v<T>, usize> hg_hash(T val) {
     union {
         T as_float;
         usize as_usize;
@@ -3491,7 +3491,7 @@ constexpr usize hg_hash(std::string_view str) {
 /**
  * Hash map hashing for HgString
  */
-inline usize hg_hash(HgString str) {
+constexpr usize hg_hash(HgString str) {
     return hg_hash((std::string_view)str);
 }
 
@@ -3929,6 +3929,293 @@ struct HgHashSet {
     }
 };
 
+template<typename>
+struct HgFunction;
+
+/**
+ * A generic function object
+ */
+template<typename R, typename... Args>
+struct HgFunction<R(Args...)> {
+    /**
+     * The function's capture
+     */
+    HgSpan<void> capture;
+    /**
+     * The function pointer
+     */
+    R (*fn)(void *data, Args...);
+
+    /**
+     * Calls the function
+     */
+    R operator()(Args... args) {
+        if constexpr (std::is_same_v<R, void>) {
+            fn(capture.data, args...);
+        } else {
+            return fn(capture.data, args...);
+        }
+    }
+
+    HgFunction() = default;
+
+    /**
+     * Construct from a captureless lambda that takes a void *data pointer
+     */
+    template<typename F, typename = std::enable_if_t<std::is_convertible_v<hg_remove_cvref_t<F>, decltype(fn)>>>
+    HgFunction(F fn_val): capture{}, fn{fn_val} {}
+
+    /**
+     * Creates a function object, which owns its capture and must be destroyed
+     *
+     * Parameters
+     * - mem The allocator to use
+     * - fn The function to use
+     *
+     * Returns
+     * - The function object
+     * - nullopt if allocation failed
+     */
+    template<typename F>
+    static HgOption<HgFunction<R(Args...)>> create(HgAllocator& mem, F fn) {
+        static_assert(std::is_trivially_destructible_v<F>);
+        static_assert(std::is_invocable_r_v<R, F, Args...>);
+
+        HgOption<HgFunction<R(Args...)>> func{std::in_place};
+
+        func->capture = mem.alloc(sizeof(F), alignof(F));
+        if (func->capture == nullptr)
+            return std::nullopt;
+
+        new ((F *)func->capture.data) F{std::move(fn)};
+
+        func->fn = [](void *data, Args... args) -> R {
+            if constexpr (std::is_same_v<R, void>) {
+                (*(F *)data)(args...);
+            } else {
+                return (*(F *)data)(args...);
+            }
+        };
+
+        return func;
+    }
+
+    /**
+     * Destroys the function object
+     *
+     * Parameters
+     * - mem The allocator to use
+     */
+    void destroy(HgAllocator& mem) {
+        mem.free(capture);
+    }
+};
+
+/**
+ * Creates a function object, convenience over HgFunction<...>::create
+ * 
+ * Parameters
+ * - mem The allocator to use
+ * - fn The function to create from
+ *
+ * Returns
+ * - The created function object
+ * - nullopt if allocation failed
+ */
+template<typename Signature, typename F>
+HgOption<HgFunction<Signature>> hg_function(HgAllocator& mem, F&& fn) {
+    return HgFunction<Signature>::create(mem, std::forward<F>(fn));
+}
+
+template<typename>
+struct HgFunctionView;
+
+/**
+ * A generic function object view
+ */
+template<typename R, typename... Args>
+struct HgFunctionView<R(Args...)> {
+    /**
+     * The function's capture
+     */
+    void *capture;
+    /**
+     * The function pointer
+     */
+    R (*fn)(void *data, Args...);
+
+    /**
+     * Calls the function
+     */
+    R operator()(Args... args) {
+        if constexpr (std::is_same_v<R, void>) {
+            fn(capture, args...);
+        } else {
+            return fn(capture, args...);
+        }
+    }
+
+    HgFunctionView() = default;
+
+    HgFunctionView(void *capture_val, decltype(fn) fn_val) : capture{capture_val}, fn{fn_val} {}
+    HgFunctionView(const HgFunction<R(Args...)>& func) : capture{func.capture.data}, fn{func.fn} {}
+
+    /**
+     * Construct from a captureless lambda that takes a void *data pointer
+     */
+    template<typename F, typename = std::enable_if_t<std::is_convertible_v<hg_remove_cvref_t<F>, decltype(fn)>>>
+    HgFunctionView(F fn_val): capture{}, fn{fn_val} {}
+
+    /**
+     * Constructs a function view from a lambda
+     *
+     * Parameters
+     * - func The function object to point to
+     *
+     * Returns
+     * - The function wrapper
+     */
+    template<typename F>
+    static HgFunctionView create(F& func) {
+        static_assert(std::is_invocable_r_v<R, F, Args...>);
+
+        HgFunctionView view;
+        view.capture = &func;
+        view.fn = [](void *data, Args... args) -> R {
+            if constexpr (std::is_same_v<R, void>) {
+                (*(F *)data)(args...);
+            } else {
+                return (*(F *)data)(args...);
+            }
+        };
+        return view;
+    }
+};
+
+/**
+ * Creates a function view, convenience over HgFunctionView<...>::create
+ * 
+ * Parameters
+ * - fn The function to create from
+ *
+ * Returns
+ * - The created function object
+ */
+template<typename Signature, typename F>
+HgFunctionView<Signature> hg_function_view(F& fn) {
+    return HgFunctionView<Signature>::create(fn);
+}
+
+/**
+ * A fence for basic thread synchronization
+ */
+struct HgFence {
+    std::atomic<usize> counter;
+
+    HgFence() {
+        counter.store(0);
+    }
+
+    /**
+     * Returns whether all work has been completed
+     */
+    bool complete() {
+        return counter.load() == 0;
+    }
+
+    /**
+     * Waits for all work submissions to be completed
+     *
+     * Parameters
+     * - timeout_seconds The time in seconds to wait before timing out
+     *
+     * Returns
+     * - true if all work completed
+     * - false if the timeout was reached
+     */
+    bool wait(f64 timeout_seconds);
+};
+
+/**
+ * A thread pool
+ */
+struct HgThreadPool {
+    struct Work {
+        HgFunctionView<void()> fn;
+        HgFence *fence;
+    };
+
+    /**
+     * The threads in the pool
+     */
+    HgSpan<std::thread> threads;
+    /**
+     * Signals to the threads to close
+     */
+    HgSpan<std::atomic_bool> threads_should_close;
+    /**
+     * Signal whether each thread is currently working
+     */
+    HgSpan<std::atomic_bool> threads_are_working;
+    /**
+     * Mutex to protect the work queue
+     */
+    std::mutex work_queue_mutex;
+    /**
+     * The queue of work to be executed
+     */
+    HgArray<Work> work_queue;
+
+    /**
+     * Creates a new thread pool
+     *
+     * Parameters
+     * - mem The allocator to use
+     * - thread_count The number of threads to spawn (recommended hardware - 1)
+     *
+     * Returns
+     * - The created thread pool
+     * - nullptr on failure
+     */
+    static HgThreadPool *create(HgAllocator& mem, usize thread_count, usize queue_size);
+
+    /**
+     * Destroys the thread pool
+     */
+    static void destroy(HgAllocator& mem, HgThreadPool *pool);
+
+    /**
+     * Pushes work to the queue to be executed
+     *
+     * Parameters
+     * - fence The fence to signal upon completion, may be nullptr
+     * - work The function to be executed
+     */
+    void submit_work(HgFence *fence, HgFunctionView<void()> work);
+
+    /**
+     * Waits for all thread submissions to be completed
+     *
+     * Parameters
+     * - timeout_seconds The time in seconds to wait before timing out
+     *
+     * Returns
+     * - true if all threads completed
+     * - false if the timeout was reached
+     */
+    bool wait_idle(f64 timeout_seconds);
+
+    /**
+     * Iterates in parallel over a function n times in chunks
+     *
+     * Parameters
+     * - n The number of iterations
+     * - chunk_size The size of each chunk
+     * - fn The function to use to iterate, takes begin and end indices
+     */
+    void for_par(usize n, usize chunk_size, HgFunctionView<void(usize, usize)> fn);
+};
+
 /**
  * The handle for an ECS entity
  */
@@ -4016,20 +4303,32 @@ struct HgECS {
     /**
      * Reallocates the entity pool, increasing the max number of entities
      *
+     * Note, partial allocation failure, may leave an unstable state
+     *
      * Parameters
      * - mem The allocator to use
      * - new_max The new max number of entities
+     *
+     * Returns
+     * - Whether the allocation succeeded
      */
-    void resize_entities(HgAllocator& mem, u32 new_max);
+    bool resize_entities(HgAllocator& mem, u32 new_max);
 
     /**
      * Grows the entity pool to current * factor
      *
+     * Note, partial allocation failure, may leave an unstable state
+     *
      * Parameters
      * - mem The allocator to use
      * - factor The factor to increase by
+     *
+     * Returns
+     * - Whether the allocation succeeded
      */
-    void grow_entities(HgAllocator& mem, f32 factor = 2.0f);
+    bool grow_entities(HgAllocator& mem, f32 factor = 2.0f) {
+        return resize_entities(mem, (u32)((f32)entity_pool.count * factor));
+    }
 
     /**
      * Creates a new entity in an ECS
@@ -4600,12 +4899,12 @@ struct HgECS {
      * - function The function to call
      */
     template<typename T, typename Fn>
-    void for_each_single(Fn& function) {
+    void for_each_single(Fn& fn) {
         static_assert(hg_is_memmove_safe_v<T>);
 
-        static_assert(std::is_invocable_v<Fn, HgEntity&, T&>);
+        static_assert(std::is_invocable_r_v<void, Fn, HgEntity&, T&>);
         for (auto [e, c] : component_iter<T>()) {
-            function(e, c);
+            fn(e, c);
         }
     }
 
@@ -4620,13 +4919,13 @@ struct HgECS {
      * - function The function to call
      */
     template<typename... Ts, typename Fn>
-    void for_each_multi(Fn& function) {
-        static_assert(std::is_invocable_v<Fn, HgEntity&, Ts&...>);
+    void for_each_multi(Fn& fn) {
+        static_assert(std::is_invocable_r_v<void, Fn, HgEntity&, Ts&...>);
 
         u32 id = smallest_system<Ts...>();
         for (HgEntity e : systems[id].dense) {
             if (has_all<Ts...>(e))
-                function(e, get<Ts>(e)...);
+                fn(e, get<Ts>(e)...);
         }
     }
 
@@ -4639,44 +4938,106 @@ struct HgECS {
      * - function The function to call
      */
     template<typename... Ts, typename Fn>
-    void for_each(Fn function) {
+    void for_each(Fn fn) {
         static_assert(sizeof...(Ts) != 0);
-        static_assert(std::is_invocable_v<Fn, HgEntity&, Ts&...>);
+        static_assert(std::is_invocable_r_v<void, Fn, HgEntity&, Ts&...>);
 
         if constexpr (sizeof...(Ts) == 1) {
-            for_each_single<Ts...>(function);
+            for_each_single<Ts...>(fn);
         } else {
-            for_each_multi<Ts...>(function);
+            for_each_multi<Ts...>(fn);
         }
     }
 
-#define hg_comp(idx) (*(T *)systems[hg_component_id<T>].components[idx])
+    /**
+     * Iterates over all entities with the single given component
+     *
+     * Note, specifying only one component allows deterministic ordering (such
+     * as in the case of sorting), as well as extra optimization
+     *
+     * The function receives as parameters:
+     * - The entity id
+     * - A reference to the component
+     *
+     * Parameters
+     * - function The function to call
+     */
+    template<typename T, typename Fn>
+    void for_each_par_single(HgThreadPool *threads, u32 chunk_size, Fn& fn) {
+        static_assert(hg_is_memmove_safe_v<T>);
+        static_assert(std::is_invocable_r_v<void, Fn, HgEntity&, T&>);
+
+        Component& system = systems[hg_component_id<T>];
+
+        auto fn_it = [&system, &fn](usize begin, usize end) {
+            HgEntity *e_begin = system.dense.items + begin;
+            HgEntity *e_end = system.dense.items + end;
+            T *c_begin = (T *)system.components[begin];
+            for (; e_begin != e_end; ++e_begin, ++c_begin) {
+                fn(*e_begin, *c_begin);
+            }
+        };
+
+        threads->for_par(system.dense.count, chunk_size, hg_function_view<void(usize, usize)>(fn_it));
+    }
+
+    /**
+     * Iterates over all entities with the given components
+     *
+     * The function receives as parameters:
+     * - The entity id
+     * - A reference to each component...
+     *
+     * Parameters
+     * - function The function to call
+     */
+    template<typename... Ts, typename Fn>
+    void for_each_par_multi(HgThreadPool *threads, u32 chunk_size, Fn& fn) {
+        static_assert(std::is_invocable_r_v<void, Fn, HgEntity&, Ts&...>);
+
+        u32 id = smallest_system<Ts...>();
+
+        auto fn_it = [this, id, &fn](usize begin, usize end) {
+            HgEntity *e_begin = systems[id].dense.items + begin;
+            HgEntity *e_end = systems[id].dense.items + end;
+            for (; e_begin != e_end; ++e_begin) {
+                if (has_all<Ts...>(*e_begin))
+                    fn(*e_begin, get<Ts>(*e_begin)...);
+            }
+        };
+
+        threads->for_par(component_count(id), chunk_size, hg_function_view<void(usize, usize)>(fn_it));
+    }
+
+    /**
+     * Iterates over all entities with the given components
+     *
+     * Note, calls the single of multi version from the number of components
+     *
+     * Parameters
+     * - function The function to call
+     */
+    template<typename... Ts, typename Fn>
+    void for_each_par(HgThreadPool *threads, u32 chunk_size, Fn fn) {
+        static_assert(sizeof...(Ts) != 0);
+
+        if constexpr (sizeof...(Ts) == 1) {
+            for_each_par_single<Ts...>(threads, chunk_size, fn);
+        } else {
+            for_each_par_multi<Ts...>(threads, chunk_size, fn);
+        }
+    }
 
     /**
      * Sorts components using selection sort
      *
      * Parameters
-     * - begin The index of the first component
-     * - end The index of the last component
+     * - begin The index to begin sorting
+     * - end The index to end sorting
+     * - component_id The component system to sort
      * - compare The comparison function
      */
-    template<typename T, typename Fn>
-    void selectionsort(u32 begin, u32 end, Fn& compare) {
-        static_assert(hg_is_memmove_safe_v<T>);
-        static_assert(std::is_invocable_v<Fn, T&, T&>);
-        hg_assert(is_registered(hg_component_id<T>));
-        hg_assert(begin <= end && end <= component_count<T>());
-
-        for (; begin < end; ++begin) {
-            u32 least = begin;
-            for (u32 i = begin + 1; i < end; ++i) {
-                if (compare(hg_comp(i), hg_comp(least)))
-                    least = i;
-            }
-            if (least != begin)
-                swap_location_idx(begin, least, hg_component_id<T>);
-        }
-    }
+    void selectionsort_untyped(u32 begin, u32 end, u32 component_id, HgFunctionView<bool(void *, void *)> compare);
 
     /**
      * Sorts components using selection sort
@@ -4686,72 +5047,29 @@ struct HgECS {
      */
     template<typename T, typename Fn>
     void selectionsort(Fn compare) {
-        static_assert(std::is_invocable_v<Fn, T&, T&>);
-        selectionsort<T>(0, component_count<T>(), compare);
+        static_assert(hg_is_memmove_safe_v<T>);
+        static_assert(std::is_invocable_r_v<bool, Fn, T&, T&>);
+
+        auto fn = [](void *pcompare, void *lhs, void *rhs) -> bool {
+            return (*(Fn *)pcompare)(*(T *)lhs, *(T *)rhs);
+        };
+
+        sort_untyped(0, component_count<T>(), hg_component_id<T>, {&compare, fn});
     }
 
     /**
-     * Rearranges components between a pivot for quick sort
+     * Sorts components using quicksort
      *
      * Parameters
-     * - pivot The index of the pivot
-     * - inc The incrementing iterator, should be pivot + 1
-     * - dec The decrementing iterator, should be end - 1
+     * - begin The index to begin sorting
+     * - end The index to end sorting
+     * - component_id The component system to sort
      * - compare The comparison function
      */
-    template<typename T, typename Fn>
-    u32 quicksort_inter(u32 pivot, u32 inc, u32 dec, Fn& compare) {
-        static_assert(hg_is_memmove_safe_v<T>);
-        static_assert(std::is_invocable_v<Fn, T&, T&>);
-        hg_assert(is_registered(hg_component_id<T>));
-        hg_assert(inc <= dec && dec <= component_count<T>());
-
-        while (inc != dec) {
-            while (!compare(hg_comp(dec), hg_comp(pivot))) {
-                --dec;
-                if (dec == inc)
-                    goto finish;
-            }
-            while (!compare(hg_comp(pivot), hg_comp(inc))) {
-                ++inc;
-                if (inc == dec)
-                    goto finish;
-            }
-            swap_location_idx(inc, dec, hg_component_id<T>);
-        }
-
-finish:
-        if (compare(hg_comp(inc), hg_comp(pivot)))
-            swap_location_idx(pivot, inc, hg_component_id<T>);
-        return inc;
-
-    }
+    void quicksort_untyped(u32 begin, u32 end, u32 component_id, HgFunctionView<bool(void *, void *)> compare);
 
     /**
-     * Sorts components using quick sort
-     *
-     * Parameters
-     * - begin The index of the first component
-     * - end The index of the last component
-     * - compare The comparison function
-     */
-    template<typename T, typename Fn>
-    void quicksort(u32 begin, u32 end, Fn& compare) {
-        static_assert(hg_is_memmove_safe_v<T>);
-        static_assert(std::is_invocable_v<Fn, T&, T&>);
-        hg_assert(is_registered(hg_component_id<T>));
-        hg_assert(begin <= end && end <= component_count<T>());
-
-        if (begin + 1 >= end)
-            return;
-
-        u32 middle = quicksort_inter<T>(begin, begin + 1, end - 1, compare);
-        quicksort<T>(begin, middle, compare);
-        quicksort<T>(middle, end, compare);
-    }
-
-    /**
-     * Sorts components using quick sort
+     * Sorts components using quicksort
      *
      * Parameters
      * - compare The comparison function
@@ -4759,11 +5077,25 @@ finish:
     template<typename T, typename Fn>
     void quicksort(Fn compare) {
         static_assert(hg_is_memmove_safe_v<T>);
-        static_assert(std::is_invocable_v<Fn, T&, T&>);
-        quicksort<T>(0, component_count<T>(), compare);
+        static_assert(std::is_invocable_r_v<bool, Fn, T&, T&>);
+
+        auto fn = [](void *pcompare, void *lhs, void *rhs) -> bool {
+            return (*(Fn *)pcompare)(*(T *)lhs, *(T *)rhs);
+        };
+
+        quicksort_untyped(0, component_count<T>(), hg_component_id<T>, {&compare, fn});
     }
 
-#undef hg_comp
+    /**
+     * Sorts components
+     *
+     * Parameters
+     * - begin The index to begin sorting
+     * - end The index to end sorting
+     * - component_id The component system to sort
+     * - compare The comparison function
+     */
+    void sort_untyped(u32 begin, u32 end, u32 component_id, HgFunctionView<bool(void *, void *)> compare);
 
     /**
      * Sorts components
@@ -4774,296 +5106,13 @@ finish:
     template<typename T, typename Fn>
     void sort(Fn compare) {
         static_assert(hg_is_memmove_safe_v<T>);
-        static_assert(std::is_invocable_v<Fn, T&, T&>);
-        quicksort<T>(compare);
-    }
-};
+        static_assert(std::is_invocable_r_v<bool, Fn, T&, T&>);
 
-template<typename>
-struct HgFunction;
-
-/**
- * A generic function object
- */
-template<typename R, typename... Args>
-struct HgFunction<R(Args...)> {
-    /**
-     * The function's capture
-     */
-    HgSpan<void> capture;
-    /**
-     * The function pointer
-     */
-    R (*fn)(void *data, Args...);
-
-    /**
-     * Calls the function
-     */
-    R operator()(Args... args) {
-        if constexpr (std::is_same_v<R, void>) {
-            fn(capture.data, args...);
-        } else {
-            return fn(capture.data, args...);
-        }
-    }
-
-    template<typename F, typename = std::enable_if_t<std::is_convertible_v<hg_remove_cvref_t<F>, decltype(fn)>>>
-    HgFunction(F func): capture{}, fn{func} {}
-
-    HgFunction() = default;
-
-    /**
-     * Creates a function object, which owns its capture and must be destroyed
-     *
-     * Parameters
-     * - mem The allocator to use
-     * - fn The function to use
-     *
-     * Returns
-     * - The function object
-     * - nullopt if allocation failed
-     */
-    template<typename F>
-    static HgOption<HgFunction<R(Args...)>> create(HgAllocator& mem, F fn) {
-        static_assert(std::is_trivially_destructible_v<F>);
-        static_assert(std::is_invocable_r_v<R, F, Args...>);
-
-        HgOption<HgFunction<R(Args...)>> func{std::in_place};
-
-        func->capture = mem.alloc(sizeof(F), alignof(F));
-        if (func->capture == nullptr)
-            return std::nullopt;
-
-        new ((F *)func->capture.data) F{std::move(fn)};
-
-        func->fn = [](void *data, Args... args) -> R {
-            if constexpr (std::is_same_v<R, void>) {
-                (*(F *)data)(args...);
-            } else {
-                return (*(F *)data)(args...);
-            }
+        auto fn = [](void *pcompare, void *lhs, void *rhs) -> bool {
+            return (*(Fn *)pcompare)(*(T *)lhs, *(T *)rhs);
         };
 
-        return func;
-    }
-
-    /**
-     * Destroys the function object
-     *
-     * Parameters
-     * - mem The allocator to use
-     */
-    void destroy(HgAllocator& mem) {
-        mem.free(capture);
-    }
-};
-
-/**
- * Creates a function object, convenience over HgFunction<...>::create
- * 
- * Parameters
- * - mem The allocator to use
- * - fn The function to create from
- *
- * Returns
- * - The created function object
- * - nullopt if allocation failed
- */
-template<typename Signature, typename F>
-HgOption<HgFunction<Signature>> hg_function(HgAllocator& mem, F&& fn) {
-    return HgFunction<Signature>::create(mem, std::forward<F>(fn));
-}
-
-template<typename>
-struct HgFunctionView;
-
-/**
- * A generic function object view
- */
-template<typename R, typename... Args>
-struct HgFunctionView<R(Args...)> {
-    /**
-     * The function's capture
-     */
-    void *capture;
-    /**
-     * The function pointer
-     */
-    R (*fn)(void *data, Args...);
-
-    /**
-     * Calls the function
-     */
-    R operator()(Args... args) {
-        if constexpr (std::is_same_v<R, void>) {
-            fn(capture, args...);
-        } else {
-            return fn(capture, args...);
-        }
-    }
-
-    HgFunctionView() = default;
-
-    HgFunctionView(void *capture_val, decltype(fn) fn_val) : capture{capture_val}, fn{fn_val} {}
-    HgFunctionView(const HgFunction<R(Args...)>& func) : capture{func.capture.data}, fn{func.fn} {}
-
-    /**
-     * Construct from a captureless lambda that takes a void *data pointer
-     */
-    template<typename F, typename = std::enable_if_t<std::is_convertible_v<hg_remove_cvref_t<F>, decltype(fn)>>>
-    HgFunctionView(F fn_val): capture{}, fn{fn_val} {}
-
-    /**
-     * Constructs a function view from a lambda
-     *
-     * Parameters
-     * - func The function object to point to
-     *
-     * Returns
-     * - The function wrapper
-     */
-    template<typename F, typename = std::enable_if_t<
-        std::is_invocable_r_v<R, F, Args...> &&
-        !std::is_same_v<hg_remove_cvref_t<F>, HgFunction<R(Args...)>> &&
-        !std::is_same_v<hg_remove_cvref_t<F>, HgFunctionView>>>
-    HgFunctionView(F& func) {
-        capture = &func;
-        fn = [](void *data, Args... args) -> R {
-            if constexpr (std::is_same_v<R, void>) {
-                (*(F *)data)(args...);
-            } else {
-                return (*(F *)data)(args...);
-            }
-        };
-    }
-};
-
-/**
- * A fence for basic thread synchronization
- */
-struct HgFence {
-    std::atomic<usize> counter;
-
-    HgFence() {
-        counter.store(0);
-    }
-
-    /**
-     * Returns whether all work has been completed
-     */
-    bool complete() {
-        return counter.load() == 0;
-    }
-
-    /**
-     * Waits for all work submissions to be completed
-     *
-     * Parameters
-     * - timeout_seconds The time in seconds to wait before timing out
-     *
-     * Returns
-     * - true if all work completed
-     * - false if the timeout was reached
-     */
-    bool wait(f64 timeout_seconds);
-};
-
-/**
- * A thread pool
- */
-struct HgThreadPool {
-    struct Work {
-        HgFunctionView<void()> fn;
-        HgFence *fence;
-    };
-
-    /**
-     * The threads in the pool
-     */
-    HgSpan<std::thread> threads;
-    /**
-     * Signals to the threads to close
-     */
-    HgSpan<std::atomic_bool> threads_should_close;
-    /**
-     * Signal whether each thread is currently working
-     */
-    HgSpan<std::atomic_bool> threads_are_working;
-    /**
-     * Mutex to protect the work queue
-     */
-    std::mutex work_queue_mutex;
-    /**
-     * The queue of work to be executed
-     */
-    HgArray<Work> work_queue;
-
-    /**
-     * Creates a new thread pool
-     *
-     * Parameters
-     * - mem The allocator to use
-     * - thread_count The number of threads to spawn (recommended hardware - 1)
-     *
-     * Returns
-     * - The created thread pool
-     * - nullptr on failure
-     */
-    static HgThreadPool *create(HgAllocator& mem, usize thread_count, usize queue_size);
-
-    /**
-     * Destroys the thread pool
-     */
-    static void destroy(HgAllocator& mem, HgThreadPool *pool);
-
-    /**
-     * Pushes work to the queue to be executed
-     *
-     * Parameters
-     * - fence The fence to signal upon completion, may be nullptr
-     * - work The function to be executed
-     */
-    void submit_work(HgFence *fence, HgFunctionView<void()> work);
-
-    /**
-     * Waits for all thread submissions to be completed
-     *
-     * Parameters
-     * - timeout_seconds The time in seconds to wait before timing out
-     *
-     * Returns
-     * - true if all threads completed
-     * - false if the timeout was reached
-     */
-    bool wait_idle(f64 timeout_seconds);
-
-    /**
-     * Iterates in parallel over a function n times in chunks
-     *
-     * Parameters
-     * - n The number of iterations
-     * - chunk_size The size of each chunk
-     * - fn The function to use to iterate, must take begin and end indices
-     */
-    void for_par(usize n, usize chunk_size, HgFunctionView<void(usize, usize)> fn);
-
-    /**
-     * Converts a function taking an index into an iterator with begin and end
-     *
-     * Parameters
-     * - n The number of iterations
-     * - chunk_size The size of each chunk
-     * - fn The function to use to iterate, must take an index
-     */
-    template<typename F, typename = std::enable_if_t<!std::is_convertible_v<F, HgFunctionView<void(usize, usize)>>>>
-    void for_par(usize n, usize chunk_size, F fn) {
-        static_assert(std::is_invocable_r_v<void, F, usize>);
-
-        for_par(n, chunk_size, {&fn, [](void *pfn, usize begin, usize end) {
-            for (usize i = begin; i < end; ++i) {
-                (*(F *)pfn)(i);
-            }
-        }});
+        sort_untyped(0, component_count<T>(), hg_component_id<T>, {&compare, fn});
     }
 };
 
