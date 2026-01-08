@@ -374,9 +374,13 @@ struct HgSpan<const void> {
      */
     const void *data;
     /**
-     * The number of items in the array
+     * The size of the array in bytes
      */
     usize count;
+    /**
+     * The alignment of the array
+     */
+    usize alignment;
 
     /**
      * The size of the array in bytes
@@ -396,9 +400,13 @@ struct HgSpan<void> {
      */
     void *data;
     /**
-     * The number of items in the array
+     * The size of the array in bytes
      */
     usize count;
+    /**
+     * The alignment of the array
+     */
+    usize alignment;
 
     /**
      * The size of the array in bytes
@@ -414,7 +422,7 @@ struct HgSpan<void> {
      * Implicit conversion can add const
      */
     constexpr operator HgSpan<const void>() const {
-        return {(const void*)data, count};
+        return {(const void*)data, count, alignment};
     }
 };
 
@@ -2304,6 +2312,7 @@ struct HgAllocator {
         HgSpan<void> span;
         span.data = alloc_fn(size, alignment);
         span.count = span.data != nullptr ? size : 0;
+        span.alignment = alignment;
         return span;
     }
 
@@ -2321,7 +2330,7 @@ struct HgAllocator {
      * - The reallocated array
      * - nullptr on failure
      */
-    template<typename T>
+    template<typename T, typename = std::enable_if_t<!std::is_same_v<T, void>>>
     HgSpan<T> realloc(HgSpan<T> allocation, usize count) {
         static_assert(hg_is_memmove_safe_v<T>);
 
@@ -2349,9 +2358,9 @@ struct HgAllocator {
      * - The reallocated array
      * - nullptr on failure
      */
-    HgSpan<void> realloc(HgSpan<void> allocation, usize size, usize alignment) {
+    HgSpan<void> realloc(HgSpan<void> allocation, usize size) {
         HgSpan<void> span;
-        span.data = realloc_fn(allocation.data, allocation.count, size, alignment);
+        span.data = realloc_fn(allocation.data, allocation.count, size, allocation.alignment);
         span.count = span.data != nullptr ? size : 0;
         return span;
     }
@@ -2376,7 +2385,7 @@ struct HgAllocator {
      * Parameters
      * - allocation The allocation to free
      */
-    template<typename T>
+    template<typename T, typename = std::enable_if_t<!std::is_same_v<T, void>>>
     void free(HgSpan<T> allocation) {
         if constexpr (std::is_destructible_v<T>) {
             for (usize i = 0; i < allocation.count; ++i) {
@@ -2392,8 +2401,8 @@ struct HgAllocator {
      * Parameters
      * - allocation The allocation to free
      */
-    void free(HgSpan<void> allocation, usize alignment) {
-        free_fn(allocation.data, allocation.count, alignment);
+    void free(HgSpan<void> allocation) {
+        free_fn(allocation.data, allocation.count, allocation.alignment);
     }
 };
 
@@ -4787,15 +4796,7 @@ struct HgFunction<R(Args...)> {
     /**
      * The function's capture
      */
-    void *data;
-    /**
-     * The size in bytes of the capture
-     */
-    usize size;
-    /**
-     * The alignment of the capture
-     */
-    usize alignment;
+    HgSpan<void> data;
     /**
      * The function pointer
      */
@@ -4806,11 +4807,20 @@ struct HgFunction<R(Args...)> {
      */
     R operator()(Args... args) {
         if constexpr (std::is_same_v<R, void>) {
-            fn(data, args...);
+            fn(data.data, args...);
         } else {
-            return fn(data, args...);
+            return fn(data.data, args...);
         }
     }
+
+    HgFunction() = default;
+    HgFunction(const HgFunction&) = default;
+    HgFunction& operator=(const HgFunction&) = default;
+    HgFunction(HgFunction&&) = default;
+    HgFunction& operator=(HgFunction&&) = default;
+
+    template<typename F, typename = std::enable_if_t<std::is_convertible_v<hg_remove_cvref_t<F>, decltype(fn)>>>
+    HgFunction(F func): data{}, fn{func} {}
 
     /**
      * Creates a function object, which owns its capture and must be destroyed
@@ -4826,20 +4836,15 @@ struct HgFunction<R(Args...)> {
     template<typename F>
     static HgOption<HgFunction<R(Args...)>> create(HgAllocator& mem, F&& fn) {
         static_assert(std::is_trivially_destructible_v<F>);
-
         static_assert(std::is_invocable_r_v<R, F, Args...>);
-        static_assert(std::is_invocable_v<F, Args...>);
 
         HgOption<HgFunction<R(Args...)>> func{std::in_place};
 
-        func->data = mem.alloc_fn(sizeof(F), alignof(F));
+        func->data = mem.alloc(sizeof(F), alignof(F));
         if (func->data == nullptr)
             return std::nullopt;
 
-        func->size = sizeof(F);
-        func->alignment = alignof(F);
-
-        new ((F *)func->data) F{std::move(fn)};
+        new ((F *)func->data.data) F{std::move(fn)};
 
         func->fn = [](void *pdata, Args... args) -> R {
             if constexpr (std::is_same_v<R, void>) {
@@ -4859,7 +4864,7 @@ struct HgFunction<R(Args...)> {
      * - mem The allocator to use
      */
     void destroy(HgAllocator& mem) {
-        mem.free_fn(data, size, alignment);
+        mem.free(data);
     }
 };
 
@@ -4872,13 +4877,13 @@ struct HgFunctionView;
 template<typename R, typename... Args>
 struct HgFunctionView<R(Args...)> {
     /**
-     * The function pointer
-     */
-    R (*fn)(void *data, Args...);
-    /**
      * The function's capture
      */
     void *data;
+    /**
+     * The function pointer
+     */
+    R (*fn)(void *data, Args...);
 
     /**
      * Calls the function
@@ -4897,9 +4902,10 @@ struct HgFunctionView<R(Args...)> {
     HgFunctionView(HgFunctionView&&) = default;
     HgFunctionView& operator=(HgFunctionView&&) = default;
 
-    HgFunctionView(decltype(fn) fn_val) : fn{fn_val}, data{} {}
-    HgFunctionView(decltype(fn) fn_val, void *data_val) : fn{fn_val}, data{data_val} {}
-    HgFunctionView(const HgFunction<R(Args...)>& func) : fn{func.fn}, data{func.data} {}
+    template<typename F, typename = std::enable_if_t<std::is_convertible_v<hg_remove_cvref_t<F>, decltype(fn)>>>
+    HgFunctionView(F fn_val): data{}, fn{fn_val} {}
+    HgFunctionView(void *data_val, decltype(fn) fn_val) : data{data_val}, fn{fn_val} {}
+    HgFunctionView(const HgFunction<R(Args...)>& func) : data{func.data.data}, fn{func.fn} {}
 
     /**
      * Constructs a function view from a lambda
@@ -4912,8 +4918,8 @@ struct HgFunctionView<R(Args...)> {
      */
     template<typename F, typename = std::enable_if_t<
         std::is_invocable_r_v<R, F, Args...> &&
-        !std::is_same_v<hg_remove_cvref_t<F>, HgFunctionView> &&
-        !std::is_same_v<hg_remove_cvref_t<F>, HgFunction<R(Args...)>>>>
+        !std::is_same_v<hg_remove_cvref_t<F>, HgFunction<R(Args...)>> &&
+        !std::is_same_v<hg_remove_cvref_t<F>, HgFunctionView>>>
     HgFunctionView(F& func) {
         data = &func;
         fn = [](void *pdata, Args... args) -> R {

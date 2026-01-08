@@ -205,7 +205,7 @@ void HgStdAllocator::free_fn(void *allocation, usize size, usize alignment) {
 HgOption<HgArena> HgArena::create(HgAllocator& parent, usize capacity) {
     HgOption<HgArena> arena{std::in_place};
 
-    arena->memory = parent.alloc(capacity, 16);
+    arena->memory = parent.alloc(capacity, alignof(std::max_align_t));
     if (arena->memory == nullptr)
         return std::nullopt;
 
@@ -215,7 +215,7 @@ HgOption<HgArena> HgArena::create(HgAllocator& parent, usize capacity) {
 }
 
 void HgArena::destroy(HgAllocator& parent) {
-    parent.free(memory, 16);
+    parent.free(memory);
 }
 
 void *HgArena::alloc_fn(usize size, usize alignment) {
@@ -312,7 +312,7 @@ hg_test(hg_arena) {
 HgOption<HgStack> HgStack::create(HgAllocator& parent, usize capacity) {
     HgOption<HgStack> stack{std::in_place};
 
-    stack->memory = parent.alloc(capacity, 16);
+    stack->memory = parent.alloc(capacity, alignof(std::max_align_t));
     if (stack->memory == nullptr)
         return std::nullopt;
 
@@ -322,7 +322,7 @@ HgOption<HgStack> HgStack::create(HgAllocator& parent, usize capacity) {
 }
 
 void HgStack::destroy(HgAllocator& parent) {
-    parent.free(memory, 16);
+    parent.free(memory);
 }
 
 void HgStack::reset() {
@@ -1554,37 +1554,71 @@ hg_test(hg_ecs_sort) {
 }
 
 hg_test(hg_function) {
-    HgStdAllocator mem;
+    {
+        HgStdAllocator mem;
 
-    HgArena arena = arena.create(mem, 4096).value();
-    hg_defer(arena.destroy(mem));
+        HgArena arena = arena.create(mem, 4096).value();
+        hg_defer(arena.destroy(mem));
 
-    enum State {
-        state_no_mul = 0,
-        state_mul_2 = 1,
-        state_mul_3 = 2,
-    } state;
+        enum State {
+            state_no_mul = 0,
+            state_mul_2 = 1,
+            state_mul_3 = 2,
+        } state;
 
-    HgFunction<u32(u32)> mul_maybe = mul_maybe.create(arena, [&](u32 in) -> u32 {
-        switch (state) {
-            case state_no_mul: return in;
-            case state_mul_2: return in * 2;
-            case state_mul_3: return in * 3;
-            default: return 0;
-        }
-    }).value();
+        HgFunction<u32(u32)> mul_maybe = mul_maybe.create(arena, [&](u32 in) -> u32 {
+            switch (state) {
+                case state_no_mul: return in;
+                case state_mul_2: return in * 2;
+                case state_mul_3: return in * 3;
+                default: return 0;
+            }
+        }).value();
 
-    HgFunctionView<u32(u32)> mul_view = mul_maybe;
-    [[maybe_unused]] HgFunctionView<u32(u32)> other_view = mul_view;
+        state = state_no_mul;
+        hg_test_assert(mul_maybe(2) == 2);
+        state = state_mul_2;
+        hg_test_assert(mul_maybe(3) == 6);
+        state = state_mul_3;
+        hg_test_assert(mul_maybe(4) == 12);
+        state = (State)3;
+        hg_test_assert(mul_maybe(5) == 0);
+    }
 
-    state = state_no_mul;
-    hg_test_assert(mul_view(2) == 2);
-    state = state_mul_2;
-    hg_test_assert(mul_view(3) == 6);
-    state = state_mul_3;
-    hg_test_assert(mul_view(4) == 12);
-    state = (State)3;
-    hg_test_assert(mul_view(5) == 0);
+    {
+        HgFunction<u32(u32)> mul_2 = [](void *, u32 x) {
+            return x * 2;
+        };
+        hg_test_assert(mul_2.data == nullptr);
+
+        hg_test_assert(mul_2(2) == 4);
+    }
+
+    return true;
+}
+
+hg_test(hg_function_view) {
+    {
+        HgFunctionView<u32(u32)> mul_2 = [](void *, u32 x) {
+            return x * 2;
+        };
+        hg_test_assert(mul_2.data == nullptr);
+
+        hg_test_assert(mul_2(2) == 4);
+    }
+
+    {
+        bool called = false;
+
+        HgFunctionView<u32(u32)> mul_2{&called, [](void *pcalled, u32 x) {
+            *(bool *)pcalled = true;
+            return x * 2;
+        }};
+
+        hg_test_assert(called == false);
+        hg_test_assert(mul_2(2) == 4);
+        hg_test_assert(called == true);
+    }
 
     return true;
 }
@@ -1706,11 +1740,10 @@ hg_test(hg_thread_pool) {
 
     {
         bool vals[100] = {};
-        auto fn = [](void *data) {
-            *(bool *)data = true;
-        };
         for (bool& val : vals) {
-            pool->submit_work({fn, &val});
+            pool->submit_work({&val, [](void *data) {
+                *(bool *)data = true;
+            }});
         }
 
         hg_test_assert(pool->wait_all(2.0));
@@ -1773,7 +1806,7 @@ HgSpan<void> hg_file_load_binary(HgAllocator& allocator, const char *path) {
         return {};
     }
 
-    HgSpan<void> data = allocator.alloc((usize)std::ftell(file), 16);
+    HgSpan<void> data = allocator.alloc((usize)std::ftell(file), alignof(std::max_align_t));
     std::rewind(file);
 
     if (std::fread(data.data, 1, data.count, file) != data.count) {
@@ -1785,7 +1818,7 @@ HgSpan<void> hg_file_load_binary(HgAllocator& allocator, const char *path) {
 }
 
 void hg_file_unload_binary(HgAllocator& allocator, HgSpan<void> data) {
-    allocator.free(data, 16);
+    allocator.free(data);
 }
 
 bool hg_file_save_binary(HgSpan<const void> data, const char *path) {
@@ -1809,10 +1842,10 @@ hg_test(hg_file_binary) {
 
     u32 save_data[] = {12, 42, 100, 128};
 
-    hg_test_assert(!hg_file_save_binary({save_data, sizeof(save_data)}, "dir/does/not/exist.bin"));
+    hg_test_assert(!hg_file_save_binary({save_data, sizeof(save_data), alignof(u32)}, "dir/does/not/exist.bin"));
     hg_test_assert(hg_file_load_binary(mem, "file_does_not_exist.bin") == nullptr);
 
-    hg_test_assert(hg_file_save_binary({save_data, sizeof(save_data)}, "hg_file_test.bin"));
+    hg_test_assert(hg_file_save_binary({save_data, sizeof(save_data), alignof(u32)}, "hg_file_test.bin"));
     HgSpan<void> load_data = hg_file_load_binary(mem, "hg_file_test.bin");
     hg_defer(hg_file_unload_binary(mem, load_data));
 
