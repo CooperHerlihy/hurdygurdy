@@ -2918,6 +2918,7 @@ struct HgArray {
      */
     void remove(usize index) {
         hg_assert(index < count);
+
         std::memmove((void *)&items[index], (void *)&items[index + 1], (count - index - 1) * sizeof(T));
         --count;
     }
@@ -2951,6 +2952,7 @@ struct HgArray {
      */
     void swap_remove(usize index) {
         hg_assert(index < count);
+
         std::memmove((void *)&items[index], (void *)&items[count - 1], sizeof(T));
         --count;
     }
@@ -3008,22 +3010,7 @@ struct HgArrayAny {
         usize alignment,
         usize count,
         usize capacity
-    ) {
-        hg_assert(count <= capacity);
-
-        HgOption<HgArrayAny> arr{std::in_place};
-
-        arr->items = mem.alloc_fn(capacity * width, alignment);
-        if (arr->items == nullptr)
-            return std::nullopt;
-
-        arr->width = width;
-        arr->alignment = alignment;
-        arr->capacity = capacity;
-        arr->count = count;
-
-        return arr;
-    }
+    );
 
     /**
      * Allocate a new dynamic array using a type
@@ -3083,16 +3070,7 @@ struct HgArrayAny {
      * Returns
      * - Whether the allocation succeeded
      */
-    bool reserve(HgAllocator& mem, usize min) {
-        if (min > capacity) {
-            void *new_items = mem.realloc_fn(items, capacity * width, min * width, alignment);
-            if (new_items == nullptr)
-                return false;
-            items = new_items;
-            capacity = min;
-        }
-        return true;
-    }
+    bool reserve(HgAllocator& mem, usize min);
 
     /**
      * Increases the capacity of the array, or inits to 1
@@ -3224,6 +3202,7 @@ struct HgArrayAny {
      */
     void remove(usize index) {
         hg_assert(index < count);
+
         std::memmove(get(index), get(index + 1), (count - index - 1) * width);
         --count;
     }
@@ -3255,6 +3234,7 @@ struct HgArrayAny {
      */
     void swap_remove(usize index) {
         hg_assert(index < count);
+
         std::memcpy(get(index), get(count - 1), width);
         --count;
     }
@@ -4047,7 +4027,7 @@ struct HgFunctionView<R(Args...)> {
     /**
      * Calls the function
      */
-    R operator()(Args... args) {
+    R operator()(Args... args) const {
         if constexpr (std::is_same_v<R, void>) {
             fn(capture, args...);
         } else {
@@ -4140,23 +4120,42 @@ struct HgFence {
  * A thread pool
  */
 struct HgThreadPool {
+    /**
+     * The threads
+     */
+    struct Thread {
+        /**
+         * The thread itself
+         */
+        std::thread thread;
+        /**
+         * Signal whether it is currently working
+         */
+        std::atomic_bool is_working;
+        /**
+         * Signal to close
+         */
+        std::atomic_bool should_close;
+    };
+
+    /**
+     * The work for threads to execute
+     */
     struct Work {
+        /**
+         * The function to execute
+         */
         HgFunctionView<void()> fn;
+        /**
+         * The fence to signal on completion
+         */
         HgFence *fence;
     };
 
     /**
      * The threads in the pool
      */
-    HgSpan<std::thread> threads;
-    /**
-     * Signals to the threads to close
-     */
-    HgSpan<std::atomic_bool> threads_should_close;
-    /**
-     * Signal whether each thread is currently working
-     */
-    HgSpan<std::atomic_bool> threads_are_working;
+    HgSpan<Thread> threads;
     /**
      * Mutex to protect the work queue
      */
@@ -4194,6 +4193,18 @@ struct HgThreadPool {
     void submit_work(HgFence *fence, HgFunctionView<void()> work);
 
     /**
+     * Iterates in parallel over a function n times in chunks
+     *
+     * Note, uses a fence internally to wait for all work to complete
+     *
+     * Parameters
+     * - count The number of elements to iterate [0, count)
+     * - chunk_size The number of elementes to iterate per parallel execution
+     * - fn The function to use to iterate, takes begin and end indices
+     */
+    void submit_work_range(usize count, usize chunk_size, HgFunctionView<void(usize, usize)> fn);
+
+    /**
      * Waits for all thread submissions to be completed
      *
      * Parameters
@@ -4204,17 +4215,53 @@ struct HgThreadPool {
      * - false if the timeout was reached
      */
     bool wait_idle(f64 timeout_seconds);
-
-    /**
-     * Iterates in parallel over a function n times in chunks
-     *
-     * Parameters
-     * - n The number of iterations
-     * - chunk_size The size of each chunk
-     * - fn The function to use to iterate, takes begin and end indices
-     */
-    void for_par(usize n, usize chunk_size, HgFunctionView<void(usize, usize)> fn);
 };
+
+/**
+ * Initializes the global thread pool
+ *
+ * Parameters
+ * - thread_count The number of threads in the pool
+ * - queue_size The number of slots in the work queue
+ */
+void hg_threads_init(usize thread_count, usize queue_size);
+
+/**
+ * Shuts down the global thread pool
+ */
+void hg_threads_deinit();
+
+/**
+ * Returns a pointer to the global thread pool
+ */
+HgThreadPool *hg_get_thread_pool();
+
+/**
+ * Waits for all threads in the global thread pool
+ *
+ * Parameters
+ * - timeout_seconds The time in seconds to wait before timing out
+ */
+bool hg_threads_wait_idle(f64 timeout_seconds);
+
+/**
+ * Executes a function in parallel in the global thread pool
+ *
+ * Parameters
+ * - fence The fence to signal on completion, may be nullptr
+ * - fn The function to execute in parallel
+ */
+void hg_call_par(HgFence *fence, HgFunctionView<void()> fn);
+
+/**
+ * Executes a range function in parallel in the global thread pool
+ *
+ * Parameters
+ * - count The number of elements to iterate [0, count)
+ * - chunk_size The number of elementes to iterate per parallel execution
+ * - fn The function to execute in parallel
+ */
+void hg_for_par(usize count, usize chunk_size, HgFunctionView<void(usize begin, usize end)> work);
 
 /**
  * The handle for an ECS entity
@@ -4808,12 +4855,10 @@ struct HgECS {
     template<typename T>
     HgEntity get_entity(const T& component) {
         static_assert(hg_is_memmove_safe_v<T>);
+        hg_assert(is_registered(hg_component_id<T>));
 
-        u32 component_id = hg_component_id<T>;
-        hg_assert(is_registered(component_id));
-
-        u32 index = (u32)(&component - (T *)systems[component_id].components.items);
-        return systems[component_id].dense[index];
+        u32 index = (u32)(&component - (T *)systems[hg_component_id<T>].components.items);
+        return systems[hg_component_id<T>].dense[index];
     }
 
     /**
@@ -4901,8 +4946,8 @@ struct HgECS {
     template<typename T, typename Fn>
     void for_each_single(Fn& fn) {
         static_assert(hg_is_memmove_safe_v<T>);
-
         static_assert(std::is_invocable_r_v<void, Fn, HgEntity&, T&>);
+
         for (auto [e, c] : component_iter<T>()) {
             fn(e, c);
         }
@@ -4963,7 +5008,7 @@ struct HgECS {
      * - function The function to call
      */
     template<typename T, typename Fn>
-    void for_each_par_single(HgThreadPool *threads, u32 chunk_size, Fn& fn) {
+    void for_each_par_single(u32 chunk_size, Fn& fn) {
         static_assert(hg_is_memmove_safe_v<T>);
         static_assert(std::is_invocable_r_v<void, Fn, HgEntity&, T&>);
 
@@ -4978,7 +5023,7 @@ struct HgECS {
             }
         };
 
-        threads->for_par(system.dense.count, chunk_size, hg_function_view<void(usize, usize)>(fn_it));
+        hg_for_par(system.dense.count, chunk_size, hg_function_view<void(usize, usize)>(fn_it));
     }
 
     /**
@@ -4992,7 +5037,7 @@ struct HgECS {
      * - function The function to call
      */
     template<typename... Ts, typename Fn>
-    void for_each_par_multi(HgThreadPool *threads, u32 chunk_size, Fn& fn) {
+    void for_each_par_multi(u32 chunk_size, Fn& fn) {
         static_assert(std::is_invocable_r_v<void, Fn, HgEntity&, Ts&...>);
 
         u32 id = smallest_system<Ts...>();
@@ -5006,7 +5051,7 @@ struct HgECS {
             }
         };
 
-        threads->for_par(component_count(id), chunk_size, hg_function_view<void(usize, usize)>(fn_it));
+        hg_for_par(component_count(id), chunk_size, hg_function_view<void(usize, usize)>(fn_it));
     }
 
     /**
@@ -5018,13 +5063,13 @@ struct HgECS {
      * - function The function to call
      */
     template<typename... Ts, typename Fn>
-    void for_each_par(HgThreadPool *threads, u32 chunk_size, Fn fn) {
+    void for_each_par(u32 chunk_size, Fn fn) {
         static_assert(sizeof...(Ts) != 0);
 
         if constexpr (sizeof...(Ts) == 1) {
-            for_each_par_single<Ts...>(threads, chunk_size, fn);
+            for_each_par_single<Ts...>(chunk_size, fn);
         } else {
-            for_each_par_multi<Ts...>(threads, chunk_size, fn);
+            for_each_par_multi<Ts...>(chunk_size, fn);
         }
     }
 
@@ -5719,6 +5764,8 @@ void hg_platform_init();
  */
 void hg_platform_deinit();
 
+// audio system : TODO
+
 /**
  * A key on the keyboard or button on the mouse
  */
@@ -6036,8 +6083,6 @@ VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window);
  * - windows All open windows, must not be nullptr
  */
 void hg_process_window_events(HgSpan<const HgWindow> windows);
-
-// audio system : TODO
 
 /**
  * A pipeline to render 2D sprites
