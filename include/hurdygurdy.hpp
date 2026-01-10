@@ -3476,6 +3476,13 @@ constexpr usize hg_hash(HgString str) {
 }
 
 /**
+ * Hash map hashing for C string
+ */
+constexpr usize hg_hash(const char *str) {
+    return hg_hash((std::string_view)str);
+}
+
+/**
  * A key-value hash map
  *
  * Key type must have an overload of hg_hash
@@ -4117,27 +4124,27 @@ struct HgFence {
 };
 
 /**
+ * A continuous thread with signals
+ */
+struct HgThread {
+    /**
+     * The thread itself
+     */
+    std::thread thread;
+    /**
+     * Signal whether it is currently working
+     */
+    std::atomic_bool is_working;
+    /**
+     * Signal to close
+     */
+    std::atomic_bool should_close;
+};
+
+/**
  * A thread pool
  */
 struct HgThreadPool {
-    /**
-     * The threads
-     */
-    struct Thread {
-        /**
-         * The thread itself
-         */
-        std::thread thread;
-        /**
-         * Signal whether it is currently working
-         */
-        std::atomic_bool is_working;
-        /**
-         * Signal to close
-         */
-        std::atomic_bool should_close;
-    };
-
     /**
      * The work for threads to execute
      */
@@ -4155,7 +4162,7 @@ struct HgThreadPool {
     /**
      * The threads in the pool
      */
-    HgSpan<Thread> threads;
+    HgSpan<HgThread> threads;
     /**
      * Mutex to protect the work queue
      */
@@ -4184,6 +4191,18 @@ struct HgThreadPool {
     static void destroy(HgAllocator& mem, HgThreadPool *pool);
 
     /**
+     * Waits for all thread submissions to be completed
+     *
+     * Parameters
+     * - timeout_seconds The time in seconds to wait before timing out
+     *
+     * Returns
+     * - true if all threads completed
+     * - false if the timeout was reached
+     */
+    bool wait_idle(f64 timeout_seconds);
+
+    /**
      * Pushes work to the queue to be executed
      *
      * Parameters
@@ -4202,34 +4221,26 @@ struct HgThreadPool {
      * - chunk_size The number of elementes to iterate per parallel execution
      * - fn The function to use to iterate, takes begin and end indices
      */
-    void submit_work_range(usize count, usize chunk_size, HgFunctionView<void(usize, usize)> fn);
-
-    /**
-     * Waits for all thread submissions to be completed
-     *
-     * Parameters
-     * - timeout_seconds The time in seconds to wait before timing out
-     *
-     * Returns
-     * - true if all threads completed
-     * - false if the timeout was reached
-     */
-    bool wait_idle(f64 timeout_seconds);
+    void submit_work_range(usize count, usize chunk_size, HgFunctionView<void(usize begin, usize end)> fn);
 };
 
 /**
  * Initializes the global thread pool
  *
  * Parameters
+ * - mem The allocator to use
  * - thread_count The number of threads in the pool
  * - queue_size The number of slots in the work queue
  */
-void hg_threads_init(usize thread_count, usize queue_size);
+void hg_threads_init(HgAllocator& mem, usize thread_count, usize queue_size);
 
 /**
  * Shuts down the global thread pool
+ *
+ * Parameters
+ * - mem The allocator to use
  */
-void hg_threads_deinit();
+void hg_threads_deinit(HgAllocator& mem);
 
 /**
  * Returns a pointer to the global thread pool
@@ -4261,7 +4272,7 @@ void hg_call_par(HgFence *fence, HgFunctionView<void()> fn);
  * - chunk_size The number of elementes to iterate per parallel execution
  * - fn The function to execute in parallel
  */
-void hg_for_par(usize count, usize chunk_size, HgFunctionView<void(usize begin, usize end)> work);
+void hg_for_par(usize count, usize chunk_size, HgFunctionView<void(usize begin, usize end)> fn);
 
 /**
  * The handle for an ECS entity
@@ -5160,6 +5171,271 @@ struct HgECS {
         sort_untyped(0, component_count<T>(), hg_component_id<T>, {&compare, fn});
     }
 };
+
+/**
+ * The resource id type created from hg_hash
+ */
+using HgResourceID = decltype(hg_hash(std::string_view{}));
+
+/**
+ * A resource manager to load, store, and unload resources
+ */
+struct HgResourceManager {
+    enum RequestType {
+        REQUEST_LOAD = 0,
+        REQUEST_STORE = 1,
+        REQUEST_UNLOAD = 2,
+    };
+
+    struct LoadRequest {
+        RequestType type = REQUEST_LOAD;
+        HgFence *fence;
+        HgAllocator *mem;
+        HgResourceID id;
+        std::string_view path;
+        HgFunctionView<void *(HgAllocator& mem, std::string_view path)> fn;
+    };
+
+    struct StoreRequest {
+        RequestType type = REQUEST_STORE;
+        HgFence *fence;
+        HgResourceID id;
+        std::string_view path;
+        HgFunctionView<void(void *resource, std::string_view path)> fn;
+    };
+
+    struct UnloadRequest {
+        RequestType type = REQUEST_UNLOAD;
+        HgFence *fence;
+        HgAllocator *mem;
+        HgResourceID id;
+        HgFunctionView<void(HgAllocator& mem, void *resource)> fn;
+    };
+
+    union Request {
+        RequestType type;
+        HgFence *fence;
+        LoadRequest load;
+        StoreRequest store;
+        UnloadRequest unload;
+    };
+
+    /**
+     * The mutex protecting the registry
+     */
+    std::mutex registry_mutex;
+    /**
+     * Where the resources are stored
+     */
+    HgHashMap<HgResourceID, void *> registry;
+    /**
+     * The mutex protecting the request_queue
+     */
+    std::mutex request_queue_mutex;
+    /**
+     * The requests to be processed
+     */
+    HgArray<Request> request_queue;
+    /**
+     * The thread which handles requests
+     */
+    HgThread request_thread;
+
+    /**
+     * Create a new resource manager
+     *
+     * Parameters
+     * - mem The allocator to use
+     * - max_resources The max resources that can be registered
+     * - max_requests The max requests that can be concurrently processed
+     *
+     * Returns
+     * - A pointer to the created resource manager
+     */
+    static HgResourceManager *create(HgAllocator& mem, usize max_resources, usize max_requests);
+
+    /**
+     * Destroys a resource manager
+     *
+     * Parameters
+     * - mem The allocator to use
+     * - rm The resource manager to destroy
+     */
+    static void destroy(HgAllocator& mem, HgResourceManager *rm);
+
+    /**
+     * Add a resource id to the registry as nullptr
+     *
+     * Parameters
+     * - id The id to register
+     */
+    void register_id(HgResourceID id);
+
+    /**
+     * Remove a resource id from the registry as nullptr
+     *
+     * Parameters
+     * - id The id to unregister
+     */
+    void unregister_id(HgResourceID id);
+
+    /**
+     * Checks whether a resource id is registered
+     *
+     * Parameters
+     * - id The id to check registration
+     *
+     * Returns
+     * - Whether the id is registered
+     */
+    bool is_registered(HgResourceID id);
+
+    /**
+     * Load a resource from disc into memory
+     *
+     * Parameters
+     * - fence The fence to signal on completion
+     * - fn The function to use to load
+     * - mem The allocator to use
+     * - id The id of the resource
+     * - path The file path to load from
+     */
+    void load(HgFence *fence, HgFunctionView<void *(HgAllocator& mem, std::string_view path)> fn,
+        HgAllocator& mem, HgResourceID id, std::string_view path);
+
+    /**
+     * Store a resource from memory onto disc
+     *
+     * Parameters
+     * - fence The fence to signal on completion
+     * - fn The function to use to store
+     * - id The id of the resource
+     * - path The file path to store at
+     */
+    void store(HgFence *fence, HgFunctionView<void(void *resource, std::string_view path)> fn,
+        HgResourceID id, std::string_view path);
+
+    /**
+     * Unload a resource from memory
+     *
+     * Parameters
+     * - fence The fence to signal on completion
+     * - fn The function to use to unload
+     * - mem The allocator to use
+     * - id The id of the resource
+     */
+    void unload(HgFence *fence, HgFunctionView<void(HgAllocator& mem, void *resource)> fn,
+        HgAllocator& mem, HgResourceID id);
+
+    /**
+     * Gets a pointer to a resource
+     *
+     * Parameters
+     * - id The id of the resource
+     *
+     * Returns
+     * - A pointer to the resource
+     */
+    void *get(HgResourceID id);
+};
+
+/**
+ * Initializes the global resource manager
+ *
+ * Parameters
+ * - mem The allocator to use
+ * - max_resources The max resources that can be registered
+ * - max_requests The max requests that can be concurrently processed
+ */
+void hg_resource_manager_init(HgAllocator& mem, usize max_resources, usize max_requests);
+
+/**
+ * Deinitializes the global resource manager
+ *
+ * Parameters
+ * - mem The allocator to use
+ */
+void hg_resource_manager_deinit(HgAllocator& mem);
+
+/**
+ * Returns a pointer to the global resource manager
+ */
+HgResourceManager *hg_get_resource_manager();
+
+/**
+ * Register a new global resource id
+ *
+ * Parameters
+ * - id The resource id to register
+ */
+void hg_register_resource(HgResourceID id);
+
+/**
+ * Unregisters a global resource id
+ *
+ * Parameters
+ * - id The resource id to unregister
+ */
+void hg_unregister_resource(HgResourceID id);
+
+/**
+ * Checks whether a global resource id is registered
+ *
+ * Parameters
+ * - id The id to check registration
+ *
+ * Returns
+ * - Whether the id is registered
+ */
+bool hg_is_resource_registered(HgResourceID id);
+
+/**
+ * Load a resource from disc into memory
+ *
+ * Parameters
+ * - fence The fence to signal on completion
+ * - fn The function to use to load
+ * - mem The allocator to use
+ * - id The id of the resource
+ * - path The file path to load from
+ */
+void hg_load_resource(HgFence *fence, HgFunctionView<void *(HgAllocator& mem, std::string_view path)> fn,
+    HgAllocator& mem, HgResourceID id, std::string_view path);
+
+/**
+ * Store a resource from memory onto disc
+ *
+ * Parameters
+ * - fence The fence to signal on completion
+ * - fn The function to use to store
+ * - id The id of the resource
+ * - path The file path to store at
+ */
+void hg_store_resource(HgFence *fence, HgFunctionView<void(void *resource, std::string_view path)> fn,
+    HgResourceID id, std::string_view path);
+
+/**
+ * Unload a resource from memory
+ *
+ * Parameters
+ * - fence The fence to signal on completion
+ * - fn The function to use to unload
+ * - mem The allocator to use
+ * - id The id of the resource
+ */
+void hg_unload_resource(HgFence *fence, HgFunctionView<void(HgAllocator& mem, void *resource)> fn,
+    HgAllocator& mem, HgResourceID id);
+
+/**
+ * Gets a pointer to a resource
+ *
+ * Parameters
+ * - id The id of the resource
+ *
+ * Returns
+ * - A pointer to the resource
+ */
+void *hg_get_resource(HgResourceID id);
 
 /**
  * Loads a binary file

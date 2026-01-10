@@ -7,17 +7,24 @@
 #endif
 
 void hg_init(void) {
+    HgStdAllocator mem;
+
     u32 thread_pool_size = std::thread::hardware_concurrency()
-        - 1; // main thread
-    hg_threads_init(thread_pool_size, 4096);
+        - 2; // main thread, resource io thread
+
+    hg_threads_init(mem, thread_pool_size, 4096);
+    hg_resource_manager_init(mem, 4096, 4096);
     hg_platform_init();
     hg_vulkan_init();
 }
 
 void hg_exit(void) {
+    HgStdAllocator mem;
+
     hg_vulkan_deinit();
     hg_platform_deinit();
-    hg_threads_deinit();
+    hg_resource_manager_deinit(mem);
+    hg_threads_deinit(mem);
 }
 
 static HgArray<HgTest>& hg_internal_get_tests() {
@@ -353,23 +360,23 @@ static void hg_internal_thread_fn(HgThreadPool *pool, usize index) {
         if (pool->threads[index].should_close.load())
             return;
 
+        pool->threads[index].is_working.store(true);
+
         if (pool->work_queue_mutex.try_lock()) {
-            if (pool->work_queue.count > 0) {
+            if (pool->work_queue.count == 0) {
+                pool->work_queue_mutex.unlock();
+            } else {
                 HgThreadPool::Work work = pool->work_queue.last();
                 pool->work_queue.pop();
                 pool->work_queue_mutex.unlock();
 
-                pool->threads[index].is_working.store(true);
-
                 work.fn();
                 if (work.fence != nullptr)
                     --work.fence->counter;
-
-                pool->threads[index].is_working.store(false);
-            } else {
-                pool->work_queue_mutex.unlock();
             }
         }
+
+        pool->threads[index].is_working.store(false);
     }
 }
 
@@ -378,7 +385,7 @@ HgThreadPool *HgThreadPool::create(HgAllocator& mem, usize thread_count, usize q
     if (pool == nullptr)
         goto cleanup_pool;
 
-    pool->threads = mem.alloc<Thread>(thread_count);
+    pool->threads = mem.alloc<HgThread>(thread_count);
     if (pool->threads == nullptr)
         goto cleanup_threads;
 
@@ -418,39 +425,6 @@ void HgThreadPool::destroy(HgAllocator& mem, HgThreadPool *pool) {
     mem.free(pool);
 }
 
-void HgThreadPool::submit_work(HgFence *fence, HgFunctionView<void()> work) {
-    hg_assert(work.fn != nullptr);
-
-    if (fence != nullptr)
-        ++fence->counter;
-
-    work_queue_mutex.lock();
-    work_queue.push(work, fence);
-    work_queue_mutex.unlock();
-}
-
-void HgThreadPool::submit_work_range(usize count, usize chunk_size, HgFunctionView<void(usize, usize)> fn) {
-    static constexpr auto fn_work = [fn_dummy = decltype(fn)(), begin = (usize)0, end = (usize)0]() {
-        (void)fn_dummy;
-        (void)begin;
-        (void)end;
-    };
-    static constexpr usize mem_align = alignof(decltype(fn_work));
-
-    HgArena arena{};
-    usize mem_size = (usize)std::ceil((f64)count / (f64)chunk_size) * sizeof(fn_work);
-    arena.memory = {alloca(mem_size), mem_size, mem_align};
-    arena.head = arena.memory.data;
-
-    HgFence fence;
-    for (usize i = 0; i < count; i += chunk_size) {
-        submit_work(&fence, hg_function<void()>(arena, [fn, begin = i, end = std::min(count, i + chunk_size)]() {
-            fn(begin, end);
-        }).value());
-    }
-    fence.wait(INFINITY);
-}
-
 bool HgThreadPool::wait_idle(f64 timeout_seconds) {
     HgClock timer{};
     for (f64 elapsed = 0.0f; elapsed < timeout_seconds; elapsed += timer.tick()) {
@@ -470,18 +444,50 @@ wait_longer:
     return false;
 }
 
+void HgThreadPool::submit_work(HgFence *fence, HgFunctionView<void()> work) {
+    hg_assert(work.fn != nullptr);
+
+    if (fence != nullptr)
+        ++fence->counter;
+
+    work_queue_mutex.lock();
+    work_queue.push(work, fence);
+    work_queue_mutex.unlock();
+}
+
+void HgThreadPool::submit_work_range(usize count, usize chunk_size, HgFunctionView<void(usize, usize)> fn) {
+    static constexpr auto fn_work = [fn_dummy = decltype(fn){}, begin = (usize)0, end = (usize)0]() {
+        (void)fn_dummy;
+        (void)begin;
+        (void)end;
+    };
+    usize mem_size = (usize)std::ceil((f64)count / (f64)chunk_size) * sizeof(fn_work);
+
+    HgArena arena{};
+    arena.memory = {alloca(mem_size), mem_size, alignof(decltype(fn_work))};
+    arena.head = arena.memory.data;
+
+    HgFence fence;
+    for (usize i = 0; i < count; i += chunk_size) {
+        submit_work(&fence, hg_function<void()>(arena, [fn, begin = i, end = std::min(count, i + chunk_size)]() {
+            fn(begin, end);
+        }).value());
+    }
+    fence.wait(INFINITY);
+}
+
 static HgThreadPool *hg_internal_thread_pool = nullptr;
 
-void hg_threads_init(usize thread_count, usize queue_size) {
+void hg_threads_init(HgAllocator& mem, usize thread_count, usize queue_size) {
     if (hg_internal_thread_pool == nullptr) {
-        hg_internal_thread_pool = HgThreadPool::create(HgStdAllocator::get(), thread_count, queue_size);
+        hg_internal_thread_pool = HgThreadPool::create(mem, thread_count, queue_size);
         hg_assert(hg_internal_thread_pool != nullptr);
     }
 }
 
-void hg_threads_deinit() {
+void hg_threads_deinit(HgAllocator& mem) {
     if (hg_internal_thread_pool != nullptr) {
-        HgThreadPool::destroy(HgStdAllocator::get(), hg_internal_thread_pool);
+        HgThreadPool::destroy(mem, hg_internal_thread_pool);
         hg_internal_thread_pool = nullptr;
     }
 }
@@ -781,6 +787,255 @@ void HgECS::quicksort_untyped(u32 begin, u32 end, u32 component_id, HgFunctionVi
 
 void HgECS::sort_untyped(u32 begin, u32 end, u32 component_id, HgFunctionView<bool(void *, void *)> compare) {
     quicksort_untyped(begin, end, component_id, compare);
+}
+
+static HgResourceManager *hg_internal_resource_manager;
+
+static void hg_internal_resource_thread_fn(HgResourceManager *rm) {
+    for (;;) {
+        if (rm->request_thread.should_close.load())
+            return;
+
+        rm->request_thread.is_working.store(true);
+
+        if (rm->request_queue_mutex.try_lock()) {
+            if (rm->request_queue.count == 0) {
+                rm->request_queue_mutex.unlock();
+            } else {
+                HgResourceManager::Request request = rm->request_queue.last();
+                rm->request_queue.pop();
+                rm->request_queue_mutex.unlock();
+
+                switch (request.type) {
+                    case HgResourceManager::REQUEST_LOAD: {
+                        void *resource;
+                        resource = request.load.fn(*request.load.mem, request.load.path);
+
+                        rm->registry_mutex.lock();
+                        rm->registry.get(request.load.id) = resource;
+                        rm->registry_mutex.unlock();
+
+                        --request.load.fence->counter;
+                    } break;
+                    case HgResourceManager::REQUEST_STORE: {
+                        void *resource;
+                        rm->registry_mutex.lock();
+                        resource = rm->registry.get(request.store.id);
+                        rm->registry_mutex.unlock();
+
+                        request.store.fn(resource, request.store.path);
+
+                        --request.store.fence->counter;
+                    } break;
+                    case HgResourceManager::REQUEST_UNLOAD: {
+                        void *resource;
+                        rm->registry_mutex.lock();
+                        void *& ref = rm->registry.get(request.unload.id);
+                        resource = ref;
+                        ref = nullptr;
+                        rm->registry_mutex.unlock();
+
+                        request.unload.fn(*request.unload.mem, resource);
+
+                        --request.unload.fence->counter;
+                    } break;
+                    default:
+                        hg_assert(false);
+                }
+            }
+        }
+
+        rm->request_thread.is_working.store(false);
+    }
+}
+
+HgResourceManager *HgResourceManager::create(HgAllocator& mem, usize max_resources, usize max_requests) {
+    HgResourceManager *rm = mem.alloc<HgResourceManager>();
+    if (rm == nullptr)
+        goto cleanup_rm;
+
+    rm->registry = rm->registry.create(mem, max_resources).value_or(HgHashMap<HgResourceID, void *>{});
+    if (rm->registry.slots == nullptr)
+        goto cleanup_registry;
+
+    rm->request_queue = rm->request_queue.create(mem, 0, max_requests).value_or(HgArray<Request>{});
+    if (rm->request_queue.items == nullptr)
+        goto cleanup_request_queue;
+
+    rm->request_thread.should_close.store(false);
+    rm->request_thread.is_working.store(false);
+    rm->request_thread.thread = std::thread(hg_internal_resource_thread_fn, rm);
+
+    return rm;
+
+cleanup_request_queue:
+    rm->registry.destroy(mem);
+cleanup_registry:
+    mem.free(rm);
+cleanup_rm:
+    return nullptr;
+}
+
+void HgResourceManager::destroy(HgAllocator& mem, HgResourceManager *rm) {
+    rm->request_thread.should_close.store(true);
+    rm->request_thread.thread.join();
+    rm->request_queue.destroy(mem);
+    rm->registry.destroy(mem);
+}
+
+void HgResourceManager::register_id(HgResourceID id) {
+    registry_mutex.lock();
+    hg_defer(registry_mutex.unlock());
+    hg_assert(!registry.has(id));
+    registry.insert(id, nullptr);
+}
+
+void HgResourceManager::unregister_id(HgResourceID id) {
+    registry_mutex.lock();
+    hg_defer(registry_mutex.unlock());
+    registry.remove(id);
+}
+
+bool HgResourceManager::is_registered(HgResourceID id) {
+    registry_mutex.lock();
+    hg_defer(registry_mutex.unlock());
+    return registry.has(id);
+}
+
+void HgResourceManager::load(
+    HgFence *fence,
+    HgFunctionView<void *(HgAllocator& mem, std::string_view path)> fn,
+    HgAllocator& mem,
+    HgResourceID id,
+    std::string_view path
+) {
+    Request request{};
+    request.type = REQUEST_LOAD;
+    request.load.fence = fence;
+    request.load.mem = &mem;
+    request.load.id = id;
+    request.load.path = path;
+    request.load.fn = fn;
+
+    if (fence != nullptr)
+        ++fence->counter;
+
+    request_queue_mutex.lock();
+    hg_defer(request_queue_mutex.unlock());
+    hg_assert(request_queue.has_space());
+    request_queue.push(request);
+}
+
+void HgResourceManager::store(
+    HgFence *fence,
+    HgFunctionView<void(void *resource, std::string_view path)> fn,
+    HgResourceID id,
+    std::string_view path
+) {
+    Request request{};
+    request.type = REQUEST_STORE;
+    request.store.fence = fence;
+    request.store.id = id;
+    request.store.path = path;
+    request.store.fn = fn;
+
+    if (fence != nullptr)
+        ++fence->counter;
+
+    request_queue_mutex.lock();
+    hg_defer(request_queue_mutex.unlock());
+    hg_assert(request_queue.has_space());
+    request_queue.push(request);
+}
+
+void HgResourceManager::unload(
+    HgFence *fence,
+    HgFunctionView<void(HgAllocator& mem, void *resource)> fn,
+    HgAllocator& mem,
+    HgResourceID id
+) {
+    Request request{};
+    request.type = REQUEST_UNLOAD;
+    request.unload.fence = fence;
+    request.unload.mem = &mem;
+    request.unload.id = id;
+    request.unload.fn = fn;
+
+    if (fence != nullptr)
+        ++fence->counter;
+
+    request_queue_mutex.lock();
+    hg_defer(request_queue_mutex.unlock());
+    hg_assert(request_queue.has_space());
+    request_queue.push(request);
+}
+
+void *HgResourceManager::get(HgResourceID id) {
+    registry_mutex.lock();
+    hg_defer(registry_mutex.unlock());
+    return registry.get(id);
+}
+
+void hg_resource_manager_init(HgAllocator& mem, usize max_resources, usize max_requests) {
+    if (hg_internal_resource_manager == nullptr) {
+        hg_internal_resource_manager = HgResourceManager::create(mem, max_resources, max_requests);
+        hg_assert(hg_internal_resource_manager != nullptr);
+    }
+}
+
+void hg_resource_manager_deinit(HgAllocator& mem) {
+    if (hg_internal_resource_manager != nullptr) {
+        HgResourceManager::destroy(mem, hg_internal_resource_manager);
+        hg_internal_resource_manager = nullptr;
+    }
+}
+
+HgResourceManager *hg_get_resource_manager() {
+    return hg_internal_resource_manager;
+}
+
+void hg_register_resource(HgResourceID id) {
+    hg_internal_resource_manager->register_id(id);
+}
+
+void hg_unregister_resource(HgResourceID id) {
+    hg_internal_resource_manager->unregister_id(id);
+}
+
+bool hg_is_resource_registered(HgResourceID id) {
+    return hg_internal_resource_manager->is_registered(id);
+}
+
+void hg_load_resource(
+    HgFence *fence,
+    HgFunctionView<void *(HgAllocator& mem, std::string_view path)> fn,
+    HgAllocator& mem,
+    HgResourceID id,
+    std::string_view path
+) {
+    hg_internal_resource_manager->load(fence, fn, mem, id, path);
+}
+
+void hg_store_resource(
+    HgFence *fence,
+    HgFunctionView<void(void *resource, std::string_view path)> fn,
+    HgResourceID id,
+    std::string_view path
+) {
+    hg_internal_resource_manager->store(fence, fn, id, path);
+}
+
+void hg_unload_resource(
+    HgFence *fence,
+    HgFunctionView<void(HgAllocator& mem, void *resource)> fn,
+    HgAllocator& mem,
+    HgResourceID id
+) {
+    hg_internal_resource_manager->unload(fence, fn, mem, id);
+}
+
+void *hg_get_resource(HgResourceID id) {
+    return hg_internal_resource_manager->get(id);
 }
 
 HgSpan<void> hg_file_load_binary(HgAllocator& allocator, const char *path) {
@@ -4744,7 +4999,7 @@ static void *hg_internal_libvulkan = nullptr;
         hg_error("Could not load " #name "\n"); \
     }
 
-void hg_vulkan_init(void) {
+void hg_vulkan_init() {
 
 #if defined(HG_PLATFORM_LINUX)
 

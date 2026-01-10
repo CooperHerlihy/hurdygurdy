@@ -1138,8 +1138,8 @@ hg_test(hg_function_view) {
 hg_test(hg_thread_pool) {
     HgStdAllocator mem;
 
-    hg_threads_init(std::thread::hardware_concurrency() - 1, 128);
-    hg_defer(hg_threads_deinit());
+    hg_threads_init(mem, std::thread::hardware_concurrency() - 1, 128);
+    hg_defer(hg_threads_deinit(mem));
 
     hg_test_assert(hg_get_thread_pool() != nullptr);
 
@@ -1404,8 +1404,8 @@ hg_test(hg_ecs) {
     hg_test_assert(ecs.component_count<u64>() == 0);
 
     {
-        hg_threads_init(std::thread::hardware_concurrency() - 1, 1024);
-        hg_defer(hg_threads_deinit());
+        hg_threads_init(mem, std::thread::hardware_concurrency() - 1, 1024);
+        hg_defer(hg_threads_deinit(mem));
 
         HgArena arena = arena.create(mem, 4096).value();
         hg_defer(arena.destroy(mem));
@@ -1566,16 +1566,178 @@ hg_test(hg_ecs_sort) {
     return true;
 }
 
+hg_test(hg_resource_manager) {
+    HgStdAllocator mem;
+
+    hg_resource_manager_init(mem, 128, 128);
+    hg_defer(hg_resource_manager_deinit(mem));
+
+    hg_test_assert(hg_get_resource_manager() != nullptr);
+
+    const char *file1_name = "hg_test_dir/rm_file1.bin";
+    u8 file1_data[] = {1, 2, 3, 4};
+    HgResourceID file1 = hg_hash(file1_name);
+    hg_test_assert(hg_file_save_binary({file1_data, sizeof(file1_data), alignof(u32)}, file1_name));
+
+    const char *file2_name = "hg_test_dir/rm_file2.bin";
+    u8 file2_data[] = {5, 6, 7, 8};
+    HgResourceID file2 = hg_hash(file2_name);
+    hg_test_assert(hg_file_save_binary({file2_data, sizeof(file2_data), alignof(u32)}, file2_name));
+
+    hg_test_assert(file1 != file2);
+
+    std::atomic_int called;
+    called.store(0);
+
+    {
+        hg_register_resource(file1);
+        hg_register_resource(file2);
+        hg_test_assert(hg_is_resource_registered(file1));
+        hg_test_assert(hg_is_resource_registered(file2));
+    }
+
+    {
+        auto file_load_fn = [](void *pcalled, HgAllocator& lmem, std::string_view path) -> void * {
+            ++*(std::atomic_int *)pcalled;
+
+            char *cpath = (char *)alloca(path.length() + 1);
+            std::memcpy(cpath, path.data(), path.length());
+            cpath[path.length()] = '\0';
+
+            HgSpan<void> *file = lmem.alloc<HgSpan<void>>();
+            if (file == nullptr)
+                goto cleanup_file_pointer;
+
+            *file = hg_file_load_binary(lmem, cpath);
+            if (*file == nullptr)
+                goto cleanup_file_data;
+
+            return file;
+
+    cleanup_file_data:
+            lmem.free(file);
+    cleanup_file_pointer:
+            return nullptr;
+        };
+
+        HgFunctionView<void *(HgAllocator&, std::string_view)> file_load{&called, file_load_fn};
+
+        HgFence fence;
+
+        hg_test_assert(called.load() == 0);
+        hg_load_resource(&fence, file_load, mem, file1, file1_name);
+        hg_load_resource(&fence, file_load, mem, file2, file2_name);
+
+        hg_test_assert(fence.wait(2.0));
+        hg_test_assert(called.load() == 2);
+
+        hg_test_assert(hg_get_resource(file1) != nullptr);
+        hg_test_assert(hg_get_resource(file2) != nullptr);
+
+        HgSpan<void> *file1_loaded = (HgSpan<void> *)hg_get_resource(file1);
+        HgSpan<void> *file2_loaded = (HgSpan<void> *)hg_get_resource(file2);
+
+        hg_test_assert(file1_loaded != nullptr);
+        hg_test_assert(file2_loaded != nullptr);
+
+        hg_test_assert(file1_loaded->size() == sizeof(file1_data));
+        hg_test_assert(file2_loaded->size() == sizeof(file2_data));
+
+        hg_test_assert(std::memcmp(file1_loaded->data, file1_data, file1_loaded->size()) == 0);
+        hg_test_assert(std::memcmp(file2_loaded->data, file2_data, file2_loaded->size()) == 0);
+    }
+
+    {
+        auto file_store_fn = [](void *pcalled, void *resource, std::string_view path) {
+            ++*(std::atomic_int *)pcalled;
+
+            HgSpan<void> *file = (HgSpan<void> *)resource;
+
+            char *cpath = (char *)alloca(path.length() + 1);
+            std::memcpy(cpath, path.data(), path.length());
+            cpath[path.length()] = '\0';
+
+            hg_file_save_binary(*file, cpath);
+        };
+
+        HgFunctionView<void(void *, std::string_view)> file_store{&called, file_store_fn};
+
+        HgSpan<void>* file1_loaded = (HgSpan<void> *)hg_get_resource(file1);
+        HgSpan<void>* file2_loaded = (HgSpan<void> *)hg_get_resource(file2);
+
+        u8 file1_data_new[] = {9, 10, 11, 12};
+        u8 file2_data_new[] = {13, 14, 15, 16};
+        std::memcpy(file1_loaded->data, file1_data_new, file1_loaded->size());
+        std::memcpy(file2_loaded->data, file2_data_new, file2_loaded->size());
+
+        HgFence fence;
+
+        hg_test_assert(called.load() == 2);
+        hg_store_resource(&fence, file_store, file1, file1_name);
+        hg_store_resource(&fence, file_store, file2, file2_name);
+
+        hg_test_assert(fence.wait(2.0));
+        hg_test_assert(called.load() == 4);
+
+        HgSpan<void> file1_loaded_new = hg_file_load_binary(mem, file1_name);
+        HgSpan<void> file2_loaded_new = hg_file_load_binary(mem, file2_name);
+        hg_defer(hg_file_unload_binary(mem, file1_loaded_new));
+        hg_defer(hg_file_unload_binary(mem, file2_loaded_new));
+
+        hg_test_assert(file1_loaded_new != nullptr);
+        hg_test_assert(file2_loaded_new != nullptr);
+
+        hg_test_assert(file1_loaded_new.size() == sizeof(file1_data_new));
+        hg_test_assert(file2_loaded_new.size() == sizeof(file2_data_new));
+
+        hg_test_assert(std::memcmp(file1_loaded_new.data, file1_data_new, file1_loaded_new.size()) == 0);
+        hg_test_assert(std::memcmp(file2_loaded_new.data, file2_data_new, file2_loaded_new.size()) == 0);
+    }
+
+    {
+        auto file_unload_fn = [](void *pcalled, HgAllocator& lmem, void *resource) {
+            ++*(std::atomic_int *)pcalled;
+
+            HgSpan<void> *file = (HgSpan<void> *)resource;
+            lmem.free(*file);
+            lmem.free(file);
+        };
+
+        HgFunctionView<void(HgAllocator&, void *)> file_unload{&called, file_unload_fn};
+
+        HgFence fence;
+
+        hg_test_assert(called.load() == 4);
+        hg_unload_resource(&fence, file_unload, mem, file1);
+        hg_unload_resource(&fence, file_unload, mem, file2);
+
+        hg_test_assert(fence.wait(2.0));
+        hg_test_assert(called.load() == 6);
+
+        hg_test_assert(hg_get_resource(file1) == nullptr);
+        hg_test_assert(hg_get_resource(file2) == nullptr);
+    }
+
+    {
+        hg_unregister_resource(file1);
+        hg_unregister_resource(file2);
+        hg_test_assert(!hg_is_resource_registered(file1));
+        hg_test_assert(!hg_is_resource_registered(file2));
+    }
+
+    return true;
+}
+
 hg_test(hg_file_binary) {
     HgStdAllocator mem;
 
     u32 save_data[] = {12, 42, 100, 128};
 
-    hg_test_assert(!hg_file_save_binary({save_data, sizeof(save_data), alignof(u32)}, "dir/does/not/exist.bin"));
-    hg_test_assert(hg_file_load_binary(mem, "file_does_not_exist.bin") == nullptr);
+    hg_test_assert(!hg_file_save_binary({save_data, sizeof(save_data), alignof(u32)}, "dir/does/not/exist"));
+    hg_test_assert(hg_file_load_binary(mem, "file_does_not_exist") == nullptr);
 
-    hg_test_assert(hg_file_save_binary({save_data, sizeof(save_data), alignof(u32)}, "hg_file_test.bin"));
-    HgSpan<void> load_data = hg_file_load_binary(mem, "hg_file_test.bin");
+    hg_test_assert(hg_file_save_binary({save_data, sizeof(save_data), alignof(u32)}, "hg_test_dir/file_bin_test.bin"));
+    HgSpan<void> load_data = hg_file_load_binary(mem, "hg_test_dir/file_bin_test.bin");
     hg_defer(hg_file_unload_binary(mem, load_data));
 
     hg_test_assert(load_data != nullptr);
