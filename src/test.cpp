@@ -1662,13 +1662,29 @@ hg_test(hg_resource_manager) {
 
         HgFunctionView<void(void *, std::string_view)> file_store{&called, file_store_fn};
 
-        HgSpan<void>* file1_loaded = (HgSpan<void> *)hg_get_resource(file1);
-        HgSpan<void>* file2_loaded = (HgSpan<void> *)hg_get_resource(file2);
+        u8 file1_data_new[] = {1, 2, 3, 4, 5, 6, 7, 8};
+        u8 file2_data_new[] = {9, 10, 11, 12, 13, 14, 15, 16};
 
-        u8 file1_data_new[] = {9, 10, 11, 12};
-        u8 file2_data_new[] = {13, 14, 15, 16};
-        std::memcpy(file1_loaded->data, file1_data_new, file1_loaded->size());
-        std::memcpy(file2_loaded->data, file2_data_new, file2_loaded->size());
+        HgSpan<void> *file1_new = mem.alloc<HgSpan<void>>();
+        HgSpan<void> *file2_new = mem.alloc<HgSpan<void>>();
+        *file1_new = mem.alloc(sizeof(file1_data_new), alignof(u8));
+        *file2_new = mem.alloc(sizeof(file2_data_new), alignof(u8));
+
+        std::memcpy(file1_new->data, file1_data_new, file1_new->size());
+        std::memcpy(file2_new->data, file2_data_new, file2_new->size());
+
+        HgSpan<void> *file1_old = (HgSpan<void> *)hg_exchange_resource(file1, file1_new);
+        HgSpan<void> *file2_old = (HgSpan<void> *)hg_exchange_resource(file2, file2_new);
+
+        hg_test_assert(file1_old != nullptr);
+        hg_test_assert(file2_old != nullptr);
+        hg_test_assert(*file1_old != nullptr);
+        hg_test_assert(*file2_old != nullptr);
+
+        mem.free(*file1_old);
+        mem.free(*file2_old);
+        mem.free(file1_old);
+        mem.free(file2_old);
 
         HgFence fence;
 

@@ -5337,6 +5337,18 @@ struct HgResourceManager {
      * - A pointer to the resource
      */
     void *get(HgResourceID id);
+
+    /**
+     * Exchanges the resource contained at the id for a new one
+     *
+     * Parameters
+     * - id The id of the resource
+     * - new_resource The new resource to contain
+     *
+     * Returns
+     * - The previously contained resource
+     */
+    void *exchange(HgResourceID id, void *new_resource);
 };
 
 /**
@@ -5390,7 +5402,7 @@ void hg_unregister_resource(HgResourceID id);
 bool hg_is_resource_registered(HgResourceID id);
 
 /**
- * Load a resource from disc into memory
+ * Load a global resource from disc into memory
  *
  * Parameters
  * - fence The fence to signal on completion
@@ -5403,7 +5415,7 @@ void hg_load_resource(HgFence *fence, HgFunctionView<void *(HgAllocator& mem, st
     HgAllocator& mem, HgResourceID id, std::string_view path);
 
 /**
- * Store a resource from memory onto disc
+ * Store a global resource from memory onto disc
  *
  * Parameters
  * - fence The fence to signal on completion
@@ -5415,7 +5427,7 @@ void hg_store_resource(HgFence *fence, HgFunctionView<void(void *resource, std::
     HgResourceID id, std::string_view path);
 
 /**
- * Unload a resource from memory
+ * Unload a global resource from memory
  *
  * Parameters
  * - fence The fence to signal on completion
@@ -5427,7 +5439,7 @@ void hg_unload_resource(HgFence *fence, HgFunctionView<void(HgAllocator& mem, vo
     HgAllocator& mem, HgResourceID id);
 
 /**
- * Gets a pointer to a resource
+ * Gets a pointer to a global resource
  *
  * Parameters
  * - id The id of the resource
@@ -5436,6 +5448,18 @@ void hg_unload_resource(HgFence *fence, HgFunctionView<void(HgAllocator& mem, vo
  * - A pointer to the resource
  */
 void *hg_get_resource(HgResourceID id);
+
+/**
+ * Exchanges the global resource contained at the id for a new one
+ *
+ * Parameters
+ * - id The id of the resource
+ * - new_resource The new resource to contain
+ *
+ * Returns
+ * - The previously contained resource
+ */
+void *hg_exchange_resource(HgResourceID id, void *new_resource);
 
 /**
  * Loads a binary file
@@ -6359,6 +6383,8 @@ VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window);
  * - windows All open windows, must not be nullptr
  */
 void hg_process_window_events(HgSpan<const HgWindow> windows);
+
+// 2d pipeline
 
 /**
  * A pipeline to render 2D sprites

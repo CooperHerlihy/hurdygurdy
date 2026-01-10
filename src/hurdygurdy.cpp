@@ -976,6 +976,15 @@ void *HgResourceManager::get(HgResourceID id) {
     return registry.get(id);
 }
 
+void *HgResourceManager::exchange(HgResourceID id, void *new_resource) {
+    registry_mutex.lock();
+    hg_defer(registry_mutex.unlock());
+    void *& ref= registry.get(id);
+    void *old = ref;
+    ref = new_resource;
+    return old;
+}
+
 void hg_resource_manager_init(HgAllocator& mem, usize max_resources, usize max_requests) {
     if (hg_internal_resource_manager == nullptr) {
         hg_internal_resource_manager = HgResourceManager::create(mem, max_resources, max_requests);
@@ -1036,6 +1045,10 @@ void hg_unload_resource(
 
 void *hg_get_resource(HgResourceID id) {
     return hg_internal_resource_manager->get(id);
+}
+
+void *hg_exchange_resource(HgResourceID id, void *new_resource) {
+    return hg_internal_resource_manager->exchange(id, new_resource);
 }
 
 HgSpan<void> hg_file_load_binary(HgAllocator& allocator, const char *path) {
