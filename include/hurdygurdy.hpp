@@ -3470,6 +3470,257 @@ struct HgArrayAny {
 };
 
 /**
+ * A dynamic LIFO queue
+ */
+template<typename T>
+struct HgQueue {
+    static_assert(hg_is_memmove_safe_v<T>);
+
+    /**
+     * The allocated space for the queue
+     */
+    T *items;
+    /**
+     * The max number of items that can be stored in the queue
+     */
+    usize capacity;
+    /**
+     * The end of the queue, where items are added
+     */
+    usize head;
+    /**
+     * The beginning of the queue, where items are removed
+     */
+    usize tail;
+
+    /**
+     * Returns the number of items in the queue
+     */
+    constexpr usize count() const {
+        return (head >= tail ? 0 : capacity) + head - tail;
+    }
+
+    /**
+     * Returns the size in bytes of the queue
+     */
+    constexpr usize size() const {
+        return count() * sizeof(T);
+    }
+
+    /**
+     * Allocate a new dynamic queue
+     *
+     * Parameters
+     * - mem The allocator to use
+     * - capacity The max number of items before reallocating
+     *
+     * Returns
+     * - The allocated dynamic queue
+     * - nullopt if allocation failed
+     */
+    static HgOption<HgQueue<T>> create(HgAllocator& mem, usize capacity) {
+        hg_assert(capacity > 1);
+
+        HgOption<HgQueue> arr{std::in_place};
+
+        arr->items = (T *)mem.alloc_fn(capacity * sizeof(T), alignof(T));
+        if (arr->items == nullptr)
+            return std::nullopt;
+
+        arr->capacity = capacity;
+        arr->head = 0;
+        arr->tail = 0;
+
+        return arr;
+    }
+
+    /**
+     * Free the dynamic queue
+     */
+    void destroy(HgAllocator& mem) {
+        mem.free_fn(items, capacity * sizeof(T), alignof(T));
+    }
+
+    /**
+     * Removes all contained objects, emptying the queue
+     */
+    constexpr void reset() {
+        head = 0;
+        tail = 0;
+    }
+
+    /**
+     * Returns whether capacity is filled
+     */
+    constexpr bool is_full() const {
+        return (head + 1) % capacity == tail;
+    }
+
+    /**
+     * Returns whether items can be added safely
+     */
+    constexpr bool has_space() const {
+        return !is_full();
+    }
+
+    /**
+     * Returns whether any items are contained
+     */
+    constexpr bool is_empty() const {
+        return head == tail;
+    }
+
+    /**
+     * Increases the capacity to a minimum value
+     *
+     * Parameters
+     * - mem The allocator to use
+     * - min The new minimum capacity
+     *
+     * Returns
+     * - Whether the allocation succeeded
+     */
+    bool reserve(HgAllocator& mem, usize min) {
+        if (min > capacity) {
+            void *new_items = mem.realloc_fn(items, capacity * sizeof(T), min * sizeof(T), alignof(T));
+            if (new_items == nullptr)
+                return false;
+            items = (T *)new_items;
+
+            if (tail > head) {
+                usize diff = min - capacity;
+                std::memmove(items + tail, items + tail + diff, (capacity - tail) * sizeof(T));
+            }
+
+            capacity = min;
+        }
+        return true;
+    }
+
+    /**
+     * Increases the capacity of the queue, or inits to 1
+     *
+     * Parameters
+     * - mem The allocator to use
+     * - factor The growth factor to increase by
+     *
+     * Returns
+     * - Whether the allocation succeeded
+     */
+    bool grow(HgAllocator& mem, f32 factor = 2.0f) {
+        hg_assert(factor > 1.0f);
+        hg_assert(capacity <= (usize)((f32)SIZE_MAX / factor));
+        return reserve(mem, capacity == 0 ? 1 : (usize)((f32)capacity * factor));
+    }
+
+    /**
+     * Access the value at index
+     *
+     * Parameters
+     * - index The index to get from, must be < count
+     *
+     * Returns
+     * - A reference to the gotten value
+     */
+    constexpr T& get(usize index) {
+        hg_assert(index < capacity);
+        if (head > tail)
+            hg_assert(index >= tail && index < head);
+        else
+            hg_assert(index >= tail || index < head);
+        return items[index];
+    }
+
+    /**
+     * Access the value at index in a const context
+     *
+     * Parameters
+     * - index The index to get from, must be < count
+     *
+     * Returns
+     * - A reference to the gotten value
+     */
+    constexpr const T& get(usize index) const {
+        hg_assert(index < capacity);
+        if (head > tail)
+            hg_assert(index >= tail && index < head);
+        else
+            hg_assert(index >= tail || index < head);
+        return items[index];
+    }
+
+    /**
+     * Access using the index operator
+     */
+    constexpr T& operator[](usize index) {
+        return get(index);
+    }
+
+    /**
+     * Access using the index operator in a const context
+     */
+    constexpr const T& operator[](usize index) const {
+        return get(index);
+    }
+
+    /**
+     * Returns a reference to the first item in the queue
+     */
+    constexpr T& first() {
+        return get(tail);
+    }
+
+    /**
+     * Returns a reference to the first item in the queue in a const context
+     */
+    constexpr const T& first() const {
+        return get(tail);
+    }
+
+    /**
+     * Returns a reference to the last item in the queue
+     */
+    constexpr T& last() {
+        return get(head - 1);
+    }
+
+    /**
+     * Returns a reference to the last item in the queue in a const context
+     */
+    constexpr const T& last() const {
+        return get(head - 1);
+    }
+
+    /**
+     * Push an item to the end to the queue
+     *
+     * Note, space must be available
+     *
+     * Parameters
+     * - args The arguments to use to construct the new item, if any
+     */
+    template<typename... Args>
+    constexpr void push(Args&&... args) {
+        hg_assert(has_space());
+        new (&items[head]) T{std::forward<Args>(args)...};
+        head = (head + 1) % capacity;
+    }
+
+    /**
+     * Pops an item off the end of the queue
+     *
+     * Returns
+     * - The popped item
+     */
+    constexpr T pop() {
+        hg_assert(!is_empty());
+        T ret = items[tail];
+        tail = (tail + 1) % capacity;
+        return ret;
+    }
+};
+
+/**
  * A dynamic string container
  */
 struct HgString {

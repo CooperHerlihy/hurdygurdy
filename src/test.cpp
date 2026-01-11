@@ -516,6 +516,46 @@ hg_test(hg_array_any) {
     return true;
 }
 
+hg_test(hg_queue) {
+    HgStdAllocator mem;
+
+    HgQueue<u32> queue = queue.create(mem, 8).value();
+    hg_defer(queue.destroy(mem));
+
+    hg_assert(queue.items != nullptr);
+    hg_assert(queue.capacity == 8);
+    hg_assert(queue.head == 0);
+    hg_assert(queue.tail == 0);
+
+    for (usize i = 0; i < 16; ++i) {
+        for (u32 j = 0; j < 7; ++j) {
+            hg_test_assert(queue.count() == j);
+            queue.push(j);
+        }
+
+        hg_test_assert(queue.pop() == 0);
+        hg_test_assert(queue.pop() == 1);
+        hg_test_assert(queue.pop() == 2);
+        hg_test_assert(queue.pop() == 3);
+
+        for (u32 j = 7; j < 10; ++j) {
+            hg_test_assert(queue.count() == j - 4);
+            queue.push(j);
+        }
+
+        hg_test_assert(queue.pop() == 4);
+        hg_test_assert(queue.pop() == 5);
+        hg_test_assert(queue.pop() == 6);
+        hg_test_assert(queue.pop() == 7);
+        hg_test_assert(queue.pop() == 8);
+        hg_test_assert(queue.pop() == 9);
+
+        hg_test_assert(queue.count() == 0);
+    }
+
+    return true;
+}
+
 hg_test(hg_string) {
     HgStdAllocator mem;
     HgArena arena = arena.create(mem, 4096).value();

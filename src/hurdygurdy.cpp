@@ -894,6 +894,7 @@ void HgResourceManager::request(
 
 void *HgResourceManager::get_untyped(HgResourceID<void> id) {
     registry_mutex.lock();
+    hg_assert(registry.has(id));
     void *resource = registry.get(id);
     registry_mutex.unlock();
     return resource;
@@ -901,10 +902,11 @@ void *HgResourceManager::get_untyped(HgResourceID<void> id) {
 
 void *HgResourceManager::exchange_untyped(HgResourceID<void> id, void *new_resource) {
     registry_mutex.lock();
-    hg_defer(registry_mutex.unlock());
+    hg_assert(registry.has(id));
     void *& ref = registry.get(id);
     void *old = ref;
     ref = new_resource;
+    registry_mutex.unlock();
     return old;
 }
 
@@ -2046,8 +2048,10 @@ void hg_vk_load_instance(VkInstance instance) {
 
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetDeviceProcAddr);
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkDestroyInstance);
-    hg_debug_mode(HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkCreateDebugUtilsMessengerEXT));
-    hg_debug_mode(HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkDestroyDebugUtilsMessengerEXT));
+#ifdef HG_VK_DEBUG_MESSENGER
+    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkCreateDebugUtilsMessengerEXT);
+    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkDestroyDebugUtilsMessengerEXT);
+#endif
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkEnumeratePhysicalDevices);
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkEnumerateDeviceExtensionProperties);
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetPhysicalDeviceProperties);
@@ -2193,7 +2197,7 @@ static VkBool32 hg_internal_debug_callback(
 static const VkDebugUtilsMessengerCreateInfoEXT hg_internal_debug_utils_messenger_info{
     VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
     nullptr, 0,
-    // VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+    VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
     VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
     VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
     VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
@@ -2211,14 +2215,14 @@ VkInstance hg_vk_create_instance() {
     app_info.engineVersion = 0;
     app_info.apiVersion = VK_API_VERSION_1_3;
 
-#ifdef HG_DEBUG_MODE
+#ifdef HG_VK_DEBUG_MESSENGER
     const char* layers[]{
         "VK_LAYER_KHRONOS_validation",
     };
 #endif
 
     const char *exts[]{
-#ifdef HG_DEBUG_MODE
+#ifdef HG_VK_DEBUG_MESSENGER
         "VK_EXT_debug_utils",
 #endif
         "VK_KHR_surface",
@@ -2231,12 +2235,12 @@ VkInstance hg_vk_create_instance() {
 
     VkInstanceCreateInfo instance_info{};
     instance_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-#ifdef HG_DEBUG_MODE
+#ifdef HG_VK_DEBUG_MESSENGER
     instance_info.pNext = &hg_internal_debug_utils_messenger_info;
 #endif
     instance_info.flags = 0;
     instance_info.pApplicationInfo = &app_info;
-#ifdef HG_DEBUG_MODE
+#ifdef HG_VK_DEBUG_MESSENGER
     instance_info.enabledLayerCount = hg_countof(layers);
     instance_info.ppEnabledLayerNames = layers;
 #endif
