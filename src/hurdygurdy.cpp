@@ -787,11 +787,10 @@ static void hg_internal_resource_thread_fn(HgResourceManager *rm) {
         rm->request_thread.is_working.store(true);
 
         if (rm->request_queue_mutex.try_lock()) {
-            if (rm->request_queue.count == 0) {
+            if (rm->request_queue.count() == 0) {
                 rm->request_queue_mutex.unlock();
             } else {
-                HgResourceManager::Request request = rm->request_queue.last();
-                rm->request_queue.pop();
+                HgResourceManager::Request request = rm->request_queue.pop();
                 rm->request_queue_mutex.unlock();
 
                 rm->registry_mutex.lock();
@@ -816,7 +815,7 @@ HgResourceManager *HgResourceManager::create(HgAllocator& mem, usize max_resourc
     if (rm->registry.slots == nullptr)
         goto cleanup_registry;
 
-    rm->request_queue = rm->request_queue.create(mem, 0, max_requests).value_or(HgArray<Request>{});
+    rm->request_queue = rm->request_queue.create(mem, max_requests).value_or(HgQueue<Request>{});
     if (rm->request_queue.items == nullptr)
         goto cleanup_request_queue;
 

@@ -1610,8 +1610,6 @@ hg_test(hg_file_binary) {
         file.size = sizeof(save_data);
 
         hg_store_file_binary(&fence, file_id, file_path);
-        hg_test_assert(fence.wait(2.0));
-
         hg_load_file_binary(&fence, mem, file_id, file_path);
         hg_test_assert(fence.wait(2.0));
 
@@ -1671,8 +1669,6 @@ hg_test(hg_image) {
         file.depth = save_depth;
 
         hg_store_image(&fence, file_id, file_path);
-        hg_test_assert(fence.wait(2.0));
-
         hg_load_image(&fence, mem, file_id, file_path);
         hg_test_assert(fence.wait(2.0));
 

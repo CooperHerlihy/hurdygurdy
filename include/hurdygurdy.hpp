@@ -5718,7 +5718,7 @@ struct HgResourceManager {
     /**
      * The requests to be processed
      */
-    HgArray<Request> request_queue;
+    HgQueue<Request> request_queue;
     /**
      * The thread which handles requests
      */
