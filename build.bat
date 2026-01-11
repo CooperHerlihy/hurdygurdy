@@ -43,17 +43,25 @@ for %%S in (%SHADERS%) do (
     )
 )
 
-cl /c "%SRC_DIR%\src\hurdygurdy.cpp" ^
-    /Fd:"%BUILD_DIR%\hurdygurdy.pdb" ^
-    /Fo:"%BUILD_DIR%\hurdygurdy.obj" ^
-    %STD% %WARNINGS% %CONFIG% %INCLUDES%
-
 cl /c "%SRC_DIR%\src\vk_mem_alloc.cpp" ^
     /Fd:"%BUILD_DIR%\vk_mem_alloc.pdb" ^
     /Fo:"%BUILD_DIR%\vk_mem_alloc.obj" ^
     %STD% %CONFIG% %INCLUDES%
 
-lib /nologo /OUT:"%BUILD_DIR%\hurdygurdy.lib" "%BUILD_DIR%\hurdygurdy.obj" "%BUILD_DIR%\vk_mem_alloc.obj"
+cl /c "%SRC_DIR%\src\stb.c" ^
+    /Fd:"%BUILD_DIR%\stb.pdb" ^
+    /Fo:"%BUILD_DIR%\stb.obj" ^
+    %STD% %CONFIG% %INCLUDES%
+
+cl /c "%SRC_DIR%\src\hurdygurdy.cpp" ^
+    /Fd:"%BUILD_DIR%\hurdygurdy.pdb" ^
+    /Fo:"%BUILD_DIR%\hurdygurdy.obj" ^
+    %STD% %WARNINGS% %CONFIG% %INCLUDES%
+
+lib /nologo /OUT:"%BUILD_DIR%\hurdygurdy.lib" ^
+    "%BUILD_DIR%\hurdygurdy.obj" ^
+    "%BUILD_DIR%\vk_mem_alloc.obj" ^
+    "%BUILD_DIR%\stb.obj"
 
 cl "%SRC_DIR%\src\test.cpp" ^
     /Fd:"%BUILD_DIR%\test.pdb" ^

@@ -1,5 +1,8 @@
 #include "hurdygurdy.hpp"
 
+#include "stb_image.h"
+#include "stb_image_write.h"
+
 #if defined(HG_PLATFORM_LINUX)
 #include <alloca.h>
 #elif defined(HG_PLATFORM_WINDOWS)
@@ -9,22 +12,39 @@
 void hg_init(void) {
     HgStdAllocator mem;
 
-    u32 thread_pool_size = std::thread::hardware_concurrency()
-        - 2; // main thread, resource io thread
+    if (hg_threads == nullptr) {
+        u32 thread_count
+            = std::thread::hardware_concurrency()
+            - 2; // main thread, resource io thread
 
-    hg_threads_init(mem, thread_pool_size, 4096);
-    hg_resource_manager_init(mem, 4096, 4096);
+        hg_threads = HgThreadPool::create(mem, thread_count, 4096);
+        hg_assert(hg_threads != nullptr);
+    }
+
+    if (hg_resources == nullptr) {
+        hg_resources = HgResourceManager::create(mem, 4096, 4096);
+        hg_assert(hg_resources != nullptr);
+    }
+
     hg_platform_init();
-    hg_vulkan_init();
+    hg_graphics_init();
 }
 
 void hg_exit(void) {
     HgStdAllocator mem;
 
-    hg_vulkan_deinit();
+    hg_graphics_deinit();
     hg_platform_deinit();
-    hg_resource_manager_deinit(mem);
-    hg_threads_deinit(mem);
+
+    if (hg_resources != nullptr) {
+        HgResourceManager::destroy(mem, hg_resources);
+        hg_resources = nullptr;
+    }
+
+    if (hg_threads != nullptr) {
+        HgThreadPool::destroy(mem, hg_threads);
+        hg_threads = nullptr;
+    }
 }
 
 static HgArray<HgTest>& hg_internal_get_tests() {
@@ -40,6 +60,8 @@ HgTest::HgTest(const char *test_name, bool (*test_function)()) : name(test_name)
 }
 
 bool hg_run_tests() {
+    hg_init();
+
     HgArray<HgTest>& tests = hg_internal_get_tests();
 
     bool all_succeeded = true;
@@ -444,7 +466,7 @@ wait_longer:
     return false;
 }
 
-void HgThreadPool::submit_work(HgFence *fence, HgFunctionView<void()> work) {
+void HgThreadPool::call_par(HgFence *fence, HgFunctionView<void()> work) {
     hg_assert(work.fn != nullptr);
 
     if (fence != nullptr)
@@ -455,7 +477,7 @@ void HgThreadPool::submit_work(HgFence *fence, HgFunctionView<void()> work) {
     work_queue_mutex.unlock();
 }
 
-void HgThreadPool::submit_work_range(usize count, usize chunk_size, HgFunctionView<void(usize, usize)> fn) {
+void HgThreadPool::for_par(usize count, usize chunk_size, HgFunctionView<void(usize, usize)> fn) {
     static constexpr auto fn_work = [fn_dummy = decltype(fn){}, begin = (usize)0, end = (usize)0]() {
         (void)fn_dummy;
         (void)begin;
@@ -469,43 +491,11 @@ void HgThreadPool::submit_work_range(usize count, usize chunk_size, HgFunctionVi
 
     HgFence fence;
     for (usize i = 0; i < count; i += chunk_size) {
-        submit_work(&fence, hg_function<void()>(arena, [fn, begin = i, end = std::min(count, i + chunk_size)]() {
+        call_par(&fence, hg_function<void()>(arena, [fn, begin = i, end = std::min(count, i + chunk_size)]() {
             fn(begin, end);
         }).value());
     }
     fence.wait(INFINITY);
-}
-
-static HgThreadPool *hg_internal_thread_pool = nullptr;
-
-void hg_threads_init(HgAllocator& mem, usize thread_count, usize queue_size) {
-    if (hg_internal_thread_pool == nullptr) {
-        hg_internal_thread_pool = HgThreadPool::create(mem, thread_count, queue_size);
-        hg_assert(hg_internal_thread_pool != nullptr);
-    }
-}
-
-void hg_threads_deinit(HgAllocator& mem) {
-    if (hg_internal_thread_pool != nullptr) {
-        HgThreadPool::destroy(mem, hg_internal_thread_pool);
-        hg_internal_thread_pool = nullptr;
-    }
-}
-
-HgThreadPool *hg_get_thread_pool() {
-    return hg_internal_thread_pool;
-}
-
-bool hg_threads_wait_idle(f64 timeout_seconds) {
-    return hg_internal_thread_pool->wait_idle(timeout_seconds);
-}
-
-void hg_call_par(HgFence *fence, HgFunctionView<void()> fn) {
-    hg_internal_thread_pool->submit_work(fence, fn);
-}
-
-void hg_for_par(usize count, usize chunk_size, HgFunctionView<void(usize begin, usize end)> fn) {
-    hg_internal_thread_pool->submit_work_range(count, chunk_size, fn);
 }
 
 static u32& hg_internal_current_component_id() {
@@ -789,8 +779,6 @@ void HgECS::sort_untyped(u32 begin, u32 end, u32 component_id, HgFunctionView<bo
     quicksort_untyped(begin, end, component_id, compare);
 }
 
-static HgResourceManager *hg_internal_resource_manager;
-
 static void hg_internal_resource_thread_fn(HgResourceManager *rm) {
     for (;;) {
         if (rm->request_thread.should_close.load())
@@ -806,42 +794,12 @@ static void hg_internal_resource_thread_fn(HgResourceManager *rm) {
                 rm->request_queue.pop();
                 rm->request_queue_mutex.unlock();
 
-                switch (request.type) {
-                    case HgResourceManager::REQUEST_LOAD: {
-                        void *resource;
-                        resource = request.load.fn(*request.load.mem, request.load.path);
+                rm->registry_mutex.lock();
+                void *resource = rm->registry.get(request.id);
+                rm->registry_mutex.unlock();
 
-                        rm->registry_mutex.lock();
-                        rm->registry.get(request.load.id) = resource;
-                        rm->registry_mutex.unlock();
-
-                        --request.load.fence->counter;
-                    } break;
-                    case HgResourceManager::REQUEST_STORE: {
-                        void *resource;
-                        rm->registry_mutex.lock();
-                        resource = rm->registry.get(request.store.id);
-                        rm->registry_mutex.unlock();
-
-                        request.store.fn(resource, request.store.path);
-
-                        --request.store.fence->counter;
-                    } break;
-                    case HgResourceManager::REQUEST_UNLOAD: {
-                        void *resource;
-                        rm->registry_mutex.lock();
-                        void *& ref = rm->registry.get(request.unload.id);
-                        resource = ref;
-                        ref = nullptr;
-                        rm->registry_mutex.unlock();
-
-                        request.unload.fn(*request.unload.mem, resource);
-
-                        --request.unload.fence->counter;
-                    } break;
-                    default:
-                        hg_assert(false);
-                }
+                request.fn(request.mem, resource, request.path);
+                --request.fence->counter;
             }
         }
 
@@ -854,7 +812,7 @@ HgResourceManager *HgResourceManager::create(HgAllocator& mem, usize max_resourc
     if (rm == nullptr)
         goto cleanup_rm;
 
-    rm->registry = rm->registry.create(mem, max_resources).value_or(HgHashMap<HgResourceID, void *>{});
+    rm->registry = rm->registry.create(mem, max_resources).value_or(HgHashMap<HgResourceID<void>, void *>{});
     if (rm->registry.slots == nullptr)
         goto cleanup_registry;
 
@@ -883,222 +841,691 @@ void HgResourceManager::destroy(HgAllocator& mem, HgResourceManager *rm) {
     rm->registry.destroy(mem);
 }
 
-void HgResourceManager::register_id(HgResourceID id) {
+bool HgResourceManager::register_id_untyped(HgAllocator& mem, HgResourceID<void> id, usize size, usize alignment) {
+    void *resource = mem.alloc_fn(size, alignment);
+    if (resource == nullptr)
+        return false;
+
     registry_mutex.lock();
-    hg_defer(registry_mutex.unlock());
     hg_assert(!registry.has(id));
-    registry.insert(id, nullptr);
+    registry.insert(id, resource);
+    registry_mutex.unlock();
+
+    return true;
 }
 
-void HgResourceManager::unregister_id(HgResourceID id) {
+void HgResourceManager::unregister_id_untyped(HgAllocator& mem, HgResourceID<void> id, usize size, usize alignment) {
     registry_mutex.lock();
-    hg_defer(registry_mutex.unlock());
-    registry.remove(id);
+    HgOption<void *> resource = registry.get_remove(id);
+    registry_mutex.unlock();
+    if (resource.has_value())
+        mem.free_fn(resource.value(), size, alignment);
 }
 
-bool HgResourceManager::is_registered(HgResourceID id) {
+bool HgResourceManager::is_registered(HgResourceID<void> id) {
     registry_mutex.lock();
-    hg_defer(registry_mutex.unlock());
-    return registry.has(id);
+    bool is = registry.has(id);
+    registry_mutex.unlock();
+    return is;
 }
 
-void HgResourceManager::load(
+void HgResourceManager::request(
     HgFence *fence,
-    HgFunctionView<void *(HgAllocator& mem, std::string_view path)> fn,
-    HgAllocator& mem,
-    HgResourceID id,
+    HgFunctionView<void(HgAllocator *mem, void *resource, std::string_view path)> fn,
+    HgAllocator *mem,
+    HgResourceID<void> id,
     std::string_view path
 ) {
-    Request request{};
-    request.type = REQUEST_LOAD;
-    request.load.fence = fence;
-    request.load.mem = &mem;
-    request.load.id = id;
-    request.load.path = path;
-    request.load.fn = fn;
+    Request request;
+    request.fence = fence;
+    request.mem = mem;
+    request.id = id;
+    request.path = path;
+    request.fn = fn;
 
     if (fence != nullptr)
         ++fence->counter;
 
     request_queue_mutex.lock();
-    hg_defer(request_queue_mutex.unlock());
     hg_assert(request_queue.has_space());
     request_queue.push(request);
+    request_queue_mutex.unlock();
 }
 
-void HgResourceManager::store(
-    HgFence *fence,
-    HgFunctionView<void(void *resource, std::string_view path)> fn,
-    HgResourceID id,
-    std::string_view path
-) {
-    Request request{};
-    request.type = REQUEST_STORE;
-    request.store.fence = fence;
-    request.store.id = id;
-    request.store.path = path;
-    request.store.fn = fn;
-
-    if (fence != nullptr)
-        ++fence->counter;
-
-    request_queue_mutex.lock();
-    hg_defer(request_queue_mutex.unlock());
-    hg_assert(request_queue.has_space());
-    request_queue.push(request);
+void *HgResourceManager::get_untyped(HgResourceID<void> id) {
+    registry_mutex.lock();
+    void *resource = registry.get(id);
+    registry_mutex.unlock();
+    return resource;
 }
 
-void HgResourceManager::unload(
-    HgFence *fence,
-    HgFunctionView<void(HgAllocator& mem, void *resource)> fn,
-    HgAllocator& mem,
-    HgResourceID id
-) {
-    Request request{};
-    request.type = REQUEST_UNLOAD;
-    request.unload.fence = fence;
-    request.unload.mem = &mem;
-    request.unload.id = id;
-    request.unload.fn = fn;
-
-    if (fence != nullptr)
-        ++fence->counter;
-
-    request_queue_mutex.lock();
-    hg_defer(request_queue_mutex.unlock());
-    hg_assert(request_queue.has_space());
-    request_queue.push(request);
-}
-
-void *HgResourceManager::get(HgResourceID id) {
+void *HgResourceManager::exchange_untyped(HgResourceID<void> id, void *new_resource) {
     registry_mutex.lock();
     hg_defer(registry_mutex.unlock());
-    return registry.get(id);
-}
-
-void *HgResourceManager::exchange(HgResourceID id, void *new_resource) {
-    registry_mutex.lock();
-    hg_defer(registry_mutex.unlock());
-    void *& ref= registry.get(id);
+    void *& ref = registry.get(id);
     void *old = ref;
     ref = new_resource;
     return old;
 }
 
-void hg_resource_manager_init(HgAllocator& mem, usize max_resources, usize max_requests) {
-    if (hg_internal_resource_manager == nullptr) {
-        hg_internal_resource_manager = HgResourceManager::create(mem, max_resources, max_requests);
-        hg_assert(hg_internal_resource_manager != nullptr);
-    }
+void hg_load_file_binary(HgFence *fence, HgAllocator& mem, HgResourceID<HgFileBinary> id, std::string_view path) {
+    hg_assert(hg_resources->is_registered(id));
+
+    auto fn = [](void *, HgAllocator *pmem, void *pfile, std::string_view fpath) {
+        HgFileBinary& file = *(HgFileBinary *)pfile;
+
+        char *cpath = (char *)alloca(fpath.length() + 1);
+        std::memcpy(cpath, fpath.data(), fpath.length());
+        cpath[fpath.length()] = '\0';
+
+        FILE* file_handle = std::fopen(cpath, "rb");
+        if (file_handle == nullptr) {
+            hg_warn("Could not find file to read binary: %s\n", cpath);
+            file = {};
+            return;
+        }
+        hg_defer(std::fclose(file_handle));
+
+        if (std::fseek(file_handle, 0, SEEK_END) != 0) {
+            hg_warn("Failed to read binary from file: %s\n", cpath);
+            file = {};
+            return;
+        }
+
+        file.size = (usize)std::ftell(file_handle);
+        file.data = pmem->alloc_fn(file.size, alignof(std::max_align_t));
+        if (file.data == nullptr) {
+            hg_warn("Allocation failure during file read: %s\n", cpath);
+            file = {};
+            return;
+        }
+        std::rewind(file_handle);
+
+        if (std::fread(file.data, 1, file.size, file_handle) != file.size) {
+            hg_warn("Failed to read binary from file: %s\n", cpath);
+            pmem->free_fn(file.data, file.size, alignof(std::max_align_t));
+            file = {};
+            return;
+        }
+    };
+
+    hg_resources->request(fence, fn, &mem, id, path);
 }
 
-void hg_resource_manager_deinit(HgAllocator& mem) {
-    if (hg_internal_resource_manager != nullptr) {
-        HgResourceManager::destroy(mem, hg_internal_resource_manager);
-        hg_internal_resource_manager = nullptr;
-    }
+void hg_unload_file_binary(HgFence *fence, HgAllocator& mem, HgResourceID<HgFileBinary> id) {
+    hg_assert(hg_resources->is_registered(id));
+
+    auto fn = [](void *, HgAllocator *pmem, void *pfile, std::string_view) {
+        HgFileBinary& file = *(HgFileBinary *)pfile;
+        pmem->free_fn(file.data, file.size, alignof(std::max_align_t));
+        file = {};
+    };
+
+    hg_resources->request(fence, fn, &mem, id, {});
 }
 
-HgResourceManager *hg_get_resource_manager() {
-    return hg_internal_resource_manager;
+void hg_store_file_binary(HgFence *fence, HgResourceID<HgFileBinary> id, std::string_view path) {
+    hg_assert(hg_resources->is_registered(id));
+
+    auto fn = [](void *, HgAllocator *, void *pfile, std::string_view fpath) {
+        HgFileBinary& file = *(HgFileBinary *)pfile;
+
+        char *cpath = (char *)alloca(fpath.length() + 1);
+        std::memcpy(cpath, fpath.data(), fpath.length());
+        cpath[fpath.length()] = '\0';
+
+        FILE* file_handle = std::fopen(cpath, "wb");
+        if (file_handle == nullptr) {
+            hg_warn("Failed to create file to write binary: %s\n", cpath);
+            return;
+        }
+        hg_defer(std::fclose(file_handle));
+
+        if (std::fwrite(file.data, 1, file.size, file_handle) != file.size) {
+            hg_warn("Failed to write binary data to file: %s\n", cpath);
+            return;
+        }
+    };
+
+    hg_resources->request(fence, fn, nullptr, id, path);
 }
 
-void hg_register_resource(HgResourceID id) {
-    hg_internal_resource_manager->register_id(id);
+void hg_load_image(HgFence *fence, HgAllocator& mem, HgResourceID<HgImage> id, std::string_view path) {
+    hg_assert(hg_resources->is_registered(id));
+
+    auto fn = [](void *, HgAllocator *, void *pimage, std::string_view fpath) {
+        HgImage& image = *(HgImage *)pimage;
+
+        char *cpath = (char *)alloca(fpath.length() + 1);
+        std::memcpy(cpath, fpath.data(), fpath.length());
+        cpath[fpath.length()] = '\0';
+
+        int channels;
+        image.data = stbi_load(cpath, (int *)&image.width, (int *)&image.height, &channels, 4);
+        if (image.data == nullptr) {
+            hg_warn("Failed to load image file: %s\n", cpath);
+            image = {};
+            return;
+        }
+
+        image.format = VK_FORMAT_R8G8B8A8_SRGB;
+    };
+
+    hg_resources->request(fence, fn, &mem, id, path);
 }
 
-void hg_unregister_resource(HgResourceID id) {
-    hg_internal_resource_manager->unregister_id(id);
+void hg_unload_image(HgFence *fence, HgAllocator& mem, HgResourceID<HgImage> id) {
+    hg_assert(hg_resources->is_registered(id));
+
+    auto fn = [](void *, HgAllocator *, void *pimage, std::string_view) {
+        HgImage& image = *(HgImage *)pimage;
+
+        free(image.data);
+        image = {};
+    };
+
+    hg_resources->request(fence, fn, &mem, id, {});
 }
 
-bool hg_is_resource_registered(HgResourceID id) {
-    return hg_internal_resource_manager->is_registered(id);
-}
+void hg_store_image(HgFence *fence, HgResourceID<HgImage> id, std::string_view path) {
+    hg_assert(hg_resources->is_registered(id));
 
-void hg_load_resource(
-    HgFence *fence,
-    HgFunctionView<void *(HgAllocator& mem, std::string_view path)> fn,
-    HgAllocator& mem,
-    HgResourceID id,
-    std::string_view path
-) {
-    hg_internal_resource_manager->load(fence, fn, mem, id, path);
-}
+    auto fn = [](void *, HgAllocator *, void *pimage, std::string_view fpath) {
+        HgImage& image = *(HgImage *)pimage;
 
-void hg_store_resource(
-    HgFence *fence,
-    HgFunctionView<void(void *resource, std::string_view path)> fn,
-    HgResourceID id,
-    std::string_view path
-) {
-    hg_internal_resource_manager->store(fence, fn, id, path);
-}
+        char *cpath = (char *)alloca(fpath.length() + 1);
+        std::memcpy(cpath, fpath.data(), fpath.length());
+        cpath[fpath.length()] = '\0';
 
-void hg_unload_resource(
-    HgFence *fence,
-    HgFunctionView<void(HgAllocator& mem, void *resource)> fn,
-    HgAllocator& mem,
-    HgResourceID id
-) {
-    hg_internal_resource_manager->unload(fence, fn, mem, id);
-}
+        stbi_write_png(
+            cpath,
+            (int)image.width,
+            (int)image.height,
+            4,
+            image.data,
+            (int)(image.width * 4));
+    };
 
-void *hg_get_resource(HgResourceID id) {
-    return hg_internal_resource_manager->get(id);
-}
-
-void *hg_exchange_resource(HgResourceID id, void *new_resource) {
-    return hg_internal_resource_manager->exchange(id, new_resource);
-}
-
-HgSpan<void> hg_file_load_binary(HgAllocator& allocator, const char *path) {
-    FILE* file = std::fopen(path, "rb");
-    if (file == nullptr) {
-        hg_warn("Could not find file to read binary: %s\n", path);
-        return {};
-    }
-    hg_defer(std::fclose(file));
-
-    if (std::fseek(file, 0, SEEK_END) != 0) {
-        hg_warn("Failed to read binary from file: %s\n", path);
-        return {};
-    }
-
-    HgSpan<void> data = allocator.alloc((usize)std::ftell(file), alignof(std::max_align_t));
-    std::rewind(file);
-
-    if (std::fread(data.data, 1, data.count, file) != data.count) {
-        hg_warn("Failed to read binary from file: %s\n", path);
-        return {};
-    }
-
-    return data;
-}
-
-void hg_file_unload_binary(HgAllocator& allocator, HgSpan<void> data) {
-    allocator.free(data);
-}
-
-bool hg_file_save_binary(HgSpan<const void> data, const char *path) {
-    FILE* file = std::fopen(path, "wb");
-    if (file == nullptr) {
-        hg_warn("Failed to create file to write binary: %s\n", path);
-        return false;
-    }
-    hg_defer(std::fclose(file));
-
-    if (std::fwrite(data.data, 1, data.count, file) != data.count) {
-        hg_warn("Failed to write binary data to file: %s\n", path);
-        return false;
-    }
-
-    return true;
+    hg_resources->request(fence, fn, nullptr, id, path);
 }
 
 f64 HgClock::tick() {
     auto prev = time;
     time = std::chrono::high_resolution_clock::now();
     return std::chrono::duration<f64>{time - prev}.count();
+}
+
+void hg_vulkan_init();
+
+#ifdef HG_VK_DEBUG_MESSENGER
+VkDebugUtilsMessengerEXT hg_internal_vk_debug_messenger = nullptr;
+#endif
+
+void hg_graphics_init() {
+    hg_vulkan_init();
+
+    if (hg_vk_instance == nullptr) {
+        hg_vk_instance = hg_vk_create_instance();
+        hg_vk_load_instance(hg_vk_instance);
+    }
+
+#ifdef HG_VK_DEBUG_MESSENGER
+    if (hg_internal_vk_debug_messenger == nullptr)
+        hg_internal_vk_debug_messenger = hg_vk_create_debug_messenger();
+#endif
+
+    if (hg_vk_physical_device == nullptr) {
+        hg_vk_physical_device = hg_vk_find_single_queue_physical_device();
+        hg_vk_queue_family = *hg_vk_find_queue_family(hg_vk_physical_device,
+            VK_QUEUE_GRAPHICS_BIT |
+            VK_QUEUE_TRANSFER_BIT |
+            VK_QUEUE_COMPUTE_BIT);
+    }
+
+    if (hg_vk_device == nullptr) {
+        hg_vk_device = hg_vk_create_single_queue_device();
+        hg_vk_load_device(hg_vk_device);
+        vkGetDeviceQueue(hg_vk_device, hg_vk_queue_family, 0, &hg_vk_queue);
+    }
+
+    if (hg_vk_vma == nullptr) {
+        hg_vk_vma = hg_vk_create_vma_allocator();
+    }
+}
+
+void hg_vulkan_deinit();
+
+void hg_graphics_deinit() {
+    if (hg_vk_vma != nullptr) {
+        vmaDestroyAllocator(hg_vk_vma);
+        hg_vk_vma = nullptr;
+    }
+
+    if (hg_vk_device != nullptr) {
+        vkDestroyDevice(hg_vk_device, nullptr);
+        hg_vk_device = nullptr;
+    }
+
+    if (hg_vk_physical_device != nullptr) {
+        hg_vk_physical_device = nullptr;
+        hg_vk_queue_family = (u32)-1;
+    }
+
+#ifdef HG_VK_DEBUG_MESSENGER
+    if (hg_internal_vk_debug_messenger != nullptr) {
+        vkDestroyDebugUtilsMessengerEXT(hg_vk_instance, hg_internal_vk_debug_messenger, nullptr);
+        hg_internal_vk_debug_messenger = nullptr;
+    }
+#endif
+
+    if (hg_vk_instance != nullptr) {
+        vkDestroyInstance(hg_vk_instance, nullptr);
+        hg_vk_instance = nullptr;
+    }
+
+    hg_vulkan_deinit();
+}
+
+const char *hg_vk_result_string(VkResult result) {
+    switch (result) {
+        case VK_SUCCESS:
+            return "VK_SUCCESS";
+        case VK_NOT_READY:
+            return "VK_NOT_READY";
+        case VK_TIMEOUT:
+            return "VK_TIMEOUT";
+        case VK_EVENT_SET:
+            return "VK_EVENT_SET";
+        case VK_EVENT_RESET:
+            return "VK_EVENT_RESET";
+        case VK_INCOMPLETE:
+            return "VK_INCOMPLETE";
+        case VK_ERROR_OUT_OF_HOST_MEMORY:
+            return "VK_ERROR_OUT_OF_HOST_MEMORY";
+        case VK_ERROR_OUT_OF_DEVICE_MEMORY:
+            return "VK_ERROR_OUT_OF_DEVICE_MEMORY";
+        case VK_ERROR_INITIALIZATION_FAILED:
+            return "VK_ERROR_INITIALIZATION_FAILED";
+        case VK_ERROR_DEVICE_LOST:
+            return "VK_ERROR_DEVICE_LOST";
+        case VK_ERROR_MEMORY_MAP_FAILED:
+            return "VK_ERROR_MEMORY_MAP_FAILED";
+        case VK_ERROR_LAYER_NOT_PRESENT:
+            return "VK_ERROR_LAYER_NOT_PRESENT";
+        case VK_ERROR_EXTENSION_NOT_PRESENT:
+            return "VK_ERROR_EXTENSION_NOT_PRESENT";
+        case VK_ERROR_FEATURE_NOT_PRESENT:
+            return "VK_ERROR_FEATURE_NOT_PRESENT";
+        case VK_ERROR_INCOMPATIBLE_DRIVER:
+            return "VK_ERROR_INCOMPATIBLE_DRIVER";
+        case VK_ERROR_TOO_MANY_OBJECTS:
+            return "VK_ERROR_TOO_MANY_OBJECTS";
+        case VK_ERROR_FORMAT_NOT_SUPPORTED:
+            return "VK_ERROR_FORMAT_NOT_SUPPORTED";
+        case VK_ERROR_FRAGMENTED_POOL:
+            return "VK_ERROR_FRAGMENTED_POOL";
+        case VK_ERROR_UNKNOWN:
+            return "VK_ERROR_UNKNOWN";
+        case VK_ERROR_VALIDATION_FAILED:
+            return "VK_ERROR_VALIDATION_FAILED";
+        case VK_ERROR_OUT_OF_POOL_MEMORY:
+            return "VK_ERROR_OUT_OF_POOL_MEMORY";
+        case VK_ERROR_INVALID_EXTERNAL_HANDLE:
+            return "VK_ERROR_INVALID_EXTERNAL_HANDLE";
+        case VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS:
+            return "VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS";
+        case VK_ERROR_FRAGMENTATION:
+            return "VK_ERROR_FRAGMENTATION";
+        case VK_PIPELINE_COMPILE_REQUIRED:
+            return "VK_PIPELINE_COMPILE_REQUIRED";
+        case VK_ERROR_NOT_PERMITTED:
+            return "VK_ERROR_NOT_PERMITTED";
+        case VK_ERROR_SURFACE_LOST_KHR:
+            return "VK_ERROR_SURFACE_LOST_KHR";
+        case VK_ERROR_NATIVE_WINDOW_IN_USE_KHR:
+            return "VK_ERROR_NATIVE_WINDOW_IN_USE_KHR";
+        case VK_SUBOPTIMAL_KHR:
+            return "VK_SUBOPTIMAL_KHR";
+        case VK_ERROR_OUT_OF_DATE_KHR:
+            return "VK_ERROR_OUT_OF_DATE_KHR";
+        case VK_ERROR_INCOMPATIBLE_DISPLAY_KHR:
+            return "VK_ERROR_INCOMPATIBLE_DISPLAY_KHR";
+        case VK_ERROR_INVALID_SHADER_NV:
+            return "VK_ERROR_INVALID_SHADER_NV";
+        case VK_ERROR_IMAGE_USAGE_NOT_SUPPORTED_KHR:
+            return "VK_ERROR_IMAGE_USAGE_NOT_SUPPORTED_KHR";
+        case VK_ERROR_VIDEO_PICTURE_LAYOUT_NOT_SUPPORTED_KHR:
+            return "VK_ERROR_VIDEO_PICTURE_LAYOUT_NOT_SUPPORTED_KHR";
+        case VK_ERROR_VIDEO_PROFILE_OPERATION_NOT_SUPPORTED_KHR:
+            return "VK_ERROR_VIDEO_PROFILE_OPERATION_NOT_SUPPORTED_KHR";
+        case VK_ERROR_VIDEO_PROFILE_FORMAT_NOT_SUPPORTED_KHR:
+            return "VK_ERROR_VIDEO_PROFILE_FORMAT_NOT_SUPPORTED_KHR";
+        case VK_ERROR_VIDEO_PROFILE_CODEC_NOT_SUPPORTED_KHR:
+            return "VK_ERROR_VIDEO_PROFILE_CODEC_NOT_SUPPORTED_KHR";
+        case VK_ERROR_VIDEO_STD_VERSION_NOT_SUPPORTED_KHR:
+            return "VK_ERROR_VIDEO_STD_VERSION_NOT_SUPPORTED_KHR";
+        case VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT:
+            return "VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT";
+        case VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT:
+            return "VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT";
+        case VK_THREAD_IDLE_KHR:
+            return "VK_THREAD_IDLE_KHR";
+        case VK_THREAD_DONE_KHR:
+            return "VK_THREAD_DONE_KHR";
+        case VK_OPERATION_DEFERRED_KHR:
+            return "VK_OPERATION_DEFERRED_KHR";
+        case VK_OPERATION_NOT_DEFERRED_KHR:
+            return "VK_OPERATION_NOT_DEFERRED_KHR";
+        case VK_ERROR_INVALID_VIDEO_STD_PARAMETERS_KHR:
+            return "VK_ERROR_INVALID_VIDEO_STD_PARAMETERS_KHR";
+        case VK_ERROR_COMPRESSION_EXHAUSTED_EXT:
+            return "VK_ERROR_COMPRESSION_EXHAUSTED_EXT";
+        case VK_INCOMPATIBLE_SHADER_BINARY_EXT:
+            return "VK_INCOMPATIBLE_SHADER_BINARY_EXT";
+        case VK_PIPELINE_BINARY_MISSING_KHR:
+            return "VK_PIPELINE_BINARY_MISSING_KHR";
+        case VK_ERROR_NOT_ENOUGH_SPACE_KHR:
+            return "VK_ERROR_NOT_ENOUGH_SPACE_KHR";
+        case VK_RESULT_MAX_ENUM:
+            return "VK_RESULT_MAX_ENUM";
+    }
+    return "Unrecognized Vulkan result";
+}
+
+u32 hg_vk_format_to_size(VkFormat format) {
+    switch (format) {
+        case VK_FORMAT_UNDEFINED:
+            return 0;
+
+        case VK_FORMAT_R8_UNORM:
+        case VK_FORMAT_R8_SNORM:
+        case VK_FORMAT_R8_USCALED:
+        case VK_FORMAT_R8_SSCALED:
+        case VK_FORMAT_R8_UINT:
+        case VK_FORMAT_R8_SINT:
+        case VK_FORMAT_R8_SRGB:
+        case VK_FORMAT_A8_UNORM:
+        case VK_FORMAT_R8_BOOL_ARM:
+            return 1;
+
+        case VK_FORMAT_R4G4_UNORM_PACK8: return 1;
+        case VK_FORMAT_R4G4B4A4_UNORM_PACK16:
+        case VK_FORMAT_B4G4R4A4_UNORM_PACK16:
+        case VK_FORMAT_R5G6B5_UNORM_PACK16:
+        case VK_FORMAT_B5G6R5_UNORM_PACK16:
+        case VK_FORMAT_R5G5B5A1_UNORM_PACK16:
+        case VK_FORMAT_B5G5R5A1_UNORM_PACK16:
+        case VK_FORMAT_A1R5G5B5_UNORM_PACK16:
+        case VK_FORMAT_A4R4G4B4_UNORM_PACK16:
+        case VK_FORMAT_A4B4G4R4_UNORM_PACK16:
+        case VK_FORMAT_A1B5G5R5_UNORM_PACK16:
+            return 2;
+
+        case VK_FORMAT_R16_UNORM:
+        case VK_FORMAT_R16_SNORM:
+        case VK_FORMAT_R16_USCALED:
+        case VK_FORMAT_R16_SSCALED:
+        case VK_FORMAT_R16_UINT:
+        case VK_FORMAT_R16_SINT:
+        case VK_FORMAT_R16_SFLOAT:
+            return 2;
+
+        case VK_FORMAT_R8G8_UNORM:
+        case VK_FORMAT_R8G8_SNORM:
+        case VK_FORMAT_R8G8_USCALED:
+        case VK_FORMAT_R8G8_SSCALED:
+        case VK_FORMAT_R8G8_UINT:
+        case VK_FORMAT_R8G8_SINT:
+        case VK_FORMAT_R8G8_SRGB:
+            return 2;
+
+        case VK_FORMAT_R8G8B8_UNORM:
+        case VK_FORMAT_R8G8B8_SNORM:
+        case VK_FORMAT_R8G8B8_USCALED:
+        case VK_FORMAT_R8G8B8_SSCALED:
+        case VK_FORMAT_R8G8B8_UINT:
+        case VK_FORMAT_R8G8B8_SINT:
+        case VK_FORMAT_R8G8B8_SRGB:
+        case VK_FORMAT_B8G8R8_UNORM:
+        case VK_FORMAT_B8G8R8_SNORM:
+        case VK_FORMAT_B8G8R8_USCALED:
+        case VK_FORMAT_B8G8R8_SSCALED:
+        case VK_FORMAT_B8G8R8_UINT:
+        case VK_FORMAT_B8G8R8_SINT:
+        case VK_FORMAT_B8G8R8_SRGB:
+            return 3;
+
+        case VK_FORMAT_R8G8B8A8_UNORM:
+        case VK_FORMAT_R8G8B8A8_SNORM:
+        case VK_FORMAT_R8G8B8A8_USCALED:
+        case VK_FORMAT_R8G8B8A8_SSCALED:
+        case VK_FORMAT_R8G8B8A8_UINT:
+        case VK_FORMAT_R8G8B8A8_SINT:
+        case VK_FORMAT_R8G8B8A8_SRGB:
+        case VK_FORMAT_B8G8R8A8_UNORM:
+        case VK_FORMAT_B8G8R8A8_SNORM:
+        case VK_FORMAT_B8G8R8A8_USCALED:
+        case VK_FORMAT_B8G8R8A8_SSCALED:
+        case VK_FORMAT_B8G8R8A8_UINT:
+        case VK_FORMAT_B8G8R8A8_SINT:
+        case VK_FORMAT_B8G8R8A8_SRGB:
+        case VK_FORMAT_A8B8G8R8_UNORM_PACK32:
+        case VK_FORMAT_A8B8G8R8_SNORM_PACK32:
+        case VK_FORMAT_A8B8G8R8_USCALED_PACK32:
+        case VK_FORMAT_A8B8G8R8_SSCALED_PACK32:
+        case VK_FORMAT_A8B8G8R8_UINT_PACK32:
+        case VK_FORMAT_A8B8G8R8_SINT_PACK32:
+        case VK_FORMAT_A8B8G8R8_SRGB_PACK32:
+        case VK_FORMAT_B10G11R11_UFLOAT_PACK32:
+        case VK_FORMAT_E5B9G9R9_UFLOAT_PACK32:
+            return 4;
+
+        case VK_FORMAT_A2R10G10B10_UNORM_PACK32:
+        case VK_FORMAT_A2R10G10B10_SNORM_PACK32:
+        case VK_FORMAT_A2R10G10B10_USCALED_PACK32:
+        case VK_FORMAT_A2R10G10B10_SSCALED_PACK32:
+        case VK_FORMAT_A2R10G10B10_UINT_PACK32:
+        case VK_FORMAT_A2R10G10B10_SINT_PACK32:
+        case VK_FORMAT_A2B10G10R10_UNORM_PACK32:
+        case VK_FORMAT_A2B10G10R10_SNORM_PACK32:
+        case VK_FORMAT_A2B10G10R10_USCALED_PACK32:
+        case VK_FORMAT_A2B10G10R10_SSCALED_PACK32:
+        case VK_FORMAT_A2B10G10R10_UINT_PACK32:
+        case VK_FORMAT_A2B10G10R10_SINT_PACK32:
+            return 4;
+
+        case VK_FORMAT_R16G16_UNORM:
+        case VK_FORMAT_R16G16_SNORM:
+        case VK_FORMAT_R16G16_USCALED:
+        case VK_FORMAT_R16G16_SSCALED:
+        case VK_FORMAT_R16G16_UINT:
+        case VK_FORMAT_R16G16_SINT:
+        case VK_FORMAT_R16G16_SFLOAT:
+            return 4;
+
+        case VK_FORMAT_R16G16B16_UNORM:
+        case VK_FORMAT_R16G16B16_SNORM:
+        case VK_FORMAT_R16G16B16_USCALED:
+        case VK_FORMAT_R16G16B16_SSCALED:
+        case VK_FORMAT_R16G16B16_UINT:
+        case VK_FORMAT_R16G16B16_SINT:
+        case VK_FORMAT_R16G16B16_SFLOAT:
+            return 6;
+
+        case VK_FORMAT_R16G16B16A16_UNORM:
+        case VK_FORMAT_R16G16B16A16_SNORM:
+        case VK_FORMAT_R16G16B16A16_USCALED:
+        case VK_FORMAT_R16G16B16A16_SSCALED:
+        case VK_FORMAT_R16G16B16A16_UINT:
+        case VK_FORMAT_R16G16B16A16_SINT:
+        case VK_FORMAT_R16G16B16A16_SFLOAT:
+            return 8;
+
+        case VK_FORMAT_R32_UINT:
+        case VK_FORMAT_R32_SINT:
+        case VK_FORMAT_R32_SFLOAT:
+            return 4;
+
+        case VK_FORMAT_R32G32_UINT:
+        case VK_FORMAT_R32G32_SINT:
+        case VK_FORMAT_R32G32_SFLOAT:
+            return 8;
+
+        case VK_FORMAT_R32G32B32_UINT:
+        case VK_FORMAT_R32G32B32_SINT:
+        case VK_FORMAT_R32G32B32_SFLOAT:
+            return 12;
+
+        case VK_FORMAT_R32G32B32A32_UINT:
+        case VK_FORMAT_R32G32B32A32_SINT:
+        case VK_FORMAT_R32G32B32A32_SFLOAT:
+            return 16;
+
+        case VK_FORMAT_R64_UINT:
+        case VK_FORMAT_R64_SINT:
+        case VK_FORMAT_R64_SFLOAT:
+            return 8;
+
+        case VK_FORMAT_R64G64_UINT:
+        case VK_FORMAT_R64G64_SINT:
+        case VK_FORMAT_R64G64_SFLOAT:
+            return 16;
+
+        case VK_FORMAT_R64G64B64_UINT:
+        case VK_FORMAT_R64G64B64_SINT:
+        case VK_FORMAT_R64G64B64_SFLOAT:
+            return 24;
+
+        case VK_FORMAT_R64G64B64A64_UINT:
+        case VK_FORMAT_R64G64B64A64_SINT:
+        case VK_FORMAT_R64G64B64A64_SFLOAT:
+            return 32;
+
+        case VK_FORMAT_D16_UNORM: return 2;
+        case VK_FORMAT_X8_D24_UNORM_PACK32: return 4;
+        case VK_FORMAT_D32_SFLOAT: return 4;
+        case VK_FORMAT_S8_UINT: return 1;
+        case VK_FORMAT_D16_UNORM_S8_UINT: return 3;
+        case VK_FORMAT_D24_UNORM_S8_UINT: return 4;
+        case VK_FORMAT_D32_SFLOAT_S8_UINT: return 5;
+
+        case VK_FORMAT_BC1_RGB_UNORM_BLOCK:
+        case VK_FORMAT_BC1_RGB_SRGB_BLOCK:
+        case VK_FORMAT_BC1_RGBA_UNORM_BLOCK:
+        case VK_FORMAT_BC1_RGBA_SRGB_BLOCK:
+            return 8;
+
+        case VK_FORMAT_BC2_UNORM_BLOCK:
+        case VK_FORMAT_BC2_SRGB_BLOCK:
+        case VK_FORMAT_BC3_UNORM_BLOCK:
+        case VK_FORMAT_BC3_SRGB_BLOCK:
+            return 16;
+
+        case VK_FORMAT_BC4_UNORM_BLOCK:
+        case VK_FORMAT_BC4_SNORM_BLOCK:
+        case VK_FORMAT_BC5_UNORM_BLOCK:
+        case VK_FORMAT_BC5_SNORM_BLOCK:
+            return 16;
+
+        case VK_FORMAT_BC6H_UFLOAT_BLOCK:
+        case VK_FORMAT_BC6H_SFLOAT_BLOCK:
+        case VK_FORMAT_BC7_UNORM_BLOCK:
+        case VK_FORMAT_BC7_SRGB_BLOCK:
+            return 16;
+
+        case VK_FORMAT_ETC2_R8G8B8_UNORM_BLOCK:
+        case VK_FORMAT_ETC2_R8G8B8_SRGB_BLOCK:
+            return 8;
+
+        case VK_FORMAT_ETC2_R8G8B8A1_UNORM_BLOCK:
+        case VK_FORMAT_ETC2_R8G8B8A1_SRGB_BLOCK:
+            return 8;
+
+        case VK_FORMAT_ETC2_R8G8B8A8_UNORM_BLOCK:
+        case VK_FORMAT_ETC2_R8G8B8A8_SRGB_BLOCK:
+            return 16;
+
+        case VK_FORMAT_EAC_R11_UNORM_BLOCK:
+        case VK_FORMAT_EAC_R11_SNORM_BLOCK:
+            return 8;
+
+        case VK_FORMAT_EAC_R11G11_UNORM_BLOCK:
+        case VK_FORMAT_EAC_R11G11_SNORM_BLOCK:
+            return 16;
+
+        case VK_FORMAT_ASTC_4x4_UNORM_BLOCK:
+        case VK_FORMAT_ASTC_4x4_SRGB_BLOCK:
+        case VK_FORMAT_ASTC_5x4_UNORM_BLOCK:
+        case VK_FORMAT_ASTC_5x4_SRGB_BLOCK:
+        case VK_FORMAT_ASTC_5x5_UNORM_BLOCK:
+        case VK_FORMAT_ASTC_5x5_SRGB_BLOCK:
+        case VK_FORMAT_ASTC_6x5_UNORM_BLOCK:
+        case VK_FORMAT_ASTC_6x5_SRGB_BLOCK:
+        case VK_FORMAT_ASTC_6x6_UNORM_BLOCK:
+        case VK_FORMAT_ASTC_6x6_SRGB_BLOCK:
+        case VK_FORMAT_ASTC_8x5_UNORM_BLOCK:
+        case VK_FORMAT_ASTC_8x5_SRGB_BLOCK:
+        case VK_FORMAT_ASTC_8x6_UNORM_BLOCK:
+        case VK_FORMAT_ASTC_8x6_SRGB_BLOCK:
+        case VK_FORMAT_ASTC_8x8_UNORM_BLOCK:
+        case VK_FORMAT_ASTC_8x8_SRGB_BLOCK:
+        case VK_FORMAT_ASTC_10x5_UNORM_BLOCK:
+        case VK_FORMAT_ASTC_10x5_SRGB_BLOCK:
+        case VK_FORMAT_ASTC_10x6_UNORM_BLOCK:
+        case VK_FORMAT_ASTC_10x6_SRGB_BLOCK:
+        case VK_FORMAT_ASTC_10x8_UNORM_BLOCK:
+        case VK_FORMAT_ASTC_10x8_SRGB_BLOCK:
+        case VK_FORMAT_ASTC_10x10_UNORM_BLOCK:
+        case VK_FORMAT_ASTC_10x10_SRGB_BLOCK:
+        case VK_FORMAT_ASTC_12x10_UNORM_BLOCK:
+        case VK_FORMAT_ASTC_12x10_SRGB_BLOCK:
+        case VK_FORMAT_ASTC_12x12_UNORM_BLOCK:
+        case VK_FORMAT_ASTC_12x12_SRGB_BLOCK:
+            return 16;
+
+        case VK_FORMAT_PVRTC1_2BPP_UNORM_BLOCK_IMG:
+        case VK_FORMAT_PVRTC1_2BPP_SRGB_BLOCK_IMG:
+            return 8;
+        case VK_FORMAT_PVRTC1_4BPP_UNORM_BLOCK_IMG:
+        case VK_FORMAT_PVRTC1_4BPP_SRGB_BLOCK_IMG:
+            return 8;
+        case VK_FORMAT_PVRTC2_2BPP_UNORM_BLOCK_IMG:
+        case VK_FORMAT_PVRTC2_2BPP_SRGB_BLOCK_IMG:
+            return 8;
+        case VK_FORMAT_PVRTC2_4BPP_UNORM_BLOCK_IMG:
+        case VK_FORMAT_PVRTC2_4BPP_SRGB_BLOCK_IMG:
+            return 8;
+
+        case VK_FORMAT_G8B8G8R8_422_UNORM:
+        case VK_FORMAT_B8G8R8G8_422_UNORM:
+        case VK_FORMAT_G8_B8_R8_3PLANE_420_UNORM:
+        case VK_FORMAT_G8_B8R8_2PLANE_420_UNORM:
+        case VK_FORMAT_G8_B8_R8_3PLANE_422_UNORM:
+        case VK_FORMAT_G8_B8R8_2PLANE_422_UNORM:
+        case VK_FORMAT_G8_B8_R8_3PLANE_444_UNORM:
+        case VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_420_UNORM_3PACK16:
+        case VK_FORMAT_G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16:
+        case VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_422_UNORM_3PACK16:
+        case VK_FORMAT_G10X6_B10X6R10X6_2PLANE_422_UNORM_3PACK16:
+        case VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_444_UNORM_3PACK16:
+        case VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_420_UNORM_3PACK16:
+        case VK_FORMAT_G12X4_B12X4R12X4_2PLANE_420_UNORM_3PACK16:
+        case VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_422_UNORM_3PACK16:
+        case VK_FORMAT_G12X4_B12X4R12X4_2PLANE_422_UNORM_3PACK16:
+        case VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_444_UNORM_3PACK16:
+        case VK_FORMAT_G16B16G16R16_422_UNORM:
+        case VK_FORMAT_B16G16R16G16_422_UNORM:
+        case VK_FORMAT_G16_B16_R16_3PLANE_420_UNORM:
+        case VK_FORMAT_G16_B16R16_2PLANE_420_UNORM:
+        case VK_FORMAT_G16_B16_R16_3PLANE_422_UNORM:
+        case VK_FORMAT_G16_B16R16_2PLANE_422_UNORM:
+        case VK_FORMAT_G16_B16_R16_3PLANE_444_UNORM:
+            return 0;
+
+        default:
+            hg_warn("Unrecognized Vulkan format value\n");
+            return 0;
+    }
 }
 
 #define HG_MAKE_VULKAN_FUNC(name) PFN_##name name
@@ -1740,408 +2167,6 @@ void hg_vk_load_device(VkDevice device) {
 
 #undef HG_LOAD_VULKAN_DEVICE_FUNC
 
-const char *hg_vk_result_string(VkResult result) {
-    switch (result) {
-        case VK_SUCCESS:
-            return "VK_SUCCESS";
-        case VK_NOT_READY:
-            return "VK_NOT_READY";
-        case VK_TIMEOUT:
-            return "VK_TIMEOUT";
-        case VK_EVENT_SET:
-            return "VK_EVENT_SET";
-        case VK_EVENT_RESET:
-            return "VK_EVENT_RESET";
-        case VK_INCOMPLETE:
-            return "VK_INCOMPLETE";
-        case VK_ERROR_OUT_OF_HOST_MEMORY:
-            return "VK_ERROR_OUT_OF_HOST_MEMORY";
-        case VK_ERROR_OUT_OF_DEVICE_MEMORY:
-            return "VK_ERROR_OUT_OF_DEVICE_MEMORY";
-        case VK_ERROR_INITIALIZATION_FAILED:
-            return "VK_ERROR_INITIALIZATION_FAILED";
-        case VK_ERROR_DEVICE_LOST:
-            return "VK_ERROR_DEVICE_LOST";
-        case VK_ERROR_MEMORY_MAP_FAILED:
-            return "VK_ERROR_MEMORY_MAP_FAILED";
-        case VK_ERROR_LAYER_NOT_PRESENT:
-            return "VK_ERROR_LAYER_NOT_PRESENT";
-        case VK_ERROR_EXTENSION_NOT_PRESENT:
-            return "VK_ERROR_EXTENSION_NOT_PRESENT";
-        case VK_ERROR_FEATURE_NOT_PRESENT:
-            return "VK_ERROR_FEATURE_NOT_PRESENT";
-        case VK_ERROR_INCOMPATIBLE_DRIVER:
-            return "VK_ERROR_INCOMPATIBLE_DRIVER";
-        case VK_ERROR_TOO_MANY_OBJECTS:
-            return "VK_ERROR_TOO_MANY_OBJECTS";
-        case VK_ERROR_FORMAT_NOT_SUPPORTED:
-            return "VK_ERROR_FORMAT_NOT_SUPPORTED";
-        case VK_ERROR_FRAGMENTED_POOL:
-            return "VK_ERROR_FRAGMENTED_POOL";
-        case VK_ERROR_UNKNOWN:
-            return "VK_ERROR_UNKNOWN";
-        case VK_ERROR_VALIDATION_FAILED:
-            return "VK_ERROR_VALIDATION_FAILED";
-        case VK_ERROR_OUT_OF_POOL_MEMORY:
-            return "VK_ERROR_OUT_OF_POOL_MEMORY";
-        case VK_ERROR_INVALID_EXTERNAL_HANDLE:
-            return "VK_ERROR_INVALID_EXTERNAL_HANDLE";
-        case VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS:
-            return "VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS";
-        case VK_ERROR_FRAGMENTATION:
-            return "VK_ERROR_FRAGMENTATION";
-        case VK_PIPELINE_COMPILE_REQUIRED:
-            return "VK_PIPELINE_COMPILE_REQUIRED";
-        case VK_ERROR_NOT_PERMITTED:
-            return "VK_ERROR_NOT_PERMITTED";
-        case VK_ERROR_SURFACE_LOST_KHR:
-            return "VK_ERROR_SURFACE_LOST_KHR";
-        case VK_ERROR_NATIVE_WINDOW_IN_USE_KHR:
-            return "VK_ERROR_NATIVE_WINDOW_IN_USE_KHR";
-        case VK_SUBOPTIMAL_KHR:
-            return "VK_SUBOPTIMAL_KHR";
-        case VK_ERROR_OUT_OF_DATE_KHR:
-            return "VK_ERROR_OUT_OF_DATE_KHR";
-        case VK_ERROR_INCOMPATIBLE_DISPLAY_KHR:
-            return "VK_ERROR_INCOMPATIBLE_DISPLAY_KHR";
-        case VK_ERROR_INVALID_SHADER_NV:
-            return "VK_ERROR_INVALID_SHADER_NV";
-        case VK_ERROR_IMAGE_USAGE_NOT_SUPPORTED_KHR:
-            return "VK_ERROR_IMAGE_USAGE_NOT_SUPPORTED_KHR";
-        case VK_ERROR_VIDEO_PICTURE_LAYOUT_NOT_SUPPORTED_KHR:
-            return "VK_ERROR_VIDEO_PICTURE_LAYOUT_NOT_SUPPORTED_KHR";
-        case VK_ERROR_VIDEO_PROFILE_OPERATION_NOT_SUPPORTED_KHR:
-            return "VK_ERROR_VIDEO_PROFILE_OPERATION_NOT_SUPPORTED_KHR";
-        case VK_ERROR_VIDEO_PROFILE_FORMAT_NOT_SUPPORTED_KHR:
-            return "VK_ERROR_VIDEO_PROFILE_FORMAT_NOT_SUPPORTED_KHR";
-        case VK_ERROR_VIDEO_PROFILE_CODEC_NOT_SUPPORTED_KHR:
-            return "VK_ERROR_VIDEO_PROFILE_CODEC_NOT_SUPPORTED_KHR";
-        case VK_ERROR_VIDEO_STD_VERSION_NOT_SUPPORTED_KHR:
-            return "VK_ERROR_VIDEO_STD_VERSION_NOT_SUPPORTED_KHR";
-        case VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT:
-            return "VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT";
-        case VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT:
-            return "VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT";
-        case VK_THREAD_IDLE_KHR:
-            return "VK_THREAD_IDLE_KHR";
-        case VK_THREAD_DONE_KHR:
-            return "VK_THREAD_DONE_KHR";
-        case VK_OPERATION_DEFERRED_KHR:
-            return "VK_OPERATION_DEFERRED_KHR";
-        case VK_OPERATION_NOT_DEFERRED_KHR:
-            return "VK_OPERATION_NOT_DEFERRED_KHR";
-        case VK_ERROR_INVALID_VIDEO_STD_PARAMETERS_KHR:
-            return "VK_ERROR_INVALID_VIDEO_STD_PARAMETERS_KHR";
-        case VK_ERROR_COMPRESSION_EXHAUSTED_EXT:
-            return "VK_ERROR_COMPRESSION_EXHAUSTED_EXT";
-        case VK_INCOMPATIBLE_SHADER_BINARY_EXT:
-            return "VK_INCOMPATIBLE_SHADER_BINARY_EXT";
-        case VK_PIPELINE_BINARY_MISSING_KHR:
-            return "VK_PIPELINE_BINARY_MISSING_KHR";
-        case VK_ERROR_NOT_ENOUGH_SPACE_KHR:
-            return "VK_ERROR_NOT_ENOUGH_SPACE_KHR";
-        case VK_RESULT_MAX_ENUM:
-            return "VK_RESULT_MAX_ENUM";
-    }
-    return "Unrecognized Vulkan result";
-}
-
-u32 hg_vk_format_to_size(VkFormat format) {
-    switch (format) {
-        case VK_FORMAT_UNDEFINED:
-            return 0;
-
-        case VK_FORMAT_R8_UNORM:
-        case VK_FORMAT_R8_SNORM:
-        case VK_FORMAT_R8_USCALED:
-        case VK_FORMAT_R8_SSCALED:
-        case VK_FORMAT_R8_UINT:
-        case VK_FORMAT_R8_SINT:
-        case VK_FORMAT_R8_SRGB:
-        case VK_FORMAT_A8_UNORM:
-        case VK_FORMAT_R8_BOOL_ARM:
-            return 1;
-
-        case VK_FORMAT_R4G4_UNORM_PACK8: return 1;
-        case VK_FORMAT_R4G4B4A4_UNORM_PACK16:
-        case VK_FORMAT_B4G4R4A4_UNORM_PACK16:
-        case VK_FORMAT_R5G6B5_UNORM_PACK16:
-        case VK_FORMAT_B5G6R5_UNORM_PACK16:
-        case VK_FORMAT_R5G5B5A1_UNORM_PACK16:
-        case VK_FORMAT_B5G5R5A1_UNORM_PACK16:
-        case VK_FORMAT_A1R5G5B5_UNORM_PACK16:
-        case VK_FORMAT_A4R4G4B4_UNORM_PACK16:
-        case VK_FORMAT_A4B4G4R4_UNORM_PACK16:
-        case VK_FORMAT_A1B5G5R5_UNORM_PACK16:
-            return 2;
-
-        case VK_FORMAT_R16_UNORM:
-        case VK_FORMAT_R16_SNORM:
-        case VK_FORMAT_R16_USCALED:
-        case VK_FORMAT_R16_SSCALED:
-        case VK_FORMAT_R16_UINT:
-        case VK_FORMAT_R16_SINT:
-        case VK_FORMAT_R16_SFLOAT:
-            return 2;
-
-        case VK_FORMAT_R8G8_UNORM:
-        case VK_FORMAT_R8G8_SNORM:
-        case VK_FORMAT_R8G8_USCALED:
-        case VK_FORMAT_R8G8_SSCALED:
-        case VK_FORMAT_R8G8_UINT:
-        case VK_FORMAT_R8G8_SINT:
-        case VK_FORMAT_R8G8_SRGB:
-            return 2;
-
-        case VK_FORMAT_R8G8B8_UNORM:
-        case VK_FORMAT_R8G8B8_SNORM:
-        case VK_FORMAT_R8G8B8_USCALED:
-        case VK_FORMAT_R8G8B8_SSCALED:
-        case VK_FORMAT_R8G8B8_UINT:
-        case VK_FORMAT_R8G8B8_SINT:
-        case VK_FORMAT_R8G8B8_SRGB:
-        case VK_FORMAT_B8G8R8_UNORM:
-        case VK_FORMAT_B8G8R8_SNORM:
-        case VK_FORMAT_B8G8R8_USCALED:
-        case VK_FORMAT_B8G8R8_SSCALED:
-        case VK_FORMAT_B8G8R8_UINT:
-        case VK_FORMAT_B8G8R8_SINT:
-        case VK_FORMAT_B8G8R8_SRGB:
-            return 3;
-
-        case VK_FORMAT_R8G8B8A8_UNORM:
-        case VK_FORMAT_R8G8B8A8_SNORM:
-        case VK_FORMAT_R8G8B8A8_USCALED:
-        case VK_FORMAT_R8G8B8A8_SSCALED:
-        case VK_FORMAT_R8G8B8A8_UINT:
-        case VK_FORMAT_R8G8B8A8_SINT:
-        case VK_FORMAT_R8G8B8A8_SRGB:
-        case VK_FORMAT_B8G8R8A8_UNORM:
-        case VK_FORMAT_B8G8R8A8_SNORM:
-        case VK_FORMAT_B8G8R8A8_USCALED:
-        case VK_FORMAT_B8G8R8A8_SSCALED:
-        case VK_FORMAT_B8G8R8A8_UINT:
-        case VK_FORMAT_B8G8R8A8_SINT:
-        case VK_FORMAT_B8G8R8A8_SRGB:
-        case VK_FORMAT_A8B8G8R8_UNORM_PACK32:
-        case VK_FORMAT_A8B8G8R8_SNORM_PACK32:
-        case VK_FORMAT_A8B8G8R8_USCALED_PACK32:
-        case VK_FORMAT_A8B8G8R8_SSCALED_PACK32:
-        case VK_FORMAT_A8B8G8R8_UINT_PACK32:
-        case VK_FORMAT_A8B8G8R8_SINT_PACK32:
-        case VK_FORMAT_A8B8G8R8_SRGB_PACK32:
-        case VK_FORMAT_B10G11R11_UFLOAT_PACK32:
-        case VK_FORMAT_E5B9G9R9_UFLOAT_PACK32:
-            return 4;
-
-        case VK_FORMAT_A2R10G10B10_UNORM_PACK32:
-        case VK_FORMAT_A2R10G10B10_SNORM_PACK32:
-        case VK_FORMAT_A2R10G10B10_USCALED_PACK32:
-        case VK_FORMAT_A2R10G10B10_SSCALED_PACK32:
-        case VK_FORMAT_A2R10G10B10_UINT_PACK32:
-        case VK_FORMAT_A2R10G10B10_SINT_PACK32:
-        case VK_FORMAT_A2B10G10R10_UNORM_PACK32:
-        case VK_FORMAT_A2B10G10R10_SNORM_PACK32:
-        case VK_FORMAT_A2B10G10R10_USCALED_PACK32:
-        case VK_FORMAT_A2B10G10R10_SSCALED_PACK32:
-        case VK_FORMAT_A2B10G10R10_UINT_PACK32:
-        case VK_FORMAT_A2B10G10R10_SINT_PACK32:
-            return 4;
-
-        case VK_FORMAT_R16G16_UNORM:
-        case VK_FORMAT_R16G16_SNORM:
-        case VK_FORMAT_R16G16_USCALED:
-        case VK_FORMAT_R16G16_SSCALED:
-        case VK_FORMAT_R16G16_UINT:
-        case VK_FORMAT_R16G16_SINT:
-        case VK_FORMAT_R16G16_SFLOAT:
-            return 4;
-
-        case VK_FORMAT_R16G16B16_UNORM:
-        case VK_FORMAT_R16G16B16_SNORM:
-        case VK_FORMAT_R16G16B16_USCALED:
-        case VK_FORMAT_R16G16B16_SSCALED:
-        case VK_FORMAT_R16G16B16_UINT:
-        case VK_FORMAT_R16G16B16_SINT:
-        case VK_FORMAT_R16G16B16_SFLOAT:
-            return 6;
-
-        case VK_FORMAT_R16G16B16A16_UNORM:
-        case VK_FORMAT_R16G16B16A16_SNORM:
-        case VK_FORMAT_R16G16B16A16_USCALED:
-        case VK_FORMAT_R16G16B16A16_SSCALED:
-        case VK_FORMAT_R16G16B16A16_UINT:
-        case VK_FORMAT_R16G16B16A16_SINT:
-        case VK_FORMAT_R16G16B16A16_SFLOAT:
-            return 8;
-
-        case VK_FORMAT_R32_UINT:
-        case VK_FORMAT_R32_SINT:
-        case VK_FORMAT_R32_SFLOAT:
-            return 4;
-
-        case VK_FORMAT_R32G32_UINT:
-        case VK_FORMAT_R32G32_SINT:
-        case VK_FORMAT_R32G32_SFLOAT:
-            return 8;
-
-        case VK_FORMAT_R32G32B32_UINT:
-        case VK_FORMAT_R32G32B32_SINT:
-        case VK_FORMAT_R32G32B32_SFLOAT:
-            return 12;
-
-        case VK_FORMAT_R32G32B32A32_UINT:
-        case VK_FORMAT_R32G32B32A32_SINT:
-        case VK_FORMAT_R32G32B32A32_SFLOAT:
-            return 16;
-
-        case VK_FORMAT_R64_UINT:
-        case VK_FORMAT_R64_SINT:
-        case VK_FORMAT_R64_SFLOAT:
-            return 8;
-
-        case VK_FORMAT_R64G64_UINT:
-        case VK_FORMAT_R64G64_SINT:
-        case VK_FORMAT_R64G64_SFLOAT:
-            return 16;
-
-        case VK_FORMAT_R64G64B64_UINT:
-        case VK_FORMAT_R64G64B64_SINT:
-        case VK_FORMAT_R64G64B64_SFLOAT:
-            return 24;
-
-        case VK_FORMAT_R64G64B64A64_UINT:
-        case VK_FORMAT_R64G64B64A64_SINT:
-        case VK_FORMAT_R64G64B64A64_SFLOAT:
-            return 32;
-
-        case VK_FORMAT_D16_UNORM: return 2;
-        case VK_FORMAT_X8_D24_UNORM_PACK32: return 4;
-        case VK_FORMAT_D32_SFLOAT: return 4;
-        case VK_FORMAT_S8_UINT: return 1;
-        case VK_FORMAT_D16_UNORM_S8_UINT: return 3;
-        case VK_FORMAT_D24_UNORM_S8_UINT: return 4;
-        case VK_FORMAT_D32_SFLOAT_S8_UINT: return 5;
-
-        case VK_FORMAT_BC1_RGB_UNORM_BLOCK:
-        case VK_FORMAT_BC1_RGB_SRGB_BLOCK:
-        case VK_FORMAT_BC1_RGBA_UNORM_BLOCK:
-        case VK_FORMAT_BC1_RGBA_SRGB_BLOCK:
-            return 8;
-
-        case VK_FORMAT_BC2_UNORM_BLOCK:
-        case VK_FORMAT_BC2_SRGB_BLOCK:
-        case VK_FORMAT_BC3_UNORM_BLOCK:
-        case VK_FORMAT_BC3_SRGB_BLOCK:
-            return 16;
-
-        case VK_FORMAT_BC4_UNORM_BLOCK:
-        case VK_FORMAT_BC4_SNORM_BLOCK:
-        case VK_FORMAT_BC5_UNORM_BLOCK:
-        case VK_FORMAT_BC5_SNORM_BLOCK:
-            return 16;
-
-        case VK_FORMAT_BC6H_UFLOAT_BLOCK:
-        case VK_FORMAT_BC6H_SFLOAT_BLOCK:
-        case VK_FORMAT_BC7_UNORM_BLOCK:
-        case VK_FORMAT_BC7_SRGB_BLOCK:
-            return 16;
-
-        case VK_FORMAT_ETC2_R8G8B8_UNORM_BLOCK:
-        case VK_FORMAT_ETC2_R8G8B8_SRGB_BLOCK:
-            return 8;
-
-        case VK_FORMAT_ETC2_R8G8B8A1_UNORM_BLOCK:
-        case VK_FORMAT_ETC2_R8G8B8A1_SRGB_BLOCK:
-            return 8;
-
-        case VK_FORMAT_ETC2_R8G8B8A8_UNORM_BLOCK:
-        case VK_FORMAT_ETC2_R8G8B8A8_SRGB_BLOCK:
-            return 16;
-
-        case VK_FORMAT_EAC_R11_UNORM_BLOCK:
-        case VK_FORMAT_EAC_R11_SNORM_BLOCK:
-            return 8;
-
-        case VK_FORMAT_EAC_R11G11_UNORM_BLOCK:
-        case VK_FORMAT_EAC_R11G11_SNORM_BLOCK:
-            return 16;
-
-        case VK_FORMAT_ASTC_4x4_UNORM_BLOCK:
-        case VK_FORMAT_ASTC_4x4_SRGB_BLOCK:
-        case VK_FORMAT_ASTC_5x4_UNORM_BLOCK:
-        case VK_FORMAT_ASTC_5x4_SRGB_BLOCK:
-        case VK_FORMAT_ASTC_5x5_UNORM_BLOCK:
-        case VK_FORMAT_ASTC_5x5_SRGB_BLOCK:
-        case VK_FORMAT_ASTC_6x5_UNORM_BLOCK:
-        case VK_FORMAT_ASTC_6x5_SRGB_BLOCK:
-        case VK_FORMAT_ASTC_6x6_UNORM_BLOCK:
-        case VK_FORMAT_ASTC_6x6_SRGB_BLOCK:
-        case VK_FORMAT_ASTC_8x5_UNORM_BLOCK:
-        case VK_FORMAT_ASTC_8x5_SRGB_BLOCK:
-        case VK_FORMAT_ASTC_8x6_UNORM_BLOCK:
-        case VK_FORMAT_ASTC_8x6_SRGB_BLOCK:
-        case VK_FORMAT_ASTC_8x8_UNORM_BLOCK:
-        case VK_FORMAT_ASTC_8x8_SRGB_BLOCK:
-        case VK_FORMAT_ASTC_10x5_UNORM_BLOCK:
-        case VK_FORMAT_ASTC_10x5_SRGB_BLOCK:
-        case VK_FORMAT_ASTC_10x6_UNORM_BLOCK:
-        case VK_FORMAT_ASTC_10x6_SRGB_BLOCK:
-        case VK_FORMAT_ASTC_10x8_UNORM_BLOCK:
-        case VK_FORMAT_ASTC_10x8_SRGB_BLOCK:
-        case VK_FORMAT_ASTC_10x10_UNORM_BLOCK:
-        case VK_FORMAT_ASTC_10x10_SRGB_BLOCK:
-        case VK_FORMAT_ASTC_12x10_UNORM_BLOCK:
-        case VK_FORMAT_ASTC_12x10_SRGB_BLOCK:
-        case VK_FORMAT_ASTC_12x12_UNORM_BLOCK:
-        case VK_FORMAT_ASTC_12x12_SRGB_BLOCK:
-            return 16;
-
-        case VK_FORMAT_PVRTC1_2BPP_UNORM_BLOCK_IMG:
-        case VK_FORMAT_PVRTC1_2BPP_SRGB_BLOCK_IMG:
-            return 8;
-        case VK_FORMAT_PVRTC1_4BPP_UNORM_BLOCK_IMG:
-        case VK_FORMAT_PVRTC1_4BPP_SRGB_BLOCK_IMG:
-            return 8;
-        case VK_FORMAT_PVRTC2_2BPP_UNORM_BLOCK_IMG:
-        case VK_FORMAT_PVRTC2_2BPP_SRGB_BLOCK_IMG:
-            return 8;
-        case VK_FORMAT_PVRTC2_4BPP_UNORM_BLOCK_IMG:
-        case VK_FORMAT_PVRTC2_4BPP_SRGB_BLOCK_IMG:
-            return 8;
-
-        case VK_FORMAT_G8B8G8R8_422_UNORM:
-        case VK_FORMAT_B8G8R8G8_422_UNORM:
-        case VK_FORMAT_G8_B8_R8_3PLANE_420_UNORM:
-        case VK_FORMAT_G8_B8R8_2PLANE_420_UNORM:
-        case VK_FORMAT_G8_B8_R8_3PLANE_422_UNORM:
-        case VK_FORMAT_G8_B8R8_2PLANE_422_UNORM:
-        case VK_FORMAT_G8_B8_R8_3PLANE_444_UNORM:
-        case VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_420_UNORM_3PACK16:
-        case VK_FORMAT_G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16:
-        case VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_422_UNORM_3PACK16:
-        case VK_FORMAT_G10X6_B10X6R10X6_2PLANE_422_UNORM_3PACK16:
-        case VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_444_UNORM_3PACK16:
-        case VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_420_UNORM_3PACK16:
-        case VK_FORMAT_G12X4_B12X4R12X4_2PLANE_420_UNORM_3PACK16:
-        case VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_422_UNORM_3PACK16:
-        case VK_FORMAT_G12X4_B12X4R12X4_2PLANE_422_UNORM_3PACK16:
-        case VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_444_UNORM_3PACK16:
-        case VK_FORMAT_G16B16G16R16_422_UNORM:
-        case VK_FORMAT_B16G16R16G16_422_UNORM:
-        case VK_FORMAT_G16_B16_R16_3PLANE_420_UNORM:
-        case VK_FORMAT_G16_B16R16_2PLANE_420_UNORM:
-        case VK_FORMAT_G16_B16_R16_3PLANE_422_UNORM:
-        case VK_FORMAT_G16_B16R16_2PLANE_422_UNORM:
-        case VK_FORMAT_G16_B16_R16_3PLANE_444_UNORM:
-            return 0;
-
-        default:
-            hg_warn("Unrecognized Vulkan format value\n");
-            return 0;
-    }
-}
-
 static VkBool32 hg_internal_debug_callback(
     const VkDebugUtilsMessageSeverityFlagBitsEXT severity,
     const VkDebugUtilsMessageTypeFlagsEXT type,
@@ -2168,7 +2193,7 @@ static VkBool32 hg_internal_debug_callback(
 static const VkDebugUtilsMessengerCreateInfoEXT hg_internal_debug_utils_messenger_info{
     VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
     nullptr, 0,
-    VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+    // VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
     VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
     VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
     VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
@@ -2177,10 +2202,10 @@ static const VkDebugUtilsMessengerCreateInfoEXT hg_internal_debug_utils_messenge
     hg_internal_debug_callback, nullptr,
 };
 
-VkInstance hg_vk_create_instance(const char *app_name) {
+VkInstance hg_vk_create_instance() {
     VkApplicationInfo app_info{};
     app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    app_info.pApplicationName = app_name != nullptr ? app_name : "Hurdy Gurdy Application",
+    app_info.pApplicationName = "Hurdy Gurdy Application",
     app_info.applicationVersion = 0;
     app_info.pEngineName = "Hurdy Gurdy Engine";
     app_info.engineVersion = 0;
@@ -2223,16 +2248,15 @@ VkInstance hg_vk_create_instance(const char *app_name) {
     if (instance == nullptr)
         hg_error("Failed to create Vulkan instance: %s\n", hg_vk_result_string(result));
 
-    hg_vk_load_instance(instance);
     return instance;
 }
 
-VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger(VkInstance instance) {
-    hg_assert(instance != nullptr);
+VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger() {
+    hg_assert(hg_vk_instance != nullptr);
 
     VkDebugUtilsMessengerEXT messenger = nullptr;
     VkResult result = vkCreateDebugUtilsMessengerEXT(
-        instance, &hg_internal_debug_utils_messenger_info, nullptr, &messenger);
+        hg_vk_instance, &hg_internal_debug_utils_messenger_info, nullptr, &messenger);
     if (messenger == nullptr)
         hg_error("Failed to create Vulkan debug messenger: %s\n", hg_vk_result_string(result));
 
@@ -2259,15 +2283,15 @@ static const char *const hg_internal_vk_device_extensions[]{
     "VK_KHR_swapchain",
 };
 
-static VkPhysicalDevice hg_internal_find_single_queue_gpu(VkInstance instance, u32 *queue_family) {
-    hg_assert(instance != nullptr);
+VkPhysicalDevice hg_vk_find_single_queue_physical_device() {
+    hg_assert(hg_vk_instance != nullptr);
 
     HgStdAllocator mem; // replace allocator : TODO
 
     u32 gpu_count;
-    vkEnumeratePhysicalDevices(instance, &gpu_count, nullptr);
+    vkEnumeratePhysicalDevices(hg_vk_instance, &gpu_count, nullptr);
     VkPhysicalDevice *gpus = (VkPhysicalDevice *)alloca(gpu_count * sizeof(*gpus));
-    vkEnumeratePhysicalDevices(instance, &gpu_count, gpus);
+    vkEnumeratePhysicalDevices(hg_vk_instance, &gpu_count, gpus);
 
     HgSpan<VkExtensionProperties> ext_props{};
     hg_defer(mem.free(ext_props));
@@ -2293,11 +2317,13 @@ next_ext:
             continue;
         }
 
-        family = hg_vk_find_queue_family(gpu, VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT);
+        family = hg_vk_find_queue_family(gpu,
+            VK_QUEUE_GRAPHICS_BIT |
+            VK_QUEUE_TRANSFER_BIT |
+            VK_QUEUE_COMPUTE_BIT);
         if (!family.has_value())
             goto next_gpu;
 
-        *queue_family = *family;
         return gpu;
 
 next_gpu:
@@ -2308,8 +2334,9 @@ next_gpu:
     return nullptr;
 }
 
-static VkDevice hg_internal_create_single_queue_device(VkPhysicalDevice gpu, u32 queue_family) {
-    hg_assert(gpu != nullptr);
+VkDevice hg_vk_create_single_queue_device() {
+    hg_assert(hg_vk_physical_device != nullptr);
+    hg_assert(hg_vk_queue_family != (u32)-1);
 
     VkPhysicalDeviceDynamicRenderingFeatures dynamic_rendering_feature{};
     dynamic_rendering_feature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
@@ -2324,7 +2351,7 @@ static VkDevice hg_internal_create_single_queue_device(VkPhysicalDevice gpu, u32
 
     VkDeviceQueueCreateInfo queue_info{};
     queue_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    queue_info.queueFamilyIndex = queue_family;
+    queue_info.queueFamilyIndex = hg_vk_queue_family;
     queue_info.queueCount = 1;
     float queue_priority = 1.0f;
     queue_info.pQueuePriorities = &queue_priority;
@@ -2339,23 +2366,26 @@ static VkDevice hg_internal_create_single_queue_device(VkPhysicalDevice gpu, u32
     device_info.pEnabledFeatures = &features;
 
     VkDevice device = nullptr;
-    VkResult result = vkCreateDevice(gpu, &device_info, nullptr, &device);
+    VkResult result = vkCreateDevice(hg_vk_physical_device, &device_info, nullptr, &device);
 
     if (device == nullptr)
         hg_error("Could not create Vulkan device: %s\n", hg_vk_result_string(result));
     return device;
 }
 
-HgSingleQueueDeviceData hg_vk_create_single_queue_device(VkInstance instance) {
-    hg_assert(instance != nullptr);
+VmaAllocator hg_vk_create_vma_allocator() {
+    VmaAllocatorCreateInfo allocator_info{};
+    allocator_info.physicalDevice = hg_vk_physical_device;
+    allocator_info.device = hg_vk_device;
+    allocator_info.instance = hg_vk_instance;
+    allocator_info.vulkanApiVersion = VK_API_VERSION_1_3;
 
-    HgSingleQueueDeviceData device{};
-    device.gpu = hg_internal_find_single_queue_gpu(instance, &device.queue_family);
-    device.handle = hg_internal_create_single_queue_device(device.gpu, device.queue_family);
-    hg_vk_load_device(device.handle);
-    vkGetDeviceQueue(device.handle, device.queue_family, 0, &device.queue);
+    VmaAllocator vma = nullptr;
+    VkResult result = vmaCreateAllocator(&allocator_info, &vma);
 
-    return device;
+    if (vma == nullptr)
+        hg_error("Could note create Vulkan memory allocator: %s\n", hg_vk_result_string(result));
+    return vma;
 }
 
 VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineConfig& config) {
@@ -2524,14 +2554,14 @@ VkPipeline hg_vk_create_compute_pipeline(VkDevice device, const HgVkPipelineConf
     return pipeline;
 }
 
-static VkFormat hg_internal_vk_find_swapchain_format(VkPhysicalDevice gpu, VkSurfaceKHR surface) {
-    hg_assert(gpu != nullptr);
+static VkFormat hg_internal_vk_find_swapchain_format(VkSurfaceKHR surface) {
+    hg_assert(hg_vk_physical_device != nullptr);
     hg_assert(surface != nullptr);
 
     u32 format_count = 0;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &format_count, nullptr);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(hg_vk_physical_device, surface, &format_count, nullptr);
     VkSurfaceFormatKHR *formats = (VkSurfaceFormatKHR *)alloca(format_count * sizeof(*formats));
-    vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &format_count, formats);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(hg_vk_physical_device, surface, &format_count, formats);
 
     for (usize i = 0; i < format_count; ++i) {
         if (formats[i].format == VK_FORMAT_R8G8B8A8_SRGB)
@@ -2543,20 +2573,19 @@ static VkFormat hg_internal_vk_find_swapchain_format(VkPhysicalDevice gpu, VkSur
 }
 
 static VkPresentModeKHR hg_internal_vk_find_swapchain_present_mode(
-    VkPhysicalDevice gpu,
     VkSurfaceKHR surface,
     VkPresentModeKHR desired_mode
 ) {
-    hg_assert(gpu != nullptr);
+    hg_assert(hg_vk_physical_device != nullptr);
     hg_assert(surface != nullptr);
 
     if (desired_mode == VK_PRESENT_MODE_FIFO_KHR)
         return desired_mode;
 
     u32 mode_count = 0;
-    vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &mode_count, nullptr);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(hg_vk_physical_device, surface, &mode_count, nullptr);
     VkPresentModeKHR *present_modes = (VkPresentModeKHR *)alloca(mode_count * sizeof(*present_modes));
-    vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface, &mode_count, present_modes);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(hg_vk_physical_device, surface, &mode_count, present_modes);
 
     for (usize i = 0; i < mode_count; ++i) {
         if (present_modes[i] == desired_mode)
@@ -2566,22 +2595,20 @@ static VkPresentModeKHR hg_internal_vk_find_swapchain_present_mode(
 }
 
 HgSwapchainData hg_vk_create_swapchain(
-    VkDevice device,
-    VkPhysicalDevice gpu,
     VkSwapchainKHR old_swapchain,
     VkSurfaceKHR surface,
     VkImageUsageFlags image_usage,
     VkPresentModeKHR desired_mode
 ) {
-    hg_assert(device != nullptr);
-    hg_assert(gpu != nullptr);
+    hg_assert(hg_vk_device != nullptr);
+    hg_assert(hg_vk_physical_device != nullptr);
     hg_assert(surface != nullptr);
     hg_assert(image_usage != 0);
 
     HgSwapchainData swapchain{};
 
     VkSurfaceCapabilitiesKHR surface_capabilities;
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &surface_capabilities);
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(hg_vk_physical_device, surface, &surface_capabilities);
 
     if (surface_capabilities.currentExtent.width == 0 ||
         surface_capabilities.currentExtent.height == 0 ||
@@ -2596,7 +2623,7 @@ HgSwapchainData hg_vk_create_swapchain(
 
     swapchain.width = surface_capabilities.currentExtent.width;
     swapchain.height = surface_capabilities.currentExtent.height;
-    swapchain.format = hg_internal_vk_find_swapchain_format(gpu, surface);
+    swapchain.format = hg_internal_vk_find_swapchain_format(surface);
 
     VkSwapchainCreateInfoKHR swapchain_info{};
     swapchain_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -2608,19 +2635,19 @@ HgSwapchainData hg_vk_create_swapchain(
     swapchain_info.imageUsage = image_usage;
     swapchain_info.preTransform = surface_capabilities.currentTransform;
     swapchain_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    swapchain_info.presentMode = hg_internal_vk_find_swapchain_present_mode(gpu, surface, desired_mode);
+    swapchain_info.presentMode = hg_internal_vk_find_swapchain_present_mode(surface, desired_mode);
     swapchain_info.clipped = VK_TRUE;
     swapchain_info.oldSwapchain = old_swapchain;
 
-    VkResult result = vkCreateSwapchainKHR(device, &swapchain_info, nullptr, &swapchain.handle);
+    VkResult result = vkCreateSwapchainKHR(hg_vk_device, &swapchain_info, nullptr, &swapchain.handle);
     if (swapchain.handle == nullptr)
         hg_error("Failed to create swapchain: %s\n", hg_vk_result_string(result));
 
     return swapchain;
 }
 
-HgSwapchainCommands HgSwapchainCommands::create(VkDevice device, VkSwapchainKHR swapchain, VkCommandPool cmd_pool) {
-    hg_assert(device != nullptr);
+HgSwapchainCommands HgSwapchainCommands::create(VkSwapchainKHR swapchain, VkCommandPool cmd_pool) {
+    hg_assert(hg_vk_device != nullptr);
     hg_assert(cmd_pool != nullptr);
     hg_assert(swapchain != nullptr);
 
@@ -2630,7 +2657,7 @@ HgSwapchainCommands HgSwapchainCommands::create(VkDevice device, VkSwapchainKHR 
     sync.cmd_pool = cmd_pool;
     sync.swapchain = swapchain;
 
-    vkGetSwapchainImagesKHR(device, swapchain, &sync.frame_count, nullptr);
+    vkGetSwapchainImagesKHR(hg_vk_device, swapchain, &sync.frame_count, nullptr);
 
     void *allocation = mem.alloc_fn(
         sync.frame_count * sizeof(*sync.cmds) +
@@ -2647,47 +2674,47 @@ HgSwapchainCommands HgSwapchainCommands::create(VkDevice device, VkSwapchainKHR 
     cmd_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     cmd_alloc_info.commandBufferCount = sync.frame_count;
 
-    vkAllocateCommandBuffers(device, &cmd_alloc_info, sync.cmds);
+    vkAllocateCommandBuffers(hg_vk_device, &cmd_alloc_info, sync.cmds);
 
     sync.frame_finished = (VkFence *)(sync.cmds + sync.frame_count);
     for (usize i = 0; i < sync.frame_count; ++i) {
         VkFenceCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
         info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-        vkCreateFence(device, &info, nullptr, &sync.frame_finished[i]);
+        vkCreateFence(hg_vk_device, &info, nullptr, &sync.frame_finished[i]);
     }
 
     sync.image_available = (VkSemaphore *)(sync.frame_finished + sync.frame_count);
     for (usize i = 0; i < sync.frame_count; ++i) {
         VkSemaphoreCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-        vkCreateSemaphore(device, &info, nullptr, &sync.image_available[i]);
+        vkCreateSemaphore(hg_vk_device, &info, nullptr, &sync.image_available[i]);
     }
 
     sync.ready_to_present = (VkSemaphore *)(sync.image_available + sync.frame_count);
     for (usize i = 0; i < sync.frame_count; ++i) {
         VkSemaphoreCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-        vkCreateSemaphore(device, &info, nullptr, &sync.ready_to_present[i]);
+        vkCreateSemaphore(hg_vk_device, &info, nullptr, &sync.ready_to_present[i]);
     }
 
     return sync;
 }
 
-void HgSwapchainCommands::destroy(VkDevice device) {
-    hg_assert(device != nullptr);
+void HgSwapchainCommands::destroy() {
+    hg_assert(hg_vk_device != nullptr);
 
     HgStdAllocator mem;
 
-    vkFreeCommandBuffers(device, cmd_pool, frame_count, cmds);
+    vkFreeCommandBuffers(hg_vk_device, cmd_pool, frame_count, cmds);
     for (usize i = 0; i < frame_count; ++i) {
-        vkDestroyFence(device, frame_finished[i], nullptr);
+        vkDestroyFence(hg_vk_device, frame_finished[i], nullptr);
     }
     for (usize i = 0; i < frame_count; ++i) {
-        vkDestroySemaphore(device, image_available[i], nullptr);
+        vkDestroySemaphore(hg_vk_device, image_available[i], nullptr);
     }
     for (usize i = 0; i < frame_count; ++i) {
-        vkDestroySemaphore(device, ready_to_present[i], nullptr);
+        vkDestroySemaphore(hg_vk_device, ready_to_present[i], nullptr);
     }
 
     mem.free_fn(
@@ -2701,16 +2728,16 @@ void HgSwapchainCommands::destroy(VkDevice device) {
     std::memset(this, 0, sizeof(*this));
 }
 
-VkCommandBuffer HgSwapchainCommands::acquire_and_record(VkDevice device) {
-    hg_assert(device != nullptr);
+VkCommandBuffer HgSwapchainCommands::acquire_and_record() {
+    hg_assert(hg_vk_device != nullptr);
 
     current_frame = (current_frame + 1) % frame_count;
 
-    vkWaitForFences(device, 1, &frame_finished[current_frame], VK_TRUE, UINT64_MAX);
-    vkResetFences(device, 1, &frame_finished[current_frame]);
+    vkWaitForFences(hg_vk_device, 1, &frame_finished[current_frame], VK_TRUE, UINT64_MAX);
+    vkResetFences(hg_vk_device, 1, &frame_finished[current_frame]);
 
     VkResult result = vkAcquireNextImageKHR(
-        device, swapchain, UINT64_MAX, image_available[current_frame], nullptr, &current_image);
+        hg_vk_device, swapchain, UINT64_MAX, image_available[current_frame], nullptr, &current_image);
     if (result == VK_ERROR_OUT_OF_DATE_KHR)
         return nullptr;
 
@@ -2756,16 +2783,15 @@ void HgSwapchainCommands::end_and_present(VkQueue queue) {
 }
 
 u32 hg_vk_find_memory_type_index(
-    VkPhysicalDevice gpu,
     u32 bitmask,
     VkMemoryPropertyFlags desired_flags,
     VkMemoryPropertyFlags undesired_flags
 ) {
-    hg_assert(gpu != nullptr);
+    hg_assert(hg_vk_physical_device != nullptr);
     hg_assert(bitmask != 0);
 
     VkPhysicalDeviceMemoryProperties mem_props;
-    vkGetPhysicalDeviceMemoryProperties(gpu, &mem_props);
+    vkGetPhysicalDeviceMemoryProperties(hg_vk_physical_device, &mem_props);
 
     for (u32 i = 0; i < mem_props.memoryTypeCount; ++i) {
         if ((bitmask & (1 << i)) == 0)
@@ -2794,16 +2820,14 @@ u32 hg_vk_find_memory_type_index(
 }
 
 void hg_vk_buffer_staging_write(
-    VkDevice device,
-    VmaAllocator allocator,
     VkQueue transfer_queue,
     VkCommandPool cmd_pool,
     VkBuffer dst,
     usize offset,
     HgSpan<const void> src
 ) {
-    hg_assert(device != nullptr);
-    hg_assert(allocator != nullptr);
+    hg_assert(hg_vk_device != nullptr);
+    hg_assert(hg_vk_vma != nullptr);
     hg_assert(cmd_pool != nullptr);
     hg_assert(transfer_queue != nullptr);
     hg_assert(dst != nullptr);
@@ -2820,9 +2844,9 @@ void hg_vk_buffer_staging_write(
 
     VkBuffer stage = nullptr;
     VmaAllocation stage_alloc = nullptr;
-    vmaCreateBuffer(allocator, &stage_info, &stage_alloc_info, &stage, &stage_alloc, nullptr);
-    vmaCopyMemoryToAllocation(allocator, src.data, stage_alloc, offset, src.count);
-    hg_defer(vmaDestroyBuffer(allocator, stage, stage_alloc));
+    vmaCreateBuffer(hg_vk_vma, &stage_info, &stage_alloc_info, &stage, &stage_alloc, nullptr);
+    vmaCopyMemoryToAllocation(hg_vk_vma, src.data, stage_alloc, offset, src.count);
+    hg_defer(vmaDestroyBuffer(hg_vk_vma, stage, stage_alloc));
 
     VkCommandBufferAllocateInfo cmd_info{};
     cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -2831,8 +2855,8 @@ void hg_vk_buffer_staging_write(
     cmd_info.commandBufferCount = 1;
 
     VkCommandBuffer cmd = nullptr;
-    vkAllocateCommandBuffers(device, &cmd_info, &cmd);
-    hg_defer(vkFreeCommandBuffers(device, cmd_pool, 1, &cmd));
+    vkAllocateCommandBuffers(hg_vk_device, &cmd_info, &cmd);
+    hg_defer(vkFreeCommandBuffers(hg_vk_device, cmd_pool, 1, &cmd));
 
     VkCommandBufferBeginInfo begin_info{};
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -2850,8 +2874,8 @@ void hg_vk_buffer_staging_write(
     fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 
     VkFence fence = nullptr;
-    vkCreateFence(device, &fence_info, nullptr, &fence);
-    hg_defer(vkDestroyFence(device, fence, nullptr));
+    vkCreateFence(hg_vk_device, &fence_info, nullptr, &fence);
+    hg_defer(vkDestroyFence(hg_vk_device, fence, nullptr));
 
     VkSubmitInfo submit{};
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -2859,20 +2883,18 @@ void hg_vk_buffer_staging_write(
     submit.pCommandBuffers = &cmd;
 
     vkQueueSubmit(transfer_queue, 1, &submit, fence);
-    vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+    vkWaitForFences(hg_vk_device, 1, &fence, VK_TRUE, UINT64_MAX);
 }
 
 void hg_vk_buffer_staging_read(
-    VkDevice device,
-    VmaAllocator allocator,
     VkQueue transfer_queue,
     VkCommandPool cmd_pool,
     HgSpan<void> dst,
     VkBuffer src,
     usize offset
 ) {
-    hg_assert(device != nullptr);
-    hg_assert(allocator != nullptr);
+    hg_assert(hg_vk_device != nullptr);
+    hg_assert(hg_vk_vma != nullptr);
     hg_assert(cmd_pool != nullptr);
     hg_assert(transfer_queue != nullptr);
     hg_assert(dst != nullptr);
@@ -2889,8 +2911,8 @@ void hg_vk_buffer_staging_read(
 
     VkBuffer stage = nullptr;
     VmaAllocation stage_alloc = nullptr;
-    vmaCreateBuffer(allocator, &stage_info, &stage_alloc_info, &stage, &stage_alloc, nullptr);
-    hg_defer(vmaDestroyBuffer(allocator, stage, stage_alloc));
+    vmaCreateBuffer(hg_vk_vma, &stage_info, &stage_alloc_info, &stage, &stage_alloc, nullptr);
+    hg_defer(vmaDestroyBuffer(hg_vk_vma, stage, stage_alloc));
 
     VkCommandBufferAllocateInfo cmd_info{};
     cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -2899,8 +2921,8 @@ void hg_vk_buffer_staging_read(
     cmd_info.commandBufferCount = 1;
 
     VkCommandBuffer cmd = nullptr;
-    vkAllocateCommandBuffers(device, &cmd_info, &cmd);
-    hg_defer(vkFreeCommandBuffers(device, cmd_pool, 1, &cmd));
+    vkAllocateCommandBuffers(hg_vk_device, &cmd_info, &cmd);
+    hg_defer(vkFreeCommandBuffers(hg_vk_device, cmd_pool, 1, &cmd));
 
     VkCommandBufferBeginInfo begin_info{};
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -2918,8 +2940,8 @@ void hg_vk_buffer_staging_read(
     fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 
     VkFence fence = nullptr;
-    vkCreateFence(device, &fence_info, nullptr, &fence);
-    hg_defer(vkDestroyFence(device, fence, nullptr));
+    vkCreateFence(hg_vk_device, &fence_info, nullptr, &fence);
+    hg_defer(vkDestroyFence(hg_vk_device, fence, nullptr));
 
     VkSubmitInfo submit{};
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -2927,20 +2949,18 @@ void hg_vk_buffer_staging_read(
     submit.pCommandBuffers = &cmd;
 
     vkQueueSubmit(transfer_queue, 1, &submit, fence);
-    vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+    vkWaitForFences(hg_vk_device, 1, &fence, VK_TRUE, UINT64_MAX);
 
-    vmaCopyAllocationToMemory(allocator, stage_alloc, offset, dst.data, dst.count);
+    vmaCopyAllocationToMemory(hg_vk_vma, stage_alloc, offset, dst.data, dst.count);
 }
 
 void hg_vk_image_staging_write(
-    VkDevice device,
-    VmaAllocator allocator,
     VkQueue transfer_queue,
     VkCommandPool cmd_pool,
     const HgVkImageStagingWriteConfig& config
 ) {
-    hg_assert(device != nullptr);
-    hg_assert(allocator != nullptr);
+    hg_assert(hg_vk_device != nullptr);
+    hg_assert(hg_vk_vma != nullptr);
     hg_assert(cmd_pool != nullptr);
     hg_assert(transfer_queue != nullptr);
     hg_assert(config.dst_image != nullptr);
@@ -2966,9 +2986,9 @@ void hg_vk_image_staging_write(
 
     VkBuffer stage = nullptr;
     VmaAllocation stage_alloc = nullptr;
-    vmaCreateBuffer(allocator, &stage_info, &stage_alloc_info, &stage, &stage_alloc, nullptr);
-    vmaCopyMemoryToAllocation(allocator, config.src_data, stage_alloc, 0, size);
-    hg_defer(vmaDestroyBuffer(allocator, stage, stage_alloc));
+    vmaCreateBuffer(hg_vk_vma, &stage_info, &stage_alloc_info, &stage, &stage_alloc, nullptr);
+    vmaCopyMemoryToAllocation(hg_vk_vma, config.src_data, stage_alloc, 0, size);
+    hg_defer(vmaDestroyBuffer(hg_vk_vma, stage, stage_alloc));
 
     VkCommandBufferAllocateInfo cmd_info{};
     cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -2977,8 +2997,8 @@ void hg_vk_image_staging_write(
     cmd_info.commandBufferCount = 1;
 
     VkCommandBuffer cmd = nullptr;
-    vkAllocateCommandBuffers(device, &cmd_info, &cmd);
-    hg_defer(vkFreeCommandBuffers(device, cmd_pool, 1, &cmd));
+    vkAllocateCommandBuffers(hg_vk_device, &cmd_info, &cmd);
+    hg_defer(vkFreeCommandBuffers(hg_vk_device, cmd_pool, 1, &cmd));
 
     VkCommandBufferBeginInfo begin_info{};
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -3039,8 +3059,8 @@ void hg_vk_image_staging_write(
     VkFenceCreateInfo fence_info{};
     fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     VkFence fence = nullptr;
-    vkCreateFence(device, &fence_info, nullptr, &fence);
-    hg_defer(vkDestroyFence(device, fence, nullptr));
+    vkCreateFence(hg_vk_device, &fence_info, nullptr, &fence);
+    hg_defer(vkDestroyFence(hg_vk_device, fence, nullptr));
 
     VkSubmitInfo submit{};
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -3048,18 +3068,16 @@ void hg_vk_image_staging_write(
     submit.pCommandBuffers = &cmd;
 
     vkQueueSubmit(transfer_queue, 1, &submit, fence);
-    vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+    vkWaitForFences(hg_vk_device, 1, &fence, VK_TRUE, UINT64_MAX);
 }
 
 void hg_vk_image_staging_read(
-    VkDevice device,
-    VmaAllocator allocator,
     VkQueue transfer_queue,
     VkCommandPool cmd_pool,
     const HgVkImageStagingReadConfig& config
 ) {
-    hg_assert(device != nullptr);
-    hg_assert(allocator != nullptr);
+    hg_assert(hg_vk_device != nullptr);
+    hg_assert(hg_vk_vma != nullptr);
     hg_assert(cmd_pool != nullptr);
     hg_assert(transfer_queue != nullptr);
     hg_assert(config.src_image != nullptr);
@@ -3086,8 +3104,8 @@ void hg_vk_image_staging_read(
 
     VkBuffer stage = nullptr;
     VmaAllocation stage_alloc = nullptr;
-    vmaCreateBuffer(allocator, &stage_info, &stage_alloc_info, &stage, &stage_alloc, nullptr);
-    hg_defer(vmaDestroyBuffer(allocator, stage, stage_alloc));
+    vmaCreateBuffer(hg_vk_vma, &stage_info, &stage_alloc_info, &stage, &stage_alloc, nullptr);
+    hg_defer(vmaDestroyBuffer(hg_vk_vma, stage, stage_alloc));
 
     VkCommandBufferAllocateInfo cmd_info{};
     cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -3096,8 +3114,8 @@ void hg_vk_image_staging_read(
     cmd_info.commandBufferCount = 1;
 
     VkCommandBuffer cmd = nullptr;
-    vkAllocateCommandBuffers(device, &cmd_info, &cmd);
-    hg_defer(vkFreeCommandBuffers(device, cmd_pool, 1, &cmd));
+    vkAllocateCommandBuffers(hg_vk_device, &cmd_info, &cmd);
+    hg_defer(vkFreeCommandBuffers(hg_vk_device, cmd_pool, 1, &cmd));
 
     VkCommandBufferBeginInfo begin_info{};
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -3157,8 +3175,8 @@ void hg_vk_image_staging_read(
     fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 
     VkFence fence = nullptr;
-    vkCreateFence(device, &fence_info, nullptr, &fence);
-    hg_defer(vkDestroyFence(device, fence, nullptr));
+    vkCreateFence(hg_vk_device, &fence_info, nullptr, &fence);
+    hg_defer(vkDestroyFence(hg_vk_device, fence, nullptr));
 
     VkSubmitInfo submit{};
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -3166,13 +3184,12 @@ void hg_vk_image_staging_read(
     submit.pCommandBuffers = &cmd;
 
     vkQueueSubmit(transfer_queue, 1, &submit, fence);
-    vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+    vkWaitForFences(hg_vk_device, 1, &fence, VK_TRUE, UINT64_MAX);
 
-    vmaCopyAllocationToMemory(allocator, stage_alloc, 0, config.dst, size);
+    vmaCopyAllocationToMemory(hg_vk_vma, stage_alloc, 0, config.dst, size);
 }
 
 void hg_vk_image_generate_mipmaps(
-    VkDevice device,
     VkQueue transfer_queue,
     VkCommandPool cmd_pool,
     VkImage image,
@@ -3184,7 +3201,7 @@ void hg_vk_image_generate_mipmaps(
     u32 depth,
     u32 mip_count
 ) {
-    hg_assert(device != nullptr);
+    hg_assert(hg_vk_device != nullptr);
     hg_assert(transfer_queue != nullptr);
     hg_assert(cmd_pool != nullptr);
     hg_assert(image != nullptr);
@@ -3204,8 +3221,8 @@ void hg_vk_image_generate_mipmaps(
     cmd_info.commandBufferCount = 1;
 
     VkCommandBuffer cmd = nullptr;
-    vkAllocateCommandBuffers(device, &cmd_info, &cmd);
-    hg_defer(vkFreeCommandBuffers(device, cmd_pool, 1, &cmd));
+    vkAllocateCommandBuffers(hg_vk_device, &cmd_info, &cmd);
+    hg_defer(vkFreeCommandBuffers(hg_vk_device, cmd_pool, 1, &cmd));
 
     VkCommandBufferBeginInfo begin_info{};
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -3309,23 +3326,21 @@ void hg_vk_image_generate_mipmaps(
 #include "sprite.frag.spv.h"
 #include "sprite.vert.spv.h"
 
-struct HgPipelineSpriteVPUniform {
-    HgMat4f proj;
-    HgMat4f view;
-};
-
-HgPipelineSprite hg_pipeline_sprite_create(
-    VkDevice device,
-    VmaAllocator allocator,
+HgOption<HgPipeline2D> HgPipeline2D::create(
+    HgAllocator& mem,
+    usize max_textures,
     VkFormat color_format,
     VkFormat depth_format
 ) {
-    hg_assert(device != nullptr);
+    hg_assert(hg_vk_device != nullptr);
     hg_assert(color_format != VK_FORMAT_UNDEFINED);
 
-    HgPipelineSprite pipeline;
-    pipeline.device = device;
-    pipeline.allocator = allocator;
+    HgOption<HgPipeline2D> pipeline;
+
+    pipeline->texture_sets = pipeline->texture_sets.create(mem, max_textures)
+        .value_or(HgHashMap<HgResourceID<HgTexture>, VkDescriptorSet>{});
+    if (pipeline->texture_sets.slots == nullptr)
+        return std::nullopt;
 
     VkDescriptorSetLayoutBinding vp_bindings[1]{};
     vp_bindings[0].binding = 0;
@@ -3338,7 +3353,294 @@ HgPipelineSprite hg_pipeline_sprite_create(
     vp_layout_info.bindingCount = hg_countof(vp_bindings);
     vp_layout_info.pBindings = vp_bindings;
 
-    vkCreateDescriptorSetLayout(device, &vp_layout_info, nullptr, &pipeline.vp_layout);
+    vkCreateDescriptorSetLayout(hg_vk_device, &vp_layout_info, nullptr, &pipeline->vp_layout);
+    hg_assert(pipeline->vp_layout != nullptr);
+
+    VkDescriptorSetLayoutBinding texture_bindings[1]{};
+    texture_bindings[0].binding = 0;
+    texture_bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    texture_bindings[0].descriptorCount = 1;
+    texture_bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    VkDescriptorSetLayoutCreateInfo texture_layout_info{};
+    texture_layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    texture_layout_info.bindingCount = hg_countof(texture_bindings);
+    texture_layout_info.pBindings = texture_bindings;
+
+    vkCreateDescriptorSetLayout(hg_vk_device, &texture_layout_info, nullptr, &pipeline->texture_layout);
+    hg_assert(pipeline->texture_layout != nullptr);
+
+    VkDescriptorSetLayout set_layouts[]{pipeline->vp_layout, pipeline->texture_layout};
+    VkPushConstantRange push_ranges[1]{};
+    push_ranges[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    push_ranges[0].size = sizeof(Push);
+
+    VkPipelineLayoutCreateInfo layout_info{};
+    layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    layout_info.setLayoutCount = hg_countof(set_layouts);
+    layout_info.pSetLayouts = set_layouts;
+    layout_info.pushConstantRangeCount = hg_countof(push_ranges);
+    layout_info.pPushConstantRanges = push_ranges;
+
+    vkCreatePipelineLayout(hg_vk_device, &layout_info, nullptr, &pipeline->pipeline_layout);
+    hg_assert(pipeline->pipeline_layout != nullptr);
+
+    VkShaderModuleCreateInfo vertex_shader_info{};
+    vertex_shader_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    vertex_shader_info.codeSize = sprite_vert_spv_size;
+    vertex_shader_info.pCode = (u32 *)sprite_vert_spv;
+
+    VkShaderModule vertex_shader = nullptr;
+    vkCreateShaderModule(hg_vk_device, &vertex_shader_info, nullptr, &vertex_shader);
+    hg_assert(vertex_shader != nullptr);
+
+    VkShaderModuleCreateInfo fragment_shader_info{};
+    fragment_shader_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    fragment_shader_info.codeSize = sprite_frag_spv_size;
+    fragment_shader_info.pCode = (u32 *)sprite_frag_spv;
+
+    VkShaderModule fragment_shader = nullptr;
+    vkCreateShaderModule(hg_vk_device, &fragment_shader_info, nullptr, &fragment_shader);
+    hg_assert(fragment_shader != nullptr);
+
+    VkPipelineShaderStageCreateInfo shader_stages[2]{};
+    shader_stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    shader_stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+    shader_stages[0].module = vertex_shader;
+    shader_stages[0].pName = "main";
+    shader_stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    shader_stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    shader_stages[1].module = fragment_shader;
+    shader_stages[1].pName = "main";
+
+    HgVkPipelineConfig pipeline_config{};
+    pipeline_config.color_attachment_formats = {&color_format, 1};
+    pipeline_config.depth_attachment_format = depth_format;
+    pipeline_config.stencil_attachment_format = VK_FORMAT_UNDEFINED;
+    pipeline_config.shader_stages = {shader_stages, hg_countof(shader_stages)};
+    pipeline_config.layout = pipeline->pipeline_layout;
+    pipeline_config.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
+    pipeline_config.enable_color_blend = true;
+
+    pipeline->pipeline = hg_vk_create_graphics_pipeline(hg_vk_device, pipeline_config);
+
+    vkDestroyShaderModule(hg_vk_device, fragment_shader, nullptr);
+    vkDestroyShaderModule(hg_vk_device, vertex_shader, nullptr);
+
+    VkDescriptorPoolSize desc_pool_sizes[2]{};
+    desc_pool_sizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    desc_pool_sizes[0].descriptorCount = 1;
+    desc_pool_sizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    desc_pool_sizes[1].descriptorCount = (u32)max_textures;
+
+    VkDescriptorPoolCreateInfo desc_pool_info{};
+    desc_pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    desc_pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+    desc_pool_info.maxSets = 1 + (u32)max_textures;
+    desc_pool_info.poolSizeCount = hg_countof(desc_pool_sizes);
+    desc_pool_info.pPoolSizes = desc_pool_sizes;
+
+    vkCreateDescriptorPool(hg_vk_device, &desc_pool_info, nullptr, &pipeline->descriptor_pool);
+    hg_assert(pipeline->descriptor_pool != nullptr);
+
+    VkDescriptorSetAllocateInfo vp_set_alloc_info{};
+    vp_set_alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    vp_set_alloc_info.descriptorPool = pipeline->descriptor_pool;
+    vp_set_alloc_info.descriptorSetCount = 1;
+    vp_set_alloc_info.pSetLayouts = &pipeline->vp_layout;
+
+    vkAllocateDescriptorSets(hg_vk_device, &vp_set_alloc_info, &pipeline->vp_set);
+    hg_assert(pipeline->vp_set != nullptr);
+
+    VkBufferCreateInfo vp_buffer_info{};
+    vp_buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    vp_buffer_info.size = sizeof(VPUniform);
+    vp_buffer_info.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+
+    VmaAllocationCreateInfo vp_alloc_info{};
+    vp_alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    vp_alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
+
+    vmaCreateBuffer(
+        hg_vk_vma,
+        &vp_buffer_info,
+        &vp_alloc_info,
+        &pipeline->vp_buffer,
+        &pipeline->vp_buffer_allocation,
+        nullptr);
+    hg_assert(pipeline->vp_buffer != nullptr);
+    hg_assert(pipeline->vp_buffer_allocation != nullptr);
+
+    VPUniform vp_data{};
+    vp_data.proj = 1.0f;
+    vp_data.view = 1.0f;
+
+    vmaCopyMemoryToAllocation(hg_vk_vma, &vp_data, pipeline->vp_buffer_allocation, 0, sizeof(vp_data));
+
+    VkDescriptorBufferInfo desc_info{};
+    desc_info.buffer = pipeline->vp_buffer;
+    desc_info.offset = 0;
+    desc_info.range = sizeof(VPUniform);
+
+    VkWriteDescriptorSet desc_write{};
+    desc_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    desc_write.dstSet = pipeline->vp_set;
+    desc_write.dstBinding = 0;
+    desc_write.descriptorCount = 1;
+    desc_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    desc_write.pBufferInfo = &desc_info;
+
+    vkUpdateDescriptorSets(hg_vk_device, 1, &desc_write, 0, nullptr);
+
+    return pipeline;
+}
+
+void HgPipeline2D::destroy(HgAllocator& mem) {
+    texture_sets.destroy(mem);
+    vmaDestroyBuffer(hg_vk_vma, vp_buffer, vp_buffer_allocation);
+    vkFreeDescriptorSets(hg_vk_device, descriptor_pool, 1, &vp_set);
+    vkDestroyDescriptorPool(hg_vk_device, descriptor_pool, nullptr);
+    vkDestroyPipeline(hg_vk_device, pipeline, nullptr);
+    vkDestroyPipelineLayout(hg_vk_device, pipeline_layout, nullptr);
+    vkDestroyDescriptorSetLayout(hg_vk_device, texture_layout, nullptr);
+    vkDestroyDescriptorSetLayout(hg_vk_device, vp_layout, nullptr);
+}
+
+void HgPipeline2D::add_texture(HgResourceID<HgTexture> texture) {
+    hg_assert(hg_resources->is_registered(texture));
+    if (texture_sets.has(texture))
+        return;
+
+    VkDescriptorSetAllocateInfo set_info{};
+    set_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    set_info.descriptorPool = descriptor_pool;
+    set_info.descriptorSetCount = 1;
+    set_info.pSetLayouts = &texture_layout;
+
+    VkDescriptorSet set = nullptr;
+    vkAllocateDescriptorSets(hg_vk_device, &set_info, &set);
+    hg_assert(set != nullptr);
+
+    HgTexture& tex_data = hg_resources->get(texture);
+
+    VkDescriptorImageInfo desc_info{};
+    desc_info.sampler = tex_data.sampler;
+    desc_info.imageView = tex_data.view;
+    desc_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    VkWriteDescriptorSet desc_write{};
+    desc_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    desc_write.dstSet = set;
+    desc_write.dstBinding = 0;
+    desc_write.descriptorCount = 1;
+    desc_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    desc_write.pImageInfo = &desc_info;
+
+    vkUpdateDescriptorSets(hg_vk_device, 1, &desc_write, 0, nullptr);
+
+    texture_sets.insert(texture, set);
+}
+
+void HgPipeline2D::remove_texture(HgResourceID<HgTexture> texture) {
+    hg_assert(hg_resources->is_registered(texture));
+
+    if (texture_sets.has(texture)) {
+        VkDescriptorSet set = texture_sets.get(texture);
+        texture_sets.remove(texture);
+
+        vkFreeDescriptorSets(hg_vk_device, descriptor_pool, 1, &set);
+    }
+}
+
+void HgPipeline2D::update_projection(HgMat4f& projection) {
+    vmaCopyMemoryToAllocation(
+        hg_vk_vma,
+        &projection,
+        vp_buffer_allocation,
+        offsetof(VPUniform, proj),
+        sizeof(projection));
+}
+
+void HgPipeline2D::update_view(HgMat4f& view) {
+    vmaCopyMemoryToAllocation(
+        hg_vk_vma,
+        &view,
+        vp_buffer_allocation,
+        offsetof(VPUniform, view),
+        sizeof(view));
+}
+
+void HgPipeline2D::add_sprite(HgECS& ecs, HgEntity entity, HgResourceID<HgTexture> texture, HgVec2f uv_pos, HgVec2f uv_size) {
+    hg_assert(ecs.is_registered<Sprite>());
+    hg_assert(!ecs.has<Sprite>(entity));
+
+    Sprite& sprite = ecs.add<Sprite>(entity);
+    sprite.texture = texture;
+    sprite.uv_pos = uv_pos;
+    sprite.uv_size = uv_size;
+    sprite.position = {0.0f, 0.0f, 0.0f};
+    sprite.rotation = 0.0f;
+    sprite.scale = {1.0f, 1.0f};
+}
+
+void HgPipeline2D::remove_sprite(HgECS& ecs, HgEntity entity) {
+    hg_assert(ecs.is_registered<Sprite>());
+    hg_assert(ecs.has<Sprite>(entity));
+
+    ecs.remove<Sprite>(entity);
+}
+
+void HgPipeline2D::place_sprite(HgECS& ecs, HgEntity entity, HgVec3f position, f32 rotation, HgVec2f scale) {
+    hg_assert(ecs.is_registered<Sprite>());
+    hg_assert(ecs.has<Sprite>(entity));
+
+    Sprite& sprite = ecs.get<Sprite>(entity);
+    sprite.position = position;
+    sprite.rotation = rotation;
+    sprite.scale = scale;
+}
+
+void HgPipeline2D::move_sprite(HgECS& ecs, HgEntity entity, HgVec3f position, f32 rotation, HgVec2f scale) {
+    hg_assert(ecs.is_registered<Sprite>());
+    hg_assert(ecs.has<Sprite>(entity));
+
+    Sprite& sprite = ecs.get<Sprite>(entity);
+    sprite.position += position;
+    sprite.rotation += rotation;
+    sprite.scale += scale;
+}
+
+void HgPipeline2D::draw(VkCommandBuffer cmd, HgECS& ecs) {
+    (void)cmd;
+    (void)ecs;
+}
+
+struct HgPipelineSpriteVPUniform {
+    HgMat4f proj;
+    HgMat4f view;
+};
+
+HgPipelineSprite hg_pipeline_sprite_create(
+    VkFormat color_format,
+    VkFormat depth_format
+) {
+    hg_assert(hg_vk_device != nullptr);
+    hg_assert(color_format != VK_FORMAT_UNDEFINED);
+
+    HgPipelineSprite pipeline;
+
+    VkDescriptorSetLayoutBinding vp_bindings[1]{};
+    vp_bindings[0].binding = 0;
+    vp_bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    vp_bindings[0].descriptorCount = 1;
+    vp_bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+    VkDescriptorSetLayoutCreateInfo vp_layout_info{};
+    vp_layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    vp_layout_info.bindingCount = hg_countof(vp_bindings);
+    vp_layout_info.pBindings = vp_bindings;
+
+    vkCreateDescriptorSetLayout(hg_vk_device, &vp_layout_info, nullptr, &pipeline.vp_layout);
 
     VkDescriptorSetLayoutBinding image_bindings[1]{};
     image_bindings[0].binding = 0;
@@ -3351,7 +3653,7 @@ HgPipelineSprite hg_pipeline_sprite_create(
     image_layout_info.bindingCount = hg_countof(image_bindings);
     image_layout_info.pBindings = image_bindings;
 
-    vkCreateDescriptorSetLayout(device, &image_layout_info, nullptr, &pipeline.image_layout);
+    vkCreateDescriptorSetLayout(hg_vk_device, &image_layout_info, nullptr, &pipeline.image_layout);
 
     VkDescriptorSetLayout set_layouts[]{pipeline.vp_layout, pipeline.image_layout};
     VkPushConstantRange push_ranges[1]{};
@@ -3365,7 +3667,7 @@ HgPipelineSprite hg_pipeline_sprite_create(
     layout_info.pushConstantRangeCount = hg_countof(push_ranges);
     layout_info.pPushConstantRanges = push_ranges;
 
-    vkCreatePipelineLayout(device, &layout_info, nullptr, &pipeline.pipeline_layout);
+    vkCreatePipelineLayout(hg_vk_device, &layout_info, nullptr, &pipeline.pipeline_layout);
 
     VkShaderModuleCreateInfo vertex_shader_info{};
     vertex_shader_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -3373,7 +3675,7 @@ HgPipelineSprite hg_pipeline_sprite_create(
     vertex_shader_info.pCode = (u32 *)sprite_vert_spv;
 
     VkShaderModule vertex_shader;
-    vkCreateShaderModule(device, &vertex_shader_info, nullptr, &vertex_shader);
+    vkCreateShaderModule(hg_vk_device, &vertex_shader_info, nullptr, &vertex_shader);
 
     VkShaderModuleCreateInfo fragment_shader_info{};
     fragment_shader_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -3381,7 +3683,7 @@ HgPipelineSprite hg_pipeline_sprite_create(
     fragment_shader_info.pCode = (u32 *)sprite_frag_spv;
 
     VkShaderModule fragment_shader;
-    vkCreateShaderModule(device, &fragment_shader_info, nullptr, &fragment_shader);
+    vkCreateShaderModule(hg_vk_device, &fragment_shader_info, nullptr, &fragment_shader);
 
     VkPipelineShaderStageCreateInfo shader_stages[2]{};
     shader_stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -3402,10 +3704,10 @@ HgPipelineSprite hg_pipeline_sprite_create(
     pipeline_config.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
     pipeline_config.enable_color_blend = true;
 
-    pipeline.pipeline = hg_vk_create_graphics_pipeline(device, pipeline_config);
+    pipeline.pipeline = hg_vk_create_graphics_pipeline(hg_vk_device, pipeline_config);
 
-    vkDestroyShaderModule(device, fragment_shader, nullptr);
-    vkDestroyShaderModule(device, vertex_shader, nullptr);
+    vkDestroyShaderModule(hg_vk_device, fragment_shader, nullptr);
+    vkDestroyShaderModule(hg_vk_device, vertex_shader, nullptr);
 
     VkDescriptorPoolSize desc_pool_sizes[2]{};
     desc_pool_sizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -3420,7 +3722,7 @@ HgPipelineSprite hg_pipeline_sprite_create(
     desc_pool_info.poolSizeCount = hg_countof(desc_pool_sizes);
     desc_pool_info.pPoolSizes = desc_pool_sizes;
 
-    vkCreateDescriptorPool(device, &desc_pool_info, nullptr, &pipeline.descriptor_pool);
+    vkCreateDescriptorPool(hg_vk_device, &desc_pool_info, nullptr, &pipeline.descriptor_pool);
 
     VkDescriptorSetAllocateInfo vp_set_alloc_info{};
     vp_set_alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -3428,7 +3730,7 @@ HgPipelineSprite hg_pipeline_sprite_create(
     vp_set_alloc_info.descriptorSetCount = 1;
     vp_set_alloc_info.pSetLayouts = &pipeline.vp_layout;
 
-    vkAllocateDescriptorSets(device, &vp_set_alloc_info, &pipeline.vp_set);
+    vkAllocateDescriptorSets(hg_vk_device, &vp_set_alloc_info, &pipeline.vp_set);
 
     VkBufferCreateInfo vp_buffer_info{};
     vp_buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -3440,7 +3742,7 @@ HgPipelineSprite hg_pipeline_sprite_create(
     vp_alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
 
     vmaCreateBuffer(
-        allocator,
+        hg_vk_vma,
         &vp_buffer_info,
         &vp_alloc_info,
         &pipeline.vp_buffer,
@@ -3451,7 +3753,7 @@ HgPipelineSprite hg_pipeline_sprite_create(
     vp_data.proj = 1.0f;
     vp_data.view = 1.0f;
 
-    vmaCopyMemoryToAllocation(allocator, &vp_data, pipeline.vp_buffer_allocation, 0, sizeof(vp_data));
+    vmaCopyMemoryToAllocation(hg_vk_vma, &vp_data, pipeline.vp_buffer_allocation, 0, sizeof(vp_data));
 
     VkDescriptorBufferInfo desc_info{};
     desc_info.buffer = pipeline.vp_buffer;
@@ -3466,7 +3768,7 @@ HgPipelineSprite hg_pipeline_sprite_create(
     desc_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     desc_write.pBufferInfo = &desc_info;
 
-    vkUpdateDescriptorSets(device, 1, &desc_write, 0, nullptr);
+    vkUpdateDescriptorSets(hg_vk_device, 1, &desc_write, 0, nullptr);
 
     return pipeline;
 }
@@ -3475,13 +3777,13 @@ void hg_pipeline_sprite_destroy(HgPipelineSprite *pipeline) {
     if (pipeline == nullptr)
         return;
 
-    vmaDestroyBuffer(pipeline->allocator, pipeline->vp_buffer, pipeline->vp_buffer_allocation);
-    vkFreeDescriptorSets(pipeline->device, pipeline->descriptor_pool, 1, &pipeline->vp_set);
-    vkDestroyDescriptorPool(pipeline->device, pipeline->descriptor_pool, nullptr);
-    vkDestroyPipeline(pipeline->device, pipeline->pipeline, nullptr);
-    vkDestroyPipelineLayout(pipeline->device, pipeline->pipeline_layout, nullptr);
-    vkDestroyDescriptorSetLayout(pipeline->device, pipeline->image_layout, nullptr);
-    vkDestroyDescriptorSetLayout(pipeline->device, pipeline->vp_layout, nullptr);
+    vmaDestroyBuffer(hg_vk_vma, pipeline->vp_buffer, pipeline->vp_buffer_allocation);
+    vkFreeDescriptorSets(hg_vk_device, pipeline->descriptor_pool, 1, &pipeline->vp_set);
+    vkDestroyDescriptorPool(hg_vk_device, pipeline->descriptor_pool, nullptr);
+    vkDestroyPipeline(hg_vk_device, pipeline->pipeline, nullptr);
+    vkDestroyPipelineLayout(hg_vk_device, pipeline->pipeline_layout, nullptr);
+    vkDestroyDescriptorSetLayout(hg_vk_device, pipeline->image_layout, nullptr);
+    vkDestroyDescriptorSetLayout(hg_vk_device, pipeline->vp_layout, nullptr);
 }
 
 void hg_pipeline_sprite_update_projection(HgPipelineSprite *pipeline, HgMat4f *projection) {
@@ -3489,7 +3791,7 @@ void hg_pipeline_sprite_update_projection(HgPipelineSprite *pipeline, HgMat4f *p
     hg_assert(projection != nullptr);
 
     vmaCopyMemoryToAllocation(
-        pipeline->allocator,
+        hg_vk_vma,
         projection,
         pipeline->vp_buffer_allocation,
         offsetof(HgPipelineSpriteVPUniform, proj),
@@ -3501,7 +3803,7 @@ void hg_pipeline_sprite_update_view(HgPipelineSprite *pipeline, HgMat4f *view) {
     hg_assert(view != nullptr);
 
     vmaCopyMemoryToAllocation(
-        pipeline->allocator,
+        hg_vk_vma,
         view,
         pipeline->vp_buffer_allocation,
         offsetof(HgPipelineSpriteVPUniform, view),
@@ -3536,7 +3838,7 @@ HgPipelineSpriteTexture hg_pipeline_sprite_create_texture(
     VmaAllocationCreateInfo alloc_info{};
     alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
 
-    vmaCreateImage(pipeline->allocator, &image_info, &alloc_info, &tex.image, &tex.allocation, nullptr);
+    vmaCreateImage(hg_vk_vma, &image_info, &alloc_info, &tex.image, &tex.allocation, nullptr);
 
     HgVkImageStagingWriteConfig staging_config{};
     staging_config.dst_image = tex.image;
@@ -3549,7 +3851,7 @@ HgPipelineSpriteTexture hg_pipeline_sprite_create_texture(
     staging_config.format = config->format;
     staging_config.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    hg_vk_image_staging_write(pipeline->device, pipeline->allocator, transfer_queue, cmd_pool, staging_config);
+    hg_vk_image_staging_write(transfer_queue, cmd_pool, staging_config);
 
     VkImageViewCreateInfo view_info{};
     view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -3560,7 +3862,7 @@ HgPipelineSpriteTexture hg_pipeline_sprite_create_texture(
     view_info.subresourceRange.levelCount = 1;
     view_info.subresourceRange.layerCount = 1;
 
-    vkCreateImageView(pipeline->device, &view_info, nullptr, &tex.view);
+    vkCreateImageView(hg_vk_device, &view_info, nullptr, &tex.view);
 
     VkSamplerCreateInfo sampler_info{};
     sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -3570,7 +3872,7 @@ HgPipelineSpriteTexture hg_pipeline_sprite_create_texture(
     sampler_info.addressModeV = config->edge_mode;
     sampler_info.addressModeW = config->edge_mode;
 
-    vkCreateSampler(pipeline->device, &sampler_info, nullptr, &tex.sampler);
+    vkCreateSampler(hg_vk_device, &sampler_info, nullptr, &tex.sampler);
 
     VkDescriptorSetAllocateInfo set_info{};
     set_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -3578,7 +3880,7 @@ HgPipelineSpriteTexture hg_pipeline_sprite_create_texture(
     set_info.descriptorSetCount = 1;
     set_info.pSetLayouts = &pipeline->image_layout;
 
-    vkAllocateDescriptorSets(pipeline->device, &set_info, &tex.set);
+    vkAllocateDescriptorSets(hg_vk_device, &set_info, &tex.set);
 
     VkDescriptorImageInfo desc_info{};
     desc_info.sampler = tex.sampler;
@@ -3593,7 +3895,7 @@ HgPipelineSpriteTexture hg_pipeline_sprite_create_texture(
     desc_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     desc_write.pImageInfo = &desc_info;
 
-    vkUpdateDescriptorSets(pipeline->device, 1, &desc_write, 0, nullptr);
+    vkUpdateDescriptorSets(hg_vk_device, 1, &desc_write, 0, nullptr);
 
     return tex;
 }
@@ -3602,10 +3904,10 @@ void hg_pipeline_sprite_destroy_texture(HgPipelineSprite *pipeline, HgPipelineSp
     hg_assert(pipeline != nullptr);
     hg_assert(texture != nullptr);
 
-    vkFreeDescriptorSets(pipeline->device, pipeline->descriptor_pool, 1, &texture->set);
-    vkDestroySampler(pipeline->device, texture->sampler, nullptr);
-    vkDestroyImageView(pipeline->device, texture->view, nullptr);
-    vmaDestroyImage(pipeline->allocator, texture->image, texture->allocation);
+    vkFreeDescriptorSets(hg_vk_device, pipeline->descriptor_pool, 1, &texture->set);
+    vkDestroySampler(hg_vk_device, texture->sampler, nullptr);
+    vkDestroyImageView(hg_vk_device, texture->view, nullptr);
+    vmaDestroyImage(hg_vk_vma, texture->image, texture->allocation);
 }
 
 void hg_pipeline_sprite_bind(HgPipelineSprite *pipeline, VkCommandBuffer cmd) {

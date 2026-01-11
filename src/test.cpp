@@ -19,48 +19,29 @@ int main(void) {
     HgWindow window = HgWindow::create(window_config);
     hg_defer(window.destroy());
 
-    VkInstance instance = hg_vk_create_instance("HurdyGurdy Test");
-    hg_defer(vkDestroyInstance(instance, nullptr));
-    hg_debug_mode(
-        VkDebugUtilsMessengerEXT debug_messenger = hg_vk_create_debug_messenger(instance);
-        hg_defer(vkDestroyDebugUtilsMessengerEXT(instance, debug_messenger, nullptr));
-    )
-    HgSingleQueueDeviceData device = hg_vk_create_single_queue_device(instance);
-    hg_defer(vkDestroyDevice(device.handle, nullptr));
-
-    VmaAllocatorCreateInfo allocator_info{};
-    allocator_info.physicalDevice = device.gpu;
-    allocator_info.device = device.handle;
-    allocator_info.instance = instance;
-    allocator_info.vulkanApiVersion = VK_API_VERSION_1_3;
-
-    VmaAllocator vma;
-    vmaCreateAllocator(&allocator_info, &vma);
-    hg_defer(vmaDestroyAllocator(vma));
-
     VkCommandPoolCreateInfo cmd_pool_info{};
     cmd_pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     cmd_pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    cmd_pool_info.queueFamilyIndex = device.queue_family;
+    cmd_pool_info.queueFamilyIndex = hg_vk_queue_family;
 
     VkCommandPool cmd_pool;
-    vkCreateCommandPool(device.handle, &cmd_pool_info, nullptr, &cmd_pool);
-    hg_defer(vkDestroyCommandPool(device.handle, cmd_pool, nullptr));
+    vkCreateCommandPool(hg_vk_device, &cmd_pool_info, nullptr, &cmd_pool);
+    hg_defer(vkDestroyCommandPool(hg_vk_device, cmd_pool, nullptr));
 
-    VkSurfaceKHR surface = hg_vk_create_surface(instance, window);
-    hg_defer(vkDestroySurfaceKHR(instance, surface, nullptr));
+    VkSurfaceKHR surface = hg_vk_create_surface(hg_vk_instance, window);
+    hg_defer(vkDestroySurfaceKHR(hg_vk_instance, surface, nullptr));
 
-    HgSwapchainData swapchain = hg_vk_create_swapchain(device.handle, device.gpu, nullptr, surface,
+    HgSwapchainData swapchain = hg_vk_create_swapchain(nullptr, surface,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_PRESENT_MODE_FIFO_KHR);
-    hg_defer(vkDestroySwapchainKHR(device.handle, swapchain.handle, nullptr));
+    hg_defer(vkDestroySwapchainKHR(hg_vk_device, swapchain.handle, nullptr));
 
     u32 swap_image_count;
-    vkGetSwapchainImagesKHR(device.handle, swapchain.handle, &swap_image_count, nullptr);
+    vkGetSwapchainImagesKHR(hg_vk_device, swapchain.handle, &swap_image_count, nullptr);
     HgSpan<VkImage> swap_images = mem.alloc<VkImage>(swap_image_count);
     hg_defer(mem.free(swap_images));
     HgSpan<VkImageView> swap_views = mem.alloc<VkImageView>(swap_image_count);
     hg_defer(mem.free(swap_views));
-    vkGetSwapchainImagesKHR(device.handle, swapchain.handle, &swap_image_count, swap_images.data);
+    vkGetSwapchainImagesKHR(hg_vk_device, swapchain.handle, &swap_image_count, swap_images.data);
     for (usize i = 0; i < swap_image_count; ++i) {
         VkImageViewCreateInfo create_info{};
         create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -69,19 +50,17 @@ int main(void) {
         create_info.format = swapchain.format;
         create_info.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
 
-        vkCreateImageView(device.handle, &create_info, nullptr, &swap_views[i]);
+        vkCreateImageView(hg_vk_device, &create_info, nullptr, &swap_views[i]);
     }
     hg_defer(
         for (usize i = 0; i < swap_image_count; ++i) {
-            vkDestroyImageView(device.handle, swap_views[i], nullptr);
+            vkDestroyImageView(hg_vk_device, swap_views[i], nullptr);
         }
     )
-    HgSwapchainCommands swapchain_commands = HgSwapchainCommands::create(
-        device.handle, swapchain.handle, cmd_pool);
-    hg_defer(swapchain_commands.destroy(device.handle));
+    HgSwapchainCommands swapchain_commands = HgSwapchainCommands::create(swapchain.handle, cmd_pool);
+    hg_defer(swapchain_commands.destroy());
 
-    HgPipelineSprite sprite_pipeline = hg_pipeline_sprite_create(
-        device.handle, vma, swapchain.format, VK_FORMAT_UNDEFINED);
+    HgPipelineSprite sprite_pipeline = hg_pipeline_sprite_create(swapchain.format, VK_FORMAT_UNDEFINED);
     hg_defer(hg_pipeline_sprite_destroy(&sprite_pipeline));
 
     struct {u8 r, g, b, a;} tex_data[]{
@@ -97,7 +76,7 @@ int main(void) {
     tex_config.edge_mode = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 
     HgPipelineSpriteTexture texture = hg_pipeline_sprite_create_texture(
-        &sprite_pipeline, cmd_pool, device.queue, &tex_config);
+        &sprite_pipeline, cmd_pool, hg_vk_queue, &tex_config);
     hg_defer(hg_pipeline_sprite_destroy_texture(&sprite_pipeline, &texture));
 
     HgVec3 position{0.0f, 0.0f, 0.0f};
@@ -142,24 +121,24 @@ int main(void) {
             position.x += speed * deltaf;
 
         if (window.was_resized()) {
-            vkQueueWaitIdle(device.queue);
+            vkQueueWaitIdle(hg_vk_queue);
 
             VkSwapchainKHR old_swapchain = swapchain.handle;
-            swapchain = hg_vk_create_swapchain(device.handle, device.gpu, old_swapchain, surface,
+            swapchain = hg_vk_create_swapchain(old_swapchain, surface,
                 VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_PRESENT_MODE_FIFO_KHR);
 
             for (usize i = 0; i < swap_views.count; ++i) {
-                vkDestroyImageView(device.handle, swap_views[i], nullptr);
+                vkDestroyImageView(hg_vk_device, swap_views[i], nullptr);
             }
-            swapchain_commands.destroy(device.handle);
+            swapchain_commands.destroy();
 
             if (swapchain.handle != nullptr) {
-                vkGetSwapchainImagesKHR(device.handle, swapchain.handle, &swap_image_count, nullptr);
+                vkGetSwapchainImagesKHR(hg_vk_device, swapchain.handle, &swap_image_count, nullptr);
                 if (swap_images.count != swap_image_count) {
                     swap_images = mem.realloc(swap_images, swap_image_count);
                     swap_views = mem.realloc(swap_views, swap_image_count);
                 }
-                vkGetSwapchainImagesKHR(device.handle, swapchain.handle, &swap_image_count, swap_images.data);
+                vkGetSwapchainImagesKHR(hg_vk_device, swapchain.handle, &swap_image_count, swap_images.data);
                 for (usize i = 0; i < swap_image_count; ++i) {
                     VkImageViewCreateInfo create_info{};
                     create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -168,23 +147,22 @@ int main(void) {
                     create_info.format = swapchain.format;
                     create_info.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
 
-                    vkCreateImageView(device.handle, &create_info, nullptr, &swap_views[i]);
+                    vkCreateImageView(hg_vk_device, &create_info, nullptr, &swap_views[i]);
                 }
-                swapchain_commands = HgSwapchainCommands::create(
-                    device.handle, swapchain.handle, cmd_pool);
+                swapchain_commands = HgSwapchainCommands::create(swapchain.handle, cmd_pool);
 
                 aspect = (f32)swapchain.width / (f32)swapchain.height;
                 proj = hg_projection_orthographic(-aspect, aspect, -1.0f, 1.0f, 0.0f, 1.0f);
                 hg_pipeline_sprite_update_projection(&sprite_pipeline, &proj);
             }
 
-            vkDestroySwapchainKHR(device.handle, old_swapchain, nullptr);
+            vkDestroySwapchainKHR(hg_vk_device, old_swapchain, nullptr);
             hg_info("window resized\n");
         }
 
         VkCommandBuffer cmd;
         cpu_time += cpu_clock.tick();
-        if (swapchain.handle && (cmd = swapchain_commands.acquire_and_record(device.handle))) {
+        if (swapchain.handle && (cmd = swapchain_commands.acquire_and_record())) {
             cpu_clock.tick();
             u32 image_index = swapchain_commands.current_image;
 
@@ -253,21 +231,11 @@ int main(void) {
 
             vkCmdPipelineBarrier2(cmd, &present_dependency);
 
-            swapchain_commands.end_and_present(device.queue);
+            swapchain_commands.end_and_present(hg_vk_queue);
         }
     }
 
-    vkDeviceWaitIdle(device.handle);
-}
-
-hg_test(hg_init_and_exit) {
-    for (usize i = 0; i < 16; ++i) {
-        hg_init();
-        hg_init();
-        hg_exit();
-        hg_exit();
-    }
-    return true;
+    vkDeviceWaitIdle(hg_vk_device);
 }
 
 hg_test(hg_test) {
@@ -1138,10 +1106,10 @@ hg_test(hg_function_view) {
 hg_test(hg_thread_pool) {
     HgStdAllocator mem;
 
-    hg_threads_init(mem, std::thread::hardware_concurrency() - 1, 128);
-    hg_defer(hg_threads_deinit(mem));
+    HgThreadPool *threads = HgThreadPool::create(mem, std::thread::hardware_concurrency() - 1, 128);
+    hg_defer(HgThreadPool::destroy(mem, threads));
 
-    hg_test_assert(hg_get_thread_pool() != nullptr);
+    hg_assert(threads != nullptr);
 
     {
         HgFence fence;
@@ -1155,8 +1123,8 @@ hg_test(hg_thread_pool) {
             b = true;
         };
 
-        hg_call_par(&fence, hg_function_view<void()>(a_fn));
-        hg_call_par(&fence, hg_function_view<void()>(b_fn));
+        threads->call_par(&fence, hg_function_view<void()>(a_fn));
+        threads->call_par(&fence, hg_function_view<void()>(b_fn));
 
         hg_test_assert(fence.wait(2.0));
 
@@ -1169,7 +1137,7 @@ hg_test(hg_thread_pool) {
 
         bool vals[100] = {};
         for (bool& val : vals) {
-            hg_call_par(&fence, {&val, [](void *data) {
+            threads->call_par(&fence, {&val, [](void *data) {
                 *(bool *)data = true;
             }});
         }
@@ -1189,7 +1157,7 @@ hg_test(hg_thread_pool) {
 
         bool vals[100] = {};
         for (u32 i = 0; i < hg_countof(vals); ++i) {
-            hg_call_par(&fence, hg_function<void()>(arena, [&vals, i]() {
+            threads->call_par(&fence, hg_function<void()>(arena, [&vals, i]() {
                 vals[i] = true;
             }).value());
         }
@@ -1211,7 +1179,7 @@ hg_test(hg_thread_pool) {
             }
         };
 
-        hg_for_par(hg_countof(vals), 16, {&vals, iter});
+        threads->for_par(hg_countof(vals), 16, {&vals, iter});
 
         for (bool& val : vals) {
             hg_test_assert(val == true);
@@ -1228,7 +1196,7 @@ hg_test(hg_thread_pool) {
             }
         };
 
-        hg_for_par(hg_countof(vals), 16, hg_function_view<void(usize, usize)>(iter));
+        threads->for_par(hg_countof(vals), 16, hg_function_view<void(usize, usize)>(iter));
 
         for (bool& val : vals) {
             hg_test_assert(val == true);
@@ -1241,7 +1209,7 @@ hg_test(hg_thread_pool) {
 
         bool vals[100] = {};
 
-        hg_for_par(hg_countof(vals), 16, hg_function<void(usize, usize)>(arena, [&](usize begin, usize end) {
+        threads->for_par(hg_countof(vals), 16, hg_function<void(usize, usize)>(arena, [&](usize begin, usize end) {
             hg_assert(begin < end && end <= hg_countof(vals));
             for (; begin < end; ++begin) {
                 vals[begin] = true;
@@ -1404,9 +1372,6 @@ hg_test(hg_ecs) {
     hg_test_assert(ecs.component_count<u64>() == 0);
 
     {
-        hg_threads_init(mem, std::thread::hardware_concurrency() - 1, 1024);
-        hg_defer(hg_threads_deinit(mem));
-
         HgArena arena = arena.create(mem, 4096).value();
         hg_defer(arena.destroy(mem));
 
@@ -1566,199 +1531,126 @@ hg_test(hg_ecs_sort) {
     return true;
 }
 
-hg_test(hg_resource_manager) {
-    HgStdAllocator mem;
-
-    hg_resource_manager_init(mem, 128, 128);
-    hg_defer(hg_resource_manager_deinit(mem));
-
-    hg_test_assert(hg_get_resource_manager() != nullptr);
-
-    const char *file1_name = "hg_test_dir/rm_file1.bin";
-    u8 file1_data[] = {1, 2, 3, 4};
-    HgResourceID file1 = hg_hash(file1_name);
-    hg_test_assert(hg_file_save_binary({file1_data, sizeof(file1_data), alignof(u32)}, file1_name));
-
-    const char *file2_name = "hg_test_dir/rm_file2.bin";
-    u8 file2_data[] = {5, 6, 7, 8};
-    HgResourceID file2 = hg_hash(file2_name);
-    hg_test_assert(hg_file_save_binary({file2_data, sizeof(file2_data), alignof(u32)}, file2_name));
-
-    hg_test_assert(file1 != file2);
-
-    std::atomic_int called;
-    called.store(0);
-
-    {
-        hg_register_resource(file1);
-        hg_register_resource(file2);
-        hg_test_assert(hg_is_resource_registered(file1));
-        hg_test_assert(hg_is_resource_registered(file2));
-    }
-
-    {
-        auto file_load_fn = [](void *pcalled, HgAllocator& lmem, std::string_view path) -> void * {
-            ++*(std::atomic_int *)pcalled;
-
-            char *cpath = (char *)alloca(path.length() + 1);
-            std::memcpy(cpath, path.data(), path.length());
-            cpath[path.length()] = '\0';
-
-            HgSpan<void> *file = lmem.alloc<HgSpan<void>>();
-            if (file == nullptr)
-                goto cleanup_file_pointer;
-
-            *file = hg_file_load_binary(lmem, cpath);
-            if (*file == nullptr)
-                goto cleanup_file_data;
-
-            return file;
-
-    cleanup_file_data:
-            lmem.free(file);
-    cleanup_file_pointer:
-            return nullptr;
-        };
-
-        HgFunctionView<void *(HgAllocator&, std::string_view)> file_load{&called, file_load_fn};
-
-        HgFence fence;
-
-        hg_test_assert(called.load() == 0);
-        hg_load_resource(&fence, file_load, mem, file1, file1_name);
-        hg_load_resource(&fence, file_load, mem, file2, file2_name);
-
-        hg_test_assert(fence.wait(2.0));
-        hg_test_assert(called.load() == 2);
-
-        hg_test_assert(hg_get_resource(file1) != nullptr);
-        hg_test_assert(hg_get_resource(file2) != nullptr);
-
-        HgSpan<void> *file1_loaded = (HgSpan<void> *)hg_get_resource(file1);
-        HgSpan<void> *file2_loaded = (HgSpan<void> *)hg_get_resource(file2);
-
-        hg_test_assert(file1_loaded != nullptr);
-        hg_test_assert(file2_loaded != nullptr);
-
-        hg_test_assert(file1_loaded->size() == sizeof(file1_data));
-        hg_test_assert(file2_loaded->size() == sizeof(file2_data));
-
-        hg_test_assert(std::memcmp(file1_loaded->data, file1_data, file1_loaded->size()) == 0);
-        hg_test_assert(std::memcmp(file2_loaded->data, file2_data, file2_loaded->size()) == 0);
-    }
-
-    {
-        auto file_store_fn = [](void *pcalled, void *resource, std::string_view path) {
-            ++*(std::atomic_int *)pcalled;
-
-            HgSpan<void> *file = (HgSpan<void> *)resource;
-
-            char *cpath = (char *)alloca(path.length() + 1);
-            std::memcpy(cpath, path.data(), path.length());
-            cpath[path.length()] = '\0';
-
-            hg_file_save_binary(*file, cpath);
-        };
-
-        HgFunctionView<void(void *, std::string_view)> file_store{&called, file_store_fn};
-
-        u8 file1_data_new[] = {1, 2, 3, 4, 5, 6, 7, 8};
-        u8 file2_data_new[] = {9, 10, 11, 12, 13, 14, 15, 16};
-
-        HgSpan<void> *file1_new = mem.alloc<HgSpan<void>>();
-        HgSpan<void> *file2_new = mem.alloc<HgSpan<void>>();
-        *file1_new = mem.alloc(sizeof(file1_data_new), alignof(u8));
-        *file2_new = mem.alloc(sizeof(file2_data_new), alignof(u8));
-
-        std::memcpy(file1_new->data, file1_data_new, file1_new->size());
-        std::memcpy(file2_new->data, file2_data_new, file2_new->size());
-
-        HgSpan<void> *file1_old = (HgSpan<void> *)hg_exchange_resource(file1, file1_new);
-        HgSpan<void> *file2_old = (HgSpan<void> *)hg_exchange_resource(file2, file2_new);
-
-        hg_test_assert(file1_old != nullptr);
-        hg_test_assert(file2_old != nullptr);
-        hg_test_assert(*file1_old != nullptr);
-        hg_test_assert(*file2_old != nullptr);
-
-        mem.free(*file1_old);
-        mem.free(*file2_old);
-        mem.free(file1_old);
-        mem.free(file2_old);
-
-        HgFence fence;
-
-        hg_test_assert(called.load() == 2);
-        hg_store_resource(&fence, file_store, file1, file1_name);
-        hg_store_resource(&fence, file_store, file2, file2_name);
-
-        hg_test_assert(fence.wait(2.0));
-        hg_test_assert(called.load() == 4);
-
-        HgSpan<void> file1_loaded_new = hg_file_load_binary(mem, file1_name);
-        HgSpan<void> file2_loaded_new = hg_file_load_binary(mem, file2_name);
-        hg_defer(hg_file_unload_binary(mem, file1_loaded_new));
-        hg_defer(hg_file_unload_binary(mem, file2_loaded_new));
-
-        hg_test_assert(file1_loaded_new != nullptr);
-        hg_test_assert(file2_loaded_new != nullptr);
-
-        hg_test_assert(file1_loaded_new.size() == sizeof(file1_data_new));
-        hg_test_assert(file2_loaded_new.size() == sizeof(file2_data_new));
-
-        hg_test_assert(std::memcmp(file1_loaded_new.data, file1_data_new, file1_loaded_new.size()) == 0);
-        hg_test_assert(std::memcmp(file2_loaded_new.data, file2_data_new, file2_loaded_new.size()) == 0);
-    }
-
-    {
-        auto file_unload_fn = [](void *pcalled, HgAllocator& lmem, void *resource) {
-            ++*(std::atomic_int *)pcalled;
-
-            HgSpan<void> *file = (HgSpan<void> *)resource;
-            lmem.free(*file);
-            lmem.free(file);
-        };
-
-        HgFunctionView<void(HgAllocator&, void *)> file_unload{&called, file_unload_fn};
-
-        HgFence fence;
-
-        hg_test_assert(called.load() == 4);
-        hg_unload_resource(&fence, file_unload, mem, file1);
-        hg_unload_resource(&fence, file_unload, mem, file2);
-
-        hg_test_assert(fence.wait(2.0));
-        hg_test_assert(called.load() == 6);
-
-        hg_test_assert(hg_get_resource(file1) == nullptr);
-        hg_test_assert(hg_get_resource(file2) == nullptr);
-    }
-
-    {
-        hg_unregister_resource(file1);
-        hg_unregister_resource(file2);
-        hg_test_assert(!hg_is_resource_registered(file1));
-        hg_test_assert(!hg_is_resource_registered(file2));
-    }
-
-    return true;
-}
-
 hg_test(hg_file_binary) {
     HgStdAllocator mem;
 
     u32 save_data[] = {12, 42, 100, 128};
 
-    hg_test_assert(!hg_file_save_binary({save_data, sizeof(save_data), alignof(u32)}, "dir/does/not/exist"));
-    hg_test_assert(hg_file_load_binary(mem, "file_does_not_exist") == nullptr);
+    const char *file_path = "hg_test_dir/file_bin_test.bin";
+    HgResourceID<HgFileBinary> file_id = hg_hash(file_path);
 
-    hg_test_assert(hg_file_save_binary({save_data, sizeof(save_data), alignof(u32)}, "hg_test_dir/file_bin_test.bin"));
-    HgSpan<void> load_data = hg_file_load_binary(mem, "hg_test_dir/file_bin_test.bin");
-    hg_defer(hg_file_unload_binary(mem, load_data));
+    hg_resources->register_id(mem, file_id);
+    hg_test_assert(hg_resources->is_registered(file_id));
+    hg_test_assert(hg_resources->get_untyped(file_id) != nullptr);
 
-    hg_test_assert(load_data != nullptr);
-    hg_test_assert(load_data.size() == sizeof(save_data));
-    hg_test_assert(memcmp(save_data, load_data.data, load_data.size()) == 0);
+    HgFileBinary& file = hg_resources->get(file_id);
+
+    HgFence fence;
+    {
+        hg_load_file_binary(&fence, mem, file_id, "file_does_not_exist.bin");
+        hg_test_assert(fence.wait(2.0));
+
+        hg_test_assert(file.data == nullptr);
+        hg_test_assert(file.size == 0);
+    }
+
+    {
+        file.data = save_data;
+        file.size = sizeof(save_data);
+
+        hg_store_file_binary(&fence, file_id, "dir/does/not/exist.bin");
+        hg_test_assert(fence.wait(2.0));
+
+        FILE *file_handle = std::fopen("dir/does/not/exist.bin", "rb");
+        hg_test_assert(file_handle == nullptr);
+    }
+
+    {
+        file.data = save_data;
+        file.size = sizeof(save_data);
+
+        hg_store_file_binary(&fence, file_id, file_path);
+        hg_test_assert(fence.wait(2.0));
+
+        hg_load_file_binary(&fence, mem, file_id, file_path);
+        hg_test_assert(fence.wait(2.0));
+
+        hg_test_assert(file.data != nullptr);
+        hg_test_assert(file.data != save_data);
+        hg_test_assert(file.size == sizeof(save_data));
+        hg_test_assert(std::memcmp(save_data, file.data, file.size) == 0);
+
+        hg_unload_file_binary(&fence, mem, file_id);
+    }
+    hg_test_assert(fence.wait(2.0));
+
+    hg_resources->unregister_id(mem, file_id);
+    hg_test_assert(!hg_resources->is_registered(file_id));
+
+    return true;
+}
+
+hg_test(hg_image) {
+    HgStdAllocator mem;
+
+    struct color {
+        u8 r, g, b, a;
+
+        operator u32() { return *(u32 *)this; }
+    };
+
+    u32 red =   color{0xff, 0x00, 0x00, 0xff};
+    u32 green = color{0x00, 0xff, 0x00, 0xff};
+    u32 blue =  color{0x00, 0x00, 0xff, 0xff};
+
+    u32 save_data[3][3] = {
+        {red, green, blue},
+        {blue, red, green},
+        {green, blue, red},
+    };
+    VkFormat save_format = VK_FORMAT_R8G8B8A8_SRGB;
+    u32 save_width = 3;
+    u32 save_height = 3;
+    u32 save_depth = 1;
+
+    const char *file_path = "hg_test_dir/file_image_test.png";
+    HgResourceID<HgImage> file_id = hg_hash(file_path);
+
+    hg_resources->register_id(mem, file_id);
+    hg_test_assert(hg_resources->is_registered(file_id));
+    hg_test_assert(hg_resources->get_untyped(file_id) != nullptr);
+
+    HgImage& file = hg_resources->get(file_id);
+
+    HgFence fence;
+    {
+        file.data = save_data;
+        file.format = save_format;
+        file.width = save_width;
+        file.height = save_height;
+        file.depth = save_depth;
+
+        hg_store_image(&fence, file_id, file_path);
+        hg_test_assert(fence.wait(2.0));
+
+        hg_load_image(&fence, mem, file_id, file_path);
+        hg_test_assert(fence.wait(2.0));
+
+        hg_test_assert(file.data != nullptr);
+        hg_test_assert(file.data != save_data);
+        hg_test_assert(file.format == save_format);
+        hg_test_assert(file.width == save_width);
+        hg_test_assert(file.height == save_height);
+        hg_test_assert(file.depth == save_depth);
+        hg_test_assert(file.width * file.height * file.depth * hg_vk_format_to_size(file.format) == sizeof(save_data));
+        hg_test_assert(std::memcmp(save_data, file.data, sizeof(save_data)) == 0);
+
+        hg_unload_image(&fence, mem, file_id);
+    }
+    hg_test_assert(fence.wait(2.0));
+
+    hg_resources->unregister_id(mem, file_id);
+    hg_test_assert(!hg_resources->is_registered(file_id));
 
     return true;
 }

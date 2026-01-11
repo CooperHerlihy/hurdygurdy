@@ -47,11 +47,6 @@ for shader in "${SHADERS[@]}"; do
         ${name}.spv > ${BUILD_DIR}/shaders/${name}.spv.h
 done
 
-echo "hurdygurdy.cpp"
-c++ ${STD} ${CONFIG} ${WARNINGS} ${INCLUDES} \
-    -c ${SRC_DIR}/src/hurdygurdy.cpp \
-    -o ${BUILD_DIR}/hurdygurdy.o
-
 if [ ! -f "${BUILD_DIR}/vk_mem_alloc.o" ]; then
     echo "vk_mem_alloc.cpp"
     c++ ${STD} ${CONFIG} ${INCLUDES} \
@@ -59,8 +54,23 @@ if [ ! -f "${BUILD_DIR}/vk_mem_alloc.o" ]; then
         -o ${BUILD_DIR}/vk_mem_alloc.o
 fi
 
+if [ ! -f "${BUILD_DIR}/stb.o" ]; then
+    echo "stb.c"
+    c++ ${STD} ${CONFIG} ${INCLUDES} \
+        -c ${SRC_DIR}/src/stb.c \
+        -o ${BUILD_DIR}/stb.o
+fi
+
+echo "hurdygurdy.cpp"
+c++ ${STD} ${CONFIG} ${WARNINGS} ${INCLUDES} \
+    -c ${SRC_DIR}/src/hurdygurdy.cpp \
+    -o ${BUILD_DIR}/hurdygurdy.o
+
 echo "libhurdygurdy.a"
-ar rcs ${BUILD_DIR}/libhurdygurdy.a ${BUILD_DIR}/hurdygurdy.o ${BUILD_DIR}/vk_mem_alloc.o
+ar rcs ${BUILD_DIR}/libhurdygurdy.a \
+    ${BUILD_DIR}/hurdygurdy.o \
+    ${BUILD_DIR}/vk_mem_alloc.o \
+    ${BUILD_DIR}/stb.o
 
 echo "test.cpp"
 c++ ${STD} ${CONFIG} ${WARNINGS} ${INCLUDES} \

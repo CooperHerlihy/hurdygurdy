@@ -78,6 +78,10 @@
 #define HG_DEBUG_MODE 1
 #endif
 
+#ifdef HG_DEBUG_MODE
+#define HG_VK_DEBUG_MESSENGER 1
+#endif
+
 #ifdef HG_RELEASE_MODE
 #define HG_NO_ASSERTIONS 1
 #endif
@@ -85,10 +89,11 @@
 /**
  * Initializes the HurdyGurdy library
  *
- * Run this function before calling functions from these sections:
+ * Subsystems initialized:
  * - Threading
+ * - Resources
+ * - Graphics
  * - Windowing
- * - Vulkan
  */
 void hg_init();
 
@@ -501,6 +506,30 @@ struct HgVec2 {
         hg_assert(index < 2);
         return *(&x + index);
     }
+
+    constexpr const HgVec2& operator+=(const HgVec2& other) {
+        x += other.x;
+        y += other.y;
+        return *this;
+    }
+
+    constexpr const HgVec2& operator-=(const HgVec2& other) {
+        x -= other.x;
+        y -= other.y;
+        return *this;
+    }
+
+    constexpr const HgVec2& operator*=(const HgVec2& other) {
+        x *= other.x;
+        y *= other.y;
+        return *this;
+    }
+
+    constexpr const HgVec2& operator/=(const HgVec2& other) {
+        x /= other.x;
+        y /= other.y;
+        return *this;
+    }
 };
 
 using HgVec2f = HgVec2<f32>;
@@ -539,6 +568,34 @@ struct HgVec3 {
     constexpr const T& operator[](usize index) const {
         hg_assert(index < 3);
         return *(&x + index);
+    }
+
+    constexpr const HgVec3& operator+=(const HgVec3& other) {
+        x += other.x;
+        y += other.y;
+        z += other.z;
+        return *this;
+    }
+
+    constexpr const HgVec3& operator-=(const HgVec3& other) {
+        x -= other.x;
+        y -= other.y;
+        z -= other.z;
+        return *this;
+    }
+
+    constexpr const HgVec3& operator*=(const HgVec3& other) {
+        x *= other.x;
+        y *= other.y;
+        z *= other.z;
+        return *this;
+    }
+
+    constexpr const HgVec3& operator/=(const HgVec3& other) {
+        x /= other.x;
+        y /= other.y;
+        z /= other.z;
+        return *this;
     }
 };
 
@@ -581,6 +638,38 @@ struct HgVec4 {
         hg_assert(index < 4);
         return *(&x + index);
     }
+
+    constexpr const HgVec4& operator+=(const HgVec4& other) {
+        x += other.x;
+        y += other.y;
+        z += other.z;
+        w += other.w;
+        return *this;
+    }
+
+    constexpr const HgVec4& operator-=(const HgVec4& other) {
+        x -= other.x;
+        y -= other.y;
+        z -= other.z;
+        w -= other.w;
+        return *this;
+    }
+
+    constexpr const HgVec4& operator*=(const HgVec4& other) {
+        x *= other.x;
+        y *= other.y;
+        z *= other.z;
+        w *= other.w;
+        return *this;
+    }
+
+    constexpr const HgVec4& operator/=(const HgVec4& other) {
+        x /= other.x;
+        y /= other.y;
+        z /= other.z;
+        w /= other.w;
+        return *this;
+    }
 };
 
 using HgVec4f = HgVec4<f32>;
@@ -618,6 +707,30 @@ struct HgMat2 {
     constexpr const T& operator[](usize index) const {
         hg_assert(index < 2);
         return *(&x + index);
+    }
+
+    constexpr const HgMat2& operator+=(const HgMat2& other) {
+        x += other.x;
+        y += other.y;
+        return *this;
+    }
+
+    constexpr const HgMat2& operator-=(const HgMat2& other) {
+        x -= other.x;
+        y -= other.y;
+        return *this;
+    }
+
+    constexpr const HgMat2& operator*=(const HgMat2& other) {
+        x *= other.x;
+        y *= other.y;
+        return *this;
+    }
+
+    constexpr const HgMat2& operator/=(const HgMat2& other) {
+        x /= other.x;
+        y /= other.y;
+        return *this;
     }
 };
 
@@ -661,6 +774,34 @@ struct HgMat3 {
     constexpr const T& operator[](usize index) const {
         hg_assert(index < 3);
         return *(&x + index);
+    }
+
+    constexpr const HgMat3& operator+=(const HgMat3& other) {
+        x += other.x;
+        y += other.y;
+        z += other.z;
+        return *this;
+    }
+
+    constexpr const HgMat3& operator-=(const HgMat3& other) {
+        x -= other.x;
+        y -= other.y;
+        z -= other.z;
+        return *this;
+    }
+
+    constexpr const HgMat3& operator*=(const HgMat3& other) {
+        x *= other.x;
+        y *= other.y;
+        z *= other.z;
+        return *this;
+    }
+
+    constexpr const HgMat3& operator/=(const HgMat3& other) {
+        x /= other.x;
+        y /= other.y;
+        z /= other.z;
+        return *this;
     }
 };
 
@@ -709,6 +850,38 @@ struct HgMat4 {
         hg_assert(index < 4);
         return *(&x + index);
     }
+
+    constexpr const HgMat4& operator+=(const HgMat4& other) {
+        x += other.x;
+        y += other.y;
+        z += other.z;
+        w += other.w;
+        return *this;
+    }
+
+    constexpr const HgMat4& operator-=(const HgMat4& other) {
+        x -= other.x;
+        y -= other.y;
+        z -= other.z;
+        w -= other.w;
+        return *this;
+    }
+
+    constexpr const HgMat4& operator*=(const HgMat4& other) {
+        x *= other.x;
+        y *= other.y;
+        z *= other.z;
+        w *= other.w;
+        return *this;
+    }
+
+    constexpr const HgMat4& operator/=(const HgMat4& other) {
+        x /= other.x;
+        y /= other.y;
+        z /= other.z;
+        w /= other.w;
+        return *this;
+    }
 };
 
 using HgMat4f = HgMat4<f32>;
@@ -753,6 +926,30 @@ struct HgComplex {
         hg_assert(index < 2);
         return *(&r + index);
     }
+
+    constexpr const HgComplex& operator+=(const HgComplex& other) {
+        r += other.r;
+        i += other.i;
+        return *this;
+    }
+
+    constexpr const HgComplex& operator-=(const HgComplex& other) {
+        r -= other.r;
+        i -= other.i;
+        return *this;
+    }
+
+    constexpr const HgComplex& operator*=(const HgComplex& other) {
+        r *= other.r;
+        i *= other.i;
+        return *this;
+    }
+
+    constexpr const HgComplex& operator/=(const HgComplex& other) {
+        r /= other.r;
+        i /= other.i;
+        return *this;
+    }
 };
 
 using HgComplexf = HgComplex<f32>;
@@ -796,6 +993,38 @@ struct HgQuat {
     constexpr const T& operator[](usize index) const {
         hg_assert(index < 4);
         return *(&r + index);
+    }
+
+    constexpr const HgQuat& operator+=(const HgQuat& other) {
+        r += other.r;
+        i += other.i;
+        j += other.j;
+        k += other.k;
+        return *this;
+    }
+
+    constexpr const HgQuat& operator-=(const HgQuat& other) {
+        r -= other.r;
+        i -= other.i;
+        j -= other.j;
+        k -= other.k;
+        return *this;
+    }
+
+    constexpr const HgQuat& operator*=(const HgQuat& other) {
+        r *= other.r;
+        i *= other.i;
+        j *= other.j;
+        k *= other.k;
+        return *this;
+    }
+
+    constexpr const HgQuat& operator/=(const HgQuat& other) {
+        r /= other.r;
+        i /= other.i;
+        j /= other.j;
+        k /= other.k;
+        return *this;
     }
 };
 
@@ -3630,6 +3859,40 @@ struct HgHashMap {
     }
 
     /**
+     * Removes a value from the hash map, and returns it
+     *
+     * Parameters
+     * - key The key to remove from
+     */
+    HgOption<Value> get_remove(const Key& key) {
+        hg_assert(load < slots.count);
+
+        usize index = hg_hash(key) % slots.count;
+        while (slots[index].has_value() && slots[index]->key != key) {
+            index = (index + 1) % slots.count;
+        }
+        if (!slots[index].has_value())
+            return std::nullopt;
+
+        HgOption<Value> val = slots[index]->value;
+        slots[index].reset();
+        --load;
+
+        index = (index + 1) % slots.count;
+        while (slots[index].has_value()) {
+            if (hg_hash(slots[index]->key) % slots.count != index) {
+                Slot temp = slots[index];
+                slots[index].reset();
+                --load;
+                insert(temp->key, temp->value);
+            }
+            index = (index + 1) % slots.count;
+        }
+
+        return val;
+    }
+
+    /**
      * Removes a value from the hash map
      *
      * Parameters
@@ -4209,7 +4472,7 @@ struct HgThreadPool {
      * - fence The fence to signal upon completion, may be nullptr
      * - work The function to be executed
      */
-    void submit_work(HgFence *fence, HgFunctionView<void()> work);
+    void call_par(HgFence *fence, HgFunctionView<void()> work);
 
     /**
      * Iterates in parallel over a function n times in chunks
@@ -4221,58 +4484,13 @@ struct HgThreadPool {
      * - chunk_size The number of elementes to iterate per parallel execution
      * - fn The function to use to iterate, takes begin and end indices
      */
-    void submit_work_range(usize count, usize chunk_size, HgFunctionView<void(usize begin, usize end)> fn);
+    void for_par(usize count, usize chunk_size, HgFunctionView<void(usize begin, usize end)> fn);
 };
 
 /**
- * Initializes the global thread pool
- *
- * Parameters
- * - mem The allocator to use
- * - thread_count The number of threads in the pool
- * - queue_size The number of slots in the work queue
+ * A global thread pool
  */
-void hg_threads_init(HgAllocator& mem, usize thread_count, usize queue_size);
-
-/**
- * Shuts down the global thread pool
- *
- * Parameters
- * - mem The allocator to use
- */
-void hg_threads_deinit(HgAllocator& mem);
-
-/**
- * Returns a pointer to the global thread pool
- */
-HgThreadPool *hg_get_thread_pool();
-
-/**
- * Waits for all threads in the global thread pool
- *
- * Parameters
- * - timeout_seconds The time in seconds to wait before timing out
- */
-bool hg_threads_wait_idle(f64 timeout_seconds);
-
-/**
- * Executes a function in parallel in the global thread pool
- *
- * Parameters
- * - fence The fence to signal on completion, may be nullptr
- * - fn The function to execute in parallel
- */
-void hg_call_par(HgFence *fence, HgFunctionView<void()> fn);
-
-/**
- * Executes a range function in parallel in the global thread pool
- *
- * Parameters
- * - count The number of elements to iterate [0, count)
- * - chunk_size The number of elementes to iterate per parallel execution
- * - fn The function to execute in parallel
- */
-void hg_for_par(usize count, usize chunk_size, HgFunctionView<void(usize begin, usize end)> fn);
+inline HgThreadPool *hg_threads = nullptr;
 
 /**
  * The handle for an ECS entity
@@ -5034,7 +5252,7 @@ struct HgECS {
             }
         };
 
-        hg_for_par(system.dense.count, chunk_size, hg_function_view<void(usize, usize)>(fn_it));
+        hg_threads->for_par(system.dense.count, chunk_size, hg_function_view<void(usize, usize)>(fn_it));
     }
 
     /**
@@ -5062,7 +5280,7 @@ struct HgECS {
             }
         };
 
-        hg_for_par(component_count(id), chunk_size, hg_function_view<void(usize, usize)>(fn_it));
+        hg_threads->for_par(component_count(id), chunk_size, hg_function_view<void(usize, usize)>(fn_it));
     }
 
     /**
@@ -5172,52 +5390,66 @@ struct HgECS {
     }
 };
 
+template<typename T>
+struct HgResourceID;
+
 /**
  * The resource id type created from hg_hash
  */
-using HgResourceID = decltype(hg_hash(std::string_view{}));
+template<>
+struct HgResourceID<void> {
+    usize id;
+
+    HgResourceID() = default;
+
+    constexpr HgResourceID(usize val) : id{val} {}
+    constexpr operator usize() { return id; }
+
+    template<typename U>
+    constexpr HgResourceID(HgResourceID<U> other) : id{other.id} {}
+};
+
+/**
+ * The resource id type created from hg_hash
+ */
+template<typename T>
+struct HgResourceID {
+    usize id;
+
+    constexpr HgResourceID(usize val) : id{val} {}
+    constexpr operator usize() { return id; }
+
+    explicit operator HgResourceID<void>() { return {id}; }
+};
+
+template<typename T, typename U>
+constexpr bool operator==(HgResourceID<T> lhs, HgResourceID<U> rhs) {
+    return lhs.id == rhs.id;
+}
+
+template<typename T, typename U>
+constexpr bool operator!=(HgResourceID<T> lhs, HgResourceID<U> rhs) {
+    return lhs.id != rhs.id;
+}
+
+/**
+ * Hash map hash for resource id
+ */
+template<typename T>
+constexpr usize hg_hash(HgResourceID<T> val) {
+    return hg_hash(val.id);
+}
 
 /**
  * A resource manager to load, store, and unload resources
  */
 struct HgResourceManager {
-    enum RequestType {
-        REQUEST_LOAD = 0,
-        REQUEST_STORE = 1,
-        REQUEST_UNLOAD = 2,
-    };
-
-    struct LoadRequest {
-        RequestType type = REQUEST_LOAD;
+    struct Request {
         HgFence *fence;
         HgAllocator *mem;
-        HgResourceID id;
+        HgResourceID<void> id;
         std::string_view path;
-        HgFunctionView<void *(HgAllocator& mem, std::string_view path)> fn;
-    };
-
-    struct StoreRequest {
-        RequestType type = REQUEST_STORE;
-        HgFence *fence;
-        HgResourceID id;
-        std::string_view path;
-        HgFunctionView<void(void *resource, std::string_view path)> fn;
-    };
-
-    struct UnloadRequest {
-        RequestType type = REQUEST_UNLOAD;
-        HgFence *fence;
-        HgAllocator *mem;
-        HgResourceID id;
-        HgFunctionView<void(HgAllocator& mem, void *resource)> fn;
-    };
-
-    union Request {
-        RequestType type;
-        HgFence *fence;
-        LoadRequest load;
-        StoreRequest store;
-        UnloadRequest unload;
+        HgFunctionView<void(HgAllocator *mem, void *resource, std::string_view path)> fn;
     };
 
     /**
@@ -5227,7 +5459,7 @@ struct HgResourceManager {
     /**
      * Where the resources are stored
      */
-    HgHashMap<HgResourceID, void *> registry;
+    HgHashMap<HgResourceID<void>, void *> registry;
     /**
      * The mutex protecting the request_queue
      */
@@ -5257,6 +5489,9 @@ struct HgResourceManager {
     /**
      * Destroys a resource manager
      *
+     * Note, destroying the resource manager without unloading and unregistering
+     * every resource is a leak
+     *
      * Parameters
      * - mem The allocator to use
      * - rm The resource manager to destroy
@@ -5264,20 +5499,58 @@ struct HgResourceManager {
     static void destroy(HgAllocator& mem, HgResourceManager *rm);
 
     /**
-     * Add a resource id to the registry as nullptr
+     * Add a resource id to the registry
      *
      * Parameters
+     * - mem The allocator to use
      * - id The id to register
+     * - size The size in bytes of the resource entry
+     * - alignment The alignment of the resource entry
+     *
+     * Returns
+     * - Whether the allocation succeeded
      */
-    void register_id(HgResourceID id);
+    bool register_id_untyped(HgAllocator& mem, HgResourceID<void> id, usize size, usize alignment);
 
     /**
-     * Remove a resource id from the registry as nullptr
+     * Add a resource id to the registry
      *
      * Parameters
-     * - id The id to unregister
+     * - mem The allocator to use
+     * - id The id to register
+     *
+     * Returns
+     * - Whether the allocation succeeded
      */
-    void unregister_id(HgResourceID id);
+    template<typename T>
+    bool register_id(HgAllocator& mem, HgResourceID<T> id) {
+        return register_id_untyped(mem, id, sizeof(T), alignof(T));
+    }
+
+    /**
+     * Remove a resource id from the registry
+     *
+     * Parameters
+     * - mem The allocator to use
+     * - id The id to unregister
+     * - size The size in bytes of the resource entry
+     * - alignment The alignment of the resource entry
+     */
+    void unregister_id_untyped(HgAllocator& mem, HgResourceID<void> id, usize size, usize alignment);
+
+    /**
+     * Remove a resource id from the registry
+     *
+     * Parameters
+     * - mem The allocator to use
+     * - id The id to unregister
+     * - size The size in bytes of the resource entry
+     * - alignment The alignment of the resource entry
+     */
+    template<typename T>
+    void unregister_id(HgAllocator& mem, HgResourceID<T> id) {
+        unregister_id_untyped(mem, id, sizeof(T), alignof(T));
+    }
 
     /**
      * Checks whether a resource id is registered
@@ -5288,44 +5561,20 @@ struct HgResourceManager {
      * Returns
      * - Whether the id is registered
      */
-    bool is_registered(HgResourceID id);
+    bool is_registered(HgResourceID<void> id);
 
     /**
-     * Load a resource from disc into memory
+     * Request to operate on a resource
      *
      * Parameters
      * - fence The fence to signal on completion
-     * - fn The function to use to load
+     * - fn The function to call
      * - mem The allocator to use
      * - id The id of the resource
-     * - path The file path to load from
+     * - path The file path to load from/store to
      */
-    void load(HgFence *fence, HgFunctionView<void *(HgAllocator& mem, std::string_view path)> fn,
-        HgAllocator& mem, HgResourceID id, std::string_view path);
-
-    /**
-     * Store a resource from memory onto disc
-     *
-     * Parameters
-     * - fence The fence to signal on completion
-     * - fn The function to use to store
-     * - id The id of the resource
-     * - path The file path to store at
-     */
-    void store(HgFence *fence, HgFunctionView<void(void *resource, std::string_view path)> fn,
-        HgResourceID id, std::string_view path);
-
-    /**
-     * Unload a resource from memory
-     *
-     * Parameters
-     * - fence The fence to signal on completion
-     * - fn The function to use to unload
-     * - mem The allocator to use
-     * - id The id of the resource
-     */
-    void unload(HgFence *fence, HgFunctionView<void(HgAllocator& mem, void *resource)> fn,
-        HgAllocator& mem, HgResourceID id);
+    void request(HgFence *fence, HgFunctionView<void(HgAllocator *mem, void *resource, std::string_view path)> fn,
+        HgAllocator *mem, HgResourceID<void> id, std::string_view path);
 
     /**
      * Gets a pointer to a resource
@@ -5336,7 +5585,21 @@ struct HgResourceManager {
      * Returns
      * - A pointer to the resource
      */
-    void *get(HgResourceID id);
+    void *get_untyped(HgResourceID<void> id);
+
+    /**
+     * Gets a pointer to a resource
+     *
+     * Parameters
+     * - id The id of the resource
+     *
+     * Returns
+     * - A pointer to the resource
+     */
+    template<typename T>
+    T& get(HgResourceID<T> id) {
+        return *(T *)get_untyped(id);
+    }
 
     /**
      * Exchanges the resource contained at the id for a new one
@@ -5348,159 +5611,132 @@ struct HgResourceManager {
      * Returns
      * - The previously contained resource
      */
-    void *exchange(HgResourceID id, void *new_resource);
+    void *exchange_untyped(HgResourceID<void> id, void *new_resource);
+
+    /**
+     * Exchanges the resource contained at the id for a new one
+     *
+     * Parameters
+     * - id The id of the resource
+     * - new_resource The new resource to contain
+     *
+     * Returns
+     * - The previously contained resource
+     */
+    template<typename T>
+    T *exchange(HgResourceID<void> id, T *new_resource) {
+        return (T *)exchange_untyped(id, (void *)new_resource);
+    }
+
+    /**
+     * Exchanges the resource contained at the id for a new one
+     *
+     * Parameters
+     * - id The id of the resource
+     * - new_resource The new resource to contain
+     *
+     * Returns
+     * - The previously contained resource
+     */
+    template<typename OldT, typename NewT>
+    OldT *exchange(HgResourceID<OldT> id, NewT *new_resource) {
+        return (OldT *)exchange_untyped(id, (void *)new_resource);
+    }
 };
 
 /**
- * Initializes the global resource manager
- *
- * Parameters
- * - mem The allocator to use
- * - max_resources The max resources that can be registered
- * - max_requests The max requests that can be concurrently processed
+ * A global resource manager
  */
-void hg_resource_manager_init(HgAllocator& mem, usize max_resources, usize max_requests);
+inline HgResourceManager *hg_resources;
 
 /**
- * Deinitializes the global resource manager
- *
- * Parameters
- * - mem The allocator to use
+ * A loaded binary file
  */
-void hg_resource_manager_deinit(HgAllocator& mem);
+struct HgFileBinary {
+    void *data;
+    usize size;
+
+    static constexpr usize alignment = alignof(std::max_align_t);
+};
 
 /**
- * Returns a pointer to the global resource manager
- */
-HgResourceManager *hg_get_resource_manager();
-
-/**
- * Register a new global resource id
- *
- * Parameters
- * - id The resource id to register
- */
-void hg_register_resource(HgResourceID id);
-
-/**
- * Unregisters a global resource id
- *
- * Parameters
- * - id The resource id to unregister
- */
-void hg_unregister_resource(HgResourceID id);
-
-/**
- * Checks whether a global resource id is registered
- *
- * Parameters
- * - id The id to check registration
- *
- * Returns
- * - Whether the id is registered
- */
-bool hg_is_resource_registered(HgResourceID id);
-
-/**
- * Load a global resource from disc into memory
+ * Load a binary file from disc
  *
  * Parameters
  * - fence The fence to signal on completion
- * - fn The function to use to load
  * - mem The allocator to use
- * - id The id of the resource
- * - path The file path to load from
+ * - id The resource id to load into
+ * - path The file path to the image
  */
-void hg_load_resource(HgFence *fence, HgFunctionView<void *(HgAllocator& mem, std::string_view path)> fn,
-    HgAllocator& mem, HgResourceID id, std::string_view path);
+void hg_load_file_binary(HgFence *fence, HgAllocator& mem, HgResourceID<HgFileBinary> id, std::string_view path);
 
 /**
- * Store a global resource from memory onto disc
+ * Unload a binary file resource
  *
  * Parameters
  * - fence The fence to signal on completion
- * - fn The function to use to store
- * - id The id of the resource
- * - path The file path to store at
+ * - mem The allocator to use
+ * - id The resource id to unload from
  */
-void hg_store_resource(HgFence *fence, HgFunctionView<void(void *resource, std::string_view path)> fn,
-    HgResourceID id, std::string_view path);
+void hg_unload_file_binary(HgFence *fence, HgAllocator& mem, HgResourceID<HgFileBinary> id);
 
 /**
- * Unload a global resource from memory
+ * Store a binary file to disc
  *
  * Parameters
  * - fence The fence to signal on completion
- * - fn The function to use to unload
- * - mem The allocator to use
- * - id The id of the resource
+ * - id The resource id to store from
+ * - path The file path
  */
-void hg_unload_resource(HgFence *fence, HgFunctionView<void(HgAllocator& mem, void *resource)> fn,
-    HgAllocator& mem, HgResourceID id);
-
-/**
- * Gets a pointer to a global resource
- *
- * Parameters
- * - id The id of the resource
- *
- * Returns
- * - A pointer to the resource
- */
-void *hg_get_resource(HgResourceID id);
-
-/**
- * Exchanges the global resource contained at the id for a new one
- *
- * Parameters
- * - id The id of the resource
- * - new_resource The new resource to contain
- *
- * Returns
- * - The previously contained resource
- */
-void *hg_exchange_resource(HgResourceID id, void *new_resource);
-
-/**
- * Loads a binary file
- *
- * Parameters
- * - allocator Where to allocate the memory from
- * - path The null terminated path to the file to load
- *
- * Returns
- * - The loaded file data if successful
- * - nullptr if the file was not found or could not be read
- */
-HgSpan<void> hg_file_load_binary(HgAllocator& allocator, const char *path);
-
-/**
- * Unloads a binary file
- *
- * Parameters
- * - allocator Where to free the memory to
- * - data The data to unload
- */
-void hg_file_unload_binary(HgAllocator& allocator, HgSpan<void> data);
-
-/**
- * Saves a binary file
- *
- * Parameters
- * - data The data to save
- * - path The path to the file to save
- *
- * Returns
- * - true if the file was saved successfully
- * - false if the file could not be written
- */
-bool hg_file_save_binary(HgSpan<const void> data, const char *path);
+void hg_store_file_binary(HgFence *fence, HgResourceID<HgFileBinary> id, std::string_view path);
 
 // text files : TODO
 // json files : TODO
 // image files : TODO
 // 3d model files : TODO
 // audio files : TODO
+
+/**
+ * A loaded image file
+ */
+struct HgImage {
+    void *data;
+    VkFormat format;
+    u32 width;
+    u32 height;
+    u32 depth;
+};
+
+/**
+ * Load an image from disc
+ *
+ * Parameters
+ * - fence The fence to signal on completion
+ * - mem The allocator to use
+ * - id The resource id to load into
+ * - path The file path to the image
+ */
+void hg_load_image(HgFence *fence, HgAllocator& mem, HgResourceID<HgImage> id, std::string_view path);
+
+/**
+ * Unload an image resource
+ *
+ * Parameters
+ * - fence The fence to signal on completion
+ * - mem The allocator to use
+ * - id The resource id to unload from
+ */
+void hg_unload_image(HgFence *fence, HgAllocator& mem, HgResourceID<HgImage> id);
+
+/**
+ * Store an image to disc
+ *
+ * Parameters
+ * - fence The fence to signal on completion
+ * - id The resource id to store from
+ * - path The file path to the image
+ */
+void hg_store_image(HgFence *fence, HgResourceID<HgImage> id, std::string_view path);
 
 /**
  * A high precision clock for timers and game deltas
@@ -5521,37 +5757,22 @@ struct HgClock {
 };
 
 /**
- * Loads the Vulkan library and the functions required to create an instance
- *
- * Note, this function is automatically called from hg_init
+ * Initializes the graphics subsystem
  */
-void hg_vulkan_init();
+void hg_graphics_init();
 
 /**
- * Unloads the Vulkan library
+ * Deinitializes the graphics subsystem
  */
-void hg_vulkan_deinit();
+void hg_graphics_deinit();
 
-/**
- * Loads the Vulkan functions which use the instance
- *
- * Note, this function is automatically called from hg_vk_create_instance
- *
- * Parameters
- * - instance The Vulkan instance, must not be nullptr
- */
-void hg_vk_load_instance(VkInstance instance);
+inline VkInstance hg_vk_instance = nullptr;
+inline VkPhysicalDevice hg_vk_physical_device = nullptr;
+inline VkDevice hg_vk_device = nullptr;
+inline VmaAllocator hg_vk_vma = nullptr;
 
-/**
- * Loads the Vulkan functions which use the Device
- *
- * Note, this function is automatically called from
- * hg_vk_create_single_queue_device
- *
- * Parameters
- * - device The Vulkan device, must not be nullptr
- */
-void hg_vk_load_device(VkDevice device);
+inline VkQueue hg_vk_queue = nullptr;
+inline u32 hg_vk_queue_family = (u32)-1;
 
 /**
  * Turns a VkResult into a string
@@ -5576,30 +5797,43 @@ const char *hg_vk_result_string(VkResult result);
 u32 hg_vk_format_to_size(VkFormat format);
 
 /**
+ * Loads the Vulkan functions which use the instance
+ *
+ * Note, this function is automatically called from hg_vk_create_instance
+ *
+ * Parameters
+ * - instance The Vulkan instance, must not be nullptr
+ */
+void hg_vk_load_instance(VkInstance instance);
+
+/**
+ * Loads the Vulkan functions which use the Device
+ *
+ * Note, this function is automatically called from
+ * hg_vk_create_single_queue_device
+ *
+ * Parameters
+ * - device The Vulkan device, must not be nullptr
+ */
+void hg_vk_load_device(VkDevice device);
+
+/**
  * Creates a Vulkan instance with sensible defaults
  * 
  * In debug mode, enables debug messaging
  *
- * Note, loads Vulkan function pointers automatically
- *
- * Parameters
- * - app_name The name of the application, defaults to "Hurdy Gurdy Application"
- *
  * Returns
  * - The created VkInstance, will never be nullptr
  */
-VkInstance hg_vk_create_instance(const char *app_name);
+VkInstance hg_vk_create_instance();
 
 /**
  * Creates a Vulkan debug messenger
  *
- * Parameters
- * - instance The Vulkan instance, must not be nullptr
- *
  * Returns
  * - The created debug messenger, will never be nullptr
  */
-VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger(VkInstance instance);
+VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger();
 
 /**
  * Find the first queue family index which supports the the queue flags
@@ -5614,47 +5848,42 @@ VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger(VkInstance instance);
  */
 HgOption<u32> hg_vk_find_queue_family(VkPhysicalDevice gpu, VkQueueFlags queue_flags);
 
+/**
+ * Finds a Vulkan physical device with a general purpose queue family
+ *
+ * The physical device will have at least one queue family which supports both
+ * graphics, transfer, and compute
+ *
+ * Note, hg_vk_instance must be initialized
+ *
+ * Returns
+ * - The physical device
+ * - nullptr if none was found
+ */
+VkPhysicalDevice hg_vk_find_single_queue_physical_device();
+
+/**
+ * Creates a Vulkan logical device with a single general purpose queue
+ *
+ * The device will have queue 0 in hg_vk_queue_family
+ *
+ * Note, hg_vk_physical_device must be initialized
+ *
+ * Returns
+ * - The physical device, will never be nullptr
+ */
+VkDevice hg_vk_create_single_queue_device();
+
 // find gpu with multiple potential queues : TODO
 // create device with multiple potential queues : TODO
 
 /**
- * A Vulkan device with a single general-purpose queue
- */
-struct HgSingleQueueDeviceData {
-    /**
-     * The handle to the Vulkan device object
-     */
-    VkDevice handle;
-    /**
-     * The handle to the associated Vulkan physical device
-     */
-    VkPhysicalDevice gpu;
-    /**
-     * The created Vulkan queue
-     */
-    VkQueue queue;
-    /**
-     * The index of the queue family that the queue is from
-     */
-    u32 queue_family;
-};
-
-/**
- * Creates a Vulkan device with a single general-purpose queue
- *
- * Enables the swapchain extension, and the synchronization 2 and dynamic
- * rendering features
- *
- * Note, loads Vulkan function pointers automatically
- *
- * Parameters
- * - gpu The physical device, must not be nullptr
- * - queue_family Which family to create the queue in
+ * Creates a general purpose Vulkan memory allocator
  *
  * Returns
- * - The created Vulkan device, will never be nullptr
+ * - The created Vulkan memory allocator, will never be nullptr;
  */
-HgSingleQueueDeviceData hg_vk_create_single_queue_device(VkInstance instance);
+VmaAllocator hg_vk_create_vma_allocator();
 
 /**
  * Configuration for Vulkan pipelines
@@ -5722,13 +5951,12 @@ struct HgVkPipelineConfig {
  * Creates a graphics pipeline
  *
  * Parameters
- * - device The Vulkan device, must not be nullptr
  * - config The pipeline configuration
  *
  * Returns
  * - The created graphics pipeline, will never be nullptr
  */
-VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineConfig& config);
+VkPipeline hg_vk_create_graphics_pipeline(const HgVkPipelineConfig& config);
 
 /**
  * Creates a compute pipeline
@@ -5738,13 +5966,12 @@ VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineCon
  * There cannot be any vertex inputs
  *
  * Parameters
- * - device The Vulkan device, must not be nullptr
  * - config The pipeline configuration
  *
  * Returns
  * - The created compute pipeline, will never be nullptr
  */
-VkPipeline hg_vk_create_compute_pipeline(VkDevice device, const HgVkPipelineConfig& config);
+VkPipeline hg_vk_create_compute_pipeline(const HgVkPipelineConfig& config);
 
 /**
  * A Vulkan swapchain and associated data
@@ -5783,8 +6010,6 @@ struct HgSwapchainData {
  * - The created Vulkan swapchain
  */
 HgSwapchainData hg_vk_create_swapchain(
-    VkDevice device,
-    VkPhysicalDevice gpu,
     VkSwapchainKHR old_swapchain,
     VkSurfaceKHR surface,
     VkImageUsageFlags image_usage,
@@ -5808,34 +6033,27 @@ struct HgSwapchainCommands {
      * Creates a swapchain command buffer system
      *
      * Parameters
-     * - device The Vulkan device, must not be nullptr
      * - swapchain The Vulkan swapchain to create frames for, must not be nullptr
      * - cmd_pool The Vulkan command pool to allocate cmds from, must not be nullptr
      *
      * Returns
      * - The created swaphchain command buffer system
      */
-    static HgSwapchainCommands create(VkDevice device, VkSwapchainKHR swapchain, VkCommandPool cmd_pool);
+    static HgSwapchainCommands create(VkSwapchainKHR swapchain, VkCommandPool cmd_pool);
 
     /**
      * Destroys a swaphchain command buffer system
-     *
-     * Parameters
-     * - device The Vulkan device, must not be nullptr
      */
-    void destroy(VkDevice device);
+    void destroy();
 
     /**
      * Acquires the next swapchain image and begins its command buffer
-     *
-     * Parameters
-     * - device The Vulkan device, must not be nullptr
      *
      * Returns
      * - The command buffer to record this frame
      * - nullptr if the swapchain is out of date
      */
-    VkCommandBuffer acquire_and_record(VkDevice device);
+    VkCommandBuffer acquire_and_record();
 
     /**
      * Finishes recording the command buffer and presents the swapchain image
@@ -5855,7 +6073,6 @@ struct HgSwapchainCommands {
  * The bitmask must not mask out all memory types
  *
  * Parameters
- * - gpu The Vulkan physical device, must not be nullptr
  * - bitmask A bitmask of which memory types cannot be used, must not be 0
  * - desired_flags The flags which the type should 
  * - undesired_flags The flags which the type should not have, though may have
@@ -5864,7 +6081,6 @@ struct HgSwapchainCommands {
  * - The found index of the memory type
  */
 u32 hg_vk_find_memory_type_index(
-    VkPhysicalDevice gpu,
     u32 bitmask,
     VkMemoryPropertyFlags desired_flags,
     VkMemoryPropertyFlags undesired_flags);
@@ -5875,8 +6091,6 @@ u32 hg_vk_find_memory_type_index(
  * Writes to a Vulkan device local buffer through a staging buffer
  *
  * Parameters
- * - device The Vulkan device, must not be nullptr
- * - allocator The Vulkan allocator, must not be nullptr
  * - transfer_queue The Vulkan queue to transfer on, must not be nullptr
  * - cmd_pool The command pool for the queue, must not be nullptr
  * - dst The buffer to write to, must not be nullptr
@@ -5884,8 +6098,6 @@ u32 hg_vk_find_memory_type_index(
  * - src The data to write, must not be nullptr
  */
 void hg_vk_buffer_staging_write(
-    VkDevice device,
-    VmaAllocator allocator,
     VkQueue transfer_queue,
     VkCommandPool cmd_pool,
     VkBuffer dst,
@@ -5896,8 +6108,6 @@ void hg_vk_buffer_staging_write(
  * Reads from a Vulkan device local buffer through a staging buffer
  *
  * Parameters
- * - device The Vulkan device, must not be nullptr
- * - allocator The Vulkan allocator, must not be nullptr
  * - transfer_queue The Vulkan queue to transfer on, must not be nullptr
  * - cmd_pool The command pool for the queue, must not be nullptr
  * - dst The location to write to, must not be nullptr
@@ -5905,8 +6115,6 @@ void hg_vk_buffer_staging_write(
  * - offset The offset in bytes into the dst buffer
  */
 void hg_vk_buffer_staging_read(
-    VkDevice device,
-    VmaAllocator allocator,
     VkQueue transfer_queue,
     VkCommandPool cmd_pool,
     HgSpan<void> dst,
@@ -5955,15 +6163,11 @@ struct HgVkImageStagingWriteConfig {
  * Writes to a Vulkan device local image through a staging buffer
  *
  * Parameters
- * - device The Vulkan device, must not be nullptr
- * - allocator The Vulkan allocator, must not be nullptr
  * - transfer_queue The Vulkan queue to transfer on, must not be nullptr
  * - cmd_pool The command pool for the queue, must not be nullptr
  * - config The configuration for the write
  */
 void hg_vk_image_staging_write(
-    VkDevice device,
-    VmaAllocator allocator,
     VkQueue transfer_queue,
     VkCommandPool cmd_pool,
     const HgVkImageStagingWriteConfig& config);
@@ -6010,15 +6214,11 @@ struct HgVkImageStagingReadConfig {
  * Reads from a Vulkan device local image through a staging buffer
  *
  * Parameters
- * - device The Vulkan device, must not be nullptr
- * - allocator The Vulkan allocator, must not be nullptr
  * - transfer_queue The Vulkan queue to transfer on, must not be nullptr
  * - cmd_pool The command pool for the queue, must not be nullptr
  * - config The configuration for the read, must not be nullptr
  */
 void hg_vk_image_staging_read(
-    VkDevice device,
-    VmaAllocator allocator,
     VkQueue transfer_queue,
     VkCommandPool cmd_pool,
     const HgVkImageStagingReadConfig& config);
@@ -6029,7 +6229,6 @@ void hg_vk_image_staging_read(
  * Generates mipmaps from the base level
  *
  * Parameters
- * - device The Vulkan device, must not be nullptr
  * - transfer_queue The Vulkan queue to transfer on, must not be nullptr
  * - cmd_pool The command pool for the queue, must not be nullptr
  * - image The image to generate mipmaps in, must not be nullptr
@@ -6042,7 +6241,6 @@ void hg_vk_image_staging_read(
  * - mip_count The total number of mips in the image, must be greater than 0
  */
 void hg_vk_image_generate_mipmaps(
-    VkDevice device,
     VkQueue transfer_queue,
     VkCommandPool cmd_pool,
     VkImage image,
@@ -6053,6 +6251,73 @@ void hg_vk_image_generate_mipmaps(
     u32 height,
     u32 depth,
     u32 mip_count);
+
+struct HgTexture {
+    VmaAllocation allocation;
+    VkImage image;
+    VkImageView view;
+    VkSampler sampler;
+};
+
+struct HgPipeline2D {
+
+    struct VPUniform {
+        HgMat4f proj;
+        HgMat4f view;
+    };
+
+    struct Push {
+        HgMat4f model;
+        HgVec2f uv_pos;
+        HgVec2f uv_size;
+    };
+
+    VkDescriptorSetLayout vp_layout;
+    VkDescriptorSetLayout texture_layout;
+    VkPipelineLayout pipeline_layout;
+    VkPipeline pipeline;
+
+    VkDescriptorPool descriptor_pool;
+    VkDescriptorSet vp_set;
+
+    VkBuffer vp_buffer;
+    VmaAllocation vp_buffer_allocation;
+
+    HgHashMap<HgResourceID<HgTexture>, VkDescriptorSet> texture_sets;
+
+    static HgOption<HgPipeline2D> create(
+        HgAllocator& mem,
+        usize max_textures,
+        VkFormat color_format,
+        VkFormat depth_format);
+
+    void destroy(HgAllocator& mem);
+
+    void add_texture(HgResourceID<HgTexture> texture);
+    void remove_texture(HgResourceID<HgTexture> texture);
+
+    void update_projection(HgMat4f& projection);
+    void update_view(HgMat4f& view);
+
+    struct Sprite {
+        HgResourceID<HgTexture> texture;
+        HgVec2f uv_pos;
+        HgVec2f uv_size;
+
+        HgVec3f position;
+        f32 rotation;
+        HgVec2f scale;
+    };
+
+    void add_sprite(HgECS& ecs, HgEntity entity, HgResourceID<HgTexture> texture, HgVec2f uv_pos, HgVec2f uv_size);
+    void remove_sprite(HgECS& ecs, HgEntity entity);
+
+    void place_sprite(HgECS& ecs, HgEntity entity, HgVec3f position, f32 rotation, HgVec2f scale);
+    void move_sprite(HgECS& ecs, HgEntity entity, HgVec3f position, f32 rotation, HgVec2f scale);
+
+    void draw(VkCommandBuffer cmd, HgECS& ecs);
+
+};
 
 /**
  * Initializes global resources for windowing
@@ -6384,14 +6649,10 @@ VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window);
  */
 void hg_process_window_events(HgSpan<const HgWindow> windows);
 
-// 2d pipeline
-
 /**
  * A pipeline to render 2D sprites
  */
 struct HgPipelineSprite {
-    VkDevice device;
-    VmaAllocator allocator;
     VkDescriptorSetLayout vp_layout;
     VkDescriptorSetLayout image_layout;
     VkPipelineLayout pipeline_layout;
@@ -6416,8 +6677,6 @@ struct HgPipelineSprite {
  * - The created pipeline
  */
 HgPipelineSprite hg_pipeline_sprite_create(
-    VkDevice device,
-    VmaAllocator allocator,
     VkFormat color_format,
     VkFormat depth_format);
 
