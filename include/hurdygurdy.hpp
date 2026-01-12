@@ -493,7 +493,7 @@ template<typename T>
 struct HgVec2 {
     T x, y;
 
-    HgVec2() {}
+    HgVec2() = default;
     constexpr HgVec2(T scalar) : x{scalar}, y{scalar} {}
     constexpr HgVec2(T x_val, T y_val) : x{x_val}, y{y_val} {}
 
@@ -553,8 +553,8 @@ constexpr bool operator!=(const HgVec2<T>& lhs, const HgVec2<T>& rhs) {
 template<typename T>
 struct HgVec3 {
     T x, y, z;
- 
-    HgVec3() {}
+
+    HgVec3() = default;
     constexpr HgVec3(T scalar) : x{scalar}, y{scalar}, z{scalar} {}
     constexpr HgVec3(T x_val, T y_val) : x{x_val}, y{y_val}, z{0} {}
     constexpr HgVec3(T x_val, T y_val, T z_val) : x{x_val}, y{y_val}, z{z_val} {}
@@ -621,7 +621,7 @@ template<typename T>
 struct HgVec4 {
     T x, y, z, w;
  
-    HgVec4() {}
+    HgVec4() = default;
     constexpr HgVec4(T scalar) : x{scalar}, y{scalar}, z{scalar}, w{scalar} {}
     constexpr HgVec4(T x_val, T y_val) : x{x_val}, y{y_val}, z{0}, w{0} {}
     constexpr HgVec4(T x_val, T y_val, T z_val) : x{x_val}, y{y_val}, z{z_val}, w{0} {}
@@ -694,7 +694,7 @@ template<typename T>
 struct HgMat2 {
     HgVec2<T> x, y;
 
-    HgMat2() {}
+    HgMat2() = default;
     constexpr HgMat2(T scalar) : x{scalar, 0}, y{0, scalar} {}
     constexpr HgMat2(T xx, T xy, T yx, T yy) : x{xx, xy}, y{yx, yy} {}
     constexpr HgMat2(const HgVec2<T>& x_val, const HgVec2<T>& y_val) : x{x_val}, y{y_val} {}
@@ -756,7 +756,7 @@ template<typename T>
 struct HgMat3 {
     HgVec3<T> x, y, z;
 
-    HgMat3() {}
+    HgMat3() = default;
     constexpr HgMat3(T scalar)
         : x{scalar, 0, 0}, y{0, scalar, 0}, z{0, 0, scalar} {}
     constexpr HgMat3(const HgVec2<T>& x_val, const HgVec2<T>& y_val)
@@ -827,7 +827,7 @@ template<typename T>
 struct HgMat4 {
     HgVec4<T> x, y, z, w;
 
-    HgMat4() {}
+    HgMat4() = default;
     constexpr HgMat4(T scalar)
         : x{scalar, 0, 0, 0}, y{0, scalar, 0, 0}, z{0, 0, scalar, 0}, w{0, 0, 0, scalar} {}
     constexpr HgMat4(const HgVec2<T>& x_val, const HgVec2<T>& y_val)
@@ -913,7 +913,7 @@ struct HgComplex {
      */
     T i;
 
-    HgComplex() {}
+    HgComplex() = default;
     constexpr HgComplex(T r_val) : r{r_val}, i{0} {}
     constexpr HgComplex(T r_val, T i_val) : r{r_val}, i{i_val} {}
 
@@ -981,7 +981,7 @@ struct HgQuat {
      */
     T i, j, k;
  
-    HgQuat() {}
+    HgQuat() = default;
     constexpr HgQuat(T r_val) : r{r_val}, i{0}, j{0}, k{0} {}
     constexpr HgQuat(T r_val, T i_val, T j_val, T k_val) : r{r_val}, i{i_val}, j{j_val}, k{k_val} {}
 
@@ -4905,7 +4905,7 @@ struct HgECS {
      * Returns
      * - Whether allocation was successful
      */
-    bool register_component(
+    bool register_component_untyped(
         HgAllocator& mem,
         u32 max_components,
         u32 component_size,
@@ -4924,7 +4924,7 @@ struct HgECS {
     template<typename T>
     bool register_component(HgAllocator& mem, u32 max_components) {
         static_assert(hg_is_memmove_safe_v<T>);
-        return register_component(mem, max_components, sizeof(T), alignof(T), hg_component_id<T>);
+        return register_component_untyped(mem, max_components, sizeof(T), alignof(T), hg_component_id<T>);
     }
 
     /**
@@ -4934,7 +4934,7 @@ struct HgECS {
      * - mem The allocator to get memory from
      * - component_id The id of the component
      */
-    void unregister_component(HgAllocator& mem, u32 component_id);
+    void unregister_component_untyped(HgAllocator& mem, u32 component_id);
 
     /**
      * Unregisters a component in this ECS
@@ -4945,7 +4945,7 @@ struct HgECS {
     template<typename T>
     void unregister_component(HgAllocator& mem) {
         static_assert(hg_is_memmove_safe_v<T>);
-        unregister_component(mem, hg_component_id<T>);
+        unregister_component_untyped(mem, hg_component_id<T>);
     }
 
     /**
@@ -5554,64 +5554,6 @@ struct HgECS {
     }
 
     /**
-     * Sorts components using selection sort
-     *
-     * Parameters
-     * - begin The index to begin sorting
-     * - end The index to end sorting
-     * - component_id The component system to sort
-     * - compare The comparison function
-     */
-    void selectionsort_untyped(u32 begin, u32 end, u32 component_id, HgFunctionView<bool(void *, void *)> compare);
-
-    /**
-     * Sorts components using selection sort
-     *
-     * Parameters
-     * - compare The comparison function
-     */
-    template<typename T, typename Fn>
-    void selectionsort(Fn compare) {
-        static_assert(hg_is_memmove_safe_v<T>);
-        static_assert(std::is_invocable_r_v<bool, Fn, T&, T&>);
-
-        auto fn = [](void *pcompare, void *lhs, void *rhs) -> bool {
-            return (*(Fn *)pcompare)(*(T *)lhs, *(T *)rhs);
-        };
-
-        sort_untyped(0, component_count<T>(), hg_component_id<T>, {&compare, fn});
-    }
-
-    /**
-     * Sorts components using quicksort
-     *
-     * Parameters
-     * - begin The index to begin sorting
-     * - end The index to end sorting
-     * - component_id The component system to sort
-     * - compare The comparison function
-     */
-    void quicksort_untyped(u32 begin, u32 end, u32 component_id, HgFunctionView<bool(void *, void *)> compare);
-
-    /**
-     * Sorts components using quicksort
-     *
-     * Parameters
-     * - compare The comparison function
-     */
-    template<typename T, typename Fn>
-    void quicksort(Fn compare) {
-        static_assert(hg_is_memmove_safe_v<T>);
-        static_assert(std::is_invocable_r_v<bool, Fn, T&, T&>);
-
-        auto fn = [](void *pcompare, void *lhs, void *rhs) -> bool {
-            return (*(Fn *)pcompare)(*(T *)lhs, *(T *)rhs);
-        };
-
-        quicksort_untyped(0, component_count<T>(), hg_component_id<T>, {&compare, fn});
-    }
-
-    /**
      * Sorts components
      *
      * Parameters
@@ -5620,7 +5562,7 @@ struct HgECS {
      * - component_id The component system to sort
      * - compare The comparison function
      */
-    void sort_untyped(u32 begin, u32 end, u32 component_id, HgFunctionView<bool(void *, void *)> compare);
+    void sort_untyped(u32 begin, u32 end, u32 component_id, HgFunctionView<bool(HgEntity lhs, HgEntity rhs)> compare);
 
     /**
      * Sorts components
@@ -5628,18 +5570,17 @@ struct HgECS {
      * Parameters
      * - compare The comparison function
      */
-    template<typename T, typename Fn>
-    void sort(Fn compare) {
+    template<typename T>
+    void sort(HgFunctionView<bool(HgEntity lhs, HgEntity rhs)> compare) {
         static_assert(hg_is_memmove_safe_v<T>);
-        static_assert(std::is_invocable_r_v<bool, Fn, T&, T&>);
-
-        auto fn = [](void *pcompare, void *lhs, void *rhs) -> bool {
-            return (*(Fn *)pcompare)(*(T *)lhs, *(T *)rhs);
-        };
-
-        sort_untyped(0, component_count<T>(), hg_component_id<T>, {&compare, fn});
+        sort_untyped(0, component_count<T>(), hg_component_id<T>, compare);
     }
 };
+
+/**
+ * A global entity component system
+ */
+inline HgECS *hg_ecs;
 
 template<typename T>
 struct HgResourceID;
@@ -5951,10 +5892,25 @@ void hg_store_file_binary(HgFence *fence, HgResourceID<HgFileBinary> id, std::st
  * A loaded image file
  */
 struct HgImage {
-    void *data;
+    /**
+     * The pixel data
+     */
+    void *pixels;
+    /**
+     * The format of each pixel
+     */
     VkFormat format;
+    /**
+     * The width in pixels
+     */
     u32 width;
+    /**
+     * The height in pixels
+     */
     u32 height;
+    /**
+     * The depth in pixels
+     */
     u32 depth;
 };
 
@@ -6510,6 +6466,22 @@ struct HgTexture {
     VkSampler sampler;
 };
 
+void hg_load_texture(VkCommandPool cmd_pool, HgResourceID<HgTexture> id, VkFilter filter, HgResourceID<HgImage> src);
+
+void hg_unload_texture(HgResourceID<HgTexture> id);
+
+struct HgTransform {
+    HgVec3f position = {0.0f, 0.0f, 0.0f};
+    HgVec3f scale = {1.0f, 1.0f, 1.0f};
+    HgQuatf rotation = {1.0f, 0.0f, 0.0f, 0.0f};
+};
+
+struct HgSprite {
+    HgResourceID<HgTexture> texture;
+    HgVec2f uv_pos;
+    HgVec2f uv_size;
+};
+
 struct HgPipeline2D {
 
     struct VPUniform {
@@ -6550,24 +6522,10 @@ struct HgPipeline2D {
     void update_projection(HgMat4f& projection);
     void update_view(HgMat4f& view);
 
-    struct Sprite {
-        HgResourceID<HgTexture> texture;
-        HgVec2f uv_pos;
-        HgVec2f uv_size;
+    void add_sprite(HgEntity entity, HgResourceID<HgTexture> texture, HgVec2f uv_pos, HgVec2f uv_size);
+    void remove_sprite(HgEntity entity);
 
-        HgVec3f position;
-        f32 rotation;
-        HgVec2f scale;
-    };
-
-    void add_sprite(HgECS& ecs, HgEntity entity, HgResourceID<HgTexture> texture, HgVec2f uv_pos, HgVec2f uv_size);
-    void remove_sprite(HgECS& ecs, HgEntity entity);
-
-    void place_sprite(HgECS& ecs, HgEntity entity, HgVec3f position, f32 rotation, HgVec2f scale);
-    void move_sprite(HgECS& ecs, HgEntity entity, HgVec3f position, f32 rotation, HgVec2f scale);
-
-    void draw(VkCommandBuffer cmd, HgECS& ecs);
-
+    void draw(VkCommandBuffer cmd);
 };
 
 /**
@@ -6899,180 +6857,5 @@ VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window);
  * - windows All open windows, must not be nullptr
  */
 void hg_process_window_events(HgSpan<const HgWindow> windows);
-
-/**
- * A pipeline to render 2D sprites
- */
-struct HgPipelineSprite {
-    VkDescriptorSetLayout vp_layout;
-    VkDescriptorSetLayout image_layout;
-    VkPipelineLayout pipeline_layout;
-    VkPipeline pipeline;
-    VkDescriptorPool descriptor_pool;
-    VkDescriptorSet vp_set;
-    VkBuffer vp_buffer;
-    VmaAllocation vp_buffer_allocation;
-};
-
-/**
- * Creates a pipeline abstraction to render 2D sprites
- * 
- * Parameters
- * - device The Vulkan device, must not be nullptr
- * - allocator The VMA allocator, must not be nullptr,
- * - color_format The format of the color attachment which will be rendered to,
- *   must not be VK_FORMAT_UNDEFINED
- * - depth_format The format of the depth attachment, may be VK_FORMAT_UNDEFINED
- *
- * Returns
- * - The created pipeline
- */
-HgPipelineSprite hg_pipeline_sprite_create(
-    VkFormat color_format,
-    VkFormat depth_format);
-
-/**
- * Destroys the sprite pipeline
- *
- * Parameters
- * - pipeline The pipeline to destroy
- */
-void hg_pipeline_sprite_destroy(HgPipelineSprite *pipeline);
-
-/**
- * Updates the sprite pipeline's projection matrix
- *
- * Parameters
- * - pipeline The pipeline to update, must not be nullptr
- * - projection The value to update to, must not be nullptr
- */
-void hg_pipeline_sprite_update_projection(HgPipelineSprite *pipeline, HgMat4f *projection);
-
-/**
- * Updates the sprite pipeline's view matrix
- *
- * Parameters
- * - pipeline The pipeline to update, must not be nullptr
- * - view The value to update to, must not be nullptr
- */
-void hg_pipeline_sprite_update_view(HgPipelineSprite *pipeline, HgMat4f *view);
-
-/**
- * The texture resources used by HgPipelineSprite
- */
-struct HgPipelineSpriteTexture {
-    VmaAllocation allocation;
-    VkImage image;
-    VkImageView view;
-    VkSampler sampler;
-    VkDescriptorSet set;
-};
-
-/**
- * Configuration for a hgSpritePipelineTexture
- */
-struct HgPipelineSpriteTextureConfig {
-    /**
-     * The pixel data to use, must not be nullptr
-     */
-    void *tex_data;
-    /**
-     * The width of the texture in pixels, must be greater than 0
-     */
-    u32 width;
-    /**
-     * The height of the texture in pixels, must be greater than 0
-     */
-    u32 height;
-    /**
-     * The Vulkan format of each pixel, must not be UNDEFINED
-     */
-    VkFormat format;
-    /**
-     * The filter to use when sampling the texture
-     */
-    VkFilter filter;
-    /**
-     * How to sample beyond the edge of the texture
-     */
-    VkSamplerAddressMode edge_mode;
-};
-
-/**
- * Creates a texture for HgPipelineSprite
- *
- * Note, if for some reason there are multiple HgPipelineSprite objects,
- * textures are compatible between them, so need not be duplicated
- *
- * Parameters
- * - pipeline The pipeline to create for, must not be nullptr
- * - cmd_pool The command pool to get a command buffer from, must not be nullptr
- * - transfer_queue The queue to transfer the data on, must not be nullptr
- * - config The configuration for the texture, must not be nullptr
- *
- * Returns
- * - The created texture
- */
-HgPipelineSpriteTexture hg_pipeline_sprite_create_texture(
-    HgPipelineSprite *pipeline,
-    VkCommandPool cmd_pool,
-    VkQueue transfer_queue,
-    HgPipelineSpriteTextureConfig *config);
-
-/**
- * Destroys a texture for HgPipelineSprite
- *
- * Parameters
- * - pipeline The pipeline, must not be nullptr
- * - texture The texture to destroy, must not be nullptr
- */
-void hg_pipeline_sprite_destroy_texture(HgPipelineSprite *pipeline, HgPipelineSpriteTexture *texture);
-
-/**
- * Binds the pipeline in a command buffer
- *
- * Note, the command buffer should be in a render pass, and the dynamic viewport
- * and scissor must be set
- *
- * Parameters
- * - pipeline The pipeline to bind, must not be nullptr
- * - cmd The command buffer, must not be nullptr
- */
-void hg_pipeline_sprite_bind(HgPipelineSprite *pipeline, VkCommandBuffer cmd);
-
-/**
- * The data pushed to each sprite draw call
- */
-struct HgPipelineSpritePush {
-    /**
-     * The sprite's model matrix (position, scale, rotation, etc.)
-     */
-    HgMat4f model;
-    /**
-     * The beginning coordinates of the texture to read from (0.0f to 1.0f)
-     */
-    HgVec2f uv_pos;
-    /**
-     * The size within the texture to read (0.0f to 1.0f)
-     */
-    HgVec2f uv_size;
-};
-
-/**
- * Draws a sprite using the sprite pipeline
- *
- * The HpPipelineSprite must already be bound
- *
- * Parameters
- * - pipeline The pipeline, must not be nullptr
- * - cmd The command buffer, must not be nullptr
- * - texture The texture to read from, must not be nullptr
- * - push_data The data to push to the draw call, must not be nullptr
- */
-void hg_pipeline_sprite_draw(
-    HgPipelineSprite *pipeline,
-    VkCommandBuffer cmd,
-    HgPipelineSpriteTexture *texture,
-    HgPipelineSpritePush *push_data);
 
 #endif // HURDYGURDY_HPP

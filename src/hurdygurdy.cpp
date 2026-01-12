@@ -28,10 +28,22 @@ void hg_init(void) {
 
     hg_platform_init();
     hg_graphics_init();
+
+    if (hg_ecs == nullptr) {
+        hg_ecs = mem.alloc<HgECS>();
+        *hg_ecs = hg_ecs->create(mem, 4096).value();
+    }
+
+    hg_ecs->reset();
 }
 
 void hg_exit(void) {
     HgStdAllocator mem;
+
+    if (hg_ecs != nullptr) {
+        hg_ecs->destroy(mem);
+        hg_ecs = nullptr;
+    }
 
     hg_graphics_deinit();
     hg_platform_deinit();
@@ -98,7 +110,7 @@ HgMat4f hg_model_matrix_2d(const HgVec3f& position, const HgVec2f& scale, f32 ro
 }
 
 HgMat4f hg_model_matrix_3d(const HgVec3f& position, const HgVec3f& scale, const HgQuatf& rotation) {
-    HgMat3f m3{};
+    HgMat3f m3{1.0f};
     m3.x.x = scale.x;
     m3.y.y = scale.y;
     m3.z.z = scale.z;
@@ -602,7 +614,7 @@ void HgECS::despawn(HgEntity entity) {
     next_entity = entity;
 }
 
-bool HgECS::register_component(
+bool HgECS::register_component_untyped(
     HgAllocator& mem,
     u32 max_components,
     u32 component_size,
@@ -639,15 +651,9 @@ cleanup_sparse:
     return false;
 }
 
-void HgECS::unregister_component(HgAllocator& mem, u32 component_id) {
+void HgECS::unregister_component_untyped(HgAllocator& mem, u32 component_id) {
     if (!is_registered(component_id))
         return;
-
-    for (HgEntity entity : systems[component_id].dense) {
-        hg_assert(is_alive(entity));
-        hg_assert(has(entity, component_id));
-        remove(entity, component_id);
-    }
 
     mem.free(systems[component_id].sparse);
     systems[component_id].dense.destroy(mem);
@@ -721,34 +727,34 @@ void HgECS::swap_location(HgEntity lhs, HgEntity rhs, u32 component_id) {
     swap_idx(lhs_index, rhs_index, component_id);
 }
 
-void HgECS::selectionsort_untyped(u32 begin, u32 end, u32 component_id, HgFunctionView<bool(void *, void *)> compare) {
-    hg_assert(is_registered(component_id));
-    for (; begin < end; ++begin) {
-        u32 least = begin;
-        for (u32 i = begin + 1; i < end; ++i) {
-            if (compare(systems[component_id].components[i], systems[component_id].components[least]))
-                least = i;
-        }
-        if (least != begin)
-            swap_location_idx(begin, least, component_id);
-    }
-}
+// static void hg_internal_ecs_selectionsort(
+//     HgECS& ecs, u32 component_id,
+//     u32 begin, u32 end,
+//     HgFunctionView<bool(HgECS&, HgEntity, HgEntity)> compare) {
+//     hg_assert(ecs.is_registered(component_id));
+//     for (; begin < end; ++begin) {
+//         u32 least = begin;
+//         for (u32 i = begin + 1; i < end; ++i) {
+//             if (compare(ecs, ecs.systems[component_id].dense[i], ecs.systems[component_id].dense[least]))
+//                 least = i;
+//         }
+//         if (least != begin)
+//             ecs.swap_location_idx(begin, least, component_id);
+//     }
+// }
 
 u32 hg_internal_ecs_quicksort_inter(
-    HgECS& ecs,
-    u32 component_id,
-    u32 pivot,
-    u32 inc,
-    u32 dec,
-    HgFunctionView<bool(void *, void *)> compare
+    HgECS& ecs, u32 component_id,
+    u32 pivot, u32 inc, u32 dec,
+    const HgFunctionView<bool(HgEntity, HgEntity)>& compare
 ) {
     while (inc != dec) {
-        while (!compare(ecs.systems[component_id].components[dec], ecs.systems[component_id].components[pivot])) {
+        while (!compare(ecs.systems[component_id].dense[dec], ecs.systems[component_id].dense[pivot])) {
             --dec;
             if (dec == inc)
                 goto finish;
         }
-        while (!compare(ecs.systems[component_id].components[pivot], ecs.systems[component_id].components[inc])) {
+        while (!compare(ecs.systems[component_id].dense[pivot], ecs.systems[component_id].dense[inc])) {
             ++inc;
             if (inc == dec)
                 goto finish;
@@ -757,26 +763,30 @@ u32 hg_internal_ecs_quicksort_inter(
     }
 
 finish:
-    if (compare(ecs.systems[component_id].components[inc], ecs.systems[component_id].components[pivot]))
+    if (compare(ecs.systems[component_id].dense[inc], ecs.systems[component_id].dense[pivot]))
         ecs.swap_location_idx(pivot, inc, component_id);
 
     return inc;
 }
 
-void HgECS::quicksort_untyped(u32 begin, u32 end, u32 component_id, HgFunctionView<bool(void *, void *)> compare) {
-    hg_assert(is_registered(component_id));
-    hg_assert(begin <= end && end <= component_count(component_id));
+static void hg_internal_ecs_quicksort(
+    HgECS& ecs, u32 component_id,
+    u32 begin, u32 end,
+    const HgFunctionView<bool(HgEntity, HgEntity)>& compare
+) {
+    hg_assert(ecs.is_registered(component_id));
+    hg_assert(begin <= end && end <= ecs.component_count(component_id));
 
     if (begin + 1 >= end)
         return;
 
-    u32 middle = hg_internal_ecs_quicksort_inter(*this, component_id, begin, begin + 1, end - 1, compare);
-    quicksort_untyped(begin, middle, component_id, compare);
-    quicksort_untyped(middle, end, component_id, compare);
+    u32 middle = hg_internal_ecs_quicksort_inter(ecs, component_id, begin, begin + 1, end - 1, compare);
+    hg_internal_ecs_quicksort(ecs, component_id, begin, middle, compare);
+    hg_internal_ecs_quicksort(ecs, component_id, middle, end, compare);
 }
 
-void HgECS::sort_untyped(u32 begin, u32 end, u32 component_id, HgFunctionView<bool(void *, void *)> compare) {
-    quicksort_untyped(begin, end, component_id, compare);
+void HgECS::sort_untyped(u32 begin, u32 end, u32 component_id, HgFunctionView<bool(HgEntity, HgEntity)> compare) {
+    hg_internal_ecs_quicksort(*this, component_id, begin, end, compare);
 }
 
 static void hg_internal_resource_thread_fn(HgResourceManager *rm) {
@@ -1002,8 +1012,8 @@ void hg_load_image(HgFence *fence, HgAllocator& mem, HgResourceID<HgImage> id, s
         cpath[fpath.length()] = '\0';
 
         int channels;
-        image.data = stbi_load(cpath, (int *)&image.width, (int *)&image.height, &channels, 4);
-        if (image.data == nullptr) {
+        image.pixels = stbi_load(cpath, (int *)&image.width, (int *)&image.height, &channels, 4);
+        if (image.pixels == nullptr) {
             hg_warn("Failed to load image file: %s\n", cpath);
             image = {};
             return;
@@ -1021,7 +1031,7 @@ void hg_unload_image(HgFence *fence, HgAllocator& mem, HgResourceID<HgImage> id)
     auto fn = [](void *, HgAllocator *, void *pimage, std::string_view) {
         HgImage& image = *(HgImage *)pimage;
 
-        free(image.data);
+        free(image.pixels);
         image = {};
     };
 
@@ -1043,7 +1053,7 @@ void hg_store_image(HgFence *fence, HgResourceID<HgImage> id, std::string_view p
             (int)image.width,
             (int)image.height,
             4,
-            image.data,
+            image.pixels,
             (int)(image.width * 4));
     };
 
@@ -3326,6 +3336,78 @@ void hg_vk_image_generate_mipmaps(
     vkQueueSubmit(transfer_queue, 1, &submit_info, nullptr);
 }
 
+void hg_load_texture(VkCommandPool cmd_pool, HgResourceID<HgTexture> id, VkFilter filter, HgResourceID<HgImage> src) {
+    HgTexture& tex = hg_resources->get(id);
+    HgImage& image = hg_resources->get(src);
+
+    hg_assert(image.pixels != nullptr);
+    hg_assert(image.format != 0);
+    hg_assert(image.width != 0);
+    hg_assert(image.height != 0);
+    hg_assert(image.depth != 0);
+
+    VkImageCreateInfo image_info{};
+    image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    image_info.imageType = VK_IMAGE_TYPE_2D;
+    image_info.format = image.format;
+    image_info.extent = {image.width, image.height, image.depth};
+    image_info.mipLevels = 1;
+    image_info.arrayLayers = 1;
+    image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    image_info.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+
+    VmaAllocationCreateInfo alloc_info{};
+    alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
+
+    vmaCreateImage(hg_vk_vma, &image_info, &alloc_info, &tex.image, &tex.allocation, nullptr);
+    hg_assert(tex.allocation != nullptr);
+    hg_assert(tex.image != nullptr);
+
+    HgVkImageStagingWriteConfig staging_config{};
+    staging_config.dst_image = tex.image;
+    staging_config.subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    staging_config.subresource.layerCount = 1;
+    staging_config.src_data = image.pixels;
+    staging_config.width = image.width;
+    staging_config.height = image.height;
+    staging_config.depth = image.depth;
+    staging_config.format = image.format;
+    staging_config.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    hg_vk_image_staging_write(hg_vk_queue, cmd_pool, staging_config);
+
+    VkImageViewCreateInfo view_info{};
+    view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    view_info.image = tex.image;
+    view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    view_info.format = image.format;
+    view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    view_info.subresourceRange.levelCount = 1;
+    view_info.subresourceRange.layerCount = 1;
+
+    vkCreateImageView(hg_vk_device, &view_info, nullptr, &tex.view);
+    hg_assert(tex.view != nullptr);
+
+    VkSamplerCreateInfo sampler_info{};
+    sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    sampler_info.magFilter = filter;
+    sampler_info.minFilter = filter;
+    sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+
+    vkCreateSampler(hg_vk_device, &sampler_info, nullptr, &tex.sampler);
+    hg_assert(tex.sampler != nullptr);
+}
+
+void hg_unload_texture(HgResourceID<HgTexture> id) {
+    HgTexture& tex = hg_resources->get(id);
+
+    vkDestroySampler(hg_vk_device, tex.sampler, nullptr);
+    vkDestroyImageView(hg_vk_device, tex.view, nullptr);
+    vmaDestroyImage(hg_vk_vma, tex.image, tex.allocation);
+}
+
 #include "sprite.frag.spv.h"
 #include "sprite.vert.spv.h"
 
@@ -3338,7 +3420,7 @@ HgOption<HgPipeline2D> HgPipeline2D::create(
     hg_assert(hg_vk_device != nullptr);
     hg_assert(color_format != VK_FORMAT_UNDEFINED);
 
-    HgOption<HgPipeline2D> pipeline;
+    HgOption<HgPipeline2D> pipeline{std::in_place};
 
     pipeline->texture_sets = pipeline->texture_sets.create(mem, max_textures)
         .value_or(HgHashMap<HgResourceID<HgTexture>, VkDescriptorSet>{});
@@ -3573,389 +3655,70 @@ void HgPipeline2D::update_view(HgMat4f& view) {
         sizeof(view));
 }
 
-void HgPipeline2D::add_sprite(HgECS& ecs, HgEntity entity, HgResourceID<HgTexture> texture, HgVec2f uv_pos, HgVec2f uv_size) {
-    hg_assert(ecs.is_registered<Sprite>());
-    hg_assert(!ecs.has<Sprite>(entity));
+void HgPipeline2D::add_sprite(HgEntity entity, HgResourceID<HgTexture> texture, HgVec2f uv_pos, HgVec2f uv_size) {
+    hg_assert(hg_ecs->is_registered<HgSprite>());
+    hg_assert(!hg_ecs->has<HgSprite>(entity));
 
-    Sprite& sprite = ecs.add<Sprite>(entity);
+    HgSprite& sprite = hg_ecs->add<HgSprite>(entity);
     sprite.texture = texture;
     sprite.uv_pos = uv_pos;
     sprite.uv_size = uv_size;
-    sprite.position = {0.0f, 0.0f, 0.0f};
-    sprite.rotation = 0.0f;
-    sprite.scale = {1.0f, 1.0f};
 }
 
-void HgPipeline2D::remove_sprite(HgECS& ecs, HgEntity entity) {
-    hg_assert(ecs.is_registered<Sprite>());
-    hg_assert(ecs.has<Sprite>(entity));
+void HgPipeline2D::remove_sprite(HgEntity entity) {
+    hg_assert(hg_ecs->is_registered<HgSprite>());
+    hg_assert(hg_ecs->has<HgSprite>(entity));
 
-    ecs.remove<Sprite>(entity);
+    hg_ecs->remove<HgSprite>(entity);
 }
 
-void HgPipeline2D::place_sprite(HgECS& ecs, HgEntity entity, HgVec3f position, f32 rotation, HgVec2f scale) {
-    hg_assert(ecs.is_registered<Sprite>());
-    hg_assert(ecs.has<Sprite>(entity));
-
-    Sprite& sprite = ecs.get<Sprite>(entity);
-    sprite.position = position;
-    sprite.rotation = rotation;
-    sprite.scale = scale;
-}
-
-void HgPipeline2D::move_sprite(HgECS& ecs, HgEntity entity, HgVec3f position, f32 rotation, HgVec2f scale) {
-    hg_assert(ecs.is_registered<Sprite>());
-    hg_assert(ecs.has<Sprite>(entity));
-
-    Sprite& sprite = ecs.get<Sprite>(entity);
-    sprite.position += position;
-    sprite.rotation += rotation;
-    sprite.scale += scale;
-}
-
-void HgPipeline2D::draw(VkCommandBuffer cmd, HgECS& ecs) {
-    (void)cmd;
-    (void)ecs;
-}
-
-struct HgPipelineSpriteVPUniform {
-    HgMat4f proj;
-    HgMat4f view;
-};
-
-HgPipelineSprite hg_pipeline_sprite_create(
-    VkFormat color_format,
-    VkFormat depth_format
-) {
-    hg_assert(hg_vk_device != nullptr);
-    hg_assert(color_format != VK_FORMAT_UNDEFINED);
-
-    HgPipelineSprite pipeline;
-
-    VkDescriptorSetLayoutBinding vp_bindings[1]{};
-    vp_bindings[0].binding = 0;
-    vp_bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    vp_bindings[0].descriptorCount = 1;
-    vp_bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-
-    VkDescriptorSetLayoutCreateInfo vp_layout_info{};
-    vp_layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    vp_layout_info.bindingCount = hg_countof(vp_bindings);
-    vp_layout_info.pBindings = vp_bindings;
-
-    vkCreateDescriptorSetLayout(hg_vk_device, &vp_layout_info, nullptr, &pipeline.vp_layout);
-
-    VkDescriptorSetLayoutBinding image_bindings[1]{};
-    image_bindings[0].binding = 0;
-    image_bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    image_bindings[0].descriptorCount = 1;
-    image_bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-    VkDescriptorSetLayoutCreateInfo image_layout_info{};
-    image_layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    image_layout_info.bindingCount = hg_countof(image_bindings);
-    image_layout_info.pBindings = image_bindings;
-
-    vkCreateDescriptorSetLayout(hg_vk_device, &image_layout_info, nullptr, &pipeline.image_layout);
-
-    VkDescriptorSetLayout set_layouts[]{pipeline.vp_layout, pipeline.image_layout};
-    VkPushConstantRange push_ranges[1]{};
-    push_ranges[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-    push_ranges[0].size = sizeof(HgPipelineSpritePush);
-
-    VkPipelineLayoutCreateInfo layout_info{};
-    layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    layout_info.setLayoutCount = hg_countof(set_layouts);
-    layout_info.pSetLayouts = set_layouts;
-    layout_info.pushConstantRangeCount = hg_countof(push_ranges);
-    layout_info.pPushConstantRanges = push_ranges;
-
-    vkCreatePipelineLayout(hg_vk_device, &layout_info, nullptr, &pipeline.pipeline_layout);
-
-    VkShaderModuleCreateInfo vertex_shader_info{};
-    vertex_shader_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    vertex_shader_info.codeSize = sprite_vert_spv_size;
-    vertex_shader_info.pCode = (u32 *)sprite_vert_spv;
-
-    VkShaderModule vertex_shader;
-    vkCreateShaderModule(hg_vk_device, &vertex_shader_info, nullptr, &vertex_shader);
-
-    VkShaderModuleCreateInfo fragment_shader_info{};
-    fragment_shader_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    fragment_shader_info.codeSize = sprite_frag_spv_size;
-    fragment_shader_info.pCode = (u32 *)sprite_frag_spv;
-
-    VkShaderModule fragment_shader;
-    vkCreateShaderModule(hg_vk_device, &fragment_shader_info, nullptr, &fragment_shader);
-
-    VkPipelineShaderStageCreateInfo shader_stages[2]{};
-    shader_stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    shader_stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-    shader_stages[0].module = vertex_shader;
-    shader_stages[0].pName = "main";
-    shader_stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    shader_stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-    shader_stages[1].module = fragment_shader;
-    shader_stages[1].pName = "main";
-
-    HgVkPipelineConfig pipeline_config{};
-    pipeline_config.color_attachment_formats = {&color_format, 1};
-    pipeline_config.depth_attachment_format = depth_format;
-    pipeline_config.stencil_attachment_format = VK_FORMAT_UNDEFINED;
-    pipeline_config.shader_stages = {shader_stages, hg_countof(shader_stages)};
-    pipeline_config.layout = pipeline.pipeline_layout;
-    pipeline_config.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
-    pipeline_config.enable_color_blend = true;
-
-    pipeline.pipeline = hg_vk_create_graphics_pipeline(hg_vk_device, pipeline_config);
-
-    vkDestroyShaderModule(hg_vk_device, fragment_shader, nullptr);
-    vkDestroyShaderModule(hg_vk_device, vertex_shader, nullptr);
-
-    VkDescriptorPoolSize desc_pool_sizes[2]{};
-    desc_pool_sizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    desc_pool_sizes[0].descriptorCount = 1;
-    desc_pool_sizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    desc_pool_sizes[1].descriptorCount = 255;
-
-    VkDescriptorPoolCreateInfo desc_pool_info{};
-    desc_pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    desc_pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-    desc_pool_info.maxSets = 256;
-    desc_pool_info.poolSizeCount = hg_countof(desc_pool_sizes);
-    desc_pool_info.pPoolSizes = desc_pool_sizes;
-
-    vkCreateDescriptorPool(hg_vk_device, &desc_pool_info, nullptr, &pipeline.descriptor_pool);
-
-    VkDescriptorSetAllocateInfo vp_set_alloc_info{};
-    vp_set_alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    vp_set_alloc_info.descriptorPool = pipeline.descriptor_pool;
-    vp_set_alloc_info.descriptorSetCount = 1;
-    vp_set_alloc_info.pSetLayouts = &pipeline.vp_layout;
-
-    vkAllocateDescriptorSets(hg_vk_device, &vp_set_alloc_info, &pipeline.vp_set);
-
-    VkBufferCreateInfo vp_buffer_info{};
-    vp_buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    vp_buffer_info.size = sizeof(HgPipelineSpriteVPUniform);
-    vp_buffer_info.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-
-    VmaAllocationCreateInfo vp_alloc_info{};
-    vp_alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    vp_alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
-
-    vmaCreateBuffer(
-        hg_vk_vma,
-        &vp_buffer_info,
-        &vp_alloc_info,
-        &pipeline.vp_buffer,
-        &pipeline.vp_buffer_allocation,
-        nullptr);
-
-    HgPipelineSpriteVPUniform vp_data{};
-    vp_data.proj = 1.0f;
-    vp_data.view = 1.0f;
-
-    vmaCopyMemoryToAllocation(hg_vk_vma, &vp_data, pipeline.vp_buffer_allocation, 0, sizeof(vp_data));
-
-    VkDescriptorBufferInfo desc_info{};
-    desc_info.buffer = pipeline.vp_buffer;
-    desc_info.offset = 0;
-    desc_info.range = sizeof(HgPipelineSpriteVPUniform);
-
-    VkWriteDescriptorSet desc_write{};
-    desc_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    desc_write.dstSet = pipeline.vp_set;
-    desc_write.dstBinding = 0;
-    desc_write.descriptorCount = 1;
-    desc_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    desc_write.pBufferInfo = &desc_info;
-
-    vkUpdateDescriptorSets(hg_vk_device, 1, &desc_write, 0, nullptr);
-
-    return pipeline;
-}
-
-void hg_pipeline_sprite_destroy(HgPipelineSprite *pipeline) {
-    if (pipeline == nullptr)
-        return;
-
-    vmaDestroyBuffer(hg_vk_vma, pipeline->vp_buffer, pipeline->vp_buffer_allocation);
-    vkFreeDescriptorSets(hg_vk_device, pipeline->descriptor_pool, 1, &pipeline->vp_set);
-    vkDestroyDescriptorPool(hg_vk_device, pipeline->descriptor_pool, nullptr);
-    vkDestroyPipeline(hg_vk_device, pipeline->pipeline, nullptr);
-    vkDestroyPipelineLayout(hg_vk_device, pipeline->pipeline_layout, nullptr);
-    vkDestroyDescriptorSetLayout(hg_vk_device, pipeline->image_layout, nullptr);
-    vkDestroyDescriptorSetLayout(hg_vk_device, pipeline->vp_layout, nullptr);
-}
-
-void hg_pipeline_sprite_update_projection(HgPipelineSprite *pipeline, HgMat4f *projection) {
-    hg_assert(pipeline != nullptr);
-    hg_assert(projection != nullptr);
-
-    vmaCopyMemoryToAllocation(
-        hg_vk_vma,
-        projection,
-        pipeline->vp_buffer_allocation,
-        offsetof(HgPipelineSpriteVPUniform, proj),
-        sizeof(*projection));
-}
-
-void hg_pipeline_sprite_update_view(HgPipelineSprite *pipeline, HgMat4f *view) {
-    hg_assert(pipeline != nullptr);
-    hg_assert(view != nullptr);
-
-    vmaCopyMemoryToAllocation(
-        hg_vk_vma,
-        view,
-        pipeline->vp_buffer_allocation,
-        offsetof(HgPipelineSpriteVPUniform, view),
-        sizeof(*view));
-}
-
-HgPipelineSpriteTexture hg_pipeline_sprite_create_texture(
-    HgPipelineSprite *pipeline,
-    VkCommandPool cmd_pool,
-    VkQueue transfer_queue,
-    HgPipelineSpriteTextureConfig *config
-) {
-    hg_assert(pipeline != nullptr);
-    hg_assert(config != nullptr);
-    hg_assert(config->tex_data != nullptr);
-    hg_assert(config->width > 0);
-    hg_assert(config->height > 0);
-    hg_assert(config->format != VK_FORMAT_UNDEFINED);
-
-    HgPipelineSpriteTexture tex;
-
-    VkImageCreateInfo image_info{};
-    image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    image_info.imageType = VK_IMAGE_TYPE_2D;
-    image_info.format = config->format;
-    image_info.extent = {config->width, config->height, 1};
-    image_info.mipLevels = 1;
-    image_info.arrayLayers = 1;
-    image_info.samples = VK_SAMPLE_COUNT_1_BIT;
-    image_info.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-
-    VmaAllocationCreateInfo alloc_info{};
-    alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
-
-    vmaCreateImage(hg_vk_vma, &image_info, &alloc_info, &tex.image, &tex.allocation, nullptr);
-
-    HgVkImageStagingWriteConfig staging_config{};
-    staging_config.dst_image = tex.image;
-    staging_config.subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    staging_config.subresource.layerCount = 1;
-    staging_config.src_data = config->tex_data;
-    staging_config.width = config->width;
-    staging_config.height = config->height;
-    staging_config.depth = 1;
-    staging_config.format = config->format;
-    staging_config.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-    hg_vk_image_staging_write(transfer_queue, cmd_pool, staging_config);
-
-    VkImageViewCreateInfo view_info{};
-    view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    view_info.image = tex.image;
-    view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    view_info.format = config->format;
-    view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    view_info.subresourceRange.levelCount = 1;
-    view_info.subresourceRange.layerCount = 1;
-
-    vkCreateImageView(hg_vk_device, &view_info, nullptr, &tex.view);
-
-    VkSamplerCreateInfo sampler_info{};
-    sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    sampler_info.magFilter = config->filter;
-    sampler_info.minFilter = config->filter;
-    sampler_info.addressModeU = config->edge_mode;
-    sampler_info.addressModeV = config->edge_mode;
-    sampler_info.addressModeW = config->edge_mode;
-
-    vkCreateSampler(hg_vk_device, &sampler_info, nullptr, &tex.sampler);
-
-    VkDescriptorSetAllocateInfo set_info{};
-    set_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    set_info.descriptorPool = pipeline->descriptor_pool;
-    set_info.descriptorSetCount = 1;
-    set_info.pSetLayouts = &pipeline->image_layout;
-
-    vkAllocateDescriptorSets(hg_vk_device, &set_info, &tex.set);
-
-    VkDescriptorImageInfo desc_info{};
-    desc_info.sampler = tex.sampler;
-    desc_info.imageView = tex.view;
-    desc_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-    VkWriteDescriptorSet desc_write{};
-    desc_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    desc_write.dstSet = tex.set;
-    desc_write.dstBinding = 0;
-    desc_write.descriptorCount = 1;
-    desc_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    desc_write.pImageInfo = &desc_info;
-
-    vkUpdateDescriptorSets(hg_vk_device, 1, &desc_write, 0, nullptr);
-
-    return tex;
-}
-
-void hg_pipeline_sprite_destroy_texture(HgPipelineSprite *pipeline, HgPipelineSpriteTexture *texture) {
-    hg_assert(pipeline != nullptr);
-    hg_assert(texture != nullptr);
-
-    vkFreeDescriptorSets(hg_vk_device, pipeline->descriptor_pool, 1, &texture->set);
-    vkDestroySampler(hg_vk_device, texture->sampler, nullptr);
-    vkDestroyImageView(hg_vk_device, texture->view, nullptr);
-    vmaDestroyImage(hg_vk_vma, texture->image, texture->allocation);
-}
-
-void hg_pipeline_sprite_bind(HgPipelineSprite *pipeline, VkCommandBuffer cmd) {
+void HgPipeline2D::draw(VkCommandBuffer cmd) {
     hg_assert(cmd != nullptr);
-    hg_assert(pipeline != nullptr);
+    hg_assert(hg_ecs->is_registered<HgSprite>());
 
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->pipeline);
+    hg_ecs->sort<HgSprite>([](void *, HgEntity lhs, HgEntity rhs) -> bool {
+        hg_assert(hg_ecs->has<HgTransform>(lhs));
+        hg_assert(hg_ecs->has<HgTransform>(rhs));
+        return hg_ecs->get<HgTransform>(lhs).position.z < hg_ecs->get<HgTransform>(rhs).position.z;
+    });
+
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
     vkCmdBindDescriptorSets(
         cmd,
         VK_PIPELINE_BIND_POINT_GRAPHICS,
-        pipeline->pipeline_layout,
+        pipeline_layout,
         0,
         1,
-        &pipeline->vp_set,
-        0,
-        nullptr);
-}
-
-void hg_pipeline_sprite_draw(
-    HgPipelineSprite *pipeline,
-    VkCommandBuffer cmd,
-    HgPipelineSpriteTexture *texture,
-    HgPipelineSpritePush *push_data
-) {
-    hg_assert(cmd != nullptr);
-
-    vkCmdBindDescriptorSets(
-        cmd,
-        VK_PIPELINE_BIND_POINT_GRAPHICS,
-        pipeline->pipeline_layout,
-        1,
-        1,
-        &texture->set,
+        &vp_set,
         0,
         nullptr);
 
-    vkCmdPushConstants(
-        cmd,
-        pipeline->pipeline_layout,
-        VK_SHADER_STAGE_VERTEX_BIT,
-        0,
-        sizeof(*push_data),
-        push_data);
+    hg_ecs->for_each<HgSprite, HgTransform>([&](HgEntity, HgSprite& sprite, HgTransform& transform) {
+        vkCmdBindDescriptorSets(
+            cmd,
+            VK_PIPELINE_BIND_POINT_GRAPHICS,
+            pipeline_layout,
+            1,
+            1,
+            &texture_sets.get(sprite.texture),
+            0,
+            nullptr);
 
-    vkCmdDraw(cmd, 4, 1, 0, 0);
+        Push push;
+        push.model = hg_model_matrix_3d(transform.position, transform.scale, transform.rotation);
+        push.uv_pos = sprite.uv_pos;
+        push.uv_size = sprite.uv_size;
+
+        vkCmdPushConstants(
+            cmd,
+            pipeline_layout,
+            VK_SHADER_STAGE_VERTEX_BIT,
+            0,
+            sizeof(push),
+            &push);
+
+        vkCmdDraw(cmd, 4, 1, 0, 0);
+    });
 }
 
 struct HgWindowInput {

@@ -60,30 +60,52 @@ int main(void) {
     HgSwapchainCommands swapchain_commands = HgSwapchainCommands::create(swapchain.handle, cmd_pool);
     hg_defer(swapchain_commands.destroy());
 
-    HgPipelineSprite sprite_pipeline = hg_pipeline_sprite_create(swapchain.format, VK_FORMAT_UNDEFINED);
-    hg_defer(hg_pipeline_sprite_destroy(&sprite_pipeline));
+    HgPipeline2D pipeline2d = pipeline2d.create(mem, 255, swapchain.format, VK_FORMAT_UNDEFINED).value();
+    hg_defer(pipeline2d.destroy(mem));
 
-    struct {u8 r, g, b, a;} tex_data[]{
-        {0xff, 0x00, 0x00, 0xff}, {0x00, 0xff, 0x00, 0xff},
-        {0x00, 0x00, 0xff, 0xff}, {0xff, 0xff, 0x00, 0xff},
-    };
-    HgPipelineSpriteTextureConfig tex_config{};
-    tex_config.tex_data = tex_data;
-    tex_config.width = 2;
-    tex_config.height = 2;
-    tex_config.format = VK_FORMAT_R8G8B8A8_UNORM;
-    tex_config.filter = VK_FILTER_NEAREST;
-    tex_config.edge_mode = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    HgResourceID<HgTexture> texture = hg_hash("texture");
 
-    HgPipelineSpriteTexture texture = hg_pipeline_sprite_create_texture(
-        &sprite_pipeline, cmd_pool, hg_vk_queue, &tex_config);
-    hg_defer(hg_pipeline_sprite_destroy_texture(&sprite_pipeline, &texture));
+    hg_resources->register_id(mem, texture);
+    hg_defer(hg_resources->unregister_id(mem, texture));
+    {
+        HgResourceID<HgImage> texture_image = hg_hash("texture_image");
 
-    HgVec3 position{0.0f, 0.0f, 0.0f};
+        hg_resources->register_id(mem, texture_image);
+        hg_defer(hg_resources->unregister_id(mem, texture_image));
+
+        HgImage& image = hg_resources->get(texture_image);
+
+        struct {u8 r, g, b, a;} tex_data[]{
+            {0xff, 0x00, 0x00, 0xff}, {0x00, 0xff, 0x00, 0xff},
+            {0x00, 0x00, 0xff, 0xff}, {0xff, 0xff, 0x00, 0xff},
+        };
+
+        image.pixels = tex_data;
+        image.format = VK_FORMAT_R8G8B8A8_SRGB;
+        image.width = 2;
+        image.height = 2;
+        image.depth = 1;
+
+        hg_load_texture(cmd_pool, texture, VK_FILTER_NEAREST, texture_image);
+    }
+    hg_defer(hg_unload_texture(texture));
+
+    pipeline2d.add_texture(texture);
+    hg_defer(pipeline2d.remove_texture(texture));
+
+    hg_ecs->register_component<HgTransform>(mem, 1024);
+    hg_ecs->register_component<HgSprite>(mem, 1024);
+
+    HgEntity player = hg_ecs->spawn();
+
+    HgTransform& player_transform = hg_ecs->add<HgTransform>(player);
+    player_transform = {};
+
+    pipeline2d.add_sprite(player, texture, {0.0f}, {1.0f});
 
     f32 aspect = (f32)swapchain.width / (f32)swapchain.height;
     HgMat4 proj = hg_projection_orthographic(-aspect, aspect, -1.0f, 1.0f, 0.0f, 1.0f);
-    hg_pipeline_sprite_update_projection(&sprite_pipeline, &proj);
+    pipeline2d.update_projection(proj);
 
     u32 frame_count = 0;
     f64 frame_time = 0.0f;
@@ -112,13 +134,13 @@ int main(void) {
 
         static const f32 speed = 1.0f;
         if (window.is_key_down(HG_KEY_W))
-            position.y -= speed * deltaf;
+            player_transform.position.y -= speed * deltaf;
         if (window.is_key_down(HG_KEY_A))
-            position.x -= speed * deltaf;
+            player_transform.position.x -= speed * deltaf;
         if (window.is_key_down(HG_KEY_S))
-            position.y += speed * deltaf;
+            player_transform.position.y += speed * deltaf;
         if (window.is_key_down(HG_KEY_D))
-            position.x += speed * deltaf;
+            player_transform.position.x += speed * deltaf;
 
         if (window.was_resized()) {
             vkQueueWaitIdle(hg_vk_queue);
@@ -153,7 +175,7 @@ int main(void) {
 
                 aspect = (f32)swapchain.width / (f32)swapchain.height;
                 proj = hg_projection_orthographic(-aspect, aspect, -1.0f, 1.0f, 0.0f, 1.0f);
-                hg_pipeline_sprite_update_projection(&sprite_pipeline, &proj);
+                pipeline2d.update_projection(proj);
             }
 
             vkDestroySwapchainKHR(hg_vk_device, old_swapchain, nullptr);
@@ -204,14 +226,7 @@ int main(void) {
             VkRect2D scissor{{0, 0}, {swapchain.width, swapchain.height}};
             vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-            hg_pipeline_sprite_bind(&sprite_pipeline, cmd);
-
-            HgPipelineSpritePush push{};
-            push.model = hg_model_matrix_2d(position, 0.5f, 0.0f);
-            push.uv_pos = {0.0f, 0.0f};
-            push.uv_size = {1.0f, 1.0f};
-
-            hg_pipeline_sprite_draw(&sprite_pipeline, cmd, &texture, &push);
+            pipeline2d.draw(cmd);
 
             vkCmdEndRendering(cmd);
 
@@ -1267,50 +1282,51 @@ hg_test(hg_thread_pool) {
 hg_test(hg_ecs) {
     HgStdAllocator mem;
 
-    HgECS ecs = ecs.create(mem, 1 << 16).value();
-    hg_defer(ecs.destroy(mem));
+    hg_ecs->reset();
 
-    hg_test_assert(ecs.register_component<u32>(mem, 4096));
-    hg_test_assert(ecs.register_component<u64>(mem, 4096));
+    hg_test_assert(hg_ecs->register_component<u32>(mem, 512));
+    hg_test_assert(hg_ecs->register_component<u64>(mem, 512));
+    hg_defer(hg_ecs->unregister_component<u32>(mem));
+    hg_defer(hg_ecs->unregister_component<u64>(mem));
 
-    HgEntity e1 = ecs.spawn();
-    HgEntity e2 = ecs.spawn();
+    HgEntity e1 = hg_ecs->spawn();
+    HgEntity e2 = hg_ecs->spawn();
     HgEntity e3;
     hg_test_assert(e1 == 0);
     hg_test_assert(e2 == 1);
-    hg_test_assert(ecs.is_alive(e1));
-    hg_test_assert(ecs.is_alive(e2));
-    hg_test_assert(!ecs.is_alive(e3));
+    hg_test_assert(hg_ecs->is_alive(e1));
+    hg_test_assert(hg_ecs->is_alive(e2));
+    hg_test_assert(!hg_ecs->is_alive(e3));
 
-    ecs.despawn(e1);
-    hg_test_assert(!ecs.is_alive(e1));
-    e3 = ecs.spawn();
-    hg_test_assert(ecs.is_alive(e3));
+    hg_ecs->despawn(e1);
+    hg_test_assert(!hg_ecs->is_alive(e1));
+    e3 = hg_ecs->spawn();
+    hg_test_assert(hg_ecs->is_alive(e3));
     hg_test_assert(e3 == e1);
 
-    e1 = ecs.spawn();
-    hg_test_assert(ecs.is_alive(e1));
+    e1 = hg_ecs->spawn();
+    hg_test_assert(hg_ecs->is_alive(e1));
     hg_test_assert(e1 == 2);
 
     bool has_unknown = false;
-    ecs.for_each<u32>([&](HgEntity, u32&) {
+    hg_ecs->for_each<u32>([&](HgEntity, u32&) {
         has_unknown = true;
     });
     hg_test_assert(!has_unknown);
 
-    hg_test_assert(ecs.component_count<u32>() == 0);
-    hg_test_assert(ecs.component_count<u64>() == 0);
+    hg_test_assert(hg_ecs->component_count<u32>() == 0);
+    hg_test_assert(hg_ecs->component_count<u64>() == 0);
 
-    ecs.add<u32>(e1) = 12;
-    ecs.add<u32>(e2) = 42;
-    ecs.add<u32>(e3) = 100;
-    hg_test_assert(ecs.component_count<u32>() == 3);
-    hg_test_assert(ecs.component_count<u64>() == 0);
+    hg_ecs->add<u32>(e1) = 12;
+    hg_ecs->add<u32>(e2) = 42;
+    hg_ecs->add<u32>(e3) = 100;
+    hg_test_assert(hg_ecs->component_count<u32>() == 3);
+    hg_test_assert(hg_ecs->component_count<u64>() == 0);
 
     bool has_12 = false;
     bool has_42 = false;
     bool has_100 = false;
-    for (auto [e, c] : ecs.component_iter<u32>()) {
+    for (auto [e, c] : hg_ecs->component_iter<u32>()) {
         switch (c) {
             case 12:
                 has_12 = e == e1;
@@ -1331,17 +1347,17 @@ hg_test(hg_ecs) {
     hg_test_assert(has_100);
     hg_test_assert(!has_unknown);
 
-    ecs.add<u64>(e2) = 2042;
-    ecs.add<u64>(e3) = 2100;
-    hg_test_assert(ecs.component_count<u32>() == 3);
-    hg_test_assert(ecs.component_count<u64>() == 2);
+    hg_ecs->add<u64>(e2) = 2042;
+    hg_ecs->add<u64>(e3) = 2100;
+    hg_test_assert(hg_ecs->component_count<u32>() == 3);
+    hg_test_assert(hg_ecs->component_count<u64>() == 2);
 
     has_12 = false;
     has_42 = false;
     has_100 = false;
     bool has_2042 = false;
     bool has_2100 = false;
-    ecs.for_each<u32, u64>([&](HgEntity e, u32& comp32, u64& comp64) {
+    hg_ecs->for_each<u32, u64>([&](HgEntity e, u32& comp32, u64& comp64) {
         switch (comp32) {
             case 12:
                 has_12 = e == e1;
@@ -1375,14 +1391,14 @@ hg_test(hg_ecs) {
     hg_test_assert(has_2100);
     hg_test_assert(!has_unknown);
 
-    ecs.despawn(e1);
-    hg_test_assert(ecs.component_count<u32>() == 2);
-    hg_test_assert(ecs.component_count<u64>() == 2);
+    hg_ecs->despawn(e1);
+    hg_test_assert(hg_ecs->component_count<u32>() == 2);
+    hg_test_assert(hg_ecs->component_count<u64>() == 2);
 
     has_12 = false;
     has_42 = false;
     has_100 = false;
-    ecs.for_each<u32>([&](HgEntity e, u32& c) {
+    hg_ecs->for_each<u32>([&](HgEntity e, u32& c) {
         switch (c) {
             case 12:
                 has_12 = e == e1;
@@ -1403,13 +1419,13 @@ hg_test(hg_ecs) {
     hg_test_assert(has_100);
     hg_test_assert(!has_unknown);
 
-    ecs.despawn(e2);
-    hg_test_assert(ecs.component_count<u32>() == 1);
-    hg_test_assert(ecs.component_count<u64>() == 1);
+    hg_ecs->despawn(e2);
+    hg_test_assert(hg_ecs->component_count<u32>() == 1);
+    hg_test_assert(hg_ecs->component_count<u64>() == 1);
 
-    ecs.reset();
-    hg_test_assert(ecs.component_count<u32>() == 0);
-    hg_test_assert(ecs.component_count<u64>() == 0);
+    hg_ecs->reset();
+    hg_test_assert(hg_ecs->component_count<u32>() == 0);
+    hg_test_assert(hg_ecs->component_count<u64>() == 0);
 
     {
         HgArena arena = arena.create(mem, 4096).value();
@@ -1418,46 +1434,46 @@ hg_test(hg_ecs) {
         HgArray<HgEntity> entities = entities.create(arena, 0, 300).value();
 
         for (u32 i = 0; i < 300; ++i) {
-            HgEntity e = entities.push(ecs.spawn());
+            HgEntity e = entities.push(hg_ecs->spawn());
             switch (i % 3) {
                 case 0:
-                    ecs.add<u32>(e) = 12;
-                    ecs.add<u64>(e) = 42;
+                    hg_ecs->add<u32>(e) = 12;
+                    hg_ecs->add<u64>(e) = 42;
                     break;
                 case 1:
-                    ecs.add<u32>(e) = 12;
+                    hg_ecs->add<u32>(e) = 12;
                     break;
                 case 2:
-                    ecs.add<u64>(e) = 42;
+                    hg_ecs->add<u64>(e) = 42;
                     break;
             }
         }
 
-        ecs.for_each_par<u32>(16, [&](HgEntity, u32& c) {
+        hg_ecs->for_each_par<u32>(16, [&](HgEntity, u32& c) {
             c += 4;
         });
-        for (auto [e, c] : ecs.component_iter<u32>()) {
+        for (auto [e, c] : hg_ecs->component_iter<u32>()) {
             hg_test_assert(c == 16);
         }
 
-        ecs.for_each_par<u64>(16, [&](HgEntity, u64& c) {
+        hg_ecs->for_each_par<u64>(16, [&](HgEntity, u64& c) {
             c += 3;
         });
-        for (auto [e, c] : ecs.component_iter<u64>()) {
+        for (auto [e, c] : hg_ecs->component_iter<u64>()) {
             hg_test_assert(c == 45);
         }
 
-        ecs.for_each_par<u32, u64>(16, [&](HgEntity, u32& c32, u64& c64) {
+        hg_ecs->for_each_par<u32, u64>(16, [&](HgEntity, u32& c32, u64& c64) {
             c64 -= c32;
         });
-        for (auto [e, c] : ecs.component_iter<u64>()) {
-            if (ecs.has<u32>(e))
+        for (auto [e, c] : hg_ecs->component_iter<u64>()) {
+            if (hg_ecs->has<u32>(e))
                 hg_test_assert(c == 29);
             else
                 hg_test_assert(c == 45);
         }
 
-        ecs.reset();
+        hg_ecs->reset();
     }
 
     return true;
@@ -1466,107 +1482,110 @@ hg_test(hg_ecs) {
 hg_test(hg_ecs_sort) {
     HgStdAllocator mem;
 
-    HgECS ecs = ecs.create(mem, 128).value();
-    hg_defer(ecs.destroy(mem));
+    hg_ecs->reset();
 
     u32 elem;
 
-    hg_test_assert(ecs.register_component<u32>(mem, 128));
+    hg_test_assert(hg_ecs->register_component<u32>(mem, 512));
+    hg_defer(hg_ecs->unregister_component<u32>(mem));
 
-    auto comparison = [](u32 lhs, u32 rhs) {
-        return lhs < rhs;
+    auto comparison = [](void *, HgEntity lhs, HgEntity rhs) {
+        return hg_ecs->get<u32>(lhs) < hg_ecs->get<u32>(rhs);
     };
 
-    ecs.add<u32>(ecs.spawn()) = 42;
-    ecs.sort<u32>(comparison);
+    hg_ecs->add<u32>(hg_ecs->spawn()) = 42;
 
-    for (auto [e, c] : ecs.component_iter<u32>()) {
+    hg_ecs->sort<u32>(comparison);
+
+    for (auto [e, c] : hg_ecs->component_iter<u32>()) {
         (void) e;
         hg_test_assert(c == 42);
     }
 
-    ecs.reset();
+    hg_ecs->reset();
 
     u32 small_scramble_1[] = {1, 0};
     for (u32 i = 0; i < hg_countof(small_scramble_1); ++i) {
-        ecs.add<u32>(ecs.spawn()) = small_scramble_1[i];
+        hg_ecs->add<u32>(hg_ecs->spawn()) = small_scramble_1[i];
     }
-    ecs.sort<u32>(comparison);
+    hg_ecs->sort<u32>(comparison);
 
     elem = 0;
-    for (auto [e, c] : ecs.component_iter<u32>()) {
+    for (auto [e, c] : hg_ecs->component_iter<u32>()) {
         (void)e;
         hg_test_assert(c == elem);
         ++elem;
     }
-    ecs.sort<u32>(comparison);
+    hg_ecs->sort<u32>(comparison);
 
     elem = 0;
-    for (auto [e, c] : ecs.component_iter<u32>()) {
+    for (auto [e, c] : hg_ecs->component_iter<u32>()) {
         (void)e;
         hg_test_assert(c == elem);
         ++elem;
     }
 
-    ecs.reset();
+    hg_ecs->reset();
 
     u32 medium_scramble_1[] = {8, 9, 1, 6, 0, 3, 7, 2, 5, 4};
     for (u32 i = 0; i < hg_countof(medium_scramble_1); ++i) {
-        ecs.add<u32>(ecs.spawn()) = medium_scramble_1[i];
+        hg_ecs->add<u32>(hg_ecs->spawn()) = medium_scramble_1[i];
     }
-    ecs.sort<u32>(comparison);
+    hg_ecs->sort<u32>(comparison);
 
     elem = 0;
-    for (auto [e, c] : ecs.component_iter<u32>()) {
+    for (auto [e, c] : hg_ecs->component_iter<u32>()) {
         (void)e;
         hg_test_assert(c == elem);
         ++elem;
     }
 
-    ecs.reset();
+    hg_ecs->reset();
 
     u32 medium_scramble_2[] = {3, 9, 7, 6, 8, 5, 0, 1, 2, 4};
     for (u32 i = 0; i < hg_countof(medium_scramble_2); ++i) {
-        ecs.add<u32>(ecs.spawn()) = medium_scramble_2[i];
+        hg_ecs->add<u32>(hg_ecs->spawn()) = medium_scramble_2[i];
     }
-    ecs.sort<u32>(comparison);
-    ecs.sort<u32>(comparison);
+    hg_ecs->sort<u32>(comparison);
+    hg_ecs->sort<u32>(comparison);
 
     elem = 0;
-    for (auto [e, c] : ecs.component_iter<u32>()) {
+    for (auto [e, c] : hg_ecs->component_iter<u32>()) {
         (void)e;
         hg_test_assert(c == elem);
         ++elem;
     }
 
-    ecs.reset();
+    hg_ecs->reset();
 
     for (u32 i = 127; i < 128; --i) {
-        ecs.add<u32>(ecs.spawn()) = i;
+        hg_ecs->add<u32>(hg_ecs->spawn()) = i;
     }
-    ecs.sort<u32>(comparison);
+    hg_ecs->sort<u32>(comparison);
 
     elem = 0;
-    for (auto [e, c] : ecs.component_iter<u32>()) {
+    for (auto [e, c] : hg_ecs->component_iter<u32>()) {
         (void)e;
         hg_test_assert(c == elem);
         ++elem;
     }
 
-    ecs.reset();
+    hg_ecs->reset();
 
     for (u32 i = 127; i < 128; --i) {
-        ecs.add<u32>(ecs.spawn()) = i / 2;
+        hg_ecs->add<u32>(hg_ecs->spawn()) = i / 2;
     }
-    ecs.sort<u32>(comparison);
-    ecs.sort<u32>(comparison);
+    hg_ecs->sort<u32>(comparison);
+    hg_ecs->sort<u32>(comparison);
 
     elem = 0;
-    for (auto [e, c] : ecs.component_iter<u32>()) {
+    for (auto [e, c] : hg_ecs->component_iter<u32>()) {
         (void)e;
         hg_test_assert(c == elem / 2);
         ++elem;
     }
+
+    hg_ecs->reset();
 
     return true;
 }
@@ -1662,7 +1681,7 @@ hg_test(hg_image) {
 
     HgFence fence;
     {
-        file.data = save_data;
+        file.pixels = save_data;
         file.format = save_format;
         file.width = save_width;
         file.height = save_height;
@@ -1672,14 +1691,14 @@ hg_test(hg_image) {
         hg_load_image(&fence, mem, file_id, file_path);
         hg_test_assert(fence.wait(2.0));
 
-        hg_test_assert(file.data != nullptr);
-        hg_test_assert(file.data != save_data);
+        hg_test_assert(file.pixels != nullptr);
+        hg_test_assert(file.pixels != save_data);
         hg_test_assert(file.format == save_format);
         hg_test_assert(file.width == save_width);
         hg_test_assert(file.height == save_height);
         hg_test_assert(file.depth == save_depth);
         hg_test_assert(file.width * file.height * file.depth * hg_vk_format_to_size(file.format) == sizeof(save_data));
-        hg_test_assert(std::memcmp(save_data, file.data, sizeof(save_data)) == 0);
+        hg_test_assert(std::memcmp(save_data, file.pixels, sizeof(save_data)) == 0);
 
         hg_unload_image(&fence, mem, file_id);
     }
