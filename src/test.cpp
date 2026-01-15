@@ -63,35 +63,26 @@ int main(void) {
     HgPipeline2D pipeline2d = pipeline2d.create(mem, 255, swapchain.format, VK_FORMAT_UNDEFINED).value();
     hg_defer(pipeline2d.destroy(mem));
 
-    HgResourceID<HgTexture> texture = hg_hash("texture");
-
-    hg_resources->register_id(mem, texture);
-    hg_defer(hg_resources->unregister_id(mem, texture));
+    HgTexture texture;
     {
-        HgResourceID<HgImage> texture_image = hg_hash("texture_image");
-
-        hg_resources->register_id(mem, texture_image);
-        hg_defer(hg_resources->unregister_id(mem, texture_image));
-
-        HgImage& image = hg_resources->get(texture_image);
-
         struct {u8 r, g, b, a;} tex_data[]{
             {0xff, 0x00, 0x00, 0xff}, {0x00, 0xff, 0x00, 0xff},
             {0x00, 0x00, 0xff, 0xff}, {0xff, 0xff, 0x00, 0xff},
         };
 
+        HgImage image;
         image.pixels = tex_data;
         image.format = VK_FORMAT_R8G8B8A8_SRGB;
         image.width = 2;
         image.height = 2;
         image.depth = 1;
 
-        hg_load_texture(cmd_pool, texture, VK_FILTER_NEAREST, texture_image);
+        hg_load_texture(cmd_pool, texture, VK_FILTER_NEAREST, image);
     }
     hg_defer(hg_unload_texture(texture));
 
-    pipeline2d.add_texture(texture);
-    hg_defer(pipeline2d.remove_texture(texture));
+    pipeline2d.add_texture(&texture);
+    hg_defer(pipeline2d.remove_texture(&texture));
 
     hg_ecs->register_component<HgTransform>(mem, 1024);
     hg_ecs->register_component<HgSprite>(mem, 1024);
@@ -1596,17 +1587,11 @@ hg_test(hg_file_binary) {
     u32 save_data[] = {12, 42, 100, 128};
 
     const char *file_path = "hg_test_dir/file_bin_test.bin";
-    HgResourceID<HgFileBinary> file_id = hg_hash(file_path);
-
-    hg_resources->register_id(mem, file_id);
-    hg_test_assert(hg_resources->is_registered(file_id));
-    hg_test_assert(hg_resources->get_untyped(file_id) != nullptr);
-
-    HgFileBinary& file = hg_resources->get(file_id);
+    HgFileBinary file{};
 
     HgFence fence;
     {
-        hg_load_file_binary(&fence, mem, file_id, "file_does_not_exist.bin");
+        hg_load_file_binary(&fence, mem, file, "file_does_not_exist.bin");
         hg_test_assert(fence.wait(2.0));
 
         hg_test_assert(file.data == nullptr);
@@ -1617,7 +1602,7 @@ hg_test(hg_file_binary) {
         file.data = save_data;
         file.size = sizeof(save_data);
 
-        hg_store_file_binary(&fence, file_id, "dir/does/not/exist.bin");
+        hg_store_file_binary(&fence, file, "dir/does/not/exist.bin");
         hg_test_assert(fence.wait(2.0));
 
         FILE *file_handle = std::fopen("dir/does/not/exist.bin", "rb");
@@ -1628,8 +1613,8 @@ hg_test(hg_file_binary) {
         file.data = save_data;
         file.size = sizeof(save_data);
 
-        hg_store_file_binary(&fence, file_id, file_path);
-        hg_load_file_binary(&fence, mem, file_id, file_path);
+        hg_store_file_binary(&fence, file, file_path);
+        hg_load_file_binary(&fence, mem, file, file_path);
         hg_test_assert(fence.wait(2.0));
 
         hg_test_assert(file.data != nullptr);
@@ -1637,12 +1622,9 @@ hg_test(hg_file_binary) {
         hg_test_assert(file.size == sizeof(save_data));
         hg_test_assert(std::memcmp(save_data, file.data, file.size) == 0);
 
-        hg_unload_file_binary(&fence, mem, file_id);
+        hg_unload_file_binary(&fence, mem, file);
     }
     hg_test_assert(fence.wait(2.0));
-
-    hg_resources->unregister_id(mem, file_id);
-    hg_test_assert(!hg_resources->is_registered(file_id));
 
     return true;
 }
@@ -1671,13 +1653,7 @@ hg_test(hg_image) {
     u32 save_depth = 1;
 
     const char *file_path = "hg_test_dir/file_image_test.png";
-    HgResourceID<HgImage> file_id = hg_hash(file_path);
-
-    hg_resources->register_id(mem, file_id);
-    hg_test_assert(hg_resources->is_registered(file_id));
-    hg_test_assert(hg_resources->get_untyped(file_id) != nullptr);
-
-    HgImage& file = hg_resources->get(file_id);
+    HgImage file;
 
     HgFence fence;
     {
@@ -1687,8 +1663,8 @@ hg_test(hg_image) {
         file.height = save_height;
         file.depth = save_depth;
 
-        hg_store_image(&fence, file_id, file_path);
-        hg_load_image(&fence, mem, file_id, file_path);
+        hg_store_image(&fence, file, file_path);
+        hg_load_image(&fence, mem, file, file_path);
         hg_test_assert(fence.wait(2.0));
 
         hg_test_assert(file.pixels != nullptr);
@@ -1700,12 +1676,9 @@ hg_test(hg_image) {
         hg_test_assert(file.width * file.height * file.depth * hg_vk_format_to_size(file.format) == sizeof(save_data));
         hg_test_assert(std::memcmp(save_data, file.pixels, sizeof(save_data)) == 0);
 
-        hg_unload_image(&fence, mem, file_id);
+        hg_unload_image(&fence, mem, file);
     }
     hg_test_assert(fence.wait(2.0));
-
-    hg_resources->unregister_id(mem, file_id);
-    hg_test_assert(!hg_resources->is_registered(file_id));
 
     return true;
 }

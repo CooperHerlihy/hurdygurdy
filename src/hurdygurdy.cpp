@@ -22,7 +22,7 @@ void hg_init(void) {
     }
 
     if (hg_resources == nullptr) {
-        hg_resources = HgResourceManager::create(mem, 4096, 4096);
+        hg_resources = HgResourceManager::create(mem, 4096);
         hg_assert(hg_resources != nullptr);
     }
 
@@ -803,11 +803,7 @@ static void hg_internal_resource_thread_fn(HgResourceManager *rm) {
                 HgResourceManager::Request request = rm->request_queue.pop();
                 rm->request_queue_mutex.unlock();
 
-                rm->registry_mutex.lock();
-                void *resource = rm->registry.get(request.id);
-                rm->registry_mutex.unlock();
-
-                request.fn(request.mem, resource, request.path);
+                request.fn(request.mem, request.resource, request.path);
                 --request.fence->counter;
             }
         }
@@ -816,18 +812,14 @@ static void hg_internal_resource_thread_fn(HgResourceManager *rm) {
     }
 }
 
-HgResourceManager *HgResourceManager::create(HgAllocator& mem, usize max_resources, usize max_requests) {
+HgResourceManager *HgResourceManager::create(HgAllocator& mem, usize max_requests) {
     HgResourceManager *rm = mem.alloc<HgResourceManager>();
     if (rm == nullptr)
         goto cleanup_rm;
 
-    rm->registry = rm->registry.create(mem, max_resources).value_or(HgHashMap<HgResourceID<void>, void *>{});
-    if (rm->registry.slots == nullptr)
-        goto cleanup_registry;
-
     rm->request_queue = rm->request_queue.create(mem, max_requests).value_or(HgQueue<Request>{});
     if (rm->request_queue.items == nullptr)
-        goto cleanup_request_queue;
+        goto cleanup_queue;
 
     rm->request_thread.should_close.store(false);
     rm->request_thread.is_working.store(false);
@@ -835,9 +827,7 @@ HgResourceManager *HgResourceManager::create(HgAllocator& mem, usize max_resourc
 
     return rm;
 
-cleanup_request_queue:
-    rm->registry.destroy(mem);
-cleanup_registry:
+cleanup_queue:
     mem.free(rm);
 cleanup_rm:
     return nullptr;
@@ -847,53 +837,11 @@ void HgResourceManager::destroy(HgAllocator& mem, HgResourceManager *rm) {
     rm->request_thread.should_close.store(true);
     rm->request_thread.thread.join();
     rm->request_queue.destroy(mem);
-    rm->registry.destroy(mem);
 }
 
-bool HgResourceManager::register_id_untyped(HgAllocator& mem, HgResourceID<void> id, usize size, usize alignment) {
-    void *resource = mem.alloc_fn(size, alignment);
-    if (resource == nullptr)
-        return false;
-
-    registry_mutex.lock();
-    hg_assert(!registry.has(id));
-    registry.insert(id, resource);
-    registry_mutex.unlock();
-
-    return true;
-}
-
-void HgResourceManager::unregister_id_untyped(HgAllocator& mem, HgResourceID<void> id, usize size, usize alignment) {
-    registry_mutex.lock();
-    HgOption<void *> resource = registry.get_remove(id);
-    registry_mutex.unlock();
-    if (resource.has_value())
-        mem.free_fn(resource.value(), size, alignment);
-}
-
-bool HgResourceManager::is_registered(HgResourceID<void> id) {
-    registry_mutex.lock();
-    bool is = registry.has(id);
-    registry_mutex.unlock();
-    return is;
-}
-
-void HgResourceManager::request(
-    HgFence *fence,
-    HgFunctionView<void(HgAllocator *mem, void *resource, HgStringView path)> fn,
-    HgAllocator *mem,
-    HgResourceID<void> id,
-    HgStringView path
-) {
-    Request request;
-    request.fence = fence;
-    request.mem = mem;
-    request.id = id;
-    request.path = path;
-    request.fn = fn;
-
-    if (fence != nullptr)
-        ++fence->counter;
+void HgResourceManager::request(const Request &request) {
+    if (request.fence != nullptr)
+        ++request.fence->counter;
 
     request_queue_mutex.lock();
     hg_assert(request_queue.has_space());
@@ -901,29 +849,9 @@ void HgResourceManager::request(
     request_queue_mutex.unlock();
 }
 
-void *HgResourceManager::get_untyped(HgResourceID<void> id) {
-    registry_mutex.lock();
-    hg_assert(registry.has(id));
-    void *resource = registry.get(id);
-    registry_mutex.unlock();
-    return resource;
-}
-
-void *HgResourceManager::exchange_untyped(HgResourceID<void> id, void *new_resource) {
-    registry_mutex.lock();
-    hg_assert(registry.has(id));
-    void *& ref = registry.get(id);
-    void *old = ref;
-    ref = new_resource;
-    registry_mutex.unlock();
-    return old;
-}
-
-void hg_load_file_binary(HgFence *fence, HgAllocator& mem, HgResourceID<HgFileBinary> id, HgStringView path) {
-    hg_assert(hg_resources->is_registered(id));
-
+void hg_load_file_binary(HgFence *fence, HgAllocator& mem, HgFileBinary& file, HgStringView path) {
     auto fn = [](void *, HgAllocator *pmem, void *pfile, HgStringView fpath) {
-        HgFileBinary& file = *(HgFileBinary *)pfile;
+        HgFileBinary& file_data = *(HgFileBinary *)pfile;
 
         char *cpath = (char *)alloca(fpath.length() + 1);
         std::memcpy(cpath, fpath.data(), fpath.length());
@@ -932,54 +860,61 @@ void hg_load_file_binary(HgFence *fence, HgAllocator& mem, HgResourceID<HgFileBi
         FILE* file_handle = std::fopen(cpath, "rb");
         if (file_handle == nullptr) {
             hg_warn("Could not find file to read binary: %s\n", cpath);
-            file = {};
+            file_data = {};
             return;
         }
         hg_defer(std::fclose(file_handle));
 
         if (std::fseek(file_handle, 0, SEEK_END) != 0) {
             hg_warn("Failed to read binary from file: %s\n", cpath);
-            file = {};
+            file_data = {};
             return;
         }
 
-        file.size = (usize)std::ftell(file_handle);
-        file.data = pmem->alloc_fn(file.size, alignof(std::max_align_t));
-        if (file.data == nullptr) {
+        file_data.size = (usize)std::ftell(file_handle);
+        file_data.data = pmem->alloc_fn(file_data.size, alignof(std::max_align_t));
+        if (file_data.data == nullptr) {
             hg_warn("Allocation failure during file read: %s\n", cpath);
-            file = {};
+            file_data = {};
             return;
         }
         std::rewind(file_handle);
 
-        if (std::fread(file.data, 1, file.size, file_handle) != file.size) {
+        if (std::fread(file_data.data, 1, file_data.size, file_handle) != file_data.size) {
             hg_warn("Failed to read binary from file: %s\n", cpath);
-            pmem->free_fn(file.data, file.size, alignof(std::max_align_t));
-            file = {};
+            pmem->free_fn(file_data.data, file_data.size, alignof(std::max_align_t));
+            file_data = {};
             return;
         }
     };
 
-    hg_resources->request(fence, fn, &mem, id, path);
+    HgResourceManager::Request request;
+    request.fence = fence;
+    request.fn = fn;
+    request.mem = &mem;
+    request.resource = &file;
+    request.path = path;
+    hg_resources->request(request);
 }
 
-void hg_unload_file_binary(HgFence *fence, HgAllocator& mem, HgResourceID<HgFileBinary> id) {
-    hg_assert(hg_resources->is_registered(id));
-
+void hg_unload_file_binary(HgFence *fence, HgAllocator& mem, HgFileBinary& file) {
     auto fn = [](void *, HgAllocator *pmem, void *pfile, HgStringView) {
-        HgFileBinary& file = *(HgFileBinary *)pfile;
-        pmem->free_fn(file.data, file.size, alignof(std::max_align_t));
-        file = {};
+        HgFileBinary& file_data = *(HgFileBinary *)pfile;
+        pmem->free_fn(file_data.data, file_data.size, alignof(std::max_align_t));
+        file_data = {};
     };
 
-    hg_resources->request(fence, fn, &mem, id, {});
+    HgResourceManager::Request request;
+    request.fence = fence;
+    request.fn = fn;
+    request.mem = &mem;
+    request.resource = &file;
+    hg_resources->request(request);
 }
 
-void hg_store_file_binary(HgFence *fence, HgResourceID<HgFileBinary> id, HgStringView path) {
-    hg_assert(hg_resources->is_registered(id));
-
+void hg_store_file_binary(HgFence *fence, HgFileBinary& file, HgStringView path) {
     auto fn = [](void *, HgAllocator *, void *pfile, HgStringView fpath) {
-        HgFileBinary& file = *(HgFileBinary *)pfile;
+        HgFileBinary& file_data = *(HgFileBinary *)pfile;
 
         char *cpath = (char *)alloca(fpath.length() + 1);
         std::memcpy(cpath, fpath.data(), fpath.length());
@@ -992,57 +927,67 @@ void hg_store_file_binary(HgFence *fence, HgResourceID<HgFileBinary> id, HgStrin
         }
         hg_defer(std::fclose(file_handle));
 
-        if (std::fwrite(file.data, 1, file.size, file_handle) != file.size) {
+        if (std::fwrite(file_data.data, 1, file_data.size, file_handle) != file_data.size) {
             hg_warn("Failed to write binary data to file: %s\n", cpath);
             return;
         }
     };
 
-    hg_resources->request(fence, fn, nullptr, id, path);
+    HgResourceManager::Request request;
+    request.fence = fence;
+    request.fn = fn;
+    request.resource = &file;
+    request.path = path;
+    hg_resources->request(request);
 }
 
-void hg_load_image(HgFence *fence, HgAllocator& mem, HgResourceID<HgImage> id, HgStringView path) {
-    hg_assert(hg_resources->is_registered(id));
-
+void hg_load_image(HgFence *fence, HgAllocator& mem, HgImage& image, HgStringView path) {
     auto fn = [](void *, HgAllocator *, void *pimage, HgStringView fpath) {
-        HgImage& image = *(HgImage *)pimage;
+        HgImage& image_data = *(HgImage *)pimage;
 
         char *cpath = (char *)alloca(fpath.length() + 1);
         std::memcpy(cpath, fpath.data(), fpath.length());
         cpath[fpath.length()] = '\0';
 
         int channels;
-        image.pixels = stbi_load(cpath, (int *)&image.width, (int *)&image.height, &channels, 4);
-        if (image.pixels == nullptr) {
+        image_data.pixels = stbi_load(cpath, (int *)&image_data.width, (int *)&image_data.height, &channels, 4);
+        if (image_data.pixels == nullptr) {
             hg_warn("Failed to load image file: %s\n", cpath);
-            image = {};
+            image_data = {};
             return;
         }
 
-        image.format = VK_FORMAT_R8G8B8A8_SRGB;
+        image_data.format = VK_FORMAT_R8G8B8A8_SRGB;
     };
 
-    hg_resources->request(fence, fn, &mem, id, path);
+    HgResourceManager::Request request;
+    request.fence = fence;
+    request.fn = fn;
+    request.mem = &mem;
+    request.resource = &image;
+    request.path = path;
+    hg_resources->request(request);
 }
 
-void hg_unload_image(HgFence *fence, HgAllocator& mem, HgResourceID<HgImage> id) {
-    hg_assert(hg_resources->is_registered(id));
-
+void hg_unload_image(HgFence *fence, HgAllocator& mem, HgImage& image) {
     auto fn = [](void *, HgAllocator *, void *pimage, HgStringView) {
-        HgImage& image = *(HgImage *)pimage;
+        HgImage& image_data = *(HgImage *)pimage;
 
-        free(image.pixels);
-        image = {};
+        free(image_data.pixels);
+        image_data = {};
     };
 
-    hg_resources->request(fence, fn, &mem, id, {});
+    HgResourceManager::Request request;
+    request.fence = fence;
+    request.fn = fn;
+    request.mem = &mem;
+    request.resource = &image;
+    hg_resources->request(request);
 }
 
-void hg_store_image(HgFence *fence, HgResourceID<HgImage> id, HgStringView path) {
-    hg_assert(hg_resources->is_registered(id));
-
+void hg_store_image(HgFence *fence, HgImage& image, HgStringView path) {
     auto fn = [](void *, HgAllocator *, void *pimage, HgStringView fpath) {
-        HgImage& image = *(HgImage *)pimage;
+        HgImage& image_data = *(HgImage *)pimage;
 
         char *cpath = (char *)alloca(fpath.length() + 1);
         std::memcpy(cpath, fpath.data(), fpath.length());
@@ -1050,14 +995,19 @@ void hg_store_image(HgFence *fence, HgResourceID<HgImage> id, HgStringView path)
 
         stbi_write_png(
             cpath,
-            (int)image.width,
-            (int)image.height,
+            (int)image_data.width,
+            (int)image_data.height,
             4,
-            image.pixels,
-            (int)(image.width * 4));
+            image_data.pixels,
+            (int)(image_data.width * 4));
     };
 
-    hg_resources->request(fence, fn, nullptr, id, path);
+    HgResourceManager::Request request;
+    request.fence = fence;
+    request.fn = fn;
+    request.resource = &image;
+    request.path = path;
+    hg_resources->request(request);
 }
 
 f64 HgClock::tick() {
@@ -3336,10 +3286,7 @@ void hg_vk_image_generate_mipmaps(
     vkQueueSubmit(transfer_queue, 1, &submit_info, nullptr);
 }
 
-void hg_load_texture(VkCommandPool cmd_pool, HgResourceID<HgTexture> id, VkFilter filter, HgResourceID<HgImage> src) {
-    HgTexture& tex = hg_resources->get(id);
-    HgImage& image = hg_resources->get(src);
-
+void hg_load_texture(VkCommandPool cmd_pool, HgTexture& texture, VkFilter filter, HgImage& image) {
     hg_assert(image.pixels != nullptr);
     hg_assert(image.format != 0);
     hg_assert(image.width != 0);
@@ -3359,12 +3306,12 @@ void hg_load_texture(VkCommandPool cmd_pool, HgResourceID<HgTexture> id, VkFilte
     VmaAllocationCreateInfo alloc_info{};
     alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
 
-    vmaCreateImage(hg_vk_vma, &image_info, &alloc_info, &tex.image, &tex.allocation, nullptr);
-    hg_assert(tex.allocation != nullptr);
-    hg_assert(tex.image != nullptr);
+    vmaCreateImage(hg_vk_vma, &image_info, &alloc_info, &texture.image, &texture.allocation, nullptr);
+    hg_assert(texture.allocation != nullptr);
+    hg_assert(texture.image != nullptr);
 
     HgVkImageStagingWriteConfig staging_config{};
-    staging_config.dst_image = tex.image;
+    staging_config.dst_image = texture.image;
     staging_config.subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     staging_config.subresource.layerCount = 1;
     staging_config.src_data = image.pixels;
@@ -3378,15 +3325,15 @@ void hg_load_texture(VkCommandPool cmd_pool, HgResourceID<HgTexture> id, VkFilte
 
     VkImageViewCreateInfo view_info{};
     view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    view_info.image = tex.image;
+    view_info.image = texture.image;
     view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
     view_info.format = image.format;
     view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     view_info.subresourceRange.levelCount = 1;
     view_info.subresourceRange.layerCount = 1;
 
-    vkCreateImageView(hg_vk_device, &view_info, nullptr, &tex.view);
-    hg_assert(tex.view != nullptr);
+    vkCreateImageView(hg_vk_device, &view_info, nullptr, &texture.view);
+    hg_assert(texture.view != nullptr);
 
     VkSamplerCreateInfo sampler_info{};
     sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -3396,16 +3343,14 @@ void hg_load_texture(VkCommandPool cmd_pool, HgResourceID<HgTexture> id, VkFilte
     sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
     sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 
-    vkCreateSampler(hg_vk_device, &sampler_info, nullptr, &tex.sampler);
-    hg_assert(tex.sampler != nullptr);
+    vkCreateSampler(hg_vk_device, &sampler_info, nullptr, &texture.sampler);
+    hg_assert(texture.sampler != nullptr);
 }
 
-void hg_unload_texture(HgResourceID<HgTexture> id) {
-    HgTexture& tex = hg_resources->get(id);
-
-    vkDestroySampler(hg_vk_device, tex.sampler, nullptr);
-    vkDestroyImageView(hg_vk_device, tex.view, nullptr);
-    vmaDestroyImage(hg_vk_vma, tex.image, tex.allocation);
+void hg_unload_texture(HgTexture& texture) {
+    vkDestroySampler(hg_vk_device, texture.sampler, nullptr);
+    vkDestroyImageView(hg_vk_device, texture.view, nullptr);
+    vmaDestroyImage(hg_vk_vma, texture.image, texture.allocation);
 }
 
 #include "sprite.frag.spv.h"
@@ -3423,7 +3368,7 @@ HgOption<HgPipeline2D> HgPipeline2D::create(
     HgOption<HgPipeline2D> pipeline{std::in_place};
 
     pipeline->texture_sets = pipeline->texture_sets.create(mem, max_textures)
-        .value_or(HgHashMap<HgResourceID<HgTexture>, VkDescriptorSet>{});
+        .value_or(HgHashMap<HgTexture *, VkDescriptorSet>{});
     if (pipeline->texture_sets.slots == nullptr)
         return std::nullopt;
 
@@ -3591,8 +3536,9 @@ void HgPipeline2D::destroy(HgAllocator& mem) {
     vkDestroyDescriptorSetLayout(hg_vk_device, vp_layout, nullptr);
 }
 
-void HgPipeline2D::add_texture(HgResourceID<HgTexture> texture) {
-    hg_assert(hg_resources->is_registered(texture));
+void HgPipeline2D::add_texture(HgTexture *texture) {
+    hg_assert(texture != nullptr);
+
     if (texture_sets.has(texture))
         return;
 
@@ -3606,11 +3552,9 @@ void HgPipeline2D::add_texture(HgResourceID<HgTexture> texture) {
     vkAllocateDescriptorSets(hg_vk_device, &set_info, &set);
     hg_assert(set != nullptr);
 
-    HgTexture& tex_data = hg_resources->get(texture);
-
     VkDescriptorImageInfo desc_info{};
-    desc_info.sampler = tex_data.sampler;
-    desc_info.imageView = tex_data.view;
+    desc_info.sampler = texture->sampler;
+    desc_info.imageView = texture->view;
     desc_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
     VkWriteDescriptorSet desc_write{};
@@ -3626,8 +3570,8 @@ void HgPipeline2D::add_texture(HgResourceID<HgTexture> texture) {
     texture_sets.insert(texture, set);
 }
 
-void HgPipeline2D::remove_texture(HgResourceID<HgTexture> texture) {
-    hg_assert(hg_resources->is_registered(texture));
+void HgPipeline2D::remove_texture(HgTexture *texture) {
+    hg_assert(texture != nullptr);
 
     if (texture_sets.has(texture)) {
         VkDescriptorSet set = texture_sets.get(texture);
@@ -3655,12 +3599,12 @@ void HgPipeline2D::update_view(HgMat4f& view) {
         sizeof(view));
 }
 
-void HgPipeline2D::add_sprite(HgEntity entity, HgResourceID<HgTexture> texture, HgVec2f uv_pos, HgVec2f uv_size) {
+void HgPipeline2D::add_sprite(HgEntity entity, HgTexture& texture, HgVec2f uv_pos, HgVec2f uv_size) {
     hg_assert(hg_ecs->is_registered<HgSprite>());
     hg_assert(!hg_ecs->has<HgSprite>(entity));
 
     HgSprite& sprite = hg_ecs->add<HgSprite>(entity);
-    sprite.texture = texture;
+    sprite.texture = &texture;
     sprite.uv_pos = uv_pos;
     sprite.uv_size = uv_size;
 }

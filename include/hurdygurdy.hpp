@@ -3843,6 +3843,14 @@ constexpr std::enable_if_t<std::is_floating_point_v<T>, usize> hg_hash(T val) {
 }
 
 /**
+ * Hash map hashing for pointer types
+ */
+template<typename T>
+constexpr std::enable_if_t<std::is_pointer_v<T>, usize> hg_hash(T val) {
+    return (usize)val;
+}
+
+/**
  * Hash map hashing for strings
  */
 constexpr usize hg_hash(HgStringView str) {
@@ -5490,56 +5498,6 @@ struct HgECS {
  */
 inline HgECS *hg_ecs;
 
-template<typename T>
-struct HgResourceID;
-
-/**
- * The resource id type created from hg_hash
- */
-template<>
-struct HgResourceID<void> {
-    usize id;
-
-    HgResourceID() = default;
-
-    constexpr HgResourceID(usize val) : id{val} {}
-    constexpr operator usize() { return id; }
-
-    template<typename U>
-    constexpr HgResourceID(HgResourceID<U> other) : id{other.id} {}
-};
-
-/**
- * The resource id type created from hg_hash
- */
-template<typename T>
-struct HgResourceID {
-    usize id;
-
-    constexpr HgResourceID(usize val) : id{val} {}
-    constexpr operator usize() { return id; }
-
-    explicit operator HgResourceID<void>() { return {id}; }
-};
-
-template<typename T, typename U>
-constexpr bool operator==(HgResourceID<T> lhs, HgResourceID<U> rhs) {
-    return lhs.id == rhs.id;
-}
-
-template<typename T, typename U>
-constexpr bool operator!=(HgResourceID<T> lhs, HgResourceID<U> rhs) {
-    return lhs.id != rhs.id;
-}
-
-/**
- * Hash map hash for resource id
- */
-template<typename T>
-constexpr usize hg_hash(HgResourceID<T> val) {
-    return hg_hash(val.id);
-}
-
 /**
  * A resource manager to load, store, and unload resources
  */
@@ -5547,19 +5505,11 @@ struct HgResourceManager {
     struct Request {
         HgFence *fence;
         HgAllocator *mem;
-        HgResourceID<void> id;
+        void *resource;
         HgStringView path;
         HgFunctionView<void(HgAllocator *mem, void *resource, HgStringView path)> fn;
     };
 
-    /**
-     * The mutex protecting the registry
-     */
-    std::mutex registry_mutex;
-    /**
-     * Where the resources are stored
-     */
-    HgHashMap<HgResourceID<void>, void *> registry;
     /**
      * The mutex protecting the request_queue
      */
@@ -5578,19 +5528,15 @@ struct HgResourceManager {
      *
      * Parameters
      * - mem The allocator to use
-     * - max_resources The max resources that can be registered
      * - max_requests The max requests that can be concurrently processed
      *
      * Returns
      * - A pointer to the created resource manager
      */
-    static HgResourceManager *create(HgAllocator& mem, usize max_resources, usize max_requests);
+    static HgResourceManager *create(HgAllocator& mem, usize max_requests);
 
     /**
      * Destroys a resource manager
-     *
-     * Note, destroying the resource manager without unloading and unregistering
-     * every resource is a leak
      *
      * Parameters
      * - mem The allocator to use
@@ -5599,149 +5545,12 @@ struct HgResourceManager {
     static void destroy(HgAllocator& mem, HgResourceManager *rm);
 
     /**
-     * Add a resource id to the registry
-     *
-     * Parameters
-     * - mem The allocator to use
-     * - id The id to register
-     * - size The size in bytes of the resource entry
-     * - alignment The alignment of the resource entry
-     *
-     * Returns
-     * - Whether the allocation succeeded
-     */
-    bool register_id_untyped(HgAllocator& mem, HgResourceID<void> id, usize size, usize alignment);
-
-    /**
-     * Add a resource id to the registry
-     *
-     * Parameters
-     * - mem The allocator to use
-     * - id The id to register
-     *
-     * Returns
-     * - Whether the allocation succeeded
-     */
-    template<typename T>
-    bool register_id(HgAllocator& mem, HgResourceID<T> id) {
-        return register_id_untyped(mem, id, sizeof(T), alignof(T));
-    }
-
-    /**
-     * Remove a resource id from the registry
-     *
-     * Parameters
-     * - mem The allocator to use
-     * - id The id to unregister
-     * - size The size in bytes of the resource entry
-     * - alignment The alignment of the resource entry
-     */
-    void unregister_id_untyped(HgAllocator& mem, HgResourceID<void> id, usize size, usize alignment);
-
-    /**
-     * Remove a resource id from the registry
-     *
-     * Parameters
-     * - mem The allocator to use
-     * - id The id to unregister
-     * - size The size in bytes of the resource entry
-     * - alignment The alignment of the resource entry
-     */
-    template<typename T>
-    void unregister_id(HgAllocator& mem, HgResourceID<T> id) {
-        unregister_id_untyped(mem, id, sizeof(T), alignof(T));
-    }
-
-    /**
-     * Checks whether a resource id is registered
-     *
-     * Parameters
-     * - id The id to check registration
-     *
-     * Returns
-     * - Whether the id is registered
-     */
-    bool is_registered(HgResourceID<void> id);
-
-    /**
      * Request to operate on a resource
      *
      * Parameters
-     * - fence The fence to signal on completion
-     * - fn The function to call
-     * - mem The allocator to use
-     * - id The id of the resource
-     * - path The file path to load from/store to
+     * - request The request to make
      */
-    void request(HgFence *fence, HgFunctionView<void(HgAllocator *mem, void *resource, HgStringView path)> fn,
-        HgAllocator *mem, HgResourceID<void> id, HgStringView path);
-
-    /**
-     * Gets a pointer to a resource
-     *
-     * Parameters
-     * - id The id of the resource
-     *
-     * Returns
-     * - A pointer to the resource
-     */
-    void *get_untyped(HgResourceID<void> id);
-
-    /**
-     * Gets a pointer to a resource
-     *
-     * Parameters
-     * - id The id of the resource
-     *
-     * Returns
-     * - A pointer to the resource
-     */
-    template<typename T>
-    T& get(HgResourceID<T> id) {
-        return *(T *)get_untyped(id);
-    }
-
-    /**
-     * Exchanges the resource contained at the id for a new one
-     *
-     * Parameters
-     * - id The id of the resource
-     * - new_resource The new resource to contain
-     *
-     * Returns
-     * - The previously contained resource
-     */
-    void *exchange_untyped(HgResourceID<void> id, void *new_resource);
-
-    /**
-     * Exchanges the resource contained at the id for a new one
-     *
-     * Parameters
-     * - id The id of the resource
-     * - new_resource The new resource to contain
-     *
-     * Returns
-     * - The previously contained resource
-     */
-    template<typename T>
-    T *exchange(HgResourceID<void> id, T *new_resource) {
-        return (T *)exchange_untyped(id, (void *)new_resource);
-    }
-
-    /**
-     * Exchanges the resource contained at the id for a new one
-     *
-     * Parameters
-     * - id The id of the resource
-     * - new_resource The new resource to contain
-     *
-     * Returns
-     * - The previously contained resource
-     */
-    template<typename OldT, typename NewT>
-    OldT *exchange(HgResourceID<OldT> id, NewT *new_resource) {
-        return (OldT *)exchange_untyped(id, (void *)new_resource);
-    }
+    void request(const Request& request);
 };
 
 /**
@@ -5765,10 +5574,10 @@ struct HgFileBinary {
  * Parameters
  * - fence The fence to signal on completion
  * - mem The allocator to use
- * - id The resource id to load into
+ * - file The file to load into, must be stable
  * - path The file path to the image
  */
-void hg_load_file_binary(HgFence *fence, HgAllocator& mem, HgResourceID<HgFileBinary> id, HgStringView path);
+void hg_load_file_binary(HgFence *fence, HgAllocator& mem, HgFileBinary& file, HgStringView path);
 
 /**
  * Unload a binary file resource
@@ -5776,19 +5585,19 @@ void hg_load_file_binary(HgFence *fence, HgAllocator& mem, HgResourceID<HgFileBi
  * Parameters
  * - fence The fence to signal on completion
  * - mem The allocator to use
- * - id The resource id to unload from
+ * - file The file to unload, must be stable
  */
-void hg_unload_file_binary(HgFence *fence, HgAllocator& mem, HgResourceID<HgFileBinary> id);
+void hg_unload_file_binary(HgFence *fence, HgAllocator& mem, HgFileBinary& file);
 
 /**
  * Store a binary file to disc
  *
  * Parameters
  * - fence The fence to signal on completion
- * - id The resource id to store from
+ * - file The file to store, must be stable
  * - path The file path
  */
-void hg_store_file_binary(HgFence *fence, HgResourceID<HgFileBinary> id, HgStringView path);
+void hg_store_file_binary(HgFence *fence, HgFileBinary& file, HgStringView path);
 
 // text files : TODO
 // json files : TODO
@@ -5828,10 +5637,10 @@ struct HgImage {
  * Parameters
  * - fence The fence to signal on completion
  * - mem The allocator to use
- * - id The resource id to load into
+ * - image The image to load into, must be stable
  * - path The file path to the image
  */
-void hg_load_image(HgFence *fence, HgAllocator& mem, HgResourceID<HgImage> id, HgStringView path);
+void hg_load_image(HgFence *fence, HgAllocator& mem, HgImage& image, HgStringView path);
 
 /**
  * Unload an image resource
@@ -5839,19 +5648,19 @@ void hg_load_image(HgFence *fence, HgAllocator& mem, HgResourceID<HgImage> id, H
  * Parameters
  * - fence The fence to signal on completion
  * - mem The allocator to use
- * - id The resource id to unload from
+ * - image The image to unload, must be stable
  */
-void hg_unload_image(HgFence *fence, HgAllocator& mem, HgResourceID<HgImage> id);
+void hg_unload_image(HgFence *fence, HgAllocator& mem, HgImage& image);
 
 /**
  * Store an image to disc
  *
  * Parameters
  * - fence The fence to signal on completion
- * - id The resource id to store from
+ * - image The image to store
  * - path The file path to the image
  */
-void hg_store_image(HgFence *fence, HgResourceID<HgImage> id, HgStringView path);
+void hg_store_image(HgFence *fence, HgImage& image, HgStringView path);
 
 /**
  * A high precision clock for timers and game deltas
@@ -6374,9 +6183,9 @@ struct HgTexture {
     VkSampler sampler;
 };
 
-void hg_load_texture(VkCommandPool cmd_pool, HgResourceID<HgTexture> id, VkFilter filter, HgResourceID<HgImage> src);
+void hg_load_texture(VkCommandPool cmd_pool, HgTexture& texture, VkFilter filter, HgImage& src);
 
-void hg_unload_texture(HgResourceID<HgTexture> id);
+void hg_unload_texture(HgTexture& texture);
 
 struct HgTransform {
     HgVec3f position = {0.0f, 0.0f, 0.0f};
@@ -6385,7 +6194,7 @@ struct HgTransform {
 };
 
 struct HgSprite {
-    HgResourceID<HgTexture> texture;
+    HgTexture *texture;
     HgVec2f uv_pos;
     HgVec2f uv_size;
 };
@@ -6414,7 +6223,7 @@ struct HgPipeline2D {
     VkBuffer vp_buffer;
     VmaAllocation vp_buffer_allocation;
 
-    HgHashMap<HgResourceID<HgTexture>, VkDescriptorSet> texture_sets;
+    HgHashMap<HgTexture *, VkDescriptorSet> texture_sets;
 
     static HgOption<HgPipeline2D> create(
         HgAllocator& mem,
@@ -6424,13 +6233,13 @@ struct HgPipeline2D {
 
     void destroy(HgAllocator& mem);
 
-    void add_texture(HgResourceID<HgTexture> texture);
-    void remove_texture(HgResourceID<HgTexture> texture);
+    void add_texture(HgTexture *texture);
+    void remove_texture(HgTexture *texture);
 
     void update_projection(HgMat4f& projection);
     void update_view(HgMat4f& view);
 
-    void add_sprite(HgEntity entity, HgResourceID<HgTexture> texture, HgVec2f uv_pos, HgVec2f uv_size);
+    void add_sprite(HgEntity entity, HgTexture& texture, HgVec2f uv_pos, HgVec2f uv_size);
     void remove_sprite(HgEntity entity);
 
     void draw(VkCommandBuffer cmd);
