@@ -283,6 +283,8 @@ using iptr = std::intptr_t;
 using f32 = std::float_t;
 using f64 = std::double_t;
 
+using HgStringView = std::string_view;
+
 template<typename T>
 using HgOption = std::optional<T>;
 
@@ -533,9 +535,6 @@ struct HgVec2 {
 };
 
 using HgVec2f = HgVec2<f32>;
-using HgVec2d = HgVec2<f64>;
-using HgVec2i = HgVec2<i32>;
-using HgVec2u = HgVec2<u32>;
 
 template<typename T>
 constexpr bool operator==(const HgVec2<T>& lhs, const HgVec2<T>& rhs) {
@@ -600,9 +599,6 @@ struct HgVec3 {
 };
 
 using HgVec3f = HgVec3<f32>;
-using HgVec3d = HgVec3<f64>;
-using HgVec3i = HgVec3<i32>;
-using HgVec3u = HgVec3<u32>;
 
 template<typename T>
 constexpr bool operator==(const HgVec3<T>& lhs, const HgVec3<T>& rhs) {
@@ -673,9 +669,6 @@ struct HgVec4 {
 };
 
 using HgVec4f = HgVec4<f32>;
-using HgVec4d = HgVec4<f64>;
-using HgVec4i = HgVec4<i32>;
-using HgVec4u = HgVec4<u32>;
 
 template<typename T>
 constexpr bool operator==(const HgVec4<T>& lhs, const HgVec4<T>& rhs) {
@@ -735,9 +728,6 @@ struct HgMat2 {
 };
 
 using HgMat2f = HgMat2<f32>;
-using HgMat2d = HgMat2<f64>;
-using HgMat2i = HgMat2<i32>;
-using HgMat2u = HgMat2<u32>;
 
 template<typename T>
 constexpr bool operator==(const HgMat2<T>& lhs, const HgMat2<T>& rhs) {
@@ -806,9 +796,6 @@ struct HgMat3 {
 };
 
 using HgMat3f = HgMat3<f32>;
-using HgMat3d = HgMat3<f64>;
-using HgMat3i = HgMat3<i32>;
-using HgMat3u = HgMat3<u32>;
 
 template<typename T>
 constexpr bool operator==(const HgMat3<T>& lhs, const HgMat3<T>& rhs) {
@@ -885,9 +872,6 @@ struct HgMat4 {
 };
 
 using HgMat4f = HgMat4<f32>;
-using HgMat4d = HgMat4<f64>;
-using HgMat4i = HgMat4<i32>;
-using HgMat4u = HgMat4<u32>;
 
 template<typename T>
 constexpr bool operator==(const HgMat4<T>& lhs, const HgMat4<T>& rhs) {
@@ -953,9 +937,6 @@ struct HgComplex {
 };
 
 using HgComplexf = HgComplex<f32>;
-using HgComplexd = HgComplex<f64>;
-using HgComplexi = HgComplex<i32>;
-using HgComplexu = HgComplex<u32>;
 
 template<typename T>
 constexpr bool operator==(const HgComplex<T>& lhs, const HgComplex<T>& rhs) {
@@ -1029,9 +1010,6 @@ struct HgQuat {
 };
 
 using HgQuatf = HgQuat<f32>;
-using HgQuatd = HgQuat<f64>;
-using HgQuati = HgQuat<i32>;
-using HgQuatu = HgQuat<u32>;
 
 template<typename T>
 constexpr bool operator==(const HgQuat<T>& lhs, const HgQuat<T>& rhs) {
@@ -3181,6 +3159,10 @@ struct HgArray {
      */
     void swap_remove(usize index) {
         hg_assert(index < count);
+        if (index == count - 1) {
+            pop();
+            return;
+        }
 
         std::memmove((void *)&items[index], (void *)&items[count - 1], sizeof(T));
         --count;
@@ -3198,11 +3180,11 @@ struct HgArrayAny {
     /**
      * The size in bytes of the items
      */
-    usize width;
+    u32 width;
     /**
      * The alignment of the items
      */
-    usize alignment;
+    u32 alignment;
     /**
      * The max number of items that can be stored in the array
      */
@@ -3235,8 +3217,8 @@ struct HgArrayAny {
      */
     static HgOption<HgArrayAny> create(
         HgAllocator& mem,
-        usize width,
-        usize alignment,
+        u32 width,
+        u32 alignment,
         usize count,
         usize capacity
     );
@@ -3463,6 +3445,10 @@ struct HgArrayAny {
      */
     void swap_remove(usize index) {
         hg_assert(index < count);
+        if (index == count - 1) {
+            pop();
+            return;
+        }
 
         std::memcpy(get(index), get(count - 1), width);
         --count;
@@ -3470,7 +3456,7 @@ struct HgArrayAny {
 };
 
 /**
- * A dynamic LIFO queue
+ * A dynamic FIFO queue
  */
 template<typename T>
 struct HgQueue {
@@ -3614,84 +3600,6 @@ struct HgQueue {
     }
 
     /**
-     * Access the value at index
-     *
-     * Parameters
-     * - index The index to get from, must be < count
-     *
-     * Returns
-     * - A reference to the gotten value
-     */
-    constexpr T& get(usize index) {
-        hg_assert(index < capacity);
-        if (head > tail)
-            hg_assert(index >= tail && index < head);
-        else
-            hg_assert(index >= tail || index < head);
-        return items[index];
-    }
-
-    /**
-     * Access the value at index in a const context
-     *
-     * Parameters
-     * - index The index to get from, must be < count
-     *
-     * Returns
-     * - A reference to the gotten value
-     */
-    constexpr const T& get(usize index) const {
-        hg_assert(index < capacity);
-        if (head > tail)
-            hg_assert(index >= tail && index < head);
-        else
-            hg_assert(index >= tail || index < head);
-        return items[index];
-    }
-
-    /**
-     * Access using the index operator
-     */
-    constexpr T& operator[](usize index) {
-        return get(index);
-    }
-
-    /**
-     * Access using the index operator in a const context
-     */
-    constexpr const T& operator[](usize index) const {
-        return get(index);
-    }
-
-    /**
-     * Returns a reference to the first item in the queue
-     */
-    constexpr T& first() {
-        return get(tail);
-    }
-
-    /**
-     * Returns a reference to the first item in the queue in a const context
-     */
-    constexpr const T& first() const {
-        return get(tail);
-    }
-
-    /**
-     * Returns a reference to the last item in the queue
-     */
-    constexpr T& last() {
-        return get(head - 1);
-    }
-
-    /**
-     * Returns a reference to the last item in the queue in a const context
-     */
-    constexpr const T& last() const {
-        return get(head - 1);
-    }
-
-    /**
      * Push an item to the end to the queue
      *
      * Note, space must be available
@@ -3764,7 +3672,7 @@ struct HgString {
      * - The created copied string
      * - nullopt if allocation failed
      */
-    static HgOption<HgString> create(HgAllocator& mem, std::string_view init);
+    static HgOption<HgString> create(HgAllocator& mem, HgStringView init);
 
     /**
      * Frees the string
@@ -3881,26 +3789,26 @@ struct HgString {
      * Parameters
      * - mem The allocator to use
      */
-    void insert(HgAllocator& mem, usize index, std::string_view str);
+    void insert(HgAllocator& mem, usize index, HgStringView str);
 
     /**
      * Copies another string to the end of this string
      */
-    void append(HgAllocator& mem, std::string_view str) {
+    void append(HgAllocator& mem, HgStringView str) {
         insert(mem, length, str);
     }
 
     /**
      * Copies another string to the beginning of this string
      */
-    void prepend(HgAllocator& mem, std::string_view str) {
+    void prepend(HgAllocator& mem, HgStringView str) {
         insert(mem, 0, str);
     }
 
     /**
      * Implicit converts to string_view
      */
-    constexpr operator std::string_view() {
+    constexpr operator HgStringView() {
         return {chars.data, length};
     }
 };
@@ -3937,7 +3845,7 @@ constexpr std::enable_if_t<std::is_floating_point_v<T>, usize> hg_hash(T val) {
 /**
  * Hash map hashing for strings
  */
-constexpr usize hg_hash(std::string_view str) {
+constexpr usize hg_hash(HgStringView str) {
     constexpr u64 power = 257;
     u64 mult = 1;
     u64 res = 0;
@@ -3952,14 +3860,14 @@ constexpr usize hg_hash(std::string_view str) {
  * Hash map hashing for HgString
  */
 constexpr usize hg_hash(HgString str) {
-    return hg_hash((std::string_view)str);
+    return hg_hash((HgStringView)str);
 }
 
 /**
  * Hash map hashing for C string
  */
 constexpr usize hg_hash(const char *str) {
-    return hg_hash((std::string_view)str);
+    return hg_hash((HgStringView)str);
 }
 
 /**
@@ -5640,8 +5548,8 @@ struct HgResourceManager {
         HgFence *fence;
         HgAllocator *mem;
         HgResourceID<void> id;
-        std::string_view path;
-        HgFunctionView<void(HgAllocator *mem, void *resource, std::string_view path)> fn;
+        HgStringView path;
+        HgFunctionView<void(HgAllocator *mem, void *resource, HgStringView path)> fn;
     };
 
     /**
@@ -5765,8 +5673,8 @@ struct HgResourceManager {
      * - id The id of the resource
      * - path The file path to load from/store to
      */
-    void request(HgFence *fence, HgFunctionView<void(HgAllocator *mem, void *resource, std::string_view path)> fn,
-        HgAllocator *mem, HgResourceID<void> id, std::string_view path);
+    void request(HgFence *fence, HgFunctionView<void(HgAllocator *mem, void *resource, HgStringView path)> fn,
+        HgAllocator *mem, HgResourceID<void> id, HgStringView path);
 
     /**
      * Gets a pointer to a resource
@@ -5860,7 +5768,7 @@ struct HgFileBinary {
  * - id The resource id to load into
  * - path The file path to the image
  */
-void hg_load_file_binary(HgFence *fence, HgAllocator& mem, HgResourceID<HgFileBinary> id, std::string_view path);
+void hg_load_file_binary(HgFence *fence, HgAllocator& mem, HgResourceID<HgFileBinary> id, HgStringView path);
 
 /**
  * Unload a binary file resource
@@ -5880,7 +5788,7 @@ void hg_unload_file_binary(HgFence *fence, HgAllocator& mem, HgResourceID<HgFile
  * - id The resource id to store from
  * - path The file path
  */
-void hg_store_file_binary(HgFence *fence, HgResourceID<HgFileBinary> id, std::string_view path);
+void hg_store_file_binary(HgFence *fence, HgResourceID<HgFileBinary> id, HgStringView path);
 
 // text files : TODO
 // json files : TODO
@@ -5923,7 +5831,7 @@ struct HgImage {
  * - id The resource id to load into
  * - path The file path to the image
  */
-void hg_load_image(HgFence *fence, HgAllocator& mem, HgResourceID<HgImage> id, std::string_view path);
+void hg_load_image(HgFence *fence, HgAllocator& mem, HgResourceID<HgImage> id, HgStringView path);
 
 /**
  * Unload an image resource
@@ -5943,7 +5851,7 @@ void hg_unload_image(HgFence *fence, HgAllocator& mem, HgResourceID<HgImage> id)
  * - id The resource id to store from
  * - path The file path to the image
  */
-void hg_store_image(HgFence *fence, HgResourceID<HgImage> id, std::string_view path);
+void hg_store_image(HgFence *fence, HgResourceID<HgImage> id, HgStringView path);
 
 /**
  * A high precision clock for timers and game deltas

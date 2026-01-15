@@ -282,8 +282,8 @@ void HgStack::free_fn(void *allocation, usize size, usize alignment) {
 
 HgOption<HgArrayAny> HgArrayAny::create(
     HgAllocator& mem,
-    usize width,
-    usize alignment,
+    u32 width,
+    u32 alignment,
     usize count,
     usize capacity
 ) {
@@ -326,7 +326,7 @@ HgOption<HgString> HgString::create(HgAllocator& mem, usize capacity) {
     return str;
 }
 
-HgOption<HgString> HgString::create(HgAllocator& mem, std::string_view init) {
+HgOption<HgString> HgString::create(HgAllocator& mem, HgStringView init) {
     HgOption<HgString> str{std::in_place};
 
     str->chars = mem.alloc<char>(init.length());
@@ -360,7 +360,7 @@ bool HgString::grow(HgAllocator& mem, f32 factor) {
     return reserve(mem, chars.count == 0 ? 1 : (usize)((f32)chars.count * factor));
 }
 
-void HgString::insert(HgAllocator& mem, usize index, std::string_view str) {
+void HgString::insert(HgAllocator& mem, usize index, HgStringView str) {
     hg_assert(index <= length);
 
     usize new_length = length + str.length();
@@ -880,10 +880,10 @@ bool HgResourceManager::is_registered(HgResourceID<void> id) {
 
 void HgResourceManager::request(
     HgFence *fence,
-    HgFunctionView<void(HgAllocator *mem, void *resource, std::string_view path)> fn,
+    HgFunctionView<void(HgAllocator *mem, void *resource, HgStringView path)> fn,
     HgAllocator *mem,
     HgResourceID<void> id,
-    std::string_view path
+    HgStringView path
 ) {
     Request request;
     request.fence = fence;
@@ -919,10 +919,10 @@ void *HgResourceManager::exchange_untyped(HgResourceID<void> id, void *new_resou
     return old;
 }
 
-void hg_load_file_binary(HgFence *fence, HgAllocator& mem, HgResourceID<HgFileBinary> id, std::string_view path) {
+void hg_load_file_binary(HgFence *fence, HgAllocator& mem, HgResourceID<HgFileBinary> id, HgStringView path) {
     hg_assert(hg_resources->is_registered(id));
 
-    auto fn = [](void *, HgAllocator *pmem, void *pfile, std::string_view fpath) {
+    auto fn = [](void *, HgAllocator *pmem, void *pfile, HgStringView fpath) {
         HgFileBinary& file = *(HgFileBinary *)pfile;
 
         char *cpath = (char *)alloca(fpath.length() + 1);
@@ -966,7 +966,7 @@ void hg_load_file_binary(HgFence *fence, HgAllocator& mem, HgResourceID<HgFileBi
 void hg_unload_file_binary(HgFence *fence, HgAllocator& mem, HgResourceID<HgFileBinary> id) {
     hg_assert(hg_resources->is_registered(id));
 
-    auto fn = [](void *, HgAllocator *pmem, void *pfile, std::string_view) {
+    auto fn = [](void *, HgAllocator *pmem, void *pfile, HgStringView) {
         HgFileBinary& file = *(HgFileBinary *)pfile;
         pmem->free_fn(file.data, file.size, alignof(std::max_align_t));
         file = {};
@@ -975,10 +975,10 @@ void hg_unload_file_binary(HgFence *fence, HgAllocator& mem, HgResourceID<HgFile
     hg_resources->request(fence, fn, &mem, id, {});
 }
 
-void hg_store_file_binary(HgFence *fence, HgResourceID<HgFileBinary> id, std::string_view path) {
+void hg_store_file_binary(HgFence *fence, HgResourceID<HgFileBinary> id, HgStringView path) {
     hg_assert(hg_resources->is_registered(id));
 
-    auto fn = [](void *, HgAllocator *, void *pfile, std::string_view fpath) {
+    auto fn = [](void *, HgAllocator *, void *pfile, HgStringView fpath) {
         HgFileBinary& file = *(HgFileBinary *)pfile;
 
         char *cpath = (char *)alloca(fpath.length() + 1);
@@ -1001,10 +1001,10 @@ void hg_store_file_binary(HgFence *fence, HgResourceID<HgFileBinary> id, std::st
     hg_resources->request(fence, fn, nullptr, id, path);
 }
 
-void hg_load_image(HgFence *fence, HgAllocator& mem, HgResourceID<HgImage> id, std::string_view path) {
+void hg_load_image(HgFence *fence, HgAllocator& mem, HgResourceID<HgImage> id, HgStringView path) {
     hg_assert(hg_resources->is_registered(id));
 
-    auto fn = [](void *, HgAllocator *, void *pimage, std::string_view fpath) {
+    auto fn = [](void *, HgAllocator *, void *pimage, HgStringView fpath) {
         HgImage& image = *(HgImage *)pimage;
 
         char *cpath = (char *)alloca(fpath.length() + 1);
@@ -1028,7 +1028,7 @@ void hg_load_image(HgFence *fence, HgAllocator& mem, HgResourceID<HgImage> id, s
 void hg_unload_image(HgFence *fence, HgAllocator& mem, HgResourceID<HgImage> id) {
     hg_assert(hg_resources->is_registered(id));
 
-    auto fn = [](void *, HgAllocator *, void *pimage, std::string_view) {
+    auto fn = [](void *, HgAllocator *, void *pimage, HgStringView) {
         HgImage& image = *(HgImage *)pimage;
 
         free(image.pixels);
@@ -1038,10 +1038,10 @@ void hg_unload_image(HgFence *fence, HgAllocator& mem, HgResourceID<HgImage> id)
     hg_resources->request(fence, fn, &mem, id, {});
 }
 
-void hg_store_image(HgFence *fence, HgResourceID<HgImage> id, std::string_view path) {
+void hg_store_image(HgFence *fence, HgResourceID<HgImage> id, HgStringView path) {
     hg_assert(hg_resources->is_registered(id));
 
-    auto fn = [](void *, HgAllocator *, void *pimage, std::string_view fpath) {
+    auto fn = [](void *, HgAllocator *, void *pimage, HgStringView fpath) {
         HgImage& image = *(HgImage *)pimage;
 
         char *cpath = (char *)alloca(fpath.length() + 1);
