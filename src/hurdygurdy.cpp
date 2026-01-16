@@ -64,7 +64,7 @@ static HgArray<HgTest>& hg_internal_get_tests() {
     return internal_tests;
 }
 
-HgTest::HgTest(const char *test_name, bool (*test_function)()) : name(test_name), function(test_function) {
+HgTest::HgTest(const char* test_name, bool (*test_function)()) : name(test_name), function(test_function) {
     HgArray<HgTest>& internal_tests = hg_internal_get_tests();
     if (internal_tests.is_full())
         internal_tests.grow(HgStdAllocator::get());
@@ -97,11 +97,449 @@ bool hg_run_tests() {
     return all_succeeded;
 }
 
-HgMat4f hg_model_matrix_2d(const HgVec3f& position, const HgVec2f& scale, f32 rotation) {
-    HgMat2f m2{{scale.x, 0.0f}, {0.0f, scale.y}};
+const HgVec2& HgVec2::operator+=(const HgVec2& other) {
+    x += other.x;
+    y += other.y;
+    return* this;
+}
+
+const HgVec2& HgVec2::operator-=(const HgVec2& other) {
+    x -= other.x;
+    y -= other.y;
+    return* this;
+}
+
+const HgVec2& HgVec2::operator*=(const HgVec2& other) {
+    x *= other.x;
+    y *= other.y;
+    return* this;
+}
+
+const HgVec2& HgVec2::operator/=(const HgVec2& other) {
+    x /= other.x;
+    y /= other.y;
+    return* this;
+}
+
+const HgVec3& HgVec3::operator+=(const HgVec3& other) {
+    x += other.x;
+    y += other.y;
+    z += other.z;
+    return* this;
+}
+
+const HgVec3& HgVec3::operator-=(const HgVec3& other) {
+    x -= other.x;
+    y -= other.y;
+    z -= other.z;
+    return* this;
+}
+
+const HgVec3& HgVec3::operator*=(const HgVec3& other) {
+    x *= other.x;
+    y *= other.y;
+    z *= other.z;
+    return* this;
+}
+
+const HgVec3& HgVec3::operator/=(const HgVec3& other) {
+    x /= other.x;
+    y /= other.y;
+    z /= other.z;
+    return* this;
+}
+
+const HgVec4& HgVec4::operator+=(const HgVec4& other) {
+    x += other.x;
+    y += other.y;
+    z += other.z;
+    w += other.w;
+    return* this;
+}
+
+const HgVec4& HgVec4::operator-=(const HgVec4& other) {
+    x -= other.x;
+    y -= other.y;
+    z -= other.z;
+    w -= other.w;
+    return* this;
+}
+
+const HgVec4& HgVec4::operator*=(const HgVec4& other) {
+    x *= other.x;
+    y *= other.y;
+    z *= other.z;
+    w *= other.w;
+    return* this;
+}
+
+const HgVec4& HgVec4::operator/=(const HgVec4& other) {
+    x /= other.x;
+    y /= other.y;
+    z /= other.z;
+    w /= other.w;
+    return* this;
+}
+
+const HgMat2& HgMat2::operator+=(const HgMat2& other) {
+    x += other.x;
+    y += other.y;
+    return* this;
+}
+
+const HgMat2& HgMat2::operator-=(const HgMat2& other) {
+    x -= other.x;
+    y -= other.y;
+    return* this;
+}
+
+const HgMat3& HgMat3::operator+=(const HgMat3& other) {
+    x += other.x;
+    y += other.y;
+    z += other.z;
+    return* this;
+}
+
+const HgMat3& HgMat3::operator-=(const HgMat3& other) {
+    x -= other.x;
+    y -= other.y;
+    z -= other.z;
+    return* this;
+}
+
+const HgMat4& HgMat4::operator+=(const HgMat4& other) {
+    x += other.x;
+    y += other.y;
+    z += other.z;
+    w += other.w;
+    return* this;
+}
+
+const HgMat4& HgMat4::operator-=(const HgMat4& other) {
+    x -= other.x;
+    y -= other.y;
+    z -= other.z;
+    w -= other.w;
+    return* this;
+}
+
+const HgComplex& HgComplex::operator+=(const HgComplex& other) {
+    r += other.r;
+    i += other.i;
+    return* this;
+}
+
+const HgComplex& HgComplex::operator-=(const HgComplex& other) {
+    r -= other.r;
+    i -= other.i;
+    return* this;
+}
+
+const HgQuat& HgQuat::operator+=(const HgQuat& other) {
+    r += other.r;
+    i += other.i;
+    j += other.j;
+    k += other.k;
+    return* this;
+}
+
+const HgQuat& HgQuat::operator-=(const HgQuat& other) {
+    r -= other.r;
+    i -= other.i;
+    j -= other.j;
+    k -= other.k;
+    return* this;
+}
+
+void hg_vec_add(u32 size, f32* dst, const f32* lhs, const f32* rhs) {
+    hg_assert(dst != nullptr);
+    hg_assert(lhs != nullptr);
+    hg_assert(rhs != nullptr);
+    for (u32 i = 0; i < size; ++i) {
+        dst[i] = lhs[i] + rhs[i];
+    }
+}
+
+void hg_vec_sub(u32 size, f32* dst, const f32* lhs, const f32* rhs) {
+    hg_assert(dst != nullptr);
+    hg_assert(lhs != nullptr);
+    hg_assert(rhs != nullptr);
+    for (u32 i = 0; i < size; ++i) {
+        dst[i] = lhs[i] - rhs[i];
+    }
+}
+
+void hg_vec_mul_pairwise(u32 size, f32* dst, const f32* lhs, const f32* rhs) {
+    hg_assert(dst != nullptr);
+    hg_assert(lhs != nullptr);
+    hg_assert(rhs != nullptr);
+    for (u32 i = 0; i < size; ++i) {
+        dst[i] = lhs[i] * rhs[i];
+    }
+}
+
+void hg_vec_scalar_mul(u32 size, f32* dst, f32 scalar, const f32* vec) {
+    hg_assert(dst != nullptr);
+    hg_assert(vec != nullptr);
+    for (u32 i = 0; i < size; ++i) {
+        dst[i] = scalar * vec[i];
+    }
+}
+
+void hg_vec_div(u32 size, f32* dst, const f32* lhs, const f32* rhs) {
+    hg_assert(dst != nullptr);
+    hg_assert(lhs != nullptr);
+    hg_assert(rhs != nullptr);
+    for (u32 i = 0; i < size; ++i) {
+        hg_assert(rhs[i] != 0);
+        dst[i] = lhs[i] / rhs[i];
+    }
+}
+
+void hg_vec_scalar_div(u32 size, f32* dst, const f32* vec, f32 scalar) {
+    hg_assert(dst != nullptr);
+    hg_assert(vec != nullptr);
+    hg_assert(scalar != 0);
+    for (u32 i = 0; i < size; ++i) {
+        dst[i] = vec[i] / scalar;
+    }
+}
+
+void hg_dot(u32 size, f32* dst, const f32* lhs, const f32* rhs) {
+    hg_assert(dst != nullptr);
+    hg_assert(lhs != nullptr);
+    hg_assert(rhs != nullptr);
+    *dst = 0;
+    for (u32 i = 0; i < size; ++i) {
+        *dst += lhs[i] * rhs[i];
+    }
+}
+
+void hg_len(u32 size, f32* dst, const f32* vec) {
+    hg_assert(dst != nullptr);
+    hg_assert(vec != nullptr);
+    hg_dot(size, dst, vec, vec);
+    *dst = std::sqrt(*dst);
+}
+
+f32 hg_len(const HgVec2& vec) {
+    return std::sqrt(hg_dot(vec, vec));
+}
+
+f32 hg_len(const HgVec3& vec) {
+    return std::sqrt(hg_dot(vec, vec));
+}
+
+f32 hg_len(const HgVec4& vec) {
+    return std::sqrt(hg_dot(vec, vec));
+}
+
+void hg_norm(u32 size, f32* dst, const f32* vec) {
+    hg_assert(dst != nullptr);
+    hg_assert(vec != nullptr);
+    f32 len;
+    hg_len(size, &len, vec);
+    hg_assert(len != 0);
+    for (u32 i = 0; i < size; ++i) {
+        dst[i] = vec[i] / len;
+    }
+}
+
+HgVec2 hg_norm(const HgVec2& vec) {
+    f32 len = hg_len(vec);
+    hg_assert(len != 0);
+    return {vec.x / len, vec.y / len};
+}
+
+HgVec3 hg_norm(const HgVec3& vec) {
+    f32 len = hg_len(vec);
+    hg_assert(len != 0);
+    return {vec.x / len, vec.y / len, vec.z / len};
+}
+
+HgVec4 hg_norm(const HgVec4& vec) {
+    f32 len = hg_len(vec);
+    hg_assert(len != 0);
+    return {vec.x / len, vec.y / len, vec.z / len, vec.w / len};
+}
+
+void hg_cross(f32* dst, const f32* lhs, const f32* rhs) {
+    hg_assert(dst != nullptr);
+    hg_assert(lhs != nullptr);
+    hg_assert(rhs != nullptr);
+    dst[0] = lhs[1] * rhs[2] - lhs[2] * rhs[1];
+    dst[1] = lhs[2] * rhs[0] - lhs[0] * rhs[2];
+    dst[2] = lhs[0] * rhs[1] - lhs[1] * rhs[0];
+}
+
+HgVec3 hg_cross(const HgVec3& lhs, const HgVec3& rhs) {
+    return {
+        lhs.y * rhs.z - lhs.z * rhs.y,
+        lhs.z * rhs.x - lhs.x * rhs.z,
+        lhs.x * rhs.y - lhs.y * rhs.x
+    };
+}
+
+void hg_mat_add(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs) {
+    hg_assert(dst != nullptr);
+    hg_assert(lhs != nullptr);
+    hg_assert(rhs != nullptr);
+    for (u32 i = 0; i < width; ++i) {
+        for (u32 j = 0; j < height; ++j) {
+            dst[i * width + j] = lhs[i * width + j] + rhs[i * width + j];
+        }
+    }
+}
+
+HgMat2 operator+(const HgMat2& lhs, const HgMat2& rhs) {
+    HgMat2 result{};
+    hg_mat_add(2, 2, &result.x.x, &lhs.x.x, &rhs.x.x);
+    return result;
+}
+
+HgMat3 operator+(const HgMat3& lhs, const HgMat3& rhs) {
+    HgMat3 result{};
+    hg_mat_add(3, 3, &result.x.x, &lhs.x.x, &rhs.x.x);
+    return result;
+}
+
+HgMat4 operator+(const HgMat4& lhs, const HgMat4& rhs) {
+    HgMat4 result{};
+    hg_mat_add(4, 4, &result.x.x, &lhs.x.x, &rhs.x.x);
+    return result;
+}
+
+void hg_mat_sub(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs) {
+    hg_assert(dst != nullptr);
+    hg_assert(lhs != nullptr);
+    hg_assert(rhs != nullptr);
+    for (u32 i = 0; i < width; ++i) {
+        for (u32 j = 0; j < height; ++j) {
+            dst[i * width + j] = lhs[i * width + j] - rhs[i * width + j];
+        }
+    }
+}
+
+HgMat2 operator-(const HgMat2& lhs, const HgMat2& rhs) {
+    HgMat2 result{};
+    hg_mat_sub(2, 2, &result.x.x, &lhs.x.x, &rhs.x.x);
+    return result;
+}
+
+HgMat3 operator-(const HgMat3& lhs, const HgMat3& rhs) {
+    HgMat3 result{};
+    hg_mat_sub(3, 3, &result.x.x, &lhs.x.x, &rhs.x.x);
+    return result;
+}
+
+HgMat4 operator-(const HgMat4& lhs, const HgMat4& rhs) {
+    HgMat4 result{};
+    hg_mat_sub(4, 4, &result.x.x, &lhs.x.x, &rhs.x.x);
+    return result;
+}
+
+void hg_mat_mul(f32* dst, u32 wl, u32 hl, const f32* lhs, u32 wr, u32 hr, const f32* rhs) {
+    hg_assert(hr == wl);
+    hg_assert(dst != nullptr);
+    hg_assert(lhs != nullptr);
+    hg_assert(rhs != nullptr);
+    (void)hr;
+    for (u32 i = 0; i < wl; ++i) {
+        for (u32 j = 0; j < wr; ++j) {
+            dst[i * wl + j] = 0.0f;
+            for (u32 k = 0; k < hl; ++k) {
+                dst[i * wl + j] += lhs[k * wl + j] * rhs[i * wr + k];
+            }
+        }
+    }
+}
+
+HgMat2 operator*(const HgMat2& lhs, const HgMat2& rhs) {
+    HgMat2 result{};
+    hg_mat_mul(&result.x.x, 2, 2, &lhs.x.x, 2, 2, &rhs.x.x);
+    return result;
+}
+
+HgMat3 operator*(const HgMat3& lhs, const HgMat3& rhs) {
+    HgMat3 result{};
+    hg_mat_mul(&result.x.x, 3, 3, &lhs.x.x, 3, 3, &rhs.x.x);
+    return result;
+}
+
+HgMat4 operator*(const HgMat4& lhs, const HgMat4& rhs) {
+    HgMat4 result{};
+    hg_mat_mul(&result.x.x, 4, 4, &lhs.x.x, 4, 4, &rhs.x.x);
+    return result;
+}
+
+void hg_mat_vec_mul(u32 width, u32 height, f32* dst, const f32* mat, const f32* vec) {
+    hg_assert(dst != nullptr);
+    hg_assert(mat != nullptr);
+    hg_assert(vec != nullptr);
+    for (u32 i = 0; i < height; ++i) {
+        dst[i] = 0.0f;
+        for (u32 j = 0; j < width; ++j) {
+            dst[i] += mat[j * width + i] * vec[j];
+        }
+    }
+}
+
+HgVec2 operator*(const HgMat2& lhs, const HgVec2& rhs) {
+    HgVec2 result{};
+    hg_mat_vec_mul(2, 2, &result.x, &lhs.x.x, &rhs.x);
+    return result;
+}
+
+HgVec3 operator*(const HgMat3& lhs, const HgVec3& rhs) {
+    HgVec3 result{};
+    hg_mat_vec_mul(3, 3, &result.x, &lhs.x.x, &rhs.x);
+    return result;
+}
+
+HgVec4 operator*(const HgMat4& lhs, const HgVec4& rhs) {
+    HgVec4 result{};
+    hg_mat_vec_mul(4, 4, &result.x, &lhs.x.x, &rhs.x);
+    return result;
+}
+
+HgQuat operator*(const HgQuat& lhs, const HgQuat& rhs) {
+    return {
+        lhs.r * rhs.r - lhs.i * rhs.i - lhs.j * rhs.j - lhs.k * rhs.k,
+        lhs.r * rhs.i + lhs.i * rhs.r + lhs.j * rhs.k - lhs.k * rhs.j,
+        lhs.r * rhs.j - lhs.i * rhs.k + lhs.j * rhs.r + lhs.k * rhs.i,
+        lhs.r * rhs.k + lhs.i * rhs.j - lhs.j * rhs.i + lhs.k * rhs.r,
+    };
+}
+
+HgQuat hg_axis_angle(const HgVec3& axis, f32 angle) {
+    f32 half_angle = angle * (f32)0.5;
+    f32 sin_half_angle = std::sin(half_angle);
+    return {
+        std::cos(half_angle),
+        axis.x * sin_half_angle,
+        axis.y * sin_half_angle,
+        axis.z * sin_half_angle,
+    };
+}
+
+HgVec3 hg_rotate(const HgQuat& lhs, const HgVec3& rhs) {
+    HgQuat q = lhs * HgQuat{0, rhs.x, rhs.y, rhs.z} * hg_conj(lhs);
+    return {q.i, q.j, q.k};
+}
+
+HgMat3 hg_rotate(const HgQuat& lhs, const HgMat3& rhs) {
+    return {
+        hg_rotate(lhs, rhs.x),
+        hg_rotate(lhs, rhs.y),
+        hg_rotate(lhs, rhs.z),
+    };
+}
+
+HgMat4 hg_model_matrix_2d(const HgVec3& position, const HgVec2& scale, f32 rotation) {
+    HgMat2 m2{{scale.x, 0.0f}, {0.0f, scale.y}};
     f32 rot_sin = std::sin(rotation);
     f32 rot_cos = std::cos(rotation);
-    HgMat2f rot{{rot_cos, rot_sin}, {-rot_sin, rot_cos}};
+    HgMat2 rot{{rot_cos, rot_sin}, {-rot_sin, rot_cos}};
     HgMat4 m4 = rot * m2;
     m4.w.x = position.x;
     m4.w.y = position.y;
@@ -109,22 +547,22 @@ HgMat4f hg_model_matrix_2d(const HgVec3f& position, const HgVec2f& scale, f32 ro
     return m4;
 }
 
-HgMat4f hg_model_matrix_3d(const HgVec3f& position, const HgVec3f& scale, const HgQuatf& rotation) {
-    HgMat3f m3{1.0f};
+HgMat4 hg_model_matrix_3d(const HgVec3& position, const HgVec3& scale, const HgQuat& rotation) {
+    HgMat3 m3{1.0f};
     m3.x.x = scale.x;
     m3.y.y = scale.y;
     m3.z.z = scale.z;
     m3 = hg_rotate(rotation, m3);
-    HgMat4f m4{m3};
+    HgMat4 m4 = m3;
     m4.w.x = position.x;
     m4.w.y = position.y;
     m4.w.z = position.z;
     return m4;
 }
 
-HgMat4f hg_view_matrix(const HgVec3f& position, f32 zoom, const HgQuatf& rotation) {
-    HgMat4f rot{hg_rotate(hg_conj(rotation), HgMat3f{1.0f})};
-    HgMat4f pos{1.0f};
+HgMat4 hg_view_matrix(const HgVec3& position, f32 zoom, const HgQuat& rotation) {
+    HgMat4 rot{hg_rotate(hg_conj(rotation), HgMat3{1.0f})};
+    HgMat4 pos{1.0f};
     pos.x.x = zoom;
     pos.y.y = zoom;
     pos.w.x = -position.x;
@@ -133,7 +571,7 @@ HgMat4f hg_view_matrix(const HgVec3f& position, f32 zoom, const HgQuatf& rotatio
     return rot * pos;
 }
 
-HgMat4f hg_projection_orthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far) {
+HgMat4 hg_projection_orthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far) {
     return {
         {2.0f / (right - left), 0.0f, 0.0f, 0.0f},
         {0.0f, 2.0f / (bottom - top), 0.0f, 0.0f},
@@ -142,7 +580,7 @@ HgMat4f hg_projection_orthographic(f32 left, f32 right, f32 top, f32 bottom, f32
     };
 }
 
-HgMat4f hg_projection_perspective(f32 fov, f32 aspect, f32 near, f32 far) {
+HgMat4 hg_projection_perspective(f32 fov, f32 aspect, f32 near, f32 far) {
     hg_assert(near > 0.0f);
     hg_assert(far > near);
     f32 scale = 1.0f / std::tan(fov * 0.5f);
@@ -154,18 +592,23 @@ HgMat4f hg_projection_perspective(f32 fov, f32 aspect, f32 near, f32 far) {
     };
 }
 
-void *HgStdAllocator::alloc_fn(usize size, usize alignment) {
+u32 hg_max_mipmaps(u32 width, u32 height, u32 depth) {
+    hg_assert(std::max({width, height, depth}) > 0);
+    return (u32)std::log2((f32)std::max({width, height, depth})) + 1;
+}
+
+void* HgStdAllocator::alloc_fn(usize size, usize alignment) {
     (void)alignment;
     return std::malloc(size);
 }
 
-void *HgStdAllocator::realloc_fn(void *allocation, usize old_size, usize new_size, usize alignment) {
+void* HgStdAllocator::realloc_fn(void* allocation, usize old_size, usize new_size, usize alignment) {
     (void)old_size;
     (void)alignment;
     return std::realloc(allocation, new_size);
 }
 
-void HgStdAllocator::free_fn(void *allocation, usize size, usize alignment) {
+void HgStdAllocator::free_fn(void* allocation, usize size, usize alignment) {
     (void)size;
     (void)alignment;
     std::free(allocation);
@@ -187,36 +630,36 @@ void HgArena::destroy(HgAllocator& parent) {
     parent.free(memory);
 }
 
-void *HgArena::alloc_fn(usize size, usize alignment) {
-    void *allocation = (void *)hg_align((usize)head, alignment);
+void* HgArena::alloc_fn(usize size, usize alignment) {
+    void* allocation = (void* )hg_align((usize)head, alignment);
 
     uptr new_head = (uptr)allocation + size;
     if (new_head > (uptr)memory.data + memory.count)
         return nullptr;
-    head = (void *)new_head;
+    head = (void* )new_head;
 
     return allocation;
 }
 
-void *HgArena::realloc_fn(void *allocation, usize old_size, usize new_size, usize alignment) {
+void* HgArena::realloc_fn(void* allocation, usize old_size, usize new_size, usize alignment) {
     if ((uptr)allocation + old_size == (uptr)head) {
         uptr new_head = (uptr)allocation + new_size;
         if (new_head > (uptr)memory.data + memory.count)
             return nullptr;
-        head = (void *)new_head;
+        head = (void* )new_head;
         return allocation;
     }
 
     if (new_size < old_size)
         return allocation;
 
-    void *new_allocation = alloc_fn(new_size, alignment);
+    void* new_allocation = alloc_fn(new_size, alignment);
     if (allocation != nullptr && new_allocation != nullptr)
         std::memcpy(new_allocation, allocation, std::min(old_size, new_size));
     return new_allocation;
 }
 
-void HgArena::free_fn(void *allocation, usize size, usize alignment) {
+void HgArena::free_fn(void* allocation, usize size, usize alignment) {
     (void)allocation;
     (void)size;
     (void)alignment;
@@ -242,19 +685,19 @@ void HgStack::reset() {
     head = 0;
 }
 
-void *HgStack::alloc_fn(usize size, usize alignment) {
+void* HgStack::alloc_fn(usize size, usize alignment) {
     (void)alignment;
 
     usize new_head = head + hg_align(size, 16);
     if (new_head > memory.count)
         return nullptr;
 
-    void *allocation = (u8 *)memory.data + head;
+    void* allocation = (u8* )memory.data + head;
     head = new_head;
     return allocation;
 }
 
-void *HgStack::realloc_fn(void *allocation, usize old_size, usize new_size, usize alignment) {
+void* HgStack::realloc_fn(void* allocation, usize old_size, usize new_size, usize alignment) {
     (void)alignment;
 
     if ((uptr)allocation + hg_align(old_size, 16) == head) {
@@ -265,12 +708,12 @@ void *HgStack::realloc_fn(void *allocation, usize old_size, usize new_size, usiz
         return allocation;
     }
 
-    void *new_allocation = alloc_fn(new_size, 16);
+    void* new_allocation = alloc_fn(new_size, 16);
     std::memcpy(new_allocation, allocation, std::min(old_size, new_size));
     return new_allocation;
 }
 
-void HgStack::free_fn(void *allocation, usize size, usize alignment) {
+void HgStack::free_fn(void* allocation, usize size, usize alignment) {
     (void)alignment;
 
     if ((uptr)allocation + hg_align(size, 16) == (uptr)memory.data + head) {
@@ -305,7 +748,7 @@ HgOption<HgArrayAny> HgArrayAny::create(
 
 bool HgArrayAny::reserve(HgAllocator& mem, usize min) {
     if (min > capacity) {
-        void *new_items = mem.realloc_fn(items, capacity * width, min * width, alignment);
+        void* new_items = mem.realloc_fn(items, capacity * width, min * width, alignment);
         if (new_items == nullptr)
             return false;
         items = new_items;
@@ -329,13 +772,13 @@ HgOption<HgString> HgString::create(HgAllocator& mem, usize capacity) {
 HgOption<HgString> HgString::create(HgAllocator& mem, HgStringView init) {
     HgOption<HgString> str{std::in_place};
 
-    str->chars = mem.alloc<char>(init.length());
+    str->chars = mem.alloc<char>(init.count);
     if (str->chars == nullptr)
         return std::nullopt;
 
-    std::memcpy(str->chars.data, init.data(), init.length());
+    std::memcpy(str->chars.data, init.data, init.count);
 
-    str->length = init.length();
+    str->length = init.count;
 
     return str;
 }
@@ -363,7 +806,7 @@ bool HgString::grow(HgAllocator& mem, f32 factor) {
 void HgString::insert(HgAllocator& mem, usize index, HgStringView str) {
     hg_assert(index <= length);
 
-    usize new_length = length + str.length();
+    usize new_length = length + str.count;
 
     if (chars.count < new_length) {
         usize new_count = chars.count == 0 ? 1 : chars.count;
@@ -375,8 +818,8 @@ void HgString::insert(HgAllocator& mem, usize index, HgStringView str) {
         hg_assert(string_insert_allocation_success);
     }
 
-    std::memmove(chars.data + index + str.length(), chars.data + index, length - index);
-    std::memcpy(chars.data + index, str.data(), str.length());
+    std::memmove(chars.data + index + str.count, chars.data + index, length - index);
+    std::memcpy(chars.data + index, str.data, str.count);
     length = new_length;
 }
 
@@ -389,7 +832,7 @@ bool HgFence::wait(f64 timeout_seconds) {
     return false;
 }
 
-static void hg_internal_thread_fn(HgThreadPool *pool, usize index) {
+static void hg_internal_thread_fn(HgThreadPool* pool, usize index) {
     for (;;) {
         if (pool->threads[index].should_close.load())
             return;
@@ -404,7 +847,7 @@ static void hg_internal_thread_fn(HgThreadPool *pool, usize index) {
                 pool->work_queue.pop();
                 pool->work_queue_mutex.unlock();
 
-                work.fn();
+                work.fn(work.data);
                 if (work.fence != nullptr)
                     --work.fence->counter;
             }
@@ -414,8 +857,8 @@ static void hg_internal_thread_fn(HgThreadPool *pool, usize index) {
     }
 }
 
-HgThreadPool *HgThreadPool::create(HgAllocator& mem, usize thread_count, usize queue_size) {
-    HgThreadPool *pool = mem.alloc<HgThreadPool>();
+HgThreadPool* HgThreadPool::create(HgAllocator& mem, usize thread_count, usize queue_size) {
+    HgThreadPool* pool = mem.alloc<HgThreadPool>();
     if (pool == nullptr)
         goto cleanup_pool;
 
@@ -443,7 +886,7 @@ cleanup_pool:
     return nullptr;
 }
 
-void HgThreadPool::destroy(HgAllocator& mem, HgThreadPool *pool) {
+void HgThreadPool::destroy(HgAllocator& mem, HgThreadPool* pool) {
     if (pool == nullptr)
         return;
 
@@ -478,22 +921,20 @@ wait_longer:
     return false;
 }
 
-void HgThreadPool::call_par(HgFence *fence, HgFunctionView<void()> work) {
-    hg_assert(work.fn != nullptr);
+void HgThreadPool::call_par(HgFence* fence, void* data, void (*fn)(void*)) {
+    hg_assert(fn != nullptr);
 
     if (fence != nullptr)
         ++fence->counter;
 
     work_queue_mutex.lock();
-    work_queue.push(work, fence);
+    work_queue.push(fence, data, fn);
     work_queue_mutex.unlock();
 }
 
-void HgThreadPool::for_par(usize count, usize chunk_size, HgFunctionView<void(usize, usize)> fn) {
-    static constexpr auto fn_work = [fn_dummy = decltype(fn){}, begin = (usize)0, end = (usize)0]() {
-        (void)fn_dummy;
-        (void)begin;
-        (void)end;
+void HgThreadPool::for_par(usize count, usize chunk_size, void* data, void (*fn)(void*, usize begin, usize end)) {
+    static constexpr auto fn_work = [data_dummy = nullptr, fn_dummy = nullptr, begin = (usize)0, end = (usize)0]() {
+        (void)data_dummy, (void)fn_dummy, (void)begin, (void)end;
     };
     usize mem_size = (usize)std::ceil((f64)count / (f64)chunk_size) * sizeof(fn_work);
 
@@ -503,9 +944,10 @@ void HgThreadPool::for_par(usize count, usize chunk_size, HgFunctionView<void(us
 
     HgFence fence;
     for (usize i = 0; i < count; i += chunk_size) {
-        call_par(&fence, hg_function<void()>(arena, [fn, begin = i, end = std::min(count, i + chunk_size)]() {
-            fn(begin, end);
-        }).value());
+        auto fn_obj = hg_function<void()>(arena, [data, fn, begin = i, end = std::min(count, i + chunk_size)]() {
+            fn(data, begin, end);
+        }).value();
+        call_par(&fence, fn_obj.capture.data, fn_obj.fn);
     }
     fence.wait(INFINITY);
 }
@@ -680,7 +1122,7 @@ void HgECS::swap_idx(u32 lhs, u32 rhs, u32 component_id) {
     hg_assert(rhs < system.dense.count);
 
     usize width = system.components.width;
-    void *temp = alloca(width);
+    void* temp = alloca(width);
     std::memcpy(temp, system.components[lhs], width);
     std::memcpy(system.components[lhs], system.components[rhs], width);
     std::memcpy(system.components[rhs], temp, width);
@@ -727,69 +1169,52 @@ void HgECS::swap_location(HgEntity lhs, HgEntity rhs, u32 component_id) {
     swap_idx(lhs_index, rhs_index, component_id);
 }
 
-// static void hg_internal_ecs_selectionsort(
-//     HgECS& ecs, u32 component_id,
-//     u32 begin, u32 end,
-//     HgFunctionView<bool(HgECS&, HgEntity, HgEntity)> compare) {
-//     hg_assert(ecs.is_registered(component_id));
-//     for (; begin < end; ++begin) {
-//         u32 least = begin;
-//         for (u32 i = begin + 1; i < end; ++i) {
-//             if (compare(ecs, ecs.systems[component_id].dense[i], ecs.systems[component_id].dense[least]))
-//                 least = i;
-//         }
-//         if (least != begin)
-//             ecs.swap_location_idx(begin, least, component_id);
-//     }
-// }
-
-u32 hg_internal_ecs_quicksort_inter(
-    HgECS& ecs, u32 component_id,
-    u32 pivot, u32 inc, u32 dec,
-    const HgFunctionView<bool(HgEntity, HgEntity)>& compare
+void HgECS::sort_untyped(
+    u32 begin,
+    u32 end,
+    u32 component_id,
+    void* data,
+    bool (*compare)(void*, HgEntity lhs, HgEntity rhs)
 ) {
-    while (inc != dec) {
-        while (!compare(ecs.systems[component_id].dense[dec], ecs.systems[component_id].dense[pivot])) {
-            --dec;
-            if (dec == inc)
-                goto finish;
+    hg_assert(is_registered(component_id));
+
+    auto inter = [this, component_id, data, compare](u32 pivot, u32 inc, u32 dec) -> u32 {
+        while (inc != dec) {
+            while (!compare(data, systems[component_id].dense[dec], systems[component_id].dense[pivot])) {
+                --dec;
+                if (dec == inc)
+                    goto finish;
+            }
+            while (!compare(data, systems[component_id].dense[pivot], systems[component_id].dense[inc])) {
+                ++inc;
+                if (inc == dec)
+                    goto finish;
+            }
+            swap_location_idx(inc, dec, component_id);
         }
-        while (!compare(ecs.systems[component_id].dense[pivot], ecs.systems[component_id].dense[inc])) {
-            ++inc;
-            if (inc == dec)
-                goto finish;
-        }
-        ecs.swap_location_idx(inc, dec, component_id);
-    }
 
 finish:
-    if (compare(ecs.systems[component_id].dense[inc], ecs.systems[component_id].dense[pivot]))
-        ecs.swap_location_idx(pivot, inc, component_id);
+        if (compare(data, systems[component_id].dense[inc], systems[component_id].dense[pivot]))
+            swap_location_idx(pivot, inc, component_id);
 
-    return inc;
+        return inc;
+    };
+
+    auto quicksort = [this, component_id, inter](const auto& recurse, u32 qbegin, u32 qend) {
+        hg_assert(qbegin <= qend && qend <= component_count(component_id));
+
+        if (qbegin + 1 >= qend)
+            return;
+
+        u32 middle = inter(qbegin, qbegin + 1, qend - 1);
+        recurse(recurse, qbegin, middle);
+        recurse(recurse, middle, qend);
+    };
+
+    quicksort(quicksort, begin, end);
 }
 
-static void hg_internal_ecs_quicksort(
-    HgECS& ecs, u32 component_id,
-    u32 begin, u32 end,
-    const HgFunctionView<bool(HgEntity, HgEntity)>& compare
-) {
-    hg_assert(ecs.is_registered(component_id));
-    hg_assert(begin <= end && end <= ecs.component_count(component_id));
-
-    if (begin + 1 >= end)
-        return;
-
-    u32 middle = hg_internal_ecs_quicksort_inter(ecs, component_id, begin, begin + 1, end - 1, compare);
-    hg_internal_ecs_quicksort(ecs, component_id, begin, middle, compare);
-    hg_internal_ecs_quicksort(ecs, component_id, middle, end, compare);
-}
-
-void HgECS::sort_untyped(u32 begin, u32 end, u32 component_id, HgFunctionView<bool(HgEntity, HgEntity)> compare) {
-    hg_internal_ecs_quicksort(*this, component_id, begin, end, compare);
-}
-
-static void hg_internal_resource_thread_fn(HgResourceManager *rm) {
+static void hg_internal_resource_thread_fn(HgResourceManager* rm) {
     for (;;) {
         if (rm->request_thread.should_close.load())
             return;
@@ -803,7 +1228,7 @@ static void hg_internal_resource_thread_fn(HgResourceManager *rm) {
                 HgResourceManager::Request request = rm->request_queue.pop();
                 rm->request_queue_mutex.unlock();
 
-                request.fn(request.mem, request.resource, request.path);
+                request.fn(request.data, request.mem, request.resource, request.path);
                 --request.fence->counter;
             }
         }
@@ -812,8 +1237,8 @@ static void hg_internal_resource_thread_fn(HgResourceManager *rm) {
     }
 }
 
-HgResourceManager *HgResourceManager::create(HgAllocator& mem, usize max_requests) {
-    HgResourceManager *rm = mem.alloc<HgResourceManager>();
+HgResourceManager* HgResourceManager::create(HgAllocator& mem, usize max_requests) {
+    HgResourceManager* rm = mem.alloc<HgResourceManager>();
     if (rm == nullptr)
         goto cleanup_rm;
 
@@ -833,7 +1258,7 @@ cleanup_rm:
     return nullptr;
 }
 
-void HgResourceManager::destroy(HgAllocator& mem, HgResourceManager *rm) {
+void HgResourceManager::destroy(HgAllocator& mem, HgResourceManager* rm) {
     rm->request_thread.should_close.store(true);
     rm->request_thread.thread.join();
     rm->request_queue.destroy(mem);
@@ -849,13 +1274,13 @@ void HgResourceManager::request(const Request &request) {
     request_queue_mutex.unlock();
 }
 
-void hg_load_file_binary(HgFence *fence, HgAllocator& mem, HgFileBinary& file, HgStringView path) {
-    auto fn = [](void *, HgAllocator *pmem, void *pfile, HgStringView fpath) {
-        HgFileBinary& file_data = *(HgFileBinary *)pfile;
+void hg_load_file_binary(HgFence* fence, HgAllocator& mem, HgFileBinary& file, HgStringView path) {
+    auto fn = [](void*, HgAllocator* pmem, void* pfile, HgStringView fpath) {
+        HgFileBinary& file_data =* (HgFileBinary* )pfile;
 
-        char *cpath = (char *)alloca(fpath.length() + 1);
-        std::memcpy(cpath, fpath.data(), fpath.length());
-        cpath[fpath.length()] = '\0';
+        char* cpath = (char* )alloca(fpath.count + 1);
+        std::memcpy(cpath, fpath.data, fpath.count);
+        cpath[fpath.count] = '\0';
 
         FILE* file_handle = std::fopen(cpath, "rb");
         if (file_handle == nullptr) {
@@ -897,9 +1322,9 @@ void hg_load_file_binary(HgFence *fence, HgAllocator& mem, HgFileBinary& file, H
     hg_resources->request(request);
 }
 
-void hg_unload_file_binary(HgFence *fence, HgAllocator& mem, HgFileBinary& file) {
-    auto fn = [](void *, HgAllocator *pmem, void *pfile, HgStringView) {
-        HgFileBinary& file_data = *(HgFileBinary *)pfile;
+void hg_unload_file_binary(HgFence* fence, HgAllocator& mem, HgFileBinary& file) {
+    auto fn = [](void*, HgAllocator* pmem, void* pfile, HgStringView) {
+        HgFileBinary& file_data =* (HgFileBinary* )pfile;
         pmem->free_fn(file_data.data, file_data.size, alignof(std::max_align_t));
         file_data = {};
     };
@@ -912,13 +1337,13 @@ void hg_unload_file_binary(HgFence *fence, HgAllocator& mem, HgFileBinary& file)
     hg_resources->request(request);
 }
 
-void hg_store_file_binary(HgFence *fence, HgFileBinary& file, HgStringView path) {
-    auto fn = [](void *, HgAllocator *, void *pfile, HgStringView fpath) {
-        HgFileBinary& file_data = *(HgFileBinary *)pfile;
+void hg_store_file_binary(HgFence* fence, HgFileBinary& file, HgStringView path) {
+    auto fn = [](void*, HgAllocator*, void* pfile, HgStringView fpath) {
+        HgFileBinary& file_data =* (HgFileBinary* )pfile;
 
-        char *cpath = (char *)alloca(fpath.length() + 1);
-        std::memcpy(cpath, fpath.data(), fpath.length());
-        cpath[fpath.length()] = '\0';
+        char* cpath = (char* )alloca(fpath.count + 1);
+        std::memcpy(cpath, fpath.data, fpath.count);
+        cpath[fpath.count] = '\0';
 
         FILE* file_handle = std::fopen(cpath, "wb");
         if (file_handle == nullptr) {
@@ -941,16 +1366,16 @@ void hg_store_file_binary(HgFence *fence, HgFileBinary& file, HgStringView path)
     hg_resources->request(request);
 }
 
-void hg_load_image(HgFence *fence, HgAllocator& mem, HgImage& image, HgStringView path) {
-    auto fn = [](void *, HgAllocator *, void *pimage, HgStringView fpath) {
-        HgImage& image_data = *(HgImage *)pimage;
+void hg_load_image(HgFence* fence, HgAllocator& mem, HgImage& image, HgStringView path) {
+    auto fn = [](void*, HgAllocator*, void* pimage, HgStringView fpath) {
+        HgImage& image_data =* (HgImage* )pimage;
 
-        char *cpath = (char *)alloca(fpath.length() + 1);
-        std::memcpy(cpath, fpath.data(), fpath.length());
-        cpath[fpath.length()] = '\0';
+        char* cpath = (char* )alloca(fpath.count + 1);
+        std::memcpy(cpath, fpath.data, fpath.count);
+        cpath[fpath.count] = '\0';
 
         int channels;
-        image_data.pixels = stbi_load(cpath, (int *)&image_data.width, (int *)&image_data.height, &channels, 4);
+        image_data.pixels = stbi_load(cpath, (int* )&image_data.width, (int* )&image_data.height, &channels, 4);
         if (image_data.pixels == nullptr) {
             hg_warn("Failed to load image file: %s\n", cpath);
             image_data = {};
@@ -969,9 +1394,9 @@ void hg_load_image(HgFence *fence, HgAllocator& mem, HgImage& image, HgStringVie
     hg_resources->request(request);
 }
 
-void hg_unload_image(HgFence *fence, HgAllocator& mem, HgImage& image) {
-    auto fn = [](void *, HgAllocator *, void *pimage, HgStringView) {
-        HgImage& image_data = *(HgImage *)pimage;
+void hg_unload_image(HgFence* fence, HgAllocator& mem, HgImage& image) {
+    auto fn = [](void*, HgAllocator*, void* pimage, HgStringView) {
+        HgImage& image_data =* (HgImage* )pimage;
 
         free(image_data.pixels);
         image_data = {};
@@ -985,13 +1410,13 @@ void hg_unload_image(HgFence *fence, HgAllocator& mem, HgImage& image) {
     hg_resources->request(request);
 }
 
-void hg_store_image(HgFence *fence, HgImage& image, HgStringView path) {
-    auto fn = [](void *, HgAllocator *, void *pimage, HgStringView fpath) {
-        HgImage& image_data = *(HgImage *)pimage;
+void hg_store_image(HgFence* fence, HgImage& image, HgStringView path) {
+    auto fn = [](void*, HgAllocator*, void* pimage, HgStringView fpath) {
+        HgImage& image_data =* (HgImage* )pimage;
 
-        char *cpath = (char *)alloca(fpath.length() + 1);
-        std::memcpy(cpath, fpath.data(), fpath.length());
-        cpath[fpath.length()] = '\0';
+        char* cpath = (char* )alloca(fpath.count + 1);
+        std::memcpy(cpath, fpath.data, fpath.count);
+        cpath[fpath.count] = '\0';
 
         stbi_write_png(
             cpath,
@@ -1037,7 +1462,7 @@ void hg_graphics_init() {
 
     if (hg_vk_physical_device == nullptr) {
         hg_vk_physical_device = hg_vk_find_single_queue_physical_device();
-        hg_vk_queue_family = *hg_vk_find_queue_family(hg_vk_physical_device,
+        hg_vk_queue_family =* hg_vk_find_queue_family(hg_vk_physical_device,
             VK_QUEUE_GRAPHICS_BIT |
             VK_QUEUE_TRANSFER_BIT |
             VK_QUEUE_COMPUTE_BIT);
@@ -1087,7 +1512,7 @@ void hg_graphics_deinit() {
     hg_vulkan_deinit();
 }
 
-const char *hg_vk_result_string(VkResult result) {
+const char* hg_vk_result_string(VkResult result) {
     switch (result) {
         case VK_SUCCESS:
             return "VK_SUCCESS";
@@ -1610,55 +2035,55 @@ struct HgVulkanFuncs {
 
 static HgVulkanFuncs hg_internal_vulkan_funcs{};
 
-PFN_vkVoidFunction vkGetInstanceProcAddr(VkInstance instance, const char *pName) {
+PFN_vkVoidFunction vkGetInstanceProcAddr(VkInstance instance, const char* pName) {
     return hg_internal_vulkan_funcs.vkGetInstanceProcAddr(instance, pName);
 }
 
-PFN_vkVoidFunction vkGetDeviceProcAddr(VkDevice device, const char *pName) {
+PFN_vkVoidFunction vkGetDeviceProcAddr(VkDevice device, const char* pName) {
     return hg_internal_vulkan_funcs.vkGetDeviceProcAddr(device, pName);
 }
 
-VkResult vkCreateInstance(const VkInstanceCreateInfo *pCreateInfo, const VkAllocationCallbacks *pAllocator, VkInstance *pInstance) {
+VkResult vkCreateInstance(const VkInstanceCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkInstance* pInstance) {
     return hg_internal_vulkan_funcs.vkCreateInstance(pCreateInfo, pAllocator, pInstance);
 }
 
-void vkDestroyInstance(VkInstance instance, const VkAllocationCallbacks *pAllocator) {
+void vkDestroyInstance(VkInstance instance, const VkAllocationCallbacks* pAllocator) {
     hg_internal_vulkan_funcs.vkDestroyInstance(instance, pAllocator);
 }
 
-VkResult vkCreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo, const VkAllocationCallbacks *pAllocator, VkDebugUtilsMessengerEXT *pMessenger) {
+VkResult vkCreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pMessenger) {
     return hg_internal_vulkan_funcs.vkCreateDebugUtilsMessengerEXT(instance, pCreateInfo, pAllocator, pMessenger);
 }
 
-void vkDestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT messenger, const VkAllocationCallbacks *pAllocator) {
+void vkDestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT messenger, const VkAllocationCallbacks* pAllocator) {
     hg_internal_vulkan_funcs.vkDestroyDebugUtilsMessengerEXT(instance, messenger, pAllocator);
 }
 
-VkResult vkEnumeratePhysicalDevices(VkInstance instance, uint32_t *pCount, VkPhysicalDevice *pDevices) {
+VkResult vkEnumeratePhysicalDevices(VkInstance instance, uint32_t* pCount, VkPhysicalDevice* pDevices) {
     return hg_internal_vulkan_funcs.vkEnumeratePhysicalDevices(instance, pCount, pDevices);
 }
 
-VkResult vkEnumerateDeviceExtensionProperties(VkPhysicalDevice device, const char *pLayerName, uint32_t *pCount, VkExtensionProperties *pProps) {
+VkResult vkEnumerateDeviceExtensionProperties(VkPhysicalDevice device, const char* pLayerName, uint32_t* pCount, VkExtensionProperties* pProps) {
     return hg_internal_vulkan_funcs.vkEnumerateDeviceExtensionProperties(device, pLayerName, pCount, pProps);
 }
 
-void vkGetPhysicalDeviceProperties(VkPhysicalDevice physicalDevice, VkPhysicalDeviceProperties *pProperties) {
+void vkGetPhysicalDeviceProperties(VkPhysicalDevice physicalDevice, VkPhysicalDeviceProperties* pProperties) {
     hg_internal_vulkan_funcs.vkGetPhysicalDeviceProperties(physicalDevice, pProperties);
 }
 
-void vkGetPhysicalDeviceQueueFamilyProperties(VkPhysicalDevice device, uint32_t *pCount, VkQueueFamilyProperties *pProps) {
+void vkGetPhysicalDeviceQueueFamilyProperties(VkPhysicalDevice device, uint32_t* pCount, VkQueueFamilyProperties* pProps) {
     hg_internal_vulkan_funcs.vkGetPhysicalDeviceQueueFamilyProperties(device, pCount, pProps);
 }
 
-void vkDestroySurfaceKHR(VkInstance instance, VkSurfaceKHR surface, const VkAllocationCallbacks *pAllocator) {
+void vkDestroySurfaceKHR(VkInstance instance, VkSurfaceKHR surface, const VkAllocationCallbacks* pAllocator) {
     hg_internal_vulkan_funcs.vkDestroySurfaceKHR(instance, surface, pAllocator);
 }
 
-VkResult vkCreateDevice(VkPhysicalDevice device, const VkDeviceCreateInfo *pCreateInfo, const VkAllocationCallbacks *pAllocator, VkDevice *pDevice) {
+VkResult vkCreateDevice(VkPhysicalDevice device, const VkDeviceCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDevice* pDevice) {
     return hg_internal_vulkan_funcs.vkCreateDevice(device, pCreateInfo, pAllocator, pDevice);
 }
 
-void vkDestroyDevice(VkDevice device, const VkAllocationCallbacks *pAllocator) {
+void vkDestroyDevice(VkDevice device, const VkAllocationCallbacks* pAllocator) {
     hg_internal_vulkan_funcs.vkDestroyDevice(device, pAllocator);
 }
 
@@ -1666,59 +2091,59 @@ VkResult vkDeviceWaitIdle(VkDevice device) {
     return hg_internal_vulkan_funcs.vkDeviceWaitIdle(device);
 }
 
-VkResult vkGetPhysicalDeviceSurfaceFormatsKHR(VkPhysicalDevice device, VkSurfaceKHR surface, uint32_t *pCount, VkSurfaceFormatKHR *pFormats) {
+VkResult vkGetPhysicalDeviceSurfaceFormatsKHR(VkPhysicalDevice device, VkSurfaceKHR surface, uint32_t* pCount, VkSurfaceFormatKHR* pFormats) {
     return hg_internal_vulkan_funcs.vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, pCount, pFormats);
 }
 
-VkResult vkGetPhysicalDeviceSurfacePresentModesKHR(VkPhysicalDevice device, VkSurfaceKHR surface, uint32_t *pCount, VkPresentModeKHR *pModes) {
+VkResult vkGetPhysicalDeviceSurfacePresentModesKHR(VkPhysicalDevice device, VkSurfaceKHR surface, uint32_t* pCount, VkPresentModeKHR* pModes) {
     return hg_internal_vulkan_funcs.vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, pCount, pModes);
 }
 
-VkResult vkGetPhysicalDeviceSurfaceCapabilitiesKHR(VkPhysicalDevice device, VkSurfaceKHR surface, VkSurfaceCapabilitiesKHR *pCaps) {
+VkResult vkGetPhysicalDeviceSurfaceCapabilitiesKHR(VkPhysicalDevice device, VkSurfaceKHR surface, VkSurfaceCapabilitiesKHR* pCaps) {
     return hg_internal_vulkan_funcs.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, pCaps);
 }
 
-VkResult vkCreateSwapchainKHR(VkDevice device, const VkSwapchainCreateInfoKHR *pCreateInfo, const VkAllocationCallbacks *pAllocator, VkSwapchainKHR *pSwapchain) {
+VkResult vkCreateSwapchainKHR(VkDevice device, const VkSwapchainCreateInfoKHR* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkSwapchainKHR* pSwapchain) {
     return hg_internal_vulkan_funcs.vkCreateSwapchainKHR(device, pCreateInfo, pAllocator, pSwapchain);
 }
 
-void vkDestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain, const VkAllocationCallbacks *pAllocator) {
+void vkDestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain, const VkAllocationCallbacks* pAllocator) {
     hg_internal_vulkan_funcs.vkDestroySwapchainKHR(device, swapchain, pAllocator);
 }
 
-VkResult vkGetSwapchainImagesKHR(VkDevice device, VkSwapchainKHR swapchain, uint32_t *pCount, VkImage *pImages) {
+VkResult vkGetSwapchainImagesKHR(VkDevice device, VkSwapchainKHR swapchain, uint32_t* pCount, VkImage* pImages) {
     return hg_internal_vulkan_funcs.vkGetSwapchainImagesKHR(device, swapchain, pCount, pImages);
 }
 
-VkResult vkAcquireNextImageKHR(VkDevice device, VkSwapchainKHR swapchain, uint64_t timeout, VkSemaphore sem, VkFence fence, uint32_t *pIndex) {
+VkResult vkAcquireNextImageKHR(VkDevice device, VkSwapchainKHR swapchain, uint64_t timeout, VkSemaphore sem, VkFence fence, uint32_t* pIndex) {
     return hg_internal_vulkan_funcs.vkAcquireNextImageKHR(device, swapchain, timeout, sem, fence, pIndex);
 }
 
-VkResult vkCreateSemaphore(VkDevice device, const VkSemaphoreCreateInfo *pCreateInfo, const VkAllocationCallbacks *pAllocator, VkSemaphore *pSemaphore) {
+VkResult vkCreateSemaphore(VkDevice device, const VkSemaphoreCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkSemaphore* pSemaphore) {
     return hg_internal_vulkan_funcs.vkCreateSemaphore(device, pCreateInfo, pAllocator, pSemaphore);
 }
 
-void vkDestroySemaphore(VkDevice device, VkSemaphore sem, const VkAllocationCallbacks *pAllocator) {
+void vkDestroySemaphore(VkDevice device, VkSemaphore sem, const VkAllocationCallbacks* pAllocator) {
     hg_internal_vulkan_funcs.vkDestroySemaphore(device, sem, pAllocator);
 }
 
-VkResult vkCreateFence(VkDevice device, const VkFenceCreateInfo *pCreateInfo, const VkAllocationCallbacks *pAllocator, VkFence *pFence) {
+VkResult vkCreateFence(VkDevice device, const VkFenceCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkFence* pFence) {
     return hg_internal_vulkan_funcs.vkCreateFence(device, pCreateInfo, pAllocator, pFence);
 }
 
-void vkDestroyFence(VkDevice device, VkFence fence, const VkAllocationCallbacks *pAllocator) {
+void vkDestroyFence(VkDevice device, VkFence fence, const VkAllocationCallbacks* pAllocator) {
     hg_internal_vulkan_funcs.vkDestroyFence(device, fence, pAllocator);
 }
 
-VkResult vkResetFences(VkDevice device, uint32_t count, const VkFence *pFences) {
+VkResult vkResetFences(VkDevice device, uint32_t count, const VkFence* pFences) {
     return hg_internal_vulkan_funcs.vkResetFences(device, count, pFences);
 }
 
-VkResult vkWaitForFences(VkDevice device, uint32_t count, const VkFence *pFences, VkBool32 waitAll, uint64_t timeout) {
+VkResult vkWaitForFences(VkDevice device, uint32_t count, const VkFence* pFences, VkBool32 waitAll, uint64_t timeout) {
     return hg_internal_vulkan_funcs.vkWaitForFences(device, count, pFences, waitAll, timeout);
 }
 
-void vkGetDeviceQueue(VkDevice device, uint32_t family, uint32_t index, VkQueue *pQueue) {
+void vkGetDeviceQueue(VkDevice device, uint32_t family, uint32_t index, VkQueue* pQueue) {
     hg_internal_vulkan_funcs.vkGetDeviceQueue(device, family, index, pQueue);
 }
 
@@ -1726,35 +2151,35 @@ VkResult vkQueueWaitIdle(VkQueue queue) {
     return hg_internal_vulkan_funcs.vkQueueWaitIdle(queue);
 }
 
-VkResult vkQueueSubmit(VkQueue queue, uint32_t count, const VkSubmitInfo *pSubmits, VkFence fence) {
+VkResult vkQueueSubmit(VkQueue queue, uint32_t count, const VkSubmitInfo* pSubmits, VkFence fence) {
     return hg_internal_vulkan_funcs.vkQueueSubmit(queue, count, pSubmits, fence);
 }
 
-VkResult vkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR *pInfo) {
+VkResult vkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* pInfo) {
     return hg_internal_vulkan_funcs.vkQueuePresentKHR(queue, pInfo);
 }
 
-VkResult vkCreateCommandPool(VkDevice device, const VkCommandPoolCreateInfo *pCreateInfo, const VkAllocationCallbacks *pAllocator, VkCommandPool *pPool) {
+VkResult vkCreateCommandPool(VkDevice device, const VkCommandPoolCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkCommandPool* pPool) {
     return hg_internal_vulkan_funcs.vkCreateCommandPool(device, pCreateInfo, pAllocator, pPool);
 }
 
-void vkDestroyCommandPool(VkDevice device, VkCommandPool pool, const VkAllocationCallbacks *pAllocator) {
+void vkDestroyCommandPool(VkDevice device, VkCommandPool pool, const VkAllocationCallbacks* pAllocator) {
     hg_internal_vulkan_funcs.vkDestroyCommandPool(device, pool, pAllocator);
 }
 
-VkResult vkAllocateCommandBuffers(VkDevice device, const VkCommandBufferAllocateInfo *pInfo, VkCommandBuffer *pBufs) {
+VkResult vkAllocateCommandBuffers(VkDevice device, const VkCommandBufferAllocateInfo* pInfo, VkCommandBuffer* pBufs) {
     return hg_internal_vulkan_funcs.vkAllocateCommandBuffers(device, pInfo, pBufs);
 }
 
-void vkFreeCommandBuffers(VkDevice device, VkCommandPool pool, uint32_t count, const VkCommandBuffer *pBufs) {
+void vkFreeCommandBuffers(VkDevice device, VkCommandPool pool, uint32_t count, const VkCommandBuffer* pBufs) {
     hg_internal_vulkan_funcs.vkFreeCommandBuffers(device, pool, count, pBufs);
 }
 
-VkResult vkCreateDescriptorPool(VkDevice device, const VkDescriptorPoolCreateInfo *pInfo, const VkAllocationCallbacks *pAllocator, VkDescriptorPool *pPool) {
+VkResult vkCreateDescriptorPool(VkDevice device, const VkDescriptorPoolCreateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkDescriptorPool* pPool) {
     return hg_internal_vulkan_funcs.vkCreateDescriptorPool(device, pInfo, pAllocator, pPool);
 }
 
-void vkDestroyDescriptorPool(VkDevice device, VkDescriptorPool pool, const VkAllocationCallbacks *pAllocator) {
+void vkDestroyDescriptorPool(VkDevice device, VkDescriptorPool pool, const VkAllocationCallbacks* pAllocator) {
     hg_internal_vulkan_funcs.vkDestroyDescriptorPool(device, pool, pAllocator);
 }
 
@@ -1762,7 +2187,7 @@ VkResult vkResetDescriptorPool(VkDevice device, VkDescriptorPool pool, uint32_t 
     return hg_internal_vulkan_funcs.vkResetDescriptorPool(device, pool, flags);
 }
 
-VkResult vkAllocateDescriptorSets(VkDevice device, const VkDescriptorSetAllocateInfo *pInfo, VkDescriptorSet *pSets) {
+VkResult vkAllocateDescriptorSets(VkDevice device, const VkDescriptorSetAllocateInfo* pInfo, VkDescriptorSet* pSets) {
     return hg_internal_vulkan_funcs.vkAllocateDescriptorSets(device, pInfo, pSets);
 }
 
@@ -1770,79 +2195,79 @@ VkResult vkFreeDescriptorSets(VkDevice device, VkDescriptorPool descriptorPool, 
     return hg_internal_vulkan_funcs.vkFreeDescriptorSets(device, descriptorPool, descriptorSetCount, pDescriptorSets);
 }
 
-void vkUpdateDescriptorSets(VkDevice device, uint32_t writeCount, const VkWriteDescriptorSet *pWrites, uint32_t copyCount, const VkCopyDescriptorSet *pCopies) {
+void vkUpdateDescriptorSets(VkDevice device, uint32_t writeCount, const VkWriteDescriptorSet* pWrites, uint32_t copyCount, const VkCopyDescriptorSet* pCopies) {
     hg_internal_vulkan_funcs.vkUpdateDescriptorSets(device, writeCount, pWrites, copyCount, pCopies);
 }
 
-VkResult vkCreateDescriptorSetLayout(VkDevice device, const VkDescriptorSetLayoutCreateInfo *pInfo, const VkAllocationCallbacks *pAllocator, VkDescriptorSetLayout *pLayout) {
+VkResult vkCreateDescriptorSetLayout(VkDevice device, const VkDescriptorSetLayoutCreateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkDescriptorSetLayout* pLayout) {
     return hg_internal_vulkan_funcs.vkCreateDescriptorSetLayout(device, pInfo, pAllocator, pLayout);
 }
 
-void vkDestroyDescriptorSetLayout(VkDevice device, VkDescriptorSetLayout layout, const VkAllocationCallbacks *pAllocator) {
+void vkDestroyDescriptorSetLayout(VkDevice device, VkDescriptorSetLayout layout, const VkAllocationCallbacks* pAllocator) {
     hg_internal_vulkan_funcs.vkDestroyDescriptorSetLayout(device, layout, pAllocator);
 }
 
-VkResult vkCreatePipelineLayout(VkDevice device, const VkPipelineLayoutCreateInfo *pInfo, const VkAllocationCallbacks *pAllocator, VkPipelineLayout *pLayout) {
+VkResult vkCreatePipelineLayout(VkDevice device, const VkPipelineLayoutCreateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkPipelineLayout* pLayout) {
     return hg_internal_vulkan_funcs.vkCreatePipelineLayout(device, pInfo, pAllocator, pLayout);
 }
 
-void vkDestroyPipelineLayout(VkDevice device, VkPipelineLayout layout, const VkAllocationCallbacks *pAllocator) {
+void vkDestroyPipelineLayout(VkDevice device, VkPipelineLayout layout, const VkAllocationCallbacks* pAllocator) {
     hg_internal_vulkan_funcs.vkDestroyPipelineLayout(device, layout, pAllocator);
 }
 
-VkResult vkCreateShaderModule(VkDevice device, const VkShaderModuleCreateInfo *pInfo, const VkAllocationCallbacks *pAllocator, VkShaderModule *pModule) {
+VkResult vkCreateShaderModule(VkDevice device, const VkShaderModuleCreateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkShaderModule* pModule) {
     return hg_internal_vulkan_funcs.vkCreateShaderModule(device, pInfo, pAllocator, pModule);
 }
 
-void vkDestroyShaderModule(VkDevice device, VkShaderModule module, const VkAllocationCallbacks *pAllocator) {
+void vkDestroyShaderModule(VkDevice device, VkShaderModule module, const VkAllocationCallbacks* pAllocator) {
     hg_internal_vulkan_funcs.vkDestroyShaderModule(device, module, pAllocator);
 }
 
-VkResult vkCreateGraphicsPipelines(VkDevice device, VkPipelineCache cache, uint32_t count, const VkGraphicsPipelineCreateInfo *pInfos, const VkAllocationCallbacks *pAllocator, VkPipeline *pPipelines) {
+VkResult vkCreateGraphicsPipelines(VkDevice device, VkPipelineCache cache, uint32_t count, const VkGraphicsPipelineCreateInfo* pInfos, const VkAllocationCallbacks* pAllocator, VkPipeline* pPipelines) {
     return hg_internal_vulkan_funcs.vkCreateGraphicsPipelines(device, cache, count, pInfos, pAllocator, pPipelines);
 }
 
-VkResult vkCreateComputePipelines(VkDevice device, VkPipelineCache cache, uint32_t count, const VkComputePipelineCreateInfo *pInfos, const VkAllocationCallbacks *pAllocator, VkPipeline *pPipelines) {
+VkResult vkCreateComputePipelines(VkDevice device, VkPipelineCache cache, uint32_t count, const VkComputePipelineCreateInfo* pInfos, const VkAllocationCallbacks* pAllocator, VkPipeline* pPipelines) {
     return hg_internal_vulkan_funcs.vkCreateComputePipelines(device, cache, count, pInfos, pAllocator, pPipelines);
 }
 
-void vkDestroyPipeline(VkDevice device, VkPipeline pipeline, const VkAllocationCallbacks *pAllocator) {
+void vkDestroyPipeline(VkDevice device, VkPipeline pipeline, const VkAllocationCallbacks* pAllocator) {
     hg_internal_vulkan_funcs.vkDestroyPipeline(device, pipeline, pAllocator);
 }
 
-VkResult vkCreateBuffer(VkDevice device, const VkBufferCreateInfo *pInfo, const VkAllocationCallbacks *pAllocator, VkBuffer *pBuf) {
+VkResult vkCreateBuffer(VkDevice device, const VkBufferCreateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkBuffer* pBuf) {
     return hg_internal_vulkan_funcs.vkCreateBuffer(device, pInfo, pAllocator, pBuf);
 }
 
-void vkDestroyBuffer(VkDevice device, VkBuffer buf, const VkAllocationCallbacks *pAllocator) {
+void vkDestroyBuffer(VkDevice device, VkBuffer buf, const VkAllocationCallbacks* pAllocator) {
     hg_internal_vulkan_funcs.vkDestroyBuffer(device, buf, pAllocator);
 }
 
-VkResult vkCreateImage(VkDevice device, const VkImageCreateInfo *pInfo, const VkAllocationCallbacks *pAllocator, VkImage *pImage) {
+VkResult vkCreateImage(VkDevice device, const VkImageCreateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkImage* pImage) {
     return hg_internal_vulkan_funcs.vkCreateImage(device, pInfo, pAllocator, pImage);
 }
 
-void vkDestroyImage(VkDevice device, VkImage img, const VkAllocationCallbacks *pAllocator) {
+void vkDestroyImage(VkDevice device, VkImage img, const VkAllocationCallbacks* pAllocator) {
     hg_internal_vulkan_funcs.vkDestroyImage(device, img, pAllocator);
 }
 
-VkResult vkCreateImageView(VkDevice device, const VkImageViewCreateInfo *pInfo, const VkAllocationCallbacks *pAllocator, VkImageView *pView) {
+VkResult vkCreateImageView(VkDevice device, const VkImageViewCreateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkImageView* pView) {
     return hg_internal_vulkan_funcs.vkCreateImageView(device, pInfo, pAllocator, pView);
 }
 
-void vkDestroyImageView(VkDevice device, VkImageView view, const VkAllocationCallbacks *pAllocator) {
+void vkDestroyImageView(VkDevice device, VkImageView view, const VkAllocationCallbacks* pAllocator) {
     hg_internal_vulkan_funcs.vkDestroyImageView(device, view, pAllocator);
 }
 
-VkResult vkCreateSampler(VkDevice device, const VkSamplerCreateInfo *pInfo, const VkAllocationCallbacks *pAllocator, VkSampler *pSampler) {
+VkResult vkCreateSampler(VkDevice device, const VkSamplerCreateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkSampler* pSampler) {
     return hg_internal_vulkan_funcs.vkCreateSampler(device, pInfo, pAllocator, pSampler);
 }
 
-void vkDestroySampler(VkDevice device, VkSampler sampler, const VkAllocationCallbacks *pAllocator) {
+void vkDestroySampler(VkDevice device, VkSampler sampler, const VkAllocationCallbacks* pAllocator) {
     hg_internal_vulkan_funcs.vkDestroySampler(device, sampler, pAllocator);
 }
 
-void vkGetPhysicalDeviceMemoryProperties(VkPhysicalDevice physicalDevice, VkPhysicalDeviceMemoryProperties *pMemoryProperties) {
+void vkGetPhysicalDeviceMemoryProperties(VkPhysicalDevice physicalDevice, VkPhysicalDeviceMemoryProperties* pMemoryProperties) {
     hg_internal_vulkan_funcs.vkGetPhysicalDeviceMemoryProperties(physicalDevice, pMemoryProperties);
 }
 
@@ -1850,7 +2275,7 @@ void vkGetPhysicalDeviceMemoryProperties2(VkPhysicalDevice physicalDevice, VkPhy
     hg_internal_vulkan_funcs.vkGetPhysicalDeviceMemoryProperties2(physicalDevice, pMemoryProperties);
 }
 
-void vkGetBufferMemoryRequirements(VkDevice device, VkBuffer buffer, VkMemoryRequirements *pMemoryRequirements) {
+void vkGetBufferMemoryRequirements(VkDevice device, VkBuffer buffer, VkMemoryRequirements* pMemoryRequirements) {
     hg_internal_vulkan_funcs.vkGetBufferMemoryRequirements(device, buffer, pMemoryRequirements);
 }
 
@@ -1858,7 +2283,7 @@ void vkGetBufferMemoryRequirements2(VkDevice device, const VkBufferMemoryRequire
     hg_internal_vulkan_funcs.vkGetBufferMemoryRequirements2(device, pInfo, pMemoryRequirements);
 }
 
-void vkGetImageMemoryRequirements(VkDevice device, VkImage image, VkMemoryRequirements *pMemoryRequirements) {
+void vkGetImageMemoryRequirements(VkDevice device, VkImage image, VkMemoryRequirements* pMemoryRequirements) {
     hg_internal_vulkan_funcs.vkGetImageMemoryRequirements(device, image, pMemoryRequirements);
 }
 
@@ -1874,11 +2299,11 @@ void vkGetDeviceImageMemoryRequirements(VkDevice device, const VkDeviceImageMemo
     hg_internal_vulkan_funcs.vkGetDeviceImageMemoryRequirements(device, pInfo, pMemoryRequirements);
 }
 
-VkResult vkAllocateMemory(VkDevice device, const VkMemoryAllocateInfo *pInfo, const VkAllocationCallbacks *pAllocator, VkDeviceMemory *pMemory) {
+VkResult vkAllocateMemory(VkDevice device, const VkMemoryAllocateInfo* pInfo, const VkAllocationCallbacks* pAllocator, VkDeviceMemory* pMemory) {
     return hg_internal_vulkan_funcs.vkAllocateMemory(device, pInfo, pAllocator, pMemory);
 }
 
-void vkFreeMemory(VkDevice device, VkDeviceMemory mem, const VkAllocationCallbacks *pAllocator) {
+void vkFreeMemory(VkDevice device, VkDeviceMemory mem, const VkAllocationCallbacks* pAllocator) {
     hg_internal_vulkan_funcs.vkFreeMemory(device, mem, pAllocator);
 }
 
@@ -1898,7 +2323,7 @@ VkResult vkBindImageMemory2(VkDevice device, uint32_t bindInfoCount, const VkBin
     return hg_internal_vulkan_funcs.vkBindImageMemory2(device, bindInfoCount, pBindInfos);
 }
 
-VkResult vkMapMemory(VkDevice device, VkDeviceMemory mem, VkDeviceSize offset, VkDeviceSize size, VkMemoryMapFlags flags, void **ppData) {
+VkResult vkMapMemory(VkDevice device, VkDeviceMemory mem, VkDeviceSize offset, VkDeviceSize size, VkMemoryMapFlags flags, void** ppData) {
     return hg_internal_vulkan_funcs.vkMapMemory(device, mem, offset, size, flags, ppData);
 }
 
@@ -1906,15 +2331,15 @@ void vkUnmapMemory(VkDevice device, VkDeviceMemory mem) {
     hg_internal_vulkan_funcs.vkUnmapMemory(device, mem);
 }
 
-VkResult vkFlushMappedMemoryRanges(VkDevice device, uint32_t count, const VkMappedMemoryRange *pRanges) {
+VkResult vkFlushMappedMemoryRanges(VkDevice device, uint32_t count, const VkMappedMemoryRange* pRanges) {
     return hg_internal_vulkan_funcs.vkFlushMappedMemoryRanges(device, count, pRanges);
 }
 
-VkResult vkInvalidateMappedMemoryRanges(VkDevice device, uint32_t count, const VkMappedMemoryRange *pRanges) {
+VkResult vkInvalidateMappedMemoryRanges(VkDevice device, uint32_t count, const VkMappedMemoryRange* pRanges) {
     return hg_internal_vulkan_funcs.vkInvalidateMappedMemoryRanges(device, count, pRanges);
 }
 
-VkResult vkBeginCommandBuffer(VkCommandBuffer cmd, const VkCommandBufferBeginInfo *pInfo) {
+VkResult vkBeginCommandBuffer(VkCommandBuffer cmd, const VkCommandBufferBeginInfo* pInfo) {
     return hg_internal_vulkan_funcs.vkBeginCommandBuffer(cmd, pInfo);
 }
 
@@ -1926,31 +2351,31 @@ VkResult vkResetCommandBuffer(VkCommandBuffer cmd, VkCommandBufferResetFlags fla
     return hg_internal_vulkan_funcs.vkResetCommandBuffer(cmd, flags);
 }
 
-void vkCmdCopyBuffer(VkCommandBuffer cmd, VkBuffer src, VkBuffer dst, uint32_t count, const VkBufferCopy *pRegions) {
+void vkCmdCopyBuffer(VkCommandBuffer cmd, VkBuffer src, VkBuffer dst, uint32_t count, const VkBufferCopy* pRegions) {
     hg_internal_vulkan_funcs.vkCmdCopyBuffer(cmd, src, dst, count, pRegions);
 }
 
-void vkCmdCopyImage(VkCommandBuffer cmd, VkImage src, VkImageLayout srcLayout, VkImage dst, VkImageLayout dstLayout, uint32_t count, const VkImageCopy *pRegions) {
+void vkCmdCopyImage(VkCommandBuffer cmd, VkImage src, VkImageLayout srcLayout, VkImage dst, VkImageLayout dstLayout, uint32_t count, const VkImageCopy* pRegions) {
     hg_internal_vulkan_funcs.vkCmdCopyImage(cmd, src, srcLayout, dst, dstLayout, count, pRegions);
 }
 
-void vkCmdBlitImage(VkCommandBuffer cmd, VkImage src, VkImageLayout srcLayout, VkImage dst, VkImageLayout dstLayout, uint32_t count, const VkImageBlit *pRegions, VkFilter filter) {
+void vkCmdBlitImage(VkCommandBuffer cmd, VkImage src, VkImageLayout srcLayout, VkImage dst, VkImageLayout dstLayout, uint32_t count, const VkImageBlit* pRegions, VkFilter filter) {
     hg_internal_vulkan_funcs.vkCmdBlitImage(cmd, src, srcLayout, dst, dstLayout, count, pRegions, filter);
 }
 
-void vkCmdCopyBufferToImage(VkCommandBuffer cmd, VkBuffer src, VkImage dst, VkImageLayout dstLayout, uint32_t count, const VkBufferImageCopy *pRegions) {
+void vkCmdCopyBufferToImage(VkCommandBuffer cmd, VkBuffer src, VkImage dst, VkImageLayout dstLayout, uint32_t count, const VkBufferImageCopy* pRegions) {
     hg_internal_vulkan_funcs.vkCmdCopyBufferToImage(cmd, src, dst, dstLayout, count, pRegions);
 }
 
-void vkCmdCopyImageToBuffer(VkCommandBuffer cmd, VkImage src, VkImageLayout srcLayout, VkBuffer dst, uint32_t count, const VkBufferImageCopy *pRegions) {
+void vkCmdCopyImageToBuffer(VkCommandBuffer cmd, VkImage src, VkImageLayout srcLayout, VkBuffer dst, uint32_t count, const VkBufferImageCopy* pRegions) {
     hg_internal_vulkan_funcs.vkCmdCopyImageToBuffer(cmd, src, srcLayout, dst, count, pRegions);
 }
 
-void vkCmdPipelineBarrier2(VkCommandBuffer cmd, const VkDependencyInfo *pInfo) {
+void vkCmdPipelineBarrier2(VkCommandBuffer cmd, const VkDependencyInfo* pInfo) {
     hg_internal_vulkan_funcs.vkCmdPipelineBarrier2(cmd, pInfo);
 }
 
-void vkCmdBeginRendering(VkCommandBuffer cmd, const VkRenderingInfo *pInfo) {
+void vkCmdBeginRendering(VkCommandBuffer cmd, const VkRenderingInfo* pInfo) {
     hg_internal_vulkan_funcs.vkCmdBeginRendering(cmd, pInfo);
 }
 
@@ -1958,11 +2383,11 @@ void vkCmdEndRendering(VkCommandBuffer cmd) {
     hg_internal_vulkan_funcs.vkCmdEndRendering(cmd);
 }
 
-void vkCmdSetViewport(VkCommandBuffer cmd, uint32_t first, uint32_t count, const VkViewport *pViewports) {
+void vkCmdSetViewport(VkCommandBuffer cmd, uint32_t first, uint32_t count, const VkViewport* pViewports) {
     hg_internal_vulkan_funcs.vkCmdSetViewport(cmd, first, count, pViewports);
 }
 
-void vkCmdSetScissor(VkCommandBuffer cmd, uint32_t first, uint32_t count, const VkRect2D *pScissors) {
+void vkCmdSetScissor(VkCommandBuffer cmd, uint32_t first, uint32_t count, const VkRect2D* pScissors) {
     hg_internal_vulkan_funcs.vkCmdSetScissor(cmd, first, count, pScissors);
 }
 
@@ -1970,15 +2395,15 @@ void vkCmdBindPipeline(VkCommandBuffer cmd, VkPipelineBindPoint bindPoint, VkPip
     hg_internal_vulkan_funcs.vkCmdBindPipeline(cmd, bindPoint, pipeline);
 }
 
-void vkCmdBindDescriptorSets(VkCommandBuffer cmd, VkPipelineBindPoint bindPoint, VkPipelineLayout layout, uint32_t firstSet, uint32_t count, const VkDescriptorSet *pSets, uint32_t dynCount, const uint32_t *pDyn) {
+void vkCmdBindDescriptorSets(VkCommandBuffer cmd, VkPipelineBindPoint bindPoint, VkPipelineLayout layout, uint32_t firstSet, uint32_t count, const VkDescriptorSet* pSets, uint32_t dynCount, const uint32_t* pDyn) {
     hg_internal_vulkan_funcs.vkCmdBindDescriptorSets(cmd, bindPoint, layout, firstSet, count, pSets, dynCount, pDyn);
 }
 
-void vkCmdPushConstants(VkCommandBuffer cmd, VkPipelineLayout layout, VkShaderStageFlags stages, uint32_t offset, uint32_t size, const void *pData) {
+void vkCmdPushConstants(VkCommandBuffer cmd, VkPipelineLayout layout, VkShaderStageFlags stages, uint32_t offset, uint32_t size, const void* pData) {
     hg_internal_vulkan_funcs.vkCmdPushConstants(cmd, layout, stages, offset, size, pData);
 }
 
-void vkCmdBindVertexBuffers(VkCommandBuffer cmd, uint32_t first, uint32_t count, const VkBuffer *pBufs, const VkDeviceSize *pOffsets) {
+void vkCmdBindVertexBuffers(VkCommandBuffer cmd, uint32_t first, uint32_t count, const VkBuffer* pBufs, const VkDeviceSize* pOffsets) {
     hg_internal_vulkan_funcs.vkCmdBindVertexBuffers(cmd, first, count, pBufs, pOffsets);
 }
 
@@ -2180,7 +2605,7 @@ VkInstance hg_vk_create_instance() {
     };
 #endif
 
-    const char *exts[]{
+    const char* exts[]{
 #ifdef HG_VK_DEBUG_MESSENGER
         "VK_EXT_debug_utils",
 #endif
@@ -2231,7 +2656,7 @@ HgOption<u32> hg_vk_find_queue_family(VkPhysicalDevice gpu, VkQueueFlags queue_f
 
     u32 family_count = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, nullptr);
-    VkQueueFamilyProperties *families = (VkQueueFamilyProperties *)alloca(family_count * sizeof(*families));
+    VkQueueFamilyProperties* families = (VkQueueFamilyProperties* )alloca(family_count * sizeof(*families));
     vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, families);
 
     for (u32 i = 0; i < family_count; ++i) {
@@ -2242,7 +2667,7 @@ HgOption<u32> hg_vk_find_queue_family(VkPhysicalDevice gpu, VkQueueFlags queue_f
     return std::nullopt;
 }
 
-static const char *const hg_internal_vk_device_extensions[]{
+static const char* const hg_internal_vk_device_extensions[]{
     "VK_KHR_swapchain",
 };
 
@@ -2253,7 +2678,7 @@ VkPhysicalDevice hg_vk_find_single_queue_physical_device() {
 
     u32 gpu_count;
     vkEnumeratePhysicalDevices(hg_vk_instance, &gpu_count, nullptr);
-    VkPhysicalDevice *gpus = (VkPhysicalDevice *)alloca(gpu_count * sizeof(*gpus));
+    VkPhysicalDevice* gpus = (VkPhysicalDevice* )alloca(gpu_count * sizeof(*gpus));
     vkEnumeratePhysicalDevices(hg_vk_instance, &gpu_count, gpus);
 
     HgSpan<VkExtensionProperties> ext_props{};
@@ -2523,7 +2948,7 @@ static VkFormat hg_internal_vk_find_swapchain_format(VkSurfaceKHR surface) {
 
     u32 format_count = 0;
     vkGetPhysicalDeviceSurfaceFormatsKHR(hg_vk_physical_device, surface, &format_count, nullptr);
-    VkSurfaceFormatKHR *formats = (VkSurfaceFormatKHR *)alloca(format_count * sizeof(*formats));
+    VkSurfaceFormatKHR* formats = (VkSurfaceFormatKHR* )alloca(format_count * sizeof(*formats));
     vkGetPhysicalDeviceSurfaceFormatsKHR(hg_vk_physical_device, surface, &format_count, formats);
 
     for (usize i = 0; i < format_count; ++i) {
@@ -2547,7 +2972,7 @@ static VkPresentModeKHR hg_internal_vk_find_swapchain_present_mode(
 
     u32 mode_count = 0;
     vkGetPhysicalDeviceSurfacePresentModesKHR(hg_vk_physical_device, surface, &mode_count, nullptr);
-    VkPresentModeKHR *present_modes = (VkPresentModeKHR *)alloca(mode_count * sizeof(*present_modes));
+    VkPresentModeKHR* present_modes = (VkPresentModeKHR* )alloca(mode_count * sizeof(*present_modes));
     vkGetPhysicalDeviceSurfacePresentModesKHR(hg_vk_physical_device, surface, &mode_count, present_modes);
 
     for (usize i = 0; i < mode_count; ++i) {
@@ -2622,14 +3047,14 @@ HgSwapchainCommands HgSwapchainCommands::create(VkSwapchainKHR swapchain, VkComm
 
     vkGetSwapchainImagesKHR(hg_vk_device, swapchain, &sync.frame_count, nullptr);
 
-    void *allocation = mem.alloc_fn(
+    void* allocation = mem.alloc_fn(
         sync.frame_count * sizeof(*sync.cmds) +
         sync.frame_count * sizeof(*sync.frame_finished) +
         sync.frame_count * sizeof(*sync.image_available) +
         sync.frame_count * sizeof(*sync.ready_to_present),
         16);
 
-    sync.cmds = (VkCommandBuffer *)allocation;
+    sync.cmds = (VkCommandBuffer* )allocation;
     VkCommandBufferAllocateInfo cmd_alloc_info{};
     cmd_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     cmd_alloc_info.pNext = nullptr;
@@ -2639,7 +3064,7 @@ HgSwapchainCommands HgSwapchainCommands::create(VkSwapchainKHR swapchain, VkComm
 
     vkAllocateCommandBuffers(hg_vk_device, &cmd_alloc_info, sync.cmds);
 
-    sync.frame_finished = (VkFence *)(sync.cmds + sync.frame_count);
+    sync.frame_finished = (VkFence* )(sync.cmds + sync.frame_count);
     for (usize i = 0; i < sync.frame_count; ++i) {
         VkFenceCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
@@ -2647,14 +3072,14 @@ HgSwapchainCommands HgSwapchainCommands::create(VkSwapchainKHR swapchain, VkComm
         vkCreateFence(hg_vk_device, &info, nullptr, &sync.frame_finished[i]);
     }
 
-    sync.image_available = (VkSemaphore *)(sync.frame_finished + sync.frame_count);
+    sync.image_available = (VkSemaphore* )(sync.frame_finished + sync.frame_count);
     for (usize i = 0; i < sync.frame_count; ++i) {
         VkSemaphoreCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
         vkCreateSemaphore(hg_vk_device, &info, nullptr, &sync.image_available[i]);
     }
 
-    sync.ready_to_present = (VkSemaphore *)(sync.image_available + sync.frame_count);
+    sync.ready_to_present = (VkSemaphore* )(sync.image_available + sync.frame_count);
     for (usize i = 0; i < sync.frame_count; ++i) {
         VkSemaphoreCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -3368,7 +3793,7 @@ HgOption<HgPipeline2D> HgPipeline2D::create(
     HgOption<HgPipeline2D> pipeline{std::in_place};
 
     pipeline->texture_sets = pipeline->texture_sets.create(mem, max_textures)
-        .value_or(HgHashMap<HgTexture *, VkDescriptorSet>{});
+        .value_or(HgHashMap<HgTexture*, VkDescriptorSet>{});
     if (pipeline->texture_sets.slots == nullptr)
         return std::nullopt;
 
@@ -3418,7 +3843,7 @@ HgOption<HgPipeline2D> HgPipeline2D::create(
     VkShaderModuleCreateInfo vertex_shader_info{};
     vertex_shader_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     vertex_shader_info.codeSize = sprite_vert_spv_size;
-    vertex_shader_info.pCode = (u32 *)sprite_vert_spv;
+    vertex_shader_info.pCode = (u32* )sprite_vert_spv;
 
     VkShaderModule vertex_shader = nullptr;
     vkCreateShaderModule(hg_vk_device, &vertex_shader_info, nullptr, &vertex_shader);
@@ -3427,7 +3852,7 @@ HgOption<HgPipeline2D> HgPipeline2D::create(
     VkShaderModuleCreateInfo fragment_shader_info{};
     fragment_shader_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     fragment_shader_info.codeSize = sprite_frag_spv_size;
-    fragment_shader_info.pCode = (u32 *)sprite_frag_spv;
+    fragment_shader_info.pCode = (u32* )sprite_frag_spv;
 
     VkShaderModule fragment_shader = nullptr;
     vkCreateShaderModule(hg_vk_device, &fragment_shader_info, nullptr, &fragment_shader);
@@ -3536,7 +3961,7 @@ void HgPipeline2D::destroy(HgAllocator& mem) {
     vkDestroyDescriptorSetLayout(hg_vk_device, vp_layout, nullptr);
 }
 
-void HgPipeline2D::add_texture(HgTexture *texture) {
+void HgPipeline2D::add_texture(HgTexture* texture) {
     hg_assert(texture != nullptr);
 
     if (texture_sets.has(texture))
@@ -3570,7 +3995,7 @@ void HgPipeline2D::add_texture(HgTexture *texture) {
     texture_sets.insert(texture, set);
 }
 
-void HgPipeline2D::remove_texture(HgTexture *texture) {
+void HgPipeline2D::remove_texture(HgTexture* texture) {
     hg_assert(texture != nullptr);
 
     if (texture_sets.has(texture)) {
@@ -3581,7 +4006,7 @@ void HgPipeline2D::remove_texture(HgTexture *texture) {
     }
 }
 
-void HgPipeline2D::update_projection(HgMat4f& projection) {
+void HgPipeline2D::update_projection(HgMat4& projection) {
     vmaCopyMemoryToAllocation(
         hg_vk_vma,
         &projection,
@@ -3590,7 +4015,7 @@ void HgPipeline2D::update_projection(HgMat4f& projection) {
         sizeof(projection));
 }
 
-void HgPipeline2D::update_view(HgMat4f& view) {
+void HgPipeline2D::update_view(HgMat4& view) {
     vmaCopyMemoryToAllocation(
         hg_vk_vma,
         &view,
@@ -3599,7 +4024,7 @@ void HgPipeline2D::update_view(HgMat4f& view) {
         sizeof(view));
 }
 
-void HgPipeline2D::add_sprite(HgEntity entity, HgTexture& texture, HgVec2f uv_pos, HgVec2f uv_size) {
+void HgPipeline2D::add_sprite(HgEntity entity, HgTexture& texture, HgVec2 uv_pos, HgVec2 uv_size) {
     hg_assert(hg_ecs->is_registered<HgSprite>());
     hg_assert(!hg_ecs->has<HgSprite>(entity));
 
@@ -3620,7 +4045,7 @@ void HgPipeline2D::draw(VkCommandBuffer cmd) {
     hg_assert(cmd != nullptr);
     hg_assert(hg_ecs->is_registered<HgSprite>());
 
-    hg_ecs->sort<HgSprite>([](void *, HgEntity lhs, HgEntity rhs) -> bool {
+    hg_ecs->sort<HgSprite>(nullptr, [](void*, HgEntity lhs, HgEntity rhs) -> bool {
         hg_assert(hg_ecs->has<HgTransform>(lhs));
         hg_assert(hg_ecs->has<HgTransform>(rhs));
         return hg_ecs->get<HgTransform>(lhs).position.z < hg_ecs->get<HgTransform>(rhs).position.z;
@@ -3687,7 +4112,7 @@ struct HgWindowInput {
 #include <vulkan/vulkan_xlib.h>
 
 struct HgX11Funcs {
-    Display *(*XOpenDisplay)(_Xconst char*);
+    Display* (*XOpenDisplay)(_Xconst char*);
     int (*XCloseDisplay)(Display*);
     Window (*XCreateWindow)(Display*, Window, int, int, unsigned int, unsigned int,
         unsigned int, int, unsigned int, Visual*, unsigned long, XSetWindowAttributes*);
@@ -3703,19 +4128,19 @@ struct HgX11Funcs {
     KeySym (*XLookupKeysym)(XKeyEvent*, int);
 };
 
-static void *hg_internal_libx11 = nullptr;
+static void* hg_internal_libx11 = nullptr;
 static HgX11Funcs hg_internal_x11_funcs{};
 
-Display *XOpenDisplay(_Xconst char *name) {
+Display* XOpenDisplay(_Xconst char* name) {
     return hg_internal_x11_funcs.XOpenDisplay(name);
 }
 
-int XCloseDisplay(Display *dpy) {
+int XCloseDisplay(Display* dpy) {
     return hg_internal_x11_funcs.XCloseDisplay(dpy);
 }
 
 Window XCreateWindow(
-    Display *dpy,
+    Display* dpy,
     Window parent,
     int x,
     int y,
@@ -3724,9 +4149,9 @@ Window XCreateWindow(
     unsigned int border_width,
     int depth,
     unsigned int xclass,
-    Visual *visual,
+    Visual* visual,
     unsigned long valuemask,
-    XSetWindowAttributes *attributes
+    XSetWindowAttributes* attributes
 ) {
     return hg_internal_x11_funcs.XCreateWindow(
         dpy, parent, x, y, width, height, border_width,
@@ -3734,51 +4159,51 @@ Window XCreateWindow(
     );
 }
 
-int XDestroyWindow(Display *dpy, Window w) {
+int XDestroyWindow(Display* dpy, Window w) {
     return hg_internal_x11_funcs.XDestroyWindow(dpy, w);
 }
 
-int XStoreName(Display *dpy, Window w, _Xconst char *name) {
+int XStoreName(Display* dpy, Window w, _Xconst char* name) {
     return hg_internal_x11_funcs.XStoreName(dpy, w, name);
 }
 
-Atom XInternAtom(Display *dpy, _Xconst char *name, Bool only_if_exists) {
+Atom XInternAtom(Display* dpy, _Xconst char* name, Bool only_if_exists) {
     return hg_internal_x11_funcs.XInternAtom(dpy, name, only_if_exists);
 }
 
-Status XSetWMProtocols(Display *dpy, Window w, Atom *protocols, int count) {
+Status XSetWMProtocols(Display* dpy, Window w, Atom* protocols, int count) {
     return hg_internal_x11_funcs.XSetWMProtocols(dpy, w, protocols, count);
 }
 
-int XMapWindow(Display *dpy, Window w) {
+int XMapWindow(Display* dpy, Window w) {
     return hg_internal_x11_funcs.XMapWindow(dpy, w);
 }
 
-Status XSendEvent(Display *dpy, Window w, Bool propagate, long event_mask, XEvent *event) {
+Status XSendEvent(Display* dpy, Window w, Bool propagate, long event_mask, XEvent* event) {
     return hg_internal_x11_funcs.XSendEvent(dpy, w, propagate, event_mask, event);
 }
 
-int XFlush(Display *dpy) {
+int XFlush(Display* dpy) {
     return hg_internal_x11_funcs.XFlush(dpy);
 }
 
-int XNextEvent(Display *dpy, XEvent *event) {
+int XNextEvent(Display* dpy, XEvent* event) {
     return hg_internal_x11_funcs.XNextEvent(dpy, event);
 }
 
-int XPending(Display *dpy) {
+int XPending(Display* dpy) {
     return hg_internal_x11_funcs.XPending(dpy);
 }
 
-KeySym XLookupKeysym(XKeyEvent *key_event, int index) {
+KeySym XLookupKeysym(XKeyEvent* key_event, int index) {
     return hg_internal_x11_funcs.XLookupKeysym(key_event, index);
 }
 
-#define HG_LOAD_X11_FUNC(name) *(void **)&hg_internal_x11_funcs. name \
+#define HG_LOAD_X11_FUNC(name)* (void** )&hg_internal_x11_funcs. name \
     = dlsym(hg_internal_libx11, #name); \
     if (hg_internal_x11_funcs. name == nullptr) { hg_error("Could not load Xlib function: \n" #name); }
 
-Display *hg_internal_x11_display = nullptr;
+Display* hg_internal_x11_display = nullptr;
 
 void hg_platform_init() {
     if (hg_internal_libx11 == nullptr)
@@ -3818,10 +4243,10 @@ void hg_platform_deinit() {
 }
 
 static Window hg_internal_create_x11_window(
-    Display *display,
+    Display* display,
     u32 width,
     u32 height,
-    const char *title
+    const char* title
 ) {
     XSetWindowAttributes window_attributes{};
     window_attributes.event_mask
@@ -3955,7 +4380,7 @@ void HgWindow::destroy() {
     XFlush(hg_internal_x11_display);
 }
 
-void HgWindow::set_icon(u32 *icon_data, u32 width, u32 height) {
+void HgWindow::set_icon(u32* icon_data, u32 width, u32 height) {
     // window set_icon : TODO
     (void)icon_data;
     (void)width;
@@ -3977,7 +4402,7 @@ void HgWindow::set_cursor(HgWindow::Cursor cursor) {
     (void)cursor;
 }
 
-void HgWindow::set_cursor_image(u32 *data, u32 width, u32 height) {
+void HgWindow::set_cursor_image(u32* data, u32 width, u32 height) {
     // window set_cursor_image : TODO
     (void)data;
     (void)width;
@@ -4460,11 +4885,11 @@ struct HgWindow::Internals {
 };
 
 static LRESULT CALLBACK hg_internal_window_callback(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
-    HgWindow::Internals *window = (HgWindow::Internals *)GetWindowLongPtrA(hwnd, GWLP_USERDATA);
+    HgWindow::Internals* window = (HgWindow::Internals* )GetWindowLongPtrA(hwnd, GWLP_USERDATA);
 
     switch (msg) {
         case WM_NCCREATE:
-            SetWindowLongPtrA(hwnd, GWLP_USERDATA, (LONG_PTR)(((CREATESTRUCTA *)lparam)->lpCreateParams));
+            SetWindowLongPtrA(hwnd, GWLP_USERDATA, (LONG_PTR)(((CREATESTRUCTA* )lparam)->lpCreateParams));
             break;
         case WM_CLOSE:
             window->input.was_closed = true;
@@ -4809,7 +5234,7 @@ static LRESULT CALLBACK hg_internal_window_callback(HWND hwnd, UINT msg, WPARAM 
 HgWindow HgWindow::create(const HgWindow::Config& config) {
     HgStdAllocator mem;
 
-    const char *title = config.title != nullptr ? config.title : "Hurdy Gurdy";
+    const char* title = config.title != nullptr ? config.title : "Hurdy Gurdy";
 
     HgWindow window;
     window.internals = mem.alloc<HgWindow::Internals>();
@@ -4875,7 +5300,7 @@ void HgWindow::destroy() {
     }
 }
 
-void HgWindow::set_icon(u32 *icon_data, u32 width, u32 height) {
+void HgWindow::set_icon(u32* icon_data, u32 width, u32 height) {
     // window set_icon : TODO
     (void)icon_data;
     (void)width;
@@ -4897,7 +5322,7 @@ void HgWindow::set_cursor(HgWindow::Cursor cursor) {
     (void)cursor;
 }
 
-void HgWindow::set_cursor_image(u32 *data, u32 width, u32 height) {
+void HgWindow::set_cursor_image(u32* data, u32 width, u32 height) {
     // window set_cursor_image : TODO
     (void)data;
     (void)width;
@@ -4931,7 +5356,7 @@ void hg_process_window_events(HgSpan<HgWindow const> windows) {
     hg_assert(windows != nullptr);
 
     for (usize i = 0; i < windows.count; ++i) {
-        HgWindow::Internals *window = windows[i].internals;
+        HgWindow::Internals* window = windows[i].internals;
 
         std::memset(window->input.keys_pressed, 0, sizeof(window->input.keys_pressed));
         std::memset(window->input.keys_released, 0, sizeof(window->input.keys_released));
@@ -4984,7 +5409,7 @@ bool HgWindow::was_resized() {
     return internals->input.was_resized;
 }
 
-void HgWindow::get_size(u32 *width, u32 *height) {
+void HgWindow::get_size(u32* width, u32* height) {
     *width = internals->input.width;
     *height = internals->input.height;
 }
@@ -5016,7 +5441,7 @@ bool HgWindow::was_key_released(HgKey key) {
 
 #undef HG_MAKE_VULKAN_FUNC
 
-static void *hg_internal_libvulkan = nullptr;
+static void* hg_internal_libvulkan = nullptr;
 
 #define HG_LOAD_VULKAN_FUNC(name) \
     hg_internal_vulkan_funcs. name = (PFN_##name)hg_internal_vulkan_funcs.vkGetInstanceProcAddr(nullptr, #name); \
@@ -5033,14 +5458,14 @@ void hg_vulkan_init() {
     if (hg_internal_libvulkan == nullptr)
         hg_error("Could not load vulkan dynamic lib: %s\n", dlerror());
 
-    *(void **)&hg_internal_vulkan_funcs.vkGetInstanceProcAddr = dlsym(hg_internal_libvulkan, "vkGetInstanceProcAddr");
+    *(void** )&hg_internal_vulkan_funcs.vkGetInstanceProcAddr = dlsym(hg_internal_libvulkan, "vkGetInstanceProcAddr");
     if (hg_internal_vulkan_funcs.vkGetInstanceProcAddr == nullptr)
         hg_error("Could not load vkGetInstanceProcAddr: %s\n", dlerror());
 
 #elif defined(HG_PLATFORM_WINDOWS)
 
     if (hg_internal_libvulkan == nullptr)
-        hg_internal_libvulkan = (void *)LoadLibraryA("vulkan-1.dll");
+        hg_internal_libvulkan = (void* )LoadLibraryA("vulkan-1.dll");
     if (hg_internal_libvulkan == nullptr)
         hg_error("Could not load vulkan dynamic lib\n");
 

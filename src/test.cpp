@@ -250,26 +250,26 @@ hg_test(hg_test) {
 }
 
 hg_test(hg_matrix_mul) {
-    HgMat2f mat{
+    HgMat2 mat{
         {1.0f, 0.0f},
         {1.0f, 0.0f},
     };
-    HgVec2f vec{1.0f, 1.0f};
+    HgVec2 vec{1.0f, 1.0f};
 
-    HgMat2f identity{
+    HgMat2 identity{
         {1.0f, 0.0f},
         {0.0f, 1.0f},
     };
     hg_test_assert(identity * mat == mat);
     hg_test_assert(identity * vec == vec);
 
-    HgMat2f mat_rotated{
+    HgMat2 mat_rotated{
         {0.0f, 1.0f},
         {0.0f, 1.0f},
     };
-    HgVec2f vec_rotated{-1.0f, 1.0f};
+    HgVec2 vec_rotated{-1.0f, 1.0f};
 
-    HgMat2f rotation{
+    HgMat2 rotation{
         {0.0f, 1.0f},
         {-1.0f, 0.0f},
     };
@@ -285,14 +285,14 @@ hg_test(hg_matrix_mul) {
 }
 
 hg_test(hg_quat) {
-    HgMat3f identity_mat = 1.0f;
-    HgVec3f up_vec{0.0f, -1.0f, 0.0f};
-    HgQuatf rotation = hg_axis_angle<f32>({0.0f, 0.0f, -1.0f}, -(f32)hg_pi * 0.5f);
+    HgMat3 identity_mat = 1.0f;
+    HgVec3 up_vec{0.0f, -1.0f, 0.0f};
+    HgQuat rotation = hg_axis_angle({0.0f, 0.0f, -1.0f}, -(f32)hg_pi * 0.5f);
 
-    HgVec3f rotated_vec = hg_rotate(rotation, up_vec);
-    HgMat3f rotated_mat = hg_rotate(rotation, identity_mat);
+    HgVec3 rotated_vec = hg_rotate(rotation, up_vec);
+    HgMat3 rotated_mat = hg_rotate(rotation, identity_mat);
 
-    HgVec3f mat_rotated_vec = rotated_mat * up_vec;
+    HgVec3 mat_rotated_vec = rotated_mat * up_vec;
 
     hg_test_assert(std::abs(rotated_vec.x - 1.0f) < FLT_EPSILON
                 && std::abs(rotated_vec.y - 0.0f) < FLT_EPSILON
@@ -316,25 +316,25 @@ hg_test(hg_arena) {
         hg_test_assert(arena.memory.count == 1024);
         hg_test_assert(arena.head == arena.memory.data);
 
-        u32 *alloc_u32 = arena.alloc<u32>();
+        u32* alloc_u32 = arena.alloc<u32>();
         hg_test_assert(alloc_u32 == arena.memory.data);
 
-        void *head = arena.head;
+        void* head = arena.head;
         arena.free(alloc_u32);
         hg_test_assert(alloc_u32 == arena.memory.data);
         hg_test_assert(head == arena.head);
 
         HgSpan<u64> alloc_u64 = arena.alloc<u64>(2);
-        hg_test_assert((u8 *)alloc_u64.data == (u8 *)alloc_u32 + 8);
+        hg_test_assert((u8* )alloc_u64.data == (u8* )alloc_u32 + 8);
 
-        u8 *alloc_u8 = arena.alloc<u8>();
-        hg_test_assert(alloc_u8 == (u8 *)alloc_u32 + 24);
+        u8* alloc_u8 = arena.alloc<u8>();
+        hg_test_assert(alloc_u8 == (u8* )alloc_u32 + 24);
 
         struct Big {
             u8 data[32];
         };
-        Big *alloc_big = arena.alloc<Big>();
-        hg_test_assert((u8 *)alloc_big == (u8 *)alloc_u32 + 25);
+        Big* alloc_big = arena.alloc<Big>();
+        hg_test_assert((u8* )alloc_big == (u8* )alloc_u32 + 25);
 
         HgSpan<Big> realloc_big = arena.realloc(HgSpan<Big>{alloc_big, 1}, 2);
         hg_test_assert(realloc_big.data == alloc_big);
@@ -345,7 +345,7 @@ hg_test(hg_arena) {
         hg_test_assert(realloc_big2.data == realloc_big.data);
         hg_test_assert(memcmp(realloc_big.data, realloc_big2.data, realloc_big2.size()) == 0);
 
-        u8 *alloc_little = arena.alloc<u8>();
+        u8* alloc_little = arena.alloc<u8>();
         arena.free(alloc_little);
 
         realloc_big2 = arena.realloc(realloc_big, 2);
@@ -372,18 +372,18 @@ hg_test(hg_stack) {
         hg_test_assert(stack.memory.count == 1024);
         hg_test_assert(stack.head == 0);
 
-        u8 *alloc_u8_1 = stack.alloc<u8>();
-        hg_test_assert(alloc_u8_1 == (u8 *)stack.memory.data);
+        u8* alloc_u8_1 = stack.alloc<u8>();
+        hg_test_assert(alloc_u8_1 == (u8* )stack.memory.data);
 
-        u8 *alloc_u8_2 = stack.alloc<u8>();
+        u8* alloc_u8_2 = stack.alloc<u8>();
         hg_test_assert(alloc_u8_2 == alloc_u8_1 + 16);
 
         stack.free(alloc_u8_2);
-        u8 *alloc_u8_3 = stack.alloc<u8>();
+        u8* alloc_u8_3 = stack.alloc<u8>();
         hg_test_assert(alloc_u8_3 == alloc_u8_2);
 
         HgSpan<u64> alloc_u64 = stack.alloc<u64>(2);
-        hg_test_assert((u8 *)alloc_u64.data == alloc_u8_3 + 16);
+        hg_test_assert((u8* )alloc_u64.data == alloc_u8_3 + 16);
 
         HgSpan<u64> realloc_u64 = stack.realloc(alloc_u64, 3);
         hg_test_assert(realloc_u64.data = alloc_u64.data);
@@ -470,54 +470,54 @@ hg_test(hg_array_any) {
     hg_test_assert(arr.capacity == 2);
     hg_test_assert(arr.count == 0);
 
-    *(u32 *)arr.push() = 2;
-    hg_test_assert(*(u32 *)arr[0] == 2);
+    *(u32* )arr.push() = 2;
+    hg_test_assert(*(u32* )arr[0] == 2);
     hg_test_assert(arr.count == 1);
-    *(u32 *)arr.push() = 4;
-    hg_test_assert(*(u32 *)arr[1] == 4);
+    *(u32* )arr.push() = 4;
+    hg_test_assert(*(u32* )arr[1] == 4);
     hg_test_assert(arr.count == 2);
 
     arr.grow(mem);
     hg_test_assert(arr.capacity == 4);
 
-    *(u32 *)arr.push() = 8;
-    hg_test_assert(*(u32 *)arr[2] == 8);
+    *(u32* )arr.push() = 8;
+    hg_test_assert(*(u32* )arr[2] == 8);
     hg_test_assert(arr.count == 3);
 
     arr.pop();
     hg_test_assert(arr.count == 2);
     hg_test_assert(arr.capacity == 4);
 
-    *(u32 *)arr.insert(0) = 1;
+    *(u32* )arr.insert(0) = 1;
     hg_test_assert(arr.count == 3);
-    hg_test_assert(*(u32 *)arr[0] == 1);
-    hg_test_assert(*(u32 *)arr[1] == 2);
-    hg_test_assert(*(u32 *)arr[2] == 4);
+    hg_test_assert(*(u32* )arr[0] == 1);
+    hg_test_assert(*(u32* )arr[1] == 2);
+    hg_test_assert(*(u32* )arr[2] == 4);
 
     arr.remove(1);
     hg_test_assert(arr.count == 2);
-    hg_test_assert(*(u32 *)arr[0] == 1);
-    hg_test_assert(*(u32 *)arr[1] == 4);
+    hg_test_assert(*(u32* )arr[0] == 1);
+    hg_test_assert(*(u32* )arr[1] == 4);
 
     for (u32 i = 0; i < 100; ++i) {
         if (arr.is_full())
             arr.grow(mem);
-        *(u32 *)arr.push() = i;
+        *(u32* )arr.push() = i;
     }
     hg_test_assert(arr.count == 102);
     hg_test_assert(arr.capacity >= 102);
 
     arr.swap_remove(2);
     hg_test_assert(arr.count == 101);
-    hg_test_assert(*(u32 *)arr[2] == 99);
-    hg_test_assert(*(u32 *)arr[arr.count - 1] == 98);
+    hg_test_assert(*(u32* )arr[2] == 99);
+    hg_test_assert(*(u32* )arr[arr.count - 1] == 98);
 
-    *(u32 *)arr.swap_insert(0) = 42;
+    *(u32* )arr.swap_insert(0) = 42;
     hg_test_assert(arr.count == 102);
-    hg_test_assert(*(u32 *)arr[0] == 42);
-    hg_test_assert(*(u32 *)arr[1] == 4);
-    hg_test_assert(*(u32 *)arr[2] == 99);
-    hg_test_assert(*(u32 *)arr[arr.count - 1] == 1);
+    hg_test_assert(*(u32* )arr[0] == 42);
+    hg_test_assert(*(u32* )arr[1] == 4);
+    hg_test_assert(*(u32* )arr[2] == 99);
+    hg_test_assert(*(u32* )arr[arr.count - 1] == 1);
 
     return true;
 }
@@ -718,13 +718,13 @@ hg_test(hg_hash_map_str) {
     }
 
     {
-        HgHashMap<const char *, u32> map = map.create(mem, 128).value();
+        HgHashMap<const char*, u32> map = map.create(mem, 128).value();
         hg_defer(map.destroy(mem));
 
-        const char *a = "a";
-        const char *b = "b";
-        const char *ab = "ab";
-        const char *scf = "supercalifragilisticexpialidocious";
+        const char* a = "a";
+        const char* b = "b";
+        const char* ab = "ab";
+        const char* scf = "supercalifragilisticexpialidocious";
 
         hg_test_assert(!map.has(a));
         hg_test_assert(!map.has(b));
@@ -955,13 +955,13 @@ hg_test(hg_hash_set_str) {
     }
 
     {
-        HgHashSet<const char *> map = map.create(mem, 128).value();
+        HgHashSet<const char* > map = map.create(mem, 128).value();
         hg_defer(map.destroy(mem));
 
-        const char *a = "a";
-        const char *b = "b";
-        const char *ab = "ab";
-        const char *scf = "supercalifragilisticexpialidocious";
+        const char* a = "a";
+        const char* b = "b";
+        const char* ab = "ab";
+        const char* scf = "supercalifragilisticexpialidocious";
 
         hg_test_assert(!map.has(a));
         hg_test_assert(!map.has(b));
@@ -1104,46 +1104,13 @@ hg_test(hg_function) {
     }
 
     {
-        HgFunction<u32(u32)> mul_2 = [](void *, u32 x) {
+        HgFunction<u32(u32)> mul_2{};
+        mul_2.fn = [](void*, u32 x) {
             return x * 2;
         };
         hg_test_assert(mul_2.capture == nullptr);
 
         hg_test_assert(mul_2(2) == 4);
-    }
-
-    return true;
-}
-
-hg_test(hg_function_view) {
-    {
-        HgFunctionView<void()> f{};
-        HgFunctionView<void()> f_copy = f;
-        f = f_copy;
-        HgFunctionView<void()> f_move = std::move(f);
-        f = std::move(f_move);
-    }
-
-    {
-        HgFunctionView<u32(u32)> mul_2 = [](void *, u32 x) {
-            return x * 2;
-        };
-        hg_test_assert(mul_2.capture == nullptr);
-
-        hg_test_assert(mul_2(2) == 4);
-    }
-
-    {
-        bool called = false;
-
-        HgFunctionView<u32(u32)> mul_2{&called, [](void *pcalled, u32 x) {
-            *(bool *)pcalled = true;
-            return x * 2;
-        }};
-
-        hg_test_assert(called == false);
-        hg_test_assert(mul_2(2) == 4);
-        hg_test_assert(called == true);
     }
 
     return true;
@@ -1152,7 +1119,7 @@ hg_test(hg_function_view) {
 hg_test(hg_thread_pool) {
     HgStdAllocator mem;
 
-    HgThreadPool *threads = HgThreadPool::create(mem, std::thread::hardware_concurrency() - 1, 128);
+    HgThreadPool* threads = HgThreadPool::create(mem, std::thread::hardware_concurrency() - 1, 128);
     hg_defer(HgThreadPool::destroy(mem, threads));
 
     hg_assert(threads != nullptr);
@@ -1161,16 +1128,17 @@ hg_test(hg_thread_pool) {
         HgFence fence;
 
         bool a = false;
-        auto a_fn = [&] {
-            a = true;
-        };
-        bool b = false;
-        auto b_fn = [&] {
-            b = true;
+        auto a_fn = [](void *pa) {
+            *(bool*)pa = true;
         };
 
-        threads->call_par(&fence, hg_function_view<void()>(a_fn));
-        threads->call_par(&fence, hg_function_view<void()>(b_fn));
+        bool b = false;
+        auto b_fn = [](void *pb) {
+            *(bool*)pb = true;
+        };
+
+        threads->call_par(&fence, &a, a_fn);
+        threads->call_par(&fence, &b, b_fn);
 
         hg_test_assert(fence.wait(2.0));
 
@@ -1183,9 +1151,9 @@ hg_test(hg_thread_pool) {
 
         bool vals[100] = {};
         for (bool& val : vals) {
-            threads->call_par(&fence, {&val, [](void *data) {
-                *(bool *)data = true;
-            }});
+            threads->call_par(&fence, &val, [](void* data) {
+                *(bool* )data = true;
+            });
         }
 
         hg_test_assert(fence.wait(2.0));
@@ -1203,9 +1171,11 @@ hg_test(hg_thread_pool) {
 
         bool vals[100] = {};
         for (u32 i = 0; i < hg_countof(vals); ++i) {
-            threads->call_par(&fence, hg_function<void()>(arena, [&vals, i]() {
+            auto fn_obj = hg_function<void()>(arena, [&vals, i]() {
                 vals[i] = true;
-            }).value());
+            }).value();
+
+            threads->call_par(&fence, fn_obj.capture.data, fn_obj.fn);
         }
 
         hg_test_assert(fence.wait(2.0));
@@ -1218,14 +1188,14 @@ hg_test(hg_thread_pool) {
     {
         bool vals[100] = {};
 
-        auto iter = [](void *pvals, usize begin, usize end) {
+        auto iter = [](void* pvals, usize begin, usize end) {
             hg_assert(begin < end && end <= hg_countof(vals));
             for (; begin < end; ++begin) {
-                (*(decltype(vals) *)pvals)[begin] = true;
+                (*(decltype(vals)* )pvals)[begin] = true;
             }
         };
 
-        threads->for_par(hg_countof(vals), 16, {&vals, iter});
+        threads->for_par(hg_countof(vals), 16, &vals, iter);
 
         for (bool& val : vals) {
             hg_test_assert(val == true);
@@ -1235,14 +1205,14 @@ hg_test(hg_thread_pool) {
     {
         bool vals[100] = {};
 
-        auto iter = [&](usize begin, usize end) {
+        auto iter = [](void* data, usize begin, usize end) {
             hg_assert(begin < end && end <= hg_countof(vals));
             for (; begin < end; ++begin) {
-                vals[begin] = true;
+                (*(decltype(vals)*)data)[begin] = true;
             }
         };
 
-        threads->for_par(hg_countof(vals), 16, hg_function_view<void(usize, usize)>(iter));
+        threads->for_par(hg_countof(vals), 16, &vals, iter);
 
         for (bool& val : vals) {
             hg_test_assert(val == true);
@@ -1250,17 +1220,17 @@ hg_test(hg_thread_pool) {
     }
 
     {
-        HgArena arena = arena.create(mem, 1 << 16).value();
-        hg_defer(arena.destroy(mem));
-
         bool vals[100] = {};
 
-        threads->for_par(hg_countof(vals), 16, hg_function<void(usize, usize)>(arena, [&](usize begin, usize end) {
+        auto fn_obj = hg_function<void(usize, usize)>(mem, [&](usize begin, usize end) {
             hg_assert(begin < end && end <= hg_countof(vals));
             for (; begin < end; ++begin) {
                 vals[begin] = true;
             }
-        }).value());
+        }).value();
+        hg_defer(fn_obj.destroy(mem));
+
+        threads->for_par(hg_countof(vals), 16, fn_obj.capture.data, fn_obj.fn);
 
         for (bool& val : vals) {
             hg_test_assert(val == true);
@@ -1480,13 +1450,13 @@ hg_test(hg_ecs_sort) {
     hg_test_assert(hg_ecs->register_component<u32>(mem, 512));
     hg_defer(hg_ecs->unregister_component<u32>(mem));
 
-    auto comparison = [](void *, HgEntity lhs, HgEntity rhs) {
+    auto comparison = [](void*, HgEntity lhs, HgEntity rhs) {
         return hg_ecs->get<u32>(lhs) < hg_ecs->get<u32>(rhs);
     };
 
     hg_ecs->add<u32>(hg_ecs->spawn()) = 42;
 
-    hg_ecs->sort<u32>(comparison);
+    hg_ecs->sort<u32>(nullptr, comparison);
 
     for (auto [e, c] : hg_ecs->component_iter<u32>()) {
         (void) e;
@@ -1499,7 +1469,7 @@ hg_test(hg_ecs_sort) {
     for (u32 i = 0; i < hg_countof(small_scramble_1); ++i) {
         hg_ecs->add<u32>(hg_ecs->spawn()) = small_scramble_1[i];
     }
-    hg_ecs->sort<u32>(comparison);
+    hg_ecs->sort<u32>(nullptr, comparison);
 
     elem = 0;
     for (auto [e, c] : hg_ecs->component_iter<u32>()) {
@@ -1507,7 +1477,7 @@ hg_test(hg_ecs_sort) {
         hg_test_assert(c == elem);
         ++elem;
     }
-    hg_ecs->sort<u32>(comparison);
+    hg_ecs->sort<u32>(nullptr, comparison);
 
     elem = 0;
     for (auto [e, c] : hg_ecs->component_iter<u32>()) {
@@ -1522,7 +1492,7 @@ hg_test(hg_ecs_sort) {
     for (u32 i = 0; i < hg_countof(medium_scramble_1); ++i) {
         hg_ecs->add<u32>(hg_ecs->spawn()) = medium_scramble_1[i];
     }
-    hg_ecs->sort<u32>(comparison);
+    hg_ecs->sort<u32>(nullptr, comparison);
 
     elem = 0;
     for (auto [e, c] : hg_ecs->component_iter<u32>()) {
@@ -1537,8 +1507,8 @@ hg_test(hg_ecs_sort) {
     for (u32 i = 0; i < hg_countof(medium_scramble_2); ++i) {
         hg_ecs->add<u32>(hg_ecs->spawn()) = medium_scramble_2[i];
     }
-    hg_ecs->sort<u32>(comparison);
-    hg_ecs->sort<u32>(comparison);
+    hg_ecs->sort<u32>(nullptr, comparison);
+    hg_ecs->sort<u32>(nullptr, comparison);
 
     elem = 0;
     for (auto [e, c] : hg_ecs->component_iter<u32>()) {
@@ -1552,7 +1522,7 @@ hg_test(hg_ecs_sort) {
     for (u32 i = 127; i < 128; --i) {
         hg_ecs->add<u32>(hg_ecs->spawn()) = i;
     }
-    hg_ecs->sort<u32>(comparison);
+    hg_ecs->sort<u32>(nullptr, comparison);
 
     elem = 0;
     for (auto [e, c] : hg_ecs->component_iter<u32>()) {
@@ -1566,8 +1536,8 @@ hg_test(hg_ecs_sort) {
     for (u32 i = 127; i < 128; --i) {
         hg_ecs->add<u32>(hg_ecs->spawn()) = i / 2;
     }
-    hg_ecs->sort<u32>(comparison);
-    hg_ecs->sort<u32>(comparison);
+    hg_ecs->sort<u32>(nullptr, comparison);
+    hg_ecs->sort<u32>(nullptr, comparison);
 
     elem = 0;
     for (auto [e, c] : hg_ecs->component_iter<u32>()) {
@@ -1586,7 +1556,7 @@ hg_test(hg_file_binary) {
 
     u32 save_data[] = {12, 42, 100, 128};
 
-    const char *file_path = "hg_test_dir/file_bin_test.bin";
+    const char* file_path = "hg_test_dir/file_bin_test.bin";
     HgFileBinary file{};
 
     HgFence fence;
@@ -1605,7 +1575,7 @@ hg_test(hg_file_binary) {
         hg_store_file_binary(&fence, file, "dir/does/not/exist.bin");
         hg_test_assert(fence.wait(2.0));
 
-        FILE *file_handle = std::fopen("dir/does/not/exist.bin", "rb");
+        FILE* file_handle = std::fopen("dir/does/not/exist.bin", "rb");
         hg_test_assert(file_handle == nullptr);
     }
 
@@ -1635,7 +1605,7 @@ hg_test(hg_image) {
     struct color {
         u8 r, g, b, a;
 
-        operator u32() { return *(u32 *)this; }
+        operator u32() { return* (u32* )this; }
     };
 
     u32 red =   color{0xff, 0x00, 0x00, 0xff};
@@ -1652,7 +1622,7 @@ hg_test(hg_image) {
     u32 save_height = 3;
     u32 save_depth = 1;
 
-    const char *file_path = "hg_test_dir/file_image_test.png";
+    const char* file_path = "hg_test_dir/file_image_test.png";
     HgImage file;
 
     HgFence fence;
