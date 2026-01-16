@@ -313,28 +313,28 @@ hg_test(hg_arena) {
 
     for (usize i = 0; i < 3; ++i) {
         hg_test_assert(arena.memory != nullptr);
-        hg_test_assert(arena.memory.count == 1024);
-        hg_test_assert(arena.head == arena.memory.data);
+        hg_test_assert(arena.capacity == 1024);
+        hg_test_assert(arena.head == 0);
 
         u32* alloc_u32 = arena.alloc<u32>();
-        hg_test_assert(alloc_u32 == arena.memory.data);
+        hg_test_assert(alloc_u32 == arena.memory);
 
-        void* head = arena.head;
+        usize head = arena.head;
         arena.free(alloc_u32);
-        hg_test_assert(alloc_u32 == arena.memory.data);
+        hg_test_assert(alloc_u32 == arena.memory);
         hg_test_assert(head == arena.head);
 
         HgSpan<u64> alloc_u64 = arena.alloc<u64>(2);
-        hg_test_assert((u8* )alloc_u64.data == (u8* )alloc_u32 + 8);
+        hg_test_assert((u8*)alloc_u64.data == (u8*)alloc_u32 + 8);
 
         u8* alloc_u8 = arena.alloc<u8>();
-        hg_test_assert(alloc_u8 == (u8* )alloc_u32 + 24);
+        hg_test_assert(alloc_u8 == (u8*)alloc_u32 + 24);
 
         struct Big {
             u8 data[32];
         };
         Big* alloc_big = arena.alloc<Big>();
-        hg_test_assert((u8* )alloc_big == (u8* )alloc_u32 + 25);
+        hg_test_assert((u8*)alloc_big == (u8*)alloc_u32 + 25);
 
         HgSpan<Big> realloc_big = arena.realloc(HgSpan<Big>{alloc_big, 1}, 2);
         hg_test_assert(realloc_big.data == alloc_big);
@@ -373,7 +373,7 @@ hg_test(hg_stack) {
         hg_test_assert(stack.head == 0);
 
         u8* alloc_u8_1 = stack.alloc<u8>();
-        hg_test_assert(alloc_u8_1 == (u8* )stack.memory.data);
+        hg_test_assert(alloc_u8_1 == (u8*)stack.memory.data);
 
         u8* alloc_u8_2 = stack.alloc<u8>();
         hg_test_assert(alloc_u8_2 == alloc_u8_1 + 16);
@@ -383,7 +383,7 @@ hg_test(hg_stack) {
         hg_test_assert(alloc_u8_3 == alloc_u8_2);
 
         HgSpan<u64> alloc_u64 = stack.alloc<u64>(2);
-        hg_test_assert((u8* )alloc_u64.data == alloc_u8_3 + 16);
+        hg_test_assert((u8*)alloc_u64.data == alloc_u8_3 + 16);
 
         HgSpan<u64> realloc_u64 = stack.realloc(alloc_u64, 3);
         hg_test_assert(realloc_u64.data = alloc_u64.data);
@@ -470,54 +470,54 @@ hg_test(hg_array_any) {
     hg_test_assert(arr.capacity == 2);
     hg_test_assert(arr.count == 0);
 
-    *(u32* )arr.push() = 2;
-    hg_test_assert(*(u32* )arr[0] == 2);
+    *(u32*)arr.push() = 2;
+    hg_test_assert(*(u32*)arr[0] == 2);
     hg_test_assert(arr.count == 1);
-    *(u32* )arr.push() = 4;
-    hg_test_assert(*(u32* )arr[1] == 4);
+    *(u32*)arr.push() = 4;
+    hg_test_assert(*(u32*)arr[1] == 4);
     hg_test_assert(arr.count == 2);
 
     arr.grow(mem);
     hg_test_assert(arr.capacity == 4);
 
-    *(u32* )arr.push() = 8;
-    hg_test_assert(*(u32* )arr[2] == 8);
+    *(u32*)arr.push() = 8;
+    hg_test_assert(*(u32*)arr[2] == 8);
     hg_test_assert(arr.count == 3);
 
     arr.pop();
     hg_test_assert(arr.count == 2);
     hg_test_assert(arr.capacity == 4);
 
-    *(u32* )arr.insert(0) = 1;
+    *(u32*)arr.insert(0) = 1;
     hg_test_assert(arr.count == 3);
-    hg_test_assert(*(u32* )arr[0] == 1);
-    hg_test_assert(*(u32* )arr[1] == 2);
-    hg_test_assert(*(u32* )arr[2] == 4);
+    hg_test_assert(*(u32*)arr[0] == 1);
+    hg_test_assert(*(u32*)arr[1] == 2);
+    hg_test_assert(*(u32*)arr[2] == 4);
 
     arr.remove(1);
     hg_test_assert(arr.count == 2);
-    hg_test_assert(*(u32* )arr[0] == 1);
-    hg_test_assert(*(u32* )arr[1] == 4);
+    hg_test_assert(*(u32*)arr[0] == 1);
+    hg_test_assert(*(u32*)arr[1] == 4);
 
     for (u32 i = 0; i < 100; ++i) {
         if (arr.is_full())
             arr.grow(mem);
-        *(u32* )arr.push() = i;
+        *(u32*)arr.push() = i;
     }
     hg_test_assert(arr.count == 102);
     hg_test_assert(arr.capacity >= 102);
 
     arr.swap_remove(2);
     hg_test_assert(arr.count == 101);
-    hg_test_assert(*(u32* )arr[2] == 99);
-    hg_test_assert(*(u32* )arr[arr.count - 1] == 98);
+    hg_test_assert(*(u32*)arr[2] == 99);
+    hg_test_assert(*(u32*)arr[arr.count - 1] == 98);
 
-    *(u32* )arr.swap_insert(0) = 42;
+    *(u32*)arr.swap_insert(0) = 42;
     hg_test_assert(arr.count == 102);
-    hg_test_assert(*(u32* )arr[0] == 42);
-    hg_test_assert(*(u32* )arr[1] == 4);
-    hg_test_assert(*(u32* )arr[2] == 99);
-    hg_test_assert(*(u32* )arr[arr.count - 1] == 1);
+    hg_test_assert(*(u32*)arr[0] == 42);
+    hg_test_assert(*(u32*)arr[1] == 4);
+    hg_test_assert(*(u32*)arr[2] == 99);
+    hg_test_assert(*(u32*)arr[arr.count - 1] == 1);
 
     return true;
 }
@@ -1152,7 +1152,7 @@ hg_test(hg_thread_pool) {
         bool vals[100] = {};
         for (bool& val : vals) {
             threads->call_par(&fence, &val, [](void* data) {
-                *(bool* )data = true;
+                *(bool*)data = true;
             });
         }
 
@@ -1191,7 +1191,7 @@ hg_test(hg_thread_pool) {
         auto iter = [](void* pvals, usize begin, usize end) {
             hg_assert(begin < end && end <= hg_countof(vals));
             for (; begin < end; ++begin) {
-                (*(decltype(vals)* )pvals)[begin] = true;
+                (*(decltype(vals)*)pvals)[begin] = true;
             }
         };
 
@@ -1605,7 +1605,7 @@ hg_test(hg_image) {
     struct color {
         u8 r, g, b, a;
 
-        operator u32() { return* (u32* )this; }
+        operator u32() { return *(u32*)this; }
     };
 
     u32 red =   color{0xff, 0x00, 0x00, 0xff};

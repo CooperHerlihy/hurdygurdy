@@ -617,36 +617,36 @@ void HgStdAllocator::free_fn(void* allocation, usize size, usize alignment) {
 HgOption<HgArena> HgArena::create(HgAllocator& parent, usize capacity) {
     HgOption<HgArena> arena{std::in_place};
 
-    arena->memory = parent.alloc(capacity, alignof(std::max_align_t));
+    arena->memory = parent.alloc_fn(capacity, alignof(std::max_align_t));
     if (arena->memory == nullptr)
         return std::nullopt;
 
-    arena->head = arena->memory.data;
+    arena->capacity = capacity;
+    arena->head = 0;
 
     return arena;
 }
 
 void HgArena::destroy(HgAllocator& parent) {
-    parent.free(memory);
+    parent.free_fn(memory, capacity, alignof(std::max_align_t));
 }
 
 void* HgArena::alloc_fn(usize size, usize alignment) {
-    void* allocation = (void* )hg_align((usize)head, alignment);
+    uptr new_head = hg_align((usize)head, alignment) + size;
 
-    uptr new_head = (uptr)allocation + size;
-    if (new_head > (uptr)memory.data + memory.count)
+    if (new_head > capacity)
         return nullptr;
-    head = (void* )new_head;
+    head = new_head;
 
-    return allocation;
+    return (void*)((uptr)memory + head - size);
 }
 
 void* HgArena::realloc_fn(void* allocation, usize old_size, usize new_size, usize alignment) {
-    if ((uptr)allocation + old_size == (uptr)head) {
-        uptr new_head = (uptr)allocation + new_size;
-        if (new_head > (uptr)memory.data + memory.count)
+    if ((uptr)allocation - (uptr)memory + old_size == (uptr)head) {
+        uptr new_head = (uptr)allocation - (uptr)memory + new_size;
+        if (new_head > capacity)
             return nullptr;
-        head = (void* )new_head;
+        head = new_head;
         return allocation;
     }
 
@@ -939,8 +939,8 @@ void HgThreadPool::for_par(usize count, usize chunk_size, void* data, void (*fn)
     usize mem_size = (usize)std::ceil((f64)count / (f64)chunk_size) * sizeof(fn_work);
 
     HgArena arena{};
-    arena.memory = {alloca(mem_size), mem_size, alignof(decltype(fn_work))};
-    arena.head = arena.memory.data;
+    arena.memory = alloca(mem_size);
+    arena.capacity = mem_size;
 
     HgFence fence;
     for (usize i = 0; i < count; i += chunk_size) {

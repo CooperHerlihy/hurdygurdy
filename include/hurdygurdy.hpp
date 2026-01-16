@@ -293,11 +293,106 @@ struct hg_remove_cvref {
 template<typename T>
 using hg_remove_cvref_t = typename hg_remove_cvref<T>::type;
 
-/**
- * An object which may or may not exist
- */
 template<typename T>
 using HgOption = std::optional<T>;
+
+// /**
+//  * An object which may or may not exist
+//  */
+// template<typename T>
+// struct HgOption {
+//     static_assert(hg_is_memmove_safe<T>);
+//
+//     /**
+//      * Whether the option contains a value
+//      */
+//     bool has_value = false;
+//     /**
+//      * Either the value or an uninitialized dummy
+//      */
+//     union {
+//         /**
+//          * The value, if it exists
+//          */
+//         T value_;
+//         /**
+//          * A dummy, if the value does not exist
+//          */
+//         u8 dummy_[sizeof(T)];
+//     };
+//
+//     /**
+//      * Gets the value, asserting it exists
+//      */
+//     T& value() {
+//         hg_assert(has_value);
+//         return value_;
+//     }
+//
+//     /**
+//      * Gets the value, asserting it exists, in a const context
+//      */
+//     const T& value() const {
+//         hg_assert(has_value);
+//         return value_;
+//     }
+//
+//     /**
+//      * Gets the value, asserting it exists
+//      */
+//     T& operator*() {
+//         hg_assert(has_value);
+//         return value_;
+//     }
+//
+//     /**
+//      * Accesses the value, asserting it exists
+//      */
+//     T* operator->() {
+//         hg_assert(has_value);
+//         return &value_;
+//     }
+//
+//     HgOption() = default;
+//
+//     constexpr HgOption(std::nullopt_t) {}
+//     constexpr HgOption(T&& val) : has_value{true}, value_{val} {}
+//
+//     /**
+//      * Takes the value, or a returns default value
+//      */
+//     T value_or(const T& default_val) const {
+//         if (has_value)
+//             return value_;
+//         else
+//             return default_val;
+//     }
+//
+//     /**
+//      * Constructs a new object in place
+//      *
+//      * Parameters
+//      * - args The parameters to the constructor
+//      *
+//      * Returns
+//      * - A reference to the constructed object
+//      */
+//     template<typename... Args>
+//     T& construct(Args&&... args) {
+//         hg_assert(!has_value);
+//         new (&value_) T{std::forward<Args>(args)...};
+//     }
+//
+//     /**
+//      * Destroys the contained value
+//      *
+//      * Note, this function does not call a destructor, because no destructor
+//      * should exist
+//      */
+//     void destruct() {
+//         has_value = false;
+//     }
+// };
 
 /**
  * A pointer-count view into memory
@@ -1774,6 +1869,197 @@ HgMat4 hg_projection_perspective(f32 fov, f32 aspect, f32 near, f32 far);
  */
 u32 hg_max_mipmaps(u32 width, u32 height, u32 depth);
 
+// /**
+//  * The interface for generic allocators
+//  */
+// struct HgAllocator {
+//     /**
+//      * Allocates memory
+//      *
+//      * Parameters
+//      * - size The size to allocate in bytes
+//      * - alignment The alignment of the allocation, must be a power of 2
+//      *
+//      * Returns
+//      * - The allocated memory
+//      * - nullptr on failure
+//      */
+//     void* (*alloc_fn)(usize size, usize alignment);
+//
+//     /**
+//      * Changes the size of an allocation, potentially returning a different
+//      * allocation, with the data copied over
+//      *
+//      * Parameters
+//      * - allocation The allocation to free
+//      * - old_size The original size of the allocation in bytes
+//      * - new_size The size to allocate in bytes
+//      * - alignment The alignment of the allocation, must be a power of 2
+//      *
+//      * Returns
+//      * - The reallocated memory
+//      * - nullptr on failure
+//      */
+//     void* (*realloc_fn)(void* allocation, usize old_size, usize new_size, usize alignment);
+//
+//     /**
+//      * Frees allocated memory
+//      *
+//      * Parameters
+//      * - allocation The allocation to free
+//      * - size The size of the allocation in bytes
+//      * - alignment The alignment of the allocation, must be a power of 2
+//      */
+//     void (*free_fn)(void* allocation, usize size, usize alignment);
+//
+//     /**
+//      * A convenience to allocate a type
+//      *
+//      * Returns
+//      * - The allocated item
+//      * - nullptr on failure
+//      */
+//     template<typename T>
+//     T* alloc() {
+//         return new ((T* )alloc_fn(sizeof(T), alignof(T))) T;
+//     }
+//
+//     /**
+//      * A convenience to allocate an array of a type
+//      *
+//      * Note, objects are default constructed if possible, otherwise they are
+//      * left uninitialized
+//      *
+//      * Parameters
+//      * - count The number of T to allocate
+//      *
+//      * Returns
+//      * - The allocated array
+//      * - nullptr on failure
+//      */
+//     template<typename T>
+//     HgSpan<T> alloc(usize count) {
+//         HgSpan<T> span;
+//         span.data = (T* )alloc_fn(count * sizeof(T), alignof(T));
+//         span.count = span.data != nullptr ? count : 0;
+//
+//         if constexpr (std::is_default_constructible_v<T>) {
+//             for (usize i = 0; i < span.count; ++i) {
+//                 new (&span[i]) T;
+//             }
+//         }
+//
+//         return span;
+//     }
+//
+//     /**
+//      * A convenience to allocate a void array
+//      *
+//      * Parameters
+//      * - size The size in bytes to allocate
+//      *
+//      * Returns
+//      * - The allocated array
+//      * - nullptr on failure
+//      */
+//     HgSpan<void> alloc(usize size, usize alignment) {
+//         HgSpan<void> span;
+//         span.data = alloc_fn(size, alignment);
+//         span.count = span.data != nullptr ? size : 0;
+//         span.alignment = alignment;
+//         return span;
+//     }
+//
+//     /**
+//      * A convenience to reallocate an array of a type
+//      *
+//      * Note, objects are default constructed if possible, otherwise they are
+//      * left uninitialized
+//      *
+//      * Parameters
+//      * - allocation The allocation to reallocate
+//      * - count The new number of T to allocate
+//      *
+//      * Returns
+//      * - The reallocated array
+//      * - nullptr on failure
+//      */
+//     template<typename T>
+//     HgSpan<T> realloc(HgSpan<T> allocation, usize count) {
+//         static_assert(hg_is_memmove_safe<T>);
+//
+//         HgSpan<T> span;
+//         span.data = (T* )realloc_fn(allocation.data, allocation.count * sizeof(T), count * sizeof(T), alignof(T));
+//         span.count = span.data != nullptr ? count : 0;
+//
+//         if constexpr (std::is_default_constructible_v<T>) {
+//             for (usize i = allocation.count; i < span.count; ++i) {
+//                 new (&span[i]) T;
+//             }
+//         }
+//
+//         return span;
+//     }
+//
+//     /**
+//      * A convenience to reallocate a void array
+//      *
+//      * Parameters
+//      * - allocation The allocation to reallocate
+//      * - size The new size to allocate
+//      *
+//      * Returns
+//      * - The reallocated array
+//      * - nullptr on failure
+//      */
+//     HgSpan<void> realloc(HgSpan<void> allocation, usize size) {
+//         HgSpan<void> span;
+//         span.data = realloc_fn(allocation.data, allocation.count, size, allocation.alignment);
+//         span.count = span.data != nullptr ? size : 0;
+//         return span;
+//     }
+//
+//     /**
+//      * A convenience to free a type
+//      *
+//      * Parameters
+//      * - allocation The allocation to free
+//      */
+//     template<typename T>
+//     void free(T* allocation) {
+//         if constexpr (std::is_destructible_v<T>) {
+//             allocation->~T();
+//         }
+//         free_fn(allocation, sizeof(T), alignof(T));
+//     }
+//
+//     /**
+//      * A convenience to free an array of a type
+//      *
+//      * Parameters
+//      * - allocation The allocation to free
+//      */
+//     template<typename T>
+//     void free(HgSpan<T> allocation) {
+//         if constexpr (std::is_destructible_v<T>) {
+//             for (usize i = 0; i < allocation.count; ++i) {
+//                 allocation[i].~T();
+//             }
+//         }
+//         free_fn(allocation.data, allocation.count * sizeof(T), alignof(T));
+//     }
+//
+//     /**
+//      * A convenience to free a void array
+//      *
+//      * Parameters
+//      * - allocation The allocation to free
+//      */
+//     void free(HgSpan<void> allocation) {
+//         free_fn(allocation.data, allocation.count, allocation.alignment);
+//     }
+// };
+
 /**
  * The interface for generic allocators
  */
@@ -2027,11 +2313,15 @@ struct HgArena : public HgAllocator {
     /**
      * A pointer to the memory being allocated
      */
-    HgSpan<void> memory;
+    void* memory;
+    /**
+     * The max capacity in bytes of memory
+     */
+    usize capacity;
     /**
      * The next allocation to be given out
      */
-    void* head;
+    usize head;
 
     /**
      * Allocates an arena with capacity
@@ -2055,21 +2345,21 @@ struct HgArena : public HgAllocator {
      * Frees all allocations from an arena
      */
     void reset() {
-        head = memory.data;
+        head = 0;
     }
 
     /**
      * Returns the state of the arena
      */
-    void* save() {
+    usize save() {
         return head;
     }
 
     /**
      * Loads the saved state of the arena
      */
-    void load(void* save_state) {
-        hg_assert((uptr)head <= (uptr)save_state && (uptr)save_state <= (uptr)memory.data + memory.count);
+    void load(usize save_state) {
+        hg_assert(head <= save_state && save_state <= capacity);
         head = save_state;
     }
 
