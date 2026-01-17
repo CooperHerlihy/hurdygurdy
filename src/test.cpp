@@ -1080,7 +1080,7 @@ hg_test(hg_function) {
 hg_test(hg_thread_pool) {
     HgStdAllocator mem;
 
-    HgThreadPool* threads = HgThreadPool::create(mem, std::thread::hardware_concurrency() - 1, 128);
+    HgThreadPool* threads = HgThreadPool::create(mem, std::thread::hardware_concurrency() - 1, 128, 128);
     hg_defer(HgThreadPool::destroy(mem, threads));
 
     hg_assert(threads != nullptr);

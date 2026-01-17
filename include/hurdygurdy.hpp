@@ -2261,13 +2261,6 @@ struct HgArray {
     }
 
     /**
-     * Returns whether items can be added safely
-     */
-    constexpr bool has_space() const {
-        return count < capacity;
-    }
-
-    /**
      * Increases the capacity to a minimum value
      *
      * Parameters
@@ -2560,13 +2553,6 @@ struct HgArrayAny {
     }
 
     /**
-     * Returns whether items can be added safely
-     */
-    constexpr bool has_space() const {
-        return count < capacity;
-    }
-
-    /**
      * Increases the capacity to a minimum value
      *
      * Parameters
@@ -2819,13 +2805,6 @@ struct HgQueue {
     }
 
     /**
-     * Returns whether items can be added safely
-     */
-    constexpr bool has_space() const {
-        return !is_full();
-    }
-
-    /**
      * Returns whether any items are contained
      */
     constexpr bool is_empty() const {
@@ -2884,7 +2863,7 @@ struct HgQueue {
      * - args The arguments to use to construct the new item, if any
      */
     constexpr T& push() {
-        hg_assert(has_space());
+        hg_assert(!is_full());
         usize index = head;
         head = (head + 1) % capacity;
         return items[index];
@@ -3851,28 +3830,78 @@ struct HgThreadPool {
     };
 
     /**
-     * The threads in the pool
+     * Work specialized for blocking IO
      */
-    HgSpan<std::thread> threads;
-    /**
-     * Mutex to protect the work queue
-     */
-    std::mutex work_queue_mutex;
-    /**
-     * Condition variable to signal workers
-     */
-    std::condition_variable work_queue_signal;
+    struct IORequest {
+        /**
+         * The fence to signal on completion
+         */
+        HgFence* fence;
+        /**
+         * the data passed to the function
+         */
+        void* data;
+        /**
+         * The allocator to use, if any
+         */
+        HgAllocator* mem;
+        /**
+         * The resource to operate on, if any
+         */
+        void* resource;
+        /**
+         * The path to use, if any
+         */
+        HgStringView path;
+        /**
+         * The function to execute
+         */
+        void (*fn)(void*, HgAllocator*, void*, HgStringView);
+    };
+
     /**
      * A signal to all threads to close
      */
     bool should_close;
     /**
+     * The threads in the pool
+     */
+    HgSpan<std::thread> work_threads;
+    /**
+     * A thread dedicated to blocking io
+     */
+    std::thread io_thread;
+    /**
+     * Mutex to protect work queue
+     */
+    std::mutex work_mtx;
+    /**
+     * Condition variable to signal workers
+     */
+    std::condition_variable work_cv;
+    /**
      * The queue of work to be executed
      */
     HgQueue<Work> work_queue;
+    /**
+     * Mutex to protect io queue
+     */
+    std::mutex io_mtx;
+    /**
+     * Condition variable to signal the io thread
+     */
+    std::condition_variable io_cv;
+    /**
+     * The dedicated queue for io requests
+     */
+    HgQueue<IORequest> io_queue;
 
     /**
      * Creates a new thread pool
+     *
+     * Note, thread_count is allocated:
+     * - 1 io thread
+     * - Rest worker threads
      *
      * Parameters
      * - mem The allocator to use
@@ -3882,7 +3911,7 @@ struct HgThreadPool {
      * - The created thread pool
      * - nullptr on failure
      */
-    static HgThreadPool* create(HgAllocator& mem, usize thread_count, usize queue_size);
+    static HgThreadPool* create(HgAllocator& mem, usize thread_count, usize queue_size, usize io_queue_size);
 
     /**
      * Destroys the thread pool
@@ -3921,6 +3950,14 @@ struct HgThreadPool {
      * - fn The function to use to iterate, takes begin and end indices
      */
     void for_par(usize count, usize chunk_size, void* data, void (*fn)(void*, usize begin, usize end));
+
+    /**
+     * Request to operate on a resource
+     *
+     * Parameters
+     * - request The request to make
+     */
+    void io_par(const IORequest& request);
 };
 
 /**
@@ -4787,75 +4824,6 @@ struct HgECS {
  * A global entity component system
  */
 inline HgECS* hg_ecs;
-
-/**
- * A resource manager to load, store, and unload resources
- */
-struct HgResourceManager {
-    struct Request {
-        HgFence* fence;
-        void* data;
-        HgAllocator* mem;
-        void* resource;
-        HgStringView path;
-        void (*fn)(void*, HgAllocator*, void*, HgStringView);
-    };
-
-    /**
-     * The mutex protecting the request_queue
-     */
-    std::mutex request_queue_mutex;
-    /**
-     * A condition variable to signal work to the thread
-     */
-    std::condition_variable request_queue_signal;
-    /**
-     * A signal to the thread to close;
-     */
-    bool should_close;
-    /**
-     * The requests to be processed
-     */
-    HgQueue<Request> request_queue;
-    /**
-     * The thread which handles requests
-     */
-    std::thread request_thread;
-
-    /**
-     * Create a new resource manager
-     *
-     * Parameters
-     * - mem The allocator to use
-     * - max_requests The max requests that can be concurrently processed
-     *
-     * Returns
-     * - A pointer to the created resource manager
-     */
-    static HgResourceManager* create(HgAllocator& mem, usize max_requests);
-
-    /**
-     * Destroys a resource manager
-     *
-     * Parameters
-     * - mem The allocator to use
-     * - rm The resource manager to destroy
-     */
-    static void destroy(HgAllocator& mem, HgResourceManager* rm);
-
-    /**
-     * Request to operate on a resource
-     *
-     * Parameters
-     * - request The request to make
-     */
-    void request(const Request& request);
-};
-
-/**
- * A global resource manager
- */
-inline HgResourceManager* hg_resources;
 
 /**
  * A loaded binary file

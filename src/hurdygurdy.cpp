@@ -17,13 +17,8 @@ void hg_init(void) {
             = std::thread::hardware_concurrency()
             - 2; // main thread, resource io thread
 
-        hg_threads = HgThreadPool::create(mem, thread_count, 4096);
+        hg_threads = HgThreadPool::create(mem, thread_count, 4096, 4096);
         hg_assert(hg_threads != nullptr);
-    }
-
-    if (hg_resources == nullptr) {
-        hg_resources = HgResourceManager::create(mem, 4096);
-        hg_assert(hg_resources != nullptr);
     }
 
     hg_platform_init();
@@ -47,11 +42,6 @@ void hg_exit(void) {
 
     hg_graphics_deinit();
     hg_platform_deinit();
-
-    if (hg_resources != nullptr) {
-        HgResourceManager::destroy(mem, hg_resources);
-        hg_resources = nullptr;
-    }
 
     if (hg_threads != nullptr) {
         HgThreadPool::destroy(mem, hg_threads);
@@ -774,7 +764,9 @@ void HgFence::add() {
 }
 
 void HgFence::signal() {
+    // mtx.lock();
     --counter;
+    // mtx.unlock();
     if (complete())
         cv.notify_all();
 }
@@ -799,12 +791,12 @@ bool HgFence::wait(f64 timeout_seconds) {
     return status != std::cv_status::timeout;
 }
 
-HgThreadPool* HgThreadPool::create(HgAllocator& mem, usize thread_count, usize queue_size) {
+HgThreadPool* HgThreadPool::create(HgAllocator& mem, usize thread_count, usize queue_size, usize io_queue_size) {
     auto thread_fn = [](HgThreadPool* pool) {
         for (;;) {
-            std::unique_lock<std::mutex> lock{pool->work_queue_mutex};
+            std::unique_lock<std::mutex> lock{pool->work_mtx};
             while (pool->work_queue.is_empty() && !pool->should_close) {
-                pool->work_queue_signal.wait(lock);
+                pool->work_cv.wait(lock);
             }
             if (pool->should_close)
                 return;
@@ -820,12 +812,32 @@ HgThreadPool* HgThreadPool::create(HgAllocator& mem, usize thread_count, usize q
         }
     };
 
+    auto io_thread_fn = [](HgThreadPool* pool) {
+        for (;;) {
+            std::unique_lock<std::mutex> lock{pool->io_mtx};
+            while (pool->io_queue.is_empty() && !pool->should_close) {
+                pool->io_cv.wait(lock);
+            }
+            if (pool->should_close)
+                return;
+
+            HgThreadPool::IORequest request = pool->io_queue.pop();
+            lock.unlock();
+
+            hg_assert(request.fn != nullptr);
+            request.fn(request.data, request.mem, request.resource, request.path);
+
+            if (request.fence != nullptr)
+                request.fence->signal();
+        }
+    };
+
     HgThreadPool* pool = mem.alloc<HgThreadPool>();
     if (pool == nullptr)
         goto cleanup_pool;
 
-    pool->threads = mem.alloc<std::thread>(thread_count);
-    if (pool->threads == nullptr)
+    pool->work_threads = mem.alloc<std::thread>(thread_count);
+    if (pool->work_threads == nullptr)
         goto cleanup_threads;
 
     pool->should_close = false;
@@ -837,14 +849,24 @@ HgThreadPool* HgThreadPool::create(HgAllocator& mem, usize thread_count, usize q
         pool->work_queue = queue;
     }
 
-    for (u32 i = 0; i < thread_count; ++i) {
-        pool->threads[i] = std::thread(thread_fn, pool);
+    {
+        auto [success, queue] = pool->io_queue.create(mem, io_queue_size);
+        if (!success)
+            goto cleanup_io_queue;
+        pool->io_queue = queue;
     }
+
+    for (u32 i = 0; i < thread_count; ++i) {
+        pool->work_threads[i] = std::thread(thread_fn, pool);
+    }
+    pool->io_thread = std::thread(io_thread_fn, pool);
 
     return pool;
 
+cleanup_io_queue:
+    pool->work_queue.destroy(mem);
 cleanup_work_queue:
-    mem.free(pool->threads);
+    mem.free(pool->work_threads);
 cleanup_threads:
     mem.free(pool);
 cleanup_pool:
@@ -855,30 +877,35 @@ void HgThreadPool::destroy(HgAllocator& mem, HgThreadPool* pool) {
     if (pool == nullptr)
         return;
 
-    pool->work_queue_mutex.lock();
+    std::lock(pool->work_mtx, pool->io_mtx);
     pool->should_close = true;
-    pool->work_queue_mutex.unlock();
-    pool->work_queue_signal.notify_all();
+    pool->work_mtx.unlock();
+    pool->io_mtx.unlock();
 
-    for (auto& thread : pool->threads) {
+    pool->work_cv.notify_all();
+    pool->io_cv.notify_all();
+
+    for (auto& thread : pool->work_threads) {
         thread.join();
     }
+    pool->io_thread.join();
 
     pool->work_queue.destroy(mem);
-    mem.free(pool->threads);
+    pool->io_queue.destroy(mem);
+    mem.free(pool->work_threads);
     mem.free(pool);
 }
 
 void HgThreadPool::call_par(HgFence* fence, void* data, void (*fn)(void*)) {
     hg_assert(fn != nullptr);
-
     if (fence != nullptr)
         fence->add();
 
-    work_queue_mutex.lock();
+    work_mtx.lock();
+    hg_assert(!work_queue.is_full());
     work_queue.push() = {fence, data, fn};
-    work_queue_mutex.unlock();
-    work_queue_signal.notify_one();
+    work_mtx.unlock();
+    work_cv.notify_one();
 }
 
 void HgThreadPool::for_par(usize count, usize chunk_size, void* data, void (*fn)(void*, usize begin, usize end)) {
@@ -899,6 +926,18 @@ void HgThreadPool::for_par(usize count, usize chunk_size, void* data, void (*fn)
         call_par(&fence, fn_obj.capture.data, fn_obj.fn);
     }
     fence.wait(INFINITY);
+}
+
+void HgThreadPool::io_par(const IORequest& request) {
+    hg_assert(request.fn != nullptr);
+    if (request.fence != nullptr)
+        request.fence->add();
+
+    io_mtx.lock();
+    hg_assert(!io_queue.is_full());
+    io_queue.push() = request;
+    io_mtx.unlock();
+    io_cv.notify_one();
 }
 
 static u32& hg_internal_current_component_id() {
@@ -1170,71 +1209,6 @@ finish:
     quicksort(quicksort, begin, end);
 }
 
-HgResourceManager* HgResourceManager::create(HgAllocator& mem, usize max_requests) {
-    auto thread_fn = [](HgResourceManager* rm) {
-        for (;;) {
-            std::unique_lock<std::mutex> lock{rm->request_queue_mutex};
-            while (rm->request_queue.is_empty() && !rm->should_close) {
-                rm->request_queue_signal.wait(lock);
-            }
-            if (rm->should_close)
-                return;
-
-            HgResourceManager::Request request = rm->request_queue.pop();
-            lock.unlock();
-
-            hg_assert(request.fn != nullptr);
-            request.fn(request.data, request.mem, request.resource, request.path);
-
-            if (request.fence != nullptr)
-                request.fence->signal();
-        }
-    };
-
-    HgResourceManager* rm = mem.alloc<HgResourceManager>();
-    if (rm == nullptr)
-        goto cleanup_rm;
-
-    rm->should_close = false;
-
-    {
-        auto [success, queue] = rm->request_queue.create(mem, max_requests);
-        if (!success)
-            goto cleanup_queue;
-        rm->request_queue = queue;
-    }
-
-    rm->request_thread = std::thread(thread_fn, rm);
-
-    return rm;
-
-cleanup_queue:
-    mem.free(rm);
-cleanup_rm:
-    return nullptr;
-}
-
-void HgResourceManager::destroy(HgAllocator& mem, HgResourceManager* rm) {
-    rm->request_queue_mutex.lock();
-    rm->should_close = true;
-    rm->request_queue_mutex.unlock();
-    rm->request_queue_signal.notify_all();
-
-    rm->request_thread.join();
-    rm->request_queue.destroy(mem);
-}
-
-void HgResourceManager::request(const Request &request) {
-    if (request.fence != nullptr)
-        request.fence->add();
-
-    request_queue_mutex.lock();
-    hg_assert(request_queue.has_space());
-    request_queue.push() = request;
-    request_queue_mutex.unlock();
-    request_queue_signal.notify_one();
-}
-
 void hg_load_file_binary(HgFence* fence, HgAllocator& mem, HgFileBinary& file, HgStringView path) {
     auto fn = [](void*, HgAllocator* pmem, void* pfile, HgStringView fpath) {
         HgFileBinary& file_data =* (HgFileBinary*)pfile;
@@ -1274,13 +1248,13 @@ void hg_load_file_binary(HgFence* fence, HgAllocator& mem, HgFileBinary& file, H
         }
     };
 
-    HgResourceManager::Request request;
+    HgThreadPool::IORequest request;
     request.fence = fence;
     request.fn = fn;
     request.mem = &mem;
     request.resource = &file;
     request.path = path;
-    hg_resources->request(request);
+    hg_threads->io_par(request);
 }
 
 void hg_unload_file_binary(HgFence* fence, HgAllocator& mem, HgFileBinary& file) {
@@ -1290,12 +1264,12 @@ void hg_unload_file_binary(HgFence* fence, HgAllocator& mem, HgFileBinary& file)
         file_data = {};
     };
 
-    HgResourceManager::Request request;
+    HgThreadPool::IORequest request;
     request.fence = fence;
     request.fn = fn;
     request.mem = &mem;
     request.resource = &file;
-    hg_resources->request(request);
+    hg_threads->io_par(request);
 }
 
 void hg_store_file_binary(HgFence* fence, HgFileBinary& file, HgStringView path) {
@@ -1319,12 +1293,12 @@ void hg_store_file_binary(HgFence* fence, HgFileBinary& file, HgStringView path)
         }
     };
 
-    HgResourceManager::Request request;
+    HgThreadPool::IORequest request;
     request.fence = fence;
     request.fn = fn;
     request.resource = &file;
     request.path = path;
-    hg_resources->request(request);
+    hg_threads->io_par(request);
 }
 
 void hg_load_image(HgFence* fence, HgAllocator& mem, HgImage& image, HgStringView path) {
@@ -1346,13 +1320,13 @@ void hg_load_image(HgFence* fence, HgAllocator& mem, HgImage& image, HgStringVie
         image_data.format = VK_FORMAT_R8G8B8A8_SRGB;
     };
 
-    HgResourceManager::Request request;
+    HgThreadPool::IORequest request;
     request.fence = fence;
     request.fn = fn;
     request.mem = &mem;
     request.resource = &image;
     request.path = path;
-    hg_resources->request(request);
+    hg_threads->io_par(request);
 }
 
 void hg_unload_image(HgFence* fence, HgAllocator& mem, HgImage& image) {
@@ -1363,12 +1337,12 @@ void hg_unload_image(HgFence* fence, HgAllocator& mem, HgImage& image) {
         image_data = {};
     };
 
-    HgResourceManager::Request request;
+    HgThreadPool::IORequest request;
     request.fence = fence;
     request.fn = fn;
     request.mem = &mem;
     request.resource = &image;
-    hg_resources->request(request);
+    hg_threads->io_par(request);
 }
 
 void hg_store_image(HgFence* fence, HgImage& image, HgStringView path) {
@@ -1388,12 +1362,12 @@ void hg_store_image(HgFence* fence, HgImage& image, HgStringView path) {
             (int)(image_data.width * 4));
     };
 
-    HgResourceManager::Request request;
+    HgThreadPool::IORequest request;
     request.fence = fence;
     request.fn = fn;
     request.resource = &image;
     request.path = path;
-    hg_resources->request(request);
+    hg_threads->io_par(request);
 }
 
 f64 HgClock::tick() {
