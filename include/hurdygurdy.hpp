@@ -44,6 +44,8 @@
 #include <mutex>
 #include <thread>
 
+#include <emmintrin.h>
+
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
 
@@ -2709,14 +2711,6 @@ struct HgArrayAny {
 };
 
 /**
- * A lock free, thread safe, multi consumer, multi producer queue
- */
-template<typename T>
-struct HgThreadQueue {
-    // thread queue : TODO
-};
-
-/**
  * A dynamic FIFO queue
  */
 template<typename T>
@@ -3710,29 +3704,44 @@ struct HgFunction<R(Args...)> {
      * - The function object
      * - nullopt if allocation failed
      */
+    template<typename C>
+    static HgOption<HgFunction> create(HgAllocator& mem, C&& capture, R (*fn)(void*, Args...)) {
+        HgOption<HgFunction> func;
+        func.has_value = true;
+
+        func->capture = mem.alloc(sizeof(C), alignof(C));
+        if (func->capture == nullptr)
+            return hg_empty;
+        new ((C*)func->capture.data) C{std::move(capture)};
+
+        func->fn = fn;
+
+        return func;
+    }
+
+    /**
+     * Creates a function object, which owns its capture and must be destroyed
+     *
+     * Parameters
+     * - mem The allocator to use
+     * - fn The function to use
+     *
+     * Returns
+     * - The function object
+     * - nullopt if allocation failed
+     */
     template<typename F>
     static HgOption<HgFunction> create(HgAllocator& mem, F fn) {
         static_assert(std::is_trivially_destructible_v<F>);
         static_assert(std::is_invocable_r_v<R, F, Args...>);
 
-        HgOption<HgFunction> func;
-        func.has_value = true;
-
-        func->capture = mem.alloc(sizeof(F), alignof(F));
-        if (func->capture == nullptr)
-            return hg_empty;
-
-        new ((F*)func->capture.data) F{std::move(fn)};
-
-        func->fn = [](void* data, Args... args) -> R {
+        return create(mem, std::move(fn), [](void* data, Args... args) -> R {
             if constexpr (std::is_same_v<R, void>) {
                 (*(F*)data)(args...);
             } else {
                 return (*(F*)data)(args...);
             }
-        };
-
-        return func;
+        });
     }
 
     /**
