@@ -40,6 +40,7 @@
 #include <chrono>
 
 #include <atomic>
+#include <condition_variable>
 #include <mutex>
 #include <thread>
 
@@ -3786,18 +3787,33 @@ HgOption<HgFunction<Signature>> hg_function(HgAllocator& mem, F&& fn) {
  * A fence for basic thread synchronization
  */
 struct HgFence {
-    std::atomic<usize> counter;
+    /**
+     * The number of events the fence is waiting on
+     */
+    std::atomic<u64> counter{0};
+    /**
+     * The mutex to sync between threads
+     */
+    std::mutex mtx{};
+    /**
+     * The cond var to wait and notify on
+     */
+    std::condition_variable cv{};
 
-    HgFence() {
-        counter.store(0);
-    }
+    /**
+     * Add another event for the fence to wait on
+     */
+    void add();
+
+    /**
+     * Signal that an event has completed
+     */
+    void signal();
 
     /**
      * Returns whether all work has been completed
      */
-    bool complete() {
-        return counter.load() == 0;
-    }
+    bool complete();
 
     /**
      * Waits for all work submissions to be completed
@@ -3810,24 +3826,6 @@ struct HgFence {
      * - false if the timeout was reached
      */
     bool wait(f64 timeout_seconds);
-};
-
-/**
- * A continuous thread with signals
- */
-struct HgThread {
-    /**
-     * The thread itself
-     */
-    std::thread thread;
-    /**
-     * Signal whether it is currently working
-     */
-    std::atomic_bool is_working;
-    /**
-     * Signal to close
-     */
-    std::atomic_bool should_close;
 };
 
 /**
@@ -3855,11 +3853,19 @@ struct HgThreadPool {
     /**
      * The threads in the pool
      */
-    HgSpan<HgThread> threads;
+    HgSpan<std::thread> threads;
     /**
      * Mutex to protect the work queue
      */
     std::mutex work_queue_mutex;
+    /**
+     * Condition variable to signal workers
+     */
+    std::condition_variable work_queue_signal;
+    /**
+     * A signal to all threads to close
+     */
+    bool should_close;
     /**
      * The queue of work to be executed
      */
@@ -4800,13 +4806,21 @@ struct HgResourceManager {
      */
     std::mutex request_queue_mutex;
     /**
+     * A condition variable to signal work to the thread
+     */
+    std::condition_variable request_queue_signal;
+    /**
+     * A signal to the thread to close;
+     */
+    bool should_close;
+    /**
      * The requests to be processed
      */
     HgQueue<Request> request_queue;
     /**
      * The thread which handles requests
      */
-    HgThread request_thread;
+    std::thread request_thread;
 
     /**
      * Create a new resource manager

@@ -769,37 +769,54 @@ void HgString::insert(HgAllocator& mem, usize index, HgStringView str) {
     length = new_length;
 }
 
+void HgFence::add() {
+    ++counter;
+}
+
+void HgFence::signal() {
+    --counter;
+    if (complete())
+        cv.notify_all();
+}
+
+bool HgFence::complete() {
+    return counter.load() == 0;
+}
+
 bool HgFence::wait(f64 timeout_seconds) {
-    HgClock timer{};
-    for (f64 elapsed = 0.0f; elapsed < timeout_seconds; elapsed += timer.tick()) {
-        if (complete())
-            return true;
+    if (complete())
+        return true;
+
+    std::cv_status status = std::cv_status::no_timeout;
+    auto end_time = std::chrono::steady_clock::now() + std::chrono::duration<f64>(timeout_seconds);
+
+    std::unique_lock<std::mutex> lock{mtx};
+    while (!complete()) {
+        status = cv.wait_until(lock, end_time);
     }
-    return false;
+    lock.unlock();
+
+    return status != std::cv_status::timeout;
 }
 
 HgThreadPool* HgThreadPool::create(HgAllocator& mem, usize thread_count, usize queue_size) {
-    auto thread_fn = [](HgThreadPool* pool, usize index) {
+    auto thread_fn = [](HgThreadPool* pool) {
         for (;;) {
-            if (pool->threads[index].should_close.load())
+            std::unique_lock<std::mutex> lock{pool->work_queue_mutex};
+            while (pool->work_queue.is_empty() && !pool->should_close) {
+                pool->work_queue_signal.wait(lock);
+            }
+            if (pool->should_close)
                 return;
 
-            pool->threads[index].is_working.store(true);
+            HgThreadPool::Work work = pool->work_queue.pop();
+            lock.unlock();
 
-            if (pool->work_queue_mutex.try_lock()) {
-                if (pool->work_queue.count() == 0) {
-                    pool->work_queue_mutex.unlock();
-                } else {
-                    HgThreadPool::Work work = pool->work_queue.pop();
-                    pool->work_queue_mutex.unlock();
+            hg_assert(work.fn != nullptr);
+            work.fn(work.data);
 
-                    work.fn(work.data);
-                    if (work.fence != nullptr)
-                        --work.fence->counter;
-                }
-            }
-
-            pool->threads[index].is_working.store(false);
+            if (work.fence != nullptr)
+                work.fence->signal();
         }
     };
 
@@ -807,9 +824,11 @@ HgThreadPool* HgThreadPool::create(HgAllocator& mem, usize thread_count, usize q
     if (pool == nullptr)
         goto cleanup_pool;
 
-    pool->threads = mem.alloc<HgThread>(thread_count);
+    pool->threads = mem.alloc<std::thread>(thread_count);
     if (pool->threads == nullptr)
         goto cleanup_threads;
+
+    pool->should_close = false;
 
     {
         auto [success, queue] = pool->work_queue.create(mem, queue_size);
@@ -819,9 +838,7 @@ HgThreadPool* HgThreadPool::create(HgAllocator& mem, usize thread_count, usize q
     }
 
     for (u32 i = 0; i < thread_count; ++i) {
-        pool->threads[i].is_working.store(false);
-        pool->threads[i].should_close.store(false);
-        pool->threads[i].thread = std::thread(thread_fn, pool, i);
+        pool->threads[i] = std::thread(thread_fn, pool);
     }
 
     return pool;
@@ -838,11 +855,13 @@ void HgThreadPool::destroy(HgAllocator& mem, HgThreadPool* pool) {
     if (pool == nullptr)
         return;
 
+    pool->work_queue_mutex.lock();
+    pool->should_close = true;
+    pool->work_queue_mutex.unlock();
+    pool->work_queue_signal.notify_all();
+
     for (auto& thread : pool->threads) {
-        thread.should_close.store(true);
-    }
-    for (auto& thread : pool->threads) {
-        thread.thread.join();
+        thread.join();
     }
 
     pool->work_queue.destroy(mem);
@@ -850,34 +869,16 @@ void HgThreadPool::destroy(HgAllocator& mem, HgThreadPool* pool) {
     mem.free(pool);
 }
 
-bool HgThreadPool::wait_idle(f64 timeout_seconds) {
-    HgClock timer{};
-    for (f64 elapsed = 0.0f; elapsed < timeout_seconds; elapsed += timer.tick()) {
-        if (work_queue_mutex.try_lock()) {
-            hg_defer(work_queue_mutex.unlock());
-            if (work_queue.count() != 0)
-                goto wait_longer;
-            for (auto& thread : threads) {
-                if (thread.is_working.load())
-                    goto wait_longer;
-            }
-            return true;
-        }
-wait_longer:
-        continue;
-    }
-    return false;
-}
-
 void HgThreadPool::call_par(HgFence* fence, void* data, void (*fn)(void*)) {
     hg_assert(fn != nullptr);
 
     if (fence != nullptr)
-        ++fence->counter;
+        fence->add();
 
     work_queue_mutex.lock();
     work_queue.push() = {fence, data, fn};
     work_queue_mutex.unlock();
+    work_queue_signal.notify_one();
 }
 
 void HgThreadPool::for_par(usize count, usize chunk_size, void* data, void (*fn)(void*, usize begin, usize end)) {
@@ -1169,33 +1170,32 @@ finish:
     quicksort(quicksort, begin, end);
 }
 
-static void hg_internal_resource_thread_fn(HgResourceManager* rm) {
-    for (;;) {
-        if (rm->request_thread.should_close.load())
-            return;
-
-        rm->request_thread.is_working.store(true);
-
-        if (rm->request_queue_mutex.try_lock()) {
-            if (rm->request_queue.count() == 0) {
-                rm->request_queue_mutex.unlock();
-            } else {
-                HgResourceManager::Request request = rm->request_queue.pop();
-                rm->request_queue_mutex.unlock();
-
-                request.fn(request.data, request.mem, request.resource, request.path);
-                --request.fence->counter;
-            }
-        }
-
-        rm->request_thread.is_working.store(false);
-    }
-}
-
 HgResourceManager* HgResourceManager::create(HgAllocator& mem, usize max_requests) {
+    auto thread_fn = [](HgResourceManager* rm) {
+        for (;;) {
+            std::unique_lock<std::mutex> lock{rm->request_queue_mutex};
+            while (rm->request_queue.is_empty() && !rm->should_close) {
+                rm->request_queue_signal.wait(lock);
+            }
+            if (rm->should_close)
+                return;
+
+            HgResourceManager::Request request = rm->request_queue.pop();
+            lock.unlock();
+
+            hg_assert(request.fn != nullptr);
+            request.fn(request.data, request.mem, request.resource, request.path);
+
+            if (request.fence != nullptr)
+                request.fence->signal();
+        }
+    };
+
     HgResourceManager* rm = mem.alloc<HgResourceManager>();
     if (rm == nullptr)
         goto cleanup_rm;
+
+    rm->should_close = false;
 
     {
         auto [success, queue] = rm->request_queue.create(mem, max_requests);
@@ -1204,9 +1204,7 @@ HgResourceManager* HgResourceManager::create(HgAllocator& mem, usize max_request
         rm->request_queue = queue;
     }
 
-    rm->request_thread.should_close.store(false);
-    rm->request_thread.is_working.store(false);
-    rm->request_thread.thread = std::thread(hg_internal_resource_thread_fn, rm);
+    rm->request_thread = std::thread(thread_fn, rm);
 
     return rm;
 
@@ -1217,19 +1215,24 @@ cleanup_rm:
 }
 
 void HgResourceManager::destroy(HgAllocator& mem, HgResourceManager* rm) {
-    rm->request_thread.should_close.store(true);
-    rm->request_thread.thread.join();
+    rm->request_queue_mutex.lock();
+    rm->should_close = true;
+    rm->request_queue_mutex.unlock();
+    rm->request_queue_signal.notify_all();
+
+    rm->request_thread.join();
     rm->request_queue.destroy(mem);
 }
 
 void HgResourceManager::request(const Request &request) {
     if (request.fence != nullptr)
-        ++request.fence->counter;
+        request.fence->add();
 
     request_queue_mutex.lock();
     hg_assert(request_queue.has_space());
     request_queue.push() = request;
     request_queue_mutex.unlock();
+    request_queue_signal.notify_one();
 }
 
 void hg_load_file_binary(HgFence* fence, HgAllocator& mem, HgFileBinary& file, HgStringView path) {

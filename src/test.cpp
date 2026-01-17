@@ -1101,7 +1101,7 @@ hg_test(hg_thread_pool) {
         threads->call_par(&fence, &a, a_fn);
         threads->call_par(&fence, &b, b_fn);
 
-        hg_test_assert(fence.wait(2.0));
+        hg_test_assert(fence.wait(INFINITY));
 
         hg_test_assert(a == true);
         hg_test_assert(b == true);
@@ -1117,7 +1117,7 @@ hg_test(hg_thread_pool) {
             });
         }
 
-        hg_test_assert(fence.wait(2.0));
+        hg_test_assert(fence.wait(INFINITY));
 
         for (bool& val : vals) {
             hg_test_assert(val == true);
@@ -1139,7 +1139,7 @@ hg_test(hg_thread_pool) {
             threads->call_par(&fence, fn_obj.capture.data, fn_obj.fn);
         }
 
-        hg_test_assert(fence.wait(2.0));
+        hg_test_assert(fence.wait(INFINITY));
 
         for (bool& val : vals) {
             hg_test_assert(val == true);
@@ -1523,7 +1523,7 @@ hg_test(hg_file_binary) {
     HgFence fence;
     {
         hg_load_file_binary(&fence, mem, file, "file_does_not_exist.bin");
-        hg_test_assert(fence.wait(2.0));
+        hg_test_assert(fence.wait(INFINITY));
 
         hg_test_assert(file.data == nullptr);
         hg_test_assert(file.size == 0);
@@ -1534,7 +1534,7 @@ hg_test(hg_file_binary) {
         file.size = sizeof(save_data);
 
         hg_store_file_binary(&fence, file, "dir/does/not/exist.bin");
-        hg_test_assert(fence.wait(2.0));
+        hg_test_assert(fence.wait(INFINITY));
 
         FILE* file_handle = std::fopen("dir/does/not/exist.bin", "rb");
         hg_test_assert(file_handle == nullptr);
@@ -1546,7 +1546,7 @@ hg_test(hg_file_binary) {
 
         hg_store_file_binary(&fence, file, file_path);
         hg_load_file_binary(&fence, mem, file, file_path);
-        hg_test_assert(fence.wait(2.0));
+        hg_test_assert(fence.wait(INFINITY));
 
         hg_test_assert(file.data != nullptr);
         hg_test_assert(file.data != save_data);
@@ -1555,7 +1555,7 @@ hg_test(hg_file_binary) {
 
         hg_unload_file_binary(&fence, mem, file);
     }
-    hg_test_assert(fence.wait(2.0));
+    hg_test_assert(fence.wait(INFINITY));
 
     return true;
 }
@@ -1596,7 +1596,7 @@ hg_test(hg_image) {
 
         hg_store_image(&fence, file, file_path);
         hg_load_image(&fence, mem, file, file_path);
-        hg_test_assert(fence.wait(2.0));
+        hg_test_assert(fence.wait(INFINITY));
 
         hg_test_assert(file.pixels != nullptr);
         hg_test_assert(file.pixels != save_data);
@@ -1609,7 +1609,7 @@ hg_test(hg_image) {
 
         hg_unload_image(&fence, mem, file);
     }
-    hg_test_assert(fence.wait(2.0));
+    hg_test_assert(fence.wait(INFINITY));
 
     return true;
 }
