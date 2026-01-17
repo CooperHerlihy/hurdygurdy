@@ -940,6 +940,32 @@ void HgThreadPool::io_par(const IORequest& request) {
     io_cv.notify_one();
 }
 
+bool HgThreadPool::help(HgFence& fence, f64 timeout_seconds) {
+    auto wait_time = std::chrono::steady_clock::now() + std::chrono::duration<f64>(timeout_seconds);
+    while (std::chrono::steady_clock::now() < wait_time) {
+        if (fence.complete())
+            return true;
+
+        if (work_mtx.try_lock()) {
+            if (work_queue.is_empty()) {
+                work_mtx.unlock();
+            } else {
+                Work work = work_queue.pop();
+                work_mtx.unlock();
+
+                hg_assert(work.fn != nullptr);
+                work.fn(work.data);
+
+                if (work.fence != nullptr)
+                    work.fence->signal();
+            }
+        }
+
+        std::this_thread::yield();
+    }
+    return false;
+}
+
 static u32& hg_internal_current_component_id() {
     static u32 id = 0;
     return id;

@@ -1085,9 +1085,8 @@ hg_test(hg_thread_pool) {
 
     hg_assert(threads != nullptr);
 
+    HgFence fence;
     {
-        HgFence fence;
-
         bool a = false;
         auto a_fn = [](void *pa) {
             *(bool*)pa = true;
@@ -1101,15 +1100,13 @@ hg_test(hg_thread_pool) {
         threads->call_par(&fence, &a, a_fn);
         threads->call_par(&fence, &b, b_fn);
 
-        hg_test_assert(fence.wait(INFINITY));
+        hg_test_assert(fence.wait(2.0));
 
         hg_test_assert(a == true);
         hg_test_assert(b == true);
     }
 
     {
-        HgFence fence;
-
         bool vals[100] = {};
         for (bool& val : vals) {
             threads->call_par(&fence, &val, [](void* data) {
@@ -1117,7 +1114,7 @@ hg_test(hg_thread_pool) {
             });
         }
 
-        hg_test_assert(fence.wait(INFINITY));
+        hg_test_assert(threads->help(fence, 2.0));
 
         for (bool& val : vals) {
             hg_test_assert(val == true);
@@ -1125,8 +1122,6 @@ hg_test(hg_thread_pool) {
     }
 
     {
-        HgFence fence;
-
         HgArena arena = arena.create(mem, 1 << 16).value();
         hg_defer(arena.destroy(mem));
 
@@ -1139,7 +1134,7 @@ hg_test(hg_thread_pool) {
             threads->call_par(&fence, fn_obj.capture.data, fn_obj.fn);
         }
 
-        hg_test_assert(fence.wait(INFINITY));
+        hg_test_assert(threads->help(fence, 2.0));
 
         for (bool& val : vals) {
             hg_test_assert(val == true);
@@ -1523,7 +1518,7 @@ hg_test(hg_file_binary) {
     HgFence fence;
     {
         hg_load_file_binary(&fence, mem, file, "file_does_not_exist.bin");
-        hg_test_assert(fence.wait(INFINITY));
+        hg_test_assert(fence.wait(2.0));
 
         hg_test_assert(file.data == nullptr);
         hg_test_assert(file.size == 0);
@@ -1534,7 +1529,7 @@ hg_test(hg_file_binary) {
         file.size = sizeof(save_data);
 
         hg_store_file_binary(&fence, file, "dir/does/not/exist.bin");
-        hg_test_assert(fence.wait(INFINITY));
+        hg_test_assert(fence.wait(2.0));
 
         FILE* file_handle = std::fopen("dir/does/not/exist.bin", "rb");
         hg_test_assert(file_handle == nullptr);
@@ -1546,7 +1541,7 @@ hg_test(hg_file_binary) {
 
         hg_store_file_binary(&fence, file, file_path);
         hg_load_file_binary(&fence, mem, file, file_path);
-        hg_test_assert(fence.wait(INFINITY));
+        hg_test_assert(fence.wait(2.0));
 
         hg_test_assert(file.data != nullptr);
         hg_test_assert(file.data != save_data);
@@ -1555,7 +1550,7 @@ hg_test(hg_file_binary) {
 
         hg_unload_file_binary(&fence, mem, file);
     }
-    hg_test_assert(fence.wait(INFINITY));
+    hg_test_assert(fence.wait(2.0));
 
     return true;
 }

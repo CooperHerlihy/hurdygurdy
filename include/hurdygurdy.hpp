@@ -3967,6 +3967,19 @@ struct HgThreadPool {
      * - request The request to make
      */
     void io_par(const IORequest& request);
+
+    /**
+     * Wait on the fence, and help complete work in the meantime
+     *
+     * Parameters
+     * - fence The fence to wait on
+     * - timeout_seconds The max time to spend working
+     *
+     * Returns
+     * - true if the fence was completed
+     * - false if the timeout was reached
+     */
+    bool help(HgFence& fence, f64 timeout_seconds);
 };
 
 /**
