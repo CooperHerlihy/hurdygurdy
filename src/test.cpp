@@ -361,45 +361,6 @@ hg_test(hg_arena) {
     return true;
 }
 
-hg_test(hg_stack) {
-    HgStdAllocator mem;
-
-    HgStack stack = stack.create(mem, 1024).value();
-    hg_defer(stack.destroy(mem));
-
-    for (usize i = 0; i < 3; ++i) {
-        hg_test_assert(stack.memory != nullptr);
-        hg_test_assert(stack.memory.count == 1024);
-        hg_test_assert(stack.head == 0);
-
-        u8* alloc_u8_1 = stack.alloc<u8>();
-        hg_test_assert(alloc_u8_1 == (u8*)stack.memory.data);
-
-        u8* alloc_u8_2 = stack.alloc<u8>();
-        hg_test_assert(alloc_u8_2 == alloc_u8_1 + 16);
-
-        stack.free(alloc_u8_2);
-        u8* alloc_u8_3 = stack.alloc<u8>();
-        hg_test_assert(alloc_u8_3 == alloc_u8_2);
-
-        HgSpan<u64> alloc_u64 = stack.alloc<u64>(2);
-        hg_test_assert((u8*)alloc_u64.data == alloc_u8_3 + 16);
-
-        HgSpan<u64> realloc_u64 = stack.realloc(alloc_u64, 3);
-        hg_test_assert(realloc_u64.data = alloc_u64.data);
-
-        std::fill_n(realloc_u64.data, realloc_u64.count, 2);
-        (void)stack.alloc<u8>();
-        HgSpan<u64> realloc_u64_2 = stack.realloc(realloc_u64, 3);
-        hg_test_assert(realloc_u64_2.data != realloc_u64.data);
-        hg_test_assert(memcmp(realloc_u64_2.data, realloc_u64.data, realloc_u64.size()) == 0);
-
-        stack.reset();
-    }
-
-    return true;
-}
-
 hg_test(hg_array) {
     HgStdAllocator mem;
 
@@ -409,17 +370,17 @@ hg_test(hg_array) {
     hg_test_assert(arr.capacity == 2);
     hg_test_assert(arr.count == 0);
 
-    arr.push((u32)2);
+    arr.push() = 2;
     hg_test_assert(arr[0] == 2);
     hg_test_assert(arr.count == 1);
-    arr.push((u32)4);
+    arr.push() = 4;
     hg_test_assert(arr[1] == 4);
     hg_test_assert(arr.count == 2);
 
     arr.grow(mem);
     hg_test_assert(arr.capacity == 4);
 
-    arr.push((u32)8);
+    arr.push() = 8;
     hg_test_assert(arr[2] == 8);
     hg_test_assert(arr.count == 3);
 
@@ -427,7 +388,7 @@ hg_test(hg_array) {
     hg_test_assert(arr.count == 2);
     hg_test_assert(arr.capacity == 4);
 
-    arr.insert(0, (u32)1);
+    arr.insert(0) = 1;
     hg_test_assert(arr.count == 3);
     hg_test_assert(arr[0] == 1);
     hg_test_assert(arr[1] == 2);
@@ -438,10 +399,10 @@ hg_test(hg_array) {
     hg_test_assert(arr[0] == 1);
     hg_test_assert(arr[1] == 4);
 
-    for (usize i = 0; i < 100; ++i) {
+    for (u32 i = 0; i < 100; ++i) {
         if (arr.is_full())
             arr.grow(mem);
-        arr.push((u32)i);
+        arr.push() = i;
     }
     hg_test_assert(arr.count == 102);
     hg_test_assert(arr.capacity >= 102);
@@ -451,7 +412,7 @@ hg_test(hg_array) {
     hg_test_assert(arr[2] == 99);
     hg_test_assert(arr[arr.count - 1] == 98);
 
-    arr.swap_insert(0, (u32)42);
+    arr.swap_insert(0) = 42;
     hg_test_assert(arr.count == 102);
     hg_test_assert(arr[0] == 42);
     hg_test_assert(arr[1] == 4);
@@ -536,7 +497,7 @@ hg_test(hg_queue) {
     for (usize i = 0; i < 16; ++i) {
         for (u32 j = 0; j < 7; ++j) {
             hg_test_assert(queue.count() == j);
-            queue.push(j);
+            queue.push() = j;
         }
 
         hg_test_assert(queue.pop() == 0);
@@ -546,7 +507,7 @@ hg_test(hg_queue) {
 
         for (u32 j = 7; j < 10; ++j) {
             hg_test_assert(queue.count() == j - 4);
-            queue.push(j);
+            queue.push() = j;
         }
 
         hg_test_assert(queue.pop() == 4);
@@ -583,19 +544,19 @@ hg_test(hg_string) {
     hg_test_assert(a == abc);
 
     HgString str = str.create(arena, 16).value();
-    hg_test_assert(str == HgString::create(arena, 0));
+    hg_test_assert(str == HgString::create(arena, 0).value());
 
     str.append(arena, "hello");
-    hg_test_assert(str == HgString::create(arena, "hello"));
+    hg_test_assert(str == HgString::create(arena, "hello").value());
 
     str.append(arena, " there");
-    hg_test_assert(str == HgString::create(arena, "hello there"));
+    hg_test_assert(str == HgString::create(arena, "hello there").value());
 
     str.prepend(arena, "why ");
-    hg_test_assert(str == HgString::create(arena, "why hello there"));
+    hg_test_assert(str == HgString::create(arena, "why hello there").value());
 
     str.insert(arena, 3, ",");
-    hg_test_assert(str == HgString::create(arena, "why, hello there"));
+    hg_test_assert(str == HgString::create(arena, "why, hello there").value());
 
     return true;
 }
@@ -1395,7 +1356,7 @@ hg_test(hg_ecs) {
         HgArray<HgEntity> entities = entities.create(arena, 0, 300).value();
 
         for (u32 i = 0; i < 300; ++i) {
-            HgEntity e = entities.push(hg_ecs->spawn());
+            HgEntity e = entities.push() = hg_ecs->spawn();
             switch (i % 3) {
                 case 0:
                     hg_ecs->add<u32>(e) = 12;

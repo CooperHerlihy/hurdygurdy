@@ -68,7 +68,7 @@ HgTest::HgTest(const char* test_name, bool (*test_function)()) : name(test_name)
     HgArray<HgTest>& internal_tests = hg_internal_get_tests();
     if (internal_tests.is_full())
         internal_tests.grow(HgStdAllocator::get());
-    internal_tests.push(*this);
+    internal_tests.push() = *this;
 }
 
 bool hg_run_tests() {
@@ -615,11 +615,12 @@ void HgStdAllocator::free_fn(void* allocation, usize size, usize alignment) {
 }
 
 HgOption<HgArena> HgArena::create(HgAllocator& parent, usize capacity) {
-    HgOption<HgArena> arena{std::in_place};
+    HgOption<HgArena> arena;
+    arena.has_value = true;
 
     arena->memory = parent.alloc_fn(capacity, alignof(std::max_align_t));
     if (arena->memory == nullptr)
-        return std::nullopt;
+        return hg_empty;
 
     arena->capacity = capacity;
     arena->head = 0;
@@ -665,64 +666,6 @@ void HgArena::free_fn(void* allocation, usize size, usize alignment) {
     (void)alignment;
 }
 
-HgOption<HgStack> HgStack::create(HgAllocator& parent, usize capacity) {
-    HgOption<HgStack> stack{std::in_place};
-
-    stack->memory = parent.alloc(capacity, alignof(std::max_align_t));
-    if (stack->memory == nullptr)
-        return std::nullopt;
-
-    stack->head = 0;
-
-    return stack;
-}
-
-void HgStack::destroy(HgAllocator& parent) {
-    parent.free(memory);
-}
-
-void HgStack::reset() {
-    head = 0;
-}
-
-void* HgStack::alloc_fn(usize size, usize alignment) {
-    (void)alignment;
-
-    usize new_head = head + hg_align(size, 16);
-    if (new_head > memory.count)
-        return nullptr;
-
-    void* allocation = (u8* )memory.data + head;
-    head = new_head;
-    return allocation;
-}
-
-void* HgStack::realloc_fn(void* allocation, usize old_size, usize new_size, usize alignment) {
-    (void)alignment;
-
-    if ((uptr)allocation + hg_align(old_size, 16) == head) {
-        usize new_head = (uptr)allocation - (uptr)memory.data + hg_align(new_size, 16);
-        if (new_head > memory.count)
-            return nullptr;
-        head = new_head;
-        return allocation;
-    }
-
-    void* new_allocation = alloc_fn(new_size, 16);
-    std::memcpy(new_allocation, allocation, std::min(old_size, new_size));
-    return new_allocation;
-}
-
-void HgStack::free_fn(void* allocation, usize size, usize alignment) {
-    (void)alignment;
-
-    if ((uptr)allocation + hg_align(size, 16) == (uptr)memory.data + head) {
-        head = (uptr)allocation - (uptr)memory.data;
-    } else {
-        hg_warn("Attempt to free a stack allocation not at the head\n");
-    }
-}
-
 HgOption<HgArrayAny> HgArrayAny::create(
     HgAllocator& mem,
     u32 width,
@@ -732,11 +675,12 @@ HgOption<HgArrayAny> HgArrayAny::create(
 ) {
     hg_assert(count <= capacity);
 
-    HgOption<HgArrayAny> arr{std::in_place};
+    HgOption<HgArrayAny> arr;
+    arr.has_value = true;
 
     arr->items = mem.alloc_fn(capacity * width, alignment);
     if (arr->items == nullptr)
-        return std::nullopt;
+        return hg_empty;
 
     arr->width = width;
     arr->alignment = alignment;
@@ -758,11 +702,12 @@ bool HgArrayAny::reserve(HgAllocator& mem, usize min) {
 }
 
 HgOption<HgString> HgString::create(HgAllocator& mem, usize capacity) {
-    HgOption<HgString> str{std::in_place};
+    HgOption<HgString> str;
+    str.has_value = true;
 
     str->chars = mem.alloc<char>(capacity);
     if (str->chars == nullptr)
-        return std::nullopt;
+        return hg_empty;
 
     str->length = 0;
 
@@ -770,11 +715,12 @@ HgOption<HgString> HgString::create(HgAllocator& mem, usize capacity) {
 }
 
 HgOption<HgString> HgString::create(HgAllocator& mem, HgStringView init) {
-    HgOption<HgString> str{std::in_place};
+    HgOption<HgString> str;
+    str.has_value = true;
 
     str->chars = mem.alloc<char>(init.count);
     if (str->chars == nullptr)
-        return std::nullopt;
+        return hg_empty;
 
     std::memcpy(str->chars.data, init.data, init.count);
 
@@ -832,32 +778,31 @@ bool HgFence::wait(f64 timeout_seconds) {
     return false;
 }
 
-static void hg_internal_thread_fn(HgThreadPool* pool, usize index) {
-    for (;;) {
-        if (pool->threads[index].should_close.load())
-            return;
-
-        pool->threads[index].is_working.store(true);
-
-        if (pool->work_queue_mutex.try_lock()) {
-            if (pool->work_queue.count == 0) {
-                pool->work_queue_mutex.unlock();
-            } else {
-                HgThreadPool::Work work = pool->work_queue.last();
-                pool->work_queue.pop();
-                pool->work_queue_mutex.unlock();
-
-                work.fn(work.data);
-                if (work.fence != nullptr)
-                    --work.fence->counter;
-            }
-        }
-
-        pool->threads[index].is_working.store(false);
-    }
-}
-
 HgThreadPool* HgThreadPool::create(HgAllocator& mem, usize thread_count, usize queue_size) {
+    auto thread_fn = [](HgThreadPool* pool, usize index) {
+        for (;;) {
+            if (pool->threads[index].should_close.load())
+                return;
+
+            pool->threads[index].is_working.store(true);
+
+            if (pool->work_queue_mutex.try_lock()) {
+                if (pool->work_queue.count() == 0) {
+                    pool->work_queue_mutex.unlock();
+                } else {
+                    HgThreadPool::Work work = pool->work_queue.pop();
+                    pool->work_queue_mutex.unlock();
+
+                    work.fn(work.data);
+                    if (work.fence != nullptr)
+                        --work.fence->counter;
+                }
+            }
+
+            pool->threads[index].is_working.store(false);
+        }
+    };
+
     HgThreadPool* pool = mem.alloc<HgThreadPool>();
     if (pool == nullptr)
         goto cleanup_pool;
@@ -866,14 +811,17 @@ HgThreadPool* HgThreadPool::create(HgAllocator& mem, usize thread_count, usize q
     if (pool->threads == nullptr)
         goto cleanup_threads;
 
-    pool->work_queue = pool->work_queue.create(mem, 0, queue_size).value_or(HgArray<Work>{});
-    if (pool->work_queue.items == nullptr)
-        goto cleanup_work_queue;
+    {
+        auto [success, queue] = pool->work_queue.create(mem, queue_size);
+        if (!success)
+            goto cleanup_work_queue;
+        pool->work_queue = queue;
+    }
 
     for (u32 i = 0; i < thread_count; ++i) {
         pool->threads[i].is_working.store(false);
         pool->threads[i].should_close.store(false);
-        pool->threads[i].thread = std::thread(hg_internal_thread_fn, pool, i);
+        pool->threads[i].thread = std::thread(thread_fn, pool, i);
     }
 
     return pool;
@@ -907,7 +855,7 @@ bool HgThreadPool::wait_idle(f64 timeout_seconds) {
     for (f64 elapsed = 0.0f; elapsed < timeout_seconds; elapsed += timer.tick()) {
         if (work_queue_mutex.try_lock()) {
             hg_defer(work_queue_mutex.unlock());
-            if (work_queue.count != 0)
+            if (work_queue.count() != 0)
                 goto wait_longer;
             for (auto& thread : threads) {
                 if (thread.is_working.load())
@@ -928,7 +876,7 @@ void HgThreadPool::call_par(HgFence* fence, void* data, void (*fn)(void*)) {
         ++fence->counter;
 
     work_queue_mutex.lock();
-    work_queue.push(fence, data, fn);
+    work_queue.push() = {fence, data, fn};
     work_queue_mutex.unlock();
 }
 
@@ -967,7 +915,8 @@ HgOption<HgECS> HgECS::create(
     HgAllocator& mem,
     u32 max_entities
 ) {
-    HgOption<HgECS> ecs{std::in_place};
+    HgOption<HgECS> ecs;
+    ecs.has_value = true;
 
     ecs->entity_pool = mem.alloc<HgEntity>(max_entities);
     if (ecs->entity_pool == nullptr)
@@ -989,7 +938,7 @@ HgOption<HgECS> HgECS::create(
 cleanup_systems:
     mem.free(ecs->entity_pool);
 cleanup_entity_pool:
-    return std::nullopt;
+    return hg_empty;
 }
 
 void HgECS::destroy(HgAllocator& mem) {
@@ -1074,13 +1023,19 @@ bool HgECS::register_component_untyped(
     if (system.sparse == nullptr)
         goto cleanup_sparse;
 
-    system.dense = system.dense.create(mem, 0, max_components).value_or(HgArray<HgEntity>{});
-    if (system.dense.items == nullptr)
-        goto cleanup_dense;
+    {
+        auto [success, arr] = system.dense.create(mem, 0, max_components);
+        if (!success)
+            goto cleanup_dense;
+        system.dense = arr;
+    }
 
-    system.components = system.components.create(mem, component_size, component_alignment, 0, max_components).value_or(HgArrayAny{});
-    if (system.components.items == nullptr)
-        goto cleanup_components;
+    {
+        auto [success, arr] = system.components.create(mem, component_size, component_alignment, 0, max_components);
+        if (!success)
+            goto cleanup_components;
+        system.components = arr;
+    }
 
     std::fill_n(system.sparse.data, system.sparse.count, (u32)-1);
     return true;
@@ -1242,9 +1197,12 @@ HgResourceManager* HgResourceManager::create(HgAllocator& mem, usize max_request
     if (rm == nullptr)
         goto cleanup_rm;
 
-    rm->request_queue = rm->request_queue.create(mem, max_requests).value_or(HgQueue<Request>{});
-    if (rm->request_queue.items == nullptr)
-        goto cleanup_queue;
+    {
+        auto [success, queue] = rm->request_queue.create(mem, max_requests);
+        if (!success)
+            goto cleanup_queue;
+        rm->request_queue = queue;
+    }
 
     rm->request_thread.should_close.store(false);
     rm->request_thread.is_working.store(false);
@@ -1270,15 +1228,15 @@ void HgResourceManager::request(const Request &request) {
 
     request_queue_mutex.lock();
     hg_assert(request_queue.has_space());
-    request_queue.push(request);
+    request_queue.push() = request;
     request_queue_mutex.unlock();
 }
 
 void hg_load_file_binary(HgFence* fence, HgAllocator& mem, HgFileBinary& file, HgStringView path) {
     auto fn = [](void*, HgAllocator* pmem, void* pfile, HgStringView fpath) {
-        HgFileBinary& file_data =* (HgFileBinary* )pfile;
+        HgFileBinary& file_data =* (HgFileBinary*)pfile;
 
-        char* cpath = (char* )alloca(fpath.count + 1);
+        char* cpath = (char*)alloca(fpath.count + 1);
         std::memcpy(cpath, fpath.data, fpath.count);
         cpath[fpath.count] = '\0';
 
@@ -1324,7 +1282,7 @@ void hg_load_file_binary(HgFence* fence, HgAllocator& mem, HgFileBinary& file, H
 
 void hg_unload_file_binary(HgFence* fence, HgAllocator& mem, HgFileBinary& file) {
     auto fn = [](void*, HgAllocator* pmem, void* pfile, HgStringView) {
-        HgFileBinary& file_data =* (HgFileBinary* )pfile;
+        HgFileBinary& file_data =* (HgFileBinary*)pfile;
         pmem->free_fn(file_data.data, file_data.size, alignof(std::max_align_t));
         file_data = {};
     };
@@ -1339,9 +1297,9 @@ void hg_unload_file_binary(HgFence* fence, HgAllocator& mem, HgFileBinary& file)
 
 void hg_store_file_binary(HgFence* fence, HgFileBinary& file, HgStringView path) {
     auto fn = [](void*, HgAllocator*, void* pfile, HgStringView fpath) {
-        HgFileBinary& file_data =* (HgFileBinary* )pfile;
+        HgFileBinary& file_data =* (HgFileBinary*)pfile;
 
-        char* cpath = (char* )alloca(fpath.count + 1);
+        char* cpath = (char*)alloca(fpath.count + 1);
         std::memcpy(cpath, fpath.data, fpath.count);
         cpath[fpath.count] = '\0';
 
@@ -1368,14 +1326,14 @@ void hg_store_file_binary(HgFence* fence, HgFileBinary& file, HgStringView path)
 
 void hg_load_image(HgFence* fence, HgAllocator& mem, HgImage& image, HgStringView path) {
     auto fn = [](void*, HgAllocator*, void* pimage, HgStringView fpath) {
-        HgImage& image_data =* (HgImage* )pimage;
+        HgImage& image_data =* (HgImage*)pimage;
 
-        char* cpath = (char* )alloca(fpath.count + 1);
+        char* cpath = (char*)alloca(fpath.count + 1);
         std::memcpy(cpath, fpath.data, fpath.count);
         cpath[fpath.count] = '\0';
 
         int channels;
-        image_data.pixels = stbi_load(cpath, (int* )&image_data.width, (int* )&image_data.height, &channels, 4);
+        image_data.pixels = stbi_load(cpath, (int*)&image_data.width, (int*)&image_data.height, &channels, 4);
         if (image_data.pixels == nullptr) {
             hg_warn("Failed to load image file: %s\n", cpath);
             image_data = {};
@@ -1396,7 +1354,7 @@ void hg_load_image(HgFence* fence, HgAllocator& mem, HgImage& image, HgStringVie
 
 void hg_unload_image(HgFence* fence, HgAllocator& mem, HgImage& image) {
     auto fn = [](void*, HgAllocator*, void* pimage, HgStringView) {
-        HgImage& image_data =* (HgImage* )pimage;
+        HgImage& image_data =* (HgImage*)pimage;
 
         free(image_data.pixels);
         image_data = {};
@@ -1412,9 +1370,9 @@ void hg_unload_image(HgFence* fence, HgAllocator& mem, HgImage& image) {
 
 void hg_store_image(HgFence* fence, HgImage& image, HgStringView path) {
     auto fn = [](void*, HgAllocator*, void* pimage, HgStringView fpath) {
-        HgImage& image_data =* (HgImage* )pimage;
+        HgImage& image_data =* (HgImage*)pimage;
 
-        char* cpath = (char* )alloca(fpath.count + 1);
+        char* cpath = (char*)alloca(fpath.count + 1);
         std::memcpy(cpath, fpath.data, fpath.count);
         cpath[fpath.count] = '\0';
 
@@ -1462,10 +1420,11 @@ void hg_graphics_init() {
 
     if (hg_vk_physical_device == nullptr) {
         hg_vk_physical_device = hg_vk_find_single_queue_physical_device();
-        hg_vk_queue_family =* hg_vk_find_queue_family(hg_vk_physical_device,
+        hg_vk_queue_family = hg_vk_find_queue_family(hg_vk_physical_device,
             VK_QUEUE_GRAPHICS_BIT |
             VK_QUEUE_TRANSFER_BIT |
-            VK_QUEUE_COMPUTE_BIT);
+            VK_QUEUE_COMPUTE_BIT)
+            .value();
     }
 
     if (hg_vk_device == nullptr) {
@@ -2656,7 +2615,7 @@ HgOption<u32> hg_vk_find_queue_family(VkPhysicalDevice gpu, VkQueueFlags queue_f
 
     u32 family_count = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, nullptr);
-    VkQueueFamilyProperties* families = (VkQueueFamilyProperties* )alloca(family_count * sizeof(*families));
+    VkQueueFamilyProperties* families = (VkQueueFamilyProperties*)alloca(family_count * sizeof(*families));
     vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, families);
 
     for (u32 i = 0; i < family_count; ++i) {
@@ -2664,7 +2623,7 @@ HgOption<u32> hg_vk_find_queue_family(VkPhysicalDevice gpu, VkQueueFlags queue_f
             return i;
         }
     }
-    return std::nullopt;
+    return hg_empty;
 }
 
 static const char* const hg_internal_vk_device_extensions[]{
@@ -2678,7 +2637,7 @@ VkPhysicalDevice hg_vk_find_single_queue_physical_device() {
 
     u32 gpu_count;
     vkEnumeratePhysicalDevices(hg_vk_instance, &gpu_count, nullptr);
-    VkPhysicalDevice* gpus = (VkPhysicalDevice* )alloca(gpu_count * sizeof(*gpus));
+    VkPhysicalDevice* gpus = (VkPhysicalDevice*)alloca(gpu_count * sizeof(*gpus));
     vkEnumeratePhysicalDevices(hg_vk_instance, &gpu_count, gpus);
 
     HgSpan<VkExtensionProperties> ext_props{};
@@ -2709,7 +2668,7 @@ next_ext:
             VK_QUEUE_GRAPHICS_BIT |
             VK_QUEUE_TRANSFER_BIT |
             VK_QUEUE_COMPUTE_BIT);
-        if (!family.has_value())
+        if (!family.has_value)
             goto next_gpu;
 
         return gpu;
@@ -2948,7 +2907,7 @@ static VkFormat hg_internal_vk_find_swapchain_format(VkSurfaceKHR surface) {
 
     u32 format_count = 0;
     vkGetPhysicalDeviceSurfaceFormatsKHR(hg_vk_physical_device, surface, &format_count, nullptr);
-    VkSurfaceFormatKHR* formats = (VkSurfaceFormatKHR* )alloca(format_count * sizeof(*formats));
+    VkSurfaceFormatKHR* formats = (VkSurfaceFormatKHR*)alloca(format_count * sizeof(*formats));
     vkGetPhysicalDeviceSurfaceFormatsKHR(hg_vk_physical_device, surface, &format_count, formats);
 
     for (usize i = 0; i < format_count; ++i) {
@@ -2972,7 +2931,7 @@ static VkPresentModeKHR hg_internal_vk_find_swapchain_present_mode(
 
     u32 mode_count = 0;
     vkGetPhysicalDeviceSurfacePresentModesKHR(hg_vk_physical_device, surface, &mode_count, nullptr);
-    VkPresentModeKHR* present_modes = (VkPresentModeKHR* )alloca(mode_count * sizeof(*present_modes));
+    VkPresentModeKHR* present_modes = (VkPresentModeKHR*)alloca(mode_count * sizeof(*present_modes));
     vkGetPhysicalDeviceSurfacePresentModesKHR(hg_vk_physical_device, surface, &mode_count, present_modes);
 
     for (usize i = 0; i < mode_count; ++i) {
@@ -3054,7 +3013,7 @@ HgSwapchainCommands HgSwapchainCommands::create(VkSwapchainKHR swapchain, VkComm
         sync.frame_count * sizeof(*sync.ready_to_present),
         16);
 
-    sync.cmds = (VkCommandBuffer* )allocation;
+    sync.cmds = (VkCommandBuffer*)allocation;
     VkCommandBufferAllocateInfo cmd_alloc_info{};
     cmd_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     cmd_alloc_info.pNext = nullptr;
@@ -3064,7 +3023,7 @@ HgSwapchainCommands HgSwapchainCommands::create(VkSwapchainKHR swapchain, VkComm
 
     vkAllocateCommandBuffers(hg_vk_device, &cmd_alloc_info, sync.cmds);
 
-    sync.frame_finished = (VkFence* )(sync.cmds + sync.frame_count);
+    sync.frame_finished = (VkFence*)(sync.cmds + sync.frame_count);
     for (usize i = 0; i < sync.frame_count; ++i) {
         VkFenceCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
@@ -3072,14 +3031,14 @@ HgSwapchainCommands HgSwapchainCommands::create(VkSwapchainKHR swapchain, VkComm
         vkCreateFence(hg_vk_device, &info, nullptr, &sync.frame_finished[i]);
     }
 
-    sync.image_available = (VkSemaphore* )(sync.frame_finished + sync.frame_count);
+    sync.image_available = (VkSemaphore*)(sync.frame_finished + sync.frame_count);
     for (usize i = 0; i < sync.frame_count; ++i) {
         VkSemaphoreCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
         vkCreateSemaphore(hg_vk_device, &info, nullptr, &sync.image_available[i]);
     }
 
-    sync.ready_to_present = (VkSemaphore* )(sync.image_available + sync.frame_count);
+    sync.ready_to_present = (VkSemaphore*)(sync.image_available + sync.frame_count);
     for (usize i = 0; i < sync.frame_count; ++i) {
         VkSemaphoreCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -3790,12 +3749,15 @@ HgOption<HgPipeline2D> HgPipeline2D::create(
     hg_assert(hg_vk_device != nullptr);
     hg_assert(color_format != VK_FORMAT_UNDEFINED);
 
-    HgOption<HgPipeline2D> pipeline{std::in_place};
+    HgOption<HgPipeline2D> pipeline;
+    pipeline.has_value = true;
 
-    pipeline->texture_sets = pipeline->texture_sets.create(mem, max_textures)
-        .value_or(HgHashMap<HgTexture*, VkDescriptorSet>{});
-    if (pipeline->texture_sets.slots == nullptr)
-        return std::nullopt;
+    {
+        auto [success, map] = pipeline->texture_sets.create(mem, max_textures);
+        if (!success)
+            return hg_empty;
+        pipeline->texture_sets = map;
+    }
 
     VkDescriptorSetLayoutBinding vp_bindings[1]{};
     vp_bindings[0].binding = 0;
@@ -3843,7 +3805,7 @@ HgOption<HgPipeline2D> HgPipeline2D::create(
     VkShaderModuleCreateInfo vertex_shader_info{};
     vertex_shader_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     vertex_shader_info.codeSize = sprite_vert_spv_size;
-    vertex_shader_info.pCode = (u32* )sprite_vert_spv;
+    vertex_shader_info.pCode = (u32*)sprite_vert_spv;
 
     VkShaderModule vertex_shader = nullptr;
     vkCreateShaderModule(hg_vk_device, &vertex_shader_info, nullptr, &vertex_shader);
@@ -3852,7 +3814,7 @@ HgOption<HgPipeline2D> HgPipeline2D::create(
     VkShaderModuleCreateInfo fragment_shader_info{};
     fragment_shader_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     fragment_shader_info.codeSize = sprite_frag_spv_size;
-    fragment_shader_info.pCode = (u32* )sprite_frag_spv;
+    fragment_shader_info.pCode = (u32*)sprite_frag_spv;
 
     VkShaderModule fragment_shader = nullptr;
     vkCreateShaderModule(hg_vk_device, &fragment_shader_info, nullptr, &fragment_shader);
@@ -4199,7 +4161,7 @@ KeySym XLookupKeysym(XKeyEvent* key_event, int index) {
     return hg_internal_x11_funcs.XLookupKeysym(key_event, index);
 }
 
-#define HG_LOAD_X11_FUNC(name)* (void** )&hg_internal_x11_funcs. name \
+#define HG_LOAD_X11_FUNC(name)* (void**)&hg_internal_x11_funcs. name \
     = dlsym(hg_internal_libx11, #name); \
     if (hg_internal_x11_funcs. name == nullptr) { hg_error("Could not load Xlib function: \n" #name); }
 
@@ -4885,11 +4847,11 @@ struct HgWindow::Internals {
 };
 
 static LRESULT CALLBACK hg_internal_window_callback(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
-    HgWindow::Internals* window = (HgWindow::Internals* )GetWindowLongPtrA(hwnd, GWLP_USERDATA);
+    HgWindow::Internals* window = (HgWindow::Internals*)GetWindowLongPtrA(hwnd, GWLP_USERDATA);
 
     switch (msg) {
         case WM_NCCREATE:
-            SetWindowLongPtrA(hwnd, GWLP_USERDATA, (LONG_PTR)(((CREATESTRUCTA* )lparam)->lpCreateParams));
+            SetWindowLongPtrA(hwnd, GWLP_USERDATA, (LONG_PTR)(((CREATESTRUCTA*)lparam)->lpCreateParams));
             break;
         case WM_CLOSE:
             window->input.was_closed = true;
@@ -5458,14 +5420,14 @@ void hg_vulkan_init() {
     if (hg_internal_libvulkan == nullptr)
         hg_error("Could not load vulkan dynamic lib: %s\n", dlerror());
 
-    *(void** )&hg_internal_vulkan_funcs.vkGetInstanceProcAddr = dlsym(hg_internal_libvulkan, "vkGetInstanceProcAddr");
+    *(void**)&hg_internal_vulkan_funcs.vkGetInstanceProcAddr = dlsym(hg_internal_libvulkan, "vkGetInstanceProcAddr");
     if (hg_internal_vulkan_funcs.vkGetInstanceProcAddr == nullptr)
         hg_error("Could not load vkGetInstanceProcAddr: %s\n", dlerror());
 
 #elif defined(HG_PLATFORM_WINDOWS)
 
     if (hg_internal_libvulkan == nullptr)
-        hg_internal_libvulkan = (void* )LoadLibraryA("vulkan-1.dll");
+        hg_internal_libvulkan = (void*)LoadLibraryA("vulkan-1.dll");
     if (hg_internal_libvulkan == nullptr)
         hg_error("Could not load vulkan dynamic lib\n");
 
