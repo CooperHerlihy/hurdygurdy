@@ -44,8 +44,6 @@
 #include <mutex>
 #include <thread>
 
-#include <emmintrin.h>
-
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
 
