@@ -3794,6 +3794,14 @@ struct HgFence {
     void add();
 
     /**
+     * Add more events for the fence to wait on
+     *
+     * Parameters
+     * - count The number of added events
+     */
+    void add(usize count);
+
+    /**
      * Signal that an event has completed
      */
     void signal();
@@ -3944,21 +3952,10 @@ struct HgThreadPool {
      *
      * Parameters
      * - fence The fence to signal upon completion, may be nullptr
+     * - data The data passed to the function
      * - work The function to be executed
      */
     void call_par(HgFence* fence, void* data, void (*fn)(void*));
-
-    /**
-     * Iterates in parallel over a function n times in chunks
-     *
-     * Note, uses a fence internally to wait for all work to complete
-     *
-     * Parameters
-     * - count The number of elements to iterate [0, count)
-     * - chunk_size The number of elementes to iterate per parallel execution
-     * - fn The function to use to iterate, takes begin and end indices
-     */
-    void for_par(usize count, usize chunk_size, void* data, void (*fn)(void*, usize begin, usize end));
 
     /**
      * Request to operate on a resource
@@ -3980,6 +3977,56 @@ struct HgThreadPool {
      * - false if the timeout was reached
      */
     bool help(HgFence& fence, f64 timeout_seconds);
+
+    /**
+     * Iterates in parallel over a function n times
+     *
+     * Note, uses a fence internally to wait for all work to complete
+     *
+     * Parameters
+     * - count The number of elements to iterate [0, count)
+     * - chunk_size The number of elements to iterate per chunk
+     * - fn The function to use to iterate, takes begin and end indicces
+     */
+    template<typename F>
+    void for_par(usize count, usize chunk_size, F fn) {
+        static_assert(std::is_invocable_r_v<void, F, usize, usize>);
+
+        struct Capture {
+            F* fn;
+            usize begin;
+            usize end;
+        };
+        HgSpan<Capture> captures;
+        captures.count = (usize)std::ceil((f32)count / (f32)chunk_size);
+        captures.data = (Capture*)alloca(captures.count * sizeof(Capture));
+
+        usize i = 0;
+        for (auto& capture : captures) {
+            capture.fn = &fn;
+            capture.begin = i;
+            capture.end = std::min(i + chunk_size, count);
+            i += chunk_size;
+        }
+
+        auto fn_iter = [](void* pcapture) {
+            Capture& capture = *(Capture*)pcapture;
+            (*capture.fn)(capture.begin, capture.end);
+        };
+
+        HgFence fence;
+        fence.add(captures.count);
+
+        work_mtx.lock();
+        hg_assert(!work_queue.is_full());
+        for (auto& capture : captures) {
+            work_queue.push() = {&fence, &capture, fn_iter};
+        }
+        work_mtx.unlock();
+        work_cv.notify_all();
+
+        help(fence, INFINITY);
+    }
 };
 
 /**
@@ -4736,25 +4783,15 @@ struct HgECS {
         static_assert(hg_is_memmove_safe<T>);
         static_assert(std::is_invocable_r_v<void, Fn, HgEntity&, T&>);
 
-        struct Capture {
-            Component& system;
-            Fn& function;
-        } capture {
-            systems[hg_component_id<T>], fn,
-        };
-
-        auto fn_it = [](void* pcapture, usize begin, usize end) {
-            auto& [system, function] = *(Capture*)pcapture;
-
+        Component& system = systems[hg_component_id<T>];
+        hg_threads->for_par(system.dense.count, chunk_size, [&](usize begin, usize end) {
             HgEntity* e_begin = system.dense.items + begin;
             HgEntity* e_end = system.dense.items + end;
             T* c_begin = (T*)system.components[begin];
             for (; e_begin != e_end; ++e_begin, ++c_begin) {
-                function(*e_begin,* c_begin);
+                fn(*e_begin,* c_begin);
             }
-        };
-
-        hg_threads->for_par(capture.system.dense.count, chunk_size, &capture, fn_it);
+        });
     }
 
     /**
@@ -4771,27 +4808,15 @@ struct HgECS {
     void for_each_par_multi(u32 chunk_size, Fn& fn) {
         static_assert(std::is_invocable_r_v<void, Fn, HgEntity&, Ts&...>);
 
-        struct Capture {
-            HgECS& ecs;
-            u32 id;
-            Fn& function;
-        } capture {
-            *this, smallest_system<Ts...>(), fn,
-        };
-
-
-        auto fn_it = [](void *pcapture, usize begin, usize end) {
-            auto& [ecs, id, function] = *(Capture*)pcapture;
-
-            HgEntity* e_begin = ecs.systems[id].dense.items + begin;
-            HgEntity* e_end = ecs.systems[id].dense.items + end;
+        u32 id = smallest_system<Ts...>();
+        hg_threads->for_par(component_count(id), chunk_size, [&](usize begin, usize end) {
+            HgEntity* e_begin = systems[id].dense.items + begin;
+            HgEntity* e_end = systems[id].dense.items + end;
             for (; e_begin != e_end; ++e_begin) {
-                if (ecs.template has_all<Ts...>(*e_begin))
-                    function(*e_begin, ecs.template get<Ts>(*e_begin)...);
+                if (has_all<Ts...>(*e_begin))
+                    fn(*e_begin, get<Ts>(*e_begin)...);
             }
-        };
-
-        hg_threads->for_par(component_count(capture.id), chunk_size, &capture, fn_it);
+        });
     }
 
     /**

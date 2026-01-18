@@ -1088,17 +1088,14 @@ hg_test(hg_thread_pool) {
     HgFence fence;
     {
         bool a = false;
-        auto a_fn = [](void *pa) {
-            *(bool*)pa = true;
-        };
-
         bool b = false;
-        auto b_fn = [](void *pb) {
-            *(bool*)pb = true;
-        };
 
-        threads->call_par(&fence, &a, a_fn);
-        threads->call_par(&fence, &b, b_fn);
+        threads->call_par(&fence, &a, [](void *pa) {
+            *(bool*)pa = true;
+        });
+        threads->call_par(&fence, &b, [](void *pb) {
+            *(bool*)pb = true;
+        });
 
         hg_test_assert(fence.wait(2.0));
 
@@ -1144,49 +1141,12 @@ hg_test(hg_thread_pool) {
     {
         bool vals[100] = {};
 
-        auto iter = [](void* pvals, usize begin, usize end) {
-            hg_assert(begin < end && end <= hg_countof(vals));
-            for (; begin < end; ++begin) {
-                (*(decltype(vals)*)pvals)[begin] = true;
-            }
-        };
-
-        threads->for_par(hg_countof(vals), 16, &vals, iter);
-
-        for (bool& val : vals) {
-            hg_test_assert(val == true);
-        }
-    }
-
-    {
-        bool vals[100] = {};
-
-        auto iter = [](void* data, usize begin, usize end) {
-            hg_assert(begin < end && end <= hg_countof(vals));
-            for (; begin < end; ++begin) {
-                (*(decltype(vals)*)data)[begin] = true;
-            }
-        };
-
-        threads->for_par(hg_countof(vals), 16, &vals, iter);
-
-        for (bool& val : vals) {
-            hg_test_assert(val == true);
-        }
-    }
-
-    {
-        bool vals[100] = {};
-
-        auto fn_obj = hg_function<void(usize, usize)>(mem, [&](usize begin, usize end) {
+        threads->for_par(hg_countof(vals), 16, [&](usize begin, usize end) {
             hg_assert(begin < end && end <= hg_countof(vals));
             for (; begin < end; ++begin) {
                 vals[begin] = true;
             }
-        }).value();
-        hg_defer(fn_obj.destroy(mem));
-
-        threads->for_par(hg_countof(vals), 16, fn_obj.capture.data, fn_obj.fn);
+        });
 
         for (bool& val : vals) {
             hg_test_assert(val == true);

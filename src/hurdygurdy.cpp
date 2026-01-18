@@ -763,6 +763,10 @@ void HgFence::add() {
     ++counter;
 }
 
+void HgFence::add(usize count) {
+    counter.fetch_add(count);
+}
+
 void HgFence::signal() {
     // mtx.lock();
     --counter;
@@ -906,26 +910,6 @@ void HgThreadPool::call_par(HgFence* fence, void* data, void (*fn)(void*)) {
     work_queue.push() = {fence, data, fn};
     work_mtx.unlock();
     work_cv.notify_one();
-}
-
-void HgThreadPool::for_par(usize count, usize chunk_size, void* data, void (*fn)(void*, usize begin, usize end)) {
-    static constexpr auto fn_work = [data_dummy = nullptr, fn_dummy = nullptr, begin = (usize)0, end = (usize)0]() {
-        (void)data_dummy, (void)fn_dummy, (void)begin, (void)end;
-    };
-    usize mem_size = (usize)std::ceil((f64)count / (f64)chunk_size) * sizeof(fn_work);
-
-    HgArena arena{};
-    arena.memory = alloca(mem_size);
-    arena.capacity = mem_size;
-
-    HgFence fence;
-    for (usize i = 0; i < count; i += chunk_size) {
-        auto fn_obj = hg_function<void()>(arena, [data, fn, begin = i, end = std::min(count, i + chunk_size)]() {
-            fn(data, begin, end);
-        }).value();
-        call_par(&fence, fn_obj.capture.data, fn_obj.fn);
-    }
-    fence.wait(INFINITY);
 }
 
 void HgThreadPool::io_par(const IORequest& request) {
