@@ -1080,7 +1080,7 @@ hg_test(hg_function) {
 hg_test(hg_thread_pool) {
     HgStdAllocator mem;
 
-    HgThreadPool* threads = HgThreadPool::create(mem, std::thread::hardware_concurrency() - 1, 128, 128);
+    HgThreadPool* threads = HgThreadPool::create(mem, std::thread::hardware_concurrency() - 1, 128);
     hg_defer(HgThreadPool::destroy(mem, threads));
 
     hg_assert(threads != nullptr);
@@ -1097,7 +1097,7 @@ hg_test(hg_thread_pool) {
             *(bool*)pb = true;
         });
 
-        hg_test_assert(fence.wait(2.0));
+        fence.wait();
 
         hg_test_assert(a == true);
         hg_test_assert(b == true);
@@ -1150,6 +1150,78 @@ hg_test(hg_thread_pool) {
 
         for (bool& val : vals) {
             hg_test_assert(val == true);
+        }
+    }
+
+    return true;
+}
+
+hg_test(hg_io_thread) {
+    HgStdAllocator mem;
+
+    HgIOThread* io = HgIOThread::create(mem, 128);
+    hg_defer(HgIOThread::destroy(mem, io));
+
+    hg_test_assert(io != nullptr);
+
+    HgFence fence;
+    {
+        bool vals[100] = {};
+
+        HgIOThread::Request request;
+        request.fence = &fence;
+        request.resource = vals;
+        request.fn = [](void*, HgAllocator*, void* pval, HgStringView) {
+            HgSpan<bool> span = {(bool*)pval, hg_countof(vals)};
+            for (auto& val : span) {
+                val = true;
+            }
+        };
+        io->request(request);
+
+        fence.wait();
+        for (usize i = 0; i < hg_countof(vals); ++i) {
+            hg_test_assert(vals[i] == true);
+        }
+    }
+
+    {
+        bool vals[100] = {};
+
+        for (usize i = 0; i < hg_countof(vals); ++i) {
+            HgIOThread::Request request;
+            request.fence = &fence;
+            request.resource = &vals[i];
+            request.fn = [](void*, HgAllocator*, void* pval, HgStringView) {
+                *(bool*)pval = true;
+            };
+            io->request(request);
+        }
+
+        fence.wait();
+        for (usize i = 0; i < hg_countof(vals); ++i) {
+            hg_test_assert(vals[i] == true);
+        }
+    }
+
+    {
+        bool vals[100] = {};
+
+        vals[0] = true;
+
+        for (usize i = 1; i < hg_countof(vals); ++i) {
+            HgIOThread::Request request;
+            request.fence = &fence;
+            request.resource = &vals[i];
+            request.fn = [](void*, HgAllocator*, void* pval, HgStringView) {
+                *(bool*)pval = *((bool*)pval - 1);
+            };
+            io->request(request);
+        }
+
+        fence.wait();
+        for (usize i = 0; i < hg_countof(vals); ++i) {
+            hg_test_assert(vals[i] == true);
         }
     }
 
@@ -1478,7 +1550,7 @@ hg_test(hg_file_binary) {
     HgFence fence;
     {
         hg_load_file_binary(&fence, mem, file, "file_does_not_exist.bin");
-        hg_test_assert(fence.wait(2.0));
+        fence.wait();
 
         hg_test_assert(file.data == nullptr);
         hg_test_assert(file.size == 0);
@@ -1489,7 +1561,7 @@ hg_test(hg_file_binary) {
         file.size = sizeof(save_data);
 
         hg_store_file_binary(&fence, file, "dir/does/not/exist.bin");
-        hg_test_assert(fence.wait(2.0));
+        fence.wait();
 
         FILE* file_handle = std::fopen("dir/does/not/exist.bin", "rb");
         hg_test_assert(file_handle == nullptr);
@@ -1501,7 +1573,7 @@ hg_test(hg_file_binary) {
 
         hg_store_file_binary(&fence, file, file_path);
         hg_load_file_binary(&fence, mem, file, file_path);
-        hg_test_assert(fence.wait(2.0));
+        fence.wait();
 
         hg_test_assert(file.data != nullptr);
         hg_test_assert(file.data != save_data);
@@ -1510,7 +1582,7 @@ hg_test(hg_file_binary) {
 
         hg_unload_file_binary(&fence, mem, file);
     }
-    hg_test_assert(fence.wait(2.0));
+    fence.wait();
 
     return true;
 }
@@ -1551,7 +1623,7 @@ hg_test(hg_image) {
 
         hg_store_image(&fence, file, file_path);
         hg_load_image(&fence, mem, file, file_path);
-        hg_test_assert(fence.wait(INFINITY));
+        fence.wait();
 
         hg_test_assert(file.pixels != nullptr);
         hg_test_assert(file.pixels != save_data);
@@ -1564,7 +1636,7 @@ hg_test(hg_image) {
 
         hg_unload_image(&fence, mem, file);
     }
-    hg_test_assert(fence.wait(INFINITY));
+    fence.wait();
 
     return true;
 }

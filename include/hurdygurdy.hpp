@@ -3777,14 +3777,6 @@ struct HgFence {
      * The number of events the fence is waiting on
      */
     std::atomic<u64> counter{0};
-    /**
-     * The mutex to sync between threads
-     */
-    std::mutex mtx{};
-    /**
-     * The cond var to wait and notify on
-     */
-    std::condition_variable cv{};
 
     /**
      * Add another event for the fence to wait on
@@ -3811,15 +3803,8 @@ struct HgFence {
 
     /**
      * Waits for all work submissions to be completed
-     *
-     * Parameters
-     * - timeout_seconds The time in seconds to wait before timing out
-     *
-     * Returns
-     * - true if all work completed
-     * - false if the timeout was reached
      */
-    bool wait(f64 timeout_seconds);
+    void wait();
 };
 
 /**
@@ -3845,9 +3830,148 @@ struct HgThreadPool {
     };
 
     /**
+     * A signal to all threads to close
+     */
+    std::atomic_bool should_close;
+    /**
+     * The threads in the pool
+     */
+    HgSpan<std::thread> threads;
+    /**
+     * Mutex to protect work queue
+     */
+    std::mutex mtx;
+    /**
+     * Condition variable to signal workers
+     */
+    std::condition_variable cv;
+    /**
+     * The queue of work to be executed
+     */
+    HgQueue<Work> queue;
+    /**
+     * The number of work calls available
+     */
+    std::atomic<usize> count;
+
+    /**
+     * Creates a new thread pool
+     *
+     * Note, thread_count is allocated:
+     * - 1 io thread
+     * - Rest worker threads
+     *
+     * Parameters
+     * - mem The allocator to use
+     * - thread_count The number of threads to spawn (recommended hardware - 1)
+     * - queue_size The max capacity of the work queue
+     *
+     * Returns
+     * - The created thread pool
+     * - nullptr on failure
+     */
+    static HgThreadPool* create(HgAllocator& mem, usize thread_count, usize queue_size);
+
+    /**
+     * Destroys the thread pool
+     */
+    static void destroy(HgAllocator& mem, HgThreadPool* pool);
+
+    /**
+     * Pushes work to the queue to be executed
+     *
+     * Parameters
+     * - fence The fence to signal upon completion, may be nullptr
+     * - data The data passed to the function
+     * - work The function to be executed
+     */
+    void call_par(HgFence* fence, void* data, void (*fn)(void*));
+
+    /**
+     * Try to steal work if all threads are working
+     */
+    void try_steal();
+
+    /**
+     * Wait on the fence, and help complete work in the meantime
+     *
+     * Parameters
+     * - fence The fence to wait on
+     * - timeout_seconds The max time to spend working
+     *
+     * Returns
+     * - true if the fence was completed
+     * - false if the timeout was reached
+     */
+    bool help(HgFence& fence, f64 timeout_seconds);
+
+    /**
+     * Iterates in parallel over a function n times
+     *
+     * Note, uses a fence internally to wait for all work to complete
+     *
+     * Parameters
+     * - n The number of elements to iterate [0, count)
+     * - chunk_size The number of elements to iterate per chunk
+     * - fn The function to use to iterate, takes begin and end indicces
+     */
+    template<typename F>
+    void for_par(usize n, usize chunk_size, F fn) {
+        static_assert(std::is_invocable_r_v<void, F, usize, usize>);
+
+        struct Capture {
+            F* fn;
+            usize begin;
+            usize end;
+        };
+        HgSpan<Capture> captures;
+        captures.count = (usize)std::ceil((f32)n / (f32)chunk_size);
+        captures.data = (Capture*)alloca(captures.count * sizeof(Capture));
+
+        usize i = 0;
+        for (auto& capture : captures) {
+            capture.fn = &fn;
+            capture.begin = i;
+            capture.end = std::min(i + chunk_size, n);
+            i += chunk_size;
+        }
+
+        auto fn_iter = [](void* pcapture) {
+            Capture& capture = *(Capture*)pcapture;
+            (*capture.fn)(capture.begin, capture.end);
+        };
+
+        HgFence fence;
+        fence.add(captures.count);
+
+        mtx.lock();
+        hg_assert(!queue.is_full());
+        for (auto& capture : captures) {
+            queue.push() = {&fence, &capture, fn_iter};
+        }
+        count.fetch_add(captures.count);
+        mtx.unlock();
+        cv.notify_all();
+
+        help(fence, INFINITY);
+    }
+};
+
+/**
+ * A global thread pool
+ */
+inline HgThreadPool* hg_threads = nullptr;
+
+/**
+ * A thread dedicated to blocking IO
+ *
+ * When idle, steals work from hg_threads
+ */
+struct HgIOThread {
+    /**
      * Work specialized for blocking IO
      */
-    struct IORequest {
+    struct Request {
         /**
          * The fence to signal on completion
          */
@@ -3875,85 +3999,43 @@ struct HgThreadPool {
     };
 
     /**
-     * A signal to all threads to close
+     * A signal to the thread to close
      */
-    bool should_close;
+    std::atomic_bool should_close;
     /**
-     * The threads in the pool
+     * The thread handle
      */
-    HgSpan<std::thread> work_threads;
+    std::thread thread;
     /**
-     * A thread dedicated to blocking io
+     * Mutex to protect the queue
      */
-    std::thread io_thread;
+    std::mutex mtx;
     /**
-     * Mutex to protect work queue
+     * The request queue
      */
-    std::mutex work_mtx;
+    HgQueue<Request> queue;
     /**
-     * Condition variable to signal workers
+     * The number of available requests
      */
-    std::condition_variable work_cv;
-    /**
-     * The queue of work to be executed
-     */
-    HgQueue<Work> work_queue;
-    /**
-     * Mutex to protect io queue
-     */
-    std::mutex io_mtx;
-    /**
-     * Condition variable to signal the io thread
-     */
-    std::condition_variable io_cv;
-    /**
-     * The dedicated queue for io requests
-     */
-    HgQueue<IORequest> io_queue;
+    std::atomic<usize> count;
 
     /**
      * Creates a new thread pool
      *
-     * Note, thread_count is allocated:
-     * - 1 io thread
-     * - Rest worker threads
-     *
      * Parameters
      * - mem The allocator to use
-     * - thread_count The number of threads to spawn (recommended hardware - 1)
+     * - queue_size The max capacity of the request queue
      *
      * Returns
-     * - The created thread pool
+     * - The created io thread
      * - nullptr on failure
      */
-    static HgThreadPool* create(HgAllocator& mem, usize thread_count, usize queue_size, usize io_queue_size);
+    static HgIOThread* create(HgAllocator& mem, usize queue_size);
 
     /**
-     * Destroys the thread pool
+     * Destroys the io thread
      */
-    static void destroy(HgAllocator& mem, HgThreadPool* pool);
-
-    /**
-     * Waits for all thread submissions to be completed
-     *
-     * Parameters
-     * - timeout_seconds The time in seconds to wait before timing out
-     *
-     * Returns
-     * - true if all threads completed
-     * - false if the timeout was reached
-     */
-    bool wait_idle(f64 timeout_seconds);
-
-    /**
-     * Pushes work to the queue to be executed
-     *
-     * Parameters
-     * - fence The fence to signal upon completion, may be nullptr
-     * - data The data passed to the function
-     * - work The function to be executed
-     */
-    void call_par(HgFence* fence, void* data, void (*fn)(void*));
+    static void destroy(HgAllocator& mem, HgIOThread* thread);
 
     /**
      * Request to operate on a resource
@@ -3961,76 +4043,13 @@ struct HgThreadPool {
      * Parameters
      * - request The request to make
      */
-    void io_par(const IORequest& request);
-
-    /**
-     * Wait on the fence, and help complete work in the meantime
-     *
-     * Parameters
-     * - fence The fence to wait on
-     * - timeout_seconds The max time to spend working
-     *
-     * Returns
-     * - true if the fence was completed
-     * - false if the timeout was reached
-     */
-    bool help(HgFence& fence, f64 timeout_seconds);
-
-    /**
-     * Iterates in parallel over a function n times
-     *
-     * Note, uses a fence internally to wait for all work to complete
-     *
-     * Parameters
-     * - count The number of elements to iterate [0, count)
-     * - chunk_size The number of elements to iterate per chunk
-     * - fn The function to use to iterate, takes begin and end indicces
-     */
-    template<typename F>
-    void for_par(usize count, usize chunk_size, F fn) {
-        static_assert(std::is_invocable_r_v<void, F, usize, usize>);
-
-        struct Capture {
-            F* fn;
-            usize begin;
-            usize end;
-        };
-        HgSpan<Capture> captures;
-        captures.count = (usize)std::ceil((f32)count / (f32)chunk_size);
-        captures.data = (Capture*)alloca(captures.count * sizeof(Capture));
-
-        usize i = 0;
-        for (auto& capture : captures) {
-            capture.fn = &fn;
-            capture.begin = i;
-            capture.end = std::min(i + chunk_size, count);
-            i += chunk_size;
-        }
-
-        auto fn_iter = [](void* pcapture) {
-            Capture& capture = *(Capture*)pcapture;
-            (*capture.fn)(capture.begin, capture.end);
-        };
-
-        HgFence fence;
-        fence.add(captures.count);
-
-        work_mtx.lock();
-        hg_assert(!work_queue.is_full());
-        for (auto& capture : captures) {
-            work_queue.push() = {&fence, &capture, fn_iter};
-        }
-        work_mtx.unlock();
-        work_cv.notify_all();
-
-        help(fence, INFINITY);
-    }
+    void request(const Request& request);
 };
 
 /**
- * A global thread pool
+ * A global io thread
  */
-inline HgThreadPool* hg_threads = nullptr;
+inline HgIOThread* hg_io;
 
 /**
  * The handle for an ECS entity
