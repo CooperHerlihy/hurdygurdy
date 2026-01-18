@@ -926,15 +926,9 @@ HgIOThread* HgIOThread::create(HgAllocator& mem, usize queue_size) {
                 return;
 
             io->mtx.lock();
-
-            if (io->count.load() == 0) {
-                io->mtx.unlock();
-                continue;
-            }
-
+            hg_assert(io->count.load() > 0);
             Request request = io->queue.pop();
             --io->count;
-
             io->mtx.unlock();
 
             hg_assert(request.fn != nullptr);
