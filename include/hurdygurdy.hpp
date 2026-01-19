@@ -2850,9 +2850,6 @@ struct HgQueue {
      * Push an item to the end to the queue
      *
      * Note, space must be available
-     *
-     * Parameters
-     * - args The arguments to use to construct the new item, if any
      */
     constexpr T& push() {
         hg_assert(!is_full());
@@ -2872,6 +2869,181 @@ struct HgQueue {
         T ret = items[tail];
         tail = (tail + 1) % capacity;
         return ret;
+    }
+};
+
+/**
+ * A multi producer, multi consumer, lock free ring buffer queue
+ *
+ * Note, multi consumer is supported, but FIFO is only guaranteed with single
+ */
+template<typename T>
+struct HgMPMCQueue {
+    /**
+     * The statuses each item could be in
+     */
+    enum Status : u8 {
+        /**
+         * The slot does not contain an item
+         */
+        STATUS_EMPTY,
+        /**
+         * The slot is currently being pushed to
+         */
+        STATUS_WRITING,
+        /**
+         * The slot contains an item and is ready to be popped
+         */
+        STATUS_READY,
+        /**
+         * The slot is currently begin popped from
+         */
+        STATUS_READING,
+    };
+
+    /**
+     * The status of each item
+     */
+    HgSpan<std::atomic<Status>> item_status;
+    /**
+     * The allocated space for the queue
+     */
+    T* items;
+    /**
+     * The max number of items that can be stored in the queue
+     */
+    usize capacity;
+    /**
+     * The end of the queue, where items are added
+     */
+    std::atomic<usize> head;
+    /**
+     * The beginning of the queue, where items are removed
+     */
+    std::atomic<usize> tail;
+
+    /**
+     * Allocate a new dynamic queue
+     *
+     * Parameters
+     * - mem The allocator to use
+     * - capacity The max number of items before reallocating
+     *
+     * Returns
+     * - The allocated dynamic queue
+     * - nullopt if allocation failed
+     */
+    static HgMPMCQueue* create(HgAllocator& mem, usize capacity) {
+        hg_assert(capacity > 1);
+
+        HgMPMCQueue* queue = mem.alloc<HgMPMCQueue>();
+        if (queue == nullptr)
+            goto cleanup_queue;
+
+        queue->item_status = mem.alloc<std::atomic<Status>>(capacity);
+        if (queue->item_status == nullptr)
+            goto cleanup_status;
+
+        queue->items = (T*)mem.alloc_fn(capacity * sizeof(T), alignof(T));
+        if (queue->items == nullptr)
+            goto cleanup_items;
+
+        queue->capacity = capacity;
+
+        queue->reset();
+        return queue;
+
+cleanup_items:
+        mem.free(queue->item_status);
+cleanup_status:
+        mem.free(queue);
+cleanup_queue:
+        return nullptr;
+    }
+
+    /**
+     * Free the dynamic queue
+     *
+     * Note, this is not thread safe
+     */
+    static void destroy(HgAllocator& mem, HgMPMCQueue* queue) {
+        mem.free_fn(queue->items, queue->capacity * sizeof(T), alignof(T));
+    }
+
+    /**
+     * Removes all contained objects, emptying the queue
+     *
+     * Note, this is not thread safe
+     */
+    constexpr void reset() {
+        head.store(0);
+        tail.store(0);
+        for (auto& status : item_status) {
+            status.store(STATUS_EMPTY);
+        }
+    }
+
+    /**
+     * Push an item to the end to the queue
+     *
+     * Note, space must be available
+     *
+     * Parameters
+     * - item The item to copy onto the queue
+     */
+    constexpr void push(const T& item) {
+        usize idx = head.load();
+        for (;;) {
+            Status status = item_status[idx].load();
+            if (status == STATUS_EMPTY && item_status[idx].compare_exchange_strong(status, STATUS_WRITING))
+                break;
+            idx = (idx + 1) % capacity;
+            hg_assert(idx != tail.load());
+        }
+
+        new (items + idx) T{item};
+        item_status[idx].store(STATUS_READY);
+
+        usize head_current = head.load();
+        while (item_status[head_current].load() == STATUS_READY) {
+            usize head_next = (head_current + 1) % capacity;
+            head.compare_exchange_strong(head_current, head_next);
+            head_current = head_next;
+        }
+    }
+
+    /**
+     * Pops an item off the end of the queue
+     *
+     * Parameters
+     * - item A reference to store the popped item, if available
+     *
+     * Returns
+     * - Whether an item could be popped
+     */
+    bool pop(T& item) {
+        usize idx = tail.load();
+        for (;;) {
+            if (idx == head.load())
+                return false;
+            Status status = item_status[idx].load();
+            if (status == STATUS_EMPTY || status == STATUS_WRITING)
+                return false;
+            if (status == STATUS_READY && item_status[idx].compare_exchange_strong(status, STATUS_READING))
+                break;
+            idx = (idx + 1) % capacity;
+        }
+
+        item = items[idx];
+        item_status[idx].store(STATUS_EMPTY);
+
+        usize tail_current = tail.load();
+        while (item_status[tail_current].load() == STATUS_EMPTY && tail_current != head.load()) {
+            usize tail_next = (tail_current + 1) % capacity;
+            tail.compare_exchange_strong(tail_current, tail_next);
+            tail_current = tail_next;
+        }
+        return true;
     }
 };
 
@@ -3838,7 +4010,7 @@ struct HgThreadPool {
      */
     HgSpan<std::thread> threads;
     /**
-     * Mutex to protect work queue
+     * Mutex to sleep with cv
      */
     std::mutex mtx;
     /**
@@ -3848,9 +4020,9 @@ struct HgThreadPool {
     /**
      * The queue of work to be executed
      */
-    HgQueue<Work> queue;
+    HgMPMCQueue<Work>* queue;
     /**
-     * The number of work calls available
+     * The available work count
      */
     std::atomic<usize> count;
 
@@ -3944,12 +4116,15 @@ struct HgThreadPool {
         HgFence fence;
         fence.add(captures.count);
 
-        mtx.lock();
-        hg_assert(!queue.is_full());
         for (auto& capture : captures) {
-            queue.push() = {&fence, &capture, fn_iter};
+            Work work;
+            work.fence = &fence;
+            work.data = &capture;
+            work.fn = fn_iter;
+            queue->push(work);
+            ++count;
         }
-        count.fetch_add(captures.count);
+        mtx.lock();
         mtx.unlock();
         cv.notify_all();
 
@@ -4007,17 +4182,9 @@ struct HgIOThread {
      */
     std::thread thread;
     /**
-     * Mutex to protect the queue
-     */
-    std::mutex mtx;
-    /**
      * The request queue
      */
-    HgQueue<Request> queue;
-    /**
-     * The number of available requests
-     */
-    std::atomic<usize> count;
+    HgMPMCQueue<Request>* queue;
 
     /**
      * Creates a new thread pool
@@ -4932,7 +5099,6 @@ void hg_store_file_binary(HgFence* fence, HgFileBinary& file, HgStringView path)
 
 // text files : TODO
 // json files : TODO
-// image files : TODO
 // 3d model files : TODO
 // audio files : TODO
 

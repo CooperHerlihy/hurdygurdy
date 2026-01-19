@@ -8,4 +8,4 @@
 -fno-rtti
 -Iinclude
 -Ivendor/libX11/include
--Ibuild/shaders
+-Ibuild

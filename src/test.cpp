@@ -1,5 +1,7 @@
 #include "hurdygurdy.hpp"
 
+#include <emmintrin.h>
+
 int main(void) {
     hg_defer(hg_info("Exited successfully\n"));
 
@@ -489,10 +491,10 @@ hg_test(hg_queue) {
     HgQueue<u32> queue = queue.create(mem, 8).value();
     hg_defer(queue.destroy(mem));
 
-    hg_assert(queue.items != nullptr);
-    hg_assert(queue.capacity == 8);
-    hg_assert(queue.head == 0);
-    hg_assert(queue.tail == 0);
+    hg_test_assert(queue.items != nullptr);
+    hg_test_assert(queue.capacity == 8);
+    hg_test_assert(queue.head == 0);
+    hg_test_assert(queue.tail == 0);
 
     for (usize i = 0; i < 16; ++i) {
         for (u32 j = 0; j < 7; ++j) {
@@ -518,6 +520,113 @@ hg_test(hg_queue) {
         hg_test_assert(queue.pop() == 9);
 
         hg_test_assert(queue.count() == 0);
+    }
+
+    return true;
+}
+
+hg_test(hg_mpmc_queue) {
+    HgStdAllocator mem;
+
+    {
+        HgMPMCQueue<u32>* queue = HgMPMCQueue<u32>::create(mem, 8);
+        hg_defer(HgMPMCQueue<u32>::destroy(mem, queue));
+
+        hg_test_assert(queue != nullptr);
+        hg_test_assert(queue->items != nullptr);
+        hg_test_assert(queue->capacity == 8);
+        hg_test_assert(queue->head == 0);
+        hg_test_assert(queue->tail == 0);
+
+        u32 item;
+
+        for (usize i = 0; i < 4; ++i) {
+            for (u32 j = 0; j < 7; ++j) {
+                queue->push(j);
+            }
+
+            hg_test_assert(queue->pop(item) && item == 0);
+            hg_test_assert(queue->pop(item) && item == 1);
+            hg_test_assert(queue->pop(item) && item == 2);
+            hg_test_assert(queue->pop(item) && item == 3);
+
+            for (u32 j = 7; j < 10; ++j) {
+                queue->push(j);
+            }
+
+            hg_test_assert(queue->pop(item) && item == 4);
+            hg_test_assert(queue->pop(item) && item == 5);
+            hg_test_assert(queue->pop(item) && item == 6);
+            hg_test_assert(queue->pop(item) && item == 7);
+            hg_test_assert(queue->pop(item) && item == 8);
+            hg_test_assert(queue->pop(item) && item == 9);
+        }
+    }
+
+    {
+        HgMPMCQueue<u32>* queue = HgMPMCQueue<u32>::create(mem, 128);
+        hg_defer(HgMPMCQueue<u32>::destroy(mem, queue));
+
+        hg_test_assert(queue != nullptr);
+        hg_test_assert(queue->items != nullptr);
+        hg_test_assert(queue->capacity == 128);
+        hg_test_assert(queue->head == 0);
+        hg_test_assert(queue->tail == 0);
+
+        std::atomic_bool start = false;
+        std::thread producers[4];
+        std::thread consumers[4];
+
+        bool vals[100] = {};
+
+        auto prod_fn = [&](u32 idx) {
+            while (!start) {
+                _mm_pause();
+            }
+            u32 begin = idx * 25;
+            u32 end = begin + 25;
+            for (u32 i = begin; i < end; ++i) {
+                queue->push(i);
+            }
+        };
+        for (u32 j = 0; j < hg_countof(producers); ++j) {
+            producers[j] = std::thread(prod_fn, j);
+        }
+
+        std::atomic<usize> count = 0;
+        auto cons_fn = [&]() {
+            while (!start) {
+                _mm_pause();
+            }
+            while (count < hg_countof(vals)) {
+                usize count_internal = 0;
+                for (usize j = 0; j < 20; ++j) {
+                    u32 idx;
+                    if (queue->pop(idx)) {
+                        vals[idx] = true;
+                        ++count_internal;
+                    } else {
+                        _mm_pause();
+                    }
+                }
+                count.fetch_add(count_internal);
+            }
+        };
+        for (u32 j = 0; j < hg_countof(consumers); ++j) {
+            consumers[j] = std::thread(cons_fn);
+        }
+
+        start.store(true);
+        for (auto& thread : producers) {
+            thread.join();
+        }
+        for (auto& thread : consumers) {
+            thread.join();
+        }
+
+        for (auto val : vals) {
+            hg_test_assert(val == true);
+        }
     }
 
     return true;

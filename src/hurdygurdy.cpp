@@ -797,22 +797,23 @@ HgThreadPool* HgThreadPool::create(HgAllocator& mem, usize thread_count, usize q
     auto thread_fn = [](HgThreadPool* pool) {
         for (;;) {
             std::unique_lock<std::mutex> lock{pool->mtx};
-            while (pool->queue.is_empty() && !pool->should_close.load()) {
+            while (pool->count.load() == 0 && !pool->should_close.load()) {
                 pool->cv.wait(lock);
             }
+            lock.unlock();
             if (pool->should_close.load())
                 return;
 
-            hg_assert(pool->count.load() > 0);
-            HgThreadPool::Work work = pool->queue.pop();
-            --pool->count;
-            lock.unlock();
+            Work work;
+            if (pool->queue->pop(work)) {
+                --pool->count;
 
-            hg_assert(work.fn != nullptr);
-            work.fn(work.data);
+                hg_assert(work.fn != nullptr);
+                work.fn(work.data);
 
-            if (work.fence != nullptr)
-                work.fence->signal();
+                if (work.fence != nullptr)
+                    work.fence->signal();
+            }
         }
     };
 
@@ -824,12 +825,9 @@ HgThreadPool* HgThreadPool::create(HgAllocator& mem, usize thread_count, usize q
     if (pool->threads == nullptr)
         goto cleanup_threads;
 
-    {
-        auto [success, queue] = pool->queue.create(mem, queue_size);
-        if (!success)
-            goto cleanup_work_queue;
-        pool->queue = queue;
-    }
+    pool->queue = HgMPMCQueue<Work>::create(mem, queue_size);
+    if (pool->queue == nullptr)
+        goto cleanup_work_queue;
     pool->count.store(0);
 
     pool->should_close.store(false);
@@ -860,7 +858,7 @@ void HgThreadPool::destroy(HgAllocator& mem, HgThreadPool* pool) {
         thread.join();
     }
 
-    pool->queue.destroy(mem);
+    HgMPMCQueue<Work>::destroy(mem, pool->queue);
     mem.free(pool->threads);
     mem.free(pool);
 }
@@ -870,34 +868,25 @@ void HgThreadPool::call_par(HgFence* fence, void* data, void (*fn)(void*)) {
     if (fence != nullptr)
         fence->add();
 
-    mtx.lock();
-    hg_assert(!queue.is_full());
-    queue.push() = {fence, data, fn};
+    Work work;
+    work.fence = fence;
+    work.data = data;
+    work.fn = fn;
+    queue->push(work);
     ++count;
+
+    mtx.lock();
     mtx.unlock();
     cv.notify_one();
 }
 
 void HgThreadPool::try_steal() {
-    if (count.load() == 0) {
+    Work work;
+    if (count.load() == 0 || !queue->pop(work)) {
         _mm_pause();
         return;
     }
-
-    if (!mtx.try_lock()) {
-        _mm_pause();
-        return;
-    }
-
-    if (queue.is_empty()) {
-        mtx.unlock();
-        _mm_pause();
-        return;
-    }
-
-    Work work = queue.pop();
     --count;
-    mtx.unlock();
 
     hg_assert(work.fn != nullptr);
     work.fn(work.data);
@@ -919,23 +908,19 @@ bool HgThreadPool::help(HgFence& fence, f64 timeout_seconds) {
 HgIOThread* HgIOThread::create(HgAllocator& mem, usize queue_size) {
     auto thread_fn = [](HgIOThread* io) {
         for (;;) {
-            while (io->count.load() == 0 && !io->should_close.load()) {
-                hg_threads->try_steal();
-            }
             if (io->should_close.load())
                 return;
 
-            io->mtx.lock();
-            hg_assert(io->count.load() > 0);
-            Request request = io->queue.pop();
-            --io->count;
-            io->mtx.unlock();
+            Request request;
+            if (io->queue->pop(request)) {
+                hg_assert(request.fn != nullptr);
+                request.fn(request.data, request.mem, request.resource, request.path);
 
-            hg_assert(request.fn != nullptr);
-            request.fn(request.data, request.mem, request.resource, request.path);
-
-            if (request.fence != nullptr)
-                request.fence->signal();
+                if (request.fence != nullptr)
+                    request.fence->signal();
+            } else {
+                hg_threads->try_steal();
+            }
         }
     };
 
@@ -943,13 +928,9 @@ HgIOThread* HgIOThread::create(HgAllocator& mem, usize queue_size) {
     if (io == nullptr)
         goto cleanup_thread;
 
-    {
-        auto [success, queue] = io->queue.create(mem, queue_size);
-        if (!success)
-            goto cleanup_queue;
-        io->queue = queue;
-    }
-    io->count.store(0);
+    io->queue = HgMPMCQueue<Request>::create(mem, queue_size);
+    if (io->queue == nullptr)
+        goto cleanup_queue;
 
     io->should_close.store(false);
     io->thread = std::thread(thread_fn, io);
@@ -969,7 +950,7 @@ void HgIOThread::destroy(HgAllocator& mem, HgIOThread* io) {
     io->should_close = true;
     io->thread.join();
 
-    io->queue.destroy(mem);
+    HgMPMCQueue<Request>::destroy(mem, io->queue);
     mem.free(io);
 }
 
@@ -978,11 +959,7 @@ void HgIOThread::request(const Request& request) {
     if (request.fence != nullptr)
         request.fence->add();
 
-    mtx.lock();
-    hg_assert(!queue.is_full());
-    queue.push() = request;
-    ++count;
-    mtx.unlock();
+    queue->push(request);
 }
 
 static u32& hg_internal_current_component_id() {
