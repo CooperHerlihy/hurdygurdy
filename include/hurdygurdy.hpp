@@ -2904,7 +2904,7 @@ struct HgMPMCQueue {
     /**
      * The status of each item
      */
-    HgSpan<std::atomic<Status>> item_status;
+    std::atomic<Status>* item_status;
     /**
      * The allocated space for the queue
      */
@@ -2914,13 +2914,21 @@ struct HgMPMCQueue {
      */
     usize capacity;
     /**
-     * The end of the queue, where items are added
+     * The beginning of the queue, where items are removed
      */
-    std::atomic<usize> head;
+    std::atomic<usize>* tail;
     /**
      * The beginning of the queue, where items are removed
      */
-    std::atomic<usize> tail;
+    std::atomic<usize>* working_tail;
+    /**
+     * The end of the queue, where items are added
+     */
+    std::atomic<usize>* head;
+    /**
+     * The end of the queue, where items are added
+     */
+    std::atomic<usize>* working_head;
 
     /**
      * Allocate a new dynamic queue
@@ -2933,14 +2941,13 @@ struct HgMPMCQueue {
      * - The allocated dynamic queue
      * - nullopt if allocation failed
      */
-    static HgMPMCQueue* create(HgAllocator& mem, usize capacity) {
+    static HgOption<HgMPMCQueue> create(HgAllocator& mem, usize capacity) {
         hg_assert(capacity > 1);
 
-        HgMPMCQueue* queue = mem.alloc<HgMPMCQueue>();
-        if (queue == nullptr)
-            goto cleanup_queue;
+        HgOption<HgMPMCQueue> queue;
+        queue.has_value = true;
 
-        queue->item_status = mem.alloc<std::atomic<Status>>(capacity);
+        queue->item_status = mem.alloc<std::atomic<Status>>(capacity).data;
         if (queue->item_status == nullptr)
             goto cleanup_status;
 
@@ -2948,17 +2955,27 @@ struct HgMPMCQueue {
         if (queue->items == nullptr)
             goto cleanup_items;
 
-        queue->capacity = capacity;
+        {
+            auto atomics = mem.alloc<std::atomic<usize>>(4);
+            if (atomics == nullptr)
+                goto cleanup_atomics;
 
+            queue->tail = &atomics[0];
+            queue->working_tail = &atomics[1];
+            queue->head = &atomics[2];
+            queue->working_head = &atomics[3];
+        }
+
+        queue->capacity = capacity;
         queue->reset();
         return queue;
 
+cleanup_atomics:
+        mem.free_fn(queue->items, capacity * sizeof(T), alignof(T));
 cleanup_items:
-        mem.free(queue->item_status);
+        mem.free(HgSpan<std::atomic<Status>>{queue->item_status, capacity});
 cleanup_status:
-        mem.free(queue);
-cleanup_queue:
-        return nullptr;
+        return hg_empty;
     }
 
     /**
@@ -2966,8 +2983,10 @@ cleanup_queue:
      *
      * Note, this is not thread safe
      */
-    static void destroy(HgAllocator& mem, HgMPMCQueue* queue) {
-        mem.free_fn(queue->items, queue->capacity * sizeof(T), alignof(T));
+    void destroy(HgAllocator& mem) {
+        mem.free(HgSpan<std::atomic<usize>>{tail, 4});
+        mem.free(HgSpan<std::atomic<Status>>{item_status, capacity});
+        mem.free_fn(items, capacity * sizeof(T), alignof(T));
     }
 
     /**
@@ -2976,9 +2995,11 @@ cleanup_queue:
      * Note, this is not thread safe
      */
     constexpr void reset() {
-        head.store(0);
-        tail.store(0);
-        for (auto& status : item_status) {
+        tail->store(0);
+        working_tail->store(0);
+        head->store(0);
+        working_head->store(0);
+        for (auto& status : HgSpan<std::atomic<Status>>{item_status, capacity}) {
             status.store(STATUS_EMPTY);
         }
     }
@@ -2992,23 +3013,28 @@ cleanup_queue:
      * - item The item to copy onto the queue
      */
     constexpr void push(const T& item) {
-        usize idx = head.load();
+        usize idx = capacity;
         for (;;) {
-            Status status = item_status[idx].load();
-            if (status == STATUS_EMPTY && item_status[idx].compare_exchange_strong(status, STATUS_WRITING))
+            usize wh = working_head->load();
+            Status status = item_status[wh].load();
+            if (status == STATUS_EMPTY && working_head->compare_exchange_strong(wh, (wh + 1) % capacity)) {
+                [[maybe_unused]]
+                bool success = item_status[wh].compare_exchange_strong(status, STATUS_WRITING);
+                hg_assert(success);
+                idx = wh;
                 break;
-            idx = (idx + 1) % capacity;
-            hg_assert(idx != tail.load());
+            }
         }
+        hg_assert(idx != capacity);
 
         new (items + idx) T{item};
         item_status[idx].store(STATUS_READY);
 
-        usize head_current = head.load();
-        while (item_status[head_current].load() == STATUS_READY) {
-            usize head_next = (head_current + 1) % capacity;
-            head.compare_exchange_strong(head_current, head_next);
-            head_current = head_next;
+        usize h = head->load();
+        while (item_status[h].load() == STATUS_READY) {
+            usize next = (h + 1) % capacity;
+            if (head->compare_exchange_strong(h, next))
+                h = next;
         }
     }
 
@@ -3022,26 +3048,32 @@ cleanup_queue:
      * - Whether an item could be popped
      */
     bool pop(T& item) {
-        usize idx = tail.load();
+        usize idx = capacity;
         for (;;) {
-            if (idx == head.load())
+            usize wt = working_tail->load();
+            if (wt == head->load())
                 return false;
-            Status status = item_status[idx].load();
-            if (status == STATUS_EMPTY || status == STATUS_WRITING)
-                return false;
-            if (status == STATUS_READY && item_status[idx].compare_exchange_strong(status, STATUS_READING))
+            Status status = item_status[wt].load();
+            if (status == STATUS_READY && working_tail->compare_exchange_strong(wt, (wt + 1) % capacity)) {
+                [[maybe_unused]]
+                bool success = item_status[wt].compare_exchange_strong(status, STATUS_READING);
+                hg_assert(success);
+                idx = wt;
                 break;
-            idx = (idx + 1) % capacity;
+            }
         }
+        hg_assert(idx != capacity);
 
         item = items[idx];
         item_status[idx].store(STATUS_EMPTY);
 
-        usize tail_current = tail.load();
-        while (item_status[tail_current].load() == STATUS_EMPTY && tail_current != head.load()) {
-            usize tail_next = (tail_current + 1) % capacity;
-            tail.compare_exchange_strong(tail_current, tail_next);
-            tail_current = tail_next;
+        usize t = tail->load();
+        while (item_status[t].load() == STATUS_EMPTY) {
+            if (t == head->load())
+                break;
+            usize next = (t + 1) % capacity;
+            if (tail->compare_exchange_strong(t, next))
+                t = next;
         }
         return true;
     }
@@ -4020,7 +4052,7 @@ struct HgThreadPool {
     /**
      * The queue of work to be executed
      */
-    HgMPMCQueue<Work>* queue;
+    HgMPMCQueue<Work> queue;
     /**
      * The available work count
      */
@@ -4121,7 +4153,7 @@ struct HgThreadPool {
             work.fence = &fence;
             work.data = &capture;
             work.fn = fn_iter;
-            queue->push(work);
+            queue.push(work);
             ++count;
         }
         mtx.lock();
@@ -4184,7 +4216,7 @@ struct HgIOThread {
     /**
      * The request queue
      */
-    HgMPMCQueue<Request>* queue;
+    HgMPMCQueue<Request> queue;
 
     /**
      * Creates a new thread pool
