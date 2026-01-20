@@ -932,7 +932,7 @@ HgIOThread* HgIOThread::create(HgAllocator& mem, usize queue_size) {
         goto cleanup_thread;
 
     {
-        auto [success, queue] = HgMPMCQueue<Request>::create(mem, queue_size);
+        auto [success, queue] = HgMPSCQueue<Request>::create(mem, queue_size);
         if (!success)
             goto cleanup_queue;
         io->queue = queue;

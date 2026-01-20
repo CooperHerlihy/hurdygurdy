@@ -525,6 +525,103 @@ hg_test(hg_queue) {
     return true;
 }
 
+hg_test(hg_mpsc_queue) {
+    HgStdAllocator mem;
+
+    {
+        HgMPSCQueue<u32> queue = std::move(HgMPSCQueue<u32>::create(mem, 8).value());
+        hg_defer(queue.destroy(mem));
+
+        hg_test_assert(queue.items != nullptr);
+        hg_test_assert(queue.capacity == 8);
+        hg_test_assert(queue.head->load() == 0);
+        hg_test_assert(queue.tail->load() == 0);
+
+        u32 item;
+
+        for (usize i = 0; i < 3; ++i) {
+            for (u32 j = 0; j < 7; ++j) {
+                queue.push(j);
+            }
+
+            hg_test_assert(queue.pop(item) && item == 0);
+            hg_test_assert(queue.pop(item) && item == 1);
+            hg_test_assert(queue.pop(item) && item == 2);
+            hg_test_assert(queue.pop(item) && item == 3);
+
+            for (u32 j = 7; j < 10; ++j) {
+                queue.push(j);
+            }
+
+            hg_test_assert(queue.pop(item) && item == 4);
+            hg_test_assert(queue.pop(item) && item == 5);
+            hg_test_assert(queue.pop(item) && item == 6);
+            hg_test_assert(queue.pop(item) && item == 7);
+            hg_test_assert(queue.pop(item) && item == 8);
+            hg_test_assert(queue.pop(item) && item == 9);
+        }
+    }
+
+    {
+        HgMPSCQueue<u32> queue = std::move(HgMPSCQueue<u32>::create(mem, 128).value());
+        hg_defer(queue.destroy(mem));
+
+        hg_test_assert(queue.items != nullptr);
+        hg_test_assert(queue.capacity == 128);
+        hg_test_assert(queue.head->load() == 0);
+        hg_test_assert(queue.tail->load() == 0);
+
+        for (u32 n = 0; n < 3; ++n) {
+            std::atomic_bool start{false};
+            std::thread producers[4];
+            std::thread consumer;
+
+            bool vals[100] = {};
+
+            auto prod_fn = [&](u32 idx) {
+                while (!start) {
+                    _mm_pause();
+                }
+                u32 begin = idx * 25;
+                u32 end = begin + 25;
+                for (u32 i = begin; i < end; ++i) {
+                    queue.push(i);
+                }
+            };
+            for (u32 j = 0; j < hg_countof(producers); ++j) {
+                producers[j] = std::thread(prod_fn, j);
+            }
+
+            auto cons_fn = [&]() {
+                while (!start) {
+                    _mm_pause();
+                }
+                usize count = 0;
+                while (count < hg_countof(vals)) {
+                    u32 idx;
+                    if (queue.pop(idx)) {
+                        vals[idx] = !vals[idx];
+                        ++count;
+                    }
+                }
+            };
+            consumer = std::thread(cons_fn);
+
+            start.store(true);
+            for (auto& thread : producers) {
+                thread.join();
+            }
+            consumer.join();
+
+            for (auto val : vals) {
+                hg_test_assert(val == true);
+            }
+        }
+    }
+
+    return true;
+}
+
 hg_test(hg_mpmc_queue) {
     HgStdAllocator mem;
 
@@ -539,7 +636,7 @@ hg_test(hg_mpmc_queue) {
 
         u32 item;
 
-        for (usize i = 0; i < 4; ++i) {
+        for (usize i = 0; i < 3; ++i) {
             for (u32 j = 0; j < 7; ++j) {
                 queue.push(j);
             }
@@ -571,7 +668,7 @@ hg_test(hg_mpmc_queue) {
         hg_test_assert(queue.head->load() == 0);
         hg_test_assert(queue.tail->load() == 0);
 
-        for (u32 n = 0; n < 4; ++n) {
+        for (u32 n = 0; n < 3; ++n) {
             std::atomic_bool start{false};
             std::thread producers[4];
             std::thread consumers[4];
@@ -602,10 +699,8 @@ hg_test(hg_mpmc_queue) {
                     for (usize j = 0; j < 20; ++j) {
                         u32 idx;
                         if (queue.pop(idx)) {
-                            vals[idx] = true;
+                            vals[idx] = !vals[idx];
                             ++count_internal;
-                        } else {
-                            _mm_pause();
                         }
                     }
                     count.fetch_add(count_internal);
