@@ -89,13 +89,26 @@ int main(void) {
     hg_ecs->register_component<HgTransform>(mem, 1024);
     hg_ecs->register_component<HgSprite>(mem, 1024);
 
-    HgEntity square = hg_ecs->spawn();
+    HgEntity squares[] = {
+        hg_ecs->spawn(),
+        hg_ecs->spawn(),
+    };
 
-    HgTransform& square_transform = hg_ecs->add<HgTransform>(square);
-    square_transform = {};
-    square_transform.position.z = 1.0f;
+    for (HgEntity square : squares) {
+        hg_ecs->add<HgTransform>(square) = {};
+        pipeline2d.add_sprite(square, texture, {0.0f}, {1.0f});
+    }
 
-    pipeline2d.add_sprite(square, texture, {0.0f}, {1.0f});
+    {
+        HgTransform& tf = hg_ecs->get<HgTransform>(squares[0]);
+        tf.position.x = -0.3f;
+        tf.position.z = 0.7f;
+    }
+    {
+        HgTransform& tf = hg_ecs->get<HgTransform>(squares[1]);
+        tf.position.x = 0.3f;
+        tf.position.z = 1.3f;
+    }
 
     HgTransform camera = {};
 
@@ -133,10 +146,9 @@ int main(void) {
         if (window.is_key_down(HG_KEY_LMOUSE)) {
             f64 x, y;
             window.get_mouse_delta(x, y);
-            HgQuat rot_h = hg_axis_angle({0.0f, 1.0f, 0.0f}, (f32)x * rot_speed);
-            HgQuat rot_v = hg_axis_angle({-1.0f, 0.0f, 0.0f}, (f32)y * rot_speed);
-            camera.rotation = rot_h * camera.rotation;
-            camera.rotation = camera.rotation * rot_v;
+            HgQuat rot_x = hg_axis_angle({0.0f, 1.0f, 0.0f}, (f32)x * rot_speed);
+            HgQuat rot_y = hg_axis_angle({-1.0f, 0.0f, 0.0f}, (f32)y * rot_speed);
+            camera.rotation = rot_x * camera.rotation * rot_y;
         }
 
         static const f32 move_speed = 1.5f;
@@ -153,10 +165,10 @@ int main(void) {
             movement.x -= 1.0f;
         if (window.is_key_down(HG_KEY_D))
             movement.x += 1.0f;
+
         if (movement != HgVec3{0.0f}) {
-            HgVec3 rotated = hg_rotate(camera.rotation, movement);
-            camera.position += hg_norm(HgVec3{rotated.x, movement.y, rotated.z})
-                * move_speed * deltaf;
+            HgVec3 rotated = hg_rotate(camera.rotation, HgVec3{movement.x, 0.0f, movement.z});
+            camera.position += hg_norm(HgVec3{rotated.x, movement.y, rotated.z}) * move_speed * deltaf;
         }
 
         pipeline2d.update_view(hg_view_matrix(camera.position, camera.scale, camera.rotation));
@@ -336,9 +348,10 @@ hg_test(hg_quat) {
 
 hg_test(hg_arena) {
     HgStdAllocator mem;
+    HgSpan<void> block = mem.alloc(1024, alignof(std::max_align_t));
+    hg_defer(mem.free(block));
 
-    HgArena arena = arena.create(mem, 1024).value();
-    hg_defer(arena.destroy(mem));
+    HgArena arena = block;
 
     for (usize i = 0; i < 3; ++i) {
         hg_test_assert(arena.memory != nullptr);
@@ -552,106 +565,9 @@ hg_test(hg_queue) {
     return true;
 }
 
-hg_test(hg_mpsc_queue) {
-    HgStdAllocator mem;
-
-    {
-        HgMPSCQueue<u32> queue = std::move(HgMPSCQueue<u32>::create(mem, 8).value());
-        hg_defer(queue.destroy(mem));
-
-        hg_test_assert(queue.items != nullptr);
-        hg_test_assert(queue.capacity == 8);
-        hg_test_assert(queue.head->load() == 0);
-        hg_test_assert(queue.tail->load() == 0);
-
-        u32 item;
-
-        for (usize i = 0; i < 3; ++i) {
-            for (u32 j = 0; j < 7; ++j) {
-                queue.push(j);
-            }
-
-            hg_test_assert(queue.pop(item) && item == 0);
-            hg_test_assert(queue.pop(item) && item == 1);
-            hg_test_assert(queue.pop(item) && item == 2);
-            hg_test_assert(queue.pop(item) && item == 3);
-
-            for (u32 j = 7; j < 10; ++j) {
-                queue.push(j);
-            }
-
-            hg_test_assert(queue.pop(item) && item == 4);
-            hg_test_assert(queue.pop(item) && item == 5);
-            hg_test_assert(queue.pop(item) && item == 6);
-            hg_test_assert(queue.pop(item) && item == 7);
-            hg_test_assert(queue.pop(item) && item == 8);
-            hg_test_assert(queue.pop(item) && item == 9);
-        }
-    }
-
-    {
-        HgMPSCQueue<u32> queue = std::move(HgMPSCQueue<u32>::create(mem, 128).value());
-        hg_defer(queue.destroy(mem));
-
-        hg_test_assert(queue.items != nullptr);
-        hg_test_assert(queue.capacity == 128);
-        hg_test_assert(queue.head->load() == 0);
-        hg_test_assert(queue.tail->load() == 0);
-
-        for (u32 n = 0; n < 3; ++n) {
-            std::atomic_bool start{false};
-            std::thread producers[4];
-            std::thread consumer;
-
-            bool vals[100] = {};
-
-            auto prod_fn = [&](u32 idx) {
-                while (!start) {
-                    _mm_pause();
-                }
-                u32 begin = idx * 25;
-                u32 end = begin + 25;
-                for (u32 i = begin; i < end; ++i) {
-                    queue.push(i);
-                }
-            };
-            for (u32 j = 0; j < hg_countof(producers); ++j) {
-                producers[j] = std::thread(prod_fn, j);
-            }
-
-            auto cons_fn = [&]() {
-                while (!start) {
-                    _mm_pause();
-                }
-                usize count = 0;
-                while (count < hg_countof(vals)) {
-                    u32 idx;
-                    if (queue.pop(idx)) {
-                        vals[idx] = !vals[idx];
-                        ++count;
-                    }
-                }
-            };
-            consumer = std::thread(cons_fn);
-
-            start.store(true);
-            for (auto& thread : producers) {
-                thread.join();
-            }
-            consumer.join();
-
-            for (auto val : vals) {
-                hg_test_assert(val == true);
-            }
-        }
-    }
-
-    return true;
-}
-
 hg_test(hg_string) {
     HgStdAllocator mem;
-    HgArena arena = arena.create(mem, 4096).value();
+    HgArenaAllocator arena = arena.create(mem, 4096).value();
     hg_defer(arena.destroy(mem));
 
     HgString a = a.create(arena, "a").value();
@@ -879,7 +795,7 @@ hg_test(hg_hash_map_str) {
     }
 
     {
-        HgArena arena = arena.create(mem, 1 << 16).value();
+        HgArenaAllocator arena = arena.create(mem, 1 << 16).value();
         hg_defer(arena.destroy(mem));
 
         HgHashMap<HgString, u32> map = map.create(arena, 128).value();
@@ -1116,7 +1032,7 @@ hg_test(hg_hash_set_str) {
     }
 
     {
-        HgArena arena = arena.create(mem, 1 << 16).value();
+        HgArenaAllocator arena = arena.create(mem, 1 << 16).value();
         hg_defer(arena.destroy(mem));
 
         HgHashSet<HgString> map = map.create(arena, 128).value();
@@ -1162,7 +1078,7 @@ hg_test(hg_function) {
     {
         HgStdAllocator mem;
 
-        HgArena arena = arena.create(mem, 4096).value();
+        HgArenaAllocator arena = arena.create(mem, 4096).value();
         hg_defer(arena.destroy(mem));
 
         enum State {
@@ -1198,6 +1114,103 @@ hg_test(hg_function) {
         hg_test_assert(mul_2.capture == nullptr);
 
         hg_test_assert(mul_2(2) == 4);
+    }
+
+    return true;
+}
+
+hg_test(hg_mpsc_queue) {
+    HgStdAllocator mem;
+
+    {
+        HgMPSCQueue<u32> queue = std::move(HgMPSCQueue<u32>::create(mem, 8).value());
+        hg_defer(queue.destroy(mem));
+
+        hg_test_assert(queue.items != nullptr);
+        hg_test_assert(queue.capacity == 8);
+        hg_test_assert(queue.head->load() == 0);
+        hg_test_assert(queue.tail->load() == 0);
+
+        u32 item;
+
+        for (usize i = 0; i < 3; ++i) {
+            for (u32 j = 0; j < 7; ++j) {
+                queue.push(j);
+            }
+
+            hg_test_assert(queue.pop(item) && item == 0);
+            hg_test_assert(queue.pop(item) && item == 1);
+            hg_test_assert(queue.pop(item) && item == 2);
+            hg_test_assert(queue.pop(item) && item == 3);
+
+            for (u32 j = 7; j < 10; ++j) {
+                queue.push(j);
+            }
+
+            hg_test_assert(queue.pop(item) && item == 4);
+            hg_test_assert(queue.pop(item) && item == 5);
+            hg_test_assert(queue.pop(item) && item == 6);
+            hg_test_assert(queue.pop(item) && item == 7);
+            hg_test_assert(queue.pop(item) && item == 8);
+            hg_test_assert(queue.pop(item) && item == 9);
+        }
+    }
+
+    {
+        HgMPSCQueue<u32> queue = std::move(HgMPSCQueue<u32>::create(mem, 128).value());
+        hg_defer(queue.destroy(mem));
+
+        hg_test_assert(queue.items != nullptr);
+        hg_test_assert(queue.capacity == 128);
+        hg_test_assert(queue.head->load() == 0);
+        hg_test_assert(queue.tail->load() == 0);
+
+        for (u32 n = 0; n < 3; ++n) {
+            std::atomic_bool start{false};
+            std::thread producers[4];
+            std::thread consumer;
+
+            bool vals[100] = {};
+
+            auto prod_fn = [&](u32 idx) {
+                while (!start) {
+                    _mm_pause();
+                }
+                u32 begin = idx * 25;
+                u32 end = begin + 25;
+                for (u32 i = begin; i < end; ++i) {
+                    queue.push(i);
+                }
+            };
+            for (u32 j = 0; j < hg_countof(producers); ++j) {
+                producers[j] = std::thread(prod_fn, j);
+            }
+
+            auto cons_fn = [&]() {
+                while (!start) {
+                    _mm_pause();
+                }
+                usize count = 0;
+                while (count < hg_countof(vals)) {
+                    u32 idx;
+                    if (queue.pop(idx)) {
+                        vals[idx] = !vals[idx];
+                        ++count;
+                    }
+                }
+            };
+            consumer = std::thread(cons_fn);
+
+            start.store(true);
+            for (auto& thread : producers) {
+                thread.join();
+            }
+            consumer.join();
+
+            for (auto val : vals) {
+                hg_test_assert(val == true);
+            }
+        }
     }
 
     return true;
@@ -1328,7 +1341,7 @@ hg_test(hg_thread_pool) {
             *(bool*)pb = true;
         });
 
-        fence.wait();
+        hg_test_assert(fence.wait(2.0));
 
         hg_test_assert(a == true);
         hg_test_assert(b == true);
@@ -1350,7 +1363,7 @@ hg_test(hg_thread_pool) {
     }
 
     {
-        HgArena arena = arena.create(mem, 1 << 16).value();
+        HgArenaAllocator arena = arena.create(mem, 1 << 16).value();
         hg_defer(arena.destroy(mem));
 
         bool vals[100] = {};
@@ -1410,7 +1423,7 @@ hg_test(hg_io_thread) {
         };
         io->request(request);
 
-        fence.wait();
+        hg_test_assert(fence.wait(2.0));
         for (usize i = 0; i < hg_countof(vals); ++i) {
             hg_test_assert(vals[i] == true);
         }
@@ -1429,7 +1442,7 @@ hg_test(hg_io_thread) {
             io->request(request);
         }
 
-        fence.wait();
+        hg_test_assert(fence.wait(2.0));
         for (usize i = 0; i < hg_countof(vals); ++i) {
             hg_test_assert(vals[i] == true);
         }
@@ -1450,7 +1463,7 @@ hg_test(hg_io_thread) {
             io->request(request);
         }
 
-        fence.wait();
+        hg_test_assert(fence.wait(2.0));
         for (usize i = 0; i < hg_countof(vals); ++i) {
             hg_test_assert(vals[i] == true);
         }
@@ -1608,7 +1621,7 @@ hg_test(hg_ecs) {
     hg_test_assert(hg_ecs->component_count<u64>() == 0);
 
     {
-        HgArena arena = arena.create(mem, 4096).value();
+        HgArenaAllocator arena = arena.create(mem, 4096).value();
         hg_defer(arena.destroy(mem));
 
         HgArray<HgEntity> entities = entities.create(arena, 0, 300).value();
@@ -1781,7 +1794,7 @@ hg_test(hg_file_binary) {
     HgFence fence;
     {
         hg_load_file_binary(&fence, mem, file, "file_does_not_exist.bin");
-        fence.wait();
+        hg_test_assert(fence.wait(2.0));
 
         hg_test_assert(file.data == nullptr);
         hg_test_assert(file.size == 0);
@@ -1792,7 +1805,7 @@ hg_test(hg_file_binary) {
         file.size = sizeof(save_data);
 
         hg_store_file_binary(&fence, file, "dir/does/not/exist.bin");
-        fence.wait();
+        hg_test_assert(fence.wait(2.0));
 
         FILE* file_handle = std::fopen("dir/does/not/exist.bin", "rb");
         hg_test_assert(file_handle == nullptr);
@@ -1804,7 +1817,7 @@ hg_test(hg_file_binary) {
 
         hg_store_file_binary(&fence, file, file_path);
         hg_load_file_binary(&fence, mem, file, file_path);
-        fence.wait();
+        hg_test_assert(fence.wait(2.0));
 
         hg_test_assert(file.data != nullptr);
         hg_test_assert(file.data != save_data);
@@ -1813,7 +1826,7 @@ hg_test(hg_file_binary) {
 
         hg_unload_file_binary(&fence, mem, file);
     }
-    fence.wait();
+    hg_test_assert(fence.wait(2.0));
 
     return true;
 }
@@ -1854,7 +1867,7 @@ hg_test(hg_image) {
 
         hg_store_image(&fence, file, file_path);
         hg_load_image(&fence, mem, file, file_path);
-        fence.wait();
+        hg_test_assert(fence.wait(2.0));
 
         hg_test_assert(file.pixels != nullptr);
         hg_test_assert(file.pixels != save_data);
@@ -1867,7 +1880,7 @@ hg_test(hg_image) {
 
         hg_unload_image(&fence, mem, file);
     }
-    fence.wait();
+    hg_test_assert(fence.wait(2.0));
 
     return true;
 }

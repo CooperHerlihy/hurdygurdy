@@ -14,6 +14,15 @@
 void hg_init(void) {
     HgStdAllocator mem;
 
+    // init arenas for each thread : TODO?
+
+    if (hg_scratch_arenas == nullptr) {
+        hg_scratch_arenas = mem.alloc<HgArena>(2);
+        for (auto& arena : hg_scratch_arenas) {
+            arena = mem.alloc((u32)-1, alignof(std::max_align_t));
+        }
+    }
+
     if (hg_threads == nullptr) {
         u32 thread_count = std::thread::hardware_concurrency()
             - 2; // main thread, io thread
@@ -57,6 +66,13 @@ void hg_exit(void) {
     if (hg_threads != nullptr) {
         HgThreadPool::destroy(mem, hg_threads);
         hg_threads = nullptr;
+    }
+
+    if (hg_scratch_arenas == nullptr) {
+        for (auto& arena : hg_scratch_arenas) {
+            mem.free(HgSpan<void>{arena.memory, arena.capacity, alignof(std::max_align_t)});
+        }
+        mem.free(hg_scratch_arenas);
     }
 }
 
@@ -616,24 +632,6 @@ void HgStdAllocator::free_fn(void* allocation, usize size, usize alignment) {
     std::free(allocation);
 }
 
-HgOption<HgArena> HgArena::create(HgAllocator& parent, usize capacity) {
-    HgOption<HgArena> arena;
-    arena.has_value = true;
-
-    arena->memory = parent.alloc_fn(capacity, alignof(std::max_align_t));
-    if (arena->memory == nullptr)
-        return hg_empty;
-
-    arena->capacity = capacity;
-    arena->head = 0;
-
-    return arena;
-}
-
-void HgArena::destroy(HgAllocator& parent) {
-    parent.free_fn(memory, capacity, alignof(std::max_align_t));
-}
-
 void* HgArena::alloc_fn(usize size, usize alignment) {
     uptr new_head = hg_align((usize)head, alignment) + size;
 
@@ -662,7 +660,71 @@ void* HgArena::realloc_fn(void* allocation, usize old_size, usize new_size, usiz
     return new_allocation;
 }
 
-void HgArena::free_fn(void* allocation, usize size, usize alignment) {
+HgArena& hg_get_scratch() {
+    hg_assert(hg_scratch_arenas.count != 0);
+    return hg_scratch_arenas[0];
+}
+
+HgArena& hg_get_scratch(const HgArena* conflict) {
+    hg_assert(hg_scratch_arenas.count != 0);
+    for (HgArena& arena : hg_scratch_arenas) {
+        if (&arena != conflict)
+            return arena;
+    }
+    hg_error("No scratch arena available\n");
+}
+
+HgArena& hg_get_scratch(HgSpan<const HgArena*> conflicts) {
+    hg_assert(hg_scratch_arenas.count != 0);
+    for (HgArena& arena : hg_scratch_arenas) {
+        for (const HgArena* conflict : conflicts) {
+            if (&arena == conflict)
+                goto next;
+        }
+        return arena;
+next:
+        continue;
+    }
+    hg_error("No scratch arena available\n");
+}
+
+HgOption<HgArenaAllocator> HgArenaAllocator::create(HgAllocator& parent, usize capacity) {
+    HgOption<HgArenaAllocator> allocator;
+    allocator.has_value = true;
+
+    allocator->arena = parent.alloc<HgArena>();
+    if (allocator->arena == nullptr)
+        goto cleanup_arena;
+
+    allocator->arena->memory = parent.alloc_fn(capacity, alignof(std::max_align_t));
+    if (allocator->arena->memory == nullptr)
+        goto cleanup_memory;
+
+    allocator->arena->capacity = capacity;
+    allocator->arena->head = 0;
+
+    return allocator;
+
+cleanup_memory:
+    parent.free(allocator->arena);
+cleanup_arena:
+    return hg_empty;
+}
+
+void HgArenaAllocator::destroy(HgAllocator& parent) {
+    parent.free_fn(arena->memory, arena->capacity, alignof(std::max_align_t));
+    parent.free(arena);
+}
+
+void* HgArenaAllocator::alloc_fn(usize size, usize alignment) {
+    return arena->alloc_fn(size, alignment);
+}
+
+void* HgArenaAllocator::realloc_fn(void* allocation, usize old_size, usize new_size, usize alignment) {
+    return arena->realloc_fn(allocation, old_size, new_size, alignment);
+}
+
+void HgArenaAllocator::free_fn(void* allocation, usize size, usize alignment) {
     (void)allocation;
     (void)size;
     (void)alignment;
@@ -791,10 +853,12 @@ bool HgFence::is_complete() {
     return counter.load() == 0;
 }
 
-void HgFence::wait() {
-    while (!is_complete()) {
+bool HgFence::wait(f64 timeout_seconds) {
+    auto end = std::chrono::steady_clock::now() + std::chrono::duration<f64>(timeout_seconds);
+    while (!is_complete() && std::chrono::steady_clock::now() < end) {
         _mm_pause();
     }
+    return is_complete();
 }
 
 HgThreadPool* HgThreadPool::create(HgAllocator& mem, usize thread_count, usize queue_size) {
@@ -889,7 +953,7 @@ void HgThreadPool::call_par(HgFence* fence, void* data, void (*fn)(void*)) {
     cv.notify_one();
 }
 
-void HgThreadPool::try_steal() {
+void HgThreadPool::try_help() {
     Work work;
     if (count.load() == 0 || !queue.pop(work)) {
         _mm_pause();
@@ -905,13 +969,11 @@ void HgThreadPool::try_steal() {
 }
 
 bool HgThreadPool::help(HgFence& fence, f64 timeout_seconds) {
-    auto end_time = std::chrono::steady_clock::now() + std::chrono::duration<f64>(timeout_seconds);
-    while (!fence.is_complete()) {
-        try_steal();
-        if (std::chrono::steady_clock::now() >= end_time)
-            return false;
+    auto end = std::chrono::steady_clock::now() + std::chrono::duration<f64>(timeout_seconds);
+    while (!fence.is_complete() && std::chrono::steady_clock::now() < end) {
+        try_help();
     }
-    return true;
+    return fence.is_complete();
 }
 
 HgIOThread* HgIOThread::create(HgAllocator& mem, usize queue_size) {
@@ -928,7 +990,7 @@ HgIOThread* HgIOThread::create(HgAllocator& mem, usize queue_size) {
                 if (request.fence != nullptr)
                     request.fence->signal();
             } else {
-                hg_threads->try_steal();
+                hg_threads->try_help();
             }
         }
     };
@@ -4021,7 +4083,7 @@ void HgPipeline2D::draw(VkCommandBuffer cmd) {
     hg_ecs->sort<HgSprite>(nullptr, [](void*, HgEntity lhs, HgEntity rhs) -> bool {
         hg_assert(hg_ecs->has<HgTransform>(lhs));
         hg_assert(hg_ecs->has<HgTransform>(rhs));
-        return hg_ecs->get<HgTransform>(lhs).position.z < hg_ecs->get<HgTransform>(rhs).position.z;
+        return hg_ecs->get<HgTransform>(lhs).position.z > hg_ecs->get<HgTransform>(rhs).position.z;
     });
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);

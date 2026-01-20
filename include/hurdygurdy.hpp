@@ -2072,13 +2072,7 @@ struct HgStdAllocator : public HgAllocator {
     }
 };
 
-/**
- * An arena allocator
- *
- * Allocations are made very quickly, and are not freed individually, instead
- * the whole block is freed at once
- */
-struct HgArena : public HgAllocator {
+struct HgArena {
     /**
      * A pointer to the memory being allocated
      */
@@ -2092,23 +2086,27 @@ struct HgArena : public HgAllocator {
      */
     usize head;
 
-    /**
-     * Allocates an arena with capacity
-     *
-     * Parameters
-     * - parent The allocator to create the arena from
-     * - capacity The size of the block to allocate and use
-     *
-     * Returns
-     * - The allocated arena
-     * - nullopt if allocation failed
-     */
-    static HgOption<HgArena> create(HgAllocator& parent, usize capacity);
+    HgArena() = default;
 
     /**
-     * Frees an arena's memory
+     * Create an arena from a block of memory
      */
-    void destroy(HgAllocator& parent);
+    HgArena(void* memory_val, usize capacity_val)
+        : memory{memory_val}
+        , capacity{capacity_val}
+        , head{0}
+    {}
+
+    /**
+     * Create an arena from a block of memory
+     *
+     * Note, does not retain the block's alignment
+     */
+    HgArena(HgSpan<void> block)
+        : memory{block.data}
+        , capacity{block.count}
+        , head{0}
+    {}
 
     /**
      * Frees all allocations from an arena
@@ -2128,9 +2126,244 @@ struct HgArena : public HgAllocator {
      * Loads the saved state of the arena
      */
     void load(usize save_state) {
-        hg_assert(head <= save_state && save_state <= capacity);
+        hg_assert(save_state <= capacity);
         head = save_state;
     }
+
+    /**
+     * Allocates memory from an arena
+     *
+     * Parameters
+     * - size The size in bytes of the allocation
+     * - alignment The required alignment of the allocation in bytes
+     *
+     * Returns
+     * - The allocation if successful
+     * - nullptr if the allocation exceeds capacity
+     */
+    void* alloc_fn(usize size, usize alignment);
+
+    /**
+     * Reallocates memory from a arena
+     *
+     * Simply increases the size if allocation is the most recent allocation
+     *
+     * Parameters
+     * - allocation The allocation to grow, must be the last allocation made
+     * - old_size The original size in bytes of the allocation
+     * - new_size The new size in bytes of the allocation
+     * - alignment The required alignment of the allocation in bytes
+     *
+     * Returns
+     * - The allocation if successful
+     * - nullptr if the allocation exceeds capacity
+     */
+    void* realloc_fn(void* allocation, usize old_size, usize new_size, usize alignment);
+
+    /**
+     * A convenience to allocate a type
+     *
+     * Returns
+     * - The allocated item
+     * - nullptr on failure
+     */
+    template<typename T>
+    T* alloc() {
+        return new ((T*)alloc_fn(sizeof(T), alignof(T))) T;
+    }
+
+    /**
+     * A convenience to allocate an array of a type
+     *
+     * Note, objects are default constructed if possible, otherwise they are
+     * left uninitialized
+     *
+     * Parameters
+     * - count The number of T to allocate
+     *
+     * Returns
+     * - The allocated array
+     * - nullptr on failure
+     */
+    template<typename T>
+    HgSpan<T> alloc(usize count) {
+        HgSpan<T> span;
+        span.data = (T*)alloc_fn(count * sizeof(T), alignof(T));
+        span.count = span.data != nullptr ? count : 0;
+
+        if constexpr (std::is_default_constructible_v<T>) {
+            for (usize i = 0; i < span.count; ++i) {
+                new (&span[i]) T;
+            }
+        }
+
+        return span;
+    }
+
+    /**
+     * A convenience to allocate a void array
+     *
+     * Parameters
+     * - size The size in bytes to allocate
+     *
+     * Returns
+     * - The allocated array
+     * - nullptr on failure
+     */
+    HgSpan<void> alloc(usize size, usize alignment) {
+        HgSpan<void> span;
+        span.data = alloc_fn(size, alignment);
+        span.count = span.data != nullptr ? size : 0;
+        span.alignment = alignment;
+        return span;
+    }
+
+    /**
+     * A convenience to reallocate an array of a type
+     *
+     * Note, objects are default constructed if possible, otherwise they are
+     * left uninitialized
+     *
+     * Parameters
+     * - allocation The allocation to reallocate
+     * - count The new number of T to allocate
+     *
+     * Returns
+     * - The reallocated array
+     * - nullptr on failure
+     */
+    template<typename T>
+    HgSpan<T> realloc(HgSpan<T> allocation, usize count) {
+        static_assert(hg_is_memmove_safe<T>);
+
+        HgSpan<T> span;
+        span.data = (T*)realloc_fn(allocation.data, allocation.count * sizeof(T), count * sizeof(T), alignof(T));
+        span.count = span.data != nullptr ? count : 0;
+
+        if constexpr (std::is_default_constructible_v<T>) {
+            for (usize i = allocation.count; i < span.count; ++i) {
+                new (&span[i]) T;
+            }
+        }
+
+        return span;
+    }
+
+    /**
+     * A convenience to reallocate a void array
+     *
+     * Parameters
+     * - allocation The allocation to reallocate
+     * - size The new size to allocate
+     *
+     * Returns
+     * - The reallocated array
+     * - nullptr on failure
+     */
+    HgSpan<void> realloc(HgSpan<void> allocation, usize size) {
+        HgSpan<void> span;
+        span.data = realloc_fn(allocation.data, allocation.count, size, allocation.alignment);
+        span.count = span.data != nullptr ? size : 0;
+        return span;
+    }
+
+    /**
+     * A convenience to destroy a type
+     *
+     * Parameters
+     * - allocation The allocation to destroy
+     */
+    template<typename T>
+    void free(T* allocation) {
+        if constexpr (std::is_destructible_v<T>) {
+            allocation->~T();
+        }
+    }
+
+    /**
+     * A convenience to destroy an array of a type
+     *
+     * Parameters
+     * - allocation The allocation to destroy
+     */
+    template<typename T>
+    void free(HgSpan<T> allocation) {
+        if constexpr (std::is_destructible_v<T>) {
+            for (usize i = 0; i < allocation.count; ++i) {
+                allocation[i].~T();
+            }
+        }
+    }
+};
+
+inline thread_local HgSpan<HgArena> hg_scratch_arenas{};
+
+/**
+ * Get a scratch arena for temporary allocations, assuming no conflicts
+ *
+ * Returns
+ * - A scratch arena
+ */
+HgArena& hg_get_scratch();
+
+/**
+ * Get a scratch arena for temporary allocations, accounting for a conflict
+ *
+ * Parameters
+ * - conflict If an arena is being used, the returned arena will be different
+ *
+ * Returns
+ * - A scratch arena
+ */
+HgArena& hg_get_scratch(const HgArena* conflict);
+
+/**
+ * Get a scratch arena for temporary allocations, accounting for conflicts
+ *
+ * Parameters
+ * - conflict If arenas are being used, the returned arena will be different
+ *
+ * Returns
+ * - A scratch arena
+ */
+HgArena& hg_get_scratch(HgSpan<const HgArena*> conflicts);
+
+/**
+ * An arena allocator
+ *
+ * Allocations are made very quickly, and are not freed individually, instead
+ * the whole block is freed at once
+ */
+struct HgArenaAllocator : public HgAllocator {
+    /**
+     * The arena
+     */
+    HgArena* arena;
+
+    HgArenaAllocator() = default;
+
+    /**
+     * Implicit conversion from arena
+     */
+    HgArenaAllocator(HgArena& arena_val) : arena{&arena_val} {}
+
+    /**
+     * Allocates the arena with capacity
+     *
+     * Parameters
+     * - parent The allocator to create the arena from
+     * - capacity The size of the block to allocate and use
+     *
+     * Returns
+     * - The allocated arena
+     * - nullopt if allocation failed
+     */
+    static HgOption<HgArenaAllocator> create(HgAllocator& parent, usize capacity);
+
+    /**
+     * Frees the arena's memory
+     */
+    void destroy(HgAllocator& parent);
 
     /**
      * Allocates memory from an arena
@@ -3767,7 +4000,7 @@ HgOption<HgFunction<Signature>> hg_function(HgAllocator& mem, F&& fn) {
 }
 
 /**
- * A fence for basic thread synchronization
+ * A spinlock fence for basic thread synchronization
  */
 struct HgFence {
     /**
@@ -3807,9 +4040,12 @@ struct HgFence {
     bool is_complete();
 
     /**
-     * Waits for all work submissions to be completed
+     * Spin waits for all work submissions to be completed
+     *
+     * Parameters
+     * - timeout_seconds The time in seconds to wait before timing out
      */
-    void wait();
+    bool wait(f64 seconds);
 };
 
 /**
@@ -3817,6 +4053,8 @@ struct HgFence {
  */
 template<typename T>
 struct HgMPSCQueue {
+    static_assert(hg_is_memmove_safe<T>);
+
     /**
      * The status of each item
      */
@@ -3964,6 +4202,8 @@ cleanup_status:
  */
 template<typename T>
 struct HgMPMCQueue {
+    static_assert(hg_is_memmove_safe<T>);
+
     /**
      * Whether each item is filled
      */
@@ -4203,10 +4443,10 @@ struct HgThreadPool {
     /**
      * Try to steal work if all threads are working
      */
-    void try_steal();
+    void try_help();
 
     /**
-     * Wait on the fence, and help complete work in the meantime
+     * Wait on a fence, and help complete work in the meantime
      *
      * Parameters
      * - fence The fence to wait on
