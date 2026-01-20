@@ -26,27 +26,28 @@ void hg_init(void) {
         hg_assert(hg_io != nullptr);
     }
 
-    hg_platform_init();
-    hg_graphics_init();
-
     if (hg_ecs == nullptr) {
         hg_ecs = mem.alloc<HgECS>();
         *hg_ecs = hg_ecs->create(mem, 4096).value();
     }
-
     hg_ecs->reset();
+
+    hg_graphics_init();
+
+    hg_platform_init();
 }
 
 void hg_exit(void) {
     HgStdAllocator mem;
 
+    hg_platform_deinit();
+
+    hg_graphics_deinit();
+
     if (hg_ecs != nullptr) {
         hg_ecs->destroy(mem);
         hg_ecs = nullptr;
     }
-
-    hg_graphics_deinit();
-    hg_platform_deinit();
 
     if (hg_io != nullptr) {
         HgIOThread::destroy(mem, hg_io);
@@ -781,12 +782,16 @@ void HgFence::signal() {
     --counter;
 }
 
-bool HgFence::complete() {
+void HgFence::signal(usize count) {
+    counter.fetch_sub(count);
+}
+
+bool HgFence::is_complete() {
     return counter.load() == 0;
 }
 
 void HgFence::wait() {
-    while (!complete()) {
+    while (!is_complete()) {
         _mm_pause();
     }
 }
@@ -900,7 +905,7 @@ void HgThreadPool::try_steal() {
 
 bool HgThreadPool::help(HgFence& fence, f64 timeout_seconds) {
     auto end_time = std::chrono::steady_clock::now() + std::chrono::duration<f64>(timeout_seconds);
-    while (!fence.complete()) {
+    while (!fence.is_complete()) {
         try_steal();
         if (std::chrono::steady_clock::now() >= end_time)
             return false;
@@ -3973,7 +3978,7 @@ void HgPipeline2D::remove_texture(HgTexture* texture) {
     }
 }
 
-void HgPipeline2D::update_projection(HgMat4& projection) {
+void HgPipeline2D::update_projection(const HgMat4& projection) {
     vmaCopyMemoryToAllocation(
         hg_vk_vma,
         &projection,
@@ -3982,7 +3987,7 @@ void HgPipeline2D::update_projection(HgMat4& projection) {
         sizeof(projection));
 }
 
-void HgPipeline2D::update_view(HgMat4& view) {
+void HgPipeline2D::update_view(const HgMat4& view) {
     vmaCopyMemoryToAllocation(
         hg_vk_vma,
         &view,

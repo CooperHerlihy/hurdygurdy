@@ -15,8 +15,8 @@ int main(void) {
     HgWindow::Config window_config{};
     window_config.title = "Hg Test";
     window_config.windowed = true;
-    window_config.width = 800;
-    window_config.height = 600;
+    window_config.width = 1600;
+    window_config.height = 900;
 
     HgWindow window = HgWindow::create(window_config);
     hg_defer(window.destroy());
@@ -89,15 +89,19 @@ int main(void) {
     hg_ecs->register_component<HgTransform>(mem, 1024);
     hg_ecs->register_component<HgSprite>(mem, 1024);
 
-    HgEntity player = hg_ecs->spawn();
+    HgEntity square = hg_ecs->spawn();
 
-    HgTransform& player_transform = hg_ecs->add<HgTransform>(player);
-    player_transform = {};
+    HgTransform& square_transform = hg_ecs->add<HgTransform>(square);
+    square_transform = {};
+    square_transform.position.z = 0.5f;
 
-    pipeline2d.add_sprite(player, texture, {0.0f}, {1.0f});
+    pipeline2d.add_sprite(square, texture, {0.0f}, {1.0f});
+
+    HgTransform camera = {};
 
     f32 aspect = (f32)swapchain.width / (f32)swapchain.height;
-    HgMat4 proj = hg_projection_orthographic(-aspect, aspect, -1.0f, 1.0f, 0.0f, 1.0f);
+    // HgMat4 proj = hg_projection_orthographic(-aspect, aspect, -1.0f, 1.0f, 0.0f, 1.0f);
+    HgMat4 proj = hg_projection_perspective((f32)hg_pi * 0.5f, aspect, 0.1f, 1000.0f);
     pipeline2d.update_projection(proj);
 
     u32 frame_count = 0;
@@ -125,15 +129,37 @@ int main(void) {
         if (window.was_closed() || window.is_key_down(HG_KEY_ESCAPE))
             break;
 
-        static const f32 speed = 1.0f;
+        static const f32 rot_speed = 2.0f;
+        if (window.is_key_down(HG_KEY_LMOUSE)) {
+            f64 x, y;
+            window.get_mouse_delta(x, y);
+            HgQuat rot_h = hg_axis_angle({0.0f, 1.0f, 0.0f}, (f32)x * rot_speed);
+            HgQuat rot_v = hg_axis_angle({-1.0f, 0.0f, 0.0f}, (f32)y * rot_speed);
+            camera.rotation = rot_h * camera.rotation;
+            camera.rotation = camera.rotation * rot_v;
+        }
+
+        static const f32 move_speed = 1.5f;
+        HgVec3 movement = {0.0f};
+        if (window.is_key_down(HG_KEY_SPACE))
+            movement.y -= 1.0f;
+        if (window.is_key_down(HG_KEY_LSHIFT))
+            movement.y += 1.0f;
         if (window.is_key_down(HG_KEY_W))
-            player_transform.position.y -= speed * deltaf;
-        if (window.is_key_down(HG_KEY_A))
-            player_transform.position.x -= speed * deltaf;
+            movement.z += 1.0f;
         if (window.is_key_down(HG_KEY_S))
-            player_transform.position.y += speed * deltaf;
+            movement.z -= 1.0f;
+        if (window.is_key_down(HG_KEY_A))
+            movement.x -= 1.0f;
         if (window.is_key_down(HG_KEY_D))
-            player_transform.position.x += speed * deltaf;
+            movement.x += 1.0f;
+        if (movement != HgVec3{0.0f}) {
+            HgVec3 rotated = hg_rotate(camera.rotation, movement);
+            camera.position += hg_norm(HgVec3{rotated.x, movement.y, rotated.z})
+                * move_speed * deltaf;
+        }
+
+        pipeline2d.update_view(hg_view_matrix(camera.position, 1.0f, camera.rotation));
 
         if (window.was_resized()) {
             vkQueueWaitIdle(hg_vk_queue);
@@ -167,7 +193,8 @@ int main(void) {
                 swapchain_commands = HgSwapchainCommands::create(swapchain.handle, cmd_pool);
 
                 aspect = (f32)swapchain.width / (f32)swapchain.height;
-                proj = hg_projection_orthographic(-aspect, aspect, -1.0f, 1.0f, 0.0f, 1.0f);
+                // proj = hg_projection_orthographic(-aspect, aspect, -1.0f, 1.0f, 0.0f, 1.0f);
+                proj = hg_projection_perspective((f32)hg_pi * 0.5f, aspect, 0.1f, 1000.0f);
                 pipeline2d.update_projection(proj);
             }
 
@@ -612,111 +639,6 @@ hg_test(hg_mpsc_queue) {
                 thread.join();
             }
             consumer.join();
-
-            for (auto val : vals) {
-                hg_test_assert(val == true);
-            }
-        }
-    }
-
-    return true;
-}
-
-hg_test(hg_mpmc_queue) {
-    HgStdAllocator mem;
-
-    {
-        HgMPMCQueue<u32> queue = std::move(HgMPMCQueue<u32>::create(mem, 8).value());
-        hg_defer(queue.destroy(mem));
-
-        hg_test_assert(queue.items != nullptr);
-        hg_test_assert(queue.capacity == 8);
-        hg_test_assert(queue.head->load() == 0);
-        hg_test_assert(queue.tail->load() == 0);
-
-        u32 item;
-
-        for (usize i = 0; i < 3; ++i) {
-            for (u32 j = 0; j < 7; ++j) {
-                queue.push(j);
-            }
-
-            hg_test_assert(queue.pop(item) && item == 0);
-            hg_test_assert(queue.pop(item) && item == 1);
-            hg_test_assert(queue.pop(item) && item == 2);
-            hg_test_assert(queue.pop(item) && item == 3);
-
-            for (u32 j = 7; j < 10; ++j) {
-                queue.push(j);
-            }
-
-            hg_test_assert(queue.pop(item) && item == 4);
-            hg_test_assert(queue.pop(item) && item == 5);
-            hg_test_assert(queue.pop(item) && item == 6);
-            hg_test_assert(queue.pop(item) && item == 7);
-            hg_test_assert(queue.pop(item) && item == 8);
-            hg_test_assert(queue.pop(item) && item == 9);
-        }
-    }
-
-    {
-        HgMPMCQueue<u32> queue = std::move(HgMPMCQueue<u32>::create(mem, 128).value());
-        hg_defer(queue.destroy(mem));
-
-        hg_test_assert(queue.items != nullptr);
-        hg_test_assert(queue.capacity == 128);
-        hg_test_assert(queue.head->load() == 0);
-        hg_test_assert(queue.tail->load() == 0);
-
-        for (u32 n = 0; n < 3; ++n) {
-            std::atomic_bool start{false};
-            std::thread producers[4];
-            std::thread consumers[4];
-
-            bool vals[100] = {};
-
-            auto prod_fn = [&](u32 idx) {
-                while (!start) {
-                    _mm_pause();
-                }
-                u32 begin = idx * 25;
-                u32 end = begin + 25;
-                for (u32 i = begin; i < end; ++i) {
-                    queue.push(i);
-                }
-            };
-            for (u32 j = 0; j < hg_countof(producers); ++j) {
-                producers[j] = std::thread(prod_fn, j);
-            }
-
-            std::atomic<usize> count = 0;
-            auto cons_fn = [&]() {
-                while (!start) {
-                    _mm_pause();
-                }
-                while (count < hg_countof(vals)) {
-                    usize count_internal = 0;
-                    for (usize j = 0; j < 20; ++j) {
-                        u32 idx;
-                        if (queue.pop(idx)) {
-                            vals[idx] = !vals[idx];
-                            ++count_internal;
-                        }
-                    }
-                    count.fetch_add(count_internal);
-                }
-            };
-            for (u32 j = 0; j < hg_countof(consumers); ++j) {
-                consumers[j] = std::thread(cons_fn);
-            }
-
-            start.store(true);
-            for (auto& thread : producers) {
-                thread.join();
-            }
-            for (auto& thread : consumers) {
-                thread.join();
-            }
 
             for (auto val : vals) {
                 hg_test_assert(val == true);
@@ -1276,6 +1198,111 @@ hg_test(hg_function) {
         hg_test_assert(mul_2.capture == nullptr);
 
         hg_test_assert(mul_2(2) == 4);
+    }
+
+    return true;
+}
+
+hg_test(hg_mpmc_queue) {
+    HgStdAllocator mem;
+
+    {
+        HgMPMCQueue<u32> queue = std::move(HgMPMCQueue<u32>::create(mem, 8).value());
+        hg_defer(queue.destroy(mem));
+
+        hg_test_assert(queue.items != nullptr);
+        hg_test_assert(queue.capacity == 8);
+        hg_test_assert(queue.head->load() == 0);
+        hg_test_assert(queue.tail->load() == 0);
+
+        u32 item;
+
+        for (usize i = 0; i < 3; ++i) {
+            for (u32 j = 0; j < 7; ++j) {
+                queue.push(j);
+            }
+
+            hg_test_assert(queue.pop(item) && item == 0);
+            hg_test_assert(queue.pop(item) && item == 1);
+            hg_test_assert(queue.pop(item) && item == 2);
+            hg_test_assert(queue.pop(item) && item == 3);
+
+            for (u32 j = 7; j < 10; ++j) {
+                queue.push(j);
+            }
+
+            hg_test_assert(queue.pop(item) && item == 4);
+            hg_test_assert(queue.pop(item) && item == 5);
+            hg_test_assert(queue.pop(item) && item == 6);
+            hg_test_assert(queue.pop(item) && item == 7);
+            hg_test_assert(queue.pop(item) && item == 8);
+            hg_test_assert(queue.pop(item) && item == 9);
+        }
+    }
+
+    {
+        HgMPMCQueue<u32> queue = std::move(HgMPMCQueue<u32>::create(mem, 128).value());
+        hg_defer(queue.destroy(mem));
+
+        hg_test_assert(queue.items != nullptr);
+        hg_test_assert(queue.capacity == 128);
+        hg_test_assert(queue.head->load() == 0);
+        hg_test_assert(queue.tail->load() == 0);
+
+        for (u32 n = 0; n < 3; ++n) {
+            std::atomic_bool start{false};
+            std::thread producers[4];
+            std::thread consumers[4];
+
+            bool vals[100] = {};
+
+            auto prod_fn = [&](u32 idx) {
+                while (!start) {
+                    _mm_pause();
+                }
+                u32 begin = idx * 25;
+                u32 end = begin + 25;
+                for (u32 i = begin; i < end; ++i) {
+                    queue.push(i);
+                }
+            };
+            for (u32 j = 0; j < hg_countof(producers); ++j) {
+                producers[j] = std::thread(prod_fn, j);
+            }
+
+            std::atomic<usize> count = 0;
+            auto cons_fn = [&]() {
+                while (!start) {
+                    _mm_pause();
+                }
+                while (count < hg_countof(vals)) {
+                    usize count_internal = 0;
+                    for (usize j = 0; j < 20; ++j) {
+                        u32 idx;
+                        if (queue.pop(idx)) {
+                            vals[idx] = !vals[idx];
+                            ++count_internal;
+                        }
+                    }
+                    count.fetch_add(count_internal);
+                }
+            };
+            for (u32 j = 0; j < hg_countof(consumers); ++j) {
+                consumers[j] = std::thread(cons_fn);
+            }
+
+            start.store(true);
+            for (auto& thread : producers) {
+                thread.join();
+            }
+            for (auto& thread : consumers) {
+                thread.join();
+            }
+
+            for (auto val : vals) {
+                hg_test_assert(val == true);
+            }
+        }
     }
 
     return true;

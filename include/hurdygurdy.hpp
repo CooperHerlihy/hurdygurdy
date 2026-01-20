@@ -2873,316 +2873,6 @@ struct HgQueue {
 };
 
 /**
- * A multi producer, single consumer, lock free FIFO queue
- */
-template<typename T>
-struct HgMPSCQueue {
-    /**
-     * The status of each item
-     */
-    std::atomic<bool>* has_item;
-    /**
-     * The allocated space for the queue
-     */
-    T* items;
-    /**
-     * The max number of items that can be stored in the queue
-     */
-    usize capacity;
-    /**
-     * The beginning of the queue, where items are popped from
-     */
-    std::atomic<usize>* tail;
-    /**
-     * The end of the queue, where items are still being pushed
-     */
-    std::atomic<usize>* head;
-    /**
-     * The end of the queue, where items are pushed to
-     */
-    std::atomic<usize>* working_head;
-
-    /**
-     * Allocate a new dynamic queue
-     *
-     * Parameters
-     * - mem The allocator to use
-     * - capacity The max number of items before reallocating
-     *
-     * Returns
-     * - The allocated dynamic queue
-     * - nullopt if allocation failed
-     */
-    static HgOption<HgMPSCQueue> create(HgAllocator& mem, usize capacity) {
-        hg_assert(capacity > 1);
-
-        HgOption<HgMPSCQueue> queue;
-        queue.has_value = true;
-
-        queue->has_item = mem.alloc<std::atomic<bool>>(capacity).data;
-        if (queue->has_item == nullptr)
-            goto cleanup_status;
-
-        queue->items = (T*)mem.alloc_fn(capacity * sizeof(T), alignof(T));
-        if (queue->items == nullptr)
-            goto cleanup_items;
-
-        {
-            auto atomics = mem.alloc<std::atomic<usize>>(4);
-            if (atomics == nullptr)
-                goto cleanup_atomics;
-
-            queue->tail = &atomics[0];
-            queue->head = &atomics[1];
-            queue->working_head = &atomics[2];
-        }
-
-        queue->capacity = capacity;
-        queue->reset();
-        return queue;
-
-cleanup_atomics:
-        mem.free_fn(queue->items, capacity * sizeof(T), alignof(T));
-cleanup_items:
-        mem.free(HgSpan<std::atomic<bool>>{queue->has_item, capacity});
-cleanup_status:
-        return hg_empty;
-    }
-
-    /**
-     * Free the dynamic queue
-     *
-     * Note, this is not thread safe
-     */
-    void destroy(HgAllocator& mem) {
-        mem.free(HgSpan<std::atomic<usize>>{tail, 3});
-        mem.free(HgSpan<std::atomic<bool>>{has_item, capacity});
-        mem.free_fn(items, capacity * sizeof(T), alignof(T));
-    }
-
-    /**
-     * Removes all contained objects, emptying the queue
-     *
-     * Note, this is not thread safe
-     */
-    void reset() {
-        tail->store(0);
-        head->store(0);
-        working_head->store(0);
-        for (auto& status : HgSpan<std::atomic<bool>>{has_item, capacity}) {
-            status.store(false);
-        }
-    }
-
-    /**
-     * Push an item to the end to the queue
-     *
-     * Note, space must be available
-     *
-     * Parameters
-     * - item The item to copy onto the queue
-     */
-    void push(const T& item) {
-        usize idx = working_head->load();
-        while (!working_head->compare_exchange_weak(idx, (idx + 1) % capacity)) {}
-
-        new (items + idx) T{item};
-        has_item[idx].store(true);
-
-        usize h = head->load();
-        while (has_item[h].load()) {
-            usize next = (h + 1) % capacity;
-            head->compare_exchange_strong(h, next);
-            h = next;
-        }
-    }
-
-    /**
-     * Pops an item off the end of the queue
-     *
-     * Parameters
-     * - item A reference to store the popped item, if available
-     *
-     * Returns
-     * - Whether an item could be popped
-     */
-    bool pop(T& item) {
-        usize idx = tail->load();
-        if (idx == head->load())
-            return false;
-
-        item = items[idx];
-        has_item[idx].store(false);
-
-        tail->store((idx + 1) % capacity);
-        return true;
-    }
-};
-
-/**
- * A multi producer, multi consumer, lock free ring buffer queue
- *
- * Note, multi consumer is supported, but FIFO is only guaranteed with single
- */
-template<typename T>
-struct HgMPMCQueue {
-    /**
-     * Whether each item is filled
-     */
-    std::atomic<bool>* has_item;
-    /**
-     * The allocated space for the queue
-     */
-    T* items;
-    /**
-     * The max number of items that can be stored in the queue
-     */
-    usize capacity;
-    /**
-     * The beginning of the queue, where items may be popped
-     */
-    std::atomic<usize>* tail;
-    /**
-     * The beginning of the queue, where items are beign popped
-     */
-    std::atomic<usize>* working_tail;
-    /**
-     * The end of the queue, where items are being pushed
-     */
-    std::atomic<usize>* head;
-    /**
-     * The end of the queue, where items may be pushed
-     */
-    std::atomic<usize>* working_head;
-
-    /**
-     * Allocate a new dynamic queue
-     *
-     * Parameters
-     * - mem The allocator to use
-     * - capacity The max number of items before reallocating
-     *
-     * Returns
-     * - The allocated dynamic queue
-     * - nullopt if allocation failed
-     */
-    static HgOption<HgMPMCQueue> create(HgAllocator& mem, usize capacity) {
-        hg_assert(capacity > 1);
-
-        HgOption<HgMPMCQueue> queue;
-        queue.has_value = true;
-
-        queue->has_item = mem.alloc<std::atomic<bool>>(capacity).data;
-        if (queue->has_item == nullptr)
-            goto cleanup_status;
-
-        queue->items = (T*)mem.alloc_fn(capacity * sizeof(T), alignof(T));
-        if (queue->items == nullptr)
-            goto cleanup_items;
-
-        {
-            auto atomics = mem.alloc<std::atomic<usize>>(4);
-            if (atomics == nullptr)
-                goto cleanup_atomics;
-
-            queue->tail = &atomics[0];
-            queue->working_tail = &atomics[1];
-            queue->head = &atomics[2];
-            queue->working_head = &atomics[3];
-        }
-
-        queue->capacity = capacity;
-        queue->reset();
-        return queue;
-
-cleanup_atomics:
-        mem.free_fn(queue->items, capacity * sizeof(T), alignof(T));
-cleanup_items:
-        mem.free(HgSpan<std::atomic<bool>>{queue->has_item, capacity});
-cleanup_status:
-        return hg_empty;
-    }
-
-    /**
-     * Free the dynamic queue
-     *
-     * Note, this is not thread safe
-     */
-    void destroy(HgAllocator& mem) {
-        mem.free(HgSpan<std::atomic<usize>>{tail, 4});
-        mem.free(HgSpan<std::atomic<bool>>{has_item, capacity});
-        mem.free_fn(items, capacity * sizeof(T), alignof(T));
-    }
-
-    /**
-     * Removes all contained objects, emptying the queue
-     *
-     * Note, this is not thread safe
-     */
-    void reset() {
-        tail->store(0);
-        working_tail->store(0);
-        head->store(0);
-        working_head->store(0);
-        for (auto& status : HgSpan<std::atomic<bool>>{has_item, capacity}) {
-            status.store(false);
-        }
-    }
-
-    /**
-     * Push an item to the end to the queue
-     *
-     * Note, space must be available
-     *
-     * Parameters
-     * - item The item to copy onto the queue
-     */
-    void push(const T& item) {
-        usize idx = working_head->load();
-        while (!working_head->compare_exchange_weak(idx, (idx + 1) % capacity)) {}
-
-        new (items + idx) T{item};
-        has_item[idx].store(true);
-
-        usize h = head->load();
-        while (has_item[h].load()) {
-            usize next = (h + 1) % capacity;
-            head->compare_exchange_strong(h, next);
-            h = next;
-        }
-    }
-
-    /**
-     * Pops an item off the end of the queue
-     *
-     * Parameters
-     * - item A reference to store the popped item, if available
-     *
-     * Returns
-     * - Whether an item could be popped
-     */
-    bool pop(T& item) {
-        usize idx;
-        do {
-            idx = working_tail->load();
-            if (idx == head->load())
-                return false;
-        } while (!has_item[idx].load() || !working_tail->compare_exchange_weak(idx, (idx + 1) % capacity));
-
-        item = items[idx];
-        has_item[idx].store(false);
-
-        usize t = tail->load();
-        while (t != head->load() && !has_item[t].load()) {
-            usize next = (t + 1) % capacity;
-            tail->compare_exchange_strong(t, next);
-            t = next;
-        }
-        return true;
-    }
-};
-
-/**
  * A dynamic string container
  */
 struct HgString {
@@ -4104,14 +3794,330 @@ struct HgFence {
     void signal();
 
     /**
+     * Signal that events have completed
+     *
+     * Parameters
+     * - count The number of signaled events
+     */
+    void signal(usize count);
+
+    /**
      * Returns whether all work has been completed
      */
-    bool complete();
+    bool is_complete();
 
     /**
      * Waits for all work submissions to be completed
      */
     void wait();
+};
+
+/**
+ * A multi producer, single consumer, lock free FIFO queue
+ */
+template<typename T>
+struct HgMPSCQueue {
+    /**
+     * The status of each item
+     */
+    std::atomic<bool>* has_item;
+    /**
+     * The allocated space for the queue
+     */
+    T* items;
+    /**
+     * The max number of items that can be stored in the queue
+     */
+    usize capacity;
+    /**
+     * The beginning of the queue, where items are popped from
+     */
+    std::atomic<usize>* tail;
+    /**
+     * The end of the queue, where items are still being pushed
+     */
+    std::atomic<usize>* head;
+    /**
+     * The end of the queue, where items are pushed to
+     */
+    std::atomic<usize>* working_head;
+
+    /**
+     * Allocate a new dynamic queue
+     *
+     * Parameters
+     * - mem The allocator to use
+     * - capacity The max number of items before reallocating
+     *
+     * Returns
+     * - The allocated dynamic queue
+     * - nullopt if allocation failed
+     */
+    static HgOption<HgMPSCQueue> create(HgAllocator& mem, usize capacity) {
+        hg_assert(capacity > 1);
+
+        HgOption<HgMPSCQueue> queue;
+        queue.has_value = true;
+
+        queue->has_item = mem.alloc<std::atomic<bool>>(capacity).data;
+        if (queue->has_item == nullptr)
+            goto cleanup_status;
+
+        queue->items = (T*)mem.alloc_fn(capacity * sizeof(T), alignof(T));
+        if (queue->items == nullptr)
+            goto cleanup_items;
+
+        {
+            auto atomics = mem.alloc<std::atomic<usize>>(4);
+            if (atomics == nullptr)
+                goto cleanup_atomics;
+
+            queue->tail = &atomics[0];
+            queue->head = &atomics[1];
+            queue->working_head = &atomics[2];
+        }
+
+        queue->capacity = capacity;
+        queue->reset();
+        return queue;
+
+cleanup_atomics:
+        mem.free_fn(queue->items, capacity * sizeof(T), alignof(T));
+cleanup_items:
+        mem.free(HgSpan<std::atomic<bool>>{queue->has_item, capacity});
+cleanup_status:
+        return hg_empty;
+    }
+
+    /**
+     * Free the dynamic queue
+     *
+     * Note, this is not thread safe
+     */
+    void destroy(HgAllocator& mem) {
+        mem.free(HgSpan<std::atomic<usize>>{tail, 3});
+        mem.free(HgSpan<std::atomic<bool>>{has_item, capacity});
+        mem.free_fn(items, capacity * sizeof(T), alignof(T));
+    }
+
+    /**
+     * Removes all contained objects, emptying the queue
+     *
+     * Note, this is not thread safe
+     */
+    void reset() {
+        tail->store(0);
+        head->store(0);
+        working_head->store(0);
+        for (auto& status : HgSpan<std::atomic<bool>>{has_item, capacity}) {
+            status.store(false);
+        }
+    }
+
+    /**
+     * Push an item to the end to the queue
+     *
+     * Note, space must be available
+     *
+     * Parameters
+     * - item The item to copy onto the queue
+     */
+    void push(const T& item) {
+        usize idx = working_head->load();
+        while (!working_head->compare_exchange_weak(idx, (idx + 1) % capacity)) {}
+
+        new (items + idx) T{item};
+        has_item[idx].store(true);
+
+        usize h = head->load();
+        while (has_item[h].load()) {
+            usize next = (h + 1) % capacity;
+            head->compare_exchange_strong(h, next);
+            h = next;
+        }
+    }
+
+    /**
+     * Pops an item off the end of the queue
+     *
+     * Parameters
+     * - item A reference to store the popped item, if available
+     *
+     * Returns
+     * - Whether an item could be popped
+     */
+    bool pop(T& item) {
+        usize idx = tail->load();
+        if (idx == head->load())
+            return false;
+
+        item = items[idx];
+        has_item[idx].store(false);
+
+        tail->store((idx + 1) % capacity);
+        return true;
+    }
+};
+
+/**
+ * A multi producer, multi consumer, lock free queue
+ */
+template<typename T>
+struct HgMPMCQueue {
+    /**
+     * Whether each item is filled
+     */
+    std::atomic<bool>* has_item;
+    /**
+     * The allocated space for the queue
+     */
+    T* items;
+    /**
+     * The max number of items that can be stored in the queue
+     */
+    usize capacity;
+    /**
+     * The beginning of the queue, where items may be popped
+     */
+    std::atomic<usize>* tail;
+    /**
+     * The beginning of the queue, where items are beign popped
+     */
+    std::atomic<usize>* working_tail;
+    /**
+     * The end of the queue, where items are being pushed
+     */
+    std::atomic<usize>* head;
+    /**
+     * The end of the queue, where items may be pushed
+     */
+    std::atomic<usize>* working_head;
+
+    /**
+     * Allocate a new dynamic queue
+     *
+     * Parameters
+     * - mem The allocator to use
+     * - capacity The max number of items before reallocating
+     *
+     * Returns
+     * - The allocated dynamic queue
+     * - nullopt if allocation failed
+     */
+    static HgOption<HgMPMCQueue> create(HgAllocator& mem, usize capacity) {
+        hg_assert(capacity > 1);
+
+        HgOption<HgMPMCQueue> queue;
+        queue.has_value = true;
+
+        queue->has_item = mem.alloc<std::atomic<bool>>(capacity).data;
+        if (queue->has_item == nullptr)
+            goto cleanup_status;
+
+        queue->items = (T*)mem.alloc_fn(capacity * sizeof(T), alignof(T));
+        if (queue->items == nullptr)
+            goto cleanup_items;
+
+        {
+            auto atomics = mem.alloc<std::atomic<usize>>(4);
+            if (atomics == nullptr)
+                goto cleanup_atomics;
+
+            queue->tail = &atomics[0];
+            queue->working_tail = &atomics[1];
+            queue->head = &atomics[2];
+            queue->working_head = &atomics[3];
+        }
+
+        queue->capacity = capacity;
+        queue->reset();
+        return queue;
+
+cleanup_atomics:
+        mem.free_fn(queue->items, capacity * sizeof(T), alignof(T));
+cleanup_items:
+        mem.free(HgSpan<std::atomic<bool>>{queue->has_item, capacity});
+cleanup_status:
+        return hg_empty;
+    }
+
+    /**
+     * Free the dynamic queue
+     *
+     * Note, this is not thread safe
+     */
+    void destroy(HgAllocator& mem) {
+        mem.free(HgSpan<std::atomic<usize>>{tail, 4});
+        mem.free(HgSpan<std::atomic<bool>>{has_item, capacity});
+        mem.free_fn(items, capacity * sizeof(T), alignof(T));
+    }
+
+    /**
+     * Removes all contained objects, emptying the queue
+     *
+     * Note, this is not thread safe
+     */
+    void reset() {
+        tail->store(0);
+        working_tail->store(0);
+        head->store(0);
+        working_head->store(0);
+        for (auto& status : HgSpan<std::atomic<bool>>{has_item, capacity}) {
+            status.store(false);
+        }
+    }
+
+    /**
+     * Push an item to the end to the queue
+     *
+     * Note, space must be available
+     *
+     * Parameters
+     * - item The item to copy onto the queue
+     */
+    void push(const T& item) {
+        usize idx = working_head->load();
+        while (!working_head->compare_exchange_weak(idx, (idx + 1) % capacity)) {}
+
+        new (items + idx) T{item};
+        has_item[idx].store(true);
+
+        usize h = head->load();
+        while (has_item[h].load()) {
+            usize next = (h + 1) % capacity;
+            head->compare_exchange_strong(h, next);
+            h = next;
+        }
+    }
+
+    /**
+     * Pops an item off the end of the queue
+     *
+     * Parameters
+     * - item A reference to store the popped item, if available
+     *
+     * Returns
+     * - Whether an item could be popped
+     */
+    bool pop(T& item) {
+        usize idx;
+        do {
+            idx = working_tail->load();
+            if (idx == head->load())
+                return false;
+        } while (!has_item[idx].load() || !working_tail->compare_exchange_weak(idx, (idx + 1) % capacity));
+
+        item = items[idx];
+        has_item[idx].store(false);
+
+        usize t = tail->load();
+        while (t != head->load() && !has_item[t].load()) {
+            usize next = (t + 1) % capacity;
+            tail->compare_exchange_strong(t, next);
+            t = next;
+        }
+        return true;
+    }
 };
 
 /**
@@ -5868,8 +5874,8 @@ struct HgPipeline2D {
     void add_texture(HgTexture* texture);
     void remove_texture(HgTexture* texture);
 
-    void update_projection(HgMat4& projection);
-    void update_view(HgMat4& view);
+    void update_projection(const HgMat4& projection);
+    void update_view(const HgMat4& view);
 
     void add_sprite(HgEntity entity, HgTexture& texture, HgVec2 uv_pos, HgVec2 uv_size);
     void remove_sprite(HgEntity entity);
