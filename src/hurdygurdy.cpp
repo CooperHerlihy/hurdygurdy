@@ -561,11 +561,12 @@ HgMat4 hg_model_matrix_3d(const HgVec3& position, const HgVec3& scale, const HgQ
     return m4;
 }
 
-HgMat4 hg_view_matrix(const HgVec3& position, f32 zoom, const HgQuat& rotation) {
+HgMat4 hg_view_matrix(const HgVec3& position, const HgVec3& zoom, const HgQuat& rotation) {
     HgMat4 rot{hg_rotate(hg_conj(rotation), HgMat3{1.0f})};
     HgMat4 pos{1.0f};
-    pos.x.x = zoom;
-    pos.y.y = zoom;
+    pos.x.x = zoom.x;
+    pos.y.y = zoom.y;
+    pos.z.z = zoom.z;
     pos.w.x = -position.x;
     pos.w.y = -position.y;
     pos.w.z = -position.z;

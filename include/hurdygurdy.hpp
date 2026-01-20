@@ -1778,7 +1778,7 @@ HgMat4 hg_model_matrix_3d(const HgVec3& position, const HgVec3& scale, const HgQ
  * Returns
  * - The created matrix
  */
-HgMat4 hg_view_matrix(const HgVec3& position, f32 zoom, const HgQuat& rotation);
+HgMat4 hg_view_matrix(const HgVec3& position, const HgVec3& zoom, const HgQuat& rotation);
 
 /**
  * Creates an orthographic projection matrix

@@ -93,7 +93,7 @@ int main(void) {
 
     HgTransform& square_transform = hg_ecs->add<HgTransform>(square);
     square_transform = {};
-    square_transform.position.z = 0.5f;
+    square_transform.position.z = 1.0f;
 
     pipeline2d.add_sprite(square, texture, {0.0f}, {1.0f});
 
@@ -159,7 +159,7 @@ int main(void) {
                 * move_speed * deltaf;
         }
 
-        pipeline2d.update_view(hg_view_matrix(camera.position, 1.0f, camera.rotation));
+        pipeline2d.update_view(hg_view_matrix(camera.position, camera.scale, camera.rotation));
 
         if (window.was_resized()) {
             vkQueueWaitIdle(hg_vk_queue);
