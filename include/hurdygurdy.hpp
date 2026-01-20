@@ -283,7 +283,7 @@ using f32 = std::float_t;
 using f64 = std::double_t;
 
 template<typename T>
-static constexpr bool hg_is_memmove_safe = std::is_trivially_copyable_v<T> && std::is_trivially_destructible_v<T>;
+static constexpr bool hg_is_c_safe = std::is_trivially_copyable_v<T> && std::is_trivially_destructible_v<T>;
 
 /**
  * An empty type to flag empty optional construct
@@ -442,10 +442,6 @@ struct HgSpan<const void> {
      * The size of the array in bytes
      */
     usize count;
-    /**
-     * The alignment of the array
-     */
-    usize alignment;
 
     /**
      * The size of the array in bytes
@@ -468,10 +464,6 @@ struct HgSpan<void> {
      * The size of the array in bytes
      */
     usize count;
-    /**
-     * The alignment of the array
-     */
-    usize alignment;
 
     /**
      * The size of the array in bytes
@@ -487,7 +479,7 @@ struct HgSpan<void> {
      * Implicit conversion can add const
      */
     constexpr operator HgSpan<const void>() const {
-        return {(const void*)data, count, alignment};
+        return {(const void*)data, count};
     }
 };
 
@@ -1830,248 +1822,8 @@ HgMat4 hg_projection_perspective(f32 fov, f32 aspect, f32 near, f32 far);
 u32 hg_max_mipmaps(u32 width, u32 height, u32 depth);
 
 /**
- * The interface for generic allocators
+ * An arena allocator
  */
-struct HgAllocator {
-    /**
-     * Allocates memory
-     *
-     * Parameters
-     * - size The size to allocate in bytes
-     * - alignment The alignment of the allocation, must be a power of 2
-     *
-     * Returns
-     * - The allocated memory
-     * - nullptr on failure
-     */
-    virtual void* alloc_fn(usize size, usize alignment) = 0;
-
-    /**
-     * Changes the size of an allocation, potentially returning a different
-     * allocation, with the data copied over
-     *
-     * Parameters
-     * - allocation The allocation to free
-     * - old_size The original size of the allocation in bytes
-     * - new_size The size to allocate in bytes
-     * - alignment The alignment of the allocation, must be a power of 2
-     *
-     * Returns
-     * - The reallocated memory
-     * - nullptr on failure
-     */
-    virtual void* realloc_fn(void* allocation, usize old_size, usize new_size, usize alignment) = 0;
-
-    /**
-     * Frees allocated memory
-     *
-     * Parameters
-     * - allocation The allocation to free
-     * - size The size of the allocation in bytes
-     * - alignment The alignment of the allocation, must be a power of 2
-     */
-    virtual void free_fn(void* allocation, usize size, usize alignment) = 0;
-
-    /**
-     * A convenience to allocate a type
-     *
-     * Returns
-     * - The allocated item
-     * - nullptr on failure
-     */
-    template<typename T>
-    T* alloc() {
-        return new ((T*)alloc_fn(sizeof(T), alignof(T))) T;
-    }
-
-    /**
-     * A convenience to allocate an array of a type
-     *
-     * Note, objects are default constructed if possible, otherwise they are
-     * left uninitialized
-     *
-     * Parameters
-     * - count The number of T to allocate
-     *
-     * Returns
-     * - The allocated array
-     * - nullptr on failure
-     */
-    template<typename T>
-    HgSpan<T> alloc(usize count) {
-        HgSpan<T> span;
-        span.data = (T*)alloc_fn(count * sizeof(T), alignof(T));
-        span.count = span.data != nullptr ? count : 0;
-
-        if constexpr (std::is_default_constructible_v<T>) {
-            for (usize i = 0; i < span.count; ++i) {
-                new (&span[i]) T;
-            }
-        }
-
-        return span;
-    }
-
-    /**
-     * A convenience to allocate a void array
-     *
-     * Parameters
-     * - size The size in bytes to allocate
-     *
-     * Returns
-     * - The allocated array
-     * - nullptr on failure
-     */
-    HgSpan<void> alloc(usize size, usize alignment) {
-        HgSpan<void> span;
-        span.data = alloc_fn(size, alignment);
-        span.count = span.data != nullptr ? size : 0;
-        span.alignment = alignment;
-        return span;
-    }
-
-    /**
-     * A convenience to reallocate an array of a type
-     *
-     * Note, objects are default constructed if possible, otherwise they are
-     * left uninitialized
-     *
-     * Parameters
-     * - allocation The allocation to reallocate
-     * - count The new number of T to allocate
-     *
-     * Returns
-     * - The reallocated array
-     * - nullptr on failure
-     */
-    template<typename T>
-    HgSpan<T> realloc(HgSpan<T> allocation, usize count) {
-        static_assert(hg_is_memmove_safe<T>);
-
-        HgSpan<T> span;
-        span.data = (T*)realloc_fn(allocation.data, allocation.count * sizeof(T), count * sizeof(T), alignof(T));
-        span.count = span.data != nullptr ? count : 0;
-
-        if constexpr (std::is_default_constructible_v<T>) {
-            for (usize i = allocation.count; i < span.count; ++i) {
-                new (&span[i]) T;
-            }
-        }
-
-        return span;
-    }
-
-    /**
-     * A convenience to reallocate a void array
-     *
-     * Parameters
-     * - allocation The allocation to reallocate
-     * - size The new size to allocate
-     *
-     * Returns
-     * - The reallocated array
-     * - nullptr on failure
-     */
-    HgSpan<void> realloc(HgSpan<void> allocation, usize size) {
-        HgSpan<void> span;
-        span.data = realloc_fn(allocation.data, allocation.count, size, allocation.alignment);
-        span.count = span.data != nullptr ? size : 0;
-        return span;
-    }
-
-    /**
-     * A convenience to free a type
-     *
-     * Parameters
-     * - allocation The allocation to free
-     */
-    template<typename T>
-    void free(T* allocation) {
-        if constexpr (std::is_destructible_v<T>) {
-            allocation->~T();
-        }
-        free_fn(allocation, sizeof(T), alignof(T));
-    }
-
-    /**
-     * A convenience to free an array of a type
-     *
-     * Parameters
-     * - allocation The allocation to free
-     */
-    template<typename T>
-    void free(HgSpan<T> allocation) {
-        if constexpr (std::is_destructible_v<T>) {
-            for (usize i = 0; i < allocation.count; ++i) {
-                allocation[i].~T();
-            }
-        }
-        free_fn(allocation.data, allocation.count * sizeof(T), alignof(T));
-    }
-
-    /**
-     * A convenience to free a void array
-     *
-     * Parameters
-     * - allocation The allocation to free
-     */
-    void free(HgSpan<void> allocation) {
-        free_fn(allocation.data, allocation.count, allocation.alignment);
-    }
-};
-
-/**
- * C malloc, realloc, and free in the HgAllocator interface
- */
-struct HgStdAllocator : public HgAllocator {
-    /**
-     * Calls malloc, checking for nullptr in debug mode
-     *
-     * Parameters
-     * - size The size of the allocation in bytes
-     * - alignment The alignment in bytes of the allocation
-     *
-     * Returns
-     * - The allocated memory
-     */
-    void* alloc_fn(usize size, usize alignment) override;
-
-    /**
-     * Calls realloc, checking for nullptr in debug mode
-     *
-     * Parameters
-     * - allocation The allocation to resize
-     * - old_size The size of the original allocation in bytes
-     * - new_size The size of the new allocation in bytes
-     * - alignment The alignment in bytes of the allocation
-     *
-     * Returns
-     * - The allocated memory
-     */
-    void* realloc_fn(void* allocation, usize old_size, usize new_size, usize alignment) override;
-
-    /**
-     * Calls free
-     *
-     * Parameters
-     * - allocation The allocation to free
-     * - size The size of the allocation in bytes
-     * - alignment The alignment in bytes of the allocation
-     */
-    void free_fn(void* allocation, usize size, usize alignment) override;
-
-    /**
-     * Convenience to grab a statically constructed HgStdAllocator vtable
-     *
-     * Returns
-     * - The global standard allocator, no different from any other
-     */
-    static HgStdAllocator& get() {
-        static HgStdAllocator mem;
-        return mem;
-    }
-};
-
 struct HgArena {
     /**
      * A pointer to the memory being allocated
@@ -2099,8 +1851,6 @@ struct HgArena {
 
     /**
      * Create an arena from a block of memory
-     *
-     * Note, does not retain the block's alignment
      */
     HgArena(HgSpan<void> block)
         : memory{block.data}
@@ -2138,10 +1888,9 @@ struct HgArena {
      * - alignment The required alignment of the allocation in bytes
      *
      * Returns
-     * - The allocation if successful
-     * - nullptr if the allocation exceeds capacity
+     * - The allocation, never nullptr
      */
-    void* alloc_fn(usize size, usize alignment);
+    void* alloc_v(usize size, usize alignment);
 
     /**
      * Reallocates memory from a arena
@@ -2155,21 +1904,35 @@ struct HgArena {
      * - alignment The required alignment of the allocation in bytes
      *
      * Returns
-     * - The allocation if successful
-     * - nullptr if the allocation exceeds capacity
+     * - The allocation, never nullptr
      */
-    void* realloc_fn(void* allocation, usize old_size, usize new_size, usize alignment);
+    void* realloc_v(void* allocation, usize old_size, usize new_size, usize alignment);
 
     /**
      * A convenience to allocate a type
      *
      * Returns
-     * - The allocated item
-     * - nullptr on failure
+     * - The allocated item, never nullptr
      */
     template<typename T>
     T* alloc() {
-        return new ((T*)alloc_fn(sizeof(T), alignof(T))) T;
+        return new ((T*)alloc_v(sizeof(T), alignof(T))) T;
+    }
+
+    /**
+     * A convenience to allocate a void array
+     *
+     * Parameters
+     * - size The size in bytes to allocate
+     *
+     * Returns
+     * - The allocated array, never nullptr
+     */
+    HgSpan<void> alloc(usize size, usize alignment) {
+        HgSpan<void> span;
+        span.data = alloc_v(size, alignment);
+        span.count = span.data != nullptr ? size : 0;
+        return span;
     }
 
     /**
@@ -2182,66 +1945,16 @@ struct HgArena {
      * - count The number of T to allocate
      *
      * Returns
-     * - The allocated array
-     * - nullptr on failure
+     * - The allocated array, never nullptr
      */
     template<typename T>
     HgSpan<T> alloc(usize count) {
         HgSpan<T> span;
-        span.data = (T*)alloc_fn(count * sizeof(T), alignof(T));
+        span.data = (T*)alloc_v(count * sizeof(T), alignof(T));
         span.count = span.data != nullptr ? count : 0;
 
         if constexpr (std::is_default_constructible_v<T>) {
             for (usize i = 0; i < span.count; ++i) {
-                new (&span[i]) T;
-            }
-        }
-
-        return span;
-    }
-
-    /**
-     * A convenience to allocate a void array
-     *
-     * Parameters
-     * - size The size in bytes to allocate
-     *
-     * Returns
-     * - The allocated array
-     * - nullptr on failure
-     */
-    HgSpan<void> alloc(usize size, usize alignment) {
-        HgSpan<void> span;
-        span.data = alloc_fn(size, alignment);
-        span.count = span.data != nullptr ? size : 0;
-        span.alignment = alignment;
-        return span;
-    }
-
-    /**
-     * A convenience to reallocate an array of a type
-     *
-     * Note, objects are default constructed if possible, otherwise they are
-     * left uninitialized
-     *
-     * Parameters
-     * - allocation The allocation to reallocate
-     * - count The new number of T to allocate
-     *
-     * Returns
-     * - The reallocated array
-     * - nullptr on failure
-     */
-    template<typename T>
-    HgSpan<T> realloc(HgSpan<T> allocation, usize count) {
-        static_assert(hg_is_memmove_safe<T>);
-
-        HgSpan<T> span;
-        span.data = (T*)realloc_fn(allocation.data, allocation.count * sizeof(T), count * sizeof(T), alignof(T));
-        span.count = span.data != nullptr ? count : 0;
-
-        if constexpr (std::is_default_constructible_v<T>) {
-            for (usize i = allocation.count; i < span.count; ++i) {
                 new (&span[i]) T;
             }
         }
@@ -2257,129 +1970,109 @@ struct HgArena {
      * - size The new size to allocate
      *
      * Returns
-     * - The reallocated array
-     * - nullptr on failure
+     * - The reallocated array, never nullptr
      */
-    HgSpan<void> realloc(HgSpan<void> allocation, usize size) {
+    HgSpan<void> realloc(HgSpan<void> allocation, usize size, usize alignment) {
         HgSpan<void> span;
-        span.data = realloc_fn(allocation.data, allocation.count, size, allocation.alignment);
+        span.data = realloc_v(allocation.data, allocation.count, size, alignment);
         span.count = span.data != nullptr ? size : 0;
         return span;
     }
 
     /**
-     * A convenience to destroy a type
+     * A convenience to reallocate an array of a type
+     *
+     * Note, objects are default constructed if possible, otherwise they are
+     * left uninitialized
      *
      * Parameters
-     * - allocation The allocation to destroy
+     * - allocation The allocation to reallocate
+     * - count The new number of T to allocate
+     *
+     * Returns
+     * - The reallocated array, never nullptr
      */
     template<typename T>
-    void free(T* allocation) {
-        if constexpr (std::is_destructible_v<T>) {
-            allocation->~T();
-        }
-    }
+    HgSpan<T> realloc(HgSpan<T> allocation, usize count) {
+        static_assert(hg_is_c_safe<T>);
 
-    /**
-     * A convenience to destroy an array of a type
-     *
-     * Parameters
-     * - allocation The allocation to destroy
-     */
-    template<typename T>
-    void free(HgSpan<T> allocation) {
-        if constexpr (std::is_destructible_v<T>) {
-            for (usize i = 0; i < allocation.count; ++i) {
-                allocation[i].~T();
+        HgSpan<T> span;
+        span.data = (T*)realloc_v(allocation.data, allocation.count * sizeof(T), count * sizeof(T), alignof(T));
+        span.count = span.data != nullptr ? count : 0;
+
+        if constexpr (std::is_default_constructible_v<T>) {
+            for (usize i = allocation.count; i < span.count; ++i) {
+                new (&span[i]) T;
             }
         }
+
+        return span;
     }
 };
 
-inline thread_local HgSpan<HgArena> hg_scratch_arenas{};
-
 /**
- * Get a scratch arena for temporary allocations, assuming no conflicts
- *
- * Returns
- * - A scratch arena
+ * A scope guard to save and load the head of an arena
  */
-HgArena& hg_get_scratch();
-
-/**
- * Get a scratch arena for temporary allocations, accounting for a conflict
- *
- * Parameters
- * - conflict If an arena is being used, the returned arena will be different
- *
- * Returns
- * - A scratch arena
- */
-HgArena& hg_get_scratch(const HgArena* conflict);
-
-/**
- * Get a scratch arena for temporary allocations, accounting for conflicts
- *
- * Parameters
- * - conflict If arenas are being used, the returned arena will be different
- *
- * Returns
- * - A scratch arena
- */
-HgArena& hg_get_scratch(HgSpan<const HgArena*> conflicts);
-
-/**
- * An arena allocator
- *
- * Allocations are made very quickly, and are not freed individually, instead
- * the whole block is freed at once
- */
-struct HgArenaAllocator : public HgAllocator {
+struct HgArenaScope {
     /**
-     * The arena
+     * The arena to guard
      */
     HgArena* arena;
-
-    HgArenaAllocator() = default;
+    /**
+     * The original head of the arena
+     */
+    usize original_pos;
 
     /**
-     * Implicit conversion from arena
+     * Create a scope guard with an arena
      */
-    HgArenaAllocator(HgArena& arena_val) : arena{&arena_val} {}
+    HgArenaScope(HgArena& arena_val) : arena{&arena_val}, original_pos{arena->save()} {}
 
     /**
-     * Allocates the arena with capacity
-     *
-     * Parameters
-     * - parent The allocator to create the arena from
-     * - capacity The size of the block to allocate and use
-     *
-     * Returns
-     * - The allocated arena
-     * - nullopt if allocation failed
+     * Load the original head at the scope's end
      */
-    static HgOption<HgArenaAllocator> create(HgAllocator& parent, usize capacity);
+    ~HgArenaScope() {
+        arena->load(original_pos);
+    }
+
+    operator HgArena&() {
+        return *arena;
+    }
 
     /**
-     * Frees the arena's memory
+     * Frees all allocations from an arena
      */
-    void destroy(HgAllocator& parent);
+    void reset() {
+        arena->reset();
+    }
+
+    /**
+     * Returns the state of the arena
+     */
+    usize save() {
+        return arena->save();
+    }
+
+    /**
+     * Loads the saved state of the arena
+     */
+    void load(usize save_state) {
+        arena->load(save_state);
+    }
 
     /**
      * Allocates memory from an arena
-     *
-     * Allocations are not individually freed, hg_arena() is
-     * called instead to free all allocations at once
      *
      * Parameters
      * - size The size in bytes of the allocation
      * - alignment The required alignment of the allocation in bytes
      *
      * Returns
-     * - The allocation if successful
-     * - nullptr if the allocation exceeds capacity
+     * - The allocation, never nullptr
      */
-    void* alloc_fn(usize size, usize alignment) override;
+    void* alloc_v(usize size, usize alignment) {
+        return arena->alloc_v(size, alignment);
+    }
 
     /**
      * Reallocates memory from a arena
@@ -2393,28 +2086,152 @@ struct HgArenaAllocator : public HgAllocator {
      * - alignment The required alignment of the allocation in bytes
      *
      * Returns
-     * - The allocation if successful
-     * - nullptr if the allocation exceeds capacity
+     * - The allocation, never nullptr
      */
-    void* realloc_fn(void* allocation, usize old_size, usize new_size, usize alignment) override;
+    void* realloc_v(void* allocation, usize old_size, usize new_size, usize alignment) {
+        return arena->realloc_v(allocation, old_size, new_size, alignment);
+    }
 
     /**
-     * Does nothing, only exists to fit allocator interface
+     * A convenience to allocate a type
+     *
+     * Returns
+     * - The allocated item, never nullptr
+     */
+    template<typename T>
+    T* alloc() {
+        return arena->alloc<T>();
+    }
+
+    /**
+     * A convenience to allocate a void array
      *
      * Parameters
-     * - allocation The allocation to free, must be the last allocation made
-     * - size The size of the allocation
-     * - alignment The required alignment of the allocation in bytes
+     * - size The size in bytes to allocate
+     *
+     * Returns
+     * - The allocated array, never nullptr
      */
-    void free_fn(void* allocation, usize size, usize alignment) override;
+    HgSpan<void> alloc(usize size, usize alignment) {
+        return arena->alloc(size, alignment);
+    }
+
+    /**
+     * A convenience to allocate an array of a type
+     *
+     * Note, objects are default constructed if possible, otherwise they are
+     * left uninitialized
+     *
+     * Parameters
+     * - count The number of T to allocate
+     *
+     * Returns
+     * - The allocated array, never nullptr
+     */
+    template<typename T>
+    HgSpan<T> alloc(usize count) {
+        return arena->alloc<T>(count);
+    }
+
+    /**
+     * A convenience to reallocate a void array
+     *
+     * Parameters
+     * - allocation The allocation to reallocate
+     * - size The new size to allocate
+     *
+     * Returns
+     * - The reallocated array, never nullptr
+     */
+    HgSpan<void> realloc(HgSpan<void> allocation, usize size, usize alignment) {
+        return arena->realloc(allocation, size, alignment);
+    }
+
+    /**
+     * A convenience to reallocate an array of a type
+     *
+     * Note, objects are default constructed if possible, otherwise they are
+     * left uninitialized
+     *
+     * Parameters
+     * - allocation The allocation to reallocate
+     * - count The new number of T to allocate
+     *
+     * Returns
+     * - The reallocated array, never nullptr
+     */
+    template<typename T>
+    HgSpan<T> realloc(HgSpan<T> allocation, usize count) {
+        return arena->realloc(allocation, count);
+    }
 };
+
+inline thread_local HgSpan<HgArena> hg_arenas{};
+
+/**
+ * Get a scratch arena for temporary allocations, assuming no conflicts
+ *
+ * Returns
+ * - A scratch arena
+ */
+HgArena& hg_get_arena();
+
+/**
+ * Get a scratch arena for temporary allocations, accounting for a conflict
+ *
+ * Parameters
+ * - conflict If an arena is being used, the returned arena will be different
+ *
+ * Returns
+ * - A scratch arena
+ */
+HgArena& hg_get_arena(const HgArena* conflict);
+
+/**
+ * Get a scratch arena for temporary allocations, accounting for conflicts
+ *
+ * Parameters
+ * - conflict If arenas are being used, the returned arena will be different
+ *
+ * Returns
+ * - A scratch arena
+ */
+HgArena& hg_get_arena(HgSpan<const HgArena*> conflicts);
+
+/**
+ * A convenience to destroy a type
+ *
+ * Parameters
+ * - allocation The allocation to destroy
+ */
+template<typename T>
+void hg_destroy(T* allocation) {
+    if constexpr (std::is_destructible_v<T>) {
+        allocation->~T();
+    }
+}
+
+/**
+ * A convenience to destroy an array of a type
+ *
+ * Parameters
+ * - allocation The allocation to destroy
+ */
+template<typename T>
+void hg_destroy(HgSpan<T> allocation) {
+    if constexpr (std::is_destructible_v<T>) {
+        for (usize i = 0; i < allocation.count; ++i) {
+            allocation[i].~T();
+        }
+    }
+}
 
 /**
  * A dynamically sized array
  */
 template<typename T>
 struct HgArray {
-    static_assert(hg_is_memmove_safe<T>);
+    static_assert(hg_is_c_safe<T>);
 
     /**
      * The allocated space for the array
@@ -2437,46 +2254,41 @@ struct HgArray {
     }
 
     /**
+     * Returns whether capacity is filled
+     */
+    constexpr bool is_full() const {
+        return count == capacity;
+    }
+
+    /**
      * Allocate a new dynamic array
      *
      * Parameters
-     * - mem The allocator to use
+     * - arena The arena to allocate from
      * - count The number of active items to begin with, must be <= capacity
      * - capacity The max number of items before reallocating
      *
      * Returns
      * - The allocated dynamic array
-     * - nullopt if allocation failed
      */
-    static HgOption<HgArray<T>> create(HgAllocator& mem, usize count, usize capacity) {
+    static HgArray<T> create(HgArena& arena, usize count, usize capacity) {
         hg_assert(count <= capacity);
 
-        HgOption<HgArray> arr;
-        arr.has_value = true;
+        HgArray arr;
 
-        arr->items = (T*)mem.alloc_fn(capacity * sizeof(T), alignof(T));
-        if (arr->items == nullptr)
-            return hg_empty;
-
-        arr->capacity = capacity;
-        arr->count = count;
+        arr.items = (T*)arena.alloc_v(capacity * sizeof(T), alignof(T));
+        arr.capacity = capacity;
+        arr.count = count;
 
         if constexpr (std::is_default_constructible_v<T>) {
             for (usize i = 0; i < count; ++i) {
-                new (&arr->items[i]) T;
+                new (&arr.items[i]) T;
             }
         } else {
             hg_assert(count == 0);
         }
 
         return arr;
-    }
-
-    /**
-     * Free the dynamic array
-     */
-    void destroy(HgAllocator& mem) {
-        mem.free_fn(items, capacity * sizeof(T), alignof(T));
     }
 
     /**
@@ -2487,47 +2299,28 @@ struct HgArray {
     }
 
     /**
-     * Returns whether capacity is filled
-     */
-    constexpr bool is_full() const {
-        return count == capacity;
-    }
-
-    /**
-     * Increases the capacity to a minimum value
+     * Changes the capacity
      *
      * Parameters
-     * - mem The allocator to use
-     * - min The new minimum capacity
-     *
-     * Returns
-     * - Whether the allocation succeeded
+     * - arena The arena to allocate from
+     * - new_capacity The new capacity to allocator
      */
-    bool reserve(HgAllocator& mem, usize min) {
-        if (min > capacity) {
-            void* new_items = mem.realloc_fn(items, capacity * sizeof(T), min * sizeof(T), alignof(T));
-            if (new_items == nullptr)
-                return false;
-            items = (T*)new_items;
-            capacity = min;
-        }
-        return true;
+    void reserve(HgArena& arena, usize new_capacity) {
+        items = (T*)arena.realloc_v(items, capacity * sizeof(T), new_capacity * sizeof(T), alignof(T));
+        capacity = new_capacity;
     }
 
     /**
      * Increases the capacity of the array, or inits to 1
      *
      * Parameters
-     * - mem The allocator to use
+     * - arena The arena to allocate from
      * - factor The growth factor to increase by
-     *
-     * Returns
-     * - Whether the allocation succeeded
      */
-    bool grow(HgAllocator& mem, f32 factor = 2.0f) {
+    void grow(HgArena& arena, f32 factor = 2.0f) {
         hg_assert(factor > 1.0f);
         hg_assert(capacity <= (usize)((f32)SIZE_MAX / factor));
-        return reserve(mem, capacity == 0 ? 1 : (usize)((f32)capacity * factor));
+        reserve(arena, capacity == 0 ? 1 : (usize)((f32)capacity * factor));
     }
 
     /**
@@ -2723,10 +2516,17 @@ struct HgArrayAny {
     }
 
     /**
+     * Returns whether capacity is filled
+     */
+    constexpr bool is_full() const {
+        return count == capacity;
+    }
+
+    /**
      * Allocate a new dynamic array
      *
      * Parameters
-     * - allocator The allocator to use
+     * - arena The arena to allocate from
      * - width The size of the items in bytes
      * - alignment The alignment of the items
      * - count The number of active items to begin with, must be <= capacity
@@ -2734,10 +2534,9 @@ struct HgArrayAny {
      *
      * Returns
      * - The allocated dynamic array
-     * - nullopt if allocation failed
      */
-    static HgOption<HgArrayAny> create(
-        HgAllocator& mem,
+    static HgArrayAny create(
+        HgArena& arena,
         u32 width,
         u32 alignment,
         usize count,
@@ -2750,25 +2549,17 @@ struct HgArrayAny {
      * Note, does not construct items
      *
      * Parameters
-     * - allocator The allocator to use
+     * - arena The arena to allocate from
      * - count The number of active items to begin with, must be <= capacity
      * - capacity The max number of items before reallocating
      *
      * Returns
      * - The allocated dynamic array
-     * - nullopt if allocation failed
      */
     template<typename T>
-    static HgOption<HgArrayAny> create(HgAllocator& mem, usize count, usize capacity) {
-        static_assert(hg_is_memmove_safe<T>);
-        return create(mem, sizeof(T), alignof(T), count, capacity);
-    }
-
-    /**
-     * Free the dynamic array
-     */
-    void destroy(HgAllocator& mem) {
-        mem.free_fn(items, capacity * width, alignment);
+    static HgArrayAny create(HgArena& arena, usize count, usize capacity) {
+        static_assert(hg_is_c_safe<T>);
+        return create(arena, sizeof(T), alignof(T), count, capacity);
     }
 
     /**
@@ -2779,38 +2570,28 @@ struct HgArrayAny {
     }
 
     /**
-     * Returns whether capacity is filled
-     */
-    constexpr bool is_full() const {
-        return count == capacity;
-    }
-
-    /**
-     * Increases the capacity to a minimum value
+     * Changes the capacity
      *
      * Parameters
-     * - mem The allocator to use
-     * - min The new minimum capacity
-     *
-     * Returns
-     * - Whether the allocation succeeded
+     * - arena The arena to allocate from
+     * - new_capacity The new capacity
      */
-    bool reserve(HgAllocator& mem, usize min);
+    void reserve(HgArena& arena, usize new_capacity);
 
     /**
      * Increases the capacity of the array, or inits to 1
      *
      * Parameters
-     * - mem The allocator to use
+     * - arena The arena to allocate from
      * - factor The growth factor to increase by
      *
      * Returns
      * - Whether the allocation succeeded
      */
-    bool grow(HgAllocator& mem, f32 factor = 2.0f) {
+    void grow(HgArena& arena, f32 factor = 2.0f) {
         hg_assert(factor > 1.0f);
         hg_assert(capacity <= (usize)((f32)SIZE_MAX / factor));
-        return reserve(mem, capacity == 0 ? 1 : (usize)((f32)capacity * factor));
+        reserve(arena, capacity == 0 ? 1 : (usize)((f32)capacity * factor));
     }
 
     /**
@@ -2942,84 +2723,41 @@ struct HgArrayAny {
 };
 
 /**
- * A dynamic FIFO queue
+ * A dynamic FIFO ring buffer
  */
 template<typename T>
-struct HgQueue {
-    static_assert(hg_is_memmove_safe<T>);
+struct HgRingBuffer {
+    static_assert(hg_is_c_safe<T>);
 
     /**
-     * The allocated space for the queue
+     * The allocated space for the ring buffer
      */
     T* items;
     /**
-     * The max number of items that can be stored in the queue
+     * The max number of items that can be stored in the ring buffer
      */
     usize capacity;
     /**
-     * The end of the queue, where items are added
+     * The end of the ring buffer, where items are added
      */
     usize head;
     /**
-     * The beginning of the queue, where items are removed
+     * The beginning of the ring buffer, where items are removed
      */
     usize tail;
 
     /**
-     * Returns the number of items in the queue
+     * Returns the number of items in the ring buffer
      */
     constexpr usize count() const {
         return (head >= tail ? 0 : capacity) + head - tail;
     }
 
     /**
-     * Returns the size in bytes of the queue
+     * Returns the size in bytes of the ring buffer
      */
     constexpr usize size() const {
         return count() * sizeof(T);
-    }
-
-    /**
-     * Allocate a new dynamic queue
-     *
-     * Parameters
-     * - mem The allocator to use
-     * - capacity The max number of items before reallocating
-     *
-     * Returns
-     * - The allocated dynamic queue
-     * - nullopt if allocation failed
-     */
-    static HgOption<HgQueue<T>> create(HgAllocator& mem, usize capacity) {
-        hg_assert(capacity > 1);
-
-        HgOption<HgQueue> queue;
-        queue.has_value = true;
-
-        queue->items = (T*)mem.alloc_fn(capacity * sizeof(T), alignof(T));
-        if (queue->items == nullptr)
-            return hg_empty;
-
-        queue->capacity = capacity;
-        queue->head = 0;
-        queue->tail = 0;
-
-        return queue;
-    }
-
-    /**
-     * Free the dynamic queue
-     */
-    void destroy(HgAllocator& mem) {
-        mem.free_fn(items, capacity * sizeof(T), alignof(T));
-    }
-
-    /**
-     * Removes all contained objects, emptying the queue
-     */
-    constexpr void reset() {
-        head = 0;
-        tail = 0;
     }
 
     /**
@@ -3037,50 +2775,68 @@ struct HgQueue {
     }
 
     /**
-     * Increases the capacity to a minimum value
+     * Allocate a new dynamic ring buffer
      *
      * Parameters
-     * - mem The allocator to use
-     * - min The new minimum capacity
+     * - arena The arena to allocate from
+     * - capacity The max number of items before reallocating
      *
      * Returns
-     * - Whether the allocation succeeded
+     * - The allocated dynamic ring buffer
      */
-    bool reserve(HgAllocator& mem, usize min) {
-        if (min > capacity) {
-            void* new_items = mem.realloc_fn(items, capacity * sizeof(T), min * sizeof(T), alignof(T));
-            if (new_items == nullptr)
-                return false;
-            items = (T*)new_items;
+    static HgRingBuffer<T> create(HgArena& arena, usize capacity) {
+        hg_assert(capacity > 1);
 
-            if (tail > head) {
-                usize diff = min - capacity;
-                std::memmove(items + tail, items + tail + diff, (capacity - tail) * sizeof(T));
-            }
-
-            capacity = min;
-        }
-        return true;
+        HgRingBuffer buf;
+        buf.items = (T*)arena.alloc_v(capacity * sizeof(T), alignof(T));
+        buf.capacity = capacity;
+        buf.head = 0;
+        buf.tail = 0;
+        return buf;
     }
 
     /**
-     * Increases the capacity of the queue, or inits to 1
+     * Removes all contained objects, emptying the ring buffer
+     */
+    constexpr void reset() {
+        head = 0;
+        tail = 0;
+    }
+
+    /**
+     * Increases the capacity of the ring buffer
      *
      * Parameters
-     * - mem The allocator to use
-     * - factor The growth factor to increase by
-     *
-     * Returns
-     * - Whether the allocation succeeded
+     * - arena The arena to allocate from
+     * - new_capacity The new capacity
      */
-    bool grow(HgAllocator& mem, f32 factor = 2.0f) {
+    void reserve(HgArena& arena, usize new_capacity) {
+        hg_assert(new_capacity >= capacity);
+
+        items = arena.realloc_v(items, capacity * sizeof(T), new_capacity * sizeof(T), alignof(T));
+
+        if (tail > head) {
+            usize diff = new_capacity - capacity;
+            std::memmove(items + tail, items + tail + diff, (capacity - tail) * sizeof(T));
+        }
+        capacity = new_capacity;
+    }
+
+    /**
+     * Grows the capacity of the ring buffer by a factor, or inits to 1
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - factor The growth factor to increase by
+     */
+    void grow(HgArena& arena, f32 factor = 2.0f) {
         hg_assert(factor > 1.0f);
         hg_assert(capacity <= (usize)((f32)SIZE_MAX / factor));
-        return reserve(mem, capacity == 0 ? 1 : (usize)((f32)capacity * factor));
+        reserve(arena, capacity == 0 ? 1 : (usize)((f32)capacity * factor));
     }
 
     /**
-     * Push an item to the end to the queue
+     * Push an item to the end to the ring buffer
      *
      * Note, space must be available
      */
@@ -3092,7 +2848,7 @@ struct HgQueue {
     }
 
     /**
-     * Pops an item off the end of the queue
+     * Pops an item off the end of the ring buffer
      *
      * Returns
      * - The popped item
@@ -3129,35 +2885,25 @@ struct HgString {
      * Creates a new string with empty capacity
      *
      * Parameters
-     * - mem The allocator to use
+     * - arena The arena to allocate from
      * - capacity The capacity to begin with
      *
      * Returns
      * - The created empty string
-     * - nullopt if allocation failed
      */
-    static HgOption<HgString> create(HgAllocator& mem, usize capacity);
+    static HgString create(HgArena& arena, usize capacity);
 
     /**
      * Creates a new string copied from an existing string
      *
      * Parameters
-     * - mem The allocator to use
+     * - arena The arena to allocate from
      * - init The initial string to copy from
      *
      * Returns
      * - The created copied string
-     * - nullopt if allocation failed
      */
-    static HgOption<HgString> create(HgAllocator& mem, HgStringView init);
-
-    /**
-     * Frees the string
-     *
-     * Parameters
-     * - mem The allocator to use
-     */
-    void destroy(HgAllocator& mem);
+    static HgString create(HgArena& arena, HgStringView init);
 
     /**
      * Removes all characters
@@ -3165,6 +2911,24 @@ struct HgString {
     constexpr void reset() {
         length = 0;
     }
+
+    /**
+     * Changes the capacity
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - new_capacity The new minimum capacity
+     */
+    void reserve(HgArena& arena, usize new_capacity);
+
+    /**
+     * Increases the capacity of the string, or inits to 1
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - factor The growth factor to increase by
+     */
+    void grow(HgArena& arena, f32 factor = 2.0f);
 
     /**
      * Access the character at index
@@ -3237,49 +3001,25 @@ struct HgString {
     }
 
     /**
-     * Increases the capacity to a minimum value
-     *
-     * Parameters
-     * - mem The allocator to use
-     * - min The new minimum capacity
-     *
-     * Returns
-     * - Whether the allocation succeeded
-     */
-    bool reserve(HgAllocator& mem, usize min);
-
-    /**
-     * Increases the capacity of the string, or inits to 1
-     *
-     * Parameters
-     * - mem The allocator to use
-     * - factor The growth factor to increase by
-     *
-     * Returns
-     * - Whether the allocation succeeded
-     */
-    bool grow(HgAllocator& mem, f32 factor = 2.0f);
-
-    /**
      * Copies another string into this string at index
      * 
      * Parameters
-     * - mem The allocator to use
+     * - arena The arena to allocate from
      */
-    void insert(HgAllocator& mem, usize index, HgStringView str);
+    void insert(HgArena& arena, usize index, HgStringView str);
 
     /**
      * Copies another string to the end of this string
      */
-    void append(HgAllocator& mem, HgStringView str) {
-        insert(mem, length, str);
+    void append(HgArena& arena, HgStringView str) {
+        insert(arena, length, str);
     }
 
     /**
      * Copies another string to the beginning of this string
      */
-    void prepend(HgAllocator& mem, HgStringView str) {
-        insert(mem, 0, str);
+    void prepend(HgArena& arena, HgStringView str) {
+        insert(arena, 0, str);
     }
 
     /**
@@ -3420,7 +3160,7 @@ constexpr usize hg_hash(const char* str) {
  */
 template<typename Key, typename Value>
 struct HgHashMap {
-    static_assert(hg_is_memmove_safe<Key> && hg_is_memmove_safe<Value>);
+    static_assert(hg_is_c_safe<Key> && hg_is_c_safe<Value>);
 
     struct Pair {
         Key key;
@@ -3445,36 +3185,19 @@ struct HgHashMap {
      * Creates a new hash map
      *
      * Parameters
-     * - mem The allocator to use
+     * - arena The arena to allocate from
      * - slot_count The max number of slots to store values in
      *
      * Returns
      * - The created empty hash map
-     * - nullopt if allocation failed
      */
-    static HgOption<HgHashMap> create(HgAllocator& mem, usize slot_count) {
+    static HgHashMap create(HgArena& arena, usize slot_count) {
         hg_assert(slot_count > 0);
 
-        HgOption<HgHashMap> map;
-        map.has_value = true;
-
-        map->slots = mem.alloc<Slot>(slot_count);
-        if (map->slots == nullptr)
-            return hg_empty;
-
-        map->load = 0;
-
+        HgHashMap map;
+        map.slots = arena.alloc<Slot>(slot_count);
+        map.load = 0;
         return map;
-    }
-
-    /**
-     * Destroys the hash map
-     *
-     * Parameters
-     * - mem The allocator to use
-     */
-    void destroy(HgAllocator& mem) {
-        mem.free(slots);
     }
 
     /**
@@ -3491,39 +3214,28 @@ struct HgHashMap {
      * Resizes the slots and rehashes all entries
      *
      * Parameters
-     * - mem The allocator to use
+     * - arena The arena to allocate from
      * - new_size The new number of slots
-     *
-     * Returns
-     * - Whether the allocation succeeded
      */
-    bool resize(HgAllocator& mem, usize new_size) {
+    void resize(HgArena& arena, usize new_size) {
         HgSpan<Slot> old_slots = slots;
-        hg_defer(mem.free(old_slots));
-
-        slots = mem.alloc<Slot>(new_size);
-        if (slots == nullptr)
-            return false;
+        slots = arena.alloc<Slot>(new_size);
 
         for (Slot& slot : old_slots) {
             if (old_slots[index].has_value)
                 insert(old_slots[index]->key, old_slots[index]->value);
         }
-        return true;
     }
 
     /**
      * Grows the number of slots by a factor
      *
      * Parameters
-     * - mem The allocator to use
+     * - arena The arena to allocate from
      * - factor The factor to increase by
-     *
-     * Returns
-     * - Whether the allocation succeeded
      */
-    bool grow(HgAllocator& mem, f32 factor = 2) {
-        return resize(mem, (usize)((f32)slots.count * factor));
+    void grow(HgArena& arena, f32 factor = 2) {
+        resize(arena, (usize)((f32)slots.count * factor));
     }
 
     /**
@@ -3705,7 +3417,7 @@ struct HgHashMap {
  */
 template<typename T>
 struct HgHashSet {
-    static_assert(hg_is_memmove_safe<T>);
+    static_assert(hg_is_c_safe<T>);
 
     using Slot = HgOption<T>;
 
@@ -3722,36 +3434,19 @@ struct HgHashSet {
      * Creates a new hash set
      *
      * Parameters
-     * - mem The allocator to use
+     * - arena The arena to allocate from
      * - slot_count The max number of slots to store values in
      *
      * Returns
      * - The created empty hash set
-     * - nullopt if allocation failed
      */
-    static HgOption<HgHashSet> create(HgAllocator& mem, usize slot_count) {
+    static HgHashSet create(HgArena& arena, usize slot_count) {
         hg_assert(slot_count > 0);
 
-        HgOption<HgHashSet> set;
-        set.has_value = true;
-
-        set->slots = mem.alloc<Slot>(slot_count);
-        if (set->slots == nullptr)
-            return hg_empty;
-
-        set->load = 0;
-
+        HgHashSet set;
+        set.slots = arena.alloc<Slot>(slot_count);
+        set.load = 0;
         return set;
-    }
-
-    /**
-     * Destroys the hash set
-     *
-     * Parameters
-     * - mem The allocator to use
-     */
-    void destroy(HgAllocator& mem) {
-        mem.free(slots);
     }
 
     /**
@@ -3768,39 +3463,29 @@ struct HgHashSet {
      * Resizes the slots and rehashes all entries
      *
      * Parameters
-     * - mem The allocator to use
+     * - arena The arena to allocate from
      * - new_size The new number of slots
-     *
-     * Returns
-     * - Whether the allocation succeeded
      */
-    bool resize(HgAllocator& mem, usize new_size) {
+    void resize(HgArena& arena, usize new_size) {
         HgSpan<Slot> old_slots = slots;
-        hg_defer(mem.free(old_slots));
 
-        slots = mem.alloc<Slot>(new_size);
-        if (slots == nullptr)
-            return false;
+        slots = arena.alloc<Slot>(new_size);
 
         for (Slot& slot : old_slots) {
             if (old_slots[index].has_value)
                 insert(old_slots[index].value());
         }
-        return true;
     }
 
     /**
      * Grows the number of slots by a factor
      *
      * Parameters
-     * - mem The allocator to use
+     * - arena The arena to allocate from
      * - factor The factor to increase by
-     *
-     * Returns
-     * - Whether the allocation succeeded
      */
-    bool grow(HgAllocator& mem, f32 factor = 2) {
-        return resize(mem, (usize)((f32)slots.count * factor));
+    void grow(HgArena& arena, f32 factor = 2) {
+        resize(arena, (usize)((f32)slots.count * factor));
     }
 
     /**
@@ -3904,7 +3589,7 @@ struct HgFunction<R(Args...)> {
     /**
      * The function's capture
      */
-    HgSpan<void> capture;
+    void* capture;
     /**
      * The function pointer
      */
@@ -3915,9 +3600,9 @@ struct HgFunction<R(Args...)> {
      */
     R operator()(Args... args) {
         if constexpr (std::is_same_v<R, void>) {
-            fn(capture.data, args...);
+            fn(capture, args...);
         } else {
-            return fn(capture.data, args...);
+            return fn(capture, args...);
         }
     }
 
@@ -3925,25 +3610,18 @@ struct HgFunction<R(Args...)> {
      * Creates a function object, which owns its capture and must be destroyed
      *
      * Parameters
-     * - mem The allocator to use
+     * - arena The arena to allocate from
      * - fn The function to use
      *
      * Returns
      * - The function object
-     * - nullopt if allocation failed
      */
     template<typename C>
-    static HgOption<HgFunction> create(HgAllocator& mem, C&& capture, R (*fn)(void*, Args...)) {
-        HgOption<HgFunction> func;
-        func.has_value = true;
-
-        func->capture = mem.alloc(sizeof(C), alignof(C));
-        if (func->capture == nullptr)
-            return hg_empty;
-        new ((C*)func->capture.data) C{std::move(capture)};
-
-        func->fn = fn;
-
+    static HgFunction create(HgArena& arena, C&& capture, R (*fn)(void*, Args...)) {
+        HgFunction func;
+        func.capture = arena.alloc_v(sizeof(C), alignof(C));
+        new ((C*)func.capture) C{std::move(capture)};
+        func.fn = fn;
         return func;
     }
 
@@ -3951,19 +3629,18 @@ struct HgFunction<R(Args...)> {
      * Creates a function object, which owns its capture and must be destroyed
      *
      * Parameters
-     * - mem The allocator to use
+     * - arena The arena to allocate from
      * - fn The function to use
      *
      * Returns
      * - The function object
-     * - nullopt if allocation failed
      */
     template<typename F>
-    static HgOption<HgFunction> create(HgAllocator& mem, F fn) {
+    static HgFunction create(HgArena& arena, F fn) {
         static_assert(std::is_trivially_destructible_v<F>);
         static_assert(std::is_invocable_r_v<R, F, Args...>);
 
-        return create(mem, std::move(fn), [](void* data, Args... args) -> R {
+        return create(arena, std::move(fn), [](void* data, Args... args) -> R {
             if constexpr (std::is_same_v<R, void>) {
                 (*(F*)data)(args...);
             } else {
@@ -3971,32 +3648,21 @@ struct HgFunction<R(Args...)> {
             }
         });
     }
-
-    /**
-     * Destroys the function object
-     *
-     * Parameters
-     * - mem The allocator to use
-     */
-    void destroy(HgAllocator& mem) {
-        mem.free(capture);
-    }
 };
 
 /**
  * Creates a function object, convenience over HgFunction<...>::create
  * 
  * Parameters
- * - mem The allocator to use
+ * - arena The arena to allocate from
  * - fn The function to create from
  *
  * Returns
  * - The created function object
- * - nullopt if allocation failed
  */
 template<typename Signature, typename F>
-HgOption<HgFunction<Signature>> hg_function(HgAllocator& mem, F&& fn) {
-    return HgFunction<Signature>::create(mem, std::forward<F>(fn));
+HgFunction<Signature> hg_function(HgArena& arena, F&& fn) {
+    return HgFunction<Signature>::create(arena, std::forward<F>(fn));
 }
 
 /**
@@ -4053,7 +3719,7 @@ struct HgFence {
  */
 template<typename T>
 struct HgMPSCQueue {
-    static_assert(hg_is_memmove_safe<T>);
+    static_assert(hg_is_c_safe<T>);
 
     /**
      * The status of each item
@@ -4084,58 +3750,28 @@ struct HgMPSCQueue {
      * Allocate a new dynamic queue
      *
      * Parameters
-     * - mem The allocator to use
+     * - arena The arena to allocate from
      * - capacity The max number of items before reallocating
      *
      * Returns
      * - The allocated dynamic queue
-     * - nullopt if allocation failed
      */
-    static HgOption<HgMPSCQueue> create(HgAllocator& mem, usize capacity) {
+    static HgMPSCQueue create(HgArena& arena, usize capacity) {
         hg_assert(capacity > 1);
 
-        HgOption<HgMPSCQueue> queue;
-        queue.has_value = true;
+        HgMPSCQueue queue;
 
-        queue->has_item = mem.alloc<std::atomic<bool>>(capacity).data;
-        if (queue->has_item == nullptr)
-            goto cleanup_status;
+        queue.has_item = arena.alloc<std::atomic<bool>>(capacity).data;
+        queue.items = (T*)arena.alloc_v(capacity * sizeof(T), alignof(T));
 
-        queue->items = (T*)mem.alloc_fn(capacity * sizeof(T), alignof(T));
-        if (queue->items == nullptr)
-            goto cleanup_items;
+        queue.tail = arena.alloc<std::atomic<usize>>();
+        queue.head = arena.alloc<std::atomic<usize>>();
+        queue.working_head = arena.alloc<std::atomic<usize>>();
 
-        {
-            auto atomics = mem.alloc<std::atomic<usize>>(4);
-            if (atomics == nullptr)
-                goto cleanup_atomics;
+        queue.capacity = capacity;
+        queue.reset();
 
-            queue->tail = &atomics[0];
-            queue->head = &atomics[1];
-            queue->working_head = &atomics[2];
-        }
-
-        queue->capacity = capacity;
-        queue->reset();
         return queue;
-
-cleanup_atomics:
-        mem.free_fn(queue->items, capacity * sizeof(T), alignof(T));
-cleanup_items:
-        mem.free(HgSpan<std::atomic<bool>>{queue->has_item, capacity});
-cleanup_status:
-        return hg_empty;
-    }
-
-    /**
-     * Free the dynamic queue
-     *
-     * Note, this is not thread safe
-     */
-    void destroy(HgAllocator& mem) {
-        mem.free(HgSpan<std::atomic<usize>>{tail, 3});
-        mem.free(HgSpan<std::atomic<bool>>{has_item, capacity});
-        mem.free_fn(items, capacity * sizeof(T), alignof(T));
     }
 
     /**
@@ -4202,7 +3838,7 @@ cleanup_status:
  */
 template<typename T>
 struct HgMPMCQueue {
-    static_assert(hg_is_memmove_safe<T>);
+    static_assert(hg_is_c_safe<T>);
 
     /**
      * Whether each item is filled
@@ -4237,59 +3873,29 @@ struct HgMPMCQueue {
      * Allocate a new dynamic queue
      *
      * Parameters
-     * - mem The allocator to use
+     * - arena The arena to allocate from
      * - capacity The max number of items before reallocating
      *
      * Returns
      * - The allocated dynamic queue
-     * - nullopt if allocation failed
      */
-    static HgOption<HgMPMCQueue> create(HgAllocator& mem, usize capacity) {
+    static HgMPMCQueue create(HgArena& arena, usize capacity) {
         hg_assert(capacity > 1);
 
-        HgOption<HgMPMCQueue> queue;
-        queue.has_value = true;
+        HgMPMCQueue queue;
 
-        queue->has_item = mem.alloc<std::atomic<bool>>(capacity).data;
-        if (queue->has_item == nullptr)
-            goto cleanup_status;
+        queue.has_item = arena.alloc<std::atomic<bool>>(capacity).data;
+        queue.items = (T*)arena.alloc_v(capacity * sizeof(T), alignof(T));
 
-        queue->items = (T*)mem.alloc_fn(capacity * sizeof(T), alignof(T));
-        if (queue->items == nullptr)
-            goto cleanup_items;
+        queue.tail = arena.alloc<std::atomic<usize>>();
+        queue.working_tail = arena.alloc<std::atomic<usize>>();
+        queue.head = arena.alloc<std::atomic<usize>>();
+        queue.working_head = arena.alloc<std::atomic<usize>>();
 
-        {
-            auto atomics = mem.alloc<std::atomic<usize>>(4);
-            if (atomics == nullptr)
-                goto cleanup_atomics;
+        queue.capacity = capacity;
+        queue.reset();
 
-            queue->tail = &atomics[0];
-            queue->working_tail = &atomics[1];
-            queue->head = &atomics[2];
-            queue->working_head = &atomics[3];
-        }
-
-        queue->capacity = capacity;
-        queue->reset();
         return queue;
-
-cleanup_atomics:
-        mem.free_fn(queue->items, capacity * sizeof(T), alignof(T));
-cleanup_items:
-        mem.free(HgSpan<std::atomic<bool>>{queue->has_item, capacity});
-cleanup_status:
-        return hg_empty;
-    }
-
-    /**
-     * Free the dynamic queue
-     *
-     * Note, this is not thread safe
-     */
-    void destroy(HgAllocator& mem) {
-        mem.free(HgSpan<std::atomic<usize>>{tail, 4});
-        mem.free(HgSpan<std::atomic<bool>>{has_item, capacity});
-        mem.free_fn(items, capacity * sizeof(T), alignof(T));
     }
 
     /**
@@ -4415,7 +4021,7 @@ struct HgThreadPool {
      * - Rest worker threads
      *
      * Parameters
-     * - mem The allocator to use
+     * - arena The arena to allocate from
      * - thread_count The number of threads to spawn (recommended hardware - 1)
      * - queue_size The max capacity of the work queue
      *
@@ -4423,12 +4029,12 @@ struct HgThreadPool {
      * - The created thread pool
      * - nullptr on failure
      */
-    static HgThreadPool* create(HgAllocator& mem, usize thread_count, usize queue_size);
+    static HgThreadPool* create(HgArena& arena, usize thread_count, usize queue_size);
 
     /**
      * Destroys the thread pool
      */
-    static void destroy(HgAllocator& mem, HgThreadPool* pool);
+    void destroy();
 
     /**
      * Pushes work to the queue to be executed
@@ -4472,14 +4078,14 @@ struct HgThreadPool {
     void for_par(usize n, usize chunk_size, F fn) {
         static_assert(std::is_invocable_r_v<void, F, usize, usize>);
 
+        HgArenaScope scratch = hg_get_arena();
+
         struct Capture {
             F* fn;
             usize begin;
             usize end;
         };
-        HgSpan<Capture> captures;
-        captures.count = (usize)std::ceil((f32)n / (f32)chunk_size);
-        captures.data = (Capture*)alloca(captures.count * sizeof(Capture));
+        HgSpan<Capture> captures = scratch.alloc<Capture>((usize)std::ceil((f32)n / (f32)chunk_size));
 
         usize i = 0;
         for (auto& capture : captures) {
@@ -4533,13 +4139,9 @@ struct HgIOThread {
          */
         HgFence* fence;
         /**
-         * the data passed to the function
+         * The data passed to the function
          */
         void* data;
-        /**
-         * The allocator to use, if any
-         */
-        HgAllocator* mem;
         /**
          * The resource to operate on, if any
          */
@@ -4551,7 +4153,7 @@ struct HgIOThread {
         /**
          * The function to execute
          */
-        void (*fn)(void*, HgAllocator*, void*, HgStringView);
+        void (*fn)(void*, void*, HgStringView);
     };
 
     /**
@@ -4571,19 +4173,18 @@ struct HgIOThread {
      * Creates a new thread pool
      *
      * Parameters
-     * - mem The allocator to use
+     * - arena The arena to allocate from
      * - queue_size The max capacity of the request queue
      *
      * Returns
      * - The created io thread
-     * - nullptr on failure
      */
-    static HgIOThread* create(HgAllocator& mem, usize queue_size);
+    static HgIOThread* create(HgArena& arena, usize queue_size);
 
     /**
      * Destroys the io thread
      */
-    static void destroy(HgAllocator& mem, HgIOThread* thread);
+    void destroy();
 
     /**
      * Request to operate on a resource
@@ -4667,14 +4268,8 @@ struct HgECS {
      *
      * Returns
      * - The created entity component system
-     * - nullopt if allocation failed
      */
-    static HgOption<HgECS> create(HgAllocator& mem, u32 max_entities);
-
-    /**
-     * Destroys an entity component system
-     */
-    void destroy(HgAllocator& mem);
+    static HgECS create(HgArena& arena, u32 max_entities);
 
     /**
      * Resets an entity component system, removing all entities
@@ -4686,31 +4281,21 @@ struct HgECS {
     /**
      * Reallocates the entity pool, increasing the max number of entities
      *
-     * Note, partial allocation failure, may leave an unstable state
-     *
      * Parameters
-     * - mem The allocator to use
+     * - arena The arena to allocate from
      * - new_max The new max number of entities
-     *
-     * Returns
-     * - Whether the allocation succeeded
      */
-    bool resize_entities(HgAllocator& mem, u32 new_max);
+    void resize_entities(HgArena& arena, u32 new_max);
 
     /**
      * Grows the entity pool to current * factor
      *
-     * Note, partial allocation failure, may leave an unstable state
-     *
      * Parameters
-     * - mem The allocator to use
+     * - arena The arena to allocate from
      * - factor The factor to increase by
-     *
-     * Returns
-     * - Whether the allocation succeeded
      */
-    bool grow_entities(HgAllocator& mem, f32 factor = 2.0f) {
-        return resize_entities(mem, (u32)((f32)entity_pool.count * factor));
+    void grow_entities(HgArena& arena, f32 factor = 2.0f) {
+        resize_entities(arena, (u32)((f32)entity_pool.count * factor));
     }
 
     /**
@@ -4757,12 +4342,9 @@ struct HgECS {
      * - component_size The size in bytes of the component struct
      * - component_alignment The alignment of the component struct
      * - component_id The id of the component
-     *
-     * Returns
-     * - Whether allocation was successful
      */
-    bool register_component_untyped(
-        HgAllocator& mem,
+    void register_component_untyped(
+        HgArena& arena,
         u32 max_components,
         u32 component_size,
         u32 component_alignment,
@@ -4778,30 +4360,26 @@ struct HgECS {
      * - max_component The max number of this component the ECS can hold
      */
     template<typename T>
-    bool register_component(HgAllocator& mem, u32 max_components) {
-        static_assert(hg_is_memmove_safe<T>);
-        return register_component_untyped(mem, max_components, sizeof(T), alignof(T), hg_component_id<T>);
+    void register_component(HgArena& arena, u32 max_components) {
+        static_assert(hg_is_c_safe<T>);
+        register_component_untyped(arena, max_components, sizeof(T), alignof(T), hg_component_id<T>);
     }
 
     /**
      * Unregisters a component in this ECS
      *
      * Parameters
-     * - mem The allocator to get memory from
      * - component_id The id of the component
      */
-    void unregister_component_untyped(HgAllocator& mem, u32 component_id);
+    void unregister_component_untyped(u32 component_id);
 
     /**
      * Unregisters a component in this ECS
-     *
-     * Parameters
-     * - mem The allocator to get memory from
      */
     template<typename T>
-    void unregister_component(HgAllocator& mem) {
-        static_assert(hg_is_memmove_safe<T>);
-        unregister_component_untyped(mem, hg_component_id<T>);
+    void unregister_component() {
+        static_assert(hg_is_c_safe<T>);
+        unregister_component_untyped(hg_component_id<T>);
     }
 
     /**
@@ -4829,7 +4407,7 @@ struct HgECS {
      */
     template<typename T>
     bool is_registered() {
-        static_assert(hg_is_memmove_safe<T>);
+        static_assert(hg_is_c_safe<T>);
         return is_registered(hg_component_id<T>);
     }
 
@@ -4855,7 +4433,7 @@ struct HgECS {
      */
     template<typename T>
     u32 component_count() {
-        static_assert(hg_is_memmove_safe<T>);
+        static_assert(hg_is_c_safe<T>);
         return component_count(hg_component_id<T>);
     }
 
@@ -4921,7 +4499,7 @@ struct HgECS {
      */
     template<typename T>
     T& add(HgEntity entity) {
-        static_assert(hg_is_memmove_safe<T>);
+        static_assert(hg_is_c_safe<T>);
         return* (T*)add(entity, hg_component_id<T>);
     }
 
@@ -4958,7 +4536,7 @@ struct HgECS {
      */
     template<typename T>
     void remove(HgEntity entity) {
-        static_assert(hg_is_memmove_safe<T>);
+        static_assert(hg_is_c_safe<T>);
         remove(entity, hg_component_id<T>);
     }
 
@@ -4981,7 +4559,7 @@ struct HgECS {
      */
     template<typename T>
     void swap_idx(u32 lhs, u32 rhs) {
-        static_assert(hg_is_memmove_safe<T>);
+        static_assert(hg_is_c_safe<T>);
         swap_idx(lhs, rhs, hg_component_id<T>);
     }
 
@@ -5015,7 +4593,7 @@ struct HgECS {
      */
     template<typename T>
     void swap(HgEntity lhs, HgEntity rhs) {
-        static_assert(hg_is_memmove_safe<T>);
+        static_assert(hg_is_c_safe<T>);
         swap(lhs, rhs, hg_component_id<T>);
     }
 
@@ -5038,7 +4616,7 @@ struct HgECS {
      */
     template<typename T>
     void swap_location_idx(u32 lhs, u32 rhs) {
-        static_assert(hg_is_memmove_safe<T>);
+        static_assert(hg_is_c_safe<T>);
         swap_location_idx(lhs, rhs, hg_component_id<T>);
     }
 
@@ -5061,7 +4639,7 @@ struct HgECS {
      */
     template<typename T>
     void swap_location(HgEntity lhs, HgEntity rhs) {
-        static_assert(hg_is_memmove_safe<T>);
+        static_assert(hg_is_c_safe<T>);
         swap_location(lhs, rhs, hg_component_id<T>);
     }
 
@@ -5092,7 +4670,7 @@ struct HgECS {
      */
     template<typename T>
     bool has(HgEntity entity) {
-        static_assert(hg_is_memmove_safe<T>);
+        static_assert(hg_is_c_safe<T>);
         return has(entity, hg_component_id<T>);
     }
 
@@ -5156,7 +4734,7 @@ struct HgECS {
      */
     template<typename T>
     T& get(HgEntity entity) {
-        static_assert(hg_is_memmove_safe<T>);
+        static_assert(hg_is_c_safe<T>);
         return* ((T*)get(entity, hg_component_id<T>));
     }
 
@@ -5190,7 +4768,7 @@ struct HgECS {
      */
     template<typename T>
     HgEntity get_entity(const T& component) {
-        static_assert(hg_is_memmove_safe<T>);
+        static_assert(hg_is_c_safe<T>);
         hg_assert(is_registered(hg_component_id<T>));
 
         u32 index = (u32)(&component - (T*)systems[hg_component_id<T>].components.items);
@@ -5202,7 +4780,7 @@ struct HgECS {
      */
     template<typename T>
     struct ComponentView {
-        static_assert(hg_is_memmove_safe<T>);
+        static_assert(hg_is_c_safe<T>);
 
         struct Iter {
             HgEntity* entity;
@@ -5254,7 +4832,7 @@ struct HgECS {
      */
     template<typename T>
     ComponentView<T> component_iter() {
-        static_assert(hg_is_memmove_safe<T>);
+        static_assert(hg_is_c_safe<T>);
 
         u32 id = hg_component_id<T>;
         hg_assert(is_registered(id));
@@ -5281,7 +4859,7 @@ struct HgECS {
      */
     template<typename T, typename Fn>
     void for_each_single(Fn& fn) {
-        static_assert(hg_is_memmove_safe<T>);
+        static_assert(hg_is_c_safe<T>);
         static_assert(std::is_invocable_r_v<void, Fn, HgEntity&, T&>);
 
         for (auto [e, c] : component_iter<T>()) {
@@ -5345,7 +4923,7 @@ struct HgECS {
      */
     template<typename T, typename Fn>
     void for_each_par_single(u32 chunk_size, Fn& fn) {
-        static_assert(hg_is_memmove_safe<T>);
+        static_assert(hg_is_c_safe<T>);
         static_assert(std::is_invocable_r_v<void, Fn, HgEntity&, T&>);
 
         Component& system = systems[hg_component_id<T>];
@@ -5427,7 +5005,7 @@ struct HgECS {
      */
     template<typename T>
     void sort(void* data, bool (*compare)(void*, HgEntity lhs, HgEntity rhs)) {
-        static_assert(hg_is_memmove_safe<T>);
+        static_assert(hg_is_c_safe<T>);
         sort_untyped(0, component_count<T>(), hg_component_id<T>, data, compare);
     }
 };
@@ -5445,38 +5023,37 @@ struct HgFileBinary {
     usize size;
 
     static constexpr usize alignment = alignof(std::max_align_t);
+
+    /**
+     * Load a binary file from disc
+     *
+     * Parameters
+     * - fence The fence to signal on completion
+     * - file The file to load into, must be stable
+     * - path The file path to the image
+     */
+    void load(HgFence* fence, HgStringView path);
+
+    /**
+     * Unload a binary file resource
+     *
+     * Parameters
+     * - fence The fence to signal on completion
+     * - arena The arena to allocate from
+     * - file The file to unload, must be stable
+     */
+    void unload(HgFence* fence);
+
+    /**
+     * Store a binary file to disc
+     *
+     * Parameters
+     * - fence The fence to signal on completion
+     * - file The file to store, must be stable
+     * - path The file path
+     */
+    void store(HgFence* fence, HgStringView path);
 };
-
-/**
- * Load a binary file from disc
- *
- * Parameters
- * - fence The fence to signal on completion
- * - mem The allocator to use
- * - file The file to load into, must be stable
- * - path The file path to the image
- */
-void hg_load_file_binary(HgFence* fence, HgAllocator& mem, HgFileBinary& file, HgStringView path);
-
-/**
- * Unload a binary file resource
- *
- * Parameters
- * - fence The fence to signal on completion
- * - mem The allocator to use
- * - file The file to unload, must be stable
- */
-void hg_unload_file_binary(HgFence* fence, HgAllocator& mem, HgFileBinary& file);
-
-/**
- * Store a binary file to disc
- *
- * Parameters
- * - fence The fence to signal on completion
- * - file The file to store, must be stable
- * - path The file path
- */
-void hg_store_file_binary(HgFence* fence, HgFileBinary& file, HgStringView path);
 
 // text files : TODO
 // json files : TODO
@@ -5507,38 +5084,33 @@ struct HgImage {
      * The depth in pixels
      */
     u32 depth;
+
+    /**
+     * Load an image from disc
+     *
+     * Parameters
+     * - fence The fence to signal on completion
+     * - path The file path to the image
+     */
+    void load(HgFence* fence, HgStringView path);
+
+    /**
+     * Unload an image resource
+     *
+     * Parameters
+     * - fence The fence to signal on completion
+     */
+    void unload(HgFence* fence);
+
+    /**
+     * Store an image to disc
+     *
+     * Parameters
+     * - fence The fence to signal on completion
+     * - path The file path to the image
+     */
+    void store(HgFence* fence, HgStringView path);
 };
-
-/**
- * Load an image from disc
- *
- * Parameters
- * - fence The fence to signal on completion
- * - mem The allocator to use
- * - image The image to load into, must be stable
- * - path The file path to the image
- */
-void hg_load_image(HgFence* fence, HgAllocator& mem, HgImage& image, HgStringView path);
-
-/**
- * Unload an image resource
- *
- * Parameters
- * - fence The fence to signal on completion
- * - mem The allocator to use
- * - image The image to unload, must be stable
- */
-void hg_unload_image(HgFence* fence, HgAllocator& mem, HgImage& image);
-
-/**
- * Store an image to disc
- *
- * Parameters
- * - fence The fence to signal on completion
- * - image The image to store
- * - path The file path to the image
- */
-void hg_store_image(HgFence* fence, HgImage& image, HgStringView path);
 
 /**
  * A high precision clock for timers and game deltas
@@ -5835,13 +5407,14 @@ struct HgSwapchainCommands {
      * Creates a swapchain command buffer system
      *
      * Parameters
+     * - arena The arena to allocate from
      * - swapchain The Vulkan swapchain to create frames for, must not be nullptr
      * - cmd_pool The Vulkan command pool to allocate cmds from, must not be nullptr
      *
      * Returns
      * - The created swaphchain command buffer system
      */
-    static HgSwapchainCommands create(VkSwapchainKHR swapchain, VkCommandPool cmd_pool);
+    static HgSwapchainCommands create(HgArena& arena, VkSwapchainKHR swapchain, VkCommandPool cmd_pool);
 
     /**
      * Destroys a swaphchain command buffer system
@@ -6059,11 +5632,11 @@ struct HgTexture {
     VkImage image;
     VkImageView view;
     VkSampler sampler;
+
+    void load(VkCommandPool cmd_pool, VkFilter filter, HgImage& src);
+
+    void unload();
 };
-
-void hg_load_texture(VkCommandPool cmd_pool, HgTexture& texture, VkFilter filter, HgImage& src);
-
-void hg_unload_texture(HgTexture& texture);
 
 struct HgTransform {
     HgVec3 position = {0.0f, 0.0f, 0.0f};
@@ -6103,13 +5676,13 @@ struct HgPipeline2D {
 
     HgHashMap<HgTexture*, VkDescriptorSet> texture_sets;
 
-    static HgOption<HgPipeline2D> create(
-        HgAllocator& mem,
+    static HgPipeline2D create(
+        HgArena& arena,
         usize max_textures,
         VkFormat color_format,
         VkFormat depth_format);
 
-    void destroy(HgAllocator& mem);
+    void destroy();
 
     void add_texture(HgTexture* texture);
     void remove_texture(HgTexture* texture);
@@ -6289,15 +5862,16 @@ struct HgWindow {
      * Creates a window
      *
      * Parameters
+     * - arena The arena to allocate from
      * - config The window configuration
      *
      * Returns
      * - The created window, will never be nullptr
      */
-    static HgWindow create(const Config& config);
+    static HgWindow create(HgArena& arena, const Config& config);
 
     /**
-     * Destroys a window
+     * Destroys the window
      */
     void destroy();
 

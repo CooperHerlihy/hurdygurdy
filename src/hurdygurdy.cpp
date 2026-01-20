@@ -12,32 +12,35 @@
 #endif
 
 void hg_init(void) {
-    HgStdAllocator mem;
+    if (hg_arenas == nullptr) {
+        usize arena_count = 2;
+        hg_arenas = {(HgArena*)malloc(arena_count * sizeof(HgArena)), arena_count};
 
-    // init arenas for each thread : TODO?
-
-    if (hg_scratch_arenas == nullptr) {
-        hg_scratch_arenas = mem.alloc<HgArena>(2);
-        for (auto& arena : hg_scratch_arenas) {
-            arena = mem.alloc((u32)-1, alignof(std::max_align_t));
+        for (auto& arena : hg_arenas) {
+            usize arena_size = (u32)-1;
+            arena = {malloc(arena_size), arena_size};
         }
     }
+
+    HgArena& arena = hg_get_arena();
+
+    // init arenas for each thread : TODO?
 
     if (hg_threads == nullptr) {
         u32 thread_count = std::thread::hardware_concurrency()
             - 2; // main thread, io thread
-        hg_threads = HgThreadPool::create(mem, thread_count, 4096);
+        hg_threads = HgThreadPool::create(arena, thread_count, 4096);
         hg_assert(hg_threads != nullptr);
     }
 
     if (hg_io == nullptr) {
-        hg_io = HgIOThread::create(mem, 4096);
+        hg_io = HgIOThread::create(arena, 4096);
         hg_assert(hg_io != nullptr);
     }
 
     if (hg_ecs == nullptr) {
-        hg_ecs = mem.alloc<HgECS>();
-        *hg_ecs = hg_ecs->create(mem, 4096).value();
+        hg_ecs = arena.alloc<HgECS>();
+        *hg_ecs = hg_ecs->create(arena, 4096);
     }
     hg_ecs->reset();
 
@@ -47,58 +50,74 @@ void hg_init(void) {
 }
 
 void hg_exit(void) {
-    HgStdAllocator mem;
-
     hg_platform_deinit();
 
     hg_graphics_deinit();
 
     if (hg_ecs != nullptr) {
-        hg_ecs->destroy(mem);
         hg_ecs = nullptr;
     }
 
     if (hg_io != nullptr) {
-        HgIOThread::destroy(mem, hg_io);
+        hg_io->destroy();
         hg_io = nullptr;
     }
 
     if (hg_threads != nullptr) {
-        HgThreadPool::destroy(mem, hg_threads);
+        hg_threads->destroy();
         hg_threads = nullptr;
     }
 
-    if (hg_scratch_arenas == nullptr) {
-        for (auto& arena : hg_scratch_arenas) {
-            mem.free(HgSpan<void>{arena.memory, arena.capacity, alignof(std::max_align_t)});
+    if (hg_arenas == nullptr) {
+        for (auto& arena : hg_arenas) {
+            std::free(arena.memory);
         }
-        mem.free(hg_scratch_arenas);
+        std::free(hg_arenas.data);
     }
 }
 
-static HgArray<HgTest>& hg_internal_get_tests() {
-    static HgArray<HgTest> internal_tests = internal_tests.create(HgStdAllocator::get(), 0, 1024).value();
-    return internal_tests;
+struct HgTestArray {
+    HgSpan<HgTest> items;
+    usize count;
+
+    static HgTestArray create(usize init_count) {
+        HgTestArray arr;
+        arr.items = {(HgTest*)std::malloc(init_count), init_count};
+        arr.count = 0;
+        return arr;
+    }
+
+    void destroy() {
+        std::free(items.data);
+    }
+
+    HgTest& push() {
+        if (items.count == count)
+            items = {(HgTest*)std::realloc(items.data, items.count * 2), items.count * 2};
+        return items[count++];
+    }
+};
+
+static HgTestArray& hg_internal_get_tests() {
+    static HgTestArray tests = tests.create(1024);
+    return tests;
 }
 
 HgTest::HgTest(const char* test_name, bool (*test_function)()) : name(test_name), function(test_function) {
-    HgArray<HgTest>& internal_tests = hg_internal_get_tests();
-    if (internal_tests.is_full())
-        internal_tests.grow(HgStdAllocator::get());
-    internal_tests.push() = *this;
+    hg_internal_get_tests().push() = *this;
 }
 
 bool hg_run_tests() {
     hg_init();
 
-    HgArray<HgTest>& tests = hg_internal_get_tests();
+    HgTestArray& tests = hg_internal_get_tests();
 
     bool all_succeeded = true;
     std::printf("HurdyGurdy: Tests Begun\n");
     HgClock timer{};
     for (usize i = 0; i < tests.count; ++i) {
-        std::printf("%s...\n", tests[i].name);
-        if (tests[i].function()) {
+        std::printf("%s...\n", tests.items[i].name);
+        if (tests.items[i].function()) {
             std::printf("\x1b[32mSuccess\n\x1b[0m");
         } else {
             all_succeeded = false;
@@ -615,68 +634,53 @@ u32 hg_max_mipmaps(u32 width, u32 height, u32 depth) {
     return (u32)std::log2((f32)std::max({width, height, depth})) + 1;
 }
 
-void* HgStdAllocator::alloc_fn(usize size, usize alignment) {
-    (void)alignment;
-    return std::malloc(size);
-}
-
-void* HgStdAllocator::realloc_fn(void* allocation, usize old_size, usize new_size, usize alignment) {
-    (void)old_size;
-    (void)alignment;
-    return std::realloc(allocation, new_size);
-}
-
-void HgStdAllocator::free_fn(void* allocation, usize size, usize alignment) {
-    (void)size;
-    (void)alignment;
-    std::free(allocation);
-}
-
-void* HgArena::alloc_fn(usize size, usize alignment) {
+void* HgArena::alloc_v(usize size, usize alignment) {
     uptr new_head = hg_align((usize)head, alignment) + size;
 
-    if (new_head > capacity)
-        return nullptr;
+    hg_assert(new_head <= capacity);
     head = new_head;
 
     return (void*)((uptr)memory + head - size);
 }
 
-void* HgArena::realloc_fn(void* allocation, usize old_size, usize new_size, usize alignment) {
-    if ((uptr)allocation - (uptr)memory + old_size == (uptr)head) {
-        uptr new_head = (uptr)allocation - (uptr)memory + new_size;
-        if (new_head > capacity)
-            return nullptr;
-        head = new_head;
-        return allocation;
+void* HgArena::realloc_v(void* allocation, usize old_size, usize new_size, usize alignment) {
+    if ((uptr)allocation > (uptr)memory && (uptr)allocation < (uptr)memory + capacity) {
+        if ((uptr)allocation - (uptr)memory + old_size == (uptr)head) {
+            uptr new_head = (uptr)allocation - (uptr)memory + new_size;
+
+            hg_assert(new_head <= capacity);
+            head = new_head;
+
+            return allocation;
+        }
+
+        if (new_size < old_size)
+            return allocation;
     }
 
-    if (new_size < old_size)
-        return allocation;
-
-    void* new_allocation = alloc_fn(new_size, alignment);
-    if (allocation != nullptr && new_allocation != nullptr)
+    void* new_allocation = alloc_v(new_size, alignment);
+    if (allocation != nullptr)
         std::memcpy(new_allocation, allocation, std::min(old_size, new_size));
     return new_allocation;
 }
 
-HgArena& hg_get_scratch() {
-    hg_assert(hg_scratch_arenas.count != 0);
-    return hg_scratch_arenas[0];
+HgArena& hg_get_arena() {
+    hg_assert(hg_arenas.count != 0);
+    return hg_arenas[0];
 }
 
-HgArena& hg_get_scratch(const HgArena* conflict) {
-    hg_assert(hg_scratch_arenas.count != 0);
-    for (HgArena& arena : hg_scratch_arenas) {
+HgArena& hg_get_arena(const HgArena* conflict) {
+    hg_assert(hg_arenas.count != 0);
+    for (HgArena& arena : hg_arenas) {
         if (&arena != conflict)
             return arena;
     }
     hg_error("No scratch arena available\n");
 }
 
-HgArena& hg_get_scratch(HgSpan<const HgArena*> conflicts) {
-    hg_assert(hg_scratch_arenas.count != 0);
-    for (HgArena& arena : hg_scratch_arenas) {
+HgArena& hg_get_arena(HgSpan<const HgArena*> conflicts) {
+    hg_assert(hg_arenas.count != 0);
+    for (HgArena& arena : hg_arenas) {
         for (const HgArena* conflict : conflicts) {
             if (&arena == conflict)
                 goto next;
@@ -688,50 +692,8 @@ next:
     hg_error("No scratch arena available\n");
 }
 
-HgOption<HgArenaAllocator> HgArenaAllocator::create(HgAllocator& parent, usize capacity) {
-    HgOption<HgArenaAllocator> allocator;
-    allocator.has_value = true;
-
-    allocator->arena = parent.alloc<HgArena>();
-    if (allocator->arena == nullptr)
-        goto cleanup_arena;
-
-    allocator->arena->memory = parent.alloc_fn(capacity, alignof(std::max_align_t));
-    if (allocator->arena->memory == nullptr)
-        goto cleanup_memory;
-
-    allocator->arena->capacity = capacity;
-    allocator->arena->head = 0;
-
-    return allocator;
-
-cleanup_memory:
-    parent.free(allocator->arena);
-cleanup_arena:
-    return hg_empty;
-}
-
-void HgArenaAllocator::destroy(HgAllocator& parent) {
-    parent.free_fn(arena->memory, arena->capacity, alignof(std::max_align_t));
-    parent.free(arena);
-}
-
-void* HgArenaAllocator::alloc_fn(usize size, usize alignment) {
-    return arena->alloc_fn(size, alignment);
-}
-
-void* HgArenaAllocator::realloc_fn(void* allocation, usize old_size, usize new_size, usize alignment) {
-    return arena->realloc_fn(allocation, old_size, new_size, alignment);
-}
-
-void HgArenaAllocator::free_fn(void* allocation, usize size, usize alignment) {
-    (void)allocation;
-    (void)size;
-    (void)alignment;
-}
-
-HgOption<HgArrayAny> HgArrayAny::create(
-    HgAllocator& mem,
+HgArrayAny HgArrayAny::create(
+    HgArena& arena,
     u32 width,
     u32 alignment,
     usize count,
@@ -739,93 +701,52 @@ HgOption<HgArrayAny> HgArrayAny::create(
 ) {
     hg_assert(count <= capacity);
 
-    HgOption<HgArrayAny> arr;
-    arr.has_value = true;
-
-    arr->items = mem.alloc_fn(capacity * width, alignment);
-    if (arr->items == nullptr)
-        return hg_empty;
-
-    arr->width = width;
-    arr->alignment = alignment;
-    arr->capacity = capacity;
-    arr->count = count;
-
+    HgArrayAny arr;
+    arr.items = arena.alloc_v(capacity * width, alignment);
+    arr.width = width;
+    arr.alignment = alignment;
+    arr.capacity = capacity;
+    arr.count = count;
     return arr;
 }
 
-bool HgArrayAny::reserve(HgAllocator& mem, usize min) {
-    if (min > capacity) {
-        void* new_items = mem.realloc_fn(items, capacity * width, min * width, alignment);
-        if (new_items == nullptr)
-            return false;
-        items = new_items;
-        capacity = min;
-    }
-    return true;
+void HgArrayAny::reserve(HgArena& arena, usize new_capacity) {
+    items = arena.realloc_v(items, capacity * width, new_capacity * width, alignment);
+    capacity = new_capacity;
 }
 
-HgOption<HgString> HgString::create(HgAllocator& mem, usize capacity) {
-    HgOption<HgString> str;
-    str.has_value = true;
-
-    str->chars = mem.alloc<char>(capacity);
-    if (str->chars == nullptr)
-        return hg_empty;
-
-    str->length = 0;
-
+HgString HgString::create(HgArena& arena, usize capacity) {
+    HgString str;
+    str.chars = arena.alloc<char>(capacity);
+    str.length = 0;
     return str;
 }
 
-HgOption<HgString> HgString::create(HgAllocator& mem, HgStringView init) {
-    HgOption<HgString> str;
-    str.has_value = true;
-
-    str->chars = mem.alloc<char>(init.count);
-    if (str->chars == nullptr)
-        return hg_empty;
-
-    std::memcpy(str->chars.data, init.data, init.count);
-
-    str->length = init.count;
-
+HgString HgString::create(HgArena& arena, HgStringView init) {
+    HgString str;
+    str.chars = arena.alloc<char>(init.count);
+    str.length = init.count;
+    std::memcpy(str.chars.data, init.data, init.count);
     return str;
 }
 
-void HgString::destroy(HgAllocator& mem) {
-    mem.free(chars);
+void HgString::reserve(HgArena& arena, usize new_capacity) {
+    HgSpan<char> new_items = arena.realloc(chars, new_capacity);
+    chars = new_items;
 }
 
-bool HgString::reserve(HgAllocator& mem, usize min) {
-    if (min > chars.count) {
-        HgSpan<char> new_items = mem.realloc(chars, min);
-        if (new_items == nullptr)
-            return false;
-        chars = new_items;
-    }
-    return true;
-}
-
-bool HgString::grow(HgAllocator& mem, f32 factor) {
+void HgString::grow(HgArena& arena, f32 factor) {
     hg_assert(factor > 1.0f);
     hg_assert(chars.count <= (usize)((f32)SIZE_MAX / factor));
-    return reserve(mem, chars.count == 0 ? 1 : (usize)((f32)chars.count * factor));
+    reserve(arena, chars.count == 0 ? 1 : (usize)((f32)chars.count * factor));
 }
 
-void HgString::insert(HgAllocator& mem, usize index, HgStringView str) {
+void HgString::insert(HgArena& arena, usize index, HgStringView str) {
     hg_assert(index <= length);
 
     usize new_length = length + str.count;
-
-    if (chars.count < new_length) {
-        usize new_count = chars.count == 0 ? 1 : chars.count;
-        while (new_count < new_length) {
-            new_count *= 2;
-        }
-        [[maybe_unused]] bool string_insert_allocation_success
-            = reserve(mem, new_count);
-        hg_assert(string_insert_allocation_success);
+    while (chars.count < new_length) {
+        grow(arena);
     }
 
     std::memmove(chars.data + index + str.count, chars.data + index, length - index);
@@ -861,7 +782,7 @@ bool HgFence::wait(f64 timeout_seconds) {
     return is_complete();
 }
 
-HgThreadPool* HgThreadPool::create(HgAllocator& mem, usize thread_count, usize queue_size) {
+HgThreadPool* HgThreadPool::create(HgArena& arena, usize thread_count, usize queue_size) {
     usize work_threads = std::min((usize)1, thread_count - 1);
 
     auto thread_fn = [](HgThreadPool* pool) {
@@ -887,53 +808,31 @@ HgThreadPool* HgThreadPool::create(HgAllocator& mem, usize thread_count, usize q
         }
     };
 
-    HgThreadPool* pool = mem.alloc<HgThreadPool>();
-    if (pool == nullptr)
-        goto cleanup_pool;
+    HgThreadPool* pool = arena.alloc<HgThreadPool>();
 
-    pool->threads = mem.alloc<std::thread>(work_threads);
-    if (pool->threads == nullptr)
-        goto cleanup_threads;
+    pool->threads = arena.alloc<std::thread>(work_threads);
+    pool->queue = HgMPMCQueue<Work>::create(arena, queue_size);
 
-    {
-        auto [success, queue] = HgMPMCQueue<Work>::create(mem, queue_size);
-        if (!success)
-            goto cleanup_work_queue;
-        pool->queue = queue;
-    }
     pool->count.store(0);
-
     pool->should_close.store(false);
+
     for (auto& thread : pool->threads) {
         thread = std::thread(thread_fn, pool);
     }
 
     return pool;
-
-cleanup_work_queue:
-    mem.free(pool->threads);
-cleanup_threads:
-    mem.free(pool);
-cleanup_pool:
-    return nullptr;
 }
 
-void HgThreadPool::destroy(HgAllocator& mem, HgThreadPool* pool) {
-    if (pool == nullptr)
-        return;
+void HgThreadPool::destroy() {
+    mtx.lock();
+    should_close = true;
+    mtx.unlock();
+    cv.notify_all();
 
-    pool->mtx.lock();
-    pool->should_close = true;
-    pool->mtx.unlock();
-    pool->cv.notify_all();
-
-    for (auto& thread : pool->threads) {
+    for (auto& thread : threads) {
         thread.join();
     }
-
-    pool->queue.destroy(mem);
-    mem.free(pool->threads);
-    mem.free(pool);
+    hg_destroy(threads);
 }
 
 void HgThreadPool::call_par(HgFence* fence, void* data, void (*fn)(void*)) {
@@ -976,7 +875,7 @@ bool HgThreadPool::help(HgFence& fence, f64 timeout_seconds) {
     return fence.is_complete();
 }
 
-HgIOThread* HgIOThread::create(HgAllocator& mem, usize queue_size) {
+HgIOThread* HgIOThread::create(HgArena& arena, usize queue_size) {
     auto thread_fn = [](HgIOThread* io) {
         for (;;) {
             if (io->should_close.load())
@@ -985,7 +884,7 @@ HgIOThread* HgIOThread::create(HgAllocator& mem, usize queue_size) {
             Request request;
             if (io->queue.pop(request)) {
                 hg_assert(request.fn != nullptr);
-                request.fn(request.data, request.mem, request.resource, request.path);
+                request.fn(request.data, request.resource, request.path);
 
                 if (request.fence != nullptr)
                     request.fence->signal();
@@ -995,37 +894,21 @@ HgIOThread* HgIOThread::create(HgAllocator& mem, usize queue_size) {
         }
     };
 
-    HgIOThread* io = mem.alloc<HgIOThread>();
-    if (io == nullptr)
-        goto cleanup_thread;
+    HgIOThread* io = arena.alloc<HgIOThread>();
 
-    {
-        auto [success, queue] = HgMPSCQueue<Request>::create(mem, queue_size);
-        if (!success)
-            goto cleanup_queue;
-        io->queue = queue;
-    }
+    io->queue = HgMPSCQueue<Request>::create(arena, queue_size);
 
     io->should_close.store(false);
     io->thread = std::thread(thread_fn, io);
 
     return io;
-
-cleanup_queue:
-    mem.free(io);
-cleanup_thread:
-    return nullptr;
 }
 
-void HgIOThread::destroy(HgAllocator& mem, HgIOThread* io) {
-    if (io == nullptr)
-        return;
+void HgIOThread::destroy() {
+    should_close = true;
+    thread.join();
 
-    io->should_close = true;
-    io->thread.join();
-
-    io->queue.destroy(mem);
-    mem.free(io);
+    hg_destroy(&thread);
 }
 
 void HgIOThread::request(const Request& request) {
@@ -1047,44 +930,20 @@ u32 hg_create_component_id() {
     return id;
 }
 
-HgOption<HgECS> HgECS::create(
-    HgAllocator& mem,
-    u32 max_entities
-) {
-    HgOption<HgECS> ecs;
-    ecs.has_value = true;
+HgECS HgECS::create(HgArena& arena, u32 max_entities) {
+    HgECS ecs;
 
-    ecs->entity_pool = mem.alloc<HgEntity>(max_entities);
-    if (ecs->entity_pool == nullptr)
-        goto cleanup_entity_pool;
+    ecs.entity_pool = arena.alloc<HgEntity>(max_entities);
+    ecs.systems = arena.alloc<Component>(hg_internal_current_component_id());
 
-    ecs->systems = mem.alloc<Component>(hg_internal_current_component_id());
-    if (ecs->systems == nullptr)
-        goto cleanup_systems;
-
-    for (u32 i = 0; i < ecs->entity_pool.count; ++i) {
-        ecs->entity_pool[i] = {i + 1};
+    for (u32 i = 0; i < ecs.entity_pool.count; ++i) {
+        ecs.entity_pool[i] = {i + 1};
     }
-    ecs->next_entity = {0};
+    ecs.next_entity = {0};
 
-    std::fill_n(ecs->systems.data, ecs->systems.count, Component{});
+    std::fill_n(ecs.systems.data, ecs.systems.count, Component{});
 
     return ecs;
-
-cleanup_systems:
-    mem.free(ecs->entity_pool);
-cleanup_entity_pool:
-    return hg_empty;
-}
-
-void HgECS::destroy(HgAllocator& mem) {
-    for (u32 i = 0; i < systems.count; ++i) {
-        mem.free(systems[i].sparse);
-        systems[i].dense.destroy(mem);
-        systems[i].components.destroy(mem);
-    }
-    mem.free(systems);
-    mem.free(entity_pool);
 }
 
 void HgECS::reset() {
@@ -1101,24 +960,16 @@ void HgECS::reset() {
     next_entity = {0};
 }
 
-bool HgECS::resize_entities(HgAllocator& mem, u32 new_max) {
-    HgSpan<HgEntity> new_entity_pool = mem.realloc(entity_pool, new_max);
-    if (new_entity_pool == nullptr)
-        return false;
-
-    for (u32 i = (u32)entity_pool.count; i < (u32)new_entity_pool.count; ++i) {
-        new_entity_pool[i] = {i + 1};
+void HgECS::resize_entities(HgArena& arena, u32 new_max) {
+    usize old_count = entity_pool.count;
+    entity_pool = arena.realloc(entity_pool, new_max);
+    for (u32 i = (u32)old_count; i < (u32)entity_pool.count; ++i) {
+        entity_pool[i] = {i + 1};
     }
-    entity_pool = new_entity_pool;
 
     for (Component& system : systems) {
-        HgSpan<u32> new_sparse = mem.realloc(system.sparse, new_max);
-        if (new_sparse == nullptr)
-            return false;
-        system.sparse = new_sparse;
+        system.sparse = arena.realloc(system.sparse, new_max);
     }
-
-    return true;
 }
 
 HgEntity HgECS::spawn() {
@@ -1141,56 +992,27 @@ void HgECS::despawn(HgEntity entity) {
     next_entity = entity;
 }
 
-bool HgECS::register_component_untyped(
-    HgAllocator& mem,
+void HgECS::register_component_untyped(
+    HgArena& arena,
     u32 max_components,
     u32 component_size,
     u32 component_alignment,
     u32 component_id
 ) {
-    if (component_id >= systems.count)
-        systems = mem.realloc(systems, component_id + 1);
-
     hg_assert(!is_registered(component_id));
+    if (component_id >= systems.count)
+        systems = arena.realloc(systems, component_id + 1);
 
     Component& system = systems[component_id];
-
-    system.sparse = mem.alloc<u32>(entity_pool.count);
-    if (system.sparse == nullptr)
-        goto cleanup_sparse;
-
-    {
-        auto [success, arr] = system.dense.create(mem, 0, max_components);
-        if (!success)
-            goto cleanup_dense;
-        system.dense = arr;
-    }
-
-    {
-        auto [success, arr] = system.components.create(mem, component_size, component_alignment, 0, max_components);
-        if (!success)
-            goto cleanup_components;
-        system.components = arr;
-    }
-
+    system.sparse = arena.alloc<u32>(entity_pool.count);
+    system.dense = system.dense.create(arena, 0, max_components);
+    system.components = system.components.create(arena, component_size, component_alignment, 0, max_components);
     std::fill_n(system.sparse.data, system.sparse.count, (u32)-1);
-    return true;
-
-cleanup_components:
-    system.dense.destroy(mem);
-cleanup_dense:
-    mem.free(system.sparse);
-cleanup_sparse:
-    return false;
 }
 
-void HgECS::unregister_component_untyped(HgAllocator& mem, u32 component_id) {
+void HgECS::unregister_component_untyped(u32 component_id) {
     if (!is_registered(component_id))
         return;
-
-    mem.free(systems[component_id].sparse);
-    systems[component_id].dense.destroy(mem);
-    systems[component_id].components.destroy(mem);
 
     systems[component_id] = {};
 }
@@ -1305,9 +1127,9 @@ finish:
     quicksort(quicksort, begin, end);
 }
 
-void hg_load_file_binary(HgFence* fence, HgAllocator& mem, HgFileBinary& file, HgStringView path) {
-    auto fn = [](void*, HgAllocator* pmem, void* pfile, HgStringView fpath) {
-        HgFileBinary& file_data =* (HgFileBinary*)pfile;
+void HgFileBinary::load(HgFence* fence, HgStringView path) {
+    auto fn = [](void*, void* pfile, HgStringView fpath) {
+        HgFileBinary& file_data = *(HgFileBinary*)pfile;
 
         char* cpath = (char*)alloca(fpath.count + 1);
         std::memcpy(cpath, fpath.data, fpath.count);
@@ -1328,17 +1150,11 @@ void hg_load_file_binary(HgFence* fence, HgAllocator& mem, HgFileBinary& file, H
         }
 
         file_data.size = (usize)std::ftell(file_handle);
-        file_data.data = pmem->alloc_fn(file_data.size, alignof(std::max_align_t));
-        if (file_data.data == nullptr) {
-            hg_warn("Allocation failure during file read: %s\n", cpath);
-            file_data = {};
-            return;
-        }
+        file_data.data = std::malloc(file_data.size);
         std::rewind(file_handle);
 
         if (std::fread(file_data.data, 1, file_data.size, file_handle) != file_data.size) {
             hg_warn("Failed to read binary from file: %s\n", cpath);
-            pmem->free_fn(file_data.data, file_data.size, alignof(std::max_align_t));
             file_data = {};
             return;
         }
@@ -1347,30 +1163,28 @@ void hg_load_file_binary(HgFence* fence, HgAllocator& mem, HgFileBinary& file, H
     HgIOThread::Request request;
     request.fence = fence;
     request.fn = fn;
-    request.mem = &mem;
-    request.resource = &file;
+    request.resource = this;
     request.path = path;
     hg_io->request(request);
 }
 
-void hg_unload_file_binary(HgFence* fence, HgAllocator& mem, HgFileBinary& file) {
-    auto fn = [](void*, HgAllocator* pmem, void* pfile, HgStringView) {
-        HgFileBinary& file_data =* (HgFileBinary*)pfile;
-        pmem->free_fn(file_data.data, file_data.size, alignof(std::max_align_t));
+void HgFileBinary::unload(HgFence* fence) {
+    auto fn = [](void*, void* pfile, HgStringView) {
+        HgFileBinary& file_data = *(HgFileBinary*)pfile;
+        std::free(file_data.data);
         file_data = {};
     };
 
     HgIOThread::Request request;
     request.fence = fence;
     request.fn = fn;
-    request.mem = &mem;
-    request.resource = &file;
+    request.resource = this;
     hg_io->request(request);
 }
 
-void hg_store_file_binary(HgFence* fence, HgFileBinary& file, HgStringView path) {
-    auto fn = [](void*, HgAllocator*, void* pfile, HgStringView fpath) {
-        HgFileBinary& file_data =* (HgFileBinary*)pfile;
+void HgFileBinary::store(HgFence* fence, HgStringView path) {
+    auto fn = [](void*, void* pfile, HgStringView fpath) {
+        HgFileBinary& file_data = *(HgFileBinary*)pfile;
 
         char* cpath = (char*)alloca(fpath.count + 1);
         std::memcpy(cpath, fpath.data, fpath.count);
@@ -1392,14 +1206,14 @@ void hg_store_file_binary(HgFence* fence, HgFileBinary& file, HgStringView path)
     HgIOThread::Request request;
     request.fence = fence;
     request.fn = fn;
-    request.resource = &file;
+    request.resource = this;
     request.path = path;
     hg_io->request(request);
 }
 
-void hg_load_image(HgFence* fence, HgAllocator& mem, HgImage& image, HgStringView path) {
-    auto fn = [](void*, HgAllocator*, void* pimage, HgStringView fpath) {
-        HgImage& image_data =* (HgImage*)pimage;
+void HgImage::load(HgFence* fence, HgStringView path) {
+    auto fn = [](void*, void* pimage, HgStringView fpath) {
+        HgImage& image_data = *(HgImage*)pimage;
 
         char* cpath = (char*)alloca(fpath.count + 1);
         std::memcpy(cpath, fpath.data, fpath.count);
@@ -1419,16 +1233,14 @@ void hg_load_image(HgFence* fence, HgAllocator& mem, HgImage& image, HgStringVie
     HgIOThread::Request request;
     request.fence = fence;
     request.fn = fn;
-    request.mem = &mem;
-    request.resource = &image;
+    request.resource = this;
     request.path = path;
     hg_io->request(request);
 }
 
-void hg_unload_image(HgFence* fence, HgAllocator& mem, HgImage& image) {
-    auto fn = [](void*, HgAllocator*, void* pimage, HgStringView) {
-        HgImage& image_data =* (HgImage*)pimage;
-
+void HgImage::unload(HgFence* fence) {
+    auto fn = [](void*, void* pimage, HgStringView) {
+        HgImage& image_data = *(HgImage*)pimage;
         free(image_data.pixels);
         image_data = {};
     };
@@ -1436,14 +1248,13 @@ void hg_unload_image(HgFence* fence, HgAllocator& mem, HgImage& image) {
     HgIOThread::Request request;
     request.fence = fence;
     request.fn = fn;
-    request.mem = &mem;
-    request.resource = &image;
+    request.resource = this;
     hg_io->request(request);
 }
 
-void hg_store_image(HgFence* fence, HgImage& image, HgStringView path) {
-    auto fn = [](void*, HgAllocator*, void* pimage, HgStringView fpath) {
-        HgImage& image_data =* (HgImage*)pimage;
+void HgImage::store(HgFence* fence, HgStringView path) {
+    auto fn = [](void*, void* pimage, HgStringView fpath) {
+        HgImage& image_data = *(HgImage*)pimage;
 
         char* cpath = (char*)alloca(fpath.count + 1);
         std::memcpy(cpath, fpath.data, fpath.count);
@@ -1461,7 +1272,7 @@ void hg_store_image(HgFence* fence, HgImage& image, HgStringView path) {
     HgIOThread::Request request;
     request.fence = fence;
     request.fn = fn;
-    request.resource = &image;
+    request.resource = this;
     request.path = path;
     hg_io->request(request);
 }
@@ -2686,10 +2497,12 @@ VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger() {
 HgOption<u32> hg_vk_find_queue_family(VkPhysicalDevice gpu, VkQueueFlags queue_flags) {
     hg_assert(gpu != nullptr);
 
+    HgArenaScope scratch = hg_get_arena();
+
     u32 family_count = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, nullptr);
-    VkQueueFamilyProperties* families = (VkQueueFamilyProperties*)alloca(family_count * sizeof(*families));
-    vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, families);
+    HgSpan<VkQueueFamilyProperties> families = scratch.alloc<VkQueueFamilyProperties>(family_count);
+    vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, families.data);
 
     for (u32 i = 0; i < family_count; ++i) {
         if (families[i].queueFlags & queue_flags) {
@@ -2706,15 +2519,14 @@ static const char* const hg_internal_vk_device_extensions[]{
 VkPhysicalDevice hg_vk_find_single_queue_physical_device() {
     hg_assert(hg_vk_instance != nullptr);
 
-    HgStdAllocator mem; // replace allocator : TODO
+    HgArenaScope scratch = hg_get_arena();
 
     u32 gpu_count;
     vkEnumeratePhysicalDevices(hg_vk_instance, &gpu_count, nullptr);
-    VkPhysicalDevice* gpus = (VkPhysicalDevice*)alloca(gpu_count * sizeof(*gpus));
-    vkEnumeratePhysicalDevices(hg_vk_instance, &gpu_count, gpus);
+    HgSpan<VkPhysicalDevice> gpus = scratch.alloc<VkPhysicalDevice>(gpu_count);
+    vkEnumeratePhysicalDevices(hg_vk_instance, &gpu_count, gpus.data);
 
     HgSpan<VkExtensionProperties> ext_props{};
-    hg_defer(mem.free(ext_props));
 
     for (u32 i = 0; i < gpu_count; ++i) {
         VkPhysicalDevice gpu = gpus[i];
@@ -2723,7 +2535,7 @@ VkPhysicalDevice hg_vk_find_single_queue_physical_device() {
         u32 new_prop_count = 0;
         vkEnumerateDeviceExtensionProperties(gpu, nullptr, &new_prop_count, nullptr);
         if (new_prop_count > ext_props.count) {
-            ext_props = mem.realloc(ext_props, new_prop_count);
+            ext_props = scratch.realloc(ext_props, new_prop_count);
         }
         vkEnumerateDeviceExtensionProperties(gpu, nullptr, &new_prop_count, ext_props.data);
 
@@ -2978,10 +2790,12 @@ static VkFormat hg_internal_vk_find_swapchain_format(VkSurfaceKHR surface) {
     hg_assert(hg_vk_physical_device != nullptr);
     hg_assert(surface != nullptr);
 
+    HgArenaScope scratch = hg_get_arena();
+
     u32 format_count = 0;
     vkGetPhysicalDeviceSurfaceFormatsKHR(hg_vk_physical_device, surface, &format_count, nullptr);
-    VkSurfaceFormatKHR* formats = (VkSurfaceFormatKHR*)alloca(format_count * sizeof(*formats));
-    vkGetPhysicalDeviceSurfaceFormatsKHR(hg_vk_physical_device, surface, &format_count, formats);
+    HgSpan<VkSurfaceFormatKHR> formats = scratch.alloc<VkSurfaceFormatKHR>(format_count);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(hg_vk_physical_device, surface, &format_count, formats.data);
 
     for (usize i = 0; i < format_count; ++i) {
         if (formats[i].format == VK_FORMAT_R8G8B8A8_SRGB)
@@ -3066,12 +2880,10 @@ HgSwapchainData hg_vk_create_swapchain(
     return swapchain;
 }
 
-HgSwapchainCommands HgSwapchainCommands::create(VkSwapchainKHR swapchain, VkCommandPool cmd_pool) {
+HgSwapchainCommands HgSwapchainCommands::create(HgArena& arena, VkSwapchainKHR swapchain, VkCommandPool cmd_pool) {
     hg_assert(hg_vk_device != nullptr);
     hg_assert(cmd_pool != nullptr);
     hg_assert(swapchain != nullptr);
-
-    HgStdAllocator mem;
 
     HgSwapchainCommands sync{};
     sync.cmd_pool = cmd_pool;
@@ -3079,14 +2891,8 @@ HgSwapchainCommands HgSwapchainCommands::create(VkSwapchainKHR swapchain, VkComm
 
     vkGetSwapchainImagesKHR(hg_vk_device, swapchain, &sync.frame_count, nullptr);
 
-    void* allocation = mem.alloc_fn(
-        sync.frame_count * sizeof(*sync.cmds) +
-        sync.frame_count * sizeof(*sync.frame_finished) +
-        sync.frame_count * sizeof(*sync.image_available) +
-        sync.frame_count * sizeof(*sync.ready_to_present),
-        16);
+    sync.cmds = arena.alloc<VkCommandBuffer>(sync.frame_count).data;
 
-    sync.cmds = (VkCommandBuffer*)allocation;
     VkCommandBufferAllocateInfo cmd_alloc_info{};
     cmd_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     cmd_alloc_info.pNext = nullptr;
@@ -3096,7 +2902,7 @@ HgSwapchainCommands HgSwapchainCommands::create(VkSwapchainKHR swapchain, VkComm
 
     vkAllocateCommandBuffers(hg_vk_device, &cmd_alloc_info, sync.cmds);
 
-    sync.frame_finished = (VkFence*)(sync.cmds + sync.frame_count);
+    sync.frame_finished = arena.alloc<VkFence>(sync.frame_count).data;
     for (usize i = 0; i < sync.frame_count; ++i) {
         VkFenceCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
@@ -3104,14 +2910,14 @@ HgSwapchainCommands HgSwapchainCommands::create(VkSwapchainKHR swapchain, VkComm
         vkCreateFence(hg_vk_device, &info, nullptr, &sync.frame_finished[i]);
     }
 
-    sync.image_available = (VkSemaphore*)(sync.frame_finished + sync.frame_count);
+    sync.image_available = arena.alloc<VkSemaphore>(sync.frame_count).data;
     for (usize i = 0; i < sync.frame_count; ++i) {
         VkSemaphoreCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
         vkCreateSemaphore(hg_vk_device, &info, nullptr, &sync.image_available[i]);
     }
 
-    sync.ready_to_present = (VkSemaphore*)(sync.image_available + sync.frame_count);
+    sync.ready_to_present = arena.alloc<VkSemaphore>(sync.frame_count).data;
     for (usize i = 0; i < sync.frame_count; ++i) {
         VkSemaphoreCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -3124,8 +2930,6 @@ HgSwapchainCommands HgSwapchainCommands::create(VkSwapchainKHR swapchain, VkComm
 void HgSwapchainCommands::destroy() {
     hg_assert(hg_vk_device != nullptr);
 
-    HgStdAllocator mem;
-
     vkFreeCommandBuffers(hg_vk_device, cmd_pool, frame_count, cmds);
     for (usize i = 0; i < frame_count; ++i) {
         vkDestroyFence(hg_vk_device, frame_finished[i], nullptr);
@@ -3136,14 +2940,6 @@ void HgSwapchainCommands::destroy() {
     for (usize i = 0; i < frame_count; ++i) {
         vkDestroySemaphore(hg_vk_device, ready_to_present[i], nullptr);
     }
-
-    mem.free_fn(
-        cmds,
-        frame_count * sizeof(*cmds) +
-        frame_count * sizeof(*frame_finished) +
-        frame_count * sizeof(*image_available) +
-        frame_count * sizeof(*ready_to_present),
-        16);
 
     std::memset(this, 0, sizeof(*this));
 }
@@ -3743,18 +3539,18 @@ void hg_vk_image_generate_mipmaps(
     vkQueueSubmit(transfer_queue, 1, &submit_info, nullptr);
 }
 
-void hg_load_texture(VkCommandPool cmd_pool, HgTexture& texture, VkFilter filter, HgImage& image) {
-    hg_assert(image.pixels != nullptr);
-    hg_assert(image.format != 0);
-    hg_assert(image.width != 0);
-    hg_assert(image.height != 0);
-    hg_assert(image.depth != 0);
+void HgTexture::load(VkCommandPool cmd_pool, VkFilter filter, HgImage& src) {
+    hg_assert(src.pixels != nullptr);
+    hg_assert(src.format != 0);
+    hg_assert(src.width != 0);
+    hg_assert(src.height != 0);
+    hg_assert(src.depth != 0);
 
     VkImageCreateInfo image_info{};
     image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     image_info.imageType = VK_IMAGE_TYPE_2D;
-    image_info.format = image.format;
-    image_info.extent = {image.width, image.height, image.depth};
+    image_info.format = src.format;
+    image_info.extent = {src.width, src.height, src.depth};
     image_info.mipLevels = 1;
     image_info.arrayLayers = 1;
     image_info.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -3763,34 +3559,34 @@ void hg_load_texture(VkCommandPool cmd_pool, HgTexture& texture, VkFilter filter
     VmaAllocationCreateInfo alloc_info{};
     alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
 
-    vmaCreateImage(hg_vk_vma, &image_info, &alloc_info, &texture.image, &texture.allocation, nullptr);
-    hg_assert(texture.allocation != nullptr);
-    hg_assert(texture.image != nullptr);
+    vmaCreateImage(hg_vk_vma, &image_info, &alloc_info, &image, &allocation, nullptr);
+    hg_assert(allocation != nullptr);
+    hg_assert(image != nullptr);
 
     HgVkImageStagingWriteConfig staging_config{};
-    staging_config.dst_image = texture.image;
+    staging_config.dst_image = image;
     staging_config.subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     staging_config.subresource.layerCount = 1;
-    staging_config.src_data = image.pixels;
-    staging_config.width = image.width;
-    staging_config.height = image.height;
-    staging_config.depth = image.depth;
-    staging_config.format = image.format;
+    staging_config.src_data = src.pixels;
+    staging_config.width = src.width;
+    staging_config.height = src.height;
+    staging_config.depth = src.depth;
+    staging_config.format = src.format;
     staging_config.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
     hg_vk_image_staging_write(hg_vk_queue, cmd_pool, staging_config);
 
     VkImageViewCreateInfo view_info{};
     view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    view_info.image = texture.image;
+    view_info.image = image;
     view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    view_info.format = image.format;
+    view_info.format = src.format;
     view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     view_info.subresourceRange.levelCount = 1;
     view_info.subresourceRange.layerCount = 1;
 
-    vkCreateImageView(hg_vk_device, &view_info, nullptr, &texture.view);
-    hg_assert(texture.view != nullptr);
+    vkCreateImageView(hg_vk_device, &view_info, nullptr, &view);
+    hg_assert(view != nullptr);
 
     VkSamplerCreateInfo sampler_info{};
     sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -3800,21 +3596,21 @@ void hg_load_texture(VkCommandPool cmd_pool, HgTexture& texture, VkFilter filter
     sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
     sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 
-    vkCreateSampler(hg_vk_device, &sampler_info, nullptr, &texture.sampler);
-    hg_assert(texture.sampler != nullptr);
+    vkCreateSampler(hg_vk_device, &sampler_info, nullptr, &sampler);
+    hg_assert(sampler != nullptr);
 }
 
-void hg_unload_texture(HgTexture& texture) {
-    vkDestroySampler(hg_vk_device, texture.sampler, nullptr);
-    vkDestroyImageView(hg_vk_device, texture.view, nullptr);
-    vmaDestroyImage(hg_vk_vma, texture.image, texture.allocation);
+void HgTexture::unload() {
+    vkDestroySampler(hg_vk_device, sampler, nullptr);
+    vkDestroyImageView(hg_vk_device, view, nullptr);
+    vmaDestroyImage(hg_vk_vma, image, allocation);
 }
 
 #include "sprite.frag.spv.h"
 #include "sprite.vert.spv.h"
 
-HgOption<HgPipeline2D> HgPipeline2D::create(
-    HgAllocator& mem,
+HgPipeline2D HgPipeline2D::create(
+    HgArena& arena,
     usize max_textures,
     VkFormat color_format,
     VkFormat depth_format
@@ -3822,15 +3618,8 @@ HgOption<HgPipeline2D> HgPipeline2D::create(
     hg_assert(hg_vk_device != nullptr);
     hg_assert(color_format != VK_FORMAT_UNDEFINED);
 
-    HgOption<HgPipeline2D> pipeline;
-    pipeline.has_value = true;
-
-    {
-        auto [success, map] = pipeline->texture_sets.create(mem, max_textures);
-        if (!success)
-            return hg_empty;
-        pipeline->texture_sets = map;
-    }
+    HgPipeline2D pipeline{};
+    pipeline.texture_sets = pipeline.texture_sets.create(arena, max_textures);
 
     VkDescriptorSetLayoutBinding vp_bindings[1]{};
     vp_bindings[0].binding = 0;
@@ -3843,8 +3632,8 @@ HgOption<HgPipeline2D> HgPipeline2D::create(
     vp_layout_info.bindingCount = hg_countof(vp_bindings);
     vp_layout_info.pBindings = vp_bindings;
 
-    vkCreateDescriptorSetLayout(hg_vk_device, &vp_layout_info, nullptr, &pipeline->vp_layout);
-    hg_assert(pipeline->vp_layout != nullptr);
+    vkCreateDescriptorSetLayout(hg_vk_device, &vp_layout_info, nullptr, &pipeline.vp_layout);
+    hg_assert(pipeline.vp_layout != nullptr);
 
     VkDescriptorSetLayoutBinding texture_bindings[1]{};
     texture_bindings[0].binding = 0;
@@ -3857,10 +3646,10 @@ HgOption<HgPipeline2D> HgPipeline2D::create(
     texture_layout_info.bindingCount = hg_countof(texture_bindings);
     texture_layout_info.pBindings = texture_bindings;
 
-    vkCreateDescriptorSetLayout(hg_vk_device, &texture_layout_info, nullptr, &pipeline->texture_layout);
-    hg_assert(pipeline->texture_layout != nullptr);
+    vkCreateDescriptorSetLayout(hg_vk_device, &texture_layout_info, nullptr, &pipeline.texture_layout);
+    hg_assert(pipeline.texture_layout != nullptr);
 
-    VkDescriptorSetLayout set_layouts[]{pipeline->vp_layout, pipeline->texture_layout};
+    VkDescriptorSetLayout set_layouts[]{pipeline.vp_layout, pipeline.texture_layout};
     VkPushConstantRange push_ranges[1]{};
     push_ranges[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     push_ranges[0].size = sizeof(Push);
@@ -3872,8 +3661,8 @@ HgOption<HgPipeline2D> HgPipeline2D::create(
     layout_info.pushConstantRangeCount = hg_countof(push_ranges);
     layout_info.pPushConstantRanges = push_ranges;
 
-    vkCreatePipelineLayout(hg_vk_device, &layout_info, nullptr, &pipeline->pipeline_layout);
-    hg_assert(pipeline->pipeline_layout != nullptr);
+    vkCreatePipelineLayout(hg_vk_device, &layout_info, nullptr, &pipeline.pipeline_layout);
+    hg_assert(pipeline.pipeline_layout != nullptr);
 
     VkShaderModuleCreateInfo vertex_shader_info{};
     vertex_shader_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -3908,11 +3697,11 @@ HgOption<HgPipeline2D> HgPipeline2D::create(
     pipeline_config.depth_attachment_format = depth_format;
     pipeline_config.stencil_attachment_format = VK_FORMAT_UNDEFINED;
     pipeline_config.shader_stages = {shader_stages, hg_countof(shader_stages)};
-    pipeline_config.layout = pipeline->pipeline_layout;
+    pipeline_config.layout = pipeline.pipeline_layout;
     pipeline_config.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
     pipeline_config.enable_color_blend = true;
 
-    pipeline->pipeline = hg_vk_create_graphics_pipeline(hg_vk_device, pipeline_config);
+    pipeline.pipeline = hg_vk_create_graphics_pipeline(hg_vk_device, pipeline_config);
 
     vkDestroyShaderModule(hg_vk_device, fragment_shader, nullptr);
     vkDestroyShaderModule(hg_vk_device, vertex_shader, nullptr);
@@ -3930,17 +3719,17 @@ HgOption<HgPipeline2D> HgPipeline2D::create(
     desc_pool_info.poolSizeCount = hg_countof(desc_pool_sizes);
     desc_pool_info.pPoolSizes = desc_pool_sizes;
 
-    vkCreateDescriptorPool(hg_vk_device, &desc_pool_info, nullptr, &pipeline->descriptor_pool);
-    hg_assert(pipeline->descriptor_pool != nullptr);
+    vkCreateDescriptorPool(hg_vk_device, &desc_pool_info, nullptr, &pipeline.descriptor_pool);
+    hg_assert(pipeline.descriptor_pool != nullptr);
 
     VkDescriptorSetAllocateInfo vp_set_alloc_info{};
     vp_set_alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    vp_set_alloc_info.descriptorPool = pipeline->descriptor_pool;
+    vp_set_alloc_info.descriptorPool = pipeline.descriptor_pool;
     vp_set_alloc_info.descriptorSetCount = 1;
-    vp_set_alloc_info.pSetLayouts = &pipeline->vp_layout;
+    vp_set_alloc_info.pSetLayouts = &pipeline.vp_layout;
 
-    vkAllocateDescriptorSets(hg_vk_device, &vp_set_alloc_info, &pipeline->vp_set);
-    hg_assert(pipeline->vp_set != nullptr);
+    vkAllocateDescriptorSets(hg_vk_device, &vp_set_alloc_info, &pipeline.vp_set);
+    hg_assert(pipeline.vp_set != nullptr);
 
     VkBufferCreateInfo vp_buffer_info{};
     vp_buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -3955,26 +3744,26 @@ HgOption<HgPipeline2D> HgPipeline2D::create(
         hg_vk_vma,
         &vp_buffer_info,
         &vp_alloc_info,
-        &pipeline->vp_buffer,
-        &pipeline->vp_buffer_allocation,
+        &pipeline.vp_buffer,
+        &pipeline.vp_buffer_allocation,
         nullptr);
-    hg_assert(pipeline->vp_buffer != nullptr);
-    hg_assert(pipeline->vp_buffer_allocation != nullptr);
+    hg_assert(pipeline.vp_buffer != nullptr);
+    hg_assert(pipeline.vp_buffer_allocation != nullptr);
 
     VPUniform vp_data{};
     vp_data.proj = 1.0f;
     vp_data.view = 1.0f;
 
-    vmaCopyMemoryToAllocation(hg_vk_vma, &vp_data, pipeline->vp_buffer_allocation, 0, sizeof(vp_data));
+    vmaCopyMemoryToAllocation(hg_vk_vma, &vp_data, pipeline.vp_buffer_allocation, 0, sizeof(vp_data));
 
     VkDescriptorBufferInfo desc_info{};
-    desc_info.buffer = pipeline->vp_buffer;
+    desc_info.buffer = pipeline.vp_buffer;
     desc_info.offset = 0;
     desc_info.range = sizeof(VPUniform);
 
     VkWriteDescriptorSet desc_write{};
     desc_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    desc_write.dstSet = pipeline->vp_set;
+    desc_write.dstSet = pipeline.vp_set;
     desc_write.dstBinding = 0;
     desc_write.descriptorCount = 1;
     desc_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -3985,8 +3774,7 @@ HgOption<HgPipeline2D> HgPipeline2D::create(
     return pipeline;
 }
 
-void HgPipeline2D::destroy(HgAllocator& mem) {
-    texture_sets.destroy(mem);
+void HgPipeline2D::destroy() {
     vmaDestroyBuffer(hg_vk_vma, vp_buffer, vp_buffer_allocation);
     vkFreeDescriptorSets(hg_vk_device, descriptor_pool, 1, &vp_set);
     vkDestroyDescriptorPool(hg_vk_device, descriptor_pool, nullptr);
@@ -4375,16 +4163,14 @@ struct HgWindow::Internals {
     Atom delete_atom;
 };
 
-HgWindow HgWindow::create(const HgWindow::Config& config) {
-    HgStdAllocator mem;
-
+HgWindow HgWindow::create(HgArena& arena, const HgWindow::Config& config) {
     u32 width = config.windowed ? config.width
         : (u32)DisplayWidth(hg_internal_x11_display, DefaultScreen(hg_internal_x11_display));
     u32 height = config.windowed ? config.height
         : (u32)DisplayHeight(hg_internal_x11_display, DefaultScreen(hg_internal_x11_display));
 
     HgWindow window;
-    window.internals = mem.alloc<HgWindow::Internals>();
+    window.internals = arena.alloc<Internals>();
     *window.internals = {};
 
     window.internals->input.width = width;
@@ -4406,39 +4192,33 @@ HgWindow HgWindow::create(const HgWindow::Config& config) {
 }
 
 void HgWindow::destroy() {
-    if (internals != nullptr) {
-        HgStdAllocator mem;
-
-        XDestroyWindow(hg_internal_x11_display, internals->x11_window);
-        mem.free(internals);
-    }
+    XDestroyWindow(hg_internal_x11_display, internals->x11_window);
     XFlush(hg_internal_x11_display);
 }
 
 void HgWindow::set_icon(u32* icon_data, u32 width, u32 height) {
-    // window set_icon : TODO
+    hg_error("window set_icon : TODO\n");
     (void)icon_data;
     (void)width;
     (void)height;
 }
 
 bool HgWindow::is_fullscreen() {
-    // window is_fullscreen : TODO
-    return false;
+    hg_error("window is_fullscreen : TODO\n");
 }
 
 void HgWindow::set_fullscreen(bool fullscreen) {
-    // window set_fullscreen : TODO
+    hg_error("window set_fullscreen : TODO\n");
     (void)fullscreen;
 }
 
 void HgWindow::set_cursor(HgWindow::Cursor cursor) {
-    // window set_cursor : TODO
+    hg_error("window set_cursor : TODO\n");
     (void)cursor;
 }
 
 void HgWindow::set_cursor_image(u32* data, u32 width, u32 height) {
-    // window set_cursor_image : TODO
+    hg_error("window set_cursor_image : TODO\n");
     (void)data;
     (void)width;
     (void)height;
@@ -5266,13 +5046,11 @@ static LRESULT CALLBACK hg_internal_window_callback(HWND hwnd, UINT msg, WPARAM 
     return DefWindowProcA(hwnd, msg, wparam, lparam);
 }
 
-HgWindow HgWindow::create(const HgWindow::Config& config) {
-    HgStdAllocator mem;
-
+HgWindow HgWindow::create(HgArena& arena, const HgWindow::Config& config) {
     const char* title = config.title != nullptr ? config.title : "Hurdy Gurdy";
 
     HgWindow window;
-    window.internals = mem.alloc<HgWindow::Internals>();
+    window.internals = arena.alloc<Internals>();
     *window.internals = {};
 
     WNDCLASSA window_class{};
@@ -5327,38 +5105,32 @@ HgWindow HgWindow::create(const HgWindow::Config& config) {
 }
 
 void HgWindow::destroy() {
-    if (internals != nullptr) {
-        DestroyWindow(internals->hwnd);
-
-        HgStdAllocator mem;
-        mem.free(internals);
-    }
+    DestroyWindow(internals->hwnd);
 }
 
 void HgWindow::set_icon(u32* icon_data, u32 width, u32 height) {
-    // window set_icon : TODO
+    hg_error("window set_icon : TODO\n");
     (void)icon_data;
     (void)width;
     (void)height;
 }
 
 bool HgWindow::is_fullscreen() {
-    // window is_fullscreen : TODO
-    return false;
+    hg_error("window is_fullscreen : TODO\n");
 }
 
 void HgWindow::set_fullscreen(bool fullscreen) {
-    // window set_fullscreen : TODO
+    hg_error("window set_fullscreen : TODO\n");
     (void)fullscreen;
 }
 
 void HgWindow::set_cursor(HgWindow::Cursor cursor) {
-    // window set_cursor : TODO
+    hg_error("window set_cursor : TODO\n");
     (void)cursor;
 }
 
 void HgWindow::set_cursor_image(u32* data, u32 width, u32 height) {
-    // window set_cursor_image : TODO
+    hg_error("window set_cursor_image : TODO\n");
     (void)data;
     (void)width;
     (void)height;
@@ -5515,7 +5287,6 @@ void hg_vulkan_init() {
 }
 
 void hg_vulkan_deinit() {
-
     if (hg_internal_libvulkan != nullptr) {
 
 #if defined(HG_PLATFORM_LINUX)
@@ -5526,7 +5297,6 @@ void hg_vulkan_deinit() {
 
         hg_internal_libvulkan = nullptr;
     }
-
 }
 
 #undef HG_LOAD_VULKAN_FUNC
