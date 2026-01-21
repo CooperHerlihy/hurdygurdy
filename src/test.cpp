@@ -385,6 +385,77 @@ hg_test(hg_arena) {
     return true;
 }
 
+hg_test(hg_pool) {
+    HgArenaScope arena = hg_get_arena();
+
+    HgPool<u32> pool = pool.create(arena, 128);
+
+    for (usize i = 0; i < 4; ++i) {
+        hg_test_assert(pool.first == 0);
+
+        u32* a = pool.alloc();
+        hg_test_assert(a == (u32*)pool.slots.data);
+
+        u32* b = pool.alloc();
+        hg_test_assert(b != a);
+
+        pool.free(a);
+        u32* c = pool.alloc();
+        hg_test_assert(c == a);
+
+        pool.free(b);
+        pool.free(c);
+
+        u32* items[100]{};
+
+        for (u32 j = 0; j < 100; ++j) {
+            items[j] = pool.alloc();
+            *items[j] = j + 1000;
+        }
+
+        for (u32 j = 0; j < 100; ++j) {
+            hg_test_assert(items[j] != nullptr);
+            hg_test_assert(*items[j] == j + 1000);
+        }
+
+        for (u32 j = 0; j < 100; ++j) {
+            pool.free(items[j]);
+        }
+
+        for (u32 j = 0; j < 100; ++j) {
+            hg_test_assert(*items[j] != j + 1000);
+        }
+
+        for (u32 j = 0; j < 100; ++j) {
+            items[j] = pool.alloc();
+        }
+
+        pool.reset();
+    }
+
+    u32* items[256]{};
+
+    for (usize i = 0; i < 64; ++i) {
+        items[i] = pool.alloc();
+    }
+
+    for (usize i = 0; i < 64; ++i) {
+        hg_test_assert(items[i] != nullptr);
+    }
+
+    pool.resize(arena, 256);
+
+    for (usize i = 64; i < 256; ++i) {
+        items[i] = pool.alloc();
+    }
+
+    for (usize i = 0; i < 256; ++i) {
+        hg_test_assert(items[i] != nullptr);
+    }
+
+    return true;
+}
+
 hg_test(hg_array) {
     HgArenaScope arena = hg_get_arena();
 

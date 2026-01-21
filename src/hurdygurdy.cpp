@@ -635,22 +635,16 @@ u32 hg_max_mipmaps(u32 width, u32 height, u32 depth) {
 }
 
 void* HgArena::alloc_v(usize size, usize alignment) {
-    uptr new_head = hg_align((usize)head, alignment) + size;
-
-    hg_assert(new_head <= capacity);
-    head = new_head;
-
+    head = hg_align((usize)head, alignment) + size;
+    hg_assert(head <= capacity);
     return (void*)((uptr)memory + head - size);
 }
 
 void* HgArena::realloc_v(void* allocation, usize old_size, usize new_size, usize alignment) {
     if ((uptr)allocation > (uptr)memory && (uptr)allocation < (uptr)memory + capacity) {
         if ((uptr)allocation - (uptr)memory + old_size == (uptr)head) {
-            uptr new_head = (uptr)allocation - (uptr)memory + new_size;
-
-            hg_assert(new_head <= capacity);
-            head = new_head;
-
+            head = (uptr)allocation - (uptr)memory + new_size;
+            hg_assert(head <= capacity);
             return allocation;
         }
 
@@ -669,10 +663,10 @@ HgArena& hg_get_arena() {
     return hg_arenas[0];
 }
 
-HgArena& hg_get_arena(const HgArena* conflict) {
+HgArena& hg_get_arena(const HgArena& conflict) {
     hg_assert(hg_arenas.count != 0);
     for (HgArena& arena : hg_arenas) {
-        if (&arena != conflict)
+        if (&arena != &conflict)
             return arena;
     }
     hg_error("No scratch arena available\n");

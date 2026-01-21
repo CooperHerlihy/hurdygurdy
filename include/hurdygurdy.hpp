@@ -2021,18 +2021,18 @@ struct HgArenaScope {
     /**
      * The original head of the arena
      */
-    usize original_pos;
+    usize state;
 
     /**
      * Create a scope guard with an arena
      */
-    HgArenaScope(HgArena& arena_val) : arena{&arena_val}, original_pos{arena->save()} {}
+    HgArenaScope(HgArena& arena_val) : arena{&arena_val}, state{arena->save()} {}
 
     /**
      * Load the original head at the scope's end
      */
     ~HgArenaScope() {
-        arena->load(original_pos);
+        arena->load(state);
     }
 
     operator HgArena&() {
@@ -2185,7 +2185,7 @@ HgArena& hg_get_arena();
  * Returns
  * - A scratch arena
  */
-HgArena& hg_get_arena(const HgArena* conflict);
+HgArena& hg_get_arena(const HgArena& conflict);
 
 /**
  * Get a scratch arena for temporary allocations, accounting for conflicts
@@ -2225,6 +2225,114 @@ void hg_destroy(HgSpan<T> allocation) {
         }
     }
 }
+
+/**
+ * A free list memory pool
+ */
+template<typename T>
+struct HgPool {
+    static_assert(hg_is_c_safe<T>);
+
+    /**
+     * How items are stored
+     */
+    union Slot {
+        /**
+         * The item
+         */
+        T item;
+        /**
+         * A pointer to the next in the free list
+         */
+        usize next;
+    };
+
+    /**
+     * The items in the pool
+     */
+    HgSpan<Slot> slots;
+    /**
+     * A pointer to the first in the free list
+     */
+    usize first;
+
+    /**
+     * Create a new free list memory pool
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - count The number of items in the pool
+     *
+     * Returns
+     * - The created pool
+     */
+    static HgPool create(HgArena& arena, usize count) {
+        HgPool pool;
+        pool.slots = arena.alloc<Slot>(count);
+        pool.reset();
+        return pool;
+    }
+
+    /**
+     * Free all items
+     */
+    void reset() {
+        first = 0;
+        for (usize i = 0; i < slots.count; ++i) {
+            slots[i].next = i + 1;
+        }
+    }
+
+    /**
+     * Increase the size of the pool
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - new_count The new number of items in the pool
+     */
+    void resize(HgArena& arena, usize new_count) {
+        hg_assert(new_count > slots.count);
+
+        usize old_count = slots.count;
+        slots = arena.realloc(slots, new_count);
+        for (usize i = old_count; i < slots.count; ++i) {
+            slots[i].next = i + 1;
+        }
+    }
+
+    /**
+     * Allocates a new item from the pool
+     *
+     * Note, the item is not constructed
+     *
+     * Returns
+     * - The allocated item, never nullptr
+     */
+    T* alloc() {
+        hg_assert(first != slots.count);
+
+        Slot* slot = &slots[first];
+        first = slots[first].next;
+        return &slot->item;
+    }
+
+    /**
+     * Free an item back into the pool
+     *
+     * Parameters
+     * - allocation The item to free, must not be nullptr
+     */
+    void free(T* allocation) {
+        hg_assert(allocation != nullptr);
+        hg_assert((Slot*)allocation >= slots.begin() && (Slot*)allocation < slots.end());
+
+        static_assert(offsetof(Slot, item) == 0);
+
+        usize idx = (Slot*)allocation - slots.data;
+        slots[idx].next = first;
+        first = idx;
+    }
+};
 
 /**
  * A dynamically sized array
