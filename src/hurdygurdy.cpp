@@ -22,7 +22,7 @@ void hg_init(void) {
         }
     }
 
-    HgArena& arena = hg_get_arena();
+    HgArena& arena = hg_get_scratch();
 
     // init arenas for each thread : TODO?
 
@@ -76,6 +76,12 @@ void hg_exit(void) {
     }
 }
 
+f64 HgClock::tick() {
+    auto prev = time;
+    time = std::chrono::high_resolution_clock::now();
+    return std::chrono::duration<f64>{time - prev}.count();
+}
+
 struct HgTestArray {
     HgSpan<HgTest> items;
     usize count;
@@ -108,12 +114,11 @@ HgTest::HgTest(const char* test_name, bool (*test_function)()) : name(test_name)
 }
 
 bool hg_run_tests() {
-    hg_init();
+    std::printf("HurdyGurdy: Tests Begun\n");
 
     HgTestArray& tests = hg_internal_get_tests();
-
     bool all_succeeded = true;
-    std::printf("HurdyGurdy: Tests Begun\n");
+
     HgClock timer{};
     for (usize i = 0; i < tests.count; ++i) {
         std::printf("%s...\n", tests.items[i].name);
@@ -125,11 +130,13 @@ bool hg_run_tests() {
         }
     }
     f64 ms = timer.tick() * 1000.0f;
+
     if (all_succeeded) {
         std::printf("HurdyGurdy: Tests Complete in %fms \x1b[32m[Success]\x1b[0m\n", ms);
     } else {
         std::printf("HurdyGurdy: Tests Complete in %fms \x1b[31m[Failure]\x1b[0m\n", ms);
     }
+
     return all_succeeded;
 }
 
@@ -658,12 +665,12 @@ void* HgArena::realloc_v(void* allocation, usize old_size, usize new_size, usize
     return new_allocation;
 }
 
-HgArena& hg_get_arena() {
+HgArena& hg_get_scratch() {
     hg_assert(hg_arenas.count != 0);
     return hg_arenas[0];
 }
 
-HgArena& hg_get_arena(const HgArena& conflict) {
+HgArena& hg_get_scratch(const HgArena& conflict) {
     hg_assert(hg_arenas.count != 0);
     for (HgArena& arena : hg_arenas) {
         if (&arena != &conflict)
@@ -672,7 +679,7 @@ HgArena& hg_get_arena(const HgArena& conflict) {
     hg_error("No scratch arena available\n");
 }
 
-HgArena& hg_get_arena(HgSpan<const HgArena*> conflicts) {
+HgArena& hg_get_scratch(HgSpan<const HgArena*> conflicts) {
     hg_assert(hg_arenas.count != 0);
     for (HgArena& arena : hg_arenas) {
         for (const HgArena* conflict : conflicts) {
@@ -718,9 +725,9 @@ HgString HgString::create(HgArena& arena, usize capacity) {
 
 HgString HgString::create(HgArena& arena, HgStringView init) {
     HgString str;
-    str.chars = arena.alloc<char>(init.count);
-    str.length = init.count;
-    std::memcpy(str.chars.data, init.data, init.count);
+    str.chars = arena.alloc<char>(init.length);
+    str.length = init.length;
+    std::memcpy(str.chars.data, init.chars, init.length);
     return str;
 }
 
@@ -735,17 +742,576 @@ void HgString::grow(HgArena& arena, f32 factor) {
     reserve(arena, chars.count == 0 ? 1 : (usize)((f32)chars.count * factor));
 }
 
-void HgString::insert(HgArena& arena, usize index, HgStringView str) {
+void HgString::insert(HgArena& arena, usize index, char c) {
     hg_assert(index <= length);
 
-    usize new_length = length + str.count;
+    usize new_length = length + 1;
     while (chars.count < new_length) {
         grow(arena);
     }
 
-    std::memmove(chars.data + index + str.count, chars.data + index, length - index);
-    std::memcpy(chars.data + index, str.data, str.count);
+    std::memmove(chars.data + index + 1, chars.data + index, length - index);
+    chars[index] = c;
     length = new_length;
+}
+
+void HgString::insert(HgArena& arena, usize index, HgStringView str) {
+    hg_assert(index <= length);
+
+    usize new_length = length + str.length;
+    while (chars.count < new_length) {
+        grow(arena);
+    }
+
+    std::memmove(chars.data + index + str.length, chars.data + index, length - index);
+    std::memcpy(chars.data + index, str.chars, str.length);
+    length = new_length;
+}
+
+bool hg_is_whitespace(char c) {
+    return c == ' ' || c == '\t' || c == '\n';
+}
+
+bool hg_is_numeral_base10(char c) {
+    return c >= '0' && c <= '9';
+}
+
+bool hg_is_integer_base10(HgStringView str) {
+    if (str.length == 0)
+        return false;
+
+    usize head = 0;
+    if (!hg_is_numeral_base10(str[head]) && str[head] != '+' && str[head] != '-')
+        return false;
+
+    ++head;
+    while (head < str.length) {
+        if (!hg_is_numeral_base10(str[head]))
+            return false;
+        ++head;
+    }
+    return true;
+}
+
+bool hg_is_float_base10(HgStringView str) {
+    if (str.length == 0)
+        return false;
+
+    bool has_decimal = false;
+    bool has_exponent = false;
+
+    usize head = 0;
+
+    if (!hg_is_numeral_base10(str[head]) && str[head] != '.' && str[head] != '+' && str[head] != '-')
+        return false;
+
+    if (str[head] == '.')
+        has_decimal = true;
+
+    ++head;
+    while (head < str.length) {
+        if (hg_is_numeral_base10(str[head])) {
+            ++head;
+            continue;
+        }
+
+        if (str[head] == '.' && !has_decimal) {
+            has_decimal = true;
+            ++head;
+            continue;
+        }
+
+        if (str[head] == 'e' && !has_exponent) {
+            has_exponent = true;
+            ++head;
+            if (hg_is_numeral_base10(str[head]) || str[head] == '+' || str[head] == '-') {
+                ++head;
+                continue;
+            }
+            return false;
+        }
+
+        if (str[head] == 'f' && head == str.length - 1)
+            break;
+
+        return false;
+    }
+
+    return has_decimal || has_exponent;
+}
+
+i64 hg_str_to_int_base10(HgStringView str) {
+    hg_assert(hg_is_integer_base10(str));
+
+    i64 power = 1;
+    i64 ret = 0;
+
+    usize head = str.length - 1;
+    while (head > 0) {
+        ret += (i64)(str[head] - '0') * power;
+        power *= 10;
+        --head;
+    }
+
+    if (str[head] != '+') {
+        if (str[head] == '-')
+            ret *= -1;
+        else
+            ret += (i64)(str[head] - '0') * power;
+    }
+
+    return ret;
+}
+
+f64 hg_str_to_float_base10(HgStringView str) {
+    hg_assert(hg_is_float_base10(str));
+
+    f64 ret = 0.0;
+    usize head = 0;
+
+    bool is_negative = str[head] == '-';
+    if (is_negative || str[head] == '+')
+        ++head;
+
+    if (hg_is_numeral_base10(str[head])) {
+        usize int_part_begin = head;
+        while (head < str.length && str[head] != '.' && str[head] != 'e') {
+            ++head;
+        }
+        ret += (f64)hg_str_to_int_base10({str.chars + int_part_begin, str.chars + head});
+    }
+
+    if (head < str.length && str[head] == '.') {
+        ++head;
+
+        f64 power = 0.1;
+        while (head < str.length && hg_is_numeral_base10(str[head])) {
+            ret += (f64)(str[head] - '0') * power;
+            power *= 0.1;
+            ++head;
+        }
+    }
+
+    if (head < str.length && str[head] == 'e') {
+        ++head;
+
+        bool exp_is_negative = str[head] == '-';
+        if (exp_is_negative || str[head] == '+')
+            ++head;
+
+        usize exp_begin = head;
+        while (head < str.length && hg_is_numeral_base10(str[head])) {
+            ++head;
+        }
+
+        i64 exp = hg_str_to_int_base10({str.chars + exp_begin, str.chars + head});
+        if (exp != 0) {
+            if (exp_is_negative) {
+                for (i64 i = 0; i < exp; ++i) {
+                    ret *= 0.1;
+                }
+            } else {
+                for (i64 i = 0; i < exp; ++i) {
+                    ret *= 10.0;
+                }
+            }
+        } else {
+            ret = 1.0;
+        }
+    }
+
+    if (is_negative)
+        ret *= -1.0;
+
+    return ret;
+}
+
+HgString hg_int_to_str_base10(HgArena& arena, i64 num) {
+    HgArenaScope scratch = hg_get_scratch(arena);
+
+    if (num == 0)
+        return HgString::create(arena, "0");
+
+    bool is_negative = num < 0;
+    u64 unum = (u64)std::abs(num);
+
+    HgString reverse = reverse.create(scratch, 16);
+    while (unum != 0) {
+        u64 digit = unum % 10;
+        unum = (u64)((f64)unum / 10.0);
+        reverse.append(scratch, '0' + (char)digit);
+    }
+
+    HgString ret = ret.create(arena, reverse.length + (is_negative ? 1 : 0));
+    if (is_negative)
+        ret.append(arena, '-');
+    for (usize i = reverse.length - 1; i < reverse.length; --i) {
+        ret.append(arena, reverse[i]);
+    }
+    return ret;
+}
+
+HgString hg_float_to_str_base10(HgArena& arena, f64 num, u64 decimal_count) {
+    HgArenaScope scratch = hg_get_scratch(arena);
+
+    if (num == 0.0)
+        return HgString::create(arena, "0.0");
+
+    HgString int_str = hg_int_to_str_base10(scratch, (i64)std::abs(num));
+
+    HgString dec_str = HgString::create(scratch, decimal_count + 1);
+    dec_str.append(scratch, '.');
+
+    f64 dec_part = std::abs(num);
+    for (usize i = 0; i < decimal_count; ++i) {
+        dec_part *= 10.0;
+        dec_str.append(scratch, '0' + (char)((u64)dec_part % 10));
+    }
+
+    bool is_negative = num < 0.0;
+    HgString ret = HgString::create(arena, (is_negative ? 1 : 0) + int_str.length + dec_str.length);
+    if (is_negative)
+        ret.append(arena, '-');
+    ret.append(arena, int_str);
+    ret.append(arena, dec_str);
+    return ret;
+}
+
+HgJsonParser HgJsonParser::create(HgStringView file) {
+    HgJsonParser parser;
+    parser.file = file;
+    parser.head = 0;
+    parser.line_count = 1;
+    parser.nest_count = 0;
+    parser.prev = NONE;
+    return parser;
+}
+
+HgJsonParser::Token HgJsonParser::next_token(HgArena& arena) {
+    if (prev == ERROR) {
+        Token token;
+        token.type = ERROR;
+        token.literal = STRING;
+        token.string = HgString::create(arena, "json error detected, cannot continue parsing\n");
+    }
+
+    if (head >= file.length) {
+        Token token;
+        token.type = END_OF_FILE;
+        token.literal = EMPTY;
+
+        prev = END_OF_FILE;
+        return token;
+    }
+
+    HgArenaScope scratch = hg_get_scratch(arena);
+
+    while (head < file.length && hg_is_whitespace(file[head])) {
+        if (file[head] == '\n')
+            ++line_count;
+        ++head;
+    }
+
+    if (head >= file.length || file[head] == EOF) {
+        if (nest_count == 0 && prev == STRUCT_END) {
+            Token token;
+            token.type = END_OF_FILE;
+            token.literal = EMPTY;
+
+            prev = END_OF_FILE;
+            return token;
+        }
+
+        Token token;
+        token.type = ERROR;
+        token.literal = STRING;
+        token.string = HgString::create(arena, "json unexpected EOF before parse completion\n");
+
+        prev = ERROR;
+        return token;
+    }
+
+    if (file[head] == '{') {
+        ++head;
+
+        Token token;
+        token.type = STRUCT_BEGIN;
+        token.literal = EMPTY;
+
+        prev = STRUCT_BEGIN;
+        ++nest_count;
+        return token;
+    }
+
+    if (file[head] == '}') {
+        ++head;
+        while (hg_is_whitespace(file[head])) {
+            if (file[head] == '\n')
+                ++line_count;
+            ++head;
+        }
+        if (file[head] == ',')
+            ++head;
+
+        Token token;
+        token.type = STRUCT_END;
+        token.literal = EMPTY;
+
+        prev = STRUCT_END;
+        --nest_count;
+        return token;
+    }
+
+    if (file[head] == '[') {
+        ++head;
+
+        Token token;
+        token.type = ARRAY_BEGIN;
+        token.literal = EMPTY;
+
+        prev = ARRAY_BEGIN;
+        ++nest_count;
+        return token;
+    }
+
+    if (file[head] == ']') {
+        ++head;
+        while (hg_is_whitespace(file[head])) {
+            if (file[head] == '\n')
+                ++line_count;
+            ++head;
+        }
+        if (file[head] == ',')
+            ++head;
+
+        Token token;
+        token.type = ARRAY_END;
+        token.literal = EMPTY;
+
+        prev = ARRAY_END;
+        --nest_count;
+        return token;
+    }
+
+    if (file[head] == '\"' || file[head] == '\'') {
+        ++head;
+        goto parse_string;
+    }
+
+    if (hg_is_numeral_base10(file[head])
+            || file[head] == '.'
+            || file[head] == '+'
+            || file[head] == '-'
+       ) {
+        goto parse_number;
+    }
+
+    if (head + 4 <= file.length && HgStringView{file.chars + head, 4} == "true") {
+        head += 4;
+        while (hg_is_whitespace(file[head])) {
+            if (file[head] == '\n')
+                ++line_count;
+            ++head;
+        }
+        if (file[head] == ',')
+            ++head;
+
+        Token token;
+        token.type = LITERAL;
+        token.literal = BOOLEAN;
+        token.boolean = true;
+
+        prev = LITERAL;
+        return token;
+    }
+
+    if (head + 5 <= file.length && HgStringView{file.chars + head, 5} == "false") {
+        head += 5;
+        while (hg_is_whitespace(file[head])) {
+            if (file[head] == '\n')
+                ++line_count;
+            ++head;
+        }
+        if (file[head] == ',')
+            ++head;
+
+        Token token;
+        token.type = LITERAL;
+        token.literal = BOOLEAN;
+        token.boolean = false;
+
+        prev = LITERAL;
+        return token;
+    }
+
+    {
+        const char* line_begin = &file[head];
+        while (line_begin != file.chars && line_begin[-1] != '\n') {
+            --line_begin;
+        }
+        usize line_len = 0;
+        while (line_begin[line_len] != '\n') {
+            ++line_len;
+        }
+
+        Token token;
+        token.type = ERROR;
+        token.literal = STRING;
+
+        // replace with format : TODO
+        token.string = {};
+        token.string.append(arena, "json unexpected character '");
+        token.string.append(arena, file[head]);
+        token.string.append(arena, "'while parsing line ");
+        token.string.append(arena, hg_int_to_str_base10(scratch, (i64)line_count));
+        token.string.append(arena, ": \"");
+        token.string.append(arena, {line_begin, line_len});
+        token.string.append(arena, "\"\n");
+
+        return token;
+    }
+
+parse_string:
+    {
+        HgString string{};
+continue_string:
+        if (file[head] == EOF || head == file.length) {
+            Token token;
+            token.type = ERROR;
+            token.literal = STRING;
+
+            // replace with format : TODO
+            token.string = {};
+            token.string.append(arena, "json unexpected EOF while parsing string \"");
+            token.string.append(arena, string);
+            token.string.append(arena, "\"\n");
+
+            return token;
+        }
+
+        if (file[head] == '\"' || file[head] == '\'') {
+            ++head;
+            while (hg_is_whitespace(file[head])) {
+                if (file[head] == '\n')
+                    ++line_count;
+                ++head;
+            }
+
+            if (file[head] == '\"' || file[head] == '\'') {
+                ++head;
+                goto parse_string;
+            }
+
+            if (file[head] == ':') {
+                if (prev == FIELD) {
+                    Token token;
+                    token.type = ERROR;
+                    token.literal = STRING;
+
+                    // change to format : TODO
+                    token.string = {};
+                    token.string.append(arena, "json found two ':' on line ");
+                    token.string.append(arena, hg_int_to_str_base10(scratch, (i64)line_count));
+                    token.string.append(arena, ", cannot defined previous field with field \"");
+                    token.string.append(arena, string);
+                    token.string.append(arena, "\", must defined literal, struct, or array\n");
+
+                    prev = ERROR;
+                    return token;
+                }
+
+                ++head;
+
+                Token token;
+                token.type = FIELD;
+                token.literal = STRING;
+                token.string = HgString::create(arena, string);
+
+                prev = FIELD;
+                return token;
+            }
+
+            if (file[head] == ',') {
+                ++head;
+
+                Token token;
+                token.type = LITERAL;
+                token.literal = STRING;
+                token.string = HgString::create(arena, string);
+
+                prev = LITERAL;
+                return token;
+            }
+        }
+
+        string.append(scratch, file[head]);
+        ++head;
+        goto continue_string;
+    }
+
+parse_number:
+    {
+        HgString number{};
+
+        bool is_float = false;
+        while (hg_is_numeral_base10(file[head])
+               || file[head] == '.'
+               || file[head] == '+'
+               || file[head] == '-'
+               || file[head] == 'e'
+               || file[head] == 'f'
+        ) {
+            if (file[head] == '.' || file[head] == 'e' || file[head] == 'f')
+                is_float = true;
+            number.append(scratch, file[head]);
+            ++head;
+        }
+
+        if (file[head] == EOF || head == file.length) {
+            Token token;
+            token.type = ERROR;
+            token.literal = STRING;
+
+            // replace with format : TODO
+            token.string = {};
+            token.string.append(arena, "json unexpected EOF while parsing number \"");
+            token.string.append(arena, number);
+            token.string.append(arena, "\"\n");
+
+            return token;
+        }
+
+        if (!hg_is_integer_base10(number) && !hg_is_float_base10(number)) {
+            Token token;
+            token.type = ERROR;
+            token.literal = STRING;
+
+            // replace with format : TODO
+            token.string = {};
+            token.string.append(arena, "json invalid number \"");
+            token.string.append(arena, number);
+            token.string.append(arena, "\"\n");
+
+            return token;
+        }
+
+        if (head < file.length && file[head] == ',')
+            ++head;
+
+        Token token;
+        token.type = LITERAL;
+
+        if (is_float) {
+            token.literal = FLOATING;
+            token.floating = hg_str_to_float_base10(number);
+        } else {
+            token.literal = INTEGER;
+            token.integer = hg_str_to_int_base10(number);
+        }
+
+        prev = LITERAL;
+        return token;
+    }
 }
 
 void HgFence::add() {
@@ -911,6 +1477,232 @@ void HgIOThread::request(const Request& request) {
         request.fence->add();
 
     queue.push(request);
+}
+
+void HgBinary::load(HgFence* fence, HgStringView path) {
+    auto fn = [](void*, void* pfile, HgStringView fpath) {
+        HgBinary& file = *(HgBinary*)pfile;
+
+        char* cpath = (char*)alloca(fpath.length + 1);
+        std::memcpy(cpath, fpath.chars, fpath.length);
+        cpath[fpath.length] = '\0';
+
+        FILE* file_handle = std::fopen(cpath, "rb");
+        if (file_handle == nullptr) {
+            hg_warn("Could not find file to read binary: %s\n", cpath);
+            file = {};
+            return;
+        }
+        hg_defer(std::fclose(file_handle));
+
+        if (std::fseek(file_handle, 0, SEEK_END) != 0) {
+            hg_warn("Failed to read binary from file: %s\n", cpath);
+            file = {};
+            return;
+        }
+
+        file.count = (usize)std::ftell(file_handle);
+        file.data = std::malloc(file.count);
+        std::rewind(file_handle);
+
+        if (std::fread(file.data, 1, file.count, file_handle) != file.count) {
+            hg_warn("Failed to read binary from file: %s\n", cpath);
+            file = {};
+            return;
+        }
+    };
+
+    HgIOThread::Request request;
+    request.fence = fence;
+    request.fn = fn;
+    request.resource = this;
+    request.path = path;
+    hg_io->request(request);
+}
+
+void HgBinary::unload(HgFence* fence) {
+    auto fn = [](void*, void* pfile, HgStringView) {
+        HgBinary& file = *(HgBinary*)pfile;
+        std::free(file.data);
+        file = {};
+    };
+
+    HgIOThread::Request request;
+    request.fence = fence;
+    request.fn = fn;
+    request.resource = this;
+    hg_io->request(request);
+}
+
+void HgBinary::store(HgFence* fence, HgStringView path) {
+    auto fn = [](void*, void* pfile, HgStringView fpath) {
+        HgBinary& file = *(HgBinary*)pfile;
+
+        char* cpath = (char*)alloca(fpath.length + 1);
+        std::memcpy(cpath, fpath.chars, fpath.length);
+        cpath[fpath.length] = '\0';
+
+        FILE* file_handle = std::fopen(cpath, "wb");
+        if (file_handle == nullptr) {
+            hg_warn("Failed to create file to write binary: %s\n", cpath);
+            return;
+        }
+        hg_defer(std::fclose(file_handle));
+
+        if (std::fwrite(file.data, 1, file.count, file_handle) != file.count) {
+            hg_warn("Failed to write binary data to file: %s\n", cpath);
+            return;
+        }
+    };
+
+    HgIOThread::Request request;
+    request.fence = fence;
+    request.fn = fn;
+    request.resource = this;
+    request.path = path;
+    hg_io->request(request);
+}
+
+void HgTexture::load_png(HgFence* fence, HgStringView path) {
+    auto fn = [](void*, void* ptexture, HgStringView fpath) {
+        HgTexture& texture = *(HgTexture*)ptexture;
+
+        char* cpath = (char*)alloca(fpath.length + 1);
+        std::memcpy(cpath, fpath.chars, fpath.length);
+        cpath[fpath.length] = '\0';
+
+        int channels;
+        texture.pixels = stbi_load(cpath, (int*)&texture.width, (int*)&texture.height, &channels, 4);
+        if (texture.pixels == nullptr) {
+            hg_warn("Failed to load image file: %s\n", cpath);
+            texture = {};
+            return;
+        }
+
+        texture.format = VK_FORMAT_R8G8B8A8_SRGB;
+        texture.location |= CPU;
+    };
+
+    HgIOThread::Request request;
+    request.fence = fence;
+    request.fn = fn;
+    request.resource = this;
+    request.path = path;
+    hg_io->request(request);
+}
+
+void HgTexture::unload(HgFence* fence) {
+    auto fn = [](void*, void* ptexture, HgStringView) {
+        HgTexture& texture = *(HgTexture*)ptexture;
+        free(texture.pixels);
+        texture.pixels = nullptr;
+        texture.location &= ~CPU;
+    };
+
+    HgIOThread::Request request;
+    request.fence = fence;
+    request.fn = fn;
+    request.resource = this;
+    hg_io->request(request);
+}
+
+void HgTexture::store_png(HgFence* fence, HgStringView path) {
+    auto fn = [](void*, void* ptexture, HgStringView fpath) {
+        HgTexture& texture = *(HgTexture*)ptexture;
+        hg_assert(texture.location & CPU);
+
+        char* cpath = (char*)alloca(fpath.length + 1);
+        std::memcpy(cpath, fpath.chars, fpath.length);
+        cpath[fpath.length] = '\0';
+
+        stbi_write_png(
+            cpath,
+            (int)texture.width,
+            (int)texture.height,
+            4,
+            texture.pixels,
+            (int)(texture.width * 4));
+    };
+
+    HgIOThread::Request request;
+    request.fence = fence;
+    request.fn = fn;
+    request.resource = this;
+    request.path = path;
+    hg_io->request(request);
+}
+
+void HgTexture::create_gpu(VkCommandPool cmd_pool, VkFilter filter) {
+    hg_assert(location == CPU);
+    hg_assert(pixels != nullptr);
+    hg_assert(format != 0);
+    hg_assert(width != 0);
+    hg_assert(height != 0);
+    hg_assert(depth != 0);
+
+    VkImageCreateInfo image_info{};
+    image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    image_info.imageType = VK_IMAGE_TYPE_2D;
+    image_info.format = format;
+    image_info.extent = {width, height, depth};
+    image_info.mipLevels = 1;
+    image_info.arrayLayers = 1;
+    image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    image_info.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+
+    VmaAllocationCreateInfo alloc_info{};
+    alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
+
+    vmaCreateImage(hg_vk_vma, &image_info, &alloc_info, &image, &allocation, nullptr);
+    hg_assert(allocation != nullptr);
+    hg_assert(image != nullptr);
+
+    HgVkImageStagingWriteConfig staging_config{};
+    staging_config.dst_image = image;
+    staging_config.subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    staging_config.subresource.layerCount = 1;
+    staging_config.src_data = pixels;
+    staging_config.width = width;
+    staging_config.height = height;
+    staging_config.depth = depth;
+    staging_config.format = format;
+    staging_config.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    hg_vk_image_staging_write(hg_vk_queue, cmd_pool, staging_config);
+
+    VkImageViewCreateInfo view_info{};
+    view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    view_info.image = image;
+    view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    view_info.format = format;
+    view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    view_info.subresourceRange.levelCount = 1;
+    view_info.subresourceRange.layerCount = 1;
+
+    vkCreateImageView(hg_vk_device, &view_info, nullptr, &view);
+    hg_assert(view != nullptr);
+
+    VkSamplerCreateInfo sampler_info{};
+    sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    sampler_info.magFilter = filter;
+    sampler_info.minFilter = filter;
+    sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+
+    vkCreateSampler(hg_vk_device, &sampler_info, nullptr, &sampler);
+    hg_assert(sampler != nullptr);
+
+    location |= GPU;
+}
+
+void HgTexture::destroy_gpu() {
+    hg_assert(location & GPU);
+    vkDestroySampler(hg_vk_device, sampler, nullptr);
+    vkDestroyImageView(hg_vk_device, view, nullptr);
+    vmaDestroyImage(hg_vk_vma, image, allocation);
+
+    location &= ~GPU;
 }
 
 static u32& hg_internal_current_component_id() {
@@ -1121,160 +1913,311 @@ finish:
     quicksort(quicksort, begin, end);
 }
 
-void HgFileBinary::load(HgFence* fence, HgStringView path) {
-    auto fn = [](void*, void* pfile, HgStringView fpath) {
-        HgFileBinary& file_data = *(HgFileBinary*)pfile;
+#include "sprite.frag.spv.h"
+#include "sprite.vert.spv.h"
 
-        char* cpath = (char*)alloca(fpath.count + 1);
-        std::memcpy(cpath, fpath.data, fpath.count);
-        cpath[fpath.count] = '\0';
+HgPipeline2D HgPipeline2D::create(
+    HgArena& arena,
+    usize max_textures,
+    VkFormat color_format,
+    VkFormat depth_format
+) {
+    hg_assert(hg_vk_device != nullptr);
+    hg_assert(color_format != VK_FORMAT_UNDEFINED);
 
-        FILE* file_handle = std::fopen(cpath, "rb");
-        if (file_handle == nullptr) {
-            hg_warn("Could not find file to read binary: %s\n", cpath);
-            file_data = {};
-            return;
-        }
-        hg_defer(std::fclose(file_handle));
+    HgPipeline2D pipeline{};
+    pipeline.texture_sets = pipeline.texture_sets.create(arena, max_textures);
 
-        if (std::fseek(file_handle, 0, SEEK_END) != 0) {
-            hg_warn("Failed to read binary from file: %s\n", cpath);
-            file_data = {};
-            return;
-        }
+    VkDescriptorSetLayoutBinding vp_bindings[1]{};
+    vp_bindings[0].binding = 0;
+    vp_bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    vp_bindings[0].descriptorCount = 1;
+    vp_bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
-        file_data.size = (usize)std::ftell(file_handle);
-        file_data.data = std::malloc(file_data.size);
-        std::rewind(file_handle);
+    VkDescriptorSetLayoutCreateInfo vp_layout_info{};
+    vp_layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    vp_layout_info.bindingCount = hg_countof(vp_bindings);
+    vp_layout_info.pBindings = vp_bindings;
 
-        if (std::fread(file_data.data, 1, file_data.size, file_handle) != file_data.size) {
-            hg_warn("Failed to read binary from file: %s\n", cpath);
-            file_data = {};
-            return;
-        }
-    };
+    vkCreateDescriptorSetLayout(hg_vk_device, &vp_layout_info, nullptr, &pipeline.vp_layout);
+    hg_assert(pipeline.vp_layout != nullptr);
 
-    HgIOThread::Request request;
-    request.fence = fence;
-    request.fn = fn;
-    request.resource = this;
-    request.path = path;
-    hg_io->request(request);
+    VkDescriptorSetLayoutBinding texture_bindings[1]{};
+    texture_bindings[0].binding = 0;
+    texture_bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    texture_bindings[0].descriptorCount = 1;
+    texture_bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    VkDescriptorSetLayoutCreateInfo texture_layout_info{};
+    texture_layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    texture_layout_info.bindingCount = hg_countof(texture_bindings);
+    texture_layout_info.pBindings = texture_bindings;
+
+    vkCreateDescriptorSetLayout(hg_vk_device, &texture_layout_info, nullptr, &pipeline.texture_layout);
+    hg_assert(pipeline.texture_layout != nullptr);
+
+    VkDescriptorSetLayout set_layouts[]{pipeline.vp_layout, pipeline.texture_layout};
+    VkPushConstantRange push_ranges[1]{};
+    push_ranges[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    push_ranges[0].size = sizeof(Push);
+
+    VkPipelineLayoutCreateInfo layout_info{};
+    layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    layout_info.setLayoutCount = hg_countof(set_layouts);
+    layout_info.pSetLayouts = set_layouts;
+    layout_info.pushConstantRangeCount = hg_countof(push_ranges);
+    layout_info.pPushConstantRanges = push_ranges;
+
+    vkCreatePipelineLayout(hg_vk_device, &layout_info, nullptr, &pipeline.pipeline_layout);
+    hg_assert(pipeline.pipeline_layout != nullptr);
+
+    VkShaderModuleCreateInfo vertex_shader_info{};
+    vertex_shader_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    vertex_shader_info.codeSize = sprite_vert_spv_size;
+    vertex_shader_info.pCode = (u32*)sprite_vert_spv;
+
+    VkShaderModule vertex_shader = nullptr;
+    vkCreateShaderModule(hg_vk_device, &vertex_shader_info, nullptr, &vertex_shader);
+    hg_assert(vertex_shader != nullptr);
+
+    VkShaderModuleCreateInfo fragment_shader_info{};
+    fragment_shader_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    fragment_shader_info.codeSize = sprite_frag_spv_size;
+    fragment_shader_info.pCode = (u32*)sprite_frag_spv;
+
+    VkShaderModule fragment_shader = nullptr;
+    vkCreateShaderModule(hg_vk_device, &fragment_shader_info, nullptr, &fragment_shader);
+    hg_assert(fragment_shader != nullptr);
+
+    VkPipelineShaderStageCreateInfo shader_stages[2]{};
+    shader_stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    shader_stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+    shader_stages[0].module = vertex_shader;
+    shader_stages[0].pName = "main";
+    shader_stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    shader_stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    shader_stages[1].module = fragment_shader;
+    shader_stages[1].pName = "main";
+
+    HgVkPipelineConfig pipeline_config{};
+    pipeline_config.color_attachment_formats = {&color_format, 1};
+    pipeline_config.depth_attachment_format = depth_format;
+    pipeline_config.stencil_attachment_format = VK_FORMAT_UNDEFINED;
+    pipeline_config.shader_stages = {shader_stages, hg_countof(shader_stages)};
+    pipeline_config.layout = pipeline.pipeline_layout;
+    pipeline_config.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
+    pipeline_config.enable_color_blend = true;
+
+    pipeline.pipeline = hg_vk_create_graphics_pipeline(pipeline_config);
+
+    vkDestroyShaderModule(hg_vk_device, fragment_shader, nullptr);
+    vkDestroyShaderModule(hg_vk_device, vertex_shader, nullptr);
+
+    VkDescriptorPoolSize desc_pool_sizes[2]{};
+    desc_pool_sizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    desc_pool_sizes[0].descriptorCount = 1;
+    desc_pool_sizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    desc_pool_sizes[1].descriptorCount = (u32)max_textures;
+
+    VkDescriptorPoolCreateInfo desc_pool_info{};
+    desc_pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    desc_pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+    desc_pool_info.maxSets = 1 + (u32)max_textures;
+    desc_pool_info.poolSizeCount = hg_countof(desc_pool_sizes);
+    desc_pool_info.pPoolSizes = desc_pool_sizes;
+
+    vkCreateDescriptorPool(hg_vk_device, &desc_pool_info, nullptr, &pipeline.descriptor_pool);
+    hg_assert(pipeline.descriptor_pool != nullptr);
+
+    VkDescriptorSetAllocateInfo vp_set_alloc_info{};
+    vp_set_alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    vp_set_alloc_info.descriptorPool = pipeline.descriptor_pool;
+    vp_set_alloc_info.descriptorSetCount = 1;
+    vp_set_alloc_info.pSetLayouts = &pipeline.vp_layout;
+
+    vkAllocateDescriptorSets(hg_vk_device, &vp_set_alloc_info, &pipeline.vp_set);
+    hg_assert(pipeline.vp_set != nullptr);
+
+    VkBufferCreateInfo vp_buffer_info{};
+    vp_buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    vp_buffer_info.size = sizeof(VPUniform);
+    vp_buffer_info.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+
+    VmaAllocationCreateInfo vp_alloc_info{};
+    vp_alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    vp_alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
+
+    vmaCreateBuffer(
+        hg_vk_vma,
+        &vp_buffer_info,
+        &vp_alloc_info,
+        &pipeline.vp_buffer,
+        &pipeline.vp_buffer_allocation,
+        nullptr);
+    hg_assert(pipeline.vp_buffer != nullptr);
+    hg_assert(pipeline.vp_buffer_allocation != nullptr);
+
+    VPUniform vp_data{};
+    vp_data.proj = 1.0f;
+    vp_data.view = 1.0f;
+
+    vmaCopyMemoryToAllocation(hg_vk_vma, &vp_data, pipeline.vp_buffer_allocation, 0, sizeof(vp_data));
+
+    VkDescriptorBufferInfo desc_info{};
+    desc_info.buffer = pipeline.vp_buffer;
+    desc_info.offset = 0;
+    desc_info.range = sizeof(VPUniform);
+
+    VkWriteDescriptorSet desc_write{};
+    desc_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    desc_write.dstSet = pipeline.vp_set;
+    desc_write.dstBinding = 0;
+    desc_write.descriptorCount = 1;
+    desc_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    desc_write.pBufferInfo = &desc_info;
+
+    vkUpdateDescriptorSets(hg_vk_device, 1, &desc_write, 0, nullptr);
+
+    return pipeline;
 }
 
-void HgFileBinary::unload(HgFence* fence) {
-    auto fn = [](void*, void* pfile, HgStringView) {
-        HgFileBinary& file_data = *(HgFileBinary*)pfile;
-        std::free(file_data.data);
-        file_data = {};
-    };
-
-    HgIOThread::Request request;
-    request.fence = fence;
-    request.fn = fn;
-    request.resource = this;
-    hg_io->request(request);
+void HgPipeline2D::destroy() {
+    vmaDestroyBuffer(hg_vk_vma, vp_buffer, vp_buffer_allocation);
+    vkFreeDescriptorSets(hg_vk_device, descriptor_pool, 1, &vp_set);
+    vkDestroyDescriptorPool(hg_vk_device, descriptor_pool, nullptr);
+    vkDestroyPipeline(hg_vk_device, pipeline, nullptr);
+    vkDestroyPipelineLayout(hg_vk_device, pipeline_layout, nullptr);
+    vkDestroyDescriptorSetLayout(hg_vk_device, texture_layout, nullptr);
+    vkDestroyDescriptorSetLayout(hg_vk_device, vp_layout, nullptr);
 }
 
-void HgFileBinary::store(HgFence* fence, HgStringView path) {
-    auto fn = [](void*, void* pfile, HgStringView fpath) {
-        HgFileBinary& file_data = *(HgFileBinary*)pfile;
+void HgPipeline2D::add_texture(HgTexture* texture) {
+    hg_assert(texture != nullptr);
 
-        char* cpath = (char*)alloca(fpath.count + 1);
-        std::memcpy(cpath, fpath.data, fpath.count);
-        cpath[fpath.count] = '\0';
+    if (texture_sets.has(texture))
+        return;
 
-        FILE* file_handle = std::fopen(cpath, "wb");
-        if (file_handle == nullptr) {
-            hg_warn("Failed to create file to write binary: %s\n", cpath);
-            return;
-        }
-        hg_defer(std::fclose(file_handle));
+    VkDescriptorSetAllocateInfo set_info{};
+    set_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    set_info.descriptorPool = descriptor_pool;
+    set_info.descriptorSetCount = 1;
+    set_info.pSetLayouts = &texture_layout;
 
-        if (std::fwrite(file_data.data, 1, file_data.size, file_handle) != file_data.size) {
-            hg_warn("Failed to write binary data to file: %s\n", cpath);
-            return;
-        }
-    };
+    VkDescriptorSet set = nullptr;
+    vkAllocateDescriptorSets(hg_vk_device, &set_info, &set);
+    hg_assert(set != nullptr);
 
-    HgIOThread::Request request;
-    request.fence = fence;
-    request.fn = fn;
-    request.resource = this;
-    request.path = path;
-    hg_io->request(request);
+    VkDescriptorImageInfo desc_info{};
+    desc_info.sampler = texture->sampler;
+    desc_info.imageView = texture->view;
+    desc_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    VkWriteDescriptorSet desc_write{};
+    desc_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    desc_write.dstSet = set;
+    desc_write.dstBinding = 0;
+    desc_write.descriptorCount = 1;
+    desc_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    desc_write.pImageInfo = &desc_info;
+
+    vkUpdateDescriptorSets(hg_vk_device, 1, &desc_write, 0, nullptr);
+
+    texture_sets.insert(texture, set);
 }
 
-void HgImage::load(HgFence* fence, HgStringView path) {
-    auto fn = [](void*, void* pimage, HgStringView fpath) {
-        HgImage& image_data = *(HgImage*)pimage;
+void HgPipeline2D::remove_texture(HgTexture* texture) {
+    hg_assert(texture != nullptr);
 
-        char* cpath = (char*)alloca(fpath.count + 1);
-        std::memcpy(cpath, fpath.data, fpath.count);
-        cpath[fpath.count] = '\0';
+    if (texture_sets.has(texture)) {
+        VkDescriptorSet set = texture_sets.get(texture);
+        texture_sets.remove(texture);
 
-        int channels;
-        image_data.pixels = stbi_load(cpath, (int*)&image_data.width, (int*)&image_data.height, &channels, 4);
-        if (image_data.pixels == nullptr) {
-            hg_warn("Failed to load image file: %s\n", cpath);
-            image_data = {};
-            return;
-        }
-
-        image_data.format = VK_FORMAT_R8G8B8A8_SRGB;
-    };
-
-    HgIOThread::Request request;
-    request.fence = fence;
-    request.fn = fn;
-    request.resource = this;
-    request.path = path;
-    hg_io->request(request);
+        vkFreeDescriptorSets(hg_vk_device, descriptor_pool, 1, &set);
+    }
 }
 
-void HgImage::unload(HgFence* fence) {
-    auto fn = [](void*, void* pimage, HgStringView) {
-        HgImage& image_data = *(HgImage*)pimage;
-        free(image_data.pixels);
-        image_data = {};
-    };
-
-    HgIOThread::Request request;
-    request.fence = fence;
-    request.fn = fn;
-    request.resource = this;
-    hg_io->request(request);
+void HgPipeline2D::update_projection(const HgMat4& projection) {
+    vmaCopyMemoryToAllocation(
+        hg_vk_vma,
+        &projection,
+        vp_buffer_allocation,
+        offsetof(VPUniform, proj),
+        sizeof(projection));
 }
 
-void HgImage::store(HgFence* fence, HgStringView path) {
-    auto fn = [](void*, void* pimage, HgStringView fpath) {
-        HgImage& image_data = *(HgImage*)pimage;
-
-        char* cpath = (char*)alloca(fpath.count + 1);
-        std::memcpy(cpath, fpath.data, fpath.count);
-        cpath[fpath.count] = '\0';
-
-        stbi_write_png(
-            cpath,
-            (int)image_data.width,
-            (int)image_data.height,
-            4,
-            image_data.pixels,
-            (int)(image_data.width * 4));
-    };
-
-    HgIOThread::Request request;
-    request.fence = fence;
-    request.fn = fn;
-    request.resource = this;
-    request.path = path;
-    hg_io->request(request);
+void HgPipeline2D::update_view(const HgMat4& view) {
+    vmaCopyMemoryToAllocation(
+        hg_vk_vma,
+        &view,
+        vp_buffer_allocation,
+        offsetof(VPUniform, view),
+        sizeof(view));
 }
 
-f64 HgClock::tick() {
-    auto prev = time;
-    time = std::chrono::high_resolution_clock::now();
-    return std::chrono::duration<f64>{time - prev}.count();
+void HgPipeline2D::add_sprite(HgEntity entity, HgTexture& texture, HgVec2 uv_pos, HgVec2 uv_size) {
+    hg_assert(hg_ecs->is_registered<HgSprite>());
+    hg_assert(!hg_ecs->has<HgSprite>(entity));
+
+    HgSprite& sprite = hg_ecs->add<HgSprite>(entity);
+    sprite.texture = &texture;
+    sprite.uv_pos = uv_pos;
+    sprite.uv_size = uv_size;
+}
+
+void HgPipeline2D::remove_sprite(HgEntity entity) {
+    hg_assert(hg_ecs->is_registered<HgSprite>());
+    hg_assert(hg_ecs->has<HgSprite>(entity));
+
+    hg_ecs->remove<HgSprite>(entity);
+}
+
+void HgPipeline2D::draw(VkCommandBuffer cmd) {
+    hg_assert(cmd != nullptr);
+    hg_assert(hg_ecs->is_registered<HgSprite>());
+
+    hg_ecs->sort<HgSprite>(nullptr, [](void*, HgEntity lhs, HgEntity rhs) -> bool {
+        hg_assert(hg_ecs->has<HgTransform>(lhs));
+        hg_assert(hg_ecs->has<HgTransform>(rhs));
+        return hg_ecs->get<HgTransform>(lhs).position.z > hg_ecs->get<HgTransform>(rhs).position.z;
+    });
+
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+    vkCmdBindDescriptorSets(
+        cmd,
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        pipeline_layout,
+        0,
+        1,
+        &vp_set,
+        0,
+        nullptr);
+
+    hg_ecs->for_each<HgSprite, HgTransform>([&](HgEntity, HgSprite& sprite, HgTransform& transform) {
+        vkCmdBindDescriptorSets(
+            cmd,
+            VK_PIPELINE_BIND_POINT_GRAPHICS,
+            pipeline_layout,
+            1,
+            1,
+            &texture_sets.get(sprite.texture),
+            0,
+            nullptr);
+
+        Push push;
+        push.model = hg_model_matrix_3d(transform.position, transform.scale, transform.rotation);
+        push.uv_pos = sprite.uv_pos;
+        push.uv_size = sprite.uv_size;
+
+        vkCmdPushConstants(
+            cmd,
+            pipeline_layout,
+            VK_SHADER_STAGE_VERTEX_BIT,
+            0,
+            sizeof(push),
+            &push);
+
+        vkCmdDraw(cmd, 4, 1, 0, 0);
+    });
 }
 
 void hg_vulkan_init();
@@ -2491,7 +3434,7 @@ VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger() {
 HgOption<u32> hg_vk_find_queue_family(VkPhysicalDevice gpu, VkQueueFlags queue_flags) {
     hg_assert(gpu != nullptr);
 
-    HgArenaScope scratch = hg_get_arena();
+    HgArenaScope scratch = hg_get_scratch();
 
     u32 family_count = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, nullptr);
@@ -2513,7 +3456,7 @@ static const char* const hg_internal_vk_device_extensions[]{
 VkPhysicalDevice hg_vk_find_single_queue_physical_device() {
     hg_assert(hg_vk_instance != nullptr);
 
-    HgArenaScope scratch = hg_get_arena();
+    HgArenaScope scratch = hg_get_scratch();
 
     u32 gpu_count;
     vkEnumeratePhysicalDevices(hg_vk_instance, &gpu_count, nullptr);
@@ -2614,8 +3557,7 @@ VmaAllocator hg_vk_create_vma_allocator() {
     return vma;
 }
 
-VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineConfig& config) {
-    hg_assert(device != nullptr);
+VkPipeline hg_vk_create_graphics_pipeline(const HgVkPipelineConfig& config) {
     if (config.color_attachment_formats.count > 0)
         hg_assert(config.color_attachment_formats.data != nullptr);
     hg_assert(config.shader_stages != nullptr);
@@ -2747,15 +3689,14 @@ VkPipeline hg_vk_create_graphics_pipeline(VkDevice device, const HgVkPipelineCon
     pipeline_info.basePipelineIndex = -1;
 
     VkPipeline pipeline = nullptr;
-    VkResult result = vkCreateGraphicsPipelines(device, nullptr, 1, &pipeline_info, nullptr, &pipeline);
+    VkResult result = vkCreateGraphicsPipelines(hg_vk_device, nullptr, 1, &pipeline_info, nullptr, &pipeline);
     if (pipeline == nullptr)
         hg_error("Failed to create Vulkan graphics pipeline: %s\n", hg_vk_result_string(result));
 
     return pipeline;
 }
 
-VkPipeline hg_vk_create_compute_pipeline(VkDevice device, const HgVkPipelineConfig& config) {
-    hg_assert(device != nullptr);
+VkPipeline hg_vk_create_compute_pipeline(const HgVkPipelineConfig& config) {
     hg_assert(config.color_attachment_formats == nullptr);
     hg_assert(config.depth_attachment_format == VK_FORMAT_UNDEFINED);
     hg_assert(config.stencil_attachment_format == VK_FORMAT_UNDEFINED);
@@ -2773,7 +3714,7 @@ VkPipeline hg_vk_create_compute_pipeline(VkDevice device, const HgVkPipelineConf
     pipeline_info.basePipelineIndex = -1;
 
     VkPipeline pipeline = nullptr;
-    VkResult result = vkCreateComputePipelines(device, nullptr, 1, &pipeline_info, nullptr, &pipeline);
+    VkResult result = vkCreateComputePipelines(hg_vk_device, nullptr, 1, &pipeline_info, nullptr, &pipeline);
     if (pipeline == nullptr)
         hg_error("Failed to create Vulkan compute pipeline: %s\n", hg_vk_result_string(result));
 
@@ -2784,7 +3725,7 @@ static VkFormat hg_internal_vk_find_swapchain_format(VkSurfaceKHR surface) {
     hg_assert(hg_vk_physical_device != nullptr);
     hg_assert(surface != nullptr);
 
-    HgArenaScope scratch = hg_get_arena();
+    HgArenaScope scratch = hg_get_scratch();
 
     u32 format_count = 0;
     vkGetPhysicalDeviceSurfaceFormatsKHR(hg_vk_physical_device, surface, &format_count, nullptr);
@@ -3531,380 +4472,6 @@ void hg_vk_image_generate_mipmaps(
     submit_info.pCommandBuffers = &cmd;
 
     vkQueueSubmit(transfer_queue, 1, &submit_info, nullptr);
-}
-
-void HgTexture::load(VkCommandPool cmd_pool, VkFilter filter, HgImage& src) {
-    hg_assert(src.pixels != nullptr);
-    hg_assert(src.format != 0);
-    hg_assert(src.width != 0);
-    hg_assert(src.height != 0);
-    hg_assert(src.depth != 0);
-
-    VkImageCreateInfo image_info{};
-    image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    image_info.imageType = VK_IMAGE_TYPE_2D;
-    image_info.format = src.format;
-    image_info.extent = {src.width, src.height, src.depth};
-    image_info.mipLevels = 1;
-    image_info.arrayLayers = 1;
-    image_info.samples = VK_SAMPLE_COUNT_1_BIT;
-    image_info.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-
-    VmaAllocationCreateInfo alloc_info{};
-    alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
-
-    vmaCreateImage(hg_vk_vma, &image_info, &alloc_info, &image, &allocation, nullptr);
-    hg_assert(allocation != nullptr);
-    hg_assert(image != nullptr);
-
-    HgVkImageStagingWriteConfig staging_config{};
-    staging_config.dst_image = image;
-    staging_config.subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    staging_config.subresource.layerCount = 1;
-    staging_config.src_data = src.pixels;
-    staging_config.width = src.width;
-    staging_config.height = src.height;
-    staging_config.depth = src.depth;
-    staging_config.format = src.format;
-    staging_config.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-    hg_vk_image_staging_write(hg_vk_queue, cmd_pool, staging_config);
-
-    VkImageViewCreateInfo view_info{};
-    view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    view_info.image = image;
-    view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    view_info.format = src.format;
-    view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    view_info.subresourceRange.levelCount = 1;
-    view_info.subresourceRange.layerCount = 1;
-
-    vkCreateImageView(hg_vk_device, &view_info, nullptr, &view);
-    hg_assert(view != nullptr);
-
-    VkSamplerCreateInfo sampler_info{};
-    sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    sampler_info.magFilter = filter;
-    sampler_info.minFilter = filter;
-    sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-
-    vkCreateSampler(hg_vk_device, &sampler_info, nullptr, &sampler);
-    hg_assert(sampler != nullptr);
-}
-
-void HgTexture::unload() {
-    vkDestroySampler(hg_vk_device, sampler, nullptr);
-    vkDestroyImageView(hg_vk_device, view, nullptr);
-    vmaDestroyImage(hg_vk_vma, image, allocation);
-}
-
-#include "sprite.frag.spv.h"
-#include "sprite.vert.spv.h"
-
-HgPipeline2D HgPipeline2D::create(
-    HgArena& arena,
-    usize max_textures,
-    VkFormat color_format,
-    VkFormat depth_format
-) {
-    hg_assert(hg_vk_device != nullptr);
-    hg_assert(color_format != VK_FORMAT_UNDEFINED);
-
-    HgPipeline2D pipeline{};
-    pipeline.texture_sets = pipeline.texture_sets.create(arena, max_textures);
-
-    VkDescriptorSetLayoutBinding vp_bindings[1]{};
-    vp_bindings[0].binding = 0;
-    vp_bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    vp_bindings[0].descriptorCount = 1;
-    vp_bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-
-    VkDescriptorSetLayoutCreateInfo vp_layout_info{};
-    vp_layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    vp_layout_info.bindingCount = hg_countof(vp_bindings);
-    vp_layout_info.pBindings = vp_bindings;
-
-    vkCreateDescriptorSetLayout(hg_vk_device, &vp_layout_info, nullptr, &pipeline.vp_layout);
-    hg_assert(pipeline.vp_layout != nullptr);
-
-    VkDescriptorSetLayoutBinding texture_bindings[1]{};
-    texture_bindings[0].binding = 0;
-    texture_bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    texture_bindings[0].descriptorCount = 1;
-    texture_bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-    VkDescriptorSetLayoutCreateInfo texture_layout_info{};
-    texture_layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    texture_layout_info.bindingCount = hg_countof(texture_bindings);
-    texture_layout_info.pBindings = texture_bindings;
-
-    vkCreateDescriptorSetLayout(hg_vk_device, &texture_layout_info, nullptr, &pipeline.texture_layout);
-    hg_assert(pipeline.texture_layout != nullptr);
-
-    VkDescriptorSetLayout set_layouts[]{pipeline.vp_layout, pipeline.texture_layout};
-    VkPushConstantRange push_ranges[1]{};
-    push_ranges[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-    push_ranges[0].size = sizeof(Push);
-
-    VkPipelineLayoutCreateInfo layout_info{};
-    layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    layout_info.setLayoutCount = hg_countof(set_layouts);
-    layout_info.pSetLayouts = set_layouts;
-    layout_info.pushConstantRangeCount = hg_countof(push_ranges);
-    layout_info.pPushConstantRanges = push_ranges;
-
-    vkCreatePipelineLayout(hg_vk_device, &layout_info, nullptr, &pipeline.pipeline_layout);
-    hg_assert(pipeline.pipeline_layout != nullptr);
-
-    VkShaderModuleCreateInfo vertex_shader_info{};
-    vertex_shader_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    vertex_shader_info.codeSize = sprite_vert_spv_size;
-    vertex_shader_info.pCode = (u32*)sprite_vert_spv;
-
-    VkShaderModule vertex_shader = nullptr;
-    vkCreateShaderModule(hg_vk_device, &vertex_shader_info, nullptr, &vertex_shader);
-    hg_assert(vertex_shader != nullptr);
-
-    VkShaderModuleCreateInfo fragment_shader_info{};
-    fragment_shader_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    fragment_shader_info.codeSize = sprite_frag_spv_size;
-    fragment_shader_info.pCode = (u32*)sprite_frag_spv;
-
-    VkShaderModule fragment_shader = nullptr;
-    vkCreateShaderModule(hg_vk_device, &fragment_shader_info, nullptr, &fragment_shader);
-    hg_assert(fragment_shader != nullptr);
-
-    VkPipelineShaderStageCreateInfo shader_stages[2]{};
-    shader_stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    shader_stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-    shader_stages[0].module = vertex_shader;
-    shader_stages[0].pName = "main";
-    shader_stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    shader_stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-    shader_stages[1].module = fragment_shader;
-    shader_stages[1].pName = "main";
-
-    HgVkPipelineConfig pipeline_config{};
-    pipeline_config.color_attachment_formats = {&color_format, 1};
-    pipeline_config.depth_attachment_format = depth_format;
-    pipeline_config.stencil_attachment_format = VK_FORMAT_UNDEFINED;
-    pipeline_config.shader_stages = {shader_stages, hg_countof(shader_stages)};
-    pipeline_config.layout = pipeline.pipeline_layout;
-    pipeline_config.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
-    pipeline_config.enable_color_blend = true;
-
-    pipeline.pipeline = hg_vk_create_graphics_pipeline(hg_vk_device, pipeline_config);
-
-    vkDestroyShaderModule(hg_vk_device, fragment_shader, nullptr);
-    vkDestroyShaderModule(hg_vk_device, vertex_shader, nullptr);
-
-    VkDescriptorPoolSize desc_pool_sizes[2]{};
-    desc_pool_sizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    desc_pool_sizes[0].descriptorCount = 1;
-    desc_pool_sizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    desc_pool_sizes[1].descriptorCount = (u32)max_textures;
-
-    VkDescriptorPoolCreateInfo desc_pool_info{};
-    desc_pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    desc_pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-    desc_pool_info.maxSets = 1 + (u32)max_textures;
-    desc_pool_info.poolSizeCount = hg_countof(desc_pool_sizes);
-    desc_pool_info.pPoolSizes = desc_pool_sizes;
-
-    vkCreateDescriptorPool(hg_vk_device, &desc_pool_info, nullptr, &pipeline.descriptor_pool);
-    hg_assert(pipeline.descriptor_pool != nullptr);
-
-    VkDescriptorSetAllocateInfo vp_set_alloc_info{};
-    vp_set_alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    vp_set_alloc_info.descriptorPool = pipeline.descriptor_pool;
-    vp_set_alloc_info.descriptorSetCount = 1;
-    vp_set_alloc_info.pSetLayouts = &pipeline.vp_layout;
-
-    vkAllocateDescriptorSets(hg_vk_device, &vp_set_alloc_info, &pipeline.vp_set);
-    hg_assert(pipeline.vp_set != nullptr);
-
-    VkBufferCreateInfo vp_buffer_info{};
-    vp_buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    vp_buffer_info.size = sizeof(VPUniform);
-    vp_buffer_info.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-
-    VmaAllocationCreateInfo vp_alloc_info{};
-    vp_alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    vp_alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
-
-    vmaCreateBuffer(
-        hg_vk_vma,
-        &vp_buffer_info,
-        &vp_alloc_info,
-        &pipeline.vp_buffer,
-        &pipeline.vp_buffer_allocation,
-        nullptr);
-    hg_assert(pipeline.vp_buffer != nullptr);
-    hg_assert(pipeline.vp_buffer_allocation != nullptr);
-
-    VPUniform vp_data{};
-    vp_data.proj = 1.0f;
-    vp_data.view = 1.0f;
-
-    vmaCopyMemoryToAllocation(hg_vk_vma, &vp_data, pipeline.vp_buffer_allocation, 0, sizeof(vp_data));
-
-    VkDescriptorBufferInfo desc_info{};
-    desc_info.buffer = pipeline.vp_buffer;
-    desc_info.offset = 0;
-    desc_info.range = sizeof(VPUniform);
-
-    VkWriteDescriptorSet desc_write{};
-    desc_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    desc_write.dstSet = pipeline.vp_set;
-    desc_write.dstBinding = 0;
-    desc_write.descriptorCount = 1;
-    desc_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    desc_write.pBufferInfo = &desc_info;
-
-    vkUpdateDescriptorSets(hg_vk_device, 1, &desc_write, 0, nullptr);
-
-    return pipeline;
-}
-
-void HgPipeline2D::destroy() {
-    vmaDestroyBuffer(hg_vk_vma, vp_buffer, vp_buffer_allocation);
-    vkFreeDescriptorSets(hg_vk_device, descriptor_pool, 1, &vp_set);
-    vkDestroyDescriptorPool(hg_vk_device, descriptor_pool, nullptr);
-    vkDestroyPipeline(hg_vk_device, pipeline, nullptr);
-    vkDestroyPipelineLayout(hg_vk_device, pipeline_layout, nullptr);
-    vkDestroyDescriptorSetLayout(hg_vk_device, texture_layout, nullptr);
-    vkDestroyDescriptorSetLayout(hg_vk_device, vp_layout, nullptr);
-}
-
-void HgPipeline2D::add_texture(HgTexture* texture) {
-    hg_assert(texture != nullptr);
-
-    if (texture_sets.has(texture))
-        return;
-
-    VkDescriptorSetAllocateInfo set_info{};
-    set_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    set_info.descriptorPool = descriptor_pool;
-    set_info.descriptorSetCount = 1;
-    set_info.pSetLayouts = &texture_layout;
-
-    VkDescriptorSet set = nullptr;
-    vkAllocateDescriptorSets(hg_vk_device, &set_info, &set);
-    hg_assert(set != nullptr);
-
-    VkDescriptorImageInfo desc_info{};
-    desc_info.sampler = texture->sampler;
-    desc_info.imageView = texture->view;
-    desc_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-    VkWriteDescriptorSet desc_write{};
-    desc_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    desc_write.dstSet = set;
-    desc_write.dstBinding = 0;
-    desc_write.descriptorCount = 1;
-    desc_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    desc_write.pImageInfo = &desc_info;
-
-    vkUpdateDescriptorSets(hg_vk_device, 1, &desc_write, 0, nullptr);
-
-    texture_sets.insert(texture, set);
-}
-
-void HgPipeline2D::remove_texture(HgTexture* texture) {
-    hg_assert(texture != nullptr);
-
-    if (texture_sets.has(texture)) {
-        VkDescriptorSet set = texture_sets.get(texture);
-        texture_sets.remove(texture);
-
-        vkFreeDescriptorSets(hg_vk_device, descriptor_pool, 1, &set);
-    }
-}
-
-void HgPipeline2D::update_projection(const HgMat4& projection) {
-    vmaCopyMemoryToAllocation(
-        hg_vk_vma,
-        &projection,
-        vp_buffer_allocation,
-        offsetof(VPUniform, proj),
-        sizeof(projection));
-}
-
-void HgPipeline2D::update_view(const HgMat4& view) {
-    vmaCopyMemoryToAllocation(
-        hg_vk_vma,
-        &view,
-        vp_buffer_allocation,
-        offsetof(VPUniform, view),
-        sizeof(view));
-}
-
-void HgPipeline2D::add_sprite(HgEntity entity, HgTexture& texture, HgVec2 uv_pos, HgVec2 uv_size) {
-    hg_assert(hg_ecs->is_registered<HgSprite>());
-    hg_assert(!hg_ecs->has<HgSprite>(entity));
-
-    HgSprite& sprite = hg_ecs->add<HgSprite>(entity);
-    sprite.texture = &texture;
-    sprite.uv_pos = uv_pos;
-    sprite.uv_size = uv_size;
-}
-
-void HgPipeline2D::remove_sprite(HgEntity entity) {
-    hg_assert(hg_ecs->is_registered<HgSprite>());
-    hg_assert(hg_ecs->has<HgSprite>(entity));
-
-    hg_ecs->remove<HgSprite>(entity);
-}
-
-void HgPipeline2D::draw(VkCommandBuffer cmd) {
-    hg_assert(cmd != nullptr);
-    hg_assert(hg_ecs->is_registered<HgSprite>());
-
-    hg_ecs->sort<HgSprite>(nullptr, [](void*, HgEntity lhs, HgEntity rhs) -> bool {
-        hg_assert(hg_ecs->has<HgTransform>(lhs));
-        hg_assert(hg_ecs->has<HgTransform>(rhs));
-        return hg_ecs->get<HgTransform>(lhs).position.z > hg_ecs->get<HgTransform>(rhs).position.z;
-    });
-
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-    vkCmdBindDescriptorSets(
-        cmd,
-        VK_PIPELINE_BIND_POINT_GRAPHICS,
-        pipeline_layout,
-        0,
-        1,
-        &vp_set,
-        0,
-        nullptr);
-
-    hg_ecs->for_each<HgSprite, HgTransform>([&](HgEntity, HgSprite& sprite, HgTransform& transform) {
-        vkCmdBindDescriptorSets(
-            cmd,
-            VK_PIPELINE_BIND_POINT_GRAPHICS,
-            pipeline_layout,
-            1,
-            1,
-            &texture_sets.get(sprite.texture),
-            0,
-            nullptr);
-
-        Push push;
-        push.model = hg_model_matrix_3d(transform.position, transform.scale, transform.rotation);
-        push.uv_pos = sprite.uv_pos;
-        push.uv_size = sprite.uv_size;
-
-        vkCmdPushConstants(
-            cmd,
-            pipeline_layout,
-            VK_SHADER_STAGE_VERTEX_BIT,
-            0,
-            sizeof(push),
-            &push);
-
-        vkCmdDraw(cmd, 4, 1, 0, 0);
-    });
 }
 
 struct HgWindowInput {

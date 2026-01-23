@@ -1,0 +1,32 @@
+{
+    "resources": [
+        {
+            "id": "tex",
+            "type": "texture",
+            "path": "tex.png",
+        },
+        {
+            "id": "model",
+            "type": "3d model",
+            "path": "model.gltf",
+        },
+    ],
+    "entities": [
+        {
+            "id": "player",
+            "transform": {
+                "pos": [0.0, 0.0, 0.0],
+                "scale": [1.0, 1.0, 1.0],
+                "rotation": [1.0, 0.0, 0.0, 0.0],
+            },
+        },
+        {
+            "id": "enemy",
+            "transform": {
+                "pos": [0.0, 0.0, 0.0],
+                "scale": [1.0, 1.0, 1.0],
+                "rotation": [1.0, 0.0, 0.0, 0.0],
+            },
+        },
+    ],
+},

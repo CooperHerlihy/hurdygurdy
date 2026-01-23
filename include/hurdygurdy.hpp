@@ -28,7 +28,6 @@
 #define HURDYGURDY_HPP
 
 #include <cfloat>
-#include <cinttypes>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -257,8 +256,7 @@ struct HgTest {
 /**
  * Runs all tests registered globally
  *
- * Note, tests are rendered through static init, so this should be called after
- * static init is completed
+ * This should be called after initialization, some tests require it
  *
  * Returns:
  * - Whether all tests passed
@@ -368,6 +366,23 @@ struct HgSpan {
      */
     usize count;
 
+    HgSpan() = default;
+
+    /**
+     * Create a span from a pointer and length
+     */
+    constexpr HgSpan(T* data_val, usize count_val) : data{data_val}, count{count_val} {}
+
+    /**
+     * Create a span from begin and end pointers
+     */
+    constexpr HgSpan(T* data_begin, T* data_end)
+        : data{data_begin}
+        , count{(uptr)(data_end - data_begin)}
+    {
+        hg_assert(data_end > data_begin);
+    }
+
     /**
      * The size of the array in bytes
      *
@@ -443,6 +458,23 @@ struct HgSpan<const void> {
      */
     usize count;
 
+    HgSpan() = default;
+
+    /**
+     * Create a span from a pointer and length
+     */
+    constexpr HgSpan(const void* data_val, usize count_val) : data{data_val}, count{count_val} {}
+
+    /**
+     * Create a span from begin and end pointers
+     */
+    constexpr HgSpan(const void* data_begin, const void* data_end)
+        : data{data_begin}
+        , count{(uptr)((u8*)data_end - (u8*)data_begin)}
+    {
+        hg_assert(data_end > data_begin);
+    }
+
     /**
      * The size of the array in bytes
      *
@@ -464,6 +496,23 @@ struct HgSpan<void> {
      * The size of the array in bytes
      */
     usize count;
+
+    HgSpan() = default;
+
+    /**
+     * Create a span from a pointer and length
+     */
+    constexpr HgSpan(void* data_val, usize count_val) : data{data_val}, count{count_val} {}
+
+    /**
+     * Create a span from begin and end pointers
+     */
+    constexpr HgSpan(void* data_begin, const void* data_end)
+        : data{data_begin}
+        , count{(uptr)((u8*)data_end - (u8*)data_begin)}
+    {
+        hg_assert(data_end > data_begin);
+    }
 
     /**
      * The size of the array in bytes
@@ -518,23 +567,21 @@ constexpr bool operator!=(std::nullptr_t lhs, HgSpan<T> rhs) {
 }
 
 /**
- * A span view into a string
+ * A high precision clock for timers and game deltas
  */
-struct HgStringView : public HgSpan<const char> {
-    HgStringView() = default;
-    constexpr HgStringView(const char* data_val, usize count_val) : HgSpan{data_val, count_val} {}
+struct HgClock {
+    std::chrono::time_point<std::chrono::high_resolution_clock> time = std::chrono::high_resolution_clock::now();
 
     /**
-     * Implicit constexpr conversion from c string
+     * Resets the clock and returns the delta since the last tick in seconds
      *
-     * Potentially dangerous, c string must be at most 4096 chars
+     * Parameters
+     * - clock The clock to tick, must not be nullptr
+     *
+     * Returns
+     * - Seconds since last tick
      */
-    constexpr HgStringView(const char* c_str) : HgSpan{c_str, 0} {
-        while (c_str[count] != '\0') {
-            ++count;
-            hg_assert(count <= 4096);
-        }
-    }
+    f64 tick();
 };
 
 static constexpr f64 hg_pi    = 3.1415926535897932;
@@ -542,21 +589,6 @@ static constexpr f64 hg_tau   = 6.2831853071795864;
 static constexpr f64 hg_euler = 2.7182818284590452;
 static constexpr f64 hg_root2 = 1.4142135623730951;
 static constexpr f64 hg_root3 = 1.7320508075688772;
-
-/**
- * Aligns a pointer to an alignment
- *
- * Parameters
- * - value The value to align
- * - alignment The alignment, must be a power of two
- *
- * Returns
- * - The aligned size
- */
-constexpr usize hg_align(uptr value, usize alignment) {
-    hg_assert(alignment > 0 && (alignment & (alignment - 1)) == 0);
-    return (value + alignment - 1) & ~(alignment - 1);
-}
 
 /**
  * A 2D vector
@@ -1822,6 +1854,49 @@ HgMat4 hg_projection_perspective(f32 fov, f32 aspect, f32 near, f32 far);
 u32 hg_max_mipmaps(u32 width, u32 height, u32 depth);
 
 /**
+ * A convenience to destroy a type
+ *
+ * Parameters
+ * - allocation The allocation to destroy
+ */
+template<typename T>
+void hg_destroy(T* allocation) {
+    if constexpr (std::is_destructible_v<T>) {
+        allocation->~T();
+    }
+}
+
+/**
+ * A convenience to destroy an array of a type
+ *
+ * Parameters
+ * - allocation The allocation to destroy
+ */
+template<typename T>
+void hg_destroy(HgSpan<T> allocation) {
+    if constexpr (std::is_destructible_v<T>) {
+        for (usize i = 0; i < allocation.count; ++i) {
+            allocation[i].~T();
+        }
+    }
+}
+
+/**
+ * Aligns a pointer to an alignment
+ *
+ * Parameters
+ * - value The value to align
+ * - alignment The alignment, must be a power of two
+ *
+ * Returns
+ * - The aligned size
+ */
+constexpr usize hg_align(uptr value, usize alignment) {
+    hg_assert(alignment > 0 && (alignment & (alignment - 1)) == 0);
+    return (value + alignment - 1) & ~(alignment - 1);
+}
+
+/**
  * An arena allocator
  */
 struct HgArena {
@@ -2174,7 +2249,7 @@ inline thread_local HgSpan<HgArena> hg_arenas{};
  * Returns
  * - A scratch arena
  */
-HgArena& hg_get_arena();
+HgArena& hg_get_scratch();
 
 /**
  * Get a scratch arena for temporary allocations, accounting for a conflict
@@ -2185,7 +2260,7 @@ HgArena& hg_get_arena();
  * Returns
  * - A scratch arena
  */
-HgArena& hg_get_arena(const HgArena& conflict);
+HgArena& hg_get_scratch(const HgArena& conflict);
 
 /**
  * Get a scratch arena for temporary allocations, accounting for conflicts
@@ -2196,35 +2271,7 @@ HgArena& hg_get_arena(const HgArena& conflict);
  * Returns
  * - A scratch arena
  */
-HgArena& hg_get_arena(HgSpan<const HgArena*> conflicts);
-
-/**
- * A convenience to destroy a type
- *
- * Parameters
- * - allocation The allocation to destroy
- */
-template<typename T>
-void hg_destroy(T* allocation) {
-    if constexpr (std::is_destructible_v<T>) {
-        allocation->~T();
-    }
-}
-
-/**
- * A convenience to destroy an array of a type
- *
- * Parameters
- * - allocation The allocation to destroy
- */
-template<typename T>
-void hg_destroy(HgSpan<T> allocation) {
-    if constexpr (std::is_destructible_v<T>) {
-        for (usize i = 0; i < allocation.count; ++i) {
-            allocation[i].~T();
-        }
-    }
-}
+HgArena& hg_get_scratch(HgSpan<const HgArena*> conflicts);
 
 /**
  * A free list memory pool
@@ -2970,6 +3017,713 @@ struct HgRingBuffer {
 };
 
 /**
+ * The template for hg_hash functions
+ */
+template<typename T>
+constexpr usize hg_hash(T val);
+
+/**
+ * A key-value hash map
+ *
+ * Key type must have an overload of hg_hash
+ */
+template<typename Key, typename Value>
+struct HgHashMap {
+    static_assert(hg_is_c_safe<Key> && hg_is_c_safe<Value>);
+
+    /**
+     * The pairs stored in the map
+     */
+    struct Pair {
+        /**
+         * The key
+         */
+        Key key;
+        /**
+         * The value
+         */
+        Value value;
+
+        Pair() = default;
+
+        Pair(const Key& k, const Value& v) : key{k}, value{v} {}
+    };
+
+    /**
+     * Where the values are stored
+     */
+    HgSpan<HgOption<Pair>> slots;
+    /**
+     * The current number of values that are stored
+     */
+    usize load;
+
+    /**
+     * Creates a new hash map
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - slot_count The max number of slots to store values in
+     *
+     * Returns
+     * - The created empty hash map
+     */
+    static HgHashMap create(HgArena& arena, usize slot_count) {
+        hg_assert(slot_count > 0);
+
+        HgHashMap map;
+        map.slots = arena.alloc<HgOption<Pair>>(slot_count);
+        map.load = 0;
+        return map;
+    }
+
+    /**
+     * Empties all slots
+     */
+    void reset() {
+        for (HgOption<Pair>& slot : slots) {
+            slot.has_value = false;
+        }
+        load = 0;
+    }
+
+    /**
+     * Resizes the slots and rehashes all entries
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - new_size The new number of slots
+     */
+    void resize(HgArena& arena, usize new_size) {
+        HgSpan<HgOption<Pair>> old_slots = slots;
+        slots = arena.alloc<HgOption<Pair>>(new_size);
+
+        for (HgOption<Pair>& slot : old_slots) {
+            if (old_slots[index].has_value)
+                insert(old_slots[index]->key, old_slots[index]->value);
+        }
+    }
+
+    /**
+     * Grows the number of slots by a factor
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - factor The factor to increase by
+     */
+    void grow(HgArena& arena, f32 factor = 2) {
+        resize(arena, (usize)((f32)slots.count * factor));
+    }
+
+    /**
+     * Inserts a value into the hash map
+     *
+     * Parameters
+     * - key The key to store at
+     * - value The value to store
+     *
+     * Returns
+     * - A reference to the constructed object
+     */
+    Value& insert(const Key& key, const Value& value) {
+        hg_assert(load < slots.count - 1);
+
+        HgOption<Pair> slot;
+        slot.has_value = true;
+        slot->key = key;
+        slot->value = value;
+
+        usize index = hg_hash(key) % slots.count;
+        usize dist = 0;
+        while (slots[index].has_value && slots[index]->key != key) {
+            usize other_hash = hg_hash(slots[index]->key);
+            if (other_hash < index)
+                other_hash += slots.count;
+
+            usize other_dist = other_hash - index;
+            if (dist > other_dist) {
+                HgOption<Pair> temp = slots[index];
+                slots[index] = slot;
+                slot = temp;
+                dist = other_dist;
+            }
+
+            index = (index + 1) % slots.count;
+            ++dist;
+        }
+
+        ++load;
+        slots[index] = slot;
+        return slots[index]->value;
+    }
+
+    /**
+     * Removes a value from the hash map
+     *
+     * Parameters
+     * - key The key to remove from
+     */
+    void remove(const Key& key) {
+        hg_assert(load < slots.count);
+
+        usize index = hg_hash(key) % slots.count;
+        while (slots[index].has_value && slots[index]->key != key) {
+            index = (index + 1) % slots.count;
+        }
+        if (!slots[index].has_value)
+            return;
+
+        slots[index].has_value = false;
+        --load;
+
+        index = (index + 1) % slots.count;
+        while (slots[index].has_value) {
+            if (hg_hash(slots[index]->key) % slots.count != index) {
+                HgOption<Pair> temp = slots[index];
+                slots[index].has_value = false;
+                --load;
+                insert(temp->key, temp->value);
+            }
+            index = (index + 1) % slots.count;
+        }
+    }
+
+    /**
+     * Removes a value from the hash map, and returns it
+     *
+     * Parameters
+     * - key The key to remove from
+     */
+    HgOption<Value> get_remove(const Key& key) {
+        hg_assert(load < slots.count);
+
+        usize index = hg_hash(key) % slots.count;
+        while (slots[index].has_value && slots[index]->key != key) {
+            index = (index + 1) % slots.count;
+        }
+        if (!slots[index].has_value)
+            return hg_empty;
+
+        HgOption<Value> val = slots[index]->value;
+        slots[index].has_value = false;
+        --load;
+
+        index = (index + 1) % slots.count;
+        while (slots[index].has_value) {
+            if (hg_hash(slots[index]->key) % slots.count != index) {
+                HgOption<Pair> temp = slots[index];
+                slots[index].has_value = false;
+                --load;
+                insert(temp->key, temp->value);
+            }
+            index = (index + 1) % slots.count;
+        }
+
+        return val;
+    }
+
+    /**
+     * Checks whether a value exists
+     *
+     * Parameters
+     * - key The key to check at
+     *
+     * Returns
+     * - Whether a value exists at the key
+     */
+    bool has(const Key& key) {
+        hg_assert(load < slots.count);
+
+        usize index = hg_hash(key) % slots.count;
+        while (slots[index].has_value) {
+            if (slots[index]->key == key)
+                return true;
+            index = (index + 1) % slots.count;
+        }
+        return false;
+    }
+
+    /**
+     * Gets a reference to the value at key, asserting its existance
+     *
+     * Parameters
+     * - key The key to get from
+     *
+     * Returns
+     * - A reference to the value
+     */
+    Value& get(const Key& key) {
+        hg_assert(load < slots.count);
+
+        usize index = hg_hash(key) % slots.count;
+        for (;;) {
+            hg_assert(slots[index].has_value);
+            if (slots[index]->key == key)
+                return slots[index]->value;
+            index = (index + 1) % slots.count;
+        }
+    }
+
+    /**
+     * Gets a pointer to the value at key, or nullptr if it does not exist
+     *
+     * Parameters
+     * - key The key to get from
+     *
+     * Returns
+     * - A pointer to the value
+     * - nullptr if it does not exist
+     */
+    Value* try_get(const Key& key) {
+        hg_assert(load < slots.count);
+
+        usize index = hg_hash(key) % slots.count;
+        while (slots[index].has_value) {
+            if (slots[index]->key == key)
+                return &slots[index]->value;
+            index = (index + 1) % slots.count;
+        }
+        return nullptr;
+    }
+};
+
+/**
+ * A hash set
+ *
+ * T must have an overload of hg_hash
+ */
+template<typename T>
+struct HgHashSet {
+    static_assert(hg_is_c_safe<T>);
+
+    /**
+     * Where the values are stored
+     */
+    HgSpan<HgOption<T>> slots;
+    /**
+     * The current number of values that are stored
+     */
+    usize load;
+
+    /**
+     * Creates a new hash set
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - slot_count The max number of slots to store values in
+     *
+     * Returns
+     * - The created empty hash set
+     */
+    static HgHashSet create(HgArena& arena, usize slot_count) {
+        hg_assert(slot_count > 0);
+
+        HgHashSet set;
+        set.slots = arena.alloc<HgOption<T>>(slot_count);
+        set.load = 0;
+        return set;
+    }
+
+    /**
+     * Empties all slots
+     */
+    void reset() {
+        for (HgOption<T>& slot : slots) {
+            slot.has_value = false;
+        }
+        load = 0;
+    }
+
+    /**
+     * Resizes the slots and rehashes all entries
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - new_size The new number of slots
+     */
+    void resize(HgArena& arena, usize new_size) {
+        HgSpan<HgOption<T>> old_slots = slots;
+
+        slots = arena.alloc<HgOption<T>>(new_size);
+
+        for (HgOption<T>& slot : old_slots) {
+            if (old_slots[index].has_value)
+                insert(old_slots[index].value());
+        }
+    }
+
+    /**
+     * Grows the number of slots by a factor
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - factor The factor to increase by
+     */
+    void grow(HgArena& arena, f32 factor = 2) {
+        resize(arena, (usize)((f32)slots.count * factor));
+    }
+
+    /**
+     * Inserts a value into the hash set
+     *
+     * Parameters
+     * - value The value to store
+     *
+     * Returns
+     * - A reference to the constructed object
+     */
+    void insert(const T& value) {
+        hg_assert(load < slots.count - 1);
+
+        HgOption<T> slot{value};
+
+        usize index = hg_hash(value) % slots.count;
+        usize dist = 0;
+        while (slots[index].has_value && slots[index].value() != value) {
+            usize other_hash = hg_hash(slots[index].value());
+            if (other_hash < index)
+                other_hash += slots.count;
+
+            usize other_dist = index - other_hash;
+            if (dist > other_dist) {
+                HgOption<T> temp = slots[index];
+                slots[index] = slot;
+                slot = temp;
+                dist = other_dist;
+            }
+
+            index = (index + 1) % slots.count;
+            ++dist;
+        }
+
+        ++load;
+        slots[index] = slot;
+    }
+
+    /**
+     * Removes a value from the hash set
+     *
+     * Parameters
+     * - key The value to remove
+     */
+    void remove(const T& value) {
+        hg_assert(load < slots.count);
+
+        usize index = hg_hash(value) % slots.count;
+        while (slots[index].has_value && slots[index].value() != value) {
+            index = (index + 1) % slots.count;
+        }
+        if (!slots[index].has_value)
+            return;
+
+        slots[index].has_value = false;
+        --load;
+
+        index = (index + 1) % slots.count;
+        while (slots[index].has_value) {
+            if (hg_hash(slots[index].value()) % slots.count != index) {
+                HgOption<T> temp = slots[index];
+                slots[index].has_value = false;
+                --load;
+                insert(temp.value());
+            }
+            index = (index + 1) % slots.count;
+        }
+    }
+
+    /**
+     * Checks whether a value is contained in the set
+     *
+     * Parameters
+     * - value The value to check
+     *
+     * Returns
+     * - Whether the value is present
+     */
+    bool has(const T& value) {
+        hg_assert(load < slots.count);
+
+        usize index = hg_hash(value) % slots.count;
+        while (slots[index].has_value) {
+            if (slots[index].value() == value)
+                return true;
+            index = (index + 1) % slots.count;
+        }
+        return false;
+    }
+};
+
+/**
+ * Hash map hashing for u8
+ */
+template<>
+constexpr usize hg_hash(u8 val) {
+    return (usize)val;
+}
+
+/**
+ * Hash map hashing for u16
+ */
+template<>
+constexpr usize hg_hash(u16 val) {
+    return (usize)val;
+}
+
+/**
+ * Hash map hashing for u32
+ */
+template<>
+constexpr usize hg_hash(u32 val) {
+    return (usize)val;
+}
+
+/**
+ * Hash map hashing for u64
+ */
+template<>
+constexpr usize hg_hash(u64 val) {
+    return (usize)val;
+}
+
+/**
+ * Hash map hashing for i8
+ */
+template<>
+constexpr usize hg_hash(i8 val) {
+    return (usize)val;
+}
+
+/**
+ * Hash map hashing for i16
+ */
+template<>
+constexpr usize hg_hash(i16 val) {
+    return (usize)val;
+}
+
+/**
+ * Hash map hashing for i32
+ */
+template<>
+constexpr usize hg_hash(i32 val) {
+    return (usize)val;
+}
+
+/**
+ * Hash map hashing for i64
+ */
+template<>
+constexpr usize hg_hash(i64 val) {
+    return (usize)val;
+}
+
+/**
+ * Hash map hashing for f32
+ */
+template<>
+constexpr usize hg_hash(f32 val) {
+    union {
+        f32 as_float;
+        usize as_usize;
+    } u{};
+    u.as_float = val;
+    return u.as_usize;
+}
+
+/**
+ * Hash map hashing for f64
+ */
+template<>
+constexpr usize hg_hash(f64 val) {
+    union {
+        f64 as_float;
+        usize as_usize;
+    } u{};
+    u.as_float = val;
+    return u.as_usize;
+}
+
+template<>
+constexpr usize hg_hash(void* val) {
+    union {
+        void* as_ptr;
+        uptr as_usize;
+    } u{};
+    u.as_ptr = val;
+    return u.as_usize;
+}
+
+template<typename>
+struct HgFunction;
+
+/**
+ * A generic function object
+ */
+template<typename R, typename... Args>
+struct HgFunction<R(Args...)> {
+    /**
+     * The function's capture
+     */
+    void* capture;
+    /**
+     * The function pointer
+     */
+    R (*fn)(void* data, Args...);
+
+    /**
+     * Calls the function
+     */
+    R operator()(Args... args) {
+        if constexpr (std::is_same_v<R, void>) {
+            fn(capture, args...);
+        } else {
+            return fn(capture, args...);
+        }
+    }
+
+    /**
+     * Creates a function object, which owns its capture and must be destroyed
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - fn The function to use
+     *
+     * Returns
+     * - The function object
+     */
+    template<typename C>
+    static HgFunction create(HgArena& arena, C&& capture, R (*fn)(void*, Args...)) {
+        HgFunction func;
+        func.capture = arena.alloc_v(sizeof(C), alignof(C));
+        new ((C*)func.capture) C{std::move(capture)};
+        func.fn = fn;
+        return func;
+    }
+
+    /**
+     * Creates a function object, which owns its capture and must be destroyed
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - fn The function to use
+     *
+     * Returns
+     * - The function object
+     */
+    template<typename F>
+    static HgFunction create(HgArena& arena, F fn) {
+        static_assert(std::is_trivially_destructible_v<F>);
+        static_assert(std::is_invocable_r_v<R, F, Args...>);
+
+        return create(arena, std::move(fn), [](void* data, Args... args) -> R {
+            if constexpr (std::is_same_v<R, void>) {
+                (*(F*)data)(args...);
+            } else {
+                return (*(F*)data)(args...);
+            }
+        });
+    }
+};
+
+/**
+ * Creates a function object, convenience over HgFunction<...>::create
+ * 
+ * Parameters
+ * - arena The arena to allocate from
+ * - fn The function to create from
+ *
+ * Returns
+ * - The created function object
+ */
+template<typename Signature, typename F>
+HgFunction<Signature> hg_function(HgArena& arena, F&& fn) {
+    return HgFunction<Signature>::create(arena, std::forward<F>(fn));
+}
+
+/**
+ * A span view into a string
+ */
+struct HgStringView {
+    /**
+     * The characters
+     */
+    const char* chars;
+    /**
+     * The number of items in the array
+     */
+    usize length;
+
+    /**
+     * The size of the array in bytes
+     *
+     * Returns
+     * - The size of the array in bytes
+     */
+    constexpr usize size() const {
+        return length;
+    }
+
+    HgStringView() = default;
+
+    /**
+     * Create a string view from a pointer and length
+     */
+    constexpr HgStringView(const char* chars_val, usize length_val) : chars{chars_val}, length{length_val} {}
+
+    /**
+     * Create a string view from begin and end pointers
+     */
+    constexpr HgStringView(const char* chars_begin, const char* chars_end)
+        : chars{chars_begin}
+        , length{(uptr)(chars_end - chars_begin)}
+    {
+        hg_assert(chars_end > chars_begin);
+    }
+
+    /**
+     * Implicit constexpr conversion from c string
+     *
+     * Potentially dangerous, c string can be at most 4096 chars
+     */
+    constexpr HgStringView(const char* c_str) : chars{c_str}, length{0} {
+        while (c_str[length] != '\0') {
+            ++length;
+            hg_assert(length <= 4096);
+        }
+    }
+
+    /**
+     * Convenience to index into the array with debug bounds checking
+     */
+    constexpr const char& operator[](usize index) const {
+        hg_assert(chars != nullptr);
+        hg_assert(index < length);
+        return chars[index];
+    }
+
+    /**
+     * For c++ ranged based for
+     */
+    constexpr const char* begin() const {
+        return chars;
+    }
+
+    /**
+     * For c++ ranged based for
+     */
+    constexpr const char* end() const {
+        return chars + length;
+    }
+
+    /**
+     * Implicit conversion to span
+     */
+    constexpr operator HgSpan<const char>() const {
+        return {chars, length};
+    }
+};
+
+/**
  * A dynamic string container
  */
 struct HgString {
@@ -3109,15 +3863,51 @@ struct HgString {
     }
 
     /**
-     * Copies another string into this string at index
-     * 
+     * Inserts a char into this string at index
+     *
      * Parameters
      * - arena The arena to allocate from
+     * - c The char to insert
+     */
+    void insert(HgArena& arena, usize index, char c);
+
+    /**
+     * Appends a char to the end of this string
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - c The char to append
+     */
+    void append(HgArena& arena, char c) {
+        insert(arena, length, c);
+    }
+
+    /**
+     * Prepends a char to the beginning of this string
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - c The char to prepend
+     */
+    void prepend(HgArena& arena, char c) {
+        insert(arena, 0, c);
+    }
+
+    /**
+     * Copies another string into this string at index
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - str The string to copy from
      */
     void insert(HgArena& arena, usize index, HgStringView str);
 
     /**
      * Copies another string to the end of this string
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - str The string to copy from
      */
     void append(HgArena& arena, HgStringView str) {
         insert(arena, length, str);
@@ -3125,6 +3915,10 @@ struct HgString {
 
     /**
      * Copies another string to the beginning of this string
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - str The string to copy from
      */
     void prepend(HgArena& arena, HgStringView str) {
         insert(arena, 0, str);
@@ -3138,118 +3932,40 @@ struct HgString {
     }
 };
 
-inline bool operator==(HgString lhs, HgString rhs) {
+constexpr bool operator==(HgStringView lhs, HgStringView rhs) {
+    return lhs.length == rhs.length && std::memcmp(lhs.chars, rhs.chars, lhs.length) == 0;
+}
+
+constexpr bool operator!=(HgStringView lhs, HgStringView rhs) {
+    return !(lhs == rhs);
+}
+
+inline bool operator==(const HgString& lhs, const HgString& rhs) {
     return lhs.length == rhs.length && memcmp(lhs.chars.data, rhs.chars.data, lhs.length) == 0;
 }
 
-inline bool operator!=(HgString lhs, HgString rhs) {
-    return lhs.length != rhs.length || memcmp(lhs.chars.data, rhs.chars.data, lhs.length) != 0;
-}
-
-/**
- * Hash map hashing for u8
- */
-constexpr usize hg_hash(u8 val) {
-    return (usize)val;
-}
-
-/**
- * Hash map hashing for u16
- */
-constexpr usize hg_hash(u16 val) {
-    return (usize)val;
-}
-
-/**
- * Hash map hashing for u32
- */
-constexpr usize hg_hash(u32 val) {
-    return (usize)val;
-}
-
-/**
- * Hash map hashing for u64
- */
-constexpr usize hg_hash(u64 val) {
-    return (usize)val;
-}
-
-/**
- * Hash map hashing for i8
- */
-constexpr usize hg_hash(i8 val) {
-    return (usize)val;
-}
-
-/**
- * Hash map hashing for i16
- */
-constexpr usize hg_hash(i16 val) {
-    return (usize)val;
-}
-
-/**
- * Hash map hashing for i32
- */
-constexpr usize hg_hash(i32 val) {
-    return (usize)val;
-}
-
-/**
- * Hash map hashing for i64
- */
-constexpr usize hg_hash(i64 val) {
-    return (usize)val;
-}
-
-/**
- * Hash map hashing for f32
- */
-constexpr usize hg_hash(f32 val) {
-    union {
-        f32 as_float;
-        usize as_usize;
-    } u{};
-    u.as_float = val;
-    return u.as_usize;
-}
-
-/**
- * Hash map hashing for f64
- */
-constexpr usize hg_hash(f64 val) {
-    union {
-        f64 as_float;
-        usize as_usize;
-    } u{};
-    u.as_float = val;
-    return u.as_usize;
-}
-
-/**
- * Hash map hashing for pointer types
- */
-inline usize hg_hash(void* val) {
-    return (uptr)val;
+inline bool operator!=(const HgString& lhs, const HgString& rhs) {
+    return !(lhs == rhs);
 }
 
 /**
  * Hash map hashing for strings
  */
+template<>
 constexpr usize hg_hash(HgStringView str) {
-    constexpr u64 power = 257;
+    u64 ret = 0;
     u64 mult = 1;
-    u64 res = 0;
     for (char c : str) {
-        res += (u64)c * mult;
-        mult *= power;
+        ret += (u64)c * mult;
+        mult *= 257;
     }
-    return (usize)res;
+    return (usize)ret;
 }
 
 /**
  * Hash map hashing for HgString
  */
+template<>
 constexpr usize hg_hash(HgString str) {
     return hg_hash((HgStringView)str);
 }
@@ -3257,521 +3973,259 @@ constexpr usize hg_hash(HgString str) {
 /**
  * Hash map hashing for C string
  */
+template<>
 constexpr usize hg_hash(const char* str) {
-    return hg_hash(HgStringView{str});
+    return hg_hash((HgStringView)str);
 }
 
 /**
- * A key-value hash map
+ * Check whether a character is whitespace
  *
- * Key type must have an overload of hg_hash
- */
-template<typename Key, typename Value>
-struct HgHashMap {
-    static_assert(hg_is_c_safe<Key> && hg_is_c_safe<Value>);
-
-    struct Pair {
-        Key key;
-        Value value;
-
-        Pair() = default;
-        Pair(const Key& k, const Value& v) : key{k}, value{v} {}
-    };
-
-    using Slot = HgOption<Pair>;
-
-    /**
-     * Where the values are stored
-     */
-    HgSpan<Slot> slots;
-    /**
-     * The current number of values that are stored
-     */
-    usize load;
-
-    /**
-     * Creates a new hash map
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - slot_count The max number of slots to store values in
-     *
-     * Returns
-     * - The created empty hash map
-     */
-    static HgHashMap create(HgArena& arena, usize slot_count) {
-        hg_assert(slot_count > 0);
-
-        HgHashMap map;
-        map.slots = arena.alloc<Slot>(slot_count);
-        map.load = 0;
-        return map;
-    }
-
-    /**
-     * Empties all slots
-     */
-    void reset() {
-        for (Slot& slot : slots) {
-            slot.has_value = false;
-        }
-        load = 0;
-    }
-
-    /**
-     * Resizes the slots and rehashes all entries
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - new_size The new number of slots
-     */
-    void resize(HgArena& arena, usize new_size) {
-        HgSpan<Slot> old_slots = slots;
-        slots = arena.alloc<Slot>(new_size);
-
-        for (Slot& slot : old_slots) {
-            if (old_slots[index].has_value)
-                insert(old_slots[index]->key, old_slots[index]->value);
-        }
-    }
-
-    /**
-     * Grows the number of slots by a factor
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - factor The factor to increase by
-     */
-    void grow(HgArena& arena, f32 factor = 2) {
-        resize(arena, (usize)((f32)slots.count * factor));
-    }
-
-    /**
-     * Inserts a value into the hash map
-     *
-     * Parameters
-     * - key The key to store at
-     * - value The value to store
-     *
-     * Returns
-     * - A reference to the constructed object
-     */
-    Value& insert(const Key& key, const Value& value) {
-        hg_assert(load < slots.count - 1);
-
-        Slot slot;
-        slot.has_value = true;
-        slot->key = key;
-        slot->value = value;
-
-        usize index = hg_hash(key) % slots.count;
-        usize dist = 0;
-        while (slots[index].has_value && slots[index]->key != key) {
-            usize other_hash = hg_hash(slots[index]->key);
-            if (other_hash < index)
-                other_hash += slots.count;
-
-            usize other_dist = other_hash - index;
-            if (dist > other_dist) {
-                Slot temp = slots[index];
-                slots[index] = slot;
-                slot = temp;
-                dist = other_dist;
-            }
-
-            index = (index + 1) % slots.count;
-            ++dist;
-        }
-
-        ++load;
-        slots[index] = slot;
-        return slots[index]->value;
-    }
-
-    /**
-     * Removes a value from the hash map, and returns it
-     *
-     * Parameters
-     * - key The key to remove from
-     */
-    HgOption<Value> get_remove(const Key& key) {
-        hg_assert(load < slots.count);
-
-        usize index = hg_hash(key) % slots.count;
-        while (slots[index].has_value && slots[index]->key != key) {
-            index = (index + 1) % slots.count;
-        }
-        if (!slots[index].has_value)
-            return hg_empty;
-
-        HgOption<Value> val = slots[index]->value;
-        slots[index].has_value = false;
-        --load;
-
-        index = (index + 1) % slots.count;
-        while (slots[index].has_value) {
-            if (hg_hash(slots[index]->key) % slots.count != index) {
-                Slot temp = slots[index];
-                slots[index].has_value = false;
-                --load;
-                insert(temp->key, temp->value);
-            }
-            index = (index + 1) % slots.count;
-        }
-
-        return val;
-    }
-
-    /**
-     * Removes a value from the hash map
-     *
-     * Parameters
-     * - key The key to remove from
-     */
-    void remove(const Key& key) {
-        hg_assert(load < slots.count);
-
-        usize index = hg_hash(key) % slots.count;
-        while (slots[index].has_value && slots[index]->key != key) {
-            index = (index + 1) % slots.count;
-        }
-        if (!slots[index].has_value)
-            return;
-
-        slots[index].has_value = false;
-        --load;
-
-        index = (index + 1) % slots.count;
-        while (slots[index].has_value) {
-            if (hg_hash(slots[index]->key) % slots.count != index) {
-                Slot temp = slots[index];
-                slots[index].has_value = false;
-                --load;
-                insert(temp->key, temp->value);
-            }
-            index = (index + 1) % slots.count;
-        }
-    }
-
-    /**
-     * Checks whether a value exists
-     *
-     * Parameters
-     * - key The key to check at
-     *
-     * Returns
-     * - Whether a value exists at the key
-     */
-    bool has(const Key& key) {
-        hg_assert(load < slots.count);
-
-        usize index = hg_hash(key) % slots.count;
-        while (slots[index].has_value) {
-            if (slots[index]->key == key)
-                return true;
-            index = (index + 1) % slots.count;
-        }
-        return false;
-    }
-
-    /**
-     * Gets a pointer to the value at key, or nullptr if it does not exist
-     *
-     * Parameters
-     * - key The key to get from
-     *
-     * Returns
-     * - A pointer to the value
-     * - nullptr if it does not exist
-     */
-    Value* try_get(const Key& key) {
-        hg_assert(load < slots.count);
-
-        usize index = hg_hash(key) % slots.count;
-        while (slots[index].has_value) {
-            if (slots[index]->key == key)
-                return &slots[index]->value;
-            index = (index + 1) % slots.count;
-        }
-        return nullptr;
-    }
-
-    /**
-     * Gets a reference to the value at key, asserting its existance
-     *
-     * Parameters
-     * - key The key to get from
-     *
-     * Returns
-     * - A reference to the value
-     */
-    Value& get(const Key& key) {
-        hg_assert(load < slots.count);
-
-        usize index = hg_hash(key) % slots.count;
-        for (;;) {
-            hg_assert(slots[index].has_value);
-            if (slots[index]->key == key)
-                return slots[index]->value;
-            index = (index + 1) % slots.count;
-        }
-    }
-};
-
-/**
- * A hash set
- *
- * T must have an overload of hg_hash
- */
-template<typename T>
-struct HgHashSet {
-    static_assert(hg_is_c_safe<T>);
-
-    using Slot = HgOption<T>;
-
-    /**
-     * Where the values are stored
-     */
-    HgSpan<Slot> slots;
-    /**
-     * The current number of values that are stored
-     */
-    usize load;
-
-    /**
-     * Creates a new hash set
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - slot_count The max number of slots to store values in
-     *
-     * Returns
-     * - The created empty hash set
-     */
-    static HgHashSet create(HgArena& arena, usize slot_count) {
-        hg_assert(slot_count > 0);
-
-        HgHashSet set;
-        set.slots = arena.alloc<Slot>(slot_count);
-        set.load = 0;
-        return set;
-    }
-
-    /**
-     * Empties all slots
-     */
-    void reset() {
-        for (Slot& slot : slots) {
-            slot.has_value = false;
-        }
-        load = 0;
-    }
-
-    /**
-     * Resizes the slots and rehashes all entries
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - new_size The new number of slots
-     */
-    void resize(HgArena& arena, usize new_size) {
-        HgSpan<Slot> old_slots = slots;
-
-        slots = arena.alloc<Slot>(new_size);
-
-        for (Slot& slot : old_slots) {
-            if (old_slots[index].has_value)
-                insert(old_slots[index].value());
-        }
-    }
-
-    /**
-     * Grows the number of slots by a factor
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - factor The factor to increase by
-     */
-    void grow(HgArena& arena, f32 factor = 2) {
-        resize(arena, (usize)((f32)slots.count * factor));
-    }
-
-    /**
-     * Inserts a value into the hash set
-     *
-     * Parameters
-     * - value The value to store
-     *
-     * Returns
-     * - A reference to the constructed object
-     */
-    void insert(const T& value) {
-        hg_assert(load < slots.count - 1);
-
-        Slot slot{value};
-
-        usize index = hg_hash(value) % slots.count;
-        usize dist = 0;
-        while (slots[index].has_value && slots[index].value() != value) {
-            usize other_hash = hg_hash(slots[index].value());
-            if (other_hash < index)
-                other_hash += slots.count;
-
-            usize other_dist = index - other_hash;
-            if (dist > other_dist) {
-                Slot temp = slots[index];
-                slots[index] = slot;
-                slot = temp;
-                dist = other_dist;
-            }
-
-            index = (index + 1) % slots.count;
-            ++dist;
-        }
-
-        ++load;
-        slots[index] = slot;
-    }
-
-    /**
-     * Removes a value from the hash set
-     *
-     * Parameters
-     * - key The value to remove
-     */
-    void remove(const T& value) {
-        hg_assert(load < slots.count);
-
-        usize index = hg_hash(value) % slots.count;
-        while (slots[index].has_value && slots[index].value() != value) {
-            index = (index + 1) % slots.count;
-        }
-        if (!slots[index].has_value)
-            return;
-
-        slots[index].has_value = false;
-        --load;
-
-        index = (index + 1) % slots.count;
-        while (slots[index].has_value) {
-            if (hg_hash(slots[index].value()) % slots.count != index) {
-                Slot temp = slots[index];
-                slots[index].has_value = false;
-                --load;
-                insert(temp.value());
-            }
-            index = (index + 1) % slots.count;
-        }
-    }
-
-    /**
-     * Checks whether a value is contained in the set
-     *
-     * Parameters
-     * - value The value to check
-     *
-     * Returns
-     * - Whether the value is present
-     */
-    bool has(const T& value) {
-        hg_assert(load < slots.count);
-
-        usize index = hg_hash(value) % slots.count;
-        while (slots[index].has_value) {
-            if (slots[index].value() == value)
-                return true;
-            index = (index + 1) % slots.count;
-        }
-        return false;
-    }
-};
-
-template<typename>
-struct HgFunction;
-
-/**
- * A generic function object
- */
-template<typename R, typename... Args>
-struct HgFunction<R(Args...)> {
-    /**
-     * The function's capture
-     */
-    void* capture;
-    /**
-     * The function pointer
-     */
-    R (*fn)(void* data, Args...);
-
-    /**
-     * Calls the function
-     */
-    R operator()(Args... args) {
-        if constexpr (std::is_same_v<R, void>) {
-            fn(capture, args...);
-        } else {
-            return fn(capture, args...);
-        }
-    }
-
-    /**
-     * Creates a function object, which owns its capture and must be destroyed
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - fn The function to use
-     *
-     * Returns
-     * - The function object
-     */
-    template<typename C>
-    static HgFunction create(HgArena& arena, C&& capture, R (*fn)(void*, Args...)) {
-        HgFunction func;
-        func.capture = arena.alloc_v(sizeof(C), alignof(C));
-        new ((C*)func.capture) C{std::move(capture)};
-        func.fn = fn;
-        return func;
-    }
-
-    /**
-     * Creates a function object, which owns its capture and must be destroyed
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - fn The function to use
-     *
-     * Returns
-     * - The function object
-     */
-    template<typename F>
-    static HgFunction create(HgArena& arena, F fn) {
-        static_assert(std::is_trivially_destructible_v<F>);
-        static_assert(std::is_invocable_r_v<R, F, Args...>);
-
-        return create(arena, std::move(fn), [](void* data, Args... args) -> R {
-            if constexpr (std::is_same_v<R, void>) {
-                (*(F*)data)(args...);
-            } else {
-                return (*(F*)data)(args...);
-            }
-        });
-    }
-};
-
-/**
- * Creates a function object, convenience over HgFunction<...>::create
- * 
  * Parameters
- * - arena The arena to allocate from
- * - fn The function to create from
+ * - c The character to check
  *
  * Returns
- * - The created function object
+ * - Whether it is a space, tab, or newline, or not
  */
-template<typename Signature, typename F>
-HgFunction<Signature> hg_function(HgArena& arena, F&& fn) {
-    return HgFunction<Signature>::create(arena, std::forward<F>(fn));
-}
+bool hg_is_whitespace(char c);
+
+/**
+ * Check whether a character is a base 10 numeral
+ *
+ * Parameters
+ * - c The character to check
+ *
+ * Returns
+ * - Whether it is 0-9 or not
+ */
+bool hg_is_numeral_base10(char c);
+
+/**
+ * Check whether a string is a base 10 integer
+ *
+ * Parameters
+ * - str The string to check
+ *
+ * Returns
+ * - Whether it is valid integer, positive or negative
+ */
+bool hg_is_integer_base10(HgStringView str);
+
+/**
+ * Check whether a string is a base 10 floating point number
+ *
+ * Parameters
+ * - str The string to check
+ *
+ * Returns
+ * - Whether it is valid floating point number
+ */
+bool hg_is_float_base10(HgStringView str);
+
+/**
+ * Create an i64 from a base 10 string
+ *
+ * Parameters
+ * - str The string to create from
+ *
+ * Returns
+ * - The created integer
+ */
+i64 hg_str_to_int_base10(HgStringView str);
+
+/**
+ * Create a integer from a base 10 string
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - num The integer number to create from
+ *
+ * Returns
+ * - The created string
+ */
+f64 hg_str_to_float_base10(HgStringView str);
+
+/**
+ * Create a base 10 string from an integer
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - num The integer number to create from
+ *
+ * Returns
+ * - The created string
+ */
+HgString hg_int_to_str_base10(HgArena& arena, i64 num);
+
+/**
+ * Create a base 10 string from an integer
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - num The integer number to create from
+ *
+ * Returns
+ * - The created string
+ */
+HgString hg_float_to_str_base10(HgArena& arena, f64 num, u64 decimal_count);
+
+// base 2 and 16 string-int conversions : TODO
+// arbitrary base string-int conversions : TODO
+// string formatting : TODO
+
+/**
+ * Parses a string of Json text, one token at a time
+ */
+struct HgJsonParser {
+    /**
+     * The types of tokens that may be returned
+     */
+    enum Type {
+        /**
+         * The initial type, should not be returned
+         */
+        NONE,
+        /**
+         * An error was encountered, and further reads may be nonsensical
+         */
+        ERROR,
+        /**
+         * The end of the file has been reached
+         */
+        END_OF_FILE,
+        /**
+         * A field
+         *
+         * Contains the name of the field as a string
+         */
+        FIELD,
+        /**
+         * A literal defining a field
+         *
+         * Contains literal and its type
+         */
+        LITERAL,
+        /**
+         * The beginning of a struct defining a field
+         *
+         * Subsequent tokens will be the fields in the struct
+         */
+        STRUCT_BEGIN,
+        /**
+         * The end of a struct
+         */
+        STRUCT_END,
+        /**
+         * The beginning of an array defining a field
+         *
+         * Subsequent tokens will be the elements in the array
+         */
+        ARRAY_BEGIN,
+        /**
+         * The end of an array defining a field
+         */
+        ARRAY_END,
+    };
+
+    enum Literal {
+        /**
+         * There is not literal
+         *
+         * Do not access string, integer, floating, or boolean
+         */
+        EMPTY,
+        /**
+         * There is a string literal
+         *
+         * string is safe to access
+         */
+        STRING,
+        /**
+         * There is an integer literal
+         *
+         * integer is safe to access
+         */
+        INTEGER,
+        /**
+         * There is a floating point literal
+         *
+         * floating is safe to access
+         */
+        FLOATING,
+        /**
+         * There is a boolean literal
+         *
+         * boolean is safe to access
+         */
+        BOOLEAN,
+    };
+
+    /**
+     * The tokens that get parsed
+     */
+    struct Token {
+        /**
+         * The type of the token
+         */
+        Type type;
+        /**
+         * The type of the literal, if any
+         */
+        Literal literal;
+        /**
+         * The literal value, if any
+         */
+        union {
+            HgString string;
+            i64 integer;
+            f64 floating;
+            bool boolean;
+        };
+    };
+
+    /**
+     * The file being parsed
+     */
+    HgStringView file;
+    /**
+     * The current character begin parsed
+     */
+    usize head;
+    /**
+     * The number of lines found, for better errors
+     */
+    usize line_count;
+    /**
+     * The number of nestings, for validation
+     */
+    usize nest_count;
+    /**
+     * The previous type of token parsed, for validation
+     */
+    Type prev;
+
+    /**
+     * Create a new Json parser
+     *
+     * Parameters
+     * - file The text to parse
+     *
+     * Returns
+     * - The created parser
+     */
+    static HgJsonParser create(HgStringView file);
+
+    /**
+     * Get the next token
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     *
+     * Returns
+     * - The parsed token or error message
+     */
+    Token next_token(HgArena& arena);
+};
 
 /**
  * A spinlock fence for basic thread synchronization
@@ -3857,6 +4311,9 @@ struct HgMPSCQueue {
     /**
      * Allocate a new dynamic queue
      *
+     * Note, capacity must be a power of two, it can be better optimized, and
+     * overflows are handled safely
+     *
      * Parameters
      * - arena The arena to allocate from
      * - capacity The max number of items before reallocating
@@ -3865,7 +4322,7 @@ struct HgMPSCQueue {
      * - The allocated dynamic queue
      */
     static HgMPSCQueue create(HgArena& arena, usize capacity) {
-        hg_assert(capacity > 1);
+        hg_assert((capacity & (capacity - 1)) == 0);
 
         HgMPSCQueue queue;
 
@@ -3905,15 +4362,14 @@ struct HgMPSCQueue {
      * - item The item to copy onto the queue
      */
     void push(const T& item) {
-        usize idx = working_head->load();
-        while (!working_head->compare_exchange_weak(idx, (idx + 1) % capacity)) {}
+        usize idx = working_head->fetch_add(1) & (capacity - 1);
 
         new (items + idx) T{item};
         has_item[idx].store(true);
 
         usize h = head->load();
         while (has_item[h].load()) {
-            usize next = (h + 1) % capacity;
+            usize next = (h + 1) & (capacity - 1);
             head->compare_exchange_strong(h, next);
             h = next;
         }
@@ -3929,14 +4385,14 @@ struct HgMPSCQueue {
      * - Whether an item could be popped
      */
     bool pop(T& item) {
-        usize idx = tail->load();
+        usize idx = tail->load() & (capacity - 1);
         if (idx == head->load())
             return false;
 
         item = items[idx];
         has_item[idx].store(false);
 
-        tail->store((idx + 1) % capacity);
+        tail->fetch_add(1);
         return true;
     }
 };
@@ -3980,6 +4436,9 @@ struct HgMPMCQueue {
     /**
      * Allocate a new dynamic queue
      *
+     * Note, capacity must be a power of two, it can be better optimized, and
+     * overflows are handled safely
+     *
      * Parameters
      * - arena The arena to allocate from
      * - capacity The max number of items before reallocating
@@ -3988,7 +4447,7 @@ struct HgMPMCQueue {
      * - The allocated dynamic queue
      */
     static HgMPMCQueue create(HgArena& arena, usize capacity) {
-        hg_assert(capacity > 1);
+        hg_assert((capacity & (capacity - 1)) == 0);
 
         HgMPMCQueue queue;
 
@@ -4030,15 +4489,14 @@ struct HgMPMCQueue {
      * - item The item to copy onto the queue
      */
     void push(const T& item) {
-        usize idx = working_head->load();
-        while (!working_head->compare_exchange_weak(idx, (idx + 1) % capacity)) {}
+        usize idx = working_head->fetch_add(1) & (capacity - 1);
 
         new (items + idx) T{item};
         has_item[idx].store(true);
 
         usize h = head->load();
         while (has_item[h].load()) {
-            usize next = (h + 1) % capacity;
+            usize next = (h + 1) & (capacity - 1);
             head->compare_exchange_strong(h, next);
             h = next;
         }
@@ -4054,19 +4512,18 @@ struct HgMPMCQueue {
      * - Whether an item could be popped
      */
     bool pop(T& item) {
-        usize idx;
+        usize idx = working_tail->load();
         do {
-            idx = working_tail->load();
             if (idx == head->load())
                 return false;
-        } while (!has_item[idx].load() || !working_tail->compare_exchange_weak(idx, (idx + 1) % capacity));
+        } while (!working_tail->compare_exchange_weak(idx, (idx + 1) & (capacity - 1)));
 
         item = items[idx];
         has_item[idx].store(false);
 
         usize t = tail->load();
         while (t != head->load() && !has_item[t].load()) {
-            usize next = (t + 1) % capacity;
+            usize next = (t + 1) & (capacity - 1);
             tail->compare_exchange_strong(t, next);
             t = next;
         }
@@ -4186,43 +4643,28 @@ struct HgThreadPool {
     void for_par(usize n, usize chunk_size, F fn) {
         static_assert(std::is_invocable_r_v<void, F, usize, usize>);
 
-        HgArenaScope scratch = hg_get_arena();
-
-        struct Capture {
-            F* fn;
-            usize begin;
-            usize end;
-        };
-        HgSpan<Capture> captures = scratch.alloc<Capture>((usize)std::ceil((f32)n / (f32)chunk_size));
-
-        usize i = 0;
-        for (auto& capture : captures) {
-            capture.fn = &fn;
-            capture.begin = i;
-            capture.end = std::min(i + chunk_size, n);
-            i += chunk_size;
-        }
-
-        auto fn_iter = [](void* pcapture) {
-            Capture& capture = *(Capture*)pcapture;
-            (*capture.fn)(capture.begin, capture.end);
-        };
+        HgArenaScope scratch = hg_get_scratch();
 
         HgFence fence;
-        fence.add(captures.count);
+        for (usize i = 0; i < n; i += chunk_size) {
+            fence.add();
 
-        for (auto& capture : captures) {
+            auto iter = hg_function<void()>(scratch,
+                [begin = i, end = std::min(i + chunk_size, n), &fn] {
+                    fn(begin, end);
+                });
+
             Work work;
             work.fence = &fence;
-            work.data = &capture;
-            work.fn = fn_iter;
+            work.data = iter.capture;
+            work.fn = iter.fn;
             queue.push(work);
+
             ++count;
         }
         mtx.lock();
         mtx.unlock();
         cv.notify_all();
-
         help(fence, INFINITY);
     }
 };
@@ -4307,6 +4749,134 @@ struct HgIOThread {
  * A global io thread
  */
 inline HgIOThread* hg_io;
+
+/**
+ * A loaded binary file
+ */
+struct HgBinary : HgSpan<void> {
+    /**
+     * Load a binary file from disc
+     *
+     * Parameters
+     * - fence The fence to signal on completion
+     * - path The file path to the image
+     */
+    void load(HgFence* fence, HgStringView path);
+
+    /**
+     * Unload a binary file resource
+     *
+     * Parameters
+     * - fence The fence to signal on completion
+     * - arena The arena to allocate from
+     */
+    void unload(HgFence* fence);
+
+    /**
+     * Store a binary file to disc
+     *
+     * Parameters
+     * - fence The fence to signal on completion
+     * - path The file path
+     */
+    void store(HgFence* fence, HgStringView path);
+};
+
+/**
+ * A loaded texture/image file
+ */
+struct HgTexture {
+    enum Location : u32 {
+        UNLOADED = 0x0,
+        CPU = 0x1,
+        GPU = 0x2,
+        BOTH = 0x3,
+    };
+
+    /**
+     * The gpu side allocation
+     */
+    VmaAllocation allocation;
+    /**
+     * The gpu image
+     */
+    VkImage image;
+    /**
+     * The gpu image view
+     */
+    VkImageView view;
+    /**
+     * The gpu sampler
+     */
+    VkSampler sampler;
+    /**
+     * The cpu side pixel data
+     */
+    void* pixels;
+    /**
+     * The format of each pixel
+     */
+    VkFormat format;
+    /**
+     * The width in pixels
+     */
+    u32 width;
+    /**
+     * The height in pixels
+     */
+    u32 height;
+    /**
+     * The depth in pixels
+     */
+    u32 depth;
+    /**
+     * Where the texture is loaded into
+     */
+    u32 location;
+
+    /**
+     * Load a png image from disc
+     *
+     * Parameters
+     * - fence The fence to signal on completion
+     * - path The file path to the image
+     */
+    void load_png(HgFence* fence, HgStringView path);
+
+    /**
+     * Unload an image file
+     *
+     * Parameters
+     * - fence The fence to signal on completion
+     */
+    void unload(HgFence* fence);
+
+    /**
+     * Store a png image to disc
+     *
+     * Parameters
+     * - fence The fence to signal on completion
+     * - path The file path to the image
+     */
+    void store_png(HgFence* fence, HgStringView path);
+
+    /**
+     * Transfer the loaded cpu side image to the gpu
+     *
+     * Parameters
+     * - cmd_pool The command pool to record transfer
+     * - filter The filter to create the sampler
+     */
+    void create_gpu(VkCommandPool cmd_pool, VkFilter filter);
+
+    /**
+     * Destroy the gpu side resources
+     */
+    void destroy_gpu();
+};
+
+// 3d model files : TODO
+// audio files : TODO
 
 /**
  * The handle for an ECS entity
@@ -5124,118 +5694,102 @@ struct HgECS {
 inline HgECS* hg_ecs;
 
 /**
- * A loaded binary file
+ * The transform for (nearly) all entities
  */
-struct HgFileBinary {
+struct HgTransform {
+    /**
+     * x: -left, +right
+     * y: -up, +down
+     * z: -backward, +forward
+     */
+    HgVec3 position = {0.0f, 0.0f, 0.0f};
+    HgVec3 scale = {1.0f, 1.0f, 1.0f};
+    HgQuat rotation = {1.0f, 0.0f, 0.0f, 0.0f};
+};
+
+struct HgSprite {
+    /**
+     * The texture to draw from
+     */
+    HgTexture* texture;
+    /**
+     * The beginning coordinate to read from texture, [0.0, 1.0]
+     */
+    HgVec2 uv_pos;
+    /**
+     * The size of the region to read from texture, [0.0, 1.0]
+     */
+    HgVec2 uv_size;
+};
+
+template<>
+constexpr usize hg_hash(HgTexture* val) {
+    union {
+        HgTexture* as_ptr;
+        usize as_usize;
+    } u{};
+    u.as_ptr = val;
+    return u.as_usize;
+}
+
+struct HgPipeline2D {
+
+    struct VPUniform {
+        HgMat4 proj;
+        HgMat4 view;
+    };
+
+    struct Push {
+        HgMat4 model;
+        HgVec2 uv_pos;
+        HgVec2 uv_size;
+    };
+
+    VkDescriptorSetLayout vp_layout;
+    VkDescriptorSetLayout texture_layout;
+    VkPipelineLayout pipeline_layout;
+    VkPipeline pipeline;
+
+    VkDescriptorPool descriptor_pool;
+    VkDescriptorSet vp_set;
+
+    VkBuffer vp_buffer;
+    VmaAllocation vp_buffer_allocation;
+
+    HgHashMap<HgTexture*, VkDescriptorSet> texture_sets;
+
+    static HgPipeline2D create(
+        HgArena& arena,
+        usize max_textures,
+        VkFormat color_format,
+        VkFormat depth_format);
+
+    void destroy();
+
+    void add_texture(HgTexture* texture);
+    void remove_texture(HgTexture* texture);
+
+    void update_projection(const HgMat4& projection);
+    void update_view(const HgMat4& view);
+
+    void add_sprite(HgEntity entity, HgTexture& texture, HgVec2 uv_pos, HgVec2 uv_size);
+    void remove_sprite(HgEntity entity);
+
+    void draw(VkCommandBuffer cmd);
+};
+
+using HgResourceID = usize;
+
+struct HgResource {
+    usize scene_count;
     void* data;
-    usize size;
-
-    static constexpr usize alignment = alignof(std::max_align_t);
-
-    /**
-     * Load a binary file from disc
-     *
-     * Parameters
-     * - fence The fence to signal on completion
-     * - file The file to load into, must be stable
-     * - path The file path to the image
-     */
-    void load(HgFence* fence, HgStringView path);
-
-    /**
-     * Unload a binary file resource
-     *
-     * Parameters
-     * - fence The fence to signal on completion
-     * - arena The arena to allocate from
-     * - file The file to unload, must be stable
-     */
-    void unload(HgFence* fence);
-
-    /**
-     * Store a binary file to disc
-     *
-     * Parameters
-     * - fence The fence to signal on completion
-     * - file The file to store, must be stable
-     * - path The file path
-     */
-    void store(HgFence* fence, HgStringView path);
 };
 
-// text files : TODO
-// json files : TODO
-// 3d model files : TODO
-// audio files : TODO
+inline HgHashMap<HgResourceID, HgResource> hg_resources;
 
-/**
- * A loaded image file
- */
-struct HgImage {
-    /**
-     * The pixel data
-     */
-    void* pixels;
-    /**
-     * The format of each pixel
-     */
-    VkFormat format;
-    /**
-     * The width in pixels
-     */
-    u32 width;
-    /**
-     * The height in pixels
-     */
-    u32 height;
-    /**
-     * The depth in pixels
-     */
-    u32 depth;
-
-    /**
-     * Load an image from disc
-     *
-     * Parameters
-     * - fence The fence to signal on completion
-     * - path The file path to the image
-     */
-    void load(HgFence* fence, HgStringView path);
-
-    /**
-     * Unload an image resource
-     *
-     * Parameters
-     * - fence The fence to signal on completion
-     */
-    void unload(HgFence* fence);
-
-    /**
-     * Store an image to disc
-     *
-     * Parameters
-     * - fence The fence to signal on completion
-     * - path The file path to the image
-     */
-    void store(HgFence* fence, HgStringView path);
-};
-
-/**
- * A high precision clock for timers and game deltas
- */
-struct HgClock {
-    std::chrono::time_point<std::chrono::high_resolution_clock> time = std::chrono::high_resolution_clock::now();
-
-    /**
-     * Resets the clock and returns the delta since the last tick in seconds
-     *
-     * Parameters
-     * - clock The clock to tick, must not be nullptr
-     *
-     * Returns
-     * - Seconds since last tick
-     */
-    f64 tick();
+struct HgScene {
+    HgHashSet<HgResourceID> resources;
+    HgHashSet<HgEntity> entities;
 };
 
 /**
@@ -5734,75 +6288,6 @@ void hg_vk_image_generate_mipmaps(
     u32 height,
     u32 depth,
     u32 mip_count);
-
-struct HgTexture {
-    VmaAllocation allocation;
-    VkImage image;
-    VkImageView view;
-    VkSampler sampler;
-
-    void load(VkCommandPool cmd_pool, VkFilter filter, HgImage& src);
-
-    void unload();
-};
-
-struct HgTransform {
-    HgVec3 position = {0.0f, 0.0f, 0.0f};
-    HgVec3 scale = {1.0f, 1.0f, 1.0f};
-    HgQuat rotation = {1.0f, 0.0f, 0.0f, 0.0f};
-};
-
-struct HgSprite {
-    HgTexture* texture;
-    HgVec2 uv_pos;
-    HgVec2 uv_size;
-};
-
-struct HgPipeline2D {
-
-    struct VPUniform {
-        HgMat4 proj;
-        HgMat4 view;
-    };
-
-    struct Push {
-        HgMat4 model;
-        HgVec2 uv_pos;
-        HgVec2 uv_size;
-    };
-
-    VkDescriptorSetLayout vp_layout;
-    VkDescriptorSetLayout texture_layout;
-    VkPipelineLayout pipeline_layout;
-    VkPipeline pipeline;
-
-    VkDescriptorPool descriptor_pool;
-    VkDescriptorSet vp_set;
-
-    VkBuffer vp_buffer;
-    VmaAllocation vp_buffer_allocation;
-
-    HgHashMap<HgTexture*, VkDescriptorSet> texture_sets;
-
-    static HgPipeline2D create(
-        HgArena& arena,
-        usize max_textures,
-        VkFormat color_format,
-        VkFormat depth_format);
-
-    void destroy();
-
-    void add_texture(HgTexture* texture);
-    void remove_texture(HgTexture* texture);
-
-    void update_projection(const HgMat4& projection);
-    void update_view(const HgMat4& view);
-
-    void add_sprite(HgEntity entity, HgTexture& texture, HgVec2 uv_pos, HgVec2 uv_size);
-    void remove_sprite(HgEntity entity);
-
-    void draw(VkCommandBuffer cmd);
-};
 
 /**
  * Initializes global resources for windowing
