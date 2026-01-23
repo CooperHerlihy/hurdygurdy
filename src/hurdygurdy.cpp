@@ -992,7 +992,8 @@ HgJsonParser::Token HgJsonParser::next_token(HgArena& arena) {
         Token token;
         token.type = ERROR;
         token.literal = STRING;
-        token.string = HgString::create(arena, "json error detected, cannot continue parsing\n");
+        token.string = HgString::create(arena, "json error already detected, cannot continue parsing\n");
+        return token;
     }
 
     if (head >= file.length) {
@@ -1045,12 +1046,12 @@ HgJsonParser::Token HgJsonParser::next_token(HgArena& arena) {
 
     if (file[head] == '}') {
         ++head;
-        while (hg_is_whitespace(file[head])) {
+        while (head < file.length && hg_is_whitespace(file[head])) {
             if (file[head] == '\n')
                 ++line_count;
             ++head;
         }
-        if (file[head] == ',')
+        if (head < file.length && file[head] == ',')
             ++head;
 
         Token token;
@@ -1076,7 +1077,7 @@ HgJsonParser::Token HgJsonParser::next_token(HgArena& arena) {
 
     if (file[head] == ']') {
         ++head;
-        while (hg_is_whitespace(file[head])) {
+        while (head < file.length && hg_is_whitespace(file[head])) {
             if (file[head] == '\n')
                 ++line_count;
             ++head;
@@ -1108,7 +1109,7 @@ HgJsonParser::Token HgJsonParser::next_token(HgArena& arena) {
 
     if (head + 4 <= file.length && HgStringView{file.chars + head, 4} == "true") {
         head += 4;
-        while (hg_is_whitespace(file[head])) {
+        while (head < file.length && hg_is_whitespace(file[head])) {
             if (file[head] == '\n')
                 ++line_count;
             ++head;
@@ -1127,7 +1128,7 @@ HgJsonParser::Token HgJsonParser::next_token(HgArena& arena) {
 
     if (head + 5 <= file.length && HgStringView{file.chars + head, 5} == "false") {
         head += 5;
-        while (hg_is_whitespace(file[head])) {
+        while (head < file.length && hg_is_whitespace(file[head])) {
             if (file[head] == '\n')
                 ++line_count;
             ++head;
@@ -1168,6 +1169,7 @@ HgJsonParser::Token HgJsonParser::next_token(HgArena& arena) {
         token.string.append(arena, {line_begin, line_len});
         token.string.append(arena, "\"\n");
 
+        prev = ERROR;
         return token;
     }
 
@@ -1175,7 +1177,7 @@ parse_string:
     {
         HgString string{};
 continue_string:
-        if (file[head] == EOF || head == file.length) {
+        if (head >= file.length || file[head] == EOF) {
             Token token;
             token.type = ERROR;
             token.literal = STRING;
@@ -1186,23 +1188,41 @@ continue_string:
             token.string.append(arena, string);
             token.string.append(arena, "\"\n");
 
+            prev = ERROR;
             return token;
         }
 
         if (file[head] == '\"' || file[head] == '\'') {
             ++head;
-            while (hg_is_whitespace(file[head])) {
+            while (head < file.length && hg_is_whitespace(file[head])) {
                 if (file[head] == '\n')
                     ++line_count;
                 ++head;
             }
 
+            if (head >= file.length || file[head] == EOF) {
+                Token token;
+                token.type = ERROR;
+                token.literal = STRING;
+
+                // replace with format : TODO
+                token.string = {};
+                token.string.append(arena, "json unexpected EOF while parsing string \"");
+                token.string.append(arena, string);
+                token.string.append(arena, "\"\n");
+
+                prev = ERROR;
+                return token;
+            }
+
             if (file[head] == '\"' || file[head] == '\'') {
                 ++head;
-                goto parse_string;
+                goto continue_string;
             }
 
             if (file[head] == ':') {
+                ++head;
+
                 if (prev == FIELD) {
                     Token token;
                     token.type = ERROR;
@@ -1220,8 +1240,6 @@ continue_string:
                     return token;
                 }
 
-                ++head;
-
                 Token token;
                 token.type = FIELD;
                 token.literal = STRING;
@@ -1231,17 +1249,16 @@ continue_string:
                 return token;
             }
 
-            if (file[head] == ',') {
+            if (file[head] == ',')
                 ++head;
 
-                Token token;
-                token.type = LITERAL;
-                token.literal = STRING;
-                token.string = HgString::create(arena, string);
+            Token token;
+            token.type = LITERAL;
+            token.literal = STRING;
+            token.string = HgString::create(arena, string);
 
-                prev = LITERAL;
-                return token;
-            }
+            prev = LITERAL;
+            return token;
         }
 
         string.append(scratch, file[head]);
@@ -1267,7 +1284,7 @@ parse_number:
             ++head;
         }
 
-        if (file[head] == EOF || head == file.length) {
+        if (head >= file.length || file[head] == EOF) {
             Token token;
             token.type = ERROR;
             token.literal = STRING;
@@ -1278,6 +1295,7 @@ parse_number:
             token.string.append(arena, number);
             token.string.append(arena, "\"\n");
 
+            prev = ERROR;
             return token;
         }
 
@@ -1292,6 +1310,7 @@ parse_number:
             token.string.append(arena, number);
             token.string.append(arena, "\"\n");
 
+            prev = ERROR;
             return token;
         }
 
