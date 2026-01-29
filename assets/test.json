@@ -3,24 +3,24 @@
         "transform": {
             "position": [0.0, 0.0, 0.0],
             "scale": [1.0, 1.0, 1.0],
-            "rotation": [1.0, 0.0, 0.0, 0.0],
+            "rotation": [1.0, 0.0, 0.0, 0.0]
         },
         "sprite": {
             "texture": "assets/tex.png",
             "uv_pos": [0.0, 0.0],
-            "uv_size": [1.0, 1.0],
-        },
+            "uv_size": [1.0, 1.0]
+        }
     },
     "enemy": {
         "transform": {
             "position": [0.0, 0.0, 0.0],
             "scale": [1.0, 1.0, 1.0],
-            "rotation": [1.0, 0.0, 0.0, 0.0],
+            "rotation": [1.0, 0.0, 0.0, 0.0]
         },
         "sprite": {
             "texture": "assets/tex.png",
             "uv_pos": [0.0, 0.0],
-            "uv_size": [1.0, 1.0],
-        },
-    },
+            "uv_size": [1.0, 1.0]
+        }
+    }
 },

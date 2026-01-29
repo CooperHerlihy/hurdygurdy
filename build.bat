@@ -45,15 +45,19 @@ for %%S in (%SHADERS%) do (
     )
 )
 
-cl /c "%SRC_DIR%\src\vk_mem_alloc.cpp" ^
-    /Fd:"%BUILD_DIR%\vk_mem_alloc.pdb" ^
-    /Fo:"%BUILD_DIR%\vk_mem_alloc.obj" ^
-    %STD% %CONFIG% %INCLUDES%
+if not exist "%BUILD_DIR%\vk_mem_alloc.obj" (
+    cl /c "%SRC_DIR%\src\vk_mem_alloc.cpp" ^
+        /Fd:"%BUILD_DIR%\vk_mem_alloc.pdb" ^
+        /Fo:"%BUILD_DIR%\vk_mem_alloc.obj" ^
+        %STD% %CONFIG% %INCLUDES%
+)
 
-cl /c "%SRC_DIR%\src\stb.c" ^
-    /Fd:"%BUILD_DIR%\stb.pdb" ^
-    /Fo:"%BUILD_DIR%\stb.obj" ^
-    %STD% %CONFIG% %INCLUDES%
+if not exist "%BUILD_DIR%\stb.obj" (
+    cl /c "%SRC_DIR%\src\stb.c" ^
+        /Fd:"%BUILD_DIR%\stb.pdb" ^
+        /Fo:"%BUILD_DIR%\stb.obj" ^
+        %STD% %CONFIG% %INCLUDES%
+)
 
 cl /c "%SRC_DIR%\src\hurdygurdy.cpp" ^
     /Fd:"%BUILD_DIR%\hurdygurdy.pdb" ^

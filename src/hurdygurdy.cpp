@@ -1886,7 +1886,6 @@ void HgECS::reset() {
     for (u32 i = 0; i < systems.count; ++i) {
         if (is_registered(i)) {
             std::fill_n(systems[i].sparse.data, systems[i].sparse.count, (u32)-1);
-            systems[i].dense.reset();
             systems[i].components.reset();
         }
     }
@@ -1941,7 +1940,7 @@ void HgECS::register_component_untyped(
 
     Component& system = systems[component_id];
     system.sparse = arena.alloc<u32>(entity_pool.count);
-    system.dense = system.dense.create(arena, 0, max_components);
+    system.dense = arena.alloc<HgEntity>(max_components);
     system.components = system.components.create(arena, component_size, component_alignment, 0, max_components);
     std::fill_n(system.sparse.data, system.sparse.count, (u32)-1);
 }
@@ -1958,7 +1957,7 @@ u32 HgECS::smallest_system_untyped(HgPtr<u32> ids) {
     hg_assert(is_registered(ids[0]));
     for (usize i = 1; i < ids.count; ++i) {
         hg_assert(is_registered(ids[i]));
-        if (systems[ids[i]].dense.count < systems[smallest].dense.count)
+        if (systems[ids[i]].components.count < systems[smallest].components.count)
             smallest = ids[i];
     }
     return smallest;
@@ -1967,8 +1966,8 @@ u32 HgECS::smallest_system_untyped(HgPtr<u32> ids) {
 void HgECS::swap_idx(u32 lhs, u32 rhs, u32 component_id) {
     hg_assert(is_registered(component_id));
     Component& system = systems[component_id];
-    hg_assert(lhs < system.dense.count);
-    hg_assert(rhs < system.dense.count);
+    hg_assert(lhs < system.components.count);
+    hg_assert(rhs < system.components.count);
 
     usize width = system.components.width;
     void* temp = alloca(width);
@@ -1980,8 +1979,8 @@ void HgECS::swap_idx(u32 lhs, u32 rhs, u32 component_id) {
 void HgECS::swap_location_idx(u32 lhs, u32 rhs, u32 component_id) {
     hg_assert(is_registered(component_id));
     Component& system = systems[component_id];
-    hg_assert(lhs < system.dense.count);
-    hg_assert(rhs < system.dense.count);
+    hg_assert(lhs < system.components.count);
+    hg_assert(rhs < system.components.count);
 
     HgEntity lhs_entity = system.dense[lhs];
     HgEntity rhs_entity = system.dense[rhs];
@@ -2496,17 +2495,17 @@ void HgScene::unload(HgPtr<HgFence> fences) {
 }
 
 void HgScene::instantiate(HgArena& arena) {
-    hg_assert(entities.items == nullptr);
+    hg_assert(!instantiated);
 
     hg_arena_scope(scratch, hg_get_scratch());
 
     HgSceneDescInfo info = desc.read<HgSceneDescInfo>(0);
 
-    while (entities.items.count < info.entity_count) {
-        entities.grow(arena);
+    while (entities.count < info.entity_count) {
+        entities = arena.realloc(entities, entities.count == 0 ? 1 : entities.count * 2);
     }
     for (usize i = 0; i < info.entity_count; ++i) {
-        entities.push() = hg_ecs->spawn();
+        entities[i] = hg_ecs->spawn();
     }
 
     usize component_idx = info.components_idx;
@@ -2534,14 +2533,16 @@ void HgScene::instantiate(HgArena& arena) {
             break;
         }
     }
+
+    instantiated = true;
 }
 
 void HgScene::deinstantiate() {
-    hg_assert(entities.items != nullptr);
+    hg_assert(instantiated);
     for (HgEntity e : entities) {
         hg_ecs->despawn(e);
     }
-    entities.reset();
+    instantiated = false;
 }
 
 // HgBinary hg_convert_scene(HgArena& arena, const HgStringView& file) {
