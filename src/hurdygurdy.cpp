@@ -1011,6 +1011,9 @@ HgString HgJsonParser::Token::to_string(HgArena& arena) {
     ret.append(arena, "{ ");
 
     switch (type) {
+        default:
+            hg_warn("json token has invalid type enum");
+            [[fallthrough]];
         case NONE:
             ret.append(arena, "Type: NONE");
             break;
@@ -1038,11 +1041,12 @@ HgString HgJsonParser::Token::to_string(HgArena& arena) {
         case ARRAY_END:
             ret.append(arena, "Type: ARRAY_END");
             break;
-        default:
-            hg_assert(false && "json token has invalid type enum");
     }
 
     switch (literal) {
+        default:
+            hg_warn("json token has invalid literal enum");
+            [[fallthrough]];
         case EMPTY:
             break;
         case STRING:
@@ -1070,8 +1074,6 @@ HgString HgJsonParser::Token::to_string(HgArena& arena) {
                 ret.append(arena, "Boolean: false");
             }
             break;
-        default:
-            hg_assert(false && "json token has invalid literal enum");
     }
 
     ret.append(arena, " }");
@@ -1100,7 +1102,7 @@ HgJsonParser::Token HgJsonParser::next_token(HgArena& arena) {
             ++head;
         }
 
-        Token token;
+        Token token{};
         if (file[head - 1] == '}') {
             token.type = STRUCT_END;
             token.literal = EMPTY;
@@ -6360,7 +6362,7 @@ HgWindow HgWindow::create(HgArena& arena, const HgWindow::Config& config) {
     const char* title = config.title != nullptr ? config.title : "Hurdy Gurdy";
 
     HgWindow window;
-    window.internals = arena.alloc<Internals>();
+    window.internals = arena.alloc<Internals>(1).data;
     *window.internals = {};
 
     WNDCLASSA window_class{};
@@ -6469,7 +6471,7 @@ VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window) {
     return surface;
 }
 
-void hg_process_window_events(HgSpan<HgWindow const> windows) {
+void hg_process_window_events(HgPtr<HgWindow const> windows) {
     hg_assert(windows != nullptr);
 
     for (usize i = 0; i < windows.count; ++i) {
