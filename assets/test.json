@@ -1,32 +1,26 @@
 {
-    "resources": [
-        {
-            "id": "tex",
-            "type": "texture",
-            "path": "tex.png",
+    "player": {
+        "transform": {
+            "position": [0.0, 0.0, 0.0],
+            "scale": [1.0, 1.0, 1.0],
+            "rotation": [1.0, 0.0, 0.0, 0.0],
         },
-        {
-            "id": "model",
-            "type": "3d model",
-            "path": "model.gltf",
+        "sprite": {
+            "texture": "assets/tex.png",
+            "uv_pos": [0.0, 0.0],
+            "uv_size": [1.0, 1.0],
         },
-    ],
-    "entities": [
-        {
-            "id": "player",
-            "transform": {
-                "pos": [0.0, 0.0, 0.0],
-                "scale": [1.0, 1.0, 1.0],
-                "rotation": [1.0, 0.0, 0.0, 0.0],
-            },
+    },
+    "enemy": {
+        "transform": {
+            "position": [0.0, 0.0, 0.0],
+            "scale": [1.0, 1.0, 1.0],
+            "rotation": [1.0, 0.0, 0.0, 0.0],
         },
-        {
-            "id": "enemy",
-            "transform": {
-                "pos": [0.0, 0.0, 0.0],
-                "scale": [1.0, 1.0, 1.0],
-                "rotation": [1.0, 0.0, 0.0, 0.0],
-            },
+        "sprite": {
+            "texture": "assets/tex.png",
+            "uv_pos": [0.0, 0.0],
+            "uv_size": [1.0, 1.0],
         },
-    ],
+    },
 },

@@ -16,9 +16,9 @@ void hg_init(void) {
         usize arena_count = 2;
         hg_arenas = {(HgArena*)malloc(arena_count * sizeof(HgArena)), arena_count};
 
-        for (auto& arena : hg_arenas) {
+        for (HgArena& arena : hg_arenas) {
             usize arena_size = (u32)-1;
-            arena = {malloc(arena_size), arena_size};
+            arena = {{malloc(arena_size), arena_size}};
         }
     }
 
@@ -39,10 +39,15 @@ void hg_init(void) {
     }
 
     if (hg_ecs == nullptr) {
-        hg_ecs = arena.alloc<HgECS>();
+        hg_ecs = arena.alloc<HgECS>(1).data;
         *hg_ecs = hg_ecs->create(arena, 4096);
     }
     hg_ecs->reset();
+
+    if (hg_resources == nullptr) {
+        hg_resources = arena.alloc<HgHashMap<HgResourceID, HgResource>>(1).data;
+        *hg_resources = hg_resources->create(arena, 4096);
+    }
 
     hg_graphics_init();
 
@@ -53,6 +58,10 @@ void hg_exit(void) {
     hg_platform_deinit();
 
     hg_graphics_deinit();
+
+    if (hg_resources != nullptr) {
+        hg_resources = nullptr;
+    }
 
     if (hg_ecs != nullptr) {
         hg_ecs = nullptr;
@@ -70,7 +79,7 @@ void hg_exit(void) {
 
     if (hg_arenas == nullptr) {
         for (auto& arena : hg_arenas) {
-            std::free(arena.memory);
+            std::free(arena.memory.data);
         }
         std::free(hg_arenas.data);
     }
@@ -83,7 +92,7 @@ f64 HgClock::tick() {
 }
 
 struct HgTestArray {
-    HgSpan<HgTest> items;
+    HgPtr<HgTest> items;
     usize count;
 
     static HgTestArray create(usize init_count) {
@@ -641,27 +650,30 @@ u32 hg_max_mipmaps(u32 width, u32 height, u32 depth) {
     return (u32)std::log2((f32)std::max({width, height, depth})) + 1;
 }
 
-void* HgArena::alloc_v(usize size, usize alignment) {
+HgPtr<void> HgArena::alloc(usize size, usize alignment) {
     head = hg_align((usize)head, alignment) + size;
-    hg_assert(head <= capacity);
-    return (void*)((uptr)memory + head - size);
+    hg_assert(head <= memory.count);
+    return {(void*)((uptr)memory.data + head - size), size};
 }
 
-void* HgArena::realloc_v(void* allocation, usize old_size, usize new_size, usize alignment) {
-    if ((uptr)allocation > (uptr)memory && (uptr)allocation < (uptr)memory + capacity) {
-        if ((uptr)allocation - (uptr)memory + old_size == (uptr)head) {
-            head = (uptr)allocation - (uptr)memory + new_size;
-            hg_assert(head <= capacity);
+HgPtr<void> HgArena::realloc(HgPtr<void> allocation, usize new_size, usize alignment) {
+    if (allocation.begin() >= memory.begin() && allocation.end() <= memory.end()) {
+        if ((uptr)allocation.end() - (uptr)memory.begin() == (uptr)head) {
+            head = (uptr)allocation.begin() + new_size - (uptr)memory.begin();
+            hg_assert(head <= memory.count);
             return allocation;
         }
 
-        if (new_size < old_size)
+        if (new_size < allocation.size())
             return allocation;
     }
 
-    void* new_allocation = alloc_v(new_size, alignment);
+    HgPtr<void> new_allocation = alloc(new_size, alignment);
     if (allocation != nullptr)
-        std::memcpy(new_allocation, allocation, std::min(old_size, new_size));
+        std::memcpy(
+            new_allocation.begin(),
+            allocation.begin(),
+            std::min(allocation.size(), new_allocation.size()));
     return new_allocation;
 }
 
@@ -679,7 +691,7 @@ HgArena& hg_get_scratch(const HgArena& conflict) {
     hg_error("No scratch arena available\n");
 }
 
-HgArena& hg_get_scratch(HgSpan<const HgArena*> conflicts) {
+HgArena& hg_get_scratch(HgPtr<const HgArena*> conflicts) {
     hg_assert(hg_arenas.count != 0);
     for (HgArena& arena : hg_arenas) {
         for (const HgArena* conflict : conflicts) {
@@ -703,7 +715,7 @@ HgArrayAny HgArrayAny::create(
     hg_assert(count <= capacity);
 
     HgArrayAny arr;
-    arr.items = arena.alloc_v(capacity * width, alignment);
+    arr.items = arena.alloc(capacity * width, alignment).data;
     arr.width = width;
     arr.alignment = alignment;
     arr.capacity = capacity;
@@ -712,27 +724,27 @@ HgArrayAny HgArrayAny::create(
 }
 
 void HgArrayAny::reserve(HgArena& arena, usize new_capacity) {
-    items = arena.realloc_v(items, capacity * width, new_capacity * width, alignment);
+    items = arena.realloc({items, capacity * width}, new_capacity * width, alignment).data;
     capacity = new_capacity;
 }
 
 HgString HgString::create(HgArena& arena, usize capacity) {
     HgString str;
     str.chars = arena.alloc<char>(capacity);
-    str.length = 0;
+    str.count = 0;
     return str;
 }
 
 HgString HgString::create(HgArena& arena, HgStringView init) {
     HgString str;
-    str.chars = arena.alloc<char>(init.length);
-    str.length = init.length;
-    std::memcpy(str.chars.data, init.chars, init.length);
+    str.chars = arena.alloc<char>(init.length());
+    str.count = init.length();
+    std::memcpy(str.begin(), init.begin(), init.length());
     return str;
 }
 
 void HgString::reserve(HgArena& arena, usize new_capacity) {
-    HgSpan<char> new_items = arena.realloc(chars, new_capacity);
+    HgPtr<char> new_items = arena.realloc(chars, new_capacity);
     chars = new_items;
 }
 
@@ -742,30 +754,36 @@ void HgString::grow(HgArena& arena, f32 factor) {
     reserve(arena, chars.count == 0 ? 1 : (usize)((f32)chars.count * factor));
 }
 
-void HgString::insert(HgArena& arena, usize index, char c) {
-    hg_assert(index <= length);
+HgString& HgString::insert(HgArena& arena, usize index, char c) {
+    hg_assert(index <= count);
 
-    usize new_length = length + 1;
+    usize new_length = count + 1;
     while (chars.count < new_length) {
         grow(arena);
     }
 
-    std::memmove(chars.data + index + 1, chars.data + index, length - index);
+    if (index != count)
+        std::memmove(&chars[index + 1], &chars[index], count - index);
     chars[index] = c;
-    length = new_length;
+    count = new_length;
+
+    return *this;
 }
 
-void HgString::insert(HgArena& arena, usize index, HgStringView str) {
-    hg_assert(index <= length);
+HgString& HgString::insert(HgArena& arena, usize index, HgStringView str) {
+    hg_assert(index <= count);
 
-    usize new_length = length + str.length;
-    while (chars.count < new_length) {
+    usize new_count = count + str.length();
+    while (chars.count < new_count) {
         grow(arena);
     }
 
-    std::memmove(chars.data + index + str.length, chars.data + index, length - index);
-    std::memcpy(chars.data + index, str.chars, str.length);
-    length = new_length;
+    if (index != count)
+        std::memmove(&chars[index + str.length()], &chars[index], count - index);
+    std::memcpy(&chars[index], str.begin(), str.length());
+    count = new_count;
+
+    return *this;
 }
 
 bool hg_is_whitespace(char c) {
@@ -777,7 +795,7 @@ bool hg_is_numeral_base10(char c) {
 }
 
 bool hg_is_integer_base10(HgStringView str) {
-    if (str.length == 0)
+    if (str.length() == 0)
         return false;
 
     usize head = 0;
@@ -785,7 +803,7 @@ bool hg_is_integer_base10(HgStringView str) {
         return false;
 
     ++head;
-    while (head < str.length) {
+    while (head < str.length()) {
         if (!hg_is_numeral_base10(str[head]))
             return false;
         ++head;
@@ -794,7 +812,7 @@ bool hg_is_integer_base10(HgStringView str) {
 }
 
 bool hg_is_float_base10(HgStringView str) {
-    if (str.length == 0)
+    if (str.length() == 0)
         return false;
 
     bool has_decimal = false;
@@ -809,7 +827,7 @@ bool hg_is_float_base10(HgStringView str) {
         has_decimal = true;
 
     ++head;
-    while (head < str.length) {
+    while (head < str.length()) {
         if (hg_is_numeral_base10(str[head])) {
             ++head;
             continue;
@@ -831,7 +849,7 @@ bool hg_is_float_base10(HgStringView str) {
             return false;
         }
 
-        if (str[head] == 'f' && head == str.length - 1)
+        if (str[head] == 'f' && head == str.length() - 1)
             break;
 
         return false;
@@ -846,7 +864,7 @@ i64 hg_str_to_int_base10(HgStringView str) {
     i64 power = 1;
     i64 ret = 0;
 
-    usize head = str.length - 1;
+    usize head = str.length() - 1;
     while (head > 0) {
         ret += (i64)(str[head] - '0') * power;
         power *= 10;
@@ -875,24 +893,24 @@ f64 hg_str_to_float_base10(HgStringView str) {
 
     if (hg_is_numeral_base10(str[head])) {
         usize int_part_begin = head;
-        while (head < str.length && str[head] != '.' && str[head] != 'e') {
+        while (head < str.length() && str[head] != '.' && str[head] != 'e') {
             ++head;
         }
-        ret += (f64)hg_str_to_int_base10({str.chars + int_part_begin, str.chars + head});
+        ret += (f64)hg_str_to_int_base10({&str[int_part_begin], &str[head]});
     }
 
-    if (head < str.length && str[head] == '.') {
+    if (head < str.length() && str[head] == '.') {
         ++head;
 
         f64 power = 0.1;
-        while (head < str.length && hg_is_numeral_base10(str[head])) {
+        while (head < str.length() && hg_is_numeral_base10(str[head])) {
             ret += (f64)(str[head] - '0') * power;
             power *= 0.1;
             ++head;
         }
     }
 
-    if (head < str.length && str[head] == 'e') {
+    if (head < str.length() && str[head] == 'e') {
         ++head;
 
         bool exp_is_negative = str[head] == '-';
@@ -900,11 +918,11 @@ f64 hg_str_to_float_base10(HgStringView str) {
             ++head;
 
         usize exp_begin = head;
-        while (head < str.length && hg_is_numeral_base10(str[head])) {
+        while (head < str.length() && hg_is_numeral_base10(str[head])) {
             ++head;
         }
 
-        i64 exp = hg_str_to_int_base10({str.chars + exp_begin, str.chars + head});
+        i64 exp = hg_str_to_int_base10({&str[exp_begin], str.chars.data + head});
         if (exp != 0) {
             if (exp_is_negative) {
                 for (i64 i = 0; i < exp; ++i) {
@@ -927,7 +945,7 @@ f64 hg_str_to_float_base10(HgStringView str) {
 }
 
 HgString hg_int_to_str_base10(HgArena& arena, i64 num) {
-    HgArenaScope scratch = hg_get_scratch(arena);
+    hg_arena_scope(scratch, hg_get_scratch(arena));
 
     if (num == 0)
         return HgString::create(arena, "0");
@@ -942,17 +960,17 @@ HgString hg_int_to_str_base10(HgArena& arena, i64 num) {
         reverse.append(scratch, '0' + (char)digit);
     }
 
-    HgString ret = ret.create(arena, reverse.length + (is_negative ? 1 : 0));
+    HgString ret = ret.create(arena, reverse.length() + (is_negative ? 1 : 0));
     if (is_negative)
         ret.append(arena, '-');
-    for (usize i = reverse.length - 1; i < reverse.length; --i) {
+    for (usize i = reverse.length() - 1; i < reverse.length(); --i) {
         ret.append(arena, reverse[i]);
     }
     return ret;
 }
 
 HgString hg_float_to_str_base10(HgArena& arena, f64 num, u64 decimal_count) {
-    HgArenaScope scratch = hg_get_scratch(arena);
+    hg_arena_scope(scratch, hg_get_scratch(arena));
 
     if (num == 0.0)
         return HgString::create(arena, "0.0");
@@ -968,12 +986,95 @@ HgString hg_float_to_str_base10(HgArena& arena, f64 num, u64 decimal_count) {
         dec_str.append(scratch, '0' + (char)((u64)dec_part % 10));
     }
 
-    bool is_negative = num < 0.0;
-    HgString ret = HgString::create(arena, (is_negative ? 1 : 0) + int_str.length + dec_str.length);
-    if (is_negative)
+    HgString ret{};
+    if (num < 0.0)
         ret.append(arena, '-');
     ret.append(arena, int_str);
     ret.append(arena, dec_str);
+    return ret;
+}
+
+HgStringView hg_string_next(const HgStringView& str, usize& head) {
+    while (head < str.length() && hg_is_whitespace(str[head])) {
+        ++head;
+    }
+    const char* begin = &str[head];
+    while (head < str.length() && !hg_is_whitespace(str[head])) {
+        ++head;
+    }
+    const char* end = &str[head];
+    return {begin, end};
+}
+
+HgString HgJsonParser::Token::to_string(HgArena& arena) {
+    HgString ret{};
+    ret.append(arena, "{ ");
+
+    switch (type) {
+        case NONE:
+            ret.append(arena, "Type: NONE");
+            break;
+        case ERROR:
+            ret.append(arena, "Type: ERROR, ");
+            break;
+        case END_OF_FILE:
+            ret.append(arena, "Type: END_OF_FILE");
+            break;
+        case FIELD:
+            ret.append(arena, "Type: FIELD, ");
+            break;
+        case LITERAL:
+            ret.append(arena, "Type: LITERAL, ");
+            break;
+        case STRUCT_BEGIN:
+            ret.append(arena, "Type: STRUCT_BEGIN");
+            break;
+        case STRUCT_END:
+            ret.append(arena, "Type: STRUCT_END");
+            break;
+        case ARRAY_BEGIN:
+            ret.append(arena, "Type: ARRAY_BEGIN");
+            break;
+        case ARRAY_END:
+            ret.append(arena, "Type: ARRAY_END");
+            break;
+        default:
+            hg_assert(false && "json token has invalid type enum");
+    }
+
+    switch (literal) {
+        case EMPTY:
+            break;
+        case STRING:
+            ret.append(arena, "String: ");
+            ret.append(arena, string);
+            break;
+        case INTEGER:
+            ret.append(arena, "Integer: ");
+            {
+                hg_arena_scope(scratch, hg_get_scratch(arena));
+                ret.append(arena, hg_int_to_str_base10(scratch, integer));
+            }
+            break;
+        case FLOATING:
+            ret.append(arena, "Floating: ");
+            {
+                hg_arena_scope(scratch, hg_get_scratch(arena));
+                ret.append(arena, hg_float_to_str_base10(scratch, floating, 6));
+            }
+            break;
+        case BOOLEAN:
+            if (boolean) {
+                ret.append(arena, "Boolean: true");
+            } else {
+                ret.append(arena, "Boolean: false");
+            }
+            break;
+        default:
+            hg_assert(false && "json token has invalid literal enum");
+    }
+
+    ret.append(arena, " }");
     return ret;
 }
 
@@ -989,14 +1090,30 @@ HgJsonParser HgJsonParser::create(HgStringView file) {
 
 HgJsonParser::Token HgJsonParser::next_token(HgArena& arena) {
     if (prev == ERROR) {
+        usize prev_nest = nest_count - 1;
+        while (nest_count != prev_nest) {
+            if (file[head] == '{' || file[head] == '[') {
+                ++nest_count;
+            } else if (file[head] == '}' || file[head] == ']') {
+                --nest_count;
+            }
+            ++head;
+        }
+
         Token token;
-        token.type = ERROR;
-        token.literal = STRING;
-        token.string = HgString::create(arena, "json error already detected, cannot continue parsing\n");
+        if (file[head - 1] == '}') {
+            token.type = STRUCT_END;
+            token.literal = EMPTY;
+            prev = STRUCT_END;
+        } else if (file[head = 1] == ']') {
+            token.type = ARRAY_END;
+            token.literal = EMPTY;
+            prev = ARRAY_END;
+        }
         return token;
     }
 
-    if (head >= file.length) {
+    if (head >= file.length()) {
         Token token;
         token.type = END_OF_FILE;
         token.literal = EMPTY;
@@ -1005,15 +1122,15 @@ HgJsonParser::Token HgJsonParser::next_token(HgArena& arena) {
         return token;
     }
 
-    HgArenaScope scratch = hg_get_scratch(arena);
+    hg_arena_scope(scratch, hg_get_scratch(arena));
 
-    while (head < file.length && hg_is_whitespace(file[head])) {
+    while (head < file.length() && hg_is_whitespace(file[head])) {
         if (file[head] == '\n')
             ++line_count;
         ++head;
     }
 
-    if (head >= file.length || file[head] == EOF) {
+    if (head >= file.length() || file[head] == EOF) {
         if (nest_count == 0 && prev == STRUCT_END) {
             Token token;
             token.type = END_OF_FILE;
@@ -1046,12 +1163,12 @@ HgJsonParser::Token HgJsonParser::next_token(HgArena& arena) {
 
     if (file[head] == '}') {
         ++head;
-        while (head < file.length && hg_is_whitespace(file[head])) {
+        while (head < file.length() && hg_is_whitespace(file[head])) {
             if (file[head] == '\n')
                 ++line_count;
             ++head;
         }
-        if (head < file.length && file[head] == ',')
+        if (head < file.length() && file[head] == ',')
             ++head;
 
         Token token;
@@ -1077,7 +1194,7 @@ HgJsonParser::Token HgJsonParser::next_token(HgArena& arena) {
 
     if (file[head] == ']') {
         ++head;
-        while (head < file.length && hg_is_whitespace(file[head])) {
+        while (head < file.length() && hg_is_whitespace(file[head])) {
             if (file[head] == '\n')
                 ++line_count;
             ++head;
@@ -1107,9 +1224,9 @@ HgJsonParser::Token HgJsonParser::next_token(HgArena& arena) {
         goto parse_number;
     }
 
-    if (head + 4 <= file.length && HgStringView{file.chars + head, 4} == "true") {
+    if (head + 4 <= file.length() && HgStringView{&file[head], 4} == "true") {
         head += 4;
-        while (head < file.length && hg_is_whitespace(file[head])) {
+        while (head < file.length() && hg_is_whitespace(file[head])) {
             if (file[head] == '\n')
                 ++line_count;
             ++head;
@@ -1126,9 +1243,9 @@ HgJsonParser::Token HgJsonParser::next_token(HgArena& arena) {
         return token;
     }
 
-    if (head + 5 <= file.length && HgStringView{file.chars + head, 5} == "false") {
+    if (head + 5 <= file.length() && HgStringView{&file[head], 5} == "false") {
         head += 5;
-        while (head < file.length && hg_is_whitespace(file[head])) {
+        while (head < file.length() && hg_is_whitespace(file[head])) {
             if (file[head] == '\n')
                 ++line_count;
             ++head;
@@ -1147,7 +1264,7 @@ HgJsonParser::Token HgJsonParser::next_token(HgArena& arena) {
 
     {
         const char* line_begin = &file[head];
-        while (line_begin != file.chars && line_begin[-1] != '\n') {
+        while (line_begin > file.begin() && line_begin[-1] != '\n') {
             --line_begin;
         }
         usize line_len = 0;
@@ -1160,14 +1277,15 @@ HgJsonParser::Token HgJsonParser::next_token(HgArena& arena) {
         token.literal = STRING;
 
         // replace with format : TODO
-        token.string = {};
-        token.string.append(arena, "json unexpected character '");
-        token.string.append(arena, file[head]);
-        token.string.append(arena, "'while parsing line ");
-        token.string.append(arena, hg_int_to_str_base10(scratch, (i64)line_count));
-        token.string.append(arena, ": \"");
-        token.string.append(arena, {line_begin, line_len});
-        token.string.append(arena, "\"\n");
+        HgString err{};
+        err.append(arena, "json unexpected character '");
+        err.append(arena, file[head]);
+        err.append(arena, "'while parsing line ");
+        err.append(arena, hg_int_to_str_base10(scratch, (i64)line_count));
+        err.append(arena, ": \"");
+        err.append(arena, {line_begin, line_len});
+        err.append(arena, "\"\n");
+        token.string = err;
 
         prev = ERROR;
         return token;
@@ -1177,16 +1295,17 @@ parse_string:
     {
         HgString string{};
 continue_string:
-        if (head >= file.length || file[head] == EOF) {
+        if (head >= file.length() || file[head] == EOF) {
             Token token;
             token.type = ERROR;
             token.literal = STRING;
 
             // replace with format : TODO
-            token.string = {};
-            token.string.append(arena, "json unexpected EOF while parsing string \"");
-            token.string.append(arena, string);
-            token.string.append(arena, "\"\n");
+            HgString err{};
+            err.append(arena, "json unexpected EOF while parsing string \"");
+            err.append(arena, string);
+            err.append(arena, "\"\n");
+            token.string = err;
 
             prev = ERROR;
             return token;
@@ -1194,22 +1313,23 @@ continue_string:
 
         if (file[head] == '\"' || file[head] == '\'') {
             ++head;
-            while (head < file.length && hg_is_whitespace(file[head])) {
+            while (head < file.length() && hg_is_whitespace(file[head])) {
                 if (file[head] == '\n')
                     ++line_count;
                 ++head;
             }
 
-            if (head >= file.length || file[head] == EOF) {
+            if (head >= file.length() || file[head] == EOF) {
                 Token token;
                 token.type = ERROR;
                 token.literal = STRING;
 
                 // replace with format : TODO
-                token.string = {};
-                token.string.append(arena, "json unexpected EOF while parsing string \"");
-                token.string.append(arena, string);
-                token.string.append(arena, "\"\n");
+                HgString err{};
+                err.append(arena, "json unexpected EOF while parsing string \"");
+                err.append(arena, string);
+                err.append(arena, "\"\n");
+                token.string = err;
 
                 prev = ERROR;
                 return token;
@@ -1229,12 +1349,13 @@ continue_string:
                     token.literal = STRING;
 
                     // change to format : TODO
-                    token.string = {};
-                    token.string.append(arena, "json found two ':' on line ");
-                    token.string.append(arena, hg_int_to_str_base10(scratch, (i64)line_count));
-                    token.string.append(arena, ", cannot defined previous field with field \"");
-                    token.string.append(arena, string);
-                    token.string.append(arena, "\", must defined literal, struct, or array\n");
+                    HgString err{};
+                    err.append(arena, "json found two ':' on line ");
+                    err.append(arena, hg_int_to_str_base10(scratch, (i64)line_count));
+                    err.append(arena, ", cannot defined previous field with field \"");
+                    err.append(arena, string);
+                    err.append(arena, "\", must defined literal, struct, or array\n");
+                    token.string = err;
 
                     prev = ERROR;
                     return token;
@@ -1284,16 +1405,17 @@ parse_number:
             ++head;
         }
 
-        if (head >= file.length || file[head] == EOF) {
+        if (head >= file.length() || file[head] == EOF) {
             Token token;
             token.type = ERROR;
             token.literal = STRING;
 
             // replace with format : TODO
-            token.string = {};
-            token.string.append(arena, "json unexpected EOF while parsing number \"");
-            token.string.append(arena, number);
-            token.string.append(arena, "\"\n");
+            HgString err{};
+            err.append(arena, "json unexpected EOF while parsing number \"");
+            err.append(arena, number);
+            err.append(arena, "\"\n");
+            token.string = err;
 
             prev = ERROR;
             return token;
@@ -1305,16 +1427,17 @@ parse_number:
             token.literal = STRING;
 
             // replace with format : TODO
-            token.string = {};
-            token.string.append(arena, "json invalid number \"");
-            token.string.append(arena, number);
-            token.string.append(arena, "\"\n");
+            HgString err{};
+            err.append(arena, "json invalid number \"");
+            err.append(arena, number);
+            err.append(arena, "\"\n");
+            token.string = err;
 
             prev = ERROR;
             return token;
         }
 
-        if (head < file.length && file[head] == ',')
+        if (head < file.length() && file[head] == ',')
             ++head;
 
         Token token;
@@ -1381,13 +1504,14 @@ HgThreadPool* HgThreadPool::create(HgArena& arena, usize thread_count, usize que
                 hg_assert(work.fn != nullptr);
                 work.fn(work.data);
 
-                if (work.fence != nullptr)
-                    work.fence->signal();
+                for (HgFence& fence : work.fences) {
+                    fence.signal();
+                }
             }
         }
     };
 
-    HgThreadPool* pool = arena.alloc<HgThreadPool>();
+    HgThreadPool* pool = arena.alloc<HgThreadPool>(1).data;
 
     pool->threads = arena.alloc<std::thread>(work_threads);
     pool->queue = HgMPMCQueue<Work>::create(arena, queue_size);
@@ -1395,8 +1519,8 @@ HgThreadPool* HgThreadPool::create(HgArena& arena, usize thread_count, usize que
     pool->count.store(0);
     pool->should_close.store(false);
 
-    for (auto& thread : pool->threads) {
-        thread = std::thread(thread_fn, pool);
+    for (std::thread& thread : pool->threads) {
+        new (&thread) std::thread(thread_fn, pool);
     }
 
     return pool;
@@ -1411,16 +1535,19 @@ void HgThreadPool::destroy() {
     for (auto& thread : threads) {
         thread.join();
     }
-    hg_destroy(threads);
+    for (auto& thread : threads) {
+        thread.~thread();
+    }
 }
 
-void HgThreadPool::call_par(HgFence* fence, void* data, void (*fn)(void*)) {
+void HgThreadPool::call_par(HgPtr<HgFence> fences, void* data, void (*fn)(void*)) {
     hg_assert(fn != nullptr);
-    if (fence != nullptr)
-        fence->add();
+    for (HgFence& fence : fences) {
+        fence.add();
+    }
 
     Work work;
-    work.fence = fence;
+    work.fences = fences;
     work.data = data;
     work.fn = fn;
     queue.push(work);
@@ -1442,8 +1569,9 @@ void HgThreadPool::try_help() {
     hg_assert(work.fn != nullptr);
     work.fn(work.data);
 
-    if (work.fence != nullptr)
-        work.fence->signal();
+    for (HgFence& fence : work.fences) {
+        fence.signal();
+    }
 }
 
 bool HgThreadPool::help(HgFence& fence, f64 timeout_seconds) {
@@ -1465,20 +1593,21 @@ HgIOThread* HgIOThread::create(HgArena& arena, usize queue_size) {
                 hg_assert(request.fn != nullptr);
                 request.fn(request.data, request.resource, request.path);
 
-                if (request.fence != nullptr)
-                    request.fence->signal();
+                for (HgFence& fence : request.fences) {
+                    fence.signal();
+                }
             } else {
                 hg_threads->try_help();
             }
         }
     };
 
-    HgIOThread* io = arena.alloc<HgIOThread>();
+    HgIOThread* io = arena.alloc<HgIOThread>(1).data;
 
     io->queue = HgMPSCQueue<Request>::create(arena, queue_size);
 
     io->should_close.store(false);
-    io->thread = std::thread(thread_fn, io);
+    new (&io->thread) std::thread(thread_fn, io);
 
     return io;
 }
@@ -1486,80 +1615,80 @@ HgIOThread* HgIOThread::create(HgArena& arena, usize queue_size) {
 void HgIOThread::destroy() {
     should_close = true;
     thread.join();
-
-    hg_destroy(&thread);
+    thread.~thread();
 }
 
 void HgIOThread::request(const Request& request) {
     hg_assert(request.fn != nullptr);
-    if (request.fence != nullptr)
-        request.fence->add();
+    for (HgFence& fence : request.fences) {
+        fence.add();
+    }
 
     queue.push(request);
 }
 
-void HgBinary::load(HgFence* fence, HgStringView path) {
-    auto fn = [](void*, void* pfile, HgStringView fpath) {
-        HgBinary& file = *(HgBinary*)pfile;
+void HgBinary::load(HgPtr<HgFence> fences, HgStringView path) {
+    auto fn = [](void*, void* pbin, HgStringView fpath) {
+        HgBinary& bin = *(HgBinary*)pbin;
 
-        char* cpath = (char*)alloca(fpath.length + 1);
-        std::memcpy(cpath, fpath.chars, fpath.length);
-        cpath[fpath.length] = '\0';
+        char* cpath = (char*)alloca(fpath.length() + 1);
+        std::memcpy(cpath, fpath.begin(), fpath.size());
+        cpath[fpath.length()] = '\0';
 
         FILE* file_handle = std::fopen(cpath, "rb");
         if (file_handle == nullptr) {
             hg_warn("Could not find file to read binary: %s\n", cpath);
-            file = {};
+            bin = {};
             return;
         }
         hg_defer(std::fclose(file_handle));
 
         if (std::fseek(file_handle, 0, SEEK_END) != 0) {
             hg_warn("Failed to read binary from file: %s\n", cpath);
-            file = {};
+            bin = {};
             return;
         }
 
-        file.count = (usize)std::ftell(file_handle);
-        file.data = std::malloc(file.count);
+        bin.file.count = (usize)std::ftell(file_handle);
+        bin.file.data = std::malloc(bin.file.count);
         std::rewind(file_handle);
 
-        if (std::fread(file.data, 1, file.count, file_handle) != file.count) {
+        if (std::fread(bin.file.data, 1, bin.file.count, file_handle) != bin.file.count) {
             hg_warn("Failed to read binary from file: %s\n", cpath);
-            file = {};
+            bin = {};
             return;
         }
     };
 
     HgIOThread::Request request;
-    request.fence = fence;
+    request.fences = fences;
     request.fn = fn;
     request.resource = this;
     request.path = path;
     hg_io->request(request);
 }
 
-void HgBinary::unload(HgFence* fence) {
-    auto fn = [](void*, void* pfile, HgStringView) {
-        HgBinary& file = *(HgBinary*)pfile;
-        std::free(file.data);
-        file = {};
+void HgBinary::unload(HgPtr<HgFence> fences) {
+    auto fn = [](void*, void* pbin, HgStringView) {
+        HgBinary& bin = *(HgBinary*)pbin;
+        std::free(bin.file.data);
+        bin = {};
     };
 
     HgIOThread::Request request;
-    request.fence = fence;
+    request.fences = fences;
     request.fn = fn;
     request.resource = this;
     hg_io->request(request);
 }
 
-void HgBinary::store(HgFence* fence, HgStringView path) {
-    auto fn = [](void*, void* pfile, HgStringView fpath) {
-        HgBinary& file = *(HgBinary*)pfile;
+void HgBinary::store(HgPtr<HgFence> fences, HgStringView path) {
+    auto fn = [](void*, void* pbin, HgStringView fpath) {
+        HgBinary& bin = *(HgBinary*)pbin;
 
-        char* cpath = (char*)alloca(fpath.length + 1);
-        std::memcpy(cpath, fpath.chars, fpath.length);
-        cpath[fpath.length] = '\0';
+        char* cpath = (char*)alloca(fpath.length() + 1);
+        std::memcpy(cpath, fpath.begin(), fpath.size());
+        cpath[fpath.length()] = '\0';
 
         FILE* file_handle = std::fopen(cpath, "wb");
         if (file_handle == nullptr) {
@@ -1568,27 +1697,27 @@ void HgBinary::store(HgFence* fence, HgStringView path) {
         }
         hg_defer(std::fclose(file_handle));
 
-        if (std::fwrite(file.data, 1, file.count, file_handle) != file.count) {
+        if (std::fwrite(bin.file.data, 1, bin.file.count, file_handle) != bin.file.count) {
             hg_warn("Failed to write binary data to file: %s\n", cpath);
             return;
         }
     };
 
     HgIOThread::Request request;
-    request.fence = fence;
+    request.fences = fences;
     request.fn = fn;
     request.resource = this;
     request.path = path;
     hg_io->request(request);
 }
 
-void HgTexture::load_png(HgFence* fence, HgStringView path) {
+void HgTexture::load_png(HgPtr<HgFence> fences, HgStringView path) {
     auto fn = [](void*, void* ptexture, HgStringView fpath) {
         HgTexture& texture = *(HgTexture*)ptexture;
 
-        char* cpath = (char*)alloca(fpath.length + 1);
-        std::memcpy(cpath, fpath.chars, fpath.length);
-        cpath[fpath.length] = '\0';
+        char* cpath = (char*)alloca(fpath.length() + 1);
+        std::memcpy(cpath, fpath.begin(), fpath.size());
+        cpath[fpath.length()] = '\0';
 
         int channels;
         texture.pixels = stbi_load(cpath, (int*)&texture.width, (int*)&texture.height, &channels, 4);
@@ -1603,14 +1732,14 @@ void HgTexture::load_png(HgFence* fence, HgStringView path) {
     };
 
     HgIOThread::Request request;
-    request.fence = fence;
+    request.fences = fences;
     request.fn = fn;
     request.resource = this;
     request.path = path;
     hg_io->request(request);
 }
 
-void HgTexture::unload(HgFence* fence) {
+void HgTexture::unload(HgPtr<HgFence> fences) {
     auto fn = [](void*, void* ptexture, HgStringView) {
         HgTexture& texture = *(HgTexture*)ptexture;
         free(texture.pixels);
@@ -1619,20 +1748,20 @@ void HgTexture::unload(HgFence* fence) {
     };
 
     HgIOThread::Request request;
-    request.fence = fence;
+    request.fences = fences;
     request.fn = fn;
     request.resource = this;
     hg_io->request(request);
 }
 
-void HgTexture::store_png(HgFence* fence, HgStringView path) {
+void HgTexture::store_png(HgPtr<HgFence> fences, HgStringView path) {
     auto fn = [](void*, void* ptexture, HgStringView fpath) {
         HgTexture& texture = *(HgTexture*)ptexture;
         hg_assert(texture.location & CPU);
 
-        char* cpath = (char*)alloca(fpath.length + 1);
-        std::memcpy(cpath, fpath.chars, fpath.length);
-        cpath[fpath.length] = '\0';
+        char* cpath = (char*)alloca(fpath.length() + 1);
+        std::memcpy(cpath, fpath.begin(), fpath.size());
+        cpath[fpath.length()] = '\0';
 
         stbi_write_png(
             cpath,
@@ -1644,7 +1773,7 @@ void HgTexture::store_png(HgFence* fence, HgStringView path) {
     };
 
     HgIOThread::Request request;
-    request.fence = fence;
+    request.fences = fences;
     request.fn = fn;
     request.resource = this;
     request.path = path;
@@ -1822,7 +1951,7 @@ void HgECS::unregister_component_untyped(u32 component_id) {
     systems[component_id] = {};
 }
 
-u32 HgECS::smallest_system_untyped(HgSpan<u32> ids) {
+u32 HgECS::smallest_system_untyped(HgPtr<u32> ids) {
     u32 smallest = ids[0];
     hg_assert(is_registered(ids[0]));
     for (usize i = 1; i < ids.count; ++i) {
@@ -2112,6 +2241,7 @@ void HgPipeline2D::destroy() {
 
 void HgPipeline2D::add_texture(HgTexture* texture) {
     hg_assert(texture != nullptr);
+    hg_assert(texture->location & HgTexture::GPU);
 
     if (texture_sets.has(texture))
         return;
@@ -2173,23 +2303,6 @@ void HgPipeline2D::update_view(const HgMat4& view) {
         sizeof(view));
 }
 
-void HgPipeline2D::add_sprite(HgEntity entity, HgTexture& texture, HgVec2 uv_pos, HgVec2 uv_size) {
-    hg_assert(hg_ecs->is_registered<HgSprite>());
-    hg_assert(!hg_ecs->has<HgSprite>(entity));
-
-    HgSprite& sprite = hg_ecs->add<HgSprite>(entity);
-    sprite.texture = &texture;
-    sprite.uv_pos = uv_pos;
-    sprite.uv_size = uv_size;
-}
-
-void HgPipeline2D::remove_sprite(HgEntity entity) {
-    hg_assert(hg_ecs->is_registered<HgSprite>());
-    hg_assert(hg_ecs->has<HgSprite>(entity));
-
-    hg_ecs->remove<HgSprite>(entity);
-}
-
 void HgPipeline2D::draw(VkCommandBuffer cmd) {
     hg_assert(cmd != nullptr);
     hg_assert(hg_ecs->is_registered<HgSprite>());
@@ -2239,6 +2352,622 @@ void HgPipeline2D::draw(VkCommandBuffer cmd) {
     });
 }
 
+// static HgComponentType hg_internal_component_str_to_enum(HgStringView str) {
+//     if (str.length() == 0)
+//         return HG_COMPONENT_NONE;
+//
+//     switch (str[0]) {
+//         case 't':
+//             if (str == "transform")
+//                 return HG_COMPONENT_TRANSFORM;
+//             break;
+//         case 's':
+//             if (str == "sprite")
+//                 return HG_COMPONENT_SPRITE;
+//             break;
+//     }
+//
+//     return HG_COMPONENT_NONE;
+// }
+
+struct HgSceneDescInfo {
+    u32 version_major;
+    u32 version_minor;
+    u32 version_patch;
+    u32 entity_count;
+    u32 component_count;
+    u32 components_idx;
+    u32 resource_count;
+    u32 resources_idx;
+};
+
+struct HgSceneDescComponent {
+    HgComponentType type;
+    u32 entities_begin_idx;
+    u32 components_begin_idx;
+    u32 count;
+};
+
+struct HgSceneDescResource {
+    HgResourceType type;
+    u32 path_idx;
+    u32 length;
+};
+
+void HgScene::register_resources(HgArena& arena) {
+    hg_assert(hg_resources != nullptr);
+
+    HgSceneDescInfo info = desc.read<HgSceneDescInfo>(0);
+
+    usize resource_idx = info.resources_idx;
+    usize resource_end = resource_idx + info.resource_count * sizeof(HgSceneDescResource);
+    for (; resource_idx < resource_end; resource_idx += sizeof(HgSceneDescResource)) {
+        HgSceneDescResource resource_desc = desc.read<HgSceneDescResource>(resource_idx);
+
+        HgStringView path = {(char*)desc.file[resource_desc.path_idx], resource_desc.length};
+        HgResourceID id = hg_hash(path);
+
+        switch (resource_desc.type) {
+            case HG_RESOURCE_BINARY:
+                hg_resources->insert(id, {arena.alloc<HgBinary>(1).data, 0});
+                break;
+            case HG_RESOURCE_TEXTURE:
+                hg_resources->insert(id, {arena.alloc<HgTexture>(1).data, 0});
+                break;
+            default: {
+                hg_arena_scope(scratch, hg_get_scratch(arena));
+                HgString c_str = c_str.create(scratch, path).append(scratch, 0);
+                hg_warn("Invalid resource type found with file: %s\n", c_str.chars.data);
+            } break;
+        }
+    }
+}
+
+void HgScene::load(HgPtr<HgFence> fences) {
+    if (loaded)
+        return;
+
+    HgSceneDescInfo info = desc.read<HgSceneDescInfo>(0);
+
+    usize resource_idx = info.resources_idx;
+    usize resource_end = resource_idx + info.resource_count * sizeof(HgSceneDescResource);
+    for (; resource_idx < resource_end; resource_idx += sizeof(HgSceneDescResource)) {
+        HgSceneDescResource resource_desc = desc.read<HgSceneDescResource>(resource_idx);
+
+        HgStringView path = {(char*)desc.file[resource_desc.path_idx], resource_desc.length};
+        HgResource& resource = hg_resources->get(hg_hash(path));
+        if (resource.ref_count++ != 0)
+            continue;
+
+        switch (resource_desc.type) {
+            case HG_RESOURCE_BINARY:
+                (*(HgBinary*)resource.data).load(fences, path);
+                break;
+            case HG_RESOURCE_TEXTURE:
+                (*(HgTexture*)resource.data).load_png(fences, path);
+                break;
+            default: {
+                hg_arena_scope(scratch, hg_get_scratch());
+                HgString c_str = c_str.create(scratch, path).append(scratch, 0);
+                hg_warn("Invalid resource type found with file: %s\n", c_str.chars.data);
+                break;
+            }
+        }
+    }
+
+    loaded = true;
+}
+
+void HgScene::unload(HgPtr<HgFence> fences) {
+    if (!loaded)
+        return;
+
+    HgSceneDescInfo info = desc.read<HgSceneDescInfo>(0);
+
+    usize resource_idx = info.resources_idx;
+    usize resource_end = resource_idx + info.resource_count * sizeof(HgSceneDescResource);
+    for (; resource_idx < resource_end; resource_idx += sizeof(HgSceneDescResource)) {
+        HgSceneDescResource resource_desc = desc.read<HgSceneDescResource>(resource_idx);
+
+        HgStringView path = {(char*)desc.file[resource_desc.path_idx], resource_desc.length};
+        HgResource& resource = hg_resources->get(hg_hash(path));
+        if (--resource.ref_count != 0)
+            continue;
+
+        switch (resource_desc.type) {
+            case HG_RESOURCE_BINARY:
+                (*(HgBinary*)resource.data).unload(fences);
+                break;
+            case HG_RESOURCE_TEXTURE:
+                (*(HgTexture*)resource.data).unload(fences);
+                break;
+            default: {
+                hg_arena_scope(scratch, hg_get_scratch());
+                HgString c_str = c_str.create(scratch, path).append(scratch, 0);
+                hg_warn("Invalid resource type found with file: %s\n", c_str.chars.data);
+                break;
+            }
+        }
+    }
+
+    loaded = false;
+}
+
+void HgScene::instantiate(HgArena& arena) {
+    hg_assert(entities.items == nullptr);
+
+    hg_arena_scope(scratch, hg_get_scratch());
+
+    HgSceneDescInfo info = desc.read<HgSceneDescInfo>(0);
+
+    while (entities.items.count < info.entity_count) {
+        entities.grow(arena);
+    }
+    for (usize i = 0; i < info.entity_count; ++i) {
+        entities.push() = hg_ecs->spawn();
+    }
+
+    usize component_idx = info.components_idx;
+    usize component_end = component_idx + info.component_count * sizeof(HgSceneDescComponent);
+    for (; component_idx < component_end; component_idx += sizeof(HgSceneDescComponent)) {
+        HgSceneDescComponent component_desc = desc.read<HgSceneDescComponent>(component_idx);
+
+        usize entities_idx = component_desc.entities_begin_idx;
+        usize components_idx = component_desc.components_begin_idx;
+        switch (component_desc.type) {
+        case HG_COMPONENT_TRANSFORM:
+            for (usize i = 0; i < component_desc.count; ++i) {
+                HgEntity entity = entities[desc.read<HgEntity>(entities_idx + i * sizeof(HgEntity))];
+                hg_ecs->add(entity, desc.read<HgTransform>(components_idx + i * sizeof(HgTransform)));
+            }
+            break;
+        case HG_COMPONENT_SPRITE:
+            for (usize i = 0; i < component_desc.count; ++i) {
+                HgEntity entity = entities[desc.read<HgEntity>(entities_idx + i * sizeof(HgEntity))];
+                hg_ecs->add(entity, desc.read<HgSprite>(components_idx + i * sizeof(HgSprite)));
+            }
+            break;
+        default:
+            hg_warn("Invalid component type found\n");
+            break;
+        }
+    }
+}
+
+void HgScene::deinstantiate() {
+    hg_assert(entities.items != nullptr);
+    for (HgEntity e : entities) {
+        hg_ecs->despawn(e);
+    }
+    entities.reset();
+}
+
+// HgBinary hg_convert_scene(HgArena& arena, const HgStringView& file) {
+//     HgArenaScope scratch = hg_get_scratch(arena);
+//
+//     HgHashMap<HgStringView, usize> entities = entities.create(scratch, 512);
+//
+//     struct Component {
+//         HgComponentType type;
+//         HgArray<HgEntity> entities;
+//         HgArrayAny data;
+//     };
+//     HgArray<Component> components = components.create(scratch, 0, 64);
+//
+//     struct Resource {
+//         HgResourceType type;
+//         HgStringView path;
+//     };
+//     HgArray<Resource> resources = resources.create(scratch, 0, 64);
+//     // HgHashMap<HgStringView, usize> resource_indices = resource_indices.create(scratch, 64);
+//
+//     usize head = 0;
+// next_entity:
+//     HgStringView token = hg_string_next(file, head);
+//     if (entities.is_near_full())
+//         entities.grow(scratch);
+//
+//     HgStringView entity_name = token;
+//     entities.insert(HgString::create(scratch, entity_name), entities.load);
+//
+//     while (head < file.length() && hg_is_whitespace(file[head])) {
+//         ++head;
+//     }
+//     if (head != '{') {
+//         hg_warn("entity \"%s\" is missing an opening brace\n",
+//             HgString::create(scratch, entity_name).append(scratch, 0).chars.data);
+//     } else {
+//         ++head;
+//     }
+//
+// next_component:
+//     token = hg_string_next(file, head);
+//
+//     while (head < file.length() && hg_is_whitespace(file[head])) {
+//         ++head;
+//     }
+//     if (head != '{') {
+//         hg_warn("component in entity \"%s\" is missing an opening brace\n",
+//             HgString::create(scratch, entity_name).append(scratch, 0).chars.data);
+//     } else {
+//         ++head;
+//     }
+//
+//     HgComponentType component_type = hg_internal_component_str_to_enum(token);
+//     switch (component_type) {
+//         case HG_COMPONENT_TRANSFORM: {
+//             usize comp_idx = 0;
+//             while (comp_idx < components.count && components[comp_idx].type != component_type) {
+//                 ++comp_idx;
+//             }
+//             if (comp_idx == components.count) {
+//                 if (components.is_full())
+//                     components.grow(scratch);
+//                 Component c;
+//                 c.type = component_type;
+//                 c.entities = c.entities.create(scratch, 0, 512);
+//                 c.data = c.data.create<HgTransform>(scratch, 0, 512);
+//                 components.push() = c;
+//             }
+//
+//             bool has_pos = false;
+//             bool has_scale = false;
+//             bool has_rot = false;
+//             HgTransform tf{};
+//
+//             token = hg_string_next(file, head);
+//
+//             while (head < file.length() && hg_is_whitespace(file[head])) {
+//                 ++head;
+//             }
+//             if (head != '{') {
+//                 hg_warn("component in entity \"%s\" is missing an opening brace\n",
+//                     HgString::create(scratch, entity_name).append(scratch, 0).chars.data);
+//             } else {
+//                 ++head;
+//             }
+//
+//             if (token == "position") {
+//                 if (has_pos)
+//                     hg_warn("entity \"%s\" transform has two positions, the first was ignored\n",
+//                         HgString::create(scratch, entity_name).append(scratch, 0).chars.data);
+//
+//                 has_pos = true;
+//             } else if (token == "scale") {
+//                 if (has_scale)
+//                     hg_warn("entity \"%s\" transform has two scales, the first was ignored\n",
+//                         HgString::create(scratch, entity_name).append(scratch, 0).chars.data);
+//
+//                 has_scale = true;
+//             } else if (token == "rotation") {
+//                 if (has_rot)
+//                     hg_warn("entity \"%s\" transform has two rotations, the first was ignored\n",
+//                         HgString::create(scratch, entity_name).append(scratch, 0).chars.data);
+//
+//                 has_rot = true;
+//             }
+//
+//             goto next_component;
+//         }
+//         default:
+//             if (head < file.length())
+//                 goto next_entity;
+//     }
+//
+//     HgBinaryWriter bin{};
+//
+//     HgSceneDescInfo info{};
+//     info.version_major = HgScene::desc_version_major;
+//     info.version_minor = HgScene::desc_version_minor;
+//     info.version_patch = HgScene::desc_version_patch;
+//     info.entity_count = (u32)entities.load;
+//     info.component_count = (u32)components.count;
+//     info.components_idx = 0;
+//     info.resource_count = (u32)resources.count;
+//     info.resources_idx = 0;
+//
+//     usize info_idx = bin.head;
+//     bin.reserve(arena, sizeof(HgSceneDescInfo));
+//
+//     info.components_idx = (u32)bin.head;
+//     bin.reserve(arena, components.count * sizeof(HgSceneDescComponent));
+//
+//     usize i = 0;
+//     for (Component& c : components) {
+//         HgSceneDescComponent desc;
+//         desc.type = c.type;
+//         desc.count = (u32)c.entities.count;
+//
+//         desc.entities_begin_idx = (u32)bin.head;
+//         for (HgEntity e : c.entities) {
+//             bin.write(arena, e);
+//         }
+//
+//         desc.components_begin_idx = (u32)bin.head;
+//         for (usize j = 0; i < c.data.count; ++i) {
+//             bin.write(arena, c.data[j], c.data.width);
+//         }
+//
+//         bin.overwrite(info.components_idx + i, desc);
+//         i += sizeof(HgSceneDescComponent);
+//     }
+//
+//     info.resources_idx = (u32)bin.head;
+//     bin.reserve(arena, resources.count * sizeof(HgSceneDescResource));
+//
+//     i = 0;
+//     for (Resource& r : resources) {
+//         HgSceneDescResource desc;
+//         desc.type = r.type;
+//         desc.length = (u32)r.path.length();
+//
+//         desc.path_idx = (u32)bin.head;
+//         bin.write(arena, r.path);
+//
+//         bin.overwrite(info.components_idx + i, desc);
+//         i += sizeof(HgSceneDescResource);
+//     }
+//
+//     bin.overwrite(info_idx, info);
+//
+//     return bin;
+// }
+
+// HgBinary hg_create_scene_json(HgArena& arena, const HgStringView& json_desc) {
+//     HgArenaScope scratch = hg_get_scratch(arena);
+//
+//     HgHashMap<HgStringView, usize> entities = entities.create(scratch, 512);
+//
+//     struct Component {
+//         HgComponentType type;
+//         HgArray<HgEntity> entities;
+//         HgArrayAny data;
+//     };
+//     HgArray<Component> components = components.create(scratch, 0, 64);
+//
+//     struct Resource {
+//         HgResourceType type;
+//         HgStringView path;
+//     };
+//     HgArray<Resource> resources = resources.create(scratch, 0, 64);
+//     // HgHashMap<HgStringView, usize> resource_indices = resource_indices.create(scratch, 64);
+//
+//     HgJsonParser json = json.create(json_desc);
+//
+//     using Token = HgJsonParser::Token;
+//
+//     Token entity_name = json.next_token(scratch);
+//     if (entity_name.type == HgJsonParser::STRUCT_BEGIN) {
+//         entity_name = json.next_token(scratch);
+//     } else if (entity_name.type == HgJsonParser::ERROR) {
+//         hg_warn("json scene, expected file to begin with STRUCT_BEGIN, found %s\n",
+//             HgString::create(scratch, entity_name.string).append(scratch, 0).chars.data);
+//     } else {
+//         hg_warn("json scene, expected file to begin with STRUCT_BEGIN\n");
+//         ++json.nest_count;
+//     }
+//
+//     while (entity_name.type != HgJsonParser::STRUCT_END) {
+//         if (entity_name.type != HgJsonParser::FIELD) {
+//             HgString fmt = entity_name.to_string(scratch).append(scratch, 0);
+//             hg_warn("in json scene, expected FIELD, found %s\n", fmt.chars.data);
+//             goto err_return;
+//         }
+//
+//         if (entities.is_near_full())
+//             entities.grow(scratch);
+//         u32 entity_idx = (u32)entities.load;
+//         entities.insert(entity_name.string, entity_idx);
+//
+//         Token entity_begin = json.next_token(scratch);
+//         if (entity_begin.type != HgJsonParser::STRUCT_BEGIN) {
+//             HgString fmt = entity_begin.to_string(scratch).append(scratch, 0);
+//             hg_warn("in json scene, expected entities: STRUCT_BEGIN, found %s\n", fmt.chars.data);
+//             goto err_return;
+//         }
+//
+//         Token component_name = json.next_token(scratch);
+//         while (component_name.type != HgJsonParser::STRUCT_END) {
+//             if (component_name.type != HgJsonParser::FIELD) {
+//                 HgString fmt = component_name.to_string(scratch).append(scratch, 0);
+//                 hg_warn("in json scene, expected component FIELD, found %s\n", fmt.chars.data);
+//                 goto err_return;
+//             }
+//
+//             HgComponentType component_type = hg_internal_component_str_to_enum(component_name.string);
+//
+//             Token component_struct_begin = json.next_token(scratch);
+//             if (component_struct_begin.type != HgJsonParser::STRUCT_BEGIN) {
+//                 entity_name.string.append(scratch, 0);
+//                 component_name.string.append(scratch, 0);
+//                 HgString fmt = component_struct_begin.to_string(scratch).append(scratch, 0);
+//                 hg_warn("in json scene, entity \"%s\" %s, expected STRUCT_BEGIN, found %s\n",
+//                     entity_name.string.chars.data,
+//                     component_name.string.chars.data,
+//                     fmt.chars.data);
+//                 goto err_return;
+//             }
+//
+//             switch (component_type) {
+//             case HG_COMPONENT_TRANSFORM: {
+//                 bool has_pos = false;
+//                 bool has_scale = false;
+//                 bool has_rot = false;
+//                 HgTransform transform{};
+//
+//                 while (!has_pos || !has_scale || !has_rot) {
+//                     Token component_field = json.next_token(scratch);
+//                     if (component_field.type != HgJsonParser::FIELD) {
+//                         HgString fmt = component_field.to_string(scratch).append(scratch, 0);
+//                         hg_warn(
+//                             "in json scene, entity \"%s\" transform, expected FIELD, found %s\n",
+//                             entity_name.string.chars.data,
+//                             fmt.chars.data);
+//                         goto err_return;
+//                     }
+//
+//                     if (component_field.string == "position") {
+//                         if (has_pos) {
+//                             entity_name.string.append(scratch, 0);
+//                             hg_warn(
+//                                 "in json scene, entity \"%s\" transform, has two positions\n",
+//                                 entity_name.string.chars.data);
+//                             goto err_return;
+//                         }
+//                         has_pos = true;
+//
+//                         Token pos_token = json.next_token(scratch);
+//                         if (pos_token.type != HgJsonParser::ARRAY_BEGIN) {
+//                             entity_name.string.append(scratch, 0);
+//                             HgString fmt = component_field.to_string(scratch).append(scratch, 0);
+//                             hg_warn(
+//                                 "in json scene, entity \"%s\" transform, expected position: ARRAY_BEGIN, found %s\n",
+//                                 entity_name.string.chars.data,
+//                                 fmt.chars.data);
+//                             goto err_return;
+//                         }
+//
+//                         for (usize i = 0; i < 3; ++i) {
+//                             pos_token = json.next_token(scratch);
+//                             if (pos_token.type != HgJsonParser::LITERAL ||
+//                                 pos_token.literal != HgJsonParser::FLOATING) {
+//                                 entity_name.string.append(scratch, 0);
+//                                 HgString fmt = component_field.to_string(scratch).append(scratch, 0);
+//                                 hg_warn(
+//                                     "in json scene, entity \"%s\" transform, "
+//                                     "expected position: [FLOATING, FLOATING, FLOATING], found %s\n",
+//                                     entity_name.string.chars.data,
+//                                     fmt.chars.data);
+//                                 goto err_return;
+//                             }
+//                             transform.position[i] = (f32)pos_token.floating;
+//                         }
+//
+//                         pos_token = json.next_token(scratch);
+//                         if (pos_token.type != HgJsonParser::ARRAY_END) {
+//                             entity_name.string.append(scratch, 0);
+//                             HgString fmt = component_field.to_string(scratch).append(scratch, 0);
+//                             hg_warn(
+//                                 "in json scene, entity \"%s\" transform, expected position: ARRAY_END, found %s\n",
+//                                 entity_name.string.chars.data,
+//                                 fmt.chars.data);
+//                             goto err_return;
+//                         }
+//                     }
+//                     if (component_field.string == "scale") {
+//                     }
+//                     if (component_field.string == "rotation") {
+//                     }
+//                 }
+//
+//                 u32 component_idx = 0;
+//                 while (component_idx < components.count || components[component_idx].type == HG_COMPONENT_TRANSFORM) {
+//                     ++component_idx;
+//                 }
+//                 if (component_idx == components.count) {
+//                     if (components.is_full())
+//                         components.grow(scratch);
+//
+//                     HgSceneDescComponent component{};
+//                     component.type = HG_COMPONENT_TRANSFORM;
+//                     components.push() = component;
+//
+//                     if (component_data.is_full())
+//                         component_data.grow(scratch);
+//
+//                     HgArrayAny data = data.create(scratch, sizeof(u32) + sizeof(HgTransform), 1, 0, 512);
+//                 }
+//
+//                 ++components[component_idx].count;
+//
+//                 HgBinaryWriter data{};
+//                 data.write(scratch, entity_idx);
+//                 data.write(scratch, transform);
+//                 std::memcpy(component_data[component_idx].push(), data.file.data, data.head);
+//             } break;
+//             case HG_COMPONENT_SPRITE: {
+//                 Token component_field = json.next_token(scratch);
+//                 while (component_field.type != HgJsonParser::STRUCT_END) {
+//                     if (component_field.type != HgJsonParser::FIELD) {
+//                         HgString fmt = component_field.to_string(scratch).append(scratch, 0);
+//                         hg_warn("in json scene, expected FIELD, found %s\n", fmt.chars.data);
+//                         goto err_return;
+//                     }
+//
+//                     component_field = json.next_token(scratch);
+//                 }
+//             } break;
+//             default:
+//                 component_name.string.append(scratch, 0);
+//                 hg_warn("in json scene, found invalid component type: %s\n", component_name.string.chars.data);
+//                 goto err_return;
+//             }
+//
+//             component_name = json.next_token(scratch);
+//         }
+//
+//         entity_name = json.next_token(scratch);
+//     }
+//
+//     HgBinaryWriter bin{};
+//
+//     HgSceneDescInfo info{};
+//     info.version_major = HgScene::desc_version_major;
+//     info.version_minor = HgScene::desc_version_minor;
+//     info.version_patch = HgScene::desc_version_patch;
+//     info.entity_count = (u32)entities.load;
+//     info.component_count = (u32)components.count;
+//     info.components_idx = 0;
+//     info.resource_count = (u32)resources.count;
+//     info.resources_idx = 0;
+//
+//     usize info_idx = bin.head;
+//     bin.reserve(arena, sizeof(HgSceneDescInfo));
+//
+//     info.components_idx = (u32)bin.head;
+//     bin.reserve(arena, components.count * sizeof(HgSceneDescComponent));
+//
+//     usize i = 0;
+//     for (Component& c : components) {
+//         HgSceneDescComponent desc;
+//         desc.type = c.type;
+//         desc.count = (u32)c.entities.count;
+//
+//         desc.entities_begin_idx = (u32)bin.head;
+//         for (HgEntity e : c.entities) {
+//             bin.write(arena, e);
+//         }
+//
+//         desc.components_begin_idx = (u32)bin.head;
+//         for (usize j = 0; i < c.data.count; ++i) {
+//             bin.write(arena, c.data[j], c.data.width);
+//         }
+//
+//         bin.overwrite(info.components_idx + i, desc);
+//         i += sizeof(HgSceneDescComponent);
+//     }
+//
+//     info.resources_idx = (u32)bin.head;
+//     bin.reserve(arena, resources.count * sizeof(HgSceneDescResource));
+//
+//     i = 0;
+//     for (Resource& r : resources) {
+//         HgSceneDescResource desc;
+//         desc.type = r.type;
+//         desc.length = (u32)r.path.length();
+//
+//         desc.path_idx = (u32)bin.head;
+//         bin.write(arena, r.path);
+//
+//         bin.overwrite(info.components_idx + i, desc);
+//         i += sizeof(HgSceneDescResource);
+//     }
+//
+//     bin.overwrite(info_idx, info);
+//
+//     return bin;
+// }
+
 void hg_vulkan_init();
 
 #ifdef HG_VK_DEBUG_MESSENGER
@@ -2260,11 +2989,8 @@ void hg_graphics_init() {
 
     if (hg_vk_physical_device == nullptr) {
         hg_vk_physical_device = hg_vk_find_single_queue_physical_device();
-        hg_vk_queue_family = hg_vk_find_queue_family(hg_vk_physical_device,
-            VK_QUEUE_GRAPHICS_BIT |
-            VK_QUEUE_TRANSFER_BIT |
-            VK_QUEUE_COMPUTE_BIT)
-            .value();
+        hg_vk_find_queue_family(hg_vk_physical_device, hg_vk_queue_family,
+            VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT | VK_QUEUE_COMPUTE_BIT);
     }
 
     if (hg_vk_device == nullptr) {
@@ -3450,22 +4176,23 @@ VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger() {
     return messenger;
 }
 
-HgOption<u32> hg_vk_find_queue_family(VkPhysicalDevice gpu, VkQueueFlags queue_flags) {
+bool hg_vk_find_queue_family(VkPhysicalDevice gpu, u32& queue_family, VkQueueFlags queue_flags) {
     hg_assert(gpu != nullptr);
 
-    HgArenaScope scratch = hg_get_scratch();
+    hg_arena_scope(scratch, hg_get_scratch());
 
     u32 family_count = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, nullptr);
-    HgSpan<VkQueueFamilyProperties> families = scratch.alloc<VkQueueFamilyProperties>(family_count);
+    HgPtr<VkQueueFamilyProperties> families = scratch.alloc<VkQueueFamilyProperties>(family_count);
     vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, families.data);
 
     for (u32 i = 0; i < family_count; ++i) {
         if (families[i].queueFlags & queue_flags) {
-            return i;
+            queue_family = i;
+            return true;
         }
     }
-    return hg_empty;
+    return false;
 }
 
 static const char* const hg_internal_vk_device_extensions[]{
@@ -3475,18 +4202,18 @@ static const char* const hg_internal_vk_device_extensions[]{
 VkPhysicalDevice hg_vk_find_single_queue_physical_device() {
     hg_assert(hg_vk_instance != nullptr);
 
-    HgArenaScope scratch = hg_get_scratch();
+    hg_arena_scope(scratch, hg_get_scratch());
 
     u32 gpu_count;
     vkEnumeratePhysicalDevices(hg_vk_instance, &gpu_count, nullptr);
-    HgSpan<VkPhysicalDevice> gpus = scratch.alloc<VkPhysicalDevice>(gpu_count);
+    HgPtr<VkPhysicalDevice> gpus = scratch.alloc<VkPhysicalDevice>(gpu_count);
     vkEnumeratePhysicalDevices(hg_vk_instance, &gpu_count, gpus.data);
 
-    HgSpan<VkExtensionProperties> ext_props{};
+    HgPtr<VkExtensionProperties> ext_props{};
 
     for (u32 i = 0; i < gpu_count; ++i) {
         VkPhysicalDevice gpu = gpus[i];
-        HgOption<u32> family;
+        u32 family;
 
         u32 new_prop_count = 0;
         vkEnumerateDeviceExtensionProperties(gpu, nullptr, &new_prop_count, nullptr);
@@ -3505,11 +4232,8 @@ next_ext:
             continue;
         }
 
-        family = hg_vk_find_queue_family(gpu,
-            VK_QUEUE_GRAPHICS_BIT |
-            VK_QUEUE_TRANSFER_BIT |
-            VK_QUEUE_COMPUTE_BIT);
-        if (!family.has_value)
+        if (!hg_vk_find_queue_family(gpu, family,
+                VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT | VK_QUEUE_COMPUTE_BIT))
             goto next_gpu;
 
         return gpu;
@@ -3744,11 +4468,11 @@ static VkFormat hg_internal_vk_find_swapchain_format(VkSurfaceKHR surface) {
     hg_assert(hg_vk_physical_device != nullptr);
     hg_assert(surface != nullptr);
 
-    HgArenaScope scratch = hg_get_scratch();
+    hg_arena_scope(scratch, hg_get_scratch());
 
     u32 format_count = 0;
     vkGetPhysicalDeviceSurfaceFormatsKHR(hg_vk_physical_device, surface, &format_count, nullptr);
-    HgSpan<VkSurfaceFormatKHR> formats = scratch.alloc<VkSurfaceFormatKHR>(format_count);
+    HgPtr<VkSurfaceFormatKHR> formats = scratch.alloc<VkSurfaceFormatKHR>(format_count);
     vkGetPhysicalDeviceSurfaceFormatsKHR(hg_vk_physical_device, surface, &format_count, formats.data);
 
     for (usize i = 0; i < format_count; ++i) {
@@ -3835,50 +4559,53 @@ HgSwapchainData hg_vk_create_swapchain(
 }
 
 HgSwapchainCommands HgSwapchainCommands::create(HgArena& arena, VkSwapchainKHR swapchain, VkCommandPool cmd_pool) {
-    hg_assert(hg_vk_device != nullptr);
-    hg_assert(cmd_pool != nullptr);
-    hg_assert(swapchain != nullptr);
-
     HgSwapchainCommands sync{};
-    sync.cmd_pool = cmd_pool;
-    sync.swapchain = swapchain;
+    sync.recreate(arena, swapchain, cmd_pool);
+    return sync;
+}
 
-    vkGetSwapchainImagesKHR(hg_vk_device, swapchain, &sync.frame_count, nullptr);
+void HgSwapchainCommands::recreate(HgArena& arena, VkSwapchainKHR swapchain_val, VkCommandPool cmd_pool_val) {
+    hg_assert(hg_vk_device != nullptr);
+    hg_assert(cmd_pool_val != nullptr);
+    hg_assert(swapchain_val != nullptr);
 
-    sync.cmds = arena.alloc<VkCommandBuffer>(sync.frame_count).data;
+    cmd_pool = cmd_pool_val;
+    swapchain = swapchain_val;
+
+    vkGetSwapchainImagesKHR(hg_vk_device, swapchain, &frame_count, nullptr);
+
+    cmds = arena.alloc<VkCommandBuffer>(frame_count).data;
 
     VkCommandBufferAllocateInfo cmd_alloc_info{};
     cmd_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     cmd_alloc_info.pNext = nullptr;
     cmd_alloc_info.commandPool = cmd_pool;
     cmd_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    cmd_alloc_info.commandBufferCount = sync.frame_count;
+    cmd_alloc_info.commandBufferCount = frame_count;
 
-    vkAllocateCommandBuffers(hg_vk_device, &cmd_alloc_info, sync.cmds);
+    vkAllocateCommandBuffers(hg_vk_device, &cmd_alloc_info, cmds);
 
-    sync.frame_finished = arena.alloc<VkFence>(sync.frame_count).data;
-    for (usize i = 0; i < sync.frame_count; ++i) {
+    frame_finished = arena.alloc<VkFence>(frame_count).data;
+    for (usize i = 0; i < frame_count; ++i) {
         VkFenceCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
         info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-        vkCreateFence(hg_vk_device, &info, nullptr, &sync.frame_finished[i]);
+        vkCreateFence(hg_vk_device, &info, nullptr, &frame_finished[i]);
     }
 
-    sync.image_available = arena.alloc<VkSemaphore>(sync.frame_count).data;
-    for (usize i = 0; i < sync.frame_count; ++i) {
+    image_available = arena.alloc<VkSemaphore>(frame_count).data;
+    for (usize i = 0; i < frame_count; ++i) {
         VkSemaphoreCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-        vkCreateSemaphore(hg_vk_device, &info, nullptr, &sync.image_available[i]);
+        vkCreateSemaphore(hg_vk_device, &info, nullptr, &image_available[i]);
     }
 
-    sync.ready_to_present = arena.alloc<VkSemaphore>(sync.frame_count).data;
-    for (usize i = 0; i < sync.frame_count; ++i) {
+    ready_to_present = arena.alloc<VkSemaphore>(frame_count).data;
+    for (usize i = 0; i < frame_count; ++i) {
         VkSemaphoreCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-        vkCreateSemaphore(hg_vk_device, &info, nullptr, &sync.ready_to_present[i]);
+        vkCreateSemaphore(hg_vk_device, &info, nullptr, &ready_to_present[i]);
     }
-
-    return sync;
 }
 
 void HgSwapchainCommands::destroy() {
@@ -3895,11 +4622,14 @@ void HgSwapchainCommands::destroy() {
         vkDestroySemaphore(hg_vk_device, ready_to_present[i], nullptr);
     }
 
-    std::memset(this, 0, sizeof(*this));
+    swapchain = nullptr;
+    cmd_pool = nullptr;
 }
 
 VkCommandBuffer HgSwapchainCommands::acquire_and_record() {
     hg_assert(hg_vk_device != nullptr);
+    if (swapchain == nullptr)
+        return nullptr;
 
     current_frame = (current_frame + 1) % frame_count;
 
@@ -3994,7 +4724,7 @@ void hg_vk_buffer_staging_write(
     VkCommandPool cmd_pool,
     VkBuffer dst,
     usize offset,
-    HgSpan<const void> src
+    HgPtr<const void> src
 ) {
     hg_assert(hg_vk_device != nullptr);
     hg_assert(hg_vk_vma != nullptr);
@@ -4059,7 +4789,7 @@ void hg_vk_buffer_staging_write(
 void hg_vk_buffer_staging_read(
     VkQueue transfer_queue,
     VkCommandPool cmd_pool,
-    HgSpan<void> dst,
+    HgPtr<void> dst,
     VkBuffer src,
     usize offset
 ) {
@@ -4750,7 +5480,7 @@ HgWindow HgWindow::create(HgArena& arena, const HgWindow::Config& config) {
         : (u32)DisplayHeight(hg_internal_x11_display, DefaultScreen(hg_internal_x11_display));
 
     HgWindow window;
-    window.internals = arena.alloc<Internals>();
+    window.internals = arena.alloc<Internals>(1).data;
     *window.internals = {};
 
     window.internals->input.width = width;
@@ -4826,7 +5556,7 @@ VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window) {
     return surface;
 }
 
-void hg_process_window_events(HgSpan<const HgWindow> windows) {
+void hg_process_window_events(HgPtr<const HgWindow> windows) {
     hg_assert(windows != nullptr);
 
     if (windows.count > 1)

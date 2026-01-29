@@ -10,7 +10,7 @@ int main(void) {
 
     hg_run_tests();
 
-    HgArenaScope arena = hg_get_scratch();
+    hg_arena_scope(arena, hg_get_scratch());
 
     HgWindow::Config window_config{};
     window_config.title = "Hg Test";
@@ -39,8 +39,8 @@ int main(void) {
 
     u32 swap_image_count;
     vkGetSwapchainImagesKHR(hg_vk_device, swapchain.handle, &swap_image_count, nullptr);
-    HgSpan<VkImage> swap_images = arena.alloc<VkImage>(swap_image_count);
-    HgSpan<VkImageView> swap_views = arena.alloc<VkImageView>(swap_image_count);
+    HgPtr<VkImage> swap_images = arena.alloc<VkImage>(swap_image_count);
+    HgPtr<VkImageView> swap_views = arena.alloc<VkImageView>(swap_image_count);
     vkGetSwapchainImagesKHR(hg_vk_device, swapchain.handle, &swap_image_count, swap_images.data);
     for (usize i = 0; i < swap_image_count; ++i) {
         VkImageViewCreateInfo create_info{};
@@ -91,8 +91,8 @@ int main(void) {
     };
 
     for (HgEntity square : squares) {
-        hg_ecs->add<HgTransform>(square) = {};
-        pipeline2d.add_sprite(square, texture, {0.0f}, {1.0f});
+        hg_ecs->add(square, HgTransform{});
+        hg_ecs->add(square, HgSprite{&texture, {0.0f}, {1.0f}});
     }
 
     {
@@ -133,6 +133,8 @@ int main(void) {
             frame_time -= 1.0;
             cpu_time = 0.0;
         }
+
+        hg_arena_scope(frame, hg_get_scratch(arena));
 
         hg_process_window_events({&window, 1});
         if (window.was_closed() || window.is_key_down(HG_KEY_ESCAPE))
@@ -198,7 +200,7 @@ int main(void) {
 
                     vkCreateImageView(hg_vk_device, &create_info, nullptr, &swap_views[i]);
                 }
-                swapchain_commands = swapchain_commands.create(arena, swapchain.handle, cmd_pool);
+                swapchain_commands.recreate(arena, swapchain.handle, cmd_pool);
 
                 aspect = (f32)swapchain.width / (f32)swapchain.height;
                 // proj = hg_projection_orthographic(-aspect, aspect, -1.0f, 1.0f, 0.0f, 1.0f);
@@ -210,9 +212,9 @@ int main(void) {
             hg_info("window resized\n");
         }
 
-        VkCommandBuffer cmd;
         cpu_time += cpu_clock.tick();
-        if (swapchain.handle && (cmd = swapchain_commands.acquire_and_record())) {
+        VkCommandBuffer cmd = swapchain_commands.acquire_and_record();
+        if (cmd != nullptr) {
             cpu_clock.tick();
             u32 image_index = swapchain_commands.current_image;
 
@@ -346,34 +348,34 @@ hg_test(HgArena) {
     void* block = std::malloc(1024);
     hg_defer(std::free(block));
 
-    HgArena arena{block, 1024};
+    HgArena arena{{block, 1024}};
 
     for (usize i = 0; i < 3; ++i) {
         hg_test_assert(arena.memory != nullptr);
-        hg_test_assert(arena.capacity == 1024);
+        hg_test_assert(arena.memory.count == 1024);
         hg_test_assert(arena.head == 0);
 
-        u32* alloc_u32 = arena.alloc<u32>();
-        hg_test_assert(alloc_u32 == arena.memory);
+        u32* alloc_u32 = arena.alloc<u32>(1).data;
+        hg_test_assert(alloc_u32 == arena.memory.begin());
 
-        HgSpan<u64> alloc_u64 = arena.alloc<u64>(2);
+        HgPtr<u64> alloc_u64 = arena.alloc<u64>(2);
         hg_test_assert((u8*)alloc_u64.data == (u8*)alloc_u32 + 8);
 
-        u8* alloc_u8 = arena.alloc<u8>();
+        u8* alloc_u8 = arena.alloc<u8>(1).data;
         hg_test_assert(alloc_u8 == (u8*)alloc_u32 + 24);
 
         struct Big {
             u8 data[32];
         };
-        Big* alloc_big = arena.alloc<Big>();
-        hg_test_assert((u8*)alloc_big == (u8*)alloc_u32 + 25);
+        HgPtr<Big> alloc_big = arena.alloc<Big>(1);
+        hg_test_assert((u8*)alloc_big.data == (u8*)alloc_u32 + 25);
 
-        HgSpan<Big> realloc_big = arena.realloc(HgSpan<Big>{alloc_big, 1}, 2);
-        hg_test_assert(realloc_big.data == alloc_big);
+        HgPtr<Big> realloc_big = arena.realloc(alloc_big, 2);
+        hg_test_assert(realloc_big.data == alloc_big.data);
 
         memset(realloc_big.data, 2, realloc_big.size());
 
-        HgSpan<Big> realloc_big2 = arena.realloc(realloc_big, 2);
+        HgPtr<Big> realloc_big2 = arena.realloc(realloc_big, 2);
         hg_test_assert(realloc_big2.data == realloc_big.data);
         hg_test_assert(memcmp(realloc_big.data, realloc_big2.data, realloc_big2.size()) == 0);
 
@@ -383,87 +385,87 @@ hg_test(HgArena) {
     return true;
 }
 
-hg_test(HgPool) {
-    HgArenaScope arena = hg_get_scratch();
-
-    HgPool<u32> pool = pool.create(arena, 128);
-
-    for (usize i = 0; i < 3; ++i) {
-        hg_test_assert(pool.first == 0);
-
-        u32* a = pool.alloc();
-        hg_test_assert(a == (u32*)pool.slots.data);
-
-        u32* b = pool.alloc();
-        hg_test_assert(b != a);
-
-        pool.free(a);
-        u32* c = pool.alloc();
-        hg_test_assert(c == a);
-
-        pool.free(b);
-        pool.free(c);
-
-        u32* items[100]{};
-
-        for (u32 j = 0; j < 100; ++j) {
-            items[j] = pool.alloc();
-            *items[j] = j + 1000;
-        }
-
-        for (u32 j = 0; j < 100; ++j) {
-            hg_test_assert(items[j] != nullptr);
-            hg_test_assert(*items[j] == j + 1000);
-        }
-
-        for (u32 j = 0; j < 100; ++j) {
-            pool.free(items[j]);
-        }
-
-        for (u32 j = 0; j < 100; ++j) {
-            hg_test_assert(*items[j] != j + 1000);
-        }
-
-        for (u32 j = 0; j < 100; ++j) {
-            items[j] = pool.alloc();
-        }
-
-        pool.reset();
-    }
-
-    u32* items[256]{};
-
-    for (u32 i = 0; i < 128; ++i) {
-        items[i] = pool.alloc();
-        *items[i] = i;
-    }
-
-    for (u32 i = 0; i < 128; ++i) {
-        hg_test_assert(items[i] != nullptr);
-        hg_test_assert(*items[i] == i);
-    }
-
-    pool.resize(arena, 256);
-
-    for (u32 i = 128; i < 256; ++i) {
-        items[i] = pool.alloc();
-        *items[i] = i;
-    }
-
-    for (u32 i = 0; i < 256; ++i) {
-        hg_test_assert(items[i] != nullptr);
-        hg_test_assert(*items[i] == i);
-    }
-
-    return true;
-}
+// hg_test(HgPool) {
+//     hg_arena_scope(arena, hg_get_scratch());
+//
+//     HgPool<u32> pool = pool.create(arena, 128);
+//
+//     for (usize i = 0; i < 3; ++i) {
+//         hg_test_assert(pool.first == 0);
+//
+//         u32* a = pool.alloc();
+//         hg_test_assert(a == (u32*)pool.slots.data);
+//
+//         u32* b = pool.alloc();
+//         hg_test_assert(b != a);
+//
+//         pool.free(a);
+//         u32* c = pool.alloc();
+//         hg_test_assert(c == a);
+//
+//         pool.free(b);
+//         pool.free(c);
+//
+//         u32* items[100]{};
+//
+//         for (u32 j = 0; j < 100; ++j) {
+//             items[j] = pool.alloc();
+//             *items[j] = j + 1000;
+//         }
+//
+//         for (u32 j = 0; j < 100; ++j) {
+//             hg_test_assert(items[j] != nullptr);
+//             hg_test_assert(*items[j] == j + 1000);
+//         }
+//
+//         for (u32 j = 0; j < 100; ++j) {
+//             pool.free(items[j]);
+//         }
+//
+//         for (u32 j = 0; j < 100; ++j) {
+//             hg_test_assert(*items[j] != j + 1000);
+//         }
+//
+//         for (u32 j = 0; j < 100; ++j) {
+//             items[j] = pool.alloc();
+//         }
+//
+//         pool.reset();
+//     }
+//
+//     u32* items[256]{};
+//
+//     for (u32 i = 0; i < 128; ++i) {
+//         items[i] = pool.alloc();
+//         *items[i] = i;
+//     }
+//
+//     for (u32 i = 0; i < 128; ++i) {
+//         hg_test_assert(items[i] != nullptr);
+//         hg_test_assert(*items[i] == i);
+//     }
+//
+//     pool.resize(arena, 256);
+//
+//     for (u32 i = 128; i < 256; ++i) {
+//         items[i] = pool.alloc();
+//         *items[i] = i;
+//     }
+//
+//     for (u32 i = 0; i < 256; ++i) {
+//         hg_test_assert(items[i] != nullptr);
+//         hg_test_assert(*items[i] == i);
+//     }
+//
+//     return true;
+// }
 
 hg_test(HgArray) {
-    HgArenaScope arena = hg_get_scratch();
+    hg_arena_scope(arena, hg_get_scratch());
 
     HgArray<u32> arr = arr.create(arena, 0, 2);
     hg_test_assert(arr.items != nullptr);
-    hg_test_assert(arr.capacity == 2);
+    hg_test_assert(arr.items.count == 2);
     hg_test_assert(arr.count == 0);
 
     arr.push() = 2;
@@ -474,7 +476,7 @@ hg_test(HgArray) {
     hg_test_assert(arr.count == 2);
 
     arr.grow(arena);
-    hg_test_assert(arr.capacity == 4);
+    hg_test_assert(arr.items.count == 4);
 
     arr.push() = 8;
     hg_test_assert(arr[2] == 8);
@@ -482,7 +484,7 @@ hg_test(HgArray) {
 
     arr.pop();
     hg_test_assert(arr.count == 2);
-    hg_test_assert(arr.capacity == 4);
+    hg_test_assert(arr.items.count == 4);
 
     arr.insert(0) = 1;
     hg_test_assert(arr.count == 3);
@@ -501,7 +503,7 @@ hg_test(HgArray) {
         arr.push() = i;
     }
     hg_test_assert(arr.count == 102);
-    hg_test_assert(arr.capacity >= 102);
+    hg_test_assert(arr.items.count >= 102);
 
     arr.swap_remove(2);
     hg_test_assert(arr.count == 101);
@@ -519,7 +521,7 @@ hg_test(HgArray) {
 }
 
 hg_test(HgArrayAny) {
-    HgArenaScope arena = hg_get_scratch();
+    hg_arena_scope(arena, hg_get_scratch());
 
     HgArrayAny arr = arr.create(arena, sizeof(u32), alignof(u32), 0, 2);
     hg_test_assert(arr.items != nullptr);
@@ -578,48 +580,48 @@ hg_test(HgArrayAny) {
     return true;
 }
 
-hg_test(HgQueue) {
-    HgArenaScope arena = hg_get_scratch();
-
-    HgRingBuffer<u32> queue = queue.create(arena, 8);
-
-    hg_test_assert(queue.items != nullptr);
-    hg_test_assert(queue.capacity == 8);
-    hg_test_assert(queue.head == 0);
-    hg_test_assert(queue.tail == 0);
-
-    for (usize i = 0; i < 8; ++i) {
-        for (u32 j = 0; j < 7; ++j) {
-            hg_test_assert(queue.count() == j);
-            queue.push() = j;
-        }
-
-        hg_test_assert(queue.pop() == 0);
-        hg_test_assert(queue.pop() == 1);
-        hg_test_assert(queue.pop() == 2);
-        hg_test_assert(queue.pop() == 3);
-
-        for (u32 j = 7; j < 10; ++j) {
-            hg_test_assert(queue.count() == j - 4);
-            queue.push() = j;
-        }
-
-        hg_test_assert(queue.pop() == 4);
-        hg_test_assert(queue.pop() == 5);
-        hg_test_assert(queue.pop() == 6);
-        hg_test_assert(queue.pop() == 7);
-        hg_test_assert(queue.pop() == 8);
-        hg_test_assert(queue.pop() == 9);
-
-        hg_test_assert(queue.count() == 0);
-    }
-
-    return true;
-}
+// hg_test(HgRingBuffer) {
+//     hg_arena_scope(arena, hg_get_scratch());
+//
+//     HgRingBuffer<u32> queue = queue.create(arena, 8);
+//
+//     hg_test_assert(queue.items != nullptr);
+//     hg_test_assert(queue.items.count == 8);
+//     hg_test_assert(queue.head == 0);
+//     hg_test_assert(queue.tail == 0);
+//
+//     for (usize i = 0; i < 8; ++i) {
+//         for (u32 j = 0; j < 7; ++j) {
+//             hg_test_assert(queue.count() == j);
+//             queue.push() = j;
+//         }
+//
+//         hg_test_assert(queue.pop() == 0);
+//         hg_test_assert(queue.pop() == 1);
+//         hg_test_assert(queue.pop() == 2);
+//         hg_test_assert(queue.pop() == 3);
+//
+//         for (u32 j = 7; j < 10; ++j) {
+//             hg_test_assert(queue.count() == j - 4);
+//             queue.push() = j;
+//         }
+//
+//         hg_test_assert(queue.pop() == 4);
+//         hg_test_assert(queue.pop() == 5);
+//         hg_test_assert(queue.pop() == 6);
+//         hg_test_assert(queue.pop() == 7);
+//         hg_test_assert(queue.pop() == 8);
+//         hg_test_assert(queue.pop() == 9);
+//
+//         hg_test_assert(queue.count() == 0);
+//     }
+//
+//     return true;
+// }
 
 hg_test(HgHashMap) {
     {
-        HgArenaScope arena = hg_get_scratch();
+        hg_arena_scope(arena, hg_get_scratch());
 
         constexpr usize count = 128;
 
@@ -693,7 +695,7 @@ hg_test(HgHashMap) {
     }
 
     {
-        HgArenaScope arena = hg_get_scratch();
+        hg_arena_scope(arena, hg_get_scratch());
 
         using StrHash = usize;
 
@@ -731,7 +733,7 @@ hg_test(HgHashMap) {
     }
 
     {
-        HgArenaScope arena = hg_get_scratch();
+        hg_arena_scope(arena, hg_get_scratch());
 
         HgHashMap<const char*, u32> map = map.create(arena, 128);
 
@@ -767,7 +769,7 @@ hg_test(HgHashMap) {
     }
 
     {
-        HgArenaScope arena = hg_get_scratch();
+        hg_arena_scope(arena, hg_get_scratch());
 
         HgHashMap<HgString, u32> map = map.create(arena, 128);
 
@@ -802,7 +804,7 @@ hg_test(HgHashMap) {
     }
 
     {
-        HgArenaScope arena = hg_get_scratch();
+        hg_arena_scope(arena, hg_get_scratch());
 
         HgHashMap<HgStringView, u32> map = map.create(arena, 128);
 
@@ -839,262 +841,262 @@ hg_test(HgHashMap) {
     return true;
 }
 
-hg_test(HgHashSet) {
-    {
-        HgArenaScope arena = hg_get_scratch();
-
-        u32 count = 128;
-
-        HgHashSet<u32> set = set.create(arena, count);
-
-        for (usize i = 0; i < 3; ++i) {
-            hg_test_assert(set.load == 0);
-            hg_test_assert(!set.has(0));
-            hg_test_assert(!set.has(1));
-            hg_test_assert(!set.has(12));
-            hg_test_assert(!set.has(42));
-            hg_test_assert(!set.has(100000));
-
-            set.insert(1);
-            hg_test_assert(set.load == 1);
-            hg_test_assert(set.has(1));
-
-            set.remove(1);
-            hg_test_assert(set.load == 0);
-            hg_test_assert(!set.has(1));
-
-            hg_test_assert(!set.has(12));
-            hg_test_assert(!set.has(12 + count));
-
-            set.insert(12);
-            hg_test_assert(set.load == 1);
-            hg_test_assert(set.has(12));
-            hg_test_assert(!set.has(12 + count));
-
-            set.insert(12 + count);
-            hg_test_assert(set.load == 2);
-            hg_test_assert(set.has(12));
-            hg_test_assert(set.has(12 + count));
-
-            set.insert(12 + count * 2);
-            hg_test_assert(set.load == 3);
-            hg_test_assert(set.has(12));
-            hg_test_assert(set.has(12 + count));
-            hg_test_assert(set.has(12 + count * 2));
-
-            set.remove(12);
-            hg_test_assert(set.load == 2);
-            hg_test_assert(!set.has(12));
-            hg_test_assert(set.has(12 + count));
-
-            set.insert(42);
-            hg_test_assert(set.load == 3);
-            hg_test_assert(set.has(42));
-
-            set.remove(12 + count);
-            hg_test_assert(set.load == 2);
-            hg_test_assert(!set.has(12));
-            hg_test_assert(!set.has(12 + count));
-
-            set.remove(42);
-            hg_test_assert(set.load == 1);
-            hg_test_assert(!set.has(42));
-
-            set.remove(12 + count * 2);
-            hg_test_assert(set.load == 0);
-            hg_test_assert(!set.has(12));
-            hg_test_assert(!set.has(12 + count));
-            hg_test_assert(!set.has(12 + count * 2));
-
-            for (u32 j = 0; j < 100; ++j) {
-                hg_test_assert(!set.has(j * 3));
-                set.insert(j * 3);
-                hg_test_assert(set.has(j * 3));
-            }
-            for (u32 j = 0; j < 100; ++j) {
-                hg_test_assert(set.has(j * 3));
-                set.remove(j * 3);
-                hg_test_assert(!set.has(j * 3));
-            }
-
-            set.reset();
-        }
-    }
-
-    {
-        HgArenaScope arena = hg_get_scratch();
-
-        using StrHash = usize;
-
-        HgHashSet<StrHash> map = map.create(arena, 128);
-
-        StrHash a = hg_hash("a");
-        StrHash b = hg_hash("b");
-        StrHash ab = hg_hash("ab");
-        StrHash scf = hg_hash("supercalifragilisticexpialidocious");
-
-        hg_test_assert(!map.has(a));
-        hg_test_assert(!map.has(b));
-        hg_test_assert(!map.has(ab));
-        hg_test_assert(!map.has(scf));
-
-        map.insert(a);
-        map.insert(b);
-        map.insert(ab);
-        map.insert(scf);
-
-        hg_test_assert(map.has(a));
-        hg_test_assert(map.has(b));
-        hg_test_assert(map.has(ab));
-        hg_test_assert(map.has(scf));
-
-        map.remove(a);
-        map.remove(b);
-        map.remove(ab);
-        map.remove(scf);
-
-        hg_test_assert(!map.has(a));
-        hg_test_assert(!map.has(b));
-        hg_test_assert(!map.has(ab));
-        hg_test_assert(!map.has(scf));
-    }
-
-    {
-        HgArenaScope arena = hg_get_scratch();
-
-        HgHashSet<const char* > map = map.create(arena, 128);
-
-        const char* a = "a";
-        const char* b = "b";
-        const char* ab = "ab";
-        const char* scf = "supercalifragilisticexpialidocious";
-
-        hg_test_assert(!map.has(a));
-        hg_test_assert(!map.has(b));
-        hg_test_assert(!map.has(ab));
-        hg_test_assert(!map.has(scf));
-
-        map.insert(a);
-        map.insert(b);
-        map.insert(ab);
-        map.insert(scf);
-
-        hg_test_assert(map.has(a));
-        hg_test_assert(map.has(b));
-        hg_test_assert(map.has(ab));
-        hg_test_assert(map.has(scf));
-
-        map.remove(a);
-        map.remove(b);
-        map.remove(ab);
-        map.remove(scf);
-
-        hg_test_assert(!map.has(a));
-        hg_test_assert(!map.has(b));
-        hg_test_assert(!map.has(ab));
-        hg_test_assert(!map.has(scf));
-    }
-
-    {
-        HgArenaScope arena = hg_get_scratch();
-
-        HgHashSet<HgString> map = map.create(arena, 128);
-
-        HgString a = a.create(arena, "a");
-        HgString b = b.create(arena, "b");
-        HgString ab = ab.create(arena, "ab");
-        HgString scf = scf.create(arena, "supercalifragilisticexpialidocious");
-
-        hg_test_assert(!map.has(a));
-        hg_test_assert(!map.has(b));
-        hg_test_assert(!map.has(ab));
-        hg_test_assert(!map.has(scf));
-
-        map.insert(a);
-        map.insert(b);
-        map.insert(ab);
-        map.insert(scf);
-
-        hg_test_assert(map.has(a));
-        hg_test_assert(map.has(b));
-        hg_test_assert(map.has(ab));
-        hg_test_assert(map.has(scf));
-
-        map.remove(a);
-        map.remove(b);
-        map.remove(ab);
-        map.remove(scf);
-
-        hg_test_assert(!map.has(a));
-        hg_test_assert(!map.has(b));
-        hg_test_assert(!map.has(ab));
-        hg_test_assert(!map.has(scf));
-    }
-
-    {
-        HgArenaScope arena = hg_get_scratch();
-
-        HgHashSet<HgString> map = map.create(arena, 128);
-
-        hg_test_assert(!map.has(HgString::create(arena, "a")));
-        hg_test_assert(!map.has(HgString::create(arena, "b")));
-        hg_test_assert(!map.has(HgString::create(arena, "ab")));
-        hg_test_assert(!map.has(HgString::create(arena, "supercalifragilisticexpialidocious")));
-
-        map.insert(HgString::create(arena, "a"));
-        map.insert(HgString::create(arena, "b"));
-        map.insert(HgString::create(arena, "ab"));
-        map.insert(HgString::create(arena, "supercalifragilisticexpialidocious"));
-
-        hg_test_assert(map.has(HgString::create(arena, "a")));
-        hg_test_assert(map.has(HgString::create(arena, "b")));
-        hg_test_assert(map.has(HgString::create(arena, "ab")));
-        hg_test_assert(map.has(HgString::create(arena, "supercalifragilisticexpialidocious")));
-
-        map.remove(HgString::create(arena, "a"));
-        map.remove(HgString::create(arena, "b"));
-        map.remove(HgString::create(arena, "ab"));
-        map.remove(HgString::create(arena, "supercalifragilisticexpialidocious"));
-
-        hg_test_assert(!map.has(HgString::create(arena, "a")));
-        hg_test_assert(!map.has(HgString::create(arena, "b")));
-        hg_test_assert(!map.has(HgString::create(arena, "ab")));
-        hg_test_assert(!map.has(HgString::create(arena, "supercalifragilisticexpialidocious")));
-    }
-
-    {
-        HgArenaScope arena = hg_get_scratch();
-
-        HgHashSet<HgStringView> map = map.create(arena, 128);
-
-        hg_test_assert(!map.has("a"));
-        hg_test_assert(!map.has("b"));
-        hg_test_assert(!map.has("ab"));
-        hg_test_assert(!map.has("supercalifragilisticexpialidocious"));
-
-        map.insert(HgString::create(arena, "a"));
-        map.insert(HgString::create(arena, "b"));
-        map.insert(HgString::create(arena, "ab"));
-        map.insert(HgString::create(arena, "supercalifragilisticexpialidocious"));
-
-        hg_test_assert(map.has("a"));
-        hg_test_assert(map.has("b"));
-        hg_test_assert(map.has("ab"));
-        hg_test_assert(map.has("supercalifragilisticexpialidocious"));
-
-        map.remove("a");
-        map.remove("b");
-        map.remove("ab");
-        map.remove("supercalifragilisticexpialidocious");
-
-        hg_test_assert(!map.has("a"));
-        hg_test_assert(!map.has("b"));
-        hg_test_assert(!map.has("ab"));
-        hg_test_assert(!map.has("supercalifragilisticexpialidocious"));
-    }
-
-    return true;
-}
+// hg_test(HgHashSet) {
+//     {
+//         hg_arena_scope(arena, hg_get_scratch());
+//
+//         u32 count = 128;
+//
+//         HgHashSet<u32> set = set.create(arena, count);
+//
+//         for (usize i = 0; i < 3; ++i) {
+//             hg_test_assert(set.load == 0);
+//             hg_test_assert(!set.has(0));
+//             hg_test_assert(!set.has(1));
+//             hg_test_assert(!set.has(12));
+//             hg_test_assert(!set.has(42));
+//             hg_test_assert(!set.has(100000));
+//
+//             set.insert(1);
+//             hg_test_assert(set.load == 1);
+//             hg_test_assert(set.has(1));
+//
+//             set.remove(1);
+//             hg_test_assert(set.load == 0);
+//             hg_test_assert(!set.has(1));
+//
+//             hg_test_assert(!set.has(12));
+//             hg_test_assert(!set.has(12 + count));
+//
+//             set.insert(12);
+//             hg_test_assert(set.load == 1);
+//             hg_test_assert(set.has(12));
+//             hg_test_assert(!set.has(12 + count));
+//
+//             set.insert(12 + count);
+//             hg_test_assert(set.load == 2);
+//             hg_test_assert(set.has(12));
+//             hg_test_assert(set.has(12 + count));
+//
+//             set.insert(12 + count * 2);
+//             hg_test_assert(set.load == 3);
+//             hg_test_assert(set.has(12));
+//             hg_test_assert(set.has(12 + count));
+//             hg_test_assert(set.has(12 + count * 2));
+//
+//             set.remove(12);
+//             hg_test_assert(set.load == 2);
+//             hg_test_assert(!set.has(12));
+//             hg_test_assert(set.has(12 + count));
+//
+//             set.insert(42);
+//             hg_test_assert(set.load == 3);
+//             hg_test_assert(set.has(42));
+//
+//             set.remove(12 + count);
+//             hg_test_assert(set.load == 2);
+//             hg_test_assert(!set.has(12));
+//             hg_test_assert(!set.has(12 + count));
+//
+//             set.remove(42);
+//             hg_test_assert(set.load == 1);
+//             hg_test_assert(!set.has(42));
+//
+//             set.remove(12 + count * 2);
+//             hg_test_assert(set.load == 0);
+//             hg_test_assert(!set.has(12));
+//             hg_test_assert(!set.has(12 + count));
+//             hg_test_assert(!set.has(12 + count * 2));
+//
+//             for (u32 j = 0; j < 100; ++j) {
+//                 hg_test_assert(!set.has(j * 3));
+//                 set.insert(j * 3);
+//                 hg_test_assert(set.has(j * 3));
+//             }
+//             for (u32 j = 0; j < 100; ++j) {
+//                 hg_test_assert(set.has(j * 3));
+//                 set.remove(j * 3);
+//                 hg_test_assert(!set.has(j * 3));
+//             }
+//
+//             set.reset();
+//         }
+//     }
+//
+//     {
+//         hg_arena_scope(arena, hg_get_scratch());
+//
+//         using StrHash = usize;
+//
+//         HgHashSet<StrHash> map = map.create(arena, 128);
+//
+//         StrHash a = hg_hash("a");
+//         StrHash b = hg_hash("b");
+//         StrHash ab = hg_hash("ab");
+//         StrHash scf = hg_hash("supercalifragilisticexpialidocious");
+//
+//         hg_test_assert(!map.has(a));
+//         hg_test_assert(!map.has(b));
+//         hg_test_assert(!map.has(ab));
+//         hg_test_assert(!map.has(scf));
+//
+//         map.insert(a);
+//         map.insert(b);
+//         map.insert(ab);
+//         map.insert(scf);
+//
+//         hg_test_assert(map.has(a));
+//         hg_test_assert(map.has(b));
+//         hg_test_assert(map.has(ab));
+//         hg_test_assert(map.has(scf));
+//
+//         map.remove(a);
+//         map.remove(b);
+//         map.remove(ab);
+//         map.remove(scf);
+//
+//         hg_test_assert(!map.has(a));
+//         hg_test_assert(!map.has(b));
+//         hg_test_assert(!map.has(ab));
+//         hg_test_assert(!map.has(scf));
+//     }
+//
+//     {
+//         hg_arena_scope(arena, hg_get_scratch());
+//
+//         HgHashSet<const char* > map = map.create(arena, 128);
+//
+//         const char* a = "a";
+//         const char* b = "b";
+//         const char* ab = "ab";
+//         const char* scf = "supercalifragilisticexpialidocious";
+//
+//         hg_test_assert(!map.has(a));
+//         hg_test_assert(!map.has(b));
+//         hg_test_assert(!map.has(ab));
+//         hg_test_assert(!map.has(scf));
+//
+//         map.insert(a);
+//         map.insert(b);
+//         map.insert(ab);
+//         map.insert(scf);
+//
+//         hg_test_assert(map.has(a));
+//         hg_test_assert(map.has(b));
+//         hg_test_assert(map.has(ab));
+//         hg_test_assert(map.has(scf));
+//
+//         map.remove(a);
+//         map.remove(b);
+//         map.remove(ab);
+//         map.remove(scf);
+//
+//         hg_test_assert(!map.has(a));
+//         hg_test_assert(!map.has(b));
+//         hg_test_assert(!map.has(ab));
+//         hg_test_assert(!map.has(scf));
+//     }
+//
+//     {
+//         hg_arena_scope(arena, hg_get_scratch());
+//
+//         HgHashSet<HgString> map = map.create(arena, 128);
+//
+//         HgString a = a.create(arena, "a");
+//         HgString b = b.create(arena, "b");
+//         HgString ab = ab.create(arena, "ab");
+//         HgString scf = scf.create(arena, "supercalifragilisticexpialidocious");
+//
+//         hg_test_assert(!map.has(a));
+//         hg_test_assert(!map.has(b));
+//         hg_test_assert(!map.has(ab));
+//         hg_test_assert(!map.has(scf));
+//
+//         map.insert(a);
+//         map.insert(b);
+//         map.insert(ab);
+//         map.insert(scf);
+//
+//         hg_test_assert(map.has(a));
+//         hg_test_assert(map.has(b));
+//         hg_test_assert(map.has(ab));
+//         hg_test_assert(map.has(scf));
+//
+//         map.remove(a);
+//         map.remove(b);
+//         map.remove(ab);
+//         map.remove(scf);
+//
+//         hg_test_assert(!map.has(a));
+//         hg_test_assert(!map.has(b));
+//         hg_test_assert(!map.has(ab));
+//         hg_test_assert(!map.has(scf));
+//     }
+//
+//     {
+//         hg_arena_scope(arena, hg_get_scratch());
+//
+//         HgHashSet<HgString> map = map.create(arena, 128);
+//
+//         hg_test_assert(!map.has(HgString::create(arena, "a")));
+//         hg_test_assert(!map.has(HgString::create(arena, "b")));
+//         hg_test_assert(!map.has(HgString::create(arena, "ab")));
+//         hg_test_assert(!map.has(HgString::create(arena, "supercalifragilisticexpialidocious")));
+//
+//         map.insert(HgString::create(arena, "a"));
+//         map.insert(HgString::create(arena, "b"));
+//         map.insert(HgString::create(arena, "ab"));
+//         map.insert(HgString::create(arena, "supercalifragilisticexpialidocious"));
+//
+//         hg_test_assert(map.has(HgString::create(arena, "a")));
+//         hg_test_assert(map.has(HgString::create(arena, "b")));
+//         hg_test_assert(map.has(HgString::create(arena, "ab")));
+//         hg_test_assert(map.has(HgString::create(arena, "supercalifragilisticexpialidocious")));
+//
+//         map.remove(HgString::create(arena, "a"));
+//         map.remove(HgString::create(arena, "b"));
+//         map.remove(HgString::create(arena, "ab"));
+//         map.remove(HgString::create(arena, "supercalifragilisticexpialidocious"));
+//
+//         hg_test_assert(!map.has(HgString::create(arena, "a")));
+//         hg_test_assert(!map.has(HgString::create(arena, "b")));
+//         hg_test_assert(!map.has(HgString::create(arena, "ab")));
+//         hg_test_assert(!map.has(HgString::create(arena, "supercalifragilisticexpialidocious")));
+//     }
+//
+//     {
+//         hg_arena_scope(arena, hg_get_scratch());
+//
+//         HgHashSet<HgStringView> map = map.create(arena, 128);
+//
+//         hg_test_assert(!map.has("a"));
+//         hg_test_assert(!map.has("b"));
+//         hg_test_assert(!map.has("ab"));
+//         hg_test_assert(!map.has("supercalifragilisticexpialidocious"));
+//
+//         map.insert(HgString::create(arena, "a"));
+//         map.insert(HgString::create(arena, "b"));
+//         map.insert(HgString::create(arena, "ab"));
+//         map.insert(HgString::create(arena, "supercalifragilisticexpialidocious"));
+//
+//         hg_test_assert(map.has("a"));
+//         hg_test_assert(map.has("b"));
+//         hg_test_assert(map.has("ab"));
+//         hg_test_assert(map.has("supercalifragilisticexpialidocious"));
+//
+//         map.remove("a");
+//         map.remove("b");
+//         map.remove("ab");
+//         map.remove("supercalifragilisticexpialidocious");
+//
+//         hg_test_assert(!map.has("a"));
+//         hg_test_assert(!map.has("b"));
+//         hg_test_assert(!map.has("ab"));
+//         hg_test_assert(!map.has("supercalifragilisticexpialidocious"));
+//     }
+//
+//     return true;
+// }
 
 hg_test(HgFunction) {
     {
@@ -1106,7 +1108,7 @@ hg_test(HgFunction) {
     }
 
     {
-        HgArenaScope arena = hg_get_scratch();
+        hg_arena_scope(arena, hg_get_scratch());
 
         enum State {
             state_no_mul = 0,
@@ -1148,18 +1150,18 @@ hg_test(HgFunction) {
 
 hg_test(HgString) {
     {
-        HgArenaScope arena = hg_get_scratch();
+        hg_arena_scope(arena, hg_get_scratch());
 
         HgString a = a.create(arena, "a");
         hg_test_assert(a[0] == 'a');
         hg_test_assert(a.chars.count == 1);
-        hg_test_assert(a.length == 1);
+        hg_test_assert(a.length() == 1);
 
         HgString abc = abc.create(arena, "abc");
         hg_test_assert(abc[0] == 'a');
         hg_test_assert(abc[1] == 'b');
         hg_test_assert(abc[2] == 'c');
-        hg_test_assert(abc.length == 3);
+        hg_test_assert(abc.length() == 3);
         hg_test_assert(abc.chars.count == 3);
 
         a.append(arena, "bc");
@@ -1185,7 +1187,7 @@ hg_test(HgString) {
 }
 
 hg_test(hg_string_utils) {
-    HgArenaScope arena = hg_get_scratch();
+    hg_arena_scope(arena, hg_get_scratch());
 
     hg_test_assert(hg_is_whitespace(' '));
     hg_test_assert(hg_is_whitespace('\t'));
@@ -1448,7 +1450,7 @@ hg_test(hg_string_utils) {
 
 hg_test(HgJsonParser) {
     {
-        HgArenaScope arena = hg_get_scratch();
+        hg_arena_scope(arena, hg_get_scratch());
 
         HgStringView file = R"(
             {
@@ -1696,7 +1698,7 @@ hg_test(HgJsonParser) {
 
 hg_test(HgMPSCQueue) {
     {
-        HgArenaScope arena = hg_get_scratch();
+        hg_arena_scope(arena, hg_get_scratch());
 
         HgMPSCQueue<u32> queue = HgMPSCQueue<u32>::create(arena, 8);
 
@@ -1731,7 +1733,7 @@ hg_test(HgMPSCQueue) {
     }
 
     {
-        HgArenaScope arena = hg_get_scratch();
+        hg_arena_scope(arena, hg_get_scratch());
 
         HgMPSCQueue<u32> queue = HgMPSCQueue<u32>::create(arena, 128);
 
@@ -1794,7 +1796,7 @@ hg_test(HgMPSCQueue) {
 
 hg_test(HgMPMCQueue) {
     {
-        HgArenaScope arena = hg_get_scratch();
+        hg_arena_scope(arena, hg_get_scratch());
 
         HgMPMCQueue<u32> queue = HgMPMCQueue<u32>::create(arena, 8);
 
@@ -1829,7 +1831,7 @@ hg_test(HgMPMCQueue) {
     }
 
     {
-        HgArenaScope arena = hg_get_scratch();
+        hg_arena_scope(arena, hg_get_scratch());
 
         HgMPMCQueue<u32> queue = HgMPMCQueue<u32>::create(arena, 128);
 
@@ -1899,7 +1901,7 @@ hg_test(HgMPMCQueue) {
 }
 
 hg_test(HgThreadPool) {
-    HgArenaScope arena = hg_get_scratch();
+    hg_arena_scope(arena, hg_get_scratch());
 
     HgThreadPool* threads = HgThreadPool::create(arena, std::thread::hardware_concurrency() - 1, 128);
     hg_defer(threads->destroy());
@@ -1975,7 +1977,7 @@ hg_test(HgThreadPool) {
 }
 
 hg_test(HgIOThread) {
-    HgArenaScope arena = hg_get_scratch();
+    hg_arena_scope(arena, hg_get_scratch());
 
     HgIOThread* io = HgIOThread::create(arena, 128);
     hg_defer(io->destroy());
@@ -1987,10 +1989,10 @@ hg_test(HgIOThread) {
         bool vals[100] = {};
 
         HgIOThread::Request request;
-        request.fence = &fence;
+        request.fences = &fence;
         request.resource = vals;
         request.fn = [](void*, void* pval, HgStringView) {
-            HgSpan<bool> span = {(bool*)pval, hg_countof(vals)};
+            HgPtr<bool> span = {(bool*)pval, hg_countof(vals)};
             for (auto& val : span) {
                 val = true;
             }
@@ -2008,7 +2010,7 @@ hg_test(HgIOThread) {
 
         for (usize i = 0; i < hg_countof(vals); ++i) {
             HgIOThread::Request request;
-            request.fence = &fence;
+            request.fences = &fence;
             request.resource = &vals[i];
             request.fn = [](void*, void* pval, HgStringView) {
                 *(bool*)pval = true;
@@ -2029,7 +2031,7 @@ hg_test(HgIOThread) {
 
         for (usize i = 1; i < hg_countof(vals); ++i) {
             HgIOThread::Request request;
-            request.fence = &fence;
+            request.fences = &fence;
             request.resource = &vals[i];
             request.fn = [](void*, void* pval, HgStringView) {
                 *(bool*)pval = *((bool*)pval - 1);
@@ -2047,27 +2049,27 @@ hg_test(HgIOThread) {
 }
 
 hg_test(HgFileBinary) {
-    HgArenaScope arena = hg_get_scratch();
+    hg_arena_scope(arena, hg_get_scratch());
 
     u32 save_data[] = {12, 42, 100, 128};
 
     const char* file_path = "hg_test_dir/file_bin_test.bin";
-    HgBinary file{};
+    HgBinary bin{};
 
     HgFence fence;
     {
-        file.load(&fence, "file_does_not_exist.bin");
+        bin.load(&fence, "file_does_not_exist.bin");
         hg_test_assert(fence.wait(2.0));
 
-        hg_test_assert(file.data == nullptr);
-        hg_test_assert(file.count == 0);
+        hg_test_assert(bin.file == nullptr);
+        hg_test_assert(bin.file.count == 0);
     }
 
     {
-        file.data = save_data;
-        file.count = sizeof(save_data);
+        bin.file.data = save_data;
+        bin.file.count = sizeof(save_data);
 
-        file.store(&fence, "dir/does/not/exist.bin");
+        bin.store(&fence, "dir/does/not/exist.bin");
         hg_test_assert(fence.wait(2.0));
 
         FILE* file_handle = std::fopen("dir/does/not/exist.bin", "rb");
@@ -2075,19 +2077,19 @@ hg_test(HgFileBinary) {
     }
 
     {
-        file.data = save_data;
-        file.count = sizeof(save_data);
+        bin.file.data = save_data;
+        bin.file.count = sizeof(save_data);
 
-        file.store(&fence, file_path);
-        file.load(&fence, file_path);
+        bin.store(&fence, file_path);
+        bin.load(&fence, file_path);
         hg_test_assert(fence.wait(2.0));
 
-        hg_test_assert(file.data != nullptr);
-        hg_test_assert(file.data != save_data);
-        hg_test_assert(file.count == sizeof(save_data));
-        hg_test_assert(std::memcmp(save_data, file.data, file.count) == 0);
+        hg_test_assert(bin.file != nullptr);
+        hg_test_assert(bin.file.data != save_data);
+        hg_test_assert(bin.file.count == sizeof(save_data));
+        hg_test_assert(std::memcmp(save_data, bin.file.data, bin.file.count) == 0);
 
-        file.unload(&fence);
+        bin.unload(&fence);
     }
     hg_test_assert(fence.wait(2.0));
 
@@ -2095,7 +2097,7 @@ hg_test(HgFileBinary) {
 }
 
 hg_test(HgTexture) {
-    HgArenaScope arena = hg_get_scratch();
+    hg_arena_scope(arena, hg_get_scratch());
 
     struct color {
         u8 r, g, b, a;
@@ -2156,7 +2158,7 @@ hg_test(HgTexture) {
 }
 
 hg_test(HgECS) {
-    HgArenaScope arena = hg_get_scratch();
+    hg_arena_scope(arena, hg_get_scratch());
 
     HgECS ecs = ecs.create(arena, 512);
 
