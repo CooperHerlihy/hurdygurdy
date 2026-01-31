@@ -39,9 +39,9 @@ int main(void) {
 
     u32 swap_image_count;
     vkGetSwapchainImagesKHR(hg_vk_device, swapchain.handle, &swap_image_count, nullptr);
-    HgPtr<VkImage> swap_images = arena.alloc<VkImage>(swap_image_count);
-    HgPtr<VkImageView> swap_views = arena.alloc<VkImageView>(swap_image_count);
-    vkGetSwapchainImagesKHR(hg_vk_device, swapchain.handle, &swap_image_count, swap_images.data);
+    VkImage* swap_images = arena.alloc<VkImage>(swap_image_count);
+    VkImageView* swap_views = arena.alloc<VkImageView>(swap_image_count);
+    vkGetSwapchainImagesKHR(hg_vk_device, swapchain.handle, &swap_image_count, swap_images);
     for (usize i = 0; i < swap_image_count; ++i) {
         VkImageViewCreateInfo create_info{};
         create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -68,19 +68,21 @@ int main(void) {
         {0x00, 0x00, 0xff, 0xff}, {0xff, 0xff, 0x00, 0xff},
     };
 
-    HgTexture texture;
+    HgResourceID texture_id = hg_resource_id("sprite_texture");
+    hg_resources->register_resource(HG_RESOURCE_TEXTURE, texture_id);
+
+    HgTexture& texture = hg_resources->get<HgTexture>(texture_id);
     texture.pixels = tex_data;
     texture.format = VK_FORMAT_R8G8B8A8_SRGB;
     texture.width = 2;
     texture.height = 2;
     texture.depth = 1;
     texture.location = HgTexture::CPU;
+    texture.transfer_to_gpu(cmd_pool, VK_FILTER_NEAREST);
+    hg_defer(texture.free_from_gpu());
 
-    texture.create_gpu(cmd_pool, VK_FILTER_NEAREST);
-    hg_defer(texture.destroy_gpu());
-
-    pipeline2d.add_texture(&texture);
-    hg_defer(pipeline2d.remove_texture(&texture));
+    pipeline2d.add_texture(texture_id);
+    hg_defer(pipeline2d.remove_texture(texture_id));
 
     hg_ecs->register_component<HgTransform>(arena, 1024);
     hg_ecs->register_component<HgSprite>(arena, 1024);
@@ -92,7 +94,7 @@ int main(void) {
 
     for (HgEntity square : squares) {
         hg_ecs->add(square, HgTransform{});
-        hg_ecs->add(square, HgSprite{&texture, {0.0f}, {1.0f}});
+        hg_ecs->add(square, HgSprite{texture_id, {0.0f}, {1.0f}});
     }
 
     {
@@ -109,7 +111,6 @@ int main(void) {
     HgTransform camera = {};
 
     f32 aspect = (f32)swapchain.width / (f32)swapchain.height;
-    // HgMat4 proj = hg_projection_orthographic(-aspect, aspect, -1.0f, 1.0f, 0.0f, 1.0f);
     HgMat4 proj = hg_projection_perspective((f32)hg_pi * 0.5f, aspect, 0.1f, 1000.0f);
     pipeline2d.update_projection(proj);
 
@@ -136,7 +137,7 @@ int main(void) {
 
         hg_arena_scope(frame, hg_get_scratch(arena));
 
-        hg_process_window_events({&window, 1});
+        hg_process_window_events(&window, 1);
         if (window.was_closed() || window.is_key_down(HG_KEY_ESCAPE))
             break;
 
@@ -178,18 +179,19 @@ int main(void) {
             swapchain = hg_vk_create_swapchain(old_swapchain, surface,
                 VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_PRESENT_MODE_FIFO_KHR);
 
-            for (usize i = 0; i < swap_views.count; ++i) {
+            for (usize i = 0; i < swap_image_count; ++i) {
                 vkDestroyImageView(hg_vk_device, swap_views[i], nullptr);
             }
             swapchain_commands.destroy();
 
             if (swapchain.handle != nullptr) {
+                usize old_count = swap_image_count;
                 vkGetSwapchainImagesKHR(hg_vk_device, swapchain.handle, &swap_image_count, nullptr);
-                if (swap_images.count != swap_image_count) {
-                    swap_images = arena.realloc(swap_images, swap_image_count);
-                    swap_views = arena.realloc(swap_views, swap_image_count);
+                if (old_count != swap_image_count) {
+                    swap_images = arena.realloc(swap_images, old_count, swap_image_count);
+                    swap_views = arena.realloc(swap_views, old_count, swap_image_count);
                 }
-                vkGetSwapchainImagesKHR(hg_vk_device, swapchain.handle, &swap_image_count, swap_images.data);
+                vkGetSwapchainImagesKHR(hg_vk_device, swapchain.handle, &swap_image_count, swap_images);
                 for (usize i = 0; i < swap_image_count; ++i) {
                     VkImageViewCreateInfo create_info{};
                     create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -203,7 +205,6 @@ int main(void) {
                 swapchain_commands.recreate(arena, swapchain.handle, cmd_pool);
 
                 aspect = (f32)swapchain.width / (f32)swapchain.height;
-                // proj = hg_projection_orthographic(-aspect, aspect, -1.0f, 1.0f, 0.0f, 1.0f);
                 proj = hg_projection_perspective((f32)hg_pi * 0.5f, aspect, 0.1f, 1000.0f);
                 pipeline2d.update_projection(proj);
             }
@@ -348,36 +349,41 @@ hg_test(HgArena) {
     void* block = std::malloc(1024);
     hg_defer(std::free(block));
 
-    HgArena arena{{block, 1024}};
+    HgArena arena{block, 1024};
 
     for (usize i = 0; i < 3; ++i) {
         hg_test_assert(arena.memory != nullptr);
-        hg_test_assert(arena.memory.count == 1024);
+        hg_test_assert(arena.capacity == 1024);
         hg_test_assert(arena.head == 0);
 
-        u32* alloc_u32 = arena.alloc<u32>(1).data;
-        hg_test_assert(alloc_u32 == arena.memory.begin());
+        u32* alloc_u32 = arena.alloc<u32>(1);
+        hg_test_assert(alloc_u32 == arena.memory);
 
-        HgPtr<u64> alloc_u64 = arena.alloc<u64>(2);
-        hg_test_assert((u8*)alloc_u64.data == (u8*)alloc_u32 + 8);
+        u64* alloc_u64 = arena.alloc<u64>(2);
+        hg_test_assert((u8*)alloc_u64 == (u8*)alloc_u32 + 8);
 
-        u8* alloc_u8 = arena.alloc<u8>(1).data;
+        u8* alloc_u8 = arena.alloc<u8>(1);
         hg_test_assert(alloc_u8 == (u8*)alloc_u32 + 24);
 
         struct Big {
             u8 data[32];
         };
-        HgPtr<Big> alloc_big = arena.alloc<Big>(1);
-        hg_test_assert((u8*)alloc_big.data == (u8*)alloc_u32 + 25);
+        Big* alloc_big = arena.alloc<Big>(1);
+        hg_test_assert((u8*)alloc_big == (u8*)alloc_u32 + 25);
 
-        HgPtr<Big> realloc_big = arena.realloc(alloc_big, 2);
-        hg_test_assert(realloc_big.data == alloc_big.data);
+        Big* realloc_big = arena.realloc(alloc_big, 1, 2);
+        hg_test_assert(realloc_big == alloc_big);
 
-        memset(realloc_big.data, 2, realloc_big.size());
+        Big* realloc_big_same = arena.realloc(realloc_big, 2, 2);
+        hg_test_assert(realloc_big_same == realloc_big);
 
-        HgPtr<Big> realloc_big2 = arena.realloc(realloc_big, 2);
-        hg_test_assert(realloc_big2.data == realloc_big.data);
-        hg_test_assert(memcmp(realloc_big.data, realloc_big2.data, realloc_big2.size()) == 0);
+        memset(realloc_big, 2, 2 * sizeof(*realloc_big));
+        u8* alloc_interrupt = arena.alloc<u8>(1);
+        (void)alloc_interrupt;
+
+        Big* realloc_big2 = arena.realloc(realloc_big, 2, 4);
+        hg_test_assert(realloc_big2 != realloc_big);
+        hg_test_assert(memcmp(realloc_big, realloc_big2, 2 * sizeof(*realloc_big)) == 0);
 
         arena.reset();
     }
@@ -388,23 +394,23 @@ hg_test(HgArena) {
 hg_test(HgArrayAny) {
     hg_arena_scope(arena, hg_get_scratch());
 
-    HgArrayAny arr = arr.create(arena, sizeof(u32), alignof(u32), 0, 2);
+    HgAnyArray arr = arr.create(arena, sizeof(u32), alignof(u32), 0, 2);
     hg_test_assert(arr.items != nullptr);
     hg_test_assert(arr.capacity == 2);
     hg_test_assert(arr.count == 0);
 
     *(u32*)arr.push() = 2;
-    hg_test_assert(*(u32*)arr[0] == 2);
+    hg_test_assert(*(u32*)arr.get(0) == 2);
     hg_test_assert(arr.count == 1);
     *(u32*)arr.push() = 4;
-    hg_test_assert(*(u32*)arr[1] == 4);
+    hg_test_assert(*(u32*)arr.get(1) == 4);
     hg_test_assert(arr.count == 2);
 
     arr.grow(arena);
     hg_test_assert(arr.capacity == 4);
 
     *(u32*)arr.push() = 8;
-    hg_test_assert(*(u32*)arr[2] == 8);
+    hg_test_assert(*(u32*)arr.get(2) == 8);
     hg_test_assert(arr.count == 3);
 
     arr.pop();
@@ -413,14 +419,14 @@ hg_test(HgArrayAny) {
 
     *(u32*)arr.insert(0) = 1;
     hg_test_assert(arr.count == 3);
-    hg_test_assert(*(u32*)arr[0] == 1);
-    hg_test_assert(*(u32*)arr[1] == 2);
-    hg_test_assert(*(u32*)arr[2] == 4);
+    hg_test_assert(*(u32*)arr.get(0) == 1);
+    hg_test_assert(*(u32*)arr.get(1) == 2);
+    hg_test_assert(*(u32*)arr.get(2) == 4);
 
     arr.remove(1);
     hg_test_assert(arr.count == 2);
-    hg_test_assert(*(u32*)arr[0] == 1);
-    hg_test_assert(*(u32*)arr[1] == 4);
+    hg_test_assert(*(u32*)arr.get(0) == 1);
+    hg_test_assert(*(u32*)arr.get(1) == 4);
 
     for (u32 i = 0; i < 100; ++i) {
         if (arr.is_full())
@@ -432,15 +438,15 @@ hg_test(HgArrayAny) {
 
     arr.swap_remove(2);
     hg_test_assert(arr.count == 101);
-    hg_test_assert(*(u32*)arr[2] == 99);
-    hg_test_assert(*(u32*)arr[arr.count - 1] == 98);
+    hg_test_assert(*(u32*)arr.get(2) == 99);
+    hg_test_assert(*(u32*)arr.get(arr.count - 1) == 98);
 
     *(u32*)arr.swap_insert(0) = 42;
     hg_test_assert(arr.count == 102);
-    hg_test_assert(*(u32*)arr[0] == 42);
-    hg_test_assert(*(u32*)arr[1] == 4);
-    hg_test_assert(*(u32*)arr[2] == 99);
-    hg_test_assert(*(u32*)arr[arr.count - 1] == 1);
+    hg_test_assert(*(u32*)arr.get(0) == 42);
+    hg_test_assert(*(u32*)arr.get(1) == 4);
+    hg_test_assert(*(u32*)arr.get(2) == 99);
+    hg_test_assert(*(u32*)arr.get(arr.count - 1) == 1);
 
     return true;
 }
@@ -673,15 +679,15 @@ hg_test(HgString) {
 
         HgString a = a.create(arena, "a");
         hg_test_assert(a[0] == 'a');
-        hg_test_assert(a.chars.count == 1);
-        hg_test_assert(a.length() == 1);
+        hg_test_assert(a.capacity == 1);
+        hg_test_assert(a.length == 1);
 
         HgString abc = abc.create(arena, "abc");
         hg_test_assert(abc[0] == 'a');
         hg_test_assert(abc[1] == 'b');
         hg_test_assert(abc[2] == 'c');
-        hg_test_assert(abc.length() == 3);
-        hg_test_assert(abc.chars.count == 3);
+        hg_test_assert(abc.length == 3);
+        hg_test_assert(abc.capacity == 3);
 
         a.append(arena, "bc");
         hg_test_assert(a == abc);
@@ -1215,210 +1221,6 @@ hg_test(HgJsonParser) {
     return true;
 }
 
-hg_test(HgMPSCQueue) {
-    {
-        hg_arena_scope(arena, hg_get_scratch());
-
-        HgMPSCQueue<u32> queue = HgMPSCQueue<u32>::create(arena, 8);
-
-        hg_test_assert(queue.items != nullptr);
-        hg_test_assert(queue.capacity == 8);
-        hg_test_assert(queue.head->load() == 0);
-        hg_test_assert(queue.tail->load() == 0);
-
-        u32 item;
-
-        for (usize i = 0; i < 3; ++i) {
-            for (u32 j = 0; j < 7; ++j) {
-                queue.push(j);
-            }
-
-            hg_test_assert(queue.pop(item) && item == 0);
-            hg_test_assert(queue.pop(item) && item == 1);
-            hg_test_assert(queue.pop(item) && item == 2);
-            hg_test_assert(queue.pop(item) && item == 3);
-
-            for (u32 j = 7; j < 10; ++j) {
-                queue.push(j);
-            }
-
-            hg_test_assert(queue.pop(item) && item == 4);
-            hg_test_assert(queue.pop(item) && item == 5);
-            hg_test_assert(queue.pop(item) && item == 6);
-            hg_test_assert(queue.pop(item) && item == 7);
-            hg_test_assert(queue.pop(item) && item == 8);
-            hg_test_assert(queue.pop(item) && item == 9);
-        }
-    }
-
-    {
-        hg_arena_scope(arena, hg_get_scratch());
-
-        HgMPSCQueue<u32> queue = HgMPSCQueue<u32>::create(arena, 128);
-
-        hg_test_assert(queue.items != nullptr);
-        hg_test_assert(queue.capacity == 128);
-        hg_test_assert(queue.head->load() == 0);
-        hg_test_assert(queue.tail->load() == 0);
-
-        for (u32 n = 0; n < 3; ++n) {
-
-            std::atomic_bool start{false};
-            std::thread producers[4];
-            std::thread consumer;
-
-            bool vals[100] = {};
-
-            auto prod_fn = [&](u32 idx) {
-                while (!start) {
-                    _mm_pause();
-                }
-                u32 begin = idx * 25;
-                u32 end = begin + 25;
-                for (u32 i = begin; i < end; ++i) {
-                    queue.push(i);
-                }
-            };
-            for (u32 j = 0; j < hg_countof(producers); ++j) {
-                producers[j] = std::thread(prod_fn, j);
-            }
-
-            auto cons_fn = [&]() {
-                while (!start) {
-                    _mm_pause();
-                }
-                usize count = 0;
-                while (count < hg_countof(vals)) {
-                    u32 idx;
-                    if (queue.pop(idx)) {
-                        vals[idx] = !vals[idx];
-                        ++count;
-                    }
-                }
-            };
-            consumer = std::thread(cons_fn);
-
-            start.store(true);
-            for (auto& thread : producers) {
-                thread.join();
-            }
-            consumer.join();
-
-            for (auto val : vals) {
-                hg_test_assert(val == true);
-            }
-        }
-    }
-
-    return true;
-}
-
-hg_test(HgMPMCQueue) {
-    {
-        hg_arena_scope(arena, hg_get_scratch());
-
-        HgMPMCQueue<u32> queue = HgMPMCQueue<u32>::create(arena, 8);
-
-        hg_test_assert(queue.items != nullptr);
-        hg_test_assert(queue.capacity == 8);
-        hg_test_assert(queue.head->load() == 0);
-        hg_test_assert(queue.tail->load() == 0);
-
-        u32 item;
-
-        for (usize i = 0; i < 3; ++i) {
-            for (u32 j = 0; j < 7; ++j) {
-                queue.push(j);
-            }
-
-            hg_test_assert(queue.pop(item) && item == 0);
-            hg_test_assert(queue.pop(item) && item == 1);
-            hg_test_assert(queue.pop(item) && item == 2);
-            hg_test_assert(queue.pop(item) && item == 3);
-
-            for (u32 j = 7; j < 10; ++j) {
-                queue.push(j);
-            }
-
-            hg_test_assert(queue.pop(item) && item == 4);
-            hg_test_assert(queue.pop(item) && item == 5);
-            hg_test_assert(queue.pop(item) && item == 6);
-            hg_test_assert(queue.pop(item) && item == 7);
-            hg_test_assert(queue.pop(item) && item == 8);
-            hg_test_assert(queue.pop(item) && item == 9);
-        }
-    }
-
-    {
-        hg_arena_scope(arena, hg_get_scratch());
-
-        HgMPMCQueue<u32> queue = HgMPMCQueue<u32>::create(arena, 128);
-
-        hg_test_assert(queue.items != nullptr);
-        hg_test_assert(queue.capacity == 128);
-        hg_test_assert(queue.head->load() == 0);
-        hg_test_assert(queue.tail->load() == 0);
-
-        for (u32 n = 0; n < 3; ++n) {
-
-            std::atomic_bool start{false};
-            std::thread producers[4];
-            std::thread consumers[4];
-
-            bool vals[100] = {};
-
-            auto prod_fn = [&](u32 idx) {
-                while (!start) {
-                    _mm_pause();
-                }
-                u32 begin = idx * 25;
-                u32 end = begin + 25;
-                for (u32 i = begin; i < end; ++i) {
-                    queue.push(i);
-                }
-            };
-            for (u32 j = 0; j < hg_countof(producers); ++j) {
-                producers[j] = std::thread(prod_fn, j);
-            }
-
-            std::atomic<usize> count = 0;
-            auto cons_fn = [&]() {
-                while (!start) {
-                    _mm_pause();
-                }
-                while (count < hg_countof(vals)) {
-                    usize count_internal = 0;
-                    for (usize j = 0; j < 20; ++j) {
-                        u32 idx;
-                        if (queue.pop(idx)) {
-                            vals[idx] = !vals[idx];
-                            ++count_internal;
-                        }
-                    }
-                    count.fetch_add(count_internal);
-                }
-            };
-            for (u32 j = 0; j < hg_countof(consumers); ++j) {
-                consumers[j] = std::thread(cons_fn);
-            }
-
-            start.store(true);
-            for (auto& thread : producers) {
-                thread.join();
-            }
-            for (auto& thread : consumers) {
-                thread.join();
-            }
-
-            for (auto val : vals) {
-                hg_test_assert(val == true);
-            }
-        }
-    }
-
-    return true;
-}
-
 hg_test(HgThreadPool) {
     hg_arena_scope(arena, hg_get_scratch());
 
@@ -1432,12 +1234,14 @@ hg_test(HgThreadPool) {
         bool a = false;
         bool b = false;
 
-        threads->call_par(&fence, &a, [](void *pa) {
+        threads->push(&fence, 1, &a, [](void *pa) {
             *(bool*)pa = true;
         });
-        threads->call_par(&fence, &b, [](void *pb) {
+        threads->push(&fence, 1, &b, [](void *pb) {
             *(bool*)pb = true;
         });
+
+        fence.wait(2.0);
 
         hg_test_assert(fence.wait(2.0));
 
@@ -1448,7 +1252,7 @@ hg_test(HgThreadPool) {
     {
         bool vals[100] = {};
         for (bool& val : vals) {
-            threads->call_par(&fence, &val, [](void* data) {
+            threads->push(&fence, 1, &val, [](void* data) {
                 *(bool*)data = true;
             });
         }
@@ -1475,6 +1279,43 @@ hg_test(HgThreadPool) {
         }
     }
 
+    {
+        for (u32 n = 0; n < 3; ++n) {
+            std::atomic_bool start{false};
+            std::thread producers[4];
+
+            bool vals[100] = {};
+
+            auto fn = [](void* pval) {
+                *((bool*)pval) = !*((bool*)pval);
+            };
+
+            auto prod_fn = [&](u32 idx) {
+                while (!start) {
+                    _mm_pause();
+                }
+                u32 begin = idx * 25;
+                u32 end = begin + 25;
+                for (u32 i = begin; i < end; ++i) {
+                    threads->push(&fence, 1, vals + i, fn);
+                }
+            };
+            for (u32 j = 0; j < hg_countof(producers); ++j) {
+                producers[j] = std::thread(prod_fn, j);
+            }
+
+            start.store(true);
+            for (auto& thread : producers) {
+                thread.join();
+            }
+
+            hg_test_assert(threads->help(fence, 2.0));
+            for (auto val : vals) {
+                hg_test_assert(val == true);
+            }
+        }
+    }
+
     return true;
 }
 
@@ -1492,14 +1333,14 @@ hg_test(HgIOThread) {
 
         HgIOThread::Request request;
         request.fences = &fence;
+        request.fence_count = 1;
         request.resource = vals;
-        request.fn = [](void*, void* pval, HgStringView) {
-            HgPtr<bool> span = {(bool*)pval, hg_countof(vals)};
-            for (auto& val : span) {
-                val = true;
+        request.fn = [](void*, void* pvals, HgStringView) {
+            for (usize i = 0; i < hg_countof(vals); ++i) {
+                ((bool*)pvals)[i] = true;
             }
         };
-        io->request(request);
+        io->push(request);
 
         hg_test_assert(fence.wait(2.0));
         for (usize i = 0; i < hg_countof(vals); ++i) {
@@ -1513,11 +1354,12 @@ hg_test(HgIOThread) {
         for (usize i = 0; i < hg_countof(vals); ++i) {
             HgIOThread::Request request;
             request.fences = &fence;
+            request.fence_count = 1;
             request.resource = &vals[i];
             request.fn = [](void*, void* pval, HgStringView) {
                 *(bool*)pval = true;
             };
-            io->request(request);
+            io->push(request);
         }
 
         hg_test_assert(fence.wait(2.0));
@@ -1534,16 +1376,60 @@ hg_test(HgIOThread) {
         for (usize i = 1; i < hg_countof(vals); ++i) {
             HgIOThread::Request request;
             request.fences = &fence;
+            request.fence_count = 1;
             request.resource = &vals[i];
             request.fn = [](void*, void* pval, HgStringView) {
                 *(bool*)pval = *((bool*)pval - 1);
             };
-            io->request(request);
+            io->push(request);
         }
 
         hg_test_assert(fence.wait(2.0));
         for (usize i = 0; i < hg_countof(vals); ++i) {
             hg_test_assert(vals[i] == true);
+        }
+    }
+
+    {
+        for (u32 n = 0; n < 3; ++n) {
+
+            std::atomic_bool start{false};
+            std::thread producers[4];
+
+            bool vals[100] = {};
+
+            auto req_fn = [](void*, void* pval, HgStringView) {
+                *(bool*)pval = !*(bool*)pval;
+            };
+
+            auto prod_fn = [&](u32 idx) {
+                while (!start) {
+                    _mm_pause();
+                }
+                u32 begin = idx * 25;
+                u32 end = begin + 25;
+                for (u32 i = begin; i < end; ++i) {
+                    HgIOThread::Request r{};
+                    r.fences = &fence;
+                    r.fence_count = 1;
+                    r.resource = &vals[i];
+                    r.fn = req_fn;
+                    io->push(r);
+                }
+            };
+            for (u32 j = 0; j < hg_countof(producers); ++j) {
+                producers[j] = std::thread(prod_fn, j);
+            }
+
+            start.store(true);
+            for (auto& thread : producers) {
+                thread.join();
+            }
+
+            hg_test_assert(fence.wait(2.0));
+            for (auto val : vals) {
+                hg_test_assert(val == true);
+            }
         }
     }
 
@@ -1560,18 +1446,18 @@ hg_test(HgFileBinary) {
 
     HgFence fence;
     {
-        bin.load(&fence, "file_does_not_exist.bin");
+        bin.load(&fence, 1, "file_does_not_exist.bin");
         hg_test_assert(fence.wait(2.0));
 
         hg_test_assert(bin.file == nullptr);
-        hg_test_assert(bin.file.count == 0);
+        hg_test_assert(bin.size == 0);
     }
 
     {
-        bin.file.data = save_data;
-        bin.file.count = sizeof(save_data);
+        bin.file = save_data;
+        bin.size = sizeof(save_data);
 
-        bin.store(&fence, "dir/does/not/exist.bin");
+        bin.store(&fence, 1, "dir/does/not/exist.bin");
         hg_test_assert(fence.wait(2.0));
 
         FILE* file_handle = std::fopen("dir/does/not/exist.bin", "rb");
@@ -1579,19 +1465,19 @@ hg_test(HgFileBinary) {
     }
 
     {
-        bin.file.data = save_data;
-        bin.file.count = sizeof(save_data);
+        bin.file = save_data;
+        bin.size = sizeof(save_data);
 
-        bin.store(&fence, file_path);
-        bin.load(&fence, file_path);
+        bin.store(&fence, 1, file_path);
+        bin.load(&fence, 1, file_path);
         hg_test_assert(fence.wait(2.0));
 
         hg_test_assert(bin.file != nullptr);
-        hg_test_assert(bin.file.data != save_data);
-        hg_test_assert(bin.file.count == sizeof(save_data));
-        hg_test_assert(std::memcmp(save_data, bin.file.data, bin.file.count) == 0);
+        hg_test_assert(bin.file != save_data);
+        hg_test_assert(bin.size == sizeof(save_data));
+        hg_test_assert(std::memcmp(save_data, bin.file, bin.size) == 0);
 
-        bin.unload(&fence);
+        bin.unload(&fence, 1);
     }
     hg_test_assert(fence.wait(2.0));
 
@@ -1633,8 +1519,8 @@ hg_test(HgTexture) {
         texture.depth = save_depth;
         texture.location = HgTexture::CPU;
 
-        texture.store_png(&fence, file_path);
-        texture.load_png(&fence, file_path);
+        texture.store_png(&fence, 1, file_path);
+        texture.load_png(&fence, 1, file_path);
         hg_test_assert(fence.wait(2.0));
 
         hg_test_assert(texture.pixels != nullptr);
@@ -1650,11 +1536,144 @@ hg_test(HgTexture) {
                     == sizeof(save_data));
         hg_test_assert(std::memcmp(save_data, texture.pixels, sizeof(save_data)) == 0);
 
-        texture.unload(&fence);
+        texture.unload(&fence, 1);
     }
     hg_test_assert(fence.wait(2.0));
 
     hg_test_assert(texture.location == HgTexture::UNLOADED);
+
+    return true;
+}
+
+hg_test(HgResourceManager) {
+    hg_arena_scope(arena, hg_get_scratch());
+
+    HgResourceManager rm = rm.create(arena, 64);
+
+    {
+        HgResourceID a = 0;
+        HgResourceID b = 1;
+        HgResourceID b_conf = 1 + rm.capacity;
+        HgResourceID b_conf2 = 1 + rm.capacity * 2;
+        HgResourceID c = 2;
+        HgResourceID d = 3;
+        HgResourceID e = 10;
+
+        hg_test_assert(!rm.is_registered(a));
+        hg_test_assert(!rm.is_registered(b));
+        hg_test_assert(!rm.is_registered(b_conf));
+        hg_test_assert(!rm.is_registered(b_conf2));
+        hg_test_assert(!rm.is_registered(c));
+        hg_test_assert(!rm.is_registered(d));
+        hg_test_assert(!rm.is_registered(e));
+
+        rm.register_resource(HG_RESOURCE_BINARY, a);
+        rm.register_resource(HG_RESOURCE_TEXTURE, b);
+        rm.register_resource(HG_RESOURCE_BINARY, b_conf);
+        rm.register_resource(HG_RESOURCE_TEXTURE, b_conf2);
+        rm.register_resource(HG_RESOURCE_BINARY, c);
+        rm.register_resource(HG_RESOURCE_TEXTURE, d);
+        rm.register_resource(HG_RESOURCE_BINARY, e);
+
+        hg_test_assert(rm.is_registered(a));
+        hg_test_assert(rm.resources[rm.get_resource(a)].type == HG_RESOURCE_BINARY);
+        hg_test_assert(rm.is_registered(b));
+        hg_test_assert(rm.resources[rm.get_resource(b)].type == HG_RESOURCE_TEXTURE);
+        hg_test_assert(rm.is_registered(b_conf));
+        hg_test_assert(rm.resources[rm.get_resource(b_conf)].type == HG_RESOURCE_BINARY);
+        hg_test_assert(rm.is_registered(b_conf2));
+        hg_test_assert(rm.resources[rm.get_resource(b_conf2)].type == HG_RESOURCE_TEXTURE);
+        hg_test_assert(rm.is_registered(c));
+        hg_test_assert(rm.resources[rm.get_resource(c)].type == HG_RESOURCE_BINARY);
+        hg_test_assert(rm.is_registered(d));
+        hg_test_assert(rm.resources[rm.get_resource(d)].type == HG_RESOURCE_TEXTURE);
+        hg_test_assert(rm.is_registered(e));
+        hg_test_assert(rm.resources[rm.get_resource(e)].type == HG_RESOURCE_BINARY);
+
+        rm.unregister_resource(a);
+        rm.unregister_resource(b);
+        rm.unregister_resource(b_conf);
+        rm.unregister_resource(b_conf2);
+        rm.unregister_resource(c);
+        rm.unregister_resource(d);
+        rm.unregister_resource(e);
+
+        hg_test_assert(!rm.is_registered(a));
+        hg_test_assert(!rm.is_registered(b));
+        hg_test_assert(!rm.is_registered(b_conf));
+        hg_test_assert(!rm.is_registered(b_conf2));
+        hg_test_assert(!rm.is_registered(c));
+        hg_test_assert(!rm.is_registered(d));
+        hg_test_assert(!rm.is_registered(e));
+
+        rm.register_resource(HG_RESOURCE_TEXTURE, a);
+        rm.register_resource(HG_RESOURCE_BINARY, b_conf2);
+        rm.register_resource(HG_RESOURCE_TEXTURE, d);
+        rm.register_resource(HG_RESOURCE_BINARY, b);
+
+        hg_test_assert(rm.is_registered(a));
+        hg_test_assert(rm.resources[rm.get_resource(a)].type == HG_RESOURCE_TEXTURE);
+        hg_test_assert(rm.is_registered(b));
+        hg_test_assert(rm.resources[rm.get_resource(b)].type == HG_RESOURCE_BINARY);
+        hg_test_assert(!rm.is_registered(b_conf));
+        hg_test_assert(rm.is_registered(b_conf2));
+        hg_test_assert(rm.resources[rm.get_resource(b_conf2)].type == HG_RESOURCE_BINARY);
+        hg_test_assert(!rm.is_registered(c));
+        hg_test_assert(rm.is_registered(d));
+        hg_test_assert(rm.resources[rm.get_resource(d)].type == HG_RESOURCE_TEXTURE);
+        hg_test_assert(!rm.is_registered(e));
+
+        rm.register_resource(HG_RESOURCE_TEXTURE, b_conf);
+        rm.register_resource(HG_RESOURCE_BINARY, e);
+        rm.register_resource(HG_RESOURCE_TEXTURE, c);
+
+        hg_test_assert(rm.is_registered(a));
+        hg_test_assert(rm.resources[rm.get_resource(a)].type == HG_RESOURCE_TEXTURE);
+        hg_test_assert(rm.is_registered(b));
+        hg_test_assert(rm.resources[rm.get_resource(b)].type == HG_RESOURCE_BINARY);
+        hg_test_assert(rm.is_registered(b_conf));
+        hg_test_assert(rm.resources[rm.get_resource(b_conf)].type == HG_RESOURCE_TEXTURE);
+        hg_test_assert(rm.is_registered(b_conf2));
+        hg_test_assert(rm.resources[rm.get_resource(b_conf2)].type == HG_RESOURCE_BINARY);
+        hg_test_assert(rm.is_registered(c));
+        hg_test_assert(rm.resources[rm.get_resource(c)].type == HG_RESOURCE_TEXTURE);
+        hg_test_assert(rm.is_registered(d));
+        hg_test_assert(rm.resources[rm.get_resource(d)].type == HG_RESOURCE_TEXTURE);
+        hg_test_assert(rm.is_registered(e));
+        hg_test_assert(rm.resources[rm.get_resource(e)].type == HG_RESOURCE_BINARY);
+
+        rm.unregister_resource(e);
+        rm.unregister_resource(b_conf);
+        rm.unregister_resource(b);
+        rm.unregister_resource(d);
+
+        hg_test_assert(rm.is_registered(a));
+        hg_test_assert(rm.resources[rm.get_resource(a)].type == HG_RESOURCE_TEXTURE);
+        hg_test_assert(!rm.is_registered(b));
+        hg_test_assert(!rm.is_registered(b_conf));
+        hg_test_assert(rm.is_registered(b_conf2));
+        hg_test_assert(rm.resources[rm.get_resource(b_conf2)].type == HG_RESOURCE_BINARY);
+        hg_test_assert(rm.is_registered(c));
+        hg_test_assert(rm.resources[rm.get_resource(c)].type == HG_RESOURCE_TEXTURE);
+        hg_test_assert(!rm.is_registered(d));
+        hg_test_assert(!rm.is_registered(e));
+
+        rm.unregister_resource(c);
+        rm.unregister_resource(b_conf2);
+        rm.unregister_resource(a);
+
+        hg_test_assert(!rm.is_registered(a));
+        hg_test_assert(!rm.is_registered(b));
+        hg_test_assert(!rm.is_registered(b_conf));
+        hg_test_assert(!rm.is_registered(b_conf2));
+        hg_test_assert(!rm.is_registered(c));
+        hg_test_assert(!rm.is_registered(d));
+        hg_test_assert(!rm.is_registered(e));
+    }
+
+    HgFence fence;
+    rm.destroy(&fence, 1);
+    hg_test_assert(fence.wait(2.0));
 
     return true;
 }
