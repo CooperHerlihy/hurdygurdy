@@ -2229,8 +2229,6 @@ struct HgAnyArray {
 template<typename T>
 constexpr usize hg_hash(T val);
 
-// do we need this? : TODO
-
 /**
  * A key-value hash map
  */
@@ -2316,19 +2314,12 @@ struct HgHashMap {
      * - new_size The new number of slots
      */
     void resize(HgArena& arena, usize new_size) {
-        bool* old_has = has_val;
-        Key* old_keys = keys;
-        Value* old_values = vals;
-        usize old_size = capacity;
+        HgHashMap old = *this;
+        *this = create(arena, new_size);
 
-        has_val = arena.alloc<bool>(new_size);
-        keys = arena.alloc<Key>(new_size);
-        vals = arena.alloc<Value>(new_size);
-        capacity = new_size;
-
-        for (usize i = 0; i < old_size; ++i) {
-            if (old_has[i])
-                insert(old_keys[i], old_values[i]);
+        for (usize i = 0; i < old.capacity; ++i) {
+            if (old.has_val[i])
+                insert(old.keys[i], old.vals[i]);
         }
     }
 
@@ -2359,12 +2350,12 @@ struct HgHashMap {
         usize idx = hash_fn(key) % capacity;
         usize dist = 0;
         while (has_val[idx] && keys[idx] != key) {
-            usize other_hash = hash_fn(keys[idx]);
-            if (other_hash < idx)
-                other_hash += capacity;
+            usize other_dist = hash_fn(keys[idx]) % capacity;
+            if (other_dist < idx)
+                other_dist += capacity;
+            other_dist -= idx;
 
-            usize other_dist = other_hash - idx;
-            if (dist > other_dist) {
+            if (other_dist < dist) {
                 Key key_tmp = keys[idx];
                 Value value_tmp = vals[idx];
                 keys[idx] = key;
@@ -2387,73 +2378,46 @@ struct HgHashMap {
     }
 
     /**
+     * Removes a value from the hash map, and stores it
+     *
+     * Parameters
+     * - key The key to remove from
+     * - value A pointer to store the value, if found
+     *
+     * Returns
+     * - Whether a value was found and stored in value
+     */
+    bool remove(const Key& key, Value* value) {
+        usize idx = get_idx(key);
+        if (idx == (usize)-1)
+            return false;
+
+        if (value != nullptr)
+            *value = vals[idx];
+
+        usize next = (idx + 1) % capacity;
+        while (has_val[next]) {
+            if (hash_fn(keys[next]) != idx) {
+                keys[idx] = keys[next];
+                vals[idx] = vals[next];
+                idx = next;
+            }
+            next = (next + 1)  % capacity;
+        }
+        has_val[idx] = false;
+        --load;
+
+        return true;
+    }
+
+    /**
      * Removes a value from the hash map
      *
      * Parameters
      * - key The key to remove from
      */
     void remove(const Key& key) {
-        hg_assert(load < capacity);
-
-        usize idx = hash_fn(key) % capacity;
-        while (has_val[idx] && keys[idx] != key) {
-            idx = (idx + 1) % capacity;
-        }
-        if (!has_val[idx])
-            return;
-
-        has_val[idx] = false;
-        --load;
-
-        idx = (idx + 1) % capacity;
-        while (has_val[idx]) {
-            if (hash_fn(keys[idx]) % capacity != idx) {
-                Key key_tmp = keys[idx];
-                Value val_tmp = vals[idx];
-                has_val[idx] = false;
-                --load;
-                insert(key_tmp, val_tmp);
-            }
-            idx = (idx + 1) % capacity;
-        }
-    }
-
-    /**
-     * Removes a value from the hash map, and returns it
-     *
-     * Parameters
-     * - key The key to remove from
-     * - value Where to store the value, if found
-     *
-     * Returns
-     * - Whether a value was found and stored in value
-     */
-    bool get_remove(const Key& key, Value& value) {
-        hg_assert(load < capacity);
-
-        usize idx = hash_fn(key) % capacity;
-        while (has_val[idx] && keys[idx] != key) {
-            idx = (idx + 1) % capacity;
-        }
-        if (!has_val[idx])
-            return false;
-
-        value = vals[idx];
-        has_val[idx] = false;
-        --load;
-
-        idx = (idx + 1) % capacity;
-        while (has_val[idx]) {
-            if (hash_fn(keys[idx]) % capacity != idx) {
-                Key key_tmp = keys[idx];
-                Value val_tmp = vals[idx];
-                has_val[idx] = false;
-                --load;
-                insert(key_tmp, val_tmp);
-            }
-            idx = (idx + 1) % capacity;
-        }
-        return true;
+        remove(key, nullptr);
     }
 
     /**
@@ -2466,36 +2430,25 @@ struct HgHashMap {
      * - Whether a value exists at the key
      */
     bool has(const Key& key) {
-        hg_assert(load < capacity);
-
-        usize idx = hash_fn(key) % capacity;
-        while (has_val[idx]) {
-            if (keys[idx] == key)
-                return true;
-            idx = (idx + 1) % capacity;
-        }
-        return false;
+        return get_idx(key) != (usize)-1;
     }
 
     /**
-     * Gets a reference to the value at key, asserting its existance
+     * Gets the index of a key
      *
      * Parameters
-     * - key The key to get from
+     * - key The key to lookup
      *
      * Returns
-     * - A reference to the value
+     * - The index the key is stored at
+     * - -1 if the key is not in the hash map
      */
-    Value& get(const Key& key) {
-        hg_assert(load < capacity);
-
+    usize get_idx(const Key& key) {
         usize idx = hash_fn(key) % capacity;
-        for (;;) {
-            hg_assert(has_val[idx]);
-            if (keys[idx] == key)
-                return vals[idx];
+        while (has_val[idx] && keys[idx] != key) {
             idx = (idx + 1) % capacity;
         }
+        return has_val[idx] ? idx : (usize)-1;
     }
 
     /**
@@ -2508,16 +2461,195 @@ struct HgHashMap {
      * - A pointer to the value
      * - nullptr if it does not exist
      */
-    Value* try_get(const Key& key) {
-        hg_assert(load < capacity);
+    Value* get(const Key& key) {
+        usize idx = get_idx(key);
+        return idx == (usize)-1 ? nullptr : vals + idx;
+    }
+};
 
-        usize index = hash_fn(key) % capacity;
-        while (has_val[index]) {
-            if (keys[index] == key)
-                return &vals[index];
-            index = (index + 1) % capacity;
+/**
+ * A hash set
+ */
+template<typename Value, usize (*hash_fn)(Value) = hg_hash>
+struct HgHashSet {
+    static_assert(std::is_trivially_copyable_v<Value> && std::is_trivially_destructible_v<Value>);
+
+    /**
+     * Whether each index has a value
+     */
+    bool* has_val;
+    /**
+     * Where the values are stored;
+     */
+    Value* vals;
+    /**
+     * The max number of vals
+     */
+    usize capacity;
+    /**
+     * The current number of values that are stored
+     */
+    usize load;
+
+    /**
+     * Creates a new hash set
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - slot_count The max number of slots to store values in
+     *
+     * Returns
+     * - The created empty hash set
+     */
+    static HgHashSet create(HgArena& arena, usize slot_count) {
+        hg_assert(slot_count > 0);
+
+        HgHashSet set;
+        set.has_val = arena.alloc<bool>(slot_count);
+        set.vals = arena.alloc<Value>(slot_count);
+        set.capacity = slot_count;
+        set.reset();
+        return set;
+    }
+
+    /**
+     * Empties all slots
+     */
+    void reset() {
+        for (usize i = 0; i < capacity; ++i) {
+            has_val[i] = false;
         }
-        return nullptr;
+        load = 0;
+    }
+
+    /**
+     * Returns whether the hash set is full
+     */
+    bool is_full() {
+        return load == capacity;
+    }
+
+    /**
+     * Returns whether the hash set is full
+     */
+    bool is_near_full() {
+        return (f32)load >= (f32)capacity * 0.8f;
+    }
+
+    /**
+     * Resizes the slots and rehashes all entries
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - new_size The new number of slots
+     */
+    void resize(HgArena& arena, usize new_size) {
+        HgHashSet old = *this;
+        *this = create(arena, new_size);
+
+        for (usize i = 0; i < old.capacity; ++i) {
+            if (old.has_val[i])
+                insert(old.vals[i]);
+        }
+    }
+
+    /**
+     * Grows the number of slots by a factor
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - factor The factor to increase by
+     */
+    void grow(HgArena& arena, f32 factor = 2) {
+        resize(arena, (usize)((f32)capacity * factor));
+    }
+
+    /**
+     * Inserts a value into the hash set
+     *
+     * Parameters
+     * - val The value to store
+     */
+    void insert(Value val) {
+        hg_assert(load < capacity - 1);
+
+        usize idx = hash_fn(val) % capacity;
+        usize dist = 0;
+        while (has_val[idx] && vals[idx] != val) {
+            usize other_dist = hash_fn(vals[idx]) % capacity;
+            if (other_dist < idx)
+                other_dist += capacity;
+            other_dist -= idx;
+
+            if (other_dist < dist) {
+                Value val_tmp = vals[idx];
+                vals[idx] = val;
+                val = val_tmp;
+
+                dist = other_dist;
+            }
+
+            idx = (idx + 1) % capacity;
+            ++dist;
+        }
+
+        ++load;
+        has_val[idx] = true;
+        vals[idx] = val;
+    }
+
+    /**
+     * Removes a value from the hash set, and stores it
+     *
+     * Parameters
+     * - val The value to remove from
+     */
+    void remove(const Value& val) {
+        usize idx = get_idx(val);
+        if (idx == (usize)-1)
+            return;
+
+        usize next = (idx + 1) % capacity;
+        while (has_val[next]) {
+            if (hash_fn(vals[next]) != idx) {
+                vals[idx] = vals[next];
+                idx = next;
+            }
+            next = (next + 1)  % capacity;
+        }
+        has_val[idx] = false;
+        --load;
+    }
+
+    /**
+     * Checks whether a value exists
+     *
+     * Parameters
+     * - val The value to check at
+     *
+     * Returns
+     * - Whether a value exists at the val
+     */
+    bool has(const Value& val) {
+        return get_idx(val) != (usize)-1;
+    }
+
+    /**
+     * Gets the index of a val
+     *
+     * Parameters
+     * - val The value to lookup
+     *
+     * Returns
+     * - The index the val is stored at
+     * - -1 if the val is not in the hash set
+     */
+    usize get_idx(const Value& val) {
+        usize idx = hash_fn(val) % capacity;
+        while (has_val[idx] && vals[idx] != val) {
+            idx = (idx + 1) % capacity;
+        }
+        return has_val[idx] ? idx : (usize)-1;
     }
 };
 
@@ -2611,6 +2743,9 @@ constexpr usize hg_hash(f64 val) {
     return u.as_usize;
 }
 
+/**
+ * Hash map hashing for void*
+ */
 template<>
 constexpr usize hg_hash(void* val) {
     union {

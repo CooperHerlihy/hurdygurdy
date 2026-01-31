@@ -2344,11 +2344,10 @@ void HgPipeline2D::add_texture(HgResourceID texture_id) {
 void HgPipeline2D::remove_texture(HgResourceID texture_id) {
     hg_assert(hg_resources->is_registered(texture_id));
 
-    if (texture_sets.has(texture_id)) {
-        VkDescriptorSet set = texture_sets.get(texture_id);
+    VkDescriptorSet* set = texture_sets.get(texture_id);
+    if (set != nullptr) {
         texture_sets.remove(texture_id);
-
-        vkFreeDescriptorSets(hg_vk_device, descriptor_pool, 1, &set);
+        vkFreeDescriptorSets(hg_vk_device, descriptor_pool, 1, set);
     }
 }
 
@@ -2392,13 +2391,14 @@ void HgPipeline2D::draw(VkCommandBuffer cmd) {
         nullptr);
 
     hg_ecs->for_each<HgSprite, HgTransform>([&](HgEntity, HgSprite& sprite, HgTransform& transform) {
+        hg_assert(texture_sets.has(sprite.texture));
         vkCmdBindDescriptorSets(
             cmd,
             VK_PIPELINE_BIND_POINT_GRAPHICS,
             pipeline_layout,
             1,
             1,
-            &texture_sets.get(sprite.texture),
+            texture_sets.get(sprite.texture),
             0,
             nullptr);
 

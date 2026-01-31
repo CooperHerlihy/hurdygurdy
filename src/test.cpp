@@ -470,42 +470,40 @@ hg_test(HgHashMap) {
             map.insert(1, 1);
             hg_test_assert(map.load == 1);
             hg_test_assert(map.has(1));
-            hg_test_assert(map.get(1) == 1);
-            hg_test_assert(map.try_get(1) != nullptr);
-            hg_test_assert(*map.try_get(1) == 1);
+            hg_test_assert(*map.get(1) == 1);
 
             map.remove(1);
             hg_test_assert(map.load == 0);
             hg_test_assert(!map.has(1));
-            hg_test_assert(map.try_get(1) == nullptr);
+            hg_test_assert(map.get(1) == nullptr);
 
             hg_test_assert(!map.has(12));
             hg_test_assert(!map.has(12 + count));
 
             map.insert(12, 42);
             hg_test_assert(map.load == 1);
-            hg_test_assert(map.has(12) && map.get(12) == 42);
+            hg_test_assert(map.has(12) && *map.get(12) == 42);
             hg_test_assert(!map.has(12 + count));
 
             map.insert(12 + count, 100);
             hg_test_assert(map.load == 2);
-            hg_test_assert(map.has(12) && map.get(12) == 42);
-            hg_test_assert(map.has(12 + count) && map.get(12 + count) == 100);
+            hg_test_assert(map.has(12) && *map.get(12) == 42);
+            hg_test_assert(map.has(12 + count) && *map.get(12 + count) == 100);
 
             map.insert(12 + count * 2, 200);
             hg_test_assert(map.load == 3);
-            hg_test_assert(map.has(12) && map.get(12) == 42);
-            hg_test_assert(map.has(12 + count) && map.get(12 + count) == 100);
-            hg_test_assert(map.has(12 + count * 2) && map.get(12 + count * 2) == 200);
+            hg_test_assert(map.has(12) && *map.get(12) == 42);
+            hg_test_assert(map.has(12 + count) && *map.get(12 + count) == 100);
+            hg_test_assert(map.has(12 + count * 2) && *map.get(12 + count * 2) == 200);
 
             map.remove(12);
             hg_test_assert(map.load == 2);
             hg_test_assert(!map.has(12));
-            hg_test_assert(map.has(12 + count) && map.get(12 + count) == 100);
+            hg_test_assert(map.has(12 + count) && *map.get(12 + count) == 100);
 
             map.insert(42, 12);
             hg_test_assert(map.load == 3);
-            hg_test_assert(map.has(42) && map.get(42) == 12);
+            hg_test_assert(map.has(42) && *map.get(42) == 12);
 
             map.remove(12 + count);
             hg_test_assert(map.load == 2);
@@ -548,10 +546,10 @@ hg_test(HgHashMap) {
         map.insert(ab, 3);
         map.insert(scf, 4);
 
-        hg_test_assert(map.has(a) && map.get(a) == 1);
-        hg_test_assert(map.has(b) && map.get(b) == 2);
-        hg_test_assert(map.has(ab) && map.get(ab) == 3);
-        hg_test_assert(map.has(scf) && map.get(scf) == 4);
+        hg_test_assert(map.has(a) && *map.get(a) == 1);
+        hg_test_assert(map.has(b) && *map.get(b) == 2);
+        hg_test_assert(map.has(ab) && *map.get(ab) == 3);
+        hg_test_assert(map.has(scf) && *map.get(scf) == 4);
 
         map.remove(a);
         map.remove(b);
@@ -584,10 +582,10 @@ hg_test(HgHashMap) {
         map.insert(ab, 3);
         map.insert(scf, 4);
 
-        hg_test_assert(map.has(a) && map.get(a) == 1);
-        hg_test_assert(map.has(b) && map.get(b) == 2);
-        hg_test_assert(map.has(ab) && map.get(ab) == 3);
-        hg_test_assert(map.has(scf) && map.get(scf) == 4);
+        hg_test_assert(map.has(a) && *map.get(a) == 1);
+        hg_test_assert(map.has(b) && *map.get(b) == 2);
+        hg_test_assert(map.has(ab) && *map.get(ab) == 3);
+        hg_test_assert(map.has(scf) && *map.get(scf) == 4);
 
         map.remove(a);
         map.remove(b);
@@ -616,13 +614,13 @@ hg_test(HgHashMap) {
         map.insert(HgString::create(arena, "supercalifragilisticexpialidocious"), 4);
 
         hg_test_assert(map.has(HgString::create(arena, "a")));
-        hg_test_assert(map.get(HgString::create(arena, "a")) == 1);
+        hg_test_assert(*map.get(HgString::create(arena, "a")) == 1);
         hg_test_assert(map.has(HgString::create(arena, "b")));
-        hg_test_assert(map.get(HgString::create(arena, "b")) == 2);
+        hg_test_assert(*map.get(HgString::create(arena, "b")) == 2);
         hg_test_assert(map.has(HgString::create(arena, "ab")));
-        hg_test_assert(map.get(HgString::create(arena, "ab")) == 3);
+        hg_test_assert(*map.get(HgString::create(arena, "ab")) == 3);
         hg_test_assert(map.has(HgString::create(arena, "supercalifragilisticexpialidocious")));
-        hg_test_assert(map.get(HgString::create(arena, "supercalifragilisticexpialidocious")) == 4);
+        hg_test_assert(*map.get(HgString::create(arena, "supercalifragilisticexpialidocious")) == 4);
 
         map.remove(HgString::create(arena, "a"));
         map.remove(HgString::create(arena, "b"));
@@ -651,13 +649,223 @@ hg_test(HgHashMap) {
         map.insert(HgString::create(arena, "supercalifragilisticexpialidocious"), 4);
 
         hg_test_assert(map.has("a"));
-        hg_test_assert(map.get("a") == 1);
+        hg_test_assert(*map.get("a") == 1);
         hg_test_assert(map.has("b"));
-        hg_test_assert(map.get("b") == 2);
+        hg_test_assert(*map.get("b") == 2);
         hg_test_assert(map.has("ab"));
-        hg_test_assert(map.get("ab") == 3);
+        hg_test_assert(*map.get("ab") == 3);
         hg_test_assert(map.has("supercalifragilisticexpialidocious"));
-        hg_test_assert(map.get("supercalifragilisticexpialidocious") == 4);
+        hg_test_assert(*map.get("supercalifragilisticexpialidocious") == 4);
+
+        map.remove("a");
+        map.remove("b");
+        map.remove("ab");
+        map.remove("supercalifragilisticexpialidocious");
+
+        hg_test_assert(!map.has("a"));
+        hg_test_assert(!map.has("b"));
+        hg_test_assert(!map.has("ab"));
+        hg_test_assert(!map.has("supercalifragilisticexpialidocious"));
+    }
+
+    return true;
+}
+
+hg_test(HgHashSet) {
+    {
+        hg_arena_scope(arena, hg_get_scratch());
+
+        constexpr usize count = 128;
+
+        HgHashSet<u32> map = map.create(arena, count);
+
+        for (usize i = 0; i < 3; ++i) {
+            hg_test_assert(map.load == 0);
+            hg_test_assert(!map.has(0));
+            hg_test_assert(!map.has(1));
+            hg_test_assert(!map.has(12));
+            hg_test_assert(!map.has(42));
+            hg_test_assert(!map.has(100000));
+
+            map.insert(1);
+            hg_test_assert(map.load == 1);
+            hg_test_assert(map.has(1));
+
+            map.remove(1);
+            hg_test_assert(map.load == 0);
+            hg_test_assert(!map.has(1));
+
+            hg_test_assert(!map.has(12));
+            hg_test_assert(!map.has(12 + count));
+
+            map.insert(12);
+            hg_test_assert(map.load == 1);
+            hg_test_assert(map.has(12));
+            hg_test_assert(!map.has(12 + count));
+
+            map.insert(12 + count);
+            hg_test_assert(map.load == 2);
+            hg_test_assert(map.has(12));
+            hg_test_assert(map.has(12 + count));
+
+            map.insert(12 + count * 2);
+            hg_test_assert(map.load == 3);
+            hg_test_assert(map.has(12));
+            hg_test_assert(map.has(12 + count));
+            hg_test_assert(map.has(12 + count * 2));
+
+            map.remove(12);
+            hg_test_assert(map.load == 2);
+            hg_test_assert(!map.has(12));
+            hg_test_assert(map.has(12 + count));
+
+            map.insert(42);
+            hg_test_assert(map.load == 3);
+            hg_test_assert(map.has(42));
+
+            map.remove(12 + count);
+            hg_test_assert(map.load == 2);
+            hg_test_assert(!map.has(12));
+            hg_test_assert(!map.has(12 + count));
+
+            map.remove(42);
+            hg_test_assert(map.load == 1);
+            hg_test_assert(!map.has(42));
+
+            map.remove(12 + count * 2);
+            hg_test_assert(map.load == 0);
+            hg_test_assert(!map.has(12));
+            hg_test_assert(!map.has(12 + count));
+            hg_test_assert(!map.has(12 + count * 2));
+
+            map.reset();
+        }
+    }
+
+    {
+        hg_arena_scope(arena, hg_get_scratch());
+
+        using StrHash = usize;
+
+        HgHashSet<StrHash> map = map.create(arena, 128);
+
+        StrHash a = hg_hash("a");
+        StrHash b = hg_hash("b");
+        StrHash ab = hg_hash("ab");
+        StrHash scf = hg_hash("supercalifragilisticexpialidocious");
+
+        hg_test_assert(!map.has(a));
+        hg_test_assert(!map.has(b));
+        hg_test_assert(!map.has(ab));
+        hg_test_assert(!map.has(scf));
+
+        map.insert(a);
+        map.insert(b);
+        map.insert(ab);
+        map.insert(scf);
+
+        hg_test_assert(map.has(a));
+        hg_test_assert(map.has(b));
+        hg_test_assert(map.has(ab));
+        hg_test_assert(map.has(scf));
+
+        map.remove(a);
+        map.remove(b);
+        map.remove(ab);
+        map.remove(scf);
+
+        hg_test_assert(!map.has(a));
+        hg_test_assert(!map.has(b));
+        hg_test_assert(!map.has(ab));
+        hg_test_assert(!map.has(scf));
+    }
+
+    {
+        hg_arena_scope(arena, hg_get_scratch());
+
+        HgHashSet<const char*> map = map.create(arena, 128);
+
+        const char* a = "a";
+        const char* b = "b";
+        const char* ab = "ab";
+        const char* scf = "supercalifragilisticexpialidocious";
+
+        hg_test_assert(!map.has(a));
+        hg_test_assert(!map.has(b));
+        hg_test_assert(!map.has(ab));
+        hg_test_assert(!map.has(scf));
+
+        map.insert(a);
+        map.insert(b);
+        map.insert(ab);
+        map.insert(scf);
+
+        hg_test_assert(map.has(a));
+        hg_test_assert(map.has(b));
+        hg_test_assert(map.has(ab));
+        hg_test_assert(map.has(scf));
+
+        map.remove(a);
+        map.remove(b);
+        map.remove(ab);
+        map.remove(scf);
+
+        hg_test_assert(!map.has(a));
+        hg_test_assert(!map.has(b));
+        hg_test_assert(!map.has(ab));
+        hg_test_assert(!map.has(scf));
+    }
+
+    {
+        hg_arena_scope(arena, hg_get_scratch());
+
+        HgHashSet<HgString> map = map.create(arena, 128);
+
+        hg_test_assert(!map.has(HgString::create(arena, "a")));
+        hg_test_assert(!map.has(HgString::create(arena, "b")));
+        hg_test_assert(!map.has(HgString::create(arena, "ab")));
+        hg_test_assert(!map.has(HgString::create(arena, "supercalifragilisticexpialidocious")));
+
+        map.insert(HgString::create(arena, "a"));
+        map.insert(HgString::create(arena, "b"));
+        map.insert(HgString::create(arena, "ab"));
+        map.insert(HgString::create(arena, "supercalifragilisticexpialidocious"));
+
+        hg_test_assert(map.has(HgString::create(arena, "a")));
+        hg_test_assert(map.has(HgString::create(arena, "b")));
+        hg_test_assert(map.has(HgString::create(arena, "ab")));
+        hg_test_assert(map.has(HgString::create(arena, "supercalifragilisticexpialidocious")));
+
+        map.remove(HgString::create(arena, "a"));
+        map.remove(HgString::create(arena, "b"));
+        map.remove(HgString::create(arena, "ab"));
+        map.remove(HgString::create(arena, "supercalifragilisticexpialidocious"));
+
+        hg_test_assert(!map.has(HgString::create(arena, "a")));
+        hg_test_assert(!map.has(HgString::create(arena, "b")));
+        hg_test_assert(!map.has(HgString::create(arena, "ab")));
+        hg_test_assert(!map.has(HgString::create(arena, "supercalifragilisticexpialidocious")));
+    }
+
+    {
+        hg_arena_scope(arena, hg_get_scratch());
+
+        HgHashSet<HgStringView> map = map.create(arena, 128);
+
+        hg_test_assert(!map.has("a"));
+        hg_test_assert(!map.has("b"));
+        hg_test_assert(!map.has("ab"));
+        hg_test_assert(!map.has("supercalifragilisticexpialidocious"));
+
+        map.insert(HgString::create(arena, "a"));
+        map.insert(HgString::create(arena, "b"));
+        map.insert(HgString::create(arena, "ab"));
+        map.insert(HgString::create(arena, "supercalifragilisticexpialidocious"));
+
+        hg_test_assert(map.has("a"));
+        hg_test_assert(map.has("b"));
+        hg_test_assert(map.has("ab"));
+        hg_test_assert(map.has("supercalifragilisticexpialidocious"));
 
         map.remove("a");
         map.remove("b");
