@@ -334,9 +334,6 @@ struct HgClock {
     /**
      * Resets the clock and returns the delta since the last tick in seconds
      *
-     * Parameters
-     * - clock The clock to tick, must not be nullptr
-     *
      * Returns
      * - Seconds since last tick
      */
@@ -839,27 +836,51 @@ struct HgComplex {
      * Construct uninitialized
      */
     HgComplex() = default;
+    /**
+     * Construct from just a real value
+     */
     constexpr HgComplex(f32 r_val) : r{r_val}, i{0} {}
+    /**
+     * Construct from a list of values
+     */
     constexpr HgComplex(f32 r_val, f32 i_val) : r{r_val}, i{i_val} {}
 
+    /**
+     * Access with index
+     */
     constexpr f32& operator[](usize index) {
         hg_assert(index < 2);
         return *(&r + index);
     }
 
+    /**
+     * Access with index
+     */
     constexpr const f32& operator[](usize index) const {
         hg_assert(index < 2);
         return *(&r + index);
     }
 
+    /**
+     * Add another complex number in place
+     */
     const HgComplex& operator+=(const HgComplex& other);
+    /**
+     * Subtract another complex number in place
+     */
     const HgComplex& operator-=(const HgComplex& other);
 };
 
+/**
+ * Compare two complex numbers
+ */
 constexpr bool operator==(const HgComplex& lhs, const HgComplex& rhs) {
     return lhs.r == rhs.r && lhs.i == rhs.i;
 }
 
+/**
+ * Compare two complex numbers
+ */
 constexpr bool operator!=(const HgComplex& lhs, const HgComplex& rhs) {
     return lhs.r != rhs.r || lhs.i != rhs.i;
 }
@@ -881,33 +902,57 @@ struct HgQuat {
      * Construct uninitialized
      */
     HgQuat() = default;
+    /**
+     * Construct from just a real value
+     */
     constexpr HgQuat(f32 r_val) : r{r_val}, i{0}, j{0}, k{0} {}
+    /**
+     * Construct from a list of values
+     */
     constexpr HgQuat(f32 r_val, f32 i_val, f32 j_val, f32 k_val) : r{r_val}, i{i_val}, j{j_val}, k{k_val} {}
 
+    /**
+     * Access with index
+     */
     constexpr f32& operator[](usize index) {
         hg_assert(index < 4);
         return *(&r + index);
     }
 
+    /**
+     * Access with index
+     */
     constexpr const f32& operator[](usize index) const {
         hg_assert(index < 4);
         return *(&r + index);
     }
 
+    /**
+     * Add another quaternion in place
+     */
     const HgQuat& operator+=(const HgQuat& other);
+    /**
+     * Subtract another quaternion in place
+     */
     const HgQuat& operator-=(const HgQuat& other);
 };
 
+/**
+ * Compare two quaternions
+ */
 constexpr bool operator==(const HgQuat& lhs, const HgQuat& rhs) {
     return lhs.r == rhs.r && lhs.i == rhs.i && lhs.j == rhs.j && lhs.k == rhs.k;
 }
 
+/**
+ * Compare two quaternions
+ */
 constexpr bool operator!=(const HgQuat& lhs, const HgQuat& rhs) {
     return lhs.r != rhs.r || lhs.i != rhs.i || lhs.j != rhs.j || lhs.k != rhs.k;
 }
 
 /**
- * Adds two arbitrary size vectors
+ * Add two arbitrary size vectors
  *
  * Parameters
  * - size The size of the vectors
@@ -918,51 +963,30 @@ constexpr bool operator!=(const HgQuat& lhs, const HgQuat& rhs) {
 void hg_vec_add(u32 size, f32* dst, const f32* lhs, const f32* rhs);
 
 /**
- * Adds two 2D vectors
- *
- * Parameters
- * - lhs The left-hand side vector
- * - rhs The right-hand side vector
- *
- * Returns
- * - The added vector
+ * Add two 2D vectors
  */
 constexpr HgVec2 operator+(const HgVec2& lhs, const HgVec2& rhs) {
     return {lhs.x + rhs.x, lhs.y + rhs.y};
 }
 
 /**
- * Adds two 3D vectors
- *
- * Parameters
- * - lhs The left-hand side vector
- * - rhs The right-hand side vector
- *
- * Returns
- * - The added vector
+ * Add two 3D vectors
  */
 constexpr HgVec3 operator+(const HgVec3& lhs, const HgVec3& rhs) {
     return {lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z};
 }
 
 /**
- * Adds two 4D vectors
- *
- * Parameters
- * - lhs The left-hand side vector
- * - rhs The right-hand side vector
- *
- * Returns
- * - The added vector
+ * Add two 4D vectors
  */
 constexpr HgVec4 operator+(const HgVec4& lhs, const HgVec4& rhs) {
     return {lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z, lhs.w + rhs.w};
 }
 
 /**
- * Subtracts two arbitrary size vectors
+ * Subtract two arbitrary size vectors
  *
- * Parameters
+ * parameters
  * - size The size of the vectors
  * - dst The destination vector, must not be nullptr
  * - lhs The left-hand side vector, must not be nullptr
@@ -971,49 +995,28 @@ constexpr HgVec4 operator+(const HgVec4& lhs, const HgVec4& rhs) {
 void hg_vec_sub(u32 size, f32* dst, const f32* lhs, const f32* rhs);
 
 /**
- * Subtracts two 2D vectors
- *
- * Parameters
- * - lhs The left-hand side vector
- * - rhs The right-hand side vector
- *
- * Returns
- * - The subtracted vector
+ * Subtract two 2D vectors
  */
 constexpr HgVec2 operator-(const HgVec2& lhs, const HgVec2& rhs) {
     return {lhs.x - rhs.x, lhs.y - rhs.y};
 }
 
 /**
- * Subtracts two 3D vectors
- *
- * Parameters
- * - lhs The left-hand side vector
- * - rhs The right-hand side vector
- *
- * Returns
- * - The subtracted vector
+ * Subtract two 3D vectors
  */
 constexpr HgVec3 operator-(const HgVec3& lhs, const HgVec3& rhs) {
     return {lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z};
 }
 
 /**
- * Subtracts two 4D vectors
- *
- * Parameters
- * - lhs The left-hand side vector
- * - rhs The right-hand side vector
- *
- * Returns
- * - The subtracted vector
+ * Subtract two 4D vectors
  */
 constexpr HgVec4 operator-(const HgVec4& lhs, const HgVec4& rhs) {
     return {lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z, lhs.w - rhs.w};
 }
 
 /**
- * Multiplies pairwise two arbitrary size vectors
+ * Multiply pairwise two arbitrary size vectors
  *
  * Parameters
  * - size The size of the vectors
@@ -1024,144 +1027,75 @@ constexpr HgVec4 operator-(const HgVec4& lhs, const HgVec4& rhs) {
 void hg_vec_mul_pairwise(u32 size, f32* dst, const f32* lhs, const f32* rhs);
 
 /**
- * Multiplies pairwise two 2D vectors
- *
- * Parameters
- * - lhs The left-hand side vector
- * - rhs The right-hand side vector
- *
- * Returns
- * - The multiplied vector
+ * Multiply pairwise two 2D vectors
  */
 constexpr HgVec2 operator*(const HgVec2& lhs, const HgVec2& rhs) {
     return {lhs.x * rhs.x, lhs.y * rhs.y};
 }
 
 /**
- * Multiplies pairwise two 3D vectors
- *
- * Parameters
- * - lhs The left-hand side vector
- * - rhs The right-hand side vector
- *
- * Returns
- * - The multiplied vector
+ * Multiply pairwise two 3D vectors
  */
 constexpr HgVec3 operator*(const HgVec3& lhs, const HgVec3& rhs) {
     return {lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z};
 }
 
 /**
- * Multiplies pairwise two 4D vectors
- *
- * Parameters
- * - lhs The left-hand side vector
- * - rhs The right-hand side vector
- *
- * Returns
- * - The multiplied vector
+ * Multiply pairwise two 4D vectors
  */
 constexpr HgVec4 operator*(const HgVec4& lhs, const HgVec4& rhs) {
     return {lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z, lhs.w * rhs.w};
 }
 
 /**
- * Multiplies a scalar and a vector
- *
- * Parameters
- * - size The size of the vector
- * - dst The destination vector, must not be nullptr
- * - scalar The scalar to multiply with
- * - vec The vector to multiply with, must not be nullptr
+ * Multiply a scalar and a vector
  */
 void hg_vec_scalar_mul(u32 size, f32* dst, f32 scalar, const f32* vec);
 
 /**
- * Multiplies a scalar and a 2D vector
- *
- * Parameters
- * - scalar The scalar to multiply with
- * - vec The vector to multiply with
- *
- * Returns
- * - The multiplied vector
+ * Multiply a scalar and a 2D vector
  */
 constexpr HgVec2 operator*(f32 scalar, const HgVec2& vec) {
     return {scalar * vec.x, scalar * vec.y};
 }
 
 /**
- * Multiplies a scalar and a 2D vector
- *
- * Parameters
- * - vec The vector to multiply with
- * - scalar The scalar to multiply with
- *
- * Returns
- * - The multiplied vector
+ * Multiply a scalar and a 2D vector
  */
 constexpr HgVec2 operator*(const HgVec2& vec, f32 scalar) {
     return {scalar * vec.x, scalar * vec.y};
 }
 
 /**
- * Multiplies a scalar and a 3D vector
- *
- * Parameters
- * - scalar The scalar to multiply with
- * - vec The vector to multiply with
- *
- * Returns
- * - The multiplied vector
+ * Multiply a scalar and a 3D vector
  */
 constexpr HgVec3 operator*(f32 scalar, const HgVec3& vec) {
     return {scalar * vec.x, scalar * vec.y, scalar * vec.z};
 }
 
 /**
- * Multiplies a scalar and a 3D vector
- *
- * Parameters
- * - vec The vector to multiply with
- * - scalar The scalar to multiply with
- *
- * Returns
- * - The multiplied vector
+ * Multiply a scalar and a 3D vector
  */
 constexpr HgVec3 operator*(const HgVec3& vec, f32 scalar) {
     return {scalar * vec.x, scalar * vec.y, scalar * vec.z};
 }
 
 /**
- * Multiplies a scalar and a 4D vector
- *
- * Parameters
- * - scalar The scalar to multiply with
- * - vec The vector to multiply with
- *
- * Returns
- * - The multiplied vector
+ * Multiply a scalar and a 4D vector
  */
 constexpr HgVec4 operator*(f32 scalar, const HgVec4& vec) {
     return {scalar * vec.x, scalar * vec.y, scalar * vec.z, scalar * vec.w};
 }
 
 /**
- * Multiplies a scalar and a 4D vector
- *
- * Parameters
- * - vec The vector to multiply with
- * - scalar The scalar to multiply with
- *
- * Returns
- * - The multiplied vector
+ * Multiply a scalar and a 4D vector
  */
 constexpr HgVec4 operator*(const HgVec4& vec, f32 scalar) {
     return {scalar * vec.x, scalar * vec.y, scalar * vec.z, scalar * vec.w};
 }
 
 /**
- * Divides pairwise two arbitrary size vectors
+ * Divide pairwise two arbitrary size vectors
  *
  * Note, cannot divide by 0
  *
@@ -1174,16 +1108,9 @@ constexpr HgVec4 operator*(const HgVec4& vec, f32 scalar) {
 void hg_vec_div(u32 size, f32* dst, const f32* lhs, const f32* rhs);
 
 /**
- * Divides pairwise two 2D vectors
+ * Divide pairwise two 2D vectors
  *
  * Note, cannot divide by 0
- *
- * Parameters
- * - lhs The left-hand side vector
- * - rhs The right-hand side vector
- *
- * Returns
- * - The divided vector
  */
 constexpr HgVec2 operator/(const HgVec2& lhs, const HgVec2& rhs) {
     hg_assert(rhs.x != 0 && rhs.y != 0);
@@ -1191,16 +1118,9 @@ constexpr HgVec2 operator/(const HgVec2& lhs, const HgVec2& rhs) {
 }
 
 /**
- * Divides pairwise two 3D vectors
+ * Divide pairwise two 3D vectors
  *
  * Note, cannot divide by 0
- *
- * Parameters
- * - lhs The left-hand side vector
- * - rhs The right-hand side vector
- *
- * Returns
- * - The divided vector
  */
 constexpr HgVec3 operator/(const HgVec3& lhs, const HgVec3& rhs) {
     hg_assert(rhs.x != 0 && rhs.y != 0 && rhs.z != 0);
@@ -1208,16 +1128,9 @@ constexpr HgVec3 operator/(const HgVec3& lhs, const HgVec3& rhs) {
 }
 
 /**
- * Divides pairwise two 4D vectors
+ * Divide pairwise two 4D vectors
  *
  * Note, cannot divide by 0
- *
- * Parameters
- * - lhs The left-hand side vector
- * - rhs The right-hand side vector
- *
- * Returns
- * - The divided vector
  */
 constexpr HgVec4 operator/(const HgVec4& lhs, const HgVec4& rhs) {
     hg_assert(rhs.x != 0 && rhs.y != 0 && rhs.z != 0 && rhs.w != 0);
@@ -1225,29 +1138,16 @@ constexpr HgVec4 operator/(const HgVec4& lhs, const HgVec4& rhs) {
 }
 
 /**
- * Divides a vector by a scalar
+ * Divide a vector by a scalar
  *
  * Note, cannot divide by 0
- *
- * Parameters
- * - size The size of the vector
- * - dst The destination vector, must not be nullptr
- * - vec The vector to divide, must not be nullptr
- * - scalar The scalar to divide by
  */
 void hg_vec_scalar_div(u32 size, f32* dst, const f32* vec, f32 scalar);
 
 /**
- * Divides a 2D vector by a scalar
+ * Divide a 2D vector by a scalar
  *
  * Note, cannot divide by 0
- *
- * Parameters
- * - vec The vector to divide
- * - scalar The scalar to divide by
- *
- * Returns
- * - The divided vector
  */
 constexpr HgVec2 operator/(const HgVec2& vec, f32 scalar) {
     hg_assert(scalar != 0);
@@ -1255,16 +1155,9 @@ constexpr HgVec2 operator/(const HgVec2& vec, f32 scalar) {
 }
 
 /**
- * Divides a 3D vector by a scalar
+ * Divide a 3D vector by a scalar
  *
  * Note, cannot divide by 0
- *
- * Parameters
- * - vec The vector to divide
- * - scalar The scalar to divide by
- *
- * Returns
- * - The divided vector
  */
 constexpr HgVec3 operator/(const HgVec3& vec, f32 scalar) {
     hg_assert(scalar != 0);
@@ -1272,16 +1165,9 @@ constexpr HgVec3 operator/(const HgVec3& vec, f32 scalar) {
 }
 
 /**
- * Divides a 4D vector by a scalar
+ * Divide a 4D vector by a scalar
  *
  * Note, cannot divide by 0
- *
- * Parameters
- * - vec The vector to divide
- * - scalar The scalar to divide by
- *
- * Returns
- * - The divided vector
  */
 constexpr HgVec4 operator/(const HgVec4& vec, f32 scalar) {
     hg_assert(scalar != 0);
@@ -1289,7 +1175,7 @@ constexpr HgVec4 operator/(const HgVec4& vec, f32 scalar) {
 }
 
 /**
- * Computes the dot product of two arbitrary size vectors
+ * Compute the dot product of two arbitrary size vectors
  *
  * Parameters
  * - size The size of the vectors
@@ -1300,49 +1186,28 @@ constexpr HgVec4 operator/(const HgVec4& vec, f32 scalar) {
 void hg_dot(u32 size, f32* dst, const f32* lhs, const f32* rhs);
 
 /**
- * Computes the dot product of two 2D vectors
- *
- * Parameters
- * - lhs The left-hand side vector
- * - rhs The right-hand side vector
- *
- * Returns
- * - The dot product
+ * Compute the dot product of two 2D vectors
  */
 constexpr f32 hg_dot(const HgVec2& lhs, const HgVec2& rhs) {
     return lhs.x * rhs.x + lhs.y * rhs.y;
 }
 
 /**
- * Computes the dot product of two 3D vectors
- *
- * Parameters
- * - lhs The left-hand side vector
- * - rhs The right-hand side vector
- *
- * Returns
- * - The dot product
+ * Compute the dot product of two 3D vectors
  */
 constexpr f32 hg_dot(const HgVec3& lhs, const HgVec3& rhs) {
     return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
 }
 
 /**
- * Computes the dot product of two 4D vectors
- *
- * Parameters
- * - lhs The left-hand side vector
- * - rhs The right-hand side vector
- *
- * Returns
- * - The dot product
+ * Compute the dot product of two 4D vectors
  */
 constexpr f32 hg_dot(const HgVec4& lhs, const HgVec4& rhs) {
     return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z + lhs.w * rhs.w;
 }
 
 /**
- * Computes the length of a vector
+ * Compute the length of a vector
  *
  * Parameters
  * - size The size of the vector
@@ -1352,91 +1217,50 @@ constexpr f32 hg_dot(const HgVec4& lhs, const HgVec4& rhs) {
 void hg_len(u32 size, f32* dst, const f32* vec);
 
 /**
- * Computes the length of a 2D vector
- *
- * Parameters
- * - lhs The vector to compute the length of
- *
- * Returns
- * - The length of the vector
+ * Compute the length of a 2D vector
  */
 f32 hg_len(const HgVec2& vec);
 
 /**
- * Computes the length of a 3D vector
- *
- * Parameters
- * - lhs The vector to compute the length of
- *
- * Returns
- * - The length of the vector
+ * Compute the length of a 3D vector
  */
 f32 hg_len(const HgVec3& vec);
 
 /**
- * Computes the length of a 4D vector
- *
- * Parameters
- * - lhs The vector to compute the length of
- *
- * Returns
- * - The length of the vector
+ * Compute the length of a 4D vector
  */
 f32 hg_len(const HgVec4& vec);
 
 /**
- * Normalizes a vector
+ * Normalize a vector
  *
  * Note, cannot normalize 0
- *
- * Parameters
- * - size The size of the vector
- * - dst The destination vector, must not be nullptr
- * - vec The vector to normalize, must not be nullptr
  */
 void hg_norm(u32 size, f32* dst, const f32* vec);
 
 /**
- * Normalizes a 2D vector
+ * Normalize a 2D vector
  *
  * Note, cannot normalize 0
- *
- * Parameters
- * - vec The vector to normalize
- *
- * Returns
- * - The normalized vector
  */
 HgVec2 hg_norm(const HgVec2& vec);
 
 /**
- * Normalizes a 3D vector
+ * Normalize a 3D vector
  *
  * Note, cannot normalize 0
- *
- * Parameters
- * - vec The vector to normalize
- *
- * Returns
- * - The normalized vector
  */
 HgVec3 hg_norm(const HgVec3& vec);
 
 /**
- * Normalizes a 4D vector
+ * Normalize a 4D vector
  *
  * Note, cannot normalize 0
- *
- * Parameters
- * - vec The vector to normalize
- *
- * Returns
- * - The normalized vector
  */
 HgVec4 hg_norm(const HgVec4& vec);
 
 /**
- * Computes the cross product of two 3D vectors
+ * Compute the cross product of two 3D vectors
  *
  * Parameters
  * - dst The destination vector, must not be nullptr
@@ -1446,19 +1270,12 @@ HgVec4 hg_norm(const HgVec4& vec);
 void hg_cross(f32* dst, const f32* lhs, const f32* rhs);
 
 /**
- * Computes the cross product of two 3D vectors
- *
- * Parameters
- * - lhs The left-hand side vector
- * - rhs The right-hand side vector
- *
- * Returns
- * - The cross product
+ * Compute the cross product of two 3D vectors
  */
 HgVec3 hg_cross(const HgVec3& lhs, const HgVec3& rhs);
 
 /**
- * Adds two arbitrary size matrices
+ * Add two arbitrary size matrices
  *
  * Parameters
  * - width The width of the matrices
@@ -1470,43 +1287,22 @@ HgVec3 hg_cross(const HgVec3& lhs, const HgVec3& rhs);
 void hg_mat_add(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs);
 
 /**
- * Adds two 2x2 matrices
- *
- * Parameters
- * - lhs The left-hand side matrix
- * - rhs The right-hand side matrix
- *
- * Returns
- * - The added matrix
+ * Add two 2x2 matrices
  */
 HgMat2 operator+(const HgMat2& lhs, const HgMat2& rhs);
 
 /**
- * Adds two 3x3 matrices
- *
- * Parameters
- * - lhs The left-hand side matrix
- * - rhs The right-hand side matrix
- *
- * Returns
- * - The added matrix
+ * Add two 3x3 matrices
  */
 HgMat3 operator+(const HgMat3& lhs, const HgMat3& rhs);
 
 /**
- * Adds two 4x4 matrices
- *
- * Parameters
- * - lhs The left-hand side matrix
- * - rhs The right-hand side matrix
- *
- * Returns
- * - The added matrix
+ * Add two 4x4 matrices
  */
 HgMat4 operator+(const HgMat4& lhs, const HgMat4& rhs);
 
 /**
- * Subtracts two arbitrary size matrices
+ * Subtract two arbitrary size matrices
  *
  * Parameters
  * - width The width of the matrices
@@ -1518,43 +1314,22 @@ HgMat4 operator+(const HgMat4& lhs, const HgMat4& rhs);
 void hg_mat_sub(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs);
 
 /**
- * Subtracts two 2x2 matrices
- *
- * Parameters
- * - lhs The left-hand side matrix
- * - rhs The right-hand side matrix
- *
- * Returns
- * - The subtracted matrix
+ * Subtract two 2x2 matrices
  */
 HgMat2 operator-(const HgMat2& lhs, const HgMat2& rhs);
 
 /**
- * Subtracts two 3x3 matrices
- *
- * Parameters
- * - lhs The left-hand side matrix
- * - rhs The right-hand side matrix
- *
- * Returns
- * - The subtracted matrix
+ * Subtract two 3x3 matrices
  */
 HgMat3 operator-(const HgMat3& lhs, const HgMat3& rhs);
 
 /**
- * Subtracts two 4x4 matrices
- *
- * Parameters
- * - lhs The left-hand side matrix
- * - rhs The right-hand side matrix
- *
- * Returns
- * - The subtracted matrix
+ * Subtract two 4x4 matrices
  */
 HgMat4 operator-(const HgMat4& lhs, const HgMat4& rhs);
 
 /**
- * Multiplies two arbitrary size matrices
+ * Multiply two arbitrary size matrices
  *
  * Parameters
  * - dst The destination matrix, must not be nullptr
@@ -1568,43 +1343,22 @@ HgMat4 operator-(const HgMat4& lhs, const HgMat4& rhs);
 void hg_mat_mul(f32* dst, u32 wl, u32 hl, const f32* lhs, u32 wr, u32 hr, const f32* rhs);
 
 /**
- * Multiplies two 2x2 matrices
- *
- * Parameters
- * - lhs The left-hand side matrix
- * - rhs The right-hand side matrix
- *
- * Returns
- * - The multiplied matrix
+ * Multiply two 2x2 matrices
  */
 HgMat2 operator*(const HgMat2& lhs, const HgMat2& rhs);
 
 /**
- * Multiplies two 3x3 matrices
- *
- * Parameters
- * - lhs The left-hand side matrix
- * - rhs The right-hand side matrix
- *
- * Returns
- * - The multiplied matrix
+ * Multiply two 3x3 matrices
  */
 HgMat3 operator*(const HgMat3& lhs, const HgMat3& rhs);
 
 /**
- * Multiplies two 4x4 matrices
- *
- * Parameters
- * - lhs The left-hand side matrix
- * - rhs The right-hand side matrix
- *
- * Returns
- * - The multiplied matrix
+ * Multiply two 4x4 matrices
  */
 HgMat4 operator*(const HgMat4& lhs, const HgMat4& rhs);
 
 /**
- * Multiplies a matrix and a vector
+ * Multiply a matrix and a vector
  *
  * Parameters
  * - width The width of the matrix
@@ -1616,169 +1370,79 @@ HgMat4 operator*(const HgMat4& lhs, const HgMat4& rhs);
 void hg_mat_vec_mul(u32 width, u32 height, f32* dst, const f32* mat, const f32* vec);
 
 /**
- * Multiplies a 2x2 matrix and a 2D vector
- *
- * Parameters
- * - lhs The matrix to multiply with
- * - rhs The vector to multiply with
- *
- * Returns
- * - The multiplied vector
+ * Multiply a 2x2 matrix and a 2D vector
  */
 HgVec2 operator*(const HgMat2& lhs, const HgVec2& rhs);
 
 /**
- * Multiplies a 3x3 matrix and a 3D vector
- *
- * Parameters
- * - lhs The matrix to multiply with
- * - rhs The vector to multiply with
- *
- * Returns
- * - The multiplied vector
+ * Multiply a 3x3 matrix and a 3D vector
  */
 HgVec3 operator*(const HgMat3& lhs, const HgVec3& rhs);
 
 /**
- * Multiplies a 4x4 matrix and a 4D vector
- *
- * Parameters
- * - lhs The matrix to multiply with
- * - rhs The vector to multiply with
- *
- * Returns
- * - The multiplied vector
+ * Multiply a 4x4 matrix and a 4D vector
  */
 HgVec4 operator*(const HgMat4& lhs, const HgVec4& rhs);
 
 /**
- * Adds two complex numbers
- *
- * Parameters
- * - lhs The left-hand side complex number
- * - rhs The right-hand side complex number
- *
- * Returns
- * - The added complex number
+ * Add two complex numbers
  */
 constexpr HgComplex operator+(const HgComplex& lhs, const HgComplex& rhs) {
     return {lhs.r + rhs.r, lhs.i + rhs.i};
 }
 
 /**
- * Subtracts two complex numbers
- *
- * Parameters
- * - lhs The left-hand side complex number
- * - rhs The right-hand side complex number
- *
- * Returns
- * - The subtracted complex number
+ * Subtract two complex numbers
  */
 constexpr HgComplex operator-(const HgComplex& lhs, const HgComplex& rhs) {
     return {lhs.r - rhs.r, lhs.i - rhs.i};
 }
 
 /**
- * Multiplies two complex numbers
- *
- * Parameters
- * - lhs The left-hand side complex number
- * - rhs The right-hand side complex number
- *
- * Returns
- * - The multiplied complex number
+ * Multiply two complex numbers
  */
 constexpr HgComplex operator*(const HgComplex& lhs, const HgComplex& rhs) {
     return {lhs.r * rhs.r - lhs.i * rhs.i, lhs.r * rhs.i + lhs.i * rhs.r};
 }
 
 /**
- * Adds two quaternions
- *
- * Parameters
- * - lhs The left-hand side quaternion
- * - rhs The right-hand side quaternion
- *
- * Returns
- * - The added quaternion
+ * Add two quaternions
  */
 constexpr HgQuat operator+(const HgQuat& lhs, const HgQuat& rhs) {
     return {lhs.r + rhs.r, lhs.i + rhs.i, lhs.j + rhs.j, lhs.k + rhs.k};
 }
 
 /**
- * Subtracts two quaternions
- *
- * Parameters
- * - lhs The left-hand side quaternion
- * - rhs The right-hand side quaternion
- *
- * Returns
- * - The subtracted quaternion
+ * Subtract two quaternions
  */
 constexpr HgQuat operator-(const HgQuat& lhs, const HgQuat& rhs) {
     return {lhs.r - rhs.r, lhs.i - rhs.i, lhs.j - rhs.j, lhs.k - rhs.k};
 }
 
 /**
- * Multiplies two quaternions
- *
- * Parameters
- * - lhs The left-hand side quaternion
- * - rhs The right-hand side quaternion
- *
- * Returns
- * - The multiplied quaternion
+ * Multiply two quaternions
  */
 HgQuat operator*(const HgQuat& lhs, const HgQuat& rhs);
 
 /**
- * Computes the conjugate of a quaternion
- *
- * Parameters
- * - quat The quaternion to compute the conjugate of
- *
- * Returns
- * - The conjugate of the quaternion
+ * Compute the conjugate of a quaternion
  */
 constexpr HgQuat hg_conj(const HgQuat& quat) {
     return {quat.r, -quat.i, -quat.j, -quat.k};
 }
 
 /**
- * Creates a rotation quaternion from an axis and angle
- *
- * Parameters
- * - axis The axis of the rotation
- * - angle The angle of the rotation
- *
- * Returns
- * - The created quaternion
+ * Create a rotation quaternion from an axis and angle
  */
 HgQuat hg_axis_angle(const HgVec3& axis, f32 angle);
 
 /**
- * Rotates a 3D vector using a quaternion
- *
- * Parameters
- * - lhs The quaternion to rotate with
- * - rhs The vector to rotate
- *
- * Returns
- * - The rotated vector
+ * Rotate a 3D vector using a quaternion
  */
 HgVec3 hg_rotate(const HgQuat& lhs, const HgVec3& rhs);
 
 /**
- * Rotates a 3x3 matrix using a quaternion
- *
- * Parameters
- * - lhs The quaternion to rotate with
- * - rhs The matrix to rotate
- *
- * Returns
- * - The rotated matrix
+ * Rotate a 3x3 matrix using a quaternion
  */
 HgMat3 hg_rotate(const HgQuat& lhs, const HgMat3& rhs);
 
@@ -3165,171 +2829,101 @@ HgString hg_float_to_str_base10(HgArena& arena, f64 num, u64 decimal_count);
  * A parsed Json file : TODO
  */
 struct HgJson {
-};
-
-/**
- * Parses a string of Json text, one token at a time
- */
-struct HgJsonParser {
     /**
-     * The types of tokens that may be returned
+     * An error contained in the json
      */
-    enum Type {
-        /**
-         * The initial type, should not be returned
-         */
-        NONE,
-        /**
-         * An error was encountered, and further reads may be nonsensical
-         */
-        ERROR,
-        /**
-         * The end of the file has been reached
-         */
-        END_OF_FILE,
-        /**
-         * A field
-         *
-         * Contains the name of the field as a string
-         */
-        FIELD,
-        /**
-         * A literal defining a field
-         *
-         * Contains literal and its type
-         */
-        LITERAL,
-        /**
-         * The beginning of a struct defining a field
-         *
-         * Subsequent tokens will be the fields in the struct
-         */
-        STRUCT_BEGIN,
-        /**
-         * The end of a struct
-         */
-        STRUCT_END,
-        /**
-         * The beginning of an array defining a field
-         *
-         * Subsequent tokens will be the elements in the array
-         */
-        ARRAY_BEGIN,
-        /**
-         * The end of an array defining a field
-         */
-        ARRAY_END,
-    };
-
-    enum Literal {
-        /**
-         * There is not literal
-         *
-         * Do not access string, integer, floating, or boolean
-         */
-        EMPTY,
-        /**
-         * There is a string literal
-         *
-         * string is safe to access
-         */
-        STRING,
-        /**
-         * There is an integer literal
-         *
-         * integer is safe to access
-         */
-        INTEGER,
-        /**
-         * There is a floating point literal
-         *
-         * floating is safe to access
-         */
-        FLOATING,
-        /**
-         * There is a boolean literal
-         *
-         * boolean is safe to access
-         */
-        BOOLEAN,
+    struct Error {
+        Error* next;
+        HgString message;
     };
 
     /**
-     * The tokens that get parsed
+     * A node in the json file
      */
-    struct Token {
+    struct Node;
+
+    /**
+     * The types contained in nodes
+     */
+    enum Type : u32 {
+        none = 0,
+        field,
+        jstruct,
+        array,
+        string,
+        floating,
+        integer,
+        boolean,
+    };
+
+    /**
+     * A struct contained in the json
+     */
+    struct Field {
+        HgString name;
+        Node* data;
+    };
+
+    /**
+     * A struct contained in the json
+     */
+    struct Struct {
+        Node* fields;
+    };
+
+    /**
+     * An array contained in the json
+     */
+    struct Array {
+        Node* elems;
+    };
+
+    /**
+     * A node in the json file
+     */
+    struct Node {
         /**
-         * The type of the token
+         * The next sibling node
+         */
+        Node* next;
+        /**
+         * The node's type
          */
         Type type;
         /**
-         * The type of the literal, if any
-         */
-        Literal literal;
-        /**
-         * The literal value, if any
+         * The value in the node
          */
         union {
-            HgStringView string;
-            i64 integer;
+            Field field;
+            Struct jstruct;
+            Array array;
+            HgString string;
             f64 floating;
+            i64 integer;
             bool boolean;
         };
-
-        /**
-         * Creates a formatted string for output
-         *
-         * Parameters
-         * - arena The arena to allocate from
-         *
-         * Returns
-         * - The created and formatted string
-         */
-        HgString to_string(HgArena& arena);
     };
 
     /**
-     * The file being parsed
+     * The successfully parsed nodes
      */
-    HgStringView file;
+    Node* first;
     /**
-     * The current character begin parsed
+     * The errors found
      */
-    usize head;
-    /**
-     * The number of lines found, for better errors
-     */
-    usize line_count;
-    /**
-     * The number of nestings, for validation
-     */
-    usize nest_count;
-    /**
-     * The previous type of token parsed, for validation
-     */
-    Type prev;
+    Error* errors;
 
     /**
-     * Create a new Json parser
-     *
-     * Parameters
-     * - file The text to parse
-     *
-     * Returns
-     * - The created parser
-     */
-    static HgJsonParser create(HgStringView file);
-
-    /**
-     * Get the next token
+     * Parses json text into a tree
      *
      * Parameters
      * - arena The arena to allocate from
+     * - text The json text to parse
      *
      * Returns
-     * - The parsed token or error message
+     * - The parsed json, errors contained inside
      */
-    Token next_token(HgArena& arena);
+    static HgJson parse(HgArena& arena, HgStringView text);
 };
 
 /**
@@ -3813,11 +3407,11 @@ struct HgBinary {
  * A loaded texture/image file
  */
 struct HgTexture {
-    enum Location : u32 {
-        UNLOADED = 0x0,
-        CPU = 0x1,
-        GPU = 0x2,
-        BOTH = 0x3,
+    enum class Location : u32 {
+        none = 0x0,
+        cpu = 0x1,
+        gpu = 0x2,
+        both = cpu | gpu,
     };
 
     /**
@@ -3924,21 +3518,21 @@ constexpr HgResourceID hg_resource_id(HgStringView name) {
 /**
  * The types of supported resources
  */
-enum HgResourceType : u32 {
-    HG_RESOURCE_NONE,
-    HG_RESOURCE_BINARY,
-    HG_RESOURCE_TEXTURE,
-    HG_RESOURCE_LAST,
+enum class HgResource : u32 {
+    none = 0,
+    binary,
+    texture,
+    count,
 };
 
 template<typename>
-inline constexpr HgResourceType hg_resource_type_enum = HG_RESOURCE_NONE;
+inline constexpr HgResource hg_resource_type = HgResource::none;
 
 template<>
-inline constexpr HgResourceType hg_resource_type_enum<HgBinary> = HG_RESOURCE_BINARY;
+inline constexpr HgResource hg_resource_type<HgBinary> = HgResource::binary;
 
 template<>
-inline constexpr HgResourceType hg_resource_type_enum<HgTexture> = HG_RESOURCE_TEXTURE;
+inline constexpr HgResource hg_resource_type<HgTexture> = HgResource::texture;
 
 /**
  * A resource manager
@@ -3963,7 +3557,7 @@ struct HgResourceManager {
         /**
          * The type of the data
          */
-        HgResourceType type;
+        HgResource type;
         /**
          * The number of active references
          */
@@ -4035,7 +3629,7 @@ struct HgResourceManager {
      * - type The type of the resource to register
      * - id The uuid of the resources
      */
-    void register_resource(HgResourceType type, HgResourceID id);
+    void register_resource(HgResource type, HgResourceID id);
 
     /**
      * Unregister a resource from the hash map
@@ -4073,7 +3667,7 @@ struct HgResourceManager {
      */
     template<typename T>
     T& get(HgResourceID id) {
-        static_assert(hg_resource_type_enum<T> != HG_RESOURCE_NONE);
+        static_assert(hg_resource_type<T> != HgResource::none);
         hg_assert(get_resource(id) != (usize)-1);
         return *(T*)resources[get_resource(id)].data;
     }
@@ -4196,11 +3790,11 @@ struct HgEntity {
 /**
  * The types of supported component
  */
-enum HgComponentType {
-    HG_COMPONENT_NONE,
-    HG_COMPONENT_TRANSFORM,
-    HG_COMPONENT_SPRITE,
-    HG_COMPONENT_LAST,
+enum class HgComponent {
+    none = 0,
+    transform,
+    sprite,
+    count,
 };
 
 /**
@@ -5092,18 +4686,6 @@ struct HgScene {
     void deinstantiate();
 };
 
-// /**
-//  * Create a new scene description from a json description
-//  *
-//  * Parameters
-//  * - arena The arena to allocate from
-//  * - json The json description to create from
-//  *
-//  * Returns
-//  * - The created scene, ready to be instantiated
-//  */
-// HgBinary hg_convert_scene(HgArena& arena, const HgStringView& file);
-
 /**
  * Create a new scene description from a json description
  *
@@ -5116,7 +4698,7 @@ struct HgScene {
  * Returns
  * - The created scene, ready to be instantiated
  */
-HgBinary hg_create_scene_json(HgArena& arena, const HgStringView& json);
+HgBinary hg_create_scene_json(HgArena& arena, const HgJson& json);
 
 /**
  * Initializes the graphics subsystem
@@ -5660,122 +5242,122 @@ void hg_platform_deinit();
 /**
  * A key on the keyboard or button on the mouse
  */
-typedef enum HgKey {
-    HG_KEY_NONE = 0,
-    HG_KEY_0,
-    HG_KEY_1,
-    HG_KEY_2,
-    HG_KEY_3,
-    HG_KEY_4,
-    HG_KEY_5,
-    HG_KEY_6,
-    HG_KEY_7,
-    HG_KEY_8,
-    HG_KEY_9,
-    HG_KEY_Q,
-    HG_KEY_W,
-    HG_KEY_E,
-    HG_KEY_R,
-    HG_KEY_T,
-    HG_KEY_Y,
-    HG_KEY_U,
-    HG_KEY_I,
-    HG_KEY_O,
-    HG_KEY_P,
-    HG_KEY_A,
-    HG_KEY_S,
-    HG_KEY_D,
-    HG_KEY_F,
-    HG_KEY_G,
-    HG_KEY_H,
-    HG_KEY_J,
-    HG_KEY_K,
-    HG_KEY_L,
-    HG_KEY_Z,
-    HG_KEY_X,
-    HG_KEY_C,
-    HG_KEY_V,
-    HG_KEY_B,
-    HG_KEY_N,
-    HG_KEY_M,
-    HG_KEY_SEMICOLON,
-    HG_KEY_COLON,
-    HG_KEY_APOSTROPHE,
-    HG_KEY_QUOTATION,
-    HG_KEY_COMMA,
-    HG_KEY_PERIOD,
-    HG_KEY_QUESTION,
-    HG_KEY_GRAVE,
-    HG_KEY_TILDE,
-    HG_KEY_EXCLAMATION,
-    HG_KEY_AT,
-    HG_KEY_HASH,
-    HG_KEY_DOLLAR,
-    HG_KEY_PERCENT,
-    HG_KEY_CAROT,
-    HG_KEY_AMPERSAND,
-    HG_KEY_ASTERISK,
-    HG_KEY_LPAREN,
-    HG_KEY_RPAREN,
-    HG_KEY_LBRACKET,
-    HG_KEY_RBRACKET,
-    HG_KEY_LBRACE,
-    HG_KEY_RBRACE,
-    HG_KEY_EQUAL,
-    HG_KEY_LESS,
-    HG_KEY_GREATER,
-    HG_KEY_PLUS,
-    HG_KEY_MINUS,
-    HG_KEY_SLASH,
-    HG_KEY_BACKSLASH,
-    HG_KEY_UNDERSCORE,
-    HG_KEY_BAR,
-    HG_KEY_UP,
-    HG_KEY_DOWN,
-    HG_KEY_LEFT,
-    HG_KEY_RIGHT,
-    HG_KEY_MOUSE1,
-    HG_KEY_MOUSE2,
-    HG_KEY_MOUSE3,
-    HG_KEY_MOUSE4,
-    HG_KEY_MOUSE5,
-    HG_KEY_LMOUSE = HG_KEY_MOUSE1,
-    HG_KEY_RMOUSE = HG_KEY_MOUSE2,
-    HG_KEY_MMOUSE = HG_KEY_MOUSE3,
-    HG_KEY_ESCAPE,
-    HG_KEY_SPACE,
-    HG_KEY_ENTER,
-    HG_KEY_BACKSPACE,
-    HG_KEY_DELETE,
-    HG_KEY_INSERT,
-    HG_KEY_TAB,
-    HG_KEY_HOME,
-    HG_KEY_END,
-    HG_KEY_F1,
-    HG_KEY_F2,
-    HG_KEY_F3,
-    HG_KEY_F4,
-    HG_KEY_F5,
-    HG_KEY_F6,
-    HG_KEY_F7,
-    HG_KEY_F8,
-    HG_KEY_F9,
-    HG_KEY_F10,
-    HG_KEY_F11,
-    HG_KEY_F12,
-    HG_KEY_LSHIFT,
-    HG_KEY_RSHIFT,
-    HG_KEY_LCTRL,
-    HG_KEY_RCTRL,
-    HG_KEY_LMETA,
-    HG_KEY_RMETA,
-    HG_KEY_LALT,
-    HG_KEY_RALT,
-    HG_KEY_LSUPER,
-    HG_KEY_RSUPER,
-    HG_KEY_CAPSLOCK,
-    HG_KEY_COUNT,
-} HgKey;
+enum class HgKey {
+    none = 0,
+    k0,
+    k1,
+    k2,
+    k3,
+    k4,
+    k5,
+    k6,
+    k7,
+    k8,
+    k9,
+    q,
+    w,
+    e,
+    r,
+    t,
+    y,
+    u,
+    i,
+    o,
+    p,
+    a,
+    s,
+    d,
+    f,
+    g,
+    h,
+    j,
+    k,
+    l,
+    z,
+    x,
+    c,
+    v,
+    b,
+    n,
+    m,
+    semicolon,
+    colon,
+    apostrophe,
+    quotation,
+    comma,
+    period,
+    question,
+    grave,
+    tilde,
+    exclamation,
+    at,
+    hash,
+    dollar,
+    percent,
+    carot,
+    ampersand,
+    asterisk,
+    lparen,
+    rparen,
+    lbracket,
+    rbracket,
+    lbrace,
+    rbrace,
+    equal,
+    less,
+    greater,
+    plus,
+    minus,
+    slash,
+    backslash,
+    underscore,
+    bar,
+    up,
+    down,
+    left,
+    right,
+    mouse1,
+    mouse2,
+    mouse3,
+    mouse4,
+    mouse5,
+    lmouse = mouse1,
+    rmouse = mouse2,
+    mmouse = mouse3,
+    escape,
+    space,
+    enter,
+    backspace,
+    kdelete,
+    insert,
+    tab,
+    home,
+    end,
+    f1,
+    f2,
+    f3,
+    f4,
+    f5,
+    f6,
+    f7,
+    f8,
+    f9,
+    f10,
+    f11,
+    f12,
+    lshift,
+    rshift,
+    lctrl,
+    rctrl,
+    lmeta,
+    rmeta,
+    lalt,
+    ralt,
+    lsuper,
+    rsuper,
+    capslock,
+    count,
+};
 
 struct HgWindow {
     struct Internals;
@@ -5853,14 +5435,14 @@ struct HgWindow {
     /**
      * The builtin cursor images
      */
-    typedef enum Cursor {
-        HG_CURSOR_NONE = 0,
-        HG_CURSOR_ARROW,
-        HG_CURSOR_TEXT,
-        HG_CURSOR_WAIT,
-        HG_CURSOR_CROSS,
-        HG_CURSOR_HAND,
-    } Cursor;
+    enum class Cursor {
+        none = 0,
+        arrow,
+        text,
+        wait,
+        cross,
+        hand,
+    };
 
     /**
      * Sets the window's cursor to a platform defined icon : TODO

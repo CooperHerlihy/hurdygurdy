@@ -1032,456 +1032,417 @@ HgString hg_float_to_str_base10(HgArena& arena, f64 num, u64 decimal_count) {
     return ret;
 }
 
-HgString HgJsonParser::Token::to_string(HgArena& arena) {
-    HgString ret{};
-    ret.append(arena, "{ ");
+struct HgJsonParser {
+    HgArena& arena;
+    HgStringView text;
+    usize head;
+    usize line;
 
-    switch (type) {
-        default:
-            hg_warn("json token has invalid type enum");
-            [[fallthrough]];
-        case NONE:
-            ret.append(arena, "Type: NONE");
-            break;
-        case ERROR:
-            ret.append(arena, "Type: ERROR, ");
-            break;
-        case END_OF_FILE:
-            ret.append(arena, "Type: END_OF_FILE");
-            break;
-        case FIELD:
-            ret.append(arena, "Type: FIELD, ");
-            break;
-        case LITERAL:
-            ret.append(arena, "Type: LITERAL, ");
-            break;
-        case STRUCT_BEGIN:
-            ret.append(arena, "Type: STRUCT_BEGIN");
-            break;
-        case STRUCT_END:
-            ret.append(arena, "Type: STRUCT_END");
-            break;
-        case ARRAY_BEGIN:
-            ret.append(arena, "Type: ARRAY_BEGIN");
-            break;
-        case ARRAY_END:
-            ret.append(arena, "Type: ARRAY_END");
-            break;
+    HgJsonParser(HgArena& arena_val) : arena{arena_val} {}
+
+    HgJson parse_next();
+    HgJson parse_struct();
+    HgJson parse_array();
+    HgJson parse_string();
+    HgJson parse_number();
+    HgJson parse_boolean();
+};
+
+HgJson HgJsonParser::parse_next() {
+    while (head < text.length && hg_is_whitespace(text[head])) {
+        if (text[head] == '\n')
+            ++line;
+        ++head;
+    }
+    if (head >= text.length)
+        return {};
+
+    switch (text[head]) {
+        case '{':
+            ++head;
+            return parse_struct();
+        case '[':
+            ++head;
+            return parse_array();
+        case '\'': [[fallthrough]];
+        case '"':
+            ++head;
+            return parse_string();
+        case '.': [[fallthrough]];
+        case '+': [[fallthrough]];
+        case '-':
+            return parse_number();
+        case 't': [[fallthrough]];
+        case 'f':
+            return parse_boolean();
+    }
+    if (hg_is_numeral_base10(text[head])) {
+        return parse_number();
     }
 
-    switch (literal) {
-        default:
-            hg_warn("json token has invalid literal enum");
-            [[fallthrough]];
-        case EMPTY:
+    HgJson::Error* error = arena.alloc<HgJson::Error>(1);
+    error->message = {};
+
+    usize begin = head;
+    while (head < text.length && !hg_is_whitespace(text[head])) {
+        if (text[head] == '\n')
+            ++line;
+        ++head;
+    }
+    error->message = HgString{}
+        .append(arena, "on line ")
+        .append(arena, hg_int_to_str_base10(arena, (i64)line))
+        .append(arena, ", found unexpected token \"")
+        .append(arena, {&text[begin], &text[head]})
+        .append(arena, "\"\n");
+
+    return {nullptr, error};
+}
+
+HgJson HgJsonParser::parse_struct() {
+    HgJson json{};
+    json.first = arena.alloc<HgJson::Node>(1);
+    json.first->next = nullptr;
+    json.first->type = HgJson::jstruct;
+
+    HgJson::Node* last_field = nullptr;
+    HgJson::Error* last_error = nullptr;
+
+    for (;;) {
+        while (head < text.length && hg_is_whitespace(text[head])) {
+            if (text[head] == '\n')
+                ++line;
+            ++head;
+        }
+        if (head >= text.length) {
+            HgJson::Error* error = arena.alloc<HgJson::Error>(1);
+            error->next = nullptr;
+            error->message = HgString{}
+                .append(arena, "on line ")
+                .append(arena, hg_int_to_str_base10(arena, (i64)line))
+                .append(arena, ", expected struct to terminate\n");
+            if (last_error == nullptr)
+                json.errors = last_error = error;
+            else
+                last_error->next = error;
+            last_error = error;
             break;
-        case STRING:
-            ret.append(arena, "String: ");
-            ret.append(arena, string);
+        }
+        if (text[head] == '}')
             break;
-        case INTEGER:
-            ret.append(arena, "Integer: ");
-            {
-                hg_arena_scope(scratch, hg_get_scratch(arena));
-                ret.append(arena, hg_int_to_str_base10(scratch, integer));
-            }
-            break;
-        case FLOATING:
-            ret.append(arena, "Floating: ");
-            {
-                hg_arena_scope(scratch, hg_get_scratch(arena));
-                ret.append(arena, hg_float_to_str_base10(scratch, floating, 6));
-            }
-            break;
-        case BOOLEAN:
-            if (boolean) {
-                ret.append(arena, "Boolean: true");
+
+        HgJson field = parse_next();
+
+        if (field.first != nullptr) {
+            if (field.first->type != HgJson::field) {
+                HgJson::Error* error = arena.alloc<HgJson::Error>(1);
+                error->next = nullptr;
+                error->message = HgString{}
+                    .append(arena, "on line ")
+                    .append(arena, hg_int_to_str_base10(arena, (i64)line))
+                    .append(arena, ", struct has a field which is not in the forms \"name\": value\n");
+                if (last_error == nullptr)
+                    json.errors = last_error = error;
+                else
+                    last_error->next = error;
+                last_error = error;
             } else {
-                ret.append(arena, "Boolean: false");
+                if (last_field == nullptr)
+                    json.first->jstruct.fields = field.first;
+                else
+                    last_field->next = field.first;
+                last_field = field.first;
             }
-            break;
-    }
-
-    ret.append(arena, " }");
-    return ret;
-}
-
-HgJsonParser HgJsonParser::create(HgStringView file) {
-    HgJsonParser parser;
-    parser.file = file;
-    parser.head = 0;
-    parser.line_count = 1;
-    parser.nest_count = 0;
-    parser.prev = NONE;
-    return parser;
-}
-
-HgJsonParser::Token HgJsonParser::next_token(HgArena& arena) {
-    if (prev == ERROR) {
-        usize prev_nest = nest_count - 1;
-        while (nest_count != prev_nest) {
-            if (file[head] == '{' || file[head] == '[') {
-                ++nest_count;
-            } else if (file[head] == '}' || file[head] == ']') {
-                --nest_count;
-            }
-            ++head;
-        }
-
-        Token token{};
-        if (file[head - 1] == '}') {
-            token.type = STRUCT_END;
-            token.literal = EMPTY;
-            prev = STRUCT_END;
-        } else if (file[head = 1] == ']') {
-            token.type = ARRAY_END;
-            token.literal = EMPTY;
-            prev = ARRAY_END;
-        }
-        return token;
-    }
-
-    if (head >= file.length) {
-        Token token;
-        token.type = END_OF_FILE;
-        token.literal = EMPTY;
-
-        prev = END_OF_FILE;
-        return token;
-    }
-
-    hg_arena_scope(scratch, hg_get_scratch(arena));
-
-    while (head < file.length && hg_is_whitespace(file[head])) {
-        if (file[head] == '\n')
-            ++line_count;
-        ++head;
-    }
-
-    if (head >= file.length || file[head] == EOF) {
-        if (nest_count == 0 && prev == STRUCT_END) {
-            Token token;
-            token.type = END_OF_FILE;
-            token.literal = EMPTY;
-
-            prev = END_OF_FILE;
-            return token;
-        }
-
-        Token token;
-        token.type = ERROR;
-        token.literal = STRING;
-        token.string = HgString::create(arena, "json unexpected EOF before parse completion\n");
-
-        prev = ERROR;
-        return token;
-    }
-
-    if (file[head] == '{') {
-        ++head;
-
-        Token token;
-        token.type = STRUCT_BEGIN;
-        token.literal = EMPTY;
-
-        prev = STRUCT_BEGIN;
-        ++nest_count;
-        return token;
-    }
-
-    if (file[head] == '}') {
-        ++head;
-        while (head < file.length && hg_is_whitespace(file[head])) {
-            if (file[head] == '\n')
-                ++line_count;
-            ++head;
-        }
-        if (head < file.length && file[head] == ',')
-            ++head;
-
-        Token token;
-        token.type = STRUCT_END;
-        token.literal = EMPTY;
-
-        prev = STRUCT_END;
-        --nest_count;
-        return token;
-    }
-
-    if (file[head] == '[') {
-        ++head;
-
-        Token token;
-        token.type = ARRAY_BEGIN;
-        token.literal = EMPTY;
-
-        prev = ARRAY_BEGIN;
-        ++nest_count;
-        return token;
-    }
-
-    if (file[head] == ']') {
-        ++head;
-        while (head < file.length && hg_is_whitespace(file[head])) {
-            if (file[head] == '\n')
-                ++line_count;
-            ++head;
-        }
-        if (file[head] == ',')
-            ++head;
-
-        Token token;
-        token.type = ARRAY_END;
-        token.literal = EMPTY;
-
-        prev = ARRAY_END;
-        --nest_count;
-        return token;
-    }
-
-    if (file[head] == '\"' || file[head] == '\'') {
-        ++head;
-        goto parse_string;
-    }
-
-    if (hg_is_numeral_base10(file[head])
-            || file[head] == '.'
-            || file[head] == '+'
-            || file[head] == '-'
-       ) {
-        goto parse_number;
-    }
-
-    if (head + 4 <= file.length && HgStringView{&file[head], 4} == "true") {
-        head += 4;
-        while (head < file.length && hg_is_whitespace(file[head])) {
-            if (file[head] == '\n')
-                ++line_count;
-            ++head;
-        }
-        if (file[head] == ',')
-            ++head;
-
-        Token token;
-        token.type = LITERAL;
-        token.literal = BOOLEAN;
-        token.boolean = true;
-
-        prev = LITERAL;
-        return token;
-    }
-
-    if (head + 5 <= file.length && HgStringView{&file[head], 5} == "false") {
-        head += 5;
-        while (head < file.length && hg_is_whitespace(file[head])) {
-            if (file[head] == '\n')
-                ++line_count;
-            ++head;
-        }
-        if (file[head] == ',')
-            ++head;
-
-        Token token;
-        token.type = LITERAL;
-        token.literal = BOOLEAN;
-        token.boolean = false;
-
-        prev = LITERAL;
-        return token;
-    }
-
-    {
-        const char* line_begin = &file[head];
-        while (line_begin > file.begin() && line_begin[-1] != '\n') {
-            --line_begin;
-        }
-        usize line_len = 0;
-        while (line_begin[line_len] != '\n') {
-            ++line_len;
-        }
-
-        Token token;
-        token.type = ERROR;
-        token.literal = STRING;
-
-        // replace with format : TODO
-        HgString err{};
-        err.append(arena, "json unexpected character '");
-        err.append(arena, file[head]);
-        err.append(arena, "'while parsing line ");
-        err.append(arena, hg_int_to_str_base10(scratch, (i64)line_count));
-        err.append(arena, ": \"");
-        err.append(arena, {line_begin, line_len});
-        err.append(arena, "\"\n");
-        token.string = err;
-
-        prev = ERROR;
-        return token;
-    }
-
-parse_string:
-    {
-        HgString string{};
-continue_string:
-        if (head >= file.length || file[head] == EOF) {
-            Token token;
-            token.type = ERROR;
-            token.literal = STRING;
-
-            // replace with format : TODO
-            HgString err{};
-            err.append(arena, "json unexpected EOF while parsing string \"");
-            err.append(arena, string);
-            err.append(arena, "\"\n");
-            token.string = err;
-
-            prev = ERROR;
-            return token;
-        }
-
-        if (file[head] == '\"' || file[head] == '\'') {
-            ++head;
-            while (head < file.length && hg_is_whitespace(file[head])) {
-                if (file[head] == '\n')
-                    ++line_count;
-                ++head;
-            }
-
-            if (head >= file.length || file[head] == EOF) {
-                Token token;
-                token.type = ERROR;
-                token.literal = STRING;
-
-                // replace with format : TODO
-                HgString err{};
-                err.append(arena, "json unexpected EOF while parsing string \"");
-                err.append(arena, string);
-                err.append(arena, "\"\n");
-                token.string = err;
-
-                prev = ERROR;
-                return token;
-            }
-
-            if (file[head] == '\"' || file[head] == '\'') {
-                ++head;
-                goto continue_string;
-            }
-
-            if (file[head] == ':') {
-                ++head;
-
-                if (prev == FIELD) {
-                    Token token;
-                    token.type = ERROR;
-                    token.literal = STRING;
-
-                    // change to format : TODO
-                    HgString err{};
-                    err.append(arena, "json found two ':' on line ");
-                    err.append(arena, hg_int_to_str_base10(scratch, (i64)line_count));
-                    err.append(arena, ", cannot defined previous field with field \"");
-                    err.append(arena, string);
-                    err.append(arena, "\", must defined literal, struct, or array\n");
-                    token.string = err;
-
-                    prev = ERROR;
-                    return token;
-                }
-
-                Token token;
-                token.type = FIELD;
-                token.literal = STRING;
-                token.string = HgString::create(arena, string);
-
-                prev = FIELD;
-                return token;
-            }
-
-            if (file[head] == ',')
-                ++head;
-
-            Token token;
-            token.type = LITERAL;
-            token.literal = STRING;
-            token.string = HgString::create(arena, string);
-
-            prev = LITERAL;
-            return token;
-        }
-
-        string.append(scratch, file[head]);
-        ++head;
-        goto continue_string;
-    }
-
-parse_number:
-    {
-        HgString number{};
-
-        bool is_float = false;
-        while (hg_is_numeral_base10(file[head])
-               || file[head] == '.'
-               || file[head] == '+'
-               || file[head] == '-'
-               || file[head] == 'e'
-               || file[head] == 'f'
-        ) {
-            if (file[head] == '.' || file[head] == 'e' || file[head] == 'f')
-                is_float = true;
-            number.append(scratch, file[head]);
-            ++head;
-        }
-
-        if (head >= file.length || file[head] == EOF) {
-            Token token;
-            token.type = ERROR;
-            token.literal = STRING;
-
-            // replace with format : TODO
-            HgString err{};
-            err.append(arena, "json unexpected EOF while parsing number \"");
-            err.append(arena, number);
-            err.append(arena, "\"\n");
-            token.string = err;
-
-            prev = ERROR;
-            return token;
-        }
-
-        if (!hg_is_integer_base10(number) && !hg_is_float_base10(number)) {
-            Token token;
-            token.type = ERROR;
-            token.literal = STRING;
-
-            // replace with format : TODO
-            HgString err{};
-            err.append(arena, "json invalid number \"");
-            err.append(arena, number);
-            err.append(arena, "\"\n");
-            token.string = err;
-
-            prev = ERROR;
-            return token;
-        }
-
-        if (head < file.length && file[head] == ',')
-            ++head;
-
-        Token token;
-        token.type = LITERAL;
-
-        if (is_float) {
-            token.literal = FLOATING;
-            token.floating = hg_str_to_float_base10(number);
+        } else if (field.errors != nullptr) {
+            if (last_error == nullptr)
+                json.errors = last_error = field.errors;
+            else
+                last_error->next = field.errors;
+            last_error = field.errors;
         } else {
-            token.literal = INTEGER;
-            token.integer = hg_str_to_int_base10(number);
+            HgJson::Error* error = arena.alloc<HgJson::Error>(1);
+            error->next = nullptr;
+            error->message = HgString{}
+                .append(arena, "on line ")
+                .append(arena, hg_int_to_str_base10(arena, (i64)line))
+                .append(arena, ", struct has a nonexistant field (how did this happen?)\n");
+            if (last_error == nullptr)
+                json.errors = last_error = error;
+            else
+                last_error->next = error;
+            last_error = error;
+        }
+    }
+
+    return json;
+}
+
+HgJson HgJsonParser::parse_array() {
+    HgJson json{};
+    json.first = arena.alloc<HgJson::Node>(1);
+    json.first->next = nullptr;
+    json.first->type = HgJson::array;
+
+    HgJson::Type type = HgJson::none;
+    HgJson::Node* last_elem = nullptr;
+    HgJson::Error* last_error = nullptr;
+
+    for (;;) {
+        while (head < text.length && hg_is_whitespace(text[head])) {
+            if (text[head] == '\n')
+                ++line;
+            ++head;
+        }
+        if (head >= text.length) {
+            HgJson::Error* error = arena.alloc<HgJson::Error>(1);
+            error->next = nullptr;
+            error->message = HgString{}
+                .append(arena, "on line ")
+                .append(arena, hg_int_to_str_base10(arena, (i64)line))
+                .append(arena, ", expected struct to terminate\n");
+            if (last_error == nullptr)
+                json.errors = last_error = error;
+            else
+                last_error->next = error;
+            last_error = error;
+            break;
+        }
+        if (text[head] == ']')
+            break;
+
+        HgJson elem = parse_next();
+
+        if (elem.first != nullptr) {
+            if (type == HgJson::none) {
+                if (elem.first->type != HgJson::field) {
+                    type = elem.first->type;
+                } else {
+                    HgJson::Error* error = arena.alloc<HgJson::Error>(1);
+                    error->next = nullptr;
+                    error->message = HgString{}
+                        .append(arena, "on line ")
+                        .append(arena, hg_int_to_str_base10(arena, (i64)line))
+                        .append(arena, ", array has a field as an element\n");
+                    if (last_error == nullptr)
+                        json.errors = last_error = error;
+                    else
+                        last_error->next = error;
+                    last_error = error;
+                }
+            }
+            if (elem.first->type != type) {
+                HgJson::Error* error = arena.alloc<HgJson::Error>(1);
+                error->next = nullptr;
+                error->message = HgString{}
+                    .append(arena, "on line ")
+                    .append(arena, hg_int_to_str_base10(arena, (i64)line))
+                    .append(arena, ", array has element which is not the same type as the first valid element\n");
+                if (last_error == nullptr)
+                    json.errors = last_error = error;
+                else
+                    last_error->next = error;
+                last_error = error;
+            } else {
+                if (last_elem == nullptr)
+                    json.first->array.elems = elem.first;
+                else
+                    last_elem->next = elem.first;
+                last_elem = elem.first;
+            }
+        } else if (elem.errors != nullptr) {
+            if (last_error == nullptr)
+                json.errors = last_error = elem.errors;
+            else
+                last_error->next = elem.errors;
+            last_error = elem.errors;
+        } else {
+            HgJson::Error* error = arena.alloc<HgJson::Error>(1);
+            error->next = nullptr;
+            error->message = HgString{}
+                .append(arena, "on line ")
+                .append(arena, hg_int_to_str_base10(arena, (i64)line))
+                .append(arena, ", array has an empty element (how did this happen?)\n");
+            if (last_error == nullptr)
+                json.errors = last_error = error;
+            else
+                last_error->next = error;
+            last_error = error;
+        }
+    }
+
+    return json;
+}
+
+HgJson HgJsonParser::parse_string() {
+    usize begin = head;
+    while (head < text.length && text[head] != '"') {
+        if (text[head] == '\n')
+            ++line;
+        ++head;
+    }
+    if (head < text.length)
+        ++head;
+    if (head < text.length) {
+        HgString str{};
+        for (usize i = begin; i < head; ++i) {
+            char c = text[i];
+            if (c == '\\') {
+                // escape sequences : TODO
+            }
+            str.append(arena, c);
         }
 
-        prev = LITERAL;
-        return token;
+        HgJson json{};
+        json.first = arena.alloc<HgJson::Node>(1);
+        json.first->next = nullptr;
+        if (text[head] == ':') {
+            ++head;
+            HgJson next = parse_next();
+            json.first->type = HgJson::field;
+            json.first->field.name = str;
+            json.first->field.data = nullptr;
+            json.first->field.data = next.first;
+            json.errors = next.errors;
+        } else {
+            json.first->type = HgJson::string;
+            json.first->string = str;
+        }
+        return json;
     }
+
+    HgJson::Error* error = arena.alloc<HgJson::Error>(1);
+    error->message = HgString{}
+        .append(arena, "on line ")
+        .append(arena, hg_int_to_str_base10(arena, (i64)line))
+        .append(arena, ", expected string to terminate\n");
+    return {nullptr, error};
+}
+
+HgJson HgJsonParser::parse_number() {
+    bool is_float = false;
+    usize begin = head;
+    while (head < text.length && (
+        hg_is_numeral_base10(text[head]) ||
+        text[head] == '-' ||
+        text[head] == '+' ||
+        text[head] == '.' ||
+        text[head] == 'e'
+    )) {
+        if (text[head] == '.' || text[head] == 'e')
+            is_float = true;
+        ++head;
+    }
+    HgStringView num{&text[begin], &text[head]};
+    if (head < text.length && text[head] == ',')
+        ++head;
+
+    if (is_float) {
+        if (hg_is_float_base10(num)) {
+            HgJson::Node* node = arena.alloc<HgJson::Node>(1);
+            node->next = nullptr;
+            node->type = HgJson::floating;
+            node->floating = hg_str_to_float_base10(num);
+            return {node, nullptr};
+        }
+    } else {
+        if (hg_is_integer_base10(num)) {
+            HgJson::Node* node = arena.alloc<HgJson::Node>(1);
+            node->next = nullptr;
+            node->type = HgJson::integer;
+            node->integer = hg_str_to_int_base10(num);
+            return {node, nullptr};
+        }
+    }
+
+    HgJson::Error* error = arena.alloc<HgJson::Error>(1);
+
+    error->message = HgString{}
+        .append(arena, "on line ")
+        .append(arena, hg_int_to_str_base10(arena, (i64)line))
+        .append(arena, ", expected numeral value, found \"")
+        .append(arena, num)
+        .append(arena, "\"\n");
+
+    while (head < text.length && hg_is_whitespace(text[head])) {
+        if (text[head] == '\n')
+            ++line;
+        ++head;
+    }
+    if (text[head] == '}' || text[head] == ']') {
+        return {nullptr, error};
+    } else {
+        HgJson next = parse_next();
+        error->next = next.errors;
+        return {next.first, error};
+    }
+}
+
+HgJson HgJsonParser::parse_boolean() {
+    if (head + 4 < text.length && HgStringView{&text[head], 4} == "true") {
+        head += 5;
+        if (head < text.length && text[head] == ',')
+            ++head;
+
+        HgJson::Node* node = arena.alloc<HgJson::Node>(1);
+        node->next = nullptr;
+        node->type = HgJson::boolean;
+        node->boolean = true;
+        return {node, nullptr};
+    }
+    if (head + 5 < text.length && HgStringView{&text[head], 5} == "false") {
+        head += 5;
+        if (head < text.length && text[head] == ',')
+            ++head;
+
+        HgJson::Node* node = arena.alloc<HgJson::Node>(1);
+        node->next = nullptr;
+        node->type = HgJson::boolean;
+        node->boolean = false;
+        return {node, nullptr};
+    }
+
+    HgJson::Error* error = arena.alloc<HgJson::Error>(1);
+
+    usize begin = head;
+    while (head < text.length && !hg_is_whitespace(text[head])
+        && text[head] != ','
+        && text[head] != '}'
+        && text[head] != ']'
+    ) {
+        if (text[head] == '\n')
+            ++line;
+        ++head;
+    }
+    error->message = HgString{}
+        .append(arena, "on line ")
+        .append(arena, hg_int_to_str_base10(arena, (i64)line))
+        .append(arena, ", expected boolean value, found \"")
+        .append(arena, {&text[begin], &text[head]})
+        .append(arena, "\"\n");
+
+    if (text[head] == ',')
+        ++head;
+
+    while (head < text.length && hg_is_whitespace(text[head])) {
+        if (text[head] == '\n')
+            ++line;
+        ++head;
+    }
+    if (text[head] == '}' || text[head] == ']') {
+        return {nullptr, error};
+    } else {
+        HgJson next = parse_next();
+        error->next = next.errors;
+        return {next.first, error};
+    }
+}
+
+HgJson HgJson::parse(HgArena& arena, HgStringView text) {
+    HgJsonParser parser{arena};
+    parser.text = text;
+    parser.head = 0;
+    parser.line = 1;
+    return parser.parse_next();
 }
 
 void HgFence::add() {
@@ -1830,7 +1791,7 @@ void HgTexture::load_png(HgFence* fences, usize fence_count, HgStringView path) 
         }
 
         texture.format = VK_FORMAT_R8G8B8A8_SRGB;
-        texture.location |= CPU;
+        texture.location |= (u32)Location::cpu;
     };
 
     HgIOThread::Request request;
@@ -1847,7 +1808,7 @@ void HgTexture::unload(HgFence* fences, usize fence_count) {
         HgTexture& texture = *(HgTexture*)ptexture;
         free(texture.pixels);
         texture.pixels = nullptr;
-        texture.location &= ~CPU;
+        texture.location &= ~(u32)Location::cpu;
     };
 
     HgIOThread::Request request;
@@ -1861,7 +1822,7 @@ void HgTexture::unload(HgFence* fences, usize fence_count) {
 void HgTexture::store_png(HgFence* fences, usize fence_count, HgStringView path) {
     auto fn = [](void*, void* ptexture, HgStringView fpath) {
         HgTexture& texture = *(HgTexture*)ptexture;
-        hg_assert(texture.location & CPU);
+        hg_assert(texture.location & (u32)Location::cpu);
 
         char* cpath = (char*)alloca(fpath.length + 1);
         std::memcpy(cpath, fpath.chars, fpath.length);
@@ -1886,7 +1847,7 @@ void HgTexture::store_png(HgFence* fences, usize fence_count, HgStringView path)
 }
 
 void HgTexture::transfer_to_gpu(VkCommandPool cmd_pool, VkFilter filter) {
-    hg_assert(location == CPU);
+    hg_assert(location == (u32)Location::cpu);
     hg_assert(pixels != nullptr);
     hg_assert(format != 0);
     hg_assert(width != 0);
@@ -1946,16 +1907,16 @@ void HgTexture::transfer_to_gpu(VkCommandPool cmd_pool, VkFilter filter) {
     vkCreateSampler(hg_vk_device, &sampler_info, nullptr, &sampler);
     hg_assert(sampler != nullptr);
 
-    location |= GPU;
+    location |= (u32)Location::gpu;
 }
 
 void HgTexture::free_from_gpu() {
-    hg_assert(location & GPU);
+    hg_assert(location & (u32)Location::gpu);
     vkDestroySampler(hg_vk_device, sampler, nullptr);
     vkDestroyImageView(hg_vk_device, view, nullptr);
     vmaDestroyImage(hg_vk_vma, image, allocation);
 
-    location &= ~GPU;
+    location &= ~(u32)Location::gpu;
 }
 
 void HgResourceManager::Resource::load(HgFence* fences, usize fence_count, HgStringView path) {
@@ -1965,10 +1926,10 @@ void HgResourceManager::Resource::load(HgFence* fences, usize fence_count, HgStr
         return;
 
     switch (type) {
-        case HG_RESOURCE_BINARY:
+        case HgResource::binary:
             data->binary.load(fences, fence_count, path);
             break;
-        case HG_RESOURCE_TEXTURE:
+        case HgResource::texture:
             data->texture.load_png(fences, fence_count, path);
             break;
         default: {
@@ -1988,10 +1949,10 @@ void HgResourceManager::Resource::unload(HgFence* fences, usize fence_count) {
         return;
 
     switch (type) {
-        case HG_RESOURCE_BINARY:
+        case HgResource::binary:
             data->binary.unload(fences, fence_count);
             break;
-        case HG_RESOURCE_TEXTURE:
+        case HgResource::texture:
             data->texture.unload(fences, fence_count);
             break;
         default:
@@ -1999,7 +1960,7 @@ void HgResourceManager::Resource::unload(HgFence* fences, usize fence_count) {
             break;
     }
 
-    type = HG_RESOURCE_NONE;
+    type = HgResource::none;
 }
 
 HgResourceManager HgResourceManager::create(HgArena& arena, usize capacity) {
@@ -2011,7 +1972,7 @@ HgResourceManager HgResourceManager::create(HgArena& arena, usize capacity) {
 
     Resource::Data* data = arena.alloc<Resource::Data>(capacity);
     for (usize i = 0; i < rm.capacity; ++i) {
-        rm.resources[i].type = HG_RESOURCE_NONE;
+        rm.resources[i].type = HgResource::none;
         rm.resources[i].ref_count = 0;
         rm.resources[i].data = data + i;
     }
@@ -2028,12 +1989,12 @@ void HgResourceManager::destroy(HgFence* fences, usize fence_count) {
     }
 }
 
-void HgResourceManager::register_resource(HgResourceType type, HgResourceID id) {
+void HgResourceManager::register_resource(HgResource type, HgResourceID id) {
     hg_assert(count + 1 < capacity);
 
-    if (type == HG_RESOURCE_NONE) {
+    if (type == HgResource::none) {
         hg_warn("attempted to register resource of type none\n");
-        type = HG_RESOURCE_LAST;
+        type = HgResource::count;
     }
 
     usize idx = get_resource(id);
@@ -2050,7 +2011,7 @@ void HgResourceManager::register_resource(HgResourceType type, HgResourceID id) 
     Resource* fill_data = nullptr;
 
     usize dist = 0;
-    while (resources[idx].type != HG_RESOURCE_NONE) {
+    while (resources[idx].type != HgResource::none) {
         usize other_dist = resources[idx].id % capacity;
         if (other_dist < idx)
             other_dist += capacity;
@@ -2093,7 +2054,7 @@ void HgResourceManager::unregister_resource(HgResourceID id) {
     Resource::Data* data = resources[idx].data;
 
     usize next = (idx + 1) % capacity;
-    while (resources[next].type != HG_RESOURCE_NONE) {
+    while (resources[next].type != HgResource::none) {
         if (resources[next].id % capacity != idx) {
             resources[idx] = resources[next];
             idx = next;
@@ -2101,7 +2062,7 @@ void HgResourceManager::unregister_resource(HgResourceID id) {
         next = (next + 1) % capacity;
     }
 
-    resources[idx].type = HG_RESOURCE_NONE;
+    resources[idx].type = HgResource::none;
     resources[idx].ref_count = 0;
     resources[idx].data = data;
 
@@ -2110,18 +2071,18 @@ void HgResourceManager::unregister_resource(HgResourceID id) {
 
 bool HgResourceManager::is_registered(HgResourceID id) {
     usize idx = id % capacity;
-    while (resources[idx].type != HG_RESOURCE_NONE && resources[idx].id != id) {
+    while (resources[idx].type != HgResource::none && resources[idx].id != id) {
         idx = (idx + 1) % capacity;
     }
-    return resources[idx].type != HG_RESOURCE_NONE;
+    return resources[idx].type != HgResource::none;
 }
 
 usize HgResourceManager::get_resource(HgResourceID id) {
     usize idx = id % capacity;
-    while (resources[idx].type != HG_RESOURCE_NONE && resources[idx].id != id) {
+    while (resources[idx].type != HgResource::none && resources[idx].id != id) {
         idx = (idx + 1) % capacity;
     }
-    return resources[idx].type != HG_RESOURCE_NONE ? idx : (usize)-1;
+    return resources[idx].type != HgResource::none ? idx : (usize)-1;
 }
 
 #include "sprite.frag.spv.h"
@@ -2308,7 +2269,7 @@ void HgPipeline2D::add_texture(HgResourceID texture_id) {
     hg_assert(hg_resources->is_registered(texture_id));
 
     HgTexture& texture = hg_resources->get<HgTexture>(texture_id);
-    hg_assert(texture.location & HgTexture::GPU);
+    hg_assert(texture.location & (u32)HgTexture::Location::gpu);
 
     if (texture_sets.has(texture_id))
         return;
@@ -2632,24 +2593,6 @@ finish:
     quicksort(quicksort, begin, end);
 }
 
-// static HgComponentType hg_internal_component_str_to_enum(HgStringView str) {
-//     if (str.length() == 0)
-//         return HG_COMPONENT_NONE;
-//
-//     switch (str[0]) {
-//         case 't':
-//             if (str == "transform")
-//                 return HG_COMPONENT_TRANSFORM;
-//             break;
-//         case 's':
-//             if (str == "sprite")
-//                 return HG_COMPONENT_SPRITE;
-//             break;
-//     }
-//
-//     return HG_COMPONENT_NONE;
-// }
-
 struct HgSceneDescInfo {
     u32 version_major;
     u32 version_minor;
@@ -2662,14 +2605,14 @@ struct HgSceneDescInfo {
 };
 
 struct HgSceneDescComponent {
-    HgComponentType type;
+    HgComponent type;
     u32 entities_begin_idx;
     u32 components_begin_idx;
     u32 count;
 };
 
 struct HgSceneDescResource {
-    HgResourceType type;
+    HgResource type;
     u32 path_idx;
     u32 length;
 };
@@ -2687,7 +2630,7 @@ void HgScene::register_resources() {
         HgStringView path = {(char*)desc.file + resource_desc.path_idx, resource_desc.length};
         hg_resources->register_resource(resource_desc.type, hg_resource_id(path));
 
-        if (!(resource_desc.type > HG_RESOURCE_NONE && resource_desc.type < HG_RESOURCE_LAST)) {
+        if (!(resource_desc.type > HgResource::none && resource_desc.type < HgResource::count)) {
             hg_arena_scope(scratch, hg_get_scratch());
             hg_warn("Invalid resource type found with file: %s\n",
                 HgString::create(scratch, path).append(scratch, 0).chars);
@@ -2755,13 +2698,13 @@ void HgScene::instantiate(HgArena& arena) {
         usize entities_idx = component_desc.entities_begin_idx;
         usize components_idx = component_desc.components_begin_idx;
         switch (component_desc.type) {
-        case HG_COMPONENT_TRANSFORM:
+        case HgComponent::transform:
             for (usize i = 0; i < component_desc.count; ++i) {
                 HgEntity entity = entities[desc.read<HgEntity>(entities_idx + i * sizeof(HgEntity))];
                 hg_ecs->add(entity, desc.read<HgTransform>(components_idx + i * sizeof(HgTransform)));
             }
             break;
-        case HG_COMPONENT_SPRITE:
+        case HgComponent::sprite:
             for (usize i = 0; i < component_desc.count; ++i) {
                 HgEntity entity = entities[desc.read<HgEntity>(entities_idx + i * sizeof(HgEntity))];
                 hg_ecs->add(entity, desc.read<HgSprite>(components_idx + i * sizeof(HgSprite)));
@@ -2784,430 +2727,25 @@ void HgScene::deinstantiate() {
     instantiated = false;
 }
 
-// HgBinary hg_convert_scene(HgArena& arena, const HgStringView& file) {
-//     HgArenaScope scratch = hg_get_scratch(arena);
+// static HgComponentType hg_internal_component_str_to_enum(HgStringView str) {
+//     if (str.length() == 0)
+//         return HG_COMPONENT_NONE;
 //
-//     HgHashMap<HgStringView, usize> entities = entities.create(scratch, 512);
-//
-//     struct Component {
-//         HgComponentType type;
-//         HgArray<HgEntity> entities;
-//         HgArrayAny data;
-//     };
-//     HgArray<Component> components = components.create(scratch, 0, 64);
-//
-//     struct Resource {
-//         HgResourceType type;
-//         HgStringView path;
-//     };
-//     HgArray<Resource> resources = resources.create(scratch, 0, 64);
-//     // HgHashMap<HgStringView, usize> resource_indices = resource_indices.create(scratch, 64);
-//
-//     usize head = 0;
-// next_entity:
-//     HgStringView token = hg_string_next(file, head);
-//     if (entities.is_near_full())
-//         entities.grow(scratch);
-//
-//     HgStringView entity_name = token;
-//     entities.insert(HgString::create(scratch, entity_name), entities.load);
-//
-//     while (head < file.length() && hg_is_whitespace(file[head])) {
-//         ++head;
-//     }
-//     if (head != '{') {
-//         hg_warn("entity \"%s\" is missing an opening brace\n",
-//             HgString::create(scratch, entity_name).append(scratch, 0).chars.data);
-//     } else {
-//         ++head;
+//     switch (str[0]) {
+//         case 't':
+//             if (str == "transform")
+//                 return HgComponent::tranform;
+//             break;
+//         case 's':
+//             if (str == "sprite")
+//                 return HgComponent::sprite;
+//             break;
 //     }
 //
-// next_component:
-//     token = hg_string_next(file, head);
-//
-//     while (head < file.length() && hg_is_whitespace(file[head])) {
-//         ++head;
-//     }
-//     if (head != '{') {
-//         hg_warn("component in entity \"%s\" is missing an opening brace\n",
-//             HgString::create(scratch, entity_name).append(scratch, 0).chars.data);
-//     } else {
-//         ++head;
-//     }
-//
-//     HgComponentType component_type = hg_internal_component_str_to_enum(token);
-//     switch (component_type) {
-//         case HG_COMPONENT_TRANSFORM: {
-//             usize comp_idx = 0;
-//             while (comp_idx < components.count && components[comp_idx].type != component_type) {
-//                 ++comp_idx;
-//             }
-//             if (comp_idx == components.count) {
-//                 if (components.is_full())
-//                     components.grow(scratch);
-//                 Component c;
-//                 c.type = component_type;
-//                 c.entities = c.entities.create(scratch, 0, 512);
-//                 c.data = c.data.create<HgTransform>(scratch, 0, 512);
-//                 components.push() = c;
-//             }
-//
-//             bool has_pos = false;
-//             bool has_scale = false;
-//             bool has_rot = false;
-//             HgTransform tf{};
-//
-//             token = hg_string_next(file, head);
-//
-//             while (head < file.length() && hg_is_whitespace(file[head])) {
-//                 ++head;
-//             }
-//             if (head != '{') {
-//                 hg_warn("component in entity \"%s\" is missing an opening brace\n",
-//                     HgString::create(scratch, entity_name).append(scratch, 0).chars.data);
-//             } else {
-//                 ++head;
-//             }
-//
-//             if (token == "position") {
-//                 if (has_pos)
-//                     hg_warn("entity \"%s\" transform has two positions, the first was ignored\n",
-//                         HgString::create(scratch, entity_name).append(scratch, 0).chars.data);
-//
-//                 has_pos = true;
-//             } else if (token == "scale") {
-//                 if (has_scale)
-//                     hg_warn("entity \"%s\" transform has two scales, the first was ignored\n",
-//                         HgString::create(scratch, entity_name).append(scratch, 0).chars.data);
-//
-//                 has_scale = true;
-//             } else if (token == "rotation") {
-//                 if (has_rot)
-//                     hg_warn("entity \"%s\" transform has two rotations, the first was ignored\n",
-//                         HgString::create(scratch, entity_name).append(scratch, 0).chars.data);
-//
-//                 has_rot = true;
-//             }
-//
-//             goto next_component;
-//         }
-//         default:
-//             if (head < file.length())
-//                 goto next_entity;
-//     }
-//
-//     HgBinaryWriter bin{};
-//
-//     HgSceneDescInfo info{};
-//     info.version_major = HgScene::desc_version_major;
-//     info.version_minor = HgScene::desc_version_minor;
-//     info.version_patch = HgScene::desc_version_patch;
-//     info.entity_count = (u32)entities.load;
-//     info.component_count = (u32)components.count;
-//     info.components_idx = 0;
-//     info.resource_count = (u32)resources.count;
-//     info.resources_idx = 0;
-//
-//     usize info_idx = bin.head;
-//     bin.reserve(arena, sizeof(HgSceneDescInfo));
-//
-//     info.components_idx = (u32)bin.head;
-//     bin.reserve(arena, components.count * sizeof(HgSceneDescComponent));
-//
-//     usize i = 0;
-//     for (Component& c : components) {
-//         HgSceneDescComponent desc;
-//         desc.type = c.type;
-//         desc.count = (u32)c.entities.count;
-//
-//         desc.entities_begin_idx = (u32)bin.head;
-//         for (HgEntity e : c.entities) {
-//             bin.write(arena, e);
-//         }
-//
-//         desc.components_begin_idx = (u32)bin.head;
-//         for (usize j = 0; i < c.data.count; ++i) {
-//             bin.write(arena, c.data[j], c.data.width);
-//         }
-//
-//         bin.overwrite(info.components_idx + i, desc);
-//         i += sizeof(HgSceneDescComponent);
-//     }
-//
-//     info.resources_idx = (u32)bin.head;
-//     bin.reserve(arena, resources.count * sizeof(HgSceneDescResource));
-//
-//     i = 0;
-//     for (Resource& r : resources) {
-//         HgSceneDescResource desc;
-//         desc.type = r.type;
-//         desc.length = (u32)r.path.length();
-//
-//         desc.path_idx = (u32)bin.head;
-//         bin.write(arena, r.path);
-//
-//         bin.overwrite(info.components_idx + i, desc);
-//         i += sizeof(HgSceneDescResource);
-//     }
-//
-//     bin.overwrite(info_idx, info);
-//
-//     return bin;
+//     return HG_COMPONENT_NONE;
 // }
 
-// HgBinary hg_create_scene_json(HgArena& arena, const HgStringView& json_desc) {
-//     HgArenaScope scratch = hg_get_scratch(arena);
-//
-//     HgHashMap<HgStringView, usize> entities = entities.create(scratch, 512);
-//
-//     struct Component {
-//         HgComponentType type;
-//         HgArray<HgEntity> entities;
-//         HgArrayAny data;
-//     };
-//     HgArray<Component> components = components.create(scratch, 0, 64);
-//
-//     struct Resource {
-//         HgResourceType type;
-//         HgStringView path;
-//     };
-//     HgArray<Resource> resources = resources.create(scratch, 0, 64);
-//     // HgHashMap<HgStringView, usize> resource_indices = resource_indices.create(scratch, 64);
-//
-//     HgJsonParser json = json.create(json_desc);
-//
-//     using Token = HgJsonParser::Token;
-//
-//     Token entity_name = json.next_token(scratch);
-//     if (entity_name.type == HgJsonParser::STRUCT_BEGIN) {
-//         entity_name = json.next_token(scratch);
-//     } else if (entity_name.type == HgJsonParser::ERROR) {
-//         hg_warn("json scene, expected file to begin with STRUCT_BEGIN, found %s\n",
-//             HgString::create(scratch, entity_name.string).append(scratch, 0).chars.data);
-//     } else {
-//         hg_warn("json scene, expected file to begin with STRUCT_BEGIN\n");
-//         ++json.nest_count;
-//     }
-//
-//     while (entity_name.type != HgJsonParser::STRUCT_END) {
-//         if (entity_name.type != HgJsonParser::FIELD) {
-//             HgString fmt = entity_name.to_string(scratch).append(scratch, 0);
-//             hg_warn("in json scene, expected FIELD, found %s\n", fmt.chars.data);
-//             goto err_return;
-//         }
-//
-//         if (entities.is_near_full())
-//             entities.grow(scratch);
-//         u32 entity_idx = (u32)entities.load;
-//         entities.insert(entity_name.string, entity_idx);
-//
-//         Token entity_begin = json.next_token(scratch);
-//         if (entity_begin.type != HgJsonParser::STRUCT_BEGIN) {
-//             HgString fmt = entity_begin.to_string(scratch).append(scratch, 0);
-//             hg_warn("in json scene, expected entities: STRUCT_BEGIN, found %s\n", fmt.chars.data);
-//             goto err_return;
-//         }
-//
-//         Token component_name = json.next_token(scratch);
-//         while (component_name.type != HgJsonParser::STRUCT_END) {
-//             if (component_name.type != HgJsonParser::FIELD) {
-//                 HgString fmt = component_name.to_string(scratch).append(scratch, 0);
-//                 hg_warn("in json scene, expected component FIELD, found %s\n", fmt.chars.data);
-//                 goto err_return;
-//             }
-//
-//             HgComponentType component_type = hg_internal_component_str_to_enum(component_name.string);
-//
-//             Token component_struct_begin = json.next_token(scratch);
-//             if (component_struct_begin.type != HgJsonParser::STRUCT_BEGIN) {
-//                 entity_name.string.append(scratch, 0);
-//                 component_name.string.append(scratch, 0);
-//                 HgString fmt = component_struct_begin.to_string(scratch).append(scratch, 0);
-//                 hg_warn("in json scene, entity \"%s\" %s, expected STRUCT_BEGIN, found %s\n",
-//                     entity_name.string.chars.data,
-//                     component_name.string.chars.data,
-//                     fmt.chars.data);
-//                 goto err_return;
-//             }
-//
-//             switch (component_type) {
-//             case HG_COMPONENT_TRANSFORM: {
-//                 bool has_pos = false;
-//                 bool has_scale = false;
-//                 bool has_rot = false;
-//                 HgTransform transform{};
-//
-//                 while (!has_pos || !has_scale || !has_rot) {
-//                     Token component_field = json.next_token(scratch);
-//                     if (component_field.type != HgJsonParser::FIELD) {
-//                         HgString fmt = component_field.to_string(scratch).append(scratch, 0);
-//                         hg_warn(
-//                             "in json scene, entity \"%s\" transform, expected FIELD, found %s\n",
-//                             entity_name.string.chars.data,
-//                             fmt.chars.data);
-//                         goto err_return;
-//                     }
-//
-//                     if (component_field.string == "position") {
-//                         if (has_pos) {
-//                             entity_name.string.append(scratch, 0);
-//                             hg_warn(
-//                                 "in json scene, entity \"%s\" transform, has two positions\n",
-//                                 entity_name.string.chars.data);
-//                             goto err_return;
-//                         }
-//                         has_pos = true;
-//
-//                         Token pos_token = json.next_token(scratch);
-//                         if (pos_token.type != HgJsonParser::ARRAY_BEGIN) {
-//                             entity_name.string.append(scratch, 0);
-//                             HgString fmt = component_field.to_string(scratch).append(scratch, 0);
-//                             hg_warn(
-//                                 "in json scene, entity \"%s\" transform, expected position: ARRAY_BEGIN, found %s\n",
-//                                 entity_name.string.chars.data,
-//                                 fmt.chars.data);
-//                             goto err_return;
-//                         }
-//
-//                         for (usize i = 0; i < 3; ++i) {
-//                             pos_token = json.next_token(scratch);
-//                             if (pos_token.type != HgJsonParser::LITERAL ||
-//                                 pos_token.literal != HgJsonParser::FLOATING) {
-//                                 entity_name.string.append(scratch, 0);
-//                                 HgString fmt = component_field.to_string(scratch).append(scratch, 0);
-//                                 hg_warn(
-//                                     "in json scene, entity \"%s\" transform, "
-//                                     "expected position: [FLOATING, FLOATING, FLOATING], found %s\n",
-//                                     entity_name.string.chars.data,
-//                                     fmt.chars.data);
-//                                 goto err_return;
-//                             }
-//                             transform.position[i] = (f32)pos_token.floating;
-//                         }
-//
-//                         pos_token = json.next_token(scratch);
-//                         if (pos_token.type != HgJsonParser::ARRAY_END) {
-//                             entity_name.string.append(scratch, 0);
-//                             HgString fmt = component_field.to_string(scratch).append(scratch, 0);
-//                             hg_warn(
-//                                 "in json scene, entity \"%s\" transform, expected position: ARRAY_END, found %s\n",
-//                                 entity_name.string.chars.data,
-//                                 fmt.chars.data);
-//                             goto err_return;
-//                         }
-//                     }
-//                     if (component_field.string == "scale") {
-//                     }
-//                     if (component_field.string == "rotation") {
-//                     }
-//                 }
-//
-//                 u32 component_idx = 0;
-//                 while (component_idx < components.count || components[component_idx].type == HG_COMPONENT_TRANSFORM) {
-//                     ++component_idx;
-//                 }
-//                 if (component_idx == components.count) {
-//                     if (components.is_full())
-//                         components.grow(scratch);
-//
-//                     HgSceneDescComponent component{};
-//                     component.type = HG_COMPONENT_TRANSFORM;
-//                     components.push() = component;
-//
-//                     if (component_data.is_full())
-//                         component_data.grow(scratch);
-//
-//                     HgArrayAny data = data.create(scratch, sizeof(u32) + sizeof(HgTransform), 1, 0, 512);
-//                 }
-//
-//                 ++components[component_idx].count;
-//
-//                 HgBinaryWriter data{};
-//                 data.write(scratch, entity_idx);
-//                 data.write(scratch, transform);
-//                 std::memcpy(component_data[component_idx].push(), data.file.data, data.head);
-//             } break;
-//             case HG_COMPONENT_SPRITE: {
-//                 Token component_field = json.next_token(scratch);
-//                 while (component_field.type != HgJsonParser::STRUCT_END) {
-//                     if (component_field.type != HgJsonParser::FIELD) {
-//                         HgString fmt = component_field.to_string(scratch).append(scratch, 0);
-//                         hg_warn("in json scene, expected FIELD, found %s\n", fmt.chars.data);
-//                         goto err_return;
-//                     }
-//
-//                     component_field = json.next_token(scratch);
-//                 }
-//             } break;
-//             default:
-//                 component_name.string.append(scratch, 0);
-//                 hg_warn("in json scene, found invalid component type: %s\n", component_name.string.chars.data);
-//                 goto err_return;
-//             }
-//
-//             component_name = json.next_token(scratch);
-//         }
-//
-//         entity_name = json.next_token(scratch);
-//     }
-//
-//     HgBinaryWriter bin{};
-//
-//     HgSceneDescInfo info{};
-//     info.version_major = HgScene::desc_version_major;
-//     info.version_minor = HgScene::desc_version_minor;
-//     info.version_patch = HgScene::desc_version_patch;
-//     info.entity_count = (u32)entities.load;
-//     info.component_count = (u32)components.count;
-//     info.components_idx = 0;
-//     info.resource_count = (u32)resources.count;
-//     info.resources_idx = 0;
-//
-//     usize info_idx = bin.head;
-//     bin.reserve(arena, sizeof(HgSceneDescInfo));
-//
-//     info.components_idx = (u32)bin.head;
-//     bin.reserve(arena, components.count * sizeof(HgSceneDescComponent));
-//
-//     usize i = 0;
-//     for (Component& c : components) {
-//         HgSceneDescComponent desc;
-//         desc.type = c.type;
-//         desc.count = (u32)c.entities.count;
-//
-//         desc.entities_begin_idx = (u32)bin.head;
-//         for (HgEntity e : c.entities) {
-//             bin.write(arena, e);
-//         }
-//
-//         desc.components_begin_idx = (u32)bin.head;
-//         for (usize j = 0; i < c.data.count; ++i) {
-//             bin.write(arena, c.data[j], c.data.width);
-//         }
-//
-//         bin.overwrite(info.components_idx + i, desc);
-//         i += sizeof(HgSceneDescComponent);
-//     }
-//
-//     info.resources_idx = (u32)bin.head;
-//     bin.reserve(arena, resources.count * sizeof(HgSceneDescResource));
-//
-//     i = 0;
-//     for (Resource& r : resources) {
-//         HgSceneDescResource desc;
-//         desc.type = r.type;
-//         desc.length = (u32)r.path.length();
-//
-//         desc.path_idx = (u32)bin.head;
-//         bin.write(arena, r.path);
-//
-//         bin.overwrite(info.components_idx + i, desc);
-//         i += sizeof(HgSceneDescResource);
-//     }
-//
-//     bin.overwrite(info_idx, info);
-//
-//     return bin;
+// HgBinary hg_create_scene_json(HgArena& arena, const HgJson& json) {
 // }
 
 void hg_vulkan_init();
@@ -5478,9 +5016,9 @@ struct HgWindowInput {
     f64 mouse_delta_y;
     bool was_resized;
     bool was_closed;
-    bool keys_down[HG_KEY_COUNT];
-    bool keys_pressed[HG_KEY_COUNT];
-    bool keys_released[HG_KEY_COUNT];
+    bool keys_down[(u32)HgKey::count];
+    bool keys_pressed[(u32)HgKey::count];
+    bool keys_released[(u32)HgKey::count];
 };
 
 #if defined(HG_PLATFORM_LINUX)
@@ -5835,386 +5373,386 @@ void hg_process_window_events(const HgWindow* windows, usize window_count) {
                 break;
             case KeyPress:
             case KeyRelease: {
-                HgKey key = HG_KEY_NONE;
+                HgKey key = HgKey::none;
                 switch (XLookupKeysym(&event.xkey, 0)) {
                     case XK_0:
-                        key = HG_KEY_0;
+                        key = HgKey::k0;
                         break;
                     case XK_1:
-                        key = HG_KEY_1;
+                        key = HgKey::k1;
                         break;
                     case XK_2:
-                        key = HG_KEY_2;
+                        key = HgKey::k2;
                         break;
                     case XK_3:
-                        key = HG_KEY_3;
+                        key = HgKey::k3;
                         break;
                     case XK_4:
-                        key = HG_KEY_4;
+                        key = HgKey::k4;
                         break;
                     case XK_5:
-                        key = HG_KEY_5;
+                        key = HgKey::k5;
                         break;
                     case XK_6:
-                        key = HG_KEY_6;
+                        key = HgKey::k6;
                         break;
                     case XK_7:
-                        key = HG_KEY_7;
+                        key = HgKey::k7;
                         break;
                     case XK_8:
-                        key = HG_KEY_8;
+                        key = HgKey::k8;
                         break;
                     case XK_9:
-                        key = HG_KEY_9;
+                        key = HgKey::k9;
                         break;
 
                     case XK_q:
                     case XK_Q:
-                        key = HG_KEY_Q;
+                        key = HgKey::q;
                         break;
                     case XK_w:
                     case XK_W:
-                        key = HG_KEY_W;
+                        key = HgKey::w;
                         break;
                     case XK_e:
                     case XK_E:
-                        key = HG_KEY_E;
+                        key = HgKey::e;
                         break;
                     case XK_r:
                     case XK_R:
-                        key = HG_KEY_R;
+                        key = HgKey::r;
                         break;
                     case XK_t:
                     case XK_T:
-                        key = HG_KEY_T;
+                        key = HgKey::t;
                         break;
                     case XK_y:
                     case XK_Y:
-                        key = HG_KEY_Y;
+                        key = HgKey::y;
                         break;
                     case XK_u:
                     case XK_U:
-                        key = HG_KEY_U;
+                        key = HgKey::u;
                         break;
                     case XK_i:
                     case XK_I:
-                        key = HG_KEY_I;
+                        key = HgKey::i;
                         break;
                     case XK_o:
                     case XK_O:
-                        key = HG_KEY_O;
+                        key = HgKey::o;
                         break;
                     case XK_p:
                     case XK_P:
-                        key = HG_KEY_P;
+                        key = HgKey::p;
                         break;
                     case XK_a:
                     case XK_A:
-                        key = HG_KEY_A;
+                        key = HgKey::a;
                         break;
                     case XK_s:
                     case XK_S:
-                        key = HG_KEY_S;
+                        key = HgKey::s;
                         break;
                     case XK_d:
                     case XK_D:
-                        key = HG_KEY_D;
+                        key = HgKey::d;
                         break;
                     case XK_f:
                     case XK_F:
-                        key = HG_KEY_F;
+                        key = HgKey::f;
                         break;
                     case XK_g:
                     case XK_G:
-                        key = HG_KEY_G;
+                        key = HgKey::g;
                         break;
                     case XK_h:
                     case XK_H:
-                        key = HG_KEY_H;
+                        key = HgKey::h;
                         break;
                     case XK_j:
                     case XK_J:
-                        key = HG_KEY_J;
+                        key = HgKey::j;
                         break;
                     case XK_k:
                     case XK_K:
-                        key = HG_KEY_K;
+                        key = HgKey::k;
                         break;
                     case XK_l:
                     case XK_L:
-                        key = HG_KEY_L;
+                        key = HgKey::l;
                         break;
                     case XK_z:
                     case XK_Z:
-                        key = HG_KEY_Z;
+                        key = HgKey::z;
                         break;
                     case XK_x:
                     case XK_X:
-                        key = HG_KEY_X;
+                        key = HgKey::x;
                         break;
                     case XK_c:
                     case XK_C:
-                        key = HG_KEY_C;
+                        key = HgKey::c;
                         break;
                     case XK_v:
                     case XK_V:
-                        key = HG_KEY_V;
+                        key = HgKey::v;
                         break;
                     case XK_b:
                     case XK_B:
-                        key = HG_KEY_B;
+                        key = HgKey::b;
                         break;
                     case XK_n:
                     case XK_N:
-                        key = HG_KEY_N;
+                        key = HgKey::n;
                         break;
                     case XK_m:
                     case XK_M:
-                        key = HG_KEY_M;
+                        key = HgKey::m;
                         break;
 
                     case XK_semicolon:
-                        key = HG_KEY_SEMICOLON;
+                        key = HgKey::semicolon;
                         break;
                     case XK_colon:
-                        key = HG_KEY_COLON;
+                        key = HgKey::colon;
                         break;
                     case XK_apostrophe:
-                        key = HG_KEY_APOSTROPHE;
+                        key = HgKey::apostrophe;
                         break;
                     case XK_quotedbl:
-                        key = HG_KEY_QUOTATION;
+                        key = HgKey::quotation;
                         break;
                     case XK_comma:
-                        key = HG_KEY_COMMA;
+                        key = HgKey::comma;
                         break;
                     case XK_period:
-                        key = HG_KEY_PERIOD;
+                        key = HgKey::period;
                         break;
                     case XK_question:
-                        key = HG_KEY_QUESTION;
+                        key = HgKey::question;
                         break;
                     case XK_grave:
-                        key = HG_KEY_GRAVE;
+                        key = HgKey::grave;
                         break;
                     case XK_asciitilde:
-                        key = HG_KEY_TILDE;
+                        key = HgKey::tilde;
                         break;
                     case XK_exclam:
-                        key = HG_KEY_EXCLAMATION;
+                        key = HgKey::exclamation;
                         break;
                     case XK_at:
-                        key = HG_KEY_AT;
+                        key = HgKey::at;
                         break;
                     case XK_numbersign:
-                        key = HG_KEY_HASH;
+                        key = HgKey::hash;
                         break;
                     case XK_dollar:
-                        key = HG_KEY_DOLLAR;
+                        key = HgKey::dollar;
                         break;
                     case XK_percent:
-                        key = HG_KEY_PERCENT;
+                        key = HgKey::percent;
                         break;
                     case XK_asciicircum:
-                        key = HG_KEY_CAROT;
+                        key = HgKey::carot;
                         break;
                     case XK_ampersand:
-                        key = HG_KEY_AMPERSAND;
+                        key = HgKey::ampersand;
                         break;
                     case XK_asterisk:
-                        key = HG_KEY_ASTERISK;
+                        key = HgKey::asterisk;
                         break;
                     case XK_parenleft:
-                        key = HG_KEY_LPAREN;
+                        key = HgKey::lparen;
                         break;
                     case XK_parenright:
-                        key = HG_KEY_RPAREN;
+                        key = HgKey::rparen;
                         break;
                     case XK_bracketleft:
-                        key = HG_KEY_LBRACKET;
+                        key = HgKey::lbracket;
                         break;
                     case XK_bracketright:
-                        key = HG_KEY_RBRACKET;
+                        key = HgKey::rbracket;
                         break;
                     case XK_braceleft:
-                        key = HG_KEY_LBRACE;
+                        key = HgKey::lbrace;
                         break;
                     case XK_braceright:
-                        key = HG_KEY_RBRACE;
+                        key = HgKey::rbrace;
                         break;
                     case XK_equal:
-                        key = HG_KEY_EQUAL;
+                        key = HgKey::equal;
                         break;
                     case XK_less:
-                        key = HG_KEY_LESS;
+                        key = HgKey::less;
                         break;
                     case XK_greater:
-                        key = HG_KEY_GREATER;
+                        key = HgKey::greater;
                         break;
                     case XK_plus:
-                        key = HG_KEY_PLUS;
+                        key = HgKey::plus;
                         break;
                     case XK_minus:
-                        key = HG_KEY_MINUS;
+                        key = HgKey::minus;
                         break;
                     case XK_slash:
-                        key = HG_KEY_SLASH;
+                        key = HgKey::slash;
                         break;
                     case XK_backslash:
-                        key = HG_KEY_BACKSLASH;
+                        key = HgKey::backslash;
                         break;
                     case XK_underscore:
-                        key = HG_KEY_UNDERSCORE;
+                        key = HgKey::underscore;
                         break;
                     case XK_bar:
-                        key = HG_KEY_BAR;
+                        key = HgKey::bar;
                         break;
 
                     case XK_Up:
-                        key = HG_KEY_UP;
+                        key = HgKey::up;
                         break;
                     case XK_Down:
-                        key = HG_KEY_DOWN;
+                        key = HgKey::down;
                         break;
                     case XK_Left:
-                        key = HG_KEY_LEFT;
+                        key = HgKey::left;
                         break;
                     case XK_Right:
-                        key = HG_KEY_RIGHT;
+                        key = HgKey::right;
                         break;
                     case XK_Escape:
-                        key = HG_KEY_ESCAPE;
+                        key = HgKey::escape;
                         break;
                     case XK_space:
-                        key = HG_KEY_SPACE;
+                        key = HgKey::space;
                         break;
                     case XK_Return:
-                        key = HG_KEY_ENTER;
+                        key = HgKey::enter;
                         break;
                     case XK_BackSpace:
-                        key = HG_KEY_BACKSPACE;
+                        key = HgKey::backspace;
                         break;
                     case XK_Delete:
-                        key = HG_KEY_DELETE;
+                        key = HgKey::kdelete;
                         break;
                     case XK_Insert:
-                        key = HG_KEY_INSERT;
+                        key = HgKey::insert;
                         break;
                     case XK_Tab:
-                        key = HG_KEY_TAB;
+                        key = HgKey::tab;
                         break;
                     case XK_Home:
-                        key = HG_KEY_HOME;
+                        key = HgKey::home;
                         break;
                     case XK_End:
-                        key = HG_KEY_END;
+                        key = HgKey::end;
                         break;
 
                     case XK_F1:
-                        key = HG_KEY_F1;
+                        key = HgKey::f1;
                         break;
                     case XK_F2:
-                        key = HG_KEY_F2;
+                        key = HgKey::f2;
                         break;
                     case XK_F3:
-                        key = HG_KEY_F3;
+                        key = HgKey::f3;
                         break;
                     case XK_F4:
-                        key = HG_KEY_F4;
+                        key = HgKey::f4;
                         break;
                     case XK_F5:
-                        key = HG_KEY_F5;
+                        key = HgKey::f5;
                         break;
                     case XK_F6:
-                        key = HG_KEY_F6;
+                        key = HgKey::f6;
                         break;
                     case XK_F7:
-                        key = HG_KEY_F7;
+                        key = HgKey::f7;
                         break;
                     case XK_F8:
-                        key = HG_KEY_F8;
+                        key = HgKey::f8;
                         break;
                     case XK_F9:
-                        key = HG_KEY_F9;
+                        key = HgKey::f9;
                         break;
                     case XK_F10:
-                        key = HG_KEY_F10;
+                        key = HgKey::f10;
                         break;
                     case XK_F11:
-                        key = HG_KEY_F11;
+                        key = HgKey::f11;
                         break;
                     case XK_F12:
-                        key = HG_KEY_F12;
+                        key = HgKey::f12;
                         break;
 
                     case XK_Shift_L:
-                        key = HG_KEY_LSHIFT;
+                        key = HgKey::lshift;
                         break;
                     case XK_Shift_R:
-                        key = HG_KEY_RSHIFT;
+                        key = HgKey::rshift;
                         break;
                     case XK_Control_L:
-                        key = HG_KEY_LCTRL;
+                        key = HgKey::lctrl;
                         break;
                     case XK_Control_R:
-                        key = HG_KEY_RCTRL;
+                        key = HgKey::rctrl;
                         break;
                     case XK_Meta_L:
-                        key = HG_KEY_LMETA;
+                        key = HgKey::lmeta;
                         break;
                     case XK_Meta_R:
-                        key = HG_KEY_RMETA;
+                        key = HgKey::rmeta;
                         break;
                     case XK_Alt_L:
-                        key = HG_KEY_LALT;
+                        key = HgKey::lalt;
                         break;
                     case XK_Alt_R:
-                        key = HG_KEY_RALT;
+                        key = HgKey::ralt;
                         break;
                     case XK_Super_L:
-                        key = HG_KEY_LSUPER;
+                        key = HgKey::lsuper;
                         break;
                     case XK_Super_R:
-                        key = HG_KEY_RSUPER;
+                        key = HgKey::rsuper;
                         break;
                     case XK_Caps_Lock:
-                        key = HG_KEY_CAPSLOCK;
+                        key = HgKey::capslock;
                         break;
                 }
                 if (event.type == KeyPress) {
-                    window.internals->input.keys_pressed[key] = true;
-                    window.internals->input.keys_down[key] = true;
+                    window.internals->input.keys_pressed[(u32)key] = true;
+                    window.internals->input.keys_down[(u32)key] = true;
                 } else if (event.type == KeyRelease) {
-                    window.internals->input.keys_released[key] = true;
-                    window.internals->input.keys_down[key] = false;
+                    window.internals->input.keys_released[(u32)key] = true;
+                    window.internals->input.keys_down[(u32)key] = false;
                 }
             } break;
             case ButtonPress:
             case ButtonRelease: {
-                HgKey key = HG_KEY_NONE;
+                HgKey key = HgKey::none;
                 switch (event.xbutton.button) {
                     case Button1:
-                        key = HG_KEY_MOUSE1;
+                        key = HgKey::mouse1;
                         break;
                     case Button2:
-                        key = HG_KEY_MOUSE2;
+                        key = HgKey::mouse2;
                         break;
                     case Button3:
-                        key = HG_KEY_MOUSE3;
+                        key = HgKey::mouse3;
                         break;
                     case Button4:
-                        key = HG_KEY_MOUSE4;
+                        key = HgKey::mouse4;
                         break;
                     case Button5:
-                        key = HG_KEY_MOUSE5;
+                        key = HgKey::mouse5;
                         break;
                 }
                 if (event.type == ButtonPress) {
-                    window.internals->input.keys_pressed[key] = true;
-                    window.internals->input.keys_down[key] = true;
+                    window.internals->input.keys_pressed[(u32)key] = true;
+                    window.internals->input.keys_down[(u32)key] = true;
                 } else if (event.type == ButtonRelease) {
-                    window.internals->input.keys_released[key] = true;
-                    window.internals->input.keys_down[key] = false;
+                    window.internals->input.keys_released[(u32)key] = true;
+                    window.internals->input.keys_down[(u32)key] = false;
                 }
             } break;
             case MotionNotify:
@@ -6276,322 +5814,322 @@ static LRESULT CALLBACK hg_internal_window_callback(HWND hwnd, UINT msg, WPARAM 
         case WM_SYSKEYUP:
         case WM_KEYDOWN:
         case WM_KEYUP: {
-            HgKey key = HG_KEY_NONE;
-            HgKey shift_key = HG_KEY_NONE;
+            HgKey key = HgKey::none;
+            HgKey shift_key = HgKey::none;
 
             switch (wparam) {
                 case '0':
-                    key = HG_KEY_0;
-                    shift_key = HG_KEY_RPAREN;
+                    key = HgKey::k0;
+                    shift_key = HgKey::rparen;
                     break;
                 case '1':
-                    key = HG_KEY_1;
-                    shift_key = HG_KEY_EXCLAMATION;
+                    key = HgKey::k1;
+                    shift_key = HgKey::exclamation;
                     break;
                 case '2':
-                    key = HG_KEY_2;
-                    shift_key = HG_KEY_AT;
+                    key = HgKey::k2;
+                    shift_key = HgKey::at;
                     break;
                 case '3':
-                    key = HG_KEY_3;
-                    shift_key = HG_KEY_HASH;
+                    key = HgKey::k3;
+                    shift_key = HgKey::hash;
                     break;
                 case '4':
-                    key = HG_KEY_4;
-                    shift_key = HG_KEY_DOLLAR;
+                    key = HgKey::k4;
+                    shift_key = HgKey::dollar;
                     break;
                 case '5':
-                    key = HG_KEY_5;
-                    shift_key = HG_KEY_PERCENT;
+                    key = HgKey::k5;
+                    shift_key = HgKey::percent;
                     break;
                 case '6':
-                    key = HG_KEY_6;
-                    shift_key = HG_KEY_CAROT;
+                    key = HgKey::k6;
+                    shift_key = HgKey::carot;
                     break;
                 case '7':
-                    key = HG_KEY_7;
-                    shift_key = HG_KEY_AMPERSAND;
+                    key = HgKey::k7;
+                    shift_key = HgKey::ampersand;
                     break;
                 case '8':
-                    key = HG_KEY_8;
-                    shift_key = HG_KEY_ASTERISK;
+                    key = HgKey::k8;
+                    shift_key = HgKey::asterisk;
                     break;
                 case '9':
-                    key = HG_KEY_9;
-                    shift_key = HG_KEY_LPAREN;
+                    key = HgKey::k9;
+                    shift_key = HgKey::lparen;
                     break;
 
                 case 'A':
-                    key = HG_KEY_A;
+                    key = HgKey::a;
                     break;
                 case 'B':
-                    key = HG_KEY_B;
+                    key = HgKey::b;
                     break;
                 case 'C':
-                    key = HG_KEY_C;
+                    key = HgKey::c;
                     break;
                 case 'D':
-                    key = HG_KEY_D;
+                    key = HgKey::d;
                     break;
                 case 'E':
-                    key = HG_KEY_E;
+                    key = HgKey::e;
                     break;
                 case 'F':
-                    key = HG_KEY_F;
+                    key = HgKey::f;
                     break;
                 case 'G':
-                    key = HG_KEY_G;
+                    key = HgKey::g;
                     break;
                 case 'H':
-                    key = HG_KEY_H;
+                    key = HgKey::h;
                     break;
                 case 'I':
-                    key = HG_KEY_I;
+                    key = HgKey::i;
                     break;
                 case 'J':
-                    key = HG_KEY_J;
+                    key = HgKey::j;
                     break;
                 case 'K':
-                    key = HG_KEY_K;
+                    key = HgKey::k;
                     break;
                 case 'L':
-                    key = HG_KEY_L;
+                    key = HgKey::l;
                     break;
                 case 'M':
-                    key = HG_KEY_M;
+                    key = HgKey::m;
                     break;
                 case 'N':
-                    key = HG_KEY_N;
+                    key = HgKey::n;
                     break;
                 case 'O':
-                    key = HG_KEY_O;
+                    key = HgKey::o;
                     break;
                 case 'P':
-                    key = HG_KEY_P;
+                    key = HgKey::p;
                     break;
                 case 'Q':
-                    key = HG_KEY_Q;
+                    key = HgKey::q;
                     break;
                 case 'R':
-                    key = HG_KEY_R;
+                    key = HgKey::r;
                     break;
                 case 'S':
-                    key = HG_KEY_S;
+                    key = HgKey::s;
                     break;
                 case 'T':
-                    key = HG_KEY_T;
+                    key = HgKey::t;
                     break;
                 case 'U':
-                    key = HG_KEY_U;
+                    key = HgKey::u;
                     break;
                 case 'V':
-                    key = HG_KEY_V;
+                    key = HgKey::v;
                     break;
                 case 'W':
-                    key = HG_KEY_W;
+                    key = HgKey::w;
                     break;
                 case 'X':
-                    key = HG_KEY_X;
+                    key = HgKey::x;
                     break;
                 case 'Y':
-                    key = HG_KEY_Y;
+                    key = HgKey::y;
                     break;
                 case 'Z':
-                    key = HG_KEY_Z;
+                    key = HgKey::z;
                     break;
 
                 case VK_OEM_1:
-                    key = HG_KEY_SEMICOLON;
-                    shift_key = HG_KEY_COLON;
+                    key = HgKey::semicolon;
+                    shift_key = HgKey::colon;
                     break;
                 case VK_OEM_7:
-                    key = HG_KEY_APOSTROPHE;
-                    shift_key = HG_KEY_QUOTATION;
+                    key = HgKey::apostrophe;
+                    shift_key = HgKey::quotation;
                     break;
                 case VK_OEM_COMMA:
-                    key = HG_KEY_COMMA;
-                    shift_key = HG_KEY_LESS;
+                    key = HgKey::comma;
+                    shift_key = HgKey::less;
                     break;
                 case VK_OEM_PERIOD:
-                    key = HG_KEY_PERIOD;
-                    shift_key = HG_KEY_GREATER;
+                    key = HgKey::period;
+                    shift_key = HgKey::greater;
                     break;
                 case VK_OEM_2:
-                    key = HG_KEY_SLASH;
-                    shift_key = HG_KEY_QUESTION;
+                    key = HgKey::slash;
+                    shift_key = HgKey::question;
                     break;
                 case VK_OEM_3:
-                    key = HG_KEY_GRAVE;
-                    shift_key = HG_KEY_TILDE;
+                    key = HgKey::grave;
+                    shift_key = HgKey::tilde;
                     break;
                 case VK_OEM_4:
-                    key = HG_KEY_LBRACKET;
-                    shift_key = HG_KEY_LBRACE;
+                    key = HgKey::lbracket;
+                    shift_key = HgKey::lbrace;
                     break;
                 case VK_OEM_6:
-                    key = HG_KEY_RBRACKET;
-                    shift_key = HG_KEY_RBRACE;
+                    key = HgKey::rbracket;
+                    shift_key = HgKey::rbrace;
                     break;
                 case VK_OEM_5:
-                    key = HG_KEY_BACKSLASH;
-                    shift_key = HG_KEY_BAR;
+                    key = HgKey::backslash;
+                    shift_key = HgKey::bar;
                     break;
                 case VK_OEM_PLUS:
-                    key = HG_KEY_EQUAL;
-                    shift_key = HG_KEY_PLUS;
+                    key = HgKey::equal;
+                    shift_key = HgKey::plus;
                     break;
                 case VK_OEM_MINUS:
-                    key = HG_KEY_MINUS;
-                    shift_key = HG_KEY_UNDERSCORE;
+                    key = HgKey::minus;
+                    shift_key = HgKey::underscore;
                     break;
 
                 case VK_UP:
-                    key = HG_KEY_UP;
+                    key = HgKey::up;
                     break;
                 case VK_DOWN:
-                    key = HG_KEY_DOWN;
+                    key = HgKey::down;
                     break;
                 case VK_LEFT:
-                    key = HG_KEY_LEFT;
+                    key = HgKey::left;
                     break;
                 case VK_RIGHT:
-                    key = HG_KEY_RIGHT;
+                    key = HgKey::right;
                     break;
                 case VK_ESCAPE:
-                    key = HG_KEY_ESCAPE;
+                    key = HgKey::escape;
                     break;
                 case VK_SPACE:
-                    key = HG_KEY_SPACE;
+                    key = HgKey::space;
                     break;
                 case VK_RETURN:
-                    key = HG_KEY_ENTER;
+                    key = HgKey::enter;
                     break;
                 case VK_BACK:
-                    key = HG_KEY_BACKSPACE;
+                    key = HgKey::backspace;
                     break;
                 case VK_DELETE:
-                    key = HG_KEY_DELETE;
+                    key = HgKey::kdelete;
                     break;
                 case VK_INSERT:
-                    key = HG_KEY_INSERT;
+                    key = HgKey::insert;
                     break;
                 case VK_TAB:
-                    key = HG_KEY_TAB;
+                    key = HgKey::tab;
                     break;
                 case VK_HOME:
-                    key = HG_KEY_HOME;
+                    key = HgKey::home;
                     break;
                 case VK_END:
-                    key = HG_KEY_END;
+                    key = HgKey::end;
                     break;
 
                 case VK_F1:
-                    key = HG_KEY_F1;
+                    key = HgKey::f1;
                     break;
                 case VK_F2:
-                    key = HG_KEY_F2;
+                    key = HgKey::f2;
                     break;
                 case VK_F3:
-                    key = HG_KEY_F3;
+                    key = HgKey::f3;
                     break;
                 case VK_F4:
-                    key = HG_KEY_F4;
+                    key = HgKey::f4;
                     break;
                 case VK_F5:
-                    key = HG_KEY_F5;
+                    key = HgKey::f5;
                     break;
                 case VK_F6:
-                    key = HG_KEY_F6;
+                    key = HgKey::f6;
                     break;
                 case VK_F7:
-                    key = HG_KEY_F7;
+                    key = HgKey::f7;
                     break;
                 case VK_F8:
-                    key = HG_KEY_F8;
+                    key = HgKey::f8;
                     break;
                 case VK_F9:
-                    key = HG_KEY_F9;
+                    key = HgKey::f9;
                     break;
                 case VK_F10:
-                    key = HG_KEY_F10;
+                    key = HgKey::f10;
                     break;
                 case VK_F11:
-                    key = HG_KEY_F11;
+                    key = HgKey::f11;
                     break;
                 case VK_F12:
-                    key = HG_KEY_F12;
+                    key = HgKey::f12;
                     break;
 
                 case VK_SHIFT: {
                     u32 scancode = (lparam >> 16) & 0xff;
                     if (scancode == 0x36)
-                        key = HG_KEY_RSHIFT;
+                        key = HgKey::rshift;
                     else if (scancode == 0x2A)
-                        key = HG_KEY_LSHIFT;
+                        key = HgKey::lshift;
                 } break;
                 case VK_MENU:
                     if (lparam & (1 << 24))
-                        key = HG_KEY_RALT;
+                        key = HgKey::ralt;
                     else
-                        key = HG_KEY_LALT;
+                        key = HgKey::lalt;
                     break;
                 case VK_CONTROL:
                     if (lparam & (1 << 24))
-                        key = HG_KEY_RCTRL;
+                        key = HgKey::rctrl;
                     else
-                        key = HG_KEY_LCTRL;
+                        key = HgKey::lctrl;
                     break;
                 case VK_LWIN:
-                    key = HG_KEY_LSUPER;
+                    key = HgKey::lsuper;
                     break;
                 case VK_RWIN:
-                    key = HG_KEY_RSUPER;
+                    key = HgKey::rsuper;
                     break;
                 case VK_CAPITAL:
-                    key = HG_KEY_CAPSLOCK;
+                    key = HgKey::capslock;
                     break;
             }
             if (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN) {
-                if (shift_key != HG_KEY_NONE &&
-                   (window->input.keys_down[HG_KEY_LSHIFT] ||
-                    window->input.keys_down[HG_KEY_RSHIFT])
+                if (shift_key != HgKey::none &&
+                   (window->input.keys_down[(u32)HgKey::lshift] ||
+                    window->input.keys_down[(u32)HgKey::rshift])
                 ) {
-                    window->input.keys_pressed[shift_key] = true;
-                    window->input.keys_down[shift_key] = true;
+                    window->input.keys_pressed[(u32)shift_key] = true;
+                    window->input.keys_down[(u32)shift_key] = true;
                 } else {
-                    window->input.keys_pressed[key] = true;
-                    window->input.keys_down[key] = true;
+                    window->input.keys_pressed[(u32)key] = true;
+                    window->input.keys_down[(u32)key] = true;
                 }
             } else {
-                window->input.keys_released[shift_key] = window->input.keys_down[shift_key];
-                window->input.keys_down[shift_key] = false;
-                window->input.keys_released[key] = window->input.keys_down[key];
-                window->input.keys_down[key] = false;
+                window->input.keys_released[(u32)shift_key] = window->input.keys_down[(u32)shift_key];
+                window->input.keys_down[(u32)shift_key] = false;
+                window->input.keys_released[(u32)key] = window->input.keys_down[(u32)key];
+                window->input.keys_down[(u32)key] = false;
             }
         } break;
         case WM_LBUTTONDOWN:
-            window->input.keys_pressed[HG_KEY_LMOUSE] = true;
-            window->input.keys_down[HG_KEY_LMOUSE] = true;
+            window->input.keys_pressed[(u32)HgKey::lmouse] = true;
+            window->input.keys_down[(u32)HgKey::lmouse] = true;
             break;
         case WM_RBUTTONDOWN:
-            window->input.keys_pressed[HG_KEY_RMOUSE] = true;
-            window->input.keys_down[HG_KEY_RMOUSE] = true;
+            window->input.keys_pressed[(u32)HgKey::rmouse] = true;
+            window->input.keys_down[(u32)HgKey::rmouse] = true;
             break;
         case WM_MBUTTONDOWN:
-            window->input.keys_pressed[HG_KEY_MMOUSE] = true;
-            window->input.keys_down[HG_KEY_MMOUSE] = true;
+            window->input.keys_pressed[(u32)HgKey::mmouse] = true;
+            window->input.keys_down[(u32)HgKey::mmouse] = true;
             break;
         case WM_LBUTTONUP:
-            window->input.keys_released[HG_KEY_LMOUSE] = true;
-            window->input.keys_down[HG_KEY_LMOUSE] = false;
+            window->input.keys_released[(u32)HgKey::lmouse] = true;
+            window->input.keys_down[(u32)HgKey::lmouse] = false;
             break;
         case WM_RBUTTONUP:
-            window->input.keys_released[HG_KEY_RMOUSE] = true;
-            window->input.keys_down[HG_KEY_RMOUSE] = false;
+            window->input.keys_released[(u32)HgKey::rmouse] = true;
+            window->input.keys_down[(u32)HgKey::rmouse] = false;
             break;
         case WM_MBUTTONUP:
-            window->input.keys_released[HG_KEY_MMOUSE] = true;
-            window->input.keys_down[HG_KEY_MMOUSE] = false;
+            window->input.keys_released[(u32)HgKey::mmouse] = true;
+            window->input.keys_down[(u32)HgKey::mmouse] = false;
             break;
         case WM_MOUSEMOVE:
             window->input.mouse_pos_x = (f64)LOWORD(lparam) / (f64)window->input.height;
@@ -6743,16 +6281,16 @@ void hg_process_window_events(const HgWindow* windows, usize window_count) {
         window->input.mouse_delta_x = window->input.mouse_pos_x - old_mouse_pos_x;
         window->input.mouse_delta_y = window->input.mouse_pos_y - old_mouse_pos_y;
 
-        if (window->input.keys_down[HG_KEY_LSHIFT] && window->input.keys_down[HG_KEY_RSHIFT]) {
+        if (window->input.keys_down[(u32)HgKey::lshift] && window->input.keys_down[(u32)HgKey::rshift]) {
             bool lshift = (GetAsyncKeyState(VK_LSHIFT) & 0x8000) != 0;
             bool rshift = (GetAsyncKeyState(VK_RSHIFT) & 0x8000) != 0;
             if (!lshift) {
-                window->input.keys_released[HG_KEY_LSHIFT] = true;
-                window->input.keys_down[HG_KEY_LSHIFT] = false;
+                window->input.keys_released[(u32)HgKey::lshift] = true;
+                window->input.keys_down[(u32)HgKey::lshift] = false;
             }
             if (!rshift) {
-                window->input.keys_released[HG_KEY_RSHIFT] = true;
-                window->input.keys_down[HG_KEY_RSHIFT] = false;
+                window->input.keys_released[(u32)HgKey::rshift] = true;
+                window->input.keys_down[(u32)HgKey::rshift] = false;
             }
         }
     }
@@ -6788,18 +6326,18 @@ void HgWindow::get_mouse_delta(f64& x, f64& y) {
 }
 
 bool HgWindow::is_key_down(HgKey key) {
-    hg_assert(key >= 0 && key < HG_KEY_COUNT);
-    return internals->input.keys_down[key];
+    hg_assert((u32)key > (u32)HgKey::none && (u32)key < (u32)HgKey::count);
+    return internals->input.keys_down[(u32)key];
 }
 
 bool HgWindow::was_key_pressed(HgKey key) {
-    hg_assert(key >= 0 && key < HG_KEY_COUNT);
-    return internals->input.keys_pressed[key];
+    hg_assert((u32)key > (u32)HgKey::none && (u32)key < (u32)HgKey::count);
+    return internals->input.keys_pressed[(u32)key];
 }
 
 bool HgWindow::was_key_released(HgKey key) {
-    hg_assert(key >= 0 && key < HG_KEY_COUNT);
-    return internals->input.keys_released[key];
+    hg_assert((u32)key > (u32)HgKey::none && (u32)key < (u32)HgKey::count);
+    return internals->input.keys_released[(u32)key];
 }
 
 #undef HG_MAKE_VULKAN_FUNC

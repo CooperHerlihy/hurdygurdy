@@ -69,7 +69,7 @@ int main(void) {
     };
 
     HgResourceID texture_id = hg_resource_id("sprite_texture");
-    hg_resources->register_resource(HG_RESOURCE_TEXTURE, texture_id);
+    hg_resources->register_resource(HgResource::texture, texture_id);
 
     HgTexture& texture = hg_resources->get<HgTexture>(texture_id);
     texture.pixels = tex_data;
@@ -77,7 +77,7 @@ int main(void) {
     texture.width = 2;
     texture.height = 2;
     texture.depth = 1;
-    texture.location = HgTexture::CPU;
+    texture.location = (u32)HgTexture::Location::cpu;
     texture.transfer_to_gpu(cmd_pool, VK_FILTER_NEAREST);
     hg_defer(texture.free_from_gpu());
 
@@ -138,11 +138,11 @@ int main(void) {
         hg_arena_scope(frame, hg_get_scratch(arena));
 
         hg_process_window_events(&window, 1);
-        if (window.was_closed() || window.is_key_down(HG_KEY_ESCAPE))
+        if (window.was_closed() || window.is_key_down(HgKey::escape))
             break;
 
         static const f32 rot_speed = 2.0f;
-        if (window.is_key_down(HG_KEY_LMOUSE)) {
+        if (window.is_key_down(HgKey::lmouse)) {
             f64 x, y;
             window.get_mouse_delta(x, y);
             HgQuat rot_x = hg_axis_angle({0.0f, 1.0f, 0.0f}, (f32)x * rot_speed);
@@ -152,17 +152,17 @@ int main(void) {
 
         static const f32 move_speed = 1.5f;
         HgVec3 movement = {0.0f};
-        if (window.is_key_down(HG_KEY_SPACE))
+        if (window.is_key_down(HgKey::space))
             movement.y -= 1.0f;
-        if (window.is_key_down(HG_KEY_LSHIFT))
+        if (window.is_key_down(HgKey::lshift))
             movement.y += 1.0f;
-        if (window.is_key_down(HG_KEY_W))
+        if (window.is_key_down(HgKey::w))
             movement.z += 1.0f;
-        if (window.is_key_down(HG_KEY_S))
+        if (window.is_key_down(HgKey::s))
             movement.z -= 1.0f;
-        if (window.is_key_down(HG_KEY_A))
+        if (window.is_key_down(HgKey::a))
             movement.x -= 1.0f;
-        if (window.is_key_down(HG_KEY_D))
+        if (window.is_key_down(HgKey::d))
             movement.x += 1.0f;
 
         if (movement != HgVec3{0.0f}) {
@@ -1181,249 +1181,49 @@ hg_test(hg_string_utils) {
     return true;
 }
 
-hg_test(HgJsonParser) {
+hg_test(HgJson) {
+    {
+        hg_arena_scope(arena, hg_get_scratch());
+
+        HgStringView file = R"(
+        )";
+
+        HgJson json = json.parse(arena, file);
+    }
+
     {
         hg_arena_scope(arena, hg_get_scratch());
 
         HgStringView file = R"(
             {
-                "resource": {
-                    "id": 1234,
-                    "path": "tex.png",
-                },
-                "num array": [1, 2, 3],
-                "entities": [
-                    {
-                        "id": "player",
-                        "pos": [0.0, 0.0, 0.0],
-                        "is_target": true,
-                    },
-                    {
-                        "id": "enemy",
-                        "pos": [10.0, -5.0, 1.0],
-                        "is_target": false,
-                    },
-                ],
-            },
+            }
         )";
 
-        HgJsonParser json = json.create(file);
+        HgJson json = json.parse(arena, file);
+    }
 
-        HgJsonParser::Token token;
+    {
+        hg_arena_scope(arena, hg_get_scratch());
 
-        {
-            token = json.next_token(arena);
-            hg_test_assert(token.type == HgJsonParser::STRUCT_BEGIN);
-            hg_test_assert(token.literal == HgJsonParser::EMPTY);
-
-            token = json.next_token(arena);
-            hg_test_assert(token.type == HgJsonParser::FIELD);
-            hg_test_assert(token.literal == HgJsonParser::STRING);
-            hg_test_assert(token.string == "resource");
-
+        HgStringView file = R"(
             {
-                token = json.next_token(arena);
-                hg_test_assert(token.type == HgJsonParser::STRUCT_BEGIN);
-                hg_test_assert(token.literal == HgJsonParser::EMPTY);
-
-                token = json.next_token(arena);
-                hg_test_assert(token.type == HgJsonParser::FIELD);
-                hg_test_assert(token.literal == HgJsonParser::STRING);
-                hg_test_assert(token.string == "id");
-
-                token = json.next_token(arena);
-                hg_test_assert(token.type == HgJsonParser::LITERAL);
-                hg_test_assert(token.literal == HgJsonParser::INTEGER);
-                hg_test_assert(token.integer == 1234);
-
-                token = json.next_token(arena);
-                hg_test_assert(token.type == HgJsonParser::FIELD);
-                hg_test_assert(token.literal == HgJsonParser::STRING);
-                hg_test_assert(token.string == "path");
-
-                token = json.next_token(arena);
-                hg_test_assert(token.type == HgJsonParser::LITERAL);
-                hg_test_assert(token.literal == HgJsonParser::STRING);
-                hg_test_assert(token.string == "tex.png");
-
-                token = json.next_token(arena);
-                hg_test_assert(token.type == HgJsonParser::STRUCT_END);
-                hg_test_assert(token.literal == HgJsonParser::EMPTY);
+                1234
             }
+        )";
 
-            token = json.next_token(arena);
-            hg_test_assert(token.type == HgJsonParser::FIELD);
-            hg_test_assert(token.literal == HgJsonParser::STRING);
-            hg_test_assert(token.string == "num array");
+        HgJson json = json.parse(arena, file);
+    }
 
+    {
+        hg_arena_scope(arena, hg_get_scratch());
+
+        HgStringView file = R"(
             {
-                token = json.next_token(arena);
-                hg_test_assert(token.type == HgJsonParser::ARRAY_BEGIN);
-                hg_test_assert(token.literal == HgJsonParser::EMPTY);
-
-                token = json.next_token(arena);
-                hg_test_assert(token.type == HgJsonParser::LITERAL);
-                hg_test_assert(token.literal == HgJsonParser::INTEGER);
-                hg_test_assert(token.integer == 1);
-
-                token = json.next_token(arena);
-                hg_test_assert(token.type == HgJsonParser::LITERAL);
-                hg_test_assert(token.literal == HgJsonParser::INTEGER);
-                hg_test_assert(token.integer == 2);
-
-                token = json.next_token(arena);
-                hg_test_assert(token.type == HgJsonParser::LITERAL);
-                hg_test_assert(token.literal == HgJsonParser::INTEGER);
-                hg_test_assert(token.integer == 3);
-
-                token = json.next_token(arena);
-                hg_test_assert(token.type == HgJsonParser::ARRAY_END);
-                hg_test_assert(token.literal == HgJsonParser::EMPTY);
+                "asdf"
             }
+        )";
 
-            token = json.next_token(arena);
-            hg_test_assert(token.type == HgJsonParser::FIELD);
-            hg_test_assert(token.literal == HgJsonParser::STRING);
-            hg_test_assert(token.string == "entities");
-
-            {
-                token = json.next_token(arena);
-                hg_test_assert(token.type == HgJsonParser::ARRAY_BEGIN);
-                hg_test_assert(token.literal == HgJsonParser::EMPTY);
-
-                {
-                    token = json.next_token(arena);
-                    hg_test_assert(token.type == HgJsonParser::STRUCT_BEGIN);
-                    hg_test_assert(token.literal == HgJsonParser::EMPTY);
-
-                    token = json.next_token(arena);
-                    hg_test_assert(token.type == HgJsonParser::FIELD);
-                    hg_test_assert(token.literal == HgJsonParser::STRING);
-                    hg_test_assert(token.string == "id");
-
-                    token = json.next_token(arena);
-                    hg_test_assert(token.type == HgJsonParser::LITERAL);
-                    hg_test_assert(token.literal == HgJsonParser::STRING);
-                    hg_test_assert(token.string == "player");
-
-                    token = json.next_token(arena);
-                    hg_test_assert(token.type == HgJsonParser::FIELD);
-                    hg_test_assert(token.literal == HgJsonParser::STRING);
-                    hg_test_assert(token.string == "pos");
-
-                    {
-                        token = json.next_token(arena);
-                        hg_test_assert(token.type == HgJsonParser::ARRAY_BEGIN);
-                        hg_test_assert(token.literal == HgJsonParser::EMPTY);
-
-                        token = json.next_token(arena);
-                        hg_test_assert(token.type == HgJsonParser::LITERAL);
-                        hg_test_assert(token.literal == HgJsonParser::FLOATING);
-                        hg_test_assert(token.floating == 0.0);
-
-                        token = json.next_token(arena);
-                        hg_test_assert(token.type == HgJsonParser::LITERAL);
-                        hg_test_assert(token.literal == HgJsonParser::FLOATING);
-                        hg_test_assert(token.floating == 0.0);
-
-                        token = json.next_token(arena);
-                        hg_test_assert(token.type == HgJsonParser::LITERAL);
-                        hg_test_assert(token.literal == HgJsonParser::FLOATING);
-                        hg_test_assert(token.floating == 0.0);
-
-                        token = json.next_token(arena);
-                        hg_test_assert(token.type == HgJsonParser::ARRAY_END);
-                        hg_test_assert(token.literal == HgJsonParser::EMPTY);
-                    }
-
-                    token = json.next_token(arena);
-                    hg_test_assert(token.type == HgJsonParser::FIELD);
-                    hg_test_assert(token.literal == HgJsonParser::STRING);
-                    hg_test_assert(token.string == "is_target");
-
-                    token = json.next_token(arena);
-                    hg_test_assert(token.type == HgJsonParser::LITERAL);
-                    hg_test_assert(token.literal == HgJsonParser::BOOLEAN);
-                    hg_test_assert(token.boolean == true);
-
-                    token = json.next_token(arena);
-                    hg_test_assert(token.type == HgJsonParser::STRUCT_END);
-                    hg_test_assert(token.literal == HgJsonParser::EMPTY);
-                }
-
-                {
-                    token = json.next_token(arena);
-                    hg_test_assert(token.type == HgJsonParser::STRUCT_BEGIN);
-                    hg_test_assert(token.literal == HgJsonParser::EMPTY);
-
-                    token = json.next_token(arena);
-                    hg_test_assert(token.type == HgJsonParser::FIELD);
-                    hg_test_assert(token.literal == HgJsonParser::STRING);
-                    hg_test_assert(token.string == "id");
-
-                    token = json.next_token(arena);
-                    hg_test_assert(token.type == HgJsonParser::LITERAL);
-                    hg_test_assert(token.literal == HgJsonParser::STRING);
-                    hg_test_assert(token.string == "enemy");
-
-                    token = json.next_token(arena);
-                    hg_test_assert(token.type == HgJsonParser::FIELD);
-                    hg_test_assert(token.literal == HgJsonParser::STRING);
-                    hg_test_assert(token.string == "pos");
-
-                    {
-                        token = json.next_token(arena);
-                        hg_test_assert(token.type == HgJsonParser::ARRAY_BEGIN);
-                        hg_test_assert(token.literal == HgJsonParser::EMPTY);
-
-                        token = json.next_token(arena);
-                        hg_test_assert(token.type == HgJsonParser::LITERAL);
-                        hg_test_assert(token.literal == HgJsonParser::FLOATING);
-                        hg_test_assert(token.floating == 10.0);
-
-                        token = json.next_token(arena);
-                        hg_test_assert(token.type == HgJsonParser::LITERAL);
-                        hg_test_assert(token.literal == HgJsonParser::FLOATING);
-                        hg_test_assert(token.floating == -5.0);
-
-                        token = json.next_token(arena);
-                        hg_test_assert(token.type == HgJsonParser::LITERAL);
-                        hg_test_assert(token.literal == HgJsonParser::FLOATING);
-                        hg_test_assert(token.floating == 1.0);
-
-                        token = json.next_token(arena);
-                        hg_test_assert(token.type == HgJsonParser::ARRAY_END);
-                        hg_test_assert(token.literal == HgJsonParser::EMPTY);
-                    }
-
-                    token = json.next_token(arena);
-                    hg_test_assert(token.type == HgJsonParser::FIELD);
-                    hg_test_assert(token.literal == HgJsonParser::STRING);
-                    hg_test_assert(token.string == "is_target");
-
-                    token = json.next_token(arena);
-                    hg_test_assert(token.type == HgJsonParser::LITERAL);
-                    hg_test_assert(token.literal == HgJsonParser::BOOLEAN);
-                    hg_test_assert(token.boolean == false);
-
-                    token = json.next_token(arena);
-                    hg_test_assert(token.type == HgJsonParser::STRUCT_END);
-                    hg_test_assert(token.literal == HgJsonParser::EMPTY);
-                }
-
-                token = json.next_token(arena);
-                hg_test_assert(token.type == HgJsonParser::ARRAY_END);
-                hg_test_assert(token.literal == HgJsonParser::EMPTY);
-            }
-
-            token = json.next_token(arena);
-            hg_test_assert(token.type == HgJsonParser::STRUCT_END);
-            hg_test_assert(token.literal == HgJsonParser::EMPTY);
-        }
-
-        token = json.next_token(arena);
-        hg_test_assert(token.type == HgJsonParser::END_OF_FILE);
-        hg_test_assert(token.literal == HgJsonParser::EMPTY);
+        HgJson json = json.parse(arena, file);
     }
 
     return true;
@@ -1725,7 +1525,7 @@ hg_test(HgTexture) {
         texture.width = save_width;
         texture.height = save_height;
         texture.depth = save_depth;
-        texture.location = HgTexture::CPU;
+        texture.location = (u32)HgTexture::Location::cpu;
 
         texture.store_png(&fence, 1, file_path);
         texture.load_png(&fence, 1, file_path);
@@ -1748,7 +1548,7 @@ hg_test(HgTexture) {
     }
     hg_test_assert(fence.wait(2.0));
 
-    hg_test_assert(texture.location == HgTexture::UNLOADED);
+    hg_test_assert(texture.location == (u32)HgTexture::Location::none);
 
     return true;
 }
@@ -1775,28 +1575,28 @@ hg_test(HgResourceManager) {
         hg_test_assert(!rm.is_registered(d));
         hg_test_assert(!rm.is_registered(e));
 
-        rm.register_resource(HG_RESOURCE_BINARY, a);
-        rm.register_resource(HG_RESOURCE_TEXTURE, b);
-        rm.register_resource(HG_RESOURCE_BINARY, b_conf);
-        rm.register_resource(HG_RESOURCE_TEXTURE, b_conf2);
-        rm.register_resource(HG_RESOURCE_BINARY, c);
-        rm.register_resource(HG_RESOURCE_TEXTURE, d);
-        rm.register_resource(HG_RESOURCE_BINARY, e);
+        rm.register_resource(HgResource::binary, a);
+        rm.register_resource(HgResource::texture, b);
+        rm.register_resource(HgResource::binary, b_conf);
+        rm.register_resource(HgResource::texture, b_conf2);
+        rm.register_resource(HgResource::binary, c);
+        rm.register_resource(HgResource::texture, d);
+        rm.register_resource(HgResource::binary, e);
 
         hg_test_assert(rm.is_registered(a));
-        hg_test_assert(rm.resources[rm.get_resource(a)].type == HG_RESOURCE_BINARY);
+        hg_test_assert(rm.resources[rm.get_resource(a)].type == HgResource::binary);
         hg_test_assert(rm.is_registered(b));
-        hg_test_assert(rm.resources[rm.get_resource(b)].type == HG_RESOURCE_TEXTURE);
+        hg_test_assert(rm.resources[rm.get_resource(b)].type == HgResource::texture);
         hg_test_assert(rm.is_registered(b_conf));
-        hg_test_assert(rm.resources[rm.get_resource(b_conf)].type == HG_RESOURCE_BINARY);
+        hg_test_assert(rm.resources[rm.get_resource(b_conf)].type == HgResource::binary);
         hg_test_assert(rm.is_registered(b_conf2));
-        hg_test_assert(rm.resources[rm.get_resource(b_conf2)].type == HG_RESOURCE_TEXTURE);
+        hg_test_assert(rm.resources[rm.get_resource(b_conf2)].type == HgResource::texture);
         hg_test_assert(rm.is_registered(c));
-        hg_test_assert(rm.resources[rm.get_resource(c)].type == HG_RESOURCE_BINARY);
+        hg_test_assert(rm.resources[rm.get_resource(c)].type == HgResource::binary);
         hg_test_assert(rm.is_registered(d));
-        hg_test_assert(rm.resources[rm.get_resource(d)].type == HG_RESOURCE_TEXTURE);
+        hg_test_assert(rm.resources[rm.get_resource(d)].type == HgResource::texture);
         hg_test_assert(rm.is_registered(e));
-        hg_test_assert(rm.resources[rm.get_resource(e)].type == HG_RESOURCE_BINARY);
+        hg_test_assert(rm.resources[rm.get_resource(e)].type == HgResource::binary);
 
         rm.unregister_resource(a);
         rm.unregister_resource(b);
@@ -1814,41 +1614,41 @@ hg_test(HgResourceManager) {
         hg_test_assert(!rm.is_registered(d));
         hg_test_assert(!rm.is_registered(e));
 
-        rm.register_resource(HG_RESOURCE_TEXTURE, a);
-        rm.register_resource(HG_RESOURCE_BINARY, b_conf2);
-        rm.register_resource(HG_RESOURCE_TEXTURE, d);
-        rm.register_resource(HG_RESOURCE_BINARY, b);
+        rm.register_resource(HgResource::texture, a);
+        rm.register_resource(HgResource::binary, b_conf2);
+        rm.register_resource(HgResource::texture, d);
+        rm.register_resource(HgResource::binary, b);
 
         hg_test_assert(rm.is_registered(a));
-        hg_test_assert(rm.resources[rm.get_resource(a)].type == HG_RESOURCE_TEXTURE);
+        hg_test_assert(rm.resources[rm.get_resource(a)].type == HgResource::texture);
         hg_test_assert(rm.is_registered(b));
-        hg_test_assert(rm.resources[rm.get_resource(b)].type == HG_RESOURCE_BINARY);
+        hg_test_assert(rm.resources[rm.get_resource(b)].type == HgResource::binary);
         hg_test_assert(!rm.is_registered(b_conf));
         hg_test_assert(rm.is_registered(b_conf2));
-        hg_test_assert(rm.resources[rm.get_resource(b_conf2)].type == HG_RESOURCE_BINARY);
+        hg_test_assert(rm.resources[rm.get_resource(b_conf2)].type == HgResource::binary);
         hg_test_assert(!rm.is_registered(c));
         hg_test_assert(rm.is_registered(d));
-        hg_test_assert(rm.resources[rm.get_resource(d)].type == HG_RESOURCE_TEXTURE);
+        hg_test_assert(rm.resources[rm.get_resource(d)].type == HgResource::texture);
         hg_test_assert(!rm.is_registered(e));
 
-        rm.register_resource(HG_RESOURCE_TEXTURE, b_conf);
-        rm.register_resource(HG_RESOURCE_BINARY, e);
-        rm.register_resource(HG_RESOURCE_TEXTURE, c);
+        rm.register_resource(HgResource::texture, b_conf);
+        rm.register_resource(HgResource::binary, e);
+        rm.register_resource(HgResource::texture, c);
 
         hg_test_assert(rm.is_registered(a));
-        hg_test_assert(rm.resources[rm.get_resource(a)].type == HG_RESOURCE_TEXTURE);
+        hg_test_assert(rm.resources[rm.get_resource(a)].type == HgResource::texture);
         hg_test_assert(rm.is_registered(b));
-        hg_test_assert(rm.resources[rm.get_resource(b)].type == HG_RESOURCE_BINARY);
+        hg_test_assert(rm.resources[rm.get_resource(b)].type == HgResource::binary);
         hg_test_assert(rm.is_registered(b_conf));
-        hg_test_assert(rm.resources[rm.get_resource(b_conf)].type == HG_RESOURCE_TEXTURE);
+        hg_test_assert(rm.resources[rm.get_resource(b_conf)].type == HgResource::texture);
         hg_test_assert(rm.is_registered(b_conf2));
-        hg_test_assert(rm.resources[rm.get_resource(b_conf2)].type == HG_RESOURCE_BINARY);
+        hg_test_assert(rm.resources[rm.get_resource(b_conf2)].type == HgResource::binary);
         hg_test_assert(rm.is_registered(c));
-        hg_test_assert(rm.resources[rm.get_resource(c)].type == HG_RESOURCE_TEXTURE);
+        hg_test_assert(rm.resources[rm.get_resource(c)].type == HgResource::texture);
         hg_test_assert(rm.is_registered(d));
-        hg_test_assert(rm.resources[rm.get_resource(d)].type == HG_RESOURCE_TEXTURE);
+        hg_test_assert(rm.resources[rm.get_resource(d)].type == HgResource::texture);
         hg_test_assert(rm.is_registered(e));
-        hg_test_assert(rm.resources[rm.get_resource(e)].type == HG_RESOURCE_BINARY);
+        hg_test_assert(rm.resources[rm.get_resource(e)].type == HgResource::binary);
 
         rm.unregister_resource(e);
         rm.unregister_resource(b_conf);
@@ -1856,13 +1656,13 @@ hg_test(HgResourceManager) {
         rm.unregister_resource(d);
 
         hg_test_assert(rm.is_registered(a));
-        hg_test_assert(rm.resources[rm.get_resource(a)].type == HG_RESOURCE_TEXTURE);
+        hg_test_assert(rm.resources[rm.get_resource(a)].type == HgResource::texture);
         hg_test_assert(!rm.is_registered(b));
         hg_test_assert(!rm.is_registered(b_conf));
         hg_test_assert(rm.is_registered(b_conf2));
-        hg_test_assert(rm.resources[rm.get_resource(b_conf2)].type == HG_RESOURCE_BINARY);
+        hg_test_assert(rm.resources[rm.get_resource(b_conf2)].type == HgResource::binary);
         hg_test_assert(rm.is_registered(c));
-        hg_test_assert(rm.resources[rm.get_resource(c)].type == HG_RESOURCE_TEXTURE);
+        hg_test_assert(rm.resources[rm.get_resource(c)].type == HgResource::texture);
         hg_test_assert(!rm.is_registered(d));
         hg_test_assert(!rm.is_registered(e));
 
