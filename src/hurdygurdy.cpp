@@ -1075,13 +1075,31 @@ HgJson HgJsonParser::parse_next() {
         case 't': [[fallthrough]];
         case 'f':
             return parse_boolean();
+        case '}': {
+            HgJson::Error* error = arena.alloc<HgJson::Error>(1);
+            error->next = nullptr;
+            error->message = HgString{}
+                .append(arena, "on line ")
+                .append(arena, hg_int_to_str_base10(arena, (i64)line))
+                .append(arena, ", found unexpected token \"}\"\n");
+            return {nullptr, error};
+        }
+        case ']': {
+            HgJson::Error* error = arena.alloc<HgJson::Error>(1);
+            error->next = nullptr;
+            error->message = HgString{}
+                .append(arena, "on line ")
+                .append(arena, hg_int_to_str_base10(arena, (i64)line))
+                .append(arena, ", found unexpected token \"]\"\n");
+            return {nullptr, error};
+        }
     }
     if (hg_is_numeral_base10(text[head])) {
         return parse_number();
     }
 
     HgJson::Error* error = arena.alloc<HgJson::Error>(1);
-    error->message = {};
+    error->next = nullptr;
 
     usize begin = head;
     while (head < text.length && !hg_is_whitespace(text[head])) {
@@ -1104,6 +1122,7 @@ HgJson HgJsonParser::parse_struct() {
     json.first = arena.alloc<HgJson::Node>(1);
     json.first->next = nullptr;
     json.first->type = HgJson::jstruct;
+    json.first->jstruct.fields = nullptr;
 
     HgJson::Node* last_field = nullptr;
     HgJson::Error* last_error = nullptr;
@@ -1128,8 +1147,39 @@ HgJson HgJsonParser::parse_struct() {
             last_error = error;
             break;
         }
-        if (text[head] == '}')
+        if (text[head] == ']') {
+            HgJson::Error* error = arena.alloc<HgJson::Error>(1);
+            error->next = nullptr;
+            error->message = HgString{}
+                .append(arena, "on line ")
+                .append(arena, hg_int_to_str_base10(arena, (i64)line))
+                .append(arena, ", struct ends with \"]\" instead of \"}\"\n");
+            if (last_error == nullptr)
+                json.errors = last_error = error;
+            else
+                last_error->next = error;
+            last_error = error;
+            ++head;
+            while (head < text.length && hg_is_whitespace(text[head])) {
+                if (text[head] == '\n')
+                    ++line;
+                ++head;
+            }
+            if (head < text.length && text[head] == ',')
+                ++head;
             break;
+        }
+        if (text[head] == '}') {
+            ++head;
+            while (head < text.length && hg_is_whitespace(text[head])) {
+                if (text[head] == '\n')
+                    ++line;
+                ++head;
+            }
+            if (head < text.length && text[head] == ',')
+                ++head;
+            break;
+        }
 
         HgJson field = parse_next();
 
@@ -1140,7 +1190,21 @@ HgJson HgJsonParser::parse_struct() {
                 error->message = HgString{}
                     .append(arena, "on line ")
                     .append(arena, hg_int_to_str_base10(arena, (i64)line))
-                    .append(arena, ", struct has a field which is not in the forms \"name\": value\n");
+                    .append(arena, ", struct has a literal instead of a field\n");
+                if (last_error == nullptr)
+                    json.errors = last_error = error;
+                else
+                    last_error->next = error;
+                last_error = error;
+            } else if (field.first->field.data == nullptr) {
+                HgJson::Error* error = arena.alloc<HgJson::Error>(1);
+                error->next = nullptr;
+                error->message = HgString{}
+                    .append(arena, "on line ")
+                    .append(arena, hg_int_to_str_base10(arena, (i64)line))
+                    .append(arena, ", struct has a field named \"")
+                    .append(arena, field.first->field.name)
+                    .append(arena, "\" which has no value\n");
                 if (last_error == nullptr)
                     json.errors = last_error = error;
                 else
@@ -1153,24 +1217,13 @@ HgJson HgJsonParser::parse_struct() {
                     last_field->next = field.first;
                 last_field = field.first;
             }
-        } else if (field.errors != nullptr) {
+        }
+        if (field.errors != nullptr) {
             if (last_error == nullptr)
                 json.errors = last_error = field.errors;
             else
                 last_error->next = field.errors;
             last_error = field.errors;
-        } else {
-            HgJson::Error* error = arena.alloc<HgJson::Error>(1);
-            error->next = nullptr;
-            error->message = HgString{}
-                .append(arena, "on line ")
-                .append(arena, hg_int_to_str_base10(arena, (i64)line))
-                .append(arena, ", struct has a nonexistant field (how did this happen?)\n");
-            if (last_error == nullptr)
-                json.errors = last_error = error;
-            else
-                last_error->next = error;
-            last_error = error;
         }
     }
 
@@ -1207,8 +1260,39 @@ HgJson HgJsonParser::parse_array() {
             last_error = error;
             break;
         }
-        if (text[head] == ']')
+        if (text[head] == '}') {
+            HgJson::Error* error = arena.alloc<HgJson::Error>(1);
+            error->next = nullptr;
+            error->message = HgString{}
+                .append(arena, "on line ")
+                .append(arena, hg_int_to_str_base10(arena, (i64)line))
+                .append(arena, ", array ends with \"}\" instead of \"]\"\n");
+            if (last_error == nullptr)
+                json.errors = last_error = error;
+            else
+                last_error->next = error;
+            last_error = error;
+            ++head;
+            while (head < text.length && hg_is_whitespace(text[head])) {
+                if (text[head] == '\n')
+                    ++line;
+                ++head;
+            }
+            if (head < text.length && text[head] == ',')
+                ++head;
             break;
+        }
+        if (text[head] == ']') {
+            ++head;
+            while (head < text.length && hg_is_whitespace(text[head])) {
+                if (text[head] == '\n')
+                    ++line;
+                ++head;
+            }
+            if (head < text.length && text[head] == ',')
+                ++head;
+            break;
+        }
 
         HgJson elem = parse_next();
 
@@ -1280,11 +1364,11 @@ HgJson HgJsonParser::parse_string() {
             ++line;
         ++head;
     }
-    if (head < text.length)
-        ++head;
+    usize end = head;
     if (head < text.length) {
-        HgString str{};
-        for (usize i = begin; i < head; ++i) {
+        ++head;
+        HgString str = str.create(arena, end - begin);
+        for (usize i = begin; i < end; ++i) {
             char c = text[i];
             if (c == '\\') {
                 // escape sequences : TODO
@@ -1295,18 +1379,30 @@ HgJson HgJsonParser::parse_string() {
         HgJson json{};
         json.first = arena.alloc<HgJson::Node>(1);
         json.first->next = nullptr;
-        if (text[head] == ':') {
+
+        while (head < text.length && hg_is_whitespace(text[head])) {
+            if (text[head] == '\n')
+                ++line;
             ++head;
-            HgJson next = parse_next();
+        }
+        if (head < text.length && text[head] == ':') {
+            ++head;
             json.first->type = HgJson::field;
             json.first->field.name = str;
-            json.first->field.data = nullptr;
+            HgJson next = parse_next();
             json.first->field.data = next.first;
             json.errors = next.errors;
         } else {
             json.first->type = HgJson::string;
             json.first->string = str;
         }
+        while (head < text.length && hg_is_whitespace(text[head])) {
+            if (text[head] == '\n')
+                ++line;
+            ++head;
+        }
+        if (head < text.length && text[head] == ',')
+            ++head;
         return json;
     }
 
@@ -1333,6 +1429,11 @@ HgJson HgJsonParser::parse_number() {
         ++head;
     }
     HgStringView num{&text[begin], &text[head]};
+    while (head < text.length && hg_is_whitespace(text[head])) {
+        if (text[head] == '\n')
+            ++line;
+        ++head;
+    }
     if (head < text.length && text[head] == ',')
         ++head;
 
@@ -1379,7 +1480,12 @@ HgJson HgJsonParser::parse_number() {
 
 HgJson HgJsonParser::parse_boolean() {
     if (head + 4 < text.length && HgStringView{&text[head], 4} == "true") {
-        head += 5;
+        head += 4;
+        while (head < text.length && hg_is_whitespace(text[head])) {
+            if (text[head] == '\n')
+                ++line;
+            ++head;
+        }
         if (head < text.length && text[head] == ',')
             ++head;
 
@@ -1391,6 +1497,11 @@ HgJson HgJsonParser::parse_boolean() {
     }
     if (head + 5 < text.length && HgStringView{&text[head], 5} == "false") {
         head += 5;
+        while (head < text.length && hg_is_whitespace(text[head])) {
+            if (text[head] == '\n')
+                ++line;
+            ++head;
+        }
         if (head < text.length && text[head] == ',')
             ++head;
 
