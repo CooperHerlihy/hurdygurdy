@@ -1062,7 +1062,7 @@ hg_test(HgJson) {
         hg_test_assert(field->value->type == HgJson::array);
         hg_test_assert(field->value->array.elems != nullptr);
 
-        HgJson::Elem* elem = node->field.value->array.elems;
+        HgJson::Elem* elem = field->value->array.elems;
         hg_test_assert(elem->next != nullptr);
         hg_test_assert(elem->value != nullptr);
         hg_test_assert(elem->value->type == HgJson::integer);
@@ -1117,7 +1117,7 @@ hg_test(HgJson) {
         hg_test_assert(field->value->type == HgJson::array);
         hg_test_assert(field->value->array.elems != nullptr);
 
-        HgJson::Elem* elem = node->field.value->array.elems;
+        HgJson::Elem* elem = field->value->array.elems;
         hg_test_assert(elem->next != nullptr);
         hg_test_assert(elem->value != nullptr);
         hg_test_assert(elem->value->type == HgJson::integer);
@@ -1166,7 +1166,7 @@ hg_test(HgJson) {
         hg_test_assert(field->value->type == HgJson::jstruct);
         hg_test_assert(field->value->array.elems != nullptr);
 
-        HgJson::Field* sub_field = node->field.value->jstruct.fields;
+        HgJson::Field* sub_field = field->value->jstruct.fields;
         hg_test_assert(sub_field->next != nullptr);
         hg_test_assert(sub_field->name == "a");
         hg_test_assert(sub_field->value != nullptr);

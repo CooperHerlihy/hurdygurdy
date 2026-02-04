@@ -2843,8 +2843,30 @@ void HgScene::deinstantiate() {
 //     return HG_COMPONENT_NONE;
 // }
 
-// HgBinary hg_create_scene_json(HgArena& arena, const HgJson& json) {
-// }
+static constexpr usize hg_internal_component_hash(HgComponent c) {
+    return (usize)c;
+}
+
+static constexpr usize hg_internal_resource_hash(HgResourceID r) {
+    return (usize)r;
+}
+
+HgBinary hg_create_scene_json(HgArena& arena, const HgJson& json) {
+    hg_arena_scope(scratch, hg_get_scratch(arena));
+
+    HgHashMap<usize, HgString> entities = entities.create(scratch, 512);
+
+    struct Resource {
+        HgResource type;
+        HgString path;
+    };
+    HgHashMap<HgResourceID, Resource, hg_internal_resource_hash> resources = resources.create(scratch, 128);
+
+    HgHashMap<HgComponent, HgAnyArray, hg_internal_component_hash> components = components.create(scratch, (usize)HgComponent::count);
+
+    (void)json;
+    return {};
+}
 
 void hg_vulkan_init();
 

@@ -2106,8 +2106,8 @@ struct HgJson {
      */
     enum Type : u32 {
         none = 0,
-        field,
         jstruct,
+        field,
         array,
         string,
         floating,
@@ -2158,8 +2158,8 @@ struct HgJson {
          * The value in the node
          */
         union {
-            Field field;
             Struct jstruct;
+            Field field;
             Array array;
             HgString string;
             f64 floating;
