@@ -1710,6 +1710,487 @@ HgArena& hg_get_scratch(const HgArena& conflict);
 HgArena& hg_get_scratch(const HgArena** conflicts, usize count);
 
 /**
+ * A span view into a string
+ */
+struct HgStringView {
+    /**
+     * The characters
+     */
+    const char* chars;
+    /**
+     * The number of characters;
+     */
+    usize length;
+
+    /**
+     * The size of the string in bytes
+     *
+     * Returns
+     * - The size of the string in bytes
+     */
+    constexpr usize size() const {
+        return length;
+    }
+
+    /**
+     * Construct uninitialized
+     */
+    HgStringView() = default;
+
+    /**
+     * Create a string view from a pointer and length
+     */
+    constexpr HgStringView(const char* chars_val, usize length_val) : chars{chars_val}, length{length_val} {}
+
+    /**
+     * Create a string view from begin and end pointers
+     */
+    constexpr HgStringView(const char* chars_begin, const char* chars_end)
+        : chars{chars_begin}
+        , length{(uptr)(chars_end - chars_begin)}
+    {
+        hg_assert(chars_begin <= chars_end);
+    }
+
+    /**
+     * Implicit constexpr conversion from c string
+     *
+     * Potentially dangerous, c string can be at most 4096 chars
+     */
+    constexpr HgStringView(const char* c_str) : chars{c_str}, length{0} {
+        while (c_str[length] != '\0') {
+            ++length;
+            hg_assert(length <= 4096);
+        }
+    }
+
+    /**
+     * Convenience to index into the array with debug bounds checking
+     */
+    constexpr const char& operator[](usize index) const {
+        hg_assert(chars != nullptr);
+        hg_assert(index < length);
+        return chars[index];
+    }
+
+    /**
+     * For c++ ranged based for
+     */
+    constexpr const char* begin() const {
+        return chars;
+    }
+
+    /**
+     * For c++ ranged based for
+     */
+    constexpr const char* end() const {
+        return chars + length;
+    }
+};
+
+/**
+ * A dynamic string container
+ */
+struct HgString {
+    /**
+     * The character buffer
+     */
+    char* chars;
+    /**
+     * The max number of characters in the buffer
+     */
+    usize capacity;
+    /**
+     * The number of characters currently in the string
+     */
+    usize length;
+
+    /**
+     * Returns the size of the in bytes
+     */
+    constexpr usize size() const {
+        return length;
+    }
+
+    /**
+     * Creates a new string with empty capacity
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - capacity The capacity to begin with
+     *
+     * Returns
+     * - The created empty string
+     */
+    static HgString create(HgArena& arena, usize capacity);
+
+    /**
+     * Creates a new string copied from an existing string
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - init The initial string to copy from
+     *
+     * Returns
+     * - The created copied string
+     */
+    static HgString create(HgArena& arena, HgStringView init);
+
+    /**
+     * Removes all characters
+     */
+    constexpr void reset() {
+        length = 0;
+    }
+
+    /**
+     * Changes the capacity
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - new_capacity The new minimum capacity
+     */
+    void reserve(HgArena& arena, usize new_capacity);
+
+    /**
+     * Increases the capacity of the string, or inits to 1
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - factor The growth factor to increase by
+     */
+    void grow(HgArena& arena, f32 factor = 2.0f);
+
+    /**
+     * Access using the index operator
+     */
+    constexpr char& operator[](usize index) {
+        hg_assert(index < length);
+        return chars[index];
+    }
+
+    /**
+     * Access using the index operator in a const context
+     */
+    constexpr const char& operator[](usize index) const {
+        hg_assert(index < length);
+        return chars[index];
+    }
+
+    /**
+     * For c++ ranged based for loop
+     */
+    constexpr char* begin() const {
+        return chars;
+    }
+
+    /**
+     * For c++ ranged based for loop
+     */
+    constexpr char* end() const {
+        return chars + length;
+    }
+
+    /**
+     * Inserts a char into this string at index
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - c The char to insert
+     */
+    HgString& insert(HgArena& arena, usize index, char c);
+
+    /**
+     * Appends a char to the end of this string
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - c The char to append
+     */
+    HgString& append(HgArena& arena, char c) {
+        return insert(arena, length, c);
+    }
+
+    /**
+     * Prepends a char to the beginning of this string
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - c The char to prepend
+     */
+    HgString& prepend(HgArena& arena, char c) {
+        return insert(arena, 0, c);
+    }
+
+    /**
+     * Copies another string into this string at index
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - str The string to copy from
+     */
+    HgString& insert(HgArena& arena, usize index, HgStringView str);
+
+    /**
+     * Copies another string to the end of this string
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - str The string to copy from
+     */
+    HgString& append(HgArena& arena, HgStringView str) {
+        return insert(arena, length, str);
+    }
+
+    /**
+     * Copies another string to the beginning of this string
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - str The string to copy from
+     */
+    HgString& prepend(HgArena& arena, HgStringView str) {
+        return insert(arena, 0, str);
+    }
+
+    /**
+     * Implicit converts to string_view
+     */
+    constexpr operator HgStringView() {
+        return {chars, length};
+    }
+};
+
+/**
+ * Compare strings
+ */
+constexpr bool operator==(HgStringView lhs, HgStringView rhs) {
+    return lhs.length == rhs.length && std::memcmp(lhs.chars, rhs.chars, lhs.length) == 0;
+}
+
+/**
+ * Compare strings
+ */
+constexpr bool operator!=(HgStringView lhs, HgStringView rhs) {
+    return !(lhs == rhs);
+}
+
+/**
+ * Compare strings
+ */
+inline bool operator==(const HgString& lhs, const HgString& rhs) {
+    return lhs.length == rhs.length && memcmp(lhs.chars, rhs.chars, lhs.length) == 0;
+}
+
+/**
+ * Compare strings
+ */
+inline bool operator!=(const HgString& lhs, const HgString& rhs) {
+    return !(lhs == rhs);
+}
+
+/**
+ * Check whether a character is whitespace
+ *
+ * Parameters
+ * - c The character to check
+ *
+ * Returns
+ * - Whether it is a space, tab, or newline, or not
+ */
+bool hg_is_whitespace(char c);
+
+/**
+ * Check whether a character is a base 10 numeral
+ *
+ * Parameters
+ * - c The character to check
+ *
+ * Returns
+ * - Whether it is 0-9 or not
+ */
+bool hg_is_numeral_base10(char c);
+
+/**
+ * Check whether a string is a base 10 integer
+ *
+ * Parameters
+ * - str The string to check
+ *
+ * Returns
+ * - Whether it is valid integer, positive or negative
+ */
+bool hg_is_integer_base10(HgStringView str);
+
+/**
+ * Check whether a string is a base 10 floating point number
+ *
+ * Parameters
+ * - str The string to check
+ *
+ * Returns
+ * - Whether it is valid floating point number
+ */
+bool hg_is_float_base10(HgStringView str);
+
+/**
+ * Create an i64 from a base 10 string
+ *
+ * Parameters
+ * - str The string to create from
+ *
+ * Returns
+ * - The created integer
+ */
+i64 hg_str_to_int_base10(HgStringView str);
+
+/**
+ * Create a integer from a base 10 string
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - num The integer number to create from
+ *
+ * Returns
+ * - The created string
+ */
+f64 hg_str_to_float_base10(HgStringView str);
+
+/**
+ * Create a base 10 string from an integer
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - num The integer number to create from
+ *
+ * Returns
+ * - The created string
+ */
+HgString hg_int_to_str_base10(HgArena& arena, i64 num);
+
+/**
+ * Create a base 10 string from an integer
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - num The integer number to create from
+ *
+ * Returns
+ * - The created string
+ */
+HgString hg_float_to_str_base10(HgArena& arena, f64 num, u64 decimal_count);
+
+// base 2 and 16 string-int conversions : TODO
+// arbitrary base string-int conversions : TODO?
+// string formatting : TODO
+
+/**
+ * A parsed Json file
+ */
+struct HgJson {
+    /**
+     * An error contained in the json
+     */
+    struct Error {
+        Error* next;
+        HgString message;
+    };
+
+    /**
+     * A node in the json file
+     */
+    struct Node;
+
+    /**
+     * The types contained in nodes
+     */
+    enum Type : u32 {
+        none = 0,
+        field,
+        jstruct,
+        array,
+        string,
+        floating,
+        integer,
+        boolean,
+    };
+
+    /**
+     * A field in a struct
+     */
+    struct Field {
+        Field* next;
+        HgString name;
+        Node* value;
+    };
+
+    /**
+     * A struct contained in the json
+     */
+    struct Struct {
+        Field* fields;
+    };
+
+    /**
+     * An element in an array
+     */
+    struct Elem {
+        Elem* next;
+        Node* value;
+    };
+
+    /**
+     * An array contained in the json
+     */
+    struct Array {
+        Elem* elems;
+    };
+
+    /**
+     * A node in the json file
+     */
+    struct Node {
+        /**
+         * The node's type
+         */
+        Type type;
+        /**
+         * The value in the node
+         */
+        union {
+            Field field;
+            Struct jstruct;
+            Array array;
+            HgString string;
+            f64 floating;
+            i64 integer;
+            bool boolean;
+        };
+    };
+
+    /**
+     * The successfully parsed nodes
+     */
+    Node* first;
+    /**
+     * The errors found
+     */
+    Error* errors;
+
+    /**
+     * Parses json text into a tree
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - text The json text to parse
+     *
+     * Returns
+     * - The parsed json, errors contained inside
+     */
+    static HgJson parse(HgArena& arena, HgStringView text);
+};
+
+/**
  * A type erased dynamic array
  */
 struct HgAnyArray {
@@ -1888,10 +2369,123 @@ struct HgAnyArray {
 };
 
 /**
- * The template for default hash map hash functions
+ * Hash map hashing for u8
  */
-template<typename T>
-constexpr usize hg_hash(T val);
+constexpr usize hg_hash(u8 val) {
+    return (usize)val;
+}
+
+/**
+ * Hash map hashing for u16
+ */
+constexpr usize hg_hash(u16 val) {
+    return (usize)val;
+}
+
+/**
+ * Hash map hashing for u32
+ */
+constexpr usize hg_hash(u32 val) {
+    return (usize)val;
+}
+
+/**
+ * Hash map hashing for u64
+ */
+constexpr usize hg_hash(u64 val) {
+    return (usize)val;
+}
+
+/**
+ * Hash map hashing for i8
+ */
+constexpr usize hg_hash(i8 val) {
+    return (usize)val;
+}
+
+/**
+ * Hash map hashing for i16
+ */
+constexpr usize hg_hash(i16 val) {
+    return (usize)val;
+}
+
+/**
+ * Hash map hashing for i32
+ */
+constexpr usize hg_hash(i32 val) {
+    return (usize)val;
+}
+
+/**
+ * Hash map hashing for i64
+ */
+constexpr usize hg_hash(i64 val) {
+    return (usize)val;
+}
+
+/**
+ * Hash map hashing for f32
+ */
+constexpr usize hg_hash(f32 val) {
+    union {
+        f32 as_float;
+        usize as_usize;
+    } u{};
+    u.as_float = val;
+    return u.as_usize;
+}
+
+/**
+ * Hash map hashing for f64
+ */
+constexpr usize hg_hash(f64 val) {
+    union {
+        f64 as_float;
+        usize as_usize;
+    } u{};
+    u.as_float = val;
+    return u.as_usize;
+}
+
+/**
+ * Hash map hashing for void*
+ */
+constexpr usize hg_hash(void* val) {
+    union {
+        void* as_ptr;
+        uptr as_uptr;
+    } u{};
+    u.as_ptr = val;
+    return (usize)u.as_uptr;
+}
+
+/**
+ * Hash map hashing for strings
+ */
+constexpr usize hg_hash(HgStringView str) {
+    u64 ret = 0;
+    u64 mult = 1;
+    for (char c : str) {
+        ret += (u64)c * mult;
+        mult *= 257;
+    }
+    return (usize)ret;
+}
+
+/**
+ * Hash map hashing for HgString
+ */
+constexpr usize hg_hash(HgString str) {
+    return hg_hash(HgStringView{str});
+}
+
+/**
+ * Hash map hashing for C string
+ */
+constexpr usize hg_hash(const char* str) {
+    return hg_hash(HgStringView{str});
+}
 
 /**
  * A key-value hash map
@@ -2315,615 +2909,6 @@ struct HgHashSet {
         }
         return has_val[idx] ? idx : (usize)-1;
     }
-};
-
-/**
- * Hash map hashing for u8
- */
-template<>
-constexpr usize hg_hash(u8 val) {
-    return (usize)val;
-}
-
-/**
- * Hash map hashing for u16
- */
-template<>
-constexpr usize hg_hash(u16 val) {
-    return (usize)val;
-}
-
-/**
- * Hash map hashing for u32
- */
-template<>
-constexpr usize hg_hash(u32 val) {
-    return (usize)val;
-}
-
-/**
- * Hash map hashing for u64
- */
-template<>
-constexpr usize hg_hash(u64 val) {
-    return (usize)val;
-}
-
-/**
- * Hash map hashing for i8
- */
-template<>
-constexpr usize hg_hash(i8 val) {
-    return (usize)val;
-}
-
-/**
- * Hash map hashing for i16
- */
-template<>
-constexpr usize hg_hash(i16 val) {
-    return (usize)val;
-}
-
-/**
- * Hash map hashing for i32
- */
-template<>
-constexpr usize hg_hash(i32 val) {
-    return (usize)val;
-}
-
-/**
- * Hash map hashing for i64
- */
-template<>
-constexpr usize hg_hash(i64 val) {
-    return (usize)val;
-}
-
-/**
- * Hash map hashing for f32
- */
-template<>
-constexpr usize hg_hash(f32 val) {
-    union {
-        f32 as_float;
-        usize as_usize;
-    } u{};
-    u.as_float = val;
-    return u.as_usize;
-}
-
-/**
- * Hash map hashing for f64
- */
-template<>
-constexpr usize hg_hash(f64 val) {
-    union {
-        f64 as_float;
-        usize as_usize;
-    } u{};
-    u.as_float = val;
-    return u.as_usize;
-}
-
-/**
- * Hash map hashing for void*
- */
-template<>
-constexpr usize hg_hash(void* val) {
-    union {
-        void* as_ptr;
-        uptr as_uptr;
-    } u{};
-    u.as_ptr = val;
-    return (usize)u.as_uptr;
-}
-
-/**
- * A span view into a string
- */
-struct HgStringView {
-    /**
-     * The characters
-     */
-    const char* chars;
-    /**
-     * The number of characters;
-     */
-    usize length;
-
-    /**
-     * The size of the string in bytes
-     *
-     * Returns
-     * - The size of the string in bytes
-     */
-    constexpr usize size() const {
-        return length;
-    }
-
-    /**
-     * Construct uninitialized
-     */
-    HgStringView() = default;
-
-    /**
-     * Create a string view from a pointer and length
-     */
-    constexpr HgStringView(const char* chars_val, usize length_val) : chars{chars_val}, length{length_val} {}
-
-    /**
-     * Create a string view from begin and end pointers
-     */
-    constexpr HgStringView(const char* chars_begin, const char* chars_end)
-        : chars{chars_begin}
-        , length{(uptr)(chars_end - chars_begin)}
-    {
-        hg_assert(chars_begin <= chars_end);
-    }
-
-    /**
-     * Implicit constexpr conversion from c string
-     *
-     * Potentially dangerous, c string can be at most 4096 chars
-     */
-    constexpr HgStringView(const char* c_str) : chars{c_str}, length{0} {
-        while (c_str[length] != '\0') {
-            ++length;
-            hg_assert(length <= 4096);
-        }
-    }
-
-    /**
-     * Convenience to index into the array with debug bounds checking
-     */
-    constexpr const char& operator[](usize index) const {
-        hg_assert(chars != nullptr);
-        hg_assert(index < length);
-        return chars[index];
-    }
-
-    /**
-     * For c++ ranged based for
-     */
-    constexpr const char* begin() const {
-        return chars;
-    }
-
-    /**
-     * For c++ ranged based for
-     */
-    constexpr const char* end() const {
-        return chars + length;
-    }
-};
-
-/**
- * A dynamic string container
- */
-struct HgString {
-    /**
-     * The character buffer
-     */
-    char* chars;
-    /**
-     * The max number of characters in the buffer
-     */
-    usize capacity;
-    /**
-     * The number of characters currently in the string
-     */
-    usize length;
-
-    /**
-     * Returns the size of the in bytes
-     */
-    constexpr usize size() const {
-        return length;
-    }
-
-    /**
-     * Creates a new string with empty capacity
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - capacity The capacity to begin with
-     *
-     * Returns
-     * - The created empty string
-     */
-    static HgString create(HgArena& arena, usize capacity);
-
-    /**
-     * Creates a new string copied from an existing string
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - init The initial string to copy from
-     *
-     * Returns
-     * - The created copied string
-     */
-    static HgString create(HgArena& arena, HgStringView init);
-
-    /**
-     * Removes all characters
-     */
-    constexpr void reset() {
-        length = 0;
-    }
-
-    /**
-     * Changes the capacity
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - new_capacity The new minimum capacity
-     */
-    void reserve(HgArena& arena, usize new_capacity);
-
-    /**
-     * Increases the capacity of the string, or inits to 1
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - factor The growth factor to increase by
-     */
-    void grow(HgArena& arena, f32 factor = 2.0f);
-
-    /**
-     * Access using the index operator
-     */
-    constexpr char& operator[](usize index) {
-        hg_assert(index < length);
-        return chars[index];
-    }
-
-    /**
-     * Access using the index operator in a const context
-     */
-    constexpr const char& operator[](usize index) const {
-        hg_assert(index < length);
-        return chars[index];
-    }
-
-    /**
-     * For c++ ranged based for loop
-     */
-    constexpr char* begin() const {
-        return chars;
-    }
-
-    /**
-     * For c++ ranged based for loop
-     */
-    constexpr char* end() const {
-        return chars + length;
-    }
-
-    /**
-     * Inserts a char into this string at index
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - c The char to insert
-     */
-    HgString& insert(HgArena& arena, usize index, char c);
-
-    /**
-     * Appends a char to the end of this string
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - c The char to append
-     */
-    HgString& append(HgArena& arena, char c) {
-        return insert(arena, length, c);
-    }
-
-    /**
-     * Prepends a char to the beginning of this string
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - c The char to prepend
-     */
-    HgString& prepend(HgArena& arena, char c) {
-        return insert(arena, 0, c);
-    }
-
-    /**
-     * Copies another string into this string at index
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - str The string to copy from
-     */
-    HgString& insert(HgArena& arena, usize index, HgStringView str);
-
-    /**
-     * Copies another string to the end of this string
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - str The string to copy from
-     */
-    HgString& append(HgArena& arena, HgStringView str) {
-        return insert(arena, length, str);
-    }
-
-    /**
-     * Copies another string to the beginning of this string
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - str The string to copy from
-     */
-    HgString& prepend(HgArena& arena, HgStringView str) {
-        return insert(arena, 0, str);
-    }
-
-    /**
-     * Implicit converts to string_view
-     */
-    constexpr operator HgStringView() {
-        return {chars, length};
-    }
-};
-
-/**
- * Compare strings
- */
-constexpr bool operator==(HgStringView lhs, HgStringView rhs) {
-    return lhs.length == rhs.length && std::memcmp(lhs.chars, rhs.chars, lhs.length) == 0;
-}
-
-/**
- * Compare strings
- */
-constexpr bool operator!=(HgStringView lhs, HgStringView rhs) {
-    return !(lhs == rhs);
-}
-
-/**
- * Compare strings
- */
-inline bool operator==(const HgString& lhs, const HgString& rhs) {
-    return lhs.length == rhs.length && memcmp(lhs.chars, rhs.chars, lhs.length) == 0;
-}
-
-/**
- * Compare strings
- */
-inline bool operator!=(const HgString& lhs, const HgString& rhs) {
-    return !(lhs == rhs);
-}
-
-/**
- * Hash map hashing for strings
- */
-template<>
-constexpr usize hg_hash(HgStringView str) {
-    u64 ret = 0;
-    u64 mult = 1;
-    for (char c : str) {
-        ret += (u64)c * mult;
-        mult *= 257;
-    }
-    return (usize)ret;
-}
-
-/**
- * Hash map hashing for HgString
- */
-template<>
-constexpr usize hg_hash(HgString str) {
-    return hg_hash(HgStringView{str});
-}
-
-/**
- * Hash map hashing for C string
- */
-template<>
-constexpr usize hg_hash(const char* str) {
-    return hg_hash(HgStringView{str});
-}
-
-/**
- * Check whether a character is whitespace
- *
- * Parameters
- * - c The character to check
- *
- * Returns
- * - Whether it is a space, tab, or newline, or not
- */
-bool hg_is_whitespace(char c);
-
-/**
- * Check whether a character is a base 10 numeral
- *
- * Parameters
- * - c The character to check
- *
- * Returns
- * - Whether it is 0-9 or not
- */
-bool hg_is_numeral_base10(char c);
-
-/**
- * Check whether a string is a base 10 integer
- *
- * Parameters
- * - str The string to check
- *
- * Returns
- * - Whether it is valid integer, positive or negative
- */
-bool hg_is_integer_base10(HgStringView str);
-
-/**
- * Check whether a string is a base 10 floating point number
- *
- * Parameters
- * - str The string to check
- *
- * Returns
- * - Whether it is valid floating point number
- */
-bool hg_is_float_base10(HgStringView str);
-
-/**
- * Create an i64 from a base 10 string
- *
- * Parameters
- * - str The string to create from
- *
- * Returns
- * - The created integer
- */
-i64 hg_str_to_int_base10(HgStringView str);
-
-/**
- * Create a integer from a base 10 string
- *
- * Parameters
- * - arena The arena to allocate from
- * - num The integer number to create from
- *
- * Returns
- * - The created string
- */
-f64 hg_str_to_float_base10(HgStringView str);
-
-/**
- * Create a base 10 string from an integer
- *
- * Parameters
- * - arena The arena to allocate from
- * - num The integer number to create from
- *
- * Returns
- * - The created string
- */
-HgString hg_int_to_str_base10(HgArena& arena, i64 num);
-
-/**
- * Create a base 10 string from an integer
- *
- * Parameters
- * - arena The arena to allocate from
- * - num The integer number to create from
- *
- * Returns
- * - The created string
- */
-HgString hg_float_to_str_base10(HgArena& arena, f64 num, u64 decimal_count);
-
-// base 2 and 16 string-int conversions : TODO
-// arbitrary base string-int conversions : TODO?
-// string formatting : TODO
-
-/**
- * A parsed Json file : TODO
- */
-struct HgJson {
-    /**
-     * An error contained in the json
-     */
-    struct Error {
-        Error* next;
-        HgString message;
-    };
-
-    /**
-     * A node in the json file
-     */
-    struct Node;
-
-    /**
-     * The types contained in nodes
-     */
-    enum Type : u32 {
-        none = 0,
-        field,
-        jstruct,
-        array,
-        string,
-        floating,
-        integer,
-        boolean,
-    };
-
-    /**
-     * A struct contained in the json
-     */
-    struct Field {
-        HgString name;
-        Node* data;
-    };
-
-    /**
-     * A struct contained in the json
-     */
-    struct Struct {
-        Node* fields;
-    };
-
-    /**
-     * An array contained in the json
-     */
-    struct Array {
-        Node* elems;
-    };
-
-    /**
-     * A node in the json file
-     */
-    struct Node {
-        /**
-         * The next sibling node
-         */
-        Node* next;
-        /**
-         * The node's type
-         */
-        Type type;
-        /**
-         * The value in the node
-         */
-        union {
-            Field field;
-            Struct jstruct;
-            Array array;
-            HgString string;
-            f64 floating;
-            i64 integer;
-            bool boolean;
-        };
-    };
-
-    /**
-     * The successfully parsed nodes
-     */
-    Node* first;
-    /**
-     * The errors found
-     */
-    Error* errors;
-
-    /**
-     * Parses json text into a tree
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - text The json text to parse
-     *
-     * Returns
-     * - The parsed json, errors contained inside
-     */
-    static HgJson parse(HgArena& arena, HgStringView text);
 };
 
 /**

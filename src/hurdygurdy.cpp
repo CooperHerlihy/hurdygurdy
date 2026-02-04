@@ -699,71 +699,6 @@ next:
     hg_error("No scratch arena available\n");
 }
 
-HgAnyArray HgAnyArray::create(
-    HgArena& arena,
-    u32 width,
-    u32 alignment,
-    usize count,
-    usize capacity
-) {
-    hg_assert(count <= capacity);
-
-    HgAnyArray arr;
-    arr.items = arena.alloc(capacity * width, alignment);
-    arr.width = width;
-    arr.alignment = alignment;
-    arr.capacity = capacity;
-    arr.count = count;
-    return arr;
-}
-
-void HgAnyArray::reserve(HgArena& arena, usize new_capacity) {
-    items = arena.realloc(items, capacity * width, new_capacity * width, alignment);
-    capacity = new_capacity;
-}
-
-void HgAnyArray::grow(HgArena& arena, f32 factor) {
-    hg_assert(factor > 1.0f);
-    hg_assert(capacity <= (usize)((f32)SIZE_MAX / factor));
-    reserve(arena, capacity == 0 ? 1 : (usize)((f32)capacity * factor));
-}
-
-void* HgAnyArray::insert(usize index) {
-    hg_assert(index <= count);
-    hg_assert(count < capacity);
-
-    std::memmove(get(index + 1), get(index), (count++ - index) * width);
-    return get(index);
-}
-
-void HgAnyArray::remove(usize index) {
-    hg_assert(index < count);
-
-    std::memmove(get(index), get(index + 1), (count - index - 1) * width);
-    --count;
-}
-
-void* HgAnyArray::swap_insert(usize index) {
-    hg_assert(index <= count);
-    hg_assert(count < capacity);
-    if (index == count)
-        return push();
-
-    std::memcpy(get(count++), get(index), width);
-    return get(index);
-}
-
-void HgAnyArray::swap_remove(usize index) {
-    hg_assert(index < count);
-    if (index == count - 1) {
-        pop();
-        return;
-    }
-
-    std::memcpy(get(index), get(count - 1), width);
-    --count;
-}
-
 HgString HgString::create(HgArena& arena, usize capacity) {
     HgString str;
     str.chars = arena.alloc<char>(capacity);
@@ -1120,11 +1055,10 @@ HgJson HgJsonParser::parse_next() {
 HgJson HgJsonParser::parse_struct() {
     HgJson json{};
     json.first = arena.alloc<HgJson::Node>(1);
-    json.first->next = nullptr;
     json.first->type = HgJson::jstruct;
     json.first->jstruct.fields = nullptr;
 
-    HgJson::Node* last_field = nullptr;
+    HgJson::Field* last_field = nullptr;
     HgJson::Error* last_error = nullptr;
 
     for (;;) {
@@ -1181,10 +1115,10 @@ HgJson HgJsonParser::parse_struct() {
             break;
         }
 
-        HgJson field = parse_next();
+        HgJson value = parse_next();
 
-        if (field.first != nullptr) {
-            if (field.first->type != HgJson::field) {
+        if (value.first != nullptr) {
+            if (value.first->type != HgJson::field) {
                 HgJson::Error* error = arena.alloc<HgJson::Error>(1);
                 error->next = nullptr;
                 error->message = HgString{}
@@ -1196,14 +1130,14 @@ HgJson HgJsonParser::parse_struct() {
                 else
                     last_error->next = error;
                 last_error = error;
-            } else if (field.first->field.data == nullptr) {
+            } else if (value.first->field.value == nullptr) {
                 HgJson::Error* error = arena.alloc<HgJson::Error>(1);
                 error->next = nullptr;
                 error->message = HgString{}
                     .append(arena, "on line ")
                     .append(arena, hg_int_to_str_base10(arena, (i64)line))
                     .append(arena, ", struct has a field named \"")
-                    .append(arena, field.first->field.name)
+                    .append(arena, value.first->field.name)
                     .append(arena, "\" which has no value\n");
                 if (last_error == nullptr)
                     json.errors = last_error = error;
@@ -1212,18 +1146,18 @@ HgJson HgJsonParser::parse_struct() {
                 last_error = error;
             } else {
                 if (last_field == nullptr)
-                    json.first->jstruct.fields = field.first;
+                    json.first->jstruct.fields = &value.first->field;
                 else
-                    last_field->next = field.first;
-                last_field = field.first;
+                    last_field->next = &value.first->field;
+                last_field = &value.first->field;
             }
         }
-        if (field.errors != nullptr) {
+        if (value.errors != nullptr) {
             if (last_error == nullptr)
-                json.errors = last_error = field.errors;
+                json.errors = last_error = value.errors;
             else
-                last_error->next = field.errors;
-            last_error = field.errors;
+                last_error->next = value.errors;
+            last_error = value.errors;
         }
     }
 
@@ -1233,11 +1167,10 @@ HgJson HgJsonParser::parse_struct() {
 HgJson HgJsonParser::parse_array() {
     HgJson json{};
     json.first = arena.alloc<HgJson::Node>(1);
-    json.first->next = nullptr;
     json.first->type = HgJson::array;
 
     HgJson::Type type = HgJson::none;
-    HgJson::Node* last_elem = nullptr;
+    HgJson::Elem* last_elem = nullptr;
     HgJson::Error* last_error = nullptr;
 
     for (;;) {
@@ -1294,12 +1227,16 @@ HgJson HgJsonParser::parse_array() {
             break;
         }
 
-        HgJson elem = parse_next();
+        HgJson::Elem* elem = arena.alloc<HgJson::Elem>(1);
+        elem->next = nullptr;
 
-        if (elem.first != nullptr) {
+        HgJson value = parse_next();
+        elem->value = value.first;
+
+        if (value.first != nullptr) {
             if (type == HgJson::none) {
-                if (elem.first->type != HgJson::field) {
-                    type = elem.first->type;
+                if (value.first->type != HgJson::field) {
+                    type = value.first->type;
                 } else {
                     HgJson::Error* error = arena.alloc<HgJson::Error>(1);
                     error->next = nullptr;
@@ -1314,7 +1251,7 @@ HgJson HgJsonParser::parse_array() {
                     last_error = error;
                 }
             }
-            if (elem.first->type != type) {
+            if (value.first->type != type) {
                 HgJson::Error* error = arena.alloc<HgJson::Error>(1);
                 error->next = nullptr;
                 error->message = HgString{}
@@ -1328,29 +1265,18 @@ HgJson HgJsonParser::parse_array() {
                 last_error = error;
             } else {
                 if (last_elem == nullptr)
-                    json.first->array.elems = elem.first;
+                    json.first->array.elems = elem;
                 else
-                    last_elem->next = elem.first;
-                last_elem = elem.first;
+                    last_elem->next = elem;
+                last_elem = elem;
             }
-        } else if (elem.errors != nullptr) {
+        }
+        if (value.errors != nullptr) {
             if (last_error == nullptr)
-                json.errors = last_error = elem.errors;
+                json.errors = last_error = value.errors;
             else
-                last_error->next = elem.errors;
-            last_error = elem.errors;
-        } else {
-            HgJson::Error* error = arena.alloc<HgJson::Error>(1);
-            error->next = nullptr;
-            error->message = HgString{}
-                .append(arena, "on line ")
-                .append(arena, hg_int_to_str_base10(arena, (i64)line))
-                .append(arena, ", array has an empty element (how did this happen?)\n");
-            if (last_error == nullptr)
-                json.errors = last_error = error;
-            else
-                last_error->next = error;
-            last_error = error;
+                last_error->next = value.errors;
+            last_error = value.errors;
         }
     }
 
@@ -1378,7 +1304,6 @@ HgJson HgJsonParser::parse_string() {
 
         HgJson json{};
         json.first = arena.alloc<HgJson::Node>(1);
-        json.first->next = nullptr;
 
         while (head < text.length && hg_is_whitespace(text[head])) {
             if (text[head] == '\n')
@@ -1388,9 +1313,10 @@ HgJson HgJsonParser::parse_string() {
         if (head < text.length && text[head] == ':') {
             ++head;
             json.first->type = HgJson::field;
+            json.first->field.next = nullptr;
             json.first->field.name = str;
             HgJson next = parse_next();
-            json.first->field.data = next.first;
+            json.first->field.value = next.first;
             json.errors = next.errors;
         } else {
             json.first->type = HgJson::string;
@@ -1440,7 +1366,6 @@ HgJson HgJsonParser::parse_number() {
     if (is_float) {
         if (hg_is_float_base10(num)) {
             HgJson::Node* node = arena.alloc<HgJson::Node>(1);
-            node->next = nullptr;
             node->type = HgJson::floating;
             node->floating = hg_str_to_float_base10(num);
             return {node, nullptr};
@@ -1448,7 +1373,6 @@ HgJson HgJsonParser::parse_number() {
     } else {
         if (hg_is_integer_base10(num)) {
             HgJson::Node* node = arena.alloc<HgJson::Node>(1);
-            node->next = nullptr;
             node->type = HgJson::integer;
             node->integer = hg_str_to_int_base10(num);
             return {node, nullptr};
@@ -1490,7 +1414,6 @@ HgJson HgJsonParser::parse_boolean() {
             ++head;
 
         HgJson::Node* node = arena.alloc<HgJson::Node>(1);
-        node->next = nullptr;
         node->type = HgJson::boolean;
         node->boolean = true;
         return {node, nullptr};
@@ -1506,7 +1429,6 @@ HgJson HgJsonParser::parse_boolean() {
             ++head;
 
         HgJson::Node* node = arena.alloc<HgJson::Node>(1);
-        node->next = nullptr;
         node->type = HgJson::boolean;
         node->boolean = false;
         return {node, nullptr};
@@ -1554,6 +1476,71 @@ HgJson HgJson::parse(HgArena& arena, HgStringView text) {
     parser.head = 0;
     parser.line = 1;
     return parser.parse_next();
+}
+
+HgAnyArray HgAnyArray::create(
+    HgArena& arena,
+    u32 width,
+    u32 alignment,
+    usize count,
+    usize capacity
+) {
+    hg_assert(count <= capacity);
+
+    HgAnyArray arr;
+    arr.items = arena.alloc(capacity * width, alignment);
+    arr.width = width;
+    arr.alignment = alignment;
+    arr.capacity = capacity;
+    arr.count = count;
+    return arr;
+}
+
+void HgAnyArray::reserve(HgArena& arena, usize new_capacity) {
+    items = arena.realloc(items, capacity * width, new_capacity * width, alignment);
+    capacity = new_capacity;
+}
+
+void HgAnyArray::grow(HgArena& arena, f32 factor) {
+    hg_assert(factor > 1.0f);
+    hg_assert(capacity <= (usize)((f32)SIZE_MAX / factor));
+    reserve(arena, capacity == 0 ? 1 : (usize)((f32)capacity * factor));
+}
+
+void* HgAnyArray::insert(usize index) {
+    hg_assert(index <= count);
+    hg_assert(count < capacity);
+
+    std::memmove(get(index + 1), get(index), (count++ - index) * width);
+    return get(index);
+}
+
+void HgAnyArray::remove(usize index) {
+    hg_assert(index < count);
+
+    std::memmove(get(index), get(index + 1), (count - index - 1) * width);
+    --count;
+}
+
+void* HgAnyArray::swap_insert(usize index) {
+    hg_assert(index <= count);
+    hg_assert(count < capacity);
+    if (index == count)
+        return push();
+
+    std::memcpy(get(count++), get(index), width);
+    return get(index);
+}
+
+void HgAnyArray::swap_remove(usize index) {
+    hg_assert(index < count);
+    if (index == count - 1) {
+        pop();
+        return;
+    }
+
+    std::memcpy(get(index), get(count - 1), width);
+    --count;
 }
 
 void HgFence::add() {

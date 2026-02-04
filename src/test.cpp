@@ -391,6 +391,990 @@ hg_test(HgArena) {
     return true;
 }
 
+hg_test(HgString) {
+    {
+        hg_arena_scope(arena, hg_get_scratch());
+
+        HgString a = a.create(arena, "a");
+        hg_test_assert(a[0] == 'a');
+        hg_test_assert(a.capacity == 1);
+        hg_test_assert(a.length == 1);
+
+        HgString abc = abc.create(arena, "abc");
+        hg_test_assert(abc[0] == 'a');
+        hg_test_assert(abc[1] == 'b');
+        hg_test_assert(abc[2] == 'c');
+        hg_test_assert(abc.length == 3);
+        hg_test_assert(abc.capacity == 3);
+
+        a.append(arena, "bc");
+        hg_test_assert(a == abc);
+
+        HgString str = str.create(arena, 16);
+        hg_test_assert(str == HgString::create(arena, 0));
+
+        str.append(arena, "hello");
+        hg_test_assert(str == HgString::create(arena, "hello"));
+
+        str.append(arena, " there");
+        hg_test_assert(str == HgString::create(arena, "hello there"));
+
+        str.prepend(arena, "why ");
+        hg_test_assert(str == HgString::create(arena, "why hello there"));
+
+        str.insert(arena, 3, ",");
+        hg_test_assert(str == HgString::create(arena, "why, hello there"));
+    }
+
+    return true;
+}
+
+hg_test(hg_string_utils) {
+    hg_arena_scope(arena, hg_get_scratch());
+
+    hg_test_assert(hg_is_whitespace(' '));
+    hg_test_assert(hg_is_whitespace('\t'));
+    hg_test_assert(hg_is_whitespace('\n'));
+
+    hg_test_assert(hg_is_numeral_base10('0'));
+    hg_test_assert(hg_is_numeral_base10('1'));
+    hg_test_assert(hg_is_numeral_base10('2'));
+    hg_test_assert(hg_is_numeral_base10('3'));
+    hg_test_assert(hg_is_numeral_base10('4'));
+    hg_test_assert(hg_is_numeral_base10('5'));
+    hg_test_assert(hg_is_numeral_base10('5'));
+    hg_test_assert(hg_is_numeral_base10('6'));
+    hg_test_assert(hg_is_numeral_base10('7'));
+    hg_test_assert(hg_is_numeral_base10('8'));
+    hg_test_assert(hg_is_numeral_base10('9'));
+
+    hg_test_assert(!hg_is_numeral_base10('0' - 1));
+    hg_test_assert(!hg_is_numeral_base10('9' + 1));
+
+    hg_test_assert(!hg_is_numeral_base10('x'));
+    hg_test_assert(!hg_is_numeral_base10('a'));
+    hg_test_assert(!hg_is_numeral_base10('b'));
+    hg_test_assert(!hg_is_numeral_base10('c'));
+    hg_test_assert(!hg_is_numeral_base10('d'));
+    hg_test_assert(!hg_is_numeral_base10('e'));
+    hg_test_assert(!hg_is_numeral_base10('f'));
+    hg_test_assert(!hg_is_numeral_base10('X'));
+    hg_test_assert(!hg_is_numeral_base10('A'));
+    hg_test_assert(!hg_is_numeral_base10('B'));
+    hg_test_assert(!hg_is_numeral_base10('C'));
+    hg_test_assert(!hg_is_numeral_base10('D'));
+    hg_test_assert(!hg_is_numeral_base10('E'));
+    hg_test_assert(!hg_is_numeral_base10('F'));
+
+    hg_test_assert(!hg_is_numeral_base10('.'));
+    hg_test_assert(!hg_is_numeral_base10('+'));
+    hg_test_assert(!hg_is_numeral_base10('-'));
+    hg_test_assert(!hg_is_numeral_base10('*'));
+    hg_test_assert(!hg_is_numeral_base10('/'));
+    hg_test_assert(!hg_is_numeral_base10('='));
+    hg_test_assert(!hg_is_numeral_base10('#'));
+    hg_test_assert(!hg_is_numeral_base10('&'));
+    hg_test_assert(!hg_is_numeral_base10('^'));
+    hg_test_assert(!hg_is_numeral_base10('~'));
+
+    hg_test_assert(hg_is_integer_base10("0"));
+    hg_test_assert(hg_is_integer_base10("1"));
+    hg_test_assert(hg_is_integer_base10("2"));
+    hg_test_assert(hg_is_integer_base10("3"));
+    hg_test_assert(hg_is_integer_base10("4"));
+    hg_test_assert(hg_is_integer_base10("5"));
+    hg_test_assert(hg_is_integer_base10("6"));
+    hg_test_assert(hg_is_integer_base10("7"));
+    hg_test_assert(hg_is_integer_base10("8"));
+    hg_test_assert(hg_is_integer_base10("9"));
+    hg_test_assert(hg_is_integer_base10("10"));
+
+    hg_test_assert(hg_is_integer_base10("12"));
+    hg_test_assert(hg_is_integer_base10("42"));
+    hg_test_assert(hg_is_integer_base10("100"));
+    hg_test_assert(hg_is_integer_base10("123456789"));
+    hg_test_assert(hg_is_integer_base10("-12"));
+    hg_test_assert(hg_is_integer_base10("-42"));
+    hg_test_assert(hg_is_integer_base10("-100"));
+    hg_test_assert(hg_is_integer_base10("-123456789"));
+    hg_test_assert(hg_is_integer_base10("+12"));
+    hg_test_assert(hg_is_integer_base10("+42"));
+    hg_test_assert(hg_is_integer_base10("+100"));
+    hg_test_assert(hg_is_integer_base10("+123456789"));
+
+    hg_test_assert(!hg_is_integer_base10("hello"));
+    hg_test_assert(!hg_is_integer_base10("not a number"));
+    hg_test_assert(!hg_is_integer_base10("number"));
+    hg_test_assert(!hg_is_integer_base10("integer"));
+    hg_test_assert(!hg_is_integer_base10("0.0"));
+    hg_test_assert(!hg_is_integer_base10("1.0"));
+    hg_test_assert(!hg_is_integer_base10(".10"));
+    hg_test_assert(!hg_is_integer_base10("1e2"));
+    hg_test_assert(!hg_is_integer_base10("1f"));
+    hg_test_assert(!hg_is_integer_base10("0xff"));
+    hg_test_assert(!hg_is_integer_base10("--42"));
+    hg_test_assert(!hg_is_integer_base10("++42"));
+    hg_test_assert(!hg_is_integer_base10("42-"));
+    hg_test_assert(!hg_is_integer_base10("42+"));
+    hg_test_assert(!hg_is_integer_base10("4 2"));
+    hg_test_assert(!hg_is_integer_base10("4+2"));
+
+    hg_test_assert(hg_is_float_base10("0.0"));
+    hg_test_assert(hg_is_float_base10("1."));
+    hg_test_assert(hg_is_float_base10("2.0"));
+    hg_test_assert(hg_is_float_base10("3."));
+    hg_test_assert(hg_is_float_base10("4.0"));
+    hg_test_assert(hg_is_float_base10("5."));
+    hg_test_assert(hg_is_float_base10("6.0"));
+    hg_test_assert(hg_is_float_base10("7."));
+    hg_test_assert(hg_is_float_base10("8.0"));
+    hg_test_assert(hg_is_float_base10("9."));
+    hg_test_assert(hg_is_float_base10("10.0"));
+
+    hg_test_assert(hg_is_float_base10("0.0"));
+    hg_test_assert(hg_is_float_base10(".1"));
+    hg_test_assert(hg_is_float_base10("0.2"));
+    hg_test_assert(hg_is_float_base10(".3"));
+    hg_test_assert(hg_is_float_base10("0.4"));
+    hg_test_assert(hg_is_float_base10(".5"));
+    hg_test_assert(hg_is_float_base10("0.6"));
+    hg_test_assert(hg_is_float_base10(".7"));
+    hg_test_assert(hg_is_float_base10("0.8"));
+    hg_test_assert(hg_is_float_base10(".9"));
+    hg_test_assert(hg_is_float_base10("0.10"));
+
+    hg_test_assert(hg_is_float_base10("1.0"));
+    hg_test_assert(hg_is_float_base10("+10.f"));
+    hg_test_assert(hg_is_float_base10(".10"));
+    hg_test_assert(hg_is_float_base10("-999.999f"));
+    hg_test_assert(hg_is_float_base10("1e3"));
+    hg_test_assert(hg_is_float_base10("1e3"));
+    hg_test_assert(hg_is_float_base10("+1.e3f"));
+    hg_test_assert(hg_is_float_base10(".1e3"));
+
+    hg_test_assert(!hg_is_float_base10("hello"));
+    hg_test_assert(!hg_is_float_base10("not a number"));
+    hg_test_assert(!hg_is_float_base10("number"));
+    hg_test_assert(!hg_is_float_base10("float"));
+    hg_test_assert(!hg_is_float_base10("1.0ff"));
+    hg_test_assert(!hg_is_float_base10("0x1.0"));
+    hg_test_assert(!hg_is_float_base10("-0x1.0"));
+
+    hg_test_assert(hg_str_to_int_base10("0") == 0);
+    hg_test_assert(hg_str_to_int_base10("1") == 1);
+    hg_test_assert(hg_str_to_int_base10("2") == 2);
+    hg_test_assert(hg_str_to_int_base10("3") == 3);
+    hg_test_assert(hg_str_to_int_base10("4") == 4);
+    hg_test_assert(hg_str_to_int_base10("5") == 5);
+    hg_test_assert(hg_str_to_int_base10("6") == 6);
+    hg_test_assert(hg_str_to_int_base10("7") == 7);
+    hg_test_assert(hg_str_to_int_base10("8") == 8);
+    hg_test_assert(hg_str_to_int_base10("9") == 9);
+
+    hg_test_assert(hg_str_to_int_base10("0000000") == 0);
+    hg_test_assert(hg_str_to_int_base10("+0000001") == +1);
+    hg_test_assert(hg_str_to_int_base10("0000002") == 2);
+    hg_test_assert(hg_str_to_int_base10("-0000003") == -3);
+    hg_test_assert(hg_str_to_int_base10("0000004") == 4);
+    hg_test_assert(hg_str_to_int_base10("+0000005") == +5);
+    hg_test_assert(hg_str_to_int_base10("0000006") == 6);
+    hg_test_assert(hg_str_to_int_base10("-0000007") == -7);
+    hg_test_assert(hg_str_to_int_base10("0000008") == 8);
+    hg_test_assert(hg_str_to_int_base10("+0000009") == +9);
+
+    hg_test_assert(hg_str_to_int_base10("0000000") == 0);
+    hg_test_assert(hg_str_to_int_base10("1000000") == 1000000);
+    hg_test_assert(hg_str_to_int_base10("2000000") == 2000000);
+    hg_test_assert(hg_str_to_int_base10("3000000") == 3000000);
+    hg_test_assert(hg_str_to_int_base10("4000000") == 4000000);
+    hg_test_assert(hg_str_to_int_base10("5000000") == 5000000);
+    hg_test_assert(hg_str_to_int_base10("6000000") == 6000000);
+    hg_test_assert(hg_str_to_int_base10("7000000") == 7000000);
+    hg_test_assert(hg_str_to_int_base10("8000000") == 8000000);
+    hg_test_assert(hg_str_to_int_base10("9000000") == 9000000);
+    hg_test_assert(hg_str_to_int_base10("1234567890") == 1234567890);
+
+    hg_test_assert(hg_str_to_float_base10("0.0") == 0.0);
+    hg_test_assert(hg_str_to_float_base10("1.0f") == 1.0);
+    hg_test_assert(hg_str_to_float_base10("2.0") == 2.0);
+    hg_test_assert(hg_str_to_float_base10("3.0f") == 3.0);
+    hg_test_assert(hg_str_to_float_base10("4.0") == 4.0);
+    hg_test_assert(hg_str_to_float_base10("5.0f") == 5.0);
+    hg_test_assert(hg_str_to_float_base10("6.0") == 6.0);
+    hg_test_assert(hg_str_to_float_base10("7.0f") == 7.0);
+    hg_test_assert(hg_str_to_float_base10("8.0") == 8.0);
+    hg_test_assert(hg_str_to_float_base10("9.0f") == 9.0);
+
+    hg_test_assert(hg_str_to_float_base10("0e1") == 0.0);
+    hg_test_assert(hg_str_to_float_base10("1e2f") == 1e2);
+    hg_test_assert(hg_str_to_float_base10("2e3") == 2e3);
+    hg_test_assert(hg_str_to_float_base10("3e4f") == 3e4);
+    hg_test_assert(hg_str_to_float_base10("4e5") == 4e5);
+    hg_test_assert(hg_str_to_float_base10("5e6f") == 5e6);
+    hg_test_assert(hg_str_to_float_base10("6e7") == 6e7);
+    hg_test_assert(hg_str_to_float_base10("7e8f") == 7e8);
+    hg_test_assert(hg_str_to_float_base10("8e9") == 8e9);
+    hg_test_assert(hg_str_to_float_base10("9e10f") == 9e10);
+
+    hg_test_assert(hg_str_to_float_base10("0e1") == 0.0);
+    hg_test_assert(hg_str_to_float_base10("1e2f") == 1e2);
+    hg_test_assert(hg_str_to_float_base10("2e3") == 2e3);
+    hg_test_assert(hg_str_to_float_base10("3e4f") == 3e4);
+    hg_test_assert(hg_str_to_float_base10("4e5") == 4e5);
+    hg_test_assert(hg_str_to_float_base10("5e6f") == 5e6);
+    hg_test_assert(hg_str_to_float_base10("6e7") == 6e7);
+    hg_test_assert(hg_str_to_float_base10("7e8f") == 7e8);
+    hg_test_assert(hg_str_to_float_base10("8e9") == 8e9);
+    hg_test_assert(hg_str_to_float_base10("9e10f") == 9e10);
+
+    hg_test_assert(hg_str_to_float_base10(".1") == .1);
+    hg_test_assert(hg_str_to_float_base10("+.1") == +.1);
+    hg_test_assert(hg_str_to_float_base10("-.1") == -.1);
+    hg_test_assert(hg_str_to_float_base10("+.1e5") == +.1e5);
+
+    hg_test_assert(hg_int_to_str_base10(arena, 0) == "0");
+    hg_test_assert(hg_int_to_str_base10(arena, -1) == "-1");
+    hg_test_assert(hg_int_to_str_base10(arena, 2) == "2");
+    hg_test_assert(hg_int_to_str_base10(arena, -3) == "-3");
+    hg_test_assert(hg_int_to_str_base10(arena, 4) == "4");
+    hg_test_assert(hg_int_to_str_base10(arena, -5) == "-5");
+    hg_test_assert(hg_int_to_str_base10(arena, 6) == "6");
+    hg_test_assert(hg_int_to_str_base10(arena, -7) == "-7");
+    hg_test_assert(hg_int_to_str_base10(arena, 8) == "8");
+    hg_test_assert(hg_int_to_str_base10(arena, -9) == "-9");
+
+    hg_test_assert(hg_int_to_str_base10(arena, 0000000) == "0");
+    hg_test_assert(hg_int_to_str_base10(arena, -1000000) == "-1000000");
+    hg_test_assert(hg_int_to_str_base10(arena, 2000000) == "2000000");
+    hg_test_assert(hg_int_to_str_base10(arena, -3000000) == "-3000000");
+    hg_test_assert(hg_int_to_str_base10(arena, 4000000) == "4000000");
+    hg_test_assert(hg_int_to_str_base10(arena, -5000000) == "-5000000");
+    hg_test_assert(hg_int_to_str_base10(arena, 6000000) == "6000000");
+    hg_test_assert(hg_int_to_str_base10(arena, -7000000) == "-7000000");
+    hg_test_assert(hg_int_to_str_base10(arena, 8000000) == "8000000");
+    hg_test_assert(hg_int_to_str_base10(arena, -9000000) == "-9000000");
+    hg_test_assert(hg_int_to_str_base10(arena, 1234567890) == "1234567890");
+
+    hg_test_assert(hg_float_to_str_base10(arena, 0.0, 10) == "0.0");
+    hg_test_assert(hg_float_to_str_base10(arena, -1.0f, 1) == "-1.0");
+    hg_test_assert(hg_float_to_str_base10(arena, 2.0, 2) == "2.00");
+    hg_test_assert(hg_float_to_str_base10(arena, -3.0f, 3) == "-3.000");
+    hg_test_assert(hg_float_to_str_base10(arena, 4.0, 4) == "4.0000");
+    hg_test_assert(hg_float_to_str_base10(arena, -5.0f, 5) == "-5.00000");
+    hg_test_assert(hg_float_to_str_base10(arena, 6.0, 6) == "6.000000");
+    hg_test_assert(hg_float_to_str_base10(arena, -7.0f, 7) == "-7.0000000");
+    hg_test_assert(hg_float_to_str_base10(arena, 8.0, 8) == "8.00000000");
+    hg_test_assert(hg_float_to_str_base10(arena, -9.0f, 9) == "-9.000000000");
+
+    hg_test_assert(hg_float_to_str_base10(arena, 0e0, 1) == "0.0");
+    hg_test_assert(hg_float_to_str_base10(arena, -1e1f, 0) == "-10.");
+    hg_test_assert(hg_float_to_str_base10(arena, 2e2, 1) == "200.0");
+    hg_test_assert(hg_float_to_str_base10(arena, -3e3f, 0) == "-3000.");
+    hg_test_assert(hg_float_to_str_base10(arena, 4e4, 1) == "40000.0");
+    hg_test_assert(hg_float_to_str_base10(arena, -5e5f, 0) == "-500000.");
+    hg_test_assert(hg_float_to_str_base10(arena, 6e6, 1) == "6000000.0");
+    hg_test_assert(hg_float_to_str_base10(arena, -7e7f, 0) == "-70000000.");
+    hg_test_assert(hg_float_to_str_base10(arena, 8e8, 1) == "800000000.0");
+    hg_test_assert(hg_float_to_str_base10(arena, -9e9f, 0) == "-8999999488.");
+
+    hg_test_assert(hg_float_to_str_base10(arena, -0e-0, 3) == "0.0");
+    hg_test_assert(hg_float_to_str_base10(arena, 1e-1f, 3) == "0.100");
+    hg_test_assert(hg_float_to_str_base10(arena, -2e-2, 3) == "-0.020");
+    hg_test_assert(hg_float_to_str_base10(arena, 3e-3f, 3) == "0.003");
+    hg_test_assert(hg_float_to_str_base10(arena, -4e-0, 3) == "-4.000");
+    hg_test_assert(hg_float_to_str_base10(arena, 5e-1f, 3) == "0.500");
+    hg_test_assert(hg_float_to_str_base10(arena, -6e-2, 3) == "-0.060");
+    hg_test_assert(hg_float_to_str_base10(arena, 7e-3f, 3) == "0.007");
+    hg_test_assert(hg_float_to_str_base10(arena, -8e-0, 3) == "-8.000");
+    hg_test_assert(hg_float_to_str_base10(arena, 9e-1f, 3) == "0.899");
+
+    return true;
+}
+
+hg_test(HgJson) {
+    {
+        hg_arena_scope(arena, hg_get_scratch());
+
+        HgStringView file = R"(
+        )";
+
+        HgJson json = json.parse(arena, file);
+
+        hg_test_assert(json.errors == nullptr);
+        hg_test_assert(json.first == nullptr);
+    }
+
+    {
+        hg_arena_scope(arena, hg_get_scratch());
+
+        HgStringView file = R"(
+            {
+            }
+        )";
+
+        HgJson json = json.parse(arena, file);
+
+        hg_test_assert(json.errors == nullptr);
+        hg_test_assert(json.first != nullptr);
+
+        HgJson::Node* node = json.first;
+        hg_test_assert(node->type == HgJson::jstruct);
+        hg_test_assert(node->jstruct.fields == nullptr);
+    }
+
+    {
+        hg_arena_scope(arena, hg_get_scratch());
+
+        HgStringView file = R"(
+            {
+                1234
+            }
+        )";
+
+        HgJson json = json.parse(arena, file);
+
+        hg_test_assert(json.errors != nullptr);
+        hg_test_assert(json.first != nullptr);
+
+        HgJson::Error* error = json.errors;
+        hg_test_assert(error->next == nullptr);
+        hg_test_assert(error->message == "on line 4, struct has a literal instead of a field\n");
+
+        HgJson::Node* node = json.first;
+        hg_test_assert(node->type == HgJson::jstruct);
+        hg_test_assert(node->jstruct.fields == nullptr);
+    }
+
+    {
+        hg_arena_scope(arena, hg_get_scratch());
+
+        HgStringView file = R"(
+            {
+                "asdf"
+            }
+        )";
+
+        HgJson json = json.parse(arena, file);
+
+        hg_test_assert(json.errors != nullptr);
+        hg_test_assert(json.first != nullptr);
+
+        HgJson::Error* error = json.errors;
+        hg_test_assert(error->next == nullptr);
+        hg_test_assert(error->message == "on line 4, struct has a literal instead of a field\n");
+
+        HgJson::Node* node = json.first;
+        hg_test_assert(node->type == HgJson::jstruct);
+        hg_test_assert(node->jstruct.fields == nullptr);
+    }
+
+    {
+        hg_arena_scope(arena, hg_get_scratch());
+
+        HgStringView file = R"(
+            {
+                "asdf":
+            }
+        )";
+
+        HgJson json = json.parse(arena, file);
+
+        hg_test_assert(json.errors != nullptr);
+        hg_test_assert(json.first != nullptr);
+
+        HgJson::Error* error = json.errors;
+        hg_test_assert(error->next != nullptr);
+        hg_test_assert(error->message == "on line 4, struct has a field named \"asdf\" which has no value\n");
+        error = error->next;
+        hg_test_assert(error->next == nullptr);
+        hg_test_assert(error->message == "on line 4, found unexpected token \"}\"\n");
+
+        HgJson::Node* node = json.first;
+        hg_test_assert(node->type == HgJson::jstruct);
+        hg_test_assert(node->jstruct.fields == nullptr);
+    }
+
+    {
+        hg_arena_scope(arena, hg_get_scratch());
+
+        HgStringView file = R"(
+            {
+                "asdf": true
+            }
+        )";
+
+        HgJson json = json.parse(arena, file);
+
+        hg_test_assert(json.errors == nullptr);
+        hg_test_assert(json.first != nullptr);
+
+        HgJson::Node* node = json.first;
+        hg_test_assert(node->type == HgJson::jstruct);
+        hg_test_assert(node->jstruct.fields != nullptr);
+
+        HgJson::Field* field = node->jstruct.fields;
+        hg_test_assert(field->next == nullptr);
+        hg_test_assert(field->name == "asdf");
+        hg_test_assert(field->value != nullptr);
+        hg_test_assert(field->value->type == HgJson::boolean);
+        hg_test_assert(field->value->boolean == true);
+    }
+
+    {
+        hg_arena_scope(arena, hg_get_scratch());
+
+        HgStringView file = R"(
+            {
+                "asdf": false
+            }
+        )";
+
+        HgJson json = json.parse(arena, file);
+
+        hg_test_assert(json.errors == nullptr);
+        hg_test_assert(json.first != nullptr);
+
+        HgJson::Node* node = json.first;
+        hg_test_assert(node->type == HgJson::jstruct);
+        hg_test_assert(node->jstruct.fields != nullptr);
+
+        HgJson::Field* field = node->jstruct.fields;
+        hg_test_assert(field->next == nullptr);
+        hg_test_assert(field->name == "asdf");
+        hg_test_assert(field->value != nullptr);
+        hg_test_assert(field->value->type == HgJson::boolean);
+        hg_test_assert(field->value->boolean == false);
+    }
+
+    {
+        hg_arena_scope(arena, hg_get_scratch());
+
+        HgStringView file = R"(
+            {
+                "asdf": asdf
+            }
+        )";
+
+        HgJson json = json.parse(arena, file);
+
+        hg_test_assert(json.errors != nullptr);
+        hg_test_assert(json.first != nullptr);
+
+        HgJson::Error* error = json.errors;
+        hg_test_assert(error->next != nullptr);
+        hg_test_assert(error->message == "on line 4, struct has a field named \"asdf\" which has no value\n");
+        error = error->next;
+        hg_test_assert(error->next == nullptr);
+        hg_test_assert(error->message == "on line 3, found unexpected token \"asdf\"\n");
+
+        HgJson::Node* node = json.first;
+        hg_test_assert(node->type == HgJson::jstruct);
+        hg_test_assert(node->jstruct.fields == nullptr);
+    }
+
+    {
+        hg_arena_scope(arena, hg_get_scratch());
+
+        HgStringView file = R"(
+            {
+                "asdf": "asdf"
+            }
+        )";
+
+        HgJson json = json.parse(arena, file);
+
+        hg_test_assert(json.errors == nullptr);
+        hg_test_assert(json.first != nullptr);
+
+        HgJson::Node* node = json.first;
+        hg_test_assert(node->type == HgJson::jstruct);
+        hg_test_assert(node->jstruct.fields != nullptr);
+
+        HgJson::Field* field = node->jstruct.fields;
+        hg_test_assert(field->next == nullptr);
+        hg_test_assert(field->name == "asdf");
+        hg_test_assert(field->value != nullptr);
+        hg_test_assert(field->value->type == HgJson::string);
+        hg_test_assert(field->value->string == "asdf");
+    }
+
+    {
+        hg_arena_scope(arena, hg_get_scratch());
+
+        HgStringView file = R"(
+            {
+                "asdf": 1234
+            }
+        )";
+
+        HgJson json = json.parse(arena, file);
+
+        hg_test_assert(json.errors == nullptr);
+        hg_test_assert(json.first != nullptr);
+
+        HgJson::Node* node = json.first;
+        hg_test_assert(node->type == HgJson::jstruct);
+        hg_test_assert(node->jstruct.fields != nullptr);
+
+        HgJson::Field* field = node->jstruct.fields;
+        hg_test_assert(field->next == nullptr);
+        hg_test_assert(field->name == "asdf");
+        hg_test_assert(field->value != nullptr);
+        hg_test_assert(field->value->type == HgJson::integer);
+        hg_test_assert(field->value->integer == 1234);
+    }
+
+    {
+        hg_arena_scope(arena, hg_get_scratch());
+
+        HgStringView file = R"(
+            {
+                "asdf": 1234.0
+            }
+        )";
+
+        HgJson json = json.parse(arena, file);
+
+        hg_test_assert(json.errors == nullptr);
+        hg_test_assert(json.first != nullptr);
+
+        HgJson::Node* node = json.first;
+        hg_test_assert(node->type == HgJson::jstruct);
+        hg_test_assert(node->jstruct.fields != nullptr);
+
+        HgJson::Field* field = node->jstruct.fields;
+        hg_test_assert(field->next == nullptr);
+        hg_test_assert(field->name == "asdf");
+        hg_test_assert(field->value != nullptr);
+        hg_test_assert(field->value->type == HgJson::floating);
+        hg_test_assert(field->value->floating == 1234.0);
+    }
+
+    {
+        hg_arena_scope(arena, hg_get_scratch());
+
+        HgStringView file = R"(
+            {
+                "asdf": 1234.0,
+                "hjkl": 5678.0
+            }
+        )";
+
+        HgJson json = json.parse(arena, file);
+
+        hg_test_assert(json.errors == nullptr);
+        hg_test_assert(json.first != nullptr);
+
+        HgJson::Node* node = json.first;
+        hg_test_assert(node->type == HgJson::jstruct);
+        hg_test_assert(node->jstruct.fields != nullptr);
+
+        HgJson::Field* field = node->jstruct.fields;
+        hg_test_assert(field->next != nullptr);
+        hg_test_assert(field->name == "asdf");
+        hg_test_assert(field->value != nullptr);
+        hg_test_assert(field->value->type == HgJson::floating);
+        hg_test_assert(field->value->floating == 1234.0);
+
+        field = field->next;
+        hg_test_assert(field->next == nullptr);
+        hg_test_assert(field->name == "hjkl");
+        hg_test_assert(field->value != nullptr);
+        hg_test_assert(field->value->type == HgJson::floating);
+        hg_test_assert(field->value->floating == 5678.0);
+    }
+
+    {
+        hg_arena_scope(arena, hg_get_scratch());
+
+        HgStringView file = R"(
+            {
+                "asdf": [1, 2, 3, 4]
+            }
+        )";
+
+        HgJson json = json.parse(arena, file);
+
+        for (auto e = json.errors; e != nullptr; e = e->next) {
+            hg_info("e: %s", HgString::create(arena, e->message).append(arena, 0).chars);
+        }
+        hg_test_assert(json.errors == nullptr);
+        hg_test_assert(json.first != nullptr);
+
+        HgJson::Node* node = json.first;
+        hg_test_assert(node->type == HgJson::jstruct);
+        hg_test_assert(node->jstruct.fields != nullptr);
+
+        HgJson::Field* field = node->jstruct.fields;
+        hg_test_assert(field->next == nullptr);
+        hg_test_assert(field->name == "asdf");
+        hg_test_assert(field->value != nullptr);
+        hg_test_assert(field->value->type == HgJson::array);
+        hg_test_assert(field->value->array.elems != nullptr);
+
+        HgJson::Elem* elem = field->value->array.elems;
+        hg_test_assert(elem->next != nullptr);
+        hg_test_assert(elem->value != nullptr);
+        hg_test_assert(elem->value->type == HgJson::integer);
+        hg_test_assert(elem->value->integer == 1);
+
+        elem = elem->next;
+        hg_test_assert(elem->next != nullptr);
+        hg_test_assert(elem->value != nullptr);
+        hg_test_assert(elem->value->type == HgJson::integer);
+        hg_test_assert(elem->value->integer == 2);
+
+        elem = elem->next;
+        hg_test_assert(elem->next != nullptr);
+        hg_test_assert(elem->value != nullptr);
+        hg_test_assert(elem->value->type == HgJson::integer);
+        hg_test_assert(elem->value->integer == 3);
+
+        elem = elem->next;
+        hg_test_assert(elem->next == nullptr);
+        hg_test_assert(elem->value != nullptr);
+        hg_test_assert(elem->value->type == HgJson::integer);
+        hg_test_assert(elem->value->integer == 4);
+    }
+
+    {
+        hg_arena_scope(arena, hg_get_scratch());
+
+        HgStringView file = R"(
+            {
+                "asdf": [1 2 3 4]
+            }
+        )";
+
+        HgJson json = json.parse(arena, file);
+
+        hg_test_assert(json.errors == nullptr);
+        hg_test_assert(json.first != nullptr);
+
+        HgJson::Node* node = json.first;
+        hg_test_assert(node->type == HgJson::jstruct);
+        hg_test_assert(node->jstruct.fields != nullptr);
+
+        HgJson::Field* field = node->jstruct.fields;
+        hg_test_assert(field->next == nullptr);
+        hg_test_assert(field->name == "asdf");
+        hg_test_assert(field->value != nullptr);
+        hg_test_assert(field->value->type == HgJson::array);
+        hg_test_assert(field->value->array.elems != nullptr);
+
+        HgJson::Elem* elem = node->field.value->array.elems;
+        hg_test_assert(elem->next != nullptr);
+        hg_test_assert(elem->value != nullptr);
+        hg_test_assert(elem->value->type == HgJson::integer);
+        hg_test_assert(elem->value->integer == 1);
+
+        elem = elem->next;
+        hg_test_assert(elem->next != nullptr);
+        hg_test_assert(elem->value != nullptr);
+        hg_test_assert(elem->value->type == HgJson::integer);
+        hg_test_assert(elem->value->integer == 2);
+
+        elem = elem->next;
+        hg_test_assert(elem->next != nullptr);
+        hg_test_assert(elem->value != nullptr);
+        hg_test_assert(elem->value->type == HgJson::integer);
+        hg_test_assert(elem->value->integer == 3);
+
+        elem = elem->next;
+        hg_test_assert(elem->next == nullptr);
+        hg_test_assert(elem->value != nullptr);
+        hg_test_assert(elem->value->type == HgJson::integer);
+        hg_test_assert(elem->value->integer == 4);
+    }
+
+    {
+        hg_arena_scope(arena, hg_get_scratch());
+
+        HgStringView file = R"(
+            {
+                "asdf": [1, 2, "3", 4]
+            }
+        )";
+
+        HgJson json = json.parse(arena, file);
+
+        hg_test_assert(json.errors != nullptr);
+        hg_test_assert(json.first != nullptr);
+
+        HgJson::Error* error = json.errors;
+        hg_test_assert(error->next == nullptr);
+        hg_test_assert(error->message ==
+            "on line 3, array has element which is not the same type as the first valid element\n");
+
+        HgJson::Node* node = json.first;
+        hg_test_assert(node->type == HgJson::jstruct);
+        hg_test_assert(node->jstruct.fields != nullptr);
+
+        HgJson::Field* field = node->jstruct.fields;
+        hg_test_assert(field->next == nullptr);
+        hg_test_assert(field->name == "asdf");
+        hg_test_assert(field->value != nullptr);
+        hg_test_assert(field->value->type == HgJson::array);
+        hg_test_assert(field->value->array.elems != nullptr);
+
+        HgJson::Elem* elem = node->field.value->array.elems;
+        hg_test_assert(elem->next != nullptr);
+        hg_test_assert(elem->value != nullptr);
+        hg_test_assert(elem->value->type == HgJson::integer);
+        hg_test_assert(elem->value->integer == 1);
+
+        elem = elem->next;
+        hg_test_assert(elem->next != nullptr);
+        hg_test_assert(elem->value != nullptr);
+        hg_test_assert(elem->value->type == HgJson::integer);
+        hg_test_assert(elem->value->integer == 2);
+
+        elem = elem->next;
+        hg_test_assert(elem->next == nullptr);
+        hg_test_assert(elem->value != nullptr);
+        hg_test_assert(elem->value->type == HgJson::integer);
+        hg_test_assert(elem->value->integer == 4);
+    }
+
+    {
+        hg_arena_scope(arena, hg_get_scratch());
+
+        HgStringView file = R"(
+            {
+                "asdf": {
+                    "a": 1,
+                    "s": 2.0,
+                    "d": 3,
+                    "f": 4.0,
+                }
+            }
+        )";
+
+        HgJson json = json.parse(arena, file);
+
+        hg_test_assert(json.errors == nullptr);
+        hg_test_assert(json.first != nullptr);
+
+        HgJson::Node* node = json.first;
+        hg_test_assert(node->type == HgJson::jstruct);
+        hg_test_assert(node->jstruct.fields != nullptr);
+
+        HgJson::Field* field = node->jstruct.fields;
+        hg_test_assert(field->next == nullptr);
+        hg_test_assert(field->name == "asdf");
+        hg_test_assert(field->value != nullptr);
+        hg_test_assert(field->value->type == HgJson::jstruct);
+        hg_test_assert(field->value->array.elems != nullptr);
+
+        HgJson::Field* sub_field = node->field.value->jstruct.fields;
+        hg_test_assert(sub_field->next != nullptr);
+        hg_test_assert(sub_field->name == "a");
+        hg_test_assert(sub_field->value != nullptr);
+        hg_test_assert(sub_field->value->type == HgJson::integer);
+        hg_test_assert(sub_field->value->integer == 1);
+
+        sub_field = sub_field->next;
+        hg_test_assert(sub_field->next != nullptr);
+        hg_test_assert(sub_field->name == "s");
+        hg_test_assert(sub_field->value != nullptr);
+        hg_test_assert(sub_field->value->type == HgJson::floating);
+        hg_test_assert(sub_field->value->floating == 2.0);
+
+        sub_field = sub_field->next;
+        hg_test_assert(sub_field->next != nullptr);
+        hg_test_assert(sub_field->name == "d");
+        hg_test_assert(sub_field->value != nullptr);
+        hg_test_assert(sub_field->value->type == HgJson::integer);
+        hg_test_assert(sub_field->value->integer == 3);
+
+        sub_field = sub_field->next;
+        hg_test_assert(sub_field->next == nullptr);
+        hg_test_assert(sub_field->name == "f");
+        hg_test_assert(sub_field->value != nullptr);
+        hg_test_assert(sub_field->value->type == HgJson::floating);
+        hg_test_assert(sub_field->value->floating == 4.0);
+    }
+
+    {
+        hg_arena_scope(arena, hg_get_scratch());
+
+        HgStringView file = R"(
+            {
+                "player": {
+                    "transform": {
+                        "position": [1.0, 0.0, -1.0],
+                        "scale": [1.0, 1.0, 1.0],
+                        "rotation": [1.0, 0.0, 0.0, 0.0]
+                    },
+                    "sprite": {
+                        "texture": "tex.png",
+                        "uv_pos": [0.0, 0.0],
+                        "uv_size": [1.0, 1.0]
+                    }
+                }
+            }
+        )";
+
+        HgJson json = json.parse(arena, file);
+
+        hg_test_assert(json.errors == nullptr);
+        hg_test_assert(json.first != nullptr);
+
+        HgJson::Node* main_struct = json.first;
+        hg_test_assert(main_struct->type == HgJson::jstruct);
+        hg_test_assert(main_struct->jstruct.fields != nullptr);
+
+        HgJson::Field* player = main_struct->jstruct.fields;
+        hg_test_assert(player->next == nullptr);
+        hg_test_assert(player->name == "player");
+        hg_test_assert(player->value != nullptr);
+        hg_test_assert(player->value->type == HgJson::jstruct);
+        hg_test_assert(player->value->jstruct.fields != nullptr);
+
+        HgJson::Field* component = player->value->jstruct.fields;
+        hg_test_assert(component->next != nullptr);
+        hg_test_assert(component->name == "transform");
+        hg_test_assert(component->value != nullptr);
+        hg_test_assert(component->value->type == HgJson::jstruct);
+        hg_test_assert(component->value->jstruct.fields != nullptr);
+
+        HgJson::Field* field = component->value->jstruct.fields;
+        hg_test_assert(field->next != nullptr);
+        hg_test_assert(field->name == "position");
+        hg_test_assert(field->value != nullptr);
+        hg_test_assert(field->value->type == HgJson::array);
+        hg_test_assert(field->value->array.elems != nullptr);
+
+        HgJson::Elem* elem = field->value->array.elems;
+        hg_test_assert(elem->next != nullptr);
+        hg_test_assert(elem->value != nullptr);
+        hg_test_assert(elem->value->type == HgJson::floating);
+        hg_test_assert(elem->value->floating == 1.0);
+
+        elem = elem->next;
+        hg_test_assert(elem->next != nullptr);
+        hg_test_assert(elem->value != nullptr);
+        hg_test_assert(elem->value->type == HgJson::floating);
+        hg_test_assert(elem->value->floating == 0.0);
+
+        elem = elem->next;
+        hg_test_assert(elem->next == nullptr);
+        hg_test_assert(elem->value != nullptr);
+        hg_test_assert(elem->value->type == HgJson::floating);
+        hg_test_assert(elem->value->floating == -1.0);
+
+        field = field->next;
+        hg_test_assert(field->next != nullptr);
+        hg_test_assert(field->name == "scale");
+        hg_test_assert(field->value != nullptr);
+        hg_test_assert(field->value->type == HgJson::array);
+        hg_test_assert(field->value->array.elems != nullptr);
+
+        elem = field->value->array.elems;
+        hg_test_assert(elem->next != nullptr);
+        hg_test_assert(elem->value != nullptr);
+        hg_test_assert(elem->value->type == HgJson::floating);
+        hg_test_assert(elem->value->floating == 1.0);
+
+        elem = elem->next;
+        hg_test_assert(elem->next != nullptr);
+        hg_test_assert(elem->value != nullptr);
+        hg_test_assert(elem->value->type == HgJson::floating);
+        hg_test_assert(elem->value->floating == 1.0);
+
+        elem = elem->next;
+        hg_test_assert(elem->next == nullptr);
+        hg_test_assert(elem->value != nullptr);
+        hg_test_assert(elem->value->type == HgJson::floating);
+        hg_test_assert(elem->value->floating == 1.0);
+
+        field = field->next;
+        hg_test_assert(field->next == nullptr);
+        hg_test_assert(field->name == "rotation");
+        hg_test_assert(field->value != nullptr);
+        hg_test_assert(field->value->type == HgJson::array);
+        hg_test_assert(field->value->array.elems != nullptr);
+
+        elem = field->value->array.elems;
+        hg_test_assert(elem->next != nullptr);
+        hg_test_assert(elem->value != nullptr);
+        hg_test_assert(elem->value->type == HgJson::floating);
+        hg_test_assert(elem->value->floating == 1.0);
+
+        elem = elem->next;
+        hg_test_assert(elem->next != nullptr);
+        hg_test_assert(elem->value != nullptr);
+        hg_test_assert(elem->value->type == HgJson::floating);
+        hg_test_assert(elem->value->floating == 0.0);
+
+        elem = elem->next;
+        hg_test_assert(elem->next != nullptr);
+        hg_test_assert(elem->value != nullptr);
+        hg_test_assert(elem->value->type == HgJson::floating);
+        hg_test_assert(elem->value->floating == 0.0);
+
+        elem = elem->next;
+        hg_test_assert(elem->next == nullptr);
+        hg_test_assert(elem->value != nullptr);
+        hg_test_assert(elem->value->type == HgJson::floating);
+        hg_test_assert(elem->value->floating == 0.0);
+
+        component = component->next;
+        hg_test_assert(component->next == nullptr);
+        hg_test_assert(component->name == "sprite");
+        hg_test_assert(component->value != nullptr);
+        hg_test_assert(component->value->type == HgJson::jstruct);
+        hg_test_assert(component->value->jstruct.fields != nullptr);
+
+        field = component->value->jstruct.fields;
+        hg_test_assert(field->next != nullptr);
+        hg_test_assert(field->name == "texture");
+        hg_test_assert(field->value != nullptr);
+        hg_test_assert(field->value->type == HgJson::string);
+        hg_test_assert(field->value->string == "tex.png");
+
+        field = field->next;
+        hg_test_assert(field->next != nullptr);
+        hg_test_assert(field->name == "uv_pos");
+        hg_test_assert(field->value != nullptr);
+        hg_test_assert(field->value->type == HgJson::array);
+        hg_test_assert(field->value->array.elems != nullptr);
+
+        elem = field->value->array.elems;
+        hg_test_assert(elem->next != nullptr);
+        hg_test_assert(elem->value != nullptr);
+        hg_test_assert(elem->value->type == HgJson::floating);
+        hg_test_assert(elem->value->floating == 0.0);
+
+        elem = elem->next;
+        hg_test_assert(elem->next == nullptr);
+        hg_test_assert(elem->value != nullptr);
+        hg_test_assert(elem->value->type == HgJson::floating);
+        hg_test_assert(elem->value->floating == 0.0);
+
+        field = field->next;
+        hg_test_assert(field->next == nullptr);
+        hg_test_assert(field->name == "uv_size");
+        hg_test_assert(field->value != nullptr);
+        hg_test_assert(field->value->type == HgJson::array);
+        hg_test_assert(field->value->array.elems != nullptr);
+
+        elem = field->value->array.elems;
+        hg_test_assert(elem->next != nullptr);
+        hg_test_assert(elem->value != nullptr);
+        hg_test_assert(elem->value->type == HgJson::floating);
+        hg_test_assert(elem->value->floating == 1.0);
+
+        elem = elem->next;
+        hg_test_assert(elem->next == nullptr);
+        hg_test_assert(elem->value != nullptr);
+        hg_test_assert(elem->value->type == HgJson::floating);
+        hg_test_assert(elem->value->floating == 1.0);
+    }
+
+    return true;
+}
+
 hg_test(HgArrayAny) {
     hg_arena_scope(arena, hg_get_scratch());
 
@@ -876,1029 +1860,6 @@ hg_test(HgHashSet) {
         hg_test_assert(!map.has("b"));
         hg_test_assert(!map.has("ab"));
         hg_test_assert(!map.has("supercalifragilisticexpialidocious"));
-    }
-
-    return true;
-}
-
-hg_test(HgString) {
-    {
-        hg_arena_scope(arena, hg_get_scratch());
-
-        HgString a = a.create(arena, "a");
-        hg_test_assert(a[0] == 'a');
-        hg_test_assert(a.capacity == 1);
-        hg_test_assert(a.length == 1);
-
-        HgString abc = abc.create(arena, "abc");
-        hg_test_assert(abc[0] == 'a');
-        hg_test_assert(abc[1] == 'b');
-        hg_test_assert(abc[2] == 'c');
-        hg_test_assert(abc.length == 3);
-        hg_test_assert(abc.capacity == 3);
-
-        a.append(arena, "bc");
-        hg_test_assert(a == abc);
-
-        HgString str = str.create(arena, 16);
-        hg_test_assert(str == HgString::create(arena, 0));
-
-        str.append(arena, "hello");
-        hg_test_assert(str == HgString::create(arena, "hello"));
-
-        str.append(arena, " there");
-        hg_test_assert(str == HgString::create(arena, "hello there"));
-
-        str.prepend(arena, "why ");
-        hg_test_assert(str == HgString::create(arena, "why hello there"));
-
-        str.insert(arena, 3, ",");
-        hg_test_assert(str == HgString::create(arena, "why, hello there"));
-    }
-
-    return true;
-}
-
-hg_test(hg_string_utils) {
-    hg_arena_scope(arena, hg_get_scratch());
-
-    hg_test_assert(hg_is_whitespace(' '));
-    hg_test_assert(hg_is_whitespace('\t'));
-    hg_test_assert(hg_is_whitespace('\n'));
-
-    hg_test_assert(hg_is_numeral_base10('0'));
-    hg_test_assert(hg_is_numeral_base10('1'));
-    hg_test_assert(hg_is_numeral_base10('2'));
-    hg_test_assert(hg_is_numeral_base10('3'));
-    hg_test_assert(hg_is_numeral_base10('4'));
-    hg_test_assert(hg_is_numeral_base10('5'));
-    hg_test_assert(hg_is_numeral_base10('5'));
-    hg_test_assert(hg_is_numeral_base10('6'));
-    hg_test_assert(hg_is_numeral_base10('7'));
-    hg_test_assert(hg_is_numeral_base10('8'));
-    hg_test_assert(hg_is_numeral_base10('9'));
-
-    hg_test_assert(!hg_is_numeral_base10('0' - 1));
-    hg_test_assert(!hg_is_numeral_base10('9' + 1));
-
-    hg_test_assert(!hg_is_numeral_base10('x'));
-    hg_test_assert(!hg_is_numeral_base10('a'));
-    hg_test_assert(!hg_is_numeral_base10('b'));
-    hg_test_assert(!hg_is_numeral_base10('c'));
-    hg_test_assert(!hg_is_numeral_base10('d'));
-    hg_test_assert(!hg_is_numeral_base10('e'));
-    hg_test_assert(!hg_is_numeral_base10('f'));
-    hg_test_assert(!hg_is_numeral_base10('X'));
-    hg_test_assert(!hg_is_numeral_base10('A'));
-    hg_test_assert(!hg_is_numeral_base10('B'));
-    hg_test_assert(!hg_is_numeral_base10('C'));
-    hg_test_assert(!hg_is_numeral_base10('D'));
-    hg_test_assert(!hg_is_numeral_base10('E'));
-    hg_test_assert(!hg_is_numeral_base10('F'));
-
-    hg_test_assert(!hg_is_numeral_base10('.'));
-    hg_test_assert(!hg_is_numeral_base10('+'));
-    hg_test_assert(!hg_is_numeral_base10('-'));
-    hg_test_assert(!hg_is_numeral_base10('*'));
-    hg_test_assert(!hg_is_numeral_base10('/'));
-    hg_test_assert(!hg_is_numeral_base10('='));
-    hg_test_assert(!hg_is_numeral_base10('#'));
-    hg_test_assert(!hg_is_numeral_base10('&'));
-    hg_test_assert(!hg_is_numeral_base10('^'));
-    hg_test_assert(!hg_is_numeral_base10('~'));
-
-    hg_test_assert(hg_is_integer_base10("0"));
-    hg_test_assert(hg_is_integer_base10("1"));
-    hg_test_assert(hg_is_integer_base10("2"));
-    hg_test_assert(hg_is_integer_base10("3"));
-    hg_test_assert(hg_is_integer_base10("4"));
-    hg_test_assert(hg_is_integer_base10("5"));
-    hg_test_assert(hg_is_integer_base10("6"));
-    hg_test_assert(hg_is_integer_base10("7"));
-    hg_test_assert(hg_is_integer_base10("8"));
-    hg_test_assert(hg_is_integer_base10("9"));
-    hg_test_assert(hg_is_integer_base10("10"));
-
-    hg_test_assert(hg_is_integer_base10("12"));
-    hg_test_assert(hg_is_integer_base10("42"));
-    hg_test_assert(hg_is_integer_base10("100"));
-    hg_test_assert(hg_is_integer_base10("123456789"));
-    hg_test_assert(hg_is_integer_base10("-12"));
-    hg_test_assert(hg_is_integer_base10("-42"));
-    hg_test_assert(hg_is_integer_base10("-100"));
-    hg_test_assert(hg_is_integer_base10("-123456789"));
-    hg_test_assert(hg_is_integer_base10("+12"));
-    hg_test_assert(hg_is_integer_base10("+42"));
-    hg_test_assert(hg_is_integer_base10("+100"));
-    hg_test_assert(hg_is_integer_base10("+123456789"));
-
-    hg_test_assert(!hg_is_integer_base10("hello"));
-    hg_test_assert(!hg_is_integer_base10("not a number"));
-    hg_test_assert(!hg_is_integer_base10("number"));
-    hg_test_assert(!hg_is_integer_base10("integer"));
-    hg_test_assert(!hg_is_integer_base10("0.0"));
-    hg_test_assert(!hg_is_integer_base10("1.0"));
-    hg_test_assert(!hg_is_integer_base10(".10"));
-    hg_test_assert(!hg_is_integer_base10("1e2"));
-    hg_test_assert(!hg_is_integer_base10("1f"));
-    hg_test_assert(!hg_is_integer_base10("0xff"));
-    hg_test_assert(!hg_is_integer_base10("--42"));
-    hg_test_assert(!hg_is_integer_base10("++42"));
-    hg_test_assert(!hg_is_integer_base10("42-"));
-    hg_test_assert(!hg_is_integer_base10("42+"));
-    hg_test_assert(!hg_is_integer_base10("4 2"));
-    hg_test_assert(!hg_is_integer_base10("4+2"));
-
-    hg_test_assert(hg_is_float_base10("0.0"));
-    hg_test_assert(hg_is_float_base10("1."));
-    hg_test_assert(hg_is_float_base10("2.0"));
-    hg_test_assert(hg_is_float_base10("3."));
-    hg_test_assert(hg_is_float_base10("4.0"));
-    hg_test_assert(hg_is_float_base10("5."));
-    hg_test_assert(hg_is_float_base10("6.0"));
-    hg_test_assert(hg_is_float_base10("7."));
-    hg_test_assert(hg_is_float_base10("8.0"));
-    hg_test_assert(hg_is_float_base10("9."));
-    hg_test_assert(hg_is_float_base10("10.0"));
-
-    hg_test_assert(hg_is_float_base10("0.0"));
-    hg_test_assert(hg_is_float_base10(".1"));
-    hg_test_assert(hg_is_float_base10("0.2"));
-    hg_test_assert(hg_is_float_base10(".3"));
-    hg_test_assert(hg_is_float_base10("0.4"));
-    hg_test_assert(hg_is_float_base10(".5"));
-    hg_test_assert(hg_is_float_base10("0.6"));
-    hg_test_assert(hg_is_float_base10(".7"));
-    hg_test_assert(hg_is_float_base10("0.8"));
-    hg_test_assert(hg_is_float_base10(".9"));
-    hg_test_assert(hg_is_float_base10("0.10"));
-
-    hg_test_assert(hg_is_float_base10("1.0"));
-    hg_test_assert(hg_is_float_base10("+10.f"));
-    hg_test_assert(hg_is_float_base10(".10"));
-    hg_test_assert(hg_is_float_base10("-999.999f"));
-    hg_test_assert(hg_is_float_base10("1e3"));
-    hg_test_assert(hg_is_float_base10("1e3"));
-    hg_test_assert(hg_is_float_base10("+1.e3f"));
-    hg_test_assert(hg_is_float_base10(".1e3"));
-
-    hg_test_assert(!hg_is_float_base10("hello"));
-    hg_test_assert(!hg_is_float_base10("not a number"));
-    hg_test_assert(!hg_is_float_base10("number"));
-    hg_test_assert(!hg_is_float_base10("float"));
-    hg_test_assert(!hg_is_float_base10("1.0ff"));
-    hg_test_assert(!hg_is_float_base10("0x1.0"));
-    hg_test_assert(!hg_is_float_base10("-0x1.0"));
-
-    hg_test_assert(hg_str_to_int_base10("0") == 0);
-    hg_test_assert(hg_str_to_int_base10("1") == 1);
-    hg_test_assert(hg_str_to_int_base10("2") == 2);
-    hg_test_assert(hg_str_to_int_base10("3") == 3);
-    hg_test_assert(hg_str_to_int_base10("4") == 4);
-    hg_test_assert(hg_str_to_int_base10("5") == 5);
-    hg_test_assert(hg_str_to_int_base10("6") == 6);
-    hg_test_assert(hg_str_to_int_base10("7") == 7);
-    hg_test_assert(hg_str_to_int_base10("8") == 8);
-    hg_test_assert(hg_str_to_int_base10("9") == 9);
-
-    hg_test_assert(hg_str_to_int_base10("0000000") == 0);
-    hg_test_assert(hg_str_to_int_base10("+0000001") == +1);
-    hg_test_assert(hg_str_to_int_base10("0000002") == 2);
-    hg_test_assert(hg_str_to_int_base10("-0000003") == -3);
-    hg_test_assert(hg_str_to_int_base10("0000004") == 4);
-    hg_test_assert(hg_str_to_int_base10("+0000005") == +5);
-    hg_test_assert(hg_str_to_int_base10("0000006") == 6);
-    hg_test_assert(hg_str_to_int_base10("-0000007") == -7);
-    hg_test_assert(hg_str_to_int_base10("0000008") == 8);
-    hg_test_assert(hg_str_to_int_base10("+0000009") == +9);
-
-    hg_test_assert(hg_str_to_int_base10("0000000") == 0);
-    hg_test_assert(hg_str_to_int_base10("1000000") == 1000000);
-    hg_test_assert(hg_str_to_int_base10("2000000") == 2000000);
-    hg_test_assert(hg_str_to_int_base10("3000000") == 3000000);
-    hg_test_assert(hg_str_to_int_base10("4000000") == 4000000);
-    hg_test_assert(hg_str_to_int_base10("5000000") == 5000000);
-    hg_test_assert(hg_str_to_int_base10("6000000") == 6000000);
-    hg_test_assert(hg_str_to_int_base10("7000000") == 7000000);
-    hg_test_assert(hg_str_to_int_base10("8000000") == 8000000);
-    hg_test_assert(hg_str_to_int_base10("9000000") == 9000000);
-    hg_test_assert(hg_str_to_int_base10("1234567890") == 1234567890);
-
-    hg_test_assert(hg_str_to_float_base10("0.0") == 0.0);
-    hg_test_assert(hg_str_to_float_base10("1.0f") == 1.0);
-    hg_test_assert(hg_str_to_float_base10("2.0") == 2.0);
-    hg_test_assert(hg_str_to_float_base10("3.0f") == 3.0);
-    hg_test_assert(hg_str_to_float_base10("4.0") == 4.0);
-    hg_test_assert(hg_str_to_float_base10("5.0f") == 5.0);
-    hg_test_assert(hg_str_to_float_base10("6.0") == 6.0);
-    hg_test_assert(hg_str_to_float_base10("7.0f") == 7.0);
-    hg_test_assert(hg_str_to_float_base10("8.0") == 8.0);
-    hg_test_assert(hg_str_to_float_base10("9.0f") == 9.0);
-
-    hg_test_assert(hg_str_to_float_base10("0e1") == 0.0);
-    hg_test_assert(hg_str_to_float_base10("1e2f") == 1e2);
-    hg_test_assert(hg_str_to_float_base10("2e3") == 2e3);
-    hg_test_assert(hg_str_to_float_base10("3e4f") == 3e4);
-    hg_test_assert(hg_str_to_float_base10("4e5") == 4e5);
-    hg_test_assert(hg_str_to_float_base10("5e6f") == 5e6);
-    hg_test_assert(hg_str_to_float_base10("6e7") == 6e7);
-    hg_test_assert(hg_str_to_float_base10("7e8f") == 7e8);
-    hg_test_assert(hg_str_to_float_base10("8e9") == 8e9);
-    hg_test_assert(hg_str_to_float_base10("9e10f") == 9e10);
-
-    hg_test_assert(hg_str_to_float_base10("0e1") == 0.0);
-    hg_test_assert(hg_str_to_float_base10("1e2f") == 1e2);
-    hg_test_assert(hg_str_to_float_base10("2e3") == 2e3);
-    hg_test_assert(hg_str_to_float_base10("3e4f") == 3e4);
-    hg_test_assert(hg_str_to_float_base10("4e5") == 4e5);
-    hg_test_assert(hg_str_to_float_base10("5e6f") == 5e6);
-    hg_test_assert(hg_str_to_float_base10("6e7") == 6e7);
-    hg_test_assert(hg_str_to_float_base10("7e8f") == 7e8);
-    hg_test_assert(hg_str_to_float_base10("8e9") == 8e9);
-    hg_test_assert(hg_str_to_float_base10("9e10f") == 9e10);
-
-    hg_test_assert(hg_str_to_float_base10(".1") == .1);
-    hg_test_assert(hg_str_to_float_base10("+.1") == +.1);
-    hg_test_assert(hg_str_to_float_base10("-.1") == -.1);
-    hg_test_assert(hg_str_to_float_base10("+.1e5") == +.1e5);
-
-    hg_test_assert(hg_int_to_str_base10(arena, 0) == "0");
-    hg_test_assert(hg_int_to_str_base10(arena, -1) == "-1");
-    hg_test_assert(hg_int_to_str_base10(arena, 2) == "2");
-    hg_test_assert(hg_int_to_str_base10(arena, -3) == "-3");
-    hg_test_assert(hg_int_to_str_base10(arena, 4) == "4");
-    hg_test_assert(hg_int_to_str_base10(arena, -5) == "-5");
-    hg_test_assert(hg_int_to_str_base10(arena, 6) == "6");
-    hg_test_assert(hg_int_to_str_base10(arena, -7) == "-7");
-    hg_test_assert(hg_int_to_str_base10(arena, 8) == "8");
-    hg_test_assert(hg_int_to_str_base10(arena, -9) == "-9");
-
-    hg_test_assert(hg_int_to_str_base10(arena, 0000000) == "0");
-    hg_test_assert(hg_int_to_str_base10(arena, -1000000) == "-1000000");
-    hg_test_assert(hg_int_to_str_base10(arena, 2000000) == "2000000");
-    hg_test_assert(hg_int_to_str_base10(arena, -3000000) == "-3000000");
-    hg_test_assert(hg_int_to_str_base10(arena, 4000000) == "4000000");
-    hg_test_assert(hg_int_to_str_base10(arena, -5000000) == "-5000000");
-    hg_test_assert(hg_int_to_str_base10(arena, 6000000) == "6000000");
-    hg_test_assert(hg_int_to_str_base10(arena, -7000000) == "-7000000");
-    hg_test_assert(hg_int_to_str_base10(arena, 8000000) == "8000000");
-    hg_test_assert(hg_int_to_str_base10(arena, -9000000) == "-9000000");
-    hg_test_assert(hg_int_to_str_base10(arena, 1234567890) == "1234567890");
-
-    hg_test_assert(hg_float_to_str_base10(arena, 0.0, 10) == "0.0");
-    hg_test_assert(hg_float_to_str_base10(arena, -1.0f, 1) == "-1.0");
-    hg_test_assert(hg_float_to_str_base10(arena, 2.0, 2) == "2.00");
-    hg_test_assert(hg_float_to_str_base10(arena, -3.0f, 3) == "-3.000");
-    hg_test_assert(hg_float_to_str_base10(arena, 4.0, 4) == "4.0000");
-    hg_test_assert(hg_float_to_str_base10(arena, -5.0f, 5) == "-5.00000");
-    hg_test_assert(hg_float_to_str_base10(arena, 6.0, 6) == "6.000000");
-    hg_test_assert(hg_float_to_str_base10(arena, -7.0f, 7) == "-7.0000000");
-    hg_test_assert(hg_float_to_str_base10(arena, 8.0, 8) == "8.00000000");
-    hg_test_assert(hg_float_to_str_base10(arena, -9.0f, 9) == "-9.000000000");
-
-    hg_test_assert(hg_float_to_str_base10(arena, 0e0, 1) == "0.0");
-    hg_test_assert(hg_float_to_str_base10(arena, -1e1f, 0) == "-10.");
-    hg_test_assert(hg_float_to_str_base10(arena, 2e2, 1) == "200.0");
-    hg_test_assert(hg_float_to_str_base10(arena, -3e3f, 0) == "-3000.");
-    hg_test_assert(hg_float_to_str_base10(arena, 4e4, 1) == "40000.0");
-    hg_test_assert(hg_float_to_str_base10(arena, -5e5f, 0) == "-500000.");
-    hg_test_assert(hg_float_to_str_base10(arena, 6e6, 1) == "6000000.0");
-    hg_test_assert(hg_float_to_str_base10(arena, -7e7f, 0) == "-70000000.");
-    hg_test_assert(hg_float_to_str_base10(arena, 8e8, 1) == "800000000.0");
-    hg_test_assert(hg_float_to_str_base10(arena, -9e9f, 0) == "-8999999488.");
-
-    hg_test_assert(hg_float_to_str_base10(arena, -0e-0, 3) == "0.0");
-    hg_test_assert(hg_float_to_str_base10(arena, 1e-1f, 3) == "0.100");
-    hg_test_assert(hg_float_to_str_base10(arena, -2e-2, 3) == "-0.020");
-    hg_test_assert(hg_float_to_str_base10(arena, 3e-3f, 3) == "0.003");
-    hg_test_assert(hg_float_to_str_base10(arena, -4e-0, 3) == "-4.000");
-    hg_test_assert(hg_float_to_str_base10(arena, 5e-1f, 3) == "0.500");
-    hg_test_assert(hg_float_to_str_base10(arena, -6e-2, 3) == "-0.060");
-    hg_test_assert(hg_float_to_str_base10(arena, 7e-3f, 3) == "0.007");
-    hg_test_assert(hg_float_to_str_base10(arena, -8e-0, 3) == "-8.000");
-    hg_test_assert(hg_float_to_str_base10(arena, 9e-1f, 3) == "0.899");
-
-    return true;
-}
-
-hg_test(HgJson) {
-    {
-        hg_arena_scope(arena, hg_get_scratch());
-
-        HgStringView file = R"(
-        )";
-
-        HgJson json = json.parse(arena, file);
-
-        hg_test_assert(json.errors == nullptr);
-        hg_test_assert(json.first == nullptr);
-    }
-
-    {
-        hg_arena_scope(arena, hg_get_scratch());
-
-        HgStringView file = R"(
-            {
-            }
-        )";
-
-        HgJson json = json.parse(arena, file);
-
-        hg_test_assert(json.errors == nullptr);
-        hg_test_assert(json.first != nullptr);
-
-        HgJson::Node* node = json.first;
-        hg_test_assert(node->next == nullptr);
-        hg_test_assert(node->type == HgJson::jstruct);
-        hg_test_assert(node->jstruct.fields == nullptr);
-    }
-
-    {
-        hg_arena_scope(arena, hg_get_scratch());
-
-        HgStringView file = R"(
-            {
-                1234
-            }
-        )";
-
-        HgJson json = json.parse(arena, file);
-
-        hg_test_assert(json.errors != nullptr);
-        hg_test_assert(json.first != nullptr);
-
-        HgJson::Error* error = json.errors;
-        hg_test_assert(error->next == nullptr);
-        hg_test_assert(error->message == "on line 4, struct has a literal instead of a field\n");
-
-        HgJson::Node* node = json.first;
-        hg_test_assert(node->next == nullptr);
-        hg_test_assert(node->type == HgJson::jstruct);
-        hg_test_assert(node->jstruct.fields == nullptr);
-    }
-
-    {
-        hg_arena_scope(arena, hg_get_scratch());
-
-        HgStringView file = R"(
-            {
-                "asdf"
-            }
-        )";
-
-        HgJson json = json.parse(arena, file);
-
-        hg_test_assert(json.errors != nullptr);
-        hg_test_assert(json.first != nullptr);
-
-        HgJson::Error* error = json.errors;
-        hg_test_assert(error->next == nullptr);
-        hg_test_assert(error->message == "on line 4, struct has a literal instead of a field\n");
-
-        HgJson::Node* node = json.first;
-        hg_test_assert(node->next == nullptr);
-        hg_test_assert(node->type == HgJson::jstruct);
-        hg_test_assert(node->jstruct.fields == nullptr);
-    }
-
-    {
-        hg_arena_scope(arena, hg_get_scratch());
-
-        HgStringView file = R"(
-            {
-                "asdf":
-            }
-        )";
-
-        HgJson json = json.parse(arena, file);
-
-        hg_test_assert(json.errors != nullptr);
-        hg_test_assert(json.first != nullptr);
-
-        HgJson::Error* error = json.errors;
-        hg_test_assert(error->next != nullptr);
-        hg_test_assert(error->message == "on line 4, struct has a field named \"asdf\" which has no value\n");
-        error = error->next;
-        hg_test_assert(error->next == nullptr);
-        hg_test_assert(error->message == "on line 4, found unexpected token \"}\"\n");
-
-        HgJson::Node* node = json.first;
-        hg_test_assert(node->next == nullptr);
-        hg_test_assert(node->type == HgJson::jstruct);
-        hg_test_assert(node->jstruct.fields == nullptr);
-    }
-
-    {
-        hg_arena_scope(arena, hg_get_scratch());
-
-        HgStringView file = R"(
-            {
-                "asdf": true
-            }
-        )";
-
-        HgJson json = json.parse(arena, file);
-
-        hg_test_assert(json.errors == nullptr);
-        hg_test_assert(json.first != nullptr);
-
-        HgJson::Node* node = json.first;
-        hg_test_assert(node->next == nullptr);
-        hg_test_assert(node->type == HgJson::jstruct);
-        hg_test_assert(node->jstruct.fields != nullptr);
-
-        node = node->jstruct.fields;
-        hg_test_assert(node->next == nullptr);
-        hg_test_assert(node->type == HgJson::field);
-        hg_test_assert(node->field.name == "asdf");
-        hg_test_assert(node->field.data != nullptr);
-        hg_test_assert(node->field.data->next == nullptr);
-        hg_test_assert(node->field.data->type == HgJson::boolean);
-        hg_test_assert(node->field.data->boolean == true);
-    }
-
-    {
-        hg_arena_scope(arena, hg_get_scratch());
-
-        HgStringView file = R"(
-            {
-                "asdf": false
-            }
-        )";
-
-        HgJson json = json.parse(arena, file);
-
-        hg_test_assert(json.errors == nullptr);
-        hg_test_assert(json.first != nullptr);
-
-        HgJson::Node* node = json.first;
-        hg_test_assert(node->next == nullptr);
-        hg_test_assert(node->type == HgJson::jstruct);
-        hg_test_assert(node->jstruct.fields != nullptr);
-
-        node = node->jstruct.fields;
-        hg_test_assert(node->next == nullptr);
-        hg_test_assert(node->type == HgJson::field);
-        hg_test_assert(node->field.name == "asdf");
-        hg_test_assert(node->field.data != nullptr);
-        hg_test_assert(node->field.data->next == nullptr);
-        hg_test_assert(node->field.data->type == HgJson::boolean);
-        hg_test_assert(node->field.data->boolean == false);
-    }
-
-    {
-        hg_arena_scope(arena, hg_get_scratch());
-
-        HgStringView file = R"(
-            {
-                "asdf": asdf
-            }
-        )";
-
-        HgJson json = json.parse(arena, file);
-
-        hg_test_assert(json.errors != nullptr);
-        hg_test_assert(json.first != nullptr);
-
-        HgJson::Error* error = json.errors;
-        hg_test_assert(error->next != nullptr);
-        hg_test_assert(error->message == "on line 4, struct has a field named \"asdf\" which has no value\n");
-        error = error->next;
-        hg_test_assert(error->next == nullptr);
-        hg_test_assert(error->message == "on line 3, found unexpected token \"asdf\"\n");
-
-        HgJson::Node* node = json.first;
-        hg_test_assert(node->next == nullptr);
-        hg_test_assert(node->type == HgJson::jstruct);
-        hg_test_assert(node->jstruct.fields == nullptr);
-    }
-
-    {
-        hg_arena_scope(arena, hg_get_scratch());
-
-        HgStringView file = R"(
-            {
-                "asdf": "asdf"
-            }
-        )";
-
-        HgJson json = json.parse(arena, file);
-
-        hg_test_assert(json.errors == nullptr);
-        hg_test_assert(json.first != nullptr);
-
-        HgJson::Node* node = json.first;
-        hg_test_assert(node->next == nullptr);
-        hg_test_assert(node->type == HgJson::jstruct);
-        hg_test_assert(node->jstruct.fields != nullptr);
-
-        node = node->jstruct.fields;
-        hg_test_assert(node->next == nullptr);
-        hg_test_assert(node->type == HgJson::field);
-        hg_test_assert(node->field.name == "asdf");
-        hg_test_assert(node->field.data != nullptr);
-        hg_test_assert(node->field.data->next == nullptr);
-        hg_test_assert(node->field.data->type == HgJson::string);
-        hg_test_assert(node->field.data->string == "asdf");
-    }
-
-    {
-        hg_arena_scope(arena, hg_get_scratch());
-
-        HgStringView file = R"(
-            {
-                "asdf": 1234
-            }
-        )";
-
-        HgJson json = json.parse(arena, file);
-
-        hg_test_assert(json.errors == nullptr);
-        hg_test_assert(json.first != nullptr);
-
-        HgJson::Node* node = json.first;
-        hg_test_assert(node->next == nullptr);
-        hg_test_assert(node->type == HgJson::jstruct);
-        hg_test_assert(node->jstruct.fields != nullptr);
-
-        node = node->jstruct.fields;
-        hg_test_assert(node->next == nullptr);
-        hg_test_assert(node->type == HgJson::field);
-        hg_test_assert(node->field.name == "asdf");
-        hg_test_assert(node->field.data != nullptr);
-        hg_test_assert(node->field.data->next == nullptr);
-        hg_test_assert(node->field.data->type == HgJson::integer);
-        hg_test_assert(node->field.data->integer == 1234);
-    }
-
-    {
-        hg_arena_scope(arena, hg_get_scratch());
-
-        HgStringView file = R"(
-            {
-                "asdf": 1234.0
-            }
-        )";
-
-        HgJson json = json.parse(arena, file);
-
-        hg_test_assert(json.errors == nullptr);
-        hg_test_assert(json.first != nullptr);
-
-        HgJson::Node* node = json.first;
-        hg_test_assert(node->next == nullptr);
-        hg_test_assert(node->type == HgJson::jstruct);
-        hg_test_assert(node->jstruct.fields != nullptr);
-
-        node = node->jstruct.fields;
-        hg_test_assert(node->next == nullptr);
-        hg_test_assert(node->type == HgJson::field);
-        hg_test_assert(node->field.name == "asdf");
-        hg_test_assert(node->field.data != nullptr);
-        hg_test_assert(node->field.data->next == nullptr);
-        hg_test_assert(node->field.data->type == HgJson::floating);
-        hg_test_assert(node->field.data->floating == 1234.0);
-    }
-
-    {
-        hg_arena_scope(arena, hg_get_scratch());
-
-        HgStringView file = R"(
-            {
-                "asdf": 1234.0,
-                "hjkl": 5678.0
-            }
-        )";
-
-        HgJson json = json.parse(arena, file);
-
-        hg_test_assert(json.errors == nullptr);
-        hg_test_assert(json.first != nullptr);
-
-        HgJson::Node* node = json.first;
-        hg_test_assert(node->next == nullptr);
-        hg_test_assert(node->type == HgJson::jstruct);
-        hg_test_assert(node->jstruct.fields != nullptr);
-
-        node = node->jstruct.fields;
-        hg_test_assert(node->next != nullptr);
-        hg_test_assert(node->type == HgJson::field);
-        hg_test_assert(node->field.name == "asdf");
-        hg_test_assert(node->field.data != nullptr);
-        hg_test_assert(node->field.data->next == nullptr);
-        hg_test_assert(node->field.data->type == HgJson::floating);
-        hg_test_assert(node->field.data->floating == 1234.0);
-
-        node = node->next;
-        hg_test_assert(node->next == nullptr);
-        hg_test_assert(node->type == HgJson::field);
-        hg_test_assert(node->field.name == "hjkl");
-        hg_test_assert(node->field.data != nullptr);
-        hg_test_assert(node->field.data->next == nullptr);
-        hg_test_assert(node->field.data->type == HgJson::floating);
-        hg_test_assert(node->field.data->floating == 5678.0);
-    }
-
-    {
-        hg_arena_scope(arena, hg_get_scratch());
-
-        HgStringView file = R"(
-            {
-                "asdf": [1, 2, 3, 4]
-            }
-        )";
-
-        HgJson json = json.parse(arena, file);
-
-        for (auto e = json.errors; e != nullptr; e = e->next) {
-            hg_info("e: %s", HgString::create(arena, e->message).append(arena, 0).chars);
-        }
-        hg_test_assert(json.errors == nullptr);
-        hg_test_assert(json.first != nullptr);
-
-        HgJson::Node* node = json.first;
-        hg_test_assert(node->next == nullptr);
-        hg_test_assert(node->type == HgJson::jstruct);
-        hg_test_assert(node->jstruct.fields != nullptr);
-
-        node = node->jstruct.fields;
-        hg_test_assert(node->next == nullptr);
-        hg_test_assert(node->type == HgJson::field);
-        hg_test_assert(node->field.name == "asdf");
-        hg_test_assert(node->field.data != nullptr);
-        hg_test_assert(node->field.data->next == nullptr);
-        hg_test_assert(node->field.data->type == HgJson::array);
-        hg_test_assert(node->field.data->array.elems != nullptr);
-
-        HgJson::Node* elem = node->field.data->array.elems;
-        hg_test_assert(elem->next != nullptr);
-        hg_test_assert(elem->type == HgJson::integer);
-        hg_test_assert(elem->integer == 1);
-
-        elem = elem->next;
-        hg_test_assert(elem->next != nullptr);
-        hg_test_assert(elem->type == HgJson::integer);
-        hg_test_assert(elem->integer == 2);
-
-        elem = elem->next;
-        hg_test_assert(elem->next != nullptr);
-        hg_test_assert(elem->type == HgJson::integer);
-        hg_test_assert(elem->integer == 3);
-
-        elem = elem->next;
-        hg_test_assert(elem->next == nullptr);
-        hg_test_assert(elem->type == HgJson::integer);
-        hg_test_assert(elem->integer == 4);
-    }
-
-    {
-        hg_arena_scope(arena, hg_get_scratch());
-
-        HgStringView file = R"(
-            {
-                "asdf": [1 2 3 4]
-            }
-        )";
-
-        HgJson json = json.parse(arena, file);
-
-        hg_test_assert(json.errors == nullptr);
-        hg_test_assert(json.first != nullptr);
-
-        HgJson::Node* node = json.first;
-        hg_test_assert(node->next == nullptr);
-        hg_test_assert(node->type == HgJson::jstruct);
-        hg_test_assert(node->jstruct.fields != nullptr);
-
-        node = node->jstruct.fields;
-        hg_test_assert(node->next == nullptr);
-        hg_test_assert(node->type == HgJson::field);
-        hg_test_assert(node->field.name == "asdf");
-        hg_test_assert(node->field.data != nullptr);
-        hg_test_assert(node->field.data->next == nullptr);
-        hg_test_assert(node->field.data->type == HgJson::array);
-        hg_test_assert(node->field.data->array.elems != nullptr);
-
-        HgJson::Node* elem = node->field.data->array.elems;
-        hg_test_assert(elem->next != nullptr);
-        hg_test_assert(elem->type == HgJson::integer);
-        hg_test_assert(elem->integer == 1);
-
-        elem = elem->next;
-        hg_test_assert(elem->next != nullptr);
-        hg_test_assert(elem->type == HgJson::integer);
-        hg_test_assert(elem->integer == 2);
-
-        elem = elem->next;
-        hg_test_assert(elem->next != nullptr);
-        hg_test_assert(elem->type == HgJson::integer);
-        hg_test_assert(elem->integer == 3);
-
-        elem = elem->next;
-        hg_test_assert(elem->next == nullptr);
-        hg_test_assert(elem->type == HgJson::integer);
-        hg_test_assert(elem->integer == 4);
-    }
-
-    {
-        hg_arena_scope(arena, hg_get_scratch());
-
-        HgStringView file = R"(
-            {
-                "asdf": [1, 2, 3, "4"]
-            }
-        )";
-
-        HgJson json = json.parse(arena, file);
-
-        hg_test_assert(json.errors != nullptr);
-        hg_test_assert(json.first != nullptr);
-
-        HgJson::Error* error = json.errors;
-        hg_test_assert(error->next == nullptr);
-        hg_test_assert(error->message ==
-            "on line 3, array has element which is not the same type as the first valid element\n");
-
-        HgJson::Node* node = json.first;
-        hg_test_assert(node->next == nullptr);
-        hg_test_assert(node->type == HgJson::jstruct);
-        hg_test_assert(node->jstruct.fields != nullptr);
-
-        node = node->jstruct.fields;
-        hg_test_assert(node->next == nullptr);
-        hg_test_assert(node->type == HgJson::field);
-        hg_test_assert(node->field.name == "asdf");
-        hg_test_assert(node->field.data != nullptr);
-        hg_test_assert(node->field.data->next == nullptr);
-        hg_test_assert(node->field.data->type == HgJson::array);
-        hg_test_assert(node->field.data->array.elems != nullptr);
-
-        HgJson::Node* elem = node->field.data->array.elems;
-        hg_test_assert(elem->next != nullptr);
-        hg_test_assert(elem->type == HgJson::integer);
-        hg_test_assert(elem->integer == 1);
-
-        elem = elem->next;
-        hg_test_assert(elem->next != nullptr);
-        hg_test_assert(elem->type == HgJson::integer);
-        hg_test_assert(elem->integer == 2);
-
-        elem = elem->next;
-        hg_test_assert(elem->next == nullptr);
-        hg_test_assert(elem->type == HgJson::integer);
-        hg_test_assert(elem->integer == 3);
-    }
-
-    {
-        hg_arena_scope(arena, hg_get_scratch());
-
-        HgStringView file = R"(
-            {
-                "asdf": {
-                    "a": 1,
-                    "s": 2.0,
-                    "d": 3,
-                    "f": 4.0,
-                }
-            }
-        )";
-
-        HgJson json = json.parse(arena, file);
-
-        hg_test_assert(json.errors == nullptr);
-        hg_test_assert(json.first != nullptr);
-
-        HgJson::Node* node = json.first;
-        hg_test_assert(node->next == nullptr);
-        hg_test_assert(node->type == HgJson::jstruct);
-        hg_test_assert(node->jstruct.fields != nullptr);
-
-        node = node->jstruct.fields;
-        hg_test_assert(node->next == nullptr);
-        hg_test_assert(node->type == HgJson::field);
-        hg_test_assert(node->field.name == "asdf");
-        hg_test_assert(node->field.data != nullptr);
-        hg_test_assert(node->field.data->next == nullptr);
-        hg_test_assert(node->field.data->type == HgJson::jstruct);
-        hg_test_assert(node->field.data->array.elems != nullptr);
-
-        HgJson::Node* field = node->field.data->jstruct.fields;
-        hg_test_assert(field->next != nullptr);
-        hg_test_assert(field->type == HgJson::field);
-        hg_test_assert(field->field.name == "a");
-        hg_test_assert(field->field.data != nullptr);
-        hg_test_assert(field->field.data->next == nullptr);
-        hg_test_assert(field->field.data->type == HgJson::integer);
-        hg_test_assert(field->field.data->integer == 1);
-
-        field = field->next;
-        hg_test_assert(field->next != nullptr);
-        hg_test_assert(field->type == HgJson::field);
-        hg_test_assert(field->field.name == "s");
-        hg_test_assert(field->field.data != nullptr);
-        hg_test_assert(field->field.data->next == nullptr);
-        hg_test_assert(field->field.data->type == HgJson::floating);
-        hg_test_assert(field->field.data->floating == 2.0);
-
-        field = field->next;
-        hg_test_assert(field->next != nullptr);
-        hg_test_assert(field->type == HgJson::field);
-        hg_test_assert(field->field.name == "d");
-        hg_test_assert(field->field.data != nullptr);
-        hg_test_assert(field->field.data->next == nullptr);
-        hg_test_assert(field->field.data->type == HgJson::integer);
-        hg_test_assert(field->field.data->integer == 3);
-
-        field = field->next;
-        hg_test_assert(field->next == nullptr);
-        hg_test_assert(field->type == HgJson::field);
-        hg_test_assert(field->field.name == "f");
-        hg_test_assert(field->field.data != nullptr);
-        hg_test_assert(field->field.data->next == nullptr);
-        hg_test_assert(field->field.data->type == HgJson::floating);
-        hg_test_assert(field->field.data->floating == 4.0);
-    }
-
-    {
-        hg_arena_scope(arena, hg_get_scratch());
-
-        HgStringView file = R"(
-            {
-                "player": {
-                    "transform": {
-                        "position": [1.0, 0.0, -1.0],
-                        "scale": [1.0, 1.0, 1.0],
-                        "rotation": [1.0, 0.0, 0.0, 0.0]
-                    },
-                    "sprite": {
-                        "texture": "tex.png",
-                        "uv_pos": [0.0, 0.0],
-                        "uv_size": [1.0, 1.0]
-                    }
-                }
-            }
-        )";
-
-        HgJson json = json.parse(arena, file);
-
-        hg_test_assert(json.errors == nullptr);
-        hg_test_assert(json.first != nullptr);
-
-        HgJson::Node* main_struct = json.first;
-        hg_test_assert(main_struct->next == nullptr);
-        hg_test_assert(main_struct->type == HgJson::jstruct);
-        hg_test_assert(main_struct->jstruct.fields != nullptr);
-
-        HgJson::Node* player = main_struct->jstruct.fields;
-        hg_test_assert(player->next == nullptr);
-        hg_test_assert(player->type == HgJson::field);
-        hg_test_assert(player->field.name == "player");
-        hg_test_assert(player->field.data != nullptr);
-        hg_test_assert(player->field.data->next == nullptr);
-        hg_test_assert(player->field.data->type == HgJson::jstruct);
-        hg_test_assert(player->field.data->jstruct.fields != nullptr);
-
-        HgJson::Node* component = player->field.data->jstruct.fields;
-        hg_test_assert(component->next != nullptr);
-        hg_test_assert(component->type == HgJson::field);
-        hg_test_assert(component->field.name == "transform");
-        hg_test_assert(component->field.data != nullptr);
-        hg_test_assert(component->field.data->next == nullptr);
-        hg_test_assert(component->field.data->type == HgJson::jstruct);
-        hg_test_assert(component->field.data->jstruct.fields != nullptr);
-
-        HgJson::Node* field = component->field.data->jstruct.fields;
-        hg_test_assert(field->next != nullptr);
-        hg_test_assert(field->type == HgJson::field);
-        hg_test_assert(field->field.name == "position");
-        hg_test_assert(field->field.data != nullptr);
-        hg_test_assert(field->field.data->next == nullptr);
-        hg_test_assert(field->field.data->type == HgJson::array);
-        hg_test_assert(field->field.data->array.elems != nullptr);
-
-        HgJson::Node* elem = field->field.data->array.elems;
-        hg_test_assert(elem->next != nullptr);
-        hg_test_assert(elem->type == HgJson::floating);
-        hg_test_assert(elem->floating == 1.0);
-
-        elem = elem->next;
-        hg_test_assert(elem->next != nullptr);
-        hg_test_assert(elem->type == HgJson::floating);
-        hg_test_assert(elem->floating == 0.0);
-
-        elem = elem->next;
-        hg_test_assert(elem->next == nullptr);
-        hg_test_assert(elem->type == HgJson::floating);
-        hg_test_assert(elem->floating == -1.0);
-
-        field = field->next;
-        hg_test_assert(field->next != nullptr);
-        hg_test_assert(field->type == HgJson::field);
-        hg_test_assert(field->field.name == "scale");
-        hg_test_assert(field->field.data != nullptr);
-        hg_test_assert(field->field.data->next == nullptr);
-        hg_test_assert(field->field.data->type == HgJson::array);
-        hg_test_assert(field->field.data->array.elems != nullptr);
-
-        elem = field->field.data->array.elems;
-        hg_test_assert(elem->next != nullptr);
-        hg_test_assert(elem->type == HgJson::floating);
-        hg_test_assert(elem->floating == 1.0);
-
-        elem = elem->next;
-        hg_test_assert(elem->next != nullptr);
-        hg_test_assert(elem->type == HgJson::floating);
-        hg_test_assert(elem->floating == 1.0);
-
-        elem = elem->next;
-        hg_test_assert(elem->next == nullptr);
-        hg_test_assert(elem->type == HgJson::floating);
-        hg_test_assert(elem->floating == 1.0);
-
-        field = field->next;
-        hg_test_assert(field->next == nullptr);
-        hg_test_assert(field->type == HgJson::field);
-        hg_test_assert(field->field.name == "rotation");
-        hg_test_assert(field->field.data != nullptr);
-        hg_test_assert(field->field.data->next == nullptr);
-        hg_test_assert(field->field.data->type == HgJson::array);
-        hg_test_assert(field->field.data->array.elems != nullptr);
-
-        elem = field->field.data->array.elems;
-        hg_test_assert(elem->next != nullptr);
-        hg_test_assert(elem->type == HgJson::floating);
-        hg_test_assert(elem->floating == 1.0);
-
-        elem = elem->next;
-        hg_test_assert(elem->next != nullptr);
-        hg_test_assert(elem->type == HgJson::floating);
-        hg_test_assert(elem->floating == 0.0);
-
-        elem = elem->next;
-        hg_test_assert(elem->next != nullptr);
-        hg_test_assert(elem->type == HgJson::floating);
-        hg_test_assert(elem->floating == 0.0);
-
-        elem = elem->next;
-        hg_test_assert(elem->next == nullptr);
-        hg_test_assert(elem->type == HgJson::floating);
-        hg_test_assert(elem->floating == 0.0);
-
-        component = component->next;
-        hg_test_assert(component->next == nullptr);
-        hg_test_assert(component->type == HgJson::field);
-        hg_test_assert(component->field.name == "sprite");
-        hg_test_assert(component->field.data != nullptr);
-        hg_test_assert(component->field.data->next == nullptr);
-        hg_test_assert(component->field.data->type == HgJson::jstruct);
-        hg_test_assert(component->field.data->jstruct.fields != nullptr);
-
-        field = component->field.data->jstruct.fields;
-        hg_test_assert(field->next != nullptr);
-        hg_test_assert(field->type == HgJson::field);
-        hg_test_assert(field->field.name == "texture");
-        hg_test_assert(field->field.data != nullptr);
-        hg_test_assert(field->field.data->next == nullptr);
-        hg_test_assert(field->field.data->type == HgJson::string);
-        hg_test_assert(field->field.data->string == "tex.png");
-
-        field = field->next;
-        hg_test_assert(field->next != nullptr);
-        hg_test_assert(field->type == HgJson::field);
-        hg_test_assert(field->field.name == "uv_pos");
-        hg_test_assert(field->field.data != nullptr);
-        hg_test_assert(field->field.data->next == nullptr);
-        hg_test_assert(field->field.data->type == HgJson::array);
-        hg_test_assert(field->field.data->array.elems != nullptr);
-
-        elem = field->field.data->array.elems;
-        hg_test_assert(elem->next != nullptr);
-        hg_test_assert(elem->type == HgJson::floating);
-        hg_test_assert(elem->floating == 0.0);
-
-        elem = elem->next;
-        hg_test_assert(elem->next == nullptr);
-        hg_test_assert(elem->type == HgJson::floating);
-        hg_test_assert(elem->floating == 0.0);
-
-        field = field->next;
-        hg_test_assert(field->next == nullptr);
-        hg_test_assert(field->type == HgJson::field);
-        hg_test_assert(field->field.name == "uv_size");
-        hg_test_assert(field->field.data != nullptr);
-        hg_test_assert(field->field.data->next == nullptr);
-        hg_test_assert(field->field.data->type == HgJson::array);
-        hg_test_assert(field->field.data->array.elems != nullptr);
-
-        elem = field->field.data->array.elems;
-        hg_test_assert(elem->next != nullptr);
-        hg_test_assert(elem->type == HgJson::floating);
-        hg_test_assert(elem->floating == 1.0);
-
-        elem = elem->next;
-        hg_test_assert(elem->next == nullptr);
-        hg_test_assert(elem->type == HgJson::floating);
-        hg_test_assert(elem->floating == 1.0);
     }
 
     return true;
