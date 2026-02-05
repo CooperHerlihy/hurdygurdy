@@ -1956,7 +1956,7 @@ struct HgString {
     /**
      * Implicit converts to string_view
      */
-    constexpr operator HgStringView() {
+    constexpr operator HgStringView() const {
         return {chars, length};
     }
 };
@@ -2092,8 +2092,14 @@ struct HgJson {
      * An error contained in the json
      */
     struct Error {
+        /**
+         * The next error
+         */
         Error* next;
-        HgString message;
+        /**
+         * The error message
+         */
+        HgString msg;
     };
 
     /**
@@ -2119,8 +2125,17 @@ struct HgJson {
      * A field in a struct
      */
     struct Field {
+        /**
+         * The next field
+         */
         Field* next;
+        /**
+         * The name of the field
+         */
         HgString name;
+        /**
+         * The value stored in the field
+         */
         Node* value;
     };
 
@@ -2128,6 +2143,9 @@ struct HgJson {
      * A struct contained in the json
      */
     struct Struct {
+        /**
+         * The first field
+         */
         Field* fields;
     };
 
@@ -2135,7 +2153,13 @@ struct HgJson {
      * An element in an array
      */
     struct Elem {
+        /**
+         * The next element
+         */
         Elem* next;
+        /**
+         * The value stored in the element
+         */
         Node* value;
     };
 
@@ -2143,6 +2167,9 @@ struct HgJson {
      * An array contained in the json
      */
     struct Array {
+        /**
+         * The first element
+         */
         Elem* elems;
     };
 
@@ -2171,7 +2198,7 @@ struct HgJson {
     /**
      * The successfully parsed nodes
      */
-    Node* first;
+    Node* file;
     /**
      * The errors found
      */
@@ -2562,6 +2589,13 @@ struct HgHashMap {
      */
     bool is_near_full() {
         return (f32)load >= (f32)capacity * 0.8f;
+    }
+
+    /**
+     * Returns whether the hash map is full
+     */
+    bool is_half_full() {
+        return (f32)load >= (f32)capacity * 0.5f;
     }
 
     /**

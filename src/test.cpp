@@ -701,7 +701,7 @@ hg_test(HgJson) {
         HgJson json = json.parse(arena, file);
 
         hg_test_assert(json.errors == nullptr);
-        hg_test_assert(json.first == nullptr);
+        hg_test_assert(json.file == nullptr);
     }
 
     {
@@ -715,9 +715,9 @@ hg_test(HgJson) {
         HgJson json = json.parse(arena, file);
 
         hg_test_assert(json.errors == nullptr);
-        hg_test_assert(json.first != nullptr);
+        hg_test_assert(json.file != nullptr);
 
-        HgJson::Node* node = json.first;
+        HgJson::Node* node = json.file;
         hg_test_assert(node->type == HgJson::jstruct);
         hg_test_assert(node->jstruct.fields == nullptr);
     }
@@ -734,13 +734,13 @@ hg_test(HgJson) {
         HgJson json = json.parse(arena, file);
 
         hg_test_assert(json.errors != nullptr);
-        hg_test_assert(json.first != nullptr);
+        hg_test_assert(json.file != nullptr);
 
         HgJson::Error* error = json.errors;
         hg_test_assert(error->next == nullptr);
-        hg_test_assert(error->message == "on line 4, struct has a literal instead of a field\n");
+        hg_test_assert(error->msg == "on line 4, struct has a literal instead of a field\n");
 
-        HgJson::Node* node = json.first;
+        HgJson::Node* node = json.file;
         hg_test_assert(node->type == HgJson::jstruct);
         hg_test_assert(node->jstruct.fields == nullptr);
     }
@@ -757,13 +757,13 @@ hg_test(HgJson) {
         HgJson json = json.parse(arena, file);
 
         hg_test_assert(json.errors != nullptr);
-        hg_test_assert(json.first != nullptr);
+        hg_test_assert(json.file != nullptr);
 
         HgJson::Error* error = json.errors;
         hg_test_assert(error->next == nullptr);
-        hg_test_assert(error->message == "on line 4, struct has a literal instead of a field\n");
+        hg_test_assert(error->msg == "on line 4, struct has a literal instead of a field\n");
 
-        HgJson::Node* node = json.first;
+        HgJson::Node* node = json.file;
         hg_test_assert(node->type == HgJson::jstruct);
         hg_test_assert(node->jstruct.fields == nullptr);
     }
@@ -780,16 +780,16 @@ hg_test(HgJson) {
         HgJson json = json.parse(arena, file);
 
         hg_test_assert(json.errors != nullptr);
-        hg_test_assert(json.first != nullptr);
+        hg_test_assert(json.file != nullptr);
 
         HgJson::Error* error = json.errors;
         hg_test_assert(error->next != nullptr);
-        hg_test_assert(error->message == "on line 4, struct has a field named \"asdf\" which has no value\n");
+        hg_test_assert(error->msg == "on line 4, struct has a field named \"asdf\" which has no value\n");
         error = error->next;
         hg_test_assert(error->next == nullptr);
-        hg_test_assert(error->message == "on line 4, found unexpected token \"}\"\n");
+        hg_test_assert(error->msg == "on line 4, found unexpected token \"}\"\n");
 
-        HgJson::Node* node = json.first;
+        HgJson::Node* node = json.file;
         hg_test_assert(node->type == HgJson::jstruct);
         hg_test_assert(node->jstruct.fields == nullptr);
     }
@@ -806,9 +806,9 @@ hg_test(HgJson) {
         HgJson json = json.parse(arena, file);
 
         hg_test_assert(json.errors == nullptr);
-        hg_test_assert(json.first != nullptr);
+        hg_test_assert(json.file != nullptr);
 
-        HgJson::Node* node = json.first;
+        HgJson::Node* node = json.file;
         hg_test_assert(node->type == HgJson::jstruct);
         hg_test_assert(node->jstruct.fields != nullptr);
 
@@ -832,9 +832,9 @@ hg_test(HgJson) {
         HgJson json = json.parse(arena, file);
 
         hg_test_assert(json.errors == nullptr);
-        hg_test_assert(json.first != nullptr);
+        hg_test_assert(json.file != nullptr);
 
-        HgJson::Node* node = json.first;
+        HgJson::Node* node = json.file;
         hg_test_assert(node->type == HgJson::jstruct);
         hg_test_assert(node->jstruct.fields != nullptr);
 
@@ -858,16 +858,16 @@ hg_test(HgJson) {
         HgJson json = json.parse(arena, file);
 
         hg_test_assert(json.errors != nullptr);
-        hg_test_assert(json.first != nullptr);
+        hg_test_assert(json.file != nullptr);
 
         HgJson::Error* error = json.errors;
         hg_test_assert(error->next != nullptr);
-        hg_test_assert(error->message == "on line 4, struct has a field named \"asdf\" which has no value\n");
+        hg_test_assert(error->msg == "on line 4, struct has a field named \"asdf\" which has no value\n");
         error = error->next;
         hg_test_assert(error->next == nullptr);
-        hg_test_assert(error->message == "on line 3, found unexpected token \"asdf\"\n");
+        hg_test_assert(error->msg == "on line 3, found unexpected token \"asdf\"\n");
 
-        HgJson::Node* node = json.first;
+        HgJson::Node* node = json.file;
         hg_test_assert(node->type == HgJson::jstruct);
         hg_test_assert(node->jstruct.fields == nullptr);
     }
@@ -884,9 +884,9 @@ hg_test(HgJson) {
         HgJson json = json.parse(arena, file);
 
         hg_test_assert(json.errors == nullptr);
-        hg_test_assert(json.first != nullptr);
+        hg_test_assert(json.file != nullptr);
 
-        HgJson::Node* node = json.first;
+        HgJson::Node* node = json.file;
         hg_test_assert(node->type == HgJson::jstruct);
         hg_test_assert(node->jstruct.fields != nullptr);
 
@@ -910,9 +910,9 @@ hg_test(HgJson) {
         HgJson json = json.parse(arena, file);
 
         hg_test_assert(json.errors == nullptr);
-        hg_test_assert(json.first != nullptr);
+        hg_test_assert(json.file != nullptr);
 
-        HgJson::Node* node = json.first;
+        HgJson::Node* node = json.file;
         hg_test_assert(node->type == HgJson::jstruct);
         hg_test_assert(node->jstruct.fields != nullptr);
 
@@ -936,9 +936,9 @@ hg_test(HgJson) {
         HgJson json = json.parse(arena, file);
 
         hg_test_assert(json.errors == nullptr);
-        hg_test_assert(json.first != nullptr);
+        hg_test_assert(json.file != nullptr);
 
-        HgJson::Node* node = json.first;
+        HgJson::Node* node = json.file;
         hg_test_assert(node->type == HgJson::jstruct);
         hg_test_assert(node->jstruct.fields != nullptr);
 
@@ -963,9 +963,9 @@ hg_test(HgJson) {
         HgJson json = json.parse(arena, file);
 
         hg_test_assert(json.errors == nullptr);
-        hg_test_assert(json.first != nullptr);
+        hg_test_assert(json.file != nullptr);
 
-        HgJson::Node* node = json.first;
+        HgJson::Node* node = json.file;
         hg_test_assert(node->type == HgJson::jstruct);
         hg_test_assert(node->jstruct.fields != nullptr);
 
@@ -996,12 +996,12 @@ hg_test(HgJson) {
         HgJson json = json.parse(arena, file);
 
         for (auto e = json.errors; e != nullptr; e = e->next) {
-            hg_info("e: %s", HgString::create(arena, e->message).append(arena, 0).chars);
+            hg_info("e: %s", HgString::create(arena, e->msg).append(arena, 0).chars);
         }
         hg_test_assert(json.errors == nullptr);
-        hg_test_assert(json.first != nullptr);
+        hg_test_assert(json.file != nullptr);
 
-        HgJson::Node* node = json.first;
+        HgJson::Node* node = json.file;
         hg_test_assert(node->type == HgJson::jstruct);
         hg_test_assert(node->jstruct.fields != nullptr);
 
@@ -1049,9 +1049,9 @@ hg_test(HgJson) {
         HgJson json = json.parse(arena, file);
 
         hg_test_assert(json.errors == nullptr);
-        hg_test_assert(json.first != nullptr);
+        hg_test_assert(json.file != nullptr);
 
-        HgJson::Node* node = json.first;
+        HgJson::Node* node = json.file;
         hg_test_assert(node->type == HgJson::jstruct);
         hg_test_assert(node->jstruct.fields != nullptr);
 
@@ -1099,14 +1099,14 @@ hg_test(HgJson) {
         HgJson json = json.parse(arena, file);
 
         hg_test_assert(json.errors != nullptr);
-        hg_test_assert(json.first != nullptr);
+        hg_test_assert(json.file != nullptr);
 
         HgJson::Error* error = json.errors;
         hg_test_assert(error->next == nullptr);
-        hg_test_assert(error->message ==
+        hg_test_assert(error->msg ==
             "on line 3, array has element which is not the same type as the first valid element\n");
 
-        HgJson::Node* node = json.first;
+        HgJson::Node* node = json.file;
         hg_test_assert(node->type == HgJson::jstruct);
         hg_test_assert(node->jstruct.fields != nullptr);
 
@@ -1153,9 +1153,9 @@ hg_test(HgJson) {
         HgJson json = json.parse(arena, file);
 
         hg_test_assert(json.errors == nullptr);
-        hg_test_assert(json.first != nullptr);
+        hg_test_assert(json.file != nullptr);
 
-        HgJson::Node* node = json.first;
+        HgJson::Node* node = json.file;
         hg_test_assert(node->type == HgJson::jstruct);
         hg_test_assert(node->jstruct.fields != nullptr);
 
@@ -1218,9 +1218,9 @@ hg_test(HgJson) {
         HgJson json = json.parse(arena, file);
 
         hg_test_assert(json.errors == nullptr);
-        hg_test_assert(json.first != nullptr);
+        hg_test_assert(json.file != nullptr);
 
-        HgJson::Node* main_struct = json.first;
+        HgJson::Node* main_struct = json.file;
         hg_test_assert(main_struct->type == HgJson::jstruct);
         hg_test_assert(main_struct->jstruct.fields != nullptr);
 
@@ -2637,6 +2637,10 @@ hg_test(HgECS) {
         ecs.reset();
     }
 
+    return true;
+}
+
+hg_test(HgScene) {
     return true;
 }
 

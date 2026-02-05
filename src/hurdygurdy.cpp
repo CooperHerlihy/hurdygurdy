@@ -1013,7 +1013,7 @@ HgJson HgJsonParser::parse_next() {
         case '}': {
             HgJson::Error* error = arena.alloc<HgJson::Error>(1);
             error->next = nullptr;
-            error->message = HgString{}
+            error->msg = HgString{}
                 .append(arena, "on line ")
                 .append(arena, hg_int_to_str_base10(arena, (i64)line))
                 .append(arena, ", found unexpected token \"}\"\n");
@@ -1022,7 +1022,7 @@ HgJson HgJsonParser::parse_next() {
         case ']': {
             HgJson::Error* error = arena.alloc<HgJson::Error>(1);
             error->next = nullptr;
-            error->message = HgString{}
+            error->msg = HgString{}
                 .append(arena, "on line ")
                 .append(arena, hg_int_to_str_base10(arena, (i64)line))
                 .append(arena, ", found unexpected token \"]\"\n");
@@ -1042,7 +1042,7 @@ HgJson HgJsonParser::parse_next() {
             ++line;
         ++head;
     }
-    error->message = HgString{}
+    error->msg = HgString{}
         .append(arena, "on line ")
         .append(arena, hg_int_to_str_base10(arena, (i64)line))
         .append(arena, ", found unexpected token \"")
@@ -1054,9 +1054,9 @@ HgJson HgJsonParser::parse_next() {
 
 HgJson HgJsonParser::parse_struct() {
     HgJson json{};
-    json.first = arena.alloc<HgJson::Node>(1);
-    json.first->type = HgJson::jstruct;
-    json.first->jstruct.fields = nullptr;
+    json.file = arena.alloc<HgJson::Node>(1);
+    json.file->type = HgJson::jstruct;
+    json.file->jstruct.fields = nullptr;
 
     HgJson::Field* last_field = nullptr;
     HgJson::Error* last_error = nullptr;
@@ -1070,7 +1070,7 @@ HgJson HgJsonParser::parse_struct() {
         if (head >= text.length) {
             HgJson::Error* error = arena.alloc<HgJson::Error>(1);
             error->next = nullptr;
-            error->message = HgString{}
+            error->msg = HgString{}
                 .append(arena, "on line ")
                 .append(arena, hg_int_to_str_base10(arena, (i64)line))
                 .append(arena, ", expected struct to terminate\n");
@@ -1084,7 +1084,7 @@ HgJson HgJsonParser::parse_struct() {
         if (text[head] == ']') {
             HgJson::Error* error = arena.alloc<HgJson::Error>(1);
             error->next = nullptr;
-            error->message = HgString{}
+            error->msg = HgString{}
                 .append(arena, "on line ")
                 .append(arena, hg_int_to_str_base10(arena, (i64)line))
                 .append(arena, ", struct ends with \"]\" instead of \"}\"\n");
@@ -1117,11 +1117,11 @@ HgJson HgJsonParser::parse_struct() {
 
         HgJson value = parse_next();
 
-        if (value.first != nullptr) {
-            if (value.first->type != HgJson::field) {
+        if (value.file != nullptr) {
+            if (value.file->type != HgJson::field) {
                 HgJson::Error* error = arena.alloc<HgJson::Error>(1);
                 error->next = nullptr;
-                error->message = HgString{}
+                error->msg = HgString{}
                     .append(arena, "on line ")
                     .append(arena, hg_int_to_str_base10(arena, (i64)line))
                     .append(arena, ", struct has a literal instead of a field\n");
@@ -1130,14 +1130,14 @@ HgJson HgJsonParser::parse_struct() {
                 else
                     last_error->next = error;
                 last_error = error;
-            } else if (value.first->field.value == nullptr) {
+            } else if (value.file->field.value == nullptr) {
                 HgJson::Error* error = arena.alloc<HgJson::Error>(1);
                 error->next = nullptr;
-                error->message = HgString{}
+                error->msg = HgString{}
                     .append(arena, "on line ")
                     .append(arena, hg_int_to_str_base10(arena, (i64)line))
                     .append(arena, ", struct has a field named \"")
-                    .append(arena, value.first->field.name)
+                    .append(arena, value.file->field.name)
                     .append(arena, "\" which has no value\n");
                 if (last_error == nullptr)
                     json.errors = last_error = error;
@@ -1146,10 +1146,10 @@ HgJson HgJsonParser::parse_struct() {
                 last_error = error;
             } else {
                 if (last_field == nullptr)
-                    json.first->jstruct.fields = &value.first->field;
+                    json.file->jstruct.fields = &value.file->field;
                 else
-                    last_field->next = &value.first->field;
-                last_field = &value.first->field;
+                    last_field->next = &value.file->field;
+                last_field = &value.file->field;
             }
         }
         if (value.errors != nullptr) {
@@ -1166,8 +1166,8 @@ HgJson HgJsonParser::parse_struct() {
 
 HgJson HgJsonParser::parse_array() {
     HgJson json{};
-    json.first = arena.alloc<HgJson::Node>(1);
-    json.first->type = HgJson::array;
+    json.file = arena.alloc<HgJson::Node>(1);
+    json.file->type = HgJson::array;
 
     HgJson::Type type = HgJson::none;
     HgJson::Elem* last_elem = nullptr;
@@ -1182,7 +1182,7 @@ HgJson HgJsonParser::parse_array() {
         if (head >= text.length) {
             HgJson::Error* error = arena.alloc<HgJson::Error>(1);
             error->next = nullptr;
-            error->message = HgString{}
+            error->msg = HgString{}
                 .append(arena, "on line ")
                 .append(arena, hg_int_to_str_base10(arena, (i64)line))
                 .append(arena, ", expected struct to terminate\n");
@@ -1196,7 +1196,7 @@ HgJson HgJsonParser::parse_array() {
         if (text[head] == '}') {
             HgJson::Error* error = arena.alloc<HgJson::Error>(1);
             error->next = nullptr;
-            error->message = HgString{}
+            error->msg = HgString{}
                 .append(arena, "on line ")
                 .append(arena, hg_int_to_str_base10(arena, (i64)line))
                 .append(arena, ", array ends with \"}\" instead of \"]\"\n");
@@ -1231,16 +1231,16 @@ HgJson HgJsonParser::parse_array() {
         elem->next = nullptr;
 
         HgJson value = parse_next();
-        elem->value = value.first;
+        elem->value = value.file;
 
-        if (value.first != nullptr) {
+        if (value.file != nullptr) {
             if (type == HgJson::none) {
-                if (value.first->type != HgJson::field) {
-                    type = value.first->type;
+                if (value.file->type != HgJson::field) {
+                    type = value.file->type;
                 } else {
                     HgJson::Error* error = arena.alloc<HgJson::Error>(1);
                     error->next = nullptr;
-                    error->message = HgString{}
+                    error->msg = HgString{}
                         .append(arena, "on line ")
                         .append(arena, hg_int_to_str_base10(arena, (i64)line))
                         .append(arena, ", array has a field as an element\n");
@@ -1251,10 +1251,10 @@ HgJson HgJsonParser::parse_array() {
                     last_error = error;
                 }
             }
-            if (value.first->type != type) {
+            if (value.file->type != type) {
                 HgJson::Error* error = arena.alloc<HgJson::Error>(1);
                 error->next = nullptr;
-                error->message = HgString{}
+                error->msg = HgString{}
                     .append(arena, "on line ")
                     .append(arena, hg_int_to_str_base10(arena, (i64)line))
                     .append(arena, ", array has element which is not the same type as the first valid element\n");
@@ -1265,7 +1265,7 @@ HgJson HgJsonParser::parse_array() {
                 last_error = error;
             } else {
                 if (last_elem == nullptr)
-                    json.first->array.elems = elem;
+                    json.file->array.elems = elem;
                 else
                     last_elem->next = elem;
                 last_elem = elem;
@@ -1303,7 +1303,7 @@ HgJson HgJsonParser::parse_string() {
         }
 
         HgJson json{};
-        json.first = arena.alloc<HgJson::Node>(1);
+        json.file = arena.alloc<HgJson::Node>(1);
 
         while (head < text.length && hg_is_whitespace(text[head])) {
             if (text[head] == '\n')
@@ -1312,15 +1312,15 @@ HgJson HgJsonParser::parse_string() {
         }
         if (head < text.length && text[head] == ':') {
             ++head;
-            json.first->type = HgJson::field;
-            json.first->field.next = nullptr;
-            json.first->field.name = str;
+            json.file->type = HgJson::field;
+            json.file->field.next = nullptr;
+            json.file->field.name = str;
             HgJson next = parse_next();
-            json.first->field.value = next.first;
+            json.file->field.value = next.file;
             json.errors = next.errors;
         } else {
-            json.first->type = HgJson::string;
-            json.first->string = str;
+            json.file->type = HgJson::string;
+            json.file->string = str;
         }
         while (head < text.length && hg_is_whitespace(text[head])) {
             if (text[head] == '\n')
@@ -1333,7 +1333,7 @@ HgJson HgJsonParser::parse_string() {
     }
 
     HgJson::Error* error = arena.alloc<HgJson::Error>(1);
-    error->message = HgString{}
+    error->msg = HgString{}
         .append(arena, "on line ")
         .append(arena, hg_int_to_str_base10(arena, (i64)line))
         .append(arena, ", expected string to terminate\n");
@@ -1381,7 +1381,7 @@ HgJson HgJsonParser::parse_number() {
 
     HgJson::Error* error = arena.alloc<HgJson::Error>(1);
 
-    error->message = HgString{}
+    error->msg = HgString{}
         .append(arena, "on line ")
         .append(arena, hg_int_to_str_base10(arena, (i64)line))
         .append(arena, ", expected numeral value, found \"")
@@ -1398,7 +1398,7 @@ HgJson HgJsonParser::parse_number() {
     } else {
         HgJson next = parse_next();
         error->next = next.errors;
-        return {next.first, error};
+        return {next.file, error};
     }
 }
 
@@ -1446,7 +1446,7 @@ HgJson HgJsonParser::parse_boolean() {
             ++line;
         ++head;
     }
-    error->message = HgString{}
+    error->msg = HgString{}
         .append(arena, "on line ")
         .append(arena, hg_int_to_str_base10(arena, (i64)line))
         .append(arena, ", expected boolean value, found \"")
@@ -1466,7 +1466,7 @@ HgJson HgJsonParser::parse_boolean() {
     } else {
         HgJson next = parse_next();
         error->next = next.errors;
-        return {next.first, error};
+        return {next.file, error};
     }
 }
 
@@ -2825,47 +2825,430 @@ void HgScene::deinstantiate() {
     instantiated = false;
 }
 
-// static HgComponentType hg_internal_component_str_to_enum(HgStringView str) {
-//     if (str.length() == 0)
-//         return HG_COMPONENT_NONE;
-//
-//     switch (str[0]) {
-//         case 't':
-//             if (str == "transform")
-//                 return HgComponent::tranform;
-//             break;
-//         case 's':
-//             if (str == "sprite")
-//                 return HgComponent::sprite;
-//             break;
-//     }
-//
-//     return HG_COMPONENT_NONE;
-// }
+static HgComponent hg_internal_component_str_to_enum(HgStringView str) {
+    if (str.length == 0)
+        return HgComponent::none;
 
-static constexpr usize hg_internal_component_hash(HgComponent c) {
-    return (usize)c;
+    switch (str[0]) {
+        case 't':
+            if (str == "transform")
+                return HgComponent::transform;
+            break;
+        case 's':
+            if (str == "sprite")
+                return HgComponent::sprite;
+            break;
+    }
+
+    return HgComponent::none;
 }
 
-static constexpr usize hg_internal_resource_hash(HgResourceID r) {
-    return (usize)r;
-}
+struct HgSceneJsonParser {
+    struct Component {
+        HgAnyArray data;
+        usize* indices;
 
-HgBinary hg_create_scene_json(HgArena& arena, const HgJson& json) {
-    hg_arena_scope(scratch, hg_get_scratch(arena));
-
-    HgHashMap<usize, HgString> entities = entities.create(scratch, 512);
+        static Component create(HgArena& arena, usize max, u32 width, u32 alignment) {
+            Component c;
+            c.data = c.data.create(arena, width, alignment, 0, max);
+            c.indices = arena.alloc<usize>(max);
+            return c;
+        }
+    };
 
     struct Resource {
         HgResource type;
-        HgString path;
+        HgStringView path;
     };
-    HgHashMap<HgResourceID, Resource, hg_internal_resource_hash> resources = resources.create(scratch, 128);
 
-    HgHashMap<HgComponent, HgAnyArray, hg_internal_component_hash> components = components.create(scratch, (usize)HgComponent::count);
+    static constexpr auto comp_hash = [](HgComponent c) constexpr { return (usize)c; };
+    static constexpr auto res_hash = [](HgResourceID r) constexpr { return (usize)r; };
 
-    (void)json;
-    return {};
+    HgHashMap<HgStringView, usize> entities;
+    HgHashMap<HgComponent, Component, comp_hash> components;
+    HgHashMap<HgResourceID, Resource, res_hash> resources;
+
+    HgBinary parse(HgArena& arena, const HgJson& json);
+
+    HgTransform parse_transform(HgStringView entity, const HgJson::Field* transform);
+    HgSprite parse_sprite(HgStringView entity, const HgJson::Field* sprite);
+};
+
+HgBinary HgSceneJsonParser::parse(HgArena& arena, const HgJson& json) {
+    hg_arena_scope(scratch, hg_get_scratch(arena));
+
+    entities = entities.create(scratch, 512);
+    components = components.create(scratch, (usize)HgComponent::count);
+    resources = resources.create(scratch, 128);
+
+    for (HgJson::Error* e = json.errors; e != nullptr; e = e->next) {
+        hg_warn("Scene description json file has error: %s", HgString::create(scratch, e->msg).append(scratch, 0).chars);
+    }
+
+    if (json.file == nullptr)
+        return {};
+
+    if (json.file->type != HgJson::jstruct) {
+        hg_warn("Scene description json file does not begin with a struct\n");
+        return {};
+    }
+
+    for (const HgJson::Field* entity = json.file->jstruct.fields; entity != nullptr; entity = entity->next) {
+        if (entities.has(entity->name)) {
+            hg_warn("Json scene file has duplicate entity name \"%s\", may result in unexpected behavior\n",
+                HgString::create(arena, entity->name).append(scratch, 0).chars);
+            continue;
+        }
+        if (entity->value->type != HgJson::jstruct) {
+            hg_warn("Json scene file has an entity \"%s\" which is not a struct of components\n",
+                HgString::create(scratch, entity->name).append(scratch, 0).chars);
+            continue;
+        }
+        if (entities.is_half_full())
+            entities.grow(arena);
+        entities.insert(entity->name, entities.load);
+    }
+
+#define hg_macro_parse_json_component(type_enum, type_symbol) \
+    case HgComponent::type_enum: { \
+        if (!components.has(type)) \
+            components.insert(type, Component::create( \
+                arena, entities.load, sizeof(type_symbol), alignof(type_symbol))); \
+        Component& c = *components.get(type); \
+        c.indices[c.data.count] = *entities.get(entity->name); \
+        *(type_symbol*)c.data.push() = parse_##type_enum(entity->name, comp); \
+    } break
+
+    for (const HgJson::Field* entity = json.file->jstruct.fields; entity != nullptr; entity = entity->next) {
+        if (entity->value->type != HgJson::jstruct)
+            continue;
+
+        for (HgJson::Field* comp = entity->value->jstruct.fields; comp != nullptr; comp = comp->next) {
+            HgComponent type = hg_internal_component_str_to_enum(comp->name);
+
+            switch(type) {
+                hg_macro_parse_json_component(transform, HgTransform);
+                hg_macro_parse_json_component(sprite, HgSprite);
+
+                default: {
+                    hg_arena_scope(s, hg_get_scratch());
+                    hg_warn("Json scene file has entity \"%s\" which has an invalid component \"%s\"",
+                        HgString::create(s, entity->name).append(scratch, 0).chars,
+                        HgString::create(s, comp->name).append(scratch, 0).chars);
+                }
+            }
+        }
+    }
+
+#undef hg_macro_parse_json_component
+
+    HgBinary bin{};
+
+    return bin;
+}
+
+HgTransform HgSceneJsonParser::parse_transform(HgStringView name, const HgJson::Field* transform) {
+    hg_arena_scope(scratch, hg_get_scratch());
+
+    if (transform->value->type != HgJson::jstruct) {
+        hg_warn("In json scene file, entity \"%s\" transform does not contain a struct\n",
+            HgString::create(scratch, name).append(scratch, 0).chars);
+        return {};
+    }
+
+    HgTransform t{};
+    bool has_pos = false;
+    bool has_scale = false;
+    bool has_rot = false;
+
+    for (HgJson::Field* field = transform->value->jstruct.fields; field != nullptr; field = field->next) {
+
+        if (field->name.length == 0) {
+            hg_warn("In json scene file, entity \"%s\" transform has field with no name\n",
+                HgString::create(scratch, name).append(scratch, 0).chars);
+            continue;
+        }
+        switch (field->name[0]) {
+            case 'p':
+                if (field->name != "position")
+                    hg_warn("In json scene file, entity \"%s\" transform has field \"%s\", did you mean position?\n",
+                        HgString::create(scratch, name).append(scratch, 0).chars,
+                        HgString::create(scratch, field->name).append(scratch, 0).chars);
+                if (field->value->type != HgJson::array) {
+                    hg_warn("In json scene file, entity \"%s\" transform position is not an array\n",
+                        HgString::create(scratch, name).append(scratch, 0).chars);
+                } else {
+                    if (has_pos) {
+                        hg_warn("In json scene file, entity \"%s\" transform has multiple positions\n",
+                            HgString::create(scratch, name).append(scratch, 0).chars);
+                        break;
+                    }
+                    usize count = 0;
+                    for (HgJson::Elem* elem = field->value->array.elems; elem != nullptr; elem = elem->next) {
+                        if (count >= 3) {
+                            hg_warn("In json scene file, entity \"%s\" transform position has too many elements\n",
+                                HgString::create(scratch, name).append(scratch, 0).chars);
+                            break;
+                        }
+                        if (elem->value->type == HgJson::floating) {
+                            t.position[count++] = (f32)elem->value->floating;
+                        } else if (elem->value->type == HgJson::integer) {
+                            t.position[count++] = (f32)elem->value->integer;
+                        } else {
+                            hg_warn("In json scene file, entity \"%s\" transform position does not contain numbers\n",
+                                HgString::create(scratch, name).append(scratch, 0).chars);
+                            break;
+                        }
+                    }
+                    if (count < 3)
+                        hg_warn("In json scene file, entity \"%s\" transform position has too few elements\n",
+                            HgString::create(scratch, name).append(scratch, 0).chars);
+                    has_pos = true;
+                }
+                break;
+            case 's':
+                if (field->name != "scale")
+                    hg_warn("In json scene file, entity \"%s\" transform has field \"%s\", did you mean scale?\n",
+                        HgString::create(scratch, name).append(scratch, 0).chars,
+                        HgString::create(scratch, field->name).append(scratch, 0).chars);
+                if (field->value->type != HgJson::array) {
+                    hg_warn("In json scene file, entity \"%s\" transform scale is not an array\n",
+                        HgString::create(scratch, name).append(scratch, 0).chars);
+                } else {
+                    if (has_scale) {
+                        hg_warn("In json scene file, entity \"%s\" transform has multiple scales\n",
+                            HgString::create(scratch, name).append(scratch, 0).chars);
+                        break;
+                    }
+                    usize count = 0;
+                    for (HgJson::Elem* elem = field->value->array.elems; elem != nullptr; elem = elem->next) {
+                        if (count >= 3) {
+                            hg_warn("In json scene file, entity \"%s\" transform scale has too many elements\n",
+                                HgString::create(scratch, name).append(scratch, 0).chars);
+                            break;
+                        }
+                        if (elem->value->type == HgJson::floating) {
+                            t.scale[count++] = (f32)elem->value->floating;
+                        } else if (elem->value->type == HgJson::integer) {
+                            t.scale[count++] = (f32)elem->value->integer;
+                        } else {
+                            hg_warn("In json scene file, entity \"%s\" transform scale does not contain numbers\n",
+                                HgString::create(scratch, name).append(scratch, 0).chars);
+                            break;
+                        }
+                    }
+                    if (count < 3)
+                        hg_warn("In json scene file, entity \"%s\" transform scale has too few elements\n",
+                            HgString::create(scratch, name).append(scratch, 0).chars);
+                    has_pos = true;
+                }
+                break;
+            case 'r':
+                if (field->name != "rotation")
+                    hg_warn("In json scene file, entity \"%s\" transform has field \"%s\", did you mean rotation?\n",
+                        HgString::create(scratch, name).append(scratch, 0).chars,
+                        HgString::create(scratch, field->name).append(scratch, 0).chars);
+                if (field->value->type != HgJson::array) {
+                    hg_warn("In json scene file, entity \"%s\" transform rotation is not an array\n",
+                        HgString::create(scratch, name).append(scratch, 0).chars);
+                } else {
+                    if (has_pos) {
+                        hg_warn("In json scene file, entity \"%s\" transform has multiple rotations\n",
+                            HgString::create(scratch, name).append(scratch, 0).chars);
+                        break;
+                    }
+                    usize count = 0;
+                    for (HgJson::Elem* elem = field->value->array.elems; elem != nullptr; elem = elem->next) {
+                        if (count >= 4) {
+                            hg_warn("In json scene file, entity \"%s\" transform rotations has too many elements\n",
+                                HgString::create(scratch, name).append(scratch, 0).chars);
+                            break;
+                        }
+                        if (elem->value->type == HgJson::floating) {
+                            t.rotation[count++] = (f32)elem->value->floating;
+                        } else if (elem->value->type == HgJson::integer) {
+                            t.rotation[count++] = (f32)elem->value->integer;
+                        } else {
+                            hg_warn("In json scene file, entity \"%s\" transform rotation does not contain numbers\n",
+                                HgString::create(scratch, name).append(scratch, 0).chars);
+                            break;
+                        }
+                    }
+                    if (count < 4)
+                        hg_warn("In json scene file, entity \"%s\" transform rotation has too few elements\n",
+                            HgString::create(scratch, name).append(scratch, 0).chars);
+                    has_pos = true;
+                }
+                break;
+            default:
+                hg_warn("In json scene file, entity \"%s\" transform has unknown field \"%s\"\n",
+                    HgString::create(scratch, name).append(scratch, 0).chars,
+                    HgString::create(scratch, field->name).append(scratch, 0).chars);
+                break;
+        }
+    }
+
+    if (!has_pos)
+        hg_warn("In json scene file, entity \"%s\" transform has no position\n",
+            HgString::create(scratch, name).append(scratch, 0).chars);
+    if (!has_scale)
+        hg_warn("In json scene file, entity \"%s\" transform has no scale\n",
+            HgString::create(scratch, name).append(scratch, 0).chars);
+    if (!has_rot)
+        hg_warn("In json scene file, entity \"%s\" transform has no rotation\n",
+            HgString::create(scratch, name).append(scratch, 0).chars);
+
+    return t;
+}
+
+HgSprite HgSceneJsonParser::parse_sprite(HgStringView name, const HgJson::Field* sprite) {
+    hg_arena_scope(scratch, hg_get_scratch());
+
+    if (sprite->value->type != HgJson::jstruct) {
+        hg_warn("In json scene file, entity \"%s\" sprite does not contain a struct\n",
+            HgString::create(scratch, name).append(scratch, 0).chars);
+        return {};
+    }
+
+    HgSprite s{};
+    bool has_tex = false;
+    bool has_pos = false;
+    bool has_size = false;
+
+    for (HgJson::Field* field = sprite->value->jstruct.fields; field != nullptr; field = field->next) {
+
+        if (field->name.length == 0) {
+            hg_warn("In json scene file, entity \"%s\" sprite has field with no name\n",
+                HgString::create(scratch, name).append(scratch, 0).chars);
+            continue;
+        }
+        switch (field->name[0]) {
+            case 't':
+                if (field->name != "texture")
+                    hg_warn("In json scene file, entity \"%s\" sprite has field \"%s\", did you mean texture?\n",
+                        HgString::create(scratch, name).append(scratch, 0).chars,
+                        HgString::create(scratch, field->name).append(scratch, 0).chars);
+                if (field->value->type != HgJson::string) {
+                    hg_warn("In json scene file, entity \"%s\" sprite texture is not a string\n",
+                        HgString::create(scratch, name).append(scratch, 0).chars);
+                } else {
+                    if (has_pos) {
+                        hg_warn("In json scene file, entity \"%s\" sprite has multiple textures\n",
+                            HgString::create(scratch, name).append(scratch, 0).chars);
+                    }
+                    s.texture = hg_hash(field->value->string);
+                    if (!resources.has(s.texture)) {
+                        resources.insert(s.texture, {HgResource::texture, field->value->string});
+                    } else {
+                        Resource& tex = *resources.get(s.texture);
+                        if (tex.type != HgResource::texture) {
+                            hg_warn("In json scene file, resource \"%s\" is used as more than one type\n",
+                                HgString::create(scratch, field->value->string).append(scratch, 0).chars);
+                        }
+                        if (tex.path != field->value->string) {
+                            hg_warn("In json scene file, resource \"%s\" collides with \"%s\"\n",
+                                HgString::create(scratch, tex.path).append(scratch, 0).chars,
+                                HgString::create(scratch, field->value->string).append(scratch, 0).chars);
+                        }
+                    }
+                    has_tex = true;
+                }
+                break;
+            case 'u':
+                if (field->name == "uv_pos") {
+                    if (field->value->type != HgJson::array) {
+                        hg_warn("In json scene file, entity \"%s\" sprite uv_pos is not an array\n",
+                            HgString::create(scratch, name).append(scratch, 0).chars);
+                    } else {
+                        if (has_pos) {
+                            hg_warn("In json scene file, entity \"%s\" sprite has multiple uv_pos\n",
+                                HgString::create(scratch, name).append(scratch, 0).chars);
+                            break;
+                        }
+                        usize count = 0;
+                        for (HgJson::Elem* elem = field->value->array.elems; elem != nullptr; elem = elem->next) {
+                            if (count >= 2) {
+                                hg_warn("In json scene file, entity \"%s\" sprite uv_pos has too many elements\n",
+                                    HgString::create(scratch, name).append(scratch, 0).chars);
+                                break;
+                            }
+                            if (elem->value->type == HgJson::floating) {
+                                s.uv_pos[count++] = (f32)elem->value->floating;
+                            } else if (elem->value->type == HgJson::integer) {
+                                s.uv_pos[count++] = (f32)elem->value->integer;
+                            } else {
+                                hg_warn("In json scene file, entity \"%s\" sprite uv_pos does not contain numbers\n",
+                                    HgString::create(scratch, name).append(scratch, 0).chars);
+                                break;
+                            }
+                        }
+                        if (count < 2)
+                            hg_warn("In json scene file, entity \"%s\" sprite uv_pos has too few elements\n",
+                                HgString::create(scratch, name).append(scratch, 0).chars);
+                        has_pos = true;
+                    }
+                } else if (field->name == "uv_size") {
+                    if (field->value->type != HgJson::array) {
+                        hg_warn("In json scene file, entity \"%s\" sprite uv_size is not an array\n",
+                            HgString::create(scratch, name).append(scratch, 0).chars);
+                    } else {
+                        if (has_size) {
+                            hg_warn("In json scene file, entity \"%s\" sprite has multiple uv_size\n",
+                                HgString::create(scratch, name).append(scratch, 0).chars);
+                            break;
+                        }
+                        usize count = 0;
+                        for (HgJson::Elem* elem = field->value->array.elems; elem != nullptr; elem = elem->next) {
+                            if (count >= 2) {
+                                hg_warn("In json scene file, entity \"%s\" sprite uv_size has too many elements\n",
+                                    HgString::create(scratch, name).append(scratch, 0).chars);
+                                break;
+                            }
+                            if (elem->value->type == HgJson::floating) {
+                                s.uv_size[count++] = (f32)elem->value->floating;
+                            } else if (elem->value->type == HgJson::integer) {
+                                s.uv_size[count++] = (f32)elem->value->integer;
+                            } else {
+                                hg_warn("In json scene file, entity \"%s\" sprite uv_size does not contain numbers\n",
+                                    HgString::create(scratch, name).append(scratch, 0).chars);
+                                break;
+                            }
+                        }
+                        if (count < 2)
+                            hg_warn("In json scene file, entity \"%s\" sprite uv_size has too few elements\n",
+                                HgString::create(scratch, name).append(scratch, 0).chars);
+                        has_size = true;
+                    }
+                } else {
+                    hg_warn("In json scene file, entity \"%s\" sprite has unknown field \"%s\"\n",
+                        HgString::create(scratch, name).append(scratch, 0).chars,
+                        HgString::create(scratch, field->name).append(scratch, 0).chars);
+                }
+
+                break;
+            default:
+                hg_warn("In json scene file, entity \"%s\" sprite has unknown field \"%s\"\n",
+                    HgString::create(scratch, name).append(scratch, 0).chars,
+                    HgString::create(scratch, field->name).append(scratch, 0).chars);
+                break;
+        }
+    }
+
+    if (!has_tex)
+        hg_warn("In json scene file, entity \"%s\" sprite has no texture\n",
+            HgString::create(scratch, name).append(scratch, 0).chars);
+    if (!has_pos)
+        hg_warn("In json scene file, entity \"%s\" sprite has no uv_pos\n",
+            HgString::create(scratch, name).append(scratch, 0).chars);
+    if (!has_size)
+        hg_warn("In json scene file, entity \"%s\" sprite has no uv_size\n",
+            HgString::create(scratch, name).append(scratch, 0).chars);
+
+    return s;
+}
+
+HgBinary hg_create_scene_json(HgArena& arena, const HgJson& json) {
+    return HgSceneJsonParser{}.parse(arena, json);
 }
 
 void hg_vulkan_init();
