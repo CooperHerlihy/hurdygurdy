@@ -2242,7 +2242,7 @@ void HgECS::reset() {
     next_entity = {0};
 }
 
-void HgECS::resize_entities(HgArena& arena, u32 new_capacity) {
+void HgECS::realloc_entities(HgArena& arena, u32 new_capacity) {
     entity_pool = arena.realloc(entity_pool, entity_capacity, new_capacity);
     for (u32 i = (u32)entity_capacity; i < (u32)new_capacity; ++i) {
         entity_pool[i] = {i + 1};
@@ -2273,13 +2273,7 @@ void HgECS::despawn(HgEntity entity) {
     next_entity = entity;
 }
 
-void HgECS::register_component_untyped(
-    HgArena& arena,
-    u32 max_components,
-    u32 component_size,
-    u32 component_alignment,
-    u32 component_id
-) {
+void HgECS::register_component(HgArena& arena, u32 max_components, u32 width, u32 alignment, u32 component_id) {
     hg_assert(!is_registered(component_id));
     if (component_id >= system_count) {
         systems = arena.realloc(systems, system_count, component_id + 1);
@@ -2289,18 +2283,18 @@ void HgECS::register_component_untyped(
     Component& system = systems[component_id];
     system.sparse = arena.alloc<u32>(entity_capacity);
     system.dense = arena.alloc<HgEntity>(max_components);
-    system.components = system.components.create(arena, component_size, component_alignment, 0, max_components);
+    system.components = system.components.create(arena, width, alignment, 0, max_components);
     std::memset(system.sparse, -1, entity_capacity * sizeof(*system.sparse));
 }
 
-void HgECS::unregister_component_untyped(u32 component_id) {
+void HgECS::unregister_component(u32 component_id) {
     if (!is_registered(component_id))
         return;
 
     systems[component_id] = {};
 }
 
-u32 HgECS::smallest_system_untyped(u32* ids, usize id_count) {
+u32 HgECS::smallest_id(u32* ids, usize id_count) {
     u32 smallest = ids[0];
     hg_assert(is_registered(ids[0]));
     for (usize i = 1; i < id_count; ++i) {
@@ -2311,21 +2305,31 @@ u32 HgECS::smallest_system_untyped(u32* ids, usize id_count) {
     return smallest;
 }
 
-void HgECS::swap_idx(u32 lhs, u32 rhs, u32 component_id) {
+void* HgECS::add(HgEntity entity, u32 component_id) {
+    hg_assert(is_alive(entity));
     hg_assert(is_registered(component_id));
-    Component& system = systems[component_id];
-    hg_assert(lhs < system.components.count);
-    hg_assert(rhs < system.components.count);
+    hg_assert(!has(entity, component_id));
 
-    usize width = system.components.width;
-    void* temp = alloca(width);
-    std::memcpy(temp, system.components.get(lhs), width);
-    std::memcpy(system.components.get(lhs), system.components.get(rhs), width);
-    std::memcpy(system.components.get(rhs), temp, width);
+    systems[component_id].sparse[entity] = (u32)systems[component_id].components.count;
+    systems[component_id].dense[systems[component_id].components.count] = entity;
+    return systems[component_id].components.push();
 }
 
-void HgECS::swap_location_idx(u32 lhs, u32 rhs, u32 component_id) {
+void HgECS::remove(HgEntity entity, u32 component_id) {
+    hg_assert(is_alive(entity));
     hg_assert(is_registered(component_id));
+    hg_assert(has(entity, component_id));
+
+    u32 index = systems[component_id].sparse[entity];
+    systems[component_id].sparse[entity] = (u32)-1;
+
+    systems[component_id].dense[index] = systems[component_id].dense[systems[component_id].components.count - 1];
+    systems[component_id].components.swap_remove(index);
+}
+
+void HgECS::swap_idx_location(u32 lhs, u32 rhs, u32 component_id) {
+    hg_assert(is_registered(component_id));
+
     Component& system = systems[component_id];
     hg_assert(lhs < system.components.count);
     hg_assert(rhs < system.components.count);
@@ -2343,26 +2347,10 @@ void HgECS::swap_location_idx(u32 lhs, u32 rhs, u32 component_id) {
     system.sparse[lhs_entity] = rhs;
     system.sparse[rhs_entity] = lhs;
 
-    swap_idx(lhs, rhs, component_id);
-}
-
-void HgECS::swap_location(HgEntity lhs, HgEntity rhs, u32 component_id) {
-    hg_assert(is_registered(component_id));
-    Component& system = systems[component_id];
-    hg_assert(is_alive(lhs));
-    hg_assert(is_alive(rhs));
-    hg_assert(has(lhs, component_id));
-    hg_assert(has(rhs, component_id));
-
-    u32 lhs_index = system.sparse[lhs];
-    u32 rhs_index = system.sparse[rhs];
-
-    system.dense[lhs_index] = rhs;
-    system.dense[rhs_index] = lhs;
-    system.sparse[lhs] = rhs_index;
-    system.sparse[rhs] = lhs_index;
-
-    swap_idx(lhs_index, rhs_index, component_id);
+    void* temp = alloca(system.components.width);
+    std::memcpy(temp, system.components.get(lhs), system.components.width);
+    std::memcpy(system.components.get(lhs), system.components.get(rhs), system.components.width);
+    std::memcpy(system.components.get(rhs), temp, system.components.width);
 }
 
 void HgECS::sort_untyped(
@@ -2386,12 +2374,12 @@ void HgECS::sort_untyped(
                 if (inc == dec)
                     goto finish;
             }
-            swap_location_idx(inc, dec, component_id);
+            swap_idx_location(inc, dec, component_id);
         }
 
 finish:
         if (compare(data, systems[component_id].dense[inc], systems[component_id].dense[pivot]))
-            swap_location_idx(pivot, inc, component_id);
+            swap_idx_location(pivot, inc, component_id);
 
         return inc;
     };
@@ -2465,30 +2453,17 @@ void HgTransform::destroy() {
         child = tf.next_sibling;
     }
     if (parent != HgEntity{}) {
-        if (prev_sibling == HgEntity{}) {
-            hg_ecs->get<HgTransform>(parent).first_child = next_sibling;
-            hg_ecs->get<HgTransform>(next_sibling).prev_sibling = HgEntity{};
-        } else {
+        if (prev_sibling != HgEntity{}) {
             hg_ecs->get<HgTransform>(prev_sibling).next_sibling = next_sibling;
-            hg_ecs->get<HgTransform>(next_sibling).prev_sibling = prev_sibling;
+            if (next_sibling != HgEntity{})
+                hg_ecs->get<HgTransform>(next_sibling).prev_sibling = prev_sibling;
+        } else {
+            hg_ecs->get<HgTransform>(parent).first_child = next_sibling;
+            if (next_sibling != HgEntity{})
+                hg_ecs->get<HgTransform>(next_sibling).prev_sibling = HgEntity{};
         }
     }
     hg_ecs->despawn(hg_ecs->get_entity(*this));
-}
-
-void HgTransform::move(const HgVec3& dp, const HgVec3& ds, const HgQuat& dr) {
-    HgEntity child = first_child;
-    while (child != HgEntity{}) {
-        HgTransform& tf = hg_ecs->get<HgTransform>(child);
-        // tf.move(
-        //     hg_rotate(dr, dp + (tf.position - position) * scale * ds / tf.scale) - tf.position,
-        //     ds,
-        //     dr);
-        child = tf.next_sibling;
-    }
-    position += dp;
-    scale *= ds;
-    rotation = dr * rotation;
 }
 
 void HgTransform::set(const HgVec3& p, const HgVec3& s, const HgQuat& r) {
@@ -2504,6 +2479,10 @@ void HgTransform::set(const HgVec3& p, const HgVec3& s, const HgQuat& r) {
     position = p;
     scale = s;
     rotation = r;
+}
+
+void HgTransform::move(const HgVec3& dp, const HgVec3& ds, const HgQuat& dr) {
+    set(position + dp, scale * ds, dr * rotation);
 }
 
 #include "sprite.frag.spv.h"
@@ -2800,638 +2779,6 @@ void HgPipeline2D::draw(VkCommandBuffer cmd) {
         vkCmdDraw(cmd, 4, 1, 0, 0);
     });
 }
-
-// struct HgSceneDescInfo {
-//     u32 version_major;
-//     u32 version_minor;
-//     u32 version_patch;
-//     u32 entity_count;
-//     u32 component_count;
-//     u32 components_idx;
-//     u32 resource_count;
-//     u32 resources_idx;
-// };
-//
-// struct HgSceneDescComponent {
-//     HgComponent type;
-//     u32 count;
-//     u32 entities_begin_idx;
-//     u32 components_begin_idx;
-// };
-//
-// struct HgSceneDescResource {
-//     HgResource type;
-//     u32 length;
-//     u32 path_idx;
-// };
-//
-// void HgScene::register_resources() {
-//     hg_assert(hg_resources != nullptr);
-//
-//     HgSceneDescInfo info = desc.read<HgSceneDescInfo>(0);
-//
-//     usize resource_idx = info.resources_idx;
-//     usize resource_end = resource_idx + info.resource_count * sizeof(HgSceneDescResource);
-//     for (; resource_idx < resource_end; resource_idx += sizeof(HgSceneDescResource)) {
-//         HgSceneDescResource resource_desc = desc.read<HgSceneDescResource>(resource_idx);
-//
-//         HgStringView path = {(char*)desc.file + resource_desc.path_idx, resource_desc.length};
-//         hg_resources->register_resource(resource_desc.type, hg_resource_id(path));
-//
-//         if (!(resource_desc.type > HgResource::none && resource_desc.type < HgResource::count)) {
-//             hg_arena_scope(scratch, hg_get_scratch());
-//             hg_warn("Invalid resource type found with file: %s\n",
-//                 HgString::create(scratch, path).append(scratch, 0).chars);
-//         }
-//     }
-// }
-//
-// void HgScene::load(HgFence* fences, usize fence_count) {
-//     if (loaded)
-//         return;
-//
-//     HgSceneDescInfo info = desc.read<HgSceneDescInfo>(0);
-//
-//     usize resource_idx = info.resources_idx;
-//     usize resource_end = resource_idx + info.resource_count * sizeof(HgSceneDescResource);
-//     for (; resource_idx < resource_end; resource_idx += sizeof(HgSceneDescResource)) {
-//         HgSceneDescResource resource_desc = desc.read<HgSceneDescResource>(resource_idx);
-//
-//         HgStringView path = {(char*)desc.file + resource_desc.path_idx, resource_desc.length};
-//         hg_resources->load(fences, fence_count, path);
-//     }
-//
-//     loaded = true;
-// }
-//
-// void HgScene::unload(HgFence* fences, usize fence_count) {
-//     if (!loaded)
-//         return;
-//
-//     HgSceneDescInfo info = desc.read<HgSceneDescInfo>(0);
-//
-//     usize resource_idx = info.resources_idx;
-//     usize resource_end = resource_idx + info.resource_count * sizeof(HgSceneDescResource);
-//     for (; resource_idx < resource_end; resource_idx += sizeof(HgSceneDescResource)) {
-//         HgSceneDescResource resource_desc = desc.read<HgSceneDescResource>(resource_idx);
-//
-//         HgStringView path = {(char*)desc.file + resource_desc.path_idx, resource_desc.length};
-//         hg_resources->unload(fences, fence_count, hg_resource_id(path));
-//     }
-//
-//     loaded = false;
-// }
-//
-// void HgScene::instantiate(HgArena& arena) {
-//     hg_assert(!instantiated);
-//
-//     hg_arena_scope(scratch, hg_get_scratch());
-//
-//     HgSceneDescInfo info = desc.read<HgSceneDescInfo>(0);
-//
-//     while (entity_capacity < info.entity_count) {
-//         usize new_capacity = entity_capacity == 0 ? 1 : entity_capacity * 2;
-//         entities = arena.realloc(entities, entity_capacity, new_capacity);
-//         entity_capacity = new_capacity;
-//     }
-//     for (usize i = 0; i < info.entity_count; ++i) {
-//         entities[i] = hg_ecs->spawn();
-//     }
-//
-//     usize component_idx = info.components_idx;
-//     usize component_end = component_idx + info.component_count * sizeof(HgSceneDescComponent);
-//     for (; component_idx < component_end; component_idx += sizeof(HgSceneDescComponent)) {
-//         HgSceneDescComponent component_desc = desc.read<HgSceneDescComponent>(component_idx);
-//
-//         usize entities_idx = component_desc.entities_begin_idx;
-//         usize components_idx = component_desc.components_begin_idx;
-//         switch (component_desc.type) {
-//         case HgComponent::transform:
-//             for (usize i = 0; i < component_desc.count; ++i) {
-//                 HgEntity entity = entities[desc.read<HgEntity>(entities_idx + i * sizeof(HgEntity))];
-//                 hg_ecs->add(entity, desc.read<HgTransform>(components_idx + i * sizeof(HgTransform)));
-//             }
-//             break;
-//         case HgComponent::sprite:
-//             for (usize i = 0; i < component_desc.count; ++i) {
-//                 HgEntity entity = entities[desc.read<HgEntity>(entities_idx + i * sizeof(HgEntity))];
-//                 hg_ecs->add(entity, desc.read<HgSprite>(components_idx + i * sizeof(HgSprite)));
-//             }
-//             break;
-//         default:
-//             hg_warn("Invalid component type found\n");
-//             break;
-//         }
-//     }
-//
-//     instantiated = true;
-// }
-//
-// void HgScene::deinstantiate() {
-//     hg_assert(instantiated);
-//     for (usize i = 0; i < entity_capacity; ++i) {
-//         hg_ecs->despawn(entities[i]);
-//     }
-//     instantiated = false;
-// }
-//
-// static HgComponent hg_internal_component_str_to_enum(HgStringView str) {
-//     if (str.length == 0)
-//         return HgComponent::none;
-//
-//     switch (str[0]) {
-//         case 't':
-//             if (str == "transform")
-//                 return HgComponent::transform;
-//             break;
-//         case 's':
-//             if (str == "sprite")
-//                 return HgComponent::sprite;
-//             break;
-//     }
-//
-//     return HgComponent::none;
-// }
-//
-// struct HgSceneJsonParser {
-//     struct Component {
-//         HgAnyArray data;
-//         u32* indices;
-//
-//         static Component create(HgArena& arena, usize max, u32 width, u32 alignment) {
-//             Component c;
-//             c.data = c.data.create(arena, width, alignment, 0, max);
-//             c.indices = arena.alloc<u32>(max);
-//             return c;
-//         }
-//     };
-//
-//     struct Resource {
-//         HgResource type;
-//         HgStringView path;
-//     };
-//
-//     static constexpr auto comp_hash = [](HgComponent c) constexpr { return (usize)c; };
-//     static constexpr auto res_hash = [](HgResourceID r) constexpr { return (usize)r; };
-//
-//     HgHashMap<HgStringView, usize> entities;
-//     HgHashMap<HgComponent, Component, comp_hash> components;
-//     HgHashMap<HgResourceID, Resource, res_hash> resources;
-//
-//     HgBinary parse(HgArena& arena, const HgJson& json);
-//
-//     HgTransform parse_transform(HgStringView entity, const HgJson::Field* transform);
-//     HgSprite parse_sprite(HgStringView entity, const HgJson::Field* sprite);
-// };
-//
-// HgBinary HgSceneJsonParser::parse(HgArena& arena, const HgJson& json) {
-//     hg_arena_scope(scratch, hg_get_scratch(arena));
-//
-//     entities = entities.create(scratch, 512);
-//     components = components.create(scratch, (usize)HgComponent::count);
-//     resources = resources.create(scratch, 128);
-//
-//     for (HgJson::Error* e = json.errors; e != nullptr; e = e->next) {
-//         hg_warn("Scene description json file has error: %s", HgString::create(scratch, e->msg).append(scratch, 0).chars);
-//     }
-//
-//     if (json.file == nullptr)
-//         return {};
-//
-//     if (json.file->type != HgJson::jstruct) {
-//         hg_warn("Scene description json file does not begin with a struct\n");
-//         return {};
-//     }
-//
-//     for (const HgJson::Field* entity = json.file->jstruct.fields; entity != nullptr; entity = entity->next) {
-//         if (entities.has(entity->name)) {
-//             hg_warn("Json scene file has duplicate entity name \"%s\", may result in unexpected behavior\n",
-//                 HgString::create(arena, entity->name).append(scratch, 0).chars);
-//             continue;
-//         }
-//         if (entity->value->type != HgJson::jstruct) {
-//             hg_warn("Json scene file has an entity \"%s\" which is not a struct of components\n",
-//                 HgString::create(scratch, entity->name).append(scratch, 0).chars);
-//             continue;
-//         }
-//         if (entities.is_half_full())
-//             entities.grow(arena);
-//         entities.insert(entity->name, entities.load);
-//     }
-//
-// #define hg_macro_parse_json_component(type_enum, type_symbol) \
-//     case HgComponent::type_enum: { \
-//         if (!components.has(type)) \
-//             components.insert(type, Component::create( \
-//                 arena, entities.load, sizeof(type_symbol), alignof(type_symbol))); \
-//         Component& c = *components.get(type); \
-//         c.indices[c.data.count] = (u32)*entities.get(entity->name); \
-//         *(type_symbol*)c.data.push() = parse_##type_enum(entity->name, comp); \
-//     } break
-//
-//     for (const HgJson::Field* entity = json.file->jstruct.fields; entity != nullptr; entity = entity->next) {
-//         if (entity->value->type != HgJson::jstruct)
-//             continue;
-//
-//         for (HgJson::Field* comp = entity->value->jstruct.fields; comp != nullptr; comp = comp->next) {
-//             HgComponent type = hg_internal_component_str_to_enum(comp->name);
-//
-//             switch(type) {
-//             case HgComponent ::transform: {
-//               if (!components.has(type))
-//                 components.insert(type,
-//                                   Component ::create(arena, entities.load,
-//                                                      sizeof(HgTransform),
-//                                                      alignof(HgTransform)));
-//               Component &c = *components.get(type);
-//               c.indices[c.data.count] = (u32)*entities.get(entity->name);
-//               *(HgTransform *)c.data.push() =
-//                   parse_transform(entity->name, comp);
-//             } break;
-//             case HgComponent ::sprite: {
-//               if (!components.has(type))
-//                 components.insert(type, Component ::create(arena, entities.load,
-//                                                            sizeof(HgSprite),
-//                                                            alignof(HgSprite)));
-//               Component &c = *components.get(type);
-//               c.indices[c.data.count] = (u32)*entities.get(entity->name);
-//               *(HgSprite *)c.data.push() = parse_sprite(entity->name, comp);
-//             } break;
-//
-//             default: {
-//               hg_arena_scope(s, hg_get_scratch());
-//               hg_warn(
-//                   "Json scene file has entity \"%s\" which has an invalid "
-//                   "component \"%s\"",
-//                   HgString::create(s, entity->name).append(scratch, 0).chars,
-//                   HgString::create(s, comp->name).append(scratch, 0).chars);
-//             }
-//             }
-//         }
-//     }
-//
-// #undef hg_macro_parse_json_component
-//
-//     HgBinary bin{};
-//
-//     HgSceneDescInfo info;
-//     info.version_major = HgScene::desc_version_major;
-//     info.version_minor = HgScene::desc_version_minor;
-//     info.version_patch = HgScene::desc_version_patch;
-//     info.entity_count = (u32)entities.load;
-//
-//     usize info_idx = bin.size;
-//     bin.grow(arena, sizeof(HgSceneDescInfo));
-//
-//     info.component_count = (u32)components.load;
-//     info.components_idx = (u32)bin.size;
-//     bin.grow(arena, components.load * sizeof(HgSceneDescComponent));
-//
-//     info.resource_count = (u32)resources.load;
-//     info.resources_idx = (u32)bin.size;
-//     bin.grow(arena, resources.load * sizeof(HgSceneDescResource));
-//
-//     bin.overwrite(info_idx, info);
-//
-//     usize comp_idx = info.components_idx;
-//     for (auto [type, comp] : components) {
-//         HgSceneDescComponent desc;
-//         desc.type = type;
-//         desc.count = (u32)comp.data.count;
-//
-//         desc.entities_begin_idx = (u32)bin.size;
-//         bin.grow(arena, desc.count * sizeof(*comp.indices));
-//         bin.overwrite(desc.entities_begin_idx, comp.indices, desc.count * sizeof(*comp.indices));
-//
-//         desc.components_begin_idx = (u32)bin.size;
-//         bin.grow(arena, desc.count * comp.data.width);
-//         bin.overwrite(desc.components_begin_idx, comp.data.items, desc.count * comp.data.width);
-//
-//         bin.overwrite(comp_idx, desc);
-//         comp_idx += sizeof(desc);
-//     }
-//
-//     usize resource_idx = info.resources_idx;
-//     for (auto [id, res] : resources) {
-//         HgSceneDescResource desc;
-//         desc.type = res.type;
-//         desc.length = (u32)res.path.length;
-//
-//         desc.path_idx = (u32)bin.size;
-//         bin.grow(arena, desc.length);
-//         bin.overwrite(desc.path_idx, res.path.chars, res.path.length);
-//
-//         bin.overwrite(resource_idx, desc);
-//         resource_idx += sizeof(desc);
-//     }
-//
-//     return bin;
-// }
-//
-// HgTransform HgSceneJsonParser::parse_transform(HgStringView name, const HgJson::Field* transform) {
-//     hg_arena_scope(scratch, hg_get_scratch());
-//
-//     if (transform->value->type != HgJson::jstruct) {
-//         hg_warn("In json scene file, entity \"%s\" transform does not contain a struct\n",
-//             HgString::create(scratch, name).append(scratch, 0).chars);
-//         return {};
-//     }
-//
-//     HgTransform t{};
-//     bool has_pos = false;
-//     bool has_scale = false;
-//     bool has_rot = false;
-//
-//     for (HgJson::Field* field = transform->value->jstruct.fields; field != nullptr; field = field->next) {
-//
-//         if (field->name.length == 0) {
-//             hg_warn("In json scene file, entity \"%s\" transform has field with no name\n",
-//                 HgString::create(scratch, name).append(scratch, 0).chars);
-//             continue;
-//         }
-//         switch (field->name[0]) {
-//             case 'p':
-//                 if (field->name != "position")
-//                     hg_warn("In json scene file, entity \"%s\" transform has field \"%s\", did you mean position?\n",
-//                         HgString::create(scratch, name).append(scratch, 0).chars,
-//                         HgString::create(scratch, field->name).append(scratch, 0).chars);
-//                 if (field->value->type != HgJson::array) {
-//                     hg_warn("In json scene file, entity \"%s\" transform position is not an array\n",
-//                         HgString::create(scratch, name).append(scratch, 0).chars);
-//                 } else {
-//                     if (has_pos) {
-//                         hg_warn("In json scene file, entity \"%s\" transform has multiple positions\n",
-//                             HgString::create(scratch, name).append(scratch, 0).chars);
-//                         break;
-//                     }
-//                     usize count = 0;
-//                     for (HgJson::Elem* elem = field->value->array.elems; elem != nullptr; elem = elem->next) {
-//                         if (count >= 3) {
-//                             hg_warn("In json scene file, entity \"%s\" transform position has too many elements\n",
-//                                 HgString::create(scratch, name).append(scratch, 0).chars);
-//                             break;
-//                         }
-//                         if (elem->value->type == HgJson::floating) {
-//                             t.position[count++] = (f32)elem->value->floating;
-//                         } else if (elem->value->type == HgJson::integer) {
-//                             t.position[count++] = (f32)elem->value->integer;
-//                         } else {
-//                             hg_warn("In json scene file, entity \"%s\" transform position does not contain numbers\n",
-//                                 HgString::create(scratch, name).append(scratch, 0).chars);
-//                             break;
-//                         }
-//                     }
-//                     if (count < 3)
-//                         hg_warn("In json scene file, entity \"%s\" transform position has too few elements\n",
-//                             HgString::create(scratch, name).append(scratch, 0).chars);
-//                     has_pos = true;
-//                 }
-//                 break;
-//             case 's':
-//                 if (field->name != "scale")
-//                     hg_warn("In json scene file, entity \"%s\" transform has field \"%s\", did you mean scale?\n",
-//                         HgString::create(scratch, name).append(scratch, 0).chars,
-//                         HgString::create(scratch, field->name).append(scratch, 0).chars);
-//                 if (field->value->type != HgJson::array) {
-//                     hg_warn("In json scene file, entity \"%s\" transform scale is not an array\n",
-//                         HgString::create(scratch, name).append(scratch, 0).chars);
-//                 } else {
-//                     if (has_scale) {
-//                         hg_warn("In json scene file, entity \"%s\" transform has multiple scales\n",
-//                             HgString::create(scratch, name).append(scratch, 0).chars);
-//                         break;
-//                     }
-//                     usize count = 0;
-//                     for (HgJson::Elem* elem = field->value->array.elems; elem != nullptr; elem = elem->next) {
-//                         if (count >= 3) {
-//                             hg_warn("In json scene file, entity \"%s\" transform scale has too many elements\n",
-//                                 HgString::create(scratch, name).append(scratch, 0).chars);
-//                             break;
-//                         }
-//                         if (elem->value->type == HgJson::floating) {
-//                             t.scale[count++] = (f32)elem->value->floating;
-//                         } else if (elem->value->type == HgJson::integer) {
-//                             t.scale[count++] = (f32)elem->value->integer;
-//                         } else {
-//                             hg_warn("In json scene file, entity \"%s\" transform scale does not contain numbers\n",
-//                                 HgString::create(scratch, name).append(scratch, 0).chars);
-//                             break;
-//                         }
-//                     }
-//                     if (count < 3)
-//                         hg_warn("In json scene file, entity \"%s\" transform scale has too few elements\n",
-//                             HgString::create(scratch, name).append(scratch, 0).chars);
-//                     has_scale = true;
-//                 }
-//                 break;
-//             case 'r':
-//                 if (field->name != "rotation")
-//                     hg_warn("In json scene file, entity \"%s\" transform has field \"%s\", did you mean rotation?\n",
-//                         HgString::create(scratch, name).append(scratch, 0).chars,
-//                         HgString::create(scratch, field->name).append(scratch, 0).chars);
-//                 if (field->value->type != HgJson::array) {
-//                     hg_warn("In json scene file, entity \"%s\" transform rotation is not an array\n",
-//                         HgString::create(scratch, name).append(scratch, 0).chars);
-//                 } else {
-//                     if (has_rot) {
-//                         hg_warn("In json scene file, entity \"%s\" transform has multiple rotations\n",
-//                             HgString::create(scratch, name).append(scratch, 0).chars);
-//                         break;
-//                     }
-//                     usize count = 0;
-//                     for (HgJson::Elem* elem = field->value->array.elems; elem != nullptr; elem = elem->next) {
-//                         if (count >= 4) {
-//                             hg_warn("In json scene file, entity \"%s\" transform rotations has too many elements\n",
-//                                 HgString::create(scratch, name).append(scratch, 0).chars);
-//                             break;
-//                         }
-//                         if (elem->value->type == HgJson::floating) {
-//                             t.rotation[count++] = (f32)elem->value->floating;
-//                         } else if (elem->value->type == HgJson::integer) {
-//                             t.rotation[count++] = (f32)elem->value->integer;
-//                         } else {
-//                             hg_warn("In json scene file, entity \"%s\" transform rotation does not contain numbers\n",
-//                                 HgString::create(scratch, name).append(scratch, 0).chars);
-//                             break;
-//                         }
-//                     }
-//                     if (count < 4)
-//                         hg_warn("In json scene file, entity \"%s\" transform rotation has too few elements\n",
-//                             HgString::create(scratch, name).append(scratch, 0).chars);
-//                     has_rot = true;
-//                 }
-//                 break;
-//             default:
-//                 hg_warn("In json scene file, entity \"%s\" transform has unknown field \"%s\"\n",
-//                     HgString::create(scratch, name).append(scratch, 0).chars,
-//                     HgString::create(scratch, field->name).append(scratch, 0).chars);
-//                 break;
-//         }
-//     }
-//
-//     if (!has_pos)
-//         hg_warn("In json scene file, entity \"%s\" transform has no position\n",
-//             HgString::create(scratch, name).append(scratch, 0).chars);
-//     if (!has_scale)
-//         hg_warn("In json scene file, entity \"%s\" transform has no scale\n",
-//             HgString::create(scratch, name).append(scratch, 0).chars);
-//     if (!has_rot)
-//         hg_warn("In json scene file, entity \"%s\" transform has no rotation\n",
-//             HgString::create(scratch, name).append(scratch, 0).chars);
-//
-//     return t;
-// }
-//
-// HgSprite HgSceneJsonParser::parse_sprite(HgStringView name, const HgJson::Field* sprite) {
-//     hg_arena_scope(scratch, hg_get_scratch());
-//
-//     if (sprite->value->type != HgJson::jstruct) {
-//         hg_warn("In json scene file, entity \"%s\" sprite does not contain a struct\n",
-//             HgString::create(scratch, name).append(scratch, 0).chars);
-//         return {};
-//     }
-//
-//     HgSprite s{};
-//     bool has_tex = false;
-//     bool has_pos = false;
-//     bool has_size = false;
-//
-//     for (HgJson::Field* field = sprite->value->jstruct.fields; field != nullptr; field = field->next) {
-//
-//         if (field->name.length == 0) {
-//             hg_warn("In json scene file, entity \"%s\" sprite has field with no name\n",
-//                 HgString::create(scratch, name).append(scratch, 0).chars);
-//             continue;
-//         }
-//         switch (field->name[0]) {
-//             case 't':
-//                 if (field->name != "texture")
-//                     hg_warn("In json scene file, entity \"%s\" sprite has field \"%s\", did you mean texture?\n",
-//                         HgString::create(scratch, name).append(scratch, 0).chars,
-//                         HgString::create(scratch, field->name).append(scratch, 0).chars);
-//                 if (field->value->type != HgJson::string) {
-//                     hg_warn("In json scene file, entity \"%s\" sprite texture is not a string\n",
-//                         HgString::create(scratch, name).append(scratch, 0).chars);
-//                 } else {
-//                     if (has_pos) {
-//                         hg_warn("In json scene file, entity \"%s\" sprite has multiple textures\n",
-//                             HgString::create(scratch, name).append(scratch, 0).chars);
-//                     }
-//                     s.texture = hg_hash(field->value->string);
-//                     if (!resources.has(s.texture)) {
-//                         resources.insert(s.texture, {HgResource::texture, field->value->string});
-//                     } else {
-//                         Resource& tex = *resources.get(s.texture);
-//                         if (tex.type != HgResource::texture) {
-//                             hg_warn("In json scene file, resource \"%s\" is used as more than one type\n",
-//                                 HgString::create(scratch, field->value->string).append(scratch, 0).chars);
-//                         }
-//                         if (tex.path != field->value->string) {
-//                             hg_warn("In json scene file, resource \"%s\" collides with \"%s\"\n",
-//                                 HgString::create(scratch, tex.path).append(scratch, 0).chars,
-//                                 HgString::create(scratch, field->value->string).append(scratch, 0).chars);
-//                         }
-//                     }
-//                     has_tex = true;
-//                 }
-//                 break;
-//             case 'u':
-//                 if (field->name == "uv_pos") {
-//                     if (field->value->type != HgJson::array) {
-//                         hg_warn("In json scene file, entity \"%s\" sprite uv_pos is not an array\n",
-//                             HgString::create(scratch, name).append(scratch, 0).chars);
-//                     } else {
-//                         if (has_pos) {
-//                             hg_warn("In json scene file, entity \"%s\" sprite has multiple uv_pos\n",
-//                                 HgString::create(scratch, name).append(scratch, 0).chars);
-//                             break;
-//                         }
-//                         usize count = 0;
-//                         for (HgJson::Elem* elem = field->value->array.elems; elem != nullptr; elem = elem->next) {
-//                             if (count >= 2) {
-//                                 hg_warn("In json scene file, entity \"%s\" sprite uv_pos has too many elements\n",
-//                                     HgString::create(scratch, name).append(scratch, 0).chars);
-//                                 break;
-//                             }
-//                             if (elem->value->type == HgJson::floating) {
-//                                 s.uv_pos[count++] = (f32)elem->value->floating;
-//                             } else if (elem->value->type == HgJson::integer) {
-//                                 s.uv_pos[count++] = (f32)elem->value->integer;
-//                             } else {
-//                                 hg_warn("In json scene file, entity \"%s\" sprite uv_pos does not contain numbers\n",
-//                                     HgString::create(scratch, name).append(scratch, 0).chars);
-//                                 break;
-//                             }
-//                         }
-//                         if (count < 2)
-//                             hg_warn("In json scene file, entity \"%s\" sprite uv_pos has too few elements\n",
-//                                 HgString::create(scratch, name).append(scratch, 0).chars);
-//                         has_pos = true;
-//                     }
-//                 } else if (field->name == "uv_size") {
-//                     if (field->value->type != HgJson::array) {
-//                         hg_warn("In json scene file, entity \"%s\" sprite uv_size is not an array\n",
-//                             HgString::create(scratch, name).append(scratch, 0).chars);
-//                     } else {
-//                         if (has_size) {
-//                             hg_warn("In json scene file, entity \"%s\" sprite has multiple uv_size\n",
-//                                 HgString::create(scratch, name).append(scratch, 0).chars);
-//                             break;
-//                         }
-//                         usize count = 0;
-//                         for (HgJson::Elem* elem = field->value->array.elems; elem != nullptr; elem = elem->next) {
-//                             if (count >= 2) {
-//                                 hg_warn("In json scene file, entity \"%s\" sprite uv_size has too many elements\n",
-//                                     HgString::create(scratch, name).append(scratch, 0).chars);
-//                                 break;
-//                             }
-//                             if (elem->value->type == HgJson::floating) {
-//                                 s.uv_size[count++] = (f32)elem->value->floating;
-//                             } else if (elem->value->type == HgJson::integer) {
-//                                 s.uv_size[count++] = (f32)elem->value->integer;
-//                             } else {
-//                                 hg_warn("In json scene file, entity \"%s\" sprite uv_size does not contain numbers\n",
-//                                     HgString::create(scratch, name).append(scratch, 0).chars);
-//                                 break;
-//                             }
-//                         }
-//                         if (count < 2)
-//                             hg_warn("In json scene file, entity \"%s\" sprite uv_size has too few elements\n",
-//                                 HgString::create(scratch, name).append(scratch, 0).chars);
-//                         has_size = true;
-//                     }
-//                 } else {
-//                     hg_warn("In json scene file, entity \"%s\" sprite has unknown field \"%s\"\n",
-//                         HgString::create(scratch, name).append(scratch, 0).chars,
-//                         HgString::create(scratch, field->name).append(scratch, 0).chars);
-//                 }
-//
-//                 break;
-//             default:
-//                 hg_warn("In json scene file, entity \"%s\" sprite has unknown field \"%s\"\n",
-//                     HgString::create(scratch, name).append(scratch, 0).chars,
-//                     HgString::create(scratch, field->name).append(scratch, 0).chars);
-//                 break;
-//         }
-//     }
-//
-//     if (!has_tex)
-//         hg_warn("In json scene file, entity \"%s\" sprite has no texture\n",
-//             HgString::create(scratch, name).append(scratch, 0).chars);
-//     if (!has_pos)
-//         hg_warn("In json scene file, entity \"%s\" sprite has no uv_pos\n",
-//             HgString::create(scratch, name).append(scratch, 0).chars);
-//     if (!has_size)
-//         hg_warn("In json scene file, entity \"%s\" sprite has no uv_size\n",
-//             HgString::create(scratch, name).append(scratch, 0).chars);
-//
-//     return s;
-// }
-//
-// HgBinary hg_create_scene(HgArena& arena, const HgJson& json) {
-//     HgSceneJsonParser parser{};
-//     return parser.parse(arena, json);
-// }
 
 void hg_vulkan_init();
 

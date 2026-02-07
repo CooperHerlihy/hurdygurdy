@@ -93,8 +93,8 @@ int main(void) {
     };
 
     for (HgEntity square : squares) {
-        hg_ecs->add(square, HgTransform{});
-        hg_ecs->add(square, HgSprite{texture_id, {0.0f}, {1.0f}});
+        hg_ecs->add<HgTransform>(square) = {};
+        hg_ecs->add<HgSprite>(square) = {texture_id, {0.0f}, {1.0f}};
     }
 
     {
@@ -1657,10 +1657,11 @@ hg_test(HgHashMap) {
 
         HgHashMap<u32, u32> map = map.create(arena, 64);
 
-        for (auto i : map) {
-            (void)i;
-            hg_test_assert(false);
-        }
+        bool has_any = false;
+        map.for_each([&](u32, u32) {
+            has_any = true;
+        });
+        hg_test_assert(!has_any);
 
         map.insert(12, 24);
         map.insert(42, 84);
@@ -1670,7 +1671,7 @@ hg_test(HgHashMap) {
         bool has_42 = false;
         bool has_100 = false;
         bool has_other = false;
-        for (auto [k, v] : map) {
+        map.for_each([&](u32 k, u32 v) {
             if (k == 12 && v == 24)
                 has_12 = true;
             else if (k == 42 && v == 84)
@@ -1679,20 +1680,21 @@ hg_test(HgHashMap) {
                 has_100 = true;
             else
                 has_other = true;
-        }
+        });
         hg_test_assert(has_12);
         hg_test_assert(has_42);
         hg_test_assert(has_100);
         hg_test_assert(!has_other);
 
-        for (auto [k, v] : map) {
+        map.for_each([&](u32 k, u32) {
             map.remove(k);
-        }
+        });
 
-        for (auto i : map) {
-            (void)i;
-            hg_test_assert(false);
-        }
+        has_any = false;
+        map.for_each([&](u32, u32) {
+            has_any = true;
+        });
+        hg_test_assert(!has_any);
     }
 
     return true;
@@ -2414,7 +2416,7 @@ hg_test(HgECS) {
         bool has_12 = false;
         bool has_42 = false;
         bool has_100 = false;
-        for (auto [e, c] : ecs.component_iter<u32>()) {
+        ecs.for_each<u32>([&](HgEntity e, u32& c) {
             switch (c) {
                 case 12:
                     has_12 = e == e1;
@@ -2429,7 +2431,7 @@ hg_test(HgECS) {
                     has_unknown = true;
                     break;
             }
-        }
+        });
         hg_test_assert(has_12);
         hg_test_assert(has_42);
         hg_test_assert(has_100);
@@ -2541,29 +2543,41 @@ hg_test(HgECS) {
             }
         }
 
-        ecs.for_each_par<u32>(16, [&](HgEntity, u32& c) {
+        bool success;
+        ecs.for_par<u32>(16, [&](HgEntity, u32& c) {
             c += 4;
         });
-        for (auto [e, c] : ecs.component_iter<u32>()) {
-            hg_test_assert(c == 16);
-        }
+        success = true;
+        ecs.for_each<u32>([&](HgEntity, u32 c) {
+            if (c != 16)
+                success = false;
+        });
+        hg_test_assert(success);
 
-        ecs.for_each_par<u64>(16, [&](HgEntity, u64& c) {
+        ecs.for_par<u64>(16, [&](HgEntity, u64& c) {
             c += 3;
         });
-        for (auto [e, c] : ecs.component_iter<u64>()) {
-            hg_test_assert(c == 45);
-        }
+        success = true;
+        ecs.for_each<u64>([&](HgEntity, u64 c) {
+            if (c != 45)
+                success = false;
+        });
+        hg_test_assert(success);
 
-        ecs.for_each_par<u32, u64>(16, [&](HgEntity, u32& c32, u64& c64) {
+        ecs.for_par<u32, u64>(16, [&](HgEntity, u32& c32, u64& c64) {
             c64 -= c32;
         });
-        for (auto [e, c] : ecs.component_iter<u64>()) {
-            if (ecs.has<u32>(e))
-                hg_test_assert(c == 29);
-            else
-                hg_test_assert(c == 45);
-        }
+        success = true;
+        ecs.for_each<u64>([&](HgEntity e, u64 c) {
+            if (ecs.has<u32>(e)) {
+                if (c != 29)
+                    success = false;
+            } else {
+                if (c != 45)
+                    success = false;
+            }
+        });
+        hg_test_assert(success);
     }
 
     ecs.reset();
@@ -2577,10 +2591,12 @@ hg_test(HgECS) {
 
         ecs.sort<u32>(&ecs, comparison);
 
-        for (auto [e, c] : ecs.component_iter<u32>()) {
-            (void) e;
-            hg_test_assert(c == 42);
-        }
+        bool success = true;
+        ecs.for_each<u32>([&](HgEntity, u32 c) {
+            if (c != 42)
+                success = false;
+        });
+        hg_test_assert(success);
 
         ecs.reset();
     }
@@ -2591,22 +2607,30 @@ hg_test(HgECS) {
             ecs.add<u32>(ecs.spawn()) = small_scramble_1[i];
         }
 
-        ecs.sort<u32>(&ecs, comparison);
+        {
+            ecs.sort<u32>(&ecs, comparison);
 
-        u32 elem = 0;
-        for (auto [e, c] : ecs.component_iter<u32>()) {
-            (void)e;
-            hg_test_assert(c == elem);
-            ++elem;
+            bool success = true;
+            u32 elem = 0;
+            ecs.for_each<u32>([&](HgEntity, u32 c) {
+                if (c != elem)
+                    success = false;
+                ++elem;
+            });
+            hg_test_assert(success);
         }
 
-        ecs.sort<u32>(&ecs, comparison);
+        {
+            ecs.sort<u32>(&ecs, comparison);
 
-        elem = 0;
-        for (auto [e, c] : ecs.component_iter<u32>()) {
-            (void)e;
-            hg_test_assert(c == elem);
-            ++elem;
+            bool success = true;
+            u32 elem = 0;
+            ecs.for_each<u32>([&](HgEntity, u32 c) {
+                if (c != elem)
+                    success = false;
+                ++elem;
+            });
+            hg_test_assert(success);
         }
 
         ecs.reset();
@@ -2619,12 +2643,14 @@ hg_test(HgECS) {
         }
         ecs.sort<u32>(&ecs, comparison);
 
+        bool success = true;
         u32 elem = 0;
-        for (auto [e, c] : ecs.component_iter<u32>()) {
-            (void)e;
-            hg_test_assert(c == elem);
+        ecs.for_each<u32>([&](HgEntity, u32 c) {
+            if (c != elem)
+                success = false;
             ++elem;
-        }
+        });
+        hg_test_assert(success);
 
         ecs.reset();
     }
@@ -2637,12 +2663,14 @@ hg_test(HgECS) {
         ecs.sort<u32>(&ecs, comparison);
         ecs.sort<u32>(&ecs, comparison);
 
+        bool success = true;
         u32 elem = 0;
-        for (auto [e, c] : ecs.component_iter<u32>()) {
-            (void)e;
-            hg_test_assert(c == elem);
+        ecs.for_each<u32>([&](HgEntity, u32 c) {
+            if (c != elem)
+                success = false;
             ++elem;
-        }
+        });
+        hg_test_assert(success);
 
         ecs.reset();
     }
@@ -2653,12 +2681,14 @@ hg_test(HgECS) {
         }
         ecs.sort<u32>(&ecs, comparison);
 
+        bool success = true;
         u32 elem = 0;
-        for (auto [e, c] : ecs.component_iter<u32>()) {
-            (void)e;
-            hg_test_assert(c == elem);
+        ecs.for_each<u32>([&](HgEntity, u32 c) {
+            if (c != elem)
+                success = false;
             ++elem;
-        }
+        });
+        hg_test_assert(success);
 
         ecs.reset();
     }
@@ -2670,90 +2700,18 @@ hg_test(HgECS) {
         ecs.sort<u32>(&ecs, comparison);
         ecs.sort<u32>(&ecs, comparison);
 
+        bool success = true;
         u32 elem = 0;
-        for (auto [e, c] : ecs.component_iter<u32>()) {
-            (void)e;
-            hg_test_assert(c == elem / 2);
+        ecs.for_each<u32>([&](HgEntity, u32 c) {
+            if (c != elem / 2)
+                success = false;
             ++elem;
-        }
+        });
+        hg_test_assert(success);
 
         ecs.reset();
     }
 
     return true;
 }
-
-// hg_test(HgScene) {
-//     HgFence fence;
-//
-//     {
-//         hg_arena_scope(arena, hg_get_scratch());
-//
-//         HgStringView file = R"(
-//             {
-//                 "player": {
-//                     "transform": {
-//                         "position": [0.0, 0.0, 0.0],
-//                         "scale": [1.0, 1.0, 1.0],
-//                         "rotation": [1.0, 0.0, 0.0, 0.0]
-//                     },
-//                     "sprite": {
-//                         "texture": "assets/tex.png",
-//                         "uv_pos": [0.0, 0.0],
-//                         "uv_size": [1.0, 1.0]
-//                     }
-//                 },
-//                 "enemy": {
-//                     "transform": {
-//                         "position": [0.0, 0.0, 0.0],
-//                         "scale": [1.0, 1.0, 1.0],
-//                         "rotation": [1.0, 0.0, 0.0, 0.0]
-//                     },
-//                     "sprite": {
-//                         "texture": "assets/tex.png",
-//                         "uv_pos": [0.0, 0.0],
-//                         "uv_size": [1.0, 1.0]
-//                     }
-//                 }
-//             },
-//         )";
-//         HgJson json = json.parse(arena, file);
-//         HgScene scene = hg_create_scene(arena, json);
-//
-//         scene.register_resources();
-//
-//         scene.load(&fence, 1);
-//         hg_test_assert(fence.wait(2.0));
-//
-//         u32 count = 0;
-//         for (auto [e, c] : hg_ecs->component_iter<HgTransform>()) {
-//             ++count;
-//             hg_test_assert((c.position == HgVec3{0, 0, 0}));
-//             hg_test_assert((c.scale == HgVec3{1, 1, 1}));
-//             hg_test_assert((c.rotation == HgQuat{1, 0, 0, 0}));
-//         }
-//         hg_test_assert(count == 2);
-//
-//         count = 0;
-//         for (auto [e, c] : hg_ecs->component_iter<HgSprite>()) {
-//             ++count;
-//             hg_test_assert((c.texture == hg_hash("assets/tex.png")));
-//             hg_test_assert((c.uv_pos == HgVec2{0, 0}));
-//             hg_test_assert((c.uv_size == HgVec2{1, 1}));
-//         }
-//         hg_test_assert(count == 2);
-//
-//         scene.instantiate(arena);
-//
-//         scene.deinstantiate();
-//
-//         scene.unload(&fence, 1);
-//         hg_test_assert(fence.wait(2.0));
-//
-//         hg_resources->reset(&fence, 1);
-//         hg_test_assert(fence.wait(2.0));
-//     }
-//
-//     return true;
-// }
 

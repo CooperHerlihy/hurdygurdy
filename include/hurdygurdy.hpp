@@ -106,10 +106,10 @@
  */
 #define hg_macro_concat(x, y) hg_macro_concat_internal(x, y)
 
-template<typename F>
+template<typename Fn>
 struct HgDeferInternal {
-    F fn;
-    HgDeferInternal(F defer_function) : fn(defer_function) {}
+    Fn fn;
+    HgDeferInternal(Fn defer_function) : fn(defer_function) {}
     ~HgDeferInternal() { fn(); }
 };
 
@@ -2082,7 +2082,31 @@ HgString hg_float_to_str_base10(HgArena& arena, f64 num, u64 decimal_count);
 
 // base 2 and 16 string-int conversions : TODO
 // arbitrary base string-int conversions : TODO?
-// string formatting : TODO
+
+/**
+ * Produce a formatted string : TODO
+ *
+ * Format specifiers
+ * - int (i64): "{i}"
+ * - unsigned int (u64): "{u}"
+ * - hexadecimal (i64): "{x}"
+ * - float with 6 decimals (f64): "{f}"
+ * - float with N decimals (f64): "{fN}"
+ * - char (char): "{c}"
+ * - string (HgStringView): "{s}"
+ * - c string (char*): "{cstr}"
+ *
+ * Use {{ and }} to escape the format specifier
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - fmt The format string
+ * - ... The format parameters
+ *
+ * Returns
+ * - The created string
+ */
+HgString hg_format_string(HgArena& arena, HgStringView fmt, ...);
 
 /**
  * A parsed Json file
@@ -2758,51 +2782,16 @@ struct HgHashMap {
         return idx == (usize)-1 ? nullptr : vals + idx;
     }
 
-    struct Pair {
-        Key& key;
-        Value& value;
-    };
-
     /**
-     * For c++ ranged base for
+     * Execute a function for every key-value pair
      */
-    struct Iter {
-        HgHashMap* p;
-        usize i;
-
-        Pair operator*() {
-            return {p->keys[i], p->vals[i]};
+    template<typename Fn>
+    void for_each(Fn fn) {
+        static_assert(std::is_invocable_r_v<void, Fn, Key&, Value&>);
+        for (usize i = 0; i < capacity; ++i) {
+            if (has_val[i])
+                fn(keys[i], vals[i]);
         }
-
-        Iter& operator++() {
-            ++i;
-            while (!p->has_val[i] && i < p->capacity) {
-                ++i;
-            }
-            return *this;
-        }
-
-        bool operator!=(const Iter& other) {
-            return i != other.i || p != other.p;
-        }
-    };
-
-    /**
-     * For c++ ranged base for
-     */
-    Iter begin() {
-        usize i = 0;
-        while (!has_val[i] && i < capacity) {
-            ++i;
-        }
-        return {this, i};
-    }
-
-    /**
-     * For c++ ranged base for
-     */
-    Iter end() {
-        return {this, capacity};
     }
 };
 
@@ -2989,6 +2978,18 @@ struct HgHashSet {
             idx = (idx + 1) % capacity;
         }
         return has_val[idx] ? idx : (usize)-1;
+    }
+
+    /**
+     * Execute a function for every value
+     */
+    template<typename Fn>
+    void for_each(Fn fn) {
+        static_assert(std::is_invocable_r_v<void, Fn, Value&>);
+        for (usize i = 0; i < capacity; ++i) {
+            if (has_val[i])
+                fn(vals[i]);
+        }
     }
 };
 
@@ -3191,9 +3192,9 @@ struct HgThreadPool {
      * - chunk_size The number of elements to iterate per chunk
      * - fn The function to use to iterate, takes begin and end indicces
      */
-    template<typename F>
-    void for_par(usize n, usize chunk_size, F fn) {
-        static_assert(std::is_invocable_r_v<void, F, usize, usize>);
+    template<typename Fn>
+    void for_par(usize n, usize chunk_size, Fn fn) {
+        static_assert(std::is_invocable_r_v<void, Fn, usize, usize>);
 
         hg_arena_scope(scratch, hg_get_scratch());
 
@@ -3894,7 +3895,7 @@ struct HgECS {
      * - arena The arena to allocate from
      * - new_capacity The new max number of entities
      */
-    void resize_entities(HgArena& arena, u32 new_capacity);
+    void realloc_entities(HgArena& arena, u32 new_capacity);
 
     /**
      * Grows the entity pool to current * factor
@@ -3904,7 +3905,7 @@ struct HgECS {
      * - factor The factor to increase by
      */
     void grow_entities(HgArena& arena, f32 factor = 2.0f) {
-        resize_entities(arena, entity_capacity == 0 ? 1 : (u32)((f32)entity_capacity * factor));
+        realloc_entities(arena, entity_capacity == 0 ? 1 : (u32)((f32)entity_capacity * factor));
     }
 
     /**
@@ -3948,16 +3949,11 @@ struct HgECS {
      * Parameters
      * - mem The allocator to get memory from
      * - max_component The max number of this component the ECS can hold
-     * - component_size The size in bytes of the component struct
-     * - component_alignment The alignment of the component struct
+     * - width The size in bytes of the component struct
+     * - alignment The alignment of the component struct
      * - component_id The id of the component
      */
-    void register_component_untyped(
-        HgArena& arena,
-        u32 max_components,
-        u32 component_size,
-        u32 component_alignment,
-        u32 component_id);
+    void register_component(HgArena& arena, u32 max_components, u32 width, u32 alignment, u32 component_id);
 
     /**
      * Registers a component in this ECS
@@ -3970,7 +3966,7 @@ struct HgECS {
      */
     template<typename T>
     void register_component(HgArena& arena, u32 max_components) {
-        register_component_untyped(arena, max_components, sizeof(T), alignof(T), hg_component_id<T>);
+        register_component(arena, max_components, sizeof(T), alignof(T), hg_component_id<T>);
     }
 
     /**
@@ -3979,14 +3975,14 @@ struct HgECS {
      * Parameters
      * - component_id The id of the component
      */
-    void unregister_component_untyped(u32 component_id);
+    void unregister_component(u32 component_id);
 
     /**
      * Unregisters a component in this ECS
      */
     template<typename T>
     void unregister_component() {
-        unregister_component_untyped(hg_component_id<T>);
+        unregister_component(hg_component_id<T>);
     }
 
     /**
@@ -4051,7 +4047,7 @@ struct HgECS {
      * Returns
      * - The index/id of the smallest in the array
      */
-    u32 smallest_system_untyped(u32* ids, usize id_count);
+    u32 smallest_id(u32* ids, usize id_count);
 
     /**
      * Finds the index/id of the system with the fewest elements
@@ -4060,13 +4056,13 @@ struct HgECS {
      * - The index/id of the smallest in the array
      */
     template<typename... Ts>
-    u32 smallest_system() {
+    u32 smallest_id() {
         u32 ids[sizeof...(Ts)];
 
         u32 index = 0;
         ((ids[index++] = hg_component_id<Ts>), ...);
 
-        return smallest_system_untyped(ids, hg_countof(ids));
+        return smallest_id(ids, hg_countof(ids));
     }
 
     /**
@@ -4075,21 +4071,13 @@ struct HgECS {
      * Note, the entity must not have a component of this type already
      *
      * Parameters
-     * - entity The entity to add to, must be alive
      * - component_id The id of the component, must be registered
+     * - entity The entity to add to, must be alive
      *
      * Returns
      * - A pointer to the created component
      */
-    void* add(HgEntity entity, u32 component_id) {
-        hg_assert(is_alive(entity));
-        hg_assert(is_registered(component_id));
-        hg_assert(!has(entity, component_id));
-
-        systems[component_id].sparse[entity] = (u32)systems[component_id].components.count;
-        systems[component_id].dense[systems[component_id].components.count] = entity;
-        return systems[component_id].components.push();
-    }
+    void* add(HgEntity entity, u32 component_id);
 
     /**
      * Creates a component for an entity
@@ -4108,22 +4096,6 @@ struct HgECS {
     }
 
     /**
-     * Creates a component for an entity
-     *
-     * Note, the entity must not have a component of this type already
-     *
-     * Parameters
-     * - entity The entity to add to, must be alive
-     *
-     * Returns
-     * - A pointer to the created component
-     */
-    template<typename T>
-    T& add(HgEntity entity, const T& component) {
-        return *(T*)add(entity, hg_component_id<T>) = component;
-    }
-
-    /**
      * Destroys a component from an entity
      *
      * Note, this function will invalidate iterators
@@ -4132,17 +4104,7 @@ struct HgECS {
      * - entity The id of the entity, must be alive
      * - component_id The id of the component, must be registered
      */
-    void remove(HgEntity entity, u32 component_id) {
-        hg_assert(is_alive(entity));
-        hg_assert(is_registered(component_id));
-        hg_assert(has(entity, component_id));
-
-        u32 index = systems[component_id].sparse[entity];
-        systems[component_id].sparse[entity] = (u32)-1;
-
-        systems[component_id].dense[index] = systems[component_id].dense[systems[component_id].components.count - 1];
-        systems[component_id].components.swap_remove(index);
-    }
+    void remove(HgEntity entity, u32 component_id);
 
     /**
      * Destroys a component from an entity
@@ -4157,105 +4119,6 @@ struct HgECS {
     template<typename T>
     void remove(HgEntity entity) {
         remove(entity, hg_component_id<T>);
-    }
-
-    /**
-     * Swaps the component data from the given indices
-     *
-     * Parameters
-     * - lhs The first component to swap
-     * - rhs The second component to swap
-     * - component_id The component id, must be registered
-     */
-    void swap_idx(u32 lhs, u32 rhs, u32 component_id);
-
-    /**
-     * Swaps the component data from the given indices
-     *
-     * Parameters
-     * - lhs The first component to swap
-     * - rhs The second component to swap
-     */
-    template<typename T>
-    void swap_idx(u32 lhs, u32 rhs) {
-        swap_idx(lhs, rhs, hg_component_id<T>);
-    }
-
-    /**
-     * Swaps the component data from each entity
-     *
-     * Parameters
-     * - lhs The first entity to swap, must be alive
-     * - rhs The second entity to swap, must be alive
-     * - component_id The component id, must be registered
-     */
-    void swap(HgEntity lhs, HgEntity rhs, u32 component_id) {
-        hg_assert(is_registered(component_id));
-        hg_assert(is_alive(lhs));
-        hg_assert(is_alive(rhs));
-        hg_assert(has(lhs, component_id));
-        hg_assert(has(rhs, component_id));
-
-        swap_idx(
-            systems[component_id].sparse[lhs],
-            systems[component_id].sparse[rhs],
-            component_id);
-    }
-
-    /**
-     * Swaps the component data from each entity
-     *
-     * Parameters
-     * - lhs The first entity to swap, must be alive
-     * - rhs The second entity to swap, must be alive
-     */
-    template<typename T>
-    void swap(HgEntity lhs, HgEntity rhs) {
-        swap(lhs, rhs, hg_component_id<T>);
-    }
-
-    /**
-     * Swaps the locations of components with their entities
-     *
-     * Parameters
-     * - lhs The first entity to swap
-     * - rhs The second entity to swap
-     * - component_id The component id, must be registered
-     */
-    void swap_location_idx(u32 lhs, u32 rhs, u32 component_id);
-
-    /**
-     * Swaps the locations of components with their entities
-     *
-     * Parameters
-     * - lhs The first entity to swap
-     * - rhs The second entity to swap
-     */
-    template<typename T>
-    void swap_location_idx(u32 lhs, u32 rhs) {
-        swap_location_idx(lhs, rhs, hg_component_id<T>);
-    }
-
-    /**
-     * Swaps where the entities' component are located
-     *
-     * Parameters
-     * - lhs The first entity to swap
-     * - rhs The second entity to swap
-     * - component_id The component id, must be registered
-     */
-    void swap_location(HgEntity lhs, HgEntity rhs, u32 component_id);
-
-    /**
-     * Swaps where the entities' component are located
-     *
-     * Parameters
-     * - lhs The first entity to swap
-     * - rhs The second entity to swap
-     */
-    template<typename T>
-    void swap_location(HgEntity lhs, HgEntity rhs) {
-        swap_location(lhs, rhs, hg_component_id<T>);
     }
 
     /**
@@ -4388,71 +4251,6 @@ struct HgECS {
     }
 
     /**
-     * A view into component for c++ range based for loops
-     */
-    template<typename T>
-    struct ComponentView {
-        struct Iter {
-            HgEntity* entity;
-            T* component;
-
-            Iter& operator++() {
-                ++entity;
-                ++component;
-                return *this;
-            }
-
-            bool operator!=(const Iter& other) {
-                return entity != other.entity;
-            }
-
-            struct Ref {
-                HgEntity& entity;
-                T& component;
-            };
-
-            Ref operator*() {
-                return {*entity,* component};
-            }
-        };
-
-        HgEntity* entity_begin;
-        HgEntity* entity_end;
-        T* component_begin;
-
-        constexpr Iter begin() {
-            return {entity_begin, component_begin};
-        }
-
-        constexpr Iter end() {
-            return {entity_end, nullptr};
-        }
-    };
-
-    /**
-     * Creates a view to iterate using c++ range based for loops
-     *
-     * Example:
-     * for (auto [entity, component] : ecs.component_iter<Component>()) {
-     *     foo(component);
-     * }
-     *
-     * Returns
-     * - A view with iterators into the component array
-     */
-    template<typename T>
-    ComponentView<T> component_iter() {
-        u32 id = hg_component_id<T>;
-        hg_assert(is_registered(id));
-
-        ComponentView<T> view;
-        view.entity_begin = systems[id].dense;
-        view.entity_end = systems[id].dense + systems[id].components.count;
-        view.component_begin = (T*)systems[id].components.items;
-        return view;
-    }
-
-    /**
      * Iterates over all entities with the single given component
      *
      * Note, specifying only one component allows deterministic ordering (such
@@ -4467,10 +4265,14 @@ struct HgECS {
      */
     template<typename T, typename Fn>
     void for_each_single(Fn& fn) {
-        static_assert(std::is_invocable_r_v<void, Fn, HgEntity&, T&>);
+        static_assert(std::is_invocable_r_v<void, Fn, HgEntity, T&>);
 
-        for (auto [e, c] : component_iter<T>()) {
-            fn(e, c);
+        u32 id = hg_component_id<T>;
+        HgEntity* e = systems[id].dense;
+        HgEntity* end = e + systems[id].components.count;
+        T* c = (T*)systems[id].components.items;
+        for (; e != end; ++e, ++c) {
+            fn(*e, *c);
         }
     }
 
@@ -4486,19 +4288,21 @@ struct HgECS {
      */
     template<typename... Ts, typename Fn>
     void for_each_multi(Fn& fn) {
-        static_assert(std::is_invocable_r_v<void, Fn, HgEntity&, Ts&...>);
+        static_assert(std::is_invocable_r_v<void, Fn, HgEntity, Ts&...>);
 
-        u32 id = smallest_system<Ts...>();
-        for (usize i = 0; i < systems[id].components.count; ++i) {
-            if (HgEntity e = systems[id].dense[i]; has_all<Ts...>(e))
-                fn(e, get<Ts>(e)...);
+        u32 id = smallest_id<Ts...>();
+        HgEntity* e = systems[id].dense;
+        HgEntity* end = e + systems[id].components.count;
+        for (; e != end; ++e) {
+            if (has_all<Ts...>(*e))
+                fn(*e, get<Ts>(*e)...);
         }
     }
 
     /**
      * Iterates over all entities with the given components
      *
-     * Note, calls the single of multi version from the number of components
+     * Note, calls the single or multi version from the number of components
      *
      * Parameters
      * - function The function to call
@@ -4506,7 +4310,6 @@ struct HgECS {
     template<typename... Ts, typename Fn>
     void for_each(Fn fn) {
         static_assert(sizeof...(Ts) != 0);
-        static_assert(std::is_invocable_r_v<void, Fn, HgEntity&, Ts&...>);
 
         if constexpr (sizeof...(Ts) == 1) {
             for_each_single<Ts...>(fn);
@@ -4529,16 +4332,16 @@ struct HgECS {
      * - function The function to call
      */
     template<typename T, typename Fn>
-    void for_each_par_single(u32 chunk_size, Fn& fn) {
-        static_assert(std::is_invocable_r_v<void, Fn, HgEntity&, T&>);
+    void for_par_single(u32 chunk_size, Fn& fn) {
+        static_assert(std::is_invocable_r_v<void, Fn, HgEntity, T&>);
 
-        Component& system = systems[hg_component_id<T>];
-        hg_threads->for_par(system.components.count, chunk_size, [&](usize begin, usize end) {
-            HgEntity* e_begin = system.dense + begin;
-            HgEntity* e_end = system.dense + end;
-            T* c_begin = (T*)system.components.get(begin);
-            for (; e_begin != e_end; ++e_begin, ++c_begin) {
-                fn(*e_begin,* c_begin);
+        u32 id = hg_component_id<T>;
+        hg_threads->for_par(systems[id].components.count, chunk_size, [&](usize begin, usize end) {
+            HgEntity* e = systems[id].dense + begin;
+            HgEntity* e_end = systems[id].dense + end;
+            T* c = (T*)systems[id].components.get(begin);
+            for (; e != e_end; ++e, ++c) {
+                fn(*e, *c);
             }
         });
     }
@@ -4554,16 +4357,16 @@ struct HgECS {
      * - function The function to call
      */
     template<typename... Ts, typename Fn>
-    void for_each_par_multi(u32 chunk_size, Fn& fn) {
-        static_assert(std::is_invocable_r_v<void, Fn, HgEntity&, Ts&...>);
+    void for_par_multi(u32 chunk_size, Fn& fn) {
+        static_assert(std::is_invocable_r_v<void, Fn, HgEntity, Ts&...>);
 
-        u32 id = smallest_system<Ts...>();
+        u32 id = smallest_id<Ts...>();
         hg_threads->for_par(component_count(id), chunk_size, [&](usize begin, usize end) {
-            HgEntity* e_begin = systems[id].dense + begin;
+            HgEntity* e = systems[id].dense + begin;
             HgEntity* e_end = systems[id].dense + end;
-            for (; e_begin != e_end; ++e_begin) {
-                if (has_all<Ts...>(*e_begin))
-                    fn(*e_begin, get<Ts>(*e_begin)...);
+            for (; e != e_end; ++e) {
+                if (has_all<Ts...>(*e))
+                    fn(*e, get<Ts>(*e)...);
             }
         });
     }
@@ -4577,15 +4380,25 @@ struct HgECS {
      * - function The function to call
      */
     template<typename... Ts, typename Fn>
-    void for_each_par(u32 chunk_size, Fn fn) {
+    void for_par(u32 chunk_size, Fn fn) {
         static_assert(sizeof...(Ts) != 0);
 
         if constexpr (sizeof...(Ts) == 1) {
-            for_each_par_single<Ts...>(chunk_size, fn);
+            for_par_single<Ts...>(chunk_size, fn);
         } else {
-            for_each_par_multi<Ts...>(chunk_size, fn);
+            for_par_multi<Ts...>(chunk_size, fn);
         }
     }
+
+    /**
+     * Swaps the locations of components with their entities
+     *
+     * Parameters
+     * - lhs The first entity to swap
+     * - rhs The second entity to swap
+     * - component_id The component id, must be registered
+     */
+    void swap_idx_location(u32 lhs, u32 rhs, u32 component_id);
 
     /**
      * Sorts components
@@ -4684,16 +4497,6 @@ struct HgTransform {
     void destroy();
 
     /**
-     * Move this transform and all children by a delta
-     *
-     * Parameters
-     * - dp The change in position, added to current position
-     * - ds The change in scale, multiplied to current scale
-     * - dr The change in rotation, applied to current rotation
-     */
-    void move(const HgVec3& dp, const HgVec3& ds, const HgQuat& dr);
-
-    /**
      * Set this transform and move all children by accordingly
      *
      * Parameters
@@ -4702,6 +4505,16 @@ struct HgTransform {
      * - r The new rotation
      */
     void set(const HgVec3& p, const HgVec3& s, const HgQuat& r);
+
+    /**
+     * Move this transform and all children by a delta
+     *
+     * Parameters
+     * - dp The change in position, added to current position
+     * - ds The change in scale, multiplied to current scale
+     * - dr The change in rotation, applied to current rotation
+     */
+    void move(const HgVec3& dp, const HgVec3& ds, const HgQuat& dr);
 };
 
 struct HgSprite {
@@ -4761,111 +4574,6 @@ struct HgPipeline2D {
 
     void draw(VkCommandBuffer cmd);
 };
-
-// /**
-//  * The types of supported component
-//  */
-// enum class HgComponent {
-//     none = 0,
-//     transform,
-//     sprite,
-//     count,
-// };
-//
-// /**
-//  * A scene that can be instantiated
-//  *
-//  * Note, contains a global reference counted resource manager between scenes
-//  */
-// struct HgScene {
-//     /**
-//      * The current version number of the description format
-//      */
-//     static constexpr u64 desc_version_major = 0;
-//     static constexpr u64 desc_version_minor = 0;
-//     static constexpr u64 desc_version_patch = 0;
-//
-//     /**
-//      * The binary data describing the scene
-//      */
-//     HgBinary desc;
-//     /**
-//      * The entities currently part of the scene
-//      */
-//     HgEntity* entities;
-//     /**
-//      * The max number of entities
-//      */
-//     usize entity_capacity;
-//     /**
-//      * Whether this scenes resources are loaded
-//      */
-//     bool loaded;
-//     /**
-//      * Whether this scenes resources are loaded
-//      */
-//     bool instantiated;
-//
-//     /**
-//      * Construct uninitialized
-//      */
-//     HgScene() = default;
-//
-//     /**
-//      * Create a scene from a description
-//      */
-//     HgScene(HgBinary desc_val) : desc{desc_val}, entities{}, loaded{false} {}
-//
-//     /**
-//      * Register the scene's resources in the global resource manager
-//      */
-//     void register_resources();
-//
-//     /**
-//      * Add references to the scene's resource, and load needed ones
-//      *
-//      * Parameters
-//      * - fences The fences to signal on completion
-//      * - fence_count The number of fences
-//      */
-//     void load(HgFence* fences, usize fence_count);
-//
-//     /**
-//      * Remove references to the scene's resources, and unload unneeded ones
-//      *
-//      * Parameters
-//      * - fences The fences to signal on completion
-//      * - fence_count The number of fences
-//      */
-//     void unload(HgFence* fences, usize fence_count);
-//
-//     /**
-//      * Instantiate the scene into the global ecs
-//      *
-//      * Parameters
-//      * - arena The arena to allocate from
-//      */
-//     void instantiate(HgArena& arena);
-//
-//     /**
-//      * Despawn all entities, removing the scene from the global ecs
-//      */
-//     void deinstantiate();
-// };
-//
-// /**
-//  * Create a new scene description from a json description
-//  *
-//  * Note, if an error is encountered, the scene is created up to the error
-//  *
-//  * Parameters
-//  * - arena The arena to allocate from
-//  * - json The json description to create from
-//  *
-//  * Returns
-//  * - The created scene, ready to be instantiated
-//  */
-// HgBinary hg_create_scene(HgArena& arena, const HgJson& json);
 
 /**
  * Initializes the graphics subsystem
