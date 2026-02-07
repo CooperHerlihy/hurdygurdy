@@ -1652,6 +1652,49 @@ hg_test(HgHashMap) {
         hg_test_assert(!map.has("supercalifragilisticexpialidocious"));
     }
 
+    {
+        hg_arena_scope(arena, hg_get_scratch());
+
+        HgHashMap<u32, u32> map = map.create(arena, 64);
+
+        for (auto i : map) {
+            (void)i;
+            hg_test_assert(false);
+        }
+
+        map.insert(12, 24);
+        map.insert(42, 84);
+        map.insert(100, 200);
+
+        bool has_12 = false;
+        bool has_42 = false;
+        bool has_100 = false;
+        bool has_other = false;
+        for (auto [k, v] : map) {
+            if (k == 12 && v == 24)
+                has_12 = true;
+            else if (k == 42 && v == 84)
+                has_42 = true;
+            else if (k == 100 && v == 200)
+                has_100 = true;
+            else
+                has_other = true;
+        }
+        hg_test_assert(has_12);
+        hg_test_assert(has_42);
+        hg_test_assert(has_100);
+        hg_test_assert(!has_other);
+
+        for (auto [k, v] : map) {
+            map.remove(k);
+        }
+
+        for (auto i : map) {
+            (void)i;
+            hg_test_assert(false);
+        }
+    }
+
     return true;
 }
 
@@ -2220,19 +2263,19 @@ hg_test(HgResourceManager) {
         rm.register_resource(HgResource::binary, e);
 
         hg_test_assert(rm.is_registered(a));
-        hg_test_assert(rm.resources[rm.get_resource(a)].type == HgResource::binary);
+        hg_test_assert(rm.resources[rm.get_idx(a)].type == HgResource::binary);
         hg_test_assert(rm.is_registered(b));
-        hg_test_assert(rm.resources[rm.get_resource(b)].type == HgResource::texture);
+        hg_test_assert(rm.resources[rm.get_idx(b)].type == HgResource::texture);
         hg_test_assert(rm.is_registered(b_conf));
-        hg_test_assert(rm.resources[rm.get_resource(b_conf)].type == HgResource::binary);
+        hg_test_assert(rm.resources[rm.get_idx(b_conf)].type == HgResource::binary);
         hg_test_assert(rm.is_registered(b_conf2));
-        hg_test_assert(rm.resources[rm.get_resource(b_conf2)].type == HgResource::texture);
+        hg_test_assert(rm.resources[rm.get_idx(b_conf2)].type == HgResource::texture);
         hg_test_assert(rm.is_registered(c));
-        hg_test_assert(rm.resources[rm.get_resource(c)].type == HgResource::binary);
+        hg_test_assert(rm.resources[rm.get_idx(c)].type == HgResource::binary);
         hg_test_assert(rm.is_registered(d));
-        hg_test_assert(rm.resources[rm.get_resource(d)].type == HgResource::texture);
+        hg_test_assert(rm.resources[rm.get_idx(d)].type == HgResource::texture);
         hg_test_assert(rm.is_registered(e));
-        hg_test_assert(rm.resources[rm.get_resource(e)].type == HgResource::binary);
+        hg_test_assert(rm.resources[rm.get_idx(e)].type == HgResource::binary);
 
         rm.unregister_resource(a);
         rm.unregister_resource(b);
@@ -2256,15 +2299,15 @@ hg_test(HgResourceManager) {
         rm.register_resource(HgResource::binary, b);
 
         hg_test_assert(rm.is_registered(a));
-        hg_test_assert(rm.resources[rm.get_resource(a)].type == HgResource::texture);
+        hg_test_assert(rm.resources[rm.get_idx(a)].type == HgResource::texture);
         hg_test_assert(rm.is_registered(b));
-        hg_test_assert(rm.resources[rm.get_resource(b)].type == HgResource::binary);
+        hg_test_assert(rm.resources[rm.get_idx(b)].type == HgResource::binary);
         hg_test_assert(!rm.is_registered(b_conf));
         hg_test_assert(rm.is_registered(b_conf2));
-        hg_test_assert(rm.resources[rm.get_resource(b_conf2)].type == HgResource::binary);
+        hg_test_assert(rm.resources[rm.get_idx(b_conf2)].type == HgResource::binary);
         hg_test_assert(!rm.is_registered(c));
         hg_test_assert(rm.is_registered(d));
-        hg_test_assert(rm.resources[rm.get_resource(d)].type == HgResource::texture);
+        hg_test_assert(rm.resources[rm.get_idx(d)].type == HgResource::texture);
         hg_test_assert(!rm.is_registered(e));
 
         rm.register_resource(HgResource::texture, b_conf);
@@ -2272,19 +2315,19 @@ hg_test(HgResourceManager) {
         rm.register_resource(HgResource::texture, c);
 
         hg_test_assert(rm.is_registered(a));
-        hg_test_assert(rm.resources[rm.get_resource(a)].type == HgResource::texture);
+        hg_test_assert(rm.resources[rm.get_idx(a)].type == HgResource::texture);
         hg_test_assert(rm.is_registered(b));
-        hg_test_assert(rm.resources[rm.get_resource(b)].type == HgResource::binary);
+        hg_test_assert(rm.resources[rm.get_idx(b)].type == HgResource::binary);
         hg_test_assert(rm.is_registered(b_conf));
-        hg_test_assert(rm.resources[rm.get_resource(b_conf)].type == HgResource::texture);
+        hg_test_assert(rm.resources[rm.get_idx(b_conf)].type == HgResource::texture);
         hg_test_assert(rm.is_registered(b_conf2));
-        hg_test_assert(rm.resources[rm.get_resource(b_conf2)].type == HgResource::binary);
+        hg_test_assert(rm.resources[rm.get_idx(b_conf2)].type == HgResource::binary);
         hg_test_assert(rm.is_registered(c));
-        hg_test_assert(rm.resources[rm.get_resource(c)].type == HgResource::texture);
+        hg_test_assert(rm.resources[rm.get_idx(c)].type == HgResource::texture);
         hg_test_assert(rm.is_registered(d));
-        hg_test_assert(rm.resources[rm.get_resource(d)].type == HgResource::texture);
+        hg_test_assert(rm.resources[rm.get_idx(d)].type == HgResource::texture);
         hg_test_assert(rm.is_registered(e));
-        hg_test_assert(rm.resources[rm.get_resource(e)].type == HgResource::binary);
+        hg_test_assert(rm.resources[rm.get_idx(e)].type == HgResource::binary);
 
         rm.unregister_resource(e);
         rm.unregister_resource(b_conf);
@@ -2292,13 +2335,13 @@ hg_test(HgResourceManager) {
         rm.unregister_resource(d);
 
         hg_test_assert(rm.is_registered(a));
-        hg_test_assert(rm.resources[rm.get_resource(a)].type == HgResource::texture);
+        hg_test_assert(rm.resources[rm.get_idx(a)].type == HgResource::texture);
         hg_test_assert(!rm.is_registered(b));
         hg_test_assert(!rm.is_registered(b_conf));
         hg_test_assert(rm.is_registered(b_conf2));
-        hg_test_assert(rm.resources[rm.get_resource(b_conf2)].type == HgResource::binary);
+        hg_test_assert(rm.resources[rm.get_idx(b_conf2)].type == HgResource::binary);
         hg_test_assert(rm.is_registered(c));
-        hg_test_assert(rm.resources[rm.get_resource(c)].type == HgResource::texture);
+        hg_test_assert(rm.resources[rm.get_idx(c)].type == HgResource::texture);
         hg_test_assert(!rm.is_registered(d));
         hg_test_assert(!rm.is_registered(e));
 
@@ -2640,7 +2683,77 @@ hg_test(HgECS) {
     return true;
 }
 
-hg_test(HgScene) {
-    return true;
-}
+// hg_test(HgScene) {
+//     HgFence fence;
+//
+//     {
+//         hg_arena_scope(arena, hg_get_scratch());
+//
+//         HgStringView file = R"(
+//             {
+//                 "player": {
+//                     "transform": {
+//                         "position": [0.0, 0.0, 0.0],
+//                         "scale": [1.0, 1.0, 1.0],
+//                         "rotation": [1.0, 0.0, 0.0, 0.0]
+//                     },
+//                     "sprite": {
+//                         "texture": "assets/tex.png",
+//                         "uv_pos": [0.0, 0.0],
+//                         "uv_size": [1.0, 1.0]
+//                     }
+//                 },
+//                 "enemy": {
+//                     "transform": {
+//                         "position": [0.0, 0.0, 0.0],
+//                         "scale": [1.0, 1.0, 1.0],
+//                         "rotation": [1.0, 0.0, 0.0, 0.0]
+//                     },
+//                     "sprite": {
+//                         "texture": "assets/tex.png",
+//                         "uv_pos": [0.0, 0.0],
+//                         "uv_size": [1.0, 1.0]
+//                     }
+//                 }
+//             },
+//         )";
+//         HgJson json = json.parse(arena, file);
+//         HgScene scene = hg_create_scene(arena, json);
+//
+//         scene.register_resources();
+//
+//         scene.load(&fence, 1);
+//         hg_test_assert(fence.wait(2.0));
+//
+//         u32 count = 0;
+//         for (auto [e, c] : hg_ecs->component_iter<HgTransform>()) {
+//             ++count;
+//             hg_test_assert((c.position == HgVec3{0, 0, 0}));
+//             hg_test_assert((c.scale == HgVec3{1, 1, 1}));
+//             hg_test_assert((c.rotation == HgQuat{1, 0, 0, 0}));
+//         }
+//         hg_test_assert(count == 2);
+//
+//         count = 0;
+//         for (auto [e, c] : hg_ecs->component_iter<HgSprite>()) {
+//             ++count;
+//             hg_test_assert((c.texture == hg_hash("assets/tex.png")));
+//             hg_test_assert((c.uv_pos == HgVec2{0, 0}));
+//             hg_test_assert((c.uv_size == HgVec2{1, 1}));
+//         }
+//         hg_test_assert(count == 2);
+//
+//         scene.instantiate(arena);
+//
+//         scene.deinstantiate();
+//
+//         scene.unload(&fence, 1);
+//         hg_test_assert(fence.wait(2.0));
+//
+//         hg_resources->reset(&fence, 1);
+//         hg_test_assert(fence.wait(2.0));
+//     }
+//
+//     return true;
+// }
 

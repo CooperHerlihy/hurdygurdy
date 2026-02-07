@@ -343,11 +343,11 @@ struct HgClock {
 /**
  * The value of Pi
  */
-static constexpr f64 hg_pi    = 3.1415926535897932;
+static constexpr f64 hg_pi = 3.1415926535897932;
 /**
  * The value of Tau (2pi)
  */
-static constexpr f64 hg_tau   = 6.2831853071795864;
+static constexpr f64 hg_tau = 6.2831853071795864;
 /**
  * The value of Euler's number
  */
@@ -2757,6 +2757,53 @@ struct HgHashMap {
         usize idx = get_idx(key);
         return idx == (usize)-1 ? nullptr : vals + idx;
     }
+
+    struct Pair {
+        Key& key;
+        Value& value;
+    };
+
+    /**
+     * For c++ ranged base for
+     */
+    struct Iter {
+        HgHashMap* p;
+        usize i;
+
+        Pair operator*() {
+            return {p->keys[i], p->vals[i]};
+        }
+
+        Iter& operator++() {
+            ++i;
+            while (!p->has_val[i] && i < p->capacity) {
+                ++i;
+            }
+            return *this;
+        }
+
+        bool operator!=(const Iter& other) {
+            return i != other.i || p != other.p;
+        }
+    };
+
+    /**
+     * For c++ ranged base for
+     */
+    Iter begin() {
+        usize i = 0;
+        while (!has_val[i] && i < capacity) {
+            ++i;
+        }
+        return {this, i};
+    }
+
+    /**
+     * For c++ ranged base for
+     */
+    Iter end() {
+        return {this, capacity};
+    }
 };
 
 /**
@@ -3370,6 +3417,29 @@ struct HgBinary {
     void store(HgFence* fences, usize fence_count, HgStringView path);
 
     /**
+     * Resize the file
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - new_size The new size of the file in bytes
+     */
+    void resize(HgArena& arena, usize new_size) {
+        file = arena.realloc(file, size, new_size, 1);
+        size = new_size;
+    }
+
+    /**
+     * Increase the size of the file
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - count The size in bytes to increase by
+     */
+    void grow(HgArena& arena, usize count) {
+        resize(arena, size + count);
+    }
+
+    /**
      * Read data at index into a buffer
      *
      * Parameters
@@ -3520,7 +3590,6 @@ struct HgTexture {
 
 // 3d model files : TODO
 // audio files : TODO
-// prefab files : TODO?
 
 /**
  * The uuid derived from the resource's name/path
@@ -3642,6 +3711,15 @@ struct HgResourceManager {
     void destroy(HgFence* fences, usize fence_count);
 
     /**
+     * Reset the resource manager, unloading and unregistering all resources
+     *
+     * Parameters
+     * - fences The fences to signal on completion
+     * - fence_count The number of fences
+     */
+    void reset(HgFence* fences, usize fence_count);
+
+    /**
      * Register a resource into the hash map
      *
      * Parameters
@@ -3673,7 +3751,7 @@ struct HgResourceManager {
      * - A reference to the resource struct
      * - -1 if the resource does not exist
      */
-    usize get_resource(HgResourceID id);
+    usize get_idx(HgResourceID id);
 
     /**
      * Gets a resource
@@ -3687,8 +3765,8 @@ struct HgResourceManager {
     template<typename T>
     T& get(HgResourceID id) {
         static_assert(hg_resource_type<T> != HgResource::none);
-        hg_assert(get_resource(id) != (usize)-1);
-        return *(T*)resources[get_resource(id)].data;
+        hg_assert(get_idx(id) != (usize)-1);
+        return *(T*)resources[get_idx(id)].data;
     }
 
     /**
@@ -3700,8 +3778,8 @@ struct HgResourceManager {
      * - path The path to load the resource from, also acts as uuid
      */
     void load(HgFence* fences, usize fence_count, HgStringView path) {
-        hg_assert(get_resource(hg_resource_id(path)) != (usize)-1);
-        resources[get_resource(hg_resource_id(path))].load(fences, fence_count, path);
+        hg_assert(get_idx(hg_resource_id(path)) != (usize)-1);
+        resources[get_idx(hg_resource_id(path))].load(fences, fence_count, path);
     }
 
     /**
@@ -3713,8 +3791,8 @@ struct HgResourceManager {
      * - id The id of the resource to unload
      */
     void unload(HgFence* fences, usize fence_count, HgResourceID id) {
-        hg_assert(get_resource(id) != (usize)-1);
-        resources[get_resource(id)].unload(fences, fence_count);
+        hg_assert(get_idx(id) != (usize)-1);
+        resources[get_idx(id)].unload(fences, fence_count);
     }
 };
 
@@ -3722,78 +3800,6 @@ struct HgResourceManager {
  * The global resource store
  */
 inline HgResourceManager* hg_resources = nullptr;
-
-/**
- * The transform for (nearly) all entities
- */
-struct HgTransform {
-    /**
-     * x: -left, +right
-     * y: -up, +down
-     * z: -backward, +forward
-     */
-    HgVec3 position = {0.0f, 0.0f, 0.0f};
-    HgVec3 scale = {1.0f, 1.0f, 1.0f};
-    HgQuat rotation = {1.0f, 0.0f, 0.0f, 0.0f};
-};
-
-struct HgSprite {
-    /**
-     * The texture to draw from
-     */
-    HgResourceID texture;
-    /**
-     * The beginning coordinate to read from texture, [0.0, 1.0]
-     */
-    HgVec2 uv_pos;
-    /**
-     * The size of the region to read from texture, [0.0, 1.0]
-     */
-    HgVec2 uv_size;
-};
-
-struct HgPipeline2D {
-
-    struct VPUniform {
-        HgMat4 proj;
-        HgMat4 view;
-    };
-
-    struct Push {
-        HgMat4 model;
-        HgVec2 uv_pos;
-        HgVec2 uv_size;
-    };
-
-    VkDescriptorSetLayout vp_layout;
-    VkDescriptorSetLayout texture_layout;
-    VkPipelineLayout pipeline_layout;
-    VkPipeline pipeline;
-
-    VkDescriptorPool descriptor_pool;
-    VkDescriptorSet vp_set;
-
-    VkBuffer vp_buffer;
-    VmaAllocation vp_buffer_allocation;
-
-    HgHashMap<HgResourceID, VkDescriptorSet> texture_sets;
-
-    static HgPipeline2D create(
-        HgArena& arena,
-        usize max_textures,
-        VkFormat color_format,
-        VkFormat depth_format);
-
-    void destroy();
-
-    void add_texture(HgResourceID texture_id);
-    void remove_texture(HgResourceID texture_id);
-
-    void update_projection(const HgMat4& projection);
-    void update_view(const HgMat4& view);
-
-    void draw(VkCommandBuffer cmd);
-};
 
 /**
  * The handle for an ECS entity
@@ -3804,16 +3810,6 @@ struct HgEntity {
     constexpr operator u32() const {
         return index;
     }
-};
-
-/**
- * The types of supported component
- */
-enum class HgComponent {
-    none = 0,
-    transform,
-    sprite,
-    count,
 };
 
 /**
@@ -4625,99 +4621,251 @@ struct HgECS {
 inline HgECS* hg_ecs;
 
 /**
- * A scene that can be instantiated
- *
- * Note, contains a global reference counted resource manager between scenes
+ * The transform for (nearly) all entities
  */
-struct HgScene {
+struct HgTransform {
     /**
-     * The current version number of the description format
+     * The entity's position in the world
+     *
+     * x: -left, +right
+     *
+     * y: -up, +down
+     *
+     * z: -backward, +forward
      */
-    static constexpr u64 desc_version_major = 0;
-    static constexpr u64 desc_version_minor = 0;
-    static constexpr u64 desc_version_patch = 0;
+    HgVec3 position = {0.0f, 0.0f, 0.0f};
+    /**
+     * The entity's scaling
+     *
+     * x: horizonatal
+     *
+     * y: vertical
+     *
+     * z: depth
+     */
+    HgVec3 scale = {1.0f, 1.0f, 1.0f};
+    /**
+     * The entity's rotation in the world
+     */
+    HgQuat rotation = {1.0f, 0.0f, 0.0f, 0.0f};
+    /**
+     * The entity's parent, if any
+     */
+    HgEntity parent{};
+    /**
+     * The next child of this entity's parent
+     */
+    HgEntity next_sibling{};
+    /**
+     * The previous child of this entity's parent
+     */
+    HgEntity prev_sibling{};
+    /**
+     * The first of this entity's children, forming a linked list
+     */
+    HgEntity first_child{};
 
     /**
-     * The binary data describing the scene
-     */
-    HgBinary desc;
-    /**
-     * The entities currently part of the scene
-     */
-    HgEntity* entities;
-    /**
-     * The max number of entities
-     */
-    usize entity_capacity;
-    /**
-     * Whether this scenes resources are loaded
-     */
-    bool loaded;
-    /**
-     * Whether this scenes resources are loaded
-     */
-    bool instantiated;
-
-    /**
-     * Construct uninitialized
-     */
-    HgScene() = default;
-
-    /**
-     * Create a scene from a description
-     */
-    HgScene(HgBinary desc_val) : desc{desc_val}, entities{}, loaded{false} {}
-
-    /**
-     * Register the scene's resources in the global resource manager
-     */
-    void register_resources();
-
-    /**
-     * Add references to the scene's resource, and load needed ones
+     * Add a new child entity to this transform
      *
      * Parameters
-     * - fences The fences to signal on completion
-     * - fence_count The number of fences
+     * - child The child entity to add
      */
-    void load(HgFence* fences, usize fence_count);
+    void create_child(HgEntity child);
 
     /**
-     * Remove references to the scene's resources, and unload unneeded ones
+     * Remove this entity from its place in the hierarchy
+     */
+    void detach();
+
+    /**
+     * Destroy this entity and all its children
+     */
+    void destroy();
+
+    /**
+     * Move this transform and all children by a delta
      *
      * Parameters
-     * - fences The fences to signal on completion
-     * - fence_count The number of fences
+     * - dp The change in position, added to current position
+     * - ds The change in scale, multiplied to current scale
+     * - dr The change in rotation, applied to current rotation
      */
-    void unload(HgFence* fences, usize fence_count);
+    void move(const HgVec3& dp, const HgVec3& ds, const HgQuat& dr);
 
     /**
-     * Instantiate the scene into the global ecs
+     * Set this transform and move all children by accordingly
      *
      * Parameters
-     * - arena The arena to allocate from
+     * - p The new position
+     * - s The new scale
+     * - r The new rotation
      */
-    void instantiate(HgArena& arena);
-
-    /**
-     * Despawn all entities, removing the scene from the global ecs
-     */
-    void deinstantiate();
+    void set(const HgVec3& p, const HgVec3& s, const HgQuat& r);
 };
 
-/**
- * Create a new scene description from a json description
- *
- * Note, if an error is encountered, the scene is created up to the error
- *
- * Parameters
- * - arena The arena to allocate from
- * - json The json description to create from
- *
- * Returns
- * - The created scene, ready to be instantiated
- */
-HgBinary hg_create_scene_json(HgArena& arena, const HgJson& json);
+struct HgSprite {
+    /**
+     * The texture to draw from
+     */
+    HgResourceID texture;
+    /**
+     * The beginning coordinate to read from texture, [0.0, 1.0]
+     */
+    HgVec2 uv_pos;
+    /**
+     * The size of the region to read from texture, [0.0, 1.0]
+     */
+    HgVec2 uv_size;
+};
+
+struct HgPipeline2D {
+
+    struct VPUniform {
+        HgMat4 proj;
+        HgMat4 view;
+    };
+
+    struct Push {
+        HgMat4 model;
+        HgVec2 uv_pos;
+        HgVec2 uv_size;
+    };
+
+    VkDescriptorSetLayout vp_layout;
+    VkDescriptorSetLayout texture_layout;
+    VkPipelineLayout pipeline_layout;
+    VkPipeline pipeline;
+
+    VkDescriptorPool descriptor_pool;
+    VkDescriptorSet vp_set;
+
+    VkBuffer vp_buffer;
+    VmaAllocation vp_buffer_allocation;
+
+    HgHashMap<HgResourceID, VkDescriptorSet> texture_sets;
+
+    static HgPipeline2D create(
+        HgArena& arena,
+        usize max_textures,
+        VkFormat color_format,
+        VkFormat depth_format);
+
+    void destroy();
+
+    void add_texture(HgResourceID texture_id);
+    void remove_texture(HgResourceID texture_id);
+
+    void update_projection(const HgMat4& projection);
+    void update_view(const HgMat4& view);
+
+    void draw(VkCommandBuffer cmd);
+};
+
+// /**
+//  * The types of supported component
+//  */
+// enum class HgComponent {
+//     none = 0,
+//     transform,
+//     sprite,
+//     count,
+// };
+//
+// /**
+//  * A scene that can be instantiated
+//  *
+//  * Note, contains a global reference counted resource manager between scenes
+//  */
+// struct HgScene {
+//     /**
+//      * The current version number of the description format
+//      */
+//     static constexpr u64 desc_version_major = 0;
+//     static constexpr u64 desc_version_minor = 0;
+//     static constexpr u64 desc_version_patch = 0;
+//
+//     /**
+//      * The binary data describing the scene
+//      */
+//     HgBinary desc;
+//     /**
+//      * The entities currently part of the scene
+//      */
+//     HgEntity* entities;
+//     /**
+//      * The max number of entities
+//      */
+//     usize entity_capacity;
+//     /**
+//      * Whether this scenes resources are loaded
+//      */
+//     bool loaded;
+//     /**
+//      * Whether this scenes resources are loaded
+//      */
+//     bool instantiated;
+//
+//     /**
+//      * Construct uninitialized
+//      */
+//     HgScene() = default;
+//
+//     /**
+//      * Create a scene from a description
+//      */
+//     HgScene(HgBinary desc_val) : desc{desc_val}, entities{}, loaded{false} {}
+//
+//     /**
+//      * Register the scene's resources in the global resource manager
+//      */
+//     void register_resources();
+//
+//     /**
+//      * Add references to the scene's resource, and load needed ones
+//      *
+//      * Parameters
+//      * - fences The fences to signal on completion
+//      * - fence_count The number of fences
+//      */
+//     void load(HgFence* fences, usize fence_count);
+//
+//     /**
+//      * Remove references to the scene's resources, and unload unneeded ones
+//      *
+//      * Parameters
+//      * - fences The fences to signal on completion
+//      * - fence_count The number of fences
+//      */
+//     void unload(HgFence* fences, usize fence_count);
+//
+//     /**
+//      * Instantiate the scene into the global ecs
+//      *
+//      * Parameters
+//      * - arena The arena to allocate from
+//      */
+//     void instantiate(HgArena& arena);
+//
+//     /**
+//      * Despawn all entities, removing the scene from the global ecs
+//      */
+//     void deinstantiate();
+// };
+//
+// /**
+//  * Create a new scene description from a json description
+//  *
+//  * Note, if an error is encountered, the scene is created up to the error
+//  *
+//  * Parameters
+//  * - arena The arena to allocate from
+//  * - json The json description to create from
+//  *
+//  * Returns
+//  * - The created scene, ready to be instantiated
+//  */
+// HgBinary hg_create_scene(HgArena& arena, const HgJson& json);
 
 /**
  * Initializes the graphics subsystem
