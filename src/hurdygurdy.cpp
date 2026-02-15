@@ -40,6 +40,11 @@ void hg_init(void) {
         *hg_resources = hg_resources->create(arena, 4096);
     }
 
+    if (hg_gpu_resources == nullptr) {
+        hg_gpu_resources = arena.alloc<HgGpuResourceManager>(1);
+        *hg_gpu_resources = hg_gpu_resources->create(arena, 4096);
+    }
+
     if (hg_ecs == nullptr) {
         hg_ecs = arena.alloc<HgECS>(1);
         *hg_ecs = hg_ecs->create(arena, 4096);
@@ -59,8 +64,11 @@ void hg_exit(void) {
         hg_ecs = nullptr;
     }
 
+    if (hg_gpu_resources != nullptr) {
+        hg_gpu_resources = nullptr;
+    }
+
     if (hg_resources != nullptr) {
-        hg_resources->destroy(nullptr, 0);
         hg_resources = nullptr;
     }
 
@@ -1707,6 +1715,13 @@ HgIOThread* HgIOThread::create(HgArena& arena, usize queue_size) {
     hg_assert(queue_size > 1 && (queue_size & (queue_size - 1)) == 0);
 
     auto thread_fn = [](HgIOThread* io) {
+        for (usize i = 0; i < hg_arena_count; ++i) {
+            if (hg_arenas[i].memory == nullptr) {
+                usize arena_size = (u32)-1;
+                hg_arenas[i] = {malloc(arena_size), arena_size};
+            }
+        }
+
         for (;;) {
             if (io->should_close.load())
                 return;
@@ -1714,6 +1729,10 @@ HgIOThread* HgIOThread::create(HgArena& arena, usize queue_size) {
             Request request;
             if (!io->pop(request))
                 hg_threads->pop();
+
+            for (usize i = 0; i < hg_arena_count; ++i) {
+                hg_assert(hg_arenas[i].head == 0);
+            }
         }
     };
 
@@ -1785,416 +1804,474 @@ bool HgIOThread::pop(Request& request) {
     return true;
 }
 
-void HgBinary::load(HgFence* fences, usize fence_count, HgStringView path) {
-    auto fn = [](void*, void* pbin, HgStringView fpath) {
-        HgBinary& bin = *(HgBinary*)pbin;
+HgBinary HgBinary::load(HgArena& arena, HgStringView path) {
+    hg_arena_scope(scratch, hg_get_scratch(arena));
 
-        char* cpath = (char*)alloca(fpath.length + 1);
-        std::memcpy(cpath, fpath.begin(), fpath.size());
-        cpath[fpath.length] = '\0';
+    HgBinary bin;
 
-        FILE* file_handle = std::fopen(cpath, "rb");
+    HgString cpath = cpath.create(scratch, path).append(scratch, 0);
+
+    FILE* file_handle = std::fopen(cpath.chars, "rb");
+    if (file_handle == nullptr) {
+        hg_warn("Could not find file to read binary: %s\n", cpath.chars);
+        return {};
+    }
+    hg_defer(std::fclose(file_handle));
+
+    if (std::fseek(file_handle, 0, SEEK_END) != 0) {
+        hg_warn("Failed to read binary from file: %s\n", cpath.chars);
+        return {};
+    }
+
+    bin.resize(arena, (usize)std::ftell(file_handle));
+    std::rewind(file_handle);
+
+    if (std::fread(bin.data, 1, bin.size, file_handle) != bin.size) {
+        hg_warn("Failed to read binary from file: %s\n", cpath.chars);
+        return {};
+    }
+
+    return bin;
+}
+
+void HgBinary::store(HgStringView path) {
+    hg_arena_scope(scratch, hg_get_scratch());
+
+    HgString cpath = cpath.create(scratch, path).append(scratch, 0);
+
+    FILE* file_handle = std::fopen(cpath.chars, "wb");
+    if (file_handle == nullptr) {
+        hg_warn("Failed to create file to write binary: %s\n", cpath.chars);
+        return;
+    }
+    hg_defer(std::fclose(file_handle));
+
+    if (std::fwrite(data, 1, size, file_handle) != size) {
+        hg_warn("Failed to write binary data to file: %s\n", cpath.chars);
+        return;
+    }
+}
+
+HgResourceManager HgResourceManager::create(HgArena& arena, usize capacity) {
+    HgResourceManager rm;
+    rm.pool = arena.alloc<HgBinary>(capacity);
+    rm.free_list = arena.alloc<usize>(capacity);
+    rm.capacity = capacity;
+    rm.first = 0;
+    rm.map = rm.map.create(arena, capacity);
+    rm.reset();
+    return rm;
+}
+
+void HgResourceManager::reset() {
+    map.for_each([&](HgResourceID id, Resource& res) {
+        if (res.ref_count != 0) {
+            res.ref_count = 1;
+            unload(nullptr, 0, id);
+        }
+    });
+    map.reset();
+    for (usize i = 0; i < capacity; ++i) {
+        free_list[i] = i + 1;
+    }
+    first = 0;
+}
+
+void HgResourceManager::register_resource(HgResourceID id) {
+    if (!map.has(id)) {
+        usize idx = first;
+        HgBinary* bin = pool + idx;
+        *bin = {};
+
+        map.insert(id, {bin, 0});
+        first = free_list[idx];
+        free_list[idx] = idx;
+    }
+}
+
+void HgResourceManager::unregister_resource(HgResourceID id) {
+    Resource* r = map.get(id);
+    if (r != nullptr) {
+        if (r->ref_count > 0) {
+            r->ref_count = 1;
+            unload(nullptr, 0, id);
+        }
+        usize idx = (uptr)(r->file - pool);
+        free_list[idx] = first;
+        first = idx;
+
+        map.remove(id);
+    }
+}
+
+void HgResourceManager::load(HgFence* fences, usize fence_count, HgStringView path) {
+    auto fn = [](void*, void* pres, HgStringView fpath) {
+        Resource& res = *(Resource*)pres;
+
+        hg_arena_scope(scratch, hg_get_scratch());
+        HgString cpath = cpath.create(scratch, fpath).append(scratch, 0);
+
+        FILE* file_handle = std::fopen(cpath.chars, "rb");
         if (file_handle == nullptr) {
-            hg_warn("Could not find file to read binary: %s\n", cpath);
-            bin = {};
+            hg_warn("Could not find file to read binary: %s\n", cpath.chars);
             return;
         }
         hg_defer(std::fclose(file_handle));
 
         if (std::fseek(file_handle, 0, SEEK_END) != 0) {
-            hg_warn("Failed to read binary from file: %s\n", cpath);
-            bin = {};
+            hg_warn("Failed to read binary from file: %s\n", cpath.chars);
             return;
         }
-
-        bin.size = (usize)std::ftell(file_handle);
-        bin.file = std::malloc(bin.size);
+        res.file->size = (usize)std::ftell(file_handle);
+        res.file->data = std::malloc(res.file->size);
         std::rewind(file_handle);
 
-        if (std::fread(bin.file, 1, bin.size, file_handle) != bin.size) {
-            hg_warn("Failed to read binary from file: %s\n", cpath);
-            bin = {};
+        if (std::fread(res.file->data, 1, res.file->size, file_handle) != res.file->size) {
+            hg_warn("Failed to read binary from file: %s\n", cpath.chars);
+            std::free(res.file->data);
+            res.file->size = 0;
+            res.file->data = nullptr;
             return;
         }
     };
 
-    HgIOThread::Request request;
-    request.fences = fences;
-    request.fence_count = fence_count;
-    request.fn = fn;
-    request.resource = this;
-    request.path = path;
-    hg_io->push(request);
-}
+    HgResourceID id = hg_resource_id(path);
+    hg_assert(is_registered(id));
 
-void HgBinary::unload(HgFence* fences, usize fence_count) {
-    auto fn = [](void*, void* pbin, HgStringView) {
-        HgBinary& bin = *(HgBinary*)pbin;
-        std::free(bin.file);
-        bin = {};
-    };
-
-    HgIOThread::Request request;
-    request.fences = fences;
-    request.fence_count = fence_count;
-    request.fn = fn;
-    request.resource = this;
-    hg_io->push(request);
-}
-
-void HgBinary::store(HgFence* fences, usize fence_count, HgStringView path) {
-    auto fn = [](void*, void* pbin, HgStringView fpath) {
-        HgBinary& bin = *(HgBinary*)pbin;
-
-        char* cpath = (char*)alloca(fpath.length + 1);
-        std::memcpy(cpath, fpath.chars, fpath.length);
-        cpath[fpath.length] = '\0';
-
-        FILE* file_handle = std::fopen(cpath, "wb");
-        if (file_handle == nullptr) {
-            hg_warn("Failed to create file to write binary: %s\n", cpath);
-            return;
-        }
-        hg_defer(std::fclose(file_handle));
-
-        if (std::fwrite(bin.file, 1, bin.size, file_handle) != bin.size) {
-            hg_warn("Failed to write binary data to file: %s\n", cpath);
-            return;
-        }
-    };
-
-    HgIOThread::Request request;
-    request.fences = fences;
-    request.fence_count = fence_count;
-    request.fn = fn;
-    request.resource = this;
-    request.path = path;
-    hg_io->push(request);
-}
-
-void HgTexture::load_png(HgFence* fences, usize fence_count, HgStringView path) {
-    auto fn = [](void*, void* ptexture, HgStringView fpath) {
-        HgTexture& texture = *(HgTexture*)ptexture;
-
-        char* cpath = (char*)alloca(fpath.length + 1);
-        std::memcpy(cpath, fpath.chars, fpath.length);
-        cpath[fpath.length] = '\0';
-
-        int channels;
-        texture.pixels = stbi_load(cpath, (int*)&texture.width, (int*)&texture.height, &channels, 4);
-        if (texture.pixels == nullptr) {
-            hg_warn("Failed to load image file: %s\n", cpath);
-            texture = {};
-            return;
-        }
-
-        texture.format = VK_FORMAT_R8G8B8A8_SRGB;
-        texture.location |= (u32)Location::cpu;
-    };
-
-    HgIOThread::Request request;
-    request.fences = fences;
-    request.fence_count = fence_count;
-    request.fn = fn;
-    request.resource = this;
-    request.path = path;
-    hg_io->push(request);
-}
-
-void HgTexture::unload(HgFence* fences, usize fence_count) {
-    auto fn = [](void*, void* ptexture, HgStringView) {
-        HgTexture& texture = *(HgTexture*)ptexture;
-        free(texture.pixels);
-        texture.pixels = nullptr;
-        texture.location &= ~(u32)Location::cpu;
-    };
-
-    HgIOThread::Request request;
-    request.fences = fences;
-    request.fence_count = fence_count;
-    request.fn = fn;
-    request.resource = this;
-    hg_io->push(request);
-}
-
-void HgTexture::store_png(HgFence* fences, usize fence_count, HgStringView path) {
-    auto fn = [](void*, void* ptexture, HgStringView fpath) {
-        HgTexture& texture = *(HgTexture*)ptexture;
-        hg_assert(texture.location & (u32)Location::cpu);
-
-        char* cpath = (char*)alloca(fpath.length + 1);
-        std::memcpy(cpath, fpath.chars, fpath.length);
-        cpath[fpath.length] = '\0';
-
-        stbi_write_png(
-            cpath,
-            (int)texture.width,
-            (int)texture.height,
-            4,
-            texture.pixels,
-            (int)(texture.width * 4));
-    };
-
-    HgIOThread::Request request;
-    request.fences = fences;
-    request.fence_count = fence_count;
-    request.fn = fn;
-    request.resource = this;
-    request.path = path;
-    hg_io->push(request);
-}
-
-void HgTexture::transfer_to_gpu(VkCommandPool cmd_pool, VkFilter filter) {
-    hg_assert(location == (u32)Location::cpu);
-    hg_assert(pixels != nullptr);
-    hg_assert(format != 0);
-    hg_assert(width != 0);
-    hg_assert(height != 0);
-    hg_assert(depth != 0);
-
-    VkImageCreateInfo image_info{};
-    image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    image_info.imageType = VK_IMAGE_TYPE_2D;
-    image_info.format = format;
-    image_info.extent = {width, height, depth};
-    image_info.mipLevels = 1;
-    image_info.arrayLayers = 1;
-    image_info.samples = VK_SAMPLE_COUNT_1_BIT;
-    image_info.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-
-    VmaAllocationCreateInfo alloc_info{};
-    alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
-
-    vmaCreateImage(hg_vk_vma, &image_info, &alloc_info, &image, &allocation, nullptr);
-    hg_assert(allocation != nullptr);
-    hg_assert(image != nullptr);
-
-    HgVkImageStagingWriteConfig staging_config{};
-    staging_config.dst_image = image;
-    staging_config.subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    staging_config.subresource.layerCount = 1;
-    staging_config.src_data = pixels;
-    staging_config.width = width;
-    staging_config.height = height;
-    staging_config.depth = depth;
-    staging_config.format = format;
-    staging_config.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-    hg_vk_image_staging_write(hg_vk_queue, cmd_pool, staging_config);
-
-    VkImageViewCreateInfo view_info{};
-    view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    view_info.image = image;
-    view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    view_info.format = format;
-    view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    view_info.subresourceRange.levelCount = 1;
-    view_info.subresourceRange.layerCount = 1;
-
-    vkCreateImageView(hg_vk_device, &view_info, nullptr, &view);
-    hg_assert(view != nullptr);
-
-    VkSamplerCreateInfo sampler_info{};
-    sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    sampler_info.magFilter = filter;
-    sampler_info.minFilter = filter;
-    sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-
-    vkCreateSampler(hg_vk_device, &sampler_info, nullptr, &sampler);
-    hg_assert(sampler != nullptr);
-
-    location |= (u32)Location::gpu;
-}
-
-void HgTexture::free_from_gpu() {
-    hg_assert(location & (u32)Location::gpu);
-    vkDestroySampler(hg_vk_device, sampler, nullptr);
-    vkDestroyImageView(hg_vk_device, view, nullptr);
-    vmaDestroyImage(hg_vk_vma, image, allocation);
-
-    location &= ~(u32)Location::gpu;
-}
-
-void HgResourceManager::Resource::load(HgFence* fences, usize fence_count, HgStringView path) {
-    hg_assert(data != nullptr);
-
-    if (ref_count++ != 0)
+    Resource& res = *map.get(id);
+    if (res.ref_count++ > 0)
         return;
 
-    switch (type) {
-        case HgResource::binary:
-            data->binary.load(fences, fence_count, path);
-            break;
-        case HgResource::texture:
-            data->texture.load_png(fences, fence_count, path);
-            break;
-        default: {
+    HgIOThread::Request request;
+    request.fences = fences;
+    request.fence_count = fence_count;
+    request.fn = fn;
+    request.resource = &res;
+    request.path = path;
+    hg_io->push(request);
+}
+
+void HgResourceManager::unload(HgFence* fences, usize fence_count, HgResourceID id) {
+    auto fn = [](void*, void* pres, HgStringView) {
+        Resource& res = *(Resource*)pres;
+        std::free(res.file->data);
+        res.file->size = 0;
+        res.file->data = nullptr;
+    };
+
+    hg_assert(is_registered(id));
+    Resource& res = *map.get(id);
+    if (--res.ref_count > 0)
+        return;
+
+    HgIOThread::Request request;
+    request.fences = fences;
+    request.fence_count = fence_count;
+    request.fn = fn;
+    request.resource = &res;
+    hg_io->push(request);
+}
+
+void HgResourceManager::store(HgFence* fences, usize fence_count, HgResourceID id, HgStringView path) {
+    hg_assert(is_registered(id));
+
+    auto fn = [](void*, void* pres, HgStringView fpath) {
+        (*(Resource*)pres).file->store(fpath);
+    };
+
+    HgIOThread::Request request;
+    request.fences = fences;
+    request.fence_count = fence_count;
+    request.fn = fn;
+    request.resource = map.get(id);
+    request.path = path;
+    hg_io->push(request);
+}
+
+bool HgTexture::get_info(VkFormat& format, u32& width, u32& height, u32& depth) {
+    if (file.size >= sizeof(Info) && std::memcmp(file.data, texture_identifier, sizeof(texture_identifier)) == 0) {
+        file.read(offsetof(Info, format), &format, sizeof(format));
+        file.read(offsetof(Info, width), &width, sizeof(width));
+        file.read(offsetof(Info, height), &height, sizeof(height));
+        file.read(offsetof(Info, depth), &depth, sizeof(depth));
+        return true;
+    }
+    return false;
+}
+
+void* HgTexture::get_pixels() {
+    if (file.size >= sizeof(Info) && std::memcmp(file.data, texture_identifier, sizeof(texture_identifier)) == 0) {
+        return (u8*)file.data + sizeof(Info);
+    }
+    return file.data;
+}
+
+void HgTexture::import_file(HgFence* fences, usize fence_count, HgStringView path) {
+    HgResourceID id = hg_resource_id(path);
+    hg_assert(hg_resources->is_registered(id));
+
+    hg_resources->load(fences, fence_count, path);
+
+    auto fn = [](void*, void* ptexture, HgStringView fpath) {
+        HgBinary& bin = *(HgBinary*)ptexture;
+
+        int width, height, channels;
+        u8* pixels = stbi_load_from_memory((u8*)bin.data, (int)bin.size, &width, &height, &channels, 4);
+        if (pixels == nullptr) {
             hg_arena_scope(scratch, hg_get_scratch());
-            hg_warn("resource \"%s\" loaded with invalid type\n",
-                HgString::create(scratch, path).append(scratch, 0).chars);
-        } break;
-    }
+            hg_warn("Failed to decode image file: %s\n", HgString::create(scratch, fpath).append(scratch, 0).chars);
+            return;
+        }
+
+        HgBinary new_bin;
+        new_bin.size = sizeof(Info) + (usize)width * (usize)height * sizeof(u32);
+        new_bin.data = std::malloc(new_bin.size);
+
+        Info info;
+        std::memcpy(info.identifier, texture_identifier, sizeof(texture_identifier));
+        info.format = VK_FORMAT_R8G8B8A8_SRGB;
+        info.width = (u32)width;
+        info.height = (u32)height;
+        info.depth = 1;
+
+        new_bin.overwrite(0, info);
+        new_bin.overwrite(sizeof(info), pixels, (usize)width * (usize)height * sizeof(u32));
+
+        std::free(pixels);
+        std::free(bin.data);
+        bin = new_bin;
+    };
+
+    HgIOThread::Request request;
+    request.fences = fences;
+    request.fence_count = fence_count;
+    request.fn = fn;
+    request.resource = &hg_resources->get(id);
+    request.path = path;
+    hg_io->push(request);
 }
 
-void HgResourceManager::Resource::unload(HgFence* fences, usize fence_count) {
-    hg_assert(data != nullptr);
-    if (ref_count == 0)
-        return;
+void HgTexture::export_file(HgFence* fences, usize fence_count, HgResourceID id, HgStringView path) {
+    hg_assert(hg_resources->is_registered(id));
 
-    if (--ref_count != 0)
-        return;
+    auto fn = [](void*, void* ptexture, HgStringView fpath) {
+        HgTexture tex = *(HgBinary*)ptexture;
 
-    switch (type) {
-        case HgResource::binary:
-            data->binary.unload(fences, fence_count);
-            break;
-        case HgResource::texture:
-            data->texture.unload(fences, fence_count);
-            break;
-        default:
-            hg_warn("resource with invalid type unloaded\n");
-            break;
-    }
+        hg_arena_scope(scratch, hg_get_scratch());
+        HgString cpath = cpath.create(scratch, fpath).append(scratch, 0);
 
-    type = HgResource::none;
+        void* pixels = tex.get_pixels();
+        if (pixels == nullptr) {
+            hg_warn("Cannot export emprty image %s\n", cpath.chars);
+            return;
+        }
+
+        VkFormat format;
+        u32 width, height, depth;
+        if (!tex.get_info(format, width, height, depth)) {
+            hg_warn("Could not get info from image %s to export\n", cpath.chars);
+            return;
+        }
+        if (depth > 1)
+            hg_warn("Cannot export 3d image %s, exporting only the first layer\n", cpath.chars);
+        stbi_write_png(cpath.chars, (int)width, (int)height, 4, pixels, (int)(width * sizeof(u32)));
+    };
+
+    HgIOThread::Request request;
+    request.fences = fences;
+    request.fence_count = fence_count;
+    request.fn = fn;
+    request.resource = &hg_resources->get(id);
+    request.path = path;
+    hg_io->push(request);
 }
 
-HgResourceManager HgResourceManager::create(HgArena& arena, usize capacity) {
-    HgResourceManager rm;
-
-    rm.resources = arena.alloc<Resource>(capacity);
-    rm.capacity = capacity;
-    rm.count = 0;
-
-    Resource::Data* data = arena.alloc<Resource::Data>(capacity);
-    for (usize i = 0; i < rm.capacity; ++i) {
-        rm.resources[i].type = HgResource::none;
-        rm.resources[i].ref_count = 0;
-        rm.resources[i].data = data + i;
-    }
-
+HgGpuResourceManager HgGpuResourceManager::create(HgArena& arena, usize max_resources) {
+    HgGpuResourceManager rm;
+    rm.map = rm.map.create(arena, max_resources);
     return rm;
 }
 
-void HgResourceManager::destroy(HgFence* fences, usize fence_count) {
-    for (usize i = 0; i < capacity; ++i) {
-        if (resources[i].ref_count > 0) {
-            resources[i].ref_count = 1;
-            resources[i].unload(fences, fence_count);
+void HgGpuResourceManager::reset() {
+    map.for_each([&](HgResourceID id, Resource& r) {
+        if (r.ref_count != 0) {
+            r.ref_count = 1;
+            unload(id);
+        }
+    });
+    map.reset();
+}
+
+void HgGpuResourceManager::register_buffer(HgResourceID id) {
+    if (!map.has(id)) {
+        Resource* r = map.get(id);
+        if (r != nullptr) {
+            if (r->type != Resource::Type::buffer)
+                hg_warn("Attempted to register gpu resource not of type buffer as a buffer\n");
+        } else {
+            r = &map.insert(id, {});
+            r->type = Resource::Type::buffer;
         }
     }
 }
 
-void HgResourceManager::reset(HgFence* fences, usize fence_count) {
-    for (usize i = 0; i < capacity; ++i) {
-        if (resources[i].ref_count > 0) {
-            resources[i].ref_count = 1;
-            resources[i].unload(fences, fence_count);
+void HgGpuResourceManager::register_texture(HgResourceID id) {
+    if (!map.has(id)) {
+        Resource* r = map.get(id);
+        if (r != nullptr) {
+            if (r->type != Resource::Type::texture)
+                hg_warn("Attempted to register gpu resource not of type texture as a texture\n");
+        } else {
+            r = &map.insert(id, {});
+            r->type = Resource::Type::texture;
         }
-        resources[i].type = HgResource::none;
-        resources[i].ref_count = 0;
     }
 }
 
-void HgResourceManager::register_resource(HgResource type, HgResourceID id) {
-    hg_assert(count + 1 < capacity);
-
-    if (type == HgResource::none) {
-        hg_warn("Attempted to register resource of type none\n");
-        type = HgResource::count;
-    }
-
-    usize idx = get_idx(id);
-    if (idx != (usize)-1) {
-        if (resources[idx].type != type)
-            hg_warn("Attempted to reregister resource as a different type\n");
-        return;
-    }
-
-    idx = id % capacity;
-
-    Resource r;
-    r.id = id;
-    r.type = type;
-    r.ref_count = 0;
-    r.data = nullptr;
-    Resource* fill_data = nullptr;
-
-    usize dist = 0;
-    while (resources[idx].type != HgResource::none) {
-        usize other_dist = resources[idx].id % capacity;
-        if (other_dist < idx)
-            other_dist += capacity;
-        other_dist -= idx;
-
-        if (other_dist < dist) {
-            if (r.data == nullptr)
-                fill_data = &resources[idx];
-            Resource tmp = resources[idx];
-            resources[idx] = r;
-            r = tmp;
-
-            dist = other_dist;
+void HgGpuResourceManager::unregister_resource(HgResourceID id) {
+    Resource* r = map.get(id);
+    if (r != nullptr) {
+        if (r->ref_count > 0) {
+            r->ref_count = 1;
+            unload(id);
         }
-
-        idx = (idx + 1) % capacity;
-        ++dist;
+        map.remove(id);
     }
-
-    if (fill_data != nullptr) {
-        fill_data->data = resources[idx].data;
-        resources[idx].data = r.data;
-    }
-    resources[idx].id = r.id;
-    resources[idx].type = r.type;
-
-    ++count;
 }
 
-void HgResourceManager::unregister_resource(HgResourceID id) {
-    usize idx = get_idx(id);
-    if (idx == (usize)-1)
+HgGpuBuffer& HgGpuResourceManager::get_buffer(HgResourceID id) {
+    Resource* r = map.get(id);
+    hg_assert(r != nullptr);
+    if (r->type != Resource::Type::buffer)
+        hg_warn("Accessing non buffer as gpu buffer\n");
+    return r->buffer;
+}
+
+HgGpuTexture& HgGpuResourceManager::get_texture(HgResourceID id) {
+    Resource* r = map.get(id);
+    hg_assert(r != nullptr);
+    if (r->type != Resource::Type::texture)
+        hg_warn("Accessing non texture as gpu texture\n");
+    return r->texture;
+}
+
+void HgGpuResourceManager::load_from_cpu(VkCommandPool cmd_pool, HgResourceID id, VkFilter filter) {
+    hg_assert(is_registered(id));
+
+    Resource& r = *map.get(id);
+    if (r.ref_count++ > 0)
         return;
 
-    if (resources[idx].ref_count != 0) {
-        resources[idx].ref_count = 1;
-        resources[idx].unload(nullptr, 0);
+    switch (r.type) {
+        case Resource::Type::buffer: // : TODO
+            break;
+        case Resource::Type::texture: {
+            HgTexture data = hg_resources->get(id);
+            hg_assert(data.file.data != nullptr);
+
+            HgGpuTexture& tex = get_texture(id);
+            if (!data.get_info(tex.format, tex.width, tex.height, tex.depth)) {
+                hg_warn("Could not get info to load texture\n");
+                return;
+            }
+            hg_assert(tex.format != 0);
+            hg_assert(tex.width != 0);
+            hg_assert(tex.height != 0);
+            hg_assert(tex.depth != 0);
+
+            VkImageCreateInfo image_info{};
+            image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+            image_info.imageType = VK_IMAGE_TYPE_2D;
+            image_info.format = tex.format;
+            image_info.extent = {tex.width, tex.height, tex.depth};
+            image_info.mipLevels = 1;
+            image_info.arrayLayers = 1;
+            image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+            image_info.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+
+            VmaAllocationCreateInfo alloc_info{};
+            alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
+
+            vmaCreateImage(hg_vk_vma, &image_info, &alloc_info, &tex.image, &tex.allocation, nullptr);
+            hg_assert(tex.allocation != nullptr);
+            hg_assert(tex.image != nullptr);
+
+            HgVkImageStagingWriteConfig staging_config{};
+            staging_config.dst_image = tex.image;
+            staging_config.subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            staging_config.subresource.layerCount = 1;
+            staging_config.src_data = data.get_pixels();
+            staging_config.width = tex.width;
+            staging_config.height = tex.height;
+            staging_config.depth = tex.depth;
+            staging_config.format = tex.format;
+            staging_config.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+            hg_vk_image_staging_write(hg_vk_queue, cmd_pool, staging_config);
+
+            VkImageViewCreateInfo view_info{};
+            view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            view_info.image = tex.image;
+            view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+            view_info.format = tex.format;
+            view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            view_info.subresourceRange.levelCount = 1;
+            view_info.subresourceRange.layerCount = 1;
+
+            vkCreateImageView(hg_vk_device, &view_info, nullptr, &tex.view);
+            hg_assert(tex.view != nullptr);
+
+            VkSamplerCreateInfo sampler_info{};
+            sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+            sampler_info.magFilter = filter;
+            sampler_info.minFilter = filter;
+            sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+
+            vkCreateSampler(hg_vk_device, &sampler_info, nullptr, &tex.sampler);
+            hg_assert(tex.sampler != nullptr);
+        } break;
+        default:
+            hg_assert(false);
     }
-
-    Resource::Data* data = resources[idx].data;
-
-    usize next = (idx + 1) % capacity;
-    while (resources[next].type != HgResource::none) {
-        if (resources[next].id % capacity != idx) {
-            resources[idx] = resources[next];
-            idx = next;
-        }
-        next = (next + 1) % capacity;
-    }
-
-    resources[idx].type = HgResource::none;
-    resources[idx].ref_count = 0;
-    resources[idx].data = data;
-
-    --count;
 }
 
-bool HgResourceManager::is_registered(HgResourceID id) {
-    usize idx = id % capacity;
-    while (resources[idx].type != HgResource::none && resources[idx].id != id) {
-        idx = (idx + 1) % capacity;
+void HgGpuResourceManager::load_from_disc(VkCommandPool cmd_pool, HgStringView path, VkFilter filter) {
+    HgResourceID id = hg_resource_id(path);
+    hg_assert(is_registered(id));
+
+    if (!is_loaded(id)) {
+        HgFence fence;
+        hg_resources->register_resource(id);
+        hg_resources->load(&fence, 1, path);
+        fence.wait(INFINITY);
+        load_from_cpu(cmd_pool, id, filter);
+        hg_resources->unload(nullptr, 0, id);
     }
-    return resources[idx].type != HgResource::none;
 }
 
-usize HgResourceManager::get_idx(HgResourceID id) {
-    usize idx = id % capacity;
-    while (resources[idx].type != HgResource::none && resources[idx].id != id) {
-        idx = (idx + 1) % capacity;
+void HgGpuResourceManager::unload(HgResourceID id) {
+    hg_assert(is_registered(id));
+
+    Resource& r = *map.get(id);
+    if (--r.ref_count > 0)
+        return;
+
+    switch (r.type) {
+        case Resource::Type::buffer:
+            vmaDestroyBuffer(hg_vk_vma, r.buffer.buffer, r.buffer.allocation);
+            r.buffer = {};
+            break;
+        case Resource::Type::texture:
+            vkDestroySampler(hg_vk_device, r.texture.sampler, nullptr);
+            vkDestroyImageView(hg_vk_device, r.texture.view, nullptr);
+            vmaDestroyImage(hg_vk_vma, r.texture.image, r.texture.allocation);
+            r.texture = {};
+            break;
+        default:
+            hg_assert(false);
     }
-    return resources[idx].type != HgResource::none ? idx : (usize)-1;
 }
 
 static u32& hg_internal_current_component_id() {
@@ -2668,9 +2745,7 @@ void HgPipeline2D::destroy() {
 void HgPipeline2D::add_texture(HgResourceID texture_id) {
     hg_assert(hg_resources->is_registered(texture_id));
 
-    HgTexture& texture = hg_resources->get<HgTexture>(texture_id);
-    hg_assert(texture.location & (u32)HgTexture::Location::gpu);
-
+    HgGpuTexture& texture = hg_gpu_resources->get_texture(texture_id);
     if (texture_sets.has(texture_id))
         return;
 

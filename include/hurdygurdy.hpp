@@ -76,11 +76,35 @@
 #endif
 
 #ifdef HG_DEBUG_MODE
+
+#ifndef HG_NO_LOGGING
+#define HG_LOGGING
+#endif
+
+#ifndef HG_NO_ASSERTIONS
+#define HG_ASSERTIONS 1
+#endif
+
+#ifndef HG_NO_VK_DEBUG_MESSENGER
 #define HG_VK_DEBUG_MESSENGER 1
 #endif
 
+#endif
+
 #ifdef HG_RELEASE_MODE
+
+#ifndef HG_NO_LOGGING
+#define HG_LOGGING
+#endif
+
+#ifndef HG_ASSERTIONS
 #define HG_NO_ASSERTIONS 1
+#endif
+
+#ifndef HG_VK_DEBUG_MESSENGER
+#define HG_NO_VK_DEBUG_MESSENGER 1
+#endif
+
 #endif
 
 #ifdef HG_DEBUG_MODE
@@ -132,6 +156,8 @@ struct HgDeferInternal {
  */
 #define hg_countof(array) (sizeof(array) / sizeof((array)[0]))
 
+#ifdef HG_LOGGING
+
 /**
  * Formats and logs a debug message to stderr in debug mode only
  *
@@ -164,11 +190,43 @@ struct HgDeferInternal {
  */
 #define hg_error(...) do { (void)std::fprintf(stderr, "HurdyGurdy Error: " __VA_ARGS__); abort(); } while(0)
 
-#ifdef HG_NO_ASSERTIONS
-
-#define hg_assert(cond) do {} while(0)
-
 #else
+
+/**
+ * Formats and logs a debug message to stderr in debug mode only
+ *
+ * Parameters
+ * - ... The message to print and its format parameters
+ */
+#define hg_debug(...) do {} while(0)
+
+/**
+ * Formats and logs an info message to stderr
+ *
+ * Parameters
+ * - ... The message to print and its format parameters
+ */
+#define hg_info(...) do {} while(0)
+
+/**
+ * Formats and logs a warning message to stderr
+ *
+ * Parameters
+ * - ... The message to print and its format parameters
+ */
+#define hg_warn(...) do {} while(0)
+
+/**
+ * Formats and logs an error message to stderr and aborts the program
+ *
+ * Parameters
+ * - ... The message to print and its format parameters
+ */
+#define hg_error(...) do { abort(); } while(0)
+
+#endif
+
+#ifdef HG_ASSERTIONS
 
 /**
  * Asserts condition, or aborts the program
@@ -182,63 +240,67 @@ struct HgDeferInternal {
     } \
 } while(0)
 
+#else
+
+#define hg_assert(cond) do {} while(0)
+
 #endif
 
 /**
  * An 8 bit, 1 byte unsigned integer
  */
-using u8 = std::uint8_t;
+typedef uint8_t u8;
 /**
  * A 16 bit, 2 byte unsigned integer
  */
-using u16 = std::uint16_t;
+typedef uint16_t u16;
 /**
  * A 32 bit, 4 byte unsigned integer
  */
-using u32 = std::uint32_t;
+typedef uint32_t u32;
 /**
  * A 64 bit, 8 byte unsigned integer
  */
-using u64 = std::uint64_t;
+typedef uint64_t u64;
 
 /**
  * An 8 bit, 1 byte signed integer
  */
-using i8 = std::int8_t;
+typedef int8_t i8;
 /**
  * A 16 bit, 2 byte signed integer
  */
-using i16 = std::int16_t;
+typedef int16_t i16;
 /**
  * A 32 bit, 4 byte signed integer
  */
-using i32 = std::int32_t;
+typedef int32_t i32;
 /**
  * A 64 bit, 8 byte signed integer
  */
-using i64 = std::int64_t;
+typedef int64_t i64;
 
 /**
  * An unsigned integer used for indexing
  */
-using usize = std::size_t;
+typedef size_t usize;
 /**
  * An unsigned integer representing a pointer
  */
-using uptr = std::uintptr_t;
+typedef uintptr_t uptr;
 /**
  * A signed integer representing a pointer
  */
-using iptr = std::intptr_t;
+typedef intptr_t iptr;
 
 /**
  * A 32 bit, 4 byte floating point value
  */
-using f32 = std::float_t;
+typedef float_t f32;
 /**
  * A 64 bit, 8 byte floating point value
  */
-using f64 = std::double_t;
+typedef double_t f64;
 
 /**
  * Initializes the HurdyGurdy library
@@ -3371,7 +3433,7 @@ struct HgBinary {
     /**
      * The data in the file
      */
-    void* file;
+    void* data;
     /**
      * The size of the file in bytes
      */
@@ -3385,37 +3447,28 @@ struct HgBinary {
     /**
      * Construct from a data pointer
      */
-    constexpr HgBinary(void* file_val, usize size_val) : file{file_val}, size{size_val} {}
+    constexpr HgBinary(void* file_val, usize size_val) : data{file_val}, size{size_val} {}
 
     /**
      * Load a binary file from disc
      *
-     * Parameters
-     * - fences The fences to signal on completion
-     * - fence_count The number of fences
-     * - path The file path to the image
-     */
-    void load(HgFence* fences, usize fence_count, HgStringView path);
-
-    /**
-     * Unload a binary file resource
+     * Note, this is blocking
      *
      * Parameters
-     * - fences The fences to signal on completion
-     * - fence_count The number of fences
      * - arena The arena to allocate from
+     * - path The file path to the image
      */
-    void unload(HgFence* fences, usize fence_count);
+    static HgBinary load(HgArena& arena, HgStringView path);
 
     /**
      * Store a binary file to disc
      *
+     * Note, this is blocking
+     *
      * Parameters
-     * - fences The fences to signal on completion
-     * - fence_count The number of fences
-     * - path The file path
+     * - path The file path to store at
      */
-    void store(HgFence* fences, usize fence_count, HgStringView path);
+    void store(HgStringView path);
 
     /**
      * Resize the file
@@ -3425,12 +3478,12 @@ struct HgBinary {
      * - new_size The new size of the file in bytes
      */
     void resize(HgArena& arena, usize new_size) {
-        file = arena.realloc(file, size, new_size, 1);
+        data = arena.realloc(data, size, new_size, 1);
         size = new_size;
     }
 
     /**
-     * Increase the size of the file
+     * Increase the size of the file by count
      *
      * Parameters
      * - arena The arena to allocate from
@@ -3450,7 +3503,7 @@ struct HgBinary {
      */
     void read(usize idx, void* dst, usize len) const {
         hg_assert(idx + len <= size);
-        std::memcpy(dst, (u8*)file + idx, len);
+        std::memcpy(dst, (u8*)data + idx, len);
     }
 
     /**
@@ -3478,7 +3531,7 @@ struct HgBinary {
      */
     void overwrite(usize idx, const void* src, usize len) {
         hg_assert(idx + len <= size);
-        std::memcpy((u8*)file + idx, src, len);
+        std::memcpy((u8*)data + idx, src, len);
     }
 
     /**
@@ -3494,36 +3547,281 @@ struct HgBinary {
 };
 
 /**
- * A loaded texture/image file
+ * The uuid derived from the resource's name/path
  */
-struct HgTexture {
-    enum class Location : u32 {
-        none = 0x0,
-        cpu = 0x1,
-        gpu = 0x2,
-        both = cpu | gpu,
+using HgResourceID = usize;
+
+/**
+ * Get the resource uuid from the name/path
+ */
+constexpr HgResourceID hg_resource_id(HgStringView name) {
+    return hg_hash(name);
+}
+
+/**
+ * A resource manager
+ */
+struct HgResourceManager {
+    /**
+     * The resources with reference count
+     */
+    struct Resource {
+        /**
+         * The file pointer stored in the pool
+         */
+        HgBinary* file;
+        /**
+         * The resource's reference count
+         */
+        u32 ref_count;
     };
 
     /**
-     * The gpu side allocation
+     * The pool of stable file pointers
+     */
+    HgBinary* pool;
+    /**
+     * The free list for the pool;
+     */
+    usize* free_list;
+    /**
+     * The number of binary files available
+     */
+    usize capacity;
+    /**
+     * The first file pointer in the pool
+     */
+    usize first;
+    /**
+     * The registered resources
+     */
+    HgHashMap<HgResourceID, Resource> map;
+
+    /**
+     * Create an empty resource manager
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - capacity The max number of resources
+     *
+     * Returns
+     * - The created resource manager
+     */
+    static HgResourceManager create(HgArena& arena, usize capacity);
+
+    /**
+     * Reset the resource manager, unloading and unregistering all resources
+     */
+    void reset();
+
+    /**
+     * Register a resource into the hash map
+     *
+     * Parameters
+     * - id The uuid of the resources
+     */
+    void register_resource(HgResourceID id);
+
+    /**
+     * Unload and unregister a resource from the hash map
+     *
+     * Parameters
+     * - id The uuid of the resources
+     */
+    void unregister_resource(HgResourceID id);
+
+    /**
+     * Returns whether a resource is registered
+     */
+    bool is_registered(HgResourceID id) {
+        return map.has(id);
+    }
+
+    /**
+     * Gets a resource
+     *
+     * Parameters
+     * - id The id of the resource
+     *
+     * Returns
+     * - A reference to the typed resource data
+     */
+    HgBinary& get(HgResourceID id) {
+        hg_assert(is_registered(id));
+        return *map.get(id)->file;
+    }
+
+    /**
+     * Load a resource file from disc, or increment the reference count
+     *
+     * Parameters
+     * - fences The fences to signal on completion
+     * - fence_count The number of fences
+     * - path The file to load
+     */
+    void load(HgFence* fences, usize fence_count, HgStringView path);
+
+    /**
+     * Unload a resource file, or decrement the reference count
+     *
+     * Parameters
+     * - fences The fences to signal on completion
+     * - fence_count The number of fences
+     * - id The resource to unload
+     */
+    void unload(HgFence* fences, usize fence_count, HgResourceID id);
+
+    /**
+     * Returns whether a resource is currently loaded
+     */
+    bool is_loaded(HgResourceID id) {
+        Resource* r = map.get(id);
+        return r != nullptr && r->ref_count > 0;
+    }
+
+    /**
+     * Store a resource file to disc
+     *
+     * Parameters
+     * - fences The fences to signal on completion
+     * - fence_count The number of fences
+     * - id The resource to store
+     * - path The file path
+     */
+    void store(HgFence* fences, usize fence_count, HgResourceID id, HgStringView path);
+};
+
+/**
+ * The global resource store
+ */
+inline HgResourceManager* hg_resources = nullptr;
+
+/**
+ * A texture resource
+ */
+struct HgTexture {
+    static constexpr char texture_identifier[] = "HGT"; // hurdy gurdy texture
+
+    /**
+     * The info prepended to a texture resource
+     */
+    struct Info {
+        /**
+         * The identifier to ensure the file is a Hurdy Gurdy texture
+         */
+        char identifier[4];
+        /**
+         * The format of each pixel
+         */
+        VkFormat format;
+        /**
+         * The width in pixels
+         */
+        u32 width;
+        /**
+         * The height in pixels
+         */
+        u32 height;
+        /**
+         * The depth in pixels
+         */
+        u32 depth;
+    };
+
+    /**
+     * The texture data
+     */
+    HgBinary file;
+
+    /**
+     * Construct uninitialized
+     */
+    HgTexture() = default;
+
+    /**
+     * Implicit conversion from binary file
+     */
+    HgTexture(HgBinary file_val) : file(file_val) {}
+
+    /**
+     * Get the texture info from the file
+     *
+     * Parameters
+     * - format Where to store the format
+     * - width Where to store the width
+     * - height Where to store the height
+     * - depth Where to store the depth
+     *
+     * Returns
+     * - Whether the info could be found
+     */
+    bool get_info(VkFormat& format, u32& width, u32& height, u32& depth);
+
+    /**
+     * Returns a pointer to the pixels
+     */
+    void* get_pixels();
+
+    /**
+     * Load an external texture file into a resource in the Hurdy Gurdy format
+     *
+     * Parameters
+     * - fences The fences to wait on
+     * - fence_count The number of fences
+     * - path The path of the file to import
+     */
+    static void import_file(HgFence* fences, usize fence_count, HgStringView path);
+
+    /**
+     * Store a texture resource onto disc in an external file format
+     *
+     * Parameters
+     * - fences The fences to wait on
+     * - fence_count The number of fences
+     * - id The image to export
+     * - path The path of the file to export to
+     */
+    static void export_file(HgFence* fences, usize fence_count, HgResourceID id, HgStringView path);
+};
+
+/**
+ * A buffer stored on the GPU
+ */
+struct HgGpuBuffer {
+    /**
+     * The allocation
      */
     VmaAllocation allocation;
     /**
-     * The gpu image
+     * The buffer
+     */
+    VkBuffer buffer;
+    /**
+     * The size of the buffer in bytes
+     */
+    VkDeviceSize size;
+};
+
+/**
+ * A texture stored on the GPU
+ */
+struct HgGpuTexture {
+    /**
+     * The allocation
+     */
+    VmaAllocation allocation;
+    /**
+     * The image
      */
     VkImage image;
     /**
-     * The gpu image view
+     * The image view
      */
     VkImageView view;
     /**
-     * The gpu sampler
+     * The sampler
      */
     VkSampler sampler;
-    /**
-     * The cpu side pixel data
-     */
-    void* pixels;
     /**
      * The format of each pixel
      */
@@ -3540,267 +3838,160 @@ struct HgTexture {
      * The depth in pixels
      */
     u32 depth;
-    /**
-     * Where the texture is loaded into
-     */
-    u32 location;
-
-    /**
-     * Load a png image from disc
-     *
-     * Parameters
-     * - fences The fences to signal on completion
-     * - fence_count The number of fences
-     * - path The file path to the image
-     */
-    void load_png(HgFence* fences, usize fence_count, HgStringView path);
-
-    /**
-     * Unload an image file
-     *
-     * Parameters
-     * - fences The fences to signal on completion
-     * - fence_count The number of fences
-     */
-    void unload(HgFence* fences, usize fence_count);
-
-    /**
-     * Store a png image to disc
-     *
-     * Parameters
-     * - fences The fences to signal on completion
-     * - fence_count The number of fences
-     * - path The file path to the image
-     */
-    void store_png(HgFence* fences, usize fence_count, HgStringView path);
-
-    /**
-     * Transfer the loaded cpu side image to the gpu
-     *
-     * Parameters
-     * - cmd_pool The command pool to record transfer
-     * - filter The filter to create the sampler
-     */
-    void transfer_to_gpu(VkCommandPool cmd_pool, VkFilter filter);
-
-    /**
-     * Destroy the gpu side resources
-     */
-    void free_from_gpu();
 };
 
-// 3d model files : TODO
-// audio files : TODO
-
 /**
- * The uuid derived from the resource's name/path
+ * A resource manager for gpu resources
  */
-using HgResourceID = usize;
-
-/**
- * Get the resource uuid from the name/path
- */
-constexpr HgResourceID hg_resource_id(HgStringView name) {
-    return hg_hash(name);
-}
-
-/**
- * The types of supported resources
- */
-enum class HgResource : u32 {
-    none = 0,
-    binary,
-    texture,
-    count,
-};
-
-template<typename>
-inline constexpr HgResource hg_resource_type = HgResource::none;
-
-template<>
-inline constexpr HgResource hg_resource_type<HgBinary> = HgResource::binary;
-
-template<>
-inline constexpr HgResource hg_resource_type<HgTexture> = HgResource::texture;
-
-/**
- * A resource manager
- */
-struct HgResourceManager {
+struct HgGpuResourceManager {
     /**
-     * The reference counted resources
+     * A gpu resource
      */
     struct Resource {
         /**
-         * The resource data
+         * The type of gpu resources
          */
-        union Data {
-            HgBinary binary;
-            HgTexture texture;
+        enum class Type : u32 {
+            buffer,
+            texture,
         };
 
         /**
-         * The uuid for lookup
+         * The resource
          */
-        HgResourceID id;
+        union {
+            /**
+             * The resource as a buffer
+             */
+            HgGpuBuffer buffer;
+            /**
+             * The resource as a texture
+             */
+            HgGpuTexture texture;
+        };
         /**
-         * The type of the data
+         * The type of the resource
          */
-        HgResource type;
+        Type type;
         /**
-         * The number of active references
+         * The resource's reference count
          */
         u32 ref_count;
-        /**
-         * The resource data
-         */
-        Data* data;
-
-        /**
-         * Load a resource, or just increment the reference count
-         *
-         * Parameters
-         * - fences The fences to signal on completion
-         * - fence_count The number of fences
-         * - path The path to load the resource from, also acts as uuid
-         */
-        void load(HgFence* fences, usize fence_count, HgStringView path);
-
-        /**
-         * Unload a resource, or just decrement the reference count
-         *
-         * Parameters
-         * - fences The fences to signal on completion
-         * - fence_count The number of fences
-         * - id The id of the resource to unload
-         */
-        void unload(HgFence* fences, usize fence_count);
     };
 
     /**
-     * The resources stored
+     * The registered resources
      */
-    Resource* resources;
-    /**
-     * The max number of resources
-     */
-    usize capacity;
-    /**
-     * The current number of active resources
-     */
-    usize count;
+    HgHashMap<HgResourceID, Resource> map;
 
     /**
-     * Create an empty resource manager
+     * Create an empty gpu resource manager
      *
      * Parameters
      * - arena The arena to allocate from
-     * - capacity The max number of resources
+     * - max_resources The max number of resources that can be registered
      *
      * Returns
-     * - The created resource manager
+     * - The created gpu resource manager
      */
-    static HgResourceManager create(HgArena& arena, usize capacity);
-
-    /**
-     * Destroy the resource manager, unloading all resources
-     *
-     * Parameters
-     * - fences The fences to signal on completion
-     * - fence_count The number of fences
-     */
-    void destroy(HgFence* fences, usize fence_count);
+    static HgGpuResourceManager create(HgArena& arena, usize max_resources);
 
     /**
      * Reset the resource manager, unloading and unregistering all resources
-     *
-     * Parameters
-     * - fences The fences to signal on completion
-     * - fence_count The number of fences
      */
-    void reset(HgFence* fences, usize fence_count);
+    void reset();
 
     /**
-     * Register a resource into the hash map
+     * Register a new resource as a buffer
      *
      * Parameters
-     * - type The type of the resource to register
-     * - id The uuid of the resources
+     * - id The resource to register
      */
-    void register_resource(HgResource type, HgResourceID id);
+    void register_buffer(HgResourceID id);
 
     /**
-     * Unregister a resource from the hash map
+     * Register a new resources as a texture
      *
      * Parameters
-     * - id The uuid of the resources
+     * - id The resource to register
+     */
+    void register_texture(HgResourceID id);
+
+    /**
+     * Unregister a resource, and unload if needed
      */
     void unregister_resource(HgResourceID id);
 
     /**
      * Returns whether a resource is registered
      */
-    bool is_registered(HgResourceID id);
-
-    /**
-     * Gets a resource
-     *
-     * Parameters
-     * - id The id of the resource
-     *
-     * Returns
-     * - A reference to the resource struct
-     * - -1 if the resource does not exist
-     */
-    usize get_idx(HgResourceID id);
-
-    /**
-     * Gets a resource
-     *
-     * Parameters
-     * - id The id of the resource
-     *
-     * Returns
-     * - A reference to the typed resource data
-     */
-    template<typename T>
-    T& get(HgResourceID id) {
-        static_assert(hg_resource_type<T> != HgResource::none);
-        hg_assert(get_idx(id) != (usize)-1);
-        return *(T*)resources[get_idx(id)].data;
+    bool is_registered(HgResourceID id) {
+        return map.has(id);
     }
 
     /**
-     * Load a resource, or just increment the reference count
+     * Returns the gpu buffer resource
      *
      * Parameters
-     * - fences The fences to signal on completion
-     * - fence_count The number of fences
-     * - path The path to load the resource from, also acts as uuid
+     * - id The resource to get
+     *
+     * Returns
+     * - A reference to the resource
      */
-    void load(HgFence* fences, usize fence_count, HgStringView path) {
-        hg_assert(get_idx(hg_resource_id(path)) != (usize)-1);
-        resources[get_idx(hg_resource_id(path))].load(fences, fence_count, path);
-    }
+    HgGpuBuffer& get_buffer(HgResourceID id);
 
     /**
-     * Unload a resource, or just decrement the reference count
+     * Returns the gpu texture resource
      *
      * Parameters
-     * - fences The fences to signal on completion
-     * - fence_count The number of fences
-     * - id The id of the resource to unload
+     * - id The resource to get
+     *
+     * Returns
+     * - A reference to the resource
      */
-    void unload(HgFence* fences, usize fence_count, HgResourceID id) {
-        hg_assert(get_idx(id) != (usize)-1);
-        resources[get_idx(id)].unload(fences, fence_count);
+    HgGpuTexture& get_texture(HgResourceID id);
+
+    /**
+     * Load a resource from the data stored in the cpu side resource manager
+     *
+     * Parameters
+     * - cmd_pool The Vulkan command pool to transfer on
+     * - id The resource to load
+     * - filter The filter the texture should use
+     */
+    void load_from_cpu(VkCommandPool cmd_pool, HgResourceID id, VkFilter filter);
+
+    /**
+     * Load a resource from disc
+     *
+     * Parameters
+     * - cmd_pool The Vulkan command pool to transfer on
+     * - id The resource to load
+     * - filter The filter the texture should use
+     */
+    void load_from_disc(VkCommandPool cmd_pool, HgStringView path, VkFilter filter);
+
+    /**
+     * Unload a resource
+     *
+     * Parameters
+     * - id The resource to unload
+     */
+    void unload(HgResourceID id);
+
+    /**
+     * Returns whether a resource is loaded
+     */
+    bool is_loaded(HgResourceID id) {
+        Resource* r = map.get(id);
+        return r != nullptr && r->ref_count > 0;
     }
 };
 
 /**
- * The global resource store
+ * The global GPU resource store
  */
-inline HgResourceManager* hg_resources = nullptr;
+inline HgGpuResourceManager* hg_gpu_resources = nullptr;
 
 /**
  * The handle for an ECS entity

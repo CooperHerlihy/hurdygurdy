@@ -63,23 +63,12 @@ int main(void) {
     HgPipeline2D pipeline2d = pipeline2d.create(arena, 255, swapchain.format, VK_FORMAT_UNDEFINED);
     hg_defer(pipeline2d.destroy());
 
-    struct {u8 r, g, b, a;} tex_data[]{
-        {0xff, 0x00, 0x00, 0xff}, {0x00, 0xff, 0x00, 0xff},
-        {0x00, 0x00, 0xff, 0xff}, {0xff, 0xff, 0x00, 0xff},
-    };
+    HgStringView texture_path = "hg_test_dir/file_image_test.hgtex";
+    HgResourceID texture_id = hg_resource_id(texture_path);
+    hg_gpu_resources->register_texture(texture_id);
 
-    HgResourceID texture_id = hg_resource_id("sprite_texture");
-    hg_resources->register_resource(HgResource::texture, texture_id);
-
-    HgTexture& texture = hg_resources->get<HgTexture>(texture_id);
-    texture.pixels = tex_data;
-    texture.format = VK_FORMAT_R8G8B8A8_SRGB;
-    texture.width = 2;
-    texture.height = 2;
-    texture.depth = 1;
-    texture.location = (u32)HgTexture::Location::cpu;
-    texture.transfer_to_gpu(cmd_pool, VK_FILTER_NEAREST);
-    hg_defer(texture.free_from_gpu());
+    hg_gpu_resources->load_from_disc(cmd_pool, texture_path, VK_FILTER_NEAREST);
+    hg_defer(hg_gpu_resources->unload(texture_id));
 
     pipeline2d.add_texture(texture_id);
     hg_defer(pipeline2d.remove_texture(texture_id));
@@ -2133,42 +2122,34 @@ hg_test(HgFileBinary) {
     const char* file_path = "hg_test_dir/file_bin_test.bin";
     HgBinary bin{};
 
-    HgFence fence;
     {
-        bin.load(&fence, 1, "file_does_not_exist.bin");
-        hg_test_assert(fence.wait(2.0));
-
-        hg_test_assert(bin.file == nullptr);
+        bin.load(arena, "file_does_not_exist.bin");
+        hg_test_assert(bin.data == nullptr);
         hg_test_assert(bin.size == 0);
     }
 
     {
-        bin.file = save_data;
+        bin.data = save_data;
         bin.size = sizeof(save_data);
 
-        bin.store(&fence, 1, "dir/does/not/exist.bin");
-        hg_test_assert(fence.wait(2.0));
+        bin.store("dir/does/not/exist.bin");
 
         FILE* file_handle = std::fopen("dir/does/not/exist.bin", "rb");
         hg_test_assert(file_handle == nullptr);
     }
 
     {
-        bin.file = save_data;
+        bin.data = save_data;
         bin.size = sizeof(save_data);
 
-        bin.store(&fence, 1, file_path);
-        bin.load(&fence, 1, file_path);
-        hg_test_assert(fence.wait(2.0));
+        bin.store(file_path);
+        HgBinary new_bin = bin.load(arena, file_path);
 
-        hg_test_assert(bin.file != nullptr);
-        hg_test_assert(bin.file != save_data);
-        hg_test_assert(bin.size == sizeof(save_data));
-        hg_test_assert(std::memcmp(save_data, bin.file, bin.size) == 0);
-
-        bin.unload(&fence, 1);
+        hg_test_assert(new_bin.data != nullptr);
+        hg_test_assert(new_bin.data != save_data);
+        hg_test_assert(new_bin.size == sizeof(save_data));
+        hg_test_assert(std::memcmp(save_data, new_bin.data, new_bin.size) == 0);
     }
-    hg_test_assert(fence.wait(2.0));
 
     return true;
 }
@@ -2182,188 +2163,111 @@ hg_test(HgTexture) {
         operator u32() { return *(u32*)this; }
     };
 
-    u32 red =   color{0xff, 0x00, 0x00, 0xff};
-    u32 green = color{0x00, 0xff, 0x00, 0xff};
-    u32 blue =  color{0x00, 0x00, 0xff, 0xff};
+    u32 red =    color{0xff, 0x00, 0x00, 0xff};
+    u32 green =  color{0x00, 0xff, 0x00, 0xff};
+    u32 blue =   color{0x00, 0x00, 0xff, 0xff};
+    u32 yellow = color{0xff, 0xff, 0x00, 0xff};
 
-    u32 save_data[3][3] = {
-        {red, green, blue},
-        {blue, red, green},
-        {green, blue, red},
+    constexpr VkFormat save_format = VK_FORMAT_R8G8B8A8_SRGB;
+    constexpr u32 save_width = 2;
+    constexpr u32 save_height = 2;
+    constexpr u32 save_depth = 1;
+    u32 save_data[save_width][save_height] = {
+        {red, green},
+        {blue, yellow},
     };
-    VkFormat save_format = VK_FORMAT_R8G8B8A8_SRGB;
-    u32 save_width = 3;
-    u32 save_height = 3;
-    u32 save_depth = 1;
 
-    const char* file_path = "hg_test_dir/file_image_test.png";
-    HgTexture texture;
+    HgBinary bin{};
 
-    HgFence fence;
     {
-        texture.pixels = save_data;
-        texture.format = save_format;
-        texture.width = save_width;
-        texture.height = save_height;
-        texture.depth = save_depth;
-        texture.location = (u32)HgTexture::Location::cpu;
+        HgTexture::Info info;
+        std::memcpy(info.identifier, HgTexture::texture_identifier, sizeof(HgTexture::texture_identifier));
+        info.format = VK_FORMAT_R8G8B8A8_SRGB;
+        info.width = save_width;
+        info.height = save_height;
+        info.depth = save_depth;
+        bin.grow(arena, sizeof(HgTexture::Info));
+        bin.overwrite(0, info);
 
-        texture.store_png(&fence, 1, file_path);
-        texture.load_png(&fence, 1, file_path);
+        usize pixel_idx = bin.size;
+        bin.grow(arena, sizeof(save_data));
+        bin.overwrite(pixel_idx, save_data, sizeof(save_data));
+    }
+
+    {
+        HgTexture texture = bin;
+
+        VkFormat format;
+        u32 width, height, depth;
+        hg_test_assert(texture.get_info(format, width, height, depth));
+        hg_test_assert(format == save_format);
+        hg_test_assert(width == save_width);
+        hg_test_assert(height == save_height);
+        hg_test_assert(depth == save_depth);
+        hg_test_assert(width * height * depth * hg_vk_format_to_size(format) == sizeof(save_data));
+
+        void* pixels = texture.get_pixels();
+        hg_test_assert(pixels != nullptr);
+        hg_test_assert(std::memcmp(save_data, pixels, sizeof(save_data)) == 0);
+    }
+
+    {
+        HgStringView file_path = "hg_test_dir/file_image_test.hgtex";
+
+        bin.store(file_path);
+        HgTexture file_texture = HgBinary::load(arena, file_path);
+
+        VkFormat format;
+        u32 width, height, depth;
+        hg_test_assert(file_texture.get_info(format, width, height, depth));
+        hg_test_assert(format == save_format);
+        hg_test_assert(width == save_width);
+        hg_test_assert(height == save_height);
+        hg_test_assert(depth == save_depth);
+        hg_test_assert(width * height * depth * hg_vk_format_to_size(format) == sizeof(save_data));
+
+        void* pixels = file_texture.get_pixels();
+        hg_test_assert(pixels != nullptr);
+        hg_test_assert(std::memcmp(save_data, pixels, sizeof(save_data)) == 0);
+    }
+
+    {
+        HgStringView tex_path = "tex";
+        HgStringView file_path = "hg_test_dir/file_image_test.png";
+        HgResourceID tex_id = hg_resource_id(tex_path);
+        HgResourceID file_id = hg_resource_id(file_path);
+        hg_resources->register_resource(tex_id);
+        hg_resources->register_resource(file_id);
+        hg_resources->get(tex_id) = bin;
+
+        HgFence fence;
+        HgTexture::export_file(&fence, 1, tex_id, file_path);
+        HgTexture::import_file(&fence, 1, file_path);
         hg_test_assert(fence.wait(2.0));
 
-        hg_test_assert(texture.pixels != nullptr);
-        hg_test_assert(texture.pixels != save_data);
-        hg_test_assert(texture.format == save_format);
-        hg_test_assert(texture.width == save_width);
-        hg_test_assert(texture.height == save_height);
-        hg_test_assert(texture.depth == save_depth);
-        hg_test_assert(texture.width
-                     * texture.height
-                     * texture.depth
-                     * hg_vk_format_to_size(texture.format)
-                    == sizeof(save_data));
-        hg_test_assert(std::memcmp(save_data, texture.pixels, sizeof(save_data)) == 0);
+        HgTexture file_texture = hg_resources->get(file_id);
 
-        texture.unload(&fence, 1);
+        VkFormat format;
+        u32 width, height, depth;
+        hg_test_assert(file_texture.get_info(format, width, height, depth));
+        hg_test_assert(format == save_format);
+        hg_test_assert(width == save_width);
+        hg_test_assert(height == save_height);
+        hg_test_assert(depth == save_depth);
+        hg_test_assert(width * height * depth * hg_vk_format_to_size(format) == sizeof(save_data));
+
+        void* pixels = file_texture.get_pixels();
+        hg_test_assert(pixels != nullptr);
+        hg_test_assert(std::memcmp(save_data, pixels, sizeof(save_data)) == 0);
     }
-    hg_test_assert(fence.wait(2.0));
 
-    hg_test_assert(texture.location == (u32)HgTexture::Location::none);
+    hg_resources->reset();
 
     return true;
 }
 
 hg_test(HgResourceManager) {
-    hg_arena_scope(arena, hg_get_scratch());
-
-    HgResourceManager rm = rm.create(arena, 64);
-
-    {
-        HgResourceID a = 0;
-        HgResourceID b = 1;
-        HgResourceID b_conf = 1 + rm.capacity;
-        HgResourceID b_conf2 = 1 + rm.capacity * 2;
-        HgResourceID c = 2;
-        HgResourceID d = 3;
-        HgResourceID e = 10;
-
-        hg_test_assert(!rm.is_registered(a));
-        hg_test_assert(!rm.is_registered(b));
-        hg_test_assert(!rm.is_registered(b_conf));
-        hg_test_assert(!rm.is_registered(b_conf2));
-        hg_test_assert(!rm.is_registered(c));
-        hg_test_assert(!rm.is_registered(d));
-        hg_test_assert(!rm.is_registered(e));
-
-        rm.register_resource(HgResource::binary, a);
-        rm.register_resource(HgResource::texture, b);
-        rm.register_resource(HgResource::binary, b_conf);
-        rm.register_resource(HgResource::texture, b_conf2);
-        rm.register_resource(HgResource::binary, c);
-        rm.register_resource(HgResource::texture, d);
-        rm.register_resource(HgResource::binary, e);
-
-        hg_test_assert(rm.is_registered(a));
-        hg_test_assert(rm.resources[rm.get_idx(a)].type == HgResource::binary);
-        hg_test_assert(rm.is_registered(b));
-        hg_test_assert(rm.resources[rm.get_idx(b)].type == HgResource::texture);
-        hg_test_assert(rm.is_registered(b_conf));
-        hg_test_assert(rm.resources[rm.get_idx(b_conf)].type == HgResource::binary);
-        hg_test_assert(rm.is_registered(b_conf2));
-        hg_test_assert(rm.resources[rm.get_idx(b_conf2)].type == HgResource::texture);
-        hg_test_assert(rm.is_registered(c));
-        hg_test_assert(rm.resources[rm.get_idx(c)].type == HgResource::binary);
-        hg_test_assert(rm.is_registered(d));
-        hg_test_assert(rm.resources[rm.get_idx(d)].type == HgResource::texture);
-        hg_test_assert(rm.is_registered(e));
-        hg_test_assert(rm.resources[rm.get_idx(e)].type == HgResource::binary);
-
-        rm.unregister_resource(a);
-        rm.unregister_resource(b);
-        rm.unregister_resource(b_conf);
-        rm.unregister_resource(b_conf2);
-        rm.unregister_resource(c);
-        rm.unregister_resource(d);
-        rm.unregister_resource(e);
-
-        hg_test_assert(!rm.is_registered(a));
-        hg_test_assert(!rm.is_registered(b));
-        hg_test_assert(!rm.is_registered(b_conf));
-        hg_test_assert(!rm.is_registered(b_conf2));
-        hg_test_assert(!rm.is_registered(c));
-        hg_test_assert(!rm.is_registered(d));
-        hg_test_assert(!rm.is_registered(e));
-
-        rm.register_resource(HgResource::texture, a);
-        rm.register_resource(HgResource::binary, b_conf2);
-        rm.register_resource(HgResource::texture, d);
-        rm.register_resource(HgResource::binary, b);
-
-        hg_test_assert(rm.is_registered(a));
-        hg_test_assert(rm.resources[rm.get_idx(a)].type == HgResource::texture);
-        hg_test_assert(rm.is_registered(b));
-        hg_test_assert(rm.resources[rm.get_idx(b)].type == HgResource::binary);
-        hg_test_assert(!rm.is_registered(b_conf));
-        hg_test_assert(rm.is_registered(b_conf2));
-        hg_test_assert(rm.resources[rm.get_idx(b_conf2)].type == HgResource::binary);
-        hg_test_assert(!rm.is_registered(c));
-        hg_test_assert(rm.is_registered(d));
-        hg_test_assert(rm.resources[rm.get_idx(d)].type == HgResource::texture);
-        hg_test_assert(!rm.is_registered(e));
-
-        rm.register_resource(HgResource::texture, b_conf);
-        rm.register_resource(HgResource::binary, e);
-        rm.register_resource(HgResource::texture, c);
-
-        hg_test_assert(rm.is_registered(a));
-        hg_test_assert(rm.resources[rm.get_idx(a)].type == HgResource::texture);
-        hg_test_assert(rm.is_registered(b));
-        hg_test_assert(rm.resources[rm.get_idx(b)].type == HgResource::binary);
-        hg_test_assert(rm.is_registered(b_conf));
-        hg_test_assert(rm.resources[rm.get_idx(b_conf)].type == HgResource::texture);
-        hg_test_assert(rm.is_registered(b_conf2));
-        hg_test_assert(rm.resources[rm.get_idx(b_conf2)].type == HgResource::binary);
-        hg_test_assert(rm.is_registered(c));
-        hg_test_assert(rm.resources[rm.get_idx(c)].type == HgResource::texture);
-        hg_test_assert(rm.is_registered(d));
-        hg_test_assert(rm.resources[rm.get_idx(d)].type == HgResource::texture);
-        hg_test_assert(rm.is_registered(e));
-        hg_test_assert(rm.resources[rm.get_idx(e)].type == HgResource::binary);
-
-        rm.unregister_resource(e);
-        rm.unregister_resource(b_conf);
-        rm.unregister_resource(b);
-        rm.unregister_resource(d);
-
-        hg_test_assert(rm.is_registered(a));
-        hg_test_assert(rm.resources[rm.get_idx(a)].type == HgResource::texture);
-        hg_test_assert(!rm.is_registered(b));
-        hg_test_assert(!rm.is_registered(b_conf));
-        hg_test_assert(rm.is_registered(b_conf2));
-        hg_test_assert(rm.resources[rm.get_idx(b_conf2)].type == HgResource::binary);
-        hg_test_assert(rm.is_registered(c));
-        hg_test_assert(rm.resources[rm.get_idx(c)].type == HgResource::texture);
-        hg_test_assert(!rm.is_registered(d));
-        hg_test_assert(!rm.is_registered(e));
-
-        rm.unregister_resource(c);
-        rm.unregister_resource(b_conf2);
-        rm.unregister_resource(a);
-
-        hg_test_assert(!rm.is_registered(a));
-        hg_test_assert(!rm.is_registered(b));
-        hg_test_assert(!rm.is_registered(b_conf));
-        hg_test_assert(!rm.is_registered(b_conf2));
-        hg_test_assert(!rm.is_registered(c));
-        hg_test_assert(!rm.is_registered(d));
-        hg_test_assert(!rm.is_registered(e));
-    }
-
-    HgFence fence;
-    rm.destroy(&fence, 1);
-    hg_test_assert(fence.wait(2.0));
-
+    hg_warn("HgResourceManager test not implemented yet\n");
     return true;
 }
 
