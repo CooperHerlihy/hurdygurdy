@@ -5,12 +5,6 @@
 
 #include <emmintrin.h>
 
-#if defined(HG_PLATFORM_LINUX)
-#include <alloca.h>
-#elif defined(HG_PLATFORM_WINDOWS)
-#include <malloc.h>
-#endif
-
 void hg_init(void) {
     for (usize i = 0; i < hg_arena_count; ++i) {
         if (hg_arenas[i].memory == nullptr) {
@@ -20,8 +14,6 @@ void hg_init(void) {
     }
 
     HgArena& arena = hg_get_scratch();
-
-    // init arenas for each thread : TODO?
 
     if (hg_threads == nullptr) {
         u32 thread_count = std::thread::hardware_concurrency()

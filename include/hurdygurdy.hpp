@@ -3424,7 +3424,7 @@ struct HgIOThread {
 /**
  * A global io thread
  */
-inline HgIOThread* hg_io;
+inline HgIOThread* hg_io = nullptr;
 
 /**
  * A loaded binary file
@@ -3709,7 +3709,7 @@ struct HgTexture {
         /**
          * The identifier to ensure the file is a Hurdy Gurdy texture
          */
-        char identifier[4];
+        char identifier[sizeof(texture_identifier)];
         /**
          * The format of each pixel
          */
@@ -4622,7 +4622,7 @@ struct HgECS {
 /**
  * A global entity component system
  */
-inline HgECS* hg_ecs;
+inline HgECS* hg_ecs = nullptr;
 
 /**
  * The transform for (nearly) all entities

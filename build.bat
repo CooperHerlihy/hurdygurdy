@@ -20,6 +20,13 @@ set INCLUDES= ^
     /I "%SRC_DIR%\include" ^
     /I "%SRC_DIR%\vendor\libX11\include"
 
+set SRC= ^
+    hurdygurdy.cpp
+
+set SHADERS= ^
+    sprite.vert ^
+    sprite.frag
+
 if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
 if not exist "%TEST_DIR%" mkdir "%TEST_DIR%"
 
@@ -29,20 +36,14 @@ cl "%SRC_DIR%\src\embed_file.cpp" ^
     /Fe:"%BUILD_DIR%\embed_file.exe" ^
     %STD% %WARNINGS% %CONFIG% %INCLUDES%
 
-set SHADERS= ^
-    %SRC_DIR%\src\sprite.vert ^
-    %SRC_DIR%\src\sprite.frag
+for %%F in (%SHADERS%) do (
+    echo %%F
 
-for %%S in (%SHADERS%) do (
-    for %%N in (%%~nxS) do (
-        echo %%N
+    glslc -o "%BUILD_DIR%\%%F.spv" "%%F"
 
-        glslc -o "%BUILD_DIR%\%%N.spv" "%%S"
-
-        "%BUILD_DIR%\embed_file.exe" ^
-            "%BUILD_DIR%\%%N.spv" ^
-            "%%N.spv" > "%BUILD_DIR%\%%N.spv.h"
-    )
+    "%BUILD_DIR%\embed_file.exe" ^
+        "%BUILD_DIR%\%%F.spv" ^
+        "%SRC_DIR%\src\%%F.spv" > "%BUILD_DIR%\%%F.spv.h"
 )
 
 if not exist "%BUILD_DIR%\vk_mem_alloc.obj" (
@@ -57,6 +58,13 @@ if not exist "%BUILD_DIR%\stb.obj" (
         /Fd:"%BUILD_DIR%\stb.pdb" ^
         /Fo:"%BUILD_DIR%\stb.obj" ^
         %STD% %CONFIG% %INCLUDES%
+)
+
+for %%F in (%SRC%) do (
+    cl /c "%SRC_DIR%\src\%%F" ^
+        /Fd:"%BUILD_DIR%\%%~nF.pdb" ^
+        /Fo:"%BUILD_DIR%\%%~nF.obj" ^
+        %STD% %WARNINGS% %CONFIG% %INCLUDES%
 )
 
 cl /c "%SRC_DIR%\src\hurdygurdy.cpp" ^
