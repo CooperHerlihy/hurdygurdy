@@ -67,11 +67,6 @@ for %%F in (%SRC%) do (
         %STD% %WARNINGS% %CONFIG% %INCLUDES%
 )
 
-cl /c "%SRC_DIR%\src\hurdygurdy.cpp" ^
-    /Fd:"%BUILD_DIR%\hurdygurdy.pdb" ^
-    /Fo:"%BUILD_DIR%\hurdygurdy.obj" ^
-    %STD% %WARNINGS% %CONFIG% %INCLUDES%
-
 lib /nologo /OUT:"%BUILD_DIR%\hurdygurdy.lib" ^
     "%BUILD_DIR%\hurdygurdy.obj" ^
     "%BUILD_DIR%\vk_mem_alloc.obj" ^
