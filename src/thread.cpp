@@ -170,7 +170,7 @@ HgIOThread* HgIOThread::create(HgArena& arena, usize queue_size) {
 
         for (;;) {
             if (io->should_close.load())
-                return;
+                break;
 
             Request request;
             if (!io->pop(request))

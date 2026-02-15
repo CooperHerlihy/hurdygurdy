@@ -78,12 +78,14 @@ for %%F in (%SRC%) do (
         /Fd:"%BUILD_DIR%\%%~nF.pdb" ^
         /Fo:"%BUILD_DIR%\%%~nF.obj" ^
         %STD% %WARNINGS% %CONFIG% %INCLUDES%
+
+    set OBJS=!OBJS! "%BUILD_DIR%\%%~nF.obj"
 )
 
 lib /nologo /OUT:"%BUILD_DIR%\hurdygurdy.lib" ^
-    "%BUILD_DIR%\hurdygurdy.obj" ^
     "%BUILD_DIR%\vk_mem_alloc.obj" ^
-    "%BUILD_DIR%\stb.obj"
+    "%BUILD_DIR%\stb.obj" ^
+    %OBJS%
 
 cl "%SRC_DIR%\src\tests.cpp" ^
     /Fd:"%BUILD_DIR%\tests.pdb" ^
