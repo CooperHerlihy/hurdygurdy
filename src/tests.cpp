@@ -2241,8 +2241,8 @@ hg_test(HgTexture) {
         hg_resources->get(tex_id) = bin;
 
         HgFence fence;
-        HgTexture::export_file(&fence, 1, tex_id, file_path);
-        HgTexture::import_file(&fence, 1, file_path);
+        hg_export_png(&fence, 1, tex_id, file_path);
+        hg_import_png(&fence, 1, file_path);
         hg_test_assert(fence.wait(2.0));
 
         HgTexture file_texture = hg_resources->get(file_id);

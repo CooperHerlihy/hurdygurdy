@@ -15,7 +15,20 @@ INCLUDES := \
 	-I$(SRC_DIR)/vendor/libX11/include
 
 SRC := \
-	hurdygurdy.cpp
+	init.cpp \
+	test_utils.cpp \
+	math.cpp \
+	arena.cpp \
+	string.cpp \
+	any_array.cpp \
+	time.cpp \
+	thread.cpp \
+	resources.cpp \
+	ecs.cpp \
+	transform.cpp \
+	pipeline2d.cpp \
+	x11.cpp \
+	vulkan.cpp
 
 SHADERS := \
 	sprite.vert \
@@ -23,7 +36,7 @@ SHADERS := \
 
 .PHONY: all debug release clean
 
-all: $(BUILD_DIR)/test $(TEST_DIR)
+all: $(BUILD_DIR)/tests $(TEST_DIR)
 
 debug:
 	$(MAKE) CONFIG="$(DEBUG_CONFIG)"
@@ -58,8 +71,8 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/src/%.cpp $(patsubst %, $(BUILD_DIR)/%.spv.h, $(SHA
 $(BUILD_DIR)/libhurdygurdy.a: $(patsubst %.cpp, $(BUILD_DIR)/%.o, $(SRC)) $(BUILD_DIR)/vk_mem_alloc.o $(BUILD_DIR)/stb.o
 	ar rcs $@ $^
 
-$(BUILD_DIR)/test: $(BUILD_DIR)/test.o $(BUILD_DIR)/libhurdygurdy.a
-	c++ $(STD) $(CONFIG) $(WARNINGS) -o $@ $(BUILD_DIR)/test.o -L$(BUILD_DIR) -lhurdygurdy
+$(BUILD_DIR)/tests: $(BUILD_DIR)/tests.o $(BUILD_DIR)/libhurdygurdy.a
+	c++ $(STD) $(CONFIG) $(WARNINGS) -o $@ $(BUILD_DIR)/tests.o -L$(BUILD_DIR) -lhurdygurdy
 
 clean:
 	rm -rf $(BUILD_DIR) $(TEST_DIR)

@@ -310,7 +310,7 @@ typedef double_t f64;
  * - Thread pool
  * - IO thread
  * - Entity component system
- * - Resources store
+ * - Resource managers
  * - Hardware graphics
  * - OS windowing
  */
@@ -348,7 +348,7 @@ struct HgTest {
  * Automatically declares and registers a test function
  *
  * Example:
- * hg_test(hg_example_test) {
+ * hg_test(example_test) {
  *     bool success = true;
  *     hg_test_assert(success != false);
  *     return success;
@@ -386,21 +386,6 @@ struct HgTest {
  * - Whether all tests passed
  */
 bool hg_run_tests();
-
-/**
- * A high precision clock for timers and game deltas
- */
-struct HgClock {
-    std::chrono::time_point<std::chrono::high_resolution_clock> time = std::chrono::high_resolution_clock::now();
-
-    /**
-     * Resets the clock and returns the delta since the last tick in seconds
-     *
-     * Returns
-     * - Seconds since last tick
-     */
-    f64 tick();
-};
 
 /**
  * The value of Pi
@@ -1732,13 +1717,14 @@ struct HgArena {
     hg_defer(name.load(name##_arena_save_state));
 
 /**
- * The number of global arenas
+ * Initializes scratch arenas
  */
-inline constexpr usize hg_arena_count = 2;
+void hg_init_scratch();
+
 /**
- * The global arenas used for scratch allocation
+ * Deinitializes scratch arenas
  */
-inline thread_local HgArena hg_arenas[hg_arena_count]{};
+void hg_deinit_scratch();
 
 /**
  * Get a scratch arena for temporary allocations, assuming no conflicts
@@ -3056,6 +3042,21 @@ struct HgHashSet {
 };
 
 /**
+ * A high precision clock for timers and game deltas
+ */
+struct HgClock {
+    std::chrono::time_point<std::chrono::high_resolution_clock> time = std::chrono::high_resolution_clock::now();
+
+    /**
+     * Resets the clock and returns the delta since the last tick in seconds
+     *
+     * Returns
+     * - Seconds since last tick
+     */
+    f64 tick();
+};
+
+/**
  * A spinlock fence for basic thread synchronization
  */
 struct HgFence {
@@ -3547,6 +3548,73 @@ struct HgBinary {
 };
 
 /**
+ * A texture resource
+ */
+struct HgTexture {
+    static constexpr char texture_identifier[] = "HGT"; // hurdy gurdy texture
+
+    /**
+     * The info prepended to a texture resource
+     */
+    struct Info {
+        /**
+         * The identifier to ensure the file is a Hurdy Gurdy texture
+         */
+        char identifier[sizeof(texture_identifier)];
+        /**
+         * The format of each pixel
+         */
+        VkFormat format;
+        /**
+         * The width in pixels
+         */
+        u32 width;
+        /**
+         * The height in pixels
+         */
+        u32 height;
+        /**
+         * The depth in pixels
+         */
+        u32 depth;
+    };
+
+    /**
+     * The texture data
+     */
+    HgBinary file;
+
+    /**
+     * Construct uninitialized
+     */
+    HgTexture() = default;
+
+    /**
+     * Implicit conversion from binary file
+     */
+    HgTexture(HgBinary file_val) : file(file_val) {}
+
+    /**
+     * Get the texture info from the file
+     *
+     * Parameters
+     * - format Where to store the format
+     * - width Where to store the width
+     * - height Where to store the height
+     * - depth Where to store the depth
+     *
+     * Returns
+     * - Whether the info could be found
+     */
+    bool get_info(VkFormat& format, u32& width, u32& height, u32& depth);
+
+    /**
+     * Returns a pointer to the pixels
+     */
+    void* get_pixels();
+};
+
+/**
  * The uuid derived from the resource's name/path
  */
 using HgResourceID = usize;
@@ -3697,92 +3765,25 @@ struct HgResourceManager {
 inline HgResourceManager* hg_resources = nullptr;
 
 /**
- * A texture resource
+ * Load an external texture file into a resource in the Hurdy Gurdy format
+ *
+ * Parameters
+ * - fences The fences to wait on
+ * - fence_count The number of fences
+ * - path The path of the file to import
  */
-struct HgTexture {
-    static constexpr char texture_identifier[] = "HGT"; // hurdy gurdy texture
+void hg_import_png(HgFence* fences, usize fence_count, HgStringView path);
 
-    /**
-     * The info prepended to a texture resource
-     */
-    struct Info {
-        /**
-         * The identifier to ensure the file is a Hurdy Gurdy texture
-         */
-        char identifier[sizeof(texture_identifier)];
-        /**
-         * The format of each pixel
-         */
-        VkFormat format;
-        /**
-         * The width in pixels
-         */
-        u32 width;
-        /**
-         * The height in pixels
-         */
-        u32 height;
-        /**
-         * The depth in pixels
-         */
-        u32 depth;
-    };
-
-    /**
-     * The texture data
-     */
-    HgBinary file;
-
-    /**
-     * Construct uninitialized
-     */
-    HgTexture() = default;
-
-    /**
-     * Implicit conversion from binary file
-     */
-    HgTexture(HgBinary file_val) : file(file_val) {}
-
-    /**
-     * Get the texture info from the file
-     *
-     * Parameters
-     * - format Where to store the format
-     * - width Where to store the width
-     * - height Where to store the height
-     * - depth Where to store the depth
-     *
-     * Returns
-     * - Whether the info could be found
-     */
-    bool get_info(VkFormat& format, u32& width, u32& height, u32& depth);
-
-    /**
-     * Returns a pointer to the pixels
-     */
-    void* get_pixels();
-
-    /**
-     * Load an external texture file into a resource in the Hurdy Gurdy format
-     *
-     * Parameters
-     * - fences The fences to wait on
-     * - fence_count The number of fences
-     * - path The path of the file to import
-     */
-    static void import_file(HgFence* fences, usize fence_count, HgStringView path);
-
-    /**
-     * Store a texture resource onto disc in an external file format
-     *
-     * Parameters
-     * - fences The fences to wait on
-     * - fence_count The number of fences
-     * - id The image to export
-     * - path The path of the file to export to
-     */
-    static void export_file(HgFence* fences, usize fence_count, HgResourceID id, HgStringView path);
-};
+/**
+ * Store a texture resource onto disc in an external file format
+ *
+ * Parameters
+ * - fences The fences to wait on
+ * - fence_count The number of fences
+ * - id The image to export
+ * - path The path of the file to export to
+ */
+void hg_export_png(HgFence* fences, usize fence_count, HgResourceID id, HgStringView path);
 
 /**
  * A buffer stored on the GPU
@@ -4780,7 +4781,6 @@ inline VkInstance hg_vk_instance = nullptr;
 inline VkPhysicalDevice hg_vk_physical_device = nullptr;
 inline VkDevice hg_vk_device = nullptr;
 inline VmaAllocator hg_vk_vma = nullptr;
-
 inline VkQueue hg_vk_queue = nullptr;
 inline u32 hg_vk_queue_family = (u32)-1;
 

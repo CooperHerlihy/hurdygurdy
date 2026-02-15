@@ -21,7 +21,20 @@ set INCLUDES= ^
     /I "%SRC_DIR%\vendor\libX11\include"
 
 set SRC= ^
-    hurdygurdy.cpp
+    init.cpp ^
+    test_utils.cpp ^
+    math.cpp ^
+    arena.cpp ^
+    string.cpp ^
+    any_array.cpp ^
+    time.cpp ^
+    thread.cpp ^
+    resources.cpp ^
+    ecs.cpp ^
+    transform.cpp ^
+    pipeline2d.cpp ^
+    windows.cpp ^
+    vulkan.cpp
 
 set SHADERS= ^
     sprite.vert ^
@@ -72,10 +85,10 @@ lib /nologo /OUT:"%BUILD_DIR%\hurdygurdy.lib" ^
     "%BUILD_DIR%\vk_mem_alloc.obj" ^
     "%BUILD_DIR%\stb.obj"
 
-cl "%SRC_DIR%\src\test.cpp" ^
-    /Fd:"%BUILD_DIR%\test.pdb" ^
-    /Fo:"%BUILD_DIR%\test.obj" ^
-    /Fe:"%BUILD_DIR%\test.exe" ^
+cl "%SRC_DIR%\src\tests.cpp" ^
+    /Fd:"%BUILD_DIR%\tests.pdb" ^
+    /Fo:"%BUILD_DIR%\tests.obj" ^
+    /Fe:"%BUILD_DIR%\tests.exe" ^
     %STD% %WARNINGS% %CONFIG% %INCLUDES% ^
     "%BUILD_DIR%\hurdygurdy.lib" User32.lib
 
