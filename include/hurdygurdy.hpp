@@ -38,8 +38,6 @@
 #include <chrono>
 
 #include <atomic>
-#include <condition_variable>
-#include <mutex>
 #include <thread>
 
 #include <vulkan/vulkan.h>
@@ -3066,22 +3064,12 @@ struct HgFence {
     std::atomic<u64> counter{0};
 
     /**
-     * Add another event for the fence to wait on
-     */
-    void add();
-
-    /**
      * Add more events for the fence to wait on
      *
      * Parameters
      * - count The number of added events
      */
     void add(usize count);
-
-    /**
-     * Signal that an event has completed
-     */
-    void signal();
 
     /**
      * Signal that events have completed
@@ -3106,203 +3094,90 @@ struct HgFence {
 };
 
 /**
- * A thread pool
+ * Initialize the thread pool
+ *
+ * Note, the recommended thread is the hardware thread count minus dedicated
+ * threads such as main thread, IO thread, etc.
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - thread_count The number of threads to spawn in the pool
+ * - queue_size The max capacity of the thread work queue
  */
-struct HgThreadPool {
-    /**
-     * The work for threads to execute
-     */
-    struct Work {
-        /**
-         * The fences to signal on completion
-         */
-        HgFence* fences;
-        /**
-         * The number of fences
-         */
-        usize fence_count;
-        /**
-         * The data passed to the function
-         */
-        void* data;
-        /**
-         * The function to execute
-         */
-        void (*fn)(void*);
-    };
-
-    /**
-     * A signal to all threads to close
-     */
-    std::atomic_bool should_close;
-    /**
-     * The threads in the pool
-     */
-    std::thread* threads;
-    /**
-     * The number of threads
-     */
-    usize thread_count;
-    /**
-     * Mutex to sleep with cv
-     */
-    std::mutex mtx;
-    /**
-     * Condition variable to signal workers
-     */
-    std::condition_variable cv;
-    /**
-     * Whether each item is filled
-     */
-    std::atomic_bool* has_item;
-    /**
-     * The allocated space for the queue
-     */
-    Work* items;
-    /**
-     * The max number of items that can be stored in the queue
-     */
-    usize capacity;
-    /**
-     * The available work count
-     */
-    std::atomic<usize> count;
-    /**
-     * The beginning of the queue, where items may be popped
-     */
-    std::atomic<usize> tail;
-    /**
-     * The beginning of the queue, where items are beign popped
-     */
-    std::atomic<usize> working_tail;
-    /**
-     * The end of the queue, where items are being pushed
-     */
-    std::atomic<usize> head;
-    /**
-     * The end of the queue, where items may be pushed
-     */
-    std::atomic<usize> working_head;
-
-    /**
-     * Creates a new thread pool
-     *
-     * Note, capacity must be a power of two, it can be better optimized, and
-     * overflows are handled safely
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - thread_count The number of threads to spawn (recommended hardware - 1)
-     * - queue_size The max capacity of the work queue
-     *
-     * Returns
-     * - The created thread pool
-     * - nullptr on failure
-     */
-    static HgThreadPool* create(HgArena& arena, usize thread_count, usize queue_size);
-
-    /**
-     * Destroys the thread pool
-     */
-    void destroy();
-
-    /**
-     * Removes all contained objects, emptying the queue
-     *
-     * Note, this is not thread safe
-     */
-    void reset();
-
-    /**
-     * Pushes work to the queue to be executed
-     *
-     * Parameters
-     * - fences The fences to signal upon completion
-     * - fence_count The number of fences
-     * - data The data passed to the function
-     * - work The function to be executed
-     */
-    void push(HgFence* fences, usize fence_count, void* data, void (*fn)(void*));
-
-    /**
-     * Tries to execute work from the end of the queue
-     *
-     * Returns
-     * - Whether work could be executed
-     */
-    bool pop();
-
-    /**
-     * Wait on a fence, and help complete work in the meantime
-     *
-     * Parameters
-     * - fence The fence to wait on
-     * - timeout_seconds The max time to spend working
-     *
-     * Returns
-     * - true if the fence was completed
-     * - false if the timeout was reached
-     */
-    bool help(HgFence& fence, f64 timeout_seconds);
-
-    /**
-     * Iterates in parallel over a function n times
-     *
-     * Note, uses a fence internally to wait for all work to complete
-     *
-     * Parameters
-     * - n The number of elements to iterate [0, count)
-     * - chunk_size The number of elements to iterate per chunk
-     * - fn The function to use to iterate, takes begin and end indicces
-     */
-    template<typename Fn>
-    void for_par(usize n, usize chunk_size, Fn fn) {
-        static_assert(std::is_invocable_r_v<void, Fn, usize, usize>);
-
-        hg_arena_scope(scratch, hg_get_scratch());
-
-        HgFence fence;
-        for (usize i = 0; i < n; i += chunk_size) {
-            fence.add();
-
-            auto iter = [begin = i, end = std::min(i + chunk_size, n), &fn] {
-                fn(begin, end);
-            };
-
-            void* data = scratch.alloc<decltype(iter)>(1);
-            std::memcpy(data, &iter, sizeof(iter));
-
-            usize idx = working_head.fetch_add(1) & (capacity - 1);
-
-            items[idx].fences = &fence;
-            items[idx].fence_count = 1;
-            items[idx].data = data;
-            items[idx].fn = [](void* piter) {
-                (*(decltype(iter)*)piter)();
-            };
-            has_item[idx].store(true);
-
-            usize h = head.load();
-            while (has_item[h].load()) {
-                usize next = (h + 1) & (capacity - 1);
-                head.compare_exchange_strong(h, next);
-                h = next;
-            }
-
-            ++count;
-            cv.notify_one();
-        }
-        mtx.lock();
-        mtx.unlock();
-        cv.notify_all();
-        help(fence, INFINITY);
-    }
-};
+void hg_thread_pool_init(HgArena& arena, usize thread_count, usize queue_size);
 
 /**
- * A global thread pool
+ * Deinitialize the thread pool
  */
-inline HgThreadPool* hg_threads = nullptr;
+void hg_thread_pool_deinit();
+
+/**
+ * Reset the thread pool
+ */
+void hg_thread_pool_reset();
+
+/**
+ * Tries to execute work from the end of the queue
+ *
+ * Returns
+ * - Whether work could be executed
+ */
+bool hg_thread_pool_pop();
+
+/**
+ * Wait on a fence, and help complete work in the meantime
+ *
+ * Parameters
+ * - fence The fence to wait on
+ * - timeout_seconds The max time to spend working
+ *
+ * Returns
+ * - true if the fence was completed
+ * - false if the timeout was reached
+ */
+bool hg_thread_pool_help(HgFence& fence, f64 timeout_seconds);
+
+/**
+ * Pushes work to the thread pool queue to be executed
+ *
+ * Parameters
+ * - fences The fences to signal upon completion
+ * - fence_count The number of fences
+ * - data The data passed to the function
+ * - work The function to be executed
+ */
+void hg_call_par(HgFence* fences, usize fence_count, void* data, void (*fn)(void*));
+
+/**
+ * Iterates in parallel over a function n times using the thread pool
+ *
+ * Note, uses a fence internally to wait for all work to complete
+ *
+ * Parameters
+ * - n The number of elements to iterate [0, count)
+ * - chunk_size The number of elements to iterate per chunk
+ * - fn The function to use to iterate, takes begin and end indicces
+ */
+template<typename Fn>
+void hg_for_par(usize n, usize chunk_size, Fn fn) {
+    static_assert(std::is_invocable_r_v<void, Fn, usize, usize>);
+
+    hg_arena_scope(scratch, hg_get_scratch());
+
+    HgFence fence;
+    for (usize i = 0; i < n; i += chunk_size) {
+        auto iter = [begin = i, end = std::min(i + chunk_size, n), &fn] {
+            fn(begin, end);
+        };
+        void* data = scratch.alloc<decltype(iter)>(1);
+        std::memcpy(data, &iter, sizeof(iter));
+
+        hg_call_par(&fence, 1, data, [](void* piter) {
+            (*(decltype(iter)*)piter)();
+        });
+    }
+    hg_thread_pool_help(fence, INFINITY);
+}
 
 /**
  * A thread dedicated to blocking IO
@@ -4528,7 +4403,7 @@ struct HgECS {
         static_assert(std::is_invocable_r_v<void, Fn, HgEntity, T&>);
 
         u32 id = hg_component_id<T>;
-        hg_threads->for_par(systems[id].components.count, chunk_size, [&](usize begin, usize end) {
+        hg_for_par(systems[id].components.count, chunk_size, [&](usize begin, usize end) {
             HgEntity* e = systems[id].dense + begin;
             HgEntity* e_end = systems[id].dense + end;
             T* c = (T*)systems[id].components.get(begin);
@@ -4553,7 +4428,7 @@ struct HgECS {
         static_assert(std::is_invocable_r_v<void, Fn, HgEntity, Ts&...>);
 
         u32 id = smallest_id<Ts...>();
-        hg_threads->for_par(component_count(id), chunk_size, [&](usize begin, usize end) {
+        hg_for_par(component_count(id), chunk_size, [&](usize begin, usize end) {
             HgEntity* e = systems[id].dense + begin;
             HgEntity* e_end = systems[id].dense + end;
             for (; e != e_end; ++e) {

@@ -14,7 +14,10 @@ void hg_init_scratch() {
 
 void hg_deinit_scratch() {
     for (usize i = 0; i < hg_internal_arena_count; ++i) {
-        std::free(hg_internal_arenas[i].memory);
+        if (hg_internal_arenas[i].memory != nullptr) {
+            std::free(hg_internal_arenas[i].memory);
+            hg_internal_arenas[i] = {};
+        }
     }
 }
 

@@ -1902,20 +1902,17 @@ hg_test(HgHashSet) {
 hg_test(HgThreadPool) {
     hg_arena_scope(arena, hg_get_scratch());
 
-    HgThreadPool* threads = HgThreadPool::create(arena, std::thread::hardware_concurrency() - 1, 128);
-    hg_defer(threads->destroy());
-
-    hg_assert(threads != nullptr);
+    hg_defer(hg_thread_pool_reset());
 
     HgFence fence;
     {
         bool a = false;
         bool b = false;
 
-        threads->push(&fence, 1, &a, [](void *pa) {
+        hg_call_par(&fence, 1, &a, [](void *pa) {
             *(bool*)pa = true;
         });
-        threads->push(&fence, 1, &b, [](void *pb) {
+        hg_call_par(&fence, 1, &b, [](void *pb) {
             *(bool*)pb = true;
         });
 
@@ -1930,12 +1927,12 @@ hg_test(HgThreadPool) {
     {
         bool vals[100] = {};
         for (bool& val : vals) {
-            threads->push(&fence, 1, &val, [](void* data) {
+            hg_call_par(&fence, 1, &val, [](void* data) {
                 *(bool*)data = true;
             });
         }
 
-        hg_test_assert(threads->help(fence, 2.0));
+        hg_test_assert(hg_thread_pool_help(fence, 2.0));
 
         for (bool& val : vals) {
             hg_test_assert(val == true);
@@ -1945,7 +1942,7 @@ hg_test(HgThreadPool) {
     {
         bool vals[100] = {};
 
-        threads->for_par(hg_countof(vals), 16, [&](usize begin, usize end) {
+        hg_for_par(hg_countof(vals), 16, [&](usize begin, usize end) {
             hg_assert(begin < end && end <= hg_countof(vals));
             for (; begin < end; ++begin) {
                 vals[begin] = true;
@@ -1975,7 +1972,7 @@ hg_test(HgThreadPool) {
                 u32 begin = idx * 25;
                 u32 end = begin + 25;
                 for (u32 i = begin; i < end; ++i) {
-                    threads->push(&fence, 1, vals + i, fn);
+                    hg_call_par(&fence, 1, vals + i, fn);
                 }
             };
             for (u32 j = 0; j < hg_countof(producers); ++j) {
@@ -1987,7 +1984,7 @@ hg_test(HgThreadPool) {
                 thread.join();
             }
 
-            hg_test_assert(threads->help(fence, 2.0));
+            hg_test_assert(hg_thread_pool_help(fence, 2.0));
             for (auto val : vals) {
                 hg_test_assert(val == true);
             }

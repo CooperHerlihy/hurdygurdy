@@ -5,12 +5,9 @@ void hg_init(void) {
 
     HgArena& arena = hg_get_scratch();
 
-    if (hg_threads == nullptr) {
-        u32 thread_count = std::thread::hardware_concurrency()
-            - 2; // main thread, io thread
-        hg_threads = HgThreadPool::create(arena, thread_count, 4096);
-        hg_assert(hg_threads != nullptr);
-    }
+    u32 thread_count = std::thread::hardware_concurrency()
+        - 2; // main thread, io thread
+    hg_thread_pool_init(arena, thread_count, 4096);
 
     if (hg_io == nullptr) {
         hg_io = HgIOThread::create(arena, 4096);
@@ -59,11 +56,7 @@ void hg_exit(void) {
         hg_io = nullptr;
     }
 
-    if (hg_threads != nullptr) {
-        hg_threads->destroy();
-        hg_threads = nullptr;
-    }
-
+    hg_thread_pool_deinit();
     hg_deinit_scratch();
 }
 
