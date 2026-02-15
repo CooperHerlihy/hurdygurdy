@@ -39,11 +39,11 @@ cl "%SRC_DIR%\src\embed_file.cpp" ^
 for %%F in (%SHADERS%) do (
     echo %%F
 
-    glslc -o "%BUILD_DIR%\%%F.spv" "%%F"
+    glslc -o "%BUILD_DIR%\%%F.spv" "%SRC_DIR%\src\%%F"
 
     "%BUILD_DIR%\embed_file.exe" ^
         "%BUILD_DIR%\%%F.spv" ^
-        "%SRC_DIR%\src\%%F.spv" > "%BUILD_DIR%\%%F.spv.h"
+        "%%F.spv" > "%BUILD_DIR%\%%F.spv.h"
 )
 
 if not exist "%BUILD_DIR%\vk_mem_alloc.obj" (
