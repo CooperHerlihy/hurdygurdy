@@ -79,10 +79,7 @@ usize* resource_free_list = nullptr;
 usize resource_capacity = 0;
 usize resource_first = 0;
 
-constexpr usize resource_hash(HgResource r) {
-    return r.id;
-};
-HgHashMap<HgResource, Resource, resource_hash> resource_map;
+HgHashMap<HgResource, Resource> resource_map;
 
 void hg_resources_init(HgArena& arena, usize max_resources) {
     resource_pool = arena.realloc(resource_pool, resource_capacity, max_resources);
@@ -135,7 +132,15 @@ void hg_dealloc_resource(HgResource id) {
 }
 
 void hg_load_resource(HgFence* fences, usize fence_count, HgResource id, HgStringView path) {
-    auto fn = [](void* pres, HgStringView fpath) {
+    Resource* resource = resource_map.get(id);
+    if (resource == nullptr) {
+        hg_alloc_resource(id);
+        resource = resource_map.get(id);
+    }
+    if (resource->ref_count++ > 0)
+        return;
+
+    hg_io_request(fences, fence_count, resource, path, [](void* pres, HgStringView fpath) {
         Resource& res = *(Resource*)pres;
 
         hg_arena_scope(scratch, hg_get_scratch());
@@ -163,50 +168,34 @@ void hg_load_resource(HgFence* fences, usize fence_count, HgResource id, HgStrin
             res.file->data = nullptr;
             return;
         }
-    };
-
-    if (!resource_map.has(id))
-        hg_alloc_resource(id);
-
-    Resource& res = *resource_map.get(id);
-    if (res.ref_count++ > 0)
-        return;
-
-    hg_io_request(fences, fence_count, &res, path, fn);
+    });
 }
 
 void hg_unload_resource(HgFence* fences, usize fence_count, HgResource id) {
-    if (!resource_map.has(id))
+    Resource* resource = resource_map.get(id);
+    if (resource == nullptr || resource->ref_count == 0 || --resource->ref_count > 0)
         return;
 
-    Resource& res = *resource_map.get(id);
-    if (--res.ref_count > 0)
-        return;
-
-    hg_io_request(fences, fence_count, &res, {}, [](void* pres, HgStringView) {
-        Resource& rres = *(Resource*)pres;
-        std::free(rres.file->data);
-        rres.file->size = 0;
-        rres.file->data = nullptr;
+    hg_io_request(fences, fence_count, resource, {}, [](void* pres, HgStringView) {
+        Resource& res = *(Resource*)pres;
+        std::free(res.file->data);
+        res.file->size = 0;
+        res.file->data = nullptr;
     });
 }
 
 void hg_store_resource(HgFence* fences, usize fence_count, HgResource id, HgStringView path) {
-    if (!resource_map.has(id)) {
+    Resource* resource = resource_map.get(id);
+    if (resource == nullptr) {
         hg_arena_scope(scratch, hg_get_scratch());
         hg_warn("Could not store resource to \"%s\" because the resource does not exist\n",
             HgString::create(scratch, path).append(scratch, 0).chars);
         return;
     }
 
-    hg_io_request(fences, fence_count, resource_map.get(id), path, [](void* pres, HgStringView fpath) {
+    hg_io_request(fences, fence_count, resource, path, [](void* pres, HgStringView fpath) {
         (*(Resource*)pres).file->store(fpath);
     });
-}
-
-bool hg_is_resource_loaded(HgResource id) {
-    Resource* r = resource_map.get(id);
-    return r != nullptr && r->ref_count > 0;
 }
 
 HgBinary* hg_get_resource(HgResource id) {
@@ -214,24 +203,26 @@ HgBinary* hg_get_resource(HgResource id) {
     return r == nullptr ? nullptr : r->file;
 }
 
-void hg_import_png(HgFence* fences, usize fence_count, HgStringView path) {
-    HgResource id = hg_resource_id(path);
+void hg_import_png(HgFence* fences, usize fence_count, HgResource id, HgStringView path) {
     hg_load_resource(fences, fence_count, id, path);
 
-    hg_io_request(fences, fence_count, hg_get_resource(id), path, [](void* ptex, HgStringView fpath) {
-        HgBinary& bin = *(HgBinary*)ptex;
+    hg_io_request(fences, fence_count, hg_get_resource(id), path, [](void* pbin, HgStringView fpath) {
+        hg_arena_scope(scratch, hg_get_scratch());
+        HgString cpath = cpath.create(scratch, fpath).append(scratch, 0);
+
+        HgBinary& bin = *(HgBinary*)pbin;
 
         int width, height, channels;
-        u8* pixels = stbi_load_from_memory((u8*)bin.data, (int)bin.size, &width, &height, &channels, 4);
+        u8* pixels = stbi_load_from_memory((u8*)bin.data, (i32)bin.size, &width, &height, &channels, 4);
         if (pixels == nullptr) {
-            hg_arena_scope(scratch, hg_get_scratch());
-            hg_warn("Failed to decode image file: %s\n", HgString::create(scratch, fpath).append(scratch, 0).chars);
+            hg_warn("Failed to decode image file: %s\n", cpath.chars);
             return;
         }
+        std::free(bin.data);
+        hg_defer(std::free(pixels));
 
-        HgBinary new_bin;
-        new_bin.size = sizeof(HgTexture::Info) + (usize)width * (usize)height * sizeof(u32);
-        new_bin.data = std::malloc(new_bin.size);
+        bin.size = sizeof(HgTexture::Info) + (usize)width * (usize)height * sizeof(u32);
+        bin.data = std::malloc(bin.size);
 
         HgTexture::Info info;
         std::memcpy(info.identifier, HgTexture::texture_identifier, sizeof(HgTexture::texture_identifier));
@@ -240,29 +231,25 @@ void hg_import_png(HgFence* fences, usize fence_count, HgStringView path) {
         info.height = (u32)height;
         info.depth = 1;
 
-        new_bin.overwrite(0, info);
-        new_bin.overwrite(sizeof(info), pixels, (usize)width * (usize)height * sizeof(u32));
-
-        std::free(pixels);
-        std::free(bin.data);
-        bin = new_bin;
+        bin.overwrite(0, info);
+        bin.overwrite(sizeof(info), pixels, (usize)width * (usize)height * sizeof(u32));
     });
 }
 
 void hg_export_png(HgFence* fences, usize fence_count, HgResource id, HgStringView path) {
-    if (!resource_map.has(id)) {
+    HgBinary* resource = hg_get_resource(id);
+    if (resource == nullptr) {
         hg_arena_scope(scratch, hg_get_scratch());
         hg_warn("Could not export png resource to \"%s\" because the resource does not exist\n",
             HgString::create(scratch, path).append(scratch, 0).chars);
         return;
     }
 
-    hg_io_request(fences, fence_count, hg_get_resource(id), path, [](void* ptexture, HgStringView fpath) {
-        HgTexture tex = *(HgBinary*)ptexture;
-
+    hg_io_request(fences, fence_count, resource, path, [](void* ptex, HgStringView fpath) {
         hg_arena_scope(scratch, hg_get_scratch());
         HgString cpath = cpath.create(scratch, fpath).append(scratch, 0);
 
+        HgTexture tex = *(HgBinary*)ptex;
         void* pixels = tex.get_pixels();
         if (pixels == nullptr) {
             hg_warn("Cannot export emprty image %s\n", cpath.chars);
@@ -320,7 +307,7 @@ struct GpuResource {
 /**
  * The registered resources
  */
-HgHashMap<HgResource, GpuResource, resource_hash> gpu_map;
+HgHashMap<HgResource, GpuResource> gpu_map;
 
 void hg_gpu_resources_init(HgArena& arena, usize max_resources) {
     gpu_map = gpu_map.create(arena, max_resources);

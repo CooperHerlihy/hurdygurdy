@@ -70,3 +70,68 @@ next:
     hg_error("No scratch arena available\n");
 }
 
+HgDynamicArray HgDynamicArray::create(
+    HgArena& arena,
+    u32 width,
+    u32 alignment,
+    usize count,
+    usize capacity
+) {
+    hg_assert(count <= capacity);
+
+    HgDynamicArray arr;
+    arr.items = arena.alloc(capacity * width, alignment);
+    arr.width = width;
+    arr.alignment = alignment;
+    arr.capacity = capacity;
+    arr.count = count;
+    return arr;
+}
+
+void HgDynamicArray::reserve(HgArena& arena, usize new_capacity) {
+    items = arena.realloc(items, capacity * width, new_capacity * width, alignment);
+    capacity = new_capacity;
+}
+
+void HgDynamicArray::grow(HgArena& arena, f32 factor) {
+    hg_assert(factor > 1.0f);
+    hg_assert(capacity <= (usize)((f32)SIZE_MAX / factor));
+    reserve(arena, capacity == 0 ? 1 : (usize)((f32)capacity * factor));
+}
+
+void* HgDynamicArray::insert(usize index) {
+    hg_assert(index <= count);
+    hg_assert(count < capacity);
+
+    std::memmove(get(index + 1), get(index), (count++ - index) * width);
+    return get(index);
+}
+
+void HgDynamicArray::remove(usize index) {
+    hg_assert(index < count);
+
+    std::memmove(get(index), get(index + 1), (count - index - 1) * width);
+    --count;
+}
+
+void* HgDynamicArray::swap_insert(usize index) {
+    hg_assert(index <= count);
+    hg_assert(count < capacity);
+    if (index == count)
+        return push();
+
+    std::memcpy(get(count++), get(index), width);
+    return get(index);
+}
+
+void HgDynamicArray::swap_remove(usize index) {
+    hg_assert(index < count);
+    if (index == count - 1) {
+        pop();
+        return;
+    }
+
+    std::memcpy(get(index), get(count - 1), width);
+    --count;
+}
+

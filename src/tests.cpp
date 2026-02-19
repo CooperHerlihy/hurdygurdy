@@ -382,7 +382,7 @@ hg_test(HgArena) {
         hg_test_assert(realloc_big2 != realloc_big);
         hg_test_assert(memcmp(realloc_big, realloc_big2, 2 * sizeof(*realloc_big)) == 0);
 
-        arena.reset();
+        arena.head = 0;
     }
 
     return true;
@@ -1375,7 +1375,7 @@ hg_test(HgJson) {
 hg_test(HgArrayAny) {
     hg_arena_scope(arena, hg_get_scratch());
 
-    HgAnyArray arr = arr.create(arena, sizeof(u32), alignof(u32), 0, 2);
+    HgDynamicArray arr = arr.create(arena, sizeof(u32), alignof(u32), 0, 2);
     hg_test_assert(arr.items != nullptr);
     hg_test_assert(arr.capacity == 2);
     hg_test_assert(arr.count == 0);
@@ -2218,7 +2218,7 @@ hg_test(HgTexture) {
 
         HgFence fence;
         hg_export_png(&fence, 1, tex_id, file_path);
-        hg_import_png(&fence, 1, file_path);
+        hg_import_png(&fence, 1, file_id, file_path);
         hg_test_assert(fence.wait(2.0));
 
         HgTexture file_texture = *hg_get_resource(file_id);
@@ -2257,9 +2257,9 @@ hg_test(HgECS) {
 
     HgEntity e1 = ecs.spawn();
     HgEntity e2 = ecs.spawn();
-    HgEntity e3;
-    hg_test_assert(e1 == 0);
-    hg_test_assert(e2 == 1);
+    HgEntity e3 = {};
+    hg_test_assert(e1.id == 0);
+    hg_test_assert(e2.id == 1);
     hg_test_assert(ecs.is_alive(e1));
     hg_test_assert(ecs.is_alive(e2));
     hg_test_assert(!ecs.is_alive(e3));
@@ -2272,7 +2272,7 @@ hg_test(HgECS) {
 
     e1 = ecs.spawn();
     hg_test_assert(ecs.is_alive(e1));
-    hg_test_assert(e1 == 2);
+    hg_test_assert(e1.id == 2);
 
     {
         bool has_unknown = false;

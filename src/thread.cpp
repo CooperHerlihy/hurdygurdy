@@ -6,6 +6,10 @@
 
 #include <emmintrin.h>
 
+usize hg_hardware_concurrency() {
+    return std::thread::hardware_concurrency();
+}
+
 void HgFence::add(usize count) {
     counter.fetch_add(count);
 }

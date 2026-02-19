@@ -1,13 +1,10 @@
 #include "hurdygurdy.hpp"
 
-#include <thread>
-
 void hg_init(void) {
     hg_init_scratch();
-
     HgArena& arena = hg_get_scratch();
 
-    u32 thread_count = std::thread::hardware_concurrency()
+    usize thread_count = hg_hardware_concurrency()
         - 2; // main thread, io thread
     hg_thread_pool_init(arena, 4096, thread_count);
     hg_io_thread_init(arena, 4096);
@@ -20,13 +17,11 @@ void hg_init(void) {
     }
 
     hg_graphics_init();
-
     hg_platform_init();
 }
 
 void hg_exit(void) {
     hg_platform_deinit();
-
     hg_graphics_deinit();
 
     if (hg_ecs != nullptr) {

@@ -1620,28 +1620,6 @@ struct HgArena {
     HgArena(void* memory_val, usize capacity_val) : memory{memory_val}, capacity{capacity_val}, head{0} {}
 
     /**
-     * Frees all allocations from an arena
-     */
-    void reset() {
-        head = 0;
-    }
-
-    /**
-     * Returns the state of the arena
-     */
-    usize save() {
-        return head;
-    }
-
-    /**
-     * Loads the saved state of the arena
-     */
-    void load(usize save_state) {
-        hg_assert(save_state <= capacity);
-        head = save_state;
-    }
-
-    /**
      * Allocates memory from an arena
      *
      * Parameters
@@ -1709,8 +1687,8 @@ struct HgArena {
  */
 #define hg_arena_scope(name, value) \
     HgArena& name = (value); \
-    usize name##_arena_save_state = name.save(); \
-    hg_defer(name.load(name##_arena_save_state));
+    usize name##_arena_save_state = name.head; \
+    hg_defer(name.head = name##_arena_save_state);
 
 /**
  * Initializes scratch arenas
@@ -1752,6 +1730,184 @@ HgArena& hg_get_scratch(const HgArena& conflict);
  * - A scratch arena
  */
 HgArena& hg_get_scratch(const HgArena** conflicts, usize count);
+
+/**
+ * A type erased dynamic array
+ */
+struct HgDynamicArray {
+    /**
+     * The allocated space for the array
+     */
+    void* items;
+    /**
+     * The size in bytes of the items
+     */
+    u32 width;
+    /**
+     * The alignment of the items
+     */
+    u32 alignment;
+    /**
+     * The max number of items that can be stored in the array
+     */
+    usize capacity;
+    /**
+     * The number of active items in the array
+     */
+    usize count;
+
+    /**
+     * Returns the size in bytes of the array
+     */
+    constexpr usize size() const {
+        return count * width;
+    }
+
+    /**
+     * Returns whether capacity is filled
+     */
+    constexpr bool is_full() const {
+        return count == capacity;
+    }
+
+    /**
+     * Allocate a new dynamic array
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - width The size of the items in bytes
+     * - alignment The alignment of the items
+     * - count The number of active items to begin with, must be <= capacity
+     * - capacity The max number of items before reallocating
+     *
+     * Returns
+     * - The allocated dynamic array
+     */
+    static HgDynamicArray create(
+        HgArena& arena,
+        u32 width,
+        u32 alignment,
+        usize count,
+        usize capacity
+    );
+
+    /**
+     * Allocate a new dynamic array using a type
+     *
+     * Note, does not construct items
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - count The number of active items to begin with, must be <= capacity
+     * - capacity The max number of items before reallocating
+     *
+     * Returns
+     * - The allocated dynamic array
+     */
+    template<typename T>
+    static HgDynamicArray create(HgArena& arena, usize count, usize capacity) {
+        return create(arena, sizeof(T), alignof(T), count, capacity);
+    }
+
+    /**
+     * Removes all contained objects, emptying the array
+     */
+    constexpr void reset() {
+        count = 0;
+    }
+
+    /**
+     * Changes the capacity
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - new_capacity The new capacity
+     */
+    void reserve(HgArena& arena, usize new_capacity);
+
+    /**
+     * Increases the capacity of the array, or inits to 1
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - factor The growth factor to increase by
+     *
+     * Returns
+     * - Whether the allocation succeeded
+     */
+    void grow(HgArena& arena, f32 factor = 2.0f);
+
+    /**
+     * Access the value at index
+     *
+     * Parameters
+     * - index The index to get from, must be < count
+     *
+     * Returns
+     * - A pointer to the gotten value
+     */
+    constexpr void* get(usize index) const {
+        hg_assert(index < count);
+        return (u8*)items + index * width;
+    }
+
+    /**
+     * Push an item to the end to the array, asserting space is available
+     *
+     * Returns
+     * - A pointer to the created object
+     */
+    constexpr void* push() {
+        hg_assert(count < capacity);
+        return get(count++);
+    }
+
+    /**
+     * Pops an item off the end of the array
+     */
+    constexpr void pop() {
+        hg_assert(count > 0);
+        --count;
+    }
+
+    /**
+     * Inserts an item into the array, moving subsequent items back
+     *
+     * Parameters
+     * - index The index the new item will be placed at, must be <= count
+     *
+     * Returns
+     * - A pointer to the created object
+     */
+    void* insert(usize index);
+
+    /**
+     * Removes the item at the index, subsequent items to taking its place
+     *
+     * Parameters
+     * - index The index of the item to remove
+     */
+    void remove(usize index);
+
+    /**
+     * Inserts an item into the array, moving the item at index to the end
+     *
+     * Parameters
+     * - index The index the new item will be placed at, must be <= count
+     *
+     * Returns
+     * - A reference to the created object
+     */
+    void* swap_insert(usize index);
+
+    /**
+     * Removes the item at the index, moving the last item to take its place
+     *
+     * Parameters
+     * - index The index of the item to remove
+     */
+    void swap_remove(usize index);
+};
 
 /**
  * A span view into a string
@@ -1799,7 +1955,7 @@ struct HgStringView {
     /**
      * Implicit constexpr conversion from c string
      *
-     * Potentially dangerous, c string can be at most 4096 chars
+     * Potentially dangerous, c string should be at most 4096 chars
      */
     constexpr HgStringView(const char* c_str) : chars{c_str}, length{0} {
         while (c_str[length] != '\0') {
@@ -2006,14 +2162,14 @@ struct HgString {
 };
 
 /**
- * Compare strings
+ * Compare string views
  */
 constexpr bool operator==(HgStringView lhs, HgStringView rhs) {
     return lhs.length == rhs.length && std::memcmp(lhs.chars, rhs.chars, lhs.length) == 0;
 }
 
 /**
- * Compare strings
+ * Compare string views
  */
 constexpr bool operator!=(HgStringView lhs, HgStringView rhs) {
     return !(lhs == rhs);
@@ -2283,184 +2439,6 @@ struct HgJson {
      * - The parsed json, errors contained inside
      */
     static HgJson parse(HgArena& arena, HgStringView text);
-};
-
-/**
- * A type erased dynamic array
- */
-struct HgAnyArray {
-    /**
-     * The allocated space for the array
-     */
-    void* items;
-    /**
-     * The size in bytes of the items
-     */
-    u32 width;
-    /**
-     * The alignment of the items
-     */
-    u32 alignment;
-    /**
-     * The max number of items that can be stored in the array
-     */
-    usize capacity;
-    /**
-     * The number of active items in the array
-     */
-    usize count;
-
-    /**
-     * Returns the size in bytes of the array
-     */
-    constexpr usize size() const {
-        return count * width;
-    }
-
-    /**
-     * Returns whether capacity is filled
-     */
-    constexpr bool is_full() const {
-        return count == capacity;
-    }
-
-    /**
-     * Allocate a new dynamic array
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - width The size of the items in bytes
-     * - alignment The alignment of the items
-     * - count The number of active items to begin with, must be <= capacity
-     * - capacity The max number of items before reallocating
-     *
-     * Returns
-     * - The allocated dynamic array
-     */
-    static HgAnyArray create(
-        HgArena& arena,
-        u32 width,
-        u32 alignment,
-        usize count,
-        usize capacity
-    );
-
-    /**
-     * Allocate a new dynamic array using a type
-     *
-     * Note, does not construct items
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - count The number of active items to begin with, must be <= capacity
-     * - capacity The max number of items before reallocating
-     *
-     * Returns
-     * - The allocated dynamic array
-     */
-    template<typename T>
-    static HgAnyArray create(HgArena& arena, usize count, usize capacity) {
-        return create(arena, sizeof(T), alignof(T), count, capacity);
-    }
-
-    /**
-     * Destroys all contained objects, emptying the array
-     */
-    constexpr void reset() {
-        count = 0;
-    }
-
-    /**
-     * Changes the capacity
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - new_capacity The new capacity
-     */
-    void reserve(HgArena& arena, usize new_capacity);
-
-    /**
-     * Increases the capacity of the array, or inits to 1
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - factor The growth factor to increase by
-     *
-     * Returns
-     * - Whether the allocation succeeded
-     */
-    void grow(HgArena& arena, f32 factor = 2.0f);
-
-    /**
-     * Access the value at index
-     *
-     * Parameters
-     * - index The index to get from, must be < count
-     *
-     * Returns
-     * - A pointer to the gotten value
-     */
-    constexpr void* get(usize index) const {
-        hg_assert(index < count);
-        return (u8*)items + index * width;
-    }
-
-    /**
-     * Push an item to the end to the array, asserting space is available
-     *
-     * Returns
-     * - A pointer to the created object
-     */
-    constexpr void* push() {
-        hg_assert(count < capacity);
-        return get(count++);
-    }
-
-    /**
-     * Pops an item off the end of the array
-     */
-    constexpr void pop() {
-        hg_assert(count > 0);
-        --count;
-    }
-
-    /**
-     * Inserts an item into the array, moving subsequent items back
-     *
-     * Parameters
-     * - index The index the new item will be placed at, must be <= count
-     *
-     * Returns
-     * - A pointer to the created object
-     */
-    void* insert(usize index);
-
-    /**
-     * Removes the item at the index, subsequent items to taking its place
-     *
-     * Parameters
-     * - index The index of the item to remove
-     */
-    void remove(usize index);
-
-    /**
-     * Inserts an item into the array, moving the item at index to the end
-     *
-     * Parameters
-     * - index The index the new item will be placed at, must be <= count
-     *
-     * Returns
-     * - A reference to the created object
-     */
-    void* swap_insert(usize index);
-
-    /**
-     * Removes the item at the index, moving the last item to take its place
-     *
-     * Parameters
-     * - index The index of the item to remove
-     */
-    void swap_remove(usize index);
 };
 
 /**
@@ -3053,6 +3031,11 @@ struct HgClock {
 };
 
 /**
+ * Returns the number of concurrent threads available in hardware
+ */
+usize hg_hardware_concurrency();
+
+/**
  * A spinlock fence for basic thread synchronization
  */
 struct HgFence {
@@ -3187,6 +3170,18 @@ void hg_io_request(
     void* resource,
     HgStringView path,
     void (*fn)(void* resource, HgStringView path));
+
+/**
+ * The uuid derived from the resource's name/path
+ */
+using HgResource = usize;
+
+/**
+ * Get the resource uuid from the name/path
+ */
+constexpr HgResource hg_resource_id(HgStringView name) {
+    return hg_hash(name);
+}
 
 /**
  * A loaded binary file
@@ -3376,26 +3371,6 @@ struct HgTexture {
 };
 
 /**
- * The uuid derived from the resource's name/path
- */
-struct HgResource {
-    usize id;
-
-    constexpr HgResource(usize id_val) : id{id_val} {}
-
-    constexpr operator usize() const {
-        return id;
-    }
-};
-
-/**
- * Get the resource uuid from the name/path
- */
-constexpr HgResource hg_resource_id(HgStringView name) {
-    return hg_hash(name);
-}
-
-/**
  * Initialize the resource manager (or reinitialize to reset)
  *
  * Parameters
@@ -3436,7 +3411,7 @@ void hg_dealloc_resource(HgResource id);
 void hg_load_resource(HgFence* fences, usize fence_count, HgResource id, HgStringView path);
 
 /**
- * Unloads a resource (or just decrement the reference count)
+ * Unloads a resource (or just decrements the reference count)
  *
  * Note, does not automatically deallocate the resource after unloading
  *
@@ -3459,11 +3434,6 @@ void hg_unload_resource(HgFence* fences, usize fence_count, HgResource id);
 void hg_store_resource(HgFence* fences, usize fence_count, HgResource id, HgStringView path);
 
 /**
- * Returns whether a resource is currently loaded
- */
-bool hg_is_resource_loaded(HgResource id);
-
-/**
  * Get a resource from the global store
  *
  * Parameters
@@ -3481,9 +3451,10 @@ HgBinary* hg_get_resource(HgResource id);
  * Parameters
  * - fences The fences to wait on
  * - fence_count The number of fences
+ * - id The resource to load to
  * - path The path of the file to import
  */
-void hg_import_png(HgFence* fences, usize fence_count, HgStringView path);
+void hg_import_png(HgFence* fences, usize fence_count, HgResource id, HgStringView path);
 
 /**
  * Store a texture resource onto disc in an external file format
@@ -3491,7 +3462,7 @@ void hg_import_png(HgFence* fences, usize fence_count, HgStringView path);
  * Parameters
  * - fences The fences to wait on
  * - fence_count The number of fences
- * - id The image to export
+ * - id The resource to export
  * - path The path of the file to export to
  */
 void hg_export_png(HgFence* fences, usize fence_count, HgResource id, HgStringView path);
@@ -3652,12 +3623,22 @@ HgGpuTexture* hg_get_gpu_texture(HgResource id);
  * The handle for an ECS entity
  */
 struct HgEntity {
-    u32 index = (u32)-1;
-
-    constexpr operator u32() const {
-        return index;
-    }
+    u32 id = (u32)-1;
 };
+
+/**
+ * Compare entities
+ */
+constexpr bool operator==(HgEntity lhs, HgEntity rhs) {
+    return lhs.id == rhs.id;
+}
+
+/**
+ * Compare entities
+ */
+constexpr bool operator!=(HgEntity lhs, HgEntity rhs) {
+    return lhs.id != rhs.id;
+}
 
 /**
  * Creates a new id for each component
@@ -3691,7 +3672,7 @@ struct HgECS {
         /**
          * The data for the components
          */
-        HgAnyArray components;
+        HgDynamicArray components;
     };
 
     /**
@@ -3784,7 +3765,7 @@ struct HgECS {
      * - Whether the entity is alive and can be used
      */
     bool is_alive(HgEntity entity) {
-        return entity < entity_capacity && entity_pool[entity] == entity;
+        return entity.id < entity_capacity && entity_pool[entity.id].id == entity.id;
     }
 
     /**
@@ -3980,7 +3961,7 @@ struct HgECS {
     bool has(HgEntity entity, u32 component_id) {
         hg_assert(is_alive(entity));
         hg_assert(is_registered(component_id));
-        return systems[component_id].sparse[entity] < systems[component_id].components.count;
+        return systems[component_id].sparse[entity.id] < systems[component_id].components.count;
     }
 
     /**
@@ -4041,7 +4022,7 @@ struct HgECS {
         hg_assert(is_alive(entity));
         hg_assert(is_registered(component_id));
         hg_assert(has(entity, component_id));
-        return systems[component_id].components.get(systems[component_id].sparse[entity]);
+        return systems[component_id].components.get(systems[component_id].sparse[entity.id]);
     }
 
     /**
@@ -4402,11 +4383,7 @@ struct HgPipeline2D {
     VkBuffer vp_buffer;
     VmaAllocation vp_buffer_allocation;
 
-    static constexpr usize resource_hash(HgResource r) {
-        return r.id;
-    };
-
-    HgHashMap<HgResource, VkDescriptorSet, resource_hash> texture_sets;
+    HgHashMap<HgResource, VkDescriptorSet> texture_sets;
 
     static HgPipeline2D create(
         HgArena& arena,

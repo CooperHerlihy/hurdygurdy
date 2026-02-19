@@ -24,14 +24,12 @@ set SRC= ^
     init.cpp ^
     test_utils.cpp ^
     math.cpp ^
-    arena.cpp ^
+    memory.cpp ^
     string.cpp ^
-    any_array.cpp ^
     time.cpp ^
     thread.cpp ^
     resources.cpp ^
     ecs.cpp ^
-    transform.cpp ^
     pipeline2d.cpp ^
     windows.cpp ^
     vulkan.cpp
