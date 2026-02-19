@@ -26,12 +26,12 @@ bool HgFence::wait(f64 timeout_seconds) {
     return is_complete();
 }
 
-std::thread* pool_threads;
-usize pool_thread_count;
-std::atomic_bool pool_should_close;
+std::thread* pool_threads = nullptr;
+usize pool_thread_count = 0;
+std::atomic_bool pool_should_close = false;
 
-std::mutex pool_mtx;
-std::condition_variable pool_cv;
+std::mutex pool_mtx{};
+std::condition_variable pool_cv{};
 
 struct ThreadWork {
     HgFence* fences;
@@ -39,15 +39,15 @@ struct ThreadWork {
     void* data;
     void (*fn)(void*);
 };
-ThreadWork* pool_work;
-std::atomic_bool* pool_has_work;
-usize pool_work_capacity;
+ThreadWork* pool_work = nullptr;
+std::atomic_bool* pool_has_work = nullptr;
+usize pool_work_capacity = 0;
 
-std::atomic<usize> pool_work_count;
-std::atomic<usize> pool_tail;
-std::atomic<usize> pool_working_tail;
-std::atomic<usize> pool_head;
-std::atomic<usize> pool_working_head;
+std::atomic<usize> pool_work_count = 0;
+std::atomic<usize> pool_tail = 0;
+std::atomic<usize> pool_working_tail = 0;
+std::atomic<usize> pool_head = 0;
+std::atomic<usize> pool_working_head = 0;
 
 static bool pool_execute() {
     usize idx = pool_working_tail.load();
@@ -170,8 +170,8 @@ void hg_call_par(HgFence* fences, usize fence_count, void* data, void (*fn)(void
     pool_cv.notify_one();
 }
 
-std::thread io_thread;
-std::atomic_bool io_thread_should_close;
+std::thread io_thread{};
+std::atomic_bool io_thread_should_close = false;
 
 struct Request {
     HgFence* fences;
@@ -180,13 +180,13 @@ struct Request {
     HgStringView path;
     void (*fn)(void* resource, HgStringView path);
 };
-Request* io_requests;
-std::atomic_bool* io_has_request;
-usize io_request_capacity;
+Request* io_requests = nullptr;
+std::atomic_bool* io_has_request = nullptr;
+usize io_request_capacity = 0;
 
-std::atomic<usize> io_tail;
-std::atomic<usize> io_head;
-std::atomic<usize> io_working_head;
+std::atomic<usize> io_tail = 0;
+std::atomic<usize> io_head = 0;
+std::atomic<usize> io_working_head = 0;
 
 bool io_pop() {
     usize idx = io_tail.load() & (io_request_capacity - 1);

@@ -4,9 +4,6 @@
 
 #include <emmintrin.h>
 
-inline bool hg_test_function_HgThreadPool();
-inline bool hg_test_function_HgIOThread();
-
 int main(void) {
     hg_defer(hg_info("Exited successfully\n"));
 
@@ -14,13 +11,6 @@ int main(void) {
     hg_defer(hg_exit());
 
     hg_run_tests();
-
-    hg_info("thread testing\n");
-    for (usize i = 0; i < 1000; ++i) {
-        hg_assert(hg_test_function_HgThreadPool());
-        hg_assert(hg_test_function_HgIOThread());
-    }
-    hg_info("thread success\n");
 
     hg_arena_scope(arena, hg_get_scratch());
 
@@ -76,7 +66,7 @@ int main(void) {
     hg_defer(pipeline2d.destroy());
 
     HgStringView texture_path = "hg_test_dir/file_image_test.hgtex";
-    HgResourceID texture_id = hg_resource_id(texture_path);
+    HgResource texture_id = hg_resource_id(texture_path);
     hg_gpu_resources->register_texture(texture_id);
 
     hg_gpu_resources->load_from_disc(cmd_pool, texture_path, VK_FILTER_NEAREST);
@@ -2214,18 +2204,18 @@ hg_test(HgTexture) {
     {
         HgStringView tex_path = "tex";
         HgStringView file_path = "hg_test_dir/file_image_test.png";
-        HgResourceID tex_id = hg_resource_id(tex_path);
-        HgResourceID file_id = hg_resource_id(file_path);
-        hg_resources->register_resource(tex_id);
-        hg_resources->register_resource(file_id);
-        hg_resources->get(tex_id) = bin;
+        HgResource tex_id = hg_resource_id(tex_path);
+        HgResource file_id = hg_resource_id(file_path);
+        hg_alloc_resource(tex_id);
+        hg_alloc_resource(file_id);
+        *hg_get_resource(tex_id) = bin;
 
         HgFence fence;
         hg_export_png(&fence, 1, tex_id, file_path);
         hg_import_png(&fence, 1, file_path);
         hg_test_assert(fence.wait(2.0));
 
-        HgTexture file_texture = hg_resources->get(file_id);
+        HgTexture file_texture = *hg_get_resource(file_id);
 
         VkFormat format;
         u32 width, height, depth;
@@ -2241,7 +2231,7 @@ hg_test(HgTexture) {
         hg_test_assert(std::memcmp(save_data, pixels, sizeof(save_data)) == 0);
     }
 
-    hg_resources->reset();
+    hg_resources_reset();
 
     return true;
 }

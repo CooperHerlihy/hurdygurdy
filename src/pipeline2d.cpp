@@ -180,8 +180,8 @@ void HgPipeline2D::destroy() {
     vkDestroyDescriptorSetLayout(hg_vk_device, vp_layout, nullptr);
 }
 
-void HgPipeline2D::add_texture(HgResourceID texture_id) {
-    hg_assert(hg_resources->is_registered(texture_id));
+void HgPipeline2D::add_texture(HgResource texture_id) {
+    hg_assert(hg_gpu_resources->is_loaded(texture_id));
 
     HgGpuTexture& texture = hg_gpu_resources->get_texture(texture_id);
     if (texture_sets.has(texture_id))
@@ -215,8 +215,9 @@ void HgPipeline2D::add_texture(HgResourceID texture_id) {
     texture_sets.insert(texture_id, set);
 }
 
-void HgPipeline2D::remove_texture(HgResourceID texture_id) {
-    hg_assert(hg_resources->is_registered(texture_id));
+void HgPipeline2D::remove_texture(HgResource texture_id) {
+    if (!texture_sets.has(texture_id))
+        return;
 
     VkDescriptorSet* set = texture_sets.get(texture_id);
     if (set != nullptr) {

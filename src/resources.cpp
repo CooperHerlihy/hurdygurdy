@@ -69,59 +69,72 @@ void* HgTexture::get_pixels() {
     return file.data;
 }
 
-HgResourceManager HgResourceManager::create(HgArena& arena, usize capacity) {
-    HgResourceManager rm;
-    rm.pool = arena.alloc<HgBinary>(capacity);
-    rm.free_list = arena.alloc<usize>(capacity);
-    rm.capacity = capacity;
-    rm.first = 0;
-    rm.map = rm.map.create(arena, capacity);
-    rm.reset();
-    return rm;
+struct Resource {
+    HgBinary* file;
+    u32 ref_count;
+};
+
+HgBinary* resource_pool = nullptr;
+usize* resource_free_list = nullptr;
+usize resource_capacity = 0;
+usize resource_first = 0;
+
+constexpr usize resource_hash(HgResource r) {
+    return r.id;
+};
+HgHashMap<HgResource, Resource, resource_hash> resource_map;
+
+void hg_resources_init(HgArena& arena, usize max_resources) {
+    resource_pool = arena.realloc(resource_pool, resource_capacity, max_resources);
+    resource_free_list = arena.realloc(resource_free_list, resource_capacity, max_resources);
+    resource_capacity = max_resources;
+    resource_map = resource_map.create(arena, max_resources);
+    hg_resources_reset();
 }
 
-void HgResourceManager::reset() {
-    map.for_each([&](HgResourceID id, Resource& res) {
+void hg_resources_reset() {
+    resource_map.for_each([&](HgResource id, Resource& res) {
         if (res.ref_count != 0) {
             res.ref_count = 1;
-            unload(nullptr, 0, id);
+            hg_unload_resource(nullptr, 0, id);
         }
     });
-    map.reset();
-    for (usize i = 0; i < capacity; ++i) {
-        free_list[i] = i + 1;
+    resource_map.reset();
+
+    for (usize i = 0; i < resource_capacity; ++i) {
+        resource_free_list[i] = i + 1;
     }
-    first = 0;
+    resource_first = 0;
 }
 
-void HgResourceManager::register_resource(HgResourceID id) {
-    if (!map.has(id)) {
-        usize idx = first;
-        HgBinary* bin = pool + idx;
+void hg_alloc_resource(HgResource id) {
+    if (!resource_map.has(id)) {
+        usize idx = resource_first;
+        HgBinary* bin = resource_pool + idx;
         *bin = {};
 
-        map.insert(id, {bin, 0});
-        first = free_list[idx];
-        free_list[idx] = idx;
+        resource_map.insert(id, {bin, 0});
+        resource_first = resource_free_list[idx];
+        resource_free_list[idx] = idx;
     }
 }
 
-void HgResourceManager::unregister_resource(HgResourceID id) {
-    Resource* r = map.get(id);
+void hg_dealloc_resource(HgResource id) {
+    Resource* r = resource_map.get(id);
     if (r != nullptr) {
         if (r->ref_count > 0) {
             r->ref_count = 1;
-            unload(nullptr, 0, id);
+            hg_unload_resource(nullptr, 0, id);
         }
-        usize idx = (uptr)(r->file - pool);
-        free_list[idx] = first;
-        first = idx;
+        usize idx = (uptr)(r->file - resource_pool);
+        resource_free_list[idx] = resource_first;
+        resource_first = idx;
 
-        map.remove(id);
+        resource_map.remove(id);
     }
 }
 
-void HgResourceManager::load(HgFence* fences, usize fence_count, HgStringView path) {
+void hg_load_resource(HgFence* fences, usize fence_count, HgResource id, HgStringView path) {
     auto fn = [](void* pres, HgStringView fpath) {
         Resource& res = *(Resource*)pres;
 
@@ -152,19 +165,21 @@ void HgResourceManager::load(HgFence* fences, usize fence_count, HgStringView pa
         }
     };
 
-    HgResourceID id = hg_resource_id(path);
-    hg_assert(is_registered(id));
+    if (!resource_map.has(id))
+        hg_alloc_resource(id);
 
-    Resource& res = *map.get(id);
+    Resource& res = *resource_map.get(id);
     if (res.ref_count++ > 0)
         return;
 
     hg_io_request(fences, fence_count, &res, path, fn);
 }
 
-void HgResourceManager::unload(HgFence* fences, usize fence_count, HgResourceID id) {
-    hg_assert(is_registered(id));
-    Resource& res = *map.get(id);
+void hg_unload_resource(HgFence* fences, usize fence_count, HgResource id) {
+    if (!resource_map.has(id))
+        return;
+
+    Resource& res = *resource_map.get(id);
     if (--res.ref_count > 0)
         return;
 
@@ -176,20 +191,34 @@ void HgResourceManager::unload(HgFence* fences, usize fence_count, HgResourceID 
     });
 }
 
-void HgResourceManager::store(HgFence* fences, usize fence_count, HgResourceID id, HgStringView path) {
-    hg_assert(is_registered(id));
-    hg_io_request(fences, fence_count, map.get(id), path, [](void* pres, HgStringView fpath) {
+void hg_store_resource(HgFence* fences, usize fence_count, HgResource id, HgStringView path) {
+    if (!resource_map.has(id)) {
+        hg_arena_scope(scratch, hg_get_scratch());
+        hg_warn("Could not store resource to \"%s\" because the resource does not exist\n",
+            HgString::create(scratch, path).append(scratch, 0).chars);
+        return;
+    }
+
+    hg_io_request(fences, fence_count, resource_map.get(id), path, [](void* pres, HgStringView fpath) {
         (*(Resource*)pres).file->store(fpath);
     });
 }
 
+bool hg_is_resource_loaded(HgResource id) {
+    Resource* r = resource_map.get(id);
+    return r != nullptr && r->ref_count > 0;
+}
+
+HgBinary* hg_get_resource(HgResource id) {
+    Resource* r = resource_map.get(id);
+    return r == nullptr ? nullptr : r->file;
+}
+
 void hg_import_png(HgFence* fences, usize fence_count, HgStringView path) {
-    HgResourceID id = hg_resource_id(path);
-    hg_assert(hg_resources->is_registered(id));
+    HgResource id = hg_resource_id(path);
+    hg_load_resource(fences, fence_count, id, path);
 
-    hg_resources->load(fences, fence_count, path);
-
-    hg_io_request(fences, fence_count, &hg_resources->get(id), path, [](void* ptex, HgStringView fpath) {
+    hg_io_request(fences, fence_count, hg_get_resource(id), path, [](void* ptex, HgStringView fpath) {
         HgBinary& bin = *(HgBinary*)ptex;
 
         int width, height, channels;
@@ -220,9 +249,15 @@ void hg_import_png(HgFence* fences, usize fence_count, HgStringView path) {
     });
 }
 
-void hg_export_png(HgFence* fences, usize fence_count, HgResourceID id, HgStringView path) {
-    hg_assert(hg_resources->is_registered(id));
-    hg_io_request(fences, fence_count, &hg_resources->get(id), path, [](void* ptexture, HgStringView fpath) {
+void hg_export_png(HgFence* fences, usize fence_count, HgResource id, HgStringView path) {
+    if (!resource_map.has(id)) {
+        hg_arena_scope(scratch, hg_get_scratch());
+        hg_warn("Could not export png resource to \"%s\" because the resource does not exist\n",
+            HgString::create(scratch, path).append(scratch, 0).chars);
+        return;
+    }
+
+    hg_io_request(fences, fence_count, hg_get_resource(id), path, [](void* ptexture, HgStringView fpath) {
         HgTexture tex = *(HgBinary*)ptexture;
 
         hg_arena_scope(scratch, hg_get_scratch());
@@ -253,7 +288,7 @@ HgGpuResourceManager HgGpuResourceManager::create(HgArena& arena, usize max_reso
 }
 
 void HgGpuResourceManager::reset() {
-    map.for_each([&](HgResourceID id, Resource& r) {
+    map.for_each([&](HgResource id, Resource& r) {
         if (r.ref_count != 0) {
             r.ref_count = 1;
             unload(id);
@@ -262,7 +297,7 @@ void HgGpuResourceManager::reset() {
     map.reset();
 }
 
-void HgGpuResourceManager::register_buffer(HgResourceID id) {
+void HgGpuResourceManager::register_buffer(HgResource id) {
     if (!map.has(id)) {
         Resource* r = map.get(id);
         if (r != nullptr) {
@@ -275,7 +310,7 @@ void HgGpuResourceManager::register_buffer(HgResourceID id) {
     }
 }
 
-void HgGpuResourceManager::register_texture(HgResourceID id) {
+void HgGpuResourceManager::register_texture(HgResource id) {
     if (!map.has(id)) {
         Resource* r = map.get(id);
         if (r != nullptr) {
@@ -288,7 +323,7 @@ void HgGpuResourceManager::register_texture(HgResourceID id) {
     }
 }
 
-void HgGpuResourceManager::unregister_resource(HgResourceID id) {
+void HgGpuResourceManager::unregister_resource(HgResource id) {
     Resource* r = map.get(id);
     if (r != nullptr) {
         if (r->ref_count > 0) {
@@ -299,7 +334,7 @@ void HgGpuResourceManager::unregister_resource(HgResourceID id) {
     }
 }
 
-HgGpuBuffer& HgGpuResourceManager::get_buffer(HgResourceID id) {
+HgGpuBuffer& HgGpuResourceManager::get_buffer(HgResource id) {
     Resource* r = map.get(id);
     hg_assert(r != nullptr);
     if (r->type != Resource::Type::buffer)
@@ -307,7 +342,7 @@ HgGpuBuffer& HgGpuResourceManager::get_buffer(HgResourceID id) {
     return r->buffer;
 }
 
-HgGpuTexture& HgGpuResourceManager::get_texture(HgResourceID id) {
+HgGpuTexture& HgGpuResourceManager::get_texture(HgResource id) {
     Resource* r = map.get(id);
     hg_assert(r != nullptr);
     if (r->type != Resource::Type::texture)
@@ -315,7 +350,7 @@ HgGpuTexture& HgGpuResourceManager::get_texture(HgResourceID id) {
     return r->texture;
 }
 
-void HgGpuResourceManager::load_from_cpu(VkCommandPool cmd_pool, HgResourceID id, VkFilter filter) {
+void HgGpuResourceManager::load_from_cpu(VkCommandPool cmd_pool, HgResource id, VkFilter filter) {
     hg_assert(is_registered(id));
 
     Resource& r = *map.get(id);
@@ -326,7 +361,7 @@ void HgGpuResourceManager::load_from_cpu(VkCommandPool cmd_pool, HgResourceID id
         case Resource::Type::buffer: // : TODO
             break;
         case Resource::Type::texture: {
-            HgTexture data = hg_resources->get(id);
+            HgTexture data = *hg_get_resource(id);
             hg_assert(data.file.data != nullptr);
 
             HgGpuTexture& tex = get_texture(id);
@@ -398,20 +433,20 @@ void HgGpuResourceManager::load_from_cpu(VkCommandPool cmd_pool, HgResourceID id
 }
 
 void HgGpuResourceManager::load_from_disc(VkCommandPool cmd_pool, HgStringView path, VkFilter filter) {
-    HgResourceID id = hg_resource_id(path);
+    HgResource id = hg_resource_id(path);
     hg_assert(is_registered(id));
 
     if (!is_loaded(id)) {
         HgFence fence;
-        hg_resources->register_resource(id);
-        hg_resources->load(&fence, 1, path);
+        hg_alloc_resource(id);
+        hg_load_resource(&fence, 1, id, path);
         fence.wait(INFINITY);
         load_from_cpu(cmd_pool, id, filter);
-        hg_resources->unload(nullptr, 0, id);
+        hg_unload_resource(nullptr, 0, id);
     }
 }
 
-void HgGpuResourceManager::unload(HgResourceID id) {
+void HgGpuResourceManager::unload(HgResource id) {
     hg_assert(is_registered(id));
 
     Resource& r = *map.get(id);

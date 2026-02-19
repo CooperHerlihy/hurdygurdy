@@ -3378,152 +3378,102 @@ struct HgTexture {
 /**
  * The uuid derived from the resource's name/path
  */
-using HgResourceID = usize;
+struct HgResource {
+    usize id;
+
+    constexpr HgResource(usize id_val) : id{id_val} {}
+
+    constexpr operator usize() const {
+        return id;
+    }
+};
 
 /**
  * Get the resource uuid from the name/path
  */
-constexpr HgResourceID hg_resource_id(HgStringView name) {
+constexpr HgResource hg_resource_id(HgStringView name) {
     return hg_hash(name);
 }
 
 /**
- * A resource manager
+ * Initialize the resource manager (or reinitialize to reset)
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - max_resources The max number of resources which can be allocated
  */
-struct HgResourceManager {
-    /**
-     * The resources with reference count
-     */
-    struct Resource {
-        /**
-         * The file pointer stored in the pool
-         */
-        HgBinary* file;
-        /**
-         * The resource's reference count
-         */
-        u32 ref_count;
-    };
-
-    /**
-     * The pool of stable file pointers
-     */
-    HgBinary* pool;
-    /**
-     * The free list for the pool;
-     */
-    usize* free_list;
-    /**
-     * The number of binary files available
-     */
-    usize capacity;
-    /**
-     * The first file pointer in the pool
-     */
-    usize first;
-    /**
-     * The registered resources
-     */
-    HgHashMap<HgResourceID, Resource> map;
-
-    /**
-     * Create an empty resource manager
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - capacity The max number of resources
-     *
-     * Returns
-     * - The created resource manager
-     */
-    static HgResourceManager create(HgArena& arena, usize capacity);
-
-    /**
-     * Reset the resource manager, unloading and unregistering all resources
-     */
-    void reset();
-
-    /**
-     * Register a resource into the hash map
-     *
-     * Parameters
-     * - id The uuid of the resources
-     */
-    void register_resource(HgResourceID id);
-
-    /**
-     * Unload and unregister a resource from the hash map
-     *
-     * Parameters
-     * - id The uuid of the resources
-     */
-    void unregister_resource(HgResourceID id);
-
-    /**
-     * Returns whether a resource is registered
-     */
-    bool is_registered(HgResourceID id) {
-        return map.has(id);
-    }
-
-    /**
-     * Gets a resource
-     *
-     * Parameters
-     * - id The id of the resource
-     *
-     * Returns
-     * - A reference to the typed resource data
-     */
-    HgBinary& get(HgResourceID id) {
-        hg_assert(is_registered(id));
-        return *map.get(id)->file;
-    }
-
-    /**
-     * Load a resource file from disc, or increment the reference count
-     *
-     * Parameters
-     * - fences The fences to signal on completion
-     * - fence_count The number of fences
-     * - path The file to load
-     */
-    void load(HgFence* fences, usize fence_count, HgStringView path);
-
-    /**
-     * Unload a resource file, or decrement the reference count
-     *
-     * Parameters
-     * - fences The fences to signal on completion
-     * - fence_count The number of fences
-     * - id The resource to unload
-     */
-    void unload(HgFence* fences, usize fence_count, HgResourceID id);
-
-    /**
-     * Returns whether a resource is currently loaded
-     */
-    bool is_loaded(HgResourceID id) {
-        Resource* r = map.get(id);
-        return r != nullptr && r->ref_count > 0;
-    }
-
-    /**
-     * Store a resource file to disc
-     *
-     * Parameters
-     * - fences The fences to signal on completion
-     * - fence_count The number of fences
-     * - id The resource to store
-     * - path The file path
-     */
-    void store(HgFence* fences, usize fence_count, HgResourceID id, HgStringView path);
-};
+void hg_resources_init(HgArena& arena, usize max_resources);
 
 /**
- * The global resource store
+ * Unload and dealloc all resources
  */
-inline HgResourceManager* hg_resources = nullptr;
+void hg_resources_reset();
+
+/**
+ * Allocate a new empty resource
+ *
+ * Parameters
+ * - id The id of the resource
+ */
+void hg_alloc_resource(HgResource id);
+
+/**
+ * Deallocates a resource (unloading if needed)
+ */
+void hg_dealloc_resource(HgResource id);
+
+/**
+ * Loads a resource (or just increments the reference count)
+ *
+ * Note, automatically allocates a new resource if it does not exist
+ *
+ * Parameters
+ * - fence The fences to signal on completion
+ * - fence_count The number of fences
+ * - id The resource to load into
+ * - path The filepath to load from
+ */
+void hg_load_resource(HgFence* fences, usize fence_count, HgResource id, HgStringView path);
+
+/**
+ * Unloads a resource (or just decrement the reference count)
+ *
+ * Note, automatically does not deallocate the resource after unloading
+ *
+ * Parameters
+ * - fence The fences to signal on completion
+ * - fence_count The number of fences
+ * - id The resource to load into
+ */
+void hg_unload_resource(HgFence* fences, usize fence_count, HgResource id);
+
+/**
+ * Stores a resource to disc
+ *
+ * Parameters
+ * - fence The fences to signal on completion
+ * - fence_count The number of fences
+ * - id The resource to load into
+ * - path The filepath to store to
+ */
+void hg_store_resource(HgFence* fences, usize fence_count, HgResource id, HgStringView path);
+
+/**
+ * Returns whether a resource is currently loaded
+ */
+bool hg_is_resource_loaded(HgResource id);
+
+/**
+ * Get a resource from the global store
+ *
+ * Parameters
+ * - id The resource to get
+ *
+ * Returns
+ * - A pointer to the resource binary, may be empty if not loaded
+ * - nullptr, if the resource is not allocated
+ */
+HgBinary* hg_get_resource(HgResource id);
 
 /**
  * Load an external texture file into a resource in the Hurdy Gurdy format
@@ -3544,7 +3494,7 @@ void hg_import_png(HgFence* fences, usize fence_count, HgStringView path);
  * - id The image to export
  * - path The path of the file to export to
  */
-void hg_export_png(HgFence* fences, usize fence_count, HgResourceID id, HgStringView path);
+void hg_export_png(HgFence* fences, usize fence_count, HgResource id, HgStringView path);
 
 /**
  * A buffer stored on the GPU
@@ -3641,10 +3591,14 @@ struct HgGpuResourceManager {
         u32 ref_count;
     };
 
+    static constexpr usize resource_hash(HgResource r) {
+        return r.id;
+    };
+
     /**
      * The registered resources
      */
-    HgHashMap<HgResourceID, Resource> map;
+    HgHashMap<HgResource, Resource, resource_hash> map;
 
     /**
      * Create an empty gpu resource manager
@@ -3669,7 +3623,7 @@ struct HgGpuResourceManager {
      * Parameters
      * - id The resource to register
      */
-    void register_buffer(HgResourceID id);
+    void register_buffer(HgResource id);
 
     /**
      * Register a new resources as a texture
@@ -3677,17 +3631,17 @@ struct HgGpuResourceManager {
      * Parameters
      * - id The resource to register
      */
-    void register_texture(HgResourceID id);
+    void register_texture(HgResource id);
 
     /**
      * Unregister a resource, and unload if needed
      */
-    void unregister_resource(HgResourceID id);
+    void unregister_resource(HgResource id);
 
     /**
      * Returns whether a resource is registered
      */
-    bool is_registered(HgResourceID id) {
+    bool is_registered(HgResource id) {
         return map.has(id);
     }
 
@@ -3700,7 +3654,7 @@ struct HgGpuResourceManager {
      * Returns
      * - A reference to the resource
      */
-    HgGpuBuffer& get_buffer(HgResourceID id);
+    HgGpuBuffer& get_buffer(HgResource id);
 
     /**
      * Returns the gpu texture resource
@@ -3711,7 +3665,7 @@ struct HgGpuResourceManager {
      * Returns
      * - A reference to the resource
      */
-    HgGpuTexture& get_texture(HgResourceID id);
+    HgGpuTexture& get_texture(HgResource id);
 
     /**
      * Load a resource from the data stored in the cpu side resource manager
@@ -3721,7 +3675,7 @@ struct HgGpuResourceManager {
      * - id The resource to load
      * - filter The filter the texture should use
      */
-    void load_from_cpu(VkCommandPool cmd_pool, HgResourceID id, VkFilter filter);
+    void load_from_cpu(VkCommandPool cmd_pool, HgResource id, VkFilter filter);
 
     /**
      * Load a resource from disc
@@ -3739,12 +3693,12 @@ struct HgGpuResourceManager {
      * Parameters
      * - id The resource to unload
      */
-    void unload(HgResourceID id);
+    void unload(HgResource id);
 
     /**
      * Returns whether a resource is loaded
      */
-    bool is_loaded(HgResourceID id) {
+    bool is_loaded(HgResource id) {
         Resource* r = map.get(id);
         return r != nullptr && r->ref_count > 0;
     }
@@ -4474,7 +4428,7 @@ struct HgSprite {
     /**
      * The texture to draw from
      */
-    HgResourceID texture;
+    HgResource texture;
     /**
      * The beginning coordinate to read from texture, [0.0, 1.0]
      */
@@ -4509,7 +4463,11 @@ struct HgPipeline2D {
     VkBuffer vp_buffer;
     VmaAllocation vp_buffer_allocation;
 
-    HgHashMap<HgResourceID, VkDescriptorSet> texture_sets;
+    static constexpr usize resource_hash(HgResource r) {
+        return r.id;
+    };
+
+    HgHashMap<HgResource, VkDescriptorSet, resource_hash> texture_sets;
 
     static HgPipeline2D create(
         HgArena& arena,
@@ -4519,8 +4477,8 @@ struct HgPipeline2D {
 
     void destroy();
 
-    void add_texture(HgResourceID texture_id);
-    void remove_texture(HgResourceID texture_id);
+    void add_texture(HgResource texture_id);
+    void remove_texture(HgResource texture_id);
 
     void update_projection(const HgMat4& projection);
     void update_view(const HgMat4& view);
