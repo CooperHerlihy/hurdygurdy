@@ -3620,10 +3620,175 @@ HgGpuBuffer* hg_get_gpu_buffer(HgResource id);
 HgGpuTexture* hg_get_gpu_texture(HgResource id);
 
 /**
- * The handle for an ECS entity
+ * Creates a new id for each component
+ *
+ * Should only be used by hg_component_id
+ */
+u32 hg_create_component_id();
+
+/**
+ * The unique component id for a type, keeping const and non-const the same
+ */
+template<typename T>
+inline const u32 hg_component_id = hg_create_component_id();
+
+/**
+ * An entity in the ecs
  */
 struct HgEntity {
+    /**
+     * The entity id, defaults to null
+     */
     u32 id = (u32)-1;
+
+    /**
+     * Creates a new entity in the ECS
+     *
+     * Returns
+     * - The created entity
+     */
+    static HgEntity create();
+
+    /**
+     * Destroys the entity in the ECS
+     *
+     * Note, this function will invalidate iterators
+     */
+    void destroy();
+
+    /**
+     * Returns whether the entity is alive and can be used
+     */
+    bool alive();
+
+    /**
+     * Creates a component for an entity
+     *
+     * Note, the entity must not have a component of this type already
+     *
+     * Parameters
+     * - component_id The id of the component, must be registered
+     *
+     * Returns
+     * - A pointer to the created component
+     */
+    void* add(u32 component_id);
+
+    /**
+     * Creates a component for an entity
+     *
+     * Note, the entity must not have a component of this type already
+     *
+     * Returns
+     * - A pointer to the created component
+     */
+    template<typename T>
+    T& add() {
+        return *(T*)add(hg_component_id<T>);
+    }
+
+    /**
+     * Destroys a component from an entity
+     *
+     * Note, this function will invalidate iterators
+     *
+     * Parameters
+     * - component_id The id of the component, must be registered
+     */
+    void remove(u32 component_id);
+
+    /**
+     * Destroys a component from an entity
+     *
+     * Note, this function will invalidate iterators
+     */
+    template<typename T>
+    void remove() {
+        remove(hg_component_id<T>);
+    }
+
+    /**
+     * Checks whether an entity has a component or not
+     *
+     * Parameters
+     * - component_id The id of the component, must be registered
+     *
+     * Returns
+     * - Whether the entity has a component in the system
+     */
+    bool has(u32 component_id);
+
+    /**
+     * Returns whether the entity has a component in the system
+     */
+    template<typename T>
+    bool has() {
+        return has(hg_component_id<T>);
+    }
+
+    /**
+     * Returns whether the entity has all given components in the system
+     */
+    template<typename... Ts>
+    bool has_all() {
+        return (has<Ts>() && ...);
+    }
+
+    /**
+     * Gets a pointer to the entity's component
+     *
+     * Note, the entity must have a component in the system
+     *
+     * Parameters
+     * - entity The id of the entity, must be alive
+     * - component_id The id of the component, must be registered
+     *
+     * Returns
+     * - The entity's component, will never be 0
+     */
+    void* get(u32 component_id);
+
+    /**
+     * Gets a pointer to the entity's component
+     *
+     * Note, the entity must have a component in the system
+     *
+     * Parameters
+     * - entity The id of the entity, must be alive
+     *
+     * Returns
+     * - The entity's component, will never be 0
+     */
+    template<typename T>
+    T& get() {
+        return *((T*)get(hg_component_id<T>));
+    }
+
+    /**
+     * Gets the entity from it's component
+     *
+     * Parameters
+     * - component The component to lookup, must be a valid component
+     * - component_id The id of the component, must be registered
+     *
+     * Returns
+     * - The components's entity, will never be 0
+     */
+    static HgEntity get(const void* component, u32 component_id);
+
+    /**
+     * Gets the entity from it's component
+     *
+     * Parameters
+     * - component The component to lookup, must be a valid component
+     *
+     * Returns
+     * - The components's entity, will never be 0
+     */
+    template<typename T>
+    static HgEntity get(const T& component) {
+        return get(&component, hg_component_id<T>);
+    }
 };
 
 /**
@@ -3641,624 +3806,348 @@ constexpr bool operator!=(HgEntity lhs, HgEntity rhs) {
 }
 
 /**
- * Creates a new id for each component
+ * Initializes the entity component system
  *
- * Should only be used by hg_component_id
+ * Parameters
+ * - allocator The allocator to use
+ * - max_entities The max entities that can exist
  */
-u32 hg_create_component_id();
+void hg_ecs_init(HgArena& arena, u32 max_entities);
 
 /**
- * The unique component id for a type, keeping const and non-const the same
+ * Resets the entity component system, removing all entities
+ *
+ * Note, does not unregister components, just clears storage
+ */
+void hg_ecs_reset();
+
+/**
+ * Reallocates the entity pool, increasing the max number of entities
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - new_capacity The new max number of entities
+ */
+void hg_ecs_resize(HgArena& arena, u32 new_max_entities);
+
+/**
+ * Grows the entity pool to current * factor
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - factor The factor to increase by
+ */
+void hg_ecs_grow(HgArena& arena, f32 factor = 2.0f);
+
+/**
+ * Registers a component in the ECS
+ *
+ * Note, a component id must be unregistered before reregistering
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - max_component The max number of this component the ECS can hold
+ * - width The size in bytes of the component struct
+ * - alignment The alignment of the component struct
+ * - component_id The id of the component
+ */
+void hg_ecs_register(HgArena& arena, u32 max_components, u32 width, u32 alignment, u32 component_id);
+
+/**
+ * Registers a component in the ECS
+ *
+ * Note, a component id must be unregistered before reregistering
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - max_component The max number of this component the ECS can hold
  */
 template<typename T>
-inline const u32 hg_component_id = hg_create_component_id();
+void hg_ecs_register(HgArena& arena, u32 max_components) {
+    hg_ecs_register(arena, max_components, sizeof(T), alignof(T), hg_component_id<T>);
+}
 
 /**
- * An entity component system
+ * Unregisters a component in the ECS
+ *
+ * Parameters
+ * - component_id The id of the component
  */
-struct HgECS {
-    /**
-     * A component type in an entity component system
-     */
-    struct Component {
-        /**
-         * sparse[entity] is the index into dense and components for that entity
-         */
-        u32* sparse;
-        /**
-         * dense[index] is the entity for that component
-         */
-        HgEntity* dense;
-        /**
-         * The data for the components
-         */
-        HgDynamicArray components;
-    };
+void hg_ecs_unregister(u32 component_id);
 
-    /**
-     * The pool of entity ids
-     */
-    HgEntity* entity_pool;
-    /**
-     * The max number of entities
-     */
-    u32 entity_capacity;
-    /**
-     * The next entity in the pool
-     */
-    HgEntity next_entity;
-    /**
-     * The component systems
-     */
-    Component* systems;
-    /**
-     * The number of systems
-     */
-    usize system_count;
+/**
+ * Unregisters a component in the ECS
+ */
+template<typename T>
+void hg_ecs_unregister() {
+    hg_ecs_unregister(hg_component_id<T>);
+}
 
-    /**
-     * Creates an entity component system
-     *
-     * Parameters
-     * - allocator The allocator to use
-     * - max_entities The max entities that can exist
-     *
-     * Returns
-     * - The created entity component system
-     */
-    static HgECS create(HgArena& arena, u32 max_entities);
+/**
+ * Checks whether a component is registered in the ECS
+ *
+ * Parameters
+ * - component_id The component id to check
+ *
+ * Returns
+ * - Whether the component id is registered
+ */
+bool hg_ecs_is_registered(u32 component_id);
 
-    /**
-     * Resets an entity component system, removing all entities
-     *
-     * Note, does not unregister components, just clears storage
-     */
-    void reset();
+/**
+ * Returns Whether the component id is registered
+ */
+template<typename T>
+bool hg_ecs_is_registered() {
+    return hg_ecs_is_registered(hg_component_id<T>);
+}
 
-    /**
-     * Reallocates the entity pool, increasing the max number of entities
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - new_capacity The new max number of entities
-     */
-    void realloc_entities(HgArena& arena, u32 new_capacity);
+/**
+ * Get a pointer to the component's entity array
+ *
+ * Parameters
+ * - component_id The component to get
+ *
+ * Returns
+ * - The entity array
+ */
+HgEntity* hg_ecs_entities(u32 component_id);
 
-    /**
-     * Grows the entity pool to current * factor
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - factor The factor to increase by
-     */
-    void grow_entities(HgArena& arena, f32 factor = 2.0f) {
-        realloc_entities(arena, entity_capacity == 0 ? 1 : (u32)((f32)entity_capacity * factor));
+/**
+ * Returns a pointer to the component's entity array
+ */
+template<typename T>
+HgEntity* hg_ecs_entities() {
+    return hg_ecs_entities(hg_component_id<T>);
+}
+
+/**
+ * Get a pointer to the component's array
+ *
+ * Parameters
+ * - component_id The component to get
+ *
+ * Returns
+ * - The component array
+ */
+void* hg_ecs_components(u32 component_id);
+
+/**
+ * Returns a pointer to the component's array
+ */
+template<typename T>
+T* hg_ecs_components() {
+    return (T*)hg_ecs_components(hg_component_id<T>);
+}
+
+/**
+ * Gets the number of components in the ecs under the component id
+ *
+ * Parameters
+ * - component_id The component id to count
+ *
+ * Returns
+ * - The number of components under the id
+ */
+u32 hg_ecs_component_count(u32 component_id);
+
+/**
+ * Returns the number of components in the ecs under the id
+ */
+template<typename T>
+u32 hg_ecs_component_count() {
+    return hg_ecs_component_count(hg_component_id<T>);
+}
+
+/**
+ * Finds the id of the system with the fewest elements
+ *
+ * Parameters
+ * - ids The ids to check, must be registered
+ *
+ * Returns
+ * - The id of the smallest in the array
+ */
+u32 hg_ecs_find_smallest(u32* ids, usize id_count);
+
+/**
+ * Finds the index/id of the system with the fewest elements
+ *
+ * Returns
+ * - The index/id of the smallest in the array
+ */
+template<typename... Ts>
+u32 hg_ecs_find_smallest() {
+    u32 index = 0;
+    u32 ids[sizeof...(Ts)];
+    ((ids[index++] = hg_component_id<Ts>), ...);
+    return hg_ecs_find_smallest(ids, hg_countof(ids));
+}
+
+/**
+ * Iterates over all entities with the single given component
+ *
+ * Note, specifying only one component allows deterministic ordering (such
+ * as in the case of sorting), as well as extra optimization
+ *
+ * The function receives as parameters:
+ * - The entity id
+ * - A reference to the component
+ *
+ * Parameters
+ * - function The function to call
+ */
+template<typename T, typename Fn>
+void hg_ecs_for_each_single(Fn& fn) {
+    static_assert(std::is_invocable_r_v<void, Fn, HgEntity, T&>);
+
+    HgEntity* e = hg_ecs_entities<T>();
+    HgEntity* end = e + hg_ecs_component_count<T>();
+    T* c = hg_ecs_components<T>();
+    for (; e != end; ++e, ++c) {
+        fn(*e, *c);
     }
+}
 
-    /**
-     * Creates a new entity in an ECS
-     *
-     * Note, there cannot be more than entities than allocated at creation
-     *
-     * Returns
-     * - The created entity
-     */
-    HgEntity spawn();
+/**
+ * Iterates over all entities with the given components
+ *
+ * The function receives as parameters:
+ * - The entity id
+ * - A reference to each component...
+ *
+ * Parameters
+ * - function The function to call
+ */
+template<typename... Ts, typename Fn>
+void hg_ecs_for_each_multi(Fn& fn) {
+    static_assert(std::is_invocable_r_v<void, Fn, HgEntity, Ts&...>);
 
-    /**
-     * Destroys an entity in an ECS
-     *
-     * Note, this function will invalidate iterators
-     *
-     * Parameters
-     * - entity The entity to destroy
-     */
-    void despawn(HgEntity entity);
-
-    /**
-     * Checks whether an entity id is alive and can be used
-     *
-     * Parameters
-     * - entity The id of the entity to check
-     *
-     * Returns
-     * - Whether the entity is alive and can be used
-     */
-    bool is_alive(HgEntity entity) {
-        return entity.id < entity_capacity && entity_pool[entity.id].id == entity.id;
+    u32 id = hg_ecs_find_smallest<Ts...>();
+    HgEntity* e = hg_ecs_entities(id);
+    HgEntity* end = e + hg_ecs_component_count(id);
+    for (; e != end; ++e) {
+        if (e->has_all<Ts...>())
+            fn(*e, e->get<Ts>()...);
     }
+}
 
-    /**
-     * Registers a component in this ECS
-     *
-     * Note, a component id must be unregistered before reregistering
-     *
-     * Parameters
-     * - mem The allocator to get memory from
-     * - max_component The max number of this component the ECS can hold
-     * - width The size in bytes of the component struct
-     * - alignment The alignment of the component struct
-     * - component_id The id of the component
-     */
-    void register_component(HgArena& arena, u32 max_components, u32 width, u32 alignment, u32 component_id);
+/**
+ * Iterates over all entities with the given components
+ *
+ * Note, calls the single or multi version from the number of components
+ *
+ * Parameters
+ * - function The function to call
+ */
+template<typename... Ts, typename Fn>
+void hg_ecs_for_each(Fn fn) {
+    static_assert(sizeof...(Ts) != 0);
 
-    /**
-     * Registers a component in this ECS
-     *
-     * Note, a component id must be unregistered before reregistering
-     *
-     * Parameters
-     * - mem The allocator to get memory from
-     * - max_component The max number of this component the ECS can hold
-     */
-    template<typename T>
-    void register_component(HgArena& arena, u32 max_components) {
-        register_component(arena, max_components, sizeof(T), alignof(T), hg_component_id<T>);
+    if constexpr (sizeof...(Ts) == 1) {
+        hg_ecs_for_each_single<Ts...>(fn);
+    } else {
+        hg_ecs_for_each_multi<Ts...>(fn);
     }
+}
 
-    /**
-     * Unregisters a component in this ECS
-     *
-     * Parameters
-     * - component_id The id of the component
-     */
-    void unregister_component(u32 component_id);
+/**
+ * Iterates over all entities with the single given component
+ *
+ * Note, specifying only one component allows deterministic ordering (such
+ * as in the case of sorting), as well as extra optimization
+ *
+ * The function receives as parameters:
+ * - The entity id
+ * - A reference to the component
+ *
+ * Parameters
+ * - function The function to call
+ */
+template<typename T, typename Fn>
+void hg_ecs_for_par_single(u32 chunk_size, Fn& fn) {
+    static_assert(std::is_invocable_r_v<void, Fn, HgEntity, T&>);
 
-    /**
-     * Unregisters a component in this ECS
-     */
-    template<typename T>
-    void unregister_component() {
-        unregister_component(hg_component_id<T>);
-    }
-
-    /**
-     * Checks whether a component is registered in this ECS
-     *
-     * Parameters
-     * - component_id The component id to check
-     *
-     * Returns
-     * - Whether the component id is registered
-     */
-    bool is_registered(u32 component_id) {
-        hg_assert(component_id < system_count);
-        return systems[component_id].components.items != nullptr;
-    }
-
-    /**
-     * Checks whether a component is registered in this ECS
-     *
-     * Parameters
-     * - component_id The component id to check
-     *
-     * Returns
-     * - Whether the component id is registered
-     */
-    template<typename T>
-    bool is_registered() {
-        return is_registered(hg_component_id<T>);
-    }
-
-    /**
-     * Gets the number of components that exist under the component id
-     *
-     * Parameters
-     * - component_id The component id to count
-     *
-     * Returns
-     * - The number of components under the id
-     */
-    u32 component_count(u32 component_id) {
-        hg_assert(is_registered(component_id));
-        return (u32)systems[component_id].components.count;
-    }
-
-    /**
-     * Gets the number of components that exist under the component id
-     *
-     * Returns
-     * - The number of components under the id
-     */
-    template<typename T>
-    u32 component_count() {
-        return component_count(hg_component_id<T>);
-    }
-
-    /**
-     * Finds the index/id of the system with the fewest elements
-     *
-     * Parameters
-     * - ids The indices to check, must be registered
-     *
-     * Returns
-     * - The index/id of the smallest in the array
-     */
-    u32 smallest_id(u32* ids, usize id_count);
-
-    /**
-     * Finds the index/id of the system with the fewest elements
-     *
-     * Returns
-     * - The index/id of the smallest in the array
-     */
-    template<typename... Ts>
-    u32 smallest_id() {
-        u32 ids[sizeof...(Ts)];
-
-        u32 index = 0;
-        ((ids[index++] = hg_component_id<Ts>), ...);
-
-        return smallest_id(ids, hg_countof(ids));
-    }
-
-    /**
-     * Creates a component for an entity
-     *
-     * Note, the entity must not have a component of this type already
-     *
-     * Parameters
-     * - component_id The id of the component, must be registered
-     * - entity The entity to add to, must be alive
-     *
-     * Returns
-     * - A pointer to the created component
-     */
-    void* add(HgEntity entity, u32 component_id);
-
-    /**
-     * Creates a component for an entity
-     *
-     * Note, the entity must not have a component of this type already
-     *
-     * Parameters
-     * - entity The entity to add to, must be alive
-     *
-     * Returns
-     * - A pointer to the created component
-     */
-    template<typename T>
-    T& add(HgEntity entity) {
-        return *(T*)add(entity, hg_component_id<T>);
-    }
-
-    /**
-     * Destroys a component from an entity
-     *
-     * Note, this function will invalidate iterators
-     *
-     * Parameters
-     * - entity The id of the entity, must be alive
-     * - component_id The id of the component, must be registered
-     */
-    void remove(HgEntity entity, u32 component_id);
-
-    /**
-     * Destroys a component from an entity
-     *
-     * The entity must have an associated component in the system
-     *
-     * Note, this function will invalidate iterators
-     *
-     * Parameters
-     * - entity The id of the entity, must be alive
-     */
-    template<typename T>
-    void remove(HgEntity entity) {
-        remove(entity, hg_component_id<T>);
-    }
-
-    /**
-     * Checks whether an entity has a component or not
-     *
-     * Parameters
-     * - entity The id of the entity, must be alive
-     * - component_id The id of the component, must be registered
-     *
-     * Returns
-     * - Whether the entity has a component in the system
-     */
-    bool has(HgEntity entity, u32 component_id) {
-        hg_assert(is_alive(entity));
-        hg_assert(is_registered(component_id));
-        return systems[component_id].sparse[entity.id] < systems[component_id].components.count;
-    }
-
-    /**
-     * Checks whether an entity has a component or not
-     *
-     * Parameters
-     * - entity The id of the entity, must be alive
-     *
-     * Returns
-     * - Whether the entity has a component in the system
-     */
-    template<typename T>
-    bool has(HgEntity entity) {
-        return has(entity, hg_component_id<T>);
-    }
-
-    /**
-     * Checks whether an entity has all given components
-     *
-     * Parameters
-     * - entity The id of the entity, must be alive
-     *
-     * Returns
-     * - Whether the entity has all given components in the system
-     */
-    template<typename... Ts>
-    bool has_all(HgEntity entity) {
-        return (has<Ts>(entity) && ...);
-    }
-
-    /**
-     * Checks whether an entity has any of given components
-     *
-     * Parameters
-     * - entity The id of the entity, must be alive
-     *
-     * Returns
-     * - Whether the entity has any of given components in the system
-     */
-    template<typename... Ts>
-    bool has_any(HgEntity entity) {
-        return (has<Ts>(entity) || ...);
-    }
-
-    /**
-     * Gets a pointer to the entity's component
-     *
-     * Note, the entity must have a component in the system
-     *
-     * Parameters
-     * - entity The id of the entity, must be alive
-     * - component_id The id of the component, must be registered
-     *
-     * Returns
-     * - The entity's component, will never be 0
-     */
-    void* get(HgEntity entity, u32 component_id) {
-        hg_assert(is_alive(entity));
-        hg_assert(is_registered(component_id));
-        hg_assert(has(entity, component_id));
-        return systems[component_id].components.get(systems[component_id].sparse[entity.id]);
-    }
-
-    /**
-     * Gets a pointer to the entity's component
-     *
-     * Note, the entity must have a component in the system
-     *
-     * Parameters
-     * - entity The id of the entity, must be alive
-     *
-     * Returns
-     * - The entity's component, will never be 0
-     */
-    template<typename T>
-    T& get(HgEntity entity) {
-        return *((T*)get(entity, hg_component_id<T>));
-    }
-
-    /**
-     * Gets the entity id from it's component
-     *
-     * Parameters
-     * - component The component to lookup, must be a valid component
-     * - component_id The id of the component, must be registered
-     *
-     * Returns
-     * - The components's entity, will never be 0
-     */
-    HgEntity get_entity(const void* component, u32 component_id) {
-        hg_assert(component != nullptr);
-        hg_assert(is_registered(component_id));
-
-        usize index = ((uptr)component - (uptr)systems[component_id].components.items)
-                    / systems[component_id].components.width;
-        return systems[component_id].dense[index];
-    }
-
-    /**
-     * Gets the entity id from it's component
-     *
-     * Parameters
-     * - component The component to lookup, must be a valid component
-     *
-     * Returns
-     * - The components's entity, will never be 0
-     */
-    template<typename T>
-    HgEntity get_entity(const T& component) {
-        hg_assert(is_registered(hg_component_id<T>));
-
-        u32 index = (u32)(&component - (T*)systems[hg_component_id<T>].components.items);
-        return systems[hg_component_id<T>].dense[index];
-    }
-
-    /**
-     * Iterates over all entities with the single given component
-     *
-     * Note, specifying only one component allows deterministic ordering (such
-     * as in the case of sorting), as well as extra optimization
-     *
-     * The function receives as parameters:
-     * - The entity id
-     * - A reference to the component
-     *
-     * Parameters
-     * - function The function to call
-     */
-    template<typename T, typename Fn>
-    void for_each_single(Fn& fn) {
-        static_assert(std::is_invocable_r_v<void, Fn, HgEntity, T&>);
-
-        u32 id = hg_component_id<T>;
-        HgEntity* e = systems[id].dense;
-        HgEntity* end = e + systems[id].components.count;
-        T* c = (T*)systems[id].components.items;
-        for (; e != end; ++e, ++c) {
+    hg_for_par(hg_ecs_component_count<T>(), chunk_size, [&](usize begin, usize end) {
+        HgEntity* e = hg_ecs_entities<T>() + begin;
+        HgEntity* e_end = hg_ecs_entities<T>() + end;
+        T* c = hg_ecs_components<T>() + begin;
+        for (; e != e_end; ++e, ++c) {
             fn(*e, *c);
         }
-    }
-
-    /**
-     * Iterates over all entities with the given components
-     *
-     * The function receives as parameters:
-     * - The entity id
-     * - A reference to each component...
-     *
-     * Parameters
-     * - function The function to call
-     */
-    template<typename... Ts, typename Fn>
-    void for_each_multi(Fn& fn) {
-        static_assert(std::is_invocable_r_v<void, Fn, HgEntity, Ts&...>);
-
-        u32 id = smallest_id<Ts...>();
-        HgEntity* e = systems[id].dense;
-        HgEntity* end = e + systems[id].components.count;
-        for (; e != end; ++e) {
-            if (has_all<Ts...>(*e))
-                fn(*e, get<Ts>(*e)...);
-        }
-    }
-
-    /**
-     * Iterates over all entities with the given components
-     *
-     * Note, calls the single or multi version from the number of components
-     *
-     * Parameters
-     * - function The function to call
-     */
-    template<typename... Ts, typename Fn>
-    void for_each(Fn fn) {
-        static_assert(sizeof...(Ts) != 0);
-
-        if constexpr (sizeof...(Ts) == 1) {
-            for_each_single<Ts...>(fn);
-        } else {
-            for_each_multi<Ts...>(fn);
-        }
-    }
-
-    /**
-     * Iterates over all entities with the single given component
-     *
-     * Note, specifying only one component allows deterministic ordering (such
-     * as in the case of sorting), as well as extra optimization
-     *
-     * The function receives as parameters:
-     * - The entity id
-     * - A reference to the component
-     *
-     * Parameters
-     * - function The function to call
-     */
-    template<typename T, typename Fn>
-    void for_par_single(u32 chunk_size, Fn& fn) {
-        static_assert(std::is_invocable_r_v<void, Fn, HgEntity, T&>);
-
-        u32 id = hg_component_id<T>;
-        hg_for_par(systems[id].components.count, chunk_size, [&](usize begin, usize end) {
-            HgEntity* e = systems[id].dense + begin;
-            HgEntity* e_end = systems[id].dense + end;
-            T* c = (T*)systems[id].components.get(begin);
-            for (; e != e_end; ++e, ++c) {
-                fn(*e, *c);
-            }
-        });
-    }
-
-    /**
-     * Iterates over all entities with the given components
-     *
-     * The function receives as parameters:
-     * - The entity id
-     * - A reference to each component...
-     *
-     * Parameters
-     * - function The function to call
-     */
-    template<typename... Ts, typename Fn>
-    void for_par_multi(u32 chunk_size, Fn& fn) {
-        static_assert(std::is_invocable_r_v<void, Fn, HgEntity, Ts&...>);
-
-        u32 id = smallest_id<Ts...>();
-        hg_for_par(component_count(id), chunk_size, [&](usize begin, usize end) {
-            HgEntity* e = systems[id].dense + begin;
-            HgEntity* e_end = systems[id].dense + end;
-            for (; e != e_end; ++e) {
-                if (has_all<Ts...>(*e))
-                    fn(*e, get<Ts>(*e)...);
-            }
-        });
-    }
-
-    /**
-     * Iterates over all entities with the given components
-     *
-     * Note, calls the single of multi version from the number of components
-     *
-     * Parameters
-     * - function The function to call
-     */
-    template<typename... Ts, typename Fn>
-    void for_par(u32 chunk_size, Fn fn) {
-        static_assert(sizeof...(Ts) != 0);
-
-        if constexpr (sizeof...(Ts) == 1) {
-            for_par_single<Ts...>(chunk_size, fn);
-        } else {
-            for_par_multi<Ts...>(chunk_size, fn);
-        }
-    }
-
-    /**
-     * Swaps the locations of components with their entities
-     *
-     * Parameters
-     * - lhs The first entity to swap
-     * - rhs The second entity to swap
-     * - component_id The component id, must be registered
-     */
-    void swap_idx_location(u32 lhs, u32 rhs, u32 component_id);
-
-    /**
-     * Sorts components
-     *
-     * Parameters
-     * - begin The index to begin sorting
-     * - end The index to end sorting
-     * - component_id The component system to sort
-     * - compare The comparison function
-     */
-    void sort_untyped(
-        u32 begin,
-        u32 end,
-        u32 component_id,
-        void* data,
-        bool (*compare)(void*, HgEntity lhs, HgEntity rhs));
-
-    /**
-     * Sorts components
-     *
-     * Parameters
-     * - compare The comparison function
-     */
-    template<typename T>
-    void sort(void* data, bool (*compare)(void*, HgEntity lhs, HgEntity rhs)) {
-        sort_untyped(0, component_count<T>(), hg_component_id<T>, data, compare);
-    }
-};
+    });
+}
 
 /**
- * A global entity component system
+ * Iterates over all entities with the given components
+ *
+ * The function receives as parameters:
+ * - The entity id
+ * - A reference to each component...
+ *
+ * Parameters
+ * - function The function to call
  */
-inline HgECS* hg_ecs = nullptr;
+template<typename... Ts, typename Fn>
+void hg_ecs_for_par_multi(u32 chunk_size, Fn& fn) {
+    static_assert(std::is_invocable_r_v<void, Fn, HgEntity, Ts&...>);
+
+    u32 id = hg_ecs_find_smallest<Ts...>();
+    hg_for_par(hg_ecs_component_count(id), chunk_size, [&](usize begin, usize end) {
+        HgEntity* e = hg_ecs_entities(id) + begin;
+        HgEntity* e_end = hg_ecs_entities(id) + end;
+        for (; e != e_end; ++e) {
+            if (e->has_all<Ts...>())
+                fn(*e, e->get<Ts>()...);
+        }
+    });
+}
+
+/**
+ * Iterates over all entities with the given components
+ *
+ * Note, calls the single of multi version from the number of components
+ *
+ * Parameters
+ * - function The function to call
+ */
+template<typename... Ts, typename Fn>
+void hg_ecs_for_par(u32 chunk_size, Fn fn) {
+    static_assert(sizeof...(Ts) != 0);
+
+    if constexpr (sizeof...(Ts) == 1) {
+        hg_ecs_for_par_single<Ts...>(chunk_size, fn);
+    } else {
+        hg_ecs_for_par_multi<Ts...>(chunk_size, fn);
+    }
+}
+
+/**
+ * Sorts components
+ *
+ * Parameters
+ * - begin The index to begin sorting
+ * - end The index to end sorting
+ * - component_id The component system to sort
+ * - compare The comparison function
+ */
+void hg_ecs_sort_untyped(
+    u32 begin,
+    u32 end,
+    u32 component_id,
+    void* data,
+    bool (*compare)(void*, HgEntity lhs, HgEntity rhs));
+
+/**
+ * Sorts components
+ *
+ * Parameters
+ * - compare The comparison function
+ */
+template<typename T>
+void hg_ecs_sort(void* data, bool (*compare)(void*, HgEntity lhs, HgEntity rhs)) {
+    hg_ecs_sort_untyped(0, hg_ecs_component_count<T>(), hg_component_id<T>, data, compare);
+}
 
 /**
  * The transform for (nearly) all entities
@@ -4311,7 +4200,7 @@ struct HgTransform {
      * Parameters
      * - child The child entity to add
      */
-    void create_child(HgEntity child);
+    void add_child(HgEntity child);
 
     /**
      * Remove this entity from its place in the hierarchy
@@ -4344,6 +4233,9 @@ struct HgTransform {
     void move(const HgVec3& dp, const HgVec3& ds, const HgQuat& dr);
 };
 
+/**
+ * A sprite component rendered by the 2d pipeline
+ */
 struct HgSprite {
     /**
      * The texture to draw from

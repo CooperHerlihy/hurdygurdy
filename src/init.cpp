@@ -10,11 +10,7 @@ void hg_init(void) {
     hg_io_thread_init(arena, 4096);
     hg_resources_init(arena, 4096);
     hg_gpu_resources_init(arena, 4096);
-
-    if (hg_ecs == nullptr) {
-        hg_ecs = arena.alloc<HgECS>(1);
-        *hg_ecs = hg_ecs->create(arena, 4096);
-    }
+    hg_ecs_init(arena, 4096);
 
     hg_graphics_init();
     hg_platform_init();
@@ -24,10 +20,7 @@ void hg_exit(void) {
     hg_platform_deinit();
     hg_graphics_deinit();
 
-    if (hg_ecs != nullptr) {
-        hg_ecs = nullptr;
-    }
-
+    hg_ecs_reset();
     hg_gpu_resources_reset();
     hg_resources_reset();
     hg_io_thread_deinit();

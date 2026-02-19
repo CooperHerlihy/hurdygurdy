@@ -246,12 +246,12 @@ void HgPipeline2D::update_view(const HgMat4& view) {
 
 void HgPipeline2D::draw(VkCommandBuffer cmd) {
     hg_assert(cmd != nullptr);
-    hg_assert(hg_ecs->is_registered<HgSprite>());
+    hg_assert(hg_ecs_is_registered<HgSprite>());
 
-    hg_ecs->sort<HgSprite>(nullptr, [](void*, HgEntity lhs, HgEntity rhs) -> bool {
-        hg_assert(hg_ecs->has<HgTransform>(lhs));
-        hg_assert(hg_ecs->has<HgTransform>(rhs));
-        return hg_ecs->get<HgTransform>(lhs).position.z > hg_ecs->get<HgTransform>(rhs).position.z;
+    hg_ecs_sort<HgSprite>(nullptr, [](void*, HgEntity lhs, HgEntity rhs) -> bool {
+        hg_assert(lhs.has<HgTransform>());
+        hg_assert(lhs.has<HgTransform>());
+        return lhs.get<HgTransform>().position.z > rhs.get<HgTransform>().position.z;
     });
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
@@ -265,7 +265,7 @@ void HgPipeline2D::draw(VkCommandBuffer cmd) {
         0,
         nullptr);
 
-    hg_ecs->for_each<HgSprite, HgTransform>([&](HgEntity, HgSprite& sprite, HgTransform& transform) {
+    hg_ecs_for_each<HgSprite, HgTransform>([&](HgEntity, HgSprite& sprite, HgTransform& transform) {
         hg_assert(texture_sets.has(sprite.texture));
         vkCmdBindDescriptorSets(
             cmd,
