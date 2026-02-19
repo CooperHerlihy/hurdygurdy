@@ -35,10 +35,8 @@
 #include <cstdlib>
 #include <cstring>
 
-#include <chrono>
-
 #include <atomic>
-#include <thread>
+#include <chrono>
 
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
@@ -3101,28 +3099,15 @@ struct HgFence {
  *
  * Parameters
  * - arena The arena to allocate from
- * - thread_count The number of threads to spawn in the pool
  * - queue_size The max capacity of the thread work queue
+ * - thread_count The number of threads to spawn in the pool
  */
-void hg_thread_pool_init(HgArena& arena, usize thread_count, usize queue_size);
+void hg_thread_pool_init(HgArena& arena, usize queue_size, usize thread_count);
 
 /**
  * Deinitialize the thread pool
  */
 void hg_thread_pool_deinit();
-
-/**
- * Reset the thread pool
- */
-void hg_thread_pool_reset();
-
-/**
- * Tries to execute work from the end of the queue
- *
- * Returns
- * - Whether work could be executed
- */
-bool hg_thread_pool_pop();
 
 /**
  * Wait on a fence, and help complete work in the meantime
@@ -3180,127 +3165,28 @@ void hg_for_par(usize n, usize chunk_size, Fn fn) {
 }
 
 /**
- * A thread dedicated to blocking IO
+ * Initializes the IO thread
  *
- * When idle, steals work from hg_threads
+ * Parameters
+ * - arena The arena to allocate from
+ * - queue_size The max concurrent request capacity
  */
-struct HgIOThread {
-    /**
-     * Work specialized for blocking IO
-     */
-    struct Request {
-        /**
-         * The fences to signal on completion
-         */
-        HgFence* fences;
-        /**
-         * The number of fences
-         */
-        usize fence_count;
-        /**
-         * The data passed to the function
-         */
-        void* data;
-        /**
-         * The resource to operate on, if any
-         */
-        void* resource;
-        /**
-         * The path to use, if any
-         */
-        HgStringView path;
-        /**
-         * The function to execute
-         */
-        void (*fn)(void* data, void* resource, HgStringView path);
-    };
-
-    /**
-     * A signal to the thread to close
-     */
-    std::atomic_bool should_close;
-    /**
-     * The thread handle
-     */
-    std::thread thread;
-    /**
-     * The status of each request
-     */
-    std::atomic_bool* has_item;
-    /**
-     * The request queue
-     */
-    Request* requests;
-    /**
-     * The max number of requests in the queue
-     */
-    usize capacity;
-    /**
-     * The beginning of the queue, where requests are popped from
-     */
-    std::atomic<usize> tail;
-    /**
-     * The end of the queue, where requests are still being pushed
-     */
-    std::atomic<usize> head;
-    /**
-     * The end of the queue, where requests are pushed to
-     */
-    std::atomic<usize> working_head;
-
-    /**
-     * Creates a new thread pool
-     *
-     * Note, queue_size must be a power of two, it can be better optimized, and
-     * overflows are handled safely
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - queue_size The max capacity of the request queue
-     *
-     * Returns
-     * - The created io thread
-     */
-    static HgIOThread* create(HgArena& arena, usize queue_size);
-
-    /**
-     * Destroys the io thread
-     */
-    void destroy();
-
-    /**
-     * Removes all contained objects, emptying the queue
-     *
-     * Note, this is not thread safe
-     */
-    void reset();
-
-    /**
-     * Push a request to the end to the queue
-     *
-     * Note, space must be available
-     *
-     * Parameters
-     * - request The request to push
-     */
-    void push(const Request& request);
-
-    /**
-     * Pops a request off the end of the queue
-     *
-     * Parameters
-     * - request A reference to store the popped request, if available
-     *
-     * Returns
-     * - Whether an request could be popped
-     */
-    bool pop(Request& request);
-};
+void hg_io_thread_init(HgArena& arena, usize queue_size);
 
 /**
- * A global io thread
+ * Deinitializes the IO thread
  */
-inline HgIOThread* hg_io = nullptr;
+void hg_io_thread_deinit();
+
+/**
+ * Make an asynchronous IO request on the IO thread
+ */
+void hg_io_request(
+    HgFence* fences,
+    usize fence_count,
+    void* resource,
+    HgStringView path,
+    void (*fn)(void* resource, HgStringView path));
 
 /**
  * A loaded binary file

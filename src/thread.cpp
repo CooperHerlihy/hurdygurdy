@@ -2,6 +2,7 @@
 
 #include <condition_variable>
 #include <mutex>
+#include <thread>
 
 #include <emmintrin.h>
 
@@ -48,72 +49,7 @@ std::atomic<usize> pool_working_tail;
 std::atomic<usize> pool_head;
 std::atomic<usize> pool_working_head;
 
-static bool thread_pool_pop() {
-    return false;
-}
-
-void hg_thread_pool_init(HgArena& arena, usize thread_count, usize queue_size) {
-    hg_assert(thread_count > 1 && (queue_size & (queue_size - 1)) == 0);
-
-    pool_should_close.store(false);
-    pool_thread_count = std::min((usize)1, thread_count - 1);
-    pool_threads = arena.alloc<std::thread>(pool_thread_count);
-
-    pool_work = arena.alloc<ThreadWork>(queue_size);
-    pool_has_work = arena.alloc<std::atomic_bool>(queue_size);
-    pool_work_capacity = queue_size;
-
-    hg_thread_pool_reset();
-
-    for (usize i = 0; i < pool_thread_count; ++i) {
-        new (pool_threads + i) std::thread([] {
-            for (;;) {
-                std::unique_lock<std::mutex> lock{pool_mtx};
-                while (pool_work_count.load() == 0 && !pool_should_close.load()) {
-                    pool_cv.wait(lock);
-                }
-                lock.unlock();
-                if (pool_should_close.load())
-                    return;
-
-                static constexpr usize spin_count = 128;
-                for (usize j = 0; j < spin_count; ++j) {
-                    if (!thread_pool_pop())
-                        _mm_pause();
-                }
-            }
-        });
-    }
-}
-
-void hg_thread_pool_deinit() {
-    pool_mtx.lock();
-    pool_should_close = true;
-    pool_mtx.unlock();
-    pool_cv.notify_all();
-
-    for (usize i = 0; i < pool_thread_count; ++i) {
-        pool_threads[i].join();
-    }
-    for (usize i = 0; i < pool_thread_count; ++i) {
-        pool_threads[i].~thread();
-    }
-    pool_cv.~condition_variable();
-    pool_mtx.~mutex();
-}
-
-void hg_thread_pool_reset() {
-    pool_work_count.store(0);
-    pool_tail.store(0);
-    pool_working_tail.store(0);
-    pool_head.store(0);
-    pool_working_head.store(0);
-    for (usize i = 0; i < pool_work_capacity; ++i) {
-        pool_has_work[i].store(false);
-    }
-}
-
-bool hg_thread_pool_pop() {
+static bool pool_execute() {
     usize idx = pool_working_tail.load();
     do {
         if (idx == pool_head.load())
@@ -141,10 +77,67 @@ bool hg_thread_pool_pop() {
     return true;
 }
 
+void hg_thread_pool_init(HgArena& arena, usize queue_size, usize thread_count) {
+    hg_assert(thread_count > 1 && (queue_size & (queue_size - 1)) == 0);
+
+    pool_should_close.store(false);
+    pool_thread_count = std::min((usize)1, thread_count - 1);
+    pool_threads = arena.alloc<std::thread>(pool_thread_count);
+
+    pool_work = arena.alloc<ThreadWork>(queue_size);
+    pool_has_work = arena.alloc<std::atomic_bool>(queue_size);
+    pool_work_capacity = queue_size;
+
+    pool_work_count.store(0);
+    pool_tail.store(0);
+    pool_working_tail.store(0);
+    pool_head.store(0);
+    pool_working_head.store(0);
+    for (usize i = 0; i < pool_work_capacity; ++i) {
+        pool_has_work[i].store(false);
+    }
+
+    for (usize i = 0; i < pool_thread_count; ++i) {
+        new (pool_threads + i) std::thread([] {
+            for (;;) {
+                std::unique_lock<std::mutex> lock{pool_mtx};
+                while (pool_work_count.load() == 0 && !pool_should_close.load()) {
+                    pool_cv.wait(lock);
+                }
+                lock.unlock();
+                if (pool_should_close.load())
+                    return;
+
+                static constexpr usize spin_count = 128;
+                for (usize j = 0; j < spin_count; ++j) {
+                    if (!pool_execute())
+                        _mm_pause();
+                }
+            }
+        });
+    }
+}
+
+void hg_thread_pool_deinit() {
+    pool_mtx.lock();
+    pool_should_close = true;
+    pool_mtx.unlock();
+    pool_cv.notify_all();
+
+    for (usize i = 0; i < pool_thread_count; ++i) {
+        pool_threads[i].join();
+    }
+    for (usize i = 0; i < pool_thread_count; ++i) {
+        pool_threads[i].~thread();
+    }
+    pool_cv.~condition_variable();
+    pool_mtx.~mutex();
+}
+
 bool hg_thread_pool_help(HgFence& fence, f64 timeout_seconds) {
     auto end = std::chrono::steady_clock::now() + std::chrono::duration<f64>(timeout_seconds);
     while (!fence.is_complete() && std::chrono::steady_clock::now() < end) {
-        if (!hg_thread_pool_pop())
+        if (!pool_execute())
             _mm_pause();
     }
     return fence.is_complete();
@@ -177,88 +170,103 @@ void hg_call_par(HgFence* fences, usize fence_count, void* data, void (*fn)(void
     pool_cv.notify_one();
 }
 
-HgIOThread* HgIOThread::create(HgArena& arena, usize queue_size) {
-    hg_assert(queue_size > 1 && (queue_size & (queue_size - 1)) == 0);
+std::thread io_thread;
+std::atomic_bool io_thread_should_close;
 
-    auto thread_fn = [](HgIOThread* io) {
-        hg_init_scratch();
-        hg_defer(hg_deinit_scratch());
+struct Request {
+    HgFence* fences;
+    usize fence_count;
+    void* resource;
+    HgStringView path;
+    void (*fn)(void* resource, HgStringView path);
+};
+Request* io_requests;
+std::atomic_bool* io_has_request;
+usize io_request_capacity;
 
-        for (;;) {
-            if (io->should_close.load())
-                return;
+std::atomic<usize> io_tail;
+std::atomic<usize> io_head;
+std::atomic<usize> io_working_head;
 
-            Request request;
-            if (!io->pop(request))
-                hg_thread_pool_pop();
-        }
-    };
-
-    HgIOThread* io = arena.alloc<HgIOThread>(1);
-
-    io->requests = arena.alloc<Request>(queue_size);
-    io->capacity = queue_size;
-
-    io->has_item = arena.alloc<std::atomic_bool>(queue_size);
-
-    io->reset();
-
-    io->should_close.store(false);
-    new (&io->thread) std::thread(thread_fn, io);
-
-    return io;
-}
-
-void HgIOThread::destroy() {
-    should_close = true;
-    thread.join();
-    thread.~thread();
-}
-
-void HgIOThread::reset() {
-    tail.store(0);
-    head.store(0);
-    working_head.store(0);
-    for (usize i = 0; i < capacity; ++i) {
-        has_item[i].store(false);
-    }
-}
-
-void HgIOThread::push(const Request& request) {
-    hg_assert(request.fn != nullptr);
-    for (usize i = 0; i < request.fence_count; ++i) {
-        request.fences[i].add(1);
-    }
-
-    usize idx = working_head.fetch_add(1) & (capacity - 1);
-
-    requests[idx] = request;
-    has_item[idx].store(true);
-
-    usize h = head.load();
-    while (has_item[h].load()) {
-        usize next = (h + 1) & (capacity - 1);
-        head.compare_exchange_strong(h, next);
-        h = next;
-    }
-}
-
-bool HgIOThread::pop(Request& request) {
-    usize idx = tail.load() & (capacity - 1);
-    if (idx == head.load())
+bool io_pop() {
+    usize idx = io_tail.load() & (io_request_capacity - 1);
+    if (idx == io_head.load())
         return false;
 
-    request = requests[idx];
-    has_item[idx].store(false);
+    Request request = io_requests[idx];
+    io_has_request[idx].store(false);
 
-    tail.fetch_add(1);
+    io_tail.fetch_add(1);
 
     hg_assert(request.fn != nullptr);
-    request.fn(request.data, request.resource, request.path);
+    request.fn(request.resource, request.path);
 
     for (usize i = 0; i < request.fence_count; ++i) {
         request.fences[i].signal(1);
     }
     return true;
+}
+
+void hg_io_thread_init(HgArena& arena, usize queue_size) {
+    hg_assert(queue_size > 1 && (queue_size & (queue_size - 1)) == 0);
+
+    io_requests = arena.alloc<Request>(queue_size);
+    io_has_request = arena.alloc<std::atomic_bool>(queue_size);
+    io_request_capacity = queue_size;
+
+    io_tail.store(0);
+    io_head.store(0);
+    io_working_head.store(0);
+    for (usize i = 0; i < io_request_capacity; ++i) {
+        io_has_request[i].store(false);
+    }
+
+    io_thread_should_close.store(false);
+    io_thread = std::thread([]() {
+        hg_init_scratch();
+        hg_defer(hg_deinit_scratch());
+
+        for (;;) {
+            if (io_thread_should_close.load())
+                return;
+
+            if (!io_pop())
+                pool_execute();
+        }
+    });
+}
+
+void hg_io_thread_deinit() {
+    io_thread_should_close = true;
+    io_thread.join();
+}
+
+void hg_io_request(
+    HgFence* fences,
+    usize fence_count,
+    void* resource,
+    HgStringView path,
+    void (*fn)(void* resource, HgStringView path)
+) {
+    hg_assert(fn != nullptr);
+    for (usize i = 0; i < fence_count; ++i) {
+        fences[i].add(1);
+    }
+
+    usize idx = io_working_head.fetch_add(1) & (io_request_capacity - 1);
+
+    io_requests[idx].fences = fences;
+    io_requests[idx].fence_count = fence_count;
+    io_requests[idx].resource = resource;
+    io_requests[idx].path = path;
+    io_requests[idx].fn = fn;
+    io_has_request[idx].store(true);
+
+    usize h = io_head.load();
+    while (io_has_request[h].load()) {
+        usize next = (h + 1) & (io_request_capacity - 1);
+        io_head.compare_exchange_strong(h, next);
+        h = next;
+    }
 }
 

@@ -1,5 +1,7 @@
 #include "hurdygurdy.hpp"
 
+#include <thread>
+
 void hg_init(void) {
     hg_init_scratch();
 
@@ -7,12 +9,8 @@ void hg_init(void) {
 
     u32 thread_count = std::thread::hardware_concurrency()
         - 2; // main thread, io thread
-    hg_thread_pool_init(arena, thread_count, 4096);
-
-    if (hg_io == nullptr) {
-        hg_io = HgIOThread::create(arena, 4096);
-        hg_assert(hg_io != nullptr);
-    }
+    hg_thread_pool_init(arena, 4096, thread_count);
+    hg_io_thread_init(arena, 4096);
 
     if (hg_resources == nullptr) {
         hg_resources = arena.alloc<HgResourceManager>(1);
@@ -51,11 +49,7 @@ void hg_exit(void) {
         hg_resources = nullptr;
     }
 
-    if (hg_io != nullptr) {
-        hg_io->destroy();
-        hg_io = nullptr;
-    }
-
+    hg_io_thread_deinit();
     hg_thread_pool_deinit();
     hg_deinit_scratch();
 }

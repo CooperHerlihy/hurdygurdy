@@ -1,6 +1,11 @@
 #include "hurdygurdy.hpp"
 
+#include <thread>
+
 #include <emmintrin.h>
+
+inline bool hg_test_function_HgThreadPool();
+inline bool hg_test_function_HgIOThread();
 
 int main(void) {
     hg_defer(hg_info("Exited successfully\n"));
@@ -9,6 +14,13 @@ int main(void) {
     hg_defer(hg_exit());
 
     hg_run_tests();
+
+    hg_info("thread testing\n");
+    for (usize i = 0; i < 1000; ++i) {
+        hg_assert(hg_test_function_HgThreadPool());
+        hg_assert(hg_test_function_HgIOThread());
+    }
+    hg_info("thread success\n");
 
     hg_arena_scope(arena, hg_get_scratch());
 
@@ -1902,8 +1914,6 @@ hg_test(HgHashSet) {
 hg_test(HgThreadPool) {
     hg_arena_scope(arena, hg_get_scratch());
 
-    hg_defer(hg_thread_pool_reset());
-
     HgFence fence;
     {
         bool a = false;
@@ -1997,25 +2007,15 @@ hg_test(HgThreadPool) {
 hg_test(HgIOThread) {
     hg_arena_scope(arena, hg_get_scratch());
 
-    HgIOThread* io = HgIOThread::create(arena, 128);
-    hg_defer(io->destroy());
-
-    hg_test_assert(io != nullptr);
-
     HgFence fence;
     {
         bool vals[100] = {};
 
-        HgIOThread::Request request;
-        request.fences = &fence;
-        request.fence_count = 1;
-        request.resource = vals;
-        request.fn = [](void*, void* pvals, HgStringView) {
+        hg_io_request(&fence, 1, vals, {}, [](void* pvals, HgStringView) {
             for (usize i = 0; i < hg_countof(vals); ++i) {
                 ((bool*)pvals)[i] = true;
             }
-        };
-        io->push(request);
+        });
 
         hg_test_assert(fence.wait(2.0));
         for (usize i = 0; i < hg_countof(vals); ++i) {
@@ -2027,14 +2027,9 @@ hg_test(HgIOThread) {
         bool vals[100] = {};
 
         for (usize i = 0; i < hg_countof(vals); ++i) {
-            HgIOThread::Request request;
-            request.fences = &fence;
-            request.fence_count = 1;
-            request.resource = &vals[i];
-            request.fn = [](void*, void* pval, HgStringView) {
+            hg_io_request(&fence, 1, &vals[i], {}, [](void* pval, HgStringView) {
                 *(bool*)pval = true;
-            };
-            io->push(request);
+            });
         }
 
         hg_test_assert(fence.wait(2.0));
@@ -2049,14 +2044,9 @@ hg_test(HgIOThread) {
         vals[0] = true;
 
         for (usize i = 1; i < hg_countof(vals); ++i) {
-            HgIOThread::Request request;
-            request.fences = &fence;
-            request.fence_count = 1;
-            request.resource = &vals[i];
-            request.fn = [](void*, void* pval, HgStringView) {
+            hg_io_request(&fence, 1, &vals[i], {}, [](void* pval, HgStringView) {
                 *(bool*)pval = *((bool*)pval - 1);
-            };
-            io->push(request);
+            });
         }
 
         hg_test_assert(fence.wait(2.0));
@@ -2073,10 +2063,6 @@ hg_test(HgIOThread) {
 
             bool vals[100] = {};
 
-            auto req_fn = [](void*, void* pval, HgStringView) {
-                *(bool*)pval = !*(bool*)pval;
-            };
-
             auto prod_fn = [&](u32 idx) {
                 while (!start) {
                     _mm_pause();
@@ -2084,12 +2070,9 @@ hg_test(HgIOThread) {
                 u32 begin = idx * 25;
                 u32 end = begin + 25;
                 for (u32 i = begin; i < end; ++i) {
-                    HgIOThread::Request r{};
-                    r.fences = &fence;
-                    r.fence_count = 1;
-                    r.resource = &vals[i];
-                    r.fn = req_fn;
-                    io->push(r);
+                    hg_io_request(&fence, 1, &vals[i], {}, [](void* pval, HgStringView) {
+                        *(bool*)pval = !*(bool*)pval;
+                    });
                 }
             };
             for (u32 j = 0; j < hg_countof(producers); ++j) {

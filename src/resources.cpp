@@ -122,7 +122,7 @@ void HgResourceManager::unregister_resource(HgResourceID id) {
 }
 
 void HgResourceManager::load(HgFence* fences, usize fence_count, HgStringView path) {
-    auto fn = [](void*, void* pres, HgStringView fpath) {
+    auto fn = [](void* pres, HgStringView fpath) {
         Resource& res = *(Resource*)pres;
 
         hg_arena_scope(scratch, hg_get_scratch());
@@ -159,50 +159,28 @@ void HgResourceManager::load(HgFence* fences, usize fence_count, HgStringView pa
     if (res.ref_count++ > 0)
         return;
 
-    HgIOThread::Request request;
-    request.fences = fences;
-    request.fence_count = fence_count;
-    request.fn = fn;
-    request.resource = &res;
-    request.path = path;
-    hg_io->push(request);
+    hg_io_request(fences, fence_count, &res, path, fn);
 }
 
 void HgResourceManager::unload(HgFence* fences, usize fence_count, HgResourceID id) {
-    auto fn = [](void*, void* pres, HgStringView) {
-        Resource& res = *(Resource*)pres;
-        std::free(res.file->data);
-        res.file->size = 0;
-        res.file->data = nullptr;
-    };
-
     hg_assert(is_registered(id));
     Resource& res = *map.get(id);
     if (--res.ref_count > 0)
         return;
 
-    HgIOThread::Request request;
-    request.fences = fences;
-    request.fence_count = fence_count;
-    request.fn = fn;
-    request.resource = &res;
-    hg_io->push(request);
+    hg_io_request(fences, fence_count, &res, {}, [](void* pres, HgStringView) {
+        Resource& rres = *(Resource*)pres;
+        std::free(rres.file->data);
+        rres.file->size = 0;
+        rres.file->data = nullptr;
+    });
 }
 
 void HgResourceManager::store(HgFence* fences, usize fence_count, HgResourceID id, HgStringView path) {
     hg_assert(is_registered(id));
-
-    auto fn = [](void*, void* pres, HgStringView fpath) {
+    hg_io_request(fences, fence_count, map.get(id), path, [](void* pres, HgStringView fpath) {
         (*(Resource*)pres).file->store(fpath);
-    };
-
-    HgIOThread::Request request;
-    request.fences = fences;
-    request.fence_count = fence_count;
-    request.fn = fn;
-    request.resource = map.get(id);
-    request.path = path;
-    hg_io->push(request);
+    });
 }
 
 void hg_import_png(HgFence* fences, usize fence_count, HgStringView path) {
@@ -211,8 +189,8 @@ void hg_import_png(HgFence* fences, usize fence_count, HgStringView path) {
 
     hg_resources->load(fences, fence_count, path);
 
-    auto fn = [](void*, void* ptexture, HgStringView fpath) {
-        HgBinary& bin = *(HgBinary*)ptexture;
+    hg_io_request(fences, fence_count, &hg_resources->get(id), path, [](void* ptex, HgStringView fpath) {
+        HgBinary& bin = *(HgBinary*)ptex;
 
         int width, height, channels;
         u8* pixels = stbi_load_from_memory((u8*)bin.data, (int)bin.size, &width, &height, &channels, 4);
@@ -239,21 +217,12 @@ void hg_import_png(HgFence* fences, usize fence_count, HgStringView path) {
         std::free(pixels);
         std::free(bin.data);
         bin = new_bin;
-    };
-
-    HgIOThread::Request request;
-    request.fences = fences;
-    request.fence_count = fence_count;
-    request.fn = fn;
-    request.resource = &hg_resources->get(id);
-    request.path = path;
-    hg_io->push(request);
+    });
 }
 
 void hg_export_png(HgFence* fences, usize fence_count, HgResourceID id, HgStringView path) {
     hg_assert(hg_resources->is_registered(id));
-
-    auto fn = [](void*, void* ptexture, HgStringView fpath) {
+    hg_io_request(fences, fence_count, &hg_resources->get(id), path, [](void* ptexture, HgStringView fpath) {
         HgTexture tex = *(HgBinary*)ptexture;
 
         hg_arena_scope(scratch, hg_get_scratch());
@@ -274,15 +243,7 @@ void hg_export_png(HgFence* fences, usize fence_count, HgResourceID id, HgString
         if (depth > 1)
             hg_warn("Cannot export 3d image %s, exporting only the first layer\n", cpath.chars);
         stbi_write_png(cpath.chars, (int)width, (int)height, 4, pixels, (int)(width * sizeof(u32)));
-    };
-
-    HgIOThread::Request request;
-    request.fences = fences;
-    request.fence_count = fence_count;
-    request.fn = fn;
-    request.resource = &hg_resources->get(id);
-    request.path = path;
-    hg_io->push(request);
+    });
 }
 
 HgGpuResourceManager HgGpuResourceManager::create(HgArena& arena, usize max_resources) {
