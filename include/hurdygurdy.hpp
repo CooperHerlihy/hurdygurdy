@@ -3438,7 +3438,7 @@ void hg_load_resource(HgFence* fences, usize fence_count, HgResource id, HgStrin
 /**
  * Unloads a resource (or just decrement the reference count)
  *
- * Note, automatically does not deallocate the resource after unloading
+ * Note, does not automatically deallocate the resource after unloading
  *
  * Parameters
  * - fence The fences to signal on completion
@@ -3553,161 +3553,100 @@ struct HgGpuTexture {
 };
 
 /**
- * A resource manager for gpu resources
+ * Initialize the gpu resource manager (or reinitialize to reset)
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - max_resources The max number of resources which can be allocated
  */
-struct HgGpuResourceManager {
-    /**
-     * A gpu resource
-     */
-    struct Resource {
-        /**
-         * The type of gpu resources
-         */
-        enum class Type : u32 {
-            buffer,
-            texture,
-        };
-
-        /**
-         * The resource
-         */
-        union {
-            /**
-             * The resource as a buffer
-             */
-            HgGpuBuffer buffer;
-            /**
-             * The resource as a texture
-             */
-            HgGpuTexture texture;
-        };
-        /**
-         * The type of the resource
-         */
-        Type type;
-        /**
-         * The resource's reference count
-         */
-        u32 ref_count;
-    };
-
-    static constexpr usize resource_hash(HgResource r) {
-        return r.id;
-    };
-
-    /**
-     * The registered resources
-     */
-    HgHashMap<HgResource, Resource, resource_hash> map;
-
-    /**
-     * Create an empty gpu resource manager
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - max_resources The max number of resources that can be registered
-     *
-     * Returns
-     * - The created gpu resource manager
-     */
-    static HgGpuResourceManager create(HgArena& arena, usize max_resources);
-
-    /**
-     * Reset the resource manager, unloading and unregistering all resources
-     */
-    void reset();
-
-    /**
-     * Register a new resource as a buffer
-     *
-     * Parameters
-     * - id The resource to register
-     */
-    void register_buffer(HgResource id);
-
-    /**
-     * Register a new resources as a texture
-     *
-     * Parameters
-     * - id The resource to register
-     */
-    void register_texture(HgResource id);
-
-    /**
-     * Unregister a resource, and unload if needed
-     */
-    void unregister_resource(HgResource id);
-
-    /**
-     * Returns whether a resource is registered
-     */
-    bool is_registered(HgResource id) {
-        return map.has(id);
-    }
-
-    /**
-     * Returns the gpu buffer resource
-     *
-     * Parameters
-     * - id The resource to get
-     *
-     * Returns
-     * - A reference to the resource
-     */
-    HgGpuBuffer& get_buffer(HgResource id);
-
-    /**
-     * Returns the gpu texture resource
-     *
-     * Parameters
-     * - id The resource to get
-     *
-     * Returns
-     * - A reference to the resource
-     */
-    HgGpuTexture& get_texture(HgResource id);
-
-    /**
-     * Load a resource from the data stored in the cpu side resource manager
-     *
-     * Parameters
-     * - cmd_pool The Vulkan command pool to transfer on
-     * - id The resource to load
-     * - filter The filter the texture should use
-     */
-    void load_from_cpu(VkCommandPool cmd_pool, HgResource id, VkFilter filter);
-
-    /**
-     * Load a resource from disc
-     *
-     * Parameters
-     * - cmd_pool The Vulkan command pool to transfer on
-     * - id The resource to load
-     * - filter The filter the texture should use
-     */
-    void load_from_disc(VkCommandPool cmd_pool, HgStringView path, VkFilter filter);
-
-    /**
-     * Unload a resource
-     *
-     * Parameters
-     * - id The resource to unload
-     */
-    void unload(HgResource id);
-
-    /**
-     * Returns whether a resource is loaded
-     */
-    bool is_loaded(HgResource id) {
-        Resource* r = map.get(id);
-        return r != nullptr && r->ref_count > 0;
-    }
-};
+void hg_gpu_resources_init(HgArena& arena, usize max_resources);
 
 /**
- * The global GPU resource store
+ * Unload and dealloc all gpu resources
  */
-inline HgGpuResourceManager* hg_gpu_resources = nullptr;
+void hg_gpu_resources_reset();
+
+/**
+ * Allocate a new empty gpu buffer
+ *
+ * Parameters
+ * - id The id of the resource
+ */
+void hg_alloc_gpu_buffer(HgResource id);
+
+/**
+ * Allocate a new empty gpu texture
+ *
+ * Parameters
+ * - id The id of the resource
+ */
+void hg_alloc_gpu_texture(HgResource id);
+
+/**
+ * Deallocates a gpu resource (unloading if needed)
+ */
+void hg_dealloc_gpu_resource(HgResource id);
+
+/**
+ * Loads a gpu buffer (or just increments the reference count)
+ *
+ * Note, allocates the gpu buffer if needed, but expects the cpu side loaded
+ *
+ * Parameters
+ * - id The resource to load into
+ * - path The filepath to load from
+ */
+void hg_load_gpu_buffer(HgResource id, VkCommandPool cmd_pool);
+
+/**
+ * Loads a gpu texture (or just increments the reference count)
+ *
+ * Note, allocates the gpu texture if needed, but expects the cpu side loaded
+ *
+ * Parameters
+ * - id The resource to load into
+ * - path The filepath to load from
+ */
+void hg_load_gpu_texture(HgResource id, VkCommandPool cmd_pool, VkFilter filter);
+
+/**
+ * Unloads a gpu resource (or just decrement the reference count)
+ *
+ * Note, does not automatically deallocate the resource after unloading
+ *
+ * Parameters
+ * - id The resource to load into
+ */
+void hg_unload_gpu_resource(HgResource id);
+
+/**
+ * Returns whether a gpu resource is currently loaded
+ */
+bool hg_is_gpu_resource_loaded(HgResource id);
+
+/**
+ * Get a gpu buffer from the global store
+ *
+ * Parameters
+ * - id The resource to get
+ *
+ * Returns
+ * - A pointer to the resource binary, may be empty if not loaded
+ * - nullptr, if the resource is not allocated
+ */
+HgGpuBuffer* hg_get_gpu_buffer(HgResource id);
+
+/**
+ * Get a gpu texture from the global store
+ *
+ * Parameters
+ * - id The resource to get
+ *
+ * Returns
+ * - A pointer to the resource binary, may be empty if not loaded
+ * - nullptr, if the resource is not allocated
+ */
+HgGpuTexture* hg_get_gpu_texture(HgResource id);
 
 /**
  * The handle for an ECS entity

@@ -67,10 +67,16 @@ int main(void) {
 
     HgStringView texture_path = "hg_test_dir/file_image_test.hgtex";
     HgResource texture_id = hg_resource_id(texture_path);
-    hg_gpu_resources->register_texture(texture_id);
+    hg_alloc_gpu_texture(texture_id);
 
-    hg_gpu_resources->load_from_disc(cmd_pool, texture_path, VK_FILTER_NEAREST);
-    hg_defer(hg_gpu_resources->unload(texture_id));
+    {
+        HgFence fence;
+        hg_load_resource(&fence, 1, texture_id, texture_path);
+        fence.wait(INFINITY);
+        hg_load_gpu_texture(texture_id, cmd_pool, VK_FILTER_NEAREST);
+        hg_unload_resource(nullptr, 0, texture_id);
+    }
+    hg_defer(hg_unload_gpu_resource(texture_id));
 
     pipeline2d.add_texture(texture_id);
     hg_defer(pipeline2d.remove_texture(texture_id));

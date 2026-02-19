@@ -281,191 +281,237 @@ void hg_export_png(HgFence* fences, usize fence_count, HgResource id, HgStringVi
     });
 }
 
-HgGpuResourceManager HgGpuResourceManager::create(HgArena& arena, usize max_resources) {
-    HgGpuResourceManager rm;
-    rm.map = rm.map.create(arena, max_resources);
-    return rm;
+/**
+ * The type of gpu resources
+ */
+enum class GpuResourceType : u32 {
+    buffer,
+    texture,
+};
+
+/**
+ * A gpu resource
+ */
+struct GpuResource {
+
+    /**
+     * The resource
+     */
+    union {
+        /**
+         * The resource as a buffer
+         */
+        HgGpuBuffer buffer;
+        /**
+         * The resource as a texture
+         */
+        HgGpuTexture texture;
+    };
+    /**
+     * The type of the resource
+     */
+    GpuResourceType type;
+    /**
+     * The resource's reference count
+     */
+    u32 ref_count;
+};
+
+/**
+ * The registered resources
+ */
+HgHashMap<HgResource, GpuResource, resource_hash> gpu_map;
+
+void hg_gpu_resources_init(HgArena& arena, usize max_resources) {
+    gpu_map = gpu_map.create(arena, max_resources);
 }
 
-void HgGpuResourceManager::reset() {
-    map.for_each([&](HgResource id, Resource& r) {
+void hg_gpu_resources_reset() {
+    gpu_map.for_each([&](HgResource id, GpuResource& r) {
         if (r.ref_count != 0) {
             r.ref_count = 1;
-            unload(id);
+            hg_unload_gpu_resource(id);
         }
     });
-    map.reset();
+    gpu_map.reset();
 }
 
-void HgGpuResourceManager::register_buffer(HgResource id) {
-    if (!map.has(id)) {
-        Resource* r = map.get(id);
+void hg_alloc_gpu_buffer(HgResource id) {
+    if (!gpu_map.has(id)) {
+        GpuResource* r = gpu_map.get(id);
         if (r != nullptr) {
-            if (r->type != Resource::Type::buffer)
+            if (r->type != GpuResourceType::buffer)
                 hg_warn("Attempted to register gpu resource not of type buffer as a buffer\n");
         } else {
-            r = &map.insert(id, {});
-            r->type = Resource::Type::buffer;
+            r = &gpu_map.insert(id, {});
+            r->type = GpuResourceType::buffer;
         }
     }
 }
 
-void HgGpuResourceManager::register_texture(HgResource id) {
-    if (!map.has(id)) {
-        Resource* r = map.get(id);
+void hg_alloc_gpu_texture(HgResource id) {
+    if (!gpu_map.has(id)) {
+        GpuResource* r = gpu_map.get(id);
         if (r != nullptr) {
-            if (r->type != Resource::Type::texture)
+            if (r->type != GpuResourceType::texture)
                 hg_warn("Attempted to register gpu resource not of type texture as a texture\n");
         } else {
-            r = &map.insert(id, {});
-            r->type = Resource::Type::texture;
+            r = &gpu_map.insert(id, {});
+            r->type = GpuResourceType::texture;
         }
     }
 }
 
-void HgGpuResourceManager::unregister_resource(HgResource id) {
-    Resource* r = map.get(id);
+void hg_dealloc_gpu_resource(HgResource id) {
+    GpuResource* r = gpu_map.get(id);
     if (r != nullptr) {
         if (r->ref_count > 0) {
             r->ref_count = 1;
-            unload(id);
+            hg_unload_gpu_resource(id);
         }
-        map.remove(id);
+        gpu_map.remove(id);
     }
 }
 
-HgGpuBuffer& HgGpuResourceManager::get_buffer(HgResource id) {
-    Resource* r = map.get(id);
+void hg_load_gpu_buffer(HgResource id, VkCommandPool cmd_pool) {
+    if (!gpu_map.has(id))
+        hg_alloc_gpu_buffer(id);
+
+    GpuResource* r = gpu_map.get(id);
     hg_assert(r != nullptr);
-    if (r->type != Resource::Type::buffer)
-        hg_warn("Accessing non buffer as gpu buffer\n");
-    return r->buffer;
-}
-
-HgGpuTexture& HgGpuResourceManager::get_texture(HgResource id) {
-    Resource* r = map.get(id);
-    hg_assert(r != nullptr);
-    if (r->type != Resource::Type::texture)
-        hg_warn("Accessing non texture as gpu texture\n");
-    return r->texture;
-}
-
-void HgGpuResourceManager::load_from_cpu(VkCommandPool cmd_pool, HgResource id, VkFilter filter) {
-    hg_assert(is_registered(id));
-
-    Resource& r = *map.get(id);
-    if (r.ref_count++ > 0)
+    hg_assert(r->type == GpuResourceType::buffer);
+    if (r->ref_count++ > 0)
         return;
 
-    switch (r.type) {
-        case Resource::Type::buffer: // : TODO
+    // load gpu buffer : TODO
+    (void)cmd_pool;
+    hg_error("load gpu buffer not implements : TODO\n");
+}
+
+void hg_load_gpu_texture(HgResource id, VkCommandPool cmd_pool, VkFilter filter) {
+    if (!gpu_map.has(id))
+        hg_alloc_gpu_texture(id);
+
+    GpuResource* r = gpu_map.get(id);
+    hg_assert(r != nullptr);
+    hg_assert(r->type == GpuResourceType::texture);
+    if (r->ref_count++ > 0)
+        return;
+
+    HgTexture data = *hg_get_resource(id);
+    hg_assert(data.file.data != nullptr);
+
+    HgGpuTexture& tex = *hg_get_gpu_texture(id);
+    if (!data.get_info(tex.format, tex.width, tex.height, tex.depth)) {
+        hg_warn("Could not get info to load texture\n");
+        return;
+    }
+    hg_assert(tex.format != 0);
+    hg_assert(tex.width != 0);
+    hg_assert(tex.height != 0);
+    hg_assert(tex.depth != 0);
+
+    VkImageCreateInfo image_info{};
+    image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    image_info.imageType = VK_IMAGE_TYPE_2D;
+    image_info.format = tex.format;
+    image_info.extent = {tex.width, tex.height, tex.depth};
+    image_info.mipLevels = 1;
+    image_info.arrayLayers = 1;
+    image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    image_info.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+
+    VmaAllocationCreateInfo alloc_info{};
+    alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
+
+    vmaCreateImage(hg_vk_vma, &image_info, &alloc_info, &tex.image, &tex.allocation, nullptr);
+    hg_assert(tex.allocation != nullptr);
+    hg_assert(tex.image != nullptr);
+
+    HgVkImageStagingWriteConfig staging_config{};
+    staging_config.dst_image = tex.image;
+    staging_config.subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    staging_config.subresource.layerCount = 1;
+    staging_config.src_data = data.get_pixels();
+    staging_config.width = tex.width;
+    staging_config.height = tex.height;
+    staging_config.depth = tex.depth;
+    staging_config.format = tex.format;
+    staging_config.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    hg_vk_image_staging_write(hg_vk_queue, cmd_pool, staging_config);
+
+    VkImageViewCreateInfo view_info{};
+    view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    view_info.image = tex.image;
+    view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    view_info.format = tex.format;
+    view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    view_info.subresourceRange.levelCount = 1;
+    view_info.subresourceRange.layerCount = 1;
+
+    vkCreateImageView(hg_vk_device, &view_info, nullptr, &tex.view);
+    hg_assert(tex.view != nullptr);
+
+    VkSamplerCreateInfo sampler_info{};
+    sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    sampler_info.magFilter = filter;
+    sampler_info.minFilter = filter;
+    sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+
+    vkCreateSampler(hg_vk_device, &sampler_info, nullptr, &tex.sampler);
+    hg_assert(tex.sampler != nullptr);
+}
+
+void hg_unload_gpu_resource(HgResource id) {
+    GpuResource* r = gpu_map.get(id);
+    if (r == nullptr)
+        return;
+    if (--r->ref_count > 0)
+        return;
+
+    switch (r->type) {
+        case GpuResourceType::buffer:
+            vmaDestroyBuffer(hg_vk_vma, r->buffer.buffer, r->buffer.allocation);
+            r->buffer = {};
             break;
-        case Resource::Type::texture: {
-            HgTexture data = *hg_get_resource(id);
-            hg_assert(data.file.data != nullptr);
-
-            HgGpuTexture& tex = get_texture(id);
-            if (!data.get_info(tex.format, tex.width, tex.height, tex.depth)) {
-                hg_warn("Could not get info to load texture\n");
-                return;
-            }
-            hg_assert(tex.format != 0);
-            hg_assert(tex.width != 0);
-            hg_assert(tex.height != 0);
-            hg_assert(tex.depth != 0);
-
-            VkImageCreateInfo image_info{};
-            image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-            image_info.imageType = VK_IMAGE_TYPE_2D;
-            image_info.format = tex.format;
-            image_info.extent = {tex.width, tex.height, tex.depth};
-            image_info.mipLevels = 1;
-            image_info.arrayLayers = 1;
-            image_info.samples = VK_SAMPLE_COUNT_1_BIT;
-            image_info.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-
-            VmaAllocationCreateInfo alloc_info{};
-            alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
-
-            vmaCreateImage(hg_vk_vma, &image_info, &alloc_info, &tex.image, &tex.allocation, nullptr);
-            hg_assert(tex.allocation != nullptr);
-            hg_assert(tex.image != nullptr);
-
-            HgVkImageStagingWriteConfig staging_config{};
-            staging_config.dst_image = tex.image;
-            staging_config.subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            staging_config.subresource.layerCount = 1;
-            staging_config.src_data = data.get_pixels();
-            staging_config.width = tex.width;
-            staging_config.height = tex.height;
-            staging_config.depth = tex.depth;
-            staging_config.format = tex.format;
-            staging_config.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-            hg_vk_image_staging_write(hg_vk_queue, cmd_pool, staging_config);
-
-            VkImageViewCreateInfo view_info{};
-            view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-            view_info.image = tex.image;
-            view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-            view_info.format = tex.format;
-            view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            view_info.subresourceRange.levelCount = 1;
-            view_info.subresourceRange.layerCount = 1;
-
-            vkCreateImageView(hg_vk_device, &view_info, nullptr, &tex.view);
-            hg_assert(tex.view != nullptr);
-
-            VkSamplerCreateInfo sampler_info{};
-            sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-            sampler_info.magFilter = filter;
-            sampler_info.minFilter = filter;
-            sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-
-            vkCreateSampler(hg_vk_device, &sampler_info, nullptr, &tex.sampler);
-            hg_assert(tex.sampler != nullptr);
-        } break;
+        case GpuResourceType::texture:
+            vkDestroySampler(hg_vk_device, r->texture.sampler, nullptr);
+            vkDestroyImageView(hg_vk_device, r->texture.view, nullptr);
+            vmaDestroyImage(hg_vk_vma, r->texture.image, r->texture.allocation);
+            r->texture = {};
+            break;
         default:
             hg_assert(false);
     }
 }
 
-void HgGpuResourceManager::load_from_disc(VkCommandPool cmd_pool, HgStringView path, VkFilter filter) {
-    HgResource id = hg_resource_id(path);
-    hg_assert(is_registered(id));
-
-    if (!is_loaded(id)) {
-        HgFence fence;
-        hg_alloc_resource(id);
-        hg_load_resource(&fence, 1, id, path);
-        fence.wait(INFINITY);
-        load_from_cpu(cmd_pool, id, filter);
-        hg_unload_resource(nullptr, 0, id);
-    }
+bool hg_is_gpu_resource_loaded(HgResource id) {
+    GpuResource* r = gpu_map.get(id);
+    return r != nullptr && r->ref_count > 0;
 }
 
-void HgGpuResourceManager::unload(HgResource id) {
-    hg_assert(is_registered(id));
-
-    Resource& r = *map.get(id);
-    if (--r.ref_count > 0)
-        return;
-
-    switch (r.type) {
-        case Resource::Type::buffer:
-            vmaDestroyBuffer(hg_vk_vma, r.buffer.buffer, r.buffer.allocation);
-            r.buffer = {};
-            break;
-        case Resource::Type::texture:
-            vkDestroySampler(hg_vk_device, r.texture.sampler, nullptr);
-            vkDestroyImageView(hg_vk_device, r.texture.view, nullptr);
-            vmaDestroyImage(hg_vk_vma, r.texture.image, r.texture.allocation);
-            r.texture = {};
-            break;
-        default:
-            hg_assert(false);
+HgGpuBuffer* hg_get_gpu_buffer(HgResource id) {
+    GpuResource* r = gpu_map.get(id);
+    if (r == nullptr)
+        return nullptr;
+    if (r->type != GpuResourceType::buffer) {
+        hg_warn("Attempted to access non buffer as gpu buffer\n");
+        return nullptr;
     }
+    return &r->buffer;
+}
+
+HgGpuTexture* hg_get_gpu_texture(HgResource id) {
+    GpuResource* r = gpu_map.get(id);
+    if (r == nullptr)
+        return nullptr;
+    if (r->type != GpuResourceType::texture) {
+        hg_warn("Attempted to access non texture as gpu texture\n");
+        return nullptr;
+    }
+    return &r->texture;
 }
 

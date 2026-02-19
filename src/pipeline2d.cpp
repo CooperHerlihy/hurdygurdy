@@ -181,9 +181,9 @@ void HgPipeline2D::destroy() {
 }
 
 void HgPipeline2D::add_texture(HgResource texture_id) {
-    hg_assert(hg_gpu_resources->is_loaded(texture_id));
+    hg_assert(hg_is_gpu_resource_loaded(texture_id));
 
-    HgGpuTexture& texture = hg_gpu_resources->get_texture(texture_id);
+    HgGpuTexture& texture = *hg_get_gpu_texture(texture_id);
     if (texture_sets.has(texture_id))
         return;
 
