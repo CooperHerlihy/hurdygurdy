@@ -1,12 +1,11 @@
 #include "hurdygurdy.hpp"
 
 void hg_init(void) {
-    hg_init_scratch();
+    hg_scratch_memory_init();
     HgArena& arena = hg_get_scratch();
 
-    usize thread_count = hg_hardware_concurrency()
-        - 2; // main thread, io thread
-    hg_thread_pool_init(arena, 4096, thread_count);
+    hg_thread_pool_init(arena, 4096, hg_hardware_concurrency()
+        - 2); // main thread, io thread
     hg_io_thread_init(arena, 4096);
     hg_resources_init(arena, 4096);
     hg_gpu_resources_init(arena, 4096);
@@ -25,6 +24,7 @@ void hg_exit(void) {
     hg_resources_reset();
     hg_io_thread_deinit();
     hg_thread_pool_deinit();
-    hg_deinit_scratch();
+
+    hg_scratch_memory_deinit();
 }
 

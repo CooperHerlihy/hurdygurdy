@@ -227,8 +227,8 @@ void hg_io_thread_init(HgArena& arena, usize queue_size) {
 
     io_thread_should_close.store(false);
     io_thread = std::thread([]() {
-        hg_init_scratch();
-        hg_defer(hg_deinit_scratch());
+        hg_scratch_memory_init();
+        hg_defer(hg_scratch_memory_deinit());
 
         for (;;) {
             if (io_thread_should_close.load())

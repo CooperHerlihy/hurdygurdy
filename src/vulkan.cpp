@@ -1948,7 +1948,6 @@ void hg_vk_image_staging_write(
     transfer_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
     transfer_barrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
     transfer_barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    transfer_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     transfer_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
     transfer_barrier.image = config.dst_image;
     transfer_barrier.subresourceRange.aspectMask = config.subresource.aspectMask;
@@ -1970,27 +1969,240 @@ void hg_vk_image_staging_write(
 
     vkCmdCopyBufferToImage(cmd, stage, config.dst_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
-    if (config.layout != VK_IMAGE_LAYOUT_UNDEFINED) {
-        VkImageMemoryBarrier2 end_barrier{};
-        end_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-        end_barrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-        end_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        end_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        end_barrier.newLayout = config.layout;
-        end_barrier.image = config.dst_image;
-        end_barrier.subresourceRange.aspectMask = config.subresource.aspectMask;
-        end_barrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
-        end_barrier.subresourceRange.levelCount = 1;
-        end_barrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
-        end_barrier.subresourceRange.layerCount = config.subresource.layerCount;
+    VkImageMemoryBarrier2 end_barrier{};
+    end_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    end_barrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    end_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    end_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    end_barrier.newLayout = config.layout;
+    end_barrier.image = config.dst_image;
+    end_barrier.subresourceRange.aspectMask = config.subresource.aspectMask;
+    end_barrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
+    end_barrier.subresourceRange.levelCount = 1;
+    end_barrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
+    end_barrier.subresourceRange.layerCount = config.subresource.layerCount;
 
-        VkDependencyInfo end_dep{};
-        end_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-        end_dep.imageMemoryBarrierCount = 1;
-        end_dep.pImageMemoryBarriers = &end_barrier;
+    VkDependencyInfo end_dep{};
+    end_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    end_dep.imageMemoryBarrierCount = 1;
+    end_dep.pImageMemoryBarriers = &end_barrier;
 
-        vkCmdPipelineBarrier2(cmd, &end_dep);
-    }
+    vkCmdPipelineBarrier2(cmd, &end_dep);
+
+    vkEndCommandBuffer(cmd);
+
+    VkFenceCreateInfo fence_info{};
+    fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    VkFence fence = nullptr;
+    vkCreateFence(hg_vk_device, &fence_info, nullptr, &fence);
+    hg_defer(vkDestroyFence(hg_vk_device, fence, nullptr));
+
+    VkSubmitInfo submit{};
+    submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit.commandBufferCount = 1;
+    submit.pCommandBuffers = &cmd;
+
+    vkQueueSubmit(transfer_queue, 1, &submit, fence);
+    vkWaitForFences(hg_vk_device, 1, &fence, VK_TRUE, UINT64_MAX);
+}
+
+void hg_vk_image_staging_write_cubemap(
+    VkQueue transfer_queue,
+    VkCommandPool cmd_pool,
+    const HgVkImageStagingWriteConfig& config
+) {
+    hg_assert(hg_vk_device != nullptr);
+    hg_assert(hg_vk_vma != nullptr);
+    hg_assert(cmd_pool != nullptr);
+    hg_assert(transfer_queue != nullptr);
+    hg_assert(config.dst_image != nullptr);
+    hg_assert(config.subresource.baseArrayLayer == 0);
+    hg_assert(config.subresource.layerCount == 6);
+    hg_assert(config.src_data != nullptr);
+    hg_assert(config.width > 0);
+    hg_assert(config.height > 0);
+    hg_assert(config.depth == 0 || config.depth == 1);
+    hg_assert(config.format != VK_FORMAT_UNDEFINED);
+
+    usize size = config.width
+               * config.height
+               * hg_vk_format_to_size(config.format);
+
+    VkBufferCreateInfo buffer_info{};
+    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buffer_info.size = size * 4 * 3;
+    buffer_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+
+    VmaAllocationCreateInfo buffer_alloc_info{};
+    buffer_alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    buffer_alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
+
+    VkBuffer buffer = nullptr;
+    VmaAllocation buffer_alloc = nullptr;
+    vmaCreateBuffer(hg_vk_vma, &buffer_info, &buffer_alloc_info, &buffer, &buffer_alloc, nullptr);
+    vmaCopyMemoryToAllocation(hg_vk_vma, config.src_data, buffer_alloc, 0, size);
+    hg_defer(vmaDestroyBuffer(hg_vk_vma, buffer, buffer_alloc));
+
+    VkImageCreateInfo stage_info{};
+    stage_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    stage_info.imageType = VK_IMAGE_TYPE_2D;
+    stage_info.format = config.format;
+    stage_info.extent = {config.width, config.height, 1};
+    stage_info.mipLevels = 1;
+    stage_info.arrayLayers = 1;
+    stage_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    stage_info.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT
+                     | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+
+    VmaAllocationCreateInfo stage_alloc_info{};
+    stage_alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
+
+    VkImage stage = nullptr;
+    VmaAllocation stage_alloc = nullptr;
+    vmaCreateImage(hg_vk_vma, &stage_info, &stage_alloc_info, &stage, &stage_alloc, nullptr);
+    hg_defer(vmaDestroyImage(hg_vk_vma, stage, stage_alloc));
+
+    VkCommandBufferAllocateInfo cmd_info{};
+    cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    cmd_info.commandPool = cmd_pool;
+    cmd_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    cmd_info.commandBufferCount = 1;
+
+    VkCommandBuffer cmd = nullptr;
+    vkAllocateCommandBuffers(hg_vk_device, &cmd_info, &cmd);
+    hg_defer(vkFreeCommandBuffers(hg_vk_device, cmd_pool, 1, &cmd));
+
+    VkCommandBufferBeginInfo begin_info{};
+    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    vkBeginCommandBuffer(cmd, &begin_info);
+
+    VkImageMemoryBarrier2 stage_barrier{};
+    stage_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    stage_barrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    stage_barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    stage_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    stage_barrier.image = config.dst_image;
+    stage_barrier.subresourceRange.aspectMask = config.subresource.aspectMask;
+    stage_barrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
+    stage_barrier.subresourceRange.levelCount = 1;
+    stage_barrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
+    stage_barrier.subresourceRange.layerCount = config.subresource.layerCount;
+
+    VkDependencyInfo stage_dep{};
+    stage_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    stage_dep.imageMemoryBarrierCount = 1;
+    stage_dep.pImageMemoryBarriers = &stage_barrier;
+
+    vkCmdPipelineBarrier2(cmd, &stage_dep);
+
+    VkBufferImageCopy stage_region{};
+    stage_region.imageSubresource = config.subresource;
+    stage_region.imageExtent = {config.width, config.height, config.depth};
+
+    vkCmdCopyBufferToImage(cmd, buffer, stage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &stage_region);
+
+    VkImageMemoryBarrier2 transfer_barriers[2]{};
+
+    transfer_barriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    transfer_barriers[0].srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    transfer_barriers[0].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    transfer_barriers[0].dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    transfer_barriers[0].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    transfer_barriers[0].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    transfer_barriers[0].newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    transfer_barriers[0].image = stage;
+    transfer_barriers[0].subresourceRange.aspectMask = config.subresource.aspectMask;
+    transfer_barriers[0].subresourceRange.baseMipLevel = 0;
+    transfer_barriers[0].subresourceRange.levelCount = 1;
+    transfer_barriers[0].subresourceRange.baseArrayLayer = 0;
+    transfer_barriers[0].subresourceRange.layerCount = 1;
+
+    transfer_barriers[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    transfer_barriers[1].dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    transfer_barriers[1].dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    transfer_barriers[1].newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    transfer_barriers[1].image = config.dst_image;
+    transfer_barriers[1].subresourceRange.aspectMask = config.subresource.aspectMask;
+    transfer_barriers[1].subresourceRange.baseMipLevel = config.subresource.mipLevel;
+    transfer_barriers[1].subresourceRange.levelCount = 1;
+    transfer_barriers[1].subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
+    transfer_barriers[1].subresourceRange.layerCount = config.subresource.layerCount;
+
+    VkDependencyInfo transfer_dep{};
+    transfer_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    transfer_dep.imageMemoryBarrierCount = hg_countof(transfer_barriers);
+    transfer_dep.pImageMemoryBarriers = transfer_barriers;
+
+    vkCmdPipelineBarrier2(cmd, &transfer_dep);
+
+    VkImageCopy regions[6]{};
+
+    regions[0].srcSubresource = {config.subresource.aspectMask, 0, 0, 1};
+    regions[0].srcOffset = {(int)config.width * 2, (int)config.height * 1, 0};
+    regions[0].dstSubresource = {config.subresource.aspectMask, config.subresource.mipLevel, 0, 1};
+    regions[0].dstOffset = {};
+    regions[0].extent = {config.width, config.height, 1};
+
+    regions[1].srcSubresource = {config.subresource.aspectMask, 0, 0, 1};
+    regions[1].srcOffset = {(int)config.width * 0, (int)config.height * 1, 0};
+    regions[1].dstSubresource = {config.subresource.aspectMask, config.subresource.mipLevel, 1, 1};
+    regions[1].dstOffset = {};
+    regions[1].extent = {config.width, config.height, 1};
+
+    regions[2].srcSubresource = {config.subresource.aspectMask, 0, 0, 1};
+    regions[2].srcOffset = {(int)config.width * 1, (int)config.height * 0, 0};
+    regions[2].dstSubresource = {config.subresource.aspectMask, config.subresource.mipLevel, 2, 1};
+    regions[2].dstOffset = {};
+    regions[2].extent = {config.width, config.height, 1};
+
+    regions[3].srcSubresource = {config.subresource.aspectMask, 0, 0, 1};
+    regions[3].srcOffset = {(int)config.width * 1, (int)config.height * 2, 0};
+    regions[3].dstSubresource = {config.subresource.aspectMask, config.subresource.mipLevel, 3, 1};
+    regions[3].dstOffset = {};
+    regions[3].extent = {config.width, config.height, 1};
+
+    regions[4].srcSubresource = {config.subresource.aspectMask, 0, 0, 1};
+    regions[4].srcOffset = {(int)config.width * 1, (int)config.height * 1, 0};
+    regions[4].dstSubresource = {config.subresource.aspectMask, config.subresource.mipLevel, 4, 1};
+    regions[4].dstOffset = {};
+    regions[4].extent = {config.width, config.height, 1};
+
+    regions[5].srcSubresource = {config.subresource.aspectMask, 0, 0, 1};
+    regions[5].srcOffset = {(int)config.width * 3, (int)config.height * 1, 0};
+    regions[5].dstSubresource = {config.subresource.aspectMask, config.subresource.mipLevel, 5, 1};
+    regions[5].dstOffset = {};
+    regions[5].extent = {config.width, config.height, 1};
+
+    vkCmdCopyImage(
+        cmd,
+        stage,
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        config.dst_image,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        hg_countof(regions),
+        regions);
+
+    VkImageMemoryBarrier2 end_barrier{};
+    end_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    end_barrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    end_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    end_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    end_barrier.newLayout = config.layout;
+    end_barrier.image = config.dst_image;
+    end_barrier.subresourceRange.aspectMask = config.subresource.aspectMask;
+    end_barrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
+    end_barrier.subresourceRange.levelCount = 1;
+    end_barrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
+    end_barrier.subresourceRange.layerCount = config.subresource.layerCount;
+
+    VkDependencyInfo end_dep{};
+    end_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    end_dep.imageMemoryBarrierCount = 1;
+    end_dep.pImageMemoryBarriers = &end_barrier;
+
+    vkCmdPipelineBarrier2(cmd, &end_dep);
 
     vkEndCommandBuffer(cmd);
 

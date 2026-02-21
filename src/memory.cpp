@@ -3,7 +3,7 @@
 static constexpr usize hg_internal_arena_count = 2;
 static thread_local HgArena hg_internal_arenas[hg_internal_arena_count]{};
 
-void hg_init_scratch() {
+void hg_scratch_memory_init() {
     for (usize i = 0; i < hg_internal_arena_count; ++i) {
         if (hg_internal_arenas[i].memory == nullptr) {
             usize arena_size = (u32)-1;
@@ -12,7 +12,7 @@ void hg_init_scratch() {
     }
 }
 
-void hg_deinit_scratch() {
+void hg_scratch_memory_deinit() {
     for (usize i = 0; i < hg_internal_arena_count; ++i) {
         if (hg_internal_arenas[i].memory != nullptr) {
             std::free(hg_internal_arenas[i].memory);

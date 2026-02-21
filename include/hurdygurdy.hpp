@@ -305,8 +305,8 @@ typedef double_t f64;
  * - Arena allocation
  * - Thread pool
  * - IO thread
- * - Entity component system
  * - Resource managers
+ * - Entity component system
  * - Hardware graphics
  * - OS windowing
  */
@@ -1693,12 +1693,12 @@ struct HgArena {
 /**
  * Initializes scratch arenas
  */
-void hg_init_scratch();
+void hg_scratch_memory_init();
 
 /**
  * Deinitializes scratch arenas
  */
-void hg_deinit_scratch();
+void hg_scratch_memory_deinit();
 
 /**
  * Get a scratch arena for temporary allocations, assuming no conflicts
@@ -4741,6 +4741,25 @@ void hg_vk_image_staging_write(
     const HgVkImageStagingWriteConfig& config);
 
 /**
+ * Writes to a Vulkan device local cubemap image through a staging buffer
+ *
+ * Note, config.width and config.height are interpreted as the width and height
+ * of each face of the cubemap and src_data is assumed to be layed out as:
+ *  #
+ * ####
+ *  #
+ *
+ * Parameters
+ * - transfer_queue The Vulkan queue to transfer on, must not be nullptr
+ * - cmd_pool The command pool for the queue, must not be nullptr
+ * - config The configuration for the write
+ */
+void hg_vk_image_staging_write_cubemap(
+    VkQueue transfer_queue,
+    VkCommandPool cmd_pool,
+    const HgVkImageStagingWriteConfig &config);
+
+/**
  * Configuration for a staging image write
  */
 struct HgVkImageStagingReadConfig {
@@ -4790,8 +4809,6 @@ void hg_vk_image_staging_read(
     VkQueue transfer_queue,
     VkCommandPool cmd_pool,
     const HgVkImageStagingReadConfig& config);
-
-// cubemap read/write : TODO
 
 /**
  * Generates mipmaps from the base level
