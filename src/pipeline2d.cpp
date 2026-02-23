@@ -216,14 +216,9 @@ void HgPipeline2D::add_texture(HgResource texture_id) {
 }
 
 void HgPipeline2D::remove_texture(HgResource texture_id) {
-    if (!texture_sets.has(texture_id))
-        return;
-
-    VkDescriptorSet* set = texture_sets.get(texture_id);
-    if (set != nullptr) {
-        texture_sets.remove(texture_id);
-        vkFreeDescriptorSets(hg_vk_device, descriptor_pool, 1, set);
-    }
+    VkDescriptorSet set;
+    if (texture_sets.remove(texture_id, &set))
+        vkFreeDescriptorSets(hg_vk_device, descriptor_pool, 1, &set);
 }
 
 void HgPipeline2D::update_projection(const HgMat4& projection) {
@@ -248,11 +243,16 @@ void HgPipeline2D::draw(VkCommandBuffer cmd) {
     hg_assert(cmd != nullptr);
     hg_assert(hg_ecs_is_registered<HgSprite>());
 
-    hg_ecs_sort<HgSprite>(nullptr, [](void*, HgEntity lhs, HgEntity rhs) -> bool {
-        hg_assert(lhs.has<HgTransform>());
-        hg_assert(lhs.has<HgTransform>());
-        return lhs.get<HgTransform>().position.z > rhs.get<HgTransform>().position.z;
-    });
+    if (hg_ecs_is_registered<HgCamera3D>() && hg_ecs_component_count<HgCamera3D>() > 0) {
+        hg_ecs_sort<HgSprite>(nullptr, [](void*, HgEntity lhs, HgEntity rhs) -> bool {
+            hg_assert(lhs.has<HgTransform>());
+            hg_assert(lhs.has<HgTransform>());
+            HgVec3 camera_pos = hg_ecs_components<HgCamera3D>()[0].position;
+            HgVec3 lhs_diff = lhs.get<HgTransform>().position - camera_pos;
+            HgVec3 rhs_diff = rhs.get<HgTransform>().position - camera_pos;
+            return hg_dot(lhs_diff, lhs_diff) > hg_dot(rhs_diff, rhs_diff);
+        });
+    }
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
     vkCmdBindDescriptorSets(

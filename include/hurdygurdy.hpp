@@ -4234,6 +4234,36 @@ struct HgTransform {
 };
 
 /**
+ * The world camera component
+ */
+struct HgCamera3D {
+    /**
+     * The camera's position in the world
+     *
+     * x: -left, +right
+     *
+     * y: -up, +down
+     *
+     * z: -backward, +forward
+     */
+    HgVec3 position = {0.0f, 0.0f, 0.0f};
+    /**
+     * The camera's view scaling
+     *
+     * x: horizonatal
+     *
+     * y: vertical
+     *
+     * z: depth
+     */
+    HgVec3 scale = {1.0f, 1.0f, 1.0f};
+    /**
+     * The camera's rotation in the world
+     */
+    HgQuat rotation = {1.0f, 0.0f, 0.0f, 0.0f};
+};
+
+/**
  * A sprite component rendered by the 2d pipeline
  */
 struct HgSprite {
@@ -4250,6 +4280,23 @@ struct HgSprite {
      */
     HgVec2 uv_size;
 };
+
+void hg_pipeline_2d_init(
+    HgArena& arena,
+    usize max_textures,
+    VkFormat color_format,
+    VkFormat depth_format);
+
+void hg_pipeline_2d_deinit();
+
+void hg_pipeline_2d_add_texture(HgResource texture);
+void hg_pipeline_2d_remove_texture(HgResource texture);
+bool hg_pipeline_2d_has_texture(HgResource texture);
+
+void hg_draw_2d(VkCommandBuffer cmd);
+
+void hg_update_projection(const HgMat4& projection);
+void hg_update_view(const HgMat4& view);
 
 struct HgPipeline2D {
 
@@ -4304,12 +4351,35 @@ void hg_graphics_init();
  */
 void hg_graphics_deinit();
 
+/**
+ * The global Vulkan instance
+ */
 inline VkInstance hg_vk_instance = nullptr;
+/**
+ * The global Vulkan physical device
+ */
 inline VkPhysicalDevice hg_vk_physical_device = nullptr;
+/**
+ * The global Vulkan logical device
+ */
 inline VkDevice hg_vk_device = nullptr;
+/**
+ * The global Vulkan memory allocator
+ */
 inline VmaAllocator hg_vk_vma = nullptr;
+
+/**
+ * The global Vulkan queue
+ */
 inline VkQueue hg_vk_queue = nullptr;
+/**
+ * The global Vulkan queue family
+ */
 inline u32 hg_vk_queue_family = (u32)-1;
+/**
+ * The global Vulkan command pool
+ */
+inline VkCommandPool hg_vk_cmd_pool = nullptr;
 
 /**
  * Turns a VkResult into a string
@@ -4413,14 +4483,6 @@ VkDevice hg_vk_create_single_queue_device();
 
 // find gpu with multiple potential queues : TODO
 // create device with multiple potential queues : TODO
-
-/**
- * Creates a general purpose Vulkan memory allocator
- *
- * Returns
- * - The created Vulkan memory allocator, will never be nullptr;
- */
-VmaAllocator hg_vk_create_vma_allocator();
 
 /**
  * Configuration for Vulkan pipelines
@@ -4552,10 +4614,10 @@ struct HgSwapchainData {
  * Creates a Vulkan swapchain
  *
  * Parameters
- * - device The Vulkan device, must not be nullptr
- * - gpu The physical device to query capabilities, must not be nullptr
  * - old_swapchain The old swapchain, may be nullptr
  * - surface The surface to create from
+ * - width The width of the swapchain
+ * - height The height of the swapchain
  * - image_usage How the swapchain's images will be used
  * - desired_mode The preferred present mode (fallback to FIFO)
  *
@@ -4565,6 +4627,7 @@ struct HgSwapchainData {
 HgSwapchainData hg_vk_create_swapchain(
     VkSwapchainKHR old_swapchain,
     VkSurfaceKHR surface,
+    u32 width, u32 height,
     VkImageUsageFlags image_usage,
     VkPresentModeKHR desired_mode);
 
@@ -4969,6 +5032,31 @@ enum class HgKey {
     count,
 };
 
+/**
+ * Configuration for a window
+ */
+struct HgWindowConfig {
+    /**
+     * The title of the window
+     */
+    const char* title;
+    /**
+     * Whether the window should be windowed or fullscreen
+     */
+    bool windowed;
+    /**
+     * The width in pixels if windowed, otherwise ignored
+     */
+    u32 width;
+    /**
+     * The height in pixels if windowed, otherwise ignored
+     */
+    u32 height;
+};
+
+/**
+ * A window
+ */
 struct HgWindow {
     struct Internals;
 
@@ -4976,28 +5064,6 @@ struct HgWindow {
      * Platform specific resources for a window
      */
     Internals* internals;
-
-    /**
-     * Configuration for a window
-     */
-    struct Config {
-        /**
-         * The title of the window
-         */
-        const char* title;
-        /**
-         * Whether the window should be windowed or fullscreen
-         */
-        bool windowed;
-        /**
-         * The width in pixels if windowed, otherwise ignored
-         */
-        u32 width;
-        /**
-         * The height in pixels if windowed, otherwise ignored
-         */
-        u32 height;
-    };
 
     /**
      * Creates a window
@@ -5009,7 +5075,7 @@ struct HgWindow {
      * Returns
      * - The created window, will never be nullptr
      */
-    static HgWindow create(HgArena& arena, const Config& config);
+    static HgWindow create(HgArena& arena, const HgWindowConfig& config);
 
     /**
      * Destroys the window
@@ -5017,7 +5083,7 @@ struct HgWindow {
     void destroy();
 
     /**
-     * Sets the windows icons : TODO
+     * Sets the window icon : TODO
      *
      * Parameters
      * - icon_data The pixels of the image to set the icon to, must not be nullptr
@@ -5065,21 +5131,17 @@ struct HgWindow {
     void set_cursor_image(u32* data, u32 width, u32 height);
 
     /**
-     * Checks if the window was closed via close button or window manager
+     * Returns whether the window was closed via close button or window manager
      *
-     * hg_window_close() is not automatically called when this function returns
+     * destroy() is not automatically called when this function returns
      * true, and may be called manually
-     *
-     * Returns
-     * - whether the window was closed
      */
     bool was_closed();
 
     /**
-     * Checks if the window was resized
+     * Returns whether the window was resized
      *
-     * Returns
-     * - whether the window was resized
+     * If it was, the swapchain will need to be resized
      */
     bool was_resized();
 

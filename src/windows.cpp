@@ -420,7 +420,7 @@ static LRESULT CALLBACK hg_internal_window_callback(HWND hwnd, UINT msg, WPARAM 
     return DefWindowProcA(hwnd, msg, wparam, lparam);
 }
 
-HgWindow HgWindow::create(HgArena& arena, const HgWindow::Config& config) {
+HgWindow HgWindow::create(HgArena& arena, const HgWindowConfig& config) {
     const char* title = config.title != nullptr ? config.title : "Hurdy Gurdy";
 
     HgWindow window;

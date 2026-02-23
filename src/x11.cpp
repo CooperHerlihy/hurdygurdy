@@ -288,7 +288,7 @@ static void hg_internal_set_fullscreen(
         hg_error("X11 could not send fullscreen message\n");
 }
 
-HgWindow HgWindow::create(HgArena& arena, const HgWindow::Config& config) {
+HgWindow HgWindow::create(HgArena& arena, const HgWindowConfig& config) {
     u32 width = config.windowed ? config.width
         : (u32)DisplayWidth(hg_internal_x11_display, DefaultScreen(hg_internal_x11_display));
     u32 height = config.windowed ? config.height

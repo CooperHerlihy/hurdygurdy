@@ -4,6 +4,12 @@
 
 #include <emmintrin.h>
 
+#include <GLFW/glfw3.h>
+
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_vulkan.h"
+
 int main(void) {
     hg_defer(hg_info("Exited successfully\n"));
 
@@ -14,29 +20,49 @@ int main(void) {
 
     hg_arena_scope(arena, hg_get_scratch());
 
-    HgWindow::Config window_config{};
-    window_config.title = "Hg Test";
-    window_config.windowed = true;
-    window_config.width = 1600;
-    window_config.height = 900;
+    glfwInit();
+    hg_defer(glfwTerminate());
 
-    HgWindow window = HgWindow::create(arena, window_config);
-    hg_defer(window.destroy());
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    GLFWwindow* window = glfwCreateWindow(1600, 900, "Hg Test", nullptr, nullptr);
+    hg_defer(glfwDestroyWindow(window));
 
-    VkCommandPoolCreateInfo cmd_pool_info{};
-    cmd_pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    cmd_pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    cmd_pool_info.queueFamilyIndex = hg_vk_queue_family;
-
-    VkCommandPool cmd_pool;
-    vkCreateCommandPool(hg_vk_device, &cmd_pool_info, nullptr, &cmd_pool);
-    hg_defer(vkDestroyCommandPool(hg_vk_device, cmd_pool, nullptr));
-
-    VkSurfaceKHR surface = hg_vk_create_surface(hg_vk_instance, window);
+    VkSurfaceKHR surface = nullptr;
+    glfwCreateWindowSurface(hg_vk_instance, window, nullptr, &surface);
     hg_defer(vkDestroySurfaceKHR(hg_vk_instance, surface, nullptr));
 
-    HgSwapchainData swapchain = hg_vk_create_swapchain(nullptr, surface,
-        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_PRESENT_MODE_FIFO_KHR);
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    hg_defer(ImGui::DestroyContext());
+
+    ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+    ImGui::StyleColorsDark();
+
+    ImGui_ImplGlfw_InitForVulkan(window, true);
+    hg_defer(ImGui_ImplGlfw_Shutdown());
+
+    ImGui_ImplVulkan_InitInfo imgui_info{};
+    imgui_info.Instance = hg_vk_instance;
+    imgui_info.PhysicalDevice = hg_vk_physical_device;
+    imgui_info.Device = hg_vk_device;
+    imgui_info.QueueFamily = hg_vk_queue_family;
+    imgui_info.Queue = hg_vk_queue;
+    imgui_info.DescriptorPoolSize = 1000;
+    imgui_info.MinImageCount = 2;
+    imgui_info.ImageCount = 2;
+    imgui_info.UseDynamicRendering = true;
+    imgui_info.PipelineInfoMain.PipelineRenderingCreateInfo.sType
+        = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+
+    ImGui_ImplVulkan_Init(&imgui_info);
+    hg_defer(ImGui_ImplVulkan_Shutdown());
+
+    int window_width, window_height;
+    glfwGetWindowSize(window, &window_width, &window_height);
+    HgSwapchainData swapchain = hg_vk_create_swapchain(nullptr, surface, (u32)window_width, (u32)window_height,
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_PRESENT_MODE_MAILBOX_KHR);
     hg_defer(vkDestroySwapchainKHR(hg_vk_device, swapchain.handle, nullptr));
 
     u32 swap_image_count;
@@ -59,107 +85,109 @@ int main(void) {
             vkDestroyImageView(hg_vk_device, swap_views[i], nullptr);
         }
     )
-    HgSwapchainCommands swapchain_commands = swapchain_commands.create(arena, swapchain.handle, cmd_pool);
-    hg_defer(swapchain_commands.destroy());
 
-    HgPipeline2D pipeline2d = pipeline2d.create(arena, 255, swapchain.format, VK_FORMAT_UNDEFINED);
-    hg_defer(pipeline2d.destroy());
+    HgSwapchainCommands swapchain_commands = swapchain_commands.create(arena, swapchain.handle, hg_vk_cmd_pool);
+    hg_defer(swapchain_commands.destroy());
 
     HgStringView texture_path = "hg_test_dir/file_image_test.hgtex";
     HgResource texture_id = hg_resource_id(texture_path);
-    hg_alloc_gpu_texture(texture_id);
 
     {
         HgFence fence;
         hg_load_resource(&fence, 1, texture_id, texture_path);
         fence.wait(INFINITY);
-        hg_load_gpu_texture(texture_id, cmd_pool, VK_FILTER_NEAREST);
+        hg_load_gpu_texture(texture_id, hg_vk_cmd_pool, VK_FILTER_NEAREST);
         hg_unload_resource(nullptr, 0, texture_id);
     }
     hg_defer(hg_unload_gpu_resource(texture_id));
 
+    HgPipeline2D pipeline2d = pipeline2d.create(arena, 256, swapchain.format, VK_FORMAT_UNDEFINED);
+    hg_defer(pipeline2d.destroy());
+
     pipeline2d.add_texture(texture_id);
     hg_defer(pipeline2d.remove_texture(texture_id));
 
+    hg_ecs_register<HgCamera3D>(arena, 1);
     hg_ecs_register<HgTransform>(arena, 1024);
     hg_ecs_register<HgSprite>(arena, 1024);
 
-    HgEntity squares[] = {
-        HgEntity::create(),
-        HgEntity::create(),
-    };
-
-    for (HgEntity square : squares) {
-        square.add<HgTransform>() = {};
-        square.add<HgSprite>() = {texture_id, {0.0f}, {1.0f}};
-    }
-
-    {
-        HgTransform& tf = squares[0].get<HgTransform>();
-        tf.position.x = -0.3f;
-        tf.position.z = 0.7f;
-    }
-    {
-        HgTransform& tf = squares[1].get<HgTransform>();
-        tf.position.x = 0.3f;
-        tf.position.z = 1.3f;
-    }
-
-    HgTransform camera = {};
+    HgEntity camera_entity = camera_entity.create();
+    HgCamera3D& camera = camera_entity.add<HgCamera3D>();
+    camera = {};
 
     f32 aspect = (f32)swapchain.width / (f32)swapchain.height;
     HgMat4 proj = hg_projection_perspective((f32)hg_pi * 0.5f, aspect, 0.1f, 1000.0f);
     pipeline2d.update_projection(proj);
 
-    u32 frame_count = 0;
-    f64 frame_time = 0.0f;
-    f64 cpu_time = 0.0f;
+    HgEntity squares[2]{};
+
+    for (HgEntity& square : squares) {
+        square = square.create();
+        square.add<HgTransform>();
+        square.add<HgSprite>();
+    }
+
+    {
+        HgTransform& tf = squares[0].get<HgTransform>();
+        tf = {};
+        tf.position.x = -0.3f;
+        tf.position.z = 0.7f;
+    }
+    {
+        HgTransform& tf = squares[1].get<HgTransform>();
+        tf = {};
+        tf.position.x = 0.3f;
+        tf.position.z = 1.3f;
+    }
+    squares[0].get<HgSprite>() = {texture_id, {0.0f}, 1.0f};
+    squares[1].get<HgSprite>() = {texture_id, {0.0f}, 1.0f};
+
+    f64 mouse_x, mouse_y;
+    glfwGetCursorPos(window, &mouse_x, &mouse_y);
+
     HgClock game_clock{};
     HgClock cpu_clock{};
-
     while(true) {
         f64 delta = game_clock.tick();
         f32 deltaf = (f32)delta;
-        ++frame_count;
-        frame_time += delta;
-        if (frame_time > 1.0f) {
-            hg_info("fps: %d, total avg: %fms, cpu avg: %fms\n",
-                frame_count,
-                1.0e3 / (f64)frame_count,
-                cpu_time * 1.0e3 / (f64)frame_count);
-            frame_count = 0;
-            frame_time -= 1.0;
-            cpu_time = 0.0;
-        }
 
         hg_arena_scope(frame, hg_get_scratch(arena));
 
-        hg_process_window_events(&window, 1);
-        if (window.was_closed() || window.is_key_down(HgKey::escape))
+        glfwPollEvents();
+        if (glfwWindowShouldClose(window) || glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
             break;
 
+        ImGui_ImplVulkan_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        f64 mouse_x_new, mouse_y_new;
+        glfwGetCursorPos(window, &mouse_x_new, &mouse_y_new);
+
         static const f32 rot_speed = 2.0f;
-        if (window.is_key_down(HgKey::lmouse)) {
-            f64 x, y;
-            window.get_mouse_delta(x, y);
+        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
+            f64 x = (mouse_x_new - mouse_x) / swapchain.height;
+            f64 y = (mouse_y_new - mouse_y) / swapchain.height;
             HgQuat rot_x = hg_axis_angle({0.0f, 1.0f, 0.0f}, (f32)x * rot_speed);
             HgQuat rot_y = hg_axis_angle({-1.0f, 0.0f, 0.0f}, (f32)y * rot_speed);
             camera.rotation = rot_x * camera.rotation * rot_y;
         }
 
+        mouse_x = mouse_x_new, mouse_y = mouse_y_new;
+
         static const f32 move_speed = 1.5f;
         HgVec3 movement = {0.0f};
-        if (window.is_key_down(HgKey::space))
+        if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
             movement.y -= 1.0f;
-        if (window.is_key_down(HgKey::lshift))
+        if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
             movement.y += 1.0f;
-        if (window.is_key_down(HgKey::w))
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
             movement.z += 1.0f;
-        if (window.is_key_down(HgKey::s))
+        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
             movement.z -= 1.0f;
-        if (window.is_key_down(HgKey::a))
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
             movement.x -= 1.0f;
-        if (window.is_key_down(HgKey::d))
+        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
             movement.x += 1.0f;
 
         if (movement != HgVec3{0.0f}) {
@@ -169,12 +197,13 @@ int main(void) {
 
         pipeline2d.update_view(hg_view_matrix(camera.position, camera.scale, camera.rotation));
 
-        if (window.was_resized()) {
+        glfwGetWindowSize(window, &window_width, &window_height);
+        if (swapchain.width != (u32)window_width || swapchain.height != (u32)window_height) {
             vkQueueWaitIdle(hg_vk_queue);
 
             VkSwapchainKHR old_swapchain = swapchain.handle;
-            swapchain = hg_vk_create_swapchain(old_swapchain, surface,
-                VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_PRESENT_MODE_FIFO_KHR);
+            swapchain = hg_vk_create_swapchain(old_swapchain, surface, (u32)window_width, (u32)window_height,
+                VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_PRESENT_MODE_MAILBOX_KHR);
 
             for (usize i = 0; i < swap_image_count; ++i) {
                 vkDestroyImageView(hg_vk_device, swap_views[i], nullptr);
@@ -199,7 +228,7 @@ int main(void) {
 
                     vkCreateImageView(hg_vk_device, &create_info, nullptr, &swap_views[i]);
                 }
-                swapchain_commands.recreate(arena, swapchain.handle, cmd_pool);
+                swapchain_commands.recreate(arena, swapchain.handle, hg_vk_cmd_pool);
 
                 aspect = (f32)swapchain.width / (f32)swapchain.height;
                 proj = hg_projection_perspective((f32)hg_pi * 0.5f, aspect, 0.1f, 1000.0f);
@@ -210,7 +239,12 @@ int main(void) {
             hg_info("window resized\n");
         }
 
-        cpu_time += cpu_clock.tick();
+        f64 cpu_delta = cpu_clock.tick();
+        ImGui::Begin("Time");
+        ImGui::Text("total = %fms", delta * 1.0e3);
+        ImGui::Text("cpu = %fms", cpu_delta * 1.0e3);
+        ImGui::End();
+
         VkCommandBuffer cmd = swapchain_commands.acquire_and_record();
         if (cmd != nullptr) {
             cpu_clock.tick();
@@ -255,6 +289,9 @@ int main(void) {
             vkCmdSetScissor(cmd, 0, 1, &scissor);
 
             pipeline2d.draw(cmd);
+
+            ImGui::Render();
+            ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
 
             vkCmdEndRendering(cmd);
 
