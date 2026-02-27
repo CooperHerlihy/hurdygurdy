@@ -6,17 +6,18 @@
 
 #include <GLFW/glfw3.h>
 
+#define IM_ASSERT hg_assert
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
 
 int main(void) {
-    hg_defer(hg_info("Exited successfully\n"));
+    hg_defer(hg_debug("Exited successfully\n"));
 
     hg_init();
     hg_defer(hg_exit());
 
-    hg_run_tests();
+    hg_tests_run();
 
     hg_arena_scope(arena, hg_get_scratch());
 
@@ -36,6 +37,7 @@ int main(void) {
     hg_defer(ImGui::DestroyContext());
 
     ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
     ImGui::StyleColorsDark();
@@ -236,7 +238,7 @@ int main(void) {
             }
 
             vkDestroySwapchainKHR(hg_vk_device, old_swapchain, nullptr);
-            hg_info("window resized\n");
+            hg_debug("window resized\n");
         }
 
         f64 cpu_delta = cpu_clock.tick();
@@ -244,6 +246,8 @@ int main(void) {
         ImGui::Text("total = %fms", delta * 1.0e3);
         ImGui::Text("cpu = %fms", cpu_delta * 1.0e3);
         ImGui::End();
+
+        ImGui::ShowDemoWindow();
 
         VkCommandBuffer cmd = swapchain_commands.acquire_and_record();
         if (cmd != nullptr) {
@@ -1029,9 +1033,6 @@ hg_test(HgJson) {
 
         HgJson json = json.parse(arena, file);
 
-        for (auto e = json.errors; e != nullptr; e = e->next) {
-            hg_info("e: %s", HgString::create(arena, e->msg).append(arena, 0).chars);
-        }
         hg_test_assert(json.errors == nullptr);
         hg_test_assert(json.file != nullptr);
 

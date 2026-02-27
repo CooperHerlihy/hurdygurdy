@@ -1,45 +1,53 @@
 #include "hurdygurdy.hpp"
 
-struct HgTestArray {
-    HgTest* items;
-    usize capacity;
-    usize count;
+namespace {
+    struct Test {
+        const char* name;
+        bool (*function)();
+    };
 
-    static HgTestArray create(usize init_count) {
-        HgTestArray arr;
-        arr.items = (HgTest*)std::malloc(init_count);
-        arr.capacity = init_count;
-        arr.count = 0;
-        return arr;
-    }
+    struct TestArr {
+        Test* items;
+        usize capacity;
+        usize count;
 
-    void destroy() const {
-        std::free(items);
-    }
-
-    HgTest& push() {
-        if (capacity == count) {
-            usize new_capacity = capacity == 0 ? 1 : capacity * 2;
-            items = (HgTest*)std::realloc(items, new_capacity);
-            capacity = new_capacity;
+        static TestArr create(usize init_count) {
+            TestArr arr;
+            arr.items = (Test*)std::malloc(init_count);
+            arr.capacity = init_count;
+            arr.count = 0;
+            return arr;
         }
-        return items[count++];
-    }
-};
 
-static HgTestArray& hg_internal_get_tests() {
-    static HgTestArray tests = tests.create(1024);
+        void destroy() const {
+            std::free(items);
+        }
+
+        Test& push() {
+            if (capacity == count) {
+                usize new_capacity = capacity == 0 ? 1 : capacity * 2;
+                items = (Test*)std::realloc(items, new_capacity);
+                capacity = new_capacity;
+            }
+            return items[count++];
+        }
+    };
+}
+
+static TestArr& hg_internal_get_tests() {
+    static TestArr tests = tests.create(1024);
     return tests;
 }
 
-HgTest::HgTest(const char* test_name, bool (*test_function)()) : name(test_name), function(test_function) {
-    hg_internal_get_tests().push() = *this;
+bool hg_tests_register(const char* name, bool (*function)()) {
+    hg_internal_get_tests().push() = {name, function};
+    return true;
 }
 
-bool hg_run_tests() {
+bool hg_tests_run() {
     std::printf("HurdyGurdy: Tests Begun\n");
 
-    HgTestArray& tests = hg_internal_get_tests();
+    TestArr& tests = hg_internal_get_tests();
     bool all_succeeded = true;
 
     HgClock timer{};

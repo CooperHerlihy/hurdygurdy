@@ -74,7 +74,7 @@
 #ifdef HG_DEBUG_MODE
 
 #ifndef HG_NO_LOGGING
-#define HG_LOGGING
+#define HG_LOGGING 1
 #endif
 
 #ifndef HG_NO_ASSERTIONS
@@ -90,7 +90,7 @@
 #ifdef HG_RELEASE_MODE
 
 #ifndef HG_NO_LOGGING
-#define HG_LOGGING
+#define HG_LOGGING 1
 #endif
 
 #ifndef HG_ASSERTIONS
@@ -100,22 +100,6 @@
 #ifndef HG_VK_DEBUG_MESSENGER
 #define HG_NO_VK_DEBUG_MESSENGER 1
 #endif
-
-#endif
-
-#ifdef HG_DEBUG_MODE
-
-/**
- * Runs code only in debug mode
- */
-#define hg_debug_mode(code) code
-
-#else
-
-/**
- * Runs code only in debug mode
- */
-#define hg_debug_mode(code)
 
 #endif
 
@@ -155,20 +139,12 @@ struct HgDeferInternal {
 #ifdef HG_LOGGING
 
 /**
- * Formats and logs a debug message to stderr in debug mode only
+ * Formats and logs a debug message to stderr for debugging purposes
  *
  * Parameters
  * - ... The message to print and its format parameters
  */
-#define hg_debug(...) do { hg_debug_mode({ (void)std::fprintf(stderr, "HurdyGurdy Debug: " __VA_ARGS__); }) } while(0)
-
-/**
- * Formats and logs an info message to stderr
- *
- * Parameters
- * - ... The message to print and its format parameters
- */
-#define hg_info(...) do { (void)std::fprintf(stderr, "HurdyGurdy Info: " __VA_ARGS__); } while(0)
+#define hg_debug(...) do { { (void)std::fprintf(stderr, "HurdyGurdy Debug: " __VA_ARGS__); } } while(0)
 
 /**
  * Formats and logs a warning message to stderr
@@ -189,20 +165,12 @@ struct HgDeferInternal {
 #else
 
 /**
- * Formats and logs a debug message to stderr in debug mode only
+ * Formats and logs a debug message to stderr for debugging puposes
  *
  * Parameters
  * - ... The message to print and its format parameters
  */
 #define hg_debug(...) do {} while(0)
-
-/**
- * Formats and logs an info message to stderr
- *
- * Parameters
- * - ... The message to print and its format parameters
- */
-#define hg_info(...) do {} while(0)
 
 /**
  * Formats and logs a warning message to stderr
@@ -238,6 +206,12 @@ struct HgDeferInternal {
 
 #else
 
+/**
+ * Asserts condition, or aborts the program
+ *
+ * Parameters
+ * - cond The condition to assert
+ */
 #define hg_assert(cond) do {} while(0)
 
 #endif
@@ -318,27 +292,26 @@ void hg_init();
 void hg_exit();
 
 /**
- * The struct used to declare and run tests
+ * Create and register a test globally
+ *
+ * Parameters
+ * - test_name The name of the test
+ * - test_function A pointer to the test function
+ *
+ * Returns
+ * - A dummy value for static init
  */
-struct HgTest {
-    /**
-     * The name of the test
-     */
-    const char* name;
-    /**
-     * A pointer to the test function
-     */
-    bool (*function)();
+bool hg_tests_register(const char* name, bool (*function)());
 
-    /**
-     * Creates and registers the test globally
-     *
-     * Parameters
-     * - test_name The name of the test
-     * - test_function A pointer to the test function
-     */
-    HgTest(const char* test_name, decltype(function) test_function);
-};
+/**
+ * Runs all tests registered globally
+ *
+ * This should be called after initialization, some tests require it
+ *
+ * Returns:
+ * - Whether all tests passed
+ */
+bool hg_tests_run();
 
 /**
  * Automatically declares and registers a test function
@@ -354,9 +327,15 @@ struct HgTest {
  * - name The name of the test, should not be a string
  */
 #define hg_test(name) \
-    inline bool hg_test_function_##name(); \
-    inline HgTest hg_test_struct_##name{#name, hg_test_function_##name}; \
-    inline bool hg_test_function_##name() 
+    static bool hg_test_function_##name(); \
+    namespace { \
+        struct HgTestDummy_##name { \
+            HgTestDummy_##name() { \
+                hg_tests_register(#name, hg_test_function_##name); \
+            } \
+        } hg_test_dummy_##name; \
+    } \
+    static bool hg_test_function_##name() 
 
 /**
  * Asserts a condition in a test
@@ -372,16 +351,6 @@ struct HgTest {
         return false; \
     } \
 } while(0)
-
-/**
- * Runs all tests registered globally
- *
- * This should be called after initialization, some tests require it
- *
- * Returns:
- * - Whether all tests passed
- */
-bool hg_run_tests();
 
 /**
  * The value of Pi

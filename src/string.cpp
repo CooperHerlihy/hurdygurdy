@@ -268,21 +268,23 @@ HgString hg_float_to_str_base10(HgArena& arena, f64 num, u64 decimal_count) {
     return ret;
 }
 
-struct HgJsonParser {
-    HgArena& arena;
-    HgStringView text;
-    usize head;
-    usize line;
+namespace {
+    struct HgJsonParser {
+        HgArena& arena;
+        HgStringView text;
+        usize head;
+        usize line;
 
-    HgJsonParser(HgArena& arena_val) : arena{arena_val} {}
+        HgJsonParser(HgArena& arena_val) : arena{arena_val} {}
 
-    HgJson parse_next();
-    HgJson parse_struct();
-    HgJson parse_array();
-    HgJson parse_string();
-    HgJson parse_number();
-    HgJson parse_boolean();
-};
+        HgJson parse_next();
+        HgJson parse_struct();
+        HgJson parse_array();
+        HgJson parse_string();
+        HgJson parse_number();
+        HgJson parse_boolean();
+    };
+}
 
 HgJson HgJsonParser::parse_next() {
     while (head < text.length && hg_is_whitespace(text[head])) {

@@ -519,6 +519,7 @@ struct HgVulkanFuncs {
     HG_MAKE_VULKAN_FUNC(vkDestroyDevice);
     HG_MAKE_VULKAN_FUNC(vkDeviceWaitIdle);
 
+    HG_MAKE_VULKAN_FUNC(vkGetPhysicalDeviceSurfaceSupportKHR);
     HG_MAKE_VULKAN_FUNC(vkGetPhysicalDeviceSurfaceFormatsKHR);
     HG_MAKE_VULKAN_FUNC(vkGetPhysicalDeviceSurfacePresentModesKHR);
     HG_MAKE_VULKAN_FUNC(vkGetPhysicalDeviceSurfaceCapabilitiesKHR);
@@ -610,6 +611,8 @@ struct HgVulkanFuncs {
 
     HG_MAKE_VULKAN_FUNC(vkCmdBeginRendering);
     HG_MAKE_VULKAN_FUNC(vkCmdEndRendering);
+    HG_MAKE_VULKAN_FUNC(vkCmdBeginRenderPass);
+    HG_MAKE_VULKAN_FUNC(vkCmdEndRenderPass);
     HG_MAKE_VULKAN_FUNC(vkCmdSetViewport);
     HG_MAKE_VULKAN_FUNC(vkCmdSetScissor);
     HG_MAKE_VULKAN_FUNC(vkCmdBindPipeline);
@@ -770,6 +773,19 @@ VkResult vkDeviceWaitIdle(
 ) {
     return hg_internal_vulkan_funcs.vkDeviceWaitIdle(
         device);
+}
+
+VkResult vkGetPhysicalDeviceSurfaceSupportKHR(
+    VkPhysicalDevice physicalDevice,
+    uint32_t queueFamilyIndex,
+    VkSurfaceKHR surface,
+    VkBool32* pSupported
+) {
+    return hg_internal_vulkan_funcs.vkGetPhysicalDeviceSurfaceSupportKHR(
+        physicalDevice,
+        queueFamilyIndex,
+        surface,
+        pSupported);
 }
 
 VkResult vkGetPhysicalDeviceSurfaceFormatsKHR(
@@ -1738,6 +1754,24 @@ void vkCmdEndRendering(
         cmd);
 }
 
+void vkCmdBeginRenderPass(
+    VkCommandBuffer cmd,
+    const VkRenderPassBeginInfo* pRenderPassBegin,
+    VkSubpassContents contents
+) {
+    hg_internal_vulkan_funcs.vkCmdBeginRenderPass(
+        cmd,
+        pRenderPassBegin,
+        contents);
+}
+
+void vkCmdEndRenderPass(
+    VkCommandBuffer cmd
+) {
+    hg_internal_vulkan_funcs.vkCmdEndRenderPass(
+        cmd);
+}
+
 void vkCmdSetViewport(
     VkCommandBuffer cmd,
     uint32_t first,
@@ -1905,6 +1939,7 @@ void hg_vk_load_instance(VkInstance instance) {
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetPhysicalDeviceQueueFamilyProperties);
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetPhysicalDeviceMemoryProperties);
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetPhysicalDeviceMemoryProperties2);
+    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetPhysicalDeviceSurfaceSupportKHR);
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetPhysicalDeviceSurfaceFormatsKHR);
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetPhysicalDeviceSurfacePresentModesKHR);
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetPhysicalDeviceSurfaceCapabilitiesKHR);
@@ -2011,6 +2046,8 @@ void hg_vk_load_device(VkDevice device) {
 
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdBeginRendering);
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdEndRendering);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdBeginRenderPass);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdEndRenderPass);
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdSetViewport);
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdSetScissor);
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdBindPipeline);
@@ -2099,6 +2136,7 @@ VkInstance hg_vk_create_instance() {
     instance_info.enabledLayerCount = hg_countof(layers);
     instance_info.ppEnabledLayerNames = layers;
 #endif
+    (void)layers;
     instance_info.enabledExtensionCount = hg_countof(exts);
     instance_info.ppEnabledExtensionNames = exts;
 
