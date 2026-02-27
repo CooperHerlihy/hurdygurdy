@@ -1,0 +1,514 @@
+#include "hurdygurdy.hpp"
+
+#include <GLFW/glfw3.h>
+
+#include "hurdygurdy.hpp"
+
+#ifdef HG_PLATFORM_LINUX
+
+struct HgWindowInput {
+    u32 width;
+    u32 height;
+    f64 mouse_pos_x;
+    f64 mouse_pos_y;
+    f64 mouse_delta_x;
+    f64 mouse_delta_y;
+    bool was_resized;
+    bool was_closed;
+    bool keys_down[(u32)HgKey::count];
+    bool keys_pressed[(u32)HgKey::count];
+    bool keys_released[(u32)HgKey::count];
+};
+
+struct HgWindow::Internals {
+    HgWindowInput input;
+    GLFWwindow* glfw_window;
+};
+
+bool HgWindow::was_closed() {
+    return internals->input.was_closed;
+}
+
+bool HgWindow::was_resized() {
+    return internals->input.was_resized;
+}
+
+void HgWindow::get_size(u32* width, u32* height) {
+    *width = internals->input.width;
+    *height = internals->input.height;
+}
+
+void HgWindow::get_mouse_pos(f64* x, f64* y) {
+    *x = internals->input.mouse_pos_x;
+    *y = internals->input.mouse_pos_y;
+}
+
+void HgWindow::get_mouse_delta(f64* x, f64* y) {
+    *x = internals->input.mouse_delta_x;
+    *y = internals->input.mouse_delta_y;
+}
+
+bool HgWindow::is_key_down(HgKey key) {
+    hg_assert((u32)key > (u32)HgKey::none && (u32)key < (u32)HgKey::count);
+    return internals->input.keys_down[(u32)key];
+}
+
+bool HgWindow::was_key_pressed(HgKey key) {
+    hg_assert((u32)key > (u32)HgKey::none && (u32)key < (u32)HgKey::count);
+    return internals->input.keys_pressed[(u32)key];
+}
+
+bool HgWindow::was_key_released(HgKey key) {
+    hg_assert((u32)key > (u32)HgKey::none && (u32)key < (u32)HgKey::count);
+    return internals->input.keys_released[(u32)key];
+}
+
+void hg_platform_init() {
+    glfwInit();
+}
+
+void hg_platform_deinit() {
+    glfwTerminate();
+}
+
+void window_size_callback(GLFWwindow* glfw_window, int width, int height) {
+    HgWindow window{(HgWindow::Internals*)((u8*)glfw_window + offsetof(HgWindow::Internals, glfw_window))};
+    window.internals->input.width = (u32)width;
+    window.internals->input.height = (u32)height;
+}
+
+static void key_callback(
+    GLFWwindow* glfw_window,
+    int glfw_key,
+    [[maybe_unused]] int scancode,
+    int action,
+    [[maybe_unused]] int mods
+) {
+    HgWindow window = {(HgWindow::Internals*)glfwGetWindowUserPointer(glfw_window)};
+
+    bool is_shift_down =
+        window.internals->input.keys_down[(u32)HgKey::lshift] ||
+        window.internals->input.keys_down[(u32)HgKey::rshift];
+    
+    HgKey key = HgKey::none;
+    switch (glfw_key) {
+        case GLFW_KEY_0:
+            key = is_shift_down ? HgKey::rparen : HgKey::k0;
+            break;
+        case GLFW_KEY_1:
+            key = is_shift_down ? HgKey::exclamation : HgKey::k1;
+            break;
+        case GLFW_KEY_2:
+            key = is_shift_down ? HgKey::at : HgKey::k2;
+            break;
+        case GLFW_KEY_3:
+            key = is_shift_down ? HgKey::hash : HgKey::k3;
+            break;
+        case GLFW_KEY_4:
+            key = is_shift_down ? HgKey::dollar : HgKey::k4;
+            break;
+        case GLFW_KEY_5:
+            key = is_shift_down ? HgKey::percent : HgKey::k5;
+            break;
+        case GLFW_KEY_6:
+            key = is_shift_down ? HgKey::carot : HgKey::k6;
+            break;
+        case GLFW_KEY_7:
+            key = is_shift_down ? HgKey::ampersand : HgKey::k7;
+            break;
+        case GLFW_KEY_8:
+            key = is_shift_down ? HgKey::asterisk : HgKey::k8;
+            break;
+        case GLFW_KEY_9:
+            key = is_shift_down ? HgKey::lparen : HgKey::k9;
+            break;
+
+        case GLFW_KEY_Q:
+            key = HgKey::q;
+            break;
+        case GLFW_KEY_W:
+            key = HgKey::w;
+            break;
+        case GLFW_KEY_E:
+            key = HgKey::e;
+            break;
+        case GLFW_KEY_R:
+            key = HgKey::r;
+            break;
+        case GLFW_KEY_T:
+            key = HgKey::t;
+            break;
+        case GLFW_KEY_Y:
+            key = HgKey::y;
+            break;
+        case GLFW_KEY_U:
+            key = HgKey::u;
+            break;
+        case GLFW_KEY_I:
+            key = HgKey::i;
+            break;
+        case GLFW_KEY_O:
+            key = HgKey::o;
+            break;
+        case GLFW_KEY_P:
+            key = HgKey::p;
+            break;
+        case GLFW_KEY_A:
+            key = HgKey::a;
+            break;
+        case GLFW_KEY_S:
+            key = HgKey::s;
+            break;
+        case GLFW_KEY_D:
+            key = HgKey::d;
+            break;
+        case GLFW_KEY_F:
+            key = HgKey::f;
+            break;
+        case GLFW_KEY_G:
+            key = HgKey::g;
+            break;
+        case GLFW_KEY_H:
+            key = HgKey::h;
+            break;
+        case GLFW_KEY_J:
+            key = HgKey::j;
+            break;
+        case GLFW_KEY_K:
+            key = HgKey::k;
+            break;
+        case GLFW_KEY_L:
+            key = HgKey::l;
+            break;
+        case GLFW_KEY_Z:
+            key = HgKey::z;
+            break;
+        case GLFW_KEY_X:
+            key = HgKey::x;
+            break;
+        case GLFW_KEY_C:
+            key = HgKey::c;
+            break;
+        case GLFW_KEY_V:
+            key = HgKey::v;
+            break;
+        case GLFW_KEY_B:
+            key = HgKey::b;
+            break;
+        case GLFW_KEY_N:
+            key = HgKey::n;
+            break;
+        case GLFW_KEY_M:
+            key = HgKey::m;
+            break;
+
+        case GLFW_KEY_SEMICOLON:
+            key = is_shift_down ? HgKey::colon : HgKey::semicolon;
+            break;
+        case GLFW_KEY_APOSTROPHE:
+            key = is_shift_down ? HgKey::quotation : HgKey::apostrophe;
+            break;
+        case GLFW_KEY_COMMA:
+            key = is_shift_down ? HgKey::less : HgKey::comma;
+            break;
+        case GLFW_KEY_PERIOD:
+            key = is_shift_down ? HgKey::greater : HgKey::period;
+            break;
+        case GLFW_KEY_SLASH:
+            key = is_shift_down ? HgKey::question : HgKey::slash;
+            break;
+        case GLFW_KEY_BACKSLASH:
+            key = is_shift_down ? HgKey::bar : HgKey::backslash;
+            break;
+        case GLFW_KEY_LEFT_BRACKET:
+            key = is_shift_down ? HgKey::lbrace : HgKey::lbracket;
+            break;
+        case GLFW_KEY_RIGHT_BRACKET:
+            key = is_shift_down ? HgKey::rbrace : HgKey::rbracket;
+            break;
+        case GLFW_KEY_GRAVE_ACCENT:
+            key = is_shift_down ? HgKey::tilde : HgKey::grave;
+            break;
+        case GLFW_KEY_MINUS:
+            key = is_shift_down ? HgKey::underscore : HgKey::minus;
+            break;
+        case GLFW_KEY_EQUAL:
+            key = is_shift_down ? HgKey::plus : HgKey::equal;
+            break;
+
+        case GLFW_KEY_UP:
+            key = HgKey::up;
+            break;
+        case GLFW_KEY_DOWN:
+            key = HgKey::down;
+            break;
+        case GLFW_KEY_LEFT:
+            key = HgKey::left;
+            break;
+        case GLFW_KEY_RIGHT:
+            key = HgKey::right;
+            break;
+
+        case GLFW_KEY_ESCAPE:
+            key = HgKey::escape;
+            break;
+        case GLFW_KEY_SPACE:
+            key = HgKey::space;
+            break;
+        case GLFW_KEY_ENTER:
+            key = HgKey::enter;
+            break;
+        case GLFW_KEY_BACKSPACE:
+            key = HgKey::backspace;
+            break;
+        case GLFW_KEY_DELETE:
+            key = HgKey::kdelete;
+            break;
+        case GLFW_KEY_INSERT:
+            key = HgKey::insert;
+            break;
+        case GLFW_KEY_TAB:
+            key = HgKey::tab;
+            break;
+        case GLFW_KEY_HOME:
+            key = HgKey::home;
+            break;
+        case GLFW_KEY_END:
+            key = HgKey::end;
+            break;
+
+        case GLFW_KEY_F1:
+            key = HgKey::f1;
+            break;
+        case GLFW_KEY_F2:
+            key = HgKey::f2;
+            break;
+        case GLFW_KEY_F3:
+            key = HgKey::f3;
+            break;
+        case GLFW_KEY_F4:
+            key = HgKey::f4;
+            break;
+        case GLFW_KEY_F5:
+            key = HgKey::f5;
+            break;
+        case GLFW_KEY_F6:
+            key = HgKey::f6;
+            break;
+        case GLFW_KEY_F7:
+            key = HgKey::f7;
+            break;
+        case GLFW_KEY_F8:
+            key = HgKey::f8;
+            break;
+        case GLFW_KEY_F9:
+            key = HgKey::f9;
+            break;
+        case GLFW_KEY_F10:
+            key = HgKey::f10;
+            break;
+        case GLFW_KEY_F11:
+            key = HgKey::f11;
+            break;
+        case GLFW_KEY_F12:
+            key = HgKey::f12;
+            break;
+
+        case GLFW_KEY_LEFT_SHIFT:
+            key = HgKey::lshift;
+            break;
+        case GLFW_KEY_RIGHT_SHIFT:
+            key = HgKey::rshift;
+            break;
+        case GLFW_KEY_LEFT_CONTROL:
+            key = HgKey::lctrl;
+            break;
+        case GLFW_KEY_RIGHT_CONTROL:
+            key = HgKey::rctrl;
+            break;
+        case GLFW_KEY_LEFT_ALT:
+            key = HgKey::lalt;
+            break;
+        case GLFW_KEY_RIGHT_ALT:
+            key = HgKey::ralt;
+            break;
+        case GLFW_KEY_LEFT_SUPER:
+            key = HgKey::lsuper;
+            break;
+        case GLFW_KEY_RIGHT_SUPER:
+            key = HgKey::rsuper;
+            break;
+        case GLFW_KEY_CAPS_LOCK:
+            key = HgKey::capslock;
+            break;
+    }
+
+    if (action == GLFW_PRESS) {
+        window.internals->input.keys_down[(u32)key] = true;
+        window.internals->input.keys_pressed[(u32)key] = true;
+    } else if (action == GLFW_RELEASE) {
+        window.internals->input.keys_down[(u32)key] = false;
+        window.internals->input.keys_released[(u32)key] = true;
+    }
+}
+
+static void mouse_pos_callback(GLFWwindow* glfw_window, double x, double y) {
+    HgWindow window = {(HgWindow::Internals*)glfwGetWindowUserPointer(glfw_window)};
+    window.internals->input.mouse_pos_x = x / window.internals->input.height;
+    window.internals->input.mouse_pos_y = y / window.internals->input.height;
+}
+
+void mouse_button_callback(GLFWwindow* glfw_window, int button, int action, [[maybe_unused]] int mods) {
+    HgWindow window = {(HgWindow::Internals*)glfwGetWindowUserPointer(glfw_window)};
+
+    HgKey key = HgKey::none;
+    switch (button) {
+        case GLFW_MOUSE_BUTTON_LEFT:
+            key = HgKey::lmouse;
+            break;
+        case GLFW_MOUSE_BUTTON_RIGHT:
+            key = HgKey::rmouse;
+            break;
+        case GLFW_MOUSE_BUTTON_MIDDLE:
+            key = HgKey::mmouse;
+            break;
+        case GLFW_MOUSE_BUTTON_4:
+            key = HgKey::mouse4;
+            break;
+        case GLFW_MOUSE_BUTTON_5:
+            key = HgKey::mouse5;
+            break;
+    }
+    if (action == GLFW_PRESS) {
+        window.internals->input.keys_down[(u32)key] = true;
+        window.internals->input.keys_pressed[(u32)key] = true;
+    } else if (action == GLFW_RELEASE) {
+        window.internals->input.keys_down[(u32)key] = false;
+        window.internals->input.keys_released[(u32)key] = true;
+    }
+}
+
+HgWindow HgWindow::create(HgArena& arena, const HgWindowConfig& config) {
+    HgWindow window;
+    window.internals = arena.alloc<Internals>(1);
+    *window.internals = {};
+
+    window.internals->input.width = config.width;
+    window.internals->input.height = config.height;
+
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    window.internals->glfw_window = glfwCreateWindow(
+        (int)config.width,
+        (int)config.height,
+        config.title,
+        nullptr,
+        nullptr);
+
+    glfwSetWindowUserPointer(window.internals->glfw_window, window.internals);
+    glfwSetWindowSizeCallback(window.internals->glfw_window, window_size_callback);
+    glfwSetKeyCallback(window.internals->glfw_window, key_callback);
+    glfwSetCursorPosCallback(window.internals->glfw_window, mouse_pos_callback);
+    glfwSetMouseButtonCallback(window.internals->glfw_window, mouse_button_callback);
+
+    return window;
+}
+
+void HgWindow::destroy() {
+    glfwDestroyWindow(internals->glfw_window);
+}
+
+void HgWindow::set_icon(u32* icon_data, u32 width, u32 height) {
+    hg_error("window set_icon : TODO\n");
+    (void)icon_data;
+    (void)width;
+    (void)height;
+}
+
+bool HgWindow::is_fullscreen() {
+    hg_error("window is_fullscreen : TODO\n");
+}
+
+void HgWindow::set_fullscreen(bool fullscreen) {
+    hg_error("window set_fullscreen : TODO\n");
+    (void)fullscreen;
+}
+
+void HgWindow::set_cursor(HgWindow::Cursor cursor) {
+    hg_error("window set_cursor : TODO\n");
+    (void)cursor;
+}
+
+void HgWindow::set_cursor_image(u32* data, u32 width, u32 height) {
+    hg_error("window set_cursor_image : TODO\n");
+    (void)data;
+    (void)width;
+    (void)height;
+}
+
+VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window) {
+    hg_assert(instance != nullptr);
+    hg_assert(window.internals != nullptr);
+
+    VkSurfaceKHR surface = nullptr;
+    VkResult result = glfwCreateWindowSurface(instance, window.internals->glfw_window, nullptr, &surface);
+    if (surface == nullptr)
+        hg_error("Failed to create Vulkan surface: %s\n", hg_vk_result_string(result));
+
+    return surface;
+}
+
+void hg_process_window_events(const HgWindow* windows, usize window_count) {
+    hg_assert(windows != nullptr);
+
+    hg_arena_scope(scratch, hg_get_scratch());
+
+    u32* old_widths = scratch.alloc<u32>(window_count);
+    u32* old_heights = scratch.alloc<u32>(window_count);
+    f64* old_mouse_xs = scratch.alloc<f64>(window_count);
+    f64* old_mouse_ys = scratch.alloc<f64>(window_count);
+
+    for (usize i = 0; i < window_count; ++i) {
+        HgWindow window = windows[i];
+
+        old_widths[i] = window.internals->input.width;
+        old_heights[i] = window.internals->input.height;
+        old_mouse_xs[i] = window.internals->input.mouse_pos_x;
+        old_mouse_ys[i] = window.internals->input.mouse_pos_y;
+
+        std::memset(window.internals->input.keys_pressed, 0, sizeof(window.internals->input.keys_pressed));
+        std::memset(window.internals->input.keys_released, 0, sizeof(window.internals->input.keys_released));
+        window.internals->input.was_resized = false;
+    }
+
+    glfwPollEvents();
+
+    for (usize i = 0; i < window_count; ++i) {
+        HgWindow window = windows[i];
+
+        window.internals->input.was_closed = glfwWindowShouldClose(window.internals->glfw_window);
+
+        if (window.internals->input.width != old_widths[i] || window.internals->input.height != old_heights[i]) {
+            window.internals->input.was_resized = true;
+        }
+
+        window.internals->input.mouse_delta_x = window.internals->input.mouse_pos_x - old_mouse_xs[i];
+        window.internals->input.mouse_delta_y = window.internals->input.mouse_pos_y - old_mouse_ys[i];
+    }
+}
+
+#include "imgui_impl_glfw.h"
+
+void ImGui_ImplHurdyGurdy_Init(HgWindow window) {
+    ImGui_ImplGlfw_InitForVulkan(window.internals->glfw_window, true);
+}
+
+void ImGui_ImplHurdyGurdy_Shutdown() {
+    ImGui_ImplGlfw_Shutdown();
+}
+
+void ImGui_ImplHurdyGurdy_NewFrame() {
+    ImGui_ImplGlfw_NewFrame();
+}
+
+#endif
+

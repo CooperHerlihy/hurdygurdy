@@ -5130,7 +5130,7 @@ struct HgWindow {
      * - x A pointer to store the x position
      * - y A pointer to store the y position
      */
-    void get_mouse_pos(f64& x, f64& y);
+    void get_mouse_pos(f64* x, f64* y);
 
     /**
      * Gets the most recent mouse delta
@@ -5139,7 +5139,7 @@ struct HgWindow {
      * - x A pointer to store the x delta
      * - y A pointer to store the y delta
      */
-    void get_mouse_delta(f64& x, f64& y);
+    void get_mouse_delta(f64* x, f64* y);
 
     /**
      * Checks if a key is being held down
@@ -5198,5 +5198,22 @@ VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window);
  * - windows All open windows, must not be nullptr
  */
 void hg_process_window_events(const HgWindow* windows, usize window_count);
+
+/**
+ * Initialize ImGui platform backend
+ *
+ * Note, requires GLFW on Linux (for now)
+ */
+void ImGui_ImplHurdyGurdy_Init(HgWindow window);
+
+/**
+ * Deinitializes ImGui platform backend
+ */
+void ImGui_ImplHurdyGurdy_Shutdown();
+
+/**
+ * Create a new ImGui frame for the platform backend
+ */
+void ImGui_ImplHurdyGurdy_NewFrame();
 
 #endif // HURDYGURDY_HPP

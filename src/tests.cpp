@@ -4,11 +4,8 @@
 
 #include <emmintrin.h>
 
-#include <GLFW/glfw3.h>
-
 #define IM_ASSERT hg_assert
 #include "imgui.h"
-#include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
 
 int main(void) {
@@ -21,15 +18,15 @@ int main(void) {
 
     hg_arena_scope(arena, hg_get_scratch());
 
-    glfwInit();
-    hg_defer(glfwTerminate());
+    HgWindowConfig window_config{};
+    window_config.title = "Hg Test";
+    window_config.windowed = false;
+    window_config.width = 1600;
+    window_config.height = 900;
+    HgWindow window = window.create(arena, window_config);
+    hg_defer(window.destroy());
 
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    GLFWwindow* window = glfwCreateWindow(1600, 900, "Hg Test", nullptr, nullptr);
-    hg_defer(glfwDestroyWindow(window));
-
-    VkSurfaceKHR surface = nullptr;
-    glfwCreateWindowSurface(hg_vk_instance, window, nullptr, &surface);
+    VkSurfaceKHR surface = hg_vk_create_surface(hg_vk_instance, window);
     hg_defer(vkDestroySurfaceKHR(hg_vk_instance, surface, nullptr));
 
     IMGUI_CHECKVERSION();
@@ -42,8 +39,8 @@ int main(void) {
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
     ImGui::StyleColorsDark();
 
-    ImGui_ImplGlfw_InitForVulkan(window, true);
-    hg_defer(ImGui_ImplGlfw_Shutdown());
+    ImGui_ImplHurdyGurdy_Init(window);
+    hg_defer(ImGui_ImplHurdyGurdy_Shutdown());
 
     ImGui_ImplVulkan_InitInfo imgui_info{};
     imgui_info.Instance = hg_vk_instance;
@@ -61,9 +58,9 @@ int main(void) {
     ImGui_ImplVulkan_Init(&imgui_info);
     hg_defer(ImGui_ImplVulkan_Shutdown());
 
-    int window_width, window_height;
-    glfwGetWindowSize(window, &window_width, &window_height);
-    HgSwapchainData swapchain = hg_vk_create_swapchain(nullptr, surface, (u32)window_width, (u32)window_height,
+    u32 window_width, window_height;
+    window.get_size(&window_width, &window_height);
+    HgSwapchainData swapchain = hg_vk_create_swapchain(nullptr, surface, window_width, window_height,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_PRESENT_MODE_MAILBOX_KHR);
     hg_defer(vkDestroySwapchainKHR(hg_vk_device, swapchain.handle, nullptr));
 
@@ -144,9 +141,6 @@ int main(void) {
     squares[0].get<HgSprite>() = {texture_id, {0.0f}, 1.0f};
     squares[1].get<HgSprite>() = {texture_id, {0.0f}, 1.0f};
 
-    f64 mouse_x, mouse_y;
-    glfwGetCursorPos(window, &mouse_x, &mouse_y);
-
     HgClock game_clock{};
     HgClock cpu_clock{};
     while(true) {
@@ -155,41 +149,38 @@ int main(void) {
 
         hg_arena_scope(frame, hg_get_scratch(arena));
 
-        glfwPollEvents();
-        if (glfwWindowShouldClose(window) || glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+        hg_process_window_events(&window, 1);
+        if (window.was_closed() || window.was_key_pressed(HgKey::escape))
             break;
 
+        ImGui_ImplHurdyGurdy_NewFrame();
         ImGui_ImplVulkan_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        f64 mouse_x_new, mouse_y_new;
-        glfwGetCursorPos(window, &mouse_x_new, &mouse_y_new);
-
         static const f32 rot_speed = 2.0f;
-        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
-            f64 x = (mouse_x_new - mouse_x) / swapchain.height;
-            f64 y = (mouse_y_new - mouse_y) / swapchain.height;
+        if (window.is_key_down(HgKey::lmouse)) {
+            f64 x, y;
+            window.get_mouse_delta(&x, &y);
+            // f64 x = (mouse_x_new - mouse_x) / swapchain.height;
+            // f64 y = (mouse_y_new - mouse_y) / swapchain.height;
             HgQuat rot_x = hg_axis_angle({0.0f, 1.0f, 0.0f}, (f32)x * rot_speed);
             HgQuat rot_y = hg_axis_angle({-1.0f, 0.0f, 0.0f}, (f32)y * rot_speed);
             camera.rotation = rot_x * camera.rotation * rot_y;
         }
 
-        mouse_x = mouse_x_new, mouse_y = mouse_y_new;
-
         static const f32 move_speed = 1.5f;
         HgVec3 movement = {0.0f};
-        if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+        if (window.is_key_down(HgKey::space))
             movement.y -= 1.0f;
-        if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
+        if (window.is_key_down(HgKey::lshift))
             movement.y += 1.0f;
-        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        if (window.is_key_down(HgKey::w))
             movement.z += 1.0f;
-        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+        if (window.is_key_down(HgKey::s))
             movement.z -= 1.0f;
-        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        if (window.is_key_down(HgKey::a))
             movement.x -= 1.0f;
-        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        if (window.is_key_down(HgKey::d))
             movement.x += 1.0f;
 
         if (movement != HgVec3{0.0f}) {
@@ -199,7 +190,7 @@ int main(void) {
 
         pipeline2d.update_view(hg_view_matrix(camera.position, camera.scale, camera.rotation));
 
-        glfwGetWindowSize(window, &window_width, &window_height);
+        window.get_size(&window_width, &window_height);
         if (swapchain.width != (u32)window_width || swapchain.height != (u32)window_height) {
             vkQueueWaitIdle(hg_vk_queue);
 

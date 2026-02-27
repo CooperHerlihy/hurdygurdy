@@ -38,14 +38,14 @@ void HgWindow::get_size(u32* width, u32* height) {
     *height = internals->input.height;
 }
 
-void HgWindow::get_mouse_pos(f64& x, f64& y) {
-    x = internals->input.mouse_pos_x;
-    y = internals->input.mouse_pos_y;
+void HgWindow::get_mouse_pos(f64* x, f64* y) {
+    *x = internals->input.mouse_pos_x;
+    *y = internals->input.mouse_pos_y;
 }
 
-void HgWindow::get_mouse_delta(f64& x, f64& y) {
-    x = internals->input.mouse_delta_x;
-    y = internals->input.mouse_delta_y;
+void HgWindow::get_mouse_delta(f64* x, f64* y) {
+    *x = internals->input.mouse_delta_x;
+    *y = internals->input.mouse_delta_y;
 }
 
 bool HgWindow::is_key_down(HgKey key) {
@@ -574,6 +574,20 @@ void hg_process_window_events(const HgWindow* windows, usize window_count) {
             }
         }
     }
+}
+
+#include "imgui_impl_win32.h"
+
+void ImGui_ImplHurdyGurdy_Init(HgWindow window) {
+    ImGui_ImplWin32_Init(window.internals->hwnd);
+}
+
+void ImGui_ImplHurdyGurdy_Shutdown() {
+    ImGui_ImplWin32_Shutdown();
+}
+
+void ImGui_ImplHurdyGurdy_NewFrame() {
+    ImGui_ImplWin32_NewFrame();
 }
 
 #endif

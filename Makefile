@@ -31,7 +31,7 @@ SRC := \
 	resources.cpp \
 	ecs.cpp \
 	pipeline2d.cpp \
-	x11.cpp \
+	glfw.cpp \
 	vulkan.cpp
 
 SHADERS := \

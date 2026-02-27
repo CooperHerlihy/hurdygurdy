@@ -2119,7 +2119,8 @@ VkInstance hg_vk_create_instance() {
         "VK_KHR_surface",
 #if defined(HG_PLATFORM_LINUX)
         // "VK_KHR_xlib_surface",
-        "VK_KHR_wayland_surface",
+        "VK_KHR_xcb_surface",
+        // "VK_KHR_wayland_surface",
 #elif defined(HG_PLATFORM_WINDOWS)
         "VK_KHR_win32_surface",
 #endif
