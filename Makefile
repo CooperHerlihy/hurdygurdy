@@ -21,12 +21,7 @@ IMGUI_BACKEND := \
 	imgui_impl_vulkan.cpp
 
 SRC := \
-	init.cpp \
-	test_utils.cpp \
-	math.cpp \
-	memory.cpp \
-	string.cpp \
-	time.cpp \
+	utils.cpp \
 	thread.cpp \
 	resources.cpp \
 	ecs.cpp \
@@ -40,7 +35,7 @@ SHADERS := \
 
 .PHONY: all debug release clean
 
-all: $(BUILD_DIR)/tests $(TEST_DIR)
+all: $(BUILD_DIR)/test $(TEST_DIR)
 
 debug:
 	$(MAKE) CONFIG="$(DEBUG_CONFIG)"
@@ -86,8 +81,8 @@ LIB_FILES := \
 $(BUILD_DIR)/libhurdygurdy.a: $(LIB_FILES) $(BUILD_DIR)/vk_mem_alloc.o $(BUILD_DIR)/stb.o
 	ar rcs $@ $^
 
-$(BUILD_DIR)/tests: $(BUILD_DIR)/tests.o $(BUILD_DIR)/libhurdygurdy.a
-	c++ $(STD) $(CONFIG) $(WARNINGS) -o $@ $(BUILD_DIR)/tests.o -L$(BUILD_DIR) -lhurdygurdy -lglfw
+$(BUILD_DIR)/test: $(BUILD_DIR)/test.o $(BUILD_DIR)/libhurdygurdy.a
+	c++ $(STD) $(CONFIG) $(WARNINGS) -o $@ $(BUILD_DIR)/test.o -L$(BUILD_DIR) -lhurdygurdy -lglfw
 
 clean:
 	rm -rf $(BUILD_DIR) $(TEST_DIR)

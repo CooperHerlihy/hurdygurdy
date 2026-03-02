@@ -297,11 +297,8 @@ void hg_exit();
  * Parameters
  * - test_name The name of the test
  * - test_function A pointer to the test function
- *
- * Returns
- * - A dummy value for static init
  */
-bool hg_tests_register(const char* name, bool (*function)());
+void hg_tests_register(const char* name, bool (*function)());
 
 /**
  * Runs all tests registered globally
@@ -5203,6 +5200,9 @@ void hg_process_window_events(const HgWindow* windows, usize window_count);
  * Initialize ImGui platform backend
  *
  * Note, requires GLFW on Linux (for now)
+ *
+ * Parameters
+ * - window The window for ImGui to use
  */
 void ImGui_ImplHurdyGurdy_Init(HgWindow window);
 

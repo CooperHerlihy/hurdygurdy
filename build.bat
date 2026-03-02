@@ -18,15 +18,18 @@ for %%a in (%*) do (
 set INCLUDES= ^
     /I "%BUILD_DIR%" ^
     /I "%SRC_DIR%\include" ^
-    /I "%SRC_DIR%\vendor\libX11\include"
+    /I "%SRC_DIR%\vendor\libX11\include" ^
+    /I "%SRC_DIR%\vendor\imgui" ^
+    /I "%SRC_DIR%\vendor\imgui\backends"
+
+set IMGUI_SRC=vendor/imgui/*.cpp
+
+set IMGUI_BACKENDS= ^
+    imgui_impl_win32.cpp ^
+    imgui_impl_vulkan.cpp
 
 set SRC= ^
-    init.cpp ^
-    test_utils.cpp ^
-    math.cpp ^
-    memory.cpp ^
-    string.cpp ^
-    time.cpp ^
+    utils.cpp ^
     thread.cpp ^
     resources.cpp ^
     ecs.cpp ^
@@ -71,6 +74,28 @@ if not exist "%BUILD_DIR%\stb.obj" (
         %STD% %CONFIG% %INCLUDES%
 )
 
+for %%F in (%IMGUI_SRC%) do (
+    if not exist "%BUILD_DIR%\%%~nF.obj" (
+        cl /c "%SRC_DIR%\vendor\imgui\%%F" ^
+            /Fd:"%BUILD_DIR%\%%~nF.pdb" ^
+            /Fo:"%BUILD_DIR%\%%~nF.obj" ^
+            %STD% %WARNINGS% %CONFIG% %INCLUDES%
+    )
+
+    set OBJS=!OBJS! "%BUILD_DIR%\%%~nF.obj"
+)
+
+for %%F in (%IMGUI_BACKENDS%) do (
+    if not exist "%BUILD_DIR%\%%~nF.obj" (
+        cl /c "%SRC_DIR%\vendor\imgui\backends\%%F" ^
+            /Fd:"%BUILD_DIR%\%%~nF.pdb" ^
+            /Fo:"%BUILD_DIR%\%%~nF.obj" ^
+            %STD% %WARNINGS% %CONFIG% %INCLUDES%
+    )
+
+    set OBJS=!OBJS! "%BUILD_DIR%\%%~nF.obj"
+)
+
 for %%F in (%SRC%) do (
     cl /c "%SRC_DIR%\src\%%F" ^
         /Fd:"%BUILD_DIR%\%%~nF.pdb" ^
@@ -85,10 +110,10 @@ lib /nologo /OUT:"%BUILD_DIR%\hurdygurdy.lib" ^
     "%BUILD_DIR%\stb.obj" ^
     %OBJS%
 
-cl "%SRC_DIR%\src\tests.cpp" ^
-    /Fd:"%BUILD_DIR%\tests.pdb" ^
-    /Fo:"%BUILD_DIR%\tests.obj" ^
-    /Fe:"%BUILD_DIR%\tests.exe" ^
+cl "%SRC_DIR%\src\test.cpp" ^
+    /Fd:"%BUILD_DIR%\test.pdb" ^
+    /Fo:"%BUILD_DIR%\test.obj" ^
+    /Fe:"%BUILD_DIR%\test.exe" ^
     %STD% %WARNINGS% %CONFIG% %INCLUDES% ^
     "%BUILD_DIR%\hurdygurdy.lib" User32.lib
 

@@ -20,7 +20,7 @@ int main(void) {
 
     HgWindowConfig window_config{};
     window_config.title = "Hg Test";
-    window_config.windowed = false;
+    window_config.windowed = true;
     window_config.width = 1600;
     window_config.height = 900;
     HgWindow window = window.create(arena, window_config);
@@ -33,30 +33,15 @@ int main(void) {
     ImGui::CreateContext();
     hg_defer(ImGui::DestroyContext());
 
+    ImGui::StyleColorsDark();
     ImGuiIO& io = ImGui::GetIO();
-    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
-    ImGui::StyleColorsDark();
+    // io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    // io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
     ImGui_ImplHurdyGurdy_Init(window);
     hg_defer(ImGui_ImplHurdyGurdy_Shutdown());
-
-    ImGui_ImplVulkan_InitInfo imgui_info{};
-    imgui_info.Instance = hg_vk_instance;
-    imgui_info.PhysicalDevice = hg_vk_physical_device;
-    imgui_info.Device = hg_vk_device;
-    imgui_info.QueueFamily = hg_vk_queue_family;
-    imgui_info.Queue = hg_vk_queue;
-    imgui_info.DescriptorPoolSize = 1000;
-    imgui_info.MinImageCount = 2;
-    imgui_info.ImageCount = 2;
-    imgui_info.UseDynamicRendering = true;
-    imgui_info.PipelineInfoMain.PipelineRenderingCreateInfo.sType
-        = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
-
-    ImGui_ImplVulkan_Init(&imgui_info);
-    hg_defer(ImGui_ImplVulkan_Shutdown());
 
     u32 window_width, window_height;
     window.get_size(&window_width, &window_height);
@@ -87,6 +72,30 @@ int main(void) {
 
     HgSwapchainCommands swapchain_commands = swapchain_commands.create(arena, swapchain.handle, hg_vk_cmd_pool);
     hg_defer(swapchain_commands.destroy());
+
+    ImGui_ImplVulkan_InitInfo imgui_info{};
+    imgui_info.Instance = hg_vk_instance;
+    imgui_info.PhysicalDevice = hg_vk_physical_device;
+    imgui_info.Device = hg_vk_device;
+    imgui_info.QueueFamily = hg_vk_queue_family;
+    imgui_info.Queue = hg_vk_queue;
+    imgui_info.DescriptorPoolSize = 1000;
+    imgui_info.MinImageCount = 2;
+    imgui_info.ImageCount = 2;
+    imgui_info.UseDynamicRendering = true;
+    imgui_info.PipelineInfoMain.PipelineRenderingCreateInfo.sType
+        = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+    imgui_info.PipelineInfoMain.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
+    imgui_info.PipelineInfoMain.PipelineRenderingCreateInfo.pColorAttachmentFormats = &swapchain.format;
+#ifdef HG_DEBUG_MODE
+    imgui_info.CheckVkResultFn = [](VkResult err) {
+        if (err != VK_SUCCESS)
+            hg_warn("Vulkan error from ImGui: %s\n", hg_vk_result_string(err));
+    };
+#endif
+
+    ImGui_ImplVulkan_Init(&imgui_info);
+    hg_defer(ImGui_ImplVulkan_Shutdown());
 
     HgStringView texture_path = "hg_test_dir/file_image_test.hgtex";
     HgResource texture_id = hg_resource_id(texture_path);
@@ -141,6 +150,9 @@ int main(void) {
     squares[0].get<HgSprite>() = {texture_id, {0.0f}, 1.0f};
     squares[1].get<HgSprite>() = {texture_id, {0.0f}, 1.0f};
 
+    bool show_time = true;
+    bool show_demo = true;
+
     HgClock game_clock{};
     HgClock cpu_clock{};
     while(true) {
@@ -153,16 +165,14 @@ int main(void) {
         if (window.was_closed() || window.was_key_pressed(HgKey::escape))
             break;
 
-        ImGui_ImplHurdyGurdy_NewFrame();
         ImGui_ImplVulkan_NewFrame();
+        ImGui_ImplHurdyGurdy_NewFrame();
         ImGui::NewFrame();
 
         static const f32 rot_speed = 2.0f;
         if (window.is_key_down(HgKey::lmouse)) {
             f64 x, y;
             window.get_mouse_delta(&x, &y);
-            // f64 x = (mouse_x_new - mouse_x) / swapchain.height;
-            // f64 y = (mouse_y_new - mouse_y) / swapchain.height;
             HgQuat rot_x = hg_axis_angle({0.0f, 1.0f, 0.0f}, (f32)x * rot_speed);
             HgQuat rot_y = hg_axis_angle({-1.0f, 0.0f, 0.0f}, (f32)y * rot_speed);
             camera.rotation = rot_x * camera.rotation * rot_y;
@@ -232,13 +242,17 @@ int main(void) {
             hg_debug("window resized\n");
         }
 
+        show_time = true;
+
         f64 cpu_delta = cpu_clock.tick();
-        ImGui::Begin("Time");
+        ImGui::Begin("Time", &show_time);
         ImGui::Text("total = %fms", delta * 1.0e3);
         ImGui::Text("cpu = %fms", cpu_delta * 1.0e3);
         ImGui::End();
 
-        ImGui::ShowDemoWindow();
+        show_demo = true;
+
+        ImGui::ShowDemoWindow(&show_demo);
 
         VkCommandBuffer cmd = swapchain_commands.acquire_and_record();
         if (cmd != nullptr) {
@@ -307,6 +321,11 @@ int main(void) {
             vkCmdPipelineBarrier2(cmd, &present_dependency);
 
             swapchain_commands.end_and_present(hg_vk_queue);
+
+            // if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+            //     ImGui::UpdatePlatformWindows();
+            //     ImGui::RenderPlatformWindowsDefault();
+            // }
         }
     }
 

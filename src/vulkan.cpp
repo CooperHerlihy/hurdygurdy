@@ -2137,7 +2137,6 @@ VkInstance hg_vk_create_instance() {
     instance_info.enabledLayerCount = hg_countof(layers);
     instance_info.ppEnabledLayerNames = layers;
 #endif
-    (void)layers;
     instance_info.enabledExtensionCount = hg_countof(exts);
     instance_info.ppEnabledExtensionNames = exts;
 

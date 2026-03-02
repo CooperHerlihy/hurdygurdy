@@ -578,8 +578,32 @@ void hg_process_window_events(const HgWindow* windows, usize window_count) {
 
 #include "imgui_impl_win32.h"
 
+// static int ImGui_ImplWin32_CreateVkSurface(
+//     ImGuiViewport* viewport,
+//     ImU64 vk_instance,
+//     const void* vk_allocator,
+//     ImU64* out_vk_surface
+// ) {
+//     PFN_vkCreateWin32SurfaceKHR pfn_vkCreateWin32SurfaceKHR
+//         = (PFN_vkCreateWin32SurfaceKHR)vkGetInstanceProcAddr((VkInstance)vk_instance, "vkCreateWin32SurfaceKHR");
+//     if (pfn_vkCreateWin32SurfaceKHR == nullptr)
+//         hg_error("Could not load vkCreateWin32SurfaceKHR\n");
+//
+//     VkWin32SurfaceCreateInfoKHR info{};
+//     info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+//     info.hwnd = (HWND)viewport->PlatformHandleRaw;
+//     info.hinstance = ::GetModuleHandle(nullptr);
+//
+//     return (int)pfn_vkCreateWin32SurfaceKHR(
+//         (VkInstance)vk_instance,
+//         &info,
+//         (VkAllocationCallbacks*)vk_allocator,
+//         (VkSurfaceKHR*)out_vk_surface);
+// }
+
 void ImGui_ImplHurdyGurdy_Init(HgWindow window) {
-    ImGui_ImplWin32_Init(window.internals->hwnd);
+    ImGui_ImplWin32_InitForOpenGL(window.internals->hwnd);
+    // ImGui::GetPlatformIO().Platform_CreateVkSurface = ImGui_ImplWin32_CreateVkSurface;
 }
 
 void ImGui_ImplHurdyGurdy_Shutdown() {
