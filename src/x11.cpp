@@ -349,6 +349,12 @@ void HgWindow::set_cursor_image(u32* data, u32 width, u32 height) {
     (void)height;
 }
 
+u32 hg_vk_get_platform_extensions(HgArena& arena, HgStringView** ext_buffer) {
+    *ext_buffer = arena.alloc<HgStringView>(1);
+    **ext_buffer = "VK_KHR_xlib_surface";
+    return 1;
+}
+
 VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window) {
     hg_assert(instance != nullptr);
     hg_assert(window.internals != nullptr);

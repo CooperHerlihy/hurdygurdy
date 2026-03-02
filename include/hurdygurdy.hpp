@@ -4395,10 +4395,14 @@ void hg_vk_load_device(VkDevice device);
  *
  * In debug mode, enables debug messaging
  *
+ * Parameters
+ * - extensions The instance extensions to load
+ * - extension_count The number of extensions
+ *
  * Returns
  * - The created VkInstance, will never be nullptr
  */
-VkInstance hg_vk_create_instance();
+VkInstance hg_vk_create_instance(HgStringView* extensions, u32 extension_count);
 
 /**
  * Creates a Vulkan debug messenger
@@ -5171,6 +5175,18 @@ struct HgWindow {
      */
     bool was_key_released(HgKey key);
 };
+
+/**
+ * Get the platform's required instance extensions for windowing
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - ext_buffer A pointer to store the extension names
+ *
+ * Returns
+ * - The number of required extensions
+ */
+u32 hg_vk_get_platform_extensions(HgArena& arena, HgStringView** ext_buffer);
 
 /**
  * Create a Vulkan surface for the window, according to the platform

@@ -445,6 +445,20 @@ void HgWindow::set_cursor_image(u32* data, u32 width, u32 height) {
     (void)height;
 }
 
+u32 hg_vk_get_platform_extensions(HgArena& arena, HgStringView** ext_buffer) {
+    u32 ext_count;
+    const char** exts = glfwGetRequiredInstanceExtensions(&ext_count);
+    if (exts == nullptr)
+        hg_error("Could not get required instance extensions from glfw\n");
+
+    *ext_buffer = arena.alloc<HgStringView>(ext_count);
+    for (usize i = 0; i < ext_count; ++i) {
+        (*ext_buffer)[i] = exts[i];
+    }
+
+    return ext_count;
+}
+
 VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window) {
     hg_assert(instance != nullptr);
     hg_assert(window.internals != nullptr);

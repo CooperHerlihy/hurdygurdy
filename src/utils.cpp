@@ -11,13 +11,13 @@ void hg_init(void) {
     hg_gpu_resources_init(arena, 4096);
     hg_ecs_init(arena, 4096);
 
-    hg_graphics_init();
     hg_platform_init();
+    hg_graphics_init();
 }
 
 void hg_exit(void) {
-    hg_platform_deinit();
     hg_graphics_deinit();
+    hg_platform_deinit();
 
     hg_ecs_reset();
     hg_gpu_resources_reset();

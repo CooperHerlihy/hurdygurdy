@@ -12,7 +12,15 @@ void hg_graphics_init() {
     hg_vulkan_init();
 
     if (hg_vk_instance == nullptr) {
-        hg_vk_instance = hg_vk_create_instance();
+        hg_arena_scope(scratch, hg_get_scratch());
+
+        HgStringView* exts;
+        u32 ext_count = hg_vk_get_platform_extensions(scratch, &exts);
+#ifdef HG_VK_DEBUG_MESSENGER
+        exts = scratch.realloc(exts, ext_count, ext_count + 1);
+        exts[ext_count++] = "VK_EXT_debug_utils";
+#endif
+        hg_vk_instance = hg_vk_create_instance(exts, ext_count);
         hg_vk_load_instance(hg_vk_instance);
     }
 
@@ -2097,7 +2105,9 @@ static const VkDebugUtilsMessengerCreateInfoEXT hg_internal_debug_utils_messenge
     hg_internal_debug_callback, nullptr,
 };
 
-VkInstance hg_vk_create_instance() {
+VkInstance hg_vk_create_instance(HgStringView* extensions, u32 extension_count) {
+    hg_arena_scope(scratch, hg_get_scratch());
+
     VkApplicationInfo app_info{};
     app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     app_info.pApplicationName = "Hurdy Gurdy Application",
@@ -2106,26 +2116,6 @@ VkInstance hg_vk_create_instance() {
     app_info.engineVersion = 0;
     app_info.apiVersion = VK_API_VERSION_1_3;
 
-#ifdef HG_VK_DEBUG_MESSENGER
-    const char* layers[]{
-        "VK_LAYER_KHRONOS_validation",
-    };
-#endif
-
-    const char* exts[]{
-#ifdef HG_VK_DEBUG_MESSENGER
-        "VK_EXT_debug_utils",
-#endif
-        "VK_KHR_surface",
-#if defined(HG_PLATFORM_LINUX)
-        // "VK_KHR_xlib_surface",
-        "VK_KHR_xcb_surface",
-        // "VK_KHR_wayland_surface",
-#elif defined(HG_PLATFORM_WINDOWS)
-        "VK_KHR_win32_surface",
-#endif
-    };
-
     VkInstanceCreateInfo instance_info{};
     instance_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 #ifdef HG_VK_DEBUG_MESSENGER
@@ -2133,12 +2123,21 @@ VkInstance hg_vk_create_instance() {
 #endif
     instance_info.flags = 0;
     instance_info.pApplicationInfo = &app_info;
+
 #ifdef HG_VK_DEBUG_MESSENGER
+    const char* layers[]{
+        "VK_LAYER_KHRONOS_validation",
+    };
     instance_info.enabledLayerCount = hg_countof(layers);
     instance_info.ppEnabledLayerNames = layers;
 #endif
-    instance_info.enabledExtensionCount = hg_countof(exts);
-    instance_info.ppEnabledExtensionNames = exts;
+
+    const char** ext_c_strs = scratch.alloc<const char*>(extension_count);
+    for (usize i = 0; i < extension_count; ++i) {
+        ext_c_strs[i] = HgString::create(scratch, extensions[i]).append(scratch, 0).chars;
+    }
+    instance_info.enabledExtensionCount = extension_count;
+    instance_info.ppEnabledExtensionNames = ext_c_strs;
 
     VkInstance instance = nullptr;
     VkResult result = vkCreateInstance(&instance_info, nullptr, &instance);
