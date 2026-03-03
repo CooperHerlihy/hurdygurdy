@@ -13,7 +13,6 @@ struct HgWindowInput {
     f64 mouse_pos_y;
     f64 mouse_delta_x;
     f64 mouse_delta_y;
-    bool was_resized;
     bool was_closed;
     bool keys_down[(u32)HgKey::count];
     bool keys_pressed[(u32)HgKey::count];
@@ -27,10 +26,6 @@ struct HgWindow::Internals {
 
 bool HgWindow::was_closed() {
     return internals->input.was_closed;
-}
-
-bool HgWindow::was_resized() {
-    return internals->input.was_resized;
 }
 
 void HgWindow::get_size(u32* width, u32* height) {
@@ -72,7 +67,7 @@ void hg_platform_deinit() {
 }
 
 void window_size_callback(GLFWwindow* glfw_window, int width, int height) {
-    HgWindow window{(HgWindow::Internals*)((u8*)glfw_window + offsetof(HgWindow::Internals, glfw_window))};
+    HgWindow window = {(HgWindow::Internals*)glfwGetWindowUserPointer(glfw_window)};
     window.internals->input.width = (u32)width;
     window.internals->input.height = (u32)height;
 }
@@ -393,16 +388,28 @@ HgWindow HgWindow::create(HgArena& arena, const HgWindowConfig& config) {
     window.internals = arena.alloc<Internals>(1);
     *window.internals = {};
 
-    window.internals->input.width = config.width;
-    window.internals->input.height = config.height;
-
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    window.internals->glfw_window = glfwCreateWindow(
-        (int)config.width,
-        (int)config.height,
-        config.title,
-        nullptr,
-        nullptr);
+    if (config.windowed) {
+        window.internals->input.width = config.width;
+        window.internals->input.height = config.height;
+        window.internals->glfw_window = glfwCreateWindow(
+            (int)config.width,
+            (int)config.height,
+            config.title,
+            nullptr,
+            nullptr);
+    } else {
+        GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+        const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+        window.internals->input.width = (u32)mode->width;
+        window.internals->input.height = (u32)mode->height;
+        window.internals->glfw_window = glfwCreateWindow(
+            mode->width,
+            mode->height,
+            config.title,
+            monitor,
+            nullptr);
+    }
 
     glfwSetWindowUserPointer(window.internals->glfw_window, window.internals);
     glfwSetWindowSizeCallback(window.internals->glfw_window, window_size_callback);
@@ -472,26 +479,19 @@ VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window) {
 }
 
 void hg_process_window_events(const HgWindow* windows, usize window_count) {
-    hg_assert(windows != nullptr);
-
     hg_arena_scope(scratch, hg_get_scratch());
 
-    u32* old_widths = scratch.alloc<u32>(window_count);
-    u32* old_heights = scratch.alloc<u32>(window_count);
     f64* old_mouse_xs = scratch.alloc<f64>(window_count);
     f64* old_mouse_ys = scratch.alloc<f64>(window_count);
 
     for (usize i = 0; i < window_count; ++i) {
         HgWindow window = windows[i];
 
-        old_widths[i] = window.internals->input.width;
-        old_heights[i] = window.internals->input.height;
         old_mouse_xs[i] = window.internals->input.mouse_pos_x;
         old_mouse_ys[i] = window.internals->input.mouse_pos_y;
 
         std::memset(window.internals->input.keys_pressed, 0, sizeof(window.internals->input.keys_pressed));
         std::memset(window.internals->input.keys_released, 0, sizeof(window.internals->input.keys_released));
-        window.internals->input.was_resized = false;
     }
 
     glfwPollEvents();
@@ -500,10 +500,6 @@ void hg_process_window_events(const HgWindow* windows, usize window_count) {
         HgWindow window = windows[i];
 
         window.internals->input.was_closed = glfwWindowShouldClose(window.internals->glfw_window);
-
-        if (window.internals->input.width != old_widths[i] || window.internals->input.height != old_heights[i]) {
-            window.internals->input.was_resized = true;
-        }
 
         window.internals->input.mouse_delta_x = window.internals->input.mouse_pos_x - old_mouse_xs[i];
         window.internals->input.mouse_delta_y = window.internals->input.mouse_pos_y - old_mouse_ys[i];

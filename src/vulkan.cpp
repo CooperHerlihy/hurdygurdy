@@ -2081,6 +2081,7 @@ static VkBool32 hg_internal_debug_callback(
 
     if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
         (void)std::fprintf(stderr, "Vulkan Error: %s\n", callback_data->pMessage);
+        abort();
     } else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
         (void)std::fprintf(stderr, "Vulkan Warning: %s\n", callback_data->pMessage);
     } else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) {
@@ -2479,7 +2480,8 @@ static VkPresentModeKHR hg_internal_vk_find_swapchain_present_mode(
 HgSwapchainData hg_vk_create_swapchain(
     VkSwapchainKHR old_swapchain,
     VkSurfaceKHR surface,
-    u32 width, u32 height,
+    u32 width,
+    u32 height,
     VkImageUsageFlags image_usage,
     VkPresentModeKHR desired_mode
 ) {
@@ -2493,10 +2495,18 @@ HgSwapchainData hg_vk_create_swapchain(
     VkSurfaceCapabilitiesKHR surface_capabilities;
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(hg_vk_physical_device, surface, &surface_capabilities);
 
+    if (surface_capabilities.currentExtent.width != (u32)-1)
+        width = surface_capabilities.currentExtent.width;
+    if (surface_capabilities.currentExtent.height != (u32)-1)
+        height = surface_capabilities.currentExtent.height;
+
     if (width < surface_capabilities.minImageExtent.width || height < surface_capabilities.minImageExtent.height ||
         width > surface_capabilities.maxImageExtent.width || height > surface_capabilities.maxImageExtent.height
     ) {
-        hg_warn("Could not create swapchain of the surface's size\n");
+        hg_warn("Could not create swapchain of the surface's size: %d, %d | min: %d, %d - max: %d, %d\n",
+            width, height,
+            surface_capabilities.minImageExtent.width, surface_capabilities.minImageExtent.height,
+            surface_capabilities.maxImageExtent.width, surface_capabilities.maxImageExtent.height);
         return swapchain;
     }
 
@@ -2605,7 +2615,7 @@ VkCommandBuffer HgSwapchainCommands::acquire_and_record() {
 
     VkResult result = vkAcquireNextImageKHR(
         hg_vk_device, swapchain, UINT64_MAX, image_available[current_frame], nullptr, &current_image);
-    if (result == VK_ERROR_OUT_OF_DATE_KHR)
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
         return nullptr;
 
     VkCommandBuffer cmd = cmds[current_frame];
@@ -2629,19 +2639,19 @@ void HgSwapchainCommands::end_and_present(VkQueue queue) {
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submit.waitSemaphoreCount = 1;
     submit.pWaitSemaphores = &image_available[current_frame];
-    VkPipelineStageFlags stage_flags{VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT};
+    VkPipelineStageFlags stage_flags{VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
     submit.pWaitDstStageMask = &stage_flags;
     submit.commandBufferCount = 1;
     submit.pCommandBuffers = &cmd;
     submit.signalSemaphoreCount = 1;
-    submit.pSignalSemaphores = &ready_to_present[current_image];
+    submit.pSignalSemaphores = &ready_to_present[current_frame];
 
     vkQueueSubmit(queue, 1, &submit, frame_finished[current_frame]);
 
     VkPresentInfoKHR present_info{};
     present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     present_info.waitSemaphoreCount = 1;
-    present_info.pWaitSemaphores = &ready_to_present[current_image];
+    present_info.pWaitSemaphores = &ready_to_present[current_frame];
     present_info.swapchainCount = 1;
     present_info.pSwapchains = &swapchain;
     present_info.pImageIndices = &current_image;

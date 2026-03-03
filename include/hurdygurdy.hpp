@@ -4597,7 +4597,8 @@ struct HgSwapchainData {
 HgSwapchainData hg_vk_create_swapchain(
     VkSwapchainKHR old_swapchain,
     VkSurfaceKHR surface,
-    u32 width, u32 height,
+    u32 width,
+    u32 height,
     VkImageUsageFlags image_usage,
     VkPresentModeKHR desired_mode);
 
@@ -5107,13 +5108,6 @@ struct HgWindow {
      * true, and may be called manually
      */
     bool was_closed();
-
-    /**
-     * Returns whether the window was resized
-     *
-     * If it was, the swapchain will need to be resized
-     */
-    bool was_resized();
 
     /**
      * Gets the size of the window in pixels

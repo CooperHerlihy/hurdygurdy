@@ -13,7 +13,6 @@ struct HgWindowInput {
     f64 mouse_pos_y;
     f64 mouse_delta_x;
     f64 mouse_delta_y;
-    bool was_resized;
     bool was_closed;
     bool keys_down[(u32)HgKey::count];
     bool keys_pressed[(u32)HgKey::count];
@@ -27,10 +26,6 @@ struct HgWindow::Internals {
 
 bool HgWindow::was_closed() {
     return internals->input.was_closed;
-}
-
-bool HgWindow::was_resized() {
-    return internals->input.was_resized;
 }
 
 void HgWindow::get_size(u32* width, u32* height) {
@@ -511,9 +506,11 @@ void HgWindow::set_cursor_image(u32* data, u32 width, u32 height) {
 }
 
 u32 hg_vk_get_platform_extensions(HgArena& arena, HgStringView** ext_buffer) {
-    *ext_buffer = arena.alloc<HgStringView>(1);
-    **ext_buffer = "VK_KHR_win32_surface";
-    return 1;
+    u32 count = 2;
+    *ext_buffer = arena.alloc<HgStringView>(count);
+    (*ext_buffer)[0] = "VK_KHR_surface";
+    (*ext_buffer)[1] = "VK_KHR_win32_surface";
+    return count;
 }
 
 VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window) {
@@ -547,10 +544,7 @@ void hg_process_window_events(const HgWindow* windows, usize window_count) {
 
         std::memset(window->input.keys_pressed, 0, sizeof(window->input.keys_pressed));
         std::memset(window->input.keys_released, 0, sizeof(window->input.keys_released));
-        window->input.was_resized = false;
 
-        u32 old_window_width = window->input.width;
-        u32 old_window_height = window->input.height;
         f64 old_mouse_pos_x = window->input.mouse_pos_x;
         f64 old_mouse_pos_y = window->input.mouse_pos_y;
 
@@ -558,10 +552,6 @@ void hg_process_window_events(const HgWindow* windows, usize window_count) {
         while (PeekMessageA(&msg, window->hwnd, 0, 0, PM_REMOVE) != 0) {
             TranslateMessage(&msg);
             DispatchMessageA(&msg);
-        }
-
-        if (window->input.width != old_window_width || window->input.height != old_window_height) {
-            window->input.was_resized = true;
         }
 
         window->input.mouse_delta_x = window->input.mouse_pos_x - old_mouse_pos_x;
