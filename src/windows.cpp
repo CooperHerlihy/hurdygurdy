@@ -68,8 +68,15 @@ void hg_platform_deinit() {
     hg_internal_win32_instance = nullptr;
 }
 
+extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
+static bool imgui_initialized = false;
+
 static LRESULT CALLBACK hg_internal_window_callback(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     HgWindow::Internals* window = (HgWindow::Internals*)GetWindowLongPtrA(hwnd, GWLP_USERDATA);
+
+    if (imgui_initialized)
+        ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam);
 
     switch (msg) {
         case WM_NCCREATE:
@@ -598,8 +605,9 @@ void hg_process_window_events(const HgWindow* windows, usize window_count) {
 // }
 
 void ImGui_ImplHurdyGurdy_Init(HgWindow window) {
-    ImGui_ImplWin32_InitForOpenGL(window.internals->hwnd);
+    ImGui_ImplWin32_Init(window.internals->hwnd);
     // ImGui::GetPlatformIO().Platform_CreateVkSurface = ImGui_ImplWin32_CreateVkSurface;
+    imgui_initialized = true;
 }
 
 void ImGui_ImplHurdyGurdy_Shutdown() {
