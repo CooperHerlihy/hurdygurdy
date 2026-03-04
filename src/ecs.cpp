@@ -23,7 +23,7 @@ u32 hg_create_component_id() {
     return id;
 }
 
-HgEntity HgEntity::create() {
+HgEntity hg_spawn_entity() {
     hg_assert(next_entity.id < entity_capacity);
 
     HgEntity entity = next_entity;
@@ -32,7 +32,7 @@ HgEntity HgEntity::create() {
     return entity;
 }
 
-void HgEntity::destroy() {
+void HgEntity::despawn() {
     hg_assert(alive());
 
     for (u32 i = 0; i < system_count; ++i) {
@@ -62,11 +62,19 @@ void HgEntity::remove(u32 component_id) {
     hg_assert(hg_ecs_is_registered(component_id));
     hg_assert(has(component_id));
 
-    u32 index = systems[component_id].sparse[id];
-    systems[component_id].sparse[id] = (u32)-1;
+    HgEntity last = systems[component_id].dense[systems[component_id].components.count - 1];
+    systems[component_id].dense[systems[component_id].components.count - 1] = HgEntity{};
+    if (id == last.id) {
+        systems[component_id].sparse[id] = (u32)-1;
+        systems[component_id].components.pop();
+    } else {
+        u32 index = systems[component_id].sparse[id];
+        systems[component_id].sparse[id] = (u32)-1;
 
-    systems[component_id].dense[index] = systems[component_id].dense[systems[component_id].components.count - 1];
-    systems[component_id].components.swap_remove(index);
+        systems[component_id].dense[index] = last;
+        systems[component_id].sparse[last.id] = index;
+        systems[component_id].components.swap_remove(index);
+    }
 }
 
 bool HgEntity::has(u32 component_id) {
@@ -335,7 +343,7 @@ void HgTransform::destroy() {
                 next_sibling.get<HgTransform>().prev_sibling = HgEntity{};
         }
     }
-    HgEntity::get(*this).destroy();
+    HgEntity::get(*this).despawn();
 }
 
 void HgTransform::set(const HgVec3& p, const HgVec3& s, const HgQuat& r) {

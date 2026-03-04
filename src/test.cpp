@@ -8,6 +8,10 @@
 #include "imgui.h"
 #include "imgui_impl_vulkan.h"
 
+struct HgEntityName {
+    HgStringView str;
+};
+
 int main(void) {
     hg_defer(hg_debug("Exited successfully\n"));
 
@@ -21,8 +25,8 @@ int main(void) {
     HgWindowConfig window_config{};
     window_config.title = "Hg Test";
     // window_config.windowed = true;
-    // window_config.width = 1920;
-    // window_config.height = 1080;
+    // window_config.width = 1600;
+    // window_config.height = 900;
     HgWindow window = window.create(arena, window_config);
     hg_defer(window.destroy());
 
@@ -77,40 +81,27 @@ int main(void) {
     pipeline2d.add_texture(texture_id);
     hg_defer(pipeline2d.remove_texture(texture_id));
 
+    hg_ecs_register<HgEntityName>(arena, 1024);
     hg_ecs_register<HgCamera3D>(arena, 1);
     hg_ecs_register<HgTransform>(arena, 1024);
     hg_ecs_register<HgSprite>(arena, 1024);
 
-    HgEntity camera_entity = camera_entity.create();
+    HgEntity camera_entity = hg_spawn_entity();
     HgCamera3D& camera = camera_entity.add<HgCamera3D>();
     camera = {};
+    camera.position.z = -1.0f;
 
     f32 aspect = (f32)swapchain.width / (f32)swapchain.height;
     HgMat4 proj = hg_projection_perspective((f32)hg_pi * 0.5f, aspect, 0.1f, 1000.0f);
     pipeline2d.update_projection(proj);
 
-    HgEntity squares[2]{};
+    u32 scene_capacity = 2;
+    HgEntity* scene = arena.alloc<HgEntity>(scene_capacity);
+    u32 scene_size = 0;
 
-    for (HgEntity& square : squares) {
-        square = square.create();
-        square.add<HgTransform>();
-        square.add<HgSprite>();
-    }
-
-    {
-        HgTransform& tf = squares[0].get<HgTransform>();
-        tf = {};
-        tf.position.x = -0.3f;
-        tf.position.z = 0.7f;
-    }
-    {
-        HgTransform& tf = squares[1].get<HgTransform>();
-        tf = {};
-        tf.position.x = 0.3f;
-        tf.position.z = 1.3f;
-    }
-    squares[0].get<HgSprite>() = {texture_id, {0.0f}, 1.0f};
-    squares[1].get<HgSprite>() = {texture_id, {0.0f}, 1.0f};
+    scene[scene_size++] = hg_spawn_entity();
+    scene[0].add<HgTransform>() = {};
+    scene[0].add<HgSprite>() = {texture_id, {0.0f}, 1.0f};
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -200,11 +191,73 @@ int main(void) {
         ImGui_ImplHurdyGurdy_NewFrame();
         ImGui::NewFrame();
 
-        ImGui::ShowDemoWindow();
+        // ImGui::ShowDemoWindow();
 
-        ImGui::Begin("Time");
-        ImGui::Text("total = %fms", delta * 1.0e3);
-        ImGui::Text("cpu = %fms", cpu_delta * 1.0e3);
+        if (ImGui::Begin("Time")) {
+            ImGui::Text("total = %fms", delta * 1.0e3);
+            ImGui::Text("cpu = %fms", cpu_delta * 1.0e3);
+        }
+        ImGui::End();
+
+        if (ImGui::Begin("Scene")) {
+            if (ImGui::CollapsingHeader("Entities", ImGuiTreeNodeFlags_DefaultOpen)) {
+                if (ImGui::Button("Spawn Entity")) {
+                    if (scene_size == scene_capacity) {
+                        scene = arena.realloc(scene, scene_capacity, scene_capacity * 2);
+                        scene_capacity *= 2;
+                    }
+                    scene[scene_size++] = hg_spawn_entity();
+                }
+
+                for (usize i = 0; i < scene_size; ++i) {
+                    hg_arena_scope(scratch, hg_get_scratch());
+                    HgEntity e = scene[i];
+
+                    HgString name;
+                    if (e.has<HgEntityName>()) {
+                        name = name
+                            .create(scratch, scene[i].get<HgEntityName>().str)
+                            .append(scratch, 0);
+                    } else {
+                        name = name
+                            .create(scratch, "Entity ")
+                            .append(scratch, hg_int_to_str_base10(scratch, (i64)e.id))
+                            .append(scratch, 0);
+                    }
+
+                    if (ImGui::TreeNodeEx(name.chars, ImGuiTreeNodeFlags_DefaultOpen)) {
+                        if (ImGui::Button("Despawn Entity")) {
+                            e.despawn();
+                            memmove(scene + i, scene + i + 1, sizeof(HgEntity) * (--scene_size - i));
+                            --i;
+                        } else {
+                            if (!e.has<HgTransform>() && ImGui::Button("Add Transform")) {
+                                e.add<HgTransform>() = {};
+                            }
+                            if (e.has<HgTransform>() && ImGui::TreeNodeEx("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
+                                HgTransform& tf = e.get<HgTransform>();
+                                ImGui::DragFloat3("Position", &tf.position.x, 0.01f);
+                                ImGui::DragFloat3("Scale", &tf.scale.x, 0.01f);
+                                ImGui::TreePop();
+                            }
+
+                            if (!e.has<HgSprite>() && ImGui::Button("Add Sprite")) {
+                                if (!e.has<HgTransform>())
+                                    e.add<HgTransform>() = {};
+                                e.add<HgSprite>() = {texture_id, {0.0f}, 1.0f};
+                            }
+                            if (e.has<HgSprite>() && ImGui::TreeNodeEx("Sprite", ImGuiTreeNodeFlags_DefaultOpen)) {
+                                HgSprite& s = e.get<HgSprite>();
+                                ImGui::DragFloat2("UV Position", &s.uv_pos.x, 0.01f);
+                                ImGui::DragFloat2("UV Size", &s.uv_size.x, 0.01f);
+                                ImGui::TreePop();
+                            }
+                        }
+                        ImGui::TreePop();
+                    }
+                }
+            }
+        }
         ImGui::End();
 
         ImGui::Render();
@@ -2303,8 +2356,8 @@ hg_test(hg_ecs) {
     hg_ecs_register<u64>(arena, 512);
     hg_defer(hg_ecs_unregister<u64>());
 
-    HgEntity e1 = e1.create();
-    HgEntity e2 = e2.create();
+    HgEntity e1 = hg_spawn_entity();
+    HgEntity e2 = hg_spawn_entity();
     HgEntity e3 = {};
     hg_test_assert(e1.id == 0);
     hg_test_assert(e2.id == 1);
@@ -2312,13 +2365,13 @@ hg_test(hg_ecs) {
     hg_test_assert(e2.alive());
     hg_test_assert(!e3.alive());
 
-    e1.destroy();
+    e1.despawn();
     hg_test_assert(!e1.alive());
-    e3 = e3.create();
+    e3 = hg_spawn_entity();
     hg_test_assert(e3.alive());
     hg_test_assert(e3 == e1);
 
-    e1 = e1.create();
+    e1 = hg_spawn_entity();
     hg_test_assert(e1.alive());
     hg_test_assert(e1.id == 2);
 
@@ -2414,7 +2467,7 @@ hg_test(hg_ecs) {
     }
 
     {
-        e1.destroy();
+        e1.despawn();
         hg_test_assert(hg_ecs_component_count<u32>() == 2);
         hg_test_assert(hg_ecs_component_count<u64>() == 2);
 
@@ -2445,7 +2498,7 @@ hg_test(hg_ecs) {
     }
 
     {
-        e2.destroy();
+        e2.despawn();
         hg_test_assert(hg_ecs_component_count<u32>() == 1);
         hg_test_assert(hg_ecs_component_count<u64>() == 1);
     }
@@ -2456,7 +2509,7 @@ hg_test(hg_ecs) {
 
     {
         for (u32 i = 0; i < 300; ++i) {
-            HgEntity e = e.create();
+            HgEntity e = hg_spawn_entity();
             switch (i % 3) {
                 case 0:
                     e.add<u32>() = 12;
@@ -2515,7 +2568,7 @@ hg_test(hg_ecs) {
     };
 
     {
-        HgEntity::create().add<u32>() = 42;
+        hg_spawn_entity().add<u32>() = 42;
 
         hg_ecs_sort<u32>(nullptr, comparison);
 
@@ -2532,7 +2585,7 @@ hg_test(hg_ecs) {
     {
         u32 small_scramble_1[] = {1, 0};
         for (u32 i = 0; i < hg_countof(small_scramble_1); ++i) {
-            HgEntity::create().add<u32>() = small_scramble_1[i];
+            hg_spawn_entity().add<u32>() = small_scramble_1[i];
         }
 
         {
@@ -2567,7 +2620,7 @@ hg_test(hg_ecs) {
     {
         u32 medium_scramble_1[] = {8, 9, 1, 6, 0, 3, 7, 2, 5, 4};
         for (u32 i = 0; i < hg_countof(medium_scramble_1); ++i) {
-            HgEntity::create().add<u32>() = medium_scramble_1[i];
+            hg_spawn_entity().add<u32>() = medium_scramble_1[i];
         }
         hg_ecs_sort<u32>(nullptr, comparison);
 
@@ -2586,7 +2639,7 @@ hg_test(hg_ecs) {
     {
         u32 medium_scramble_2[] = {3, 9, 7, 6, 8, 5, 0, 1, 2, 4};
         for (u32 i = 0; i < hg_countof(medium_scramble_2); ++i) {
-            HgEntity::create().add<u32>() = medium_scramble_2[i];
+            hg_spawn_entity().add<u32>() = medium_scramble_2[i];
         }
         hg_ecs_sort<u32>(nullptr, comparison);
         hg_ecs_sort<u32>(nullptr, comparison);
@@ -2605,7 +2658,7 @@ hg_test(hg_ecs) {
 
     {
         for (u32 i = 127; i < 128; --i) {
-            HgEntity::create().add<u32>() = i;
+            hg_spawn_entity().add<u32>() = i;
         }
         hg_ecs_sort<u32>(nullptr, comparison);
 
@@ -2623,7 +2676,7 @@ hg_test(hg_ecs) {
 
     {
         for (u32 i = 127; i < 128; --i) {
-            HgEntity::create().add<u32>() = i / 2;
+            hg_spawn_entity().add<u32>() = i / 2;
         }
         hg_ecs_sort<u32>(nullptr, comparison);
         hg_ecs_sort<u32>(nullptr, comparison);

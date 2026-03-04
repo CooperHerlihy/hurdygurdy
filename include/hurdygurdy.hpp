@@ -3608,19 +3608,11 @@ struct HgEntity {
     u32 id = (u32)-1;
 
     /**
-     * Creates a new entity in the ECS
-     *
-     * Returns
-     * - The created entity
-     */
-    static HgEntity create();
-
-    /**
      * Destroys the entity in the ECS
      *
      * Note, this function will invalidate iterators
      */
-    void destroy();
+    void despawn();
 
     /**
      * Returns whether the entity is alive and can be used
@@ -3756,6 +3748,14 @@ struct HgEntity {
         return get(&component, hg_component_id<T>);
     }
 };
+
+/**
+ * Create a new entity
+ *
+ * Returns
+ * - The created entity with no components
+ */
+HgEntity hg_spawn_entity();
 
 /**
  * Compare entities
