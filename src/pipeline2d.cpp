@@ -247,10 +247,7 @@ void HgPipeline2D::draw(VkCommandBuffer cmd) {
         hg_ecs_sort<HgSprite>(nullptr, [](void*, HgEntity lhs, HgEntity rhs) -> bool {
             hg_assert(lhs.has<HgTransform>());
             hg_assert(rhs.has<HgTransform>());
-            HgVec3 camera_pos = hg_ecs_components<HgCamera3D>()[0].position;
-            HgVec3 lhs_diff = lhs.get<HgTransform>().position - camera_pos;
-            HgVec3 rhs_diff = rhs.get<HgTransform>().position - camera_pos;
-            return hg_dot(lhs_diff, lhs_diff) > hg_dot(rhs_diff, rhs_diff);
+            return lhs.get<HgTransform>().position.z > rhs.get<HgTransform>().position.z;
         });
     }
 

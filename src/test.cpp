@@ -141,6 +141,9 @@ int main(void) {
     ImGui_ImplVulkan_Init(&imgui_info);
     hg_defer(ImGui_ImplVulkan_Shutdown());
 
+    bool imgui_demo = false;
+    bool move_3d = false;
+
     HgClock game_clock{};
     HgClock cpu_clock{};
     while(true) {
@@ -150,12 +153,12 @@ int main(void) {
         hg_arena_scope(frame, hg_get_scratch(arena));
 
         hg_process_window_events(&window, 1);
-        if (window.was_closed() || window.was_key_pressed(HgKey::escape))
+        if (window.was_closed())
             break;
 
         if (!ImGui::GetIO().WantCaptureMouse) {
             static const f32 rot_speed = 2.0f;
-            if (window.is_key_down(HgKey::lmouse)) {
+            if (move_3d && window.is_key_down(HgKey::lmouse)) {
                 f64 x, y;
                 window.get_mouse_delta(&x, &y);
                 HgQuat rot_x = hg_axis_angle({0.0f, 1.0f, 0.0f}, (f32)x * rot_speed);
@@ -165,42 +168,81 @@ int main(void) {
 
             static const f32 move_speed = 1.5f;
             HgVec3 movement = {0.0f};
-            if (window.is_key_down(HgKey::space))
-                movement.y -= 1.0f;
-            if (window.is_key_down(HgKey::lshift))
-                movement.y += 1.0f;
-            if (window.is_key_down(HgKey::w))
-                movement.z += 1.0f;
-            if (window.is_key_down(HgKey::s))
-                movement.z -= 1.0f;
-            if (window.is_key_down(HgKey::a))
-                movement.x -= 1.0f;
-            if (window.is_key_down(HgKey::d))
-                movement.x += 1.0f;
+
+            if (move_3d) {
+                if (window.is_key_down(HgKey::space))
+                    movement.y -= 1.0f;
+                if (window.is_key_down(HgKey::lshift))
+                    movement.y += 1.0f;
+                if (window.is_key_down(HgKey::w))
+                    movement.z += 1.0f;
+                if (window.is_key_down(HgKey::s))
+                    movement.z -= 1.0f;
+                if (window.is_key_down(HgKey::a))
+                    movement.x -= 1.0f;
+                if (window.is_key_down(HgKey::d))
+                    movement.x += 1.0f;
+            } else {
+                if (window.is_key_down(HgKey::w))
+                    movement.y -= 1.0f;
+                if (window.is_key_down(HgKey::s))
+                    movement.y += 1.0f;
+                if (window.is_key_down(HgKey::a))
+                    movement.x -= 1.0f;
+                if (window.is_key_down(HgKey::d))
+                    movement.x += 1.0f;
+            }
 
             if (movement != HgVec3{0.0f}) {
                 HgVec3 rotated = hg_rotate(camera.rotation, HgVec3{movement.x, 0.0f, movement.z});
                 camera.position += hg_norm(HgVec3{rotated.x, movement.y, rotated.z}) * move_speed * deltaf;
             }
-
-            pipeline2d.update_view(hg_view_matrix(camera.position, camera.scale, camera.rotation));
         }
+        pipeline2d.update_view(hg_view_matrix(camera.position, camera.scale, camera.rotation));
 
         f64 cpu_delta = cpu_clock.tick();
 
         ImGui_ImplHurdyGurdy_NewFrame();
         ImGui::NewFrame();
 
-        // ImGui::ShowDemoWindow();
+        {
+            ImGuiWindowFlags stats_flags
+                = ImGuiWindowFlags_NoDecoration
+                | ImGuiWindowFlags_NoDocking
+                | ImGuiWindowFlags_AlwaysAutoResize
+                | ImGuiWindowFlags_NoSavedSettings
+                | ImGuiWindowFlags_NoFocusOnAppearing
+                | ImGuiWindowFlags_NoNav
+                | ImGuiWindowFlags_NoMove;
 
-        if (ImGui::Begin("Time")) {
-            ImGui::Text("total = %fms", delta * 1.0e3);
-            ImGui::Text("cpu = %fms", cpu_delta * 1.0e3);
+            const ImGuiViewport* viewport = ImGui::GetMainViewport();
+            ImGui::SetNextWindowPos({viewport->WorkPos.x + 10.0f, viewport->WorkPos.y + 10.0f}, ImGuiCond_Always);
+            ImGui::SetNextWindowViewport(viewport->ID);
+            ImGui::SetNextWindowBgAlpha(0.35f);
+            if (ImGui::Begin("Stats", nullptr, stats_flags)) {
+                ImGui::SeparatorText("Time");
+                ImGui::Text("total: %.3fms", delta * 1.0e3);
+                ImGui::Text("cpu: %.3fms", cpu_delta * 1.0e3);
+            }
+            ImGui::End();
         }
-        ImGui::End();
+
+        if (imgui_demo)
+            ImGui::ShowDemoWindow();
 
         if (ImGui::Begin("Scene")) {
-            if (ImGui::CollapsingHeader("Entities", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGuiTreeNodeFlags options_flags = ImGuiTreeNodeFlags_DefaultOpen;
+            if (ImGui::CollapsingHeader("Options", options_flags)) {
+                if (ImGui::Button("Reset Camera")) {
+                    camera = {};
+                    camera.position.z = -1.0f;
+                }
+                ImGui::Checkbox("3D Movement", &move_3d);
+                ImGui::Checkbox("Show Demo", &imgui_demo);
+            }
+
+            ImGuiTreeNodeFlags entity_flags = ImGuiTreeNodeFlags_DefaultOpen;
+            if (ImGui::CollapsingHeader("Entities", entity_flags)) {
                 if (ImGui::Button("Spawn Entity")) {
                     if (scene_size == scene_capacity) {
                         scene = arena.realloc(scene, scene_capacity, scene_capacity * 2);
@@ -225,28 +267,58 @@ int main(void) {
                             .append(scratch, 0);
                     }
 
-                    if (ImGui::TreeNodeEx(name.chars, ImGuiTreeNodeFlags_DefaultOpen)) {
+                    if (ImGui::TreeNodeEx(name.chars, entity_flags)) {
                         if (ImGui::Button("Despawn Entity")) {
                             e.despawn();
                             memmove(scene + i, scene + i + 1, sizeof(HgEntity) * (--scene_size - i));
                             --i;
                         } else {
-                            if (!e.has<HgTransform>() && ImGui::Button("Add Transform")) {
-                                e.add<HgTransform>() = {};
+                            ImGui::SameLine();
+                            if (ImGui::Button("Add Component"))
+                                ImGui::OpenPopup("add_component");
+                            if (ImGui::BeginPopup("add_component")) {
+                                ImGui::SeparatorText("Components");
+
+                                if (!e.has<HgTransform>() && ImGui::Selectable("Transform"))
+                                    e.add<HgTransform>() = {};
+
+                                if (!e.has<HgSprite>() && ImGui::Selectable("Sprite")) {
+                                    if (!e.has<HgTransform>())
+                                        e.add<HgTransform>() = {};
+                                    e.add<HgSprite>() = {texture_id, {0.0f, 0.0f}, {1.0f, 1.0f}};
+                                }
+
+                                ImGui::EndPopup();
                             }
-                            if (e.has<HgTransform>() && ImGui::TreeNodeEx("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
+
+                            ImGui::SameLine();
+                            if (ImGui::Button("Remove Component"))
+                                ImGui::OpenPopup("remove_component");
+                            if (ImGui::BeginPopup("remove_component")) {
+                                ImGui::SeparatorText("Components");
+
+                                if (e.has<HgTransform>() && ImGui::Selectable("Transform")) {
+                                    e.remove<HgTransform>();
+                                    if (e.has<HgSprite>())
+                                        e.remove<HgSprite>();
+                                }
+
+                                if (e.has<HgSprite>() && ImGui::Selectable("Sprite"))
+                                    e.remove<HgSprite>();
+
+                                ImGui::EndPopup();
+                            }
+
+                            ImGuiTreeNodeFlags component_flags = entity_flags;
+
+                            if (e.has<HgTransform>() && ImGui::TreeNodeEx("Transform", component_flags)) {
                                 HgTransform& tf = e.get<HgTransform>();
                                 ImGui::DragFloat3("Position", &tf.position.x, 0.01f);
                                 ImGui::DragFloat3("Scale", &tf.scale.x, 0.01f);
                                 ImGui::TreePop();
                             }
 
-                            if (!e.has<HgSprite>() && ImGui::Button("Add Sprite")) {
-                                if (!e.has<HgTransform>())
-                                    e.add<HgTransform>() = {};
-                                e.add<HgSprite>() = {texture_id, {0.0f}, 1.0f};
-                            }
-                            if (e.has<HgSprite>() && ImGui::TreeNodeEx("Sprite", ImGuiTreeNodeFlags_DefaultOpen)) {
+                            if (e.has<HgSprite>() && ImGui::TreeNodeEx("Sprite", component_flags)) {
                                 HgSprite& s = e.get<HgSprite>();
                                 ImGui::DragFloat2("UV Position", &s.uv_pos.x, 0.01f);
                                 ImGui::DragFloat2("UV Size", &s.uv_size.x, 0.01f);
