@@ -1520,26 +1520,41 @@ f64 HgClock::tick() {
     return std::chrono::duration<f64>{time - prev}.count();
 }
 
-u32* component_widths = nullptr;
-u32 component_count = 0;
-u32 component_capacity = 0;
+static u32 component_widths_arr[4096]{};
+
+static u32* component_widths() {
+    return component_widths_arr;
+}
+
+// namespace {
+//     struct ComponentDtor {
+//         ~ComponentDtor() {
+//             std::free(component_widths());
+//         }
+//     } component_dtor;
+// }
+
+static u32& component_capacity() {
+    static u32 capacity = 4096;
+    return capacity;
+}
 
 static u32& next_component_id() {
-    static u32 id = 0;
-    return id;
+    static u32 count = 0;
+    return count;
 }
 
 u32 hg_create_component_id(u32 width) {
     u32 id = next_component_id()++;
-
-    if (component_count == component_capacity) {
-        component_widths = (u32 *)std::realloc(component_widths, component_capacity == 0
-            ? sizeof(u32)
-            : sizeof(u32) * component_capacity * 2);
-        component_capacity *= 2;
-    }
-
-    component_widths[id] = width;
+    hg_assert(id != component_capacity());
+    // if (id == component_capacity()) {
+    //     u32 new_capacity = component_capacity() == 0
+    //         ? sizeof(u32)
+    //         : sizeof(u32) * component_capacity() * 2;
+    //     component_widths() = (u32 *)std::realloc(component_widths(), new_capacity);
+    //     component_capacity() = new_capacity;
+    // }
+    component_widths()[id] = width;
     return id;
 }
 
@@ -1618,13 +1633,13 @@ void* HgECS::add(HgEntity e, u32 component_id) {
         systems[component_id].entities = (HgEntity*)std::realloc(
             systems[component_id].entities, sizeof(HgEntity) * new_capacity);
         systems[component_id].components = (HgEntity*)std::realloc(
-            systems[component_id].components, component_widths[component_id] * new_capacity);
+            systems[component_id].components, component_widths()[component_id] * new_capacity);
         systems[component_id].capacity = new_capacity;
     }
 
     systems[component_id].indices[e.idx()] = systems[component_id].count;
     systems[component_id].entities[systems[component_id].count] = e;
-    void* c = (u8*)systems[component_id].components + component_widths[component_id] * systems[component_id].count;
+    void* c = (u8*)systems[component_id].components + component_widths()[component_id] * systems[component_id].count;
     ++systems[component_id].count;
     return c;
 }
@@ -1640,9 +1655,9 @@ void HgECS::remove(HgEntity e, u32 component_id) {
         systems[component_id].entities[idx] = last;
         systems[component_id].indices[last.idx()] = idx;
         std::memcpy(
-            (u8*)systems[component_id].components + component_widths[component_id] * idx,
-            (u8*)systems[component_id].components + component_widths[component_id] * (systems[component_id].count - 1),
-            component_widths[component_id]);
+            (u8*)systems[component_id].components + component_widths()[component_id] * idx,
+            (u8*)systems[component_id].components + component_widths()[component_id] * (systems[component_id].count - 1),
+            component_widths()[component_id]);
     }
     systems[component_id].indices[e.idx()] = (u32)-1;
     --systems[component_id].count;
@@ -1656,13 +1671,13 @@ bool HgECS::has(HgEntity e, u32 component_id) {
 void* HgECS::get(HgEntity e, u32 component_id) {
     hg_assert(alive(e));
     hg_assert(has(e, component_id));
-    return (u8*)systems[component_id].components + component_widths[component_id] * systems[component_id].indices[e.idx()];
+    return (u8*)systems[component_id].components + component_widths()[component_id] * systems[component_id].indices[e.idx()];
 }
 
 HgEntity HgECS::get(const void* component, u32 component_id) {
     hg_assert(component != nullptr);
 
-    usize idx = ((uptr)component - (uptr)systems[component_id].components) / component_widths[component_id];
+    usize idx = ((uptr)component - (uptr)systems[component_id].components) / component_widths()[component_id];
     return systems[component_id].entities[idx];
 }
 
@@ -1693,8 +1708,8 @@ static void swap_idx_location(HgECS& ecs, u32 lhs, u32 rhs, u32 component_id) {
     system.indices[lhs_entity.id] = rhs;
     system.indices[rhs_entity.id] = lhs;
 
-    u32 width = component_widths[component_id];
-    void* temp = alloca(component_widths[component_id]);
+    u32 width = component_widths()[component_id];
+    void* temp = alloca(component_widths()[component_id]);
     std::memcpy(temp, (u8*)system.components + width * lhs, width);
     std::memcpy((u8*)system.components + width * lhs, (u8*)system.components + width * rhs, width);
     std::memcpy((u8*)system.components + width * rhs, temp, width);
