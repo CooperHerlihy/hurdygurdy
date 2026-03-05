@@ -9,7 +9,6 @@ void hg_init(void) {
     hg_io_thread_init(arena, 4096);
     hg_resources_init(arena, 4096);
     hg_gpu_resources_init(arena, 4096);
-    hg_ecs_init(arena, 4096);
 
     hg_platform_init();
     hg_graphics_init();
@@ -19,7 +18,6 @@ void hg_exit(void) {
     hg_graphics_deinit();
     hg_platform_deinit();
 
-    hg_ecs_reset();
     hg_gpu_resources_reset();
     hg_resources_reset();
     hg_io_thread_deinit();
@@ -1522,5 +1520,323 @@ f64 HgClock::tick() {
     return std::chrono::duration<f64>{time - prev}.count();
 }
 
+u32* component_widths = nullptr;
+u32 component_count = 0;
+u32 component_capacity = 0;
 
+static u32& next_component_id() {
+    static u32 id = 0;
+    return id;
+}
+
+u32 hg_create_component_id(u32 width) {
+    u32 id = next_component_id()++;
+
+    if (component_count == component_capacity) {
+        component_widths = (u32 *)std::realloc(component_widths, component_capacity == 0
+            ? sizeof(u32)
+            : sizeof(u32) * component_capacity * 2);
+        component_capacity *= 2;
+    }
+
+    component_widths[id] = width;
+    return id;
+}
+
+HgECS HgECS::create(u32 max_entities) {
+    HgECS ecs{};
+
+    ecs.pool_size = max_entities;
+    ecs.pool = (HgEntity*)std::malloc(sizeof(HgEntity) * ecs.pool_size);
+
+    ecs.system_count = next_component_id();
+    ecs.systems = (System*)std::malloc(sizeof(System) * ecs.system_count);
+
+    for (u32 i = 0; i < ecs.system_count; ++i) {
+        ecs.systems[i] = {};
+        ecs.systems[i].indices = (u32*)std::malloc(sizeof(u32) * ecs.pool_size);
+    }
+
+    ecs.reset();
+
+    return ecs;
+}
+
+void HgECS::destroy() {
+    for (u32 i = 0; i < system_count; ++i) {
+        std::free(systems[i].indices);
+        std::free(systems[i].entities);
+        std::free(systems[i].components);
+    }
+    std::free(systems);
+    std::free(pool);
+}
+
+void HgECS::reset() {
+    for (u32 i = 0; i < pool_size; ++i) {
+        pool[i] = {i + 1};
+    }
+    next = {0};
+
+    for (u32 i = 0; i < system_count; ++i) {
+        std::memset(systems[i].indices, -1, pool_size * sizeof(*systems[i].indices));
+        systems[i].count = 0;
+    }
+}
+
+HgEntity HgECS::spawn() {
+    hg_assert(next.idx() < pool_size);
+
+    HgEntity entity = next;
+    next= pool[entity.idx()];
+    pool[entity.idx()] = entity;
+    return entity;
+}
+
+void HgECS::despawn(HgEntity e) {
+    hg_assert(alive(e));
+
+    for (u32 i = 0; i < system_count; ++i) {
+        if (has(e, i))
+            remove(e, i);
+    }
+    pool[e.idx()] = next;
+    next = e;
+    next.increment_generation();
+}
+
+bool HgECS::alive(HgEntity e) {
+    return e.idx() < pool_size && pool[e.idx()] == e;
+}
+
+void* HgECS::add(HgEntity e, u32 component_id) {
+    hg_assert(alive(e));
+    hg_assert(!has(e, component_id));
+
+    if (systems[component_id].count == systems[component_id].capacity) {
+        u32 new_capacity = systems[component_id].capacity == 0 ? 1 : systems[component_id].capacity * 2;
+        systems[component_id].entities = (HgEntity*)std::realloc(
+            systems[component_id].entities, sizeof(HgEntity) * new_capacity);
+        systems[component_id].components = (HgEntity*)std::realloc(
+            systems[component_id].components, component_widths[component_id] * new_capacity);
+        systems[component_id].capacity = new_capacity;
+    }
+
+    systems[component_id].indices[e.idx()] = systems[component_id].count;
+    systems[component_id].entities[systems[component_id].count] = e;
+    void* c = (u8*)systems[component_id].components + component_widths[component_id] * systems[component_id].count;
+    ++systems[component_id].count;
+    return c;
+}
+
+void HgECS::remove(HgEntity e, u32 component_id) {
+    hg_assert(alive(e));
+    hg_assert(has(e, component_id));
+
+    HgEntity last = systems[component_id].entities[systems[component_id].count - 1];
+    systems[component_id].entities[systems[component_id].count - 1] = HgEntity{};
+    if (e != last) {
+        u32 idx = systems[component_id].indices[e.idx()];
+        systems[component_id].entities[idx] = last;
+        systems[component_id].indices[last.idx()] = idx;
+        std::memcpy(
+            (u8*)systems[component_id].components + component_widths[component_id] * idx,
+            (u8*)systems[component_id].components + component_widths[component_id] * (systems[component_id].count - 1),
+            component_widths[component_id]);
+    }
+    systems[component_id].indices[e.idx()] = (u32)-1;
+    --systems[component_id].count;
+}
+
+bool HgECS::has(HgEntity e, u32 component_id) {
+    hg_assert(alive(e));
+    return systems[component_id].indices[e.idx()] < systems[component_id].count;
+}
+
+void* HgECS::get(HgEntity e, u32 component_id) {
+    hg_assert(alive(e));
+    hg_assert(has(e, component_id));
+    return (u8*)systems[component_id].components + component_widths[component_id] * systems[component_id].indices[e.idx()];
+}
+
+HgEntity HgECS::get(const void* component, u32 component_id) {
+    hg_assert(component != nullptr);
+
+    usize idx = ((uptr)component - (uptr)systems[component_id].components) / component_widths[component_id];
+    return systems[component_id].entities[idx];
+}
+
+u32 HgECS::find_smallest(u32* ids, usize id_count) {
+    u32 smallest = ids[0];
+    for (usize i = 1; i < id_count; ++i) {
+        if (systems[ids[i]].count < systems[smallest].count)
+            smallest = ids[i];
+    }
+    return smallest;
+}
+
+static void swap_idx_location(HgECS& ecs, u32 lhs, u32 rhs, u32 component_id) {
+    HgECS::System& system = ecs.systems[component_id];
+    hg_assert(lhs < system.count);
+    hg_assert(rhs < system.count);
+
+    HgEntity lhs_entity = system.entities[lhs];
+    HgEntity rhs_entity = system.entities[rhs];
+
+    hg_assert(ecs.alive(lhs_entity));
+    hg_assert(ecs.alive(rhs_entity));
+    hg_assert(ecs.has(lhs_entity, component_id));
+    hg_assert(ecs.has(rhs_entity, component_id));
+
+    system.entities[lhs] = rhs_entity;
+    system.entities[rhs] = lhs_entity;
+    system.indices[lhs_entity.id] = rhs;
+    system.indices[rhs_entity.id] = lhs;
+
+    u32 width = component_widths[component_id];
+    void* temp = alloca(component_widths[component_id]);
+    std::memcpy(temp, (u8*)system.components + width * lhs, width);
+    std::memcpy((u8*)system.components + width * lhs, (u8*)system.components + width * rhs, width);
+    std::memcpy((u8*)system.components + width * rhs, temp, width);
+}
+
+namespace {
+    struct QuicksortData {
+        HgECS* ecs;
+        u32 comp;
+        void* data;
+        bool (*compare)(void*, HgECS& ecs, HgEntity lhs, HgEntity rhs);
+
+        u32 quicksort_inter(u32 pivot, u32 inc, u32 dec) {
+            while (inc != dec) {
+                while (!compare(data, *ecs, ecs->systems[comp].entities[dec], ecs->systems[comp].entities[pivot])) {
+                    --dec;
+                    if (dec == inc)
+                        goto finish;
+                }
+                while (!compare(data, *ecs, ecs->systems[comp].entities[pivot], ecs->systems[comp].entities[inc])) {
+                    ++inc;
+                    if (inc == dec)
+                        goto finish;
+                }
+                swap_idx_location(*ecs, inc, dec, comp);
+            }
+
+        finish:
+            if (compare(data, *ecs, ecs->systems[comp].entities[inc], ecs->systems[comp].entities[pivot]))
+                swap_idx_location(*ecs, pivot, inc, comp);
+
+            return inc;
+        }
+
+        void quicksort(u32 begin, u32 end) {
+            hg_assert(begin <= end && end <= ecs->systems[comp].count);
+
+            if (begin + 1 >= end)
+                return;
+
+            u32 middle = quicksort_inter(begin, begin + 1, end - 1);
+            quicksort(begin, middle);
+            quicksort(middle, end);
+        }
+    };
+}
+
+void HgECS::sort_untyped(
+    u32 begin,
+    u32 end,
+    u32 component_id,
+    void* data,
+    bool (*compare)(void*, HgECS& ecs, HgEntity lhs, HgEntity rhs)
+) {
+    QuicksortData q{this, component_id, data, compare};
+    q.quicksort(begin, end);
+}
+
+// void HgTransform::add_child(HgEntity child) {
+//     HgTransform& old_first = first_child.get<HgTransform>();
+//     HgTransform& new_first = child.get<HgTransform>();
+//     old_first.prev_sibling = child;
+//     new_first.next_sibling = first_child;
+//     first_child = child;
+// }
+//
+// void HgTransform::detach() {
+//     if (parent != HgEntity{}) {
+//         if (first_child == HgEntity{}) {
+//             if (prev_sibling == HgEntity{}) {
+//                 parent.get<HgTransform>().first_child = next_sibling;
+//                 next_sibling.get<HgTransform>().prev_sibling = HgEntity{};
+//             } else {
+//                 prev_sibling.get<HgTransform>().next_sibling = next_sibling;
+//                 next_sibling.get<HgTransform>().prev_sibling = prev_sibling;
+//             }
+//         } else {
+//             HgEntity last_child = first_child;
+//             for (;;) {
+//                 HgTransform& tf = last_child.get<HgTransform>();
+//                 tf.parent = parent;
+//                 if (tf.next_sibling == HgEntity{})
+//                     break;
+//                 last_child = tf.next_sibling;
+//             }
+//             if (prev_sibling == HgEntity{}) {
+//                 parent.get<HgTransform>().first_child = first_child;
+//                 next_sibling.get<HgTransform>().prev_sibling = last_child;
+//             } else {
+//                 prev_sibling.get<HgTransform>().next_sibling = first_child;
+//                 next_sibling.get<HgTransform>().prev_sibling = last_child;
+//             }
+//         }
+//     } else {
+//         HgEntity child = first_child;
+//         while (child != HgEntity{}) {
+//             HgTransform& tf = child.get<HgTransform>();
+//             child = tf.next_sibling;
+//             tf.parent = HgEntity{};
+//             tf.next_sibling = HgEntity{};
+//             tf.prev_sibling = HgEntity{};
+//         }
+//     }
+// }
+//
+// void HgTransform::destroy() {
+//     HgEntity child = first_child;
+//     while (child != HgEntity{}) {
+//         HgTransform& tf = child.get<HgTransform>();
+//         tf.destroy();
+//         child = tf.next_sibling;
+//     }
+//     if (parent != HgEntity{}) {
+//         if (prev_sibling != HgEntity{}) {
+//             prev_sibling.get<HgTransform>().next_sibling = next_sibling;
+//             if (next_sibling != HgEntity{})
+//                 next_sibling.get<HgTransform>().prev_sibling = prev_sibling;
+//         } else {
+//             parent.get<HgTransform>().first_child = next_sibling;
+//             if (next_sibling != HgEntity{})
+//                 next_sibling.get<HgTransform>().prev_sibling = HgEntity{};
+//         }
+//     }
+//     HgEntity::get(*this).despawn();
+// }
+//
+// void HgTransform::set(const HgVec3& p, const HgVec3& s, const HgQuat& r) {
+//     HgEntity child = first_child;
+//     while (child != HgEntity{}) {
+//         HgTransform& tf = child.get<HgTransform>();
+//         // tf.set(
+//         //     hg_rotate(r, (tf.position - position) * s / tf.scale + p),
+//         //     s * tf.scale / scale,
+//         //     r);
+//         child = tf.next_sibling;
+//     }
+//     position = p;
+//     scale = s;
+//     rotation = r;
+// }
+//
+// void HgTransform::move(const HgVec3& dp, const HgVec3& ds, const HgQuat& dr) {
+//     set(position + dp, scale * ds, dr * rotation);
+// }
 

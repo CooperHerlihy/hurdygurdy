@@ -24,7 +24,6 @@ SRC := \
 	utils.cpp \
 	thread.cpp \
 	resources.cpp \
-	ecs.cpp \
 	pipeline2d.cpp \
 	glfw.cpp \
 	vulkan.cpp

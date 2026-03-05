@@ -32,7 +32,6 @@ set SRC= ^
     utils.cpp ^
     thread.cpp ^
     resources.cpp ^
-    ecs.cpp ^
     pipeline2d.cpp ^
     windows.cpp ^
     vulkan.cpp

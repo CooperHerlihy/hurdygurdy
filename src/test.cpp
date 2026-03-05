@@ -81,13 +81,11 @@ int main(void) {
     pipeline2d.add_texture(texture_id);
     hg_defer(pipeline2d.remove_texture(texture_id));
 
-    hg_ecs_register<HgEntityName>(arena, 1024);
-    hg_ecs_register<HgCamera3D>(arena, 1);
-    hg_ecs_register<HgTransform>(arena, 1024);
-    hg_ecs_register<HgSprite>(arena, 1024);
+    HgECS ecs = ecs.create(4096);
+    hg_defer(ecs.destroy());
 
-    HgEntity camera_entity = hg_spawn_entity();
-    HgCamera3D& camera = camera_entity.add<HgCamera3D>();
+    HgEntity camera_entity = ecs.spawn();
+    HgCamera3D& camera = ecs.add<HgCamera3D>(camera_entity);
     camera = {};
     camera.position.z = -1.0f;
 
@@ -99,9 +97,9 @@ int main(void) {
     HgEntity* scene = arena.alloc<HgEntity>(scene_capacity);
     u32 scene_size = 0;
 
-    scene[scene_size++] = hg_spawn_entity();
-    scene[0].add<HgTransform>() = {};
-    scene[0].add<HgSprite>() = {texture_id, {0.0f}, 1.0f};
+    scene[scene_size++] = ecs.spawn();
+    ecs.add<HgTransform>(scene[0]) = {};
+    ecs.add<HgSprite>(scene[0]) = {texture_id, {0.0f}, 1.0f};
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -146,7 +144,8 @@ int main(void) {
 
     HgClock game_clock{};
     HgClock cpu_clock{};
-    while(true) {
+    bool open = true;
+    while(open) {
         f64 delta = game_clock.tick();
         f32 deltaf = (f32)delta;
 
@@ -154,7 +153,7 @@ int main(void) {
 
         hg_process_window_events(&window, 1);
         if (window.was_closed())
-            break;
+            open = false;
 
         if (!ImGui::GetIO().WantCaptureMouse) {
             static const f32 rot_speed = 2.0f;
@@ -233,10 +232,12 @@ int main(void) {
         if (ImGui::Begin("Scene")) {
             ImGuiTreeNodeFlags options_flags = ImGuiTreeNodeFlags_DefaultOpen;
             if (ImGui::CollapsingHeader("Options", options_flags)) {
-                if (ImGui::Button("Reset Camera")) {
-                    camera = {};
-                    camera.position.z = -1.0f;
-                }
+                if (ImGui::Button("Quit"))
+                    open = false;
+                if (ImGui::Button("Trigger Trap"))
+                    std::abort();
+                if (ImGui::Button("Reset Camera"))
+                    camera = {}, camera.position.z = -1.0f;
                 ImGui::Checkbox("3D Movement", &move_3d);
                 ImGui::Checkbox("Show Demo", &imgui_demo);
             }
@@ -248,7 +249,7 @@ int main(void) {
                         scene = arena.realloc(scene, scene_capacity, scene_capacity * 2);
                         scene_capacity *= 2;
                     }
-                    scene[scene_size++] = hg_spawn_entity();
+                    scene[scene_size++] = ecs.spawn();
                 }
 
                 for (usize i = 0; i < scene_size; ++i) {
@@ -256,20 +257,20 @@ int main(void) {
                     HgEntity e = scene[i];
 
                     HgString name;
-                    if (e.has<HgEntityName>()) {
+                    if (ecs.has<HgEntityName>(e)) {
                         name = name
-                            .create(scratch, scene[i].get<HgEntityName>().str)
+                            .create(scratch, ecs.get<HgEntityName>(scene[i]).str)
                             .append(scratch, 0);
                     } else {
                         name = name
                             .create(scratch, "Entity ")
-                            .append(scratch, hg_int_to_str_base10(scratch, (i64)e.id))
+                            .append(scratch, hg_int_to_str_base10(scratch, (i64)e.idx()))
                             .append(scratch, 0);
                     }
 
                     if (ImGui::TreeNodeEx(name.chars, entity_flags)) {
                         if (ImGui::Button("Despawn Entity")) {
-                            e.despawn();
+                            ecs.despawn(e);
                             memmove(scene + i, scene + i + 1, sizeof(HgEntity) * (--scene_size - i));
                             --i;
                         } else {
@@ -279,13 +280,13 @@ int main(void) {
                             if (ImGui::BeginPopup("add_component")) {
                                 ImGui::SeparatorText("Components");
 
-                                if (!e.has<HgTransform>() && ImGui::Selectable("Transform"))
-                                    e.add<HgTransform>() = {};
+                                if (!ecs.has<HgTransform>(e) && ImGui::Selectable("Transform"))
+                                    ecs.add<HgTransform>(e) = {};
 
-                                if (!e.has<HgSprite>() && ImGui::Selectable("Sprite")) {
-                                    if (!e.has<HgTransform>())
-                                        e.add<HgTransform>() = {};
-                                    e.add<HgSprite>() = {texture_id, {0.0f, 0.0f}, {1.0f, 1.0f}};
+                                if (!ecs.has<HgSprite>(e) && ImGui::Selectable("Sprite")) {
+                                    if (!ecs.has<HgTransform>(e))
+                                        ecs.add<HgTransform>(e) = {};
+                                    ecs.add<HgSprite>(e) = {texture_id, {0.0f, 0.0f}, {1.0f, 1.0f}};
                                 }
 
                                 ImGui::EndPopup();
@@ -297,29 +298,29 @@ int main(void) {
                             if (ImGui::BeginPopup("remove_component")) {
                                 ImGui::SeparatorText("Components");
 
-                                if (e.has<HgTransform>() && ImGui::Selectable("Transform")) {
-                                    e.remove<HgTransform>();
-                                    if (e.has<HgSprite>())
-                                        e.remove<HgSprite>();
+                                if (ecs.has<HgTransform>(e) && ImGui::Selectable("Transform")) {
+                                    ecs.remove<HgTransform>(e);
+                                    if (ecs.has<HgSprite>(e))
+                                        ecs.remove<HgSprite>(e);
                                 }
 
-                                if (e.has<HgSprite>() && ImGui::Selectable("Sprite"))
-                                    e.remove<HgSprite>();
+                                if (ecs.has<HgSprite>(e) && ImGui::Selectable("Sprite"))
+                                    ecs.remove<HgSprite>(e);
 
                                 ImGui::EndPopup();
                             }
 
                             ImGuiTreeNodeFlags component_flags = entity_flags;
 
-                            if (e.has<HgTransform>() && ImGui::TreeNodeEx("Transform", component_flags)) {
-                                HgTransform& tf = e.get<HgTransform>();
+                            if (ecs.has<HgTransform>(e) && ImGui::TreeNodeEx("Transform", component_flags)) {
+                                HgTransform& tf = ecs.get<HgTransform>(e);
                                 ImGui::DragFloat3("Position", &tf.position.x, 0.01f);
                                 ImGui::DragFloat3("Scale", &tf.scale.x, 0.01f);
                                 ImGui::TreePop();
                             }
 
-                            if (e.has<HgSprite>() && ImGui::TreeNodeEx("Sprite", component_flags)) {
-                                HgSprite& s = e.get<HgSprite>();
+                            if (ecs.has<HgSprite>(e) && ImGui::TreeNodeEx("Sprite", component_flags)) {
+                                HgSprite& s = ecs.get<HgSprite>(e);
                                 ImGui::DragFloat2("UV Position", &s.uv_pos.x, 0.01f);
                                 ImGui::DragFloat2("UV Size", &s.uv_size.x, 0.01f);
                                 ImGui::TreePop();
@@ -421,7 +422,7 @@ recreate_swapchain:
             VkRect2D scissor{{0, 0}, {swapchain.width, swapchain.height}};
             vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-            pipeline2d.draw(cmd);
+            pipeline2d.draw(ecs, cmd);
 
             ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
 
@@ -2421,55 +2422,82 @@ hg_test(hg_resource_management) {
 hg_test(hg_ecs) {
     hg_arena_scope(arena, hg_get_scratch());
 
-    hg_defer(hg_ecs_reset());
+    HgECS ecs = ecs.create(1024);
+    hg_defer(ecs.destroy());
 
-    hg_ecs_register<u32>(arena, 512);
-    hg_defer(hg_ecs_unregister<u32>());
-    hg_ecs_register<u64>(arena, 512);
-    hg_defer(hg_ecs_unregister<u64>());
+    hg_defer(ecs.reset());
 
-    HgEntity e1 = hg_spawn_entity();
-    HgEntity e2 = hg_spawn_entity();
+    HgEntity e1 = ecs.spawn();
+    HgEntity e2 = ecs.spawn();
     HgEntity e3 = {};
-    hg_test_assert(e1.id == 0);
-    hg_test_assert(e2.id == 1);
-    hg_test_assert(e1.alive());
-    hg_test_assert(e2.alive());
-    hg_test_assert(!e3.alive());
+    hg_test_assert(ecs.alive(e1));
+    hg_test_assert(ecs.alive(e2));
+    hg_test_assert(!ecs.alive(e3));
 
-    e1.despawn();
-    hg_test_assert(!e1.alive());
-    e3 = hg_spawn_entity();
-    hg_test_assert(e3.alive());
-    hg_test_assert(e3 == e1);
+    ecs.despawn(e1);
+    hg_test_assert(!ecs.alive(e1));
+    e3 = ecs.spawn();
+    hg_test_assert(ecs.alive(e3));
+    hg_test_assert(e3.idx() == e1.idx() && e3 != e1);
 
-    e1 = hg_spawn_entity();
-    hg_test_assert(e1.alive());
-    hg_test_assert(e1.id == 2);
+    e1 = ecs.spawn();
+    hg_test_assert(ecs.alive(e1));
+
+    {
+        hg_test_assert(!ecs.has<u32>(e1));
+        hg_test_assert(!ecs.has<u32>(e2));
+        hg_test_assert(!ecs.has<u32>(e3));
+
+        ecs.add<u32>(e1) = 1;
+        hg_test_assert(ecs.has<u32>(e1) && ecs.get<u32>(e1) == 1);
+        hg_test_assert(!ecs.has<u32>(e2));
+        hg_test_assert(!ecs.has<u32>(e3));
+        ecs.add<u32>(e2) = 2;
+        hg_test_assert(ecs.has<u32>(e1) && ecs.get<u32>(e1) == 1);
+        hg_test_assert(ecs.has<u32>(e2) && ecs.get<u32>(e2) == 2);
+        hg_test_assert(!ecs.has<u32>(e3));
+        ecs.add<u32>(e3) = 3;
+        hg_test_assert(ecs.has<u32>(e1) && ecs.get<u32>(e1) == 1);
+        hg_test_assert(ecs.has<u32>(e2) && ecs.get<u32>(e2) == 2);
+        hg_test_assert(ecs.has<u32>(e3) && ecs.get<u32>(e3) == 3);
+
+        ecs.remove<u32>(e1);
+        hg_test_assert(!ecs.has<u32>(e1));
+        hg_test_assert(ecs.has<u32>(e2) && ecs.get<u32>(e2) == 2);
+        hg_test_assert(ecs.has<u32>(e3) && ecs.get<u32>(e3) == 3);
+        ecs.remove<u32>(e2);
+        hg_test_assert(!ecs.has<u32>(e1));
+        hg_test_assert(!ecs.has<u32>(e2));
+        hg_test_assert(ecs.has<u32>(e3) && ecs.get<u32>(e3) == 3);
+        ecs.remove<u32>(e3);
+        hg_test_assert(!ecs.has<u32>(e1));
+        hg_test_assert(!ecs.has<u32>(e2));
+        hg_test_assert(!ecs.has<u32>(e3));
+    }
 
     {
         bool has_unknown = false;
-        hg_ecs_for_each<u32>([&](HgEntity, u32&) {
+        ecs.for_each<u32>([&](HgEntity, u32&) {
             has_unknown = true;
         });
         hg_test_assert(!has_unknown);
 
-        hg_test_assert(hg_ecs_component_count<u32>() == 0);
-        hg_test_assert(hg_ecs_component_count<u64>() == 0);
+        hg_test_assert(ecs.count<u32>() == 0);
+        hg_test_assert(ecs.count<u64>() == 0);
     }
 
     {
-        e1.add<u32>() = 12;
-        e2.add<u32>() = 42;
-        e3.add<u32>() = 100;
-        hg_test_assert(hg_ecs_component_count<u32>() == 3);
-        hg_test_assert(hg_ecs_component_count<u64>() == 0);
+        ecs.add<u32>(e1) = 12;
+        ecs.add<u32>(e2) = 42;
+        ecs.add<u32>(e3) = 100;
+        hg_test_assert(ecs.count<u32>() == 3);
+        hg_test_assert(ecs.count<u64>() == 0);
 
         bool has_unknown = false;
         bool has_12 = false;
         bool has_42 = false;
         bool has_100 = false;
-        hg_ecs_for_each<u32>([&](HgEntity e, u32& c) {
+        ecs.for_each<u32>([&](HgEntity e, u32& c) {
             switch (c) {
                 case 12:
                     has_12 = e == e1;
@@ -2492,10 +2520,10 @@ hg_test(hg_ecs) {
     }
 
     {
-        e2.add<u64>() = 2042;
-        e3.add<u64>() = 2100;
-        hg_test_assert(hg_ecs_component_count<u32>() == 3);
-        hg_test_assert(hg_ecs_component_count<u64>() == 2);
+        ecs.add<u64>(e2) = 2042;
+        ecs.add<u64>(e3) = 2100;
+        hg_test_assert(ecs.count<u32>() == 3);
+        hg_test_assert(ecs.count<u64>() == 2);
 
         bool has_unknown = false;
         bool has_12 = false;
@@ -2503,7 +2531,7 @@ hg_test(hg_ecs) {
         bool has_100 = false;
         bool has_2042 = false;
         bool has_2100 = false;
-        hg_ecs_for_each<u32, u64>([&](HgEntity e, u32& comp32, u64& comp64) {
+        ecs.for_each<u32, u64>([&](HgEntity e, u32& comp32, u64& comp64) {
             switch (comp32) {
                 case 12:
                     has_12 = e == e1;
@@ -2539,15 +2567,15 @@ hg_test(hg_ecs) {
     }
 
     {
-        e1.despawn();
-        hg_test_assert(hg_ecs_component_count<u32>() == 2);
-        hg_test_assert(hg_ecs_component_count<u64>() == 2);
+        ecs.despawn(e1);
+        hg_test_assert(ecs.count<u32>() == 2);
+        hg_test_assert(ecs.count<u64>() == 2);
 
         bool has_unknown = false;
         bool has_12 = false;
         bool has_42 = false;
         bool has_100 = false;
-        hg_ecs_for_each<u32>([&](HgEntity e, u32& c) {
+        ecs.for_each<u32>([&](HgEntity e, u32& c) {
             switch (c) {
                 case 12:
                     has_12 = e == e1;
@@ -2570,59 +2598,59 @@ hg_test(hg_ecs) {
     }
 
     {
-        e2.despawn();
-        hg_test_assert(hg_ecs_component_count<u32>() == 1);
-        hg_test_assert(hg_ecs_component_count<u64>() == 1);
+        ecs.despawn(e2);
+        hg_test_assert(ecs.count<u32>() == 1);
+        hg_test_assert(ecs.count<u64>() == 1);
     }
 
-    hg_ecs_reset();
-    hg_test_assert(hg_ecs_component_count<u32>() == 0);
-    hg_test_assert(hg_ecs_component_count<u64>() == 0);
+    ecs.reset();
+    hg_test_assert(ecs.count<u32>() == 0);
+    hg_test_assert(ecs.count<u64>() == 0);
 
     {
         for (u32 i = 0; i < 300; ++i) {
-            HgEntity e = hg_spawn_entity();
+            HgEntity e = ecs.spawn();
             switch (i % 3) {
                 case 0:
-                    e.add<u32>() = 12;
-                    e.add<u64>() = 42;
+                    ecs.add<u32>(e) = 12;
+                    ecs.add<u64>(e) = 42;
                     break;
                 case 1:
-                    e.add<u32>() = 12;
+                    ecs.add<u32>(e) = 12;
                     break;
                 case 2:
-                    e.add<u64>() = 42;
+                    ecs.add<u64>(e) = 42;
                     break;
             }
         }
 
         bool success;
-        hg_ecs_for_par<u32>(16, [&](HgEntity, u32& c) {
+        ecs.for_par<u32>(16, [&](HgEntity, u32& c) {
             c += 4;
         });
         success = true;
-        hg_ecs_for_each<u32>([&](HgEntity, u32 c) {
+        ecs.for_each<u32>([&](HgEntity, u32 c) {
             if (c != 16)
                 success = false;
         });
         hg_test_assert(success);
 
-        hg_ecs_for_par<u64>(16, [&](HgEntity, u64& c) {
+        ecs.for_par<u64>(16, [&](HgEntity, u64& c) {
             c += 3;
         });
         success = true;
-        hg_ecs_for_each<u64>([&](HgEntity, u64 c) {
+        ecs.for_each<u64>([&](HgEntity, u64 c) {
             if (c != 45)
                 success = false;
         });
         hg_test_assert(success);
 
-        hg_ecs_for_par<u32, u64>(16, [&](HgEntity, u32& c32, u64& c64) {
+        ecs.for_par<u32, u64>(16, [&](HgEntity, u32& c32, u64& c64) {
             c64 -= c32;
         });
         success = true;
-        hg_ecs_for_each<u64>([&](HgEntity e, u64 c) {
-            if (e.has<u32>()) {
+        ecs.for_each<u64>([&](HgEntity e, u64 c) {
+            if (ecs.has<u32>(e)) {
                 if (c != 29)
                     success = false;
             } else {
@@ -2633,39 +2661,39 @@ hg_test(hg_ecs) {
         hg_test_assert(success);
     }
 
-    hg_ecs_reset();
+    ecs.reset();
 
-    auto comparison = [](void*, HgEntity lhs, HgEntity rhs) {
-        return lhs.get<u32>() < rhs.get<u32>();
+    auto comparison = [](void*, HgECS& pecs, HgEntity lhs, HgEntity rhs) {
+        return pecs.get<u32>(lhs) < pecs.get<u32>(rhs);
     };
 
     {
-        hg_spawn_entity().add<u32>() = 42;
+        ecs.add<u32>(ecs.spawn()) = 42;
 
-        hg_ecs_sort<u32>(nullptr, comparison);
+        ecs.sort<u32>(nullptr, comparison);
 
         bool success = true;
-        hg_ecs_for_each<u32>([&](HgEntity, u32 c) {
+        ecs.for_each<u32>([&](HgEntity, u32 c) {
             if (c != 42)
                 success = false;
         });
         hg_test_assert(success);
 
-        hg_ecs_reset();
+        ecs.reset();
     }
 
     {
         u32 small_scramble_1[] = {1, 0};
         for (u32 i = 0; i < hg_countof(small_scramble_1); ++i) {
-            hg_spawn_entity().add<u32>() = small_scramble_1[i];
+            ecs.add<u32>(ecs.spawn()) = small_scramble_1[i];
         }
 
         {
-            hg_ecs_sort<u32>(nullptr, comparison);
+            ecs.sort<u32>(nullptr, comparison);
 
             bool success = true;
             u32 elem = 0;
-            hg_ecs_for_each<u32>([&](HgEntity, u32 c) {
+            ecs.for_each<u32>([&](HgEntity, u32 c) {
                 if (c != elem)
                     success = false;
                 ++elem;
@@ -2674,11 +2702,11 @@ hg_test(hg_ecs) {
         }
 
         {
-            hg_ecs_sort<u32>(nullptr, comparison);
+            ecs.sort<u32>(nullptr, comparison);
 
             bool success = true;
             u32 elem = 0;
-            hg_ecs_for_each<u32>([&](HgEntity, u32 c) {
+            ecs.for_each<u32>([&](HgEntity, u32 c) {
                 if (c != elem)
                     success = false;
                 ++elem;
@@ -2686,83 +2714,83 @@ hg_test(hg_ecs) {
             hg_test_assert(success);
         }
 
-        hg_ecs_reset();
+        ecs.reset();
     }
 
     {
         u32 medium_scramble_1[] = {8, 9, 1, 6, 0, 3, 7, 2, 5, 4};
         for (u32 i = 0; i < hg_countof(medium_scramble_1); ++i) {
-            hg_spawn_entity().add<u32>() = medium_scramble_1[i];
+            ecs.add<u32>(ecs.spawn()) = medium_scramble_1[i];
         }
-        hg_ecs_sort<u32>(nullptr, comparison);
+        ecs.sort<u32>(nullptr, comparison);
 
         bool success = true;
         u32 elem = 0;
-        hg_ecs_for_each<u32>([&](HgEntity, u32 c) {
+        ecs.for_each<u32>([&](HgEntity, u32 c) {
             if (c != elem)
                 success = false;
             ++elem;
         });
         hg_test_assert(success);
 
-        hg_ecs_reset();
+        ecs.reset();
     }
 
     {
         u32 medium_scramble_2[] = {3, 9, 7, 6, 8, 5, 0, 1, 2, 4};
         for (u32 i = 0; i < hg_countof(medium_scramble_2); ++i) {
-            hg_spawn_entity().add<u32>() = medium_scramble_2[i];
+            ecs.add<u32>(ecs.spawn()) = medium_scramble_2[i];
         }
-        hg_ecs_sort<u32>(nullptr, comparison);
-        hg_ecs_sort<u32>(nullptr, comparison);
+        ecs.sort<u32>(nullptr, comparison);
+        ecs.sort<u32>(nullptr, comparison);
 
         bool success = true;
         u32 elem = 0;
-        hg_ecs_for_each<u32>([&](HgEntity, u32 c) {
+        ecs.for_each<u32>([&](HgEntity, u32 c) {
             if (c != elem)
                 success = false;
             ++elem;
         });
         hg_test_assert(success);
 
-        hg_ecs_reset();
+        ecs.reset();
     }
 
     {
         for (u32 i = 127; i < 128; --i) {
-            hg_spawn_entity().add<u32>() = i;
+            ecs.add<u32>(ecs.spawn()) = i;
         }
-        hg_ecs_sort<u32>(nullptr, comparison);
+        ecs.sort<u32>(nullptr, comparison);
 
         bool success = true;
         u32 elem = 0;
-        hg_ecs_for_each<u32>([&](HgEntity, u32 c) {
+        ecs.for_each<u32>([&](HgEntity, u32 c) {
             if (c != elem)
                 success = false;
             ++elem;
         });
         hg_test_assert(success);
 
-        hg_ecs_reset();
+        ecs.reset();
     }
 
     {
         for (u32 i = 127; i < 128; --i) {
-            hg_spawn_entity().add<u32>() = i / 2;
+            ecs.add<u32>(ecs.spawn()) = i / 2;
         }
-        hg_ecs_sort<u32>(nullptr, comparison);
-        hg_ecs_sort<u32>(nullptr, comparison);
+        ecs.sort<u32>(nullptr, comparison);
+        ecs.sort<u32>(nullptr, comparison);
 
         bool success = true;
         u32 elem = 0;
-        hg_ecs_for_each<u32>([&](HgEntity, u32 c) {
+        ecs.for_each<u32>([&](HgEntity, u32 c) {
             if (c != elem / 2)
                 success = false;
             ++elem;
         });
         hg_test_assert(success);
 
-        hg_ecs_reset();
+        ecs.reset();
     }
 
     return true;
