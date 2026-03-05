@@ -150,8 +150,7 @@ int main(void) {
 
     HgClock game_clock{};
     HgClock cpu_clock{};
-    bool open = true;
-    while(open) {
+    for (;;) {
         f64 delta = game_clock.tick();
         f32 deltaf = (f32)delta;
 
@@ -159,7 +158,7 @@ int main(void) {
 
         hg_process_window_events(&window, 1);
         if (window.was_closed())
-            open = false;
+            goto quit;
 
         if (!ImGui::GetIO().WantCaptureMouse) {
             static const f32 rot_speed = 2.0f;
@@ -239,7 +238,7 @@ int main(void) {
             ImGuiTreeNodeFlags options_flags = ImGuiTreeNodeFlags_DefaultOpen;
             if (ImGui::CollapsingHeader("Options", options_flags)) {
                 if (ImGui::Button("Quit"))
-                    open = false;
+                    goto quit;
                 if (ImGui::Button("Trigger Trap"))
                     std::abort();
                 if (ImGui::Button("Reset Camera"))
@@ -458,6 +457,7 @@ recreate_swapchain:
             // }
         }
     }
+quit:
 
     vkDeviceWaitIdle(hg_vk_device);
 }
