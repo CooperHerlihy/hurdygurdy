@@ -1524,19 +1524,14 @@ u32* component_widths = nullptr;
 u32 component_count = 0;
 u32 component_capacity = 0;
 
-static u32& next_component_id() {
-    static u32 id = 0;
-    return id;
-}
-
 u32 hg_create_component_id(u32 width) {
-    u32 id = next_component_id()++;
-
-    if (component_count == component_capacity) {
-        component_widths = (u32 *)std::realloc(component_widths, component_capacity == 0
+    u32 id = component_count++;
+    if (id == component_capacity) {
+        u32 new_capacity = component_capacity == 0
             ? sizeof(u32)
-            : sizeof(u32) * component_capacity * 2);
-        component_capacity *= 2;
+            : sizeof(u32) * component_capacity * 2;
+        component_widths = (u32 *)std::realloc(component_widths, new_capacity);
+        component_capacity = new_capacity;
     }
 
     component_widths[id] = width;
@@ -1549,7 +1544,7 @@ HgECS HgECS::create(u32 max_entities) {
     ecs.pool_size = max_entities;
     ecs.pool = (HgEntity*)std::malloc(sizeof(HgEntity) * ecs.pool_size);
 
-    ecs.system_count = next_component_id();
+    ecs.system_count = component_count;
     ecs.systems = (System*)std::malloc(sizeof(System) * ecs.system_count);
 
     for (u32 i = 0; i < ecs.system_count; ++i) {
@@ -1753,90 +1748,105 @@ void HgECS::sort_untyped(
     q.quicksort(begin, end);
 }
 
-// void HgTransform::add_child(HgEntity child) {
-//     HgTransform& old_first = first_child.get<HgTransform>();
-//     HgTransform& new_first = child.get<HgTransform>();
-//     old_first.prev_sibling = child;
-//     new_first.next_sibling = first_child;
-//     first_child = child;
-// }
-//
-// void HgTransform::detach() {
-//     if (parent != HgEntity{}) {
-//         if (first_child == HgEntity{}) {
-//             if (prev_sibling == HgEntity{}) {
-//                 parent.get<HgTransform>().first_child = next_sibling;
-//                 next_sibling.get<HgTransform>().prev_sibling = HgEntity{};
-//             } else {
-//                 prev_sibling.get<HgTransform>().next_sibling = next_sibling;
-//                 next_sibling.get<HgTransform>().prev_sibling = prev_sibling;
-//             }
-//         } else {
-//             HgEntity last_child = first_child;
-//             for (;;) {
-//                 HgTransform& tf = last_child.get<HgTransform>();
-//                 tf.parent = parent;
-//                 if (tf.next_sibling == HgEntity{})
-//                     break;
-//                 last_child = tf.next_sibling;
-//             }
-//             if (prev_sibling == HgEntity{}) {
-//                 parent.get<HgTransform>().first_child = first_child;
-//                 next_sibling.get<HgTransform>().prev_sibling = last_child;
-//             } else {
-//                 prev_sibling.get<HgTransform>().next_sibling = first_child;
-//                 next_sibling.get<HgTransform>().prev_sibling = last_child;
-//             }
-//         }
-//     } else {
-//         HgEntity child = first_child;
-//         while (child != HgEntity{}) {
-//             HgTransform& tf = child.get<HgTransform>();
-//             child = tf.next_sibling;
-//             tf.parent = HgEntity{};
-//             tf.next_sibling = HgEntity{};
-//             tf.prev_sibling = HgEntity{};
-//         }
-//     }
-// }
-//
-// void HgTransform::destroy() {
-//     HgEntity child = first_child;
-//     while (child != HgEntity{}) {
-//         HgTransform& tf = child.get<HgTransform>();
-//         tf.destroy();
-//         child = tf.next_sibling;
-//     }
-//     if (parent != HgEntity{}) {
-//         if (prev_sibling != HgEntity{}) {
-//             prev_sibling.get<HgTransform>().next_sibling = next_sibling;
-//             if (next_sibling != HgEntity{})
-//                 next_sibling.get<HgTransform>().prev_sibling = prev_sibling;
-//         } else {
-//             parent.get<HgTransform>().first_child = next_sibling;
-//             if (next_sibling != HgEntity{})
-//                 next_sibling.get<HgTransform>().prev_sibling = HgEntity{};
-//         }
-//     }
-//     HgEntity::get(*this).despawn();
-// }
-//
-// void HgTransform::set(const HgVec3& p, const HgVec3& s, const HgQuat& r) {
-//     HgEntity child = first_child;
-//     while (child != HgEntity{}) {
-//         HgTransform& tf = child.get<HgTransform>();
-//         // tf.set(
-//         //     hg_rotate(r, (tf.position - position) * s / tf.scale + p),
-//         //     s * tf.scale / scale,
-//         //     r);
-//         child = tf.next_sibling;
-//     }
-//     position = p;
-//     scale = s;
-//     rotation = r;
-// }
-//
-// void HgTransform::move(const HgVec3& dp, const HgVec3& ds, const HgQuat& dr) {
-//     set(position + dp, scale * ds, dr * rotation);
-// }
+void hg_add_child_entity(HgECS& ecs, HgEntity parent, HgEntity child) {
+    HgHierarchy& node = ecs.get<HgHierarchy>(parent);
+    HgHierarchy& old_first = ecs.get<HgHierarchy>(node.first_child);
+    HgHierarchy& new_first = ecs.get<HgHierarchy>(child);
+
+    hg_assert(new_first.parent == HgEntity{});
+    hg_assert(new_first.prev_sibling == HgEntity{});
+    hg_assert(new_first.next_sibling == HgEntity{});
+
+    new_first.parent = parent;
+    new_first.next_sibling = node.first_child;
+
+    old_first.prev_sibling = child;
+    node.first_child = child;
+}
+
+void hg_detach_entity(HgECS& ecs, HgEntity e) {
+    HgHierarchy& node = ecs.get<HgHierarchy>(e);
+    if (node.parent != HgEntity{}) {
+        if (node.prev_sibling == HgEntity{})
+            ecs.get<HgHierarchy>(node.parent).first_child = node.next_sibling;
+        else
+            ecs.get<HgHierarchy>(node.prev_sibling).next_sibling = node.next_sibling;
+        ecs.get<HgHierarchy>(node.next_sibling).prev_sibling = node.prev_sibling;
+
+        HgEntity child = node.first_child;
+        while (child != HgEntity{}) {
+            HgHierarchy& tf = ecs.get<HgHierarchy>(child);
+            HgEntity next = tf.next_sibling;
+            tf.parent = HgEntity{};
+            tf.next_sibling = HgEntity{};
+            tf.prev_sibling = HgEntity{};
+            hg_add_child_entity(ecs, node.parent, child);
+            child = next;
+        }
+    } else {
+        hg_assert(node.prev_sibling == HgEntity{});
+        hg_assert(node.next_sibling == HgEntity{});
+        HgEntity child = node.first_child;
+        while (child != HgEntity{}) {
+            HgHierarchy& tf = ecs.get<HgHierarchy>(child);
+            child = tf.next_sibling;
+            tf.parent = HgEntity{};
+            tf.next_sibling = HgEntity{};
+            tf.prev_sibling = HgEntity{};
+        }
+    }
+    node = {};
+}
+
+void hg_destroy_entity(HgECS& ecs, HgEntity e) {
+    HgHierarchy& node = ecs.get<HgHierarchy>(e);
+    HgEntity child = node.first_child;
+    while (child != HgEntity{}) {
+        HgHierarchy& tf = ecs.get<HgHierarchy>(child);
+        HgEntity next = tf.next_sibling;
+        tf.parent = HgEntity{};
+        tf.prev_sibling = HgEntity{};
+        tf.next_sibling = HgEntity{};
+        hg_destroy_entity(ecs, child);
+        child = next;
+    }
+    if (node.parent != HgEntity{}) {
+        if (node.prev_sibling != HgEntity{})
+            ecs.get<HgHierarchy>(node.prev_sibling).next_sibling = node.next_sibling;
+        else
+            ecs.get<HgHierarchy>(node.parent).first_child = node.next_sibling;
+        if (node.next_sibling != HgEntity{})
+            ecs.get<HgHierarchy>(node.next_sibling).prev_sibling = HgEntity{};
+    }
+    ecs.despawn(e);
+}
+
+void hg_set_entity(HgECS& ecs, HgEntity e, const HgVec3& p, const HgVec3& s, const HgQuat& r) {
+    HgTransform& tf = ecs.get<HgTransform>(e);
+    if (ecs.has<HgHierarchy>(e)) {
+        HgHierarchy& node = ecs.get<HgHierarchy>(e);
+        HgEntity child = node.first_child;
+        while (child != HgEntity{}) {
+            HgHierarchy& c_node = ecs.get<HgHierarchy>(child);
+            HgTransform& c_tf = ecs.get<HgTransform>(child);
+            HgTransform rel;
+            rel.position = c_tf.position - tf.position;
+            rel.scale = c_tf.scale / tf.scale;
+            rel.rotation = hg_conj(tf.rotation) * c_tf.rotation;
+            // hg_set_entity(ecs, child,
+            //     hg_rotate(r, (c_tf.position - tf.position) * s / c_tf.scale + p),
+            //     s * c_tf.scale / tf.scale,
+            //     r);
+            child = c_node.next_sibling;
+        }
+    }
+    tf.position = p;
+    tf.scale = s;
+    tf.rotation = r;
+}
+
+void hg_move_entity(HgECS& ecs, HgEntity e, const HgVec3& dp, const HgVec3& ds, const HgQuat& dr) {
+    HgTransform& tf = ecs.get<HgTransform>(e);
+    hg_set_entity(ecs, e, tf.position + dp, tf.scale * ds, dr * tf.rotation);
+}
 

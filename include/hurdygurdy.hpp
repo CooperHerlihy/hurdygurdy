@@ -4106,7 +4106,57 @@ struct HgECS {
 };
 
 /**
- * The transform for (nearly) all entities
+ * A node component for entities in a hierarchy
+ */
+struct HgHierarchy {
+    /**
+     * The entity's parent, if any
+     */
+    HgEntity parent{};
+    /**
+     * The next child of this entity's parent
+     */
+    HgEntity next_sibling{};
+    /**
+     * The previous child of this entity's parent
+     */
+    HgEntity prev_sibling{};
+    /**
+     * The first of this entity's children, forming a linked list
+     */
+    HgEntity first_child{};
+};
+
+/**
+ * Adds a new child to an entity in a hierarchy
+ *
+ * Parameters
+ * - ecs The ecs
+ * - parent The parent to add to, must be alive
+ * - child The child to add, must be alive
+ */
+void hg_add_child_entity(HgECS& ecs, HgEntity parent, HgEntity new_child);
+
+/**
+ * Removes the entity from its hierarchy
+ *
+ * Parameters
+ * - ecs The ecs
+ * - e The entity to detach, must be alive
+ */
+void hg_detach_entity(HgECS& ecs, HgEntity e);
+
+/**
+ * Destroys the entity and all its children in a hierarchy
+ *
+ * Parameters
+ * - ecs The ecs
+ * - e The entity to destroy to, must be alive
+ */
+void hg_destroy_entity(HgECS& ecs, HgEntity e);
+
+/**
+ * The transform component for entities
  */
 struct HgTransform {
     /**
@@ -4133,61 +4183,31 @@ struct HgTransform {
      * The entity's rotation in the world
      */
     HgQuat rotation = {1.0f, 0.0f, 0.0f, 0.0f};
-    /**
-     * The entity's parent, if any
-     */
-    HgEntity parent{};
-    /**
-     * The next child of this entity's parent
-     */
-    HgEntity next_sibling{};
-    /**
-     * The previous child of this entity's parent
-     */
-    HgEntity prev_sibling{};
-    /**
-     * The first of this entity's children, forming a linked list
-     */
-    HgEntity first_child{};
-
-    /**
-     * Add a new child entity to this transform
-     *
-     * Parameters
-     * - child The child entity to add
-     */
-    void add_child(HgEntity child);
-
-    /**
-     * Remove this entity from its place in the hierarchy
-     */
-    void detach();
-
-    /**
-     * Destroy this entity and all its children
-     */
-    void destroy();
-
-    /**
-     * Set this transform and move all children by accordingly
-     *
-     * Parameters
-     * - p The new position
-     * - s The new scale
-     * - r The new rotation
-     */
-    void set(const HgVec3& p, const HgVec3& s, const HgQuat& r);
-
-    /**
-     * Move this transform and all children by a delta
-     *
-     * Parameters
-     * - dp The change in position, added to current position
-     * - ds The change in scale, multiplied to current scale
-     * - dr The change in rotation, applied to current rotation
-     */
-    void move(const HgVec3& dp, const HgVec3& ds, const HgQuat& dr);
 };
+
+/**
+ * Set this transform and move all children by accordingly
+ *
+ * Parameters
+ * - ecs The ecs
+ * - e The entity to set, must be alive
+ * - p The new position
+ * - s The new scale
+ * - r The new rotation
+ */
+void hg_set_entity(HgECS& ecs, HgEntity e, const HgVec3& p, const HgVec3& s, const HgQuat& r);
+
+/**
+ * Move this transform and all children by a delta
+ *
+ * Parameters
+ * - ecs The ecs
+ * - e The entity to move, must be alive
+ * - dp The change in position, added to current position
+ * - ds The change in scale, multiplied to current scale
+ * - dr The change in rotation, applied to current rotation
+ */
+void hg_move_entity(HgECS& ecs, HgEntity e, const HgVec3& dp, const HgVec3& ds, const HgQuat& dr);
 
 /**
  * The world camera component

@@ -12,6 +12,10 @@ struct HgEntityName {
     HgStringView str;
 };
 
+struct HgComp {
+    u32 x;
+};
+
 int main(void) {
     hg_defer(hg_debug("Exited successfully\n"));
 
@@ -100,6 +104,8 @@ int main(void) {
     scene[scene_size++] = ecs.spawn();
     ecs.add<HgTransform>(scene[0]) = {};
     ecs.add<HgSprite>(scene[0]) = {texture_id, {0.0f}, 1.0f};
+
+    ecs.add<HgComp>(scene[0]) = {12};
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -227,7 +233,7 @@ int main(void) {
         }
 
         if (imgui_demo)
-            ImGui::ShowDemoWindow();
+            ImGui::ShowDemoWindow(&imgui_demo);
 
         if (ImGui::Begin("Scene")) {
             ImGuiTreeNodeFlags options_flags = ImGuiTreeNodeFlags_DefaultOpen;
