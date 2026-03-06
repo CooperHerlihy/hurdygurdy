@@ -39,7 +39,7 @@ namespace {
 
         static TestArr create(usize init_count) {
             TestArr arr;
-            arr.items = (Test*)std::malloc(init_count);
+            arr.items = (Test*)std::malloc(init_count * sizeof(Test));
             arr.capacity = init_count;
             arr.count = 0;
             return arr;
@@ -1520,41 +1520,47 @@ f64 HgClock::tick() {
     return std::chrono::duration<f64>{time - prev}.count();
 }
 
-static u32 component_widths_arr[4096]{};
+namespace {
+    struct ComponentArr {
+        u32* widths;
+        u32 capacity;
+        u32 count;
 
-static u32* component_widths() {
-    return component_widths_arr;
+        static ComponentArr create(u32 init_count) {
+            ComponentArr arr;
+            arr.widths = (u32*)std::malloc(init_count * sizeof(u32));
+            arr.capacity = init_count;
+            arr.count = 0;
+            return arr;
+        }
+
+        void destroy() const {
+            std::free(widths);
+        }
+
+        void push(u32 width) {
+            if (capacity == count) {
+                u32 new_capacity = capacity == 0 ? 1 : capacity * 2;
+                widths = (u32*)std::realloc(widths, new_capacity);
+                capacity = new_capacity;
+            }
+            widths[count++] = width;
+        }
+    };
 }
 
-// namespace {
-//     struct ComponentDtor {
-//         ~ComponentDtor() {
-//             std::free(component_widths());
-//         }
-//     } component_dtor;
-// }
-
-static u32& component_capacity() {
-    static u32 capacity = 4096;
-    return capacity;
+ComponentArr& get_component_arr() {
+    static ComponentArr components = components.create(1024);
+    return components;
 }
 
-static u32& component_count() {
-    static u32 count = 0;
-    return count;
+static u32 component_width(u32 id) {
+    return get_component_arr().widths[id];
 }
 
 u32 hg_create_component_id(u32 width) {
-    u32 id = component_count()++;
-    hg_assert(id != component_capacity());
-    // if (id == component_capacity()) {
-    //     u32 new_capacity = component_capacity() == 0
-    //         ? sizeof(u32)
-    //         : sizeof(u32) * component_capacity() * 2;
-    //     component_widths() = (u32 *)std::realloc(component_widths(), new_capacity);
-    //     component_capacity() = new_capacity;
-    // }
-    component_widths()[id] = width;
+    u32 id = get_component_arr().count;
+    get_component_arr().push(width);
     return id;
 }
 
@@ -1564,7 +1570,7 @@ HgECS HgECS::create(u32 max_entities) {
     ecs.pool_size = max_entities;
     ecs.pool = (HgEntity*)std::malloc(sizeof(HgEntity) * ecs.pool_size);
 
-    ecs.system_count = component_count();
+    ecs.system_count = get_component_arr().count;
     ecs.systems = (System*)std::malloc(sizeof(System) * ecs.system_count);
 
     for (u32 i = 0; i < ecs.system_count; ++i) {
@@ -1633,13 +1639,13 @@ void* HgECS::add(HgEntity e, u32 component_id) {
         systems[component_id].entities = (HgEntity*)std::realloc(
             systems[component_id].entities, sizeof(HgEntity) * new_capacity);
         systems[component_id].components = (HgEntity*)std::realloc(
-            systems[component_id].components, component_widths()[component_id] * new_capacity);
+            systems[component_id].components, component_width(component_id) * new_capacity);
         systems[component_id].capacity = new_capacity;
     }
 
     systems[component_id].indices[e.idx()] = systems[component_id].count;
     systems[component_id].entities[systems[component_id].count] = e;
-    void* c = (u8*)systems[component_id].components + component_widths()[component_id] * systems[component_id].count;
+    void* c = (u8*)systems[component_id].components + component_width(component_id) * systems[component_id].count;
     ++systems[component_id].count;
     return c;
 }
@@ -1655,9 +1661,9 @@ void HgECS::remove(HgEntity e, u32 component_id) {
         systems[component_id].entities[idx] = last;
         systems[component_id].indices[last.idx()] = idx;
         std::memcpy(
-            (u8*)systems[component_id].components + component_widths()[component_id] * idx,
-            (u8*)systems[component_id].components + component_widths()[component_id] * (systems[component_id].count - 1),
-            component_widths()[component_id]);
+            (u8*)systems[component_id].components + component_width(component_id) * idx,
+            (u8*)systems[component_id].components + component_width(component_id) * (systems[component_id].count - 1),
+            component_width(component_id));
     }
     systems[component_id].indices[e.idx()] = (u32)-1;
     --systems[component_id].count;
@@ -1671,13 +1677,13 @@ bool HgECS::has(HgEntity e, u32 component_id) {
 void* HgECS::get(HgEntity e, u32 component_id) {
     hg_assert(alive(e));
     hg_assert(has(e, component_id));
-    return (u8*)systems[component_id].components + component_widths()[component_id] * systems[component_id].indices[e.idx()];
+    return (u8*)systems[component_id].components + component_width(component_id) * systems[component_id].indices[e.idx()];
 }
 
 HgEntity HgECS::get(const void* component, u32 component_id) {
     hg_assert(component != nullptr);
 
-    usize idx = ((uptr)component - (uptr)systems[component_id].components) / component_widths()[component_id];
+    usize idx = ((uptr)component - (uptr)systems[component_id].components) / component_width(component_id);
     return systems[component_id].entities[idx];
 }
 
@@ -1708,8 +1714,8 @@ static void swap_idx_location(HgECS& ecs, u32 lhs, u32 rhs, u32 component_id) {
     system.indices[lhs_entity.id] = rhs;
     system.indices[rhs_entity.id] = lhs;
 
-    u32 width = component_widths()[component_id];
-    void* temp = alloca(component_widths()[component_id]);
+    u32 width = component_width(component_id);
+    void* temp = alloca(component_width(component_id));
     std::memcpy(temp, (u8*)system.components + width * lhs, width);
     std::memcpy((u8*)system.components + width * lhs, (u8*)system.components + width * rhs, width);
     std::memcpy((u8*)system.components + width * rhs, temp, width);

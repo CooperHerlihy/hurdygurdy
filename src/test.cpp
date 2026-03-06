@@ -2454,15 +2454,18 @@ hg_test(hg_ecs) {
         hg_test_assert(!ecs.has<u32>(e2));
         hg_test_assert(!ecs.has<u32>(e3));
 
-        ecs.add<u32>(e1) = 1;
+        u32* e1c = &ecs.add<u32>(e1);
+        *e1c = 1;
         hg_test_assert(ecs.has<u32>(e1) && ecs.get<u32>(e1) == 1);
         hg_test_assert(!ecs.has<u32>(e2));
         hg_test_assert(!ecs.has<u32>(e3));
-        ecs.add<u32>(e2) = 2;
+        u32* e2c = &ecs.add<u32>(e2);
+        *e2c = 2;
         hg_test_assert(ecs.has<u32>(e1) && ecs.get<u32>(e1) == 1);
         hg_test_assert(ecs.has<u32>(e2) && ecs.get<u32>(e2) == 2);
         hg_test_assert(!ecs.has<u32>(e3));
-        ecs.add<u32>(e3) = 3;
+        u32* e3c = &ecs.add<u32>(e3);
+        *e3c = 3;
         hg_test_assert(ecs.has<u32>(e1) && ecs.get<u32>(e1) == 1);
         hg_test_assert(ecs.has<u32>(e2) && ecs.get<u32>(e2) == 2);
         hg_test_assert(ecs.has<u32>(e3) && ecs.get<u32>(e3) == 3);
