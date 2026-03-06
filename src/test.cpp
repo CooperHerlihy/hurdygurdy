@@ -153,8 +153,8 @@ int main(void) {
     imgui_info.QueueFamily = hg_vk_queue_family;
     imgui_info.Queue = hg_vk_queue;
     imgui_info.DescriptorPoolSize = 1000;
-    imgui_info.MinImageCount = 2;
-    imgui_info.ImageCount = 2;
+    imgui_info.MinImageCount = swap_image_count;
+    imgui_info.ImageCount = swap_image_count;
     imgui_info.MinAllocationSize = 1024 * 1024;
     imgui_info.UseDynamicRendering = true;
     imgui_info.PipelineInfoMain.PipelineRenderingCreateInfo.sType

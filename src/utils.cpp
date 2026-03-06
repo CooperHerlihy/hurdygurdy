@@ -512,9 +512,9 @@ HgQuat operator*(const HgQuat& lhs, const HgQuat& rhs) {
 
 HgQuat hg_axis_angle(const HgVec3& axis, f32 angle) {
     f32 half_angle = angle * (f32)0.5;
-    f32 sin_half_angle = (f32)sin(half_angle);
+    f32 sin_half_angle = (f32)std::sin(half_angle);
     return {
-        (f32)cos(half_angle),
+        (f32)std::cos(half_angle),
         axis.x * sin_half_angle,
         axis.y * sin_half_angle,
         axis.z * sin_half_angle,
@@ -536,8 +536,8 @@ HgMat3 hg_rotate(const HgQuat& lhs, const HgMat3& rhs) {
 
 HgMat4 hg_model_matrix_2d(const HgVec3& position, const HgVec2& scale, f32 rotation) {
     HgMat2 m2{{scale.x, 0.0f}, {0.0f, scale.y}};
-    f32 rot_sin = (f32)sin(rotation);
-    f32 rot_cos = (f32)cos(rotation);
+    f32 rot_sin = (f32)std::sin(rotation);
+    f32 rot_cos = (f32)std::cos(rotation);
     HgMat2 rot{{rot_cos, rot_sin}, {-rot_sin, rot_cos}};
     HgMat4 m4 = rot * m2;
     m4.w.x = position.x;
@@ -901,7 +901,7 @@ HgString hg_int_to_str_base10(HgArena& arena, i64 num) {
         return HgString::create(arena, "0");
 
     bool is_negative = num < 0;
-    u64 unum = (u64)labs(num);
+    u64 unum = (u64)std::abs(num);
 
     HgString reverse = reverse.create(scratch, 16);
     while (unum != 0) {

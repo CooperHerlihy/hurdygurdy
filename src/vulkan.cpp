@@ -2519,19 +2519,21 @@ HgSwapchainData hg_vk_create_swapchain(
     swapchain.height = height;
     swapchain.format = vk_find_swapchain_format(surface);
 
+    VkPresentModeKHR present_mode = vk_find_swapchain_present_mode(surface, desired_mode);
+
     VkSwapchainCreateInfoKHR swapchain_info{};
     swapchain_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     swapchain_info.surface = surface;
-    swapchain_info.minImageCount = surface_capabilities.maxImageCount == 0
-        ? surface_capabilities.minImageCount + 1
-        : std::min(surface_capabilities.minImageCount + 1, surface_capabilities.maxImageCount);
+    swapchain_info.minImageCount = present_mode == VK_PRESENT_MODE_FIFO_KHR
+        ? std::max(surface_capabilities.minImageCount, (u32)2)
+        : std::min(surface_capabilities.minImageCount, surface_capabilities.maxImageCount - 1) + 1;
     swapchain_info.imageFormat = swapchain.format;
     swapchain_info.imageExtent = {swapchain.width, swapchain.height};
     swapchain_info.imageArrayLayers = 1;
     swapchain_info.imageUsage = image_usage;
     swapchain_info.preTransform = surface_capabilities.currentTransform;
     swapchain_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    swapchain_info.presentMode = vk_find_swapchain_present_mode(surface, desired_mode);
+    swapchain_info.presentMode = present_mode;
     swapchain_info.clipped = VK_TRUE;
     swapchain_info.oldSwapchain = old_swapchain;
 
