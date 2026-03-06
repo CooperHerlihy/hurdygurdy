@@ -58,21 +58,21 @@ bool HgWindow::was_key_released(HgKey key) {
     return internals->input.keys_released[(u32)key];
 }
 
-HINSTANCE hg_internal_win32_instance = nullptr;
+HINSTANCE win32_instance = nullptr;
 
 void hg_platform_init() {
-    hg_internal_win32_instance = GetModuleHandle(nullptr);
+    win32_instance = GetModuleHandle(nullptr);
 }
 
 void hg_platform_deinit() {
-    hg_internal_win32_instance = nullptr;
+    win32_instance = nullptr;
 }
 
 extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 static bool imgui_initialized = false;
 
-static LRESULT CALLBACK hg_internal_window_callback(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
+static LRESULT CALLBACK window_callback(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     HgWindow::Internals* window = (HgWindow::Internals*)GetWindowLongPtrA(hwnd, GWLP_USERDATA);
 
     if (imgui_initialized)
@@ -90,7 +90,7 @@ static LRESULT CALLBACK hg_internal_window_callback(HWND hwnd, UINT msg, WPARAM 
             window->input.height = HIWORD(lparam);
             break;
         case WM_KILLFOCUS:
-            std::memset(window->input.keys_down, 0, sizeof(window->input.keys_down));
+            memset(window->input.keys_down, 0, sizeof(window->input.keys_down));
                 break;
         case WM_SYSKEYDOWN:
         case WM_SYSKEYUP:
@@ -430,11 +430,11 @@ HgWindow HgWindow::create(HgArena& arena, const HgWindowConfig& config) {
     *window.internals = {};
 
     WNDCLASSA window_class{};
-    window_class.hInstance = hg_internal_win32_instance;
+    window_class.hInstance = win32_instance;
     window_class.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
     window_class.hCursor = LoadCursor(nullptr, IDC_ARROW);
     window_class.lpszClassName = title;
-    window_class.lpfnWndProc = hg_internal_window_callback;
+    window_class.lpfnWndProc = window_callback;
     if (!RegisterClassA(&window_class))
         hg_error("Win32 failed to register window class for window: %s\n", config.title);
 
@@ -452,7 +452,7 @@ HgWindow HgWindow::create(HgArena& arena, const HgWindowConfig& config) {
             window.internals->input.height,
             nullptr,
             nullptr,
-            hg_internal_win32_instance,
+            win32_instance,
             window.internals
         );
     } else {
@@ -469,7 +469,7 @@ HgWindow HgWindow::create(HgArena& arena, const HgWindowConfig& config) {
             window.internals->input.height,
             nullptr,
             nullptr,
-            hg_internal_win32_instance,
+            win32_instance,
             window.internals
         );
     }
@@ -531,7 +531,7 @@ VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window) {
 
     VkWin32SurfaceCreateInfoKHR info{};
     info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-    info.hinstance = hg_internal_win32_instance;
+    info.hinstance = win32_instance;
     info.hwnd = window.internals->hwnd;
 
     VkSurfaceKHR surface = nullptr;
@@ -549,8 +549,8 @@ void hg_process_window_events(const HgWindow* windows, usize window_count) {
     for (usize i = 0; i < window_count; ++i) {
         HgWindow::Internals* window = windows[i].internals;
 
-        std::memset(window->input.keys_pressed, 0, sizeof(window->input.keys_pressed));
-        std::memset(window->input.keys_released, 0, sizeof(window->input.keys_released));
+        memset(window->input.keys_pressed, 0, sizeof(window->input.keys_pressed));
+        memset(window->input.keys_released, 0, sizeof(window->input.keys_released));
 
         f64 old_mouse_pos_x = window->input.mouse_pos_x;
         f64 old_mouse_pos_y = window->input.mouse_pos_y;

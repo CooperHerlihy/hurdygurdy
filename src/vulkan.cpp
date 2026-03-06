@@ -3,7 +3,7 @@
 void hg_vulkan_init();
 
 #ifdef HG_VK_DEBUG_MESSENGER
-VkDebugUtilsMessengerEXT hg_internal_vk_debug_messenger = nullptr;
+VkDebugUtilsMessengerEXT vk_debug_messenger = nullptr;
 #endif
 
 void hg_vk_create_vma_allocator();
@@ -12,7 +12,8 @@ void hg_graphics_init() {
     hg_vulkan_init();
 
     if (hg_vk_instance == nullptr) {
-        hg_arena_scope(scratch, hg_get_scratch());
+        HgArena& scratch = hg_get_scratch();
+        HgArenaScope scratch_scope{scratch};
 
         HgStringView* exts;
         u32 ext_count = hg_vk_get_platform_extensions(scratch, &exts);
@@ -25,8 +26,8 @@ void hg_graphics_init() {
     }
 
 #ifdef HG_VK_DEBUG_MESSENGER
-    if (hg_internal_vk_debug_messenger == nullptr)
-        hg_internal_vk_debug_messenger = hg_vk_create_debug_messenger();
+    if (vk_debug_messenger == nullptr)
+        vk_debug_messenger = hg_vk_create_debug_messenger();
 #endif
 
     if (hg_vk_physical_device == nullptr) {
@@ -88,9 +89,9 @@ void hg_graphics_deinit() {
     }
 
 #ifdef HG_VK_DEBUG_MESSENGER
-    if (hg_internal_vk_debug_messenger != nullptr) {
-        vkDestroyDebugUtilsMessengerEXT(hg_vk_instance, hg_internal_vk_debug_messenger, nullptr);
-        hg_internal_vk_debug_messenger = nullptr;
+    if (vk_debug_messenger != nullptr) {
+        vkDestroyDebugUtilsMessengerEXT(hg_vk_instance, vk_debug_messenger, nullptr);
+        vk_debug_messenger = nullptr;
     }
 #endif
 
@@ -635,13 +636,13 @@ struct HgVulkanFuncs {
 
 #undef HG_MAKE_VULKAN_FUNC
 
-static HgVulkanFuncs hg_internal_vulkan_funcs{};
+static HgVulkanFuncs vulkan_funcs{};
 
 PFN_vkVoidFunction vkGetInstanceProcAddr(
     VkInstance instance,
     const char* pName
 ) {
-    return hg_internal_vulkan_funcs.vkGetInstanceProcAddr(
+    return vulkan_funcs.vkGetInstanceProcAddr(
         instance,
         pName);
 }
@@ -650,7 +651,7 @@ PFN_vkVoidFunction vkGetDeviceProcAddr(
     VkDevice device,
     const char* pName
 ) {
-    return hg_internal_vulkan_funcs.vkGetDeviceProcAddr(
+    return vulkan_funcs.vkGetDeviceProcAddr(
         device,
         pName);
 }
@@ -660,7 +661,7 @@ VkResult vkCreateInstance(
     const VkAllocationCallbacks* pAllocator,
     VkInstance* pInstance
 ) {
-    return hg_internal_vulkan_funcs.vkCreateInstance(
+    return vulkan_funcs.vkCreateInstance(
         pCreateInfo,
         pAllocator,
         pInstance);
@@ -670,7 +671,7 @@ void vkDestroyInstance(
     VkInstance instance,
     const VkAllocationCallbacks* pAllocator
 ) {
-    hg_internal_vulkan_funcs.vkDestroyInstance(
+    vulkan_funcs.vkDestroyInstance(
         instance,
         pAllocator);
 }
@@ -681,7 +682,7 @@ VkResult vkCreateDebugUtilsMessengerEXT(
     const VkAllocationCallbacks* pAllocator,
     VkDebugUtilsMessengerEXT* pMessenger
 ) {
-    return hg_internal_vulkan_funcs.vkCreateDebugUtilsMessengerEXT(
+    return vulkan_funcs.vkCreateDebugUtilsMessengerEXT(
         instance,
         pCreateInfo,
         pAllocator,
@@ -693,7 +694,7 @@ void vkDestroyDebugUtilsMessengerEXT(
     VkDebugUtilsMessengerEXT messenger,
     const VkAllocationCallbacks* pAllocator
 ) {
-    hg_internal_vulkan_funcs.vkDestroyDebugUtilsMessengerEXT(
+    vulkan_funcs.vkDestroyDebugUtilsMessengerEXT(
         instance,
         messenger,
         pAllocator);
@@ -704,7 +705,7 @@ VkResult vkEnumeratePhysicalDevices(
     uint32_t* pCount,
     VkPhysicalDevice* pDevices
 ) {
-    return hg_internal_vulkan_funcs.vkEnumeratePhysicalDevices(
+    return vulkan_funcs.vkEnumeratePhysicalDevices(
         instance,
         pCount,
         pDevices);
@@ -716,7 +717,7 @@ VkResult vkEnumerateDeviceExtensionProperties(
     uint32_t* pCount,
     VkExtensionProperties* pProps
 ) {
-    return hg_internal_vulkan_funcs.vkEnumerateDeviceExtensionProperties(
+    return vulkan_funcs.vkEnumerateDeviceExtensionProperties(
         device,
         pLayerName,
         pCount,
@@ -727,7 +728,7 @@ void vkGetPhysicalDeviceProperties(
     VkPhysicalDevice physicalDevice,
     VkPhysicalDeviceProperties* pProperties
 ) {
-    hg_internal_vulkan_funcs.vkGetPhysicalDeviceProperties(
+    vulkan_funcs.vkGetPhysicalDeviceProperties(
         physicalDevice,
         pProperties);
 }
@@ -737,7 +738,7 @@ void vkGetPhysicalDeviceQueueFamilyProperties(
     uint32_t* pCount,
     VkQueueFamilyProperties* pProps
 ) {
-    hg_internal_vulkan_funcs.vkGetPhysicalDeviceQueueFamilyProperties(
+    vulkan_funcs.vkGetPhysicalDeviceQueueFamilyProperties(
         device,
         pCount,
         pProps);
@@ -748,7 +749,7 @@ void vkDestroySurfaceKHR(
     VkSurfaceKHR surface,
     const VkAllocationCallbacks* pAllocator
 ) {
-    hg_internal_vulkan_funcs.vkDestroySurfaceKHR(
+    vulkan_funcs.vkDestroySurfaceKHR(
         instance,
         surface,
         pAllocator);
@@ -760,7 +761,7 @@ VkResult vkCreateDevice(
     const VkAllocationCallbacks* pAllocator,
     VkDevice* pDevice
 ) {
-    return hg_internal_vulkan_funcs.vkCreateDevice(
+    return vulkan_funcs.vkCreateDevice(
         device,
         pCreateInfo,
         pAllocator,
@@ -771,7 +772,7 @@ void vkDestroyDevice(
     VkDevice device,
     const VkAllocationCallbacks* pAllocator
 ) {
-    hg_internal_vulkan_funcs.vkDestroyDevice(
+    vulkan_funcs.vkDestroyDevice(
         device,
         pAllocator);
 }
@@ -779,7 +780,7 @@ void vkDestroyDevice(
 VkResult vkDeviceWaitIdle(
     VkDevice device
 ) {
-    return hg_internal_vulkan_funcs.vkDeviceWaitIdle(
+    return vulkan_funcs.vkDeviceWaitIdle(
         device);
 }
 
@@ -789,7 +790,7 @@ VkResult vkGetPhysicalDeviceSurfaceSupportKHR(
     VkSurfaceKHR surface,
     VkBool32* pSupported
 ) {
-    return hg_internal_vulkan_funcs.vkGetPhysicalDeviceSurfaceSupportKHR(
+    return vulkan_funcs.vkGetPhysicalDeviceSurfaceSupportKHR(
         physicalDevice,
         queueFamilyIndex,
         surface,
@@ -802,7 +803,7 @@ VkResult vkGetPhysicalDeviceSurfaceFormatsKHR(
     uint32_t* pCount,
     VkSurfaceFormatKHR* pFormats
 ) {
-    return hg_internal_vulkan_funcs.vkGetPhysicalDeviceSurfaceFormatsKHR(
+    return vulkan_funcs.vkGetPhysicalDeviceSurfaceFormatsKHR(
         device,
         surface,
         pCount,
@@ -815,7 +816,7 @@ VkResult vkGetPhysicalDeviceSurfacePresentModesKHR(
     uint32_t* pCount,
     VkPresentModeKHR* pModes
 ) {
-    return hg_internal_vulkan_funcs.vkGetPhysicalDeviceSurfacePresentModesKHR(
+    return vulkan_funcs.vkGetPhysicalDeviceSurfacePresentModesKHR(
         device,
         surface,
         pCount,
@@ -827,7 +828,7 @@ VkResult vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
     VkSurfaceKHR surface,
     VkSurfaceCapabilitiesKHR* pCaps
 ) {
-    return hg_internal_vulkan_funcs.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
+    return vulkan_funcs.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
         device,
         surface,
         pCaps);
@@ -839,7 +840,7 @@ VkResult vkCreateSwapchainKHR(
     const VkAllocationCallbacks* pAllocator,
     VkSwapchainKHR* pSwapchain
 ) {
-    return hg_internal_vulkan_funcs.vkCreateSwapchainKHR(
+    return vulkan_funcs.vkCreateSwapchainKHR(
         device,
         pCreateInfo,
         pAllocator,
@@ -851,7 +852,7 @@ void vkDestroySwapchainKHR(
     VkSwapchainKHR swapchain,
     const VkAllocationCallbacks* pAllocator
 ) {
-    hg_internal_vulkan_funcs.vkDestroySwapchainKHR(
+    vulkan_funcs.vkDestroySwapchainKHR(
         device,
         swapchain,
         pAllocator);
@@ -863,7 +864,7 @@ VkResult vkGetSwapchainImagesKHR(
     uint32_t* pCount,
     VkImage* pImages
 ) {
-    return hg_internal_vulkan_funcs.vkGetSwapchainImagesKHR(
+    return vulkan_funcs.vkGetSwapchainImagesKHR(
         device,
         swapchain,
         pCount,
@@ -878,7 +879,7 @@ VkResult vkAcquireNextImageKHR(
     VkFence fence,
     uint32_t* pIndex
 ) {
-    return hg_internal_vulkan_funcs.vkAcquireNextImageKHR(
+    return vulkan_funcs.vkAcquireNextImageKHR(
         device,
         swapchain,
         timeout,
@@ -893,7 +894,7 @@ VkResult vkCreateSemaphore(
     const VkAllocationCallbacks* pAllocator,
     VkSemaphore* pSemaphore
 ) {
-    return hg_internal_vulkan_funcs.vkCreateSemaphore(
+    return vulkan_funcs.vkCreateSemaphore(
         device,
         pCreateInfo,
         pAllocator,
@@ -905,7 +906,7 @@ void vkDestroySemaphore(
     VkSemaphore sem,
     const VkAllocationCallbacks* pAllocator
 ) {
-    hg_internal_vulkan_funcs.vkDestroySemaphore(
+    vulkan_funcs.vkDestroySemaphore(
         device,
         sem,
         pAllocator);
@@ -917,7 +918,7 @@ VkResult vkCreateFence(
     const VkAllocationCallbacks* pAllocator,
     VkFence* pFence
 ) {
-    return hg_internal_vulkan_funcs.vkCreateFence(
+    return vulkan_funcs.vkCreateFence(
         device,
         pCreateInfo,
         pAllocator,
@@ -929,7 +930,7 @@ void vkDestroyFence(
     VkFence fence,
     const VkAllocationCallbacks* pAllocator
 ) {
-    hg_internal_vulkan_funcs.vkDestroyFence(
+    vulkan_funcs.vkDestroyFence(
         device,
         fence,
         pAllocator);
@@ -940,7 +941,7 @@ VkResult vkResetFences(
     uint32_t count,
     const VkFence* pFences
 ) {
-    return hg_internal_vulkan_funcs.vkResetFences(
+    return vulkan_funcs.vkResetFences(
         device,
         count,
         pFences);
@@ -953,7 +954,7 @@ VkResult vkWaitForFences(
     VkBool32 waitAll,
     uint64_t timeout
 ) {
-    return hg_internal_vulkan_funcs.vkWaitForFences(
+    return vulkan_funcs.vkWaitForFences(
         device,
         count,
         pFences,
@@ -967,7 +968,7 @@ void vkGetDeviceQueue(
     uint32_t index,
     VkQueue* pQueue
 ) {
-    hg_internal_vulkan_funcs.vkGetDeviceQueue(
+    vulkan_funcs.vkGetDeviceQueue(
         device,
         family,
         index,
@@ -977,7 +978,7 @@ void vkGetDeviceQueue(
 VkResult vkQueueWaitIdle(
     VkQueue queue
 ) {
-    return hg_internal_vulkan_funcs.vkQueueWaitIdle(
+    return vulkan_funcs.vkQueueWaitIdle(
         queue);
 }
 
@@ -987,7 +988,7 @@ VkResult vkQueueSubmit(
     const VkSubmitInfo* pSubmits,
     VkFence fence
 ) {
-    return hg_internal_vulkan_funcs.vkQueueSubmit(
+    return vulkan_funcs.vkQueueSubmit(
         queue,
         count,
         pSubmits,
@@ -998,7 +999,7 @@ VkResult vkQueuePresentKHR(
     VkQueue queue,
     const VkPresentInfoKHR* pInfo
 ) {
-    return hg_internal_vulkan_funcs.vkQueuePresentKHR(
+    return vulkan_funcs.vkQueuePresentKHR(
         queue,
         pInfo);
 }
@@ -1009,7 +1010,7 @@ VkResult vkCreateCommandPool(
     const VkAllocationCallbacks* pAllocator,
     VkCommandPool* pPool
 ) {
-    return hg_internal_vulkan_funcs.vkCreateCommandPool(
+    return vulkan_funcs.vkCreateCommandPool(
         device,
         pCreateInfo,
         pAllocator,
@@ -1021,7 +1022,7 @@ void vkDestroyCommandPool(
     VkCommandPool pool,
     const VkAllocationCallbacks* pAllocator
 ) {
-    hg_internal_vulkan_funcs.vkDestroyCommandPool(
+    vulkan_funcs.vkDestroyCommandPool(
         device,
         pool,
         pAllocator);
@@ -1032,7 +1033,7 @@ VkResult vkResetCommandPool(
     VkCommandPool commandPool,
     VkCommandPoolResetFlags flags
 ) {
-    return hg_internal_vulkan_funcs.vkResetCommandPool(
+    return vulkan_funcs.vkResetCommandPool(
         device,
         commandPool,
         flags);
@@ -1043,7 +1044,7 @@ VkResult vkAllocateCommandBuffers(
     const VkCommandBufferAllocateInfo* pInfo,
     VkCommandBuffer* pBufs
 ) {
-    return hg_internal_vulkan_funcs.vkAllocateCommandBuffers(
+    return vulkan_funcs.vkAllocateCommandBuffers(
         device,
         pInfo,
         pBufs);
@@ -1055,7 +1056,7 @@ void vkFreeCommandBuffers(
     uint32_t count,
     const VkCommandBuffer* pBufs
 ) {
-    hg_internal_vulkan_funcs.vkFreeCommandBuffers(
+    vulkan_funcs.vkFreeCommandBuffers(
         device,
         pool,
         count,
@@ -1068,7 +1069,7 @@ VkResult vkCreateDescriptorPool(
     const VkAllocationCallbacks* pAllocator,
     VkDescriptorPool* pPool
 ) {
-    return hg_internal_vulkan_funcs.vkCreateDescriptorPool(
+    return vulkan_funcs.vkCreateDescriptorPool(
         device,
         pInfo,
         pAllocator,
@@ -1080,7 +1081,7 @@ void vkDestroyDescriptorPool(
     VkDescriptorPool pool,
     const VkAllocationCallbacks* pAllocator
 ) {
-    hg_internal_vulkan_funcs.vkDestroyDescriptorPool(
+    vulkan_funcs.vkDestroyDescriptorPool(
         device,
         pool,
         pAllocator);
@@ -1091,7 +1092,7 @@ VkResult vkResetDescriptorPool(
     VkDescriptorPool pool,
     uint32_t flags
 ) {
-    return hg_internal_vulkan_funcs.vkResetDescriptorPool(
+    return vulkan_funcs.vkResetDescriptorPool(
         device,
         pool,
         flags);
@@ -1102,7 +1103,7 @@ VkResult vkAllocateDescriptorSets(
     const VkDescriptorSetAllocateInfo* pInfo,
     VkDescriptorSet* pSets
 ) {
-    return hg_internal_vulkan_funcs.vkAllocateDescriptorSets(
+    return vulkan_funcs.vkAllocateDescriptorSets(
         device,
         pInfo,
         pSets);
@@ -1114,7 +1115,7 @@ VkResult vkFreeDescriptorSets(
     uint32_t descriptorSetCount,
     const VkDescriptorSet* pDescriptorSets
 ) {
-    return hg_internal_vulkan_funcs.vkFreeDescriptorSets(
+    return vulkan_funcs.vkFreeDescriptorSets(
         device,
         descriptorPool,
         descriptorSetCount,
@@ -1128,7 +1129,7 @@ void vkUpdateDescriptorSets(
     uint32_t copyCount,
     const VkCopyDescriptorSet* pCopies
 ) {
-    hg_internal_vulkan_funcs.vkUpdateDescriptorSets(
+    vulkan_funcs.vkUpdateDescriptorSets(
         device,
         writeCount,
         pWrites,
@@ -1142,7 +1143,7 @@ VkResult vkCreateDescriptorSetLayout(
     const VkAllocationCallbacks* pAllocator,
     VkDescriptorSetLayout* pLayout
 ) {
-    return hg_internal_vulkan_funcs.vkCreateDescriptorSetLayout(
+    return vulkan_funcs.vkCreateDescriptorSetLayout(
         device,
         pInfo,
         pAllocator,
@@ -1154,7 +1155,7 @@ void vkDestroyDescriptorSetLayout(
     VkDescriptorSetLayout layout,
     const VkAllocationCallbacks* pAllocator
 ) {
-    hg_internal_vulkan_funcs.vkDestroyDescriptorSetLayout(
+    vulkan_funcs.vkDestroyDescriptorSetLayout(
         device,
         layout,
         pAllocator);
@@ -1166,7 +1167,7 @@ VkResult vkCreatePipelineLayout(
     const VkAllocationCallbacks* pAllocator,
     VkPipelineLayout* pLayout
 ) {
-    return hg_internal_vulkan_funcs.vkCreatePipelineLayout(
+    return vulkan_funcs.vkCreatePipelineLayout(
         device,
         pInfo,
         pAllocator,
@@ -1178,7 +1179,7 @@ void vkDestroyPipelineLayout(
     VkPipelineLayout layout,
     const VkAllocationCallbacks* pAllocator
 ) {
-    hg_internal_vulkan_funcs.vkDestroyPipelineLayout(
+    vulkan_funcs.vkDestroyPipelineLayout(
         device,
         layout,
         pAllocator);
@@ -1190,7 +1191,7 @@ VkResult vkCreateShaderModule(
     const VkAllocationCallbacks* pAllocator,
     VkShaderModule* pModule
 ) {
-    return hg_internal_vulkan_funcs.vkCreateShaderModule(
+    return vulkan_funcs.vkCreateShaderModule(
         device,
         pInfo,
         pAllocator,
@@ -1202,7 +1203,7 @@ void vkDestroyShaderModule(
     VkShaderModule module,
     const VkAllocationCallbacks* pAllocator
 ) {
-    hg_internal_vulkan_funcs.vkDestroyShaderModule(
+    vulkan_funcs.vkDestroyShaderModule(
         device,
         module,
         pAllocator);
@@ -1216,7 +1217,7 @@ VkResult vkCreateGraphicsPipelines(
     const VkAllocationCallbacks* pAllocator,
     VkPipeline* pPipelines
 ) {
-    return hg_internal_vulkan_funcs.vkCreateGraphicsPipelines(
+    return vulkan_funcs.vkCreateGraphicsPipelines(
         device,
         cache,
         count,
@@ -1233,7 +1234,7 @@ VkResult vkCreateComputePipelines(
     const VkAllocationCallbacks* pAllocator,
     VkPipeline* pPipelines
 ) {
-    return hg_internal_vulkan_funcs.vkCreateComputePipelines(
+    return vulkan_funcs.vkCreateComputePipelines(
         device,
         cache,
         count,
@@ -1247,7 +1248,7 @@ void vkDestroyPipeline(
     VkPipeline pipeline,
     const VkAllocationCallbacks* pAllocator
 ) {
-    hg_internal_vulkan_funcs.vkDestroyPipeline(
+    vulkan_funcs.vkDestroyPipeline(
         device,
         pipeline,
         pAllocator);
@@ -1259,7 +1260,7 @@ VkResult vkCreateRenderPass(
     const VkAllocationCallbacks* pAllocator,
     VkRenderPass* pRenderPass
 ) {
-    return hg_internal_vulkan_funcs.vkCreateRenderPass(
+    return vulkan_funcs.vkCreateRenderPass(
         device,
         pCreateInfo,
         pAllocator,
@@ -1271,7 +1272,7 @@ void vkDestroyRenderPass(
     VkRenderPass renderPass,
     const VkAllocationCallbacks* pAllocator
 ) {
-    hg_internal_vulkan_funcs.vkDestroyRenderPass(
+    vulkan_funcs.vkDestroyRenderPass(
         device,
         renderPass,
         pAllocator);
@@ -1283,7 +1284,7 @@ VkResult vkCreateFramebuffer(
     const VkAllocationCallbacks* pAllocator,
     VkFramebuffer* pFramebuffer
 ) {
-    return hg_internal_vulkan_funcs.vkCreateFramebuffer(
+    return vulkan_funcs.vkCreateFramebuffer(
         device,
         pCreateInfo,
         pAllocator,
@@ -1295,7 +1296,7 @@ void vkDestroyFramebuffer(
     VkFramebuffer framebuffer,
     const VkAllocationCallbacks* pAllocator
 ) {
-    hg_internal_vulkan_funcs.vkDestroyFramebuffer(
+    vulkan_funcs.vkDestroyFramebuffer(
         device,
         framebuffer,
         pAllocator);
@@ -1307,7 +1308,7 @@ VkResult vkCreateBuffer(
     const VkAllocationCallbacks* pAllocator,
     VkBuffer* pBuf
 ) {
-    return hg_internal_vulkan_funcs.vkCreateBuffer(
+    return vulkan_funcs.vkCreateBuffer(
         device,
         pInfo,
         pAllocator,
@@ -1319,7 +1320,7 @@ void vkDestroyBuffer(
     VkBuffer buf,
     const VkAllocationCallbacks* pAllocator
 ) {
-    hg_internal_vulkan_funcs.vkDestroyBuffer(
+    vulkan_funcs.vkDestroyBuffer(
         device,
         buf,
         pAllocator);
@@ -1331,7 +1332,7 @@ VkResult vkCreateImage(
     const VkAllocationCallbacks* pAllocator,
     VkImage* pImage
 ) {
-    return hg_internal_vulkan_funcs.vkCreateImage(
+    return vulkan_funcs.vkCreateImage(
         device,
         pInfo,
         pAllocator,
@@ -1343,7 +1344,7 @@ void vkDestroyImage(
     VkImage img,
     const VkAllocationCallbacks* pAllocator
 ) {
-    hg_internal_vulkan_funcs.vkDestroyImage(
+    vulkan_funcs.vkDestroyImage(
         device,
         img,
         pAllocator);
@@ -1355,7 +1356,7 @@ VkResult vkCreateImageView(
     const VkAllocationCallbacks* pAllocator,
     VkImageView* pView
 ) {
-    return hg_internal_vulkan_funcs.vkCreateImageView(
+    return vulkan_funcs.vkCreateImageView(
         device,
         pInfo,
         pAllocator,
@@ -1367,7 +1368,7 @@ void vkDestroyImageView(
     VkImageView view,
     const VkAllocationCallbacks* pAllocator
 ) {
-    hg_internal_vulkan_funcs.vkDestroyImageView(
+    vulkan_funcs.vkDestroyImageView(
         device,
         view,
         pAllocator);
@@ -1379,7 +1380,7 @@ VkResult vkCreateSampler(
     const VkAllocationCallbacks* pAllocator,
     VkSampler* pSampler
 ) {
-    return hg_internal_vulkan_funcs.vkCreateSampler(
+    return vulkan_funcs.vkCreateSampler(
         device,
         pInfo,
         pAllocator,
@@ -1391,7 +1392,7 @@ void vkDestroySampler(
     VkSampler sampler,
     const VkAllocationCallbacks* pAllocator
 ) {
-    hg_internal_vulkan_funcs.vkDestroySampler(
+    vulkan_funcs.vkDestroySampler(
         device,
         sampler,
         pAllocator);
@@ -1401,7 +1402,7 @@ void vkGetPhysicalDeviceMemoryProperties(
     VkPhysicalDevice physicalDevice,
     VkPhysicalDeviceMemoryProperties* pMemoryProperties
 ) {
-    hg_internal_vulkan_funcs.vkGetPhysicalDeviceMemoryProperties(
+    vulkan_funcs.vkGetPhysicalDeviceMemoryProperties(
         physicalDevice,
         pMemoryProperties);
 }
@@ -1410,7 +1411,7 @@ void vkGetPhysicalDeviceMemoryProperties2(
     VkPhysicalDevice physicalDevice,
     VkPhysicalDeviceMemoryProperties2*pMemoryProperties
 ) {
-    hg_internal_vulkan_funcs.vkGetPhysicalDeviceMemoryProperties2(
+    vulkan_funcs.vkGetPhysicalDeviceMemoryProperties2(
         physicalDevice,
         pMemoryProperties);
 }
@@ -1420,7 +1421,7 @@ void vkGetBufferMemoryRequirements(
     VkBuffer buffer,
     VkMemoryRequirements* pMemoryRequirements
 ) {
-    hg_internal_vulkan_funcs.vkGetBufferMemoryRequirements(
+    vulkan_funcs.vkGetBufferMemoryRequirements(
         device,
         buffer,
         pMemoryRequirements);
@@ -1431,7 +1432,7 @@ void vkGetBufferMemoryRequirements2(
     const VkBufferMemoryRequirementsInfo2* pInfo,
     VkMemoryRequirements2* pMemoryRequirements
 ) {
-    hg_internal_vulkan_funcs.vkGetBufferMemoryRequirements2(
+    vulkan_funcs.vkGetBufferMemoryRequirements2(
         device,
         pInfo,
         pMemoryRequirements);
@@ -1442,7 +1443,7 @@ void vkGetImageMemoryRequirements(
     VkImage image,
     VkMemoryRequirements* pMemoryRequirements
 ) {
-    hg_internal_vulkan_funcs.vkGetImageMemoryRequirements(
+    vulkan_funcs.vkGetImageMemoryRequirements(
         device,
         image,
         pMemoryRequirements);
@@ -1453,7 +1454,7 @@ void vkGetImageMemoryRequirements2(
     const VkImageMemoryRequirementsInfo2* pInfo,
     VkMemoryRequirements2* pMemoryRequirements
 ) {
-    hg_internal_vulkan_funcs.vkGetImageMemoryRequirements2(
+    vulkan_funcs.vkGetImageMemoryRequirements2(
         device,
         pInfo,
         pMemoryRequirements);
@@ -1464,7 +1465,7 @@ void vkGetDeviceBufferMemoryRequirements(
     const VkDeviceBufferMemoryRequirements* pInfo,
     VkMemoryRequirements2* pMemoryRequirements
 ) {
-    hg_internal_vulkan_funcs.vkGetDeviceBufferMemoryRequirements(
+    vulkan_funcs.vkGetDeviceBufferMemoryRequirements(
         device,
         pInfo,
         pMemoryRequirements);
@@ -1475,7 +1476,7 @@ void vkGetDeviceImageMemoryRequirements(
     const VkDeviceImageMemoryRequirements* pInfo,
     VkMemoryRequirements2* pMemoryRequirements
 ) {
-    hg_internal_vulkan_funcs.vkGetDeviceImageMemoryRequirements(
+    vulkan_funcs.vkGetDeviceImageMemoryRequirements(
         device,
         pInfo,
         pMemoryRequirements);
@@ -1487,7 +1488,7 @@ VkResult vkAllocateMemory(
     const VkAllocationCallbacks* pAllocator,
     VkDeviceMemory* pMemory
 ) {
-    return hg_internal_vulkan_funcs.vkAllocateMemory(
+    return vulkan_funcs.vkAllocateMemory(
         device,
         pInfo,
         pAllocator,
@@ -1499,7 +1500,7 @@ void vkFreeMemory(
     VkDeviceMemory mem,
     const VkAllocationCallbacks* pAllocator
 ) {
-    hg_internal_vulkan_funcs.vkFreeMemory(
+    vulkan_funcs.vkFreeMemory(
         device,
         mem,
         pAllocator);
@@ -1511,7 +1512,7 @@ VkResult vkBindBufferMemory(
     VkDeviceMemory mem,
     VkDeviceSize offset
 ) {
-    return hg_internal_vulkan_funcs.vkBindBufferMemory(
+    return vulkan_funcs.vkBindBufferMemory(
         device,
         buf,
         mem,
@@ -1523,7 +1524,7 @@ VkResult vkBindBufferMemory2(
     uint32_t bindInfoCount,
     const VkBindBufferMemoryInfo* pBindInfos
 ) {
-    return hg_internal_vulkan_funcs.vkBindBufferMemory2(
+    return vulkan_funcs.vkBindBufferMemory2(
         device,
         bindInfoCount,
         pBindInfos);
@@ -1535,7 +1536,7 @@ VkResult vkBindImageMemory(
     VkDeviceMemory mem,
     VkDeviceSize offset
 ) {
-    return hg_internal_vulkan_funcs.vkBindImageMemory(
+    return vulkan_funcs.vkBindImageMemory(
         device,
         img,
         mem,
@@ -1547,7 +1548,7 @@ VkResult vkBindImageMemory2(
     uint32_t bindInfoCount,
     const VkBindImageMemoryInfo* pBindInfos
 ) {
-    return hg_internal_vulkan_funcs.vkBindImageMemory2(
+    return vulkan_funcs.vkBindImageMemory2(
         device,
         bindInfoCount,
         pBindInfos);
@@ -1561,7 +1562,7 @@ VkResult vkMapMemory(
     VkMemoryMapFlags flags,
     void** ppData
 ) {
-    return hg_internal_vulkan_funcs.vkMapMemory(
+    return vulkan_funcs.vkMapMemory(
         device,
         mem,
         offset, size, flags, ppData);
@@ -1571,7 +1572,7 @@ void vkUnmapMemory(
     VkDevice device,
     VkDeviceMemory mem
 ) {
-    hg_internal_vulkan_funcs.vkUnmapMemory(
+    vulkan_funcs.vkUnmapMemory(
         device,
         mem);
 }
@@ -1581,7 +1582,7 @@ VkResult vkFlushMappedMemoryRanges(
     uint32_t count,
     const VkMappedMemoryRange* pRanges
 ) {
-    return hg_internal_vulkan_funcs.vkFlushMappedMemoryRanges(
+    return vulkan_funcs.vkFlushMappedMemoryRanges(
         device,
         count,
         pRanges);
@@ -1592,7 +1593,7 @@ VkResult vkInvalidateMappedMemoryRanges(
     uint32_t count,
     const VkMappedMemoryRange* pRanges
 ) {
-    return hg_internal_vulkan_funcs.vkInvalidateMappedMemoryRanges(
+    return vulkan_funcs.vkInvalidateMappedMemoryRanges(
         device,
         count,
         pRanges);
@@ -1602,7 +1603,7 @@ VkResult vkBeginCommandBuffer(
     VkCommandBuffer cmd,
     const VkCommandBufferBeginInfo* pInfo
 ) {
-    return hg_internal_vulkan_funcs.vkBeginCommandBuffer(
+    return vulkan_funcs.vkBeginCommandBuffer(
         cmd,
         pInfo);
 }
@@ -1610,7 +1611,7 @@ VkResult vkBeginCommandBuffer(
 VkResult vkEndCommandBuffer(
     VkCommandBuffer cmd
 ) {
-    return hg_internal_vulkan_funcs.vkEndCommandBuffer(
+    return vulkan_funcs.vkEndCommandBuffer(
         cmd);
 }
 
@@ -1618,7 +1619,7 @@ VkResult vkResetCommandBuffer(
     VkCommandBuffer cmd,
     VkCommandBufferResetFlags flags
 ) {
-    return hg_internal_vulkan_funcs.vkResetCommandBuffer(
+    return vulkan_funcs.vkResetCommandBuffer(
         cmd,
         flags);
 }
@@ -1630,7 +1631,7 @@ void vkCmdCopyBuffer(
     uint32_t count,
     const VkBufferCopy* pRegions
 ) {
-    hg_internal_vulkan_funcs.vkCmdCopyBuffer(
+    vulkan_funcs.vkCmdCopyBuffer(
         cmd,
         src,
         dst,
@@ -1647,7 +1648,7 @@ void vkCmdCopyImage(
     uint32_t count,
     const VkImageCopy* pRegions
 ) {
-    hg_internal_vulkan_funcs.vkCmdCopyImage(
+    vulkan_funcs.vkCmdCopyImage(
         cmd,
         src,
         srcLayout,
@@ -1667,7 +1668,7 @@ void vkCmdBlitImage(
     const VkImageBlit* pRegions,
     VkFilter filter
 ) {
-    hg_internal_vulkan_funcs.vkCmdBlitImage(
+    vulkan_funcs.vkCmdBlitImage(
         cmd,
         src,
         srcLayout,
@@ -1686,7 +1687,7 @@ void vkCmdCopyBufferToImage(
     uint32_t count,
     const VkBufferImageCopy* pRegions
 ) {
-    hg_internal_vulkan_funcs.vkCmdCopyBufferToImage(
+    vulkan_funcs.vkCmdCopyBufferToImage(
         cmd,
         src,
         dst,
@@ -1703,7 +1704,7 @@ void vkCmdCopyImageToBuffer(
     uint32_t count,
     const VkBufferImageCopy* pRegions
 ) {
-    hg_internal_vulkan_funcs.vkCmdCopyImageToBuffer(
+    vulkan_funcs.vkCmdCopyImageToBuffer(
         cmd,
         src,
         srcLayout,
@@ -1716,7 +1717,7 @@ void vkCmdPipelineBarrier2(
     VkCommandBuffer cmd,
     const VkDependencyInfo* pInfo
 ) {
-    hg_internal_vulkan_funcs.vkCmdPipelineBarrier2(
+    vulkan_funcs.vkCmdPipelineBarrier2(
         cmd,
         pInfo);
 }
@@ -1733,7 +1734,7 @@ void vkCmdPipelineBarrier(
     uint32_t imageMemoryBarrierCount,
     const VkImageMemoryBarrier* pImageMemoryBarriers
 ) {
-    hg_internal_vulkan_funcs.vkCmdPipelineBarrier(
+    vulkan_funcs.vkCmdPipelineBarrier(
         commandBuffer,
         srcStageMask,
         dstStageMask,
@@ -1750,7 +1751,7 @@ void vkCmdBeginRendering(
     VkCommandBuffer cmd,
     const VkRenderingInfo* pInfo
 ) {
-    hg_internal_vulkan_funcs.vkCmdBeginRendering(
+    vulkan_funcs.vkCmdBeginRendering(
         cmd,
         pInfo);
 }
@@ -1758,7 +1759,7 @@ void vkCmdBeginRendering(
 void vkCmdEndRendering(
     VkCommandBuffer cmd
 ) {
-    hg_internal_vulkan_funcs.vkCmdEndRendering(
+    vulkan_funcs.vkCmdEndRendering(
         cmd);
 }
 
@@ -1767,7 +1768,7 @@ void vkCmdBeginRenderPass(
     const VkRenderPassBeginInfo* pRenderPassBegin,
     VkSubpassContents contents
 ) {
-    hg_internal_vulkan_funcs.vkCmdBeginRenderPass(
+    vulkan_funcs.vkCmdBeginRenderPass(
         cmd,
         pRenderPassBegin,
         contents);
@@ -1776,7 +1777,7 @@ void vkCmdBeginRenderPass(
 void vkCmdEndRenderPass(
     VkCommandBuffer cmd
 ) {
-    hg_internal_vulkan_funcs.vkCmdEndRenderPass(
+    vulkan_funcs.vkCmdEndRenderPass(
         cmd);
 }
 
@@ -1786,7 +1787,7 @@ void vkCmdSetViewport(
     uint32_t count,
     const VkViewport* pViewports
 ) {
-    hg_internal_vulkan_funcs.vkCmdSetViewport(
+    vulkan_funcs.vkCmdSetViewport(
         cmd,
         first,
         count,
@@ -1799,7 +1800,7 @@ void vkCmdSetScissor(
     uint32_t count,
     const VkRect2D* pScissors
 ) {
-    hg_internal_vulkan_funcs.vkCmdSetScissor(
+    vulkan_funcs.vkCmdSetScissor(
         cmd,
         first,
         count,
@@ -1811,7 +1812,7 @@ void vkCmdBindPipeline(
     VkPipelineBindPoint bindPoint,
     VkPipeline pipeline
 ) {
-    hg_internal_vulkan_funcs.vkCmdBindPipeline(
+    vulkan_funcs.vkCmdBindPipeline(
         cmd,
         bindPoint,
         pipeline);
@@ -1827,7 +1828,7 @@ void vkCmdBindDescriptorSets(
     uint32_t dynCount,
     const uint32_t* pDyn
 ) {
-    hg_internal_vulkan_funcs.vkCmdBindDescriptorSets(
+    vulkan_funcs.vkCmdBindDescriptorSets(
         cmd,
         bindPoint,
         layout,
@@ -1846,7 +1847,7 @@ void vkCmdPushConstants(
     uint32_t size,
     const void* pData
 ) {
-    hg_internal_vulkan_funcs.vkCmdPushConstants(
+    vulkan_funcs.vkCmdPushConstants(
         cmd,
         layout,
         stages,
@@ -1862,7 +1863,7 @@ void vkCmdBindVertexBuffers(
     const VkBuffer* pBufs,
     const VkDeviceSize* pOffsets
 ) {
-    hg_internal_vulkan_funcs.vkCmdBindVertexBuffers(
+    vulkan_funcs.vkCmdBindVertexBuffers(
         cmd,
         first,
         count,
@@ -1876,7 +1877,7 @@ void vkCmdBindIndexBuffer(
     VkDeviceSize offset,
     VkIndexType type
 ) {
-    hg_internal_vulkan_funcs.vkCmdBindIndexBuffer(
+    vulkan_funcs.vkCmdBindIndexBuffer(
         cmd,
         buf,
         offset,
@@ -1890,7 +1891,7 @@ void vkCmdDraw(
     uint32_t firstVertex,
     uint32_t firstInstance
 ) {
-    hg_internal_vulkan_funcs.vkCmdDraw(
+    vulkan_funcs.vkCmdDraw(
         cmd,
         vertexCount,
         instanceCount,
@@ -1906,7 +1907,7 @@ void vkCmdDrawIndexed(
     int32_t vertexOffset,
     uint32_t firstInstance
 ) {
-    hg_internal_vulkan_funcs.vkCmdDrawIndexed(
+    vulkan_funcs.vkCmdDrawIndexed(
         cmd,
         indexCount,
         instanceCount,
@@ -1921,7 +1922,7 @@ void vkCmdDispatch(
     uint32_t y,
     uint32_t z
 ) {
-    hg_internal_vulkan_funcs.vkCmdDispatch(
+    vulkan_funcs.vkCmdDispatch(
         cmd,
         x,
         y,
@@ -1929,8 +1930,8 @@ void vkCmdDispatch(
 }
 
 #define HG_LOAD_VULKAN_INSTANCE_FUNC(instance, name) \
-    hg_internal_vulkan_funcs. name = (PFN_##name)hg_internal_vulkan_funcs.vkGetInstanceProcAddr(instance, #name); \
-    if (hg_internal_vulkan_funcs. name == nullptr) { hg_error("Could not load " #name "\n"); }
+    vulkan_funcs. name = (PFN_##name)vulkan_funcs.vkGetInstanceProcAddr(instance, #name); \
+    if (vulkan_funcs. name == nullptr) { hg_error("Could not load " #name "\n"); }
 
 void hg_vk_load_instance(VkInstance instance) {
     hg_assert(instance != nullptr);
@@ -1959,8 +1960,8 @@ void hg_vk_load_instance(VkInstance instance) {
 #undef HG_LOAD_VULKAN_INSTANCE_FUNC
 
 #define HG_LOAD_VULKAN_DEVICE_FUNC(device, name) \
-    hg_internal_vulkan_funcs. name = (PFN_##name)hg_internal_vulkan_funcs.vkGetDeviceProcAddr(device, #name); \
-    if (hg_internal_vulkan_funcs. name == nullptr) { hg_error("Could not load " #name "\n"); }
+    vulkan_funcs. name = (PFN_##name)vulkan_funcs.vkGetDeviceProcAddr(device, #name); \
+    if (vulkan_funcs. name == nullptr) { hg_error("Could not load " #name "\n"); }
 
 void hg_vk_load_device(VkDevice device) {
     hg_assert(device != nullptr);
@@ -2070,7 +2071,7 @@ void hg_vk_load_device(VkDevice device) {
 
 #undef HG_LOAD_VULKAN_DEVICE_FUNC
 
-static VkBool32 hg_internal_debug_callback(
+static VkBool32 debug_callback(
     const VkDebugUtilsMessageSeverityFlagBitsEXT severity,
     const VkDebugUtilsMessageTypeFlagsEXT type,
     const VkDebugUtilsMessengerCallbackDataEXT* callback_data,
@@ -2080,21 +2081,21 @@ static VkBool32 hg_internal_debug_callback(
     (void)user_data;
 
     if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
-        (void)std::fprintf(stderr, "Vulkan Error: %s\n", callback_data->pMessage);
+        (void)fprintf(stderr, "Vulkan Error: %s\n", callback_data->pMessage);
         abort();
     } else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
-        (void)std::fprintf(stderr, "Vulkan Warning: %s\n", callback_data->pMessage);
+        (void)fprintf(stderr, "Vulkan Warning: %s\n", callback_data->pMessage);
     } else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) {
-        (void)std::fprintf(stderr, "Vulkan Info: %s\n", callback_data->pMessage);
+        (void)fprintf(stderr, "Vulkan Info: %s\n", callback_data->pMessage);
     } else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) {
-        (void)std::fprintf(stderr, "Vulkan Verbose: %s\n", callback_data->pMessage);
+        (void)fprintf(stderr, "Vulkan Verbose: %s\n", callback_data->pMessage);
     } else {
-        (void)std::fprintf(stderr, "Vulkan Unknown: %s\n", callback_data->pMessage);
+        (void)fprintf(stderr, "Vulkan Unknown: %s\n", callback_data->pMessage);
     }
     return VK_FALSE;
 }
 
-static const VkDebugUtilsMessengerCreateInfoEXT hg_internal_debug_utils_messenger_info{
+static const VkDebugUtilsMessengerCreateInfoEXT debug_utils_messenger_info{
     VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
     nullptr, 0,
     VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
@@ -2103,11 +2104,12 @@ static const VkDebugUtilsMessengerCreateInfoEXT hg_internal_debug_utils_messenge
     VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
     VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
     VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
-    hg_internal_debug_callback, nullptr,
+    debug_callback, nullptr,
 };
 
 VkInstance hg_vk_create_instance(HgStringView* extensions, u32 extension_count) {
-    hg_arena_scope(scratch, hg_get_scratch());
+    HgArena& scratch = hg_get_scratch();
+    HgArenaScope scratch_scope{scratch};
 
     VkApplicationInfo app_info{};
     app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -2120,7 +2122,7 @@ VkInstance hg_vk_create_instance(HgStringView* extensions, u32 extension_count) 
     VkInstanceCreateInfo instance_info{};
     instance_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 #ifdef HG_VK_DEBUG_MESSENGER
-    instance_info.pNext = &hg_internal_debug_utils_messenger_info;
+    instance_info.pNext = &debug_utils_messenger_info;
 #endif
     instance_info.flags = 0;
     instance_info.pApplicationInfo = &app_info;
@@ -2129,13 +2131,13 @@ VkInstance hg_vk_create_instance(HgStringView* extensions, u32 extension_count) 
     const char* layers[]{
         "VK_LAYER_KHRONOS_validation",
     };
-    instance_info.enabledLayerCount = hg_countof(layers);
+    instance_info.enabledLayerCount = sizeof(layers) / sizeof(*layers);
     instance_info.ppEnabledLayerNames = layers;
 #endif
 
     const char** ext_c_strs = scratch.alloc<const char*>(extension_count);
     for (usize i = 0; i < extension_count; ++i) {
-        ext_c_strs[i] = HgString::create(scratch, extensions[i]).append(scratch, 0).chars;
+        ext_c_strs[i] = hg_c_string(scratch, extensions[i]);
     }
     instance_info.enabledExtensionCount = extension_count;
     instance_info.ppEnabledExtensionNames = ext_c_strs;
@@ -2153,7 +2155,7 @@ VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger() {
 
     VkDebugUtilsMessengerEXT messenger = nullptr;
     VkResult result = vkCreateDebugUtilsMessengerEXT(
-        hg_vk_instance, &hg_internal_debug_utils_messenger_info, nullptr, &messenger);
+        hg_vk_instance, &debug_utils_messenger_info, nullptr, &messenger);
     if (messenger == nullptr)
         hg_error("Failed to create Vulkan debug messenger: %s\n", hg_vk_result_string(result));
 
@@ -2163,7 +2165,8 @@ VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger() {
 bool hg_vk_find_queue_family(VkPhysicalDevice gpu, u32& queue_family, VkQueueFlags queue_flags) {
     hg_assert(gpu != nullptr);
 
-    hg_arena_scope(scratch, hg_get_scratch());
+    HgArena& scratch = hg_get_scratch();
+    HgArenaScope scratch_scope{scratch};
 
     u32 family_count = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, nullptr);
@@ -2179,14 +2182,15 @@ bool hg_vk_find_queue_family(VkPhysicalDevice gpu, u32& queue_family, VkQueueFla
     return false;
 }
 
-static const char* const hg_internal_vk_device_extensions[]{
+static const char* const vk_device_extensions[]{
     "VK_KHR_swapchain",
 };
 
 VkPhysicalDevice hg_vk_find_single_queue_physical_device() {
     hg_assert(hg_vk_instance != nullptr);
 
-    hg_arena_scope(scratch, hg_get_scratch());
+    HgArena& scratch = hg_get_scratch();
+    HgArenaScope scratch_scope{scratch};
 
     u32 gpu_count;
     vkEnumeratePhysicalDevices(hg_vk_instance, &gpu_count, nullptr);
@@ -2208,9 +2212,9 @@ VkPhysicalDevice hg_vk_find_single_queue_physical_device() {
         }
         vkEnumerateDeviceExtensionProperties(gpu, nullptr, &new_prop_count, ext_props);
 
-        for (usize j = 0; j < hg_countof(hg_internal_vk_device_extensions); j++) {
+        for (usize j = 0; j < sizeof(vk_device_extensions) / sizeof(*vk_device_extensions); j++) {
             for (usize k = 0; k < new_prop_count; k++) {
-                if (strcmp(hg_internal_vk_device_extensions[j], ext_props[k].extensionName) == 0)
+                if (strcmp(vk_device_extensions[j], ext_props[k].extensionName) == 0)
                     goto next_ext;
             }
             goto next_gpu;
@@ -2259,8 +2263,8 @@ VkDevice hg_vk_create_single_queue_device() {
     device_info.pNext = &synchronization2_feature;
     device_info.queueCreateInfoCount = 1;
     device_info.pQueueCreateInfos = &queue_info;
-    device_info.enabledExtensionCount = hg_countof(hg_internal_vk_device_extensions);
-    device_info.ppEnabledExtensionNames = hg_internal_vk_device_extensions;
+    device_info.enabledExtensionCount = sizeof(vk_device_extensions) / sizeof(*vk_device_extensions);
+    device_info.ppEnabledExtensionNames = vk_device_extensions;
     device_info.pEnabledFeatures = &features;
 
     VkDevice device = nullptr;
@@ -2351,8 +2355,8 @@ VkPipeline hg_vk_create_graphics_pipeline(const HgVkPipelineConfig& config) {
     color_blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
     color_blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
     color_blend_attachment.colorBlendOp = VK_BLEND_OP_ADD;
-    color_blend_attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-    color_blend_attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    color_blend_attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    color_blend_attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
     color_blend_attachment.alphaBlendOp = VK_BLEND_OP_ADD;
     color_blend_attachment.colorWriteMask
         = VK_COLOR_COMPONENT_R_BIT
@@ -2374,7 +2378,7 @@ VkPipeline hg_vk_create_graphics_pipeline(const HgVkPipelineConfig& config) {
     VkDynamicState dynamic_states[]{VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
     VkPipelineDynamicStateCreateInfo dynamic_state{};
     dynamic_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-    dynamic_state.dynamicStateCount = hg_countof(dynamic_states);
+    dynamic_state.dynamicStateCount = sizeof(dynamic_states) / sizeof(*dynamic_states);
     dynamic_state.pDynamicStates = dynamic_states;
 
     VkPipelineRenderingCreateInfo rendering_info{};
@@ -2435,11 +2439,12 @@ VkPipeline hg_vk_create_compute_pipeline(const HgVkPipelineConfig& config) {
     return pipeline;
 }
 
-static VkFormat hg_internal_vk_find_swapchain_format(VkSurfaceKHR surface) {
+static VkFormat vk_find_swapchain_format(VkSurfaceKHR surface) {
     hg_assert(hg_vk_physical_device != nullptr);
     hg_assert(surface != nullptr);
 
-    hg_arena_scope(scratch, hg_get_scratch());
+    HgArena& scratch = hg_get_scratch();
+    HgArenaScope scratch_scope{scratch};
 
     u32 format_count = 0;
     vkGetPhysicalDeviceSurfaceFormatsKHR(hg_vk_physical_device, surface, &format_count, nullptr);
@@ -2455,7 +2460,7 @@ static VkFormat hg_internal_vk_find_swapchain_format(VkSurfaceKHR surface) {
     hg_error("No supported swapchain formats\n");
 }
 
-static VkPresentModeKHR hg_internal_vk_find_swapchain_present_mode(
+static VkPresentModeKHR vk_find_swapchain_present_mode(
     VkSurfaceKHR surface,
     VkPresentModeKHR desired_mode
 ) {
@@ -2512,19 +2517,21 @@ HgSwapchainData hg_vk_create_swapchain(
 
     swapchain.width = width;
     swapchain.height = height;
-    swapchain.format = hg_internal_vk_find_swapchain_format(surface);
+    swapchain.format = vk_find_swapchain_format(surface);
 
     VkSwapchainCreateInfoKHR swapchain_info{};
     swapchain_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     swapchain_info.surface = surface;
-    swapchain_info.minImageCount = surface_capabilities.minImageCount;
+    swapchain_info.minImageCount = surface_capabilities.maxImageCount == 0
+        ? surface_capabilities.minImageCount + 1
+        : std::min(surface_capabilities.minImageCount + 1, surface_capabilities.maxImageCount);
     swapchain_info.imageFormat = swapchain.format;
     swapchain_info.imageExtent = {swapchain.width, swapchain.height};
     swapchain_info.imageArrayLayers = 1;
     swapchain_info.imageUsage = image_usage;
     swapchain_info.preTransform = surface_capabilities.currentTransform;
     swapchain_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    swapchain_info.presentMode = hg_internal_vk_find_swapchain_present_mode(surface, desired_mode);
+    swapchain_info.presentMode = vk_find_swapchain_present_mode(surface, desired_mode);
     swapchain_info.clipped = VK_TRUE;
     swapchain_info.oldSwapchain = old_swapchain;
 
@@ -3073,7 +3080,7 @@ void hg_vk_image_staging_write_cubemap(
 
     VkDependencyInfo transfer_dep{};
     transfer_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    transfer_dep.imageMemoryBarrierCount = hg_countof(transfer_barriers);
+    transfer_dep.imageMemoryBarrierCount = sizeof(transfer_barriers) / sizeof(*transfer_barriers);
     transfer_dep.pImageMemoryBarriers = transfer_barriers;
 
     vkCmdPipelineBarrier2(cmd, &transfer_dep);
@@ -3122,7 +3129,7 @@ void hg_vk_image_staging_write_cubemap(
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         config.dst_image,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        hg_countof(regions),
+        sizeof(regions) / sizeof(*regions),
         regions);
 
     VkImageMemoryBarrier2 end_barrier{};
@@ -3414,11 +3421,11 @@ void hg_vk_image_generate_mipmaps(
     vkQueueSubmit(transfer_queue, 1, &submit_info, nullptr);
 }
 
-static void* hg_internal_libvulkan = nullptr;
+static void* libvulkan = nullptr;
 
 #define HG_LOAD_VULKAN_FUNC(name) \
-    hg_internal_vulkan_funcs. name = (PFN_##name)hg_internal_vulkan_funcs.vkGetInstanceProcAddr(nullptr, #name); \
-    if (hg_internal_vulkan_funcs. name == nullptr) { \
+    vulkan_funcs. name = (PFN_##name)vulkan_funcs.vkGetInstanceProcAddr(nullptr, #name); \
+    if (vulkan_funcs. name == nullptr) { \
         hg_error("Could not load " #name "\n"); \
     }
 
@@ -3427,22 +3434,22 @@ static void* hg_internal_libvulkan = nullptr;
 #include <dlfcn.h>
 
 void hg_vulkan_init() {
-    if (hg_internal_libvulkan == nullptr)
-        hg_internal_libvulkan = dlopen("libvulkan.so.1", RTLD_LAZY);
-    if (hg_internal_libvulkan == nullptr)
+    if (libvulkan == nullptr)
+        libvulkan = dlopen("libvulkan.so.1", RTLD_LAZY);
+    if (libvulkan == nullptr)
         hg_error("Could not load vulkan dynamic lib: %s\n", dlerror());
 
-    *(void**)&hg_internal_vulkan_funcs.vkGetInstanceProcAddr = dlsym(hg_internal_libvulkan, "vkGetInstanceProcAddr");
-    if (hg_internal_vulkan_funcs.vkGetInstanceProcAddr == nullptr)
+    *(void**)&vulkan_funcs.vkGetInstanceProcAddr = dlsym(libvulkan, "vkGetInstanceProcAddr");
+    if (vulkan_funcs.vkGetInstanceProcAddr == nullptr)
         hg_error("Could not load vkGetInstanceProcAddr: %s\n", dlerror());
 
     HG_LOAD_VULKAN_FUNC(vkCreateInstance);
 }
 
 void hg_vulkan_deinit() {
-    if (hg_internal_libvulkan != nullptr) {
-        dlclose(hg_internal_libvulkan);
-        hg_internal_libvulkan = nullptr;
+    if (libvulkan != nullptr) {
+        dlclose(libvulkan);
+        libvulkan = nullptr;
     }
 }
 
@@ -3453,23 +3460,23 @@ void hg_vulkan_deinit() {
 
 void hg_vulkan_init() {
 
-    if (hg_internal_libvulkan == nullptr)
-        hg_internal_libvulkan = (void*)LoadLibraryA("vulkan-1.dll");
-    if (hg_internal_libvulkan == nullptr)
+    if (libvulkan == nullptr)
+        libvulkan = (void*)LoadLibraryA("vulkan-1.dll");
+    if (libvulkan == nullptr)
         hg_error("Could not load vulkan dynamic lib\n");
 
-    hg_internal_vulkan_funcs.vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr)
-        GetProcAddress((HMODULE)hg_internal_libvulkan, "vkGetInstanceProcAddr");
-    if (hg_internal_vulkan_funcs.vkGetInstanceProcAddr == nullptr)
+    vulkan_funcs.vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr)
+        GetProcAddress((HMODULE)libvulkan, "vkGetInstanceProcAddr");
+    if (vulkan_funcs.vkGetInstanceProcAddr == nullptr)
         hg_error("Could not load vkGetInstanceProcAddr\n");
 
     HG_LOAD_VULKAN_FUNC(vkCreateInstance);
 }
 
 void hg_vulkan_deinit() {
-    if (hg_internal_libvulkan != nullptr) {
-        FreeLibrary((HMODULE)hg_internal_libvulkan);
-        hg_internal_libvulkan = nullptr;
+    if (libvulkan != nullptr) {
+        FreeLibrary((HMODULE)libvulkan);
+        libvulkan = nullptr;
     }
 }
 

@@ -23,7 +23,7 @@ HgPipeline2D HgPipeline2D::create(
 
     VkDescriptorSetLayoutCreateInfo vp_layout_info{};
     vp_layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    vp_layout_info.bindingCount = hg_countof(vp_bindings);
+    vp_layout_info.bindingCount = sizeof(vp_bindings) / sizeof(*vp_bindings);
     vp_layout_info.pBindings = vp_bindings;
 
     vkCreateDescriptorSetLayout(hg_vk_device, &vp_layout_info, nullptr, &pipeline.vp_layout);
@@ -37,7 +37,7 @@ HgPipeline2D HgPipeline2D::create(
 
     VkDescriptorSetLayoutCreateInfo texture_layout_info{};
     texture_layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    texture_layout_info.bindingCount = hg_countof(texture_bindings);
+    texture_layout_info.bindingCount = sizeof(texture_bindings) / sizeof(*texture_bindings);
     texture_layout_info.pBindings = texture_bindings;
 
     vkCreateDescriptorSetLayout(hg_vk_device, &texture_layout_info, nullptr, &pipeline.texture_layout);
@@ -50,9 +50,9 @@ HgPipeline2D HgPipeline2D::create(
 
     VkPipelineLayoutCreateInfo layout_info{};
     layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    layout_info.setLayoutCount = hg_countof(set_layouts);
+    layout_info.setLayoutCount = sizeof(set_layouts) / sizeof(*set_layouts);
     layout_info.pSetLayouts = set_layouts;
-    layout_info.pushConstantRangeCount = hg_countof(push_ranges);
+    layout_info.pushConstantRangeCount = sizeof(push_ranges) / sizeof(*push_ranges);
     layout_info.pPushConstantRanges = push_ranges;
 
     vkCreatePipelineLayout(hg_vk_device, &layout_info, nullptr, &pipeline.pipeline_layout);
@@ -92,7 +92,7 @@ HgPipeline2D HgPipeline2D::create(
     pipeline_config.depth_attachment_format = depth_format;
     pipeline_config.stencil_attachment_format = VK_FORMAT_UNDEFINED;
     pipeline_config.shader_stages = shader_stages;
-    pipeline_config.shader_count = hg_countof(shader_stages);
+    pipeline_config.shader_count = sizeof(shader_stages) / sizeof(*shader_stages);
     pipeline_config.layout = pipeline.pipeline_layout;
     pipeline_config.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
     pipeline_config.enable_color_blend = true;
@@ -112,7 +112,7 @@ HgPipeline2D HgPipeline2D::create(
     desc_pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     desc_pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
     desc_pool_info.maxSets = 1 + (u32)max_textures;
-    desc_pool_info.poolSizeCount = hg_countof(desc_pool_sizes);
+    desc_pool_info.poolSizeCount = sizeof(desc_pool_sizes) / sizeof(*desc_pool_sizes);
     desc_pool_info.pPoolSizes = desc_pool_sizes;
 
     vkCreateDescriptorPool(hg_vk_device, &desc_pool_info, nullptr, &pipeline.descriptor_pool);

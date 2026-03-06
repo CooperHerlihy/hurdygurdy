@@ -479,7 +479,8 @@ VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window) {
 }
 
 void hg_process_window_events(const HgWindow* windows, usize window_count) {
-    hg_arena_scope(scratch, hg_get_scratch());
+    HgArena& scratch = hg_get_scratch();
+    HgArenaScope scratch_scope{scratch};
 
     f64* old_mouse_xs = scratch.alloc<f64>(window_count);
     f64* old_mouse_ys = scratch.alloc<f64>(window_count);
@@ -490,8 +491,8 @@ void hg_process_window_events(const HgWindow* windows, usize window_count) {
         old_mouse_xs[i] = window.internals->input.mouse_pos_x;
         old_mouse_ys[i] = window.internals->input.mouse_pos_y;
 
-        std::memset(window.internals->input.keys_pressed, 0, sizeof(window.internals->input.keys_pressed));
-        std::memset(window.internals->input.keys_released, 0, sizeof(window.internals->input.keys_released));
+        memset(window.internals->input.keys_pressed, 0, sizeof(window.internals->input.keys_pressed));
+        memset(window.internals->input.keys_released, 0, sizeof(window.internals->input.keys_released));
     }
 
     glfwPollEvents();

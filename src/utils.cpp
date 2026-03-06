@@ -39,20 +39,20 @@ namespace {
 
         static TestArr create(usize init_count) {
             TestArr arr;
-            arr.items = (Test*)std::malloc(init_count * sizeof(Test));
+            arr.items = (Test*)malloc(init_count * sizeof(Test));
             arr.capacity = init_count;
             arr.count = 0;
             return arr;
         }
 
         void destroy() const {
-            std::free(items);
+            free(items);
         }
 
         Test& push() {
             if (capacity == count) {
                 usize new_capacity = capacity == 0 ? 1 : capacity * 2;
-                items = (Test*)std::realloc(items, new_capacity);
+                items = (Test*)realloc(items, new_capacity);
                 capacity = new_capacity;
             }
             return items[count++];
@@ -60,37 +60,37 @@ namespace {
     };
 }
 
-static TestArr& hg_internal_get_tests() {
+static TestArr& get_tests() {
     static TestArr tests = tests.create(1024);
     return tests;
 }
 
 void hg_tests_register(const char* name, bool (*function)()) {
-    hg_internal_get_tests().push() = {name, function};
+    get_tests().push() = {name, function};
 }
 
 bool hg_tests_run() {
-    std::printf("HurdyGurdy: Tests Begun\n");
+    printf("HurdyGurdy: Tests Begun\n");
 
-    TestArr& tests = hg_internal_get_tests();
+    TestArr& tests = get_tests();
     bool all_succeeded = true;
 
     HgClock timer{};
     for (usize i = 0; i < tests.count; ++i) {
-        std::printf("%s...\n", tests.items[i].name);
+        printf("%s...\n", tests.items[i].name);
         if (tests.items[i].function()) {
-            std::printf("\x1b[32mSuccess\n\x1b[0m");
+            printf("\x1b[32mSuccess\n\x1b[0m");
         } else {
             all_succeeded = false;
-            std::printf("\x1b[31mFailure\n\x1b[0m");
+            printf("\x1b[31mFailure\n\x1b[0m");
         }
     }
     f64 ms = timer.tick() * 1000.0f;
 
     if (all_succeeded) {
-        std::printf("HurdyGurdy: Tests Complete in %fms \x1b[32m[Success]\x1b[0m\n", ms);
+        printf("HurdyGurdy: Tests Complete in %fms \x1b[32m[Success]\x1b[0m\n", ms);
     } else {
-        std::printf("HurdyGurdy: Tests Complete in %fms \x1b[31m[Failure]\x1b[0m\n", ms);
+        printf("HurdyGurdy: Tests Complete in %fms \x1b[31m[Failure]\x1b[0m\n", ms);
     }
 
     return all_succeeded;
@@ -318,19 +318,19 @@ void hg_len(u32 size, f32* dst, const f32* vec) {
     hg_assert(dst != nullptr);
     hg_assert(vec != nullptr);
     hg_dot(size, dst, vec, vec);
-    *dst = std::sqrt(*dst);
+    *dst = (f32)sqrt(*dst);
 }
 
 f32 hg_len(const HgVec2& vec) {
-    return std::sqrt(hg_dot(vec, vec));
+    return (f32)sqrt(hg_dot(vec, vec));
 }
 
 f32 hg_len(const HgVec3& vec) {
-    return std::sqrt(hg_dot(vec, vec));
+    return (f32)sqrt(hg_dot(vec, vec));
 }
 
 f32 hg_len(const HgVec4& vec) {
-    return std::sqrt(hg_dot(vec, vec));
+    return (f32)sqrt(hg_dot(vec, vec));
 }
 
 void hg_norm(u32 size, f32* dst, const f32* vec) {
@@ -512,9 +512,9 @@ HgQuat operator*(const HgQuat& lhs, const HgQuat& rhs) {
 
 HgQuat hg_axis_angle(const HgVec3& axis, f32 angle) {
     f32 half_angle = angle * (f32)0.5;
-    f32 sin_half_angle = std::sin(half_angle);
+    f32 sin_half_angle = (f32)sin(half_angle);
     return {
-        std::cos(half_angle),
+        (f32)cos(half_angle),
         axis.x * sin_half_angle,
         axis.y * sin_half_angle,
         axis.z * sin_half_angle,
@@ -536,8 +536,8 @@ HgMat3 hg_rotate(const HgQuat& lhs, const HgMat3& rhs) {
 
 HgMat4 hg_model_matrix_2d(const HgVec3& position, const HgVec2& scale, f32 rotation) {
     HgMat2 m2{{scale.x, 0.0f}, {0.0f, scale.y}};
-    f32 rot_sin = std::sin(rotation);
-    f32 rot_cos = std::cos(rotation);
+    f32 rot_sin = (f32)sin(rotation);
+    f32 rot_cos = (f32)cos(rotation);
     HgMat2 rot{{rot_cos, rot_sin}, {-rot_sin, rot_cos}};
     HgMat4 m4 = rot * m2;
     m4.w.x = position.x;
@@ -583,7 +583,7 @@ HgMat4 hg_projection_orthographic(f32 left, f32 right, f32 top, f32 bottom, f32 
 HgMat4 hg_projection_perspective(f32 fov, f32 aspect, f32 near, f32 far) {
     hg_assert(near > 0.0f);
     hg_assert(far > near);
-    f32 scale = 1.0f / std::tan(fov * 0.5f);
+    f32 scale = 1.0f / (f32)tan(fov * 0.5f);
     return {
         {scale / aspect, 0.0f, 0.0f, 0.0f},
         {0.0f, scale, 0.0f, 0.0f},
@@ -595,7 +595,7 @@ HgMat4 hg_projection_perspective(f32 fov, f32 aspect, f32 near, f32 far) {
 u32 hg_max_mipmaps(u32 width, u32 height, u32 depth) {
     u32 max = width > height ? width : height;
     max = max > depth ? max : depth;
-    return (u32)std::log2((f32)max) + 1;
+    return (u32)log2((f32)max) + 1;
 }
 
 void* HgArena::alloc(usize size, usize alignment) {
@@ -618,7 +618,7 @@ void* HgArena::realloc(void* allocation, usize old_size, usize new_size, usize a
 
     void* new_allocation = alloc(new_size, alignment);
     if (allocation != nullptr)
-        std::memcpy(new_allocation, allocation, std::min(old_size, new_size));
+        memcpy(new_allocation, allocation, std::min(old_size, new_size));
     return new_allocation;
 }
 
@@ -637,7 +637,7 @@ void hg_scratch_memory_init() {
 void hg_scratch_memory_deinit() {
     for (usize i = 0; i < arena_count; ++i) {
         if (arenas[i].memory != nullptr) {
-            std::free(arenas[i].memory);
+            free(arenas[i].memory);
             arenas[i] = {};
         }
     }
@@ -668,69 +668,11 @@ next:
     hg_error("No scratch arena available\n");
 }
 
-HgDynamicArray HgDynamicArray::create(
-    HgArena& arena,
-    u32 width,
-    u32 alignment,
-    usize count,
-    usize capacity
-) {
-    hg_assert(count <= capacity);
-
-    HgDynamicArray arr;
-    arr.items = arena.alloc(capacity * width, alignment);
-    arr.width = width;
-    arr.alignment = alignment;
-    arr.capacity = capacity;
-    arr.count = count;
-    return arr;
-}
-
-void HgDynamicArray::reserve(HgArena& arena, usize new_capacity) {
-    items = arena.realloc(items, capacity * width, new_capacity * width, alignment);
-    capacity = new_capacity;
-}
-
-void HgDynamicArray::grow(HgArena& arena, f32 factor) {
-    hg_assert(factor > 1.0f);
-    hg_assert(capacity <= (usize)((f32)SIZE_MAX / factor));
-    reserve(arena, capacity == 0 ? 1 : (usize)((f32)capacity * factor));
-}
-
-void* HgDynamicArray::insert(usize index) {
-    hg_assert(index <= count);
-    hg_assert(count < capacity);
-
-    std::memmove(get(index + 1), get(index), (count++ - index) * width);
-    return get(index);
-}
-
-void HgDynamicArray::remove(usize index) {
-    hg_assert(index < count);
-
-    std::memmove(get(index), get(index + 1), (count - index - 1) * width);
-    --count;
-}
-
-void* HgDynamicArray::swap_insert(usize index) {
-    hg_assert(index <= count);
-    hg_assert(count < capacity);
-    if (index == count)
-        return push();
-
-    std::memcpy(get(count++), get(index), width);
-    return get(index);
-}
-
-void HgDynamicArray::swap_remove(usize index) {
-    hg_assert(index < count);
-    if (index == count - 1) {
-        pop();
-        return;
-    }
-
-    std::memcpy(get(index), get(count - 1), width);
-    --count;
+char* hg_c_string(HgArena& arena, HgStringView str) {
+    char* c_str = arena.alloc<char>(str.length + 1);
+    memcpy(c_str, str.chars, str.length);
+    c_str[str.length] = 0;
+    return c_str;
 }
 
 HgString HgString::create(HgArena& arena, usize capacity) {
@@ -746,7 +688,7 @@ HgString HgString::create(HgArena& arena, HgStringView init) {
     str.chars = arena.alloc<char>(init.length);
     str.capacity = init.length;
     str.length = init.length;
-    std::memcpy(str.chars, init.chars, init.length);
+    memcpy(str.chars, init.chars, init.length);
     return str;
 }
 
@@ -770,7 +712,7 @@ HgString& HgString::insert(HgArena& arena, usize index, char c) {
     }
 
     if (index != length)
-        std::memmove(&chars[index + 1], &chars[index], length - index);
+        memmove(&chars[index + 1], &chars[index], length - index);
     chars[index] = c;
     length = new_length;
 
@@ -786,8 +728,8 @@ HgString& HgString::insert(HgArena& arena, usize index, HgStringView str) {
     }
 
     if (index != length)
-        std::memmove(&chars[index + str.length], &chars[index], length - index);
-    std::memcpy(&chars[index], str.chars, str.length);
+        memmove(&chars[index + str.length], &chars[index], length - index);
+    memcpy(&chars[index], str.chars, str.length);
     length = new_length;
 
     return *this;
@@ -952,13 +894,14 @@ f64 hg_str_to_float_base10(HgStringView str) {
 }
 
 HgString hg_int_to_str_base10(HgArena& arena, i64 num) {
-    hg_arena_scope(scratch, hg_get_scratch(arena));
+    HgArena& scratch = hg_get_scratch(arena);
+    HgArenaScope scratch_scope{scratch};
 
     if (num == 0)
         return HgString::create(arena, "0");
 
     bool is_negative = num < 0;
-    u64 unum = (u64)std::abs(num);
+    u64 unum = (u64)labs(num);
 
     HgString reverse = reverse.create(scratch, 16);
     while (unum != 0) {
@@ -977,17 +920,18 @@ HgString hg_int_to_str_base10(HgArena& arena, i64 num) {
 }
 
 HgString hg_float_to_str_base10(HgArena& arena, f64 num, u64 decimal_count) {
-    hg_arena_scope(scratch, hg_get_scratch(arena));
+    HgArena& scratch = hg_get_scratch(arena);
+    HgArenaScope scratch_scope{scratch};
 
     if (num == 0.0)
         return HgString::create(arena, "0.0");
 
-    HgString int_str = hg_int_to_str_base10(scratch, (i64)std::abs(num));
+    HgString int_str = hg_int_to_str_base10(scratch, (i64)fabs(num));
 
     HgString dec_str = HgString::create(scratch, decimal_count + 1);
     dec_str.append(scratch, '.');
 
-    f64 dec_part = std::abs(num);
+    f64 dec_part = fabs(num);
     for (usize i = 0; i < decimal_count; ++i) {
         dec_part *= 10.0;
         dec_str.append(scratch, '0' + (char)((u64)dec_part % 10));
@@ -1528,20 +1472,20 @@ namespace {
 
         static ComponentArr create(u32 init_count) {
             ComponentArr arr;
-            arr.widths = (u32*)std::malloc(init_count * sizeof(u32));
+            arr.widths = (u32*)malloc(init_count * sizeof(u32));
             arr.capacity = init_count;
             arr.count = 0;
             return arr;
         }
 
         void destroy() const {
-            std::free(widths);
+            free(widths);
         }
 
         void push(u32 width) {
             if (capacity == count) {
                 u32 new_capacity = capacity == 0 ? 1 : capacity * 2;
-                widths = (u32*)std::realloc(widths, new_capacity);
+                widths = (u32*)realloc(widths, new_capacity);
                 capacity = new_capacity;
             }
             widths[count++] = width;
@@ -1568,14 +1512,14 @@ HgECS HgECS::create(u32 max_entities) {
     HgECS ecs{};
 
     ecs.pool_size = max_entities;
-    ecs.pool = (HgEntity*)std::malloc(sizeof(HgEntity) * ecs.pool_size);
+    ecs.pool = (HgEntity*)malloc(sizeof(HgEntity) * ecs.pool_size);
 
     ecs.system_count = component_arr().count;
-    ecs.systems = (System*)std::malloc(sizeof(System) * ecs.system_count);
+    ecs.systems = (System*)malloc(sizeof(System) * ecs.system_count);
 
     for (u32 i = 0; i < ecs.system_count; ++i) {
         ecs.systems[i] = {};
-        ecs.systems[i].indices = (u32*)std::malloc(sizeof(u32) * ecs.pool_size);
+        ecs.systems[i].indices = (u32*)malloc(sizeof(u32) * ecs.pool_size);
     }
 
     ecs.reset();
@@ -1585,12 +1529,12 @@ HgECS HgECS::create(u32 max_entities) {
 
 void HgECS::destroy() {
     for (u32 i = 0; i < system_count; ++i) {
-        std::free(systems[i].indices);
-        std::free(systems[i].entities);
-        std::free(systems[i].components);
+        free(systems[i].indices);
+        free(systems[i].entities);
+        free(systems[i].components);
     }
-    std::free(systems);
-    std::free(pool);
+    free(systems);
+    free(pool);
 }
 
 void HgECS::reset() {
@@ -1600,7 +1544,7 @@ void HgECS::reset() {
     next = {0};
 
     for (u32 i = 0; i < system_count; ++i) {
-        std::memset(systems[i].indices, -1, pool_size * sizeof(*systems[i].indices));
+        memset(systems[i].indices, -1, pool_size * sizeof(*systems[i].indices));
         systems[i].count = 0;
     }
 }
@@ -1636,9 +1580,9 @@ void* HgECS::add(HgEntity e, u32 component_id) {
 
     if (systems[component_id].count == systems[component_id].capacity) {
         u32 new_capacity = systems[component_id].capacity == 0 ? 1 : systems[component_id].capacity * 2;
-        systems[component_id].entities = (HgEntity*)std::realloc(
+        systems[component_id].entities = (HgEntity*)realloc(
             systems[component_id].entities, sizeof(HgEntity) * new_capacity);
-        systems[component_id].components = (HgEntity*)std::realloc(
+        systems[component_id].components = (HgEntity*)realloc(
             systems[component_id].components, component_width(component_id) * new_capacity);
         systems[component_id].capacity = new_capacity;
     }
@@ -1660,7 +1604,7 @@ void HgECS::remove(HgEntity e, u32 component_id) {
         u32 idx = systems[component_id].indices[e.idx()];
         systems[component_id].entities[idx] = last;
         systems[component_id].indices[last.idx()] = idx;
-        std::memcpy(
+        memcpy(
             (u8*)systems[component_id].components + component_width(component_id) * idx,
             (u8*)systems[component_id].components + component_width(component_id) * (systems[component_id].count - 1),
             component_width(component_id));
@@ -1716,9 +1660,9 @@ static void swap_idx_location(HgECS& ecs, u32 lhs, u32 rhs, u32 component_id) {
 
     u32 width = component_width(component_id);
     void* temp = alloca(component_width(component_id));
-    std::memcpy(temp, (u8*)system.components + width * lhs, width);
-    std::memcpy((u8*)system.components + width * lhs, (u8*)system.components + width * rhs, width);
-    std::memcpy((u8*)system.components + width * rhs, temp, width);
+    memcpy(temp, (u8*)system.components + width * lhs, width);
+    memcpy((u8*)system.components + width * lhs, (u8*)system.components + width * rhs, width);
+    memcpy((u8*)system.components + width * rhs, temp, width);
 }
 
 namespace {
@@ -1859,7 +1803,7 @@ void hg_set_entity(HgECS& ecs, HgEntity e, const HgVec3& p, const HgVec3& s, con
             rel.position = c_tf.position - tf.position;
             rel.scale = c_tf.scale / tf.scale;
             rel.rotation = hg_conj(tf.rotation) * c_tf.rotation;
-            // hg_set_entity(ecs, child,
+            // hg_set_entity(ecs, child, // : TODO
             //     hg_rotate(r, (c_tf.position - tf.position) * s / c_tf.scale + p),
             //     s * c_tf.scale / tf.scale,
             //     r);

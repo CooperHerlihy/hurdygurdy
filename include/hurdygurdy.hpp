@@ -110,11 +110,27 @@
  */
 #define hg_macro_concat(x, y) hg_macro_concat_internal(x, y)
 
-template<typename Fn>
-struct HgDeferInternal {
-    Fn fn;
-    HgDeferInternal(Fn defer_function) : fn(defer_function) {}
-    ~HgDeferInternal() { fn(); }
+/**
+ * A template to defer code execution until end of scope
+ */
+template<typename F>
+struct HgDefer {
+    /**
+     * The function to execute
+     */
+    F fn;
+
+    /**
+     * Prepare the function to defer
+     */
+    HgDefer(F fn_val) : fn(fn_val) {}
+
+    /**
+     * Execute the function
+     */
+    ~HgDefer() {
+        fn();
+    }
 };
 
 /**
@@ -123,18 +139,7 @@ struct HgDeferInternal {
  * Parameters
  * - code The code to run, may be placed inside braces or not
  */
-#define hg_defer(code) [[maybe_unused]] HgDeferInternal hg_macro_concat(hg_defer_, __COUNTER__){[&]{code;}};
-
-/**
- * Gets the number of elements in a stack allocated array
- *
- * Parameters
- * - array The array to get the count of
- *
- * Returns
- * - The number of elements
- */
-#define hg_countof(array) (sizeof(array) / sizeof((array)[0]))
+#define hg_defer(code) [[maybe_unused]] HgDefer hg_macro_concat(hg_defer_, __COUNTER__){[&]{code;}};
 
 #ifdef HG_LOGGING
 
@@ -144,7 +149,7 @@ struct HgDeferInternal {
  * Parameters
  * - ... The message to print and its format parameters
  */
-#define hg_debug(...) do { { (void)std::fprintf(stderr, "HurdyGurdy Debug: " __VA_ARGS__); } } while(0)
+#define hg_debug(...) do { { (void)fprintf(stderr, "HurdyGurdy Debug: " __VA_ARGS__); } } while(0)
 
 /**
  * Formats and logs a warning message to stderr
@@ -152,7 +157,7 @@ struct HgDeferInternal {
  * Parameters
  * - ... The message to print and its format parameters
  */
-#define hg_warn(...) do { (void)std::fprintf(stderr, "HurdyGurdy Warning: " __VA_ARGS__); } while(0)
+#define hg_warn(...) do { (void)fprintf(stderr, "HurdyGurdy Warning: " __VA_ARGS__); } while(0)
 
 /**
  * Formats and logs an error message to stderr and aborts the program
@@ -160,7 +165,7 @@ struct HgDeferInternal {
  * Parameters
  * - ... The message to print and its format parameters
  */
-#define hg_error(...) do { (void)std::fprintf(stderr, "HurdyGurdy Error: " __VA_ARGS__); abort(); } while(0)
+#define hg_error(...) do { (void)fprintf(stderr, "HurdyGurdy Error: " __VA_ARGS__); abort(); } while(0)
 
 #else
 
@@ -1649,12 +1654,30 @@ struct HgArena {
 };
 
 /**
- * Define an arena reference which is automatically restored at the scope's end
+ * Create a guard which restores an arena's head at the end of the scope
  */
-#define hg_arena_scope(name, value) \
-    HgArena& name = (value); \
-    usize name##_arena_save_state = name.head; \
-    hg_defer(name.head = name##_arena_save_state);
+struct HgArenaScope {
+    /**
+     * The arena to restore
+     */
+    HgArena& arena;
+    /**
+     * The arena's original head
+     */
+    usize head;
+
+    /**
+     * Constructs the scope guard
+     */
+    HgArenaScope(HgArena& arena_val) : arena{arena_val}, head{arena_val.head} {}
+
+    /**
+     * Restores the arena's head
+     */
+    ~HgArenaScope() {
+        arena.head = head;
+    }
+};
 
 /**
  * Initializes scratch arenas
@@ -1696,184 +1719,6 @@ HgArena& hg_get_scratch(const HgArena& conflict);
  * - A scratch arena
  */
 HgArena& hg_get_scratch(const HgArena** conflicts, usize count);
-
-/**
- * A type erased dynamic array
- */
-struct HgDynamicArray {
-    /**
-     * The allocated space for the array
-     */
-    void* items;
-    /**
-     * The size in bytes of the items
-     */
-    u32 width;
-    /**
-     * The alignment of the items
-     */
-    u32 alignment;
-    /**
-     * The max number of items that can be stored in the array
-     */
-    usize capacity;
-    /**
-     * The number of active items in the array
-     */
-    usize count;
-
-    /**
-     * Returns the size in bytes of the array
-     */
-    constexpr usize size() const {
-        return count * width;
-    }
-
-    /**
-     * Returns whether capacity is filled
-     */
-    constexpr bool is_full() const {
-        return count == capacity;
-    }
-
-    /**
-     * Allocate a new dynamic array
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - width The size of the items in bytes
-     * - alignment The alignment of the items
-     * - count The number of active items to begin with, must be <= capacity
-     * - capacity The max number of items before reallocating
-     *
-     * Returns
-     * - The allocated dynamic array
-     */
-    static HgDynamicArray create(
-        HgArena& arena,
-        u32 width,
-        u32 alignment,
-        usize count,
-        usize capacity
-    );
-
-    /**
-     * Allocate a new dynamic array using a type
-     *
-     * Note, does not construct items
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - count The number of active items to begin with, must be <= capacity
-     * - capacity The max number of items before reallocating
-     *
-     * Returns
-     * - The allocated dynamic array
-     */
-    template<typename T>
-    static HgDynamicArray create(HgArena& arena, usize count, usize capacity) {
-        return create(arena, sizeof(T), alignof(T), count, capacity);
-    }
-
-    /**
-     * Removes all contained objects, emptying the array
-     */
-    constexpr void reset() {
-        count = 0;
-    }
-
-    /**
-     * Changes the capacity
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - new_capacity The new capacity
-     */
-    void reserve(HgArena& arena, usize new_capacity);
-
-    /**
-     * Increases the capacity of the array, or inits to 1
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - factor The growth factor to increase by
-     *
-     * Returns
-     * - Whether the allocation succeeded
-     */
-    void grow(HgArena& arena, f32 factor = 2.0f);
-
-    /**
-     * Access the value at index
-     *
-     * Parameters
-     * - index The index to get from, must be < count
-     *
-     * Returns
-     * - A pointer to the gotten value
-     */
-    constexpr void* get(usize index) const {
-        hg_assert(index < count);
-        return (u8*)items + index * width;
-    }
-
-    /**
-     * Push an item to the end to the array, asserting space is available
-     *
-     * Returns
-     * - A pointer to the created object
-     */
-    constexpr void* push() {
-        hg_assert(count < capacity);
-        return get(count++);
-    }
-
-    /**
-     * Pops an item off the end of the array
-     */
-    constexpr void pop() {
-        hg_assert(count > 0);
-        --count;
-    }
-
-    /**
-     * Inserts an item into the array, moving subsequent items back
-     *
-     * Parameters
-     * - index The index the new item will be placed at, must be <= count
-     *
-     * Returns
-     * - A pointer to the created object
-     */
-    void* insert(usize index);
-
-    /**
-     * Removes the item at the index, subsequent items to taking its place
-     *
-     * Parameters
-     * - index The index of the item to remove
-     */
-    void remove(usize index);
-
-    /**
-     * Inserts an item into the array, moving the item at index to the end
-     *
-     * Parameters
-     * - index The index the new item will be placed at, must be <= count
-     *
-     * Returns
-     * - A reference to the created object
-     */
-    void* swap_insert(usize index);
-
-    /**
-     * Removes the item at the index, moving the last item to take its place
-     *
-     * Parameters
-     * - index The index of the item to remove
-     */
-    void swap_remove(usize index);
-};
 
 /**
  * A span view into a string
@@ -1953,6 +1798,18 @@ struct HgStringView {
         return chars + length;
     }
 };
+
+/**
+ * Create a null terminated string for C interop
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - str The string to create from
+ *
+ * Returns
+ * - a null terminated string
+ */
+char* hg_c_string(HgArena& arena, HgStringView str);
 
 /**
  * A dynamic string container
@@ -2131,7 +1988,7 @@ struct HgString {
  * Compare string views
  */
 constexpr bool operator==(HgStringView lhs, HgStringView rhs) {
-    return lhs.length == rhs.length && std::memcmp(lhs.chars, rhs.chars, lhs.length) == 0;
+    return lhs.length == rhs.length && memcmp(lhs.chars, rhs.chars, lhs.length) == 0;
 }
 
 /**
@@ -3096,7 +2953,8 @@ template<typename Fn>
 void hg_for_par(usize n, usize chunk_size, Fn fn) {
     static_assert(std::is_invocable_r_v<void, Fn, usize, usize>);
 
-    hg_arena_scope(scratch, hg_get_scratch());
+    HgArena& scratch = hg_get_scratch();
+    HgArenaScope scratch_scope{scratch};
 
     HgFence fence;
     for (usize i = 0; i < n; i += chunk_size) {
@@ -3104,7 +2962,7 @@ void hg_for_par(usize n, usize chunk_size, Fn fn) {
             fn(begin, end);
         };
         void* data = scratch.alloc<decltype(iter)>(1);
-        std::memcpy(data, &iter, sizeof(iter));
+        memcpy(data, &iter, sizeof(iter));
 
         hg_call_par(&fence, 1, data, [](void* piter) {
             (*(decltype(iter)*)piter)();
@@ -3226,7 +3084,7 @@ struct HgBinary {
      */
     void read(usize idx, void* dst, usize len) const {
         hg_assert(idx + len <= size);
-        std::memcpy(dst, (u8*)data + idx, len);
+        memcpy(dst, (u8*)data + idx, len);
     }
 
     /**
@@ -3254,7 +3112,7 @@ struct HgBinary {
      */
     void overwrite(usize idx, const void* src, usize len) {
         hg_assert(idx + len <= size);
-        std::memcpy((u8*)data + idx, src, len);
+        memcpy((u8*)data + idx, src, len);
     }
 
     /**
@@ -3936,7 +3794,7 @@ struct HgECS {
         u32 index = 0;
         u32 ids[sizeof...(Ts)];
         ((ids[index++] = hg_component_id<Ts>), ...);
-        return find_smallest(ids, hg_countof(ids));
+        return find_smallest(ids, sizeof...(Ts));
     }
 
     /**
@@ -4186,7 +4044,7 @@ struct HgTransform {
 };
 
 /**
- * Set this transform and move all children by accordingly
+ * Set this transform and move all children by accordingly : TODO
  *
  * Parameters
  * - ecs The ecs
@@ -4208,36 +4066,6 @@ void hg_set_entity(HgECS& ecs, HgEntity e, const HgVec3& p, const HgVec3& s, con
  * - dr The change in rotation, applied to current rotation
  */
 void hg_move_entity(HgECS& ecs, HgEntity e, const HgVec3& dp, const HgVec3& ds, const HgQuat& dr);
-
-/**
- * The world camera component
- */
-struct HgCamera3D {
-    /**
-     * The camera's position in the world
-     *
-     * x: -left, +right
-     *
-     * y: -up, +down
-     *
-     * z: -backward, +forward
-     */
-    HgVec3 position = {0.0f, 0.0f, 0.0f};
-    /**
-     * The camera's view scaling
-     *
-     * x: horizonatal
-     *
-     * y: vertical
-     *
-     * z: depth
-     */
-    HgVec3 scale = {1.0f, 1.0f, 1.0f};
-    /**
-     * The camera's rotation in the world
-     */
-    HgQuat rotation = {1.0f, 0.0f, 0.0f, 0.0f};
-};
 
 /**
  * A sprite component rendered by the 2d pipeline
@@ -4269,7 +4097,7 @@ void hg_pipeline_2d_add_texture(HgResource texture);
 void hg_pipeline_2d_remove_texture(HgResource texture);
 bool hg_pipeline_2d_has_texture(HgResource texture);
 
-void hg_draw_2d(VkCommandBuffer cmd);
+void hg_draw_2d(HgECS& ecs, VkCommandBuffer cmd);
 
 void hg_update_projection(const HgMat4& projection);
 void hg_update_view(const HgMat4& view);

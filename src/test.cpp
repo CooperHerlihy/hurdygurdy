@@ -1,5 +1,7 @@
 #include "hurdygurdy.hpp"
 
+#include "stb_image_write.h"
+
 #include <thread>
 
 #include <emmintrin.h>
@@ -8,12 +10,38 @@
 #include "imgui.h"
 #include "imgui_impl_vulkan.h"
 
-struct HgEntityName {
-    HgStringView str;
+/**
+ * The world camera component
+ */
+struct HgCamera3D {
+    /**
+     * The camera's position in the world
+     *
+     * x: -left, +right
+     *
+     * y: -up, +down
+     *
+     * z: -backward, +forward
+     */
+    HgVec3 position = {0.0f, 0.0f, 0.0f};
+    /**
+     * The camera's view scaling
+     *
+     * x: horizonatal
+     *
+     * y: vertical
+     *
+     * z: depth
+     */
+    HgVec3 scale = {1.0f, 1.0f, 1.0f};
+    /**
+     * The camera's rotation in the world
+     */
+    HgQuat rotation = {1.0f, 0.0f, 0.0f, 0.0f};
 };
 
-struct HgComp {
-    u32 x;
+struct HgEntityName {
+    HgStringView str;
 };
 
 int main(void) {
@@ -24,7 +52,8 @@ int main(void) {
 
     hg_tests_run();
 
-    hg_arena_scope(arena, hg_get_scratch());
+    HgArena& arena = hg_get_scratch();
+    HgArenaScope arena_scope{arena};
 
     HgWindowConfig window_config{};
     window_config.title = "Hg Test";
@@ -79,23 +108,21 @@ int main(void) {
     }
     hg_defer(hg_unload_gpu_resource(texture_id));
 
-    HgPipeline2D pipeline2d = pipeline2d.create(arena, 256, swapchain.format, VK_FORMAT_UNDEFINED);
+    HgCamera3D camera{};
+    camera.position.z = -1.0f;
+
+    HgPipeline2D pipeline2d = pipeline2d.create(arena, 256, VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_UNDEFINED);
     hg_defer(pipeline2d.destroy());
+
+    f32 aspect = (f32)swapchain.width / (f32)swapchain.height;
+    HgMat4 proj = hg_projection_perspective((f32)hg_pi * 0.5f, aspect, 0.1f, 1000.0f);
+    pipeline2d.update_projection(proj);
 
     pipeline2d.add_texture(texture_id);
     hg_defer(pipeline2d.remove_texture(texture_id));
 
     HgECS ecs = ecs.create(4096);
     hg_defer(ecs.destroy());
-
-    HgEntity camera_entity = ecs.spawn();
-    HgCamera3D& camera = ecs.add<HgCamera3D>(camera_entity);
-    camera = {};
-    camera.position.z = -1.0f;
-
-    f32 aspect = (f32)swapchain.width / (f32)swapchain.height;
-    HgMat4 proj = hg_projection_perspective((f32)hg_pi * 0.5f, aspect, 0.1f, 1000.0f);
-    pipeline2d.update_projection(proj);
 
     u32 scene_capacity = 2;
     HgEntity* scene = arena.alloc<HgEntity>(scene_capacity);
@@ -105,8 +132,6 @@ int main(void) {
     ecs.add<HgTransform>(scene[0]) = {};
     ecs.add<HgSprite>(scene[0]) = {texture_id, {0.0f}, 1.0f};
 
-    ecs.add<HgComp>(scene[0]) = {12};
-
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     hg_defer(ImGui::DestroyContext());
@@ -115,7 +140,7 @@ int main(void) {
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
-    // io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     // io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
     ImGui_ImplHurdyGurdy_Init(window);
@@ -130,6 +155,7 @@ int main(void) {
     imgui_info.DescriptorPoolSize = 1000;
     imgui_info.MinImageCount = 2;
     imgui_info.ImageCount = 2;
+    imgui_info.MinAllocationSize = 1024 * 1024;
     imgui_info.UseDynamicRendering = true;
     imgui_info.PipelineInfoMain.PipelineRenderingCreateInfo.sType
         = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
@@ -145,6 +171,48 @@ int main(void) {
     ImGui_ImplVulkan_Init(&imgui_info);
     hg_defer(ImGui_ImplVulkan_Shutdown());
 
+    u32 render_width = 1600;
+    u32 render_height = 900;
+
+    VkImageCreateInfo render_image_info{};
+    render_image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    render_image_info.imageType = VK_IMAGE_TYPE_2D;
+    render_image_info.format = VK_FORMAT_R8G8B8A8_SRGB;
+    render_image_info.extent = {render_width, render_height, 1};
+    render_image_info.mipLevels = 1;
+    render_image_info.arrayLayers = 1;
+    render_image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    render_image_info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+
+    VmaAllocationCreateInfo render_alloc_info{};
+    render_alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
+
+    VkImage render_image = nullptr;
+    VmaAllocation render_alloc = nullptr;
+    vmaCreateImage(hg_vk_vma, &render_image_info, &render_alloc_info, &render_image, &render_alloc, nullptr);
+    hg_defer(vmaDestroyImage(hg_vk_vma, render_image, render_alloc));
+
+    VkImageViewCreateInfo render_view_info{};
+    render_view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    render_view_info.image = render_image;
+    render_view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    render_view_info.format = render_image_info.format;
+    render_view_info.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+
+    VkImageView render_view = nullptr;
+    vkCreateImageView(hg_vk_device, &render_view_info, nullptr, &render_view);
+    hg_defer(vkDestroyImageView(hg_vk_device, render_view, nullptr));
+
+    VkSamplerCreateInfo render_sampler_info{};
+    render_sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+
+    VkSampler render_sampler = nullptr;
+    vkCreateSampler(hg_vk_device, &render_sampler_info, nullptr, &render_sampler);
+    hg_defer(vkDestroySampler(hg_vk_device, render_sampler, nullptr));
+
+    VkDescriptorSet render_descriptor = ImGui_ImplVulkan_AddTexture(
+        render_sampler, render_view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
     bool imgui_demo = false;
     bool move_3d = false;
 
@@ -154,7 +222,8 @@ int main(void) {
         f64 delta = game_clock.tick();
         f32 deltaf = (f32)delta;
 
-        hg_arena_scope(frame, hg_get_scratch(arena));
+        HgArena& frame = hg_get_scratch(arena);
+        HgArenaScope frame_scope{frame};
 
         hg_process_window_events(&window, 1);
         if (window.was_closed())
@@ -234,15 +303,46 @@ int main(void) {
         if (imgui_demo)
             ImGui::ShowDemoWindow(&imgui_demo);
 
+        if (ImGui::Begin("Render Window")) {
+            ImGui::Image((ImTextureID)render_descriptor, {(f32)render_width, (f32)render_height});
+        }
+        ImGui::End();
+
         if (ImGui::Begin("Scene")) {
             ImGuiTreeNodeFlags options_flags = ImGuiTreeNodeFlags_DefaultOpen;
             if (ImGui::CollapsingHeader("Options", options_flags)) {
                 if (ImGui::Button("Quit"))
                     goto quit;
+
                 if (ImGui::Button("Trigger Trap"))
-                    std::abort();
+                    abort();
+
+                if (ImGui::Button("Screenshot")) {
+                    HgArena& scratch = hg_get_scratch();
+                    HgArenaScope scratch_scope{scratch};
+                    void* pixels = scratch.alloc(render_width * render_height * 4, 4);
+                    HgVkImageStagingReadConfig config{};
+                    config.dst = pixels;
+                    config.src_image = render_image;
+                    config.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                    config.subresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+                    config.width = render_width;
+                    config.height = render_height;
+                    config.depth = 1;
+                    config.format = VK_FORMAT_R8G8B8A8_SRGB;
+                    hg_vk_image_staging_read(hg_vk_queue, hg_vk_cmd_pool, config);
+                    stbi_write_png(
+                        "screenshot.png",
+                        (int)render_width,
+                        (int)render_height,
+                        4,
+                        pixels,
+                        (int)(render_width * sizeof(u32)));
+                }
+
                 if (ImGui::Button("Reset Camera"))
                     camera = {}, camera.position.z = -1.0f;
+
                 ImGui::Checkbox("3D Movement", &move_3d);
                 ImGui::Checkbox("Show Demo", &imgui_demo);
             }
@@ -258,22 +358,18 @@ int main(void) {
                 }
 
                 for (usize i = 0; i < scene_size; ++i) {
-                    hg_arena_scope(scratch, hg_get_scratch());
+                    HgArena& scratch = hg_get_scratch();
+                    HgArenaScope scratch_scope{scratch};
                     HgEntity e = scene[i];
 
-                    HgString name;
-                    if (ecs.has<HgEntityName>(e)) {
-                        name = name
-                            .create(scratch, ecs.get<HgEntityName>(scene[i]).str)
-                            .append(scratch, 0);
-                    } else {
-                        name = name
-                            .create(scratch, "Entity ")
+                    char* name = ecs.has<HgEntityName>(e)
+                        ? hg_c_string(scratch, ecs.get<HgEntityName>(scene[i]).str)
+                        : HgString::create(scratch, "Entity ")
                             .append(scratch, hg_int_to_str_base10(scratch, (i64)e.idx()))
-                            .append(scratch, 0);
-                    }
+                            .append(scratch, 0)
+                            .chars;
 
-                    if (ImGui::TreeNodeEx(name.chars, entity_flags)) {
+                    if (ImGui::TreeNodeEx(name, entity_flags)) {
                         if (ImGui::Button("Despawn Entity")) {
                             ecs.despawn(e);
                             memmove(scene + i, scene + i + 1, sizeof(HgEntity) * (--scene_size - i));
@@ -389,65 +485,130 @@ recreate_swapchain:
         } else {
             u32 image_index = swapchain_commands.current_image;
 
-            VkImageMemoryBarrier2 color_barrier{};
-            color_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-            color_barrier.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-            color_barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-            color_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-            color_barrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            color_barrier.image = swap_images[image_index];
-            color_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+            // render to buffer
+            {
+                VkImageMemoryBarrier2 color_barrier{};
+                color_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+                color_barrier.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+                color_barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+                color_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+                color_barrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                color_barrier.image = render_image;
+                color_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
 
-            VkDependencyInfo color_dependency{};
-            color_dependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-            color_dependency.imageMemoryBarrierCount = 1;
-            color_dependency.pImageMemoryBarriers = &color_barrier;
+                VkDependencyInfo color_dependency{};
+                color_dependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+                color_dependency.imageMemoryBarrierCount = 1;
+                color_dependency.pImageMemoryBarriers = &color_barrier;
 
-            vkCmdPipelineBarrier2(cmd, &color_dependency);
+                vkCmdPipelineBarrier2(cmd, &color_dependency);
 
-            VkRenderingAttachmentInfo color_attachment{};
-            color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-            color_attachment.imageView = swap_views[image_index];
-            color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-            color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+                VkRenderingAttachmentInfo color_attachment{};
+                color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+                color_attachment.imageView = render_view;
+                color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+                color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+                color_attachment.clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
 
-            VkRenderingInfo rendering_info{};
-            rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-            rendering_info.pNext = nullptr;
-            rendering_info.renderArea.extent = {swapchain.width, swapchain.height};
-            rendering_info.layerCount = 1;
-            rendering_info.colorAttachmentCount = 1;
-            rendering_info.pColorAttachments = &color_attachment;
+                VkRenderingInfo rendering_info{};
+                rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+                rendering_info.pNext = nullptr;
+                rendering_info.renderArea.extent = {render_width, render_height};
+                rendering_info.layerCount = 1;
+                rendering_info.colorAttachmentCount = 1;
+                rendering_info.pColorAttachments = &color_attachment;
 
-            vkCmdBeginRendering(cmd, &rendering_info);
+                vkCmdBeginRendering(cmd, &rendering_info);
 
-            VkViewport viewport{0.0f, 0.0f, (f32)swapchain.width, (f32)swapchain.height, 0.0f, 1.0f};
-            vkCmdSetViewport(cmd, 0, 1, &viewport);
-            VkRect2D scissor{{0, 0}, {swapchain.width, swapchain.height}};
-            vkCmdSetScissor(cmd, 0, 1, &scissor);
+                VkViewport viewport{0.0f, 0.0f, (f32)render_width, (f32)render_height, 0.0f, 1.0f};
+                vkCmdSetViewport(cmd, 0, 1, &viewport);
+                VkRect2D scissor{{0, 0}, {render_width, render_height}};
+                vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-            pipeline2d.draw(ecs, cmd);
+                pipeline2d.draw(ecs, cmd);
 
-            ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
+                vkCmdEndRendering(cmd);
 
-            vkCmdEndRendering(cmd);
+                VkImageMemoryBarrier2 read_barrier{};
+                read_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+                read_barrier.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+                read_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+                read_barrier.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+                read_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+                read_barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                read_barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                read_barrier.image = render_image;
+                read_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
 
-            VkImageMemoryBarrier2 present_barrier{};
-            present_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-            present_barrier.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-            present_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-            present_barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            present_barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-            present_barrier.image = swap_images[image_index];
-            present_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+                VkDependencyInfo read_dependency{};
+                read_dependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+                read_dependency.imageMemoryBarrierCount = 1;
+                read_dependency.pImageMemoryBarriers = &read_barrier;
 
-            VkDependencyInfo present_dependency{};
-            present_dependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-            present_dependency.imageMemoryBarrierCount = 1;
-            present_dependency.pImageMemoryBarriers = &present_barrier;
+                vkCmdPipelineBarrier2(cmd, &read_dependency);
+            }
 
-            vkCmdPipelineBarrier2(cmd, &present_dependency);
+            // render to window
+            {
+                VkImageMemoryBarrier2 color_barrier{};
+                color_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+                color_barrier.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+                color_barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+                color_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+                color_barrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                color_barrier.image = swap_images[image_index];
+                color_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+
+                VkDependencyInfo color_dependency{};
+                color_dependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+                color_dependency.imageMemoryBarrierCount = 1;
+                color_dependency.pImageMemoryBarriers = &color_barrier;
+
+                vkCmdPipelineBarrier2(cmd, &color_dependency);
+
+                VkRenderingAttachmentInfo color_attachment{};
+                color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+                color_attachment.imageView = swap_views[image_index];
+                color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+                color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+
+                VkRenderingInfo rendering_info{};
+                rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+                rendering_info.pNext = nullptr;
+                rendering_info.renderArea.extent = {swapchain.width, swapchain.height};
+                rendering_info.layerCount = 1;
+                rendering_info.colorAttachmentCount = 1;
+                rendering_info.pColorAttachments = &color_attachment;
+
+                vkCmdBeginRendering(cmd, &rendering_info);
+
+                VkViewport viewport{0.0f, 0.0f, (f32)swapchain.width, (f32)swapchain.height, 0.0f, 1.0f};
+                vkCmdSetViewport(cmd, 0, 1, &viewport);
+                VkRect2D scissor{{0, 0}, {swapchain.width, swapchain.height}};
+                vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+                ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
+
+                vkCmdEndRendering(cmd);
+
+                VkImageMemoryBarrier2 present_barrier{};
+                present_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+                present_barrier.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+                present_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+                present_barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                present_barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+                present_barrier.image = swap_images[image_index];
+                present_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+
+                VkDependencyInfo present_dependency{};
+                present_dependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+                present_dependency.imageMemoryBarrierCount = 1;
+                present_dependency.pImageMemoryBarriers = &present_barrier;
+
+                vkCmdPipelineBarrier2(cmd, &present_dependency);
+            }
 
             swapchain_commands.end_and_present(hg_vk_queue);
 
@@ -512,20 +673,20 @@ hg_test(HgQuat) {
 
     HgVec3 mat_rotated_vec = rotated_mat * up_vec;
 
-    hg_test_assert(std::abs(rotated_vec.x - 1.0f) < FLT_EPSILON
-                && std::abs(rotated_vec.y - 0.0f) < FLT_EPSILON
-                && std::abs(rotated_vec.y - 0.0f) < FLT_EPSILON);
+    hg_test_assert(abs(rotated_vec.x - 1.0f) < FLT_EPSILON
+                && abs(rotated_vec.y - 0.0f) < FLT_EPSILON
+                && abs(rotated_vec.y - 0.0f) < FLT_EPSILON);
 
-    hg_test_assert(std::abs(mat_rotated_vec.x - rotated_vec.x) < FLT_EPSILON
-                && std::abs(mat_rotated_vec.y - rotated_vec.y) < FLT_EPSILON
-                && std::abs(mat_rotated_vec.y - rotated_vec.z) < FLT_EPSILON);
+    hg_test_assert(abs(mat_rotated_vec.x - rotated_vec.x) < FLT_EPSILON
+                && abs(mat_rotated_vec.y - rotated_vec.y) < FLT_EPSILON
+                && abs(mat_rotated_vec.y - rotated_vec.z) < FLT_EPSILON);
 
     return true;
 }
 
 hg_test(HgArena) {
-    void* block = std::malloc(1024);
-    hg_defer(std::free(block));
+    void* block = malloc(1024);
+    hg_defer(free(block));
 
     HgArena arena{block, 1024};
 
@@ -571,7 +732,8 @@ hg_test(HgArena) {
 
 hg_test(HgString) {
     {
-        hg_arena_scope(arena, hg_get_scratch());
+        HgArena& arena = hg_get_scratch();
+        HgArenaScope arena_scope{arena};
 
         HgString a = a.create(arena, "a");
         hg_test_assert(a[0] == 'a');
@@ -608,7 +770,8 @@ hg_test(HgString) {
 }
 
 hg_test(hg_string_utils) {
-    hg_arena_scope(arena, hg_get_scratch());
+    HgArena& arena = hg_get_scratch();
+    HgArenaScope arena_scope{arena};
 
     hg_test_assert(hg_is_whitespace(' '));
     hg_test_assert(hg_is_whitespace('\t'));
@@ -871,7 +1034,8 @@ hg_test(hg_string_utils) {
 
 hg_test(HgJson) {
     {
-        hg_arena_scope(arena, hg_get_scratch());
+        HgArena& arena = hg_get_scratch();
+        HgArenaScope arena_scope{arena};
 
         HgStringView file = R"(
         )";
@@ -883,7 +1047,8 @@ hg_test(HgJson) {
     }
 
     {
-        hg_arena_scope(arena, hg_get_scratch());
+        HgArena& arena = hg_get_scratch();
+        HgArenaScope arena_scope{arena};
 
         HgStringView file = R"(
             {
@@ -901,7 +1066,8 @@ hg_test(HgJson) {
     }
 
     {
-        hg_arena_scope(arena, hg_get_scratch());
+        HgArena& arena = hg_get_scratch();
+        HgArenaScope arena_scope{arena};
 
         HgStringView file = R"(
             {
@@ -924,7 +1090,8 @@ hg_test(HgJson) {
     }
 
     {
-        hg_arena_scope(arena, hg_get_scratch());
+        HgArena& arena = hg_get_scratch();
+        HgArenaScope arena_scope{arena};
 
         HgStringView file = R"(
             {
@@ -947,7 +1114,8 @@ hg_test(HgJson) {
     }
 
     {
-        hg_arena_scope(arena, hg_get_scratch());
+        HgArena& arena = hg_get_scratch();
+        HgArenaScope arena_scope{arena};
 
         HgStringView file = R"(
             {
@@ -973,7 +1141,8 @@ hg_test(HgJson) {
     }
 
     {
-        hg_arena_scope(arena, hg_get_scratch());
+        HgArena& arena = hg_get_scratch();
+        HgArenaScope arena_scope{arena};
 
         HgStringView file = R"(
             {
@@ -999,7 +1168,8 @@ hg_test(HgJson) {
     }
 
     {
-        hg_arena_scope(arena, hg_get_scratch());
+        HgArena& arena = hg_get_scratch();
+        HgArenaScope arena_scope{arena};
 
         HgStringView file = R"(
             {
@@ -1025,7 +1195,8 @@ hg_test(HgJson) {
     }
 
     {
-        hg_arena_scope(arena, hg_get_scratch());
+        HgArena& arena = hg_get_scratch();
+        HgArenaScope arena_scope{arena};
 
         HgStringView file = R"(
             {
@@ -1051,7 +1222,8 @@ hg_test(HgJson) {
     }
 
     {
-        hg_arena_scope(arena, hg_get_scratch());
+        HgArena& arena = hg_get_scratch();
+        HgArenaScope arena_scope{arena};
 
         HgStringView file = R"(
             {
@@ -1077,7 +1249,8 @@ hg_test(HgJson) {
     }
 
     {
-        hg_arena_scope(arena, hg_get_scratch());
+        HgArena& arena = hg_get_scratch();
+        HgArenaScope arena_scope{arena};
 
         HgStringView file = R"(
             {
@@ -1103,7 +1276,8 @@ hg_test(HgJson) {
     }
 
     {
-        hg_arena_scope(arena, hg_get_scratch());
+        HgArena& arena = hg_get_scratch();
+        HgArenaScope arena_scope{arena};
 
         HgStringView file = R"(
             {
@@ -1129,7 +1303,8 @@ hg_test(HgJson) {
     }
 
     {
-        hg_arena_scope(arena, hg_get_scratch());
+        HgArena& arena = hg_get_scratch();
+        HgArenaScope arena_scope{arena};
 
         HgStringView file = R"(
             {
@@ -1163,7 +1338,8 @@ hg_test(HgJson) {
     }
 
     {
-        hg_arena_scope(arena, hg_get_scratch());
+        HgArena& arena = hg_get_scratch();
+        HgArenaScope arena_scope{arena};
 
         HgStringView file = R"(
             {
@@ -1213,7 +1389,8 @@ hg_test(HgJson) {
     }
 
     {
-        hg_arena_scope(arena, hg_get_scratch());
+        HgArena& arena = hg_get_scratch();
+        HgArenaScope arena_scope{arena};
 
         HgStringView file = R"(
             {
@@ -1263,7 +1440,8 @@ hg_test(HgJson) {
     }
 
     {
-        hg_arena_scope(arena, hg_get_scratch());
+        HgArena& arena = hg_get_scratch();
+        HgArenaScope arena_scope{arena};
 
         HgStringView file = R"(
             {
@@ -1312,7 +1490,8 @@ hg_test(HgJson) {
     }
 
     {
-        hg_arena_scope(arena, hg_get_scratch());
+        HgArena& arena = hg_get_scratch();
+        HgArenaScope arena_scope{arena};
 
         HgStringView file = R"(
             {
@@ -1371,7 +1550,8 @@ hg_test(HgJson) {
     }
 
     {
-        hg_arena_scope(arena, hg_get_scratch());
+        HgArena& arena = hg_get_scratch();
+        HgArenaScope arena_scope{arena};
 
         HgStringView file = R"(
             {
@@ -1550,69 +1730,10 @@ hg_test(HgJson) {
     return true;
 }
 
-hg_test(HgArrayAny) {
-    hg_arena_scope(arena, hg_get_scratch());
-
-    HgDynamicArray arr = arr.create(arena, sizeof(u32), alignof(u32), 0, 2);
-    hg_test_assert(arr.items != nullptr);
-    hg_test_assert(arr.capacity == 2);
-    hg_test_assert(arr.count == 0);
-
-    *(u32*)arr.push() = 2;
-    hg_test_assert(*(u32*)arr.get(0) == 2);
-    hg_test_assert(arr.count == 1);
-    *(u32*)arr.push() = 4;
-    hg_test_assert(*(u32*)arr.get(1) == 4);
-    hg_test_assert(arr.count == 2);
-
-    arr.grow(arena);
-    hg_test_assert(arr.capacity == 4);
-
-    *(u32*)arr.push() = 8;
-    hg_test_assert(*(u32*)arr.get(2) == 8);
-    hg_test_assert(arr.count == 3);
-
-    arr.pop();
-    hg_test_assert(arr.count == 2);
-    hg_test_assert(arr.capacity == 4);
-
-    *(u32*)arr.insert(0) = 1;
-    hg_test_assert(arr.count == 3);
-    hg_test_assert(*(u32*)arr.get(0) == 1);
-    hg_test_assert(*(u32*)arr.get(1) == 2);
-    hg_test_assert(*(u32*)arr.get(2) == 4);
-
-    arr.remove(1);
-    hg_test_assert(arr.count == 2);
-    hg_test_assert(*(u32*)arr.get(0) == 1);
-    hg_test_assert(*(u32*)arr.get(1) == 4);
-
-    for (u32 i = 0; i < 100; ++i) {
-        if (arr.is_full())
-            arr.grow(arena);
-        *(u32*)arr.push() = i;
-    }
-    hg_test_assert(arr.count == 102);
-    hg_test_assert(arr.capacity >= 102);
-
-    arr.swap_remove(2);
-    hg_test_assert(arr.count == 101);
-    hg_test_assert(*(u32*)arr.get(2) == 99);
-    hg_test_assert(*(u32*)arr.get(arr.count - 1) == 98);
-
-    *(u32*)arr.swap_insert(0) = 42;
-    hg_test_assert(arr.count == 102);
-    hg_test_assert(*(u32*)arr.get(0) == 42);
-    hg_test_assert(*(u32*)arr.get(1) == 4);
-    hg_test_assert(*(u32*)arr.get(2) == 99);
-    hg_test_assert(*(u32*)arr.get(arr.count - 1) == 1);
-
-    return true;
-}
-
 hg_test(HgHashMap) {
     {
-        hg_arena_scope(arena, hg_get_scratch());
+        HgArena& arena = hg_get_scratch();
+        HgArenaScope arena_scope{arena};
 
         constexpr usize count = 128;
 
@@ -1684,7 +1805,8 @@ hg_test(HgHashMap) {
     }
 
     {
-        hg_arena_scope(arena, hg_get_scratch());
+        HgArena& arena = hg_get_scratch();
+        HgArenaScope arena_scope{arena};
 
         using StrHash = usize;
 
@@ -1722,7 +1844,8 @@ hg_test(HgHashMap) {
     }
 
     {
-        hg_arena_scope(arena, hg_get_scratch());
+        HgArena& arena = hg_get_scratch();
+        HgArenaScope arena_scope{arena};
 
         HgHashMap<const char*, u32> map = map.create(arena, 128);
 
@@ -1758,7 +1881,8 @@ hg_test(HgHashMap) {
     }
 
     {
-        hg_arena_scope(arena, hg_get_scratch());
+        HgArena& arena = hg_get_scratch();
+        HgArenaScope arena_scope{arena};
 
         HgHashMap<HgString, u32> map = map.create(arena, 128);
 
@@ -1793,7 +1917,8 @@ hg_test(HgHashMap) {
     }
 
     {
-        hg_arena_scope(arena, hg_get_scratch());
+        HgArena& arena = hg_get_scratch();
+        HgArenaScope arena_scope{arena};
 
         HgHashMap<HgStringView, u32> map = map.create(arena, 128);
 
@@ -1828,7 +1953,8 @@ hg_test(HgHashMap) {
     }
 
     {
-        hg_arena_scope(arena, hg_get_scratch());
+        HgArena& arena = hg_get_scratch();
+        HgArenaScope arena_scope{arena};
 
         HgHashMap<u32, u32> map = map.create(arena, 64);
 
@@ -1877,7 +2003,8 @@ hg_test(HgHashMap) {
 
 hg_test(HgHashSet) {
     {
-        hg_arena_scope(arena, hg_get_scratch());
+        HgArena& arena = hg_get_scratch();
+        HgArenaScope arena_scope{arena};
 
         constexpr usize count = 128;
 
@@ -1947,7 +2074,8 @@ hg_test(HgHashSet) {
     }
 
     {
-        hg_arena_scope(arena, hg_get_scratch());
+        HgArena& arena = hg_get_scratch();
+        HgArenaScope arena_scope{arena};
 
         using StrHash = usize;
 
@@ -1985,7 +2113,8 @@ hg_test(HgHashSet) {
     }
 
     {
-        hg_arena_scope(arena, hg_get_scratch());
+        HgArena& arena = hg_get_scratch();
+        HgArenaScope arena_scope{arena};
 
         HgHashSet<const char*> map = map.create(arena, 128);
 
@@ -2021,7 +2150,8 @@ hg_test(HgHashSet) {
     }
 
     {
-        hg_arena_scope(arena, hg_get_scratch());
+        HgArena& arena = hg_get_scratch();
+        HgArenaScope arena_scope{arena};
 
         HgHashSet<HgString> map = map.create(arena, 128);
 
@@ -2052,7 +2182,8 @@ hg_test(HgHashSet) {
     }
 
     {
-        hg_arena_scope(arena, hg_get_scratch());
+        HgArena& arena = hg_get_scratch();
+        HgArenaScope arena_scope{arena};
 
         HgHashSet<HgStringView> map = map.create(arena, 128);
 
@@ -2086,7 +2217,8 @@ hg_test(HgHashSet) {
 }
 
 hg_test(hg_thread_pool) {
-    hg_arena_scope(arena, hg_get_scratch());
+    HgArena& arena = hg_get_scratch();
+    HgArenaScope arena_scope{arena};
 
     HgFence fence;
     {
@@ -2126,8 +2258,8 @@ hg_test(hg_thread_pool) {
     {
         bool vals[100] = {};
 
-        hg_for_par(hg_countof(vals), 16, [&](usize begin, usize end) {
-            hg_assert(begin < end && end <= hg_countof(vals));
+        hg_for_par(sizeof(vals) / sizeof(*vals), 16, [&](usize begin, usize end) {
+            hg_assert(begin < end && end <= sizeof(vals) / sizeof(*vals));
             for (; begin < end; ++begin) {
                 vals[begin] = true;
             }
@@ -2159,7 +2291,7 @@ hg_test(hg_thread_pool) {
                     hg_call_par(&fence, 1, vals + i, fn);
                 }
             };
-            for (u32 j = 0; j < hg_countof(producers); ++j) {
+            for (u32 j = 0; j < sizeof(producers) / sizeof(*producers); ++j) {
                 producers[j] = std::thread(prod_fn, j);
             }
 
@@ -2179,20 +2311,21 @@ hg_test(hg_thread_pool) {
 }
 
 hg_test(hg_io_thread) {
-    hg_arena_scope(arena, hg_get_scratch());
+    HgArena& arena = hg_get_scratch();
+    HgArenaScope arena_scope{arena};
 
     HgFence fence;
     {
         bool vals[100] = {};
 
         hg_io_request(&fence, 1, vals, {}, [](void* pvals, HgStringView) {
-            for (usize i = 0; i < hg_countof(vals); ++i) {
+            for (usize i = 0; i < sizeof(vals) / sizeof(*vals); ++i) {
                 ((bool*)pvals)[i] = true;
             }
         });
 
         hg_test_assert(fence.wait(2.0));
-        for (usize i = 0; i < hg_countof(vals); ++i) {
+        for (usize i = 0; i < sizeof(vals) / sizeof(*vals); ++i) {
             hg_test_assert(vals[i] == true);
         }
     }
@@ -2200,14 +2333,14 @@ hg_test(hg_io_thread) {
     {
         bool vals[100] = {};
 
-        for (usize i = 0; i < hg_countof(vals); ++i) {
+        for (usize i = 0; i < sizeof(vals) / sizeof(*vals); ++i) {
             hg_io_request(&fence, 1, &vals[i], {}, [](void* pval, HgStringView) {
                 *(bool*)pval = true;
             });
         }
 
         hg_test_assert(fence.wait(2.0));
-        for (usize i = 0; i < hg_countof(vals); ++i) {
+        for (usize i = 0; i < sizeof(vals) / sizeof(*vals); ++i) {
             hg_test_assert(vals[i] == true);
         }
     }
@@ -2217,14 +2350,14 @@ hg_test(hg_io_thread) {
 
         vals[0] = true;
 
-        for (usize i = 1; i < hg_countof(vals); ++i) {
+        for (usize i = 1; i < sizeof(vals) / sizeof(*vals); ++i) {
             hg_io_request(&fence, 1, &vals[i], {}, [](void* pval, HgStringView) {
                 *(bool*)pval = *((bool*)pval - 1);
             });
         }
 
         hg_test_assert(fence.wait(2.0));
-        for (usize i = 0; i < hg_countof(vals); ++i) {
+        for (usize i = 0; i < sizeof(vals) / sizeof(*vals); ++i) {
             hg_test_assert(vals[i] == true);
         }
     }
@@ -2249,7 +2382,7 @@ hg_test(hg_io_thread) {
                     });
                 }
             };
-            for (u32 j = 0; j < hg_countof(producers); ++j) {
+            for (u32 j = 0; j < sizeof(producers) / sizeof(*producers); ++j) {
                 producers[j] = std::thread(prod_fn, j);
             }
 
@@ -2269,7 +2402,8 @@ hg_test(hg_io_thread) {
 }
 
 hg_test(HgFileBinary) {
-    hg_arena_scope(arena, hg_get_scratch());
+    HgArena& arena = hg_get_scratch();
+    HgArenaScope arena_scope{arena};
 
     u32 save_data[] = {12, 42, 100, 128};
 
@@ -2288,7 +2422,7 @@ hg_test(HgFileBinary) {
 
         bin.store("dir/does/not/exist.bin");
 
-        FILE* file_handle = std::fopen("dir/does/not/exist.bin", "rb");
+        FILE* file_handle = fopen("dir/does/not/exist.bin", "rb");
         hg_test_assert(file_handle == nullptr);
     }
 
@@ -2302,14 +2436,15 @@ hg_test(HgFileBinary) {
         hg_test_assert(new_bin.data != nullptr);
         hg_test_assert(new_bin.data != save_data);
         hg_test_assert(new_bin.size == sizeof(save_data));
-        hg_test_assert(std::memcmp(save_data, new_bin.data, new_bin.size) == 0);
+        hg_test_assert(memcmp(save_data, new_bin.data, new_bin.size) == 0);
     }
 
     return true;
 }
 
 hg_test(HgTexture) {
-    hg_arena_scope(arena, hg_get_scratch());
+    HgArena& arena = hg_get_scratch();
+    HgArenaScope arena_scope{arena};
 
     struct color {
         u8 r, g, b, a;
@@ -2335,7 +2470,7 @@ hg_test(HgTexture) {
 
     {
         HgTexture::Info info;
-        std::memcpy(info.identifier, HgTexture::texture_identifier, sizeof(HgTexture::texture_identifier));
+        memcpy(info.identifier, HgTexture::texture_identifier, sizeof(HgTexture::texture_identifier));
         info.format = VK_FORMAT_R8G8B8A8_SRGB;
         info.width = save_width;
         info.height = save_height;
@@ -2362,7 +2497,7 @@ hg_test(HgTexture) {
 
         void* pixels = texture.get_pixels();
         hg_test_assert(pixels != nullptr);
-        hg_test_assert(std::memcmp(save_data, pixels, sizeof(save_data)) == 0);
+        hg_test_assert(memcmp(save_data, pixels, sizeof(save_data)) == 0);
     }
 
     {
@@ -2382,7 +2517,7 @@ hg_test(HgTexture) {
 
         void* pixels = file_texture.get_pixels();
         hg_test_assert(pixels != nullptr);
-        hg_test_assert(std::memcmp(save_data, pixels, sizeof(save_data)) == 0);
+        hg_test_assert(memcmp(save_data, pixels, sizeof(save_data)) == 0);
     }
 
     {
@@ -2412,7 +2547,7 @@ hg_test(HgTexture) {
 
         void* pixels = file_texture.get_pixels();
         hg_test_assert(pixels != nullptr);
-        hg_test_assert(std::memcmp(save_data, pixels, sizeof(save_data)) == 0);
+        hg_test_assert(memcmp(save_data, pixels, sizeof(save_data)) == 0);
     }
 
     hg_resources_reset();
@@ -2426,7 +2561,8 @@ hg_test(hg_resource_management) {
 }
 
 hg_test(hg_ecs) {
-    hg_arena_scope(arena, hg_get_scratch());
+    HgArena& arena = hg_get_scratch();
+    HgArenaScope arena_scope{arena};
 
     HgECS ecs = ecs.create(1024);
     hg_defer(ecs.destroy());
@@ -2690,7 +2826,7 @@ hg_test(hg_ecs) {
 
     {
         u32 small_scramble_1[] = {1, 0};
-        for (u32 i = 0; i < hg_countof(small_scramble_1); ++i) {
+        for (u32 i = 0; i < sizeof(small_scramble_1) / sizeof(*small_scramble_1); ++i) {
             ecs.add<u32>(ecs.spawn()) = small_scramble_1[i];
         }
 
@@ -2725,7 +2861,7 @@ hg_test(hg_ecs) {
 
     {
         u32 medium_scramble_1[] = {8, 9, 1, 6, 0, 3, 7, 2, 5, 4};
-        for (u32 i = 0; i < hg_countof(medium_scramble_1); ++i) {
+        for (u32 i = 0; i < sizeof(medium_scramble_1) / sizeof(*medium_scramble_1); ++i) {
             ecs.add<u32>(ecs.spawn()) = medium_scramble_1[i];
         }
         ecs.sort<u32>(nullptr, comparison);
@@ -2744,7 +2880,7 @@ hg_test(hg_ecs) {
 
     {
         u32 medium_scramble_2[] = {3, 9, 7, 6, 8, 5, 0, 1, 2, 4};
-        for (u32 i = 0; i < hg_countof(medium_scramble_2); ++i) {
+        for (u32 i = 0; i < sizeof(medium_scramble_2) / sizeof(*medium_scramble_2); ++i) {
             ecs.add<u32>(ecs.spawn()) = medium_scramble_2[i];
         }
         ecs.sort<u32>(nullptr, comparison);

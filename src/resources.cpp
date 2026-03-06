@@ -4,29 +4,30 @@
 #include "stb_image_write.h"
 
 HgBinary HgBinary::load(HgArena& arena, HgStringView path) {
-    hg_arena_scope(scratch, hg_get_scratch(arena));
+    HgArena& scratch = hg_get_scratch(arena);
+    HgArenaScope scratch_scope{scratch};
 
     HgBinary bin;
 
-    HgString cpath = cpath.create(scratch, path).append(scratch, 0);
+    char* cpath = hg_c_string(scratch, path);
 
-    FILE* file_handle = std::fopen(cpath.chars, "rb");
+    FILE* file_handle = fopen(cpath, "rb");
     if (file_handle == nullptr) {
-        hg_warn("Could not find file to read binary: %s\n", cpath.chars);
+        hg_warn("Could not find file to read binary: %s\n", cpath);
         return {};
     }
-    hg_defer(std::fclose(file_handle));
+    hg_defer(fclose(file_handle));
 
-    if (std::fseek(file_handle, 0, SEEK_END) != 0) {
-        hg_warn("Failed to read binary from file: %s\n", cpath.chars);
+    if (fseek(file_handle, 0, SEEK_END) != 0) {
+        hg_warn("Failed to read binary from file: %s\n", cpath);
         return {};
     }
 
-    bin.resize(arena, (usize)std::ftell(file_handle));
-    std::rewind(file_handle);
+    bin.resize(arena, (usize)ftell(file_handle));
+    rewind(file_handle);
 
-    if (std::fread(bin.data, 1, bin.size, file_handle) != bin.size) {
-        hg_warn("Failed to read binary from file: %s\n", cpath.chars);
+    if (fread(bin.data, 1, bin.size, file_handle) != bin.size) {
+        hg_warn("Failed to read binary from file: %s\n", cpath);
         return {};
     }
 
@@ -34,25 +35,26 @@ HgBinary HgBinary::load(HgArena& arena, HgStringView path) {
 }
 
 void HgBinary::store(HgStringView path) {
-    hg_arena_scope(scratch, hg_get_scratch());
+    HgArena& scratch = hg_get_scratch();
+    HgArenaScope scratch_scope{scratch};
 
-    HgString cpath = cpath.create(scratch, path).append(scratch, 0);
+    char* cpath = hg_c_string(scratch, path);
 
-    FILE* file_handle = std::fopen(cpath.chars, "wb");
+    FILE* file_handle = fopen(cpath, "wb");
     if (file_handle == nullptr) {
-        hg_warn("Failed to create file to write binary: %s\n", cpath.chars);
+        hg_warn("Failed to create file to write binary: %s\n", cpath);
         return;
     }
-    hg_defer(std::fclose(file_handle));
+    hg_defer(fclose(file_handle));
 
-    if (std::fwrite(data, 1, size, file_handle) != size) {
-        hg_warn("Failed to write binary data to file: %s\n", cpath.chars);
+    if (fwrite(data, 1, size, file_handle) != size) {
+        hg_warn("Failed to write binary data to file: %s\n", cpath);
         return;
     }
 }
 
 bool HgTexture::get_info(VkFormat& format, u32& width, u32& height, u32& depth) {
-    if (file.size >= sizeof(Info) && std::memcmp(file.data, texture_identifier, sizeof(texture_identifier)) == 0) {
+    if (file.size >= sizeof(Info) && memcmp(file.data, texture_identifier, sizeof(texture_identifier)) == 0) {
         file.read(offsetof(Info, format), &format, sizeof(format));
         file.read(offsetof(Info, width), &width, sizeof(width));
         file.read(offsetof(Info, height), &height, sizeof(height));
@@ -63,7 +65,7 @@ bool HgTexture::get_info(VkFormat& format, u32& width, u32& height, u32& depth) 
 }
 
 void* HgTexture::get_pixels() {
-    if (file.size >= sizeof(Info) && std::memcmp(file.data, texture_identifier, sizeof(texture_identifier)) == 0) {
+    if (file.size >= sizeof(Info) && memcmp(file.data, texture_identifier, sizeof(texture_identifier)) == 0) {
         return (u8*)file.data + sizeof(Info);
     }
     return file.data;
@@ -143,27 +145,28 @@ void hg_load_resource(HgFence* fences, usize fence_count, HgResource id, HgStrin
     hg_io_request(fences, fence_count, resource, path, [](void* pres, HgStringView fpath) {
         Resource& res = *(Resource*)pres;
 
-        hg_arena_scope(scratch, hg_get_scratch());
-        HgString cpath = cpath.create(scratch, fpath).append(scratch, 0);
+        HgArena& scratch = hg_get_scratch();
+        HgArenaScope scratch_scope{scratch};
+        char* cpath = hg_c_string(scratch, fpath);
 
-        FILE* file_handle = std::fopen(cpath.chars, "rb");
+        FILE* file_handle = fopen(cpath, "rb");
         if (file_handle == nullptr) {
-            hg_warn("Could not find file to read binary: %s\n", cpath.chars);
+            hg_warn("Could not find file to read binary: %s\n", cpath);
             return;
         }
-        hg_defer(std::fclose(file_handle));
+        hg_defer(fclose(file_handle));
 
-        if (std::fseek(file_handle, 0, SEEK_END) != 0) {
-            hg_warn("Failed to read binary from file: %s\n", cpath.chars);
+        if (fseek(file_handle, 0, SEEK_END) != 0) {
+            hg_warn("Failed to read binary from file: %s\n", cpath);
             return;
         }
-        res.file->size = (usize)std::ftell(file_handle);
-        res.file->data = std::malloc(res.file->size);
-        std::rewind(file_handle);
+        res.file->size = (usize)ftell(file_handle);
+        res.file->data = malloc(res.file->size);
+        rewind(file_handle);
 
-        if (std::fread(res.file->data, 1, res.file->size, file_handle) != res.file->size) {
-            hg_warn("Failed to read binary from file: %s\n", cpath.chars);
-            std::free(res.file->data);
+        if (fread(res.file->data, 1, res.file->size, file_handle) != res.file->size) {
+            hg_warn("Failed to read binary from file: %s\n", cpath);
+            free(res.file->data);
             res.file->size = 0;
             res.file->data = nullptr;
             return;
@@ -178,7 +181,7 @@ void hg_unload_resource(HgFence* fences, usize fence_count, HgResource id) {
 
     hg_io_request(fences, fence_count, resource, {}, [](void* pres, HgStringView) {
         Resource& res = *(Resource*)pres;
-        std::free(res.file->data);
+        free(res.file->data);
         res.file->size = 0;
         res.file->data = nullptr;
     });
@@ -187,9 +190,10 @@ void hg_unload_resource(HgFence* fences, usize fence_count, HgResource id) {
 void hg_store_resource(HgFence* fences, usize fence_count, HgResource id, HgStringView path) {
     Resource* resource = resource_map.get(id);
     if (resource == nullptr) {
-        hg_arena_scope(scratch, hg_get_scratch());
+        HgArena& scratch = hg_get_scratch();
+        HgArenaScope scratch_scope{scratch};
         hg_warn("Could not store resource to \"%s\" because the resource does not exist\n",
-            HgString::create(scratch, path).append(scratch, 0).chars);
+            hg_c_string(scratch, path));
         return;
     }
 
@@ -207,25 +211,25 @@ void hg_import_png(HgFence* fences, usize fence_count, HgResource id, HgStringVi
     hg_load_resource(fences, fence_count, id, path);
 
     hg_io_request(fences, fence_count, hg_get_resource(id), path, [](void* pbin, HgStringView fpath) {
-        hg_arena_scope(scratch, hg_get_scratch());
-        HgString cpath = cpath.create(scratch, fpath).append(scratch, 0);
+        HgArena& scratch = hg_get_scratch();
+        HgArenaScope scratch_scope{scratch};
 
         HgBinary& bin = *(HgBinary*)pbin;
 
         int width, height, channels;
         u8* pixels = stbi_load_from_memory((u8*)bin.data, (i32)bin.size, &width, &height, &channels, 4);
         if (pixels == nullptr) {
-            hg_warn("Failed to decode image file: %s\n", cpath.chars);
+            hg_warn("Failed to decode image file: %s\n", hg_c_string(scratch, fpath));
             return;
         }
-        std::free(bin.data);
-        hg_defer(std::free(pixels));
+        free(bin.data);
+        hg_defer(free(pixels));
 
         bin.size = sizeof(HgTexture::Info) + (usize)width * (usize)height * sizeof(u32);
-        bin.data = std::malloc(bin.size);
+        bin.data = malloc(bin.size);
 
         HgTexture::Info info;
-        std::memcpy(info.identifier, HgTexture::texture_identifier, sizeof(HgTexture::texture_identifier));
+        memcpy(info.identifier, HgTexture::texture_identifier, sizeof(HgTexture::texture_identifier));
         info.format = VK_FORMAT_R8G8B8A8_SRGB;
         info.width = (u32)width;
         info.height = (u32)height;
@@ -239,74 +243,51 @@ void hg_import_png(HgFence* fences, usize fence_count, HgResource id, HgStringVi
 void hg_export_png(HgFence* fences, usize fence_count, HgResource id, HgStringView path) {
     HgBinary* resource = hg_get_resource(id);
     if (resource == nullptr) {
-        hg_arena_scope(scratch, hg_get_scratch());
+        HgArena& scratch = hg_get_scratch();
+        HgArenaScope scratch_scope{scratch};
         hg_warn("Could not export png resource to \"%s\" because the resource does not exist\n",
-            HgString::create(scratch, path).append(scratch, 0).chars);
+            hg_c_string(scratch, path));
         return;
     }
 
     hg_io_request(fences, fence_count, resource, path, [](void* ptex, HgStringView fpath) {
-        hg_arena_scope(scratch, hg_get_scratch());
-        HgString cpath = cpath.create(scratch, fpath).append(scratch, 0);
+        HgArena& scratch = hg_get_scratch();
+        HgArenaScope scratch_scope{scratch};
+        char* cpath = hg_c_string(scratch, fpath);
 
         HgTexture tex = *(HgBinary*)ptex;
         void* pixels = tex.get_pixels();
         if (pixels == nullptr) {
-            hg_warn("Cannot export emprty image %s\n", cpath.chars);
+            hg_warn("Cannot export emprty image %s\n", cpath);
             return;
         }
 
         VkFormat format;
         u32 width, height, depth;
         if (!tex.get_info(format, width, height, depth)) {
-            hg_warn("Could not get info from image %s to export\n", cpath.chars);
+            hg_warn("Could not get info from image %s to export\n", cpath);
             return;
         }
         if (depth > 1)
-            hg_warn("Cannot export 3d image %s, exporting only the first layer\n", cpath.chars);
-        stbi_write_png(cpath.chars, (int)width, (int)height, 4, pixels, (int)(width * sizeof(u32)));
+            hg_warn("Cannot export 3d image %s, exporting only the first layer\n", cpath);
+        stbi_write_png(cpath, (int)width, (int)height, 4, pixels, (int)(width * sizeof(u32)));
     });
 }
 
-/**
- * The type of gpu resources
- */
 enum class GpuResourceType : u32 {
     buffer,
     texture,
 };
 
-/**
- * A gpu resource
- */
 struct GpuResource {
-
-    /**
-     * The resource
-     */
     union {
-        /**
-         * The resource as a buffer
-         */
         HgGpuBuffer buffer;
-        /**
-         * The resource as a texture
-         */
         HgGpuTexture texture;
     };
-    /**
-     * The type of the resource
-     */
     GpuResourceType type;
-    /**
-     * The resource's reference count
-     */
     u32 ref_count;
 };
 
-/**
- * The registered resources
- */
 HgHashMap<HgResource, GpuResource> gpu_map;
 
 void hg_gpu_resources_init(HgArena& arena, usize max_resources) {
