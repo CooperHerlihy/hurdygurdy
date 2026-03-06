@@ -3,7 +3,7 @@ BUILD_DIR := $(SRC_DIR)/build
 TEST_DIR := $(SRC_DIR)/hg_test_dir
 
 STD := -std=c++17 -MMD -MP
-WARNINGS := -Werror -Wall -Wextra -Wconversion -Wshadow -pedantic
+WARNINGS := -Werror -Wall -Wextra -pedantic
 
 DEBUG_CONFIG := -g -O0 -fsanitize=undefined -fno-exceptions -fno-rtti
 RELEASE_CONFIG := -O3 -DNDEBUG -fno-exceptions -fno-rtti

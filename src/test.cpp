@@ -183,7 +183,9 @@ int main(void) {
     render_image_info.mipLevels = 1;
     render_image_info.arrayLayers = 1;
     render_image_info.samples = VK_SAMPLE_COUNT_1_BIT;
-    render_image_info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    render_image_info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+                            | VK_IMAGE_USAGE_SAMPLED_BIT
+                            | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
     VmaAllocationCreateInfo render_alloc_info{};
     render_alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
@@ -308,7 +310,7 @@ int main(void) {
             }
             if (ImGui::BeginMenu("View")) {
 
-                ImGui::Checkbox("Render View", &show_render);
+                ImGui::Checkbox("Render", &show_render);
                 ImGui::Checkbox("Editor", &show_editor);
                 ImGui::Checkbox("ImGui Demo", &show_imgui_demo);
 
@@ -495,6 +497,8 @@ int main(void) {
             ImGui::ShowDemoWindow(&show_imgui_demo);
 
         ImGui::Render();
+
+        cpu_delta = cpu_clock.tick();
 
         window.get_size(&window_width, &window_height);
         if (swapchain.width != window_width || swapchain.height != window_height) {
