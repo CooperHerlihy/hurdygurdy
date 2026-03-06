@@ -1549,18 +1549,18 @@ namespace {
     };
 }
 
-ComponentArr& get_component_arr() {
+ComponentArr& component_arr() {
     static ComponentArr components = components.create(1024);
     return components;
 }
 
 static u32 component_width(u32 id) {
-    return get_component_arr().widths[id];
+    return component_arr().widths[id];
 }
 
 u32 hg_create_component_id(u32 width) {
-    u32 id = get_component_arr().count;
-    get_component_arr().push(width);
+    u32 id = component_arr().count;
+    component_arr().push(width);
     return id;
 }
 
@@ -1570,7 +1570,7 @@ HgECS HgECS::create(u32 max_entities) {
     ecs.pool_size = max_entities;
     ecs.pool = (HgEntity*)std::malloc(sizeof(HgEntity) * ecs.pool_size);
 
-    ecs.system_count = get_component_arr().count;
+    ecs.system_count = component_arr().count;
     ecs.systems = (System*)std::malloc(sizeof(System) * ecs.system_count);
 
     for (u32 i = 0; i < ecs.system_count; ++i) {
