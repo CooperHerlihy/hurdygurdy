@@ -4747,13 +4747,13 @@ struct HgWindowConfig {
     /**
      * How the swapchain images will be used
      */
-    VkImageUsageFlags image_usage;
+    VkImageUsageFlags image_usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     /**
      * How the swapchain images will be presented
      *
      * Note, will fall back to FIFO if unavailable
      */
-    VkPresentModeKHR desired_present_mode;
+    VkPresentModeKHR preferred_present_mode = VK_PRESENT_MODE_FIFO_KHR;
 };
 
 /**

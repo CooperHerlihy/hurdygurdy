@@ -71,6 +71,7 @@ void hg_vulkan_deinit();
 void hg_graphics_deinit() {
     if (hg_vk_cmd_pool != nullptr) {
         vkDestroyCommandPool(hg_vk_device, hg_vk_cmd_pool, nullptr);
+        hg_vk_cmd_pool = nullptr;
     }
 
     if (hg_vk_vma != nullptr) {

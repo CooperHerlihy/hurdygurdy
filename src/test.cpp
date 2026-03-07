@@ -10,9 +10,15 @@
 #include "imgui.h"
 #include "imgui_impl_vulkan.h"
 
-int main(void) {
-    hg_defer(hg_debug("Exited successfully\n"));
+void editor_example();
+void minimal_example();
 
+int main() {
+    // editor_example();
+    minimal_example();
+}
+
+void minimal_example() {
     hg_init();
     hg_defer(hg_exit());
 
@@ -22,12 +28,11 @@ int main(void) {
     HgArenaScope arena_scope{arena};
 
     HgWindowConfig window_config{};
-    window_config.title = "Hg Test";
+    window_config.title = "Hg Small Test";
     window_config.windowed = true;
-    window_config.width = 1600;
-    window_config.height = 900;
-    window_config.image_usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    window_config.desired_present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
+    window_config.width = 1200;
+    window_config.height = 800;
+
     HgWindow* window = HgWindow::create(arena, window_config);
     hg_defer(window->destroy());
 
@@ -43,19 +48,171 @@ int main(void) {
     }
     hg_defer(hg_unload_gpu_resource(texture_id));
 
-    HgVec3 camera_pos{0, 0, -1};
-    HgVec3 camera_scale{1, 1, 1};
-    HgQuat camera_rot{1, 0, 0, 0};
+    HgPipeline2D pipeline2d = pipeline2d.create(arena, 256, window->format, VK_FORMAT_UNDEFINED);
+    hg_defer(pipeline2d.destroy());
 
-    f32 aspect_ratio = 16.0f / 9.0f;
-    u32 render_width = 0;
-    u32 render_height = 0;
+    pipeline2d.add_texture(texture_id);
+    hg_defer(pipeline2d.remove_texture(texture_id));
+
+    HgTransform camera{};
+    camera.position = {0, 0, -1};
+    camera.scale = {1, 1, 1};
+    camera.rotation = {1, 0, 0, 0};
+
+    HgECS ecs = ecs.create(4096);
+    hg_defer(ecs.destroy());
+
+    HgEntity square = ecs.spawn();
+    ecs.add<HgTransform>(square) = {};
+    ecs.add<HgSprite>(square) = {texture_id, {0.0f}, {1.0f}};
+
+    HgClock game_clock{};
+    for (;;) {
+        f64 delta = game_clock.tick();
+        f32 deltaf = (f32)delta;
+
+        hg_process_window_events(&window, 1);
+        if (window->was_closed)
+            goto quit;
+
+        pipeline2d.update_projection(
+            hg_projection_perspective((f32)hg_pi * 0.5f, (f32)window->width / (f32)window->height, 0.1f, 1000.0f));
+
+        if (window->is_key_down[(u32)HgKey::lmouse]) {
+            f32 rot_speed = 2.0f;
+            HgQuat rot_x = hg_axis_angle({0, 1, 0}, (f32)window->mouse_delta_x * rot_speed);
+            HgQuat rot_y = hg_axis_angle({-1, 0, 0}, (f32)window->mouse_delta_y * rot_speed);
+            camera.rotation = rot_x * camera.rotation * rot_y;
+        }
+
+        HgVec3 movement = {
+            (f32)(window->is_key_down[(u32)HgKey::d] - window->is_key_down[(u32)HgKey::a]),
+            (f32)(window->is_key_down[(u32)HgKey::lshift] - window->is_key_down[(u32)HgKey::space]),
+            (f32)(window->is_key_down[(u32)HgKey::w] - window->is_key_down[(u32)HgKey::s]),
+        };
+        if (movement != HgVec3{0.0f}) {
+            f32 move_speed = 1.5f;
+            HgVec3 rotated = hg_rotate(camera.rotation, HgVec3{movement.x, 0.0f, movement.z});
+            camera.position += hg_norm(HgVec3{rotated.x, movement.y, rotated.z}) * move_speed * deltaf;
+        }
+
+        pipeline2d.update_view(hg_view_matrix(camera.position, camera.scale, camera.rotation));
+
+        VkCommandBuffer cmd = window->begin_recording();
+        if (cmd != nullptr) {
+            VkImageMemoryBarrier2 color_barrier{};
+            color_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+            color_barrier.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            color_barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            color_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            color_barrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            color_barrier.image = window->images[window->current_image];
+            color_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+
+            VkDependencyInfo color_dependency{};
+            color_dependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+            color_dependency.imageMemoryBarrierCount = 1;
+            color_dependency.pImageMemoryBarriers = &color_barrier;
+
+            vkCmdPipelineBarrier2(cmd, &color_dependency);
+
+            VkRenderingAttachmentInfo color_attachment{};
+            color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+            color_attachment.imageView = window->views[window->current_image];
+            color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+
+            VkRenderingInfo rendering_info{};
+            rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+            rendering_info.pNext = nullptr;
+            rendering_info.renderArea.extent = {window->width, window->height};
+            rendering_info.layerCount = 1;
+            rendering_info.colorAttachmentCount = 1;
+            rendering_info.pColorAttachments = &color_attachment;
+
+            vkCmdBeginRendering(cmd, &rendering_info);
+
+            VkViewport viewport{0.0f, 0.0f, (f32)window->width, (f32)window->height, 0.0f, 1.0f};
+            vkCmdSetViewport(cmd, 0, 1, &viewport);
+            VkRect2D scissor{{0, 0}, {window->width, window->height}};
+            vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+            pipeline2d.draw(ecs, cmd);
+
+            vkCmdEndRendering(cmd);
+
+            VkImageMemoryBarrier2 present_barrier{};
+            present_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+            present_barrier.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            present_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            present_barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            present_barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+            present_barrier.image = window->images[window->current_image];
+            present_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+
+            VkDependencyInfo present_dependency{};
+            present_dependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+            present_dependency.imageMemoryBarrierCount = 1;
+            present_dependency.pImageMemoryBarriers = &present_barrier;
+
+            vkCmdPipelineBarrier2(cmd, &present_dependency);
+
+            window->end_and_present(cmd);
+        }
+    }
+
+quit:
+    vkDeviceWaitIdle(hg_vk_device);
+}
+
+void editor_example() {
+    hg_defer(hg_debug("Exited successfully\n"));
+
+    hg_init();
+    hg_defer(hg_exit());
+
+    hg_tests_run();
+
+    HgArena& arena = hg_get_scratch();
+    HgArenaScope arena_scope{arena};
+
+    HgWindowConfig window_config{};
+    window_config.title = "Hg Test";
+    window_config.windowed = true;
+    window_config.width = 1600;
+    window_config.height = 900;
+    // window_config.preferred_present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
+
+    HgWindow* window = HgWindow::create(arena, window_config);
+    hg_defer(window->destroy());
+
+    HgStringView texture_path = "hg_test_dir/file_image_test.hgtex";
+    HgResource texture_id = hg_resource_id(texture_path);
+
+    {
+        HgFence fence;
+        hg_load_resource(&fence, 1, texture_id, texture_path);
+        fence.wait(INFINITY);
+        hg_load_gpu_texture(texture_id, VK_FILTER_NEAREST);
+        hg_unload_resource(nullptr, 0, texture_id);
+    }
+    hg_defer(hg_unload_gpu_resource(texture_id));
 
     HgPipeline2D pipeline2d = pipeline2d.create(arena, 256, VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_UNDEFINED);
     hg_defer(pipeline2d.destroy());
 
     pipeline2d.add_texture(texture_id);
     hg_defer(pipeline2d.remove_texture(texture_id));
+
+    HgTransform camera{};
+    camera.position = {0, 0, -1};
+    camera.scale = {1, 1, 1};
+    camera.rotation = {1, 0, 0, 0};
+
+    f32 aspect_ratio = 16.0f / 9.0f;
+    u32 render_width = 0;
+    u32 render_height = 0;
 
     HgECS ecs = ecs.create(4096);
     hg_defer(ecs.destroy());
@@ -66,7 +223,7 @@ int main(void) {
 
     scene[scene_size++] = ecs.spawn();
     ecs.add<HgTransform>(scene[0]) = {};
-    ecs.add<HgSprite>(scene[0]) = {texture_id, {0.0f}, 1.0f};
+    ecs.add<HgSprite>(scene[0]) = {texture_id, {0.0f}, {1.0f}};
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -241,6 +398,7 @@ int main(void) {
                     HgMat4 proj = hg_projection_perspective((f32)hg_pi * 0.5f, (f32)render_width / (f32)render_height, 0.1f, 1000.0f);
                     pipeline2d.update_projection(proj);
 
+                    ImGui_ImplVulkan_RemoveTexture(render_descriptor);
                     vkDestroyImageView(hg_vk_device, render_view, nullptr);
                     vmaDestroyImage(hg_vk_vma, render_image, render_alloc);
 
@@ -275,46 +433,30 @@ int main(void) {
                 }
 
                 if (ImGui::IsWindowFocused()) {
-                    static const f32 rot_speed = 2.0f;
                     if (move_3d && window->is_key_down[(u32)HgKey::lmouse]) {
+                        f32 rot_speed = 2.0f;
                         HgQuat rot_x = hg_axis_angle({0, 1, 0}, (f32)window->mouse_delta_x * rot_speed);
                         HgQuat rot_y = hg_axis_angle({-1, 0, 0}, (f32)window->mouse_delta_y * rot_speed);
-                        camera_rot = rot_x * camera_rot * rot_y;
+                        camera.rotation = rot_x * camera.rotation * rot_y;
                     }
 
-                    static const f32 move_speed = 1.5f;
                     HgVec3 movement = {0.0f};
-
                     if (move_3d) {
-                        if (window->is_key_down[(u32)HgKey::space])
-                            movement.y -= 1.0f;
-                        if (window->is_key_down[(u32)HgKey::lshift])
-                            movement.y += 1.0f;
-                        if (window->is_key_down[(u32)HgKey::w])
-                            movement.z += 1.0f;
-                        if (window->is_key_down[(u32)HgKey::s])
-                            movement.z -= 1.0f;
-                        if (window->is_key_down[(u32)HgKey::a])
-                            movement.x -= 1.0f;
-                        if (window->is_key_down[(u32)HgKey::d])
-                            movement.x += 1.0f;
+                        movement.y += window->is_key_down[(u32)HgKey::lshift] - window->is_key_down[(u32)HgKey::space];
+                        movement.x += window->is_key_down[(u32)HgKey::d] - window->is_key_down[(u32)HgKey::a];
+                        movement.z += window->is_key_down[(u32)HgKey::w] - window->is_key_down[(u32)HgKey::s];
                     } else {
-                        if (window->is_key_down[(u32)HgKey::w])
-                            movement.y -= 1.0f;
-                        if (window->is_key_down[(u32)HgKey::s])
-                            movement.y += 1.0f;
-                        if (window->is_key_down[(u32)HgKey::a])
-                            movement.x -= 1.0f;
-                        if (window->is_key_down[(u32)HgKey::d])
-                            movement.x += 1.0f;
+                        movement.y += window->is_key_down[(u32)HgKey::s] - window->is_key_down[(u32)HgKey::w];
+                        movement.x += window->is_key_down[(u32)HgKey::d] - window->is_key_down[(u32)HgKey::a];
                     }
 
                     if (movement != HgVec3{0.0f}) {
-                        HgVec3 rotated = hg_rotate(camera_rot, HgVec3{movement.x, 0.0f, movement.z});
-                        camera_pos += hg_norm(HgVec3{rotated.x, movement.y, rotated.z}) * move_speed * deltaf;
+                        f32 move_speed = 1.5f;
+                        HgVec3 rotated = hg_rotate(camera.rotation, HgVec3{movement.x, 0.0f, movement.z});
+                        camera.position += hg_norm(HgVec3{rotated.x, movement.y, rotated.z}) * move_speed * deltaf;
                     }
                 }
-                pipeline2d.update_view(hg_view_matrix(camera_pos, camera_scale, camera_rot));
+                pipeline2d.update_view(hg_view_matrix(camera.position, camera.scale, camera.rotation));
 
                 ImGui::Image((ImTextureID)render_descriptor, {(f32)render_width, (f32)render_height});
             }
@@ -331,11 +473,11 @@ int main(void) {
 
                     ImGui::SeparatorText("Camera");
                     if (ImGui::Button("Reset Camera"))
-                        camera_pos = {0, 0, -1}, camera_scale = {1, 1, 1}, camera_rot = {1, 0, 0, 0};
+                        camera.position = {0, 0, -1}, camera.scale = {1, 1, 1}, camera.rotation = {1, 0, 0, 0};
                     ImGui::Checkbox("3D Movement", &move_3d);
                     ImGui::Checkbox("Fixed Aspect", &fixed_aspect);
                     if (fixed_aspect)
-                        ImGui::DragFloat("Aspect", &aspect_ratio, 0.01f, 0.0f, 16.0f);
+                        ImGui::DragFloat("Aspect", &aspect_ratio, 0.01f, 0.01f, 16.0f);
                 }
 
                 ImGuiTreeNodeFlags entity_flags = ImGuiTreeNodeFlags_DefaultOpen;
@@ -430,7 +572,6 @@ int main(void) {
         ImGui::Render();
 
         cpu_delta = cpu_clock.tick();
-
         VkCommandBuffer cmd = window->begin_recording();
         cpu_clock.tick();
         if (cmd != nullptr) {

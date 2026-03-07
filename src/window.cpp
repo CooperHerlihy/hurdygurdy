@@ -25,19 +25,19 @@ void hg_internal_resize_window_swapchain(HgWindow* window) {
     VkSurfaceCapabilitiesKHR surface_capabilities;
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(hg_vk_physical_device, window->surface, &surface_capabilities);
 
-    // is this useful on any platform? : TODO
-    //
-    // if (surface_capabilities.currentExtent.width != (u32)-1)
-    //     window->width = surface_capabilities.currentExtent.width;
-    // if (surface_capabilities.currentExtent.height != (u32)-1)
-    //     window->height = surface_capabilities.currentExtent.height;
+    if (surface_capabilities.currentExtent.width != (u32)-1)
+        window->width = surface_capabilities.currentExtent.width;
+    if (surface_capabilities.currentExtent.height != (u32)-1)
+        window->height = surface_capabilities.currentExtent.height;
 
     VkSwapchainCreateInfoKHR swapchain_info{};
     swapchain_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     swapchain_info.surface = window->surface;
-    swapchain_info.minImageCount = window->present_mode == VK_PRESENT_MODE_FIFO_KHR
-        ? std::max(surface_capabilities.minImageCount, (u32)2)
-        : std::min(surface_capabilities.minImageCount, surface_capabilities.maxImageCount - 1) + 1;
+    swapchain_info.minImageCount // why do different platforms behave differently, especially with ImGui? : TODO
+        = std::min(surface_capabilities.minImageCount, surface_capabilities.maxImageCount - 1) + 1;
+        // = window->present_mode == VK_PRESENT_MODE_FIFO_KHR
+        // ? std::max(surface_capabilities.minImageCount, (u32)2)
+        // : std::min(surface_capabilities.minImageCount, surface_capabilities.maxImageCount - 1) + 1;
     swapchain_info.imageFormat = window->format;
     swapchain_info.imageExtent = {window->width, window->height};
     swapchain_info.imageArrayLayers = 1;
@@ -146,7 +146,7 @@ static VkPresentModeKHR find_swapchain_present_mode(
 
 void hg_internal_create_window_swapchain(HgWindow* window, const HgWindowConfig& config) {
     window->format = find_swapchain_format(window->surface);
-    window->present_mode = find_swapchain_present_mode(window->surface, config.desired_present_mode);
+    window->present_mode = find_swapchain_present_mode(window->surface, config.preferred_present_mode);
     window->image_usage = config.image_usage;
     hg_internal_resize_window_swapchain(window);
 }

@@ -345,6 +345,8 @@ HgWindow* HgWindow::create(HgArena& arena, const HgWindowConfig& config) {
     window->internals = arena.alloc<Internals>(1);
     *window->internals = {};
 
+    const char* title = config.title != nullptr ? config.title : "Hurdy Gurdy";
+
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     if (config.windowed) {
         window->width = config.width;
@@ -352,7 +354,7 @@ HgWindow* HgWindow::create(HgArena& arena, const HgWindowConfig& config) {
         window->internals->glfw_window = glfwCreateWindow(
             (int)config.width,
             (int)config.height,
-            config.title,
+            title,
             nullptr,
             nullptr);
     } else {
@@ -363,7 +365,7 @@ HgWindow* HgWindow::create(HgArena& arena, const HgWindowConfig& config) {
         window->internals->glfw_window = glfwCreateWindow(
             mode->width,
             mode->height,
-            config.title,
+            title,
             monitor,
             nullptr);
     }
