@@ -7,58 +7,14 @@
 #include <X11/Xutil.h>
 #include <vulkan/vulkan_xlib.h>
 
-struct HgWindowInput {
-    u32 width;
-    u32 height;
-    f64 mouse_pos_x;
-    f64 mouse_pos_y;
-    f64 mouse_delta_x;
-    f64 mouse_delta_y;
-    bool was_closed;
-    bool keys_down[(u32)HgKey::count];
-    bool keys_pressed[(u32)HgKey::count];
-    bool keys_released[(u32)HgKey::count];
-};
+void hg_internal_create_window_swapchain(HgWindow* window, const HgWindowConfig& config);
+void hg_internal_resize_window_swapchain(HgWindow* window);
+void hg_internal_destroy_window_swapchain(HgWindow* window);
 
 struct HgWindow::Internals {
-    HgWindowInput input;
     Window x11_window;
     Atom delete_atom;
 };
-
-bool HgWindow::was_closed() {
-    return internals->input.was_closed;
-}
-
-void HgWindow::get_size(u32* width, u32* height) {
-    *width = internals->input.width;
-    *height = internals->input.height;
-}
-
-void HgWindow::get_mouse_pos(f64* x, f64* y) {
-    *x = internals->input.mouse_pos_x;
-    *y = internals->input.mouse_pos_y;
-}
-
-void HgWindow::get_mouse_delta(f64* x, f64* y) {
-    *x = internals->input.mouse_delta_x;
-    *y = internals->input.mouse_delta_y;
-}
-
-bool HgWindow::is_key_down(HgKey key) {
-    hg_assert((u32)key > (u32)HgKey::none && (u32)key < (u32)HgKey::count);
-    return internals->input.keys_down[(u32)key];
-}
-
-bool HgWindow::was_key_pressed(HgKey key) {
-    hg_assert((u32)key > (u32)HgKey::none && (u32)key < (u32)HgKey::count);
-    return internals->input.keys_pressed[(u32)key];
-}
-
-bool HgWindow::was_key_released(HgKey key) {
-    hg_assert((u32)key > (u32)HgKey::none && (u32)key < (u32)HgKey::count);
-    return internals->input.keys_released[(u32)key];
-}
 
 struct HgX11Funcs {
     Display* (*XOpenDisplay)(_Xconst char*);
@@ -283,35 +239,49 @@ static void set_x11_fullscreen(
         hg_error("X11 could not send fullscreen message\n");
 }
 
-HgWindow HgWindow::create(HgArena& arena, const HgWindowConfig& config) {
-    u32 width = config.windowed ? config.width
-        : (u32)DisplayWidth(x11_display, DefaultScreen(x11_display));
-    u32 height = config.windowed ? config.height
-        : (u32)DisplayHeight(x11_display, DefaultScreen(x11_display));
+HgWindow* HgWindow::create(HgArena& arena, const HgWindowConfig& config) {
+    HgWindow* window = arena.alloc<HgWindow>(1);
+    *window = {};
+    window->internals = arena.alloc<Internals>(1);
+    *window->internals = {};
 
-    HgWindow window;
-    window.internals = arena.alloc<Internals>(1);
-    *window.internals = {};
+    window->width = config.windowed ? config.width : (u32)DisplayWidth(x11_display, DefaultScreen(x11_display));
+    window->height = config.windowed ? config.height : (u32)DisplayHeight(x11_display, DefaultScreen(x11_display));
 
-    window.internals->input.width = width;
-    window.internals->input.height = height;
-
-    window.internals->x11_window = create_x11_window(
-        x11_display, width, height, config.title);
-    window.internals->delete_atom = set_x11_delete_behavior(
-        x11_display, window.internals->x11_window);
+    window->internals->x11_window = create_x11_window(
+        x11_display, window->width, window->height, config.title);
+    window->internals->delete_atom = set_x11_delete_behavior(
+        x11_display, window->internals->x11_window);
 
     if (!config.windowed)
-        set_x11_fullscreen(x11_display, window.internals->x11_window);
+        set_x11_fullscreen(x11_display, window->internals->x11_window);
 
     int flush_result = XFlush(x11_display);
     if (flush_result == 0)
         hg_error("X11 could not flush window\n");
 
+    PFN_vkCreateXlibSurfaceKHR pfn_vkCreateXlibSurfaceKHR
+        = (PFN_vkCreateXlibSurfaceKHR)vkGetInstanceProcAddr(hg_vk_instance, "vkCreateXlibSurfaceKHR");
+    if (pfn_vkCreateXlibSurfaceKHR == nullptr)
+        hg_error("Could not load vkCreateXlibSurfaceKHR\n");
+
+    VkXlibSurfaceCreateInfoKHR info{};
+    info.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
+    info.dpy = x11_display;
+    info.window = window->internals->x11_window;
+
+    VkResult result = pfn_vkCreateXlibSurfaceKHR(hg_vk_instance, &info, nullptr, &window->surface);
+    if (window->surface == nullptr)
+        hg_error("Failed to create Vulkan surface: %s\n", hg_vk_result_string(result));
+
+    hg_internal_create_window_swapchain(window, config);
+
     return window;
 }
 
 void HgWindow::destroy() {
+    hg_internal_destroy_window_swapchain(this);
+    vkDestroySurfaceKHR(hg_vk_instance, surface, nullptr);
     XDestroyWindow(x11_display, internals->x11_window);
     XFlush(x11_display);
 }
@@ -352,40 +322,20 @@ u32 hg_vk_get_platform_extensions(HgArena& arena, HgStringView** ext_buffer) {
     return count;
 }
 
-VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window) {
-    hg_assert(instance != nullptr);
-    hg_assert(window.internals != nullptr);
-
-    PFN_vkCreateXlibSurfaceKHR pfn_vkCreateXlibSurfaceKHR
-        = (PFN_vkCreateXlibSurfaceKHR)vkGetInstanceProcAddr(instance, "vkCreateXlibSurfaceKHR");
-    if (pfn_vkCreateXlibSurfaceKHR == nullptr)
-        hg_error("Could not load vkCreateXlibSurfaceKHR\n");
-
-    VkXlibSurfaceCreateInfoKHR info{};
-    info.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
-    info.dpy = x11_display;
-    info.window = window.internals->x11_window;
-
-    VkSurfaceKHR surface = nullptr;
-    VkResult result = pfn_vkCreateXlibSurfaceKHR(instance, &info, nullptr, &surface);
-    if (surface == nullptr)
-        hg_error("Failed to create Vulkan surface: %s\n", hg_vk_result_string(result));
-
-    return surface;
-}
-
-void hg_process_window_events(const HgWindow* windows, usize window_count) {
+void hg_process_window_events(HgWindow** windows, usize window_count) {
     hg_assert(windows != nullptr);
 
     if (window_count != 1)
         hg_error("Multiple windows unsupported\n"); // : TODO
-    HgWindow window = windows[0];
+    HgWindow* window = windows[0];
 
-    memset(window.internals->input.keys_pressed, 0, sizeof(window.internals->input.keys_pressed));
-    memset(window.internals->input.keys_released, 0, sizeof(window.internals->input.keys_released));
+    memset(window->was_key_pressed, 0, sizeof(window->was_key_pressed));
+    memset(window->was_key_released, 0, sizeof(window->was_key_released));
 
-    f64 old_mouse_pos_x = window.internals->input.mouse_pos_x;
-    f64 old_mouse_pos_y = window.internals->input.mouse_pos_y;
+    u32 old_width = window->width;
+    u32 old_height = window->height;
+    f64 old_mouse_pos_x = window->mouse_pos_x;
+    f64 old_mouse_pos_y = window->mouse_pos_y;
 
     while (XPending(x11_display)) {
         XEvent event;
@@ -395,12 +345,12 @@ void hg_process_window_events(const HgWindow* windows, usize window_count) {
 
         switch (event.type) {
             case ClientMessage:
-                if ((Atom)event.xclient.data.l[0] == window.internals->delete_atom)
-                    window.internals->input.was_closed = true;
+                if ((Atom)event.xclient.data.l[0] == window->internals->delete_atom)
+                    window->was_closed = true;
                 break;
             case ConfigureNotify:
-                window.internals->input.width = (u32)event.xconfigure.width;
-                window.internals->input.height = (u32)event.xconfigure.height;
+                window->width = (u32)event.xconfigure.width;
+                window->height = (u32)event.xconfigure.height;
                 break;
             case KeyPress:
             case KeyRelease: {
@@ -751,11 +701,11 @@ void hg_process_window_events(const HgWindow* windows, usize window_count) {
                         break;
                 }
                 if (event.type == KeyPress) {
-                    window.internals->input.keys_pressed[(u32)key] = true;
-                    window.internals->input.keys_down[(u32)key] = true;
+                    window->was_key_pressed[(u32)key] = true;
+                    window->is_key_down[(u32)key] = true;
                 } else if (event.type == KeyRelease) {
-                    window.internals->input.keys_released[(u32)key] = true;
-                    window.internals->input.keys_down[(u32)key] = false;
+                    window->was_key_released[(u32)key] = true;
+                    window->is_key_down[(u32)key] = false;
                 }
             } break;
             case ButtonPress:
@@ -779,24 +729,27 @@ void hg_process_window_events(const HgWindow* windows, usize window_count) {
                         break;
                 }
                 if (event.type == ButtonPress) {
-                    window.internals->input.keys_pressed[(u32)key] = true;
-                    window.internals->input.keys_down[(u32)key] = true;
+                    window->was_key_pressed[(u32)key] = true;
+                    window->is_key_down[(u32)key] = true;
                 } else if (event.type == ButtonRelease) {
-                    window.internals->input.keys_released[(u32)key] = true;
-                    window.internals->input.keys_down[(u32)key] = false;
+                    window->was_key_released[(u32)key] = true;
+                    window->is_key_down[(u32)key] = false;
                 }
             } break;
             case MotionNotify:
-                window.internals->input.mouse_pos_x = (f64)event.xmotion.x / (f64)window.internals->input.height;
-                window.internals->input.mouse_pos_y = (f64)event.xmotion.y / (f64)window.internals->input.height;
+                window->mouse_pos_x = (f64)event.xmotion.x / (f64)window->height;
+                window->mouse_pos_y = (f64)event.xmotion.y / (f64)window->height;
                 break;
             default:
                 break;
         }
     }
 
-    window.internals->input.mouse_delta_x = window.internals->input.mouse_pos_x - old_mouse_pos_x;
-    window.internals->input.mouse_delta_y = window.internals->input.mouse_pos_y - old_mouse_pos_y;
+    if (window->width != old_width || window->height != old_height)
+        hg_internal_resize_window_swapchain(window);
+
+    window->mouse_delta_x = window->mouse_pos_x - old_mouse_pos_x;
+    window->mouse_delta_y = window->mouse_pos_y - old_mouse_pos_y;
 }
 
 void ImGui_ImplHurdyGurdy_Init(HgWindow window) {

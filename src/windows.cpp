@@ -6,57 +6,9 @@
 #include <windows.h>
 #include <vulkan/vulkan_win32.h>
 
-struct HgWindowInput {
-    u32 width;
-    u32 height;
-    f64 mouse_pos_x;
-    f64 mouse_pos_y;
-    f64 mouse_delta_x;
-    f64 mouse_delta_y;
-    bool was_closed;
-    bool keys_down[(u32)HgKey::count];
-    bool keys_pressed[(u32)HgKey::count];
-    bool keys_released[(u32)HgKey::count];
-};
-
 struct HgWindow::Internals {
-    HgWindowInput input;
     HWND hwnd;
 };
-
-bool HgWindow::was_closed() {
-    return internals->input.was_closed;
-}
-
-void HgWindow::get_size(u32* width, u32* height) {
-    *width = internals->input.width;
-    *height = internals->input.height;
-}
-
-void HgWindow::get_mouse_pos(f64* x, f64* y) {
-    *x = internals->input.mouse_pos_x;
-    *y = internals->input.mouse_pos_y;
-}
-
-void HgWindow::get_mouse_delta(f64* x, f64* y) {
-    *x = internals->input.mouse_delta_x;
-    *y = internals->input.mouse_delta_y;
-}
-
-bool HgWindow::is_key_down(HgKey key) {
-    hg_assert((u32)key > (u32)HgKey::none && (u32)key < (u32)HgKey::count);
-    return internals->input.keys_down[(u32)key];
-}
-
-bool HgWindow::was_key_pressed(HgKey key) {
-    hg_assert((u32)key > (u32)HgKey::none && (u32)key < (u32)HgKey::count);
-    return internals->input.keys_pressed[(u32)key];
-}
-
-bool HgWindow::was_key_released(HgKey key) {
-    hg_assert((u32)key > (u32)HgKey::none && (u32)key < (u32)HgKey::count);
-    return internals->input.keys_released[(u32)key];
-}
 
 HINSTANCE win32_instance = nullptr;
 
@@ -73,7 +25,7 @@ extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam
 static bool imgui_initialized = false;
 
 static LRESULT CALLBACK window_callback(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
-    HgWindow::Internals* window = (HgWindow::Internals*)GetWindowLongPtrA(hwnd, GWLP_USERDATA);
+    HgWindow* window = (HgWindow*)GetWindowLongPtrA(hwnd, GWLP_USERDATA);
 
     if (imgui_initialized)
         ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam);
@@ -83,14 +35,14 @@ static LRESULT CALLBACK window_callback(HWND hwnd, UINT msg, WPARAM wparam, LPAR
             SetWindowLongPtrA(hwnd, GWLP_USERDATA, (LONG_PTR)(((CREATESTRUCTA*)lparam)->lpCreateParams));
             break;
         case WM_CLOSE:
-            window->input.was_closed = true;
+            window->was_closed = true;
             break;
         case WM_SIZE:
-            window->input.width = LOWORD(lparam);
-            window->input.height = HIWORD(lparam);
+            window->width = LOWORD(lparam);
+            window->height = HIWORD(lparam);
             break;
         case WM_KILLFOCUS:
-            memset(window->input.keys_down, 0, sizeof(window->input.keys_down));
+            memset(window->is_key_down, 0, sizeof(window->is_key_down));
                 break;
         case WM_SYSKEYDOWN:
         case WM_SYSKEYUP:
@@ -373,61 +325,61 @@ static LRESULT CALLBACK window_callback(HWND hwnd, UINT msg, WPARAM wparam, LPAR
             }
             if (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN) {
                 if (shift_key != HgKey::none &&
-                   (window->input.keys_down[(u32)HgKey::lshift] ||
-                    window->input.keys_down[(u32)HgKey::rshift])
+                   (window->is_key_down[(u32)HgKey::lshift] ||
+                    window->is_key_down[(u32)HgKey::rshift])
                 ) {
-                    window->input.keys_pressed[(u32)shift_key] = true;
-                    window->input.keys_down[(u32)shift_key] = true;
+                    window->was_key_pressed[(u32)shift_key] = true;
+                    window->is_key_down[(u32)shift_key] = true;
                 } else {
-                    window->input.keys_pressed[(u32)key] = true;
-                    window->input.keys_down[(u32)key] = true;
+                    window->was_key_pressed[(u32)key] = true;
+                    window->is_key_down[(u32)key] = true;
                 }
             } else {
-                window->input.keys_released[(u32)shift_key] = window->input.keys_down[(u32)shift_key];
-                window->input.keys_down[(u32)shift_key] = false;
-                window->input.keys_released[(u32)key] = window->input.keys_down[(u32)key];
-                window->input.keys_down[(u32)key] = false;
+                window->was_key_released[(u32)shift_key] = window->is_key_down[(u32)shift_key];
+                window->is_key_down[(u32)shift_key] = false;
+                window->was_key_released[(u32)key] = window->is_key_down[(u32)key];
+                window->is_key_down[(u32)key] = false;
             }
         } break;
         case WM_LBUTTONDOWN:
-            window->input.keys_pressed[(u32)HgKey::lmouse] = true;
-            window->input.keys_down[(u32)HgKey::lmouse] = true;
+            window->was_key_pressed[(u32)HgKey::lmouse] = true;
+            window->is_key_down[(u32)HgKey::lmouse] = true;
             break;
         case WM_RBUTTONDOWN:
-            window->input.keys_pressed[(u32)HgKey::rmouse] = true;
-            window->input.keys_down[(u32)HgKey::rmouse] = true;
+            window->was_key_pressed[(u32)HgKey::rmouse] = true;
+            window->is_key_down[(u32)HgKey::rmouse] = true;
             break;
         case WM_MBUTTONDOWN:
-            window->input.keys_pressed[(u32)HgKey::mmouse] = true;
-            window->input.keys_down[(u32)HgKey::mmouse] = true;
+            window->was_key_pressed[(u32)HgKey::mmouse] = true;
+            window->is_key_down[(u32)HgKey::mmouse] = true;
             break;
         case WM_LBUTTONUP:
-            window->input.keys_released[(u32)HgKey::lmouse] = true;
-            window->input.keys_down[(u32)HgKey::lmouse] = false;
+            window->was_key_released[(u32)HgKey::lmouse] = true;
+            window->is_key_down[(u32)HgKey::lmouse] = false;
             break;
         case WM_RBUTTONUP:
-            window->input.keys_released[(u32)HgKey::rmouse] = true;
-            window->input.keys_down[(u32)HgKey::rmouse] = false;
+            window->was_key_released[(u32)HgKey::rmouse] = true;
+            window->is_key_down[(u32)HgKey::rmouse] = false;
             break;
         case WM_MBUTTONUP:
-            window->input.keys_released[(u32)HgKey::mmouse] = true;
-            window->input.keys_down[(u32)HgKey::mmouse] = false;
+            window->was_key_released[(u32)HgKey::mmouse] = true;
+            window->is_key_down[(u32)HgKey::mmouse] = false;
             break;
         case WM_MOUSEMOVE:
-            window->input.mouse_pos_x = (f64)LOWORD(lparam) / (f64)window->input.height;
-            window->input.mouse_pos_y = (f64)HIWORD(lparam) / (f64)window->input.height;
+            window->mouse_pos_x = (f64)LOWORD(lparam) / (f64)window->height;
+            window->mouse_pos_y = (f64)HIWORD(lparam) / (f64)window->height;
             break;
     }
 
     return DefWindowProcA(hwnd, msg, wparam, lparam);
 }
 
-HgWindow HgWindow::create(HgArena& arena, const HgWindowConfig& config) {
+HgWindow* HgWindow::create(HgArena& arena, const HgWindowConfig& config) {
     const char* title = config.title != nullptr ? config.title : "Hurdy Gurdy";
 
-    HgWindow window;
-    window.internals = arena.alloc<Internals>(1);
-    *window.internals = {};
+    HgWindow* window = arena.alloc<HgWindow>(1);
+    window->internals = arena.alloc<Internals>(1);
+    *window->internals = {};
 
     WNDCLASSA window_class{};
     window_class.hInstance = win32_instance;
@@ -439,48 +391,52 @@ HgWindow HgWindow::create(HgArena& arena, const HgWindowConfig& config) {
         hg_error("Win32 failed to register window class for window: %s\n", config.title);
 
     if (config.windowed) {
-        window.internals->input.width = config.width;
-        window.internals->input.height = config.height;
-        window.internals->hwnd = CreateWindowExA(
+        window->width = config.width;
+        window->height = config.height;
+        window->internals->hwnd = CreateWindowExA(
             0,
             title,
             title,
             WS_OVERLAPPEDWINDOW,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
-            window.internals->input.width,
-            window.internals->input.height,
+            window->width,
+            window->height,
             nullptr,
             nullptr,
             win32_instance,
-            window.internals
+            window
         );
     } else {
-        window.internals->input.width = GetSystemMetrics(SM_CXSCREEN);
-        window.internals->input.height = GetSystemMetrics(SM_CYSCREEN);
-        window.internals->hwnd = CreateWindowExA(
+        window->width = GetSystemMetrics(SM_CXSCREEN);
+        window->height = GetSystemMetrics(SM_CYSCREEN);
+        window->internals->hwnd = CreateWindowExA(
             0,
             title,
             title,
             WS_POPUP,
             0,
             0,
-            window.internals->input.width,
-            window.internals->input.height,
+            window->width,
+            window->height,
             nullptr,
             nullptr,
             win32_instance,
-            window.internals
+            window->internals
         );
     }
-    if (window.internals->hwnd == nullptr)
+    if (window->internals->hwnd == nullptr)
         hg_error("Win32 window creation failed\n");
 
-    ShowWindow(window.internals->hwnd, SW_SHOW);
+    hg_internal_create_window_swapchain(window, config);
+
+    ShowWindow(window->internals->hwnd, SW_SHOW);
     return window;
 }
 
 void HgWindow::destroy() {
+    hg_internal_destroy_window_swapchain(this);
+    vkDestroySurfaceKHR(hg_vk_instance, surface, nullptr);
     DestroyWindow(internals->hwnd);
 }
 
@@ -522,7 +478,7 @@ u32 hg_vk_get_platform_extensions(HgArena& arena, HgStringView** ext_buffer) {
 
 VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window) {
     hg_assert(instance != nullptr);
-    hg_assert(window.internals != nullptr);
+    hg_assert(window->internals != nullptr);
 
     PFN_vkCreateWin32SurfaceKHR pfn_vkCreateWin32SurfaceKHR
         = (PFN_vkCreateWin32SurfaceKHR)vkGetInstanceProcAddr(instance, "vkCreateWin32SurfaceKHR");
@@ -532,7 +488,7 @@ VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window) {
     VkWin32SurfaceCreateInfoKHR info{};
     info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
     info.hinstance = win32_instance;
-    info.hwnd = window.internals->hwnd;
+    info.hwnd = window->internals->hwnd;
 
     VkSurfaceKHR surface = nullptr;
     VkResult result = pfn_vkCreateWin32SurfaceKHR(instance, &info, nullptr, &surface);
@@ -543,17 +499,19 @@ VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window) {
     return surface;
 }
 
-void hg_process_window_events(const HgWindow* windows, usize window_count) {
+void hg_process_window_events(HgWindow** windows, usize window_count) {
     hg_assert(windows != nullptr);
 
     for (usize i = 0; i < window_count; ++i) {
         HgWindow::Internals* window = windows[i].internals;
 
-        memset(window->input.keys_pressed, 0, sizeof(window->input.keys_pressed));
-        memset(window->input.keys_released, 0, sizeof(window->input.keys_released));
+        memset(window->was_key_pressed, 0, sizeof(window->was_key_pressed));
+        memset(window->was_key_released, 0, sizeof(window->was_key_released));
 
-        f64 old_mouse_pos_x = window->input.mouse_pos_x;
-        f64 old_mouse_pos_y = window->input.mouse_pos_y;
+        u32 old_width = window->width;
+        u32 old_height = window->height;
+        f64 old_mouse_pos_x = window->mouse_pos_x;
+        f64 old_mouse_pos_y = window->mouse_pos_y;
 
         MSG msg;
         while (PeekMessageA(&msg, window->hwnd, 0, 0, PM_REMOVE) != 0) {
@@ -561,19 +519,22 @@ void hg_process_window_events(const HgWindow* windows, usize window_count) {
             DispatchMessageA(&msg);
         }
 
-        window->input.mouse_delta_x = window->input.mouse_pos_x - old_mouse_pos_x;
-        window->input.mouse_delta_y = window->input.mouse_pos_y - old_mouse_pos_y;
+        if (window->width != old_width || window->height != old_height)
+            hg_internal_resize_window_swapchain(window);
 
-        if (window->input.keys_down[(u32)HgKey::lshift] && window->input.keys_down[(u32)HgKey::rshift]) {
+        window->mouse_delta_x = window->mouse_pos_x - old_mouse_pos_x;
+        window->mouse_delta_y = window->mouse_pos_y - old_mouse_pos_y;
+
+        if (window->is_key_down[(u32)HgKey::lshift] && window->is_key_down[(u32)HgKey::rshift]) {
             bool lshift = (GetAsyncKeyState(VK_LSHIFT) & 0x8000) != 0;
             bool rshift = (GetAsyncKeyState(VK_RSHIFT) & 0x8000) != 0;
             if (!lshift) {
-                window->input.keys_released[(u32)HgKey::lshift] = true;
-                window->input.keys_down[(u32)HgKey::lshift] = false;
+                window->was_key_released[(u32)HgKey::lshift] = true;
+                window->is_key_down[(u32)HgKey::lshift] = false;
             }
             if (!rshift) {
-                window->input.keys_released[(u32)HgKey::rshift] = true;
-                window->input.keys_down[(u32)HgKey::rshift] = false;
+                window->was_key_released[(u32)HgKey::rshift] = true;
+                window->is_key_down[(u32)HgKey::rshift] = false;
             }
         }
     }
@@ -605,7 +566,7 @@ static int ImGui_ImplWin32_CreateVkSurface(
 }
 
 void ImGui_ImplHurdyGurdy_Init(HgWindow window) {
-    ImGui_ImplWin32_Init(window.internals->hwnd);
+    ImGui_ImplWin32_Init(window->internals->hwnd);
     ImGui::GetPlatformIO().Platform_CreateVkSurface = ImGui_ImplWin32_CreateVkSurface;
     imgui_initialized = true;
 }

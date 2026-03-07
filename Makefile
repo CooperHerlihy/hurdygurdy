@@ -26,6 +26,7 @@ SRC := \
 	resources.cpp \
 	pipeline2d.cpp \
 	glfw.cpp \
+	window.cpp \
 	vulkan.cpp
 
 SHADERS := \

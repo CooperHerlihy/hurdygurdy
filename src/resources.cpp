@@ -341,7 +341,7 @@ void hg_dealloc_gpu_resource(HgResource id) {
     }
 }
 
-void hg_load_gpu_buffer(HgResource id, VkCommandPool cmd_pool) {
+void hg_load_gpu_buffer(HgResource id) {
     if (!gpu_map.has(id))
         hg_alloc_gpu_buffer(id);
 
@@ -352,11 +352,10 @@ void hg_load_gpu_buffer(HgResource id, VkCommandPool cmd_pool) {
         return;
 
     // load gpu buffer : TODO
-    (void)cmd_pool;
     hg_error("load gpu buffer not implements : TODO\n");
 }
 
-void hg_load_gpu_texture(HgResource id, VkCommandPool cmd_pool, VkFilter filter) {
+void hg_load_gpu_texture(HgResource id, VkFilter filter) {
     if (!gpu_map.has(id))
         hg_alloc_gpu_texture(id);
 
@@ -407,7 +406,7 @@ void hg_load_gpu_texture(HgResource id, VkCommandPool cmd_pool, VkFilter filter)
     staging_config.format = tex.format;
     staging_config.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    hg_vk_image_staging_write(hg_vk_queue, cmd_pool, staging_config);
+    hg_vk_image_staging_write(staging_config);
 
     VkImageViewCreateInfo view_info{};
     view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;

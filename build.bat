@@ -34,6 +34,7 @@ set SRC= ^
     resources.cpp ^
     pipeline2d.cpp ^
     windows.cpp ^
+    window.cpp ^
     vulkan.cpp
 
 set SHADERS= ^

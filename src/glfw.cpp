@@ -6,57 +6,13 @@
 
 #ifdef HG_PLATFORM_LINUX
 
-struct HgWindowInput {
-    u32 width;
-    u32 height;
-    f64 mouse_pos_x;
-    f64 mouse_pos_y;
-    f64 mouse_delta_x;
-    f64 mouse_delta_y;
-    bool was_closed;
-    bool keys_down[(u32)HgKey::count];
-    bool keys_pressed[(u32)HgKey::count];
-    bool keys_released[(u32)HgKey::count];
-};
+void hg_internal_create_window_swapchain(HgWindow* window, const HgWindowConfig& config);
+void hg_internal_resize_window_swapchain(HgWindow* window);
+void hg_internal_destroy_window_swapchain(HgWindow* window);
 
 struct HgWindow::Internals {
-    HgWindowInput input;
     GLFWwindow* glfw_window;
 };
-
-bool HgWindow::was_closed() {
-    return internals->input.was_closed;
-}
-
-void HgWindow::get_size(u32* width, u32* height) {
-    *width = internals->input.width;
-    *height = internals->input.height;
-}
-
-void HgWindow::get_mouse_pos(f64* x, f64* y) {
-    *x = internals->input.mouse_pos_x;
-    *y = internals->input.mouse_pos_y;
-}
-
-void HgWindow::get_mouse_delta(f64* x, f64* y) {
-    *x = internals->input.mouse_delta_x;
-    *y = internals->input.mouse_delta_y;
-}
-
-bool HgWindow::is_key_down(HgKey key) {
-    hg_assert((u32)key > (u32)HgKey::none && (u32)key < (u32)HgKey::count);
-    return internals->input.keys_down[(u32)key];
-}
-
-bool HgWindow::was_key_pressed(HgKey key) {
-    hg_assert((u32)key > (u32)HgKey::none && (u32)key < (u32)HgKey::count);
-    return internals->input.keys_pressed[(u32)key];
-}
-
-bool HgWindow::was_key_released(HgKey key) {
-    hg_assert((u32)key > (u32)HgKey::none && (u32)key < (u32)HgKey::count);
-    return internals->input.keys_released[(u32)key];
-}
 
 void hg_platform_init() {
     glfwInit();
@@ -67,9 +23,9 @@ void hg_platform_deinit() {
 }
 
 void window_size_callback(GLFWwindow* glfw_window, int width, int height) {
-    HgWindow window = {(HgWindow::Internals*)glfwGetWindowUserPointer(glfw_window)};
-    window.internals->input.width = (u32)width;
-    window.internals->input.height = (u32)height;
+    HgWindow* window = (HgWindow*)glfwGetWindowUserPointer(glfw_window);
+    window->width = (u32)width;
+    window->height = (u32)height;
 }
 
 static void key_callback(
@@ -79,12 +35,12 @@ static void key_callback(
     int action,
     [[maybe_unused]] int mods
 ) {
-    HgWindow window = {(HgWindow::Internals*)glfwGetWindowUserPointer(glfw_window)};
+    HgWindow* window = (HgWindow*)glfwGetWindowUserPointer(glfw_window);
 
     bool is_shift_down =
-        window.internals->input.keys_down[(u32)HgKey::lshift] ||
-        window.internals->input.keys_down[(u32)HgKey::rshift];
-    
+        window->is_key_down[(u32)HgKey::lshift] ||
+        window->is_key_down[(u32)HgKey::rshift];
+
     HgKey key = HgKey::none;
     switch (glfw_key) {
         case GLFW_KEY_0:
@@ -339,22 +295,22 @@ static void key_callback(
     }
 
     if (action == GLFW_PRESS) {
-        window.internals->input.keys_down[(u32)key] = true;
-        window.internals->input.keys_pressed[(u32)key] = true;
+        window->is_key_down[(u32)key] = true;
+        window->was_key_pressed[(u32)key] = true;
     } else if (action == GLFW_RELEASE) {
-        window.internals->input.keys_down[(u32)key] = false;
-        window.internals->input.keys_released[(u32)key] = true;
+        window->is_key_down[(u32)key] = false;
+        window->was_key_released[(u32)key] = true;
     }
 }
 
 static void mouse_pos_callback(GLFWwindow* glfw_window, double x, double y) {
-    HgWindow window = {(HgWindow::Internals*)glfwGetWindowUserPointer(glfw_window)};
-    window.internals->input.mouse_pos_x = x / window.internals->input.height;
-    window.internals->input.mouse_pos_y = y / window.internals->input.height;
+    HgWindow* window = (HgWindow*)glfwGetWindowUserPointer(glfw_window);
+    window->mouse_pos_x = x / window->height;
+    window->mouse_pos_y = y / window->height;
 }
 
 void mouse_button_callback(GLFWwindow* glfw_window, int button, int action, [[maybe_unused]] int mods) {
-    HgWindow window = {(HgWindow::Internals*)glfwGetWindowUserPointer(glfw_window)};
+    HgWindow* window = (HgWindow*)glfwGetWindowUserPointer(glfw_window);
 
     HgKey key = HgKey::none;
     switch (button) {
@@ -375,24 +331,25 @@ void mouse_button_callback(GLFWwindow* glfw_window, int button, int action, [[ma
             break;
     }
     if (action == GLFW_PRESS) {
-        window.internals->input.keys_down[(u32)key] = true;
-        window.internals->input.keys_pressed[(u32)key] = true;
+        window->is_key_down[(u32)key] = true;
+        window->was_key_pressed[(u32)key] = true;
     } else if (action == GLFW_RELEASE) {
-        window.internals->input.keys_down[(u32)key] = false;
-        window.internals->input.keys_released[(u32)key] = true;
+        window->is_key_down[(u32)key] = false;
+        window->was_key_released[(u32)key] = true;
     }
 }
 
-HgWindow HgWindow::create(HgArena& arena, const HgWindowConfig& config) {
-    HgWindow window;
-    window.internals = arena.alloc<Internals>(1);
-    *window.internals = {};
+HgWindow* HgWindow::create(HgArena& arena, const HgWindowConfig& config) {
+    HgWindow* window = arena.alloc<HgWindow>(1);
+    *window = {};
+    window->internals = arena.alloc<Internals>(1);
+    *window->internals = {};
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     if (config.windowed) {
-        window.internals->input.width = config.width;
-        window.internals->input.height = config.height;
-        window.internals->glfw_window = glfwCreateWindow(
+        window->width = config.width;
+        window->height = config.height;
+        window->internals->glfw_window = glfwCreateWindow(
             (int)config.width,
             (int)config.height,
             config.title,
@@ -401,9 +358,9 @@ HgWindow HgWindow::create(HgArena& arena, const HgWindowConfig& config) {
     } else {
         GLFWmonitor* monitor = glfwGetPrimaryMonitor();
         const GLFWvidmode* mode = glfwGetVideoMode(monitor);
-        window.internals->input.width = (u32)mode->width;
-        window.internals->input.height = (u32)mode->height;
-        window.internals->glfw_window = glfwCreateWindow(
+        window->width = (u32)mode->width;
+        window->height = (u32)mode->height;
+        window->internals->glfw_window = glfwCreateWindow(
             mode->width,
             mode->height,
             config.title,
@@ -411,16 +368,28 @@ HgWindow HgWindow::create(HgArena& arena, const HgWindowConfig& config) {
             nullptr);
     }
 
-    glfwSetWindowUserPointer(window.internals->glfw_window, window.internals);
-    glfwSetWindowSizeCallback(window.internals->glfw_window, window_size_callback);
-    glfwSetKeyCallback(window.internals->glfw_window, key_callback);
-    glfwSetCursorPosCallback(window.internals->glfw_window, mouse_pos_callback);
-    glfwSetMouseButtonCallback(window.internals->glfw_window, mouse_button_callback);
+    glfwSetWindowUserPointer(window->internals->glfw_window, window);
+    glfwSetWindowSizeCallback(window->internals->glfw_window, window_size_callback);
+    glfwSetKeyCallback(window->internals->glfw_window, key_callback);
+    glfwSetCursorPosCallback(window->internals->glfw_window, mouse_pos_callback);
+    glfwSetMouseButtonCallback(window->internals->glfw_window, mouse_button_callback);
+
+    VkResult result = glfwCreateWindowSurface(
+        hg_vk_instance,
+        window->internals->glfw_window,
+        nullptr,
+        &window->surface);
+    if (window->surface == nullptr)
+        hg_error("Failed to create Vulkan surface: %s\n", hg_vk_result_string(result));
+
+    hg_internal_create_window_swapchain(window, config);
 
     return window;
 }
 
 void HgWindow::destroy() {
+    hg_internal_destroy_window_swapchain(this);
+    vkDestroySurfaceKHR(hg_vk_instance, surface, nullptr);
     glfwDestroyWindow(internals->glfw_window);
 }
 
@@ -466,51 +435,46 @@ u32 hg_vk_get_platform_extensions(HgArena& arena, HgStringView** ext_buffer) {
     return ext_count;
 }
 
-VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window) {
-    hg_assert(instance != nullptr);
-    hg_assert(window.internals != nullptr);
-
-    VkSurfaceKHR surface = nullptr;
-    VkResult result = glfwCreateWindowSurface(instance, window.internals->glfw_window, nullptr, &surface);
-    if (surface == nullptr)
-        hg_error("Failed to create Vulkan surface: %s\n", hg_vk_result_string(result));
-
-    return surface;
-}
-
-void hg_process_window_events(const HgWindow* windows, usize window_count) {
+void hg_process_window_events(HgWindow** windows, usize window_count) {
     HgArena& scratch = hg_get_scratch();
     HgArenaScope scratch_scope{scratch};
 
+    u32* old_widths = scratch.alloc<u32>(window_count);
+    u32* old_heights = scratch.alloc<u32>(window_count);
     f64* old_mouse_xs = scratch.alloc<f64>(window_count);
     f64* old_mouse_ys = scratch.alloc<f64>(window_count);
 
     for (usize i = 0; i < window_count; ++i) {
-        HgWindow window = windows[i];
+        HgWindow* window = windows[i];
 
-        old_mouse_xs[i] = window.internals->input.mouse_pos_x;
-        old_mouse_ys[i] = window.internals->input.mouse_pos_y;
+        old_widths[i] = window->width;
+        old_heights[i] = window->height;
+        old_mouse_xs[i] = window->mouse_pos_x;
+        old_mouse_ys[i] = window->mouse_pos_y;
 
-        memset(window.internals->input.keys_pressed, 0, sizeof(window.internals->input.keys_pressed));
-        memset(window.internals->input.keys_released, 0, sizeof(window.internals->input.keys_released));
+        memset(window->was_key_pressed, 0, sizeof(window->was_key_pressed));
+        memset(window->was_key_released, 0, sizeof(window->was_key_released));
     }
 
     glfwPollEvents();
 
     for (usize i = 0; i < window_count; ++i) {
-        HgWindow window = windows[i];
+        HgWindow* window = windows[i];
 
-        window.internals->input.was_closed = glfwWindowShouldClose(window.internals->glfw_window);
+        if (window->width != old_widths[i] || window->height != old_heights[i])
+            hg_internal_resize_window_swapchain(window);
 
-        window.internals->input.mouse_delta_x = window.internals->input.mouse_pos_x - old_mouse_xs[i];
-        window.internals->input.mouse_delta_y = window.internals->input.mouse_pos_y - old_mouse_ys[i];
+        window->was_closed = glfwWindowShouldClose(window->internals->glfw_window);
+
+        window->mouse_delta_x = window->mouse_pos_x - old_mouse_xs[i];
+        window->mouse_delta_y = window->mouse_pos_y - old_mouse_ys[i];
     }
 }
 
 #include "imgui_impl_glfw.h"
 
-void ImGui_ImplHurdyGurdy_Init(HgWindow window) {
-    ImGui_ImplGlfw_InitForVulkan(window.internals->glfw_window, true);
+void ImGui_ImplHurdyGurdy_Init(HgWindow* window) {
+    ImGui_ImplGlfw_InitForVulkan(window->internals->glfw_window, true);
 }
 
 void ImGui_ImplHurdyGurdy_Shutdown() {

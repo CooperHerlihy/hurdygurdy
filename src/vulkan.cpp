@@ -2439,235 +2439,6 @@ VkPipeline hg_vk_create_compute_pipeline(const HgVkPipelineConfig& config) {
     return pipeline;
 }
 
-static VkFormat vk_find_swapchain_format(VkSurfaceKHR surface) {
-    hg_assert(hg_vk_physical_device != nullptr);
-    hg_assert(surface != nullptr);
-
-    HgArena& scratch = hg_get_scratch();
-    HgArenaScope scratch_scope{scratch};
-
-    u32 format_count = 0;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(hg_vk_physical_device, surface, &format_count, nullptr);
-    VkSurfaceFormatKHR* formats = scratch.alloc<VkSurfaceFormatKHR>(format_count);
-    vkGetPhysicalDeviceSurfaceFormatsKHR(hg_vk_physical_device, surface, &format_count, formats);
-
-    for (usize i = 0; i < format_count; ++i) {
-        if (formats[i].format == VK_FORMAT_R8G8B8A8_SRGB)
-            return VK_FORMAT_R8G8B8A8_SRGB;
-        if (formats[i].format == VK_FORMAT_B8G8R8A8_SRGB)
-            return VK_FORMAT_B8G8R8A8_SRGB;
-    }
-    hg_error("No supported swapchain formats\n");
-}
-
-static VkPresentModeKHR vk_find_swapchain_present_mode(
-    VkSurfaceKHR surface,
-    VkPresentModeKHR desired_mode
-) {
-    hg_assert(hg_vk_physical_device != nullptr);
-    hg_assert(surface != nullptr);
-
-    if (desired_mode == VK_PRESENT_MODE_FIFO_KHR)
-        return desired_mode;
-
-    u32 mode_count = 0;
-    vkGetPhysicalDeviceSurfacePresentModesKHR(hg_vk_physical_device, surface, &mode_count, nullptr);
-    VkPresentModeKHR* present_modes = (VkPresentModeKHR*)alloca(mode_count * sizeof(*present_modes));
-    vkGetPhysicalDeviceSurfacePresentModesKHR(hg_vk_physical_device, surface, &mode_count, present_modes);
-
-    for (usize i = 0; i < mode_count; ++i) {
-        if (present_modes[i] == desired_mode)
-            return desired_mode;
-    }
-    return VK_PRESENT_MODE_FIFO_KHR;
-}
-
-HgSwapchainData hg_vk_create_swapchain(
-    VkSwapchainKHR old_swapchain,
-    VkSurfaceKHR surface,
-    u32 width,
-    u32 height,
-    VkImageUsageFlags image_usage,
-    VkPresentModeKHR desired_mode
-) {
-    hg_assert(hg_vk_device != nullptr);
-    hg_assert(hg_vk_physical_device != nullptr);
-    hg_assert(surface != nullptr);
-    hg_assert(image_usage != 0);
-
-    HgSwapchainData swapchain{};
-
-    VkSurfaceCapabilitiesKHR surface_capabilities;
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(hg_vk_physical_device, surface, &surface_capabilities);
-
-    if (surface_capabilities.currentExtent.width != (u32)-1)
-        width = surface_capabilities.currentExtent.width;
-    if (surface_capabilities.currentExtent.height != (u32)-1)
-        height = surface_capabilities.currentExtent.height;
-
-    if (width < surface_capabilities.minImageExtent.width || height < surface_capabilities.minImageExtent.height ||
-        width > surface_capabilities.maxImageExtent.width || height > surface_capabilities.maxImageExtent.height
-    ) {
-        hg_warn("Could not create swapchain of the surface's size: %d, %d | min: %d, %d - max: %d, %d\n",
-            width, height,
-            surface_capabilities.minImageExtent.width, surface_capabilities.minImageExtent.height,
-            surface_capabilities.maxImageExtent.width, surface_capabilities.maxImageExtent.height);
-        return swapchain;
-    }
-
-    swapchain.width = width;
-    swapchain.height = height;
-    swapchain.format = vk_find_swapchain_format(surface);
-
-    VkPresentModeKHR present_mode = vk_find_swapchain_present_mode(surface, desired_mode);
-
-    VkSwapchainCreateInfoKHR swapchain_info{};
-    swapchain_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    swapchain_info.surface = surface;
-    swapchain_info.minImageCount = present_mode == VK_PRESENT_MODE_FIFO_KHR
-        ? std::max(surface_capabilities.minImageCount, (u32)2)
-        : std::min(surface_capabilities.minImageCount, surface_capabilities.maxImageCount - 1) + 1;
-    swapchain_info.imageFormat = swapchain.format;
-    swapchain_info.imageExtent = {swapchain.width, swapchain.height};
-    swapchain_info.imageArrayLayers = 1;
-    swapchain_info.imageUsage = image_usage;
-    swapchain_info.preTransform = surface_capabilities.currentTransform;
-    swapchain_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    swapchain_info.presentMode = present_mode;
-    swapchain_info.clipped = VK_TRUE;
-    swapchain_info.oldSwapchain = old_swapchain;
-
-    VkResult result = vkCreateSwapchainKHR(hg_vk_device, &swapchain_info, nullptr, &swapchain.handle);
-    if (swapchain.handle == nullptr)
-        hg_error("Failed to create swapchain: %s\n", hg_vk_result_string(result));
-
-    return swapchain;
-}
-
-HgSwapchainCommands HgSwapchainCommands::create(HgArena& arena, VkSwapchainKHR swapchain, VkCommandPool cmd_pool) {
-    HgSwapchainCommands sync{};
-    sync.recreate(arena, swapchain, cmd_pool);
-    return sync;
-}
-
-void HgSwapchainCommands::recreate(HgArena& arena, VkSwapchainKHR swapchain_val, VkCommandPool cmd_pool_val) {
-    hg_assert(hg_vk_device != nullptr);
-    hg_assert(cmd_pool_val != nullptr);
-    hg_assert(swapchain_val != nullptr);
-
-    cmd_pool = cmd_pool_val;
-    swapchain = swapchain_val;
-
-    vkGetSwapchainImagesKHR(hg_vk_device, swapchain, &frame_count, nullptr);
-
-    cmds = arena.alloc<VkCommandBuffer>(frame_count);
-
-    VkCommandBufferAllocateInfo cmd_alloc_info{};
-    cmd_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    cmd_alloc_info.pNext = nullptr;
-    cmd_alloc_info.commandPool = cmd_pool;
-    cmd_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    cmd_alloc_info.commandBufferCount = frame_count;
-
-    vkAllocateCommandBuffers(hg_vk_device, &cmd_alloc_info, cmds);
-
-    frame_finished = arena.alloc<VkFence>(frame_count);
-    for (usize i = 0; i < frame_count; ++i) {
-        VkFenceCreateInfo info{};
-        info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-        info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-        vkCreateFence(hg_vk_device, &info, nullptr, &frame_finished[i]);
-    }
-
-    image_available = arena.alloc<VkSemaphore>(frame_count);
-    for (usize i = 0; i < frame_count; ++i) {
-        VkSemaphoreCreateInfo info{};
-        info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-        vkCreateSemaphore(hg_vk_device, &info, nullptr, &image_available[i]);
-    }
-
-    ready_to_present = arena.alloc<VkSemaphore>(frame_count);
-    for (usize i = 0; i < frame_count; ++i) {
-        VkSemaphoreCreateInfo info{};
-        info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-        vkCreateSemaphore(hg_vk_device, &info, nullptr, &ready_to_present[i]);
-    }
-}
-
-void HgSwapchainCommands::destroy() {
-    hg_assert(hg_vk_device != nullptr);
-
-    vkFreeCommandBuffers(hg_vk_device, cmd_pool, frame_count, cmds);
-    for (usize i = 0; i < frame_count; ++i) {
-        vkDestroyFence(hg_vk_device, frame_finished[i], nullptr);
-    }
-    for (usize i = 0; i < frame_count; ++i) {
-        vkDestroySemaphore(hg_vk_device, image_available[i], nullptr);
-    }
-    for (usize i = 0; i < frame_count; ++i) {
-        vkDestroySemaphore(hg_vk_device, ready_to_present[i], nullptr);
-    }
-
-    swapchain = nullptr;
-    cmd_pool = nullptr;
-}
-
-VkCommandBuffer HgSwapchainCommands::acquire_and_record() {
-    hg_assert(hg_vk_device != nullptr);
-    if (swapchain == nullptr)
-        return nullptr;
-
-    current_frame = (current_frame + 1) % frame_count;
-
-    vkWaitForFences(hg_vk_device, 1, &frame_finished[current_frame], VK_TRUE, UINT64_MAX);
-    vkResetFences(hg_vk_device, 1, &frame_finished[current_frame]);
-
-    VkResult result = vkAcquireNextImageKHR(
-        hg_vk_device, swapchain, UINT64_MAX, image_available[current_frame], nullptr, &current_image);
-    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
-        return nullptr;
-
-    VkCommandBuffer cmd = cmds[current_frame];
-    vkResetCommandBuffer(cmd, 0);
-
-    VkCommandBufferBeginInfo begin_info{};
-    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-    vkBeginCommandBuffer(cmd, &begin_info);
-    return cmd;
-}
-
-void HgSwapchainCommands::end_and_present(VkQueue queue) {
-    hg_assert(queue != nullptr);
-
-    VkCommandBuffer cmd = cmds[current_frame];
-    vkEndCommandBuffer(cmd);
-
-    VkSubmitInfo submit{};
-    submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit.waitSemaphoreCount = 1;
-    submit.pWaitSemaphores = &image_available[current_frame];
-    VkPipelineStageFlags stage_flags{VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-    submit.pWaitDstStageMask = &stage_flags;
-    submit.commandBufferCount = 1;
-    submit.pCommandBuffers = &cmd;
-    submit.signalSemaphoreCount = 1;
-    submit.pSignalSemaphores = &ready_to_present[current_frame];
-
-    vkQueueSubmit(queue, 1, &submit, frame_finished[current_frame]);
-
-    VkPresentInfoKHR present_info{};
-    present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-    present_info.waitSemaphoreCount = 1;
-    present_info.pWaitSemaphores = &ready_to_present[current_frame];
-    present_info.swapchainCount = 1;
-    present_info.pSwapchains = &swapchain;
-    present_info.pImageIndices = &current_image;
-
-    vkQueuePresentKHR(queue, &present_info);
-}
-
 u32 hg_vk_find_memory_type_index(
     u32 bitmask,
     VkMemoryPropertyFlags desired_flags,
@@ -2706,8 +2477,6 @@ u32 hg_vk_find_memory_type_index(
 }
 
 void hg_vk_buffer_staging_write(
-    VkQueue transfer_queue,
-    VkCommandPool cmd_pool,
     VkBuffer dst,
     usize offset,
     const void* src,
@@ -2715,8 +2484,6 @@ void hg_vk_buffer_staging_write(
 ) {
     hg_assert(hg_vk_device != nullptr);
     hg_assert(hg_vk_vma != nullptr);
-    hg_assert(cmd_pool != nullptr);
-    hg_assert(transfer_queue != nullptr);
     hg_assert(dst != nullptr);
     hg_assert(src != nullptr);
 
@@ -2737,13 +2504,13 @@ void hg_vk_buffer_staging_write(
 
     VkCommandBufferAllocateInfo cmd_info{};
     cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    cmd_info.commandPool = cmd_pool;
+    cmd_info.commandPool = hg_vk_cmd_pool;
     cmd_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     cmd_info.commandBufferCount = 1;
 
     VkCommandBuffer cmd = nullptr;
     vkAllocateCommandBuffers(hg_vk_device, &cmd_info, &cmd);
-    hg_defer(vkFreeCommandBuffers(hg_vk_device, cmd_pool, 1, &cmd));
+    hg_defer(vkFreeCommandBuffers(hg_vk_device, hg_vk_cmd_pool, 1, &cmd));
 
     VkCommandBufferBeginInfo begin_info{};
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -2769,13 +2536,11 @@ void hg_vk_buffer_staging_write(
     submit.commandBufferCount = 1;
     submit.pCommandBuffers = &cmd;
 
-    vkQueueSubmit(transfer_queue, 1, &submit, fence);
+    vkQueueSubmit(hg_vk_queue, 1, &submit, fence);
     vkWaitForFences(hg_vk_device, 1, &fence, VK_TRUE, UINT64_MAX);
 }
 
 void hg_vk_buffer_staging_read(
-    VkQueue transfer_queue,
-    VkCommandPool cmd_pool,
     void* dst,
     VkBuffer src,
     usize offset,
@@ -2783,8 +2548,6 @@ void hg_vk_buffer_staging_read(
 ) {
     hg_assert(hg_vk_device != nullptr);
     hg_assert(hg_vk_vma != nullptr);
-    hg_assert(cmd_pool != nullptr);
-    hg_assert(transfer_queue != nullptr);
     hg_assert(dst != nullptr);
     hg_assert(src != nullptr);
 
@@ -2804,13 +2567,13 @@ void hg_vk_buffer_staging_read(
 
     VkCommandBufferAllocateInfo cmd_info{};
     cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    cmd_info.commandPool = cmd_pool;
+    cmd_info.commandPool = hg_vk_cmd_pool;
     cmd_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     cmd_info.commandBufferCount = 1;
 
     VkCommandBuffer cmd = nullptr;
     vkAllocateCommandBuffers(hg_vk_device, &cmd_info, &cmd);
-    hg_defer(vkFreeCommandBuffers(hg_vk_device, cmd_pool, 1, &cmd));
+    hg_defer(vkFreeCommandBuffers(hg_vk_device, hg_vk_cmd_pool, 1, &cmd));
 
     VkCommandBufferBeginInfo begin_info{};
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -2836,21 +2599,17 @@ void hg_vk_buffer_staging_read(
     submit.commandBufferCount = 1;
     submit.pCommandBuffers = &cmd;
 
-    vkQueueSubmit(transfer_queue, 1, &submit, fence);
+    vkQueueSubmit(hg_vk_queue, 1, &submit, fence);
     vkWaitForFences(hg_vk_device, 1, &fence, VK_TRUE, UINT64_MAX);
 
     vmaCopyAllocationToMemory(hg_vk_vma, stage_alloc, offset, dst, size);
 }
 
 void hg_vk_image_staging_write(
-    VkQueue transfer_queue,
-    VkCommandPool cmd_pool,
     const HgVkImageStagingWriteConfig& config
 ) {
     hg_assert(hg_vk_device != nullptr);
     hg_assert(hg_vk_vma != nullptr);
-    hg_assert(cmd_pool != nullptr);
-    hg_assert(transfer_queue != nullptr);
     hg_assert(config.dst_image != nullptr);
     hg_assert(config.src_data != nullptr);
     hg_assert(config.width > 0);
@@ -2880,13 +2639,13 @@ void hg_vk_image_staging_write(
 
     VkCommandBufferAllocateInfo cmd_info{};
     cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    cmd_info.commandPool = cmd_pool;
+    cmd_info.commandPool = hg_vk_cmd_pool;
     cmd_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     cmd_info.commandBufferCount = 1;
 
     VkCommandBuffer cmd = nullptr;
     vkAllocateCommandBuffers(hg_vk_device, &cmd_info, &cmd);
-    hg_defer(vkFreeCommandBuffers(hg_vk_device, cmd_pool, 1, &cmd));
+    hg_defer(vkFreeCommandBuffers(hg_vk_device, hg_vk_cmd_pool, 1, &cmd));
 
     VkCommandBufferBeginInfo begin_info{};
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -2952,19 +2711,15 @@ void hg_vk_image_staging_write(
     submit.commandBufferCount = 1;
     submit.pCommandBuffers = &cmd;
 
-    vkQueueSubmit(transfer_queue, 1, &submit, fence);
+    vkQueueSubmit(hg_vk_queue, 1, &submit, fence);
     vkWaitForFences(hg_vk_device, 1, &fence, VK_TRUE, UINT64_MAX);
 }
 
 void hg_vk_image_staging_write_cubemap(
-    VkQueue transfer_queue,
-    VkCommandPool cmd_pool,
     const HgVkImageStagingWriteConfig& config
 ) {
     hg_assert(hg_vk_device != nullptr);
     hg_assert(hg_vk_vma != nullptr);
-    hg_assert(cmd_pool != nullptr);
-    hg_assert(transfer_queue != nullptr);
     hg_assert(config.dst_image != nullptr);
     hg_assert(config.subresource.baseArrayLayer == 0);
     hg_assert(config.subresource.layerCount == 6);
@@ -3014,13 +2769,13 @@ void hg_vk_image_staging_write_cubemap(
 
     VkCommandBufferAllocateInfo cmd_info{};
     cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    cmd_info.commandPool = cmd_pool;
+    cmd_info.commandPool = hg_vk_cmd_pool;
     cmd_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     cmd_info.commandBufferCount = 1;
 
     VkCommandBuffer cmd = nullptr;
     vkAllocateCommandBuffers(hg_vk_device, &cmd_info, &cmd);
-    hg_defer(vkFreeCommandBuffers(hg_vk_device, cmd_pool, 1, &cmd));
+    hg_defer(vkFreeCommandBuffers(hg_vk_device, hg_vk_cmd_pool, 1, &cmd));
 
     VkCommandBufferBeginInfo begin_info{};
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -3167,19 +2922,15 @@ void hg_vk_image_staging_write_cubemap(
     submit.commandBufferCount = 1;
     submit.pCommandBuffers = &cmd;
 
-    vkQueueSubmit(transfer_queue, 1, &submit, fence);
+    vkQueueSubmit(hg_vk_queue, 1, &submit, fence);
     vkWaitForFences(hg_vk_device, 1, &fence, VK_TRUE, UINT64_MAX);
 }
 
 void hg_vk_image_staging_read(
-    VkQueue transfer_queue,
-    VkCommandPool cmd_pool,
     const HgVkImageStagingReadConfig& config
 ) {
     hg_assert(hg_vk_device != nullptr);
     hg_assert(hg_vk_vma != nullptr);
-    hg_assert(cmd_pool != nullptr);
-    hg_assert(transfer_queue != nullptr);
     hg_assert(config.src_image != nullptr);
     hg_assert(config.layout != VK_IMAGE_LAYOUT_UNDEFINED);
     hg_assert(config.dst != nullptr);
@@ -3209,13 +2960,13 @@ void hg_vk_image_staging_read(
 
     VkCommandBufferAllocateInfo cmd_info{};
     cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    cmd_info.commandPool = cmd_pool;
+    cmd_info.commandPool = hg_vk_cmd_pool;
     cmd_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     cmd_info.commandBufferCount = 1;
 
     VkCommandBuffer cmd = nullptr;
     vkAllocateCommandBuffers(hg_vk_device, &cmd_info, &cmd);
-    hg_defer(vkFreeCommandBuffers(hg_vk_device, cmd_pool, 1, &cmd));
+    hg_defer(vkFreeCommandBuffers(hg_vk_device, hg_vk_cmd_pool, 1, &cmd));
 
     VkCommandBufferBeginInfo begin_info{};
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -3283,15 +3034,13 @@ void hg_vk_image_staging_read(
     submit.commandBufferCount = 1;
     submit.pCommandBuffers = &cmd;
 
-    vkQueueSubmit(transfer_queue, 1, &submit, fence);
+    vkQueueSubmit(hg_vk_queue, 1, &submit, fence);
     vkWaitForFences(hg_vk_device, 1, &fence, VK_TRUE, UINT64_MAX);
 
     vmaCopyAllocationToMemory(hg_vk_vma, stage_alloc, 0, config.dst, size);
 }
 
 void hg_vk_image_generate_mipmaps(
-    VkQueue transfer_queue,
-    VkCommandPool cmd_pool,
     VkImage image,
     VkImageAspectFlags aspect_mask,
     VkImageLayout old_layout,
@@ -3302,8 +3051,6 @@ void hg_vk_image_generate_mipmaps(
     u32 mip_count
 ) {
     hg_assert(hg_vk_device != nullptr);
-    hg_assert(transfer_queue != nullptr);
-    hg_assert(cmd_pool != nullptr);
     hg_assert(image != nullptr);
     hg_assert(old_layout != VK_IMAGE_LAYOUT_UNDEFINED);
     hg_assert(new_layout != VK_IMAGE_LAYOUT_UNDEFINED);
@@ -3316,13 +3063,13 @@ void hg_vk_image_generate_mipmaps(
 
     VkCommandBufferAllocateInfo cmd_info{};
     cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    cmd_info.commandPool = cmd_pool;
+    cmd_info.commandPool = hg_vk_cmd_pool;
     cmd_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     cmd_info.commandBufferCount = 1;
 
     VkCommandBuffer cmd = nullptr;
     vkAllocateCommandBuffers(hg_vk_device, &cmd_info, &cmd);
-    hg_defer(vkFreeCommandBuffers(hg_vk_device, cmd_pool, 1, &cmd));
+    hg_defer(vkFreeCommandBuffers(hg_vk_device, hg_vk_cmd_pool, 1, &cmd));
 
     VkCommandBufferBeginInfo begin_info{};
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -3420,7 +3167,7 @@ void hg_vk_image_generate_mipmaps(
     submit_info.commandBufferCount = 1;
     submit_info.pCommandBuffers = &cmd;
 
-    vkQueueSubmit(transfer_queue, 1, &submit_info, nullptr);
+    vkQueueSubmit(hg_vk_queue, 1, &submit_info, nullptr);
 }
 
 static void* libvulkan = nullptr;

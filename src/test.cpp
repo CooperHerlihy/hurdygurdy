@@ -8,42 +8,7 @@
 
 #define IM_ASSERT hg_assert
 #include "imgui.h"
-#include "imgui_internal.h"
 #include "imgui_impl_vulkan.h"
-
-/**
- * The world camera component
- */
-struct HgCamera3D {
-    /**
-     * The camera's position in the world
-     *
-     * x: -left, +right
-     *
-     * y: -up, +down
-     *
-     * z: -backward, +forward
-     */
-    HgVec3 position = {0.0f, 0.0f, 0.0f};
-    /**
-     * The camera's view scaling
-     *
-     * x: horizonatal
-     *
-     * y: vertical
-     *
-     * z: depth
-     */
-    HgVec3 scale = {1.0f, 1.0f, 1.0f};
-    /**
-     * The camera's rotation in the world
-     */
-    HgQuat rotation = {1.0f, 0.0f, 0.0f, 0.0f};
-};
-
-struct HgEntityName {
-    HgStringView str;
-};
 
 int main(void) {
     hg_defer(hg_debug("Exited successfully\n"));
@@ -61,41 +26,10 @@ int main(void) {
     window_config.windowed = true;
     window_config.width = 1600;
     window_config.height = 900;
-    HgWindow window = window.create(arena, window_config);
-    hg_defer(window.destroy());
-
-    VkSurfaceKHR surface = hg_vk_create_surface(hg_vk_instance, window);
-    hg_defer(vkDestroySurfaceKHR(hg_vk_instance, surface, nullptr));
-
-    u32 window_width, window_height;
-    window.get_size(&window_width, &window_height);
-    HgSwapchainData swapchain = hg_vk_create_swapchain(nullptr, surface, window_width, window_height,
-        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_PRESENT_MODE_MAILBOX_KHR);
-    hg_defer(vkDestroySwapchainKHR(hg_vk_device, swapchain.handle, nullptr));
-
-    u32 swap_image_count = 0;
-    vkGetSwapchainImagesKHR(hg_vk_device, swapchain.handle, &swap_image_count, nullptr);
-    VkImage* swap_images = arena.alloc<VkImage>(swap_image_count);
-    VkImageView* swap_views = arena.alloc<VkImageView>(swap_image_count);
-    vkGetSwapchainImagesKHR(hg_vk_device, swapchain.handle, &swap_image_count, swap_images);
-    for (usize i = 0; i < swap_image_count; ++i) {
-        VkImageViewCreateInfo create_info{};
-        create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        create_info.image = swap_images[i];
-        create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        create_info.format = swapchain.format;
-        create_info.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-
-        vkCreateImageView(hg_vk_device, &create_info, nullptr, &swap_views[i]);
-    }
-    hg_defer(
-        for (usize i = 0; i < swap_image_count; ++i) {
-            vkDestroyImageView(hg_vk_device, swap_views[i], nullptr);
-        }
-    )
-
-    HgSwapchainCommands swapchain_commands = swapchain_commands.create(arena, swapchain.handle, hg_vk_cmd_pool);
-    hg_defer(swapchain_commands.destroy());
+    window_config.image_usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    window_config.desired_present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
+    HgWindow* window = HgWindow::create(arena, window_config);
+    hg_defer(window->destroy());
 
     HgStringView texture_path = "hg_test_dir/file_image_test.hgtex";
     HgResource texture_id = hg_resource_id(texture_path);
@@ -104,13 +38,14 @@ int main(void) {
         HgFence fence;
         hg_load_resource(&fence, 1, texture_id, texture_path);
         fence.wait(INFINITY);
-        hg_load_gpu_texture(texture_id, hg_vk_cmd_pool, VK_FILTER_NEAREST);
+        hg_load_gpu_texture(texture_id, VK_FILTER_NEAREST);
         hg_unload_resource(nullptr, 0, texture_id);
     }
     hg_defer(hg_unload_gpu_resource(texture_id));
 
-    HgCamera3D camera{};
-    camera.position.z = -1.0f;
+    HgVec3 camera_pos{0, 0, -1};
+    HgVec3 camera_scale{1, 1, 1};
+    HgQuat camera_rot{1, 0, 0, 0};
 
     u32 render_width = 640;
     u32 render_height = 360;
@@ -157,14 +92,14 @@ int main(void) {
     imgui_info.QueueFamily = hg_vk_queue_family;
     imgui_info.Queue = hg_vk_queue;
     imgui_info.DescriptorPoolSize = 1000;
-    imgui_info.MinImageCount = swap_image_count;
-    imgui_info.ImageCount = swap_image_count;
+    imgui_info.MinImageCount = window->image_count;
+    imgui_info.ImageCount = window->image_count;
     imgui_info.MinAllocationSize = 1024 * 1024;
     imgui_info.UseDynamicRendering = true;
     imgui_info.PipelineInfoMain.PipelineRenderingCreateInfo.sType
         = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
     imgui_info.PipelineInfoMain.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
-    imgui_info.PipelineInfoMain.PipelineRenderingCreateInfo.pColorAttachmentFormats = &swapchain.format;
+    imgui_info.PipelineInfoMain.PipelineRenderingCreateInfo.pColorAttachmentFormats = &window->format;
 #ifdef HG_DEBUG_MODE
     imgui_info.CheckVkResultFn = [](VkResult err) {
         if (err != VK_SUCCESS)
@@ -233,14 +168,13 @@ int main(void) {
         HgArenaScope frame_scope{frame};
 
         hg_process_window_events(&window, 1);
-        if (window.was_closed())
+        if (window->was_closed)
             goto quit;
 
         ImGui_ImplHurdyGurdy_NewFrame();
         ImGui::NewFrame();
 
         ImGuiID dockspace_id = ImGui::GetID("dockspace");
-        // ImGui::DockSpaceOverViewport(dockspace_id);
         const ImGuiViewport* imgui_viewport = ImGui::GetMainViewport();
         ImGui::SetNextWindowPos(imgui_viewport->WorkPos);
         ImGui::SetNextWindowSize(imgui_viewport->WorkSize);
@@ -250,14 +184,11 @@ int main(void) {
             = ImGuiWindowFlags_MenuBar
             | ImGuiWindowFlags_NoDocking
             | ImGuiWindowFlags_NoTitleBar
-            | ImGuiWindowFlags_NoScrollbar
-            | ImGuiWindowFlags_NoScrollWithMouse
             | ImGuiWindowFlags_NoBackground
             | ImGuiWindowFlags_NoMove
             | ImGuiWindowFlags_NoResize
             | ImGuiWindowFlags_NoCollapse
-            | ImGuiWindowFlags_NoBringToFrontOnFocus
-            | ImGuiWindowFlags_AlwaysAutoResize ;
+            | ImGuiWindowFlags_NoBringToFrontOnFocus;
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
@@ -291,8 +222,7 @@ int main(void) {
                     config.height = render_height;
                     config.depth = 1;
                     config.format = VK_FORMAT_R8G8B8A8_SRGB;
-
-                    hg_vk_image_staging_read(hg_vk_queue, hg_vk_cmd_pool, config);
+                    hg_vk_image_staging_read(config);
 
                     stbi_write_png(
                         "screenshot.png",
@@ -324,67 +254,49 @@ int main(void) {
 
         ImGui::End();
 
-        static bool dockspace_init = false;
-        if (!dockspace_init) {
-            dockspace_init = true;
-            ImGui::DockBuilderRemoveNode(dockspace_id);
-            ImGui::DockBuilderAddNode(dockspace_id);
-            ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->WorkSize);
-
-            ImGuiID render_id = dockspace_id;
-            ImGuiID edit_id = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Right, 0.25f, nullptr, &render_id);
-
-            ImGui::DockBuilderDockWindow("Render", render_id);
-            ImGui::DockBuilderDockWindow("Editor", edit_id);
-
-            ImGui::DockBuilderFinish(dockspace_id);
-        }
-
         if (show_render) {
             if (ImGui::Begin("Render", &show_render)) {
                 if (ImGui::IsWindowFocused()) {
                     static const f32 rot_speed = 2.0f;
-                    if (move_3d && window.is_key_down(HgKey::lmouse)) {
-                        f64 x, y;
-                        window.get_mouse_delta(&x, &y);
-                        HgQuat rot_x = hg_axis_angle({0.0f, 1.0f, 0.0f}, (f32)x * rot_speed);
-                        HgQuat rot_y = hg_axis_angle({-1.0f, 0.0f, 0.0f}, (f32)y * rot_speed);
-                        camera.rotation = rot_x * camera.rotation * rot_y;
+                    if (move_3d && window->is_key_down[(u32)HgKey::lmouse]) {
+                        HgQuat rot_x = hg_axis_angle({0, 1, 0}, (f32)window->mouse_delta_x * rot_speed);
+                        HgQuat rot_y = hg_axis_angle({-1, 0, 0}, (f32)window->mouse_delta_y * rot_speed);
+                        camera_rot = rot_x * camera_rot * rot_y;
                     }
 
                     static const f32 move_speed = 1.5f;
                     HgVec3 movement = {0.0f};
 
                     if (move_3d) {
-                        if (window.is_key_down(HgKey::space))
+                        if (window->is_key_down[(u32)HgKey::space])
                             movement.y -= 1.0f;
-                        if (window.is_key_down(HgKey::lshift))
+                        if (window->is_key_down[(u32)HgKey::lshift])
                             movement.y += 1.0f;
-                        if (window.is_key_down(HgKey::w))
+                        if (window->is_key_down[(u32)HgKey::w])
                             movement.z += 1.0f;
-                        if (window.is_key_down(HgKey::s))
+                        if (window->is_key_down[(u32)HgKey::s])
                             movement.z -= 1.0f;
-                        if (window.is_key_down(HgKey::a))
+                        if (window->is_key_down[(u32)HgKey::a])
                             movement.x -= 1.0f;
-                        if (window.is_key_down(HgKey::d))
+                        if (window->is_key_down[(u32)HgKey::d])
                             movement.x += 1.0f;
                     } else {
-                        if (window.is_key_down(HgKey::w))
+                        if (window->is_key_down[(u32)HgKey::w])
                             movement.y -= 1.0f;
-                        if (window.is_key_down(HgKey::s))
+                        if (window->is_key_down[(u32)HgKey::s])
                             movement.y += 1.0f;
-                        if (window.is_key_down(HgKey::a))
+                        if (window->is_key_down[(u32)HgKey::a])
                             movement.x -= 1.0f;
-                        if (window.is_key_down(HgKey::d))
+                        if (window->is_key_down[(u32)HgKey::d])
                             movement.x += 1.0f;
                     }
 
                     if (movement != HgVec3{0.0f}) {
-                        HgVec3 rotated = hg_rotate(camera.rotation, HgVec3{movement.x, 0.0f, movement.z});
-                        camera.position += hg_norm(HgVec3{rotated.x, movement.y, rotated.z}) * move_speed * deltaf;
+                        HgVec3 rotated = hg_rotate(camera_rot, HgVec3{movement.x, 0.0f, movement.z});
+                        camera_pos += hg_norm(HgVec3{rotated.x, movement.y, rotated.z}) * move_speed * deltaf;
                     }
                 }
-                pipeline2d.update_view(hg_view_matrix(camera.position, camera.scale, camera.rotation));
+                pipeline2d.update_view(hg_view_matrix(camera_pos, camera_scale, camera_rot));
 
                 ImGui::Image((ImTextureID)render_descriptor, {(f32)render_width, (f32)render_height});
             }
@@ -399,10 +311,10 @@ int main(void) {
                     ImGui::Text("total: %.3fms", delta * 1.0e3);
                     ImGui::Text("cpu: %.3fms", cpu_delta * 1.0e3);
 
-                    ImGui::Checkbox("3D Movement", &move_3d);
-
+                    ImGui::SeparatorText("Camera");
                     if (ImGui::Button("Reset Camera"))
-                        camera = {}, camera.position.z = -1.0f;
+                        camera_pos = {0, 0, -1}, camera_scale = {1, 1, 1}, camera_rot = {1, 0, 0, 0};
+                    ImGui::Checkbox("3D Movement", &move_3d);
                 }
 
                 ImGuiTreeNodeFlags entity_flags = ImGuiTreeNodeFlags_DefaultOpen;
@@ -420,9 +332,7 @@ int main(void) {
                         HgArenaScope scratch_scope{scratch};
                         HgEntity e = scene[i];
 
-                        char* name = ecs.has<HgEntityName>(e)
-                            ? hg_c_string(scratch, ecs.get<HgEntityName>(scene[i]).str)
-                            : HgString::create(scratch, "Entity ")
+                        char* name = HgString::create(scratch, "Entity ID: ")
                                 .append(scratch, hg_int_to_str_base10(scratch, (i64)e.idx()))
                                 .append(scratch, 0)
                                 .chars;
@@ -500,55 +410,9 @@ int main(void) {
 
         cpu_delta = cpu_clock.tick();
 
-        window.get_size(&window_width, &window_height);
-        if (swapchain.width != window_width || swapchain.height != window_height) {
-recreate_swapchain:
-            vkQueueWaitIdle(hg_vk_queue);
-
-            VkSwapchainKHR old_swapchain = swapchain.handle;
-            swapchain = hg_vk_create_swapchain(old_swapchain, surface, (u32)window_width, (u32)window_height,
-                VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_PRESENT_MODE_MAILBOX_KHR);
-
-            for (usize i = 0; i < swap_image_count; ++i) {
-                vkDestroyImageView(hg_vk_device, swap_views[i], nullptr);
-            }
-            swapchain_commands.destroy();
-
-            if (swapchain.handle != nullptr) {
-                usize old_count = swap_image_count;
-                vkGetSwapchainImagesKHR(hg_vk_device, swapchain.handle, &swap_image_count, nullptr);
-                if (old_count != swap_image_count) {
-                    swap_images = arena.realloc(swap_images, old_count, swap_image_count);
-                    swap_views = arena.realloc(swap_views, old_count, swap_image_count);
-                }
-                vkGetSwapchainImagesKHR(hg_vk_device, swapchain.handle, &swap_image_count, swap_images);
-                for (usize i = 0; i < swap_image_count; ++i) {
-                    VkImageViewCreateInfo create_info{};
-                    create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-                    create_info.image = swap_images[i];
-                    create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-                    create_info.format = swapchain.format;
-                    create_info.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-
-                    vkCreateImageView(hg_vk_device, &create_info, nullptr, &swap_views[i]);
-                }
-                swapchain_commands.recreate(arena, swapchain.handle, hg_vk_cmd_pool);
-
-                aspect = (f32)render_width / (f32)render_height;
-                proj = hg_projection_perspective((f32)hg_pi * 0.5f, aspect, 0.1f, 1000.0f);
-                pipeline2d.update_projection(proj);
-            }
-
-            vkDestroySwapchainKHR(hg_vk_device, old_swapchain, nullptr);
-            hg_debug("window resized\n");
-        }
-        VkCommandBuffer cmd = swapchain_commands.acquire_and_record();
+        VkCommandBuffer cmd = window->acquire_and_record();
         cpu_clock.tick();
-        if (cmd == nullptr) {
-            goto recreate_swapchain;
-        } else {
-            u32 image_index = swapchain_commands.current_image;
-
+        if (cmd != nullptr) {
             // render to buffer
             {
                 VkImageMemoryBarrier2 color_barrier{};
@@ -621,7 +485,7 @@ recreate_swapchain:
                 color_barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
                 color_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
                 color_barrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-                color_barrier.image = swap_images[image_index];
+                color_barrier.image = window->images[window->current_image];
                 color_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
 
                 VkDependencyInfo color_dependency{};
@@ -633,7 +497,7 @@ recreate_swapchain:
 
                 VkRenderingAttachmentInfo color_attachment{};
                 color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-                color_attachment.imageView = swap_views[image_index];
+                color_attachment.imageView = window->views[window->current_image];
                 color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
                 color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
                 color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -641,16 +505,16 @@ recreate_swapchain:
                 VkRenderingInfo rendering_info{};
                 rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
                 rendering_info.pNext = nullptr;
-                rendering_info.renderArea.extent = {swapchain.width, swapchain.height};
+                rendering_info.renderArea.extent = {window->width, window->height};
                 rendering_info.layerCount = 1;
                 rendering_info.colorAttachmentCount = 1;
                 rendering_info.pColorAttachments = &color_attachment;
 
                 vkCmdBeginRendering(cmd, &rendering_info);
 
-                VkViewport viewport{0.0f, 0.0f, (f32)swapchain.width, (f32)swapchain.height, 0.0f, 1.0f};
+                VkViewport viewport{0.0f, 0.0f, (f32)window->width, (f32)window->height, 0.0f, 1.0f};
                 vkCmdSetViewport(cmd, 0, 1, &viewport);
-                VkRect2D scissor{{0, 0}, {swapchain.width, swapchain.height}};
+                VkRect2D scissor{{0, 0}, {window->width, window->height}};
                 vkCmdSetScissor(cmd, 0, 1, &scissor);
 
                 ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
@@ -663,7 +527,7 @@ recreate_swapchain:
                 present_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
                 present_barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
                 present_barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-                present_barrier.image = swap_images[image_index];
+                present_barrier.image = window->images[window->current_image];
                 present_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
 
                 VkDependencyInfo present_dependency{};
@@ -674,7 +538,7 @@ recreate_swapchain:
                 vkCmdPipelineBarrier2(cmd, &present_dependency);
             }
 
-            swapchain_commands.end_and_present(hg_vk_queue);
+            window->end_and_present(hg_vk_queue);
 
             // if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
             //     ImGui::UpdatePlatformWindows();

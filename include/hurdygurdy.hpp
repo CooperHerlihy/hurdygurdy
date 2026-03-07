@@ -3389,9 +3389,8 @@ void hg_dealloc_gpu_resource(HgResource id);
  *
  * Parameters
  * - id The resource to load into
- * - path The filepath to load from
  */
-void hg_load_gpu_buffer(HgResource id, VkCommandPool cmd_pool);
+void hg_load_gpu_buffer(HgResource id);
 
 /**
  * Loads a gpu texture (or just increments the reference count)
@@ -3400,9 +3399,9 @@ void hg_load_gpu_buffer(HgResource id, VkCommandPool cmd_pool);
  *
  * Parameters
  * - id The resource to load into
- * - path The filepath to load from
+ * - filter The filter the texture should use
  */
-void hg_load_gpu_texture(HgResource id, VkCommandPool cmd_pool, VkFilter filter);
+void hg_load_gpu_texture(HgResource id, VkFilter filter);
 
 /**
  * Unloads a gpu resource (or just decrement the reference count)
@@ -4397,110 +4396,6 @@ VkPipeline hg_vk_create_graphics_pipeline(const HgVkPipelineConfig& config);
 VkPipeline hg_vk_create_compute_pipeline(const HgVkPipelineConfig& config);
 
 /**
- * A Vulkan swapchain and associated data
- */
-struct HgSwapchainData {
-    /**
-     * The handle to the Vulkan swapchain object
-     */
-    VkSwapchainKHR handle;
-    /**
-     * The width of the swapchain's images
-     */
-    u32 width;
-    /**
-     * The height of the swapchain's images
-     */
-    u32 height;
-    /**
-     * The pixel format of the swapchain's images
-     */
-    VkFormat format;
-};
-
-/**
- * Creates a Vulkan swapchain
- *
- * Parameters
- * - old_swapchain The old swapchain, may be nullptr
- * - surface The surface to create from
- * - width The width of the swapchain
- * - height The height of the swapchain
- * - image_usage How the swapchain's images will be used
- * - desired_mode The preferred present mode (fallback to FIFO)
- *
- * Returns
- * - The created Vulkan swapchain
- */
-HgSwapchainData hg_vk_create_swapchain(
-    VkSwapchainKHR old_swapchain,
-    VkSurfaceKHR surface,
-    u32 width,
-    u32 height,
-    VkImageUsageFlags image_usage,
-    VkPresentModeKHR desired_mode);
-
-/**
- * A system to synchronize frames rendering to multiple swapchain images at once
- */
-struct HgSwapchainCommands {
-    VkCommandPool cmd_pool;
-    VkSwapchainKHR swapchain;
-    VkCommandBuffer* cmds;
-    VkFence* frame_finished;
-    VkSemaphore* image_available;
-    VkSemaphore* ready_to_present;
-    u32 frame_count;
-    u32 current_frame;
-    u32 current_image;
-
-    /**
-     * Creates a swapchain command buffer system
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - swapchain The Vulkan swapchain to create frames for, must not be nullptr
-     * - cmd_pool The Vulkan command pool to allocate cmds from, must not be nullptr
-     *
-     * Returns
-     * - The created swaphchain command buffer system
-     */
-    static HgSwapchainCommands create(HgArena& arena, VkSwapchainKHR swapchain, VkCommandPool cmd_pool);
-
-    /**
-     * Recreates a swapchain command buffer system
-     *
-     * Parameters
-     * - arena The arena to allocate from, if frame count has grown
-     * - swapchain The Vulkan swapchain to create frames for, must not be nullptr
-     * - cmd_pool The Vulkan command pool to allocate cmds from, must not be nullptr
-     */
-    void recreate(HgArena& arena, VkSwapchainKHR swapchain, VkCommandPool cmd_pool);
-
-    /**
-     * Destroys a swaphchain command buffer system
-     */
-    void destroy();
-
-    /**
-     * Acquires the next swapchain image and begins its command buffer
-     *
-     * Returns
-     * - The command buffer to record this frame
-     * - nullptr if the swapchain is out of date
-     */
-    VkCommandBuffer acquire_and_record();
-
-    /**
-     * Finishes recording the command buffer and presents the swapchain image
-     *
-     * Parameters
-     * - queue The Vulkan queue, must not be nullptr
-     */
-    void end_and_present(VkQueue queue);
-};
-
-/**
  * Attempts to find the index of a memory type which has the desired flags and
  * does not have the undesired flags
  *
@@ -4527,16 +4422,12 @@ u32 hg_vk_find_memory_type_index(
  * Writes to a Vulkan device local buffer through a staging buffer
  *
  * Parameters
- * - transfer_queue The Vulkan queue to transfer on, must not be nullptr
- * - cmd_pool The command pool for the queue, must not be nullptr
  * - dst The buffer to write to, must not be nullptr
  * - offset The offset in bytes into the dst buffer
  * - src The data to write, must not be nullptr
  * - size The size in bytes to write
  */
 void hg_vk_buffer_staging_write(
-    VkQueue transfer_queue,
-    VkCommandPool cmd_pool,
     VkBuffer dst,
     usize offset,
     const void* src,
@@ -4546,16 +4437,12 @@ void hg_vk_buffer_staging_write(
  * Reads from a Vulkan device local buffer through a staging buffer
  *
  * Parameters
- * - transfer_queue The Vulkan queue to transfer on, must not be nullptr
- * - cmd_pool The command pool for the queue, must not be nullptr
  * - dst The location to write to, must not be nullptr
  * - src The buffer to read from, must not be nullptr
  * - offset The offset in bytes into the dst buffer
  * - size The size in bytes to read
  */
 void hg_vk_buffer_staging_read(
-    VkQueue transfer_queue,
-    VkCommandPool cmd_pool,
     void* dst,
     VkBuffer src,
     usize offset,
@@ -4603,13 +4490,9 @@ struct HgVkImageStagingWriteConfig {
  * Writes to a Vulkan device local image through a staging buffer
  *
  * Parameters
- * - transfer_queue The Vulkan queue to transfer on, must not be nullptr
- * - cmd_pool The command pool for the queue, must not be nullptr
  * - config The configuration for the write
  */
 void hg_vk_image_staging_write(
-    VkQueue transfer_queue,
-    VkCommandPool cmd_pool,
     const HgVkImageStagingWriteConfig& config);
 
 /**
@@ -4622,13 +4505,9 @@ void hg_vk_image_staging_write(
  *  #
  *
  * Parameters
- * - transfer_queue The Vulkan queue to transfer on, must not be nullptr
- * - cmd_pool The command pool for the queue, must not be nullptr
  * - config The configuration for the write
  */
 void hg_vk_image_staging_write_cubemap(
-    VkQueue transfer_queue,
-    VkCommandPool cmd_pool,
     const HgVkImageStagingWriteConfig &config);
 
 /**
@@ -4673,21 +4552,15 @@ struct HgVkImageStagingReadConfig {
  * Reads from a Vulkan device local image through a staging buffer
  *
  * Parameters
- * - transfer_queue The Vulkan queue to transfer on, must not be nullptr
- * - cmd_pool The command pool for the queue, must not be nullptr
  * - config The configuration for the read, must not be nullptr
  */
 void hg_vk_image_staging_read(
-    VkQueue transfer_queue,
-    VkCommandPool cmd_pool,
     const HgVkImageStagingReadConfig& config);
 
 /**
  * Generates mipmaps from the base level
  *
  * Parameters
- * - transfer_queue The Vulkan queue to transfer on, must not be nullptr
- * - cmd_pool The command pool for the queue, must not be nullptr
  * - image The image to generate mipmaps in, must not be nullptr
  * - aspect_mask The image aspects to use, must not be 0
  * - old_layout The layout the image was in before, must not be UNDEFINED
@@ -4698,8 +4571,6 @@ void hg_vk_image_staging_read(
  * - mip_count The total number of mips in the image, must be greater than 0
  */
 void hg_vk_image_generate_mipmaps(
-    VkQueue transfer_queue,
-    VkCommandPool cmd_pool,
     VkImage image,
     VkImageAspectFlags aspect_mask,
     VkImageLayout old_layout,
@@ -4861,6 +4732,16 @@ struct HgWindowConfig {
      * The height in pixels if windowed, otherwise ignored
      */
     u32 height;
+    /**
+     * How the swapchain images will be used
+     */
+    VkImageUsageFlags image_usage;
+    /**
+     * How the swapchain images will be presented
+     *
+     * Note, will fall back to FIFO if unavailable
+     */
+    VkPresentModeKHR desired_present_mode;
 };
 
 /**
@@ -4873,6 +4754,104 @@ struct HgWindow {
      * Platform specific resources for a window
      */
     Internals* internals;
+    /**
+     * The window's Vulkan surface
+     */
+    VkSurfaceKHR surface;
+    /**
+     * The swapchain
+     */
+    VkSwapchainKHR swapchain;
+    /**
+     * The swapchain image format
+     */
+    VkFormat format;
+    /**
+     * The number of swapchain images
+     */
+    u32 image_count;
+    /**
+     * The swapchain images
+     */
+    VkImage* images;
+    /**
+     * The swapchain image views
+     */
+    VkImageView* views;
+    /**
+     * How the swapchain images are used
+     */
+    VkImageUsageFlags image_usage;
+    /**
+     * The swapchain image format
+     */
+    VkPresentModeKHR present_mode;
+
+    /**
+     * The command buffers per image
+     */
+    VkCommandBuffer* cmds;
+    /**
+     * The fences per image
+     */
+    VkFence* frame_finished;
+    /**
+     * The semaphores per image to signal availability
+     */
+    VkSemaphore* image_available;
+    /**
+     * The semaphores per image to signal presentability
+     */
+    VkSemaphore* ready_to_present;
+    /**
+     * The current frame
+     */
+    u32 current_frame;
+    /**
+     * The current image
+     */
+    u32 current_image;
+
+    /**
+     * The window's current width
+     */
+    u32 width;
+    /**
+     * The window's current height
+     */
+    u32 height;
+    /**
+     * The current x position of the mouse
+     */
+    f64 mouse_pos_x;
+    /**
+     * The current y position of the mouse
+     */
+    f64 mouse_pos_y;
+    /**
+     * The x distance the mouse has travelled since last frame
+     */
+    f64 mouse_delta_x;
+    /**
+     * The y distance the mouse has travelled since last frame
+     */
+    f64 mouse_delta_y;
+    /**
+     * Which keys are currently being held down
+     */
+    bool is_key_down[(u32)HgKey::count];
+    /**
+     * Which keys were pressed this frame
+     */
+    bool was_key_pressed[(u32)HgKey::count];
+    /**
+     * Which keys were released this frame
+     */
+    bool was_key_released[(u32)HgKey::count];
+    /**
+     * Whether this window has been closed
+     */
+    bool was_closed;
 
     /**
      * Creates a window
@@ -4884,12 +4863,29 @@ struct HgWindow {
      * Returns
      * - The created window, will never be nullptr
      */
-    static HgWindow create(HgArena& arena, const HgWindowConfig& config);
+    static HgWindow* create(HgArena& arena, const HgWindowConfig& config);
 
     /**
      * Destroys the window
      */
     void destroy();
+
+    /**
+     * Acquires the next swapchain image and begins its command buffer
+     *
+     * Returns
+     * - The command buffer to record this frame
+     * - nullptr if the swapchain cannot be rendered to
+     */
+    VkCommandBuffer acquire_and_record();
+
+    /**
+     * Finishes recording the command buffer and presents the swapchain image
+     *
+     * Parameters
+     * - queue The Vulkan queue, must not be nullptr
+     */
+    void end_and_present(VkQueue queue);
 
     /**
      * Sets the window icon : TODO
@@ -4938,74 +4934,6 @@ struct HgWindow {
      * Sets the window's cursor to a custom image : TODO
      */
     void set_cursor_image(u32* data, u32 width, u32 height);
-
-    /**
-     * Returns whether the window was closed via close button or window manager
-     *
-     * destroy() is not automatically called when this function returns
-     * true, and may be called manually
-     */
-    bool was_closed();
-
-    /**
-     * Gets the size of the window in pixels
-     *
-     * Parameters
-     * - width A pointer to store the width, must not be nullptr
-     * - height A pointer to store the height, must not be nullptr
-     */
-    void get_size(u32* width, u32* height);
-
-    /**
-     * Gets the most recent mouse position
-     *
-     * Parameters
-     * - x A pointer to store the x position
-     * - y A pointer to store the y position
-     */
-    void get_mouse_pos(f64* x, f64* y);
-
-    /**
-     * Gets the most recent mouse delta
-     *
-     * Parameters
-     * - x A pointer to store the x delta
-     * - y A pointer to store the y delta
-     */
-    void get_mouse_delta(f64* x, f64* y);
-
-    /**
-     * Checks if a key is being held down
-     *
-     * Parameters
-     * - key The key to check
-     *
-     * Returns
-     * - whether the key is being held down
-     */
-    bool is_key_down(HgKey key);
-
-    /**
-     * Checks if a key was pressed this frame
-     *
-     * Parameters
-     * - key The key to check
-     *
-     * Returns
-     * - whether the key was pressed this frame
-     */
-    bool was_key_pressed(HgKey key);
-
-    /**
-     * Checks if a key was released this frame
-     *
-     * Parameters
-     * - key The key to check
-     *
-     * Returns
-     * - whether the key was released this frame
-     */
-    bool was_key_released(HgKey key);
 };
 
 /**
@@ -5021,18 +4949,6 @@ struct HgWindow {
 u32 hg_vk_get_platform_extensions(HgArena& arena, HgStringView** ext_buffer);
 
 /**
- * Create a Vulkan surface for the window, according to the platform
- *
- * Parameters
- * - instance The Vulkan instance, must not be nullptr
- * - window The window to create a surface for, must exist
- *
- * Returns
- * - The created Vulkan surface, will never be nullptr
- */
-VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window);
-
-/**
  * Processes all events since the last call to process events or startup
  *
  * Must be called every frame before querying input
@@ -5042,7 +4958,7 @@ VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window);
  * Parameters
  * - windows All open windows, must not be nullptr
  */
-void hg_process_window_events(const HgWindow* windows, usize window_count);
+void hg_process_window_events(HgWindow** windows, usize window_count);
 
 /**
  * Initialize ImGui platform backend
@@ -5052,7 +4968,7 @@ void hg_process_window_events(const HgWindow* windows, usize window_count);
  * Parameters
  * - window The window for ImGui to use
  */
-void ImGui_ImplHurdyGurdy_Init(HgWindow window);
+void ImGui_ImplHurdyGurdy_Init(HgWindow* window);
 
 /**
  * Deinitializes ImGui platform backend
