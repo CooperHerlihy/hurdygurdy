@@ -4084,65 +4084,77 @@ struct HgSprite {
     HgVec2 uv_size;
 };
 
+/**
+ * Initialize the 2D pipeline
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - max_textures The maximum textures which can be added to the pipelin
+ * - color_format The format of the color attachment, must not be UNDEFINED
+ * - depth_format The format of the depth attachment, if any
+ */
 void hg_pipeline_2d_init(
     HgArena& arena,
     usize max_textures,
     VkFormat color_format,
     VkFormat depth_format);
 
+/**
+ * Deinitialize the 2D pipeline
+ */
 void hg_pipeline_2d_deinit();
 
-void hg_pipeline_2d_add_texture(HgResource texture);
-void hg_pipeline_2d_remove_texture(HgResource texture);
-bool hg_pipeline_2d_has_texture(HgResource texture);
+/**
+ * Add a texture to the 2D pipeline
+ *
+ * Parameters
+ * - texture_id The texture to add
+ */
+void hg_pipeline_2d_add_texture(HgResource texture_id);
 
+/**
+ * Remove a texture from the 2D pipeline
+ *
+ * Parameters
+ * - texture_id The texture to remove
+ */
+void hg_pipeline_2d_remove_texture(HgResource texture_id);
+
+/**
+ * Returns whether the texture has been added to the pipeline
+ *
+ * Parameters
+ * - texture_id The texture to check
+ *
+ * Returns
+ * - Whether the texture has been added to the pipeline
+ */
+bool hg_pipeline_2d_has_texture(HgResource texture_id);
+
+/**
+ * Updates the 2D pipeline's projection matrix
+ *
+ * Parameters
+ * - projection The new projection matrix
+ */
+void hg_pipeline_2d_update_projection(const HgMat4& projection);
+
+/**
+ * Updates the 2D pipeline's view matrix
+ *
+ * Parameters
+ * - projection The new view matrix
+ */
+void hg_pipeline_2d_update_view(const HgMat4& view);
+
+/**
+ * Issue draw commands for all HgSprite components in the ecs
+ * 
+ * Parameters
+ * - ecs The ecs to draw
+ * - cmd The command buffer to record to, must not be nullptr
+ */
 void hg_draw_2d(HgECS& ecs, VkCommandBuffer cmd);
-
-void hg_update_projection(const HgMat4& projection);
-void hg_update_view(const HgMat4& view);
-
-struct HgPipeline2D {
-
-    struct VPUniform {
-        HgMat4 proj;
-        HgMat4 view;
-    };
-
-    struct Push {
-        HgMat4 model;
-        HgVec2 uv_pos;
-        HgVec2 uv_size;
-    };
-
-    VkDescriptorSetLayout vp_layout;
-    VkDescriptorSetLayout texture_layout;
-    VkPipelineLayout pipeline_layout;
-    VkPipeline pipeline;
-
-    VkDescriptorPool descriptor_pool;
-    VkDescriptorSet vp_set;
-
-    VkBuffer vp_buffer;
-    VmaAllocation vp_buffer_allocation;
-
-    HgHashMap<HgResource, VkDescriptorSet> texture_sets;
-
-    static HgPipeline2D create(
-        HgArena& arena,
-        usize max_textures,
-        VkFormat color_format,
-        VkFormat depth_format);
-
-    void destroy();
-
-    void add_texture(HgResource texture_id);
-    void remove_texture(HgResource texture_id);
-
-    void update_projection(const HgMat4& projection);
-    void update_view(const HgMat4& view);
-
-    void draw(HgECS& ecs, VkCommandBuffer cmd);
-};
 
 /**
  * Initializes the graphics subsystem

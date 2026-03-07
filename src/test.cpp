@@ -48,11 +48,11 @@ void minimal_example() {
     }
     hg_defer(hg_unload_gpu_resource(texture_id));
 
-    HgPipeline2D pipeline2d = pipeline2d.create(arena, 256, window->format, VK_FORMAT_UNDEFINED);
-    hg_defer(pipeline2d.destroy());
+    hg_pipeline_2d_init(arena, 256, window->format, VK_FORMAT_UNDEFINED);
+    hg_defer(hg_pipeline_2d_deinit());
 
-    pipeline2d.add_texture(texture_id);
-    hg_defer(pipeline2d.remove_texture(texture_id));
+    hg_pipeline_2d_add_texture(texture_id);
+    hg_defer(hg_pipeline_2d_remove_texture(texture_id));
 
     HgTransform camera{};
     camera.position = {0, 0, -1};
@@ -75,7 +75,7 @@ void minimal_example() {
         if (window->was_closed)
             goto quit;
 
-        pipeline2d.update_projection(
+        hg_pipeline_2d_update_projection(
             hg_projection_perspective((f32)hg_pi * 0.5f, (f32)window->width / (f32)window->height, 0.1f, 1000.0f));
 
         if (window->is_key_down[(u32)HgKey::lmouse]) {
@@ -96,7 +96,7 @@ void minimal_example() {
             camera.position += hg_norm(HgVec3{rotated.x, movement.y, rotated.z}) * move_speed * deltaf;
         }
 
-        pipeline2d.update_view(hg_view_matrix(camera.position, camera.scale, camera.rotation));
+        hg_pipeline_2d_update_view(hg_view_matrix(camera.position, camera.scale, camera.rotation));
 
         VkCommandBuffer cmd = window->begin_recording();
         if (cmd != nullptr) {
@@ -138,7 +138,7 @@ void minimal_example() {
             VkRect2D scissor{{0, 0}, {window->width, window->height}};
             vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-            pipeline2d.draw(ecs, cmd);
+            hg_draw_2d(ecs, cmd);
 
             vkCmdEndRendering(cmd);
 
@@ -199,11 +199,11 @@ void editor_example() {
     }
     hg_defer(hg_unload_gpu_resource(texture_id));
 
-    HgPipeline2D pipeline2d = pipeline2d.create(arena, 256, VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_UNDEFINED);
-    hg_defer(pipeline2d.destroy());
+    hg_pipeline_2d_init(arena, 256, VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_UNDEFINED);
+    hg_defer(hg_pipeline_2d_deinit());
 
-    pipeline2d.add_texture(texture_id);
-    hg_defer(pipeline2d.remove_texture(texture_id));
+    hg_pipeline_2d_add_texture(texture_id);
+    hg_defer(hg_pipeline_2d_remove_texture(texture_id));
 
     HgTransform camera{};
     camera.position = {0, 0, -1};
@@ -396,7 +396,7 @@ void editor_example() {
                     render_height = view_height;
 
                     HgMat4 proj = hg_projection_perspective((f32)hg_pi * 0.5f, (f32)render_width / (f32)render_height, 0.1f, 1000.0f);
-                    pipeline2d.update_projection(proj);
+                    hg_pipeline_2d_update_projection(proj);
 
                     ImGui_ImplVulkan_RemoveTexture(render_descriptor);
                     vkDestroyImageView(hg_vk_device, render_view, nullptr);
@@ -456,7 +456,7 @@ void editor_example() {
                         camera.position += hg_norm(HgVec3{rotated.x, movement.y, rotated.z}) * move_speed * deltaf;
                     }
                 }
-                pipeline2d.update_view(hg_view_matrix(camera.position, camera.scale, camera.rotation));
+                hg_pipeline_2d_update_view(hg_view_matrix(camera.position, camera.scale, camera.rotation));
 
                 ImGui::Image((ImTextureID)render_descriptor, {(f32)render_width, (f32)render_height});
             }
@@ -616,7 +616,7 @@ void editor_example() {
                 VkRect2D scissor{{0, 0}, {render_width, render_height}};
                 vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-                pipeline2d.draw(ecs, cmd);
+                hg_draw_2d(ecs, cmd);
 
                 vkCmdEndRendering(cmd);
 
