@@ -47,15 +47,12 @@ int main(void) {
     HgVec3 camera_scale{1, 1, 1};
     HgQuat camera_rot{1, 0, 0, 0};
 
-    u32 render_width = 640;
-    u32 render_height = 360;
+    f32 aspect_ratio = 16.0f / 9.0f;
+    u32 render_width = 0;
+    u32 render_height = 0;
 
     HgPipeline2D pipeline2d = pipeline2d.create(arena, 256, VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_UNDEFINED);
     hg_defer(pipeline2d.destroy());
-
-    f32 aspect = (f32)render_width / (f32)render_height;
-    HgMat4 proj = hg_projection_perspective((f32)hg_pi * 0.5f, aspect, 0.1f, 1000.0f);
-    pipeline2d.update_projection(proj);
 
     pipeline2d.add_texture(texture_id);
     hg_defer(pipeline2d.remove_texture(texture_id));
@@ -110,51 +107,26 @@ int main(void) {
     ImGui_ImplVulkan_Init(&imgui_info);
     hg_defer(ImGui_ImplVulkan_Shutdown());
 
-    VkImageCreateInfo render_image_info{};
-    render_image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    render_image_info.imageType = VK_IMAGE_TYPE_2D;
-    render_image_info.format = VK_FORMAT_R8G8B8A8_SRGB;
-    render_image_info.extent = {render_width, render_height, 1};
-    render_image_info.mipLevels = 1;
-    render_image_info.arrayLayers = 1;
-    render_image_info.samples = VK_SAMPLE_COUNT_1_BIT;
-    render_image_info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
-                            | VK_IMAGE_USAGE_SAMPLED_BIT
-                            | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-
-    VmaAllocationCreateInfo render_alloc_info{};
-    render_alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
-
     VkImage render_image = nullptr;
     VmaAllocation render_alloc = nullptr;
-    vmaCreateImage(hg_vk_vma, &render_image_info, &render_alloc_info, &render_image, &render_alloc, nullptr);
-    hg_defer(vmaDestroyImage(hg_vk_vma, render_image, render_alloc));
-
-    VkImageViewCreateInfo render_view_info{};
-    render_view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    render_view_info.image = render_image;
-    render_view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    render_view_info.format = render_image_info.format;
-    render_view_info.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-
     VkImageView render_view = nullptr;
-    vkCreateImageView(hg_vk_device, &render_view_info, nullptr, &render_view);
-    hg_defer(vkDestroyImageView(hg_vk_device, render_view, nullptr));
-
-    VkSamplerCreateInfo render_sampler_info{};
-    render_sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-
     VkSampler render_sampler = nullptr;
-    vkCreateSampler(hg_vk_device, &render_sampler_info, nullptr, &render_sampler);
-    hg_defer(vkDestroySampler(hg_vk_device, render_sampler, nullptr));
+    VkDescriptorSet render_descriptor = nullptr;
 
-    VkDescriptorSet render_descriptor = ImGui_ImplVulkan_AddTexture(
-        render_sampler, render_view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    {
+        VkSamplerCreateInfo render_sampler_info{};
+        render_sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+        vkCreateSampler(hg_vk_device, &render_sampler_info, nullptr, &render_sampler);
+    }
+    hg_defer(vmaDestroyImage(hg_vk_vma, render_image, render_alloc));
+    hg_defer(vkDestroyImageView(hg_vk_device, render_view, nullptr));
+    hg_defer(vkDestroySampler(hg_vk_device, render_sampler, nullptr));
 
     bool show_render = true;
     bool show_editor = true;
     bool show_imgui_demo = false;
     bool move_3d = false;
+    bool fixed_aspect = false;
 
     HgClock game_clock{};
     HgClock cpu_clock{};
@@ -256,6 +228,52 @@ int main(void) {
 
         if (show_render) {
             if (ImGui::Begin("Render", &show_render)) {
+                ImVec2 size = ImGui::GetContentRegionAvail();
+
+                u32 view_height = fixed_aspect ? (u32)std::min(size.y, size.x / aspect_ratio) : size.y;
+                u32 view_width = fixed_aspect ? view_height * aspect_ratio : size.x;
+                if (render_width != view_width || render_height != view_height) {
+                    vkQueueWaitIdle(hg_vk_queue);
+
+                    render_width = view_width;
+                    render_height = view_height;
+
+                    HgMat4 proj = hg_projection_perspective((f32)hg_pi * 0.5f, (f32)render_width / (f32)render_height, 0.1f, 1000.0f);
+                    pipeline2d.update_projection(proj);
+
+                    vkDestroyImageView(hg_vk_device, render_view, nullptr);
+                    vmaDestroyImage(hg_vk_vma, render_image, render_alloc);
+
+                    VkImageCreateInfo render_image_info{};
+                    render_image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+                    render_image_info.imageType = VK_IMAGE_TYPE_2D;
+                    render_image_info.format = VK_FORMAT_R8G8B8A8_SRGB;
+                    render_image_info.extent = {render_width, render_height, 1};
+                    render_image_info.mipLevels = 1;
+                    render_image_info.arrayLayers = 1;
+                    render_image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+                    render_image_info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+                                            | VK_IMAGE_USAGE_SAMPLED_BIT
+                                            | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+
+                    VmaAllocationCreateInfo render_alloc_info{};
+                    render_alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
+
+                    vmaCreateImage(hg_vk_vma, &render_image_info, &render_alloc_info, &render_image, &render_alloc, nullptr);
+
+                    VkImageViewCreateInfo render_view_info{};
+                    render_view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+                    render_view_info.image = render_image;
+                    render_view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+                    render_view_info.format = render_image_info.format;
+                    render_view_info.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+
+                    vkCreateImageView(hg_vk_device, &render_view_info, nullptr, &render_view);
+
+                    render_descriptor = ImGui_ImplVulkan_AddTexture(
+                        render_sampler, render_view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+                }
+
                 if (ImGui::IsWindowFocused()) {
                     static const f32 rot_speed = 2.0f;
                     if (move_3d && window->is_key_down[(u32)HgKey::lmouse]) {
@@ -315,6 +333,9 @@ int main(void) {
                     if (ImGui::Button("Reset Camera"))
                         camera_pos = {0, 0, -1}, camera_scale = {1, 1, 1}, camera_rot = {1, 0, 0, 0};
                     ImGui::Checkbox("3D Movement", &move_3d);
+                    ImGui::Checkbox("Fixed Aspect", &fixed_aspect);
+                    if (fixed_aspect)
+                        ImGui::DragFloat("Aspect", &aspect_ratio, 0.01f, 0.0f, 16.0f);
                 }
 
                 ImGuiTreeNodeFlags entity_flags = ImGuiTreeNodeFlags_DefaultOpen;
@@ -410,7 +431,7 @@ int main(void) {
 
         cpu_delta = cpu_clock.tick();
 
-        VkCommandBuffer cmd = window->acquire_and_record();
+        VkCommandBuffer cmd = window->begin_recording();
         cpu_clock.tick();
         if (cmd != nullptr) {
             // render to buffer
@@ -538,7 +559,7 @@ int main(void) {
                 vkCmdPipelineBarrier2(cmd, &present_dependency);
             }
 
-            window->end_and_present(hg_vk_queue);
+            window->end_and_present(cmd);
 
             // if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
             //     ImGui::UpdatePlatformWindows();

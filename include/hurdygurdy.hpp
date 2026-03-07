@@ -4590,6 +4590,18 @@ void hg_platform_init();
  */
 void hg_platform_deinit();
 
+/**
+ * Get the platform's required instance extensions for windowing
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - ext_buffer A pointer to store the extension names
+ *
+ * Returns
+ * - The number of required extensions
+ */
+u32 hg_vk_get_platform_extensions(HgArena& arena, HgStringView** ext_buffer);
+
 // audio system : TODO
 
 /**
@@ -4877,15 +4889,15 @@ struct HgWindow {
      * - The command buffer to record this frame
      * - nullptr if the swapchain cannot be rendered to
      */
-    VkCommandBuffer acquire_and_record();
+    VkCommandBuffer begin_recording();
 
     /**
      * Finishes recording the command buffer and presents the swapchain image
      *
      * Parameters
-     * - queue The Vulkan queue, must not be nullptr
+     * - cmd The command buffer given from begin_recording
      */
-    void end_and_present(VkQueue queue);
+    void end_and_present(VkCommandBuffer cmd);
 
     /**
      * Sets the window icon : TODO
@@ -4935,18 +4947,6 @@ struct HgWindow {
      */
     void set_cursor_image(u32* data, u32 width, u32 height);
 };
-
-/**
- * Get the platform's required instance extensions for windowing
- *
- * Parameters
- * - arena The arena to allocate from
- * - ext_buffer A pointer to store the extension names
- *
- * Returns
- * - The number of required extensions
- */
-u32 hg_vk_get_platform_extensions(HgArena& arena, HgStringView** ext_buffer);
 
 /**
  * Processes all events since the last call to process events or startup

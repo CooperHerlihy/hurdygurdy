@@ -1,25 +1,5 @@
 #include "hurdygurdy.hpp"
 
-static VkFormat find_swapchain_format(VkSurfaceKHR surface) {
-    hg_assert(surface != nullptr);
-
-    HgArena& scratch = hg_get_scratch();
-    HgArenaScope scratch_scope{scratch};
-
-    u32 format_count = 0;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(hg_vk_physical_device, surface, &format_count, nullptr);
-    VkSurfaceFormatKHR* formats = scratch.alloc<VkSurfaceFormatKHR>(format_count);
-    vkGetPhysicalDeviceSurfaceFormatsKHR(hg_vk_physical_device, surface, &format_count, formats);
-
-    for (usize i = 0; i < format_count; ++i) {
-        if (formats[i].format == VK_FORMAT_R8G8B8A8_SRGB)
-            return VK_FORMAT_R8G8B8A8_SRGB;
-        if (formats[i].format == VK_FORMAT_B8G8R8A8_SRGB)
-            return VK_FORMAT_B8G8R8A8_SRGB;
-    }
-    hg_error("No supported swapchain formats\n");
-}
-
 void hg_internal_resize_window_swapchain(HgWindow* window) {
     if (window->width == 0 || window->height == 0)
         return;
@@ -45,22 +25,12 @@ void hg_internal_resize_window_swapchain(HgWindow* window) {
     VkSurfaceCapabilitiesKHR surface_capabilities;
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(hg_vk_physical_device, window->surface, &surface_capabilities);
 
-    if (surface_capabilities.currentExtent.width != (u32)-1)
-        window->width = surface_capabilities.currentExtent.width;
-    if (surface_capabilities.currentExtent.height != (u32)-1)
-        window->height = surface_capabilities.currentExtent.height;
-
-    if ( window->width < surface_capabilities.minImageExtent.width || window->height < surface_capabilities.minImageExtent.height ||
-        window->width > surface_capabilities.maxImageExtent.width || window->height > surface_capabilities.maxImageExtent.height
-    ) {
-        hg_warn("Could not create swapchain of the surface's size: %d, %d | min: %d, %d - max: %d, %d\n",
-            window->width, window->height,
-            surface_capabilities.minImageExtent.width, surface_capabilities.minImageExtent.height,
-            surface_capabilities.maxImageExtent.width, surface_capabilities.maxImageExtent.height);
-        return;
-    }
-
-    window->format = find_swapchain_format(window->surface);
+    // is this useful on any platform? : TODO
+    //
+    // if (surface_capabilities.currentExtent.width != (u32)-1)
+    //     window->width = surface_capabilities.currentExtent.width;
+    // if (surface_capabilities.currentExtent.height != (u32)-1)
+    //     window->height = surface_capabilities.currentExtent.height;
 
     VkSwapchainCreateInfoKHR swapchain_info{};
     swapchain_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -133,6 +103,26 @@ void hg_internal_resize_window_swapchain(HgWindow* window) {
     vkDestroySwapchainKHR(hg_vk_device, swapchain_info.oldSwapchain, nullptr);
 }
 
+static VkFormat find_swapchain_format(VkSurfaceKHR surface) {
+    hg_assert(surface != nullptr);
+
+    HgArena& scratch = hg_get_scratch();
+    HgArenaScope scratch_scope{scratch};
+
+    u32 format_count = 0;
+    vkGetPhysicalDeviceSurfaceFormatsKHR(hg_vk_physical_device, surface, &format_count, nullptr);
+    VkSurfaceFormatKHR* formats = scratch.alloc<VkSurfaceFormatKHR>(format_count);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(hg_vk_physical_device, surface, &format_count, formats);
+
+    for (usize i = 0; i < format_count; ++i) {
+        if (formats[i].format == VK_FORMAT_R8G8B8A8_SRGB)
+            return VK_FORMAT_R8G8B8A8_SRGB;
+        if (formats[i].format == VK_FORMAT_B8G8R8A8_SRGB)
+            return VK_FORMAT_B8G8R8A8_SRGB;
+    }
+    hg_error("No supported swapchain formats\n");
+}
+
 static VkPresentModeKHR find_swapchain_present_mode(
     VkSurfaceKHR surface,
     VkPresentModeKHR desired_mode
@@ -155,6 +145,7 @@ static VkPresentModeKHR find_swapchain_present_mode(
 }
 
 void hg_internal_create_window_swapchain(HgWindow* window, const HgWindowConfig& config) {
+    window->format = find_swapchain_format(window->surface);
     window->present_mode = find_swapchain_present_mode(window->surface, config.desired_present_mode);
     window->image_usage = config.image_usage;
     hg_internal_resize_window_swapchain(window);
@@ -188,14 +179,13 @@ void hg_internal_destroy_window_swapchain(HgWindow* window) {
     vkDestroySwapchainKHR(hg_vk_device, window->swapchain, nullptr);
 }
 
-VkCommandBuffer HgWindow::acquire_and_record() {
+VkCommandBuffer HgWindow::begin_recording() {
     hg_assert(hg_vk_device != nullptr);
     if (width == 0 || height == 0)
         return nullptr;
 
-retry: // is this necessary? : TODO
+retry:
     current_frame = (current_frame + 1) % image_count;
-
     vkWaitForFences(hg_vk_device, 1, &frame_finished[current_frame], VK_TRUE, UINT64_MAX);
     vkResetFences(hg_vk_device, 1, &frame_finished[current_frame]);
 
@@ -205,6 +195,7 @@ retry: // is this necessary? : TODO
         hg_internal_resize_window_swapchain(this);
         goto retry;
     }
+    hg_assert(result == VK_SUCCESS);
 
     VkCommandBuffer cmd = cmds[current_frame];
     vkResetCommandBuffer(cmd, 0);
@@ -217,10 +208,8 @@ retry: // is this necessary? : TODO
     return cmd;
 }
 
-void HgWindow::end_and_present(VkQueue queue) {
-    hg_assert(queue != nullptr);
-
-    VkCommandBuffer cmd = cmds[current_frame];
+void HgWindow::end_and_present(VkCommandBuffer cmd) {
+    hg_assert(cmd == cmds[current_frame]);
     vkEndCommandBuffer(cmd);
 
     VkSubmitInfo submit{};
@@ -234,7 +223,7 @@ void HgWindow::end_and_present(VkQueue queue) {
     submit.signalSemaphoreCount = 1;
     submit.pSignalSemaphores = &ready_to_present[current_frame];
 
-    vkQueueSubmit(queue, 1, &submit, frame_finished[current_frame]);
+    vkQueueSubmit(hg_vk_queue, 1, &submit, frame_finished[current_frame]);
 
     VkPresentInfoKHR present_info{};
     present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -244,6 +233,6 @@ void HgWindow::end_and_present(VkQueue queue) {
     present_info.pSwapchains = &swapchain;
     present_info.pImageIndices = &current_image;
 
-    vkQueuePresentKHR(queue, &present_info);
+    vkQueuePresentKHR(hg_vk_queue, &present_info);
 }
 
