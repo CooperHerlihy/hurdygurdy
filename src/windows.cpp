@@ -2,6 +2,10 @@
 
 #ifdef HG_PLATFORM_WINDOWS
 
+void hg_internal_create_window_swapchain(HgWindow* window, const HgWindowConfig& config);
+void hg_internal_resize_window_swapchain(HgWindow* window);
+void hg_internal_destroy_window_swapchain(HgWindow* window);
+
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <vulkan/vulkan_win32.h>
@@ -378,6 +382,7 @@ HgWindow* HgWindow::create(HgArena& arena, const HgWindowConfig& config) {
     const char* title = config.title != nullptr ? config.title : "Hurdy Gurdy";
 
     HgWindow* window = arena.alloc<HgWindow>(1);
+    *window = {};
     window->internals = arena.alloc<Internals>(1);
     *window->internals = {};
 
@@ -428,6 +433,20 @@ HgWindow* HgWindow::create(HgArena& arena, const HgWindowConfig& config) {
     if (window->internals->hwnd == nullptr)
         hg_error("Win32 window creation failed\n");
 
+    PFN_vkCreateWin32SurfaceKHR pfn_vkCreateWin32SurfaceKHR
+        = (PFN_vkCreateWin32SurfaceKHR)vkGetInstanceProcAddr(hg_vk_instance, "vkCreateWin32SurfaceKHR");
+    if (pfn_vkCreateWin32SurfaceKHR == nullptr)
+        hg_error("Could not load vkCreateWin32SurfaceKHR\n");
+
+    VkWin32SurfaceCreateInfoKHR info{};
+    info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+    info.hinstance = win32_instance;
+    info.hwnd = window->internals->hwnd;
+
+    VkResult result = pfn_vkCreateWin32SurfaceKHR(hg_vk_instance, &info, nullptr, &window->surface);
+    if (window->surface == nullptr)
+        hg_error("Failed to create Vulkan surface: %s\n", hg_vk_result_string(result));
+
     hg_internal_create_window_swapchain(window, config);
 
     ShowWindow(window->internals->hwnd, SW_SHOW);
@@ -440,11 +459,11 @@ void HgWindow::destroy() {
     DestroyWindow(internals->hwnd);
 }
 
-void HgWindow::set_icon(u32* icon_data, u32 width, u32 height) {
+void HgWindow::set_icon(u32* icon_data, u32 icon_width, u32 icon_height) {
     hg_error("window set_icon : TODO\n");
     (void)icon_data;
-    (void)width;
-    (void)height;
+    (void)icon_width;
+    (void)icon_height;
 }
 
 bool HgWindow::is_fullscreen() {
@@ -461,11 +480,11 @@ void HgWindow::set_cursor(HgWindow::Cursor cursor) {
     (void)cursor;
 }
 
-void HgWindow::set_cursor_image(u32* data, u32 width, u32 height) {
+void HgWindow::set_cursor_image(u32* data, u32 cursor_width, u32 cursor_height) {
     hg_error("window set_cursor_image : TODO\n");
     (void)data;
-    (void)width;
-    (void)height;
+    (void)cursor_width;
+    (void)cursor_height;
 }
 
 u32 hg_vk_get_platform_extensions(HgArena& arena, HgStringView** ext_buffer) {
@@ -476,34 +495,11 @@ u32 hg_vk_get_platform_extensions(HgArena& arena, HgStringView** ext_buffer) {
     return count;
 }
 
-VkSurfaceKHR hg_vk_create_surface(VkInstance instance, HgWindow window) {
-    hg_assert(instance != nullptr);
-    hg_assert(window->internals != nullptr);
-
-    PFN_vkCreateWin32SurfaceKHR pfn_vkCreateWin32SurfaceKHR
-        = (PFN_vkCreateWin32SurfaceKHR)vkGetInstanceProcAddr(instance, "vkCreateWin32SurfaceKHR");
-    if (pfn_vkCreateWin32SurfaceKHR == nullptr)
-        hg_error("Could not load vkCreateWin32SurfaceKHR\n");
-
-    VkWin32SurfaceCreateInfoKHR info{};
-    info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-    info.hinstance = win32_instance;
-    info.hwnd = window->internals->hwnd;
-
-    VkSurfaceKHR surface = nullptr;
-    VkResult result = pfn_vkCreateWin32SurfaceKHR(instance, &info, nullptr, &surface);
-    if (surface == nullptr)
-        hg_error("Failed to create Vulkan surface: %s\n", hg_vk_result_string(result));
-
-    hg_assert(surface != nullptr);
-    return surface;
-}
-
 void hg_process_window_events(HgWindow** windows, usize window_count) {
     hg_assert(windows != nullptr);
 
     for (usize i = 0; i < window_count; ++i) {
-        HgWindow::Internals* window = windows[i].internals;
+        HgWindow* window = windows[i];
 
         memset(window->was_key_pressed, 0, sizeof(window->was_key_pressed));
         memset(window->was_key_released, 0, sizeof(window->was_key_released));
@@ -514,7 +510,7 @@ void hg_process_window_events(HgWindow** windows, usize window_count) {
         f64 old_mouse_pos_y = window->mouse_pos_y;
 
         MSG msg;
-        while (PeekMessageA(&msg, window->hwnd, 0, 0, PM_REMOVE) != 0) {
+        while (PeekMessageA(&msg, window->internals->hwnd, 0, 0, PM_REMOVE) != 0) {
             TranslateMessage(&msg);
             DispatchMessageA(&msg);
         }
@@ -565,7 +561,7 @@ static int ImGui_ImplWin32_CreateVkSurface(
         (VkSurfaceKHR*)out_vk_surface);
 }
 
-void ImGui_ImplHurdyGurdy_Init(HgWindow window) {
+void ImGui_ImplHurdyGurdy_Init(HgWindow* window) {
     ImGui_ImplWin32_Init(window->internals->hwnd);
     ImGui::GetPlatformIO().Platform_CreateVkSurface = ImGui_ImplWin32_CreateVkSurface;
     imgui_initialized = true;

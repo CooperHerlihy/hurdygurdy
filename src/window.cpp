@@ -21,6 +21,9 @@ static VkFormat find_swapchain_format(VkSurfaceKHR surface) {
 }
 
 void hg_internal_resize_window_swapchain(HgWindow* window) {
+    if (window->width == 0 || window->height == 0)
+        return;
+
     vkQueueWaitIdle(hg_vk_queue);
 
     if (window->cmds != nullptr)
@@ -47,7 +50,7 @@ void hg_internal_resize_window_swapchain(HgWindow* window) {
     if (surface_capabilities.currentExtent.height != (u32)-1)
         window->height = surface_capabilities.currentExtent.height;
 
-    if (window->width < surface_capabilities.minImageExtent.width || window->height < surface_capabilities.minImageExtent.height ||
+    if ( window->width < surface_capabilities.minImageExtent.width || window->height < surface_capabilities.minImageExtent.height ||
         window->width > surface_capabilities.maxImageExtent.width || window->height > surface_capabilities.maxImageExtent.height
     ) {
         hg_warn("Could not create swapchain of the surface's size: %d, %d | min: %d, %d - max: %d, %d\n",
