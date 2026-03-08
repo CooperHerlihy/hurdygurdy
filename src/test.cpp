@@ -14,8 +14,8 @@ void editor_example();
 void minimal_example();
 
 int main() {
-    // editor_example();
-    minimal_example();
+    editor_example();
+    // minimal_example();
 }
 
 void minimal_example() {
@@ -35,8 +35,6 @@ void minimal_example() {
 
     HgWindow* window = HgWindow::create(arena, window_config);
     hg_defer(window->destroy());
-
-    HgRenderer renderer = renderer.create(arena, 64, 64);
 
     HgStringView texture_path = "hg_test_dir/file_image_test.hgtex";
     HgResource texture_id = hg_resource_id(texture_path);
@@ -73,6 +71,9 @@ void minimal_example() {
         f64 delta = game_clock.tick();
         f32 deltaf = (f32)delta;
 
+        HgArena& frame = hg_get_scratch(arena);
+        HgArenaScope frame_scope{frame};
+
         hg_process_window_events(&window, 1);
         if (window->was_closed)
             goto quit;
@@ -102,7 +103,7 @@ void minimal_example() {
 
         VkCommandBuffer cmd = window->begin_recording();
         if (cmd != nullptr) {
-            renderer.reset();
+            HgRenderer renderer = renderer.create(frame, 64, 64);
 
             HgImageRenderID window_image = renderer.add_image(
                 window->images[window->current_image],
@@ -120,11 +121,6 @@ void minimal_example() {
             pass.color_attachment_count = 1;
 
             renderer.begin_pass(cmd, window->width, window->height, pass);
-
-            VkViewport viewport{0.0f, 0.0f, (f32)window->width, (f32)window->height, 0.0f, 1.0f};
-            vkCmdSetViewport(cmd, 0, 1, &viewport);
-            VkRect2D scissor{{0, 0}, {window->width, window->height}};
-            vkCmdSetScissor(cmd, 0, 1, &scissor);
 
             hg_draw_2d(ecs, cmd);
 
@@ -545,128 +541,61 @@ void editor_example() {
         VkCommandBuffer cmd = window->begin_recording();
         cpu_clock.tick();
         if (cmd != nullptr) {
-            // render to buffer
+            HgRenderer renderer = renderer.create(frame, 64, 64);
+
+            HgImageRenderID render_image_id = renderer.add_image(
+                render_image,
+                render_view,
+                {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
+
+            HgImageRenderID window_image_id = renderer.add_image(
+                window->images[window->current_image],
+                window->views[window->current_image],
+                {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
+
             {
-                VkImageMemoryBarrier2 color_barrier{};
-                color_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-                color_barrier.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-                color_barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-                color_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-                color_barrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-                color_barrier.image = render_image;
-                color_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+                HgRenderAttachment render_color_attachment{};
+                render_color_attachment.image = render_image_id;
+                render_color_attachment.load_op = VK_ATTACHMENT_LOAD_OP_CLEAR;
+                render_color_attachment.store_op = VK_ATTACHMENT_STORE_OP_STORE;
+                render_color_attachment.clear_value.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
 
-                VkDependencyInfo color_dependency{};
-                color_dependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-                color_dependency.imageMemoryBarrierCount = 1;
-                color_dependency.pImageMemoryBarriers = &color_barrier;
+                HgRenderPass render_pass{};
+                render_pass.color_attachments = &render_color_attachment;
+                render_pass.color_attachment_count = 1;
 
-                vkCmdPipelineBarrier2(cmd, &color_dependency);
-
-                VkRenderingAttachmentInfo color_attachment{};
-                color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-                color_attachment.imageView = render_view;
-                color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-                color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-                color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-                color_attachment.clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
-
-                VkRenderingInfo rendering_info{};
-                rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-                rendering_info.renderArea.extent = {render_width, render_height};
-                rendering_info.layerCount = 1;
-                rendering_info.colorAttachmentCount = 1;
-                rendering_info.pColorAttachments = &color_attachment;
-
-                vkCmdBeginRendering(cmd, &rendering_info);
-
-                VkViewport viewport{0.0f, 0.0f, (f32)render_width, (f32)render_height, 0.0f, 1.0f};
-                vkCmdSetViewport(cmd, 0, 1, &viewport);
-                VkRect2D scissor{{0, 0}, {render_width, render_height}};
-                vkCmdSetScissor(cmd, 0, 1, &scissor);
+                renderer.begin_pass(cmd, render_width, render_height, render_pass);
 
                 hg_draw_2d(ecs, cmd);
 
-                vkCmdEndRendering(cmd);
-
-                VkImageMemoryBarrier2 read_barrier{};
-                read_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-                read_barrier.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-                read_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-                read_barrier.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-                read_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-                read_barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-                read_barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-                read_barrier.image = render_image;
-                read_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-
-                VkDependencyInfo read_dependency{};
-                read_dependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-                read_dependency.imageMemoryBarrierCount = 1;
-                read_dependency.pImageMemoryBarriers = &read_barrier;
-
-                vkCmdPipelineBarrier2(cmd, &read_dependency);
+                renderer.end_pass(cmd);
             }
 
-            // render to window
             {
-                VkImageMemoryBarrier2 color_barrier{};
-                color_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-                color_barrier.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-                color_barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-                color_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-                color_barrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-                color_barrier.image = window->images[window->current_image];
-                color_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+                HgRenderAttachment gui_color_attachment{};
+                gui_color_attachment.image = window_image_id;
+                gui_color_attachment.load_op = VK_ATTACHMENT_LOAD_OP_CLEAR;
+                gui_color_attachment.store_op = VK_ATTACHMENT_STORE_OP_STORE;
+                gui_color_attachment.clear_value.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
 
-                VkDependencyInfo color_dependency{};
-                color_dependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-                color_dependency.imageMemoryBarrierCount = 1;
-                color_dependency.pImageMemoryBarriers = &color_barrier;
+                HgRenderPass gui_pass{};
+                gui_pass.sampled_images = &render_image_id;
+                gui_pass.sampled_image_count = 1;
+                gui_pass.color_attachments = &gui_color_attachment;
+                gui_pass.color_attachment_count = 1;
 
-                vkCmdPipelineBarrier2(cmd, &color_dependency);
-
-                VkRenderingAttachmentInfo color_attachment{};
-                color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-                color_attachment.imageView = window->views[window->current_image];
-                color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-                color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-                color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-
-                VkRenderingInfo rendering_info{};
-                rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-                rendering_info.renderArea.extent = {window->width, window->height};
-                rendering_info.layerCount = 1;
-                rendering_info.colorAttachmentCount = 1;
-                rendering_info.pColorAttachments = &color_attachment;
-
-                vkCmdBeginRendering(cmd, &rendering_info);
-
-                VkViewport viewport{0.0f, 0.0f, (f32)window->width, (f32)window->height, 0.0f, 1.0f};
-                vkCmdSetViewport(cmd, 0, 1, &viewport);
-                VkRect2D scissor{{0, 0}, {window->width, window->height}};
-                vkCmdSetScissor(cmd, 0, 1, &scissor);
+                renderer.begin_pass(cmd, window->width, window->height, gui_pass);
 
                 ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
 
-                vkCmdEndRendering(cmd);
-
-                VkImageMemoryBarrier2 present_barrier{};
-                present_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-                present_barrier.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-                present_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-                present_barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-                present_barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-                present_barrier.image = window->images[window->current_image];
-                present_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-
-                VkDependencyInfo present_dependency{};
-                present_dependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-                present_dependency.imageMemoryBarrierCount = 1;
-                present_dependency.pImageMemoryBarriers = &present_barrier;
-
-                vkCmdPipelineBarrier2(cmd, &present_dependency);
+                renderer.end_pass(cmd);
             }
+
+            HgImageBarrier present_barrier{};
+            present_barrier.image = window_image_id;
+            present_barrier.next_usage = HgRenderUsage::present_src;
+
+            renderer.barrier(cmd, nullptr, 0, &present_barrier, 1);
 
             window->end_and_present(cmd);
 
@@ -677,7 +606,6 @@ void editor_example() {
         }
     }
 quit:
-
     vkDeviceWaitIdle(hg_vk_device);
 }
 

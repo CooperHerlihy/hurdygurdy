@@ -4927,38 +4927,76 @@ struct HgRenderAttachment {
     /**
      * The image attached
      */
-    HgImageRenderID image;
+    HgImageRenderID image = (u64)-1;
     /**
      * How the image will be loaded
      */
-    VkAttachmentLoadOp load_op;
+    VkAttachmentLoadOp load_op = VK_ATTACHMENT_LOAD_OP_LOAD;
     /**
      * How the image will be stored
      */
-    VkAttachmentStoreOp store_op;
+    VkAttachmentStoreOp store_op = VK_ATTACHMENT_STORE_OP_STORE;
     /**
      * What to clear the image to if cleared
      */
-    VkClearValue clear_value;
+    VkClearValue clear_value = {};
 };
 
+/**
+ * A render pass description
+ */
 struct HgRenderPass {
+    /**
+     * The uniforms buffer dependencies
+     */
     HgBufferRenderID* uniform_buffers = nullptr;
+    /**
+     * The number of uniform buffers
+     */
     u32 uniform_buffer_count = 0;
+    /**
+     * The storage buffer dependencies
+     */
     HgBufferRenderID* storage_buffers = nullptr;
+    /**
+     * The number of storage buffers
+     */
     u32 storage_buffer_count = 0;
+    /**
+     * The sampled image dependencies
+     */
     HgImageRenderID* sampled_images = nullptr;
+    /**
+     * The number of sampled images
+     */
     u32 sampled_image_count = 0;
-
+    /**
+     * The number of layers in each color attachment to write to
+     */
     u32 layer_count = 1;
+    /**
+     * The color images to write to
+     */
     HgRenderAttachment* color_attachments = nullptr;
+    /**
+     * The number of color attachments
+     */
     u32 color_attachment_count = 0;
+    /**
+     * The depth attachment, if any
+     */
     HgRenderAttachment depth_attachment = {};
+    /**
+     * The stencil attachment, if any
+     */
     HgRenderAttachment stencil_attachment = {};
 };
 
+/**
+ * Where resources used in rendering can be used
+ */
 enum class HgRenderUsage {
-    none,
+    none = 0,
     vertex_buffer,
     index_buffer,
     graphics_shader,
@@ -4970,8 +5008,12 @@ enum class HgRenderUsage {
     stencil_attachment,
     transfer,
     present_src,
+    count,
 };
 
+/**
+ * How resources used in rendering can be accessed
+ */
 enum class HgRenderAccess {
     none = 0x0,
     read = 0x1,
@@ -4979,47 +5021,171 @@ enum class HgRenderAccess {
     read_write = read | write,
 };
 
+/**
+ * An image dependency barrier
+ */
 struct HgImageBarrier {
-    HgImageRenderID image;
-    HgRenderUsage next_usage;
-    HgRenderAccess next_access;
+    /**
+     * The image to sychronize
+     */
+    HgImageRenderID image = (u64)-1;
+    /**
+     * How the image will next be used
+     */
+    HgRenderUsage next_usage = HgRenderUsage::none;
+    /**
+     * How the image will next be accessed
+     */
+    HgRenderAccess next_access = HgRenderAccess::none;
 };
 
+/**
+ * A buffer dependency barrier
+ */
 struct HgBufferBarrier {
-    HgBufferRenderID buffer;
-    HgRenderUsage next_usage;
-    HgRenderAccess next_access;
+    /**
+     * The buffer to sychronize
+     */
+    HgBufferRenderID buffer = (u64)-1;
+    /**
+     * How the buffer will next be used
+     */
+    HgRenderUsage next_usage = HgRenderUsage::none;
+    /**
+     * How the buffer will next be accessed
+     */
+    HgRenderAccess next_access = HgRenderAccess::none;
 };
 
+/**
+ * A renderer to organize render passes and synchronize resources
+ */
 struct HgRenderer {
+    /**
+     * An image resource
+     */
     struct Image {
+        /**
+         * The image
+         */
         VkImage handle;
+        /**
+         * The image view
+         */
         VkImageView view;
+        /**
+         * The image subresource
+         */
         VkImageSubresourceRange subresource;
+        /**
+         * The image's last usage
+         */
         HgRenderUsage last_usage;
+        /**
+         * The image's last access
+         */
         HgRenderAccess last_access;
     };
 
     struct Buffer {
+        /**
+         * The buffer
+         */
         VkBuffer handle;
+        /**
+         * The offset into the buffer in bytes
+         */
+        VkDeviceSize offset;
+        /**
+         * The size of the buffer in bytes
+         */
         VkDeviceSize size;
+        /**
+         * The buffer's last usage
+         */
         HgRenderUsage last_usage;
+        /**
+         * The buffer's last access
+         */
         HgRenderAccess last_access;
     };
 
-    HgHashMap<HgImageRenderID, Image> images;
-    HgHashMap<HgBufferRenderID, Buffer> buffers;
+    /**
+     * The buffer resources
+     */
+    Buffer* buffers;
+    /**
+     * The number of active buffer resources
+     */
+    u32 buffer_count;
+    /**
+     * The max buffer resources
+     */
+    u32 buffer_capacity;
+    /**
+     * The image resources
+     */
+    Image* images;
+    /**
+     * The number of active image resources
+     */
+    u32 image_count;
+    /**
+     * The max image resources
+     */
+    u32 image_capacity;
 
+    /**
+     * Create a new renderer
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - max_images The max number of image resources
+     * - max_buffers The max number of buffer resources
+     *
+     * Returns
+     * - The created renderer
+     */
     static HgRenderer create(HgArena& arena, u32 max_images, u32 max_buffers);
 
+    /**
+     * Removes all resources
+     */
     void reset();
 
+    /**
+     * Add a buffer resource
+     *
+     * Parameters
+     * - buffer The buffer to add, must not be nullptr
+     * - offset The offset into the buffer in bytes
+     * - size The size of the buffer in bytes
+     * - previous_usage The last usage of the buffer, if any
+     * - previous_access The last access of the buffer, if any
+     *
+     * Returns
+     * - The buffer resource's id
+     */
     HgBufferRenderID add_buffer(
         VkBuffer buffer,
+        VkDeviceSize offset,
         VkDeviceSize size,
         HgRenderUsage previous_usage = HgRenderUsage::none,
         HgRenderAccess previous_access = HgRenderAccess::none);
 
+    /**
+     * Add a image resource
+     *
+     * Parameters
+     * - image The image to add, must not be nullptr
+     * - view The image's view, must not be nullptr
+     * - subresource The subresource of the image
+     * - previous_usage The last usage of the image, if any
+     * - previous_access The last access of the image, if any
+     *
+     * Returns
+     * - The image resource's id
+     */
     HgImageRenderID add_image(
         VkImage image,
         VkImageView view,
@@ -5027,15 +5193,40 @@ struct HgRenderer {
         HgRenderUsage previous_usage = HgRenderUsage::none,
         HgRenderAccess previous_access = HgRenderAccess::none);
 
+    /**
+     * Creates a barrier for resource uses that are not part of a render pass
+     *
+     * Parameters
+     * - cmd The command buffer
+     * - buffer_barriers The buffer barriers
+     * - buffer_barrier_count The number of buffer barriers
+     * - image_barriers The image barriers
+     * - image_barrier_count The number of image barriers
+     */
     void barrier(
         VkCommandBuffer cmd,
         const HgBufferBarrier* buffer_barriers,
-        u32 buffer_count,
+        u32 buffer_barrier_count,
         const HgImageBarrier* image_barriers,
-        u32 image_count);
+        u32 image_barrier_count);
 
+    /**
+     * Begins a render pass
+     *
+     * Parameters
+     * - cmd The command buffer
+     * - width The width of the render area
+     * - height The height of the render area
+     * - pass The render pass description
+     */
     void begin_pass(VkCommandBuffer cmd, u32 width, u32 height, const HgRenderPass& pass);
 
+    /**
+     * Ends the render pass
+     *
+     * Parameters
+     * - cmd The command buffer
+     */
     void end_pass(VkCommandBuffer cmd);
 };
 

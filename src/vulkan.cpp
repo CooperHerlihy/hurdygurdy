@@ -1662,14 +1662,32 @@ void hg_vk_image_generate_mipmaps(const HgVkImageGenerateMipmapsConfig& config) 
 
 HgRenderer HgRenderer::create(HgArena& arena, u32 max_images, u32 max_buffers) {
     HgRenderer renderer{};
-    renderer.images = renderer.images.create(arena, max_images);
-    renderer.buffers = renderer.buffers.create(arena, max_buffers);
+    renderer.buffers = arena.alloc<Buffer>(max_buffers);
+    renderer.buffer_count = 0;
+    renderer.buffer_capacity = max_buffers;
+    renderer.images = arena.alloc<Image>(max_images);
+    renderer.image_count = 0;
+    renderer.image_capacity = max_images;
     return renderer;
 }
 
 void HgRenderer::reset() {
-    images.reset();
-    buffers.reset();
+    buffer_count = 0;
+    image_count = 0;
+}
+
+HgBufferRenderID HgRenderer::add_buffer(
+    VkBuffer buffer,
+    VkDeviceSize offset,
+    VkDeviceSize size,
+    HgRenderUsage previous_usage,
+    HgRenderAccess previous_access
+) {
+    hg_assert(buffer_count < buffer_capacity);
+    hg_assert(buffer != nullptr);
+
+    buffers[buffer_count] = {buffer, offset, size, previous_usage, previous_access};
+    return buffer_count++;
 }
 
 HgImageRenderID HgRenderer::add_image(
@@ -1679,20 +1697,12 @@ HgImageRenderID HgRenderer::add_image(
     HgRenderUsage previous_usage,
     HgRenderAccess previous_access
 ) {
-    HgImageRenderID id = (HgImageRenderID)image;
-    images.insert(id, {image, view, subresource, previous_usage, previous_access});
-    return id;
-}
+    hg_assert(image_count < image_capacity);
+    hg_assert(image != nullptr);
+    hg_assert(view != nullptr);
 
-HgBufferRenderID HgRenderer::add_buffer(
-    VkBuffer buffer,
-    VkDeviceSize size,
-    HgRenderUsage previous_usage,
-    HgRenderAccess previous_access
-) {
-    HgBufferRenderID id = (HgBufferRenderID)buffer;
-    buffers.insert(id, {buffer, size, previous_usage, previous_access});
-    return id;
+    images[image_count] = {image, view, subresource, previous_usage, previous_access};
+    return image_count++;
 }
 
 static constexpr VkPipelineStageFlags2 get_stage_mask(HgRenderUsage usage) {
@@ -1726,6 +1736,8 @@ static constexpr VkPipelineStageFlags2 get_stage_mask(HgRenderUsage usage) {
             break;
         case HgRenderUsage::present_src:
             return VK_PIPELINE_STAGE_NONE;
+            break;
+        case HgRenderUsage::count:
             break;
     }
     hg_error("Found invalid render usage: %d", (u32)usage);
@@ -1772,6 +1784,8 @@ static constexpr VkAccessFlags2 get_access_mask(HgRenderUsage usage, HgRenderAcc
         case HgRenderUsage::present_src:
             return VK_ACCESS_NONE;
             break;
+        case HgRenderUsage::count:
+            break;
     }
     hg_error("Found invalid render usage: %d", (u32)usage);
 }
@@ -1808,7 +1822,8 @@ static constexpr VkImageLayout get_layout(HgRenderUsage usage, HgRenderAccess ac
         case HgRenderUsage::vertex_buffer: [[fallthrough]];
         case HgRenderUsage::index_buffer: [[fallthrough]];
         case HgRenderUsage::graphics_uniform_buffer: [[fallthrough]];
-        case HgRenderUsage::compute_uniform_buffer:
+        case HgRenderUsage::compute_uniform_buffer: [[fallthrough]];
+        case HgRenderUsage::count:
             break;
     }
     hg_error("Found invalid render usage for image: %d", (u32)usage);
@@ -1817,19 +1832,19 @@ static constexpr VkImageLayout get_layout(HgRenderUsage usage, HgRenderAccess ac
 void HgRenderer::barrier(
     VkCommandBuffer cmd,
     const HgBufferBarrier* buffer_barriers,
-    u32 buffer_count,
+    u32 buffer_barrier_count,
     const HgImageBarrier* image_barriers,
-    u32 image_count
+    u32 image_barrier_count
 ) {
     HgArena& scratch = hg_get_scratch();
     HgArenaScope scratch_scope{scratch};
 
-    VkBufferMemoryBarrier2* vk_buffer_barriers = scratch.alloc<VkBufferMemoryBarrier2>(image_count);
-    VkImageMemoryBarrier2* vk_image_barriers = scratch.alloc<VkImageMemoryBarrier2>(image_count);
+    VkBufferMemoryBarrier2* vk_buffer_barriers = scratch.alloc<VkBufferMemoryBarrier2>(image_barrier_count);
+    VkImageMemoryBarrier2* vk_image_barriers = scratch.alloc<VkImageMemoryBarrier2>(image_barrier_count);
 
-    for (usize i = 0; i < buffer_count; ++i) {
-        hg_assert(buffers.has(buffer_barriers[i].buffer));
-        HgBufferRenderResource& buffer = *buffers.get(buffer_barriers[i].buffer);
+    for (usize i = 0; i < buffer_barrier_count; ++i) {
+        hg_assert(buffer_barriers[i].buffer < buffer_count);
+        Buffer& buffer = buffers[buffer_barriers[i].buffer];
 
         vk_buffer_barriers[i] = {};
         vk_buffer_barriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
@@ -1838,16 +1853,16 @@ void HgRenderer::barrier(
         vk_buffer_barriers[i].dstStageMask = get_stage_mask(buffer_barriers[i].next_usage);
         vk_buffer_barriers[i].dstAccessMask = get_access_mask(buffer_barriers[i].next_usage, buffer_barriers[i].next_access);
         vk_buffer_barriers[i].buffer = buffer.handle;
-        vk_buffer_barriers[i].offset = 0;
+        vk_buffer_barriers[i].offset = buffer.offset;
         vk_buffer_barriers[i].size = buffer.size;
 
         buffer.last_usage = buffer_barriers[i].next_usage;
         buffer.last_access = buffer_barriers[i].next_access;
     }
 
-    for (usize i = 0; i < image_count; ++i) {
-        hg_assert(images.has(image_barriers[i].image));
-        HgImageRenderResource& image = *images.get(image_barriers[i].image);
+    for (usize i = 0; i < image_barrier_count; ++i) {
+        hg_assert(image_barriers[i].image < image_count);
+        Image& image = images[image_barriers[i].image];
 
         vk_image_barriers[i] = {};
         vk_image_barriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -1866,9 +1881,9 @@ void HgRenderer::barrier(
 
     VkDependencyInfo dep{};
     dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    dep.bufferMemoryBarrierCount = buffer_count;
+    dep.bufferMemoryBarrierCount = buffer_barrier_count;
     dep.pBufferMemoryBarriers = vk_buffer_barriers;
-    dep.imageMemoryBarrierCount = image_count;
+    dep.imageMemoryBarrierCount = image_barrier_count;
     dep.pImageMemoryBarriers = vk_image_barriers;
 
     vkCmdPipelineBarrier2(cmd, &dep);
@@ -1887,8 +1902,8 @@ void HgRenderer::begin_pass(VkCommandBuffer cmd, u32 width, u32 height, const Hg
         buffer_barriers, buffer_barrier_count, buffer_barrier_count + pass.uniform_buffer_count);
 
     for (usize i = buffer_barrier_count; i < buffer_barrier_count + pass.uniform_buffer_count; ++i) {
-        hg_assert(buffers.has(pass.uniform_buffers[i]));
-        HgBufferRenderResource& buffer = *buffers.get(pass.uniform_buffers[i]);
+        hg_assert(pass.uniform_buffers[i - buffer_barrier_count] < buffer_count);
+        Buffer& buffer = buffers[pass.uniform_buffers[i - buffer_barrier_count]];
 
         buffer_barriers[i] = {};
         buffer_barriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
@@ -1897,7 +1912,7 @@ void HgRenderer::begin_pass(VkCommandBuffer cmd, u32 width, u32 height, const Hg
         buffer_barriers[i].dstStageMask = get_stage_mask(HgRenderUsage::graphics_uniform_buffer);
         buffer_barriers[i].dstAccessMask = get_access_mask(HgRenderUsage::graphics_uniform_buffer, HgRenderAccess::read);
         buffer_barriers[i].buffer = buffer.handle;
-        buffer_barriers[i].offset = 0;
+        buffer_barriers[i].offset = buffer.offset;
         buffer_barriers[i].size = buffer.size;
 
         buffer.last_usage = HgRenderUsage::graphics_uniform_buffer;
@@ -1910,8 +1925,8 @@ void HgRenderer::begin_pass(VkCommandBuffer cmd, u32 width, u32 height, const Hg
         buffer_barriers, buffer_barrier_count, buffer_barrier_count + pass.storage_buffer_count);
 
     for (usize i = buffer_barrier_count; i < buffer_barrier_count + pass.storage_buffer_count; ++i) {
-        hg_assert(buffers.has(pass.storage_buffers[i]));
-        HgBufferRenderResource& buffer = *buffers.get(pass.storage_buffers[i]);
+        hg_assert(pass.storage_buffers[i - buffer_barrier_count] < buffer_count);
+        Buffer& buffer = buffers[pass.storage_buffers[i - buffer_barrier_count]];
 
         buffer_barriers[i] = {};
         buffer_barriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
@@ -1920,7 +1935,7 @@ void HgRenderer::begin_pass(VkCommandBuffer cmd, u32 width, u32 height, const Hg
         buffer_barriers[i].dstStageMask = get_stage_mask(HgRenderUsage::graphics_shader);
         buffer_barriers[i].dstAccessMask = get_access_mask(HgRenderUsage::graphics_shader, HgRenderAccess::read);
         buffer_barriers[i].buffer = buffer.handle;
-        buffer_barriers[i].offset = 0;
+        buffer_barriers[i].offset = buffer.offset;
         buffer_barriers[i].size = buffer.size;
 
         buffer.last_usage = HgRenderUsage::graphics_shader;
@@ -1933,8 +1948,8 @@ void HgRenderer::begin_pass(VkCommandBuffer cmd, u32 width, u32 height, const Hg
         image_barriers, image_barrier_count, image_barrier_count + pass.sampled_image_count);
 
     for (usize i = image_barrier_count; i < image_barrier_count + pass.sampled_image_count; ++i) {
-        hg_assert(images.has(pass.sampled_images[i]));
-        HgImageRenderResource& image = *images.get(pass.sampled_images[i]);
+        hg_assert(pass.sampled_images[i - image_barrier_count] < image_count);
+        Image& image = images[pass.sampled_images[i - image_barrier_count]];
 
         image_barriers[i] = {};
         image_barriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -1957,8 +1972,8 @@ void HgRenderer::begin_pass(VkCommandBuffer cmd, u32 width, u32 height, const Hg
         image_barriers, image_barrier_count, image_barrier_count + pass.color_attachment_count);
 
     for (usize i = image_barrier_count; i < image_barrier_count + pass.color_attachment_count; ++i) {
-        hg_assert(images.has(pass.color_attachments[i].image));
-        HgImageRenderResource& image = *images.get(pass.color_attachments[i].image);
+        hg_assert(pass.color_attachments[i - image_barrier_count].image < image_count);
+        Image& image = images[pass.color_attachments[i - image_barrier_count].image];
 
         image_barriers[i] = {};
         image_barriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -1977,9 +1992,9 @@ void HgRenderer::begin_pass(VkCommandBuffer cmd, u32 width, u32 height, const Hg
 
     image_barrier_count += pass.color_attachment_count;
 
-    if (pass.depth_attachment.image != 0) {
-        hg_assert(images.has(pass.depth_attachment.image));
-        HgImageRenderResource& image = *images.get(pass.depth_attachment.image);
+    if (pass.depth_attachment.image != (u64)-1) {
+        hg_assert(pass.depth_attachment.image < image_count);
+        Image& image = images[pass.depth_attachment.image];
 
         image_barriers = scratch.realloc<VkImageMemoryBarrier2>(
             image_barriers, image_barrier_count, image_barrier_count + 1);
@@ -2005,9 +2020,9 @@ void HgRenderer::begin_pass(VkCommandBuffer cmd, u32 width, u32 height, const Hg
         ++image_barrier_count;
     }
 
-    if (pass.stencil_attachment.image != 0) {
-        hg_assert(images.has(pass.stencil_attachment.image));
-        HgImageRenderResource& image = *images.get(pass.stencil_attachment.image);
+    if (pass.stencil_attachment.image != (u64)-1) {
+        hg_assert(pass.stencil_attachment.image < image_count);
+        Image& image = images[pass.stencil_attachment.image];
 
         image_barriers = scratch.realloc<VkImageMemoryBarrier2>(
             image_barriers, image_barrier_count, image_barrier_count + 1);
@@ -2046,8 +2061,8 @@ void HgRenderer::begin_pass(VkCommandBuffer cmd, u32 width, u32 height, const Hg
         = scratch.alloc<VkRenderingAttachmentInfo>(pass.color_attachment_count);
 
     for (usize i = 0; i < pass.color_attachment_count; ++i) {
-        hg_assert(images.has(pass.color_attachments[i].image));
-        HgImageRenderResource& image = *images.get(pass.color_attachments[i].image);
+        hg_assert(pass.color_attachments[i].image < image_count);
+        Image& image = images[pass.color_attachments[i].image];
 
         color_attachments[i] = {};
         color_attachments[i].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
@@ -2059,9 +2074,9 @@ void HgRenderer::begin_pass(VkCommandBuffer cmd, u32 width, u32 height, const Hg
     }
 
     VkRenderingAttachmentInfo depth_attachment{};
-    if (pass.depth_attachment.image != 0) {
-        hg_assert(images.has(pass.depth_attachment.image));
-        HgImageRenderResource& image = *images.get(pass.depth_attachment.image);
+    if (pass.depth_attachment.image != (u64)-1) {
+        hg_assert(pass.depth_attachment.image < image_count);
+        Image& image = images[pass.depth_attachment.image];
 
         depth_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
         depth_attachment.imageView = image.view;
@@ -2072,9 +2087,8 @@ void HgRenderer::begin_pass(VkCommandBuffer cmd, u32 width, u32 height, const Hg
     }
 
     VkRenderingAttachmentInfo stencil_attachment{};
-    if (pass.stencil_attachment.image != 0) {
-        hg_assert(images.has(pass.stencil_attachment.image));
-        HgImageRenderResource& image = *images.get(pass.stencil_attachment.image);
+    if (pass.stencil_attachment.image < image_count) {
+        Image& image = images[pass.stencil_attachment.image];
 
         stencil_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
         stencil_attachment.imageView = image.view;
@@ -2090,10 +2104,15 @@ void HgRenderer::begin_pass(VkCommandBuffer cmd, u32 width, u32 height, const Hg
     rendering_info.layerCount = pass.layer_count;
     rendering_info.colorAttachmentCount = pass.color_attachment_count;
     rendering_info.pColorAttachments = color_attachments;
-    rendering_info.pDepthAttachment = pass.depth_attachment.image != 0 ? &depth_attachment : nullptr;
-    rendering_info.pStencilAttachment = pass.stencil_attachment.image != 0 ? &stencil_attachment : nullptr;
+    rendering_info.pDepthAttachment = pass.depth_attachment.image != (u64)-1 ? &depth_attachment : nullptr;
+    rendering_info.pStencilAttachment = pass.stencil_attachment.image != (u64)-1 ? &stencil_attachment : nullptr;
 
     vkCmdBeginRendering(cmd, &rendering_info);
+
+    VkViewport viewport{0.0f, 0.0f, (f32)width, (f32)height, 0.0f, 1.0f};
+    vkCmdSetViewport(cmd, 0, 1, &viewport);
+    VkRect2D scissor{{0, 0}, {width, height}};
+    vkCmdSetScissor(cmd, 0, 1, &scissor);
 }
 
 void HgRenderer::end_pass(VkCommandBuffer cmd) {
