@@ -1660,6 +1660,446 @@ void hg_vk_image_generate_mipmaps(const HgVkImageGenerateMipmapsConfig& config) 
     hg_vk_end_and_execute(cmd);
 }
 
+HgRenderer HgRenderer::create(HgArena& arena, u32 max_images, u32 max_buffers) {
+    HgRenderer renderer{};
+    renderer.images = renderer.images.create(arena, max_images);
+    renderer.buffers = renderer.buffers.create(arena, max_buffers);
+    return renderer;
+}
+
+void HgRenderer::reset() {
+    images.reset();
+    buffers.reset();
+}
+
+HgImageRenderID HgRenderer::add_image(
+    VkImage image,
+    VkImageView view,
+    VkImageSubresourceRange subresource,
+    HgRenderUsage previous_usage,
+    HgRenderAccess previous_access
+) {
+    HgImageRenderID id = (HgImageRenderID)image;
+    images.insert(id, {image, view, subresource, previous_usage, previous_access});
+    return id;
+}
+
+HgBufferRenderID HgRenderer::add_buffer(
+    VkBuffer buffer,
+    VkDeviceSize size,
+    HgRenderUsage previous_usage,
+    HgRenderAccess previous_access
+) {
+    HgBufferRenderID id = (HgBufferRenderID)buffer;
+    buffers.insert(id, {buffer, size, previous_usage, previous_access});
+    return id;
+}
+
+static constexpr VkPipelineStageFlags2 get_stage_mask(HgRenderUsage usage) {
+    switch (usage) {
+        case HgRenderUsage::none:
+            return VK_PIPELINE_STAGE_NONE;
+            break;
+        case HgRenderUsage::vertex_buffer:
+            return VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
+            break;
+        case HgRenderUsage::index_buffer:
+            return VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
+            break;
+        case HgRenderUsage::graphics_shader: [[fallthrough]];
+        case HgRenderUsage::graphics_uniform_buffer:
+            return VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            break;
+        case HgRenderUsage::compute_shader: [[fallthrough]];
+        case HgRenderUsage::compute_uniform_buffer:
+            return VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+            break;
+        case HgRenderUsage::color_attachment:
+            return VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            break;
+        case HgRenderUsage::depth_attachment: [[fallthrough]];
+        case HgRenderUsage::stencil_attachment:
+            return VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+            break;
+        case HgRenderUsage::transfer:
+            return VK_PIPELINE_STAGE_TRANSFER_BIT;
+            break;
+        case HgRenderUsage::present_src:
+            return VK_PIPELINE_STAGE_NONE;
+            break;
+    }
+    hg_error("Found invalid render usage: %d", (u32)usage);
+}
+
+static constexpr VkAccessFlags2 get_access_mask(HgRenderUsage usage, HgRenderAccess access) {
+    switch (usage) {
+        case HgRenderUsage::none:
+            return VK_ACCESS_NONE;
+            break;
+        case HgRenderUsage::vertex_buffer:
+            return VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+            break;
+        case HgRenderUsage::index_buffer:
+            return VK_ACCESS_INDEX_READ_BIT;
+            break;
+        case HgRenderUsage::graphics_shader:
+            return ((u32)access & (u32)HgRenderAccess::read) ? VK_ACCESS_SHADER_READ_BIT : 0
+                 | ((u32)access & (u32)HgRenderAccess::write) ? VK_ACCESS_SHADER_WRITE_BIT : 0;
+            break;
+        case HgRenderUsage::graphics_uniform_buffer:
+            return VK_ACCESS_UNIFORM_READ_BIT;
+            break;
+        case HgRenderUsage::compute_shader:
+            return ((u32)access & (u32)HgRenderAccess::read) ? VK_ACCESS_SHADER_READ_BIT : 0
+                 | ((u32)access & (u32)HgRenderAccess::write) ? VK_ACCESS_SHADER_WRITE_BIT : 0;
+            break;
+        case HgRenderUsage::compute_uniform_buffer:
+            return VK_ACCESS_UNIFORM_READ_BIT;
+            break;
+        case HgRenderUsage::color_attachment:
+            return ((u32)access & (u32)HgRenderAccess::read) ? VK_ACCESS_COLOR_ATTACHMENT_READ_BIT : 0
+                 | ((u32)access & (u32)HgRenderAccess::write) ? VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT : 0;
+            break;
+        case HgRenderUsage::depth_attachment: [[fallthrough]];
+        case HgRenderUsage::stencil_attachment:
+            return ((u32)access & (u32)HgRenderAccess::read) ? VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT : 0
+                 | ((u32)access & (u32)HgRenderAccess::write) ? VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT : 0;
+            break;
+        case HgRenderUsage::transfer:
+            return ((u32)access & (u32)HgRenderAccess::read) ? VK_ACCESS_TRANSFER_READ_BIT : 0
+                 | ((u32)access & (u32)HgRenderAccess::write) ? VK_ACCESS_TRANSFER_WRITE_BIT : 0;
+            break;
+        case HgRenderUsage::present_src:
+            return VK_ACCESS_NONE;
+            break;
+    }
+    hg_error("Found invalid render usage: %d", (u32)usage);
+}
+
+static constexpr VkImageLayout get_layout(HgRenderUsage usage, HgRenderAccess access) {
+    switch (usage) {
+        case HgRenderUsage::none:
+            return VK_IMAGE_LAYOUT_UNDEFINED;
+            break;
+        case HgRenderUsage::graphics_shader: [[fallthrough]];
+        case HgRenderUsage::compute_shader:
+            return ((u32)access & (u32)HgRenderAccess::write)
+                ? VK_IMAGE_LAYOUT_GENERAL
+                : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            break;
+        case HgRenderUsage::color_attachment:
+            return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            break;
+        case HgRenderUsage::depth_attachment: [[fallthrough]];
+        case HgRenderUsage::stencil_attachment:
+            return !((u32)access & (u32)HgRenderAccess::write)
+                ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+                : VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+            break;
+        case HgRenderUsage::transfer:
+            hg_assert(!(((u32)access & (u32)HgRenderAccess::read) && ((u32)access & (u32)HgRenderAccess::write)));
+            return ((u32)access & (u32)HgRenderAccess::read)
+                ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+                : VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            break;
+        case HgRenderUsage::present_src:
+            return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+            break;
+        case HgRenderUsage::vertex_buffer: [[fallthrough]];
+        case HgRenderUsage::index_buffer: [[fallthrough]];
+        case HgRenderUsage::graphics_uniform_buffer: [[fallthrough]];
+        case HgRenderUsage::compute_uniform_buffer:
+            break;
+    }
+    hg_error("Found invalid render usage for image: %d", (u32)usage);
+}
+
+void HgRenderer::barrier(
+    VkCommandBuffer cmd,
+    const HgBufferBarrier* buffer_barriers,
+    u32 buffer_count,
+    const HgImageBarrier* image_barriers,
+    u32 image_count
+) {
+    HgArena& scratch = hg_get_scratch();
+    HgArenaScope scratch_scope{scratch};
+
+    VkBufferMemoryBarrier2* vk_buffer_barriers = scratch.alloc<VkBufferMemoryBarrier2>(image_count);
+    VkImageMemoryBarrier2* vk_image_barriers = scratch.alloc<VkImageMemoryBarrier2>(image_count);
+
+    for (usize i = 0; i < buffer_count; ++i) {
+        hg_assert(buffers.has(buffer_barriers[i].buffer));
+        HgBufferRenderResource& buffer = *buffers.get(buffer_barriers[i].buffer);
+
+        vk_buffer_barriers[i] = {};
+        vk_buffer_barriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+        vk_buffer_barriers[i].srcStageMask = get_stage_mask(buffer.last_usage);
+        vk_buffer_barriers[i].srcAccessMask = get_access_mask(buffer.last_usage, buffer.last_access);
+        vk_buffer_barriers[i].dstStageMask = get_stage_mask(buffer_barriers[i].next_usage);
+        vk_buffer_barriers[i].dstAccessMask = get_access_mask(buffer_barriers[i].next_usage, buffer_barriers[i].next_access);
+        vk_buffer_barriers[i].buffer = buffer.handle;
+        vk_buffer_barriers[i].offset = 0;
+        vk_buffer_barriers[i].size = buffer.size;
+
+        buffer.last_usage = buffer_barriers[i].next_usage;
+        buffer.last_access = buffer_barriers[i].next_access;
+    }
+
+    for (usize i = 0; i < image_count; ++i) {
+        hg_assert(images.has(image_barriers[i].image));
+        HgImageRenderResource& image = *images.get(image_barriers[i].image);
+
+        vk_image_barriers[i] = {};
+        vk_image_barriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        vk_image_barriers[i].srcStageMask = get_stage_mask(image.last_usage);
+        vk_image_barriers[i].srcAccessMask = get_access_mask(image.last_usage, image.last_access);
+        vk_image_barriers[i].dstStageMask = get_stage_mask(image_barriers[i].next_usage);
+        vk_image_barriers[i].dstAccessMask = get_access_mask(image_barriers[i].next_usage, image_barriers[i].next_access);
+        vk_image_barriers[i].oldLayout = get_layout(image.last_usage, image.last_access);
+        vk_image_barriers[i].newLayout = get_layout(image_barriers[i].next_usage, image_barriers[i].next_access);
+        vk_image_barriers[i].image = image.handle;
+        vk_image_barriers[i].subresourceRange = image.subresource;
+
+        image.last_usage = image_barriers[i].next_usage;
+        image.last_access = image_barriers[i].next_access;
+    }
+
+    VkDependencyInfo dep{};
+    dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    dep.bufferMemoryBarrierCount = buffer_count;
+    dep.pBufferMemoryBarriers = vk_buffer_barriers;
+    dep.imageMemoryBarrierCount = image_count;
+    dep.pImageMemoryBarriers = vk_image_barriers;
+
+    vkCmdPipelineBarrier2(cmd, &dep);
+}
+
+void HgRenderer::begin_pass(VkCommandBuffer cmd, u32 width, u32 height, const HgRenderPass& pass) {
+    HgArena& scratch = hg_get_scratch();
+    HgArenaScope scratch_scope{scratch};
+
+    VkBufferMemoryBarrier2* buffer_barriers = nullptr;
+    u32 buffer_barrier_count = 0;
+    VkImageMemoryBarrier2* image_barriers = nullptr;
+    u32 image_barrier_count = 0;
+
+    buffer_barriers = scratch.realloc<VkBufferMemoryBarrier2>(
+        buffer_barriers, buffer_barrier_count, buffer_barrier_count + pass.uniform_buffer_count);
+
+    for (usize i = buffer_barrier_count; i < buffer_barrier_count + pass.uniform_buffer_count; ++i) {
+        hg_assert(buffers.has(pass.uniform_buffers[i]));
+        HgBufferRenderResource& buffer = *buffers.get(pass.uniform_buffers[i]);
+
+        buffer_barriers[i] = {};
+        buffer_barriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+        buffer_barriers[i].srcStageMask = get_stage_mask(buffer.last_usage);
+        buffer_barriers[i].srcAccessMask = get_access_mask(buffer.last_usage, buffer.last_access);
+        buffer_barriers[i].dstStageMask = get_stage_mask(HgRenderUsage::graphics_uniform_buffer);
+        buffer_barriers[i].dstAccessMask = get_access_mask(HgRenderUsage::graphics_uniform_buffer, HgRenderAccess::read);
+        buffer_barriers[i].buffer = buffer.handle;
+        buffer_barriers[i].offset = 0;
+        buffer_barriers[i].size = buffer.size;
+
+        buffer.last_usage = HgRenderUsage::graphics_uniform_buffer;
+        buffer.last_access = HgRenderAccess::read;
+    }
+
+    buffer_barrier_count += pass.uniform_buffer_count;
+
+    buffer_barriers = scratch.realloc<VkBufferMemoryBarrier2>(
+        buffer_barriers, buffer_barrier_count, buffer_barrier_count + pass.storage_buffer_count);
+
+    for (usize i = buffer_barrier_count; i < buffer_barrier_count + pass.storage_buffer_count; ++i) {
+        hg_assert(buffers.has(pass.storage_buffers[i]));
+        HgBufferRenderResource& buffer = *buffers.get(pass.storage_buffers[i]);
+
+        buffer_barriers[i] = {};
+        buffer_barriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+        buffer_barriers[i].srcStageMask = get_stage_mask(buffer.last_usage);
+        buffer_barriers[i].srcAccessMask = get_access_mask(buffer.last_usage, buffer.last_access);
+        buffer_barriers[i].dstStageMask = get_stage_mask(HgRenderUsage::graphics_shader);
+        buffer_barriers[i].dstAccessMask = get_access_mask(HgRenderUsage::graphics_shader, HgRenderAccess::read);
+        buffer_barriers[i].buffer = buffer.handle;
+        buffer_barriers[i].offset = 0;
+        buffer_barriers[i].size = buffer.size;
+
+        buffer.last_usage = HgRenderUsage::graphics_shader;
+        buffer.last_access = HgRenderAccess::read;
+    }
+
+    buffer_barrier_count += pass.storage_buffer_count;
+
+    image_barriers = scratch.realloc<VkImageMemoryBarrier2>(
+        image_barriers, image_barrier_count, image_barrier_count + pass.sampled_image_count);
+
+    for (usize i = image_barrier_count; i < image_barrier_count + pass.sampled_image_count; ++i) {
+        hg_assert(images.has(pass.sampled_images[i]));
+        HgImageRenderResource& image = *images.get(pass.sampled_images[i]);
+
+        image_barriers[i] = {};
+        image_barriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        image_barriers[i].srcStageMask = get_stage_mask(image.last_usage);
+        image_barriers[i].srcAccessMask = get_access_mask(image.last_usage, image.last_access);
+        image_barriers[i].dstStageMask = get_stage_mask(HgRenderUsage::graphics_shader);
+        image_barriers[i].dstAccessMask = get_access_mask(HgRenderUsage::graphics_shader, HgRenderAccess::read);
+        image_barriers[i].oldLayout = get_layout(image.last_usage, image.last_access);
+        image_barriers[i].newLayout = get_layout(HgRenderUsage::graphics_shader, HgRenderAccess::read);
+        image_barriers[i].image = image.handle;
+        image_barriers[i].subresourceRange = image.subresource;
+
+        image.last_usage = HgRenderUsage::graphics_shader;
+        image.last_access = HgRenderAccess::read;
+    }
+
+    image_barrier_count += pass.sampled_image_count;
+
+    image_barriers = scratch.realloc<VkImageMemoryBarrier2>(
+        image_barriers, image_barrier_count, image_barrier_count + pass.color_attachment_count);
+
+    for (usize i = image_barrier_count; i < image_barrier_count + pass.color_attachment_count; ++i) {
+        hg_assert(images.has(pass.color_attachments[i].image));
+        HgImageRenderResource& image = *images.get(pass.color_attachments[i].image);
+
+        image_barriers[i] = {};
+        image_barriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        image_barriers[i].srcStageMask = get_stage_mask(image.last_usage);
+        image_barriers[i].srcAccessMask = get_access_mask(image.last_usage, image.last_access);
+        image_barriers[i].dstStageMask = get_stage_mask(HgRenderUsage::color_attachment);
+        image_barriers[i].dstAccessMask = get_access_mask(HgRenderUsage::color_attachment, HgRenderAccess::write);
+        image_barriers[i].oldLayout = get_layout(image.last_usage, image.last_access);
+        image_barriers[i].newLayout = get_layout(HgRenderUsage::color_attachment, HgRenderAccess::write);
+        image_barriers[i].image = image.handle;
+        image_barriers[i].subresourceRange = image.subresource;
+
+        image.last_usage = HgRenderUsage::color_attachment;
+        image.last_access = HgRenderAccess::write;
+    }
+
+    image_barrier_count += pass.color_attachment_count;
+
+    if (pass.depth_attachment.image != 0) {
+        hg_assert(images.has(pass.depth_attachment.image));
+        HgImageRenderResource& image = *images.get(pass.depth_attachment.image);
+
+        image_barriers = scratch.realloc<VkImageMemoryBarrier2>(
+            image_barriers, image_barrier_count, image_barrier_count + 1);
+
+        HgRenderAccess access = (HgRenderAccess)((u32)HgRenderAccess::write |
+            (pass.depth_attachment.load_op == VK_ATTACHMENT_LOAD_OP_LOAD ? (u32)HgRenderAccess::read : 0));
+
+        usize idx = image_barrier_count;
+        image_barriers[idx] = {};
+        image_barriers[idx].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        image_barriers[idx].srcStageMask = get_stage_mask(image.last_usage);
+        image_barriers[idx].srcAccessMask = get_access_mask(image.last_usage, image.last_access);
+        image_barriers[idx].dstStageMask = get_stage_mask(HgRenderUsage::depth_attachment);
+        image_barriers[idx].dstAccessMask = get_access_mask(HgRenderUsage::depth_attachment, access);
+        image_barriers[idx].oldLayout = get_layout(image.last_usage, image.last_access);
+        image_barriers[idx].newLayout = get_layout(HgRenderUsage::depth_attachment, access);
+        image_barriers[idx].image = image.handle;
+        image_barriers[idx].subresourceRange = image.subresource;
+
+        image.last_usage = HgRenderUsage::depth_attachment;
+        image.last_access = access;
+
+        ++image_barrier_count;
+    }
+
+    if (pass.stencil_attachment.image != 0) {
+        hg_assert(images.has(pass.stencil_attachment.image));
+        HgImageRenderResource& image = *images.get(pass.stencil_attachment.image);
+
+        image_barriers = scratch.realloc<VkImageMemoryBarrier2>(
+            image_barriers, image_barrier_count, image_barrier_count + 1);
+
+        HgRenderAccess access = (HgRenderAccess)((u32)HgRenderAccess::write |
+            (pass.stencil_attachment.load_op == VK_ATTACHMENT_LOAD_OP_LOAD ? (u32)HgRenderAccess::read : 0));
+
+        usize idx = image_barrier_count;
+        image_barriers[idx] = {};
+        image_barriers[idx].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        image_barriers[idx].srcStageMask = get_stage_mask(image.last_usage);
+        image_barriers[idx].srcAccessMask = get_access_mask(image.last_usage, image.last_access);
+        image_barriers[idx].dstStageMask = get_stage_mask(HgRenderUsage::stencil_attachment);
+        image_barriers[idx].dstAccessMask = get_access_mask(HgRenderUsage::stencil_attachment, access);
+        image_barriers[idx].oldLayout = get_layout(image.last_usage, image.last_access);
+        image_barriers[idx].newLayout = get_layout(HgRenderUsage::stencil_attachment, access);
+        image_barriers[idx].image = image.handle;
+        image_barriers[idx].subresourceRange = image.subresource;
+
+        image.last_usage = HgRenderUsage::stencil_attachment;
+        image.last_access = access;
+
+        ++image_barrier_count;
+    }
+
+    VkDependencyInfo dep{};
+    dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    dep.bufferMemoryBarrierCount = buffer_barrier_count;
+    dep.pBufferMemoryBarriers = buffer_barriers;
+    dep.imageMemoryBarrierCount = image_barrier_count;
+    dep.pImageMemoryBarriers = image_barriers;
+
+    vkCmdPipelineBarrier2(cmd, &dep);
+
+    VkRenderingAttachmentInfo* color_attachments
+        = scratch.alloc<VkRenderingAttachmentInfo>(pass.color_attachment_count);
+
+    for (usize i = 0; i < pass.color_attachment_count; ++i) {
+        hg_assert(images.has(pass.color_attachments[i].image));
+        HgImageRenderResource& image = *images.get(pass.color_attachments[i].image);
+
+        color_attachments[i] = {};
+        color_attachments[i].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        color_attachments[i].imageView = image.view;
+        color_attachments[i].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        color_attachments[i].loadOp = pass.color_attachments[i].load_op;
+        color_attachments[i].storeOp = pass.color_attachments[i].store_op;
+        color_attachments[i].clearValue = pass.color_attachments[i].clear_value;
+    }
+
+    VkRenderingAttachmentInfo depth_attachment{};
+    if (pass.depth_attachment.image != 0) {
+        hg_assert(images.has(pass.depth_attachment.image));
+        HgImageRenderResource& image = *images.get(pass.depth_attachment.image);
+
+        depth_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        depth_attachment.imageView = image.view;
+        depth_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        depth_attachment.loadOp = pass.depth_attachment.load_op;
+        depth_attachment.storeOp = pass.depth_attachment.store_op;
+        depth_attachment.clearValue = pass.depth_attachment.clear_value;
+    }
+
+    VkRenderingAttachmentInfo stencil_attachment{};
+    if (pass.stencil_attachment.image != 0) {
+        hg_assert(images.has(pass.stencil_attachment.image));
+        HgImageRenderResource& image = *images.get(pass.stencil_attachment.image);
+
+        stencil_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        stencil_attachment.imageView = image.view;
+        stencil_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        stencil_attachment.loadOp = pass.stencil_attachment.load_op;
+        stencil_attachment.storeOp = pass.stencil_attachment.store_op;
+        stencil_attachment.clearValue = pass.stencil_attachment.clear_value;
+    }
+
+    VkRenderingInfo rendering_info{};
+    rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+    rendering_info.renderArea.extent = {width, height};
+    rendering_info.layerCount = pass.layer_count;
+    rendering_info.colorAttachmentCount = pass.color_attachment_count;
+    rendering_info.pColorAttachments = color_attachments;
+    rendering_info.pDepthAttachment = pass.depth_attachment.image != 0 ? &depth_attachment : nullptr;
+    rendering_info.pStencilAttachment = pass.stencil_attachment.image != 0 ? &stencil_attachment : nullptr;
+
+    vkCmdBeginRendering(cmd, &rendering_info);
+}
+
+void HgRenderer::end_pass(VkCommandBuffer cmd) {
+    vkCmdEndRendering(cmd);
+}
+
 #define HG_MAKE_VULKAN_FUNC(name) PFN_##name name
 
 struct HgVulkanFuncs {

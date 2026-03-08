@@ -36,6 +36,8 @@ void minimal_example() {
     HgWindow* window = HgWindow::create(arena, window_config);
     hg_defer(window->destroy());
 
+    HgRenderer renderer = renderer.create(arena, 64, 64);
+
     HgStringView texture_path = "hg_test_dir/file_image_test.hgtex";
     HgResource texture_id = hg_resource_id(texture_path);
 
@@ -100,37 +102,24 @@ void minimal_example() {
 
         VkCommandBuffer cmd = window->begin_recording();
         if (cmd != nullptr) {
-            VkImageMemoryBarrier2 color_barrier{};
-            color_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-            color_barrier.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-            color_barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-            color_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-            color_barrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            color_barrier.image = window->images[window->current_image];
-            color_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+            renderer.reset();
 
-            VkDependencyInfo color_dependency{};
-            color_dependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-            color_dependency.imageMemoryBarrierCount = 1;
-            color_dependency.pImageMemoryBarriers = &color_barrier;
+            HgImageRenderID window_image = renderer.add_image(
+                window->images[window->current_image],
+                window->views[window->current_image],
+                {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
 
-            vkCmdPipelineBarrier2(cmd, &color_dependency);
+            HgRenderAttachment color_attachment{};
+            color_attachment.image = window_image;
+            color_attachment.load_op = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            color_attachment.store_op = VK_ATTACHMENT_STORE_OP_STORE;
+            color_attachment.clear_value = {};
 
-            VkRenderingAttachmentInfo color_attachment{};
-            color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-            color_attachment.imageView = window->views[window->current_image];
-            color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-            color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+            HgRenderPass pass{};
+            pass.color_attachments = &color_attachment;
+            pass.color_attachment_count = 1;
 
-            VkRenderingInfo rendering_info{};
-            rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-            rendering_info.renderArea.extent = {window->width, window->height};
-            rendering_info.layerCount = 1;
-            rendering_info.colorAttachmentCount = 1;
-            rendering_info.pColorAttachments = &color_attachment;
-
-            vkCmdBeginRendering(cmd, &rendering_info);
+            renderer.begin_pass(cmd, window->width, window->height, pass);
 
             VkViewport viewport{0.0f, 0.0f, (f32)window->width, (f32)window->height, 0.0f, 1.0f};
             vkCmdSetViewport(cmd, 0, 1, &viewport);
@@ -139,23 +128,14 @@ void minimal_example() {
 
             hg_draw_2d(ecs, cmd);
 
-            vkCmdEndRendering(cmd);
+            renderer.end_pass(cmd);
 
-            VkImageMemoryBarrier2 present_barrier{};
-            present_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-            present_barrier.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-            present_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-            present_barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            present_barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-            present_barrier.image = window->images[window->current_image];
-            present_barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+            HgImageBarrier present_barrier{};
+            present_barrier.image = window_image;
+            present_barrier.next_usage = HgRenderUsage::present_src;
+            present_barrier.next_access = HgRenderAccess::read;
 
-            VkDependencyInfo present_dependency{};
-            present_dependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-            present_dependency.imageMemoryBarrierCount = 1;
-            present_dependency.pImageMemoryBarriers = &present_barrier;
-
-            vkCmdPipelineBarrier2(cmd, &present_dependency);
+            renderer.barrier(cmd, nullptr, 0, &present_barrier, 1);
 
             window->end_and_present(cmd);
         }

@@ -2998,7 +2998,7 @@ void hg_io_request(
 /**
  * The uuid derived from the resource's name/path
  */
-using HgResource = usize;
+using HgResource = u64;
 
 /**
  * Get the resource uuid from the name/path
@@ -4909,6 +4909,135 @@ struct HgVkImageGenerateMipmapsConfig {
  * - config The config to use
  */
 void hg_vk_image_generate_mipmaps(const HgVkImageGenerateMipmapsConfig& config);
+
+/**
+ * The image id used by HgRenderer
+ */
+using HgImageRenderID = u64;
+
+/**
+ * The buffer id used by HgRenderer
+ */
+using HgBufferRenderID = u64;
+
+/**
+ * A rendering attachment
+ */
+struct HgRenderAttachment {
+    /**
+     * The image attached
+     */
+    HgImageRenderID image;
+    /**
+     * How the image will be loaded
+     */
+    VkAttachmentLoadOp load_op;
+    /**
+     * How the image will be stored
+     */
+    VkAttachmentStoreOp store_op;
+    /**
+     * What to clear the image to if cleared
+     */
+    VkClearValue clear_value;
+};
+
+struct HgRenderPass {
+    HgBufferRenderID* uniform_buffers = nullptr;
+    u32 uniform_buffer_count = 0;
+    HgBufferRenderID* storage_buffers = nullptr;
+    u32 storage_buffer_count = 0;
+    HgImageRenderID* sampled_images = nullptr;
+    u32 sampled_image_count = 0;
+
+    u32 layer_count = 1;
+    HgRenderAttachment* color_attachments = nullptr;
+    u32 color_attachment_count = 0;
+    HgRenderAttachment depth_attachment = {};
+    HgRenderAttachment stencil_attachment = {};
+};
+
+enum class HgRenderUsage {
+    none,
+    vertex_buffer,
+    index_buffer,
+    graphics_shader,
+    graphics_uniform_buffer,
+    compute_shader,
+    compute_uniform_buffer,
+    color_attachment,
+    depth_attachment,
+    stencil_attachment,
+    transfer,
+    present_src,
+};
+
+enum class HgRenderAccess {
+    none = 0x0,
+    read = 0x1,
+    write = 0x2,
+    read_write = read | write,
+};
+
+struct HgImageBarrier {
+    HgImageRenderID image;
+    HgRenderUsage next_usage;
+    HgRenderAccess next_access;
+};
+
+struct HgBufferBarrier {
+    HgBufferRenderID buffer;
+    HgRenderUsage next_usage;
+    HgRenderAccess next_access;
+};
+
+struct HgRenderer {
+    struct Image {
+        VkImage handle;
+        VkImageView view;
+        VkImageSubresourceRange subresource;
+        HgRenderUsage last_usage;
+        HgRenderAccess last_access;
+    };
+
+    struct Buffer {
+        VkBuffer handle;
+        VkDeviceSize size;
+        HgRenderUsage last_usage;
+        HgRenderAccess last_access;
+    };
+
+    HgHashMap<HgImageRenderID, Image> images;
+    HgHashMap<HgBufferRenderID, Buffer> buffers;
+
+    static HgRenderer create(HgArena& arena, u32 max_images, u32 max_buffers);
+
+    void reset();
+
+    HgBufferRenderID add_buffer(
+        VkBuffer buffer,
+        VkDeviceSize size,
+        HgRenderUsage previous_usage = HgRenderUsage::none,
+        HgRenderAccess previous_access = HgRenderAccess::none);
+
+    HgImageRenderID add_image(
+        VkImage image,
+        VkImageView view,
+        VkImageSubresourceRange subresource,
+        HgRenderUsage previous_usage = HgRenderUsage::none,
+        HgRenderAccess previous_access = HgRenderAccess::none);
+
+    void barrier(
+        VkCommandBuffer cmd,
+        const HgBufferBarrier* buffer_barriers,
+        u32 buffer_count,
+        const HgImageBarrier* image_barriers,
+        u32 image_count);
+
+    void begin_pass(VkCommandBuffer cmd, u32 width, u32 height, const HgRenderPass& pass);
+
+    void end_pass(VkCommandBuffer cmd);
+};
 
 /**
  * Initializes global resources for windowing
