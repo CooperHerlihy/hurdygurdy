@@ -50,21 +50,19 @@ void hg_internal_resize_window_swapchain(HgWindow* window) {
 
     VkResult result = vkCreateSwapchainKHR(hg_vk_device, &swapchain_info, nullptr, &window->swapchain);
     if (window->swapchain == nullptr)
-        hg_error("Failed to create swapchain: %s\n", hg_vk_result_string(result));
+        hg_error("Failed to create swapchain: %s\n", hg_vk_result_to_string(result));
 
     vkGetSwapchainImagesKHR(hg_vk_device, window->swapchain, &window->image_count, nullptr);
     window->images = (VkImage*)realloc(window->images, sizeof(VkImage) * window->image_count);
     window->views = (VkImageView*)realloc(window->views, sizeof(VkImageView) * window->image_count);
     vkGetSwapchainImagesKHR(hg_vk_device, window->swapchain, &window->image_count, window->images);
     for (usize i = 0; i < window->image_count; ++i) {
-        VkImageViewCreateInfo create_info{};
-        create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        create_info.image = window->images[i];
-        create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        create_info.format = window->format;
-        create_info.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+        HgVkImageViewConfig view_info{};
+        view_info.image = window->images[i];
+        view_info.format = window->format;
+        view_info.subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 
-        vkCreateImageView(hg_vk_device, &create_info, nullptr, &window->views[i]);
+        hg_vk_create_image_view(&window->views[i], view_info);
     }
 
     window->cmds = (VkCommandBuffer*)realloc(window->cmds, sizeof(VkCommandBuffer) * window->image_count);

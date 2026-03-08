@@ -182,7 +182,7 @@ void editor_example() {
     window_config.windowed = true;
     window_config.width = 1600;
     window_config.height = 900;
-    // window_config.preferred_present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
+    window_config.preferred_present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
 
     HgWindow* window = HgWindow::create(arena, window_config);
     hg_defer(window->destroy());
@@ -257,7 +257,7 @@ void editor_example() {
 #ifdef HG_DEBUG_MODE
     imgui_info.CheckVkResultFn = [](VkResult err) {
         if (err != VK_SUCCESS)
-            hg_warn("Vulkan error from ImGui: %s\n", hg_vk_result_string(err));
+            hg_warn("Vulkan error from ImGui: %s\n", hg_vk_result_to_string(err));
     };
 #endif
 
@@ -402,31 +402,22 @@ void editor_example() {
                     vkDestroyImageView(hg_vk_device, render_view, nullptr);
                     vmaDestroyImage(hg_vk_vma, render_image, render_alloc);
 
-                    VkImageCreateInfo render_image_info{};
-                    render_image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-                    render_image_info.imageType = VK_IMAGE_TYPE_2D;
+                    HgVkImageConfig render_image_info{};
+                    render_image_info.width = render_width;
+                    render_image_info.height = render_height;
                     render_image_info.format = VK_FORMAT_R8G8B8A8_SRGB;
-                    render_image_info.extent = {render_width, render_height, 1};
-                    render_image_info.mipLevels = 1;
-                    render_image_info.arrayLayers = 1;
-                    render_image_info.samples = VK_SAMPLE_COUNT_1_BIT;
                     render_image_info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
                                             | VK_IMAGE_USAGE_SAMPLED_BIT
                                             | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
-                    VmaAllocationCreateInfo render_alloc_info{};
-                    render_alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
+                    hg_vk_create_image(&render_image, &render_alloc, render_image_info);
 
-                    vmaCreateImage(hg_vk_vma, &render_image_info, &render_alloc_info, &render_image, &render_alloc, nullptr);
+                    HgVkImageViewConfig view_info{};
+                    view_info.image = render_image;
+                    view_info.format = render_image_info.format;
+                    view_info.subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 
-                    VkImageViewCreateInfo render_view_info{};
-                    render_view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-                    render_view_info.image = render_image;
-                    render_view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-                    render_view_info.format = render_image_info.format;
-                    render_view_info.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-
-                    vkCreateImageView(hg_vk_device, &render_view_info, nullptr, &render_view);
+                    hg_vk_create_image_view(&render_view, view_info);
 
                     render_descriptor = ImGui_ImplVulkan_AddTexture(
                         render_sampler, render_view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);

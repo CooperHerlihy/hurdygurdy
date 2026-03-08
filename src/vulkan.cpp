@@ -22,7 +22,7 @@ void hg_graphics_init() {
         exts[ext_count++] = "VK_EXT_debug_utils";
 #endif
         hg_vk_instance = hg_vk_create_instance(exts, ext_count);
-        hg_vk_load_instance(hg_vk_instance);
+        hg_vk_load_instance_funcs(hg_vk_instance);
     }
 
 #ifdef HG_VK_DEBUG_MESSENGER
@@ -38,7 +38,7 @@ void hg_graphics_init() {
 
     if (hg_vk_device == nullptr) {
         hg_vk_device = hg_vk_create_single_queue_device();
-        hg_vk_load_device(hg_vk_device);
+        hg_vk_load_device_funcs(hg_vk_device);
         vkGetDeviceQueue(hg_vk_device, hg_vk_queue_family, 0, &hg_vk_queue);
     }
 
@@ -51,7 +51,7 @@ void hg_graphics_init() {
 
         VkResult result = vmaCreateAllocator(&allocator_info, &hg_vk_vma);
         if (hg_vk_vma == nullptr)
-            hg_error("Could note create Vulkan memory allocator: %s\n", hg_vk_result_string(result));
+            hg_error("Could note create Vulkan memory allocator: %s\n", hg_vk_result_to_string(result));
     }
 
     if (hg_vk_cmd_pool == nullptr) {
@@ -62,7 +62,7 @@ void hg_graphics_init() {
 
         VkResult result = vkCreateCommandPool(hg_vk_device, &cmd_pool_info, nullptr, &hg_vk_cmd_pool);
         if (hg_vk_cmd_pool == nullptr)
-            hg_error("Could note create Vulkan command pool: %s\n", hg_vk_result_string(result));
+            hg_error("Could note create Vulkan command pool: %s\n", hg_vk_result_to_string(result));
     }
 }
 
@@ -104,7 +104,7 @@ void hg_graphics_deinit() {
     hg_vulkan_deinit();
 }
 
-const char* hg_vk_result_string(VkResult result) {
+const char* hg_vk_result_to_string(VkResult result) {
     switch (result) {
         case VK_SUCCESS:
             return "VK_SUCCESS";
@@ -506,6 +506,1169 @@ u32 hg_vk_format_to_size(VkFormat format) {
     }
 }
 
+#ifdef HG_VK_DEBUG_MESSENGER
+
+static VkBool32 debug_callback(
+    const VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+    const VkDebugUtilsMessageTypeFlagsEXT type,
+    const VkDebugUtilsMessengerCallbackDataEXT* callback_data,
+    void* user_data
+) {
+    (void)type;
+    (void)user_data;
+
+    if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
+        (void)fprintf(stderr, "Vulkan Error: %s\n", callback_data->pMessage);
+        abort();
+    } else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+        (void)fprintf(stderr, "Vulkan Warning: %s\n", callback_data->pMessage);
+    } else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) {
+        (void)fprintf(stderr, "Vulkan Info: %s\n", callback_data->pMessage);
+    } else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) {
+        (void)fprintf(stderr, "Vulkan Verbose: %s\n", callback_data->pMessage);
+    } else {
+        (void)fprintf(stderr, "Vulkan Unknown: %s\n", callback_data->pMessage);
+    }
+    return VK_FALSE;
+}
+
+static const VkDebugUtilsMessengerCreateInfoEXT debug_utils_messenger_info{
+    VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+    nullptr,
+    0,
+    VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+    VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+    VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+    VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+    VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+    VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
+    debug_callback,
+    nullptr,
+};
+
+#endif
+
+VkInstance hg_vk_create_instance(HgStringView* extensions, u32 extension_count) {
+    HgArena& scratch = hg_get_scratch();
+    HgArenaScope scratch_scope{scratch};
+
+    VkApplicationInfo app_info{};
+    app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+    app_info.pApplicationName = "Hurdy Gurdy Application",
+    app_info.applicationVersion = 0;
+    app_info.pEngineName = "Hurdy Gurdy Engine";
+    app_info.engineVersion = 0;
+    app_info.apiVersion = VK_API_VERSION_1_3;
+
+    VkInstanceCreateInfo instance_info{};
+    instance_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+#ifdef HG_VK_DEBUG_MESSENGER
+    instance_info.pNext = &debug_utils_messenger_info;
+#endif
+    instance_info.flags = 0;
+    instance_info.pApplicationInfo = &app_info;
+
+#ifdef HG_VK_DEBUG_MESSENGER
+    const char* layers[]{
+        "VK_LAYER_KHRONOS_validation",
+    };
+    instance_info.enabledLayerCount = sizeof(layers) / sizeof(*layers);
+    instance_info.ppEnabledLayerNames = layers;
+#endif
+
+    const char** ext_c_strs = scratch.alloc<const char*>(extension_count);
+    for (usize i = 0; i < extension_count; ++i) {
+        ext_c_strs[i] = hg_c_string(scratch, extensions[i]);
+    }
+    instance_info.enabledExtensionCount = extension_count;
+    instance_info.ppEnabledExtensionNames = ext_c_strs;
+
+    VkInstance instance = nullptr;
+    VkResult result = vkCreateInstance(&instance_info, nullptr, &instance);
+    if (instance == nullptr)
+        hg_error("Failed to create Vulkan instance: %s\n", hg_vk_result_to_string(result));
+
+    return instance;
+}
+
+VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger() {
+#ifdef HG_VK_DEBUG_MESSENGER
+    hg_assert(hg_vk_instance != nullptr);
+
+    VkDebugUtilsMessengerEXT messenger = nullptr;
+    VkResult result = vkCreateDebugUtilsMessengerEXT(
+        hg_vk_instance, &debug_utils_messenger_info, nullptr, &messenger);
+    if (messenger == nullptr)
+        hg_error("Failed to create Vulkan debug messenger: %s\n", hg_vk_result_to_string(result));
+
+    return messenger;
+#else
+    return nullptr;
+#endif
+}
+
+bool hg_vk_find_queue_family(VkPhysicalDevice gpu, u32& queue_family, VkQueueFlags queue_flags) {
+    hg_assert(gpu != nullptr);
+
+    HgArena& scratch = hg_get_scratch();
+    HgArenaScope scratch_scope{scratch};
+
+    u32 family_count = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, nullptr);
+    VkQueueFamilyProperties* families = scratch.alloc<VkQueueFamilyProperties>(family_count);
+    vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, families);
+
+    for (u32 i = 0; i < family_count; ++i) {
+        if (families[i].queueFlags & queue_flags) {
+            queue_family = i;
+            return true;
+        }
+    }
+    return false;
+}
+
+static const char* const vk_device_extensions[]{
+    "VK_KHR_swapchain",
+};
+
+VkPhysicalDevice hg_vk_find_single_queue_physical_device() {
+    hg_assert(hg_vk_instance != nullptr);
+
+    HgArena& scratch = hg_get_scratch();
+    HgArenaScope scratch_scope{scratch};
+
+    u32 gpu_count;
+    vkEnumeratePhysicalDevices(hg_vk_instance, &gpu_count, nullptr);
+    VkPhysicalDevice* gpus = scratch.alloc<VkPhysicalDevice>(gpu_count);
+    vkEnumeratePhysicalDevices(hg_vk_instance, &gpu_count, gpus);
+
+    VkExtensionProperties* ext_props = nullptr;
+    u32 ext_prop_count = 0;
+
+    for (u32 i = 0; i < gpu_count; ++i) {
+        VkPhysicalDevice gpu = gpus[i];
+        u32 family;
+
+        u32 new_prop_count = 0;
+        vkEnumerateDeviceExtensionProperties(gpu, nullptr, &new_prop_count, nullptr);
+        if (new_prop_count > ext_prop_count) {
+            ext_props = scratch.realloc(ext_props, ext_prop_count, new_prop_count);
+            ext_prop_count = new_prop_count;
+        }
+        vkEnumerateDeviceExtensionProperties(gpu, nullptr, &new_prop_count, ext_props);
+
+        for (usize j = 0; j < sizeof(vk_device_extensions) / sizeof(*vk_device_extensions); j++) {
+            for (usize k = 0; k < new_prop_count; k++) {
+                if (strcmp(vk_device_extensions[j], ext_props[k].extensionName) == 0)
+                    goto next_ext;
+            }
+            goto next_gpu;
+next_ext:
+            continue;
+        }
+
+        if (!hg_vk_find_queue_family(gpu, family,
+                VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT | VK_QUEUE_COMPUTE_BIT))
+            goto next_gpu;
+
+        return gpu;
+
+next_gpu:
+        continue;
+    }
+
+    hg_warn("Could not find a suitable gpu\n");
+    return nullptr;
+}
+
+VkDevice hg_vk_create_single_queue_device() {
+    hg_assert(hg_vk_physical_device != nullptr);
+    hg_assert(hg_vk_queue_family != (u32)-1);
+
+    VkPhysicalDeviceDynamicRenderingFeatures dynamic_rendering_feature{};
+    dynamic_rendering_feature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
+    dynamic_rendering_feature.dynamicRendering = VK_TRUE;
+
+    VkPhysicalDeviceSynchronization2Features synchronization2_feature{};
+    synchronization2_feature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES;
+    synchronization2_feature.pNext = &dynamic_rendering_feature;
+    synchronization2_feature.synchronization2 = VK_TRUE;
+
+    VkPhysicalDeviceFeatures features{};
+
+    VkDeviceQueueCreateInfo queue_info{};
+    queue_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    queue_info.queueFamilyIndex = hg_vk_queue_family;
+    queue_info.queueCount = 1;
+    float queue_priority = 1.0f;
+    queue_info.pQueuePriorities = &queue_priority;
+
+    VkDeviceCreateInfo device_info{};
+    device_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    device_info.pNext = &synchronization2_feature;
+    device_info.queueCreateInfoCount = 1;
+    device_info.pQueueCreateInfos = &queue_info;
+    device_info.enabledExtensionCount = sizeof(vk_device_extensions) / sizeof(*vk_device_extensions);
+    device_info.ppEnabledExtensionNames = vk_device_extensions;
+    device_info.pEnabledFeatures = &features;
+
+    VkDevice device = nullptr;
+    VkResult result = vkCreateDevice(hg_vk_physical_device, &device_info, nullptr, &device);
+
+    if (device == nullptr)
+        hg_error("Could not create Vulkan device: %s\n", hg_vk_result_to_string(result));
+    return device;
+}
+
+VkCommandBuffer hg_vk_begin_commands() {
+    VkCommandBufferAllocateInfo cmd_info{};
+    cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    cmd_info.commandPool = hg_vk_cmd_pool;
+    cmd_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    cmd_info.commandBufferCount = 1;
+
+    VkCommandBuffer cmd = nullptr;
+    vkAllocateCommandBuffers(hg_vk_device, &cmd_info, &cmd);
+
+    VkCommandBufferBeginInfo begin_info{};
+    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    vkBeginCommandBuffer(cmd, &begin_info);
+    return cmd;
+}
+
+void hg_vk_end_and_execute(VkCommandBuffer cmd) {
+    hg_assert(cmd != nullptr);
+    vkEndCommandBuffer(cmd);
+
+    VkFenceCreateInfo fence_info{};
+    fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+
+    VkFence fence = nullptr;
+    vkCreateFence(hg_vk_device, &fence_info, nullptr, &fence);
+    hg_defer(vkDestroyFence(hg_vk_device, fence, nullptr));
+
+    VkSubmitInfo submit{};
+    submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit.commandBufferCount = 1;
+    submit.pCommandBuffers = &cmd;
+
+    vkQueueSubmit(hg_vk_queue, 1, &submit, fence);
+    vkWaitForFences(hg_vk_device, 1, &fence, VK_TRUE, UINT64_MAX);
+
+    vkFreeCommandBuffers(hg_vk_device, hg_vk_cmd_pool, 1, &cmd);
+}
+
+HgVkDescriptorSetLayoutBuilder::HgVkDescriptorSetLayoutBuilder() {
+    bindings = HgArena{hg_get_scratch()}.alloc<VkDescriptorSetLayoutBinding>(0);
+    binding_count = 0;
+}
+
+HgVkDescriptorSetLayoutBuilder& HgVkDescriptorSetLayoutBuilder::add_binding(
+    u32 binding,
+    VkDescriptorType type,
+    u32 count,
+    VkShaderStageFlagBits stage_flags
+) {
+    bindings[binding_count++] = {binding, type, count, stage_flags, nullptr};
+    return *this;
+}
+
+VkDescriptorSetLayout HgVkDescriptorSetLayoutBuilder::create() {
+    VkDescriptorSetLayoutCreateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    info.bindingCount = binding_count;
+    info.pBindings = bindings;
+
+    VkDescriptorSetLayout layout = nullptr;
+    VkResult result = vkCreateDescriptorSetLayout(hg_vk_device, &info, nullptr, &layout);
+    if (layout == nullptr)
+        hg_error("Could not create VkDescriptorSetLayout: %s\n", hg_vk_result_to_string(result));
+
+    return layout;
+}
+
+HgVkPipelineLayoutBuilder::HgVkPipelineLayoutBuilder() {
+    sets = HgArena{hg_get_scratch()}.alloc<VkDescriptorSetLayout>(0);
+    set_count = 0;
+    push = {};
+}
+
+HgVkPipelineLayoutBuilder& HgVkPipelineLayoutBuilder::add_descriptor_set(VkDescriptorSetLayout set_layout) {
+    sets[set_count++] = set_layout;
+    return *this;
+}
+
+HgVkPipelineLayoutBuilder& HgVkPipelineLayoutBuilder::set_push_range(VkShaderStageFlags stage_flags, u32 size) {
+    push = {stage_flags, 0, size};
+    return *this;
+}
+
+VkPipelineLayout HgVkPipelineLayoutBuilder::create() {
+    VkPipelineLayoutCreateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    info.setLayoutCount = set_count;
+    info.pSetLayouts = sets;
+    info.pushConstantRangeCount = 1;
+    info.pPushConstantRanges = &push;
+
+    VkPipelineLayout layout = nullptr;
+    VkResult result = vkCreatePipelineLayout(hg_vk_device, &info, nullptr, &layout);
+    if (layout == nullptr)
+        hg_error("Could not create VkPipelineLayout: %s\n", hg_vk_result_to_string(result));
+
+    return layout;
+}
+
+VkShaderModule hg_vk_create_shader_module(const u8* spirv_code, usize code_size) {
+    VkShaderModuleCreateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    info.codeSize = code_size;
+    info.pCode = (const u32*)spirv_code;
+
+    VkShaderModule shader = nullptr;
+    VkResult result = vkCreateShaderModule(hg_vk_device, &info, nullptr, &shader);
+    if (shader == nullptr)
+        hg_error("Could not create VkShaderModule: %s\n", hg_vk_result_to_string(result));
+
+    return shader;
+}
+
+VkPipeline hg_vk_create_graphics_pipeline(const HgVkPipelineConfig& config) {
+    if (config.color_attachment_format_count > 0)
+        hg_assert(config.color_attachment_formats != nullptr);
+    hg_assert(config.shader_stages != nullptr);
+    hg_assert(config.layout != nullptr);
+    if (config.vertex_binding_count > 0)
+        hg_assert(config.vertex_bindings != nullptr);
+
+    VkPipelineVertexInputStateCreateInfo vertex_input_state{};
+    vertex_input_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertex_input_state.vertexBindingDescriptionCount = (u32)config.vertex_binding_count;
+    vertex_input_state.pVertexBindingDescriptions = config.vertex_bindings;
+    vertex_input_state.vertexAttributeDescriptionCount = (u32)config.vertex_attribute_count;
+    vertex_input_state.pVertexAttributeDescriptions = config.vertex_attributes;
+
+    VkPipelineInputAssemblyStateCreateInfo input_assembly_state{};
+    input_assembly_state.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    input_assembly_state.topology = config.topology;
+    input_assembly_state.primitiveRestartEnable = VK_FALSE;
+
+    VkPipelineTessellationStateCreateInfo tessellation_state{};
+    tessellation_state.sType = VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO;
+    tessellation_state.patchControlPoints = config.tesselation_patch_control_points;
+
+    VkPipelineViewportStateCreateInfo viewport_state{};
+    viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewport_state.viewportCount = 1;
+    viewport_state.scissorCount = 1;
+
+    VkPipelineRasterizationStateCreateInfo rasterization_state{};
+    rasterization_state.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    rasterization_state.depthClampEnable = VK_FALSE;
+    rasterization_state.rasterizerDiscardEnable = VK_FALSE;
+    rasterization_state.polygonMode = config.polygon_mode;
+    rasterization_state.cullMode = config.cull_mode;
+    rasterization_state.frontFace = config.front_face;
+    rasterization_state.depthBiasEnable = VK_FALSE;
+    rasterization_state.depthBiasConstantFactor = 0.0f;
+    rasterization_state.depthBiasClamp = 0.0f;
+    rasterization_state.depthBiasSlopeFactor = 0.0f;
+    rasterization_state.lineWidth = 1.0f;
+
+    VkPipelineMultisampleStateCreateInfo multisample_state{};
+    multisample_state.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisample_state.rasterizationSamples = config.multisample_count != 0
+        ? config.multisample_count
+        : VK_SAMPLE_COUNT_1_BIT,
+    multisample_state.sampleShadingEnable = VK_FALSE;
+    multisample_state.minSampleShading = 1.0f;
+    multisample_state.pSampleMask = nullptr;
+    multisample_state.alphaToCoverageEnable = VK_FALSE;
+    multisample_state.alphaToOneEnable = VK_FALSE;
+
+    VkPipelineDepthStencilStateCreateInfo depth_stencil_state{};
+    depth_stencil_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depth_stencil_state.depthTestEnable = config.depth_attachment_format != VK_FORMAT_UNDEFINED
+            ? VK_TRUE
+            : VK_FALSE;
+    depth_stencil_state.depthWriteEnable = config.depth_attachment_format != VK_FORMAT_UNDEFINED
+            ? VK_TRUE
+            : VK_FALSE;
+    depth_stencil_state.depthCompareOp = config.enable_color_blend
+            ? VK_COMPARE_OP_LESS_OR_EQUAL
+            : VK_COMPARE_OP_LESS;
+    depth_stencil_state.depthBoundsTestEnable = config.depth_attachment_format != VK_FORMAT_UNDEFINED
+            ? VK_TRUE
+            : VK_FALSE;
+    depth_stencil_state.stencilTestEnable = config.stencil_attachment_format != VK_FORMAT_UNDEFINED
+            ? VK_TRUE
+            : VK_FALSE,
+    // depth_stencil_state.front = {}; : TODO
+    // depth_stencil_state.back = {}; : TODO
+    depth_stencil_state.minDepthBounds = 0.0f;
+    depth_stencil_state.maxDepthBounds = 1.0f;
+
+    VkPipelineColorBlendAttachmentState color_blend_attachment{};
+    color_blend_attachment.blendEnable = config.enable_color_blend ? VK_TRUE : VK_FALSE;
+    color_blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    color_blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    color_blend_attachment.colorBlendOp = VK_BLEND_OP_ADD;
+    color_blend_attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    color_blend_attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    color_blend_attachment.alphaBlendOp = VK_BLEND_OP_ADD;
+    color_blend_attachment.colorWriteMask
+        = VK_COLOR_COMPONENT_R_BIT
+        | VK_COLOR_COMPONENT_G_BIT
+        | VK_COLOR_COMPONENT_B_BIT
+        | VK_COLOR_COMPONENT_A_BIT;
+
+    VkPipelineColorBlendStateCreateInfo color_blend_state{};
+    color_blend_state.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    color_blend_state.logicOpEnable = VK_FALSE;
+    color_blend_state.logicOp = VK_LOGIC_OP_COPY;
+    color_blend_state.attachmentCount = 1;
+    color_blend_state.pAttachments = &color_blend_attachment;
+    color_blend_state.blendConstants[0] = {1.0f};
+    color_blend_state.blendConstants[1] = {1.0f};
+    color_blend_state.blendConstants[2] = {1.0f};
+    color_blend_state.blendConstants[3] = {1.0f};
+
+    VkDynamicState dynamic_states[]{VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+    VkPipelineDynamicStateCreateInfo dynamic_state{};
+    dynamic_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamic_state.dynamicStateCount = sizeof(dynamic_states) / sizeof(*dynamic_states);
+    dynamic_state.pDynamicStates = dynamic_states;
+
+    VkPipelineRenderingCreateInfo rendering_info{};
+    rendering_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+    rendering_info.colorAttachmentCount = (u32)config.color_attachment_format_count;
+    rendering_info.pColorAttachmentFormats = config.color_attachment_formats;
+    rendering_info.depthAttachmentFormat = config.depth_attachment_format;
+    rendering_info.stencilAttachmentFormat = config.stencil_attachment_format;
+
+    VkGraphicsPipelineCreateInfo pipeline_info{};
+    pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipeline_info.pNext = &rendering_info;
+    pipeline_info.stageCount = (u32)config.shader_count;
+    pipeline_info.pStages = config.shader_stages;
+    pipeline_info.pVertexInputState = &vertex_input_state;
+    pipeline_info.pInputAssemblyState = &input_assembly_state;
+    pipeline_info.pTessellationState = &tessellation_state;
+    pipeline_info.pViewportState = &viewport_state;
+    pipeline_info.pRasterizationState = &rasterization_state;
+    pipeline_info.pMultisampleState = &multisample_state;
+    pipeline_info.pDepthStencilState = &depth_stencil_state;
+    pipeline_info.pColorBlendState = &color_blend_state;
+    pipeline_info.pDynamicState = &dynamic_state;
+    pipeline_info.layout = config.layout;
+    pipeline_info.basePipelineHandle = nullptr;
+    pipeline_info.basePipelineIndex = -1;
+
+    VkPipeline pipeline = nullptr;
+    VkResult result = vkCreateGraphicsPipelines(hg_vk_device, nullptr, 1, &pipeline_info, nullptr, &pipeline);
+    if (pipeline == nullptr)
+        hg_error("Failed to create Vulkan graphics pipeline: %s\n", hg_vk_result_to_string(result));
+
+    return pipeline;
+}
+
+VkPipeline hg_vk_create_compute_pipeline(VkPipelineLayout layout, const VkShaderModule shader) {
+    hg_assert(layout != nullptr);
+    hg_assert(shader != nullptr);
+
+    VkComputePipelineCreateInfo pipeline_info{};
+    pipeline_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    pipeline_info.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    pipeline_info.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+    pipeline_info.stage.module = shader;
+    pipeline_info.stage.pName = "main";
+    pipeline_info.layout = layout;
+    pipeline_info.basePipelineHandle = nullptr;
+    pipeline_info.basePipelineIndex = -1;
+
+    VkPipeline pipeline = nullptr;
+    VkResult result = vkCreateComputePipelines(hg_vk_device, nullptr, 1, &pipeline_info, nullptr, &pipeline);
+    if (pipeline == nullptr)
+        hg_error("Failed to create Vulkan compute pipeline: %s\n", hg_vk_result_to_string(result));
+
+    return pipeline;
+}
+
+HgVkDescriptorPoolBuilder::HgVkDescriptorPoolBuilder() {
+    sizes = HgArena{hg_get_scratch()}.alloc<VkDescriptorPoolSize>(0);
+    size_count = 0;
+}
+
+HgVkDescriptorPoolBuilder& HgVkDescriptorPoolBuilder::add_descriptor_type(VkDescriptorType type, u32 count) {
+    sizes[size_count++] = {type, count};
+    return *this;
+}
+
+VkDescriptorPool HgVkDescriptorPoolBuilder::create(u32 max_sets, VkDescriptorPoolCreateFlags flags) {
+    VkDescriptorPoolCreateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    info.flags = flags;
+    info.maxSets = max_sets;
+    info.poolSizeCount = size_count;
+    info.pPoolSizes = sizes;
+
+    VkDescriptorPool pool = nullptr;
+    VkResult result = vkCreateDescriptorPool(hg_vk_device, &info, nullptr, &pool);
+    if (pool == nullptr)
+        hg_error("Could not create VkDescriptorPool: %s\n", hg_vk_result_to_string(result));
+
+    return pool;
+}
+
+VkDescriptorSet hg_vk_allocate_descriptor_set(VkDescriptorPool pool, VkDescriptorSetLayout layout) {
+    VkDescriptorSetAllocateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    info.descriptorPool = pool;
+    info.descriptorSetCount = 1;
+    info.pSetLayouts = &layout;
+
+    VkDescriptorSet set = nullptr;
+    VkResult result = vkAllocateDescriptorSets(hg_vk_device, &info, &set);
+    if (result == VK_ERROR_OUT_OF_POOL_MEMORY)
+        return nullptr;
+    if (set == nullptr)
+        hg_error("Could not allocate VkDescriptorSet: %s\n", hg_vk_result_to_string(result));
+
+    return set;
+}
+
+void hg_vk_update_descriptor_set(
+    VkDescriptorSet set,
+    u32 binding,
+    VkDescriptorType type,
+    const VkDescriptorBufferInfo& info
+) {
+    VkWriteDescriptorSet write{};
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstSet = set;
+    write.dstBinding = binding;
+    write.descriptorCount = 1;
+    write.descriptorType = type;
+    write.pBufferInfo = &info;
+
+    vkUpdateDescriptorSets(hg_vk_device, 1, &write, 0, nullptr);
+}
+
+void hg_vk_update_descriptor_set(
+    VkDescriptorSet set,
+    u32 binding,
+    VkDescriptorType type,
+    const VkDescriptorImageInfo& info
+) {
+    VkWriteDescriptorSet write{};
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstSet = set;
+    write.dstBinding = binding;
+    write.descriptorCount = 1;
+    write.descriptorType = type;
+    write.pImageInfo = &info;
+
+    vkUpdateDescriptorSets(hg_vk_device, 1, &write, 0, nullptr);
+}
+
+u32 hg_vk_find_memory_type_index(
+    u32 bitmask,
+    VkMemoryPropertyFlags preferred_flags,
+    VkMemoryPropertyFlags unpreferred_flags
+) {
+    hg_assert(hg_vk_physical_device != nullptr);
+    hg_assert(bitmask != 0);
+
+    VkPhysicalDeviceMemoryProperties mem_props;
+    vkGetPhysicalDeviceMemoryProperties(hg_vk_physical_device, &mem_props);
+
+    for (u32 i = 0; i < mem_props.memoryTypeCount; ++i) {
+        if ((bitmask & (1 << i)) != 0 &&
+            (mem_props.memoryTypes[i].propertyFlags & preferred_flags) != 0 &&
+            (mem_props.memoryTypes[i].propertyFlags & unpreferred_flags) == 0
+        ) {
+            return i;
+        }
+    }
+    for (u32 i = 0; i < mem_props.memoryTypeCount; ++i) {
+        if ((bitmask & (1 << i)) != 0 &&
+            (mem_props.memoryTypes[i].propertyFlags & preferred_flags) != 0
+        ) {
+            hg_warn("Could not find Vulkan memory type without undesired flags\n");
+            return i;
+        }
+    }
+    for (u32 i = 0; i < mem_props.memoryTypeCount; ++i) {
+        if ((bitmask & (1 << i)) != 0) {
+            hg_warn("Could not find Vulkan memory type with desired flags\n");
+            return i;
+        }
+    }
+    hg_error("Could not find Vulkan memory type\n");
+}
+
+void hg_vk_create_buffer(
+    VkBuffer* buffer,
+    VmaAllocation* allocation,
+    VkDeviceSize size,
+    VkBufferUsageFlags usage,
+    VmaAllocationCreateFlags memory
+) {
+    hg_assert(buffer != nullptr);
+    hg_assert(allocation != nullptr);
+    hg_assert(size > 0);
+    hg_assert(usage != 0);
+
+    VkBufferCreateInfo buffer_info{};
+    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buffer_info.size = size;
+    buffer_info.usage = usage;
+
+    VmaAllocationCreateInfo alloc_info{};
+    alloc_info.flags = memory;
+    alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
+
+    VkResult result = vmaCreateBuffer(hg_vk_vma, &buffer_info, &alloc_info, buffer, allocation, nullptr);
+    if (result != VK_SUCCESS)
+        hg_error("Could not create VkBuffer: %s", hg_vk_result_to_string(result));
+}
+
+void hg_vk_create_image(VkImage* image, VmaAllocation* allocation, const HgVkImageConfig& config) {
+    hg_assert(image != nullptr);
+    hg_assert(allocation != nullptr);
+    hg_assert(config.format != VK_FORMAT_UNDEFINED);
+    hg_assert(config.usage != 0);
+
+    VkImageCreateInfo image_info{};
+    image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    image_info.imageType = config.type;
+    image_info.format = config.format;
+    image_info.extent = {config.width, config.height, config.depth};
+    image_info.mipLevels = config.mip_levels;
+    image_info.arrayLayers = config.array_layers;
+    image_info.samples = config.samples;
+    image_info.usage = config.usage;
+
+    VmaAllocationCreateInfo alloc_info{};
+    alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
+
+    VkResult result = vmaCreateImage(hg_vk_vma, &image_info, &alloc_info, image, allocation, nullptr);
+    if (result != VK_SUCCESS)
+        hg_error("Could not create VkImage: %s", hg_vk_result_to_string(result));
+}
+
+void hg_vk_create_image_view(VkImageView* view, const HgVkImageViewConfig& config) {
+    hg_assert(view != nullptr);
+    hg_assert(config.image != nullptr);
+    hg_assert(config.format != VK_FORMAT_UNDEFINED);
+    hg_assert(config.subresource.aspectMask != 0);
+
+    VkImageViewCreateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    info.image = config.image;
+    info.viewType = config.type;
+    info.format = config.format;
+    info.components = config.components;
+    info.subresourceRange = config.subresource;
+
+    VkResult result = vkCreateImageView(hg_vk_device, &info, nullptr, view);
+    if (*view == nullptr)
+        hg_error("Could not create VkImageView: %s\n", hg_vk_result_to_string(result));
+}
+
+void hg_vk_buffer_staging_write(
+    VkBuffer dst,
+    usize offset,
+    const void* src,
+    usize size
+) {
+    hg_assert(hg_vk_device != nullptr);
+    hg_assert(hg_vk_vma != nullptr);
+    hg_assert(dst != nullptr);
+    hg_assert(src != nullptr);
+
+    VkBuffer stage = nullptr;
+    VmaAllocation stage_alloc = nullptr;
+    hg_vk_create_buffer(&stage, &stage_alloc, size,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+    hg_defer(vmaDestroyBuffer(hg_vk_vma, stage, stage_alloc));
+
+    vmaCopyMemoryToAllocation(hg_vk_vma, src, stage_alloc, offset, size);
+
+    VkCommandBuffer cmd = hg_vk_begin_commands();
+
+    VkBufferCopy region{};
+    region.dstOffset = offset;
+    region.size = size;
+
+    vkCmdCopyBuffer(cmd, stage, dst, 1, &region);
+
+    hg_vk_end_and_execute(cmd);
+}
+
+void hg_vk_buffer_staging_read(
+    void* dst,
+    VkBuffer src,
+    usize offset,
+    usize size
+) {
+    hg_assert(hg_vk_device != nullptr);
+    hg_assert(hg_vk_vma != nullptr);
+    hg_assert(dst != nullptr);
+    hg_assert(src != nullptr);
+
+    VkBuffer stage = nullptr;
+    VmaAllocation stage_alloc = nullptr;
+    hg_vk_create_buffer(&stage, &stage_alloc, size,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT);
+    hg_defer(vmaDestroyBuffer(hg_vk_vma, stage, stage_alloc));
+
+    VkCommandBuffer cmd = hg_vk_begin_commands();
+
+    VkBufferCopy region{};
+    region.srcOffset = offset;
+    region.size = size;
+
+    vkCmdCopyBuffer(cmd, src, stage, 1, &region);
+
+    hg_vk_end_and_execute(cmd);
+
+    vmaCopyAllocationToMemory(hg_vk_vma, stage_alloc, offset, dst, size);
+}
+
+void hg_vk_image_staging_write(
+    const HgVkImageStagingWriteConfig& config
+) {
+    hg_assert(hg_vk_device != nullptr);
+    hg_assert(hg_vk_vma != nullptr);
+    hg_assert(config.dst_image != nullptr);
+    hg_assert(config.src_data != nullptr);
+    hg_assert(config.width > 0);
+    hg_assert(config.height > 0);
+    hg_assert(config.depth > 0);
+    hg_assert(config.format != VK_FORMAT_UNDEFINED);
+
+    usize size = config.width
+               * config.height
+               * config.depth
+               * hg_vk_format_to_size(config.format);
+
+    VkBuffer stage = nullptr;
+    VmaAllocation stage_alloc = nullptr;
+    hg_vk_create_buffer(&stage, &stage_alloc, size,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+    hg_defer(vmaDestroyBuffer(hg_vk_vma, stage, stage_alloc));
+
+    vmaCopyMemoryToAllocation(hg_vk_vma, config.src_data, stage_alloc, 0, size);
+
+    VkCommandBuffer cmd = hg_vk_begin_commands();
+
+    VkImageMemoryBarrier2 transfer_barrier{};
+    transfer_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    transfer_barrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    transfer_barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    transfer_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    transfer_barrier.image = config.dst_image;
+    transfer_barrier.subresourceRange.aspectMask = config.subresource.aspectMask;
+    transfer_barrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
+    transfer_barrier.subresourceRange.levelCount = 1;
+    transfer_barrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
+    transfer_barrier.subresourceRange.layerCount = config.subresource.layerCount;
+
+    VkDependencyInfo transfer_dep{};
+    transfer_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    transfer_dep.imageMemoryBarrierCount = 1;
+    transfer_dep.pImageMemoryBarriers = &transfer_barrier;
+
+    vkCmdPipelineBarrier2(cmd, &transfer_dep);
+
+    VkBufferImageCopy region{};
+    region.imageSubresource = config.subresource;
+    region.imageExtent = {config.width, config.height, config.depth};
+
+    vkCmdCopyBufferToImage(cmd, stage, config.dst_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+    VkImageMemoryBarrier2 end_barrier{};
+    end_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    end_barrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    end_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    end_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    end_barrier.newLayout = config.layout;
+    end_barrier.image = config.dst_image;
+    end_barrier.subresourceRange.aspectMask = config.subresource.aspectMask;
+    end_barrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
+    end_barrier.subresourceRange.levelCount = 1;
+    end_barrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
+    end_barrier.subresourceRange.layerCount = config.subresource.layerCount;
+
+    VkDependencyInfo end_dep{};
+    end_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    end_dep.imageMemoryBarrierCount = 1;
+    end_dep.pImageMemoryBarriers = &end_barrier;
+
+    vkCmdPipelineBarrier2(cmd, &end_dep);
+
+    hg_vk_end_and_execute(cmd);
+}
+
+void hg_vk_image_staging_write_cubemap(
+    const HgVkImageStagingWriteConfig& config
+) {
+    hg_assert(hg_vk_device != nullptr);
+    hg_assert(hg_vk_vma != nullptr);
+    hg_assert(config.dst_image != nullptr);
+    hg_assert(config.subresource.baseArrayLayer == 0);
+    hg_assert(config.subresource.layerCount == 6);
+    hg_assert(config.src_data != nullptr);
+    hg_assert(config.width > 0);
+    hg_assert(config.height > 0);
+    hg_assert(config.depth == 0 || config.depth == 1);
+    hg_assert(config.format != VK_FORMAT_UNDEFINED);
+
+    usize size = config.width
+               * config.height
+               * hg_vk_format_to_size(config.format);
+
+    VkBuffer buffer = nullptr;
+    VmaAllocation buffer_alloc = nullptr;
+    hg_vk_create_buffer(&buffer, &buffer_alloc, size * 4 * 3,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+    hg_defer(vmaDestroyBuffer(hg_vk_vma, buffer, buffer_alloc));
+
+    vmaCopyMemoryToAllocation(hg_vk_vma, config.src_data, buffer_alloc, 0, size);
+
+    HgVkImageConfig stage_info{};
+    stage_info.width = config.width;
+    stage_info.height = config.height;
+    stage_info.depth = config.depth;
+    stage_info.format = config.format;
+    stage_info.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT
+                     | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+
+    VkImage stage = nullptr;
+    VmaAllocation stage_alloc = nullptr;
+    hg_vk_create_image(&stage, &stage_alloc, stage_info);
+    hg_defer(vmaDestroyImage(hg_vk_vma, stage, stage_alloc));
+
+    VkCommandBuffer cmd = hg_vk_begin_commands();
+
+    VkImageMemoryBarrier2 stage_barrier{};
+    stage_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    stage_barrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    stage_barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    stage_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    stage_barrier.image = config.dst_image;
+    stage_barrier.subresourceRange.aspectMask = config.subresource.aspectMask;
+    stage_barrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
+    stage_barrier.subresourceRange.levelCount = 1;
+    stage_barrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
+    stage_barrier.subresourceRange.layerCount = config.subresource.layerCount;
+
+    VkDependencyInfo stage_dep{};
+    stage_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    stage_dep.imageMemoryBarrierCount = 1;
+    stage_dep.pImageMemoryBarriers = &stage_barrier;
+
+    vkCmdPipelineBarrier2(cmd, &stage_dep);
+
+    VkBufferImageCopy stage_region{};
+    stage_region.imageSubresource = config.subresource;
+    stage_region.imageExtent = {config.width, config.height, config.depth};
+
+    vkCmdCopyBufferToImage(cmd, buffer, stage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &stage_region);
+
+    VkImageMemoryBarrier2 transfer_barriers[2]{};
+
+    transfer_barriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    transfer_barriers[0].srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    transfer_barriers[0].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    transfer_barriers[0].dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    transfer_barriers[0].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    transfer_barriers[0].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    transfer_barriers[0].newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    transfer_barriers[0].image = stage;
+    transfer_barriers[0].subresourceRange.aspectMask = config.subresource.aspectMask;
+    transfer_barriers[0].subresourceRange.baseMipLevel = 0;
+    transfer_barriers[0].subresourceRange.levelCount = 1;
+    transfer_barriers[0].subresourceRange.baseArrayLayer = 0;
+    transfer_barriers[0].subresourceRange.layerCount = 1;
+
+    transfer_barriers[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    transfer_barriers[1].dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    transfer_barriers[1].dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    transfer_barriers[1].newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    transfer_barriers[1].image = config.dst_image;
+    transfer_barriers[1].subresourceRange.aspectMask = config.subresource.aspectMask;
+    transfer_barriers[1].subresourceRange.baseMipLevel = config.subresource.mipLevel;
+    transfer_barriers[1].subresourceRange.levelCount = 1;
+    transfer_barriers[1].subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
+    transfer_barriers[1].subresourceRange.layerCount = config.subresource.layerCount;
+
+    VkDependencyInfo transfer_dep{};
+    transfer_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    transfer_dep.imageMemoryBarrierCount = sizeof(transfer_barriers) / sizeof(*transfer_barriers);
+    transfer_dep.pImageMemoryBarriers = transfer_barriers;
+
+    vkCmdPipelineBarrier2(cmd, &transfer_dep);
+
+    VkImageCopy regions[6]{};
+
+    regions[0].srcSubresource = {config.subresource.aspectMask, 0, 0, 1};
+    regions[0].srcOffset = {(int)config.width * 2, (int)config.height * 1, 0};
+    regions[0].dstSubresource = {config.subresource.aspectMask, config.subresource.mipLevel, 0, 1};
+    regions[0].dstOffset = {};
+    regions[0].extent = {config.width, config.height, 1};
+
+    regions[1].srcSubresource = {config.subresource.aspectMask, 0, 0, 1};
+    regions[1].srcOffset = {(int)config.width * 0, (int)config.height * 1, 0};
+    regions[1].dstSubresource = {config.subresource.aspectMask, config.subresource.mipLevel, 1, 1};
+    regions[1].dstOffset = {};
+    regions[1].extent = {config.width, config.height, 1};
+
+    regions[2].srcSubresource = {config.subresource.aspectMask, 0, 0, 1};
+    regions[2].srcOffset = {(int)config.width * 1, (int)config.height * 0, 0};
+    regions[2].dstSubresource = {config.subresource.aspectMask, config.subresource.mipLevel, 2, 1};
+    regions[2].dstOffset = {};
+    regions[2].extent = {config.width, config.height, 1};
+
+    regions[3].srcSubresource = {config.subresource.aspectMask, 0, 0, 1};
+    regions[3].srcOffset = {(int)config.width * 1, (int)config.height * 2, 0};
+    regions[3].dstSubresource = {config.subresource.aspectMask, config.subresource.mipLevel, 3, 1};
+    regions[3].dstOffset = {};
+    regions[3].extent = {config.width, config.height, 1};
+
+    regions[4].srcSubresource = {config.subresource.aspectMask, 0, 0, 1};
+    regions[4].srcOffset = {(int)config.width * 1, (int)config.height * 1, 0};
+    regions[4].dstSubresource = {config.subresource.aspectMask, config.subresource.mipLevel, 4, 1};
+    regions[4].dstOffset = {};
+    regions[4].extent = {config.width, config.height, 1};
+
+    regions[5].srcSubresource = {config.subresource.aspectMask, 0, 0, 1};
+    regions[5].srcOffset = {(int)config.width * 3, (int)config.height * 1, 0};
+    regions[5].dstSubresource = {config.subresource.aspectMask, config.subresource.mipLevel, 5, 1};
+    regions[5].dstOffset = {};
+    regions[5].extent = {config.width, config.height, 1};
+
+    vkCmdCopyImage(
+        cmd,
+        stage,
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        config.dst_image,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        sizeof(regions) / sizeof(*regions),
+        regions);
+
+    VkImageMemoryBarrier2 end_barrier{};
+    end_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    end_barrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    end_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    end_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    end_barrier.newLayout = config.layout;
+    end_barrier.image = config.dst_image;
+    end_barrier.subresourceRange.aspectMask = config.subresource.aspectMask;
+    end_barrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
+    end_barrier.subresourceRange.levelCount = 1;
+    end_barrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
+    end_barrier.subresourceRange.layerCount = config.subresource.layerCount;
+
+    VkDependencyInfo end_dep{};
+    end_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    end_dep.imageMemoryBarrierCount = 1;
+    end_dep.pImageMemoryBarriers = &end_barrier;
+
+    vkCmdPipelineBarrier2(cmd, &end_dep);
+
+    hg_vk_end_and_execute(cmd);
+}
+
+void hg_vk_image_staging_read(
+    const HgVkImageStagingReadConfig& config
+) {
+    hg_assert(hg_vk_device != nullptr);
+    hg_assert(hg_vk_vma != nullptr);
+    hg_assert(config.src_image != nullptr);
+    hg_assert(config.layout != VK_IMAGE_LAYOUT_UNDEFINED);
+    hg_assert(config.dst != nullptr);
+    hg_assert(config.width > 0);
+    hg_assert(config.height > 0);
+    hg_assert(config.depth > 0);
+    hg_assert(config.format != VK_FORMAT_UNDEFINED);
+
+    usize size = config.width
+               * config.height
+               * config.depth
+               * hg_vk_format_to_size(config.format);
+
+    VkBuffer stage = nullptr;
+    VmaAllocation stage_alloc = nullptr;
+    hg_vk_create_buffer(&stage, &stage_alloc, size,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+    hg_defer(vmaDestroyBuffer(hg_vk_vma, stage, stage_alloc));
+
+    VkCommandBuffer cmd = hg_vk_begin_commands();
+
+    VkImageMemoryBarrier2 transfer_barrier{};
+    transfer_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    transfer_barrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    transfer_barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    transfer_barrier.oldLayout = config.layout;
+    transfer_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    transfer_barrier.image = config.src_image;
+    transfer_barrier.subresourceRange.aspectMask = config.subresource.aspectMask;
+    transfer_barrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
+    transfer_barrier.subresourceRange.levelCount = 1;
+    transfer_barrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
+    transfer_barrier.subresourceRange.layerCount = config.subresource.layerCount;
+
+    VkDependencyInfo transfer_dep{};
+    transfer_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    transfer_dep.imageMemoryBarrierCount = 1;
+    transfer_dep.pImageMemoryBarriers = &transfer_barrier;
+
+    vkCmdPipelineBarrier2(cmd, &transfer_dep);
+
+    VkBufferImageCopy region{};
+    region.imageSubresource = config.subresource;
+    region.imageExtent = {config.width, config.height, config.depth};
+
+    vkCmdCopyImageToBuffer(cmd, config.src_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, stage, 1, &region);
+
+    VkImageMemoryBarrier2 end_barrier{};
+    end_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    end_barrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    end_barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    end_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    end_barrier.newLayout = config.layout;
+    end_barrier.image = config.src_image;
+    end_barrier.subresourceRange.aspectMask = config.subresource.aspectMask;
+    end_barrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
+    end_barrier.subresourceRange.levelCount = 1;
+    end_barrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
+    end_barrier.subresourceRange.layerCount = config.subresource.layerCount;
+
+    VkDependencyInfo end_dep{};
+    end_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    end_dep.imageMemoryBarrierCount = 1;
+    end_dep.pImageMemoryBarriers = &end_barrier;
+
+    vkCmdPipelineBarrier2(cmd, &end_dep);
+
+    hg_vk_end_and_execute(cmd);
+
+    vmaCopyAllocationToMemory(hg_vk_vma, stage_alloc, 0, config.dst, size);
+}
+
+void hg_vk_image_generate_mipmaps(
+    VkImage image,
+    VkImageAspectFlags aspect_mask,
+    VkImageLayout old_layout,
+    VkImageLayout new_layout,
+    u32 width,
+    u32 height,
+    u32 depth,
+    u32 mip_count
+) {
+    hg_assert(hg_vk_device != nullptr);
+    hg_assert(image != nullptr);
+    hg_assert(old_layout != VK_IMAGE_LAYOUT_UNDEFINED);
+    hg_assert(new_layout != VK_IMAGE_LAYOUT_UNDEFINED);
+    hg_assert(width > 0);
+    hg_assert(height > 0);
+    hg_assert(depth > 0);
+    hg_assert(mip_count > 0);
+    if (mip_count == 1)
+        return;
+
+    VkCommandBuffer cmd = hg_vk_begin_commands();
+
+    VkOffset3D mip_offset{};
+    mip_offset.x = (i32)width;
+    mip_offset.y = (i32)height;
+    mip_offset.z = (i32)depth;
+
+    VkImageMemoryBarrier2 barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    barrier.srcStageMask = VK_PIPELINE_STAGE_NONE;
+    barrier.srcAccessMask = VK_ACCESS_NONE;
+    barrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    barrier.oldLayout = old_layout;
+    barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barrier.image = image;
+    barrier.subresourceRange.aspectMask = aspect_mask;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.layerCount = 1;
+
+    VkDependencyInfo dep{};
+    dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    dep.imageMemoryBarrierCount = 1;
+    dep.pImageMemoryBarriers = &barrier;
+
+    vkCmdPipelineBarrier2(cmd, &dep);
+
+    for (u32 level = 0; level < mip_count - 1; ++level) {
+        barrier.srcStageMask = VK_PIPELINE_STAGE_NONE;
+        barrier.srcAccessMask = VK_ACCESS_NONE;
+        barrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        barrier.subresourceRange.aspectMask = aspect_mask;
+        barrier.subresourceRange.baseMipLevel = level + 1;
+
+        vkCmdPipelineBarrier2(cmd, &dep);
+
+        VkImageBlit blit{};
+        blit.srcSubresource.aspectMask = aspect_mask;
+        blit.srcSubresource.mipLevel = level;
+        blit.srcSubresource.layerCount = 1;
+        blit.srcOffsets[1] = mip_offset;
+        if (mip_offset.x > 1)
+            mip_offset.x /= 2;
+        if (mip_offset.y > 1)
+            mip_offset.y /= 2;
+        if (mip_offset.z > 1)
+            mip_offset.z /= 2;
+        blit.dstSubresource.aspectMask = aspect_mask;
+        blit.dstSubresource.mipLevel = level + 1;
+        blit.dstSubresource.layerCount = 1;
+        blit.dstOffsets[1] = mip_offset;
+
+        vkCmdBlitImage(cmd,
+            image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1, &blit,
+            VK_FILTER_LINEAR);
+
+        barrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        barrier.subresourceRange.aspectMask = aspect_mask;
+        barrier.subresourceRange.baseMipLevel = level + 1;
+
+        vkCmdPipelineBarrier2(cmd, &dep);
+    }
+
+    barrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    barrier.dstStageMask = VK_PIPELINE_STAGE_NONE;
+    barrier.dstAccessMask = VK_ACCESS_NONE;
+    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barrier.newLayout = new_layout;
+    barrier.subresourceRange.aspectMask = aspect_mask;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.levelCount = mip_count;
+
+    vkCmdPipelineBarrier2(cmd, &dep);
+
+    hg_vk_end_and_execute(cmd);
+}
+
 #define HG_MAKE_VULKAN_FUNC(name) PFN_##name name
 
 struct HgVulkanFuncs {
@@ -638,6 +1801,148 @@ struct HgVulkanFuncs {
 #undef HG_MAKE_VULKAN_FUNC
 
 static HgVulkanFuncs vulkan_funcs{};
+
+#define HG_LOAD_VULKAN_INSTANCE_FUNC(instance, name) \
+    vulkan_funcs. name = (PFN_##name)vulkan_funcs.vkGetInstanceProcAddr(instance, #name); \
+    if (vulkan_funcs. name == nullptr) { hg_error("Could not load " #name "\n"); }
+
+void hg_vk_load_instance_funcs(VkInstance instance) {
+    hg_assert(instance != nullptr);
+
+    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetDeviceProcAddr);
+    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkDestroyInstance);
+#ifdef HG_VK_DEBUG_MESSENGER
+    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkCreateDebugUtilsMessengerEXT);
+    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkDestroyDebugUtilsMessengerEXT);
+#endif
+    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkEnumeratePhysicalDevices);
+    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkEnumerateDeviceExtensionProperties);
+    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetPhysicalDeviceProperties);
+    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetPhysicalDeviceQueueFamilyProperties);
+    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetPhysicalDeviceMemoryProperties);
+    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetPhysicalDeviceMemoryProperties2);
+    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetPhysicalDeviceSurfaceSupportKHR);
+    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetPhysicalDeviceSurfaceFormatsKHR);
+    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetPhysicalDeviceSurfacePresentModesKHR);
+    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetPhysicalDeviceSurfaceCapabilitiesKHR);
+
+    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkDestroySurfaceKHR)
+    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkCreateDevice)
+}
+
+#undef HG_LOAD_VULKAN_INSTANCE_FUNC
+
+#define HG_LOAD_VULKAN_DEVICE_FUNC(device, name) \
+    vulkan_funcs. name = (PFN_##name)vulkan_funcs.vkGetDeviceProcAddr(device, #name); \
+    if (vulkan_funcs. name == nullptr) { hg_error("Could not load " #name "\n"); }
+
+void hg_vk_load_device_funcs(VkDevice device) {
+    hg_assert(device != nullptr);
+
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyDevice)
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDeviceWaitIdle)
+
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreateSwapchainKHR)
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroySwapchainKHR)
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkGetSwapchainImagesKHR)
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkAcquireNextImageKHR)
+
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreateSemaphore);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroySemaphore);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreateFence);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyFence);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkResetFences);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkWaitForFences);
+
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkGetDeviceQueue);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkQueueWaitIdle);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkQueueSubmit);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkQueuePresentKHR);
+
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreateCommandPool);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyCommandPool);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkResetCommandPool);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkAllocateCommandBuffers);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkFreeCommandBuffers);
+
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreateDescriptorPool);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyDescriptorPool);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkResetDescriptorPool);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkAllocateDescriptorSets);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkFreeDescriptorSets);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkUpdateDescriptorSets);
+
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreateDescriptorSetLayout);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyDescriptorSetLayout);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreatePipelineLayout);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyPipelineLayout);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreateShaderModule);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyShaderModule);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreateGraphicsPipelines);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreateComputePipelines);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyPipeline);
+
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreateRenderPass);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyRenderPass);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreateFramebuffer);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyFramebuffer);
+
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreateBuffer);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyBuffer);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreateImage);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyImage);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreateImageView);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyImageView);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreateSampler);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroySampler);
+
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkGetBufferMemoryRequirements);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkGetBufferMemoryRequirements2);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkGetImageMemoryRequirements);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkGetImageMemoryRequirements2);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkGetDeviceBufferMemoryRequirements);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkGetDeviceImageMemoryRequirements);
+
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkAllocateMemory);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkFreeMemory);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkBindBufferMemory);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkBindBufferMemory2);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkBindImageMemory);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkBindImageMemory2);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkMapMemory);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkUnmapMemory);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkFlushMappedMemoryRanges);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkInvalidateMappedMemoryRanges);
+
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkBeginCommandBuffer);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkEndCommandBuffer);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkResetCommandBuffer);
+
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdCopyBuffer);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdCopyImage);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdBlitImage);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdCopyBufferToImage);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdCopyImageToBuffer);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdPipelineBarrier);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdPipelineBarrier2);
+
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdBeginRendering);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdEndRendering);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdBeginRenderPass);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdEndRenderPass);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdSetViewport);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdSetScissor);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdBindPipeline);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdBindDescriptorSets);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdPushConstants);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdBindVertexBuffers);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdBindIndexBuffer);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdDraw);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdDrawIndexed);
+    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdDispatch);
+}
+
+#undef HG_LOAD_VULKAN_DEVICE_FUNC
 
 PFN_vkVoidFunction vkGetInstanceProcAddr(
     VkInstance instance,
@@ -1928,1247 +3233,6 @@ void vkCmdDispatch(
         x,
         y,
         z);
-}
-
-#define HG_LOAD_VULKAN_INSTANCE_FUNC(instance, name) \
-    vulkan_funcs. name = (PFN_##name)vulkan_funcs.vkGetInstanceProcAddr(instance, #name); \
-    if (vulkan_funcs. name == nullptr) { hg_error("Could not load " #name "\n"); }
-
-void hg_vk_load_instance(VkInstance instance) {
-    hg_assert(instance != nullptr);
-
-    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetDeviceProcAddr);
-    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkDestroyInstance);
-#ifdef HG_VK_DEBUG_MESSENGER
-    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkCreateDebugUtilsMessengerEXT);
-    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkDestroyDebugUtilsMessengerEXT);
-#endif
-    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkEnumeratePhysicalDevices);
-    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkEnumerateDeviceExtensionProperties);
-    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetPhysicalDeviceProperties);
-    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetPhysicalDeviceQueueFamilyProperties);
-    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetPhysicalDeviceMemoryProperties);
-    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetPhysicalDeviceMemoryProperties2);
-    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetPhysicalDeviceSurfaceSupportKHR);
-    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetPhysicalDeviceSurfaceFormatsKHR);
-    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetPhysicalDeviceSurfacePresentModesKHR);
-    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetPhysicalDeviceSurfaceCapabilitiesKHR);
-
-    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkDestroySurfaceKHR)
-    HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkCreateDevice)
-}
-
-#undef HG_LOAD_VULKAN_INSTANCE_FUNC
-
-#define HG_LOAD_VULKAN_DEVICE_FUNC(device, name) \
-    vulkan_funcs. name = (PFN_##name)vulkan_funcs.vkGetDeviceProcAddr(device, #name); \
-    if (vulkan_funcs. name == nullptr) { hg_error("Could not load " #name "\n"); }
-
-void hg_vk_load_device(VkDevice device) {
-    hg_assert(device != nullptr);
-
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyDevice)
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDeviceWaitIdle)
-
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreateSwapchainKHR)
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroySwapchainKHR)
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkGetSwapchainImagesKHR)
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkAcquireNextImageKHR)
-
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreateSemaphore);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroySemaphore);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreateFence);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyFence);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkResetFences);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkWaitForFences);
-
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkGetDeviceQueue);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkQueueWaitIdle);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkQueueSubmit);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkQueuePresentKHR);
-
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreateCommandPool);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyCommandPool);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkResetCommandPool);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkAllocateCommandBuffers);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkFreeCommandBuffers);
-
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreateDescriptorPool);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyDescriptorPool);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkResetDescriptorPool);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkAllocateDescriptorSets);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkFreeDescriptorSets);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkUpdateDescriptorSets);
-
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreateDescriptorSetLayout);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyDescriptorSetLayout);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreatePipelineLayout);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyPipelineLayout);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreateShaderModule);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyShaderModule);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreateGraphicsPipelines);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreateComputePipelines);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyPipeline);
-
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreateRenderPass);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyRenderPass);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreateFramebuffer);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyFramebuffer);
-
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreateBuffer);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyBuffer);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreateImage);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyImage);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreateImageView);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyImageView);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCreateSampler);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroySampler);
-
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkGetBufferMemoryRequirements);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkGetBufferMemoryRequirements2);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkGetImageMemoryRequirements);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkGetImageMemoryRequirements2);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkGetDeviceBufferMemoryRequirements);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkGetDeviceImageMemoryRequirements);
-
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkAllocateMemory);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkFreeMemory);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkBindBufferMemory);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkBindBufferMemory2);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkBindImageMemory);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkBindImageMemory2);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkMapMemory);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkUnmapMemory);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkFlushMappedMemoryRanges);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkInvalidateMappedMemoryRanges);
-
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkBeginCommandBuffer);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkEndCommandBuffer);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkResetCommandBuffer);
-
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdCopyBuffer);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdCopyImage);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdBlitImage);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdCopyBufferToImage);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdCopyImageToBuffer);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdPipelineBarrier);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdPipelineBarrier2);
-
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdBeginRendering);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdEndRendering);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdBeginRenderPass);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdEndRenderPass);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdSetViewport);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdSetScissor);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdBindPipeline);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdBindDescriptorSets);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdPushConstants);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdBindVertexBuffers);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdBindIndexBuffer);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdDraw);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdDrawIndexed);
-    HG_LOAD_VULKAN_DEVICE_FUNC(device, vkCmdDispatch);
-}
-
-#undef HG_LOAD_VULKAN_DEVICE_FUNC
-
-static VkBool32 debug_callback(
-    const VkDebugUtilsMessageSeverityFlagBitsEXT severity,
-    const VkDebugUtilsMessageTypeFlagsEXT type,
-    const VkDebugUtilsMessengerCallbackDataEXT* callback_data,
-    void* user_data
-) {
-    (void)type;
-    (void)user_data;
-
-    if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
-        (void)fprintf(stderr, "Vulkan Error: %s\n", callback_data->pMessage);
-        abort();
-    } else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
-        (void)fprintf(stderr, "Vulkan Warning: %s\n", callback_data->pMessage);
-    } else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) {
-        (void)fprintf(stderr, "Vulkan Info: %s\n", callback_data->pMessage);
-    } else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) {
-        (void)fprintf(stderr, "Vulkan Verbose: %s\n", callback_data->pMessage);
-    } else {
-        (void)fprintf(stderr, "Vulkan Unknown: %s\n", callback_data->pMessage);
-    }
-    return VK_FALSE;
-}
-
-static const VkDebugUtilsMessengerCreateInfoEXT debug_utils_messenger_info{
-    VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
-    nullptr, 0,
-    VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
-    VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-    VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
-    VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-    VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-    VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
-    debug_callback, nullptr,
-};
-
-VkInstance hg_vk_create_instance(HgStringView* extensions, u32 extension_count) {
-    HgArena& scratch = hg_get_scratch();
-    HgArenaScope scratch_scope{scratch};
-
-    VkApplicationInfo app_info{};
-    app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    app_info.pApplicationName = "Hurdy Gurdy Application",
-    app_info.applicationVersion = 0;
-    app_info.pEngineName = "Hurdy Gurdy Engine";
-    app_info.engineVersion = 0;
-    app_info.apiVersion = VK_API_VERSION_1_3;
-
-    VkInstanceCreateInfo instance_info{};
-    instance_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-#ifdef HG_VK_DEBUG_MESSENGER
-    instance_info.pNext = &debug_utils_messenger_info;
-#endif
-    instance_info.flags = 0;
-    instance_info.pApplicationInfo = &app_info;
-
-#ifdef HG_VK_DEBUG_MESSENGER
-    const char* layers[]{
-        "VK_LAYER_KHRONOS_validation",
-    };
-    instance_info.enabledLayerCount = sizeof(layers) / sizeof(*layers);
-    instance_info.ppEnabledLayerNames = layers;
-#endif
-
-    const char** ext_c_strs = scratch.alloc<const char*>(extension_count);
-    for (usize i = 0; i < extension_count; ++i) {
-        ext_c_strs[i] = hg_c_string(scratch, extensions[i]);
-    }
-    instance_info.enabledExtensionCount = extension_count;
-    instance_info.ppEnabledExtensionNames = ext_c_strs;
-
-    VkInstance instance = nullptr;
-    VkResult result = vkCreateInstance(&instance_info, nullptr, &instance);
-    if (instance == nullptr)
-        hg_error("Failed to create Vulkan instance: %s\n", hg_vk_result_string(result));
-
-    return instance;
-}
-
-VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger() {
-    hg_assert(hg_vk_instance != nullptr);
-
-    VkDebugUtilsMessengerEXT messenger = nullptr;
-    VkResult result = vkCreateDebugUtilsMessengerEXT(
-        hg_vk_instance, &debug_utils_messenger_info, nullptr, &messenger);
-    if (messenger == nullptr)
-        hg_error("Failed to create Vulkan debug messenger: %s\n", hg_vk_result_string(result));
-
-    return messenger;
-}
-
-bool hg_vk_find_queue_family(VkPhysicalDevice gpu, u32& queue_family, VkQueueFlags queue_flags) {
-    hg_assert(gpu != nullptr);
-
-    HgArena& scratch = hg_get_scratch();
-    HgArenaScope scratch_scope{scratch};
-
-    u32 family_count = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, nullptr);
-    VkQueueFamilyProperties* families = scratch.alloc<VkQueueFamilyProperties>(family_count);
-    vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, families);
-
-    for (u32 i = 0; i < family_count; ++i) {
-        if (families[i].queueFlags & queue_flags) {
-            queue_family = i;
-            return true;
-        }
-    }
-    return false;
-}
-
-static const char* const vk_device_extensions[]{
-    "VK_KHR_swapchain",
-};
-
-VkPhysicalDevice hg_vk_find_single_queue_physical_device() {
-    hg_assert(hg_vk_instance != nullptr);
-
-    HgArena& scratch = hg_get_scratch();
-    HgArenaScope scratch_scope{scratch};
-
-    u32 gpu_count;
-    vkEnumeratePhysicalDevices(hg_vk_instance, &gpu_count, nullptr);
-    VkPhysicalDevice* gpus = scratch.alloc<VkPhysicalDevice>(gpu_count);
-    vkEnumeratePhysicalDevices(hg_vk_instance, &gpu_count, gpus);
-
-    VkExtensionProperties* ext_props = nullptr;
-    u32 ext_prop_count = 0;
-
-    for (u32 i = 0; i < gpu_count; ++i) {
-        VkPhysicalDevice gpu = gpus[i];
-        u32 family;
-
-        u32 new_prop_count = 0;
-        vkEnumerateDeviceExtensionProperties(gpu, nullptr, &new_prop_count, nullptr);
-        if (new_prop_count > ext_prop_count) {
-            ext_props = scratch.realloc(ext_props, ext_prop_count, new_prop_count);
-            ext_prop_count = new_prop_count;
-        }
-        vkEnumerateDeviceExtensionProperties(gpu, nullptr, &new_prop_count, ext_props);
-
-        for (usize j = 0; j < sizeof(vk_device_extensions) / sizeof(*vk_device_extensions); j++) {
-            for (usize k = 0; k < new_prop_count; k++) {
-                if (strcmp(vk_device_extensions[j], ext_props[k].extensionName) == 0)
-                    goto next_ext;
-            }
-            goto next_gpu;
-next_ext:
-            continue;
-        }
-
-        if (!hg_vk_find_queue_family(gpu, family,
-                VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT | VK_QUEUE_COMPUTE_BIT))
-            goto next_gpu;
-
-        return gpu;
-
-next_gpu:
-        continue;
-    }
-
-    hg_warn("Could not find a suitable gpu\n");
-    return nullptr;
-}
-
-VkDevice hg_vk_create_single_queue_device() {
-    hg_assert(hg_vk_physical_device != nullptr);
-    hg_assert(hg_vk_queue_family != (u32)-1);
-
-    VkPhysicalDeviceDynamicRenderingFeatures dynamic_rendering_feature{};
-    dynamic_rendering_feature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
-    dynamic_rendering_feature.dynamicRendering = VK_TRUE;
-
-    VkPhysicalDeviceSynchronization2Features synchronization2_feature{};
-    synchronization2_feature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES;
-    synchronization2_feature.pNext = &dynamic_rendering_feature;
-    synchronization2_feature.synchronization2 = VK_TRUE;
-
-    VkPhysicalDeviceFeatures features{};
-
-    VkDeviceQueueCreateInfo queue_info{};
-    queue_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    queue_info.queueFamilyIndex = hg_vk_queue_family;
-    queue_info.queueCount = 1;
-    float queue_priority = 1.0f;
-    queue_info.pQueuePriorities = &queue_priority;
-
-    VkDeviceCreateInfo device_info{};
-    device_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    device_info.pNext = &synchronization2_feature;
-    device_info.queueCreateInfoCount = 1;
-    device_info.pQueueCreateInfos = &queue_info;
-    device_info.enabledExtensionCount = sizeof(vk_device_extensions) / sizeof(*vk_device_extensions);
-    device_info.ppEnabledExtensionNames = vk_device_extensions;
-    device_info.pEnabledFeatures = &features;
-
-    VkDevice device = nullptr;
-    VkResult result = vkCreateDevice(hg_vk_physical_device, &device_info, nullptr, &device);
-
-    if (device == nullptr)
-        hg_error("Could not create Vulkan device: %s\n", hg_vk_result_string(result));
-    return device;
-}
-
-VkPipeline hg_vk_create_graphics_pipeline(const HgVkPipelineConfig& config) {
-    if (config.color_attachment_format_count > 0)
-        hg_assert(config.color_attachment_formats != nullptr);
-    hg_assert(config.shader_stages != nullptr);
-    hg_assert(config.layout != nullptr);
-    if (config.vertex_binding_count > 0)
-        hg_assert(config.vertex_bindings != nullptr);
-
-    VkPipelineVertexInputStateCreateInfo vertex_input_state{};
-    vertex_input_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertex_input_state.vertexBindingDescriptionCount = (u32)config.vertex_binding_count;
-    vertex_input_state.pVertexBindingDescriptions = config.vertex_bindings;
-    vertex_input_state.vertexAttributeDescriptionCount = (u32)config.vertex_attribute_count;
-    vertex_input_state.pVertexAttributeDescriptions = config.vertex_attributes;
-
-    VkPipelineInputAssemblyStateCreateInfo input_assembly_state{};
-    input_assembly_state.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    input_assembly_state.topology = config.topology;
-    input_assembly_state.primitiveRestartEnable = VK_FALSE;
-
-    VkPipelineTessellationStateCreateInfo tessellation_state{};
-    tessellation_state.sType = VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO;
-    tessellation_state.patchControlPoints = config.tesselation_patch_control_points;
-
-    VkPipelineViewportStateCreateInfo viewport_state{};
-    viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-    viewport_state.viewportCount = 1;
-    viewport_state.scissorCount = 1;
-
-    VkPipelineRasterizationStateCreateInfo rasterization_state{};
-    rasterization_state.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-    rasterization_state.depthClampEnable = VK_FALSE;
-    rasterization_state.rasterizerDiscardEnable = VK_FALSE;
-    rasterization_state.polygonMode = config.polygon_mode;
-    rasterization_state.cullMode = config.cull_mode;
-    rasterization_state.frontFace = config.front_face;
-    rasterization_state.depthBiasEnable = VK_FALSE;
-    rasterization_state.depthBiasConstantFactor = 0.0f;
-    rasterization_state.depthBiasClamp = 0.0f;
-    rasterization_state.depthBiasSlopeFactor = 0.0f;
-    rasterization_state.lineWidth = 1.0f;
-
-    VkPipelineMultisampleStateCreateInfo multisample_state{};
-    multisample_state.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-    multisample_state.rasterizationSamples = config.multisample_count != 0
-        ? config.multisample_count
-        : VK_SAMPLE_COUNT_1_BIT,
-    multisample_state.sampleShadingEnable = VK_FALSE;
-    multisample_state.minSampleShading = 1.0f;
-    multisample_state.pSampleMask = nullptr;
-    multisample_state.alphaToCoverageEnable = VK_FALSE;
-    multisample_state.alphaToOneEnable = VK_FALSE;
-
-    VkPipelineDepthStencilStateCreateInfo depth_stencil_state{};
-    depth_stencil_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    depth_stencil_state.depthTestEnable = config.depth_attachment_format != VK_FORMAT_UNDEFINED
-            ? VK_TRUE
-            : VK_FALSE;
-    depth_stencil_state.depthWriteEnable = config.depth_attachment_format != VK_FORMAT_UNDEFINED
-            ? VK_TRUE
-            : VK_FALSE;
-    depth_stencil_state.depthCompareOp = config.enable_color_blend
-            ? VK_COMPARE_OP_LESS_OR_EQUAL
-            : VK_COMPARE_OP_LESS;
-    depth_stencil_state.depthBoundsTestEnable = config.depth_attachment_format != VK_FORMAT_UNDEFINED
-            ? VK_TRUE
-            : VK_FALSE;
-    depth_stencil_state.stencilTestEnable = config.stencil_attachment_format != VK_FORMAT_UNDEFINED
-            ? VK_TRUE
-            : VK_FALSE,
-    // depth_stencil_state.front = {}; : TODO
-    // depth_stencil_state.back = {}; : TODO
-    depth_stencil_state.minDepthBounds = 0.0f;
-    depth_stencil_state.maxDepthBounds = 1.0f;
-
-    VkPipelineColorBlendAttachmentState color_blend_attachment{};
-    color_blend_attachment.blendEnable = config.enable_color_blend ? VK_TRUE : VK_FALSE;
-    color_blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-    color_blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-    color_blend_attachment.colorBlendOp = VK_BLEND_OP_ADD;
-    color_blend_attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-    color_blend_attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-    color_blend_attachment.alphaBlendOp = VK_BLEND_OP_ADD;
-    color_blend_attachment.colorWriteMask
-        = VK_COLOR_COMPONENT_R_BIT
-        | VK_COLOR_COMPONENT_G_BIT
-        | VK_COLOR_COMPONENT_B_BIT
-        | VK_COLOR_COMPONENT_A_BIT;
-
-    VkPipelineColorBlendStateCreateInfo color_blend_state{};
-    color_blend_state.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-    color_blend_state.logicOpEnable = VK_FALSE;
-    color_blend_state.logicOp = VK_LOGIC_OP_COPY;
-    color_blend_state.attachmentCount = 1;
-    color_blend_state.pAttachments = &color_blend_attachment;
-    color_blend_state.blendConstants[0] = {1.0f};
-    color_blend_state.blendConstants[1] = {1.0f};
-    color_blend_state.blendConstants[2] = {1.0f};
-    color_blend_state.blendConstants[3] = {1.0f};
-
-    VkDynamicState dynamic_states[]{VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
-    VkPipelineDynamicStateCreateInfo dynamic_state{};
-    dynamic_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-    dynamic_state.dynamicStateCount = sizeof(dynamic_states) / sizeof(*dynamic_states);
-    dynamic_state.pDynamicStates = dynamic_states;
-
-    VkPipelineRenderingCreateInfo rendering_info{};
-    rendering_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
-    rendering_info.colorAttachmentCount = (u32)config.color_attachment_format_count;
-    rendering_info.pColorAttachmentFormats = config.color_attachment_formats;
-    rendering_info.depthAttachmentFormat = config.depth_attachment_format;
-    rendering_info.stencilAttachmentFormat = config.stencil_attachment_format;
-
-    VkGraphicsPipelineCreateInfo pipeline_info{};
-    pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    pipeline_info.pNext = &rendering_info;
-    pipeline_info.stageCount = (u32)config.shader_count;
-    pipeline_info.pStages = config.shader_stages;
-    pipeline_info.pVertexInputState = &vertex_input_state;
-    pipeline_info.pInputAssemblyState = &input_assembly_state;
-    pipeline_info.pTessellationState = &tessellation_state;
-    pipeline_info.pViewportState = &viewport_state;
-    pipeline_info.pRasterizationState = &rasterization_state;
-    pipeline_info.pMultisampleState = &multisample_state;
-    pipeline_info.pDepthStencilState = &depth_stencil_state;
-    pipeline_info.pColorBlendState = &color_blend_state;
-    pipeline_info.pDynamicState = &dynamic_state;
-    pipeline_info.layout = config.layout;
-    pipeline_info.basePipelineHandle = nullptr;
-    pipeline_info.basePipelineIndex = -1;
-
-    VkPipeline pipeline = nullptr;
-    VkResult result = vkCreateGraphicsPipelines(hg_vk_device, nullptr, 1, &pipeline_info, nullptr, &pipeline);
-    if (pipeline == nullptr)
-        hg_error("Failed to create Vulkan graphics pipeline: %s\n", hg_vk_result_string(result));
-
-    return pipeline;
-}
-
-VkPipeline hg_vk_create_compute_pipeline(const HgVkPipelineConfig& config) {
-    hg_assert(config.color_attachment_formats == nullptr);
-    hg_assert(config.depth_attachment_format == VK_FORMAT_UNDEFINED);
-    hg_assert(config.stencil_attachment_format == VK_FORMAT_UNDEFINED);
-    hg_assert(config.shader_stages != nullptr);
-    hg_assert(config.shader_count == 1);
-    hg_assert(config.shader_stages[0].stage == VK_SHADER_STAGE_COMPUTE_BIT);
-    hg_assert(config.layout != nullptr);
-    hg_assert(config.vertex_bindings == nullptr);
-
-    VkComputePipelineCreateInfo pipeline_info{};
-    pipeline_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-    pipeline_info.stage = config.shader_stages[0];
-    pipeline_info.layout = config.layout;
-    pipeline_info.basePipelineHandle = nullptr;
-    pipeline_info.basePipelineIndex = -1;
-
-    VkPipeline pipeline = nullptr;
-    VkResult result = vkCreateComputePipelines(hg_vk_device, nullptr, 1, &pipeline_info, nullptr, &pipeline);
-    if (pipeline == nullptr)
-        hg_error("Failed to create Vulkan compute pipeline: %s\n", hg_vk_result_string(result));
-
-    return pipeline;
-}
-
-u32 hg_vk_find_memory_type_index(
-    u32 bitmask,
-    VkMemoryPropertyFlags desired_flags,
-    VkMemoryPropertyFlags undesired_flags
-) {
-    hg_assert(hg_vk_physical_device != nullptr);
-    hg_assert(bitmask != 0);
-
-    VkPhysicalDeviceMemoryProperties mem_props;
-    vkGetPhysicalDeviceMemoryProperties(hg_vk_physical_device, &mem_props);
-
-    for (u32 i = 0; i < mem_props.memoryTypeCount; ++i) {
-        if ((bitmask & (1 << i)) == 0)
-            continue;
-        if ((mem_props.memoryTypes[i].propertyFlags & undesired_flags) != 0)
-            continue;
-        if ((mem_props.memoryTypes[i].propertyFlags & desired_flags) == 0)
-            continue;
-        return i;
-    }
-    for (u32 i = 0; i < mem_props.memoryTypeCount; ++i) {
-        if ((bitmask & (1 << i)) == 0)
-            continue;
-        if ((mem_props.memoryTypes[i].propertyFlags & desired_flags) == 0)
-            continue;
-        hg_warn("Could not find Vulkan memory type without undesired flags\n");
-        return i;
-    }
-    for (u32 i = 0; i < mem_props.memoryTypeCount; ++i) {
-        if ((bitmask & (1 << i)) == 0)
-            continue;
-        hg_warn("Could not find Vulkan memory type with desired flags\n");
-        return i;
-    }
-    hg_error("Could not find Vulkan memory type\n");
-}
-
-void hg_vk_buffer_staging_write(
-    VkBuffer dst,
-    usize offset,
-    const void* src,
-    usize size
-) {
-    hg_assert(hg_vk_device != nullptr);
-    hg_assert(hg_vk_vma != nullptr);
-    hg_assert(dst != nullptr);
-    hg_assert(src != nullptr);
-
-    VkBufferCreateInfo stage_info{};
-    stage_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    stage_info.size = size;
-    stage_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-
-    VmaAllocationCreateInfo stage_alloc_info{};
-    stage_alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    stage_alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
-
-    VkBuffer stage = nullptr;
-    VmaAllocation stage_alloc = nullptr;
-    vmaCreateBuffer(hg_vk_vma, &stage_info, &stage_alloc_info, &stage, &stage_alloc, nullptr);
-    vmaCopyMemoryToAllocation(hg_vk_vma, src, stage_alloc, offset, size);
-    hg_defer(vmaDestroyBuffer(hg_vk_vma, stage, stage_alloc));
-
-    VkCommandBufferAllocateInfo cmd_info{};
-    cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    cmd_info.commandPool = hg_vk_cmd_pool;
-    cmd_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    cmd_info.commandBufferCount = 1;
-
-    VkCommandBuffer cmd = nullptr;
-    vkAllocateCommandBuffers(hg_vk_device, &cmd_info, &cmd);
-    hg_defer(vkFreeCommandBuffers(hg_vk_device, hg_vk_cmd_pool, 1, &cmd));
-
-    VkCommandBufferBeginInfo begin_info{};
-    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-    vkBeginCommandBuffer(cmd, &begin_info);
-    VkBufferCopy region{};
-    region.dstOffset = offset;
-    region.size = size;
-
-    vkCmdCopyBuffer(cmd, stage, dst, 1, &region);
-    vkEndCommandBuffer(cmd);
-
-    VkFenceCreateInfo fence_info{};
-    fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-
-    VkFence fence = nullptr;
-    vkCreateFence(hg_vk_device, &fence_info, nullptr, &fence);
-    hg_defer(vkDestroyFence(hg_vk_device, fence, nullptr));
-
-    VkSubmitInfo submit{};
-    submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit.commandBufferCount = 1;
-    submit.pCommandBuffers = &cmd;
-
-    vkQueueSubmit(hg_vk_queue, 1, &submit, fence);
-    vkWaitForFences(hg_vk_device, 1, &fence, VK_TRUE, UINT64_MAX);
-}
-
-void hg_vk_buffer_staging_read(
-    void* dst,
-    VkBuffer src,
-    usize offset,
-    usize size
-) {
-    hg_assert(hg_vk_device != nullptr);
-    hg_assert(hg_vk_vma != nullptr);
-    hg_assert(dst != nullptr);
-    hg_assert(src != nullptr);
-
-    VkBufferCreateInfo stage_info{};
-    stage_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    stage_info.size = size;
-    stage_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-
-    VmaAllocationCreateInfo stage_alloc_info{};
-    stage_alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
-    stage_alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
-
-    VkBuffer stage = nullptr;
-    VmaAllocation stage_alloc = nullptr;
-    vmaCreateBuffer(hg_vk_vma, &stage_info, &stage_alloc_info, &stage, &stage_alloc, nullptr);
-    hg_defer(vmaDestroyBuffer(hg_vk_vma, stage, stage_alloc));
-
-    VkCommandBufferAllocateInfo cmd_info{};
-    cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    cmd_info.commandPool = hg_vk_cmd_pool;
-    cmd_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    cmd_info.commandBufferCount = 1;
-
-    VkCommandBuffer cmd = nullptr;
-    vkAllocateCommandBuffers(hg_vk_device, &cmd_info, &cmd);
-    hg_defer(vkFreeCommandBuffers(hg_vk_device, hg_vk_cmd_pool, 1, &cmd));
-
-    VkCommandBufferBeginInfo begin_info{};
-    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-    vkBeginCommandBuffer(cmd, &begin_info);
-    VkBufferCopy region{};
-    region.srcOffset = offset;
-    region.size = size;
-
-    vkCmdCopyBuffer(cmd, src, stage, 1, &region);
-    vkEndCommandBuffer(cmd);
-
-    VkFenceCreateInfo fence_info{};
-    fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-
-    VkFence fence = nullptr;
-    vkCreateFence(hg_vk_device, &fence_info, nullptr, &fence);
-    hg_defer(vkDestroyFence(hg_vk_device, fence, nullptr));
-
-    VkSubmitInfo submit{};
-    submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit.commandBufferCount = 1;
-    submit.pCommandBuffers = &cmd;
-
-    vkQueueSubmit(hg_vk_queue, 1, &submit, fence);
-    vkWaitForFences(hg_vk_device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-    vmaCopyAllocationToMemory(hg_vk_vma, stage_alloc, offset, dst, size);
-}
-
-void hg_vk_image_staging_write(
-    const HgVkImageStagingWriteConfig& config
-) {
-    hg_assert(hg_vk_device != nullptr);
-    hg_assert(hg_vk_vma != nullptr);
-    hg_assert(config.dst_image != nullptr);
-    hg_assert(config.src_data != nullptr);
-    hg_assert(config.width > 0);
-    hg_assert(config.height > 0);
-    hg_assert(config.depth > 0);
-    hg_assert(config.format != VK_FORMAT_UNDEFINED);
-
-    usize size = config.width
-               * config.height
-               * config.depth
-               * hg_vk_format_to_size(config.format);
-
-    VkBufferCreateInfo stage_info{};
-    stage_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    stage_info.size = size;
-    stage_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-
-    VmaAllocationCreateInfo stage_alloc_info{};
-    stage_alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    stage_alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
-
-    VkBuffer stage = nullptr;
-    VmaAllocation stage_alloc = nullptr;
-    vmaCreateBuffer(hg_vk_vma, &stage_info, &stage_alloc_info, &stage, &stage_alloc, nullptr);
-    vmaCopyMemoryToAllocation(hg_vk_vma, config.src_data, stage_alloc, 0, size);
-    hg_defer(vmaDestroyBuffer(hg_vk_vma, stage, stage_alloc));
-
-    VkCommandBufferAllocateInfo cmd_info{};
-    cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    cmd_info.commandPool = hg_vk_cmd_pool;
-    cmd_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    cmd_info.commandBufferCount = 1;
-
-    VkCommandBuffer cmd = nullptr;
-    vkAllocateCommandBuffers(hg_vk_device, &cmd_info, &cmd);
-    hg_defer(vkFreeCommandBuffers(hg_vk_device, hg_vk_cmd_pool, 1, &cmd));
-
-    VkCommandBufferBeginInfo begin_info{};
-    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-    vkBeginCommandBuffer(cmd, &begin_info);
-
-    VkImageMemoryBarrier2 transfer_barrier{};
-    transfer_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-    transfer_barrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    transfer_barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    transfer_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    transfer_barrier.image = config.dst_image;
-    transfer_barrier.subresourceRange.aspectMask = config.subresource.aspectMask;
-    transfer_barrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
-    transfer_barrier.subresourceRange.levelCount = 1;
-    transfer_barrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
-    transfer_barrier.subresourceRange.layerCount = config.subresource.layerCount;
-
-    VkDependencyInfo transfer_dep{};
-    transfer_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    transfer_dep.imageMemoryBarrierCount = 1;
-    transfer_dep.pImageMemoryBarriers = &transfer_barrier;
-
-    vkCmdPipelineBarrier2(cmd, &transfer_dep);
-
-    VkBufferImageCopy region{};
-    region.imageSubresource = config.subresource;
-    region.imageExtent = {config.width, config.height, config.depth};
-
-    vkCmdCopyBufferToImage(cmd, stage, config.dst_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-
-    VkImageMemoryBarrier2 end_barrier{};
-    end_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-    end_barrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    end_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    end_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    end_barrier.newLayout = config.layout;
-    end_barrier.image = config.dst_image;
-    end_barrier.subresourceRange.aspectMask = config.subresource.aspectMask;
-    end_barrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
-    end_barrier.subresourceRange.levelCount = 1;
-    end_barrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
-    end_barrier.subresourceRange.layerCount = config.subresource.layerCount;
-
-    VkDependencyInfo end_dep{};
-    end_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    end_dep.imageMemoryBarrierCount = 1;
-    end_dep.pImageMemoryBarriers = &end_barrier;
-
-    vkCmdPipelineBarrier2(cmd, &end_dep);
-
-    vkEndCommandBuffer(cmd);
-
-    VkFenceCreateInfo fence_info{};
-    fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    VkFence fence = nullptr;
-    vkCreateFence(hg_vk_device, &fence_info, nullptr, &fence);
-    hg_defer(vkDestroyFence(hg_vk_device, fence, nullptr));
-
-    VkSubmitInfo submit{};
-    submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit.commandBufferCount = 1;
-    submit.pCommandBuffers = &cmd;
-
-    vkQueueSubmit(hg_vk_queue, 1, &submit, fence);
-    vkWaitForFences(hg_vk_device, 1, &fence, VK_TRUE, UINT64_MAX);
-}
-
-void hg_vk_image_staging_write_cubemap(
-    const HgVkImageStagingWriteConfig& config
-) {
-    hg_assert(hg_vk_device != nullptr);
-    hg_assert(hg_vk_vma != nullptr);
-    hg_assert(config.dst_image != nullptr);
-    hg_assert(config.subresource.baseArrayLayer == 0);
-    hg_assert(config.subresource.layerCount == 6);
-    hg_assert(config.src_data != nullptr);
-    hg_assert(config.width > 0);
-    hg_assert(config.height > 0);
-    hg_assert(config.depth == 0 || config.depth == 1);
-    hg_assert(config.format != VK_FORMAT_UNDEFINED);
-
-    usize size = config.width
-               * config.height
-               * hg_vk_format_to_size(config.format);
-
-    VkBufferCreateInfo buffer_info{};
-    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    buffer_info.size = size * 4 * 3;
-    buffer_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-
-    VmaAllocationCreateInfo buffer_alloc_info{};
-    buffer_alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    buffer_alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
-
-    VkBuffer buffer = nullptr;
-    VmaAllocation buffer_alloc = nullptr;
-    vmaCreateBuffer(hg_vk_vma, &buffer_info, &buffer_alloc_info, &buffer, &buffer_alloc, nullptr);
-    vmaCopyMemoryToAllocation(hg_vk_vma, config.src_data, buffer_alloc, 0, size);
-    hg_defer(vmaDestroyBuffer(hg_vk_vma, buffer, buffer_alloc));
-
-    VkImageCreateInfo stage_info{};
-    stage_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    stage_info.imageType = VK_IMAGE_TYPE_2D;
-    stage_info.format = config.format;
-    stage_info.extent = {config.width, config.height, 1};
-    stage_info.mipLevels = 1;
-    stage_info.arrayLayers = 1;
-    stage_info.samples = VK_SAMPLE_COUNT_1_BIT;
-    stage_info.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT
-                     | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-
-    VmaAllocationCreateInfo stage_alloc_info{};
-    stage_alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
-
-    VkImage stage = nullptr;
-    VmaAllocation stage_alloc = nullptr;
-    vmaCreateImage(hg_vk_vma, &stage_info, &stage_alloc_info, &stage, &stage_alloc, nullptr);
-    hg_defer(vmaDestroyImage(hg_vk_vma, stage, stage_alloc));
-
-    VkCommandBufferAllocateInfo cmd_info{};
-    cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    cmd_info.commandPool = hg_vk_cmd_pool;
-    cmd_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    cmd_info.commandBufferCount = 1;
-
-    VkCommandBuffer cmd = nullptr;
-    vkAllocateCommandBuffers(hg_vk_device, &cmd_info, &cmd);
-    hg_defer(vkFreeCommandBuffers(hg_vk_device, hg_vk_cmd_pool, 1, &cmd));
-
-    VkCommandBufferBeginInfo begin_info{};
-    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-    vkBeginCommandBuffer(cmd, &begin_info);
-
-    VkImageMemoryBarrier2 stage_barrier{};
-    stage_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-    stage_barrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    stage_barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    stage_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    stage_barrier.image = config.dst_image;
-    stage_barrier.subresourceRange.aspectMask = config.subresource.aspectMask;
-    stage_barrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
-    stage_barrier.subresourceRange.levelCount = 1;
-    stage_barrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
-    stage_barrier.subresourceRange.layerCount = config.subresource.layerCount;
-
-    VkDependencyInfo stage_dep{};
-    stage_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    stage_dep.imageMemoryBarrierCount = 1;
-    stage_dep.pImageMemoryBarriers = &stage_barrier;
-
-    vkCmdPipelineBarrier2(cmd, &stage_dep);
-
-    VkBufferImageCopy stage_region{};
-    stage_region.imageSubresource = config.subresource;
-    stage_region.imageExtent = {config.width, config.height, config.depth};
-
-    vkCmdCopyBufferToImage(cmd, buffer, stage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &stage_region);
-
-    VkImageMemoryBarrier2 transfer_barriers[2]{};
-
-    transfer_barriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-    transfer_barriers[0].srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    transfer_barriers[0].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    transfer_barriers[0].dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    transfer_barriers[0].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-    transfer_barriers[0].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    transfer_barriers[0].newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    transfer_barriers[0].image = stage;
-    transfer_barriers[0].subresourceRange.aspectMask = config.subresource.aspectMask;
-    transfer_barriers[0].subresourceRange.baseMipLevel = 0;
-    transfer_barriers[0].subresourceRange.levelCount = 1;
-    transfer_barriers[0].subresourceRange.baseArrayLayer = 0;
-    transfer_barriers[0].subresourceRange.layerCount = 1;
-
-    transfer_barriers[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-    transfer_barriers[1].dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    transfer_barriers[1].dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    transfer_barriers[1].newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    transfer_barriers[1].image = config.dst_image;
-    transfer_barriers[1].subresourceRange.aspectMask = config.subresource.aspectMask;
-    transfer_barriers[1].subresourceRange.baseMipLevel = config.subresource.mipLevel;
-    transfer_barriers[1].subresourceRange.levelCount = 1;
-    transfer_barriers[1].subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
-    transfer_barriers[1].subresourceRange.layerCount = config.subresource.layerCount;
-
-    VkDependencyInfo transfer_dep{};
-    transfer_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    transfer_dep.imageMemoryBarrierCount = sizeof(transfer_barriers) / sizeof(*transfer_barriers);
-    transfer_dep.pImageMemoryBarriers = transfer_barriers;
-
-    vkCmdPipelineBarrier2(cmd, &transfer_dep);
-
-    VkImageCopy regions[6]{};
-
-    regions[0].srcSubresource = {config.subresource.aspectMask, 0, 0, 1};
-    regions[0].srcOffset = {(int)config.width * 2, (int)config.height * 1, 0};
-    regions[0].dstSubresource = {config.subresource.aspectMask, config.subresource.mipLevel, 0, 1};
-    regions[0].dstOffset = {};
-    regions[0].extent = {config.width, config.height, 1};
-
-    regions[1].srcSubresource = {config.subresource.aspectMask, 0, 0, 1};
-    regions[1].srcOffset = {(int)config.width * 0, (int)config.height * 1, 0};
-    regions[1].dstSubresource = {config.subresource.aspectMask, config.subresource.mipLevel, 1, 1};
-    regions[1].dstOffset = {};
-    regions[1].extent = {config.width, config.height, 1};
-
-    regions[2].srcSubresource = {config.subresource.aspectMask, 0, 0, 1};
-    regions[2].srcOffset = {(int)config.width * 1, (int)config.height * 0, 0};
-    regions[2].dstSubresource = {config.subresource.aspectMask, config.subresource.mipLevel, 2, 1};
-    regions[2].dstOffset = {};
-    regions[2].extent = {config.width, config.height, 1};
-
-    regions[3].srcSubresource = {config.subresource.aspectMask, 0, 0, 1};
-    regions[3].srcOffset = {(int)config.width * 1, (int)config.height * 2, 0};
-    regions[3].dstSubresource = {config.subresource.aspectMask, config.subresource.mipLevel, 3, 1};
-    regions[3].dstOffset = {};
-    regions[3].extent = {config.width, config.height, 1};
-
-    regions[4].srcSubresource = {config.subresource.aspectMask, 0, 0, 1};
-    regions[4].srcOffset = {(int)config.width * 1, (int)config.height * 1, 0};
-    regions[4].dstSubresource = {config.subresource.aspectMask, config.subresource.mipLevel, 4, 1};
-    regions[4].dstOffset = {};
-    regions[4].extent = {config.width, config.height, 1};
-
-    regions[5].srcSubresource = {config.subresource.aspectMask, 0, 0, 1};
-    regions[5].srcOffset = {(int)config.width * 3, (int)config.height * 1, 0};
-    regions[5].dstSubresource = {config.subresource.aspectMask, config.subresource.mipLevel, 5, 1};
-    regions[5].dstOffset = {};
-    regions[5].extent = {config.width, config.height, 1};
-
-    vkCmdCopyImage(
-        cmd,
-        stage,
-        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        config.dst_image,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        sizeof(regions) / sizeof(*regions),
-        regions);
-
-    VkImageMemoryBarrier2 end_barrier{};
-    end_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-    end_barrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    end_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    end_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    end_barrier.newLayout = config.layout;
-    end_barrier.image = config.dst_image;
-    end_barrier.subresourceRange.aspectMask = config.subresource.aspectMask;
-    end_barrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
-    end_barrier.subresourceRange.levelCount = 1;
-    end_barrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
-    end_barrier.subresourceRange.layerCount = config.subresource.layerCount;
-
-    VkDependencyInfo end_dep{};
-    end_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    end_dep.imageMemoryBarrierCount = 1;
-    end_dep.pImageMemoryBarriers = &end_barrier;
-
-    vkCmdPipelineBarrier2(cmd, &end_dep);
-
-    vkEndCommandBuffer(cmd);
-
-    VkFenceCreateInfo fence_info{};
-    fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    VkFence fence = nullptr;
-    vkCreateFence(hg_vk_device, &fence_info, nullptr, &fence);
-    hg_defer(vkDestroyFence(hg_vk_device, fence, nullptr));
-
-    VkSubmitInfo submit{};
-    submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit.commandBufferCount = 1;
-    submit.pCommandBuffers = &cmd;
-
-    vkQueueSubmit(hg_vk_queue, 1, &submit, fence);
-    vkWaitForFences(hg_vk_device, 1, &fence, VK_TRUE, UINT64_MAX);
-}
-
-void hg_vk_image_staging_read(
-    const HgVkImageStagingReadConfig& config
-) {
-    hg_assert(hg_vk_device != nullptr);
-    hg_assert(hg_vk_vma != nullptr);
-    hg_assert(config.src_image != nullptr);
-    hg_assert(config.layout != VK_IMAGE_LAYOUT_UNDEFINED);
-    hg_assert(config.dst != nullptr);
-    hg_assert(config.width > 0);
-    hg_assert(config.height > 0);
-    hg_assert(config.depth > 0);
-    hg_assert(config.format != VK_FORMAT_UNDEFINED);
-
-    usize size = config.width
-               * config.height
-               * config.depth
-               * hg_vk_format_to_size(config.format);
-
-    VkBufferCreateInfo stage_info{};
-    stage_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    stage_info.size = size;
-    stage_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-
-    VmaAllocationCreateInfo stage_alloc_info{};
-    stage_alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    stage_alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
-
-    VkBuffer stage = nullptr;
-    VmaAllocation stage_alloc = nullptr;
-    vmaCreateBuffer(hg_vk_vma, &stage_info, &stage_alloc_info, &stage, &stage_alloc, nullptr);
-    hg_defer(vmaDestroyBuffer(hg_vk_vma, stage, stage_alloc));
-
-    VkCommandBufferAllocateInfo cmd_info{};
-    cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    cmd_info.commandPool = hg_vk_cmd_pool;
-    cmd_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    cmd_info.commandBufferCount = 1;
-
-    VkCommandBuffer cmd = nullptr;
-    vkAllocateCommandBuffers(hg_vk_device, &cmd_info, &cmd);
-    hg_defer(vkFreeCommandBuffers(hg_vk_device, hg_vk_cmd_pool, 1, &cmd));
-
-    VkCommandBufferBeginInfo begin_info{};
-    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-    vkBeginCommandBuffer(cmd, &begin_info);
-
-    VkImageMemoryBarrier2 transfer_barrier{};
-    transfer_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-    transfer_barrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    transfer_barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-    transfer_barrier.oldLayout = config.layout;
-    transfer_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    transfer_barrier.image = config.src_image;
-    transfer_barrier.subresourceRange.aspectMask = config.subresource.aspectMask;
-    transfer_barrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
-    transfer_barrier.subresourceRange.levelCount = 1;
-    transfer_barrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
-    transfer_barrier.subresourceRange.layerCount = config.subresource.layerCount;
-
-    VkDependencyInfo transfer_dep{};
-    transfer_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    transfer_dep.imageMemoryBarrierCount = 1;
-    transfer_dep.pImageMemoryBarriers = &transfer_barrier;
-
-    vkCmdPipelineBarrier2(cmd, &transfer_dep);
-
-    VkBufferImageCopy region{};
-    region.imageSubresource = config.subresource;
-    region.imageExtent = {config.width, config.height, config.depth};
-
-    vkCmdCopyImageToBuffer(cmd, config.src_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, stage, 1, &region);
-
-    VkImageMemoryBarrier2 end_barrier{};
-    end_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-    end_barrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    end_barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-    end_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    end_barrier.newLayout = config.layout;
-    end_barrier.image = config.src_image;
-    end_barrier.subresourceRange.aspectMask = config.subresource.aspectMask;
-    end_barrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
-    end_barrier.subresourceRange.levelCount = 1;
-    end_barrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
-    end_barrier.subresourceRange.layerCount = config.subresource.layerCount;
-
-    VkDependencyInfo end_dep{};
-    end_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    end_dep.imageMemoryBarrierCount = 1;
-    end_dep.pImageMemoryBarriers = &end_barrier;
-
-    vkCmdPipelineBarrier2(cmd, &end_dep);
-
-    vkEndCommandBuffer(cmd);
-
-    VkFenceCreateInfo fence_info{};
-    fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-
-    VkFence fence = nullptr;
-    vkCreateFence(hg_vk_device, &fence_info, nullptr, &fence);
-    hg_defer(vkDestroyFence(hg_vk_device, fence, nullptr));
-
-    VkSubmitInfo submit{};
-    submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit.commandBufferCount = 1;
-    submit.pCommandBuffers = &cmd;
-
-    vkQueueSubmit(hg_vk_queue, 1, &submit, fence);
-    vkWaitForFences(hg_vk_device, 1, &fence, VK_TRUE, UINT64_MAX);
-
-    vmaCopyAllocationToMemory(hg_vk_vma, stage_alloc, 0, config.dst, size);
-}
-
-void hg_vk_image_generate_mipmaps(
-    VkImage image,
-    VkImageAspectFlags aspect_mask,
-    VkImageLayout old_layout,
-    VkImageLayout new_layout,
-    u32 width,
-    u32 height,
-    u32 depth,
-    u32 mip_count
-) {
-    hg_assert(hg_vk_device != nullptr);
-    hg_assert(image != nullptr);
-    hg_assert(old_layout != VK_IMAGE_LAYOUT_UNDEFINED);
-    hg_assert(new_layout != VK_IMAGE_LAYOUT_UNDEFINED);
-    hg_assert(width > 0);
-    hg_assert(height > 0);
-    hg_assert(depth > 0);
-    hg_assert(mip_count > 0);
-    if (mip_count == 1)
-        return;
-
-    VkCommandBufferAllocateInfo cmd_info{};
-    cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    cmd_info.commandPool = hg_vk_cmd_pool;
-    cmd_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    cmd_info.commandBufferCount = 1;
-
-    VkCommandBuffer cmd = nullptr;
-    vkAllocateCommandBuffers(hg_vk_device, &cmd_info, &cmd);
-    hg_defer(vkFreeCommandBuffers(hg_vk_device, hg_vk_cmd_pool, 1, &cmd));
-
-    VkCommandBufferBeginInfo begin_info{};
-    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-    vkBeginCommandBuffer(cmd, &begin_info);
-
-    VkOffset3D mip_offset{};
-    mip_offset.x = (i32)width;
-    mip_offset.y = (i32)height;
-    mip_offset.z = (i32)depth;
-
-    VkImageMemoryBarrier2 barrier{};
-    barrier.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    barrier.srcStageMask = VK_PIPELINE_STAGE_NONE;
-    barrier.srcAccessMask = VK_ACCESS_NONE;
-    barrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-    barrier.oldLayout = old_layout;
-    barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    barrier.image = image;
-    barrier.subresourceRange.aspectMask = aspect_mask;
-    barrier.subresourceRange.levelCount = 1;
-    barrier.subresourceRange.layerCount = 1;
-
-    VkDependencyInfo dep{};
-    dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    dep.imageMemoryBarrierCount = 1;
-    dep.pImageMemoryBarriers = &barrier;
-
-    vkCmdPipelineBarrier2(cmd, &dep);
-
-    for (u32 level = 0; level < mip_count - 1; ++level) {
-        barrier.srcStageMask = VK_PIPELINE_STAGE_NONE;
-        barrier.srcAccessMask = VK_ACCESS_NONE;
-        barrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        barrier.subresourceRange.aspectMask = aspect_mask;
-        barrier.subresourceRange.baseMipLevel = level + 1;
-
-        vkCmdPipelineBarrier2(cmd, &dep);
-
-        VkImageBlit blit{};
-        blit.srcSubresource.aspectMask = aspect_mask;
-        blit.srcSubresource.mipLevel = level;
-        blit.srcSubresource.layerCount = 1;
-        blit.srcOffsets[1] = mip_offset;
-        if (mip_offset.x > 1)
-            mip_offset.x /= 2;
-        if (mip_offset.y > 1)
-            mip_offset.y /= 2;
-        if (mip_offset.z > 1)
-            mip_offset.z /= 2;
-        blit.dstSubresource.aspectMask = aspect_mask;
-        blit.dstSubresource.mipLevel = level + 1;
-        blit.dstSubresource.layerCount = 1;
-        blit.dstOffsets[1] = mip_offset;
-
-        vkCmdBlitImage(cmd,
-            image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            1, &blit,
-            VK_FILTER_LINEAR);
-
-        barrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        barrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-        barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-        barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-        barrier.subresourceRange.aspectMask = aspect_mask;
-        barrier.subresourceRange.baseMipLevel = level + 1;
-
-        vkCmdPipelineBarrier2(cmd, &dep);
-    }
-
-    barrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-    barrier.dstStageMask = VK_PIPELINE_STAGE_NONE;
-    barrier.dstAccessMask = VK_ACCESS_NONE;
-    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    barrier.newLayout = new_layout;
-    barrier.subresourceRange.aspectMask = aspect_mask;
-    barrier.subresourceRange.baseMipLevel = 0;
-    barrier.subresourceRange.levelCount = mip_count;
-
-    vkCmdPipelineBarrier2(cmd, &dep);
-
-    vkEndCommandBuffer(cmd);
-
-    VkSubmitInfo submit_info{};
-    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit_info.commandBufferCount = 1;
-    submit_info.pCommandBuffers = &cmd;
-
-    vkQueueSubmit(hg_vk_queue, 1, &submit_info, nullptr);
 }
 
 static void* libvulkan = nullptr;

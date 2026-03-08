@@ -373,32 +373,23 @@ void hg_load_gpu_texture(HgResource id, VkFilter filter) {
         hg_warn("Could not get info to load texture\n");
         return;
     }
-    hg_assert(tex.format != 0);
     hg_assert(tex.width != 0);
     hg_assert(tex.height != 0);
     hg_assert(tex.depth != 0);
+    hg_assert(tex.format != 0);
 
-    VkImageCreateInfo image_info{};
-    image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    image_info.imageType = VK_IMAGE_TYPE_2D;
+    HgVkImageConfig image_info{};
+    image_info.width = tex.width;
+    image_info.height = tex.height;
+    image_info.depth = tex.depth;
     image_info.format = tex.format;
-    image_info.extent = {tex.width, tex.height, tex.depth};
-    image_info.mipLevels = 1;
-    image_info.arrayLayers = 1;
-    image_info.samples = VK_SAMPLE_COUNT_1_BIT;
     image_info.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 
-    VmaAllocationCreateInfo alloc_info{};
-    alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
-
-    vmaCreateImage(hg_vk_vma, &image_info, &alloc_info, &tex.image, &tex.allocation, nullptr);
-    hg_assert(tex.allocation != nullptr);
-    hg_assert(tex.image != nullptr);
+    hg_vk_create_image(&tex.image, &tex.allocation, image_info);
 
     HgVkImageStagingWriteConfig staging_config{};
     staging_config.dst_image = tex.image;
     staging_config.subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    staging_config.subresource.layerCount = 1;
     staging_config.src_data = data.get_pixels();
     staging_config.width = tex.width;
     staging_config.height = tex.height;
@@ -408,16 +399,12 @@ void hg_load_gpu_texture(HgResource id, VkFilter filter) {
 
     hg_vk_image_staging_write(staging_config);
 
-    VkImageViewCreateInfo view_info{};
-    view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    HgVkImageViewConfig view_info{};
     view_info.image = tex.image;
-    view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
     view_info.format = tex.format;
-    view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    view_info.subresourceRange.levelCount = 1;
-    view_info.subresourceRange.layerCount = 1;
+    view_info.subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 
-    vkCreateImageView(hg_vk_device, &view_info, nullptr, &tex.view);
+    hg_vk_create_image_view(&tex.view, view_info);
     hg_assert(tex.view != nullptr);
 
     VkSamplerCreateInfo sampler_info{};

@@ -4095,7 +4095,7 @@ struct HgSprite {
  */
 void hg_pipeline_2d_init(
     HgArena& arena,
-    usize max_textures,
+    u32 max_textures,
     VkFormat color_format,
     VkFormat depth_format);
 
@@ -4157,19 +4157,36 @@ void hg_pipeline_2d_update_view(const HgMat4& view);
 void hg_draw_2d(HgECS& ecs, VkCommandBuffer cmd);
 
 /**
- * Initializes the graphics subsystem
+ * Initializes the graphics subsystem, loading all global Vulkan resources
  */
 void hg_graphics_init();
 
 /**
- * Deinitializes the graphics subsystem
+ * Deinitializes the graphics subsystem, unloading all global Vulkan resources
  */
 void hg_graphics_deinit();
+
+/**
+ * Loads the Vulkan functions which use the instance
+ *
+ * Parameters
+ * - instance The Vulkan instance, must not be nullptr
+ */
+void hg_vk_load_instance_funcs(VkInstance instance);
+
+/**
+ * Loads the Vulkan functions which use the device
+ *
+ * Parameters
+ * - device The Vulkan device, must not be nullptr
+ */
+void hg_vk_load_device_funcs(VkDevice device);
 
 /**
  * The global Vulkan instance
  */
 inline VkInstance hg_vk_instance = nullptr;
+
 /**
  * The global Vulkan physical device
  */
@@ -4205,7 +4222,7 @@ inline VkCommandPool hg_vk_cmd_pool = nullptr;
  * Returns
  * - The string of the enum value's name
  */
-const char* hg_vk_result_string(VkResult result);
+const char* hg_vk_result_to_string(VkResult result);
 
 /**
  * Turns a VkFormat into the size in bytes
@@ -4217,27 +4234,6 @@ const char* hg_vk_result_string(VkResult result);
  * - The size of the format in bytes
  */
 u32 hg_vk_format_to_size(VkFormat format);
-
-/**
- * Loads the Vulkan functions which use the instance
- *
- * Note, this function is automatically called from hg_vk_create_instance
- *
- * Parameters
- * - instance The Vulkan instance, must not be nullptr
- */
-void hg_vk_load_instance(VkInstance instance);
-
-/**
- * Loads the Vulkan functions which use the Device
- *
- * Note, this function is automatically called from
- * hg_vk_create_single_queue_device
- *
- * Parameters
- * - device The Vulkan device, must not be nullptr
- */
-void hg_vk_load_device(VkDevice device);
 
 /**
  * Creates a Vulkan instance with sensible defaults
@@ -4257,7 +4253,7 @@ VkInstance hg_vk_create_instance(HgStringView* extensions, u32 extension_count);
  * Creates a Vulkan debug messenger
  *
  * Returns
- * - The created debug messenger, will never be nullptr
+ * - The created debug messenger, or nullptr if debug messenger is disabled
  */
 VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger();
 
@@ -4280,8 +4276,6 @@ bool hg_vk_find_queue_family(VkPhysicalDevice gpu, u32& queue_family, VkQueueFla
  * The physical device will have at least one queue family which supports both
  * graphics, transfer, and compute
  *
- * Note, hg_vk_instance must be initialized
- *
  * Returns
  * - The physical device
  * - nullptr if none was found
@@ -4293,8 +4287,6 @@ VkPhysicalDevice hg_vk_find_single_queue_physical_device();
  *
  * The device will have queue 0 in hg_vk_queue_family
  *
- * Note, hg_vk_physical_device must be initialized
- *
  * Returns
  * - The physical device, will never be nullptr
  */
@@ -4304,81 +4296,209 @@ VkDevice hg_vk_create_single_queue_device();
 // create device with multiple potential queues : TODO
 
 /**
+ * Begin a command buffer to be executed once
+ *
+ * Returns
+ * - The command buffer to record, will never be nullptr
+ */
+VkCommandBuffer hg_vk_begin_commands();
+
+/**
+ * Execute the command buffer and wait for completion
+ *
+ * Parameters
+ * - cmd The command buffer from hg_vk_begin_commands, must not be nullptr
+ */
+void hg_vk_end_and_execute(VkCommandBuffer cmd);
+
+/**
+ * A builder utility for VkDescriptorSetLayout
+ */
+struct HgVkDescriptorSetLayoutBuilder {
+    /**
+     * The bindings in the layout
+     */
+    VkDescriptorSetLayoutBinding* bindings;
+    /**
+     * The number of bindings
+     */
+    u32 binding_count;
+
+    /**
+     * Initialize the builder
+     */
+    HgVkDescriptorSetLayoutBuilder();
+
+    /**
+     * Add another binding
+     *
+     * Parameters
+     * - binding The binding to add
+     * - type The type of the binding
+     * - count The number of descriptors in the binding
+     * - stage_flags Which stages the binding are available to
+     *
+     * Returns
+     * - A reference to this for chaining
+     */
+    HgVkDescriptorSetLayoutBuilder& add_binding(
+        u32 binding,
+        VkDescriptorType type,
+        u32 count,
+        VkShaderStageFlagBits stage_flags);
+
+    /**
+     * Create the set layout
+     *
+     * Returns
+     * - The created layout
+     */
+    VkDescriptorSetLayout create();
+};
+
+/**
+ * A builder utility for VkPipelineLayout
+ */
+struct HgVkPipelineLayoutBuilder {
+    /**
+     * The descriptor set layouts in the pipeline
+     */
+    VkDescriptorSetLayout* sets;
+    /**
+     * The number of sets
+     */
+    u32 set_count;
+    /**
+     * The push constant
+     *
+     * Note, there is assumed to be at most one push constant
+     */
+    VkPushConstantRange push;
+
+    /**
+     * Initialize the builder
+     */
+    HgVkPipelineLayoutBuilder();
+
+    /**
+     * Add another descriptor set layout
+     *
+     * Parameters
+     * - set_layout The descriptor set layout to add
+     *
+     * Returns
+     * - A reference to this for chaining
+     */
+    HgVkPipelineLayoutBuilder& add_descriptor_set(VkDescriptorSetLayout set_layout);
+
+    /**
+     * Set the push constant
+     *
+     * Parameters
+     * - stage_flags Which stages the push constant is available to
+     *
+     * Returns
+     * - A reference to this for chaining
+     */
+    HgVkPipelineLayoutBuilder& set_push_range(VkShaderStageFlags stage_flags, u32 size);
+
+    /**
+     * Create the pipeline layout
+     *
+     * Returns
+     * - The created pipeline layout
+     */
+    VkPipelineLayout create();
+};
+
+/**
+ * Create a Vulkan shader module
+ *
+ * Parameters
+ * - spirv_code The spirv bytecode of the shader
+ * - code_size The size of spirv_code in bytes
+ *
+ * Returns
+ * - The create shader module
+ */
+VkShaderModule hg_vk_create_shader_module(const u8* spirv_code, usize code_size);
+
+/**
  * Configuration for Vulkan pipelines
  */
 struct HgVkPipelineConfig {
     /**
      * The format of the color attachments, none can be UNDEFINED
      */
-    const VkFormat* color_attachment_formats;
+    const VkFormat* color_attachment_formats = nullptr;
     /**
      * The number of color attachment formats
      */
-    u32 color_attachment_format_count;
+    u32 color_attachment_format_count = 0;
     /**
-     * The format of the depth attachment, if UNDEFINED no depth attachment
+     * The format of the depth attachment, no depth attachment if UNDEFINED
      */
-    VkFormat depth_attachment_format;
+    VkFormat depth_attachment_format = VK_FORMAT_UNDEFINED;
     /**
-     * The format of the stencil attachment, if UNDEFINED no stencil attachment
+     * The format of the stencil attachment, no stencil attachment if UNDEFINED
      */
-    VkFormat stencil_attachment_format;
+    VkFormat stencil_attachment_format = VK_FORMAT_UNDEFINED;
     /**
      * The shaders
      */
-    const VkPipelineShaderStageCreateInfo* shader_stages;
+    const VkPipelineShaderStageCreateInfo* shader_stages = nullptr;
     /**
      * The number of shaders
      */
-    u32 shader_count;
+    u32 shader_count = 0;
     /**
      * The pipeline layout
      */
-    VkPipelineLayout layout;
+    VkPipelineLayout layout = nullptr;
     /**
      * Descriptions of the vertex bindings, may be nullptr
      */
-    const VkVertexInputBindingDescription* vertex_bindings;
+    const VkVertexInputBindingDescription* vertex_bindings = nullptr;
     /**
      * The number of vertex bindings
      */
-    u32 vertex_binding_count;
+    u32 vertex_binding_count = 0;
     /**
      * Descriptions of the vertex attributes, may be nullptr
      */
-    const VkVertexInputAttributeDescription* vertex_attributes;
+    const VkVertexInputAttributeDescription* vertex_attributes = nullptr;
     /**
      * The number of vertex attributes
      */
-    u32 vertex_attribute_count;
+    u32 vertex_attribute_count = 0;
     /**
-     * How to interpret vertices into topology, defaults to POINT_LIST
+     * How to interpret vertices into topology
      */
-    VkPrimitiveTopology topology;
+    VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     /**
      * The number of patch control points in the tesselation stage
      */
-    u32 tesselation_patch_control_points;
+    u32 tesselation_patch_control_points = 0;
     /**
-     * How polygons are drawn, defaults to FILL
+     * How polygons are drawn
      */
-    VkPolygonMode polygon_mode;
+    VkPolygonMode polygon_mode = VK_POLYGON_MODE_FILL;
     /**
-     * Which face is treated as the front, defaults to COUNTER_CLOCKWISE
+     * Which face is treated as the front
      */
-    VkFrontFace front_face;
+    VkFrontFace front_face = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     /**
-     * How many samples are used in MSAA, 0 defaults to 1
+     * How many samples are used in MSAA
      */
-    VkSampleCountFlagBits multisample_count;
+    VkSampleCountFlagBits multisample_count = VK_SAMPLE_COUNT_1_BIT;
     /**
-     * Enables back/front face culling, defaults to NONE
+     * Enables back/front face culling
      */
-    VkCullModeFlagBits cull_mode;
+    VkCullModeFlagBits cull_mode = VK_CULL_MODE_NONE;
     /**
      * Enables color blending using pixel alpha values
      */
-    bool enable_color_blend;
+    bool enable_color_blend = false;
 };
 
 /**
@@ -4395,17 +4515,99 @@ VkPipeline hg_vk_create_graphics_pipeline(const HgVkPipelineConfig& config);
 /**
  * Creates a compute pipeline
  *
- * There cannot be any attachments
- * There can only be one shader stage, COMPUTE
- * There cannot be any vertex inputs
- *
  * Parameters
- * - config The pipeline configuration
+ * - layout The pipeline layout, must not be nullptr
+ * - shader The shader module, must not be nullptr
  *
  * Returns
  * - The created compute pipeline, will never be nullptr
  */
-VkPipeline hg_vk_create_compute_pipeline(const HgVkPipelineConfig& config);
+VkPipeline hg_vk_create_compute_pipeline(VkPipelineLayout layout, const VkShaderModule shader);
+
+/**
+ * A builder utility for VkDescriptorPool
+ */
+struct HgVkDescriptorPoolBuilder {
+    /**
+     * The sizes of descriptor types
+     */
+    VkDescriptorPoolSize* sizes;
+    /**
+     * The number of sizes
+     */
+    u32 size_count;
+
+    /**
+     * Initialize the builder
+     */
+    HgVkDescriptorPoolBuilder();
+
+    /**
+     * Add another descriptor type
+     *
+     * Parameters
+     * - type The type of descriptor
+     * - count The number of descriptors to allocate
+     *
+     * Returns
+     * - a reference to this for chaining
+     */
+    HgVkDescriptorPoolBuilder& add_descriptor_type(VkDescriptorType type, u32 count);
+
+    /**
+     * Create the descriptor pool
+     *
+     * Parameters
+     * - max_sets The max number of descriptor sets which can be allocated
+     * - flags Extra flags passed to the create info struct, if any
+     *
+     * Returns
+     * - The created descriptor pool
+     */
+    VkDescriptorPool create(u32 max_sets, VkDescriptorPoolCreateFlags flags = 0);
+};
+
+/**
+ * Allocate a single descriptor set
+ *
+ * Parameters
+ * - pool The descriptor pool to allocate from
+ * - layout The layout of the set
+ *
+ * Returns
+ * - The allocated descriptor set
+ */
+VkDescriptorSet hg_vk_allocate_descriptor_set(VkDescriptorPool pool, VkDescriptorSetLayout layout);
+
+/**
+ * Update a descriptor set with a buffer
+ *
+ * Parameters
+ * - set The descriptor set to update
+ * - binding The binding in the set
+ * - type The descriptor type
+ * - info The buffer info to update to
+ */
+void hg_vk_update_descriptor_set(
+    VkDescriptorSet set,
+    u32 binding,
+    VkDescriptorType type,
+    const VkDescriptorBufferInfo& info);
+
+/**
+ * Update a descriptor set with an image
+ *
+ * Parameters
+ * - set The descriptor set to update
+ * - binding The binding in the set
+ * - type The descriptor type
+ * - info The image info to update to
+ */
+void hg_vk_update_descriptor_set(
+    VkDescriptorSet set,
+    u32 binding,
+    VkDescriptorType type,
+    const VkDescriptorImageInfo& info);
 
 /**
  * Attempts to find the index of a memory type which has the desired flags and
@@ -4417,18 +4619,122 @@ VkPipeline hg_vk_create_compute_pipeline(const HgVkPipelineConfig& config);
  *
  * Parameters
  * - bitmask A bitmask of which memory types cannot be used, must not be 0
- * - desired_flags The flags which the type should
- * - undesired_flags The flags which the type should not have, though may have
+ * - preferred_flags The flags which the type should have, though may not
+ * - unpreferred_flags The flags which the type should not have, though may have
  *
  * Returns
  * - The found index of the memory type
  */
 u32 hg_vk_find_memory_type_index(
     u32 bitmask,
-    VkMemoryPropertyFlags desired_flags,
-    VkMemoryPropertyFlags undesired_flags);
+    VkMemoryPropertyFlags preferred_flags = 0,
+    VkMemoryPropertyFlags unpreferred_flags = 0);
 
 // Vulkan allocator : TODO?
+
+/**
+ * Create a Vulkan buffer
+ *
+ * Parameters
+ * - buffer A pointer to return the created buffer
+ * - allocation A pointer to return the created allocation
+ * - size The size in bytes of the buffer
+ * - usage How the buffer will be used
+ * - memory The memory flags for VMA
+ */
+void hg_vk_create_buffer(
+    VkBuffer* buffer,
+    VmaAllocation* allocation,
+    VkDeviceSize size,
+    VkBufferUsageFlags usage,
+    VmaAllocationCreateFlags memory);
+
+/**
+ * Config for hg_vk_create_image
+ */
+struct HgVkImageConfig {
+    /**
+     * The dimensions of the image
+     */
+    VkImageType type = VK_IMAGE_TYPE_2D;
+    /**
+     * The width of the image
+     */
+    u32 width = 1;
+    /**
+     * The height of the image
+     */
+    u32 height = 1;
+    /**
+     * The depth of the image
+     */
+    u32 depth = 1;
+    /**
+     * The format of the image, must not be UNDEFINED
+     */
+    VkFormat format = VK_FORMAT_UNDEFINED;
+    /**
+     * The number of mip level
+     */
+    u32 mip_levels = 1;
+    /**
+     * The number of array layers
+     */
+    u32 array_layers = 1;
+    /**
+     * The number of MSAA samples
+     */
+    VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
+    /**
+     * How the image will be used, must not be 0
+     */
+    VkImageUsageFlags usage = 0;
+};
+
+/**
+ * Create a Vulkan image
+ *
+ * Parameters
+ * - image A pointer to return the created image
+ * - allocation A pointer to return the created allocation
+ * - config The image config
+ */
+void hg_vk_create_image(VkImage* image, VmaAllocation* allocation, const HgVkImageConfig& config);
+
+/**
+ * Config for hg_vk_create_image
+ */
+struct HgVkImageViewConfig {
+    /**
+     * The image to create a view of, must not be nullptr
+     */
+    VkImage image = nullptr;
+    /**
+     * The dimensions of the image
+     */
+    VkImageViewType type = VK_IMAGE_VIEW_TYPE_2D;
+    /**
+     * The format of the image, must not be UNDEFINED
+     */
+    VkFormat format = VK_FORMAT_UNDEFINED;
+    /**
+     * The subresource, aspect must not be 0
+     */
+    VkImageSubresourceRange subresource = {0, 0, 1, 0, 1};
+    /**
+     * The component swizzles
+     */
+    VkComponentMapping components = {};
+};
+
+/**
+ * Create a Vulkan image
+ *
+ * Parameters
+ * - view A pointer to return the created view
+ * - config The image view config
+ */
+void hg_vk_create_image_view(VkImageView* view, const HgVkImageViewConfig& config);
 
 /**
  * Writes to a Vulkan device local buffer through a staging buffer
@@ -4467,35 +4773,35 @@ struct HgVkImageStagingWriteConfig {
     /**
      * The image to write to, must not be nullptr
      */
-    VkImage dst_image;
+    VkImage dst_image = nullptr;
     /**
      * The subresource of the image to write to
      */
-    VkImageSubresourceLayers subresource;
+    VkImageSubresourceLayers subresource = {0, 0, 0, 1};
     /**
      * The data to write, must not be nullptr
      */
-    void* src_data;
+    void* src_data = nullptr;
     /**
      * The width of the image in pixels, must be greater than 0
      */
-    u32 width;
+    u32 width = 1;
     /**
      * The width of the image in pixels, must be greater than 0
      */
-    u32 height;
+    u32 height = 1;
     /**
      * The width of the image in pixels, must be greater than 0
      */
-    u32 depth;
+    u32 depth = 1;
     /**
      * The format of each pixel, must not be UNDEFINED
      */
-    VkFormat format;
+    VkFormat format = VK_FORMAT_UNDEFINED;
     /**
      * The layout to transition to after transfering
      */
-    VkImageLayout layout;
+    VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
 };
 
 /**

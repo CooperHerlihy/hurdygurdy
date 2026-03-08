@@ -272,7 +272,7 @@ HgWindow* HgWindow::create(HgArena& arena, const HgWindowConfig& config) {
 
     VkResult result = pfn_vkCreateXlibSurfaceKHR(hg_vk_instance, &info, nullptr, &window->surface);
     if (window->surface == nullptr)
-        hg_error("Failed to create Vulkan surface: %s\n", hg_vk_result_string(result));
+        hg_error("Failed to create Vulkan surface: %s\n", hg_vk_result_to_string(result));
 
     hg_internal_create_window_swapchain(window, config);
 

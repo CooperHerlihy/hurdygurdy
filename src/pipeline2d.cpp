@@ -29,7 +29,7 @@ HgHashMap<HgResource, VkDescriptorSet> texture_sets;
 
 void hg_pipeline_2d_init(
     HgArena& arena,
-    usize max_textures,
+    u32 max_textures,
     VkFormat color_format,
     VkFormat depth_format
 ) {
@@ -38,66 +38,24 @@ void hg_pipeline_2d_init(
 
     texture_sets = texture_sets.create(arena, max_textures);
 
-    VkDescriptorSetLayoutBinding vp_bindings[1]{};
-    vp_bindings[0].binding = 0;
-    vp_bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    vp_bindings[0].descriptorCount = 1;
-    vp_bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    vp_layout = HgVkDescriptorSetLayoutBuilder()
+        .add_binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT)
+        .create();
 
-    VkDescriptorSetLayoutCreateInfo vp_layout_info{};
-    vp_layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    vp_layout_info.bindingCount = sizeof(vp_bindings) / sizeof(*vp_bindings);
-    vp_layout_info.pBindings = vp_bindings;
+    texture_layout = HgVkDescriptorSetLayoutBuilder()
+        .add_binding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
+        .create();
 
-    vkCreateDescriptorSetLayout(hg_vk_device, &vp_layout_info, nullptr, &vp_layout);
-    hg_assert(vp_layout != nullptr);
+    pipeline_layout = HgVkPipelineLayoutBuilder()
+        .add_descriptor_set(vp_layout)
+        .add_descriptor_set(texture_layout)
+        .set_push_range(VK_SHADER_STAGE_VERTEX_BIT, sizeof(Push))
+        .create();
 
-    VkDescriptorSetLayoutBinding texture_bindings[1]{};
-    texture_bindings[0].binding = 0;
-    texture_bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    texture_bindings[0].descriptorCount = 1;
-    texture_bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-    VkDescriptorSetLayoutCreateInfo texture_layout_info{};
-    texture_layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    texture_layout_info.bindingCount = sizeof(texture_bindings) / sizeof(*texture_bindings);
-    texture_layout_info.pBindings = texture_bindings;
-
-    vkCreateDescriptorSetLayout(hg_vk_device, &texture_layout_info, nullptr, &texture_layout);
-    hg_assert(texture_layout != nullptr);
-
-    VkDescriptorSetLayout set_layouts[]{vp_layout, texture_layout};
-    VkPushConstantRange push_ranges[1]{};
-    push_ranges[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-    push_ranges[0].size = sizeof(Push);
-
-    VkPipelineLayoutCreateInfo layout_info{};
-    layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    layout_info.setLayoutCount = sizeof(set_layouts) / sizeof(*set_layouts);
-    layout_info.pSetLayouts = set_layouts;
-    layout_info.pushConstantRangeCount = sizeof(push_ranges) / sizeof(*push_ranges);
-    layout_info.pPushConstantRanges = push_ranges;
-
-    vkCreatePipelineLayout(hg_vk_device, &layout_info, nullptr, &pipeline_layout);
-    hg_assert(pipeline_layout != nullptr);
-
-    VkShaderModuleCreateInfo vertex_shader_info{};
-    vertex_shader_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    vertex_shader_info.codeSize = sprite_vert_spv_size;
-    vertex_shader_info.pCode = (u32*)sprite_vert_spv;
-
-    VkShaderModule vertex_shader = nullptr;
-    vkCreateShaderModule(hg_vk_device, &vertex_shader_info, nullptr, &vertex_shader);
-    hg_assert(vertex_shader != nullptr);
-
-    VkShaderModuleCreateInfo fragment_shader_info{};
-    fragment_shader_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    fragment_shader_info.codeSize = sprite_frag_spv_size;
-    fragment_shader_info.pCode = (u32*)sprite_frag_spv;
-
-    VkShaderModule fragment_shader = nullptr;
-    vkCreateShaderModule(hg_vk_device, &fragment_shader_info, nullptr, &fragment_shader);
-    hg_assert(fragment_shader != nullptr);
+    VkShaderModule vertex_shader = hg_vk_create_shader_module(sprite_vert_spv, sprite_vert_spv_size);
+    VkShaderModule fragment_shader = hg_vk_create_shader_module(sprite_frag_spv, sprite_frag_spv_size);
+    hg_defer(vkDestroyShaderModule(hg_vk_device, vertex_shader, nullptr));
+    hg_defer(vkDestroyShaderModule(hg_vk_device, fragment_shader, nullptr));
 
     VkPipelineShaderStageCreateInfo shader_stages[2]{};
     shader_stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -122,52 +80,20 @@ void hg_pipeline_2d_init(
 
     pipeline = hg_vk_create_graphics_pipeline(pipeline_config);
 
-    vkDestroyShaderModule(hg_vk_device, fragment_shader, nullptr);
-    vkDestroyShaderModule(hg_vk_device, vertex_shader, nullptr);
+    descriptor_pool = HgVkDescriptorPoolBuilder()
+        .add_descriptor_type(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1)
+        .add_descriptor_type(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1)
+        .create(1 + max_textures, VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
 
-    VkDescriptorPoolSize desc_pool_sizes[2]{};
-    desc_pool_sizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    desc_pool_sizes[0].descriptorCount = 1;
-    desc_pool_sizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    desc_pool_sizes[1].descriptorCount = (u32)max_textures;
-
-    VkDescriptorPoolCreateInfo desc_pool_info{};
-    desc_pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    desc_pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-    desc_pool_info.maxSets = 1 + (u32)max_textures;
-    desc_pool_info.poolSizeCount = sizeof(desc_pool_sizes) / sizeof(*desc_pool_sizes);
-    desc_pool_info.pPoolSizes = desc_pool_sizes;
-
-    vkCreateDescriptorPool(hg_vk_device, &desc_pool_info, nullptr, &descriptor_pool);
-    hg_assert(descriptor_pool != nullptr);
-
-    VkDescriptorSetAllocateInfo vp_set_alloc_info{};
-    vp_set_alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    vp_set_alloc_info.descriptorPool = descriptor_pool;
-    vp_set_alloc_info.descriptorSetCount = 1;
-    vp_set_alloc_info.pSetLayouts = &vp_layout;
-
-    vkAllocateDescriptorSets(hg_vk_device, &vp_set_alloc_info, &vp_set);
+    vp_set = hg_vk_allocate_descriptor_set(descriptor_pool, vp_layout);
     hg_assert(vp_set != nullptr);
 
-    VkBufferCreateInfo vp_buffer_info{};
-    vp_buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    vp_buffer_info.size = sizeof(VPUniform);
-    vp_buffer_info.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-
-    VmaAllocationCreateInfo vp_alloc_info{};
-    vp_alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    vp_alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
-
-    vmaCreateBuffer(
-        hg_vk_vma,
-        &vp_buffer_info,
-        &vp_alloc_info,
+    hg_vk_create_buffer(
         &vp_buffer,
         &vp_buffer_allocation,
-        nullptr);
-    hg_assert(vp_buffer != nullptr);
-    hg_assert(vp_buffer_allocation != nullptr);
+        sizeof(VPUniform),
+        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
 
     VPUniform vp_data{};
     vp_data.proj = 1.0f;
@@ -175,20 +101,12 @@ void hg_pipeline_2d_init(
 
     vmaCopyMemoryToAllocation(hg_vk_vma, &vp_data, vp_buffer_allocation, 0, sizeof(vp_data));
 
-    VkDescriptorBufferInfo desc_info{};
-    desc_info.buffer = vp_buffer;
-    desc_info.offset = 0;
-    desc_info.range = sizeof(VPUniform);
+    VkDescriptorBufferInfo buffer_info{};
+    buffer_info.buffer = vp_buffer;
+    buffer_info.offset = 0;
+    buffer_info.range = sizeof(VPUniform);
 
-    VkWriteDescriptorSet desc_write{};
-    desc_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    desc_write.dstSet = vp_set;
-    desc_write.dstBinding = 0;
-    desc_write.descriptorCount = 1;
-    desc_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    desc_write.pBufferInfo = &desc_info;
-
-    vkUpdateDescriptorSets(hg_vk_device, 1, &desc_write, 0, nullptr);
+    hg_vk_update_descriptor_set(vp_set, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, buffer_info);
 }
 
 void hg_pipeline_2d_deinit() {
@@ -208,30 +126,15 @@ void hg_pipeline_2d_add_texture(HgResource texture_id) {
     if (texture_sets.has(texture_id))
         return;
 
-    VkDescriptorSetAllocateInfo set_info{};
-    set_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    set_info.descriptorPool = descriptor_pool;
-    set_info.descriptorSetCount = 1;
-    set_info.pSetLayouts = &texture_layout;
-
-    VkDescriptorSet set = nullptr;
-    vkAllocateDescriptorSets(hg_vk_device, &set_info, &set);
+    VkDescriptorSet set = hg_vk_allocate_descriptor_set(descriptor_pool, texture_layout);
     hg_assert(set != nullptr);
 
-    VkDescriptorImageInfo desc_info{};
-    desc_info.sampler = texture.sampler;
-    desc_info.imageView = texture.view;
-    desc_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    VkDescriptorImageInfo image_info{};
+    image_info.sampler = texture.sampler;
+    image_info.imageView = texture.view;
+    image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    VkWriteDescriptorSet desc_write{};
-    desc_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    desc_write.dstSet = set;
-    desc_write.dstBinding = 0;
-    desc_write.descriptorCount = 1;
-    desc_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    desc_write.pImageInfo = &desc_info;
-
-    vkUpdateDescriptorSets(hg_vk_device, 1, &desc_write, 0, nullptr);
+    hg_vk_update_descriptor_set(set, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, image_info);
 
     texture_sets.insert(texture_id, set);
 }
@@ -296,7 +199,7 @@ void hg_draw_2d(HgECS& ecs, VkCommandBuffer cmd) {
             0,
             nullptr);
 
-        Push push;
+        Push push{};
         push.model = hg_model_matrix_3d(transform.position, transform.scale, transform.rotation);
         push.uv_pos = sprite.uv_pos;
         push.uv_size = sprite.uv_size;
