@@ -1560,33 +1560,24 @@ void hg_vk_image_staging_read(
     vmaCopyAllocationToMemory(hg_vk_vma, stage_alloc, 0, config.dst, size);
 }
 
-void hg_vk_image_generate_mipmaps(
-    VkImage image,
-    VkImageAspectFlags aspect_mask,
-    VkImageLayout old_layout,
-    VkImageLayout new_layout,
-    u32 width,
-    u32 height,
-    u32 depth,
-    u32 mip_count
-) {
+void hg_vk_image_generate_mipmaps(const HgVkImageGenerateMipmapsConfig& config) {
     hg_assert(hg_vk_device != nullptr);
-    hg_assert(image != nullptr);
-    hg_assert(old_layout != VK_IMAGE_LAYOUT_UNDEFINED);
-    hg_assert(new_layout != VK_IMAGE_LAYOUT_UNDEFINED);
-    hg_assert(width > 0);
-    hg_assert(height > 0);
-    hg_assert(depth > 0);
-    hg_assert(mip_count > 0);
-    if (mip_count == 1)
+    hg_assert(config.image != nullptr);
+    hg_assert(config.old_layout != VK_IMAGE_LAYOUT_UNDEFINED);
+    hg_assert(config.new_layout != VK_IMAGE_LAYOUT_UNDEFINED);
+    hg_assert(config.width > 0);
+    hg_assert(config.height > 0);
+    hg_assert(config.depth > 0);
+    hg_assert(config.mip_count > 0);
+    if (config.mip_count == 1)
         return;
 
     VkCommandBuffer cmd = hg_vk_begin_commands();
 
     VkOffset3D mip_offset{};
-    mip_offset.x = (i32)width;
-    mip_offset.y = (i32)height;
-    mip_offset.z = (i32)depth;
+    mip_offset.x = (i32)config.width;
+    mip_offset.y = (i32)config.height;
+    mip_offset.z = (i32)config.depth;
 
     VkImageMemoryBarrier2 barrier{};
     barrier.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
@@ -1594,10 +1585,10 @@ void hg_vk_image_generate_mipmaps(
     barrier.srcAccessMask = VK_ACCESS_NONE;
     barrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
     barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-    barrier.oldLayout = old_layout;
+    barrier.oldLayout = config.old_layout;
     barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    barrier.image = image;
-    barrier.subresourceRange.aspectMask = aspect_mask;
+    barrier.image = config.image;
+    barrier.subresourceRange.aspectMask = config.aspect_mask;
     barrier.subresourceRange.levelCount = 1;
     barrier.subresourceRange.layerCount = 1;
 
@@ -1608,20 +1599,20 @@ void hg_vk_image_generate_mipmaps(
 
     vkCmdPipelineBarrier2(cmd, &dep);
 
-    for (u32 level = 0; level < mip_count - 1; ++level) {
+    for (u32 level = 0; level < config.mip_count - 1; ++level) {
         barrier.srcStageMask = VK_PIPELINE_STAGE_NONE;
         barrier.srcAccessMask = VK_ACCESS_NONE;
         barrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
         barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
         barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        barrier.subresourceRange.aspectMask = aspect_mask;
+        barrier.subresourceRange.aspectMask = config.aspect_mask;
         barrier.subresourceRange.baseMipLevel = level + 1;
 
         vkCmdPipelineBarrier2(cmd, &dep);
 
         VkImageBlit blit{};
-        blit.srcSubresource.aspectMask = aspect_mask;
+        blit.srcSubresource.aspectMask = config.aspect_mask;
         blit.srcSubresource.mipLevel = level;
         blit.srcSubresource.layerCount = 1;
         blit.srcOffsets[1] = mip_offset;
@@ -1631,14 +1622,14 @@ void hg_vk_image_generate_mipmaps(
             mip_offset.y /= 2;
         if (mip_offset.z > 1)
             mip_offset.z /= 2;
-        blit.dstSubresource.aspectMask = aspect_mask;
+        blit.dstSubresource.aspectMask = config.aspect_mask;
         blit.dstSubresource.mipLevel = level + 1;
         blit.dstSubresource.layerCount = 1;
         blit.dstOffsets[1] = mip_offset;
 
         vkCmdBlitImage(cmd,
-            image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            config.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            config.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             1, &blit,
             VK_FILTER_LINEAR);
 
@@ -1648,7 +1639,7 @@ void hg_vk_image_generate_mipmaps(
         barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
         barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
         barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-        barrier.subresourceRange.aspectMask = aspect_mask;
+        barrier.subresourceRange.aspectMask = config.aspect_mask;
         barrier.subresourceRange.baseMipLevel = level + 1;
 
         vkCmdPipelineBarrier2(cmd, &dep);
@@ -1659,10 +1650,10 @@ void hg_vk_image_generate_mipmaps(
     barrier.dstStageMask = VK_PIPELINE_STAGE_NONE;
     barrier.dstAccessMask = VK_ACCESS_NONE;
     barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    barrier.newLayout = new_layout;
-    barrier.subresourceRange.aspectMask = aspect_mask;
+    barrier.newLayout = config.new_layout;
+    barrier.subresourceRange.aspectMask = config.aspect_mask;
     barrier.subresourceRange.baseMipLevel = 0;
-    barrier.subresourceRange.levelCount = mip_count;
+    barrier.subresourceRange.levelCount = config.mip_count;
 
     vkCmdPipelineBarrier2(cmd, &dep);
 

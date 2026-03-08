@@ -125,7 +125,6 @@ void minimal_example() {
 
             VkRenderingInfo rendering_info{};
             rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-            rendering_info.pNext = nullptr;
             rendering_info.renderArea.extent = {window->width, window->height};
             rendering_info.layerCount = 1;
             rendering_info.colorAttachmentCount = 1;
@@ -594,7 +593,6 @@ void editor_example() {
 
                 VkRenderingInfo rendering_info{};
                 rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-                rendering_info.pNext = nullptr;
                 rendering_info.renderArea.extent = {render_width, render_height};
                 rendering_info.layerCount = 1;
                 rendering_info.colorAttachmentCount = 1;
@@ -657,7 +655,6 @@ void editor_example() {
 
                 VkRenderingInfo rendering_info{};
                 rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-                rendering_info.pNext = nullptr;
                 rendering_info.renderArea.extent = {window->width, window->height};
                 rendering_info.layerCount = 1;
                 rendering_info.colorAttachmentCount = 1;

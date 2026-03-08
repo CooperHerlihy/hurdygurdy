@@ -4745,11 +4745,7 @@ void hg_vk_create_image_view(VkImageView* view, const HgVkImageViewConfig& confi
  * - src The data to write, must not be nullptr
  * - size The size in bytes to write
  */
-void hg_vk_buffer_staging_write(
-    VkBuffer dst,
-    usize offset,
-    const void* src,
-    usize size);
+void hg_vk_buffer_staging_write(VkBuffer dst, usize offset, const void* src, usize size);
 
 /**
  * Reads from a Vulkan device local buffer through a staging buffer
@@ -4760,11 +4756,7 @@ void hg_vk_buffer_staging_write(
  * - offset The offset in bytes into the dst buffer
  * - size The size in bytes to read
  */
-void hg_vk_buffer_staging_read(
-    void* dst,
-    VkBuffer src,
-    usize offset,
-    usize size);
+void hg_vk_buffer_staging_read(void* dst, VkBuffer src, usize offset, usize size);
 
 /**
  * Configuration for a staging image write
@@ -4810,8 +4802,7 @@ struct HgVkImageStagingWriteConfig {
  * Parameters
  * - config The configuration for the write
  */
-void hg_vk_image_staging_write(
-    const HgVkImageStagingWriteConfig& config);
+void hg_vk_image_staging_write(const HgVkImageStagingWriteConfig& config);
 
 /**
  * Writes to a Vulkan device local cubemap image through a staging buffer
@@ -4825,8 +4816,7 @@ void hg_vk_image_staging_write(
  * Parameters
  * - config The configuration for the write
  */
-void hg_vk_image_staging_write_cubemap(
-    const HgVkImageStagingWriteConfig &config);
+void hg_vk_image_staging_write_cubemap(const HgVkImageStagingWriteConfig &config);
 
 /**
  * Configuration for a staging image write
@@ -4872,31 +4862,53 @@ struct HgVkImageStagingReadConfig {
  * Parameters
  * - config The configuration for the read, must not be nullptr
  */
-void hg_vk_image_staging_read(
-    const HgVkImageStagingReadConfig& config);
+void hg_vk_image_staging_read(const HgVkImageStagingReadConfig& config);
+
+/**
+ * The config for hg_vk_image_generate_mipmaps
+ */
+struct HgVkImageGenerateMipmapsConfig {
+    /**
+     * The image to generate mipmaps in, must not be nullptr
+     */
+    VkImage image;
+    /**
+     * The image aspects to use, must not be 0
+     */
+    VkImageAspectFlags aspect_mask;
+    /**
+     * The layout the image was in before, must not be UNDEFINED
+     */
+    VkImageLayout old_layout;
+    /**
+     * The layout the image will be set to, must not be UNDEFINED
+     */
+    VkImageLayout new_layout;
+    /**
+     * The width of the base level, must be greater than 0
+     */
+    u32 width;
+    /**
+     * The width of the base level, must be greater than 0
+     */
+    u32 height;
+    /**
+     * The width of the base level, must be greater than 0
+     */
+    u32 depth;
+    /**
+     * The total number of mips in the image, must be greater than 0
+     */
+    u32 mip_count;
+};
 
 /**
  * Generates mipmaps from the base level
  *
  * Parameters
- * - image The image to generate mipmaps in, must not be nullptr
- * - aspect_mask The image aspects to use, must not be 0
- * - old_layout The layout the image was in before, must not be UNDEFINED
- * - new_layout The layout the image will be set to, must not be UNDEFINED
- * - width The width of the base level, must be greater than 0
- * - height The width of the base level, must be greater than 0
- * - depth The width of the base level, must be greater than 0
- * - mip_count The total number of mips in the image, must be greater than 0
+ * - config The config to use
  */
-void hg_vk_image_generate_mipmaps(
-    VkImage image,
-    VkImageAspectFlags aspect_mask,
-    VkImageLayout old_layout,
-    VkImageLayout new_layout,
-    u32 width,
-    u32 height,
-    u32 depth,
-    u32 mip_count);
+void hg_vk_image_generate_mipmaps(const HgVkImageGenerateMipmapsConfig& config);
 
 /**
  * Initializes global resources for windowing
