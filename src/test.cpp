@@ -14,8 +14,8 @@ void editor_example();
 void minimal_example();
 
 int main() {
-    editor_example();
     // minimal_example();
+    editor_example();
 }
 
 void minimal_example() {
@@ -36,9 +36,11 @@ void minimal_example() {
     HgWindow* window = HgWindow::create(arena, window_config);
     hg_defer(window->destroy());
 
+    hg_pipeline_2d_init(arena, 256, window->format, VK_FORMAT_UNDEFINED);
+    hg_defer(hg_pipeline_2d_deinit());
+
     HgStringView texture_path = "hg_test_dir/file_image_test.hgtex";
     HgResource texture_id = hg_resource_id(texture_path);
-
     {
         HgFence fence;
         hg_load_resource(&fence, 1, texture_id, texture_path);
@@ -47,9 +49,6 @@ void minimal_example() {
         hg_unload_resource(nullptr, 0, texture_id);
     }
     hg_defer(hg_unload_gpu_resource(texture_id));
-
-    hg_pipeline_2d_init(arena, 256, window->format, VK_FORMAT_UNDEFINED);
-    hg_defer(hg_pipeline_2d_deinit());
 
     hg_pipeline_2d_add_texture(texture_id);
     hg_defer(hg_pipeline_2d_remove_texture(texture_id));
@@ -69,7 +68,6 @@ void minimal_example() {
     HgClock game_clock{};
     for (;;) {
         f64 delta = game_clock.tick();
-        f32 deltaf = (f32)delta;
 
         HgArena& frame = hg_get_scratch(arena);
         HgArenaScope frame_scope{frame};
@@ -96,7 +94,7 @@ void minimal_example() {
         if (movement != HgVec3{0.0f}) {
             f32 move_speed = 1.5f;
             HgVec3 rotated = hg_rotate(camera.rotation, HgVec3{movement.x, 0.0f, movement.z});
-            camera.position += hg_norm(HgVec3{rotated.x, movement.y, rotated.z}) * move_speed * deltaf;
+            camera.position += hg_norm(HgVec3{rotated.x, movement.y, rotated.z}) * move_speed * (f32)delta;
         }
 
         hg_pipeline_2d_update_view(hg_view_matrix(camera.position, camera.scale, camera.rotation));
@@ -113,8 +111,6 @@ void minimal_example() {
             HgRenderAttachment color_attachment{};
             color_attachment.image = window_image;
             color_attachment.load_op = VK_ATTACHMENT_LOAD_OP_CLEAR;
-            color_attachment.store_op = VK_ATTACHMENT_STORE_OP_STORE;
-            color_attachment.clear_value = {};
 
             HgRenderPass pass{};
             pass.color_attachments = &color_attachment;
@@ -129,7 +125,6 @@ void minimal_example() {
             HgImageBarrier present_barrier{};
             present_barrier.image = window_image;
             present_barrier.next_usage = HgRenderUsage::present_src;
-            present_barrier.next_access = HgRenderAccess::read;
 
             renderer.barrier(cmd, nullptr, 0, &present_barrier, 1);
 
@@ -266,7 +261,6 @@ void editor_example() {
 
     for (;;) {
         f64 delta = game_clock.tick();
-        f32 deltaf = (f32)delta;
 
         HgArena& frame = hg_get_scratch(arena);
         HgArenaScope frame_scope{frame};
@@ -419,7 +413,7 @@ void editor_example() {
                     if (movement != HgVec3{0.0f}) {
                         f32 move_speed = 1.5f;
                         HgVec3 rotated = hg_rotate(camera.rotation, HgVec3{movement.x, 0.0f, movement.z});
-                        camera.position += hg_norm(HgVec3{rotated.x, movement.y, rotated.z}) * move_speed * deltaf;
+                        camera.position += hg_norm(HgVec3{rotated.x, movement.y, rotated.z}) * move_speed * (f32)delta;
                     }
                 }
                 hg_pipeline_2d_update_view(hg_view_matrix(camera.position, camera.scale, camera.rotation));
@@ -557,7 +551,6 @@ void editor_example() {
                 HgRenderAttachment render_color_attachment{};
                 render_color_attachment.image = render_image_id;
                 render_color_attachment.load_op = VK_ATTACHMENT_LOAD_OP_CLEAR;
-                render_color_attachment.store_op = VK_ATTACHMENT_STORE_OP_STORE;
                 render_color_attachment.clear_value.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
 
                 HgRenderPass render_pass{};
@@ -575,7 +568,6 @@ void editor_example() {
                 HgRenderAttachment gui_color_attachment{};
                 gui_color_attachment.image = window_image_id;
                 gui_color_attachment.load_op = VK_ATTACHMENT_LOAD_OP_CLEAR;
-                gui_color_attachment.store_op = VK_ATTACHMENT_STORE_OP_STORE;
                 gui_color_attachment.clear_value.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
 
                 HgRenderPass gui_pass{};

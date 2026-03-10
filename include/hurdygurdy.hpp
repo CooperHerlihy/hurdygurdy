@@ -4312,104 +4312,34 @@ VkCommandBuffer hg_vk_begin_commands();
 void hg_vk_end_and_execute(VkCommandBuffer cmd);
 
 /**
- * A builder utility for VkDescriptorSetLayout
+ * Create a descriptor set layout
+ *
+ * Parameters
+ * - bindings The bindings in the descriptor set
+ * - binding_count The number of bindings
+ *
+ * Returns
+ * - The created descriptor set layout
  */
-struct HgVkDescriptorSetLayoutBuilder {
-    /**
-     * The bindings in the layout
-     */
-    VkDescriptorSetLayoutBinding* bindings;
-    /**
-     * The number of bindings
-     */
-    u32 binding_count;
-
-    /**
-     * Initialize the builder
-     */
-    HgVkDescriptorSetLayoutBuilder();
-
-    /**
-     * Add another binding
-     *
-     * Parameters
-     * - binding The binding to add
-     * - type The type of the binding
-     * - count The number of descriptors in the binding
-     * - stage_flags Which stages the binding are available to
-     *
-     * Returns
-     * - A reference to this for chaining
-     */
-    HgVkDescriptorSetLayoutBuilder& add_binding(
-        u32 binding,
-        VkDescriptorType type,
-        u32 count,
-        VkShaderStageFlagBits stage_flags);
-
-    /**
-     * Create the set layout
-     *
-     * Returns
-     * - The created layout
-     */
-    VkDescriptorSetLayout create();
-};
+VkDescriptorSetLayout hg_vk_create_descriptor_set_layout(VkDescriptorSetLayoutBinding* bindings, u32 binding_count);
 
 /**
- * A builder utility for VkPipelineLayout
+ * Create a pipeline layout
+ *
+ * Parameters
+ * - set_layouts The descriptor set layouts
+ * - set_layout_count The number of set layouts
+ * - push_ranges The push constant ranges
+ * - push_range_count The number of push ranges
+ *
+ * Returns
+ * - The created pipeline layout
  */
-struct HgVkPipelineLayoutBuilder {
-    /**
-     * The descriptor set layouts in the pipeline
-     */
-    VkDescriptorSetLayout* sets;
-    /**
-     * The number of sets
-     */
-    u32 set_count;
-    /**
-     * The push constant
-     *
-     * Note, there is assumed to be at most one push constant
-     */
-    VkPushConstantRange push;
-
-    /**
-     * Initialize the builder
-     */
-    HgVkPipelineLayoutBuilder();
-
-    /**
-     * Add another descriptor set layout
-     *
-     * Parameters
-     * - set_layout The descriptor set layout to add
-     *
-     * Returns
-     * - A reference to this for chaining
-     */
-    HgVkPipelineLayoutBuilder& add_descriptor_set(VkDescriptorSetLayout set_layout);
-
-    /**
-     * Set the push constant
-     *
-     * Parameters
-     * - stage_flags Which stages the push constant is available to
-     *
-     * Returns
-     * - A reference to this for chaining
-     */
-    HgVkPipelineLayoutBuilder& set_push_range(VkShaderStageFlags stage_flags, u32 size);
-
-    /**
-     * Create the pipeline layout
-     *
-     * Returns
-     * - The created pipeline layout
-     */
-    VkPipelineLayout create();
-};
+VkPipelineLayout hg_vk_create_pipeline_layout(
+    VkDescriptorSetLayout* set_layouts,
+    u32 set_layout_count,
+    VkPushConstantRange* push_ranges,
+    u32 push_range_count);
 
 /**
  * Create a Vulkan shader module
@@ -4444,13 +4374,13 @@ struct HgVkPipelineConfig {
      */
     VkFormat stencil_attachment_format = VK_FORMAT_UNDEFINED;
     /**
-     * The shaders
+     * The vertex shader code
      */
-    const VkPipelineShaderStageCreateInfo* shader_stages = nullptr;
+    VkShaderModule vertex_shader;
     /**
-     * The number of shaders
+     * The fragment shader code
      */
-    u32 shader_count = 0;
+    VkShaderModule fragment_shader;
     /**
      * The pipeline layout
      */
@@ -4525,47 +4455,22 @@ VkPipeline hg_vk_create_graphics_pipeline(const HgVkPipelineConfig& config);
 VkPipeline hg_vk_create_compute_pipeline(VkPipelineLayout layout, const VkShaderModule shader);
 
 /**
- * A builder utility for VkDescriptorPool
+ * Create a descriptor pool
+ *
+ * Parameters
+ * - max_sets The max number of sets which can be allocated
+ * - sizes The numbers of each descriptor type to allocate
+ * - size_count The number of sizes
+ * - flags Extra flags passed to the create info struct, if any
+ *
+ * Returns
+ * - The created descriptor pool
  */
-struct HgVkDescriptorPoolBuilder {
-    /**
-     * The sizes of descriptor types
-     */
-    VkDescriptorPoolSize* sizes;
-    /**
-     * The number of sizes
-     */
-    u32 size_count;
-
-    /**
-     * Initialize the builder
-     */
-    HgVkDescriptorPoolBuilder();
-
-    /**
-     * Add another descriptor type
-     *
-     * Parameters
-     * - type The type of descriptor
-     * - count The number of descriptors to allocate
-     *
-     * Returns
-     * - a reference to this for chaining
-     */
-    HgVkDescriptorPoolBuilder& add_descriptor_type(VkDescriptorType type, u32 count);
-
-    /**
-     * Create the descriptor pool
-     *
-     * Parameters
-     * - max_sets The max number of descriptor sets which can be allocated
-     * - flags Extra flags passed to the create info struct, if any
-     *
-     * Returns
-     * - The created descriptor pool
-     */
-    VkDescriptorPool create(u32 max_sets, VkDescriptorPoolCreateFlags flags = 0);
-};
+VkDescriptorPool hg_vk_create_descriptor_pool(
+    u32 max_sets,
+    VkDescriptorPoolSize* sizes,
+    u32 size_count,
+    VkDescriptorPoolCreateFlags flags = 0);
 
 /**
  * Allocate a single descriptor set
@@ -4931,7 +4836,7 @@ struct HgRenderAttachment {
     /**
      * How the image will be loaded
      */
-    VkAttachmentLoadOp load_op = VK_ATTACHMENT_LOAD_OP_LOAD;
+    VkAttachmentLoadOp load_op = VK_ATTACHMENT_LOAD_OP_CLEAR;
     /**
      * How the image will be stored
      */

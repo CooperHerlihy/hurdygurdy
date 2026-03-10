@@ -760,22 +760,7 @@ void hg_vk_end_and_execute(VkCommandBuffer cmd) {
     vkFreeCommandBuffers(hg_vk_device, hg_vk_cmd_pool, 1, &cmd);
 }
 
-HgVkDescriptorSetLayoutBuilder::HgVkDescriptorSetLayoutBuilder() {
-    bindings = HgArena{hg_get_scratch()}.alloc<VkDescriptorSetLayoutBinding>(0);
-    binding_count = 0;
-}
-
-HgVkDescriptorSetLayoutBuilder& HgVkDescriptorSetLayoutBuilder::add_binding(
-    u32 binding,
-    VkDescriptorType type,
-    u32 count,
-    VkShaderStageFlagBits stage_flags
-) {
-    bindings[binding_count++] = {binding, type, count, stage_flags, nullptr};
-    return *this;
-}
-
-VkDescriptorSetLayout HgVkDescriptorSetLayoutBuilder::create() {
+VkDescriptorSetLayout hg_vk_create_descriptor_set_layout(VkDescriptorSetLayoutBinding* bindings, u32 binding_count) {
     VkDescriptorSetLayoutCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     info.bindingCount = binding_count;
@@ -789,29 +774,18 @@ VkDescriptorSetLayout HgVkDescriptorSetLayoutBuilder::create() {
     return layout;
 }
 
-HgVkPipelineLayoutBuilder::HgVkPipelineLayoutBuilder() {
-    sets = HgArena{hg_get_scratch()}.alloc<VkDescriptorSetLayout>(0);
-    set_count = 0;
-    push = {};
-}
-
-HgVkPipelineLayoutBuilder& HgVkPipelineLayoutBuilder::add_descriptor_set(VkDescriptorSetLayout set_layout) {
-    sets[set_count++] = set_layout;
-    return *this;
-}
-
-HgVkPipelineLayoutBuilder& HgVkPipelineLayoutBuilder::set_push_range(VkShaderStageFlags stage_flags, u32 size) {
-    push = {stage_flags, 0, size};
-    return *this;
-}
-
-VkPipelineLayout HgVkPipelineLayoutBuilder::create() {
+VkPipelineLayout hg_vk_create_pipeline_layout(
+    VkDescriptorSetLayout* set_layouts,
+    u32 set_layout_count,
+    VkPushConstantRange* push_ranges,
+    u32 push_range_count
+) {
     VkPipelineLayoutCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    info.setLayoutCount = set_count;
-    info.pSetLayouts = sets;
-    info.pushConstantRangeCount = 1;
-    info.pPushConstantRanges = &push;
+    info.setLayoutCount = set_layout_count;
+    info.pSetLayouts = set_layouts;
+    info.pushConstantRangeCount = push_range_count;
+    info.pPushConstantRanges = push_ranges;
 
     VkPipelineLayout layout = nullptr;
     VkResult result = vkCreatePipelineLayout(hg_vk_device, &info, nullptr, &layout);
@@ -838,10 +812,21 @@ VkShaderModule hg_vk_create_shader_module(const u8* spirv_code, usize code_size)
 VkPipeline hg_vk_create_graphics_pipeline(const HgVkPipelineConfig& config) {
     if (config.color_attachment_format_count > 0)
         hg_assert(config.color_attachment_formats != nullptr);
-    hg_assert(config.shader_stages != nullptr);
+    hg_assert(config.vertex_shader != nullptr);
+    hg_assert(config.fragment_shader != nullptr);
     hg_assert(config.layout != nullptr);
     if (config.vertex_binding_count > 0)
         hg_assert(config.vertex_bindings != nullptr);
+
+    VkPipelineShaderStageCreateInfo shader_stages[2]{};
+    shader_stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    shader_stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+    shader_stages[0].module = config.vertex_shader;
+    shader_stages[0].pName = "main";
+    shader_stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    shader_stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    shader_stages[1].module = config.fragment_shader;
+    shader_stages[1].pName = "main";
 
     VkPipelineVertexInputStateCreateInfo vertex_input_state{};
     vertex_input_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -951,8 +936,8 @@ VkPipeline hg_vk_create_graphics_pipeline(const HgVkPipelineConfig& config) {
     VkGraphicsPipelineCreateInfo pipeline_info{};
     pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     pipeline_info.pNext = &rendering_info;
-    pipeline_info.stageCount = (u32)config.shader_count;
-    pipeline_info.pStages = config.shader_stages;
+    pipeline_info.stageCount = sizeof(shader_stages) / sizeof(*shader_stages);
+    pipeline_info.pStages = shader_stages;
     pipeline_info.pVertexInputState = &vertex_input_state;
     pipeline_info.pInputAssemblyState = &input_assembly_state;
     pipeline_info.pTessellationState = &tessellation_state;
@@ -996,17 +981,12 @@ VkPipeline hg_vk_create_compute_pipeline(VkPipelineLayout layout, const VkShader
     return pipeline;
 }
 
-HgVkDescriptorPoolBuilder::HgVkDescriptorPoolBuilder() {
-    sizes = HgArena{hg_get_scratch()}.alloc<VkDescriptorPoolSize>(0);
-    size_count = 0;
-}
-
-HgVkDescriptorPoolBuilder& HgVkDescriptorPoolBuilder::add_descriptor_type(VkDescriptorType type, u32 count) {
-    sizes[size_count++] = {type, count};
-    return *this;
-}
-
-VkDescriptorPool HgVkDescriptorPoolBuilder::create(u32 max_sets, VkDescriptorPoolCreateFlags flags) {
+VkDescriptorPool hg_vk_create_descriptor_pool(
+    u32 max_sets,
+    VkDescriptorPoolSize* sizes,
+    u32 size_count,
+    VkDescriptorPoolCreateFlags flags
+) {
     VkDescriptorPoolCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     info.flags = flags;

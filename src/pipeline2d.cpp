@@ -38,52 +38,54 @@ void hg_pipeline_2d_init(
 
     texture_sets = texture_sets.create(arena, max_textures);
 
-    vp_layout = HgVkDescriptorSetLayoutBuilder()
-        .add_binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT)
-        .create();
+    VkDescriptorSetLayoutBinding vp_bindings[] = {
+        {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr}
+    };
+    vp_layout = hg_vk_create_descriptor_set_layout(
+        vp_bindings, sizeof(vp_bindings) / sizeof(*vp_bindings));
 
-    texture_layout = HgVkDescriptorSetLayoutBuilder()
-        .add_binding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
-        .create();
+    VkDescriptorSetLayoutBinding texture_bindings[] = {
+        {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}
+    };
+    texture_layout = hg_vk_create_descriptor_set_layout(
+        texture_bindings, sizeof(texture_bindings) / sizeof(*texture_bindings));
 
-    pipeline_layout = HgVkPipelineLayoutBuilder()
-        .add_descriptor_set(vp_layout)
-        .add_descriptor_set(texture_layout)
-        .set_push_range(VK_SHADER_STAGE_VERTEX_BIT, sizeof(Push))
-        .create();
+    VkDescriptorSetLayout set_layouts[] = {vp_layout, texture_layout};
+    VkPushConstantRange push = {VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Push)};
+    pipeline_layout = hg_vk_create_pipeline_layout(
+        set_layouts,
+        sizeof(set_layouts) / sizeof(*set_layouts),
+        &push,
+        1);
 
     VkShaderModule vertex_shader = hg_vk_create_shader_module(sprite_vert_spv, sprite_vert_spv_size);
     VkShaderModule fragment_shader = hg_vk_create_shader_module(sprite_frag_spv, sprite_frag_spv_size);
     hg_defer(vkDestroyShaderModule(hg_vk_device, vertex_shader, nullptr));
     hg_defer(vkDestroyShaderModule(hg_vk_device, fragment_shader, nullptr));
 
-    VkPipelineShaderStageCreateInfo shader_stages[2]{};
-    shader_stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    shader_stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-    shader_stages[0].module = vertex_shader;
-    shader_stages[0].pName = "main";
-    shader_stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    shader_stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-    shader_stages[1].module = fragment_shader;
-    shader_stages[1].pName = "main";
-
     HgVkPipelineConfig pipeline_config{};
     pipeline_config.color_attachment_formats = &color_format;
     pipeline_config.color_attachment_format_count = 1;
     pipeline_config.depth_attachment_format = depth_format;
     pipeline_config.stencil_attachment_format = VK_FORMAT_UNDEFINED;
-    pipeline_config.shader_stages = shader_stages;
-    pipeline_config.shader_count = sizeof(shader_stages) / sizeof(*shader_stages);
+    pipeline_config.vertex_shader = vertex_shader;
+    pipeline_config.fragment_shader = fragment_shader;
     pipeline_config.layout = pipeline_layout;
     pipeline_config.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
     pipeline_config.enable_color_blend = true;
 
     pipeline = hg_vk_create_graphics_pipeline(pipeline_config);
 
-    descriptor_pool = HgVkDescriptorPoolBuilder()
-        .add_descriptor_type(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1)
-        .add_descriptor_type(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1)
-        .create(1 + max_textures, VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
+    VkDescriptorPoolSize descriptor_sizes[] = {
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, max_textures}
+    };
+
+    descriptor_pool = hg_vk_create_descriptor_pool(
+        max_textures + 1,
+        descriptor_sizes,
+        sizeof(descriptor_sizes) / sizeof(*descriptor_sizes),
+        VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
 
     vp_set = hg_vk_allocate_descriptor_set(descriptor_pool, vp_layout);
     hg_assert(vp_set != nullptr);
