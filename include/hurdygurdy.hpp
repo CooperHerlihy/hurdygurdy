@@ -3131,7 +3131,10 @@ struct HgBinary {
  * A texture resource
  */
 struct HgTexture {
-    static constexpr char texture_identifier[] = "HGT"; // hurdy gurdy texture
+    /**
+     * The identifier prepended to the info
+     */
+    static constexpr char texture_identifier[] = "HGT"; // Hurdy Gurdy texture
 
     /**
      * The info prepended to a texture resource
@@ -3186,12 +3189,103 @@ struct HgTexture {
      * Returns
      * - Whether the info could be found
      */
-    bool get_info(VkFormat& format, u32& width, u32& height, u32& depth);
+    bool get_info(VkFormat* format, u32* width, u32* height, u32* depth);
 
     /**
      * Returns a pointer to the pixels
      */
     void* get_pixels();
+};
+
+/**
+ * A vertex in a model
+ */
+struct HgVertex {
+    /**
+     * The vertex position
+     */
+    HgVec3 pos;
+    /**
+     * The vertex normal
+     */
+    HgVec3 norm;
+    /**
+     * The vertex tangent
+     */
+    HgVec4 tan;
+    /**
+     * The vertex uv coordinate
+     */
+    HgVec2 uv;
+};
+
+/**
+ * A 3d model resource
+ */
+struct HgModelData {
+    /**
+     * The identifier prepended to the info
+     */
+    static constexpr char model_identifier[] = "HGM"; // Hurdy Gurdy model
+
+    /**
+     * The info prendeded to a model resources
+     */
+    struct Info {
+        /**
+         * The identifier to ensure the file is a Hurdy Gurdy model
+         */
+        char ientifier[sizeof(model_identifier)];
+        /**
+         * The number of vertices
+         */
+        u32 vertex_count;
+        /**
+         * The size of each vertex in bytes
+         */
+        u32 vertex_width;
+        /**
+         * How the vertices should be interpreted in sequence
+         */
+        VkPrimitiveTopology topology;
+        /**
+         * In case a separate list of vertices also needs to be stored
+         */
+        u32 next_vertex_list;
+    };
+
+    /**
+     * The model data
+     */
+    HgBinary file;
+
+    /**
+     * Construct uninitialized
+     */
+    HgModelData() = default;
+
+    /**
+     * Implicit conversion from binary file
+     */
+    HgModelData(HgBinary file_val) : file{file_val} {}
+
+    /**
+     * Get the model info from the file
+     *
+     * Parameters
+     * - vertex_count How many vertices are in the model
+     * - vertex_width The size of each vertex in bytes
+     * - topology How the vertices should be interpreted in sequence
+     *
+     * Returns
+     * - Whether the info could be found
+     */
+    bool get_info(u32* vertex_count, u32* vertex_width, VkPrimitiveTopology* topology);
+
+    /**
+     * Returns a pointer to the vertices
+     */
+    void* get_vertices();
 };
 
 /**
@@ -3290,6 +3384,28 @@ void hg_import_png(HgFence* fences, usize fence_count, HgResource id, HgStringVi
  * - path The path of the file to export to
  */
 void hg_export_png(HgFence* fences, usize fence_count, HgResource id, HgStringView path);
+
+/**
+ * Load an external model file into a resource in the Hurdy Gurdy format
+ *
+ * Parameters
+ * - fences The fences to wait on
+ * - fence_count The number of fences
+ * - id The resource to load to
+ * - path The path of the file to import
+ */
+void hg_import_gltf(HgFence* fences, usize fence_count, HgResource id, HgStringView path);
+
+/**
+ * Store a model resource onto disc in an external file format
+ *
+ * Parameters
+ * - fences The fences to wait on
+ * - fence_count The number of fences
+ * - id The resource to export
+ * - path The path of the file to export to
+ */
+void hg_export_gltf(HgFence* fences, usize fence_count, HgResource id, HgStringView path);
 
 /**
  * A buffer stored on the GPU
@@ -4121,17 +4237,6 @@ void hg_pipeline_2d_add_texture(HgResource texture_id);
 void hg_pipeline_2d_remove_texture(HgResource texture_id);
 
 /**
- * Returns whether the texture has been added to the pipeline
- *
- * Parameters
- * - texture_id The texture to check
- *
- * Returns
- * - Whether the texture has been added to the pipeline
- */
-bool hg_pipeline_2d_has_texture(HgResource texture_id);
-
-/**
  * Updates the 2D pipeline's projection matrix
  *
  * Parameters
@@ -4155,6 +4260,103 @@ void hg_pipeline_2d_update_view(const HgMat4& view);
  * - cmd The command buffer to record to, must not be nullptr
  */
 void hg_draw_2d(HgECS& ecs, VkCommandBuffer cmd);
+
+/**
+ * A model component rendered by the 3d pipeline
+ */
+struct HgModel3D {
+    /**
+     * The model to render
+     */
+    HgResource model;
+};
+
+/**
+ * A direction light component rendered by the 3d pipeline
+ */
+struct HgDirLight3D {
+    /**
+     * The direction of the light
+     */
+    HgVec3 dir;
+    /**
+     * The color of the light
+     */
+    HgVec3 color;
+};
+
+/**
+ * A point light component rendered by the 3d pipeline
+ */
+struct HgPointLight3D {
+    /**
+     * The color of the light
+     */
+    HgVec3 color;
+};
+
+/**
+ * Initialize the 3D pipeline
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - max_models The maximum models which can be added to the pipeline
+ * - color_format The format of the color attachment, must not be UNDEFINED
+ * - depth_format The format of the depth attachment, must not be UNDEFINED
+ */
+void hg_pipeline_3d_init(
+    HgArena& arena,
+    u32 max_models,
+    VkFormat color_format,
+    VkFormat depth_format);
+
+/**
+ * Deinitialize the 3D pipeline
+ */
+void hg_pipeline_3d_deinit();
+
+/**
+ * Add a model to the 3D pipeline
+ *
+ * Parameters
+ * - model_id The model to add
+ * - color_id The model's color texture
+ * - normal_id The model's normal texture, if any
+ */
+void hg_pipeline_3d_add_model(HgResource model_id, HgResource color_id, HgResource normal_id);
+
+/**
+ * Remove a model from the 3D pipeline
+ *
+ * Parameters
+ * - model_id The model to remove
+ */
+void hg_pipeline_3d_remove_model(HgResource model_id);
+
+/**
+ * Updates the 3D pipeline's projection matrix
+ *
+ * Parameters
+ * - projection The new projection matrix
+ */
+void hg_pipeline_3d_update_projection(const HgMat4& projection);
+
+/**
+ * Updates the 3D pipeline's view matrix
+ *
+ * Parameters
+ * - projection The new view matrix
+ */
+void hg_pipeline_3d_update_view(const HgMat4& view);
+
+/**
+ * Issue draw commands for all HgModelComp components in the ecs
+ * 
+ * Parameters
+ * - ecs The ecs to draw
+ * - cmd The command buffer to record to, must not be nullptr
+ */
+void hg_draw_3d(HgECS& ecs, VkCommandBuffer cmd);
 
 /**
  * Initializes the graphics subsystem, loading all global Vulkan resources
@@ -4376,11 +4578,11 @@ struct HgVkPipelineConfig {
     /**
      * The vertex shader code
      */
-    VkShaderModule vertex_shader;
+    VkShaderModule vertex_shader = nullptr;
     /**
      * The fragment shader code
      */
-    VkShaderModule fragment_shader;
+    VkShaderModule fragment_shader = nullptr;
     /**
      * The pipeline layout
      */
@@ -4491,13 +4693,15 @@ VkDescriptorSet hg_vk_allocate_descriptor_set(VkDescriptorPool pool, VkDescripto
  * - set The descriptor set to update
  * - binding The binding in the set
  * - type The descriptor type
- * - info The buffer info to update to
+ * - info The buffer infos to update to
+ * - count The number of descriptors
  */
 void hg_vk_update_descriptor_set(
     VkDescriptorSet set,
     u32 binding,
     VkDescriptorType type,
-    const VkDescriptorBufferInfo& info);
+    const VkDescriptorBufferInfo* infos,
+    u32 count);
 
 /**
  * Update a descriptor set with an image
@@ -4506,13 +4710,15 @@ void hg_vk_update_descriptor_set(
  * - set The descriptor set to update
  * - binding The binding in the set
  * - type The descriptor type
- * - info The image info to update to
+ * - info The image infos to update to
+ * - count The number of descriptors
  */
 void hg_vk_update_descriptor_set(
     VkDescriptorSet set,
     u32 binding,
     VkDescriptorType type,
-    const VkDescriptorImageInfo& info);
+    const VkDescriptorImageInfo* infos,
+    u32 count);
 
 /**
  * Attempts to find the index of a memory type which has the desired flags and
@@ -4552,7 +4758,7 @@ void hg_vk_create_buffer(
     VmaAllocation* allocation,
     VkDeviceSize size,
     VkBufferUsageFlags usage,
-    VmaAllocationCreateFlags memory);
+    VmaAllocationCreateFlags memory = 0);
 
 /**
  * Config for hg_vk_create_image
@@ -4636,10 +4842,9 @@ struct HgVkImageViewConfig {
  * Create a Vulkan image
  *
  * Parameters
- * - view A pointer to return the created view
  * - config The image view config
  */
-void hg_vk_create_image_view(VkImageView* view, const HgVkImageViewConfig& config);
+VkImageView hg_vk_create_image_view(const HgVkImageViewConfig& config);
 
 /**
  * Writes to a Vulkan device local buffer through a staging buffer
@@ -4678,7 +4883,7 @@ struct HgVkImageStagingWriteConfig {
     /**
      * The data to write, must not be nullptr
      */
-    void* src_data = nullptr;
+    const void* src_data = nullptr;
     /**
      * The width of the image in pixels, must be greater than 0
      */

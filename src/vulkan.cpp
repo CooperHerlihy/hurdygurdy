@@ -1023,15 +1023,16 @@ void hg_vk_update_descriptor_set(
     VkDescriptorSet set,
     u32 binding,
     VkDescriptorType type,
-    const VkDescriptorBufferInfo& info
+    const VkDescriptorBufferInfo* infos,
+    u32 count
 ) {
     VkWriteDescriptorSet write{};
     write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     write.dstSet = set;
     write.dstBinding = binding;
-    write.descriptorCount = 1;
+    write.descriptorCount = count;
     write.descriptorType = type;
-    write.pBufferInfo = &info;
+    write.pBufferInfo = infos;
 
     vkUpdateDescriptorSets(hg_vk_device, 1, &write, 0, nullptr);
 }
@@ -1040,15 +1041,16 @@ void hg_vk_update_descriptor_set(
     VkDescriptorSet set,
     u32 binding,
     VkDescriptorType type,
-    const VkDescriptorImageInfo& info
+    const VkDescriptorImageInfo* infos,
+    u32 count
 ) {
     VkWriteDescriptorSet write{};
     write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     write.dstSet = set;
     write.dstBinding = binding;
-    write.descriptorCount = 1;
+    write.descriptorCount = count;
     write.descriptorType = type;
-    write.pImageInfo = &info;
+    write.pImageInfo = infos;
 
     vkUpdateDescriptorSets(hg_vk_device, 1, &write, 0, nullptr);
 }
@@ -1139,8 +1141,7 @@ void hg_vk_create_image(VkImage* image, VmaAllocation* allocation, const HgVkIma
         hg_error("Could not create VkImage: %s", hg_vk_result_to_string(result));
 }
 
-void hg_vk_create_image_view(VkImageView* view, const HgVkImageViewConfig& config) {
-    hg_assert(view != nullptr);
+VkImageView hg_vk_create_image_view(const HgVkImageViewConfig& config) {
     hg_assert(config.image != nullptr);
     hg_assert(config.format != VK_FORMAT_UNDEFINED);
     hg_assert(config.subresource.aspectMask != 0);
@@ -1153,9 +1154,12 @@ void hg_vk_create_image_view(VkImageView* view, const HgVkImageViewConfig& confi
     info.components = config.components;
     info.subresourceRange = config.subresource;
 
-    VkResult result = vkCreateImageView(hg_vk_device, &info, nullptr, view);
-    if (*view == nullptr)
+    VkImageView view = nullptr;
+    VkResult result = vkCreateImageView(hg_vk_device, &info, nullptr, &view);
+    if (view == nullptr)
         hg_error("Could not create VkImageView: %s\n", hg_vk_result_to_string(result));
+
+    return view;
 }
 
 void hg_vk_buffer_staging_write(
@@ -1786,9 +1790,7 @@ static constexpr VkImageLayout get_layout(HgRenderUsage usage, HgRenderAccess ac
             break;
         case HgRenderUsage::depth_attachment: [[fallthrough]];
         case HgRenderUsage::stencil_attachment:
-            return !((u32)access & (u32)HgRenderAccess::write)
-                ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-                : VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+            return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
             break;
         case HgRenderUsage::transfer:
             hg_assert(!(((u32)access & (u32)HgRenderAccess::read) && ((u32)access & (u32)HgRenderAccess::write)));
@@ -2060,7 +2062,7 @@ void HgRenderer::begin_pass(VkCommandBuffer cmd, u32 width, u32 height, const Hg
 
         depth_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
         depth_attachment.imageView = image.view;
-        depth_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        depth_attachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
         depth_attachment.loadOp = pass.depth_attachment.load_op;
         depth_attachment.storeOp = pass.depth_attachment.store_op;
         depth_attachment.clearValue = pass.depth_attachment.clear_value;
@@ -2097,6 +2099,240 @@ void HgRenderer::begin_pass(VkCommandBuffer cmd, u32 width, u32 height, const Hg
 
 void HgRenderer::end_pass(VkCommandBuffer cmd) {
     vkCmdEndRendering(cmd);
+}
+
+void hg_internal_resize_window_swapchain(HgWindow* window) {
+    if (window->width == 0 || window->height == 0)
+        return;
+
+    vkQueueWaitIdle(hg_vk_queue);
+
+    if (window->cmds != nullptr)
+        vkFreeCommandBuffers(hg_vk_device, hg_vk_cmd_pool, window->image_count, window->cmds);
+
+    for (usize i = 0; i < window->image_count; ++i) {
+        vkDestroyFence(hg_vk_device, window->frame_finished[i], nullptr);
+    }
+    for (usize i = 0; i < window->image_count; ++i) {
+        vkDestroySemaphore(hg_vk_device, window->image_available[i], nullptr);
+    }
+    for (usize i = 0; i < window->image_count; ++i) {
+        vkDestroySemaphore(hg_vk_device, window->ready_to_present[i], nullptr);
+    }
+    for (usize i = 0; i < window->image_count; ++i) {
+        vkDestroyImageView(hg_vk_device, window->views[i], nullptr);
+    }
+
+    VkSurfaceCapabilitiesKHR surface_capabilities;
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(hg_vk_physical_device, window->surface, &surface_capabilities);
+
+    if (surface_capabilities.currentExtent.width != (u32)-1)
+        window->width = surface_capabilities.currentExtent.width;
+    if (surface_capabilities.currentExtent.height != (u32)-1)
+        window->height = surface_capabilities.currentExtent.height;
+
+    VkSwapchainCreateInfoKHR swapchain_info{};
+    swapchain_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    swapchain_info.surface = window->surface;
+    swapchain_info.minImageCount // why do different platforms behave differently, especially with ImGui? : TODO
+        = std::min(surface_capabilities.minImageCount, surface_capabilities.maxImageCount - 1) + 1;
+        // = window->present_mode == VK_PRESENT_MODE_FIFO_KHR
+        // ? std::max(surface_capabilities.minImageCount, (u32)2)
+        // : std::min(surface_capabilities.minImageCount, surface_capabilities.maxImageCount - 1) + 1;
+    swapchain_info.imageFormat = window->format;
+    swapchain_info.imageExtent = {window->width, window->height};
+    swapchain_info.imageArrayLayers = 1;
+    swapchain_info.imageUsage = window->image_usage;
+    swapchain_info.preTransform = surface_capabilities.currentTransform;
+    swapchain_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    swapchain_info.presentMode = window->present_mode;
+    swapchain_info.clipped = VK_TRUE;
+    swapchain_info.oldSwapchain = window->swapchain;
+
+    VkResult result = vkCreateSwapchainKHR(hg_vk_device, &swapchain_info, nullptr, &window->swapchain);
+    if (window->swapchain == nullptr)
+        hg_error("Failed to create swapchain: %s\n", hg_vk_result_to_string(result));
+
+    vkGetSwapchainImagesKHR(hg_vk_device, window->swapchain, &window->image_count, nullptr);
+    window->images = (VkImage*)realloc(window->images, sizeof(VkImage) * window->image_count);
+    window->views = (VkImageView*)realloc(window->views, sizeof(VkImageView) * window->image_count);
+    vkGetSwapchainImagesKHR(hg_vk_device, window->swapchain, &window->image_count, window->images);
+    for (usize i = 0; i < window->image_count; ++i) {
+        HgVkImageViewConfig view_info{};
+        view_info.image = window->images[i];
+        view_info.format = window->format;
+        view_info.subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+
+        window->views[i] = hg_vk_create_image_view(view_info);
+    }
+
+    window->cmds = (VkCommandBuffer*)realloc(window->cmds, sizeof(VkCommandBuffer) * window->image_count);
+
+    VkCommandBufferAllocateInfo cmd_alloc_info{};
+    cmd_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    cmd_alloc_info.pNext = nullptr;
+    cmd_alloc_info.commandPool = hg_vk_cmd_pool;
+    cmd_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    cmd_alloc_info.commandBufferCount = window->image_count;
+
+    vkAllocateCommandBuffers(hg_vk_device, &cmd_alloc_info, window->cmds);
+
+    window->frame_finished = (VkFence*)realloc(window->frame_finished, sizeof(VkFence) * window->image_count);
+    for (usize i = 0; i < window->image_count; ++i) {
+        VkFenceCreateInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+        vkCreateFence(hg_vk_device, &info, nullptr, &window->frame_finished[i]);
+    }
+
+    window->image_available = (VkSemaphore*)realloc(window->image_available, sizeof(VkSemaphore) * window->image_count);
+    for (usize i = 0; i < window->image_count; ++i) {
+        VkSemaphoreCreateInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        vkCreateSemaphore(hg_vk_device, &info, nullptr, &window->image_available[i]);
+    }
+
+    window->ready_to_present = (VkSemaphore*)realloc(window->ready_to_present, sizeof(VkSemaphore) * window->image_count);
+    for (usize i = 0; i < window->image_count; ++i) {
+        VkSemaphoreCreateInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        vkCreateSemaphore(hg_vk_device, &info, nullptr, &window->ready_to_present[i]);
+    }
+
+    vkDestroySwapchainKHR(hg_vk_device, swapchain_info.oldSwapchain, nullptr);
+}
+
+static VkFormat find_swapchain_format(VkSurfaceKHR surface) {
+    hg_assert(surface != nullptr);
+
+    HgArena& scratch = hg_get_scratch();
+    HgArenaScope scratch_scope{scratch};
+
+    u32 format_count = 0;
+    vkGetPhysicalDeviceSurfaceFormatsKHR(hg_vk_physical_device, surface, &format_count, nullptr);
+    VkSurfaceFormatKHR* formats = scratch.alloc<VkSurfaceFormatKHR>(format_count);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(hg_vk_physical_device, surface, &format_count, formats);
+
+    for (usize i = 0; i < format_count; ++i) {
+        if (formats[i].format == VK_FORMAT_R8G8B8A8_SRGB)
+            return VK_FORMAT_R8G8B8A8_SRGB;
+        if (formats[i].format == VK_FORMAT_B8G8R8A8_SRGB)
+            return VK_FORMAT_B8G8R8A8_SRGB;
+    }
+    hg_error("No supported swapchain formats\n");
+}
+
+static VkPresentModeKHR find_swapchain_present_mode(
+    VkSurfaceKHR surface,
+    VkPresentModeKHR desired_mode
+) {
+    hg_assert(surface != nullptr);
+
+    if (desired_mode == VK_PRESENT_MODE_FIFO_KHR)
+        return desired_mode;
+
+    u32 mode_count = 0;
+    vkGetPhysicalDeviceSurfacePresentModesKHR(hg_vk_physical_device, surface, &mode_count, nullptr);
+    VkPresentModeKHR* present_modes = (VkPresentModeKHR*)alloca(mode_count * sizeof(*present_modes));
+    vkGetPhysicalDeviceSurfacePresentModesKHR(hg_vk_physical_device, surface, &mode_count, present_modes);
+
+    for (usize i = 0; i < mode_count; ++i) {
+        if (present_modes[i] == desired_mode)
+            return desired_mode;
+    }
+    return VK_PRESENT_MODE_FIFO_KHR;
+}
+
+void hg_internal_create_window_swapchain(HgWindow* window, const HgWindowConfig& config) {
+    window->format = find_swapchain_format(window->surface);
+    window->present_mode = find_swapchain_present_mode(window->surface, config.preferred_present_mode);
+    window->image_usage = config.image_usage;
+    hg_internal_resize_window_swapchain(window);
+}
+
+void hg_internal_destroy_window_swapchain(HgWindow* window) {
+    vkFreeCommandBuffers(hg_vk_device, hg_vk_cmd_pool, window->image_count, window->cmds);
+    free(window->cmds);
+
+    for (usize i = 0; i < window->image_count; ++i) {
+        vkDestroyFence(hg_vk_device, window->frame_finished[i], nullptr);
+    }
+    free(window->frame_finished);
+
+    for (usize i = 0; i < window->image_count; ++i) {
+        vkDestroySemaphore(hg_vk_device, window->image_available[i], nullptr);
+    }
+    free(window->image_available);
+
+    for (usize i = 0; i < window->image_count; ++i) {
+        vkDestroySemaphore(hg_vk_device, window->ready_to_present[i], nullptr);
+    }
+    free(window->ready_to_present);
+
+    for (usize i = 0; i < window->image_count; ++i) {
+        vkDestroyImageView(hg_vk_device, window->views[i], nullptr);
+    }
+    free(window->views);
+    free(window->images);
+
+    vkDestroySwapchainKHR(hg_vk_device, window->swapchain, nullptr);
+}
+
+VkCommandBuffer HgWindow::begin_recording() {
+    hg_assert(hg_vk_device != nullptr);
+    if (width == 0 || height == 0)
+        return nullptr;
+
+retry:
+    current_frame = (current_frame + 1) % image_count;
+    vkWaitForFences(hg_vk_device, 1, &frame_finished[current_frame], VK_TRUE, UINT64_MAX);
+    vkResetFences(hg_vk_device, 1, &frame_finished[current_frame]);
+
+    VkResult result = vkAcquireNextImageKHR(
+        hg_vk_device, swapchain, UINT64_MAX, image_available[current_frame], nullptr, &current_image);
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+        hg_internal_resize_window_swapchain(this);
+        goto retry;
+    }
+    hg_assert(result == VK_SUCCESS);
+
+    VkCommandBuffer cmd = cmds[current_frame];
+    vkResetCommandBuffer(cmd, 0);
+
+    VkCommandBufferBeginInfo begin_info{};
+    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    vkBeginCommandBuffer(cmd, &begin_info);
+    return cmd;
+}
+
+void HgWindow::end_and_present(VkCommandBuffer cmd) {
+    hg_assert(cmd == cmds[current_frame]);
+    vkEndCommandBuffer(cmd);
+
+    VkSubmitInfo submit{};
+    submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit.waitSemaphoreCount = 1;
+    submit.pWaitSemaphores = &image_available[current_frame];
+    VkPipelineStageFlags stage_flags{VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    submit.pWaitDstStageMask = &stage_flags;
+    submit.commandBufferCount = 1;
+    submit.pCommandBuffers = &cmd;
+    submit.signalSemaphoreCount = 1;
+    submit.pSignalSemaphores = &ready_to_present[current_frame];
+
+    vkQueueSubmit(hg_vk_queue, 1, &submit, frame_finished[current_frame]);
+
+    VkPresentInfoKHR present_info{};
+    present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    present_info.waitSemaphoreCount = 1;
+    present_info.pWaitSemaphores = &ready_to_present[current_frame];
+    present_info.swapchainCount = 1;
+    present_info.pSwapchains = &swapchain;
+    present_info.pImageIndices = &current_image;
+
+    vkQueuePresentKHR(hg_vk_queue, &present_info);
 }
 
 #define HG_MAKE_VULKAN_FUNC(name) PFN_##name name

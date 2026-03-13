@@ -1,7 +1,7 @@
 #include "hurdygurdy.hpp"
 
-#include "sprite.frag.spv.h"
 #include "sprite.vert.spv.h"
+#include "sprite.frag.spv.h"
 
 struct VPUniform {
     HgMat4 proj;
@@ -14,18 +14,18 @@ struct Push {
     HgVec2 uv_size;
 };
 
-VkDescriptorSetLayout vp_layout;
-VkDescriptorSetLayout texture_layout;
-VkPipelineLayout pipeline_layout;
-VkPipeline pipeline;
+static VkDescriptorSetLayout vp_set_layout;
+static VkDescriptorSetLayout texture_set_layout;
+static VkPipelineLayout pipeline_layout;
+static VkPipeline pipeline;
 
-VkDescriptorPool descriptor_pool;
-VkDescriptorSet vp_set;
+static VkDescriptorPool descriptor_pool;
+static VkDescriptorSet vp_set;
 
-VkBuffer vp_buffer;
-VmaAllocation vp_buffer_allocation;
+static VkBuffer vp_buffer;
+static VmaAllocation vp_buffer_allocation;
 
-HgHashMap<HgResource, VkDescriptorSet> texture_sets;
+static HgHashMap<HgResource, VkDescriptorSet> texture_sets;
 
 void hg_pipeline_2d_init(
     HgArena& arena,
@@ -41,16 +41,16 @@ void hg_pipeline_2d_init(
     VkDescriptorSetLayoutBinding vp_bindings[] = {
         {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr}
     };
-    vp_layout = hg_vk_create_descriptor_set_layout(
+    vp_set_layout = hg_vk_create_descriptor_set_layout(
         vp_bindings, sizeof(vp_bindings) / sizeof(*vp_bindings));
 
     VkDescriptorSetLayoutBinding texture_bindings[] = {
         {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}
     };
-    texture_layout = hg_vk_create_descriptor_set_layout(
+    texture_set_layout = hg_vk_create_descriptor_set_layout(
         texture_bindings, sizeof(texture_bindings) / sizeof(*texture_bindings));
 
-    VkDescriptorSetLayout set_layouts[] = {vp_layout, texture_layout};
+    VkDescriptorSetLayout set_layouts[] = {vp_set_layout, texture_set_layout};
     VkPushConstantRange push = {VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Push)};
     pipeline_layout = hg_vk_create_pipeline_layout(
         set_layouts,
@@ -80,14 +80,13 @@ void hg_pipeline_2d_init(
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, max_textures}
     };
-
     descriptor_pool = hg_vk_create_descriptor_pool(
         max_textures + 1,
         descriptor_sizes,
         sizeof(descriptor_sizes) / sizeof(*descriptor_sizes),
         VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
 
-    vp_set = hg_vk_allocate_descriptor_set(descriptor_pool, vp_layout);
+    vp_set = hg_vk_allocate_descriptor_set(descriptor_pool, vp_set_layout);
     hg_assert(vp_set != nullptr);
 
     hg_vk_create_buffer(
@@ -108,35 +107,33 @@ void hg_pipeline_2d_init(
     buffer_info.offset = 0;
     buffer_info.range = sizeof(VPUniform);
 
-    hg_vk_update_descriptor_set(vp_set, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, buffer_info);
+    hg_vk_update_descriptor_set(vp_set, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, &buffer_info, 1);
 }
 
 void hg_pipeline_2d_deinit() {
     vmaDestroyBuffer(hg_vk_vma, vp_buffer, vp_buffer_allocation);
-    vkFreeDescriptorSets(hg_vk_device, descriptor_pool, 1, &vp_set);
     vkDestroyDescriptorPool(hg_vk_device, descriptor_pool, nullptr);
     vkDestroyPipeline(hg_vk_device, pipeline, nullptr);
     vkDestroyPipelineLayout(hg_vk_device, pipeline_layout, nullptr);
-    vkDestroyDescriptorSetLayout(hg_vk_device, texture_layout, nullptr);
-    vkDestroyDescriptorSetLayout(hg_vk_device, vp_layout, nullptr);
+    vkDestroyDescriptorSetLayout(hg_vk_device, texture_set_layout, nullptr);
+    vkDestroyDescriptorSetLayout(hg_vk_device, vp_set_layout, nullptr);
 }
 
 void hg_pipeline_2d_add_texture(HgResource texture_id) {
     hg_assert(hg_is_gpu_resource_loaded(texture_id));
-
-    HgGpuTexture& texture = *hg_get_gpu_texture(texture_id);
     if (texture_sets.has(texture_id))
         return;
 
-    VkDescriptorSet set = hg_vk_allocate_descriptor_set(descriptor_pool, texture_layout);
-    hg_assert(set != nullptr);
+    HgGpuTexture& texture = *hg_get_gpu_texture(texture_id);
+
+    VkDescriptorSet set = hg_vk_allocate_descriptor_set(descriptor_pool, texture_set_layout);
 
     VkDescriptorImageInfo image_info{};
     image_info.sampler = texture.sampler;
     image_info.imageView = texture.view;
     image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    hg_vk_update_descriptor_set(set, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, image_info);
+    hg_vk_update_descriptor_set(set, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &image_info, 1);
 
     texture_sets.insert(texture_id, set);
 }
@@ -145,10 +142,6 @@ void hg_pipeline_2d_remove_texture(HgResource texture_id) {
     VkDescriptorSet set;
     if (texture_sets.remove(texture_id, &set))
         vkFreeDescriptorSets(hg_vk_device, descriptor_pool, 1, &set);
-}
-
-bool hg_pipeline_2d_has_texture(HgResource texture_id) {
-    return texture_sets.has(texture_id);
 }
 
 void hg_pipeline_2d_update_projection(const HgMat4& projection) {
@@ -179,15 +172,7 @@ void hg_draw_2d(HgECS& ecs, VkCommandBuffer cmd) {
     });
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-    vkCmdBindDescriptorSets(
-        cmd,
-        VK_PIPELINE_BIND_POINT_GRAPHICS,
-        pipeline_layout,
-        0,
-        1,
-        &vp_set,
-        0,
-        nullptr);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout, 0, 1, &vp_set, 0, nullptr);
 
     ecs.for_each<HgSprite, HgTransform>([&](HgEntity, HgSprite& sprite, HgTransform& transform) {
         hg_assert(texture_sets.has(sprite.texture));
@@ -206,13 +191,7 @@ void hg_draw_2d(HgECS& ecs, VkCommandBuffer cmd) {
         push.uv_pos = sprite.uv_pos;
         push.uv_size = sprite.uv_size;
 
-        vkCmdPushConstants(
-            cmd,
-            pipeline_layout,
-            VK_SHADER_STAGE_VERTEX_BIT,
-            0,
-            sizeof(push),
-            &push);
+        vkCmdPushConstants(cmd, pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push), &push);
 
         vkCmdDraw(cmd, 4, 1, 0, 0);
     });

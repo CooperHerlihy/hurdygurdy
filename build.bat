@@ -33,13 +33,15 @@ set SRC= ^
     thread.cpp ^
     resources.cpp ^
     pipeline2d.cpp ^
-    windows.cpp ^
-    window.cpp ^
+    pipeline3d.cpp ^
+    window_win32.cpp ^
     vulkan.cpp
 
 set SHADERS= ^
     sprite.vert ^
-    sprite.frag
+    sprite.frag ^
+    model.vert ^
+    model.frag
 
 if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
 if not exist "%TEST_DIR%" mkdir "%TEST_DIR%"

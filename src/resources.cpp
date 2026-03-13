@@ -53,12 +53,12 @@ void HgBinary::store(HgStringView path) {
     }
 }
 
-bool HgTexture::get_info(VkFormat& format, u32& width, u32& height, u32& depth) {
+bool HgTexture::get_info(VkFormat* format, u32* width, u32* height, u32* depth) {
     if (file.size >= sizeof(Info) && memcmp(file.data, texture_identifier, sizeof(texture_identifier)) == 0) {
-        file.read(offsetof(Info, format), &format, sizeof(format));
-        file.read(offsetof(Info, width), &width, sizeof(width));
-        file.read(offsetof(Info, height), &height, sizeof(height));
-        file.read(offsetof(Info, depth), &depth, sizeof(depth));
+        file.read(offsetof(Info, format), format, sizeof(*format));
+        file.read(offsetof(Info, width), width, sizeof(*width));
+        file.read(offsetof(Info, height), height, sizeof(*height));
+        file.read(offsetof(Info, depth), depth, sizeof(*depth));
         return true;
     }
     return false;
@@ -66,6 +66,23 @@ bool HgTexture::get_info(VkFormat& format, u32& width, u32& height, u32& depth) 
 
 void* HgTexture::get_pixels() {
     if (file.size >= sizeof(Info) && memcmp(file.data, texture_identifier, sizeof(texture_identifier)) == 0) {
+        return (u8*)file.data + sizeof(Info);
+    }
+    return file.data;
+}
+
+bool HgModelData::get_info(u32* vertex_count, u32* vertex_width, VkPrimitiveTopology* topology) {
+    if (file.size >= sizeof(Info) && memcmp(file.data, model_identifier, sizeof(model_identifier)) == 0) {
+        file.read(offsetof(Info, vertex_count), vertex_count, sizeof(vertex_count));
+        file.read(offsetof(Info, vertex_width), vertex_width, sizeof(vertex_width));
+        file.read(offsetof(Info, topology), topology, sizeof(topology));
+        return true;
+    }
+    return false;
+}
+
+void* HgModelData::get_vertices() {
+    if (file.size >= sizeof(Info) && memcmp(file.data, model_identifier, sizeof(model_identifier)) == 0) {
         return (u8*)file.data + sizeof(Info);
     }
     return file.data;
@@ -258,13 +275,13 @@ void hg_export_png(HgFence* fences, usize fence_count, HgResource id, HgStringVi
         HgTexture tex = *(HgBinary*)ptex;
         void* pixels = tex.get_pixels();
         if (pixels == nullptr) {
-            hg_warn("Cannot export emprty image %s\n", cpath);
+            hg_warn("Cannot export empty image %s\n", cpath);
             return;
         }
 
         VkFormat format;
         u32 width, height, depth;
-        if (!tex.get_info(format, width, height, depth)) {
+        if (!tex.get_info(&format, &width, &height, &depth)) {
             hg_warn("Could not get info from image %s to export\n", cpath);
             return;
         }
@@ -274,7 +291,24 @@ void hg_export_png(HgFence* fences, usize fence_count, HgResource id, HgStringVi
     });
 }
 
+void hg_import_gltf(HgFence* fences, usize fence_count, HgResource id, HgStringView path) {
+    (void)fences;
+    (void)fence_count;
+    (void)id;
+    (void)path;
+    hg_error("hg_import_gltf : TODO\n");
+}
+
+void hg_export_gltf(HgFence* fences, usize fence_count, HgResource id, HgStringView path) {
+    (void)fences;
+    (void)fence_count;
+    (void)id;
+    (void)path;
+    hg_error("hg_export_gltf : TODO\n");
+}
+
 enum class GpuResourceType : u32 {
+    none,
     buffer,
     texture,
 };
@@ -369,7 +403,7 @@ void hg_load_gpu_texture(HgResource id, VkFilter filter) {
     hg_assert(data.file.data != nullptr);
 
     HgGpuTexture& tex = *hg_get_gpu_texture(id);
-    if (!data.get_info(tex.format, tex.width, tex.height, tex.depth)) {
+    if (!data.get_info(&tex.format, &tex.width, &tex.height, &tex.depth)) {
         hg_warn("Could not get info to load texture\n");
         return;
     }
@@ -404,7 +438,7 @@ void hg_load_gpu_texture(HgResource id, VkFilter filter) {
     view_info.format = tex.format;
     view_info.subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 
-    hg_vk_create_image_view(&tex.view, view_info);
+    tex.view = hg_vk_create_image_view(view_info);
     hg_assert(tex.view != nullptr);
 
     VkSamplerCreateInfo sampler_info{};

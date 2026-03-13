@@ -36,7 +36,7 @@ void minimal_example() {
     HgWindow* window = HgWindow::create(arena, window_config);
     hg_defer(window->destroy());
 
-    hg_pipeline_2d_init(arena, 256, window->format, VK_FORMAT_UNDEFINED);
+    hg_pipeline_2d_init(arena, 256, window->format, VK_FORMAT_D32_SFLOAT);
     hg_defer(hg_pipeline_2d_deinit());
 
     HgStringView texture_path = "hg_test_dir/file_image_test.hgtex";
@@ -149,9 +149,9 @@ void editor_example() {
 
     HgWindowConfig window_config{};
     window_config.title = "Hg Test";
-    window_config.windowed = true;
-    window_config.width = 1600;
-    window_config.height = 900;
+    // window_config.windowed = true;
+    // window_config.width = 1600;
+    // window_config.height = 900;
     window_config.preferred_present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
 
     HgWindow* window = HgWindow::create(arena, window_config);
@@ -169,11 +169,17 @@ void editor_example() {
     }
     hg_defer(hg_unload_gpu_resource(texture_id));
 
-    hg_pipeline_2d_init(arena, 256, VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_UNDEFINED);
+    hg_pipeline_2d_init(arena, 256, VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_D32_SFLOAT);
     hg_defer(hg_pipeline_2d_deinit());
+
+    hg_pipeline_3d_init(arena, 256, VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_D32_SFLOAT);
+    hg_defer(hg_pipeline_3d_deinit());
 
     hg_pipeline_2d_add_texture(texture_id);
     hg_defer(hg_pipeline_2d_remove_texture(texture_id));
+
+    hg_pipeline_3d_add_model(0, 0, 0);
+    hg_defer(hg_pipeline_3d_remove_model(0));
 
     HgTransform camera{};
     camera.position = {0, 0, -1};
@@ -187,13 +193,26 @@ void editor_example() {
     HgECS ecs = ecs.create(4096);
     hg_defer(ecs.destroy());
 
-    u32 scene_capacity = 2;
+    u32 scene_capacity = 8;
     HgEntity* scene = arena.alloc<HgEntity>(scene_capacity);
     u32 scene_size = 0;
 
-    scene[scene_size++] = ecs.spawn();
-    ecs.add<HgTransform>(scene[0]) = {};
-    ecs.add<HgSprite>(scene[0]) = {texture_id, {0.0f}, {1.0f}};
+    u32 square = scene_size++;
+    scene[square] = ecs.spawn();
+    ecs.add<HgTransform>(scene[square]) = {};
+    ecs.get<HgTransform>(scene[square]).position.x = -1.5f;
+    ecs.add<HgSprite>(scene[square]) = {texture_id, {0.0f}, {1.0f}};
+
+    u32 dir_light = scene_size++;
+    scene[dir_light] = ecs.spawn();
+    ecs.add<HgTransform>(scene[dir_light]) = {};
+    ecs.get<HgTransform>(scene[dir_light]).position.y = -2;
+    ecs.add<HgPointLight3D>(scene[dir_light]) = {{1, 1, 1}};
+
+    u32 cube = scene_size++;
+    scene[cube] = ecs.spawn();
+    ecs.add<HgTransform>(scene[cube]) = {};
+    ecs.add<HgModel3D>(scene[cube]) = {};
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -234,25 +253,31 @@ void editor_example() {
     ImGui_ImplVulkan_Init(&imgui_info);
     hg_defer(ImGui_ImplVulkan_Shutdown());
 
+    VkSampler render_sampler = nullptr;
     VkImage render_image = nullptr;
     VmaAllocation render_alloc = nullptr;
     VkImageView render_view = nullptr;
-    VkSampler render_sampler = nullptr;
     VkDescriptorSet render_descriptor = nullptr;
+
+    VkImage depth_image = nullptr;
+    VkImageView depth_view = nullptr;
+    VmaAllocation depth_alloc = nullptr;
 
     {
         VkSamplerCreateInfo render_sampler_info{};
         render_sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
         vkCreateSampler(hg_vk_device, &render_sampler_info, nullptr, &render_sampler);
     }
+    hg_defer(vkDestroySampler(hg_vk_device, render_sampler, nullptr));
     hg_defer(vmaDestroyImage(hg_vk_vma, render_image, render_alloc));
     hg_defer(vkDestroyImageView(hg_vk_device, render_view, nullptr));
-    hg_defer(vkDestroySampler(hg_vk_device, render_sampler, nullptr));
+    hg_defer(vmaDestroyImage(hg_vk_vma, depth_image, depth_alloc));
+    hg_defer(vkDestroyImageView(hg_vk_device, depth_view, nullptr));
 
     bool show_render = true;
     bool show_editor = true;
     bool show_imgui_demo = false;
-    bool move_3d = false;
+    bool move_3d = true;
     bool fixed_aspect = false;
 
     HgClock game_clock{};
@@ -366,10 +391,13 @@ void editor_example() {
 
                     HgMat4 proj = hg_projection_perspective((f32)hg_pi * 0.5f, (f32)render_width / (f32)render_height, 0.1f, 1000.0f);
                     hg_pipeline_2d_update_projection(proj);
+                    hg_pipeline_3d_update_projection(proj);
 
                     ImGui_ImplVulkan_RemoveTexture(render_descriptor);
                     vkDestroyImageView(hg_vk_device, render_view, nullptr);
                     vmaDestroyImage(hg_vk_vma, render_image, render_alloc);
+                    vkDestroyImageView(hg_vk_device, depth_view, nullptr);
+                    vmaDestroyImage(hg_vk_vma, depth_image, depth_alloc);
 
                     HgVkImageConfig render_image_info{};
                     render_image_info.width = render_width;
@@ -381,15 +409,31 @@ void editor_example() {
 
                     hg_vk_create_image(&render_image, &render_alloc, render_image_info);
 
-                    HgVkImageViewConfig view_info{};
-                    view_info.image = render_image;
-                    view_info.format = render_image_info.format;
-                    view_info.subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                    HgVkImageViewConfig render_view_info{};
+                    render_view_info.image = render_image;
+                    render_view_info.format = render_image_info.format;
+                    render_view_info.subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 
-                    hg_vk_create_image_view(&render_view, view_info);
+                    render_view = hg_vk_create_image_view(render_view_info);
 
                     render_descriptor = ImGui_ImplVulkan_AddTexture(
                         render_sampler, render_view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+                    HgVkImageConfig depth_image_info{};
+                    depth_image_info.width = render_width;
+                    depth_image_info.height = render_height;
+                    depth_image_info.format = VK_FORMAT_D32_SFLOAT;
+                    depth_image_info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
+                                            | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+
+                    hg_vk_create_image(&depth_image, &depth_alloc, depth_image_info);
+
+                    HgVkImageViewConfig depth_view_info{};
+                    depth_view_info.image = depth_image;
+                    depth_view_info.format = depth_image_info.format;
+                    depth_view_info.subresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+
+                    depth_view = hg_vk_create_image_view(depth_view_info);
                 }
 
                 if (ImGui::IsWindowFocused()) {
@@ -416,7 +460,9 @@ void editor_example() {
                         camera.position += hg_norm(HgVec3{rotated.x, movement.y, rotated.z}) * move_speed * (f32)delta;
                     }
                 }
-                hg_pipeline_2d_update_view(hg_view_matrix(camera.position, camera.scale, camera.rotation));
+                HgMat4 view = hg_view_matrix(camera.position, camera.scale, camera.rotation);
+                hg_pipeline_2d_update_view(view);
+                hg_pipeline_3d_update_view(view);
 
                 ImGui::Image((ImTextureID)render_descriptor, {(f32)render_width, (f32)render_height});
             }
@@ -481,6 +527,21 @@ void editor_example() {
                                         ecs.add<HgSprite>(e) = {texture_id, {0.0f, 0.0f}, {1.0f, 1.0f}};
                                     }
 
+                                    if (!ecs.has<HgSprite>(e) && ImGui::Selectable("Model 3D")) {
+                                        if (!ecs.has<HgTransform>(e))
+                                            ecs.add<HgTransform>(e) = {};
+                                        ecs.add<HgModel3D>(e) = {};
+                                    }
+
+                                    if (!ecs.has<HgDirLight3D>(e) && ImGui::Selectable("Direction Light 3D"))
+                                        ecs.add<HgDirLight3D>(e) = {};
+
+                                    if (!ecs.has<HgPointLight3D>(e) && ImGui::Selectable("Point Light 3D")) {
+                                        if (!ecs.has<HgTransform>(e))
+                                            ecs.add<HgTransform>(e) = {};
+                                        ecs.add<HgPointLight3D>(e) = {};
+                                    }
+
                                     ImGui::EndPopup();
                                 }
 
@@ -494,10 +555,23 @@ void editor_example() {
                                         ecs.remove<HgTransform>(e);
                                         if (ecs.has<HgSprite>(e))
                                             ecs.remove<HgSprite>(e);
+                                        if (ecs.has<HgModel3D>(e))
+                                            ecs.remove<HgModel3D>(e);
+                                        if (ecs.has<HgPointLight3D>(e))
+                                            ecs.remove<HgPointLight3D>(e);
                                     }
 
                                     if (ecs.has<HgSprite>(e) && ImGui::Selectable("Sprite"))
                                         ecs.remove<HgSprite>(e);
+
+                                    if (ecs.has<HgModel3D>(e) && ImGui::Selectable("Model 3D"))
+                                        ecs.remove<HgModel3D>(e);
+
+                                    if (ecs.has<HgDirLight3D>(e) && ImGui::Selectable("Direction Light 3D"))
+                                        ecs.remove<HgDirLight3D>(e);
+
+                                    if (ecs.has<HgPointLight3D>(e) && ImGui::Selectable("Point Light 3D"))
+                                        ecs.remove<HgPointLight3D>(e);
 
                                     ImGui::EndPopup();
                                 }
@@ -515,6 +589,23 @@ void editor_example() {
                                     HgSprite& s = ecs.get<HgSprite>(e);
                                     ImGui::DragFloat2("UV Position", &s.uv_pos.x, 0.01f);
                                     ImGui::DragFloat2("UV Size", &s.uv_size.x, 0.01f);
+                                    ImGui::TreePop();
+                                }
+
+                                if (ecs.has<HgModel3D>(e) && ImGui::TreeNodeEx("Model 3D", component_flags)) {
+                                    ImGui::TreePop();
+                                }
+
+                                if (ecs.has<HgDirLight3D>(e) && ImGui::TreeNodeEx("Directional Light 3D", component_flags)) {
+                                    HgDirLight3D& l = ecs.get<HgDirLight3D>(e);
+                                    ImGui::DragFloat3("Direction", &l.dir.x, 0.01f);
+                                    ImGui::DragFloat3("Color", &l.color.x, 0.01f);
+                                    ImGui::TreePop();
+                                }
+
+                                if (ecs.has<HgPointLight3D>(e) && ImGui::TreeNodeEx("Point Light 3D", component_flags)) {
+                                    HgPointLight3D& l = ecs.get<HgPointLight3D>(e);
+                                    ImGui::DragFloat3("Color", &l.color.x, 0.01f);
                                     ImGui::TreePop();
                                 }
                             }
@@ -542,6 +633,11 @@ void editor_example() {
                 render_view,
                 {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
 
+            HgImageRenderID depth_image_id = renderer.add_image(
+                depth_image,
+                depth_view,
+                {VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1});
+
             HgImageRenderID window_image_id = renderer.add_image(
                 window->images[window->current_image],
                 window->views[window->current_image],
@@ -556,10 +652,14 @@ void editor_example() {
                 HgRenderPass render_pass{};
                 render_pass.color_attachments = &render_color_attachment;
                 render_pass.color_attachment_count = 1;
+                render_pass.depth_attachment.image = depth_image_id;
+                render_pass.depth_attachment.load_op = VK_ATTACHMENT_LOAD_OP_CLEAR;
+                render_pass.depth_attachment.clear_value.depthStencil = {1.0f, 0};
 
                 renderer.begin_pass(cmd, render_width, render_height, render_pass);
 
                 hg_draw_2d(ecs, cmd);
+                hg_draw_3d(ecs, cmd);
 
                 renderer.end_pass(cmd);
             }
@@ -2466,7 +2566,7 @@ hg_test(HgTexture) {
 
         VkFormat format;
         u32 width, height, depth;
-        hg_test_assert(texture.get_info(format, width, height, depth));
+        hg_test_assert(texture.get_info(&format, &width, &height, &depth));
         hg_test_assert(format == save_format);
         hg_test_assert(width == save_width);
         hg_test_assert(height == save_height);
@@ -2486,7 +2586,7 @@ hg_test(HgTexture) {
 
         VkFormat format;
         u32 width, height, depth;
-        hg_test_assert(file_texture.get_info(format, width, height, depth));
+        hg_test_assert(file_texture.get_info(&format, &width, &height, &depth));
         hg_test_assert(format == save_format);
         hg_test_assert(width == save_width);
         hg_test_assert(height == save_height);
@@ -2516,7 +2616,7 @@ hg_test(HgTexture) {
 
         VkFormat format;
         u32 width, height, depth;
-        hg_test_assert(file_texture.get_info(format, width, height, depth));
+        hg_test_assert(file_texture.get_info(&format, &width, &height, &depth));
         hg_test_assert(format == save_format);
         hg_test_assert(width == save_width);
         hg_test_assert(height == save_height);

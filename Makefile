@@ -25,13 +25,15 @@ SRC := \
 	thread.cpp \
 	resources.cpp \
 	pipeline2d.cpp \
-	glfw.cpp \
-	window.cpp \
+	pipeline3d.cpp \
+	window_glfw.cpp \
 	vulkan.cpp
 
 SHADERS := \
 	sprite.vert \
-	sprite.frag
+	sprite.frag \
+	model.vert \
+	model.frag
 
 .PHONY: all debug release clean
 
