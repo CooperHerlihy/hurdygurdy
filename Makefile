@@ -27,7 +27,8 @@ SRC := \
 	pipeline2d.cpp \
 	pipeline3d.cpp \
 	window_glfw.cpp \
-	vulkan.cpp
+	vulkan.cpp \
+	test.cpp
 
 SHADERS := \
 	sprite.vert \
@@ -83,8 +84,11 @@ LIB_FILES := \
 $(BUILD_DIR)/libhurdygurdy.a: $(LIB_FILES) $(BUILD_DIR)/vk_mem_alloc.o $(BUILD_DIR)/stb.o
 	ar rcs $@ $^
 
-$(BUILD_DIR)/test: $(BUILD_DIR)/test.o $(BUILD_DIR)/libhurdygurdy.a
-	c++ $(STD) $(CONFIG) $(WARNINGS) -o $@ $(BUILD_DIR)/test.o -L$(BUILD_DIR) -lhurdygurdy -lglfw
+$(BUILD_DIR)/minimal: $(BUILD_DIR)/minimal.o $(BUILD_DIR)/libhurdygurdy.a
+	c++ $(STD) $(CONFIG) $(WARNINGS) -o $@ $< -L$(BUILD_DIR) -lhurdygurdy -lglfw
+
+$(BUILD_DIR)/editor: $(BUILD_DIR)/editor.o $(BUILD_DIR)/libhurdygurdy.a
+	c++ $(STD) $(CONFIG) $(WARNINGS) -o $@ $< -L$(BUILD_DIR) -lhurdygurdy -lglfw
 
 clean:
 	rm -rf $(BUILD_DIR) $(TEST_DIR)

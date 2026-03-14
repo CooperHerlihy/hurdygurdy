@@ -31,9 +31,6 @@ static bool imgui_initialized = false;
 static LRESULT CALLBACK window_callback(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     HgWindow* window = (HgWindow*)GetWindowLongPtrA(hwnd, GWLP_USERDATA);
 
-    if (imgui_initialized)
-        ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam);
-
     switch (msg) {
         case WM_NCCREATE:
             SetWindowLongPtrA(hwnd, GWLP_USERDATA, (LONG_PTR)(((CREATESTRUCTA*)lparam)->lpCreateParams));
@@ -375,6 +372,9 @@ static LRESULT CALLBACK window_callback(HWND hwnd, UINT msg, WPARAM wparam, LPAR
             break;
     }
 
+    if (imgui_initialized)
+        ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam);
+
     return DefWindowProcA(hwnd, msg, wparam, lparam);
 }
 
@@ -445,7 +445,7 @@ HgWindow* HgWindow::create(HgArena& arena, const HgWindowConfig& config) {
 
     VkResult result = pfn_vkCreateWin32SurfaceKHR(hg_vk_instance, &info, nullptr, &window->surface);
     if (window->surface == nullptr)
-        hg_error("Failed to create Vulkan surface: %s\n", hg_vk_result_string(result));
+        hg_error("Failed to create Vulkan surface: %s\n", hg_vk_result_to_string(result));
 
     hg_internal_create_window_swapchain(window, config);
 

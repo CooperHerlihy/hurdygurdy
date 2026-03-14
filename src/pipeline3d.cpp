@@ -125,6 +125,7 @@ void hg_pipeline_3d_init(
 
     VkDescriptorPoolSize descriptor_sizes[] = {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1},
+        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, max_models * 2}
     };
     descriptor_pool = hg_vk_create_descriptor_pool(
@@ -381,7 +382,6 @@ void hg_draw_3d(HgECS& ecs, VkCommandBuffer cmd) {
         dir_lights[i].dir = light.dir;
         dir_lights[i].dir.w = 0.0f;
         dir_lights[i].color = light.color;
-        dir_lights[i].color.w = 1.0f;
         ++i;
     });
 
@@ -390,7 +390,6 @@ void hg_draw_3d(HgECS& ecs, VkCommandBuffer cmd) {
         point_lights[i].pos = transform.position;
         point_lights[i].pos.w = 0.0f;
         point_lights[i].color = light.color;
-        point_lights[i].color.w = 1.0f;
         ++i;
     });
 

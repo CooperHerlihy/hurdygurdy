@@ -26,6 +26,7 @@ set IMGUI_SRC=vendor/imgui/*.cpp
 
 set IMGUI_BACKENDS= ^
     imgui_impl_win32.cpp ^
+    imgui_impl_glfw.cpp ^
     imgui_impl_vulkan.cpp
 
 set SRC= ^
@@ -34,8 +35,9 @@ set SRC= ^
     resources.cpp ^
     pipeline2d.cpp ^
     pipeline3d.cpp ^
-    window_win32.cpp ^
-    vulkan.cpp
+    window_glfw.cpp ^
+    vulkan.cpp ^
+    test.cpp
 
 set SHADERS= ^
     sprite.vert ^
@@ -112,11 +114,18 @@ lib /nologo /OUT:"%BUILD_DIR%\hurdygurdy.lib" ^
     "%BUILD_DIR%\stb.obj" ^
     %OBJS%
 
-cl "%SRC_DIR%\src\test.cpp" ^
-    /Fd:"%BUILD_DIR%\test.pdb" ^
-    /Fo:"%BUILD_DIR%\test.obj" ^
-    /Fe:"%BUILD_DIR%\test.exe" ^
+cl "%SRC_DIR%\src\minimal.cpp" ^
+    /Fd:"%BUILD_DIR%\minimal.pdb" ^
+    /Fo:"%BUILD_DIR%\minimal.obj" ^
+    /Fe:"%BUILD_DIR%\minimal.exe" ^
     %STD% %WARNINGS% %CONFIG% %INCLUDES% ^
-    "%BUILD_DIR%\hurdygurdy.lib" User32.lib
+    "%BUILD_DIR%\hurdygurdy.lib" User32.lib glfw3dll.lib
+
+cl "%SRC_DIR%\src\editor.cpp" ^
+    /Fd:"%BUILD_DIR%\editor.pdb" ^
+    /Fo:"%BUILD_DIR%\editor.obj" ^
+    /Fe:"%BUILD_DIR%\editor.exe" ^
+    %STD% %WARNINGS% %CONFIG% %INCLUDES% ^
+    "%BUILD_DIR%\hurdygurdy.lib" User32.lib glfw3dll.lib
 
 endlocal

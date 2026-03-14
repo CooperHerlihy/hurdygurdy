@@ -4,8 +4,6 @@
 
 #include "hurdygurdy.hpp"
 
-#ifdef HG_PLATFORM_LINUX
-
 void hg_internal_create_window_swapchain(HgWindow* window, const HgWindowConfig& config);
 void hg_internal_resize_window_swapchain(HgWindow* window);
 void hg_internal_destroy_window_swapchain(HgWindow* window);
@@ -395,11 +393,11 @@ void HgWindow::destroy() {
     glfwDestroyWindow(internals->glfw_window);
 }
 
-void HgWindow::set_icon(u32* icon_data, u32 width, u32 height) {
+void HgWindow::set_icon(u32* icon_data, u32 icon_width, u32 icon_height) {
     hg_error("window set_icon : TODO\n");
     (void)icon_data;
-    (void)width;
-    (void)height;
+    (void)icon_width;
+    (void)icon_height;
 }
 
 bool HgWindow::is_fullscreen() {
@@ -416,11 +414,11 @@ void HgWindow::set_cursor(HgWindow::Cursor cursor) {
     (void)cursor;
 }
 
-void HgWindow::set_cursor_image(u32* data, u32 width, u32 height) {
+void HgWindow::set_cursor_image(u32* data, u32 image_width, u32 image_height) {
     hg_error("window set_cursor_image : TODO\n");
     (void)data;
-    (void)width;
-    (void)height;
+    (void)image_width;
+    (void)image_height;
 }
 
 u32 hg_vk_get_platform_extensions(HgArena& arena, HgStringView** ext_buffer) {
@@ -486,6 +484,4 @@ void ImGui_ImplHurdyGurdy_Shutdown() {
 void ImGui_ImplHurdyGurdy_NewFrame() {
     ImGui_ImplGlfw_NewFrame();
 }
-
-#endif
 

@@ -297,62 +297,9 @@ void hg_init();
 void hg_exit();
 
 /**
- * Create and register a test globally
- *
- * Parameters
- * - test_name The name of the test
- * - test_function A pointer to the test function
+ * Run Hurdy Gurdy tests, asserting success
  */
-void hg_tests_register(const char* name, bool (*function)());
-
-/**
- * Runs all tests registered globally
- *
- * This should be called after initialization, some tests require it
- *
- * Returns:
- * - Whether all tests passed
- */
-bool hg_tests_run();
-
-/**
- * Automatically declares and registers a test function
- *
- * Example:
- * hg_test(example_test) {
- *     bool success = true;
- *     hg_test_assert(success != false);
- *     return success;
- * }
- *
- * Parameters
- * - name The name of the test, should not be a string
- */
-#define hg_test(name) \
-    static bool hg_test_function_##name(); \
-    namespace { \
-        struct HgTestDummy_##name { \
-            HgTestDummy_##name() { \
-                hg_tests_register(#name, hg_test_function_##name); \
-            } \
-        } hg_test_dummy_##name; \
-    } \
-    static bool hg_test_function_##name() 
-
-/**
- * Asserts a condition in a test
- *
- * Returns false to fail the test
- *
- * Parameters
- * - cond The condition to check
- */
-#define hg_test_assert(cond) do { \
-    if (!(cond)) { \
-        hg_warn(__FILE__ ":%d Test assertion failed: " #cond "\n", __LINE__); \
-        return false; \
-    } \
-} while(0)
+void hg_test();
 
 /**
  * The value of Pi
@@ -4282,7 +4229,7 @@ struct HgDirLight3D {
     /**
      * The color of the light
      */
-    HgVec3 color;
+    HgVec4 color;
 };
 
 /**
@@ -4292,7 +4239,7 @@ struct HgPointLight3D {
     /**
      * The color of the light
      */
-    HgVec3 color;
+    HgVec4 color;
 };
 
 /**

@@ -22,15 +22,25 @@ layout (push_constant) uniform Push {
 };
 
 void main() {
-    const mat4 mv = u_view * p_model;
-    const mat3 imv = mat3(transpose(inverse(mv)));
-    const vec4 pos = mv * vec4(v_pos, 1.0);
+    vec4 model_pos = vec4(v_pos, 1.0);
+    vec4 world_pos = p_model * model_pos;
+    vec4 view_pos = u_view * world_pos;
+    gl_Position = u_proj * view_pos;
 
-    f_pos = pos.xyz;
-    f_norm = imv * v_norm;
-    f_tan = vec4(imv * v_tan.xyz, v_tan.w);
+    f_pos = world_pos.xyz;
+    f_norm = mat3(transpose(inverse(p_model))) * v_norm;
+    f_tan = vec4(mat3(transpose(inverse(p_model))) * v_tan.xyz, v_tan.w);
     f_uv = v_uv;
 
-    gl_Position = u_proj * pos;
+    // const mat4 mv = u_view * p_model;
+    // const mat3 imv = mat3(transpose(inverse(mv)));
+    // const vec4 pos = mv * vec4(v_pos, 1.0);
+    //
+    // f_pos = pos.xyz;
+    // f_norm = imv * v_norm;
+    // f_tan = vec4(imv * v_tan.xyz, v_tan.w);
+    // f_uv = v_uv;
+    //
+    // gl_Position = u_proj * pos;
 }
 
