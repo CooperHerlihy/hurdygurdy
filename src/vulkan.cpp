@@ -2134,7 +2134,7 @@ void hg_internal_resize_window_swapchain(HgWindow* window) {
     VkSwapchainCreateInfoKHR swapchain_info{};
     swapchain_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     swapchain_info.surface = window->surface;
-    swapchain_info.minImageCount // why do different platforms behave differently, especially with ImGui? : TODO
+    swapchain_info.minImageCount // which???
         = std::min(surface_capabilities.minImageCount, surface_capabilities.maxImageCount - 1) + 1;
         // = window->present_mode == VK_PRESENT_MODE_FIFO_KHR
         // ? std::max(surface_capabilities.minImageCount, (u32)2)

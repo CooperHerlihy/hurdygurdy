@@ -1,5 +1,9 @@
 #include "hurdygurdy.hpp"
 
+#define IM_ASSERT hg_assert
+#include "imgui.h"
+#include "imgui_impl_vulkan.h"
+
 int main() {
     hg_init();
     hg_defer(hg_exit());
@@ -11,9 +15,13 @@ int main() {
 
     HgWindowConfig window_config{};
     window_config.title = "Hg Small Test";
-    window_config.windowed = true;
+    // window_config.windowed = true;
     window_config.width = 1200;
     window_config.height = 800;
+    window_config.preferred_present_mode = VK_PRESENT_MODE_FIFO_KHR;
+    // window_config.preferred_present_mode = VK_PRESENT_MODE_FIFO_RELAXED_KHR;
+    // window_config.preferred_present_mode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+    // window_config.preferred_present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
 
     HgWindow* window = HgWindow::create(arena, window_config);
     hg_defer(window->destroy());
@@ -47,9 +55,56 @@ int main() {
     ecs.add<HgTransform>(square) = {};
     ecs.add<HgSprite>(square) = {texture_id, {0.0f}, {1.0f}};
 
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    hg_defer(ImGui::DestroyContext());
+
+    ImGui::StyleColorsDark();
+    ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    // io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+
+    ImGui_ImplHurdyGurdy_Init(window);
+    hg_defer(ImGui_ImplHurdyGurdy_Shutdown());
+
+    ImGui_ImplVulkan_InitInfo imgui_info{};
+    imgui_info.Instance = hg_vk_instance;
+    imgui_info.PhysicalDevice = hg_vk_physical_device;
+    imgui_info.Device = hg_vk_device;
+    imgui_info.QueueFamily = hg_vk_queue_family;
+    imgui_info.Queue = hg_vk_queue;
+    imgui_info.DescriptorPoolSize = 1000;
+    imgui_info.MinImageCount = window->image_count;
+    imgui_info.ImageCount = window->image_count;
+    imgui_info.MinAllocationSize = 1024 * 1024;
+    imgui_info.UseDynamicRendering = true;
+    imgui_info.PipelineInfoMain.PipelineRenderingCreateInfo.sType
+        = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+    imgui_info.PipelineInfoMain.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
+    imgui_info.PipelineInfoMain.PipelineRenderingCreateInfo.pColorAttachmentFormats = &window->format;
+#ifdef HG_DEBUG_MODE
+    imgui_info.CheckVkResultFn = [](VkResult err) {
+        if (err != VK_SUCCESS)
+            hg_warn("Vulkan error from ImGui: %s\n", hg_vk_result_to_string(err));
+    };
+#endif
+
+    ImGui_ImplVulkan_Init(&imgui_info);
+    hg_defer(ImGui_ImplVulkan_Shutdown());
+
     HgClock game_clock{};
+
+    f64 frame_time = 0.0;
+    f64 record_time = 0.0f;
+    f64 acquire_time = 0.0;
+    f64 present_time = 0.0f;
+
     for (;;) {
         f64 delta = game_clock.tick();
+
+        HgClock frame_clock{};
 
         HgArena& frame = hg_get_scratch(arena);
         HgArenaScope frame_scope{frame};
@@ -57,6 +112,9 @@ int main() {
         hg_process_window_events(&window, 1);
         if (window->was_closed)
             goto quit;
+
+        ImGui_ImplHurdyGurdy_NewFrame();
+        ImGui::NewFrame();
 
         hg_pipeline_2d_update_projection(
             hg_projection_perspective((f32)hg_pi * 0.5f, (f32)window->width / (f32)window->height, 0.1f, 1000.0f));
@@ -81,7 +139,29 @@ int main() {
 
         hg_pipeline_2d_update_view(hg_view_matrix(camera.position, camera.scale, camera.rotation));
 
+        if (ImGui::Begin("Time")) {
+            ImGui::Text("delta: %.3fms\n", delta * 1e3);
+
+            ImGui::Text("cpu: %.3fms\n", (frame_time + record_time) * 1e3);
+            ImGui::Text("frame: %.3fms\n", frame_time * 1e3);
+            ImGui::Text("record: %.3fms\n", record_time * 1e3);
+
+            ImGui::Text("gpu: %.3fms\n", (acquire_time + present_time) * 1e3);
+            ImGui::Text("acquire: %.3fms\n", acquire_time * 1e3);
+            ImGui::Text("present: %.3fms\n", present_time * 1e3);
+        }
+        ImGui::End();
+
+        ImGui::Render();
+
+        frame_time = frame_clock.tick();
+
+        HgClock acquire_clock{};
         VkCommandBuffer cmd = window->begin_recording();
+        acquire_time = acquire_clock.tick();
+
+        HgClock record_clock{};
+
         if (cmd != nullptr) {
             HgRenderer renderer = renderer.create(frame, 64, 64);
 
@@ -102,6 +182,8 @@ int main() {
 
             hg_draw_2d(ecs, cmd);
 
+            ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
+
             renderer.end_pass(cmd);
 
             HgImageBarrier present_barrier{};
@@ -110,7 +192,11 @@ int main() {
 
             renderer.barrier(cmd, nullptr, 0, &present_barrier, 1);
 
+            record_time = record_clock.tick();
+
+            HgClock present_clock{};
             window->end_and_present(cmd);
+            present_time = present_clock.tick();
         }
     }
 

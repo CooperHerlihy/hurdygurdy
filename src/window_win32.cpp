@@ -427,7 +427,7 @@ HgWindow* HgWindow::create(HgArena& arena, const HgWindowConfig& config) {
             nullptr,
             nullptr,
             win32_instance,
-            window->internals
+            window
         );
     }
     if (window->internals->hwnd == nullptr)

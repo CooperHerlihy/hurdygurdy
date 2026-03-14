@@ -19,10 +19,10 @@ int main() {
 
     HgWindowConfig window_config{};
     window_config.title = "Hg Test";
-    window_config.windowed = true;
+    // window_config.windowed = true;
     window_config.width = 1600;
     window_config.height = 900;
-    window_config.preferred_present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
+    window_config.preferred_present_mode = VK_PRESENT_MODE_FIFO_KHR;
 
     HgWindow* window = HgWindow::create(arena, window_config);
     hg_defer(window->destroy());
@@ -83,10 +83,11 @@ int main() {
     ecs.get<HgTransform>(scene[point_light]).position = {-1, -2, -1};
     ecs.add<HgPointLight3D>(scene[point_light]) = {{1, 1, 1, 2}};
 
-    u32 cube = scene_size++;
-    scene[cube] = ecs.spawn();
-    ecs.add<HgTransform>(scene[cube]) = {};
-    ecs.add<HgModel3D>(scene[cube]) = {};
+    u32 cube_id = scene_size++;
+    HgEntity cube = ecs.spawn();
+    scene[cube_id] = cube;
+    ecs.add<HgTransform>(scene[cube_id]) = {};
+    ecs.add<HgModel3D>(scene[cube_id]) = {};
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -161,8 +162,10 @@ int main() {
     for (;;) {
         f64 delta = game_clock.tick();
 
-        HgQuat& cube_rot = ecs.get<HgTransform>(scene[cube]).rotation;
-        cube_rot = hg_axis_angle({0, -1, 0}, (f32)delta) * cube_rot;
+        if (ecs.alive(cube)) {
+            HgQuat& cube_rot = ecs.get<HgTransform>(cube).rotation;
+            cube_rot = hg_axis_angle({0, -1, 0}, (f32)delta) * cube_rot;
+        }
 
         HgArena& frame = hg_get_scratch(arena);
         HgArenaScope frame_scope{frame};

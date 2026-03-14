@@ -26,7 +26,6 @@ set IMGUI_SRC=vendor/imgui/*.cpp
 
 set IMGUI_BACKENDS= ^
     imgui_impl_win32.cpp ^
-    imgui_impl_glfw.cpp ^
     imgui_impl_vulkan.cpp
 
 set SRC= ^
@@ -35,7 +34,7 @@ set SRC= ^
     resources.cpp ^
     pipeline2d.cpp ^
     pipeline3d.cpp ^
-    window_glfw.cpp ^
+    window_win32.cpp ^
     vulkan.cpp ^
     test.cpp
 
@@ -119,13 +118,13 @@ cl "%SRC_DIR%\src\minimal.cpp" ^
     /Fo:"%BUILD_DIR%\minimal.obj" ^
     /Fe:"%BUILD_DIR%\minimal.exe" ^
     %STD% %WARNINGS% %CONFIG% %INCLUDES% ^
-    "%BUILD_DIR%\hurdygurdy.lib" User32.lib glfw3dll.lib
+    "%BUILD_DIR%\hurdygurdy.lib" User32.lib
 
 cl "%SRC_DIR%\src\editor.cpp" ^
     /Fd:"%BUILD_DIR%\editor.pdb" ^
     /Fo:"%BUILD_DIR%\editor.obj" ^
     /Fe:"%BUILD_DIR%\editor.exe" ^
     %STD% %WARNINGS% %CONFIG% %INCLUDES% ^
-    "%BUILD_DIR%\hurdygurdy.lib" User32.lib glfw3dll.lib
+    "%BUILD_DIR%\hurdygurdy.lib" User32.lib
 
 endlocal
