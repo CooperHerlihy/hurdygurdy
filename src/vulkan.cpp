@@ -2134,11 +2134,8 @@ void hg_internal_resize_window_swapchain(HgWindow* window) {
     VkSwapchainCreateInfoKHR swapchain_info{};
     swapchain_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     swapchain_info.surface = window->surface;
-    swapchain_info.minImageCount // which???
+    swapchain_info.minImageCount
         = std::min(surface_capabilities.minImageCount, surface_capabilities.maxImageCount - 1) + 1;
-        // = window->present_mode == VK_PRESENT_MODE_FIFO_KHR
-        // ? std::max(surface_capabilities.minImageCount, (u32)2)
-        // : std::min(surface_capabilities.minImageCount, surface_capabilities.maxImageCount - 1) + 1;
     swapchain_info.imageFormat = window->format;
     swapchain_info.imageExtent = {window->width, window->height};
     swapchain_info.imageArrayLayers = 1;

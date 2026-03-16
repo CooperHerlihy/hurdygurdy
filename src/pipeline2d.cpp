@@ -120,10 +120,10 @@ void hg_pipeline_2d_deinit() {
 }
 
 void hg_pipeline_2d_add_texture(HgResource texture_id) {
-    hg_assert(hg_is_gpu_resource_loaded(texture_id));
     if (texture_sets.has(texture_id))
         return;
 
+    hg_assert(hg_get_gpu_texture(texture_id) != nullptr);
     HgGpuTexture& texture = *hg_get_gpu_texture(texture_id);
 
     VkDescriptorSet set = hg_vk_allocate_descriptor_set(descriptor_pool, texture_set_layout);
@@ -182,7 +182,7 @@ void hg_draw_2d(HgECS& ecs, VkCommandBuffer cmd) {
             pipeline_layout,
             1,
             1,
-            texture_sets.get(sprite.texture),
+            &texture_sets[sprite.texture],
             0,
             nullptr);
 

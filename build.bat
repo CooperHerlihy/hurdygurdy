@@ -30,7 +30,7 @@ set IMGUI_BACKENDS= ^
 
 set SRC= ^
     utils.cpp ^
-    thread.cpp ^
+    concurrency.cpp ^
     resources.cpp ^
     pipeline2d.cpp ^
     pipeline3d.cpp ^

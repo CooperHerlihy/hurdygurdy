@@ -359,19 +359,37 @@ void hg_draw_3d(HgECS& ecs, VkCommandBuffer cmd) {
     global_data.point_light_count = ecs.count<HgPointLight3D>();
 
     if (global_data.dir_light_count > dir_light_capacity) {
+        vkQueueWaitIdle(hg_vk_queue);
+
         u32 new_capacity = dir_light_capacity == 0 ? 1 : dir_light_capacity * 2;
+        while (new_capacity < dir_light_capacity) {
+            new_capacity *= 2;
+        }
+
         vmaDestroyBuffer(hg_vk_vma, dir_light_buffer, dir_light_buffer_alloc);
         hg_vk_create_buffer(&dir_light_buffer, &dir_light_buffer_alloc, sizeof(DirLightData) * new_capacity,
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
         dir_light_capacity = new_capacity;
+
+        VkDescriptorBufferInfo dir_light_buffer_info = {dir_light_buffer, 0, VK_WHOLE_SIZE};
+        hg_vk_update_descriptor_set(global_set, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, &dir_light_buffer_info, 1);
     }
 
     if (global_data.point_light_count > point_light_capacity) {
+        vkQueueWaitIdle(hg_vk_queue);
+
         u32 new_capacity = point_light_capacity == 0 ? 1 : point_light_capacity * 2;
+        while (new_capacity < dir_light_capacity) {
+            new_capacity *= 2;
+        }
+
         vmaDestroyBuffer(hg_vk_vma, point_light_buffer, point_light_buffer_alloc);
         hg_vk_create_buffer(&point_light_buffer, &point_light_buffer_alloc, sizeof(PointLightData) * new_capacity,
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
         point_light_capacity = new_capacity;
+
+        VkDescriptorBufferInfo point_light_buffer_info = {point_light_buffer, 0, VK_WHOLE_SIZE};
+        hg_vk_update_descriptor_set(global_set, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, &point_light_buffer_info, 1);
     }
 
     DirLightData* dir_lights = scratch.alloc<DirLightData>(global_data.dir_light_count);
@@ -428,19 +446,20 @@ void hg_draw_3d(HgECS& ecs, VkCommandBuffer cmd) {
             pipeline_layout,
             1,
             1,
-            model_map_sets.get(model.model),
+            &model_map_sets[model.model],
             0,
             nullptr);
 
         Push push{};
         push.model = hg_model_matrix_3d(transform.position, transform.scale, transform.rotation);
 
-        HgGpuBuffer* vertex_buffer = hg_get_gpu_buffer(model.model);
-        if (vertex_buffer != nullptr) {
-            // VkBuffer buffers[] = {vertex_buffer->buffer};
-            // VkDeviceSize offsets[] = {0};
-            // vkCmdBindVertexBuffers(cmd, 0, 1, buffers, offsets);
-            hg_error("3d model vertex buffer : TODO\n");
+        HgGpuModel* gpu_model = hg_get_gpu_model(model.model);
+        if (gpu_model != nullptr) {
+            vkCmdBindIndexBuffer(cmd, gpu_model->index_buffer, 0, VK_INDEX_TYPE_UINT32);
+
+            VkBuffer buffers[] = {gpu_model->vertex_buffer};
+            VkDeviceSize offsets[] = {0};
+            vkCmdBindVertexBuffers(cmd, 0, 1, buffers, offsets);
         } else {
             vkCmdBindIndexBuffer(cmd, default_model_index_buffer, 0, VK_INDEX_TYPE_UINT32);
 

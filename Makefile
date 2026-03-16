@@ -22,7 +22,7 @@ IMGUI_BACKEND := \
 
 SRC := \
 	utils.cpp \
-	thread.cpp \
+	concurrency.cpp \
 	resources.cpp \
 	pipeline2d.cpp \
 	pipeline3d.cpp \
@@ -38,7 +38,7 @@ SHADERS := \
 
 .PHONY: all debug release clean
 
-all: $(BUILD_DIR)/test $(TEST_DIR)
+all: $(BUILD_DIR)/minimal $(BUILD_DIR)/editor $(TEST_DIR)
 
 debug:
 	$(MAKE) CONFIG="$(DEBUG_CONFIG)"

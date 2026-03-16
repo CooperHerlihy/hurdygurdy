@@ -285,9 +285,8 @@ typedef double_t f64;
  * - Thread pool
  * - IO thread
  * - Resource managers
- * - Entity component system
- * - Hardware graphics
  * - OS windowing
+ * - Hardware graphics
  */
 void hg_init();
 
@@ -2076,7 +2075,7 @@ HgString hg_float_to_str_base10(HgArena& arena, f64 num, u64 decimal_count);
  * Returns
  * - The created string
  */
-HgString hg_format_string(HgArena& arena, HgStringView fmt, ...);
+// HgString hg_format_string(HgArena& arena, HgStringView fmt, ...);
 
 /**
  * A parsed Json file
@@ -2331,6 +2330,197 @@ constexpr usize hg_hash(const char* str) {
 }
 
 /**
+ * A hash set
+ */
+template<typename Value, usize (*hash_fn)(Value) = hg_hash>
+struct HgHashSet {
+    static_assert(std::is_trivially_copyable_v<Value> && std::is_trivially_destructible_v<Value>);
+
+    /**
+     * Whether each index has a value
+     */
+    bool* has_val;
+    /**
+     * Where the values are stored;
+     */
+    Value* vals;
+    /**
+     * The max number of vals
+     */
+    usize capacity;
+    /**
+     * The current number of values that are stored
+     */
+    usize load;
+
+    /**
+     * Creates a new hash set
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - slot_count The max number of slots to store values in
+     *
+     * Returns
+     * - The created empty hash set
+     */
+    static HgHashSet create(HgArena& arena, usize slot_count) {
+        hg_assert(slot_count > 0);
+
+        HgHashSet set;
+        set.has_val = arena.alloc<bool>(slot_count);
+        set.vals = arena.alloc<Value>(slot_count);
+        set.capacity = slot_count;
+        set.reset();
+        return set;
+    }
+
+    /**
+     * Empties all slots
+     */
+    void reset() {
+        for (usize i = 0; i < capacity; ++i) {
+            has_val[i] = false;
+        }
+        load = 0;
+    }
+
+    /**
+     * Returns whether the hash set is full
+     */
+    bool is_full() {
+        return load == capacity - 1;
+    }
+
+    /**
+     * Returns whether the hash set is full
+     */
+    bool is_near_full() {
+        return (f32)load >= (f32)capacity * 0.8f;
+    }
+
+    /**
+     * Resizes the slots and rehashes all entries
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - new_size The new number of slots
+     */
+    void resize(HgArena& arena, usize new_size) {
+        HgHashSet old = *this;
+        *this = create(arena, new_size);
+
+        for (usize i = 0; i < old.capacity; ++i) {
+            if (old.has_val[i])
+                insert(old.vals[i]);
+        }
+    }
+
+    /**
+     * Inserts a value into the hash set
+     *
+     * Parameters
+     * - val The value to insert
+     */
+    void insert(Value val) {
+        hg_assert(load < capacity - 1);
+
+        usize idx = hash_fn(val) % capacity;
+        usize dist = 0;
+        while (has_val[idx] && vals[idx] != val) {
+            usize other_dist = hash_fn(vals[idx]) % capacity;
+            if (other_dist < idx)
+                other_dist += capacity;
+            other_dist -= idx;
+
+            if (other_dist < dist) {
+                Value val_tmp = vals[idx];
+                vals[idx] = val;
+                val = val_tmp;
+
+                dist = other_dist;
+            }
+
+            idx = (idx + 1) % capacity;
+            ++dist;
+        }
+
+        has_val[idx] = true;
+        vals[idx] = val;
+        ++load;
+    }
+
+    /**
+     * Removes a value from the hash set
+     *
+     * Parameters
+     * - val The value to remove
+     */
+    void remove(const Value& val) {
+        usize idx = get_idx(val);
+        if (idx == (usize)-1)
+            return;
+
+        usize next = (idx + 1) % capacity;
+        while (has_val[next]) {
+            // if (hash_fn(vals[next]) % capacity != idx) { : TODO
+            if (hash_fn(vals[next]) != idx) {
+                vals[idx] = vals[next];
+                idx = next;
+            }
+            next = (next + 1)  % capacity;
+        }
+        has_val[idx] = false;
+        --load;
+    }
+
+    /**
+     * Gets the index of a val
+     *
+     * Parameters
+     * - val The value to lookup
+     *
+     * Returns
+     * - The index the val is stored at
+     * - -1 if the val is not in the hash set
+     */
+    usize get_idx(const Value& val) {
+        for (usize idx = hash_fn(val) % capacity; has_val[idx]; idx = (idx + 1) % capacity) {
+            if (vals[idx] == val)
+                return idx;
+        }
+        return (usize)-1;
+    }
+
+    /**
+     * Checks whether a value exists
+     *
+     * Parameters
+     * - val The value to check at
+     *
+     * Returns
+     * - Whether a value exists at the val
+     */
+    bool has(const Value& val) {
+        return get_idx(val) != (usize)-1;
+    }
+
+    /**
+     * Execute a function for every value
+     *
+     * Parameters
+     * - fn The function to execute
+     */
+    template<typename Fn>
+    void for_each(Fn fn) {
+        static_assert(std::is_invocable_r_v<void, Fn, const Value&>);
+        for (usize i = 0; i < capacity; ++i) {
+            if (has_val[i])
+                fn(vals[i]);
+        }
+    }
+};
+
+/**
  * A key-value hash map
  */
 template<typename Key, typename Value, usize (*hash_fn)(Key) = hg_hash>
@@ -2447,12 +2637,12 @@ struct HgHashMap {
      *
      * Parameters
      * - key The key to store at
-     * - value The value to store
+     * - val The value to store
      *
      * Returns
      * - A reference to the constructed object
      */
-    Value& insert(Key key, Value value) {
+    Value& insert(Key key, Value val) {
         hg_assert(load < capacity - 1);
 
         usize idx = hash_fn(key) % capacity;
@@ -2465,11 +2655,11 @@ struct HgHashMap {
 
             if (other_dist < dist) {
                 Key key_tmp = keys[idx];
-                Value value_tmp = vals[idx];
+                Value val_tmp = vals[idx];
                 keys[idx] = key;
-                vals[idx] = value;
+                vals[idx] = val;
                 key = key_tmp;
-                value = value_tmp;
+                val = val_tmp;
 
                 dist = other_dist;
             }
@@ -2478,10 +2668,11 @@ struct HgHashMap {
             ++dist;
         }
 
-        ++load;
         has_val[idx] = true;
         keys[idx] = key;
-        vals[idx] = value;
+        vals[idx] = val;
+        ++load;
+
         return vals[idx];
     }
 
@@ -2495,7 +2686,7 @@ struct HgHashMap {
      * Returns
      * - Whether a value was found and stored in value
      */
-    bool remove(const Key& key, Value* value) {
+    bool remove(const Key& key, Value* value = nullptr) {
         usize idx = get_idx(key);
         if (idx == (usize)-1)
             return false;
@@ -2505,13 +2696,15 @@ struct HgHashMap {
 
         usize next = (idx + 1) % capacity;
         while (has_val[next]) {
-            if (hash_fn(keys[next]) != idx) {
+            // if (hash_fn(keys[next]) % capacity != idx) {
+            if (hash_fn(keys[next]) != idx) { // : TODO
                 keys[idx] = keys[next];
                 vals[idx] = vals[next];
                 idx = next;
             }
             next = (next + 1)  % capacity;
         }
+
         has_val[idx] = false;
         --load;
 
@@ -2519,13 +2712,21 @@ struct HgHashMap {
     }
 
     /**
-     * Removes a value from the hash map
+     * Gets the index of a key
      *
      * Parameters
-     * - key The key to remove from
+     * - key The key to lookup
+     *
+     * Returns
+     * - The index the key is stored at
+     * - -1 if the key is not in the hash map
      */
-    void remove(const Key& key) {
-        remove(key, nullptr);
+    usize get_idx(const Key& key) {
+        for (usize idx = hash_fn(key) % capacity; has_val[idx]; idx = (idx + 1) % capacity) {
+            if (keys[idx] == key)
+                return idx;
+        }
+        return (usize)-1;
     }
 
     /**
@@ -2542,245 +2743,45 @@ struct HgHashMap {
     }
 
     /**
-     * Gets the index of a key
+     * Get a reference to the value stored at a key
      *
      * Parameters
-     * - key The key to lookup
+     * - The key to lookup
      *
      * Returns
-     * - The index the key is stored at
-     * - -1 if the key is not in the hash map
+     * - A reference to the value
      */
-    usize get_idx(const Key& key) {
-        usize idx = hash_fn(key) % capacity;
-        while (has_val[idx] && keys[idx] != key) {
-            idx = (idx + 1) % capacity;
-        }
-        return has_val[idx] ? idx : (usize)-1;
+    Value& operator[](const Key& key) {
+        hg_assert(has(key));
+        return vals[get_idx(key)];
     }
 
     /**
-     * Gets a pointer to the value at key, or nullptr if it does not exist
+     * Get a reference to the value stored at a key, in a const context
      *
      * Parameters
-     * - key The key to get from
+     * - The key to lookup
      *
      * Returns
-     * - A pointer to the value
-     * - nullptr if it does not exist
+     * - A reference to the value
      */
-    Value* get(const Key& key) {
-        usize idx = get_idx(key);
-        return idx == (usize)-1 ? nullptr : vals + idx;
+    const Value& operator[](const Key& key) const {
+        hg_assert(has(key));
+        return vals[get_idx(key)];
     }
 
     /**
      * Execute a function for every key-value pair
+     *
+     * Parameters
+     * - fn The function to execute
      */
     template<typename Fn>
     void for_each(Fn fn) {
-        static_assert(std::is_invocable_r_v<void, Fn, Key&, Value&>);
+        static_assert(std::is_invocable_r_v<void, Fn, const Key&, Value&>);
         for (usize i = 0; i < capacity; ++i) {
             if (has_val[i])
                 fn(keys[i], vals[i]);
-        }
-    }
-};
-
-/**
- * A hash set
- */
-template<typename Value, usize (*hash_fn)(Value) = hg_hash>
-struct HgHashSet {
-    static_assert(std::is_trivially_copyable_v<Value> && std::is_trivially_destructible_v<Value>);
-
-    /**
-     * Whether each index has a value
-     */
-    bool* has_val;
-    /**
-     * Where the values are stored;
-     */
-    Value* vals;
-    /**
-     * The max number of vals
-     */
-    usize capacity;
-    /**
-     * The current number of values that are stored
-     */
-    usize load;
-
-    /**
-     * Creates a new hash set
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - slot_count The max number of slots to store values in
-     *
-     * Returns
-     * - The created empty hash set
-     */
-    static HgHashSet create(HgArena& arena, usize slot_count) {
-        hg_assert(slot_count > 0);
-
-        HgHashSet set;
-        set.has_val = arena.alloc<bool>(slot_count);
-        set.vals = arena.alloc<Value>(slot_count);
-        set.capacity = slot_count;
-        set.reset();
-        return set;
-    }
-
-    /**
-     * Empties all slots
-     */
-    void reset() {
-        for (usize i = 0; i < capacity; ++i) {
-            has_val[i] = false;
-        }
-        load = 0;
-    }
-
-    /**
-     * Returns whether the hash set is full
-     */
-    bool is_full() {
-        return load == capacity;
-    }
-
-    /**
-     * Returns whether the hash set is full
-     */
-    bool is_near_full() {
-        return (f32)load >= (f32)capacity * 0.8f;
-    }
-
-    /**
-     * Resizes the slots and rehashes all entries
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - new_size The new number of slots
-     */
-    void resize(HgArena& arena, usize new_size) {
-        HgHashSet old = *this;
-        *this = create(arena, new_size);
-
-        for (usize i = 0; i < old.capacity; ++i) {
-            if (old.has_val[i])
-                insert(old.vals[i]);
-        }
-    }
-
-    /**
-     * Grows the number of slots by a factor
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - factor The factor to increase by
-     */
-    void grow(HgArena& arena, f32 factor = 2) {
-        resize(arena, (usize)((f32)capacity * factor));
-    }
-
-    /**
-     * Inserts a value into the hash set
-     *
-     * Parameters
-     * - val The value to store
-     */
-    void insert(Value val) {
-        hg_assert(load < capacity - 1);
-
-        usize idx = hash_fn(val) % capacity;
-        usize dist = 0;
-        while (has_val[idx] && vals[idx] != val) {
-            usize other_dist = hash_fn(vals[idx]) % capacity;
-            if (other_dist < idx)
-                other_dist += capacity;
-            other_dist -= idx;
-
-            if (other_dist < dist) {
-                Value val_tmp = vals[idx];
-                vals[idx] = val;
-                val = val_tmp;
-
-                dist = other_dist;
-            }
-
-            idx = (idx + 1) % capacity;
-            ++dist;
-        }
-
-        ++load;
-        has_val[idx] = true;
-        vals[idx] = val;
-    }
-
-    /**
-     * Removes a value from the hash set, and stores it
-     *
-     * Parameters
-     * - val The value to remove from
-     */
-    void remove(const Value& val) {
-        usize idx = get_idx(val);
-        if (idx == (usize)-1)
-            return;
-
-        usize next = (idx + 1) % capacity;
-        while (has_val[next]) {
-            if (hash_fn(vals[next]) != idx) {
-                vals[idx] = vals[next];
-                idx = next;
-            }
-            next = (next + 1)  % capacity;
-        }
-        has_val[idx] = false;
-        --load;
-    }
-
-    /**
-     * Checks whether a value exists
-     *
-     * Parameters
-     * - val The value to check at
-     *
-     * Returns
-     * - Whether a value exists at the val
-     */
-    bool has(const Value& val) {
-        return get_idx(val) != (usize)-1;
-    }
-
-    /**
-     * Gets the index of a val
-     *
-     * Parameters
-     * - val The value to lookup
-     *
-     * Returns
-     * - The index the val is stored at
-     * - -1 if the val is not in the hash set
-     */
-    usize get_idx(const Value& val) {
-        usize idx = hash_fn(val) % capacity;
-        while (has_val[idx] && vals[idx] != val) {
-            idx = (idx + 1) % capacity;
-        }
-        return has_val[idx] ? idx : (usize)-1;
-    }
-
-    /**
-     * Execute a function for every value
-     */
-    template<typename Fn>
-    void for_each(Fn fn) {
-        static_assert(std::is_invocable_r_v<void, Fn, Value&>);
-        for (usize i = 0; i < capacity; ++i) {
-            if (has_val[i])
-                fn(vals[i]);
         }
     }
 };
@@ -2905,14 +2906,20 @@ void hg_for_par(usize n, usize chunk_size, Fn fn) {
 
     HgFence fence;
     for (usize i = 0; i < n; i += chunk_size) {
-        auto iter = [begin = i, end = std::min(i + chunk_size, n), &fn] {
-            fn(begin, end);
+        struct Iter {
+            usize begin;
+            usize end;
+            Fn* fn;
         };
-        void* data = scratch.alloc<decltype(iter)>(1);
-        memcpy(data, &iter, sizeof(iter));
 
-        hg_call_par(&fence, 1, data, [](void* piter) {
-            (*(decltype(iter)*)piter)();
+        Iter* data = scratch.alloc<Iter>(1);
+        data->begin = i;
+        data->end = std::min(i + chunk_size, n);
+        data->fn = &fn;
+
+        hg_call_par(&fence, 1, data, [](void* pdata) {
+            Iter& iter = *(Iter*)pdata;
+            (*iter.fn)(iter.begin, iter.end);
         });
     }
     hg_thread_pool_help(fence, INFINITY);
@@ -2955,6 +2962,147 @@ constexpr HgResource hg_resource_id(HgStringView name) {
 }
 
 /**
+ * A resource manager
+ */
+struct HgResourceManager {
+    /**
+     * The reference count for each resource
+     */
+    u32* ref_counts;
+    /**
+     * Where the resource ids are stored;
+     */
+    HgResource* ids;
+    /**
+     * Where the resources are stored;
+     */
+    void* resources;
+    /**
+     * The size of each resource in bytes
+     */
+    usize resource_width;
+    /**
+     * The current number of resources that are stored
+     */
+    usize count;
+    /**
+     * The max number of resources
+     */
+    usize capacity;
+
+    /**
+     * Creates a new hash set
+     *
+     * Parameters
+     * - resource_width The size in bytes of each resource
+     * - capacity The initial number of slots
+     *
+     * Returns
+     * - The created empty hash set
+     */
+    static HgResourceManager create(usize resource_width, usize capacity = 128);
+
+    /**
+     * Free the hash set's memory
+     */
+    void destroy();
+
+    /**
+     * Empties all slots
+     */
+    void reset();
+
+    /**
+     * Resizes the slots and rehashes all entries
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - new_size The new number of slots
+     */
+    void resize(usize new_size);
+
+    /**
+     * Add a resource to the resource manager
+     *
+     * Parameters
+     * - The resource to add
+     *
+     * Returns
+     * - The new index of the resource
+     */
+    usize add(HgResource id);
+
+    /**
+     * Remove a resource from the resource manager
+     *
+     * Parameters
+     * - id The resource to deallocate
+     */
+    void remove(HgResource id);
+
+    /**
+     * Increment the resource's reference count
+     *
+     * Note, automatically adds the resource if needed
+     *
+     * Paramters
+     * - id The resource to load
+     *
+     * Returns
+     * - Whether the reference count was 0, and needs to be loaded
+     */
+    bool load(HgResource id);
+
+    /**
+     * Decrement the resource's reference count
+     *
+     * Parameters
+     * - The resource to unload
+     *
+     * Returns
+     * - Whether the reference count dropped to 0, and needs to be unloaded
+     */
+    bool unload(HgResource id);
+
+    /**
+     * Gets the index of a value
+     *
+     * Parameters
+     * - val The value to lookup
+     *
+     * Returns
+     * - The index the val is stored at
+     * - -1 if the val is not in the hash set
+     */
+    usize get_idx(HgResource id);
+
+    /**
+     * Get a pointer to a resource
+     *
+     * Parameters
+     *
+     * Returns
+     * - A pointer to the resource, or nullptr if it is not loaded
+     */
+    void* get(HgResource id);
+
+    /**
+     * Execute a function for every key-value pair
+     *
+     * Parameters
+     * - fn The function to execute
+     */
+    template<typename Fn>
+    void for_each(Fn fn) {
+        static_assert(std::is_invocable_r_v<void, Fn, HgResource, void*>);
+        for (usize i = 0; i < capacity; ++i) {
+            if (ref_counts[i] != (u32)-1 && ref_counts[i] > 0)
+                fn(ids[i], (u8*)resources + i * resource_width);
+        }
+    }
+};
+
+/**
  * A loaded binary file
  */
 struct HgBinary {
@@ -2968,14 +3116,70 @@ struct HgBinary {
     usize size;
 
     /**
-     * Construct uninitialized
+     * Resize the file
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - new_size The new size of the file in bytes
      */
-    HgBinary() = default;
+    void resize(HgArena& arena, usize new_size) {
+        data = arena.realloc(data, size, new_size, 1);
+        size = new_size;
+    }
 
     /**
-     * Construct from a data pointer
+     * Read data at index into a buffer
+     *
+     * Parameters
+     * - idx The index into the file in bytes to read from
+     * - dst A pointer to store the read data
+     * - size The size in bytes to read
      */
-    constexpr HgBinary(void* file_val, usize size_val) : data{file_val}, size{size_val} {}
+    void read(usize idx, void* dst, usize len) const {
+        hg_assert(idx + len <= size);
+        memcpy(dst, (u8*)data + idx, len);
+    }
+
+    /**
+     * Read data of arbitrary type from the file
+     *
+     * Parameters
+     * - idx The index into the file in bytes to read from
+     *
+     * Returns
+     * - The data read
+     */
+    template<typename T>
+    T read(usize idx) const {
+        T ret;
+        read(idx, &ret, sizeof(T));
+        return ret;
+    }
+
+    /**
+     * Overwrite data at the index
+     *
+     * Parameters
+     * - idx The index into the file to overwrite
+     * - src The data to write
+     * - size The size of the data in bytes
+     */
+    void overwrite(usize idx, const void* src, usize len) {
+        hg_assert(idx + len <= size);
+        memcpy((u8*)data + idx, src, len);
+    }
+
+    /**
+     * Overwrite data of arbitrary type at the index
+     *
+     * Parameters
+     * - idx The index into the file to overwrite
+     * - src The data to write
+     */
+    template<typename T>
+    void overwrite(usize idx, const T& src) {
+        overwrite(idx, &src, sizeof(T));
+    }
 
     /**
      * Load a binary file from disc
@@ -2997,87 +3201,74 @@ struct HgBinary {
      * - path The file path to store at
      */
     void store(HgStringView path);
-
-    /**
-     * Resize the file
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - new_size The new size of the file in bytes
-     */
-    void resize(HgArena& arena, usize new_size) {
-        data = arena.realloc(data, size, new_size, 1);
-        size = new_size;
-    }
-
-    /**
-     * Increase the size of the file by count
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - count The size in bytes to increase by
-     */
-    void grow(HgArena& arena, usize count) {
-        resize(arena, size + count);
-    }
-
-    /**
-     * Read data at index into a buffer
-     *
-     * Parameters
-     * - index The index into the file in bytes to read from
-     * - dst A pointer to store the read data
-     * - size The size in bytes to read
-     */
-    void read(usize idx, void* dst, usize len) const {
-        hg_assert(idx + len <= size);
-        memcpy(dst, (u8*)data + idx, len);
-    }
-
-    /**
-     * Read data of arbitrary type from the file
-     *
-     * Parameters
-     * - index The index into the file in bytes to read from
-     *
-     * Returns
-     * - The data read
-     */
-    template<typename T>
-    T read(usize index) const {
-        T ret;
-        read(index, &ret, sizeof(T));
-        return ret;
-    }
-
-    /**
-     * Overwrite data at the index
-     *
-     * Parameters
-     * - src The data to write
-     * - size The size of the data in bytes
-     */
-    void overwrite(usize idx, const void* src, usize len) {
-        hg_assert(idx + len <= size);
-        memcpy((u8*)data + idx, src, len);
-    }
-
-    /**
-     * Overwrite data of arbitrary type at the index
-     *
-     * Parameters
-     * - src The data to write
-     */
-    template<typename T>
-    void overwrite(usize idx, const T& src) {
-        overwrite(idx, &src, sizeof(T));
-    }
 };
+
+/**
+ * Initialize the resource manager
+ */
+void hg_resources_init();
+
+/**
+ * Deinitialize the resource manager
+ */
+void hg_resources_deinit();
+
+/**
+ * Loads an empty resource (or just increments the reference count)
+ *
+ * Parameters
+ * - id The id of the resource
+ */
+void hg_load_empty_resource(HgResource id);
+
+/**
+ * Loads a resource (or just increments the reference count)
+ *
+ * Parameters
+ * - fence The fences to signal on completion
+ * - fence_count The number of fences
+ * - id The resource to load into
+ * - path The filepath to load from
+ */
+void hg_load_resource(HgFence* fences, usize fence_count, HgResource id, HgStringView path);
+
+/**
+ * Unloads a resource (or just decrements the reference count)
+ *
+ * Parameters
+ * - fence The fences to signal on completion
+ * - fence_count The number of fences
+ * - id The resource to load into
+ */
+void hg_unload_resource(HgFence* fences, usize fence_count, HgResource id);
+
+/**
+ * Stores a resource to disc
+ *
+ * Parameters
+ * - fence The fences to signal on completion
+ * - fence_count The number of fences
+ * - id The resource to load into
+ * - path The filepath to store to
+ */
+void hg_store_resource(HgFence* fences, usize fence_count, HgResource id, HgStringView path);
+
+/**
+ * Get a resource from the global store
+ *
+ * Parameters
+ * - id The resource to get
+ *
+ * Returns
+ * - A pointer to the resource binary, may be empty if not loaded
+ * - nullptr, if the resource is not allocated
+ */
+HgBinary* hg_get_resource(HgResource id);
 
 /**
  * A texture resource
  */
-struct HgTexture {
+struct HgTextureData {
     /**
      * The identifier prepended to the info
      */
@@ -3107,22 +3298,26 @@ struct HgTexture {
          * The depth in pixels
          */
         u32 depth;
+        /**
+         * The index of the pixels
+         */
+        usize pixels_begin;
     };
 
     /**
      * The texture data
      */
-    HgBinary file;
+    HgBinary bin;
 
     /**
      * Construct uninitialized
      */
-    HgTexture() = default;
+    HgTextureData() = default;
 
     /**
      * Implicit conversion from binary file
      */
-    HgTexture(HgBinary file_val) : file(file_val) {}
+    HgTextureData(HgBinary file_val) : bin(file_val) {}
 
     /**
      * Get the texture info from the file
@@ -3143,6 +3338,28 @@ struct HgTexture {
      */
     void* get_pixels();
 };
+
+/**
+ * Load an external texture file into a resource in the Hurdy Gurdy format
+ *
+ * Parameters
+ * - fences The fences to wait on
+ * - fence_count The number of fences
+ * - id The resource to load to
+ * - path The path of the file to import
+ */
+void hg_import_png(HgFence* fences, usize fence_count, HgResource id, HgStringView path);
+
+/**
+ * Store a texture resource onto disc in an external file format
+ *
+ * Parameters
+ * - fences The fences to wait on
+ * - fence_count The number of fences
+ * - id The resource to export
+ * - path The path of the file to export to
+ */
+void hg_export_png(HgFence* fences, usize fence_count, HgResource id, HgStringView path);
 
 /**
  * A vertex in a model
@@ -3182,7 +3399,7 @@ struct HgModelData {
         /**
          * The identifier to ensure the file is a Hurdy Gurdy model
          */
-        char ientifier[sizeof(model_identifier)];
+        char identifier[sizeof(model_identifier)];
         /**
          * The number of vertices
          */
@@ -3192,13 +3409,23 @@ struct HgModelData {
          */
         u32 vertex_width;
         /**
+         * The number of indices
+         *
+         * Note, indices are assumed to be 32 bits
+         */
+        u32 index_count;
+        /**
          * How the vertices should be interpreted in sequence
          */
         VkPrimitiveTopology topology;
         /**
-         * In case a separate list of vertices also needs to be stored
+         * The file index of the first vertex
          */
-        u32 next_vertex_list;
+        usize vertices_begin;
+        /**
+         * The file index of the first geometry index
+         */
+        usize indices_begin;
     };
 
     /**
@@ -3222,118 +3449,27 @@ struct HgModelData {
      * Parameters
      * - vertex_count How many vertices are in the model
      * - vertex_width The size of each vertex in bytes
+     * - index_count How many indices are in the model
      * - topology How the vertices should be interpreted in sequence
      *
      * Returns
      * - Whether the info could be found
      */
-    bool get_info(u32* vertex_count, u32* vertex_width, VkPrimitiveTopology* topology);
+    bool get_info(u32* vertex_count, u32* vertex_width, u32* index_count, VkPrimitiveTopology* topology);
 
     /**
      * Returns a pointer to the vertices
      */
-    void* get_vertices();
+    void* get_vertex_data();
+
+    /**
+     * Returns a pointer to the vertices
+     */
+    void* get_index_data();
 };
 
 /**
- * Initialize the resource manager (or reinitialize to reset)
- *
- * Parameters
- * - arena The arena to allocate from
- * - max_resources The max number of resources which can be allocated
- */
-void hg_resources_init(HgArena& arena, usize max_resources);
-
-/**
- * Unload and dealloc all resources
- */
-void hg_resources_reset();
-
-/**
- * Allocate a new empty resource
- *
- * Parameters
- * - id The id of the resource
- */
-void hg_alloc_resource(HgResource id);
-
-/**
- * Deallocates a resource (unloading if needed)
- */
-void hg_dealloc_resource(HgResource id);
-
-/**
- * Loads a resource (or just increments the reference count)
- *
- * Note, automatically allocates a new resource if it does not exist
- *
- * Parameters
- * - fence The fences to signal on completion
- * - fence_count The number of fences
- * - id The resource to load into
- * - path The filepath to load from
- */
-void hg_load_resource(HgFence* fences, usize fence_count, HgResource id, HgStringView path);
-
-/**
- * Unloads a resource (or just decrements the reference count)
- *
- * Note, does not automatically deallocate the resource after unloading
- *
- * Parameters
- * - fence The fences to signal on completion
- * - fence_count The number of fences
- * - id The resource to load into
- */
-void hg_unload_resource(HgFence* fences, usize fence_count, HgResource id);
-
-/**
- * Stores a resource to disc
- *
- * Parameters
- * - fence The fences to signal on completion
- * - fence_count The number of fences
- * - id The resource to load into
- * - path The filepath to store to
- */
-void hg_store_resource(HgFence* fences, usize fence_count, HgResource id, HgStringView path);
-
-/**
- * Get a resource from the global store
- *
- * Parameters
- * - id The resource to get
- *
- * Returns
- * - A pointer to the resource binary, may be empty if not loaded
- * - nullptr, if the resource is not allocated
- */
-HgBinary* hg_get_resource(HgResource id);
-
-/**
- * Load an external texture file into a resource in the Hurdy Gurdy format
- *
- * Parameters
- * - fences The fences to wait on
- * - fence_count The number of fences
- * - id The resource to load to
- * - path The path of the file to import
- */
-void hg_import_png(HgFence* fences, usize fence_count, HgResource id, HgStringView path);
-
-/**
- * Store a texture resource onto disc in an external file format
- *
- * Parameters
- * - fences The fences to wait on
- * - fence_count The number of fences
- * - id The resource to export
- * - path The path of the file to export to
- */
-void hg_export_png(HgFence* fences, usize fence_count, HgResource id, HgStringView path);
-
-/**
- * Load an external model file into a resource in the Hurdy Gurdy format
+ * Load an external model file into a resource in the Hurdy Gurdy format : TODO
  *
  * Parameters
  * - fences The fences to wait on
@@ -3344,7 +3480,7 @@ void hg_export_png(HgFence* fences, usize fence_count, HgResource id, HgStringVi
 void hg_import_gltf(HgFence* fences, usize fence_count, HgResource id, HgStringView path);
 
 /**
- * Store a model resource onto disc in an external file format
+ * Store a model resource onto disc in an external file format : TODO
  *
  * Parameters
  * - fences The fences to wait on
@@ -3353,24 +3489,6 @@ void hg_import_gltf(HgFence* fences, usize fence_count, HgResource id, HgStringV
  * - path The path of the file to export to
  */
 void hg_export_gltf(HgFence* fences, usize fence_count, HgResource id, HgStringView path);
-
-/**
- * A buffer stored on the GPU
- */
-struct HgGpuBuffer {
-    /**
-     * The allocation
-     */
-    VmaAllocation allocation;
-    /**
-     * The buffer
-     */
-    VkBuffer buffer;
-    /**
-     * The size of the buffer in bytes
-     */
-    VkDeviceSize size;
-};
 
 /**
  * A texture stored on the GPU
@@ -3411,99 +3529,129 @@ struct HgGpuTexture {
 };
 
 /**
- * Initialize the gpu resource manager (or reinitialize to reset)
+ * Initialize gpu textures
+ */
+void hg_gpu_textures_init();
+
+/**
+ * Deinitialize gpu textures
+ */
+void hg_gpu_textures_deinit();
+
+/**
+ * Load a texture from the cpu to the gpu
+ *
+ * Note, if the texture is not already loaded to the gpu, it must be available
+ * on the cpu to load from
  *
  * Parameters
- * - arena The arena to allocate from
- * - max_resources The max number of resources which can be allocated
- */
-void hg_gpu_resources_init(HgArena& arena, usize max_resources);
-
-/**
- * Unload and dealloc all gpu resources
- */
-void hg_gpu_resources_reset();
-
-/**
- * Allocate a new empty gpu buffer
- *
- * Parameters
- * - id The id of the resource
- */
-void hg_alloc_gpu_buffer(HgResource id);
-
-/**
- * Allocate a new empty gpu texture
- *
- * Parameters
- * - id The id of the resource
- */
-void hg_alloc_gpu_texture(HgResource id);
-
-/**
- * Deallocates a gpu resource (unloading if needed)
- */
-void hg_dealloc_gpu_resource(HgResource id);
-
-/**
- * Loads a gpu buffer (or just increments the reference count)
- *
- * Note, allocates the gpu buffer if needed, but expects the cpu side loaded
- *
- * Parameters
- * - id The resource to load into
- */
-void hg_load_gpu_buffer(HgResource id);
-
-/**
- * Loads a gpu texture (or just increments the reference count)
- *
- * Note, allocates the gpu texture if needed, but expects the cpu side loaded
- *
- * Parameters
- * - id The resource to load into
- * - filter The filter the texture should use
+ * - id The resource to load
+ * - filter The filter for the sampler
  */
 void hg_load_gpu_texture(HgResource id, VkFilter filter);
 
 /**
- * Unloads a gpu resource (or just decrement the reference count)
- *
- * Note, does not automatically deallocate the resource after unloading
+ * Unload a texture from the gpu
  *
  * Parameters
- * - id The resource to load into
+ * - id The resource to unload
  */
-void hg_unload_gpu_resource(HgResource id);
+void hg_unload_gpu_texture(HgResource id);
 
 /**
- * Returns whether a gpu resource is currently loaded
- */
-bool hg_is_gpu_resource_loaded(HgResource id);
-
-/**
- * Get a gpu buffer from the global store
+ * Gets a gpu texture resource
  *
  * Parameters
  * - id The resource to get
  *
  * Returns
- * - A pointer to the resource binary, may be empty if not loaded
- * - nullptr, if the resource is not allocated
- */
-HgGpuBuffer* hg_get_gpu_buffer(HgResource id);
-
-/**
- * Get a gpu texture from the global store
- *
- * Parameters
- * - id The resource to get
- *
- * Returns
- * - A pointer to the resource binary, may be empty if not loaded
- * - nullptr, if the resource is not allocated
+ * - The gpu texture, or nullptr if it is not loaded
  */
 HgGpuTexture* hg_get_gpu_texture(HgResource id);
+
+/**
+ * A 3D model stored on the gpu
+ */
+struct HgGpuModel {
+    /**
+     * The allocation
+     */
+    VmaAllocation vertex_alloc;
+    /**
+     * The buffer
+     */
+    VkBuffer vertex_buffer;
+    /**
+     * The allocation
+     */
+    VmaAllocation index_alloc;
+    /**
+     * The buffer
+     */
+    VkBuffer index_buffer;
+    /**
+     * The number of vertices
+     */
+    u32 vertex_count;
+    /**
+     * The size of each vertex in bytes
+     */
+    u32 vertex_width;
+    /**
+     * The number of indices (4 bytes each)
+     */
+    u32 index_count;
+};
+
+/**
+ * Initialize gpu models
+ */
+void hg_gpu_models_init();
+
+/**
+ * Deinitialize gpu models
+ */
+void hg_gpu_models_deinit();
+
+/**
+ * Load a model from the cpu to the gpu
+ *
+ * Note, if the model is not already loaded to the gpu, it must be available
+ * on the cpu to load from
+ *
+ * Parameters
+ * - id The resource to load
+ */
+void hg_load_gpu_model(HgResource id);
+
+/**
+ * Unload a model from the gpu
+ *
+ * Parameters
+ * - id The resource to unload
+ */
+void hg_unload_gpu_model(HgResource id);
+
+/**
+ * Gets a gpu model resource
+ *
+ * Parameters
+ * - id The resource to get
+ *
+ * Returns
+ * - The gpu model, or nullptr if it is not loaded
+ */
+HgGpuModel* hg_get_gpu_model(HgResource id);
+
+/**
+ * Initialize gpu resource managers
+ */
+void hg_gpu_resources_init();
+
+/**
+ * Deinitialize gpu resource managers
+ */
+void hg_gpu_resources_deinit();
 
 /**
  * Creates a new id for each component
@@ -5006,7 +5154,7 @@ struct HgRenderPass {
     /**
      * The uniforms buffer dependencies
      */
-    HgBufferRenderID* uniform_buffers = nullptr;
+    const HgBufferRenderID* uniform_buffers = nullptr;
     /**
      * The number of uniform buffers
      */
@@ -5014,7 +5162,7 @@ struct HgRenderPass {
     /**
      * The storage buffer dependencies
      */
-    HgBufferRenderID* storage_buffers = nullptr;
+    const HgBufferRenderID* storage_buffers = nullptr;
     /**
      * The number of storage buffers
      */
@@ -5022,7 +5170,7 @@ struct HgRenderPass {
     /**
      * The sampled image dependencies
      */
-    HgImageRenderID* sampled_images = nullptr;
+    const HgImageRenderID* sampled_images = nullptr;
     /**
      * The number of sampled images
      */
@@ -5034,7 +5182,7 @@ struct HgRenderPass {
     /**
      * The color images to write to
      */
-    HgRenderAttachment* color_attachments = nullptr;
+    const HgRenderAttachment* color_attachments = nullptr;
     /**
      * The number of color attachments
      */
@@ -5144,6 +5292,9 @@ struct HgRenderer {
         HgRenderAccess last_access;
     };
 
+    /**
+     * A buffer resource
+     */
     struct Buffer {
         /**
          * The buffer

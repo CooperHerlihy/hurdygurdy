@@ -19,10 +19,10 @@ int main() {
 
     HgWindowConfig window_config{};
     window_config.title = "Hg Test";
-    // window_config.windowed = true;
+    window_config.windowed = true;
     window_config.width = 1600;
     window_config.height = 900;
-    window_config.preferred_present_mode = VK_PRESENT_MODE_FIFO_KHR;
+    window_config.preferred_present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
 
     HgWindow* window = HgWindow::create(arena, window_config);
     hg_defer(window->destroy());
@@ -37,7 +37,7 @@ int main() {
         hg_load_gpu_texture(texture_id, VK_FILTER_NEAREST);
         hg_unload_resource(nullptr, 0, texture_id);
     }
-    hg_defer(hg_unload_gpu_resource(texture_id));
+    hg_defer(hg_unload_gpu_texture(texture_id));
 
     hg_pipeline_2d_init(arena, 256, VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_D32_SFLOAT);
     hg_defer(hg_pipeline_2d_deinit());
@@ -83,11 +83,11 @@ int main() {
     ecs.get<HgTransform>(scene[point_light]).position = {-1, -2, -1};
     ecs.add<HgPointLight3D>(scene[point_light]) = {{1, 1, 1, 2}};
 
-    u32 cube_id = scene_size++;
     HgEntity cube = ecs.spawn();
-    scene[cube_id] = cube;
-    ecs.add<HgTransform>(scene[cube_id]) = {};
-    ecs.add<HgModel3D>(scene[cube_id]) = {};
+    ecs.add<HgTransform>(cube) = {};
+    ecs.add<HgModel3D>(cube) = {};
+    u32 cube_idx = scene_size++;
+    scene[cube_idx] = cube;
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();

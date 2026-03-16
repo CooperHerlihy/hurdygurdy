@@ -1121,40 +1121,39 @@ void hg_test() {
             map.insert(1, 1);
             hg_assert(map.load == 1);
             hg_assert(map.has(1));
-            hg_assert(*map.get(1) == 1);
+            hg_assert(map[1] == 1);
 
             map.remove(1);
             hg_assert(map.load == 0);
             hg_assert(!map.has(1));
-            hg_assert(map.get(1) == nullptr);
 
             hg_assert(!map.has(12));
             hg_assert(!map.has(12 + count));
 
             map.insert(12, 42);
             hg_assert(map.load == 1);
-            hg_assert(map.has(12) && *map.get(12) == 42);
+            hg_assert(map.has(12) && map[12] == 42);
             hg_assert(!map.has(12 + count));
 
             map.insert(12 + count, 100);
             hg_assert(map.load == 2);
-            hg_assert(map.has(12) && *map.get(12) == 42);
-            hg_assert(map.has(12 + count) && *map.get(12 + count) == 100);
+            hg_assert(map.has(12) && map[12] == 42);
+            hg_assert(map.has(12 + count) && map[12 + count] == 100);
 
             map.insert(12 + count * 2, 200);
             hg_assert(map.load == 3);
-            hg_assert(map.has(12) && *map.get(12) == 42);
-            hg_assert(map.has(12 + count) && *map.get(12 + count) == 100);
-            hg_assert(map.has(12 + count * 2) && *map.get(12 + count * 2) == 200);
+            hg_assert(map.has(12) && map[12] == 42);
+            hg_assert(map.has(12 + count) && map[12 + count] == 100);
+            hg_assert(map.has(12 + count * 2) && map[12 + count * 2] == 200);
 
             map.remove(12);
             hg_assert(map.load == 2);
             hg_assert(!map.has(12));
-            hg_assert(map.has(12 + count) && *map.get(12 + count) == 100);
+            hg_assert(map.has(12 + count) && map[12 + count] == 100);
 
             map.insert(42, 12);
             hg_assert(map.load == 3);
-            hg_assert(map.has(42) && *map.get(42) == 12);
+            hg_assert(map.has(42) && map[42] == 12);
 
             map.remove(12 + count);
             hg_assert(map.load == 2);
@@ -1198,10 +1197,10 @@ void hg_test() {
         map.insert(ab, 3);
         map.insert(scf, 4);
 
-        hg_assert(map.has(a) && *map.get(a) == 1);
-        hg_assert(map.has(b) && *map.get(b) == 2);
-        hg_assert(map.has(ab) && *map.get(ab) == 3);
-        hg_assert(map.has(scf) && *map.get(scf) == 4);
+        hg_assert(map.has(a) && map[a] == 1);
+        hg_assert(map.has(b) && map[b] == 2);
+        hg_assert(map.has(ab) && map[ab] == 3);
+        hg_assert(map.has(scf) && map[scf] == 4);
 
         map.remove(a);
         map.remove(b);
@@ -1235,10 +1234,10 @@ void hg_test() {
         map.insert(ab, 3);
         map.insert(scf, 4);
 
-        hg_assert(map.has(a) && *map.get(a) == 1);
-        hg_assert(map.has(b) && *map.get(b) == 2);
-        hg_assert(map.has(ab) && *map.get(ab) == 3);
-        hg_assert(map.has(scf) && *map.get(scf) == 4);
+        hg_assert(map.has(a) && map[a] == 1);
+        hg_assert(map.has(b) && map[b] == 2);
+        hg_assert(map.has(ab) && map[ab] == 3);
+        hg_assert(map.has(scf) && map[scf] == 4);
 
         map.remove(a);
         map.remove(b);
@@ -1268,13 +1267,13 @@ void hg_test() {
         map.insert(HgString::create(arena, "supercalifragilisticexpialidocious"), 4);
 
         hg_assert(map.has(HgString::create(arena, "a")));
-        hg_assert(*map.get(HgString::create(arena, "a")) == 1);
+        hg_assert(map[HgString::create(arena, "a")] == 1);
         hg_assert(map.has(HgString::create(arena, "b")));
-        hg_assert(*map.get(HgString::create(arena, "b")) == 2);
+        hg_assert(map[HgString::create(arena, "b")] == 2);
         hg_assert(map.has(HgString::create(arena, "ab")));
-        hg_assert(*map.get(HgString::create(arena, "ab")) == 3);
+        hg_assert(map[HgString::create(arena, "ab")] == 3);
         hg_assert(map.has(HgString::create(arena, "supercalifragilisticexpialidocious")));
-        hg_assert(*map.get(HgString::create(arena, "supercalifragilisticexpialidocious")) == 4);
+        hg_assert(map[HgString::create(arena, "supercalifragilisticexpialidocious")] == 4);
 
         map.remove(HgString::create(arena, "a"));
         map.remove(HgString::create(arena, "b"));
@@ -1304,13 +1303,13 @@ void hg_test() {
         map.insert(HgString::create(arena, "supercalifragilisticexpialidocious"), 4);
 
         hg_assert(map.has("a"));
-        hg_assert(*map.get("a") == 1);
+        hg_assert(map["a"] == 1);
         hg_assert(map.has("b"));
-        hg_assert(*map.get("b") == 2);
+        hg_assert(map["b"] == 2);
         hg_assert(map.has("ab"));
-        hg_assert(*map.get("ab") == 3);
+        hg_assert(map["ab"] == 3);
         hg_assert(map.has("supercalifragilisticexpialidocious"));
-        hg_assert(*map.get("supercalifragilisticexpialidocious") == 4);
+        hg_assert(map["supercalifragilisticexpialidocious"] == 4);
 
         map.remove("a");
         map.remove("b");
@@ -1376,68 +1375,68 @@ void hg_test() {
 
         constexpr usize count = 128;
 
-        HgHashSet<u32> map = map.create(arena, count);
+        HgHashSet<u32> set = set.create(arena, count);
 
         for (usize i = 0; i < 3; ++i) {
-            hg_assert(map.load == 0);
-            hg_assert(!map.has(0));
-            hg_assert(!map.has(1));
-            hg_assert(!map.has(12));
-            hg_assert(!map.has(42));
-            hg_assert(!map.has(100000));
+            hg_assert(set.load == 0);
+            hg_assert(!set.has(0));
+            hg_assert(!set.has(1));
+            hg_assert(!set.has(12));
+            hg_assert(!set.has(42));
+            hg_assert(!set.has(100000));
 
-            map.insert(1);
-            hg_assert(map.load == 1);
-            hg_assert(map.has(1));
+            set.insert(1);
+            hg_assert(set.load == 1);
+            hg_assert(set.has(1));
 
-            map.remove(1);
-            hg_assert(map.load == 0);
-            hg_assert(!map.has(1));
+            set.remove(1);
+            hg_assert(set.load == 0);
+            hg_assert(!set.has(1));
 
-            hg_assert(!map.has(12));
-            hg_assert(!map.has(12 + count));
+            hg_assert(!set.has(12));
+            hg_assert(!set.has(12 + count));
 
-            map.insert(12);
-            hg_assert(map.load == 1);
-            hg_assert(map.has(12));
-            hg_assert(!map.has(12 + count));
+            set.insert(12);
+            hg_assert(set.load == 1);
+            hg_assert(set.has(12));
+            hg_assert(!set.has(12 + count));
 
-            map.insert(12 + count);
-            hg_assert(map.load == 2);
-            hg_assert(map.has(12));
-            hg_assert(map.has(12 + count));
+            set.insert(12 + count);
+            hg_assert(set.load == 2);
+            hg_assert(set.has(12));
+            hg_assert(set.has(12 + count));
 
-            map.insert(12 + count * 2);
-            hg_assert(map.load == 3);
-            hg_assert(map.has(12));
-            hg_assert(map.has(12 + count));
-            hg_assert(map.has(12 + count * 2));
+            set.insert(12 + count * 2);
+            hg_assert(set.load == 3);
+            hg_assert(set.has(12));
+            hg_assert(set.has(12 + count));
+            hg_assert(set.has(12 + count * 2));
 
-            map.remove(12);
-            hg_assert(map.load == 2);
-            hg_assert(!map.has(12));
-            hg_assert(map.has(12 + count));
+            set.remove(12);
+            hg_assert(set.load == 2);
+            hg_assert(!set.has(12));
+            hg_assert(set.has(12 + count));
 
-            map.insert(42);
-            hg_assert(map.load == 3);
-            hg_assert(map.has(42));
+            set.insert(42);
+            hg_assert(set.load == 3);
+            hg_assert(set.has(42));
 
-            map.remove(12 + count);
-            hg_assert(map.load == 2);
-            hg_assert(!map.has(12));
-            hg_assert(!map.has(12 + count));
+            set.remove(12 + count);
+            hg_assert(set.load == 2);
+            hg_assert(!set.has(12));
+            hg_assert(!set.has(12 + count));
 
-            map.remove(42);
-            hg_assert(map.load == 1);
-            hg_assert(!map.has(42));
+            set.remove(42);
+            hg_assert(set.load == 1);
+            hg_assert(!set.has(42));
 
-            map.remove(12 + count * 2);
-            hg_assert(map.load == 0);
-            hg_assert(!map.has(12));
-            hg_assert(!map.has(12 + count));
-            hg_assert(!map.has(12 + count * 2));
+            set.remove(12 + count * 2);
+            hg_assert(set.load == 0);
+            hg_assert(!set.has(12));
+            hg_assert(!set.has(12 + count));
+            hg_assert(!set.has(12 + count * 2));
 
-            map.reset();
+            set.reset();
         }
     }
 
@@ -1447,138 +1446,138 @@ void hg_test() {
 
         using StrHash = usize;
 
-        HgHashSet<StrHash> map = map.create(arena, 128);
+        HgHashSet<StrHash> set = set.create(arena, 128);
 
         StrHash a = hg_hash("a");
         StrHash b = hg_hash("b");
         StrHash ab = hg_hash("ab");
         StrHash scf = hg_hash("supercalifragilisticexpialidocious");
 
-        hg_assert(!map.has(a));
-        hg_assert(!map.has(b));
-        hg_assert(!map.has(ab));
-        hg_assert(!map.has(scf));
+        hg_assert(!set.has(a));
+        hg_assert(!set.has(b));
+        hg_assert(!set.has(ab));
+        hg_assert(!set.has(scf));
 
-        map.insert(a);
-        map.insert(b);
-        map.insert(ab);
-        map.insert(scf);
+        set.insert(a);
+        set.insert(b);
+        set.insert(ab);
+        set.insert(scf);
 
-        hg_assert(map.has(a));
-        hg_assert(map.has(b));
-        hg_assert(map.has(ab));
-        hg_assert(map.has(scf));
+        hg_assert(set.has(a));
+        hg_assert(set.has(b));
+        hg_assert(set.has(ab));
+        hg_assert(set.has(scf));
 
-        map.remove(a);
-        map.remove(b);
-        map.remove(ab);
-        map.remove(scf);
+        set.remove(a);
+        set.remove(b);
+        set.remove(ab);
+        set.remove(scf);
 
-        hg_assert(!map.has(a));
-        hg_assert(!map.has(b));
-        hg_assert(!map.has(ab));
-        hg_assert(!map.has(scf));
+        hg_assert(!set.has(a));
+        hg_assert(!set.has(b));
+        hg_assert(!set.has(ab));
+        hg_assert(!set.has(scf));
     }
 
     {
         HgArena& arena = hg_get_scratch();
         HgArenaScope arena_scope{arena};
 
-        HgHashSet<const char*> map = map.create(arena, 128);
+        HgHashSet<const char*> set = set.create(arena, 128);
 
         const char* a = "a";
         const char* b = "b";
         const char* ab = "ab";
         const char* scf = "supercalifragilisticexpialidocious";
 
-        hg_assert(!map.has(a));
-        hg_assert(!map.has(b));
-        hg_assert(!map.has(ab));
-        hg_assert(!map.has(scf));
+        hg_assert(!set.has(a));
+        hg_assert(!set.has(b));
+        hg_assert(!set.has(ab));
+        hg_assert(!set.has(scf));
 
-        map.insert(a);
-        map.insert(b);
-        map.insert(ab);
-        map.insert(scf);
+        set.insert(a);
+        set.insert(b);
+        set.insert(ab);
+        set.insert(scf);
 
-        hg_assert(map.has(a));
-        hg_assert(map.has(b));
-        hg_assert(map.has(ab));
-        hg_assert(map.has(scf));
+        hg_assert(set.has(a));
+        hg_assert(set.has(b));
+        hg_assert(set.has(ab));
+        hg_assert(set.has(scf));
 
-        map.remove(a);
-        map.remove(b);
-        map.remove(ab);
-        map.remove(scf);
+        set.remove(a);
+        set.remove(b);
+        set.remove(ab);
+        set.remove(scf);
 
-        hg_assert(!map.has(a));
-        hg_assert(!map.has(b));
-        hg_assert(!map.has(ab));
-        hg_assert(!map.has(scf));
+        hg_assert(!set.has(a));
+        hg_assert(!set.has(b));
+        hg_assert(!set.has(ab));
+        hg_assert(!set.has(scf));
     }
 
     {
         HgArena& arena = hg_get_scratch();
         HgArenaScope arena_scope{arena};
 
-        HgHashSet<HgString> map = map.create(arena, 128);
+        HgHashSet<HgString> set = set.create(arena, 128);
 
-        hg_assert(!map.has(HgString::create(arena, "a")));
-        hg_assert(!map.has(HgString::create(arena, "b")));
-        hg_assert(!map.has(HgString::create(arena, "ab")));
-        hg_assert(!map.has(HgString::create(arena, "supercalifragilisticexpialidocious")));
+        hg_assert(!set.has(HgString::create(arena, "a")));
+        hg_assert(!set.has(HgString::create(arena, "b")));
+        hg_assert(!set.has(HgString::create(arena, "ab")));
+        hg_assert(!set.has(HgString::create(arena, "supercalifragilisticexpialidocious")));
 
-        map.insert(HgString::create(arena, "a"));
-        map.insert(HgString::create(arena, "b"));
-        map.insert(HgString::create(arena, "ab"));
-        map.insert(HgString::create(arena, "supercalifragilisticexpialidocious"));
+        set.insert(HgString::create(arena, "a"));
+        set.insert(HgString::create(arena, "b"));
+        set.insert(HgString::create(arena, "ab"));
+        set.insert(HgString::create(arena, "supercalifragilisticexpialidocious"));
 
-        hg_assert(map.has(HgString::create(arena, "a")));
-        hg_assert(map.has(HgString::create(arena, "b")));
-        hg_assert(map.has(HgString::create(arena, "ab")));
-        hg_assert(map.has(HgString::create(arena, "supercalifragilisticexpialidocious")));
+        hg_assert(set.has(HgString::create(arena, "a")));
+        hg_assert(set.has(HgString::create(arena, "b")));
+        hg_assert(set.has(HgString::create(arena, "ab")));
+        hg_assert(set.has(HgString::create(arena, "supercalifragilisticexpialidocious")));
 
-        map.remove(HgString::create(arena, "a"));
-        map.remove(HgString::create(arena, "b"));
-        map.remove(HgString::create(arena, "ab"));
-        map.remove(HgString::create(arena, "supercalifragilisticexpialidocious"));
+        set.remove(HgString::create(arena, "a"));
+        set.remove(HgString::create(arena, "b"));
+        set.remove(HgString::create(arena, "ab"));
+        set.remove(HgString::create(arena, "supercalifragilisticexpialidocious"));
 
-        hg_assert(!map.has(HgString::create(arena, "a")));
-        hg_assert(!map.has(HgString::create(arena, "b")));
-        hg_assert(!map.has(HgString::create(arena, "ab")));
-        hg_assert(!map.has(HgString::create(arena, "supercalifragilisticexpialidocious")));
+        hg_assert(!set.has(HgString::create(arena, "a")));
+        hg_assert(!set.has(HgString::create(arena, "b")));
+        hg_assert(!set.has(HgString::create(arena, "ab")));
+        hg_assert(!set.has(HgString::create(arena, "supercalifragilisticexpialidocious")));
     }
 
     {
         HgArena& arena = hg_get_scratch();
         HgArenaScope arena_scope{arena};
 
-        HgHashSet<HgStringView> map = map.create(arena, 128);
+        HgHashSet<HgStringView> set = set.create(arena, 128);
 
-        hg_assert(!map.has("a"));
-        hg_assert(!map.has("b"));
-        hg_assert(!map.has("ab"));
-        hg_assert(!map.has("supercalifragilisticexpialidocious"));
+        hg_assert(!set.has("a"));
+        hg_assert(!set.has("b"));
+        hg_assert(!set.has("ab"));
+        hg_assert(!set.has("supercalifragilisticexpialidocious"));
 
-        map.insert(HgString::create(arena, "a"));
-        map.insert(HgString::create(arena, "b"));
-        map.insert(HgString::create(arena, "ab"));
-        map.insert(HgString::create(arena, "supercalifragilisticexpialidocious"));
+        set.insert(HgString::create(arena, "a"));
+        set.insert(HgString::create(arena, "b"));
+        set.insert(HgString::create(arena, "ab"));
+        set.insert(HgString::create(arena, "supercalifragilisticexpialidocious"));
 
-        hg_assert(map.has("a"));
-        hg_assert(map.has("b"));
-        hg_assert(map.has("ab"));
-        hg_assert(map.has("supercalifragilisticexpialidocious"));
+        hg_assert(set.has("a"));
+        hg_assert(set.has("b"));
+        hg_assert(set.has("ab"));
+        hg_assert(set.has("supercalifragilisticexpialidocious"));
 
-        map.remove("a");
-        map.remove("b");
-        map.remove("ab");
-        map.remove("supercalifragilisticexpialidocious");
+        set.remove("a");
+        set.remove("b");
+        set.remove("ab");
+        set.remove("supercalifragilisticexpialidocious");
 
-        hg_assert(!map.has("a"));
-        hg_assert(!map.has("b"));
-        hg_assert(!map.has("ab"));
-        hg_assert(!map.has("supercalifragilisticexpialidocious"));
+        hg_assert(!set.has("a"));
+        hg_assert(!set.has("b"));
+        hg_assert(!set.has("ab"));
+        hg_assert(!set.has("supercalifragilisticexpialidocious"));
     }
 
     // thread pool
@@ -1766,6 +1765,9 @@ void hg_test() {
         }
     }
 
+    hg_warn("HgResourceManager test not implemented yet : TODO\n");
+
+    // HgBinary
     {
         HgArena& arena = hg_get_scratch();
         HgArenaScope arena_scope{arena};
@@ -1805,6 +1807,7 @@ void hg_test() {
         }
     }
 
+    // HgTextureData
     {
         HgArena& arena = hg_get_scratch();
         HgArenaScope arena_scope{arena};
@@ -1832,22 +1835,23 @@ void hg_test() {
         HgBinary bin{};
 
         {
-            HgTexture::Info info;
-            memcpy(info.identifier, HgTexture::texture_identifier, sizeof(HgTexture::texture_identifier));
+            HgTextureData::Info info;
+            memcpy(info.identifier, HgTextureData::texture_identifier, sizeof(HgTextureData::texture_identifier));
             info.format = VK_FORMAT_R8G8B8A8_SRGB;
             info.width = save_width;
             info.height = save_height;
             info.depth = save_depth;
-            bin.grow(arena, sizeof(HgTexture::Info));
+            info.pixels_begin = sizeof(info);
+            bin.resize(arena, bin.size + sizeof(HgTextureData::Info));
             bin.overwrite(0, info);
 
             usize pixel_idx = bin.size;
-            bin.grow(arena, sizeof(save_data));
+            bin.resize(arena, bin.size + sizeof(save_data));
             bin.overwrite(pixel_idx, save_data, sizeof(save_data));
         }
 
         {
-            HgTexture texture = bin;
+            HgTextureData texture = bin;
 
             VkFormat format;
             u32 width, height, depth;
@@ -1867,7 +1871,7 @@ void hg_test() {
             HgStringView file_path = "hg_test_dir/file_image_test.hgtex";
 
             bin.store(file_path);
-            HgTexture file_texture = HgBinary::load(arena, file_path);
+            HgTextureData file_texture = HgBinary::load(arena, file_path);
 
             VkFormat format;
             u32 width, height, depth;
@@ -1888,16 +1892,22 @@ void hg_test() {
             HgStringView file_path = "hg_test_dir/file_image_test.png";
             HgResource tex_id = hg_resource_id(tex_path);
             HgResource file_id = hg_resource_id(file_path);
-            hg_alloc_resource(tex_id);
-            hg_alloc_resource(file_id);
-            *hg_get_resource(tex_id) = bin;
+
+            hg_load_empty_resource(tex_id);
+            HgBinary* pbin_res = hg_get_resource(tex_id);
+            *pbin_res = bin;
+            hg_defer({
+                *hg_get_resource(tex_id) = {};
+                hg_unload_resource(nullptr, 0, tex_id);
+            });
 
             HgFence fence;
             hg_export_png(&fence, 1, tex_id, file_path);
             hg_import_png(&fence, 1, file_id, file_path);
+            hg_defer(hg_unload_resource(nullptr, 0, file_id));
             hg_assert(fence.wait(2.0));
 
-            HgTexture file_texture = *hg_get_resource(file_id);
+            HgTextureData file_texture = *hg_get_resource(file_id);
 
             VkFormat format;
             u32 width, height, depth;
@@ -1912,12 +1922,13 @@ void hg_test() {
             hg_assert(pixels != nullptr);
             hg_assert(memcmp(save_data, pixels, sizeof(save_data)) == 0);
         }
-
-        hg_resources_reset();
     }
 
-    hg_warn("resource management test not implemented yet\n");
+    hg_warn("HgModelData test not implemented yet : TODO\n");
+    hg_warn("HgGpuTexture test not implemented yet : TODO\n");
+    hg_warn("HgGpuModel test not implemented yet : TODO\n");
 
+    // HgECS
     {
         HgArena& arena = hg_get_scratch();
         HgArenaScope arena_scope{arena};
