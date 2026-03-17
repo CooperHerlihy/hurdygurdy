@@ -472,16 +472,55 @@ void hg_process_window_events(HgWindow** windows, usize window_count) {
 }
 
 #include "imgui_impl_glfw.h"
+#include "imgui_impl_vulkan.h"
 
-void ImGui_ImplHurdyGurdy_Init(HgWindow* window) {
+void ImGui_ImplHurdyGurdy_Init(
+    HgWindow* window,
+    u32 color_attachment_count,
+    const VkFormat* color_formats,
+    VkFormat depth_format,
+    VkFormat stencil_format
+) {
     ImGui_ImplGlfw_InitForVulkan(window->internals->glfw_window, true);
+
+    ImGui_ImplVulkan_InitInfo imgui_info{};
+    imgui_info.Instance = hg_vk_instance;
+    imgui_info.PhysicalDevice = hg_vk_physical_device;
+    imgui_info.Device = hg_vk_device;
+    imgui_info.QueueFamily = hg_vk_queue_family;
+    imgui_info.Queue = hg_vk_queue;
+    imgui_info.DescriptorPoolSize = 1000;
+    imgui_info.MinImageCount = window->image_count;
+    imgui_info.ImageCount = window->image_count;
+    imgui_info.MinAllocationSize = 1 << 20;
+    imgui_info.UseDynamicRendering = true;
+    imgui_info.PipelineInfoMain.PipelineRenderingCreateInfo.sType
+        = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+    imgui_info.PipelineInfoMain.PipelineRenderingCreateInfo.colorAttachmentCount = color_attachment_count;
+    imgui_info.PipelineInfoMain.PipelineRenderingCreateInfo.pColorAttachmentFormats = color_formats;
+    imgui_info.PipelineInfoMain.PipelineRenderingCreateInfo.depthAttachmentFormat = depth_format;
+    imgui_info.PipelineInfoMain.PipelineRenderingCreateInfo.stencilAttachmentFormat = stencil_format;
+#ifdef HG_VK_DEBUG_MESSENGER
+    imgui_info.CheckVkResultFn = [](VkResult err) {
+        if (err != VK_SUCCESS)
+            hg_warn("Vulkan error from ImGui: %s\n", hg_vk_result_to_string(err));
+    };
+#endif
+
+    ImGui_ImplVulkan_Init(&imgui_info);
 }
 
 void ImGui_ImplHurdyGurdy_Shutdown() {
+    ImGui_ImplVulkan_Shutdown();
     ImGui_ImplGlfw_Shutdown();
 }
 
 void ImGui_ImplHurdyGurdy_NewFrame() {
     ImGui_ImplGlfw_NewFrame();
+    ImGui_ImplVulkan_NewFrame();
+}
+
+void ImGui_ImplHurdyGurdy_Draw(VkCommandBuffer cmd) {
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
 }
 

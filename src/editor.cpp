@@ -98,35 +98,9 @@ int main() {
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-    // io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
-    ImGui_ImplHurdyGurdy_Init(window);
+    ImGui_ImplHurdyGurdy_Init(window, 1, &window->format);
     hg_defer(ImGui_ImplHurdyGurdy_Shutdown());
-
-    ImGui_ImplVulkan_InitInfo imgui_info{};
-    imgui_info.Instance = hg_vk_instance;
-    imgui_info.PhysicalDevice = hg_vk_physical_device;
-    imgui_info.Device = hg_vk_device;
-    imgui_info.QueueFamily = hg_vk_queue_family;
-    imgui_info.Queue = hg_vk_queue;
-    imgui_info.DescriptorPoolSize = 1000;
-    imgui_info.MinImageCount = window->image_count;
-    imgui_info.ImageCount = window->image_count;
-    imgui_info.MinAllocationSize = 1024 * 1024;
-    imgui_info.UseDynamicRendering = true;
-    imgui_info.PipelineInfoMain.PipelineRenderingCreateInfo.sType
-        = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
-    imgui_info.PipelineInfoMain.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
-    imgui_info.PipelineInfoMain.PipelineRenderingCreateInfo.pColorAttachmentFormats = &window->format;
-#ifdef HG_DEBUG_MODE
-    imgui_info.CheckVkResultFn = [](VkResult err) {
-        if (err != VK_SUCCESS)
-            hg_warn("Vulkan error from ImGui: %s\n", hg_vk_result_to_string(err));
-    };
-#endif
-
-    ImGui_ImplVulkan_Init(&imgui_info);
-    hg_defer(ImGui_ImplVulkan_Shutdown());
 
     VkSampler render_sampler = nullptr;
     VkImage render_image = nullptr;
@@ -558,7 +532,7 @@ int main() {
 
                 renderer.begin_pass(cmd, window->width, window->height, gui_pass);
 
-                ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
+                ImGui_ImplHurdyGurdy_Draw(cmd);
 
                 renderer.end_pass(cmd);
             }
@@ -570,11 +544,6 @@ int main() {
             renderer.barrier(cmd, nullptr, 0, &present_barrier, 1);
 
             window->end_and_present(cmd);
-
-            // if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
-            //     ImGui::UpdatePlatformWindows();
-            //     ImGui::RenderPlatformWindowsDefault();
-            // }
         }
     }
 quit:

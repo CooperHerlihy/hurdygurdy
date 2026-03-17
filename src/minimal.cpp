@@ -2,7 +2,6 @@
 
 #define IM_ASSERT hg_assert
 #include "imgui.h"
-#include "imgui_impl_vulkan.h"
 
 int main() {
     hg_init();
@@ -24,17 +23,6 @@ int main() {
 
     hg_pipeline_3d_init(arena, 256, window->format, VK_FORMAT_D32_SFLOAT);
     hg_defer(hg_pipeline_3d_deinit());
-
-    HgStringView texture_path = "hg_test_dir/file_image_test.hgtex";
-    HgResource texture_id = hg_resource_id(texture_path);
-    {
-        HgFence fence;
-        hg_load_resource(&fence, 1, texture_id, texture_path);
-        fence.wait(INFINITY);
-        hg_load_gpu_texture(texture_id, VK_FILTER_NEAREST);
-        hg_unload_resource(nullptr, 0, texture_id);
-    }
-    hg_defer(hg_unload_gpu_texture(texture_id));
 
     hg_pipeline_3d_add_model(0, 0, 0);
     hg_defer(hg_pipeline_3d_remove_model(0));
@@ -65,34 +53,8 @@ int main() {
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     // io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
-    ImGui_ImplHurdyGurdy_Init(window);
+    ImGui_ImplHurdyGurdy_Init(window, 1, &window->format, VK_FORMAT_D32_SFLOAT);
     hg_defer(ImGui_ImplHurdyGurdy_Shutdown());
-
-    ImGui_ImplVulkan_InitInfo imgui_info{};
-    imgui_info.Instance = hg_vk_instance;
-    imgui_info.PhysicalDevice = hg_vk_physical_device;
-    imgui_info.Device = hg_vk_device;
-    imgui_info.QueueFamily = hg_vk_queue_family;
-    imgui_info.Queue = hg_vk_queue;
-    imgui_info.DescriptorPoolSize = 1000;
-    imgui_info.MinImageCount = window->image_count;
-    imgui_info.ImageCount = window->image_count;
-    imgui_info.MinAllocationSize = 1024 * 1024;
-    imgui_info.UseDynamicRendering = true;
-    imgui_info.PipelineInfoMain.PipelineRenderingCreateInfo.sType
-        = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
-    imgui_info.PipelineInfoMain.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
-    imgui_info.PipelineInfoMain.PipelineRenderingCreateInfo.pColorAttachmentFormats = &window->format;
-    imgui_info.PipelineInfoMain.PipelineRenderingCreateInfo.depthAttachmentFormat = VK_FORMAT_D32_SFLOAT;
-#ifdef HG_DEBUG_MODE
-    imgui_info.CheckVkResultFn = [](VkResult err) {
-        if (err != VK_SUCCESS)
-            hg_warn("Vulkan error from ImGui: %s\n", hg_vk_result_to_string(err));
-    };
-#endif
-
-    ImGui_ImplVulkan_Init(&imgui_info);
-    hg_defer(ImGui_ImplVulkan_Shutdown());
 
     u32 depth_width = window->width;
     u32 depth_height = window->height;
@@ -135,7 +97,7 @@ int main() {
         if (window->was_closed)
             goto quit;
 
-        if (depth_width != window->width || depth_height != window->height) {
+        if ((depth_width != window->width || depth_height != window->height) && window->width * window->height != 0) {
             vkDestroyImageView(hg_vk_device, depth_view, nullptr);
             vmaDestroyImage(hg_vk_vma, depth_image, depth_alloc);
 
@@ -228,7 +190,7 @@ int main() {
 
             hg_draw_3d(ecs, cmd);
 
-            ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
+            ImGui_ImplHurdyGurdy_Draw(cmd);
 
             renderer.end_pass(cmd);
 

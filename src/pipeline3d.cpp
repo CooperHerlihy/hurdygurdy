@@ -397,7 +397,7 @@ void hg_draw_3d(HgECS& ecs, VkCommandBuffer cmd) {
 
     u32 i = 0;
     ecs.for_each<HgDirLight3D>([&](HgEntity, HgDirLight3D& light) {
-        dir_lights[i].dir = light.dir;
+        dir_lights[i].dir = HgMat3{global_data.view} * light.dir;
         dir_lights[i].dir.w = 0.0f;
         dir_lights[i].color = light.color;
         ++i;
@@ -405,7 +405,7 @@ void hg_draw_3d(HgECS& ecs, VkCommandBuffer cmd) {
 
     i = 0;
     ecs.for_each<HgPointLight3D, HgTransform>([&](HgEntity, HgPointLight3D& light, HgTransform& transform) {
-        point_lights[i].pos = transform.position;
+        point_lights[i].pos = global_data.view * HgVec4{transform.position, 1.0};
         point_lights[i].pos.w = 0.0f;
         point_lights[i].color = light.color;
         ++i;

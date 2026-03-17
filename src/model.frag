@@ -33,11 +33,13 @@ layout (set = 0, binding = 2) readonly buffer PointLights {
 // [0] = color map, [1] = normal map
 layout (set = 1, binding = 0) uniform sampler2D u_textures[2];
 
-float blinn_phong(vec3 normal, vec3 light_dir, float shininess) {
+float blinn_phong(vec3 normal, vec3 light_dir, float shininess, float kd, float ks) {
     float ambient = 0.03;
-    float diffuse = max(dot(normal, normalize(light_dir)), 0.0);
-//     float specular = pow(max(dot(normal, normalize(light_dir + normalize(-f_pos))), 0.0), shininess);
-    return ambient + diffuse; // + specular;
+    float diffuse = max(dot(normal, light_dir), 0.0);
+    float specular = diffuse > 0.0
+        ? pow(max(dot(normal, normalize(light_dir + normalize(-f_pos))), 0.0), shininess)
+        : 0.0;
+    return ambient + diffuse * kd + specular * ks;
 };
 
 void main() {
@@ -53,7 +55,7 @@ void main() {
     for (uint i = 0; i < u_dir_light_count; ++i) {
         vec3 light_dir = -normalize(u_dir_lights[i].dir.xyz);
         vec3 light_color = u_dir_lights[i].color.xyz * u_dir_lights[i].color.w;
-        lighting += blinn_phong(normal, light_dir, 16.0) * light_color;
+        lighting += blinn_phong(normal, light_dir, 16.0, 0.7, 0.3) * light_color;
     }
 
     for (uint i = 0; i < u_point_light_count; ++i) {
@@ -62,7 +64,7 @@ void main() {
         float light_dist = dot(light_diff, light_diff);
         vec3 light_dir = normalize(light_diff);
         vec3 light_color = u_point_lights[i].color.xyz * u_point_lights[i].color.w;
-        lighting += blinn_phong(normal, light_dir, 16.0) * light_color / light_dist;
+        lighting += blinn_phong(normal, light_dir, 16.0, 0.7, 0.3) * light_color / light_dist;
     }
 
     vec4 hdr_color = vec4(lighting, 1.0) * texture(u_textures[0], f_uv);
