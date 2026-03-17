@@ -337,10 +337,10 @@ void mouse_button_callback(GLFWwindow* glfw_window, int button, int action, [[ma
     }
 }
 
-HgWindow* HgWindow::create(HgArena& arena, const HgWindowConfig& config) {
-    HgWindow* window = arena.alloc<HgWindow>(1);
+HgWindow* HgWindow::create(HgArena* arena, const HgWindowConfig& config) {
+    HgWindow* window = hg_alloc<HgWindow>(arena, 1);
     *window = {};
-    window->internals = arena.alloc<Internals>(1);
+    window->internals = hg_alloc<Internals>(arena, 1);
     *window->internals = {};
 
     const char* title = config.title != nullptr ? config.title : "Hurdy Gurdy";
@@ -421,13 +421,13 @@ void HgWindow::set_cursor_image(u32* data, u32 image_width, u32 image_height) {
     (void)image_height;
 }
 
-u32 hg_vk_get_platform_extensions(HgArena& arena, HgStringView** ext_buffer) {
+u32 hg_vk_get_platform_extensions(HgArena* arena, HgStringView** ext_buffer) {
     u32 ext_count;
     const char** exts = glfwGetRequiredInstanceExtensions(&ext_count);
     if (exts == nullptr)
         hg_error("Could not get required instance extensions from glfw\n");
 
-    *ext_buffer = arena.alloc<HgStringView>(ext_count);
+    *ext_buffer = hg_alloc<HgStringView>(arena, ext_count);
     for (usize i = 0; i < ext_count; ++i) {
         (*ext_buffer)[i] = exts[i];
     }
@@ -436,13 +436,13 @@ u32 hg_vk_get_platform_extensions(HgArena& arena, HgStringView** ext_buffer) {
 }
 
 void hg_process_window_events(HgWindow** windows, usize window_count) {
-    HgArena& scratch = hg_get_scratch();
+    HgArena* scratch = hg_get_scratch();
     HgArenaScope scratch_scope{scratch};
 
-    u32* old_widths = scratch.alloc<u32>(window_count);
-    u32* old_heights = scratch.alloc<u32>(window_count);
-    f64* old_mouse_xs = scratch.alloc<f64>(window_count);
-    f64* old_mouse_ys = scratch.alloc<f64>(window_count);
+    u32* old_widths = hg_alloc<u32>(scratch, window_count);
+    u32* old_heights = hg_alloc<u32>(scratch, window_count);
+    f64* old_mouse_xs = hg_alloc<f64>(scratch, window_count);
+    f64* old_mouse_ys = hg_alloc<f64>(scratch, window_count);
 
     for (usize i = 0; i < window_count; ++i) {
         HgWindow* window = windows[i];

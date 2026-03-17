@@ -14,7 +14,7 @@ int main() {
 
     hg_test();
 
-    HgArena& arena = hg_get_scratch();
+    HgArena* arena = hg_get_scratch();
     HgArenaScope arena_scope{arena};
 
     HgWindowConfig window_config{};
@@ -33,7 +33,7 @@ int main() {
     {
         HgFence fence;
         hg_load_resource(&fence, 1, texture_id, texture_path);
-        fence.wait(INFINITY);
+        fence.wait_indefinite();
         hg_load_gpu_texture(texture_id, VK_FILTER_NEAREST);
         hg_unload_resource(nullptr, 0, texture_id);
     }
@@ -52,9 +52,7 @@ int main() {
     hg_defer(hg_pipeline_3d_remove_model(0));
 
     HgTransform camera{};
-    camera.position = {0, 0, -2};
-    camera.scale = {1, 1, 1};
-    camera.rotation = {1, 0, 0, 0};
+    camera.position = HgVec3{0, 0, -2};
 
     f32 aspect_ratio = 16.0f / 9.0f;
     u32 render_width = 0;
@@ -64,7 +62,7 @@ int main() {
     hg_defer(ecs.destroy());
 
     u32 scene_capacity = 8;
-    HgEntity* scene = arena.alloc<HgEntity>(scene_capacity);
+    HgEntity* scene = hg_alloc<HgEntity>(arena, scene_capacity);
     u32 scene_size = 0;
 
     // u32 square = scene_size++;
@@ -80,8 +78,8 @@ int main() {
     u32 point_light = scene_size++;
     scene[point_light] = ecs.spawn();
     ecs.add<HgTransform>(scene[point_light]) = {};
-    ecs.get<HgTransform>(scene[point_light]).position = {-1, -2, -1};
-    ecs.add<HgPointLight3D>(scene[point_light]) = {{1, 1, 1, 2}};
+    ecs.get<HgTransform>(scene[point_light]).position = HgVec3{-1, -2, -1};
+    ecs.add<HgPointLight3D>(scene[point_light]) = {HgVec4{1, 1, 1, 2}};
 
     HgEntity cube = ecs.spawn();
     ecs.add<HgTransform>(cube) = {};
@@ -138,10 +136,10 @@ int main() {
 
         if (ecs.alive(cube)) {
             HgQuat& cube_rot = ecs.get<HgTransform>(cube).rotation;
-            cube_rot = hg_axis_angle({0, -1, 0}, (f32)delta) * cube_rot;
+            cube_rot = hg_axis_angle(HgVec3{0, -1, 0}, (f32)delta) * cube_rot;
         }
 
-        HgArena& frame = hg_get_scratch(arena);
+        HgArena* frame = hg_get_scratch(&arena, 1);
         HgArenaScope frame_scope{frame};
 
         hg_process_window_events(&window, 1);
@@ -185,10 +183,10 @@ int main() {
                     abort();
 
                 if (ImGui::MenuItem("Save Screenshot")) {
-                    HgArena& scratch = hg_get_scratch();
+                    HgArena* scratch = hg_get_scratch();
                     HgArenaScope scratch_scope{scratch};
 
-                    void* pixels = scratch.alloc(render_width * render_height * 4, 4);
+                    void* pixels = hg_alloc(scratch, render_width * render_height * 4, 4);
 
                     HgVkImageStagingReadConfig config{};
                     config.dst = pixels;
@@ -293,12 +291,12 @@ int main() {
                 if (ImGui::IsWindowFocused()) {
                     if (move_3d && window->is_key_down[(u32)HgKey::lmouse]) {
                         f32 rot_speed = 2.0f;
-                        HgQuat rot_x = hg_axis_angle({0, 1, 0}, (f32)window->mouse_delta_x * rot_speed);
-                        HgQuat rot_y = hg_axis_angle({-1, 0, 0}, (f32)window->mouse_delta_y * rot_speed);
+                        HgQuat rot_x = hg_axis_angle(HgVec3{0, 1, 0}, (f32)window->mouse_delta_x * rot_speed);
+                        HgQuat rot_y = hg_axis_angle(HgVec3{-1, 0, 0}, (f32)window->mouse_delta_y * rot_speed);
                         camera.rotation = rot_x * camera.rotation * rot_y;
                     }
 
-                    HgVec3 movement = {0.0f};
+                    HgVec3 movement = HgVec3{0.0f};
                     if (move_3d) {
                         movement.y += window->is_key_down[(u32)HgKey::lshift] - window->is_key_down[(u32)HgKey::space];
                         movement.x += window->is_key_down[(u32)HgKey::d] - window->is_key_down[(u32)HgKey::a];
@@ -332,8 +330,11 @@ int main() {
                     ImGui::Text("cpu: %.3fms", cpu_delta * 1.0e3);
 
                     ImGui::SeparatorText("Camera");
-                    if (ImGui::Button("Reset Camera"))
-                        camera.position = {0, 0, -1}, camera.scale = {1, 1, 1}, camera.rotation = {1, 0, 0, 0};
+                    if (ImGui::Button("Reset Camera")) {
+                        camera.position = HgVec3{0, 0, -1};
+                        camera.scale = HgVec3{1, 1, 1};
+                        camera.rotation = HgQuat{1, 0, 0, 0};
+                    }
                     ImGui::Checkbox("3D Movement", &move_3d);
                     ImGui::Checkbox("Fixed Aspect", &fixed_aspect);
                     if (fixed_aspect)
@@ -344,14 +345,14 @@ int main() {
                 if (ImGui::CollapsingHeader("Entities", entity_flags)) {
                     if (ImGui::Button("Spawn Entity")) {
                         if (scene_size == scene_capacity) {
-                            scene = arena.realloc(scene, scene_capacity, scene_capacity * 2);
+                            scene = hg_realloc(arena, scene, scene_capacity, scene_capacity * 2);
                             scene_capacity *= 2;
                         }
                         scene[scene_size++] = ecs.spawn();
                     }
 
                     for (usize i = 0; i < scene_size; ++i) {
-                        HgArena& scratch = hg_get_scratch();
+                        HgArena* scratch = hg_get_scratch();
                         HgArenaScope scratch_scope{scratch};
                         HgEntity e = scene[i];
 
@@ -378,7 +379,7 @@ int main() {
                                     if (!ecs.has<HgSprite>(e) && ImGui::Selectable("Sprite")) {
                                         if (!ecs.has<HgTransform>(e))
                                             ecs.add<HgTransform>(e) = {};
-                                        ecs.add<HgSprite>(e) = {texture_id, {0.0f, 0.0f}, {1.0f, 1.0f}};
+                                        ecs.add<HgSprite>(e) = {texture_id, HgVec2{0.0f, 0.0f}, HgVec2{1.0f, 1.0f}};
                                     }
 
                                     if (!ecs.has<HgSprite>(e) && ImGui::Selectable("Model 3D")) {
@@ -512,8 +513,8 @@ int main() {
 
                 renderer.begin_pass(cmd, render_width, render_height, render_pass);
 
-                hg_draw_2d(ecs, cmd);
-                hg_draw_3d(ecs, cmd);
+                hg_draw_2d(&ecs, cmd);
+                hg_draw_3d(&ecs, cmd);
 
                 renderer.end_pass(cmd);
             }

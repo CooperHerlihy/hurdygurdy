@@ -12,13 +12,13 @@ void hg_graphics_init() {
     hg_vulkan_init();
 
     if (hg_vk_instance == nullptr) {
-        HgArena& scratch = hg_get_scratch();
+        HgArena* scratch = hg_get_scratch();
         HgArenaScope scratch_scope{scratch};
 
         HgStringView* exts;
         u32 ext_count = hg_vk_get_platform_extensions(scratch, &exts);
 #ifdef HG_VK_DEBUG_MESSENGER
-        exts = scratch.realloc(exts, ext_count, ext_count + 1);
+        exts = hg_realloc(scratch, exts, ext_count, ext_count + 1);
         exts[ext_count++] = "VK_EXT_debug_utils";
 #endif
         hg_vk_instance = hg_vk_create_instance(exts, ext_count);
@@ -32,7 +32,7 @@ void hg_graphics_init() {
 
     if (hg_vk_physical_device == nullptr) {
         hg_vk_physical_device = hg_vk_find_single_queue_physical_device();
-        hg_vk_find_queue_family(hg_vk_physical_device, hg_vk_queue_family,
+        hg_vk_find_queue_family(hg_vk_physical_device, &hg_vk_queue_family,
             VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT | VK_QUEUE_COMPUTE_BIT);
     }
 
@@ -549,7 +549,7 @@ static const VkDebugUtilsMessengerCreateInfoEXT debug_utils_messenger_info{
 #endif
 
 VkInstance hg_vk_create_instance(HgStringView* extensions, u32 extension_count) {
-    HgArena& scratch = hg_get_scratch();
+    HgArena* scratch = hg_get_scratch();
     HgArenaScope scratch_scope{scratch};
 
     VkApplicationInfo app_info{};
@@ -576,7 +576,7 @@ VkInstance hg_vk_create_instance(HgStringView* extensions, u32 extension_count) 
     instance_info.ppEnabledLayerNames = layers;
 #endif
 
-    const char** ext_c_strs = scratch.alloc<const char*>(extension_count);
+    const char** ext_c_strs = hg_alloc<const char*>(scratch, extension_count);
     for (usize i = 0; i < extension_count; ++i) {
         ext_c_strs[i] = hg_c_string(scratch, extensions[i]);
     }
@@ -607,20 +607,20 @@ VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger() {
 #endif
 }
 
-bool hg_vk_find_queue_family(VkPhysicalDevice gpu, u32& queue_family, VkQueueFlags queue_flags) {
+bool hg_vk_find_queue_family(VkPhysicalDevice gpu, u32* queue_family, VkQueueFlags queue_flags) {
     hg_assert(gpu != nullptr);
 
-    HgArena& scratch = hg_get_scratch();
+    HgArena* scratch = hg_get_scratch();
     HgArenaScope scratch_scope{scratch};
 
     u32 family_count = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, nullptr);
-    VkQueueFamilyProperties* families = scratch.alloc<VkQueueFamilyProperties>(family_count);
+    VkQueueFamilyProperties* families = hg_alloc<VkQueueFamilyProperties>(scratch, family_count);
     vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, families);
 
     for (u32 i = 0; i < family_count; ++i) {
         if (families[i].queueFlags & queue_flags) {
-            queue_family = i;
+            *queue_family = i;
             return true;
         }
     }
@@ -634,12 +634,12 @@ static const char* const vk_device_extensions[]{
 VkPhysicalDevice hg_vk_find_single_queue_physical_device() {
     hg_assert(hg_vk_instance != nullptr);
 
-    HgArena& scratch = hg_get_scratch();
+    HgArena* scratch = hg_get_scratch();
     HgArenaScope scratch_scope{scratch};
 
     u32 gpu_count;
     vkEnumeratePhysicalDevices(hg_vk_instance, &gpu_count, nullptr);
-    VkPhysicalDevice* gpus = scratch.alloc<VkPhysicalDevice>(gpu_count);
+    VkPhysicalDevice* gpus = hg_alloc<VkPhysicalDevice>(scratch, gpu_count);
     vkEnumeratePhysicalDevices(hg_vk_instance, &gpu_count, gpus);
 
     VkExtensionProperties* ext_props = nullptr;
@@ -652,7 +652,7 @@ VkPhysicalDevice hg_vk_find_single_queue_physical_device() {
         u32 new_prop_count = 0;
         vkEnumerateDeviceExtensionProperties(gpu, nullptr, &new_prop_count, nullptr);
         if (new_prop_count > ext_prop_count) {
-            ext_props = scratch.realloc(ext_props, ext_prop_count, new_prop_count);
+            ext_props = hg_realloc(scratch, ext_props, ext_prop_count, new_prop_count);
             ext_prop_count = new_prop_count;
         }
         vkEnumerateDeviceExtensionProperties(gpu, nullptr, &new_prop_count, ext_props);
@@ -667,7 +667,7 @@ next_ext:
             continue;
         }
 
-        if (!hg_vk_find_queue_family(gpu, family,
+        if (!hg_vk_find_queue_family(gpu, &family,
                 VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT | VK_QUEUE_COMPUTE_BIT))
             goto next_gpu;
 
@@ -1094,7 +1094,7 @@ u32 hg_vk_find_memory_type_index(
 void hg_vk_create_buffer(
     VkBuffer* buffer,
     VmaAllocation* allocation,
-    VkDeviceSize size,
+    u64 size,
     VkBufferUsageFlags usage,
     VmaAllocationCreateFlags memory
 ) {
@@ -1644,12 +1644,12 @@ void hg_vk_image_generate_mipmaps(const HgVkImageGenerateMipmapsConfig& config) 
     hg_vk_end_and_execute(cmd);
 }
 
-HgRenderer HgRenderer::create(HgArena& arena, u32 max_images, u32 max_buffers) {
+HgRenderer HgRenderer::create(HgArena* arena, u32 max_images, u32 max_buffers) {
     HgRenderer renderer{};
-    renderer.buffers = arena.alloc<Buffer>(max_buffers);
+    renderer.buffers = hg_alloc<Buffer>(arena, max_buffers);
     renderer.buffer_count = 0;
     renderer.buffer_capacity = max_buffers;
-    renderer.images = arena.alloc<Image>(max_images);
+    renderer.images = hg_alloc<Image>(arena, max_images);
     renderer.image_count = 0;
     renderer.image_capacity = max_images;
     return renderer;
@@ -1662,8 +1662,8 @@ void HgRenderer::reset() {
 
 HgBufferRenderID HgRenderer::add_buffer(
     VkBuffer buffer,
-    VkDeviceSize offset,
-    VkDeviceSize size,
+    u64 offset,
+    u64 size,
     HgRenderUsage previous_usage,
     HgRenderAccess previous_access
 ) {
@@ -1818,11 +1818,11 @@ void HgRenderer::barrier(
     const HgImageBarrier* image_barriers,
     u32 image_barrier_count
 ) {
-    HgArena& scratch = hg_get_scratch();
+    HgArena* scratch = hg_get_scratch();
     HgArenaScope scratch_scope{scratch};
 
-    VkBufferMemoryBarrier2* vk_buffer_barriers = scratch.alloc<VkBufferMemoryBarrier2>(image_barrier_count);
-    VkImageMemoryBarrier2* vk_image_barriers = scratch.alloc<VkImageMemoryBarrier2>(image_barrier_count);
+    VkBufferMemoryBarrier2* vk_buffer_barriers = hg_alloc<VkBufferMemoryBarrier2>(scratch, image_barrier_count);
+    VkImageMemoryBarrier2* vk_image_barriers = hg_alloc<VkImageMemoryBarrier2>(scratch, image_barrier_count);
 
     for (usize i = 0; i < buffer_barrier_count; ++i) {
         hg_assert(buffer_barriers[i].buffer < buffer_count);
@@ -1872,7 +1872,7 @@ void HgRenderer::barrier(
 }
 
 void HgRenderer::begin_pass(VkCommandBuffer cmd, u32 width, u32 height, const HgRenderPass& pass) {
-    HgArena& scratch = hg_get_scratch();
+    HgArena* scratch = hg_get_scratch();
     HgArenaScope scratch_scope{scratch};
 
     VkBufferMemoryBarrier2* buffer_barriers = nullptr;
@@ -1880,7 +1880,7 @@ void HgRenderer::begin_pass(VkCommandBuffer cmd, u32 width, u32 height, const Hg
     VkImageMemoryBarrier2* image_barriers = nullptr;
     u32 image_barrier_count = 0;
 
-    buffer_barriers = scratch.realloc<VkBufferMemoryBarrier2>(
+    buffer_barriers = hg_realloc<VkBufferMemoryBarrier2>(scratch, 
         buffer_barriers, buffer_barrier_count, buffer_barrier_count + pass.uniform_buffer_count);
 
     for (usize i = buffer_barrier_count; i < buffer_barrier_count + pass.uniform_buffer_count; ++i) {
@@ -1903,7 +1903,7 @@ void HgRenderer::begin_pass(VkCommandBuffer cmd, u32 width, u32 height, const Hg
 
     buffer_barrier_count += pass.uniform_buffer_count;
 
-    buffer_barriers = scratch.realloc<VkBufferMemoryBarrier2>(
+    buffer_barriers = hg_realloc<VkBufferMemoryBarrier2>(scratch, 
         buffer_barriers, buffer_barrier_count, buffer_barrier_count + pass.storage_buffer_count);
 
     for (usize i = buffer_barrier_count; i < buffer_barrier_count + pass.storage_buffer_count; ++i) {
@@ -1926,7 +1926,7 @@ void HgRenderer::begin_pass(VkCommandBuffer cmd, u32 width, u32 height, const Hg
 
     buffer_barrier_count += pass.storage_buffer_count;
 
-    image_barriers = scratch.realloc<VkImageMemoryBarrier2>(
+    image_barriers = hg_realloc<VkImageMemoryBarrier2>(scratch, 
         image_barriers, image_barrier_count, image_barrier_count + pass.sampled_image_count);
 
     for (usize i = image_barrier_count; i < image_barrier_count + pass.sampled_image_count; ++i) {
@@ -1950,7 +1950,7 @@ void HgRenderer::begin_pass(VkCommandBuffer cmd, u32 width, u32 height, const Hg
 
     image_barrier_count += pass.sampled_image_count;
 
-    image_barriers = scratch.realloc<VkImageMemoryBarrier2>(
+    image_barriers = hg_realloc<VkImageMemoryBarrier2>(scratch, 
         image_barriers, image_barrier_count, image_barrier_count + pass.color_attachment_count);
 
     for (usize i = image_barrier_count; i < image_barrier_count + pass.color_attachment_count; ++i) {
@@ -1978,7 +1978,7 @@ void HgRenderer::begin_pass(VkCommandBuffer cmd, u32 width, u32 height, const Hg
         hg_assert(pass.depth_attachment.image < image_count);
         Image& image = images[pass.depth_attachment.image];
 
-        image_barriers = scratch.realloc<VkImageMemoryBarrier2>(
+        image_barriers = hg_realloc<VkImageMemoryBarrier2>(scratch, 
             image_barriers, image_barrier_count, image_barrier_count + 1);
 
         HgRenderAccess access = (HgRenderAccess)((u32)HgRenderAccess::write |
@@ -2006,7 +2006,7 @@ void HgRenderer::begin_pass(VkCommandBuffer cmd, u32 width, u32 height, const Hg
         hg_assert(pass.stencil_attachment.image < image_count);
         Image& image = images[pass.stencil_attachment.image];
 
-        image_barriers = scratch.realloc<VkImageMemoryBarrier2>(
+        image_barriers = hg_realloc<VkImageMemoryBarrier2>(scratch, 
             image_barriers, image_barrier_count, image_barrier_count + 1);
 
         HgRenderAccess access = (HgRenderAccess)((u32)HgRenderAccess::write |
@@ -2040,7 +2040,7 @@ void HgRenderer::begin_pass(VkCommandBuffer cmd, u32 width, u32 height, const Hg
     vkCmdPipelineBarrier2(cmd, &dep);
 
     VkRenderingAttachmentInfo* color_attachments
-        = scratch.alloc<VkRenderingAttachmentInfo>(pass.color_attachment_count);
+        = hg_alloc<VkRenderingAttachmentInfo>(scratch, pass.color_attachment_count);
 
     for (usize i = 0; i < pass.color_attachment_count; ++i) {
         hg_assert(pass.color_attachments[i].image < image_count);
@@ -2202,12 +2202,12 @@ void hg_internal_resize_window_swapchain(HgWindow* window) {
 static VkFormat find_swapchain_format(VkSurfaceKHR surface) {
     hg_assert(surface != nullptr);
 
-    HgArena& scratch = hg_get_scratch();
+    HgArena* scratch = hg_get_scratch();
     HgArenaScope scratch_scope{scratch};
 
     u32 format_count = 0;
     vkGetPhysicalDeviceSurfaceFormatsKHR(hg_vk_physical_device, surface, &format_count, nullptr);
-    VkSurfaceFormatKHR* formats = scratch.alloc<VkSurfaceFormatKHR>(format_count);
+    VkSurfaceFormatKHR* formats = hg_alloc<VkSurfaceFormatKHR>(scratch, format_count);
     vkGetPhysicalDeviceSurfaceFormatsKHR(hg_vk_physical_device, surface, &format_count, formats);
 
     for (usize i = 0; i < format_count; ++i) {

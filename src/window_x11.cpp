@@ -239,10 +239,10 @@ static void set_x11_fullscreen(
         hg_error("X11 could not send fullscreen message\n");
 }
 
-HgWindow* HgWindow::create(HgArena& arena, const HgWindowConfig& config) {
-    HgWindow* window = arena.alloc<HgWindow>(1);
+HgWindow* HgWindow::create(HgArena* arena, const HgWindowConfig& config) {
+    HgWindow* window = hg_alloc<HgWindow>(arena, 1);
     *window = {};
-    window->internals = arena.alloc<Internals>(1);
+    window->internals = hg_alloc<Internals>(arena, 1);
     *window->internals = {};
 
     window->width = config.windowed ? config.width : (u32)DisplayWidth(x11_display, DefaultScreen(x11_display));
@@ -314,9 +314,9 @@ void HgWindow::set_cursor_image(u32* data, u32 width, u32 height) {
     (void)height;
 }
 
-u32 hg_vk_get_platform_extensions(HgArena& arena, HgStringView** ext_buffer) {
+u32 hg_vk_get_platform_extensions(HgArena* arena, HgStringView** ext_buffer) {
     u32 count = 2;
-    *ext_buffer = arena.alloc<HgStringView>(count);
+    *ext_buffer = hg_alloc<HgStringView>(arena, count);
     (*ext_buffer)[0] = "VK_KHR_surface";
     (*ext_buffer)[1] = "VK_KHR_xlib_surface";
     return count;

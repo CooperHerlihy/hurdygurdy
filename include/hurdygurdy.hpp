@@ -303,23 +303,19 @@ void hg_test();
 /**
  * The value of Pi
  */
-static constexpr f64 hg_pi = 3.1415926535897932;
-/**
- * The value of Tau (2pi)
- */
-static constexpr f64 hg_tau = 6.2831853071795864;
+#define hg_pi 3.1415926535897932
 /**
  * The value of Euler's number
  */
-static constexpr f64 hg_euler = 2.7182818284590452;
+#define hg_euler 2.7182818284590452
 /**
  * The value of the square root of 2
  */
-static constexpr f64 hg_root2 = 1.4142135623730951;
+#define hg_root2 1.4142135623730951
 /**
  * The value of the square root of 3
  */
-static constexpr f64 hg_root3 = 1.7320508075688772;
+#define hg_root3 1.7320508075688772
 
 /**
  * A 2D vector
@@ -337,11 +333,11 @@ struct HgVec2 {
     /**
      * Construct from a single scalar
      */
-    constexpr HgVec2(f32 scalar) : x{scalar}, y{scalar} {}
+    explicit constexpr HgVec2(f32 scalar) : x{scalar}, y{scalar} {}
     /**
      * Construct from a list of values
      */
-    constexpr HgVec2(f32 x_val, f32 y_val) : x{x_val}, y{y_val} {}
+    explicit constexpr HgVec2(f32 x_val, f32 y_val) : x{x_val}, y{y_val} {}
 
     /**
      * Access with index
@@ -362,34 +358,20 @@ struct HgVec2 {
     /**
      * Add another vector in place
      */
-    const HgVec2& operator+=(const HgVec2& other);
+    const HgVec2& operator+=(HgVec2 other);
     /**
      * Subtract another vector in place
      */
-    const HgVec2& operator-=(const HgVec2& other);
+    const HgVec2& operator-=(HgVec2 other);
     /**
      * Multiply another vector in place
      */
-    const HgVec2& operator*=(const HgVec2& other);
+    const HgVec2& operator*=(HgVec2 other);
     /**
      * Divide another vector in place
      */
-    const HgVec2& operator/=(const HgVec2& other);
+    const HgVec2& operator/=(HgVec2 other);
 };
-
-/**
- * Compare vectors
- */
-constexpr bool operator==(const HgVec2& lhs, const HgVec2& rhs) {
-    return lhs.x == rhs.x && lhs.y == rhs.y;
-}
-
-/**
- * Compare vectors
- */
-constexpr bool operator!=(const HgVec2& lhs, const HgVec2& rhs) {
-    return lhs.x != rhs.x || lhs.y != rhs.y;
-}
 
 /**
  * A 3D vector
@@ -407,23 +389,22 @@ struct HgVec3 {
     /**
      * Construct from a single scalar
      */
-    constexpr HgVec3(f32 scalar) : x{scalar}, y{scalar}, z{scalar} {}
+    explicit constexpr HgVec3(f32 scalar) : x{scalar}, y{scalar}, z{scalar} {}
     /**
      * Construct from a list of values
      */
-    constexpr HgVec3(f32 x_val, f32 y_val) : x{x_val}, y{y_val}, z{0} {}
-    /**
-     * Construct from a list of values
-     */
-    constexpr HgVec3(f32 x_val, f32 y_val, f32 z_val) : x{x_val}, y{y_val}, z{z_val} {}
-    /**
-     * Construct from a Vec2
-     */
-    constexpr HgVec3(const HgVec2& other) : x{other.x}, y{other.y}, z{0} {}
+    explicit constexpr HgVec3(f32 x_val, f32 y_val, f32 z_val) : x{x_val}, y{y_val}, z{z_val} {}
     /**
      * Construct from a Vec2 and scalar
      */
-    constexpr HgVec3(const HgVec2& other, f32 z_val) : x{other.x}, y{other.y}, z{z_val} {}
+    explicit constexpr HgVec3(HgVec2 other, f32 z_val) : x{other.x}, y{other.y}, z{z_val} {}
+
+    /**
+     * Downsize to Vec2
+     */
+    explicit operator HgVec2() {
+        return HgVec2{x, y};
+    }
 
     /**
      * Access with index
@@ -444,34 +425,20 @@ struct HgVec3 {
     /**
      * Add another vector in place
      */
-    const HgVec3& operator+=(const HgVec3& other);
+    const HgVec3& operator+=(HgVec3 other);
     /**
      * Subtract another vector in place
      */
-    const HgVec3& operator-=(const HgVec3& other);
+    const HgVec3& operator-=(HgVec3 other);
     /**
      * Multiply another vector in place
      */
-    const HgVec3& operator*=(const HgVec3& other);
+    const HgVec3& operator*=(HgVec3 other);
     /**
      * Divide another vector in place
      */
-    const HgVec3& operator/=(const HgVec3& other);
+    const HgVec3& operator/=(HgVec3 other);
 };
-
-/**
- * Compare vectors
- */
-constexpr bool operator==(const HgVec3& lhs, const HgVec3& rhs) {
-    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
-}
-
-/**
- * Compare vectors
- */
-constexpr bool operator!=(const HgVec3& lhs, const HgVec3& rhs) {
-    return lhs.x != rhs.x || lhs.y != rhs.y || lhs.z != rhs.z;
-}
 
 /**
  * A 4D vector
@@ -489,31 +456,32 @@ struct HgVec4 {
     /**
      * Construct from a single scalar
      */
-    constexpr HgVec4(f32 scalar) : x{scalar}, y{scalar}, z{scalar}, w{scalar} {}
+    explicit constexpr HgVec4(f32 scalar) : x{scalar}, y{scalar}, z{scalar}, w{scalar} {}
     /**
      * Construct from a list of values
      */
-    constexpr HgVec4(f32 x_val, f32 y_val) : x{x_val}, y{y_val}, z{0}, w{0} {}
-    /**
-     * Construct from a list of values
-     */
-    constexpr HgVec4(f32 x_val, f32 y_val, f32 z_val) : x{x_val}, y{y_val}, z{z_val}, w{0} {}
-    /**
-     * Construct from a list of values
-     */
-    constexpr HgVec4(f32 x_val, f32 y_val, f32 z_val, f32 w_val) : x{x_val}, y{y_val}, z{z_val}, w{w_val} {}
+    explicit constexpr HgVec4(f32 x_val, f32 y_val, f32 z_val, f32 w_val) : x{x_val}, y{y_val}, z{z_val}, w{w_val} {}
     /**
      * Construct from a Vec2 and scalars
      */
-    constexpr HgVec4(const HgVec2& other, f32 z_val, f32 w_val) : x{other.x}, y{other.y}, z{z_val}, w{w_val} {}
-    /**
-     * Construct from a Vec3
-     */
-    constexpr HgVec4(const HgVec3& other) : x{other.x}, y{other.y}, z{other.z}, w{0} {}
+    explicit constexpr HgVec4(HgVec2 other, f32 z_val, f32 w_val) : x{other.x}, y{other.y}, z{z_val}, w{w_val} {}
     /**
      * Construct from a Vec3 and scalar
      */
-    constexpr HgVec4(const HgVec3& other, f32 w_val) : x{other.x}, y{other.y}, z{other.z}, w{w_val} {}
+    explicit constexpr HgVec4(HgVec3 other, f32 w_val) : x{other.x}, y{other.y}, z{other.z}, w{w_val} {}
+
+    /**
+     * Downsize to Vec2
+     */
+    explicit operator HgVec2() {
+        return HgVec2{x, y};
+    }
+    /**
+     * Downsize to Vec2
+     */
+    explicit operator HgVec3() {
+        return HgVec3{x, y, z};
+    }
 
     /**
      * Access with index
@@ -534,34 +502,20 @@ struct HgVec4 {
     /**
      * Add another vector in place
      */
-    const HgVec4& operator+=(const HgVec4& other);
+    const HgVec4& operator+=(HgVec4 other);
     /**
      * Subtract another vector in place
      */
-    const HgVec4& operator-=(const HgVec4& other);
+    const HgVec4& operator-=(HgVec4 other);
     /**
      * Multiply another vector in place
      */
-    const HgVec4& operator*=(const HgVec4& other);
+    const HgVec4& operator*=(HgVec4 other);
     /**
      * Divide another vector in place
      */
-    const HgVec4& operator/=(const HgVec4& other);
+    const HgVec4& operator/=(HgVec4 other);
 };
-
-/**
- * Compare vectors
- */
-constexpr bool operator==(const HgVec4& lhs, const HgVec4& rhs) {
-    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
-}
-
-/**
- * Compare vectors
- */
-constexpr bool operator!=(const HgVec4& lhs, const HgVec4& rhs) {
-    return lhs.x != rhs.x || lhs.y != rhs.y || lhs.z != rhs.z || lhs.w != rhs.w;
-}
 
 /**
  * A 2x2 matrix
@@ -579,15 +533,15 @@ struct HgMat2 {
     /**
      * Construct from a single scalar
      */
-    constexpr HgMat2(f32 scalar) : x{scalar, 0}, y{0, scalar} {}
+    explicit constexpr HgMat2(f32 scalar) : x{scalar, 0}, y{0, scalar} {}
     /**
      * Construct from a list of values
      */
-    constexpr HgMat2(f32 xx, f32 xy, f32 yx, f32 yy) : x{xx, xy}, y{yx, yy} {}
+    explicit constexpr HgMat2(f32 xx, f32 xy, f32 yx, f32 yy) : x{xx, xy}, y{yx, yy} {}
     /**
      * Construct from a list of vectors
      */
-    constexpr HgMat2(const HgVec2& x_val, const HgVec2& y_val) : x{x_val}, y{y_val} {}
+    explicit constexpr HgMat2(HgVec2 x_val, HgVec2 y_val) : x{x_val}, y{y_val} {}
 
     /**
      * Access with index
@@ -616,20 +570,6 @@ struct HgMat2 {
 };
 
 /**
- * Compare two matrices
- */
-constexpr bool operator==(const HgMat2& lhs, const HgMat2& rhs) {
-    return lhs.x == rhs.x && lhs.y == rhs.y;
-}
-
-/**
- * Compare two matrices
- */
-constexpr bool operator!=(const HgMat2& lhs, const HgMat2& rhs) {
-    return lhs.x != rhs.x || lhs.y != rhs.y;
-}
-
-/**
  * A 3x3 matrix
  */
 struct HgMat3 {
@@ -645,32 +585,24 @@ struct HgMat3 {
     /**
      * Construct from a single scalar
      */
-    constexpr HgMat3(f32 scalar)
+    explicit constexpr HgMat3(f32 scalar)
         : x{scalar, 0, 0}, y{0, scalar, 0}, z{0, 0, scalar} {}
     /**
      * Construct from a list of vectors
      */
-    constexpr HgMat3(const HgVec2& x_val, const HgVec2& y_val)
-        : x{x_val}, y{y_val}, z{0, 0, 1} {}
-    /**
-     * Construct from a list of vectors
-     */
-    constexpr HgMat3(const HgVec3& x_val, const HgVec3& y_val, const HgVec3& z_val)
+    explicit constexpr HgMat3(HgVec3 x_val, HgVec3 y_val, HgVec3 z_val)
         : x{x_val}, y{y_val}, z{z_val} {}
     /**
      * Construct from a Mat2
      */
-    constexpr HgMat3(const HgMat2& other)
-        : x{other.x}, y{other.y}, z{0, 0, 1} {}
+    explicit constexpr HgMat3(const HgMat2& other)
+        : x{other.x, 0}, y{other.y, 0}, z{0, 0, 1} {}
 
     /**
      * Downsize to Mat2
      */
-    constexpr operator HgMat2() {
-        return {
-            HgVec2{x.x, x.y},
-            HgVec2{y.x, y.y},
-        };
+    explicit constexpr operator HgMat2() {
+        return HgMat2{HgVec2{x}, HgVec2{y}};
     }
 
     /**
@@ -700,20 +632,6 @@ struct HgMat3 {
 };
 
 /**
- * Compare two matrices
- */
-constexpr bool operator==(const HgMat3& lhs, const HgMat3& rhs) {
-    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
-}
-
-/**
- * Compare two matrices
- */
-constexpr bool operator!=(const HgMat3& lhs, const HgMat3& rhs) {
-    return lhs.x != rhs.x || lhs.y != rhs.y || lhs.z != rhs.z;
-}
-
-/**
  * A 4x4 matrix
  */
 struct HgMat4 {
@@ -729,52 +647,35 @@ struct HgMat4 {
     /**
      * Construct from a single scalar
      */
-    constexpr HgMat4(f32 scalar)
+    explicit constexpr HgMat4(f32 scalar)
         : x{scalar, 0, 0, 0}, y{0, scalar, 0, 0}, z{0, 0, scalar, 0}, w{0, 0, 0, scalar} {}
     /**
      * Construct from a list of vectors
      */
-    constexpr HgMat4(const HgVec2& x_val, const HgVec2& y_val)
-        : x{x_val}, y{y_val}, z{0, 0, 1, 0}, w{0, 0, 0, 1} {}
-    /**
-     * Construct from a list of vectors
-     */
-    constexpr HgMat4(const HgVec3& x_val, const HgVec3& y_val, const HgVec3& z_val)
-        : x{x_val}, y{y_val}, z{z_val}, w{0, 0, 0, 1} {}
-    /**
-     * Construct from a list of vectors
-     */
-    constexpr HgMat4(const HgVec4& x_val, const HgVec4& y_val, const HgVec4& z_val, const HgVec4& w_val)
+    explicit constexpr HgMat4(HgVec4 x_val, HgVec4 y_val, HgVec4 z_val, HgVec4 w_val)
         : x{x_val}, y{y_val}, z{z_val}, w{w_val} {}
     /**
      * Construct from a Mat2
      */
-    constexpr HgMat4(const HgMat2& other)
-        : x{other.x}, y{other.y}, z{0, 0, 1, 0}, w{0, 0, 0, 1} {}
+    explicit constexpr HgMat4(const HgMat2& other)
+        : x{other.x, 0, 0}, y{other.y, 0, 0}, z{0, 0, 1, 0}, w{0, 0, 0, 1} {}
     /**
      * Construct from a Mat3
      */
-    constexpr HgMat4(const HgMat3& other)
-        : x{other.x}, y{other.y}, z{other.z}, w{0, 0, 0, 1} {}
+    explicit constexpr HgMat4(const HgMat3& other)
+        : x{other.x, 0}, y{other.y, 0}, z{other.z, 0}, w{0, 0, 0, 1} {}
 
     /**
      * Downsize to Mat2
      */
-    constexpr operator HgMat2() {
-        return {
-            HgVec2{x.x, x.y},
-            HgVec2{y.x, y.y},
-        };
+    explicit constexpr operator HgMat2() {
+        return HgMat2{HgVec2{x}, HgVec2{y}};
     }
     /**
      * Downsize to Mat3
      */
-    constexpr operator HgMat3() {
-        return {
-            HgVec3{x.x, x.y, x.z},
-            HgVec3{y.x, y.y, y.z},
-            HgVec3{z.x, z.y, z.z},
-        };
+    explicit constexpr operator HgMat3() {
+        return HgMat3{HgVec3{x}, HgVec3{y}, HgVec3{z}};
     }
 
     /**
@@ -804,20 +705,6 @@ struct HgMat4 {
 };
 
 /**
- * Compare two matrices
- */
-constexpr bool operator==(const HgMat4& lhs, const HgMat4& rhs) {
-    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
-}
-
-/**
- * Compare two matrices
- */
-constexpr bool operator!=(const HgMat4& lhs, const HgMat4& rhs) {
-    return lhs.x != rhs.x || lhs.y != rhs.y || lhs.z != rhs.z || lhs.w != rhs.w;
-}
-
-/**
  * A complex number
  */
 struct HgComplex {
@@ -837,11 +724,11 @@ struct HgComplex {
     /**
      * Construct from just a real value
      */
-    constexpr HgComplex(f32 r_val) : r{r_val}, i{0} {}
+    explicit constexpr HgComplex(f32 r_val) : r{r_val}, i{0} {}
     /**
      * Construct from a list of values
      */
-    constexpr HgComplex(f32 r_val, f32 i_val) : r{r_val}, i{i_val} {}
+    explicit constexpr HgComplex(f32 r_val, f32 i_val) : r{r_val}, i{i_val} {}
 
     /**
      * Access with index
@@ -862,26 +749,12 @@ struct HgComplex {
     /**
      * Add another complex number in place
      */
-    const HgComplex& operator+=(const HgComplex& other);
+    const HgComplex& operator+=(HgComplex other);
     /**
      * Subtract another complex number in place
      */
-    const HgComplex& operator-=(const HgComplex& other);
+    const HgComplex& operator-=(HgComplex other);
 };
-
-/**
- * Compare two complex numbers
- */
-constexpr bool operator==(const HgComplex& lhs, const HgComplex& rhs) {
-    return lhs.r == rhs.r && lhs.i == rhs.i;
-}
-
-/**
- * Compare two complex numbers
- */
-constexpr bool operator!=(const HgComplex& lhs, const HgComplex& rhs) {
-    return lhs.r != rhs.r || lhs.i != rhs.i;
-}
 
 /**
  * A quaternion
@@ -903,11 +776,11 @@ struct HgQuat {
     /**
      * Construct from just a real value
      */
-    constexpr HgQuat(f32 r_val) : r{r_val}, i{0}, j{0}, k{0} {}
+    explicit constexpr HgQuat(f32 r_val) : r{r_val}, i{0}, j{0}, k{0} {}
     /**
      * Construct from a list of values
      */
-    constexpr HgQuat(f32 r_val, f32 i_val, f32 j_val, f32 k_val) : r{r_val}, i{i_val}, j{j_val}, k{k_val} {}
+    explicit constexpr HgQuat(f32 r_val, f32 i_val, f32 j_val, f32 k_val) : r{r_val}, i{i_val}, j{j_val}, k{k_val} {}
 
     /**
      * Access with index
@@ -928,24 +801,122 @@ struct HgQuat {
     /**
      * Add another quaternion in place
      */
-    const HgQuat& operator+=(const HgQuat& other);
+    const HgQuat& operator+=(HgQuat other);
     /**
      * Subtract another quaternion in place
      */
-    const HgQuat& operator-=(const HgQuat& other);
+    const HgQuat& operator-=(HgQuat other);
 };
+
+/**
+ * Compare vectors
+ */
+constexpr bool operator==(HgVec2 lhs, HgVec2 rhs) {
+    return lhs.x == rhs.x && lhs.y == rhs.y;
+}
+
+/**
+ * Compare vectors
+ */
+constexpr bool operator!=(HgVec2 lhs, HgVec2 rhs) {
+    return lhs.x != rhs.x || lhs.y != rhs.y;
+}
+
+/**
+ * Compare vectors
+ */
+constexpr bool operator==(HgVec3 lhs, HgVec3 rhs) {
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
+}
+
+/**
+ * Compare vectors
+ */
+constexpr bool operator!=(HgVec3 lhs, HgVec3 rhs) {
+    return lhs.x != rhs.x || lhs.y != rhs.y || lhs.z != rhs.z;
+}
+
+/**
+ * Compare vectors
+ */
+constexpr bool operator==(HgVec4 lhs, HgVec4 rhs) {
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
+}
+
+/**
+ * Compare vectors
+ */
+constexpr bool operator!=(HgVec4 lhs, HgVec4 rhs) {
+    return lhs.x != rhs.x || lhs.y != rhs.y || lhs.z != rhs.z || lhs.w != rhs.w;
+}
+
+/**
+ * Compare two matrices
+ */
+constexpr bool operator==(const HgMat2& lhs, const HgMat2& rhs) {
+    return lhs.x == rhs.x && lhs.y == rhs.y;
+}
+
+/**
+ * Compare two matrices
+ */
+constexpr bool operator!=(const HgMat2& lhs, const HgMat2& rhs) {
+    return lhs.x != rhs.x || lhs.y != rhs.y;
+}
+
+/**
+ * Compare two matrices
+ */
+constexpr bool operator==(const HgMat3& lhs, const HgMat3& rhs) {
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
+}
+
+/**
+ * Compare two matrices
+ */
+constexpr bool operator!=(const HgMat3& lhs, const HgMat3& rhs) {
+    return lhs.x != rhs.x || lhs.y != rhs.y || lhs.z != rhs.z;
+}
+
+/**
+ * Compare two matrices
+ */
+constexpr bool operator==(const HgMat4& lhs, const HgMat4& rhs) {
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
+}
+
+/**
+ * Compare two matrices
+ */
+constexpr bool operator!=(const HgMat4& lhs, const HgMat4& rhs) {
+    return lhs.x != rhs.x || lhs.y != rhs.y || lhs.z != rhs.z || lhs.w != rhs.w;
+}
+
+/**
+ * Compare two complex numbers
+ */
+constexpr bool operator==(HgComplex lhs, HgComplex rhs) {
+    return lhs.r == rhs.r && lhs.i == rhs.i;
+}
+
+/**
+ * Compare two complex numbers
+ */
+constexpr bool operator!=(HgComplex lhs, HgComplex rhs) {
+    return lhs.r != rhs.r || lhs.i != rhs.i;
+}
 
 /**
  * Compare two quaternions
  */
-constexpr bool operator==(const HgQuat& lhs, const HgQuat& rhs) {
+constexpr bool operator==(HgQuat lhs, HgQuat rhs) {
     return lhs.r == rhs.r && lhs.i == rhs.i && lhs.j == rhs.j && lhs.k == rhs.k;
 }
 
 /**
  * Compare two quaternions
  */
-constexpr bool operator!=(const HgQuat& lhs, const HgQuat& rhs) {
+constexpr bool operator!=(HgQuat lhs, HgQuat rhs) {
     return lhs.r != rhs.r || lhs.i != rhs.i || lhs.j != rhs.j || lhs.k != rhs.k;
 }
 
@@ -963,22 +934,22 @@ void hg_vec_add(u32 size, f32* dst, const f32* lhs, const f32* rhs);
 /**
  * Add two 2D vectors
  */
-constexpr HgVec2 operator+(const HgVec2& lhs, const HgVec2& rhs) {
-    return {lhs.x + rhs.x, lhs.y + rhs.y};
+constexpr HgVec2 operator+(HgVec2 lhs, HgVec2 rhs) {
+    return HgVec2{lhs.x + rhs.x, lhs.y + rhs.y};
 }
 
 /**
  * Add two 3D vectors
  */
-constexpr HgVec3 operator+(const HgVec3& lhs, const HgVec3& rhs) {
-    return {lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z};
+constexpr HgVec3 operator+(HgVec3 lhs, HgVec3 rhs) {
+    return HgVec3{lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z};
 }
 
 /**
  * Add two 4D vectors
  */
-constexpr HgVec4 operator+(const HgVec4& lhs, const HgVec4& rhs) {
-    return {lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z, lhs.w + rhs.w};
+constexpr HgVec4 operator+(HgVec4 lhs, HgVec4 rhs) {
+    return HgVec4{lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z, lhs.w + rhs.w};
 }
 
 /**
@@ -995,22 +966,22 @@ void hg_vec_sub(u32 size, f32* dst, const f32* lhs, const f32* rhs);
 /**
  * Subtract two 2D vectors
  */
-constexpr HgVec2 operator-(const HgVec2& lhs, const HgVec2& rhs) {
-    return {lhs.x - rhs.x, lhs.y - rhs.y};
+constexpr HgVec2 operator-(HgVec2 lhs, HgVec2 rhs) {
+    return HgVec2{lhs.x - rhs.x, lhs.y - rhs.y};
 }
 
 /**
  * Subtract two 3D vectors
  */
-constexpr HgVec3 operator-(const HgVec3& lhs, const HgVec3& rhs) {
-    return {lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z};
+constexpr HgVec3 operator-(HgVec3 lhs, HgVec3 rhs) {
+    return HgVec3{lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z};
 }
 
 /**
  * Subtract two 4D vectors
  */
-constexpr HgVec4 operator-(const HgVec4& lhs, const HgVec4& rhs) {
-    return {lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z, lhs.w - rhs.w};
+constexpr HgVec4 operator-(HgVec4 lhs, HgVec4 rhs) {
+    return HgVec4{lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z, lhs.w - rhs.w};
 }
 
 /**
@@ -1027,22 +998,22 @@ void hg_vec_mul_pairwise(u32 size, f32* dst, const f32* lhs, const f32* rhs);
 /**
  * Multiply pairwise two 2D vectors
  */
-constexpr HgVec2 operator*(const HgVec2& lhs, const HgVec2& rhs) {
-    return {lhs.x * rhs.x, lhs.y * rhs.y};
+constexpr HgVec2 operator*(HgVec2 lhs, HgVec2 rhs) {
+    return HgVec2{lhs.x * rhs.x, lhs.y * rhs.y};
 }
 
 /**
  * Multiply pairwise two 3D vectors
  */
-constexpr HgVec3 operator*(const HgVec3& lhs, const HgVec3& rhs) {
-    return {lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z};
+constexpr HgVec3 operator*(HgVec3 lhs, HgVec3 rhs) {
+    return HgVec3{lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z};
 }
 
 /**
  * Multiply pairwise two 4D vectors
  */
-constexpr HgVec4 operator*(const HgVec4& lhs, const HgVec4& rhs) {
-    return {lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z, lhs.w * rhs.w};
+constexpr HgVec4 operator*(HgVec4 lhs, HgVec4 rhs) {
+    return HgVec4{lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z, lhs.w * rhs.w};
 }
 
 /**
@@ -1053,43 +1024,43 @@ void hg_vec_scalar_mul(u32 size, f32* dst, f32 scalar, const f32* vec);
 /**
  * Multiply a scalar and a 2D vector
  */
-constexpr HgVec2 operator*(f32 scalar, const HgVec2& vec) {
-    return {scalar * vec.x, scalar * vec.y};
+constexpr HgVec2 operator*(f32 scalar, HgVec2 vec) {
+    return HgVec2{scalar * vec.x, scalar * vec.y};
 }
 
 /**
  * Multiply a scalar and a 2D vector
  */
-constexpr HgVec2 operator*(const HgVec2& vec, f32 scalar) {
-    return {scalar * vec.x, scalar * vec.y};
+constexpr HgVec2 operator*(HgVec2 vec, f32 scalar) {
+    return HgVec2{scalar * vec.x, scalar * vec.y};
 }
 
 /**
  * Multiply a scalar and a 3D vector
  */
-constexpr HgVec3 operator*(f32 scalar, const HgVec3& vec) {
-    return {scalar * vec.x, scalar * vec.y, scalar * vec.z};
+constexpr HgVec3 operator*(f32 scalar, HgVec3 vec) {
+    return HgVec3{scalar * vec.x, scalar * vec.y, scalar * vec.z};
 }
 
 /**
  * Multiply a scalar and a 3D vector
  */
-constexpr HgVec3 operator*(const HgVec3& vec, f32 scalar) {
-    return {scalar * vec.x, scalar * vec.y, scalar * vec.z};
+constexpr HgVec3 operator*(HgVec3 vec, f32 scalar) {
+    return HgVec3{scalar * vec.x, scalar * vec.y, scalar * vec.z};
 }
 
 /**
  * Multiply a scalar and a 4D vector
  */
-constexpr HgVec4 operator*(f32 scalar, const HgVec4& vec) {
-    return {scalar * vec.x, scalar * vec.y, scalar * vec.z, scalar * vec.w};
+constexpr HgVec4 operator*(f32 scalar, HgVec4 vec) {
+    return HgVec4{scalar * vec.x, scalar * vec.y, scalar * vec.z, scalar * vec.w};
 }
 
 /**
  * Multiply a scalar and a 4D vector
  */
-constexpr HgVec4 operator*(const HgVec4& vec, f32 scalar) {
-    return {scalar * vec.x, scalar * vec.y, scalar * vec.z, scalar * vec.w};
+constexpr HgVec4 operator*(HgVec4 vec, f32 scalar) {
+    return HgVec4{scalar * vec.x, scalar * vec.y, scalar * vec.z, scalar * vec.w};
 }
 
 /**
@@ -1110,9 +1081,9 @@ void hg_vec_div(u32 size, f32* dst, const f32* lhs, const f32* rhs);
  *
  * Note, cannot divide by 0
  */
-constexpr HgVec2 operator/(const HgVec2& lhs, const HgVec2& rhs) {
+constexpr HgVec2 operator/(HgVec2 lhs, HgVec2 rhs) {
     hg_assert(rhs.x != 0 && rhs.y != 0);
-    return {lhs.x / rhs.x, lhs.y / rhs.y};
+    return HgVec2{lhs.x / rhs.x, lhs.y / rhs.y};
 }
 
 /**
@@ -1120,9 +1091,9 @@ constexpr HgVec2 operator/(const HgVec2& lhs, const HgVec2& rhs) {
  *
  * Note, cannot divide by 0
  */
-constexpr HgVec3 operator/(const HgVec3& lhs, const HgVec3& rhs) {
+constexpr HgVec3 operator/(HgVec3 lhs, HgVec3 rhs) {
     hg_assert(rhs.x != 0 && rhs.y != 0 && rhs.z != 0);
-    return {lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z};
+    return HgVec3{lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z};
 }
 
 /**
@@ -1130,9 +1101,9 @@ constexpr HgVec3 operator/(const HgVec3& lhs, const HgVec3& rhs) {
  *
  * Note, cannot divide by 0
  */
-constexpr HgVec4 operator/(const HgVec4& lhs, const HgVec4& rhs) {
+constexpr HgVec4 operator/(HgVec4 lhs, HgVec4 rhs) {
     hg_assert(rhs.x != 0 && rhs.y != 0 && rhs.z != 0 && rhs.w != 0);
-    return {lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z, lhs.w / rhs.w};
+    return HgVec4{lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z, lhs.w / rhs.w};
 }
 
 /**
@@ -1147,9 +1118,9 @@ void hg_vec_scalar_div(u32 size, f32* dst, const f32* vec, f32 scalar);
  *
  * Note, cannot divide by 0
  */
-constexpr HgVec2 operator/(const HgVec2& vec, f32 scalar) {
+constexpr HgVec2 operator/(HgVec2 vec, f32 scalar) {
     hg_assert(scalar != 0);
-    return {vec.x / scalar, vec.y / scalar};
+    return HgVec2{vec.x / scalar, vec.y / scalar};
 }
 
 /**
@@ -1157,9 +1128,9 @@ constexpr HgVec2 operator/(const HgVec2& vec, f32 scalar) {
  *
  * Note, cannot divide by 0
  */
-constexpr HgVec3 operator/(const HgVec3& vec, f32 scalar) {
+constexpr HgVec3 operator/(HgVec3 vec, f32 scalar) {
     hg_assert(scalar != 0);
-    return {vec.x / scalar, vec.y / scalar, vec.z / scalar};
+    return HgVec3{vec.x / scalar, vec.y / scalar, vec.z / scalar};
 }
 
 /**
@@ -1167,9 +1138,9 @@ constexpr HgVec3 operator/(const HgVec3& vec, f32 scalar) {
  *
  * Note, cannot divide by 0
  */
-constexpr HgVec4 operator/(const HgVec4& vec, f32 scalar) {
+constexpr HgVec4 operator/(HgVec4 vec, f32 scalar) {
     hg_assert(scalar != 0);
-    return {vec.x / scalar, vec.y / scalar, vec.z / scalar, vec.w / scalar};
+    return HgVec4{vec.x / scalar, vec.y / scalar, vec.z / scalar, vec.w / scalar};
 }
 
 /**
@@ -1186,21 +1157,21 @@ void hg_dot(u32 size, f32* dst, const f32* lhs, const f32* rhs);
 /**
  * Compute the dot product of two 2D vectors
  */
-constexpr f32 hg_dot(const HgVec2& lhs, const HgVec2& rhs) {
+constexpr f32 hg_dot(HgVec2 lhs, HgVec2 rhs) {
     return lhs.x * rhs.x + lhs.y * rhs.y;
 }
 
 /**
  * Compute the dot product of two 3D vectors
  */
-constexpr f32 hg_dot(const HgVec3& lhs, const HgVec3& rhs) {
+constexpr f32 hg_dot(HgVec3 lhs, HgVec3 rhs) {
     return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
 }
 
 /**
  * Compute the dot product of two 4D vectors
  */
-constexpr f32 hg_dot(const HgVec4& lhs, const HgVec4& rhs) {
+constexpr f32 hg_dot(HgVec4 lhs, HgVec4 rhs) {
     return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z + lhs.w * rhs.w;
 }
 
@@ -1217,17 +1188,17 @@ void hg_len(u32 size, f32* dst, const f32* vec);
 /**
  * Compute the length of a 2D vector
  */
-f32 hg_len(const HgVec2& vec);
+f32 hg_len(HgVec2 vec);
 
 /**
  * Compute the length of a 3D vector
  */
-f32 hg_len(const HgVec3& vec);
+f32 hg_len(HgVec3 vec);
 
 /**
  * Compute the length of a 4D vector
  */
-f32 hg_len(const HgVec4& vec);
+f32 hg_len(HgVec4 vec);
 
 /**
  * Normalize a vector
@@ -1241,21 +1212,21 @@ void hg_norm(u32 size, f32* dst, const f32* vec);
  *
  * Note, cannot normalize 0
  */
-HgVec2 hg_norm(const HgVec2& vec);
+HgVec2 hg_norm(HgVec2 vec);
 
 /**
  * Normalize a 3D vector
  *
  * Note, cannot normalize 0
  */
-HgVec3 hg_norm(const HgVec3& vec);
+HgVec3 hg_norm(HgVec3 vec);
 
 /**
  * Normalize a 4D vector
  *
  * Note, cannot normalize 0
  */
-HgVec4 hg_norm(const HgVec4& vec);
+HgVec4 hg_norm(HgVec4 vec);
 
 /**
  * Compute the cross product of two 3D vectors
@@ -1270,7 +1241,7 @@ void hg_cross(f32* dst, const f32* lhs, const f32* rhs);
 /**
  * Compute the cross product of two 3D vectors
  */
-HgVec3 hg_cross(const HgVec3& lhs, const HgVec3& rhs);
+HgVec3 hg_cross(HgVec3 lhs, HgVec3 rhs);
 
 /**
  * Add two arbitrary size matrices
@@ -1370,79 +1341,79 @@ void hg_mat_vec_mul(u32 width, u32 height, f32* dst, const f32* mat, const f32* 
 /**
  * Multiply a 2x2 matrix and a 2D vector
  */
-HgVec2 operator*(const HgMat2& lhs, const HgVec2& rhs);
+HgVec2 operator*(const HgMat2& lhs, HgVec2 rhs);
 
 /**
  * Multiply a 3x3 matrix and a 3D vector
  */
-HgVec3 operator*(const HgMat3& lhs, const HgVec3& rhs);
+HgVec3 operator*(const HgMat3& lhs, HgVec3 rhs);
 
 /**
  * Multiply a 4x4 matrix and a 4D vector
  */
-HgVec4 operator*(const HgMat4& lhs, const HgVec4& rhs);
+HgVec4 operator*(const HgMat4& lhs, HgVec4 rhs);
 
 /**
  * Add two complex numbers
  */
-constexpr HgComplex operator+(const HgComplex& lhs, const HgComplex& rhs) {
-    return {lhs.r + rhs.r, lhs.i + rhs.i};
+constexpr HgComplex operator+(HgComplex lhs, HgComplex rhs) {
+    return HgComplex{lhs.r + rhs.r, lhs.i + rhs.i};
 }
 
 /**
  * Subtract two complex numbers
  */
-constexpr HgComplex operator-(const HgComplex& lhs, const HgComplex& rhs) {
-    return {lhs.r - rhs.r, lhs.i - rhs.i};
+constexpr HgComplex operator-(HgComplex lhs, HgComplex rhs) {
+    return HgComplex{lhs.r - rhs.r, lhs.i - rhs.i};
 }
 
 /**
  * Multiply two complex numbers
  */
-constexpr HgComplex operator*(const HgComplex& lhs, const HgComplex& rhs) {
-    return {lhs.r * rhs.r - lhs.i * rhs.i, lhs.r * rhs.i + lhs.i * rhs.r};
+constexpr HgComplex operator*(HgComplex lhs, HgComplex rhs) {
+    return HgComplex{lhs.r * rhs.r - lhs.i * rhs.i, lhs.r * rhs.i + lhs.i * rhs.r};
 }
 
 /**
  * Add two quaternions
  */
-constexpr HgQuat operator+(const HgQuat& lhs, const HgQuat& rhs) {
-    return {lhs.r + rhs.r, lhs.i + rhs.i, lhs.j + rhs.j, lhs.k + rhs.k};
+constexpr HgQuat operator+(HgQuat lhs, HgQuat rhs) {
+    return HgQuat{lhs.r + rhs.r, lhs.i + rhs.i, lhs.j + rhs.j, lhs.k + rhs.k};
 }
 
 /**
  * Subtract two quaternions
  */
-constexpr HgQuat operator-(const HgQuat& lhs, const HgQuat& rhs) {
-    return {lhs.r - rhs.r, lhs.i - rhs.i, lhs.j - rhs.j, lhs.k - rhs.k};
+constexpr HgQuat operator-(HgQuat lhs, HgQuat rhs) {
+    return HgQuat{lhs.r - rhs.r, lhs.i - rhs.i, lhs.j - rhs.j, lhs.k - rhs.k};
 }
 
 /**
  * Multiply two quaternions
  */
-HgQuat operator*(const HgQuat& lhs, const HgQuat& rhs);
+HgQuat operator*(HgQuat lhs, HgQuat rhs);
 
 /**
  * Compute the conjugate of a quaternion
  */
-constexpr HgQuat hg_conj(const HgQuat& quat) {
-    return {quat.r, -quat.i, -quat.j, -quat.k};
+constexpr HgQuat hg_conj(HgQuat quat) {
+    return HgQuat{quat.r, -quat.i, -quat.j, -quat.k};
 }
 
 /**
  * Create a rotation quaternion from an axis and angle
  */
-HgQuat hg_axis_angle(const HgVec3& axis, f32 angle);
+HgQuat hg_axis_angle(HgVec3 axis, f32 angle);
 
 /**
  * Rotate a 3D vector using a quaternion
  */
-HgVec3 hg_rotate(const HgQuat& lhs, const HgVec3& rhs);
+HgVec3 hg_rotate(HgQuat lhs, HgVec3 rhs);
 
 /**
  * Rotate a 3x3 matrix using a quaternion
  */
-HgMat3 hg_rotate(const HgQuat& lhs, const HgMat3& rhs);
+HgMat3 hg_rotate(HgQuat lhs, HgMat3 rhs);
 
 /**
  * Creates a model matrix for 2D graphics
@@ -1455,7 +1426,7 @@ HgMat3 hg_rotate(const HgQuat& lhs, const HgMat3& rhs);
  * Returns
  * - The created matrix
  */
-HgMat4 hg_model_matrix_2d(const HgVec3& position, const HgVec2& scale, f32 rotation);
+HgMat4 hg_model_matrix_2d(HgVec3 position, HgVec2 scale, f32 rotation);
 
 /**
  * Creates a model matrix for 3D graphics
@@ -1573,69 +1544,73 @@ struct HgArena {
      * Create an arena from a block of memory
      */
     HgArena(void* memory_val, usize capacity_val) : memory{memory_val}, capacity{capacity_val}, head{0} {}
-
-    /**
-     * Allocates memory from an arena
-     *
-     * Parameters
-     * - size The size in bytes of the allocation
-     * - alignment The required alignment of the allocation in bytes
-     *
-     * Returns
-     * - The allocation, never nullptr
-     */
-    void* alloc(usize size, usize alignment);
-
-    /**
-     * A convenience to allocate an array of a type
-     *
-     * Note, objects are not initialized
-     *
-     * Parameters
-     * - count The number of T to allocate
-     *
-     * Returns
-     * - The allocated array, never nullptr
-     */
-    template<typename T>
-    T* alloc(usize count) {
-        return (T*)alloc(count * sizeof(T), alignof(T));
-    }
-
-    /**
-     * Reallocates memory from a arena
-     *
-     * Simply increases the size if allocation is the most recent allocation
-     *
-     * Parameters
-     * - allocation The allocation to grow
-     * - new_size The new size in bytes of the allocation
-     * - alignment The required alignment of the allocation in bytes
-     *
-     * Returns
-     * - The allocation, never nullptr
-     */
-    void* realloc(void* allocation, usize old_size, usize new_size, usize alignment);
-
-    /**
-     * A convenience to reallocate an array of a type
-     *
-     * Note, objects are default constructed if possible, otherwise they are
-     * left uninitialized
-     *
-     * Parameters
-     * - allocation The allocation to reallocate
-     * - count The new number of T to allocate
-     *
-     * Returns
-     * - The reallocated array, never nullptr
-     */
-    template<typename T>
-    T* realloc(T* allocation, usize old_count, usize new_count) {
-        static_assert(std::is_trivially_copyable_v<T>);
-        return (T*)realloc(allocation, old_count * sizeof(T), new_count * sizeof(T), alignof(T));
-    }
 };
+
+/**
+ * Allocates memory from an arena
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - size The size in bytes of the allocation
+ * - alignment The required alignment of the allocation in bytes
+ *
+ * Returns
+ * - The allocation, never nullptr
+ */
+void* hg_alloc(HgArena* arena, usize size, usize alignment);
+
+/**
+ * A convenience to allocate an array of a type
+ *
+ * Note, objects are not initialized
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - count The number of T to allocate
+ *
+ * Returns
+ * - The allocated array, never nullptr
+ */
+template<typename T>
+T* hg_alloc(HgArena* arena, usize count) {
+    return (T*)hg_alloc(arena, count * sizeof(T), alignof(T));
+}
+
+/**
+ * Reallocates memory from a arena
+ *
+ * Simply increases the size if allocation is the most recent allocation
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - allocation The allocation to grow
+ * - new_size The new size in bytes of the allocation
+ * - alignment The required alignment of the allocation in bytes
+ *
+ * Returns
+ * - The allocation, never nullptr
+ */
+void* hg_realloc(HgArena* arena, void* allocation, usize old_size, usize new_size, usize alignment);
+
+/**
+ * A convenience to reallocate an array of a type
+ *
+ * Note, objects are default constructed if possible, otherwise they are
+ * left uninitialized
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - allocation The allocation to reallocate
+ * - count The new number of T to allocate
+ *
+ * Returns
+ * - The reallocated array, never nullptr
+ */
+template<typename T>
+T* hg_realloc(HgArena* arena, T* allocation, usize old_count, usize new_count) {
+    static_assert(std::is_trivially_copyable_v<T>);
+    return (T*)hg_realloc(arena, allocation, old_count * sizeof(T), new_count * sizeof(T), alignof(T));
+}
 
 /**
  * Create a guard which restores an arena's head at the end of the scope
@@ -1644,7 +1619,7 @@ struct HgArenaScope {
     /**
      * The arena to restore
      */
-    HgArena& arena;
+    HgArena* arena;
     /**
      * The arena's original head
      */
@@ -1653,13 +1628,13 @@ struct HgArenaScope {
     /**
      * Constructs the scope guard
      */
-    HgArenaScope(HgArena& arena_val) : arena{arena_val}, head{arena_val.head} {}
+    HgArenaScope(HgArena* arena_val) : arena{arena_val}, head{arena_val->head} {}
 
     /**
      * Restores the arena's head
      */
     ~HgArenaScope() {
-        arena.head = head;
+        arena->head = head;
     }
 };
 
@@ -1674,25 +1649,6 @@ void hg_scratch_memory_init();
 void hg_scratch_memory_deinit();
 
 /**
- * Get a scratch arena for temporary allocations, assuming no conflicts
- *
- * Returns
- * - A scratch arena
- */
-HgArena& hg_get_scratch();
-
-/**
- * Get a scratch arena for temporary allocations, accounting for a conflict
- *
- * Parameters
- * - conflict If an arena is being used, the returned arena will be different
- *
- * Returns
- * - A scratch arena
- */
-HgArena& hg_get_scratch(const HgArena& conflict);
-
-/**
  * Get a scratch arena for temporary allocations, accounting for conflicts
  *
  * Parameters
@@ -1702,7 +1658,7 @@ HgArena& hg_get_scratch(const HgArena& conflict);
  * Returns
  * - A scratch arena
  */
-HgArena& hg_get_scratch(const HgArena** conflicts, usize count);
+HgArena* hg_get_scratch(HgArena const* const* conflicts = nullptr, usize count = 0);
 
 /**
  * A span view into a string
@@ -1718,16 +1674,6 @@ struct HgStringView {
     usize length;
 
     /**
-     * The size of the string in bytes
-     *
-     * Returns
-     * - The size of the string in bytes
-     */
-    constexpr usize size() const {
-        return length;
-    }
-
-    /**
      * Construct uninitialized
      */
     HgStringView() = default;
@@ -1735,14 +1681,14 @@ struct HgStringView {
     /**
      * Create a string view from a pointer and length
      */
-    constexpr HgStringView(const char* chars_val, usize length_val) : chars{chars_val}, length{length_val} {}
+    constexpr HgStringView(const char* chars_val, usize length_val)
+        : chars{chars_val}, length{length_val} {}
 
     /**
      * Create a string view from begin and end pointers
      */
     constexpr HgStringView(const char* chars_begin, const char* chars_end)
-        : chars{chars_begin}
-        , length{(uptr)(chars_end - chars_begin)}
+        : chars{chars_begin}, length{(uptr)(chars_end - chars_begin)}
     {
         hg_assert(chars_begin <= chars_end);
     }
@@ -1793,7 +1739,7 @@ struct HgStringView {
  * Returns
  * - a null terminated string
  */
-char* hg_c_string(HgArena& arena, HgStringView str);
+char* hg_c_string(HgArena* arena, HgStringView str);
 
 /**
  * A dynamic string container
@@ -1813,13 +1759,6 @@ struct HgString {
     usize length;
 
     /**
-     * Returns the size of the in bytes
-     */
-    constexpr usize size() const {
-        return length;
-    }
-
-    /**
      * Creates a new string with empty capacity
      *
      * Parameters
@@ -1829,7 +1768,7 @@ struct HgString {
      * Returns
      * - The created empty string
      */
-    static HgString create(HgArena& arena, usize capacity);
+    static HgString create(HgArena* arena, usize capacity);
 
     /**
      * Creates a new string copied from an existing string
@@ -1841,7 +1780,7 @@ struct HgString {
      * Returns
      * - The created copied string
      */
-    static HgString create(HgArena& arena, HgStringView init);
+    static HgString create(HgArena* arena, HgStringView init);
 
     /**
      * Removes all characters
@@ -1857,7 +1796,7 @@ struct HgString {
      * - arena The arena to allocate from
      * - new_capacity The new minimum capacity
      */
-    void reserve(HgArena& arena, usize new_capacity);
+    void reserve(HgArena* arena, usize new_capacity);
 
     /**
      * Increases the capacity of the string, or inits to 1
@@ -1866,7 +1805,7 @@ struct HgString {
      * - arena The arena to allocate from
      * - factor The growth factor to increase by
      */
-    void grow(HgArena& arena, f32 factor = 2.0f);
+    void grow(HgArena* arena, f32 factor = 2.0f);
 
     /**
      * Access using the index operator
@@ -1905,7 +1844,7 @@ struct HgString {
      * - arena The arena to allocate from
      * - c The char to insert
      */
-    HgString& insert(HgArena& arena, usize index, char c);
+    HgString& insert(HgArena* arena, usize index, char c);
 
     /**
      * Appends a char to the end of this string
@@ -1914,7 +1853,7 @@ struct HgString {
      * - arena The arena to allocate from
      * - c The char to append
      */
-    HgString& append(HgArena& arena, char c) {
+    HgString& append(HgArena* arena, char c) {
         return insert(arena, length, c);
     }
 
@@ -1925,7 +1864,7 @@ struct HgString {
      * - arena The arena to allocate from
      * - c The char to prepend
      */
-    HgString& prepend(HgArena& arena, char c) {
+    HgString& prepend(HgArena* arena, char c) {
         return insert(arena, 0, c);
     }
 
@@ -1936,7 +1875,7 @@ struct HgString {
      * - arena The arena to allocate from
      * - str The string to copy from
      */
-    HgString& insert(HgArena& arena, usize index, HgStringView str);
+    HgString& insert(HgArena* arena, usize index, HgStringView str);
 
     /**
      * Copies another string to the end of this string
@@ -1945,7 +1884,7 @@ struct HgString {
      * - arena The arena to allocate from
      * - str The string to copy from
      */
-    HgString& append(HgArena& arena, HgStringView str) {
+    HgString& append(HgArena* arena, HgStringView str) {
         return insert(arena, length, str);
     }
 
@@ -1956,7 +1895,7 @@ struct HgString {
      * - arena The arena to allocate from
      * - str The string to copy from
      */
-    HgString& prepend(HgArena& arena, HgStringView str) {
+    HgString& prepend(HgArena* arena, HgStringView str) {
         return insert(arena, 0, str);
     }
 
@@ -2073,7 +2012,7 @@ f64 hg_str_to_float_base10(HgStringView str);
  * Returns
  * - The created string
  */
-HgString hg_int_to_str_base10(HgArena& arena, i64 num);
+HgString hg_int_to_str_base10(HgArena* arena, i64 num);
 
 /**
  * Create a base 10 string from an integer
@@ -2085,7 +2024,7 @@ HgString hg_int_to_str_base10(HgArena& arena, i64 num);
  * Returns
  * - The created string
  */
-HgString hg_float_to_str_base10(HgArena& arena, f64 num, u64 decimal_count);
+HgString hg_float_to_str_base10(HgArena* arena, f64 num, u64 decimal_count);
 
 // base 2 and 16 string-int conversions : TODO
 // arbitrary base string-int conversions : TODO?
@@ -2113,140 +2052,140 @@ HgString hg_float_to_str_base10(HgArena& arena, f64 num, u64 decimal_count);
  * Returns
  * - The created string
  */
-// HgString hg_format_string(HgArena& arena, HgStringView fmt, ...);
+HgString hg_format_string(HgArena* arena, HgStringView fmt, ...);
+
+/**
+ * An error contained in the json
+ */
+struct HgJsonError {
+    /**
+     * The next error
+     */
+    HgJsonError* next;
+    /**
+     * The error message
+     */
+    HgString msg;
+};
+
+/**
+ * A node in the json file
+ */
+struct HgJsonNode;
+
+/**
+ * The types contained in nodes
+ */
+enum HgJsonType : u32 {
+    none = 0,
+    jstruct,
+    field,
+    array,
+    string,
+    floating,
+    integer,
+    boolean,
+};
+
+/**
+ * A field in a struct
+ */
+struct HgJsonField {
+    /**
+     * The next field
+     */
+    HgJsonField* next;
+    /**
+     * The name of the field
+     */
+    HgString name;
+    /**
+     * The value stored in the field
+     */
+    HgJsonNode* value;
+};
+
+/**
+ * A struct contained in the json
+ */
+struct HgJsonStruct {
+    /**
+     * The first field
+     */
+    HgJsonField* fields;
+};
+
+/**
+ * An element in an array
+ */
+struct HgJsonElem {
+    /**
+     * The next element
+     */
+    HgJsonElem* next;
+    /**
+     * The value stored in the element
+     */
+    HgJsonNode* value;
+};
+
+/**
+ * An array contained in the json
+ */
+struct HgJsonArray {
+    /**
+     * The first element
+     */
+    HgJsonElem* elems;
+};
+
+/**
+ * A node in the json file
+ */
+struct HgJsonNode {
+    /**
+     * The node's type
+     */
+    HgJsonType type;
+    /**
+     * The value in the node
+     */
+    union {
+        HgJsonStruct jstruct;
+        HgJsonField field;
+        HgJsonArray array;
+        HgString string;
+        f64 floating;
+        i64 integer;
+        bool boolean;
+    };
+};
 
 /**
  * A parsed Json file
  */
 struct HgJson {
     /**
-     * An error contained in the json
-     */
-    struct Error {
-        /**
-         * The next error
-         */
-        Error* next;
-        /**
-         * The error message
-         */
-        HgString msg;
-    };
-
-    /**
-     * A node in the json file
-     */
-    struct Node;
-
-    /**
-     * The types contained in nodes
-     */
-    enum Type : u32 {
-        none = 0,
-        jstruct,
-        field,
-        array,
-        string,
-        floating,
-        integer,
-        boolean,
-    };
-
-    /**
-     * A field in a struct
-     */
-    struct Field {
-        /**
-         * The next field
-         */
-        Field* next;
-        /**
-         * The name of the field
-         */
-        HgString name;
-        /**
-         * The value stored in the field
-         */
-        Node* value;
-    };
-
-    /**
-     * A struct contained in the json
-     */
-    struct Struct {
-        /**
-         * The first field
-         */
-        Field* fields;
-    };
-
-    /**
-     * An element in an array
-     */
-    struct Elem {
-        /**
-         * The next element
-         */
-        Elem* next;
-        /**
-         * The value stored in the element
-         */
-        Node* value;
-    };
-
-    /**
-     * An array contained in the json
-     */
-    struct Array {
-        /**
-         * The first element
-         */
-        Elem* elems;
-    };
-
-    /**
-     * A node in the json file
-     */
-    struct Node {
-        /**
-         * The node's type
-         */
-        Type type;
-        /**
-         * The value in the node
-         */
-        union {
-            Struct jstruct;
-            Field field;
-            Array array;
-            HgString string;
-            f64 floating;
-            i64 integer;
-            bool boolean;
-        };
-    };
-
-    /**
      * The successfully parsed nodes
      */
-    Node* file;
+    HgJsonNode* file;
     /**
      * The errors found
      */
-    Error* errors;
-
-    /**
-     * Parses json text into a tree
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - text The json text to parse
-     *
-     * Returns
-     * - The parsed json, errors contained inside
-     */
-    static HgJson parse(HgArena& arena, HgStringView text);
+    HgJsonError* errors;
 };
+
+/**
+ * Parses json text into a tree
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - text The json text to parse
+ *
+ * Returns
+ * - The parsed json, errors contained inside
+ */
+HgJson hg_parse_json(HgArena* arena, HgStringView text);
 
 /**
  * Hash map hashing for u8
@@ -2389,7 +2328,7 @@ struct HgHashSet {
     /**
      * The current number of values that are stored
      */
-    usize load;
+    usize count;
 
     /**
      * Creates a new hash set
@@ -2401,39 +2340,15 @@ struct HgHashSet {
      * Returns
      * - The created empty hash set
      */
-    static HgHashSet create(HgArena& arena, usize slot_count) {
+    static HgHashSet create(HgArena* arena, usize slot_count) {
         hg_assert(slot_count > 0);
 
         HgHashSet set;
-        set.has_val = arena.alloc<bool>(slot_count);
-        set.vals = arena.alloc<Value>(slot_count);
+        set.has_val = hg_alloc<bool>(arena, slot_count);
+        set.vals = hg_alloc<Value>(arena, slot_count);
         set.capacity = slot_count;
         set.reset();
         return set;
-    }
-
-    /**
-     * Empties all slots
-     */
-    void reset() {
-        for (usize i = 0; i < capacity; ++i) {
-            has_val[i] = false;
-        }
-        load = 0;
-    }
-
-    /**
-     * Returns whether the hash set is full
-     */
-    bool is_full() {
-        return load == capacity - 1;
-    }
-
-    /**
-     * Returns whether the hash set is full
-     */
-    bool is_near_full() {
-        return (f32)load >= (f32)capacity * 0.8f;
     }
 
     /**
@@ -2443,7 +2358,7 @@ struct HgHashSet {
      * - arena The arena to allocate from
      * - new_size The new number of slots
      */
-    void resize(HgArena& arena, usize new_size) {
+    void resize(HgArena* arena, usize new_size) {
         HgHashSet old = *this;
         *this = create(arena, new_size);
 
@@ -2454,13 +2369,23 @@ struct HgHashSet {
     }
 
     /**
+     * Empties all slots
+     */
+    void reset() {
+        for (usize i = 0; i < capacity; ++i) {
+            has_val[i] = false;
+        }
+        count = 0;
+    }
+
+    /**
      * Inserts a value into the hash set
      *
      * Parameters
      * - val The value to insert
      */
     void insert(Value val) {
-        hg_assert(load < capacity - 1);
+        hg_assert(count < capacity - 1);
 
         usize idx = hash_fn(val) % capacity;
         usize dist = 0;
@@ -2484,7 +2409,7 @@ struct HgHashSet {
 
         has_val[idx] = true;
         vals[idx] = val;
-        ++load;
+        ++count;
     }
 
     /**
@@ -2494,8 +2419,13 @@ struct HgHashSet {
      * - val The value to remove
      */
     void remove(const Value& val) {
-        usize idx = get_idx(val);
-        if (idx == (usize)-1)
+        usize idx = hash_fn(val) % capacity;
+        while (has_val[idx]) {
+            if (vals[idx] == val)
+                break;
+            idx = (idx + 1) % capacity;
+        }
+        if (!has_val[idx])
             return;
 
         usize next = (idx + 1) % capacity;
@@ -2507,25 +2437,7 @@ struct HgHashSet {
             next = (next + 1)  % capacity;
         }
         has_val[idx] = false;
-        --load;
-    }
-
-    /**
-     * Gets the index of a val
-     *
-     * Parameters
-     * - val The value to lookup
-     *
-     * Returns
-     * - The index the val is stored at
-     * - -1 if the val is not in the hash set
-     */
-    usize get_idx(const Value& val) {
-        for (usize idx = hash_fn(val) % capacity; has_val[idx]; idx = (idx + 1) % capacity) {
-            if (vals[idx] == val)
-                return idx;
-        }
-        return (usize)-1;
+        --count;
     }
 
     /**
@@ -2537,8 +2449,12 @@ struct HgHashSet {
      * Returns
      * - Whether a value exists at the val
      */
-    bool has(const Value& val) {
-        return get_idx(val) != (usize)-1;
+    bool has(const Value& val) const {
+        for (usize idx = hash_fn(val) % capacity; has_val[idx]; idx = (idx + 1) % capacity) {
+            if (vals[idx] == val)
+                return true;
+        }
+        return false;
     }
 
     /**
@@ -2586,7 +2502,7 @@ struct HgHashMap {
     /**
      * The current number of values that are stored
      */
-    usize load;
+    usize count;
 
     /**
      * Creates a new hash map
@@ -2598,13 +2514,13 @@ struct HgHashMap {
      * Returns
      * - The created empty hash map
      */
-    static HgHashMap create(HgArena& arena, usize slot_count) {
+    static HgHashMap create(HgArena* arena, usize slot_count) {
         hg_assert(slot_count > 0);
 
         HgHashMap map;
-        map.has_val = arena.alloc<bool>(slot_count);
-        map.keys = arena.alloc<Key>(slot_count);
-        map.vals = arena.alloc<Value>(slot_count);
+        map.has_val = hg_alloc<bool>(arena, slot_count);
+        map.keys = hg_alloc<Key>(arena, slot_count);
+        map.vals = hg_alloc<Value>(arena, slot_count);
         map.capacity = slot_count;
         map.reset();
         return map;
@@ -2617,28 +2533,7 @@ struct HgHashMap {
         for (usize i = 0; i < capacity; ++i) {
             has_val[i] = false;
         }
-        load = 0;
-    }
-
-    /**
-     * Returns whether the hash map is full
-     */
-    bool is_full() {
-        return load == capacity;
-    }
-
-    /**
-     * Returns whether the hash map is full
-     */
-    bool is_near_full() {
-        return (f32)load >= (f32)capacity * 0.8f;
-    }
-
-    /**
-     * Returns whether the hash map is full
-     */
-    bool is_half_full() {
-        return (f32)load >= (f32)capacity * 0.5f;
+        count = 0;
     }
 
     /**
@@ -2648,7 +2543,7 @@ struct HgHashMap {
      * - arena The arena to allocate from
      * - new_size The new number of slots
      */
-    void resize(HgArena& arena, usize new_size) {
+    void resize(HgArena* arena, usize new_size) {
         HgHashMap old = *this;
         *this = create(arena, new_size);
 
@@ -2656,17 +2551,6 @@ struct HgHashMap {
             if (old.has_val[i])
                 insert(old.keys[i], old.vals[i]);
         }
-    }
-
-    /**
-     * Grows the number of slots by a factor
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - factor The factor to increase by
-     */
-    void grow(HgArena& arena, f32 factor = 2) {
-        resize(arena, (usize)((f32)capacity * factor));
     }
 
     /**
@@ -2680,7 +2564,7 @@ struct HgHashMap {
      * - A reference to the constructed object
      */
     Value& insert(Key key, Value val) {
-        hg_assert(load < capacity - 1);
+        hg_assert(count < capacity - 1);
 
         usize idx = hash_fn(key) % capacity;
         usize dist = 0;
@@ -2708,7 +2592,7 @@ struct HgHashMap {
         has_val[idx] = true;
         keys[idx] = key;
         vals[idx] = val;
-        ++load;
+        ++count;
 
         return vals[idx];
     }
@@ -2724,8 +2608,13 @@ struct HgHashMap {
      * - Whether a value was found and stored in value
      */
     bool remove(const Key& key, Value* value = nullptr) {
-        usize idx = get_idx(key);
-        if (idx == (usize)-1)
+        usize idx = hash_fn(key) % capacity;
+        while (has_val[idx]) {
+            if (keys[idx] == key)
+                break;
+            idx = (idx + 1) % capacity;
+        }
+        if (!has_val[idx])
             return false;
 
         if (value != nullptr)
@@ -2742,27 +2631,9 @@ struct HgHashMap {
         }
 
         has_val[idx] = false;
-        --load;
+        --count;
 
         return true;
-    }
-
-    /**
-     * Gets the index of a key
-     *
-     * Parameters
-     * - key The key to lookup
-     *
-     * Returns
-     * - The index the key is stored at
-     * - -1 if the key is not in the hash map
-     */
-    usize get_idx(const Key& key) {
-        for (usize idx = hash_fn(key) % capacity; has_val[idx]; idx = (idx + 1) % capacity) {
-            if (keys[idx] == key)
-                return idx;
-        }
-        return (usize)-1;
     }
 
     /**
@@ -2774,8 +2645,12 @@ struct HgHashMap {
      * Returns
      * - Whether a value exists at the key
      */
-    bool has(const Key& key) {
-        return get_idx(key) != (usize)-1;
+    bool has(const Key& key) const {
+        for (usize idx = hash_fn(key) % capacity; has_val[idx]; idx = (idx + 1) % capacity) {
+            if (keys[idx] == key)
+                return true;
+        }
+        return false;
     }
 
     /**
@@ -2788,8 +2663,11 @@ struct HgHashMap {
      * - A reference to the value
      */
     Value& operator[](const Key& key) {
-        hg_assert(has(key));
-        return vals[get_idx(key)];
+        for (usize idx = hash_fn(key) % capacity; has_val[idx]; idx = (idx + 1) % capacity) {
+            if (keys[idx] == key)
+                return vals[idx];
+        }
+        hg_assert(false);
     }
 
     /**
@@ -2802,8 +2680,11 @@ struct HgHashMap {
      * - A reference to the value
      */
     const Value& operator[](const Key& key) const {
-        hg_assert(has(key));
-        return vals[get_idx(key)];
+        for (usize idx = hash_fn(key) % capacity; has_val[idx]; idx = (idx + 1) % capacity) {
+            if (keys[idx] == key)
+                return vals[idx];
+        }
+        hg_assert(false);
     }
 
     /**
@@ -2874,6 +2755,11 @@ struct HgFence {
 
     /**
      * Spin waits for all work submissions to be completed
+     */
+    void wait_indefinite();
+
+    /**
+     * Spin waits for all work submissions to be completed
      *
      * Parameters
      * - timeout_seconds The time in seconds to wait before timing out
@@ -2892,7 +2778,7 @@ struct HgFence {
  * - queue_size The max capacity of the thread work queue
  * - thread_count The number of threads to spawn in the pool
  */
-void hg_thread_pool_init(HgArena& arena, usize queue_size, usize thread_count);
+void hg_thread_pool_init(HgArena* arena, usize queue_size, usize thread_count);
 
 /**
  * Deinitialize the thread pool
@@ -2937,25 +2823,25 @@ template<typename Fn>
 void hg_for_par(usize n, usize chunk_size, Fn fn) {
     static_assert(std::is_invocable_r_v<void, Fn, usize, usize>);
 
-    HgArena& scratch = hg_get_scratch();
+    HgArena* scratch = hg_get_scratch();
     HgArenaScope scratch_scope{scratch};
 
     HgFence fence;
     for (usize i = 0; i < n; i += chunk_size) {
-        struct Iter {
+        struct Capture {
             usize begin;
             usize end;
             Fn* fn;
         };
 
-        Iter* data = scratch.alloc<Iter>(1);
+        Capture* data = hg_alloc<Capture>(scratch, 1);
         data->begin = i;
         data->end = std::min(i + chunk_size, n);
         data->fn = &fn;
 
         hg_call_par(&fence, 1, data, [](void* pdata) {
-            Iter& iter = *(Iter*)pdata;
-            (*iter.fn)(iter.begin, iter.end);
+            Capture* data = (Capture*)pdata;
+            (*data->fn)(data->begin, data->end);
         });
     }
     hg_thread_pool_help(fence, INFINITY);
@@ -2968,7 +2854,7 @@ void hg_for_par(usize n, usize chunk_size, Fn fn) {
  * - arena The arena to allocate from
  * - queue_size The max concurrent request capacity
  */
-void hg_io_thread_init(HgArena& arena, usize queue_size);
+void hg_io_thread_init(HgArena* arena, usize queue_size);
 
 /**
  * Deinitializes the IO thread
@@ -2977,6 +2863,13 @@ void hg_io_thread_deinit();
 
 /**
  * Make an asynchronous IO request on the IO thread
+ *
+ * Parameters
+ * - fences The fences to signal on completion
+ * - fence_count The number of fences
+ * - resource The resource pointer passed to fn
+ * - path The path string passed to fn
+ * - fn The function to execute
  */
 void hg_io_request(
     HgFence* fences,
@@ -3027,26 +2920,21 @@ struct HgResourceManager {
     usize capacity;
 
     /**
-     * Creates a new hash set
+     * Creates a new resource manager
      *
      * Parameters
      * - resource_width The size in bytes of each resource
      * - capacity The initial number of slots
      *
      * Returns
-     * - The created empty hash set
+     * - The created empty resource manager
      */
     static HgResourceManager create(usize resource_width, usize capacity = 128);
 
     /**
-     * Free the hash set's memory
+     * Free the resource manager's memory
      */
     void destroy();
-
-    /**
-     * Empties all slots
-     */
-    void reset();
 
     /**
      * Resizes the slots and rehashes all entries
@@ -3056,6 +2944,11 @@ struct HgResourceManager {
      * - new_size The new number of slots
      */
     void resize(usize new_size);
+
+    /**
+     * Empties all slots
+     */
+    void reset();
 
     /**
      * Add a resource to the resource manager
@@ -3093,24 +2986,13 @@ struct HgResourceManager {
      * Decrement the resource's reference count
      *
      * Parameters
-     * - The resource to unload
+     * - id The resource to unload
+     * - resource A pointer to store the resource if it needs to be unloaded
      *
      * Returns
      * - Whether the reference count dropped to 0, and needs to be unloaded
      */
-    bool unload(HgResource id);
-
-    /**
-     * Gets the index of a value
-     *
-     * Parameters
-     * - val The value to lookup
-     *
-     * Returns
-     * - The index the val is stored at
-     * - -1 if the val is not in the hash set
-     */
-    usize get_idx(HgResource id);
+    bool unload(HgResource id, void* resource);
 
     /**
      * Get a pointer to a resource
@@ -3118,7 +3000,7 @@ struct HgResourceManager {
      * Parameters
      *
      * Returns
-     * - A pointer to the resource, or nullptr if it is not loaded
+     * - A pointer to the resource, or nullptr if has not been added
      */
     void* get(HgResource id);
 
@@ -3158,8 +3040,8 @@ struct HgBinary {
      * - arena The arena to allocate from
      * - new_size The new size of the file in bytes
      */
-    void resize(HgArena& arena, usize new_size) {
-        data = arena.realloc(data, size, new_size, 1);
+    void resize(HgArena* arena, usize new_size) {
+        data = hg_realloc(arena, data, size, new_size, 1);
         size = new_size;
     }
 
@@ -3216,28 +3098,32 @@ struct HgBinary {
     void overwrite(usize idx, const T& src) {
         overwrite(idx, &src, sizeof(T));
     }
-
-    /**
-     * Load a binary file from disc
-     *
-     * Note, this is blocking
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - path The file path to the image
-     */
-    static HgBinary load(HgArena& arena, HgStringView path);
-
-    /**
-     * Store a binary file to disc
-     *
-     * Note, this is blocking
-     *
-     * Parameters
-     * - path The file path to store at
-     */
-    void store(HgStringView path);
 };
+
+/**
+ * Load a binary file from disc
+ *
+ * Note, this is blocking
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - path The file path to the image
+ *
+ * Returns
+ * - The loaded binary
+ */
+HgBinary hg_load_binary(HgArena* arena, HgStringView path);
+
+/**
+ * Store a binary file to disc
+ *
+ * Note, this is blocking
+ *
+ * Parameters
+ * - bin The binary to store
+ * - path The file path to store at
+ */
+void hg_store_binary(HgBinary bin, HgStringView path);
 
 /**
  * Initialize the resource manager
@@ -3308,7 +3194,7 @@ struct HgTextureData {
     /**
      * The identifier prepended to the info
      */
-    static constexpr char texture_identifier[] = "HGT"; // Hurdy Gurdy texture
+    static constexpr char texture_identifier[] = "HGTEX"; // Hurdy Gurdy texture
 
     /**
      * The info prepended to a texture resource
@@ -3426,7 +3312,7 @@ struct HgModelData {
     /**
      * The identifier prepended to the info
      */
-    static constexpr char model_identifier[] = "HGM"; // Hurdy Gurdy model
+    static constexpr char model_identifier[] = "HGMODEL"; // Hurdy Gurdy model
 
     /**
      * The info prendeded to a model resources
@@ -3525,6 +3411,16 @@ void hg_import_gltf(HgFence* fences, usize fence_count, HgResource id, HgStringV
  * - path The path of the file to export to
  */
 void hg_export_gltf(HgFence* fences, usize fence_count, HgResource id, HgStringView path);
+
+/**
+ * Initialize all gpu resource managers
+ */
+void hg_gpu_resources_init();
+
+/**
+ * Deinitialize all gpu resource managers
+ */
+void hg_gpu_resources_deinit();
 
 /**
  * A texture stored on the GPU
@@ -3680,16 +3576,6 @@ void hg_unload_gpu_model(HgResource id);
 HgGpuModel* hg_get_gpu_model(HgResource id);
 
 /**
- * Initialize all gpu resource managers
- */
-void hg_gpu_resources_init();
-
-/**
- * Deinitialize all gpu resource managers
- */
-void hg_gpu_resources_deinit();
-
-/**
  * Creates a new id for each component
  *
  * Should only be used by hg_component_id
@@ -3792,7 +3678,6 @@ struct HgECS {
      * The capacity of the entity pool
      */
     u32 pool_size;
-
     /**
      * The component systems
      */
@@ -4185,27 +4070,22 @@ struct HgECS {
      * Sorts components
      *
      * Parameters
-     * - begin The index to begin sorting
-     * - end The index to end sorting
      * - component_id The component system to sort
+     * - data The data passed to compare
      * - compare The comparison function
      */
-    void sort_untyped(
-        u32 begin,
-        u32 end,
-        u32 component_id,
-        void* data,
-        bool (*compare)(void*, HgECS& ecs, HgEntity lhs, HgEntity rhs));
+    void sort(u32 component_id, void* data, bool (*compare)(void*, HgECS* ecs, HgEntity lhs, HgEntity rhs));
 
     /**
      * Sorts components
      *
      * Parameters
+     * - data The data passed to compare
      * - compare The comparison function
      */
     template<typename T>
-    void sort(void* data, bool (*compare)(void*, HgECS& ecs, HgEntity lhs, HgEntity rhs)) {
-        sort_untyped(0, count<T>(), hg_component_id<T>, data, compare);
+    void sort(void* data, bool (*compare)(void*, HgECS* ecs, HgEntity lhs, HgEntity rhs)) {
+        sort(hg_component_id<T>, data, compare);
     }
 };
 
@@ -4239,7 +4119,7 @@ struct HgHierarchy {
  * - parent The parent to add to, must be alive
  * - child The child to add, must be alive
  */
-void hg_add_child_entity(HgECS& ecs, HgEntity parent, HgEntity new_child);
+void hg_add_child_entity(HgECS* ecs, HgEntity parent, HgEntity new_child);
 
 /**
  * Removes the entity from its hierarchy
@@ -4248,7 +4128,7 @@ void hg_add_child_entity(HgECS& ecs, HgEntity parent, HgEntity new_child);
  * - ecs The ecs
  * - e The entity to detach, must be alive
  */
-void hg_detach_entity(HgECS& ecs, HgEntity e);
+void hg_detach_entity(HgECS* ecs, HgEntity e);
 
 /**
  * Destroys the entity and all its children in a hierarchy
@@ -4257,7 +4137,7 @@ void hg_detach_entity(HgECS& ecs, HgEntity e);
  * - ecs The ecs
  * - e The entity to destroy to, must be alive
  */
-void hg_destroy_entity(HgECS& ecs, HgEntity e);
+void hg_destroy_entity(HgECS* ecs, HgEntity e);
 
 /**
  * The transform component for entities
@@ -4272,7 +4152,7 @@ struct HgTransform {
      *
      * z: -backward, +forward
      */
-    HgVec3 position = {0.0f, 0.0f, 0.0f};
+    HgVec3 position{0.0f, 0.0f, 0.0f};
     /**
      * The entity's scaling
      *
@@ -4282,11 +4162,11 @@ struct HgTransform {
      *
      * z: depth
      */
-    HgVec3 scale = {1.0f, 1.0f, 1.0f};
+    HgVec3 scale{1.0f, 1.0f, 1.0f};
     /**
      * The entity's rotation in the world
      */
-    HgQuat rotation = {1.0f, 0.0f, 0.0f, 0.0f};
+    HgQuat rotation{1.0f, 0.0f, 0.0f, 0.0f};
 };
 
 /**
@@ -4299,7 +4179,7 @@ struct HgTransform {
  * - s The new scale
  * - r The new rotation
  */
-void hg_set_entity(HgECS& ecs, HgEntity e, const HgVec3& p, const HgVec3& s, const HgQuat& r);
+void hg_set_entity(HgECS* ecs, HgEntity e, const HgVec3& p, const HgVec3& s, const HgQuat& r);
 
 /**
  * Move this transform and all children by a delta
@@ -4311,7 +4191,7 @@ void hg_set_entity(HgECS& ecs, HgEntity e, const HgVec3& p, const HgVec3& s, con
  * - ds The change in scale, multiplied to current scale
  * - dr The change in rotation, applied to current rotation
  */
-void hg_move_entity(HgECS& ecs, HgEntity e, const HgVec3& dp, const HgVec3& ds, const HgQuat& dr);
+void hg_move_entity(HgECS* ecs, HgEntity e, const HgVec3& dp, const HgVec3& ds, const HgQuat& dr);
 
 /**
  * A sprite component rendered by the 2d pipeline
@@ -4341,7 +4221,7 @@ struct HgSprite {
  * - depth_format The format of the depth attachment, if any
  */
 void hg_pipeline_2d_init(
-    HgArena& arena,
+    HgArena* arena,
     u32 max_textures,
     VkFormat color_format,
     VkFormat depth_format);
@@ -4390,7 +4270,7 @@ void hg_pipeline_2d_update_view(const HgMat4& view);
  * - ecs The ecs to draw
  * - cmd The command buffer to record to, must not be nullptr
  */
-void hg_draw_2d(HgECS& ecs, VkCommandBuffer cmd);
+void hg_draw_2d(HgECS* ecs, VkCommandBuffer cmd);
 
 /**
  * A model component rendered by the 3d pipeline
@@ -4436,7 +4316,7 @@ struct HgPointLight3D {
  * - depth_format The format of the depth attachment, must not be UNDEFINED
  */
 void hg_pipeline_3d_init(
-    HgArena& arena,
+    HgArena* arena,
     u32 max_models,
     VkFormat color_format,
     VkFormat depth_format);
@@ -4487,7 +4367,7 @@ void hg_pipeline_3d_update_view(const HgMat4& view);
  * - ecs The ecs to draw
  * - cmd The command buffer to record to, must not be nullptr
  */
-void hg_draw_3d(HgECS& ecs, VkCommandBuffer cmd);
+void hg_draw_3d(HgECS* ecs, VkCommandBuffer cmd);
 
 /**
  * The image id used by HgRenderer
@@ -4677,11 +4557,11 @@ struct HgRenderer {
         /**
          * The offset into the buffer in bytes
          */
-        VkDeviceSize offset;
+        u64 offset;
         /**
          * The size of the buffer in bytes
          */
-        VkDeviceSize size;
+        u64 size;
         /**
          * The buffer's last usage
          */
@@ -4728,7 +4608,7 @@ struct HgRenderer {
      * Returns
      * - The created renderer
      */
-    static HgRenderer create(HgArena& arena, u32 max_images, u32 max_buffers);
+    static HgRenderer create(HgArena* arena, u32 max_images, u32 max_buffers);
 
     /**
      * Removes all resources
@@ -4750,8 +4630,8 @@ struct HgRenderer {
      */
     HgBufferRenderID add_buffer(
         VkBuffer buffer,
-        VkDeviceSize offset,
-        VkDeviceSize size,
+        u64 offset,
+        u64 size,
         HgRenderUsage previous_usage = HgRenderUsage::none,
         HgRenderAccess previous_access = HgRenderAccess::none);
 
@@ -4918,13 +4798,13 @@ VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger();
  *
  * Parameters
  * - gpu The physical device, must not be nullptr
- * - queue_flags The flags required of the queue family
  * - queue_family Where to store the family, if found
+ * - queue_flags The flags required of the queue family
  *
  * Returns
  * - Whether a queue family was found and stored in queue_family
  */
-bool hg_vk_find_queue_family(VkPhysicalDevice gpu, u32& queue_family, VkQueueFlags queue_flags);
+bool hg_vk_find_queue_family(VkPhysicalDevice gpu, u32* queue_family, VkQueueFlags queue_flags);
 
 /**
  * Finds a Vulkan physical device with a general purpose queue family
@@ -5210,7 +5090,7 @@ u32 hg_vk_find_memory_type_index(
 void hg_vk_create_buffer(
     VkBuffer* buffer,
     VmaAllocation* allocation,
-    VkDeviceSize size,
+    u64 size,
     VkBufferUsageFlags usage,
     VmaAllocationCreateFlags memory = 0);
 
@@ -5494,7 +5374,7 @@ void hg_platform_deinit();
  * Returns
  * - The number of required extensions
  */
-u32 hg_vk_get_platform_extensions(HgArena& arena, HgStringView** ext_buffer);
+u32 hg_vk_get_platform_extensions(HgArena* arena, HgStringView** ext_buffer);
 
 // audio system : TODO
 
@@ -5769,7 +5649,7 @@ struct HgWindow {
      * Returns
      * - The created window, will never be nullptr
      */
-    static HgWindow* create(HgArena& arena, const HgWindowConfig& config);
+    static HgWindow* create(HgArena* arena, const HgWindowConfig& config);
 
     /**
      * Destroys the window

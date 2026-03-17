@@ -22,6 +22,12 @@ bool HgFence::is_complete() {
     return counter.load() == 0;
 }
 
+void HgFence::wait_indefinite() {
+    while (!is_complete()) {
+        _mm_pause();
+    }
+}
+
 bool HgFence::wait(f64 timeout_seconds) {
     auto end = std::chrono::steady_clock::now() + std::chrono::duration<f64>(timeout_seconds);
     while (!is_complete() && std::chrono::steady_clock::now() < end) {
@@ -81,15 +87,15 @@ static bool pool_execute() {
     return true;
 }
 
-void hg_thread_pool_init(HgArena& arena, usize queue_size, usize thread_count) {
+void hg_thread_pool_init(HgArena* arena, usize queue_size, usize thread_count) {
     hg_assert(thread_count > 1 && (queue_size & (queue_size - 1)) == 0);
 
     pool_should_close.store(false);
     pool_thread_count = std::min((usize)1, thread_count - 1);
-    pool_threads = arena.alloc<std::thread>(pool_thread_count);
+    pool_threads = hg_alloc<std::thread>(arena, pool_thread_count);
 
-    pool_work = arena.alloc<ThreadWork>(queue_size);
-    pool_has_work = arena.alloc<std::atomic_bool>(queue_size);
+    pool_work = hg_alloc<ThreadWork>(arena, queue_size);
+    pool_has_work = hg_alloc<std::atomic_bool>(arena, queue_size);
     pool_work_capacity = queue_size;
 
     pool_work_count.store(0);
@@ -211,11 +217,11 @@ bool io_pop() {
     return true;
 }
 
-void hg_io_thread_init(HgArena& arena, usize queue_size) {
+void hg_io_thread_init(HgArena* arena, usize queue_size) {
     hg_assert(queue_size > 1 && (queue_size & (queue_size - 1)) == 0);
 
-    io_requests = arena.alloc<Request>(queue_size);
-    io_has_request = arena.alloc<std::atomic_bool>(queue_size);
+    io_requests = hg_alloc<Request>(arena, queue_size);
+    io_has_request = hg_alloc<std::atomic_bool>(arena, queue_size);
     io_request_capacity = queue_size;
 
     io_tail.store(0);

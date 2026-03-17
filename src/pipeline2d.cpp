@@ -28,7 +28,7 @@ static VmaAllocation vp_buffer_allocation;
 static HgHashMap<HgResource, VkDescriptorSet> texture_sets;
 
 void hg_pipeline_2d_init(
-    HgArena& arena,
+    HgArena* arena,
     u32 max_textures,
     VkFormat color_format,
     VkFormat depth_format
@@ -97,8 +97,8 @@ void hg_pipeline_2d_init(
         VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
 
     VPUniform vp_data{};
-    vp_data.proj = 1.0f;
-    vp_data.view = 1.0f;
+    vp_data.proj = HgMat4{1.0f};
+    vp_data.view = HgMat4{1.0f};
 
     vmaCopyMemoryToAllocation(hg_vk_vma, &vp_data, vp_buffer_allocation, 0, sizeof(vp_data));
 
@@ -162,19 +162,19 @@ void hg_pipeline_2d_update_view(const HgMat4& view) {
         sizeof(view));
 }
 
-void hg_draw_2d(HgECS& ecs, VkCommandBuffer cmd) {
+void hg_draw_2d(HgECS* ecs, VkCommandBuffer cmd) {
     hg_assert(cmd != nullptr);
 
-    ecs.sort<HgSprite>(nullptr, [](void*, HgECS& pecs, HgEntity lhs, HgEntity rhs) -> bool {
-        hg_assert(pecs.has<HgTransform>(lhs));
-        hg_assert(pecs.has<HgTransform>(rhs));
-        return pecs.get<HgTransform>(lhs).position.z > pecs.get<HgTransform>(rhs).position.z;
+    ecs->sort<HgSprite>(nullptr, [](void*, HgECS* ecs, HgEntity lhs, HgEntity rhs) -> bool {
+        hg_assert(ecs->has<HgTransform>(lhs));
+        hg_assert(ecs->has<HgTransform>(rhs));
+        return ecs->get<HgTransform>(lhs).position.z > ecs->get<HgTransform>(rhs).position.z;
     });
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout, 0, 1, &vp_set, 0, nullptr);
 
-    ecs.for_each<HgSprite, HgTransform>([&](HgEntity, HgSprite& sprite, HgTransform& transform) {
+    ecs->for_each<HgSprite, HgTransform>([&](HgEntity, HgSprite& sprite, HgTransform& transform) {
         hg_assert(texture_sets.has(sprite.texture));
         vkCmdBindDescriptorSets(
             cmd,

@@ -378,12 +378,12 @@ static LRESULT CALLBACK window_callback(HWND hwnd, UINT msg, WPARAM wparam, LPAR
     return DefWindowProcA(hwnd, msg, wparam, lparam);
 }
 
-HgWindow* HgWindow::create(HgArena& arena, const HgWindowConfig& config) {
+HgWindow* HgWindow::create(HgArena* arena, const HgWindowConfig& config) {
     const char* title = config.title != nullptr ? config.title : "Hurdy Gurdy";
 
-    HgWindow* window = arena.alloc<HgWindow>(1);
+    HgWindow* window = hg_alloc<HgWindow>(arena, 1);
     *window = {};
-    window->internals = arena.alloc<Internals>(1);
+    window->internals = hg_alloc<Internals>(arena, 1);
     *window->internals = {};
 
     WNDCLASSA window_class{};
@@ -487,9 +487,9 @@ void HgWindow::set_cursor_image(u32* data, u32 cursor_width, u32 cursor_height) 
     (void)cursor_height;
 }
 
-u32 hg_vk_get_platform_extensions(HgArena& arena, HgStringView** ext_buffer) {
+u32 hg_vk_get_platform_extensions(HgArena* arena, HgStringView** ext_buffer) {
     u32 count = 2;
-    *ext_buffer = arena.alloc<HgStringView>(count);
+    *ext_buffer = hg_alloc<HgStringView>(arena, count);
     (*ext_buffer)[0] = "VK_KHR_surface";
     (*ext_buffer)[1] = "VK_KHR_win32_surface";
     return count;

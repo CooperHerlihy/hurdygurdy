@@ -63,7 +63,7 @@ static VkBuffer default_model_index_buffer;
 static VmaAllocation default_model_index_alloc;
 
 void hg_pipeline_3d_init(
-    HgArena& arena,
+    HgArena* arena,
     u32 max_models,
     VkFormat color_format,
     VkFormat depth_format
@@ -140,8 +140,8 @@ void hg_pipeline_3d_init(
     hg_vk_create_buffer(&global_buffer, &global_buffer_alloc, sizeof(GlobalUniform),
         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
 
-    global_data.proj = 1.0f;
-    global_data.view = 1.0f;
+    global_data.proj = HgMat4{1.0f};
+    global_data.view = HgMat4{1.0f};
     global_data.dir_light_count = 0;
     global_data.point_light_count = 0;
 
@@ -205,8 +205,8 @@ void hg_pipeline_3d_init(
     hg_vk_image_staging_write(color_write);
 
     static const HgVec4 default_normals[] = {
-        {0, 0, -1, 0}, {0, 0, -1, 0},
-        {0, 0, -1, 0}, {0, 0, -1, 0},
+        HgVec4{0, 0, -1, 0}, HgVec4{0, 0, -1, 0},
+        HgVec4{0, 0, -1, 0}, HgVec4{0, 0, -1, 0},
     };
 
     HgVkImageConfig normal_image_config{};
@@ -249,35 +249,35 @@ void hg_pipeline_3d_init(
         hg_error("Could not create sampler: %s\n", hg_vk_result_to_string(sampler_result));
 
     static const HgVertex cube_vertices[] = {
-        {{ 0.5f,-0.5f,-0.5f}, { 1, 0, 0}, { 0, 0, 1, 1}, {0,0}},
-        {{ 0.5f, 0.5f,-0.5f}, { 1, 0, 0}, { 0, 0, 1, 1}, {1,0}},
-        {{ 0.5f, 0.5f, 0.5f}, { 1, 0, 0}, { 0, 0, 1, 1}, {1,1}},
-        {{ 0.5f,-0.5f, 0.5f}, { 1, 0, 0}, { 0, 0, 1, 1}, {0,1}},
+        {HgVec3{ 0.5f,-0.5f,-0.5f}, HgVec3{ 1, 0, 0}, HgVec4{ 0, 0, 1, 1}, HgVec2{0,0}},
+        {HgVec3{ 0.5f, 0.5f,-0.5f}, HgVec3{ 1, 0, 0}, HgVec4{ 0, 0, 1, 1}, HgVec2{1,0}},
+        {HgVec3{ 0.5f, 0.5f, 0.5f}, HgVec3{ 1, 0, 0}, HgVec4{ 0, 0, 1, 1}, HgVec2{1,1}},
+        {HgVec3{ 0.5f,-0.5f, 0.5f}, HgVec3{ 1, 0, 0}, HgVec4{ 0, 0, 1, 1}, HgVec2{0,1}},
 
-        {{-0.5f,-0.5f, 0.5f}, {-1, 0, 0}, { 0, 0,-1, 1}, {0,0}},
-        {{-0.5f, 0.5f, 0.5f}, {-1, 0, 0}, { 0, 0,-1, 1}, {1,0}},
-        {{-0.5f, 0.5f,-0.5f}, {-1, 0, 0}, { 0, 0,-1, 1}, {1,1}},
-        {{-0.5f,-0.5f,-0.5f}, {-1, 0, 0}, { 0, 0,-1, 1}, {0,1}},
+        {HgVec3{-0.5f,-0.5f, 0.5f}, HgVec3{-1, 0, 0}, HgVec4{ 0, 0,-1, 1}, HgVec2{0,0}},
+        {HgVec3{-0.5f, 0.5f, 0.5f}, HgVec3{-1, 0, 0}, HgVec4{ 0, 0,-1, 1}, HgVec2{1,0}},
+        {HgVec3{-0.5f, 0.5f,-0.5f}, HgVec3{-1, 0, 0}, HgVec4{ 0, 0,-1, 1}, HgVec2{1,1}},
+        {HgVec3{-0.5f,-0.5f,-0.5f}, HgVec3{-1, 0, 0}, HgVec4{ 0, 0,-1, 1}, HgVec2{0,1}},
 
-        {{-0.5f, 0.5f,-0.5f}, { 0, 1, 0}, { 1, 0, 0, 1}, {0,0}},
-        {{-0.5f, 0.5f, 0.5f}, { 0, 1, 0}, { 1, 0, 0, 1}, {1,0}},
-        {{ 0.5f, 0.5f, 0.5f}, { 0, 1, 0}, { 1, 0, 0, 1}, {1,1}},
-        {{ 0.5f, 0.5f,-0.5f}, { 0, 1, 0}, { 1, 0, 0, 1}, {0,1}},
+        {HgVec3{-0.5f, 0.5f,-0.5f}, HgVec3{ 0, 1, 0}, HgVec4{ 1, 0, 0, 1}, HgVec2{0,0}},
+        {HgVec3{-0.5f, 0.5f, 0.5f}, HgVec3{ 0, 1, 0}, HgVec4{ 1, 0, 0, 1}, HgVec2{1,0}},
+        {HgVec3{ 0.5f, 0.5f, 0.5f}, HgVec3{ 0, 1, 0}, HgVec4{ 1, 0, 0, 1}, HgVec2{1,1}},
+        {HgVec3{ 0.5f, 0.5f,-0.5f}, HgVec3{ 0, 1, 0}, HgVec4{ 1, 0, 0, 1}, HgVec2{0,1}},
 
-        {{-0.5f,-0.5f, 0.5f}, { 0,-1, 0}, { 1, 0, 0, 1}, {0,0}},
-        {{-0.5f,-0.5f,-0.5f}, { 0,-1, 0}, { 1, 0, 0, 1}, {1,0}},
-        {{ 0.5f,-0.5f,-0.5f}, { 0,-1, 0}, { 1, 0, 0, 1}, {1,1}},
-        {{ 0.5f,-0.5f, 0.5f}, { 0,-1, 0}, { 1, 0, 0, 1}, {0,1}},
+        {HgVec3{-0.5f,-0.5f, 0.5f}, HgVec3{ 0,-1, 0}, HgVec4{ 1, 0, 0, 1}, HgVec2{0,0}},
+        {HgVec3{-0.5f,-0.5f,-0.5f}, HgVec3{ 0,-1, 0}, HgVec4{ 1, 0, 0, 1}, HgVec2{1,0}},
+        {HgVec3{ 0.5f,-0.5f,-0.5f}, HgVec3{ 0,-1, 0}, HgVec4{ 1, 0, 0, 1}, HgVec2{1,1}},
+        {HgVec3{ 0.5f,-0.5f, 0.5f}, HgVec3{ 0,-1, 0}, HgVec4{ 1, 0, 0, 1}, HgVec2{0,1}},
 
-        {{-0.5f,-0.5f, 0.5f}, { 0, 0, 1}, { 1, 0, 0, 1}, {0,0}},
-        {{ 0.5f,-0.5f, 0.5f}, { 0, 0, 1}, { 1, 0, 0, 1}, {1,0}},
-        {{ 0.5f, 0.5f, 0.5f}, { 0, 0, 1}, { 1, 0, 0, 1}, {1,1}},
-        {{-0.5f, 0.5f, 0.5f}, { 0, 0, 1}, { 1, 0, 0, 1}, {0,1}},
+        {HgVec3{-0.5f,-0.5f, 0.5f}, HgVec3{ 0, 0, 1}, HgVec4{ 1, 0, 0, 1}, HgVec2{0,0}},
+        {HgVec3{ 0.5f,-0.5f, 0.5f}, HgVec3{ 0, 0, 1}, HgVec4{ 1, 0, 0, 1}, HgVec2{1,0}},
+        {HgVec3{ 0.5f, 0.5f, 0.5f}, HgVec3{ 0, 0, 1}, HgVec4{ 1, 0, 0, 1}, HgVec2{1,1}},
+        {HgVec3{-0.5f, 0.5f, 0.5f}, HgVec3{ 0, 0, 1}, HgVec4{ 1, 0, 0, 1}, HgVec2{0,1}},
 
-        {{ 0.5f,-0.5f,-0.5f}, { 0, 0,-1}, {-1, 0, 0, 1}, {0,0}},
-        {{-0.5f,-0.5f,-0.5f}, { 0, 0,-1}, {-1, 0, 0, 1}, {1,0}},
-        {{-0.5f, 0.5f,-0.5f}, { 0, 0,-1}, {-1, 0, 0, 1}, {1,1}},
-        {{ 0.5f, 0.5f,-0.5f}, { 0, 0,-1}, {-1, 0, 0, 1}, {0,1}},
+        {HgVec3{ 0.5f,-0.5f,-0.5f}, HgVec3{ 0, 0,-1}, HgVec4{-1, 0, 0, 1}, HgVec2{0,0}},
+        {HgVec3{-0.5f,-0.5f,-0.5f}, HgVec3{ 0, 0,-1}, HgVec4{-1, 0, 0, 1}, HgVec2{1,0}},
+        {HgVec3{-0.5f, 0.5f,-0.5f}, HgVec3{ 0, 0,-1}, HgVec4{-1, 0, 0, 1}, HgVec2{1,1}},
+        {HgVec3{ 0.5f, 0.5f,-0.5f}, HgVec3{ 0, 0,-1}, HgVec4{-1, 0, 0, 1}, HgVec2{0,1}},
     };
 
     static u32 cube_indices[] = {
@@ -349,14 +349,14 @@ void hg_pipeline_3d_update_view(const HgMat4& view) {
     global_data.view = view;
 }
 
-void hg_draw_3d(HgECS& ecs, VkCommandBuffer cmd) {
+void hg_draw_3d(HgECS* ecs, VkCommandBuffer cmd) {
     hg_assert(cmd != nullptr);
 
-    HgArena& scratch = hg_get_scratch();
+    HgArena* scratch = hg_get_scratch();
     HgArenaScope scratch_scope{scratch};
 
-    global_data.dir_light_count = ecs.count<HgDirLight3D>();
-    global_data.point_light_count = ecs.count<HgPointLight3D>();
+    global_data.dir_light_count = ecs->count<HgDirLight3D>();
+    global_data.point_light_count = ecs->count<HgPointLight3D>();
 
     if (global_data.dir_light_count > dir_light_capacity) {
         vkQueueWaitIdle(hg_vk_queue);
@@ -392,19 +392,19 @@ void hg_draw_3d(HgECS& ecs, VkCommandBuffer cmd) {
         hg_vk_update_descriptor_set(global_set, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, &point_light_buffer_info, 1);
     }
 
-    DirLightData* dir_lights = scratch.alloc<DirLightData>(global_data.dir_light_count);
-    PointLightData* point_lights = scratch.alloc<PointLightData>(global_data.point_light_count);
+    DirLightData* dir_lights = hg_alloc<DirLightData>(scratch, global_data.dir_light_count);
+    PointLightData* point_lights = hg_alloc<PointLightData>(scratch, global_data.point_light_count);
 
     u32 i = 0;
-    ecs.for_each<HgDirLight3D>([&](HgEntity, HgDirLight3D& light) {
-        dir_lights[i].dir = HgMat3{global_data.view} * light.dir;
+    ecs->for_each<HgDirLight3D>([&](HgEntity, HgDirLight3D& light) {
+        dir_lights[i].dir = HgVec4{HgMat3{global_data.view} * light.dir, 0.0};
         dir_lights[i].dir.w = 0.0f;
         dir_lights[i].color = light.color;
         ++i;
     });
 
     i = 0;
-    ecs.for_each<HgPointLight3D, HgTransform>([&](HgEntity, HgPointLight3D& light, HgTransform& transform) {
+    ecs->for_each<HgPointLight3D, HgTransform>([&](HgEntity, HgPointLight3D& light, HgTransform& transform) {
         point_lights[i].pos = global_data.view * HgVec4{transform.position, 1.0};
         point_lights[i].pos.w = 0.0f;
         point_lights[i].color = light.color;
@@ -437,7 +437,7 @@ void hg_draw_3d(HgECS& ecs, VkCommandBuffer cmd) {
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout, 0, 1, &global_set, 0, nullptr);
 
-    ecs.for_each<HgModel3D, HgTransform>([&](HgEntity, HgModel3D& model, HgTransform& transform) {
+    ecs->for_each<HgModel3D, HgTransform>([&](HgEntity, HgModel3D& model, HgTransform& transform) {
         hg_assert(model_map_sets.has(model.model));
 
         vkCmdBindDescriptorSets(

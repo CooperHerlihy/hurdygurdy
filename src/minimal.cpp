@@ -9,7 +9,7 @@ int main() {
 
     hg_test();
 
-    HgArena& arena = hg_get_scratch();
+    HgArena* arena = hg_get_scratch();
     HgArenaScope arena_scope{arena};
 
     HgWindowConfig window_config{};
@@ -39,8 +39,8 @@ int main() {
 
     HgEntity light = ecs.spawn();
     ecs.add<HgTransform>(light);
-    ecs.get<HgTransform>(light).position = {-1, -2, -1};
-    ecs.add<HgPointLight3D>(light) = {{1, 1, 1, 3}};
+    ecs.get<HgTransform>(light).position = HgVec3{-1, -2, -1};
+    ecs.add<HgPointLight3D>(light) = {HgVec4{1, 1, 1, 3}};
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -90,7 +90,7 @@ int main() {
 
         HgClock frame_clock{};
 
-        HgArena& frame = hg_get_scratch(arena);
+        HgArena* frame = hg_get_scratch(&arena, 1);
         HgArenaScope frame_scope{frame};
 
         hg_process_window_events(&window, 1);
@@ -113,16 +113,16 @@ int main() {
             hg_projection_perspective((f32)hg_pi * 0.5f, (f32)window->width / (f32)window->height, 0.1f, 1000.0f));
 
         HgQuat& cube_rot = ecs.get<HgTransform>(cube).rotation;
-        cube_rot = hg_axis_angle({0, -1, 0}, (f32)delta) * cube_rot;
+        cube_rot = hg_axis_angle(HgVec3{0, -1, 0}, (f32)delta) * cube_rot;
 
         if (window->is_key_down[(u32)HgKey::lmouse]) {
             f32 rot_speed = 2.0f;
-            HgQuat rot_x = hg_axis_angle({0, 1, 0}, (f32)window->mouse_delta_x * rot_speed);
-            HgQuat rot_y = hg_axis_angle({-1, 0, 0}, (f32)window->mouse_delta_y * rot_speed);
+            HgQuat rot_x = hg_axis_angle(HgVec3{0, 1, 0}, (f32)window->mouse_delta_x * rot_speed);
+            HgQuat rot_y = hg_axis_angle(HgVec3{-1, 0, 0}, (f32)window->mouse_delta_y * rot_speed);
             camera.rotation = rot_x * camera.rotation * rot_y;
         }
 
-        HgVec3 movement = {
+        HgVec3 movement = HgVec3{
             (f32)(window->is_key_down[(u32)HgKey::d] - window->is_key_down[(u32)HgKey::a]),
             (f32)(window->is_key_down[(u32)HgKey::lshift] - window->is_key_down[(u32)HgKey::space]),
             (f32)(window->is_key_down[(u32)HgKey::w] - window->is_key_down[(u32)HgKey::s]),
@@ -188,7 +188,7 @@ int main() {
 
             renderer.begin_pass(cmd, window->width, window->height, pass);
 
-            hg_draw_3d(ecs, cmd);
+            hg_draw_3d(&ecs, cmd);
 
             ImGui_ImplHurdyGurdy_Draw(cmd);
 
