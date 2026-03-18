@@ -3,7 +3,7 @@
 #include "stb_image.h"
 #include "stb_image_write.h"
 
-HgResourceManager HgResourceManager::create(usize resourceWidth, usize capacity)
+HgResourceManager HgResourceManager::create(u32 resourceWidth, u32 capacity)
 {
     hgAssert(capacity > 0);
 
@@ -24,17 +24,17 @@ void HgResourceManager::destroy()
     free(resources);
 }
 
-void HgResourceManager::resize(usize newSize)
+void HgResourceManager::resize(u32 newSize)
 {
     HgResourceManager old = *this;
     hgDefer(old.destroy());
 
     *this = create(width, newSize);
-    for (usize i = 0; i < old.capacity; ++i)
+    for (u32 i = 0; i < old.capacity; ++i)
     {
         if (old.refCounts[i] != (u32)-1)
         {
-            usize idx = add(old.ids[i]);
+            u32 idx = add(old.ids[i]);
             refCounts[idx] = old.refCounts[i];
             memcpy(
                 (u8*)resources + idx * width,
@@ -46,19 +46,19 @@ void HgResourceManager::resize(usize newSize)
 
 void HgResourceManager::reset()
 {
-    for (usize i = 0; i < capacity; ++i)
+    for (u32 i = 0; i < capacity; ++i)
     {
         refCounts[i] = (u32)-1;
     }
     count = 0;
 }
 
-usize HgResourceManager::add(HgResource id)
+u32 HgResourceManager::add(HgResource id)
 {
     if ((f32)(count + 1) >= (f32)capacity * 0.5f)
         resize(capacity * 2);
 
-    usize idx = id % capacity;
+    u32 idx = id % capacity;
     while (refCounts[idx] != (u32)-1)
     {
         if (ids[idx] == id)
@@ -75,7 +75,7 @@ usize HgResourceManager::add(HgResource id)
 
 void HgResourceManager::remove(HgResource id)
 {
-    usize idx = id % capacity;
+    u32 idx = id % capacity;
     while (refCounts[idx] != (u32)-1)
     {
         if (ids[idx] == id)
@@ -85,7 +85,7 @@ void HgResourceManager::remove(HgResource id)
     if (refCounts[idx] == (u32)-1)
         return;
 
-    usize next = (idx + 1) % capacity;
+    u32 next = (idx + 1) % capacity;
     while (refCounts[next] % capacity != (u32)-1)
     {
         if (ids[next] % capacity != idx)
@@ -106,13 +106,13 @@ void HgResourceManager::remove(HgResource id)
 
 bool HgResourceManager::load(HgResource id)
 {
-    usize idx = add(id);
+    u32 idx = add(id);
     return refCounts[idx]++ == 0;
 }
 
 bool HgResourceManager::unload(HgResource id, void* resource)
 {
-    usize idx = id % capacity;
+    u32 idx = id % capacity;
     while (refCounts[idx] != (u32)-1)
     {
         if (ids[idx] == id)
@@ -129,7 +129,7 @@ bool HgResourceManager::unload(HgResource id, void* resource)
 
 void* HgResourceManager::get(HgResource id)
 {
-    usize idx = id % capacity;
+    u32 idx = id % capacity;
     while (refCounts[idx] != (u32)-1)
     {
         if (ids[idx] == id)
@@ -164,7 +164,7 @@ HgBinary hgLoadBinary(HgArena* arena, HgStringView path)
         return {};
     }
 
-    bin.resize(arena, (usize)ftell(fileHandle));
+    bin.resize(arena, (u32)ftell(fileHandle));
     rewind(fileHandle);
 
     if (fread(bin.data, 1, bin.size, fileHandle) != bin.size)
@@ -226,7 +226,7 @@ void hgLoadEmptyResource(HgResource id)
     }
 }
 
-void hgLoadResource(HgFence* fences, usize fenceCount, HgResource id, HgStringView path)
+void hgLoadResource(HgFence* fences, u32 fenceCount, HgResource id, HgStringView path)
 {
     if (binResources.load(id))
     {
@@ -255,7 +255,7 @@ void hgLoadResource(HgFence* fences, usize fenceCount, HgResource id, HgStringVi
                 hgWarn("Failed to read binary from file: %s\n", cpath);
                 return;
             }
-            bin.size = (usize)ftell(fileHandle);
+            bin.size = (u32)ftell(fileHandle);
             bin.data = malloc(bin.size);
             rewind(fileHandle);
 
@@ -271,7 +271,7 @@ void hgLoadResource(HgFence* fences, usize fenceCount, HgResource id, HgStringVi
     }
 }
 
-void hgUnloadResource(HgFence* fences, usize fenceCount, HgResource id)
+void hgUnloadResource(HgFence* fences, u32 fenceCount, HgResource id)
 {
     HgBinary* bin;
     if (binResources.unload(id, &bin))
@@ -285,7 +285,7 @@ void hgUnloadResource(HgFence* fences, usize fenceCount, HgResource id)
     }
 }
 
-void hgStoreResource(HgFence* fences, usize fenceCount, HgResource id, HgStringView path)
+void hgStoreResource(HgFence* fences, u32 fenceCount, HgResource id, HgStringView path)
 {
     HgBinary** res = (HgBinary**)binResources.get(id);
     if (res == nullptr || *res == nullptr)
@@ -309,9 +309,9 @@ HgBinary* hgGetResource(HgResource id)
     return res == nullptr ? nullptr : *res;
 }
 
-bool HgTextureData::getInfo(VkFormat* format, u32* width, u32* height, u32* depth)
+bool HgImageData::getInfo(VkFormat* format, u32* width, u32* height, u32* depth)
 {
-    if (bin.size >= sizeof(Info) && memcmp(bin.data, textureIdentifier, sizeof(textureIdentifier)) == 0)
+    if (bin.size >= sizeof(Info) && memcmp(bin.data, imageIdentifier, sizeof(imageIdentifier)) == 0)
     {
         bin.read(offsetof(Info, format), format, sizeof(*format));
         bin.read(offsetof(Info, width), width, sizeof(*width));
@@ -322,16 +322,16 @@ bool HgTextureData::getInfo(VkFormat* format, u32* width, u32* height, u32* dept
     return false;
 }
 
-void* HgTextureData::getPixels()
+void* HgImageData::getPixels()
 {
-    if (bin.size >= sizeof(Info) && memcmp(bin.data, textureIdentifier, sizeof(textureIdentifier)) == 0)
+    if (bin.size >= sizeof(Info) && memcmp(bin.data, imageIdentifier, sizeof(imageIdentifier)) == 0)
     {
-        return (u8*)bin.data + bin.read<usize>(offsetof(Info, pixelsBegin));
+        return (u8*)bin.data + bin.read<u64>(offsetof(Info, pixelsBegin));
     }
     return bin.data;
 }
 
-void hgImportPng(HgFence* fences, usize fenceCount, HgResource id, HgStringView path)
+void hgImportPng(HgFence* fences, u32 fenceCount, HgResource id, HgStringView path)
 {
     hgLoadResource(fences, fenceCount, id, path);
 
@@ -352,11 +352,11 @@ void hgImportPng(HgFence* fences, usize fenceCount, HgResource id, HgStringView 
         free(bin.data);
         hgDefer(free(pixels));
 
-        bin.size = sizeof(HgTextureData::Info) + (usize)width * (usize)height * sizeof(u32);
+        bin.size = sizeof(HgImageData::Info) + (u32)width * (u32)height * sizeof(u32);
         bin.data = malloc(bin.size);
 
-        HgTextureData::Info info;
-        memcpy(info.identifier, HgTextureData::textureIdentifier, sizeof(HgTextureData::textureIdentifier));
+        HgImageData::Info info;
+        memcpy(info.identifier, HgImageData::imageIdentifier, sizeof(HgImageData::imageIdentifier));
         info.format = VK_FORMAT_R8G8B8A8_SRGB;
         info.width = (u32)width;
         info.height = (u32)height;
@@ -364,11 +364,11 @@ void hgImportPng(HgFence* fences, usize fenceCount, HgResource id, HgStringView 
         info.pixelsBegin = sizeof(info);
 
         bin.overwrite(0, info);
-        bin.overwrite(sizeof(info), pixels, (usize)width * (usize)height * sizeof(u32));
+        bin.overwrite(sizeof(info), pixels, (u32)width * (u32)height * sizeof(u32));
     });
 }
 
-void hgExportPng(HgFence* fences, usize fenceCount, HgResource id, HgStringView path)
+void hgExportPng(HgFence* fences, u32 fenceCount, HgResource id, HgStringView path)
 {
     HgBinary* resource = hgGetResource(id);
     if (resource == nullptr)
@@ -386,7 +386,7 @@ void hgExportPng(HgFence* fences, usize fenceCount, HgResource id, HgStringView 
         HgArenaScope scratchScope{scratch};
         char* cpath = hgCString(scratch, fpath);
 
-        HgTextureData tex = *(HgBinary*)ptex;
+        HgImageData tex = *(HgBinary*)ptex;
         void* pixels = tex.getPixels();
         if (pixels == nullptr)
         {
@@ -424,7 +424,7 @@ void* HgModelData::getVertexData()
 {
     if (file.size >= sizeof(Info) && memcmp(file.data, modelIdentifier, sizeof(modelIdentifier)) == 0)
     {
-        return (u8*)file.data + file.read<usize>(offsetof(Info, verticesBegin));
+        return (u8*)file.data + file.read<u64>(offsetof(Info, verticesBegin));
     }
     return file.data;
 }
@@ -433,12 +433,12 @@ void* HgModelData::getIndexData()
 {
     if (file.size >= sizeof(Info) && memcmp(file.data, modelIdentifier, sizeof(modelIdentifier)) == 0)
     {
-        return (u8*)file.data + file.read<usize>(offsetof(Info, indicesBegin));
+        return (u8*)file.data + file.read<u64>(offsetof(Info, indicesBegin));
     }
     return nullptr;
 }
 
-void hgImportGltf(HgFence* fences, usize fenceCount, HgResource id, HgStringView path)
+void hgImportGltf(HgFence* fences, u32 fenceCount, HgResource id, HgStringView path)
 {
     (void)fences;
     (void)fenceCount;
@@ -447,7 +447,7 @@ void hgImportGltf(HgFence* fences, usize fenceCount, HgResource id, HgStringView
     hgError("hgImportGltf : TODO\n");
 }
 
-void hgExportGltf(HgFence* fences, usize fenceCount, HgResource id, HgStringView path)
+void hgExportGltf(HgFence* fences, u32 fenceCount, HgResource id, HgStringView path)
 {
     (void)fences;
     (void)fenceCount;
@@ -458,28 +458,28 @@ void hgExportGltf(HgFence* fences, usize fenceCount, HgResource id, HgStringView
 
 void hgInitGpuResources()
 {
-    HgInitGpuTextures();
-    hgInitGpuModels();
+    HgInitTextures();
+    hgInitModels();
 }
 
 void hgDeinitGpuResources()
 {
-    hgDeinitGpuModels();
-    hgDeinitGpuTextures();
+    hgDeinitModels();
+    hgDeinitTextures();
 }
 
 HgResourceManager gpuTextures{};
 
-void HgInitGpuTextures()
+void HgInitTextures()
 {
-    gpuTextures = gpuTextures.create(sizeof(HgGpuTexture));
+    gpuTextures = gpuTextures.create(sizeof(HgTextureResource));
 }
 
-void hgDeinitGpuTextures()
+void hgDeinitTextures()
 {
     gpuTextures.forEach([](HgResource, void* ptex)
     {
-        HgGpuTexture& tex = *(HgGpuTexture*)ptex;
+        HgTextureResource& tex = *(HgTextureResource*)ptex;
         vkDestroySampler(hgVkDevice, tex.sampler, nullptr);
         vkDestroyImageView(hgVkDevice, tex.view, nullptr);
         vmaDestroyImage(hgVkVma, tex.image, tex.allocation);
@@ -487,15 +487,15 @@ void hgDeinitGpuTextures()
     gpuTextures.destroy();
 }
 
-void hgLoadGpuTexture(HgResource id, VkFilter filter)
+void hgLoadTexture(HgResource id, VkSampler sampler)
 {
     if (gpuTextures.load(id))
     {
         hgAssert(hgGetResource(id) != nullptr);
         hgAssert(hgGetResource(id)->data != nullptr);
-        HgTextureData data = *hgGetResource(id);
+        HgImageData data = *hgGetResource(id);
 
-        HgGpuTexture& tex = *(HgGpuTexture*)gpuTextures.get(id);;
+        HgTextureResource& tex = *(HgTextureResource*)gpuTextures.get(id);;
         if (!data.getInfo(&tex.format, &tex.width, &tex.height, &tex.depth))
         {
             hgWarn("Could not get info to load texture\n");
@@ -506,16 +506,16 @@ void hgLoadGpuTexture(HgResource id, VkFilter filter)
         hgAssert(tex.depth != 0);
         hgAssert(tex.format != 0);
 
-        HgVkImageConfig imageInfo{};
+        HgCreateVkImage imageInfo{};
         imageInfo.width = tex.width;
         imageInfo.height = tex.height;
         imageInfo.depth = tex.depth;
         imageInfo.format = tex.format;
         imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 
-        hgVkCreateImage(&tex.image, &tex.allocation, imageInfo);
+        hgCreateVkImage(&tex.image, &tex.allocation, imageInfo);
 
-        HgVkWriteImageStagingConfig stagingConfig{};
+        HgWriteVkImage stagingConfig{};
         stagingConfig.dstImage = tex.image;
         stagingConfig.subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         stagingConfig.srcData = data.getPixels();
@@ -525,65 +525,56 @@ void hgLoadGpuTexture(HgResource id, VkFilter filter)
         stagingConfig.format = tex.format;
         stagingConfig.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-        hgWriteVkImageStaging(stagingConfig);
+        hgWriteVkImage(stagingConfig);
 
-        HgVkImageViewConfig viewInfo{};
+        HgCreateVkImageView viewInfo{};
         viewInfo.image = tex.image;
         viewInfo.format = tex.format;
         viewInfo.subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 
-        tex.view = hgVkCreateImageView(viewInfo);
+        tex.view = hgCreateVkImageView(viewInfo);
         hgAssert(tex.view != nullptr);
 
-        VkSamplerCreateInfo samplerInfo{};
-        samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-        samplerInfo.magFilter = filter;
-        samplerInfo.minFilter = filter;
-        samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-
-        vkCreateSampler(hgVkDevice, &samplerInfo, nullptr, &tex.sampler);
-        hgAssert(tex.sampler != nullptr);
+        hgAssert(sampler != nullptr);
+        tex.sampler = sampler;
     }
 }
 
-void hgUnloadGpuTexture(HgResource id)
+void hgUnloadTexture(HgResource id)
 {
-    HgGpuTexture tex;
+    HgTextureResource tex;
     if (gpuTextures.unload(id, &tex))
     {
-        vkDestroySampler(hgVkDevice, tex.sampler, nullptr);
         vkDestroyImageView(hgVkDevice, tex.view, nullptr);
         vmaDestroyImage(hgVkVma, tex.image, tex.allocation);
         tex = {};
     }
 }
 
-HgGpuTexture* hgGetGpuTexture(HgResource id)
+HgTextureResource* hgGetTexture(HgResource id)
 {
-    return (HgGpuTexture*)gpuTextures.get(id);
+    return (HgTextureResource*)gpuTextures.get(id);
 }
 
 HgResourceManager gpuModels{};
 
-void hgInitGpuModels()
+void hgInitModels()
 {
-    gpuModels = gpuModels.create(sizeof(HgGpuModel));
+    gpuModels = gpuModels.create(sizeof(HgModelResource));
 }
 
-void hgDeinitGpuModels()
+void hgDeinitModels()
 {
     gpuModels.forEach([](HgResource, void* pmodel)
     {
-        HgGpuModel& model = *(HgGpuModel*)pmodel;
+        HgModelResource& model = *(HgModelResource*)pmodel;
         vmaDestroyBuffer(hgVkVma, model.vertexBuffer, model.vertexAlloc);
         vmaDestroyBuffer(hgVkVma, model.indexBuffer, model.indexAlloc);
     });
     gpuModels.destroy();
 }
 
-void hgLoadGpuModel(HgResource id)
+void hgLoadModel(HgResource id)
 {
     if (gpuModels.load(id))
     {
@@ -592,7 +583,7 @@ void hgLoadGpuModel(HgResource id)
         HgModelData data = *hgGetResource(id);
 
         VkPrimitiveTopology topology;
-        HgGpuModel& model = *(HgGpuModel*)gpuModels.get(id);
+        HgModelResource& model = *(HgModelResource*)gpuModels.get(id);
         if (!data.getInfo(
             &model.vertexCount,
             &model.vertexWidth,
@@ -603,39 +594,39 @@ void hgLoadGpuModel(HgResource id)
             return;
         }
 
-        hgVkCreateBuffer(
+        hgCreateVkBuffer(
             &model.vertexBuffer,
             &model.vertexAlloc,
             model.vertexCount * model.vertexWidth,
             VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
 
-        hgVkCreateBuffer(
+        hgCreateVkBuffer(
             &model.indexBuffer,
             &model.indexAlloc,
             model.indexCount * sizeof(u32),
             VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
 
-        hgVkWriteBufferStaging(
+        hgWriteVkBuffer(
             model.vertexBuffer, 0,
             data.getVertexData(), model.vertexCount * model.vertexWidth);
 
-        hgVkWriteBufferStaging(
+        hgWriteVkBuffer(
             model.indexBuffer, 0,
             data.getIndexData(), model.indexCount * sizeof(u32));
     }
 }
 
-void hgUnloadGpuModel(HgResource id)
+void hgUnloadModel(HgResource id)
 {
-    HgGpuModel model;
+    HgModelResource model;
     if (gpuModels.unload(id, &model))
     {
         vmaDestroyBuffer(hgVkVma, model.indexBuffer, model.indexAlloc);
     }
 }
 
-HgGpuModel* hgGetGpuModel(HgResource id)
+HgModelResource* hgGetModel(HgResource id)
 {
-    return (HgGpuModel*)gpuModels.get(id);
+    return (HgModelResource*)gpuModels.get(id);
 }
 

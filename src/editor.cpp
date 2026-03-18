@@ -31,14 +31,21 @@ int main()
     HgStringView texturePath = "hg_test_dir/file_image_test.hgtex";
     HgResource textureID = hgResourceID(texturePath);
 
+    HgCreateVkSampler samplerConfig{};
+    samplerConfig.filter = VK_FILTER_NEAREST;
+    samplerConfig.addressMode = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+
+    VkSampler sampler = hgCreateVkSampler(samplerConfig);
+    hgDefer(vkDestroySampler(hgVkDevice, sampler, nullptr));
+
     {
         HgFence fence;
         hgLoadResource(&fence, 1, textureID, texturePath);
         fence.waitIndefinite();
-        hgLoadGpuTexture(textureID, VK_FILTER_NEAREST);
+        hgLoadTexture(textureID, sampler);
         hgUnloadResource(nullptr, 0, textureID);
     }
-    hgDefer(hgUnloadGpuTexture(textureID));
+    hgDefer(hgUnloadTexture(textureID));
 
     hgInitPipeline2D(arena, 256, VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_D32_SFLOAT);
     hgDefer(hgDeinitPipeline2D());
@@ -194,7 +201,7 @@ int main()
 
                     void* pixels = hgAlloc(scratch, renderWidth * renderHeight * 4, 4);
 
-                    HgVkReadImageStagingConfig config{};
+                    HgReadVkImage config{};
                     config.dst = pixels;
                     config.srcImage = renderImage;
                     config.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -203,7 +210,7 @@ int main()
                     config.height = renderHeight;
                     config.depth = 1;
                     config.format = VK_FORMAT_R8G8B8A8_SRGB;
-                    hgVkReadImageStaging(config);
+                    hgReadVkImage(config);
 
                     stbi_write_png(
                         "screenshot.png",
@@ -263,7 +270,7 @@ int main()
                     vkDestroyImageView(hgVkDevice, depthView, nullptr);
                     vmaDestroyImage(hgVkVma, depthImage, depthAlloc);
 
-                    HgVkImageConfig renderImageInfo{};
+                    HgCreateVkImage renderImageInfo{};
                     renderImageInfo.width = renderWidth;
                     renderImageInfo.height = renderHeight;
                     renderImageInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
@@ -271,38 +278,38 @@ int main()
                                             | VK_IMAGE_USAGE_SAMPLED_BIT
                                             | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
-                    hgVkCreateImage(&renderImage, &renderAlloc, renderImageInfo);
+                    hgCreateVkImage(&renderImage, &renderAlloc, renderImageInfo);
 
-                    HgVkImageViewConfig renderViewInfo{};
+                    HgCreateVkImageView renderViewInfo{};
                     renderViewInfo.image = renderImage;
                     renderViewInfo.format = renderImageInfo.format;
                     renderViewInfo.subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 
-                    renderView = hgVkCreateImageView(renderViewInfo);
+                    renderView = hgCreateVkImageView(renderViewInfo);
 
                     renderDescriptor = ImGui_ImplVulkan_AddTexture(
                         renderSampler, renderView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-                    HgVkImageConfig depthImageInfo{};
+                    HgCreateVkImage depthImageInfo{};
                     depthImageInfo.width = renderWidth;
                     depthImageInfo.height = renderHeight;
                     depthImageInfo.format = VK_FORMAT_D32_SFLOAT;
                     depthImageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
                                             | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
-                    hgVkCreateImage(&depthImage, &depthAlloc, depthImageInfo);
+                    hgCreateVkImage(&depthImage, &depthAlloc, depthImageInfo);
 
-                    HgVkImageViewConfig depthViewInfo{};
+                    HgCreateVkImageView depthViewInfo{};
                     depthViewInfo.image = depthImage;
                     depthViewInfo.format = depthImageInfo.format;
                     depthViewInfo.subresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
 
-                    depthView = hgVkCreateImageView(depthViewInfo);
+                    depthView = hgCreateVkImageView(depthViewInfo);
                 }
 
                 if (ImGui::IsWindowFocused())
                 {
-                    if (move3D && window->isKeyDown[(u32)HgKey::lmouse])
+                    if (move3D && window->isKeyDown[HgKey_lmouse])
                     {
                         f32 rotSpeed = 2.0f;
                         HgQuat rotX = hgAxisAngle(HgVec3{0, 1, 0}, (f32)window->mouseDeltaX * rotSpeed);
@@ -313,12 +320,12 @@ int main()
                     HgVec3 movement = HgVec3{0.0f};
                     if (move3D)
                     {
-                        movement.y += window->isKeyDown[(u32)HgKey::lshift] - window->isKeyDown[(u32)HgKey::space];
-                        movement.x += window->isKeyDown[(u32)HgKey::d] - window->isKeyDown[(u32)HgKey::a];
-                        movement.z += window->isKeyDown[(u32)HgKey::w] - window->isKeyDown[(u32)HgKey::s];
+                        movement.y += window->isKeyDown[HgKey_lshift] - window->isKeyDown[HgKey_space];
+                        movement.x += window->isKeyDown[HgKey_d] - window->isKeyDown[HgKey_a];
+                        movement.z += window->isKeyDown[HgKey_w] - window->isKeyDown[HgKey_s];
                     } else {
-                        movement.y += window->isKeyDown[(u32)HgKey::s] - window->isKeyDown[(u32)HgKey::w];
-                        movement.x += window->isKeyDown[(u32)HgKey::d] - window->isKeyDown[(u32)HgKey::a];
+                        movement.y += window->isKeyDown[HgKey_s] - window->isKeyDown[HgKey_w];
+                        movement.x += window->isKeyDown[HgKey_d] - window->isKeyDown[HgKey_a];
                     }
 
                     if (movement != HgVec3{0.0f})
@@ -374,7 +381,7 @@ int main()
                         scene[sceneSize++] = ecs.spawn();
                     }
 
-                    for (usize i = 0; i < sceneSize; ++i)
+                    for (u32 i = 0; i < sceneSize; ++i)
                     {
                         HgArena* scratch = hgGetScratch();
                         HgArenaScope scratchScope{scratch};
@@ -403,14 +410,14 @@ int main()
                                     if (!ecs.has<HgTransform>(e) && ImGui::Selectable("Transform"))
                                         ecs.add<HgTransform>(e) = {};
 
-                                    if (!ecs.has<HgSprite>(e) && ImGui::Selectable("Sprite"))
+                                    if (!ecs.has<HgSprite2D>(e) && ImGui::Selectable("Sprite"))
                                     {
                                         if (!ecs.has<HgTransform>(e))
                                             ecs.add<HgTransform>(e) = {};
-                                        ecs.add<HgSprite>(e) = {textureID, HgVec2{0.0f, 0.0f}, HgVec2{1.0f, 1.0f}};
+                                        ecs.add<HgSprite2D>(e) = {textureID, HgVec2{0.0f, 0.0f}, HgVec2{1.0f, 1.0f}};
                                     }
 
-                                    if (!ecs.has<HgSprite>(e) && ImGui::Selectable("Model 3D"))
+                                    if (!ecs.has<HgSprite2D>(e) && ImGui::Selectable("Model 3D"))
                                     {
                                         if (!ecs.has<HgTransform>(e))
                                             ecs.add<HgTransform>(e) = {};
@@ -440,16 +447,16 @@ int main()
                                     if (ecs.has<HgTransform>(e) && ImGui::Selectable("Transform"))
                                     {
                                         ecs.remove<HgTransform>(e);
-                                        if (ecs.has<HgSprite>(e))
-                                            ecs.remove<HgSprite>(e);
+                                        if (ecs.has<HgSprite2D>(e))
+                                            ecs.remove<HgSprite2D>(e);
                                         if (ecs.has<HgModel3D>(e))
                                             ecs.remove<HgModel3D>(e);
                                         if (ecs.has<HgPointLight3D>(e))
                                             ecs.remove<HgPointLight3D>(e);
                                     }
 
-                                    if (ecs.has<HgSprite>(e) && ImGui::Selectable("Sprite"))
-                                        ecs.remove<HgSprite>(e);
+                                    if (ecs.has<HgSprite2D>(e) && ImGui::Selectable("Sprite"))
+                                        ecs.remove<HgSprite2D>(e);
 
                                     if (ecs.has<HgModel3D>(e) && ImGui::Selectable("Model 3D"))
                                         ecs.remove<HgModel3D>(e);
@@ -473,9 +480,9 @@ int main()
                                     ImGui::TreePop();
                                 }
 
-                                if (ecs.has<HgSprite>(e) && ImGui::TreeNodeEx("Sprite", componentFlags))
+                                if (ecs.has<HgSprite2D>(e) && ImGui::TreeNodeEx("Sprite", componentFlags))
                                 {
-                                    HgSprite& s = ecs.get<HgSprite>(e);
+                                    HgSprite2D& s = ecs.get<HgSprite2D>(e);
                                     ImGui::DragFloat2("UV Position", &s.uvPos.x, 0.01f);
                                     ImGui::DragFloat2("UV Size", &s.uvSize.x, 0.01f);
                                     ImGui::TreePop();
@@ -578,7 +585,7 @@ int main()
 
             HgImageBarrier presentBarrier{};
             presentBarrier.image = windowImageID;
-            presentBarrier.nextUsage = HgRenderUsage::presentSrc;
+            presentBarrier.nextUsage = HgRenderUsage_presentSrc;
 
             renderer.barrier(cmd, nullptr, 0, &presentBarrier, 1);
 

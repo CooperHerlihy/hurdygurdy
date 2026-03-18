@@ -39,271 +39,271 @@ static void keyCallback(
     HgWindow* window = (HgWindow*)glfwGetWindowUserPointer(glfwWindow);
 
     bool isShiftDown =
-        window->isKeyDown[(u32)HgKey::lshift] ||
-        window->isKeyDown[(u32)HgKey::rshift];
+        window->isKeyDown[HgKey_lshift] ||
+        window->isKeyDown[HgKey_rshift];
 
-    HgKey key = HgKey::none;
+    HgKey key = HgKey_none;
     switch (glfwKey)
     {
         case GLFW_KEY_0:
-            key = isShiftDown ? HgKey::rparen : HgKey::k0;
+            key = isShiftDown ? HgKey_rparen : HgKey_k0;
             break;
         case GLFW_KEY_1:
-            key = isShiftDown ? HgKey::exclamation : HgKey::k1;
+            key = isShiftDown ? HgKey_exclamation : HgKey_k1;
             break;
         case GLFW_KEY_2:
-            key = isShiftDown ? HgKey::at : HgKey::k2;
+            key = isShiftDown ? HgKey_at : HgKey_k2;
             break;
         case GLFW_KEY_3:
-            key = isShiftDown ? HgKey::hash : HgKey::k3;
+            key = isShiftDown ? HgKey_hash : HgKey_k3;
             break;
         case GLFW_KEY_4:
-            key = isShiftDown ? HgKey::dollar : HgKey::k4;
+            key = isShiftDown ? HgKey_dollar : HgKey_k4;
             break;
         case GLFW_KEY_5:
-            key = isShiftDown ? HgKey::percent : HgKey::k5;
+            key = isShiftDown ? HgKey_percent : HgKey_k5;
             break;
         case GLFW_KEY_6:
-            key = isShiftDown ? HgKey::carot : HgKey::k6;
+            key = isShiftDown ? HgKey_carot : HgKey_k6;
             break;
         case GLFW_KEY_7:
-            key = isShiftDown ? HgKey::ampersand : HgKey::k7;
+            key = isShiftDown ? HgKey_ampersand : HgKey_k7;
             break;
         case GLFW_KEY_8:
-            key = isShiftDown ? HgKey::asterisk : HgKey::k8;
+            key = isShiftDown ? HgKey_asterisk : HgKey_k8;
             break;
         case GLFW_KEY_9:
-            key = isShiftDown ? HgKey::lparen : HgKey::k9;
+            key = isShiftDown ? HgKey_lparen : HgKey_k9;
             break;
 
         case GLFW_KEY_Q:
-            key = HgKey::q;
+            key = HgKey_q;
             break;
         case GLFW_KEY_W:
-            key = HgKey::w;
+            key = HgKey_w;
             break;
         case GLFW_KEY_E:
-            key = HgKey::e;
+            key = HgKey_e;
             break;
         case GLFW_KEY_R:
-            key = HgKey::r;
+            key = HgKey_r;
             break;
         case GLFW_KEY_T:
-            key = HgKey::t;
+            key = HgKey_t;
             break;
         case GLFW_KEY_Y:
-            key = HgKey::y;
+            key = HgKey_y;
             break;
         case GLFW_KEY_U:
-            key = HgKey::u;
+            key = HgKey_u;
             break;
         case GLFW_KEY_I:
-            key = HgKey::i;
+            key = HgKey_i;
             break;
         case GLFW_KEY_O:
-            key = HgKey::o;
+            key = HgKey_o;
             break;
         case GLFW_KEY_P:
-            key = HgKey::p;
+            key = HgKey_p;
             break;
         case GLFW_KEY_A:
-            key = HgKey::a;
+            key = HgKey_a;
             break;
         case GLFW_KEY_S:
-            key = HgKey::s;
+            key = HgKey_s;
             break;
         case GLFW_KEY_D:
-            key = HgKey::d;
+            key = HgKey_d;
             break;
         case GLFW_KEY_F:
-            key = HgKey::f;
+            key = HgKey_f;
             break;
         case GLFW_KEY_G:
-            key = HgKey::g;
+            key = HgKey_g;
             break;
         case GLFW_KEY_H:
-            key = HgKey::h;
+            key = HgKey_h;
             break;
         case GLFW_KEY_J:
-            key = HgKey::j;
+            key = HgKey_j;
             break;
         case GLFW_KEY_K:
-            key = HgKey::k;
+            key = HgKey_k;
             break;
         case GLFW_KEY_L:
-            key = HgKey::l;
+            key = HgKey_l;
             break;
         case GLFW_KEY_Z:
-            key = HgKey::z;
+            key = HgKey_z;
             break;
         case GLFW_KEY_X:
-            key = HgKey::x;
+            key = HgKey_x;
             break;
         case GLFW_KEY_C:
-            key = HgKey::c;
+            key = HgKey_c;
             break;
         case GLFW_KEY_V:
-            key = HgKey::v;
+            key = HgKey_v;
             break;
         case GLFW_KEY_B:
-            key = HgKey::b;
+            key = HgKey_b;
             break;
         case GLFW_KEY_N:
-            key = HgKey::n;
+            key = HgKey_n;
             break;
         case GLFW_KEY_M:
-            key = HgKey::m;
+            key = HgKey_m;
             break;
 
         case GLFW_KEY_SEMICOLON:
-            key = isShiftDown ? HgKey::colon : HgKey::semicolon;
+            key = isShiftDown ? HgKey_colon : HgKey_semicolon;
             break;
         case GLFW_KEY_APOSTROPHE:
-            key = isShiftDown ? HgKey::quotation : HgKey::apostrophe;
+            key = isShiftDown ? HgKey_quotation : HgKey_apostrophe;
             break;
         case GLFW_KEY_COMMA:
-            key = isShiftDown ? HgKey::less : HgKey::comma;
+            key = isShiftDown ? HgKey_less : HgKey_comma;
             break;
         case GLFW_KEY_PERIOD:
-            key = isShiftDown ? HgKey::greater : HgKey::period;
+            key = isShiftDown ? HgKey_greater : HgKey_period;
             break;
         case GLFW_KEY_SLASH:
-            key = isShiftDown ? HgKey::question : HgKey::slash;
+            key = isShiftDown ? HgKey_question : HgKey_slash;
             break;
         case GLFW_KEY_BACKSLASH:
-            key = isShiftDown ? HgKey::bar : HgKey::backslash;
+            key = isShiftDown ? HgKey_bar : HgKey_backslash;
             break;
         case GLFW_KEY_LEFT_BRACKET:
-            key = isShiftDown ? HgKey::lbrace : HgKey::lbracket;
+            key = isShiftDown ? HgKey_lbrace : HgKey_lbracket;
             break;
         case GLFW_KEY_RIGHT_BRACKET:
-            key = isShiftDown ? HgKey::rbrace : HgKey::rbracket;
+            key = isShiftDown ? HgKey_rbrace : HgKey_rbracket;
             break;
         case GLFW_KEY_GRAVE_ACCENT:
-            key = isShiftDown ? HgKey::tilde : HgKey::grave;
+            key = isShiftDown ? HgKey_tilde : HgKey_grave;
             break;
         case GLFW_KEY_MINUS:
-            key = isShiftDown ? HgKey::underscore : HgKey::minus;
+            key = isShiftDown ? HgKey_underscore : HgKey_minus;
             break;
         case GLFW_KEY_EQUAL:
-            key = isShiftDown ? HgKey::plus : HgKey::equal;
+            key = isShiftDown ? HgKey_plus : HgKey_equal;
             break;
 
         case GLFW_KEY_UP:
-            key = HgKey::up;
+            key = HgKey_up;
             break;
         case GLFW_KEY_DOWN:
-            key = HgKey::down;
+            key = HgKey_down;
             break;
         case GLFW_KEY_LEFT:
-            key = HgKey::left;
+            key = HgKey_left;
             break;
         case GLFW_KEY_RIGHT:
-            key = HgKey::right;
+            key = HgKey_right;
             break;
 
         case GLFW_KEY_ESCAPE:
-            key = HgKey::escape;
+            key = HgKey_escape;
             break;
         case GLFW_KEY_SPACE:
-            key = HgKey::space;
+            key = HgKey_space;
             break;
         case GLFW_KEY_ENTER:
-            key = HgKey::enter;
+            key = HgKey_enter;
             break;
         case GLFW_KEY_BACKSPACE:
-            key = HgKey::backspace;
+            key = HgKey_backspace;
             break;
         case GLFW_KEY_DELETE:
-            key = HgKey::kdelete;
+            key = HgKey_kdelete;
             break;
         case GLFW_KEY_INSERT:
-            key = HgKey::insert;
+            key = HgKey_insert;
             break;
         case GLFW_KEY_TAB:
-            key = HgKey::tab;
+            key = HgKey_tab;
             break;
         case GLFW_KEY_HOME:
-            key = HgKey::home;
+            key = HgKey_home;
             break;
         case GLFW_KEY_END:
-            key = HgKey::end;
+            key = HgKey_end;
             break;
 
         case GLFW_KEY_F1:
-            key = HgKey::f1;
+            key = HgKey_f1;
             break;
         case GLFW_KEY_F2:
-            key = HgKey::f2;
+            key = HgKey_f2;
             break;
         case GLFW_KEY_F3:
-            key = HgKey::f3;
+            key = HgKey_f3;
             break;
         case GLFW_KEY_F4:
-            key = HgKey::f4;
+            key = HgKey_f4;
             break;
         case GLFW_KEY_F5:
-            key = HgKey::f5;
+            key = HgKey_f5;
             break;
         case GLFW_KEY_F6:
-            key = HgKey::f6;
+            key = HgKey_f6;
             break;
         case GLFW_KEY_F7:
-            key = HgKey::f7;
+            key = HgKey_f7;
             break;
         case GLFW_KEY_F8:
-            key = HgKey::f8;
+            key = HgKey_f8;
             break;
         case GLFW_KEY_F9:
-            key = HgKey::f9;
+            key = HgKey_f9;
             break;
         case GLFW_KEY_F10:
-            key = HgKey::f10;
+            key = HgKey_f10;
             break;
         case GLFW_KEY_F11:
-            key = HgKey::f11;
+            key = HgKey_f11;
             break;
         case GLFW_KEY_F12:
-            key = HgKey::f12;
+            key = HgKey_f12;
             break;
 
         case GLFW_KEY_LEFT_SHIFT:
-            key = HgKey::lshift;
+            key = HgKey_lshift;
             break;
         case GLFW_KEY_RIGHT_SHIFT:
-            key = HgKey::rshift;
+            key = HgKey_rshift;
             break;
         case GLFW_KEY_LEFT_CONTROL:
-            key = HgKey::lctrl;
+            key = HgKey_lctrl;
             break;
         case GLFW_KEY_RIGHT_CONTROL:
-            key = HgKey::rctrl;
+            key = HgKey_rctrl;
             break;
         case GLFW_KEY_LEFT_ALT:
-            key = HgKey::lalt;
+            key = HgKey_lalt;
             break;
         case GLFW_KEY_RIGHT_ALT:
-            key = HgKey::ralt;
+            key = HgKey_ralt;
             break;
         case GLFW_KEY_LEFT_SUPER:
-            key = HgKey::lsuper;
+            key = HgKey_lsuper;
             break;
         case GLFW_KEY_RIGHT_SUPER:
-            key = HgKey::rsuper;
+            key = HgKey_rsuper;
             break;
         case GLFW_KEY_CAPS_LOCK:
-            key = HgKey::capslock;
+            key = HgKey_capslock;
             break;
     }
 
     if (action == GLFW_PRESS)
     {
-        window->isKeyDown[(u32)key] = true;
-        window->wasKeyPressed[(u32)key] = true;
+        window->isKeyDown[key] = true;
+        window->wasKeyPressed[key] = true;
     } else if (action == GLFW_RELEASE)
     {
-        window->isKeyDown[(u32)key] = false;
-        window->wasKeyReleased[(u32)key] = true;
+        window->isKeyDown[key] = false;
+        window->wasKeyReleased[key] = true;
     }
 }
 
@@ -318,33 +318,33 @@ void mouseButtonCallback(GLFWwindow* glfwWindow, int button, int action, [[maybe
 {
     HgWindow* window = (HgWindow*)glfwGetWindowUserPointer(glfwWindow);
 
-    HgKey key = HgKey::none;
+    HgKey key = HgKey_none;
     switch (button)
     {
         case GLFW_MOUSE_BUTTON_LEFT:
-            key = HgKey::lmouse;
+            key = HgKey_lmouse;
             break;
         case GLFW_MOUSE_BUTTON_RIGHT:
-            key = HgKey::rmouse;
+            key = HgKey_rmouse;
             break;
         case GLFW_MOUSE_BUTTON_MIDDLE:
-            key = HgKey::mmouse;
+            key = HgKey_mmouse;
             break;
         case GLFW_MOUSE_BUTTON_4:
-            key = HgKey::mouse4;
+            key = HgKey_mouse4;
             break;
         case GLFW_MOUSE_BUTTON_5:
-            key = HgKey::mouse5;
+            key = HgKey_mouse5;
             break;
     }
     if (action == GLFW_PRESS)
     {
-        window->isKeyDown[(u32)key] = true;
-        window->wasKeyPressed[(u32)key] = true;
+        window->isKeyDown[key] = true;
+        window->wasKeyPressed[key] = true;
     } else if (action == GLFW_RELEASE)
     {
-        window->isKeyDown[(u32)key] = false;
-        window->wasKeyReleased[(u32)key] = true;
+        window->isKeyDown[key] = false;
+        window->wasKeyReleased[key] = true;
     }
 }
 
@@ -448,7 +448,7 @@ u32 hgVkGetPlatformExtensions(HgArena* arena, HgStringView** extBuffer)
         hgError("Could not get required instance extensions from glfw\n");
 
     *extBuffer = hgAlloc<HgStringView>(arena, extCount);
-    for (usize i = 0; i < extCount; ++i)
+    for (u32 i = 0; i < extCount; ++i)
     {
         (*extBuffer)[i] = exts[i];
     }
@@ -456,7 +456,7 @@ u32 hgVkGetPlatformExtensions(HgArena* arena, HgStringView** extBuffer)
     return extCount;
 }
 
-void hgProcessWindowEvents(HgWindow** windows, usize windowCount)
+void hgProcessWindowEvents(HgWindow** windows, u32 windowCount)
 {
     HgArena* scratch = hgGetScratch();
     HgArenaScope scratchScope{scratch};
@@ -466,7 +466,7 @@ void hgProcessWindowEvents(HgWindow** windows, usize windowCount)
     f64* oldMouseXs = hgAlloc<f64>(scratch, windowCount);
     f64* oldMouseYs = hgAlloc<f64>(scratch, windowCount);
 
-    for (usize i = 0; i < windowCount; ++i)
+    for (u32 i = 0; i < windowCount; ++i)
     {
         HgWindow* window = windows[i];
 
@@ -481,7 +481,7 @@ void hgProcessWindowEvents(HgWindow** windows, usize windowCount)
 
     glfwPollEvents();
 
-    for (usize i = 0; i < windowCount; ++i)
+    for (u32 i = 0; i < windowCount; ++i)
     {
         HgWindow* window = windows[i];
 

@@ -611,14 +611,14 @@ u32 hgMaxMipmaps(u32 width, u32 height, u32 depth)
     return max == 0 ? 0 : (u32)log2((f32)max) + 1;
 }
 
-void* hgAlloc(HgArena* arena, usize size, usize alignment)
+void* hgAlloc(HgArena* arena, u64 size, u64 alignment)
 {
-    arena->head = hgAlign((usize)arena->head, alignment) + size;
+    arena->head = hgAlign((u64)arena->head, alignment) + size;
     hgAssert(arena->head <= arena->capacity);
     return (void*)((uptr)arena->memory + arena->head - size);
 }
 
-void* hgRealloc(HgArena* arena, void* allocation, usize oldSize, usize newSize, usize alignment)
+void* hgRealloc(HgArena* arena, void* allocation, u64 oldSize, u64 newSize, u64 alignment)
 {
     if (allocation >= arena->memory && (uptr)allocation + oldSize <= (uptr)arena->memory + arena->capacity)
     {
@@ -639,16 +639,16 @@ void* hgRealloc(HgArena* arena, void* allocation, usize oldSize, usize newSize, 
     return newAllocation;
 }
 
-static constexpr usize arenaCount = 2;
+static constexpr u32 arenaCount = 2;
 static thread_local HgArena arenas[arenaCount]{};
 
 void hgInitScratchMemory()
 {
-    for (usize i = 0; i < arenaCount; ++i)
+    for (u32 i = 0; i < arenaCount; ++i)
     {
         if (arenas[i].memory == nullptr)
         {
-            usize arenaSize = (u32)-1;
+            u64 arenaSize = (u32)-1;
             arenas[i] = {malloc(arenaSize), arenaSize};
         }
     }
@@ -656,7 +656,7 @@ void hgInitScratchMemory()
 
 void hgDeinitScratchMemory()
 {
-    for (usize i = 0; i < arenaCount; ++i)
+    for (u32 i = 0; i < arenaCount; ++i)
     {
         if (arenas[i].memory != nullptr)
         {
@@ -666,11 +666,11 @@ void hgDeinitScratchMemory()
     }
 }
 
-HgArena* hgGetScratch(HgArena const* const* conflicts, usize count)
+HgArena* hgGetScratch(HgArena const* const* conflicts, u32 count)
 {
     for (HgArena& arena : arenas)
     {
-        for (usize i = 0; i < count; ++i)
+        for (u32 i = 0; i < count; ++i)
         {
             if (&arena == conflicts[i])
                 goto next;
@@ -690,7 +690,7 @@ char* hgCString(HgArena* arena, HgStringView str)
     return cStr;
 }
 
-HgString HgString::create(HgArena* arena, usize capacity)
+HgString HgString::create(HgArena* arena, u64 capacity)
 {
     HgString str;
     str.chars = hgAlloc<char>(arena, capacity);
@@ -709,7 +709,7 @@ HgString HgString::copy(HgArena* arena, HgStringView str)
     return copy;
 }
 
-void HgString::reserve(HgArena* arena, usize newCapacity)
+void HgString::reserve(HgArena* arena, u64 newCapacity)
 {
     chars = hgRealloc(arena, chars, capacity, newCapacity);
     capacity = newCapacity;
@@ -718,15 +718,15 @@ void HgString::reserve(HgArena* arena, usize newCapacity)
 void HgString::grow(HgArena* arena, f32 factor)
 {
     hgAssert(factor > 1.0f);
-    hgAssert(capacity <= (usize)((f32)SIZE_MAX / factor));
-    reserve(arena, capacity == 0 ? 1 : (usize)((f32)capacity * factor));
+    hgAssert(capacity <= (u64)((f32)SIZE_MAX / factor));
+    reserve(arena, capacity == 0 ? 1 : (u64)((f32)capacity * factor));
 }
 
-HgString& HgString::insert(HgArena* arena, usize index, char c)
+HgString& HgString::insert(HgArena* arena, u64 index, char c)
 {
     hgAssert(index <= length);
 
-    usize newLength = length + 1;
+    u64 newLength = length + 1;
     while (capacity < newLength)
     {
         grow(arena);
@@ -740,11 +740,11 @@ HgString& HgString::insert(HgArena* arena, usize index, char c)
     return *this;
 }
 
-HgString& HgString::insert(HgArena* arena, usize index, HgStringView str)
+HgString& HgString::insert(HgArena* arena, u64 index, HgStringView str)
 {
     hgAssert(index <= length);
 
-    usize newLength = length + str.length;
+    u64 newLength = length + str.length;
     while (capacity < newLength)
     {
         grow(arena);
@@ -773,7 +773,7 @@ bool hgIsIntenger(HgStringView str)
     if (str.length == 0)
         return false;
 
-    usize head = 0;
+    u64 head = 0;
     if (!hgIsNumeral(str[head]) && str[head] != '+' && str[head] != '-')
         return false;
 
@@ -795,7 +795,7 @@ bool hgIsFloat(HgStringView str)
     bool hasDecimal = false;
     bool hasExponent = false;
 
-    usize head = 0;
+    u64 head = 0;
 
     if (!hgIsNumeral(str[head]) && str[head] != '.' && str[head] != '+' && str[head] != '-')
         return false;
@@ -847,7 +847,7 @@ i64 hgStrToInt(HgStringView str)
     i64 power = 1;
     i64 ret = 0;
 
-    usize head = str.length - 1;
+    u64 head = str.length - 1;
     while (head > 0)
     {
         ret += (i64)(str[head] - '0') * power;
@@ -871,7 +871,7 @@ f64 hgStrToFloat(HgStringView str)
     hgAssert(hgIsFloat(str));
 
     f64 ret = 0.0;
-    usize head = 0;
+    u64 head = 0;
 
     bool isNegative = str[head] == '-';
     if (isNegative || str[head] == '+')
@@ -879,7 +879,7 @@ f64 hgStrToFloat(HgStringView str)
 
     if (hgIsNumeral(str[head]))
     {
-        usize intPartBegin = head;
+        u64 intPartBegin = head;
         while (head < str.length && str[head] != '.' && str[head] != 'e')
         {
             ++head;
@@ -908,7 +908,7 @@ f64 hgStrToFloat(HgStringView str)
         if (expIsNegative || str[head] == '+')
             ++head;
 
-        usize expBegin = head;
+        u64 expBegin = head;
         while (head < str.length && hgIsNumeral(str[head]))
         {
             ++head;
@@ -962,14 +962,14 @@ HgString hgIntToStr(HgArena* arena, i64 num)
     HgString ret = ret.create(arena, reverse.length + (isNegative ? 1 : 0));
     if (isNegative)
         ret.append(arena, '-');
-    for (usize i = reverse.length - 1; i < reverse.length; --i)
+    for (u64 i = reverse.length - 1; i < reverse.length; --i)
     {
         ret.append(arena, reverse[i]);
     }
     return ret;
 }
 
-HgString hgFloatToStr(HgArena* arena, f64 num, u64 decimalCount)
+HgString hgFloatToStr(HgArena* arena, f64 num, u32 decimalCount)
 {
     HgArena* scratch = hgGetScratch(&arena, 1);
     HgArenaScope scratchScope{scratch};
@@ -983,7 +983,7 @@ HgString hgFloatToStr(HgArena* arena, f64 num, u64 decimalCount)
     decStr.append(scratch, '.');
 
     f64 decPart = fabs(num);
-    for (usize i = 0; i < decimalCount; ++i)
+    for (u64 i = 0; i < decimalCount; ++i)
     {
         decPart *= 10.0;
         decStr.append(scratch, '0' + (char)((u64)decPart % 10));
@@ -1008,8 +1008,8 @@ namespace {
     struct HgJsonParser {
         HgArena* arena;
         HgStringView text;
-        usize head;
-        usize line;
+        u64 head;
+        u64 line;
 
         HgJsonParser(HgArena* arenaVal) : arena{arenaVal} {}
 
@@ -1079,7 +1079,7 @@ HgJson HgJsonParser::parseNext()
     HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
     error->next = nullptr;
 
-    usize begin = head;
+    u64 begin = head;
     while (head < text.length && !hgIsWhitespace(text[head]))
     {
         if (text[head] == '\n')
@@ -1100,7 +1100,7 @@ HgJson HgJsonParser::parseStruct()
 {
     HgJson json{};
     json.file = hgAlloc<HgJsonNode>(arena, 1);
-    json.file->type = HgJsonType::jstruct;
+    json.file->type = HgJsonType::HgJsonType_struct;
     json.file->jstruct.fields = nullptr;
 
     HgJsonField* lastField = nullptr;
@@ -1171,7 +1171,7 @@ HgJson HgJsonParser::parseStruct()
 
         if (value.file != nullptr)
         {
-            if (value.file->type != HgJsonType::field)
+            if (value.file->type != HgJsonType::HgJsonType_field)
             {
                 HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
                 error->next = nullptr;
@@ -1224,9 +1224,9 @@ HgJson HgJsonParser::parseArray()
 {
     HgJson json{};
     json.file = hgAlloc<HgJsonNode>(arena, 1);
-    json.file->type = HgJsonType::array;
+    json.file->type = HgJsonType::HgJsonType_array;
 
-    HgJsonType type = HgJsonType::none;
+    HgJsonType type = HgJsonType::HgJsonType_none;
     HgJsonElem* lastElem = nullptr;
     HgJsonError* lastError = nullptr;
 
@@ -1299,9 +1299,9 @@ HgJson HgJsonParser::parseArray()
 
         if (value.file != nullptr)
         {
-            if (type == HgJsonType::none)
+            if (type == HgJsonType::HgJsonType_none)
             {
-                if (value.file->type != HgJsonType::field)
+                if (value.file->type != HgJsonType::HgJsonType_field)
                 {
                     type = value.file->type;
                 } else {
@@ -1354,19 +1354,19 @@ HgJson HgJsonParser::parseArray()
 
 HgJson HgJsonParser::parseString()
 {
-    usize begin = head;
+    u64 begin = head;
     while (head < text.length && text[head] != '"')
     {
         if (text[head] == '\n')
             ++line;
         ++head;
     }
-    usize end = head;
+    u64 end = head;
     if (head < text.length)
     {
         ++head;
         HgString str = str.create(arena, end - begin);
-        for (usize i = begin; i < end; ++i)
+        for (u64 i = begin; i < end; ++i)
         {
             char c = text[i];
             if (c == '\\')
@@ -1388,14 +1388,14 @@ HgJson HgJsonParser::parseString()
         if (head < text.length && text[head] == ':')
         {
             ++head;
-            json.file->type = HgJsonType::field;
+            json.file->type = HgJsonType::HgJsonType_field;
             json.file->field.next = nullptr;
             json.file->field.name = str;
             HgJson next = parseNext();
             json.file->field.value = next.file;
             json.errors = next.errors;
         } else {
-            json.file->type = HgJsonType::string;
+            json.file->type = HgJsonType::HgJsonType_string;
             json.file->string = str;
         }
         while (head < text.length && hgIsWhitespace(text[head]))
@@ -1420,7 +1420,7 @@ HgJson HgJsonParser::parseString()
 HgJson HgJsonParser::parseNumber()
 {
     bool isFloat = false;
-    usize begin = head;
+    u64 begin = head;
     while (head < text.length && (
         hgIsNumeral(text[head]) ||
         text[head] == '-' ||
@@ -1448,7 +1448,7 @@ HgJson HgJsonParser::parseNumber()
         if (hgIsFloat(num))
         {
             HgJsonNode* node = hgAlloc<HgJsonNode>(arena, 1);
-            node->type = HgJsonType::floating;
+            node->type = HgJsonType::HgJsonType_float;
             node->floating = hgStrToFloat(num);
             return {node, nullptr};
         }
@@ -1456,7 +1456,7 @@ HgJson HgJsonParser::parseNumber()
         if (hgIsIntenger(num))
         {
             HgJsonNode* node = hgAlloc<HgJsonNode>(arena, 1);
-            node->type = HgJsonType::integer;
+            node->type = HgJsonType::HgJsonType_integer;
             node->integer = hgStrToInt(num);
             return {node, nullptr};
         }
@@ -1502,7 +1502,7 @@ HgJson HgJsonParser::parseBoolean()
             ++head;
 
         HgJsonNode* node = hgAlloc<HgJsonNode>(arena, 1);
-        node->type = HgJsonType::boolean;
+        node->type = HgJsonType::HgJsonType_bool;
         node->boolean = true;
         return {node, nullptr};
     }
@@ -1519,14 +1519,14 @@ HgJson HgJsonParser::parseBoolean()
             ++head;
 
         HgJsonNode* node = hgAlloc<HgJsonNode>(arena, 1);
-        node->type = HgJsonType::boolean;
+        node->type = HgJsonType::HgJsonType_bool;
         node->boolean = false;
         return {node, nullptr};
     }
 
     HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
 
-    usize begin = head;
+    u64 begin = head;
     while (head < text.length && !hgIsWhitespace(text[head])
         && text[head] != ','
         && text[head] != '}'
@@ -1570,13 +1570,6 @@ HgJson hgParseJson(HgArena* arena, HgStringView text)
     parser.head = 0;
     parser.line = 1;
     return parser.parseNext();
-}
-
-f64 HgClock::tick()
-{
-    auto prev = time;
-    time = std::chrono::high_resolution_clock::now();
-    return std::chrono::duration<f64>{time - prev}.count();
 }
 
 namespace {
@@ -1766,14 +1759,14 @@ HgEntity HgECS::get(const void* component, u32 componentId)
 {
     hgAssert(component != nullptr);
 
-    usize idx = ((uptr)component - (uptr)systems[componentId].components) / componentWidth(componentId);
+    u32 idx = (u32)((uptr)component - (uptr)systems[componentId].components) / componentWidth(componentId);
     return systems[componentId].entities[idx];
 }
 
-u32 HgECS::findSmallest(u32* ids, usize idCount)
+u32 HgECS::findSmallest(u32* ids, u32 idCount)
 {
     u32 smallest = ids[0];
-    for (usize i = 1; i < idCount; ++i)
+    for (u32 i = 1; i < idCount; ++i)
     {
         if (systems[ids[i]].count < systems[smallest].count)
             smallest = ids[i];

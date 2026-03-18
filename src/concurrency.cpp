@@ -6,17 +6,24 @@
 
 #include <emmintrin.h>
 
-usize hgHardwareThreadCount()
+f64 HgClock::tick()
 {
-    return std::thread::hardware_concurrency();
+    auto prev = time;
+    time = std::chrono::high_resolution_clock::now();
+    return std::chrono::duration<f64>{time - prev}.count();
 }
 
-void HgFence::add(usize count)
+u32 hgHardwareThreadCount()
+{
+    return (u32)std::thread::hardware_concurrency();
+}
+
+void HgFence::add(u32 count)
 {
     counter.fetch_add(count);
 }
 
-void HgFence::signal(usize count)
+void HgFence::signal(u32 count)
 {
     counter.fetch_sub(count);
 }
@@ -45,7 +52,7 @@ bool HgFence::wait(f64 timeout)
 }
 
 std::thread* poolThreads = nullptr;
-usize poolThreadCount = 0;
+u32 poolThreadCount = 0;
 std::atomic_bool poolShouldClose = false;
 
 std::mutex poolMtx{};
@@ -53,23 +60,23 @@ std::condition_variable poolCv{};
 
 struct ThreadWork {
     HgFence* fences;
-    usize fenceCount;
+    u32 fenceCount;
     void* data;
     void (*fn)(void*);
 };
 ThreadWork* poolWork = nullptr;
 std::atomic_bool* poolHasWork = nullptr;
-usize poolWorkCapacity = 0;
+u32 poolWorkCapacity = 0;
 
-std::atomic<usize> poolWorkCount = 0;
-std::atomic<usize> poolTail = 0;
-std::atomic<usize> poolWorkingTail = 0;
-std::atomic<usize> poolHead = 0;
-std::atomic<usize> poolWorkingHead = 0;
+std::atomic<u32> poolWorkCount = 0;
+std::atomic<u32> poolTail = 0;
+std::atomic<u32> poolWorkingTail = 0;
+std::atomic<u32> poolHead = 0;
+std::atomic<u32> poolWorkingHead = 0;
 
 static bool poolExecute()
 {
-    usize idx = poolWorkingTail.load();
+    u32 idx = poolWorkingTail.load();
     do {
         if (idx == poolHead.load())
             return false;
@@ -78,10 +85,10 @@ static bool poolExecute()
     ThreadWork work = poolWork[idx];
     poolHasWork[idx].store(false);
 
-    usize t = poolTail.load();
+    u32 t = poolTail.load();
     while (t != poolHead.load() && !poolHasWork[t].load())
     {
-        usize next = (t + 1) & (poolWorkCapacity - 1);
+        u32 next = (t + 1) & (poolWorkCapacity - 1);
         poolTail.compare_exchange_strong(t, next);
         t = next;
     }
@@ -91,19 +98,19 @@ static bool poolExecute()
     hgAssert(work.fn != nullptr);
     work.fn(work.data);
 
-    for (usize i = 0; i < work.fenceCount; ++i)
+    for (u32 i = 0; i < work.fenceCount; ++i)
     {
         work.fences[i].signal(1);
     }
     return true;
 }
 
-void hgInitThreadPool(HgArena* arena, usize queueSize, usize threadCount)
+void hgInitThreadPool(HgArena* arena, u32 queueSize, u32 threadCount)
 {
     hgAssert(threadCount > 1 && (queueSize & (queueSize - 1)) == 0);
 
     poolShouldClose.store(false);
-    poolThreadCount = std::min((usize)1, threadCount - 1);
+    poolThreadCount = std::min((u32)1, threadCount - 1);
     poolThreads = hgAlloc<std::thread>(arena, poolThreadCount);
 
     poolWork = hgAlloc<ThreadWork>(arena, queueSize);
@@ -115,12 +122,12 @@ void hgInitThreadPool(HgArena* arena, usize queueSize, usize threadCount)
     poolWorkingTail.store(0);
     poolHead.store(0);
     poolWorkingHead.store(0);
-    for (usize i = 0; i < poolWorkCapacity; ++i)
+    for (u32 i = 0; i < poolWorkCapacity; ++i)
     {
         poolHasWork[i].store(false);
     }
 
-    for (usize i = 0; i < poolThreadCount; ++i)
+    for (u32 i = 0; i < poolThreadCount; ++i)
     {
         new (poolThreads + i) std::thread([] {
             for (;;)
@@ -134,8 +141,8 @@ void hgInitThreadPool(HgArena* arena, usize queueSize, usize threadCount)
                 if (poolShouldClose.load())
                     return;
 
-                static constexpr usize spinCount = 128;
-                for (usize j = 0; j < spinCount; ++j)
+                static constexpr u32 spinCount = 128;
+                for (u32 j = 0; j < spinCount; ++j)
                 {
                     if (!poolExecute())
                         _mm_pause();
@@ -152,11 +159,11 @@ void hgDeinitThreadPool()
     poolMtx.unlock();
     poolCv.notify_all();
 
-    for (usize i = 0; i < poolThreadCount; ++i)
+    for (u32 i = 0; i < poolThreadCount; ++i)
     {
         poolThreads[i].join();
     }
-    for (usize i = 0; i < poolThreadCount; ++i)
+    for (u32 i = 0; i < poolThreadCount; ++i)
     {
         poolThreads[i].~thread();
     }
@@ -175,15 +182,15 @@ bool hgHelpThreadPool(HgFence& fence, f64 timeout)
     return fence.isComplete();
 }
 
-void hgCallPar(HgFence* fences, usize fenceCount, void* data, void (*fn)(void*))
+void hgCallPar(HgFence* fences, u32 fenceCount, void* data, void (*fn)(void*))
 {
     hgAssert(fn != nullptr);
-    for (usize i = 0; i < fenceCount; ++i)
+    for (u32 i = 0; i < fenceCount; ++i)
     {
         fences[i].add(1);
     }
 
-    usize idx = poolWorkingHead.fetch_add(1) & (poolWorkCapacity - 1);
+    u32 idx = poolWorkingHead.fetch_add(1) & (poolWorkCapacity - 1);
 
     poolWork[idx].fences = fences;
     poolWork[idx].fenceCount = fenceCount;
@@ -191,10 +198,10 @@ void hgCallPar(HgFence* fences, usize fenceCount, void* data, void (*fn)(void*))
     poolWork[idx].fn = fn;
     poolHasWork[idx].store(true);
 
-    usize h = poolHead.load();
+    u32 h = poolHead.load();
     while (poolHasWork[h].load())
     {
-        usize next = (h + 1) & (poolWorkCapacity - 1);
+        u32 next = (h + 1) & (poolWorkCapacity - 1);
         poolHead.compare_exchange_strong(h, next);
         h = next;
     }
@@ -210,22 +217,22 @@ std::atomic_bool ioThreadShouldClose = false;
 
 struct Request {
     HgFence* fences;
-    usize fenceCount;
+    u32 fenceCount;
     void* resource;
     HgStringView path;
     void (*fn)(void* resource, HgStringView path);
 };
 Request* ioRequests = nullptr;
 std::atomic_bool* ioHasRequest = nullptr;
-usize ioRequestCapacity = 0;
+u32 ioRequestCapacity = 0;
 
-std::atomic<usize> ioTail = 0;
-std::atomic<usize> ioHead = 0;
-std::atomic<usize> ioWorkingHead = 0;
+std::atomic<u32> ioTail = 0;
+std::atomic<u32> ioHead = 0;
+std::atomic<u32> ioWorkingHead = 0;
 
 static bool ioPop()
 {
-    usize idx = ioTail.load() & (ioRequestCapacity - 1);
+    u32 idx = ioTail.load() & (ioRequestCapacity - 1);
     if (idx == ioHead.load())
         return false;
 
@@ -237,14 +244,14 @@ static bool ioPop()
     hgAssert(request.fn != nullptr);
     request.fn(request.resource, request.path);
 
-    for (usize i = 0; i < request.fenceCount; ++i)
+    for (u32 i = 0; i < request.fenceCount; ++i)
     {
         request.fences[i].signal(1);
     }
     return true;
 }
 
-void hgInitIOThread(HgArena* arena, usize queueSize)
+void hgInitIOThread(HgArena* arena, u32 queueSize)
 {
     hgAssert(queueSize > 1 && (queueSize & (queueSize - 1)) == 0);
 
@@ -255,7 +262,7 @@ void hgInitIOThread(HgArena* arena, usize queueSize)
     ioTail.store(0);
     ioHead.store(0);
     ioWorkingHead.store(0);
-    for (usize i = 0; i < ioRequestCapacity; ++i)
+    for (u32 i = 0; i < ioRequestCapacity; ++i)
     {
         ioHasRequest[i].store(false);
     }
@@ -285,19 +292,19 @@ void hgDeinitIOThread()
 
 void hgRequestIO(
     HgFence* fences,
-    usize fenceCount,
+    u32 fenceCount,
     void* resource,
     HgStringView path,
     void (*fn)(void* resource, HgStringView path)
 )
 {
     hgAssert(fn != nullptr);
-    for (usize i = 0; i < fenceCount; ++i)
+    for (u32 i = 0; i < fenceCount; ++i)
     {
         fences[i].add(1);
     }
 
-    usize idx = ioWorkingHead.fetch_add(1) & (ioRequestCapacity - 1);
+    u32 idx = ioWorkingHead.fetch_add(1) & (ioRequestCapacity - 1);
 
     ioRequests[idx].fences = fences;
     ioRequests[idx].fenceCount = fenceCount;
@@ -306,10 +313,10 @@ void hgRequestIO(
     ioRequests[idx].fn = fn;
     ioHasRequest[idx].store(true);
 
-    usize h = ioHead.load();
+    u32 h = ioHead.load();
     while (ioHasRequest[h].load())
     {
-        usize next = (h + 1) & (ioRequestCapacity - 1);
+        u32 next = (h + 1) & (ioRequestCapacity - 1);
         ioHead.compare_exchange_strong(h, next);
         h = next;
     }

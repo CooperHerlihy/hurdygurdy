@@ -60,7 +60,7 @@ int main()
     u32 depthWidth = window->width;
     u32 depthHeight = window->height;
 
-    HgVkImageConfig depthImageConfig{};
+    HgCreateVkImage depthImageConfig{};
     depthImageConfig.width = depthWidth;
     depthImageConfig.height = depthHeight;
     depthImageConfig.format = VK_FORMAT_D32_SFLOAT;
@@ -68,15 +68,15 @@ int main()
 
     VkImage depthImage;
     VmaAllocation depthAlloc;
-    hgVkCreateImage(&depthImage, &depthAlloc, depthImageConfig);
+    hgCreateVkImage(&depthImage, &depthAlloc, depthImageConfig);
     hgDefer(vmaDestroyImage(hgVkVma, depthImage, depthAlloc));
 
-    HgVkImageViewConfig depthViewConfig{};
+    HgCreateVkImageView depthViewConfig{};
     depthViewConfig.image = depthImage;
     depthViewConfig.format = depthImageConfig.format;
     depthViewConfig.subresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
 
-    VkImageView depthView = hgVkCreateImageView(depthViewConfig);
+    VkImageView depthView = hgCreateVkImageView(depthViewConfig);
     hgDefer(vkDestroyImageView(hgVkDevice, depthView, nullptr));
 
     HgClock gameClock{};
@@ -106,10 +106,10 @@ int main()
 
             depthImageConfig.width = depthWidth = window->width;
             depthImageConfig.height = depthHeight = window->height;
-            hgVkCreateImage(&depthImage, &depthAlloc, depthImageConfig);
+            hgCreateVkImage(&depthImage, &depthAlloc, depthImageConfig);
 
             depthViewConfig.image = depthImage;
-            depthView = hgVkCreateImageView(depthViewConfig);
+            depthView = hgCreateVkImageView(depthViewConfig);
         }
 
         hgUpdateProjection3D(
@@ -118,7 +118,7 @@ int main()
         HgQuat& cubeRot = ecs.get<HgTransform>(cube).rotation;
         cubeRot = hgAxisAngle(HgVec3{0, -1, 0}, (f32)delta) * cubeRot;
 
-        if (window->isKeyDown[(u32)HgKey::lmouse])
+        if (window->isKeyDown[HgKey_lmouse])
         {
             f32 rotSpeed = 2.0f;
             HgQuat rotX = hgAxisAngle(HgVec3{0, 1, 0}, (f32)window->mouseDeltaX * rotSpeed);
@@ -127,9 +127,9 @@ int main()
         }
 
         HgVec3 movement = HgVec3{
-            (f32)(window->isKeyDown[(u32)HgKey::d] - window->isKeyDown[(u32)HgKey::a]),
-            (f32)(window->isKeyDown[(u32)HgKey::lshift] - window->isKeyDown[(u32)HgKey::space]),
-            (f32)(window->isKeyDown[(u32)HgKey::w] - window->isKeyDown[(u32)HgKey::s]),
+            (f32)(window->isKeyDown[HgKey_d] - window->isKeyDown[HgKey_a]),
+            (f32)(window->isKeyDown[HgKey_lshift] - window->isKeyDown[HgKey_space]),
+            (f32)(window->isKeyDown[HgKey_w] - window->isKeyDown[HgKey_s]),
         };
         if (movement != HgVec3{0.0f})
         {
@@ -203,7 +203,7 @@ int main()
 
             HgImageBarrier presentBarrier{};
             presentBarrier.image = windowImageID;
-            presentBarrier.nextUsage = HgRenderUsage::presentSrc;
+            presentBarrier.nextUsage = HgRenderUsage_presentSrc;
 
             renderer.barrier(cmd, nullptr, 0, &presentBarrier, 1);
 

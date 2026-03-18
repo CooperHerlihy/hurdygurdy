@@ -42,29 +42,29 @@ void hgInitPipeline2D(
     VkDescriptorSetLayoutBinding vpBindings[] = {
         {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr}
     };
-    vpSetLayout = hgVkCreateDescriptorSetLayout(
+    vpSetLayout = hgCreateVkDescriptorSetLayout(
         vpBindings, sizeof(vpBindings) / sizeof(*vpBindings));
 
     VkDescriptorSetLayoutBinding textureBindings[] = {
         {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}
     };
-    textureSetLayout = hgVkCreateDescriptorSetLayout(
+    textureSetLayout = hgCreateVkDescriptorSetLayout(
         textureBindings, sizeof(textureBindings) / sizeof(*textureBindings));
 
     VkDescriptorSetLayout setLayouts[] = {vpSetLayout, textureSetLayout};
     VkPushConstantRange push = {VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Push)};
-    pipelineLayout = hgVkCreatePipelineLayout(
+    pipelineLayout = hgCreateVkPipelineLayout(
         setLayouts,
         sizeof(setLayouts) / sizeof(*setLayouts),
         &push,
         1);
 
-    VkShaderModule vertexShader = hgVkCreateShaderModule(sprite_vert_spv, sprite_vert_spv_size);
-    VkShaderModule fragmentShader = hgVkCreateShaderModule(sprite_frag_spv, sprite_frag_spv_size);
+    VkShaderModule vertexShader = hgCreateVkShaderModule(sprite_vert_spv, sprite_vert_spv_size);
+    VkShaderModule fragmentShader = hgCreateVkShaderModule(sprite_frag_spv, sprite_frag_spv_size);
     hgDefer(vkDestroyShaderModule(hgVkDevice, vertexShader, nullptr));
     hgDefer(vkDestroyShaderModule(hgVkDevice, fragmentShader, nullptr));
 
-    HgVkPipelineConfig pipelineConfig{};
+    HgCreateVkGraphicsPipeline pipelineConfig{};
     pipelineConfig.colorAttachmentFormats = &colorFormat;
     pipelineConfig.colorAttachmentCount = 1;
     pipelineConfig.depthAttachmentFormat = depthFormat;
@@ -75,22 +75,22 @@ void hgInitPipeline2D(
     pipelineConfig.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
     pipelineConfig.enableColorBlend = true;
 
-    pipeline = hgVkCreateGraphicsPipeline(pipelineConfig);
+    pipeline = hgCreateVkGraphicsPipeline(pipelineConfig);
 
     VkDescriptorPoolSize descriptorSizes[] = {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, maxTextures}
     };
-    descriptorPool = hgVkCreateDescriptorPool(
+    descriptorPool = hgCreateVkDescriptorPool(
         maxTextures + 1,
         descriptorSizes,
         sizeof(descriptorSizes) / sizeof(*descriptorSizes),
         VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
 
-    vpSet = hgVkAllocateDescriptorSet(descriptorPool, vpSetLayout);
+    vpSet = hgCreateVkDescriptorSet(descriptorPool, vpSetLayout);
     hgAssert(vpSet != nullptr);
 
-    hgVkCreateBuffer(
+    hgCreateVkBuffer(
         &vpBuffer,
         &vpAlloc,
         sizeof(VPUniform),
@@ -108,7 +108,7 @@ void hgInitPipeline2D(
     bufferInfo.offset = 0;
     bufferInfo.range = sizeof(VPUniform);
 
-    hgVkUpdateDescriptorSetBuffers(vpSet, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, &bufferInfo, 1);
+    hgUpdateVkDescriptorSet(vpSet, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, &bufferInfo, nullptr, 1);
 }
 
 void hgDeinitPipeline2D()
@@ -126,17 +126,17 @@ void hgAddTexture2D(HgResource textureID)
     if (textureSets.has(textureID))
         return;
 
-    hgAssert(hgGetGpuTexture(textureID) != nullptr);
-    HgGpuTexture& texture = *hgGetGpuTexture(textureID);
+    hgAssert(hgGetTexture(textureID) != nullptr);
+    HgTextureResource& texture = *hgGetTexture(textureID);
 
-    VkDescriptorSet set = hgVkAllocateDescriptorSet(descriptorPool, textureSetLayout);
+    VkDescriptorSet set = hgCreateVkDescriptorSet(descriptorPool, textureSetLayout);
 
     VkDescriptorImageInfo imageInfo{};
     imageInfo.sampler = texture.sampler;
     imageInfo.imageView = texture.view;
     imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    hgVkUpdateDescriptorSetImages(set, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &imageInfo, 1);
+    hgUpdateVkDescriptorSet(set, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, nullptr, &imageInfo, 1);
 
     textureSets.add(textureID) = set;
 }
@@ -172,7 +172,7 @@ void hgDraw2D(HgECS* ecs, VkCommandBuffer cmd)
 {
     hgAssert(cmd != nullptr);
 
-    ecs->sort<HgSprite>(nullptr, [](void*, HgECS* ecs, HgEntity lhs, HgEntity rhs) -> bool {
+    ecs->sort<HgSprite2D>(nullptr, [](void*, HgECS* ecs, HgEntity lhs, HgEntity rhs) -> bool {
         hgAssert(ecs->has<HgTransform>(lhs));
         hgAssert(ecs->has<HgTransform>(rhs));
         return ecs->get<HgTransform>(lhs).position.z > ecs->get<HgTransform>(rhs).position.z;
@@ -181,7 +181,7 @@ void hgDraw2D(HgECS* ecs, VkCommandBuffer cmd)
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &vpSet, 0, nullptr);
 
-    ecs->forEach<HgSprite, HgTransform>([&](HgEntity, HgSprite& sprite, HgTransform& transform) 
+    ecs->forEach<HgSprite2D, HgTransform>([&](HgEntity, HgSprite2D& sprite, HgTransform& transform) 
     {
         hgAssert(textureSets.has(sprite.texture));
         vkCmdBindDescriptorSets(

@@ -71,7 +71,7 @@ void hgTest()
 
         HgArena arena = {block, 1024};
 
-        for (usize i = 0; i < 3; ++i)
+        for (u32 i = 0; i < 3; ++i)
         {
             hgAssert(arena.memory != nullptr);
             hgAssert(arena.capacity == 1024);
@@ -437,7 +437,7 @@ void hgTest()
         hgAssert(json.file != nullptr);
 
         HgJsonNode* node = json.file;
-        hgAssert(node->type == HgJsonType::jstruct);
+        hgAssert(node->type == HgJsonType_struct);
         hgAssert(node->jstruct.fields == nullptr);
     }
 
@@ -461,7 +461,7 @@ void hgTest()
         hgAssert(error->msg == "on line 4, struct has a literal instead of a field\n");
 
         HgJsonNode* node = json.file;
-        hgAssert(node->type == HgJsonType::jstruct);
+        hgAssert(node->type == HgJsonType_struct);
         hgAssert(node->jstruct.fields == nullptr);
     }
 
@@ -485,7 +485,7 @@ void hgTest()
         hgAssert(error->msg == "on line 4, struct has a literal instead of a field\n");
 
         HgJsonNode* node = json.file;
-        hgAssert(node->type == HgJsonType::jstruct);
+        hgAssert(node->type == HgJsonType_struct);
         hgAssert(node->jstruct.fields == nullptr);
     }
 
@@ -512,7 +512,7 @@ void hgTest()
         hgAssert(error->msg == "on line 4, found unexpected token \"}\"\n");
 
         HgJsonNode* node = json.file;
-        hgAssert(node->type == HgJsonType::jstruct);
+        hgAssert(node->type == HgJsonType_struct);
         hgAssert(node->jstruct.fields == nullptr);
     }
 
@@ -532,14 +532,14 @@ void hgTest()
         hgAssert(json.file != nullptr);
 
         HgJsonNode* node = json.file;
-        hgAssert(node->type == HgJsonType::jstruct);
+        hgAssert(node->type == HgJsonType_struct);
         hgAssert(node->jstruct.fields != nullptr);
 
         HgJsonField* field = node->jstruct.fields;
         hgAssert(field->next == nullptr);
         hgAssert(field->name == "asdf");
         hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType::boolean);
+        hgAssert(field->value->type == HgJsonType_bool);
         hgAssert(field->value->boolean == true);
     }
 
@@ -559,14 +559,14 @@ void hgTest()
         hgAssert(json.file != nullptr);
 
         HgJsonNode* node = json.file;
-        hgAssert(node->type == HgJsonType::jstruct);
+        hgAssert(node->type == HgJsonType_struct);
         hgAssert(node->jstruct.fields != nullptr);
 
         HgJsonField* field = node->jstruct.fields;
         hgAssert(field->next == nullptr);
         hgAssert(field->name == "asdf");
         hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType::boolean);
+        hgAssert(field->value->type == HgJsonType_bool);
         hgAssert(field->value->boolean == false);
     }
 
@@ -593,7 +593,7 @@ void hgTest()
         hgAssert(error->msg == "on line 3, found unexpected token \"asdf\"\n");
 
         HgJsonNode* node = json.file;
-        hgAssert(node->type == HgJsonType::jstruct);
+        hgAssert(node->type == HgJsonType_struct);
         hgAssert(node->jstruct.fields == nullptr);
     }
 
@@ -613,14 +613,14 @@ void hgTest()
         hgAssert(json.file != nullptr);
 
         HgJsonNode* node = json.file;
-        hgAssert(node->type == HgJsonType::jstruct);
+        hgAssert(node->type == HgJsonType_struct);
         hgAssert(node->jstruct.fields != nullptr);
 
         HgJsonField* field = node->jstruct.fields;
         hgAssert(field->next == nullptr);
         hgAssert(field->name == "asdf");
         hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType::string);
+        hgAssert(field->value->type == HgJsonType_string);
         hgAssert(field->value->string == "asdf");
     }
 
@@ -640,14 +640,14 @@ void hgTest()
         hgAssert(json.file != nullptr);
 
         HgJsonNode* node = json.file;
-        hgAssert(node->type == HgJsonType::jstruct);
+        hgAssert(node->type == HgJsonType_struct);
         hgAssert(node->jstruct.fields != nullptr);
 
         HgJsonField* field = node->jstruct.fields;
         hgAssert(field->next == nullptr);
         hgAssert(field->name == "asdf");
         hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType::integer);
+        hgAssert(field->value->type == HgJsonType_integer);
         hgAssert(field->value->integer == 1234);
     }
 
@@ -667,14 +667,14 @@ void hgTest()
         hgAssert(json.file != nullptr);
 
         HgJsonNode* node = json.file;
-        hgAssert(node->type == HgJsonType::jstruct);
+        hgAssert(node->type == HgJsonType_struct);
         hgAssert(node->jstruct.fields != nullptr);
 
         HgJsonField* field = node->jstruct.fields;
         hgAssert(field->next == nullptr);
         hgAssert(field->name == "asdf");
         hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType::floating);
+        hgAssert(field->value->type == HgJsonType_float);
         hgAssert(field->value->floating == 1234.0);
     }
 
@@ -695,21 +695,21 @@ void hgTest()
         hgAssert(json.file != nullptr);
 
         HgJsonNode* node = json.file;
-        hgAssert(node->type == HgJsonType::jstruct);
+        hgAssert(node->type == HgJsonType_struct);
         hgAssert(node->jstruct.fields != nullptr);
 
         HgJsonField* field = node->jstruct.fields;
         hgAssert(field->next != nullptr);
         hgAssert(field->name == "asdf");
         hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType::floating);
+        hgAssert(field->value->type == HgJsonType_float);
         hgAssert(field->value->floating == 1234.0);
 
         field = field->next;
         hgAssert(field->next == nullptr);
         hgAssert(field->name == "hjkl");
         hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType::floating);
+        hgAssert(field->value->type == HgJsonType_float);
         hgAssert(field->value->floating == 5678.0);
     }
 
@@ -729,38 +729,38 @@ void hgTest()
         hgAssert(json.file != nullptr);
 
         HgJsonNode* node = json.file;
-        hgAssert(node->type == HgJsonType::jstruct);
+        hgAssert(node->type == HgJsonType_struct);
         hgAssert(node->jstruct.fields != nullptr);
 
         HgJsonField* field = node->jstruct.fields;
         hgAssert(field->next == nullptr);
         hgAssert(field->name == "asdf");
         hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType::array);
+        hgAssert(field->value->type == HgJsonType_array);
         hgAssert(field->value->array.elems != nullptr);
 
         HgJsonElem* elem = field->value->array.elems;
         hgAssert(elem->next != nullptr);
         hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType::integer);
+        hgAssert(elem->value->type == HgJsonType_integer);
         hgAssert(elem->value->integer == 1);
 
         elem = elem->next;
         hgAssert(elem->next != nullptr);
         hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType::integer);
+        hgAssert(elem->value->type == HgJsonType_integer);
         hgAssert(elem->value->integer == 2);
 
         elem = elem->next;
         hgAssert(elem->next != nullptr);
         hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType::integer);
+        hgAssert(elem->value->type == HgJsonType_integer);
         hgAssert(elem->value->integer == 3);
 
         elem = elem->next;
         hgAssert(elem->next == nullptr);
         hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType::integer);
+        hgAssert(elem->value->type == HgJsonType_integer);
         hgAssert(elem->value->integer == 4);
     }
 
@@ -780,38 +780,38 @@ void hgTest()
         hgAssert(json.file != nullptr);
 
         HgJsonNode* node = json.file;
-        hgAssert(node->type == HgJsonType::jstruct);
+        hgAssert(node->type == HgJsonType_struct);
         hgAssert(node->jstruct.fields != nullptr);
 
         HgJsonField* field = node->jstruct.fields;
         hgAssert(field->next == nullptr);
         hgAssert(field->name == "asdf");
         hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType::array);
+        hgAssert(field->value->type == HgJsonType_array);
         hgAssert(field->value->array.elems != nullptr);
 
         HgJsonElem* elem = field->value->array.elems;
         hgAssert(elem->next != nullptr);
         hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType::integer);
+        hgAssert(elem->value->type == HgJsonType_integer);
         hgAssert(elem->value->integer == 1);
 
         elem = elem->next;
         hgAssert(elem->next != nullptr);
         hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType::integer);
+        hgAssert(elem->value->type == HgJsonType_integer);
         hgAssert(elem->value->integer == 2);
 
         elem = elem->next;
         hgAssert(elem->next != nullptr);
         hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType::integer);
+        hgAssert(elem->value->type == HgJsonType_integer);
         hgAssert(elem->value->integer == 3);
 
         elem = elem->next;
         hgAssert(elem->next == nullptr);
         hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType::integer);
+        hgAssert(elem->value->type == HgJsonType_integer);
         hgAssert(elem->value->integer == 4);
     }
 
@@ -836,32 +836,32 @@ void hgTest()
             "on line 3, array has element which is not the same type as the first valid element\n");
 
         HgJsonNode* node = json.file;
-        hgAssert(node->type == HgJsonType::jstruct);
+        hgAssert(node->type == HgJsonType_struct);
         hgAssert(node->jstruct.fields != nullptr);
 
         HgJsonField* field = node->jstruct.fields;
         hgAssert(field->next == nullptr);
         hgAssert(field->name == "asdf");
         hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType::array);
+        hgAssert(field->value->type == HgJsonType_array);
         hgAssert(field->value->array.elems != nullptr);
 
         HgJsonElem* elem = field->value->array.elems;
         hgAssert(elem->next != nullptr);
         hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType::integer);
+        hgAssert(elem->value->type == HgJsonType_integer);
         hgAssert(elem->value->integer == 1);
 
         elem = elem->next;
         hgAssert(elem->next != nullptr);
         hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType::integer);
+        hgAssert(elem->value->type == HgJsonType_integer);
         hgAssert(elem->value->integer == 2);
 
         elem = elem->next;
         hgAssert(elem->next == nullptr);
         hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType::integer);
+        hgAssert(elem->value->type == HgJsonType_integer);
         hgAssert(elem->value->integer == 4);
     }
 
@@ -886,42 +886,42 @@ void hgTest()
         hgAssert(json.file != nullptr);
 
         HgJsonNode* node = json.file;
-        hgAssert(node->type == HgJsonType::jstruct);
+        hgAssert(node->type == HgJsonType_struct);
         hgAssert(node->jstruct.fields != nullptr);
 
         HgJsonField* field = node->jstruct.fields;
         hgAssert(field->next == nullptr);
         hgAssert(field->name == "asdf");
         hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType::jstruct);
+        hgAssert(field->value->type == HgJsonType_struct);
         hgAssert(field->value->array.elems != nullptr);
 
         HgJsonField* subField = field->value->jstruct.fields;
         hgAssert(subField->next != nullptr);
         hgAssert(subField->name == "a");
         hgAssert(subField->value != nullptr);
-        hgAssert(subField->value->type == HgJsonType::integer);
+        hgAssert(subField->value->type == HgJsonType_integer);
         hgAssert(subField->value->integer == 1);
 
         subField = subField->next;
         hgAssert(subField->next != nullptr);
         hgAssert(subField->name == "s");
         hgAssert(subField->value != nullptr);
-        hgAssert(subField->value->type == HgJsonType::floating);
+        hgAssert(subField->value->type == HgJsonType_float);
         hgAssert(subField->value->floating == 2.0);
 
         subField = subField->next;
         hgAssert(subField->next != nullptr);
         hgAssert(subField->name == "d");
         hgAssert(subField->value != nullptr);
-        hgAssert(subField->value->type == HgJsonType::integer);
+        hgAssert(subField->value->type == HgJsonType_integer);
         hgAssert(subField->value->integer == 3);
 
         subField = subField->next;
         hgAssert(subField->next == nullptr);
         hgAssert(subField->name == "f");
         hgAssert(subField->value != nullptr);
-        hgAssert(subField->value->type == HgJsonType::floating);
+        hgAssert(subField->value->type == HgJsonType_float);
         hgAssert(subField->value->floating == 4.0);
     }
 
@@ -952,154 +952,154 @@ void hgTest()
         hgAssert(json.file != nullptr);
 
         HgJsonNode* mainStruct = json.file;
-        hgAssert(mainStruct->type == HgJsonType::jstruct);
+        hgAssert(mainStruct->type == HgJsonType_struct);
         hgAssert(mainStruct->jstruct.fields != nullptr);
 
         HgJsonField* player = mainStruct->jstruct.fields;
         hgAssert(player->next == nullptr);
         hgAssert(player->name == "player");
         hgAssert(player->value != nullptr);
-        hgAssert(player->value->type == HgJsonType::jstruct);
+        hgAssert(player->value->type == HgJsonType_struct);
         hgAssert(player->value->jstruct.fields != nullptr);
 
         HgJsonField* component = player->value->jstruct.fields;
         hgAssert(component->next != nullptr);
         hgAssert(component->name == "transform");
         hgAssert(component->value != nullptr);
-        hgAssert(component->value->type == HgJsonType::jstruct);
+        hgAssert(component->value->type == HgJsonType_struct);
         hgAssert(component->value->jstruct.fields != nullptr);
 
         HgJsonField* field = component->value->jstruct.fields;
         hgAssert(field->next != nullptr);
         hgAssert(field->name == "position");
         hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType::array);
+        hgAssert(field->value->type == HgJsonType_array);
         hgAssert(field->value->array.elems != nullptr);
 
         HgJsonElem* elem = field->value->array.elems;
         hgAssert(elem->next != nullptr);
         hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType::floating);
+        hgAssert(elem->value->type == HgJsonType_float);
         hgAssert(elem->value->floating == 1.0);
 
         elem = elem->next;
         hgAssert(elem->next != nullptr);
         hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType::floating);
+        hgAssert(elem->value->type == HgJsonType_float);
         hgAssert(elem->value->floating == 0.0);
 
         elem = elem->next;
         hgAssert(elem->next == nullptr);
         hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType::floating);
+        hgAssert(elem->value->type == HgJsonType_float);
         hgAssert(elem->value->floating == -1.0);
 
         field = field->next;
         hgAssert(field->next != nullptr);
         hgAssert(field->name == "scale");
         hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType::array);
+        hgAssert(field->value->type == HgJsonType_array);
         hgAssert(field->value->array.elems != nullptr);
 
         elem = field->value->array.elems;
         hgAssert(elem->next != nullptr);
         hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType::floating);
+        hgAssert(elem->value->type == HgJsonType_float);
         hgAssert(elem->value->floating == 1.0);
 
         elem = elem->next;
         hgAssert(elem->next != nullptr);
         hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType::floating);
+        hgAssert(elem->value->type == HgJsonType_float);
         hgAssert(elem->value->floating == 1.0);
 
         elem = elem->next;
         hgAssert(elem->next == nullptr);
         hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType::floating);
+        hgAssert(elem->value->type == HgJsonType_float);
         hgAssert(elem->value->floating == 1.0);
 
         field = field->next;
         hgAssert(field->next == nullptr);
         hgAssert(field->name == "rotation");
         hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType::array);
+        hgAssert(field->value->type == HgJsonType_array);
         hgAssert(field->value->array.elems != nullptr);
 
         elem = field->value->array.elems;
         hgAssert(elem->next != nullptr);
         hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType::floating);
+        hgAssert(elem->value->type == HgJsonType_float);
         hgAssert(elem->value->floating == 1.0);
 
         elem = elem->next;
         hgAssert(elem->next != nullptr);
         hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType::floating);
+        hgAssert(elem->value->type == HgJsonType_float);
         hgAssert(elem->value->floating == 0.0);
 
         elem = elem->next;
         hgAssert(elem->next != nullptr);
         hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType::floating);
+        hgAssert(elem->value->type == HgJsonType_float);
         hgAssert(elem->value->floating == 0.0);
 
         elem = elem->next;
         hgAssert(elem->next == nullptr);
         hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType::floating);
+        hgAssert(elem->value->type == HgJsonType_float);
         hgAssert(elem->value->floating == 0.0);
 
         component = component->next;
         hgAssert(component->next == nullptr);
         hgAssert(component->name == "sprite");
         hgAssert(component->value != nullptr);
-        hgAssert(component->value->type == HgJsonType::jstruct);
+        hgAssert(component->value->type == HgJsonType_struct);
         hgAssert(component->value->jstruct.fields != nullptr);
 
         field = component->value->jstruct.fields;
         hgAssert(field->next != nullptr);
         hgAssert(field->name == "texture");
         hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType::string);
+        hgAssert(field->value->type == HgJsonType_string);
         hgAssert(field->value->string == "tex.png");
 
         field = field->next;
         hgAssert(field->next != nullptr);
         hgAssert(field->name == "uvPos");
         hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType::array);
+        hgAssert(field->value->type == HgJsonType_array);
         hgAssert(field->value->array.elems != nullptr);
 
         elem = field->value->array.elems;
         hgAssert(elem->next != nullptr);
         hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType::floating);
+        hgAssert(elem->value->type == HgJsonType_float);
         hgAssert(elem->value->floating == 0.0);
 
         elem = elem->next;
         hgAssert(elem->next == nullptr);
         hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType::floating);
+        hgAssert(elem->value->type == HgJsonType_float);
         hgAssert(elem->value->floating == 0.0);
 
         field = field->next;
         hgAssert(field->next == nullptr);
         hgAssert(field->name == "uvSize");
         hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType::array);
+        hgAssert(field->value->type == HgJsonType_array);
         hgAssert(field->value->array.elems != nullptr);
 
         elem = field->value->array.elems;
         hgAssert(elem->next != nullptr);
         hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType::floating);
+        hgAssert(elem->value->type == HgJsonType_float);
         hgAssert(elem->value->floating == 1.0);
 
         elem = elem->next;
         hgAssert(elem->next == nullptr);
         hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType::floating);
+        hgAssert(elem->value->type == HgJsonType_float);
         hgAssert(elem->value->floating == 1.0);
     }
 
@@ -1108,11 +1108,11 @@ void hgTest()
         HgArena* arena = hgGetScratch();
         HgArenaScope arenaScope{arena};
 
-        constexpr usize count = 128;
+        constexpr u32 count = 128;
 
         HgHashMap<u32, u32> map = map.create(arena, count);
 
-        for (usize i = 0; i < 3; ++i)
+        for (u32 i = 0; i < 3; ++i)
         {
             hgAssert(map.count == 0);
             hgAssert(!map.has(0));
@@ -1181,7 +1181,7 @@ void hgTest()
         HgArena* arena = hgGetScratch();
         HgArenaScope arenaScope{arena};
 
-        using StrHash = usize;
+        using StrHash = u64;
 
         HgHashMap<StrHash, u32> map = map.create(arena, 128);
 
@@ -1380,11 +1380,11 @@ void hgTest()
         HgArena* arena = hgGetScratch();
         HgArenaScope arenaScope{arena};
 
-        constexpr usize count = 128;
+        constexpr u32 count = 128;
 
         HgHashSet<u32> set = set.create(arena, count);
 
-        for (usize i = 0; i < 3; ++i)
+        for (u32 i = 0; i < 3; ++i)
         {
             hgAssert(set.count == 0);
             hgAssert(!set.has(0));
@@ -1452,7 +1452,7 @@ void hgTest()
         HgArena* arena = hgGetScratch();
         HgArenaScope arenaScope{arena};
 
-        using StrHash = usize;
+        using StrHash = u64;
 
         HgHashSet<StrHash> set = set.create(arena, 128);
 
@@ -1635,7 +1635,7 @@ void hgTest()
     {
         bool vals[100] = {};
 
-        hgForPar(sizeof(vals) / sizeof(*vals), 16, [&](usize begin, usize end)
+        hgForPar(sizeof(vals) / sizeof(*vals), 16, [&](u64 begin, u64 end)
         {
             hgAssert(begin < end && end <= sizeof(vals) / sizeof(*vals));
             for (; begin < end; ++begin)
@@ -1705,14 +1705,14 @@ void hgTest()
 
         hgRequestIO(&fence, 1, vals, {}, [](void* pvals, HgStringView)
         {
-            for (usize i = 0; i < sizeof(vals) / sizeof(*vals); ++i)
+            for (u32 i = 0; i < sizeof(vals) / sizeof(*vals); ++i)
             {
                 ((bool*)pvals)[i] = true;
             }
         });
 
         hgAssert(fence.wait(2.0));
-        for (usize i = 0; i < sizeof(vals) / sizeof(*vals); ++i)
+        for (u32 i = 0; i < sizeof(vals) / sizeof(*vals); ++i)
         {
             hgAssert(vals[i] == true);
         }
@@ -1723,7 +1723,7 @@ void hgTest()
 
         bool vals[100] = {};
 
-        for (usize i = 0; i < sizeof(vals) / sizeof(*vals); ++i)
+        for (u32 i = 0; i < sizeof(vals) / sizeof(*vals); ++i)
         {
             hgRequestIO(&fence, 1, &vals[i], {}, [](void* pval, HgStringView)
             {
@@ -1732,7 +1732,7 @@ void hgTest()
         }
 
         hgAssert(fence.wait(2.0));
-        for (usize i = 0; i < sizeof(vals) / sizeof(*vals); ++i)
+        for (u32 i = 0; i < sizeof(vals) / sizeof(*vals); ++i)
         {
             hgAssert(vals[i] == true);
         }
@@ -1745,7 +1745,7 @@ void hgTest()
 
         vals[0] = true;
 
-        for (usize i = 1; i < sizeof(vals) / sizeof(*vals); ++i)
+        for (u32 i = 1; i < sizeof(vals) / sizeof(*vals); ++i)
         {
             hgRequestIO(&fence, 1, &vals[i], {}, [](void* pval, HgStringView)
             {
@@ -1754,7 +1754,7 @@ void hgTest()
         }
 
         hgAssert(fence.wait(2.0));
-        for (usize i = 0; i < sizeof(vals) / sizeof(*vals); ++i)
+        for (u32 i = 0; i < sizeof(vals) / sizeof(*vals); ++i)
         {
             hgAssert(vals[i] == true);
         }
@@ -1875,23 +1875,23 @@ void hgTest()
         HgBinary bin{};
 
         {
-            HgTextureData::Info info;
-            memcpy(info.identifier, HgTextureData::textureIdentifier, sizeof(HgTextureData::textureIdentifier));
+            HgImageData::Info info;
+            memcpy(info.identifier, HgImageData::imageIdentifier, sizeof(HgImageData::imageIdentifier));
             info.format = VK_FORMAT_R8G8B8A8_SRGB;
             info.width = saveWidth;
             info.height = saveHeight;
             info.depth = saveDepth;
             info.pixelsBegin = sizeof(info);
-            bin.resize(arena, bin.size + sizeof(HgTextureData::Info));
+            bin.resize(arena, bin.size + sizeof(HgImageData::Info));
             bin.overwrite(0, info);
 
-            usize pixelIdx = bin.size;
+            u64 pixelIdx = bin.size;
             bin.resize(arena, bin.size + sizeof(saveData));
             bin.overwrite(pixelIdx, saveData, sizeof(saveData));
         }
 
         {
-            HgTextureData texture = bin;
+            HgImageData texture = bin;
 
             VkFormat format;
             u32 width, height, depth;
@@ -1911,7 +1911,7 @@ void hgTest()
             HgStringView filePath = "hg_test_dir/file_image_test.hgtex";
 
             hgStoreBinary(bin, filePath);
-            HgTextureData fileTexture = hgLoadBinary(arena, filePath);
+            HgImageData fileTexture = hgLoadBinary(arena, filePath);
 
             VkFormat format;
             u32 width, height, depth;
@@ -1947,7 +1947,7 @@ void hgTest()
             hgDefer(hgUnloadResource(nullptr, 0, fileId));
             hgAssert(fence.wait(2.0));
 
-            HgTextureData fileTexture = *hgGetResource(fileId);
+            HgImageData fileTexture = *hgGetResource(fileId);
 
             VkFormat format;
             u32 width, height, depth;

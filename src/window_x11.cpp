@@ -338,7 +338,7 @@ u32 hgVkGetPlatformExtensions(HgArena* arena, HgStringView** extBuffer)
     return count;
 }
 
-void hgProcessWindowEvents(HgWindow** windows, usize windowCount)
+void hgProcessWindowEvents(HgWindow** windows, u32 windowCount)
 {
     hgAssert(windows != nullptr);
 
@@ -373,392 +373,392 @@ void hgProcessWindowEvents(HgWindow** windows, usize windowCount)
                 break;
             case KeyPress:
             case KeyRelease: {
-                HgKey key = HgKey::none;
+                HgKey key = HgKey_none;
                 switch (XLookupKeysym(&event.xkey, 0))
                 {
                     case XK_0:
-                        key = HgKey::k0;
+                        key = HgKey_k0;
                         break;
                     case XK_1:
-                        key = HgKey::k1;
+                        key = HgKey_k1;
                         break;
                     case XK_2:
-                        key = HgKey::k2;
+                        key = HgKey_k2;
                         break;
                     case XK_3:
-                        key = HgKey::k3;
+                        key = HgKey_k3;
                         break;
                     case XK_4:
-                        key = HgKey::k4;
+                        key = HgKey_k4;
                         break;
                     case XK_5:
-                        key = HgKey::k5;
+                        key = HgKey_k5;
                         break;
                     case XK_6:
-                        key = HgKey::k6;
+                        key = HgKey_k6;
                         break;
                     case XK_7:
-                        key = HgKey::k7;
+                        key = HgKey_k7;
                         break;
                     case XK_8:
-                        key = HgKey::k8;
+                        key = HgKey_k8;
                         break;
                     case XK_9:
-                        key = HgKey::k9;
+                        key = HgKey_k9;
                         break;
 
                     case XK_q:
                     case XK_Q:
-                        key = HgKey::q;
+                        key = HgKey_q;
                         break;
                     case XK_w:
                     case XK_W:
-                        key = HgKey::w;
+                        key = HgKey_w;
                         break;
                     case XK_e:
                     case XK_E:
-                        key = HgKey::e;
+                        key = HgKey_e;
                         break;
                     case XK_r:
                     case XK_R:
-                        key = HgKey::r;
+                        key = HgKey_r;
                         break;
                     case XK_t:
                     case XK_T:
-                        key = HgKey::t;
+                        key = HgKey_t;
                         break;
                     case XK_y:
                     case XK_Y:
-                        key = HgKey::y;
+                        key = HgKey_y;
                         break;
                     case XK_u:
                     case XK_U:
-                        key = HgKey::u;
+                        key = HgKey_u;
                         break;
                     case XK_i:
                     case XK_I:
-                        key = HgKey::i;
+                        key = HgKey_i;
                         break;
                     case XK_o:
                     case XK_O:
-                        key = HgKey::o;
+                        key = HgKey_o;
                         break;
                     case XK_p:
                     case XK_P:
-                        key = HgKey::p;
+                        key = HgKey_p;
                         break;
                     case XK_a:
                     case XK_A:
-                        key = HgKey::a;
+                        key = HgKey_a;
                         break;
                     case XK_s:
                     case XK_S:
-                        key = HgKey::s;
+                        key = HgKey_s;
                         break;
                     case XK_d:
                     case XK_D:
-                        key = HgKey::d;
+                        key = HgKey_d;
                         break;
                     case XK_f:
                     case XK_F:
-                        key = HgKey::f;
+                        key = HgKey_f;
                         break;
                     case XK_g:
                     case XK_G:
-                        key = HgKey::g;
+                        key = HgKey_g;
                         break;
                     case XK_h:
                     case XK_H:
-                        key = HgKey::h;
+                        key = HgKey_h;
                         break;
                     case XK_j:
                     case XK_J:
-                        key = HgKey::j;
+                        key = HgKey_j;
                         break;
                     case XK_k:
                     case XK_K:
-                        key = HgKey::k;
+                        key = HgKey_k;
                         break;
                     case XK_l:
                     case XK_L:
-                        key = HgKey::l;
+                        key = HgKey_l;
                         break;
                     case XK_z:
                     case XK_Z:
-                        key = HgKey::z;
+                        key = HgKey_z;
                         break;
                     case XK_x:
                     case XK_X:
-                        key = HgKey::x;
+                        key = HgKey_x;
                         break;
                     case XK_c:
                     case XK_C:
-                        key = HgKey::c;
+                        key = HgKey_c;
                         break;
                     case XK_v:
                     case XK_V:
-                        key = HgKey::v;
+                        key = HgKey_v;
                         break;
                     case XK_b:
                     case XK_B:
-                        key = HgKey::b;
+                        key = HgKey_b;
                         break;
                     case XK_n:
                     case XK_N:
-                        key = HgKey::n;
+                        key = HgKey_n;
                         break;
                     case XK_m:
                     case XK_M:
-                        key = HgKey::m;
+                        key = HgKey_m;
                         break;
 
                     case XK_semicolon:
-                        key = HgKey::semicolon;
+                        key = HgKey_semicolon;
                         break;
                     case XK_colon:
-                        key = HgKey::colon;
+                        key = HgKey_colon;
                         break;
                     case XK_apostrophe:
-                        key = HgKey::apostrophe;
+                        key = HgKey_apostrophe;
                         break;
                     case XK_quotedbl:
-                        key = HgKey::quotation;
+                        key = HgKey_quotation;
                         break;
                     case XK_comma:
-                        key = HgKey::comma;
+                        key = HgKey_comma;
                         break;
                     case XK_period:
-                        key = HgKey::period;
+                        key = HgKey_period;
                         break;
                     case XK_question:
-                        key = HgKey::question;
+                        key = HgKey_question;
                         break;
                     case XK_grave:
-                        key = HgKey::grave;
+                        key = HgKey_grave;
                         break;
                     case XK_asciitilde:
-                        key = HgKey::tilde;
+                        key = HgKey_tilde;
                         break;
                     case XK_exclam:
-                        key = HgKey::exclamation;
+                        key = HgKey_exclamation;
                         break;
                     case XK_at:
-                        key = HgKey::at;
+                        key = HgKey_at;
                         break;
                     case XK_numbersign:
-                        key = HgKey::hash;
+                        key = HgKey_hash;
                         break;
                     case XK_dollar:
-                        key = HgKey::dollar;
+                        key = HgKey_dollar;
                         break;
                     case XK_percent:
-                        key = HgKey::percent;
+                        key = HgKey_percent;
                         break;
                     case XK_asciicircum:
-                        key = HgKey::carot;
+                        key = HgKey_carot;
                         break;
                     case XK_ampersand:
-                        key = HgKey::ampersand;
+                        key = HgKey_ampersand;
                         break;
                     case XK_asterisk:
-                        key = HgKey::asterisk;
+                        key = HgKey_asterisk;
                         break;
                     case XK_parenleft:
-                        key = HgKey::lparen;
+                        key = HgKey_lparen;
                         break;
                     case XK_parenright:
-                        key = HgKey::rparen;
+                        key = HgKey_rparen;
                         break;
                     case XK_bracketleft:
-                        key = HgKey::lbracket;
+                        key = HgKey_lbracket;
                         break;
                     case XK_bracketright:
-                        key = HgKey::rbracket;
+                        key = HgKey_rbracket;
                         break;
                     case XK_braceleft:
-                        key = HgKey::lbrace;
+                        key = HgKey_lbrace;
                         break;
                     case XK_braceright:
-                        key = HgKey::rbrace;
+                        key = HgKey_rbrace;
                         break;
                     case XK_equal:
-                        key = HgKey::equal;
+                        key = HgKey_equal;
                         break;
                     case XK_less:
-                        key = HgKey::less;
+                        key = HgKey_less;
                         break;
                     case XK_greater:
-                        key = HgKey::greater;
+                        key = HgKey_greater;
                         break;
                     case XK_plus:
-                        key = HgKey::plus;
+                        key = HgKey_plus;
                         break;
                     case XK_minus:
-                        key = HgKey::minus;
+                        key = HgKey_minus;
                         break;
                     case XK_slash:
-                        key = HgKey::slash;
+                        key = HgKey_slash;
                         break;
                     case XK_backslash:
-                        key = HgKey::backslash;
+                        key = HgKey_backslash;
                         break;
                     case XK_underscore:
-                        key = HgKey::underscore;
+                        key = HgKey_underscore;
                         break;
                     case XK_bar:
-                        key = HgKey::bar;
+                        key = HgKey_bar;
                         break;
 
                     case XK_Up:
-                        key = HgKey::up;
+                        key = HgKey_up;
                         break;
                     case XK_Down:
-                        key = HgKey::down;
+                        key = HgKey_down;
                         break;
                     case XK_Left:
-                        key = HgKey::left;
+                        key = HgKey_left;
                         break;
                     case XK_Right:
-                        key = HgKey::right;
+                        key = HgKey_right;
                         break;
                     case XK_Escape:
-                        key = HgKey::escape;
+                        key = HgKey_escape;
                         break;
                     case XK_space:
-                        key = HgKey::space;
+                        key = HgKey_space;
                         break;
                     case XK_Return:
-                        key = HgKey::enter;
+                        key = HgKey_enter;
                         break;
                     case XK_BackSpace:
-                        key = HgKey::backspace;
+                        key = HgKey_backspace;
                         break;
                     case XK_Delete:
-                        key = HgKey::kdelete;
+                        key = HgKey_kdelete;
                         break;
                     case XK_Insert:
-                        key = HgKey::insert;
+                        key = HgKey_insert;
                         break;
                     case XK_Tab:
-                        key = HgKey::tab;
+                        key = HgKey_tab;
                         break;
                     case XK_Home:
-                        key = HgKey::home;
+                        key = HgKey_home;
                         break;
                     case XK_End:
-                        key = HgKey::end;
+                        key = HgKey_end;
                         break;
 
                     case XK_F1:
-                        key = HgKey::f1;
+                        key = HgKey_f1;
                         break;
                     case XK_F2:
-                        key = HgKey::f2;
+                        key = HgKey_f2;
                         break;
                     case XK_F3:
-                        key = HgKey::f3;
+                        key = HgKey_f3;
                         break;
                     case XK_F4:
-                        key = HgKey::f4;
+                        key = HgKey_f4;
                         break;
                     case XK_F5:
-                        key = HgKey::f5;
+                        key = HgKey_f5;
                         break;
                     case XK_F6:
-                        key = HgKey::f6;
+                        key = HgKey_f6;
                         break;
                     case XK_F7:
-                        key = HgKey::f7;
+                        key = HgKey_f7;
                         break;
                     case XK_F8:
-                        key = HgKey::f8;
+                        key = HgKey_f8;
                         break;
                     case XK_F9:
-                        key = HgKey::f9;
+                        key = HgKey_f9;
                         break;
                     case XK_F10:
-                        key = HgKey::f10;
+                        key = HgKey_f10;
                         break;
                     case XK_F11:
-                        key = HgKey::f11;
+                        key = HgKey_f11;
                         break;
                     case XK_F12:
-                        key = HgKey::f12;
+                        key = HgKey_f12;
                         break;
 
                     case XK_Shift_L:
-                        key = HgKey::lshift;
+                        key = HgKey_lshift;
                         break;
                     case XK_Shift_R:
-                        key = HgKey::rshift;
+                        key = HgKey_rshift;
                         break;
                     case XK_Control_L:
-                        key = HgKey::lctrl;
+                        key = HgKey_lctrl;
                         break;
                     case XK_Control_R:
-                        key = HgKey::rctrl;
+                        key = HgKey_rctrl;
                         break;
                     case XK_Meta_L:
-                        key = HgKey::lmeta;
+                        key = HgKey_lmeta;
                         break;
                     case XK_Meta_R:
-                        key = HgKey::rmeta;
+                        key = HgKey_rmeta;
                         break;
                     case XK_Alt_L:
-                        key = HgKey::lalt;
+                        key = HgKey_lalt;
                         break;
                     case XK_Alt_R:
-                        key = HgKey::ralt;
+                        key = HgKey_ralt;
                         break;
                     case XK_Super_L:
-                        key = HgKey::lsuper;
+                        key = HgKey_lsuper;
                         break;
                     case XK_Super_R:
-                        key = HgKey::rsuper;
+                        key = HgKey_rsuper;
                         break;
                     case XK_Caps_Lock:
-                        key = HgKey::capslock;
+                        key = HgKey_capslock;
                         break;
                 }
                 if (event.type == KeyPress)
                 {
-                    window->wasKeyPressed[(u32)key] = true;
-                    window->isKeyDown[(u32)key] = true;
+                    window->wasKeyPressed[key] = true;
+                    window->isKeyDown[key] = true;
                 } else if (event.type == KeyRelease)
                 {
-                    window->wasKeyReleased[(u32)key] = true;
-                    window->isKeyDown[(u32)key] = false;
+                    window->wasKeyReleased[key] = true;
+                    window->isKeyDown[key] = false;
                 }
             } break;
             case ButtonPress:
             case ButtonRelease: {
-                HgKey key = HgKey::none;
+                HgKey key = HgKey_none;
                 switch (event.xbutton.button)
                 {
                     case Button1:
-                        key = HgKey::mouse1;
+                        key = HgKey_mouse1;
                         break;
                     case Button2:
-                        key = HgKey::mouse2;
+                        key = HgKey_mouse2;
                         break;
                     case Button3:
-                        key = HgKey::mouse3;
+                        key = HgKey_mouse3;
                         break;
                     case Button4:
-                        key = HgKey::mouse4;
+                        key = HgKey_mouse4;
                         break;
                     case Button5:
-                        key = HgKey::mouse5;
+                        key = HgKey_mouse5;
                         break;
                 }
                 if (event.type == ButtonPress)
                 {
-                    window->wasKeyPressed[(u32)key] = true;
-                    window->isKeyDown[(u32)key] = true;
+                    window->wasKeyPressed[key] = true;
+                    window->isKeyDown[key] = true;
                 } else if (event.type == ButtonRelease)
                 {
-                    window->wasKeyReleased[(u32)key] = true;
-                    window->isKeyDown[(u32)key] = false;
+                    window->wasKeyReleased[key] = true;
+                    window->isKeyDown[key] = false;
                 }
             } break;
             case MotionNotify:

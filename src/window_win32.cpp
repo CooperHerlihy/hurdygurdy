@@ -53,324 +53,324 @@ static LRESULT CALLBACK windowCallback(HWND hwnd, UINT msg, WPARAM wparam, LPARA
         case WM_SYSKEYUP:
         case WM_KEYDOWN:
         case WM_KEYUP: {
-            HgKey key = HgKey::none;
-            HgKey shiftKey = HgKey::none;
+            HgKey key = HgKey_none;
+            HgKey shiftKey = HgKey_none;
 
             switch (wparam)
             {
                 case '0':
-                    key = HgKey::k0;
-                    shiftKey = HgKey::rparen;
+                    key = HgKey_k0;
+                    shiftKey = HgKey_rparen;
                     break;
                 case '1':
-                    key = HgKey::k1;
-                    shiftKey = HgKey::exclamation;
+                    key = HgKey_k1;
+                    shiftKey = HgKey_exclamation;
                     break;
                 case '2':
-                    key = HgKey::k2;
-                    shiftKey = HgKey::at;
+                    key = HgKey_k2;
+                    shiftKey = HgKey_at;
                     break;
                 case '3':
-                    key = HgKey::k3;
-                    shiftKey = HgKey::hash;
+                    key = HgKey_k3;
+                    shiftKey = HgKey_hash;
                     break;
                 case '4':
-                    key = HgKey::k4;
-                    shiftKey = HgKey::dollar;
+                    key = HgKey_k4;
+                    shiftKey = HgKey_dollar;
                     break;
                 case '5':
-                    key = HgKey::k5;
-                    shiftKey = HgKey::percent;
+                    key = HgKey_k5;
+                    shiftKey = HgKey_percent;
                     break;
                 case '6':
-                    key = HgKey::k6;
-                    shiftKey = HgKey::carot;
+                    key = HgKey_k6;
+                    shiftKey = HgKey_carot;
                     break;
                 case '7':
-                    key = HgKey::k7;
-                    shiftKey = HgKey::ampersand;
+                    key = HgKey_k7;
+                    shiftKey = HgKey_ampersand;
                     break;
                 case '8':
-                    key = HgKey::k8;
-                    shiftKey = HgKey::asterisk;
+                    key = HgKey_k8;
+                    shiftKey = HgKey_asterisk;
                     break;
                 case '9':
-                    key = HgKey::k9;
-                    shiftKey = HgKey::lparen;
+                    key = HgKey_k9;
+                    shiftKey = HgKey_lparen;
                     break;
 
                 case 'A':
-                    key = HgKey::a;
+                    key = HgKey_a;
                     break;
                 case 'B':
-                    key = HgKey::b;
+                    key = HgKey_b;
                     break;
                 case 'C':
-                    key = HgKey::c;
+                    key = HgKey_c;
                     break;
                 case 'D':
-                    key = HgKey::d;
+                    key = HgKey_d;
                     break;
                 case 'E':
-                    key = HgKey::e;
+                    key = HgKey_e;
                     break;
                 case 'F':
-                    key = HgKey::f;
+                    key = HgKey_f;
                     break;
                 case 'G':
-                    key = HgKey::g;
+                    key = HgKey_g;
                     break;
                 case 'H':
-                    key = HgKey::h;
+                    key = HgKey_h;
                     break;
                 case 'I':
-                    key = HgKey::i;
+                    key = HgKey_i;
                     break;
                 case 'J':
-                    key = HgKey::j;
+                    key = HgKey_j;
                     break;
                 case 'K':
-                    key = HgKey::k;
+                    key = HgKey_k;
                     break;
                 case 'L':
-                    key = HgKey::l;
+                    key = HgKey_l;
                     break;
                 case 'M':
-                    key = HgKey::m;
+                    key = HgKey_m;
                     break;
                 case 'N':
-                    key = HgKey::n;
+                    key = HgKey_n;
                     break;
                 case 'O':
-                    key = HgKey::o;
+                    key = HgKey_o;
                     break;
                 case 'P':
-                    key = HgKey::p;
+                    key = HgKey_p;
                     break;
                 case 'Q':
-                    key = HgKey::q;
+                    key = HgKey_q;
                     break;
                 case 'R':
-                    key = HgKey::r;
+                    key = HgKey_r;
                     break;
                 case 'S':
-                    key = HgKey::s;
+                    key = HgKey_s;
                     break;
                 case 'T':
-                    key = HgKey::t;
+                    key = HgKey_t;
                     break;
                 case 'U':
-                    key = HgKey::u;
+                    key = HgKey_u;
                     break;
                 case 'V':
-                    key = HgKey::v;
+                    key = HgKey_v;
                     break;
                 case 'W':
-                    key = HgKey::w;
+                    key = HgKey_w;
                     break;
                 case 'X':
-                    key = HgKey::x;
+                    key = HgKey_x;
                     break;
                 case 'Y':
-                    key = HgKey::y;
+                    key = HgKey_y;
                     break;
                 case 'Z':
-                    key = HgKey::z;
+                    key = HgKey_z;
                     break;
 
                 case VK_OEM_1:
-                    key = HgKey::semicolon;
-                    shiftKey = HgKey::colon;
+                    key = HgKey_semicolon;
+                    shiftKey = HgKey_colon;
                     break;
                 case VK_OEM_7:
-                    key = HgKey::apostrophe;
-                    shiftKey = HgKey::quotation;
+                    key = HgKey_apostrophe;
+                    shiftKey = HgKey_quotation;
                     break;
                 case VK_OEM_COMMA:
-                    key = HgKey::comma;
-                    shiftKey = HgKey::less;
+                    key = HgKey_comma;
+                    shiftKey = HgKey_less;
                     break;
                 case VK_OEM_PERIOD:
-                    key = HgKey::period;
-                    shiftKey = HgKey::greater;
+                    key = HgKey_period;
+                    shiftKey = HgKey_greater;
                     break;
                 case VK_OEM_2:
-                    key = HgKey::slash;
-                    shiftKey = HgKey::question;
+                    key = HgKey_slash;
+                    shiftKey = HgKey_question;
                     break;
                 case VK_OEM_3:
-                    key = HgKey::grave;
-                    shiftKey = HgKey::tilde;
+                    key = HgKey_grave;
+                    shiftKey = HgKey_tilde;
                     break;
                 case VK_OEM_4:
-                    key = HgKey::lbracket;
-                    shiftKey = HgKey::lbrace;
+                    key = HgKey_lbracket;
+                    shiftKey = HgKey_lbrace;
                     break;
                 case VK_OEM_6:
-                    key = HgKey::rbracket;
-                    shiftKey = HgKey::rbrace;
+                    key = HgKey_rbracket;
+                    shiftKey = HgKey_rbrace;
                     break;
                 case VK_OEM_5:
-                    key = HgKey::backslash;
-                    shiftKey = HgKey::bar;
+                    key = HgKey_backslash;
+                    shiftKey = HgKey_bar;
                     break;
                 case VK_OEM_PLUS:
-                    key = HgKey::equal;
-                    shiftKey = HgKey::plus;
+                    key = HgKey_equal;
+                    shiftKey = HgKey_plus;
                     break;
                 case VK_OEM_MINUS:
-                    key = HgKey::minus;
-                    shiftKey = HgKey::underscore;
+                    key = HgKey_minus;
+                    shiftKey = HgKey_underscore;
                     break;
 
                 case VK_UP:
-                    key = HgKey::up;
+                    key = HgKey_up;
                     break;
                 case VK_DOWN:
-                    key = HgKey::down;
+                    key = HgKey_down;
                     break;
                 case VK_LEFT:
-                    key = HgKey::left;
+                    key = HgKey_left;
                     break;
                 case VK_RIGHT:
-                    key = HgKey::right;
+                    key = HgKey_right;
                     break;
                 case VK_ESCAPE:
-                    key = HgKey::escape;
+                    key = HgKey_escape;
                     break;
                 case VK_SPACE:
-                    key = HgKey::space;
+                    key = HgKey_space;
                     break;
                 case VK_RETURN:
-                    key = HgKey::enter;
+                    key = HgKey_enter;
                     break;
                 case VK_BACK:
-                    key = HgKey::backspace;
+                    key = HgKey_backspace;
                     break;
                 case VK_DELETE:
-                    key = HgKey::kdelete;
+                    key = HgKey_kdelete;
                     break;
                 case VK_INSERT:
-                    key = HgKey::insert;
+                    key = HgKey_insert;
                     break;
                 case VK_TAB:
-                    key = HgKey::tab;
+                    key = HgKey_tab;
                     break;
                 case VK_HOME:
-                    key = HgKey::home;
+                    key = HgKey_home;
                     break;
                 case VK_END:
-                    key = HgKey::end;
+                    key = HgKey_end;
                     break;
 
                 case VK_F1:
-                    key = HgKey::f1;
+                    key = HgKey_f1;
                     break;
                 case VK_F2:
-                    key = HgKey::f2;
+                    key = HgKey_f2;
                     break;
                 case VK_F3:
-                    key = HgKey::f3;
+                    key = HgKey_f3;
                     break;
                 case VK_F4:
-                    key = HgKey::f4;
+                    key = HgKey_f4;
                     break;
                 case VK_F5:
-                    key = HgKey::f5;
+                    key = HgKey_f5;
                     break;
                 case VK_F6:
-                    key = HgKey::f6;
+                    key = HgKey_f6;
                     break;
                 case VK_F7:
-                    key = HgKey::f7;
+                    key = HgKey_f7;
                     break;
                 case VK_F8:
-                    key = HgKey::f8;
+                    key = HgKey_f8;
                     break;
                 case VK_F9:
-                    key = HgKey::f9;
+                    key = HgKey_f9;
                     break;
                 case VK_F10:
-                    key = HgKey::f10;
+                    key = HgKey_f10;
                     break;
                 case VK_F11:
-                    key = HgKey::f11;
+                    key = HgKey_f11;
                     break;
                 case VK_F12:
-                    key = HgKey::f12;
+                    key = HgKey_f12;
                     break;
 
                 case VK_SHIFT: {
                     u32 scancode = (lparam >> 16) & 0xff;
                     if (scancode == 0x36)
-                        key = HgKey::rshift;
+                        key = HgKey_rshift;
                     else if (scancode == 0x2A)
-                        key = HgKey::lshift;
+                        key = HgKey_lshift;
                 } break;
                 case VK_MENU:
                     if (lparam & (1 << 24))
-                        key = HgKey::ralt;
+                        key = HgKey_ralt;
                     else
-                        key = HgKey::lalt;
+                        key = HgKey_lalt;
                     break;
                 case VK_CONTROL:
                     if (lparam & (1 << 24))
-                        key = HgKey::rctrl;
+                        key = HgKey_rctrl;
                     else
-                        key = HgKey::lctrl;
+                        key = HgKey_lctrl;
                     break;
                 case VK_LWIN:
-                    key = HgKey::lsuper;
+                    key = HgKey_lsuper;
                     break;
                 case VK_RWIN:
-                    key = HgKey::rsuper;
+                    key = HgKey_rsuper;
                     break;
                 case VK_CAPITAL:
-                    key = HgKey::capslock;
+                    key = HgKey_capslock;
                     break;
             }
             if (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN)
             {
-                if (shiftKey != HgKey::none &&
-                   (window->isKeyDown[(u32)HgKey::lshift] ||
-                    window->isKeyDown[(u32)HgKey::rshift]))
+                if (shiftKey != HgKey_none &&
+                   (window->isKeyDown[HgKey_lshift] ||
+                    window->isKeyDown[HgKey_rshift]))
                 {
-                    window->wasKeyPressed[(u32)shiftKey] = true;
-                    window->isKeyDown[(u32)shiftKey] = true;
+                    window->wasKeyPressed[shiftKey] = true;
+                    window->isKeyDown[shiftKey] = true;
                 } else {
-                    window->wasKeyPressed[(u32)key] = true;
-                    window->isKeyDown[(u32)key] = true;
+                    window->wasKeyPressed[key] = true;
+                    window->isKeyDown[key] = true;
                 }
             } else {
-                window->wasKeyReleased[(u32)shiftKey] = window->isKeyDown[(u32)shiftKey];
-                window->isKeyDown[(u32)shiftKey] = false;
-                window->wasKeyReleased[(u32)key] = window->isKeyDown[(u32)key];
-                window->isKeyDown[(u32)key] = false;
+                window->wasKeyReleased[shiftKey] = window->isKeyDown[shiftKey];
+                window->isKeyDown[shiftKey] = false;
+                window->wasKeyReleased[key] = window->isKeyDown[key];
+                window->isKeyDown[key] = false;
             }
         } break;
         case WM_LBUTTONDOWN:
-            window->wasKeyPressed[(u32)HgKey::lmouse] = true;
-            window->isKeyDown[(u32)HgKey::lmouse] = true;
+            window->wasKeyPressed[HgKey_lmouse] = true;
+            window->isKeyDown[HgKey_lmouse] = true;
             break;
         case WM_RBUTTONDOWN:
-            window->wasKeyPressed[(u32)HgKey::rmouse] = true;
-            window->isKeyDown[(u32)HgKey::rmouse] = true;
+            window->wasKeyPressed[HgKey_rmouse] = true;
+            window->isKeyDown[HgKey_rmouse] = true;
             break;
         case WM_MBUTTONDOWN:
-            window->wasKeyPressed[(u32)HgKey::mmouse] = true;
-            window->isKeyDown[(u32)HgKey::mmouse] = true;
+            window->wasKeyPressed[HgKey_mmouse] = true;
+            window->isKeyDown[HgKey_mmouse] = true;
             break;
         case WM_LBUTTONUP:
-            window->wasKeyReleased[(u32)HgKey::lmouse] = true;
-            window->isKeyDown[(u32)HgKey::lmouse] = false;
+            window->wasKeyReleased[HgKey_lmouse] = true;
+            window->isKeyDown[HgKey_lmouse] = false;
             break;
         case WM_RBUTTONUP:
-            window->wasKeyReleased[(u32)HgKey::rmouse] = true;
-            window->isKeyDown[(u32)HgKey::rmouse] = false;
+            window->wasKeyReleased[HgKey_rmouse] = true;
+            window->isKeyDown[HgKey_rmouse] = false;
             break;
         case WM_MBUTTONUP:
-            window->wasKeyReleased[(u32)HgKey::mmouse] = true;
-            window->isKeyDown[(u32)HgKey::mmouse] = false;
+            window->wasKeyReleased[HgKey_mmouse] = true;
+            window->isKeyDown[HgKey_mmouse] = false;
             break;
         case WM_MOUSEMOVE:
             window->mousePosX = (f64)LOWORD(lparam) / (f64)window->height;
@@ -510,11 +510,11 @@ u32 hgVkGetPlatformExtensions(HgArena* arena, HgStringView** extBuffer)
     return count;
 }
 
-void hgProcessWindowEvents(HgWindow** windows, usize windowCount)
+void hgProcessWindowEvents(HgWindow** windows, u32 windowCount)
 {
     hgAssert(windows != nullptr);
 
-    for (usize i = 0; i < windowCount; ++i)
+    for (u32 i = 0; i < windowCount; ++i)
     {
         HgWindow* window = windows[i];
 
@@ -539,19 +539,19 @@ void hgProcessWindowEvents(HgWindow** windows, usize windowCount)
         window->mouseDeltaX = window->mousePosX - oldMousePosX;
         window->mouseDeltaY = window->mousePosY - oldMousePosY;
 
-        if (window->isKeyDown[(u32)HgKey::lshift] && window->isKeyDown[(u32)HgKey::rshift])
+        if (window->isKeyDown[HgKey_lshift] && window->isKeyDown[HgKey_rshift])
         {
             bool lshift = (GetAsyncKeyState(VK_LSHIFT) & 0x8000) != 0;
             bool rshift = (GetAsyncKeyState(VK_RSHIFT) & 0x8000) != 0;
             if (!lshift)
             {
-                window->wasKeyReleased[(u32)HgKey::lshift] = true;
-                window->isKeyDown[(u32)HgKey::lshift] = false;
+                window->wasKeyReleased[HgKey_lshift] = true;
+                window->isKeyDown[HgKey_lshift] = false;
             }
             if (!rshift)
             {
-                window->wasKeyReleased[(u32)HgKey::rshift] = true;
-                window->isKeyDown[(u32)HgKey::rshift] = false;
+                window->wasKeyReleased[HgKey_rshift] = true;
+                window->isKeyDown[HgKey_rshift] = false;
             }
         }
     }

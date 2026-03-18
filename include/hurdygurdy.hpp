@@ -29,7 +29,6 @@
 
 #include <cfloat>
 #include <cmath>
-#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -114,7 +113,8 @@
  * A template to defer code execution until end of scope
  */
 template<typename F>
-struct HgDefer {
+struct HgDefer
+{
     /**
      * The function to execute
      */
@@ -243,10 +243,6 @@ typedef int32_t i32;
 typedef int64_t i64;
 
 /**
- * An unsigned integer used for indexing
- */
-typedef size_t usize;
-/**
  * An unsigned integer representing a pointer
  */
 typedef uintptr_t uptr;
@@ -307,7 +303,8 @@ void hgTest();
 /**
  * A 2D vector
  */
-struct HgVec2 {
+struct HgVec2
+{
     /**
      * The vector components
      */
@@ -329,7 +326,7 @@ struct HgVec2 {
     /**
      * Access with index
      */
-    constexpr f32& operator[](usize index)
+    constexpr f32& operator[](u32 index)
     {
         hgAssert(index < 2);
         return *(&x + index);
@@ -338,7 +335,7 @@ struct HgVec2 {
     /**
      * Access with index
      */
-    constexpr const f32& operator[](usize index) const {
+    constexpr const f32& operator[](u32 index) const {
         hgAssert(index < 2);
         return *(&x + index);
     }
@@ -364,7 +361,8 @@ struct HgVec2 {
 /**
  * A 3D vector
  */
-struct HgVec3 {
+struct HgVec3
+{
     /**
      * The vector components
      */
@@ -398,7 +396,7 @@ struct HgVec3 {
     /**
      * Access with index
      */
-    constexpr f32& operator[](usize index)
+    constexpr f32& operator[](u32 index)
     {
         hgAssert(index < 3);
         return *(&x + index);
@@ -407,7 +405,7 @@ struct HgVec3 {
     /**
      * Access with index
      */
-    constexpr const f32& operator[](usize index) const {
+    constexpr const f32& operator[](u32 index) const {
         hgAssert(index < 3);
         return *(&x + index);
     }
@@ -433,7 +431,8 @@ struct HgVec3 {
 /**
  * A 4D vector
  */
-struct HgVec4 {
+struct HgVec4
+{
     /**
      * The vector components
      */
@@ -478,7 +477,7 @@ struct HgVec4 {
     /**
      * Access with index
      */
-    constexpr f32& operator[](usize index)
+    constexpr f32& operator[](u32 index)
     {
         hgAssert(index < 4);
         return *(&x + index);
@@ -487,7 +486,7 @@ struct HgVec4 {
     /**
      * Access with index
      */
-    constexpr const f32& operator[](usize index) const {
+    constexpr const f32& operator[](u32 index) const {
         hgAssert(index < 4);
         return *(&x + index);
     }
@@ -513,7 +512,8 @@ struct HgVec4 {
 /**
  * A 2x2 matrix
  */
-struct HgMat2 {
+struct HgMat2
+{
     /**
      * The matrix components
      */
@@ -539,7 +539,7 @@ struct HgMat2 {
     /**
      * Access with index
      */
-    constexpr HgVec2& operator[](usize index)
+    constexpr HgVec2& operator[](u32 index)
     {
         hgAssert(index < 2);
         return *(&x + index);
@@ -548,7 +548,7 @@ struct HgMat2 {
     /**
      * Access with index
      */
-    constexpr const HgVec2& operator[](usize index) const {
+    constexpr const HgVec2& operator[](u32 index) const {
         hgAssert(index < 2);
         return *(&x + index);
     }
@@ -566,7 +566,8 @@ struct HgMat2 {
 /**
  * A 3x3 matrix
  */
-struct HgMat3 {
+struct HgMat3
+{
     /**
      * The matrix components
      */
@@ -603,7 +604,7 @@ struct HgMat3 {
     /**
      * Access with index
      */
-    constexpr HgVec3& operator[](usize index)
+    constexpr HgVec3& operator[](u32 index)
     {
         hgAssert(index < 3);
         return *(&x + index);
@@ -612,7 +613,7 @@ struct HgMat3 {
     /**
      * Access with index
      */
-    constexpr const HgVec3& operator[](usize index) const {
+    constexpr const HgVec3& operator[](u32 index) const {
         hgAssert(index < 3);
         return *(&x + index);
     }
@@ -630,7 +631,8 @@ struct HgMat3 {
 /**
  * A 4x4 matrix
  */
-struct HgMat4 {
+struct HgMat4
+{
     /**
      * The matrix components
      */
@@ -679,7 +681,7 @@ struct HgMat4 {
     /**
      * Access with index
      */
-    constexpr HgVec4& operator[](usize index)
+    constexpr HgVec4& operator[](u32 index)
     {
         hgAssert(index < 4);
         return *(&x + index);
@@ -688,7 +690,7 @@ struct HgMat4 {
     /**
      * Access with index
      */
-    constexpr const HgVec4& operator[](usize index) const {
+    constexpr const HgVec4& operator[](u32 index) const {
         hgAssert(index < 4);
         return *(&x + index);
     }
@@ -706,7 +708,8 @@ struct HgMat4 {
 /**
  * A complex number
  */
-struct HgComplex {
+struct HgComplex
+{
     /**
      * The real part
      */
@@ -732,7 +735,7 @@ struct HgComplex {
     /**
      * Access with index
      */
-    constexpr f32& operator[](usize index)
+    constexpr f32& operator[](u32 index)
     {
         hgAssert(index < 2);
         return *(&r + index);
@@ -741,7 +744,7 @@ struct HgComplex {
     /**
      * Access with index
      */
-    constexpr const f32& operator[](usize index) const {
+    constexpr const f32& operator[](u32 index) const {
         hgAssert(index < 2);
         return *(&r + index);
     }
@@ -759,7 +762,8 @@ struct HgComplex {
 /**
  * A quaternion
  */
-struct HgQuat {
+struct HgQuat
+{
     /**
      * The real part
      */
@@ -785,7 +789,7 @@ struct HgQuat {
     /**
      * Access with index
      */
-    constexpr f32& operator[](usize index)
+    constexpr f32& operator[](u32 index)
     {
         hgAssert(index < 4);
         return *(&r + index);
@@ -794,7 +798,7 @@ struct HgQuat {
     /**
      * Access with index
      */
-    constexpr const f32& operator[](usize index) const {
+    constexpr const f32& operator[](u32 index) const {
         hgAssert(index < 4);
         return *(&r + index);
     }
@@ -1540,7 +1544,7 @@ u32 hgMaxMipmaps(u32 width, u32 height, u32 depth);
  * Returns
  * - The aligned value
  */
-constexpr usize hgAlign(uptr value, usize alignment)
+constexpr uptr hgAlign(uptr value, uptr alignment)
 {
     hgAssert(alignment > 0 && (alignment & (alignment - 1)) == 0);
     return (value + alignment - 1) & ~(alignment - 1);
@@ -1549,7 +1553,8 @@ constexpr usize hgAlign(uptr value, usize alignment)
 /**
  * An arena allocator
  */
-struct HgArena {
+struct HgArena
+{
     /**
      * A pointer to the memory being allocated
      */
@@ -1557,11 +1562,11 @@ struct HgArena {
     /**
      * The capacity of the memory being allocated
      */
-    usize capacity;
+    u64 capacity;
     /**
      * The next allocation to be given out
      */
-    usize head;
+    u64 head;
 
     /**
      * Construct uninitialized
@@ -1571,7 +1576,7 @@ struct HgArena {
     /**
      * Create an arena from a block of memory
      */
-    HgArena(void* memoryVal, usize capacityVal) : memory{memoryVal}, capacity{capacityVal}, head{0} {}
+    HgArena(void* memoryVal, u64 capacityVal) : memory{memoryVal}, capacity{capacityVal}, head{0} {}
 };
 
 /**
@@ -1585,7 +1590,7 @@ struct HgArena {
  * Returns
  * - The allocation, never nullptr
  */
-void* hgAlloc(HgArena* arena, usize size, usize alignment);
+void* hgAlloc(HgArena* arena, u64 size, u64 alignment);
 
 /**
  * A convenience to allocate an array of a type
@@ -1600,7 +1605,7 @@ void* hgAlloc(HgArena* arena, usize size, usize alignment);
  * - The allocated array, never nullptr
  */
 template<typename T>
-T* hgAlloc(HgArena* arena, usize count)
+T* hgAlloc(HgArena* arena, u64 count)
 {
     return (T*)hgAlloc(arena, count * sizeof(T), alignof(T));
 }
@@ -1620,7 +1625,7 @@ T* hgAlloc(HgArena* arena, usize count)
  * Returns
  * - The allocation, never nullptr
  */
-void* hgRealloc(HgArena* arena, void* allocation, usize oldSize, usize newSize, usize alignment);
+void* hgRealloc(HgArena* arena, void* allocation, u64 oldSize, u64 newSize, u64 alignment);
 
 /**
  * A convenience to reallocate an array of a type
@@ -1638,7 +1643,7 @@ void* hgRealloc(HgArena* arena, void* allocation, usize oldSize, usize newSize, 
  * - The reallocated array, never nullptr
  */
 template<typename T>
-T* hgRealloc(HgArena* arena, T* allocation, usize oldCount, usize newCount) 
+T* hgRealloc(HgArena* arena, T* allocation, u64 oldCount, u64 newCount) 
 {
     static_assert(std::is_trivially_copyable_v<T>);
     return (T*)hgRealloc(arena, allocation, oldCount * sizeof(T), newCount * sizeof(T), alignof(T));
@@ -1647,7 +1652,8 @@ T* hgRealloc(HgArena* arena, T* allocation, usize oldCount, usize newCount)
 /**
  * Create a guard which restores an arena's head at the end of the scope
  */
-struct HgArenaScope {
+struct HgArenaScope
+{
     /**
      * The arena to restore
      */
@@ -1655,7 +1661,7 @@ struct HgArenaScope {
     /**
      * The arena's original head
      */
-    usize head;
+    u64 head;
 
     /**
      * Constructs the scope guard
@@ -1691,12 +1697,13 @@ void hgDeinitScratchMemory();
  * Returns
  * - A scratch arena, never nullptr
  */
-HgArena* hgGetScratch(HgArena const* const* conflicts = nullptr, usize count = 0);
+HgArena* hgGetScratch(HgArena const* const* conflicts = nullptr, u32 count = 0);
 
 /**
  * A span view into a string
  */
-struct HgStringView {
+struct HgStringView
+{
     /**
      * The characters
      */
@@ -1704,7 +1711,7 @@ struct HgStringView {
     /**
      * The number of characters;
      */
-    usize length;
+    u64 length;
 
     /**
      * Construct uninitialized
@@ -1714,7 +1721,7 @@ struct HgStringView {
     /**
      * Create a string view from a pointer and length
      */
-    constexpr HgStringView(const char* charsVal, usize lengthVal)
+    constexpr HgStringView(const char* charsVal, u64 lengthVal)
         : chars{charsVal}, length{lengthVal} {}
 
     /**
@@ -1731,7 +1738,8 @@ struct HgStringView {
      *
      * Potentially dangerous, c string should be at most 4096 chars
      */
-    constexpr HgStringView(const char* cStr) : chars{cStr}, length{0} {
+    constexpr HgStringView(const char* cStr) : chars{cStr}, length{0}
+    {
         while (cStr[length] != '\0')
         {
             ++length;
@@ -1742,7 +1750,8 @@ struct HgStringView {
     /**
      * Convenience to index into the array with debug bounds checking
      */
-    constexpr const char& operator[](usize index) const {
+    constexpr const char& operator[](u64 index) const
+    {
         hgAssert(chars != nullptr);
         hgAssert(index < length);
         return chars[index];
@@ -1751,14 +1760,16 @@ struct HgStringView {
     /**
      * For c++ ranged based for
      */
-    constexpr const char* begin() const {
+    constexpr const char* begin() const
+    {
         return chars;
     }
 
     /**
      * For c++ ranged based for
      */
-    constexpr const char* end() const {
+    constexpr const char* end() const
+    {
         return chars + length;
     }
 };
@@ -1775,7 +1786,8 @@ char* hgCString(HgArena* arena, HgStringView str);
 /**
  * A dynamic string container
  */
-struct HgString {
+struct HgString
+{
     /**
      * The character buffer
      */
@@ -1783,11 +1795,11 @@ struct HgString {
     /**
      * The max number of characters in the buffer
      */
-    usize capacity;
+    u64 capacity;
     /**
      * The number of characters currently in the string
      */
-    usize length;
+    u64 length;
 
     /**
      * Creates a new string with empty capacity
@@ -1796,7 +1808,7 @@ struct HgString {
      * - arena The arena to allocate from
      * - capacity The capacity to begin with
      */
-    static HgString create(HgArena* arena, usize capacity);
+    static HgString create(HgArena* arena, u64 capacity);
 
     /**
      * Creates a new string copied from an existing string
@@ -1822,7 +1834,7 @@ struct HgString {
      * - arena The arena to allocate from
      * - newCapacity The new minimum capacity
      */
-    void reserve(HgArena* arena, usize newCapacity);
+    void reserve(HgArena* arena, u64 newCapacity);
 
     /**
      * Increases the capacity of the string, or inits to 1
@@ -1836,7 +1848,7 @@ struct HgString {
     /**
      * Access using the index operator
      */
-    constexpr char& operator[](usize index)
+    constexpr char& operator[](u64 index)
     {
         hgAssert(index < length);
         return chars[index];
@@ -1845,7 +1857,8 @@ struct HgString {
     /**
      * Access using the index operator in a const context
      */
-    constexpr const char& operator[](usize index) const {
+    constexpr const char& operator[](u64 index) const
+    {
         hgAssert(index < length);
         return chars[index];
     }
@@ -1853,14 +1866,16 @@ struct HgString {
     /**
      * For c++ ranged based for loop
      */
-    constexpr char* begin() const {
+    constexpr char* begin() const
+    {
         return chars;
     }
 
     /**
      * For c++ ranged based for loop
      */
-    constexpr char* end() const {
+    constexpr char* end() const
+    {
         return chars + length;
     }
 
@@ -1871,7 +1886,7 @@ struct HgString {
      * - arena The arena to allocate from
      * - c The char to insert
      */
-    HgString& insert(HgArena* arena, usize index, char c);
+    HgString& insert(HgArena* arena, u64 index, char c);
 
     /**
      * Appends a char to the end of this string
@@ -1904,7 +1919,7 @@ struct HgString {
      * - arena The arena to allocate from
      * - str The string to copy from
      */
-    HgString& insert(HgArena* arena, usize index, HgStringView str);
+    HgString& insert(HgArena* arena, u64 index, HgStringView str);
 
     /**
      * Copies another string to the end of this string
@@ -1933,7 +1948,8 @@ struct HgString {
     /**
      * Implicit converts to a string view
      */
-    constexpr operator HgStringView() const {
+    constexpr operator HgStringView() const
+    {
         return {chars, length};
     }
 };
@@ -2017,7 +2033,7 @@ HgString hgIntToStr(HgArena* arena, i64 num);
  * - num The integer number to create from
  * - decimalCount The number of trailing decimal digits
  */
-HgString hgFloatToStr(HgArena* arena, f64 num, u64 decimalCount);
+HgString hgFloatToStr(HgArena* arena, f64 num, u32 decimalCount);
 
 // base 2 and 16 string-int conversions : TODO
 // arbitrary base string-int conversions : TODO?
@@ -2047,7 +2063,8 @@ HgString hgFormatString(HgArena* arena, HgStringView fmt, ...);
 /**
  * An error contained in the json
  */
-struct HgJsonError {
+struct HgJsonError
+{
     /**
      * The next error
      */
@@ -2066,21 +2083,23 @@ struct HgJsonNode;
 /**
  * The types contained in nodes
  */
-enum HgJsonType : u32 {
-    none = 0,
-    jstruct,
-    field,
-    array,
-    string,
-    floating,
-    integer,
-    boolean,
+enum HgJsonType : u32
+{
+    HgJsonType_none = 0,
+    HgJsonType_struct,
+    HgJsonType_field,
+    HgJsonType_array,
+    HgJsonType_string,
+    HgJsonType_float,
+    HgJsonType_integer,
+    HgJsonType_bool,
 };
 
 /**
  * A field in a struct
  */
-struct HgJsonField {
+struct HgJsonField
+{
     /**
      * The next field
      */
@@ -2098,7 +2117,8 @@ struct HgJsonField {
 /**
  * A struct contained in the json
  */
-struct HgJsonStruct {
+struct HgJsonStruct
+{
     /**
      * The first field
      */
@@ -2108,7 +2128,8 @@ struct HgJsonStruct {
 /**
  * An element in an array
  */
-struct HgJsonElem {
+struct HgJsonElem
+{
     /**
      * The next element
      */
@@ -2122,7 +2143,8 @@ struct HgJsonElem {
 /**
  * An array contained in the json
  */
-struct HgJsonArray {
+struct HgJsonArray
+{
     /**
      * The first element
      */
@@ -2132,7 +2154,8 @@ struct HgJsonArray {
 /**
  * A node in the json file
  */
-struct HgJsonNode {
+struct HgJsonNode
+{
     /**
      * The node's type
      */
@@ -2140,7 +2163,8 @@ struct HgJsonNode {
     /**
      * The value in the node
      */
-    union {
+    union
+    {
         HgJsonStruct jstruct;
         HgJsonField field;
         HgJsonArray array;
@@ -2154,7 +2178,8 @@ struct HgJsonNode {
 /**
  * A parsed Json file
  */
-struct HgJson {
+struct HgJson
+{
     /**
      * The successfully parsed nodes
      */
@@ -2180,110 +2205,113 @@ HgJson hgParseJson(HgArena* arena, HgStringView text);
 /**
  * Hash map hashing for u8
  */
-constexpr usize hgHash(u8 val)
+constexpr u64 hgHash(u8 val)
 {
-    return (usize)val;
+    return (u64)val;
 }
 
 /**
  * Hash map hashing for u16
  */
-constexpr usize hgHash(u16 val)
+constexpr u64 hgHash(u16 val)
 {
-    return (usize)val;
+    return (u64)val;
 }
 
 /**
  * Hash map hashing for u32
  */
-constexpr usize hgHash(u32 val)
+constexpr u64 hgHash(u32 val)
 {
-    return (usize)val;
+    return (u64)val;
 }
 
 /**
  * Hash map hashing for u64
  */
-constexpr usize hgHash(u64 val)
+constexpr u64 hgHash(u64 val)
 {
-    return (usize)val;
+    return (u64)val;
 }
 
 /**
  * Hash map hashing for i8
  */
-constexpr usize hgHash(i8 val)
+constexpr u64 hgHash(i8 val)
 {
-    return (usize)val;
+    return (u64)val;
 }
 
 /**
  * Hash map hashing for i16
  */
-constexpr usize hgHash(i16 val)
+constexpr u64 hgHash(i16 val)
 {
-    return (usize)val;
+    return (u64)val;
 }
 
 /**
  * Hash map hashing for i32
  */
-constexpr usize hgHash(i32 val)
+constexpr u64 hgHash(i32 val)
 {
-    return (usize)val;
+    return (u64)val;
 }
 
 /**
  * Hash map hashing for i64
  */
-constexpr usize hgHash(i64 val)
+constexpr u64 hgHash(i64 val)
 {
-    return (usize)val;
+    return (u64)val;
 }
 
 /**
  * Hash map hashing for f32
  */
-constexpr usize hgHash(f32 val)
+constexpr u64 hgHash(f32 val)
 {
-    union {
+    union
+    {
         f32 asFloat;
-        usize asUsize;
+        u64 asHash;
     } u{};
     u.asFloat = val;
-    return u.asUsize;
+    return u.asHash;
 }
 
 /**
  * Hash map hashing for f64
  */
-constexpr usize hgHash(f64 val)
+constexpr u64 hgHash(f64 val)
 {
-    union {
+    union
+    {
         f64 asFloat;
-        usize asUsize;
+        u64 asHash;
     } u{};
     u.asFloat = val;
-    return u.asUsize;
+    return u.asHash;
 }
 
 /**
  * Hash map hashing for void*
  */
-constexpr usize hgHash(void* val)
+constexpr u64 hgHash(void* val)
 {
-    union {
+    union
+    {
         void* asPtr;
         uptr asUptr;
     } u{};
     u.asPtr = val;
-    return (usize)u.asUptr;
+    return (u64)u.asUptr;
 }
 
 /**
  * Hash map hashing for strings
  */
-constexpr usize hgHash(HgStringView str)
+constexpr u64 hgHash(HgStringView str)
 {
     u64 ret = 0;
     u64 mult = 1;
@@ -2292,13 +2320,13 @@ constexpr usize hgHash(HgStringView str)
         ret += (u64)c * mult;
         mult *= 257;
     }
-    return (usize)ret;
+    return ret;
 }
 
 /**
  * Hash map hashing for HgString
  */
-constexpr usize hgHash(HgString str)
+constexpr u64 hgHash(HgString str)
 {
     return hgHash(HgStringView{str});
 }
@@ -2306,7 +2334,7 @@ constexpr usize hgHash(HgString str)
 /**
  * Hash map hashing for C string
  */
-constexpr usize hgHash(const char* str)
+constexpr u64 hgHash(const char* str)
 {
     return hgHash(HgStringView{str});
 }
@@ -2314,8 +2342,9 @@ constexpr usize hgHash(const char* str)
 /**
  * A hash set
  */
-template<typename Value, usize (*hashFn)(Value) = hgHash>
-struct HgHashSet {
+template<typename Value, u64 (*hashFn)(Value) = hgHash>
+struct HgHashSet
+{
     static_assert(std::is_trivially_copyable_v<Value> && std::is_trivially_destructible_v<Value>);
 
     /**
@@ -2329,11 +2358,11 @@ struct HgHashSet {
     /**
      * The max number of vals
      */
-    usize capacity;
+    u32 capacity;
     /**
      * The current number of values that are stored
      */
-    usize count;
+    u32 count;
 
     /**
      * Creates a new hash set
@@ -2342,7 +2371,7 @@ struct HgHashSet {
      * - arena The arena to allocate from
      * - slotCount The max number of slots to store values in
      */
-    static HgHashSet create(HgArena* arena, usize slotCount)
+    static HgHashSet create(HgArena* arena, u32 slotCount)
     {
         hgAssert(slotCount > 0);
 
@@ -2361,12 +2390,12 @@ struct HgHashSet {
      * - arena The arena to allocate from
      * - newSize The new number of slots
      */
-    void resize(HgArena* arena, usize newSize)
+    void resize(HgArena* arena, u32 newSize)
     {
         HgHashSet old = *this;
         *this = create(arena, newSize);
 
-        for (usize i = 0; i < old.capacity; ++i)
+        for (u32 i = 0; i < old.capacity; ++i)
         {
             if (old.hasVal[i])
                 add(old.vals[i]);
@@ -2378,7 +2407,7 @@ struct HgHashSet {
      */
     void reset()
     {
-        for (usize i = 0; i < capacity; ++i)
+        for (u32 i = 0; i < capacity; ++i)
         {
             hasVal[i] = false;
         }
@@ -2392,11 +2421,11 @@ struct HgHashSet {
     {
         hgAssert(count < capacity - 1);
 
-        usize idx = hashFn(val) % capacity;
-        usize dist = 0;
+        u32 idx = hashFn(val) % capacity;
+        u32 dist = 0;
         while (hasVal[idx] && vals[idx] != val)
         {
-            usize otherDist = hashFn(vals[idx]) % capacity;
+            u32 otherDist = hashFn(vals[idx]) % capacity;
             if (otherDist < idx)
                 otherDist += capacity;
             otherDist -= idx;
@@ -2424,7 +2453,7 @@ struct HgHashSet {
      */
     void remove(const Value& val)
     {
-        usize idx = hashFn(val) % capacity;
+        u32 idx = hashFn(val) % capacity;
         while (hasVal[idx])
         {
             if (vals[idx] == val)
@@ -2434,7 +2463,7 @@ struct HgHashSet {
         if (!hasVal[idx])
             return;
 
-        usize next = (idx + 1) % capacity;
+        u32 next = (idx + 1) % capacity;
         while (hasVal[next])
         {
             if (hashFn(vals[next]) != idx)
@@ -2451,8 +2480,9 @@ struct HgHashSet {
     /**
      * Checks whether a value is contained in the set
      */
-    bool has(const Value& val) const {
-        for (usize idx = hashFn(val) % capacity; hasVal[idx]; idx = (idx + 1) % capacity)
+    bool has(const Value& val) const
+    {
+        for (u32 idx = hashFn(val) % capacity; hasVal[idx]; idx = (idx + 1) % capacity)
         {
             if (vals[idx] == val)
                 return true;
@@ -2470,7 +2500,7 @@ struct HgHashSet {
     void forEach(Fn fn)
     {
         static_assert(std::is_invocable_r_v<void, Fn, const Value&>);
-        for (usize i = 0; i < capacity; ++i)
+        for (u32 i = 0; i < capacity; ++i)
         {
             if (hasVal[i])
                 fn(vals[i]);
@@ -2481,8 +2511,9 @@ struct HgHashSet {
 /**
  * A key-value hash map
  */
-template<typename Key, typename Value, usize (*hashFn)(Key) = hgHash>
-struct HgHashMap {
+template<typename Key, typename Value, u64 (*hashFn)(Key) = hgHash>
+struct HgHashMap
+{
     static_assert(std::is_trivially_copyable_v<Key>
                && std::is_trivially_copyable_v<Value>
                && std::is_trivially_destructible_v<Key>
@@ -2503,11 +2534,11 @@ struct HgHashMap {
     /**
      * The max number of key value pairs
      */
-    usize capacity;
+    u32 capacity;
     /**
      * The current number of values that are stored
      */
-    usize count;
+    u32 count;
 
     /**
      * Creates a new hash map
@@ -2516,7 +2547,7 @@ struct HgHashMap {
      * - arena The arena to allocate from
      * - slotCount The max number of slots to store values in
      */
-    static HgHashMap create(HgArena* arena, usize slotCount)
+    static HgHashMap create(HgArena* arena, u32 slotCount)
     {
         hgAssert(slotCount > 0);
 
@@ -2536,12 +2567,12 @@ struct HgHashMap {
      * - arena The arena to allocate from
      * - newSize The new number of slots
      */
-    void resize(HgArena* arena, usize newSize)
+    void resize(HgArena* arena, u32 newSize)
     {
         HgHashMap old = *this;
         *this = create(arena, newSize);
 
-        for (usize i = 0; i < old.capacity; ++i)
+        for (u32 i = 0; i < old.capacity; ++i)
         {
             if (old.hasVal[i])
                 add(old.keys[i], old.vals[i]);
@@ -2553,7 +2584,7 @@ struct HgHashMap {
      */
     void reset()
     {
-        for (usize i = 0; i < capacity; ++i)
+        for (u32 i = 0; i < capacity; ++i)
         {
             hasVal[i] = false;
         }
@@ -2575,11 +2606,11 @@ struct HgHashMap {
 
         Value val{};
 
-        usize idx = hashFn(key) % capacity;
-        usize dist = 0;
+        u32 idx = hashFn(key) % capacity;
+        u32 dist = 0;
         while (hasVal[idx] && keys[idx] != key)
         {
-            usize otherDist = hashFn(keys[idx]) % capacity;
+            u32 otherDist = hashFn(keys[idx]) % capacity;
             if (otherDist < idx)
                 otherDist += capacity;
             otherDist -= idx;
@@ -2620,7 +2651,7 @@ struct HgHashMap {
      */
     bool remove(const Key& key, Value* value = nullptr)
     {
-        usize idx = hashFn(key) % capacity;
+        u32 idx = hashFn(key) % capacity;
         while (hasVal[idx])
         {
             if (keys[idx] == key)
@@ -2633,7 +2664,7 @@ struct HgHashMap {
         if (value != nullptr)
             *value = vals[idx];
 
-        usize next = (idx + 1) % capacity;
+        u32 next = (idx + 1) % capacity;
         while (hasVal[next])
         {
             if (hashFn(keys[next]) != idx)
@@ -2654,8 +2685,9 @@ struct HgHashMap {
     /**
      * Checks whether a key-value pair exists
      */
-    bool has(const Key& key) const {
-        for (usize idx = hashFn(key) % capacity; hasVal[idx]; idx = (idx + 1) % capacity)
+    bool has(const Key& key) const
+    {
+        for (u32 idx = hashFn(key) % capacity; hasVal[idx]; idx = (idx + 1) % capacity)
         {
             if (keys[idx] == key)
                 return true;
@@ -2671,7 +2703,7 @@ struct HgHashMap {
      */
     Value& operator[](const Key& key)
     {
-        for (usize idx = hashFn(key) % capacity; hasVal[idx]; idx = (idx + 1) % capacity)
+        for (u32 idx = hashFn(key) % capacity; hasVal[idx]; idx = (idx + 1) % capacity)
         {
             if (keys[idx] == key)
                 return vals[idx];
@@ -2685,8 +2717,9 @@ struct HgHashMap {
      * Parameters
      * - The key to lookup, must be in the hash map
      */
-    const Value& operator[](const Key& key) const {
-        for (usize idx = hashFn(key) % capacity; hasVal[idx]; idx = (idx + 1) % capacity)
+    const Value& operator[](const Key& key) const
+    {
+        for (u32 idx = hashFn(key) % capacity; hasVal[idx]; idx = (idx + 1) % capacity)
         {
             if (keys[idx] == key)
                 return vals[idx];
@@ -2704,7 +2737,7 @@ struct HgHashMap {
     void forEach(Fn fn)
     {
         static_assert(std::is_invocable_r_v<void, Fn, const Key&, Value&>);
-        for (usize i = 0; i < capacity; ++i)
+        for (u32 i = 0; i < capacity; ++i)
         {
             if (hasVal[i])
                 fn(keys[i], vals[i]);
@@ -2715,7 +2748,8 @@ struct HgHashMap {
 /**
  * A high precision clock for timers and game deltas
  */
-struct HgClock {
+struct HgClock
+{
     /**
      * The begin time
      */
@@ -2733,16 +2767,17 @@ struct HgClock {
 /**
  * Returns the number of concurrent threads available in hardware
  */
-usize hgHardwareThreadCount();
+u32 hgHardwareThreadCount();
 
 /**
  * A spinlock fence for basic thread synchronization
  */
-struct HgFence {
+struct HgFence
+{
     /**
      * The number of events the fence is waiting on
      */
-    std::atomic<u64> counter{0};
+    std::atomic<u32> counter{0};
 
     /**
      * Add more events for the fence to wait on
@@ -2750,7 +2785,7 @@ struct HgFence {
      * Parameters
      * - count The number of added events
      */
-    void add(usize count);
+    void add(u32 count);
 
     /**
      * Signal that events have completed
@@ -2758,7 +2793,7 @@ struct HgFence {
      * Parameters
      * - count The number of signaled events
      */
-    void signal(usize count);
+    void signal(u32 count);
 
     /**
      * Returns whether all work has been completed
@@ -2790,7 +2825,7 @@ struct HgFence {
  * - queueSize The max capacity of the thread work queue
  * - threadCount The number of threads to spawn in the pool
  */
-void hgInitThreadPool(HgArena* arena, usize queueSize, usize threadCount);
+void hgInitThreadPool(HgArena* arena, u32 queueSize, u32 threadCount);
 
 /**
  * Deinitialize the thread pool
@@ -2819,7 +2854,7 @@ bool hgHelpThreadPool(HgFence& fence, f64 timeout);
  * - data The data passed to the function
  * - work The function to be executed
  */
-void hgCallPar(HgFence* fences, usize fenceCount, void* data, void (*fn)(void*));
+void hgCallPar(HgFence* fences, u32 fenceCount, void* data, void (*fn)(void*));
 
 /**
  * Iterates in parallel over a function n times using the thread pool
@@ -2832,19 +2867,20 @@ void hgCallPar(HgFence* fences, usize fenceCount, void* data, void (*fn)(void*))
  * - fn The function to use to iterate, takes begin and end indicces
  */
 template<typename Fn>
-void hgForPar(usize n, usize chunkSize, Fn fn)
+void hgForPar(u64 n, u64 chunkSize, Fn fn)
 {
-    static_assert(std::is_invocable_r_v<void, Fn, usize, usize>);
+    static_assert(std::is_invocable_r_v<void, Fn, u64, u64>);
 
     HgArena* scratch = hgGetScratch();
     HgArenaScope scratchScope{scratch};
 
     HgFence fence;
-    for (usize i = 0; i < n; i += chunkSize)
+    for (u64 i = 0; i < n; i += chunkSize)
     {
-        struct Capture {
-            usize begin;
-            usize end;
+        struct Capture
+        {
+            u64 begin;
+            u64 end;
             Fn* fn;
         };
 
@@ -2854,7 +2890,7 @@ void hgForPar(usize n, usize chunkSize, Fn fn)
         data->fn = &fn;
 
         hgCallPar(&fence, 1, data, [](void* pdata)
-                {
+        {
             Capture* data = (Capture*)pdata;
             (*data->fn)(data->begin, data->end);
         });
@@ -2869,7 +2905,7 @@ void hgForPar(usize n, usize chunkSize, Fn fn)
  * - arena The arena to allocate from
  * - queueSize The max concurrent request capacity
  */
-void hgInitIOThread(HgArena* arena, usize queueSize);
+void hgInitIOThread(HgArena* arena, u32 queueSize);
 
 /**
  * Deinitializes the IO thread
@@ -2888,7 +2924,7 @@ void hgDeinitIOThread();
  */
 void hgRequestIO(
     HgFence* fences,
-    usize fenceCount,
+    u32 fenceCount,
     void* resource,
     HgStringView path,
     void (*fn)(void* resource, HgStringView path));
@@ -2909,7 +2945,8 @@ constexpr HgResource hgResourceID(HgStringView name)
 /**
  * A resource manager
  */
-struct HgResourceManager {
+struct HgResourceManager
+{
     /**
      * The reference count for each resource
      */
@@ -2925,15 +2962,15 @@ struct HgResourceManager {
     /**
      * The size of each resource in bytes
      */
-    usize width;
+    u32 width;
     /**
      * The current number of resources that are stored
      */
-    usize count;
+    u32 count;
     /**
      * The max number of resources
      */
-    usize capacity;
+    u32 capacity;
 
     /**
      * Creates a new resource manager
@@ -2942,7 +2979,7 @@ struct HgResourceManager {
      * - resourceWidth The size in bytes of each resource
      * - capacity The initial number of slots
      */
-    static HgResourceManager create(usize resourceWidth, usize capacity = 128);
+    static HgResourceManager create(u32 resourceWidth, u32 capacity = 128);
 
     /**
      * Free the resource manager's memory
@@ -2956,7 +2993,7 @@ struct HgResourceManager {
      * - arena The arena to allocate from
      * - newSize The new number of slots
      */
-    void resize(usize newSize);
+    void resize(u32 newSize);
 
     /**
      * Empties all slots
@@ -2969,7 +3006,7 @@ struct HgResourceManager {
      * Returns
      * - The new index of the resource
      */
-    usize add(HgResource id);
+    u32 add(HgResource id);
 
     /**
      * Remove a resource from the resource manager
@@ -3016,7 +3053,7 @@ struct HgResourceManager {
     void forEach(Fn fn)
     {
         static_assert(std::is_invocable_r_v<void, Fn, HgResource, void*>);
-        for (usize i = 0; i < capacity; ++i)
+        for (u32 i = 0; i < capacity; ++i)
         {
             if (refCounts[i] != (u32)-1 && refCounts[i] > 0)
                 fn(ids[i], (u8*)resources + i * width);
@@ -3027,7 +3064,8 @@ struct HgResourceManager {
 /**
  * A loaded binary file
  */
-struct HgBinary {
+struct HgBinary
+{
     /**
      * The data in the file
      */
@@ -3035,7 +3073,7 @@ struct HgBinary {
     /**
      * The size of the file in bytes
      */
-    usize size;
+    u64 size;
 
     /**
      * Resize the file
@@ -3044,7 +3082,7 @@ struct HgBinary {
      * - arena The arena to allocate from
      * - newSize The new size of the file in bytes
      */
-    void resize(HgArena* arena, usize newSize)
+    void resize(HgArena* arena, u64 newSize)
     {
         data = hgRealloc(arena, data, size, newSize, 1);
         size = newSize;
@@ -3058,7 +3096,8 @@ struct HgBinary {
      * - dst A pointer to store the read data
      * - size The size in bytes to read
      */
-    void read(usize idx, void* dst, usize len) const {
+    void read(u64 idx, void* dst, u64 len) const
+    {
         hgAssert(idx + len <= size);
         memcpy(dst, (u8*)data + idx, len);
     }
@@ -3070,7 +3109,8 @@ struct HgBinary {
      * - idx The index into the file in bytes to read from
      */
     template<typename T>
-    T read(usize idx) const {
+    T read(u64 idx) const
+    {
         T ret;
         read(idx, &ret, sizeof(T));
         return ret;
@@ -3084,7 +3124,7 @@ struct HgBinary {
      * - src The data to write
      * - size The size of the data in bytes
      */
-    void overwrite(usize idx, const void* src, usize len)
+    void overwrite(u64 idx, const void* src, u64 len)
     {
         hgAssert(idx + len <= size);
         memcpy((u8*)data + idx, src, len);
@@ -3098,7 +3138,7 @@ struct HgBinary {
      * - src The data to write
      */
     template<typename T>
-    void overwrite(usize idx, const T& src)
+    void overwrite(u64 idx, const T& src)
     {
         overwrite(idx, &src, sizeof(T));
     }
@@ -3156,7 +3196,7 @@ void hgLoadEmptyResource(HgResource id);
  * - id The resource to load into
  * - path The filepath to load from
  */
-void hgLoadResource(HgFence* fences, usize fenceCount, HgResource id, HgStringView path);
+void hgLoadResource(HgFence* fences, u32 fenceCount, HgResource id, HgStringView path);
 
 /**
  * Unloads a resource (or just decrements the reference count)
@@ -3166,7 +3206,7 @@ void hgLoadResource(HgFence* fences, usize fenceCount, HgResource id, HgStringVi
  * - fenceCount The number of fences
  * - id The resource to load into
  */
-void hgUnloadResource(HgFence* fences, usize fenceCount, HgResource id);
+void hgUnloadResource(HgFence* fences, u32 fenceCount, HgResource id);
 
 /**
  * Stores a resource to disc
@@ -3177,7 +3217,7 @@ void hgUnloadResource(HgFence* fences, usize fenceCount, HgResource id);
  * - id The resource to load into
  * - path The filepath to store to
  */
-void hgStoreResource(HgFence* fences, usize fenceCount, HgResource id, HgStringView path);
+void hgStoreResource(HgFence* fences, u32 fenceCount, HgResource id, HgStringView path);
 
 /**
  * Get a resource from the global store
@@ -3192,22 +3232,24 @@ void hgStoreResource(HgFence* fences, usize fenceCount, HgResource id, HgStringV
 HgBinary* hgGetResource(HgResource id);
 
 /**
- * A texture resource
+ * An image resource
  */
-struct HgTextureData {
+struct HgImageData
+{
     /**
      * The identifier prepended to the info
      */
-    static constexpr char textureIdentifier[] = "HGTEX";
+    static constexpr char imageIdentifier[] = "HGIMAGE";
 
     /**
-     * The info prepended to a texture resource
+     * The info prepended to an image resource
      */
-    struct Info {
+    struct Info
+    {
         /**
-         * The identifier to ensure the file is a Hurdy Gurdy texture
+         * The identifier to ensure the file is a Hurdy Gurdy image
          */
-        char identifier[sizeof(textureIdentifier)];
+        char identifier[sizeof(imageIdentifier)];
         /**
          * The format of each pixel
          */
@@ -3227,26 +3269,26 @@ struct HgTextureData {
         /**
          * The index of the pixels
          */
-        usize pixelsBegin;
+        u64 pixelsBegin;
     };
 
     /**
-     * The texture data
+     * The image data
      */
     HgBinary bin;
 
     /**
      * Construct uninitialized
      */
-    HgTextureData() = default;
+    HgImageData() = default;
 
     /**
      * Implicit conversion from binary file
      */
-    HgTextureData(HgBinary fileVal) : bin(fileVal) {}
+    HgImageData(HgBinary fileVal) : bin(fileVal) {}
 
     /**
-     * Get the texture info from the file
+     * Get the image info from the file
      *
      * Parameters
      * - format Where to store the format
@@ -3266,7 +3308,7 @@ struct HgTextureData {
 };
 
 /**
- * Load an external texture file into a resource in the Hurdy Gurdy format
+ * Load an external image file into a resource in the Hurdy Gurdy format
  *
  * Parameters
  * - fences The fences to wait on
@@ -3274,10 +3316,10 @@ struct HgTextureData {
  * - id The resource to load into
  * - path The path of the file to import
  */
-void hgImportPng(HgFence* fences, usize fenceCount, HgResource id, HgStringView path);
+void hgImportPng(HgFence* fences, u32 fenceCount, HgResource id, HgStringView path);
 
 /**
- * Store a texture resource onto disc in an external file format
+ * Store a image resource onto disc in an external file format
  *
  * Parameters
  * - fences The fences to wait on
@@ -3285,12 +3327,13 @@ void hgImportPng(HgFence* fences, usize fenceCount, HgResource id, HgStringView 
  * - id The resource to export
  * - path The path of the file to export to
  */
-void hgExportPng(HgFence* fences, usize fenceCount, HgResource id, HgStringView path);
+void hgExportPng(HgFence* fences, u32 fenceCount, HgResource id, HgStringView path);
 
 /**
  * A vertex in a model
  */
-struct HgVertex {
+struct HgModelVertex
+{
     /**
      * The vertex position
      */
@@ -3312,7 +3355,8 @@ struct HgVertex {
 /**
  * A 3d model resource
  */
-struct HgModelData {
+struct HgModelData
+{
     /**
      * The identifier prepended to the info
      */
@@ -3321,7 +3365,8 @@ struct HgModelData {
     /**
      * The info prendeded to a model resources
      */
-    struct Info {
+    struct Info
+    {
         /**
          * The identifier to ensure the file is a Hurdy Gurdy model
          */
@@ -3345,11 +3390,11 @@ struct HgModelData {
         /**
          * The file index of the first vertex
          */
-        usize verticesBegin;
+        u64 verticesBegin;
         /**
          * The file index of the first geometry index
          */
-        usize indicesBegin;
+        u64 indicesBegin;
     };
 
     /**
@@ -3401,7 +3446,7 @@ struct HgModelData {
  * - id The resource to load to
  * - path The path of the file to import
  */
-void hgImportGltf(HgFence* fences, usize fenceCount, HgResource id, HgStringView path);
+void hgImportGltf(HgFence* fences, u32 fenceCount, HgResource id, HgStringView path);
 
 /**
  * Store a model resource onto disc in an external file format : TODO
@@ -3412,7 +3457,7 @@ void hgImportGltf(HgFence* fences, usize fenceCount, HgResource id, HgStringView
  * - id The resource to export
  * - path The path of the file to export to
  */
-void hgExportGltf(HgFence* fences, usize fenceCount, HgResource id, HgStringView path);
+void hgExportGltf(HgFence* fences, u32 fenceCount, HgResource id, HgStringView path);
 
 /**
  * Initialize all gpu resource managers
@@ -3431,7 +3476,8 @@ void hgDeinitGpuResources();
 /**
  * A texture stored on the GPU
  */
-struct HgGpuTexture {
+struct HgTextureResource
+{
     /**
      * The allocation
      */
@@ -3469,12 +3515,12 @@ struct HgGpuTexture {
 /**
  * Initialize gpu textures
  */
-void HgInitGpuTextures();
+void HgInitTextures();
 
 /**
  * Deinitialize gpu textures
  */
-void hgDeinitGpuTextures();
+void hgDeinitTextures();
 
 /**
  * Load a texture from the cpu to the gpu
@@ -3484,14 +3530,14 @@ void hgDeinitGpuTextures();
  *
  * Parameters
  * - id The resource to load
- * - filter The filter for the sampler
+ * - sampler The sampler the texture should use
  */
-void hgLoadGpuTexture(HgResource id, VkFilter filter);
+void hgLoadTexture(HgResource id, VkSampler sampler);
 
 /**
  * Unload a texture from the gpu
  */
-void hgUnloadGpuTexture(HgResource id);
+void hgUnloadTexture(HgResource id);
 
 /**
  * Gets a gpu texture resource
@@ -3499,12 +3545,13 @@ void hgUnloadGpuTexture(HgResource id);
  * Returns
  * - The gpu texture, or nullptr if it is not loaded
  */
-HgGpuTexture* hgGetGpuTexture(HgResource id);
+HgTextureResource* hgGetTexture(HgResource id);
 
 /**
  * A 3D model stored on the gpu
  */
-struct HgGpuModel {
+struct HgModelResource
+{
     /**
      * The allocation
      */
@@ -3538,12 +3585,12 @@ struct HgGpuModel {
 /**
  * Initialize gpu models
  */
-void hgInitGpuModels();
+void hgInitModels();
 
 /**
  * Deinitialize gpu models
  */
-void hgDeinitGpuModels();
+void hgDeinitModels();
 
 /**
  * Load a model from the cpu to the gpu
@@ -3551,12 +3598,12 @@ void hgDeinitGpuModels();
  * Note, if the model is not already loaded to the gpu, it must be available
  * on the cpu to load from
  */
-void hgLoadGpuModel(HgResource id);
+void hgLoadModel(HgResource id);
 
 /**
  * Unload a model from the gpu
  */
-void hgUnloadGpuModel(HgResource id);
+void hgUnloadModel(HgResource id);
 
 /**
  * Gets a gpu model resource
@@ -3564,7 +3611,7 @@ void hgUnloadGpuModel(HgResource id);
  * Returns
  * - The gpu model, or nullptr if it is not loaded
  */
-HgGpuModel* hgGetGpuModel(HgResource id);
+HgModelResource* hgGetModel(HgResource id);
 
 /**
  * Creates a new id for a component
@@ -3585,7 +3632,8 @@ inline u32 hgComponentID = hgCreateComponentID(sizeof(T));
 /**
  * An entity in the ecs
  */
-struct HgEntity {
+struct HgEntity
+{
     /**
      * The entity id, defaults to null
      */
@@ -3635,11 +3683,13 @@ constexpr bool operator!=(HgEntity lhs, HgEntity rhs)
 /**
  * An entity component system
  */
-struct HgECS {
+struct HgECS
+{
     /**
      * A system of components
      */
-    struct System {
+    struct System
+    {
         /**
          * The component lookup from entity index
          */
@@ -3867,7 +3917,7 @@ struct HgECS {
     /**
      * Find the id of the system with the fewest elements
      */
-    u32 findSmallest(u32* ids, usize idCount);
+    u32 findSmallest(u32* ids, u32 idCount);
 
     /**
      * Find the id of the system with the fewest elements
@@ -3969,12 +4019,12 @@ struct HgECS {
      * - fn The function to call
      */
     template<typename T, typename Fn>
-    void forParSingle(u32 chunkSize, Fn& fn)
+    void forParSingle(u64 chunkSize, Fn& fn)
     {
         static_assert(std::is_invocable_r_v<void, Fn, HgEntity, T&>);
 
-        hgForPar(count<T>(), chunkSize, [&](usize begin, usize end)
-                {
+        hgForPar(count<T>(), chunkSize, [&](u64 begin, u64 end)
+        {
             HgEntity* e = entities<T>() + begin;
             HgEntity* eEnd = entities<T>() + end;
             T* c = components<T>() + begin;
@@ -3997,13 +4047,13 @@ struct HgECS {
      * - fn The function to call
      */
     template<typename... Ts, typename Fn>
-    void forParMulti(u32 chunkSize, Fn& fn)
+    void forParMulti(u64 chunkSize, Fn& fn)
     {
         static_assert(std::is_invocable_r_v<void, Fn, HgEntity, Ts&...>);
 
         u32 id = findSmallest<Ts...>();
-        hgForPar(systems[id].count, chunkSize, [&](usize begin, usize end)
-                {
+        hgForPar(systems[id].count, chunkSize, [&](u64 begin, u64 end)
+        {
             HgEntity* e = systems[id].entities + begin;
             HgEntity* eEnd = systems[id].entities + end;
             for (; e != eEnd; ++e)
@@ -4028,7 +4078,7 @@ struct HgECS {
      * - fn The function to call
      */
     template<typename... Ts, typename Fn>
-    void forPar(u32 chunkSize, Fn fn)
+    void forPar(u64 chunkSize, Fn fn)
     {
         static_assert(sizeof...(Ts) != 0);
 
@@ -4067,7 +4117,8 @@ struct HgECS {
 /**
  * A node component for entities in a hierarchy
  */
-struct HgHierarchy {
+struct HgHierarchy
+{
     /**
      * The entity's parent, if any
      */
@@ -4117,7 +4168,8 @@ void hgDestroyEntity(HgECS* ecs, HgEntity e);
 /**
  * The transform component for entities
  */
-struct HgTransform {
+struct HgTransform
+{
     /**
      * The entity's position in the world
      * - x: -left, +right
@@ -4165,7 +4217,8 @@ void hgMoveEntity(HgECS* ecs, HgEntity e, const HgVec3& dpos, const HgVec3& dsca
 /**
  * A sprite component rendered by the 2d pipeline
  */
-struct HgSprite {
+struct HgSprite2D
+{
     /**
      * The texture to draw from
      */
@@ -4232,17 +4285,27 @@ void hgDraw2D(HgECS* ecs, VkCommandBuffer cmd);
 /**
  * A model component rendered by the 3d pipeline
  */
-struct HgModel3D {
+struct HgModel3D
+{
     /**
      * The model to render
      */
-    HgResource model;
+    HgResource modelResource;
+    // /**
+    //  * The model's color map
+    //  */
+    // HgResource colorMap;
+    // /**
+    //  * The model's normal map
+    //  */
+    // HgResource normalMap;
 };
 
 /**
  * A direction light component rendered by the 3d pipeline
  */
-struct HgDirLight3D {
+struct HgDirLight3D
+{
     /**
      * The direction of the light
      */
@@ -4256,7 +4319,8 @@ struct HgDirLight3D {
 /**
  * A point light component rendered by the 3d pipeline
  */
-struct HgPointLight3D {
+struct HgPointLight3D
+{
     /**
      * The color of the light
      */
@@ -4318,326 +4382,6 @@ void hgUpdateView3D(const HgMat4& view);
 void hgDraw3D(HgECS* ecs, VkCommandBuffer cmd);
 
 /**
- * The image id used by HgRenderer
- */
-using HgImageRenderID = u64;
-
-/**
- * The buffer id used by HgRenderer
- */
-using HgBufferRenderID = u64;
-
-/**
- * A rendering attachment
- */
-struct HgRenderAttachment {
-    /**
-     * The image attached
-     */
-    HgImageRenderID image = (u64)-1;
-    /**
-     * How the image will be loaded
-     */
-    VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    /**
-     * How the image will be stored
-     */
-    VkAttachmentStoreOp storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    /**
-     * What to clear the image to if cleared
-     */
-    VkClearValue clearValue = {};
-};
-
-/**
- * A render pass description
- */
-struct HgRenderPass {
-    /**
-     * The uniforms buffer dependencies
-     */
-    const HgBufferRenderID* uniformBuffers = nullptr;
-    /**
-     * The number of uniform buffers
-     */
-    u32 uniformBufferCount = 0;
-    /**
-     * The storage buffer dependencies
-     */
-    const HgBufferRenderID* storageBuffers = nullptr;
-    /**
-     * The number of storage buffers
-     */
-    u32 storageBufferCount = 0;
-    /**
-     * The sampled image dependencies
-     */
-    const HgImageRenderID* sampledImages = nullptr;
-    /**
-     * The number of sampled images
-     */
-    u32 sampledImageCount = 0;
-    /**
-     * The number of layers in each color attachment to write to
-     */
-    u32 layerCount = 1;
-    /**
-     * The color images to write to
-     */
-    const HgRenderAttachment* colorAttachments = nullptr;
-    /**
-     * The number of color attachments
-     */
-    u32 colorAttachmentCount = 0;
-    /**
-     * The depth attachment, if any
-     */
-    HgRenderAttachment depthAttachment = {};
-    /**
-     * The stencil attachment, if any
-     */
-    HgRenderAttachment stencilAttachment = {};
-};
-
-/**
- * Where resources used in rendering can be used
- */
-enum class HgRenderUsage {
-    none = 0,
-    vertexBuffer,
-    indexBuffer,
-    graphicsShader,
-    graphicsUniformBuffer,
-    computeShader,
-    computeUniformBuffer,
-    colorAttachment,
-    depthAttachment,
-    stencilAttachment,
-    transfer,
-    presentSrc,
-    count,
-};
-
-/**
- * How resources used in rendering can be accessed
- */
-enum class HgRenderAccess {
-    none = 0x0,
-    read = 0x1,
-    write = 0x2,
-    readWrite = read | write,
-};
-
-/**
- * An image dependency barrier
- */
-struct HgImageBarrier {
-    /**
-     * The image to sychronize
-     */
-    HgImageRenderID image = (u64)-1;
-    /**
-     * How the image will next be used
-     */
-    HgRenderUsage nextUsage = HgRenderUsage::none;
-    /**
-     * How the image will next be accessed
-     */
-    HgRenderAccess nextAccess = HgRenderAccess::none;
-};
-
-/**
- * A buffer dependency barrier
- */
-struct HgBufferBarrier {
-    /**
-     * The buffer to sychronize
-     */
-    HgBufferRenderID buffer = (u64)-1;
-    /**
-     * How the buffer will next be used
-     */
-    HgRenderUsage nextUsage = HgRenderUsage::none;
-    /**
-     * How the buffer will next be accessed
-     */
-    HgRenderAccess nextAccess = HgRenderAccess::none;
-};
-
-/**
- * A renderer to organize render passes and synchronize resources
- */
-struct HgRenderer {
-    /**
-     * An image resource
-     */
-    struct Image {
-        /**
-         * The image
-         */
-        VkImage handle;
-        /**
-         * The image view
-         */
-        VkImageView view;
-        /**
-         * The image subresource
-         */
-        VkImageSubresourceRange subresource;
-        /**
-         * The image's last usage
-         */
-        HgRenderUsage lastUsage;
-        /**
-         * The image's last access
-         */
-        HgRenderAccess lastAccess;
-    };
-
-    /**
-     * A buffer resource
-     */
-    struct Buffer {
-        /**
-         * The buffer
-         */
-        VkBuffer handle;
-        /**
-         * The offset into the buffer in bytes
-         */
-        u64 offset;
-        /**
-         * The size of the buffer in bytes
-         */
-        u64 size;
-        /**
-         * The buffer's last usage
-         */
-        HgRenderUsage lastUsage;
-        /**
-         * The buffer's last access
-         */
-        HgRenderAccess lastAccess;
-    };
-
-    /**
-     * The buffer resources
-     */
-    Buffer* buffers;
-    /**
-     * The number of active buffer resources
-     */
-    u32 bufferCount;
-    /**
-     * The max buffer resources
-     */
-    u32 bufferCapacity;
-    /**
-     * The image resources
-     */
-    Image* images;
-    /**
-     * The number of active image resources
-     */
-    u32 imageCount;
-    /**
-     * The max image resources
-     */
-    u32 imageCapacity;
-
-    /**
-     * Create a new renderer
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - maxImages The max number of image resources
-     * - maxBuffers The max number of buffer resources
-     */
-    static HgRenderer create(HgArena* arena, u32 maxImages, u32 maxBuffers);
-
-    /**
-     * Removes all resources
-     */
-    void reset();
-
-    /**
-     * Add a buffer resource
-     *
-     * Parameters
-     * - buffer The buffer to add, must not be nullptr
-     * - offset The offset into the buffer in bytes
-     * - size The size of the buffer in bytes
-     * - previousUsage The last usage of the buffer, if any
-     * - previousAccess The last access of the buffer, if any
-     *
-     * Returns
-     * - The buffer resource's id
-     */
-    HgBufferRenderID addBuffer(
-        VkBuffer buffer,
-        u64 offset,
-        u64 size,
-        HgRenderUsage previousUsage = HgRenderUsage::none,
-        HgRenderAccess previousAccess = HgRenderAccess::none);
-
-    /**
-     * Add a image resource
-     *
-     * Parameters
-     * - image The image to add, must not be nullptr
-     * - view The image's view, must not be nullptr
-     * - subresource The subresource of the image
-     * - previousUsage The last usage of the image, if any
-     * - previousAccess The last access of the image, if any
-     *
-     * Returns
-     * - The image resource's id
-     */
-    HgImageRenderID addImage(
-        VkImage image,
-        VkImageView view,
-        VkImageSubresourceRange subresource,
-        HgRenderUsage previousUsage = HgRenderUsage::none,
-        HgRenderAccess previousAccess = HgRenderAccess::none);
-
-    /**
-     * Creates a barrier for resource uses that are not part of a render pass
-     *
-     * Parameters
-     * - cmd The command buffer
-     * - bufferBarriers The buffer barriers
-     * - bufferBarrierCount The number of buffer barriers
-     * - imageBarriers The image barriers
-     * - imageBarrierCount The number of image barriers
-     */
-    void barrier(
-        VkCommandBuffer cmd,
-        const HgBufferBarrier* bufferBarriers,
-        u32 bufferBarrierCount,
-        const HgImageBarrier* imageBarriers,
-        u32 imageBarrierCount);
-
-    /**
-     * Begins a render pass
-     *
-     * Parameters
-     * - cmd The command buffer
-     * - width The width of the render area
-     * - height The height of the render area
-     * - pass The render pass description
-     */
-    void beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgRenderPass& pass);
-
-    /**
-     * Ends the render pass
-     *
-     * Parameters
-     * - cmd The command buffer
-     */
-    void endPass(VkCommandBuffer cmd);
-};
-
-/**
  * Initializes the graphics subsystem, loading all global Vulkan resources
  */
 void hgInitGraphics();
@@ -4653,7 +4397,7 @@ void hgDeinitGraphics();
  * Parameters
  * - instance The Vulkan instance, must not be nullptr
  */
-void hgVkLoadInstanceFuncs(VkInstance instance);
+void hgLoadVulkanInstanceFuncs(VkInstance instance);
 
 /**
  * Loads the Vulkan functions which use the device
@@ -4661,7 +4405,7 @@ void hgVkLoadInstanceFuncs(VkInstance instance);
  * Parameters
  * - device The Vulkan device, must not be nullptr
  */
-void hgVkLoadDeviceFuncs(VkDevice device);
+void hgLoadVulkanDeviceFuncs(VkDevice device);
 
 /**
  * The global Vulkan instance
@@ -4728,7 +4472,7 @@ u32 hgVkFormatToSize(VkFormat format);
  * Returns
  * - The created VkInstance, will never be nullptr
  */
-VkInstance hgVkCreateInstance(HgStringView* extensions, u32 extensionCount);
+VkInstance hgCreateVkInstance(HgStringView* extensions, u32 extensionCount);
 
 /**
  * Creates a Vulkan debug messenger
@@ -4736,7 +4480,7 @@ VkInstance hgVkCreateInstance(HgStringView* extensions, u32 extensionCount);
  * Returns
  * - The created debug messenger, or nullptr if debug messenger is disabled
  */
-VkDebugUtilsMessengerEXT hgVkCreateDebugMessenger();
+VkDebugUtilsMessengerEXT hgCreateVkDebugUtilsMessenger();
 
 /**
  * Find the first queue family index which supports the the queue flags
@@ -4749,7 +4493,7 @@ VkDebugUtilsMessengerEXT hgVkCreateDebugMessenger();
  * Returns
  * - Whether a queue family was found and stored in queueFamily
  */
-bool hgVkFindQueueFamily(VkPhysicalDevice gpu, u32* queueFamily, VkQueueFlags queueFlags);
+bool hgFindVkQueueFamily(VkPhysicalDevice gpu, u32* queueFamily, VkQueueFlags queueFlags);
 
 /**
  * Finds a Vulkan physical device with a general purpose queue family
@@ -4761,7 +4505,7 @@ bool hgVkFindQueueFamily(VkPhysicalDevice gpu, u32* queueFamily, VkQueueFlags qu
  * - The physical device
  * - nullptr if none was found
  */
-VkPhysicalDevice hgVkFindSingleQueuePhysicalDevice();
+VkPhysicalDevice hgFindVkPhysicalDevice();
 
 /**
  * Creates a Vulkan logical device with a single general purpose queue
@@ -4771,26 +4515,669 @@ VkPhysicalDevice hgVkFindSingleQueuePhysicalDevice();
  * Returns
  * - The physical device, will never be nullptr
  */
-VkDevice hgVkCreateSingleQueueDevice();
-
-// find gpu with multiple potential queues : TODO
-// create device with multiple potential queues : TODO
+VkDevice hgCreateVkDevice();
 
 /**
- * Begin a command buffer to be executed once
+ * Attempts to find the index of a memory type which has the desired flags and
+ * does not have the undesired flags
  *
- * Returns
- * - The command buffer to record, will never be nullptr
- */
-VkCommandBuffer hgVkBeginCommands();
-
-/**
- * Execute the command buffer and wait for completion
+ * Note, if no such memory type exists, the next best thing will be found
+ *
+ * The bitmask must not mask out all memory types
  *
  * Parameters
- * - cmd The command buffer from hgvkBeginCommands, must not be nullptr
+ * - bitmask A bitmask of which memory types cannot be used, must not be 0
+ * - preferredFlags The flags which the type should have, though may not
+ * - unpreferredFlags The flags which the type should not have, though may have
+ *
+ * Returns
+ * - The found index of the memory type
  */
-void hgVkEndAndExecute(VkCommandBuffer cmd);
+u32 hgFindVkMemoryTypeIndex(
+    u32 bitmask,
+    VkMemoryPropertyFlags preferredFlags = 0,
+    VkMemoryPropertyFlags unpreferredFlags = 0);
+
+// Vulkan allocator : TODO?
+
+/**
+ * Create a Vulkan buffer
+ *
+ * Parameters
+ * - buffer A pointer to return the created buffer
+ * - allocation A pointer to return the created allocation
+ * - size The size in bytes of the buffer
+ * - usage How the buffer will be used
+ * - memory The memory flags for VMA
+ */
+void hgCreateVkBuffer(
+    VkBuffer* buffer,
+    VmaAllocation* allocation,
+    u64 size,
+    VkBufferUsageFlags usage,
+    VmaAllocationCreateFlags memory = 0);
+
+/**
+ * How an HgBuffer will be accessed
+ */
+enum HgBufferMemoryUsage
+{
+    HgBufferMemoryUsage_deviceOnly,
+    HgBufferMemoryUsage_frequentUpdate,
+    HgBufferMemoryUsage_stageWrite,
+    HgBufferMemoryUsage_stageRead,
+};
+
+/**
+ * How an HgBuffer can be accessed
+ */
+enum HgBufferMemoryAccess
+{
+    HgBufferMemoryAccess_device = 0x1,
+    HgBufferMemoryAccess_hostWrite = 0x2,
+    HgBufferMemoryAccess_hostRead = 0x4,
+};
+
+/**
+ * A gpu buffer
+ */
+struct HgBuffer
+{
+    /**
+     * The Vulkan buffer
+     */
+    VkBuffer buffer;
+    /**
+     * The buffer's allocation
+     */
+    VmaAllocation alloc;
+    /**
+     * The size of the buffer
+     */
+    u64 size;
+    /**
+     * How the buffer can be accessed
+     */
+    HgBufferMemoryAccess access;
+};
+
+/**
+ * Create a gpu buffer
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - size The size in bytes of the buffer
+ * - usage How the buffer will be used
+ * - access How the buffer should be accessed
+ */
+HgBuffer* hgCreateBuffer(
+    HgArena* arena,
+    u64 size,
+    VkBufferUsageFlags usage,
+    HgBufferMemoryUsage access = HgBufferMemoryUsage_deviceOnly);
+
+/**
+ * Destroy a gpu buffer
+ */
+void hgDestroyBuffer(HgBuffer* buffer);
+
+/**
+ * Writes to a Vulkan device local buffer through a staging buffer
+ *
+ * Parameters
+ * - dst The buffer to write to, must not be nullptr
+ * - offset The offset in bytes into the dst buffer
+ * - src The data to write, must not be nullptr
+ * - size The size in bytes to write
+ */
+void hgWriteVkBuffer(VkBuffer dst, u64 offset, const void* src, u64 size);
+
+/**
+ * Writes to a gpu buffer
+ *
+ * Parameters
+ * - dst The buffer to write to, must not be nullptr
+ * - offset The offset in bytes into the dst buffer
+ * - src The data to write, must not be nullptr
+ * - size The size in bytes to write
+ */
+void hgWriteBuffer(HgBuffer* dst, u64 offset, const void* src, u64 size);
+
+/**
+ * Reads from a Vulkan device local buffer through a staging buffer
+ *
+ * Parameters
+ * - dst The location to write to, must not be nullptr
+ * - src The buffer to read from, must not be nullptr
+ * - offset The offset in bytes into the dst buffer
+ * - size The size in bytes to read
+ */
+void hgReadVkBuffer(void* dst, VkBuffer src, u64 offset, u64 size);
+
+/**
+ * Reads from a Vulkan device local buffer through a staging buffer
+ *
+ * Parameters
+ * - dst The location to write to, must not be nullptr
+ * - src The buffer to read from, must not be nullptr
+ * - offset The offset in bytes into the dst buffer
+ * - size The size in bytes to read
+ */
+void hgReadBuffer(void* dst, HgBuffer* src, u64 offset, u64 size);
+
+/**
+ * Config for hgCreateVkImage
+ */
+struct HgCreateVkImage
+{
+    /**
+     * The dimensions of the image
+     */
+    VkImageType type = VK_IMAGE_TYPE_2D;
+    /**
+     * The width of the image
+     */
+    u32 width = 1;
+    /**
+     * The height of the image
+     */
+    u32 height = 1;
+    /**
+     * The depth of the image
+     */
+    u32 depth = 1;
+    /**
+     * The format of the image, must not be UNDEFINED
+     */
+    VkFormat format = VK_FORMAT_UNDEFINED;
+    /**
+     * The number of mip level
+     */
+    u32 mipLevels = 1;
+    /**
+     * The number of array layers
+     */
+    u32 arrayLayers = 1;
+    /**
+     * The number of MSAA samples
+     */
+    VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
+    /**
+     * How the image will be used, must not be 0
+     */
+    VkImageUsageFlags usage = 0;
+};
+
+/**
+ * Create a Vulkan image
+ *
+ * Parameters
+ * - image A pointer to return the created image
+ * - allocation A pointer to return the created allocation
+ * - create The image create info
+ */
+void hgCreateVkImage(VkImage* image, VmaAllocation* allocation, const HgCreateVkImage& create);
+
+/**
+ * A gpu image
+ */
+struct HgImage
+{
+    /**
+     * The Vulkan image
+     */
+    VkImage image;
+    /**
+     * The image's allocation
+     */
+    VmaAllocation alloc;
+    /**
+     * The type of image
+     */
+    VkImageType type;
+    /**
+     * The pixel format
+     */
+    VkFormat format;
+    /**
+     * The width in pixels
+     */
+    u32 width;
+    /**
+     * The height in pixels
+     */
+    u32 height;
+    /**
+     * The depth in pixels
+     */
+    u32 depth;
+    /**
+     * The number of mipmap levels
+     */
+    u32 mipLevels;
+    /**
+     * The number of array layers
+     */
+    u32 arrayLayers;
+    /**
+     * The number of msaa samples
+     */
+    VkSampleCountFlagBits msaaSamples;
+};
+
+/**
+ * Config for hgCreateVkImage
+ */
+struct HgCreateImage
+{
+    /**
+     * The dimensions of the image
+     */
+    VkImageType type = VK_IMAGE_TYPE_2D;
+    /**
+     * The width of the image
+     */
+    u32 width = 1;
+    /**
+     * The height of the image
+     */
+    u32 height = 1;
+    /**
+     * The depth of the image
+     */
+    u32 depth = 1;
+    /**
+     * The format of the image, must not be UNDEFINED
+     */
+    VkFormat format = VK_FORMAT_UNDEFINED;
+    /**
+     * The number of mip level
+     */
+    u32 mipLevels = 1;
+    /**
+     * The number of array layers
+     */
+    u32 arrayLayers = 1;
+    /**
+     * The number of MSAA samples
+     */
+    VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
+    /**
+     * How the image will be used, must not be 0
+     */
+    VkImageUsageFlags usage = 0;
+};
+
+/**
+ * Create a gpu image
+ */
+HgImage* hgCreateImage(HgArena* arena, const HgCreateImage& create);
+
+/**
+ * Destroy a gpu image
+ */
+void hgDestroyImage(HgImage* image);
+
+/**
+ * Config for hgVkCreateImage
+ */
+struct HgCreateVkImageView
+{
+    /**
+     * The image to create a view of, must not be nullptr
+     */
+    VkImage image = nullptr;
+    /**
+     * The dimensions of the image
+     */
+    VkImageViewType type = VK_IMAGE_VIEW_TYPE_2D;
+    /**
+     * The format of the image, must not be UNDEFINED
+     */
+    VkFormat format = VK_FORMAT_UNDEFINED;
+    /**
+     * The subresource, aspect must not be 0
+     */
+    VkImageSubresourceRange subresource = {0, 0, 1, 0, 1};
+    /**
+     * The component swizzles
+     */
+    VkComponentMapping components = {};
+};
+
+/**
+ * Create a Vulkan image
+ */
+VkImageView hgCreateVkImageView(const HgCreateVkImageView& create);
+
+/**
+ * A view into a gpu image
+ */
+struct HgImageView
+{
+    /**
+     * The view
+     */
+    VkImageView view;
+    /**
+     * The image viewed
+     */
+    HgImage* image;
+    /**
+     * The type of view
+     */
+    VkImageViewType type;
+    /**
+     * The image aspect
+     */
+    VkImageAspectFlags aspectFlags;
+    /**
+     * The first mip level
+     */
+    u32 baseMipLevel;
+    /**
+     * The number of mip levels including the base
+     */
+    u32 levelCount;
+    /**
+     * The first array layer
+     */
+    u32 baseArrayLayer;
+    /**
+     * The number of array layers including the base
+     */
+    u32 layerCount;
+};
+
+/**
+ * Config for hgVkCreateImage
+ */
+struct HgCreateImageView
+{
+    /**
+     * The image to create a view of, must not be nullptr
+     */
+    HgImage* image = nullptr;
+    /**
+     * The dimensions of the image
+     */
+    VkImageViewType type = VK_IMAGE_VIEW_TYPE_2D;
+    /**
+     * The image aspect, must not be none
+     */
+    VkImageAspectFlags aspectFlags = VK_IMAGE_ASPECT_NONE;
+    /**
+     * The first mip level
+     */
+    u32 baseMipLevel = 0;
+    /**
+     * The number of mip levels including the base
+     */
+    u32 levelCount = 1;
+    /**
+     * The first array layer
+     */
+    u32 baseArrayLayer = 0;
+    /**
+     * The number of array layers including the base
+     */
+    u32 layerCount = 1;
+};
+
+/**
+ * Create a Vulkan image
+ */
+HgImageView* hgCreateImageView(
+    HgArena* arena,
+    HgImage* image,
+    VkImageViewType type,
+    VkImageSubresourceRange subresource);
+
+/**
+ * Config for hgCreateVkSampler
+ */
+struct HgCreateVkSampler
+{
+    /**
+     * The filter used for sampling
+     */
+    VkFilter filter;
+    /**
+     * How addresses past the edge are handled
+     */
+    VkSamplerAddressMode addressMode;
+    /**
+     * The border color, if addressMode uses a border
+     */
+    VkBorderColor borderColor;
+    /**
+     * The load bias
+     */
+    f32 mipLodBias = 0.0f;
+    /**
+     * The min clamp lod
+     */
+    f32 minLod = 0.0f;
+    /**
+     * The max clamp, or 1000.0f for no max
+     */
+    f32 maxLod = 1000.0f;
+};
+
+/**
+ * Create a Vulkan sampler
+ */
+VkSampler hgCreateVkSampler(const HgCreateVkSampler& create);
+
+/**
+ * Config for hgWriteVkImage
+ */
+struct HgWriteVkImage
+{
+    /**
+     * The image to write to, must not be nullptr
+     */
+    VkImage dstImage = nullptr;
+    /**
+     * The subresource of the image to write to
+     */
+    VkImageSubresourceLayers subresource = {0, 0, 0, 1};
+    /**
+     * The data to write, must not be nullptr
+     */
+    const void* srcData = nullptr;
+    /**
+     * The width of the image in pixels, must be greater than 0
+     */
+    u32 width = 1;
+    /**
+     * The width of the image in pixels, must be greater than 0
+     */
+    u32 height = 1;
+    /**
+     * The width of the image in pixels, must be greater than 0
+     */
+    u32 depth = 1;
+    /**
+     * The format of each pixel, must not be UNDEFINED
+     */
+    VkFormat format = VK_FORMAT_UNDEFINED;
+    /**
+     * The layout to transition to after transfering
+     */
+    VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
+};
+
+/**
+ * Writes to a Vulkan device local image through a staging buffer
+ */
+void hgWriteVkImage(const HgWriteVkImage& config);
+
+/**
+ * Writes to a Vulkan device local cubemap image through a staging buffer
+ *
+ * Note, config.width and config.height are interpreted as the width and height
+ * of each face of the cubemap and srcData is assumed to be layed out as:
+ *  #
+ * ####
+ *  #
+ */
+void hgWriteVkImageCubemap(const HgWriteVkImage &config);
+
+/**
+ * Write to a gpu image
+ *
+ * Parameters
+ * - dst The image to write to
+ * - subresource The subresource of the image to write to
+ * - src The data to read from
+ * - layout The final layout to set the image to
+ */
+void hgWriteImage(
+    HgImage* dst,
+    VkImageSubresourceLayers subresource,
+    const void* src,
+    VkImageLayout layout);
+
+/**
+ * Write to a gpu image cubemap
+ *
+ * Note, dst should have 6 array layers, all of which will be filled
+ *
+ * Note, srcData is assumed to be layed out as:
+ *  #
+ * ####
+ *  #
+ *
+ * Parameters
+ * - dst The image to write to
+ * - subresource The subresource of the image to write to
+ * - src The data to read from
+ * - layout The final layout to set the image to
+ */
+void hgWriteImageCubemap(
+    HgImage* dst,
+    VkImageSubresourceLayers subresource,
+    const void* src,
+    VkImageLayout layout);
+
+/**
+ * Config for hgReadVkImage
+ */
+struct HgReadVkImage
+{
+    /**
+     * The location to write to, must not be nullptr
+     */
+    void* dst = nullptr;
+    /**
+     * The image to read from, must not be nullptr
+     */
+    VkImage srcImage = nullptr;
+    /**
+     * The layout the image was in before reading, must not be UNDEFINED
+     */
+    VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
+    /**
+     * The subresource of the image to read from
+     */
+    VkImageSubresourceLayers subresource = {0, 0, 0, 1};
+    /**
+     * The width of the image in pixels, must be greater than 0
+     */
+    u32 width = 1;
+    /**
+     * The width of the image in pixels, must be greater than 0
+     */
+    u32 height = 1;
+    /**
+     * The width of the image in pixels, must be greater than 0
+     */
+    u32 depth = 1;
+    /**
+     * The format of each pixel, must not be UNDEFINED
+     */
+    VkFormat format = VK_FORMAT_UNDEFINED;
+};
+
+/**
+ * Reads from a Vulkan device local image through a staging buffer
+ */
+void hgReadVkImage(const HgReadVkImage& config);
+
+/**
+ * Read from a gpu image
+ *
+ * Parameters
+ * - src The pointer to write to
+ * - dst The image to read from
+ * - subresource The subresource of the image to read from
+ * - layout The final layout to set the image to
+ */
+void hgReadImage(
+    void* dst,
+    HgImage* src,
+    VkImageSubresourceLayers subresource,
+    VkImageLayout layout);
+
+/**
+ * Config for hgGenerateVkImageMipmaps
+ */
+struct HgGenerateVkImageMipmaps
+{
+    /**
+     * The image to generate mipmaps in, must not be nullptr
+     */
+    VkImage image = nullptr;
+    /**
+     * The image aspects to use, must not be 0
+     */
+    VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_NONE;
+    /**
+     * The layout the image was in before, must not be UNDEFINED
+     */
+    VkImageLayout oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    /**
+     * The layout the image will be set to, must not be UNDEFINED
+     */
+    VkImageLayout newLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    /**
+     * The width of the base level, must be greater than 0
+     */
+    u32 width = 1;
+    /**
+     * The width of the base level, must be greater than 0
+     */
+    u32 height = 1;
+    /**
+     * The width of the base level, must be greater than 0
+     */
+    u32 depth = 1;
+    /**
+     * The total number of mips in the image, must be greater than 0
+     */
+    u32 mipCount = 0;
+};
+
+/**
+ * Generates mipmaps from the base level
+ */
+void hgGenerateVkImageMipmaps(const HgGenerateVkImageMipmaps& config);
+
+/**
+ * Generates mipmaps from the base level
+ *
+ * Parameters
+ * - image The image to generate mipmaps for
+ * - aspectFlags The image aspect flags
+ * - oldLayout The layout the image was in before
+ * - newLayout The layout the image will be set to after
+ */
+void hgGenerateMipmaps(
+    HgImage* image,
+    VkImageAspectFlags aspectFlags,
+    VkImageLayout oldLayout,
+    VkImageLayout newLayout);
 
 /**
  * Create a descriptor set layout
@@ -4798,11 +5185,10 @@ void hgVkEndAndExecute(VkCommandBuffer cmd);
  * Parameters
  * - bindings The bindings in the descriptor set
  * - bindingCount The number of bindings
- *
- * Returns
- * - The created descriptor set layout
  */
-VkDescriptorSetLayout hgVkCreateDescriptorSetLayout(VkDescriptorSetLayoutBinding* bindings, u32 bindingCount);
+VkDescriptorSetLayout hgCreateVkDescriptorSetLayout(
+    const VkDescriptorSetLayoutBinding* bindings,
+    u32 bindingCount);
 
 /**
  * Create a pipeline layout
@@ -4812,11 +5198,8 @@ VkDescriptorSetLayout hgVkCreateDescriptorSetLayout(VkDescriptorSetLayoutBinding
  * - setLayoutCount The number of set layouts
  * - pushRanges The push constant ranges
  * - pushRangeCount The number of push ranges
- *
- * Returns
- * - The created pipeline layout
  */
-VkPipelineLayout hgVkCreatePipelineLayout(
+VkPipelineLayout hgCreateVkPipelineLayout(
     VkDescriptorSetLayout* setLayouts,
     u32 setLayoutCount,
     VkPushConstantRange* pushRanges,
@@ -4828,16 +5211,14 @@ VkPipelineLayout hgVkCreatePipelineLayout(
  * Parameters
  * - spirvCode The spirv bytecode of the shader
  * - codeSize The size of spirvCode in bytes
- *
- * Returns
- * - The create shader module
  */
-VkShaderModule hgVkCreateShaderModule(const u8* spirvCode, usize codeSize);
+VkShaderModule hgCreateVkShaderModule(const u8* spirvCode, u64 codeSize);
 
 /**
- * Configuration for Vulkan pipelines
+ * Config for hgCreateVkGraphicsPipeline
  */
-struct HgVkPipelineConfig {
+struct HgCreateVkGraphicsPipeline
+{
     /**
      * The format of the color attachments, none can be UNDEFINED
      */
@@ -4917,23 +5298,17 @@ struct HgVkPipelineConfig {
  *
  * Parameters
  * - config The pipeline configuration
- *
- * Returns
- * - The created graphics pipeline, will never be nullptr
  */
-VkPipeline hgVkCreateGraphicsPipeline(const HgVkPipelineConfig& config);
+VkPipeline hgCreateVkGraphicsPipeline(const HgCreateVkGraphicsPipeline& config);
 
 /**
  * Creates a compute pipeline
  *
  * Parameters
  * - layout The pipeline layout, must not be nullptr
- * - shader The shader module, must not be nullptr
- *
- * Returns
- * - The created compute pipeline, will never be nullptr
+ * - shader The compute shader, must not be nullptr
  */
-VkPipeline hgVkCreateComputePipeline(VkPipelineLayout layout, const VkShaderModule shader);
+VkPipeline hgCreateVkComputePipeline(VkPipelineLayout layout, const VkShaderModule shader);
 
 /**
  * Create a descriptor pool
@@ -4943,11 +5318,8 @@ VkPipeline hgVkCreateComputePipeline(VkPipelineLayout layout, const VkShaderModu
  * - sizes The numbers of each descriptor type to allocate
  * - sizeCount The number of sizes
  * - flags Extra flags passed to the create info struct, if any
- *
- * Returns
- * - The created descriptor pool
  */
-VkDescriptorPool hgVkCreateDescriptorPool(
+VkDescriptorPool hgCreateVkDescriptorPool(
     u32 maxSets,
     VkDescriptorPoolSize* sizes,
     u32 sizeCount,
@@ -4959,31 +5331,11 @@ VkDescriptorPool hgVkCreateDescriptorPool(
  * Parameters
  * - pool The descriptor pool to allocate from
  * - layout The layout of the set
- *
- * Returns
- * - The allocated descriptor set
  */
-VkDescriptorSet hgVkAllocateDescriptorSet(VkDescriptorPool pool, VkDescriptorSetLayout layout);
+VkDescriptorSet hgCreateVkDescriptorSet(VkDescriptorPool pool, VkDescriptorSetLayout layout);
 
 /**
- * Update a descriptor set with a buffer
- *
- * Parameters
- * - set The descriptor set to update
- * - binding The binding in the set
- * - type The descriptor type
- * - info The buffer infos to update to
- * - count The number of descriptors
- */
-void hgVkUpdateDescriptorSetBuffers(
-    VkDescriptorSet set,
-    u32 binding,
-    VkDescriptorType type,
-    const VkDescriptorBufferInfo* infos,
-    u32 count);
-
-/**
- * Update a descriptor set with an image
+ * Update a descriptor set binding
  *
  * Parameters
  * - set The descriptor set to update
@@ -4992,312 +5344,358 @@ void hgVkUpdateDescriptorSetBuffers(
  * - info The image infos to update to
  * - count The number of descriptors
  */
-void hgVkUpdateDescriptorSetImages(
+void hgUpdateVkDescriptorSet(
     VkDescriptorSet set,
     u32 binding,
     VkDescriptorType type,
-    const VkDescriptorImageInfo* infos,
+    const VkDescriptorBufferInfo* bufferInfos,
+    const VkDescriptorImageInfo* imageInfos,
     u32 count);
 
 /**
- * Attempts to find the index of a memory type which has the desired flags and
- * does not have the undesired flags
- *
- * Note, if no such memory type exists, the next best thing will be found
- *
- * The bitmask must not mask out all memory types
- *
- * Parameters
- * - bitmask A bitmask of which memory types cannot be used, must not be 0
- * - preferredFlags The flags which the type should have, though may not
- * - unpreferredFlags The flags which the type should not have, though may have
+ * Begin a command buffer to be executed once
  *
  * Returns
- * - The found index of the memory type
+ * - The command buffer to record, will never be nullptr
  */
-u32 hgVkFindMemoryTypeIndex(
-    u32 bitmask,
-    VkMemoryPropertyFlags preferredFlags = 0,
-    VkMemoryPropertyFlags unpreferredFlags = 0);
-
-// Vulkan allocator : TODO?
+VkCommandBuffer hgBeginVkCmd();
 
 /**
- * Create a Vulkan buffer
+ * Execute the command buffer and wait for completion
  *
  * Parameters
- * - buffer A pointer to return the created buffer
- * - allocation A pointer to return the created allocation
- * - size The size in bytes of the buffer
- * - usage How the buffer will be used
- * - memory The memory flags for VMA
+ * - cmd The command buffer from hgvkBeginCommands, must not be nullptr
  */
-void hgVkCreateBuffer(
-    VkBuffer* buffer,
-    VmaAllocation* allocation,
-    u64 size,
-    VkBufferUsageFlags usage,
-    VmaAllocationCreateFlags memory = 0);
+void hgEndVkCmd(VkCommandBuffer cmd);
 
 /**
- * Writes to a Vulkan device local buffer through a staging buffer
- *
- * Parameters
- * - dst The buffer to write to, must not be nullptr
- * - offset The offset in bytes into the dst buffer
- * - src The data to write, must not be nullptr
- * - size The size in bytes to write
+ * The image id used by HgRenderer
  */
-void hgVkWriteBufferStaging(VkBuffer dst, usize offset, const void* src, usize size);
+using HgImageRenderID = u64;
 
 /**
- * Reads from a Vulkan device local buffer through a staging buffer
- *
- * Parameters
- * - dst The location to write to, must not be nullptr
- * - src The buffer to read from, must not be nullptr
- * - offset The offset in bytes into the dst buffer
- * - size The size in bytes to read
+ * The buffer id used by HgRenderer
  */
-void hgVkReadBufferStaging(void* dst, VkBuffer src, usize offset, usize size);
+using HgBufferRenderID = u64;
 
 /**
- * Config for hgVkCreateImage
+ * A rendering attachment
  */
-struct HgVkImageConfig {
+struct HgRenderAttachment
+{
     /**
-     * The dimensions of the image
+     * The image attached
      */
-    VkImageType type = VK_IMAGE_TYPE_2D;
+    HgImageRenderID image = (u64)-1;
     /**
-     * The width of the image
+     * How the image will be loaded
      */
-    u32 width = 1;
+    VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     /**
-     * The height of the image
+     * How the image will be stored
      */
-    u32 height = 1;
+    VkAttachmentStoreOp storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     /**
-     * The depth of the image
+     * What to clear the image to if cleared
      */
-    u32 depth = 1;
-    /**
-     * The format of the image, must not be UNDEFINED
-     */
-    VkFormat format = VK_FORMAT_UNDEFINED;
-    /**
-     * The number of mip level
-     */
-    u32 mipLevels = 1;
-    /**
-     * The number of array layers
-     */
-    u32 arrayLayers = 1;
-    /**
-     * The number of MSAA samples
-     */
-    VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
-    /**
-     * How the image will be used, must not be 0
-     */
-    VkImageUsageFlags usage = 0;
+    VkClearValue clearValue = {};
 };
 
 /**
- * Create a Vulkan image
- *
- * Parameters
- * - image A pointer to return the created image
- * - allocation A pointer to return the created allocation
- * - config The image config
+ * A render pass description
  */
-void hgVkCreateImage(VkImage* image, VmaAllocation* allocation, const HgVkImageConfig& config);
-
-/**
- * Config for hgVkCreateImage
- */
-struct HgVkImageViewConfig {
+struct HgRenderPass
+{
     /**
-     * The image to create a view of, must not be nullptr
+     * The uniforms buffer dependencies
      */
-    VkImage image = nullptr;
+    const HgBufferRenderID* uniformBuffers = nullptr;
     /**
-     * The dimensions of the image
+     * The number of uniform buffers
      */
-    VkImageViewType type = VK_IMAGE_VIEW_TYPE_2D;
+    u32 uniformBufferCount = 0;
     /**
-     * The format of the image, must not be UNDEFINED
+     * The storage buffer dependencies
      */
-    VkFormat format = VK_FORMAT_UNDEFINED;
+    const HgBufferRenderID* storageBuffers = nullptr;
     /**
-     * The subresource, aspect must not be 0
+     * The number of storage buffers
      */
-    VkImageSubresourceRange subresource = {0, 0, 1, 0, 1};
+    u32 storageBufferCount = 0;
     /**
-     * The component swizzles
+     * The sampled image dependencies
      */
-    VkComponentMapping components = {};
+    const HgImageRenderID* sampledImages = nullptr;
+    /**
+     * The number of sampled images
+     */
+    u32 sampledImageCount = 0;
+    /**
+     * The number of layers in each color attachment to write to
+     */
+    u32 layerCount = 1;
+    /**
+     * The color images to write to
+     */
+    const HgRenderAttachment* colorAttachments = nullptr;
+    /**
+     * The number of color attachments
+     */
+    u32 colorAttachmentCount = 0;
+    /**
+     * The depth attachment, if any
+     */
+    HgRenderAttachment depthAttachment = {};
+    /**
+     * The stencil attachment, if any
+     */
+    HgRenderAttachment stencilAttachment = {};
 };
 
 /**
- * Create a Vulkan image
- *
- * Parameters
- * - config The image view config
+ * Where resources used in rendering can be used
  */
-VkImageView hgVkCreateImageView(const HgVkImageViewConfig& config);
-
-/**
- * Configuration for a staging image write
- */
-struct HgVkWriteImageStagingConfig {
-    /**
-     * The image to write to, must not be nullptr
-     */
-    VkImage dstImage = nullptr;
-    /**
-     * The subresource of the image to write to
-     */
-    VkImageSubresourceLayers subresource = {0, 0, 0, 1};
-    /**
-     * The data to write, must not be nullptr
-     */
-    const void* srcData = nullptr;
-    /**
-     * The width of the image in pixels, must be greater than 0
-     */
-    u32 width = 1;
-    /**
-     * The width of the image in pixels, must be greater than 0
-     */
-    u32 height = 1;
-    /**
-     * The width of the image in pixels, must be greater than 0
-     */
-    u32 depth = 1;
-    /**
-     * The format of each pixel, must not be UNDEFINED
-     */
-    VkFormat format = VK_FORMAT_UNDEFINED;
-    /**
-     * The layout to transition to after transfering
-     */
-    VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
+enum HgRenderUsage
+{
+    HgRenderUsage_none = 0,
+    HgRenderUsage_vertexBuffer,
+    HgRenderUsage_indexBuffer,
+    HgRenderUsage_graphicsShader,
+    HgRenderUsage_graphicsUniformBuffer,
+    HgRenderUsage_computeShader,
+    HgRenderUsage_computeUniformBuffer,
+    HgRenderUsage_colorAttachment,
+    HgRenderUsage_depthAttachment,
+    HgRenderUsage_stencilAttachment,
+    HgRenderUsage_transfer,
+    HgRenderUsage_presentSrc,
+    HgRenderUsage_count,
 };
 
 /**
- * Writes to a Vulkan device local image through a staging buffer
- *
- * Parameters
- * - config The configuration for the write
+ * How resources used in rendering can be accessed
  */
-void hgWriteVkImageStaging(const HgVkWriteImageStagingConfig& config);
-
-/**
- * Writes to a Vulkan device local cubemap image through a staging buffer
- *
- * Note, config.width and config.height are interpreted as the width and height
- * of each face of the cubemap and srcData is assumed to be layed out as:
- *  #
- * ####
- *  #
- *
- * Parameters
- * - config The configuration for the write
- */
-void hgVkWriteCubemapStaging(const HgVkWriteImageStagingConfig &config);
-
-/**
- * Configuration for a staging image write
- */
-struct HgVkReadImageStagingConfig {
-    /**
-     * The location to write to, must not be nullptr
-     */
-    void* dst;
-    /**
-     * The image to read from, must not be nullptr
-     */
-    VkImage srcImage;
-    /**
-     * The layout the image was in before reading, must not be UNDEFINED
-     */
-    VkImageLayout layout;
-    /**
-     * The subresource of the image to read from
-     */
-    VkImageSubresourceLayers subresource;
-    /**
-     * The width of the image in pixels, must be greater than 0
-     */
-    u32 width;
-    /**
-     * The width of the image in pixels, must be greater than 0
-     */
-    u32 height;
-    /**
-     * The width of the image in pixels, must be greater than 0
-     */
-    u32 depth;
-    /**
-     * The format of each pixel, must not be UNDEFINED
-     */
-    VkFormat format;
+enum HgRenderAccess
+{
+    HgRenderAccess_none = 0x0,
+    HgRenderAccess_read = 0x1,
+    HgRenderAccess_write = 0x2,
+    HgRenderAccess_readWrite = HgRenderAccess_read | HgRenderAccess_write,
 };
 
 /**
- * Reads from a Vulkan device local image through a staging buffer
- *
- * Parameters
- * - config The configuration for the read, must not be nullptr
+ * An image dependency barrier
  */
-void hgVkReadImageStaging(const HgVkReadImageStagingConfig& config);
-
-/**
- * The config for hgVkImageGenerateMipmaps
- */
-struct HgVkGenerateMipmapsConfig {
+struct HgImageBarrier
+{
     /**
-     * The image to generate mipmaps in, must not be nullptr
+     * The image to sychronize
      */
-    VkImage image;
+    HgImageRenderID image = (u64)-1;
     /**
-     * The image aspects to use, must not be 0
+     * How the image will next be used
      */
-    VkImageAspectFlags aspectMask;
+    HgRenderUsage nextUsage = HgRenderUsage_none;
     /**
-     * The layout the image was in before, must not be UNDEFINED
+     * How the image will next be accessed
      */
-    VkImageLayout oldLayout;
-    /**
-     * The layout the image will be set to, must not be UNDEFINED
-     */
-    VkImageLayout newLayout;
-    /**
-     * The width of the base level, must be greater than 0
-     */
-    u32 width;
-    /**
-     * The width of the base level, must be greater than 0
-     */
-    u32 height;
-    /**
-     * The width of the base level, must be greater than 0
-     */
-    u32 depth;
-    /**
-     * The total number of mips in the image, must be greater than 0
-     */
-    u32 mipCount;
+    HgRenderAccess nextAccess = HgRenderAccess_none;
 };
 
 /**
- * Generates mipmaps from the base level
- *
- * Parameters
- * - config The config to use
+ * A buffer dependency barrier
  */
-void hgVkGenerateMipmaps(const HgVkGenerateMipmapsConfig& config);
+struct HgBufferBarrier
+{
+    /**
+     * The buffer to sychronize
+     */
+    HgBufferRenderID buffer = (u64)-1;
+    /**
+     * How the buffer will next be used
+     */
+    HgRenderUsage nextUsage = HgRenderUsage_none;
+    /**
+     * How the buffer will next be accessed
+     */
+    HgRenderAccess nextAccess = HgRenderAccess_none;
+};
+
+/**
+ * A renderer to organize render passes and synchronize resources
+ */
+struct HgRenderer
+{
+    /**
+     * An image resource
+     */
+    struct Image
+    {
+        /**
+         * The image
+         */
+        VkImage handle;
+        /**
+         * The image view
+         */
+        VkImageView view;
+        /**
+         * The image subresource
+         */
+        VkImageSubresourceRange subresource;
+        /**
+         * The image's last usage
+         */
+        HgRenderUsage lastUsage;
+        /**
+         * The image's last access
+         */
+        HgRenderAccess lastAccess;
+    };
+
+    /**
+     * A buffer resource
+     */
+    struct Buffer
+    {
+        /**
+         * The buffer
+         */
+        VkBuffer handle;
+        /**
+         * The offset into the buffer in bytes
+         */
+        u64 offset;
+        /**
+         * The size of the buffer in bytes
+         */
+        u64 size;
+        /**
+         * The buffer's last usage
+         */
+        HgRenderUsage lastUsage;
+        /**
+         * The buffer's last access
+         */
+        HgRenderAccess lastAccess;
+    };
+
+    /**
+     * The buffer resources
+     */
+    Buffer* buffers;
+    /**
+     * The number of active buffer resources
+     */
+    u32 bufferCount;
+    /**
+     * The max buffer resources
+     */
+    u32 bufferCapacity;
+    /**
+     * The image resources
+     */
+    Image* images;
+    /**
+     * The number of active image resources
+     */
+    u32 imageCount;
+    /**
+     * The max image resources
+     */
+    u32 imageCapacity;
+
+    /**
+     * Create a new renderer
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - maxImages The max number of image resources
+     * - maxBuffers The max number of buffer resources
+     */
+    static HgRenderer create(HgArena* arena, u32 maxImages, u32 maxBuffers);
+
+    /**
+     * Removes all resources
+     */
+    void reset();
+
+    /**
+     * Add a buffer resource
+     *
+     * Parameters
+     * - buffer The buffer to add, must not be nullptr
+     * - offset The offset into the buffer in bytes
+     * - size The size of the buffer in bytes
+     * - previousUsage The last usage of the buffer, if any
+     * - previousAccess The last access of the buffer, if any
+     *
+     * Returns
+     * - The buffer resource's id
+     */
+    HgBufferRenderID addBuffer(
+        VkBuffer buffer,
+        u64 offset,
+        u64 size,
+        HgRenderUsage previousUsage = HgRenderUsage_none,
+        HgRenderAccess previousAccess = HgRenderAccess_none);
+
+    /**
+     * Add a image resource
+     *
+     * Parameters
+     * - image The image to add, must not be nullptr
+     * - view The image's view, must not be nullptr
+     * - subresource The subresource of the image
+     * - previousUsage The last usage of the image, if any
+     * - previousAccess The last access of the image, if any
+     *
+     * Returns
+     * - The image resource's id
+     */
+    HgImageRenderID addImage(
+        VkImage image,
+        VkImageView view,
+        VkImageSubresourceRange subresource,
+        HgRenderUsage previousUsage = HgRenderUsage_none,
+        HgRenderAccess previousAccess = HgRenderAccess_none);
+
+    /**
+     * Creates a barrier for resource uses that are not part of a render pass
+     *
+     * Parameters
+     * - cmd The command buffer
+     * - bufferBarriers The buffer barriers
+     * - bufferBarrierCount The number of buffer barriers
+     * - imageBarriers The image barriers
+     * - imageBarrierCount The number of image barriers
+     */
+    void barrier(
+        VkCommandBuffer cmd,
+        const HgBufferBarrier* bufferBarriers,
+        u32 bufferBarrierCount,
+        const HgImageBarrier* imageBarriers,
+        u32 imageBarrierCount);
+
+    /**
+     * Begins a render pass
+     *
+     * Parameters
+     * - cmd The command buffer
+     * - width The width of the render area
+     * - height The height of the render area
+     * - pass The render pass description
+     */
+    void beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgRenderPass& pass);
+
+    /**
+     * Ends the render pass
+     *
+     * Parameters
+     * - cmd The command buffer
+     */
+    void endPass(VkCommandBuffer cmd);
+};
 
 /**
  * Initializes global resources for windowing
@@ -5326,127 +5724,129 @@ u32 hgVkGetPlatformExtensions(HgArena* arena, HgStringView** extBuffer);
 /**
  * A key on the keyboard or button on the mouse
  */
-enum class HgKey {
-    none = 0,
-    k0,
-    k1,
-    k2,
-    k3,
-    k4,
-    k5,
-    k6,
-    k7,
-    k8,
-    k9,
-    q,
-    w,
-    e,
-    r,
-    t,
-    y,
-    u,
-    i,
-    o,
-    p,
-    a,
-    s,
-    d,
-    f,
-    g,
-    h,
-    j,
-    k,
-    l,
-    z,
-    x,
-    c,
-    v,
-    b,
-    n,
-    m,
-    semicolon,
-    colon,
-    apostrophe,
-    quotation,
-    comma,
-    period,
-    question,
-    grave,
-    tilde,
-    exclamation,
-    at,
-    hash,
-    dollar,
-    percent,
-    carot,
-    ampersand,
-    asterisk,
-    lparen,
-    rparen,
-    lbracket,
-    rbracket,
-    lbrace,
-    rbrace,
-    equal,
-    less,
-    greater,
-    plus,
-    minus,
-    slash,
-    backslash,
-    underscore,
-    bar,
-    up,
-    down,
-    left,
-    right,
-    mouse1,
-    mouse2,
-    mouse3,
-    mouse4,
-    mouse5,
-    lmouse = mouse1,
-    rmouse = mouse2,
-    mmouse = mouse3,
-    escape,
-    space,
-    enter,
-    backspace,
-    kdelete,
-    insert,
-    tab,
-    home,
-    end,
-    f1,
-    f2,
-    f3,
-    f4,
-    f5,
-    f6,
-    f7,
-    f8,
-    f9,
-    f10,
-    f11,
-    f12,
-    lshift,
-    rshift,
-    lctrl,
-    rctrl,
-    lmeta,
-    rmeta,
-    lalt,
-    ralt,
-    lsuper,
-    rsuper,
-    capslock,
-    count,
+enum HgKey
+{
+    HgKey_none = 0,
+    HgKey_k0,
+    HgKey_k1,
+    HgKey_k2,
+    HgKey_k3,
+    HgKey_k4,
+    HgKey_k5,
+    HgKey_k6,
+    HgKey_k7,
+    HgKey_k8,
+    HgKey_k9,
+    HgKey_q,
+    HgKey_w,
+    HgKey_e,
+    HgKey_r,
+    HgKey_t,
+    HgKey_y,
+    HgKey_u,
+    HgKey_i,
+    HgKey_o,
+    HgKey_p,
+    HgKey_a,
+    HgKey_s,
+    HgKey_d,
+    HgKey_f,
+    HgKey_g,
+    HgKey_h,
+    HgKey_j,
+    HgKey_k,
+    HgKey_l,
+    HgKey_z,
+    HgKey_x,
+    HgKey_c,
+    HgKey_v,
+    HgKey_b,
+    HgKey_n,
+    HgKey_m,
+    HgKey_semicolon,
+    HgKey_colon,
+    HgKey_apostrophe,
+    HgKey_quotation,
+    HgKey_comma,
+    HgKey_period,
+    HgKey_question,
+    HgKey_grave,
+    HgKey_tilde,
+    HgKey_exclamation,
+    HgKey_at,
+    HgKey_hash,
+    HgKey_dollar,
+    HgKey_percent,
+    HgKey_carot,
+    HgKey_ampersand,
+    HgKey_asterisk,
+    HgKey_lparen,
+    HgKey_rparen,
+    HgKey_lbracket,
+    HgKey_rbracket,
+    HgKey_lbrace,
+    HgKey_rbrace,
+    HgKey_equal,
+    HgKey_less,
+    HgKey_greater,
+    HgKey_plus,
+    HgKey_minus,
+    HgKey_slash,
+    HgKey_backslash,
+    HgKey_underscore,
+    HgKey_bar,
+    HgKey_up,
+    HgKey_down,
+    HgKey_left,
+    HgKey_right,
+    HgKey_mouse1,
+    HgKey_mouse2,
+    HgKey_mouse3,
+    HgKey_mouse4,
+    HgKey_mouse5,
+    HgKey_lmouse = HgKey_mouse1,
+    HgKey_rmouse = HgKey_mouse2,
+    HgKey_mmouse = HgKey_mouse3,
+    HgKey_escape,
+    HgKey_space,
+    HgKey_enter,
+    HgKey_backspace,
+    HgKey_kdelete,
+    HgKey_insert,
+    HgKey_tab,
+    HgKey_home,
+    HgKey_end,
+    HgKey_f1,
+    HgKey_f2,
+    HgKey_f3,
+    HgKey_f4,
+    HgKey_f5,
+    HgKey_f6,
+    HgKey_f7,
+    HgKey_f8,
+    HgKey_f9,
+    HgKey_f10,
+    HgKey_f11,
+    HgKey_f12,
+    HgKey_lshift,
+    HgKey_rshift,
+    HgKey_lctrl,
+    HgKey_rctrl,
+    HgKey_lmeta,
+    HgKey_rmeta,
+    HgKey_lalt,
+    HgKey_ralt,
+    HgKey_lsuper,
+    HgKey_rsuper,
+    HgKey_capslock,
+    HgKey_count,
 };
 
 /**
  * Configuration for a window
  */
-struct HgWindowConfig {
+struct HgWindowConfig
+{
     /**
      * The title of the window
      */
@@ -5478,7 +5878,8 @@ struct HgWindowConfig {
 /**
  * A window
  */
-struct HgWindow {
+struct HgWindow
+{
     struct Internals;
 
     /**
@@ -5570,15 +5971,15 @@ struct HgWindow {
     /**
      * Which keys are currently being held down
      */
-    bool isKeyDown[(u32)HgKey::count];
+    bool isKeyDown[HgKey_count];
     /**
      * Which keys were pressed this frame
      */
-    bool wasKeyPressed[(u32)HgKey::count];
+    bool wasKeyPressed[HgKey_count];
     /**
      * Which keys were released this frame
      */
-    bool wasKeyReleased[(u32)HgKey::count];
+    bool wasKeyReleased[HgKey_count];
     /**
      * Whether this window has been closed
      */
@@ -5644,13 +6045,14 @@ struct HgWindow {
     /**
      * The builtin cursor images
      */
-    enum class Cursor {
-        none = 0,
-        arrow,
-        text,
-        wait,
-        cross,
-        hand,
+    enum Cursor
+    {
+        Cursor_none = 0,
+        Cursor_arrow,
+        Cursor_text,
+        Cursor_wait,
+        Cursor_cross,
+        Cursor_hand,
     };
 
     /**
@@ -5675,7 +6077,7 @@ struct HgWindow {
  * - windows All open windows, must not be nullptr
  * - windowCount The number of windows
  */
-void hgProcessWindowEvents(HgWindow** windows, usize windowCount);
+void hgProcessWindowEvents(HgWindow** windows, u32 windowCount);
 
 /**
  * Initialize ImGui platform backend
