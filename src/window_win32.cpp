@@ -2,9 +2,9 @@
 
 #ifdef HG_PLATFORM_WINDOWS
 
-void hg_internal_create_window_swapchain(HgWindow* window, const HgWindowConfig& config);
-void hg_internal_resize_window_swapchain(HgWindow* window);
-void hg_internal_destroy_window_swapchain(HgWindow* window);
+void hgInternalCreateWindowSwapchain(HgWindow* window, const HgWindowConfig& config);
+void hgInternalResizeWindowSwapchain(HgWindow* window);
+void hgInternalDestroyWindowSwapchain(HgWindow* window);
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -14,84 +14,89 @@ struct HgWindow::Internals {
     HWND hwnd;
 };
 
-HINSTANCE win32_instance = nullptr;
+HINSTANCE win32Instance = nullptr;
 
-void hg_platform_init() {
-    win32_instance = GetModuleHandle(nullptr);
+void hgInitPlatform()
+{
+    win32Instance = GetModuleHandle(nullptr);
 }
 
-void hg_platform_deinit() {
-    win32_instance = nullptr;
+void hgDeinitPlatform()
+{
+    win32Instance = nullptr;
 }
 
 extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
-static bool imgui_initialized = false;
+static bool imguiInitialized = false;
 
-static LRESULT CALLBACK window_callback(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
+static LRESULT CALLBACK windowCallback(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
+{
     HgWindow* window = (HgWindow*)GetWindowLongPtrA(hwnd, GWLP_USERDATA);
 
-    switch (msg) {
+    switch (msg)
+    {
         case WM_NCCREATE:
             SetWindowLongPtrA(hwnd, GWLP_USERDATA, (LONG_PTR)(((CREATESTRUCTA*)lparam)->lpCreateParams));
             break;
         case WM_CLOSE:
-            window->was_closed = true;
+            window->wasClosed = true;
             break;
         case WM_SIZE:
             window->width = LOWORD(lparam);
             window->height = HIWORD(lparam);
             break;
         case WM_KILLFOCUS:
-            memset(window->is_key_down, 0, sizeof(window->is_key_down));
+            memset(window->isKeyDown, 0, sizeof(window->isKeyDown));
                 break;
         case WM_SYSKEYDOWN:
         case WM_SYSKEYUP:
         case WM_KEYDOWN:
         case WM_KEYUP: {
             HgKey key = HgKey::none;
-            HgKey shift_key = HgKey::none;
+            HgKey shiftKey = HgKey::none;
 
-            switch (wparam) {
+            switch (wparam)
+            {
                 case '0':
                     key = HgKey::k0;
-                    shift_key = HgKey::rparen;
+                    shiftKey = HgKey::rparen;
                     break;
                 case '1':
                     key = HgKey::k1;
-                    shift_key = HgKey::exclamation;
+                    shiftKey = HgKey::exclamation;
                     break;
                 case '2':
                     key = HgKey::k2;
-                    shift_key = HgKey::at;
+                    shiftKey = HgKey::at;
                     break;
                 case '3':
                     key = HgKey::k3;
-                    shift_key = HgKey::hash;
+                    shiftKey = HgKey::hash;
                     break;
                 case '4':
                     key = HgKey::k4;
-                    shift_key = HgKey::dollar;
+                    shiftKey = HgKey::dollar;
                     break;
                 case '5':
                     key = HgKey::k5;
-                    shift_key = HgKey::percent;
+                    shiftKey = HgKey::percent;
                     break;
                 case '6':
                     key = HgKey::k6;
-                    shift_key = HgKey::carot;
+                    shiftKey = HgKey::carot;
                     break;
                 case '7':
                     key = HgKey::k7;
-                    shift_key = HgKey::ampersand;
+                    shiftKey = HgKey::ampersand;
                     break;
                 case '8':
                     key = HgKey::k8;
-                    shift_key = HgKey::asterisk;
+                    shiftKey = HgKey::asterisk;
                     break;
                 case '9':
                     key = HgKey::k9;
-                    shift_key = HgKey::lparen;
+                    shiftKey = HgKey::lparen;
                     break;
 
                 case 'A':
@@ -175,47 +180,47 @@ static LRESULT CALLBACK window_callback(HWND hwnd, UINT msg, WPARAM wparam, LPAR
 
                 case VK_OEM_1:
                     key = HgKey::semicolon;
-                    shift_key = HgKey::colon;
+                    shiftKey = HgKey::colon;
                     break;
                 case VK_OEM_7:
                     key = HgKey::apostrophe;
-                    shift_key = HgKey::quotation;
+                    shiftKey = HgKey::quotation;
                     break;
                 case VK_OEM_COMMA:
                     key = HgKey::comma;
-                    shift_key = HgKey::less;
+                    shiftKey = HgKey::less;
                     break;
                 case VK_OEM_PERIOD:
                     key = HgKey::period;
-                    shift_key = HgKey::greater;
+                    shiftKey = HgKey::greater;
                     break;
                 case VK_OEM_2:
                     key = HgKey::slash;
-                    shift_key = HgKey::question;
+                    shiftKey = HgKey::question;
                     break;
                 case VK_OEM_3:
                     key = HgKey::grave;
-                    shift_key = HgKey::tilde;
+                    shiftKey = HgKey::tilde;
                     break;
                 case VK_OEM_4:
                     key = HgKey::lbracket;
-                    shift_key = HgKey::lbrace;
+                    shiftKey = HgKey::lbrace;
                     break;
                 case VK_OEM_6:
                     key = HgKey::rbracket;
-                    shift_key = HgKey::rbrace;
+                    shiftKey = HgKey::rbrace;
                     break;
                 case VK_OEM_5:
                     key = HgKey::backslash;
-                    shift_key = HgKey::bar;
+                    shiftKey = HgKey::bar;
                     break;
                 case VK_OEM_PLUS:
                     key = HgKey::equal;
-                    shift_key = HgKey::plus;
+                    shiftKey = HgKey::plus;
                     break;
                 case VK_OEM_MINUS:
                     key = HgKey::minus;
-                    shift_key = HgKey::underscore;
+                    shiftKey = HgKey::underscore;
                     break;
 
                 case VK_UP:
@@ -324,78 +329,81 @@ static LRESULT CALLBACK window_callback(HWND hwnd, UINT msg, WPARAM wparam, LPAR
                     key = HgKey::capslock;
                     break;
             }
-            if (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN) {
-                if (shift_key != HgKey::none &&
-                   (window->is_key_down[(u32)HgKey::lshift] ||
-                    window->is_key_down[(u32)HgKey::rshift])
-                ) {
-                    window->was_key_pressed[(u32)shift_key] = true;
-                    window->is_key_down[(u32)shift_key] = true;
+            if (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN)
+            {
+                if (shiftKey != HgKey::none &&
+                   (window->isKeyDown[(u32)HgKey::lshift] ||
+                    window->isKeyDown[(u32)HgKey::rshift]))
+                {
+                    window->wasKeyPressed[(u32)shiftKey] = true;
+                    window->isKeyDown[(u32)shiftKey] = true;
                 } else {
-                    window->was_key_pressed[(u32)key] = true;
-                    window->is_key_down[(u32)key] = true;
+                    window->wasKeyPressed[(u32)key] = true;
+                    window->isKeyDown[(u32)key] = true;
                 }
             } else {
-                window->was_key_released[(u32)shift_key] = window->is_key_down[(u32)shift_key];
-                window->is_key_down[(u32)shift_key] = false;
-                window->was_key_released[(u32)key] = window->is_key_down[(u32)key];
-                window->is_key_down[(u32)key] = false;
+                window->wasKeyReleased[(u32)shiftKey] = window->isKeyDown[(u32)shiftKey];
+                window->isKeyDown[(u32)shiftKey] = false;
+                window->wasKeyReleased[(u32)key] = window->isKeyDown[(u32)key];
+                window->isKeyDown[(u32)key] = false;
             }
         } break;
         case WM_LBUTTONDOWN:
-            window->was_key_pressed[(u32)HgKey::lmouse] = true;
-            window->is_key_down[(u32)HgKey::lmouse] = true;
+            window->wasKeyPressed[(u32)HgKey::lmouse] = true;
+            window->isKeyDown[(u32)HgKey::lmouse] = true;
             break;
         case WM_RBUTTONDOWN:
-            window->was_key_pressed[(u32)HgKey::rmouse] = true;
-            window->is_key_down[(u32)HgKey::rmouse] = true;
+            window->wasKeyPressed[(u32)HgKey::rmouse] = true;
+            window->isKeyDown[(u32)HgKey::rmouse] = true;
             break;
         case WM_MBUTTONDOWN:
-            window->was_key_pressed[(u32)HgKey::mmouse] = true;
-            window->is_key_down[(u32)HgKey::mmouse] = true;
+            window->wasKeyPressed[(u32)HgKey::mmouse] = true;
+            window->isKeyDown[(u32)HgKey::mmouse] = true;
             break;
         case WM_LBUTTONUP:
-            window->was_key_released[(u32)HgKey::lmouse] = true;
-            window->is_key_down[(u32)HgKey::lmouse] = false;
+            window->wasKeyReleased[(u32)HgKey::lmouse] = true;
+            window->isKeyDown[(u32)HgKey::lmouse] = false;
             break;
         case WM_RBUTTONUP:
-            window->was_key_released[(u32)HgKey::rmouse] = true;
-            window->is_key_down[(u32)HgKey::rmouse] = false;
+            window->wasKeyReleased[(u32)HgKey::rmouse] = true;
+            window->isKeyDown[(u32)HgKey::rmouse] = false;
             break;
         case WM_MBUTTONUP:
-            window->was_key_released[(u32)HgKey::mmouse] = true;
-            window->is_key_down[(u32)HgKey::mmouse] = false;
+            window->wasKeyReleased[(u32)HgKey::mmouse] = true;
+            window->isKeyDown[(u32)HgKey::mmouse] = false;
             break;
         case WM_MOUSEMOVE:
-            window->mouse_pos_x = (f64)LOWORD(lparam) / (f64)window->height;
-            window->mouse_pos_y = (f64)HIWORD(lparam) / (f64)window->height;
+            window->mousePosX = (f64)LOWORD(lparam) / (f64)window->height;
+            window->mousePosY = (f64)HIWORD(lparam) / (f64)window->height;
             break;
     }
 
-    if (imgui_initialized)
+    if (imguiInitialized)
         ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam);
 
     return DefWindowProcA(hwnd, msg, wparam, lparam);
 }
 
-HgWindow* HgWindow::create(HgArena* arena, const HgWindowConfig& config) {
+HgWindow* HgWindow::create(HgArena* arena, const HgWindowConfig& config)
+{
     const char* title = config.title != nullptr ? config.title : "Hurdy Gurdy";
 
-    HgWindow* window = hg_alloc<HgWindow>(arena, 1);
+    HgWindow* window = hgAlloc<HgWindow>(arena, 1);
     *window = {};
-    window->internals = hg_alloc<Internals>(arena, 1);
+    window->internals = hgAlloc<Internals>(arena, 1);
     *window->internals = {};
 
-    WNDCLASSA window_class{};
-    window_class.hInstance = win32_instance;
-    window_class.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
-    window_class.hCursor = LoadCursor(nullptr, IDC_ARROW);
-    window_class.lpszClassName = title;
-    window_class.lpfnWndProc = window_callback;
-    if (!RegisterClassA(&window_class))
-        hg_error("Win32 failed to register window class for window: %s\n", config.title);
+    WNDCLASSA windowClass{};
+    windowClass.hInstance = win32Instance;
+    windowClass.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
+    windowClass.hCursor = LoadCursor(nullptr, IDC_ARROW);
+    windowClass.lpszClassName = title;
+    windowClass.lpfnWndProc = windowCallback;
+    if (!RegisterClassA(&windowClass))
+        hgError("Win32 failed to register window class for window: %s\n", config.title);
 
-    if (config.windowed) {
+    if (config.windowed)
+    {
         window->width = config.width;
         window->height = config.height;
         window->internals->hwnd = CreateWindowExA(
@@ -409,7 +417,7 @@ HgWindow* HgWindow::create(HgArena* arena, const HgWindowConfig& config) {
             window->height,
             nullptr,
             nullptr,
-            win32_instance,
+            win32Instance,
             window
         );
     } else {
@@ -426,111 +434,124 @@ HgWindow* HgWindow::create(HgArena* arena, const HgWindowConfig& config) {
             window->height,
             nullptr,
             nullptr,
-            win32_instance,
+            win32Instance,
             window
         );
     }
     if (window->internals->hwnd == nullptr)
-        hg_error("Win32 window creation failed\n");
+        hgError("Win32 window creation failed\n");
 
-    PFN_vkCreateWin32SurfaceKHR pfn_vkCreateWin32SurfaceKHR
-        = (PFN_vkCreateWin32SurfaceKHR)vkGetInstanceProcAddr(hg_vk_instance, "vkCreateWin32SurfaceKHR");
-    if (pfn_vkCreateWin32SurfaceKHR == nullptr)
-        hg_error("Could not load vkCreateWin32SurfaceKHR\n");
+    PFN_vkCreateWin32SurfaceKHR pfnVkCreateWin32SurfaceKHR
+        = (PFN_vkCreateWin32SurfaceKHR)vkGetInstanceProcAddr(hgVkInstance, "vkCreateWin32SurfaceKHR");
+    if (pfnVkCreateWin32SurfaceKHR == nullptr)
+        hgError("Could not load vkCreateWin32SurfaceKHR\n");
 
     VkWin32SurfaceCreateInfoKHR info{};
     info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-    info.hinstance = win32_instance;
+    info.hinstance = win32Instance;
     info.hwnd = window->internals->hwnd;
 
-    VkResult result = pfn_vkCreateWin32SurfaceKHR(hg_vk_instance, &info, nullptr, &window->surface);
+    VkResult result = pfnVkCreateWin32SurfaceKHR(hgVkInstance, &info, nullptr, &window->surface);
     if (window->surface == nullptr)
-        hg_error("Failed to create Vulkan surface: %s\n", hg_vk_result_to_string(result));
+        hgError("Failed to create Vulkan surface: %s\n", hgVkResultToStr(result));
 
-    hg_internal_create_window_swapchain(window, config);
+    hgInternalCreateWindowSwapchain(window, config);
 
     ShowWindow(window->internals->hwnd, SW_SHOW);
     return window;
 }
 
-void HgWindow::destroy() {
-    hg_internal_destroy_window_swapchain(this);
-    vkDestroySurfaceKHR(hg_vk_instance, surface, nullptr);
+void HgWindow::destroy()
+{
+    hgInternalDestroyWindowSwapchain(this);
+    vkDestroySurfaceKHR(hgVkInstance, surface, nullptr);
     DestroyWindow(internals->hwnd);
 }
 
-void HgWindow::set_icon(u32* icon_data, u32 icon_width, u32 icon_height) {
-    hg_error("window set_icon : TODO\n");
-    (void)icon_data;
-    (void)icon_width;
-    (void)icon_height;
+void HgWindow::setIcon(u32* iconData, u32 iconWidth, u32 iconHeight)
+{
+    hgError("window setIcon : TODO\n");
+    (void)iconData;
+    (void)iconWidth;
+    (void)iconHeight;
 }
 
-bool HgWindow::is_fullscreen() {
-    hg_error("window is_fullscreen : TODO\n");
+bool HgWindow::isFullscreen()
+{
+    hgError("window isFullscreen : TODO\n");
 }
 
-void HgWindow::set_fullscreen(bool fullscreen) {
-    hg_error("window set_fullscreen : TODO\n");
+void HgWindow::setFullscreen(bool fullscreen)
+{
+    hgError("window setFullscreen : TODO\n");
     (void)fullscreen;
 }
 
-void HgWindow::set_cursor(HgWindow::Cursor cursor) {
-    hg_error("window set_cursor : TODO\n");
+void HgWindow::setCursor(HgWindow::Cursor cursor)
+{
+    hgError("window setCursor : TODO\n");
     (void)cursor;
 }
 
-void HgWindow::set_cursor_image(u32* data, u32 cursor_width, u32 cursor_height) {
-    hg_error("window set_cursor_image : TODO\n");
+void HgWindow::setCursorImage(u32* data, u32 cursorWidth, u32 cursorHeight)
+{
+    hgError("window setCursorImage : TODO\n");
     (void)data;
-    (void)cursor_width;
-    (void)cursor_height;
+    (void)cursorWidth;
+    (void)cursorHeight;
 }
 
-u32 hg_vk_get_platform_extensions(HgArena* arena, HgStringView** ext_buffer) {
+u32 hgVkGetPlatformExtensions(HgArena* arena, HgStringView** extBuffer)
+{
     u32 count = 2;
-    *ext_buffer = hg_alloc<HgStringView>(arena, count);
-    (*ext_buffer)[0] = "VK_KHR_surface";
-    (*ext_buffer)[1] = "VK_KHR_win32_surface";
+    *extBuffer = hgAlloc<HgStringView>(arena, count);
+    (*extBuffer)[0] = "VK_KHR_surface";
+    (*extBuffer)[1] = "VK_KHR_win32_surface";
     return count;
 }
 
-void hg_process_window_events(HgWindow** windows, usize window_count) {
-    hg_assert(windows != nullptr);
+void hgProcessWindowEvents(HgWindow** windows, usize windowCount)
+{
+    hgAssert(windows != nullptr);
 
-    for (usize i = 0; i < window_count; ++i) {
+    for (usize i = 0; i < windowCount; ++i)
+    {
         HgWindow* window = windows[i];
 
-        memset(window->was_key_pressed, 0, sizeof(window->was_key_pressed));
-        memset(window->was_key_released, 0, sizeof(window->was_key_released));
+        memset(window->wasKeyPressed, 0, sizeof(window->wasKeyPressed));
+        memset(window->wasKeyReleased, 0, sizeof(window->wasKeyReleased));
 
-        u32 old_width = window->width;
-        u32 old_height = window->height;
-        f64 old_mouse_pos_x = window->mouse_pos_x;
-        f64 old_mouse_pos_y = window->mouse_pos_y;
+        u32 oldWidth = window->width;
+        u32 oldHeight = window->height;
+        f64 oldMousePosX = window->mousePosX;
+        f64 oldMousePosY = window->mousePosY;
 
         MSG msg;
-        while (PeekMessageA(&msg, window->internals->hwnd, 0, 0, PM_REMOVE) != 0) {
+        while (PeekMessageA(&msg, window->internals->hwnd, 0, 0, PM_REMOVE) != 0)
+        {
             TranslateMessage(&msg);
             DispatchMessageA(&msg);
         }
 
-        if (window->width != old_width || window->height != old_height)
-            hg_internal_resize_window_swapchain(window);
+        if (window->width != oldWidth || window->height != oldHeight)
+            hgInternalResizeWindowSwapchain(window);
 
-        window->mouse_delta_x = window->mouse_pos_x - old_mouse_pos_x;
-        window->mouse_delta_y = window->mouse_pos_y - old_mouse_pos_y;
+        window->mouseDeltaX = window->mousePosX - oldMousePosX;
+        window->mouseDeltaY = window->mousePosY - oldMousePosY;
 
-        if (window->is_key_down[(u32)HgKey::lshift] && window->is_key_down[(u32)HgKey::rshift]) {
+        if (window->isKeyDown[(u32)HgKey::lshift] && window->isKeyDown[(u32)HgKey::rshift])
+        {
             bool lshift = (GetAsyncKeyState(VK_LSHIFT) & 0x8000) != 0;
             bool rshift = (GetAsyncKeyState(VK_RSHIFT) & 0x8000) != 0;
-            if (!lshift) {
-                window->was_key_released[(u32)HgKey::lshift] = true;
-                window->is_key_down[(u32)HgKey::lshift] = false;
+            if (!lshift)
+            {
+                window->wasKeyReleased[(u32)HgKey::lshift] = true;
+                window->isKeyDown[(u32)HgKey::lshift] = false;
             }
-            if (!rshift) {
-                window->was_key_released[(u32)HgKey::rshift] = true;
-                window->is_key_down[(u32)HgKey::rshift] = false;
+            if (!rshift)
+            {
+                window->wasKeyReleased[(u32)HgKey::rshift] = true;
+                window->isKeyDown[(u32)HgKey::rshift] = false;
             }
         }
     }
@@ -541,76 +562,80 @@ void hg_process_window_events(HgWindow** windows, usize window_count) {
 
 static int ImGui_ImplWin32_CreateVkSurface(
     ImGuiViewport* viewport,
-    ImU64 vk_instance,
-    const void* vk_allocator,
-    ImU64* out_vk_surface
-) {
-    PFN_vkCreateWin32SurfaceKHR pfn_vkCreateWin32SurfaceKHR
-        = (PFN_vkCreateWin32SurfaceKHR)vkGetInstanceProcAddr((VkInstance)vk_instance, "vkCreateWin32SurfaceKHR");
-    if (pfn_vkCreateWin32SurfaceKHR == nullptr)
-        hg_error("Could not load vkCreateWin32SurfaceKHR\n");
+    ImU64 vkInstance,
+    const void* vkAllocator,
+    ImU64* outVkSurface)
+{
+    PFN_vkCreateWin32SurfaceKHR pfnVkCreateWin32SurfaceKHR
+        = (PFN_vkCreateWin32SurfaceKHR)vkGetInstanceProcAddr((VkInstance)vkInstance, "vkCreateWin32SurfaceKHR");
+    if (pfnVkCreateWin32SurfaceKHR == nullptr)
+        hgError("Could not load vkCreateWin32SurfaceKHR\n");
 
     VkWin32SurfaceCreateInfoKHR info{};
     info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
     info.hwnd = (HWND)viewport->PlatformHandleRaw;
     info.hinstance = ::GetModuleHandle(nullptr);
 
-    return (int)pfn_vkCreateWin32SurfaceKHR(
-        (VkInstance)vk_instance,
+    return (int)pfnVkCreateWin32SurfaceKHR(
+        (VkInstance)vkInstance,
         &info,
-        (VkAllocationCallbacks*)vk_allocator,
-        (VkSurfaceKHR*)out_vk_surface);
+        (VkAllocationCallbacks*)vkAllocator,
+        (VkSurfaceKHR*)outVkSurface);
 }
 
 void ImGui_ImplHurdyGurdy_Init(
     HgWindow* window,
-    u32 color_attachment_count,
-    const VkFormat* color_formats,
-    VkFormat depth_format,
-    VkFormat stencil_format
-) {
+    u32 colorAttachmentCount,
+    const VkFormat* colorFormats,
+    VkFormat depthFormat,
+    VkFormat stencilFormat)
+{
     ImGui_ImplWin32_Init(window->internals->hwnd);
     ImGui::GetPlatformIO().Platform_CreateVkSurface = ImGui_ImplWin32_CreateVkSurface;
-    imgui_initialized = true;
+    imguiInitialized = true;
 
-    ImGui_ImplVulkan_InitInfo imgui_info{};
-    imgui_info.Instance = hg_vk_instance;
-    imgui_info.PhysicalDevice = hg_vk_physical_device;
-    imgui_info.Device = hg_vk_device;
-    imgui_info.QueueFamily = hg_vk_queue_family;
-    imgui_info.Queue = hg_vk_queue;
-    imgui_info.DescriptorPoolSize = 1000;
-    imgui_info.MinImageCount = window->image_count;
-    imgui_info.ImageCount = window->image_count;
-    imgui_info.MinAllocationSize = 1 << 20;
-    imgui_info.UseDynamicRendering = true;
-    imgui_info.PipelineInfoMain.PipelineRenderingCreateInfo.sType
+    ImGui_ImplVulkan_InitInfo imguiInfo{};
+    imguiInfo.Instance = hgVkInstance;
+    imguiInfo.PhysicalDevice = hgVkPhysicalDevice;
+    imguiInfo.Device = hgVkDevice;
+    imguiInfo.QueueFamily = hgVkQueueFamily;
+    imguiInfo.Queue = hgVkQueue;
+    imguiInfo.DescriptorPoolSize = 1000;
+    imguiInfo.MinImageCount = window->imageCount;
+    imguiInfo.ImageCount = window->imageCount;
+    imguiInfo.MinAllocationSize = 1 << 20;
+    imguiInfo.UseDynamicRendering = true;
+    imguiInfo.PipelineInfoMain.PipelineRenderingCreateInfo.sType
         = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
-    imgui_info.PipelineInfoMain.PipelineRenderingCreateInfo.colorAttachmentCount = color_attachment_count;
-    imgui_info.PipelineInfoMain.PipelineRenderingCreateInfo.pColorAttachmentFormats = color_formats;
-    imgui_info.PipelineInfoMain.PipelineRenderingCreateInfo.depthAttachmentFormat = depth_format;
-    imgui_info.PipelineInfoMain.PipelineRenderingCreateInfo.stencilAttachmentFormat = stencil_format;
+    imguiInfo.PipelineInfoMain.PipelineRenderingCreateInfo.colorAttachmentCount = colorAttachmentCount;
+    imguiInfo.PipelineInfoMain.PipelineRenderingCreateInfo.pColorAttachmentFormats = colorFormats;
+    imguiInfo.PipelineInfoMain.PipelineRenderingCreateInfo.depthAttachmentFormat = depthFormat;
+    imguiInfo.PipelineInfoMain.PipelineRenderingCreateInfo.stencilAttachmentFormat = stencilFormat;
 #ifdef HG_VK_DEBUG_MESSENGER
-    imgui_info.CheckVkResultFn = [](VkResult err) {
+    imguiInfo.CheckVkResultFn = [](VkResult err)
+    {
         if (err != VK_SUCCESS)
-            hg_warn("Vulkan error from ImGui: %s\n", hg_vk_result_to_string(err));
+            hgWarn("Vulkan error from ImGui: %s\n", hgVkResultToStr(err));
     };
 #endif
 
-    ImGui_ImplVulkan_Init(&imgui_info);
+    ImGui_ImplVulkan_Init(&imguiInfo);
 }
 
-void ImGui_ImplHurdyGurdy_Shutdown() {
+void ImGui_ImplHurdyGurdy_Shutdown()
+{
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplWin32_Shutdown();
 }
 
-void ImGui_ImplHurdyGurdy_NewFrame() {
+void ImGui_ImplHurdyGurdy_NewFrame()
+{
     ImGui_ImplWin32_NewFrame();
     ImGui_ImplVulkan_NewFrame();
 }
 
-void ImGui_ImplHurdyGurdy_Draw(VkCommandBuffer cmd) {
+void ImGui_ImplHurdyGurdy_Draw(VkCommandBuffer cmd)
+{
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
 }
 

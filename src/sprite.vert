@@ -1,16 +1,16 @@
 #version 460
 
-layout (location = 0) out vec2 f_uv;
+layout (location = 0) out vec2 fUV;
 
 layout (set = 0, binding = 0) uniform UViewProjection {
-    mat4 u_proj;
-    mat4 u_view;
+    mat4 uProj;
+    mat4 uView;
 };
 
 layout (push_constant) uniform Push {
-    mat4 p_model;
-    vec2 p_uv_pos;
-    vec2 p_uv_size;
+    mat4 pModel;
+    vec2 pUVPos;
+    vec2 pUVSize;
 };
 
 const vec2 positions[] = vec2[](
@@ -21,9 +21,9 @@ const vec2 positions[] = vec2[](
 );
 
 void main() {
-    f_uv = positions[gl_VertexIndex] * p_uv_size + p_uv_pos;
+    fUV = positions[gl_VertexIndex] * pUVSize + pUVPos;
 
-    vec2 vertex_pos = positions[gl_VertexIndex] - vec2(0.5);
-    gl_Position = u_proj * u_view * p_model * vec4(vertex_pos, 0.0, 1.0);
+    vec2 vertexPos = positions[gl_VertexIndex] - vec2(0.5);
+    gl_Position = uProj * uView * pModel * vec4(vertexPos, 0.0, 1.0);
 }
 

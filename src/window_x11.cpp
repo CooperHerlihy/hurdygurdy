@@ -7,13 +7,13 @@
 #include <X11/Xutil.h>
 #include <vulkan/vulkan_xlib.h>
 
-void hg_internal_create_window_swapchain(HgWindow* window, const HgWindowConfig& config);
-void hg_internal_resize_window_swapchain(HgWindow* window);
-void hg_internal_destroy_window_swapchain(HgWindow* window);
+void hgInternalCreateWindowSwapchain(HgWindow* window, const HgWindowConfig& config);
+void hgInternalResizeWindowSwapchain(HgWindow* window);
+void hgInternalDestroyWindowSwapchain(HgWindow* window);
 
 struct HgWindow::Internals {
-    Window x11_window;
-    Atom delete_atom;
+    Window x11Window;
+    Atom deleteAtom;
 };
 
 struct HgX11Funcs {
@@ -34,14 +34,16 @@ struct HgX11Funcs {
 };
 
 static void* libx11 = nullptr;
-static HgX11Funcs x11_funcs{};
+static HgX11Funcs x11Funcs{};
 
-Display* XOpenDisplay(_Xconst char* name) {
-    return x11_funcs.XOpenDisplay(name);
+Display* XOpenDisplay(_Xconst char* name)
+{
+    return x11Funcs.XOpenDisplay(name);
 }
 
-int XCloseDisplay(Display* dpy) {
-    return x11_funcs.XCloseDisplay(dpy);
+int XCloseDisplay(Display* dpy)
+{
+    return x11Funcs.XCloseDisplay(dpy);
 }
 
 Window XCreateWindow(
@@ -51,70 +53,81 @@ Window XCreateWindow(
     int y,
     unsigned int width,
     unsigned int height,
-    unsigned int border_width,
+    unsigned int borderWidth,
     int depth,
     unsigned int xclass,
     Visual* visual,
     unsigned long valuemask,
-    XSetWindowAttributes* attributes
-) {
-    return x11_funcs.XCreateWindow(
-        dpy, parent, x, y, width, height, border_width,
+    XSetWindowAttributes* attributes)
+{
+    return x11Funcs.XCreateWindow(
+        dpy, parent, x, y, width, height, borderWidth,
         depth, xclass, visual, valuemask, attributes
     );
 }
 
-int XDestroyWindow(Display* dpy, Window w) {
-    return x11_funcs.XDestroyWindow(dpy, w);
+int XDestroyWindow(Display* dpy, Window w)
+{
+    return x11Funcs.XDestroyWindow(dpy, w);
 }
 
-int XStoreName(Display* dpy, Window w, _Xconst char* name) {
-    return x11_funcs.XStoreName(dpy, w, name);
+int XStoreName(Display* dpy, Window w, _Xconst char* name)
+{
+    return x11Funcs.XStoreName(dpy, w, name);
 }
 
-Atom XInternAtom(Display* dpy, _Xconst char* name, Bool only_if_exists) {
-    return x11_funcs.XInternAtom(dpy, name, only_if_exists);
+Atom XInternAtom(Display* dpy, _Xconst char* name, Bool onlyIfExists)
+{
+    return x11Funcs.XInternAtom(dpy, name, onlyIfExists);
 }
 
-Status XSetWMProtocols(Display* dpy, Window w, Atom* protocols, int count) {
-    return x11_funcs.XSetWMProtocols(dpy, w, protocols, count);
+Status XSetWMProtocols(Display* dpy, Window w, Atom* protocols, int count)
+{
+    return x11Funcs.XSetWMProtocols(dpy, w, protocols, count);
 }
 
-int XMapWindow(Display* dpy, Window w) {
-    return x11_funcs.XMapWindow(dpy, w);
+int XMapWindow(Display* dpy, Window w)
+{
+    return x11Funcs.XMapWindow(dpy, w);
 }
 
-Status XSendEvent(Display* dpy, Window w, Bool propagate, long event_mask, XEvent* event) {
-    return x11_funcs.XSendEvent(dpy, w, propagate, event_mask, event);
+Status XSendEvent(Display* dpy, Window w, Bool propagate, long eventMask, XEvent* event)
+{
+    return x11Funcs.XSendEvent(dpy, w, propagate, eventMask, event);
 }
 
-int XFlush(Display* dpy) {
-    return x11_funcs.XFlush(dpy);
+int XFlush(Display* dpy)
+{
+    return x11Funcs.XFlush(dpy);
 }
 
-int XNextEvent(Display* dpy, XEvent* event) {
-    return x11_funcs.XNextEvent(dpy, event);
+int XNextEvent(Display* dpy, XEvent* event)
+{
+    return x11Funcs.XNextEvent(dpy, event);
 }
 
-int XPending(Display* dpy) {
-    return x11_funcs.XPending(dpy);
+int XPending(Display* dpy)
+{
+    return x11Funcs.XPending(dpy);
 }
 
-KeySym XLookupKeysym(XKeyEvent* key_event, int index) {
-    return x11_funcs.XLookupKeysym(key_event, index);
+KeySym XLookupKeysym(XKeyEvent* keyEvent, int index)
+{
+    return x11Funcs.XLookupKeysym(keyEvent, index);
 }
 
-#define HG_LOAD_X11_FUNC(name)* (void**)&x11_funcs. name \
+#define HG_LOAD_X11_FUNC(name)* (void**)&x11Funcs. name \
     = dlsym(libx11, #name); \
-    if (x11_funcs. name == nullptr) { hg_error("Could not load Xlib function: \n" #name); }
+    if (x11Funcs. name == nullptr) { hgError("Could not load Xlib function: \n" #name); }
 
-Display* x11_display = nullptr;
+Display* x11Display = nullptr;
 
-void hg_platform_init() {
+void hgInitPlatform()
+{
     if (libx11 == nullptr)
         libx11 = dlopen("libX11.so.6", RTLD_LAZY);
     if (libx11 == nullptr)
-        hg_error("Could not open Xlib\n");
+        hgError("Could not open Xlib\n");
 
     HG_LOAD_X11_FUNC(XOpenDisplay);
     HG_LOAD_X11_FUNC(XCloseDisplay);
@@ -130,31 +143,29 @@ void hg_platform_init() {
     HG_LOAD_X11_FUNC(XNextEvent);
     HG_LOAD_X11_FUNC(XLookupKeysym);
 
-    if (x11_display == nullptr)
-        x11_display = XOpenDisplay(nullptr);
-    if (x11_display == nullptr)
-        hg_error("Could not open X display\n");
+    if (x11Display == nullptr)
+        x11Display = XOpenDisplay(nullptr);
+    if (x11Display == nullptr)
+        hgError("Could not open X display\n");
 }
 
-void hg_platform_deinit() {
-    if (x11_display != nullptr) {
-        XCloseDisplay(x11_display);
-        x11_display = nullptr;
+void hgDeinitPlatform()
+{
+    if (x11Display != nullptr)
+    {
+        XCloseDisplay(x11Display);
+        x11Display = nullptr;
     }
-    if (libx11 != nullptr) {
+    if (libx11 != nullptr)
+    {
         dlclose(libx11);
         libx11 = nullptr;
     }
 }
 
-static Window create_x11_window(
-    Display* display,
-    u32 width,
-    u32 height,
-    const char* title
-) {
-    XSetWindowAttributes window_attributes{};
-    window_attributes.event_mask
+static Window createX11Window(Display* display, u32 width, u32 height, const char* title) {
+    XSetWindowAttributes windowAttributes{};
+    windowAttributes.event_mask
         = KeyPressMask | KeyReleaseMask
         | ButtonPressMask
         | ButtonReleaseMask
@@ -170,183 +181,191 @@ static Window create_x11_window(
         InputOutput,
         CopyFromParent,
         CWEventMask,
-        &window_attributes
+        &windowAttributes
     );
     if (window == ~0U)
-        hg_error("X11 could not create window\n");
+        hgError("X11 could not create window\n");
 
-    if (title != nullptr) {
-        int name_result = XStoreName(display, window, title);
-        if (name_result == 0)
-            hg_error("X11 could not set window title\n");
+    if (title != nullptr)
+    {
+        int nameResult = XStoreName(display, window, title);
+        if (nameResult == 0)
+            hgError("X11 could not set window title\n");
     }
 
-    int map_result = XMapWindow(display, window);
-    if (map_result == 0)
-        hg_error("X11 could not map window\n");
+    int mapResult = XMapWindow(display, window);
+    if (mapResult == 0)
+        hgError("X11 could not map window\n");
 
     return window;
 }
 
-static Atom set_x11_delete_behavior(
-    Display* display,
-    Window window
-) {
-    Atom delete_atom = XInternAtom(display, "WM_DELETE_WINDOW", False);
-    if (delete_atom == None)
-        hg_error("X11 could not get WM_DELETE_WINDOW atom\n");
+static Atom setX11DeleteBehavior(Display* display, Window window)
+{
+    Atom deleteAtom = XInternAtom(display, "WM_DELETE_WINDOW", False);
+    if (deleteAtom == None)
+        hgError("X11 could not get WM_DELETE_WINDOW atom\n");
 
-    int set_protocols_result = XSetWMProtocols(
+    int setProtocolsResult = XSetWMProtocols(
         display,
         window,
-        &delete_atom,
+        &deleteAtom,
         1
     );
-    if (set_protocols_result == 0)
-        hg_error("X11 could not set WM_DELETE_WINDOW protocol\n");
+    if (setProtocolsResult == 0)
+        hgError("X11 could not set WM_DELETE_WINDOW protocol\n");
 
-    return delete_atom;
+    return deleteAtom;
 }
 
-static void set_x11_fullscreen(
-    Display* display,
-    Window window
-) {
-    Atom state_atom = XInternAtom(display, "_NET_WM_STATE", False);
-    if (state_atom == None)
-        hg_error("X11 failed to get state atom\n");
+static void setX11Fullscreen(Display* display, Window window)
+{
+    Atom stateAtom = XInternAtom(display, "_NET_WM_STATE", False);
+    if (stateAtom == None)
+        hgError("X11 failed to get state atom\n");
 
-    Atom fullscreen_atom = XInternAtom(display, "_NET_WM_STATE_FULLSCREEN", False);
-    if (fullscreen_atom == None)
-        hg_error("X11 failed to get fullscreen atom\n");
+    Atom fullscreenAtom = XInternAtom(display, "_NET_WM_STATE_FULLSCREEN", False);
+    if (fullscreenAtom == None)
+        hgError("X11 failed to get fullscreen atom\n");
 
     XEvent event{};
     event.xclient.type = ClientMessage;
     event.xclient.window = window;
-    event.xclient.message_type = state_atom;
+    event.xclient.message_type = stateAtom;
     event.xclient.format = 32;
     event.xclient.data.l[0] = 1;
-    event.xclient.data.l[1] = (long)fullscreen_atom;
+    event.xclient.data.l[1] = (long)fullscreenAtom;
 
-    int fullscreen_result = XSendEvent(
+    int fullscreenResult = XSendEvent(
         display,
         RootWindow(display, DefaultScreen(display)),
         False,
         SubstructureRedirectMask | SubstructureNotifyMask,
         &event
     );
-    if (fullscreen_result == 0)
-        hg_error("X11 could not send fullscreen message\n");
+    if (fullscreenResult == 0)
+        hgError("X11 could not send fullscreen message\n");
 }
 
-HgWindow* HgWindow::create(HgArena* arena, const HgWindowConfig& config) {
-    HgWindow* window = hg_alloc<HgWindow>(arena, 1);
+HgWindow* HgWindow::create(HgArena* arena, const HgWindowConfig& config)
+{
+    HgWindow* window = hgAlloc<HgWindow>(arena, 1);
     *window = {};
-    window->internals = hg_alloc<Internals>(arena, 1);
+    window->internals = hgAlloc<Internals>(arena, 1);
     *window->internals = {};
 
-    window->width = config.windowed ? config.width : (u32)DisplayWidth(x11_display, DefaultScreen(x11_display));
-    window->height = config.windowed ? config.height : (u32)DisplayHeight(x11_display, DefaultScreen(x11_display));
+    window->width = config.windowed ? config.width : (u32)DisplayWidth(x11Display, DefaultScreen(x11Display));
+    window->height = config.windowed ? config.height : (u32)DisplayHeight(x11Display, DefaultScreen(x11Display));
 
-    window->internals->x11_window = create_x11_window(
-        x11_display, window->width, window->height, config.title);
-    window->internals->delete_atom = set_x11_delete_behavior(
-        x11_display, window->internals->x11_window);
+    window->internals->x11Window = createX11Window(
+        x11Display, window->width, window->height, config.title);
+    window->internals->deleteAtom = setX11DeleteBehavior(
+        x11Display, window->internals->x11Window);
 
     if (!config.windowed)
-        set_x11_fullscreen(x11_display, window->internals->x11_window);
+        setX11Fullscreen(x11Display, window->internals->x11Window);
 
-    int flush_result = XFlush(x11_display);
-    if (flush_result == 0)
-        hg_error("X11 could not flush window\n");
+    int flushResult = XFlush(x11Display);
+    if (flushResult == 0)
+        hgError("X11 could not flush window\n");
 
-    PFN_vkCreateXlibSurfaceKHR pfn_vkCreateXlibSurfaceKHR
-        = (PFN_vkCreateXlibSurfaceKHR)vkGetInstanceProcAddr(hg_vk_instance, "vkCreateXlibSurfaceKHR");
-    if (pfn_vkCreateXlibSurfaceKHR == nullptr)
-        hg_error("Could not load vkCreateXlibSurfaceKHR\n");
+    PFN_vkCreateXlibSurfaceKHR pfnVkCreateXlibSurfaceKHR
+        = (PFN_vkCreateXlibSurfaceKHR)vkGetInstanceProcAddr(hgVkInstance, "vkCreateXlibSurfaceKHR");
+    if (pfnVkCreateXlibSurfaceKHR == nullptr)
+        hgError("Could not load vkCreateXlibSurfaceKHR\n");
 
     VkXlibSurfaceCreateInfoKHR info{};
     info.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
-    info.dpy = x11_display;
-    info.window = window->internals->x11_window;
+    info.dpy = x11Display;
+    info.window = window->internals->x11Window;
 
-    VkResult result = pfn_vkCreateXlibSurfaceKHR(hg_vk_instance, &info, nullptr, &window->surface);
+    VkResult result = pfnVkCreateXlibSurfaceKHR(hgVkInstance, &info, nullptr, &window->surface);
     if (window->surface == nullptr)
-        hg_error("Failed to create Vulkan surface: %s\n", hg_vk_result_to_string(result));
+        hgError("Failed to create Vulkan surface: %s\n", hgVkResultToStr(result));
 
-    hg_internal_create_window_swapchain(window, config);
+    hgInternalCreateWindowSwapchain(window, config);
 
     return window;
 }
 
-void HgWindow::destroy() {
-    hg_internal_destroy_window_swapchain(this);
-    vkDestroySurfaceKHR(hg_vk_instance, surface, nullptr);
-    XDestroyWindow(x11_display, internals->x11_window);
-    XFlush(x11_display);
+void HgWindow::destroy()
+{
+    hgInternalDestroyWindowSwapchain(this);
+    vkDestroySurfaceKHR(hgVkInstance, surface, nullptr);
+    XDestroyWindow(x11Display, internals->x11Window);
+    XFlush(x11Display);
 }
 
-void HgWindow::set_icon(u32* icon_data, u32 width, u32 height) {
-    hg_error("window set_icon : TODO\n");
-    (void)icon_data;
+void HgWindow::setIcon(u32* iconData, u32 width, u32 height)
+{
+    hgError("window setIcon : TODO\n");
+    (void)iconData;
     (void)width;
     (void)height;
 }
 
-bool HgWindow::is_fullscreen() {
-    hg_error("window is_fullscreen : TODO\n");
+bool HgWindow::isFullscreen()
+{
+    hgError("window isFullscreen : TODO\n");
 }
 
-void HgWindow::set_fullscreen(bool fullscreen) {
-    hg_error("window set_fullscreen : TODO\n");
+void HgWindow::setFullscreen(bool fullscreen)
+{
+    hgError("window setFullscreen : TODO\n");
     (void)fullscreen;
 }
 
-void HgWindow::set_cursor(HgWindow::Cursor cursor) {
-    hg_error("window set_cursor : TODO\n");
+void HgWindow::setCursor(HgWindow::Cursor cursor)
+{
+    hgError("window setCursor : TODO\n");
     (void)cursor;
 }
 
-void HgWindow::set_cursor_image(u32* data, u32 width, u32 height) {
-    hg_error("window set_cursor_image : TODO\n");
+void HgWindow::setCursorImage(u32* data, u32 width, u32 height)
+{
+    hgError("window setCursorImage : TODO\n");
     (void)data;
     (void)width;
     (void)height;
 }
 
-u32 hg_vk_get_platform_extensions(HgArena* arena, HgStringView** ext_buffer) {
+u32 hgVkGetPlatformExtensions(HgArena* arena, HgStringView** extBuffer)
+{
     u32 count = 2;
-    *ext_buffer = hg_alloc<HgStringView>(arena, count);
-    (*ext_buffer)[0] = "VK_KHR_surface";
-    (*ext_buffer)[1] = "VK_KHR_xlib_surface";
+    *extBuffer = hgAlloc<HgStringView>(arena, count);
+    (*extBuffer)[0] = "VK_KHR_surface";
+    (*extBuffer)[1] = "VK_KHR_xlib_surface";
     return count;
 }
 
-void hg_process_window_events(HgWindow** windows, usize window_count) {
-    hg_assert(windows != nullptr);
+void hgProcessWindowEvents(HgWindow** windows, usize windowCount)
+{
+    hgAssert(windows != nullptr);
 
-    if (window_count != 1)
-        hg_error("Multiple windows unsupported\n"); // : TODO
+    if (windowCount != 1)
+        hgError("Multiple windows unsupported\n"); // : TODO
     HgWindow* window = windows[0];
 
-    memset(window->was_key_pressed, 0, sizeof(window->was_key_pressed));
-    memset(window->was_key_released, 0, sizeof(window->was_key_released));
+    memset(window->wasKeyPressed, 0, sizeof(window->wasKeyPressed));
+    memset(window->wasKeyReleased, 0, sizeof(window->wasKeyReleased));
 
-    u32 old_width = window->width;
-    u32 old_height = window->height;
-    f64 old_mouse_pos_x = window->mouse_pos_x;
-    f64 old_mouse_pos_y = window->mouse_pos_y;
+    u32 oldWidth = window->width;
+    u32 oldHeight = window->height;
+    f64 oldMousePosX = window->mousePosX;
+    f64 oldMousePosY = window->mousePosY;
 
-    while (XPending(x11_display)) {
+    while (XPending(x11Display))
+    {
         XEvent event;
-        int event_result = XNextEvent(x11_display, &event);
-        if (event_result != 0)
-            hg_error("X11 could not get next event\n");
+        int eventResult = XNextEvent(x11Display, &event);
+        if (eventResult != 0)
+            hgError("X11 could not get next event\n");
 
-        switch (event.type) {
+        switch (event.type)
+        {
             case ClientMessage:
-                if ((Atom)event.xclient.data.l[0] == window->internals->delete_atom)
-                    window->was_closed = true;
+                if ((Atom)event.xclient.data.l[0] == window->internals->deleteAtom)
+                    window->wasClosed = true;
                 break;
             case ConfigureNotify:
                 window->width = (u32)event.xconfigure.width;
@@ -355,7 +374,8 @@ void hg_process_window_events(HgWindow** windows, usize window_count) {
             case KeyPress:
             case KeyRelease: {
                 HgKey key = HgKey::none;
-                switch (XLookupKeysym(&event.xkey, 0)) {
+                switch (XLookupKeysym(&event.xkey, 0))
+                {
                     case XK_0:
                         key = HgKey::k0;
                         break;
@@ -700,18 +720,21 @@ void hg_process_window_events(HgWindow** windows, usize window_count) {
                         key = HgKey::capslock;
                         break;
                 }
-                if (event.type == KeyPress) {
-                    window->was_key_pressed[(u32)key] = true;
-                    window->is_key_down[(u32)key] = true;
-                } else if (event.type == KeyRelease) {
-                    window->was_key_released[(u32)key] = true;
-                    window->is_key_down[(u32)key] = false;
+                if (event.type == KeyPress)
+                {
+                    window->wasKeyPressed[(u32)key] = true;
+                    window->isKeyDown[(u32)key] = true;
+                } else if (event.type == KeyRelease)
+                {
+                    window->wasKeyReleased[(u32)key] = true;
+                    window->isKeyDown[(u32)key] = false;
                 }
             } break;
             case ButtonPress:
             case ButtonRelease: {
                 HgKey key = HgKey::none;
-                switch (event.xbutton.button) {
+                switch (event.xbutton.button)
+                {
                     case Button1:
                         key = HgKey::mouse1;
                         break;
@@ -728,41 +751,46 @@ void hg_process_window_events(HgWindow** windows, usize window_count) {
                         key = HgKey::mouse5;
                         break;
                 }
-                if (event.type == ButtonPress) {
-                    window->was_key_pressed[(u32)key] = true;
-                    window->is_key_down[(u32)key] = true;
-                } else if (event.type == ButtonRelease) {
-                    window->was_key_released[(u32)key] = true;
-                    window->is_key_down[(u32)key] = false;
+                if (event.type == ButtonPress)
+                {
+                    window->wasKeyPressed[(u32)key] = true;
+                    window->isKeyDown[(u32)key] = true;
+                } else if (event.type == ButtonRelease)
+                {
+                    window->wasKeyReleased[(u32)key] = true;
+                    window->isKeyDown[(u32)key] = false;
                 }
             } break;
             case MotionNotify:
-                window->mouse_pos_x = (f64)event.xmotion.x / (f64)window->height;
-                window->mouse_pos_y = (f64)event.xmotion.y / (f64)window->height;
+                window->mousePosX = (f64)event.xmotion.x / (f64)window->height;
+                window->mousePosY = (f64)event.xmotion.y / (f64)window->height;
                 break;
             default:
                 break;
         }
     }
 
-    if (window->width != old_width || window->height != old_height)
-        hg_internal_resize_window_swapchain(window);
+    if (window->width != oldWidth || window->height != oldHeight)
+        hgInternalResizeWindowSwapchain(window);
 
-    window->mouse_delta_x = window->mouse_pos_x - old_mouse_pos_x;
-    window->mouse_delta_y = window->mouse_pos_y - old_mouse_pos_y;
+    window->mouseDeltaX = window->mousePosX - oldMousePosX;
+    window->mouseDeltaY = window->mousePosY - oldMousePosY;
 }
 
-void ImGui_ImplHurdyGurdy_Init(HgWindow window) {
+void ImGui_ImplHurdyGurdy_Init(HgWindow window)
+{
     (void)window;
-    hg_error("x11 has no imgui impl yet\n");
+    hgError("x11 has no imgui impl yet\n");
 }
 
-void ImGui_ImplHurdyGurdy_Shutdown() {
-    hg_error("x11 has no imgui impl yet\n");
+void ImGui_ImplHurdyGurdy_Shutdown()
+{
+    hgError("x11 has no imgui impl yet\n");
 }
 
-void ImGui_ImplHurdyGurdy_NewFrame() {
-    hg_error("x11 has no imgui impl yet\n");
+void ImGui_ImplHurdyGurdy_NewFrame()
+{
+    hgError("x11 has no imgui impl yet\n");
 }
 
 #endif

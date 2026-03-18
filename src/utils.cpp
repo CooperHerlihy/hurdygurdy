@@ -1,83 +1,94 @@
 #include "hurdygurdy.hpp"
 
-void hg_init(void) {
-    hg_scratch_memory_init();
-    HgArena* arena = hg_get_scratch();
+void hgInit(void)
+{
+    hgInitScratchMemory();
+    HgArena* arena = hgGetScratch();
 
-    hg_thread_pool_init(arena, 4096, hg_hardware_concurrency() - 2); // main thread, io thread
-    hg_io_thread_init(arena, 4096);
-    hg_resources_init();
-    hg_gpu_resources_init();
+    hgInitThreadPool(arena, 4096, hgHardwareThreadCount() - 2); // main thread, io thread
+    hgInitIOThread(arena, 4096);
+    hgInitResources();
+    hgInitGpuResources();
 
-    hg_platform_init();
-    hg_graphics_init();
+    hgInitPlatform();
+    hgInitGraphics();
 }
 
-void hg_exit(void) {
-    hg_graphics_deinit();
-    hg_platform_deinit();
+void hgExit(void)
+{
+    hgDeinitGraphics();
+    hgDeinitPlatform();
 
-    hg_gpu_resources_deinit();
-    hg_resources_deinit();
-    hg_io_thread_deinit();
-    hg_thread_pool_deinit();
+    hgDeinitGpuResources();
+    hgDeinitResource();
+    hgDeinitIOThread();
+    hgDeinitThreadPool();
 
-    hg_scratch_memory_deinit();
+    hgDeinitScratchMemory();
 }
 
-const HgVec2& HgVec2::operator+=(HgVec2 other) {
+const HgVec2& HgVec2::operator+=(HgVec2 other)
+{
     x += other.x;
     y += other.y;
     return* this;
 }
 
-const HgVec2& HgVec2::operator-=(HgVec2 other) {
+const HgVec2& HgVec2::operator-=(HgVec2 other)
+{
     x -= other.x;
     y -= other.y;
     return* this;
 }
 
-const HgVec2& HgVec2::operator*=(HgVec2 other) {
+const HgVec2& HgVec2::operator*=(HgVec2 other)
+{
     x *= other.x;
     y *= other.y;
     return* this;
 }
 
-const HgVec2& HgVec2::operator/=(HgVec2 other) {
+const HgVec2& HgVec2::operator/=(HgVec2 other)
+{
     x /= other.x;
     y /= other.y;
     return* this;
 }
 
-const HgVec3& HgVec3::operator+=(HgVec3 other) {
+const HgVec3& HgVec3::operator+=(HgVec3 other)
+{
     x += other.x;
     y += other.y;
     z += other.z;
     return* this;
 }
 
-const HgVec3& HgVec3::operator-=(HgVec3 other) {
+const HgVec3& HgVec3::operator-=(HgVec3 other)
+{
     x -= other.x;
     y -= other.y;
     z -= other.z;
     return* this;
 }
 
-const HgVec3& HgVec3::operator*=(HgVec3 other) {
+const HgVec3& HgVec3::operator*=(HgVec3 other)
+{
     x *= other.x;
     y *= other.y;
     z *= other.z;
     return* this;
 }
 
-const HgVec3& HgVec3::operator/=(HgVec3 other) {
+const HgVec3& HgVec3::operator/=(HgVec3 other)
+{
     x /= other.x;
     y /= other.y;
     z /= other.z;
     return* this;
 }
 
-const HgVec4& HgVec4::operator+=(HgVec4 other) {
+const HgVec4& HgVec4::operator+=(HgVec4 other)
+{
     x += other.x;
     y += other.y;
     z += other.z;
@@ -85,7 +96,8 @@ const HgVec4& HgVec4::operator+=(HgVec4 other) {
     return* this;
 }
 
-const HgVec4& HgVec4::operator-=(HgVec4 other) {
+const HgVec4& HgVec4::operator-=(HgVec4 other)
+{
     x -= other.x;
     y -= other.y;
     z -= other.z;
@@ -93,7 +105,8 @@ const HgVec4& HgVec4::operator-=(HgVec4 other) {
     return* this;
 }
 
-const HgVec4& HgVec4::operator*=(HgVec4 other) {
+const HgVec4& HgVec4::operator*=(HgVec4 other)
+{
     x *= other.x;
     y *= other.y;
     z *= other.z;
@@ -101,7 +114,8 @@ const HgVec4& HgVec4::operator*=(HgVec4 other) {
     return* this;
 }
 
-const HgVec4& HgVec4::operator/=(HgVec4 other) {
+const HgVec4& HgVec4::operator/=(HgVec4 other)
+{
     x /= other.x;
     y /= other.y;
     z /= other.z;
@@ -109,33 +123,38 @@ const HgVec4& HgVec4::operator/=(HgVec4 other) {
     return* this;
 }
 
-const HgMat2& HgMat2::operator+=(const HgMat2& other) {
+const HgMat2& HgMat2::operator+=(const HgMat2& other)
+{
     x += other.x;
     y += other.y;
     return* this;
 }
 
-const HgMat2& HgMat2::operator-=(const HgMat2& other) {
+const HgMat2& HgMat2::operator-=(const HgMat2& other)
+{
     x -= other.x;
     y -= other.y;
     return* this;
 }
 
-const HgMat3& HgMat3::operator+=(const HgMat3& other) {
+const HgMat3& HgMat3::operator+=(const HgMat3& other)
+{
     x += other.x;
     y += other.y;
     z += other.z;
     return* this;
 }
 
-const HgMat3& HgMat3::operator-=(const HgMat3& other) {
+const HgMat3& HgMat3::operator-=(const HgMat3& other)
+{
     x -= other.x;
     y -= other.y;
     z -= other.z;
     return* this;
 }
 
-const HgMat4& HgMat4::operator+=(const HgMat4& other) {
+const HgMat4& HgMat4::operator+=(const HgMat4& other)
+{
     x += other.x;
     y += other.y;
     z += other.z;
@@ -143,7 +162,8 @@ const HgMat4& HgMat4::operator+=(const HgMat4& other) {
     return* this;
 }
 
-const HgMat4& HgMat4::operator-=(const HgMat4& other) {
+const HgMat4& HgMat4::operator-=(const HgMat4& other)
+{
     x -= other.x;
     y -= other.y;
     z -= other.z;
@@ -151,19 +171,22 @@ const HgMat4& HgMat4::operator-=(const HgMat4& other) {
     return* this;
 }
 
-const HgComplex& HgComplex::operator+=(HgComplex other) {
+const HgComplex& HgComplex::operator+=(HgComplex other)
+{
     r += other.r;
     i += other.i;
     return* this;
 }
 
-const HgComplex& HgComplex::operator-=(HgComplex other) {
+const HgComplex& HgComplex::operator-=(HgComplex other)
+{
     r -= other.r;
     i -= other.i;
     return* this;
 }
 
-const HgQuat& HgQuat::operator+=(HgQuat other) {
+const HgQuat& HgQuat::operator+=(HgQuat other)
+{
     r += other.r;
     i += other.i;
     j += other.j;
@@ -171,7 +194,8 @@ const HgQuat& HgQuat::operator+=(HgQuat other) {
     return* this;
 }
 
-const HgQuat& HgQuat::operator-=(HgQuat other) {
+const HgQuat& HgQuat::operator-=(HgQuat other)
+{
     r -= other.r;
     i -= other.i;
     j -= other.j;
@@ -179,128 +203,153 @@ const HgQuat& HgQuat::operator-=(HgQuat other) {
     return* this;
 }
 
-void hg_vec_add(u32 size, f32* dst, const f32* lhs, const f32* rhs) {
-    hg_assert(dst != nullptr);
-    hg_assert(lhs != nullptr);
-    hg_assert(rhs != nullptr);
-    for (u32 i = 0; i < size; ++i) {
+void hgAddVec(u32 size, f32* dst, const f32* lhs, const f32* rhs)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(lhs != nullptr);
+    hgAssert(rhs != nullptr);
+    for (u32 i = 0; i < size; ++i)
+    {
         dst[i] = lhs[i] + rhs[i];
     }
 }
 
-void hg_vec_sub(u32 size, f32* dst, const f32* lhs, const f32* rhs) {
-    hg_assert(dst != nullptr);
-    hg_assert(lhs != nullptr);
-    hg_assert(rhs != nullptr);
-    for (u32 i = 0; i < size; ++i) {
+void hgSubVec(u32 size, f32* dst, const f32* lhs, const f32* rhs)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(lhs != nullptr);
+    hgAssert(rhs != nullptr);
+    for (u32 i = 0; i < size; ++i)
+    {
         dst[i] = lhs[i] - rhs[i];
     }
 }
 
-void hg_vec_mul_pairwise(u32 size, f32* dst, const f32* lhs, const f32* rhs) {
-    hg_assert(dst != nullptr);
-    hg_assert(lhs != nullptr);
-    hg_assert(rhs != nullptr);
-    for (u32 i = 0; i < size; ++i) {
+void hgPairwiseMulVec(u32 size, f32* dst, const f32* lhs, const f32* rhs)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(lhs != nullptr);
+    hgAssert(rhs != nullptr);
+    for (u32 i = 0; i < size; ++i)
+    {
         dst[i] = lhs[i] * rhs[i];
     }
 }
 
-void hg_vec_scalar_mul(u32 size, f32* dst, f32 scalar, const f32* vec) {
-    hg_assert(dst != nullptr);
-    hg_assert(vec != nullptr);
-    for (u32 i = 0; i < size; ++i) {
+void hgMulVecScalar(u32 size, f32* dst, f32 scalar, const f32* vec)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(vec != nullptr);
+    for (u32 i = 0; i < size; ++i)
+    {
         dst[i] = scalar * vec[i];
     }
 }
 
-void hg_vec_div(u32 size, f32* dst, const f32* lhs, const f32* rhs) {
-    hg_assert(dst != nullptr);
-    hg_assert(lhs != nullptr);
-    hg_assert(rhs != nullptr);
-    for (u32 i = 0; i < size; ++i) {
-        hg_assert(rhs[i] != 0);
+void hgPairwiseDivVec(u32 size, f32* dst, const f32* lhs, const f32* rhs)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(lhs != nullptr);
+    hgAssert(rhs != nullptr);
+    for (u32 i = 0; i < size; ++i)
+    {
+        hgAssert(rhs[i] != 0);
         dst[i] = lhs[i] / rhs[i];
     }
 }
 
-void hg_vec_scalar_div(u32 size, f32* dst, const f32* vec, f32 scalar) {
-    hg_assert(dst != nullptr);
-    hg_assert(vec != nullptr);
-    hg_assert(scalar != 0);
-    for (u32 i = 0; i < size; ++i) {
+void hgDivVecScalar(u32 size, f32* dst, const f32* vec, f32 scalar)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(vec != nullptr);
+    hgAssert(scalar != 0);
+    for (u32 i = 0; i < size; ++i)
+    {
         dst[i] = vec[i] / scalar;
     }
 }
 
-void hg_dot(u32 size, f32* dst, const f32* lhs, const f32* rhs) {
-    hg_assert(dst != nullptr);
-    hg_assert(lhs != nullptr);
-    hg_assert(rhs != nullptr);
+void hgDot(u32 size, f32* dst, const f32* lhs, const f32* rhs)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(lhs != nullptr);
+    hgAssert(rhs != nullptr);
     *dst = 0;
-    for (u32 i = 0; i < size; ++i) {
+    for (u32 i = 0; i < size; ++i)
+    {
         *dst += lhs[i] * rhs[i];
     }
 }
 
-void hg_len(u32 size, f32* dst, const f32* vec) {
-    hg_assert(dst != nullptr);
-    hg_assert(vec != nullptr);
-    hg_dot(size, dst, vec, vec);
+void hgLen(u32 size, f32* dst, const f32* vec)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(vec != nullptr);
+    hgDot(size, dst, vec, vec);
     *dst = (f32)sqrt(*dst);
 }
 
-f32 hg_len(HgVec2 vec) {
-    return (f32)sqrt(hg_dot(vec, vec));
+f32 hgLen(HgVec2 vec)
+{
+    return (f32)sqrt(hgDot(vec, vec));
 }
 
-f32 hg_len(HgVec3 vec) {
-    return (f32)sqrt(hg_dot(vec, vec));
+f32 hgLen(HgVec3 vec)
+{
+    return (f32)sqrt(hgDot(vec, vec));
 }
 
-f32 hg_len(HgVec4 vec) {
-    return (f32)sqrt(hg_dot(vec, vec));
+f32 hgLen(HgVec4 vec)
+{
+    return (f32)sqrt(hgDot(vec, vec));
 }
 
-void hg_norm(u32 size, f32* dst, const f32* vec) {
-    hg_assert(dst != nullptr);
-    hg_assert(vec != nullptr);
+void hgNorm(u32 size, f32* dst, const f32* vec)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(vec != nullptr);
     f32 len;
-    hg_len(size, &len, vec);
-    hg_assert(len != 0);
-    for (u32 i = 0; i < size; ++i) {
+    hgLen(size, &len, vec);
+    hgAssert(len != 0);
+    for (u32 i = 0; i < size; ++i)
+    {
         dst[i] = vec[i] / len;
     }
 }
 
-HgVec2 hg_norm(HgVec2 vec) {
-    f32 len = hg_len(vec);
-    hg_assert(len != 0);
+HgVec2 hgNorm(HgVec2 vec)
+{
+    f32 len = hgLen(vec);
+    hgAssert(len != 0);
     return HgVec2{vec.x / len, vec.y / len};
 }
 
-HgVec3 hg_norm(HgVec3 vec) {
-    f32 len = hg_len(vec);
-    hg_assert(len != 0);
+HgVec3 hgNorm(HgVec3 vec)
+{
+    f32 len = hgLen(vec);
+    hgAssert(len != 0);
     return HgVec3{vec.x / len, vec.y / len, vec.z / len};
 }
 
-HgVec4 hg_norm(HgVec4 vec) {
-    f32 len = hg_len(vec);
-    hg_assert(len != 0);
+HgVec4 hgNorm(HgVec4 vec)
+{
+    f32 len = hgLen(vec);
+    hgAssert(len != 0);
     return HgVec4{vec.x / len, vec.y / len, vec.z / len, vec.w / len};
 }
 
-void hg_cross(f32* dst, const f32* lhs, const f32* rhs) {
-    hg_assert(dst != nullptr);
-    hg_assert(lhs != nullptr);
-    hg_assert(rhs != nullptr);
+void hgCross(f32* dst, const f32* lhs, const f32* rhs)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(lhs != nullptr);
+    hgAssert(rhs != nullptr);
     dst[0] = lhs[1] * rhs[2] - lhs[2] * rhs[1];
     dst[1] = lhs[2] * rhs[0] - lhs[0] * rhs[2];
     dst[2] = lhs[0] * rhs[1] - lhs[1] * rhs[0];
 }
 
-HgVec3 hg_cross(const HgVec3& lhs, const HgVec3& rhs) {
+HgVec3 hgCross(const HgVec3& lhs, const HgVec3& rhs)
+{
     return HgVec3{
         lhs.y * rhs.z - lhs.z * rhs.y,
         lhs.z * rhs.x - lhs.x * rhs.z,
@@ -308,129 +357,155 @@ HgVec3 hg_cross(const HgVec3& lhs, const HgVec3& rhs) {
     };
 }
 
-void hg_mat_add(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs) {
-    hg_assert(dst != nullptr);
-    hg_assert(lhs != nullptr);
-    hg_assert(rhs != nullptr);
-    for (u32 i = 0; i < width; ++i) {
-        for (u32 j = 0; j < height; ++j) {
+void hgAddMat(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(lhs != nullptr);
+    hgAssert(rhs != nullptr);
+    for (u32 i = 0; i < width; ++i)
+    {
+        for (u32 j = 0; j < height; ++j)
+        {
             dst[i * width + j] = lhs[i * width + j] + rhs[i * width + j];
         }
     }
 }
 
-HgMat2 operator+(const HgMat2& lhs, const HgMat2& rhs) {
+HgMat2 operator+(const HgMat2& lhs, const HgMat2& rhs)
+{
     HgMat2 result{};
-    hg_mat_add(2, 2, &result.x.x, &lhs.x.x, &rhs.x.x);
+    hgAddMat(2, 2, &result.x.x, &lhs.x.x, &rhs.x.x);
     return result;
 }
 
-HgMat3 operator+(const HgMat3& lhs, const HgMat3& rhs) {
+HgMat3 operator+(const HgMat3& lhs, const HgMat3& rhs)
+{
     HgMat3 result{};
-    hg_mat_add(3, 3, &result.x.x, &lhs.x.x, &rhs.x.x);
+    hgAddMat(3, 3, &result.x.x, &lhs.x.x, &rhs.x.x);
     return result;
 }
 
-HgMat4 operator+(const HgMat4& lhs, const HgMat4& rhs) {
+HgMat4 operator+(const HgMat4& lhs, const HgMat4& rhs)
+{
     HgMat4 result{};
-    hg_mat_add(4, 4, &result.x.x, &lhs.x.x, &rhs.x.x);
+    hgAddMat(4, 4, &result.x.x, &lhs.x.x, &rhs.x.x);
     return result;
 }
 
-void hg_mat_sub(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs) {
-    hg_assert(dst != nullptr);
-    hg_assert(lhs != nullptr);
-    hg_assert(rhs != nullptr);
-    for (u32 i = 0; i < width; ++i) {
-        for (u32 j = 0; j < height; ++j) {
+void hgSubMat(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(lhs != nullptr);
+    hgAssert(rhs != nullptr);
+    for (u32 i = 0; i < width; ++i)
+    {
+        for (u32 j = 0; j < height; ++j)
+        {
             dst[i * width + j] = lhs[i * width + j] - rhs[i * width + j];
         }
     }
 }
 
-HgMat2 operator-(const HgMat2& lhs, const HgMat2& rhs) {
+HgMat2 operator-(const HgMat2& lhs, const HgMat2& rhs)
+{
     HgMat2 result{};
-    hg_mat_sub(2, 2, &result.x.x, &lhs.x.x, &rhs.x.x);
+    hgSubMat(2, 2, &result.x.x, &lhs.x.x, &rhs.x.x);
     return result;
 }
 
-HgMat3 operator-(const HgMat3& lhs, const HgMat3& rhs) {
+HgMat3 operator-(const HgMat3& lhs, const HgMat3& rhs)
+{
     HgMat3 result{};
-    hg_mat_sub(3, 3, &result.x.x, &lhs.x.x, &rhs.x.x);
+    hgSubMat(3, 3, &result.x.x, &lhs.x.x, &rhs.x.x);
     return result;
 }
 
-HgMat4 operator-(const HgMat4& lhs, const HgMat4& rhs) {
+HgMat4 operator-(const HgMat4& lhs, const HgMat4& rhs)
+{
     HgMat4 result{};
-    hg_mat_sub(4, 4, &result.x.x, &lhs.x.x, &rhs.x.x);
+    hgSubMat(4, 4, &result.x.x, &lhs.x.x, &rhs.x.x);
     return result;
 }
 
-void hg_mat_mul(f32* dst, u32 wl, u32 hl, const f32* lhs, u32 wr, u32 hr, const f32* rhs) {
-    hg_assert(hr == wl);
-    hg_assert(dst != nullptr);
-    hg_assert(lhs != nullptr);
-    hg_assert(rhs != nullptr);
+void hgMulMat(f32* dst, u32 wl, u32 hl, const f32* lhs, u32 wr, u32 hr, const f32* rhs)
+{
+    hgAssert(hr == wl);
+    hgAssert(dst != nullptr);
+    hgAssert(lhs != nullptr);
+    hgAssert(rhs != nullptr);
     (void)hr;
-    for (u32 i = 0; i < wl; ++i) {
-        for (u32 j = 0; j < wr; ++j) {
+    for (u32 i = 0; i < wl; ++i)
+    {
+        for (u32 j = 0; j < wr; ++j)
+        {
             dst[i * wl + j] = 0.0f;
-            for (u32 k = 0; k < hl; ++k) {
+            for (u32 k = 0; k < hl; ++k)
+            {
                 dst[i * wl + j] += lhs[k * wl + j] * rhs[i * wr + k];
             }
         }
     }
 }
 
-HgMat2 operator*(const HgMat2& lhs, const HgMat2& rhs) {
+HgMat2 operator*(const HgMat2& lhs, const HgMat2& rhs)
+{
     HgMat2 result{};
-    hg_mat_mul(&result.x.x, 2, 2, &lhs.x.x, 2, 2, &rhs.x.x);
+    hgMulMat(&result.x.x, 2, 2, &lhs.x.x, 2, 2, &rhs.x.x);
     return result;
 }
 
-HgMat3 operator*(const HgMat3& lhs, const HgMat3& rhs) {
+HgMat3 operator*(const HgMat3& lhs, const HgMat3& rhs)
+{
     HgMat3 result{};
-    hg_mat_mul(&result.x.x, 3, 3, &lhs.x.x, 3, 3, &rhs.x.x);
+    hgMulMat(&result.x.x, 3, 3, &lhs.x.x, 3, 3, &rhs.x.x);
     return result;
 }
 
-HgMat4 operator*(const HgMat4& lhs, const HgMat4& rhs) {
+HgMat4 operator*(const HgMat4& lhs, const HgMat4& rhs)
+{
     HgMat4 result{};
-    hg_mat_mul(&result.x.x, 4, 4, &lhs.x.x, 4, 4, &rhs.x.x);
+    hgMulMat(&result.x.x, 4, 4, &lhs.x.x, 4, 4, &rhs.x.x);
     return result;
 }
 
-void hg_mat_vec_mul(u32 width, u32 height, f32* dst, const f32* mat, const f32* vec) {
-    hg_assert(dst != nullptr);
-    hg_assert(mat != nullptr);
-    hg_assert(vec != nullptr);
-    for (u32 i = 0; i < height; ++i) {
+void hgMulMatVec(u32 width, u32 height, f32* dst, const f32* mat, const f32* vec)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(mat != nullptr);
+    hgAssert(vec != nullptr);
+    for (u32 i = 0; i < height; ++i)
+    {
         dst[i] = 0.0f;
-        for (u32 j = 0; j < width; ++j) {
+        for (u32 j = 0; j < width; ++j)
+        {
             dst[i] += mat[j * width + i] * vec[j];
         }
     }
 }
 
-HgVec2 operator*(const HgMat2& lhs, HgVec2 rhs) {
+HgVec2 operator*(const HgMat2& lhs, HgVec2 rhs)
+{
     HgVec2 result{};
-    hg_mat_vec_mul(2, 2, &result.x, &lhs.x.x, &rhs.x);
+    hgMulMatVec(2, 2, &result.x, &lhs.x.x, &rhs.x);
     return result;
 }
 
-HgVec3 operator*(const HgMat3& lhs, HgVec3 rhs) {
+HgVec3 operator*(const HgMat3& lhs, HgVec3 rhs)
+{
     HgVec3 result{};
-    hg_mat_vec_mul(3, 3, &result.x, &lhs.x.x, &rhs.x);
+    hgMulMatVec(3, 3, &result.x, &lhs.x.x, &rhs.x);
     return result;
 }
 
-HgVec4 operator*(const HgMat4& lhs, HgVec4 rhs) {
+HgVec4 operator*(const HgMat4& lhs, HgVec4 rhs)
+{
     HgVec4 result{};
-    hg_mat_vec_mul(4, 4, &result.x, &lhs.x.x, &rhs.x);
+    hgMulMatVec(4, 4, &result.x, &lhs.x.x, &rhs.x);
     return result;
 }
 
-HgQuat operator*(HgQuat lhs, HgQuat rhs) {
+HgQuat operator*(HgQuat lhs, HgQuat rhs)
+{
     return HgQuat{
         lhs.r * rhs.r - lhs.i * rhs.i - lhs.j * rhs.j - lhs.k * rhs.k,
         lhs.r * rhs.i + lhs.i * rhs.r + lhs.j * rhs.k - lhs.k * rhs.j,
@@ -439,35 +514,39 @@ HgQuat operator*(HgQuat lhs, HgQuat rhs) {
     };
 }
 
-HgQuat hg_axis_angle(HgVec3 axis, f32 angle) {
-    f32 half_angle = angle * (f32)0.5;
-    f32 sin_half_angle = (f32)std::sin(half_angle);
+HgQuat hgAxisAngle(HgVec3 axis, f32 angle)
+{
+    f32 halfAngle = angle * (f32)0.5;
+    f32 sinHalfAngle = (f32)std::sin(halfAngle);
     return HgQuat{
-        (f32)std::cos(half_angle),
-        axis.x * sin_half_angle,
-        axis.y * sin_half_angle,
-        axis.z * sin_half_angle,
+        (f32)std::cos(halfAngle),
+        axis.x * sinHalfAngle,
+        axis.y * sinHalfAngle,
+        axis.z * sinHalfAngle,
     };
 }
 
-HgVec3 hg_rotate(HgQuat lhs, HgVec3 rhs) {
-    HgQuat q = lhs * HgQuat{0, rhs.x, rhs.y, rhs.z} * hg_conj(lhs);
+HgVec3 hgRotate(HgQuat lhs, HgVec3 rhs)
+{
+    HgQuat q = lhs * HgQuat{0, rhs.x, rhs.y, rhs.z} * hgConj(lhs);
     return HgVec3{q.i, q.j, q.k};
 }
 
-HgMat3 hg_rotate(HgQuat lhs, HgMat3 rhs) {
+HgMat3 hgRotate(HgQuat lhs, HgMat3 rhs)
+{
     return HgMat3{
-        hg_rotate(lhs, rhs.x),
-        hg_rotate(lhs, rhs.y),
-        hg_rotate(lhs, rhs.z),
+        hgRotate(lhs, rhs.x),
+        hgRotate(lhs, rhs.y),
+        hgRotate(lhs, rhs.z),
     };
 }
 
-HgMat4 hg_model_matrix_2d(HgVec3 position, HgVec2 scale, f32 rotation) {
+HgMat4 hgModelMatrix2D(HgVec3 position, HgVec2 scale, f32 rotation)
+{
     HgMat2 m2{HgVec2{scale.x, 0.0f}, HgVec2{0.0f, scale.y}};
-    f32 rot_sin = (f32)std::sin(rotation);
-    f32 rot_cos = (f32)std::cos(rotation);
-    HgMat2 rot{HgVec2{rot_cos, rot_sin}, HgVec2{-rot_sin, rot_cos}};
+    f32 rotSin = (f32)std::sin(rotation);
+    f32 rotCos = (f32)std::cos(rotation);
+    HgMat2 rot{HgVec2{rotCos, rotSin}, HgVec2{-rotSin, rotCos}};
     HgMat4 m4 = HgMat4{rot * m2};
     m4.w.x = position.x;
     m4.w.y = position.y;
@@ -475,12 +554,13 @@ HgMat4 hg_model_matrix_2d(HgVec3 position, HgVec2 scale, f32 rotation) {
     return m4;
 }
 
-HgMat4 hg_model_matrix_3d(const HgVec3& position, const HgVec3& scale, const HgQuat& rotation) {
+HgMat4 hgModelMatrix3D(const HgVec3& position, const HgVec3& scale, const HgQuat& rotation)
+{
     HgMat3 m3{1.0f};
     m3.x.x = scale.x;
     m3.y.y = scale.y;
     m3.z.z = scale.z;
-    m3 = hg_rotate(rotation, m3);
+    m3 = hgRotate(rotation, m3);
     HgMat4 m4 = HgMat4{m3};
     m4.w.x = position.x;
     m4.w.y = position.y;
@@ -488,8 +568,9 @@ HgMat4 hg_model_matrix_3d(const HgVec3& position, const HgVec3& scale, const HgQ
     return m4;
 }
 
-HgMat4 hg_view_matrix(const HgVec3& position, const HgVec3& zoom, const HgQuat& rotation) {
-    HgMat4 rot{hg_rotate(hg_conj(rotation), HgMat3{1.0f})};
+HgMat4 hgViewMatrix(const HgVec3& position, const HgVec3& zoom, const HgQuat& rotation)
+{
+    HgMat4 rot{hgRotate(hgConj(rotation), HgMat3{1.0f})};
     HgMat4 pos{1.0f};
     pos.x.x = zoom.x;
     pos.y.y = zoom.y;
@@ -500,7 +581,8 @@ HgMat4 hg_view_matrix(const HgVec3& position, const HgVec3& zoom, const HgQuat& 
     return rot * pos;
 }
 
-HgMat4 hg_projection_orthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far) {
+HgMat4 hgOrthographicProjection(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far)
+{
     return HgMat4{
         HgVec4{2.0f / (right - left), 0.0f, 0.0f, 0.0f},
         HgVec4{0.0f, 2.0f / (bottom - top), 0.0f, 0.0f},
@@ -509,9 +591,10 @@ HgMat4 hg_projection_orthographic(f32 left, f32 right, f32 top, f32 bottom, f32 
     };
 }
 
-HgMat4 hg_projection_perspective(f32 fov, f32 aspect, f32 near, f32 far) {
-    hg_assert(near > 0.0f);
-    hg_assert(far > near);
+HgMat4 hgPerspectiveProjection(f32 fov, f32 aspect, f32 near, f32 far)
+{
+    hgAssert(near > 0.0f);
+    hgAssert(far > near);
     f32 scale = 1.0f / (f32)tan(fov * 0.5f);
     return HgMat4{
         HgVec4{scale / aspect, 0.0f, 0.0f, 0.0f},
@@ -521,60 +604,74 @@ HgMat4 hg_projection_perspective(f32 fov, f32 aspect, f32 near, f32 far) {
     };
 }
 
-u32 hg_max_mipmaps(u32 width, u32 height, u32 depth) {
+u32 hgMaxMipmaps(u32 width, u32 height, u32 depth)
+{
     u32 max = width > height ? width : height;
     max = max > depth ? max : depth;
-    return (u32)log2((f32)max) + 1;
+    return max == 0 ? 0 : (u32)log2((f32)max) + 1;
 }
 
-void* hg_alloc(HgArena* arena, usize size, usize alignment) {
-    arena->head = hg_align((usize)arena->head, alignment) + size;
-    hg_assert(arena->head <= arena->capacity);
+void* hgAlloc(HgArena* arena, usize size, usize alignment)
+{
+    arena->head = hgAlign((usize)arena->head, alignment) + size;
+    hgAssert(arena->head <= arena->capacity);
     return (void*)((uptr)arena->memory + arena->head - size);
 }
 
-void* hg_realloc(HgArena* arena, void* allocation, usize old_size, usize new_size, usize alignment) {
-    if (allocation >= arena->memory && (uptr)allocation + old_size <= (uptr)arena->memory + arena->capacity) {
-        if ((uptr)allocation + old_size - (uptr)arena->memory == (uptr)arena->head) {
-            arena->head = (uptr)allocation + new_size - (uptr)arena->memory;
-            hg_assert(arena->head <= arena->capacity);
+void* hgRealloc(HgArena* arena, void* allocation, usize oldSize, usize newSize, usize alignment)
+{
+    if (allocation >= arena->memory && (uptr)allocation + oldSize <= (uptr)arena->memory + arena->capacity)
+    {
+        if ((uptr)allocation + oldSize - (uptr)arena->memory == (uptr)arena->head)
+        {
+            arena->head = (uptr)allocation + newSize - (uptr)arena->memory;
+            hgAssert(arena->head <= arena->capacity);
             return allocation;
         }
 
-        if (new_size < old_size)
+        if (newSize < oldSize)
             return allocation;
     }
 
-    void* new_allocation = hg_alloc(arena, new_size, alignment);
+    void* newAllocation = hgAlloc(arena, newSize, alignment);
     if (allocation != nullptr)
-        memcpy(new_allocation, allocation, std::min(old_size, new_size));
-    return new_allocation;
+        memcpy(newAllocation, allocation, std::min(oldSize, newSize));
+    return newAllocation;
 }
 
-static constexpr usize arena_count = 2;
-static thread_local HgArena arenas[arena_count]{};
+static constexpr usize arenaCount = 2;
+static thread_local HgArena arenas[arenaCount]{};
 
-void hg_scratch_memory_init() {
-    for (usize i = 0; i < arena_count; ++i) {
-        if (arenas[i].memory == nullptr) {
-            usize arena_size = (u32)-1;
-            arenas[i] = {malloc(arena_size), arena_size};
+void hgInitScratchMemory()
+{
+    for (usize i = 0; i < arenaCount; ++i)
+    {
+        if (arenas[i].memory == nullptr)
+        {
+            usize arenaSize = (u32)-1;
+            arenas[i] = {malloc(arenaSize), arenaSize};
         }
     }
 }
 
-void hg_scratch_memory_deinit() {
-    for (usize i = 0; i < arena_count; ++i) {
-        if (arenas[i].memory != nullptr) {
+void hgDeinitScratchMemory()
+{
+    for (usize i = 0; i < arenaCount; ++i)
+    {
+        if (arenas[i].memory != nullptr)
+        {
             free(arenas[i].memory);
             arenas[i] = {};
         }
     }
 }
 
-HgArena* hg_get_scratch(HgArena const* const* conflicts, usize count) {
-    for (HgArena& arena : arenas) {
-        for (usize i = 0; i < count; ++i) {
+HgArena* hgGetScratch(HgArena const* const* conflicts, usize count)
+{
+    for (HgArena& arena : arenas)
+    {
+        for (usize i = 0; i < count; ++i)
+        {
             if (&arena == conflicts[i])
                 goto next;
         }
@@ -582,133 +679,152 @@ HgArena* hg_get_scratch(HgArena const* const* conflicts, usize count) {
 next:
         continue;
     }
-    hg_error("No scratch arena available\n");
+    hgError("No scratch arena available\n");
 }
 
-char* hg_c_string(HgArena* arena, HgStringView str) {
-    char* c_str = hg_alloc<char>(arena, str.length + 1);
-    memcpy(c_str, str.chars, str.length);
-    c_str[str.length] = 0;
-    return c_str;
+char* hgCString(HgArena* arena, HgStringView str)
+{
+    char* cStr = hgAlloc<char>(arena, str.length + 1);
+    memcpy(cStr, str.chars, str.length);
+    cStr[str.length] = 0;
+    return cStr;
 }
 
-HgString HgString::create(HgArena* arena, usize capacity) {
+HgString HgString::create(HgArena* arena, usize capacity)
+{
     HgString str;
-    str.chars = hg_alloc<char>(arena, capacity);
+    str.chars = hgAlloc<char>(arena, capacity);
     str.capacity = capacity;
     str.length = 0;
     return str;
 }
 
-HgString HgString::create(HgArena* arena, HgStringView init) {
-    HgString str;
-    str.chars = hg_alloc<char>(arena, init.length);
-    str.capacity = init.length;
-    str.length = init.length;
-    memcpy(str.chars, init.chars, init.length);
-    return str;
+HgString HgString::copy(HgArena* arena, HgStringView str)
+{
+    HgString copy;
+    copy.chars = hgAlloc<char>(arena, str.length);
+    copy.capacity = str.length;
+    copy.length = str.length;
+    memcpy(copy.chars, str.chars, str.length);
+    return copy;
 }
 
-void HgString::reserve(HgArena* arena, usize new_capacity) {
-    chars = hg_realloc(arena, chars, capacity, new_capacity);
-    capacity = new_capacity;
+void HgString::reserve(HgArena* arena, usize newCapacity)
+{
+    chars = hgRealloc(arena, chars, capacity, newCapacity);
+    capacity = newCapacity;
 }
 
-void HgString::grow(HgArena* arena, f32 factor) {
-    hg_assert(factor > 1.0f);
-    hg_assert(capacity <= (usize)((f32)SIZE_MAX / factor));
+void HgString::grow(HgArena* arena, f32 factor)
+{
+    hgAssert(factor > 1.0f);
+    hgAssert(capacity <= (usize)((f32)SIZE_MAX / factor));
     reserve(arena, capacity == 0 ? 1 : (usize)((f32)capacity * factor));
 }
 
-HgString& HgString::insert(HgArena* arena, usize index, char c) {
-    hg_assert(index <= length);
+HgString& HgString::insert(HgArena* arena, usize index, char c)
+{
+    hgAssert(index <= length);
 
-    usize new_length = length + 1;
-    while (capacity < new_length) {
+    usize newLength = length + 1;
+    while (capacity < newLength)
+    {
         grow(arena);
     }
 
     if (index != length)
         memmove(&chars[index + 1], &chars[index], length - index);
     chars[index] = c;
-    length = new_length;
+    length = newLength;
 
     return *this;
 }
 
-HgString& HgString::insert(HgArena* arena, usize index, HgStringView str) {
-    hg_assert(index <= length);
+HgString& HgString::insert(HgArena* arena, usize index, HgStringView str)
+{
+    hgAssert(index <= length);
 
-    usize new_length = length + str.length;
-    while (capacity < new_length) {
+    usize newLength = length + str.length;
+    while (capacity < newLength)
+    {
         grow(arena);
     }
 
     if (index != length)
         memmove(&chars[index + str.length], &chars[index], length - index);
     memcpy(&chars[index], str.chars, str.length);
-    length = new_length;
+    length = newLength;
 
     return *this;
 }
 
-bool hg_is_whitespace(char c) {
+bool hgIsWhitespace(char c)
+{
     return c == ' ' || c == '\t' || c == '\n';
 }
 
-bool hg_is_numeral_base10(char c) {
+bool hgIsNumeral(char c)
+{
     return c >= '0' && c <= '9';
 }
 
-bool hg_is_integer_base10(HgStringView str) {
+bool hgIsIntenger(HgStringView str)
+{
     if (str.length == 0)
         return false;
 
     usize head = 0;
-    if (!hg_is_numeral_base10(str[head]) && str[head] != '+' && str[head] != '-')
+    if (!hgIsNumeral(str[head]) && str[head] != '+' && str[head] != '-')
         return false;
 
     ++head;
-    while (head < str.length) {
-        if (!hg_is_numeral_base10(str[head]))
+    while (head < str.length)
+    {
+        if (!hgIsNumeral(str[head]))
             return false;
         ++head;
     }
     return true;
 }
 
-bool hg_is_float_base10(HgStringView str) {
+bool hgIsFloat(HgStringView str)
+{
     if (str.length == 0)
         return false;
 
-    bool has_decimal = false;
-    bool has_exponent = false;
+    bool hasDecimal = false;
+    bool hasExponent = false;
 
     usize head = 0;
 
-    if (!hg_is_numeral_base10(str[head]) && str[head] != '.' && str[head] != '+' && str[head] != '-')
+    if (!hgIsNumeral(str[head]) && str[head] != '.' && str[head] != '+' && str[head] != '-')
         return false;
 
     if (str[head] == '.')
-        has_decimal = true;
+        hasDecimal = true;
 
     ++head;
-    while (head < str.length) {
-        if (hg_is_numeral_base10(str[head])) {
+    while (head < str.length)
+    {
+        if (hgIsNumeral(str[head]))
+        {
             ++head;
             continue;
         }
 
-        if (str[head] == '.' && !has_decimal) {
-            has_decimal = true;
+        if (str[head] == '.' && !hasDecimal)
+        {
+            hasDecimal = true;
             ++head;
             continue;
         }
 
-        if (str[head] == 'e' && !has_exponent) {
-            has_exponent = true;
+        if (str[head] == 'e' && !hasExponent)
+        {
+            hasExponent = true;
             ++head;
-            if (hg_is_numeral_base10(str[head]) || str[head] == '+' || str[head] == '-') {
+            if (hgIsNumeral(str[head]) || str[head] == '+' || str[head] == '-')
+            {
                 ++head;
                 continue;
             }
@@ -721,23 +837,26 @@ bool hg_is_float_base10(HgStringView str) {
         return false;
     }
 
-    return has_decimal || has_exponent;
+    return hasDecimal || hasExponent;
 }
 
-i64 hg_str_to_int_base10(HgStringView str) {
-    hg_assert(hg_is_integer_base10(str));
+i64 hgStrToInt(HgStringView str)
+{
+    hgAssert(hgIsIntenger(str));
 
     i64 power = 1;
     i64 ret = 0;
 
     usize head = str.length - 1;
-    while (head > 0) {
+    while (head > 0)
+    {
         ret += (i64)(str[head] - '0') * power;
         power *= 10;
         --head;
     }
 
-    if (str[head] != '+') {
+    if (str[head] != '+')
+    {
         if (str[head] == '-')
             ret *= -1;
         else
@@ -747,55 +866,66 @@ i64 hg_str_to_int_base10(HgStringView str) {
     return ret;
 }
 
-f64 hg_str_to_float_base10(HgStringView str) {
-    hg_assert(hg_is_float_base10(str));
+f64 hgStrToFloat(HgStringView str)
+{
+    hgAssert(hgIsFloat(str));
 
     f64 ret = 0.0;
     usize head = 0;
 
-    bool is_negative = str[head] == '-';
-    if (is_negative || str[head] == '+')
+    bool isNegative = str[head] == '-';
+    if (isNegative || str[head] == '+')
         ++head;
 
-    if (hg_is_numeral_base10(str[head])) {
-        usize int_part_begin = head;
-        while (head < str.length && str[head] != '.' && str[head] != 'e') {
+    if (hgIsNumeral(str[head]))
+    {
+        usize intPartBegin = head;
+        while (head < str.length && str[head] != '.' && str[head] != 'e')
+        {
             ++head;
         }
-        ret += (f64)hg_str_to_int_base10({&str[int_part_begin], &str[head]});
+        ret += (f64)hgStrToInt({&str[intPartBegin], &str[head]});
     }
 
-    if (head < str.length && str[head] == '.') {
+    if (head < str.length && str[head] == '.')
+    {
         ++head;
 
         f64 power = 0.1;
-        while (head < str.length && hg_is_numeral_base10(str[head])) {
+        while (head < str.length && hgIsNumeral(str[head]))
+        {
             ret += (f64)(str[head] - '0') * power;
             power *= 0.1;
             ++head;
         }
     }
 
-    if (head < str.length && str[head] == 'e') {
+    if (head < str.length && str[head] == 'e')
+    {
         ++head;
 
-        bool exp_is_negative = str[head] == '-';
-        if (exp_is_negative || str[head] == '+')
+        bool expIsNegative = str[head] == '-';
+        if (expIsNegative || str[head] == '+')
             ++head;
 
-        usize exp_begin = head;
-        while (head < str.length && hg_is_numeral_base10(str[head])) {
+        usize expBegin = head;
+        while (head < str.length && hgIsNumeral(str[head]))
+        {
             ++head;
         }
 
-        i64 exp = hg_str_to_int_base10({&str[exp_begin], str.chars + head});
-        if (exp != 0) {
-            if (exp_is_negative) {
-                for (i64 i = 0; i < exp; ++i) {
+        i64 exp = hgStrToInt({&str[expBegin], str.chars + head});
+        if (exp != 0)
+        {
+            if (expIsNegative)
+            {
+                for (i64 i = 0; i < exp; ++i)
+                {
                     ret *= 0.1;
                 }
             } else {
-                for (i64 i = 0; i < exp; ++i) {
+                for (i64 i = 0; i < exp; ++i)
+                {
                     ret *= 10.0;
                 }
             }
@@ -804,68 +934,74 @@ f64 hg_str_to_float_base10(HgStringView str) {
         }
     }
 
-    if (is_negative)
+    if (isNegative)
         ret *= -1.0;
 
     return ret;
 }
 
-HgString hg_int_to_str_base10(HgArena* arena, i64 num) {
-    HgArena* scratch = hg_get_scratch(&arena, 1);
-    HgArenaScope scratch_scope{scratch};
+HgString hgIntToStr(HgArena* arena, i64 num)
+{
+    HgArena* scratch = hgGetScratch(&arena, 1);
+    HgArenaScope scratchScope{scratch};
 
     if (num == 0)
-        return HgString::create(arena, "0");
+        return HgString::copy(arena, "0");
 
-    bool is_negative = num < 0;
+    bool isNegative = num < 0;
     u64 unum = (u64)std::abs(num);
 
     HgString reverse = reverse.create(scratch, 16);
-    while (unum != 0) {
+    while (unum != 0)
+    {
         u64 digit = unum % 10;
         unum = (u64)((f64)unum / 10.0);
         reverse.append(scratch, '0' + (char)digit);
     }
 
-    HgString ret = ret.create(arena, reverse.length + (is_negative ? 1 : 0));
-    if (is_negative)
+    HgString ret = ret.create(arena, reverse.length + (isNegative ? 1 : 0));
+    if (isNegative)
         ret.append(arena, '-');
-    for (usize i = reverse.length - 1; i < reverse.length; --i) {
+    for (usize i = reverse.length - 1; i < reverse.length; --i)
+    {
         ret.append(arena, reverse[i]);
     }
     return ret;
 }
 
-HgString hg_float_to_str_base10(HgArena* arena, f64 num, u64 decimal_count) {
-    HgArena* scratch = hg_get_scratch(&arena, 1);
-    HgArenaScope scratch_scope{scratch};
+HgString hgFloatToStr(HgArena* arena, f64 num, u64 decimalCount)
+{
+    HgArena* scratch = hgGetScratch(&arena, 1);
+    HgArenaScope scratchScope{scratch};
 
     if (num == 0.0)
-        return HgString::create(arena, "0.0");
+        return HgString::copy(arena, "0.0");
 
-    HgString int_str = hg_int_to_str_base10(scratch, (i64)fabs(num));
+    HgString intStr = hgIntToStr(scratch, (i64)fabs(num));
 
-    HgString dec_str = HgString::create(scratch, decimal_count + 1);
-    dec_str.append(scratch, '.');
+    HgString decStr = HgString::create(scratch, decimalCount + 1);
+    decStr.append(scratch, '.');
 
-    f64 dec_part = fabs(num);
-    for (usize i = 0; i < decimal_count; ++i) {
-        dec_part *= 10.0;
-        dec_str.append(scratch, '0' + (char)((u64)dec_part % 10));
+    f64 decPart = fabs(num);
+    for (usize i = 0; i < decimalCount; ++i)
+    {
+        decPart *= 10.0;
+        decStr.append(scratch, '0' + (char)((u64)decPart % 10));
     }
 
     HgString ret{};
     if (num < 0.0)
         ret.append(arena, '-');
-    ret.append(arena, int_str);
-    ret.append(arena, dec_str);
+    ret.append(arena, intStr);
+    ret.append(arena, decStr);
     return ret;
 }
 
-HgString hg_format_string(HgArena* arena, HgStringView fmt, ...) {
+HgString hgFormatString(HgArena* arena, HgStringView fmt, ...)
+{
     (void)arena;
     (void)fmt;
-    hg_error("hg_format_string not implemented yet : TODO\n");
+    hgError("hgFormatString not implemented yet : TODO\n");
 }
 
 namespace {
@@ -875,19 +1011,21 @@ namespace {
         usize head;
         usize line;
 
-        HgJsonParser(HgArena* arena_val) : arena{arena_val} {}
+        HgJsonParser(HgArena* arenaVal) : arena{arenaVal} {}
 
-        HgJson parse_next();
-        HgJson parse_struct();
-        HgJson parse_array();
-        HgJson parse_string();
-        HgJson parse_number();
-        HgJson parse_boolean();
+        HgJson parseNext();
+        HgJson parseStruct();
+        HgJson parseArray();
+        HgJson parseString();
+        HgJson parseNumber();
+        HgJson parseBoolean();
     };
 }
 
-HgJson HgJsonParser::parse_next() {
-    while (head < text.length && hg_is_whitespace(text[head])) {
+HgJson HgJsonParser::parseNext()
+{
+    while (head < text.length && hgIsWhitespace(text[head]))
+    {
         if (text[head] == '\n')
             ++line;
         ++head;
@@ -895,59 +1033,62 @@ HgJson HgJsonParser::parse_next() {
     if (head >= text.length)
         return {};
 
-    switch (text[head]) {
+    switch (text[head])
+    {
         case '{':
             ++head;
-            return parse_struct();
+            return parseStruct();
         case '[':
             ++head;
-            return parse_array();
+            return parseArray();
         case '\'': [[fallthrough]];
         case '"':
             ++head;
-            return parse_string();
+            return parseString();
         case '.': [[fallthrough]];
         case '+': [[fallthrough]];
         case '-':
-            return parse_number();
+            return parseNumber();
         case 't': [[fallthrough]];
         case 'f':
-            return parse_boolean();
+            return parseBoolean();
         case '}': {
-            HgJsonError* error = hg_alloc<HgJsonError>(arena, 1);
+            HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
             error->next = nullptr;
             error->msg = HgString{}
                 .append(arena, "on line ")
-                .append(arena, hg_int_to_str_base10(arena, (i64)line))
+                .append(arena, hgIntToStr(arena, (i64)line))
                 .append(arena, ", found unexpected token \"}\"\n");
             return {nullptr, error};
         }
         case ']': {
-            HgJsonError* error = hg_alloc<HgJsonError>(arena, 1);
+            HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
             error->next = nullptr;
             error->msg = HgString{}
                 .append(arena, "on line ")
-                .append(arena, hg_int_to_str_base10(arena, (i64)line))
+                .append(arena, hgIntToStr(arena, (i64)line))
                 .append(arena, ", found unexpected token \"]\"\n");
             return {nullptr, error};
         }
     }
-    if (hg_is_numeral_base10(text[head])) {
-        return parse_number();
+    if (hgIsNumeral(text[head]))
+    {
+        return parseNumber();
     }
 
-    HgJsonError* error = hg_alloc<HgJsonError>(arena, 1);
+    HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
     error->next = nullptr;
 
     usize begin = head;
-    while (head < text.length && !hg_is_whitespace(text[head])) {
+    while (head < text.length && !hgIsWhitespace(text[head]))
+    {
         if (text[head] == '\n')
             ++line;
         ++head;
     }
     error->msg = HgString{}
         .append(arena, "on line ")
-        .append(arena, hg_int_to_str_base10(arena, (i64)line))
+        .append(arena, hgIntToStr(arena, (i64)line))
         .append(arena, ", found unexpected token \"")
         .append(arena, {&text[begin], &text[head]})
         .append(arena, "\"\n");
@@ -955,49 +1096,55 @@ HgJson HgJsonParser::parse_next() {
     return {nullptr, error};
 }
 
-HgJson HgJsonParser::parse_struct() {
+HgJson HgJsonParser::parseStruct()
+{
     HgJson json{};
-    json.file = hg_alloc<HgJsonNode>(arena, 1);
+    json.file = hgAlloc<HgJsonNode>(arena, 1);
     json.file->type = HgJsonType::jstruct;
     json.file->jstruct.fields = nullptr;
 
-    HgJsonField* last_field = nullptr;
-    HgJsonError* last_error = nullptr;
+    HgJsonField* lastField = nullptr;
+    HgJsonError* lastError = nullptr;
 
-    for (;;) {
-        while (head < text.length && hg_is_whitespace(text[head])) {
+    for (;;)
+    {
+        while (head < text.length && hgIsWhitespace(text[head]))
+        {
             if (text[head] == '\n')
                 ++line;
             ++head;
         }
-        if (head >= text.length) {
-            HgJsonError* error = hg_alloc<HgJsonError>(arena, 1);
+        if (head >= text.length)
+        {
+            HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
             error->next = nullptr;
             error->msg = HgString{}
                 .append(arena, "on line ")
-                .append(arena, hg_int_to_str_base10(arena, (i64)line))
+                .append(arena, hgIntToStr(arena, (i64)line))
                 .append(arena, ", expected struct to terminate\n");
-            if (last_error == nullptr)
-                json.errors = last_error = error;
+            if (lastError == nullptr)
+                json.errors = lastError = error;
             else
-                last_error->next = error;
-            last_error = error;
+                lastError->next = error;
+            lastError = error;
             break;
         }
-        if (text[head] == ']') {
-            HgJsonError* error = hg_alloc<HgJsonError>(arena, 1);
+        if (text[head] == ']')
+        {
+            HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
             error->next = nullptr;
             error->msg = HgString{}
                 .append(arena, "on line ")
-                .append(arena, hg_int_to_str_base10(arena, (i64)line))
+                .append(arena, hgIntToStr(arena, (i64)line))
                 .append(arena, ", struct ends with \"]\" instead of \"}\"\n");
-            if (last_error == nullptr)
-                json.errors = last_error = error;
+            if (lastError == nullptr)
+                json.errors = lastError = error;
             else
-                last_error->next = error;
-            last_error = error;
+                lastError->next = error;
+            lastError = error;
             ++head;
-            while (head < text.length && hg_is_whitespace(text[head])) {
+            while (head < text.length && hgIsWhitespace(text[head]))
+            {
                 if (text[head] == '\n')
                     ++line;
                 ++head;
@@ -1006,9 +1153,11 @@ HgJson HgJsonParser::parse_struct() {
                 ++head;
             break;
         }
-        if (text[head] == '}') {
+        if (text[head] == '}')
+        {
             ++head;
-            while (head < text.length && hg_is_whitespace(text[head])) {
+            while (head < text.length && hgIsWhitespace(text[head]))
+            {
                 if (text[head] == '\n')
                     ++line;
                 ++head;
@@ -1018,98 +1167,108 @@ HgJson HgJsonParser::parse_struct() {
             break;
         }
 
-        HgJson value = parse_next();
+        HgJson value = parseNext();
 
-        if (value.file != nullptr) {
-            if (value.file->type != HgJsonType::field) {
-                HgJsonError* error = hg_alloc<HgJsonError>(arena, 1);
+        if (value.file != nullptr)
+        {
+            if (value.file->type != HgJsonType::field)
+            {
+                HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
                 error->next = nullptr;
                 error->msg = HgString{}
                     .append(arena, "on line ")
-                    .append(arena, hg_int_to_str_base10(arena, (i64)line))
+                    .append(arena, hgIntToStr(arena, (i64)line))
                     .append(arena, ", struct has a literal instead of a field\n");
-                if (last_error == nullptr)
-                    json.errors = last_error = error;
+                if (lastError == nullptr)
+                    json.errors = lastError = error;
                 else
-                    last_error->next = error;
-                last_error = error;
-            } else if (value.file->field.value == nullptr) {
-                HgJsonError* error = hg_alloc<HgJsonError>(arena, 1);
+                    lastError->next = error;
+                lastError = error;
+            } else if (value.file->field.value == nullptr)
+            {
+                HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
                 error->next = nullptr;
                 error->msg = HgString{}
                     .append(arena, "on line ")
-                    .append(arena, hg_int_to_str_base10(arena, (i64)line))
+                    .append(arena, hgIntToStr(arena, (i64)line))
                     .append(arena, ", struct has a field named \"")
                     .append(arena, value.file->field.name)
                     .append(arena, "\" which has no value\n");
-                if (last_error == nullptr)
-                    json.errors = last_error = error;
+                if (lastError == nullptr)
+                    json.errors = lastError = error;
                 else
-                    last_error->next = error;
-                last_error = error;
+                    lastError->next = error;
+                lastError = error;
             } else {
-                if (last_field == nullptr)
+                if (lastField == nullptr)
                     json.file->jstruct.fields = &value.file->field;
                 else
-                    last_field->next = &value.file->field;
-                last_field = &value.file->field;
+                    lastField->next = &value.file->field;
+                lastField = &value.file->field;
             }
         }
-        if (value.errors != nullptr) {
-            if (last_error == nullptr)
-                json.errors = last_error = value.errors;
+        if (value.errors != nullptr)
+        {
+            if (lastError == nullptr)
+                json.errors = lastError = value.errors;
             else
-                last_error->next = value.errors;
-            last_error = value.errors;
+                lastError->next = value.errors;
+            lastError = value.errors;
         }
     }
 
     return json;
 }
 
-HgJson HgJsonParser::parse_array() {
+HgJson HgJsonParser::parseArray()
+{
     HgJson json{};
-    json.file = hg_alloc<HgJsonNode>(arena, 1);
+    json.file = hgAlloc<HgJsonNode>(arena, 1);
     json.file->type = HgJsonType::array;
 
     HgJsonType type = HgJsonType::none;
-    HgJsonElem* last_elem = nullptr;
-    HgJsonError* last_error = nullptr;
+    HgJsonElem* lastElem = nullptr;
+    HgJsonError* lastError = nullptr;
 
-    for (;;) {
-        while (head < text.length && hg_is_whitespace(text[head])) {
+    for (;;)
+    {
+        while (head < text.length && hgIsWhitespace(text[head]))
+        {
             if (text[head] == '\n')
                 ++line;
             ++head;
         }
-        if (head >= text.length) {
-            HgJsonError* error = hg_alloc<HgJsonError>(arena, 1);
+        if (head >= text.length)
+        {
+            HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
             error->next = nullptr;
             error->msg = HgString{}
                 .append(arena, "on line ")
-                .append(arena, hg_int_to_str_base10(arena, (i64)line))
+                .append(arena, hgIntToStr(arena, (i64)line))
                 .append(arena, ", expected struct to terminate\n");
-            if (last_error == nullptr)
-                json.errors = last_error = error;
+            if (lastError == nullptr)
+                json.errors = lastError = error;
             else
-                last_error->next = error;
-            last_error = error;
+                lastError->next = error;
+            lastError = error;
             break;
         }
-        if (text[head] == '}') {
-            HgJsonError* error = hg_alloc<HgJsonError>(arena, 1);
+        if (text[head] == '}')
+        {
+            HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
             error->next = nullptr;
             error->msg = HgString{}
                 .append(arena, "on line ")
-                .append(arena, hg_int_to_str_base10(arena, (i64)line))
+                .append(arena, hgIntToStr(arena, (i64)line))
                 .append(arena, ", array ends with \"}\" instead of \"]\"\n");
-            if (last_error == nullptr)
-                json.errors = last_error = error;
+            if (lastError == nullptr)
+                json.errors = lastError = error;
             else
-                last_error->next = error;
-            last_error = error;
+                lastError->next = error;
+            lastError = error;
             ++head;
-            while (head < text.length && hg_is_whitespace(text[head])) {
+            while (head < text.length && hgIsWhitespace(text[head]))
+            {
                 if (text[head] == '\n')
                     ++line;
                 ++head;
@@ -1118,9 +1277,11 @@ HgJson HgJsonParser::parse_array() {
                 ++head;
             break;
         }
-        if (text[head] == ']') {
+        if (text[head] == ']')
+        {
             ++head;
-            while (head < text.length && hg_is_whitespace(text[head])) {
+            while (head < text.length && hgIsWhitespace(text[head]))
+            {
                 if (text[head] == '\n')
                     ++line;
                 ++head;
@@ -1130,102 +1291,115 @@ HgJson HgJsonParser::parse_array() {
             break;
         }
 
-        HgJsonElem* elem = hg_alloc<HgJsonElem>(arena, 1);
+        HgJsonElem* elem = hgAlloc<HgJsonElem>(arena, 1);
         elem->next = nullptr;
 
-        HgJson value = parse_next();
+        HgJson value = parseNext();
         elem->value = value.file;
 
-        if (value.file != nullptr) {
-            if (type == HgJsonType::none) {
-                if (value.file->type != HgJsonType::field) {
+        if (value.file != nullptr)
+        {
+            if (type == HgJsonType::none)
+            {
+                if (value.file->type != HgJsonType::field)
+                {
                     type = value.file->type;
                 } else {
-                    HgJsonError* error = hg_alloc<HgJsonError>(arena, 1);
+                    HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
                     error->next = nullptr;
                     error->msg = HgString{}
                         .append(arena, "on line ")
-                        .append(arena, hg_int_to_str_base10(arena, (i64)line))
+                        .append(arena, hgIntToStr(arena, (i64)line))
                         .append(arena, ", array has a field as an element\n");
-                    if (last_error == nullptr)
-                        json.errors = last_error = error;
+                    if (lastError == nullptr)
+                        json.errors = lastError = error;
                     else
-                        last_error->next = error;
-                    last_error = error;
+                        lastError->next = error;
+                    lastError = error;
                 }
             }
-            if (value.file->type != type) {
-                HgJsonError* error = hg_alloc<HgJsonError>(arena, 1);
+            if (value.file->type != type)
+            {
+                HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
                 error->next = nullptr;
                 error->msg = HgString{}
                     .append(arena, "on line ")
-                    .append(arena, hg_int_to_str_base10(arena, (i64)line))
+                    .append(arena, hgIntToStr(arena, (i64)line))
                     .append(arena, ", array has element which is not the same type as the first valid element\n");
-                if (last_error == nullptr)
-                    json.errors = last_error = error;
+                if (lastError == nullptr)
+                    json.errors = lastError = error;
                 else
-                    last_error->next = error;
-                last_error = error;
+                    lastError->next = error;
+                lastError = error;
             } else {
-                if (last_elem == nullptr)
+                if (lastElem == nullptr)
                     json.file->array.elems = elem;
                 else
-                    last_elem->next = elem;
-                last_elem = elem;
+                    lastElem->next = elem;
+                lastElem = elem;
             }
         }
-        if (value.errors != nullptr) {
-            if (last_error == nullptr)
-                json.errors = last_error = value.errors;
+        if (value.errors != nullptr)
+        {
+            if (lastError == nullptr)
+                json.errors = lastError = value.errors;
             else
-                last_error->next = value.errors;
-            last_error = value.errors;
+                lastError->next = value.errors;
+            lastError = value.errors;
         }
     }
 
     return json;
 }
 
-HgJson HgJsonParser::parse_string() {
+HgJson HgJsonParser::parseString()
+{
     usize begin = head;
-    while (head < text.length && text[head] != '"') {
+    while (head < text.length && text[head] != '"')
+    {
         if (text[head] == '\n')
             ++line;
         ++head;
     }
     usize end = head;
-    if (head < text.length) {
+    if (head < text.length)
+    {
         ++head;
         HgString str = str.create(arena, end - begin);
-        for (usize i = begin; i < end; ++i) {
+        for (usize i = begin; i < end; ++i)
+        {
             char c = text[i];
-            if (c == '\\') {
+            if (c == '\\')
+            {
                 // escape sequences : TODO
             }
             str.append(arena, c);
         }
 
         HgJson json{};
-        json.file = hg_alloc<HgJsonNode>(arena, 1);
+        json.file = hgAlloc<HgJsonNode>(arena, 1);
 
-        while (head < text.length && hg_is_whitespace(text[head])) {
+        while (head < text.length && hgIsWhitespace(text[head]))
+        {
             if (text[head] == '\n')
                 ++line;
             ++head;
         }
-        if (head < text.length && text[head] == ':') {
+        if (head < text.length && text[head] == ':')
+        {
             ++head;
             json.file->type = HgJsonType::field;
             json.file->field.next = nullptr;
             json.file->field.name = str;
-            HgJson next = parse_next();
+            HgJson next = parseNext();
             json.file->field.value = next.file;
             json.errors = next.errors;
         } else {
             json.file->type = HgJsonType::string;
             json.file->string = str;
         }
-        while (head < text.length && hg_is_whitespace(text[head])) {
+        while (head < text.length && hgIsWhitespace(text[head]))
+        {
             if (text[head] == '\n')
                 ++line;
             ++head;
@@ -1235,30 +1409,33 @@ HgJson HgJsonParser::parse_string() {
         return json;
     }
 
-    HgJsonError* error = hg_alloc<HgJsonError>(arena, 1);
+    HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
     error->msg = HgString{}
         .append(arena, "on line ")
-        .append(arena, hg_int_to_str_base10(arena, (i64)line))
+        .append(arena, hgIntToStr(arena, (i64)line))
         .append(arena, ", expected string to terminate\n");
     return {nullptr, error};
 }
 
-HgJson HgJsonParser::parse_number() {
-    bool is_float = false;
+HgJson HgJsonParser::parseNumber()
+{
+    bool isFloat = false;
     usize begin = head;
     while (head < text.length && (
-        hg_is_numeral_base10(text[head]) ||
+        hgIsNumeral(text[head]) ||
         text[head] == '-' ||
         text[head] == '+' ||
         text[head] == '.' ||
         text[head] == 'e'
-    )) {
+    ))
+    {
         if (text[head] == '.' || text[head] == 'e')
-            is_float = true;
+            isFloat = true;
         ++head;
     }
     HgStringView num{&text[begin], &text[head]};
-    while (head < text.length && hg_is_whitespace(text[head])) {
+    while (head < text.length && hgIsWhitespace(text[head]))
+    {
         if (text[head] == '\n')
             ++line;
         ++head;
@@ -1266,49 +1443,57 @@ HgJson HgJsonParser::parse_number() {
     if (head < text.length && text[head] == ',')
         ++head;
 
-    if (is_float) {
-        if (hg_is_float_base10(num)) {
-            HgJsonNode* node = hg_alloc<HgJsonNode>(arena, 1);
+    if (isFloat)
+    {
+        if (hgIsFloat(num))
+        {
+            HgJsonNode* node = hgAlloc<HgJsonNode>(arena, 1);
             node->type = HgJsonType::floating;
-            node->floating = hg_str_to_float_base10(num);
+            node->floating = hgStrToFloat(num);
             return {node, nullptr};
         }
     } else {
-        if (hg_is_integer_base10(num)) {
-            HgJsonNode* node = hg_alloc<HgJsonNode>(arena, 1);
+        if (hgIsIntenger(num))
+        {
+            HgJsonNode* node = hgAlloc<HgJsonNode>(arena, 1);
             node->type = HgJsonType::integer;
-            node->integer = hg_str_to_int_base10(num);
+            node->integer = hgStrToInt(num);
             return {node, nullptr};
         }
     }
 
-    HgJsonError* error = hg_alloc<HgJsonError>(arena, 1);
+    HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
 
     error->msg = HgString{}
         .append(arena, "on line ")
-        .append(arena, hg_int_to_str_base10(arena, (i64)line))
+        .append(arena, hgIntToStr(arena, (i64)line))
         .append(arena, ", expected numeral value, found \"")
         .append(arena, num)
         .append(arena, "\"\n");
 
-    while (head < text.length && hg_is_whitespace(text[head])) {
+    while (head < text.length && hgIsWhitespace(text[head]))
+    {
         if (text[head] == '\n')
             ++line;
         ++head;
     }
-    if (text[head] == '}' || text[head] == ']') {
+    if (text[head] == '}' || text[head] == ']')
+    {
         return {nullptr, error};
     } else {
-        HgJson next = parse_next();
+        HgJson next = parseNext();
         error->next = next.errors;
         return {next.file, error};
     }
 }
 
-HgJson HgJsonParser::parse_boolean() {
-    if (head + 4 < text.length && HgStringView{&text[head], 4} == "true") {
+HgJson HgJsonParser::parseBoolean()
+{
+    if (head + 4 < text.length && HgStringView{&text[head], 4} == "true")
+    {
         head += 4;
-        while (head < text.length && hg_is_whitespace(text[head])) {
+        while (head < text.length && hgIsWhitespace(text[head]))
+        {
             if (text[head] == '\n')
                 ++line;
             ++head;
@@ -1316,14 +1501,16 @@ HgJson HgJsonParser::parse_boolean() {
         if (head < text.length && text[head] == ',')
             ++head;
 
-        HgJsonNode* node = hg_alloc<HgJsonNode>(arena, 1);
+        HgJsonNode* node = hgAlloc<HgJsonNode>(arena, 1);
         node->type = HgJsonType::boolean;
         node->boolean = true;
         return {node, nullptr};
     }
-    if (head + 5 < text.length && HgStringView{&text[head], 5} == "false") {
+    if (head + 5 < text.length && HgStringView{&text[head], 5} == "false")
+    {
         head += 5;
-        while (head < text.length && hg_is_whitespace(text[head])) {
+        while (head < text.length && hgIsWhitespace(text[head]))
+        {
             if (text[head] == '\n')
                 ++line;
             ++head;
@@ -1331,27 +1518,28 @@ HgJson HgJsonParser::parse_boolean() {
         if (head < text.length && text[head] == ',')
             ++head;
 
-        HgJsonNode* node = hg_alloc<HgJsonNode>(arena, 1);
+        HgJsonNode* node = hgAlloc<HgJsonNode>(arena, 1);
         node->type = HgJsonType::boolean;
         node->boolean = false;
         return {node, nullptr};
     }
 
-    HgJsonError* error = hg_alloc<HgJsonError>(arena, 1);
+    HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
 
     usize begin = head;
-    while (head < text.length && !hg_is_whitespace(text[head])
+    while (head < text.length && !hgIsWhitespace(text[head])
         && text[head] != ','
         && text[head] != '}'
         && text[head] != ']'
-    ) {
+    )
+    {
         if (text[head] == '\n')
             ++line;
         ++head;
     }
     error->msg = HgString{}
         .append(arena, "on line ")
-        .append(arena, hg_int_to_str_base10(arena, (i64)line))
+        .append(arena, hgIntToStr(arena, (i64)line))
         .append(arena, ", expected boolean value, found \"")
         .append(arena, {&text[begin], &text[head]})
         .append(arena, "\"\n");
@@ -1359,29 +1547,33 @@ HgJson HgJsonParser::parse_boolean() {
     if (text[head] == ',')
         ++head;
 
-    while (head < text.length && hg_is_whitespace(text[head])) {
+    while (head < text.length && hgIsWhitespace(text[head]))
+    {
         if (text[head] == '\n')
             ++line;
         ++head;
     }
-    if (text[head] == '}' || text[head] == ']') {
+    if (text[head] == '}' || text[head] == ']')
+    {
         return {nullptr, error};
     } else {
-        HgJson next = parse_next();
+        HgJson next = parseNext();
         error->next = next.errors;
         return {next.file, error};
     }
 }
 
-HgJson hg_parse_json(HgArena* arena, HgStringView text) {
+HgJson hgParseJson(HgArena* arena, HgStringView text)
+{
     HgJsonParser parser{arena};
     parser.text = text;
     parser.head = 0;
     parser.line = 1;
-    return parser.parse_next();
+    return parser.parseNext();
 }
 
-f64 HgClock::tick() {
+f64 HgClock::tick()
+{
     auto prev = time;
     time = std::chrono::high_resolution_clock::now();
     return std::chrono::duration<f64>{time - prev}.count();
@@ -1393,10 +1585,11 @@ namespace {
         u32 capacity;
         u32 count;
 
-        static ComponentArr create(u32 init_count) {
+        static ComponentArr create(u32 initCount)
+        {
             ComponentArr arr;
-            arr.widths = (u32*)malloc(init_count * sizeof(u32));
-            arr.capacity = init_count;
+            arr.widths = (u32*)malloc(initCount * sizeof(u32));
+            arr.capacity = initCount;
             arr.count = 0;
             return arr;
         }
@@ -1405,44 +1598,51 @@ namespace {
             free(widths);
         }
 
-        void push(u32 width) {
-            if (capacity == count) {
-                u32 new_capacity = capacity == 0 ? 1 : capacity * 2;
-                widths = (u32*)realloc(widths, new_capacity);
-                capacity = new_capacity;
+        void push(u32 width)
+        {
+            if (capacity == count)
+            {
+                u32 newCapacity = capacity == 0 ? 1 : capacity * 2;
+                widths = (u32*)realloc(widths, newCapacity);
+                capacity = newCapacity;
             }
             widths[count++] = width;
         }
     };
 }
 
-ComponentArr& component_arr() {
+ComponentArr& componentArr()
+{
     static ComponentArr components = components.create(1024);
     return components;
 }
 
-static u32 component_width(u32 id) {
-    return component_arr().widths[id];
+static u32 componentWidth(u32 id)
+{
+    return componentArr().widths[id];
 }
 
-u32 hg_create_component_id(u32 width) {
-    u32 id = component_arr().count;
-    component_arr().push(width);
+u32 hgCreateComponentID(u32 width)
+{
+    u32 id = componentArr().count;
+    componentArr().push(width);
     return id;
 }
 
-HgECS HgECS::create(u32 max_entities) {
+HgECS HgECS::create(u32 maxEntities)
+{
     HgECS ecs{};
 
-    ecs.pool_size = max_entities;
-    ecs.pool = (HgEntity*)malloc(sizeof(HgEntity) * ecs.pool_size);
+    ecs.poolSize = maxEntities;
+    ecs.pool = (HgEntity*)malloc(sizeof(HgEntity) * ecs.poolSize);
 
-    ecs.system_count = component_arr().count;
-    ecs.systems = (System*)malloc(sizeof(System) * ecs.system_count);
+    ecs.systemCount = componentArr().count;
+    ecs.systems = (System*)malloc(sizeof(System) * ecs.systemCount);
 
-    for (u32 i = 0; i < ecs.system_count; ++i) {
+    for (u32 i = 0; i < ecs.systemCount; ++i)
+    {
         ecs.systems[i] = {};
-        ecs.systems[i].indices = (u32*)malloc(sizeof(u32) * ecs.pool_size);
+        ecs.systems[i].indices = (u32*)malloc(sizeof(u32) * ecs.poolSize);
     }
 
     ecs.reset();
@@ -1450,8 +1650,10 @@ HgECS HgECS::create(u32 max_entities) {
     return ecs;
 }
 
-void HgECS::destroy() {
-    for (u32 i = 0; i < system_count; ++i) {
+void HgECS::destroy()
+{
+    for (u32 i = 0; i < systemCount; ++i)
+    {
         free(systems[i].indices);
         free(systems[i].entities);
         free(systems[i].components);
@@ -1460,20 +1662,24 @@ void HgECS::destroy() {
     free(pool);
 }
 
-void HgECS::reset() {
-    for (u32 i = 0; i < pool_size; ++i) {
+void HgECS::reset()
+{
+    for (u32 i = 0; i < poolSize; ++i)
+    {
         pool[i] = {i + 1};
     }
     next = {0};
 
-    for (u32 i = 0; i < system_count; ++i) {
-        memset(systems[i].indices, -1, pool_size * sizeof(*systems[i].indices));
+    for (u32 i = 0; i < systemCount; ++i)
+    {
+        memset(systems[i].indices, -1, poolSize * sizeof(*systems[i].indices));
         systems[i].count = 0;
     }
 }
 
-HgEntity HgECS::spawn() {
-    hg_assert(next.idx() < pool_size);
+HgEntity HgECS::spawn()
+{
+    hgAssert(next.idx() < poolSize);
 
     HgEntity entity = next;
     next= pool[entity.idx()];
@@ -1481,108 +1687,121 @@ HgEntity HgECS::spawn() {
     return entity;
 }
 
-void HgECS::despawn(HgEntity e) {
-    hg_assert(alive(e));
+void HgECS::despawn(HgEntity e)
+{
+    hgAssert(alive(e));
 
-    for (u32 i = 0; i < system_count; ++i) {
+    for (u32 i = 0; i < systemCount; ++i)
+    {
         if (has(e, i))
             remove(e, i);
     }
     pool[e.idx()] = next;
     next = e;
-    next.increment_generation();
+    next.incrementGeneration();
 }
 
-bool HgECS::alive(HgEntity e) {
-    return e.idx() < pool_size && pool[e.idx()] == e;
+bool HgECS::alive(HgEntity e)
+{
+    return e.idx() < poolSize && pool[e.idx()] == e;
 }
 
-void* HgECS::add(HgEntity e, u32 component_id) {
-    hg_assert(alive(e));
-    hg_assert(!has(e, component_id));
+void* HgECS::add(HgEntity e, u32 componentId)
+{
+    hgAssert(alive(e));
+    hgAssert(!has(e, componentId));
 
-    if (systems[component_id].count == systems[component_id].capacity) {
-        u32 new_capacity = systems[component_id].capacity == 0 ? 1 : systems[component_id].capacity * 2;
-        systems[component_id].entities = (HgEntity*)realloc(
-            systems[component_id].entities, sizeof(HgEntity) * new_capacity);
-        systems[component_id].components = (HgEntity*)realloc(
-            systems[component_id].components, component_width(component_id) * new_capacity);
-        systems[component_id].capacity = new_capacity;
+    if (systems[componentId].count == systems[componentId].capacity)
+    {
+        u32 newCapacity = systems[componentId].capacity == 0 ? 1 : systems[componentId].capacity * 2;
+        systems[componentId].entities = (HgEntity*)realloc(
+            systems[componentId].entities, sizeof(HgEntity) * newCapacity);
+        systems[componentId].components = (HgEntity*)realloc(
+            systems[componentId].components, componentWidth(componentId) * newCapacity);
+        systems[componentId].capacity = newCapacity;
     }
 
-    systems[component_id].indices[e.idx()] = systems[component_id].count;
-    systems[component_id].entities[systems[component_id].count] = e;
-    void* c = (u8*)systems[component_id].components + component_width(component_id) * systems[component_id].count;
-    ++systems[component_id].count;
+    systems[componentId].indices[e.idx()] = systems[componentId].count;
+    systems[componentId].entities[systems[componentId].count] = e;
+    void* c = (u8*)systems[componentId].components + componentWidth(componentId) * systems[componentId].count;
+    ++systems[componentId].count;
     return c;
 }
 
-void HgECS::remove(HgEntity e, u32 component_id) {
-    hg_assert(alive(e));
-    hg_assert(has(e, component_id));
+void HgECS::remove(HgEntity e, u32 componentId)
+{
+    hgAssert(alive(e));
+    hgAssert(has(e, componentId));
 
-    HgEntity last = systems[component_id].entities[systems[component_id].count - 1];
-    systems[component_id].entities[systems[component_id].count - 1] = HgEntity{};
-    if (e != last) {
-        u32 idx = systems[component_id].indices[e.idx()];
-        systems[component_id].entities[idx] = last;
-        systems[component_id].indices[last.idx()] = idx;
+    HgEntity last = systems[componentId].entities[systems[componentId].count - 1];
+    systems[componentId].entities[systems[componentId].count - 1] = HgEntity{};
+    if (e != last)
+    {
+        u32 idx = systems[componentId].indices[e.idx()];
+        systems[componentId].entities[idx] = last;
+        systems[componentId].indices[last.idx()] = idx;
         memcpy(
-            (u8*)systems[component_id].components + component_width(component_id) * idx,
-            (u8*)systems[component_id].components + component_width(component_id) * (systems[component_id].count - 1),
-            component_width(component_id));
+            (u8*)systems[componentId].components + componentWidth(componentId) * idx,
+            (u8*)systems[componentId].components + componentWidth(componentId) * (systems[componentId].count - 1),
+            componentWidth(componentId));
     }
-    systems[component_id].indices[e.idx()] = (u32)-1;
-    --systems[component_id].count;
+    systems[componentId].indices[e.idx()] = (u32)-1;
+    --systems[componentId].count;
 }
 
-bool HgECS::has(HgEntity e, u32 component_id) {
-    hg_assert(alive(e));
-    return systems[component_id].indices[e.idx()] < systems[component_id].count;
+bool HgECS::has(HgEntity e, u32 componentId)
+{
+    hgAssert(alive(e));
+    return systems[componentId].indices[e.idx()] < systems[componentId].count;
 }
 
-void* HgECS::get(HgEntity e, u32 component_id) {
-    hg_assert(alive(e));
-    hg_assert(has(e, component_id));
-    return (u8*)systems[component_id].components + component_width(component_id) * systems[component_id].indices[e.idx()];
+void* HgECS::get(HgEntity e, u32 componentId)
+{
+    hgAssert(alive(e));
+    hgAssert(has(e, componentId));
+    return (u8*)systems[componentId].components + componentWidth(componentId) * systems[componentId].indices[e.idx()];
 }
 
-HgEntity HgECS::get(const void* component, u32 component_id) {
-    hg_assert(component != nullptr);
+HgEntity HgECS::get(const void* component, u32 componentId)
+{
+    hgAssert(component != nullptr);
 
-    usize idx = ((uptr)component - (uptr)systems[component_id].components) / component_width(component_id);
-    return systems[component_id].entities[idx];
+    usize idx = ((uptr)component - (uptr)systems[componentId].components) / componentWidth(componentId);
+    return systems[componentId].entities[idx];
 }
 
-u32 HgECS::find_smallest(u32* ids, usize id_count) {
+u32 HgECS::findSmallest(u32* ids, usize idCount)
+{
     u32 smallest = ids[0];
-    for (usize i = 1; i < id_count; ++i) {
+    for (usize i = 1; i < idCount; ++i)
+    {
         if (systems[ids[i]].count < systems[smallest].count)
             smallest = ids[i];
     }
     return smallest;
 }
 
-static void swap_idx_location(HgECS& ecs, u32 lhs, u32 rhs, u32 component_id) {
-    HgECS::System& system = ecs.systems[component_id];
-    hg_assert(lhs < system.count);
-    hg_assert(rhs < system.count);
+static void swapIdxLocation(HgECS* ecs, u32 lhs, u32 rhs, u32 componentId)
+{
+    HgECS::System& system = ecs->systems[componentId];
+    hgAssert(lhs < system.count);
+    hgAssert(rhs < system.count);
 
-    HgEntity lhs_entity = system.entities[lhs];
-    HgEntity rhs_entity = system.entities[rhs];
+    HgEntity lhsEntity = system.entities[lhs];
+    HgEntity rhsEntity = system.entities[rhs];
 
-    hg_assert(ecs.alive(lhs_entity));
-    hg_assert(ecs.alive(rhs_entity));
-    hg_assert(ecs.has(lhs_entity, component_id));
-    hg_assert(ecs.has(rhs_entity, component_id));
+    hgAssert(ecs->alive(lhsEntity));
+    hgAssert(ecs->alive(rhsEntity));
+    hgAssert(ecs->has(lhsEntity, componentId));
+    hgAssert(ecs->has(rhsEntity, componentId));
 
-    system.entities[lhs] = rhs_entity;
-    system.entities[rhs] = lhs_entity;
-    system.indices[lhs_entity.id] = rhs;
-    system.indices[rhs_entity.id] = lhs;
+    system.entities[lhs] = rhsEntity;
+    system.entities[rhs] = lhsEntity;
+    system.indices[lhsEntity.id] = rhs;
+    system.indices[rhsEntity.id] = lhs;
 
-    u32 width = component_width(component_id);
-    void* temp = alloca(component_width(component_id));
+    u32 width = componentWidth(componentId);
+    void* temp = alloca(componentWidth(componentId));
     memcpy(temp, (u8*)system.components + width * lhs, width);
     memcpy((u8*)system.components + width * lhs, (u8*)system.components + width * rhs, width);
     memcpy((u8*)system.components + width * rhs, temp, width);
@@ -1595,35 +1814,40 @@ namespace {
         void* data;
         bool (*compare)(void*, HgECS* ecs, HgEntity lhs, HgEntity rhs);
 
-        u32 quicksort_inter(u32 pivot, u32 inc, u32 dec) {
-            while (inc != dec) {
-                while (!compare(data, ecs, ecs->systems[comp].entities[dec], ecs->systems[comp].entities[pivot])) {
+        u32 quicksortInter(u32 pivot, u32 inc, u32 dec)
+        {
+            while (inc != dec)
+            {
+                while (!compare(data, ecs, ecs->systems[comp].entities[dec], ecs->systems[comp].entities[pivot]))
+                {
                     --dec;
                     if (dec == inc)
                         goto finish;
                 }
-                while (!compare(data, ecs, ecs->systems[comp].entities[pivot], ecs->systems[comp].entities[inc])) {
+                while (!compare(data, ecs, ecs->systems[comp].entities[pivot], ecs->systems[comp].entities[inc]))
+                {
                     ++inc;
                     if (inc == dec)
                         goto finish;
                 }
-                swap_idx_location(*ecs, inc, dec, comp);
+                swapIdxLocation(ecs, inc, dec, comp);
             }
 
         finish:
             if (compare(data, ecs, ecs->systems[comp].entities[inc], ecs->systems[comp].entities[pivot]))
-                swap_idx_location(*ecs, pivot, inc, comp);
+                swapIdxLocation(ecs, pivot, inc, comp);
 
             return inc;
         }
 
-        void quicksort(u32 begin, u32 end) {
-            hg_assert(begin <= end && end <= ecs->systems[comp].count);
+        void quicksort(u32 begin, u32 end)
+        {
+            hgAssert(begin <= end && end <= ecs->systems[comp].count);
 
             if (begin + 1 >= end)
                 return;
 
-            u32 middle = quicksort_inter(begin, begin + 1, end - 1);
+            u32 middle = quicksortInter(begin, begin + 1, end - 1);
             quicksort(begin, middle);
             quicksort(middle, end);
         }
@@ -1631,113 +1855,126 @@ namespace {
 }
 
 void HgECS::sort(
-    u32 component_id,
+    u32 componentId,
     void* data,
     bool (*compare)(void*, HgECS* ecs, HgEntity lhs, HgEntity rhs)
-) {
-    QuicksortData q{this, component_id, data, compare};
-    q.quicksort(0, systems[component_id].count);
+)
+{
+    QuicksortData q{this, componentId, data, compare};
+    q.quicksort(0, systems[componentId].count);
 }
 
-void hg_add_child_entity(HgECS& ecs, HgEntity parent, HgEntity child) {
-    HgHierarchy& node = ecs.get<HgHierarchy>(parent);
-    HgHierarchy& old_first = ecs.get<HgHierarchy>(node.first_child);
-    HgHierarchy& new_first = ecs.get<HgHierarchy>(child);
+void hgAddChildEntity(HgECS* ecs, HgEntity parent, HgEntity child)
+{
+    HgHierarchy& node = ecs->get<HgHierarchy>(parent);
+    HgHierarchy& oldFirst = ecs->get<HgHierarchy>(node.firstChild);
+    HgHierarchy& newFirst = ecs->get<HgHierarchy>(child);
 
-    hg_assert(new_first.parent == HgEntity{});
-    hg_assert(new_first.prev_sibling == HgEntity{});
-    hg_assert(new_first.next_sibling == HgEntity{});
+    hgAssert(newFirst.parent == HgEntity{});
+    hgAssert(newFirst.prevSibling == HgEntity{});
+    hgAssert(newFirst.nextSibling == HgEntity{});
 
-    new_first.parent = parent;
-    new_first.next_sibling = node.first_child;
+    newFirst.parent = parent;
+    newFirst.nextSibling = node.firstChild;
 
-    old_first.prev_sibling = child;
-    node.first_child = child;
+    oldFirst.prevSibling = child;
+    node.firstChild = child;
 }
 
-void hg_detach_entity(HgECS& ecs, HgEntity e) {
-    HgHierarchy& node = ecs.get<HgHierarchy>(e);
-    if (node.parent != HgEntity{}) {
-        if (node.prev_sibling == HgEntity{})
-            ecs.get<HgHierarchy>(node.parent).first_child = node.next_sibling;
+void hgDetachEntity(HgECS* ecs, HgEntity e)
+{
+    HgHierarchy& node = ecs->get<HgHierarchy>(e);
+    if (node.parent != HgEntity{})
+    {
+        if (node.prevSibling == HgEntity{})
+            ecs->get<HgHierarchy>(node.parent).firstChild = node.nextSibling;
         else
-            ecs.get<HgHierarchy>(node.prev_sibling).next_sibling = node.next_sibling;
-        ecs.get<HgHierarchy>(node.next_sibling).prev_sibling = node.prev_sibling;
+            ecs->get<HgHierarchy>(node.prevSibling).nextSibling = node.nextSibling;
+        ecs->get<HgHierarchy>(node.nextSibling).prevSibling = node.prevSibling;
 
-        HgEntity child = node.first_child;
-        while (child != HgEntity{}) {
-            HgHierarchy& tf = ecs.get<HgHierarchy>(child);
-            HgEntity next = tf.next_sibling;
+        HgEntity child = node.firstChild;
+        while (child != HgEntity{})
+        {
+            HgHierarchy& tf = ecs->get<HgHierarchy>(child);
+            HgEntity next = tf.nextSibling;
             tf.parent = HgEntity{};
-            tf.next_sibling = HgEntity{};
-            tf.prev_sibling = HgEntity{};
-            hg_add_child_entity(ecs, node.parent, child);
+            tf.nextSibling = HgEntity{};
+            tf.prevSibling = HgEntity{};
+            hgAddChildEntity(ecs, node.parent, child);
             child = next;
         }
     } else {
-        hg_assert(node.prev_sibling == HgEntity{});
-        hg_assert(node.next_sibling == HgEntity{});
-        HgEntity child = node.first_child;
-        while (child != HgEntity{}) {
-            HgHierarchy& tf = ecs.get<HgHierarchy>(child);
-            child = tf.next_sibling;
+        hgAssert(node.prevSibling == HgEntity{});
+        hgAssert(node.nextSibling == HgEntity{});
+        HgEntity child = node.firstChild;
+        while (child != HgEntity{})
+        {
+            HgHierarchy& tf = ecs->get<HgHierarchy>(child);
+            child = tf.nextSibling;
             tf.parent = HgEntity{};
-            tf.next_sibling = HgEntity{};
-            tf.prev_sibling = HgEntity{};
+            tf.nextSibling = HgEntity{};
+            tf.prevSibling = HgEntity{};
         }
     }
     node = {};
 }
 
-void hg_destroy_entity(HgECS& ecs, HgEntity e) {
-    HgHierarchy& node = ecs.get<HgHierarchy>(e);
-    HgEntity child = node.first_child;
-    while (child != HgEntity{}) {
-        HgHierarchy& tf = ecs.get<HgHierarchy>(child);
-        HgEntity next = tf.next_sibling;
+void hgDestroyEntity(HgECS* ecs, HgEntity e)
+{
+    HgHierarchy& node = ecs->get<HgHierarchy>(e);
+    HgEntity child = node.firstChild;
+    while (child != HgEntity{})
+    {
+        HgHierarchy& tf = ecs->get<HgHierarchy>(child);
+        HgEntity next = tf.nextSibling;
         tf.parent = HgEntity{};
-        tf.prev_sibling = HgEntity{};
-        tf.next_sibling = HgEntity{};
-        hg_destroy_entity(ecs, child);
+        tf.prevSibling = HgEntity{};
+        tf.nextSibling = HgEntity{};
+        hgDestroyEntity(ecs, child);
         child = next;
     }
-    if (node.parent != HgEntity{}) {
-        if (node.prev_sibling != HgEntity{})
-            ecs.get<HgHierarchy>(node.prev_sibling).next_sibling = node.next_sibling;
+    if (node.parent != HgEntity{})
+    {
+        if (node.prevSibling != HgEntity{})
+            ecs->get<HgHierarchy>(node.prevSibling).nextSibling = node.nextSibling;
         else
-            ecs.get<HgHierarchy>(node.parent).first_child = node.next_sibling;
-        if (node.next_sibling != HgEntity{})
-            ecs.get<HgHierarchy>(node.next_sibling).prev_sibling = HgEntity{};
+            ecs->get<HgHierarchy>(node.parent).firstChild = node.nextSibling;
+        if (node.nextSibling != HgEntity{})
+            ecs->get<HgHierarchy>(node.nextSibling).prevSibling = HgEntity{};
     }
-    ecs.despawn(e);
+    ecs->despawn(e);
 }
 
-void hg_set_entity(HgECS& ecs, HgEntity e, const HgVec3& p, const HgVec3& s, const HgQuat& r) {
-    HgTransform& tf = ecs.get<HgTransform>(e);
-    if (ecs.has<HgHierarchy>(e)) {
-        HgHierarchy& node = ecs.get<HgHierarchy>(e);
-        HgEntity child = node.first_child;
-        while (child != HgEntity{}) {
-            HgHierarchy& c_node = ecs.get<HgHierarchy>(child);
-            HgTransform& c_tf = ecs.get<HgTransform>(child);
+void hgSetEntity(HgECS* ecs, HgEntity e, const HgVec3& pos, const HgVec3& scale, const HgQuat& rot)
+{
+    HgTransform& tf = ecs->get<HgTransform>(e);
+    if (ecs->has<HgHierarchy>(e))
+    {
+        HgHierarchy& node = ecs->get<HgHierarchy>(e);
+        HgEntity child = node.firstChild;
+        while (child != HgEntity{})
+        {
+            HgHierarchy& cNode = ecs->get<HgHierarchy>(child);
+            HgTransform& cTf = ecs->get<HgTransform>(child);
             HgTransform rel;
-            rel.position = c_tf.position - tf.position;
-            rel.scale = c_tf.scale / tf.scale;
-            rel.rotation = hg_conj(tf.rotation) * c_tf.rotation;
-            // hg_set_entity(ecs, child, // : TODO
-            //     hg_rotate(r, (c_tf.position - tf.position) * s / c_tf.scale + p),
-            //     s * c_tf.scale / tf.scale,
+            rel.position = cTf.position - tf.position;
+            rel.scale = cTf.scale / tf.scale;
+            rel.rotation = hgConj(tf.rotation) * cTf.rotation;
+            // hgSetEntity(ecs, child, // : TODO
+            //     hgRotate(r, (cTf.position - tf.position) * s / cTf.scale + p),
+            //     s * cTf.scale / tf.scale,
             //     r);
-            child = c_node.next_sibling;
+            child = cNode.nextSibling;
         }
     }
-    tf.position = p;
-    tf.scale = s;
-    tf.rotation = r;
+    tf.position = pos;
+    tf.scale = scale;
+    tf.rotation = rot;
 }
 
-void hg_move_entity(HgECS& ecs, HgEntity e, const HgVec3& dp, const HgVec3& ds, const HgQuat& dr) {
-    HgTransform& tf = ecs.get<HgTransform>(e);
-    hg_set_entity(ecs, e, tf.position + dp, tf.scale * ds, dr * tf.rotation);
+void hgMoveEntity(HgECS* ecs, HgEntity e, const HgVec3& dpos, const HgVec3& dscale, const HgQuat& drot)
+{
+    HgTransform& tf = ecs->get<HgTransform>(e);
+    hgSetEntity(ecs, e, tf.position + dpos, tf.scale * dscale, drot * tf.rotation);
 }
 

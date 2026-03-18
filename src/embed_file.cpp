@@ -16,9 +16,9 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    size_t name_len = 0;
-    for (; argv[2][name_len] != '\0'; ++name_len);
-    for (size_t i = 0; i < name_len; i++) {
+    size_t nameLen = 0;
+    for (; argv[2][nameLen] != '\0'; ++nameLen);
+    for (size_t i = 0; i < nameLen; i++) {
         switch (argv[2][i]) {
             case '.':
             case '/':
@@ -37,13 +37,13 @@ int main(int argc, char** argv) {
     printf("const unsigned char %s[] = {", argv[2]);
 
     uint8_t byte;
-    uint32_t line_count = 0;
+    uint32_t lineCount = 0;
     while (fread(&byte, 1, 1, file) > 0) {
-        if (line_count % 16 == 0)
+        if (lineCount % 16 == 0)
             printf("\n\t");
         else
             printf(" ");
-        ++line_count;
+        ++lineCount;
 
         printf("0x%02x,", byte);
     }

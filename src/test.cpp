@@ -4,7 +4,8 @@
 
 #include <emmintrin.h>
 
-void hg_test() {
+void hgTest()
+{
     printf("HurdyGurdy: Tests Begun\n");
 
     HgClock timer{};
@@ -21,88 +22,89 @@ void hg_test() {
             HgVec2{1.0f, 0.0f},
             HgVec2{0.0f, 1.0f},
         };
-        hg_assert(identity * mat == mat);
-        hg_assert(identity * vec == vec);
+        hgAssert(identity * mat == mat);
+        hgAssert(identity * vec == vec);
 
-        HgMat2 mat_rotated{
+        HgMat2 matRotated{
             HgVec2{0.0f, 1.0f},
             HgVec2{0.0f, 1.0f},
         };
-        HgVec2 vec_rotated{-1.0f, 1.0f};
+        HgVec2 vecRotated{-1.0f, 1.0f};
 
         HgMat2 rotation{
             HgVec2{0.0f, 1.0f},
             HgVec2{-1.0f, 0.0f},
         };
-        hg_assert(rotation * mat == mat_rotated);
-        hg_assert(rotation * vec == vec_rotated);
+        hgAssert(rotation * mat == matRotated);
+        hgAssert(rotation * vec == vecRotated);
 
-        hg_assert((identity * rotation) * mat == identity * (rotation * mat));
-        hg_assert((identity * rotation) * vec == identity * (rotation * vec));
-        hg_assert((rotation * rotation) * mat == rotation * (rotation * mat));
-        hg_assert((rotation * rotation) * vec == rotation * (rotation * vec));
+        hgAssert((identity * rotation) * mat == identity * (rotation * mat));
+        hgAssert((identity * rotation) * vec == identity * (rotation * vec));
+        hgAssert((rotation * rotation) * mat == rotation * (rotation * mat));
+        hgAssert((rotation * rotation) * vec == rotation * (rotation * vec));
     }
 
     // HgQuat
     {
-        HgMat3 identity_mat = HgMat3{1.0f};
-        HgVec3 up_vec{0.0f, -1.0f, 0.0f};
-        HgQuat rotation = hg_axis_angle(HgVec3{0.0f, 0.0f, -1.0f}, -(f32)hg_pi * 0.5f);
+        HgMat3 identityMat = HgMat3{1.0f};
+        HgVec3 upVec{0.0f, -1.0f, 0.0f};
+        HgQuat rotation = hgAxisAngle(HgVec3{0.0f, 0.0f, -1.0f}, -(f32)hgPi * 0.5f);
 
-        HgVec3 rotated_vec = hg_rotate(rotation, up_vec);
-        HgMat3 rotated_mat = hg_rotate(rotation, identity_mat);
+        HgVec3 rotatedVec = hgRotate(rotation, upVec);
+        HgMat3 rotatedMat = hgRotate(rotation, identityMat);
 
-        HgVec3 mat_rotated_vec = rotated_mat * up_vec;
+        HgVec3 matRotatedVec = rotatedMat * upVec;
 
-        hg_assert(abs(rotated_vec.x - 1.0f) < FLT_EPSILON
-                    && abs(rotated_vec.y - 0.0f) < FLT_EPSILON
-                    && abs(rotated_vec.y - 0.0f) < FLT_EPSILON);
+        hgAssert(abs(rotatedVec.x - 1.0f) < FLT_EPSILON
+                    && abs(rotatedVec.y - 0.0f) < FLT_EPSILON
+                    && abs(rotatedVec.y - 0.0f) < FLT_EPSILON);
 
-        hg_assert(abs(mat_rotated_vec.x - rotated_vec.x) < FLT_EPSILON
-                    && abs(mat_rotated_vec.y - rotated_vec.y) < FLT_EPSILON
-                    && abs(mat_rotated_vec.y - rotated_vec.z) < FLT_EPSILON);
+        hgAssert(abs(matRotatedVec.x - rotatedVec.x) < FLT_EPSILON
+                    && abs(matRotatedVec.y - rotatedVec.y) < FLT_EPSILON
+                    && abs(matRotatedVec.y - rotatedVec.z) < FLT_EPSILON);
     }
 
     // HgArena
     {
         void* block = malloc(1024);
-        hg_defer(free(block));
+        hgDefer(free(block));
 
         HgArena arena = {block, 1024};
 
-        for (usize i = 0; i < 3; ++i) {
-            hg_assert(arena.memory != nullptr);
-            hg_assert(arena.capacity == 1024);
-            hg_assert(arena.head == 0);
+        for (usize i = 0; i < 3; ++i)
+        {
+            hgAssert(arena.memory != nullptr);
+            hgAssert(arena.capacity == 1024);
+            hgAssert(arena.head == 0);
 
-            u32* alloc_u32 = hg_alloc<u32>(&arena, 1);
-            hg_assert(alloc_u32 == arena.memory);
+            u32* allocU32 = hgAlloc<u32>(&arena, 1);
+            hgAssert(allocU32 == arena.memory);
 
-            u64* alloc_u64 = hg_alloc<u64>(&arena, 2);
-            hg_assert((u8*)alloc_u64 == (u8*)alloc_u32 + 8);
+            u64* allocU64 = hgAlloc<u64>(&arena, 2);
+            hgAssert((u8*)allocU64 == (u8*)allocU32 + 8);
 
-            u8* alloc_u8 = hg_alloc<u8>(&arena, 1);
-            hg_assert(alloc_u8 == (u8*)alloc_u32 + 24);
+            u8* allocU8 = hgAlloc<u8>(&arena, 1);
+            hgAssert(allocU8 == (u8*)allocU32 + 24);
 
             struct Big {
                 u8 data[32];
             };
-            Big* alloc_big = hg_alloc<Big>(&arena, 1);
-            hg_assert((u8*)alloc_big == (u8*)alloc_u32 + 25);
+            Big* allocBig = hgAlloc<Big>(&arena, 1);
+            hgAssert((u8*)allocBig == (u8*)allocU32 + 25);
 
-            Big* realloc_big = hg_realloc(&arena, alloc_big, 1, 2);
-            hg_assert(realloc_big == alloc_big);
+            Big* reallocBig = hgRealloc(&arena, allocBig, 1, 2);
+            hgAssert(reallocBig == allocBig);
 
-            Big* realloc_big_same = hg_realloc(&arena, realloc_big, 2, 2);
-            hg_assert(realloc_big_same == realloc_big);
+            Big* reallocBigSame = hgRealloc(&arena, reallocBig, 2, 2);
+            hgAssert(reallocBigSame == reallocBig);
 
-            memset(realloc_big, 2, 2 * sizeof(*realloc_big));
-            u8* alloc_interrupt = hg_alloc<u8>(&arena, 1);
-            (void)alloc_interrupt;
+            memset(reallocBig, 2, 2 * sizeof(*reallocBig));
+            u8* allocInterrupt = hgAlloc<u8>(&arena, 1);
+            (void)allocInterrupt;
 
-            Big* realloc_big2 = hg_realloc(&arena, realloc_big, 2, 4);
-            hg_assert(realloc_big2 != realloc_big);
-            hg_assert(memcmp(realloc_big, realloc_big2, 2 * sizeof(*realloc_big)) == 0);
+            Big* reallocBig2 = hgRealloc(&arena, reallocBig, 2, 4);
+            hgAssert(reallocBig2 != reallocBig);
+            hgAssert(memcmp(reallocBig, reallocBig2, 2 * sizeof(*reallocBig)) == 0);
 
             arena.head = 0;
         }
@@ -110,338 +112,338 @@ void hg_test() {
 
     // HgString
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
-        HgString a = a.create(arena, "a");
-        hg_assert(a[0] == 'a');
-        hg_assert(a.capacity == 1);
-        hg_assert(a.length == 1);
+        HgString a = a.copy(arena, "a");
+        hgAssert(a[0] == 'a');
+        hgAssert(a.capacity == 1);
+        hgAssert(a.length == 1);
 
-        HgString abc = abc.create(arena, "abc");
-        hg_assert(abc[0] == 'a');
-        hg_assert(abc[1] == 'b');
-        hg_assert(abc[2] == 'c');
-        hg_assert(abc.length == 3);
-        hg_assert(abc.capacity == 3);
+        HgString abc = abc.copy(arena, "abc");
+        hgAssert(abc[0] == 'a');
+        hgAssert(abc[1] == 'b');
+        hgAssert(abc[2] == 'c');
+        hgAssert(abc.length == 3);
+        hgAssert(abc.capacity == 3);
 
         a.append(arena, "bc");
-        hg_assert(a == abc);
+        hgAssert(a == abc);
 
         HgString str = str.create(arena, 16);
-        hg_assert(str == HgString::create(arena, 0));
+        hgAssert(str == HgString::create(arena, 0));
 
         str.append(arena, "hello");
-        hg_assert(str == HgString::create(arena, "hello"));
+        hgAssert(str == HgString::copy(arena, "hello"));
 
         str.append(arena, " there");
-        hg_assert(str == HgString::create(arena, "hello there"));
+        hgAssert(str == HgString::copy(arena, "hello there"));
 
         str.prepend(arena, "why ");
-        hg_assert(str == HgString::create(arena, "why hello there"));
+        hgAssert(str == HgString::copy(arena, "why hello there"));
 
         str.insert(arena, 3, ",");
-        hg_assert(str == HgString::create(arena, "why, hello there"));
+        hgAssert(str == HgString::copy(arena, "why, hello there"));
     }
 
     // string utils
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
-        hg_assert(hg_is_whitespace(' '));
-        hg_assert(hg_is_whitespace('\t'));
-        hg_assert(hg_is_whitespace('\n'));
+        hgAssert(hgIsWhitespace(' '));
+        hgAssert(hgIsWhitespace('\t'));
+        hgAssert(hgIsWhitespace('\n'));
 
-        hg_assert(hg_is_numeral_base10('0'));
-        hg_assert(hg_is_numeral_base10('1'));
-        hg_assert(hg_is_numeral_base10('2'));
-        hg_assert(hg_is_numeral_base10('3'));
-        hg_assert(hg_is_numeral_base10('4'));
-        hg_assert(hg_is_numeral_base10('5'));
-        hg_assert(hg_is_numeral_base10('5'));
-        hg_assert(hg_is_numeral_base10('6'));
-        hg_assert(hg_is_numeral_base10('7'));
-        hg_assert(hg_is_numeral_base10('8'));
-        hg_assert(hg_is_numeral_base10('9'));
+        hgAssert(hgIsNumeral('0'));
+        hgAssert(hgIsNumeral('1'));
+        hgAssert(hgIsNumeral('2'));
+        hgAssert(hgIsNumeral('3'));
+        hgAssert(hgIsNumeral('4'));
+        hgAssert(hgIsNumeral('5'));
+        hgAssert(hgIsNumeral('5'));
+        hgAssert(hgIsNumeral('6'));
+        hgAssert(hgIsNumeral('7'));
+        hgAssert(hgIsNumeral('8'));
+        hgAssert(hgIsNumeral('9'));
 
-        hg_assert(!hg_is_numeral_base10('0' - 1));
-        hg_assert(!hg_is_numeral_base10('9' + 1));
+        hgAssert(!hgIsNumeral('0' - 1));
+        hgAssert(!hgIsNumeral('9' + 1));
 
-        hg_assert(!hg_is_numeral_base10('x'));
-        hg_assert(!hg_is_numeral_base10('a'));
-        hg_assert(!hg_is_numeral_base10('b'));
-        hg_assert(!hg_is_numeral_base10('c'));
-        hg_assert(!hg_is_numeral_base10('d'));
-        hg_assert(!hg_is_numeral_base10('e'));
-        hg_assert(!hg_is_numeral_base10('f'));
-        hg_assert(!hg_is_numeral_base10('X'));
-        hg_assert(!hg_is_numeral_base10('A'));
-        hg_assert(!hg_is_numeral_base10('B'));
-        hg_assert(!hg_is_numeral_base10('C'));
-        hg_assert(!hg_is_numeral_base10('D'));
-        hg_assert(!hg_is_numeral_base10('E'));
-        hg_assert(!hg_is_numeral_base10('F'));
+        hgAssert(!hgIsNumeral('x'));
+        hgAssert(!hgIsNumeral('a'));
+        hgAssert(!hgIsNumeral('b'));
+        hgAssert(!hgIsNumeral('c'));
+        hgAssert(!hgIsNumeral('d'));
+        hgAssert(!hgIsNumeral('e'));
+        hgAssert(!hgIsNumeral('f'));
+        hgAssert(!hgIsNumeral('X'));
+        hgAssert(!hgIsNumeral('A'));
+        hgAssert(!hgIsNumeral('B'));
+        hgAssert(!hgIsNumeral('C'));
+        hgAssert(!hgIsNumeral('D'));
+        hgAssert(!hgIsNumeral('E'));
+        hgAssert(!hgIsNumeral('F'));
 
-        hg_assert(!hg_is_numeral_base10('.'));
-        hg_assert(!hg_is_numeral_base10('+'));
-        hg_assert(!hg_is_numeral_base10('-'));
-        hg_assert(!hg_is_numeral_base10('*'));
-        hg_assert(!hg_is_numeral_base10('/'));
-        hg_assert(!hg_is_numeral_base10('='));
-        hg_assert(!hg_is_numeral_base10('#'));
-        hg_assert(!hg_is_numeral_base10('&'));
-        hg_assert(!hg_is_numeral_base10('^'));
-        hg_assert(!hg_is_numeral_base10('~'));
+        hgAssert(!hgIsNumeral('.'));
+        hgAssert(!hgIsNumeral('+'));
+        hgAssert(!hgIsNumeral('-'));
+        hgAssert(!hgIsNumeral('*'));
+        hgAssert(!hgIsNumeral('/'));
+        hgAssert(!hgIsNumeral('='));
+        hgAssert(!hgIsNumeral('#'));
+        hgAssert(!hgIsNumeral('&'));
+        hgAssert(!hgIsNumeral('^'));
+        hgAssert(!hgIsNumeral('~'));
 
-        hg_assert(hg_is_integer_base10("0"));
-        hg_assert(hg_is_integer_base10("1"));
-        hg_assert(hg_is_integer_base10("2"));
-        hg_assert(hg_is_integer_base10("3"));
-        hg_assert(hg_is_integer_base10("4"));
-        hg_assert(hg_is_integer_base10("5"));
-        hg_assert(hg_is_integer_base10("6"));
-        hg_assert(hg_is_integer_base10("7"));
-        hg_assert(hg_is_integer_base10("8"));
-        hg_assert(hg_is_integer_base10("9"));
-        hg_assert(hg_is_integer_base10("10"));
+        hgAssert(hgIsIntenger("0"));
+        hgAssert(hgIsIntenger("1"));
+        hgAssert(hgIsIntenger("2"));
+        hgAssert(hgIsIntenger("3"));
+        hgAssert(hgIsIntenger("4"));
+        hgAssert(hgIsIntenger("5"));
+        hgAssert(hgIsIntenger("6"));
+        hgAssert(hgIsIntenger("7"));
+        hgAssert(hgIsIntenger("8"));
+        hgAssert(hgIsIntenger("9"));
+        hgAssert(hgIsIntenger("10"));
 
-        hg_assert(hg_is_integer_base10("12"));
-        hg_assert(hg_is_integer_base10("42"));
-        hg_assert(hg_is_integer_base10("100"));
-        hg_assert(hg_is_integer_base10("123456789"));
-        hg_assert(hg_is_integer_base10("-12"));
-        hg_assert(hg_is_integer_base10("-42"));
-        hg_assert(hg_is_integer_base10("-100"));
-        hg_assert(hg_is_integer_base10("-123456789"));
-        hg_assert(hg_is_integer_base10("+12"));
-        hg_assert(hg_is_integer_base10("+42"));
-        hg_assert(hg_is_integer_base10("+100"));
-        hg_assert(hg_is_integer_base10("+123456789"));
+        hgAssert(hgIsIntenger("12"));
+        hgAssert(hgIsIntenger("42"));
+        hgAssert(hgIsIntenger("100"));
+        hgAssert(hgIsIntenger("123456789"));
+        hgAssert(hgIsIntenger("-12"));
+        hgAssert(hgIsIntenger("-42"));
+        hgAssert(hgIsIntenger("-100"));
+        hgAssert(hgIsIntenger("-123456789"));
+        hgAssert(hgIsIntenger("+12"));
+        hgAssert(hgIsIntenger("+42"));
+        hgAssert(hgIsIntenger("+100"));
+        hgAssert(hgIsIntenger("+123456789"));
 
-        hg_assert(!hg_is_integer_base10("hello"));
-        hg_assert(!hg_is_integer_base10("not a number"));
-        hg_assert(!hg_is_integer_base10("number"));
-        hg_assert(!hg_is_integer_base10("integer"));
-        hg_assert(!hg_is_integer_base10("0.0"));
-        hg_assert(!hg_is_integer_base10("1.0"));
-        hg_assert(!hg_is_integer_base10(".10"));
-        hg_assert(!hg_is_integer_base10("1e2"));
-        hg_assert(!hg_is_integer_base10("1f"));
-        hg_assert(!hg_is_integer_base10("0xff"));
-        hg_assert(!hg_is_integer_base10("--42"));
-        hg_assert(!hg_is_integer_base10("++42"));
-        hg_assert(!hg_is_integer_base10("42-"));
-        hg_assert(!hg_is_integer_base10("42+"));
-        hg_assert(!hg_is_integer_base10("4 2"));
-        hg_assert(!hg_is_integer_base10("4+2"));
+        hgAssert(!hgIsIntenger("hello"));
+        hgAssert(!hgIsIntenger("not a number"));
+        hgAssert(!hgIsIntenger("number"));
+        hgAssert(!hgIsIntenger("integer"));
+        hgAssert(!hgIsIntenger("0.0"));
+        hgAssert(!hgIsIntenger("1.0"));
+        hgAssert(!hgIsIntenger(".10"));
+        hgAssert(!hgIsIntenger("1e2"));
+        hgAssert(!hgIsIntenger("1f"));
+        hgAssert(!hgIsIntenger("0xff"));
+        hgAssert(!hgIsIntenger("--42"));
+        hgAssert(!hgIsIntenger("++42"));
+        hgAssert(!hgIsIntenger("42-"));
+        hgAssert(!hgIsIntenger("42+"));
+        hgAssert(!hgIsIntenger("4 2"));
+        hgAssert(!hgIsIntenger("4+2"));
 
-        hg_assert(hg_is_float_base10("0.0"));
-        hg_assert(hg_is_float_base10("1."));
-        hg_assert(hg_is_float_base10("2.0"));
-        hg_assert(hg_is_float_base10("3."));
-        hg_assert(hg_is_float_base10("4.0"));
-        hg_assert(hg_is_float_base10("5."));
-        hg_assert(hg_is_float_base10("6.0"));
-        hg_assert(hg_is_float_base10("7."));
-        hg_assert(hg_is_float_base10("8.0"));
-        hg_assert(hg_is_float_base10("9."));
-        hg_assert(hg_is_float_base10("10.0"));
+        hgAssert(hgIsFloat("0.0"));
+        hgAssert(hgIsFloat("1."));
+        hgAssert(hgIsFloat("2.0"));
+        hgAssert(hgIsFloat("3."));
+        hgAssert(hgIsFloat("4.0"));
+        hgAssert(hgIsFloat("5."));
+        hgAssert(hgIsFloat("6.0"));
+        hgAssert(hgIsFloat("7."));
+        hgAssert(hgIsFloat("8.0"));
+        hgAssert(hgIsFloat("9."));
+        hgAssert(hgIsFloat("10.0"));
 
-        hg_assert(hg_is_float_base10("0.0"));
-        hg_assert(hg_is_float_base10(".1"));
-        hg_assert(hg_is_float_base10("0.2"));
-        hg_assert(hg_is_float_base10(".3"));
-        hg_assert(hg_is_float_base10("0.4"));
-        hg_assert(hg_is_float_base10(".5"));
-        hg_assert(hg_is_float_base10("0.6"));
-        hg_assert(hg_is_float_base10(".7"));
-        hg_assert(hg_is_float_base10("0.8"));
-        hg_assert(hg_is_float_base10(".9"));
-        hg_assert(hg_is_float_base10("0.10"));
+        hgAssert(hgIsFloat("0.0"));
+        hgAssert(hgIsFloat(".1"));
+        hgAssert(hgIsFloat("0.2"));
+        hgAssert(hgIsFloat(".3"));
+        hgAssert(hgIsFloat("0.4"));
+        hgAssert(hgIsFloat(".5"));
+        hgAssert(hgIsFloat("0.6"));
+        hgAssert(hgIsFloat(".7"));
+        hgAssert(hgIsFloat("0.8"));
+        hgAssert(hgIsFloat(".9"));
+        hgAssert(hgIsFloat("0.10"));
 
-        hg_assert(hg_is_float_base10("1.0"));
-        hg_assert(hg_is_float_base10("+10.f"));
-        hg_assert(hg_is_float_base10(".10"));
-        hg_assert(hg_is_float_base10("-999.999f"));
-        hg_assert(hg_is_float_base10("1e3"));
-        hg_assert(hg_is_float_base10("1e3"));
-        hg_assert(hg_is_float_base10("+1.e3f"));
-        hg_assert(hg_is_float_base10(".1e3"));
+        hgAssert(hgIsFloat("1.0"));
+        hgAssert(hgIsFloat("+10.f"));
+        hgAssert(hgIsFloat(".10"));
+        hgAssert(hgIsFloat("-999.999f"));
+        hgAssert(hgIsFloat("1e3"));
+        hgAssert(hgIsFloat("1e3"));
+        hgAssert(hgIsFloat("+1.e3f"));
+        hgAssert(hgIsFloat(".1e3"));
 
-        hg_assert(!hg_is_float_base10("hello"));
-        hg_assert(!hg_is_float_base10("not a number"));
-        hg_assert(!hg_is_float_base10("number"));
-        hg_assert(!hg_is_float_base10("float"));
-        hg_assert(!hg_is_float_base10("1.0ff"));
-        hg_assert(!hg_is_float_base10("0x1.0"));
-        hg_assert(!hg_is_float_base10("-0x1.0"));
+        hgAssert(!hgIsFloat("hello"));
+        hgAssert(!hgIsFloat("not a number"));
+        hgAssert(!hgIsFloat("number"));
+        hgAssert(!hgIsFloat("float"));
+        hgAssert(!hgIsFloat("1.0ff"));
+        hgAssert(!hgIsFloat("0x1.0"));
+        hgAssert(!hgIsFloat("-0x1.0"));
 
-        hg_assert(hg_str_to_int_base10("0") == 0);
-        hg_assert(hg_str_to_int_base10("1") == 1);
-        hg_assert(hg_str_to_int_base10("2") == 2);
-        hg_assert(hg_str_to_int_base10("3") == 3);
-        hg_assert(hg_str_to_int_base10("4") == 4);
-        hg_assert(hg_str_to_int_base10("5") == 5);
-        hg_assert(hg_str_to_int_base10("6") == 6);
-        hg_assert(hg_str_to_int_base10("7") == 7);
-        hg_assert(hg_str_to_int_base10("8") == 8);
-        hg_assert(hg_str_to_int_base10("9") == 9);
+        hgAssert(hgStrToInt("0") == 0);
+        hgAssert(hgStrToInt("1") == 1);
+        hgAssert(hgStrToInt("2") == 2);
+        hgAssert(hgStrToInt("3") == 3);
+        hgAssert(hgStrToInt("4") == 4);
+        hgAssert(hgStrToInt("5") == 5);
+        hgAssert(hgStrToInt("6") == 6);
+        hgAssert(hgStrToInt("7") == 7);
+        hgAssert(hgStrToInt("8") == 8);
+        hgAssert(hgStrToInt("9") == 9);
 
-        hg_assert(hg_str_to_int_base10("0000000") == 0);
-        hg_assert(hg_str_to_int_base10("+0000001") == +1);
-        hg_assert(hg_str_to_int_base10("0000002") == 2);
-        hg_assert(hg_str_to_int_base10("-0000003") == -3);
-        hg_assert(hg_str_to_int_base10("0000004") == 4);
-        hg_assert(hg_str_to_int_base10("+0000005") == +5);
-        hg_assert(hg_str_to_int_base10("0000006") == 6);
-        hg_assert(hg_str_to_int_base10("-0000007") == -7);
-        hg_assert(hg_str_to_int_base10("0000008") == 8);
-        hg_assert(hg_str_to_int_base10("+0000009") == +9);
+        hgAssert(hgStrToInt("0000000") == 0);
+        hgAssert(hgStrToInt("+0000001") == +1);
+        hgAssert(hgStrToInt("0000002") == 2);
+        hgAssert(hgStrToInt("-0000003") == -3);
+        hgAssert(hgStrToInt("0000004") == 4);
+        hgAssert(hgStrToInt("+0000005") == +5);
+        hgAssert(hgStrToInt("0000006") == 6);
+        hgAssert(hgStrToInt("-0000007") == -7);
+        hgAssert(hgStrToInt("0000008") == 8);
+        hgAssert(hgStrToInt("+0000009") == +9);
 
-        hg_assert(hg_str_to_int_base10("0000000") == 0);
-        hg_assert(hg_str_to_int_base10("1000000") == 1000000);
-        hg_assert(hg_str_to_int_base10("2000000") == 2000000);
-        hg_assert(hg_str_to_int_base10("3000000") == 3000000);
-        hg_assert(hg_str_to_int_base10("4000000") == 4000000);
-        hg_assert(hg_str_to_int_base10("5000000") == 5000000);
-        hg_assert(hg_str_to_int_base10("6000000") == 6000000);
-        hg_assert(hg_str_to_int_base10("7000000") == 7000000);
-        hg_assert(hg_str_to_int_base10("8000000") == 8000000);
-        hg_assert(hg_str_to_int_base10("9000000") == 9000000);
-        hg_assert(hg_str_to_int_base10("1234567890") == 1234567890);
+        hgAssert(hgStrToInt("0000000") == 0);
+        hgAssert(hgStrToInt("1000000") == 1000000);
+        hgAssert(hgStrToInt("2000000") == 2000000);
+        hgAssert(hgStrToInt("3000000") == 3000000);
+        hgAssert(hgStrToInt("4000000") == 4000000);
+        hgAssert(hgStrToInt("5000000") == 5000000);
+        hgAssert(hgStrToInt("6000000") == 6000000);
+        hgAssert(hgStrToInt("7000000") == 7000000);
+        hgAssert(hgStrToInt("8000000") == 8000000);
+        hgAssert(hgStrToInt("9000000") == 9000000);
+        hgAssert(hgStrToInt("1234567890") == 1234567890);
 
-        hg_assert(hg_str_to_float_base10("0.0") == 0.0);
-        hg_assert(hg_str_to_float_base10("1.0f") == 1.0);
-        hg_assert(hg_str_to_float_base10("2.0") == 2.0);
-        hg_assert(hg_str_to_float_base10("3.0f") == 3.0);
-        hg_assert(hg_str_to_float_base10("4.0") == 4.0);
-        hg_assert(hg_str_to_float_base10("5.0f") == 5.0);
-        hg_assert(hg_str_to_float_base10("6.0") == 6.0);
-        hg_assert(hg_str_to_float_base10("7.0f") == 7.0);
-        hg_assert(hg_str_to_float_base10("8.0") == 8.0);
-        hg_assert(hg_str_to_float_base10("9.0f") == 9.0);
+        hgAssert(hgStrToFloat("0.0") == 0.0);
+        hgAssert(hgStrToFloat("1.0f") == 1.0);
+        hgAssert(hgStrToFloat("2.0") == 2.0);
+        hgAssert(hgStrToFloat("3.0f") == 3.0);
+        hgAssert(hgStrToFloat("4.0") == 4.0);
+        hgAssert(hgStrToFloat("5.0f") == 5.0);
+        hgAssert(hgStrToFloat("6.0") == 6.0);
+        hgAssert(hgStrToFloat("7.0f") == 7.0);
+        hgAssert(hgStrToFloat("8.0") == 8.0);
+        hgAssert(hgStrToFloat("9.0f") == 9.0);
 
-        hg_assert(hg_str_to_float_base10("0e1") == 0.0);
-        hg_assert(hg_str_to_float_base10("1e2f") == 1e2);
-        hg_assert(hg_str_to_float_base10("2e3") == 2e3);
-        hg_assert(hg_str_to_float_base10("3e4f") == 3e4);
-        hg_assert(hg_str_to_float_base10("4e5") == 4e5);
-        hg_assert(hg_str_to_float_base10("5e6f") == 5e6);
-        hg_assert(hg_str_to_float_base10("6e7") == 6e7);
-        hg_assert(hg_str_to_float_base10("7e8f") == 7e8);
-        hg_assert(hg_str_to_float_base10("8e9") == 8e9);
-        hg_assert(hg_str_to_float_base10("9e10f") == 9e10);
+        hgAssert(hgStrToFloat("0e1") == 0.0);
+        hgAssert(hgStrToFloat("1e2f") == 1e2);
+        hgAssert(hgStrToFloat("2e3") == 2e3);
+        hgAssert(hgStrToFloat("3e4f") == 3e4);
+        hgAssert(hgStrToFloat("4e5") == 4e5);
+        hgAssert(hgStrToFloat("5e6f") == 5e6);
+        hgAssert(hgStrToFloat("6e7") == 6e7);
+        hgAssert(hgStrToFloat("7e8f") == 7e8);
+        hgAssert(hgStrToFloat("8e9") == 8e9);
+        hgAssert(hgStrToFloat("9e10f") == 9e10);
 
-        hg_assert(hg_str_to_float_base10("0e1") == 0.0);
-        hg_assert(hg_str_to_float_base10("1e2f") == 1e2);
-        hg_assert(hg_str_to_float_base10("2e3") == 2e3);
-        hg_assert(hg_str_to_float_base10("3e4f") == 3e4);
-        hg_assert(hg_str_to_float_base10("4e5") == 4e5);
-        hg_assert(hg_str_to_float_base10("5e6f") == 5e6);
-        hg_assert(hg_str_to_float_base10("6e7") == 6e7);
-        hg_assert(hg_str_to_float_base10("7e8f") == 7e8);
-        hg_assert(hg_str_to_float_base10("8e9") == 8e9);
-        hg_assert(hg_str_to_float_base10("9e10f") == 9e10);
+        hgAssert(hgStrToFloat("0e1") == 0.0);
+        hgAssert(hgStrToFloat("1e2f") == 1e2);
+        hgAssert(hgStrToFloat("2e3") == 2e3);
+        hgAssert(hgStrToFloat("3e4f") == 3e4);
+        hgAssert(hgStrToFloat("4e5") == 4e5);
+        hgAssert(hgStrToFloat("5e6f") == 5e6);
+        hgAssert(hgStrToFloat("6e7") == 6e7);
+        hgAssert(hgStrToFloat("7e8f") == 7e8);
+        hgAssert(hgStrToFloat("8e9") == 8e9);
+        hgAssert(hgStrToFloat("9e10f") == 9e10);
 
-        hg_assert(hg_str_to_float_base10(".1") == .1);
-        hg_assert(hg_str_to_float_base10("+.1") == +.1);
-        hg_assert(hg_str_to_float_base10("-.1") == -.1);
-        hg_assert(hg_str_to_float_base10("+.1e5") == +.1e5);
+        hgAssert(hgStrToFloat(".1") == .1);
+        hgAssert(hgStrToFloat("+.1") == +.1);
+        hgAssert(hgStrToFloat("-.1") == -.1);
+        hgAssert(hgStrToFloat("+.1e5") == +.1e5);
 
-        hg_assert(hg_int_to_str_base10(arena, 0) == "0");
-        hg_assert(hg_int_to_str_base10(arena, -1) == "-1");
-        hg_assert(hg_int_to_str_base10(arena, 2) == "2");
-        hg_assert(hg_int_to_str_base10(arena, -3) == "-3");
-        hg_assert(hg_int_to_str_base10(arena, 4) == "4");
-        hg_assert(hg_int_to_str_base10(arena, -5) == "-5");
-        hg_assert(hg_int_to_str_base10(arena, 6) == "6");
-        hg_assert(hg_int_to_str_base10(arena, -7) == "-7");
-        hg_assert(hg_int_to_str_base10(arena, 8) == "8");
-        hg_assert(hg_int_to_str_base10(arena, -9) == "-9");
+        hgAssert(hgIntToStr(arena, 0) == "0");
+        hgAssert(hgIntToStr(arena, -1) == "-1");
+        hgAssert(hgIntToStr(arena, 2) == "2");
+        hgAssert(hgIntToStr(arena, -3) == "-3");
+        hgAssert(hgIntToStr(arena, 4) == "4");
+        hgAssert(hgIntToStr(arena, -5) == "-5");
+        hgAssert(hgIntToStr(arena, 6) == "6");
+        hgAssert(hgIntToStr(arena, -7) == "-7");
+        hgAssert(hgIntToStr(arena, 8) == "8");
+        hgAssert(hgIntToStr(arena, -9) == "-9");
 
-        hg_assert(hg_int_to_str_base10(arena, 0000000) == "0");
-        hg_assert(hg_int_to_str_base10(arena, -1000000) == "-1000000");
-        hg_assert(hg_int_to_str_base10(arena, 2000000) == "2000000");
-        hg_assert(hg_int_to_str_base10(arena, -3000000) == "-3000000");
-        hg_assert(hg_int_to_str_base10(arena, 4000000) == "4000000");
-        hg_assert(hg_int_to_str_base10(arena, -5000000) == "-5000000");
-        hg_assert(hg_int_to_str_base10(arena, 6000000) == "6000000");
-        hg_assert(hg_int_to_str_base10(arena, -7000000) == "-7000000");
-        hg_assert(hg_int_to_str_base10(arena, 8000000) == "8000000");
-        hg_assert(hg_int_to_str_base10(arena, -9000000) == "-9000000");
-        hg_assert(hg_int_to_str_base10(arena, 1234567890) == "1234567890");
+        hgAssert(hgIntToStr(arena, 0000000) == "0");
+        hgAssert(hgIntToStr(arena, -1000000) == "-1000000");
+        hgAssert(hgIntToStr(arena, 2000000) == "2000000");
+        hgAssert(hgIntToStr(arena, -3000000) == "-3000000");
+        hgAssert(hgIntToStr(arena, 4000000) == "4000000");
+        hgAssert(hgIntToStr(arena, -5000000) == "-5000000");
+        hgAssert(hgIntToStr(arena, 6000000) == "6000000");
+        hgAssert(hgIntToStr(arena, -7000000) == "-7000000");
+        hgAssert(hgIntToStr(arena, 8000000) == "8000000");
+        hgAssert(hgIntToStr(arena, -9000000) == "-9000000");
+        hgAssert(hgIntToStr(arena, 1234567890) == "1234567890");
 
-        hg_assert(hg_float_to_str_base10(arena, 0.0, 10) == "0.0");
-        hg_assert(hg_float_to_str_base10(arena, -1.0f, 1) == "-1.0");
-        hg_assert(hg_float_to_str_base10(arena, 2.0, 2) == "2.00");
-        hg_assert(hg_float_to_str_base10(arena, -3.0f, 3) == "-3.000");
-        hg_assert(hg_float_to_str_base10(arena, 4.0, 4) == "4.0000");
-        hg_assert(hg_float_to_str_base10(arena, -5.0f, 5) == "-5.00000");
-        hg_assert(hg_float_to_str_base10(arena, 6.0, 6) == "6.000000");
-        hg_assert(hg_float_to_str_base10(arena, -7.0f, 7) == "-7.0000000");
-        hg_assert(hg_float_to_str_base10(arena, 8.0, 8) == "8.00000000");
-        hg_assert(hg_float_to_str_base10(arena, -9.0f, 9) == "-9.000000000");
+        hgAssert(hgFloatToStr(arena, 0.0, 10) == "0.0");
+        hgAssert(hgFloatToStr(arena, -1.0f, 1) == "-1.0");
+        hgAssert(hgFloatToStr(arena, 2.0, 2) == "2.00");
+        hgAssert(hgFloatToStr(arena, -3.0f, 3) == "-3.000");
+        hgAssert(hgFloatToStr(arena, 4.0, 4) == "4.0000");
+        hgAssert(hgFloatToStr(arena, -5.0f, 5) == "-5.00000");
+        hgAssert(hgFloatToStr(arena, 6.0, 6) == "6.000000");
+        hgAssert(hgFloatToStr(arena, -7.0f, 7) == "-7.0000000");
+        hgAssert(hgFloatToStr(arena, 8.0, 8) == "8.00000000");
+        hgAssert(hgFloatToStr(arena, -9.0f, 9) == "-9.000000000");
 
-        hg_assert(hg_float_to_str_base10(arena, 0e0, 1) == "0.0");
-        hg_assert(hg_float_to_str_base10(arena, -1e1f, 0) == "-10.");
-        hg_assert(hg_float_to_str_base10(arena, 2e2, 1) == "200.0");
-        hg_assert(hg_float_to_str_base10(arena, -3e3f, 0) == "-3000.");
-        hg_assert(hg_float_to_str_base10(arena, 4e4, 1) == "40000.0");
-        hg_assert(hg_float_to_str_base10(arena, -5e5f, 0) == "-500000.");
-        hg_assert(hg_float_to_str_base10(arena, 6e6, 1) == "6000000.0");
-        hg_assert(hg_float_to_str_base10(arena, -7e7f, 0) == "-70000000.");
-        hg_assert(hg_float_to_str_base10(arena, 8e8, 1) == "800000000.0");
-        hg_assert(hg_float_to_str_base10(arena, -9e9f, 0) == "-8999999488.");
+        hgAssert(hgFloatToStr(arena, 0e0, 1) == "0.0");
+        hgAssert(hgFloatToStr(arena, -1e1f, 0) == "-10.");
+        hgAssert(hgFloatToStr(arena, 2e2, 1) == "200.0");
+        hgAssert(hgFloatToStr(arena, -3e3f, 0) == "-3000.");
+        hgAssert(hgFloatToStr(arena, 4e4, 1) == "40000.0");
+        hgAssert(hgFloatToStr(arena, -5e5f, 0) == "-500000.");
+        hgAssert(hgFloatToStr(arena, 6e6, 1) == "6000000.0");
+        hgAssert(hgFloatToStr(arena, -7e7f, 0) == "-70000000.");
+        hgAssert(hgFloatToStr(arena, 8e8, 1) == "800000000.0");
+        hgAssert(hgFloatToStr(arena, -9e9f, 0) == "-8999999488.");
 
-        hg_assert(hg_float_to_str_base10(arena, -0e-0, 3) == "0.0");
-        hg_assert(hg_float_to_str_base10(arena, 1e-1f, 3) == "0.100");
-        hg_assert(hg_float_to_str_base10(arena, -2e-2, 3) == "-0.020");
-        hg_assert(hg_float_to_str_base10(arena, 3e-3f, 3) == "0.003");
-        hg_assert(hg_float_to_str_base10(arena, -4e-0, 3) == "-4.000");
-        hg_assert(hg_float_to_str_base10(arena, 5e-1f, 3) == "0.500");
-        hg_assert(hg_float_to_str_base10(arena, -6e-2, 3) == "-0.060");
-        hg_assert(hg_float_to_str_base10(arena, 7e-3f, 3) == "0.007");
-        hg_assert(hg_float_to_str_base10(arena, -8e-0, 3) == "-8.000");
-        hg_assert(hg_float_to_str_base10(arena, 9e-1f, 3) == "0.899");
+        hgAssert(hgFloatToStr(arena, -0e-0, 3) == "0.0");
+        hgAssert(hgFloatToStr(arena, 1e-1f, 3) == "0.100");
+        hgAssert(hgFloatToStr(arena, -2e-2, 3) == "-0.020");
+        hgAssert(hgFloatToStr(arena, 3e-3f, 3) == "0.003");
+        hgAssert(hgFloatToStr(arena, -4e-0, 3) == "-4.000");
+        hgAssert(hgFloatToStr(arena, 5e-1f, 3) == "0.500");
+        hgAssert(hgFloatToStr(arena, -6e-2, 3) == "-0.060");
+        hgAssert(hgFloatToStr(arena, 7e-3f, 3) == "0.007");
+        hgAssert(hgFloatToStr(arena, -8e-0, 3) == "-8.000");
+        hgAssert(hgFloatToStr(arena, 9e-1f, 3) == "0.899");
     }
 
     // HgJson
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
         HgStringView file = R"(
         )";
 
-        HgJson json = hg_parse_json(arena, file);
+        HgJson json = hgParseJson(arena, file);
 
-        hg_assert(json.errors == nullptr);
-        hg_assert(json.file == nullptr);
+        hgAssert(json.errors == nullptr);
+        hgAssert(json.file == nullptr);
     }
 
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
         HgStringView file = R"(
             {
             }
         )";
 
-        HgJson json = hg_parse_json(arena, file);
+        HgJson json = hgParseJson(arena, file);
 
-        hg_assert(json.errors == nullptr);
-        hg_assert(json.file != nullptr);
+        hgAssert(json.errors == nullptr);
+        hgAssert(json.file != nullptr);
 
         HgJsonNode* node = json.file;
-        hg_assert(node->type == HgJsonType::jstruct);
-        hg_assert(node->jstruct.fields == nullptr);
+        hgAssert(node->type == HgJsonType::jstruct);
+        hgAssert(node->jstruct.fields == nullptr);
     }
 
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
         HgStringView file = R"(
             {
@@ -449,23 +451,23 @@ void hg_test() {
             }
         )";
 
-        HgJson json = hg_parse_json(arena, file);
+        HgJson json = hgParseJson(arena, file);
 
-        hg_assert(json.errors != nullptr);
-        hg_assert(json.file != nullptr);
+        hgAssert(json.errors != nullptr);
+        hgAssert(json.file != nullptr);
 
         HgJsonError* error = json.errors;
-        hg_assert(error->next == nullptr);
-        hg_assert(error->msg == "on line 4, struct has a literal instead of a field\n");
+        hgAssert(error->next == nullptr);
+        hgAssert(error->msg == "on line 4, struct has a literal instead of a field\n");
 
         HgJsonNode* node = json.file;
-        hg_assert(node->type == HgJsonType::jstruct);
-        hg_assert(node->jstruct.fields == nullptr);
+        hgAssert(node->type == HgJsonType::jstruct);
+        hgAssert(node->jstruct.fields == nullptr);
     }
 
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
         HgStringView file = R"(
             {
@@ -473,23 +475,23 @@ void hg_test() {
             }
         )";
 
-        HgJson json = hg_parse_json(arena, file);
+        HgJson json = hgParseJson(arena, file);
 
-        hg_assert(json.errors != nullptr);
-        hg_assert(json.file != nullptr);
+        hgAssert(json.errors != nullptr);
+        hgAssert(json.file != nullptr);
 
         HgJsonError* error = json.errors;
-        hg_assert(error->next == nullptr);
-        hg_assert(error->msg == "on line 4, struct has a literal instead of a field\n");
+        hgAssert(error->next == nullptr);
+        hgAssert(error->msg == "on line 4, struct has a literal instead of a field\n");
 
         HgJsonNode* node = json.file;
-        hg_assert(node->type == HgJsonType::jstruct);
-        hg_assert(node->jstruct.fields == nullptr);
+        hgAssert(node->type == HgJsonType::jstruct);
+        hgAssert(node->jstruct.fields == nullptr);
     }
 
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
         HgStringView file = R"(
             {
@@ -497,26 +499,26 @@ void hg_test() {
             }
         )";
 
-        HgJson json = hg_parse_json(arena, file);
+        HgJson json = hgParseJson(arena, file);
 
-        hg_assert(json.errors != nullptr);
-        hg_assert(json.file != nullptr);
+        hgAssert(json.errors != nullptr);
+        hgAssert(json.file != nullptr);
 
         HgJsonError* error = json.errors;
-        hg_assert(error->next != nullptr);
-        hg_assert(error->msg == "on line 4, struct has a field named \"asdf\" which has no value\n");
+        hgAssert(error->next != nullptr);
+        hgAssert(error->msg == "on line 4, struct has a field named \"asdf\" which has no value\n");
         error = error->next;
-        hg_assert(error->next == nullptr);
-        hg_assert(error->msg == "on line 4, found unexpected token \"}\"\n");
+        hgAssert(error->next == nullptr);
+        hgAssert(error->msg == "on line 4, found unexpected token \"}\"\n");
 
         HgJsonNode* node = json.file;
-        hg_assert(node->type == HgJsonType::jstruct);
-        hg_assert(node->jstruct.fields == nullptr);
+        hgAssert(node->type == HgJsonType::jstruct);
+        hgAssert(node->jstruct.fields == nullptr);
     }
 
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
         HgStringView file = R"(
             {
@@ -524,26 +526,26 @@ void hg_test() {
             }
         )";
 
-        HgJson json = hg_parse_json(arena, file);
+        HgJson json = hgParseJson(arena, file);
 
-        hg_assert(json.errors == nullptr);
-        hg_assert(json.file != nullptr);
+        hgAssert(json.errors == nullptr);
+        hgAssert(json.file != nullptr);
 
         HgJsonNode* node = json.file;
-        hg_assert(node->type == HgJsonType::jstruct);
-        hg_assert(node->jstruct.fields != nullptr);
+        hgAssert(node->type == HgJsonType::jstruct);
+        hgAssert(node->jstruct.fields != nullptr);
 
         HgJsonField* field = node->jstruct.fields;
-        hg_assert(field->next == nullptr);
-        hg_assert(field->name == "asdf");
-        hg_assert(field->value != nullptr);
-        hg_assert(field->value->type == HgJsonType::boolean);
-        hg_assert(field->value->boolean == true);
+        hgAssert(field->next == nullptr);
+        hgAssert(field->name == "asdf");
+        hgAssert(field->value != nullptr);
+        hgAssert(field->value->type == HgJsonType::boolean);
+        hgAssert(field->value->boolean == true);
     }
 
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
         HgStringView file = R"(
             {
@@ -551,26 +553,26 @@ void hg_test() {
             }
         )";
 
-        HgJson json = hg_parse_json(arena, file);
+        HgJson json = hgParseJson(arena, file);
 
-        hg_assert(json.errors == nullptr);
-        hg_assert(json.file != nullptr);
+        hgAssert(json.errors == nullptr);
+        hgAssert(json.file != nullptr);
 
         HgJsonNode* node = json.file;
-        hg_assert(node->type == HgJsonType::jstruct);
-        hg_assert(node->jstruct.fields != nullptr);
+        hgAssert(node->type == HgJsonType::jstruct);
+        hgAssert(node->jstruct.fields != nullptr);
 
         HgJsonField* field = node->jstruct.fields;
-        hg_assert(field->next == nullptr);
-        hg_assert(field->name == "asdf");
-        hg_assert(field->value != nullptr);
-        hg_assert(field->value->type == HgJsonType::boolean);
-        hg_assert(field->value->boolean == false);
+        hgAssert(field->next == nullptr);
+        hgAssert(field->name == "asdf");
+        hgAssert(field->value != nullptr);
+        hgAssert(field->value->type == HgJsonType::boolean);
+        hgAssert(field->value->boolean == false);
     }
 
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
         HgStringView file = R"(
             {
@@ -578,26 +580,26 @@ void hg_test() {
             }
         )";
 
-        HgJson json = hg_parse_json(arena, file);
+        HgJson json = hgParseJson(arena, file);
 
-        hg_assert(json.errors != nullptr);
-        hg_assert(json.file != nullptr);
+        hgAssert(json.errors != nullptr);
+        hgAssert(json.file != nullptr);
 
         HgJsonError* error = json.errors;
-        hg_assert(error->next != nullptr);
-        hg_assert(error->msg == "on line 4, struct has a field named \"asdf\" which has no value\n");
+        hgAssert(error->next != nullptr);
+        hgAssert(error->msg == "on line 4, struct has a field named \"asdf\" which has no value\n");
         error = error->next;
-        hg_assert(error->next == nullptr);
-        hg_assert(error->msg == "on line 3, found unexpected token \"asdf\"\n");
+        hgAssert(error->next == nullptr);
+        hgAssert(error->msg == "on line 3, found unexpected token \"asdf\"\n");
 
         HgJsonNode* node = json.file;
-        hg_assert(node->type == HgJsonType::jstruct);
-        hg_assert(node->jstruct.fields == nullptr);
+        hgAssert(node->type == HgJsonType::jstruct);
+        hgAssert(node->jstruct.fields == nullptr);
     }
 
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
         HgStringView file = R"(
             {
@@ -605,26 +607,26 @@ void hg_test() {
             }
         )";
 
-        HgJson json = hg_parse_json(arena, file);
+        HgJson json = hgParseJson(arena, file);
 
-        hg_assert(json.errors == nullptr);
-        hg_assert(json.file != nullptr);
+        hgAssert(json.errors == nullptr);
+        hgAssert(json.file != nullptr);
 
         HgJsonNode* node = json.file;
-        hg_assert(node->type == HgJsonType::jstruct);
-        hg_assert(node->jstruct.fields != nullptr);
+        hgAssert(node->type == HgJsonType::jstruct);
+        hgAssert(node->jstruct.fields != nullptr);
 
         HgJsonField* field = node->jstruct.fields;
-        hg_assert(field->next == nullptr);
-        hg_assert(field->name == "asdf");
-        hg_assert(field->value != nullptr);
-        hg_assert(field->value->type == HgJsonType::string);
-        hg_assert(field->value->string == "asdf");
+        hgAssert(field->next == nullptr);
+        hgAssert(field->name == "asdf");
+        hgAssert(field->value != nullptr);
+        hgAssert(field->value->type == HgJsonType::string);
+        hgAssert(field->value->string == "asdf");
     }
 
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
         HgStringView file = R"(
             {
@@ -632,26 +634,26 @@ void hg_test() {
             }
         )";
 
-        HgJson json = hg_parse_json(arena, file);
+        HgJson json = hgParseJson(arena, file);
 
-        hg_assert(json.errors == nullptr);
-        hg_assert(json.file != nullptr);
+        hgAssert(json.errors == nullptr);
+        hgAssert(json.file != nullptr);
 
         HgJsonNode* node = json.file;
-        hg_assert(node->type == HgJsonType::jstruct);
-        hg_assert(node->jstruct.fields != nullptr);
+        hgAssert(node->type == HgJsonType::jstruct);
+        hgAssert(node->jstruct.fields != nullptr);
 
         HgJsonField* field = node->jstruct.fields;
-        hg_assert(field->next == nullptr);
-        hg_assert(field->name == "asdf");
-        hg_assert(field->value != nullptr);
-        hg_assert(field->value->type == HgJsonType::integer);
-        hg_assert(field->value->integer == 1234);
+        hgAssert(field->next == nullptr);
+        hgAssert(field->name == "asdf");
+        hgAssert(field->value != nullptr);
+        hgAssert(field->value->type == HgJsonType::integer);
+        hgAssert(field->value->integer == 1234);
     }
 
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
         HgStringView file = R"(
             {
@@ -659,26 +661,26 @@ void hg_test() {
             }
         )";
 
-        HgJson json = hg_parse_json(arena, file);
+        HgJson json = hgParseJson(arena, file);
 
-        hg_assert(json.errors == nullptr);
-        hg_assert(json.file != nullptr);
+        hgAssert(json.errors == nullptr);
+        hgAssert(json.file != nullptr);
 
         HgJsonNode* node = json.file;
-        hg_assert(node->type == HgJsonType::jstruct);
-        hg_assert(node->jstruct.fields != nullptr);
+        hgAssert(node->type == HgJsonType::jstruct);
+        hgAssert(node->jstruct.fields != nullptr);
 
         HgJsonField* field = node->jstruct.fields;
-        hg_assert(field->next == nullptr);
-        hg_assert(field->name == "asdf");
-        hg_assert(field->value != nullptr);
-        hg_assert(field->value->type == HgJsonType::floating);
-        hg_assert(field->value->floating == 1234.0);
+        hgAssert(field->next == nullptr);
+        hgAssert(field->name == "asdf");
+        hgAssert(field->value != nullptr);
+        hgAssert(field->value->type == HgJsonType::floating);
+        hgAssert(field->value->floating == 1234.0);
     }
 
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
         HgStringView file = R"(
             {
@@ -687,33 +689,33 @@ void hg_test() {
             }
         )";
 
-        HgJson json = hg_parse_json(arena, file);
+        HgJson json = hgParseJson(arena, file);
 
-        hg_assert(json.errors == nullptr);
-        hg_assert(json.file != nullptr);
+        hgAssert(json.errors == nullptr);
+        hgAssert(json.file != nullptr);
 
         HgJsonNode* node = json.file;
-        hg_assert(node->type == HgJsonType::jstruct);
-        hg_assert(node->jstruct.fields != nullptr);
+        hgAssert(node->type == HgJsonType::jstruct);
+        hgAssert(node->jstruct.fields != nullptr);
 
         HgJsonField* field = node->jstruct.fields;
-        hg_assert(field->next != nullptr);
-        hg_assert(field->name == "asdf");
-        hg_assert(field->value != nullptr);
-        hg_assert(field->value->type == HgJsonType::floating);
-        hg_assert(field->value->floating == 1234.0);
+        hgAssert(field->next != nullptr);
+        hgAssert(field->name == "asdf");
+        hgAssert(field->value != nullptr);
+        hgAssert(field->value->type == HgJsonType::floating);
+        hgAssert(field->value->floating == 1234.0);
 
         field = field->next;
-        hg_assert(field->next == nullptr);
-        hg_assert(field->name == "hjkl");
-        hg_assert(field->value != nullptr);
-        hg_assert(field->value->type == HgJsonType::floating);
-        hg_assert(field->value->floating == 5678.0);
+        hgAssert(field->next == nullptr);
+        hgAssert(field->name == "hjkl");
+        hgAssert(field->value != nullptr);
+        hgAssert(field->value->type == HgJsonType::floating);
+        hgAssert(field->value->floating == 5678.0);
     }
 
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
         HgStringView file = R"(
             {
@@ -721,50 +723,50 @@ void hg_test() {
             }
         )";
 
-        HgJson json = hg_parse_json(arena, file);
+        HgJson json = hgParseJson(arena, file);
 
-        hg_assert(json.errors == nullptr);
-        hg_assert(json.file != nullptr);
+        hgAssert(json.errors == nullptr);
+        hgAssert(json.file != nullptr);
 
         HgJsonNode* node = json.file;
-        hg_assert(node->type == HgJsonType::jstruct);
-        hg_assert(node->jstruct.fields != nullptr);
+        hgAssert(node->type == HgJsonType::jstruct);
+        hgAssert(node->jstruct.fields != nullptr);
 
         HgJsonField* field = node->jstruct.fields;
-        hg_assert(field->next == nullptr);
-        hg_assert(field->name == "asdf");
-        hg_assert(field->value != nullptr);
-        hg_assert(field->value->type == HgJsonType::array);
-        hg_assert(field->value->array.elems != nullptr);
+        hgAssert(field->next == nullptr);
+        hgAssert(field->name == "asdf");
+        hgAssert(field->value != nullptr);
+        hgAssert(field->value->type == HgJsonType::array);
+        hgAssert(field->value->array.elems != nullptr);
 
         HgJsonElem* elem = field->value->array.elems;
-        hg_assert(elem->next != nullptr);
-        hg_assert(elem->value != nullptr);
-        hg_assert(elem->value->type == HgJsonType::integer);
-        hg_assert(elem->value->integer == 1);
+        hgAssert(elem->next != nullptr);
+        hgAssert(elem->value != nullptr);
+        hgAssert(elem->value->type == HgJsonType::integer);
+        hgAssert(elem->value->integer == 1);
 
         elem = elem->next;
-        hg_assert(elem->next != nullptr);
-        hg_assert(elem->value != nullptr);
-        hg_assert(elem->value->type == HgJsonType::integer);
-        hg_assert(elem->value->integer == 2);
+        hgAssert(elem->next != nullptr);
+        hgAssert(elem->value != nullptr);
+        hgAssert(elem->value->type == HgJsonType::integer);
+        hgAssert(elem->value->integer == 2);
 
         elem = elem->next;
-        hg_assert(elem->next != nullptr);
-        hg_assert(elem->value != nullptr);
-        hg_assert(elem->value->type == HgJsonType::integer);
-        hg_assert(elem->value->integer == 3);
+        hgAssert(elem->next != nullptr);
+        hgAssert(elem->value != nullptr);
+        hgAssert(elem->value->type == HgJsonType::integer);
+        hgAssert(elem->value->integer == 3);
 
         elem = elem->next;
-        hg_assert(elem->next == nullptr);
-        hg_assert(elem->value != nullptr);
-        hg_assert(elem->value->type == HgJsonType::integer);
-        hg_assert(elem->value->integer == 4);
+        hgAssert(elem->next == nullptr);
+        hgAssert(elem->value != nullptr);
+        hgAssert(elem->value->type == HgJsonType::integer);
+        hgAssert(elem->value->integer == 4);
     }
 
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
         HgStringView file = R"(
             {
@@ -772,50 +774,50 @@ void hg_test() {
             }
         )";
 
-        HgJson json = hg_parse_json(arena, file);
+        HgJson json = hgParseJson(arena, file);
 
-        hg_assert(json.errors == nullptr);
-        hg_assert(json.file != nullptr);
+        hgAssert(json.errors == nullptr);
+        hgAssert(json.file != nullptr);
 
         HgJsonNode* node = json.file;
-        hg_assert(node->type == HgJsonType::jstruct);
-        hg_assert(node->jstruct.fields != nullptr);
+        hgAssert(node->type == HgJsonType::jstruct);
+        hgAssert(node->jstruct.fields != nullptr);
 
         HgJsonField* field = node->jstruct.fields;
-        hg_assert(field->next == nullptr);
-        hg_assert(field->name == "asdf");
-        hg_assert(field->value != nullptr);
-        hg_assert(field->value->type == HgJsonType::array);
-        hg_assert(field->value->array.elems != nullptr);
+        hgAssert(field->next == nullptr);
+        hgAssert(field->name == "asdf");
+        hgAssert(field->value != nullptr);
+        hgAssert(field->value->type == HgJsonType::array);
+        hgAssert(field->value->array.elems != nullptr);
 
         HgJsonElem* elem = field->value->array.elems;
-        hg_assert(elem->next != nullptr);
-        hg_assert(elem->value != nullptr);
-        hg_assert(elem->value->type == HgJsonType::integer);
-        hg_assert(elem->value->integer == 1);
+        hgAssert(elem->next != nullptr);
+        hgAssert(elem->value != nullptr);
+        hgAssert(elem->value->type == HgJsonType::integer);
+        hgAssert(elem->value->integer == 1);
 
         elem = elem->next;
-        hg_assert(elem->next != nullptr);
-        hg_assert(elem->value != nullptr);
-        hg_assert(elem->value->type == HgJsonType::integer);
-        hg_assert(elem->value->integer == 2);
+        hgAssert(elem->next != nullptr);
+        hgAssert(elem->value != nullptr);
+        hgAssert(elem->value->type == HgJsonType::integer);
+        hgAssert(elem->value->integer == 2);
 
         elem = elem->next;
-        hg_assert(elem->next != nullptr);
-        hg_assert(elem->value != nullptr);
-        hg_assert(elem->value->type == HgJsonType::integer);
-        hg_assert(elem->value->integer == 3);
+        hgAssert(elem->next != nullptr);
+        hgAssert(elem->value != nullptr);
+        hgAssert(elem->value->type == HgJsonType::integer);
+        hgAssert(elem->value->integer == 3);
 
         elem = elem->next;
-        hg_assert(elem->next == nullptr);
-        hg_assert(elem->value != nullptr);
-        hg_assert(elem->value->type == HgJsonType::integer);
-        hg_assert(elem->value->integer == 4);
+        hgAssert(elem->next == nullptr);
+        hgAssert(elem->value != nullptr);
+        hgAssert(elem->value->type == HgJsonType::integer);
+        hgAssert(elem->value->integer == 4);
     }
 
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
         HgStringView file = R"(
             {
@@ -823,49 +825,49 @@ void hg_test() {
             }
         )";
 
-        HgJson json = hg_parse_json(arena, file);
+        HgJson json = hgParseJson(arena, file);
 
-        hg_assert(json.errors != nullptr);
-        hg_assert(json.file != nullptr);
+        hgAssert(json.errors != nullptr);
+        hgAssert(json.file != nullptr);
 
         HgJsonError* error = json.errors;
-        hg_assert(error->next == nullptr);
-        hg_assert(error->msg ==
+        hgAssert(error->next == nullptr);
+        hgAssert(error->msg ==
             "on line 3, array has element which is not the same type as the first valid element\n");
 
         HgJsonNode* node = json.file;
-        hg_assert(node->type == HgJsonType::jstruct);
-        hg_assert(node->jstruct.fields != nullptr);
+        hgAssert(node->type == HgJsonType::jstruct);
+        hgAssert(node->jstruct.fields != nullptr);
 
         HgJsonField* field = node->jstruct.fields;
-        hg_assert(field->next == nullptr);
-        hg_assert(field->name == "asdf");
-        hg_assert(field->value != nullptr);
-        hg_assert(field->value->type == HgJsonType::array);
-        hg_assert(field->value->array.elems != nullptr);
+        hgAssert(field->next == nullptr);
+        hgAssert(field->name == "asdf");
+        hgAssert(field->value != nullptr);
+        hgAssert(field->value->type == HgJsonType::array);
+        hgAssert(field->value->array.elems != nullptr);
 
         HgJsonElem* elem = field->value->array.elems;
-        hg_assert(elem->next != nullptr);
-        hg_assert(elem->value != nullptr);
-        hg_assert(elem->value->type == HgJsonType::integer);
-        hg_assert(elem->value->integer == 1);
+        hgAssert(elem->next != nullptr);
+        hgAssert(elem->value != nullptr);
+        hgAssert(elem->value->type == HgJsonType::integer);
+        hgAssert(elem->value->integer == 1);
 
         elem = elem->next;
-        hg_assert(elem->next != nullptr);
-        hg_assert(elem->value != nullptr);
-        hg_assert(elem->value->type == HgJsonType::integer);
-        hg_assert(elem->value->integer == 2);
+        hgAssert(elem->next != nullptr);
+        hgAssert(elem->value != nullptr);
+        hgAssert(elem->value->type == HgJsonType::integer);
+        hgAssert(elem->value->integer == 2);
 
         elem = elem->next;
-        hg_assert(elem->next == nullptr);
-        hg_assert(elem->value != nullptr);
-        hg_assert(elem->value->type == HgJsonType::integer);
-        hg_assert(elem->value->integer == 4);
+        hgAssert(elem->next == nullptr);
+        hgAssert(elem->value != nullptr);
+        hgAssert(elem->value->type == HgJsonType::integer);
+        hgAssert(elem->value->integer == 4);
     }
 
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
         HgStringView file = R"(
             {
@@ -878,54 +880,54 @@ void hg_test() {
             }
         )";
 
-        HgJson json = hg_parse_json(arena, file);
+        HgJson json = hgParseJson(arena, file);
 
-        hg_assert(json.errors == nullptr);
-        hg_assert(json.file != nullptr);
+        hgAssert(json.errors == nullptr);
+        hgAssert(json.file != nullptr);
 
         HgJsonNode* node = json.file;
-        hg_assert(node->type == HgJsonType::jstruct);
-        hg_assert(node->jstruct.fields != nullptr);
+        hgAssert(node->type == HgJsonType::jstruct);
+        hgAssert(node->jstruct.fields != nullptr);
 
         HgJsonField* field = node->jstruct.fields;
-        hg_assert(field->next == nullptr);
-        hg_assert(field->name == "asdf");
-        hg_assert(field->value != nullptr);
-        hg_assert(field->value->type == HgJsonType::jstruct);
-        hg_assert(field->value->array.elems != nullptr);
+        hgAssert(field->next == nullptr);
+        hgAssert(field->name == "asdf");
+        hgAssert(field->value != nullptr);
+        hgAssert(field->value->type == HgJsonType::jstruct);
+        hgAssert(field->value->array.elems != nullptr);
 
-        HgJsonField* sub_field = field->value->jstruct.fields;
-        hg_assert(sub_field->next != nullptr);
-        hg_assert(sub_field->name == "a");
-        hg_assert(sub_field->value != nullptr);
-        hg_assert(sub_field->value->type == HgJsonType::integer);
-        hg_assert(sub_field->value->integer == 1);
+        HgJsonField* subField = field->value->jstruct.fields;
+        hgAssert(subField->next != nullptr);
+        hgAssert(subField->name == "a");
+        hgAssert(subField->value != nullptr);
+        hgAssert(subField->value->type == HgJsonType::integer);
+        hgAssert(subField->value->integer == 1);
 
-        sub_field = sub_field->next;
-        hg_assert(sub_field->next != nullptr);
-        hg_assert(sub_field->name == "s");
-        hg_assert(sub_field->value != nullptr);
-        hg_assert(sub_field->value->type == HgJsonType::floating);
-        hg_assert(sub_field->value->floating == 2.0);
+        subField = subField->next;
+        hgAssert(subField->next != nullptr);
+        hgAssert(subField->name == "s");
+        hgAssert(subField->value != nullptr);
+        hgAssert(subField->value->type == HgJsonType::floating);
+        hgAssert(subField->value->floating == 2.0);
 
-        sub_field = sub_field->next;
-        hg_assert(sub_field->next != nullptr);
-        hg_assert(sub_field->name == "d");
-        hg_assert(sub_field->value != nullptr);
-        hg_assert(sub_field->value->type == HgJsonType::integer);
-        hg_assert(sub_field->value->integer == 3);
+        subField = subField->next;
+        hgAssert(subField->next != nullptr);
+        hgAssert(subField->name == "d");
+        hgAssert(subField->value != nullptr);
+        hgAssert(subField->value->type == HgJsonType::integer);
+        hgAssert(subField->value->integer == 3);
 
-        sub_field = sub_field->next;
-        hg_assert(sub_field->next == nullptr);
-        hg_assert(sub_field->name == "f");
-        hg_assert(sub_field->value != nullptr);
-        hg_assert(sub_field->value->type == HgJsonType::floating);
-        hg_assert(sub_field->value->floating == 4.0);
+        subField = subField->next;
+        hgAssert(subField->next == nullptr);
+        hgAssert(subField->name == "f");
+        hgAssert(subField->value != nullptr);
+        hgAssert(subField->value->type == HgJsonType::floating);
+        hgAssert(subField->value->floating == 4.0);
     }
 
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
         HgStringView file = R"(
             {
@@ -937,285 +939,286 @@ void hg_test() {
                     },
                     "sprite": {
                         "texture": "tex.png",
-                        "uv_pos": [0.0, 0.0],
-                        "uv_size": [1.0, 1.0]
+                        "uvPos": [0.0, 0.0],
+                        "uvSize": [1.0, 1.0]
                     }
                 }
             }
         )";
 
-        HgJson json = hg_parse_json(arena, file);
+        HgJson json = hgParseJson(arena, file);
 
-        hg_assert(json.errors == nullptr);
-        hg_assert(json.file != nullptr);
+        hgAssert(json.errors == nullptr);
+        hgAssert(json.file != nullptr);
 
-        HgJsonNode* main_struct = json.file;
-        hg_assert(main_struct->type == HgJsonType::jstruct);
-        hg_assert(main_struct->jstruct.fields != nullptr);
+        HgJsonNode* mainStruct = json.file;
+        hgAssert(mainStruct->type == HgJsonType::jstruct);
+        hgAssert(mainStruct->jstruct.fields != nullptr);
 
-        HgJsonField* player = main_struct->jstruct.fields;
-        hg_assert(player->next == nullptr);
-        hg_assert(player->name == "player");
-        hg_assert(player->value != nullptr);
-        hg_assert(player->value->type == HgJsonType::jstruct);
-        hg_assert(player->value->jstruct.fields != nullptr);
+        HgJsonField* player = mainStruct->jstruct.fields;
+        hgAssert(player->next == nullptr);
+        hgAssert(player->name == "player");
+        hgAssert(player->value != nullptr);
+        hgAssert(player->value->type == HgJsonType::jstruct);
+        hgAssert(player->value->jstruct.fields != nullptr);
 
         HgJsonField* component = player->value->jstruct.fields;
-        hg_assert(component->next != nullptr);
-        hg_assert(component->name == "transform");
-        hg_assert(component->value != nullptr);
-        hg_assert(component->value->type == HgJsonType::jstruct);
-        hg_assert(component->value->jstruct.fields != nullptr);
+        hgAssert(component->next != nullptr);
+        hgAssert(component->name == "transform");
+        hgAssert(component->value != nullptr);
+        hgAssert(component->value->type == HgJsonType::jstruct);
+        hgAssert(component->value->jstruct.fields != nullptr);
 
         HgJsonField* field = component->value->jstruct.fields;
-        hg_assert(field->next != nullptr);
-        hg_assert(field->name == "position");
-        hg_assert(field->value != nullptr);
-        hg_assert(field->value->type == HgJsonType::array);
-        hg_assert(field->value->array.elems != nullptr);
+        hgAssert(field->next != nullptr);
+        hgAssert(field->name == "position");
+        hgAssert(field->value != nullptr);
+        hgAssert(field->value->type == HgJsonType::array);
+        hgAssert(field->value->array.elems != nullptr);
 
         HgJsonElem* elem = field->value->array.elems;
-        hg_assert(elem->next != nullptr);
-        hg_assert(elem->value != nullptr);
-        hg_assert(elem->value->type == HgJsonType::floating);
-        hg_assert(elem->value->floating == 1.0);
+        hgAssert(elem->next != nullptr);
+        hgAssert(elem->value != nullptr);
+        hgAssert(elem->value->type == HgJsonType::floating);
+        hgAssert(elem->value->floating == 1.0);
 
         elem = elem->next;
-        hg_assert(elem->next != nullptr);
-        hg_assert(elem->value != nullptr);
-        hg_assert(elem->value->type == HgJsonType::floating);
-        hg_assert(elem->value->floating == 0.0);
+        hgAssert(elem->next != nullptr);
+        hgAssert(elem->value != nullptr);
+        hgAssert(elem->value->type == HgJsonType::floating);
+        hgAssert(elem->value->floating == 0.0);
 
         elem = elem->next;
-        hg_assert(elem->next == nullptr);
-        hg_assert(elem->value != nullptr);
-        hg_assert(elem->value->type == HgJsonType::floating);
-        hg_assert(elem->value->floating == -1.0);
+        hgAssert(elem->next == nullptr);
+        hgAssert(elem->value != nullptr);
+        hgAssert(elem->value->type == HgJsonType::floating);
+        hgAssert(elem->value->floating == -1.0);
 
         field = field->next;
-        hg_assert(field->next != nullptr);
-        hg_assert(field->name == "scale");
-        hg_assert(field->value != nullptr);
-        hg_assert(field->value->type == HgJsonType::array);
-        hg_assert(field->value->array.elems != nullptr);
+        hgAssert(field->next != nullptr);
+        hgAssert(field->name == "scale");
+        hgAssert(field->value != nullptr);
+        hgAssert(field->value->type == HgJsonType::array);
+        hgAssert(field->value->array.elems != nullptr);
 
         elem = field->value->array.elems;
-        hg_assert(elem->next != nullptr);
-        hg_assert(elem->value != nullptr);
-        hg_assert(elem->value->type == HgJsonType::floating);
-        hg_assert(elem->value->floating == 1.0);
+        hgAssert(elem->next != nullptr);
+        hgAssert(elem->value != nullptr);
+        hgAssert(elem->value->type == HgJsonType::floating);
+        hgAssert(elem->value->floating == 1.0);
 
         elem = elem->next;
-        hg_assert(elem->next != nullptr);
-        hg_assert(elem->value != nullptr);
-        hg_assert(elem->value->type == HgJsonType::floating);
-        hg_assert(elem->value->floating == 1.0);
+        hgAssert(elem->next != nullptr);
+        hgAssert(elem->value != nullptr);
+        hgAssert(elem->value->type == HgJsonType::floating);
+        hgAssert(elem->value->floating == 1.0);
 
         elem = elem->next;
-        hg_assert(elem->next == nullptr);
-        hg_assert(elem->value != nullptr);
-        hg_assert(elem->value->type == HgJsonType::floating);
-        hg_assert(elem->value->floating == 1.0);
+        hgAssert(elem->next == nullptr);
+        hgAssert(elem->value != nullptr);
+        hgAssert(elem->value->type == HgJsonType::floating);
+        hgAssert(elem->value->floating == 1.0);
 
         field = field->next;
-        hg_assert(field->next == nullptr);
-        hg_assert(field->name == "rotation");
-        hg_assert(field->value != nullptr);
-        hg_assert(field->value->type == HgJsonType::array);
-        hg_assert(field->value->array.elems != nullptr);
+        hgAssert(field->next == nullptr);
+        hgAssert(field->name == "rotation");
+        hgAssert(field->value != nullptr);
+        hgAssert(field->value->type == HgJsonType::array);
+        hgAssert(field->value->array.elems != nullptr);
 
         elem = field->value->array.elems;
-        hg_assert(elem->next != nullptr);
-        hg_assert(elem->value != nullptr);
-        hg_assert(elem->value->type == HgJsonType::floating);
-        hg_assert(elem->value->floating == 1.0);
+        hgAssert(elem->next != nullptr);
+        hgAssert(elem->value != nullptr);
+        hgAssert(elem->value->type == HgJsonType::floating);
+        hgAssert(elem->value->floating == 1.0);
 
         elem = elem->next;
-        hg_assert(elem->next != nullptr);
-        hg_assert(elem->value != nullptr);
-        hg_assert(elem->value->type == HgJsonType::floating);
-        hg_assert(elem->value->floating == 0.0);
+        hgAssert(elem->next != nullptr);
+        hgAssert(elem->value != nullptr);
+        hgAssert(elem->value->type == HgJsonType::floating);
+        hgAssert(elem->value->floating == 0.0);
 
         elem = elem->next;
-        hg_assert(elem->next != nullptr);
-        hg_assert(elem->value != nullptr);
-        hg_assert(elem->value->type == HgJsonType::floating);
-        hg_assert(elem->value->floating == 0.0);
+        hgAssert(elem->next != nullptr);
+        hgAssert(elem->value != nullptr);
+        hgAssert(elem->value->type == HgJsonType::floating);
+        hgAssert(elem->value->floating == 0.0);
 
         elem = elem->next;
-        hg_assert(elem->next == nullptr);
-        hg_assert(elem->value != nullptr);
-        hg_assert(elem->value->type == HgJsonType::floating);
-        hg_assert(elem->value->floating == 0.0);
+        hgAssert(elem->next == nullptr);
+        hgAssert(elem->value != nullptr);
+        hgAssert(elem->value->type == HgJsonType::floating);
+        hgAssert(elem->value->floating == 0.0);
 
         component = component->next;
-        hg_assert(component->next == nullptr);
-        hg_assert(component->name == "sprite");
-        hg_assert(component->value != nullptr);
-        hg_assert(component->value->type == HgJsonType::jstruct);
-        hg_assert(component->value->jstruct.fields != nullptr);
+        hgAssert(component->next == nullptr);
+        hgAssert(component->name == "sprite");
+        hgAssert(component->value != nullptr);
+        hgAssert(component->value->type == HgJsonType::jstruct);
+        hgAssert(component->value->jstruct.fields != nullptr);
 
         field = component->value->jstruct.fields;
-        hg_assert(field->next != nullptr);
-        hg_assert(field->name == "texture");
-        hg_assert(field->value != nullptr);
-        hg_assert(field->value->type == HgJsonType::string);
-        hg_assert(field->value->string == "tex.png");
+        hgAssert(field->next != nullptr);
+        hgAssert(field->name == "texture");
+        hgAssert(field->value != nullptr);
+        hgAssert(field->value->type == HgJsonType::string);
+        hgAssert(field->value->string == "tex.png");
 
         field = field->next;
-        hg_assert(field->next != nullptr);
-        hg_assert(field->name == "uv_pos");
-        hg_assert(field->value != nullptr);
-        hg_assert(field->value->type == HgJsonType::array);
-        hg_assert(field->value->array.elems != nullptr);
+        hgAssert(field->next != nullptr);
+        hgAssert(field->name == "uvPos");
+        hgAssert(field->value != nullptr);
+        hgAssert(field->value->type == HgJsonType::array);
+        hgAssert(field->value->array.elems != nullptr);
 
         elem = field->value->array.elems;
-        hg_assert(elem->next != nullptr);
-        hg_assert(elem->value != nullptr);
-        hg_assert(elem->value->type == HgJsonType::floating);
-        hg_assert(elem->value->floating == 0.0);
+        hgAssert(elem->next != nullptr);
+        hgAssert(elem->value != nullptr);
+        hgAssert(elem->value->type == HgJsonType::floating);
+        hgAssert(elem->value->floating == 0.0);
 
         elem = elem->next;
-        hg_assert(elem->next == nullptr);
-        hg_assert(elem->value != nullptr);
-        hg_assert(elem->value->type == HgJsonType::floating);
-        hg_assert(elem->value->floating == 0.0);
+        hgAssert(elem->next == nullptr);
+        hgAssert(elem->value != nullptr);
+        hgAssert(elem->value->type == HgJsonType::floating);
+        hgAssert(elem->value->floating == 0.0);
 
         field = field->next;
-        hg_assert(field->next == nullptr);
-        hg_assert(field->name == "uv_size");
-        hg_assert(field->value != nullptr);
-        hg_assert(field->value->type == HgJsonType::array);
-        hg_assert(field->value->array.elems != nullptr);
+        hgAssert(field->next == nullptr);
+        hgAssert(field->name == "uvSize");
+        hgAssert(field->value != nullptr);
+        hgAssert(field->value->type == HgJsonType::array);
+        hgAssert(field->value->array.elems != nullptr);
 
         elem = field->value->array.elems;
-        hg_assert(elem->next != nullptr);
-        hg_assert(elem->value != nullptr);
-        hg_assert(elem->value->type == HgJsonType::floating);
-        hg_assert(elem->value->floating == 1.0);
+        hgAssert(elem->next != nullptr);
+        hgAssert(elem->value != nullptr);
+        hgAssert(elem->value->type == HgJsonType::floating);
+        hgAssert(elem->value->floating == 1.0);
 
         elem = elem->next;
-        hg_assert(elem->next == nullptr);
-        hg_assert(elem->value != nullptr);
-        hg_assert(elem->value->type == HgJsonType::floating);
-        hg_assert(elem->value->floating == 1.0);
+        hgAssert(elem->next == nullptr);
+        hgAssert(elem->value != nullptr);
+        hgAssert(elem->value->type == HgJsonType::floating);
+        hgAssert(elem->value->floating == 1.0);
     }
 
     // HgHashMap
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
         constexpr usize count = 128;
 
         HgHashMap<u32, u32> map = map.create(arena, count);
 
-        for (usize i = 0; i < 3; ++i) {
-            hg_assert(map.count == 0);
-            hg_assert(!map.has(0));
-            hg_assert(!map.has(1));
-            hg_assert(!map.has(12));
-            hg_assert(!map.has(42));
-            hg_assert(!map.has(100000));
+        for (usize i = 0; i < 3; ++i)
+        {
+            hgAssert(map.count == 0);
+            hgAssert(!map.has(0));
+            hgAssert(!map.has(1));
+            hgAssert(!map.has(12));
+            hgAssert(!map.has(42));
+            hgAssert(!map.has(100000));
 
-            map.insert(1, 1);
-            hg_assert(map.count == 1);
-            hg_assert(map.has(1));
-            hg_assert(map[1] == 1);
+            map.add(1) = 1;
+            hgAssert(map.count == 1);
+            hgAssert(map.has(1));
+            hgAssert(map[1] == 1);
 
             map.remove(1);
-            hg_assert(map.count == 0);
-            hg_assert(!map.has(1));
+            hgAssert(map.count == 0);
+            hgAssert(!map.has(1));
 
-            hg_assert(!map.has(12));
-            hg_assert(!map.has(12 + count));
+            hgAssert(!map.has(12));
+            hgAssert(!map.has(12 + count));
 
-            map.insert(12, 42);
-            hg_assert(map.count == 1);
-            hg_assert(map.has(12) && map[12] == 42);
-            hg_assert(!map.has(12 + count));
+            map.add(12) = 42;
+            hgAssert(map.count == 1);
+            hgAssert(map.has(12) && map[12] == 42);
+            hgAssert(!map.has(12 + count));
 
-            map.insert(12 + count, 100);
-            hg_assert(map.count == 2);
-            hg_assert(map.has(12) && map[12] == 42);
-            hg_assert(map.has(12 + count) && map[12 + count] == 100);
+            map.add(12 + count) = 100;
+            hgAssert(map.count == 2);
+            hgAssert(map.has(12) && map[12] == 42);
+            hgAssert(map.has(12 + count) && map[12 + count] == 100);
 
-            map.insert(12 + count * 2, 200);
-            hg_assert(map.count == 3);
-            hg_assert(map.has(12) && map[12] == 42);
-            hg_assert(map.has(12 + count) && map[12 + count] == 100);
-            hg_assert(map.has(12 + count * 2) && map[12 + count * 2] == 200);
+            map.add(12 + count * 2) = 200;
+            hgAssert(map.count == 3);
+            hgAssert(map.has(12) && map[12] == 42);
+            hgAssert(map.has(12 + count) && map[12 + count] == 100);
+            hgAssert(map.has(12 + count * 2) && map[12 + count * 2] == 200);
 
             map.remove(12);
-            hg_assert(map.count == 2);
-            hg_assert(!map.has(12));
-            hg_assert(map.has(12 + count) && map[12 + count] == 100);
+            hgAssert(map.count == 2);
+            hgAssert(!map.has(12));
+            hgAssert(map.has(12 + count) && map[12 + count] == 100);
 
-            map.insert(42, 12);
-            hg_assert(map.count == 3);
-            hg_assert(map.has(42) && map[42] == 12);
+            map.add(42) = 12;
+            hgAssert(map.count == 3);
+            hgAssert(map.has(42) && map[42] == 12);
 
             map.remove(12 + count);
-            hg_assert(map.count == 2);
-            hg_assert(!map.has(12));
-            hg_assert(!map.has(12 + count));
+            hgAssert(map.count == 2);
+            hgAssert(!map.has(12));
+            hgAssert(!map.has(12 + count));
 
             map.remove(42);
-            hg_assert(map.count == 1);
-            hg_assert(!map.has(42));
+            hgAssert(map.count == 1);
+            hgAssert(!map.has(42));
 
             map.remove(12 + count * 2);
-            hg_assert(map.count == 0);
-            hg_assert(!map.has(12));
-            hg_assert(!map.has(12 + count));
-            hg_assert(!map.has(12 + count * 2));
+            hgAssert(map.count == 0);
+            hgAssert(!map.has(12));
+            hgAssert(!map.has(12 + count));
+            hgAssert(!map.has(12 + count * 2));
 
             map.reset();
         }
     }
 
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
         using StrHash = usize;
 
         HgHashMap<StrHash, u32> map = map.create(arena, 128);
 
-        StrHash a = hg_hash("a");
-        StrHash b = hg_hash("b");
-        StrHash ab = hg_hash("ab");
-        StrHash scf = hg_hash("supercalifragilisticexpialidocious");
+        StrHash a = hgHash("a");
+        StrHash b = hgHash("b");
+        StrHash ab = hgHash("ab");
+        StrHash scf = hgHash("supercalifragilisticexpialidocious");
 
-        hg_assert(!map.has(a));
-        hg_assert(!map.has(b));
-        hg_assert(!map.has(ab));
-        hg_assert(!map.has(scf));
+        hgAssert(!map.has(a));
+        hgAssert(!map.has(b));
+        hgAssert(!map.has(ab));
+        hgAssert(!map.has(scf));
 
-        map.insert(a, 1);
-        map.insert(b, 2);
-        map.insert(ab, 3);
-        map.insert(scf, 4);
+        map.add(a) = 1;
+        map.add(b) = 2;
+        map.add(ab) = 3;
+        map.add(scf) = 4;
 
-        hg_assert(map.has(a) && map[a] == 1);
-        hg_assert(map.has(b) && map[b] == 2);
-        hg_assert(map.has(ab) && map[ab] == 3);
-        hg_assert(map.has(scf) && map[scf] == 4);
+        hgAssert(map.has(a) && map[a] == 1);
+        hgAssert(map.has(b) && map[b] == 2);
+        hgAssert(map.has(ab) && map[ab] == 3);
+        hgAssert(map.has(scf) && map[scf] == 4);
 
         map.remove(a);
         map.remove(b);
         map.remove(ab);
         map.remove(scf);
 
-        hg_assert(!map.has(a));
-        hg_assert(!map.has(b));
-        hg_assert(!map.has(ab));
-        hg_assert(!map.has(scf));
+        hgAssert(!map.has(a));
+        hgAssert(!map.has(b));
+        hgAssert(!map.has(ab));
+        hgAssert(!map.has(scf));
     }
 
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
         HgHashMap<const char*, u32> map = map.create(arena, 128);
 
@@ -1224,264 +1227,269 @@ void hg_test() {
         const char* ab = "ab";
         const char* scf = "supercalifragilisticexpialidocious";
 
-        hg_assert(!map.has(a));
-        hg_assert(!map.has(b));
-        hg_assert(!map.has(ab));
-        hg_assert(!map.has(scf));
+        hgAssert(!map.has(a));
+        hgAssert(!map.has(b));
+        hgAssert(!map.has(ab));
+        hgAssert(!map.has(scf));
 
-        map.insert(a, 1);
-        map.insert(b, 2);
-        map.insert(ab, 3);
-        map.insert(scf, 4);
+        map.add(a) = 1;
+        map.add(b) = 2;
+        map.add(ab) = 3;
+        map.add(scf) = 4;
 
-        hg_assert(map.has(a) && map[a] == 1);
-        hg_assert(map.has(b) && map[b] == 2);
-        hg_assert(map.has(ab) && map[ab] == 3);
-        hg_assert(map.has(scf) && map[scf] == 4);
+        hgAssert(map.has(a) && map[a] == 1);
+        hgAssert(map.has(b) && map[b] == 2);
+        hgAssert(map.has(ab) && map[ab] == 3);
+        hgAssert(map.has(scf) && map[scf] == 4);
 
         map.remove(a);
         map.remove(b);
         map.remove(ab);
         map.remove(scf);
 
-        hg_assert(!map.has(a));
-        hg_assert(!map.has(b));
-        hg_assert(!map.has(ab));
-        hg_assert(!map.has(scf));
+        hgAssert(!map.has(a));
+        hgAssert(!map.has(b));
+        hgAssert(!map.has(ab));
+        hgAssert(!map.has(scf));
     }
 
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
         HgHashMap<HgString, u32> map = map.create(arena, 128);
 
-        hg_assert(!map.has(HgString::create(arena, "a")));
-        hg_assert(!map.has(HgString::create(arena, "b")));
-        hg_assert(!map.has(HgString::create(arena, "ab")));
-        hg_assert(!map.has(HgString::create(arena, "supercalifragilisticexpialidocious")));
+        hgAssert(!map.has(HgString::copy(arena, "a")));
+        hgAssert(!map.has(HgString::copy(arena, "b")));
+        hgAssert(!map.has(HgString::copy(arena, "ab")));
+        hgAssert(!map.has(HgString::copy(arena, "supercalifragilisticexpialidocious")));
 
-        map.insert(HgString::create(arena, "a"), 1);
-        map.insert(HgString::create(arena, "b"), 2);
-        map.insert(HgString::create(arena, "ab"), 3);
-        map.insert(HgString::create(arena, "supercalifragilisticexpialidocious"), 4);
+        map.add(HgString::copy(arena, "a")) = 1;
+        map.add(HgString::copy(arena, "b")) = 2;
+        map.add(HgString::copy(arena, "ab")) = 3;
+        map.add(HgString::copy(arena, "supercalifragilisticexpialidocious")) = 4;
 
-        hg_assert(map.has(HgString::create(arena, "a")));
-        hg_assert(map[HgString::create(arena, "a")] == 1);
-        hg_assert(map.has(HgString::create(arena, "b")));
-        hg_assert(map[HgString::create(arena, "b")] == 2);
-        hg_assert(map.has(HgString::create(arena, "ab")));
-        hg_assert(map[HgString::create(arena, "ab")] == 3);
-        hg_assert(map.has(HgString::create(arena, "supercalifragilisticexpialidocious")));
-        hg_assert(map[HgString::create(arena, "supercalifragilisticexpialidocious")] == 4);
+        hgAssert(map.has(HgString::copy(arena, "a")));
+        hgAssert(map[HgString::copy(arena, "a")] == 1);
+        hgAssert(map.has(HgString::copy(arena, "b")));
+        hgAssert(map[HgString::copy(arena, "b")] == 2);
+        hgAssert(map.has(HgString::copy(arena, "ab")));
+        hgAssert(map[HgString::copy(arena, "ab")] == 3);
+        hgAssert(map.has(HgString::copy(arena, "supercalifragilisticexpialidocious")));
+        hgAssert(map[HgString::copy(arena, "supercalifragilisticexpialidocious")] == 4);
 
-        map.remove(HgString::create(arena, "a"));
-        map.remove(HgString::create(arena, "b"));
-        map.remove(HgString::create(arena, "ab"));
-        map.remove(HgString::create(arena, "supercalifragilisticexpialidocious"));
+        map.remove(HgString::copy(arena, "a"));
+        map.remove(HgString::copy(arena, "b"));
+        map.remove(HgString::copy(arena, "ab"));
+        map.remove(HgString::copy(arena, "supercalifragilisticexpialidocious"));
 
-        hg_assert(!map.has(HgString::create(arena, "a")));
-        hg_assert(!map.has(HgString::create(arena, "b")));
-        hg_assert(!map.has(HgString::create(arena, "ab")));
-        hg_assert(!map.has(HgString::create(arena, "supercalifragilisticexpialidocious")));
+        hgAssert(!map.has(HgString::copy(arena, "a")));
+        hgAssert(!map.has(HgString::copy(arena, "b")));
+        hgAssert(!map.has(HgString::copy(arena, "ab")));
+        hgAssert(!map.has(HgString::copy(arena, "supercalifragilisticexpialidocious")));
     }
 
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
         HgHashMap<HgStringView, u32> map = map.create(arena, 128);
 
-        hg_assert(!map.has("a"));
-        hg_assert(!map.has("b"));
-        hg_assert(!map.has("ab"));
-        hg_assert(!map.has("supercalifragilisticexpialidocious"));
+        hgAssert(!map.has("a"));
+        hgAssert(!map.has("b"));
+        hgAssert(!map.has("ab"));
+        hgAssert(!map.has("supercalifragilisticexpialidocious"));
 
-        map.insert(HgString::create(arena, "a"), 1);
-        map.insert(HgString::create(arena, "b"), 2);
-        map.insert(HgString::create(arena, "ab"), 3);
-        map.insert(HgString::create(arena, "supercalifragilisticexpialidocious"), 4);
+        map.add(HgString::copy(arena, "a")) = 1;
+        map.add(HgString::copy(arena, "b")) = 2;
+        map.add(HgString::copy(arena, "ab")) = 3;
+        map.add(HgString::copy(arena, "supercalifragilisticexpialidocious")) = 4;
 
-        hg_assert(map.has("a"));
-        hg_assert(map["a"] == 1);
-        hg_assert(map.has("b"));
-        hg_assert(map["b"] == 2);
-        hg_assert(map.has("ab"));
-        hg_assert(map["ab"] == 3);
-        hg_assert(map.has("supercalifragilisticexpialidocious"));
-        hg_assert(map["supercalifragilisticexpialidocious"] == 4);
+        hgAssert(map.has("a"));
+        hgAssert(map["a"] == 1);
+        hgAssert(map.has("b"));
+        hgAssert(map["b"] == 2);
+        hgAssert(map.has("ab"));
+        hgAssert(map["ab"] == 3);
+        hgAssert(map.has("supercalifragilisticexpialidocious"));
+        hgAssert(map["supercalifragilisticexpialidocious"] == 4);
 
         map.remove("a");
         map.remove("b");
         map.remove("ab");
         map.remove("supercalifragilisticexpialidocious");
 
-        hg_assert(!map.has("a"));
-        hg_assert(!map.has("b"));
-        hg_assert(!map.has("ab"));
-        hg_assert(!map.has("supercalifragilisticexpialidocious"));
+        hgAssert(!map.has("a"));
+        hgAssert(!map.has("b"));
+        hgAssert(!map.has("ab"));
+        hgAssert(!map.has("supercalifragilisticexpialidocious"));
     }
 
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
         HgHashMap<u32, u32> map = map.create(arena, 64);
 
-        bool has_any = false;
-        map.for_each([&](u32, u32) {
-            has_any = true;
+        bool hasAny = false;
+        map.forEach([&](u32, u32)
+        {
+            hasAny = true;
         });
-        hg_assert(!has_any);
+        hgAssert(!hasAny);
 
-        map.insert(12, 24);
-        map.insert(42, 84);
-        map.insert(100, 200);
+        map.add(12) = 24;
+        map.add(42) = 84;
+        map.add(100) = 200;
 
-        bool has_12 = false;
-        bool has_42 = false;
-        bool has_100 = false;
-        bool has_other = false;
-        map.for_each([&](u32 k, u32 v) {
+        bool has12 = false;
+        bool has42 = false;
+        bool has100 = false;
+        bool hasOther = false;
+        map.forEach([&](u32 k, u32 v)
+        {
             if (k == 12 && v == 24)
-                has_12 = true;
+                has12 = true;
             else if (k == 42 && v == 84)
-                has_42 = true;
+                has42 = true;
             else if (k == 100 && v == 200)
-                has_100 = true;
+                has100 = true;
             else
-                has_other = true;
+                hasOther = true;
         });
-        hg_assert(has_12);
-        hg_assert(has_42);
-        hg_assert(has_100);
-        hg_assert(!has_other);
+        hgAssert(has12);
+        hgAssert(has42);
+        hgAssert(has100);
+        hgAssert(!hasOther);
 
-        map.for_each([&](u32 k, u32) {
+        map.forEach([&](u32 k, u32)
+        {
             map.remove(k);
         });
 
-        has_any = false;
-        map.for_each([&](u32, u32) {
-            has_any = true;
+        hasAny = false;
+        map.forEach([&](u32, u32)
+        {
+            hasAny = true;
         });
-        hg_assert(!has_any);
+        hgAssert(!hasAny);
     }
 
     // HgHashSet
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
         constexpr usize count = 128;
 
         HgHashSet<u32> set = set.create(arena, count);
 
-        for (usize i = 0; i < 3; ++i) {
-            hg_assert(set.count == 0);
-            hg_assert(!set.has(0));
-            hg_assert(!set.has(1));
-            hg_assert(!set.has(12));
-            hg_assert(!set.has(42));
-            hg_assert(!set.has(100000));
+        for (usize i = 0; i < 3; ++i)
+        {
+            hgAssert(set.count == 0);
+            hgAssert(!set.has(0));
+            hgAssert(!set.has(1));
+            hgAssert(!set.has(12));
+            hgAssert(!set.has(42));
+            hgAssert(!set.has(100000));
 
-            set.insert(1);
-            hg_assert(set.count == 1);
-            hg_assert(set.has(1));
+            set.add(1);
+            hgAssert(set.count == 1);
+            hgAssert(set.has(1));
 
             set.remove(1);
-            hg_assert(set.count == 0);
-            hg_assert(!set.has(1));
+            hgAssert(set.count == 0);
+            hgAssert(!set.has(1));
 
-            hg_assert(!set.has(12));
-            hg_assert(!set.has(12 + count));
+            hgAssert(!set.has(12));
+            hgAssert(!set.has(12 + count));
 
-            set.insert(12);
-            hg_assert(set.count == 1);
-            hg_assert(set.has(12));
-            hg_assert(!set.has(12 + count));
+            set.add(12);
+            hgAssert(set.count == 1);
+            hgAssert(set.has(12));
+            hgAssert(!set.has(12 + count));
 
-            set.insert(12 + count);
-            hg_assert(set.count == 2);
-            hg_assert(set.has(12));
-            hg_assert(set.has(12 + count));
+            set.add(12 + count);
+            hgAssert(set.count == 2);
+            hgAssert(set.has(12));
+            hgAssert(set.has(12 + count));
 
-            set.insert(12 + count * 2);
-            hg_assert(set.count == 3);
-            hg_assert(set.has(12));
-            hg_assert(set.has(12 + count));
-            hg_assert(set.has(12 + count * 2));
+            set.add(12 + count * 2);
+            hgAssert(set.count == 3);
+            hgAssert(set.has(12));
+            hgAssert(set.has(12 + count));
+            hgAssert(set.has(12 + count * 2));
 
             set.remove(12);
-            hg_assert(set.count == 2);
-            hg_assert(!set.has(12));
-            hg_assert(set.has(12 + count));
+            hgAssert(set.count == 2);
+            hgAssert(!set.has(12));
+            hgAssert(set.has(12 + count));
 
-            set.insert(42);
-            hg_assert(set.count == 3);
-            hg_assert(set.has(42));
+            set.add(42);
+            hgAssert(set.count == 3);
+            hgAssert(set.has(42));
 
             set.remove(12 + count);
-            hg_assert(set.count == 2);
-            hg_assert(!set.has(12));
-            hg_assert(!set.has(12 + count));
+            hgAssert(set.count == 2);
+            hgAssert(!set.has(12));
+            hgAssert(!set.has(12 + count));
 
             set.remove(42);
-            hg_assert(set.count == 1);
-            hg_assert(!set.has(42));
+            hgAssert(set.count == 1);
+            hgAssert(!set.has(42));
 
             set.remove(12 + count * 2);
-            hg_assert(set.count == 0);
-            hg_assert(!set.has(12));
-            hg_assert(!set.has(12 + count));
-            hg_assert(!set.has(12 + count * 2));
+            hgAssert(set.count == 0);
+            hgAssert(!set.has(12));
+            hgAssert(!set.has(12 + count));
+            hgAssert(!set.has(12 + count * 2));
 
             set.reset();
         }
     }
 
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
         using StrHash = usize;
 
         HgHashSet<StrHash> set = set.create(arena, 128);
 
-        StrHash a = hg_hash("a");
-        StrHash b = hg_hash("b");
-        StrHash ab = hg_hash("ab");
-        StrHash scf = hg_hash("supercalifragilisticexpialidocious");
+        StrHash a = hgHash("a");
+        StrHash b = hgHash("b");
+        StrHash ab = hgHash("ab");
+        StrHash scf = hgHash("supercalifragilisticexpialidocious");
 
-        hg_assert(!set.has(a));
-        hg_assert(!set.has(b));
-        hg_assert(!set.has(ab));
-        hg_assert(!set.has(scf));
+        hgAssert(!set.has(a));
+        hgAssert(!set.has(b));
+        hgAssert(!set.has(ab));
+        hgAssert(!set.has(scf));
 
-        set.insert(a);
-        set.insert(b);
-        set.insert(ab);
-        set.insert(scf);
+        set.add(a);
+        set.add(b);
+        set.add(ab);
+        set.add(scf);
 
-        hg_assert(set.has(a));
-        hg_assert(set.has(b));
-        hg_assert(set.has(ab));
-        hg_assert(set.has(scf));
+        hgAssert(set.has(a));
+        hgAssert(set.has(b));
+        hgAssert(set.has(ab));
+        hgAssert(set.has(scf));
 
         set.remove(a);
         set.remove(b);
         set.remove(ab);
         set.remove(scf);
 
-        hg_assert(!set.has(a));
-        hg_assert(!set.has(b));
-        hg_assert(!set.has(ab));
-        hg_assert(!set.has(scf));
+        hgAssert(!set.has(a));
+        hgAssert(!set.has(b));
+        hgAssert(!set.has(ab));
+        hgAssert(!set.has(scf));
     }
 
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
         HgHashSet<const char*> set = set.create(arena, 128);
 
@@ -1490,94 +1498,94 @@ void hg_test() {
         const char* ab = "ab";
         const char* scf = "supercalifragilisticexpialidocious";
 
-        hg_assert(!set.has(a));
-        hg_assert(!set.has(b));
-        hg_assert(!set.has(ab));
-        hg_assert(!set.has(scf));
+        hgAssert(!set.has(a));
+        hgAssert(!set.has(b));
+        hgAssert(!set.has(ab));
+        hgAssert(!set.has(scf));
 
-        set.insert(a);
-        set.insert(b);
-        set.insert(ab);
-        set.insert(scf);
+        set.add(a);
+        set.add(b);
+        set.add(ab);
+        set.add(scf);
 
-        hg_assert(set.has(a));
-        hg_assert(set.has(b));
-        hg_assert(set.has(ab));
-        hg_assert(set.has(scf));
+        hgAssert(set.has(a));
+        hgAssert(set.has(b));
+        hgAssert(set.has(ab));
+        hgAssert(set.has(scf));
 
         set.remove(a);
         set.remove(b);
         set.remove(ab);
         set.remove(scf);
 
-        hg_assert(!set.has(a));
-        hg_assert(!set.has(b));
-        hg_assert(!set.has(ab));
-        hg_assert(!set.has(scf));
+        hgAssert(!set.has(a));
+        hgAssert(!set.has(b));
+        hgAssert(!set.has(ab));
+        hgAssert(!set.has(scf));
     }
 
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
         HgHashSet<HgString> set = set.create(arena, 128);
 
-        hg_assert(!set.has(HgString::create(arena, "a")));
-        hg_assert(!set.has(HgString::create(arena, "b")));
-        hg_assert(!set.has(HgString::create(arena, "ab")));
-        hg_assert(!set.has(HgString::create(arena, "supercalifragilisticexpialidocious")));
+        hgAssert(!set.has(HgString::copy(arena, "a")));
+        hgAssert(!set.has(HgString::copy(arena, "b")));
+        hgAssert(!set.has(HgString::copy(arena, "ab")));
+        hgAssert(!set.has(HgString::copy(arena, "supercalifragilisticexpialidocious")));
 
-        set.insert(HgString::create(arena, "a"));
-        set.insert(HgString::create(arena, "b"));
-        set.insert(HgString::create(arena, "ab"));
-        set.insert(HgString::create(arena, "supercalifragilisticexpialidocious"));
+        set.add(HgString::copy(arena, "a"));
+        set.add(HgString::copy(arena, "b"));
+        set.add(HgString::copy(arena, "ab"));
+        set.add(HgString::copy(arena, "supercalifragilisticexpialidocious"));
 
-        hg_assert(set.has(HgString::create(arena, "a")));
-        hg_assert(set.has(HgString::create(arena, "b")));
-        hg_assert(set.has(HgString::create(arena, "ab")));
-        hg_assert(set.has(HgString::create(arena, "supercalifragilisticexpialidocious")));
+        hgAssert(set.has(HgString::copy(arena, "a")));
+        hgAssert(set.has(HgString::copy(arena, "b")));
+        hgAssert(set.has(HgString::copy(arena, "ab")));
+        hgAssert(set.has(HgString::copy(arena, "supercalifragilisticexpialidocious")));
 
-        set.remove(HgString::create(arena, "a"));
-        set.remove(HgString::create(arena, "b"));
-        set.remove(HgString::create(arena, "ab"));
-        set.remove(HgString::create(arena, "supercalifragilisticexpialidocious"));
+        set.remove(HgString::copy(arena, "a"));
+        set.remove(HgString::copy(arena, "b"));
+        set.remove(HgString::copy(arena, "ab"));
+        set.remove(HgString::copy(arena, "supercalifragilisticexpialidocious"));
 
-        hg_assert(!set.has(HgString::create(arena, "a")));
-        hg_assert(!set.has(HgString::create(arena, "b")));
-        hg_assert(!set.has(HgString::create(arena, "ab")));
-        hg_assert(!set.has(HgString::create(arena, "supercalifragilisticexpialidocious")));
+        hgAssert(!set.has(HgString::copy(arena, "a")));
+        hgAssert(!set.has(HgString::copy(arena, "b")));
+        hgAssert(!set.has(HgString::copy(arena, "ab")));
+        hgAssert(!set.has(HgString::copy(arena, "supercalifragilisticexpialidocious")));
     }
 
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
         HgHashSet<HgStringView> set = set.create(arena, 128);
 
-        hg_assert(!set.has("a"));
-        hg_assert(!set.has("b"));
-        hg_assert(!set.has("ab"));
-        hg_assert(!set.has("supercalifragilisticexpialidocious"));
+        hgAssert(!set.has("a"));
+        hgAssert(!set.has("b"));
+        hgAssert(!set.has("ab"));
+        hgAssert(!set.has("supercalifragilisticexpialidocious"));
 
-        set.insert(HgString::create(arena, "a"));
-        set.insert(HgString::create(arena, "b"));
-        set.insert(HgString::create(arena, "ab"));
-        set.insert(HgString::create(arena, "supercalifragilisticexpialidocious"));
+        set.add(HgString::copy(arena, "a"));
+        set.add(HgString::copy(arena, "b"));
+        set.add(HgString::copy(arena, "ab"));
+        set.add(HgString::copy(arena, "supercalifragilisticexpialidocious"));
 
-        hg_assert(set.has("a"));
-        hg_assert(set.has("b"));
-        hg_assert(set.has("ab"));
-        hg_assert(set.has("supercalifragilisticexpialidocious"));
+        hgAssert(set.has("a"));
+        hgAssert(set.has("b"));
+        hgAssert(set.has("ab"));
+        hgAssert(set.has("supercalifragilisticexpialidocious"));
 
         set.remove("a");
         set.remove("b");
         set.remove("ab");
         set.remove("supercalifragilisticexpialidocious");
 
-        hg_assert(!set.has("a"));
-        hg_assert(!set.has("b"));
-        hg_assert(!set.has("ab"));
-        hg_assert(!set.has("supercalifragilisticexpialidocious"));
+        hgAssert(!set.has("a"));
+        hgAssert(!set.has("b"));
+        hgAssert(!set.has("ab"));
+        hgAssert(!set.has("supercalifragilisticexpialidocious"));
     }
 
     // thread pool
@@ -1587,88 +1595,104 @@ void hg_test() {
         bool a = false;
         bool b = false;
 
-        hg_call_par(&fence, 1, &a, [](void *pa) {
+        hgCallPar(&fence, 1, &a, [](void *pa)
+        {
             *(bool*)pa = true;
         });
-        hg_call_par(&fence, 1, &b, [](void *pb) {
+        hgCallPar(&fence, 1, &b, [](void *pb)
+        {
             *(bool*)pb = true;
         });
 
         fence.wait(2.0);
 
-        hg_assert(fence.wait(2.0));
+        hgAssert(fence.wait(2.0));
 
-        hg_assert(a == true);
-        hg_assert(b == true);
+        hgAssert(a == true);
+        hgAssert(b == true);
     }
 
     {
         HgFence fence;
 
         bool vals[100] = {};
-        for (bool& val : vals) {
-            hg_call_par(&fence, 1, &val, [](void* data) {
+        for (bool& val : vals)
+        {
+            hgCallPar(&fence, 1, &val, [](void* data)
+            {
                 *(bool*)data = true;
             });
         }
 
-        hg_assert(hg_thread_pool_help(fence, 2.0));
+        hgAssert(hgHelpThreadPool(fence, 2.0));
 
-        for (bool& val : vals) {
-            hg_assert(val == true);
+        for (bool& val : vals)
+        {
+            hgAssert(val == true);
         }
     }
 
     {
         bool vals[100] = {};
 
-        hg_for_par(sizeof(vals) / sizeof(*vals), 16, [&](usize begin, usize end) {
-            hg_assert(begin < end && end <= sizeof(vals) / sizeof(*vals));
-            for (; begin < end; ++begin) {
+        hgForPar(sizeof(vals) / sizeof(*vals), 16, [&](usize begin, usize end)
+        {
+            hgAssert(begin < end && end <= sizeof(vals) / sizeof(*vals));
+            for (; begin < end; ++begin)
+            {
                 vals[begin] = true;
             }
         });
 
-        for (bool& val : vals) {
-            hg_assert(val == true);
+        for (bool& val : vals)
+        {
+            hgAssert(val == true);
         }
     }
 
     {
         HgFence fence;
 
-        for (u32 n = 0; n < 3; ++n) {
+        for (u32 n = 0; n < 3; ++n)
+        {
             std::atomic_bool start{false};
             std::thread producers[4];
 
             bool vals[100] = {};
 
-            auto fn = [](void* pval) {
+            auto fn = [](void* pval)
+            {
                 *((bool*)pval) = !*((bool*)pval);
             };
 
-            auto prod_fn = [&](u32 idx) {
-                while (!start) {
+            auto prodFn = [&](u32 idx)
+            {
+                while (!start)
+                {
                     _mm_pause();
                 }
                 u32 begin = idx * 25;
                 u32 end = begin + 25;
-                for (u32 i = begin; i < end; ++i) {
-                    hg_call_par(&fence, 1, vals + i, fn);
+                for (u32 i = begin; i < end; ++i)
+                {
+                    hgCallPar(&fence, 1, vals + i, fn);
                 }
             };
-            for (u32 j = 0; j < sizeof(producers) / sizeof(*producers); ++j) {
-                producers[j] = std::thread(prod_fn, j);
+            for (u32 j = 0; j < sizeof(producers) / sizeof(*producers); ++j)
+            {
+                producers[j] = std::thread(prodFn, j);
             }
 
             start.store(true);
-            for (auto& thread : producers) {
+            for (auto& thread : producers)
+            {
                 thread.join();
             }
 
-            hg_assert(hg_thread_pool_help(fence, 2.0));
-            for (auto val : vals) {
-                hg_assert(val == true);
+            hgAssert(hgHelpThreadPool(fence, 2.0));
+            for (auto val : vals)
+            {
+                hgAssert(val == true);
             }
         }
     }
@@ -1679,15 +1703,18 @@ void hg_test() {
 
         bool vals[100] = {};
 
-        hg_io_request(&fence, 1, vals, {}, [](void* pvals, HgStringView) {
-            for (usize i = 0; i < sizeof(vals) / sizeof(*vals); ++i) {
+        hgRequestIO(&fence, 1, vals, {}, [](void* pvals, HgStringView)
+        {
+            for (usize i = 0; i < sizeof(vals) / sizeof(*vals); ++i)
+            {
                 ((bool*)pvals)[i] = true;
             }
         });
 
-        hg_assert(fence.wait(2.0));
-        for (usize i = 0; i < sizeof(vals) / sizeof(*vals); ++i) {
-            hg_assert(vals[i] == true);
+        hgAssert(fence.wait(2.0));
+        for (usize i = 0; i < sizeof(vals) / sizeof(*vals); ++i)
+        {
+            hgAssert(vals[i] == true);
         }
     }
 
@@ -1696,15 +1723,18 @@ void hg_test() {
 
         bool vals[100] = {};
 
-        for (usize i = 0; i < sizeof(vals) / sizeof(*vals); ++i) {
-            hg_io_request(&fence, 1, &vals[i], {}, [](void* pval, HgStringView) {
+        for (usize i = 0; i < sizeof(vals) / sizeof(*vals); ++i)
+        {
+            hgRequestIO(&fence, 1, &vals[i], {}, [](void* pval, HgStringView)
+            {
                 *(bool*)pval = true;
             });
         }
 
-        hg_assert(fence.wait(2.0));
-        for (usize i = 0; i < sizeof(vals) / sizeof(*vals); ++i) {
-            hg_assert(vals[i] == true);
+        hgAssert(fence.wait(2.0));
+        for (usize i = 0; i < sizeof(vals) / sizeof(*vals); ++i)
+        {
+            hgAssert(vals[i] == true);
         }
     }
 
@@ -1715,102 +1745,112 @@ void hg_test() {
 
         vals[0] = true;
 
-        for (usize i = 1; i < sizeof(vals) / sizeof(*vals); ++i) {
-            hg_io_request(&fence, 1, &vals[i], {}, [](void* pval, HgStringView) {
+        for (usize i = 1; i < sizeof(vals) / sizeof(*vals); ++i)
+        {
+            hgRequestIO(&fence, 1, &vals[i], {}, [](void* pval, HgStringView)
+            {
                 *(bool*)pval = *((bool*)pval - 1);
             });
         }
 
-        hg_assert(fence.wait(2.0));
-        for (usize i = 0; i < sizeof(vals) / sizeof(*vals); ++i) {
-            hg_assert(vals[i] == true);
+        hgAssert(fence.wait(2.0));
+        for (usize i = 0; i < sizeof(vals) / sizeof(*vals); ++i)
+        {
+            hgAssert(vals[i] == true);
         }
     }
 
     {
         HgFence fence;
 
-        for (u32 n = 0; n < 3; ++n) {
-
+        for (u32 n = 0; n < 3; ++n)
+        {
             std::atomic_bool start{false};
             std::thread producers[4];
 
             bool vals[100] = {};
 
-            auto prod_fn = [&](u32 idx) {
-                while (!start) {
+            auto prodFn = [&](u32 idx)
+            {
+                while (!start)
+                {
                     _mm_pause();
                 }
                 u32 begin = idx * 25;
                 u32 end = begin + 25;
-                for (u32 i = begin; i < end; ++i) {
-                    hg_io_request(&fence, 1, &vals[i], {}, [](void* pval, HgStringView) {
+                for (u32 i = begin; i < end; ++i)
+                {
+                    hgRequestIO(&fence, 1, &vals[i], {}, [](void* pval, HgStringView)
+                    {
                         *(bool*)pval = !*(bool*)pval;
                     });
                 }
             };
-            for (u32 j = 0; j < sizeof(producers) / sizeof(*producers); ++j) {
-                producers[j] = std::thread(prod_fn, j);
+            for (u32 j = 0; j < sizeof(producers) / sizeof(*producers); ++j)
+            {
+                producers[j] = std::thread(prodFn, j);
             }
 
             start.store(true);
-            for (auto& thread : producers) {
+            for (auto& thread : producers)
+            {
                 thread.join();
             }
 
-            hg_assert(fence.wait(2.0));
-            for (auto val : vals) {
-                hg_assert(val == true);
+            hgAssert(fence.wait(2.0));
+            for (auto val : vals)
+            {
+                hgAssert(val == true);
             }
         }
     }
 
-    hg_warn("HgResourceManager test not implemented yet : TODO\n");
+    hgWarn("HgResourceManager test not implemented yet : TODO\n");
 
     // HgBinary
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
-        u32 save_data[] = {12, 42, 100, 128};
+        u32 saveData[] = {12, 42, 100, 128};
 
-        const char* file_path = "hg_test_dir/file_bin_test.bin";
+        const char* filePath = "hg_test_dir/file_bin_test.bin";
         HgBinary bin{};
 
         {
-            bin = hg_load_binary(arena, "file_does_not_exist.bin");
-            hg_assert(bin.data == nullptr);
-            hg_assert(bin.size == 0);
+            bin = hgLoadBinary(arena, "file_does_not_exist.bin");
+            hgAssert(bin.data == nullptr);
+            hgAssert(bin.size == 0);
         }
 
         {
-            bin.data = save_data;
-            bin.size = sizeof(save_data);
+            bin.data = saveData;
+            bin.size = sizeof(saveData);
 
-            hg_store_binary(bin, "dir/does/not/exist.bin");
+            hgStoreBinary(bin, "dir/does/not/exist.bin");
 
-            FILE* file_handle = fopen("dir/does/not/exist.bin", "rb");
-            hg_assert(file_handle == nullptr);
+            FILE* fileHandle = fopen("dir/does/not/exist.bin", "rb");
+            hgAssert(fileHandle == nullptr);
         }
 
         {
-            bin.data = save_data;
-            bin.size = sizeof(save_data);
+            bin.data = saveData;
+            bin.size = sizeof(saveData);
 
-            hg_store_binary(bin, file_path);
-            HgBinary new_bin = hg_load_binary(arena, file_path);
+            hgStoreBinary(bin, filePath);
+            HgBinary newBin = hgLoadBinary(arena, filePath);
 
-            hg_assert(new_bin.data != nullptr);
-            hg_assert(new_bin.data != save_data);
-            hg_assert(new_bin.size == sizeof(save_data));
-            hg_assert(memcmp(save_data, new_bin.data, new_bin.size) == 0);
+            hgAssert(newBin.data != nullptr);
+            hgAssert(newBin.data != saveData);
+            hgAssert(newBin.size == sizeof(saveData));
+            hgAssert(memcmp(saveData, newBin.data, newBin.size) == 0);
         }
     }
 
     // HgTextureData
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
         struct color {
             u8 r, g, b, a;
@@ -1823,11 +1863,11 @@ void hg_test() {
         u32 blue =   color{0x00, 0x00, 0xff, 0xff};
         u32 yellow = color{0xff, 0xff, 0x00, 0xff};
 
-        constexpr VkFormat save_format = VK_FORMAT_R8G8B8A8_SRGB;
-        constexpr u32 save_width = 2;
-        constexpr u32 save_height = 2;
-        constexpr u32 save_depth = 1;
-        u32 save_data[save_width][save_height] = {
+        constexpr VkFormat saveFormat = VK_FORMAT_R8G8B8A8_SRGB;
+        constexpr u32 saveWidth = 2;
+        constexpr u32 saveHeight = 2;
+        constexpr u32 saveDepth = 1;
+        u32 saveData[saveWidth][saveHeight] = {
             {red, green},
             {blue, yellow},
         };
@@ -1836,18 +1876,18 @@ void hg_test() {
 
         {
             HgTextureData::Info info;
-            memcpy(info.identifier, HgTextureData::texture_identifier, sizeof(HgTextureData::texture_identifier));
+            memcpy(info.identifier, HgTextureData::textureIdentifier, sizeof(HgTextureData::textureIdentifier));
             info.format = VK_FORMAT_R8G8B8A8_SRGB;
-            info.width = save_width;
-            info.height = save_height;
-            info.depth = save_depth;
-            info.pixels_begin = sizeof(info);
+            info.width = saveWidth;
+            info.height = saveHeight;
+            info.depth = saveDepth;
+            info.pixelsBegin = sizeof(info);
             bin.resize(arena, bin.size + sizeof(HgTextureData::Info));
             bin.overwrite(0, info);
 
-            usize pixel_idx = bin.size;
-            bin.resize(arena, bin.size + sizeof(save_data));
-            bin.overwrite(pixel_idx, save_data, sizeof(save_data));
+            usize pixelIdx = bin.size;
+            bin.resize(arena, bin.size + sizeof(saveData));
+            bin.overwrite(pixelIdx, saveData, sizeof(saveData));
         }
 
         {
@@ -1855,273 +1895,283 @@ void hg_test() {
 
             VkFormat format;
             u32 width, height, depth;
-            hg_assert(texture.get_info(&format, &width, &height, &depth));
-            hg_assert(format == save_format);
-            hg_assert(width == save_width);
-            hg_assert(height == save_height);
-            hg_assert(depth == save_depth);
-            hg_assert(width * height * depth * hg_vk_format_to_size(format) == sizeof(save_data));
+            hgAssert(texture.getInfo(&format, &width, &height, &depth));
+            hgAssert(format == saveFormat);
+            hgAssert(width == saveWidth);
+            hgAssert(height == saveHeight);
+            hgAssert(depth == saveDepth);
+            hgAssert(width * height * depth * hgVkFormatToSize(format) == sizeof(saveData));
 
-            void* pixels = texture.get_pixels();
-            hg_assert(pixels != nullptr);
-            hg_assert(memcmp(save_data, pixels, sizeof(save_data)) == 0);
+            void* pixels = texture.getPixels();
+            hgAssert(pixels != nullptr);
+            hgAssert(memcmp(saveData, pixels, sizeof(saveData)) == 0);
         }
 
         {
-            HgStringView file_path = "hg_test_dir/file_image_test.hgtex";
+            HgStringView filePath = "hg_test_dir/file_image_test.hgtex";
 
-            hg_store_binary(bin, file_path);
-            HgTextureData file_texture = hg_load_binary(arena, file_path);
+            hgStoreBinary(bin, filePath);
+            HgTextureData fileTexture = hgLoadBinary(arena, filePath);
 
             VkFormat format;
             u32 width, height, depth;
-            hg_assert(file_texture.get_info(&format, &width, &height, &depth));
-            hg_assert(format == save_format);
-            hg_assert(width == save_width);
-            hg_assert(height == save_height);
-            hg_assert(depth == save_depth);
-            hg_assert(width * height * depth * hg_vk_format_to_size(format) == sizeof(save_data));
+            hgAssert(fileTexture.getInfo(&format, &width, &height, &depth));
+            hgAssert(format == saveFormat);
+            hgAssert(width == saveWidth);
+            hgAssert(height == saveHeight);
+            hgAssert(depth == saveDepth);
+            hgAssert(width * height * depth * hgVkFormatToSize(format) == sizeof(saveData));
 
-            void* pixels = file_texture.get_pixels();
-            hg_assert(pixels != nullptr);
-            hg_assert(memcmp(save_data, pixels, sizeof(save_data)) == 0);
+            void* pixels = fileTexture.getPixels();
+            hgAssert(pixels != nullptr);
+            hgAssert(memcmp(saveData, pixels, sizeof(saveData)) == 0);
         }
 
         {
-            HgStringView tex_path = "tex";
-            HgStringView file_path = "hg_test_dir/file_image_test.png";
-            HgResource tex_id = hg_resource_id(tex_path);
-            HgResource file_id = hg_resource_id(file_path);
+            HgStringView texPath = "tex";
+            HgStringView filePath = "hg_test_dir/file_image_test.png";
+            HgResource texId = hgResourceID(texPath);
+            HgResource fileId = hgResourceID(filePath);
 
-            hg_load_empty_resource(tex_id);
-            HgBinary* pbin_res = hg_get_resource(tex_id);
-            *pbin_res = bin;
-            hg_defer({
-                *hg_get_resource(tex_id) = {};
-                hg_unload_resource(nullptr, 0, tex_id);
+            hgLoadEmptyResource(texId);
+            HgBinary* pbinRes = hgGetResource(texId);
+            *pbinRes = bin;
+            hgDefer({
+                *hgGetResource(texId) = {};
+                hgUnloadResource(nullptr, 0, texId);
             });
 
             HgFence fence;
-            hg_export_png(&fence, 1, tex_id, file_path);
-            hg_import_png(&fence, 1, file_id, file_path);
-            hg_defer(hg_unload_resource(nullptr, 0, file_id));
-            hg_assert(fence.wait(2.0));
+            hgExportPng(&fence, 1, texId, filePath);
+            hgImportPng(&fence, 1, fileId, filePath);
+            hgDefer(hgUnloadResource(nullptr, 0, fileId));
+            hgAssert(fence.wait(2.0));
 
-            HgTextureData file_texture = *hg_get_resource(file_id);
+            HgTextureData fileTexture = *hgGetResource(fileId);
 
             VkFormat format;
             u32 width, height, depth;
-            hg_assert(file_texture.get_info(&format, &width, &height, &depth));
-            hg_assert(format == save_format);
-            hg_assert(width == save_width);
-            hg_assert(height == save_height);
-            hg_assert(depth == save_depth);
-            hg_assert(width * height * depth * hg_vk_format_to_size(format) == sizeof(save_data));
+            hgAssert(fileTexture.getInfo(&format, &width, &height, &depth));
+            hgAssert(format == saveFormat);
+            hgAssert(width == saveWidth);
+            hgAssert(height == saveHeight);
+            hgAssert(depth == saveDepth);
+            hgAssert(width * height * depth * hgVkFormatToSize(format) == sizeof(saveData));
 
-            void* pixels = file_texture.get_pixels();
-            hg_assert(pixels != nullptr);
-            hg_assert(memcmp(save_data, pixels, sizeof(save_data)) == 0);
+            void* pixels = fileTexture.getPixels();
+            hgAssert(pixels != nullptr);
+            hgAssert(memcmp(saveData, pixels, sizeof(saveData)) == 0);
         }
     }
 
-    hg_warn("HgModelData test not implemented yet : TODO\n");
-    hg_warn("HgGpuTexture test not implemented yet : TODO\n");
-    hg_warn("HgGpuModel test not implemented yet : TODO\n");
+    hgWarn("HgModelData test not implemented yet : TODO\n");
+    hgWarn("HgGpuTexture test not implemented yet : TODO\n");
+    hgWarn("HgGpuModel test not implemented yet : TODO\n");
 
     // HgECS
     {
-        HgArena* arena = hg_get_scratch();
-        HgArenaScope arena_scope{arena};
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
 
         HgECS ecs = ecs.create(1024);
-        hg_defer(ecs.destroy());
+        hgDefer(ecs.destroy());
 
-        hg_defer(ecs.reset());
+        hgDefer(ecs.reset());
 
         HgEntity e1 = ecs.spawn();
         HgEntity e2 = ecs.spawn();
         HgEntity e3 = {};
-        hg_assert(ecs.alive(e1));
-        hg_assert(ecs.alive(e2));
-        hg_assert(!ecs.alive(e3));
+        hgAssert(ecs.alive(e1));
+        hgAssert(ecs.alive(e2));
+        hgAssert(!ecs.alive(e3));
 
         ecs.despawn(e1);
-        hg_assert(!ecs.alive(e1));
+        hgAssert(!ecs.alive(e1));
         e3 = ecs.spawn();
-        hg_assert(ecs.alive(e3));
-        hg_assert(e3.idx() == e1.idx() && e3 != e1);
+        hgAssert(ecs.alive(e3));
+        hgAssert(e3.idx() == e1.idx() && e3 != e1);
 
         e1 = ecs.spawn();
-        hg_assert(ecs.alive(e1));
+        hgAssert(ecs.alive(e1));
 
         {
-            hg_assert(!ecs.has<u32>(e1));
-            hg_assert(!ecs.has<u32>(e2));
-            hg_assert(!ecs.has<u32>(e3));
+            hgAssert(!ecs.has<u32>(e1));
+            hgAssert(!ecs.has<u32>(e2));
+            hgAssert(!ecs.has<u32>(e3));
 
             ecs.add<u32>(e1) = 1;
-            hg_assert(ecs.has<u32>(e1) && ecs.get<u32>(e1) == 1);
-            hg_assert(!ecs.has<u32>(e2));
-            hg_assert(!ecs.has<u32>(e3));
+            hgAssert(ecs.has<u32>(e1) && ecs.get<u32>(e1) == 1);
+            hgAssert(!ecs.has<u32>(e2));
+            hgAssert(!ecs.has<u32>(e3));
             ecs.add<u32>(e2) = 2;
-            hg_assert(ecs.has<u32>(e1) && ecs.get<u32>(e1) == 1);
-            hg_assert(ecs.has<u32>(e2) && ecs.get<u32>(e2) == 2);
-            hg_assert(!ecs.has<u32>(e3));
+            hgAssert(ecs.has<u32>(e1) && ecs.get<u32>(e1) == 1);
+            hgAssert(ecs.has<u32>(e2) && ecs.get<u32>(e2) == 2);
+            hgAssert(!ecs.has<u32>(e3));
             ecs.add<u32>(e3) = 3;
-            hg_assert(ecs.has<u32>(e1) && ecs.get<u32>(e1) == 1);
-            hg_assert(ecs.has<u32>(e2) && ecs.get<u32>(e2) == 2);
-            hg_assert(ecs.has<u32>(e3) && ecs.get<u32>(e3) == 3);
+            hgAssert(ecs.has<u32>(e1) && ecs.get<u32>(e1) == 1);
+            hgAssert(ecs.has<u32>(e2) && ecs.get<u32>(e2) == 2);
+            hgAssert(ecs.has<u32>(e3) && ecs.get<u32>(e3) == 3);
 
             ecs.remove<u32>(e1);
-            hg_assert(!ecs.has<u32>(e1));
-            hg_assert(ecs.has<u32>(e2) && ecs.get<u32>(e2) == 2);
-            hg_assert(ecs.has<u32>(e3) && ecs.get<u32>(e3) == 3);
+            hgAssert(!ecs.has<u32>(e1));
+            hgAssert(ecs.has<u32>(e2) && ecs.get<u32>(e2) == 2);
+            hgAssert(ecs.has<u32>(e3) && ecs.get<u32>(e3) == 3);
             ecs.remove<u32>(e2);
-            hg_assert(!ecs.has<u32>(e1));
-            hg_assert(!ecs.has<u32>(e2));
-            hg_assert(ecs.has<u32>(e3) && ecs.get<u32>(e3) == 3);
+            hgAssert(!ecs.has<u32>(e1));
+            hgAssert(!ecs.has<u32>(e2));
+            hgAssert(ecs.has<u32>(e3) && ecs.get<u32>(e3) == 3);
             ecs.remove<u32>(e3);
-            hg_assert(!ecs.has<u32>(e1));
-            hg_assert(!ecs.has<u32>(e2));
-            hg_assert(!ecs.has<u32>(e3));
+            hgAssert(!ecs.has<u32>(e1));
+            hgAssert(!ecs.has<u32>(e2));
+            hgAssert(!ecs.has<u32>(e3));
         }
 
         {
-            bool has_unknown = false;
-            ecs.for_each<u32>([&](HgEntity, u32&) {
-                has_unknown = true;
+            bool hasUnknown = false;
+            ecs.forEach<u32>([&](HgEntity, u32&)
+            {
+                hasUnknown = true;
             });
-            hg_assert(!has_unknown);
+            hgAssert(!hasUnknown);
 
-            hg_assert(ecs.count<u32>() == 0);
-            hg_assert(ecs.count<u64>() == 0);
+            hgAssert(ecs.count<u32>() == 0);
+            hgAssert(ecs.count<u64>() == 0);
         }
 
         {
             ecs.add<u32>(e1) = 12;
             ecs.add<u32>(e2) = 42;
             ecs.add<u32>(e3) = 100;
-            hg_assert(ecs.count<u32>() == 3);
-            hg_assert(ecs.count<u64>() == 0);
+            hgAssert(ecs.count<u32>() == 3);
+            hgAssert(ecs.count<u64>() == 0);
 
-            bool has_unknown = false;
-            bool has_12 = false;
-            bool has_42 = false;
-            bool has_100 = false;
-            ecs.for_each<u32>([&](HgEntity e, u32& c) {
-                switch (c) {
+            bool hasUnknown = false;
+            bool has12 = false;
+            bool has42 = false;
+            bool has100 = false;
+            ecs.forEach<u32>([&](HgEntity e, u32& c)
+            {
+                switch (c)
+                {
                     case 12:
-                        has_12 = e == e1;
+                        has12 = e == e1;
                         break;
                     case 42:
-                        has_42 = e == e2;
+                        has42 = e == e2;
                         break;
                     case 100:
-                        has_100 = e == e3;
+                        has100 = e == e3;
                         break;
                     default:
-                        has_unknown = true;
+                        hasUnknown = true;
                         break;
                 }
             });
-            hg_assert(has_12);
-            hg_assert(has_42);
-            hg_assert(has_100);
-            hg_assert(!has_unknown);
+            hgAssert(has12);
+            hgAssert(has42);
+            hgAssert(has100);
+            hgAssert(!hasUnknown);
         }
 
         {
             ecs.add<u64>(e2) = 2042;
             ecs.add<u64>(e3) = 2100;
-            hg_assert(ecs.count<u32>() == 3);
-            hg_assert(ecs.count<u64>() == 2);
+            hgAssert(ecs.count<u32>() == 3);
+            hgAssert(ecs.count<u64>() == 2);
 
-            bool has_unknown = false;
-            bool has_12 = false;
-            bool has_42 = false;
-            bool has_100 = false;
-            bool has_2042 = false;
-            bool has_2100 = false;
-            ecs.for_each<u32, u64>([&](HgEntity e, u32& comp32, u64& comp64) {
-                switch (comp32) {
+            bool hasUnknown = false;
+            bool has12 = false;
+            bool has42 = false;
+            bool has100 = false;
+            bool has2042 = false;
+            bool has2100 = false;
+            ecs.forEach<u32, u64>([&](HgEntity e, u32& comp32, u64& comp64)
+            {
+                switch (comp32)
+                {
                     case 12:
-                        has_12 = e == e1;
+                        has12 = e == e1;
                         break;
                     case 42:
-                        has_42 = e == e2;
+                        has42 = e == e2;
                         break;
                     case 100:
-                        has_100 = e == e3;
+                        has100 = e == e3;
                         break;
                     default:
-                        has_unknown = true;
+                        hasUnknown = true;
                         break;
                 }
-                switch (comp64) {
+                switch (comp64)
+                {
                     case 2042:
-                        has_2042 = e == e2;
+                        has2042 = e == e2;
                         break;
                     case 2100:
-                        has_2100 = e == e3;
+                        has2100 = e == e3;
                         break;
                     default:
-                        has_unknown = true;
+                        hasUnknown = true;
                         break;
                 }
             });
-            hg_assert(!has_12);
-            hg_assert(has_42);
-            hg_assert(has_100);
-            hg_assert(has_2042);
-            hg_assert(has_2100);
-            hg_assert(!has_unknown);
+            hgAssert(!has12);
+            hgAssert(has42);
+            hgAssert(has100);
+            hgAssert(has2042);
+            hgAssert(has2100);
+            hgAssert(!hasUnknown);
         }
 
         {
             ecs.despawn(e1);
-            hg_assert(ecs.count<u32>() == 2);
-            hg_assert(ecs.count<u64>() == 2);
+            hgAssert(ecs.count<u32>() == 2);
+            hgAssert(ecs.count<u64>() == 2);
 
-            bool has_unknown = false;
-            bool has_12 = false;
-            bool has_42 = false;
-            bool has_100 = false;
-            ecs.for_each<u32>([&](HgEntity e, u32& c) {
-                switch (c) {
+            bool hasUnknown = false;
+            bool has12 = false;
+            bool has42 = false;
+            bool has100 = false;
+            ecs.forEach<u32>([&](HgEntity e, u32& c)
+            {
+                switch (c)
+                {
                     case 12:
-                        has_12 = e == e1;
+                        has12 = e == e1;
                         break;
                     case 42:
-                        has_42 = e == e2;
+                        has42 = e == e2;
                         break;
                     case 100:
-                        has_100 = e == e3;
+                        has100 = e == e3;
                         break;
                     default:
-                        has_unknown = true;
+                        hasUnknown = true;
                         break;
                 }
             });
-            hg_assert(!has_12);
-            hg_assert(has_42);
-            hg_assert(has_100);
-            hg_assert(!has_unknown);
+            hgAssert(!has12);
+            hgAssert(has42);
+            hgAssert(has100);
+            hgAssert(!hasUnknown);
         }
 
         {
             ecs.despawn(e2);
-            hg_assert(ecs.count<u32>() == 1);
-            hg_assert(ecs.count<u64>() == 1);
+            hgAssert(ecs.count<u32>() == 1);
+            hgAssert(ecs.count<u64>() == 1);
         }
 
         ecs.reset();
-        hg_assert(ecs.count<u32>() == 0);
-        hg_assert(ecs.count<u64>() == 0);
+        hgAssert(ecs.count<u32>() == 0);
+        hgAssert(ecs.count<u64>() == 0);
 
         {
-            for (u32 i = 0; i < 300; ++i) {
+            for (u32 i = 0; i < 300; ++i)
+            {
                 HgEntity e = ecs.spawn();
-                switch (i % 3) {
+                switch (i % 3)
+                {
                     case 0:
                         ecs.add<u32>(e) = 12;
                         ecs.add<u64>(e) = 42;
@@ -2136,32 +2186,39 @@ void hg_test() {
             }
 
             bool success;
-            ecs.for_par<u32>(16, [&](HgEntity, u32& c) {
+            ecs.forPar<u32>(16, [&](HgEntity, u32& c)
+            {
                 c += 4;
             });
             success = true;
-            ecs.for_each<u32>([&](HgEntity, u32 c) {
+            ecs.forEach<u32>([&](HgEntity, u32 c)
+            {
                 if (c != 16)
                     success = false;
             });
-            hg_assert(success);
+            hgAssert(success);
 
-            ecs.for_par<u64>(16, [&](HgEntity, u64& c) {
+            ecs.forPar<u64>(16, [&](HgEntity, u64& c)
+            {
                 c += 3;
             });
             success = true;
-            ecs.for_each<u64>([&](HgEntity, u64 c) {
+            ecs.forEach<u64>([&](HgEntity, u64 c)
+            {
                 if (c != 45)
                     success = false;
             });
-            hg_assert(success);
+            hgAssert(success);
 
-            ecs.for_par<u32, u64>(16, [&](HgEntity, u32& c32, u64& c64) {
+            ecs.forPar<u32, u64>(16, [&](HgEntity, u32& c32, u64& c64)
+            {
                 c64 -= c32;
             });
             success = true;
-            ecs.for_each<u64>([&](HgEntity e, u64 c) {
-                if (ecs.has<u32>(e)) {
+            ecs.forEach<u64>([&](HgEntity e, u64 c)
+            {
+                if (ecs.has<u32>(e))
+                {
                     if (c != 29)
                         success = false;
                 } else {
@@ -2169,12 +2226,13 @@ void hg_test() {
                         success = false;
                 }
             });
-            hg_assert(success);
+            hgAssert(success);
         }
 
         ecs.reset();
 
-        auto comparison = [](void*, HgECS* ecs, HgEntity lhs, HgEntity rhs) {
+        auto comparison = [](void*, HgECS* ecs, HgEntity lhs, HgEntity rhs)
+        {
             return ecs->get<u32>(lhs) < ecs->get<u32>(rhs);
         };
 
@@ -2184,19 +2242,21 @@ void hg_test() {
             ecs.sort<u32>(nullptr, comparison);
 
             bool success = true;
-            ecs.for_each<u32>([&](HgEntity, u32 c) {
+            ecs.forEach<u32>([&](HgEntity, u32 c)
+            {
                 if (c != 42)
                     success = false;
             });
-            hg_assert(success);
+            hgAssert(success);
 
             ecs.reset();
         }
 
         {
-            u32 small_scramble_1[] = {1, 0};
-            for (u32 i = 0; i < sizeof(small_scramble_1) / sizeof(*small_scramble_1); ++i) {
-                ecs.add<u32>(ecs.spawn()) = small_scramble_1[i];
+            u32 smallScramble1[] = {1, 0};
+            for (u32 i = 0; i < sizeof(smallScramble1) / sizeof(*smallScramble1); ++i)
+            {
+                ecs.add<u32>(ecs.spawn()) = smallScramble1[i];
             }
 
             {
@@ -2204,12 +2264,13 @@ void hg_test() {
 
                 bool success = true;
                 u32 elem = 0;
-                ecs.for_each<u32>([&](HgEntity, u32 c) {
+                ecs.forEach<u32>([&](HgEntity, u32 c)
+                {
                     if (c != elem)
                         success = false;
                     ++elem;
                 });
-                hg_assert(success);
+                hgAssert(success);
             }
 
             {
@@ -2217,76 +2278,84 @@ void hg_test() {
 
                 bool success = true;
                 u32 elem = 0;
-                ecs.for_each<u32>([&](HgEntity, u32 c) {
+                ecs.forEach<u32>([&](HgEntity, u32 c)
+                {
                     if (c != elem)
                         success = false;
                     ++elem;
                 });
-                hg_assert(success);
+                hgAssert(success);
             }
 
             ecs.reset();
         }
 
         {
-            u32 medium_scramble_1[] = {8, 9, 1, 6, 0, 3, 7, 2, 5, 4};
-            for (u32 i = 0; i < sizeof(medium_scramble_1) / sizeof(*medium_scramble_1); ++i) {
-                ecs.add<u32>(ecs.spawn()) = medium_scramble_1[i];
+            u32 mediumScramble1[] = {8, 9, 1, 6, 0, 3, 7, 2, 5, 4};
+            for (u32 i = 0; i < sizeof(mediumScramble1) / sizeof(*mediumScramble1); ++i)
+            {
+                ecs.add<u32>(ecs.spawn()) = mediumScramble1[i];
             }
             ecs.sort<u32>(nullptr, comparison);
 
             bool success = true;
             u32 elem = 0;
-            ecs.for_each<u32>([&](HgEntity, u32 c) {
+            ecs.forEach<u32>([&](HgEntity, u32 c)
+            {
                 if (c != elem)
                     success = false;
                 ++elem;
             });
-            hg_assert(success);
+            hgAssert(success);
 
             ecs.reset();
         }
 
         {
-            u32 medium_scramble_2[] = {3, 9, 7, 6, 8, 5, 0, 1, 2, 4};
-            for (u32 i = 0; i < sizeof(medium_scramble_2) / sizeof(*medium_scramble_2); ++i) {
-                ecs.add<u32>(ecs.spawn()) = medium_scramble_2[i];
+            u32 mediumScramble2[] = {3, 9, 7, 6, 8, 5, 0, 1, 2, 4};
+            for (u32 i = 0; i < sizeof(mediumScramble2) / sizeof(*mediumScramble2); ++i)
+            {
+                ecs.add<u32>(ecs.spawn()) = mediumScramble2[i];
             }
             ecs.sort<u32>(nullptr, comparison);
             ecs.sort<u32>(nullptr, comparison);
 
             bool success = true;
             u32 elem = 0;
-            ecs.for_each<u32>([&](HgEntity, u32 c) {
+            ecs.forEach<u32>([&](HgEntity, u32 c)
+            {
                 if (c != elem)
                     success = false;
                 ++elem;
             });
-            hg_assert(success);
+            hgAssert(success);
 
             ecs.reset();
         }
 
         {
-            for (u32 i = 127; i < 128; --i) {
+            for (u32 i = 127; i < 128; --i)
+            {
                 ecs.add<u32>(ecs.spawn()) = i;
             }
             ecs.sort<u32>(nullptr, comparison);
 
             bool success = true;
             u32 elem = 0;
-            ecs.for_each<u32>([&](HgEntity, u32 c) {
+            ecs.forEach<u32>([&](HgEntity, u32 c)
+            {
                 if (c != elem)
                     success = false;
                 ++elem;
             });
-            hg_assert(success);
+            hgAssert(success);
 
             ecs.reset();
         }
 
         {
-            for (u32 i = 127; i < 128; --i) {
+            for (u32 i = 127; i < 128; --i)
+            {
                 ecs.add<u32>(ecs.spawn()) = i / 2;
             }
             ecs.sort<u32>(nullptr, comparison);
@@ -2294,12 +2363,13 @@ void hg_test() {
 
             bool success = true;
             u32 elem = 0;
-            ecs.for_each<u32>([&](HgEntity, u32 c) {
+            ecs.forEach<u32>([&](HgEntity, u32 c)
+            {
                 if (c != elem / 2)
                     success = false;
                 ++elem;
             });
-            hg_assert(success);
+            hgAssert(success);
 
             ecs.reset();
         }

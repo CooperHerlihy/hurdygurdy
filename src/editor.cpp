@@ -2,94 +2,95 @@
 
 #include "stb_image_write.h"
 
-#define IM_ASSERT hg_assert
+#define IM_ASSERT hgAssert
 #include "imgui.h"
 #include "imgui_impl_vulkan.h"
 
-int main() {
-    hg_defer(hg_debug("Exited successfully\n"));
+int main()
+{
+    hgDefer(hgDebug("Exited successfully\n"));
 
-    hg_init();
-    hg_defer(hg_exit());
+    hgInit();
+    hgDefer(hgExit());
 
-    hg_test();
+    hgTest();
 
-    HgArena* arena = hg_get_scratch();
-    HgArenaScope arena_scope{arena};
+    HgArena* arena = hgGetScratch();
+    HgArenaScope arenaScope{arena};
 
-    HgWindowConfig window_config{};
-    window_config.title = "Hg Test";
-    window_config.windowed = true;
-    window_config.width = 1600;
-    window_config.height = 900;
-    window_config.preferred_present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
+    HgWindowConfig windowConfig{};
+    windowConfig.title = "Hg Test";
+    windowConfig.windowed = true;
+    windowConfig.width = 1600;
+    windowConfig.height = 900;
+    windowConfig.preferredPresentMode = VK_PRESENT_MODE_MAILBOX_KHR;
 
-    HgWindow* window = HgWindow::create(arena, window_config);
-    hg_defer(window->destroy());
+    HgWindow* window = HgWindow::create(arena, windowConfig);
+    hgDefer(window->destroy());
 
-    HgStringView texture_path = "hg_test_dir/file_image_test.hgtex";
-    HgResource texture_id = hg_resource_id(texture_path);
+    HgStringView texturePath = "hg_test_dir/file_image_test.hgtex";
+    HgResource textureID = hgResourceID(texturePath);
 
     {
         HgFence fence;
-        hg_load_resource(&fence, 1, texture_id, texture_path);
-        fence.wait_indefinite();
-        hg_load_gpu_texture(texture_id, VK_FILTER_NEAREST);
-        hg_unload_resource(nullptr, 0, texture_id);
+        hgLoadResource(&fence, 1, textureID, texturePath);
+        fence.waitIndefinite();
+        hgLoadGpuTexture(textureID, VK_FILTER_NEAREST);
+        hgUnloadResource(nullptr, 0, textureID);
     }
-    hg_defer(hg_unload_gpu_texture(texture_id));
+    hgDefer(hgUnloadGpuTexture(textureID));
 
-    hg_pipeline_2d_init(arena, 256, VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_D32_SFLOAT);
-    hg_defer(hg_pipeline_2d_deinit());
+    hgInitPipeline2D(arena, 256, VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_D32_SFLOAT);
+    hgDefer(hgDeinitPipeline2D());
 
-    hg_pipeline_3d_init(arena, 256, VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_D32_SFLOAT);
-    hg_defer(hg_pipeline_3d_deinit());
+    hgInitPipeline3D(arena, 256, VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_D32_SFLOAT);
+    hgDefer(hgDeinitPipeline3D());
 
-    hg_pipeline_2d_add_texture(texture_id);
-    hg_defer(hg_pipeline_2d_remove_texture(texture_id));
+    hgAddTexture2D(textureID);
+    hgDefer(hgRemoveTexture2D(textureID));
 
-    hg_pipeline_3d_add_model(0, 0, 0);
-    hg_defer(hg_pipeline_3d_remove_model(0));
+    hgAddModel3D(0, 0, 0);
+    hgDefer(hgRemoveModel3D(0));
 
     HgTransform camera{};
     camera.position = HgVec3{0, 0, -2};
 
-    f32 aspect_ratio = 16.0f / 9.0f;
-    u32 render_width = 0;
-    u32 render_height = 0;
+    f32 aspectRatio = 16.0f / 9.0f;
+    u32 renderWidth = 0;
+    u32 renderHeight = 0;
 
     HgECS ecs = ecs.create(4096);
-    hg_defer(ecs.destroy());
+    hgDefer(ecs.destroy());
 
-    u32 scene_capacity = 8;
-    HgEntity* scene = hg_alloc<HgEntity>(arena, scene_capacity);
-    u32 scene_size = 0;
+    u32 sceneCapacity = 8;
+    HgEntity* scene = hgAlloc<HgEntity>(arena, sceneCapacity);
+    u32 sceneSize = 0;
 
-    // u32 square = scene_size++;
+    // u32 square = sceneSize++;
     // scene[square] = ecs.spawn();
     // ecs.add<HgTransform>(scene[square]) = {};
     // ecs.get<HgTransform>(scene[square]).position.x = -1.5f;
-    // ecs.add<HgSprite>(scene[square]) = {texture_id, {0.0f}, {1.0f}};
+    // ecs.add<HgSprite>(scene[square]) = {textureID, {0.0f}, {1.0f}};
 
-    // u32 dir_light = scene_size++;
-    // scene[dir_light] = ecs.spawn();
-    // ecs.add<HgDirLight3D>(scene[dir_light]) = {{1, 1, 1}, {1, 1, 1, 1}};
+    // u32 dirLight = sceneSize++;
+    // scene[dirLight] = ecs.spawn();
+    // ecs.add<HgDirLight3D>(scene[dirLight]) = {{1, 1, 1}, {1, 1, 1, 1}};
 
-    u32 point_light = scene_size++;
-    scene[point_light] = ecs.spawn();
-    ecs.add<HgTransform>(scene[point_light]) = {};
-    ecs.get<HgTransform>(scene[point_light]).position = HgVec3{-1, -2, -1};
-    ecs.add<HgPointLight3D>(scene[point_light]) = {HgVec4{1, 1, 1, 2}};
+    u32 pointLight = sceneSize++;
+    scene[pointLight] = ecs.spawn();
+    ecs.add<HgTransform>(scene[pointLight]) = {};
+    ecs.get<HgTransform>(scene[pointLight]).position = HgVec3{-1, -2, -1};
+    ecs.add<HgPointLight3D>(scene[pointLight]) = {HgVec4{1, 1, 1, 2}};
 
     HgEntity cube = ecs.spawn();
     ecs.add<HgTransform>(cube) = {};
     ecs.add<HgModel3D>(cube) = {};
-    u32 cube_idx = scene_size++;
-    scene[cube_idx] = cube;
+    u32 cubeIdx = sceneSize++;
+    scene[cubeIdx] = cube;
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    hg_defer(ImGui::DestroyContext());
+    hgDefer(ImGui::DestroyContext());
 
     ImGui::StyleColorsDark();
     ImGuiIO& io = ImGui::GetIO();
@@ -98,64 +99,66 @@ int main() {
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
     ImGui_ImplHurdyGurdy_Init(window, 1, &window->format);
-    hg_defer(ImGui_ImplHurdyGurdy_Shutdown());
+    hgDefer(ImGui_ImplHurdyGurdy_Shutdown());
 
-    VkSampler render_sampler = nullptr;
-    VkImage render_image = nullptr;
-    VmaAllocation render_alloc = nullptr;
-    VkImageView render_view = nullptr;
-    VkDescriptorSet render_descriptor = nullptr;
+    VkSampler renderSampler = nullptr;
+    VkImage renderImage = nullptr;
+    VmaAllocation renderAlloc = nullptr;
+    VkImageView renderView = nullptr;
+    VkDescriptorSet renderDescriptor = nullptr;
 
-    VkImage depth_image = nullptr;
-    VkImageView depth_view = nullptr;
-    VmaAllocation depth_alloc = nullptr;
+    VkImage depthImage = nullptr;
+    VkImageView depthView = nullptr;
+    VmaAllocation depthAlloc = nullptr;
 
     {
-        VkSamplerCreateInfo render_sampler_info{};
-        render_sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-        vkCreateSampler(hg_vk_device, &render_sampler_info, nullptr, &render_sampler);
+        VkSamplerCreateInfo renderSamplerInfo{};
+        renderSamplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+        vkCreateSampler(hgVkDevice, &renderSamplerInfo, nullptr, &renderSampler);
     }
-    hg_defer(vkDestroySampler(hg_vk_device, render_sampler, nullptr));
-    hg_defer(vmaDestroyImage(hg_vk_vma, render_image, render_alloc));
-    hg_defer(vkDestroyImageView(hg_vk_device, render_view, nullptr));
-    hg_defer(vmaDestroyImage(hg_vk_vma, depth_image, depth_alloc));
-    hg_defer(vkDestroyImageView(hg_vk_device, depth_view, nullptr));
+    hgDefer(vkDestroySampler(hgVkDevice, renderSampler, nullptr));
+    hgDefer(vmaDestroyImage(hgVkVma, renderImage, renderAlloc));
+    hgDefer(vkDestroyImageView(hgVkDevice, renderView, nullptr));
+    hgDefer(vmaDestroyImage(hgVkVma, depthImage, depthAlloc));
+    hgDefer(vkDestroyImageView(hgVkDevice, depthView, nullptr));
 
-    bool show_render = true;
-    bool show_editor = true;
-    bool show_imgui_demo = false;
-    bool move_3d = true;
-    bool fixed_aspect = false;
+    bool showRender = true;
+    bool showEditor = true;
+    bool showImguiDemo = false;
+    bool move3D = true;
+    bool fixedAspect = false;
 
-    HgClock game_clock{};
-    HgClock cpu_clock{};
-    f64 cpu_delta = 0.0;
+    HgClock gameClock{};
+    HgClock cpuClock{};
+    f64 cpuDelta = 0.0;
 
-    for (;;) {
-        f64 delta = game_clock.tick();
+    for (;;)
+    {
+        f64 delta = gameClock.tick();
 
-        if (ecs.alive(cube)) {
-            HgQuat& cube_rot = ecs.get<HgTransform>(cube).rotation;
-            cube_rot = hg_axis_angle(HgVec3{0, -1, 0}, (f32)delta) * cube_rot;
+        if (ecs.alive(cube))
+        {
+            HgQuat& cubeRot = ecs.get<HgTransform>(cube).rotation;
+            cubeRot = hgAxisAngle(HgVec3{0, -1, 0}, (f32)delta) * cubeRot;
         }
 
-        HgArena* frame = hg_get_scratch(&arena, 1);
-        HgArenaScope frame_scope{frame};
+        HgArena* frame = hgGetScratch(&arena, 1);
+        HgArenaScope frameScope{frame};
 
-        hg_process_window_events(&window, 1);
-        if (window->was_closed)
+        hgProcessWindowEvents(&window, 1);
+        if (window->wasClosed)
             goto quit;
 
         ImGui_ImplHurdyGurdy_NewFrame();
         ImGui::NewFrame();
 
-        ImGuiID dockspace_id = ImGui::GetID("dockspace");
-        const ImGuiViewport* imgui_viewport = ImGui::GetMainViewport();
-        ImGui::SetNextWindowPos(imgui_viewport->WorkPos);
-        ImGui::SetNextWindowSize(imgui_viewport->WorkSize);
-        ImGui::SetNextWindowViewport(imgui_viewport->ID);
+        ImGuiID dockspaceID = ImGui::GetID("dockspace");
+        const ImGuiViewport* imguiViewport = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(imguiViewport->WorkPos);
+        ImGui::SetNextWindowSize(imguiViewport->WorkSize);
+        ImGui::SetNextWindowViewport(imguiViewport->ID);
 
-        ImGuiWindowFlags dockspace_flags
+        ImGuiWindowFlags dockspaceFlags
             = ImGuiWindowFlags_MenuBar
             | ImGuiWindowFlags_NoDocking
             | ImGuiWindowFlags_NoTitleBar
@@ -168,13 +171,15 @@ int main() {
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-        ImGui::Begin("Dockspace", nullptr, dockspace_flags);
+        ImGui::Begin("Dockspace", nullptr, dockspaceFlags);
         ImGui::PopStyleVar(3);
 
-        ImGui::DockSpace(dockspace_id, {0.0f, 0.0f});
+        ImGui::DockSpace(dockspaceID, {0.0f, 0.0f});
 
-        if (ImGui::BeginMenuBar()) {
-            if (ImGui::BeginMenu("File")) {
+        if (ImGui::BeginMenuBar())
+        {
+            if (ImGui::BeginMenu("File"))
+            {
 
                 if (ImGui::MenuItem("Quit"))
                     goto quit;
@@ -182,46 +187,50 @@ int main() {
                 if (ImGui::MenuItem("Trigger Trap"))
                     abort();
 
-                if (ImGui::MenuItem("Save Screenshot")) {
-                    HgArena* scratch = hg_get_scratch();
-                    HgArenaScope scratch_scope{scratch};
+                if (ImGui::MenuItem("Save Screenshot"))
+                {
+                    HgArena* scratch = hgGetScratch();
+                    HgArenaScope scratchScope{scratch};
 
-                    void* pixels = hg_alloc(scratch, render_width * render_height * 4, 4);
+                    void* pixels = hgAlloc(scratch, renderWidth * renderHeight * 4, 4);
 
-                    HgVkImageStagingReadConfig config{};
+                    HgVkReadImageStagingConfig config{};
                     config.dst = pixels;
-                    config.src_image = render_image;
+                    config.srcImage = renderImage;
                     config.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
                     config.subresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-                    config.width = render_width;
-                    config.height = render_height;
+                    config.width = renderWidth;
+                    config.height = renderHeight;
                     config.depth = 1;
                     config.format = VK_FORMAT_R8G8B8A8_SRGB;
-                    hg_vk_image_staging_read(config);
+                    hgVkReadImageStaging(config);
 
                     stbi_write_png(
                         "screenshot.png",
-                        (int)render_width,
-                        (int)render_height,
+                        (int)renderWidth,
+                        (int)renderHeight,
                         4,
                         pixels,
-                        (int)(render_width * sizeof(u32)));
+                        (int)(renderWidth * sizeof(u32)));
                 }
 
                 ImGui::EndMenu();
             }
-            if (ImGui::BeginMenu("Edit")) {
+            if (ImGui::BeginMenu("Edit"))
+            {
                 ImGui::EndMenu();
             }
-            if (ImGui::BeginMenu("View")) {
+            if (ImGui::BeginMenu("View"))
+            {
 
-                ImGui::Checkbox("Render", &show_render);
-                ImGui::Checkbox("Editor", &show_editor);
-                ImGui::Checkbox("ImGui Demo", &show_imgui_demo);
+                ImGui::Checkbox("Render", &showRender);
+                ImGui::Checkbox("Editor", &showEditor);
+                ImGui::Checkbox("ImGui Demo", &showImguiDemo);
 
                 ImGui::EndMenu();
             }
-            if (ImGui::BeginMenu("Settings")) {
+            if (ImGui::BeginMenu("Settings"))
+            {
                 ImGui::EndMenu();
             }
             ImGui::EndMenuBar();
@@ -229,160 +238,180 @@ int main() {
 
         ImGui::End();
 
-        if (show_render) {
-            if (ImGui::Begin("Render", &show_render)) {
+        if (showRender)
+        {
+            if (ImGui::Begin("Render", &showRender))
+            {
                 ImVec2 size = ImGui::GetContentRegionAvail();
 
-                u32 view_height = fixed_aspect ? (u32)std::min(size.y, size.x / aspect_ratio) : (u32)size.y;
-                u32 view_width = fixed_aspect ? (u32)((f32)view_height * aspect_ratio) : (u32)size.x;
-                if (render_width != view_width || render_height != view_height) {
-                    vkQueueWaitIdle(hg_vk_queue);
+                u32 viewHeight = fixedAspect ? (u32)std::min(size.y, size.x / aspectRatio) : (u32)size.y;
+                u32 viewWidth = fixedAspect ? (u32)((f32)viewHeight * aspectRatio) : (u32)size.x;
+                if (renderWidth != viewWidth || renderHeight != viewHeight)
+                {
+                    vkQueueWaitIdle(hgVkQueue);
 
-                    render_width = view_width;
-                    render_height = view_height;
+                    renderWidth = viewWidth;
+                    renderHeight = viewHeight;
 
-                    HgMat4 proj = hg_projection_perspective((f32)hg_pi * 0.5f, (f32)render_width / (f32)render_height, 0.1f, 1000.0f);
-                    hg_pipeline_2d_update_projection(proj);
-                    hg_pipeline_3d_update_projection(proj);
+                    HgMat4 proj = hgPerspectiveProjection((f32)hgPi * 0.5f, (f32)renderWidth / (f32)renderHeight, 0.1f, 1000.0f);
+                    hgUpdateProjection2D(proj);
+                    hgUpdateProjection3D(proj);
 
-                    ImGui_ImplVulkan_RemoveTexture(render_descriptor);
-                    vkDestroyImageView(hg_vk_device, render_view, nullptr);
-                    vmaDestroyImage(hg_vk_vma, render_image, render_alloc);
-                    vkDestroyImageView(hg_vk_device, depth_view, nullptr);
-                    vmaDestroyImage(hg_vk_vma, depth_image, depth_alloc);
+                    ImGui_ImplVulkan_RemoveTexture(renderDescriptor);
+                    vkDestroyImageView(hgVkDevice, renderView, nullptr);
+                    vmaDestroyImage(hgVkVma, renderImage, renderAlloc);
+                    vkDestroyImageView(hgVkDevice, depthView, nullptr);
+                    vmaDestroyImage(hgVkVma, depthImage, depthAlloc);
 
-                    HgVkImageConfig render_image_info{};
-                    render_image_info.width = render_width;
-                    render_image_info.height = render_height;
-                    render_image_info.format = VK_FORMAT_R8G8B8A8_SRGB;
-                    render_image_info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+                    HgVkImageConfig renderImageInfo{};
+                    renderImageInfo.width = renderWidth;
+                    renderImageInfo.height = renderHeight;
+                    renderImageInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+                    renderImageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
                                             | VK_IMAGE_USAGE_SAMPLED_BIT
                                             | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
-                    hg_vk_create_image(&render_image, &render_alloc, render_image_info);
+                    hgVkCreateImage(&renderImage, &renderAlloc, renderImageInfo);
 
-                    HgVkImageViewConfig render_view_info{};
-                    render_view_info.image = render_image;
-                    render_view_info.format = render_image_info.format;
-                    render_view_info.subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                    HgVkImageViewConfig renderViewInfo{};
+                    renderViewInfo.image = renderImage;
+                    renderViewInfo.format = renderImageInfo.format;
+                    renderViewInfo.subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 
-                    render_view = hg_vk_create_image_view(render_view_info);
+                    renderView = hgVkCreateImageView(renderViewInfo);
 
-                    render_descriptor = ImGui_ImplVulkan_AddTexture(
-                        render_sampler, render_view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+                    renderDescriptor = ImGui_ImplVulkan_AddTexture(
+                        renderSampler, renderView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-                    HgVkImageConfig depth_image_info{};
-                    depth_image_info.width = render_width;
-                    depth_image_info.height = render_height;
-                    depth_image_info.format = VK_FORMAT_D32_SFLOAT;
-                    depth_image_info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
+                    HgVkImageConfig depthImageInfo{};
+                    depthImageInfo.width = renderWidth;
+                    depthImageInfo.height = renderHeight;
+                    depthImageInfo.format = VK_FORMAT_D32_SFLOAT;
+                    depthImageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
                                             | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
-                    hg_vk_create_image(&depth_image, &depth_alloc, depth_image_info);
+                    hgVkCreateImage(&depthImage, &depthAlloc, depthImageInfo);
 
-                    HgVkImageViewConfig depth_view_info{};
-                    depth_view_info.image = depth_image;
-                    depth_view_info.format = depth_image_info.format;
-                    depth_view_info.subresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+                    HgVkImageViewConfig depthViewInfo{};
+                    depthViewInfo.image = depthImage;
+                    depthViewInfo.format = depthImageInfo.format;
+                    depthViewInfo.subresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
 
-                    depth_view = hg_vk_create_image_view(depth_view_info);
+                    depthView = hgVkCreateImageView(depthViewInfo);
                 }
 
-                if (ImGui::IsWindowFocused()) {
-                    if (move_3d && window->is_key_down[(u32)HgKey::lmouse]) {
-                        f32 rot_speed = 2.0f;
-                        HgQuat rot_x = hg_axis_angle(HgVec3{0, 1, 0}, (f32)window->mouse_delta_x * rot_speed);
-                        HgQuat rot_y = hg_axis_angle(HgVec3{-1, 0, 0}, (f32)window->mouse_delta_y * rot_speed);
-                        camera.rotation = rot_x * camera.rotation * rot_y;
+                if (ImGui::IsWindowFocused())
+                {
+                    if (move3D && window->isKeyDown[(u32)HgKey::lmouse])
+                    {
+                        f32 rotSpeed = 2.0f;
+                        HgQuat rotX = hgAxisAngle(HgVec3{0, 1, 0}, (f32)window->mouseDeltaX * rotSpeed);
+                        HgQuat rotY = hgAxisAngle(HgVec3{-1, 0, 0}, (f32)window->mouseDeltaY * rotSpeed);
+                        camera.rotation = rotX * camera.rotation * rotY;
                     }
 
                     HgVec3 movement = HgVec3{0.0f};
-                    if (move_3d) {
-                        movement.y += window->is_key_down[(u32)HgKey::lshift] - window->is_key_down[(u32)HgKey::space];
-                        movement.x += window->is_key_down[(u32)HgKey::d] - window->is_key_down[(u32)HgKey::a];
-                        movement.z += window->is_key_down[(u32)HgKey::w] - window->is_key_down[(u32)HgKey::s];
+                    if (move3D)
+                    {
+                        movement.y += window->isKeyDown[(u32)HgKey::lshift] - window->isKeyDown[(u32)HgKey::space];
+                        movement.x += window->isKeyDown[(u32)HgKey::d] - window->isKeyDown[(u32)HgKey::a];
+                        movement.z += window->isKeyDown[(u32)HgKey::w] - window->isKeyDown[(u32)HgKey::s];
                     } else {
-                        movement.y += window->is_key_down[(u32)HgKey::s] - window->is_key_down[(u32)HgKey::w];
-                        movement.x += window->is_key_down[(u32)HgKey::d] - window->is_key_down[(u32)HgKey::a];
+                        movement.y += window->isKeyDown[(u32)HgKey::s] - window->isKeyDown[(u32)HgKey::w];
+                        movement.x += window->isKeyDown[(u32)HgKey::d] - window->isKeyDown[(u32)HgKey::a];
                     }
 
-                    if (movement != HgVec3{0.0f}) {
-                        f32 move_speed = 1.5f;
-                        HgVec3 rotated = hg_rotate(camera.rotation, HgVec3{movement.x, 0.0f, movement.z});
-                        camera.position += hg_norm(HgVec3{rotated.x, movement.y, rotated.z}) * move_speed * (f32)delta;
+                    if (movement != HgVec3{0.0f})
+                    {
+                        f32 moveSpeed = 1.5f;
+                        HgVec3 rotated = hgRotate(camera.rotation, HgVec3{movement.x, 0.0f, movement.z});
+                        camera.position += hgNorm(HgVec3{rotated.x, movement.y, rotated.z}) * moveSpeed * (f32)delta;
                     }
                 }
-                HgMat4 view = hg_view_matrix(camera.position, camera.scale, camera.rotation);
-                hg_pipeline_2d_update_view(view);
-                hg_pipeline_3d_update_view(view);
+                HgMat4 view = hgViewMatrix(camera.position, camera.scale, camera.rotation);
+                hgUpdateView2D(view);
+                hgUpdateView3D(view);
 
-                ImGui::Image((ImTextureID)render_descriptor, {(f32)render_width, (f32)render_height});
+                ImGui::Image((ImTextureID)renderDescriptor, {(f32)renderWidth, (f32)renderHeight});
             }
             ImGui::End();
         }
 
-        if (show_editor) {
-            if (ImGui::Begin("Editor", &show_editor)) {
-                ImGuiTreeNodeFlags options_flags = ImGuiTreeNodeFlags_DefaultOpen;
-                if (ImGui::CollapsingHeader("Options", options_flags)) {
+        if (showEditor)
+        {
+            if (ImGui::Begin("Editor", &showEditor))
+            {
+                ImGuiTreeNodeFlags optionsFlags = ImGuiTreeNodeFlags_DefaultOpen;
+                if (ImGui::CollapsingHeader("Options", optionsFlags))
+                {
                     ImGui::SeparatorText("Time");
                     ImGui::Text("total: %.3fms", delta * 1.0e3);
-                    ImGui::Text("cpu: %.3fms", cpu_delta * 1.0e3);
+                    ImGui::Text("cpu: %.3fms", cpuDelta * 1.0e3);
 
                     ImGui::SeparatorText("Camera");
-                    if (ImGui::Button("Reset Camera")) {
+                    if (ImGui::Button("Reset Camera"))
+                    {
                         camera.position = HgVec3{0, 0, -1};
                         camera.scale = HgVec3{1, 1, 1};
                         camera.rotation = HgQuat{1, 0, 0, 0};
                     }
-                    ImGui::Checkbox("3D Movement", &move_3d);
-                    ImGui::Checkbox("Fixed Aspect", &fixed_aspect);
-                    if (fixed_aspect)
-                        ImGui::DragFloat("Aspect", &aspect_ratio, 0.01f, 0.01f, 16.0f);
+                    ImGui::Checkbox("3D Movement", &move3D);
+                    ImGui::Checkbox("Fixed Aspect", &fixedAspect);
+                    if (fixedAspect)
+                        ImGui::DragFloat("Aspect", &aspectRatio, 0.01f, 0.01f, 16.0f);
                 }
 
-                ImGuiTreeNodeFlags entity_flags = ImGuiTreeNodeFlags_DefaultOpen;
-                if (ImGui::CollapsingHeader("Entities", entity_flags)) {
-                    if (ImGui::Button("Spawn Entity")) {
-                        if (scene_size == scene_capacity) {
-                            scene = hg_realloc(arena, scene, scene_capacity, scene_capacity * 2);
-                            scene_capacity *= 2;
+                ImGuiTreeNodeFlags entityFlags = ImGuiTreeNodeFlags_DefaultOpen;
+                if (ImGui::CollapsingHeader("Entities", entityFlags))
+                {
+                    if (ImGui::Button("Spawn Entity"))
+                    {
+                        if (sceneSize == sceneCapacity)
+                        {
+                            scene = hgRealloc(arena, scene, sceneCapacity, sceneCapacity * 2);
+                            sceneCapacity *= 2;
                         }
-                        scene[scene_size++] = ecs.spawn();
+                        scene[sceneSize++] = ecs.spawn();
                     }
 
-                    for (usize i = 0; i < scene_size; ++i) {
-                        HgArena* scratch = hg_get_scratch();
-                        HgArenaScope scratch_scope{scratch};
+                    for (usize i = 0; i < sceneSize; ++i)
+                    {
+                        HgArena* scratch = hgGetScratch();
+                        HgArenaScope scratchScope{scratch};
                         HgEntity e = scene[i];
 
-                        char* name = HgString::create(scratch, "Entity ID: ")
-                                .append(scratch, hg_int_to_str_base10(scratch, (i64)e.idx()))
+                        char* name = HgString::copy(scratch, "Entity ID: ")
+                                .append(scratch, hgIntToStr(scratch, (i64)e.idx()))
                                 .append(scratch, 0)
                                 .chars;
 
-                        if (ImGui::TreeNodeEx(name, entity_flags)) {
-                            if (ImGui::Button("Despawn Entity")) {
+                        if (ImGui::TreeNodeEx(name, entityFlags))
+                        {
+                            if (ImGui::Button("Despawn Entity"))
+                            {
                                 ecs.despawn(e);
-                                memmove(scene + i, scene + i + 1, sizeof(HgEntity) * (--scene_size - i));
+                                memmove(scene + i, scene + i + 1, sizeof(HgEntity) * (--sceneSize - i));
                                 --i;
                             } else {
                                 ImGui::SameLine();
                                 if (ImGui::Button("Add Component"))
-                                    ImGui::OpenPopup("add_component");
-                                if (ImGui::BeginPopup("add_component")) {
+                                    ImGui::OpenPopup("addComponent");
+                                if (ImGui::BeginPopup("addComponent"))
+                                {
                                     ImGui::SeparatorText("Components");
 
                                     if (!ecs.has<HgTransform>(e) && ImGui::Selectable("Transform"))
                                         ecs.add<HgTransform>(e) = {};
 
-                                    if (!ecs.has<HgSprite>(e) && ImGui::Selectable("Sprite")) {
+                                    if (!ecs.has<HgSprite>(e) && ImGui::Selectable("Sprite"))
+                                    {
                                         if (!ecs.has<HgTransform>(e))
                                             ecs.add<HgTransform>(e) = {};
-                                        ecs.add<HgSprite>(e) = {texture_id, HgVec2{0.0f, 0.0f}, HgVec2{1.0f, 1.0f}};
+                                        ecs.add<HgSprite>(e) = {textureID, HgVec2{0.0f, 0.0f}, HgVec2{1.0f, 1.0f}};
                                     }
 
-                                    if (!ecs.has<HgSprite>(e) && ImGui::Selectable("Model 3D")) {
+                                    if (!ecs.has<HgSprite>(e) && ImGui::Selectable("Model 3D"))
+                                    {
                                         if (!ecs.has<HgTransform>(e))
                                             ecs.add<HgTransform>(e) = {};
                                         ecs.add<HgModel3D>(e) = {};
@@ -391,7 +420,8 @@ int main() {
                                     if (!ecs.has<HgDirLight3D>(e) && ImGui::Selectable("Direction Light 3D"))
                                         ecs.add<HgDirLight3D>(e) = {};
 
-                                    if (!ecs.has<HgPointLight3D>(e) && ImGui::Selectable("Point Light 3D")) {
+                                    if (!ecs.has<HgPointLight3D>(e) && ImGui::Selectable("Point Light 3D"))
+                                    {
                                         if (!ecs.has<HgTransform>(e))
                                             ecs.add<HgTransform>(e) = {};
                                         ecs.add<HgPointLight3D>(e) = {};
@@ -402,11 +432,13 @@ int main() {
 
                                 ImGui::SameLine();
                                 if (ImGui::Button("Remove Component"))
-                                    ImGui::OpenPopup("remove_component");
-                                if (ImGui::BeginPopup("remove_component")) {
+                                    ImGui::OpenPopup("removeComponent");
+                                if (ImGui::BeginPopup("removeComponent"))
+                                {
                                     ImGui::SeparatorText("Components");
 
-                                    if (ecs.has<HgTransform>(e) && ImGui::Selectable("Transform")) {
+                                    if (ecs.has<HgTransform>(e) && ImGui::Selectable("Transform"))
+                                    {
                                         ecs.remove<HgTransform>(e);
                                         if (ecs.has<HgSprite>(e))
                                             ecs.remove<HgSprite>(e);
@@ -431,34 +463,39 @@ int main() {
                                     ImGui::EndPopup();
                                 }
 
-                                ImGuiTreeNodeFlags component_flags = entity_flags;
+                                ImGuiTreeNodeFlags componentFlags = entityFlags;
 
-                                if (ecs.has<HgTransform>(e) && ImGui::TreeNodeEx("Transform", component_flags)) {
+                                if (ecs.has<HgTransform>(e) && ImGui::TreeNodeEx("Transform", componentFlags))
+                                {
                                     HgTransform& tf = ecs.get<HgTransform>(e);
                                     ImGui::DragFloat3("Position", &tf.position.x, 0.01f);
                                     ImGui::DragFloat3("Scale", &tf.scale.x, 0.01f);
                                     ImGui::TreePop();
                                 }
 
-                                if (ecs.has<HgSprite>(e) && ImGui::TreeNodeEx("Sprite", component_flags)) {
+                                if (ecs.has<HgSprite>(e) && ImGui::TreeNodeEx("Sprite", componentFlags))
+                                {
                                     HgSprite& s = ecs.get<HgSprite>(e);
-                                    ImGui::DragFloat2("UV Position", &s.uv_pos.x, 0.01f);
-                                    ImGui::DragFloat2("UV Size", &s.uv_size.x, 0.01f);
+                                    ImGui::DragFloat2("UV Position", &s.uvPos.x, 0.01f);
+                                    ImGui::DragFloat2("UV Size", &s.uvSize.x, 0.01f);
                                     ImGui::TreePop();
                                 }
 
-                                if (ecs.has<HgModel3D>(e) && ImGui::TreeNodeEx("Model 3D", component_flags)) {
+                                if (ecs.has<HgModel3D>(e) && ImGui::TreeNodeEx("Model 3D", componentFlags))
+                                {
                                     ImGui::TreePop();
                                 }
 
-                                if (ecs.has<HgDirLight3D>(e) && ImGui::TreeNodeEx("Directional Light 3D", component_flags)) {
+                                if (ecs.has<HgDirLight3D>(e) && ImGui::TreeNodeEx("Directional Light 3D", componentFlags))
+                                {
                                     HgDirLight3D& l = ecs.get<HgDirLight3D>(e);
                                     ImGui::DragFloat3("Direction", &l.dir.x, 0.01f);
                                     ImGui::DragFloat4("Color", &l.color.x, 0.01f);
                                     ImGui::TreePop();
                                 }
 
-                                if (ecs.has<HgPointLight3D>(e) && ImGui::TreeNodeEx("Point Light 3D", component_flags)) {
+                                if (ecs.has<HgPointLight3D>(e) && ImGui::TreeNodeEx("Point Light 3D", componentFlags))
+                                {
                                     HgPointLight3D& l = ecs.get<HgPointLight3D>(e);
                                     ImGui::DragFloat4("Color", &l.color.x, 0.01f);
                                     ImGui::TreePop();
@@ -472,82 +509,83 @@ int main() {
             ImGui::End();
         }
 
-        if (show_imgui_demo)
-            ImGui::ShowDemoWindow(&show_imgui_demo);
+        if (showImguiDemo)
+            ImGui::ShowDemoWindow(&showImguiDemo);
 
         ImGui::Render();
 
-        cpu_delta = cpu_clock.tick();
-        VkCommandBuffer cmd = window->begin_recording();
-        cpu_clock.tick();
-        if (cmd != nullptr) {
+        cpuDelta = cpuClock.tick();
+        VkCommandBuffer cmd = window->beginRecording();
+        cpuClock.tick();
+        if (cmd != nullptr)
+        {
             HgRenderer renderer = renderer.create(frame, 64, 64);
 
-            HgImageRenderID render_image_id = renderer.add_image(
-                render_image,
-                render_view,
+            HgImageRenderID renderImageID = renderer.addImage(
+                renderImage,
+                renderView,
                 {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
 
-            HgImageRenderID depth_image_id = renderer.add_image(
-                depth_image,
-                depth_view,
+            HgImageRenderID depthImageID = renderer.addImage(
+                depthImage,
+                depthView,
                 {VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1});
 
-            HgImageRenderID window_image_id = renderer.add_image(
-                window->images[window->current_image],
-                window->views[window->current_image],
+            HgImageRenderID windowImageID = renderer.addImage(
+                window->images[window->currentImage],
+                window->views[window->currentImage],
                 {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
 
             {
-                HgRenderAttachment render_color_attachment{};
-                render_color_attachment.image = render_image_id;
-                render_color_attachment.load_op = VK_ATTACHMENT_LOAD_OP_CLEAR;
-                render_color_attachment.clear_value.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
+                HgRenderAttachment renderColorAttachment{};
+                renderColorAttachment.image = renderImageID;
+                renderColorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+                renderColorAttachment.clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
 
-                HgRenderPass render_pass{};
-                render_pass.color_attachments = &render_color_attachment;
-                render_pass.color_attachment_count = 1;
-                render_pass.depth_attachment.image = depth_image_id;
-                render_pass.depth_attachment.load_op = VK_ATTACHMENT_LOAD_OP_CLEAR;
-                render_pass.depth_attachment.clear_value.depthStencil = {1.0f, 0};
+                HgRenderPass renderPass{};
+                renderPass.colorAttachments = &renderColorAttachment;
+                renderPass.colorAttachmentCount = 1;
+                renderPass.depthAttachment.image = depthImageID;
+                renderPass.depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+                renderPass.depthAttachment.clearValue.depthStencil = {1.0f, 0};
 
-                renderer.begin_pass(cmd, render_width, render_height, render_pass);
+                renderer.beginPass(cmd, renderWidth, renderHeight, renderPass);
 
-                hg_draw_2d(&ecs, cmd);
-                hg_draw_3d(&ecs, cmd);
+                hgDraw2D(&ecs, cmd);
+                hgDraw3D(&ecs, cmd);
 
-                renderer.end_pass(cmd);
+                renderer.endPass(cmd);
             }
 
             {
-                HgRenderAttachment gui_color_attachment{};
-                gui_color_attachment.image = window_image_id;
-                gui_color_attachment.load_op = VK_ATTACHMENT_LOAD_OP_CLEAR;
-                gui_color_attachment.clear_value.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
+                HgRenderAttachment guiColorAttachment{};
+                guiColorAttachment.image = windowImageID;
+                guiColorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+                guiColorAttachment.clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
 
-                HgRenderPass gui_pass{};
-                gui_pass.sampled_images = &render_image_id;
-                gui_pass.sampled_image_count = 1;
-                gui_pass.color_attachments = &gui_color_attachment;
-                gui_pass.color_attachment_count = 1;
+                HgRenderPass guiPass{};
+                guiPass.sampledImages = &renderImageID;
+                guiPass.sampledImageCount = 1;
+                guiPass.colorAttachments = &guiColorAttachment;
+                guiPass.colorAttachmentCount = 1;
 
-                renderer.begin_pass(cmd, window->width, window->height, gui_pass);
+                renderer.beginPass(cmd, window->width, window->height, guiPass);
 
                 ImGui_ImplHurdyGurdy_Draw(cmd);
 
-                renderer.end_pass(cmd);
+                renderer.endPass(cmd);
             }
 
-            HgImageBarrier present_barrier{};
-            present_barrier.image = window_image_id;
-            present_barrier.next_usage = HgRenderUsage::present_src;
+            HgImageBarrier presentBarrier{};
+            presentBarrier.image = windowImageID;
+            presentBarrier.nextUsage = HgRenderUsage::presentSrc;
 
-            renderer.barrier(cmd, nullptr, 0, &present_barrier, 1);
+            renderer.barrier(cmd, nullptr, 0, &presentBarrier, 1);
 
-            window->end_and_present(cmd);
+            window->endAndPresent(cmd);
         }
     }
 quit:
-    vkDeviceWaitIdle(hg_vk_device);
+    vkDeviceWaitIdle(hgVkDevice);
 }
 

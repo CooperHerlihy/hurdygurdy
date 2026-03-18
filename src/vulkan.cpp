@@ -1,111 +1,126 @@
 #include "hurdygurdy.hpp"
 
-void hg_vulkan_init();
+void hgVulkanInit();
 
 #ifdef HG_VK_DEBUG_MESSENGER
-VkDebugUtilsMessengerEXT vk_debug_messenger = nullptr;
+VkDebugUtilsMessengerEXT vkDebugMessenger = nullptr;
 #endif
 
-void hg_vk_create_vma_allocator();
+void hgVkCreateVmaAllocator();
 
-void hg_graphics_init() {
-    hg_vulkan_init();
+void hgInitGraphics()
+{
+    hgVulkanInit();
 
-    if (hg_vk_instance == nullptr) {
-        HgArena* scratch = hg_get_scratch();
-        HgArenaScope scratch_scope{scratch};
+    if (hgVkInstance == nullptr)
+    {
+        HgArena* scratch = hgGetScratch();
+        HgArenaScope scratchScope{scratch};
 
         HgStringView* exts;
-        u32 ext_count = hg_vk_get_platform_extensions(scratch, &exts);
+        u32 extCount = hgVkGetPlatformExtensions(scratch, &exts);
 #ifdef HG_VK_DEBUG_MESSENGER
-        exts = hg_realloc(scratch, exts, ext_count, ext_count + 1);
-        exts[ext_count++] = "VK_EXT_debug_utils";
+        exts = hgRealloc(scratch, exts, extCount, extCount + 1);
+        exts[extCount++] = "VK_EXT_debug_utils";
 #endif
-        hg_vk_instance = hg_vk_create_instance(exts, ext_count);
-        hg_vk_load_instance_funcs(hg_vk_instance);
+        hgVkInstance = hgVkCreateInstance(exts, extCount);
+        hgVkLoadInstanceFuncs(hgVkInstance);
     }
 
 #ifdef HG_VK_DEBUG_MESSENGER
-    if (vk_debug_messenger == nullptr)
-        vk_debug_messenger = hg_vk_create_debug_messenger();
+    if (vkDebugMessenger == nullptr)
+        vkDebugMessenger = hgVkCreateDebugMessenger();
 #endif
 
-    if (hg_vk_physical_device == nullptr) {
-        hg_vk_physical_device = hg_vk_find_single_queue_physical_device();
-        hg_vk_find_queue_family(hg_vk_physical_device, &hg_vk_queue_family,
+    if (hgVkPhysicalDevice == nullptr)
+    {
+        hgVkPhysicalDevice = hgVkFindSingleQueuePhysicalDevice();
+        hgVkFindQueueFamily(hgVkPhysicalDevice, &hgVkQueueFamily,
             VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT | VK_QUEUE_COMPUTE_BIT);
     }
 
-    if (hg_vk_device == nullptr) {
-        hg_vk_device = hg_vk_create_single_queue_device();
-        hg_vk_load_device_funcs(hg_vk_device);
-        vkGetDeviceQueue(hg_vk_device, hg_vk_queue_family, 0, &hg_vk_queue);
+    if (hgVkDevice == nullptr)
+    {
+        hgVkDevice = hgVkCreateSingleQueueDevice();
+        hgVkLoadDeviceFuncs(hgVkDevice);
+        vkGetDeviceQueue(hgVkDevice, hgVkQueueFamily, 0, &hgVkQueue);
     }
 
-    if (hg_vk_vma == nullptr) {
-        VmaAllocatorCreateInfo allocator_info{};
-        allocator_info.physicalDevice = hg_vk_physical_device;
-        allocator_info.device = hg_vk_device;
-        allocator_info.instance = hg_vk_instance;
-        allocator_info.vulkanApiVersion = VK_API_VERSION_1_3;
+    if (hgVkVma == nullptr)
+    {
+        VmaAllocatorCreateInfo allocatorInfo{};
+        allocatorInfo.physicalDevice = hgVkPhysicalDevice;
+        allocatorInfo.device = hgVkDevice;
+        allocatorInfo.instance = hgVkInstance;
+        allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_3;
 
-        VkResult result = vmaCreateAllocator(&allocator_info, &hg_vk_vma);
-        if (hg_vk_vma == nullptr)
-            hg_error("Could note create Vulkan memory allocator: %s\n", hg_vk_result_to_string(result));
+        VkResult result = vmaCreateAllocator(&allocatorInfo, &hgVkVma);
+        if (hgVkVma == nullptr)
+            hgError("Could note create Vulkan memory allocator: %s\n", hgVkResultToStr(result));
     }
 
-    if (hg_vk_cmd_pool == nullptr) {
-        VkCommandPoolCreateInfo cmd_pool_info{};
-        cmd_pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-        cmd_pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-        cmd_pool_info.queueFamilyIndex = hg_vk_queue_family;
+    if (hgVkCmdPool == nullptr)
+    {
+        VkCommandPoolCreateInfo cmdPoolInfo{};
+        cmdPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        cmdPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+        cmdPoolInfo.queueFamilyIndex = hgVkQueueFamily;
 
-        VkResult result = vkCreateCommandPool(hg_vk_device, &cmd_pool_info, nullptr, &hg_vk_cmd_pool);
-        if (hg_vk_cmd_pool == nullptr)
-            hg_error("Could note create Vulkan command pool: %s\n", hg_vk_result_to_string(result));
+        VkResult result = vkCreateCommandPool(hgVkDevice, &cmdPoolInfo, nullptr, &hgVkCmdPool);
+        if (hgVkCmdPool == nullptr)
+            hgError("Could note create Vulkan command pool: %s\n", hgVkResultToStr(result));
     }
 }
 
-void hg_vulkan_deinit();
+void hgVulkanDeinit();
 
-void hg_graphics_deinit() {
-    if (hg_vk_cmd_pool != nullptr) {
-        vkDestroyCommandPool(hg_vk_device, hg_vk_cmd_pool, nullptr);
-        hg_vk_cmd_pool = nullptr;
+void hgDeinitGraphics()
+{
+    if (hgVkCmdPool != nullptr)
+    {
+        vkDestroyCommandPool(hgVkDevice, hgVkCmdPool, nullptr);
+        hgVkCmdPool = nullptr;
     }
 
-    if (hg_vk_vma != nullptr) {
-        vmaDestroyAllocator(hg_vk_vma);
-        hg_vk_vma = nullptr;
+    if (hgVkVma != nullptr)
+    {
+        vmaDestroyAllocator(hgVkVma);
+        hgVkVma = nullptr;
     }
 
-    if (hg_vk_device != nullptr) {
-        vkDestroyDevice(hg_vk_device, nullptr);
-        hg_vk_device = nullptr;
+    if (hgVkDevice != nullptr)
+    {
+        vkDestroyDevice(hgVkDevice, nullptr);
+        hgVkDevice = nullptr;
     }
 
-    if (hg_vk_physical_device != nullptr) {
-        hg_vk_physical_device = nullptr;
-        hg_vk_queue_family = (u32)-1;
+    if (hgVkPhysicalDevice != nullptr)
+    {
+        hgVkPhysicalDevice = nullptr;
+        hgVkQueueFamily = (u32)-1;
     }
 
 #ifdef HG_VK_DEBUG_MESSENGER
-    if (vk_debug_messenger != nullptr) {
-        vkDestroyDebugUtilsMessengerEXT(hg_vk_instance, vk_debug_messenger, nullptr);
-        vk_debug_messenger = nullptr;
+    if (vkDebugMessenger != nullptr)
+    {
+        vkDestroyDebugUtilsMessengerEXT(hgVkInstance, vkDebugMessenger, nullptr);
+        vkDebugMessenger = nullptr;
     }
 #endif
 
-    if (hg_vk_instance != nullptr) {
-        vkDestroyInstance(hg_vk_instance, nullptr);
-        hg_vk_instance = nullptr;
+    if (hgVkInstance != nullptr)
+    {
+        vkDestroyInstance(hgVkInstance, nullptr);
+        hgVkInstance = nullptr;
     }
 
-    hg_vulkan_deinit();
+    hgVulkanDeinit();
 }
 
-const char* hg_vk_result_to_string(VkResult result) {
-    switch (result) {
+const char* hgVkResultToStr(VkResult result)
+{
+    switch (result)
+    {
         case VK_SUCCESS:
             return "VK_SUCCESS";
         case VK_NOT_READY:
@@ -210,8 +225,10 @@ const char* hg_vk_result_to_string(VkResult result) {
     return "Unrecognized Vulkan result";
 }
 
-u32 hg_vk_format_to_size(VkFormat format) {
-    switch (format) {
+u32 hgVkFormatToSize(VkFormat format)
+{
+    switch (format)
+    {
         case VK_FORMAT_UNDEFINED:
             return 0;
 
@@ -501,38 +518,42 @@ u32 hg_vk_format_to_size(VkFormat format) {
             return 0;
 
         default:
-            hg_warn("Unrecognized Vulkan format value\n");
+            hgWarn("Unrecognized Vulkan format value\n");
             return 0;
     }
 }
 
 #ifdef HG_VK_DEBUG_MESSENGER
 
-static VkBool32 debug_callback(
+static VkBool32 debugCallback(
     const VkDebugUtilsMessageSeverityFlagBitsEXT severity,
     const VkDebugUtilsMessageTypeFlagsEXT type,
-    const VkDebugUtilsMessengerCallbackDataEXT* callback_data,
-    void* user_data
-) {
+    const VkDebugUtilsMessengerCallbackDataEXT* callbackData,
+    void* userData)
+{
     (void)type;
-    (void)user_data;
+    (void)userData;
 
-    if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
-        (void)fprintf(stderr, "Vulkan Error: %s\n", callback_data->pMessage);
+    if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+    {
+        (void)fprintf(stderr, "Vulkan Error: %s\n", callbackData->pMessage);
         abort();
-    } else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
-        (void)fprintf(stderr, "Vulkan Warning: %s\n", callback_data->pMessage);
-    } else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) {
-        (void)fprintf(stderr, "Vulkan Info: %s\n", callback_data->pMessage);
-    } else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) {
-        (void)fprintf(stderr, "Vulkan Verbose: %s\n", callback_data->pMessage);
+    } else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+    {
+        (void)fprintf(stderr, "Vulkan Warning: %s\n", callbackData->pMessage);
+    } else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
+    {
+        (void)fprintf(stderr, "Vulkan Info: %s\n", callbackData->pMessage);
+    } else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT)
+    {
+        (void)fprintf(stderr, "Vulkan Verbose: %s\n", callbackData->pMessage);
     } else {
-        (void)fprintf(stderr, "Vulkan Unknown: %s\n", callback_data->pMessage);
+        (void)fprintf(stderr, "Vulkan Unknown: %s\n", callbackData->pMessage);
     }
     return VK_FALSE;
 }
 
-static const VkDebugUtilsMessengerCreateInfoEXT debug_utils_messenger_info{
+static const VkDebugUtilsMessengerCreateInfoEXT debugUtilsMessengerInfo{
     VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
     nullptr,
     0,
@@ -542,64 +563,67 @@ static const VkDebugUtilsMessengerCreateInfoEXT debug_utils_messenger_info{
     VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
     VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
     VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
-    debug_callback,
+    debugCallback,
     nullptr,
 };
 
 #endif
 
-VkInstance hg_vk_create_instance(HgStringView* extensions, u32 extension_count) {
-    HgArena* scratch = hg_get_scratch();
-    HgArenaScope scratch_scope{scratch};
+VkInstance hgVkCreateInstance(HgStringView* extensions, u32 extensionCount)
+{
+    HgArena* scratch = hgGetScratch();
+    HgArenaScope scratchScope{scratch};
 
-    VkApplicationInfo app_info{};
-    app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    app_info.pApplicationName = "Hurdy Gurdy Application",
-    app_info.applicationVersion = 0;
-    app_info.pEngineName = "Hurdy Gurdy Engine";
-    app_info.engineVersion = 0;
-    app_info.apiVersion = VK_API_VERSION_1_3;
+    VkApplicationInfo appInfo{};
+    appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+    appInfo.pApplicationName = "Hurdy Gurdy Application",
+    appInfo.applicationVersion = 0;
+    appInfo.pEngineName = "Hurdy Gurdy Engine";
+    appInfo.engineVersion = 0;
+    appInfo.apiVersion = VK_API_VERSION_1_3;
 
-    VkInstanceCreateInfo instance_info{};
-    instance_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    VkInstanceCreateInfo instanceInfo{};
+    instanceInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 #ifdef HG_VK_DEBUG_MESSENGER
-    instance_info.pNext = &debug_utils_messenger_info;
+    instanceInfo.pNext = &debugUtilsMessengerInfo;
 #endif
-    instance_info.flags = 0;
-    instance_info.pApplicationInfo = &app_info;
+    instanceInfo.flags = 0;
+    instanceInfo.pApplicationInfo = &appInfo;
 
 #ifdef HG_VK_DEBUG_MESSENGER
     const char* layers[]{
         "VK_LAYER_KHRONOS_validation",
     };
-    instance_info.enabledLayerCount = sizeof(layers) / sizeof(*layers);
-    instance_info.ppEnabledLayerNames = layers;
+    instanceInfo.enabledLayerCount = sizeof(layers) / sizeof(*layers);
+    instanceInfo.ppEnabledLayerNames = layers;
 #endif
 
-    const char** ext_c_strs = hg_alloc<const char*>(scratch, extension_count);
-    for (usize i = 0; i < extension_count; ++i) {
-        ext_c_strs[i] = hg_c_string(scratch, extensions[i]);
+    const char** extCStrs = hgAlloc<const char*>(scratch, extensionCount);
+    for (usize i = 0; i < extensionCount; ++i)
+    {
+        extCStrs[i] = hgCString(scratch, extensions[i]);
     }
-    instance_info.enabledExtensionCount = extension_count;
-    instance_info.ppEnabledExtensionNames = ext_c_strs;
+    instanceInfo.enabledExtensionCount = extensionCount;
+    instanceInfo.ppEnabledExtensionNames = extCStrs;
 
     VkInstance instance = nullptr;
-    VkResult result = vkCreateInstance(&instance_info, nullptr, &instance);
+    VkResult result = vkCreateInstance(&instanceInfo, nullptr, &instance);
     if (instance == nullptr)
-        hg_error("Failed to create Vulkan instance: %s\n", hg_vk_result_to_string(result));
+        hgError("Failed to create Vulkan instance: %s\n", hgVkResultToStr(result));
 
     return instance;
 }
 
-VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger() {
+VkDebugUtilsMessengerEXT hgVkCreateDebugMessenger()
+{
 #ifdef HG_VK_DEBUG_MESSENGER
-    hg_assert(hg_vk_instance != nullptr);
+    hgAssert(hgVkInstance != nullptr);
 
     VkDebugUtilsMessengerEXT messenger = nullptr;
     VkResult result = vkCreateDebugUtilsMessengerEXT(
-        hg_vk_instance, &debug_utils_messenger_info, nullptr, &messenger);
+        hgVkInstance, &debugUtilsMessengerInfo, nullptr, &messenger);
     if (messenger == nullptr)
-        hg_error("Failed to create Vulkan debug messenger: %s\n", hg_vk_result_to_string(result));
+        hgError("Failed to create Vulkan debug messenger: %s\n", hgVkResultToStr(result));
 
     return messenger;
 #else
@@ -607,402 +631,418 @@ VkDebugUtilsMessengerEXT hg_vk_create_debug_messenger() {
 #endif
 }
 
-bool hg_vk_find_queue_family(VkPhysicalDevice gpu, u32* queue_family, VkQueueFlags queue_flags) {
-    hg_assert(gpu != nullptr);
+bool hgVkFindQueueFamily(VkPhysicalDevice gpu, u32* queueFamily, VkQueueFlags queueFlags)
+{
+    hgAssert(gpu != nullptr);
 
-    HgArena* scratch = hg_get_scratch();
-    HgArenaScope scratch_scope{scratch};
+    HgArena* scratch = hgGetScratch();
+    HgArenaScope scratchScope{scratch};
 
-    u32 family_count = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, nullptr);
-    VkQueueFamilyProperties* families = hg_alloc<VkQueueFamilyProperties>(scratch, family_count);
-    vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, families);
+    u32 familyCount = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(gpu, &familyCount, nullptr);
+    VkQueueFamilyProperties* families = hgAlloc<VkQueueFamilyProperties>(scratch, familyCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(gpu, &familyCount, families);
 
-    for (u32 i = 0; i < family_count; ++i) {
-        if (families[i].queueFlags & queue_flags) {
-            *queue_family = i;
+    for (u32 i = 0; i < familyCount; ++i)
+    {
+        if (families[i].queueFlags & queueFlags)
+        {
+            *queueFamily = i;
             return true;
         }
     }
     return false;
 }
 
-static const char* const vk_device_extensions[]{
+static const char* const vkDeviceExtensions[]{
     "VK_KHR_swapchain",
 };
 
-VkPhysicalDevice hg_vk_find_single_queue_physical_device() {
-    hg_assert(hg_vk_instance != nullptr);
+VkPhysicalDevice hgVkFindSingleQueuePhysicalDevice()
+{
+    hgAssert(hgVkInstance != nullptr);
 
-    HgArena* scratch = hg_get_scratch();
-    HgArenaScope scratch_scope{scratch};
+    HgArena* scratch = hgGetScratch();
+    HgArenaScope scratchScope{scratch};
 
-    u32 gpu_count;
-    vkEnumeratePhysicalDevices(hg_vk_instance, &gpu_count, nullptr);
-    VkPhysicalDevice* gpus = hg_alloc<VkPhysicalDevice>(scratch, gpu_count);
-    vkEnumeratePhysicalDevices(hg_vk_instance, &gpu_count, gpus);
+    u32 gpuCount;
+    vkEnumeratePhysicalDevices(hgVkInstance, &gpuCount, nullptr);
+    VkPhysicalDevice* gpus = hgAlloc<VkPhysicalDevice>(scratch, gpuCount);
+    vkEnumeratePhysicalDevices(hgVkInstance, &gpuCount, gpus);
 
-    VkExtensionProperties* ext_props = nullptr;
-    u32 ext_prop_count = 0;
+    VkExtensionProperties* extProps = nullptr;
+    u32 extPropCount = 0;
 
-    for (u32 i = 0; i < gpu_count; ++i) {
+    for (u32 i = 0; i < gpuCount; ++i)
+    {
         VkPhysicalDevice gpu = gpus[i];
         u32 family;
 
-        u32 new_prop_count = 0;
-        vkEnumerateDeviceExtensionProperties(gpu, nullptr, &new_prop_count, nullptr);
-        if (new_prop_count > ext_prop_count) {
-            ext_props = hg_realloc(scratch, ext_props, ext_prop_count, new_prop_count);
-            ext_prop_count = new_prop_count;
+        u32 newPropCount = 0;
+        vkEnumerateDeviceExtensionProperties(gpu, nullptr, &newPropCount, nullptr);
+        if (newPropCount > extPropCount)
+        {
+            extProps = hgRealloc(scratch, extProps, extPropCount, newPropCount);
+            extPropCount = newPropCount;
         }
-        vkEnumerateDeviceExtensionProperties(gpu, nullptr, &new_prop_count, ext_props);
+        vkEnumerateDeviceExtensionProperties(gpu, nullptr, &newPropCount, extProps);
 
-        for (usize j = 0; j < sizeof(vk_device_extensions) / sizeof(*vk_device_extensions); j++) {
-            for (usize k = 0; k < new_prop_count; k++) {
-                if (strcmp(vk_device_extensions[j], ext_props[k].extensionName) == 0)
-                    goto next_ext;
+        for (usize j = 0; j < sizeof(vkDeviceExtensions) / sizeof(*vkDeviceExtensions); j++)
+        {
+            for (usize k = 0; k < newPropCount; k++)
+            {
+                if (strcmp(vkDeviceExtensions[j], extProps[k].extensionName) == 0)
+                    goto nextExt;
             }
-            goto next_gpu;
-next_ext:
+            goto nextGpu;
+nextExt:
             continue;
         }
 
-        if (!hg_vk_find_queue_family(gpu, &family,
+        if (!hgVkFindQueueFamily(gpu, &family,
                 VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT | VK_QUEUE_COMPUTE_BIT))
-            goto next_gpu;
+            goto nextGpu;
 
         return gpu;
 
-next_gpu:
+nextGpu:
         continue;
     }
 
-    hg_warn("Could not find a suitable gpu\n");
+    hgWarn("Could not find a suitable gpu\n");
     return nullptr;
 }
 
-VkDevice hg_vk_create_single_queue_device() {
-    hg_assert(hg_vk_physical_device != nullptr);
-    hg_assert(hg_vk_queue_family != (u32)-1);
+VkDevice hgVkCreateSingleQueueDevice()
+{
+    hgAssert(hgVkPhysicalDevice != nullptr);
+    hgAssert(hgVkQueueFamily != (u32)-1);
 
-    VkPhysicalDeviceDynamicRenderingFeatures dynamic_rendering_feature{};
-    dynamic_rendering_feature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
-    dynamic_rendering_feature.dynamicRendering = VK_TRUE;
+    VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeature{};
+    dynamicRenderingFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
+    dynamicRenderingFeature.dynamicRendering = VK_TRUE;
 
-    VkPhysicalDeviceSynchronization2Features synchronization2_feature{};
-    synchronization2_feature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES;
-    synchronization2_feature.pNext = &dynamic_rendering_feature;
-    synchronization2_feature.synchronization2 = VK_TRUE;
+    VkPhysicalDeviceSynchronization2Features synchronization2Feature{};
+    synchronization2Feature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES;
+    synchronization2Feature.pNext = &dynamicRenderingFeature;
+    synchronization2Feature.synchronization2 = VK_TRUE;
 
     VkPhysicalDeviceFeatures features{};
 
-    VkDeviceQueueCreateInfo queue_info{};
-    queue_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    queue_info.queueFamilyIndex = hg_vk_queue_family;
-    queue_info.queueCount = 1;
-    float queue_priority = 1.0f;
-    queue_info.pQueuePriorities = &queue_priority;
+    VkDeviceQueueCreateInfo queueInfo{};
+    queueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    queueInfo.queueFamilyIndex = hgVkQueueFamily;
+    queueInfo.queueCount = 1;
+    float queuePriority = 1.0f;
+    queueInfo.pQueuePriorities = &queuePriority;
 
-    VkDeviceCreateInfo device_info{};
-    device_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    device_info.pNext = &synchronization2_feature;
-    device_info.queueCreateInfoCount = 1;
-    device_info.pQueueCreateInfos = &queue_info;
-    device_info.enabledExtensionCount = sizeof(vk_device_extensions) / sizeof(*vk_device_extensions);
-    device_info.ppEnabledExtensionNames = vk_device_extensions;
-    device_info.pEnabledFeatures = &features;
+    VkDeviceCreateInfo deviceInfo{};
+    deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    deviceInfo.pNext = &synchronization2Feature;
+    deviceInfo.queueCreateInfoCount = 1;
+    deviceInfo.pQueueCreateInfos = &queueInfo;
+    deviceInfo.enabledExtensionCount = sizeof(vkDeviceExtensions) / sizeof(*vkDeviceExtensions);
+    deviceInfo.ppEnabledExtensionNames = vkDeviceExtensions;
+    deviceInfo.pEnabledFeatures = &features;
 
     VkDevice device = nullptr;
-    VkResult result = vkCreateDevice(hg_vk_physical_device, &device_info, nullptr, &device);
+    VkResult result = vkCreateDevice(hgVkPhysicalDevice, &deviceInfo, nullptr, &device);
 
     if (device == nullptr)
-        hg_error("Could not create Vulkan device: %s\n", hg_vk_result_to_string(result));
+        hgError("Could not create Vulkan device: %s\n", hgVkResultToStr(result));
     return device;
 }
 
-VkCommandBuffer hg_vk_begin_commands() {
-    VkCommandBufferAllocateInfo cmd_info{};
-    cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    cmd_info.commandPool = hg_vk_cmd_pool;
-    cmd_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    cmd_info.commandBufferCount = 1;
+VkCommandBuffer hgVkBeginCommands()
+{
+    VkCommandBufferAllocateInfo cmdInfo{};
+    cmdInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    cmdInfo.commandPool = hgVkCmdPool;
+    cmdInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    cmdInfo.commandBufferCount = 1;
 
     VkCommandBuffer cmd = nullptr;
-    vkAllocateCommandBuffers(hg_vk_device, &cmd_info, &cmd);
+    vkAllocateCommandBuffers(hgVkDevice, &cmdInfo, &cmd);
 
-    VkCommandBufferBeginInfo begin_info{};
-    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-    vkBeginCommandBuffer(cmd, &begin_info);
+    vkBeginCommandBuffer(cmd, &beginInfo);
     return cmd;
 }
 
-void hg_vk_end_and_execute(VkCommandBuffer cmd) {
-    hg_assert(cmd != nullptr);
+void hgVkEndAndExecute(VkCommandBuffer cmd)
+{
+    hgAssert(cmd != nullptr);
     vkEndCommandBuffer(cmd);
 
-    VkFenceCreateInfo fence_info{};
-    fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    VkFenceCreateInfo fenceInfo{};
+    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 
     VkFence fence = nullptr;
-    vkCreateFence(hg_vk_device, &fence_info, nullptr, &fence);
-    hg_defer(vkDestroyFence(hg_vk_device, fence, nullptr));
+    vkCreateFence(hgVkDevice, &fenceInfo, nullptr, &fence);
+    hgDefer(vkDestroyFence(hgVkDevice, fence, nullptr));
 
     VkSubmitInfo submit{};
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submit.commandBufferCount = 1;
     submit.pCommandBuffers = &cmd;
 
-    vkQueueSubmit(hg_vk_queue, 1, &submit, fence);
-    vkWaitForFences(hg_vk_device, 1, &fence, VK_TRUE, UINT64_MAX);
+    vkQueueSubmit(hgVkQueue, 1, &submit, fence);
+    vkWaitForFences(hgVkDevice, 1, &fence, VK_TRUE, UINT64_MAX);
 
-    vkFreeCommandBuffers(hg_vk_device, hg_vk_cmd_pool, 1, &cmd);
+    vkFreeCommandBuffers(hgVkDevice, hgVkCmdPool, 1, &cmd);
 }
 
-VkDescriptorSetLayout hg_vk_create_descriptor_set_layout(VkDescriptorSetLayoutBinding* bindings, u32 binding_count) {
+VkDescriptorSetLayout hgVkCreateDescriptorSetLayout(VkDescriptorSetLayoutBinding* bindings, u32 bindingCount)
+{
     VkDescriptorSetLayoutCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    info.bindingCount = binding_count;
+    info.bindingCount = bindingCount;
     info.pBindings = bindings;
 
     VkDescriptorSetLayout layout = nullptr;
-    VkResult result = vkCreateDescriptorSetLayout(hg_vk_device, &info, nullptr, &layout);
+    VkResult result = vkCreateDescriptorSetLayout(hgVkDevice, &info, nullptr, &layout);
     if (layout == nullptr)
-        hg_error("Could not create VkDescriptorSetLayout: %s\n", hg_vk_result_to_string(result));
+        hgError("Could not create VkDescriptorSetLayout: %s\n", hgVkResultToStr(result));
 
     return layout;
 }
 
-VkPipelineLayout hg_vk_create_pipeline_layout(
-    VkDescriptorSetLayout* set_layouts,
-    u32 set_layout_count,
-    VkPushConstantRange* push_ranges,
-    u32 push_range_count
-) {
+VkPipelineLayout hgVkCreatePipelineLayout(
+    VkDescriptorSetLayout* setLayouts,
+    u32 setLayoutCount,
+    VkPushConstantRange* pushRanges,
+    u32 pushRangeCount)
+{
     VkPipelineLayoutCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    info.setLayoutCount = set_layout_count;
-    info.pSetLayouts = set_layouts;
-    info.pushConstantRangeCount = push_range_count;
-    info.pPushConstantRanges = push_ranges;
+    info.setLayoutCount = setLayoutCount;
+    info.pSetLayouts = setLayouts;
+    info.pushConstantRangeCount = pushRangeCount;
+    info.pPushConstantRanges = pushRanges;
 
     VkPipelineLayout layout = nullptr;
-    VkResult result = vkCreatePipelineLayout(hg_vk_device, &info, nullptr, &layout);
+    VkResult result = vkCreatePipelineLayout(hgVkDevice, &info, nullptr, &layout);
     if (layout == nullptr)
-        hg_error("Could not create VkPipelineLayout: %s\n", hg_vk_result_to_string(result));
+        hgError("Could not create VkPipelineLayout: %s\n", hgVkResultToStr(result));
 
     return layout;
 }
 
-VkShaderModule hg_vk_create_shader_module(const u8* spirv_code, usize code_size) {
+VkShaderModule hgVkCreateShaderModule(const u8* spirvCode, usize codeSize)
+{
     VkShaderModuleCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    info.codeSize = code_size;
-    info.pCode = (const u32*)spirv_code;
+    info.codeSize = codeSize;
+    info.pCode = (const u32*)spirvCode;
 
     VkShaderModule shader = nullptr;
-    VkResult result = vkCreateShaderModule(hg_vk_device, &info, nullptr, &shader);
+    VkResult result = vkCreateShaderModule(hgVkDevice, &info, nullptr, &shader);
     if (shader == nullptr)
-        hg_error("Could not create VkShaderModule: %s\n", hg_vk_result_to_string(result));
+        hgError("Could not create VkShaderModule: %s\n", hgVkResultToStr(result));
 
     return shader;
 }
 
-VkPipeline hg_vk_create_graphics_pipeline(const HgVkPipelineConfig& config) {
-    if (config.color_attachment_format_count > 0)
-        hg_assert(config.color_attachment_formats != nullptr);
-    hg_assert(config.vertex_shader != nullptr);
-    hg_assert(config.fragment_shader != nullptr);
-    hg_assert(config.layout != nullptr);
-    if (config.vertex_binding_count > 0)
-        hg_assert(config.vertex_bindings != nullptr);
+VkPipeline hgVkCreateGraphicsPipeline(const HgVkPipelineConfig& config)
+{
+    if (config.colorAttachmentCount > 0)
+        hgAssert(config.colorAttachmentFormats != nullptr);
+    hgAssert(config.vertexShader != nullptr);
+    hgAssert(config.fragmentShader != nullptr);
+    hgAssert(config.layout != nullptr);
+    if (config.vertexBindingCount > 0)
+        hgAssert(config.vertexBindings != nullptr);
 
-    VkPipelineShaderStageCreateInfo shader_stages[2]{};
-    shader_stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    shader_stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-    shader_stages[0].module = config.vertex_shader;
-    shader_stages[0].pName = "main";
-    shader_stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    shader_stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-    shader_stages[1].module = config.fragment_shader;
-    shader_stages[1].pName = "main";
+    VkPipelineShaderStageCreateInfo shaderStages[2]{};
+    shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    shaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+    shaderStages[0].module = config.vertexShader;
+    shaderStages[0].pName = "main";
+    shaderStages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    shaderStages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    shaderStages[1].module = config.fragmentShader;
+    shaderStages[1].pName = "main";
 
-    VkPipelineVertexInputStateCreateInfo vertex_input_state{};
-    vertex_input_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertex_input_state.vertexBindingDescriptionCount = (u32)config.vertex_binding_count;
-    vertex_input_state.pVertexBindingDescriptions = config.vertex_bindings;
-    vertex_input_state.vertexAttributeDescriptionCount = (u32)config.vertex_attribute_count;
-    vertex_input_state.pVertexAttributeDescriptions = config.vertex_attributes;
+    VkPipelineVertexInputStateCreateInfo vertexInputState{};
+    vertexInputState.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertexInputState.vertexBindingDescriptionCount = (u32)config.vertexBindingCount;
+    vertexInputState.pVertexBindingDescriptions = config.vertexBindings;
+    vertexInputState.vertexAttributeDescriptionCount = (u32)config.vertexAttributeCount;
+    vertexInputState.pVertexAttributeDescriptions = config.vertexAttributes;
 
-    VkPipelineInputAssemblyStateCreateInfo input_assembly_state{};
-    input_assembly_state.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    input_assembly_state.topology = config.topology;
-    input_assembly_state.primitiveRestartEnable = VK_FALSE;
+    VkPipelineInputAssemblyStateCreateInfo inputAssemblyState{};
+    inputAssemblyState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    inputAssemblyState.topology = config.topology;
+    inputAssemblyState.primitiveRestartEnable = VK_FALSE;
 
-    VkPipelineTessellationStateCreateInfo tessellation_state{};
-    tessellation_state.sType = VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO;
-    tessellation_state.patchControlPoints = config.tesselation_patch_control_points;
+    VkPipelineTessellationStateCreateInfo tessellationState{};
+    tessellationState.sType = VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO;
+    tessellationState.patchControlPoints = config.tesselationPatchControlPoints;
 
-    VkPipelineViewportStateCreateInfo viewport_state{};
-    viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-    viewport_state.viewportCount = 1;
-    viewport_state.scissorCount = 1;
+    VkPipelineViewportStateCreateInfo viewportState{};
+    viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewportState.viewportCount = 1;
+    viewportState.scissorCount = 1;
 
-    VkPipelineRasterizationStateCreateInfo rasterization_state{};
-    rasterization_state.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-    rasterization_state.depthClampEnable = VK_FALSE;
-    rasterization_state.rasterizerDiscardEnable = VK_FALSE;
-    rasterization_state.polygonMode = config.polygon_mode;
-    rasterization_state.cullMode = config.cull_mode;
-    rasterization_state.frontFace = config.front_face;
-    rasterization_state.depthBiasEnable = VK_FALSE;
-    rasterization_state.depthBiasConstantFactor = 0.0f;
-    rasterization_state.depthBiasClamp = 0.0f;
-    rasterization_state.depthBiasSlopeFactor = 0.0f;
-    rasterization_state.lineWidth = 1.0f;
+    VkPipelineRasterizationStateCreateInfo rasterizationState{};
+    rasterizationState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    rasterizationState.depthClampEnable = VK_FALSE;
+    rasterizationState.rasterizerDiscardEnable = VK_FALSE;
+    rasterizationState.polygonMode = config.polygonMode;
+    rasterizationState.cullMode = config.cullMode;
+    rasterizationState.frontFace = config.frontFace;
+    rasterizationState.depthBiasEnable = VK_FALSE;
+    rasterizationState.depthBiasConstantFactor = 0.0f;
+    rasterizationState.depthBiasClamp = 0.0f;
+    rasterizationState.depthBiasSlopeFactor = 0.0f;
+    rasterizationState.lineWidth = 1.0f;
 
-    VkPipelineMultisampleStateCreateInfo multisample_state{};
-    multisample_state.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-    multisample_state.rasterizationSamples = config.multisample_count != 0
-        ? config.multisample_count
+    VkPipelineMultisampleStateCreateInfo multisampleState{};
+    multisampleState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisampleState.rasterizationSamples = config.multisampleCount != 0
+        ? config.multisampleCount
         : VK_SAMPLE_COUNT_1_BIT,
-    multisample_state.sampleShadingEnable = VK_FALSE;
-    multisample_state.minSampleShading = 1.0f;
-    multisample_state.pSampleMask = nullptr;
-    multisample_state.alphaToCoverageEnable = VK_FALSE;
-    multisample_state.alphaToOneEnable = VK_FALSE;
+    multisampleState.sampleShadingEnable = VK_FALSE;
+    multisampleState.minSampleShading = 1.0f;
+    multisampleState.pSampleMask = nullptr;
+    multisampleState.alphaToCoverageEnable = VK_FALSE;
+    multisampleState.alphaToOneEnable = VK_FALSE;
 
-    VkPipelineDepthStencilStateCreateInfo depth_stencil_state{};
-    depth_stencil_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    depth_stencil_state.depthTestEnable = config.depth_attachment_format != VK_FORMAT_UNDEFINED
+    VkPipelineDepthStencilStateCreateInfo depthStencilState{};
+    depthStencilState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depthStencilState.depthTestEnable = config.depthAttachmentFormat != VK_FORMAT_UNDEFINED
             ? VK_TRUE
             : VK_FALSE;
-    depth_stencil_state.depthWriteEnable = config.depth_attachment_format != VK_FORMAT_UNDEFINED
+    depthStencilState.depthWriteEnable = config.depthAttachmentFormat != VK_FORMAT_UNDEFINED
             ? VK_TRUE
             : VK_FALSE;
-    depth_stencil_state.depthCompareOp = config.enable_color_blend
+    depthStencilState.depthCompareOp = config.enableColorBlend
             ? VK_COMPARE_OP_LESS_OR_EQUAL
             : VK_COMPARE_OP_LESS;
-    depth_stencil_state.depthBoundsTestEnable = config.depth_attachment_format != VK_FORMAT_UNDEFINED
+    depthStencilState.depthBoundsTestEnable = config.depthAttachmentFormat != VK_FORMAT_UNDEFINED
             ? VK_TRUE
             : VK_FALSE;
-    depth_stencil_state.stencilTestEnable = config.stencil_attachment_format != VK_FORMAT_UNDEFINED
+    depthStencilState.stencilTestEnable = config.stencilAttachmentFormat != VK_FORMAT_UNDEFINED
             ? VK_TRUE
             : VK_FALSE,
-    // depth_stencil_state.front = {}; : TODO
-    // depth_stencil_state.back = {}; : TODO
-    depth_stencil_state.minDepthBounds = 0.0f;
-    depth_stencil_state.maxDepthBounds = 1.0f;
+    // depthStencilState.front = {}; : TODO
+    // depthStencilState.back = {}; : TODO
+    depthStencilState.minDepthBounds = 0.0f;
+    depthStencilState.maxDepthBounds = 1.0f;
 
-    VkPipelineColorBlendAttachmentState color_blend_attachment{};
-    color_blend_attachment.blendEnable = config.enable_color_blend ? VK_TRUE : VK_FALSE;
-    color_blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-    color_blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-    color_blend_attachment.colorBlendOp = VK_BLEND_OP_ADD;
-    color_blend_attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-    color_blend_attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-    color_blend_attachment.alphaBlendOp = VK_BLEND_OP_ADD;
-    color_blend_attachment.colorWriteMask
+    VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+    colorBlendAttachment.blendEnable = config.enableColorBlend ? VK_TRUE : VK_FALSE;
+    colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+    colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+    colorBlendAttachment.colorWriteMask
         = VK_COLOR_COMPONENT_R_BIT
         | VK_COLOR_COMPONENT_G_BIT
         | VK_COLOR_COMPONENT_B_BIT
         | VK_COLOR_COMPONENT_A_BIT;
 
-    VkPipelineColorBlendStateCreateInfo color_blend_state{};
-    color_blend_state.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-    color_blend_state.logicOpEnable = VK_FALSE;
-    color_blend_state.logicOp = VK_LOGIC_OP_COPY;
-    color_blend_state.attachmentCount = 1;
-    color_blend_state.pAttachments = &color_blend_attachment;
-    color_blend_state.blendConstants[0] = {1.0f};
-    color_blend_state.blendConstants[1] = {1.0f};
-    color_blend_state.blendConstants[2] = {1.0f};
-    color_blend_state.blendConstants[3] = {1.0f};
+    VkPipelineColorBlendStateCreateInfo colorBlendState{};
+    colorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    colorBlendState.logicOpEnable = VK_FALSE;
+    colorBlendState.logicOp = VK_LOGIC_OP_COPY;
+    colorBlendState.attachmentCount = 1;
+    colorBlendState.pAttachments = &colorBlendAttachment;
+    colorBlendState.blendConstants[0] = {1.0f};
+    colorBlendState.blendConstants[1] = {1.0f};
+    colorBlendState.blendConstants[2] = {1.0f};
+    colorBlendState.blendConstants[3] = {1.0f};
 
-    VkDynamicState dynamic_states[]{VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
-    VkPipelineDynamicStateCreateInfo dynamic_state{};
-    dynamic_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-    dynamic_state.dynamicStateCount = sizeof(dynamic_states) / sizeof(*dynamic_states);
-    dynamic_state.pDynamicStates = dynamic_states;
+    VkDynamicState dynamicStates[]{VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+    VkPipelineDynamicStateCreateInfo dynamicState{};
+    dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamicState.dynamicStateCount = sizeof(dynamicStates) / sizeof(*dynamicStates);
+    dynamicState.pDynamicStates = dynamicStates;
 
-    VkPipelineRenderingCreateInfo rendering_info{};
-    rendering_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
-    rendering_info.colorAttachmentCount = (u32)config.color_attachment_format_count;
-    rendering_info.pColorAttachmentFormats = config.color_attachment_formats;
-    rendering_info.depthAttachmentFormat = config.depth_attachment_format;
-    rendering_info.stencilAttachmentFormat = config.stencil_attachment_format;
+    VkPipelineRenderingCreateInfo renderingInfo{};
+    renderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+    renderingInfo.colorAttachmentCount = (u32)config.colorAttachmentCount;
+    renderingInfo.pColorAttachmentFormats = config.colorAttachmentFormats;
+    renderingInfo.depthAttachmentFormat = config.depthAttachmentFormat;
+    renderingInfo.stencilAttachmentFormat = config.stencilAttachmentFormat;
 
-    VkGraphicsPipelineCreateInfo pipeline_info{};
-    pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    pipeline_info.pNext = &rendering_info;
-    pipeline_info.stageCount = sizeof(shader_stages) / sizeof(*shader_stages);
-    pipeline_info.pStages = shader_stages;
-    pipeline_info.pVertexInputState = &vertex_input_state;
-    pipeline_info.pInputAssemblyState = &input_assembly_state;
-    pipeline_info.pTessellationState = &tessellation_state;
-    pipeline_info.pViewportState = &viewport_state;
-    pipeline_info.pRasterizationState = &rasterization_state;
-    pipeline_info.pMultisampleState = &multisample_state;
-    pipeline_info.pDepthStencilState = &depth_stencil_state;
-    pipeline_info.pColorBlendState = &color_blend_state;
-    pipeline_info.pDynamicState = &dynamic_state;
-    pipeline_info.layout = config.layout;
-    pipeline_info.basePipelineHandle = nullptr;
-    pipeline_info.basePipelineIndex = -1;
+    VkGraphicsPipelineCreateInfo pipelineInfo{};
+    pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipelineInfo.pNext = &renderingInfo;
+    pipelineInfo.stageCount = sizeof(shaderStages) / sizeof(*shaderStages);
+    pipelineInfo.pStages = shaderStages;
+    pipelineInfo.pVertexInputState = &vertexInputState;
+    pipelineInfo.pInputAssemblyState = &inputAssemblyState;
+    pipelineInfo.pTessellationState = &tessellationState;
+    pipelineInfo.pViewportState = &viewportState;
+    pipelineInfo.pRasterizationState = &rasterizationState;
+    pipelineInfo.pMultisampleState = &multisampleState;
+    pipelineInfo.pDepthStencilState = &depthStencilState;
+    pipelineInfo.pColorBlendState = &colorBlendState;
+    pipelineInfo.pDynamicState = &dynamicState;
+    pipelineInfo.layout = config.layout;
+    pipelineInfo.basePipelineHandle = nullptr;
+    pipelineInfo.basePipelineIndex = -1;
 
     VkPipeline pipeline = nullptr;
-    VkResult result = vkCreateGraphicsPipelines(hg_vk_device, nullptr, 1, &pipeline_info, nullptr, &pipeline);
+    VkResult result = vkCreateGraphicsPipelines(hgVkDevice, nullptr, 1, &pipelineInfo, nullptr, &pipeline);
     if (pipeline == nullptr)
-        hg_error("Failed to create Vulkan graphics pipeline: %s\n", hg_vk_result_to_string(result));
+        hgError("Failed to create Vulkan graphics pipeline: %s\n", hgVkResultToStr(result));
 
     return pipeline;
 }
 
-VkPipeline hg_vk_create_compute_pipeline(VkPipelineLayout layout, const VkShaderModule shader) {
-    hg_assert(layout != nullptr);
-    hg_assert(shader != nullptr);
+VkPipeline hgVkCreateComputePipeline(VkPipelineLayout layout, const VkShaderModule shader)
+{
+    hgAssert(layout != nullptr);
+    hgAssert(shader != nullptr);
 
-    VkComputePipelineCreateInfo pipeline_info{};
-    pipeline_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-    pipeline_info.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    pipeline_info.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-    pipeline_info.stage.module = shader;
-    pipeline_info.stage.pName = "main";
-    pipeline_info.layout = layout;
-    pipeline_info.basePipelineHandle = nullptr;
-    pipeline_info.basePipelineIndex = -1;
+    VkComputePipelineCreateInfo pipelineInfo{};
+    pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    pipelineInfo.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    pipelineInfo.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+    pipelineInfo.stage.module = shader;
+    pipelineInfo.stage.pName = "main";
+    pipelineInfo.layout = layout;
+    pipelineInfo.basePipelineHandle = nullptr;
+    pipelineInfo.basePipelineIndex = -1;
 
     VkPipeline pipeline = nullptr;
-    VkResult result = vkCreateComputePipelines(hg_vk_device, nullptr, 1, &pipeline_info, nullptr, &pipeline);
+    VkResult result = vkCreateComputePipelines(hgVkDevice, nullptr, 1, &pipelineInfo, nullptr, &pipeline);
     if (pipeline == nullptr)
-        hg_error("Failed to create Vulkan compute pipeline: %s\n", hg_vk_result_to_string(result));
+        hgError("Failed to create Vulkan compute pipeline: %s\n", hgVkResultToStr(result));
 
     return pipeline;
 }
 
-VkDescriptorPool hg_vk_create_descriptor_pool(
-    u32 max_sets,
+VkDescriptorPool hgVkCreateDescriptorPool(
+    u32 maxSets,
     VkDescriptorPoolSize* sizes,
-    u32 size_count,
-    VkDescriptorPoolCreateFlags flags
-) {
+    u32 sizeCount,
+    VkDescriptorPoolCreateFlags flags)
+{
     VkDescriptorPoolCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     info.flags = flags;
-    info.maxSets = max_sets;
-    info.poolSizeCount = size_count;
+    info.maxSets = maxSets;
+    info.poolSizeCount = sizeCount;
     info.pPoolSizes = sizes;
 
     VkDescriptorPool pool = nullptr;
-    VkResult result = vkCreateDescriptorPool(hg_vk_device, &info, nullptr, &pool);
+    VkResult result = vkCreateDescriptorPool(hgVkDevice, &info, nullptr, &pool);
     if (pool == nullptr)
-        hg_error("Could not create VkDescriptorPool: %s\n", hg_vk_result_to_string(result));
+        hgError("Could not create VkDescriptorPool: %s\n", hgVkResultToStr(result));
 
     return pool;
 }
 
-VkDescriptorSet hg_vk_allocate_descriptor_set(VkDescriptorPool pool, VkDescriptorSetLayout layout) {
+VkDescriptorSet hgVkAllocateDescriptorSet(VkDescriptorPool pool, VkDescriptorSetLayout layout)
+{
     VkDescriptorSetAllocateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
     info.descriptorPool = pool;
@@ -1010,22 +1050,22 @@ VkDescriptorSet hg_vk_allocate_descriptor_set(VkDescriptorPool pool, VkDescripto
     info.pSetLayouts = &layout;
 
     VkDescriptorSet set = nullptr;
-    VkResult result = vkAllocateDescriptorSets(hg_vk_device, &info, &set);
+    VkResult result = vkAllocateDescriptorSets(hgVkDevice, &info, &set);
     if (result == VK_ERROR_OUT_OF_POOL_MEMORY)
         return nullptr;
     if (set == nullptr)
-        hg_error("Could not allocate VkDescriptorSet: %s\n", hg_vk_result_to_string(result));
+        hgError("Could not allocate VkDescriptorSet: %s\n", hgVkResultToStr(result));
 
     return set;
 }
 
-void hg_vk_update_descriptor_set(
+void hgVkUpdateDescriptorSetBuffers(
     VkDescriptorSet set,
     u32 binding,
     VkDescriptorType type,
     const VkDescriptorBufferInfo* infos,
-    u32 count
-) {
+    u32 count)
+{
     VkWriteDescriptorSet write{};
     write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     write.dstSet = set;
@@ -1034,16 +1074,16 @@ void hg_vk_update_descriptor_set(
     write.descriptorType = type;
     write.pBufferInfo = infos;
 
-    vkUpdateDescriptorSets(hg_vk_device, 1, &write, 0, nullptr);
+    vkUpdateDescriptorSets(hgVkDevice, 1, &write, 0, nullptr);
 }
 
-void hg_vk_update_descriptor_set(
+void hgVkUpdateDescriptorSetImages(
     VkDescriptorSet set,
     u32 binding,
     VkDescriptorType type,
     const VkDescriptorImageInfo* infos,
-    u32 count
-) {
+    u32 count)
+{
     VkWriteDescriptorSet write{};
     write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     write.dstSet = set;
@@ -1052,99 +1092,164 @@ void hg_vk_update_descriptor_set(
     write.descriptorType = type;
     write.pImageInfo = infos;
 
-    vkUpdateDescriptorSets(hg_vk_device, 1, &write, 0, nullptr);
+    vkUpdateDescriptorSets(hgVkDevice, 1, &write, 0, nullptr);
 }
 
-u32 hg_vk_find_memory_type_index(
+u32 hgVkFindMemoryTypeIndex(
     u32 bitmask,
-    VkMemoryPropertyFlags preferred_flags,
-    VkMemoryPropertyFlags unpreferred_flags
-) {
-    hg_assert(hg_vk_physical_device != nullptr);
-    hg_assert(bitmask != 0);
+    VkMemoryPropertyFlags preferredFlags,
+    VkMemoryPropertyFlags unpreferredFlags)
+{
+    hgAssert(hgVkPhysicalDevice != nullptr);
+    hgAssert(bitmask != 0);
 
-    VkPhysicalDeviceMemoryProperties mem_props;
-    vkGetPhysicalDeviceMemoryProperties(hg_vk_physical_device, &mem_props);
+    VkPhysicalDeviceMemoryProperties memProps;
+    vkGetPhysicalDeviceMemoryProperties(hgVkPhysicalDevice, &memProps);
 
-    for (u32 i = 0; i < mem_props.memoryTypeCount; ++i) {
+    for (u32 i = 0; i < memProps.memoryTypeCount; ++i)
+    {
         if ((bitmask & (1 << i)) != 0 &&
-            (mem_props.memoryTypes[i].propertyFlags & preferred_flags) != 0 &&
-            (mem_props.memoryTypes[i].propertyFlags & unpreferred_flags) == 0
-        ) {
+            (memProps.memoryTypes[i].propertyFlags & preferredFlags) != 0 &&
+            (memProps.memoryTypes[i].propertyFlags & unpreferredFlags) == 0)
+        {
             return i;
         }
     }
-    for (u32 i = 0; i < mem_props.memoryTypeCount; ++i) {
-        if ((bitmask & (1 << i)) != 0 &&
-            (mem_props.memoryTypes[i].propertyFlags & preferred_flags) != 0
-        ) {
-            hg_warn("Could not find Vulkan memory type without undesired flags\n");
+    for (u32 i = 0; i < memProps.memoryTypeCount; ++i)
+    {
+        if ((bitmask & (1 << i)) != 0 && (memProps.memoryTypes[i].propertyFlags & preferredFlags) != 0)
+        {
+            hgWarn("Could not find Vulkan memory type without undesired flags\n");
             return i;
         }
     }
-    for (u32 i = 0; i < mem_props.memoryTypeCount; ++i) {
-        if ((bitmask & (1 << i)) != 0) {
-            hg_warn("Could not find Vulkan memory type with desired flags\n");
+    for (u32 i = 0; i < memProps.memoryTypeCount; ++i)
+    {
+        if ((bitmask & (1 << i)) != 0)
+        {
+            hgWarn("Could not find Vulkan memory type with desired flags\n");
             return i;
         }
     }
-    hg_error("Could not find Vulkan memory type\n");
+    hgError("Could not find Vulkan memory type\n");
 }
 
-void hg_vk_create_buffer(
+void hgVkCreateBuffer(
     VkBuffer* buffer,
     VmaAllocation* allocation,
     u64 size,
     VkBufferUsageFlags usage,
-    VmaAllocationCreateFlags memory
-) {
-    hg_assert(buffer != nullptr);
-    hg_assert(allocation != nullptr);
-    hg_assert(size > 0);
-    hg_assert(usage != 0);
+    VmaAllocationCreateFlags memory)
+{
+    hgAssert(buffer != nullptr);
+    hgAssert(allocation != nullptr);
+    hgAssert(size > 0);
+    hgAssert(usage != 0);
 
-    VkBufferCreateInfo buffer_info{};
-    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    buffer_info.size = size;
-    buffer_info.usage = usage;
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = size;
+    bufferInfo.usage = usage;
 
-    VmaAllocationCreateInfo alloc_info{};
-    alloc_info.flags = memory;
-    alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
+    VmaAllocationCreateInfo allocInfo{};
+    allocInfo.flags = memory;
+    allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
 
-    VkResult result = vmaCreateBuffer(hg_vk_vma, &buffer_info, &alloc_info, buffer, allocation, nullptr);
+    VkResult result = vmaCreateBuffer(hgVkVma, &bufferInfo, &allocInfo, buffer, allocation, nullptr);
     if (result != VK_SUCCESS)
-        hg_error("Could not create VkBuffer: %s", hg_vk_result_to_string(result));
+        hgError("Could not create VkBuffer: %s", hgVkResultToStr(result));
 }
 
-void hg_vk_create_image(VkImage* image, VmaAllocation* allocation, const HgVkImageConfig& config) {
-    hg_assert(image != nullptr);
-    hg_assert(allocation != nullptr);
-    hg_assert(config.format != VK_FORMAT_UNDEFINED);
-    hg_assert(config.usage != 0);
+void hgVkWriteBufferStaging(
+    VkBuffer dst,
+    usize offset,
+    const void* src,
+    usize size)
+{
+    hgAssert(hgVkDevice != nullptr);
+    hgAssert(hgVkVma != nullptr);
+    hgAssert(dst != nullptr);
+    hgAssert(src != nullptr);
 
-    VkImageCreateInfo image_info{};
-    image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    image_info.imageType = config.type;
-    image_info.format = config.format;
-    image_info.extent = {config.width, config.height, config.depth};
-    image_info.mipLevels = config.mip_levels;
-    image_info.arrayLayers = config.array_layers;
-    image_info.samples = config.samples;
-    image_info.usage = config.usage;
+    VkBuffer stage = nullptr;
+    VmaAllocation stageAlloc = nullptr;
+    hgVkCreateBuffer(&stage, &stageAlloc, size,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+    hgDefer(vmaDestroyBuffer(hgVkVma, stage, stageAlloc));
 
-    VmaAllocationCreateInfo alloc_info{};
-    alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
+    vmaCopyMemoryToAllocation(hgVkVma, src, stageAlloc, offset, size);
 
-    VkResult result = vmaCreateImage(hg_vk_vma, &image_info, &alloc_info, image, allocation, nullptr);
-    if (result != VK_SUCCESS)
-        hg_error("Could not create VkImage: %s", hg_vk_result_to_string(result));
+    VkCommandBuffer cmd = hgVkBeginCommands();
+
+    VkBufferCopy region{};
+    region.dstOffset = offset;
+    region.size = size;
+
+    vkCmdCopyBuffer(cmd, stage, dst, 1, &region);
+
+    hgVkEndAndExecute(cmd);
 }
 
-VkImageView hg_vk_create_image_view(const HgVkImageViewConfig& config) {
-    hg_assert(config.image != nullptr);
-    hg_assert(config.format != VK_FORMAT_UNDEFINED);
-    hg_assert(config.subresource.aspectMask != 0);
+void hgVkReadBufferStaging(
+    void* dst,
+    VkBuffer src,
+    usize offset,
+    usize size)
+{
+    hgAssert(hgVkDevice != nullptr);
+    hgAssert(hgVkVma != nullptr);
+    hgAssert(dst != nullptr);
+    hgAssert(src != nullptr);
+
+    VkBuffer stage = nullptr;
+    VmaAllocation stageAlloc = nullptr;
+    hgVkCreateBuffer(&stage, &stageAlloc, size,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT);
+    hgDefer(vmaDestroyBuffer(hgVkVma, stage, stageAlloc));
+
+    VkCommandBuffer cmd = hgVkBeginCommands();
+
+    VkBufferCopy region{};
+    region.srcOffset = offset;
+    region.size = size;
+
+    vkCmdCopyBuffer(cmd, src, stage, 1, &region);
+
+    hgVkEndAndExecute(cmd);
+
+    vmaCopyAllocationToMemory(hgVkVma, stageAlloc, offset, dst, size);
+}
+
+void hgVkCreateImage(VkImage* image, VmaAllocation* allocation, const HgVkImageConfig& config)
+{
+    hgAssert(image != nullptr);
+    hgAssert(allocation != nullptr);
+    hgAssert(config.format != VK_FORMAT_UNDEFINED);
+    hgAssert(config.usage != 0);
+
+    VkImageCreateInfo imageInfo{};
+    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageInfo.imageType = config.type;
+    imageInfo.format = config.format;
+    imageInfo.extent = {config.width, config.height, config.depth};
+    imageInfo.mipLevels = config.mipLevels;
+    imageInfo.arrayLayers = config.arrayLayers;
+    imageInfo.samples = config.samples;
+    imageInfo.usage = config.usage;
+
+    VmaAllocationCreateInfo allocInfo{};
+    allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+
+    VkResult result = vmaCreateImage(hgVkVma, &imageInfo, &allocInfo, image, allocation, nullptr);
+    if (result != VK_SUCCESS)
+        hgError("Could not create VkImage: %s", hgVkResultToStr(result));
+}
+
+VkImageView hgVkCreateImageView(const HgVkImageViewConfig& config)
+{
+    hgAssert(config.image != nullptr);
+    hgAssert(config.format != VK_FORMAT_UNDEFINED);
+    hgAssert(config.subresource.aspectMask != 0);
 
     VkImageViewCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -1155,247 +1260,185 @@ VkImageView hg_vk_create_image_view(const HgVkImageViewConfig& config) {
     info.subresourceRange = config.subresource;
 
     VkImageView view = nullptr;
-    VkResult result = vkCreateImageView(hg_vk_device, &info, nullptr, &view);
+    VkResult result = vkCreateImageView(hgVkDevice, &info, nullptr, &view);
     if (view == nullptr)
-        hg_error("Could not create VkImageView: %s\n", hg_vk_result_to_string(result));
+        hgError("Could not create VkImageView: %s\n", hgVkResultToStr(result));
 
     return view;
 }
 
-void hg_vk_buffer_staging_write(
-    VkBuffer dst,
-    usize offset,
-    const void* src,
-    usize size
-) {
-    hg_assert(hg_vk_device != nullptr);
-    hg_assert(hg_vk_vma != nullptr);
-    hg_assert(dst != nullptr);
-    hg_assert(src != nullptr);
-
-    VkBuffer stage = nullptr;
-    VmaAllocation stage_alloc = nullptr;
-    hg_vk_create_buffer(&stage, &stage_alloc, size,
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
-    hg_defer(vmaDestroyBuffer(hg_vk_vma, stage, stage_alloc));
-
-    vmaCopyMemoryToAllocation(hg_vk_vma, src, stage_alloc, offset, size);
-
-    VkCommandBuffer cmd = hg_vk_begin_commands();
-
-    VkBufferCopy region{};
-    region.dstOffset = offset;
-    region.size = size;
-
-    vkCmdCopyBuffer(cmd, stage, dst, 1, &region);
-
-    hg_vk_end_and_execute(cmd);
-}
-
-void hg_vk_buffer_staging_read(
-    void* dst,
-    VkBuffer src,
-    usize offset,
-    usize size
-) {
-    hg_assert(hg_vk_device != nullptr);
-    hg_assert(hg_vk_vma != nullptr);
-    hg_assert(dst != nullptr);
-    hg_assert(src != nullptr);
-
-    VkBuffer stage = nullptr;
-    VmaAllocation stage_alloc = nullptr;
-    hg_vk_create_buffer(&stage, &stage_alloc, size,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT);
-    hg_defer(vmaDestroyBuffer(hg_vk_vma, stage, stage_alloc));
-
-    VkCommandBuffer cmd = hg_vk_begin_commands();
-
-    VkBufferCopy region{};
-    region.srcOffset = offset;
-    region.size = size;
-
-    vkCmdCopyBuffer(cmd, src, stage, 1, &region);
-
-    hg_vk_end_and_execute(cmd);
-
-    vmaCopyAllocationToMemory(hg_vk_vma, stage_alloc, offset, dst, size);
-}
-
-void hg_vk_image_staging_write(
-    const HgVkImageStagingWriteConfig& config
-) {
-    hg_assert(hg_vk_device != nullptr);
-    hg_assert(hg_vk_vma != nullptr);
-    hg_assert(config.dst_image != nullptr);
-    hg_assert(config.src_data != nullptr);
-    hg_assert(config.width > 0);
-    hg_assert(config.height > 0);
-    hg_assert(config.depth > 0);
-    hg_assert(config.format != VK_FORMAT_UNDEFINED);
+void hgWriteVkImageStaging(const HgVkWriteImageStagingConfig& config)
+{
+    hgAssert(hgVkDevice != nullptr);
+    hgAssert(hgVkVma != nullptr);
+    hgAssert(config.dstImage != nullptr);
+    hgAssert(config.srcData != nullptr);
+    hgAssert(config.width > 0);
+    hgAssert(config.height > 0);
+    hgAssert(config.depth > 0);
+    hgAssert(config.format != VK_FORMAT_UNDEFINED);
 
     usize size = config.width
                * config.height
                * config.depth
-               * hg_vk_format_to_size(config.format);
+               * hgVkFormatToSize(config.format);
 
     VkBuffer stage = nullptr;
-    VmaAllocation stage_alloc = nullptr;
-    hg_vk_create_buffer(&stage, &stage_alloc, size,
+    VmaAllocation stageAlloc = nullptr;
+    hgVkCreateBuffer(&stage, &stageAlloc, size,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
-    hg_defer(vmaDestroyBuffer(hg_vk_vma, stage, stage_alloc));
+    hgDefer(vmaDestroyBuffer(hgVkVma, stage, stageAlloc));
 
-    vmaCopyMemoryToAllocation(hg_vk_vma, config.src_data, stage_alloc, 0, size);
+    vmaCopyMemoryToAllocation(hgVkVma, config.srcData, stageAlloc, 0, size);
 
-    VkCommandBuffer cmd = hg_vk_begin_commands();
+    VkCommandBuffer cmd = hgVkBeginCommands();
 
-    VkImageMemoryBarrier2 transfer_barrier{};
-    transfer_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-    transfer_barrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    transfer_barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    transfer_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    transfer_barrier.image = config.dst_image;
-    transfer_barrier.subresourceRange.aspectMask = config.subresource.aspectMask;
-    transfer_barrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
-    transfer_barrier.subresourceRange.levelCount = 1;
-    transfer_barrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
-    transfer_barrier.subresourceRange.layerCount = config.subresource.layerCount;
+    VkImageMemoryBarrier2 transferBarrier{};
+    transferBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    transferBarrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    transferBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    transferBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    transferBarrier.image = config.dstImage;
+    transferBarrier.subresourceRange.aspectMask = config.subresource.aspectMask;
+    transferBarrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
+    transferBarrier.subresourceRange.levelCount = 1;
+    transferBarrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
+    transferBarrier.subresourceRange.layerCount = config.subresource.layerCount;
 
-    VkDependencyInfo transfer_dep{};
-    transfer_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    transfer_dep.imageMemoryBarrierCount = 1;
-    transfer_dep.pImageMemoryBarriers = &transfer_barrier;
+    VkDependencyInfo transferDep{};
+    transferDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    transferDep.imageMemoryBarrierCount = 1;
+    transferDep.pImageMemoryBarriers = &transferBarrier;
 
-    vkCmdPipelineBarrier2(cmd, &transfer_dep);
+    vkCmdPipelineBarrier2(cmd, &transferDep);
 
     VkBufferImageCopy region{};
     region.imageSubresource = config.subresource;
     region.imageExtent = {config.width, config.height, config.depth};
 
-    vkCmdCopyBufferToImage(cmd, stage, config.dst_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    vkCmdCopyBufferToImage(cmd, stage, config.dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
-    VkImageMemoryBarrier2 end_barrier{};
-    end_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-    end_barrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    end_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    end_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    end_barrier.newLayout = config.layout;
-    end_barrier.image = config.dst_image;
-    end_barrier.subresourceRange.aspectMask = config.subresource.aspectMask;
-    end_barrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
-    end_barrier.subresourceRange.levelCount = 1;
-    end_barrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
-    end_barrier.subresourceRange.layerCount = config.subresource.layerCount;
+    VkImageMemoryBarrier2 endBarrier{};
+    endBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    endBarrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    endBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    endBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    endBarrier.newLayout = config.layout;
+    endBarrier.image = config.dstImage;
+    endBarrier.subresourceRange.aspectMask = config.subresource.aspectMask;
+    endBarrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
+    endBarrier.subresourceRange.levelCount = 1;
+    endBarrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
+    endBarrier.subresourceRange.layerCount = config.subresource.layerCount;
 
-    VkDependencyInfo end_dep{};
-    end_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    end_dep.imageMemoryBarrierCount = 1;
-    end_dep.pImageMemoryBarriers = &end_barrier;
+    VkDependencyInfo endDep{};
+    endDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    endDep.imageMemoryBarrierCount = 1;
+    endDep.pImageMemoryBarriers = &endBarrier;
 
-    vkCmdPipelineBarrier2(cmd, &end_dep);
+    vkCmdPipelineBarrier2(cmd, &endDep);
 
-    hg_vk_end_and_execute(cmd);
+    hgVkEndAndExecute(cmd);
 }
 
-void hg_vk_image_staging_write_cubemap(
-    const HgVkImageStagingWriteConfig& config
-) {
-    hg_assert(hg_vk_device != nullptr);
-    hg_assert(hg_vk_vma != nullptr);
-    hg_assert(config.dst_image != nullptr);
-    hg_assert(config.subresource.baseArrayLayer == 0);
-    hg_assert(config.subresource.layerCount == 6);
-    hg_assert(config.src_data != nullptr);
-    hg_assert(config.width > 0);
-    hg_assert(config.height > 0);
-    hg_assert(config.depth == 0 || config.depth == 1);
-    hg_assert(config.format != VK_FORMAT_UNDEFINED);
+void hgVkWriteCubemapStaging(const HgVkWriteImageStagingConfig& config)
+{
+    hgAssert(hgVkDevice != nullptr);
+    hgAssert(hgVkVma != nullptr);
+    hgAssert(config.dstImage != nullptr);
+    hgAssert(config.subresource.baseArrayLayer == 0);
+    hgAssert(config.subresource.layerCount == 6);
+    hgAssert(config.srcData != nullptr);
+    hgAssert(config.width > 0);
+    hgAssert(config.height > 0);
+    hgAssert(config.depth == 0 || config.depth == 1);
+    hgAssert(config.format != VK_FORMAT_UNDEFINED);
 
     usize size = config.width
                * config.height
-               * hg_vk_format_to_size(config.format);
+               * hgVkFormatToSize(config.format);
 
     VkBuffer buffer = nullptr;
-    VmaAllocation buffer_alloc = nullptr;
-    hg_vk_create_buffer(&buffer, &buffer_alloc, size * 4 * 3,
+    VmaAllocation bufferAlloc = nullptr;
+    hgVkCreateBuffer(&buffer, &bufferAlloc, size * 4 * 3,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
-    hg_defer(vmaDestroyBuffer(hg_vk_vma, buffer, buffer_alloc));
+    hgDefer(vmaDestroyBuffer(hgVkVma, buffer, bufferAlloc));
 
-    vmaCopyMemoryToAllocation(hg_vk_vma, config.src_data, buffer_alloc, 0, size);
+    vmaCopyMemoryToAllocation(hgVkVma, config.srcData, bufferAlloc, 0, size);
 
-    HgVkImageConfig stage_info{};
-    stage_info.width = config.width;
-    stage_info.height = config.height;
-    stage_info.depth = config.depth;
-    stage_info.format = config.format;
-    stage_info.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT
+    HgVkImageConfig stageInfo{};
+    stageInfo.width = config.width;
+    stageInfo.height = config.height;
+    stageInfo.depth = config.depth;
+    stageInfo.format = config.format;
+    stageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT
                      | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
     VkImage stage = nullptr;
-    VmaAllocation stage_alloc = nullptr;
-    hg_vk_create_image(&stage, &stage_alloc, stage_info);
-    hg_defer(vmaDestroyImage(hg_vk_vma, stage, stage_alloc));
+    VmaAllocation stageAlloc = nullptr;
+    hgVkCreateImage(&stage, &stageAlloc, stageInfo);
+    hgDefer(vmaDestroyImage(hgVkVma, stage, stageAlloc));
 
-    VkCommandBuffer cmd = hg_vk_begin_commands();
+    VkCommandBuffer cmd = hgVkBeginCommands();
 
-    VkImageMemoryBarrier2 stage_barrier{};
-    stage_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-    stage_barrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    stage_barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    stage_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    stage_barrier.image = config.dst_image;
-    stage_barrier.subresourceRange.aspectMask = config.subresource.aspectMask;
-    stage_barrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
-    stage_barrier.subresourceRange.levelCount = 1;
-    stage_barrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
-    stage_barrier.subresourceRange.layerCount = config.subresource.layerCount;
+    VkImageMemoryBarrier2 stageBarrier{};
+    stageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    stageBarrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    stageBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    stageBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    stageBarrier.image = config.dstImage;
+    stageBarrier.subresourceRange.aspectMask = config.subresource.aspectMask;
+    stageBarrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
+    stageBarrier.subresourceRange.levelCount = 1;
+    stageBarrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
+    stageBarrier.subresourceRange.layerCount = config.subresource.layerCount;
 
-    VkDependencyInfo stage_dep{};
-    stage_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    stage_dep.imageMemoryBarrierCount = 1;
-    stage_dep.pImageMemoryBarriers = &stage_barrier;
+    VkDependencyInfo stageDep{};
+    stageDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    stageDep.imageMemoryBarrierCount = 1;
+    stageDep.pImageMemoryBarriers = &stageBarrier;
 
-    vkCmdPipelineBarrier2(cmd, &stage_dep);
+    vkCmdPipelineBarrier2(cmd, &stageDep);
 
-    VkBufferImageCopy stage_region{};
-    stage_region.imageSubresource = config.subresource;
-    stage_region.imageExtent = {config.width, config.height, config.depth};
+    VkBufferImageCopy stageRegion{};
+    stageRegion.imageSubresource = config.subresource;
+    stageRegion.imageExtent = {config.width, config.height, config.depth};
 
-    vkCmdCopyBufferToImage(cmd, buffer, stage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &stage_region);
+    vkCmdCopyBufferToImage(cmd, buffer, stage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &stageRegion);
 
-    VkImageMemoryBarrier2 transfer_barriers[2]{};
+    VkImageMemoryBarrier2 transferBarriers[2]{};
 
-    transfer_barriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-    transfer_barriers[0].srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    transfer_barriers[0].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    transfer_barriers[0].dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    transfer_barriers[0].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-    transfer_barriers[0].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    transfer_barriers[0].newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    transfer_barriers[0].image = stage;
-    transfer_barriers[0].subresourceRange.aspectMask = config.subresource.aspectMask;
-    transfer_barriers[0].subresourceRange.baseMipLevel = 0;
-    transfer_barriers[0].subresourceRange.levelCount = 1;
-    transfer_barriers[0].subresourceRange.baseArrayLayer = 0;
-    transfer_barriers[0].subresourceRange.layerCount = 1;
+    transferBarriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    transferBarriers[0].srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    transferBarriers[0].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    transferBarriers[0].dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    transferBarriers[0].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    transferBarriers[0].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    transferBarriers[0].newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    transferBarriers[0].image = stage;
+    transferBarriers[0].subresourceRange.aspectMask = config.subresource.aspectMask;
+    transferBarriers[0].subresourceRange.baseMipLevel = 0;
+    transferBarriers[0].subresourceRange.levelCount = 1;
+    transferBarriers[0].subresourceRange.baseArrayLayer = 0;
+    transferBarriers[0].subresourceRange.layerCount = 1;
 
-    transfer_barriers[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-    transfer_barriers[1].dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    transfer_barriers[1].dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    transfer_barriers[1].newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    transfer_barriers[1].image = config.dst_image;
-    transfer_barriers[1].subresourceRange.aspectMask = config.subresource.aspectMask;
-    transfer_barriers[1].subresourceRange.baseMipLevel = config.subresource.mipLevel;
-    transfer_barriers[1].subresourceRange.levelCount = 1;
-    transfer_barriers[1].subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
-    transfer_barriers[1].subresourceRange.layerCount = config.subresource.layerCount;
+    transferBarriers[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    transferBarriers[1].dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    transferBarriers[1].dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    transferBarriers[1].newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    transferBarriers[1].image = config.dstImage;
+    transferBarriers[1].subresourceRange.aspectMask = config.subresource.aspectMask;
+    transferBarriers[1].subresourceRange.baseMipLevel = config.subresource.mipLevel;
+    transferBarriers[1].subresourceRange.levelCount = 1;
+    transferBarriers[1].subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
+    transferBarriers[1].subresourceRange.layerCount = config.subresource.layerCount;
 
-    VkDependencyInfo transfer_dep{};
-    transfer_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    transfer_dep.imageMemoryBarrierCount = sizeof(transfer_barriers) / sizeof(*transfer_barriers);
-    transfer_dep.pImageMemoryBarriers = transfer_barriers;
+    VkDependencyInfo transferDep{};
+    transferDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    transferDep.imageMemoryBarrierCount = sizeof(transferBarriers) / sizeof(*transferBarriers);
+    transferDep.pImageMemoryBarriers = transferBarriers;
 
-    vkCmdPipelineBarrier2(cmd, &transfer_dep);
+    vkCmdPipelineBarrier2(cmd, &transferDep);
 
     VkImageCopy regions[6]{};
 
@@ -1439,129 +1482,129 @@ void hg_vk_image_staging_write_cubemap(
         cmd,
         stage,
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        config.dst_image,
+        config.dstImage,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         sizeof(regions) / sizeof(*regions),
         regions);
 
-    VkImageMemoryBarrier2 end_barrier{};
-    end_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-    end_barrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    end_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    end_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    end_barrier.newLayout = config.layout;
-    end_barrier.image = config.dst_image;
-    end_barrier.subresourceRange.aspectMask = config.subresource.aspectMask;
-    end_barrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
-    end_barrier.subresourceRange.levelCount = 1;
-    end_barrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
-    end_barrier.subresourceRange.layerCount = config.subresource.layerCount;
+    VkImageMemoryBarrier2 endBarrier{};
+    endBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    endBarrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    endBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    endBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    endBarrier.newLayout = config.layout;
+    endBarrier.image = config.dstImage;
+    endBarrier.subresourceRange.aspectMask = config.subresource.aspectMask;
+    endBarrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
+    endBarrier.subresourceRange.levelCount = 1;
+    endBarrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
+    endBarrier.subresourceRange.layerCount = config.subresource.layerCount;
 
-    VkDependencyInfo end_dep{};
-    end_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    end_dep.imageMemoryBarrierCount = 1;
-    end_dep.pImageMemoryBarriers = &end_barrier;
+    VkDependencyInfo endDep{};
+    endDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    endDep.imageMemoryBarrierCount = 1;
+    endDep.pImageMemoryBarriers = &endBarrier;
 
-    vkCmdPipelineBarrier2(cmd, &end_dep);
+    vkCmdPipelineBarrier2(cmd, &endDep);
 
-    hg_vk_end_and_execute(cmd);
+    hgVkEndAndExecute(cmd);
 }
 
-void hg_vk_image_staging_read(
-    const HgVkImageStagingReadConfig& config
-) {
-    hg_assert(hg_vk_device != nullptr);
-    hg_assert(hg_vk_vma != nullptr);
-    hg_assert(config.src_image != nullptr);
-    hg_assert(config.layout != VK_IMAGE_LAYOUT_UNDEFINED);
-    hg_assert(config.dst != nullptr);
-    hg_assert(config.width > 0);
-    hg_assert(config.height > 0);
-    hg_assert(config.depth > 0);
-    hg_assert(config.format != VK_FORMAT_UNDEFINED);
+void hgVkReadImageStaging(const HgVkReadImageStagingConfig& config)
+{
+    hgAssert(hgVkDevice != nullptr);
+    hgAssert(hgVkVma != nullptr);
+    hgAssert(config.srcImage != nullptr);
+    hgAssert(config.layout != VK_IMAGE_LAYOUT_UNDEFINED);
+    hgAssert(config.dst != nullptr);
+    hgAssert(config.width > 0);
+    hgAssert(config.height > 0);
+    hgAssert(config.depth > 0);
+    hgAssert(config.format != VK_FORMAT_UNDEFINED);
 
     usize size = config.width
                * config.height
                * config.depth
-               * hg_vk_format_to_size(config.format);
+               * hgVkFormatToSize(config.format);
 
     VkBuffer stage = nullptr;
-    VmaAllocation stage_alloc = nullptr;
-    hg_vk_create_buffer(&stage, &stage_alloc, size,
+    VmaAllocation stageAlloc = nullptr;
+    hgVkCreateBuffer(&stage, &stageAlloc, size,
         VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
-    hg_defer(vmaDestroyBuffer(hg_vk_vma, stage, stage_alloc));
+    hgDefer(vmaDestroyBuffer(hgVkVma, stage, stageAlloc));
 
-    VkCommandBuffer cmd = hg_vk_begin_commands();
+    VkCommandBuffer cmd = hgVkBeginCommands();
 
-    VkImageMemoryBarrier2 transfer_barrier{};
-    transfer_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-    transfer_barrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    transfer_barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-    transfer_barrier.oldLayout = config.layout;
-    transfer_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    transfer_barrier.image = config.src_image;
-    transfer_barrier.subresourceRange.aspectMask = config.subresource.aspectMask;
-    transfer_barrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
-    transfer_barrier.subresourceRange.levelCount = 1;
-    transfer_barrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
-    transfer_barrier.subresourceRange.layerCount = config.subresource.layerCount;
+    VkImageMemoryBarrier2 transferBarrier{};
+    transferBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    transferBarrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    transferBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    transferBarrier.oldLayout = config.layout;
+    transferBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    transferBarrier.image = config.srcImage;
+    transferBarrier.subresourceRange.aspectMask = config.subresource.aspectMask;
+    transferBarrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
+    transferBarrier.subresourceRange.levelCount = 1;
+    transferBarrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
+    transferBarrier.subresourceRange.layerCount = config.subresource.layerCount;
 
-    VkDependencyInfo transfer_dep{};
-    transfer_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    transfer_dep.imageMemoryBarrierCount = 1;
-    transfer_dep.pImageMemoryBarriers = &transfer_barrier;
+    VkDependencyInfo transferDep{};
+    transferDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    transferDep.imageMemoryBarrierCount = 1;
+    transferDep.pImageMemoryBarriers = &transferBarrier;
 
-    vkCmdPipelineBarrier2(cmd, &transfer_dep);
+    vkCmdPipelineBarrier2(cmd, &transferDep);
 
     VkBufferImageCopy region{};
     region.imageSubresource = config.subresource;
     region.imageExtent = {config.width, config.height, config.depth};
 
-    vkCmdCopyImageToBuffer(cmd, config.src_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, stage, 1, &region);
+    vkCmdCopyImageToBuffer(cmd, config.srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, stage, 1, &region);
 
-    VkImageMemoryBarrier2 end_barrier{};
-    end_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-    end_barrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    end_barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-    end_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    end_barrier.newLayout = config.layout;
-    end_barrier.image = config.src_image;
-    end_barrier.subresourceRange.aspectMask = config.subresource.aspectMask;
-    end_barrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
-    end_barrier.subresourceRange.levelCount = 1;
-    end_barrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
-    end_barrier.subresourceRange.layerCount = config.subresource.layerCount;
+    VkImageMemoryBarrier2 endBarrier{};
+    endBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    endBarrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    endBarrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    endBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    endBarrier.newLayout = config.layout;
+    endBarrier.image = config.srcImage;
+    endBarrier.subresourceRange.aspectMask = config.subresource.aspectMask;
+    endBarrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
+    endBarrier.subresourceRange.levelCount = 1;
+    endBarrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
+    endBarrier.subresourceRange.layerCount = config.subresource.layerCount;
 
-    VkDependencyInfo end_dep{};
-    end_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    end_dep.imageMemoryBarrierCount = 1;
-    end_dep.pImageMemoryBarriers = &end_barrier;
+    VkDependencyInfo endDep{};
+    endDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    endDep.imageMemoryBarrierCount = 1;
+    endDep.pImageMemoryBarriers = &endBarrier;
 
-    vkCmdPipelineBarrier2(cmd, &end_dep);
+    vkCmdPipelineBarrier2(cmd, &endDep);
 
-    hg_vk_end_and_execute(cmd);
+    hgVkEndAndExecute(cmd);
 
-    vmaCopyAllocationToMemory(hg_vk_vma, stage_alloc, 0, config.dst, size);
+    vmaCopyAllocationToMemory(hgVkVma, stageAlloc, 0, config.dst, size);
 }
 
-void hg_vk_image_generate_mipmaps(const HgVkImageGenerateMipmapsConfig& config) {
-    hg_assert(hg_vk_device != nullptr);
-    hg_assert(config.image != nullptr);
-    hg_assert(config.old_layout != VK_IMAGE_LAYOUT_UNDEFINED);
-    hg_assert(config.new_layout != VK_IMAGE_LAYOUT_UNDEFINED);
-    hg_assert(config.width > 0);
-    hg_assert(config.height > 0);
-    hg_assert(config.depth > 0);
-    hg_assert(config.mip_count > 0);
-    if (config.mip_count == 1)
+void hgVkGenerateMipmaps(const HgVkGenerateMipmapsConfig& config)
+{
+    hgAssert(hgVkDevice != nullptr);
+    hgAssert(config.image != nullptr);
+    hgAssert(config.oldLayout != VK_IMAGE_LAYOUT_UNDEFINED);
+    hgAssert(config.newLayout != VK_IMAGE_LAYOUT_UNDEFINED);
+    hgAssert(config.width > 0);
+    hgAssert(config.height > 0);
+    hgAssert(config.depth > 0);
+    hgAssert(config.mipCount > 0);
+    if (config.mipCount == 1)
         return;
 
-    VkCommandBuffer cmd = hg_vk_begin_commands();
+    VkCommandBuffer cmd = hgVkBeginCommands();
 
-    VkOffset3D mip_offset{};
-    mip_offset.x = (i32)config.width;
-    mip_offset.y = (i32)config.height;
-    mip_offset.z = (i32)config.depth;
+    VkOffset3D mipOffset{};
+    mipOffset.x = (i32)config.width;
+    mipOffset.y = (i32)config.height;
+    mipOffset.z = (i32)config.depth;
 
     VkImageMemoryBarrier2 barrier{};
     barrier.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
@@ -1569,10 +1612,10 @@ void hg_vk_image_generate_mipmaps(const HgVkImageGenerateMipmapsConfig& config) 
     barrier.srcAccessMask = VK_ACCESS_NONE;
     barrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
     barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-    barrier.oldLayout = config.old_layout;
+    barrier.oldLayout = config.oldLayout;
     barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
     barrier.image = config.image;
-    barrier.subresourceRange.aspectMask = config.aspect_mask;
+    barrier.subresourceRange.aspectMask = config.aspectMask;
     barrier.subresourceRange.levelCount = 1;
     barrier.subresourceRange.layerCount = 1;
 
@@ -1583,33 +1626,34 @@ void hg_vk_image_generate_mipmaps(const HgVkImageGenerateMipmapsConfig& config) 
 
     vkCmdPipelineBarrier2(cmd, &dep);
 
-    for (u32 level = 0; level < config.mip_count - 1; ++level) {
+    for (u32 level = 0; level < config.mipCount - 1; ++level)
+    {
         barrier.srcStageMask = VK_PIPELINE_STAGE_NONE;
         barrier.srcAccessMask = VK_ACCESS_NONE;
         barrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
         barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
         barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        barrier.subresourceRange.aspectMask = config.aspect_mask;
+        barrier.subresourceRange.aspectMask = config.aspectMask;
         barrier.subresourceRange.baseMipLevel = level + 1;
 
         vkCmdPipelineBarrier2(cmd, &dep);
 
         VkImageBlit blit{};
-        blit.srcSubresource.aspectMask = config.aspect_mask;
+        blit.srcSubresource.aspectMask = config.aspectMask;
         blit.srcSubresource.mipLevel = level;
         blit.srcSubresource.layerCount = 1;
-        blit.srcOffsets[1] = mip_offset;
-        if (mip_offset.x > 1)
-            mip_offset.x /= 2;
-        if (mip_offset.y > 1)
-            mip_offset.y /= 2;
-        if (mip_offset.z > 1)
-            mip_offset.z /= 2;
-        blit.dstSubresource.aspectMask = config.aspect_mask;
+        blit.srcOffsets[1] = mipOffset;
+        if (mipOffset.x > 1)
+            mipOffset.x /= 2;
+        if (mipOffset.y > 1)
+            mipOffset.y /= 2;
+        if (mipOffset.z > 1)
+            mipOffset.z /= 2;
+        blit.dstSubresource.aspectMask = config.aspectMask;
         blit.dstSubresource.mipLevel = level + 1;
         blit.dstSubresource.layerCount = 1;
-        blit.dstOffsets[1] = mip_offset;
+        blit.dstOffsets[1] = mipOffset;
 
         vkCmdBlitImage(cmd,
             config.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
@@ -1623,7 +1667,7 @@ void hg_vk_image_generate_mipmaps(const HgVkImageGenerateMipmapsConfig& config) 
         barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
         barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
         barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-        barrier.subresourceRange.aspectMask = config.aspect_mask;
+        barrier.subresourceRange.aspectMask = config.aspectMask;
         barrier.subresourceRange.baseMipLevel = level + 1;
 
         vkCmdPipelineBarrier2(cmd, &dep);
@@ -1634,130 +1678,136 @@ void hg_vk_image_generate_mipmaps(const HgVkImageGenerateMipmapsConfig& config) 
     barrier.dstStageMask = VK_PIPELINE_STAGE_NONE;
     barrier.dstAccessMask = VK_ACCESS_NONE;
     barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    barrier.newLayout = config.new_layout;
-    barrier.subresourceRange.aspectMask = config.aspect_mask;
+    barrier.newLayout = config.newLayout;
+    barrier.subresourceRange.aspectMask = config.aspectMask;
     barrier.subresourceRange.baseMipLevel = 0;
-    barrier.subresourceRange.levelCount = config.mip_count;
+    barrier.subresourceRange.levelCount = config.mipCount;
 
     vkCmdPipelineBarrier2(cmd, &dep);
 
-    hg_vk_end_and_execute(cmd);
+    hgVkEndAndExecute(cmd);
 }
 
-HgRenderer HgRenderer::create(HgArena* arena, u32 max_images, u32 max_buffers) {
+HgRenderer HgRenderer::create(HgArena* arena, u32 maxImages, u32 maxBuffers)
+{
     HgRenderer renderer{};
-    renderer.buffers = hg_alloc<Buffer>(arena, max_buffers);
-    renderer.buffer_count = 0;
-    renderer.buffer_capacity = max_buffers;
-    renderer.images = hg_alloc<Image>(arena, max_images);
-    renderer.image_count = 0;
-    renderer.image_capacity = max_images;
+    renderer.buffers = hgAlloc<Buffer>(arena, maxBuffers);
+    renderer.bufferCount = 0;
+    renderer.bufferCapacity = maxBuffers;
+    renderer.images = hgAlloc<Image>(arena, maxImages);
+    renderer.imageCount = 0;
+    renderer.imageCapacity = maxImages;
     return renderer;
 }
 
-void HgRenderer::reset() {
-    buffer_count = 0;
-    image_count = 0;
+void HgRenderer::reset()
+{
+    bufferCount = 0;
+    imageCount = 0;
 }
 
-HgBufferRenderID HgRenderer::add_buffer(
+HgBufferRenderID HgRenderer::addBuffer(
     VkBuffer buffer,
     u64 offset,
     u64 size,
-    HgRenderUsage previous_usage,
-    HgRenderAccess previous_access
-) {
-    hg_assert(buffer_count < buffer_capacity);
-    hg_assert(buffer != nullptr);
+    HgRenderUsage previousUsage,
+    HgRenderAccess previousAccess)
+{
+    hgAssert(bufferCount < bufferCapacity);
+    hgAssert(buffer != nullptr);
 
-    buffers[buffer_count] = {buffer, offset, size, previous_usage, previous_access};
-    return buffer_count++;
+    buffers[bufferCount] = {buffer, offset, size, previousUsage, previousAccess};
+    return bufferCount++;
 }
 
-HgImageRenderID HgRenderer::add_image(
+HgImageRenderID HgRenderer::addImage(
     VkImage image,
     VkImageView view,
     VkImageSubresourceRange subresource,
-    HgRenderUsage previous_usage,
-    HgRenderAccess previous_access
-) {
-    hg_assert(image_count < image_capacity);
-    hg_assert(image != nullptr);
-    hg_assert(view != nullptr);
+    HgRenderUsage previousUsage,
+    HgRenderAccess previousAccess)
+{
+    hgAssert(imageCount < imageCapacity);
+    hgAssert(image != nullptr);
+    hgAssert(view != nullptr);
 
-    images[image_count] = {image, view, subresource, previous_usage, previous_access};
-    return image_count++;
+    images[imageCount] = {image, view, subresource, previousUsage, previousAccess};
+    return imageCount++;
 }
 
-static constexpr VkPipelineStageFlags2 get_stage_mask(HgRenderUsage usage) {
-    switch (usage) {
+static constexpr VkPipelineStageFlags2 getStageMask(HgRenderUsage usage)
+{
+    switch (usage)
+    {
         case HgRenderUsage::none:
             return VK_PIPELINE_STAGE_NONE;
             break;
-        case HgRenderUsage::vertex_buffer:
+        case HgRenderUsage::vertexBuffer:
             return VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
             break;
-        case HgRenderUsage::index_buffer:
+        case HgRenderUsage::indexBuffer:
             return VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
             break;
-        case HgRenderUsage::graphics_shader: [[fallthrough]];
-        case HgRenderUsage::graphics_uniform_buffer:
+        case HgRenderUsage::graphicsShader: [[fallthrough]];
+        case HgRenderUsage::graphicsUniformBuffer:
             return VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
             break;
-        case HgRenderUsage::compute_shader: [[fallthrough]];
-        case HgRenderUsage::compute_uniform_buffer:
+        case HgRenderUsage::computeShader: [[fallthrough]];
+        case HgRenderUsage::computeUniformBuffer:
             return VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
             break;
-        case HgRenderUsage::color_attachment:
+        case HgRenderUsage::colorAttachment:
             return VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
             break;
-        case HgRenderUsage::depth_attachment: [[fallthrough]];
-        case HgRenderUsage::stencil_attachment:
+        case HgRenderUsage::depthAttachment: [[fallthrough]];
+        case HgRenderUsage::stencilAttachment:
             return VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
             break;
         case HgRenderUsage::transfer:
             return VK_PIPELINE_STAGE_TRANSFER_BIT;
             break;
-        case HgRenderUsage::present_src:
+        case HgRenderUsage::presentSrc:
             return VK_PIPELINE_STAGE_NONE;
             break;
         case HgRenderUsage::count:
             break;
     }
-    hg_error("Found invalid render usage: %d", (u32)usage);
+    hgError("Found invalid render usage: %d", (u32)usage);
 }
 
-static constexpr VkAccessFlags2 get_access_mask(HgRenderUsage usage, HgRenderAccess access) {
-    switch (usage) {
+static constexpr VkAccessFlags2 getAccessMask(HgRenderUsage usage, HgRenderAccess access)
+{
+    switch (usage)
+    {
         case HgRenderUsage::none:
             return VK_ACCESS_NONE;
             break;
-        case HgRenderUsage::vertex_buffer:
+        case HgRenderUsage::vertexBuffer:
             return VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
             break;
-        case HgRenderUsage::index_buffer:
+        case HgRenderUsage::indexBuffer:
             return VK_ACCESS_INDEX_READ_BIT;
             break;
-        case HgRenderUsage::graphics_shader:
+        case HgRenderUsage::graphicsShader:
             return ((u32)access & (u32)HgRenderAccess::read) ? VK_ACCESS_SHADER_READ_BIT : 0
                  | ((u32)access & (u32)HgRenderAccess::write) ? VK_ACCESS_SHADER_WRITE_BIT : 0;
             break;
-        case HgRenderUsage::graphics_uniform_buffer:
+        case HgRenderUsage::graphicsUniformBuffer:
             return VK_ACCESS_UNIFORM_READ_BIT;
             break;
-        case HgRenderUsage::compute_shader:
+        case HgRenderUsage::computeShader:
             return ((u32)access & (u32)HgRenderAccess::read) ? VK_ACCESS_SHADER_READ_BIT : 0
                  | ((u32)access & (u32)HgRenderAccess::write) ? VK_ACCESS_SHADER_WRITE_BIT : 0;
             break;
-        case HgRenderUsage::compute_uniform_buffer:
+        case HgRenderUsage::computeUniformBuffer:
             return VK_ACCESS_UNIFORM_READ_BIT;
             break;
-        case HgRenderUsage::color_attachment:
+        case HgRenderUsage::colorAttachment:
             return ((u32)access & (u32)HgRenderAccess::read) ? VK_ACCESS_COLOR_ATTACHMENT_READ_BIT : 0
                  | ((u32)access & (u32)HgRenderAccess::write) ? VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT : 0;
             break;
-        case HgRenderUsage::depth_attachment: [[fallthrough]];
-        case HgRenderUsage::stencil_attachment:
+        case HgRenderUsage::depthAttachment: [[fallthrough]];
+        case HgRenderUsage::stencilAttachment:
             return ((u32)access & (u32)HgRenderAccess::read) ? VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT : 0
                  | ((u32)access & (u32)HgRenderAccess::write) ? VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT : 0;
             break;
@@ -1765,331 +1815,345 @@ static constexpr VkAccessFlags2 get_access_mask(HgRenderUsage usage, HgRenderAcc
             return ((u32)access & (u32)HgRenderAccess::read) ? VK_ACCESS_TRANSFER_READ_BIT : 0
                  | ((u32)access & (u32)HgRenderAccess::write) ? VK_ACCESS_TRANSFER_WRITE_BIT : 0;
             break;
-        case HgRenderUsage::present_src:
+        case HgRenderUsage::presentSrc:
             return VK_ACCESS_NONE;
             break;
         case HgRenderUsage::count:
             break;
     }
-    hg_error("Found invalid render usage: %d", (u32)usage);
+    hgError("Found invalid render usage: %d", (u32)usage);
 }
 
-static constexpr VkImageLayout get_layout(HgRenderUsage usage, HgRenderAccess access) {
-    switch (usage) {
+static constexpr VkImageLayout getLayout(HgRenderUsage usage, HgRenderAccess access)
+{
+    switch (usage)
+    {
         case HgRenderUsage::none:
             return VK_IMAGE_LAYOUT_UNDEFINED;
             break;
-        case HgRenderUsage::graphics_shader: [[fallthrough]];
-        case HgRenderUsage::compute_shader:
+        case HgRenderUsage::graphicsShader: [[fallthrough]];
+        case HgRenderUsage::computeShader:
             return ((u32)access & (u32)HgRenderAccess::write)
                 ? VK_IMAGE_LAYOUT_GENERAL
                 : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
             break;
-        case HgRenderUsage::color_attachment:
+        case HgRenderUsage::colorAttachment:
             return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
             break;
-        case HgRenderUsage::depth_attachment: [[fallthrough]];
-        case HgRenderUsage::stencil_attachment:
+        case HgRenderUsage::depthAttachment: [[fallthrough]];
+        case HgRenderUsage::stencilAttachment:
             return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
             break;
         case HgRenderUsage::transfer:
-            hg_assert(!(((u32)access & (u32)HgRenderAccess::read) && ((u32)access & (u32)HgRenderAccess::write)));
+            hgAssert(!(((u32)access & (u32)HgRenderAccess::read) && ((u32)access & (u32)HgRenderAccess::write)));
             return ((u32)access & (u32)HgRenderAccess::read)
                 ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
                 : VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
             break;
-        case HgRenderUsage::present_src:
+        case HgRenderUsage::presentSrc:
             return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
             break;
-        case HgRenderUsage::vertex_buffer: [[fallthrough]];
-        case HgRenderUsage::index_buffer: [[fallthrough]];
-        case HgRenderUsage::graphics_uniform_buffer: [[fallthrough]];
-        case HgRenderUsage::compute_uniform_buffer: [[fallthrough]];
+        case HgRenderUsage::vertexBuffer: [[fallthrough]];
+        case HgRenderUsage::indexBuffer: [[fallthrough]];
+        case HgRenderUsage::graphicsUniformBuffer: [[fallthrough]];
+        case HgRenderUsage::computeUniformBuffer: [[fallthrough]];
         case HgRenderUsage::count:
             break;
     }
-    hg_error("Found invalid render usage for image: %d", (u32)usage);
+    hgError("Found invalid render usage for image: %d", (u32)usage);
 }
 
 void HgRenderer::barrier(
     VkCommandBuffer cmd,
-    const HgBufferBarrier* buffer_barriers,
-    u32 buffer_barrier_count,
-    const HgImageBarrier* image_barriers,
-    u32 image_barrier_count
-) {
-    HgArena* scratch = hg_get_scratch();
-    HgArenaScope scratch_scope{scratch};
+    const HgBufferBarrier* bufferBarriers,
+    u32 bufferBarrierCount,
+    const HgImageBarrier* imageBarriers,
+    u32 imageBarrierCount)
+{
+    HgArena* scratch = hgGetScratch();
+    HgArenaScope scratchScope{scratch};
 
-    VkBufferMemoryBarrier2* vk_buffer_barriers = hg_alloc<VkBufferMemoryBarrier2>(scratch, image_barrier_count);
-    VkImageMemoryBarrier2* vk_image_barriers = hg_alloc<VkImageMemoryBarrier2>(scratch, image_barrier_count);
+    VkBufferMemoryBarrier2* vkBufferBarriers = hgAlloc<VkBufferMemoryBarrier2>(scratch, imageBarrierCount);
+    VkImageMemoryBarrier2* vkImageBarriers = hgAlloc<VkImageMemoryBarrier2>(scratch, imageBarrierCount);
 
-    for (usize i = 0; i < buffer_barrier_count; ++i) {
-        hg_assert(buffer_barriers[i].buffer < buffer_count);
-        Buffer& buffer = buffers[buffer_barriers[i].buffer];
+    for (usize i = 0; i < bufferBarrierCount; ++i)
+    {
+        hgAssert(bufferBarriers[i].buffer < bufferCount);
+        Buffer& buffer = buffers[bufferBarriers[i].buffer];
 
-        vk_buffer_barriers[i] = {};
-        vk_buffer_barriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
-        vk_buffer_barriers[i].srcStageMask = get_stage_mask(buffer.last_usage);
-        vk_buffer_barriers[i].srcAccessMask = get_access_mask(buffer.last_usage, buffer.last_access);
-        vk_buffer_barriers[i].dstStageMask = get_stage_mask(buffer_barriers[i].next_usage);
-        vk_buffer_barriers[i].dstAccessMask = get_access_mask(buffer_barriers[i].next_usage, buffer_barriers[i].next_access);
-        vk_buffer_barriers[i].buffer = buffer.handle;
-        vk_buffer_barriers[i].offset = buffer.offset;
-        vk_buffer_barriers[i].size = buffer.size;
+        vkBufferBarriers[i] = {};
+        vkBufferBarriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+        vkBufferBarriers[i].srcStageMask = getStageMask(buffer.lastUsage);
+        vkBufferBarriers[i].srcAccessMask = getAccessMask(buffer.lastUsage, buffer.lastAccess);
+        vkBufferBarriers[i].dstStageMask = getStageMask(bufferBarriers[i].nextUsage);
+        vkBufferBarriers[i].dstAccessMask = getAccessMask(bufferBarriers[i].nextUsage, bufferBarriers[i].nextAccess);
+        vkBufferBarriers[i].buffer = buffer.handle;
+        vkBufferBarriers[i].offset = buffer.offset;
+        vkBufferBarriers[i].size = buffer.size;
 
-        buffer.last_usage = buffer_barriers[i].next_usage;
-        buffer.last_access = buffer_barriers[i].next_access;
+        buffer.lastUsage = bufferBarriers[i].nextUsage;
+        buffer.lastAccess = bufferBarriers[i].nextAccess;
     }
 
-    for (usize i = 0; i < image_barrier_count; ++i) {
-        hg_assert(image_barriers[i].image < image_count);
-        Image& image = images[image_barriers[i].image];
+    for (usize i = 0; i < imageBarrierCount; ++i)
+    {
+        hgAssert(imageBarriers[i].image < imageCount);
+        Image& image = images[imageBarriers[i].image];
 
-        vk_image_barriers[i] = {};
-        vk_image_barriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-        vk_image_barriers[i].srcStageMask = get_stage_mask(image.last_usage);
-        vk_image_barriers[i].srcAccessMask = get_access_mask(image.last_usage, image.last_access);
-        vk_image_barriers[i].dstStageMask = get_stage_mask(image_barriers[i].next_usage);
-        vk_image_barriers[i].dstAccessMask = get_access_mask(image_barriers[i].next_usage, image_barriers[i].next_access);
-        vk_image_barriers[i].oldLayout = get_layout(image.last_usage, image.last_access);
-        vk_image_barriers[i].newLayout = get_layout(image_barriers[i].next_usage, image_barriers[i].next_access);
-        vk_image_barriers[i].image = image.handle;
-        vk_image_barriers[i].subresourceRange = image.subresource;
+        vkImageBarriers[i] = {};
+        vkImageBarriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        vkImageBarriers[i].srcStageMask = getStageMask(image.lastUsage);
+        vkImageBarriers[i].srcAccessMask = getAccessMask(image.lastUsage, image.lastAccess);
+        vkImageBarriers[i].dstStageMask = getStageMask(imageBarriers[i].nextUsage);
+        vkImageBarriers[i].dstAccessMask = getAccessMask(imageBarriers[i].nextUsage, imageBarriers[i].nextAccess);
+        vkImageBarriers[i].oldLayout = getLayout(image.lastUsage, image.lastAccess);
+        vkImageBarriers[i].newLayout = getLayout(imageBarriers[i].nextUsage, imageBarriers[i].nextAccess);
+        vkImageBarriers[i].image = image.handle;
+        vkImageBarriers[i].subresourceRange = image.subresource;
 
-        image.last_usage = image_barriers[i].next_usage;
-        image.last_access = image_barriers[i].next_access;
+        image.lastUsage = imageBarriers[i].nextUsage;
+        image.lastAccess = imageBarriers[i].nextAccess;
     }
 
     VkDependencyInfo dep{};
     dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    dep.bufferMemoryBarrierCount = buffer_barrier_count;
-    dep.pBufferMemoryBarriers = vk_buffer_barriers;
-    dep.imageMemoryBarrierCount = image_barrier_count;
-    dep.pImageMemoryBarriers = vk_image_barriers;
+    dep.bufferMemoryBarrierCount = bufferBarrierCount;
+    dep.pBufferMemoryBarriers = vkBufferBarriers;
+    dep.imageMemoryBarrierCount = imageBarrierCount;
+    dep.pImageMemoryBarriers = vkImageBarriers;
 
     vkCmdPipelineBarrier2(cmd, &dep);
 }
 
-void HgRenderer::begin_pass(VkCommandBuffer cmd, u32 width, u32 height, const HgRenderPass& pass) {
-    HgArena* scratch = hg_get_scratch();
-    HgArenaScope scratch_scope{scratch};
+void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgRenderPass& pass)
+{
+    HgArena* scratch = hgGetScratch();
+    HgArenaScope scratchScope{scratch};
 
-    VkBufferMemoryBarrier2* buffer_barriers = nullptr;
-    u32 buffer_barrier_count = 0;
-    VkImageMemoryBarrier2* image_barriers = nullptr;
-    u32 image_barrier_count = 0;
+    VkBufferMemoryBarrier2* bufferBarriers = nullptr;
+    u32 bufferBarrierCount = 0;
+    VkImageMemoryBarrier2* imageBarriers = nullptr;
+    u32 imageBarrierCount = 0;
 
-    buffer_barriers = hg_realloc<VkBufferMemoryBarrier2>(scratch, 
-        buffer_barriers, buffer_barrier_count, buffer_barrier_count + pass.uniform_buffer_count);
+    bufferBarriers = hgRealloc<VkBufferMemoryBarrier2>(scratch, 
+        bufferBarriers, bufferBarrierCount, bufferBarrierCount + pass.uniformBufferCount);
 
-    for (usize i = buffer_barrier_count; i < buffer_barrier_count + pass.uniform_buffer_count; ++i) {
-        hg_assert(pass.uniform_buffers[i - buffer_barrier_count] < buffer_count);
-        Buffer& buffer = buffers[pass.uniform_buffers[i - buffer_barrier_count]];
+    for (usize i = bufferBarrierCount; i < bufferBarrierCount + pass.uniformBufferCount; ++i)
+    {
+        hgAssert(pass.uniformBuffers[i - bufferBarrierCount] < bufferCount);
+        Buffer& buffer = buffers[pass.uniformBuffers[i - bufferBarrierCount]];
 
-        buffer_barriers[i] = {};
-        buffer_barriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
-        buffer_barriers[i].srcStageMask = get_stage_mask(buffer.last_usage);
-        buffer_barriers[i].srcAccessMask = get_access_mask(buffer.last_usage, buffer.last_access);
-        buffer_barriers[i].dstStageMask = get_stage_mask(HgRenderUsage::graphics_uniform_buffer);
-        buffer_barriers[i].dstAccessMask = get_access_mask(HgRenderUsage::graphics_uniform_buffer, HgRenderAccess::read);
-        buffer_barriers[i].buffer = buffer.handle;
-        buffer_barriers[i].offset = buffer.offset;
-        buffer_barriers[i].size = buffer.size;
+        bufferBarriers[i] = {};
+        bufferBarriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+        bufferBarriers[i].srcStageMask = getStageMask(buffer.lastUsage);
+        bufferBarriers[i].srcAccessMask = getAccessMask(buffer.lastUsage, buffer.lastAccess);
+        bufferBarriers[i].dstStageMask = getStageMask(HgRenderUsage::graphicsUniformBuffer);
+        bufferBarriers[i].dstAccessMask = getAccessMask(HgRenderUsage::graphicsUniformBuffer, HgRenderAccess::read);
+        bufferBarriers[i].buffer = buffer.handle;
+        bufferBarriers[i].offset = buffer.offset;
+        bufferBarriers[i].size = buffer.size;
 
-        buffer.last_usage = HgRenderUsage::graphics_uniform_buffer;
-        buffer.last_access = HgRenderAccess::read;
+        buffer.lastUsage = HgRenderUsage::graphicsUniformBuffer;
+        buffer.lastAccess = HgRenderAccess::read;
     }
 
-    buffer_barrier_count += pass.uniform_buffer_count;
+    bufferBarrierCount += pass.uniformBufferCount;
 
-    buffer_barriers = hg_realloc<VkBufferMemoryBarrier2>(scratch, 
-        buffer_barriers, buffer_barrier_count, buffer_barrier_count + pass.storage_buffer_count);
+    bufferBarriers = hgRealloc<VkBufferMemoryBarrier2>(scratch, 
+        bufferBarriers, bufferBarrierCount, bufferBarrierCount + pass.storageBufferCount);
 
-    for (usize i = buffer_barrier_count; i < buffer_barrier_count + pass.storage_buffer_count; ++i) {
-        hg_assert(pass.storage_buffers[i - buffer_barrier_count] < buffer_count);
-        Buffer& buffer = buffers[pass.storage_buffers[i - buffer_barrier_count]];
+    for (usize i = bufferBarrierCount; i < bufferBarrierCount + pass.storageBufferCount; ++i)
+    {
+        hgAssert(pass.storageBuffers[i - bufferBarrierCount] < bufferCount);
+        Buffer& buffer = buffers[pass.storageBuffers[i - bufferBarrierCount]];
 
-        buffer_barriers[i] = {};
-        buffer_barriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
-        buffer_barriers[i].srcStageMask = get_stage_mask(buffer.last_usage);
-        buffer_barriers[i].srcAccessMask = get_access_mask(buffer.last_usage, buffer.last_access);
-        buffer_barriers[i].dstStageMask = get_stage_mask(HgRenderUsage::graphics_shader);
-        buffer_barriers[i].dstAccessMask = get_access_mask(HgRenderUsage::graphics_shader, HgRenderAccess::read);
-        buffer_barriers[i].buffer = buffer.handle;
-        buffer_barriers[i].offset = buffer.offset;
-        buffer_barriers[i].size = buffer.size;
+        bufferBarriers[i] = {};
+        bufferBarriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+        bufferBarriers[i].srcStageMask = getStageMask(buffer.lastUsage);
+        bufferBarriers[i].srcAccessMask = getAccessMask(buffer.lastUsage, buffer.lastAccess);
+        bufferBarriers[i].dstStageMask = getStageMask(HgRenderUsage::graphicsShader);
+        bufferBarriers[i].dstAccessMask = getAccessMask(HgRenderUsage::graphicsShader, HgRenderAccess::read);
+        bufferBarriers[i].buffer = buffer.handle;
+        bufferBarriers[i].offset = buffer.offset;
+        bufferBarriers[i].size = buffer.size;
 
-        buffer.last_usage = HgRenderUsage::graphics_shader;
-        buffer.last_access = HgRenderAccess::read;
+        buffer.lastUsage = HgRenderUsage::graphicsShader;
+        buffer.lastAccess = HgRenderAccess::read;
     }
 
-    buffer_barrier_count += pass.storage_buffer_count;
+    bufferBarrierCount += pass.storageBufferCount;
 
-    image_barriers = hg_realloc<VkImageMemoryBarrier2>(scratch, 
-        image_barriers, image_barrier_count, image_barrier_count + pass.sampled_image_count);
+    imageBarriers = hgRealloc<VkImageMemoryBarrier2>(scratch, 
+        imageBarriers, imageBarrierCount, imageBarrierCount + pass.sampledImageCount);
 
-    for (usize i = image_barrier_count; i < image_barrier_count + pass.sampled_image_count; ++i) {
-        hg_assert(pass.sampled_images[i - image_barrier_count] < image_count);
-        Image& image = images[pass.sampled_images[i - image_barrier_count]];
+    for (usize i = imageBarrierCount; i < imageBarrierCount + pass.sampledImageCount; ++i)
+    {
+        hgAssert(pass.sampledImages[i - imageBarrierCount] < imageCount);
+        Image& image = images[pass.sampledImages[i - imageBarrierCount]];
 
-        image_barriers[i] = {};
-        image_barriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-        image_barriers[i].srcStageMask = get_stage_mask(image.last_usage);
-        image_barriers[i].srcAccessMask = get_access_mask(image.last_usage, image.last_access);
-        image_barriers[i].dstStageMask = get_stage_mask(HgRenderUsage::graphics_shader);
-        image_barriers[i].dstAccessMask = get_access_mask(HgRenderUsage::graphics_shader, HgRenderAccess::read);
-        image_barriers[i].oldLayout = get_layout(image.last_usage, image.last_access);
-        image_barriers[i].newLayout = get_layout(HgRenderUsage::graphics_shader, HgRenderAccess::read);
-        image_barriers[i].image = image.handle;
-        image_barriers[i].subresourceRange = image.subresource;
+        imageBarriers[i] = {};
+        imageBarriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        imageBarriers[i].srcStageMask = getStageMask(image.lastUsage);
+        imageBarriers[i].srcAccessMask = getAccessMask(image.lastUsage, image.lastAccess);
+        imageBarriers[i].dstStageMask = getStageMask(HgRenderUsage::graphicsShader);
+        imageBarriers[i].dstAccessMask = getAccessMask(HgRenderUsage::graphicsShader, HgRenderAccess::read);
+        imageBarriers[i].oldLayout = getLayout(image.lastUsage, image.lastAccess);
+        imageBarriers[i].newLayout = getLayout(HgRenderUsage::graphicsShader, HgRenderAccess::read);
+        imageBarriers[i].image = image.handle;
+        imageBarriers[i].subresourceRange = image.subresource;
 
-        image.last_usage = HgRenderUsage::graphics_shader;
-        image.last_access = HgRenderAccess::read;
+        image.lastUsage = HgRenderUsage::graphicsShader;
+        image.lastAccess = HgRenderAccess::read;
     }
 
-    image_barrier_count += pass.sampled_image_count;
+    imageBarrierCount += pass.sampledImageCount;
 
-    image_barriers = hg_realloc<VkImageMemoryBarrier2>(scratch, 
-        image_barriers, image_barrier_count, image_barrier_count + pass.color_attachment_count);
+    imageBarriers = hgRealloc<VkImageMemoryBarrier2>(scratch, 
+        imageBarriers, imageBarrierCount, imageBarrierCount + pass.colorAttachmentCount);
 
-    for (usize i = image_barrier_count; i < image_barrier_count + pass.color_attachment_count; ++i) {
-        hg_assert(pass.color_attachments[i - image_barrier_count].image < image_count);
-        Image& image = images[pass.color_attachments[i - image_barrier_count].image];
+    for (usize i = imageBarrierCount; i < imageBarrierCount + pass.colorAttachmentCount; ++i)
+    {
+        hgAssert(pass.colorAttachments[i - imageBarrierCount].image < imageCount);
+        Image& image = images[pass.colorAttachments[i - imageBarrierCount].image];
 
-        image_barriers[i] = {};
-        image_barriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-        image_barriers[i].srcStageMask = get_stage_mask(image.last_usage);
-        image_barriers[i].srcAccessMask = get_access_mask(image.last_usage, image.last_access);
-        image_barriers[i].dstStageMask = get_stage_mask(HgRenderUsage::color_attachment);
-        image_barriers[i].dstAccessMask = get_access_mask(HgRenderUsage::color_attachment, HgRenderAccess::write);
-        image_barriers[i].oldLayout = get_layout(image.last_usage, image.last_access);
-        image_barriers[i].newLayout = get_layout(HgRenderUsage::color_attachment, HgRenderAccess::write);
-        image_barriers[i].image = image.handle;
-        image_barriers[i].subresourceRange = image.subresource;
+        imageBarriers[i] = {};
+        imageBarriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        imageBarriers[i].srcStageMask = getStageMask(image.lastUsage);
+        imageBarriers[i].srcAccessMask = getAccessMask(image.lastUsage, image.lastAccess);
+        imageBarriers[i].dstStageMask = getStageMask(HgRenderUsage::colorAttachment);
+        imageBarriers[i].dstAccessMask = getAccessMask(HgRenderUsage::colorAttachment, HgRenderAccess::write);
+        imageBarriers[i].oldLayout = getLayout(image.lastUsage, image.lastAccess);
+        imageBarriers[i].newLayout = getLayout(HgRenderUsage::colorAttachment, HgRenderAccess::write);
+        imageBarriers[i].image = image.handle;
+        imageBarriers[i].subresourceRange = image.subresource;
 
-        image.last_usage = HgRenderUsage::color_attachment;
-        image.last_access = HgRenderAccess::write;
+        image.lastUsage = HgRenderUsage::colorAttachment;
+        image.lastAccess = HgRenderAccess::write;
     }
 
-    image_barrier_count += pass.color_attachment_count;
+    imageBarrierCount += pass.colorAttachmentCount;
 
-    if (pass.depth_attachment.image != (u64)-1) {
-        hg_assert(pass.depth_attachment.image < image_count);
-        Image& image = images[pass.depth_attachment.image];
+    if (pass.depthAttachment.image != (u64)-1)
+    {
+        hgAssert(pass.depthAttachment.image < imageCount);
+        Image& image = images[pass.depthAttachment.image];
 
-        image_barriers = hg_realloc<VkImageMemoryBarrier2>(scratch, 
-            image_barriers, image_barrier_count, image_barrier_count + 1);
+        imageBarriers = hgRealloc<VkImageMemoryBarrier2>(scratch, 
+            imageBarriers, imageBarrierCount, imageBarrierCount + 1);
 
         HgRenderAccess access = (HgRenderAccess)((u32)HgRenderAccess::write |
-            (pass.depth_attachment.load_op == VK_ATTACHMENT_LOAD_OP_LOAD ? (u32)HgRenderAccess::read : 0));
+            (pass.depthAttachment.loadOp == VK_ATTACHMENT_LOAD_OP_LOAD ? (u32)HgRenderAccess::read : 0));
 
-        usize idx = image_barrier_count;
-        image_barriers[idx] = {};
-        image_barriers[idx].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-        image_barriers[idx].srcStageMask = get_stage_mask(image.last_usage);
-        image_barriers[idx].srcAccessMask = get_access_mask(image.last_usage, image.last_access);
-        image_barriers[idx].dstStageMask = get_stage_mask(HgRenderUsage::depth_attachment);
-        image_barriers[idx].dstAccessMask = get_access_mask(HgRenderUsage::depth_attachment, access);
-        image_barriers[idx].oldLayout = get_layout(image.last_usage, image.last_access);
-        image_barriers[idx].newLayout = get_layout(HgRenderUsage::depth_attachment, access);
-        image_barriers[idx].image = image.handle;
-        image_barriers[idx].subresourceRange = image.subresource;
+        usize idx = imageBarrierCount;
+        imageBarriers[idx] = {};
+        imageBarriers[idx].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        imageBarriers[idx].srcStageMask = getStageMask(image.lastUsage);
+        imageBarriers[idx].srcAccessMask = getAccessMask(image.lastUsage, image.lastAccess);
+        imageBarriers[idx].dstStageMask = getStageMask(HgRenderUsage::depthAttachment);
+        imageBarriers[idx].dstAccessMask = getAccessMask(HgRenderUsage::depthAttachment, access);
+        imageBarriers[idx].oldLayout = getLayout(image.lastUsage, image.lastAccess);
+        imageBarriers[idx].newLayout = getLayout(HgRenderUsage::depthAttachment, access);
+        imageBarriers[idx].image = image.handle;
+        imageBarriers[idx].subresourceRange = image.subresource;
 
-        image.last_usage = HgRenderUsage::depth_attachment;
-        image.last_access = access;
+        image.lastUsage = HgRenderUsage::depthAttachment;
+        image.lastAccess = access;
 
-        ++image_barrier_count;
+        ++imageBarrierCount;
     }
 
-    if (pass.stencil_attachment.image != (u64)-1) {
-        hg_assert(pass.stencil_attachment.image < image_count);
-        Image& image = images[pass.stencil_attachment.image];
+    if (pass.stencilAttachment.image != (u64)-1)
+    {
+        hgAssert(pass.stencilAttachment.image < imageCount);
+        Image& image = images[pass.stencilAttachment.image];
 
-        image_barriers = hg_realloc<VkImageMemoryBarrier2>(scratch, 
-            image_barriers, image_barrier_count, image_barrier_count + 1);
+        imageBarriers = hgRealloc<VkImageMemoryBarrier2>(scratch, 
+            imageBarriers, imageBarrierCount, imageBarrierCount + 1);
 
         HgRenderAccess access = (HgRenderAccess)((u32)HgRenderAccess::write |
-            (pass.stencil_attachment.load_op == VK_ATTACHMENT_LOAD_OP_LOAD ? (u32)HgRenderAccess::read : 0));
+            (pass.stencilAttachment.loadOp == VK_ATTACHMENT_LOAD_OP_LOAD ? (u32)HgRenderAccess::read : 0));
 
-        usize idx = image_barrier_count;
-        image_barriers[idx] = {};
-        image_barriers[idx].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-        image_barriers[idx].srcStageMask = get_stage_mask(image.last_usage);
-        image_barriers[idx].srcAccessMask = get_access_mask(image.last_usage, image.last_access);
-        image_barriers[idx].dstStageMask = get_stage_mask(HgRenderUsage::stencil_attachment);
-        image_barriers[idx].dstAccessMask = get_access_mask(HgRenderUsage::stencil_attachment, access);
-        image_barriers[idx].oldLayout = get_layout(image.last_usage, image.last_access);
-        image_barriers[idx].newLayout = get_layout(HgRenderUsage::stencil_attachment, access);
-        image_barriers[idx].image = image.handle;
-        image_barriers[idx].subresourceRange = image.subresource;
+        usize idx = imageBarrierCount;
+        imageBarriers[idx] = {};
+        imageBarriers[idx].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        imageBarriers[idx].srcStageMask = getStageMask(image.lastUsage);
+        imageBarriers[idx].srcAccessMask = getAccessMask(image.lastUsage, image.lastAccess);
+        imageBarriers[idx].dstStageMask = getStageMask(HgRenderUsage::stencilAttachment);
+        imageBarriers[idx].dstAccessMask = getAccessMask(HgRenderUsage::stencilAttachment, access);
+        imageBarriers[idx].oldLayout = getLayout(image.lastUsage, image.lastAccess);
+        imageBarriers[idx].newLayout = getLayout(HgRenderUsage::stencilAttachment, access);
+        imageBarriers[idx].image = image.handle;
+        imageBarriers[idx].subresourceRange = image.subresource;
 
-        image.last_usage = HgRenderUsage::stencil_attachment;
-        image.last_access = access;
+        image.lastUsage = HgRenderUsage::stencilAttachment;
+        image.lastAccess = access;
 
-        ++image_barrier_count;
+        ++imageBarrierCount;
     }
 
     VkDependencyInfo dep{};
     dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    dep.bufferMemoryBarrierCount = buffer_barrier_count;
-    dep.pBufferMemoryBarriers = buffer_barriers;
-    dep.imageMemoryBarrierCount = image_barrier_count;
-    dep.pImageMemoryBarriers = image_barriers;
+    dep.bufferMemoryBarrierCount = bufferBarrierCount;
+    dep.pBufferMemoryBarriers = bufferBarriers;
+    dep.imageMemoryBarrierCount = imageBarrierCount;
+    dep.pImageMemoryBarriers = imageBarriers;
 
     vkCmdPipelineBarrier2(cmd, &dep);
 
-    VkRenderingAttachmentInfo* color_attachments
-        = hg_alloc<VkRenderingAttachmentInfo>(scratch, pass.color_attachment_count);
+    VkRenderingAttachmentInfo* colorAttachments
+        = hgAlloc<VkRenderingAttachmentInfo>(scratch, pass.colorAttachmentCount);
 
-    for (usize i = 0; i < pass.color_attachment_count; ++i) {
-        hg_assert(pass.color_attachments[i].image < image_count);
-        Image& image = images[pass.color_attachments[i].image];
+    for (usize i = 0; i < pass.colorAttachmentCount; ++i)
+    {
+        hgAssert(pass.colorAttachments[i].image < imageCount);
+        Image& image = images[pass.colorAttachments[i].image];
 
-        color_attachments[i] = {};
-        color_attachments[i].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        color_attachments[i].imageView = image.view;
-        color_attachments[i].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        color_attachments[i].loadOp = pass.color_attachments[i].load_op;
-        color_attachments[i].storeOp = pass.color_attachments[i].store_op;
-        color_attachments[i].clearValue = pass.color_attachments[i].clear_value;
+        colorAttachments[i] = {};
+        colorAttachments[i].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        colorAttachments[i].imageView = image.view;
+        colorAttachments[i].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        colorAttachments[i].loadOp = pass.colorAttachments[i].loadOp;
+        colorAttachments[i].storeOp = pass.colorAttachments[i].storeOp;
+        colorAttachments[i].clearValue = pass.colorAttachments[i].clearValue;
     }
 
-    VkRenderingAttachmentInfo depth_attachment{};
-    if (pass.depth_attachment.image != (u64)-1) {
-        hg_assert(pass.depth_attachment.image < image_count);
-        Image& image = images[pass.depth_attachment.image];
+    VkRenderingAttachmentInfo depthAttachment{};
+    if (pass.depthAttachment.image != (u64)-1)
+    {
+        hgAssert(pass.depthAttachment.image < imageCount);
+        Image& image = images[pass.depthAttachment.image];
 
-        depth_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        depth_attachment.imageView = image.view;
-        depth_attachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-        depth_attachment.loadOp = pass.depth_attachment.load_op;
-        depth_attachment.storeOp = pass.depth_attachment.store_op;
-        depth_attachment.clearValue = pass.depth_attachment.clear_value;
+        depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        depthAttachment.imageView = image.view;
+        depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+        depthAttachment.loadOp = pass.depthAttachment.loadOp;
+        depthAttachment.storeOp = pass.depthAttachment.storeOp;
+        depthAttachment.clearValue = pass.depthAttachment.clearValue;
     }
 
-    VkRenderingAttachmentInfo stencil_attachment{};
-    if (pass.stencil_attachment.image < image_count) {
-        Image& image = images[pass.stencil_attachment.image];
+    VkRenderingAttachmentInfo stencilAttachment{};
+    if (pass.stencilAttachment.image < imageCount)
+    {
+        Image& image = images[pass.stencilAttachment.image];
 
-        stencil_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        stencil_attachment.imageView = image.view;
-        stencil_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        stencil_attachment.loadOp = pass.stencil_attachment.load_op;
-        stencil_attachment.storeOp = pass.stencil_attachment.store_op;
-        stencil_attachment.clearValue = pass.stencil_attachment.clear_value;
+        stencilAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        stencilAttachment.imageView = image.view;
+        stencilAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        stencilAttachment.loadOp = pass.stencilAttachment.loadOp;
+        stencilAttachment.storeOp = pass.stencilAttachment.storeOp;
+        stencilAttachment.clearValue = pass.stencilAttachment.clearValue;
     }
 
-    VkRenderingInfo rendering_info{};
-    rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-    rendering_info.renderArea.extent = {width, height};
-    rendering_info.layerCount = pass.layer_count;
-    rendering_info.colorAttachmentCount = pass.color_attachment_count;
-    rendering_info.pColorAttachments = color_attachments;
-    rendering_info.pDepthAttachment = pass.depth_attachment.image != (u64)-1 ? &depth_attachment : nullptr;
-    rendering_info.pStencilAttachment = pass.stencil_attachment.image != (u64)-1 ? &stencil_attachment : nullptr;
+    VkRenderingInfo renderingInfo{};
+    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+    renderingInfo.renderArea.extent = {width, height};
+    renderingInfo.layerCount = pass.layerCount;
+    renderingInfo.colorAttachmentCount = pass.colorAttachmentCount;
+    renderingInfo.pColorAttachments = colorAttachments;
+    renderingInfo.pDepthAttachment = pass.depthAttachment.image != (u64)-1 ? &depthAttachment : nullptr;
+    renderingInfo.pStencilAttachment = pass.stencilAttachment.image != (u64)-1 ? &stencilAttachment : nullptr;
 
-    vkCmdBeginRendering(cmd, &rendering_info);
+    vkCmdBeginRendering(cmd, &renderingInfo);
 
     VkViewport viewport{0.0f, 0.0f, (f32)width, (f32)height, 0.0f, 1.0f};
     vkCmdSetViewport(cmd, 0, 1, &viewport);
@@ -2097,239 +2161,261 @@ void HgRenderer::begin_pass(VkCommandBuffer cmd, u32 width, u32 height, const Hg
     vkCmdSetScissor(cmd, 0, 1, &scissor);
 }
 
-void HgRenderer::end_pass(VkCommandBuffer cmd) {
+void HgRenderer::endPass(VkCommandBuffer cmd)
+{
     vkCmdEndRendering(cmd);
 }
 
-void hg_internal_resize_window_swapchain(HgWindow* window) {
+void hgInternalResizeWindowSwapchain(HgWindow* window)
+{
     if (window->width == 0 || window->height == 0)
         return;
 
-    vkQueueWaitIdle(hg_vk_queue);
+    vkQueueWaitIdle(hgVkQueue);
 
     if (window->cmds != nullptr)
-        vkFreeCommandBuffers(hg_vk_device, hg_vk_cmd_pool, window->image_count, window->cmds);
+        vkFreeCommandBuffers(hgVkDevice, hgVkCmdPool, window->imageCount, window->cmds);
 
-    for (usize i = 0; i < window->image_count; ++i) {
-        vkDestroyFence(hg_vk_device, window->frame_finished[i], nullptr);
+    for (usize i = 0; i < window->imageCount; ++i)
+    {
+        vkDestroyFence(hgVkDevice, window->frameFinished[i], nullptr);
     }
-    for (usize i = 0; i < window->image_count; ++i) {
-        vkDestroySemaphore(hg_vk_device, window->image_available[i], nullptr);
+    for (usize i = 0; i < window->imageCount; ++i)
+    {
+        vkDestroySemaphore(hgVkDevice, window->imageAvailable[i], nullptr);
     }
-    for (usize i = 0; i < window->image_count; ++i) {
-        vkDestroySemaphore(hg_vk_device, window->ready_to_present[i], nullptr);
+    for (usize i = 0; i < window->imageCount; ++i)
+    {
+        vkDestroySemaphore(hgVkDevice, window->readyToPresent[i], nullptr);
     }
-    for (usize i = 0; i < window->image_count; ++i) {
-        vkDestroyImageView(hg_vk_device, window->views[i], nullptr);
+    for (usize i = 0; i < window->imageCount; ++i)
+    {
+        vkDestroyImageView(hgVkDevice, window->views[i], nullptr);
     }
 
-    VkSurfaceCapabilitiesKHR surface_capabilities;
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(hg_vk_physical_device, window->surface, &surface_capabilities);
+    VkSurfaceCapabilitiesKHR surfaceCapabilities;
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(hgVkPhysicalDevice, window->surface, &surfaceCapabilities);
 
-    if (surface_capabilities.currentExtent.width != (u32)-1)
-        window->width = surface_capabilities.currentExtent.width;
-    if (surface_capabilities.currentExtent.height != (u32)-1)
-        window->height = surface_capabilities.currentExtent.height;
+    if (surfaceCapabilities.currentExtent.width != (u32)-1)
+        window->width = surfaceCapabilities.currentExtent.width;
+    if (surfaceCapabilities.currentExtent.height != (u32)-1)
+        window->height = surfaceCapabilities.currentExtent.height;
 
-    VkSwapchainCreateInfoKHR swapchain_info{};
-    swapchain_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    swapchain_info.surface = window->surface;
-    swapchain_info.minImageCount
-        = std::min(surface_capabilities.minImageCount, surface_capabilities.maxImageCount - 1) + 1;
-    swapchain_info.imageFormat = window->format;
-    swapchain_info.imageExtent = {window->width, window->height};
-    swapchain_info.imageArrayLayers = 1;
-    swapchain_info.imageUsage = window->image_usage;
-    swapchain_info.preTransform = surface_capabilities.currentTransform;
-    swapchain_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    swapchain_info.presentMode = window->present_mode;
-    swapchain_info.clipped = VK_TRUE;
-    swapchain_info.oldSwapchain = window->swapchain;
+    VkSwapchainCreateInfoKHR swapchainInfo{};
+    swapchainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    swapchainInfo.surface = window->surface;
+    swapchainInfo.minImageCount
+        = std::min(surfaceCapabilities.minImageCount, surfaceCapabilities.maxImageCount - 1) + 1;
+    swapchainInfo.imageFormat = window->format;
+    swapchainInfo.imageExtent = {window->width, window->height};
+    swapchainInfo.imageArrayLayers = 1;
+    swapchainInfo.imageUsage = window->imageUsage;
+    swapchainInfo.preTransform = surfaceCapabilities.currentTransform;
+    swapchainInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    swapchainInfo.presentMode = window->presentMode;
+    swapchainInfo.clipped = VK_TRUE;
+    swapchainInfo.oldSwapchain = window->swapchain;
 
-    VkResult result = vkCreateSwapchainKHR(hg_vk_device, &swapchain_info, nullptr, &window->swapchain);
+    VkResult result = vkCreateSwapchainKHR(hgVkDevice, &swapchainInfo, nullptr, &window->swapchain);
     if (window->swapchain == nullptr)
-        hg_error("Failed to create swapchain: %s\n", hg_vk_result_to_string(result));
+        hgError("Failed to create swapchain: %s\n", hgVkResultToStr(result));
 
-    vkGetSwapchainImagesKHR(hg_vk_device, window->swapchain, &window->image_count, nullptr);
-    window->images = (VkImage*)realloc(window->images, sizeof(VkImage) * window->image_count);
-    window->views = (VkImageView*)realloc(window->views, sizeof(VkImageView) * window->image_count);
-    vkGetSwapchainImagesKHR(hg_vk_device, window->swapchain, &window->image_count, window->images);
-    for (usize i = 0; i < window->image_count; ++i) {
-        HgVkImageViewConfig view_info{};
-        view_info.image = window->images[i];
-        view_info.format = window->format;
-        view_info.subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    vkGetSwapchainImagesKHR(hgVkDevice, window->swapchain, &window->imageCount, nullptr);
+    window->images = (VkImage*)realloc(window->images, sizeof(VkImage) * window->imageCount);
+    window->views = (VkImageView*)realloc(window->views, sizeof(VkImageView) * window->imageCount);
+    vkGetSwapchainImagesKHR(hgVkDevice, window->swapchain, &window->imageCount, window->images);
+    for (usize i = 0; i < window->imageCount; ++i)
+    {
+        HgVkImageViewConfig viewInfo{};
+        viewInfo.image = window->images[i];
+        viewInfo.format = window->format;
+        viewInfo.subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 
-        window->views[i] = hg_vk_create_image_view(view_info);
+        window->views[i] = hgVkCreateImageView(viewInfo);
     }
 
-    window->cmds = (VkCommandBuffer*)realloc(window->cmds, sizeof(VkCommandBuffer) * window->image_count);
+    window->cmds = (VkCommandBuffer*)realloc(window->cmds, sizeof(VkCommandBuffer) * window->imageCount);
 
-    VkCommandBufferAllocateInfo cmd_alloc_info{};
-    cmd_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    cmd_alloc_info.pNext = nullptr;
-    cmd_alloc_info.commandPool = hg_vk_cmd_pool;
-    cmd_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    cmd_alloc_info.commandBufferCount = window->image_count;
+    VkCommandBufferAllocateInfo cmdAllocInfo{};
+    cmdAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    cmdAllocInfo.pNext = nullptr;
+    cmdAllocInfo.commandPool = hgVkCmdPool;
+    cmdAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    cmdAllocInfo.commandBufferCount = window->imageCount;
 
-    vkAllocateCommandBuffers(hg_vk_device, &cmd_alloc_info, window->cmds);
+    vkAllocateCommandBuffers(hgVkDevice, &cmdAllocInfo, window->cmds);
 
-    window->frame_finished = (VkFence*)realloc(window->frame_finished, sizeof(VkFence) * window->image_count);
-    for (usize i = 0; i < window->image_count; ++i) {
+    window->frameFinished = (VkFence*)realloc(window->frameFinished, sizeof(VkFence) * window->imageCount);
+    for (usize i = 0; i < window->imageCount; ++i)
+    {
         VkFenceCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
         info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-        vkCreateFence(hg_vk_device, &info, nullptr, &window->frame_finished[i]);
+        vkCreateFence(hgVkDevice, &info, nullptr, &window->frameFinished[i]);
     }
 
-    window->image_available = (VkSemaphore*)realloc(window->image_available, sizeof(VkSemaphore) * window->image_count);
-    for (usize i = 0; i < window->image_count; ++i) {
+    window->imageAvailable = (VkSemaphore*)realloc(window->imageAvailable, sizeof(VkSemaphore) * window->imageCount);
+    for (usize i = 0; i < window->imageCount; ++i)
+    {
         VkSemaphoreCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-        vkCreateSemaphore(hg_vk_device, &info, nullptr, &window->image_available[i]);
+        vkCreateSemaphore(hgVkDevice, &info, nullptr, &window->imageAvailable[i]);
     }
 
-    window->ready_to_present = (VkSemaphore*)realloc(window->ready_to_present, sizeof(VkSemaphore) * window->image_count);
-    for (usize i = 0; i < window->image_count; ++i) {
+    window->readyToPresent = (VkSemaphore*)realloc(window->readyToPresent, sizeof(VkSemaphore) * window->imageCount);
+    for (usize i = 0; i < window->imageCount; ++i)
+    {
         VkSemaphoreCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-        vkCreateSemaphore(hg_vk_device, &info, nullptr, &window->ready_to_present[i]);
+        vkCreateSemaphore(hgVkDevice, &info, nullptr, &window->readyToPresent[i]);
     }
 
-    vkDestroySwapchainKHR(hg_vk_device, swapchain_info.oldSwapchain, nullptr);
+    vkDestroySwapchainKHR(hgVkDevice, swapchainInfo.oldSwapchain, nullptr);
 }
 
-static VkFormat find_swapchain_format(VkSurfaceKHR surface) {
-    hg_assert(surface != nullptr);
+static VkFormat findSwapchainFormat(VkSurfaceKHR surface)
+{
+    hgAssert(surface != nullptr);
 
-    HgArena* scratch = hg_get_scratch();
-    HgArenaScope scratch_scope{scratch};
+    HgArena* scratch = hgGetScratch();
+    HgArenaScope scratchScope{scratch};
 
-    u32 format_count = 0;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(hg_vk_physical_device, surface, &format_count, nullptr);
-    VkSurfaceFormatKHR* formats = hg_alloc<VkSurfaceFormatKHR>(scratch, format_count);
-    vkGetPhysicalDeviceSurfaceFormatsKHR(hg_vk_physical_device, surface, &format_count, formats);
+    u32 formatCount = 0;
+    vkGetPhysicalDeviceSurfaceFormatsKHR(hgVkPhysicalDevice, surface, &formatCount, nullptr);
+    VkSurfaceFormatKHR* formats = hgAlloc<VkSurfaceFormatKHR>(scratch, formatCount);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(hgVkPhysicalDevice, surface, &formatCount, formats);
 
-    for (usize i = 0; i < format_count; ++i) {
+    for (usize i = 0; i < formatCount; ++i)
+    {
         if (formats[i].format == VK_FORMAT_R8G8B8A8_SRGB)
             return VK_FORMAT_R8G8B8A8_SRGB;
         if (formats[i].format == VK_FORMAT_B8G8R8A8_SRGB)
             return VK_FORMAT_B8G8R8A8_SRGB;
     }
-    hg_error("No supported swapchain formats\n");
+    hgError("No supported swapchain formats\n");
 }
 
-static VkPresentModeKHR find_swapchain_present_mode(
+static VkPresentModeKHR findSwapchainPresentMode(
     VkSurfaceKHR surface,
-    VkPresentModeKHR desired_mode
-) {
-    hg_assert(surface != nullptr);
+    VkPresentModeKHR desiredMode)
+{
+    hgAssert(surface != nullptr);
 
-    if (desired_mode == VK_PRESENT_MODE_FIFO_KHR)
-        return desired_mode;
+    if (desiredMode == VK_PRESENT_MODE_FIFO_KHR)
+        return desiredMode;
 
-    u32 mode_count = 0;
-    vkGetPhysicalDeviceSurfacePresentModesKHR(hg_vk_physical_device, surface, &mode_count, nullptr);
-    VkPresentModeKHR* present_modes = (VkPresentModeKHR*)alloca(mode_count * sizeof(*present_modes));
-    vkGetPhysicalDeviceSurfacePresentModesKHR(hg_vk_physical_device, surface, &mode_count, present_modes);
+    u32 modeCount = 0;
+    vkGetPhysicalDeviceSurfacePresentModesKHR(hgVkPhysicalDevice, surface, &modeCount, nullptr);
+    VkPresentModeKHR* presentModes = (VkPresentModeKHR*)alloca(modeCount * sizeof(*presentModes));
+    vkGetPhysicalDeviceSurfacePresentModesKHR(hgVkPhysicalDevice, surface, &modeCount, presentModes);
 
-    for (usize i = 0; i < mode_count; ++i) {
-        if (present_modes[i] == desired_mode)
-            return desired_mode;
+    for (usize i = 0; i < modeCount; ++i)
+    {
+        if (presentModes[i] == desiredMode)
+            return desiredMode;
     }
     return VK_PRESENT_MODE_FIFO_KHR;
 }
 
-void hg_internal_create_window_swapchain(HgWindow* window, const HgWindowConfig& config) {
-    window->format = find_swapchain_format(window->surface);
-    window->present_mode = find_swapchain_present_mode(window->surface, config.preferred_present_mode);
-    window->image_usage = config.image_usage;
-    hg_internal_resize_window_swapchain(window);
+void hgInternalCreateWindowSwapchain(HgWindow* window, const HgWindowConfig& config)
+{
+    window->format = findSwapchainFormat(window->surface);
+    window->presentMode = findSwapchainPresentMode(window->surface, config.preferredPresentMode);
+    window->imageUsage = config.imageUsage;
+    hgInternalResizeWindowSwapchain(window);
 }
 
-void hg_internal_destroy_window_swapchain(HgWindow* window) {
-    vkFreeCommandBuffers(hg_vk_device, hg_vk_cmd_pool, window->image_count, window->cmds);
+void hgInternalDestroyWindowSwapchain(HgWindow* window)
+{
+    vkFreeCommandBuffers(hgVkDevice, hgVkCmdPool, window->imageCount, window->cmds);
     free(window->cmds);
 
-    for (usize i = 0; i < window->image_count; ++i) {
-        vkDestroyFence(hg_vk_device, window->frame_finished[i], nullptr);
+    for (usize i = 0; i < window->imageCount; ++i)
+    {
+        vkDestroyFence(hgVkDevice, window->frameFinished[i], nullptr);
     }
-    free(window->frame_finished);
+    free(window->frameFinished);
 
-    for (usize i = 0; i < window->image_count; ++i) {
-        vkDestroySemaphore(hg_vk_device, window->image_available[i], nullptr);
+    for (usize i = 0; i < window->imageCount; ++i)
+    {
+        vkDestroySemaphore(hgVkDevice, window->imageAvailable[i], nullptr);
     }
-    free(window->image_available);
+    free(window->imageAvailable);
 
-    for (usize i = 0; i < window->image_count; ++i) {
-        vkDestroySemaphore(hg_vk_device, window->ready_to_present[i], nullptr);
+    for (usize i = 0; i < window->imageCount; ++i)
+    {
+        vkDestroySemaphore(hgVkDevice, window->readyToPresent[i], nullptr);
     }
-    free(window->ready_to_present);
+    free(window->readyToPresent);
 
-    for (usize i = 0; i < window->image_count; ++i) {
-        vkDestroyImageView(hg_vk_device, window->views[i], nullptr);
+    for (usize i = 0; i < window->imageCount; ++i)
+    {
+        vkDestroyImageView(hgVkDevice, window->views[i], nullptr);
     }
     free(window->views);
     free(window->images);
 
-    vkDestroySwapchainKHR(hg_vk_device, window->swapchain, nullptr);
+    vkDestroySwapchainKHR(hgVkDevice, window->swapchain, nullptr);
 }
 
-VkCommandBuffer HgWindow::begin_recording() {
-    hg_assert(hg_vk_device != nullptr);
+VkCommandBuffer HgWindow::beginRecording()
+{
+    hgAssert(hgVkDevice != nullptr);
     if (width == 0 || height == 0)
         return nullptr;
 
 retry:
-    current_frame = (current_frame + 1) % image_count;
-    vkWaitForFences(hg_vk_device, 1, &frame_finished[current_frame], VK_TRUE, UINT64_MAX);
-    vkResetFences(hg_vk_device, 1, &frame_finished[current_frame]);
+    currentFrame = (currentFrame + 1) % imageCount;
+    vkWaitForFences(hgVkDevice, 1, &frameFinished[currentFrame], VK_TRUE, UINT64_MAX);
+    vkResetFences(hgVkDevice, 1, &frameFinished[currentFrame]);
 
     VkResult result = vkAcquireNextImageKHR(
-        hg_vk_device, swapchain, UINT64_MAX, image_available[current_frame], nullptr, &current_image);
-    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-        hg_internal_resize_window_swapchain(this);
+        hgVkDevice, swapchain, UINT64_MAX, imageAvailable[currentFrame], nullptr, &currentImage);
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
+    {
+        hgInternalResizeWindowSwapchain(this);
         goto retry;
     }
-    hg_assert(result == VK_SUCCESS);
+    hgAssert(result == VK_SUCCESS);
 
-    VkCommandBuffer cmd = cmds[current_frame];
+    VkCommandBuffer cmd = cmds[currentFrame];
     vkResetCommandBuffer(cmd, 0);
 
-    VkCommandBufferBeginInfo begin_info{};
-    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-    vkBeginCommandBuffer(cmd, &begin_info);
+    vkBeginCommandBuffer(cmd, &beginInfo);
     return cmd;
 }
 
-void HgWindow::end_and_present(VkCommandBuffer cmd) {
-    hg_assert(cmd == cmds[current_frame]);
+void HgWindow::endAndPresent(VkCommandBuffer cmd)
+{
+    hgAssert(cmd == cmds[currentFrame]);
     vkEndCommandBuffer(cmd);
 
     VkSubmitInfo submit{};
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submit.waitSemaphoreCount = 1;
-    submit.pWaitSemaphores = &image_available[current_frame];
-    VkPipelineStageFlags stage_flags{VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-    submit.pWaitDstStageMask = &stage_flags;
+    submit.pWaitSemaphores = &imageAvailable[currentFrame];
+    VkPipelineStageFlags stageFlags{VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    submit.pWaitDstStageMask = &stageFlags;
     submit.commandBufferCount = 1;
     submit.pCommandBuffers = &cmd;
     submit.signalSemaphoreCount = 1;
-    submit.pSignalSemaphores = &ready_to_present[current_frame];
+    submit.pSignalSemaphores = &readyToPresent[currentFrame];
 
-    vkQueueSubmit(hg_vk_queue, 1, &submit, frame_finished[current_frame]);
+    vkQueueSubmit(hgVkQueue, 1, &submit, frameFinished[currentFrame]);
 
-    VkPresentInfoKHR present_info{};
-    present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-    present_info.waitSemaphoreCount = 1;
-    present_info.pWaitSemaphores = &ready_to_present[current_frame];
-    present_info.swapchainCount = 1;
-    present_info.pSwapchains = &swapchain;
-    present_info.pImageIndices = &current_image;
+    VkPresentInfoKHR presentInfo{};
+    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = &readyToPresent[currentFrame];
+    presentInfo.swapchainCount = 1;
+    presentInfo.pSwapchains = &swapchain;
+    presentInfo.pImageIndices = &currentImage;
 
-    vkQueuePresentKHR(hg_vk_queue, &present_info);
+    vkQueuePresentKHR(hgVkQueue, &presentInfo);
 }
 
 #define HG_MAKE_VULKAN_FUNC(name) PFN_##name name
@@ -2463,14 +2549,15 @@ struct HgVulkanFuncs {
 
 #undef HG_MAKE_VULKAN_FUNC
 
-static HgVulkanFuncs vulkan_funcs{};
+static HgVulkanFuncs vulkanFuncs{};
 
 #define HG_LOAD_VULKAN_INSTANCE_FUNC(instance, name) \
-    vulkan_funcs. name = (PFN_##name)vulkan_funcs.vkGetInstanceProcAddr(instance, #name); \
-    if (vulkan_funcs. name == nullptr) { hg_error("Could not load " #name "\n"); }
+    vulkanFuncs. name = (PFN_##name)vulkanFuncs.vkGetInstanceProcAddr(instance, #name); \
+    if (vulkanFuncs. name == nullptr) { hgError("Could not load " #name "\n"); }
 
-void hg_vk_load_instance_funcs(VkInstance instance) {
-    hg_assert(instance != nullptr);
+void hgVkLoadInstanceFuncs(VkInstance instance)
+{
+    hgAssert(instance != nullptr);
 
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkGetDeviceProcAddr);
     HG_LOAD_VULKAN_INSTANCE_FUNC(instance, vkDestroyInstance);
@@ -2496,11 +2583,12 @@ void hg_vk_load_instance_funcs(VkInstance instance) {
 #undef HG_LOAD_VULKAN_INSTANCE_FUNC
 
 #define HG_LOAD_VULKAN_DEVICE_FUNC(device, name) \
-    vulkan_funcs. name = (PFN_##name)vulkan_funcs.vkGetDeviceProcAddr(device, #name); \
-    if (vulkan_funcs. name == nullptr) { hg_error("Could not load " #name "\n"); }
+    vulkanFuncs. name = (PFN_##name)vulkanFuncs.vkGetDeviceProcAddr(device, #name); \
+    if (vulkanFuncs. name == nullptr) { hgError("Could not load " #name "\n"); }
 
-void hg_vk_load_device_funcs(VkDevice device) {
-    hg_assert(device != nullptr);
+void hgVkLoadDeviceFuncs(VkDevice device)
+{
+    hgAssert(device != nullptr);
 
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDestroyDevice)
     HG_LOAD_VULKAN_DEVICE_FUNC(device, vkDeviceWaitIdle)
@@ -2609,18 +2697,18 @@ void hg_vk_load_device_funcs(VkDevice device) {
 
 PFN_vkVoidFunction vkGetInstanceProcAddr(
     VkInstance instance,
-    const char* pName
-) {
-    return vulkan_funcs.vkGetInstanceProcAddr(
+    const char* pName)
+{
+    return vulkanFuncs.vkGetInstanceProcAddr(
         instance,
         pName);
 }
 
 PFN_vkVoidFunction vkGetDeviceProcAddr(
     VkDevice device,
-    const char* pName
-) {
-    return vulkan_funcs.vkGetDeviceProcAddr(
+    const char* pName)
+{
+    return vulkanFuncs.vkGetDeviceProcAddr(
         device,
         pName);
 }
@@ -2628,9 +2716,9 @@ PFN_vkVoidFunction vkGetDeviceProcAddr(
 VkResult vkCreateInstance(
     const VkInstanceCreateInfo* pCreateInfo,
     const VkAllocationCallbacks* pAllocator,
-    VkInstance* pInstance
-) {
-    return vulkan_funcs.vkCreateInstance(
+    VkInstance* pInstance)
+{
+    return vulkanFuncs.vkCreateInstance(
         pCreateInfo,
         pAllocator,
         pInstance);
@@ -2638,9 +2726,9 @@ VkResult vkCreateInstance(
 
 void vkDestroyInstance(
     VkInstance instance,
-    const VkAllocationCallbacks* pAllocator
-) {
-    vulkan_funcs.vkDestroyInstance(
+    const VkAllocationCallbacks* pAllocator)
+{
+    vulkanFuncs.vkDestroyInstance(
         instance,
         pAllocator);
 }
@@ -2649,9 +2737,9 @@ VkResult vkCreateDebugUtilsMessengerEXT(
     VkInstance instance,
     const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
     const VkAllocationCallbacks* pAllocator,
-    VkDebugUtilsMessengerEXT* pMessenger
-) {
-    return vulkan_funcs.vkCreateDebugUtilsMessengerEXT(
+    VkDebugUtilsMessengerEXT* pMessenger)
+{
+    return vulkanFuncs.vkCreateDebugUtilsMessengerEXT(
         instance,
         pCreateInfo,
         pAllocator,
@@ -2661,9 +2749,9 @@ VkResult vkCreateDebugUtilsMessengerEXT(
 void vkDestroyDebugUtilsMessengerEXT(
     VkInstance instance,
     VkDebugUtilsMessengerEXT messenger,
-    const VkAllocationCallbacks* pAllocator
-) {
-    vulkan_funcs.vkDestroyDebugUtilsMessengerEXT(
+    const VkAllocationCallbacks* pAllocator)
+{
+    vulkanFuncs.vkDestroyDebugUtilsMessengerEXT(
         instance,
         messenger,
         pAllocator);
@@ -2672,9 +2760,9 @@ void vkDestroyDebugUtilsMessengerEXT(
 VkResult vkEnumeratePhysicalDevices(
     VkInstance instance,
     uint32_t* pCount,
-    VkPhysicalDevice* pDevices
-) {
-    return vulkan_funcs.vkEnumeratePhysicalDevices(
+    VkPhysicalDevice* pDevices)
+{
+    return vulkanFuncs.vkEnumeratePhysicalDevices(
         instance,
         pCount,
         pDevices);
@@ -2684,9 +2772,9 @@ VkResult vkEnumerateDeviceExtensionProperties(
     VkPhysicalDevice device,
     const char* pLayerName,
     uint32_t* pCount,
-    VkExtensionProperties* pProps
-) {
-    return vulkan_funcs.vkEnumerateDeviceExtensionProperties(
+    VkExtensionProperties* pProps)
+{
+    return vulkanFuncs.vkEnumerateDeviceExtensionProperties(
         device,
         pLayerName,
         pCount,
@@ -2695,9 +2783,9 @@ VkResult vkEnumerateDeviceExtensionProperties(
 
 void vkGetPhysicalDeviceProperties(
     VkPhysicalDevice physicalDevice,
-    VkPhysicalDeviceProperties* pProperties
-) {
-    vulkan_funcs.vkGetPhysicalDeviceProperties(
+    VkPhysicalDeviceProperties* pProperties)
+{
+    vulkanFuncs.vkGetPhysicalDeviceProperties(
         physicalDevice,
         pProperties);
 }
@@ -2705,9 +2793,9 @@ void vkGetPhysicalDeviceProperties(
 void vkGetPhysicalDeviceQueueFamilyProperties(
     VkPhysicalDevice device,
     uint32_t* pCount,
-    VkQueueFamilyProperties* pProps
-) {
-    vulkan_funcs.vkGetPhysicalDeviceQueueFamilyProperties(
+    VkQueueFamilyProperties* pProps)
+{
+    vulkanFuncs.vkGetPhysicalDeviceQueueFamilyProperties(
         device,
         pCount,
         pProps);
@@ -2716,9 +2804,9 @@ void vkGetPhysicalDeviceQueueFamilyProperties(
 void vkDestroySurfaceKHR(
     VkInstance instance,
     VkSurfaceKHR surface,
-    const VkAllocationCallbacks* pAllocator
-) {
-    vulkan_funcs.vkDestroySurfaceKHR(
+    const VkAllocationCallbacks* pAllocator)
+{
+    vulkanFuncs.vkDestroySurfaceKHR(
         instance,
         surface,
         pAllocator);
@@ -2728,9 +2816,9 @@ VkResult vkCreateDevice(
     VkPhysicalDevice device,
     const VkDeviceCreateInfo* pCreateInfo,
     const VkAllocationCallbacks* pAllocator,
-    VkDevice* pDevice
-) {
-    return vulkan_funcs.vkCreateDevice(
+    VkDevice* pDevice)
+{
+    return vulkanFuncs.vkCreateDevice(
         device,
         pCreateInfo,
         pAllocator,
@@ -2739,17 +2827,17 @@ VkResult vkCreateDevice(
 
 void vkDestroyDevice(
     VkDevice device,
-    const VkAllocationCallbacks* pAllocator
-) {
-    vulkan_funcs.vkDestroyDevice(
+    const VkAllocationCallbacks* pAllocator)
+{
+    vulkanFuncs.vkDestroyDevice(
         device,
         pAllocator);
 }
 
 VkResult vkDeviceWaitIdle(
-    VkDevice device
-) {
-    return vulkan_funcs.vkDeviceWaitIdle(
+    VkDevice device)
+{
+    return vulkanFuncs.vkDeviceWaitIdle(
         device);
 }
 
@@ -2757,9 +2845,9 @@ VkResult vkGetPhysicalDeviceSurfaceSupportKHR(
     VkPhysicalDevice physicalDevice,
     uint32_t queueFamilyIndex,
     VkSurfaceKHR surface,
-    VkBool32* pSupported
-) {
-    return vulkan_funcs.vkGetPhysicalDeviceSurfaceSupportKHR(
+    VkBool32* pSupported)
+{
+    return vulkanFuncs.vkGetPhysicalDeviceSurfaceSupportKHR(
         physicalDevice,
         queueFamilyIndex,
         surface,
@@ -2770,9 +2858,9 @@ VkResult vkGetPhysicalDeviceSurfaceFormatsKHR(
     VkPhysicalDevice device,
     VkSurfaceKHR surface,
     uint32_t* pCount,
-    VkSurfaceFormatKHR* pFormats
-) {
-    return vulkan_funcs.vkGetPhysicalDeviceSurfaceFormatsKHR(
+    VkSurfaceFormatKHR* pFormats)
+{
+    return vulkanFuncs.vkGetPhysicalDeviceSurfaceFormatsKHR(
         device,
         surface,
         pCount,
@@ -2783,9 +2871,9 @@ VkResult vkGetPhysicalDeviceSurfacePresentModesKHR(
     VkPhysicalDevice device,
     VkSurfaceKHR surface,
     uint32_t* pCount,
-    VkPresentModeKHR* pModes
-) {
-    return vulkan_funcs.vkGetPhysicalDeviceSurfacePresentModesKHR(
+    VkPresentModeKHR* pModes)
+{
+    return vulkanFuncs.vkGetPhysicalDeviceSurfacePresentModesKHR(
         device,
         surface,
         pCount,
@@ -2795,9 +2883,9 @@ VkResult vkGetPhysicalDeviceSurfacePresentModesKHR(
 VkResult vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
     VkPhysicalDevice device,
     VkSurfaceKHR surface,
-    VkSurfaceCapabilitiesKHR* pCaps
-) {
-    return vulkan_funcs.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
+    VkSurfaceCapabilitiesKHR* pCaps)
+{
+    return vulkanFuncs.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
         device,
         surface,
         pCaps);
@@ -2807,9 +2895,9 @@ VkResult vkCreateSwapchainKHR(
     VkDevice device,
     const VkSwapchainCreateInfoKHR* pCreateInfo,
     const VkAllocationCallbacks* pAllocator,
-    VkSwapchainKHR* pSwapchain
-) {
-    return vulkan_funcs.vkCreateSwapchainKHR(
+    VkSwapchainKHR* pSwapchain)
+{
+    return vulkanFuncs.vkCreateSwapchainKHR(
         device,
         pCreateInfo,
         pAllocator,
@@ -2819,9 +2907,9 @@ VkResult vkCreateSwapchainKHR(
 void vkDestroySwapchainKHR(
     VkDevice device,
     VkSwapchainKHR swapchain,
-    const VkAllocationCallbacks* pAllocator
-) {
-    vulkan_funcs.vkDestroySwapchainKHR(
+    const VkAllocationCallbacks* pAllocator)
+{
+    vulkanFuncs.vkDestroySwapchainKHR(
         device,
         swapchain,
         pAllocator);
@@ -2831,9 +2919,9 @@ VkResult vkGetSwapchainImagesKHR(
     VkDevice device,
     VkSwapchainKHR swapchain,
     uint32_t* pCount,
-    VkImage* pImages
-) {
-    return vulkan_funcs.vkGetSwapchainImagesKHR(
+    VkImage* pImages)
+{
+    return vulkanFuncs.vkGetSwapchainImagesKHR(
         device,
         swapchain,
         pCount,
@@ -2846,9 +2934,9 @@ VkResult vkAcquireNextImageKHR(
     uint64_t timeout,
     VkSemaphore sem,
     VkFence fence,
-    uint32_t* pIndex
-) {
-    return vulkan_funcs.vkAcquireNextImageKHR(
+    uint32_t* pIndex)
+{
+    return vulkanFuncs.vkAcquireNextImageKHR(
         device,
         swapchain,
         timeout,
@@ -2861,9 +2949,9 @@ VkResult vkCreateSemaphore(
     VkDevice device,
     const VkSemaphoreCreateInfo* pCreateInfo,
     const VkAllocationCallbacks* pAllocator,
-    VkSemaphore* pSemaphore
-) {
-    return vulkan_funcs.vkCreateSemaphore(
+    VkSemaphore* pSemaphore)
+{
+    return vulkanFuncs.vkCreateSemaphore(
         device,
         pCreateInfo,
         pAllocator,
@@ -2873,9 +2961,9 @@ VkResult vkCreateSemaphore(
 void vkDestroySemaphore(
     VkDevice device,
     VkSemaphore sem,
-    const VkAllocationCallbacks* pAllocator
-) {
-    vulkan_funcs.vkDestroySemaphore(
+    const VkAllocationCallbacks* pAllocator)
+{
+    vulkanFuncs.vkDestroySemaphore(
         device,
         sem,
         pAllocator);
@@ -2885,9 +2973,9 @@ VkResult vkCreateFence(
     VkDevice device,
     const VkFenceCreateInfo* pCreateInfo,
     const VkAllocationCallbacks* pAllocator,
-    VkFence* pFence
-) {
-    return vulkan_funcs.vkCreateFence(
+    VkFence* pFence)
+{
+    return vulkanFuncs.vkCreateFence(
         device,
         pCreateInfo,
         pAllocator,
@@ -2897,9 +2985,9 @@ VkResult vkCreateFence(
 void vkDestroyFence(
     VkDevice device,
     VkFence fence,
-    const VkAllocationCallbacks* pAllocator
-) {
-    vulkan_funcs.vkDestroyFence(
+    const VkAllocationCallbacks* pAllocator)
+{
+    vulkanFuncs.vkDestroyFence(
         device,
         fence,
         pAllocator);
@@ -2908,9 +2996,9 @@ void vkDestroyFence(
 VkResult vkResetFences(
     VkDevice device,
     uint32_t count,
-    const VkFence* pFences
-) {
-    return vulkan_funcs.vkResetFences(
+    const VkFence* pFences)
+{
+    return vulkanFuncs.vkResetFences(
         device,
         count,
         pFences);
@@ -2921,9 +3009,9 @@ VkResult vkWaitForFences(
     uint32_t count,
     const VkFence* pFences,
     VkBool32 waitAll,
-    uint64_t timeout
-) {
-    return vulkan_funcs.vkWaitForFences(
+    uint64_t timeout)
+{
+    return vulkanFuncs.vkWaitForFences(
         device,
         count,
         pFences,
@@ -2935,9 +3023,9 @@ void vkGetDeviceQueue(
     VkDevice device,
     uint32_t family,
     uint32_t index,
-    VkQueue* pQueue
-) {
-    vulkan_funcs.vkGetDeviceQueue(
+    VkQueue* pQueue)
+{
+    vulkanFuncs.vkGetDeviceQueue(
         device,
         family,
         index,
@@ -2945,9 +3033,9 @@ void vkGetDeviceQueue(
 }
 
 VkResult vkQueueWaitIdle(
-    VkQueue queue
-) {
-    return vulkan_funcs.vkQueueWaitIdle(
+    VkQueue queue)
+{
+    return vulkanFuncs.vkQueueWaitIdle(
         queue);
 }
 
@@ -2955,9 +3043,9 @@ VkResult vkQueueSubmit(
     VkQueue queue,
     uint32_t count,
     const VkSubmitInfo* pSubmits,
-    VkFence fence
-) {
-    return vulkan_funcs.vkQueueSubmit(
+    VkFence fence)
+{
+    return vulkanFuncs.vkQueueSubmit(
         queue,
         count,
         pSubmits,
@@ -2966,9 +3054,9 @@ VkResult vkQueueSubmit(
 
 VkResult vkQueuePresentKHR(
     VkQueue queue,
-    const VkPresentInfoKHR* pInfo
-) {
-    return vulkan_funcs.vkQueuePresentKHR(
+    const VkPresentInfoKHR* pInfo)
+{
+    return vulkanFuncs.vkQueuePresentKHR(
         queue,
         pInfo);
 }
@@ -2977,9 +3065,9 @@ VkResult vkCreateCommandPool(
     VkDevice device,
     const VkCommandPoolCreateInfo* pCreateInfo,
     const VkAllocationCallbacks* pAllocator,
-    VkCommandPool* pPool
-) {
-    return vulkan_funcs.vkCreateCommandPool(
+    VkCommandPool* pPool)
+{
+    return vulkanFuncs.vkCreateCommandPool(
         device,
         pCreateInfo,
         pAllocator,
@@ -2989,9 +3077,9 @@ VkResult vkCreateCommandPool(
 void vkDestroyCommandPool(
     VkDevice device,
     VkCommandPool pool,
-    const VkAllocationCallbacks* pAllocator
-) {
-    vulkan_funcs.vkDestroyCommandPool(
+    const VkAllocationCallbacks* pAllocator)
+{
+    vulkanFuncs.vkDestroyCommandPool(
         device,
         pool,
         pAllocator);
@@ -3000,9 +3088,9 @@ void vkDestroyCommandPool(
 VkResult vkResetCommandPool(
     VkDevice device,
     VkCommandPool commandPool,
-    VkCommandPoolResetFlags flags
-) {
-    return vulkan_funcs.vkResetCommandPool(
+    VkCommandPoolResetFlags flags)
+{
+    return vulkanFuncs.vkResetCommandPool(
         device,
         commandPool,
         flags);
@@ -3011,9 +3099,9 @@ VkResult vkResetCommandPool(
 VkResult vkAllocateCommandBuffers(
     VkDevice device,
     const VkCommandBufferAllocateInfo* pInfo,
-    VkCommandBuffer* pBufs
-) {
-    return vulkan_funcs.vkAllocateCommandBuffers(
+    VkCommandBuffer* pBufs)
+{
+    return vulkanFuncs.vkAllocateCommandBuffers(
         device,
         pInfo,
         pBufs);
@@ -3023,9 +3111,9 @@ void vkFreeCommandBuffers(
     VkDevice device,
     VkCommandPool pool,
     uint32_t count,
-    const VkCommandBuffer* pBufs
-) {
-    vulkan_funcs.vkFreeCommandBuffers(
+    const VkCommandBuffer* pBufs)
+{
+    vulkanFuncs.vkFreeCommandBuffers(
         device,
         pool,
         count,
@@ -3036,9 +3124,9 @@ VkResult vkCreateDescriptorPool(
     VkDevice device,
     const VkDescriptorPoolCreateInfo* pInfo,
     const VkAllocationCallbacks* pAllocator,
-    VkDescriptorPool* pPool
-) {
-    return vulkan_funcs.vkCreateDescriptorPool(
+    VkDescriptorPool* pPool)
+{
+    return vulkanFuncs.vkCreateDescriptorPool(
         device,
         pInfo,
         pAllocator,
@@ -3048,9 +3136,9 @@ VkResult vkCreateDescriptorPool(
 void vkDestroyDescriptorPool(
     VkDevice device,
     VkDescriptorPool pool,
-    const VkAllocationCallbacks* pAllocator
-) {
-    vulkan_funcs.vkDestroyDescriptorPool(
+    const VkAllocationCallbacks* pAllocator)
+{
+    vulkanFuncs.vkDestroyDescriptorPool(
         device,
         pool,
         pAllocator);
@@ -3059,9 +3147,9 @@ void vkDestroyDescriptorPool(
 VkResult vkResetDescriptorPool(
     VkDevice device,
     VkDescriptorPool pool,
-    uint32_t flags
-) {
-    return vulkan_funcs.vkResetDescriptorPool(
+    uint32_t flags)
+{
+    return vulkanFuncs.vkResetDescriptorPool(
         device,
         pool,
         flags);
@@ -3070,9 +3158,9 @@ VkResult vkResetDescriptorPool(
 VkResult vkAllocateDescriptorSets(
     VkDevice device,
     const VkDescriptorSetAllocateInfo* pInfo,
-    VkDescriptorSet* pSets
-) {
-    return vulkan_funcs.vkAllocateDescriptorSets(
+    VkDescriptorSet* pSets)
+{
+    return vulkanFuncs.vkAllocateDescriptorSets(
         device,
         pInfo,
         pSets);
@@ -3082,9 +3170,9 @@ VkResult vkFreeDescriptorSets(
     VkDevice device,
     VkDescriptorPool descriptorPool,
     uint32_t descriptorSetCount,
-    const VkDescriptorSet* pDescriptorSets
-) {
-    return vulkan_funcs.vkFreeDescriptorSets(
+    const VkDescriptorSet* pDescriptorSets)
+{
+    return vulkanFuncs.vkFreeDescriptorSets(
         device,
         descriptorPool,
         descriptorSetCount,
@@ -3096,9 +3184,9 @@ void vkUpdateDescriptorSets(
     uint32_t writeCount,
     const VkWriteDescriptorSet* pWrites,
     uint32_t copyCount,
-    const VkCopyDescriptorSet* pCopies
-) {
-    vulkan_funcs.vkUpdateDescriptorSets(
+    const VkCopyDescriptorSet* pCopies)
+{
+    vulkanFuncs.vkUpdateDescriptorSets(
         device,
         writeCount,
         pWrites,
@@ -3110,9 +3198,9 @@ VkResult vkCreateDescriptorSetLayout(
     VkDevice device,
     const VkDescriptorSetLayoutCreateInfo* pInfo,
     const VkAllocationCallbacks* pAllocator,
-    VkDescriptorSetLayout* pLayout
-) {
-    return vulkan_funcs.vkCreateDescriptorSetLayout(
+    VkDescriptorSetLayout* pLayout)
+{
+    return vulkanFuncs.vkCreateDescriptorSetLayout(
         device,
         pInfo,
         pAllocator,
@@ -3122,9 +3210,9 @@ VkResult vkCreateDescriptorSetLayout(
 void vkDestroyDescriptorSetLayout(
     VkDevice device,
     VkDescriptorSetLayout layout,
-    const VkAllocationCallbacks* pAllocator
-) {
-    vulkan_funcs.vkDestroyDescriptorSetLayout(
+    const VkAllocationCallbacks* pAllocator)
+{
+    vulkanFuncs.vkDestroyDescriptorSetLayout(
         device,
         layout,
         pAllocator);
@@ -3134,9 +3222,9 @@ VkResult vkCreatePipelineLayout(
     VkDevice device,
     const VkPipelineLayoutCreateInfo* pInfo,
     const VkAllocationCallbacks* pAllocator,
-    VkPipelineLayout* pLayout
-) {
-    return vulkan_funcs.vkCreatePipelineLayout(
+    VkPipelineLayout* pLayout)
+{
+    return vulkanFuncs.vkCreatePipelineLayout(
         device,
         pInfo,
         pAllocator,
@@ -3146,9 +3234,9 @@ VkResult vkCreatePipelineLayout(
 void vkDestroyPipelineLayout(
     VkDevice device,
     VkPipelineLayout layout,
-    const VkAllocationCallbacks* pAllocator
-) {
-    vulkan_funcs.vkDestroyPipelineLayout(
+    const VkAllocationCallbacks* pAllocator)
+{
+    vulkanFuncs.vkDestroyPipelineLayout(
         device,
         layout,
         pAllocator);
@@ -3158,9 +3246,9 @@ VkResult vkCreateShaderModule(
     VkDevice device,
     const VkShaderModuleCreateInfo* pInfo,
     const VkAllocationCallbacks* pAllocator,
-    VkShaderModule* pModule
-) {
-    return vulkan_funcs.vkCreateShaderModule(
+    VkShaderModule* pModule)
+{
+    return vulkanFuncs.vkCreateShaderModule(
         device,
         pInfo,
         pAllocator,
@@ -3170,9 +3258,9 @@ VkResult vkCreateShaderModule(
 void vkDestroyShaderModule(
     VkDevice device,
     VkShaderModule module,
-    const VkAllocationCallbacks* pAllocator
-) {
-    vulkan_funcs.vkDestroyShaderModule(
+    const VkAllocationCallbacks* pAllocator)
+{
+    vulkanFuncs.vkDestroyShaderModule(
         device,
         module,
         pAllocator);
@@ -3184,9 +3272,9 @@ VkResult vkCreateGraphicsPipelines(
     uint32_t count,
     const VkGraphicsPipelineCreateInfo* pInfos,
     const VkAllocationCallbacks* pAllocator,
-    VkPipeline* pPipelines
-) {
-    return vulkan_funcs.vkCreateGraphicsPipelines(
+    VkPipeline* pPipelines)
+{
+    return vulkanFuncs.vkCreateGraphicsPipelines(
         device,
         cache,
         count,
@@ -3201,9 +3289,9 @@ VkResult vkCreateComputePipelines(
     uint32_t count,
     const VkComputePipelineCreateInfo* pInfos,
     const VkAllocationCallbacks* pAllocator,
-    VkPipeline* pPipelines
-) {
-    return vulkan_funcs.vkCreateComputePipelines(
+    VkPipeline* pPipelines)
+{
+    return vulkanFuncs.vkCreateComputePipelines(
         device,
         cache,
         count,
@@ -3215,9 +3303,9 @@ VkResult vkCreateComputePipelines(
 void vkDestroyPipeline(
     VkDevice device,
     VkPipeline pipeline,
-    const VkAllocationCallbacks* pAllocator
-) {
-    vulkan_funcs.vkDestroyPipeline(
+    const VkAllocationCallbacks* pAllocator)
+{
+    vulkanFuncs.vkDestroyPipeline(
         device,
         pipeline,
         pAllocator);
@@ -3227,9 +3315,9 @@ VkResult vkCreateRenderPass(
     VkDevice device,
     const VkRenderPassCreateInfo* pCreateInfo,
     const VkAllocationCallbacks* pAllocator,
-    VkRenderPass* pRenderPass
-) {
-    return vulkan_funcs.vkCreateRenderPass(
+    VkRenderPass* pRenderPass)
+{
+    return vulkanFuncs.vkCreateRenderPass(
         device,
         pCreateInfo,
         pAllocator,
@@ -3239,9 +3327,9 @@ VkResult vkCreateRenderPass(
 void vkDestroyRenderPass(
     VkDevice device,
     VkRenderPass renderPass,
-    const VkAllocationCallbacks* pAllocator
-) {
-    vulkan_funcs.vkDestroyRenderPass(
+    const VkAllocationCallbacks* pAllocator)
+{
+    vulkanFuncs.vkDestroyRenderPass(
         device,
         renderPass,
         pAllocator);
@@ -3251,9 +3339,9 @@ VkResult vkCreateFramebuffer(
     VkDevice device,
     const VkFramebufferCreateInfo* pCreateInfo,
     const VkAllocationCallbacks* pAllocator,
-    VkFramebuffer* pFramebuffer
-) {
-    return vulkan_funcs.vkCreateFramebuffer(
+    VkFramebuffer* pFramebuffer)
+{
+    return vulkanFuncs.vkCreateFramebuffer(
         device,
         pCreateInfo,
         pAllocator,
@@ -3263,9 +3351,9 @@ VkResult vkCreateFramebuffer(
 void vkDestroyFramebuffer(
     VkDevice device,
     VkFramebuffer framebuffer,
-    const VkAllocationCallbacks* pAllocator
-) {
-    vulkan_funcs.vkDestroyFramebuffer(
+    const VkAllocationCallbacks* pAllocator)
+{
+    vulkanFuncs.vkDestroyFramebuffer(
         device,
         framebuffer,
         pAllocator);
@@ -3275,9 +3363,9 @@ VkResult vkCreateBuffer(
     VkDevice device,
     const VkBufferCreateInfo* pInfo,
     const VkAllocationCallbacks* pAllocator,
-    VkBuffer* pBuf
-) {
-    return vulkan_funcs.vkCreateBuffer(
+    VkBuffer* pBuf)
+{
+    return vulkanFuncs.vkCreateBuffer(
         device,
         pInfo,
         pAllocator,
@@ -3287,9 +3375,9 @@ VkResult vkCreateBuffer(
 void vkDestroyBuffer(
     VkDevice device,
     VkBuffer buf,
-    const VkAllocationCallbacks* pAllocator
-) {
-    vulkan_funcs.vkDestroyBuffer(
+    const VkAllocationCallbacks* pAllocator)
+{
+    vulkanFuncs.vkDestroyBuffer(
         device,
         buf,
         pAllocator);
@@ -3299,9 +3387,9 @@ VkResult vkCreateImage(
     VkDevice device,
     const VkImageCreateInfo* pInfo,
     const VkAllocationCallbacks* pAllocator,
-    VkImage* pImage
-) {
-    return vulkan_funcs.vkCreateImage(
+    VkImage* pImage)
+{
+    return vulkanFuncs.vkCreateImage(
         device,
         pInfo,
         pAllocator,
@@ -3311,9 +3399,9 @@ VkResult vkCreateImage(
 void vkDestroyImage(
     VkDevice device,
     VkImage img,
-    const VkAllocationCallbacks* pAllocator
-) {
-    vulkan_funcs.vkDestroyImage(
+    const VkAllocationCallbacks* pAllocator)
+{
+    vulkanFuncs.vkDestroyImage(
         device,
         img,
         pAllocator);
@@ -3323,9 +3411,9 @@ VkResult vkCreateImageView(
     VkDevice device,
     const VkImageViewCreateInfo* pInfo,
     const VkAllocationCallbacks* pAllocator,
-    VkImageView* pView
-) {
-    return vulkan_funcs.vkCreateImageView(
+    VkImageView* pView)
+{
+    return vulkanFuncs.vkCreateImageView(
         device,
         pInfo,
         pAllocator,
@@ -3335,9 +3423,9 @@ VkResult vkCreateImageView(
 void vkDestroyImageView(
     VkDevice device,
     VkImageView view,
-    const VkAllocationCallbacks* pAllocator
-) {
-    vulkan_funcs.vkDestroyImageView(
+    const VkAllocationCallbacks* pAllocator)
+{
+    vulkanFuncs.vkDestroyImageView(
         device,
         view,
         pAllocator);
@@ -3347,9 +3435,9 @@ VkResult vkCreateSampler(
     VkDevice device,
     const VkSamplerCreateInfo* pInfo,
     const VkAllocationCallbacks* pAllocator,
-    VkSampler* pSampler
-) {
-    return vulkan_funcs.vkCreateSampler(
+    VkSampler* pSampler)
+{
+    return vulkanFuncs.vkCreateSampler(
         device,
         pInfo,
         pAllocator,
@@ -3359,9 +3447,9 @@ VkResult vkCreateSampler(
 void vkDestroySampler(
     VkDevice device,
     VkSampler sampler,
-    const VkAllocationCallbacks* pAllocator
-) {
-    vulkan_funcs.vkDestroySampler(
+    const VkAllocationCallbacks* pAllocator)
+{
+    vulkanFuncs.vkDestroySampler(
         device,
         sampler,
         pAllocator);
@@ -3369,18 +3457,18 @@ void vkDestroySampler(
 
 void vkGetPhysicalDeviceMemoryProperties(
     VkPhysicalDevice physicalDevice,
-    VkPhysicalDeviceMemoryProperties* pMemoryProperties
-) {
-    vulkan_funcs.vkGetPhysicalDeviceMemoryProperties(
+    VkPhysicalDeviceMemoryProperties* pMemoryProperties)
+{
+    vulkanFuncs.vkGetPhysicalDeviceMemoryProperties(
         physicalDevice,
         pMemoryProperties);
 }
 
 void vkGetPhysicalDeviceMemoryProperties2(
     VkPhysicalDevice physicalDevice,
-    VkPhysicalDeviceMemoryProperties2*pMemoryProperties
-) {
-    vulkan_funcs.vkGetPhysicalDeviceMemoryProperties2(
+    VkPhysicalDeviceMemoryProperties2*pMemoryProperties)
+{
+    vulkanFuncs.vkGetPhysicalDeviceMemoryProperties2(
         physicalDevice,
         pMemoryProperties);
 }
@@ -3388,9 +3476,9 @@ void vkGetPhysicalDeviceMemoryProperties2(
 void vkGetBufferMemoryRequirements(
     VkDevice device,
     VkBuffer buffer,
-    VkMemoryRequirements* pMemoryRequirements
-) {
-    vulkan_funcs.vkGetBufferMemoryRequirements(
+    VkMemoryRequirements* pMemoryRequirements)
+{
+    vulkanFuncs.vkGetBufferMemoryRequirements(
         device,
         buffer,
         pMemoryRequirements);
@@ -3399,9 +3487,9 @@ void vkGetBufferMemoryRequirements(
 void vkGetBufferMemoryRequirements2(
     VkDevice device,
     const VkBufferMemoryRequirementsInfo2* pInfo,
-    VkMemoryRequirements2* pMemoryRequirements
-) {
-    vulkan_funcs.vkGetBufferMemoryRequirements2(
+    VkMemoryRequirements2* pMemoryRequirements)
+{
+    vulkanFuncs.vkGetBufferMemoryRequirements2(
         device,
         pInfo,
         pMemoryRequirements);
@@ -3410,9 +3498,9 @@ void vkGetBufferMemoryRequirements2(
 void vkGetImageMemoryRequirements(
     VkDevice device,
     VkImage image,
-    VkMemoryRequirements* pMemoryRequirements
-) {
-    vulkan_funcs.vkGetImageMemoryRequirements(
+    VkMemoryRequirements* pMemoryRequirements)
+{
+    vulkanFuncs.vkGetImageMemoryRequirements(
         device,
         image,
         pMemoryRequirements);
@@ -3421,9 +3509,9 @@ void vkGetImageMemoryRequirements(
 void vkGetImageMemoryRequirements2(
     VkDevice device,
     const VkImageMemoryRequirementsInfo2* pInfo,
-    VkMemoryRequirements2* pMemoryRequirements
-) {
-    vulkan_funcs.vkGetImageMemoryRequirements2(
+    VkMemoryRequirements2* pMemoryRequirements)
+{
+    vulkanFuncs.vkGetImageMemoryRequirements2(
         device,
         pInfo,
         pMemoryRequirements);
@@ -3432,9 +3520,9 @@ void vkGetImageMemoryRequirements2(
 void vkGetDeviceBufferMemoryRequirements(
     VkDevice device,
     const VkDeviceBufferMemoryRequirements* pInfo,
-    VkMemoryRequirements2* pMemoryRequirements
-) {
-    vulkan_funcs.vkGetDeviceBufferMemoryRequirements(
+    VkMemoryRequirements2* pMemoryRequirements)
+{
+    vulkanFuncs.vkGetDeviceBufferMemoryRequirements(
         device,
         pInfo,
         pMemoryRequirements);
@@ -3443,9 +3531,9 @@ void vkGetDeviceBufferMemoryRequirements(
 void vkGetDeviceImageMemoryRequirements(
     VkDevice device,
     const VkDeviceImageMemoryRequirements* pInfo,
-    VkMemoryRequirements2* pMemoryRequirements
-) {
-    vulkan_funcs.vkGetDeviceImageMemoryRequirements(
+    VkMemoryRequirements2* pMemoryRequirements)
+{
+    vulkanFuncs.vkGetDeviceImageMemoryRequirements(
         device,
         pInfo,
         pMemoryRequirements);
@@ -3455,9 +3543,9 @@ VkResult vkAllocateMemory(
     VkDevice device,
     const VkMemoryAllocateInfo* pInfo,
     const VkAllocationCallbacks* pAllocator,
-    VkDeviceMemory* pMemory
-) {
-    return vulkan_funcs.vkAllocateMemory(
+    VkDeviceMemory* pMemory)
+{
+    return vulkanFuncs.vkAllocateMemory(
         device,
         pInfo,
         pAllocator,
@@ -3467,9 +3555,9 @@ VkResult vkAllocateMemory(
 void vkFreeMemory(
     VkDevice device,
     VkDeviceMemory mem,
-    const VkAllocationCallbacks* pAllocator
-) {
-    vulkan_funcs.vkFreeMemory(
+    const VkAllocationCallbacks* pAllocator)
+{
+    vulkanFuncs.vkFreeMemory(
         device,
         mem,
         pAllocator);
@@ -3479,9 +3567,9 @@ VkResult vkBindBufferMemory(
     VkDevice device,
     VkBuffer buf,
     VkDeviceMemory mem,
-    VkDeviceSize offset
-) {
-    return vulkan_funcs.vkBindBufferMemory(
+    VkDeviceSize offset)
+{
+    return vulkanFuncs.vkBindBufferMemory(
         device,
         buf,
         mem,
@@ -3491,9 +3579,9 @@ VkResult vkBindBufferMemory(
 VkResult vkBindBufferMemory2(
     VkDevice device,
     uint32_t bindInfoCount,
-    const VkBindBufferMemoryInfo* pBindInfos
-) {
-    return vulkan_funcs.vkBindBufferMemory2(
+    const VkBindBufferMemoryInfo* pBindInfos)
+{
+    return vulkanFuncs.vkBindBufferMemory2(
         device,
         bindInfoCount,
         pBindInfos);
@@ -3503,9 +3591,9 @@ VkResult vkBindImageMemory(
     VkDevice device,
     VkImage img,
     VkDeviceMemory mem,
-    VkDeviceSize offset
-) {
-    return vulkan_funcs.vkBindImageMemory(
+    VkDeviceSize offset)
+{
+    return vulkanFuncs.vkBindImageMemory(
         device,
         img,
         mem,
@@ -3515,9 +3603,9 @@ VkResult vkBindImageMemory(
 VkResult vkBindImageMemory2(
     VkDevice device,
     uint32_t bindInfoCount,
-    const VkBindImageMemoryInfo* pBindInfos
-) {
-    return vulkan_funcs.vkBindImageMemory2(
+    const VkBindImageMemoryInfo* pBindInfos)
+{
+    return vulkanFuncs.vkBindImageMemory2(
         device,
         bindInfoCount,
         pBindInfos);
@@ -3529,9 +3617,9 @@ VkResult vkMapMemory(
     VkDeviceSize offset,
     VkDeviceSize size,
     VkMemoryMapFlags flags,
-    void** ppData
-) {
-    return vulkan_funcs.vkMapMemory(
+    void** ppData)
+{
+    return vulkanFuncs.vkMapMemory(
         device,
         mem,
         offset, size, flags, ppData);
@@ -3539,9 +3627,9 @@ VkResult vkMapMemory(
 
 void vkUnmapMemory(
     VkDevice device,
-    VkDeviceMemory mem
-) {
-    vulkan_funcs.vkUnmapMemory(
+    VkDeviceMemory mem)
+{
+    vulkanFuncs.vkUnmapMemory(
         device,
         mem);
 }
@@ -3549,9 +3637,9 @@ void vkUnmapMemory(
 VkResult vkFlushMappedMemoryRanges(
     VkDevice device,
     uint32_t count,
-    const VkMappedMemoryRange* pRanges
-) {
-    return vulkan_funcs.vkFlushMappedMemoryRanges(
+    const VkMappedMemoryRange* pRanges)
+{
+    return vulkanFuncs.vkFlushMappedMemoryRanges(
         device,
         count,
         pRanges);
@@ -3560,9 +3648,9 @@ VkResult vkFlushMappedMemoryRanges(
 VkResult vkInvalidateMappedMemoryRanges(
     VkDevice device,
     uint32_t count,
-    const VkMappedMemoryRange* pRanges
-) {
-    return vulkan_funcs.vkInvalidateMappedMemoryRanges(
+    const VkMappedMemoryRange* pRanges)
+{
+    return vulkanFuncs.vkInvalidateMappedMemoryRanges(
         device,
         count,
         pRanges);
@@ -3570,25 +3658,25 @@ VkResult vkInvalidateMappedMemoryRanges(
 
 VkResult vkBeginCommandBuffer(
     VkCommandBuffer cmd,
-    const VkCommandBufferBeginInfo* pInfo
-) {
-    return vulkan_funcs.vkBeginCommandBuffer(
+    const VkCommandBufferBeginInfo* pInfo)
+{
+    return vulkanFuncs.vkBeginCommandBuffer(
         cmd,
         pInfo);
 }
 
 VkResult vkEndCommandBuffer(
-    VkCommandBuffer cmd
-) {
-    return vulkan_funcs.vkEndCommandBuffer(
+    VkCommandBuffer cmd)
+{
+    return vulkanFuncs.vkEndCommandBuffer(
         cmd);
 }
 
 VkResult vkResetCommandBuffer(
     VkCommandBuffer cmd,
-    VkCommandBufferResetFlags flags
-) {
-    return vulkan_funcs.vkResetCommandBuffer(
+    VkCommandBufferResetFlags flags)
+{
+    return vulkanFuncs.vkResetCommandBuffer(
         cmd,
         flags);
 }
@@ -3598,9 +3686,9 @@ void vkCmdCopyBuffer(
     VkBuffer src,
     VkBuffer dst,
     uint32_t count,
-    const VkBufferCopy* pRegions
-) {
-    vulkan_funcs.vkCmdCopyBuffer(
+    const VkBufferCopy* pRegions)
+{
+    vulkanFuncs.vkCmdCopyBuffer(
         cmd,
         src,
         dst,
@@ -3615,9 +3703,9 @@ void vkCmdCopyImage(
     VkImage dst,
     VkImageLayout dstLayout,
     uint32_t count,
-    const VkImageCopy* pRegions
-) {
-    vulkan_funcs.vkCmdCopyImage(
+    const VkImageCopy* pRegions)
+{
+    vulkanFuncs.vkCmdCopyImage(
         cmd,
         src,
         srcLayout,
@@ -3635,9 +3723,9 @@ void vkCmdBlitImage(
     VkImageLayout dstLayout,
     uint32_t count,
     const VkImageBlit* pRegions,
-    VkFilter filter
-) {
-    vulkan_funcs.vkCmdBlitImage(
+    VkFilter filter)
+{
+    vulkanFuncs.vkCmdBlitImage(
         cmd,
         src,
         srcLayout,
@@ -3654,9 +3742,9 @@ void vkCmdCopyBufferToImage(
     VkImage dst,
     VkImageLayout dstLayout,
     uint32_t count,
-    const VkBufferImageCopy* pRegions
-) {
-    vulkan_funcs.vkCmdCopyBufferToImage(
+    const VkBufferImageCopy* pRegions)
+{
+    vulkanFuncs.vkCmdCopyBufferToImage(
         cmd,
         src,
         dst,
@@ -3671,9 +3759,9 @@ void vkCmdCopyImageToBuffer(
     VkImageLayout srcLayout,
     VkBuffer dst,
     uint32_t count,
-    const VkBufferImageCopy* pRegions
-) {
-    vulkan_funcs.vkCmdCopyImageToBuffer(
+    const VkBufferImageCopy* pRegions)
+{
+    vulkanFuncs.vkCmdCopyImageToBuffer(
         cmd,
         src,
         srcLayout,
@@ -3684,9 +3772,9 @@ void vkCmdCopyImageToBuffer(
 
 void vkCmdPipelineBarrier2(
     VkCommandBuffer cmd,
-    const VkDependencyInfo* pInfo
-) {
-    vulkan_funcs.vkCmdPipelineBarrier2(
+    const VkDependencyInfo* pInfo)
+{
+    vulkanFuncs.vkCmdPipelineBarrier2(
         cmd,
         pInfo);
 }
@@ -3701,9 +3789,9 @@ void vkCmdPipelineBarrier(
     uint32_t bufferMemoryBarrierCount,
     const VkBufferMemoryBarrier* pBufferMemoryBarriers,
     uint32_t imageMemoryBarrierCount,
-    const VkImageMemoryBarrier* pImageMemoryBarriers
-) {
-    vulkan_funcs.vkCmdPipelineBarrier(
+    const VkImageMemoryBarrier* pImageMemoryBarriers)
+{
+    vulkanFuncs.vkCmdPipelineBarrier(
         commandBuffer,
         srcStageMask,
         dstStageMask,
@@ -3718,35 +3806,35 @@ void vkCmdPipelineBarrier(
 
 void vkCmdBeginRendering(
     VkCommandBuffer cmd,
-    const VkRenderingInfo* pInfo
-) {
-    vulkan_funcs.vkCmdBeginRendering(
+    const VkRenderingInfo* pInfo)
+{
+    vulkanFuncs.vkCmdBeginRendering(
         cmd,
         pInfo);
 }
 
 void vkCmdEndRendering(
-    VkCommandBuffer cmd
-) {
-    vulkan_funcs.vkCmdEndRendering(
+    VkCommandBuffer cmd)
+{
+    vulkanFuncs.vkCmdEndRendering(
         cmd);
 }
 
 void vkCmdBeginRenderPass(
     VkCommandBuffer cmd,
     const VkRenderPassBeginInfo* pRenderPassBegin,
-    VkSubpassContents contents
-) {
-    vulkan_funcs.vkCmdBeginRenderPass(
+    VkSubpassContents contents)
+{
+    vulkanFuncs.vkCmdBeginRenderPass(
         cmd,
         pRenderPassBegin,
         contents);
 }
 
 void vkCmdEndRenderPass(
-    VkCommandBuffer cmd
-) {
-    vulkan_funcs.vkCmdEndRenderPass(
+    VkCommandBuffer cmd)
+{
+    vulkanFuncs.vkCmdEndRenderPass(
         cmd);
 }
 
@@ -3754,9 +3842,9 @@ void vkCmdSetViewport(
     VkCommandBuffer cmd,
     uint32_t first,
     uint32_t count,
-    const VkViewport* pViewports
-) {
-    vulkan_funcs.vkCmdSetViewport(
+    const VkViewport* pViewports)
+{
+    vulkanFuncs.vkCmdSetViewport(
         cmd,
         first,
         count,
@@ -3767,9 +3855,9 @@ void vkCmdSetScissor(
     VkCommandBuffer cmd,
     uint32_t first,
     uint32_t count,
-    const VkRect2D* pScissors
-) {
-    vulkan_funcs.vkCmdSetScissor(
+    const VkRect2D* pScissors)
+{
+    vulkanFuncs.vkCmdSetScissor(
         cmd,
         first,
         count,
@@ -3779,9 +3867,9 @@ void vkCmdSetScissor(
 void vkCmdBindPipeline(
     VkCommandBuffer cmd,
     VkPipelineBindPoint bindPoint,
-    VkPipeline pipeline
-) {
-    vulkan_funcs.vkCmdBindPipeline(
+    VkPipeline pipeline)
+{
+    vulkanFuncs.vkCmdBindPipeline(
         cmd,
         bindPoint,
         pipeline);
@@ -3795,9 +3883,9 @@ void vkCmdBindDescriptorSets(
     uint32_t count,
     const VkDescriptorSet* pSets,
     uint32_t dynCount,
-    const uint32_t* pDyn
-) {
-    vulkan_funcs.vkCmdBindDescriptorSets(
+    const uint32_t* pDyn)
+{
+    vulkanFuncs.vkCmdBindDescriptorSets(
         cmd,
         bindPoint,
         layout,
@@ -3814,9 +3902,9 @@ void vkCmdPushConstants(
     VkShaderStageFlags stages,
     uint32_t offset,
     uint32_t size,
-    const void* pData
-) {
-    vulkan_funcs.vkCmdPushConstants(
+    const void* pData)
+{
+    vulkanFuncs.vkCmdPushConstants(
         cmd,
         layout,
         stages,
@@ -3830,9 +3918,9 @@ void vkCmdBindVertexBuffers(
     uint32_t first,
     uint32_t count,
     const VkBuffer* pBufs,
-    const VkDeviceSize* pOffsets
-) {
-    vulkan_funcs.vkCmdBindVertexBuffers(
+    const VkDeviceSize* pOffsets)
+{
+    vulkanFuncs.vkCmdBindVertexBuffers(
         cmd,
         first,
         count,
@@ -3844,9 +3932,9 @@ void vkCmdBindIndexBuffer(
     VkCommandBuffer cmd,
     VkBuffer buf,
     VkDeviceSize offset,
-    VkIndexType type
-) {
-    vulkan_funcs.vkCmdBindIndexBuffer(
+    VkIndexType type)
+{
+    vulkanFuncs.vkCmdBindIndexBuffer(
         cmd,
         buf,
         offset,
@@ -3858,9 +3946,9 @@ void vkCmdDraw(
     uint32_t vertexCount,
     uint32_t instanceCount,
     uint32_t firstVertex,
-    uint32_t firstInstance
-) {
-    vulkan_funcs.vkCmdDraw(
+    uint32_t firstInstance)
+{
+    vulkanFuncs.vkCmdDraw(
         cmd,
         vertexCount,
         instanceCount,
@@ -3874,9 +3962,9 @@ void vkCmdDrawIndexed(
     uint32_t instanceCount,
     uint32_t firstIndex,
     int32_t vertexOffset,
-    uint32_t firstInstance
-) {
-    vulkan_funcs.vkCmdDrawIndexed(
+    uint32_t firstInstance)
+{
+    vulkanFuncs.vkCmdDrawIndexed(
         cmd,
         indexCount,
         instanceCount,
@@ -3889,9 +3977,9 @@ void vkCmdDispatch(
     VkCommandBuffer cmd,
     uint32_t x,
     uint32_t y,
-    uint32_t z
-) {
-    vulkan_funcs.vkCmdDispatch(
+    uint32_t z)
+{
+    vulkanFuncs.vkCmdDispatch(
         cmd,
         x,
         y,
@@ -3901,30 +3989,31 @@ void vkCmdDispatch(
 static void* libvulkan = nullptr;
 
 #define HG_LOAD_VULKAN_FUNC(name) \
-    vulkan_funcs. name = (PFN_##name)vulkan_funcs.vkGetInstanceProcAddr(nullptr, #name); \
-    if (vulkan_funcs. name == nullptr) { \
-        hg_error("Could not load " #name "\n"); \
-    }
+    vulkanFuncs. name = (PFN_##name)vulkanFuncs.vkGetInstanceProcAddr(nullptr, #name); \
+    if (vulkanFuncs. name == nullptr) { hgError("Could not load " #name "\n"); }
 
 #if defined(HG_PLATFORM_LINUX)
 
 #include <dlfcn.h>
 
-void hg_vulkan_init() {
+void hgVulkanInit()
+{
     if (libvulkan == nullptr)
         libvulkan = dlopen("libvulkan.so.1", RTLD_LAZY);
     if (libvulkan == nullptr)
-        hg_error("Could not load vulkan dynamic lib: %s\n", dlerror());
+        hgError("Could not load vulkan dynamic lib: %s\n", dlerror());
 
-    *(void**)&vulkan_funcs.vkGetInstanceProcAddr = dlsym(libvulkan, "vkGetInstanceProcAddr");
-    if (vulkan_funcs.vkGetInstanceProcAddr == nullptr)
-        hg_error("Could not load vkGetInstanceProcAddr: %s\n", dlerror());
+    *(void**)&vulkanFuncs.vkGetInstanceProcAddr = dlsym(libvulkan, "vkGetInstanceProcAddr");
+    if (vulkanFuncs.vkGetInstanceProcAddr == nullptr)
+        hgError("Could not load vkGetInstanceProcAddr: %s\n", dlerror());
 
     HG_LOAD_VULKAN_FUNC(vkCreateInstance);
 }
 
-void hg_vulkan_deinit() {
-    if (libvulkan != nullptr) {
+void hgVulkanDeinit()
+{
+    if (libvulkan != nullptr)
+    {
         dlclose(libvulkan);
         libvulkan = nullptr;
     }
@@ -3935,23 +4024,25 @@ void hg_vulkan_deinit() {
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-void hg_vulkan_init() {
-
+void hgVulkanInit()
+{
     if (libvulkan == nullptr)
         libvulkan = (void*)LoadLibraryA("vulkan-1.dll");
     if (libvulkan == nullptr)
-        hg_error("Could not load vulkan dynamic lib\n");
+        hgError("Could not load vulkan dynamic lib\n");
 
-    vulkan_funcs.vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr)
+    vulkanFuncs.vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr)
         GetProcAddress((HMODULE)libvulkan, "vkGetInstanceProcAddr");
-    if (vulkan_funcs.vkGetInstanceProcAddr == nullptr)
-        hg_error("Could not load vkGetInstanceProcAddr\n");
+    if (vulkanFuncs.vkGetInstanceProcAddr == nullptr)
+        hgError("Could not load vkGetInstanceProcAddr\n");
 
     HG_LOAD_VULKAN_FUNC(vkCreateInstance);
 }
 
-void hg_vulkan_deinit() {
-    if (libvulkan != nullptr) {
+void hgVulkanDeinit()
+{
+    if (libvulkan != nullptr)
+    {
         FreeLibrary((HMODULE)libvulkan);
         libvulkan = nullptr;
     }

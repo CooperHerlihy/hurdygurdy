@@ -1,12 +1,12 @@
 #version 460
 
-layout (location = 0) out vec4 out_color;
+layout (location = 0) out vec4 outColor;
 
-layout (location = 0) in vec2 v_uv;
+layout (location = 0) in vec2 vUV;
 
-layout (set = 1, binding = 0) uniform sampler2D u_sprite;
+layout (set = 1, binding = 0) uniform sampler2D uSprite;
 
 void main() {
-    out_color = texture(u_sprite, v_uv);
+    outColor = texture(uSprite, vUV);
 }
 
