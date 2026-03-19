@@ -2864,41 +2864,12 @@ void hgCallPar(HgFence* fences, u32 fenceCount, void* data, void (*fn)(void*));
  * Note, uses a fence internally to wait for all work to complete
  *
  * Parameters
- * - n The number of elements to iterate [0, count)
- * - chunkSize The number of elements to iterate per chunk
+ * - begin The first index to iterate from
+ * - end The end index to iterate to
+ * - data The data pointer passed to fn
  * - fn The function to use to iterate, takes begin and end indicces
  */
-template<typename Fn>
-void hgForPar(u64 n, u64 chunkSize, Fn fn)
-{
-    static_assert(std::is_invocable_r_v<void, Fn, u64, u64>);
-
-    HgArena* scratch = hgGetScratch();
-    HgArenaScope scratchScope{scratch};
-
-    HgFence fence;
-    for (u64 i = 0; i < n; i += chunkSize)
-    {
-        struct Capture
-        {
-            u64 begin;
-            u64 end;
-            Fn* fn;
-        };
-
-        Capture* data = hgAlloc<Capture>(scratch, 1);
-        data->begin = i;
-        data->end = std::min(i + chunkSize, n);
-        data->fn = &fn;
-
-        hgCallPar(&fence, 1, data, [](void* pdata)
-        {
-            Capture* data = (Capture*)pdata;
-            (*data->fn)(data->begin, data->end);
-        });
-    }
-    hgHelpThreadPool(fence, INFINITY);
-}
+void hgForPar(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx));
 
 /**
  * Initializes the IO thread
@@ -4942,23 +4913,26 @@ struct HgECS
      * - A reference to the component
      *
      * Parameters
-     * - chunkSize The number of executions per group
      * - fn The function to call
      */
     template<typename T, typename Fn>
-    void forParSingle(u64 chunkSize, Fn& fn)
+    void forParSingle(Fn& fn)
     {
         static_assert(std::is_invocable_r_v<void, Fn, HgEntity, T&>);
 
-        hgForPar(count<T>(), chunkSize, [&](u64 begin, u64 end)
+        struct Capture
         {
-            HgEntity* e = entities<T>() + begin;
-            HgEntity* eEnd = entities<T>() + end;
-            T* c = components<T>() + begin;
-            for (; e != eEnd; ++e, ++c)
-            {
-                fn(*e, *c);
-            }
+            HgECS* ecs;
+            Fn* fn;
+        };
+        Capture capture = {this, &fn};
+
+        hgForPar(0, count<T>(), &capture, [](void* pcapture, u64 idx)
+        {
+            Capture* capture = (Capture*)pcapture;
+            (*capture->fn)(
+                capture->ecs->template entities<T>()[idx],
+                capture->ecs->template components<T>()[idx]);
         });
     }
 
@@ -4970,24 +4944,27 @@ struct HgECS
      * - A reference to each component...
      *
      * Parameters
-     * - chunkSize The number of executions per group
      * - fn The function to call
      */
     template<typename... Ts, typename Fn>
-    void forParMulti(u64 chunkSize, Fn& fn)
+    void forParMulti(Fn& fn)
     {
         static_assert(std::is_invocable_r_v<void, Fn, HgEntity, Ts&...>);
 
-        u32 id = findSmallest<Ts...>();
-        hgForPar(systems[id].count, chunkSize, [&](u64 begin, u64 end)
+        struct Capture
         {
-            HgEntity* e = systems[id].entities + begin;
-            HgEntity* eEnd = systems[id].entities + end;
-            for (; e != eEnd; ++e)
-            {
-                if (hasAll<Ts...>(*e))
-                    fn(*e, get<Ts>(*e)...);
-            }
+            HgECS* ecs;
+            Fn* fn;
+            u32 id;
+        };
+        Capture capture = {this, &fn, findSmallest<Ts...>()};
+
+        hgForPar(0, systems[capture.id].count, &capture, [](void* pcapture, u64 idx)
+        {
+            Capture* capture = (Capture*)pcapture;
+            HgEntity e = capture->ecs->systems[capture->id].entities[idx];
+            if (capture->ecs->template hasAll<Ts...>(e))
+                (*capture->fn)(e, capture->ecs->template get<Ts>(e)...);
         });
     }
 
@@ -5005,15 +4982,15 @@ struct HgECS
      * - fn The function to call
      */
     template<typename... Ts, typename Fn>
-    void forPar(u64 chunkSize, Fn fn)
+    void forPar(Fn fn)
     {
         static_assert(sizeof...(Ts) != 0);
 
         if constexpr (sizeof...(Ts) == 1)
         {
-            forParSingle<Ts...>(chunkSize, fn);
+            forParSingle<Ts...>(fn);
         } else {
-            forParMulti<Ts...>(chunkSize, fn);
+            forParMulti<Ts...>(fn);
         }
     }
 

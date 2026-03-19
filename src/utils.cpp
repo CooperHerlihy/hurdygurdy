@@ -5,24 +5,24 @@ void hgInit(void)
     hgInitScratchMemory();
     HgArena* arena = hgGetScratch();
 
+    hgInitPlatform();
+    hgInitGraphics();
+
     hgInitThreadPool(arena, 4096, hgHardwareThreadCount() - 2); // main thread, io thread
     hgInitIOThread(arena, 4096);
     hgInitResources();
     hgInitGpuResources();
-
-    hgInitPlatform();
-    hgInitGraphics();
 }
 
 void hgExit(void)
 {
-    hgDeinitGraphics();
-    hgDeinitPlatform();
-
     hgDeinitGpuResources();
     hgDeinitResource();
     hgDeinitIOThread();
     hgDeinitThreadPool();
+
+    hgDeinitGraphics();
+    hgDeinitPlatform();
 
     hgDeinitScratchMemory();
 }

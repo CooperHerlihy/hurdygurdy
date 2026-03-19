@@ -1635,14 +1635,11 @@ void hgTest()
     {
         bool vals[100] = {};
 
-        hgForPar(sizeof(vals) / sizeof(*vals), 16, [&](u64 begin, u64 end)
+        auto fn = [](void* pvals, u64 idx)
         {
-            hgAssert(begin < end && end <= sizeof(vals) / sizeof(*vals));
-            for (; begin < end; ++begin)
-            {
-                vals[begin] = true;
-            }
-        });
+            ((bool*)pvals)[idx] = true;
+        };
+        hgForPar(0, sizeof(vals) / sizeof(*vals), vals, fn);
 
         for (bool& val : vals)
         {
@@ -2186,7 +2183,7 @@ void hgTest()
             }
 
             bool success;
-            ecs.forPar<u32>(16, [&](HgEntity, u32& c)
+            ecs.forPar<u32>([&](HgEntity, u32& c)
             {
                 c += 4;
             });
@@ -2198,7 +2195,7 @@ void hgTest()
             });
             hgAssert(success);
 
-            ecs.forPar<u64>(16, [&](HgEntity, u64& c)
+            ecs.forPar<u64>([&](HgEntity, u64& c)
             {
                 c += 3;
             });
@@ -2210,7 +2207,7 @@ void hgTest()
             });
             hgAssert(success);
 
-            ecs.forPar<u32, u64>(16, [&](HgEntity, u32& c32, u64& c64)
+            ecs.forPar<u32, u64>([&](HgEntity, u32& c32, u64& c64)
             {
                 c64 -= c32;
             });

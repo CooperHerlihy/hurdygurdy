@@ -212,6 +212,44 @@ void hgCallPar(HgFence* fences, u32 fenceCount, void* data, void (*fn)(void*))
     poolCv.notify_one();
 }
 
+void hgForPar(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx))
+{
+    hgAssert(begin <= end);
+
+    HgArena* scratch = hgGetScratch();
+    HgArenaScope scratchScope{scratch};
+
+    u64 chunkSize = (u64)std::ceil((f32)(end - begin) / (8.0f * (f32)hgHardwareThreadCount()));
+
+    HgFence fence;
+    for (u64 i = begin; i < end; i += chunkSize)
+    {
+        struct Capture
+        {
+            void* data;
+            void (*fn)(void* data, u64 idx);
+            u64 begin;
+            u64 end;
+        };
+
+        Capture* capture = hgAlloc<Capture>(scratch, 1);
+        capture->data = data;
+        capture->fn = fn;
+        capture->begin = i;
+        capture->end = std::min(i + chunkSize, end);
+
+        hgCallPar(&fence, 1, capture, [](void* pcapture)
+        {
+            Capture* capture = (Capture*)pcapture;
+            for (u64 i = capture->begin; i < capture->end; ++i)
+            {
+                (capture->fn)(capture->data, i);
+            }
+        });
+    }
+    hgHelpThreadPool(fence, INFINITY);
+}
+
 std::thread ioThread{};
 std::atomic_bool ioThreadShouldClose = false;
 
