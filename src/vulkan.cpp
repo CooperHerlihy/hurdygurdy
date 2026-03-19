@@ -69,10 +69,44 @@ void hgInitGraphics()
         if (hgVkCmdPool == nullptr)
             hgError("Could note create Vulkan command pool: %s\n", hgVkResultToStr(result));
     }
+
+    if (hgVkDescriptorPool == nullptr)
+    {
+        VkDescriptorPoolSize sizes[] = {
+            {VK_DESCRIPTOR_TYPE_SAMPLER, 2048},
+            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2048},
+            {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 2048},
+            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 2048},
+            {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 2048},
+            {VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 2048},
+            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2048},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2048},
+            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 2048},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 2048},
+            {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 2048},
+        };
+
+        VkDescriptorPoolCreateInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+        info.maxSets = 2048;
+        info.poolSizeCount = sizeof(sizes) / sizeof(*sizes);
+        info.pPoolSizes = sizes;
+
+        VkResult result = vkCreateDescriptorPool(hgVkDevice, &info, nullptr, &hgVkDescriptorPool);
+        if (hgVkDescriptorPool == nullptr)
+            hgError("Could not create VkDescriptorPool: %s\n", hgVkResultToStr(result));
+    };
 }
 
 void hgDeinitGraphics()
 {
+    if (hgVkDescriptorPool != nullptr)
+    {
+        vkDestroyDescriptorPool(hgVkDevice, hgVkDescriptorPool, nullptr);
+        hgVkDescriptorPool = nullptr;
+    }
+
     if (hgVkCmdPool != nullptr)
     {
         vkDestroyCommandPool(hgVkDevice, hgVkCmdPool, nullptr);
@@ -1496,7 +1530,7 @@ VkPipelineLayout hgCreateVkPipelineLayout(
     return layout;
 }
 
-VkShaderModule hgCreateVkShaderModule(const u8* spirvCode, u64 codeSize)
+static VkShaderModule hgCreateVkShaderModule(const u8* spirvCode, u64 codeSize)
 {
     VkShaderModuleCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -1521,14 +1555,19 @@ VkPipeline hgCreateVkGraphicsPipeline(const HgCreateVkGraphicsPipeline& config)
     if (config.vertexBindingCount > 0)
         hgAssert(config.vertexBindings != nullptr);
 
+    VkShaderModule vertexShader = hgCreateVkShaderModule(config.vertexShader, config.vertexShaderSize);
+    VkShaderModule fragmentShader = hgCreateVkShaderModule(config.fragmentShader, config.fragmentShaderSize);
+    hgDefer(vkDestroyShaderModule(hgVkDevice, vertexShader, nullptr));
+    hgDefer(vkDestroyShaderModule(hgVkDevice, fragmentShader, nullptr));
+
     VkPipelineShaderStageCreateInfo shaderStages[2]{};
     shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     shaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-    shaderStages[0].module = config.vertexShader;
+    shaderStages[0].module = vertexShader;
     shaderStages[0].pName = "main";
     shaderStages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     shaderStages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-    shaderStages[1].module = config.fragmentShader;
+    shaderStages[1].module = fragmentShader;
     shaderStages[1].pName = "main";
 
     VkPipelineVertexInputStateCreateInfo vertexInputState{};
@@ -1662,16 +1701,20 @@ VkPipeline hgCreateVkGraphicsPipeline(const HgCreateVkGraphicsPipeline& config)
     return pipeline;
 }
 
-VkPipeline hgCreateVkComputePipeline(VkPipelineLayout layout, const VkShaderModule shader)
+VkPipeline hgCreateVkComputePipeline(VkPipelineLayout layout, const u8* shaderCode, u64 shaderCodeSize)
 {
     hgAssert(layout != nullptr);
-    hgAssert(shader != nullptr);
+    hgAssert(shaderCode != nullptr);
+    hgAssert(shaderCodeSize > 0);
+
+    VkShaderModule computeShader = hgCreateVkShaderModule(shaderCode, shaderCodeSize);
+    hgDefer(vkDestroyShaderModule(hgVkDevice, computeShader, nullptr));
 
     VkComputePipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
     pipelineInfo.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     pipelineInfo.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-    pipelineInfo.stage.module = shader;
+    pipelineInfo.stage.module = computeShader;
     pipelineInfo.stage.pName = "main";
     pipelineInfo.layout = layout;
     pipelineInfo.basePipelineHandle = nullptr;
@@ -1685,57 +1728,41 @@ VkPipeline hgCreateVkComputePipeline(VkPipelineLayout layout, const VkShaderModu
     return pipeline;
 }
 
-VkDescriptorPool hgCreateVkDescriptorPool(
-    u32 maxSets,
-    VkDescriptorPoolSize* sizes,
-    u32 sizeCount,
-    VkDescriptorPoolCreateFlags flags)
-{
-    VkDescriptorPoolCreateInfo info{};
-    info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    info.flags = flags;
-    info.maxSets = maxSets;
-    info.poolSizeCount = sizeCount;
-    info.pPoolSizes = sizes;
-
-    VkDescriptorPool pool = nullptr;
-    VkResult result = vkCreateDescriptorPool(hgVkDevice, &info, nullptr, &pool);
-    if (pool == nullptr)
-        hgError("Could not create VkDescriptorPool: %s\n", hgVkResultToStr(result));
-
-    return pool;
-}
-
-VkDescriptorSet hgCreateVkDescriptorSet(VkDescriptorPool pool, VkDescriptorSetLayout layout)
+VkDescriptorSet hgCreateVkDescriptorSet(VkDescriptorSetLayout layout)
 {
     VkDescriptorSetAllocateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    info.descriptorPool = pool;
+    info.descriptorPool = hgVkDescriptorPool;
     info.descriptorSetCount = 1;
     info.pSetLayouts = &layout;
 
     VkDescriptorSet set = nullptr;
     VkResult result = vkAllocateDescriptorSets(hgVkDevice, &info, &set);
-    if (result == VK_ERROR_OUT_OF_POOL_MEMORY)
-        return nullptr;
     if (set == nullptr)
         hgError("Could not allocate VkDescriptorSet: %s\n", hgVkResultToStr(result));
 
     return set;
 }
 
-void hgUpdateVkDescriptorSet(
+void hgDestroyVkDescriptorSet(VkDescriptorSet set)
+{
+    vkFreeDescriptorSets(hgVkDevice, hgVkDescriptorPool, 1, &set);
+}
+
+void hgUpdateVkDescriptorSetBinding(
     VkDescriptorSet set,
     u32 binding,
+    u32 begin,
+    u32 count,
     VkDescriptorType type,
     const VkDescriptorBufferInfo* bufferInfos,
-    const VkDescriptorImageInfo* imageInfos,
-    u32 count)
+    const VkDescriptorImageInfo* imageInfos)
 {
     VkWriteDescriptorSet write{};
     write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     write.dstSet = set;
     write.dstBinding = binding;
+    write.dstArrayElement = begin;
     write.descriptorCount = count;
     write.descriptorType = type;
     write.pBufferInfo = bufferInfos;

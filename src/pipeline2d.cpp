@@ -19,30 +19,22 @@ static VkDescriptorSetLayout textureSetLayout;
 static VkPipelineLayout pipelineLayout;
 static VkPipeline pipeline;
 
-static VkDescriptorPool descriptorPool;
+static HgBuffer* vpBuffer;
 static VkDescriptorSet vpSet;
 
-static HgBuffer* vpBuffer;
+static HgTextureResource defaultTex;
+static VkDescriptorSet defaultTexSet;
 
 static HgHashMap<HgResource, VkDescriptorSet> textureSets;
-
-static HgImage* defaultTex;
-static HgImageView* defaultTexView;
-static VkSampler defaultTexSampler;
-
-static VkDescriptorSet defaultTexSet;
 
 void hgInitPipeline2D(
     HgArena* arena,
     u32 maxTextures,
     VkFormat colorFormat,
-    VkFormat depthFormat
-)
+    VkFormat depthFormat)
 {
     hgAssert(hgVkDevice != nullptr);
     hgAssert(colorFormat != VK_FORMAT_UNDEFINED);
-
-    textureSets = textureSets.create(arena, maxTextures);
 
     VkDescriptorSetLayoutBinding vpBindings[] = {
         {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr}
@@ -64,35 +56,21 @@ void hgInitPipeline2D(
         &push,
         1);
 
-    VkShaderModule vertexShader = hgCreateVkShaderModule(sprite_vert_spv, sprite_vert_spv_size);
-    VkShaderModule fragmentShader = hgCreateVkShaderModule(sprite_frag_spv, sprite_frag_spv_size);
-    hgDefer(vkDestroyShaderModule(hgVkDevice, vertexShader, nullptr));
-    hgDefer(vkDestroyShaderModule(hgVkDevice, fragmentShader, nullptr));
-
     HgCreateVkGraphicsPipeline pipelineConfig{};
     pipelineConfig.colorAttachmentFormats = &colorFormat;
     pipelineConfig.colorAttachmentCount = 1;
     pipelineConfig.depthAttachmentFormat = depthFormat;
-    pipelineConfig.stencilAttachmentFormat = VK_FORMAT_UNDEFINED;
-    pipelineConfig.vertexShader = vertexShader;
-    pipelineConfig.fragmentShader = fragmentShader;
+    pipelineConfig.vertexShader = sprite_vert_spv;
+    pipelineConfig.vertexShaderSize = sprite_vert_spv_size;
+    pipelineConfig.fragmentShader = sprite_frag_spv;
+    pipelineConfig.fragmentShaderSize = sprite_frag_spv_size;
     pipelineConfig.layout = pipelineLayout;
     pipelineConfig.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
     pipelineConfig.enableColorBlend = true;
 
     pipeline = hgCreateVkGraphicsPipeline(pipelineConfig);
 
-    VkDescriptorPoolSize descriptorSizes[] = {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, maxTextures}
-    };
-    descriptorPool = hgCreateVkDescriptorPool(
-        maxTextures + 1,
-        descriptorSizes,
-        sizeof(descriptorSizes) / sizeof(*descriptorSizes),
-        VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
-
-    vpSet = hgCreateVkDescriptorSet(descriptorPool, vpSetLayout);
+    vpSet = hgCreateVkDescriptorSet(vpSetLayout);
     hgAssert(vpSet != nullptr);
 
     vpBuffer = hgCreateBuffer(
@@ -107,7 +85,14 @@ void hgInitPipeline2D(
     hgWriteBuffer(vpBuffer, 0, &vpData, sizeof(vpData));
 
     VkDescriptorBufferInfo bufferInfo = {vpBuffer->buffer, 0, sizeof(VPUniform)};
-    hgUpdateVkDescriptorSet(vpSet, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, &bufferInfo, nullptr, 1);
+    hgUpdateVkDescriptorSetBinding(
+        vpSet,
+        0,
+        0,
+        1,
+        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        &bufferInfo,
+        nullptr);
 
     struct Color
     {
@@ -118,43 +103,50 @@ void hgInitPipeline2D(
         {0x00, 0x00, 0x00, 0xff}, {0xff, 0x00, 0xff, 0xff},
     };
 
-    defaultTex = hgCreateImage(2, 2, VK_FORMAT_R8G8B8A8_SRGB,
+    defaultTex.image = hgCreateImage(2, 2, VK_FORMAT_R8G8B8A8_SRGB,
         VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
 
-    defaultTexView = hgCreateImageView(defaultTex, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
+    defaultTex.view = hgCreateImageView(defaultTex.image, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
 
     hgWriteImage(
-        defaultTex,
+        defaultTex.image,
         {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
         defaultColors,
         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
     HgCreateVkSampler defaultTexSamplerInfo{};
-    defaultTexSampler = hgCreateVkSampler(defaultTexSamplerInfo);
+    defaultTex.sampler = hgCreateVkSampler(defaultTexSamplerInfo);
 
-    defaultTexSet = hgCreateVkDescriptorSet(descriptorPool, textureSetLayout);
+    defaultTexSet = hgCreateVkDescriptorSet(textureSetLayout);
 
     VkDescriptorImageInfo imageInfo{};
-    imageInfo.sampler = defaultTexSampler;
-    imageInfo.imageView = defaultTexView->view;
+    imageInfo.sampler = defaultTex.sampler;
+    imageInfo.imageView = defaultTex.view->view;
     imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    hgUpdateVkDescriptorSet(
+    hgUpdateVkDescriptorSetBinding(
         defaultTexSet,
         0,
+        0,
+        1,
         VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
         nullptr,
-        &imageInfo,
-        1);
+        &imageInfo);
+
+    textureSets = textureSets.create(arena, maxTextures);
 }
 
 void hgDeinitPipeline2D()
 {
-    vkDestroySampler(hgVkDevice, defaultTexSampler, nullptr);
-    hgDestroyImageView(defaultTexView);
-    hgDestroyImage(defaultTex);
+    textureSets.forEach([](HgResource, VkDescriptorSet set)
+    {
+        hgDestroyVkDescriptorSet(set);
+    });
+    hgDestroyVkDescriptorSet(defaultTexSet);
+    vkDestroySampler(hgVkDevice, defaultTex.sampler, nullptr);
+    hgDestroyImageView(defaultTex.view);
+    hgDestroyImage(defaultTex.image);
     hgDestroyBuffer(vpBuffer);
-    vkDestroyDescriptorPool(hgVkDevice, descriptorPool, nullptr);
     vkDestroyPipeline(hgVkDevice, pipeline, nullptr);
     vkDestroyPipelineLayout(hgVkDevice, pipelineLayout, nullptr);
     vkDestroyDescriptorSetLayout(hgVkDevice, textureSetLayout, nullptr);
@@ -169,14 +161,21 @@ void hgAddTexture2D(HgResource textureID)
     hgAssert(hgGetTexture(textureID) != nullptr);
     HgTextureResource& texture = *hgGetTexture(textureID);
 
-    VkDescriptorSet set = hgCreateVkDescriptorSet(descriptorPool, textureSetLayout);
+    VkDescriptorSet set = hgCreateVkDescriptorSet(textureSetLayout);
 
     VkDescriptorImageInfo imageInfo{};
     imageInfo.sampler = texture.sampler;
     imageInfo.imageView = texture.view->view;
     imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    hgUpdateVkDescriptorSet(set, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, nullptr, &imageInfo, 1);
+    hgUpdateVkDescriptorSetBinding(
+        set,
+        0,
+        0,
+        1,
+        VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        nullptr,
+        &imageInfo);
 
     textureSets.add(textureID) = set;
 }
@@ -185,7 +184,7 @@ void hgRemoveTexture2D(HgResource textureID)
 {
     VkDescriptorSet set;
     if (textureSets.remove(textureID, &set))
-        vkFreeDescriptorSets(hgVkDevice, descriptorPool, 1, &set);
+        hgDestroyVkDescriptorSet(set);
 }
 
 void hgUpdateProjection2D(const HgMat4& projection)
@@ -213,11 +212,11 @@ void hgDraw2D(HgECS* ecs, VkCommandBuffer cmd)
 
     ecs->forEach<HgSprite2D, HgTransform>([&](HgEntity, HgSprite2D& sprite, HgTransform& transform) 
     {
-        VkDescriptorSet set = textureSets[sprite.texture];
-        if (set == nullptr)
-            set = defaultTexSet;
+        VkDescriptorSet texSet = textureSets[sprite.texture];
+        if (texSet == nullptr)
+            texSet = defaultTexSet;
 
-        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 1, 1, &set, 0, nullptr);
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 1, 1, &texSet, 0, nullptr);
 
         Push push{};
         push.model = hgModelMatrix3D(transform.position, transform.scale, transform.rotation);

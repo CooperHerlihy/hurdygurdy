@@ -2987,6 +2987,10 @@ inline u32 hgVkQueueFamily = (u32)-1;
  * The global Vulkan command pool
  */
 inline VkCommandPool hgVkCmdPool = nullptr;
+/**
+ * The global Vulkan descriptor pool
+ */
+inline VkDescriptorPool hgVkDescriptorPool = nullptr;
 
 /**
  * Turns a VkResult into a string
@@ -3473,15 +3477,6 @@ VkPipelineLayout hgCreateVkPipelineLayout(
     u32 pushRangeCount);
 
 /**
- * Create a Vulkan shader module
- *
- * Parameters
- * - spirvCode The spirv bytecode of the shader
- * - codeSize The size of spirvCode in bytes
- */
-VkShaderModule hgCreateVkShaderModule(const u8* spirvCode, u64 codeSize);
-
-/**
  * Config for hgCreateVkGraphicsPipeline
  */
 struct HgCreateVkGraphicsPipeline
@@ -3505,11 +3500,19 @@ struct HgCreateVkGraphicsPipeline
     /**
      * The vertex shader code
      */
-    VkShaderModule vertexShader = nullptr;
+    const u8* vertexShader = nullptr;
+    /**
+     * The size in bytes of the vertex shader code
+     */
+    u64 vertexShaderSize = 0;
     /**
      * The fragment shader code
      */
-    VkShaderModule fragmentShader = nullptr;
+    const u8* fragmentShader = nullptr;
+    /**
+     * The size in bytes of the fragment shader code
+     */
+    u64 fragmentShaderSize = 0;
     /**
      * The pipeline layout
      */
@@ -3578,28 +3581,17 @@ VkPipeline hgCreateVkGraphicsPipeline(const HgCreateVkGraphicsPipeline& config);
 VkPipeline hgCreateVkComputePipeline(VkPipelineLayout layout, const VkShaderModule shader);
 
 /**
- * Create a descriptor pool
+ * Allocate a descriptor set
  *
  * Parameters
- * - maxSets The max number of sets which can be allocated
- * - sizes The numbers of each descriptor type to allocate
- * - sizeCount The number of sizes
- * - flags Extra flags passed to the create info struct, if any
- */
-VkDescriptorPool hgCreateVkDescriptorPool(
-    u32 maxSets,
-    VkDescriptorPoolSize* sizes,
-    u32 sizeCount,
-    VkDescriptorPoolCreateFlags flags = 0);
-
-/**
- * Allocate a single descriptor set
- *
- * Parameters
- * - pool The descriptor pool to allocate from
  * - layout The layout of the set
  */
-VkDescriptorSet hgCreateVkDescriptorSet(VkDescriptorPool pool, VkDescriptorSetLayout layout);
+VkDescriptorSet hgCreateVkDescriptorSet(VkDescriptorSetLayout layout);
+
+/**
+ * Free a descriptor set
+ */
+void hgDestroyVkDescriptorSet(VkDescriptorSet set);
 
 /**
  * Update a descriptor set binding
@@ -3607,17 +3599,20 @@ VkDescriptorSet hgCreateVkDescriptorSet(VkDescriptorPool pool, VkDescriptorSetLa
  * Parameters
  * - set The descriptor set to update
  * - binding The binding in the set
+ * - begin The first array element to update
+ * - count The number of descriptors to update, starting at begin
  * - type The descriptor type
- * - info The image infos to update to
- * - count The number of descriptors
+ * - bufferInfos The buffer infos to update to
+ * - imageInfos The image infos to update to
  */
-void hgUpdateVkDescriptorSet(
+void hgUpdateVkDescriptorSetBinding(
     VkDescriptorSet set,
     u32 binding,
+    u32 begin,
+    u32 count,
     VkDescriptorType type,
     const VkDescriptorBufferInfo* bufferInfos,
-    const VkDescriptorImageInfo* imageInfos,
-    u32 count);
+    const VkDescriptorImageInfo* imageInfos);
 
 /**
  * Begin a command buffer to be executed once
