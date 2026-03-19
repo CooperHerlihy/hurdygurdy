@@ -789,39 +789,12 @@ u32 hgFindVkMemoryTypeIndex(
     hgError("Could not find Vulkan memory type\n");
 }
 
-void hgCreateVkBuffer(
-    VkBuffer* buffer,
-    VmaAllocation* allocation,
-    u64 size,
-    VkBufferUsageFlags usage,
-    VmaAllocationCreateFlags memory)
-{
-    hgAssert(buffer != nullptr);
-    hgAssert(allocation != nullptr);
-    hgAssert(size > 0);
-    hgAssert(usage != 0);
-
-    VkBufferCreateInfo bufferInfo{};
-    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferInfo.size = size;
-    bufferInfo.usage = usage;
-
-    VmaAllocationCreateInfo allocInfo{};
-    allocInfo.flags = memory;
-    allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-
-    VkResult result = vmaCreateBuffer(hgVkVma, &bufferInfo, &allocInfo, buffer, allocation, nullptr);
-    if (result != VK_SUCCESS)
-        hgError("Could not create VkBuffer: %s", hgVkResultToStr(result));
-}
-
 HgBuffer* hgCreateBuffer(
-    HgArena* arena,
     u64 size,
     VkBufferUsageFlags usage,
     HgBufferMemoryUsage access)
 {
-    HgBuffer* buffer = hgAlloc<HgBuffer>(arena, 1);
+    HgBuffer* buffer = (HgBuffer*)malloc(sizeof(*buffer));
     *buffer = {};
 
     hgAssert(size > 0);
@@ -843,10 +816,10 @@ HgBuffer* hgCreateBuffer(
             = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
             | VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT;
         break;
-    case HgBufferMemoryUsage_stageWrite:
+    case HgBufferMemoryUsage_stagingWrite:
         allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
         break;
-    case HgBufferMemoryUsage_stageRead:
+    case HgBufferMemoryUsage_stagingRead:
         allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
         break;
     }
@@ -867,73 +840,51 @@ HgBuffer* hgCreateBuffer(
     switch (access)
     {
     case HgBufferMemoryUsage_deviceOnly:
-        buffer->access = HgBufferMemoryAccess_device;
+        buffer->access = HgBufferMemoryHostAccess_none;
         break;
     case HgBufferMemoryUsage_frequentUpdate:
         VkMemoryPropertyFlags memPropFlags;
         vmaGetAllocationMemoryProperties(hgVkVma, buffer->alloc, &memPropFlags);
         buffer->access = memPropFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-            ? (HgBufferMemoryAccess)(HgBufferMemoryAccess_device | HgBufferMemoryAccess_hostWrite)
-            : HgBufferMemoryAccess_device;
+            ? HgBufferMemoryHostAccess_write
+            : HgBufferMemoryHostAccess_none;
         break;
-    case HgBufferMemoryUsage_stageWrite:
-        buffer->access = HgBufferMemoryAccess_hostWrite;
+    case HgBufferMemoryUsage_stagingWrite:
+        buffer->access = HgBufferMemoryHostAccess_write;
         break;
-    case HgBufferMemoryUsage_stageRead:
-        buffer->access = HgBufferMemoryAccess_hostRead;
+    case HgBufferMemoryUsage_stagingRead:
+        buffer->access = HgBufferMemoryHostAccess_read;
         break;
     }
 
     return buffer;
 }
 
-void hgDestroyBuffer(HgBuffer* buffer) {
-    vmaDestroyBuffer(hgVkVma, buffer->buffer, buffer->alloc);
-}
-
-void hgWriteVkBuffer(VkBuffer dst, u64 offset, const void* src, u64 size)
+void hgDestroyBuffer(HgBuffer *buffer)
 {
-    hgAssert(dst != nullptr);
-    hgAssert(src != nullptr);
-
-    VkBuffer stage = nullptr;
-    VmaAllocation stageAlloc = nullptr;
-    hgCreateVkBuffer(&stage, &stageAlloc, size,
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
-    hgDefer(vmaDestroyBuffer(hgVkVma, stage, stageAlloc));
-
-    vmaCopyMemoryToAllocation(hgVkVma, src, stageAlloc, offset, size);
-
-    VkCommandBuffer cmd = hgBeginVkCmd();
-
-    VkBufferCopy region{};
-    region.dstOffset = offset;
-    region.size = size;
-
-    vkCmdCopyBuffer(cmd, stage, dst, 1, &region);
-
-    hgEndVkCmd(cmd);
+    if (buffer != nullptr)
+    {
+        vmaDestroyBuffer(hgVkVma, buffer->buffer, buffer->alloc);
+        free(buffer);
+    }
 }
 
 void hgWriteBuffer(HgBuffer* dst, u64 offset, const void* src, u64 size)
 {
-    HgArena* scratch = hgGetScratch();
-    HgArenaScope scratchScope{scratch};
-
     hgAssert(dst != nullptr);
     hgAssert(src != nullptr);
 
-    hgAssert(dst->access & (HgBufferMemoryAccess_device | HgBufferMemoryAccess_hostWrite));
-
-    if (dst->access & HgBufferMemoryAccess_hostWrite) {
+    if (dst->access & HgBufferMemoryHostAccess_write)
+    {
         VkResult result = vmaCopyMemoryToAllocation(hgVkVma, src, dst->alloc, offset, size);
         if (result != VK_SUCCESS)
             hgError("Could not write gpu buffer: %s", hgVkResultToStr(result));
         return;
     }
 
-    HgBuffer* stage = hgCreateBuffer(scratch, size,
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT, HgBufferMemoryUsage_stageWrite);
+    HgBuffer* stage = hgCreateBuffer(
+        size,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT, HgBufferMemoryUsage_stagingWrite);
     hgDefer(hgDestroyBuffer(stage));
     hgWriteBuffer(stage, 0, src, size);
 
@@ -948,51 +899,22 @@ void hgWriteBuffer(HgBuffer* dst, u64 offset, const void* src, u64 size)
     hgEndVkCmd(cmd);
 }
 
-void hgReadVkBuffer(void* dst, VkBuffer src, u64 offset, u64 size)
-{
-    hgAssert(hgVkDevice != nullptr);
-    hgAssert(hgVkVma != nullptr);
-    hgAssert(dst != nullptr);
-    hgAssert(src != nullptr);
-
-    VkBuffer stage = nullptr;
-    VmaAllocation stageAlloc = nullptr;
-    hgCreateVkBuffer(&stage, &stageAlloc, size,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT);
-    hgDefer(vmaDestroyBuffer(hgVkVma, stage, stageAlloc));
-
-    VkCommandBuffer cmd = hgBeginVkCmd();
-
-    VkBufferCopy region{};
-    region.srcOffset = offset;
-    region.size = size;
-
-    vkCmdCopyBuffer(cmd, src, stage, 1, &region);
-
-    hgEndVkCmd(cmd);
-
-    vmaCopyAllocationToMemory(hgVkVma, stageAlloc, offset, dst, size);
-}
-
 void hgReadBuffer(void* dst, HgBuffer* src, u64 offset, u64 size)
 {
-    HgArena* scratch = hgGetScratch();
-    HgArenaScope scratchScope{scratch};
-
     hgAssert(dst != nullptr);
     hgAssert(src != nullptr);
 
-    hgAssert(src->access & (HgBufferMemoryAccess_device | HgBufferMemoryAccess_hostRead));
-
-    if (src->access & HgBufferMemoryAccess_hostRead) {
+    if (src->access & HgBufferMemoryHostAccess_read)
+    {
         VkResult result = vmaCopyAllocationToMemory(hgVkVma, src->alloc, offset, dst, size);
         if (result != VK_SUCCESS)
             hgError("Could not read gpu buffer: %s", hgVkResultToStr(result));
         return;
     }
 
-    HgBuffer* stage = hgCreateBuffer(scratch, size,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT, HgBufferMemoryUsage_stageRead);
+    HgBuffer* stage = hgCreateBuffer(
+        size,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT, HgBufferMemoryUsage_stagingRead);
     hgDefer(hgDestroyBuffer(stage));
 
     VkCommandBuffer cmd = hgBeginVkCmd();
@@ -1008,37 +930,22 @@ void hgReadBuffer(void* dst, HgBuffer* src, u64 offset, u64 size)
     hgReadBuffer(dst, stage, 0, size);
 }
 
-void hgCreateVkImage(VkImage* image, VmaAllocation* allocation, const HgCreateVkImage& create)
+HgImage* hgCreateImage(u32 width, u32 height, VkFormat format, VkImageUsageFlags usage)
 {
-    hgAssert(image != nullptr);
-    hgAssert(allocation != nullptr);
-    hgAssert(create.format != VK_FORMAT_UNDEFINED);
-    hgAssert(create.usage != 0);
-
-    VkImageCreateInfo imageInfo{};
-    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    imageInfo.imageType = create.type;
-    imageInfo.format = create.format;
-    imageInfo.extent = {create.width, create.height, create.depth};
-    imageInfo.mipLevels = create.mipLevels;
-    imageInfo.arrayLayers = create.arrayLayers;
-    imageInfo.samples = create.msaaSamples;
-    imageInfo.usage = create.usage;
-
-    VmaAllocationCreateInfo allocInfo{};
-    allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-
-    VkResult result = vmaCreateImage(hgVkVma, &imageInfo, &allocInfo, image, allocation, nullptr);
-    if (result != VK_SUCCESS)
-        hgError("Could not create VkImage: %s", hgVkResultToStr(result));
+    HgCreateImageEx create{};
+    create.width = width;
+    create.height = height;
+    create.format = format;
+    create.usage = usage;
+    return hgCreateImageEx(create);
 }
 
-HgImage* hgCreateImage(HgArena* arena, const HgCreateImage& create)
+HgImage* hgCreateImageEx(const HgCreateImageEx& create)
 {
     hgAssert(create.format != VK_FORMAT_UNDEFINED);
     hgAssert(create.usage != 0);
 
-    HgImage* image = hgAlloc<HgImage>(arena, 1);
+    HgImage* image = (HgImage*)malloc(sizeof(*image));
     *image = {};
 
     VkImageCreateInfo imageInfo{};
@@ -1079,41 +986,22 @@ HgImage* hgCreateImage(HgArena* arena, const HgCreateImage& create)
 
 void hgDestroyImage(HgImage* image)
 {
-    vmaDestroyImage(hgVkVma, image->image, image->alloc);
-}
-
-VkImageView hgCreateVkImageView(const HgCreateVkImageView& create)
-{
-    hgAssert(create.image != nullptr);
-    hgAssert(create.format != VK_FORMAT_UNDEFINED);
-    hgAssert(create.subresource.aspectMask != 0);
-
-    VkImageViewCreateInfo info{};
-    info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    info.image = create.image;
-    info.viewType = create.type;
-    info.format = create.format;
-    info.components = create.components;
-    info.subresourceRange = create.subresource;
-
-    VkImageView view = nullptr;
-    VkResult result = vkCreateImageView(hgVkDevice, &info, nullptr, &view);
-    if (view == nullptr)
-        hgError("Could not create VkImageView: %s\n", hgVkResultToStr(result));
-
-    return view;
+    if (image != nullptr)
+    {
+        vmaDestroyImage(hgVkVma, image->image, image->alloc);
+        free(image);
+    }
 }
 
 HgImageView* hgCreateImageView(
-    HgArena* arena,
-    HgImage* image,
-    VkImageViewType type,
-    VkImageSubresourceRange subresource)
+    const HgImage* image,
+    VkImageSubresourceRange subresource,
+    VkImageViewType type)
 {
     hgAssert(image != nullptr);
     hgAssert(subresource.aspectMask != 0);
 
-    HgImageView* view = hgAlloc<HgImageView>(arena, 1);
+    HgImageView* view = (HgImageView*)malloc(sizeof(*view));
     *view = {};
 
     VkImageViewCreateInfo info{};
@@ -1136,6 +1024,15 @@ HgImageView* hgCreateImageView(
     view->layerCount = subresource.layerCount;
 
     return view;
+}
+
+void hgDestroyImageView(HgImageView* view)
+{
+    if (view != nullptr)
+    {
+        vkDestroyImageView(hgVkDevice, view->view, nullptr);
+        free(view);
+    }
 }
 
 VkSampler hgCreateVkSampler(const HgCreateVkSampler& create)
@@ -1162,249 +1059,6 @@ VkSampler hgCreateVkSampler(const HgCreateVkSampler& create)
     return sampler;
 }
 
-void hgWriteVkImage(const HgWriteVkImage& config)
-{
-    hgAssert(hgVkDevice != nullptr);
-    hgAssert(hgVkVma != nullptr);
-    hgAssert(config.dstImage != nullptr);
-    hgAssert(config.srcData != nullptr);
-    hgAssert(config.width > 0);
-    hgAssert(config.height > 0);
-    hgAssert(config.depth > 0);
-    hgAssert(config.format != VK_FORMAT_UNDEFINED);
-
-    u64 size = config.width
-             * config.height
-             * config.depth
-             * hgVkFormatToSize(config.format);
-
-    VkBuffer stage = nullptr;
-    VmaAllocation stageAlloc = nullptr;
-    hgCreateVkBuffer(&stage, &stageAlloc, size,
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
-    hgDefer(vmaDestroyBuffer(hgVkVma, stage, stageAlloc));
-
-    vmaCopyMemoryToAllocation(hgVkVma, config.srcData, stageAlloc, 0, size);
-
-    VkCommandBuffer cmd = hgBeginVkCmd();
-
-    VkImageMemoryBarrier2 transferBarrier{};
-    transferBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-    transferBarrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    transferBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    transferBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    transferBarrier.image = config.dstImage;
-    transferBarrier.subresourceRange.aspectMask = config.subresource.aspectMask;
-    transferBarrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
-    transferBarrier.subresourceRange.levelCount = 1;
-    transferBarrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
-    transferBarrier.subresourceRange.layerCount = config.subresource.layerCount;
-
-    VkDependencyInfo transferDep{};
-    transferDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    transferDep.imageMemoryBarrierCount = 1;
-    transferDep.pImageMemoryBarriers = &transferBarrier;
-
-    vkCmdPipelineBarrier2(cmd, &transferDep);
-
-    VkBufferImageCopy region{};
-    region.imageSubresource = config.subresource;
-    region.imageExtent = {config.width, config.height, config.depth};
-
-    vkCmdCopyBufferToImage(cmd, stage, config.dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-
-    VkImageMemoryBarrier2 endBarrier{};
-    endBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-    endBarrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    endBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    endBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    endBarrier.newLayout = config.layout;
-    endBarrier.image = config.dstImage;
-    endBarrier.subresourceRange.aspectMask = config.subresource.aspectMask;
-    endBarrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
-    endBarrier.subresourceRange.levelCount = 1;
-    endBarrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
-    endBarrier.subresourceRange.layerCount = config.subresource.layerCount;
-
-    VkDependencyInfo endDep{};
-    endDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    endDep.imageMemoryBarrierCount = 1;
-    endDep.pImageMemoryBarriers = &endBarrier;
-
-    vkCmdPipelineBarrier2(cmd, &endDep);
-
-    hgEndVkCmd(cmd);
-}
-
-void hgWriteVkImageCubemap(const HgWriteVkImage& config)
-{
-    hgAssert(hgVkDevice != nullptr);
-    hgAssert(hgVkVma != nullptr);
-    hgAssert(config.dstImage != nullptr);
-    hgAssert(config.subresource.baseArrayLayer == 0);
-    hgAssert(config.subresource.layerCount == 6);
-    hgAssert(config.srcData != nullptr);
-    hgAssert(config.width > 0);
-    hgAssert(config.height > 0);
-    hgAssert(config.depth == 0 || config.depth == 1);
-    hgAssert(config.format != VK_FORMAT_UNDEFINED);
-
-    u64 size = config.width
-             * config.height
-             * hgVkFormatToSize(config.format);
-
-    VkBuffer buffer = nullptr;
-    VmaAllocation bufferAlloc = nullptr;
-    hgCreateVkBuffer(&buffer, &bufferAlloc, size * 4 * 3,
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
-    hgDefer(vmaDestroyBuffer(hgVkVma, buffer, bufferAlloc));
-
-    vmaCopyMemoryToAllocation(hgVkVma, config.srcData, bufferAlloc, 0, size);
-
-    HgCreateVkImage stageInfo{};
-    stageInfo.width = config.width;
-    stageInfo.height = config.height;
-    stageInfo.depth = config.depth;
-    stageInfo.format = config.format;
-    stageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT
-                     | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-
-    VkImage stage = nullptr;
-    VmaAllocation stageAlloc = nullptr;
-    hgCreateVkImage(&stage, &stageAlloc, stageInfo);
-    hgDefer(vmaDestroyImage(hgVkVma, stage, stageAlloc));
-
-    VkCommandBuffer cmd = hgBeginVkCmd();
-
-    VkImageMemoryBarrier2 stageBarrier{};
-    stageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-    stageBarrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    stageBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    stageBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    stageBarrier.image = config.dstImage;
-    stageBarrier.subresourceRange.aspectMask = config.subresource.aspectMask;
-    stageBarrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
-    stageBarrier.subresourceRange.levelCount = 1;
-    stageBarrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
-    stageBarrier.subresourceRange.layerCount = config.subresource.layerCount;
-
-    VkDependencyInfo stageDep{};
-    stageDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    stageDep.imageMemoryBarrierCount = 1;
-    stageDep.pImageMemoryBarriers = &stageBarrier;
-
-    vkCmdPipelineBarrier2(cmd, &stageDep);
-
-    VkBufferImageCopy stageRegion{};
-    stageRegion.imageSubresource = config.subresource;
-    stageRegion.imageExtent = {config.width, config.height, config.depth};
-
-    vkCmdCopyBufferToImage(cmd, buffer, stage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &stageRegion);
-
-    VkImageMemoryBarrier2 transferBarriers[2]{};
-
-    transferBarriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-    transferBarriers[0].srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    transferBarriers[0].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    transferBarriers[0].dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    transferBarriers[0].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-    transferBarriers[0].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    transferBarriers[0].newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    transferBarriers[0].image = stage;
-    transferBarriers[0].subresourceRange.aspectMask = config.subresource.aspectMask;
-    transferBarriers[0].subresourceRange.baseMipLevel = 0;
-    transferBarriers[0].subresourceRange.levelCount = 1;
-    transferBarriers[0].subresourceRange.baseArrayLayer = 0;
-    transferBarriers[0].subresourceRange.layerCount = 1;
-
-    transferBarriers[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-    transferBarriers[1].dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    transferBarriers[1].dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    transferBarriers[1].newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    transferBarriers[1].image = config.dstImage;
-    transferBarriers[1].subresourceRange.aspectMask = config.subresource.aspectMask;
-    transferBarriers[1].subresourceRange.baseMipLevel = config.subresource.mipLevel;
-    transferBarriers[1].subresourceRange.levelCount = 1;
-    transferBarriers[1].subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
-    transferBarriers[1].subresourceRange.layerCount = config.subresource.layerCount;
-
-    VkDependencyInfo transferDep{};
-    transferDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    transferDep.imageMemoryBarrierCount = sizeof(transferBarriers) / sizeof(*transferBarriers);
-    transferDep.pImageMemoryBarriers = transferBarriers;
-
-    vkCmdPipelineBarrier2(cmd, &transferDep);
-
-    VkImageCopy regions[6]{};
-
-    regions[0].srcSubresource = {config.subresource.aspectMask, 0, 0, 1};
-    regions[0].srcOffset = {(int)config.width * 2, (int)config.height * 1, 0};
-    regions[0].dstSubresource = {config.subresource.aspectMask, config.subresource.mipLevel, 0, 1};
-    regions[0].dstOffset = {};
-    regions[0].extent = {config.width, config.height, 1};
-
-    regions[1].srcSubresource = {config.subresource.aspectMask, 0, 0, 1};
-    regions[1].srcOffset = {(int)config.width * 0, (int)config.height * 1, 0};
-    regions[1].dstSubresource = {config.subresource.aspectMask, config.subresource.mipLevel, 1, 1};
-    regions[1].dstOffset = {};
-    regions[1].extent = {config.width, config.height, 1};
-
-    regions[2].srcSubresource = {config.subresource.aspectMask, 0, 0, 1};
-    regions[2].srcOffset = {(int)config.width * 1, (int)config.height * 0, 0};
-    regions[2].dstSubresource = {config.subresource.aspectMask, config.subresource.mipLevel, 2, 1};
-    regions[2].dstOffset = {};
-    regions[2].extent = {config.width, config.height, 1};
-
-    regions[3].srcSubresource = {config.subresource.aspectMask, 0, 0, 1};
-    regions[3].srcOffset = {(int)config.width * 1, (int)config.height * 2, 0};
-    regions[3].dstSubresource = {config.subresource.aspectMask, config.subresource.mipLevel, 3, 1};
-    regions[3].dstOffset = {};
-    regions[3].extent = {config.width, config.height, 1};
-
-    regions[4].srcSubresource = {config.subresource.aspectMask, 0, 0, 1};
-    regions[4].srcOffset = {(int)config.width * 1, (int)config.height * 1, 0};
-    regions[4].dstSubresource = {config.subresource.aspectMask, config.subresource.mipLevel, 4, 1};
-    regions[4].dstOffset = {};
-    regions[4].extent = {config.width, config.height, 1};
-
-    regions[5].srcSubresource = {config.subresource.aspectMask, 0, 0, 1};
-    regions[5].srcOffset = {(int)config.width * 3, (int)config.height * 1, 0};
-    regions[5].dstSubresource = {config.subresource.aspectMask, config.subresource.mipLevel, 5, 1};
-    regions[5].dstOffset = {};
-    regions[5].extent = {config.width, config.height, 1};
-
-    vkCmdCopyImage(
-        cmd,
-        stage,
-        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        config.dstImage,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        sizeof(regions) / sizeof(*regions),
-        regions);
-
-    VkImageMemoryBarrier2 endBarrier{};
-    endBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-    endBarrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    endBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    endBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    endBarrier.newLayout = config.layout;
-    endBarrier.image = config.dstImage;
-    endBarrier.subresourceRange.aspectMask = config.subresource.aspectMask;
-    endBarrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
-    endBarrier.subresourceRange.levelCount = 1;
-    endBarrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
-    endBarrier.subresourceRange.layerCount = config.subresource.layerCount;
-
-    VkDependencyInfo endDep{};
-    endDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    endDep.imageMemoryBarrierCount = 1;
-    endDep.pImageMemoryBarriers = &endBarrier;
-
-    vkCmdPipelineBarrier2(cmd, &endDep);
-
-    hgEndVkCmd(cmd);
-}
-
 void hgWriteImage(
     HgImage* dst,
     VkImageSubresourceLayers subresource,
@@ -1414,13 +1068,12 @@ void hgWriteImage(
     hgAssert(dst!= nullptr);
     hgAssert(src!= nullptr);
 
-    HgArena* scratch = hgGetScratch();
-    HgArenaScope scratchScope{scratch};
-
     u64 size = dst->width * dst->height * dst->depth * hgVkFormatToSize(dst->format);
 
-    HgBuffer* stage = hgCreateBuffer(scratch, size,
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT, HgBufferMemoryUsage_stageWrite);
+    HgBuffer* stage = hgCreateBuffer(
+        size,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        HgBufferMemoryUsage_stagingWrite);
     hgDefer(hgDestroyBuffer(stage));
     hgWriteBuffer(stage, 0, src, size);
 
@@ -1486,24 +1139,20 @@ void hgWriteImageCubemap(
     hgAssert(src != nullptr);
     hgAssert(dst->depth == 1);
 
-    HgArena* scratch = hgGetScratch();
-    HgArenaScope scratchScope{scratch};
-
     u64 size = dst->width * dst->height * hgVkFormatToSize(dst->format);
 
-    HgBuffer* buffer = hgCreateBuffer(scratch, size * 4 * 3,
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT, HgBufferMemoryUsage_stageWrite);
+    HgBuffer* buffer = hgCreateBuffer(
+        size * 4 * 3,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        HgBufferMemoryUsage_stagingWrite);
     hgDefer(hgDestroyBuffer(buffer));
     hgWriteBuffer(buffer, 0, src, size);
 
-    HgCreateImage stageInfo{};
-    stageInfo.width = dst->width * 4;
-    stageInfo.height = dst->height * 3;
-    stageInfo.format = dst->format;
-    stageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT
-                    | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-
-    HgImage* stage = hgCreateImage(scratch, stageInfo);
+    HgImage* stage = hgCreateImage(
+        dst->width * 4,
+        dst->height * 3,
+        dst->format,
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
     hgDefer(hgDestroyImage(stage));
 
     VkCommandBuffer cmd = hgBeginVkCmd();
@@ -1637,82 +1286,6 @@ void hgWriteImageCubemap(
     hgEndVkCmd(cmd);
 }
 
-void hgReadVkImage(const HgReadVkImage& config)
-{
-    hgAssert(hgVkDevice != nullptr);
-    hgAssert(hgVkVma != nullptr);
-    hgAssert(config.srcImage != nullptr);
-    hgAssert(config.layout != VK_IMAGE_LAYOUT_UNDEFINED);
-    hgAssert(config.dst != nullptr);
-    hgAssert(config.width > 0);
-    hgAssert(config.height > 0);
-    hgAssert(config.depth > 0);
-    hgAssert(config.format != VK_FORMAT_UNDEFINED);
-
-    u64 size = config.width
-             * config.height
-             * config.depth
-             * hgVkFormatToSize(config.format);
-
-    VkBuffer stage = nullptr;
-    VmaAllocation stageAlloc = nullptr;
-    hgCreateVkBuffer(&stage, &stageAlloc, size,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
-    hgDefer(vmaDestroyBuffer(hgVkVma, stage, stageAlloc));
-
-    VkCommandBuffer cmd = hgBeginVkCmd();
-
-    VkImageMemoryBarrier2 transferBarrier{};
-    transferBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-    transferBarrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    transferBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-    transferBarrier.oldLayout = config.layout;
-    transferBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    transferBarrier.image = config.srcImage;
-    transferBarrier.subresourceRange.aspectMask = config.subresource.aspectMask;
-    transferBarrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
-    transferBarrier.subresourceRange.levelCount = 1;
-    transferBarrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
-    transferBarrier.subresourceRange.layerCount = config.subresource.layerCount;
-
-    VkDependencyInfo transferDep{};
-    transferDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    transferDep.imageMemoryBarrierCount = 1;
-    transferDep.pImageMemoryBarriers = &transferBarrier;
-
-    vkCmdPipelineBarrier2(cmd, &transferDep);
-
-    VkBufferImageCopy region{};
-    region.imageSubresource = config.subresource;
-    region.imageExtent = {config.width, config.height, config.depth};
-
-    vkCmdCopyImageToBuffer(cmd, config.srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, stage, 1, &region);
-
-    VkImageMemoryBarrier2 endBarrier{};
-    endBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-    endBarrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    endBarrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-    endBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    endBarrier.newLayout = config.layout;
-    endBarrier.image = config.srcImage;
-    endBarrier.subresourceRange.aspectMask = config.subresource.aspectMask;
-    endBarrier.subresourceRange.baseMipLevel = config.subresource.mipLevel;
-    endBarrier.subresourceRange.levelCount = 1;
-    endBarrier.subresourceRange.baseArrayLayer = config.subresource.baseArrayLayer;
-    endBarrier.subresourceRange.layerCount = config.subresource.layerCount;
-
-    VkDependencyInfo endDep{};
-    endDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    endDep.imageMemoryBarrierCount = 1;
-    endDep.pImageMemoryBarriers = &endBarrier;
-
-    vkCmdPipelineBarrier2(cmd, &endDep);
-
-    hgEndVkCmd(cmd);
-
-    vmaCopyAllocationToMemory(hgVkVma, stageAlloc, 0, config.dst, size);
-}
-
 void hgReadImage(
     void* dst,
     HgImage* src,
@@ -1723,13 +1296,12 @@ void hgReadImage(
     hgAssert(layout != VK_IMAGE_LAYOUT_UNDEFINED);
     hgAssert(dst != nullptr);
 
-    HgArena* scratch = hgGetScratch();
-    HgArenaScope scratchScope{scratch};;
-
     u64 size = src->width * src->height * src->depth * hgVkFormatToSize(src->format);
 
-    HgBuffer* stage = hgCreateBuffer(scratch, size,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT, HgBufferMemoryUsage_stageRead);
+    HgBuffer* stage = hgCreateBuffer(
+        size,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        HgBufferMemoryUsage_stagingRead);
     hgDefer(hgDestroyBuffer(stage));
 
     VkCommandBuffer cmd = hgBeginVkCmd();
@@ -1783,108 +1355,6 @@ void hgReadImage(
     hgEndVkCmd(cmd);
 
     hgReadBuffer(dst, stage, 0, size);
-}
-
-void hgGenerateVkImageMipmaps(const HgGenerateVkImageMipmaps& config)
-{
-    hgAssert(hgVkDevice != nullptr);
-    hgAssert(config.image != nullptr);
-    hgAssert(config.oldLayout != VK_IMAGE_LAYOUT_UNDEFINED);
-    hgAssert(config.newLayout != VK_IMAGE_LAYOUT_UNDEFINED);
-    hgAssert(config.width > 0);
-    hgAssert(config.height > 0);
-    hgAssert(config.depth > 0);
-    hgAssert(config.mipCount > 0);
-    if (config.mipCount == 1)
-        return;
-
-    VkCommandBuffer cmd = hgBeginVkCmd();
-
-    VkOffset3D mipOffset{};
-    mipOffset.x = (i32)config.width;
-    mipOffset.y = (i32)config.height;
-    mipOffset.z = (i32)config.depth;
-
-    VkImageMemoryBarrier2 barrier{};
-    barrier.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    barrier.srcStageMask = VK_PIPELINE_STAGE_NONE;
-    barrier.srcAccessMask = VK_ACCESS_NONE;
-    barrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-    barrier.oldLayout = config.oldLayout;
-    barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    barrier.image = config.image;
-    barrier.subresourceRange.aspectMask = config.aspectMask;
-    barrier.subresourceRange.levelCount = 1;
-    barrier.subresourceRange.layerCount = 1;
-
-    VkDependencyInfo dep{};
-    dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    dep.imageMemoryBarrierCount = 1;
-    dep.pImageMemoryBarriers = &barrier;
-
-    vkCmdPipelineBarrier2(cmd, &dep);
-
-    for (u32 level = 0; level < config.mipCount - 1; ++level)
-    {
-        barrier.srcStageMask = VK_PIPELINE_STAGE_NONE;
-        barrier.srcAccessMask = VK_ACCESS_NONE;
-        barrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        barrier.subresourceRange.aspectMask = config.aspectMask;
-        barrier.subresourceRange.baseMipLevel = level + 1;
-
-        vkCmdPipelineBarrier2(cmd, &dep);
-
-        VkImageBlit blit{};
-        blit.srcSubresource.aspectMask = config.aspectMask;
-        blit.srcSubresource.mipLevel = level;
-        blit.srcSubresource.layerCount = 1;
-        blit.srcOffsets[1] = mipOffset;
-        if (mipOffset.x > 1)
-            mipOffset.x /= 2;
-        if (mipOffset.y > 1)
-            mipOffset.y /= 2;
-        if (mipOffset.z > 1)
-            mipOffset.z /= 2;
-        blit.dstSubresource.aspectMask = config.aspectMask;
-        blit.dstSubresource.mipLevel = level + 1;
-        blit.dstSubresource.layerCount = 1;
-        blit.dstOffsets[1] = mipOffset;
-
-        vkCmdBlitImage(cmd,
-            config.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            config.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            1, &blit,
-            VK_FILTER_LINEAR);
-
-        barrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        barrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-        barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-        barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-        barrier.subresourceRange.aspectMask = config.aspectMask;
-        barrier.subresourceRange.baseMipLevel = level + 1;
-
-        vkCmdPipelineBarrier2(cmd, &dep);
-    }
-
-    barrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-    barrier.dstStageMask = VK_PIPELINE_STAGE_NONE;
-    barrier.dstAccessMask = VK_ACCESS_NONE;
-    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    barrier.newLayout = config.newLayout;
-    barrier.subresourceRange.aspectMask = config.aspectMask;
-    barrier.subresourceRange.baseMipLevel = 0;
-    barrier.subresourceRange.levelCount = config.mipCount;
-
-    vkCmdPipelineBarrier2(cmd, &dep);
-
-    hgEndVkCmd(cmd);
 }
 
 void hgGenerateMipmaps(
@@ -2316,179 +1786,32 @@ void hgEndVkCmd(VkCommandBuffer cmd)
     vkFreeCommandBuffers(hgVkDevice, hgVkCmdPool, 1, &cmd);
 }
 
-HgRenderer HgRenderer::create(HgArena* arena, u32 maxImages, u32 maxBuffers)
+HgRenderer HgRenderer::create(HgArena* arena, u32 maxBuffers, u32 maxImages)
 {
     HgRenderer renderer{};
-    renderer.buffers = hgAlloc<Buffer>(arena, maxBuffers);
-    renderer.bufferCount = 0;
-    renderer.bufferCapacity = maxBuffers;
-    renderer.images = hgAlloc<Image>(arena, maxImages);
-    renderer.imageCount = 0;
-    renderer.imageCapacity = maxImages;
+    renderer.buffers = renderer.buffers.create(arena, maxBuffers);
+    renderer.images = renderer.images.create(arena, maxImages);
     return renderer;
 }
 
 void HgRenderer::reset()
 {
-    bufferCount = 0;
-    imageCount = 0;
+    buffers.reset();
+    images.reset();
 }
 
-HgBufferRenderID HgRenderer::addBuffer(
-    VkBuffer buffer,
-    u64 offset,
-    u64 size,
-    HgRenderUsage previousUsage,
-    HgRenderAccess previousAccess)
+void HgRenderer::setBuffer(HgBuffer* buffer, VkPipelineStageFlags lastStage, VkAccessFlags lastAccess)
 {
-    hgAssert(bufferCount < bufferCapacity);
-    hgAssert(buffer != nullptr);
-
-    buffers[bufferCount] = {buffer, offset, size, previousUsage, previousAccess};
-    return bufferCount++;
+    buffers[buffer] = {lastStage, lastAccess};
 }
 
-HgImageRenderID HgRenderer::addImage(
-    VkImage image,
-    VkImageView view,
-    VkImageSubresourceRange subresource,
-    HgRenderUsage previousUsage,
-    HgRenderAccess previousAccess)
+void HgRenderer::setImage(
+    HgImageView* image,
+    VkPipelineStageFlags lastStage,
+    VkAccessFlags lastAccess,
+    VkImageLayout lastLayout)
 {
-    hgAssert(imageCount < imageCapacity);
-    hgAssert(image != nullptr);
-    hgAssert(view != nullptr);
-
-    images[imageCount] = {image, view, subresource, previousUsage, previousAccess};
-    return imageCount++;
-}
-
-static constexpr VkPipelineStageFlags2 getStageMask(HgRenderUsage usage)
-{
-    switch (usage)
-    {
-        case HgRenderUsage_none:
-            return VK_PIPELINE_STAGE_NONE;
-            break;
-        case HgRenderUsage_vertexBuffer:
-            return VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
-            break;
-        case HgRenderUsage_indexBuffer:
-            return VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
-            break;
-        case HgRenderUsage_graphicsShader: [[fallthrough]];
-        case HgRenderUsage_graphicsUniformBuffer:
-            return VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-            break;
-        case HgRenderUsage_computeShader: [[fallthrough]];
-        case HgRenderUsage_computeUniformBuffer:
-            return VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-            break;
-        case HgRenderUsage_colorAttachment:
-            return VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-            break;
-        case HgRenderUsage_depthAttachment: [[fallthrough]];
-        case HgRenderUsage_stencilAttachment:
-            return VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-            break;
-        case HgRenderUsage_transfer:
-            return VK_PIPELINE_STAGE_TRANSFER_BIT;
-            break;
-        case HgRenderUsage_presentSrc:
-            return VK_PIPELINE_STAGE_NONE;
-            break;
-        case HgRenderUsage_count:
-            break;
-    }
-    hgError("Found invalid render usage: %d", (u32)usage);
-}
-
-static constexpr VkAccessFlags2 getAccessMask(HgRenderUsage usage, HgRenderAccess access)
-{
-    switch (usage)
-    {
-        case HgRenderUsage_none:
-            return VK_ACCESS_NONE;
-            break;
-        case HgRenderUsage_vertexBuffer:
-            return VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
-            break;
-        case HgRenderUsage_indexBuffer:
-            return VK_ACCESS_INDEX_READ_BIT;
-            break;
-        case HgRenderUsage_graphicsShader:
-            return ((u32)access & HgRenderAccess_read) ? VK_ACCESS_SHADER_READ_BIT : 0
-                 | ((u32)access & HgRenderAccess_write) ? VK_ACCESS_SHADER_WRITE_BIT : 0;
-            break;
-        case HgRenderUsage_graphicsUniformBuffer:
-            return VK_ACCESS_UNIFORM_READ_BIT;
-            break;
-        case HgRenderUsage_computeShader:
-            return ((u32)access & HgRenderAccess_read) ? VK_ACCESS_SHADER_READ_BIT : 0
-                 | ((u32)access & HgRenderAccess_write) ? VK_ACCESS_SHADER_WRITE_BIT : 0;
-            break;
-        case HgRenderUsage_computeUniformBuffer:
-            return VK_ACCESS_UNIFORM_READ_BIT;
-            break;
-        case HgRenderUsage_colorAttachment:
-            return ((u32)access & HgRenderAccess_read) ? VK_ACCESS_COLOR_ATTACHMENT_READ_BIT : 0
-                 | ((u32)access & HgRenderAccess_write) ? VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT : 0;
-            break;
-        case HgRenderUsage_depthAttachment: [[fallthrough]];
-        case HgRenderUsage_stencilAttachment:
-            return ((u32)access & HgRenderAccess_read) ? VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT : 0
-                 | ((u32)access & HgRenderAccess_write) ? VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT : 0;
-            break;
-        case HgRenderUsage_transfer:
-            return ((u32)access & HgRenderAccess_read) ? VK_ACCESS_TRANSFER_READ_BIT : 0
-                 | ((u32)access & HgRenderAccess_write) ? VK_ACCESS_TRANSFER_WRITE_BIT : 0;
-            break;
-        case HgRenderUsage_presentSrc:
-            return VK_ACCESS_NONE;
-            break;
-        case HgRenderUsage_count:
-            break;
-    }
-    hgError("Found invalid render usage: %d", (u32)usage);
-}
-
-static constexpr VkImageLayout getLayout(HgRenderUsage usage, HgRenderAccess access)
-{
-    switch (usage)
-    {
-        case HgRenderUsage_none:
-            return VK_IMAGE_LAYOUT_UNDEFINED;
-            break;
-        case HgRenderUsage_graphicsShader: [[fallthrough]];
-        case HgRenderUsage_computeShader:
-            return ((u32)access & HgRenderAccess_write)
-                ? VK_IMAGE_LAYOUT_GENERAL
-                : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            break;
-        case HgRenderUsage_colorAttachment:
-            return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            break;
-        case HgRenderUsage_depthAttachment: [[fallthrough]];
-        case HgRenderUsage_stencilAttachment:
-            return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-            break;
-        case HgRenderUsage_transfer:
-            hgAssert(!(((u32)access & HgRenderAccess_read) && ((u32)access & HgRenderAccess_write)));
-            return ((u32)access & HgRenderAccess_read)
-                ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
-                : VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-            break;
-        case HgRenderUsage_presentSrc:
-            return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-            break;
-        case HgRenderUsage_vertexBuffer: [[fallthrough]];
-        case HgRenderUsage_indexBuffer: [[fallthrough]];
-        case HgRenderUsage_graphicsUniformBuffer: [[fallthrough]];
-        case HgRenderUsage_computeUniformBuffer: [[fallthrough]];
-        case HgRenderUsage_count:
-            break;
-    }
-    hgError("Found invalid render usage for image: %d", (u32)usage);
+    images[image] = {lastStage, lastAccess, lastLayout};
 }
 
 void HgRenderer::barrier(
@@ -2506,41 +1829,45 @@ void HgRenderer::barrier(
 
     for (u32 i = 0; i < bufferBarrierCount; ++i)
     {
-        hgAssert(bufferBarriers[i].buffer < bufferCount);
         Buffer& buffer = buffers[bufferBarriers[i].buffer];
 
         vkBufferBarriers[i] = {};
         vkBufferBarriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
-        vkBufferBarriers[i].srcStageMask = getStageMask(buffer.lastUsage);
-        vkBufferBarriers[i].srcAccessMask = getAccessMask(buffer.lastUsage, buffer.lastAccess);
-        vkBufferBarriers[i].dstStageMask = getStageMask(bufferBarriers[i].nextUsage);
-        vkBufferBarriers[i].dstAccessMask = getAccessMask(bufferBarriers[i].nextUsage, bufferBarriers[i].nextAccess);
-        vkBufferBarriers[i].buffer = buffer.handle;
-        vkBufferBarriers[i].offset = buffer.offset;
-        vkBufferBarriers[i].size = buffer.size;
+        vkBufferBarriers[i].srcStageMask = buffer.lastPipelineStage;
+        vkBufferBarriers[i].srcAccessMask = buffer.lastAccess;
+        vkBufferBarriers[i].dstStageMask = bufferBarriers[i].nextPipelineStage;
+        vkBufferBarriers[i].dstAccessMask = bufferBarriers[i].nextAccess;
+        vkBufferBarriers[i].buffer = bufferBarriers[i].buffer->buffer;
+        vkBufferBarriers[i].size = bufferBarriers[i].buffer->size;
 
-        buffer.lastUsage = bufferBarriers[i].nextUsage;
+        buffer.lastPipelineStage = bufferBarriers[i].nextPipelineStage;
         buffer.lastAccess = bufferBarriers[i].nextAccess;
     }
 
     for (u32 i = 0; i < imageBarrierCount; ++i)
     {
-        hgAssert(imageBarriers[i].image < imageCount);
         Image& image = images[imageBarriers[i].image];
 
         vkImageBarriers[i] = {};
         vkImageBarriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-        vkImageBarriers[i].srcStageMask = getStageMask(image.lastUsage);
-        vkImageBarriers[i].srcAccessMask = getAccessMask(image.lastUsage, image.lastAccess);
-        vkImageBarriers[i].dstStageMask = getStageMask(imageBarriers[i].nextUsage);
-        vkImageBarriers[i].dstAccessMask = getAccessMask(imageBarriers[i].nextUsage, imageBarriers[i].nextAccess);
-        vkImageBarriers[i].oldLayout = getLayout(image.lastUsage, image.lastAccess);
-        vkImageBarriers[i].newLayout = getLayout(imageBarriers[i].nextUsage, imageBarriers[i].nextAccess);
-        vkImageBarriers[i].image = image.handle;
-        vkImageBarriers[i].subresourceRange = image.subresource;
+        vkImageBarriers[i].srcStageMask = image.lastPipelineStage;
+        vkImageBarriers[i].srcAccessMask = image.lastAccess;
+        vkImageBarriers[i].dstStageMask = imageBarriers[i].nextPipelineStage;
+        vkImageBarriers[i].dstAccessMask = imageBarriers[i].nextAccess;
+        vkImageBarriers[i].oldLayout = image.lastLayout;
+        vkImageBarriers[i].newLayout = imageBarriers[i].nextLayout;
+        vkImageBarriers[i].image = imageBarriers[i].image->image->image;
+        vkImageBarriers[i].subresourceRange = {
+            imageBarriers[i].image->aspectFlags,
+            imageBarriers[i].image->baseMipLevel,
+            imageBarriers[i].image->levelCount,
+            imageBarriers[i].image->baseArrayLayer,
+            imageBarriers[i].image->layerCount,
+        };
 
-        image.lastUsage = imageBarriers[i].nextUsage;
+        image.lastPipelineStage = imageBarriers[i].nextPipelineStage;
         image.lastAccess = imageBarriers[i].nextAccess;
+        image.lastLayout = imageBarriers[i].nextLayout;
     }
 
     VkDependencyInfo dep{};
@@ -2568,21 +1895,21 @@ void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgR
 
     for (u32 i = bufferBarrierCount; i < bufferBarrierCount + pass.uniformBufferCount; ++i)
     {
-        hgAssert(pass.uniformBuffers[i - bufferBarrierCount] < bufferCount);
         Buffer& buffer = buffers[pass.uniformBuffers[i - bufferBarrierCount]];
 
         bufferBarriers[i] = {};
         bufferBarriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
-        bufferBarriers[i].srcStageMask = getStageMask(buffer.lastUsage);
-        bufferBarriers[i].srcAccessMask = getAccessMask(buffer.lastUsage, buffer.lastAccess);
-        bufferBarriers[i].dstStageMask = getStageMask(HgRenderUsage_graphicsUniformBuffer);
-        bufferBarriers[i].dstAccessMask = getAccessMask(HgRenderUsage_graphicsUniformBuffer, HgRenderAccess_read);
-        bufferBarriers[i].buffer = buffer.handle;
-        bufferBarriers[i].offset = buffer.offset;
-        bufferBarriers[i].size = buffer.size;
+        bufferBarriers[i].srcStageMask = buffer.lastPipelineStage;
+        bufferBarriers[i].srcAccessMask = buffer.lastAccess;
+        bufferBarriers[i].dstStageMask = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT
+                                       | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        bufferBarriers[i].dstAccessMask = VK_ACCESS_UNIFORM_READ_BIT;
+        bufferBarriers[i].buffer = pass.uniformBuffers[i - bufferBarrierCount]->buffer;
+        bufferBarriers[i].size = pass.uniformBuffers[i - bufferBarrierCount]->size;
 
-        buffer.lastUsage = HgRenderUsage_graphicsUniformBuffer;
-        buffer.lastAccess = HgRenderAccess_read;
+        buffer.lastPipelineStage = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT
+                                 | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        buffer.lastAccess = VK_ACCESS_UNIFORM_READ_BIT;
     }
 
     bufferBarrierCount += pass.uniformBufferCount;
@@ -2592,21 +1919,21 @@ void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgR
 
     for (u32 i = bufferBarrierCount; i < bufferBarrierCount + pass.storageBufferCount; ++i)
     {
-        hgAssert(pass.storageBuffers[i - bufferBarrierCount] < bufferCount);
         Buffer& buffer = buffers[pass.storageBuffers[i - bufferBarrierCount]];
 
         bufferBarriers[i] = {};
         bufferBarriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
-        bufferBarriers[i].srcStageMask = getStageMask(buffer.lastUsage);
-        bufferBarriers[i].srcAccessMask = getAccessMask(buffer.lastUsage, buffer.lastAccess);
-        bufferBarriers[i].dstStageMask = getStageMask(HgRenderUsage_graphicsShader);
-        bufferBarriers[i].dstAccessMask = getAccessMask(HgRenderUsage_graphicsShader, HgRenderAccess_read);
-        bufferBarriers[i].buffer = buffer.handle;
-        bufferBarriers[i].offset = buffer.offset;
-        bufferBarriers[i].size = buffer.size;
+        bufferBarriers[i].srcStageMask = buffer.lastPipelineStage;
+        bufferBarriers[i].srcAccessMask = buffer.lastAccess;
+        bufferBarriers[i].dstStageMask = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT
+                                       | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        bufferBarriers[i].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        bufferBarriers[i].buffer = pass.uniformBuffers[i - bufferBarrierCount]->buffer;
+        bufferBarriers[i].size = pass.uniformBuffers[i - bufferBarrierCount]->size;
 
-        buffer.lastUsage = HgRenderUsage_graphicsShader;
-        buffer.lastAccess = HgRenderAccess_read;
+        buffer.lastPipelineStage = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT
+                                 | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        buffer.lastAccess = VK_ACCESS_SHADER_READ_BIT;
     }
 
     bufferBarrierCount += pass.storageBufferCount;
@@ -2616,22 +1943,28 @@ void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgR
 
     for (u32 i = imageBarrierCount; i < imageBarrierCount + pass.sampledImageCount; ++i)
     {
-        hgAssert(pass.sampledImages[i - imageBarrierCount] < imageCount);
         Image& image = images[pass.sampledImages[i - imageBarrierCount]];
 
         imageBarriers[i] = {};
         imageBarriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-        imageBarriers[i].srcStageMask = getStageMask(image.lastUsage);
-        imageBarriers[i].srcAccessMask = getAccessMask(image.lastUsage, image.lastAccess);
-        imageBarriers[i].dstStageMask = getStageMask(HgRenderUsage_graphicsShader);
-        imageBarriers[i].dstAccessMask = getAccessMask(HgRenderUsage_graphicsShader, HgRenderAccess_read);
-        imageBarriers[i].oldLayout = getLayout(image.lastUsage, image.lastAccess);
-        imageBarriers[i].newLayout = getLayout(HgRenderUsage_graphicsShader, HgRenderAccess_read);
-        imageBarriers[i].image = image.handle;
-        imageBarriers[i].subresourceRange = image.subresource;
+        imageBarriers[i].srcStageMask = image.lastPipelineStage;
+        imageBarriers[i].srcAccessMask = image.lastAccess;
+        imageBarriers[i].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        imageBarriers[i].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        imageBarriers[i].oldLayout = image.lastLayout;
+        imageBarriers[i].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        imageBarriers[i].image = pass.sampledImages[i - imageBarrierCount]->image->image;
+        imageBarriers[i].subresourceRange = {
+            pass.sampledImages[i - imageBarrierCount]->aspectFlags,
+            pass.sampledImages[i - imageBarrierCount]->baseMipLevel,
+            pass.sampledImages[i - imageBarrierCount]->levelCount,
+            pass.sampledImages[i - imageBarrierCount]->baseArrayLayer,
+            pass.sampledImages[i - imageBarrierCount]->layerCount,
+        };
 
-        image.lastUsage = HgRenderUsage_graphicsShader;
-        image.lastAccess = HgRenderAccess_read;
+        image.lastPipelineStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        image.lastAccess = VK_ACCESS_SHADER_READ_BIT;
+        image.lastLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     }
 
     imageBarrierCount += pass.sampledImageCount;
@@ -2641,80 +1974,100 @@ void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgR
 
     for (u32 i = imageBarrierCount; i < imageBarrierCount + pass.colorAttachmentCount; ++i)
     {
-        hgAssert(pass.colorAttachments[i - imageBarrierCount].image < imageCount);
         Image& image = images[pass.colorAttachments[i - imageBarrierCount].image];
 
         imageBarriers[i] = {};
         imageBarriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-        imageBarriers[i].srcStageMask = getStageMask(image.lastUsage);
-        imageBarriers[i].srcAccessMask = getAccessMask(image.lastUsage, image.lastAccess);
-        imageBarriers[i].dstStageMask = getStageMask(HgRenderUsage_colorAttachment);
-        imageBarriers[i].dstAccessMask = getAccessMask(HgRenderUsage_colorAttachment, HgRenderAccess_write);
-        imageBarriers[i].oldLayout = getLayout(image.lastUsage, image.lastAccess);
-        imageBarriers[i].newLayout = getLayout(HgRenderUsage_colorAttachment, HgRenderAccess_write);
-        imageBarriers[i].image = image.handle;
-        imageBarriers[i].subresourceRange = image.subresource;
+        imageBarriers[i].srcStageMask = image.lastPipelineStage;
+        imageBarriers[i].srcAccessMask = image.lastAccess;
+        imageBarriers[i].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        imageBarriers[i].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        imageBarriers[i].oldLayout = image.lastLayout;
+        imageBarriers[i].newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        imageBarriers[i].image = pass.colorAttachments[i - imageBarrierCount].image->image->image;
+        imageBarriers[i].subresourceRange = {
+            pass.colorAttachments[i - imageBarrierCount].image->aspectFlags,
+            pass.colorAttachments[i - imageBarrierCount].image->baseMipLevel,
+            pass.colorAttachments[i - imageBarrierCount].image->levelCount,
+            pass.colorAttachments[i - imageBarrierCount].image->baseArrayLayer,
+            pass.colorAttachments[i - imageBarrierCount].image->layerCount,
+        };
 
-        image.lastUsage = HgRenderUsage_colorAttachment;
-        image.lastAccess = HgRenderAccess_write;
+        image.lastPipelineStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        image.lastAccess = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        image.lastLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     }
 
     imageBarrierCount += pass.colorAttachmentCount;
 
-    if (pass.depthAttachment.image != (u64)-1)
+    if (pass.depthAttachment.image != nullptr)
     {
-        hgAssert(pass.depthAttachment.image < imageCount);
         Image& image = images[pass.depthAttachment.image];
 
         imageBarriers = hgRealloc<VkImageMemoryBarrier2>(scratch, 
             imageBarriers, imageBarrierCount, imageBarrierCount + 1);
 
-        HgRenderAccess access = (HgRenderAccess)((u32)HgRenderAccess_write |
-            (pass.depthAttachment.loadOp == VK_ATTACHMENT_LOAD_OP_LOAD ? (u32)HgRenderAccess_read : 0));
-
         u32 idx = imageBarrierCount;
         imageBarriers[idx] = {};
         imageBarriers[idx].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-        imageBarriers[idx].srcStageMask = getStageMask(image.lastUsage);
-        imageBarriers[idx].srcAccessMask = getAccessMask(image.lastUsage, image.lastAccess);
-        imageBarriers[idx].dstStageMask = getStageMask(HgRenderUsage_depthAttachment);
-        imageBarriers[idx].dstAccessMask = getAccessMask(HgRenderUsage_depthAttachment, access);
-        imageBarriers[idx].oldLayout = getLayout(image.lastUsage, image.lastAccess);
-        imageBarriers[idx].newLayout = getLayout(HgRenderUsage_depthAttachment, access);
-        imageBarriers[idx].image = image.handle;
-        imageBarriers[idx].subresourceRange = image.subresource;
+        imageBarriers[idx].srcStageMask = image.lastPipelineStage;
+        imageBarriers[idx].srcAccessMask = image.lastAccess;
+        imageBarriers[idx].dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
+                                        | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+        imageBarriers[idx].dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT
+                                         | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        imageBarriers[idx].oldLayout = image.lastLayout;
+        imageBarriers[idx].newLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+        imageBarriers[idx].image = pass.depthAttachment.image->image->image;
+        imageBarriers[idx].subresourceRange = {
+            pass.depthAttachment.image->aspectFlags,
+            pass.depthAttachment.image->baseMipLevel,
+            pass.depthAttachment.image->levelCount,
+            pass.depthAttachment.image->baseArrayLayer,
+            pass.depthAttachment.image->layerCount,
+        };
 
-        image.lastUsage = HgRenderUsage_depthAttachment;
-        image.lastAccess = access;
+        image.lastPipelineStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
+                                | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+        image.lastAccess = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT
+                         | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        image.lastLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
 
         ++imageBarrierCount;
     }
 
-    if (pass.stencilAttachment.image != (u64)-1)
+    if (pass.stencilAttachment.image != nullptr)
     {
-        hgAssert(pass.stencilAttachment.image < imageCount);
         Image& image = images[pass.stencilAttachment.image];
 
         imageBarriers = hgRealloc<VkImageMemoryBarrier2>(scratch, 
             imageBarriers, imageBarrierCount, imageBarrierCount + 1);
 
-        HgRenderAccess access = (HgRenderAccess)((u32)HgRenderAccess_write |
-            (pass.stencilAttachment.loadOp == VK_ATTACHMENT_LOAD_OP_LOAD ? (u32)HgRenderAccess_read : 0));
-
         u32 idx = imageBarrierCount;
         imageBarriers[idx] = {};
         imageBarriers[idx].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-        imageBarriers[idx].srcStageMask = getStageMask(image.lastUsage);
-        imageBarriers[idx].srcAccessMask = getAccessMask(image.lastUsage, image.lastAccess);
-        imageBarriers[idx].dstStageMask = getStageMask(HgRenderUsage_stencilAttachment);
-        imageBarriers[idx].dstAccessMask = getAccessMask(HgRenderUsage_stencilAttachment, access);
-        imageBarriers[idx].oldLayout = getLayout(image.lastUsage, image.lastAccess);
-        imageBarriers[idx].newLayout = getLayout(HgRenderUsage_stencilAttachment, access);
-        imageBarriers[idx].image = image.handle;
-        imageBarriers[idx].subresourceRange = image.subresource;
+        imageBarriers[idx].srcStageMask = image.lastPipelineStage;
+        imageBarriers[idx].srcAccessMask = image.lastAccess;
+        imageBarriers[idx].dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
+                                        | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+        imageBarriers[idx].dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT
+                                         | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        imageBarriers[idx].oldLayout = image.lastLayout;
+        imageBarriers[idx].newLayout = VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL;
+        imageBarriers[idx].image = pass.stencilAttachment.image->image->image;
+        imageBarriers[idx].subresourceRange = {
+            pass.stencilAttachment.image->aspectFlags,
+            pass.stencilAttachment.image->baseMipLevel,
+            pass.stencilAttachment.image->levelCount,
+            pass.stencilAttachment.image->baseArrayLayer,
+            pass.stencilAttachment.image->layerCount,
+        };
 
-        image.lastUsage = HgRenderUsage_stencilAttachment;
-        image.lastAccess = access;
+        image.lastPipelineStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
+                                | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+        image.lastAccess = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT
+                         | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        image.lastLayout = VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL;
 
         ++imageBarrierCount;
     }
@@ -2733,12 +2086,9 @@ void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgR
 
     for (u32 i = 0; i < pass.colorAttachmentCount; ++i)
     {
-        hgAssert(pass.colorAttachments[i].image < imageCount);
-        Image& image = images[pass.colorAttachments[i].image];
-
         colorAttachments[i] = {};
         colorAttachments[i].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        colorAttachments[i].imageView = image.view;
+        colorAttachments[i].imageView = pass.colorAttachments[i].image->view;
         colorAttachments[i].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         colorAttachments[i].loadOp = pass.colorAttachments[i].loadOp;
         colorAttachments[i].storeOp = pass.colorAttachments[i].storeOp;
@@ -2746,13 +2096,10 @@ void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgR
     }
 
     VkRenderingAttachmentInfo depthAttachment{};
-    if (pass.depthAttachment.image != (u64)-1)
+    if (pass.depthAttachment.image != nullptr)
     {
-        hgAssert(pass.depthAttachment.image < imageCount);
-        Image& image = images[pass.depthAttachment.image];
-
         depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        depthAttachment.imageView = image.view;
+        depthAttachment.imageView = pass.depthAttachment.image->view;
         depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
         depthAttachment.loadOp = pass.depthAttachment.loadOp;
         depthAttachment.storeOp = pass.depthAttachment.storeOp;
@@ -2760,12 +2107,10 @@ void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgR
     }
 
     VkRenderingAttachmentInfo stencilAttachment{};
-    if (pass.stencilAttachment.image < imageCount)
+    if (pass.stencilAttachment.image != nullptr)
     {
-        Image& image = images[pass.stencilAttachment.image];
-
         stencilAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        stencilAttachment.imageView = image.view;
+        stencilAttachment.imageView = pass.stencilAttachment.image->view;
         stencilAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         stencilAttachment.loadOp = pass.stencilAttachment.loadOp;
         stencilAttachment.storeOp = pass.stencilAttachment.storeOp;
@@ -2778,8 +2123,12 @@ void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgR
     renderingInfo.layerCount = pass.layerCount;
     renderingInfo.colorAttachmentCount = pass.colorAttachmentCount;
     renderingInfo.pColorAttachments = colorAttachments;
-    renderingInfo.pDepthAttachment = pass.depthAttachment.image != (u64)-1 ? &depthAttachment : nullptr;
-    renderingInfo.pStencilAttachment = pass.stencilAttachment.image != (u64)-1 ? &stencilAttachment : nullptr;
+    renderingInfo.pDepthAttachment = pass.depthAttachment.image != nullptr
+        ? &depthAttachment
+        : nullptr;
+    renderingInfo.pStencilAttachment = pass.stencilAttachment.image != nullptr
+        ? &stencilAttachment
+        : nullptr;
 
     vkCmdBeginRendering(cmd, &renderingInfo);
 
@@ -2798,6 +2147,9 @@ void hgInternalResizeWindowSwapchain(HgWindow* window)
 {
     if (window->width == 0 || window->height == 0)
         return;
+
+    HgArena* scratch = hgGetScratch();
+    HgArenaScope scratchScope{scratch};
 
     vkQueueWaitIdle(hgVkQueue);
 
@@ -2818,7 +2170,7 @@ void hgInternalResizeWindowSwapchain(HgWindow* window)
     }
     for (u32 i = 0; i < window->imageCount; ++i)
     {
-        vkDestroyImageView(hgVkDevice, window->views[i], nullptr);
+        vkDestroyImageView(hgVkDevice, window->views[i].view, nullptr);
     }
 
     VkSurfaceCapabilitiesKHR surfaceCapabilities;
@@ -2848,32 +2200,65 @@ void hgInternalResizeWindowSwapchain(HgWindow* window)
     if (window->swapchain == nullptr)
         hgError("Failed to create swapchain: %s\n", hgVkResultToStr(result));
 
-    vkGetSwapchainImagesKHR(hgVkDevice, window->swapchain, &window->imageCount, nullptr);
-    window->images = (VkImage*)realloc(window->images, sizeof(VkImage) * window->imageCount);
-    window->views = (VkImageView*)realloc(window->views, sizeof(VkImageView) * window->imageCount);
-    vkGetSwapchainImagesKHR(hgVkDevice, window->swapchain, &window->imageCount, window->images);
+    u32 swapImageCount;
+    vkGetSwapchainImagesKHR(hgVkDevice, window->swapchain, &swapImageCount, nullptr);
+    VkImage* swapImages = hgAlloc<VkImage>(scratch, swapImageCount);
+    vkGetSwapchainImagesKHR(hgVkDevice, window->swapchain, &swapImageCount, swapImages);
+
+    if (window->imageCount != swapImageCount)
+    {
+        window->images = (HgImage*)realloc(window->images, sizeof(HgImage) * swapImageCount);
+        window->views = (HgImageView*)realloc(window->views, sizeof(HgImageView) * swapImageCount);
+
+        window->cmds = (VkCommandBuffer*)realloc(window->cmds, sizeof(VkCommandBuffer) * swapImageCount);
+        window->frameFinished = (VkFence*)realloc(window->frameFinished, sizeof(VkFence) * swapImageCount);
+        window->imageAvailable = (VkSemaphore*)realloc(window->imageAvailable, sizeof(VkSemaphore) * swapImageCount);
+        window->readyToPresent = (VkSemaphore*)realloc(window->readyToPresent, sizeof(VkSemaphore) * swapImageCount);
+
+        window->imageCount = swapImageCount;
+    }
     for (u32 i = 0; i < window->imageCount; ++i)
     {
-        HgCreateVkImageView viewInfo{};
-        viewInfo.image = window->images[i];
-        viewInfo.format = window->format;
-        viewInfo.subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        window->images[i].image = swapImages[i];
+        window->images[i].type = VK_IMAGE_TYPE_2D;
+        window->images[i].format = window->format;
+        window->images[i].width = window->width;
+        window->images[i].height = window->height;
+        window->images[i].depth = 1;
+        window->images[i].mipLevels = 1;
+        window->images[i].arrayLayers = 1;
+        window->images[i].msaaSamples = VK_SAMPLE_COUNT_1_BIT;
 
-        window->views[i] = hgCreateVkImageView(viewInfo);
+        VkImageViewCreateInfo viewInfo{};
+        viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        viewInfo.image = swapImages[i];
+        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        viewInfo.format = window->format;
+        viewInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+
+        VkResult viewResult = vkCreateImageView(hgVkDevice, &viewInfo, nullptr, &window->views[i].view);
+        if (window->views[i].view == nullptr)
+            hgError("Could not create VkImageView: %s\n", hgVkResultToStr(viewResult));
+
+        window->views[i].image = &window->images[i];
+        window->views[i].type = VK_IMAGE_VIEW_TYPE_2D;
+        window->views[i].aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
+        window->views[i].baseMipLevel = 0;
+        window->views[i].levelCount = 1;
+        window->views[i].baseArrayLayer = 0;
+        window->views[i].layerCount = 1;
     }
 
-    window->cmds = (VkCommandBuffer*)realloc(window->cmds, sizeof(VkCommandBuffer) * window->imageCount);
+    if (window->imageCount > 0) {
+        VkCommandBufferAllocateInfo cmdAllocInfo{};
+        cmdAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        cmdAllocInfo.pNext = nullptr;
+        cmdAllocInfo.commandPool = hgVkCmdPool;
+        cmdAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        cmdAllocInfo.commandBufferCount = window->imageCount;
 
-    VkCommandBufferAllocateInfo cmdAllocInfo{};
-    cmdAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    cmdAllocInfo.pNext = nullptr;
-    cmdAllocInfo.commandPool = hgVkCmdPool;
-    cmdAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    cmdAllocInfo.commandBufferCount = window->imageCount;
-
-    vkAllocateCommandBuffers(hgVkDevice, &cmdAllocInfo, window->cmds);
-
-    window->frameFinished = (VkFence*)realloc(window->frameFinished, sizeof(VkFence) * window->imageCount);
+        vkAllocateCommandBuffers(hgVkDevice, &cmdAllocInfo, window->cmds);
+    }
     for (u32 i = 0; i < window->imageCount; ++i)
     {
         VkFenceCreateInfo info{};
@@ -2881,16 +2266,12 @@ void hgInternalResizeWindowSwapchain(HgWindow* window)
         info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
         vkCreateFence(hgVkDevice, &info, nullptr, &window->frameFinished[i]);
     }
-
-    window->imageAvailable = (VkSemaphore*)realloc(window->imageAvailable, sizeof(VkSemaphore) * window->imageCount);
     for (u32 i = 0; i < window->imageCount; ++i)
     {
         VkSemaphoreCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
         vkCreateSemaphore(hgVkDevice, &info, nullptr, &window->imageAvailable[i]);
     }
-
-    window->readyToPresent = (VkSemaphore*)realloc(window->readyToPresent, sizeof(VkSemaphore) * window->imageCount);
     for (u32 i = 0; i < window->imageCount; ++i)
     {
         VkSemaphoreCreateInfo info{};
@@ -2978,7 +2359,7 @@ void hgInternalDestroyWindowSwapchain(HgWindow* window)
 
     for (u32 i = 0; i < window->imageCount; ++i)
     {
-        vkDestroyImageView(hgVkDevice, window->views[i], nullptr);
+        vkDestroyImageView(hgVkDevice, window->views[i].view, nullptr);
     }
     free(window->views);
     free(window->images);

@@ -163,7 +163,8 @@ void hgDeinitPlatform()
     }
 }
 
-static Window createX11Window(Display* display, u32 width, u32 height, const char* title) {
+static Window createX11Window(Display* display, u32 width, u32 height, const char* title)
+{
     XSetWindowAttributes windowAttributes{};
     windowAttributes.event_mask
         = KeyPressMask | KeyReleaseMask

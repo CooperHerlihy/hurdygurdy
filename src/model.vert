@@ -10,18 +10,21 @@ layout (location = 1) in vec3 vNorm;
 layout (location = 2) in vec4 vTan;
 layout (location = 3) in vec2 vUV;
 
-layout (set = 0, binding = 0) uniform UViewProjection {
+layout (set = 0, binding = 0) uniform UViewProjection
+{
     mat4 u_proj;
     mat4 u_view;
     uint u_dir_light_count;
     uint u_point_light_count;
 };
 
-layout (push_constant) uniform Push {
+layout (push_constant) uniform Push
+{
     mat4 p_model;
 };
 
-void main() {
+void main()
+{
     mat4 mv = u_view * p_model;
     mat3 imv = mat3(transpose(inverse(mv)));
     vec4 pos = mv * vec4(vPos, 1.0);

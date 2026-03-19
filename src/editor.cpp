@@ -28,72 +28,11 @@ int main()
     HgWindow* window = HgWindow::create(arena, windowConfig);
     hgDefer(window->destroy());
 
-    HgStringView texturePath = "hg_test_dir/file_image_test.hgtex";
-    HgResource textureID = hgResourceID(texturePath);
-
-    HgCreateVkSampler samplerConfig{};
-    samplerConfig.filter = VK_FILTER_NEAREST;
-    samplerConfig.addressMode = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-
-    VkSampler sampler = hgCreateVkSampler(samplerConfig);
-    hgDefer(vkDestroySampler(hgVkDevice, sampler, nullptr));
-
-    {
-        HgFence fence;
-        hgLoadResource(&fence, 1, textureID, texturePath);
-        fence.waitIndefinite();
-        hgLoadTexture(textureID, sampler);
-        hgUnloadResource(nullptr, 0, textureID);
-    }
-    hgDefer(hgUnloadTexture(textureID));
-
     hgInitPipeline2D(arena, 256, VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_D32_SFLOAT);
     hgDefer(hgDeinitPipeline2D());
 
     hgInitPipeline3D(arena, 256, VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_D32_SFLOAT);
     hgDefer(hgDeinitPipeline3D());
-
-    hgAddTexture2D(textureID);
-    hgDefer(hgRemoveTexture2D(textureID));
-
-    hgAddModel3D(0, 0, 0);
-    hgDefer(hgRemoveModel3D(0));
-
-    HgTransform camera{};
-    camera.position = HgVec3{0, 0, -2};
-
-    f32 aspectRatio = 16.0f / 9.0f;
-    u32 renderWidth = 0;
-    u32 renderHeight = 0;
-
-    HgECS ecs = ecs.create(4096);
-    hgDefer(ecs.destroy());
-
-    u32 sceneCapacity = 8;
-    HgEntity* scene = hgAlloc<HgEntity>(arena, sceneCapacity);
-    u32 sceneSize = 0;
-
-    // u32 square = sceneSize++;
-    // scene[square] = ecs.spawn();
-    // ecs.add<HgTransform>(scene[square]) = {};
-    // ecs.get<HgTransform>(scene[square]).position.x = -1.5f;
-    // ecs.add<HgSprite>(scene[square]) = {textureID, {0.0f}, {1.0f}};
-
-    // u32 dirLight = sceneSize++;
-    // scene[dirLight] = ecs.spawn();
-    // ecs.add<HgDirLight3D>(scene[dirLight]) = {{1, 1, 1}, {1, 1, 1, 1}};
-
-    u32 pointLight = sceneSize++;
-    scene[pointLight] = ecs.spawn();
-    ecs.add<HgTransform>(scene[pointLight]) = {};
-    ecs.get<HgTransform>(scene[pointLight]).position = HgVec3{-1, -2, -1};
-    ecs.add<HgPointLight3D>(scene[pointLight]) = {HgVec4{1, 1, 1, 2}};
-
-    HgEntity cube = ecs.spawn();
-    ecs.add<HgTransform>(cube) = {};
-    ecs.add<HgModel3D>(cube) = {};
-    u32 cubeIdx = sceneSize++;
-    scene[cubeIdx] = cube;
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -108,49 +47,84 @@ int main()
     ImGui_ImplHurdyGurdy_Init(window, 1, &window->format);
     hgDefer(ImGui_ImplHurdyGurdy_Shutdown());
 
-    VkSampler renderSampler = nullptr;
-    VkImage renderImage = nullptr;
-    VmaAllocation renderAlloc = nullptr;
-    VkImageView renderView = nullptr;
-    VkDescriptorSet renderDescriptor = nullptr;
+    HgTransform camera{};
+    camera.position = HgVec3{0, 0, -1};
 
-    VkImage depthImage = nullptr;
-    VkImageView depthView = nullptr;
-    VmaAllocation depthAlloc = nullptr;
+    f32 aspectRatio = 16.0f / 9.0f;
+    u32 renderWidth = window->width;
+    u32 renderHeight = window->height;
 
-    {
-        VkSamplerCreateInfo renderSamplerInfo{};
-        renderSamplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-        vkCreateSampler(hgVkDevice, &renderSamplerInfo, nullptr, &renderSampler);
-    }
+    HgECS ecs = ecs.create(4096);
+    hgDefer(ecs.destroy());
+
+    u32 sceneCapacity = 8;
+    HgEntity* scene = hgAlloc<HgEntity>(arena, sceneCapacity);
+    u32 sceneSize = 0;
+
+    HgEntity pointLight = ecs.spawn();
+    scene[sceneSize++] = pointLight;
+    ecs.add<HgTransform>(pointLight) = {};
+    ecs.get<HgTransform>(pointLight).position = HgVec3{0, -2, 0};
+    ecs.add<HgPointLight3D>(pointLight) = {HgVec4{1, 1, 1, 2}};
+
+    HgEntity square = ecs.spawn();
+    scene[sceneSize++] = square;
+    ecs.add<HgTransform>(square) = {};
+    ecs.get<HgTransform>(square).position = HgVec3{-1, 0, 1};
+    ecs.add<HgSprite2D>(square) = {0, HgVec2{0.0f}, HgVec2{1.0f}};
+
+    HgEntity cube = ecs.spawn();
+    ecs.add<HgTransform>(cube) = {};
+    ecs.get<HgTransform>(cube).position = HgVec3{1, 0, 1};
+    ecs.add<HgModel3D>(cube) = {};
+    u32 cubeIdx = sceneSize++;
+    scene[cubeIdx] = cube;
+
+    HgImage* renderImage = nullptr;
+    hgDefer(hgDestroyImage(renderImage));
+
+    HgImageView* renderView = nullptr;
+    hgDefer(hgDestroyImageView(renderView));
+
+    HgCreateVkSampler renderSamplerInfo{};
+    VkSampler renderSampler = hgCreateVkSampler(renderSamplerInfo);
     hgDefer(vkDestroySampler(hgVkDevice, renderSampler, nullptr));
-    hgDefer(vmaDestroyImage(hgVkVma, renderImage, renderAlloc));
-    hgDefer(vkDestroyImageView(hgVkDevice, renderView, nullptr));
-    hgDefer(vmaDestroyImage(hgVkVma, depthImage, depthAlloc));
-    hgDefer(vkDestroyImageView(hgVkDevice, depthView, nullptr));
+
+    VkDescriptorSet renderDescriptor = nullptr;
+    hgDefer(ImGui_ImplVulkan_RemoveTexture(renderDescriptor));
+
+    HgImage* depthImage = nullptr;
+    hgDefer(hgDestroyImage(depthImage));
+
+    HgImageView* depthView = nullptr;
+    hgDefer(hgDestroyImageView(depthView));
 
     bool showRender = true;
     bool showEditor = true;
     bool showImguiDemo = false;
     bool move3D = true;
     bool fixedAspect = false;
-
-    HgClock gameClock{};
-    HgClock cpuClock{};
     f64 cpuDelta = 0.0;
 
+    HgClock gameClock{};
     for (;;)
     {
         f64 delta = gameClock.tick();
+        HgClock cpuClock{};
 
+        HgArena* frame = hgGetScratch();
+        HgArenaScope frameScope{frame};
+
+        if (ecs.alive(square))
+        {
+            HgQuat& squareRot = ecs.get<HgTransform>(square).rotation;
+            squareRot = hgAxisAngle(HgVec3{0, -1, 0}, (f32)delta) * squareRot;
+        }
         if (ecs.alive(cube))
         {
             HgQuat& cubeRot = ecs.get<HgTransform>(cube).rotation;
             cubeRot = hgAxisAngle(HgVec3{0, -1, 0}, (f32)delta) * cubeRot;
         }
-
-        HgArena* frame = hgGetScratch(&arena, 1);
-        HgArenaScope frameScope{frame};
 
         hgProcessWindowEvents(&window, 1);
         if (window->wasClosed)
@@ -201,16 +175,11 @@ int main()
 
                     void* pixels = hgAlloc(scratch, renderWidth * renderHeight * 4, 4);
 
-                    HgReadVkImage config{};
-                    config.dst = pixels;
-                    config.srcImage = renderImage;
-                    config.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-                    config.subresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-                    config.width = renderWidth;
-                    config.height = renderHeight;
-                    config.depth = 1;
-                    config.format = VK_FORMAT_R8G8B8A8_SRGB;
-                    hgReadVkImage(config);
+                    hgReadImage(
+                        pixels,
+                        renderImage,
+                        {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
                     stbi_write_png(
                         "screenshot.png",
@@ -260,51 +229,36 @@ int main()
                     renderWidth = viewWidth;
                     renderHeight = viewHeight;
 
-                    HgMat4 proj = hgPerspectiveProjection((f32)hgPi * 0.5f, (f32)renderWidth / (f32)renderHeight, 0.1f, 1000.0f);
+                    HgMat4 proj = hgPerspective((f32)hgPi * 0.5f, (f32)renderWidth / (f32)renderHeight, 0.1f, 1000.0f);
                     hgUpdateProjection2D(proj);
                     hgUpdateProjection3D(proj);
 
                     ImGui_ImplVulkan_RemoveTexture(renderDescriptor);
-                    vkDestroyImageView(hgVkDevice, renderView, nullptr);
-                    vmaDestroyImage(hgVkVma, renderImage, renderAlloc);
-                    vkDestroyImageView(hgVkDevice, depthView, nullptr);
-                    vmaDestroyImage(hgVkVma, depthImage, depthAlloc);
+                    hgDestroyImageView(depthView);
+                    hgDestroyImage(depthImage);
+                    hgDestroyImageView(renderView);
+                    hgDestroyImage(renderImage);
 
-                    HgCreateVkImage renderImageInfo{};
-                    renderImageInfo.width = renderWidth;
-                    renderImageInfo.height = renderHeight;
-                    renderImageInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
-                    renderImageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
-                                            | VK_IMAGE_USAGE_SAMPLED_BIT
-                                            | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+                    renderImage = hgCreateImage(
+                            renderWidth,
+                            renderHeight,
+                            VK_FORMAT_R8G8B8A8_SRGB,
+                            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                            VK_IMAGE_USAGE_SAMPLED_BIT |
+                            VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
 
-                    hgCreateVkImage(&renderImage, &renderAlloc, renderImageInfo);
-
-                    HgCreateVkImageView renderViewInfo{};
-                    renderViewInfo.image = renderImage;
-                    renderViewInfo.format = renderImageInfo.format;
-                    renderViewInfo.subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-
-                    renderView = hgCreateVkImageView(renderViewInfo);
+                    renderView = hgCreateImageView(renderImage, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
 
                     renderDescriptor = ImGui_ImplVulkan_AddTexture(
-                        renderSampler, renderView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+                        renderSampler, renderView->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-                    HgCreateVkImage depthImageInfo{};
-                    depthImageInfo.width = renderWidth;
-                    depthImageInfo.height = renderHeight;
-                    depthImageInfo.format = VK_FORMAT_D32_SFLOAT;
-                    depthImageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
-                                            | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+                    depthImage = depthImage = hgCreateImage(
+                        renderWidth,
+                        renderHeight,
+                        VK_FORMAT_D32_SFLOAT,
+                        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
 
-                    hgCreateVkImage(&depthImage, &depthAlloc, depthImageInfo);
-
-                    HgCreateVkImageView depthViewInfo{};
-                    depthViewInfo.image = depthImage;
-                    depthViewInfo.format = depthImageInfo.format;
-                    depthViewInfo.subresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-
-                    depthView = hgCreateVkImageView(depthViewInfo);
+                    depthView = hgCreateImageView(depthImage, {VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1});
                 }
 
                 if (ImGui::IsWindowFocused())
@@ -414,7 +368,7 @@ int main()
                                     {
                                         if (!ecs.has<HgTransform>(e))
                                             ecs.add<HgTransform>(e) = {};
-                                        ecs.add<HgSprite2D>(e) = {textureID, HgVec2{0.0f, 0.0f}, HgVec2{1.0f, 1.0f}};
+                                        ecs.add<HgSprite2D>(e) = {0, HgVec2{0.0f, 0.0f}, HgVec2{1.0f, 1.0f}};
                                     }
 
                                     if (!ecs.has<HgSprite2D>(e) && ImGui::Selectable("Model 3D"))
@@ -523,72 +477,55 @@ int main()
 
         cpuDelta = cpuClock.tick();
         VkCommandBuffer cmd = window->beginRecording();
-        cpuClock.tick();
         if (cmd != nullptr)
         {
-            HgRenderer renderer = renderer.create(frame, 64, 64);
+            cpuClock.tick();
 
-            HgImageRenderID renderImageID = renderer.addImage(
-                renderImage,
-                renderView,
-                {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
+            HgRenderer renderer = renderer.create(frame, 32, 32);
 
-            HgImageRenderID depthImageID = renderer.addImage(
-                depthImage,
-                depthView,
-                {VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1});
+            HgRenderAttachment renderColorAttachment{};
+            renderColorAttachment.image = renderView;
+            renderColorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            renderColorAttachment.clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
 
-            HgImageRenderID windowImageID = renderer.addImage(
-                window->images[window->currentImage],
-                window->views[window->currentImage],
-                {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
+            HgRenderPass renderPass{};
+            renderPass.colorAttachments = &renderColorAttachment;
+            renderPass.colorAttachmentCount = 1;
+            renderPass.depthAttachment.image = depthView;
+            renderPass.depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            renderPass.depthAttachment.clearValue.depthStencil = {1.0f, 0};
 
-            {
-                HgRenderAttachment renderColorAttachment{};
-                renderColorAttachment.image = renderImageID;
-                renderColorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-                renderColorAttachment.clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
+            renderer.beginPass(cmd, renderWidth, renderHeight, renderPass);
 
-                HgRenderPass renderPass{};
-                renderPass.colorAttachments = &renderColorAttachment;
-                renderPass.colorAttachmentCount = 1;
-                renderPass.depthAttachment.image = depthImageID;
-                renderPass.depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-                renderPass.depthAttachment.clearValue.depthStencil = {1.0f, 0};
+            hgDraw2D(&ecs, cmd);
+            hgDraw3D(&ecs, cmd);
 
-                renderer.beginPass(cmd, renderWidth, renderHeight, renderPass);
+            renderer.endPass(cmd);
 
-                hgDraw2D(&ecs, cmd);
-                hgDraw3D(&ecs, cmd);
+            HgRenderAttachment guiColorAttachment{};
+            guiColorAttachment.image = &window->views[window->currentImage];
+            guiColorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            guiColorAttachment.clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
 
-                renderer.endPass(cmd);
-            }
+            HgRenderPass guiPass{};
+            guiPass.sampledImages = &renderView;
+            guiPass.sampledImageCount = 1;
+            guiPass.colorAttachments = &guiColorAttachment;
+            guiPass.colorAttachmentCount = 1;
 
-            {
-                HgRenderAttachment guiColorAttachment{};
-                guiColorAttachment.image = windowImageID;
-                guiColorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-                guiColorAttachment.clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
+            renderer.beginPass(cmd, window->width, window->height, guiPass);
 
-                HgRenderPass guiPass{};
-                guiPass.sampledImages = &renderImageID;
-                guiPass.sampledImageCount = 1;
-                guiPass.colorAttachments = &guiColorAttachment;
-                guiPass.colorAttachmentCount = 1;
+            ImGui_ImplHurdyGurdy_Draw(cmd);
 
-                renderer.beginPass(cmd, window->width, window->height, guiPass);
-
-                ImGui_ImplHurdyGurdy_Draw(cmd);
-
-                renderer.endPass(cmd);
-            }
+            renderer.endPass(cmd);
 
             HgImageBarrier presentBarrier{};
-            presentBarrier.image = windowImageID;
-            presentBarrier.nextUsage = HgRenderUsage_presentSrc;
+            presentBarrier.image = &window->views[window->currentImage];
+            presentBarrier.nextLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
             renderer.barrier(cmd, nullptr, 0, &presentBarrier, 1);
 
+            cpuDelta += cpuClock.tick();
             window->endAndPresent(cmd);
         }
     }

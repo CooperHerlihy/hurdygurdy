@@ -1507,7 +1507,7 @@ HgMat4 hgViewMatrix(const HgVec3& position, const HgVec3& zoom, const HgQuat& ro
  * - near The near plane of the view frustum
  * - far The far plane of the view frustum
  */
-HgMat4 hgOrthographicProjection(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far);
+HgMat4 hgOrthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far);
 
 /**
  * Creates a perspective projection matrix
@@ -1518,7 +1518,7 @@ HgMat4 hgOrthographicProjection(f32 left, f32 right, f32 top, f32 bottom, f32 ne
  * - near The near plane of the projection, must be greater than 0.0f
  * - far The far plane of the projection, must be greater than near
  */
-HgMat4 hgPerspectiveProjection(f32 fov, f32 aspect, f32 near, f32 far);
+HgMat4 hgPerspective(f32 fov, f32 aspect, f32 near, f32 far);
 
 // random number generators : TODO
 
@@ -2698,8 +2698,10 @@ struct HgHashMap
     /**
      * Get a reference to the value stored at a key
      *
+     * Note, if the key is not in the hash map, it will be added
+     *
      * Parameters
-     * - The key to lookup, must be in the hash map
+     * - The key to lookup
      */
     Value& operator[](const Key& key)
     {
@@ -2708,7 +2710,7 @@ struct HgHashMap
             if (keys[idx] == key)
                 return vals[idx];
         }
-        hgAssert(false);
+        return add(key) = {};
     }
 
     /**
@@ -2928,6 +2930,964 @@ void hgRequestIO(
     void* resource,
     HgStringView path,
     void (*fn)(void* resource, HgStringView path));
+
+/**
+ * Initializes the graphics subsystem, loading all global Vulkan resources
+ */
+void hgInitGraphics();
+
+/**
+ * Deinitializes the graphics subsystem, unloading all global Vulkan resources
+ */
+void hgDeinitGraphics();
+
+/**
+ * Loads the Vulkan functions which use the instance
+ *
+ * Parameters
+ * - instance The Vulkan instance, must not be nullptr
+ */
+void hgLoadVulkanInstanceFuncs(VkInstance instance);
+
+/**
+ * Loads the Vulkan functions which use the device
+ *
+ * Parameters
+ * - device The Vulkan device, must not be nullptr
+ */
+void hgLoadVulkanDeviceFuncs(VkDevice device);
+
+/**
+ * The global Vulkan instance
+ */
+inline VkInstance hgVkInstance = nullptr;
+
+/**
+ * The global Vulkan physical device
+ */
+inline VkPhysicalDevice hgVkPhysicalDevice = nullptr;
+/**
+ * The global Vulkan logical device
+ */
+inline VkDevice hgVkDevice = nullptr;
+/**
+ * The global Vulkan memory allocator
+ */
+inline VmaAllocator hgVkVma = nullptr;
+
+/**
+ * The global Vulkan queue
+ */
+inline VkQueue hgVkQueue = nullptr;
+/**
+ * The global Vulkan queue family
+ */
+inline u32 hgVkQueueFamily = (u32)-1;
+/**
+ * The global Vulkan command pool
+ */
+inline VkCommandPool hgVkCmdPool = nullptr;
+
+/**
+ * Turns a VkResult into a string
+ *
+ * Parameters
+ * - result The result enum to stringify
+ *
+ * Returns
+ * - The string of the enum value's name
+ */
+const char* hgVkResultToStr(VkResult result);
+
+/**
+ * Turns a VkFormat into the size in bytes
+ *
+ * Parameters
+ * - format The format to get the size of
+ *
+ * Returns
+ * - The size of the format in bytes
+ */
+u32 hgVkFormatToSize(VkFormat format);
+
+/**
+ * Creates a Vulkan instance with sensible defaults
+ *
+ * In debug mode, enables debug messaging
+ *
+ * Parameters
+ * - extensions The instance extensions to load
+ * - extensionCount The number of extensions
+ *
+ * Returns
+ * - The created VkInstance, will never be nullptr
+ */
+VkInstance hgCreateVkInstance(HgStringView* extensions, u32 extensionCount);
+
+/**
+ * Creates a Vulkan debug messenger
+ *
+ * Returns
+ * - The created debug messenger, or nullptr if debug messenger is disabled
+ */
+VkDebugUtilsMessengerEXT hgCreateVkDebugUtilsMessenger();
+
+/**
+ * Find the first queue family index which supports the the queue flags
+ *
+ * Parameters
+ * - gpu The physical device, must not be nullptr
+ * - queueFamily Where to store the family, if found
+ * - queueFlags The flags required of the queue family
+ *
+ * Returns
+ * - Whether a queue family was found and stored in queueFamily
+ */
+bool hgFindVkQueueFamily(VkPhysicalDevice gpu, u32* queueFamily, VkQueueFlags queueFlags);
+
+/**
+ * Finds a Vulkan physical device with a general purpose queue family
+ *
+ * The physical device will have at least one queue family which supports both
+ * graphics, transfer, and compute
+ *
+ * Returns
+ * - The physical device
+ * - nullptr if none was found
+ */
+VkPhysicalDevice hgFindVkPhysicalDevice();
+
+/**
+ * Creates a Vulkan logical device with a single general purpose queue
+ *
+ * The device will have queue 0 in hgVkQueueFamily
+ *
+ * Returns
+ * - The physical device, will never be nullptr
+ */
+VkDevice hgCreateVkDevice();
+
+/**
+ * Attempts to find the index of a memory type which has the desired flags and
+ * does not have the undesired flags
+ *
+ * Note, if no such memory type exists, the next best thing will be found
+ *
+ * The bitmask must not mask out all memory types
+ *
+ * Parameters
+ * - bitmask A bitmask of which memory types cannot be used, must not be 0
+ * - preferredFlags The flags which the type should have, though may not
+ * - unpreferredFlags The flags which the type should not have, though may have
+ *
+ * Returns
+ * - The found index of the memory type
+ */
+u32 hgFindVkMemoryTypeIndex(
+    u32 bitmask,
+    VkMemoryPropertyFlags preferredFlags = 0,
+    VkMemoryPropertyFlags unpreferredFlags = 0);
+
+// Vulkan allocator : TODO?
+
+/**
+ * How an HgBuffer will be accessed
+ */
+enum HgBufferMemoryUsage
+{
+    /**
+     * It will only be accessed from the device
+     */
+    HgBufferMemoryUsage_deviceOnly = 0,
+    /**
+     * It will be frequently written from the host and read on the device
+     */
+    HgBufferMemoryUsage_frequentUpdate,
+    /**
+     * It will be used as a staging buffer to transfer from host to device
+     */
+    HgBufferMemoryUsage_stagingWrite,
+    /**
+     * It will be used as a staging buffer to transfer from device to host
+     */
+    HgBufferMemoryUsage_stagingRead,
+};
+
+/**
+ * How an HgBuffer can be accessed
+ */
+enum HgBufferMemoryHostAccess
+{
+    HgBufferMemoryHostAccess_none = 0x0,
+    HgBufferMemoryHostAccess_write = 0x1,
+    HgBufferMemoryHostAccess_read = 0x2,
+};
+
+/**
+ * A gpu buffer
+ */
+struct HgBuffer
+{
+    /**
+     * The Vulkan buffer
+     */
+    VkBuffer buffer;
+    /**
+     * The buffer's allocation
+     */
+    VmaAllocation alloc;
+    /**
+     * The size of the buffer
+     */
+    u64 size;
+    /**
+     * How the buffer can be accessed
+     */
+    HgBufferMemoryHostAccess access;
+};
+
+/**
+ * Create a gpu buffer
+ *
+ * Parameters
+ * - size The size in bytes of the buffer
+ * - usage How the buffer will be used
+ * - access How the buffer should be accessed
+ */
+HgBuffer* hgCreateBuffer(
+    u64 size,
+    VkBufferUsageFlags usage,
+    HgBufferMemoryUsage access = HgBufferMemoryUsage_deviceOnly);
+
+/**
+ * Destroy a gpu buffer
+ */
+void hgDestroyBuffer(HgBuffer* buffer);
+
+/**
+ * Writes to a gpu buffer
+ *
+ * Parameters
+ * - dst The buffer to write to, must not be nullptr
+ * - offset The offset in bytes into the dst buffer
+ * - src The data to write, must not be nullptr
+ * - size The size in bytes to write
+ */
+void hgWriteBuffer(HgBuffer* dst, u64 offset, const void* src, u64 size);
+
+/**
+ * Reads from a Vulkan device local buffer through a staging buffer
+ *
+ * Parameters
+ * - dst The location to write to, must not be nullptr
+ * - src The buffer to read from, must not be nullptr
+ * - offset The offset in bytes into the dst buffer
+ * - size The size in bytes to read
+ */
+void hgReadBuffer(void* dst, HgBuffer* src, u64 offset, u64 size);
+
+/**
+ * A gpu image
+ */
+struct HgImage
+{
+    /**
+     * The Vulkan image
+     */
+    VkImage image;
+    /**
+     * The image's allocation
+     */
+    VmaAllocation alloc;
+    /**
+     * The type of image
+     */
+    VkImageType type;
+    /**
+     * The pixel format
+     */
+    VkFormat format;
+    /**
+     * The width in pixels
+     */
+    u32 width;
+    /**
+     * The height in pixels
+     */
+    u32 height;
+    /**
+     * The depth in pixels
+     */
+    u32 depth;
+    /**
+     * The number of mipmap levels
+     */
+    u32 mipLevels;
+    /**
+     * The number of array layers
+     */
+    u32 arrayLayers;
+    /**
+     * The number of msaa samples
+     */
+    VkSampleCountFlagBits msaaSamples;
+};
+
+/**
+ * Create a gpu image assuming most defaults
+ */
+HgImage* hgCreateImage(u32 width, u32 height, VkFormat format, VkImageUsageFlags usage);
+
+/**
+ * Config for hgCreateVkImage
+ */
+struct HgCreateImageEx
+{
+    /**
+     * The dimensions of the image
+     */
+    VkImageType type = VK_IMAGE_TYPE_2D;
+    /**
+     * The width of the image
+     */
+    u32 width = 1;
+    /**
+     * The height of the image
+     */
+    u32 height = 1;
+    /**
+     * The depth of the image
+     */
+    u32 depth = 1;
+    /**
+     * The format of the image, must not be UNDEFINED
+     */
+    VkFormat format = VK_FORMAT_UNDEFINED;
+    /**
+     * The number of mip level
+     */
+    u32 mipLevels = 1;
+    /**
+     * The number of array layers
+     */
+    u32 arrayLayers = 1;
+    /**
+     * The number of MSAA samples
+     */
+    VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
+    /**
+     * How the image will be used, must not be 0
+     */
+    VkImageUsageFlags usage = 0;
+};
+
+/**
+ * Create a gpu image with more options
+ */
+HgImage* hgCreateImageEx(const HgCreateImageEx& create);
+
+/**
+ * Destroy a gpu image
+ */
+void hgDestroyImage(HgImage* image);
+
+/**
+ * A view into a gpu image
+ */
+struct HgImageView
+{
+    /**
+     * The view
+     */
+    VkImageView view;
+    /**
+     * The image viewed
+     */
+    const HgImage* image;
+    /**
+     * The type of view
+     */
+    VkImageViewType type;
+    /**
+     * The image aspect
+     */
+    VkImageAspectFlags aspectFlags;
+    /**
+     * The first mip level
+     */
+    u32 baseMipLevel;
+    /**
+     * The number of mip levels including the base
+     */
+    u32 levelCount;
+    /**
+     * The first array layer
+     */
+    u32 baseArrayLayer;
+    /**
+     * The number of array layers including the base
+     */
+    u32 layerCount;
+};
+
+/**
+ * Create a gpu image view
+ */
+HgImageView* hgCreateImageView(
+    const HgImage* image,
+    VkImageSubresourceRange subresource,
+    VkImageViewType type = VK_IMAGE_VIEW_TYPE_2D);
+
+/**
+ * Destroy a gpu image view
+ */
+void hgDestroyImageView(HgImageView* view);
+
+/**
+ * Config for hgCreateVkSampler
+ */
+struct HgCreateVkSampler
+{
+    /**
+     * The filter used for sampling
+     */
+    VkFilter filter = VK_FILTER_NEAREST;
+    /**
+     * How addresses past the edge are handled
+     */
+    VkSamplerAddressMode addressMode = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    /**
+     * The border color, if addressMode uses a border
+     */
+    VkBorderColor borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
+    /**
+     * The load bias
+     */
+    f32 mipLodBias = 0.0f;
+    /**
+     * The min clamp lod
+     */
+    f32 minLod = 0.0f;
+    /**
+     * The max clamp, or 1000.0f for no max
+     */
+    f32 maxLod = 1000.0f;
+};
+
+/**
+ * Create a Vulkan sampler
+ */
+VkSampler hgCreateVkSampler(const HgCreateVkSampler& create);
+
+/**
+ * Write to a gpu image
+ *
+ * Parameters
+ * - dst The image to write to
+ * - subresource The subresource of the image to write to
+ * - src The data to read from
+ * - layout The final layout to set the image to
+ */
+void hgWriteImage(
+    HgImage* dst,
+    VkImageSubresourceLayers subresource,
+    const void* src,
+    VkImageLayout layout);
+
+/**
+ * Write to a gpu image cubemap
+ *
+ * Note, dst should have 6 array layers, all of which will be filled
+ *
+ * Note, srcData is assumed to be layed out as:
+ *  #
+ * ####
+ *  #
+ *
+ * Parameters
+ * - dst The image to write to
+ * - subresource The subresource of the image to write to
+ * - src The data to read from
+ * - layout The final layout to set the image to
+ */
+void hgWriteImageCubemap(
+    HgImage* dst,
+    VkImageSubresourceLayers subresource,
+    const void* src,
+    VkImageLayout layout);
+
+/**
+ * Read from a gpu image
+ *
+ * Parameters
+ * - src The pointer to write to
+ * - dst The image to read from
+ * - subresource The subresource of the image to read from
+ * - layout The final layout to set the image to
+ */
+void hgReadImage(
+    void* dst,
+    HgImage* src,
+    VkImageSubresourceLayers subresource,
+    VkImageLayout layout);
+
+/**
+ * Generates mipmaps from the base level
+ *
+ * Parameters
+ * - image The image to generate mipmaps for
+ * - aspectFlags The image aspect flags
+ * - oldLayout The layout the image was in before
+ * - newLayout The layout the image will be set to after
+ */
+void hgGenerateMipmaps(
+    HgImage* image,
+    VkImageAspectFlags aspectFlags,
+    VkImageLayout oldLayout,
+    VkImageLayout newLayout);
+
+/**
+ * Create a descriptor set layout
+ *
+ * Parameters
+ * - bindings The bindings in the descriptor set
+ * - bindingCount The number of bindings
+ */
+VkDescriptorSetLayout hgCreateVkDescriptorSetLayout(
+    const VkDescriptorSetLayoutBinding* bindings,
+    u32 bindingCount);
+
+/**
+ * Create a pipeline layout
+ *
+ * Parameters
+ * - setLayouts The descriptor set layouts
+ * - setLayoutCount The number of set layouts
+ * - pushRanges The push constant ranges
+ * - pushRangeCount The number of push ranges
+ */
+VkPipelineLayout hgCreateVkPipelineLayout(
+    VkDescriptorSetLayout* setLayouts,
+    u32 setLayoutCount,
+    VkPushConstantRange* pushRanges,
+    u32 pushRangeCount);
+
+/**
+ * Create a Vulkan shader module
+ *
+ * Parameters
+ * - spirvCode The spirv bytecode of the shader
+ * - codeSize The size of spirvCode in bytes
+ */
+VkShaderModule hgCreateVkShaderModule(const u8* spirvCode, u64 codeSize);
+
+/**
+ * Config for hgCreateVkGraphicsPipeline
+ */
+struct HgCreateVkGraphicsPipeline
+{
+    /**
+     * The format of the color attachments, none can be UNDEFINED
+     */
+    const VkFormat* colorAttachmentFormats = nullptr;
+    /**
+     * The number of color attachment formats
+     */
+    u32 colorAttachmentCount = 0;
+    /**
+     * The format of the depth attachment, no depth attachment if UNDEFINED
+     */
+    VkFormat depthAttachmentFormat = VK_FORMAT_UNDEFINED;
+    /**
+     * The format of the stencil attachment, no stencil attachment if UNDEFINED
+     */
+    VkFormat stencilAttachmentFormat = VK_FORMAT_UNDEFINED;
+    /**
+     * The vertex shader code
+     */
+    VkShaderModule vertexShader = nullptr;
+    /**
+     * The fragment shader code
+     */
+    VkShaderModule fragmentShader = nullptr;
+    /**
+     * The pipeline layout
+     */
+    VkPipelineLayout layout = nullptr;
+    /**
+     * Descriptions of the vertex bindings, may be nullptr
+     */
+    const VkVertexInputBindingDescription* vertexBindings = nullptr;
+    /**
+     * The number of vertex bindings
+     */
+    u32 vertexBindingCount = 0;
+    /**
+     * Descriptions of the vertex attributes, may be nullptr
+     */
+    const VkVertexInputAttributeDescription* vertexAttributes = nullptr;
+    /**
+     * The number of vertex attributes
+     */
+    u32 vertexAttributeCount = 0;
+    /**
+     * How to interpret vertices into topology
+     */
+    VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    /**
+     * The number of patch control points in the tesselation stage
+     */
+    u32 tesselationPatchControlPoints = 0;
+    /**
+     * How polygons are drawn
+     */
+    VkPolygonMode polygonMode = VK_POLYGON_MODE_FILL;
+    /**
+     * Which face is treated as the front
+     */
+    VkFrontFace frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    /**
+     * How many samples are used in MSAA
+     */
+    VkSampleCountFlagBits multisampleCount = VK_SAMPLE_COUNT_1_BIT;
+    /**
+     * Enables back/front face culling
+     */
+    VkCullModeFlagBits cullMode = VK_CULL_MODE_NONE;
+    /**
+     * Enables color blending using pixel alpha values
+     */
+    bool enableColorBlend = false;
+};
+
+/**
+ * Creates a graphics pipeline
+ *
+ * Parameters
+ * - config The pipeline configuration
+ */
+VkPipeline hgCreateVkGraphicsPipeline(const HgCreateVkGraphicsPipeline& config);
+
+/**
+ * Creates a compute pipeline
+ *
+ * Parameters
+ * - layout The pipeline layout, must not be nullptr
+ * - shader The compute shader, must not be nullptr
+ */
+VkPipeline hgCreateVkComputePipeline(VkPipelineLayout layout, const VkShaderModule shader);
+
+/**
+ * Create a descriptor pool
+ *
+ * Parameters
+ * - maxSets The max number of sets which can be allocated
+ * - sizes The numbers of each descriptor type to allocate
+ * - sizeCount The number of sizes
+ * - flags Extra flags passed to the create info struct, if any
+ */
+VkDescriptorPool hgCreateVkDescriptorPool(
+    u32 maxSets,
+    VkDescriptorPoolSize* sizes,
+    u32 sizeCount,
+    VkDescriptorPoolCreateFlags flags = 0);
+
+/**
+ * Allocate a single descriptor set
+ *
+ * Parameters
+ * - pool The descriptor pool to allocate from
+ * - layout The layout of the set
+ */
+VkDescriptorSet hgCreateVkDescriptorSet(VkDescriptorPool pool, VkDescriptorSetLayout layout);
+
+/**
+ * Update a descriptor set binding
+ *
+ * Parameters
+ * - set The descriptor set to update
+ * - binding The binding in the set
+ * - type The descriptor type
+ * - info The image infos to update to
+ * - count The number of descriptors
+ */
+void hgUpdateVkDescriptorSet(
+    VkDescriptorSet set,
+    u32 binding,
+    VkDescriptorType type,
+    const VkDescriptorBufferInfo* bufferInfos,
+    const VkDescriptorImageInfo* imageInfos,
+    u32 count);
+
+/**
+ * Begin a command buffer to be executed once
+ *
+ * Returns
+ * - The command buffer to record, will never be nullptr
+ */
+VkCommandBuffer hgBeginVkCmd();
+
+/**
+ * Execute the command buffer and wait for completion
+ *
+ * Parameters
+ * - cmd The command buffer from hgvkBeginCommands, must not be nullptr
+ */
+void hgEndVkCmd(VkCommandBuffer cmd);
+
+/**
+ * A rendering attachment
+ */
+struct HgRenderAttachment
+{
+    /**
+     * The image attached
+     */
+    const HgImageView* image = nullptr;
+    /**
+     * How the image will be loaded
+     */
+    VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    /**
+     * How the image will be stored
+     */
+    VkAttachmentStoreOp storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    /**
+     * What to clear the image to if cleared
+     */
+    VkClearValue clearValue = {};
+};
+
+/**
+ * A render pass description
+ */
+struct HgRenderPass
+{
+    /**
+     * The uniforms buffer dependencies
+     */
+    HgBuffer** uniformBuffers = nullptr;
+    /**
+     * The number of uniform buffers
+     */
+    u32 uniformBufferCount = 0;
+    /**
+     * The storage buffer dependencies
+     */
+    HgBuffer** storageBuffers = nullptr;
+    /**
+     * The number of storage buffers
+     */
+    u32 storageBufferCount = 0;
+    /**
+     * The sampled image dependencies
+     */
+    HgImageView** sampledImages = nullptr;
+    /**
+     * The number of sampled images
+     */
+    u32 sampledImageCount = 0;
+    /**
+     * The number of layers in each color attachment to write to
+     */
+    u32 layerCount = 1;
+    /**
+     * The color images to write to
+     */
+    const HgRenderAttachment* colorAttachments = nullptr;
+    /**
+     * The number of color attachments
+     */
+    u32 colorAttachmentCount = 0;
+    /**
+     * The depth attachment, if any
+     */
+    HgRenderAttachment depthAttachment = {};
+    /**
+     * The stencil attachment, if any
+     */
+    HgRenderAttachment stencilAttachment = {};
+};
+
+/**
+ * An image dependency barrier
+ */
+struct HgImageBarrier
+{
+    /**
+     * The image to sychronize
+     */
+    HgImageView* image;
+    /**
+     * Where the image will be used next
+     */
+    VkPipelineStageFlags nextPipelineStage;
+    /**
+     * How the image will be accessed next
+     */
+    VkAccessFlags nextAccess;
+    /**
+     * The next layout the image needs to be in
+     */
+    VkImageLayout nextLayout;
+};
+
+/**
+ * A buffer dependency barrier
+ */
+struct HgBufferBarrier
+{
+    /**
+     * The buffer to sychronize
+     */
+    HgBuffer* buffer = nullptr;
+    /**
+     * Where the image will be used next
+     */
+    VkPipelineStageFlags nextPipelineStage;
+    /**
+     * How the image will be accessed next
+     */
+    VkAccessFlags nextAccess;
+};
+
+/**
+ * A renderer to organize render passes and synchronize resources
+ */
+struct HgRenderer
+{
+    /**
+     * A buffer resource
+     */
+    struct Buffer
+    {
+        /**
+         * Where the image was used last
+         */
+        VkPipelineStageFlags lastPipelineStage;
+        /**
+         * How the image was accessed last
+         */
+        VkAccessFlags lastAccess;
+    };
+
+    /**
+     * An image resource
+     */
+    struct Image
+    {
+        /**
+         * Where the image was used last
+         */
+        VkPipelineStageFlags lastPipelineStage;
+        /**
+         * How the image was accessed last
+         */
+        VkAccessFlags lastAccess;
+        /**
+         * The last layout the image was in
+         */
+        VkImageLayout lastLayout;
+    };
+
+    /**
+     * The hash function for HgBuffer*
+     */
+    static constexpr auto bufferHash = [](const HgBuffer* buffer) constexpr -> u64 {
+        union
+        {
+            const HgBuffer* asPtr;
+            uptr asUptr;
+        } cast = {buffer};
+        return (u64)cast.asUptr;
+    };
+
+    /**
+     * The hash function for HgImageView*
+     */
+    static constexpr auto imageHash = [](const HgImageView* image) constexpr -> u64 {
+        union
+        {
+            const HgImageView* asPtr;
+            uptr asUptr;
+        } cast = {image};
+        return (u64)cast.asUptr;
+    };
+
+    /**
+     * The buffer resources
+     */
+    HgHashMap<const HgBuffer*, Buffer, bufferHash> buffers;
+    /**
+     * The image resources
+     */
+    HgHashMap<const HgImageView*, Image, imageHash> images;
+
+    /**
+     * Create a new renderer
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - maxBuffers The max number of buffer resources
+     * - maxImages The max number of image resources
+     */
+    static HgRenderer create(HgArena* arena, u32 maxBuffers, u32 maxImages);
+
+    /**
+     * Removes all resources
+     */
+    void reset();
+
+    /**
+     * Set the state for a buffer
+     */
+    void setBuffer(HgBuffer* buffer, VkPipelineStageFlags lastStage, VkAccessFlags lastAccess);
+
+    /**
+     * Set the state for an image
+     */
+    void setImage(
+        HgImageView* image,
+        VkPipelineStageFlags lastStage,
+        VkAccessFlags lastAccess,
+        VkImageLayout lastLayout);
+
+    /**
+     * Creates a barrier for resource uses that are not part of a render pass
+     *
+     * Parameters
+     * - cmd The command buffer
+     * - bufferBarriers The buffer barriers
+     * - bufferBarrierCount The number of buffer barriers
+     * - imageBarriers The image barriers
+     * - imageBarrierCount The number of image barriers
+     */
+    void barrier(
+        VkCommandBuffer cmd,
+        const HgBufferBarrier* bufferBarriers,
+        u32 bufferBarrierCount,
+        const HgImageBarrier* imageBarriers,
+        u32 imageBarrierCount);
+
+    /**
+     * Begins a render pass
+     *
+     * Parameters
+     * - cmd The command buffer
+     * - width The width of the render area
+     * - height The height of the render area
+     * - pass The render pass description
+     */
+    void beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgRenderPass& pass);
+
+    /**
+     * Ends the render pass
+     *
+     * Parameters
+     * - cmd The command buffer
+     */
+    void endPass(VkCommandBuffer cmd);
+};
 
 /**
  * The uuid derived from the resource's name/path
@@ -3479,37 +4439,17 @@ void hgDeinitGpuResources();
 struct HgTextureResource
 {
     /**
-     * The allocation
-     */
-    VmaAllocation allocation;
-    /**
      * The image
      */
-    VkImage image;
+    HgImage* image;
     /**
      * The image view
      */
-    VkImageView view;
+    HgImageView* view;
     /**
      * The sampler
      */
     VkSampler sampler;
-    /**
-     * The format of each pixel
-     */
-    VkFormat format;
-    /**
-     * The width in pixels
-     */
-    u32 width;
-    /**
-     * The height in pixels
-     */
-    u32 height;
-    /**
-     * The depth in pixels
-     */
-    u32 depth;
 };
 
 /**
@@ -3553,21 +4493,13 @@ HgTextureResource* hgGetTexture(HgResource id);
 struct HgModelResource
 {
     /**
-     * The allocation
+     * The vertex buffer
      */
-    VmaAllocation vertexAlloc;
+    HgBuffer* vertexBuffer;
     /**
-     * The buffer
+     * The index buffer
      */
-    VkBuffer vertexBuffer;
-    /**
-     * The allocation
-     */
-    VmaAllocation indexAlloc;
-    /**
-     * The buffer
-     */
-    VkBuffer indexBuffer;
+    HgBuffer* indexBuffer;
     /**
      * The number of vertices
      */
@@ -4382,1322 +5314,6 @@ void hgUpdateView3D(const HgMat4& view);
 void hgDraw3D(HgECS* ecs, VkCommandBuffer cmd);
 
 /**
- * Initializes the graphics subsystem, loading all global Vulkan resources
- */
-void hgInitGraphics();
-
-/**
- * Deinitializes the graphics subsystem, unloading all global Vulkan resources
- */
-void hgDeinitGraphics();
-
-/**
- * Loads the Vulkan functions which use the instance
- *
- * Parameters
- * - instance The Vulkan instance, must not be nullptr
- */
-void hgLoadVulkanInstanceFuncs(VkInstance instance);
-
-/**
- * Loads the Vulkan functions which use the device
- *
- * Parameters
- * - device The Vulkan device, must not be nullptr
- */
-void hgLoadVulkanDeviceFuncs(VkDevice device);
-
-/**
- * The global Vulkan instance
- */
-inline VkInstance hgVkInstance = nullptr;
-
-/**
- * The global Vulkan physical device
- */
-inline VkPhysicalDevice hgVkPhysicalDevice = nullptr;
-/**
- * The global Vulkan logical device
- */
-inline VkDevice hgVkDevice = nullptr;
-/**
- * The global Vulkan memory allocator
- */
-inline VmaAllocator hgVkVma = nullptr;
-
-/**
- * The global Vulkan queue
- */
-inline VkQueue hgVkQueue = nullptr;
-/**
- * The global Vulkan queue family
- */
-inline u32 hgVkQueueFamily = (u32)-1;
-/**
- * The global Vulkan command pool
- */
-inline VkCommandPool hgVkCmdPool = nullptr;
-
-/**
- * Turns a VkResult into a string
- *
- * Parameters
- * - result The result enum to stringify
- *
- * Returns
- * - The string of the enum value's name
- */
-const char* hgVkResultToStr(VkResult result);
-
-/**
- * Turns a VkFormat into the size in bytes
- *
- * Parameters
- * - format The format to get the size of
- *
- * Returns
- * - The size of the format in bytes
- */
-u32 hgVkFormatToSize(VkFormat format);
-
-/**
- * Creates a Vulkan instance with sensible defaults
- *
- * In debug mode, enables debug messaging
- *
- * Parameters
- * - extensions The instance extensions to load
- * - extensionCount The number of extensions
- *
- * Returns
- * - The created VkInstance, will never be nullptr
- */
-VkInstance hgCreateVkInstance(HgStringView* extensions, u32 extensionCount);
-
-/**
- * Creates a Vulkan debug messenger
- *
- * Returns
- * - The created debug messenger, or nullptr if debug messenger is disabled
- */
-VkDebugUtilsMessengerEXT hgCreateVkDebugUtilsMessenger();
-
-/**
- * Find the first queue family index which supports the the queue flags
- *
- * Parameters
- * - gpu The physical device, must not be nullptr
- * - queueFamily Where to store the family, if found
- * - queueFlags The flags required of the queue family
- *
- * Returns
- * - Whether a queue family was found and stored in queueFamily
- */
-bool hgFindVkQueueFamily(VkPhysicalDevice gpu, u32* queueFamily, VkQueueFlags queueFlags);
-
-/**
- * Finds a Vulkan physical device with a general purpose queue family
- *
- * The physical device will have at least one queue family which supports both
- * graphics, transfer, and compute
- *
- * Returns
- * - The physical device
- * - nullptr if none was found
- */
-VkPhysicalDevice hgFindVkPhysicalDevice();
-
-/**
- * Creates a Vulkan logical device with a single general purpose queue
- *
- * The device will have queue 0 in hgVkQueueFamily
- *
- * Returns
- * - The physical device, will never be nullptr
- */
-VkDevice hgCreateVkDevice();
-
-/**
- * Attempts to find the index of a memory type which has the desired flags and
- * does not have the undesired flags
- *
- * Note, if no such memory type exists, the next best thing will be found
- *
- * The bitmask must not mask out all memory types
- *
- * Parameters
- * - bitmask A bitmask of which memory types cannot be used, must not be 0
- * - preferredFlags The flags which the type should have, though may not
- * - unpreferredFlags The flags which the type should not have, though may have
- *
- * Returns
- * - The found index of the memory type
- */
-u32 hgFindVkMemoryTypeIndex(
-    u32 bitmask,
-    VkMemoryPropertyFlags preferredFlags = 0,
-    VkMemoryPropertyFlags unpreferredFlags = 0);
-
-// Vulkan allocator : TODO?
-
-/**
- * Create a Vulkan buffer
- *
- * Parameters
- * - buffer A pointer to return the created buffer
- * - allocation A pointer to return the created allocation
- * - size The size in bytes of the buffer
- * - usage How the buffer will be used
- * - memory The memory flags for VMA
- */
-void hgCreateVkBuffer(
-    VkBuffer* buffer,
-    VmaAllocation* allocation,
-    u64 size,
-    VkBufferUsageFlags usage,
-    VmaAllocationCreateFlags memory = 0);
-
-/**
- * How an HgBuffer will be accessed
- */
-enum HgBufferMemoryUsage
-{
-    HgBufferMemoryUsage_deviceOnly,
-    HgBufferMemoryUsage_frequentUpdate,
-    HgBufferMemoryUsage_stageWrite,
-    HgBufferMemoryUsage_stageRead,
-};
-
-/**
- * How an HgBuffer can be accessed
- */
-enum HgBufferMemoryAccess
-{
-    HgBufferMemoryAccess_device = 0x1,
-    HgBufferMemoryAccess_hostWrite = 0x2,
-    HgBufferMemoryAccess_hostRead = 0x4,
-};
-
-/**
- * A gpu buffer
- */
-struct HgBuffer
-{
-    /**
-     * The Vulkan buffer
-     */
-    VkBuffer buffer;
-    /**
-     * The buffer's allocation
-     */
-    VmaAllocation alloc;
-    /**
-     * The size of the buffer
-     */
-    u64 size;
-    /**
-     * How the buffer can be accessed
-     */
-    HgBufferMemoryAccess access;
-};
-
-/**
- * Create a gpu buffer
- *
- * Parameters
- * - arena The arena to allocate from
- * - size The size in bytes of the buffer
- * - usage How the buffer will be used
- * - access How the buffer should be accessed
- */
-HgBuffer* hgCreateBuffer(
-    HgArena* arena,
-    u64 size,
-    VkBufferUsageFlags usage,
-    HgBufferMemoryUsage access = HgBufferMemoryUsage_deviceOnly);
-
-/**
- * Destroy a gpu buffer
- */
-void hgDestroyBuffer(HgBuffer* buffer);
-
-/**
- * Writes to a Vulkan device local buffer through a staging buffer
- *
- * Parameters
- * - dst The buffer to write to, must not be nullptr
- * - offset The offset in bytes into the dst buffer
- * - src The data to write, must not be nullptr
- * - size The size in bytes to write
- */
-void hgWriteVkBuffer(VkBuffer dst, u64 offset, const void* src, u64 size);
-
-/**
- * Writes to a gpu buffer
- *
- * Parameters
- * - dst The buffer to write to, must not be nullptr
- * - offset The offset in bytes into the dst buffer
- * - src The data to write, must not be nullptr
- * - size The size in bytes to write
- */
-void hgWriteBuffer(HgBuffer* dst, u64 offset, const void* src, u64 size);
-
-/**
- * Reads from a Vulkan device local buffer through a staging buffer
- *
- * Parameters
- * - dst The location to write to, must not be nullptr
- * - src The buffer to read from, must not be nullptr
- * - offset The offset in bytes into the dst buffer
- * - size The size in bytes to read
- */
-void hgReadVkBuffer(void* dst, VkBuffer src, u64 offset, u64 size);
-
-/**
- * Reads from a Vulkan device local buffer through a staging buffer
- *
- * Parameters
- * - dst The location to write to, must not be nullptr
- * - src The buffer to read from, must not be nullptr
- * - offset The offset in bytes into the dst buffer
- * - size The size in bytes to read
- */
-void hgReadBuffer(void* dst, HgBuffer* src, u64 offset, u64 size);
-
-/**
- * Config for hgCreateVkImage
- */
-struct HgCreateVkImage
-{
-    /**
-     * The dimensions of the image
-     */
-    VkImageType type = VK_IMAGE_TYPE_2D;
-    /**
-     * The width of the image
-     */
-    u32 width = 1;
-    /**
-     * The height of the image
-     */
-    u32 height = 1;
-    /**
-     * The depth of the image
-     */
-    u32 depth = 1;
-    /**
-     * The format of the image, must not be UNDEFINED
-     */
-    VkFormat format = VK_FORMAT_UNDEFINED;
-    /**
-     * The number of mip level
-     */
-    u32 mipLevels = 1;
-    /**
-     * The number of array layers
-     */
-    u32 arrayLayers = 1;
-    /**
-     * The number of MSAA samples
-     */
-    VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
-    /**
-     * How the image will be used, must not be 0
-     */
-    VkImageUsageFlags usage = 0;
-};
-
-/**
- * Create a Vulkan image
- *
- * Parameters
- * - image A pointer to return the created image
- * - allocation A pointer to return the created allocation
- * - create The image create info
- */
-void hgCreateVkImage(VkImage* image, VmaAllocation* allocation, const HgCreateVkImage& create);
-
-/**
- * A gpu image
- */
-struct HgImage
-{
-    /**
-     * The Vulkan image
-     */
-    VkImage image;
-    /**
-     * The image's allocation
-     */
-    VmaAllocation alloc;
-    /**
-     * The type of image
-     */
-    VkImageType type;
-    /**
-     * The pixel format
-     */
-    VkFormat format;
-    /**
-     * The width in pixels
-     */
-    u32 width;
-    /**
-     * The height in pixels
-     */
-    u32 height;
-    /**
-     * The depth in pixels
-     */
-    u32 depth;
-    /**
-     * The number of mipmap levels
-     */
-    u32 mipLevels;
-    /**
-     * The number of array layers
-     */
-    u32 arrayLayers;
-    /**
-     * The number of msaa samples
-     */
-    VkSampleCountFlagBits msaaSamples;
-};
-
-/**
- * Config for hgCreateVkImage
- */
-struct HgCreateImage
-{
-    /**
-     * The dimensions of the image
-     */
-    VkImageType type = VK_IMAGE_TYPE_2D;
-    /**
-     * The width of the image
-     */
-    u32 width = 1;
-    /**
-     * The height of the image
-     */
-    u32 height = 1;
-    /**
-     * The depth of the image
-     */
-    u32 depth = 1;
-    /**
-     * The format of the image, must not be UNDEFINED
-     */
-    VkFormat format = VK_FORMAT_UNDEFINED;
-    /**
-     * The number of mip level
-     */
-    u32 mipLevels = 1;
-    /**
-     * The number of array layers
-     */
-    u32 arrayLayers = 1;
-    /**
-     * The number of MSAA samples
-     */
-    VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
-    /**
-     * How the image will be used, must not be 0
-     */
-    VkImageUsageFlags usage = 0;
-};
-
-/**
- * Create a gpu image
- */
-HgImage* hgCreateImage(HgArena* arena, const HgCreateImage& create);
-
-/**
- * Destroy a gpu image
- */
-void hgDestroyImage(HgImage* image);
-
-/**
- * Config for hgVkCreateImage
- */
-struct HgCreateVkImageView
-{
-    /**
-     * The image to create a view of, must not be nullptr
-     */
-    VkImage image = nullptr;
-    /**
-     * The dimensions of the image
-     */
-    VkImageViewType type = VK_IMAGE_VIEW_TYPE_2D;
-    /**
-     * The format of the image, must not be UNDEFINED
-     */
-    VkFormat format = VK_FORMAT_UNDEFINED;
-    /**
-     * The subresource, aspect must not be 0
-     */
-    VkImageSubresourceRange subresource = {0, 0, 1, 0, 1};
-    /**
-     * The component swizzles
-     */
-    VkComponentMapping components = {};
-};
-
-/**
- * Create a Vulkan image
- */
-VkImageView hgCreateVkImageView(const HgCreateVkImageView& create);
-
-/**
- * A view into a gpu image
- */
-struct HgImageView
-{
-    /**
-     * The view
-     */
-    VkImageView view;
-    /**
-     * The image viewed
-     */
-    HgImage* image;
-    /**
-     * The type of view
-     */
-    VkImageViewType type;
-    /**
-     * The image aspect
-     */
-    VkImageAspectFlags aspectFlags;
-    /**
-     * The first mip level
-     */
-    u32 baseMipLevel;
-    /**
-     * The number of mip levels including the base
-     */
-    u32 levelCount;
-    /**
-     * The first array layer
-     */
-    u32 baseArrayLayer;
-    /**
-     * The number of array layers including the base
-     */
-    u32 layerCount;
-};
-
-/**
- * Config for hgVkCreateImage
- */
-struct HgCreateImageView
-{
-    /**
-     * The image to create a view of, must not be nullptr
-     */
-    HgImage* image = nullptr;
-    /**
-     * The dimensions of the image
-     */
-    VkImageViewType type = VK_IMAGE_VIEW_TYPE_2D;
-    /**
-     * The image aspect, must not be none
-     */
-    VkImageAspectFlags aspectFlags = VK_IMAGE_ASPECT_NONE;
-    /**
-     * The first mip level
-     */
-    u32 baseMipLevel = 0;
-    /**
-     * The number of mip levels including the base
-     */
-    u32 levelCount = 1;
-    /**
-     * The first array layer
-     */
-    u32 baseArrayLayer = 0;
-    /**
-     * The number of array layers including the base
-     */
-    u32 layerCount = 1;
-};
-
-/**
- * Create a Vulkan image
- */
-HgImageView* hgCreateImageView(
-    HgArena* arena,
-    HgImage* image,
-    VkImageViewType type,
-    VkImageSubresourceRange subresource);
-
-/**
- * Config for hgCreateVkSampler
- */
-struct HgCreateVkSampler
-{
-    /**
-     * The filter used for sampling
-     */
-    VkFilter filter;
-    /**
-     * How addresses past the edge are handled
-     */
-    VkSamplerAddressMode addressMode;
-    /**
-     * The border color, if addressMode uses a border
-     */
-    VkBorderColor borderColor;
-    /**
-     * The load bias
-     */
-    f32 mipLodBias = 0.0f;
-    /**
-     * The min clamp lod
-     */
-    f32 minLod = 0.0f;
-    /**
-     * The max clamp, or 1000.0f for no max
-     */
-    f32 maxLod = 1000.0f;
-};
-
-/**
- * Create a Vulkan sampler
- */
-VkSampler hgCreateVkSampler(const HgCreateVkSampler& create);
-
-/**
- * Config for hgWriteVkImage
- */
-struct HgWriteVkImage
-{
-    /**
-     * The image to write to, must not be nullptr
-     */
-    VkImage dstImage = nullptr;
-    /**
-     * The subresource of the image to write to
-     */
-    VkImageSubresourceLayers subresource = {0, 0, 0, 1};
-    /**
-     * The data to write, must not be nullptr
-     */
-    const void* srcData = nullptr;
-    /**
-     * The width of the image in pixels, must be greater than 0
-     */
-    u32 width = 1;
-    /**
-     * The width of the image in pixels, must be greater than 0
-     */
-    u32 height = 1;
-    /**
-     * The width of the image in pixels, must be greater than 0
-     */
-    u32 depth = 1;
-    /**
-     * The format of each pixel, must not be UNDEFINED
-     */
-    VkFormat format = VK_FORMAT_UNDEFINED;
-    /**
-     * The layout to transition to after transfering
-     */
-    VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
-};
-
-/**
- * Writes to a Vulkan device local image through a staging buffer
- */
-void hgWriteVkImage(const HgWriteVkImage& config);
-
-/**
- * Writes to a Vulkan device local cubemap image through a staging buffer
- *
- * Note, config.width and config.height are interpreted as the width and height
- * of each face of the cubemap and srcData is assumed to be layed out as:
- *  #
- * ####
- *  #
- */
-void hgWriteVkImageCubemap(const HgWriteVkImage &config);
-
-/**
- * Write to a gpu image
- *
- * Parameters
- * - dst The image to write to
- * - subresource The subresource of the image to write to
- * - src The data to read from
- * - layout The final layout to set the image to
- */
-void hgWriteImage(
-    HgImage* dst,
-    VkImageSubresourceLayers subresource,
-    const void* src,
-    VkImageLayout layout);
-
-/**
- * Write to a gpu image cubemap
- *
- * Note, dst should have 6 array layers, all of which will be filled
- *
- * Note, srcData is assumed to be layed out as:
- *  #
- * ####
- *  #
- *
- * Parameters
- * - dst The image to write to
- * - subresource The subresource of the image to write to
- * - src The data to read from
- * - layout The final layout to set the image to
- */
-void hgWriteImageCubemap(
-    HgImage* dst,
-    VkImageSubresourceLayers subresource,
-    const void* src,
-    VkImageLayout layout);
-
-/**
- * Config for hgReadVkImage
- */
-struct HgReadVkImage
-{
-    /**
-     * The location to write to, must not be nullptr
-     */
-    void* dst = nullptr;
-    /**
-     * The image to read from, must not be nullptr
-     */
-    VkImage srcImage = nullptr;
-    /**
-     * The layout the image was in before reading, must not be UNDEFINED
-     */
-    VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
-    /**
-     * The subresource of the image to read from
-     */
-    VkImageSubresourceLayers subresource = {0, 0, 0, 1};
-    /**
-     * The width of the image in pixels, must be greater than 0
-     */
-    u32 width = 1;
-    /**
-     * The width of the image in pixels, must be greater than 0
-     */
-    u32 height = 1;
-    /**
-     * The width of the image in pixels, must be greater than 0
-     */
-    u32 depth = 1;
-    /**
-     * The format of each pixel, must not be UNDEFINED
-     */
-    VkFormat format = VK_FORMAT_UNDEFINED;
-};
-
-/**
- * Reads from a Vulkan device local image through a staging buffer
- */
-void hgReadVkImage(const HgReadVkImage& config);
-
-/**
- * Read from a gpu image
- *
- * Parameters
- * - src The pointer to write to
- * - dst The image to read from
- * - subresource The subresource of the image to read from
- * - layout The final layout to set the image to
- */
-void hgReadImage(
-    void* dst,
-    HgImage* src,
-    VkImageSubresourceLayers subresource,
-    VkImageLayout layout);
-
-/**
- * Config for hgGenerateVkImageMipmaps
- */
-struct HgGenerateVkImageMipmaps
-{
-    /**
-     * The image to generate mipmaps in, must not be nullptr
-     */
-    VkImage image = nullptr;
-    /**
-     * The image aspects to use, must not be 0
-     */
-    VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_NONE;
-    /**
-     * The layout the image was in before, must not be UNDEFINED
-     */
-    VkImageLayout oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    /**
-     * The layout the image will be set to, must not be UNDEFINED
-     */
-    VkImageLayout newLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    /**
-     * The width of the base level, must be greater than 0
-     */
-    u32 width = 1;
-    /**
-     * The width of the base level, must be greater than 0
-     */
-    u32 height = 1;
-    /**
-     * The width of the base level, must be greater than 0
-     */
-    u32 depth = 1;
-    /**
-     * The total number of mips in the image, must be greater than 0
-     */
-    u32 mipCount = 0;
-};
-
-/**
- * Generates mipmaps from the base level
- */
-void hgGenerateVkImageMipmaps(const HgGenerateVkImageMipmaps& config);
-
-/**
- * Generates mipmaps from the base level
- *
- * Parameters
- * - image The image to generate mipmaps for
- * - aspectFlags The image aspect flags
- * - oldLayout The layout the image was in before
- * - newLayout The layout the image will be set to after
- */
-void hgGenerateMipmaps(
-    HgImage* image,
-    VkImageAspectFlags aspectFlags,
-    VkImageLayout oldLayout,
-    VkImageLayout newLayout);
-
-/**
- * Create a descriptor set layout
- *
- * Parameters
- * - bindings The bindings in the descriptor set
- * - bindingCount The number of bindings
- */
-VkDescriptorSetLayout hgCreateVkDescriptorSetLayout(
-    const VkDescriptorSetLayoutBinding* bindings,
-    u32 bindingCount);
-
-/**
- * Create a pipeline layout
- *
- * Parameters
- * - setLayouts The descriptor set layouts
- * - setLayoutCount The number of set layouts
- * - pushRanges The push constant ranges
- * - pushRangeCount The number of push ranges
- */
-VkPipelineLayout hgCreateVkPipelineLayout(
-    VkDescriptorSetLayout* setLayouts,
-    u32 setLayoutCount,
-    VkPushConstantRange* pushRanges,
-    u32 pushRangeCount);
-
-/**
- * Create a Vulkan shader module
- *
- * Parameters
- * - spirvCode The spirv bytecode of the shader
- * - codeSize The size of spirvCode in bytes
- */
-VkShaderModule hgCreateVkShaderModule(const u8* spirvCode, u64 codeSize);
-
-/**
- * Config for hgCreateVkGraphicsPipeline
- */
-struct HgCreateVkGraphicsPipeline
-{
-    /**
-     * The format of the color attachments, none can be UNDEFINED
-     */
-    const VkFormat* colorAttachmentFormats = nullptr;
-    /**
-     * The number of color attachment formats
-     */
-    u32 colorAttachmentCount = 0;
-    /**
-     * The format of the depth attachment, no depth attachment if UNDEFINED
-     */
-    VkFormat depthAttachmentFormat = VK_FORMAT_UNDEFINED;
-    /**
-     * The format of the stencil attachment, no stencil attachment if UNDEFINED
-     */
-    VkFormat stencilAttachmentFormat = VK_FORMAT_UNDEFINED;
-    /**
-     * The vertex shader code
-     */
-    VkShaderModule vertexShader = nullptr;
-    /**
-     * The fragment shader code
-     */
-    VkShaderModule fragmentShader = nullptr;
-    /**
-     * The pipeline layout
-     */
-    VkPipelineLayout layout = nullptr;
-    /**
-     * Descriptions of the vertex bindings, may be nullptr
-     */
-    const VkVertexInputBindingDescription* vertexBindings = nullptr;
-    /**
-     * The number of vertex bindings
-     */
-    u32 vertexBindingCount = 0;
-    /**
-     * Descriptions of the vertex attributes, may be nullptr
-     */
-    const VkVertexInputAttributeDescription* vertexAttributes = nullptr;
-    /**
-     * The number of vertex attributes
-     */
-    u32 vertexAttributeCount = 0;
-    /**
-     * How to interpret vertices into topology
-     */
-    VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    /**
-     * The number of patch control points in the tesselation stage
-     */
-    u32 tesselationPatchControlPoints = 0;
-    /**
-     * How polygons are drawn
-     */
-    VkPolygonMode polygonMode = VK_POLYGON_MODE_FILL;
-    /**
-     * Which face is treated as the front
-     */
-    VkFrontFace frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-    /**
-     * How many samples are used in MSAA
-     */
-    VkSampleCountFlagBits multisampleCount = VK_SAMPLE_COUNT_1_BIT;
-    /**
-     * Enables back/front face culling
-     */
-    VkCullModeFlagBits cullMode = VK_CULL_MODE_NONE;
-    /**
-     * Enables color blending using pixel alpha values
-     */
-    bool enableColorBlend = false;
-};
-
-/**
- * Creates a graphics pipeline
- *
- * Parameters
- * - config The pipeline configuration
- */
-VkPipeline hgCreateVkGraphicsPipeline(const HgCreateVkGraphicsPipeline& config);
-
-/**
- * Creates a compute pipeline
- *
- * Parameters
- * - layout The pipeline layout, must not be nullptr
- * - shader The compute shader, must not be nullptr
- */
-VkPipeline hgCreateVkComputePipeline(VkPipelineLayout layout, const VkShaderModule shader);
-
-/**
- * Create a descriptor pool
- *
- * Parameters
- * - maxSets The max number of sets which can be allocated
- * - sizes The numbers of each descriptor type to allocate
- * - sizeCount The number of sizes
- * - flags Extra flags passed to the create info struct, if any
- */
-VkDescriptorPool hgCreateVkDescriptorPool(
-    u32 maxSets,
-    VkDescriptorPoolSize* sizes,
-    u32 sizeCount,
-    VkDescriptorPoolCreateFlags flags = 0);
-
-/**
- * Allocate a single descriptor set
- *
- * Parameters
- * - pool The descriptor pool to allocate from
- * - layout The layout of the set
- */
-VkDescriptorSet hgCreateVkDescriptorSet(VkDescriptorPool pool, VkDescriptorSetLayout layout);
-
-/**
- * Update a descriptor set binding
- *
- * Parameters
- * - set The descriptor set to update
- * - binding The binding in the set
- * - type The descriptor type
- * - info The image infos to update to
- * - count The number of descriptors
- */
-void hgUpdateVkDescriptorSet(
-    VkDescriptorSet set,
-    u32 binding,
-    VkDescriptorType type,
-    const VkDescriptorBufferInfo* bufferInfos,
-    const VkDescriptorImageInfo* imageInfos,
-    u32 count);
-
-/**
- * Begin a command buffer to be executed once
- *
- * Returns
- * - The command buffer to record, will never be nullptr
- */
-VkCommandBuffer hgBeginVkCmd();
-
-/**
- * Execute the command buffer and wait for completion
- *
- * Parameters
- * - cmd The command buffer from hgvkBeginCommands, must not be nullptr
- */
-void hgEndVkCmd(VkCommandBuffer cmd);
-
-/**
- * The image id used by HgRenderer
- */
-using HgImageRenderID = u64;
-
-/**
- * The buffer id used by HgRenderer
- */
-using HgBufferRenderID = u64;
-
-/**
- * A rendering attachment
- */
-struct HgRenderAttachment
-{
-    /**
-     * The image attached
-     */
-    HgImageRenderID image = (u64)-1;
-    /**
-     * How the image will be loaded
-     */
-    VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    /**
-     * How the image will be stored
-     */
-    VkAttachmentStoreOp storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    /**
-     * What to clear the image to if cleared
-     */
-    VkClearValue clearValue = {};
-};
-
-/**
- * A render pass description
- */
-struct HgRenderPass
-{
-    /**
-     * The uniforms buffer dependencies
-     */
-    const HgBufferRenderID* uniformBuffers = nullptr;
-    /**
-     * The number of uniform buffers
-     */
-    u32 uniformBufferCount = 0;
-    /**
-     * The storage buffer dependencies
-     */
-    const HgBufferRenderID* storageBuffers = nullptr;
-    /**
-     * The number of storage buffers
-     */
-    u32 storageBufferCount = 0;
-    /**
-     * The sampled image dependencies
-     */
-    const HgImageRenderID* sampledImages = nullptr;
-    /**
-     * The number of sampled images
-     */
-    u32 sampledImageCount = 0;
-    /**
-     * The number of layers in each color attachment to write to
-     */
-    u32 layerCount = 1;
-    /**
-     * The color images to write to
-     */
-    const HgRenderAttachment* colorAttachments = nullptr;
-    /**
-     * The number of color attachments
-     */
-    u32 colorAttachmentCount = 0;
-    /**
-     * The depth attachment, if any
-     */
-    HgRenderAttachment depthAttachment = {};
-    /**
-     * The stencil attachment, if any
-     */
-    HgRenderAttachment stencilAttachment = {};
-};
-
-/**
- * Where resources used in rendering can be used
- */
-enum HgRenderUsage
-{
-    HgRenderUsage_none = 0,
-    HgRenderUsage_vertexBuffer,
-    HgRenderUsage_indexBuffer,
-    HgRenderUsage_graphicsShader,
-    HgRenderUsage_graphicsUniformBuffer,
-    HgRenderUsage_computeShader,
-    HgRenderUsage_computeUniformBuffer,
-    HgRenderUsage_colorAttachment,
-    HgRenderUsage_depthAttachment,
-    HgRenderUsage_stencilAttachment,
-    HgRenderUsage_transfer,
-    HgRenderUsage_presentSrc,
-    HgRenderUsage_count,
-};
-
-/**
- * How resources used in rendering can be accessed
- */
-enum HgRenderAccess
-{
-    HgRenderAccess_none = 0x0,
-    HgRenderAccess_read = 0x1,
-    HgRenderAccess_write = 0x2,
-    HgRenderAccess_readWrite = HgRenderAccess_read | HgRenderAccess_write,
-};
-
-/**
- * An image dependency barrier
- */
-struct HgImageBarrier
-{
-    /**
-     * The image to sychronize
-     */
-    HgImageRenderID image = (u64)-1;
-    /**
-     * How the image will next be used
-     */
-    HgRenderUsage nextUsage = HgRenderUsage_none;
-    /**
-     * How the image will next be accessed
-     */
-    HgRenderAccess nextAccess = HgRenderAccess_none;
-};
-
-/**
- * A buffer dependency barrier
- */
-struct HgBufferBarrier
-{
-    /**
-     * The buffer to sychronize
-     */
-    HgBufferRenderID buffer = (u64)-1;
-    /**
-     * How the buffer will next be used
-     */
-    HgRenderUsage nextUsage = HgRenderUsage_none;
-    /**
-     * How the buffer will next be accessed
-     */
-    HgRenderAccess nextAccess = HgRenderAccess_none;
-};
-
-/**
- * A renderer to organize render passes and synchronize resources
- */
-struct HgRenderer
-{
-    /**
-     * An image resource
-     */
-    struct Image
-    {
-        /**
-         * The image
-         */
-        VkImage handle;
-        /**
-         * The image view
-         */
-        VkImageView view;
-        /**
-         * The image subresource
-         */
-        VkImageSubresourceRange subresource;
-        /**
-         * The image's last usage
-         */
-        HgRenderUsage lastUsage;
-        /**
-         * The image's last access
-         */
-        HgRenderAccess lastAccess;
-    };
-
-    /**
-     * A buffer resource
-     */
-    struct Buffer
-    {
-        /**
-         * The buffer
-         */
-        VkBuffer handle;
-        /**
-         * The offset into the buffer in bytes
-         */
-        u64 offset;
-        /**
-         * The size of the buffer in bytes
-         */
-        u64 size;
-        /**
-         * The buffer's last usage
-         */
-        HgRenderUsage lastUsage;
-        /**
-         * The buffer's last access
-         */
-        HgRenderAccess lastAccess;
-    };
-
-    /**
-     * The buffer resources
-     */
-    Buffer* buffers;
-    /**
-     * The number of active buffer resources
-     */
-    u32 bufferCount;
-    /**
-     * The max buffer resources
-     */
-    u32 bufferCapacity;
-    /**
-     * The image resources
-     */
-    Image* images;
-    /**
-     * The number of active image resources
-     */
-    u32 imageCount;
-    /**
-     * The max image resources
-     */
-    u32 imageCapacity;
-
-    /**
-     * Create a new renderer
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - maxImages The max number of image resources
-     * - maxBuffers The max number of buffer resources
-     */
-    static HgRenderer create(HgArena* arena, u32 maxImages, u32 maxBuffers);
-
-    /**
-     * Removes all resources
-     */
-    void reset();
-
-    /**
-     * Add a buffer resource
-     *
-     * Parameters
-     * - buffer The buffer to add, must not be nullptr
-     * - offset The offset into the buffer in bytes
-     * - size The size of the buffer in bytes
-     * - previousUsage The last usage of the buffer, if any
-     * - previousAccess The last access of the buffer, if any
-     *
-     * Returns
-     * - The buffer resource's id
-     */
-    HgBufferRenderID addBuffer(
-        VkBuffer buffer,
-        u64 offset,
-        u64 size,
-        HgRenderUsage previousUsage = HgRenderUsage_none,
-        HgRenderAccess previousAccess = HgRenderAccess_none);
-
-    /**
-     * Add a image resource
-     *
-     * Parameters
-     * - image The image to add, must not be nullptr
-     * - view The image's view, must not be nullptr
-     * - subresource The subresource of the image
-     * - previousUsage The last usage of the image, if any
-     * - previousAccess The last access of the image, if any
-     *
-     * Returns
-     * - The image resource's id
-     */
-    HgImageRenderID addImage(
-        VkImage image,
-        VkImageView view,
-        VkImageSubresourceRange subresource,
-        HgRenderUsage previousUsage = HgRenderUsage_none,
-        HgRenderAccess previousAccess = HgRenderAccess_none);
-
-    /**
-     * Creates a barrier for resource uses that are not part of a render pass
-     *
-     * Parameters
-     * - cmd The command buffer
-     * - bufferBarriers The buffer barriers
-     * - bufferBarrierCount The number of buffer barriers
-     * - imageBarriers The image barriers
-     * - imageBarrierCount The number of image barriers
-     */
-    void barrier(
-        VkCommandBuffer cmd,
-        const HgBufferBarrier* bufferBarriers,
-        u32 bufferBarrierCount,
-        const HgImageBarrier* imageBarriers,
-        u32 imageBarrierCount);
-
-    /**
-     * Begins a render pass
-     *
-     * Parameters
-     * - cmd The command buffer
-     * - width The width of the render area
-     * - height The height of the render area
-     * - pass The render pass description
-     */
-    void beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgRenderPass& pass);
-
-    /**
-     * Ends the render pass
-     *
-     * Parameters
-     * - cmd The command buffer
-     */
-    void endPass(VkCommandBuffer cmd);
-};
-
-/**
  * Initializes global resources for windowing
  */
 void hgInitPlatform();
@@ -5905,11 +5521,11 @@ struct HgWindow
     /**
      * The swapchain images
      */
-    VkImage* images;
+    HgImage* images;
     /**
      * The swapchain image views
      */
-    VkImageView* views;
+    HgImageView* views;
     /**
      * How the swapchain images are used
      */

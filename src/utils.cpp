@@ -581,7 +581,7 @@ HgMat4 hgViewMatrix(const HgVec3& position, const HgVec3& zoom, const HgQuat& ro
     return rot * pos;
 }
 
-HgMat4 hgOrthographicProjection(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far)
+HgMat4 hgOrthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far)
 {
     return HgMat4{
         HgVec4{2.0f / (right - left), 0.0f, 0.0f, 0.0f},
@@ -591,7 +591,7 @@ HgMat4 hgOrthographicProjection(f32 left, f32 right, f32 top, f32 bottom, f32 ne
     };
 }
 
-HgMat4 hgPerspectiveProjection(f32 fov, f32 aspect, f32 near, f32 far)
+HgMat4 hgPerspective(f32 fov, f32 aspect, f32 near, f32 far)
 {
     hgAssert(near > 0.0f);
     hgAssert(far > near);

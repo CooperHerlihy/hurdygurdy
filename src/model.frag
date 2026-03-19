@@ -7,33 +7,39 @@ layout (location = 1) in vec3 fNorm;
 layout (location = 2) in vec4 fTan;
 layout (location = 3) in vec2 fUV;
 
-layout (set = 0, binding = 0) uniform UViewProjection {
+layout (set = 0, binding = 0) uniform UViewProjection
+{
     mat4 uProj;
     mat4 uView;
     uint uDirLightCount;
     uint uPointLightCount;
 };
 
-struct DirectionalLight {
+struct DirectionalLight
+{
     vec4 dir;
     vec4 color;
 };
-layout (set = 0, binding = 1) readonly buffer DirectionalLights {
+layout (set = 0, binding = 1) readonly buffer DirectionalLights
+{
     DirectionalLight uDirLights[];
 };
 
-struct PointLight {
+struct PointLight
+{
     vec4 pos;
     vec4 color;
 };
-layout (set = 0, binding = 2) readonly buffer PointLights {
+layout (set = 0, binding = 2) readonly buffer PointLights
+{
     PointLight uPointLights[];
 };
 
 // [0] = color map, [1] = normal map
 layout (set = 1, binding = 0) uniform sampler2D uTextures[2];
 
-float blinnPhong(vec3 normal, vec3 lightDir, float shininess, float kd, float ks) {
+float blinnPhong(vec3 normal, vec3 lightDir, float shininess, float kd, float ks)
+{
     float ambient = 0.03;
     float diffuse = max(dot(normal, lightDir), 0.0);
     float specular = diffuse > 0.0
@@ -42,7 +48,8 @@ float blinnPhong(vec3 normal, vec3 lightDir, float shininess, float kd, float ks
     return ambient + diffuse * kd + specular * ks;
 };
 
-void main() {
+void main()
+{
     mat3 texToModel = mat3(
         fTan.xyz,
         cross(fTan.xyz, fNorm) * fTan.w,

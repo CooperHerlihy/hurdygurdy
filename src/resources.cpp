@@ -480,9 +480,8 @@ void hgDeinitTextures()
     gpuTextures.forEach([](HgResource, void* ptex)
     {
         HgTextureResource& tex = *(HgTextureResource*)ptex;
-        vkDestroySampler(hgVkDevice, tex.sampler, nullptr);
-        vkDestroyImageView(hgVkDevice, tex.view, nullptr);
-        vmaDestroyImage(hgVkVma, tex.image, tex.allocation);
+        hgDestroyImageView(tex.view);
+        hgDestroyImage(tex.image);
     });
     gpuTextures.destroy();
 }
@@ -495,45 +494,36 @@ void hgLoadTexture(HgResource id, VkSampler sampler)
         hgAssert(hgGetResource(id)->data != nullptr);
         HgImageData data = *hgGetResource(id);
 
-        HgTextureResource& tex = *(HgTextureResource*)gpuTextures.get(id);;
-        if (!data.getInfo(&tex.format, &tex.width, &tex.height, &tex.depth))
+        VkFormat format;
+        u32 width, height, depth;
+        if (!data.getInfo(&format, &width, &height, &depth))
         {
             hgWarn("Could not get info to load texture\n");
             return;
         }
-        hgAssert(tex.width != 0);
-        hgAssert(tex.height != 0);
-        hgAssert(tex.depth != 0);
-        hgAssert(tex.format != 0);
+        hgAssert(format != 0);
+        hgAssert(width != 0);
+        hgAssert(height != 0);
+        hgAssert(depth != 0);
 
-        HgCreateVkImage imageInfo{};
-        imageInfo.width = tex.width;
-        imageInfo.height = tex.height;
-        imageInfo.depth = tex.depth;
-        imageInfo.format = tex.format;
+        HgTextureResource& tex = *(HgTextureResource*)gpuTextures.get(id);;
+
+        HgCreateImageEx imageInfo{};
+        imageInfo.format = format;
+        imageInfo.width = width;
+        imageInfo.height = height;
+        imageInfo.depth = depth;
         imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 
-        hgCreateVkImage(&tex.image, &tex.allocation, imageInfo);
+        tex.image = hgCreateImageEx(imageInfo);
 
-        HgWriteVkImage stagingConfig{};
-        stagingConfig.dstImage = tex.image;
-        stagingConfig.subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        stagingConfig.srcData = data.getPixels();
-        stagingConfig.width = tex.width;
-        stagingConfig.height = tex.height;
-        stagingConfig.depth = tex.depth;
-        stagingConfig.format = tex.format;
-        stagingConfig.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        hgWriteImage(
+            tex.image,
+            {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+            data.getPixels(),
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-        hgWriteVkImage(stagingConfig);
-
-        HgCreateVkImageView viewInfo{};
-        viewInfo.image = tex.image;
-        viewInfo.format = tex.format;
-        viewInfo.subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-
-        tex.view = hgCreateVkImageView(viewInfo);
-        hgAssert(tex.view != nullptr);
+        tex.view = hgCreateImageView(tex.image, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
 
         hgAssert(sampler != nullptr);
         tex.sampler = sampler;
@@ -545,8 +535,8 @@ void hgUnloadTexture(HgResource id)
     HgTextureResource tex;
     if (gpuTextures.unload(id, &tex))
     {
-        vkDestroyImageView(hgVkDevice, tex.view, nullptr);
-        vmaDestroyImage(hgVkVma, tex.image, tex.allocation);
+        hgDestroyImageView(tex.view);
+        hgDestroyImage(tex.image);
         tex = {};
     }
 }
@@ -568,8 +558,8 @@ void hgDeinitModels()
     gpuModels.forEach([](HgResource, void* pmodel)
     {
         HgModelResource& model = *(HgModelResource*)pmodel;
-        vmaDestroyBuffer(hgVkVma, model.vertexBuffer, model.vertexAlloc);
-        vmaDestroyBuffer(hgVkVma, model.indexBuffer, model.indexAlloc);
+        hgDestroyBuffer(model.vertexBuffer);
+        hgDestroyBuffer(model.indexBuffer);
     });
     gpuModels.destroy();
 }
@@ -594,25 +584,25 @@ void hgLoadModel(HgResource id)
             return;
         }
 
-        hgCreateVkBuffer(
-            &model.vertexBuffer,
-            &model.vertexAlloc,
+        model.vertexBuffer = hgCreateBuffer(
             model.vertexCount * model.vertexWidth,
             VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
 
-        hgCreateVkBuffer(
-            &model.indexBuffer,
-            &model.indexAlloc,
+        model.indexBuffer = hgCreateBuffer(
             model.indexCount * sizeof(u32),
             VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
 
-        hgWriteVkBuffer(
-            model.vertexBuffer, 0,
-            data.getVertexData(), model.vertexCount * model.vertexWidth);
+        hgWriteBuffer(
+            model.vertexBuffer,
+            0,
+            data.getVertexData(),
+            model.vertexCount * model.vertexWidth);
 
-        hgWriteVkBuffer(
-            model.indexBuffer, 0,
-            data.getIndexData(), model.indexCount * sizeof(u32));
+        hgWriteBuffer(
+            model.indexBuffer,
+            0,
+            data.getIndexData(),
+            model.indexCount * sizeof(u32));
     }
 }
 
@@ -621,7 +611,8 @@ void hgUnloadModel(HgResource id)
     HgModelResource model;
     if (gpuModels.unload(id, &model))
     {
-        vmaDestroyBuffer(hgVkVma, model.indexBuffer, model.indexAlloc);
+        hgDestroyBuffer(model.vertexBuffer);
+        hgDestroyBuffer(model.indexBuffer);
     }
 }
 

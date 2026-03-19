@@ -6,7 +6,8 @@ layout (location = 0) in vec2 vUV;
 
 layout (set = 1, binding = 0) uniform sampler2D uSprite;
 
-void main() {
+void main()
+{
     outColor = texture(uSprite, vUV);
 }
 
