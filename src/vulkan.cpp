@@ -1823,13 +1823,13 @@ HgRenderer HgRenderer::create(HgArena* arena, u32 maxBuffers, u32 maxImages)
 
 void HgRenderer::reset()
 {
-    buffers.reset();
-    images.reset();
+    buffers.empty();
+    images.empty();
 }
 
 void HgRenderer::setBuffer(HgBuffer* buffer, VkPipelineStageFlags lastStage, VkAccessFlags lastAccess)
 {
-    buffers[buffer] = {lastStage, lastAccess};
+    buffers.add(buffer, {lastStage, lastAccess});
 }
 
 void HgRenderer::setImage(
@@ -1838,7 +1838,7 @@ void HgRenderer::setImage(
     VkAccessFlags lastAccess,
     VkImageLayout lastLayout)
 {
-    images[image] = {lastStage, lastAccess, lastLayout};
+    images.add(image, {lastStage, lastAccess, lastLayout});
 }
 
 void HgRenderer::barrier(
@@ -1856,32 +1856,36 @@ void HgRenderer::barrier(
 
     for (u32 i = 0; i < bufferBarrierCount; ++i)
     {
-        Buffer& buffer = buffers[bufferBarriers[i].buffer];
+        Buffer* buffer = buffers.get(bufferBarriers[i].buffer);
+        if (buffer == nullptr)
+            buffer = buffers.add(bufferBarriers[i].buffer);
 
         vkBufferBarriers[i] = {};
         vkBufferBarriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
-        vkBufferBarriers[i].srcStageMask = buffer.lastPipelineStage;
-        vkBufferBarriers[i].srcAccessMask = buffer.lastAccess;
+        vkBufferBarriers[i].srcStageMask = buffer->lastPipelineStage;
+        vkBufferBarriers[i].srcAccessMask = buffer->lastAccess;
         vkBufferBarriers[i].dstStageMask = bufferBarriers[i].nextPipelineStage;
         vkBufferBarriers[i].dstAccessMask = bufferBarriers[i].nextAccess;
         vkBufferBarriers[i].buffer = bufferBarriers[i].buffer->buffer;
         vkBufferBarriers[i].size = bufferBarriers[i].buffer->size;
 
-        buffer.lastPipelineStage = bufferBarriers[i].nextPipelineStage;
-        buffer.lastAccess = bufferBarriers[i].nextAccess;
+        buffer->lastPipelineStage = bufferBarriers[i].nextPipelineStage;
+        buffer->lastAccess = bufferBarriers[i].nextAccess;
     }
 
     for (u32 i = 0; i < imageBarrierCount; ++i)
     {
-        Image& image = images[imageBarriers[i].image];
+        Image* image = images.get(imageBarriers[i].image);
+        if (image == nullptr)
+            image = images.add(imageBarriers[i].image);
 
         vkImageBarriers[i] = {};
         vkImageBarriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-        vkImageBarriers[i].srcStageMask = image.lastPipelineStage;
-        vkImageBarriers[i].srcAccessMask = image.lastAccess;
+        vkImageBarriers[i].srcStageMask = image->lastPipelineStage;
+        vkImageBarriers[i].srcAccessMask = image->lastAccess;
         vkImageBarriers[i].dstStageMask = imageBarriers[i].nextPipelineStage;
         vkImageBarriers[i].dstAccessMask = imageBarriers[i].nextAccess;
-        vkImageBarriers[i].oldLayout = image.lastLayout;
+        vkImageBarriers[i].oldLayout = image->lastLayout;
         vkImageBarriers[i].newLayout = imageBarriers[i].nextLayout;
         vkImageBarriers[i].image = imageBarriers[i].image->image->image;
         vkImageBarriers[i].subresourceRange = {
@@ -1892,9 +1896,9 @@ void HgRenderer::barrier(
             imageBarriers[i].image->layerCount,
         };
 
-        image.lastPipelineStage = imageBarriers[i].nextPipelineStage;
-        image.lastAccess = imageBarriers[i].nextAccess;
-        image.lastLayout = imageBarriers[i].nextLayout;
+        image->lastPipelineStage = imageBarriers[i].nextPipelineStage;
+        image->lastAccess = imageBarriers[i].nextAccess;
+        image->lastLayout = imageBarriers[i].nextLayout;
     }
 
     VkDependencyInfo dep{};
@@ -1922,21 +1926,23 @@ void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgR
 
     for (u32 i = bufferBarrierCount; i < bufferBarrierCount + pass.uniformBufferCount; ++i)
     {
-        Buffer& buffer = buffers[pass.uniformBuffers[i - bufferBarrierCount]];
+        Buffer* buffer = buffers.get(pass.uniformBuffers[i - bufferBarrierCount]);
+        if (buffer == nullptr)
+            buffer = buffers.add(pass.uniformBuffers[i - bufferBarrierCount]);
 
         bufferBarriers[i] = {};
         bufferBarriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
-        bufferBarriers[i].srcStageMask = buffer.lastPipelineStage;
-        bufferBarriers[i].srcAccessMask = buffer.lastAccess;
+        bufferBarriers[i].srcStageMask = buffer->lastPipelineStage;
+        bufferBarriers[i].srcAccessMask = buffer->lastAccess;
         bufferBarriers[i].dstStageMask = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT
                                        | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
         bufferBarriers[i].dstAccessMask = VK_ACCESS_UNIFORM_READ_BIT;
         bufferBarriers[i].buffer = pass.uniformBuffers[i - bufferBarrierCount]->buffer;
         bufferBarriers[i].size = pass.uniformBuffers[i - bufferBarrierCount]->size;
 
-        buffer.lastPipelineStage = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT
+        buffer->lastPipelineStage = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT
                                  | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-        buffer.lastAccess = VK_ACCESS_UNIFORM_READ_BIT;
+        buffer->lastAccess = VK_ACCESS_UNIFORM_READ_BIT;
     }
 
     bufferBarrierCount += pass.uniformBufferCount;
@@ -1946,21 +1952,23 @@ void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgR
 
     for (u32 i = bufferBarrierCount; i < bufferBarrierCount + pass.storageBufferCount; ++i)
     {
-        Buffer& buffer = buffers[pass.storageBuffers[i - bufferBarrierCount]];
+        Buffer* buffer = buffers.get(pass.storageBuffers[i - bufferBarrierCount]);
+        if (buffer == nullptr)
+            buffer = buffers.add(pass.storageBuffers[i - bufferBarrierCount]);
 
         bufferBarriers[i] = {};
         bufferBarriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
-        bufferBarriers[i].srcStageMask = buffer.lastPipelineStage;
-        bufferBarriers[i].srcAccessMask = buffer.lastAccess;
+        bufferBarriers[i].srcStageMask = buffer->lastPipelineStage;
+        bufferBarriers[i].srcAccessMask = buffer->lastAccess;
         bufferBarriers[i].dstStageMask = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT
                                        | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
         bufferBarriers[i].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
         bufferBarriers[i].buffer = pass.uniformBuffers[i - bufferBarrierCount]->buffer;
         bufferBarriers[i].size = pass.uniformBuffers[i - bufferBarrierCount]->size;
 
-        buffer.lastPipelineStage = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT
+        buffer->lastPipelineStage = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT
                                  | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-        buffer.lastAccess = VK_ACCESS_SHADER_READ_BIT;
+        buffer->lastAccess = VK_ACCESS_SHADER_READ_BIT;
     }
 
     bufferBarrierCount += pass.storageBufferCount;
@@ -1970,15 +1978,17 @@ void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgR
 
     for (u32 i = imageBarrierCount; i < imageBarrierCount + pass.sampledImageCount; ++i)
     {
-        Image& image = images[pass.sampledImages[i - imageBarrierCount]];
+        Image* image = images.get(pass.sampledImages[i - imageBarrierCount]);
+        if (image == nullptr)
+            image = images.add(pass.sampledImages[i - imageBarrierCount]);
 
         imageBarriers[i] = {};
         imageBarriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-        imageBarriers[i].srcStageMask = image.lastPipelineStage;
-        imageBarriers[i].srcAccessMask = image.lastAccess;
+        imageBarriers[i].srcStageMask = image->lastPipelineStage;
+        imageBarriers[i].srcAccessMask = image->lastAccess;
         imageBarriers[i].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
         imageBarriers[i].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        imageBarriers[i].oldLayout = image.lastLayout;
+        imageBarriers[i].oldLayout = image->lastLayout;
         imageBarriers[i].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         imageBarriers[i].image = pass.sampledImages[i - imageBarrierCount]->image->image;
         imageBarriers[i].subresourceRange = {
@@ -1989,9 +1999,9 @@ void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgR
             pass.sampledImages[i - imageBarrierCount]->layerCount,
         };
 
-        image.lastPipelineStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-        image.lastAccess = VK_ACCESS_SHADER_READ_BIT;
-        image.lastLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        image->lastPipelineStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        image->lastAccess = VK_ACCESS_SHADER_READ_BIT;
+        image->lastLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     }
 
     imageBarrierCount += pass.sampledImageCount;
@@ -2001,15 +2011,17 @@ void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgR
 
     for (u32 i = imageBarrierCount; i < imageBarrierCount + pass.colorAttachmentCount; ++i)
     {
-        Image& image = images[pass.colorAttachments[i - imageBarrierCount].image];
+        Image* image = images.get(pass.colorAttachments[i - imageBarrierCount].image);
+        if (image == nullptr)
+            image = images.add(pass.colorAttachments[i - imageBarrierCount].image);
 
         imageBarriers[i] = {};
         imageBarriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-        imageBarriers[i].srcStageMask = image.lastPipelineStage;
-        imageBarriers[i].srcAccessMask = image.lastAccess;
+        imageBarriers[i].srcStageMask = image->lastPipelineStage;
+        imageBarriers[i].srcAccessMask = image->lastAccess;
         imageBarriers[i].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         imageBarriers[i].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        imageBarriers[i].oldLayout = image.lastLayout;
+        imageBarriers[i].oldLayout = image->lastLayout;
         imageBarriers[i].newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         imageBarriers[i].image = pass.colorAttachments[i - imageBarrierCount].image->image->image;
         imageBarriers[i].subresourceRange = {
@@ -2020,16 +2032,18 @@ void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgR
             pass.colorAttachments[i - imageBarrierCount].image->layerCount,
         };
 
-        image.lastPipelineStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        image.lastAccess = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        image.lastLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        image->lastPipelineStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        image->lastAccess = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        image->lastLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     }
 
     imageBarrierCount += pass.colorAttachmentCount;
 
     if (pass.depthAttachment.image != nullptr)
     {
-        Image& image = images[pass.depthAttachment.image];
+        Image* image = images.get(pass.depthAttachment.image);
+        if (image == nullptr)
+            image = images.add(pass.depthAttachment.image);
 
         imageBarriers = hgRealloc<VkImageMemoryBarrier2>(scratch, 
             imageBarriers, imageBarrierCount, imageBarrierCount + 1);
@@ -2037,13 +2051,13 @@ void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgR
         u32 idx = imageBarrierCount;
         imageBarriers[idx] = {};
         imageBarriers[idx].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-        imageBarriers[idx].srcStageMask = image.lastPipelineStage;
-        imageBarriers[idx].srcAccessMask = image.lastAccess;
+        imageBarriers[idx].srcStageMask = image->lastPipelineStage;
+        imageBarriers[idx].srcAccessMask = image->lastAccess;
         imageBarriers[idx].dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
                                         | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
         imageBarriers[idx].dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT
                                          | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        imageBarriers[idx].oldLayout = image.lastLayout;
+        imageBarriers[idx].oldLayout = image->lastLayout;
         imageBarriers[idx].newLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
         imageBarriers[idx].image = pass.depthAttachment.image->image->image;
         imageBarriers[idx].subresourceRange = {
@@ -2054,18 +2068,20 @@ void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgR
             pass.depthAttachment.image->layerCount,
         };
 
-        image.lastPipelineStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
+        image->lastPipelineStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
                                 | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-        image.lastAccess = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT
+        image->lastAccess = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT
                          | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        image.lastLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+        image->lastLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
 
         ++imageBarrierCount;
     }
 
     if (pass.stencilAttachment.image != nullptr)
     {
-        Image& image = images[pass.stencilAttachment.image];
+        Image* image = images.get(pass.stencilAttachment.image);
+        if (image == nullptr)
+            image = images.add(pass.stencilAttachment.image);
 
         imageBarriers = hgRealloc<VkImageMemoryBarrier2>(scratch, 
             imageBarriers, imageBarrierCount, imageBarrierCount + 1);
@@ -2073,13 +2089,13 @@ void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgR
         u32 idx = imageBarrierCount;
         imageBarriers[idx] = {};
         imageBarriers[idx].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-        imageBarriers[idx].srcStageMask = image.lastPipelineStage;
-        imageBarriers[idx].srcAccessMask = image.lastAccess;
+        imageBarriers[idx].srcStageMask = image->lastPipelineStage;
+        imageBarriers[idx].srcAccessMask = image->lastAccess;
         imageBarriers[idx].dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
                                         | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
         imageBarriers[idx].dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT
                                          | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        imageBarriers[idx].oldLayout = image.lastLayout;
+        imageBarriers[idx].oldLayout = image->lastLayout;
         imageBarriers[idx].newLayout = VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL;
         imageBarriers[idx].image = pass.stencilAttachment.image->image->image;
         imageBarriers[idx].subresourceRange = {
@@ -2090,11 +2106,11 @@ void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgR
             pass.stencilAttachment.image->layerCount,
         };
 
-        image.lastPipelineStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
+        image->lastPipelineStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
                                 | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-        image.lastAccess = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT
+        image->lastAccess = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT
                          | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        image.lastLayout = VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL;
+        image->lastLayout = VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL;
 
         ++imageBarrierCount;
     }

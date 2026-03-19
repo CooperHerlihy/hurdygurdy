@@ -55,12 +55,33 @@ void HgResourceManager::reset()
 
 u32 HgResourceManager::add(HgResource id)
 {
+    HgArena* scratch = hgGetScratch();
+    HgArenaScope scratchScope{scratch};
+
     if ((f32)(count + 1) >= (f32)capacity * 0.5f)
         resize(capacity * 2);
 
+    void* resource = hgAlloc(scratch, width, 16);
+    void* resourceTmp = hgAlloc(scratch, width, 16);
+
     u32 idx = id % capacity;
-    while (refCounts[idx] != (u32)-1)
+    for (u32 dist = 0; refCounts[idx] != (u32)-1; ++dist)
     {
+        u32 otherDist = ids[idx] % capacity - idx;
+        if (otherDist > capacity)
+            otherDist += capacity;
+
+        if (otherDist < dist)
+        {
+            HgResource tmpID = ids[idx];
+            ids[idx] = id;
+            id = tmpID;
+            memcpy(resourceTmp, (u8*)resources + idx * width, width);
+            memcpy((u8*)resources + idx * width, resource, width);
+            memcpy(resourceTmp, resource, width);
+            dist = otherDist;
+        }
+
         if (ids[idx] == id)
             return idx;
         idx = (idx + 1) % capacity;
@@ -88,7 +109,7 @@ void HgResourceManager::remove(HgResource id)
     u32 next = (idx + 1) % capacity;
     while (refCounts[next] % capacity != (u32)-1)
     {
-        if (ids[next] % capacity != idx)
+        if (ids[next] % capacity != next)
         {
             refCounts[idx] = refCounts[next];
             ids[idx] = ids[next];

@@ -140,7 +140,7 @@ struct HgDefer
  * Parameters
  * - code The code to run, may be placed inside braces or not
  */
-#define hgDefer(code) [[maybe_unused]] HgDefer hgMacroConcat(hgDefer_, __COUNTER__){[&]{code;}};
+#define hgDefer(code) [[maybe_unused]] HgDefer hgMacroConcat(hgDefer_, __LINE__){[&]{code;}};
 
 #ifdef HG_LOGGING
 
@@ -2379,33 +2379,14 @@ struct HgHashSet
         set.hasVal = hgAlloc<bool>(arena, slotCount);
         set.vals = hgAlloc<Value>(arena, slotCount);
         set.capacity = slotCount;
-        set.reset();
+        set.empty();
         return set;
-    }
-
-    /**
-     * Resizes the slots and rehashes all entries
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - newSize The new number of slots
-     */
-    void resize(HgArena* arena, u32 newSize)
-    {
-        HgHashSet old = *this;
-        *this = create(arena, newSize);
-
-        for (u32 i = 0; i < old.capacity; ++i)
-        {
-            if (old.hasVal[i])
-                add(old.vals[i]);
-        }
     }
 
     /**
      * Empties all slots
      */
-    void reset()
+    void empty()
     {
         for (u32 i = 0; i < capacity; ++i)
         {
@@ -2422,25 +2403,21 @@ struct HgHashSet
         hgAssert(count < capacity - 1);
 
         u32 idx = hashFn(val) % capacity;
-        u32 dist = 0;
-        while (hasVal[idx] && vals[idx] != val)
+        for (u32 dist = 0; hasVal[idx] && vals[idx] != val; ++dist)
         {
-            u32 otherDist = hashFn(vals[idx]) % capacity;
-            if (otherDist < idx)
+            u32 otherDist = hashFn(vals[idx]) % capacity - idx;
+            if (otherDist > capacity)
                 otherDist += capacity;
-            otherDist -= idx;
 
             if (otherDist < dist)
             {
                 Value valTmp = vals[idx];
                 vals[idx] = val;
                 val = valTmp;
-
                 dist = otherDist;
             }
 
             idx = (idx + 1) % capacity;
-            ++dist;
         }
 
         hasVal[idx] = true;
@@ -2466,12 +2443,12 @@ struct HgHashSet
         u32 next = (idx + 1) % capacity;
         while (hasVal[next])
         {
-            if (hashFn(vals[next]) != idx)
+            if (hashFn(vals[next]) % capacity != next)
             {
                 vals[idx] = vals[next];
                 idx = next;
             }
-            next = (next + 1)  % capacity;
+            next = (next + 1) % capacity;
         }
         hasVal[idx] = false;
         --count;
@@ -2556,33 +2533,14 @@ struct HgHashMap
         map.keys = hgAlloc<Key>(arena, slotCount);
         map.vals = hgAlloc<Value>(arena, slotCount);
         map.capacity = slotCount;
-        map.reset();
+        map.empty();
         return map;
-    }
-
-    /**
-     * Resizes the slots and rehashes all entries
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - newSize The new number of slots
-     */
-    void resize(HgArena* arena, u32 newSize)
-    {
-        HgHashMap old = *this;
-        *this = create(arena, newSize);
-
-        for (u32 i = 0; i < old.capacity; ++i)
-        {
-            if (old.hasVal[i])
-                add(old.keys[i], old.vals[i]);
-        }
     }
 
     /**
      * Empties all slots
      */
-    void reset()
+    void empty()
     {
         for (u32 i = 0; i < capacity; ++i)
         {
@@ -2600,20 +2558,16 @@ struct HgHashMap
      * Returns
      * - A reference to the added value
      */
-    Value& add(Key key)
+    Value* add(Key key, Value val = {})
     {
         hgAssert(count < capacity - 1);
 
-        Value val{};
-
         u32 idx = hashFn(key) % capacity;
-        u32 dist = 0;
-        while (hasVal[idx] && keys[idx] != key)
+        for (u32 dist = 0; hasVal[idx] && keys[idx] != key; ++dist)
         {
-            u32 otherDist = hashFn(keys[idx]) % capacity;
-            if (otherDist < idx)
+            u32 otherDist = hashFn(keys[idx]) % capacity - idx;
+            if (otherDist > capacity)
                 otherDist += capacity;
-            otherDist -= idx;
 
             if (otherDist < dist)
             {
@@ -2623,12 +2577,10 @@ struct HgHashMap
                 vals[idx] = val;
                 key = keyTmp;
                 val = valTmp;
-
                 dist = otherDist;
             }
 
             idx = (idx + 1) % capacity;
-            ++dist;
         }
 
         hasVal[idx] = true;
@@ -2636,7 +2588,7 @@ struct HgHashMap
         vals[idx] = val;
         ++count;
 
-        return vals[idx];
+        return vals + idx;
     }
 
     /**
@@ -2667,7 +2619,7 @@ struct HgHashMap
         u32 next = (idx + 1) % capacity;
         while (hasVal[next])
         {
-            if (hashFn(keys[next]) != idx)
+            if (hashFn(keys[next]) % capacity != next)
             {
                 keys[idx] = keys[next];
                 vals[idx] = vals[next];
@@ -2675,7 +2627,6 @@ struct HgHashMap
             }
             next = (next + 1)  % capacity;
         }
-
         hasVal[idx] = false;
         --count;
 
@@ -2683,50 +2634,19 @@ struct HgHashMap
     }
 
     /**
-     * Checks whether a key-value pair exists
+     * Gets the value stored at a key
+     *
+     * Returns
+     * - A pointer to the value, or nullptr if it does not exist
      */
-    bool has(const Key& key) const
+    Value* get(const Key& key) const
     {
         for (u32 idx = hashFn(key) % capacity; hasVal[idx]; idx = (idx + 1) % capacity)
         {
             if (keys[idx] == key)
-                return true;
+                return vals + idx;
         }
-        return false;
-    }
-
-    /**
-     * Get a reference to the value stored at a key
-     *
-     * Note, if the key is not in the hash map, it will be added
-     *
-     * Parameters
-     * - The key to lookup
-     */
-    Value& operator[](const Key& key)
-    {
-        for (u32 idx = hashFn(key) % capacity; hasVal[idx]; idx = (idx + 1) % capacity)
-        {
-            if (keys[idx] == key)
-                return vals[idx];
-        }
-        return add(key) = {};
-    }
-
-    /**
-     * Get a reference to the value stored at a key, in a const context
-     *
-     * Parameters
-     * - The key to lookup, must be in the hash map
-     */
-    const Value& operator[](const Key& key) const
-    {
-        for (u32 idx = hashFn(key) % capacity; hasVal[idx]; idx = (idx + 1) % capacity)
-        {
-            if (keys[idx] == key)
-                return vals[idx];
-        }
-        hgAssert(false);
+        return nullptr;
     }
 
     /**

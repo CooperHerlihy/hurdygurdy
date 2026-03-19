@@ -155,7 +155,7 @@ void hgDeinitPipeline2D()
 
 void hgAddTexture2D(HgResource textureID)
 {
-    if (textureSets.has(textureID))
+    if (textureSets.get(textureID) != nullptr)
         return;
 
     hgAssert(hgGetTexture(textureID) != nullptr);
@@ -177,7 +177,7 @@ void hgAddTexture2D(HgResource textureID)
         nullptr,
         &imageInfo);
 
-    textureSets.add(textureID) = set;
+    textureSets.add(textureID, set);
 }
 
 void hgRemoveTexture2D(HgResource textureID)
@@ -212,11 +212,11 @@ void hgDraw2D(HgECS* ecs, VkCommandBuffer cmd)
 
     ecs->forEach<HgSprite2D, HgTransform>([&](HgEntity, HgSprite2D& sprite, HgTransform& transform) 
     {
-        VkDescriptorSet texSet = textureSets[sprite.texture];
+        VkDescriptorSet* texSet = textureSets.get(sprite.texture);
         if (texSet == nullptr)
-            texSet = defaultTexSet;
+            texSet = &defaultTexSet;
 
-        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 1, 1, &texSet, 0, nullptr);
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 1, 1, texSet, 0, nullptr);
 
         Push push{};
         push.model = hgModelMatrix3D(transform.position, transform.scale, transform.rotation);

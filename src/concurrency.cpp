@@ -307,7 +307,7 @@ void hgInitIOThread(HgArena* arena, u32 queueSize)
 
     ioThreadShouldClose.store(false);
     ioThread = std::thread([]()
-            {
+    {
         hgInitScratchMemory();
         hgDefer(hgDeinitScratchMemory());
 

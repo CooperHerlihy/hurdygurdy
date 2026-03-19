@@ -1103,278 +1103,6 @@ void hgTest()
         hgAssert(elem->value->floating == 1.0);
     }
 
-    // HgHashMap
-    {
-        HgArena* arena = hgGetScratch();
-        HgArenaScope arenaScope{arena};
-
-        constexpr u32 count = 128;
-
-        HgHashMap<u32, u32> map = map.create(arena, count);
-
-        for (u32 i = 0; i < 3; ++i)
-        {
-            hgAssert(map.count == 0);
-            hgAssert(!map.has(0));
-            hgAssert(!map.has(1));
-            hgAssert(!map.has(12));
-            hgAssert(!map.has(42));
-            hgAssert(!map.has(100000));
-
-            map.add(1) = 1;
-            hgAssert(map.count == 1);
-            hgAssert(map.has(1));
-            hgAssert(map[1] == 1);
-
-            map.remove(1);
-            hgAssert(map.count == 0);
-            hgAssert(!map.has(1));
-
-            hgAssert(!map.has(12));
-            hgAssert(!map.has(12 + count));
-
-            map.add(12) = 42;
-            hgAssert(map.count == 1);
-            hgAssert(map.has(12) && map[12] == 42);
-            hgAssert(!map.has(12 + count));
-
-            map.add(12 + count) = 100;
-            hgAssert(map.count == 2);
-            hgAssert(map.has(12) && map[12] == 42);
-            hgAssert(map.has(12 + count) && map[12 + count] == 100);
-
-            map.add(12 + count * 2) = 200;
-            hgAssert(map.count == 3);
-            hgAssert(map.has(12) && map[12] == 42);
-            hgAssert(map.has(12 + count) && map[12 + count] == 100);
-            hgAssert(map.has(12 + count * 2) && map[12 + count * 2] == 200);
-
-            map.remove(12);
-            hgAssert(map.count == 2);
-            hgAssert(!map.has(12));
-            hgAssert(map.has(12 + count) && map[12 + count] == 100);
-
-            map.add(42) = 12;
-            hgAssert(map.count == 3);
-            hgAssert(map.has(42) && map[42] == 12);
-
-            map.remove(12 + count);
-            hgAssert(map.count == 2);
-            hgAssert(!map.has(12));
-            hgAssert(!map.has(12 + count));
-
-            map.remove(42);
-            hgAssert(map.count == 1);
-            hgAssert(!map.has(42));
-
-            map.remove(12 + count * 2);
-            hgAssert(map.count == 0);
-            hgAssert(!map.has(12));
-            hgAssert(!map.has(12 + count));
-            hgAssert(!map.has(12 + count * 2));
-
-            map.reset();
-        }
-    }
-
-    {
-        HgArena* arena = hgGetScratch();
-        HgArenaScope arenaScope{arena};
-
-        using StrHash = u64;
-
-        HgHashMap<StrHash, u32> map = map.create(arena, 128);
-
-        StrHash a = hgHash("a");
-        StrHash b = hgHash("b");
-        StrHash ab = hgHash("ab");
-        StrHash scf = hgHash("supercalifragilisticexpialidocious");
-
-        hgAssert(!map.has(a));
-        hgAssert(!map.has(b));
-        hgAssert(!map.has(ab));
-        hgAssert(!map.has(scf));
-
-        map.add(a) = 1;
-        map.add(b) = 2;
-        map.add(ab) = 3;
-        map.add(scf) = 4;
-
-        hgAssert(map.has(a) && map[a] == 1);
-        hgAssert(map.has(b) && map[b] == 2);
-        hgAssert(map.has(ab) && map[ab] == 3);
-        hgAssert(map.has(scf) && map[scf] == 4);
-
-        map.remove(a);
-        map.remove(b);
-        map.remove(ab);
-        map.remove(scf);
-
-        hgAssert(!map.has(a));
-        hgAssert(!map.has(b));
-        hgAssert(!map.has(ab));
-        hgAssert(!map.has(scf));
-    }
-
-    {
-        HgArena* arena = hgGetScratch();
-        HgArenaScope arenaScope{arena};
-
-        HgHashMap<const char*, u32> map = map.create(arena, 128);
-
-        const char* a = "a";
-        const char* b = "b";
-        const char* ab = "ab";
-        const char* scf = "supercalifragilisticexpialidocious";
-
-        hgAssert(!map.has(a));
-        hgAssert(!map.has(b));
-        hgAssert(!map.has(ab));
-        hgAssert(!map.has(scf));
-
-        map.add(a) = 1;
-        map.add(b) = 2;
-        map.add(ab) = 3;
-        map.add(scf) = 4;
-
-        hgAssert(map.has(a) && map[a] == 1);
-        hgAssert(map.has(b) && map[b] == 2);
-        hgAssert(map.has(ab) && map[ab] == 3);
-        hgAssert(map.has(scf) && map[scf] == 4);
-
-        map.remove(a);
-        map.remove(b);
-        map.remove(ab);
-        map.remove(scf);
-
-        hgAssert(!map.has(a));
-        hgAssert(!map.has(b));
-        hgAssert(!map.has(ab));
-        hgAssert(!map.has(scf));
-    }
-
-    {
-        HgArena* arena = hgGetScratch();
-        HgArenaScope arenaScope{arena};
-
-        HgHashMap<HgString, u32> map = map.create(arena, 128);
-
-        hgAssert(!map.has(HgString::copy(arena, "a")));
-        hgAssert(!map.has(HgString::copy(arena, "b")));
-        hgAssert(!map.has(HgString::copy(arena, "ab")));
-        hgAssert(!map.has(HgString::copy(arena, "supercalifragilisticexpialidocious")));
-
-        map.add(HgString::copy(arena, "a")) = 1;
-        map.add(HgString::copy(arena, "b")) = 2;
-        map.add(HgString::copy(arena, "ab")) = 3;
-        map.add(HgString::copy(arena, "supercalifragilisticexpialidocious")) = 4;
-
-        hgAssert(map.has(HgString::copy(arena, "a")));
-        hgAssert(map[HgString::copy(arena, "a")] == 1);
-        hgAssert(map.has(HgString::copy(arena, "b")));
-        hgAssert(map[HgString::copy(arena, "b")] == 2);
-        hgAssert(map.has(HgString::copy(arena, "ab")));
-        hgAssert(map[HgString::copy(arena, "ab")] == 3);
-        hgAssert(map.has(HgString::copy(arena, "supercalifragilisticexpialidocious")));
-        hgAssert(map[HgString::copy(arena, "supercalifragilisticexpialidocious")] == 4);
-
-        map.remove(HgString::copy(arena, "a"));
-        map.remove(HgString::copy(arena, "b"));
-        map.remove(HgString::copy(arena, "ab"));
-        map.remove(HgString::copy(arena, "supercalifragilisticexpialidocious"));
-
-        hgAssert(!map.has(HgString::copy(arena, "a")));
-        hgAssert(!map.has(HgString::copy(arena, "b")));
-        hgAssert(!map.has(HgString::copy(arena, "ab")));
-        hgAssert(!map.has(HgString::copy(arena, "supercalifragilisticexpialidocious")));
-    }
-
-    {
-        HgArena* arena = hgGetScratch();
-        HgArenaScope arenaScope{arena};
-
-        HgHashMap<HgStringView, u32> map = map.create(arena, 128);
-
-        hgAssert(!map.has("a"));
-        hgAssert(!map.has("b"));
-        hgAssert(!map.has("ab"));
-        hgAssert(!map.has("supercalifragilisticexpialidocious"));
-
-        map.add(HgString::copy(arena, "a")) = 1;
-        map.add(HgString::copy(arena, "b")) = 2;
-        map.add(HgString::copy(arena, "ab")) = 3;
-        map.add(HgString::copy(arena, "supercalifragilisticexpialidocious")) = 4;
-
-        hgAssert(map.has("a"));
-        hgAssert(map["a"] == 1);
-        hgAssert(map.has("b"));
-        hgAssert(map["b"] == 2);
-        hgAssert(map.has("ab"));
-        hgAssert(map["ab"] == 3);
-        hgAssert(map.has("supercalifragilisticexpialidocious"));
-        hgAssert(map["supercalifragilisticexpialidocious"] == 4);
-
-        map.remove("a");
-        map.remove("b");
-        map.remove("ab");
-        map.remove("supercalifragilisticexpialidocious");
-
-        hgAssert(!map.has("a"));
-        hgAssert(!map.has("b"));
-        hgAssert(!map.has("ab"));
-        hgAssert(!map.has("supercalifragilisticexpialidocious"));
-    }
-
-    {
-        HgArena* arena = hgGetScratch();
-        HgArenaScope arenaScope{arena};
-
-        HgHashMap<u32, u32> map = map.create(arena, 64);
-
-        bool hasAny = false;
-        map.forEach([&](u32, u32)
-        {
-            hasAny = true;
-        });
-        hgAssert(!hasAny);
-
-        map.add(12) = 24;
-        map.add(42) = 84;
-        map.add(100) = 200;
-
-        bool has12 = false;
-        bool has42 = false;
-        bool has100 = false;
-        bool hasOther = false;
-        map.forEach([&](u32 k, u32 v)
-        {
-            if (k == 12 && v == 24)
-                has12 = true;
-            else if (k == 42 && v == 84)
-                has42 = true;
-            else if (k == 100 && v == 200)
-                has100 = true;
-            else
-                hasOther = true;
-        });
-        hgAssert(has12);
-        hgAssert(has42);
-        hgAssert(has100);
-        hgAssert(!hasOther);
-
-        map.forEach([&](u32 k, u32)
-        {
-            map.remove(k);
-        });
-
-        hasAny = false;
-        map.forEach([&](u32, u32)
-        {
-            hasAny = true;
-        });
-        hgAssert(!hasAny);
-    }
-
     // HgHashSet
     {
         HgArena* arena = hgGetScratch();
@@ -1444,8 +1172,280 @@ void hgTest()
             hgAssert(!set.has(12 + count));
             hgAssert(!set.has(12 + count * 2));
 
-            set.reset();
+            set.empty();
         }
+    }
+
+    // HgHashMap
+    {
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
+
+        constexpr u32 count = 128;
+
+        HgHashMap<u32, u32> map = map.create(arena, count);
+
+        for (u32 i = 0; i < 3; ++i)
+        {
+            hgAssert(map.count == 0);
+            hgAssert(map.get(0) == nullptr);
+            hgAssert(map.get(1) == nullptr);
+            hgAssert(map.get(12) == nullptr);
+            hgAssert(map.get(42) == nullptr);
+            hgAssert(map.get(100000) == nullptr);
+
+            map.add(1, 1);
+            hgAssert(map.count == 1);
+            hgAssert(map.get(1) != nullptr);
+            hgAssert(*map.get(1) == 1);
+
+            map.remove(1);
+            hgAssert(map.count == 0);
+            hgAssert(map.get(1) == nullptr);
+
+            hgAssert(map.get(12) == nullptr);
+            hgAssert(map.get(12 + count) == nullptr);
+
+            map.add(12, 42);
+            hgAssert(map.count == 1);
+            hgAssert(map.get(12) != nullptr && *map.get(12) == 42);
+            hgAssert(map.get(12 + count) == nullptr);
+
+            map.add(12 + count, 100);
+            hgAssert(map.count == 2);
+            hgAssert(map.get(12) != nullptr && *map.get(12) == 42);
+            hgAssert(map.get(12 + count) != nullptr && *map.get(12 + count) == 100);
+
+            map.add(12 + count * 2, 200);
+            hgAssert(map.count == 3);
+            hgAssert(map.get(12) != nullptr && *map.get(12) == 42);
+            hgAssert(map.get(12 + count) != nullptr && *map.get(12 + count) == 100);
+            hgAssert(map.get(12 + count * 2) != nullptr && *map.get(12 + count * 2) == 200);
+
+            map.remove(12);
+            hgAssert(map.count == 2);
+            hgAssert(map.get(12) == nullptr);
+            hgAssert(map.get(12 + count) != nullptr && *map.get(12 + count) == 100);
+
+            map.add(42, 12);
+            hgAssert(map.count == 3);
+            hgAssert(map.get(42) != nullptr && *map.get(42) == 12);
+
+            map.remove(12 + count);
+            hgAssert(map.count == 2);
+            hgAssert(map.get(12) == nullptr);
+            hgAssert(map.get(12 + count) == nullptr);
+
+            map.remove(42);
+            hgAssert(map.count == 1);
+            hgAssert(map.get(42) == nullptr);
+
+            map.remove(12 + count * 2);
+            hgAssert(map.count == 0);
+            hgAssert(map.get(12) == nullptr);
+            hgAssert(map.get(12 + count) == nullptr);
+            hgAssert(map.get(12 + count * 2) == nullptr);
+
+            map.empty();
+        }
+    }
+
+    {
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
+
+        using StrHash = u64;
+
+        HgHashMap<StrHash, u32> map = map.create(arena, 128);
+
+        StrHash a = hgHash("a");
+        StrHash b = hgHash("b");
+        StrHash ab = hgHash("ab");
+        StrHash scf = hgHash("supercalifragilisticexpialidocious");
+
+        hgAssert(map.get(a) == nullptr);
+        hgAssert(map.get(b) == nullptr);
+        hgAssert(map.get(ab) == nullptr);
+        hgAssert(map.get(scf) == nullptr);
+
+        map.add(a, 1);
+        map.add(b, 2);
+        map.add(ab, 3);
+        map.add(scf, 4);
+
+        hgAssert(map.get(a) != nullptr && *map.get(a) == 1);
+        hgAssert(map.get(b) != nullptr && *map.get(b) == 2);
+        hgAssert(map.get(ab) != nullptr && *map.get(ab) == 3);
+        hgAssert(map.get(scf) != nullptr && *map.get(scf) == 4);
+
+        map.remove(a);
+        map.remove(b);
+        map.remove(ab);
+        map.remove(scf);
+
+        hgAssert(map.get(a) == nullptr);
+        hgAssert(map.get(b) == nullptr);
+        hgAssert(map.get(ab) == nullptr);
+        hgAssert(map.get(scf) == nullptr);
+    }
+
+    {
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
+
+        HgHashMap<const char*, u32> map = map.create(arena, 128);
+
+        const char* a = "a";
+        const char* b = "b";
+        const char* ab = "ab";
+        const char* scf = "supercalifragilisticexpialidocious";
+
+        hgAssert(map.get(a) == nullptr);
+        hgAssert(map.get(b) == nullptr);
+        hgAssert(map.get(ab) == nullptr);
+        hgAssert(map.get(scf) == nullptr);
+
+        map.add(a, 1);
+        map.add(b, 2);
+        map.add(ab, 3);
+        map.add(scf, 4);
+
+        hgAssert(map.get(a) != nullptr && *map.get(a) == 1);
+        hgAssert(map.get(b) != nullptr && *map.get(b) == 2);
+        hgAssert(map.get(ab) != nullptr && *map.get(ab) == 3);
+        hgAssert(map.get(scf) != nullptr && *map.get(scf) == 4);
+
+        map.remove(a);
+        map.remove(b);
+        map.remove(ab);
+        map.remove(scf);
+
+        hgAssert(map.get(a) == nullptr);
+        hgAssert(map.get(b) == nullptr);
+        hgAssert(map.get(ab) == nullptr);
+        hgAssert(map.get(scf) == nullptr);
+    }
+
+    {
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
+
+        HgHashMap<HgString, u32> map = map.create(arena, 128);
+
+        hgAssert(map.get(HgString::copy(arena, "a")) == nullptr);
+        hgAssert(map.get(HgString::copy(arena, "b")) == nullptr);
+        hgAssert(map.get(HgString::copy(arena, "ab")) == nullptr);
+        hgAssert(map.get(HgString::copy(arena, "supercalifragilisticexpialidocious")) == nullptr);
+
+        map.add(HgString::copy(arena, "a"), 1);
+        map.add(HgString::copy(arena, "b"), 2);
+        map.add(HgString::copy(arena, "ab"), 3);
+        map.add(HgString::copy(arena, "supercalifragilisticexpialidocious"), 4);
+
+        hgAssert(map.get(HgString::copy(arena, "a")) != nullptr);
+        hgAssert(*map.get(HgString::copy(arena, "a")) == 1);
+        hgAssert(map.get(HgString::copy(arena, "b")) != nullptr);
+        hgAssert(*map.get(HgString::copy(arena, "b")) == 2);
+        hgAssert(map.get(HgString::copy(arena, "ab")) != nullptr);
+        hgAssert(*map.get(HgString::copy(arena, "ab")) == 3);
+        hgAssert(map.get(HgString::copy(arena, "supercalifragilisticexpialidocious")) != nullptr);
+        hgAssert(*map.get(HgString::copy(arena, "supercalifragilisticexpialidocious")) == 4);
+
+        map.remove(HgString::copy(arena, "a"));
+        map.remove(HgString::copy(arena, "b"));
+        map.remove(HgString::copy(arena, "ab"));
+        map.remove(HgString::copy(arena, "supercalifragilisticexpialidocious"));
+
+        hgAssert(map.get(HgString::copy(arena, "a")) == nullptr);
+        hgAssert(map.get(HgString::copy(arena, "b")) == nullptr);
+        hgAssert(map.get(HgString::copy(arena, "ab")) == nullptr);
+        hgAssert(map.get(HgString::copy(arena, "supercalifragilisticexpialidocious")) == nullptr);
+    }
+
+    {
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
+
+        HgHashMap<HgStringView, u32> map = map.create(arena, 128);
+
+        hgAssert(map.get("a") == nullptr);
+        hgAssert(map.get("b") == nullptr);
+        hgAssert(map.get("ab") == nullptr);
+        hgAssert(map.get("supercalifragilisticexpialidocious") == nullptr);
+
+        map.add(HgString::copy(arena, "a"), 1);
+        map.add(HgString::copy(arena, "b"), 2);
+        map.add(HgString::copy(arena, "ab"), 3);
+        map.add(HgString::copy(arena, "supercalifragilisticexpialidocious"), 4);
+
+        hgAssert(map.get("a") != nullptr);
+        hgAssert(*map.get("a") == 1);
+        hgAssert(map.get("b") != nullptr);
+        hgAssert(*map.get("b") == 2);
+        hgAssert(map.get("ab") != nullptr);
+        hgAssert(*map.get("ab") == 3);
+        hgAssert(map.get("supercalifragilisticexpialidocious") != nullptr);
+        hgAssert(*map.get("supercalifragilisticexpialidocious") == 4);
+
+        map.remove("a");
+        map.remove("b");
+        map.remove("ab");
+        map.remove("supercalifragilisticexpialidocious");
+
+        hgAssert(map.get("a") == nullptr);
+        hgAssert(map.get("b") == nullptr);
+        hgAssert(map.get("ab") == nullptr);
+        hgAssert(map.get("supercalifragilisticexpialidocious") == nullptr);
+    }
+
+    {
+        HgArena* arena = hgGetScratch();
+        HgArenaScope arenaScope{arena};
+
+        HgHashMap<u32, u32> map = map.create(arena, 64);
+
+        bool hasAny = false;
+        map.forEach([&](u32, u32)
+        {
+            hasAny = true;
+        });
+        hgAssert(!hasAny);
+
+        map.add(12, 24);
+        map.add(42, 84);
+        map.add(100, 200);
+
+        bool has12 = false;
+        bool has42 = false;
+        bool has100 = false;
+        bool hasOther = false;
+        map.forEach([&](u32 k, u32 v)
+        {
+            if (k == 12 && v == 24)
+                has12 = true;
+            else if (k == 42 && v == 84)
+                has42 = true;
+            else if (k == 100 && v == 200)
+                has100 = true;
+            else
+                hasOther = true;
+        });
+        hgAssert(has12);
+        hgAssert(has42);
+        hgAssert(has100);
+        hgAssert(!hasOther);
+
+        map.forEach([&](u32 k, u32)
+        {
+            map.remove(k);
+        });
+
+        hasAny = false;
+        map.forEach([&](u32, u32)
+        {
+            hasAny = true;
+        });
+        hgAssert(!hasAny);
     }
 
     {

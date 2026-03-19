@@ -324,7 +324,7 @@ void hgAddModel3D(HgResource modelID, HgResource colorID, HgResource normalID)
         nullptr,
         imageInfos);
 
-    modelSets.add(modelID) = set;
+    modelSets.add(modelID, set);
 }
 
 void hgRemoveModel3D(HgResource modelID)
@@ -442,11 +442,11 @@ void hgDraw3D(HgECS* ecs, VkCommandBuffer cmd)
 
     ecs->forEach<HgModel3D, HgTransform>([&](HgEntity, HgModel3D& model, HgTransform& transform)
     {
-        VkDescriptorSet modelSet = modelSets[model.modelResource];
+        VkDescriptorSet* modelSet = modelSets.get(model.modelResource);
         if (modelSet == nullptr)
-            modelSet = defaultModelSet;
+            modelSet = &defaultModelSet;
 
-        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 1, 1, &modelSet, 0, nullptr);
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 1, 1, modelSet, 0, nullptr);
 
         Push push{};
         push.model = hgModelMatrix3D(transform.position, transform.scale, transform.rotation);
