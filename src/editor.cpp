@@ -86,8 +86,7 @@ int main()
     HgImageView* renderView = nullptr;
     hgDefer(hgDestroyImageView(renderView));
 
-    HgCreateVkSampler renderSamplerInfo{};
-    VkSampler renderSampler = hgCreateVkSampler(renderSamplerInfo);
+    VkSampler renderSampler = hgCreateVkSampler(VK_FILTER_NEAREST);
     hgDefer(vkDestroySampler(hgVkDevice, renderSampler, nullptr));
 
     VkDescriptorSet renderDescriptor = nullptr;
@@ -488,12 +487,15 @@ int main()
             renderColorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
             renderColorAttachment.clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
 
+            HgRenderAttachment renderDepthAttachment{};
+            renderDepthAttachment.image = depthView;
+            renderDepthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            renderDepthAttachment.clearValue.depthStencil = {1.0f, 0};
+
             HgRenderPass renderPass{};
             renderPass.colorAttachments = &renderColorAttachment;
             renderPass.colorAttachmentCount = 1;
-            renderPass.depthAttachment.image = depthView;
-            renderPass.depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-            renderPass.depthAttachment.clearValue.depthStencil = {1.0f, 0};
+            renderPass.depthAttachment = &renderDepthAttachment;
 
             renderer.beginPass(cmd, renderWidth, renderHeight, renderPass);
 

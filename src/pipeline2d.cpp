@@ -32,10 +32,10 @@ void hgInitPipeline2D(
     hgAssert(hgVkDevice != nullptr);
     hgAssert(colorFormat != VK_FORMAT_UNDEFINED);
 
-    VkPushConstantRange push = {VK_SHADER_STAGE_ALL, 0, sizeof(Push)};
-    pipelineLayout = hgCreateBindlessPipelineLayout(&push, 1);
+    VkPushConstantRange push{VK_SHADER_STAGE_ALL, 0, sizeof(Push)};
+    pipelineLayout = hgCreatePipelineLayout(&push, 1);
 
-    HgCreateVkGraphicsPipeline pipelineConfig{};
+    HgCreateGraphicsPipeline pipelineConfig{};
     pipelineConfig.layout = pipelineLayout;
     pipelineConfig.vertexShader = sprite_vert_spv;
     pipelineConfig.vertexShaderSize = sprite_vert_spv_size;
@@ -46,7 +46,7 @@ void hgInitPipeline2D(
     pipelineConfig.depthAttachmentFormat = depthFormat;
     pipelineConfig.enableColorBlend = true;
 
-    pipeline = hgCreateVkGraphicsPipeline(pipelineConfig);
+    pipeline = hgCreateGraphicsPipeline(pipelineConfig);
 
     vpBuffer = hgCreateBuffer(
         sizeof(VPUniform),
@@ -61,14 +61,14 @@ void hgInitPipeline2D(
 
     vpDesc = hgCreateDescriptor(HgDescriptorType_uniformBuffer);
 
-    VkDescriptorBufferInfo bufferInfo = {vpBuffer->buffer, 0, sizeof(VPUniform)};
+    VkDescriptorBufferInfo bufferInfo{vpBuffer->buffer, 0, sizeof(VPUniform)};
     hgUpdateDescriptor(vpDesc, &bufferInfo, nullptr);
 
     struct Color
     {
         u8 r, g, b, a;
     };
-    static const Color defaultColors[] = {
+    static const Color defaultColors[]{
         {0xff, 0x00, 0xff, 0xff}, {0x00, 0x00, 0x00, 0xff},
         {0x00, 0x00, 0x00, 0xff}, {0xff, 0x00, 0xff, 0xff},
     };
@@ -84,8 +84,7 @@ void hgInitPipeline2D(
         defaultColors,
         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-    HgCreateVkSampler defaultTexSamplerInfo{};
-    defaultTex.sampler = hgCreateVkSampler(defaultTexSamplerInfo);
+    defaultTex.sampler = hgCreateVkSampler(VK_FILTER_NEAREST);
 
     defaultTexDesc = hgCreateDescriptor(HgDescriptorType_combinedImageSampler);
 
@@ -129,9 +128,7 @@ void hgDraw2D(HgECS* ecs, VkCommandBuffer cmd)
         return ecs->get<HgTransform>(lhs).position.z > ecs->get<HgTransform>(rhs).position.z;
     });
 
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-
-    hgBindBindlessDescriptors(cmd, pipelineLayout);
+    hgBindGraphicsPipeline(cmd, pipeline, pipelineLayout);
 
     ecs->forEach<HgSprite2D, HgTransform>([&](HgEntity, HgSprite2D& sprite, HgTransform& transform) 
     {

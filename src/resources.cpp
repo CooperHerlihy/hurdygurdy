@@ -551,7 +551,7 @@ void hgLoadTexture(HgResource id, VkSampler sampler)
 
         tex.descriptor = hgCreateDescriptor(HgDescriptorType_combinedImageSampler);
 
-        VkDescriptorImageInfo descInfo = {tex.sampler, tex.view->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+        VkDescriptorImageInfo descInfo{tex.sampler, tex.view->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
         hgUpdateDescriptor(tex.descriptor, nullptr, &descInfo);
     }
 }

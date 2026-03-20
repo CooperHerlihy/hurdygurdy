@@ -69,7 +69,7 @@ void hgTest()
         void* block = malloc(1024);
         hgDefer(free(block));
 
-        HgArena arena = {block, 1024};
+        HgArena arena{block, 1024};
 
         for (u32 i = 0; i < 3; ++i)
         {
@@ -1615,7 +1615,7 @@ void hgTest()
     {
         HgFence fence;
 
-        bool vals[100] = {};
+        bool vals[100]{};
         for (bool& val : vals)
         {
             hgCallPar(&fence, 1, &val, [](void* data)
@@ -1633,7 +1633,7 @@ void hgTest()
     }
 
     {
-        bool vals[100] = {};
+        bool vals[100]{};
 
         auto fn = [](void* pvals, u64 idx)
         {
@@ -1655,7 +1655,7 @@ void hgTest()
             std::atomic_bool start{false};
             std::thread producers[4];
 
-            bool vals[100] = {};
+            bool vals[100]{};
 
             auto fn = [](void* pval)
             {
@@ -1698,7 +1698,7 @@ void hgTest()
     {
         HgFence fence;
 
-        bool vals[100] = {};
+        bool vals[100]{};
 
         hgRequestIO(&fence, 1, vals, {}, [](void* pvals, HgStringView)
         {
@@ -1718,7 +1718,7 @@ void hgTest()
     {
         HgFence fence;
 
-        bool vals[100] = {};
+        bool vals[100]{};
 
         for (u32 i = 0; i < sizeof(vals) / sizeof(*vals); ++i)
         {
@@ -1738,7 +1738,7 @@ void hgTest()
     {
         HgFence fence;
 
-        bool vals[100] = {};
+        bool vals[100]{};
 
         vals[0] = true;
 
@@ -1765,7 +1765,7 @@ void hgTest()
             std::atomic_bool start{false};
             std::thread producers[4];
 
-            bool vals[100] = {};
+            bool vals[100]{};
 
             auto prodFn = [&](u32 idx)
             {
@@ -1809,7 +1809,7 @@ void hgTest()
         HgArena* arena = hgGetScratch();
         HgArenaScope arenaScope{arena};
 
-        u32 saveData[] = {12, 42, 100, 128};
+        u32 saveData[]{12, 42, 100, 128};
 
         const char* filePath = "hg_test_dir/file_bin_test.bin";
         HgBinary bin{};
@@ -1864,7 +1864,7 @@ void hgTest()
         constexpr u32 saveWidth = 2;
         constexpr u32 saveHeight = 2;
         constexpr u32 saveDepth = 1;
-        u32 saveData[saveWidth][saveHeight] = {
+        u32 saveData[saveWidth][saveHeight]{
             {red, green},
             {blue, yellow},
         };
@@ -2250,7 +2250,7 @@ void hgTest()
         }
 
         {
-            u32 smallScramble1[] = {1, 0};
+            u32 smallScramble1[]{1, 0};
             for (u32 i = 0; i < sizeof(smallScramble1) / sizeof(*smallScramble1); ++i)
             {
                 ecs.add<u32>(ecs.spawn()) = smallScramble1[i];
@@ -2288,7 +2288,7 @@ void hgTest()
         }
 
         {
-            u32 mediumScramble1[] = {8, 9, 1, 6, 0, 3, 7, 2, 5, 4};
+            u32 mediumScramble1[]{8, 9, 1, 6, 0, 3, 7, 2, 5, 4};
             for (u32 i = 0; i < sizeof(mediumScramble1) / sizeof(*mediumScramble1); ++i)
             {
                 ecs.add<u32>(ecs.spawn()) = mediumScramble1[i];
@@ -2309,7 +2309,7 @@ void hgTest()
         }
 
         {
-            u32 mediumScramble2[] = {3, 9, 7, 6, 8, 5, 0, 1, 2, 4};
+            u32 mediumScramble2[]{3, 9, 7, 6, 8, 5, 0, 1, 2, 4};
             for (u32 i = 0; i < sizeof(mediumScramble2) / sizeof(*mediumScramble2); ++i)
             {
                 ecs.add<u32>(ecs.spawn()) = mediumScramble2[i];

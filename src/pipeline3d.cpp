@@ -56,19 +56,19 @@ void hgInitPipeline3D(
     hgAssert(colorFormat != VK_FORMAT_UNDEFINED);
     hgAssert(depthFormat != VK_FORMAT_UNDEFINED);
 
-    VkPushConstantRange pushRange = {VK_SHADER_STAGE_ALL, 0, sizeof(Push)};
-    pipelineLayout = hgCreateBindlessPipelineLayout(&pushRange, 1);
+    VkPushConstantRange pushRange{VK_SHADER_STAGE_ALL, 0, sizeof(Push)};
+    pipelineLayout = hgCreatePipelineLayout(&pushRange, 1);
 
-    VkVertexInputBindingDescription vertexBindings[] = {
+    VkVertexInputBindingDescription vertexBindings[]{
         {0, sizeof(HgModelVertex), VK_VERTEX_INPUT_RATE_VERTEX},
     };
-    VkVertexInputAttributeDescription vertexAttributes[] = {
+    VkVertexInputAttributeDescription vertexAttributes[]{
         {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(HgModelVertex, pos)},
         {1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(HgModelVertex, norm)},
         {2, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(HgModelVertex, tan)},
         {3, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(HgModelVertex, uv)},
     };
-    HgCreateVkGraphicsPipeline pipelineConfig{};
+    HgCreateGraphicsPipeline pipelineConfig{};
     pipelineConfig.layout = pipelineLayout;
     pipelineConfig.vertexShader = model_vert_spv;
     pipelineConfig.vertexShaderSize = model_vert_spv_size;
@@ -83,7 +83,7 @@ void hgInitPipeline3D(
     pipelineConfig.vertexAttributeCount = sizeof(vertexAttributes) / sizeof(*vertexAttributes);
     pipelineConfig.cullMode = VK_CULL_MODE_BACK_BIT;
 
-    pipeline = hgCreateVkGraphicsPipeline(pipelineConfig);
+    pipeline = hgCreateGraphicsPipeline(pipelineConfig);
 
     vpData.proj = HgMat4{1.0f};
     vpData.view = HgMat4{1.0f};
@@ -97,7 +97,7 @@ void hgInitPipeline3D(
 
     vpDesc = hgCreateDescriptor(HgDescriptorType_uniformBuffer);
 
-    VkDescriptorBufferInfo bufferInfo = {vpBuffer->buffer, 0, sizeof(VPUniform)};
+    VkDescriptorBufferInfo bufferInfo{vpBuffer->buffer, 0, sizeof(VPUniform)};
     hgUpdateDescriptor(vpDesc, &bufferInfo, nullptr);
 
     dirLightCapacity = 4;
@@ -115,13 +115,13 @@ void hgInitPipeline3D(
     dirLightDesc = hgCreateDescriptor(HgDescriptorType_storageBuffer);
     pointLightDesc = hgCreateDescriptor(HgDescriptorType_storageBuffer);
 
-    VkDescriptorBufferInfo dirLightBufferInfo = {dirLightBuffer->buffer, 0, VK_WHOLE_SIZE};
+    VkDescriptorBufferInfo dirLightBufferInfo{dirLightBuffer->buffer, 0, VK_WHOLE_SIZE};
     hgUpdateDescriptor(dirLightDesc, &dirLightBufferInfo, nullptr);
 
-    VkDescriptorBufferInfo pointLightBufferInfo = {pointLightBuffer->buffer, 0, VK_WHOLE_SIZE};
+    VkDescriptorBufferInfo pointLightBufferInfo{pointLightBuffer->buffer, 0, VK_WHOLE_SIZE};
     hgUpdateDescriptor(pointLightDesc, &pointLightBufferInfo, nullptr);
 
-    static const HgModelVertex cubeVertices[] = {
+    static const HgModelVertex cubeVertices[]{
         {HgVec3{ 0.5f,-0.5f,-0.5f}, HgVec3{ 1, 0, 0}, HgVec4{ 0, 0, 1, 1}, HgVec2{0,0}},
         {HgVec3{ 0.5f, 0.5f,-0.5f}, HgVec3{ 1, 0, 0}, HgVec4{ 0, 0, 1, 1}, HgVec2{1,0}},
         {HgVec3{ 0.5f, 0.5f, 0.5f}, HgVec3{ 1, 0, 0}, HgVec4{ 0, 0, 1, 1}, HgVec2{1,1}},
@@ -153,7 +153,7 @@ void hgInitPipeline3D(
         {HgVec3{ 0.5f, 0.5f,-0.5f}, HgVec3{ 0, 0,-1}, HgVec4{-1, 0, 0, 1}, HgVec2{0,1}},
     };
 
-    static u32 cubeIndices[] = {
+    static u32 cubeIndices[]{
          0,  1,  2,  0,  2,  3,
          4,  5,  6,  4,  6,  7,
          8,  9, 10,  8, 10, 11,
@@ -177,8 +177,7 @@ void hgInitPipeline3D(
     defaultModel.vertexWidth = sizeof(HgModelVertex);
     defaultModel.indexCount = sizeof(cubeIndices) / sizeof(*cubeIndices);
 
-    HgCreateVkSampler samplerInfo{};
-    defaultMapSampler = hgCreateVkSampler(samplerInfo);
+    defaultMapSampler = hgCreateVkSampler(VK_FILTER_NEAREST);
 
     defaultColorMap.sampler = defaultMapSampler;
     defaultNormalMap.sampler = defaultMapSampler;
@@ -187,13 +186,13 @@ void hgInitPipeline3D(
     {
         u8 r, g, b, a;
     };
-    static const Color defaultColors[] = {
+    static const Color defaultColors[]{
         {0xff, 0x00, 0xff, 0xff}, {0x00, 0x00, 0x00, 0xff}, {0xff, 0x00, 0xff, 0xff},
         {0x00, 0x00, 0x00, 0xff}, {0xff, 0x00, 0xff, 0xff}, {0x00, 0x00, 0x00, 0xff},
         {0xff, 0x00, 0xff, 0xff}, {0x00, 0x00, 0x00, 0xff}, {0xff, 0x00, 0xff, 0xff},
     };
 
-    static const HgVec4 defaultNormals[] = {
+    static const HgVec4 defaultNormals[]{
         HgVec4{0, 0, -1, 0}, HgVec4{0, 0, -1, 0},
         HgVec4{0, 0, -1, 0}, HgVec4{0, 0, -1, 0},
     };
@@ -288,7 +287,7 @@ void hgDraw3D(HgECS* ecs, VkCommandBuffer cmd)
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
             HgBufferMemoryUsage_frequentUpdate);
 
-        VkDescriptorBufferInfo dirLightBufferInfo = {dirLightBuffer->buffer, 0, VK_WHOLE_SIZE};
+        VkDescriptorBufferInfo dirLightBufferInfo{dirLightBuffer->buffer, 0, VK_WHOLE_SIZE};
         hgUpdateDescriptor(dirLightDesc, &dirLightBufferInfo, nullptr);
     }
 
@@ -308,7 +307,7 @@ void hgDraw3D(HgECS* ecs, VkCommandBuffer cmd)
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
             HgBufferMemoryUsage_frequentUpdate);
 
-        VkDescriptorBufferInfo pointLightBufferInfo = {pointLightBuffer->buffer, 0, VK_WHOLE_SIZE};
+        VkDescriptorBufferInfo pointLightBufferInfo{pointLightBuffer->buffer, 0, VK_WHOLE_SIZE};
         hgUpdateDescriptor(pointLightDesc, &pointLightBufferInfo, nullptr);
     }
 
@@ -337,9 +336,7 @@ void hgDraw3D(HgECS* ecs, VkCommandBuffer cmd)
     if (pointLightCount > 0)
         hgWriteBuffer(pointLightBuffer, 0, pointLights, sizeof(*pointLights) * pointLightCount);
 
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-
-    hgBindBindlessDescriptors(cmd, pipelineLayout);
+    hgBindGraphicsPipeline(cmd, pipeline, pipelineLayout);
 
     ecs->forEach<HgModel3D, HgTransform>([&](HgEntity, HgModel3D& model, HgTransform& transform)
     {
@@ -367,8 +364,8 @@ void hgDraw3D(HgECS* ecs, VkCommandBuffer cmd)
 
         vkCmdBindIndexBuffer(cmd, gpuModel->indexBuffer->buffer, 0, VK_INDEX_TYPE_UINT32);
 
-        VkBuffer buffers[] = {gpuModel->vertexBuffer->buffer};
-        VkDeviceSize offsets[] = {0};
+        VkBuffer buffers[]{gpuModel->vertexBuffer->buffer};
+        VkDeviceSize offsets[]{0};
         vkCmdBindVertexBuffers(cmd, 0, 1, buffers, offsets);
 
         vkCmdPushConstants(cmd, pipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(push), &push);

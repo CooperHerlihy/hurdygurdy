@@ -2295,17 +2295,26 @@ constexpr u64 hgHash(f64 val)
 }
 
 /**
- * Hash map hashing for void*
+ * Hash map hashing for arbitrary pointer types
  */
-constexpr u64 hgHash(void* val)
+template<typename T>
+constexpr u64 hgPtrHash(T* val)
 {
     union
     {
-        void* asPtr;
+        T* asPtr;
         uptr asUptr;
     } u{};
     u.asPtr = val;
     return (u64)u.asUptr;
+};
+
+/**
+ * Hash map hashing for void*
+ */
+constexpr u64 hgHash(void* val)
+{
+    return hgPtrHash<void>(val);
 }
 
 /**
@@ -3235,40 +3244,12 @@ HgImageView* hgCreateImageView(
 void hgDestroyImageView(HgImageView* view);
 
 /**
- * Config for hgCreateVkSampler
- */
-struct HgCreateVkSampler
-{
-    /**
-     * The filter used for sampling
-     */
-    VkFilter filter = VK_FILTER_NEAREST;
-    /**
-     * How addresses past the edge are handled
-     */
-    VkSamplerAddressMode addressMode = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    /**
-     * The border color, if addressMode uses a border
-     */
-    VkBorderColor borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
-    /**
-     * The load bias
-     */
-    f32 mipLodBias = 0.0f;
-    /**
-     * The min clamp lod
-     */
-    f32 minLod = 0.0f;
-    /**
-     * The max clamp, or 1000.0f for no max
-     */
-    f32 maxLod = 1000.0f;
-};
-
-/**
  * Create a Vulkan sampler
  */
-VkSampler hgCreateVkSampler(const HgCreateVkSampler& create);
+VkSampler hgCreateVkSampler(
+    VkFilter filter,
+    VkSamplerAddressMode addressMode = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+    VkBorderColor borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK);
 
 /**
  * Write to a gpu image
@@ -3432,27 +3413,12 @@ void hgUpdateDescriptor(
 /**
  * Create a pipeline layout using the global bindless descriptor set layout
  */
-VkPipelineLayout hgCreateBindlessPipelineLayout(const VkPushConstantRange* pushRanges, u32 pushRangeCount);
+VkPipelineLayout hgCreatePipelineLayout(const VkPushConstantRange* pushRanges, u32 pushRangeCount);
 
 /**
- * Get the global bindless descriptor set layout
+ * Config for hgCreateGraphicsPipeline
  */
-VkDescriptorSetLayout hgBindlessSetLayout();
-
-/**
- * Bind the bindless descriptor set to the pipeline
- *
- * Parameters
- * - cmd The command buffer
- * - pipelineLayout The layout of the current pipeline
- * - set The index of the set in the pipeline layout
- */
-void hgBindBindlessDescriptors(VkCommandBuffer cmd, VkPipelineLayout pipelineLayout, u32 set = 0);
-
-/**
- * Config for hgCreateVkGraphicsPipeline
- */
-struct HgCreateVkGraphicsPipeline
+struct HgCreateGraphicsPipeline
 {
     /**
      * The pipeline layout
@@ -3542,7 +3508,17 @@ struct HgCreateVkGraphicsPipeline
  * Parameters
  * - config The pipeline configuration
  */
-VkPipeline hgCreateVkGraphicsPipeline(const HgCreateVkGraphicsPipeline& config);
+VkPipeline hgCreateGraphicsPipeline(const HgCreateGraphicsPipeline& config);
+
+/**
+ * Bind the pipeline using the bindless descriptor set
+ *
+ * Parameters
+ * - cmd The command buffer
+ * - pipeline The pipeline to bind
+ * - pipelineLayout The layout of the pipeline
+ */
+void hgBindGraphicsPipeline(VkCommandBuffer cmd, VkPipeline pipeline, VkPipelineLayout pipelineLayout);
 
 /**
  * Creates a compute pipeline
@@ -3552,7 +3528,17 @@ VkPipeline hgCreateVkGraphicsPipeline(const HgCreateVkGraphicsPipeline& config);
  * - shaderCode The compute shader, must not be nullptr
  * - shaderCodeSize The size in bytes of shaderCode
  */
-VkPipeline hgCreateVkComputePipeline(VkPipelineLayout layout, const u8* shaderCode, u64 shaderCodeSize);
+VkPipeline hgCreateComputePipeline(VkPipelineLayout layout, const u8* shaderCode, u64 shaderCodeSize);
+
+/**
+ * Bind the pipeline using the bindless descriptor set
+ *
+ * Parameters
+ * - cmd The command buffer
+ * - pipeline The pipeline to bind
+ * - pipelineLayout The layout of the pipeline
+ */
+void hgBindComputePipeline(VkCommandBuffer cmd, VkPipeline pipeline, VkPipelineLayout pipelineLayout);
 
 /**
  * Begin a command buffer to be executed once
@@ -3623,9 +3609,13 @@ struct HgRenderPass
      */
     u32 sampledImageCount = 0;
     /**
-     * The number of layers in each color attachment to write to
+     * The storage image dependencies
      */
-    u32 layerCount = 1;
+    HgImageView** storageImages = nullptr;
+    /**
+     * The number of storage images
+     */
+    u32 storageImageCount = 0;
     /**
      * The color images to write to
      */
@@ -3635,13 +3625,17 @@ struct HgRenderPass
      */
     u32 colorAttachmentCount = 0;
     /**
+     * The number of layers in each color attachment to write to
+     */
+    u32 layerCount = 1;
+    /**
      * The depth attachment, if any
      */
-    HgRenderAttachment depthAttachment = {};
+    const HgRenderAttachment* depthAttachment = nullptr;
     /**
      * The stencil attachment, if any
      */
-    HgRenderAttachment stencilAttachment = {};
+    const HgRenderAttachment* stencilAttachment = nullptr;
 };
 
 /**
@@ -3675,7 +3669,7 @@ struct HgBufferBarrier
     /**
      * The buffer to sychronize
      */
-    HgBuffer* buffer = nullptr;
+    HgBuffer* buffer;
     /**
      * Where the image will be used next
      */
@@ -3694,7 +3688,7 @@ struct HgRenderer
     /**
      * A buffer resource
      */
-    struct Buffer
+    struct BufferState
     {
         /**
          * Where the image was used last
@@ -3709,7 +3703,7 @@ struct HgRenderer
     /**
      * An image resource
      */
-    struct Image
+    struct ImageState
     {
         /**
          * Where the image was used last
@@ -3726,37 +3720,13 @@ struct HgRenderer
     };
 
     /**
-     * The hash function for HgBuffer*
-     */
-    static constexpr auto bufferHash = [](const HgBuffer* buffer) constexpr -> u64 {
-        union
-        {
-            const HgBuffer* asPtr;
-            uptr asUptr;
-        } cast = {buffer};
-        return (u64)cast.asUptr;
-    };
-
-    /**
-     * The hash function for HgImageView*
-     */
-    static constexpr auto imageHash = [](const HgImageView* image) constexpr -> u64 {
-        union
-        {
-            const HgImageView* asPtr;
-            uptr asUptr;
-        } cast = {image};
-        return (u64)cast.asUptr;
-    };
-
-    /**
      * The buffer resources
      */
-    HgHashMap<const HgBuffer*, Buffer, bufferHash> buffers;
+    HgHashMap<const HgBuffer*, BufferState, hgPtrHash<const HgBuffer>> buffers;
     /**
      * The image resources
      */
-    HgHashMap<const HgImageView*, Image, imageHash> images;
+    HgHashMap<const HgImageView*, ImageState, hgPtrHash<const HgImageView>> images;
 
     /**
      * Create a new renderer
@@ -4898,7 +4868,7 @@ struct HgECS
             HgECS* ecs;
             Fn* fn;
         };
-        Capture capture = {this, &fn};
+        Capture capture{this, &fn};
 
         hgForPar(0, count<T>(), &capture, [](void* pcapture, u64 idx)
         {
@@ -4930,7 +4900,7 @@ struct HgECS
             Fn* fn;
             u32 id;
         };
-        Capture capture = {this, &fn, findSmallest<Ts...>()};
+        Capture capture{this, &fn, findSmallest<Ts...>()};
 
         hgForPar(0, systems[capture.id].count, &capture, [](void* pcapture, u64 idx)
         {
