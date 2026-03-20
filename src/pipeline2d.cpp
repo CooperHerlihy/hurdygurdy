@@ -36,15 +36,14 @@ void hgInitPipeline2D(
     pipelineLayout = hgCreateBindlessPipelineLayout(&push, 1);
 
     HgCreateVkGraphicsPipeline pipelineConfig{};
-    pipelineConfig.colorAttachmentFormats = &colorFormat;
-    pipelineConfig.colorAttachmentCount = 1;
-    pipelineConfig.depthAttachmentFormat = depthFormat;
+    pipelineConfig.layout = pipelineLayout;
     pipelineConfig.vertexShader = sprite_vert_spv;
     pipelineConfig.vertexShaderSize = sprite_vert_spv_size;
     pipelineConfig.fragmentShader = sprite_frag_spv;
     pipelineConfig.fragmentShaderSize = sprite_frag_spv_size;
-    pipelineConfig.layout = pipelineLayout;
-    pipelineConfig.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
+    pipelineConfig.colorAttachmentFormats = &colorFormat;
+    pipelineConfig.colorAttachmentCount = 1;
+    pipelineConfig.depthAttachmentFormat = depthFormat;
     pipelineConfig.enableColorBlend = true;
 
     pipeline = hgCreateVkGraphicsPipeline(pipelineConfig);
@@ -149,7 +148,7 @@ void hgDraw2D(HgECS* ecs, VkCommandBuffer cmd)
 
         vkCmdPushConstants(cmd, pipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(push), &push);
 
-        vkCmdDraw(cmd, 4, 1, 0, 0);
+        vkCmdDraw(cmd, 6, 1, 0, 0);
     });
 }
 

@@ -3421,16 +3421,23 @@ void hgDestroyDescriptor(HgDescriptor descriptor);
  * - descriptor The descriptor to update
  * - bufferInfo The buffer info, if the descriptor is a buffer type
  * - imageInfo The image info, if the descriptor is an image type
+ * - texelInfo The texel view, if the descriptor is a texel type
  */
 void hgUpdateDescriptor(
     HgDescriptor descriptor,
     const VkDescriptorBufferInfo* bufferInfo,
-    const VkDescriptorImageInfo* imageInfo);
+    const VkDescriptorImageInfo* imageInfo,
+    const VkBufferView* texelInfo = nullptr);
 
 /**
  * Create a pipeline layout using the global bindless descriptor set layout
  */
-VkPipelineLayout hgCreateBindlessPipelineLayout(VkPushConstantRange* pushRanges, u32 pushRangeCount);
+VkPipelineLayout hgCreateBindlessPipelineLayout(const VkPushConstantRange* pushRanges, u32 pushRangeCount);
+
+/**
+ * Get the global bindless descriptor set layout
+ */
+VkDescriptorSetLayout hgBindlessSetLayout();
 
 /**
  * Bind the bindless descriptor set to the pipeline
@@ -3443,36 +3450,14 @@ VkPipelineLayout hgCreateBindlessPipelineLayout(VkPushConstantRange* pushRanges,
 void hgBindBindlessDescriptors(VkCommandBuffer cmd, VkPipelineLayout pipelineLayout, u32 set = 0);
 
 /**
- * Get the global bindless descriptor set layout
- */
-VkDescriptorSetLayout hgGetBindlessSetLayout();
-
-/**
- * Get the global bindless descriptor set
- */
-VkDescriptorSet hgGetBindlessSet();
-
-/**
  * Config for hgCreateVkGraphicsPipeline
  */
 struct HgCreateVkGraphicsPipeline
 {
     /**
-     * The format of the color attachments, none can be UNDEFINED
+     * The pipeline layout
      */
-    const VkFormat* colorAttachmentFormats = nullptr;
-    /**
-     * The number of color attachment formats
-     */
-    u32 colorAttachmentCount = 0;
-    /**
-     * The format of the depth attachment, no depth attachment if UNDEFINED
-     */
-    VkFormat depthAttachmentFormat = VK_FORMAT_UNDEFINED;
-    /**
-     * The format of the stencil attachment, no stencil attachment if UNDEFINED
-     */
-    VkFormat stencilAttachmentFormat = VK_FORMAT_UNDEFINED;
+    VkPipelineLayout layout = nullptr;
     /**
      * The vertex shader code
      */
@@ -3490,9 +3475,21 @@ struct HgCreateVkGraphicsPipeline
      */
     u64 fragmentShaderSize = 0;
     /**
-     * The pipeline layout
+     * The format of the color attachments, none can be UNDEFINED
      */
-    VkPipelineLayout layout = nullptr;
+    const VkFormat* colorAttachmentFormats = nullptr;
+    /**
+     * The number of color attachment formats
+     */
+    u32 colorAttachmentCount = 0;
+    /**
+     * The format of the depth attachment, no depth attachment if UNDEFINED
+     */
+    VkFormat depthAttachmentFormat = VK_FORMAT_UNDEFINED;
+    /**
+     * The format of the stencil attachment, no stencil attachment if UNDEFINED
+     */
+    VkFormat stencilAttachmentFormat = VK_FORMAT_UNDEFINED;
     /**
      * Descriptions of the vertex bindings, may be nullptr
      */
@@ -3552,9 +3549,10 @@ VkPipeline hgCreateVkGraphicsPipeline(const HgCreateVkGraphicsPipeline& config);
  *
  * Parameters
  * - layout The pipeline layout, must not be nullptr
- * - shader The compute shader, must not be nullptr
+ * - shaderCode The compute shader, must not be nullptr
+ * - shaderCodeSize The size in bytes of shaderCode
  */
-VkPipeline hgCreateVkComputePipeline(VkPipelineLayout layout, const VkShaderModule shader);
+VkPipeline hgCreateVkComputePipeline(VkPipelineLayout layout, const u8* shaderCode, u64 shaderCodeSize);
 
 /**
  * Begin a command buffer to be executed once

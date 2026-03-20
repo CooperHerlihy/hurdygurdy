@@ -8,6 +8,16 @@ struct VPUniform {
     HgMat4 view;
 };
 
+struct DirLightData {
+    HgVec4 dir;
+    HgVec4 color;
+};
+
+struct PointLightData {
+    HgVec4 pos;
+    HgVec4 color;
+};
+
 struct Push {
     HgMat4 model;
     u32 vpIdx;
@@ -17,16 +27,6 @@ struct Push {
     u32 pointLightCount;
     u32 colorMapIdx;
     u32 normalMapIdx;
-};
-
-struct DirLightData {
-    HgVec4 dir;
-    HgVec4 color;
-};
-
-struct PointLightData {
-    HgVec4 pos;
-    HgVec4 color;
 };
 
 static VkPipelineLayout pipelineLayout;
@@ -69,14 +69,14 @@ void hgInitPipeline3D(
         {3, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(HgModelVertex, uv)},
     };
     HgCreateVkGraphicsPipeline pipelineConfig{};
-    pipelineConfig.colorAttachmentFormats = &colorFormat;
-    pipelineConfig.colorAttachmentCount = 1;
-    pipelineConfig.depthAttachmentFormat = depthFormat;
+    pipelineConfig.layout = pipelineLayout;
     pipelineConfig.vertexShader = model_vert_spv;
     pipelineConfig.vertexShaderSize = model_vert_spv_size;
     pipelineConfig.fragmentShader = model_frag_spv;
     pipelineConfig.fragmentShaderSize = model_frag_spv_size;
-    pipelineConfig.layout = pipelineLayout;
+    pipelineConfig.colorAttachmentFormats = &colorFormat;
+    pipelineConfig.colorAttachmentCount = 1;
+    pipelineConfig.depthAttachmentFormat = depthFormat;
     pipelineConfig.vertexBindings = vertexBindings;
     pipelineConfig.vertexBindingCount = sizeof(vertexBindings) / sizeof(*vertexBindings);
     pipelineConfig.vertexAttributes = vertexAttributes;
@@ -276,18 +276,17 @@ void hgDraw3D(HgECS* ecs, VkCommandBuffer cmd)
     {
         vkQueueWaitIdle(hgVkQueue);
 
-        u32 newCapacity = dirLightCapacity == 0 ? 1 : dirLightCapacity * 2;
-        while (newCapacity < dirLightCapacity)
+        dirLightCapacity = dirLightCapacity == 0 ? 1 : dirLightCapacity * 2;
+        while (dirLightCapacity < dirLightCount)
         {
-            newCapacity *= 2;
+            dirLightCapacity *= 2;
         }
 
         hgDestroyBuffer(dirLightBuffer);
         dirLightBuffer = hgCreateBuffer(
-            sizeof(DirLightData) * newCapacity,
+            sizeof(DirLightData) * dirLightCapacity,
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
             HgBufferMemoryUsage_frequentUpdate);
-        dirLightCapacity = newCapacity;
 
         VkDescriptorBufferInfo dirLightBufferInfo = {dirLightBuffer->buffer, 0, VK_WHOLE_SIZE};
         hgUpdateDescriptor(dirLightDesc, &dirLightBufferInfo, nullptr);
@@ -297,18 +296,17 @@ void hgDraw3D(HgECS* ecs, VkCommandBuffer cmd)
     {
         vkQueueWaitIdle(hgVkQueue);
 
-        u32 newCapacity = pointLightCapacity == 0 ? 1 : pointLightCapacity * 2;
-        while (newCapacity < dirLightCapacity)
+        pointLightCapacity = pointLightCapacity == 0 ? 1 : pointLightCapacity * 2;
+        while (pointLightCapacity < pointLightCount)
         {
-            newCapacity *= 2;
+            pointLightCapacity *= 2;
         }
 
         hgDestroyBuffer(pointLightBuffer);
         pointLightBuffer = hgCreateBuffer(
-            sizeof(PointLightData) * newCapacity,
+            sizeof(PointLightData) * pointLightCapacity,
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
             HgBufferMemoryUsage_frequentUpdate);
-        pointLightCapacity = newCapacity;
 
         VkDescriptorBufferInfo pointLightBufferInfo = {pointLightBuffer->buffer, 0, VK_WHOLE_SIZE};
         hgUpdateDescriptor(pointLightDesc, &pointLightBufferInfo, nullptr);

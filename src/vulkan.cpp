@@ -1722,27 +1722,35 @@ HgDescriptor hgCreateDescriptor(HgDescriptorType type)
     switch (type)
     {
         case HgDescriptorType_sampler:
+            hgAssert(samplerPoolNext.idx() != UINT16_MAX);
             return allocDescriptor(samplerPool, &samplerPoolNext);
             break;
         case HgDescriptorType_combinedImageSampler:
+            hgAssert(combinedImageSamplerPoolNext.idx() != UINT16_MAX);
             return allocDescriptor(combinedImageSamplerPool, &combinedImageSamplerPoolNext);
             break;
         case HgDescriptorType_sampledImage:
+            hgAssert(sampledImagePoolNext.idx() != UINT16_MAX);
             return allocDescriptor(sampledImagePool, &sampledImagePoolNext);
             break;
         case HgDescriptorType_storageImage:
+            hgAssert(storageImagePoolNext.idx() != UINT16_MAX);
             return allocDescriptor(storageImagePool, &storageImagePoolNext);
             break;
         case HgDescriptorType_uniformTexelBuffer:
+            hgAssert(uniformTexelBufferPoolNext.idx() != UINT16_MAX);
             return allocDescriptor(uniformTexelBufferPool, &uniformTexelBufferPoolNext);
             break;
         case HgDescriptorType_storageTexelBuffer:
+            hgAssert(storageTexelBufferPoolNext.idx() != UINT16_MAX);
             return allocDescriptor(storageTexelBufferPool, &storageTexelBufferPoolNext);
             break;
         case HgDescriptorType_uniformBuffer:
+            hgAssert(uniformBufferPoolNext.idx() != UINT16_MAX);
             return allocDescriptor(uniformBufferPool, &uniformBufferPoolNext);
             break;
         case HgDescriptorType_storageBuffer:
+            hgAssert(storageBufferPoolNext.idx() != UINT16_MAX);
             return allocDescriptor(storageBufferPool, &storageBufferPoolNext);
             break;
         default:
@@ -1833,7 +1841,8 @@ VkDescriptorType hgDescriptorTypeToVk(HgDescriptorType type)
 void hgUpdateDescriptor(
     HgDescriptor descriptor,
     const VkDescriptorBufferInfo* bufferInfo,
-    const VkDescriptorImageInfo* imageInfo)
+    const VkDescriptorImageInfo* imageInfo,
+    const VkBufferView* texelInfo)
 {
     VkWriteDescriptorSet write{};
     write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -1844,11 +1853,12 @@ void hgUpdateDescriptor(
     write.descriptorType = hgDescriptorTypeToVk(descriptor.type());
     write.pBufferInfo = bufferInfo;
     write.pImageInfo = imageInfo;
+    write.pTexelBufferView = texelInfo;
 
     vkUpdateDescriptorSets(hgVkDevice, 1, &write, 0, nullptr);
 }
 
-VkPipelineLayout hgCreateBindlessPipelineLayout(VkPushConstantRange* pushRanges, u32 pushRangeCount)
+VkPipelineLayout hgCreateBindlessPipelineLayout(const VkPushConstantRange* pushRanges, u32 pushRangeCount)
 {
     VkPipelineLayoutCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -1865,18 +1875,13 @@ VkPipelineLayout hgCreateBindlessPipelineLayout(VkPushConstantRange* pushRanges,
     return layout;
 }
 
-void hgBindBindlessDescriptors(VkCommandBuffer cmd, VkPipelineLayout pipelineLayout, u32 set) {
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, set, 1, &bindlessSet, 0, nullptr);
-}
-
-VkDescriptorSetLayout hgGetBindlessSetLayout()
+VkDescriptorSetLayout hgBindlessSetLayout()
 {
     return bindlessLayout;
 }
 
-VkDescriptorSet hgGetBindlessSet()
-{
-    return bindlessSet;
+void hgBindBindlessDescriptors(VkCommandBuffer cmd, VkPipelineLayout pipelineLayout, u32 set) {
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, set, 1, &bindlessSet, 0, nullptr);
 }
 
 static VkShaderModule createVkShaderModule(const u8* spirvCode, u64 codeSize)
@@ -1896,11 +1901,11 @@ static VkShaderModule createVkShaderModule(const u8* spirvCode, u64 codeSize)
 
 VkPipeline hgCreateVkGraphicsPipeline(const HgCreateVkGraphicsPipeline& config)
 {
-    if (config.colorAttachmentCount > 0)
-        hgAssert(config.colorAttachmentFormats != nullptr);
+    hgAssert(config.layout != nullptr);
     hgAssert(config.vertexShader != nullptr);
     hgAssert(config.fragmentShader != nullptr);
-    hgAssert(config.layout != nullptr);
+    if (config.colorAttachmentCount > 0)
+        hgAssert(config.colorAttachmentFormats != nullptr);
     if (config.vertexBindingCount > 0)
         hgAssert(config.vertexBindings != nullptr);
 
