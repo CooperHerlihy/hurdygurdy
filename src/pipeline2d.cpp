@@ -32,7 +32,7 @@ void hgInitPipeline2D(
     hgAssert(colorFormat != VK_FORMAT_UNDEFINED);
 
     VkPushConstantRange push{VK_SHADER_STAGE_ALL, 0, sizeof(Push)};
-    pipelineLayout = hgCreatePipelineLayout(&push, 1);
+    pipelineLayout = hgCreatePipelineLayout(push);
 
     HgCreateGraphicsPipeline pipelineConfig{};
     pipelineConfig.layout = pipelineLayout;
@@ -43,7 +43,9 @@ void hgInitPipeline2D(
     pipelineConfig.colorAttachmentFormats = &colorFormat;
     pipelineConfig.colorAttachmentCount = 1;
     pipelineConfig.depthAttachmentFormat = depthFormat;
-    pipelineConfig.enableColorBlend = true;
+    pipelineConfig.enableDepthRead = depthFormat != VK_FORMAT_UNDEFINED;
+    bool enableColorBlend = true;
+    pipelineConfig.colorBlendEnables = &enableColorBlend;
 
     pipeline = hgCreateGraphicsPipeline(pipelineConfig);
 

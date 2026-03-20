@@ -56,8 +56,8 @@ void hgInitPipeline3D(
     hgAssert(colorFormat != VK_FORMAT_UNDEFINED);
     hgAssert(depthFormat != VK_FORMAT_UNDEFINED);
 
-    VkPushConstantRange pushRange{VK_SHADER_STAGE_ALL, 0, sizeof(Push)};
-    pipelineLayout = hgCreatePipelineLayout(&pushRange, 1);
+    VkPushConstantRange push{VK_SHADER_STAGE_ALL, 0, sizeof(Push)};
+    pipelineLayout = hgCreatePipelineLayout(push);
 
     VkVertexInputBindingDescription vertexBindings[]{
         {0, sizeof(HgModelVertex), VK_VERTEX_INPUT_RATE_VERTEX},
@@ -82,6 +82,8 @@ void hgInitPipeline3D(
     pipelineConfig.vertexAttributes = vertexAttributes;
     pipelineConfig.vertexAttributeCount = sizeof(vertexAttributes) / sizeof(*vertexAttributes);
     pipelineConfig.cullMode = VK_CULL_MODE_BACK_BIT;
+    pipelineConfig.enableDepthRead = true;
+    pipelineConfig.enableDepthWrite = true;
 
     pipeline = hgCreateGraphicsPipeline(pipelineConfig);
 

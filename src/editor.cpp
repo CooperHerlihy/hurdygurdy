@@ -499,8 +499,8 @@ int main()
 
             renderer.beginPass(cmd, renderWidth, renderHeight, renderPass);
 
-            hgDraw2D(&ecs, cmd);
             hgDraw3D(&ecs, cmd);
+            hgDraw2D(&ecs, cmd);
 
             renderer.endPass(cmd);
 

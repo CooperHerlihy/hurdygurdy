@@ -3244,14 +3244,6 @@ HgImageView* hgCreateImageView(
 void hgDestroyImageView(HgImageView* view);
 
 /**
- * Create a Vulkan sampler
- */
-VkSampler hgCreateVkSampler(
-    VkFilter filter,
-    VkSamplerAddressMode addressMode = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-    VkBorderColor borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK);
-
-/**
  * Write to a gpu image
  *
  * Parameters
@@ -3319,6 +3311,19 @@ void hgGenerateMipmaps(
     VkImageLayout newLayout);
 
 /**
+ * Create a Vulkan sampler
+ *
+ * Parameters
+ * - filter How the sampler interpolates between image values
+ * - addressMode How the sampler handles address off edges
+ * - borderColor The border color if addressMode uses a border
+ */
+VkSampler hgCreateVkSampler(
+    VkFilter filter,
+    VkSamplerAddressMode addressMode = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+    VkBorderColor borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK);
+
+/**
  * The binding indices for the descriptor types in the bindless layout
  */
 enum HgDescriptorType
@@ -3347,7 +3352,7 @@ struct HgDescriptor
     /**
      * Get the index from the id
      */
-    u32 idx()
+    constexpr u32 idx()
     {
         return id & 0x0000ffff;
     }
@@ -3355,7 +3360,7 @@ struct HgDescriptor
     /**
      * Get the generation from the id
      */
-    u32 generation()
+    constexpr u32 generation()
     {
         return (id & 0x0fff0000) >> 16;
     }
@@ -3363,7 +3368,7 @@ struct HgDescriptor
     /**
      * Increment this descriptor's generation count
      */
-    void incrementGeneration()
+    constexpr void incrementGeneration()
     {
         id += 1 << 16;
     }
@@ -3371,7 +3376,7 @@ struct HgDescriptor
     /**
      * Get the descriptor type from the id
      */
-    HgDescriptorType type()
+    constexpr HgDescriptorType type()
     {
         return (HgDescriptorType)((id & 0xf0000000) >> 28);
     }
@@ -3379,7 +3384,7 @@ struct HgDescriptor
     /**
      * Increment this descriptor's generation count
      */
-    void setType(HgDescriptorType type)
+    constexpr void setType(HgDescriptorType type)
     {
         id = (id & 0x0fffffff) | (type << 28);
     }
@@ -3413,7 +3418,7 @@ void hgUpdateDescriptor(
 /**
  * Create a pipeline layout using the global bindless descriptor set layout
  */
-VkPipelineLayout hgCreatePipelineLayout(const VkPushConstantRange* pushRanges, u32 pushRangeCount);
+VkPipelineLayout hgCreatePipelineLayout(const VkPushConstantRange& push);
 
 /**
  * Config for hgCreateGraphicsPipeline
@@ -3485,6 +3490,10 @@ struct HgCreateGraphicsPipeline
      */
     VkPolygonMode polygonMode = VK_POLYGON_MODE_FILL;
     /**
+     * Enables back/front face culling
+     */
+    VkCullModeFlagBits cullMode = VK_CULL_MODE_NONE;
+    /**
      * Which face is treated as the front
      */
     VkFrontFace frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
@@ -3493,13 +3502,17 @@ struct HgCreateGraphicsPipeline
      */
     VkSampleCountFlagBits multisampleCount = VK_SAMPLE_COUNT_1_BIT;
     /**
-     * Enables back/front face culling
+     * Enables culling fragments by comparing to a depth buffer
      */
-    VkCullModeFlagBits cullMode = VK_CULL_MODE_NONE;
+    bool enableDepthRead = false;
     /**
-     * Enables color blending using pixel alpha values
+     * Enables writing the depth to the depth buffer
      */
-    bool enableColorBlend = false;
+    bool enableDepthWrite = false;
+    /**
+     * Enables color blending using pixel alpha values for each color attachment
+     */
+    const bool* colorBlendEnables = nullptr;
 };
 
 /**
@@ -4483,7 +4496,7 @@ struct HgEntity
     /**
      * Get the index from the id
      */
-    u32 idx()
+    constexpr u32 idx()
     {
         return id & 0x00ffffff;
     }
@@ -4491,7 +4504,7 @@ struct HgEntity
     /**
      * Get the generation from the id
      */
-    u32 generation()
+    constexpr u32 generation()
     {
         return (id & 0xff000000) >> 24;
     }
@@ -4499,7 +4512,7 @@ struct HgEntity
     /**
      * Increment this entity's generation count
      */
-    void incrementGeneration()
+    constexpr void incrementGeneration()
     {
         id += 1 << 24;
     }

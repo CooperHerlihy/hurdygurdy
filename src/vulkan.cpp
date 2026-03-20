@@ -1274,30 +1274,6 @@ void hgDestroyImageView(HgImageView* view)
     }
 }
 
-VkSampler hgCreateVkSampler(VkFilter filter, VkSamplerAddressMode addressMode, VkBorderColor borderColor)
-{
-    VkSamplerCreateInfo info{};
-    info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    info.magFilter = filter;
-    info.minFilter = filter;
-    info.mipmapMode = filter == VK_FILTER_LINEAR
-        ? VK_SAMPLER_MIPMAP_MODE_LINEAR : VK_SAMPLER_MIPMAP_MODE_NEAREST;
-    info.addressModeU = addressMode;
-    info.addressModeV = addressMode;
-    info.addressModeW = addressMode;
-    info.mipLodBias = 0.0f;
-    info.minLod = 0.0f;
-    info.maxLod = 1000.0f;
-    info.borderColor = borderColor;
-
-    VkSampler sampler = nullptr;
-    VkResult result = vkCreateSampler(hgVkDevice, &info, nullptr, &sampler);
-    if (sampler == nullptr)
-        hgError("Could not create VkSampler: %s", hgVkResultToStr(result));
-
-    return sampler;
-}
-
 void hgWriteImage(
     HgImage* dst,
     VkImageSubresourceLayers subresource,
@@ -1697,6 +1673,30 @@ void hgGenerateMipmaps(
     hgEndVkCmd(cmd);
 }
 
+VkSampler hgCreateVkSampler(VkFilter filter, VkSamplerAddressMode addressMode, VkBorderColor borderColor)
+{
+    VkSamplerCreateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    info.magFilter = filter;
+    info.minFilter = filter;
+    info.mipmapMode = filter == VK_FILTER_LINEAR
+        ? VK_SAMPLER_MIPMAP_MODE_LINEAR : VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    info.addressModeU = addressMode;
+    info.addressModeV = addressMode;
+    info.addressModeW = addressMode;
+    info.mipLodBias = 0.0f;
+    info.minLod = 0.0f;
+    info.maxLod = 1000.0f;
+    info.borderColor = borderColor;
+
+    VkSampler sampler = nullptr;
+    VkResult result = vkCreateSampler(hgVkDevice, &info, nullptr, &sampler);
+    if (sampler == nullptr)
+        hgError("Could not create VkSampler: %s", hgVkResultToStr(result));
+
+    return sampler;
+}
+
 static HgDescriptor allocDescriptor(HgDescriptor* pool, HgDescriptor* next)
 {
     HgDescriptor desc = *next;
@@ -1858,14 +1858,14 @@ void hgUpdateDescriptor(
     vkUpdateDescriptorSets(hgVkDevice, 1, &write, 0, nullptr);
 }
 
-VkPipelineLayout hgCreatePipelineLayout(const VkPushConstantRange* pushRanges, u32 pushRangeCount)
+VkPipelineLayout hgCreatePipelineLayout(const VkPushConstantRange& push)
 {
     VkPipelineLayoutCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     info.setLayoutCount = 1;
     info.pSetLayouts = &bindlessLayout;
-    info.pushConstantRangeCount = pushRangeCount;
-    info.pPushConstantRanges = pushRanges;
+    info.pushConstantRangeCount = 1;
+    info.pPushConstantRanges = &push;
 
     VkPipelineLayout layout = nullptr;
     VkResult result = vkCreatePipelineLayout(hgVkDevice, &info, nullptr, &layout);
@@ -1899,6 +1899,9 @@ VkPipeline hgCreateGraphicsPipeline(const HgCreateGraphicsPipeline& config)
         hgAssert(config.colorAttachmentFormats != nullptr);
     if (config.vertexBindingCount > 0)
         hgAssert(config.vertexBindings != nullptr);
+
+    HgArena* scratch = hgGetScratch();
+    HgArenaScope scratchScope{scratch};
 
     VkShaderModule vertexShader = createVkShaderModule(config.vertexShader, config.vertexShaderSize);
     VkShaderModule fragmentShader = createVkShaderModule(config.fragmentShader, config.fragmentShaderSize);
@@ -1951,9 +1954,7 @@ VkPipeline hgCreateGraphicsPipeline(const HgCreateGraphicsPipeline& config)
 
     VkPipelineMultisampleStateCreateInfo multisampleState{};
     multisampleState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-    multisampleState.rasterizationSamples = config.multisampleCount != 0
-        ? config.multisampleCount
-        : VK_SAMPLE_COUNT_1_BIT,
+    multisampleState.rasterizationSamples = config.multisampleCount;
     multisampleState.sampleShadingEnable = VK_FALSE;
     multisampleState.minSampleShading = 1.0f;
     multisampleState.pSampleMask = nullptr;
@@ -1962,50 +1963,47 @@ VkPipeline hgCreateGraphicsPipeline(const HgCreateGraphicsPipeline& config)
 
     VkPipelineDepthStencilStateCreateInfo depthStencilState{};
     depthStencilState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    depthStencilState.depthTestEnable = config.depthAttachmentFormat != VK_FORMAT_UNDEFINED
-            ? VK_TRUE
-            : VK_FALSE;
-    depthStencilState.depthWriteEnable = config.depthAttachmentFormat != VK_FORMAT_UNDEFINED
-            ? VK_TRUE
-            : VK_FALSE;
-    depthStencilState.depthCompareOp = config.enableColorBlend
-            ? VK_COMPARE_OP_LESS_OR_EQUAL
-            : VK_COMPARE_OP_LESS;
-    depthStencilState.depthBoundsTestEnable = config.depthAttachmentFormat != VK_FORMAT_UNDEFINED
-            ? VK_TRUE
-            : VK_FALSE;
-    depthStencilState.stencilTestEnable = config.stencilAttachmentFormat != VK_FORMAT_UNDEFINED
-            ? VK_TRUE
-            : VK_FALSE,
-    // depthStencilState.front = {}; : TODO
-    // depthStencilState.back = {}; : TODO
+    depthStencilState.depthTestEnable = config.enableDepthRead;
+    depthStencilState.depthWriteEnable = config.enableDepthWrite;
+    depthStencilState.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+    depthStencilState.depthBoundsTestEnable = config.enableDepthRead;
+    depthStencilState.stencilTestEnable = VK_FALSE, // : TODO
+    depthStencilState.front = {}; // : TODO
+    depthStencilState.back = {}; // : TODO
     depthStencilState.minDepthBounds = 0.0f;
     depthStencilState.maxDepthBounds = 1.0f;
 
-    VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-    colorBlendAttachment.blendEnable = config.enableColorBlend ? VK_TRUE : VK_FALSE;
-    colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-    colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-    colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
-    colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-    colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-    colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
-    colorBlendAttachment.colorWriteMask
-        = VK_COLOR_COMPONENT_R_BIT
-        | VK_COLOR_COMPONENT_G_BIT
-        | VK_COLOR_COMPONENT_B_BIT
-        | VK_COLOR_COMPONENT_A_BIT;
+    VkPipelineColorBlendAttachmentState* colorBlendAttachments
+        = hgAlloc<VkPipelineColorBlendAttachmentState>(scratch, config.colorAttachmentCount);
+
+    for (u32 i = 0; i < config.colorAttachmentCount; ++i)
+    {
+        colorBlendAttachments[i].blendEnable = config.colorBlendEnables != nullptr
+            ? config.colorBlendEnables[i]
+            : VK_FALSE;
+        colorBlendAttachments[i].srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+        colorBlendAttachments[i].dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        colorBlendAttachments[i].colorBlendOp = VK_BLEND_OP_ADD;
+        colorBlendAttachments[i].srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        colorBlendAttachments[i].dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        colorBlendAttachments[i].alphaBlendOp = VK_BLEND_OP_ADD;
+        colorBlendAttachments[i].colorWriteMask
+            = VK_COLOR_COMPONENT_R_BIT
+            | VK_COLOR_COMPONENT_G_BIT
+            | VK_COLOR_COMPONENT_B_BIT
+            | VK_COLOR_COMPONENT_A_BIT;
+    }
 
     VkPipelineColorBlendStateCreateInfo colorBlendState{};
     colorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     colorBlendState.logicOpEnable = VK_FALSE;
     colorBlendState.logicOp = VK_LOGIC_OP_COPY;
-    colorBlendState.attachmentCount = 1;
-    colorBlendState.pAttachments = &colorBlendAttachment;
-    colorBlendState.blendConstants[0] = {1.0f};
-    colorBlendState.blendConstants[1] = {1.0f};
-    colorBlendState.blendConstants[2] = {1.0f};
-    colorBlendState.blendConstants[3] = {1.0f};
+    colorBlendState.attachmentCount = config.colorAttachmentCount;
+    colorBlendState.pAttachments = colorBlendAttachments;
+    for (float& blendConstant : colorBlendState.blendConstants)
+    {
+        blendConstant = 1.0f;
+    }
 
     VkDynamicState dynamicStates[]{VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
     VkPipelineDynamicStateCreateInfo dynamicState{};
