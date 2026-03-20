@@ -17,24 +17,23 @@ layout (binding = HgBinding_uniformBuffer) uniform VP {
     mat4 view;
 } uniformBuffers[];
 
-layout (push_constant) uniform Push
-{
-    mat4 pModel;
-    uint pVpIdx;
-    uint pDirLightIdx;
-    uint pDirLightCount;
-    uint pPointLightIdx;
-    uint pPointLightCount;
-    uint pColorMapIdx;
-    uint pNormalMapIdx;
-};
+layout (push_constant) uniform Push {
+    mat4 model;
+    uint vpIdx;
+    uint dirLightIdx;
+    uint dirLightCount;
+    uint pointLightIdx;
+    uint pointLightCount;
+    uint colorMapIdx;
+    uint normalMapIdx;
+} p;
 
 void main()
 {
-    mat4 proj = uniformBuffers[pVpIdx].proj;
-    mat4 view = uniformBuffers[pVpIdx].view;
+    mat4 proj = uniformBuffers[p.vpIdx].proj;
+    mat4 view = uniformBuffers[p.vpIdx].view;
 
-    mat4 mv = view * pModel;
+    mat4 mv = view * p.model;
     mat3 imv = mat3(transpose(inverse(mv)));
     vec4 pos = mv * vec4(vPos, 1.0);
 

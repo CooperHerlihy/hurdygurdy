@@ -31,17 +31,16 @@ layout (binding = HgBinding_storageBuffer) readonly buffer PointLights {
 
 layout (binding = HgBinding_combinedImageSampler) uniform sampler2D uTextures[];
 
-layout (push_constant) uniform Push
-{
-    mat4 pModel;
-    uint pVpIdx;
-    uint pDirLightIdx;
-    uint pDirLightCount;
-    uint pPointLightIdx;
-    uint pPointLightCount;
-    uint pColorMapIdx;
-    uint pNormalMapIdx;
-};
+layout (push_constant) uniform Push {
+    mat4 model;
+    uint vpIdx;
+    uint dirLightIdx;
+    uint dirLightCount;
+    uint pointLightIdx;
+    uint pointLightCount;
+    uint colorMapIdx;
+    uint normalMapIdx;
+} p;
 
 float blinnPhong(vec3 normal, vec3 lightDir, float shininess, float kd, float ks)
 {
@@ -60,19 +59,19 @@ void main()
         cross(fTan.xyz, fNorm) * fTan.w,
         -fNorm
     );
-    vec3 normal = normalize(texToModel * texture(uTextures[pNormalMapIdx], fUV).xyz);
+    vec3 normal = normalize(texToModel * texture(uTextures[p.normalMapIdx], fUV).xyz);
 
     vec3 lighting = vec3(0.0);
 
-    for (uint i = 0; i < pDirLightCount; ++i) {
-        DirLight light = dirLights[pDirLightIdx].lights[i];
+    for (uint i = 0; i < p.dirLightCount; ++i) {
+        DirLight light = dirLights[p.dirLightIdx].lights[i];
         vec3 lightDir = -normalize(light.dir.xyz);
         vec3 lightColor = light.color.xyz * light.color.w;
         lighting += blinnPhong(normal, lightDir, 16.0, 0.7, 0.3) * lightColor;
     }
 
-    for (uint i = 0; i < pPointLightCount; ++i) {
-        PointLight light = pointLights[pPointLightIdx].lights[i];
+    for (uint i = 0; i < p.pointLightCount; ++i) {
+        PointLight light = pointLights[p.pointLightIdx].lights[i];
         vec3 lightPos = light.pos.xyz;
         vec3 lightDiff = lightPos - fPos;
         float lightDist = dot(lightDiff, lightDiff);
@@ -81,7 +80,7 @@ void main()
         lighting += blinnPhong(normal, lightDir, 16.0, 0.7, 0.3) * lightColor / lightDist;
     }
 
-    vec4 hdrColor = vec4(lighting, 1.0) * texture(uTextures[pColorMapIdx], fUV);
+    vec4 hdrColor = vec4(lighting, 1.0) * texture(uTextures[p.colorMapIdx], fUV);
     vec4 ldrColor = vec4(1.0) - exp(-hdrColor);
     outColor = hdrColor;
 }

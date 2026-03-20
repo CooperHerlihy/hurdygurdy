@@ -23,7 +23,6 @@ static HgBuffer* vpBuffer;
 static HgDescriptor vpDesc;
 
 static HgTextureResource defaultTex;
-static HgDescriptor defaultTexDesc;
 
 void hgInitPipeline2D(
     VkFormat colorFormat,
@@ -86,19 +85,19 @@ void hgInitPipeline2D(
 
     defaultTex.sampler = hgCreateVkSampler(VK_FILTER_NEAREST);
 
-    defaultTexDesc = hgCreateDescriptor(HgDescriptorType_combinedImageSampler);
+    defaultTex.descriptor = hgCreateDescriptor(HgDescriptorType_combinedImageSampler);
 
     VkDescriptorImageInfo imageInfo{};
     imageInfo.sampler = defaultTex.sampler;
     imageInfo.imageView = defaultTex.view->view;
     imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    hgUpdateDescriptor(defaultTexDesc, nullptr, &imageInfo);
+    hgUpdateDescriptor(defaultTex.descriptor, nullptr, &imageInfo);
 }
 
 void hgDeinitPipeline2D()
 {
-    hgDestroyDescriptor(defaultTexDesc);
+    hgDestroyDescriptor(defaultTex.descriptor);
     vkDestroySampler(hgVkDevice, defaultTex.sampler, nullptr);
     hgDestroyImageView(defaultTex.view);
     hgDestroyImage(defaultTex.image);

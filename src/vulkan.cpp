@@ -2779,7 +2779,8 @@ retry:
         hgInternalResizeWindowSwapchain(this);
         goto retry;
     }
-    hgAssert(result == VK_SUCCESS);
+    if (result != VK_SUCCESS)
+        hgError("Could not acquire next image: %s", hgVkResultToStr(result));
 
     VkCommandBuffer cmd = cmds[currentFrame];
     vkResetCommandBuffer(cmd, 0);
