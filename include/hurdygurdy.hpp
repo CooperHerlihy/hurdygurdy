@@ -2878,10 +2878,6 @@ inline u32 hgVkQueueFamily = (u32)-1;
  * The global Vulkan command pool
  */
 inline VkCommandPool hgVkCmdPool = nullptr;
-/**
- * The global Vulkan descriptor pool
- */
-inline VkDescriptorPool hgVkDescriptorPool = nullptr;
 
 /**
  * Turns a VkResult into a string
@@ -3342,30 +3338,119 @@ void hgGenerateMipmaps(
     VkImageLayout newLayout);
 
 /**
- * Create a descriptor set layout
- *
- * Parameters
- * - bindings The bindings in the descriptor set
- * - bindingCount The number of bindings
+ * The binding indices for the descriptor types in the bindless layout
  */
-VkDescriptorSetLayout hgCreateVkDescriptorSetLayout(
-    const VkDescriptorSetLayoutBinding* bindings,
-    u32 bindingCount);
+enum HgDescriptorType
+{
+    HgDescriptorType_sampler = 0,
+    HgDescriptorType_combinedImageSampler = 1,
+    HgDescriptorType_sampledImage = 2,
+    HgDescriptorType_storageImage = 3,
+    HgDescriptorType_uniformTexelBuffer = 4,
+    HgDescriptorType_storageTexelBuffer = 5,
+    HgDescriptorType_uniformBuffer = 6,
+    HgDescriptorType_storageBuffer = 7,
+    HgDescriptorType_count,
+};
 
 /**
- * Create a pipeline layout
+ * A descriptor in the bindless set
+ */
+struct HgDescriptor
+{
+    /**
+     * The descriptor id, defaults to null
+     */
+    u32 id = (u32)-1;
+
+    /**
+     * Get the index from the id
+     */
+    u32 idx()
+    {
+        return id & 0x0000ffff;
+    }
+
+    /**
+     * Get the generation from the id
+     */
+    u32 generation()
+    {
+        return (id & 0x0fff0000) >> 16;
+    }
+
+    /**
+     * Increment this descriptor's generation count
+     */
+    void incrementGeneration()
+    {
+        id += 1 << 16;
+    }
+
+    /**
+     * Get the descriptor type from the id
+     */
+    HgDescriptorType type()
+    {
+        return (HgDescriptorType)((id & 0xf0000000) >> 28);
+    }
+
+    /**
+     * Increment this descriptor's generation count
+     */
+    void setType(HgDescriptorType type)
+    {
+        id = (id & 0x0fffffff) | (type << 28);
+    }
+};
+
+/**
+ * Create a new bindless descriptor
+ */
+HgDescriptor hgCreateDescriptor(HgDescriptorType type);
+
+/**
+ * Destroy a bindless descriptor
+ */
+void hgDestroyDescriptor(HgDescriptor descriptor);
+
+/**
+ * Update a bindless descriptor
  *
  * Parameters
- * - setLayouts The descriptor set layouts
- * - setLayoutCount The number of set layouts
- * - pushRanges The push constant ranges
- * - pushRangeCount The number of push ranges
+ * - descriptor The descriptor to update
+ * - bufferInfo The buffer info, if the descriptor is a buffer type
+ * - imageInfo The image info, if the descriptor is an image type
  */
-VkPipelineLayout hgCreateVkPipelineLayout(
-    VkDescriptorSetLayout* setLayouts,
-    u32 setLayoutCount,
-    VkPushConstantRange* pushRanges,
-    u32 pushRangeCount);
+void hgUpdateDescriptor(
+    HgDescriptor descriptor,
+    const VkDescriptorBufferInfo* bufferInfo,
+    const VkDescriptorImageInfo* imageInfo);
+
+/**
+ * Create a pipeline layout using the global bindless descriptor set layout
+ */
+VkPipelineLayout hgCreateBindlessPipelineLayout(VkPushConstantRange* pushRanges, u32 pushRangeCount);
+
+/**
+ * Bind the bindless descriptor set to the pipeline
+ *
+ * Parameters
+ * - cmd The command buffer
+ * - pipelineLayout The layout of the current pipeline
+ * - set The index of the set in the pipeline layout
+ */
+void hgBindBindlessDescriptors(VkCommandBuffer cmd, VkPipelineLayout pipelineLayout, u32 set = 0);
+
+/**
+ * Get the global bindless descriptor set layout
+ */
+VkDescriptorSetLayout hgGetBindlessSetLayout();
+
+/**
+ * Get the global bindless descriptor set
+ */
+VkDescriptorSet hgGetBindlessSet();
 
 /**
  * Config for hgCreateVkGraphicsPipeline
@@ -3470,40 +3555,6 @@ VkPipeline hgCreateVkGraphicsPipeline(const HgCreateVkGraphicsPipeline& config);
  * - shader The compute shader, must not be nullptr
  */
 VkPipeline hgCreateVkComputePipeline(VkPipelineLayout layout, const VkShaderModule shader);
-
-/**
- * Allocate a descriptor set
- *
- * Parameters
- * - layout The layout of the set
- */
-VkDescriptorSet hgCreateVkDescriptorSet(VkDescriptorSetLayout layout);
-
-/**
- * Free a descriptor set
- */
-void hgDestroyVkDescriptorSet(VkDescriptorSet set);
-
-/**
- * Update a descriptor set binding
- *
- * Parameters
- * - set The descriptor set to update
- * - binding The binding in the set
- * - begin The first array element to update
- * - count The number of descriptors to update, starting at begin
- * - type The descriptor type
- * - bufferInfos The buffer infos to update to
- * - imageInfos The image infos to update to
- */
-void hgUpdateVkDescriptorSetBinding(
-    VkDescriptorSet set,
-    u32 binding,
-    u32 begin,
-    u32 count,
-    VkDescriptorType type,
-    const VkDescriptorBufferInfo* bufferInfos,
-    const VkDescriptorImageInfo* imageInfos);
 
 /**
  * Begin a command buffer to be executed once
@@ -4336,6 +4387,10 @@ struct HgTextureResource
      * The sampler
      */
     VkSampler sampler;
+    /**
+     * The descriptor
+     */
+    HgDescriptor descriptor;
 };
 
 /**
@@ -5061,14 +5116,10 @@ struct HgSprite2D
  * Initialize the 2D pipeline
  *
  * Parameters
- * - arena The arena to allocate from
- * - maxTextures The maximum textures which can be added to the pipelin
  * - colorFormat The format of the color attachment, must not be UNDEFINED
  * - depthFormat The format of the depth attachment, if any
  */
 void hgInitPipeline2D(
-    HgArena* arena,
-    u32 maxTextures,
     VkFormat colorFormat,
     VkFormat depthFormat);
 
@@ -5115,14 +5166,14 @@ struct HgModel3D
      * The model to render
      */
     HgResource modelResource;
-    // /**
-    //  * The model's color map
-    //  */
-    // HgResource colorMap;
-    // /**
-    //  * The model's normal map
-    //  */
-    // HgResource normalMap;
+    /**
+     * The model's color map
+     */
+    HgResource colorMap;
+    /**
+     * The model's normal map
+     */
+    HgResource normalMap;
 };
 
 /**
@@ -5155,14 +5206,10 @@ struct HgPointLight3D
  * Initialize the 3D pipeline
  *
  * Parameters
- * - arena The arena to allocate from
- * - maxModels The maximum models which can be added to the pipeline
  * - colorFormat The format of the color attachment, must not be UNDEFINED
  * - depthFormat The format of the depth attachment, must not be UNDEFINED
  */
 void hgInitPipeline3D(
-    HgArena* arena,
-    u32 maxModels,
     VkFormat colorFormat,
     VkFormat depthFormat);
 

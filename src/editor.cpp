@@ -28,10 +28,10 @@ int main()
     HgWindow* window = HgWindow::create(arena, windowConfig);
     hgDefer(window->destroy());
 
-    hgInitPipeline2D(arena, 256, VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_D32_SFLOAT);
+    hgInitPipeline2D(VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_D32_SFLOAT);
     hgDefer(hgDeinitPipeline2D());
 
-    hgInitPipeline3D(arena, 256, VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_D32_SFLOAT);
+    hgInitPipeline3D(VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_D32_SFLOAT);
     hgDefer(hgDeinitPipeline3D());
 
     IMGUI_CHECKVERSION();

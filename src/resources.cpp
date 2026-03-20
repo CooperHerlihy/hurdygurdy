@@ -313,8 +313,8 @@ void hgStoreResource(HgFence* fences, u32 fenceCount, HgResource id, HgStringVie
     {
         HgArena* scratch = hgGetScratch();
         HgArenaScope scratchScope{scratch};
-        hgWarn("Could not store resource to \"%s\" because the resource does not exist\n",
-            hgCString(scratch, path));
+        hgWarn("Could not store resource to \"%.*s\" because the resource does not exist\n",
+            (int)path.length, path.chars);
         return;
     }
 
@@ -367,7 +367,7 @@ void hgImportPng(HgFence* fences, u32 fenceCount, HgResource id, HgStringView pa
         u8* pixels = stbi_load_from_memory((u8*)bin.data, (i32)bin.size, &width, &height, &channels, 4);
         if (pixels == nullptr)
         {
-            hgWarn("Failed to decode image file: %s\n", hgCString(scratch, fpath));
+            hgWarn("Failed to decode image file: %.*s\n", (int)fpath.length, fpath.chars);
             return;
         }
         free(bin.data);
@@ -396,8 +396,8 @@ void hgExportPng(HgFence* fences, u32 fenceCount, HgResource id, HgStringView pa
     {
         HgArena* scratch = hgGetScratch();
         HgArenaScope scratchScope{scratch};
-        hgWarn("Could not export png resource to \"%s\" because the resource does not exist\n",
-            hgCString(scratch, path));
+        hgWarn("Could not export png resource to \"%.*s\" because the resource does not exist\n",
+            (int)path.length, path.chars);
         return;
     }
 
@@ -548,6 +548,11 @@ void hgLoadTexture(HgResource id, VkSampler sampler)
 
         hgAssert(sampler != nullptr);
         tex.sampler = sampler;
+
+        tex.descriptor = hgCreateDescriptor(HgDescriptorType_combinedImageSampler);
+
+        VkDescriptorImageInfo descInfo = {tex.sampler, tex.view->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+        hgUpdateDescriptor(tex.descriptor, nullptr, &descInfo);
     }
 }
 
@@ -556,6 +561,7 @@ void hgUnloadTexture(HgResource id)
     HgTextureResource tex;
     if (gpuTextures.unload(id, &tex))
     {
+        hgDestroyDescriptor(tex.descriptor);
         hgDestroyImageView(tex.view);
         hgDestroyImage(tex.image);
         tex = {};

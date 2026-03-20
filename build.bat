@@ -6,7 +6,7 @@ set BUILD_DIR=%SRC_DIR%\build
 set TEST_DIR=%SRC_DIR%\hg_test_dir
 
 set STD=/std:c++17
-set WARNINGS=/W4 /WX /D _CRT_SECURE_NO_WARNINGS
+set WARNINGS=/W4 /WX /permissive- /D _CRT_SECURE_NO_WARNINGS
 set CONFIG=/nologo /Zi /Od
 
 for %%a in (%*) do (

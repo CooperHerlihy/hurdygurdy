@@ -3,15 +3,20 @@
 #include "model.vert.spv.h"
 #include "model.frag.spv.h"
 
-struct GlobalUniform {
+struct VPUniform {
     HgMat4 proj;
     HgMat4 view;
-    u32 dirLightCount;
-    u32 pointLightCount;
 };
 
 struct Push {
     HgMat4 model;
+    u32 vpIdx;
+    u32 dirLightIdx;
+    u32 dirLightCount;
+    u32 pointLightIdx;
+    u32 pointLightCount;
+    u32 colorMapIdx;
+    u32 normalMapIdx;
 };
 
 struct DirLightData {
@@ -24,55 +29,35 @@ struct PointLightData {
     HgVec4 color;
 };
 
-static VkDescriptorSetLayout globalSetLayout;
-static VkDescriptorSetLayout textureSetLayout;
 static VkPipelineLayout pipelineLayout;
 static VkPipeline pipeline;
 
-static HgBuffer* globalBuffer;
-static GlobalUniform globalData;
+static HgBuffer* vpBuffer;
+static VPUniform vpData;
+static HgDescriptor vpDesc;
+
 static HgBuffer* dirLightBuffer;
 static u32 dirLightCapacity;
+static HgDescriptor dirLightDesc;
+
 static HgBuffer* pointLightBuffer;
 static u32 pointLightCapacity;
-static VkDescriptorSet globalSet;
+static HgDescriptor pointLightDesc;
 
 static HgModelResource defaultModel;
+static VkSampler defaultMapSampler;
 static HgTextureResource defaultColorMap;
 static HgTextureResource defaultNormalMap;
-static VkSampler defaultMapSampler;
-static VkDescriptorSet defaultModelSet;
-
-static HgHashMap<HgResource, VkDescriptorSet> modelSets;
 
 void hgInitPipeline3D(
-    HgArena* arena,
-    u32 maxModels,
     VkFormat colorFormat,
     VkFormat depthFormat)
 {
     hgAssert(colorFormat != VK_FORMAT_UNDEFINED);
     hgAssert(depthFormat != VK_FORMAT_UNDEFINED);
 
-    VkDescriptorSetLayoutBinding globalSetBindings[] = {
-        {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
-        {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
-        {2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
-    };
-    globalSetLayout = hgCreateVkDescriptorSetLayout(
-        globalSetBindings, sizeof(globalSetBindings) / sizeof(*globalSetBindings));
-
-    VkDescriptorSetLayoutBinding textureSetBindings[] = {
-        {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
-    };
-    textureSetLayout = hgCreateVkDescriptorSetLayout(
-        textureSetBindings, sizeof(textureSetBindings) / sizeof(*textureSetBindings));
-
-    VkDescriptorSetLayout setLayouts[] = {globalSetLayout, textureSetLayout};
-    VkPushConstantRange pushRange = {VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Push)};
-    pipelineLayout = hgCreateVkPipelineLayout(
-        setLayouts, sizeof(setLayouts) / sizeof(*setLayouts),
-        &pushRange, 1);
+    VkPushConstantRange pushRange = {VK_SHADER_STAGE_ALL, 0, sizeof(Push)};
+    pipelineLayout = hgCreateBindlessPipelineLayout(&pushRange, 1);
 
     VkVertexInputBindingDescription vertexBindings[] = {
         {0, sizeof(HgModelVertex), VK_VERTEX_INPUT_RATE_VERTEX},
@@ -100,30 +85,20 @@ void hgInitPipeline3D(
 
     pipeline = hgCreateVkGraphicsPipeline(pipelineConfig);
 
-    globalSet = hgCreateVkDescriptorSet(globalSetLayout);
-    hgAssert(globalSet != nullptr);
+    vpData.proj = HgMat4{1.0f};
+    vpData.view = HgMat4{1.0f};
 
-    globalData.proj = HgMat4{1.0f};
-    globalData.view = HgMat4{1.0f};
-    globalData.dirLightCount = 0;
-    globalData.pointLightCount = 0;
-
-    globalBuffer = hgCreateBuffer(
-        sizeof(GlobalUniform),
+    vpBuffer = hgCreateBuffer(
+        sizeof(VPUniform),
         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
         HgBufferMemoryUsage_frequentUpdate);
 
-    hgWriteBuffer(globalBuffer, 0, &globalData, sizeof(globalData));
+    hgWriteBuffer(vpBuffer, 0, &vpData, sizeof(vpData));
 
-    VkDescriptorBufferInfo bufferInfo = {globalBuffer->buffer, 0, sizeof(GlobalUniform)};
-    hgUpdateVkDescriptorSetBinding(
-        globalSet,
-        0,
-        0,
-        1,
-        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        &bufferInfo,
-        nullptr);
+    vpDesc = hgCreateDescriptor(HgDescriptorType_uniformBuffer);
+
+    VkDescriptorBufferInfo bufferInfo = {vpBuffer->buffer, 0, sizeof(VPUniform)};
+    hgUpdateDescriptor(vpDesc, &bufferInfo, nullptr);
 
     dirLightCapacity = 4;
     dirLightBuffer = hgCreateBuffer(
@@ -131,31 +106,20 @@ void hgInitPipeline3D(
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
         HgBufferMemoryUsage_frequentUpdate);
 
-    VkDescriptorBufferInfo dirLightBufferInfo = {dirLightBuffer->buffer, 0, VK_WHOLE_SIZE};
-    hgUpdateVkDescriptorSetBinding(
-        globalSet,
-        1,
-        0,
-        1,
-        VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-        &dirLightBufferInfo,
-        nullptr);
-
     pointLightCapacity = 4;
     pointLightBuffer = hgCreateBuffer(
         sizeof(PointLightData) * dirLightCapacity,
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
         HgBufferMemoryUsage_frequentUpdate);
 
+    dirLightDesc = hgCreateDescriptor(HgDescriptorType_storageBuffer);
+    pointLightDesc = hgCreateDescriptor(HgDescriptorType_storageBuffer);
+
+    VkDescriptorBufferInfo dirLightBufferInfo = {dirLightBuffer->buffer, 0, VK_WHOLE_SIZE};
+    hgUpdateDescriptor(dirLightDesc, &dirLightBufferInfo, nullptr);
+
     VkDescriptorBufferInfo pointLightBufferInfo = {pointLightBuffer->buffer, 0, VK_WHOLE_SIZE};
-    hgUpdateVkDescriptorSetBinding(
-        globalSet,
-        2,
-        0,
-        1,
-        VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-        &pointLightBufferInfo,
-        nullptr);
+    hgUpdateDescriptor(pointLightDesc, &pointLightBufferInfo, nullptr);
 
     static const HgModelVertex cubeVertices[] = {
         {HgVec3{ 0.5f,-0.5f,-0.5f}, HgVec3{ 1, 0, 0}, HgVec4{ 0, 0, 1, 1}, HgVec2{0,0}},
@@ -213,6 +177,12 @@ void hgInitPipeline3D(
     defaultModel.vertexWidth = sizeof(HgModelVertex);
     defaultModel.indexCount = sizeof(cubeIndices) / sizeof(*cubeIndices);
 
+    HgCreateVkSampler samplerInfo{};
+    defaultMapSampler = hgCreateVkSampler(samplerInfo);
+
+    defaultColorMap.sampler = defaultMapSampler;
+    defaultNormalMap.sampler = defaultMapSampler;
+
     struct Color
     {
         u8 r, g, b, a;
@@ -247,101 +217,47 @@ void hgInitPipeline3D(
         defaultNormals,
         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-    HgCreateVkSampler samplerInfo{};
-    defaultMapSampler = hgCreateVkSampler(samplerInfo);
+    defaultColorMap.descriptor = hgCreateDescriptor(HgDescriptorType_combinedImageSampler);
+    defaultNormalMap.descriptor = hgCreateDescriptor(HgDescriptorType_combinedImageSampler);
 
-    defaultColorMap.sampler = defaultMapSampler;
-    defaultNormalMap.sampler = defaultMapSampler;
+    VkDescriptorImageInfo colorInfo =
+        {defaultMapSampler, defaultColorMap.view->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    hgUpdateDescriptor(defaultColorMap.descriptor, nullptr, &colorInfo);
 
-    defaultModelSet = hgCreateVkDescriptorSet(textureSetLayout);
-
-    VkDescriptorImageInfo imageInfos[2]{
-        {defaultMapSampler, defaultColorMap.view->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
-        {defaultMapSampler, defaultNormalMap.view->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
-    };
-    hgUpdateVkDescriptorSetBinding(
-        defaultModelSet,
-        0,
-        0,
-        2,
-        VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-        nullptr,
-        imageInfos);
-
-    modelSets = modelSets.create(arena, maxModels);
+    VkDescriptorImageInfo normalInfo =
+        {defaultMapSampler, defaultNormalMap.view->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    hgUpdateDescriptor(defaultNormalMap.descriptor, nullptr, &normalInfo);
 }
 
 void hgDeinitPipeline3D()
 {
-    modelSets.forEach([](HgResource, VkDescriptorSet set)
-    {
-        hgDestroyVkDescriptorSet(set);
-    });
-    hgDestroyVkDescriptorSet(defaultModelSet);
+    hgDestroyDescriptor(defaultNormalMap.descriptor);
+    hgDestroyDescriptor(defaultColorMap.descriptor);
+    hgDestroyImageView(defaultNormalMap.view);
+    hgDestroyImageView(defaultColorMap.view);
+    hgDestroyImage(defaultNormalMap.image);
+    hgDestroyImage(defaultColorMap.image);
+    vkDestroySampler(hgVkDevice, defaultMapSampler, nullptr);
     hgDestroyBuffer(defaultModel.indexBuffer);
     hgDestroyBuffer(defaultModel.vertexBuffer);
-    vkDestroySampler(hgVkDevice, defaultMapSampler, nullptr);
-    hgDestroyImageView(defaultNormalMap.view);
-    hgDestroyImage(defaultNormalMap.image);
-    hgDestroyImageView(defaultColorMap.view);
-    hgDestroyImage(defaultColorMap.image);
-    hgDestroyVkDescriptorSet(globalSet);
+    hgDestroyDescriptor(pointLightDesc);
+    hgDestroyDescriptor(dirLightDesc);
     hgDestroyBuffer(pointLightBuffer);
     hgDestroyBuffer(dirLightBuffer);
-    hgDestroyBuffer(globalBuffer);
+    hgDestroyDescriptor(vpDesc);
+    hgDestroyBuffer(vpBuffer);
     vkDestroyPipeline(hgVkDevice, pipeline, nullptr);
     vkDestroyPipelineLayout(hgVkDevice, pipelineLayout, nullptr);
-    vkDestroyDescriptorSetLayout(hgVkDevice, textureSetLayout, nullptr);
-    vkDestroyDescriptorSetLayout(hgVkDevice, globalSetLayout, nullptr);
-}
-
-void hgAddModel3D(HgResource modelID, HgResource colorID, HgResource normalID)
-{
-    HgTextureResource* colorMap = hgGetTexture(colorID);
-    if (colorMap == nullptr)
-        colorMap = &defaultColorMap;
-
-    HgTextureResource* normalMap = hgGetTexture(normalID);
-    if (normalMap == nullptr)
-        normalMap = &defaultNormalMap;
-
-    VkDescriptorSet set = hgCreateVkDescriptorSet(textureSetLayout);
-
-    VkDescriptorImageInfo imageInfos[2]{};
-    imageInfos[0].sampler = colorMap->sampler;
-    imageInfos[0].imageView = colorMap->view->view;
-    imageInfos[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    imageInfos[1].sampler = normalMap->sampler;
-    imageInfos[1].imageView = normalMap->view->view;
-    imageInfos[1].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-    hgUpdateVkDescriptorSetBinding(
-        set,
-        0,
-        0,
-        2,
-        VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-        nullptr,
-        imageInfos);
-
-    modelSets.add(modelID, set);
-}
-
-void hgRemoveModel3D(HgResource modelID)
-{
-    VkDescriptorSet set;
-    if (modelSets.remove(modelID, &set))
-        hgDestroyVkDescriptorSet(set);
 }
 
 void hgUpdateProjection3D(const HgMat4& projection)
 {
-    globalData.proj = projection;
+    vpData.proj = projection;
 }
 
 void hgUpdateView3D(const HgMat4& view)
 {
-    globalData.view = view;
+    vpData.view = view;
 }
 
 void hgDraw3D(HgECS* ecs, VkCommandBuffer cmd)
@@ -351,10 +267,12 @@ void hgDraw3D(HgECS* ecs, VkCommandBuffer cmd)
     HgArena* scratch = hgGetScratch();
     HgArenaScope scratchScope{scratch};
 
-    globalData.dirLightCount = ecs->count<HgDirLight3D>();
-    globalData.pointLightCount = ecs->count<HgPointLight3D>();
+    hgWriteBuffer(vpBuffer, 0, &vpData, sizeof(vpData));
 
-    if (globalData.dirLightCount > dirLightCapacity)
+    u32 dirLightCount = ecs->count<HgDirLight3D>();
+    u32 pointLightCount = ecs->count<HgPointLight3D>();
+
+    if (dirLightCount > dirLightCapacity)
     {
         vkQueueWaitIdle(hgVkQueue);
 
@@ -372,17 +290,10 @@ void hgDraw3D(HgECS* ecs, VkCommandBuffer cmd)
         dirLightCapacity = newCapacity;
 
         VkDescriptorBufferInfo dirLightBufferInfo = {dirLightBuffer->buffer, 0, VK_WHOLE_SIZE};
-        hgUpdateVkDescriptorSetBinding(
-            globalSet,
-            1,
-            0,
-            1,
-            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            &dirLightBufferInfo,
-            nullptr);
+        hgUpdateDescriptor(dirLightDesc, &dirLightBufferInfo, nullptr);
     }
 
-    if (globalData.pointLightCount > pointLightCapacity)
+    if (pointLightCount > pointLightCapacity)
     {
         vkQueueWaitIdle(hgVkQueue);
 
@@ -400,23 +311,16 @@ void hgDraw3D(HgECS* ecs, VkCommandBuffer cmd)
         pointLightCapacity = newCapacity;
 
         VkDescriptorBufferInfo pointLightBufferInfo = {pointLightBuffer->buffer, 0, VK_WHOLE_SIZE};
-        hgUpdateVkDescriptorSetBinding(
-            globalSet,
-            1,
-            0,
-            1,
-            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            &pointLightBufferInfo,
-            nullptr);
+        hgUpdateDescriptor(pointLightDesc, &pointLightBufferInfo, nullptr);
     }
 
-    DirLightData* dirLights = hgAlloc<DirLightData>(scratch, globalData.dirLightCount);
-    PointLightData* pointLights = hgAlloc<PointLightData>(scratch, globalData.pointLightCount);
+    DirLightData* dirLights = hgAlloc<DirLightData>(scratch, dirLightCount);
+    PointLightData* pointLights = hgAlloc<PointLightData>(scratch, pointLightCount);
 
     u32 i = 0;
     ecs->forEach<HgDirLight3D>([&](HgEntity, HgDirLight3D& light)
     {
-        dirLights[i].dir = HgVec4{HgMat3{globalData.view} * light.dir, 0.0};
+        dirLights[i].dir = HgVec4{HgMat3{vpData.view} * light.dir, 0.0};
         dirLights[i].color = light.color;
         ++i;
     });
@@ -424,32 +328,40 @@ void hgDraw3D(HgECS* ecs, VkCommandBuffer cmd)
     i = 0;
     ecs->forEach<HgPointLight3D, HgTransform>([&](HgEntity, HgPointLight3D& light, HgTransform& transform)
     {
-        pointLights[i].pos = globalData.view * HgVec4{transform.position, 1.0};
+        pointLights[i].pos = vpData.view * HgVec4{transform.position, 1.0};
         pointLights[i].color = light.color;
         ++i;
     });
 
-    if (globalData.dirLightCount > 0)
-        hgWriteBuffer(dirLightBuffer, 0, dirLights, sizeof(*dirLights) * globalData.dirLightCount);
+    if (dirLightCount > 0)
+        hgWriteBuffer(dirLightBuffer, 0, dirLights, sizeof(*dirLights) * dirLightCount);
 
-    if (globalData.pointLightCount > 0)
-        hgWriteBuffer(pointLightBuffer, 0, pointLights, sizeof(*pointLights) * globalData.pointLightCount);
-
-    hgWriteBuffer(globalBuffer, 0, &globalData, sizeof(globalData));
+    if (pointLightCount > 0)
+        hgWriteBuffer(pointLightBuffer, 0, pointLights, sizeof(*pointLights) * pointLightCount);
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &globalSet, 0, nullptr);
+
+    hgBindBindlessDescriptors(cmd, pipelineLayout);
 
     ecs->forEach<HgModel3D, HgTransform>([&](HgEntity, HgModel3D& model, HgTransform& transform)
     {
-        VkDescriptorSet* modelSet = modelSets.get(model.modelResource);
-        if (modelSet == nullptr)
-            modelSet = &defaultModelSet;
+        HgTextureResource* colorMap = hgGetTexture(model.colorMap);
+        if (colorMap == nullptr)
+            colorMap = &defaultColorMap;
 
-        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 1, 1, modelSet, 0, nullptr);
+        HgTextureResource* normalMap = hgGetTexture(model.normalMap);
+        if (normalMap == nullptr)
+            normalMap = &defaultNormalMap;
 
         Push push{};
         push.model = hgModelMatrix3D(transform.position, transform.scale, transform.rotation);
+        push.dirLightIdx = dirLightDesc.idx();
+        push.dirLightCount = dirLightCount;
+        push.pointLightIdx = pointLightDesc.idx();
+        push.pointLightCount = pointLightCount;
+        push.vpIdx = vpDesc.idx();
+        push.colorMapIdx = colorMap->descriptor.idx();
+        push.normalMapIdx = normalMap->descriptor.idx();
 
         HgModelResource* gpuModel = hgGetModel(model.modelResource);
         if (gpuModel == nullptr)
@@ -461,7 +373,7 @@ void hgDraw3D(HgECS* ecs, VkCommandBuffer cmd)
         VkDeviceSize offsets[] = {0};
         vkCmdBindVertexBuffers(cmd, 0, 1, buffers, offsets);
 
-        vkCmdPushConstants(cmd, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push), &push);
+        vkCmdPushConstants(cmd, pipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(push), &push);
 
         vkCmdDrawIndexed(cmd, gpuModel->indexCount, 1, 0, 0, 0);
     });

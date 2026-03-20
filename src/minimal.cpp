@@ -19,7 +19,7 @@ int main()
     HgWindow* window = HgWindow::create(arena, windowConfig);
     hgDefer(window->destroy());
 
-    hgInitPipeline2D(arena, 256, window->format, VK_FORMAT_UNDEFINED);
+    hgInitPipeline2D(window->format, VK_FORMAT_UNDEFINED);
     hgDefer(hgDeinitPipeline2D());
 
     HgTransform camera{};

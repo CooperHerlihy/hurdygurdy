@@ -1,5 +1,7 @@
 #version 460
 
+#include "bindless.glsl"
+
 layout (location = 0) out vec4 outColor;
 
 layout (location = 0) in vec3 fPos;
@@ -7,22 +9,10 @@ layout (location = 1) in vec3 fNorm;
 layout (location = 2) in vec4 fTan;
 layout (location = 3) in vec2 fUV;
 
-layout (set = 0, binding = 0) uniform UViewProjection
-{
-    mat4 uProj;
-    mat4 uView;
-    uint uDirLightCount;
-    uint uPointLightCount;
-};
-
-struct DirectionalLight
+struct DirLight
 {
     vec4 dir;
     vec4 color;
-};
-layout (set = 0, binding = 1) readonly buffer DirectionalLights
-{
-    DirectionalLight uDirLights[];
 };
 
 struct PointLight
@@ -30,13 +20,28 @@ struct PointLight
     vec4 pos;
     vec4 color;
 };
-layout (set = 0, binding = 2) readonly buffer PointLights
-{
-    PointLight uPointLights[];
-};
 
-// [0] = color map, [1] = normal map
-layout (set = 1, binding = 0) uniform sampler2D uTextures[2];
+layout (binding = HgBinding_storageBuffer) readonly buffer DirLights {
+    DirLight lights[];
+} dirLights[];
+
+layout (binding = HgBinding_storageBuffer) readonly buffer PointLights {
+    PointLight lights[];
+} pointLights[];
+
+layout (binding = HgBinding_combinedImageSampler) uniform sampler2D uTextures[];
+
+layout (push_constant) uniform Push
+{
+    mat4 pModel;
+    uint pVpIdx;
+    uint pDirLightIdx;
+    uint pDirLightCount;
+    uint pPointLightIdx;
+    uint pPointLightCount;
+    uint pColorMapIdx;
+    uint pNormalMapIdx;
+};
 
 float blinnPhong(vec3 normal, vec3 lightDir, float shininess, float kd, float ks)
 {
@@ -55,26 +60,28 @@ void main()
         cross(fTan.xyz, fNorm) * fTan.w,
         -fNorm
     );
-    vec3 normal = normalize(texToModel * texture(uTextures[1], fUV).xyz);
+    vec3 normal = normalize(texToModel * texture(uTextures[pNormalMapIdx], fUV).xyz);
 
     vec3 lighting = vec3(0.0);
 
-    for (uint i = 0; i < uDirLightCount; ++i) {
-        vec3 lightDir = -normalize(uDirLights[i].dir.xyz);
-        vec3 lightColor = uDirLights[i].color.xyz * uDirLights[i].color.w;
+    for (uint i = 0; i < pDirLightCount; ++i) {
+        DirLight light = dirLights[pDirLightIdx].lights[i];
+        vec3 lightDir = -normalize(light.dir.xyz);
+        vec3 lightColor = light.color.xyz * light.color.w;
         lighting += blinnPhong(normal, lightDir, 16.0, 0.7, 0.3) * lightColor;
     }
 
-    for (uint i = 0; i < uPointLightCount; ++i) {
-        vec3 lightPos = uPointLights[i].pos.xyz;
+    for (uint i = 0; i < pPointLightCount; ++i) {
+        PointLight light = pointLights[pPointLightIdx].lights[i];
+        vec3 lightPos = light.pos.xyz;
         vec3 lightDiff = lightPos - fPos;
         float lightDist = dot(lightDiff, lightDiff);
         vec3 lightDir = normalize(lightDiff);
-        vec3 lightColor = uPointLights[i].color.xyz * uPointLights[i].color.w;
+        vec3 lightColor = light.color.xyz * light.color.w;
         lighting += blinnPhong(normal, lightDir, 16.0, 0.7, 0.3) * lightColor / lightDist;
     }
 
-    vec4 hdrColor = vec4(lighting, 1.0) * texture(uTextures[0], fUV);
+    vec4 hdrColor = vec4(lighting, 1.0) * texture(uTextures[pColorMapIdx], fUV);
     vec4 ldrColor = vec4(1.0) - exp(-hdrColor);
     outColor = hdrColor;
 }

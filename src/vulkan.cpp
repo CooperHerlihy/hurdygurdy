@@ -7,6 +7,30 @@ static void hgVulkanDeinit();
 static VkDebugUtilsMessengerEXT vkDebugMessenger = nullptr;
 #endif
 
+static void initBindless();
+static void deinitBindless();
+
+static VkDescriptorPool bindlessPool = nullptr;
+static VkDescriptorSetLayout bindlessLayout = nullptr;
+static VkDescriptorSet bindlessSet = nullptr;
+
+static HgDescriptor* samplerPool = nullptr;
+HgDescriptor samplerPoolNext = {0};
+static HgDescriptor* combinedImageSamplerPool = nullptr;
+HgDescriptor combinedImageSamplerPoolNext = {0};
+static HgDescriptor* sampledImagePool = nullptr;
+HgDescriptor sampledImagePoolNext = {0};
+static HgDescriptor* storageImagePool = nullptr;
+HgDescriptor storageImagePoolNext = {0};
+static HgDescriptor* uniformTexelBufferPool = nullptr;
+HgDescriptor uniformTexelBufferPoolNext = {0};
+static HgDescriptor* storageTexelBufferPool = nullptr;
+HgDescriptor storageTexelBufferPoolNext = {0};
+static HgDescriptor* uniformBufferPool = nullptr;
+HgDescriptor uniformBufferPoolNext = {0};
+static HgDescriptor* storageBufferPool = nullptr;
+HgDescriptor storageBufferPoolNext = {0};
+
 void hgInitGraphics()
 {
     hgVulkanInit();
@@ -70,42 +94,12 @@ void hgInitGraphics()
             hgError("Could note create Vulkan command pool: %s\n", hgVkResultToStr(result));
     }
 
-    if (hgVkDescriptorPool == nullptr)
-    {
-        VkDescriptorPoolSize sizes[] = {
-            {VK_DESCRIPTOR_TYPE_SAMPLER, 2048},
-            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2048},
-            {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 2048},
-            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 2048},
-            {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 2048},
-            {VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 2048},
-            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2048},
-            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2048},
-            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 2048},
-            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 2048},
-            {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 2048},
-        };
-
-        VkDescriptorPoolCreateInfo info{};
-        info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-        info.maxSets = 2048;
-        info.poolSizeCount = sizeof(sizes) / sizeof(*sizes);
-        info.pPoolSizes = sizes;
-
-        VkResult result = vkCreateDescriptorPool(hgVkDevice, &info, nullptr, &hgVkDescriptorPool);
-        if (hgVkDescriptorPool == nullptr)
-            hgError("Could not create VkDescriptorPool: %s\n", hgVkResultToStr(result));
-    };
+    initBindless();
 }
 
 void hgDeinitGraphics()
 {
-    if (hgVkDescriptorPool != nullptr)
-    {
-        vkDestroyDescriptorPool(hgVkDevice, hgVkDescriptorPool, nullptr);
-        hgVkDescriptorPool = nullptr;
-    }
+    deinitBindless();
 
     if (hgVkCmdPool != nullptr)
     {
@@ -146,6 +140,192 @@ void hgDeinitGraphics()
     }
 
     hgVulkanDeinit();
+}
+
+static HgDescriptor* createBindlessPool(HgDescriptorType type, HgDescriptor* next)
+{
+    HgDescriptor* pool = (HgDescriptor*)malloc(UINT16_MAX * sizeof(HgDescriptor));
+
+    for (u32 i = 0; i < UINT16_MAX; ++i)
+    {
+        pool[i] = {i + 1};
+        pool[i].setType(type);
+    }
+    *next = {0};
+    next->setType(type);
+
+    return pool;
+}
+
+static void initBindless()
+{
+    if (bindlessPool == nullptr)
+    {
+        VkDescriptorPoolSize sizes[] = {
+            {VK_DESCRIPTOR_TYPE_SAMPLER, UINT16_MAX},
+            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, UINT16_MAX},
+            {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, UINT16_MAX},
+            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, UINT16_MAX},
+            {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, UINT16_MAX},
+            {VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, UINT16_MAX},
+            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, UINT16_MAX},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, UINT16_MAX},
+            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, UINT16_MAX},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, UINT16_MAX},
+            {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, UINT16_MAX},
+        };
+
+        VkDescriptorPoolCreateInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        info.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
+        info.maxSets = 1;
+        info.poolSizeCount = sizeof(sizes) / sizeof(*sizes);
+        info.pPoolSizes = sizes;
+
+        VkResult result = vkCreateDescriptorPool(hgVkDevice, &info, nullptr, &bindlessPool);
+        if (bindlessPool == nullptr)
+            hgError("Could not create bindless VkDescriptorPool: %s\n", hgVkResultToStr(result));
+    };
+
+    if (bindlessLayout == nullptr)
+    {
+        VkDescriptorSetLayoutBinding bindings[HgDescriptorType_count]{};
+        VkDescriptorBindingFlags flags[HgDescriptorType_count]{};
+        for (u32 i = 0; i < HgDescriptorType_count; ++i)
+        {
+            bindings[i].descriptorCount = UINT16_MAX;
+            bindings[i].stageFlags = VK_SHADER_STAGE_ALL;
+            flags[i] = VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT | VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
+        }
+        bindings[0].binding = HgDescriptorType_sampler;
+        bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+        bindings[1].binding = HgDescriptorType_combinedImageSampler;
+        bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        bindings[2].binding = HgDescriptorType_sampledImage;
+        bindings[2].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+        bindings[3].binding = HgDescriptorType_storageImage;
+        bindings[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        bindings[4].binding = HgDescriptorType_uniformTexelBuffer;
+        bindings[4].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER;
+        bindings[5].binding = HgDescriptorType_storageTexelBuffer;
+        bindings[5].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER;
+        bindings[6].binding = HgDescriptorType_uniformBuffer;
+        bindings[6].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        bindings[7].binding = HgDescriptorType_storageBuffer;
+        bindings[7].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+
+        VkDescriptorSetLayoutBindingFlagsCreateInfo flagsInfo{};
+        flagsInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
+        flagsInfo.bindingCount = sizeof(bindings) / sizeof(*bindings);
+        flagsInfo.pBindingFlags = flags;
+
+        VkDescriptorSetLayoutCreateInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        info.pNext = &flagsInfo;
+        info.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+        info.bindingCount = sizeof(bindings) / sizeof(*bindings);
+        info.pBindings = bindings;
+
+        VkResult result = vkCreateDescriptorSetLayout(hgVkDevice, &info, nullptr, &bindlessLayout);
+        if (bindlessLayout == nullptr)
+            hgError("Could not create bindless VkDescriptorSetLayout: %s\n", hgVkResultToStr(result));
+    }
+
+    if (bindlessSet == nullptr)
+    {
+        VkDescriptorSetAllocateInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        info.descriptorPool = bindlessPool;
+        info.descriptorSetCount = 1;
+        info.pSetLayouts = &bindlessLayout;
+
+        VkResult result = vkAllocateDescriptorSets(hgVkDevice, &info, &bindlessSet);
+        if (bindlessSet == nullptr)
+            hgError("Could not allocate bindless VkDescriptorSet: %s\n", hgVkResultToStr(result));
+    }
+
+    if (samplerPool == nullptr)
+        samplerPool = createBindlessPool(HgDescriptorType_sampler, &samplerPoolNext);
+
+    if (combinedImageSamplerPool == nullptr)
+        combinedImageSamplerPool = createBindlessPool(HgDescriptorType_combinedImageSampler, &combinedImageSamplerPoolNext);
+
+    if (sampledImagePool == nullptr)
+        sampledImagePool = createBindlessPool(HgDescriptorType_sampledImage, &sampledImagePoolNext);
+
+    if (storageImagePool == nullptr)
+        storageImagePool = createBindlessPool(HgDescriptorType_storageImage, &storageImagePoolNext);
+
+    if (uniformTexelBufferPool == nullptr)
+        uniformTexelBufferPool = createBindlessPool(HgDescriptorType_uniformTexelBuffer, &uniformTexelBufferPoolNext);
+
+    if (storageTexelBufferPool == nullptr)
+        storageTexelBufferPool = createBindlessPool(HgDescriptorType_storageTexelBuffer, &storageTexelBufferPoolNext);
+
+    if (uniformBufferPool == nullptr)
+        uniformBufferPool = createBindlessPool(HgDescriptorType_uniformBuffer, &uniformBufferPoolNext);
+
+    if (storageBufferPool == nullptr)
+        storageBufferPool = createBindlessPool(HgDescriptorType_storageBuffer, &storageBufferPoolNext);
+
+}
+
+static void deinitBindless()
+{
+    if (samplerPool != nullptr)
+    {
+        free(samplerPool);
+        samplerPool = nullptr;
+    }
+    if (combinedImageSamplerPool != nullptr)
+    {
+        free(combinedImageSamplerPool);
+        combinedImageSamplerPool = nullptr;
+    }
+    if (sampledImagePool != nullptr)
+    {
+        free(sampledImagePool);
+        sampledImagePool = nullptr;
+    }
+    if (storageImagePool != nullptr)
+    {
+        free(storageImagePool);
+        storageImagePool = nullptr;
+    }
+    if (uniformTexelBufferPool != nullptr)
+    {
+        free(uniformTexelBufferPool);
+        uniformTexelBufferPool = nullptr;
+    }
+    if (storageTexelBufferPool != nullptr)
+    {
+        free(storageTexelBufferPool);
+        storageTexelBufferPool = nullptr;
+    }
+    if (uniformBufferPool != nullptr)
+    {
+        free(uniformBufferPool);
+        uniformBufferPool = nullptr;
+    }
+    if (storageBufferPool != nullptr)
+    {
+        free(storageBufferPool);
+        storageBufferPool = nullptr;
+    }
+
+    bindlessSet = nullptr;
+
+    if (bindlessLayout != nullptr)
+    {
+        vkDestroyDescriptorSetLayout(hgVkDevice, bindlessLayout, nullptr);
+        bindlessLayout = nullptr;
+    }
+
+    if (bindlessPool != nullptr)
+    {
+        vkDestroyDescriptorPool(hgVkDevice, bindlessPool, nullptr);
+        bindlessPool = nullptr;
+    }
 }
 
 const char* hgVkResultToStr(VkResult result)
@@ -749,8 +929,33 @@ VkDevice hgCreateVkDevice()
     hgAssert(hgVkPhysicalDevice != nullptr);
     hgAssert(hgVkQueueFamily != (u32)-1);
 
+    VkPhysicalDeviceDescriptorIndexingFeatures descriptorIndexingFeature{};
+    descriptorIndexingFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
+    descriptorIndexingFeature.pNext = nullptr;
+    descriptorIndexingFeature.shaderInputAttachmentArrayDynamicIndexing = VK_TRUE;
+    descriptorIndexingFeature.shaderUniformTexelBufferArrayDynamicIndexing = VK_TRUE;
+    descriptorIndexingFeature.shaderStorageTexelBufferArrayDynamicIndexing = VK_TRUE;
+    descriptorIndexingFeature.shaderUniformBufferArrayNonUniformIndexing = VK_TRUE;
+    descriptorIndexingFeature.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
+    descriptorIndexingFeature.shaderStorageBufferArrayNonUniformIndexing = VK_TRUE;
+    descriptorIndexingFeature.shaderStorageImageArrayNonUniformIndexing = VK_TRUE;
+    descriptorIndexingFeature.shaderInputAttachmentArrayNonUniformIndexing = VK_TRUE;
+    descriptorIndexingFeature.shaderUniformTexelBufferArrayNonUniformIndexing = VK_TRUE;
+    descriptorIndexingFeature.shaderStorageTexelBufferArrayNonUniformIndexing = VK_TRUE;
+    descriptorIndexingFeature.descriptorBindingUniformBufferUpdateAfterBind = VK_TRUE;
+    descriptorIndexingFeature.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
+    descriptorIndexingFeature.descriptorBindingStorageImageUpdateAfterBind = VK_TRUE;
+    descriptorIndexingFeature.descriptorBindingStorageBufferUpdateAfterBind = VK_TRUE;
+    descriptorIndexingFeature.descriptorBindingUniformTexelBufferUpdateAfterBind = VK_TRUE;
+    descriptorIndexingFeature.descriptorBindingStorageTexelBufferUpdateAfterBind = VK_TRUE;
+    descriptorIndexingFeature.descriptorBindingUpdateUnusedWhilePending = VK_TRUE;
+    descriptorIndexingFeature.descriptorBindingPartiallyBound = VK_TRUE;
+    descriptorIndexingFeature.descriptorBindingVariableDescriptorCount = VK_TRUE;
+    descriptorIndexingFeature.runtimeDescriptorArray = VK_TRUE;
+
     VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeature{};
     dynamicRenderingFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
+    dynamicRenderingFeature.pNext = &descriptorIndexingFeature;
     dynamicRenderingFeature.dynamicRendering = VK_TRUE;
 
     VkPhysicalDeviceSynchronization2Features synchronization2Feature{};
@@ -764,7 +969,7 @@ VkDevice hgCreateVkDevice()
     queueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
     queueInfo.queueFamilyIndex = hgVkQueueFamily;
     queueInfo.queueCount = 1;
-    float queuePriority = 1.0f;
+    f32 queuePriority = 1.0f;
     queueInfo.pQueuePriorities = &queuePriority;
 
     VkDeviceCreateInfo deviceInfo{};
@@ -1492,45 +1697,189 @@ void hgGenerateMipmaps(
     hgEndVkCmd(cmd);
 }
 
-VkDescriptorSetLayout hgCreateVkDescriptorSetLayout(
-    const VkDescriptorSetLayoutBinding* bindings,
-    u32 bindingCount)
+static HgDescriptor allocDescriptor(HgDescriptor* pool, HgDescriptor* next)
 {
-    VkDescriptorSetLayoutCreateInfo info{};
-    info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    info.bindingCount = bindingCount;
-    info.pBindings = bindings;
+    HgDescriptor desc = *next;
 
-    VkDescriptorSetLayout layout = nullptr;
-    VkResult result = vkCreateDescriptorSetLayout(hgVkDevice, &info, nullptr, &layout);
-    if (layout == nullptr)
-        hgError("Could not create VkDescriptorSetLayout: %s\n", hgVkResultToStr(result));
+    u32 idx = next->idx();
+    *next = pool[idx];
 
-    return layout;
+    pool[desc.idx()] = desc;
+    return desc;
 }
 
-VkPipelineLayout hgCreateVkPipelineLayout(
-    VkDescriptorSetLayout* setLayouts,
-    u32 setLayoutCount,
-    VkPushConstantRange* pushRanges,
-    u32 pushRangeCount)
+static void deallocDescriptor(HgDescriptor* pool, HgDescriptor* next, HgDescriptor desc)
+{
+    u32 idx = desc.idx();
+    pool[idx] = *next;
+
+    desc.incrementGeneration();
+    *next = desc;
+}
+
+HgDescriptor hgCreateDescriptor(HgDescriptorType type)
+{
+    switch (type)
+    {
+        case HgDescriptorType_sampler:
+            return allocDescriptor(samplerPool, &samplerPoolNext);
+            break;
+        case HgDescriptorType_combinedImageSampler:
+            return allocDescriptor(combinedImageSamplerPool, &combinedImageSamplerPoolNext);
+            break;
+        case HgDescriptorType_sampledImage:
+            return allocDescriptor(sampledImagePool, &sampledImagePoolNext);
+            break;
+        case HgDescriptorType_storageImage:
+            return allocDescriptor(storageImagePool, &storageImagePoolNext);
+            break;
+        case HgDescriptorType_uniformTexelBuffer:
+            return allocDescriptor(uniformTexelBufferPool, &uniformTexelBufferPoolNext);
+            break;
+        case HgDescriptorType_storageTexelBuffer:
+            return allocDescriptor(storageTexelBufferPool, &storageTexelBufferPoolNext);
+            break;
+        case HgDescriptorType_uniformBuffer:
+            return allocDescriptor(uniformBufferPool, &uniformBufferPoolNext);
+            break;
+        case HgDescriptorType_storageBuffer:
+            return allocDescriptor(storageBufferPool, &storageBufferPoolNext);
+            break;
+        default:
+            hgAssert(false);
+            break;
+    }
+}
+
+void hgDestroyDescriptor(HgDescriptor descriptor)
+{
+    if (descriptor.id == HgDescriptor{}.id)
+        return;
+
+    switch (descriptor.type())
+    {
+        case HgDescriptorType_sampler:
+            hgAssert(descriptor.id == samplerPool[descriptor.idx()].id);
+            deallocDescriptor(samplerPool, &samplerPoolNext, descriptor);
+            break;
+        case HgDescriptorType_combinedImageSampler:
+            hgAssert(descriptor.id == combinedImageSamplerPool[descriptor.idx()].id);
+            deallocDescriptor(combinedImageSamplerPool, &combinedImageSamplerPoolNext, descriptor);
+            break;
+        case HgDescriptorType_sampledImage:
+            hgAssert(descriptor.id == sampledImagePool[descriptor.idx()].id);
+            deallocDescriptor(sampledImagePool, &sampledImagePoolNext, descriptor);
+            break;
+        case HgDescriptorType_storageImage:
+            hgAssert(descriptor.id == storageImagePool[descriptor.idx()].id);
+            deallocDescriptor(storageImagePool, &storageImagePoolNext, descriptor);
+            break;
+        case HgDescriptorType_uniformTexelBuffer:
+            hgAssert(descriptor.id == uniformTexelBufferPool[descriptor.idx()].id);
+            deallocDescriptor(uniformTexelBufferPool, &uniformTexelBufferPoolNext, descriptor);
+            break;
+        case HgDescriptorType_storageTexelBuffer:
+            hgAssert(descriptor.id == storageTexelBufferPool[descriptor.idx()].id);
+            deallocDescriptor(storageTexelBufferPool, &storageTexelBufferPoolNext, descriptor);
+            break;
+        case HgDescriptorType_uniformBuffer:
+            hgAssert(descriptor.id == uniformBufferPool[descriptor.idx()].id);
+            deallocDescriptor(uniformBufferPool, &uniformBufferPoolNext, descriptor);
+            break;
+        case HgDescriptorType_storageBuffer:
+            hgAssert(descriptor.id == storageBufferPool[descriptor.idx()].id);
+            deallocDescriptor(storageBufferPool, &storageBufferPoolNext, descriptor);
+            break;
+        default:
+            hgAssert(false);
+            break;
+    }
+}
+
+VkDescriptorType hgDescriptorTypeToVk(HgDescriptorType type)
+{
+    switch (type)
+    {
+        case HgDescriptorType_sampler:
+            return VK_DESCRIPTOR_TYPE_SAMPLER;
+            break;
+        case HgDescriptorType_combinedImageSampler:
+            return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            break;
+        case HgDescriptorType_sampledImage:
+            return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+            break;
+        case HgDescriptorType_storageImage:
+            return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            break;
+        case HgDescriptorType_uniformTexelBuffer:
+            return VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER;
+            break;
+        case HgDescriptorType_storageTexelBuffer:
+            return VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER;
+            break;
+        case HgDescriptorType_uniformBuffer:
+            return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            break;
+        case HgDescriptorType_storageBuffer:
+            return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            break;
+        default:
+            break;
+    }
+    hgAssert(false);
+}
+
+void hgUpdateDescriptor(
+    HgDescriptor descriptor,
+    const VkDescriptorBufferInfo* bufferInfo,
+    const VkDescriptorImageInfo* imageInfo)
+{
+    VkWriteDescriptorSet write{};
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstSet = bindlessSet;
+    write.dstBinding = descriptor.type();
+    write.dstArrayElement = descriptor.idx();
+    write.descriptorCount = 1;
+    write.descriptorType = hgDescriptorTypeToVk(descriptor.type());
+    write.pBufferInfo = bufferInfo;
+    write.pImageInfo = imageInfo;
+
+    vkUpdateDescriptorSets(hgVkDevice, 1, &write, 0, nullptr);
+}
+
+VkPipelineLayout hgCreateBindlessPipelineLayout(VkPushConstantRange* pushRanges, u32 pushRangeCount)
 {
     VkPipelineLayoutCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    info.setLayoutCount = setLayoutCount;
-    info.pSetLayouts = setLayouts;
+    info.setLayoutCount = 1;
+    info.pSetLayouts = &bindlessLayout;
     info.pushConstantRangeCount = pushRangeCount;
     info.pPushConstantRanges = pushRanges;
 
     VkPipelineLayout layout = nullptr;
     VkResult result = vkCreatePipelineLayout(hgVkDevice, &info, nullptr, &layout);
     if (layout == nullptr)
-        hgError("Could not create VkPipelineLayout: %s\n", hgVkResultToStr(result));
+        hgError("Could not create bindless VkPipelineLayout: %s\n", hgVkResultToStr(result));
 
     return layout;
 }
 
-static VkShaderModule hgCreateVkShaderModule(const u8* spirvCode, u64 codeSize)
+void hgBindBindlessDescriptors(VkCommandBuffer cmd, VkPipelineLayout pipelineLayout, u32 set) {
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, set, 1, &bindlessSet, 0, nullptr);
+}
+
+VkDescriptorSetLayout hgGetBindlessSetLayout()
+{
+    return bindlessLayout;
+}
+
+VkDescriptorSet hgGetBindlessSet()
+{
+    return bindlessSet;
+}
+
+static VkShaderModule createVkShaderModule(const u8* spirvCode, u64 codeSize)
 {
     VkShaderModuleCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -1555,8 +1904,8 @@ VkPipeline hgCreateVkGraphicsPipeline(const HgCreateVkGraphicsPipeline& config)
     if (config.vertexBindingCount > 0)
         hgAssert(config.vertexBindings != nullptr);
 
-    VkShaderModule vertexShader = hgCreateVkShaderModule(config.vertexShader, config.vertexShaderSize);
-    VkShaderModule fragmentShader = hgCreateVkShaderModule(config.fragmentShader, config.fragmentShaderSize);
+    VkShaderModule vertexShader = createVkShaderModule(config.vertexShader, config.vertexShaderSize);
+    VkShaderModule fragmentShader = createVkShaderModule(config.fragmentShader, config.fragmentShaderSize);
     hgDefer(vkDestroyShaderModule(hgVkDevice, vertexShader, nullptr));
     hgDefer(vkDestroyShaderModule(hgVkDevice, fragmentShader, nullptr));
 
@@ -1707,7 +2056,7 @@ VkPipeline hgCreateVkComputePipeline(VkPipelineLayout layout, const u8* shaderCo
     hgAssert(shaderCode != nullptr);
     hgAssert(shaderCodeSize > 0);
 
-    VkShaderModule computeShader = hgCreateVkShaderModule(shaderCode, shaderCodeSize);
+    VkShaderModule computeShader = createVkShaderModule(shaderCode, shaderCodeSize);
     hgDefer(vkDestroyShaderModule(hgVkDevice, computeShader, nullptr));
 
     VkComputePipelineCreateInfo pipelineInfo{};
@@ -1726,49 +2075,6 @@ VkPipeline hgCreateVkComputePipeline(VkPipelineLayout layout, const u8* shaderCo
         hgError("Failed to create Vulkan compute pipeline: %s\n", hgVkResultToStr(result));
 
     return pipeline;
-}
-
-VkDescriptorSet hgCreateVkDescriptorSet(VkDescriptorSetLayout layout)
-{
-    VkDescriptorSetAllocateInfo info{};
-    info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    info.descriptorPool = hgVkDescriptorPool;
-    info.descriptorSetCount = 1;
-    info.pSetLayouts = &layout;
-
-    VkDescriptorSet set = nullptr;
-    VkResult result = vkAllocateDescriptorSets(hgVkDevice, &info, &set);
-    if (set == nullptr)
-        hgError("Could not allocate VkDescriptorSet: %s\n", hgVkResultToStr(result));
-
-    return set;
-}
-
-void hgDestroyVkDescriptorSet(VkDescriptorSet set)
-{
-    vkFreeDescriptorSets(hgVkDevice, hgVkDescriptorPool, 1, &set);
-}
-
-void hgUpdateVkDescriptorSetBinding(
-    VkDescriptorSet set,
-    u32 binding,
-    u32 begin,
-    u32 count,
-    VkDescriptorType type,
-    const VkDescriptorBufferInfo* bufferInfos,
-    const VkDescriptorImageInfo* imageInfos)
-{
-    VkWriteDescriptorSet write{};
-    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    write.dstSet = set;
-    write.dstBinding = binding;
-    write.dstArrayElement = begin;
-    write.descriptorCount = count;
-    write.descriptorType = type;
-    write.pBufferInfo = bufferInfos;
-    write.pImageInfo = imageInfos;
-
-    vkUpdateDescriptorSets(hgVkDevice, 1, &write, 0, nullptr);
 }
 
 VkCommandBuffer hgBeginVkCmd()
