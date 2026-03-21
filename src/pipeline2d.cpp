@@ -77,7 +77,7 @@ void hgInitPipeline2D(
         defaultColors,
         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-    defaultTex.sampler = hgCreateVkSampler(VK_FILTER_NEAREST);
+    defaultTex.sampler = hgCreateSampler(VK_FILTER_NEAREST);
 
     defaultTex.descriptor = hgCreateDescriptor(HgDescriptorType_combinedImageSampler);
 

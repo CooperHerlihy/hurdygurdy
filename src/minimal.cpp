@@ -1,5 +1,87 @@
 #include "hurdygurdy.hpp"
 
+#include "stb_image_write.h"
+
+HgResource noiseTexID = hgResourceID("noiseTexID");
+
+void createNoiseTex()
+{
+    HgArena* arena = hgGetScratch();
+    HgArenaScope arenaScope{arena};
+
+    HgFence fence;
+    HgResource shaderID = hgResourceID("build/noise.comp.spv");
+    hgLoadResource(&fence, 1, shaderID, "build/noise.comp.spv");
+    hgDefer(hgUnloadResource(nullptr, 0, shaderID));
+
+    u32 width = 256;
+    u32 height = 256;
+
+    HgImage* image = hgCreateImage(
+        width,
+        height,
+        VK_FORMAT_R8G8B8A8_UNORM,
+        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+
+    HgImageView* view = hgCreateImageView(
+        image,
+        {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
+
+    HgDescriptor desc = hgCreateDescriptor(HgDescriptorType_storageImage);
+    hgDefer(hgDestroyDescriptor(desc));
+
+    VkDescriptorImageInfo imageInfo{nullptr, view->view, VK_IMAGE_LAYOUT_GENERAL};
+    hgUpdateDescriptor(desc, nullptr, &imageInfo);
+
+    struct ComputePush
+    {
+        u32 outImageIdx;
+    };
+    VkPushConstantRange pushRange{VK_SHADER_STAGE_ALL, 0, sizeof(ComputePush)};
+    VkPipelineLayout layout = hgCreatePipelineLayout(&pushRange);
+    hgDefer(vkDestroyPipelineLayout(hgVkDevice, layout, nullptr));
+
+    hgWaitForFenceIndefinite(&fence);
+    HgBinary* shaderCode = hgGetResource(shaderID);
+    VkPipeline pipeline = hgCreateComputePipeline(
+        layout, (u8*)shaderCode->data, shaderCode->size);
+    hgDefer(vkDestroyPipeline(hgVkDevice, pipeline, nullptr));
+
+    VkCommandBuffer cmd = hgBeginVkCmd();
+
+    HgRenderer renderer = renderer.create(arena, 4, 4);
+
+    HgRenderPass computePass{};
+    computePass.storageImages = &view;
+    computePass.storageImageCount = 1;
+    renderer.prepareResources(cmd, &computePass);
+
+    hgBindComputePipeline(cmd, pipeline, layout);
+
+    ComputePush push{};
+    push.outImageIdx = hgDescriptorIdx(desc);
+    vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_ALL, 0, sizeof(push), &push);
+
+    vkCmdDispatch(cmd, width / 16, height / 16, 1);
+
+    HgRenderPass sampledPass{};
+    sampledPass.sampledImages = &view;
+    sampledPass.sampledImageCount = 1;
+    renderer.prepareResources(cmd, &sampledPass);
+
+    hgEndVkCmd(cmd);
+
+    hgLoadEmptyTexture(noiseTexID);
+    HgTextureResource* noiseTex = hgGetTexture(noiseTexID);;
+    noiseTex->image = image;
+    noiseTex->view = view;
+    noiseTex->sampler = hgCreateSampler(VK_FILTER_NEAREST);
+    noiseTex->descriptor = hgCreateDescriptor(HgDescriptorType_combinedImageSampler);
+
+    VkDescriptorImageInfo noiseTexInfo{noiseTex->sampler, noiseTex->view->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    hgUpdateDescriptor(noiseTex->descriptor, nullptr, &noiseTexInfo);
+}
+
 int main()
 {
     hgInit();
@@ -22,15 +104,18 @@ int main()
     hgInitPipeline2D(window->format, VK_FORMAT_UNDEFINED);
     hgDefer(hgDeinitPipeline2D());
 
+    createNoiseTex();
+    hgDefer(hgUnloadTexture(noiseTexID));
+
     HgTransform camera{};
     camera.position.z = -1;
 
     HgECS ecs = ecs.create(4096);
     hgDefer(ecs.destroy());
 
-    HgEntity square = ecs.spawn();
-    ecs.add<HgTransform>(square) = {};
-    ecs.add<HgSprite2D>(square) = {0, HgVec2{0}, HgVec2{1}};
+    HgEntity noiseSquare = ecs.spawn();
+    ecs.add<HgTransform>(noiseSquare) = {};
+    ecs.add<HgSprite2D>(noiseSquare) = {noiseTexID, HgVec2{0}, HgVec2{1}};
 
     HgClock gameClock{};
     for (;;)
@@ -101,5 +186,7 @@ int main()
 
 quit:
     vkDeviceWaitIdle(hgVkDevice);
+
+    vkDestroySampler(hgVkDevice, hgGetTexture(noiseTexID)->sampler, nullptr);
 }
 

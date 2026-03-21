@@ -1,0 +1,20 @@
+#version 460
+
+#include "shader_utils.glsl"
+
+layout (HgStorageImage, rgba8_snorm) uniform writeonly image2D images[]; 
+
+layout (push_constant) uniform Push {
+    uint outImageIdx;
+} push;
+
+layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+void main()
+{
+    uvec2 pos = gl_GlobalInvocationID.xy;
+    vec2 posNorm = vec2(pos.x, pos.y) / vec2(256, 256);
+
+    imageStore(images[push.outImageIdx], ivec2(pos.x, pos.y), vec4(posNorm, 0.0, 1.0));
+}
+

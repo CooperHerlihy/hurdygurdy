@@ -39,6 +39,7 @@ set SRC= ^
     test.cpp
 
 set SHADERS= ^
+    noise.comp ^
     sprite.vert ^
     sprite.frag ^
     model.vert ^

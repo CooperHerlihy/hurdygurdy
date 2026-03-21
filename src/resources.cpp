@@ -507,6 +507,11 @@ void hgDeinitTextures()
     gpuTextures.destroy();
 }
 
+void hgLoadEmptyTexture(HgResource id)
+{
+    gpuTextures.load(id);
+}
+
 void hgLoadTexture(HgResource id, VkSampler sampler)
 {
     if (gpuTextures.load(id))

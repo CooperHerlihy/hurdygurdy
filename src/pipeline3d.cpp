@@ -158,7 +158,7 @@ void hgInitPipeline3D(
     defaultModel.vertexWidth = sizeof(HgModelVertex);
     defaultModel.indexCount = sizeof(cubeIndices) / sizeof(*cubeIndices);
 
-    defaultMapSampler = hgCreateVkSampler(VK_FILTER_NEAREST);
+    defaultMapSampler = hgCreateSampler(VK_FILTER_NEAREST);
 
     defaultColorMap.sampler = defaultMapSampler;
     defaultNormalMap.sampler = defaultMapSampler;

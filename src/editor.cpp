@@ -86,7 +86,7 @@ int main()
     HgImageView* renderView = nullptr;
     hgDefer(hgDestroyImageView(renderView));
 
-    VkSampler renderSampler = hgCreateVkSampler(VK_FILTER_NEAREST);
+    VkSampler renderSampler = hgCreateSampler(VK_FILTER_NEAREST);
     hgDefer(vkDestroySampler(hgVkDevice, renderSampler, nullptr));
 
     VkDescriptorSet renderDescriptor = nullptr;

@@ -3129,11 +3129,11 @@ void hgWriteImageCubemap(
  * - src The pointer to write to
  * - dst The image to read from
  * - subresource The subresource of the image to read from
- * - layout The final layout to set the image to
+ * - layout The layout the image was in before
  */
 void hgReadImage(
     void* dst,
-    HgImage* src,
+    const HgImage* src,
     VkImageSubresourceLayers subresource,
     VkImageLayout layout);
 
@@ -3160,7 +3160,7 @@ void hgGenerateMipmaps(
  * - addressMode How the sampler handles address off edges
  * - borderColor The border color if addressMode uses a border
  */
-VkSampler hgCreateVkSampler(
+VkSampler hgCreateSampler(
     VkFilter filter,
     VkSamplerAddressMode addressMode = VK_SAMPLER_ADDRESS_MODE_REPEAT,
     VkBorderColor borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK);
@@ -3489,7 +3489,7 @@ struct HgImageBarrier
     /**
      * Where the image will be used next
      */
-    VkPipelineStageFlags nextPipelineStage;
+    VkPipelineStageFlags nextStage;
     /**
      * How the image will be accessed next
      */
@@ -3512,7 +3512,7 @@ struct HgBufferBarrier
     /**
      * Where the image will be used next
      */
-    VkPipelineStageFlags nextPipelineStage;
+    VkPipelineStageFlags nextStage;
     /**
      * How the image will be accessed next
      */
@@ -3532,7 +3532,7 @@ struct HgRenderer
         /**
          * Where the image was used last
          */
-        VkPipelineStageFlags lastPipelineStage;
+        VkPipelineStageFlags lastStage;
         /**
          * How the image was accessed last
          */
@@ -3547,7 +3547,7 @@ struct HgRenderer
         /**
          * Where the image was used last
          */
-        VkPipelineStageFlags lastPipelineStage;
+        VkPipelineStageFlags lastStage;
         /**
          * How the image was accessed last
          */
@@ -3614,7 +3614,16 @@ struct HgRenderer
         u32 imageBarrierCount);
 
     /**
-     * Begins a render pass
+     * Performs memory barriers for shader resources
+     *
+     * Parameters
+     * - cmd The command buffer
+     * - pass The render pass description
+     */
+    void prepareResources(VkCommandBuffer cmd, const HgRenderPass* pass);
+
+    /**
+     * Prepares resources and begins a render pass
      *
      * Parameters
      * - cmd The command buffer
@@ -4209,6 +4218,11 @@ void HgInitTextures();
  * Deinitialize gpu textures
  */
 void hgDeinitTextures();
+
+/**
+ * Load an empty texture
+ */
+void hgLoadEmptyTexture(HgResource id);
 
 /**
  * Load a texture from the cpu to the gpu
