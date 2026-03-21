@@ -1,16 +1,27 @@
 #include "hurdygurdy.hpp"
 
+#include <ctime>
+
 #include <condition_variable>
 #include <mutex>
 #include <thread>
 
 #include <emmintrin.h>
 
+HgClock::HgClock()
+{
+    timespec ts;
+    timespec_get(&ts, TIME_UTC);
+    time = (f64)ts.tv_sec + (f64)ts.tv_nsec * 1e-9;
+}
+
 f64 hgClockTick(HgClock* clock)
 {
-    std::chrono::time_point<std::chrono::high_resolution_clock> prev = clock->time;
-    clock->time = std::chrono::high_resolution_clock::now();
-    return std::chrono::duration<f64>{clock->time - prev}.count();
+    f64 prev = clock->time;
+    timespec ts;
+    timespec_get(&ts, TIME_UTC);
+    clock->time = (f64)ts.tv_sec + (f64)ts.tv_nsec * 1e-9;
+    return clock->time - prev;
 }
 
 u32 hgHardwareThreadCount()

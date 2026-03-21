@@ -1781,13 +1781,16 @@ static void swapIdxLocation(HgECS* ecs, u32 lhs, u32 rhs, u32 componentId)
     hgAssert(ecs->has(lhsEntity, componentId));
     hgAssert(ecs->has(rhsEntity, componentId));
 
+    HgArena* scratch = hgGetScratch();
+    HgArenaScope scratchScope{scratch};
+
     system.entities[lhs] = rhsEntity;
     system.entities[rhs] = lhsEntity;
     system.indices[lhsEntity.id] = rhs;
     system.indices[rhsEntity.id] = lhs;
 
     u32 width = componentWidth(componentId);
-    void* temp = alloca(componentWidth(componentId));
+    void* temp = hgAlloc(scratch, componentWidth(componentId), 1);
     memcpy(temp, (u8*)system.components + width * lhs, width);
     memcpy((u8*)system.components + width * lhs, (u8*)system.components + width * rhs, width);
     memcpy((u8*)system.components + width * rhs, temp, width);

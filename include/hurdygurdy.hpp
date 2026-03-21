@@ -34,8 +34,8 @@
 #include <cstdlib>
 #include <cstring>
 
+#include <algorithm>
 #include <atomic>
-#include <chrono>
 
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
@@ -2522,7 +2522,12 @@ struct HgClock
     /**
      * The begin time
      */
-    std::chrono::time_point<std::chrono::high_resolution_clock> time = std::chrono::high_resolution_clock::now();
+    f64 time;
+
+    /**
+     * Begin clock at construction
+     */
+    HgClock();
 };
 
 /**

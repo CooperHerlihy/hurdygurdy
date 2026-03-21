@@ -2702,12 +2702,15 @@ static VkPresentModeKHR findSwapchainPresentMode(
 {
     hgAssert(surface != nullptr);
 
+    HgArena* scratch = hgGetScratch();
+    HgArenaScope scratchScope{scratch};
+
     if (desiredMode == VK_PRESENT_MODE_FIFO_KHR)
         return desiredMode;
 
     u32 modeCount = 0;
     vkGetPhysicalDeviceSurfacePresentModesKHR(hgVkPhysicalDevice, surface, &modeCount, nullptr);
-    VkPresentModeKHR* presentModes = (VkPresentModeKHR*)alloca(modeCount * sizeof(*presentModes));
+    VkPresentModeKHR* presentModes = hgAlloc<VkPresentModeKHR>(scratch, modeCount);
     vkGetPhysicalDeviceSurfacePresentModesKHR(hgVkPhysicalDevice, surface, &modeCount, presentModes);
 
     for (u32 i = 0; i < modeCount; ++i)
