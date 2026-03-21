@@ -4,7 +4,7 @@
 
 #include "hurdygurdy.hpp"
 
-void hgInternalCreateWindowSwapchain(HgWindow* window, const HgWindowConfig& config);
+void hgInternalCreateWindowSwapchain(HgWindow* window, const HgWindowConfig* config);
 void hgInternalResizeWindowSwapchain(HgWindow* window);
 void hgInternalDestroyWindowSwapchain(HgWindow* window);
 
@@ -348,23 +348,23 @@ void mouseButtonCallback(GLFWwindow* glfwWindow, int button, int action, [[maybe
     }
 }
 
-HgWindow* HgWindow::create(HgArena* arena, const HgWindowConfig& config)
+HgWindow* HgWindow::create(HgArena* arena, const HgWindowConfig* config)
 {
     HgWindow* window = hgAlloc<HgWindow>(arena, 1);
     *window = {};
     window->internals = hgAlloc<Internals>(arena, 1);
     *window->internals = {};
 
-    const char* title = config.title != nullptr ? config.title : "Hurdy Gurdy";
+    const char* title = config->title != nullptr ? config->title : "Hurdy Gurdy";
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    if (config.windowed)
+    if (config->windowed)
     {
-        window->width = config.width;
-        window->height = config.height;
+        window->width = config->width;
+        window->height = config->height;
         window->internals->glfwWindow = glfwCreateWindow(
-            (int)config.width,
-            (int)config.height,
+            (int)config->width,
+            (int)config->height,
             title,
             nullptr,
             nullptr);

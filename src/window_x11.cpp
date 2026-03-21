@@ -7,7 +7,7 @@
 #include <X11/Xutil.h>
 #include <vulkan/vulkan_xlib.h>
 
-void hgInternalCreateWindowSwapchain(HgWindow* window, const HgWindowConfig& config);
+void hgInternalCreateWindowSwapchain(HgWindow* window, const HgWindowConfig* config);
 void hgInternalResizeWindowSwapchain(HgWindow* window);
 void hgInternalDestroyWindowSwapchain(HgWindow* window);
 
@@ -248,22 +248,22 @@ static void setX11Fullscreen(Display* display, Window window)
         hgError("X11 could not send fullscreen message\n");
 }
 
-HgWindow* HgWindow::create(HgArena* arena, const HgWindowConfig& config)
+HgWindow* HgWindow::create(HgArena* arena, const HgWindowConfig* config)
 {
     HgWindow* window = hgAlloc<HgWindow>(arena, 1);
     *window = {};
     window->internals = hgAlloc<Internals>(arena, 1);
     *window->internals = {};
 
-    window->width = config.windowed ? config.width : (u32)DisplayWidth(x11Display, DefaultScreen(x11Display));
-    window->height = config.windowed ? config.height : (u32)DisplayHeight(x11Display, DefaultScreen(x11Display));
+    window->width = config->windowed ? config->width : (u32)DisplayWidth(x11Display, DefaultScreen(x11Display));
+    window->height = config->windowed ? config->height : (u32)DisplayHeight(x11Display, DefaultScreen(x11Display));
 
     window->internals->x11Window = createX11Window(
-        x11Display, window->width, window->height, config.title);
+        x11Display, window->width, window->height, config->title);
     window->internals->deleteAtom = setX11DeleteBehavior(
         x11Display, window->internals->x11Window);
 
-    if (!config.windowed)
+    if (!config->windowed)
         setX11Fullscreen(x11Display, window->internals->x11Window);
 
     int flushResult = XFlush(x11Display);

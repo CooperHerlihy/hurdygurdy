@@ -6,11 +6,11 @@
 
 #include <emmintrin.h>
 
-f64 HgClock::tick()
+f64 hgClockTick(HgClock* clock)
 {
-    auto prev = time;
-    time = std::chrono::high_resolution_clock::now();
-    return std::chrono::duration<f64>{time - prev}.count();
+    std::chrono::time_point<std::chrono::high_resolution_clock> prev = clock->time;
+    clock->time = std::chrono::high_resolution_clock::now();
+    return std::chrono::duration<f64>{clock->time - prev}.count();
 }
 
 u32 hgHardwareThreadCount()
@@ -18,37 +18,37 @@ u32 hgHardwareThreadCount()
     return (u32)std::thread::hardware_concurrency();
 }
 
-void HgFence::add(u32 count)
+void hgAttachFence(HgFence* fence, u32 count)
 {
-    counter.fetch_add(count);
+    fence->counter.fetch_add(count);
 }
 
-void HgFence::signal(u32 count)
+void hgSignalFence(HgFence* fence, u32 count)
 {
-    counter.fetch_sub(count);
+    fence->counter.fetch_sub(count);
 }
 
-bool HgFence::isComplete()
+bool hgIsFenceComplete(const HgFence* fence)
 {
-    return counter.load() == 0;
+    return fence->counter.load() == 0;
 }
 
-void HgFence::waitIndefinite()
+void hgWaitForFenceIndefinite(const HgFence* fence)
 {
-    while (!isComplete())
+    while (!hgIsFenceComplete(fence))
     {
         _mm_pause();
     }
 }
 
-bool HgFence::wait(f64 timeout)
+bool hgWaitForFenceTimeout(const HgFence* fence, f64 timeoutSeconds)
 {
-    auto end = std::chrono::steady_clock::now() + std::chrono::duration<f64>(timeout);
-    while (!isComplete() && std::chrono::steady_clock::now() < end)
+    auto end = std::chrono::steady_clock::now() + std::chrono::duration<f64>(timeoutSeconds);
+    while (!hgIsFenceComplete(fence) && std::chrono::steady_clock::now() < end)
     {
         _mm_pause();
     }
-    return isComplete();
+    return hgIsFenceComplete(fence);
 }
 
 std::thread* poolThreads = nullptr;
@@ -100,7 +100,7 @@ static bool poolExecute()
 
     for (u32 i = 0; i < work.fenceCount; ++i)
     {
-        work.fences[i].signal(1);
+        hgSignalFence(&work.fences[i], 1);
     }
     return true;
 }
@@ -171,15 +171,15 @@ void hgDeinitThreadPool()
     poolMtx.~mutex();
 }
 
-bool hgHelpThreadPool(HgFence& fence, f64 timeout)
+bool hgHelpThreadPool(const HgFence* fence, f64 timeout)
 {
     auto end = std::chrono::steady_clock::now() + std::chrono::duration<f64>(timeout);
-    while (!fence.isComplete() && std::chrono::steady_clock::now() < end)
+    while (!hgIsFenceComplete(fence) && std::chrono::steady_clock::now() < end)
     {
         if (!poolExecute())
             _mm_pause();
     }
-    return fence.isComplete();
+    return hgIsFenceComplete(fence);
 }
 
 void hgCallPar(HgFence* fences, u32 fenceCount, void* data, void (*fn)(void*))
@@ -187,7 +187,7 @@ void hgCallPar(HgFence* fences, u32 fenceCount, void* data, void (*fn)(void*))
     hgAssert(fn != nullptr);
     for (u32 i = 0; i < fenceCount; ++i)
     {
-        fences[i].add(1);
+        hgAttachFence(&fences[i], 1);
     }
 
     u32 idx = poolWorkingHead.fetch_add(1) & (poolWorkCapacity - 1);
@@ -247,7 +247,7 @@ void hgForPar(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx))
             }
         });
     }
-    hgHelpThreadPool(fence, INFINITY);
+    hgHelpThreadPool(&fence, INFINITY);
 }
 
 std::thread ioThread{};
@@ -284,7 +284,7 @@ static bool ioPop()
 
     for (u32 i = 0; i < request.fenceCount; ++i)
     {
-        request.fences[i].signal(1);
+        hgSignalFence(&request.fences[i], 1);
     }
     return true;
 }
@@ -339,7 +339,7 @@ void hgRequestIO(
     hgAssert(fn != nullptr);
     for (u32 i = 0; i < fenceCount; ++i)
     {
-        fences[i].add(1);
+        hgAttachFence(&fences[i], 1);
     }
 
     u32 idx = ioWorkingHead.fetch_add(1) & (ioRequestCapacity - 1);

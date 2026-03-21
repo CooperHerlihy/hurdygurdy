@@ -149,10 +149,10 @@ static HgDescriptor* createBindlessPool(HgDescriptorType type, HgDescriptor* nex
     for (u32 i = 0; i < UINT16_MAX; ++i)
     {
         pool[i] = {i + 1};
-        pool[i].setType(type);
+        pool[i].id = (pool[i].id & 0x0fffffff) | (type << 28);
     }
     *next = {0};
-    next->setType(type);
+    next->id = (next->id & 0x0fffffff) | (type << 28);
 
     return pool;
 }
@@ -1176,26 +1176,26 @@ HgImage* hgCreateImage(u32 width, u32 height, VkFormat format, VkImageUsageFlags
     create.height = height;
     create.format = format;
     create.usage = usage;
-    return hgCreateImageEx(create);
+    return hgCreateImageEx(&create);
 }
 
-HgImage* hgCreateImageEx(const HgCreateImageEx& create)
+HgImage* hgCreateImageEx(const HgCreateImageEx* create)
 {
-    hgAssert(create.format != VK_FORMAT_UNDEFINED);
-    hgAssert(create.usage != 0);
+    hgAssert(create->format != VK_FORMAT_UNDEFINED);
+    hgAssert(create->usage != 0);
 
     HgImage* image = (HgImage*)malloc(sizeof(*image));
     *image = {};
 
     VkImageCreateInfo imageInfo{};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    imageInfo.imageType = create.type;
-    imageInfo.format = create.format;
-    imageInfo.extent = {create.width, create.height, create.depth};
-    imageInfo.mipLevels = create.mipLevels;
-    imageInfo.arrayLayers = create.arrayLayers;
-    imageInfo.samples = create.msaaSamples;
-    imageInfo.usage = create.usage;
+    imageInfo.imageType = create->type;
+    imageInfo.format = create->format;
+    imageInfo.extent = {create->width, create->height, create->depth};
+    imageInfo.mipLevels = create->mipLevels;
+    imageInfo.arrayLayers = create->arrayLayers;
+    imageInfo.samples = create->msaaSamples;
+    imageInfo.usage = create->usage;
 
     VmaAllocationCreateInfo allocInfo{};
     allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
@@ -1211,14 +1211,14 @@ HgImage* hgCreateImageEx(const HgCreateImageEx& create)
     if (result != VK_SUCCESS)
         hgError("Could not create VkImage: %s", hgVkResultToStr(result));
 
-    image->type = create.type;
-    image->format = create.format;
-    image->width = create.width;
-    image->height = create.height;
-    image->depth = create.depth;
-    image->mipLevels = create.mipLevels;
-    image->arrayLayers = create.arrayLayers;
-    image->msaaSamples = create.msaaSamples;
+    image->type = create->type;
+    image->format = create->format;
+    image->width = create->width;
+    image->height = create->height;
+    image->depth = create->depth;
+    image->mipLevels = create->mipLevels;
+    image->arrayLayers = create->arrayLayers;
+    image->msaaSamples = create->msaaSamples;
 
     return image;
 }
@@ -1701,19 +1701,19 @@ static HgDescriptor allocDescriptor(HgDescriptor* pool, HgDescriptor* next)
 {
     HgDescriptor desc = *next;
 
-    u32 idx = next->idx();
+    u32 idx = hgDescriptorIdx(*next);
     *next = pool[idx];
 
-    pool[desc.idx()] = desc;
+    pool[hgDescriptorIdx(desc)] = desc;
     return desc;
 }
 
 static void deallocDescriptor(HgDescriptor* pool, HgDescriptor* next, HgDescriptor desc)
 {
-    u32 idx = desc.idx();
+    u32 idx = hgDescriptorIdx(desc);
     pool[idx] = *next;
 
-    desc.incrementGeneration();
+    desc.id += 1 << 16;
     *next = desc;
 }
 
@@ -1722,35 +1722,35 @@ HgDescriptor hgCreateDescriptor(HgDescriptorType type)
     switch (type)
     {
         case HgDescriptorType_sampler:
-            hgAssert(samplerPoolNext.idx() != UINT16_MAX);
+            hgAssert(hgDescriptorIdx(samplerPoolNext) != UINT16_MAX);
             return allocDescriptor(samplerPool, &samplerPoolNext);
             break;
         case HgDescriptorType_combinedImageSampler:
-            hgAssert(combinedImageSamplerPoolNext.idx() != UINT16_MAX);
+            hgAssert(hgDescriptorIdx(combinedImageSamplerPoolNext) != UINT16_MAX);
             return allocDescriptor(combinedImageSamplerPool, &combinedImageSamplerPoolNext);
             break;
         case HgDescriptorType_sampledImage:
-            hgAssert(sampledImagePoolNext.idx() != UINT16_MAX);
+            hgAssert(hgDescriptorIdx(sampledImagePoolNext) != UINT16_MAX);
             return allocDescriptor(sampledImagePool, &sampledImagePoolNext);
             break;
         case HgDescriptorType_storageImage:
-            hgAssert(storageImagePoolNext.idx() != UINT16_MAX);
+            hgAssert(hgDescriptorIdx(storageImagePoolNext) != UINT16_MAX);
             return allocDescriptor(storageImagePool, &storageImagePoolNext);
             break;
         case HgDescriptorType_uniformTexelBuffer:
-            hgAssert(uniformTexelBufferPoolNext.idx() != UINT16_MAX);
+            hgAssert(hgDescriptorIdx(uniformTexelBufferPoolNext) != UINT16_MAX);
             return allocDescriptor(uniformTexelBufferPool, &uniformTexelBufferPoolNext);
             break;
         case HgDescriptorType_storageTexelBuffer:
-            hgAssert(storageTexelBufferPoolNext.idx() != UINT16_MAX);
+            hgAssert(hgDescriptorIdx(storageTexelBufferPoolNext) != UINT16_MAX);
             return allocDescriptor(storageTexelBufferPool, &storageTexelBufferPoolNext);
             break;
         case HgDescriptorType_uniformBuffer:
-            hgAssert(uniformBufferPoolNext.idx() != UINT16_MAX);
+            hgAssert(hgDescriptorIdx(uniformBufferPoolNext) != UINT16_MAX);
             return allocDescriptor(uniformBufferPool, &uniformBufferPoolNext);
             break;
         case HgDescriptorType_storageBuffer:
-            hgAssert(storageBufferPoolNext.idx() != UINT16_MAX);
+            hgAssert(hgDescriptorIdx(storageBufferPoolNext) != UINT16_MAX);
             return allocDescriptor(storageBufferPool, &storageBufferPoolNext);
             break;
         default:
@@ -1759,44 +1759,44 @@ HgDescriptor hgCreateDescriptor(HgDescriptorType type)
     }
 }
 
-void hgDestroyDescriptor(HgDescriptor descriptor)
+void hgDestroyDescriptor(HgDescriptor desc)
 {
-    if (descriptor.id == HgDescriptor{}.id)
+    if (desc.id == HgDescriptor{}.id)
         return;
 
-    switch (descriptor.type())
+    switch (hgDescriptorType(desc))
     {
         case HgDescriptorType_sampler:
-            hgAssert(descriptor.id == samplerPool[descriptor.idx()].id);
-            deallocDescriptor(samplerPool, &samplerPoolNext, descriptor);
+            hgAssert(desc.id == samplerPool[hgDescriptorIdx(desc)].id);
+            deallocDescriptor(samplerPool, &samplerPoolNext, desc);
             break;
         case HgDescriptorType_combinedImageSampler:
-            hgAssert(descriptor.id == combinedImageSamplerPool[descriptor.idx()].id);
-            deallocDescriptor(combinedImageSamplerPool, &combinedImageSamplerPoolNext, descriptor);
+            hgAssert(desc.id == combinedImageSamplerPool[hgDescriptorIdx(desc)].id);
+            deallocDescriptor(combinedImageSamplerPool, &combinedImageSamplerPoolNext, desc);
             break;
         case HgDescriptorType_sampledImage:
-            hgAssert(descriptor.id == sampledImagePool[descriptor.idx()].id);
-            deallocDescriptor(sampledImagePool, &sampledImagePoolNext, descriptor);
+            hgAssert(desc.id == sampledImagePool[hgDescriptorIdx(desc)].id);
+            deallocDescriptor(sampledImagePool, &sampledImagePoolNext, desc);
             break;
         case HgDescriptorType_storageImage:
-            hgAssert(descriptor.id == storageImagePool[descriptor.idx()].id);
-            deallocDescriptor(storageImagePool, &storageImagePoolNext, descriptor);
+            hgAssert(desc.id == storageImagePool[hgDescriptorIdx(desc)].id);
+            deallocDescriptor(storageImagePool, &storageImagePoolNext, desc);
             break;
         case HgDescriptorType_uniformTexelBuffer:
-            hgAssert(descriptor.id == uniformTexelBufferPool[descriptor.idx()].id);
-            deallocDescriptor(uniformTexelBufferPool, &uniformTexelBufferPoolNext, descriptor);
+            hgAssert(desc.id == uniformTexelBufferPool[hgDescriptorIdx(desc)].id);
+            deallocDescriptor(uniformTexelBufferPool, &uniformTexelBufferPoolNext, desc);
             break;
         case HgDescriptorType_storageTexelBuffer:
-            hgAssert(descriptor.id == storageTexelBufferPool[descriptor.idx()].id);
-            deallocDescriptor(storageTexelBufferPool, &storageTexelBufferPoolNext, descriptor);
+            hgAssert(desc.id == storageTexelBufferPool[hgDescriptorIdx(desc)].id);
+            deallocDescriptor(storageTexelBufferPool, &storageTexelBufferPoolNext, desc);
             break;
         case HgDescriptorType_uniformBuffer:
-            hgAssert(descriptor.id == uniformBufferPool[descriptor.idx()].id);
-            deallocDescriptor(uniformBufferPool, &uniformBufferPoolNext, descriptor);
+            hgAssert(desc.id == uniformBufferPool[hgDescriptorIdx(desc)].id);
+            deallocDescriptor(uniformBufferPool, &uniformBufferPoolNext, desc);
             break;
         case HgDescriptorType_storageBuffer:
-            hgAssert(descriptor.id == storageBufferPool[descriptor.idx()].id);
-            deallocDescriptor(storageBufferPool, &storageBufferPoolNext, descriptor);
+            hgAssert(desc.id == storageBufferPool[hgDescriptorIdx(desc)].id);
+            deallocDescriptor(storageBufferPool, &storageBufferPoolNext, desc);
             break;
         default:
             hgAssert(false);
@@ -1847,10 +1847,10 @@ void hgUpdateDescriptor(
     VkWriteDescriptorSet write{};
     write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     write.dstSet = bindlessSet;
-    write.dstBinding = descriptor.type();
-    write.dstArrayElement = descriptor.idx();
+    write.dstBinding = hgDescriptorType(descriptor);
+    write.dstArrayElement = hgDescriptorIdx(descriptor);
     write.descriptorCount = 1;
-    write.descriptorType = hgDescriptorTypeToVk(descriptor.type());
+    write.descriptorType = hgDescriptorTypeToVk(hgDescriptorType(descriptor));
     write.pBufferInfo = bufferInfo;
     write.pImageInfo = imageInfo;
     write.pTexelBufferView = texelInfo;
@@ -1858,14 +1858,14 @@ void hgUpdateDescriptor(
     vkUpdateDescriptorSets(hgVkDevice, 1, &write, 0, nullptr);
 }
 
-VkPipelineLayout hgCreatePipelineLayout(const VkPushConstantRange& push)
+VkPipelineLayout hgCreatePipelineLayout(const VkPushConstantRange* push)
 {
     VkPipelineLayoutCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     info.setLayoutCount = 1;
     info.pSetLayouts = &bindlessLayout;
     info.pushConstantRangeCount = 1;
-    info.pPushConstantRanges = &push;
+    info.pPushConstantRanges = push;
 
     VkPipelineLayout layout = nullptr;
     VkResult result = vkCreatePipelineLayout(hgVkDevice, &info, nullptr, &layout);
@@ -1890,21 +1890,21 @@ static VkShaderModule createVkShaderModule(const u8* spirvCode, u64 codeSize)
     return shader;
 }
 
-VkPipeline hgCreateGraphicsPipeline(const HgCreateGraphicsPipeline& config)
+VkPipeline hgCreateGraphicsPipeline(const HgCreateGraphicsPipeline* config)
 {
-    hgAssert(config.layout != nullptr);
-    hgAssert(config.vertexShader != nullptr);
-    hgAssert(config.fragmentShader != nullptr);
-    if (config.colorAttachmentCount > 0)
-        hgAssert(config.colorAttachmentFormats != nullptr);
-    if (config.vertexBindingCount > 0)
-        hgAssert(config.vertexBindings != nullptr);
+    hgAssert(config->layout != nullptr);
+    hgAssert(config->vertexShader != nullptr);
+    hgAssert(config->fragmentShader != nullptr);
+    if (config->colorAttachmentCount > 0)
+        hgAssert(config->colorAttachmentFormats != nullptr);
+    if (config->vertexBindingCount > 0)
+        hgAssert(config->vertexBindings != nullptr);
 
     HgArena* scratch = hgGetScratch();
     HgArenaScope scratchScope{scratch};
 
-    VkShaderModule vertexShader = createVkShaderModule(config.vertexShader, config.vertexShaderSize);
-    VkShaderModule fragmentShader = createVkShaderModule(config.fragmentShader, config.fragmentShaderSize);
+    VkShaderModule vertexShader = createVkShaderModule(config->vertexShader, config->vertexShaderSize);
+    VkShaderModule fragmentShader = createVkShaderModule(config->fragmentShader, config->fragmentShaderSize);
     hgDefer(vkDestroyShaderModule(hgVkDevice, vertexShader, nullptr));
     hgDefer(vkDestroyShaderModule(hgVkDevice, fragmentShader, nullptr));
 
@@ -1920,19 +1920,19 @@ VkPipeline hgCreateGraphicsPipeline(const HgCreateGraphicsPipeline& config)
 
     VkPipelineVertexInputStateCreateInfo vertexInputState{};
     vertexInputState.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertexInputState.vertexBindingDescriptionCount = (u32)config.vertexBindingCount;
-    vertexInputState.pVertexBindingDescriptions = config.vertexBindings;
-    vertexInputState.vertexAttributeDescriptionCount = (u32)config.vertexAttributeCount;
-    vertexInputState.pVertexAttributeDescriptions = config.vertexAttributes;
+    vertexInputState.vertexBindingDescriptionCount = (u32)config->vertexBindingCount;
+    vertexInputState.pVertexBindingDescriptions = config->vertexBindings;
+    vertexInputState.vertexAttributeDescriptionCount = (u32)config->vertexAttributeCount;
+    vertexInputState.pVertexAttributeDescriptions = config->vertexAttributes;
 
     VkPipelineInputAssemblyStateCreateInfo inputAssemblyState{};
     inputAssemblyState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    inputAssemblyState.topology = config.topology;
+    inputAssemblyState.topology = config->topology;
     inputAssemblyState.primitiveRestartEnable = VK_FALSE;
 
     VkPipelineTessellationStateCreateInfo tessellationState{};
     tessellationState.sType = VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO;
-    tessellationState.patchControlPoints = config.tesselationPatchControlPoints;
+    tessellationState.patchControlPoints = config->tesselationPatchControlPoints;
 
     VkPipelineViewportStateCreateInfo viewportState{};
     viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -1943,9 +1943,9 @@ VkPipeline hgCreateGraphicsPipeline(const HgCreateGraphicsPipeline& config)
     rasterizationState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rasterizationState.depthClampEnable = VK_FALSE;
     rasterizationState.rasterizerDiscardEnable = VK_FALSE;
-    rasterizationState.polygonMode = config.polygonMode;
-    rasterizationState.cullMode = config.cullMode;
-    rasterizationState.frontFace = config.frontFace;
+    rasterizationState.polygonMode = config->polygonMode;
+    rasterizationState.cullMode = config->cullMode;
+    rasterizationState.frontFace = config->frontFace;
     rasterizationState.depthBiasEnable = VK_FALSE;
     rasterizationState.depthBiasConstantFactor = 0.0f;
     rasterizationState.depthBiasClamp = 0.0f;
@@ -1954,7 +1954,7 @@ VkPipeline hgCreateGraphicsPipeline(const HgCreateGraphicsPipeline& config)
 
     VkPipelineMultisampleStateCreateInfo multisampleState{};
     multisampleState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-    multisampleState.rasterizationSamples = config.multisampleCount;
+    multisampleState.rasterizationSamples = config->multisampleCount;
     multisampleState.sampleShadingEnable = VK_FALSE;
     multisampleState.minSampleShading = 1.0f;
     multisampleState.pSampleMask = nullptr;
@@ -1963,10 +1963,10 @@ VkPipeline hgCreateGraphicsPipeline(const HgCreateGraphicsPipeline& config)
 
     VkPipelineDepthStencilStateCreateInfo depthStencilState{};
     depthStencilState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    depthStencilState.depthTestEnable = config.enableDepthRead;
-    depthStencilState.depthWriteEnable = config.enableDepthWrite;
+    depthStencilState.depthTestEnable = config->enableDepthRead;
+    depthStencilState.depthWriteEnable = config->enableDepthWrite;
     depthStencilState.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
-    depthStencilState.depthBoundsTestEnable = config.enableDepthRead;
+    depthStencilState.depthBoundsTestEnable = config->enableDepthRead;
     depthStencilState.stencilTestEnable = VK_FALSE, // : TODO
     depthStencilState.front = {}; // : TODO
     depthStencilState.back = {}; // : TODO
@@ -1974,12 +1974,12 @@ VkPipeline hgCreateGraphicsPipeline(const HgCreateGraphicsPipeline& config)
     depthStencilState.maxDepthBounds = 1.0f;
 
     VkPipelineColorBlendAttachmentState* colorBlendAttachments
-        = hgAlloc<VkPipelineColorBlendAttachmentState>(scratch, config.colorAttachmentCount);
+        = hgAlloc<VkPipelineColorBlendAttachmentState>(scratch, config->colorAttachmentCount);
 
-    for (u32 i = 0; i < config.colorAttachmentCount; ++i)
+    for (u32 i = 0; i < config->colorAttachmentCount; ++i)
     {
-        colorBlendAttachments[i].blendEnable = config.colorBlendEnables != nullptr
-            ? config.colorBlendEnables[i]
+        colorBlendAttachments[i].blendEnable = config->colorBlendEnables != nullptr
+            ? config->colorBlendEnables[i]
             : VK_FALSE;
         colorBlendAttachments[i].srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
         colorBlendAttachments[i].dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
@@ -1998,7 +1998,7 @@ VkPipeline hgCreateGraphicsPipeline(const HgCreateGraphicsPipeline& config)
     colorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     colorBlendState.logicOpEnable = VK_FALSE;
     colorBlendState.logicOp = VK_LOGIC_OP_COPY;
-    colorBlendState.attachmentCount = config.colorAttachmentCount;
+    colorBlendState.attachmentCount = config->colorAttachmentCount;
     colorBlendState.pAttachments = colorBlendAttachments;
     for (float& blendConstant : colorBlendState.blendConstants)
     {
@@ -2013,10 +2013,10 @@ VkPipeline hgCreateGraphicsPipeline(const HgCreateGraphicsPipeline& config)
 
     VkPipelineRenderingCreateInfo renderingInfo{};
     renderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
-    renderingInfo.colorAttachmentCount = (u32)config.colorAttachmentCount;
-    renderingInfo.pColorAttachmentFormats = config.colorAttachmentFormats;
-    renderingInfo.depthAttachmentFormat = config.depthAttachmentFormat;
-    renderingInfo.stencilAttachmentFormat = config.stencilAttachmentFormat;
+    renderingInfo.colorAttachmentCount = (u32)config->colorAttachmentCount;
+    renderingInfo.pColorAttachmentFormats = config->colorAttachmentFormats;
+    renderingInfo.depthAttachmentFormat = config->depthAttachmentFormat;
+    renderingInfo.stencilAttachmentFormat = config->stencilAttachmentFormat;
 
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -2032,7 +2032,7 @@ VkPipeline hgCreateGraphicsPipeline(const HgCreateGraphicsPipeline& config)
     pipelineInfo.pDepthStencilState = &depthStencilState;
     pipelineInfo.pColorBlendState = &colorBlendState;
     pipelineInfo.pDynamicState = &dynamicState;
-    pipelineInfo.layout = config.layout;
+    pipelineInfo.layout = config->layout;
     pipelineInfo.basePipelineHandle = nullptr;
     pipelineInfo.basePipelineIndex = -1;
 
@@ -2223,7 +2223,7 @@ void HgRenderer::barrier(
     vkCmdPipelineBarrier2(cmd, &dep);
 }
 
-void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgRenderPass& pass)
+void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgRenderPass* pass)
 {
     HgArena* scratch = hgGetScratch();
     HgArenaScope scratchScope{scratch};
@@ -2234,13 +2234,13 @@ void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgR
     u32 imageBarrierCount = 0;
 
     bufferBarriers = hgRealloc<VkBufferMemoryBarrier2>(scratch, 
-        bufferBarriers, bufferBarrierCount, bufferBarrierCount + pass.uniformBufferCount);
+        bufferBarriers, bufferBarrierCount, bufferBarrierCount + pass->uniformBufferCount);
 
-    for (u32 i = bufferBarrierCount; i < bufferBarrierCount + pass.uniformBufferCount; ++i)
+    for (u32 i = bufferBarrierCount; i < bufferBarrierCount + pass->uniformBufferCount; ++i)
     {
-        BufferState* buffer = buffers.get(pass.uniformBuffers[i - bufferBarrierCount]);
+        BufferState* buffer = buffers.get(pass->uniformBuffers[i - bufferBarrierCount]);
         if (buffer == nullptr)
-            buffer = buffers.add(pass.uniformBuffers[i - bufferBarrierCount]);
+            buffer = buffers.add(pass->uniformBuffers[i - bufferBarrierCount]);
 
         bufferBarriers[i] = {};
         bufferBarriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
@@ -2249,24 +2249,24 @@ void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgR
         bufferBarriers[i].dstStageMask = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT
                                        | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
         bufferBarriers[i].dstAccessMask = VK_ACCESS_UNIFORM_READ_BIT;
-        bufferBarriers[i].buffer = pass.uniformBuffers[i - bufferBarrierCount]->buffer;
-        bufferBarriers[i].size = pass.uniformBuffers[i - bufferBarrierCount]->size;
+        bufferBarriers[i].buffer = pass->uniformBuffers[i - bufferBarrierCount]->buffer;
+        bufferBarriers[i].size = pass->uniformBuffers[i - bufferBarrierCount]->size;
 
         buffer->lastPipelineStage = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT
                                  | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
         buffer->lastAccess = VK_ACCESS_UNIFORM_READ_BIT;
     }
 
-    bufferBarrierCount += pass.uniformBufferCount;
+    bufferBarrierCount += pass->uniformBufferCount;
 
     bufferBarriers = hgRealloc<VkBufferMemoryBarrier2>(scratch, 
-        bufferBarriers, bufferBarrierCount, bufferBarrierCount + pass.storageBufferCount);
+        bufferBarriers, bufferBarrierCount, bufferBarrierCount + pass->storageBufferCount);
 
-    for (u32 i = bufferBarrierCount; i < bufferBarrierCount + pass.storageBufferCount; ++i)
+    for (u32 i = bufferBarrierCount; i < bufferBarrierCount + pass->storageBufferCount; ++i)
     {
-        BufferState* buffer = buffers.get(pass.storageBuffers[i - bufferBarrierCount]);
+        BufferState* buffer = buffers.get(pass->storageBuffers[i - bufferBarrierCount]);
         if (buffer == nullptr)
-            buffer = buffers.add(pass.storageBuffers[i - bufferBarrierCount]);
+            buffer = buffers.add(pass->storageBuffers[i - bufferBarrierCount]);
 
         bufferBarriers[i] = {};
         bufferBarriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
@@ -2276,8 +2276,8 @@ void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgR
                                        | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
         bufferBarriers[i].dstAccessMask = VK_ACCESS_SHADER_READ_BIT
                                         | VK_ACCESS_SHADER_WRITE_BIT;
-        bufferBarriers[i].buffer = pass.uniformBuffers[i - bufferBarrierCount]->buffer;
-        bufferBarriers[i].size = pass.uniformBuffers[i - bufferBarrierCount]->size;
+        bufferBarriers[i].buffer = pass->uniformBuffers[i - bufferBarrierCount]->buffer;
+        bufferBarriers[i].size = pass->uniformBuffers[i - bufferBarrierCount]->size;
 
         buffer->lastPipelineStage = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT
                                   | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
@@ -2285,16 +2285,16 @@ void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgR
                            | VK_ACCESS_SHADER_WRITE_BIT;
     }
 
-    bufferBarrierCount += pass.storageBufferCount;
+    bufferBarrierCount += pass->storageBufferCount;
 
     imageBarriers = hgRealloc<VkImageMemoryBarrier2>(scratch, 
-        imageBarriers, imageBarrierCount, imageBarrierCount + pass.sampledImageCount);
+        imageBarriers, imageBarrierCount, imageBarrierCount + pass->sampledImageCount);
 
-    for (u32 i = imageBarrierCount; i < imageBarrierCount + pass.sampledImageCount; ++i)
+    for (u32 i = imageBarrierCount; i < imageBarrierCount + pass->sampledImageCount; ++i)
     {
-        ImageState* image = images.get(pass.sampledImages[i - imageBarrierCount]);
+        ImageState* image = images.get(pass->sampledImages[i - imageBarrierCount]);
         if (image == nullptr)
-            image = images.add(pass.sampledImages[i - imageBarrierCount]);
+            image = images.add(pass->sampledImages[i - imageBarrierCount]);
 
         imageBarriers[i] = {};
         imageBarriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -2304,13 +2304,13 @@ void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgR
         imageBarriers[i].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
         imageBarriers[i].oldLayout = image->lastLayout;
         imageBarriers[i].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        imageBarriers[i].image = pass.sampledImages[i - imageBarrierCount]->image->image;
+        imageBarriers[i].image = pass->sampledImages[i - imageBarrierCount]->image->image;
         imageBarriers[i].subresourceRange = {
-            pass.sampledImages[i - imageBarrierCount]->aspectFlags,
-            pass.sampledImages[i - imageBarrierCount]->baseMipLevel,
-            pass.sampledImages[i - imageBarrierCount]->levelCount,
-            pass.sampledImages[i - imageBarrierCount]->baseArrayLayer,
-            pass.sampledImages[i - imageBarrierCount]->layerCount,
+            pass->sampledImages[i - imageBarrierCount]->aspectFlags,
+            pass->sampledImages[i - imageBarrierCount]->baseMipLevel,
+            pass->sampledImages[i - imageBarrierCount]->levelCount,
+            pass->sampledImages[i - imageBarrierCount]->baseArrayLayer,
+            pass->sampledImages[i - imageBarrierCount]->layerCount,
         };
 
         image->lastPipelineStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
@@ -2318,16 +2318,16 @@ void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgR
         image->lastLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     }
 
-    imageBarrierCount += pass.sampledImageCount;
+    imageBarrierCount += pass->sampledImageCount;
 
     imageBarriers = hgRealloc<VkImageMemoryBarrier2>(scratch, 
-        imageBarriers, imageBarrierCount, imageBarrierCount + pass.storageImageCount);
+        imageBarriers, imageBarrierCount, imageBarrierCount + pass->storageImageCount);
 
-    for (u32 i = imageBarrierCount; i < imageBarrierCount + pass.storageImageCount; ++i)
+    for (u32 i = imageBarrierCount; i < imageBarrierCount + pass->storageImageCount; ++i)
     {
-        ImageState* image = images.get(pass.storageImages[i - imageBarrierCount]);
+        ImageState* image = images.get(pass->storageImages[i - imageBarrierCount]);
         if (image == nullptr)
-            image = images.add(pass.storageImages[i - imageBarrierCount]);
+            image = images.add(pass->storageImages[i - imageBarrierCount]);
 
         imageBarriers[i] = {};
         imageBarriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -2338,13 +2338,13 @@ void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgR
                                        | VK_ACCESS_SHADER_WRITE_BIT;
         imageBarriers[i].oldLayout = image->lastLayout;
         imageBarriers[i].newLayout = VK_IMAGE_LAYOUT_GENERAL;
-        imageBarriers[i].image = pass.storageImages[i - imageBarrierCount]->image->image;
+        imageBarriers[i].image = pass->storageImages[i - imageBarrierCount]->image->image;
         imageBarriers[i].subresourceRange = {
-            pass.storageImages[i - imageBarrierCount]->aspectFlags,
-            pass.storageImages[i - imageBarrierCount]->baseMipLevel,
-            pass.storageImages[i - imageBarrierCount]->levelCount,
-            pass.storageImages[i - imageBarrierCount]->baseArrayLayer,
-            pass.storageImages[i - imageBarrierCount]->layerCount,
+            pass->storageImages[i - imageBarrierCount]->aspectFlags,
+            pass->storageImages[i - imageBarrierCount]->baseMipLevel,
+            pass->storageImages[i - imageBarrierCount]->levelCount,
+            pass->storageImages[i - imageBarrierCount]->baseArrayLayer,
+            pass->storageImages[i - imageBarrierCount]->layerCount,
         };
 
         image->lastPipelineStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
@@ -2353,16 +2353,16 @@ void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgR
         image->lastLayout = VK_IMAGE_LAYOUT_GENERAL;
     }
 
-    imageBarrierCount += pass.storageImageCount;
+    imageBarrierCount += pass->storageImageCount;
 
     imageBarriers = hgRealloc<VkImageMemoryBarrier2>(scratch, 
-        imageBarriers, imageBarrierCount, imageBarrierCount + pass.colorAttachmentCount);
+        imageBarriers, imageBarrierCount, imageBarrierCount + pass->colorAttachmentCount);
 
-    for (u32 i = imageBarrierCount; i < imageBarrierCount + pass.colorAttachmentCount; ++i)
+    for (u32 i = imageBarrierCount; i < imageBarrierCount + pass->colorAttachmentCount; ++i)
     {
-        ImageState* image = images.get(pass.colorAttachments[i - imageBarrierCount].image);
+        ImageState* image = images.get(pass->colorAttachments[i - imageBarrierCount].image);
         if (image == nullptr)
-            image = images.add(pass.colorAttachments[i - imageBarrierCount].image);
+            image = images.add(pass->colorAttachments[i - imageBarrierCount].image);
 
         imageBarriers[i] = {};
         imageBarriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -2372,13 +2372,13 @@ void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgR
         imageBarriers[i].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
         imageBarriers[i].oldLayout = image->lastLayout;
         imageBarriers[i].newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        imageBarriers[i].image = pass.colorAttachments[i - imageBarrierCount].image->image->image;
+        imageBarriers[i].image = pass->colorAttachments[i - imageBarrierCount].image->image->image;
         imageBarriers[i].subresourceRange = {
-            pass.colorAttachments[i - imageBarrierCount].image->aspectFlags,
-            pass.colorAttachments[i - imageBarrierCount].image->baseMipLevel,
-            pass.colorAttachments[i - imageBarrierCount].image->levelCount,
-            pass.colorAttachments[i - imageBarrierCount].image->baseArrayLayer,
-            pass.colorAttachments[i - imageBarrierCount].image->layerCount,
+            pass->colorAttachments[i - imageBarrierCount].image->aspectFlags,
+            pass->colorAttachments[i - imageBarrierCount].image->baseMipLevel,
+            pass->colorAttachments[i - imageBarrierCount].image->levelCount,
+            pass->colorAttachments[i - imageBarrierCount].image->baseArrayLayer,
+            pass->colorAttachments[i - imageBarrierCount].image->layerCount,
         };
 
         image->lastPipelineStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -2386,13 +2386,13 @@ void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgR
         image->lastLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     }
 
-    imageBarrierCount += pass.colorAttachmentCount;
+    imageBarrierCount += pass->colorAttachmentCount;
 
-    if (pass.depthAttachment != nullptr)
+    if (pass->depthAttachment != nullptr)
     {
-        ImageState* image = images.get(pass.depthAttachment->image);
+        ImageState* image = images.get(pass->depthAttachment->image);
         if (image == nullptr)
-            image = images.add(pass.depthAttachment->image);
+            image = images.add(pass->depthAttachment->image);
 
         imageBarriers = hgRealloc<VkImageMemoryBarrier2>(scratch, 
             imageBarriers, imageBarrierCount, imageBarrierCount + 1);
@@ -2408,13 +2408,13 @@ void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgR
                                          | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
         imageBarriers[idx].oldLayout = image->lastLayout;
         imageBarriers[idx].newLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-        imageBarriers[idx].image = pass.depthAttachment->image->image->image;
+        imageBarriers[idx].image = pass->depthAttachment->image->image->image;
         imageBarriers[idx].subresourceRange = {
-            pass.depthAttachment->image->aspectFlags,
-            pass.depthAttachment->image->baseMipLevel,
-            pass.depthAttachment->image->levelCount,
-            pass.depthAttachment->image->baseArrayLayer,
-            pass.depthAttachment->image->layerCount,
+            pass->depthAttachment->image->aspectFlags,
+            pass->depthAttachment->image->baseMipLevel,
+            pass->depthAttachment->image->levelCount,
+            pass->depthAttachment->image->baseArrayLayer,
+            pass->depthAttachment->image->layerCount,
         };
 
         image->lastPipelineStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
@@ -2426,11 +2426,11 @@ void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgR
         ++imageBarrierCount;
     }
 
-    if (pass.stencilAttachment != nullptr)
+    if (pass->stencilAttachment != nullptr)
     {
-        ImageState* image = images.get(pass.stencilAttachment->image);
+        ImageState* image = images.get(pass->stencilAttachment->image);
         if (image == nullptr)
-            image = images.add(pass.stencilAttachment->image);
+            image = images.add(pass->stencilAttachment->image);
 
         imageBarriers = hgRealloc<VkImageMemoryBarrier2>(scratch, 
             imageBarriers, imageBarrierCount, imageBarrierCount + 1);
@@ -2446,13 +2446,13 @@ void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgR
                                          | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
         imageBarriers[idx].oldLayout = image->lastLayout;
         imageBarriers[idx].newLayout = VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL;
-        imageBarriers[idx].image = pass.stencilAttachment->image->image->image;
+        imageBarriers[idx].image = pass->stencilAttachment->image->image->image;
         imageBarriers[idx].subresourceRange = {
-            pass.stencilAttachment->image->aspectFlags,
-            pass.stencilAttachment->image->baseMipLevel,
-            pass.stencilAttachment->image->levelCount,
-            pass.stencilAttachment->image->baseArrayLayer,
-            pass.stencilAttachment->image->layerCount,
+            pass->stencilAttachment->image->aspectFlags,
+            pass->stencilAttachment->image->baseMipLevel,
+            pass->stencilAttachment->image->levelCount,
+            pass->stencilAttachment->image->baseArrayLayer,
+            pass->stencilAttachment->image->layerCount,
         };
 
         image->lastPipelineStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
@@ -2474,51 +2474,51 @@ void HgRenderer::beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgR
     vkCmdPipelineBarrier2(cmd, &dep);
 
     VkRenderingAttachmentInfo* colorAttachments
-        = hgAlloc<VkRenderingAttachmentInfo>(scratch, pass.colorAttachmentCount);
+        = hgAlloc<VkRenderingAttachmentInfo>(scratch, pass->colorAttachmentCount);
 
-    for (u32 i = 0; i < pass.colorAttachmentCount; ++i)
+    for (u32 i = 0; i < pass->colorAttachmentCount; ++i)
     {
         colorAttachments[i] = {};
         colorAttachments[i].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        colorAttachments[i].imageView = pass.colorAttachments[i].image->view;
+        colorAttachments[i].imageView = pass->colorAttachments[i].image->view;
         colorAttachments[i].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        colorAttachments[i].loadOp = pass.colorAttachments[i].loadOp;
-        colorAttachments[i].storeOp = pass.colorAttachments[i].storeOp;
-        colorAttachments[i].clearValue = pass.colorAttachments[i].clearValue;
+        colorAttachments[i].loadOp = pass->colorAttachments[i].loadOp;
+        colorAttachments[i].storeOp = pass->colorAttachments[i].storeOp;
+        colorAttachments[i].clearValue = pass->colorAttachments[i].clearValue;
     }
 
     VkRenderingAttachmentInfo depthAttachment{};
-    if (pass.depthAttachment != nullptr)
+    if (pass->depthAttachment != nullptr)
     {
         depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        depthAttachment.imageView = pass.depthAttachment->image->view;
+        depthAttachment.imageView = pass->depthAttachment->image->view;
         depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-        depthAttachment.loadOp = pass.depthAttachment->loadOp;
-        depthAttachment.storeOp = pass.depthAttachment->storeOp;
-        depthAttachment.clearValue = pass.depthAttachment->clearValue;
+        depthAttachment.loadOp = pass->depthAttachment->loadOp;
+        depthAttachment.storeOp = pass->depthAttachment->storeOp;
+        depthAttachment.clearValue = pass->depthAttachment->clearValue;
     }
 
     VkRenderingAttachmentInfo stencilAttachment{};
-    if (pass.stencilAttachment != nullptr)
+    if (pass->stencilAttachment != nullptr)
     {
         stencilAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        stencilAttachment.imageView = pass.stencilAttachment->image->view;
+        stencilAttachment.imageView = pass->stencilAttachment->image->view;
         stencilAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        stencilAttachment.loadOp = pass.stencilAttachment->loadOp;
-        stencilAttachment.storeOp = pass.stencilAttachment->storeOp;
-        stencilAttachment.clearValue = pass.stencilAttachment->clearValue;
+        stencilAttachment.loadOp = pass->stencilAttachment->loadOp;
+        stencilAttachment.storeOp = pass->stencilAttachment->storeOp;
+        stencilAttachment.clearValue = pass->stencilAttachment->clearValue;
     }
 
     VkRenderingInfo renderingInfo{};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
     renderingInfo.renderArea.extent = {width, height};
-    renderingInfo.layerCount = pass.layerCount;
-    renderingInfo.colorAttachmentCount = pass.colorAttachmentCount;
+    renderingInfo.layerCount = pass->layerCount;
+    renderingInfo.colorAttachmentCount = pass->colorAttachmentCount;
     renderingInfo.pColorAttachments = colorAttachments;
-    renderingInfo.pDepthAttachment = pass.depthAttachment != nullptr
+    renderingInfo.pDepthAttachment = pass->depthAttachment != nullptr
         ? &depthAttachment
         : nullptr;
-    renderingInfo.pStencilAttachment = pass.stencilAttachment != nullptr
+    renderingInfo.pStencilAttachment = pass->stencilAttachment != nullptr
         ? &stencilAttachment
         : nullptr;
 
@@ -2718,11 +2718,11 @@ static VkPresentModeKHR findSwapchainPresentMode(
     return VK_PRESENT_MODE_FIFO_KHR;
 }
 
-void hgInternalCreateWindowSwapchain(HgWindow* window, const HgWindowConfig& config)
+void hgInternalCreateWindowSwapchain(HgWindow* window, const HgWindowConfig* config)
 {
     window->format = findSwapchainFormat(window->surface);
-    window->presentMode = findSwapchainPresentMode(window->surface, config.preferredPresentMode);
-    window->imageUsage = config.imageUsage;
+    window->presentMode = findSwapchainPresentMode(window->surface, config->preferredPresentMode);
+    window->imageUsage = config->imageUsage;
     hgInternalResizeWindowSwapchain(window);
 }
 

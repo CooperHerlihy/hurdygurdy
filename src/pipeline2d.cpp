@@ -89,7 +89,7 @@ void hgInitPipeline2D(
     hgUpdateDescriptor(defaultTex.descriptor, nullptr, &imageInfo);
 
     VkPushConstantRange push{VK_SHADER_STAGE_ALL, 0, sizeof(Push)};
-    pipelineLayout = hgCreatePipelineLayout(push);
+    pipelineLayout = hgCreatePipelineLayout(&push);
 
     HgCreateGraphicsPipeline pipelineConfig{};
     pipelineConfig.layout = pipelineLayout;
@@ -104,7 +104,7 @@ void hgInitPipeline2D(
     bool enableColorBlend = true;
     pipelineConfig.colorBlendEnables = &enableColorBlend;
 
-    pipeline = hgCreateGraphicsPipeline(pipelineConfig);
+    pipeline = hgCreateGraphicsPipeline(&pipelineConfig);
 }
 
 void hgDeinitPipeline2D()
@@ -121,14 +121,14 @@ void hgDeinitPipeline2D()
     hgDestroyBuffer(vpBuffer);
 }
 
-void hgUpdateProjection2D(const HgMat4& projection)
+void hgUpdateProjection2D(const HgMat4* projection)
 {
-    hgWriteBuffer(vpBuffer, offsetof(VPUniform, proj), &projection, sizeof(projection));
+    hgWriteBuffer(vpBuffer, offsetof(VPUniform, proj), projection, sizeof(*projection));
 }
 
-void hgUpdateView2D(const HgMat4& view)
+void hgUpdateView2D(const HgMat4* view)
 {
-    hgWriteBuffer(vpBuffer, offsetof(VPUniform, view), &view, sizeof(view));
+    hgWriteBuffer(vpBuffer, offsetof(VPUniform, view), view, sizeof(*view));
 }
 
 void hgDraw2D(HgECS* ecs, VkCommandBuffer cmd)
@@ -153,8 +153,8 @@ void hgDraw2D(HgECS* ecs, VkCommandBuffer cmd)
         push.model = hgModelMatrix3D(transform.position, transform.scale, transform.rotation);
         push.uvPos = sprite.uvPos;
         push.uvSize = sprite.uvSize;
-        push.vpIdx = vpDesc.idx();
-        push.texIdx = texture->descriptor.idx();
+        push.vpIdx = hgDescriptorIdx(vpDesc);
+        push.texIdx = hgDescriptorIdx(texture->descriptor);
 
         vkCmdPushConstants(cmd, pipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(push), &push);
 

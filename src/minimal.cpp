@@ -16,7 +16,7 @@ int main()
     windowConfig.width = 1200;
     windowConfig.height = 800;
 
-    HgWindow* window = HgWindow::create(arena, windowConfig);
+    HgWindow* window = HgWindow::create(arena, &windowConfig);
     hgDefer(window->destroy());
 
     hgInitPipeline2D(window->format, VK_FORMAT_UNDEFINED);
@@ -35,7 +35,7 @@ int main()
     HgClock gameClock{};
     for (;;)
     {
-        f64 delta = gameClock.tick();
+        f64 delta = hgClockTick(&gameClock);
 
         HgArena* frame = hgGetScratch();
         HgArenaScope frameScope{frame};
@@ -44,7 +44,8 @@ int main()
         if (window->wasClosed)
             goto quit;
 
-        hgUpdateProjection2D(hgPerspective((f32)hgPi * 0.5f, (f32)window->width / (f32)window->height, 0.1f, 1000.0f));
+        HgMat4 proj = hgPerspective((f32)hgPi * 0.5f, (f32)window->width / (f32)window->height, 0.1f, 1000.0f);
+        hgUpdateProjection2D(&proj);
 
         if (window->isKeyDown[HgKey_lmouse])
         {
@@ -66,7 +67,8 @@ int main()
             camera.position += hgNorm(HgVec3{rotated.x, movement.y, rotated.z}) * moveSpeed * (f32)delta;
         }
 
-        hgUpdateView2D(hgViewMatrix(camera.position, camera.scale, camera.rotation));
+        HgMat4 view = hgViewMatrix(camera.position, camera.scale, camera.rotation);
+        hgUpdateView2D(&view);
 
         VkCommandBuffer cmd = window->beginRecording();
         if (cmd != nullptr)
@@ -81,7 +83,7 @@ int main()
             pass.colorAttachments = &colorAttachment;
             pass.colorAttachmentCount = 1;
 
-            renderer.beginPass(cmd, window->width, window->height, pass);
+            renderer.beginPass(cmd, window->width, window->height, &pass);
 
             hgDraw2D(&ecs, cmd);
 

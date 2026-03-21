@@ -2,7 +2,7 @@
 
 #ifdef HG_PLATFORM_WINDOWS
 
-void hgInternalCreateWindowSwapchain(HgWindow* window, const HgWindowConfig& config);
+void hgInternalCreateWindowSwapchain(HgWindow* window, const HgWindowConfig* config);
 void hgInternalResizeWindowSwapchain(HgWindow* window);
 void hgInternalDestroyWindowSwapchain(HgWindow* window);
 
@@ -384,9 +384,9 @@ static LRESULT CALLBACK windowCallback(HWND hwnd, UINT msg, WPARAM wparam, LPARA
     return DefWindowProcA(hwnd, msg, wparam, lparam);
 }
 
-HgWindow* HgWindow::create(HgArena* arena, const HgWindowConfig& config)
+HgWindow* HgWindow::create(HgArena* arena, const HgWindowConfig* config)
 {
-    const char* title = config.title != nullptr ? config.title : "Hurdy Gurdy";
+    const char* title = config->title != nullptr ? config->title : "Hurdy Gurdy";
 
     HgWindow* window = hgAlloc<HgWindow>(arena, 1);
     *window = {};
@@ -400,12 +400,12 @@ HgWindow* HgWindow::create(HgArena* arena, const HgWindowConfig& config)
     windowClass.lpszClassName = title;
     windowClass.lpfnWndProc = windowCallback;
     if (!RegisterClassA(&windowClass))
-        hgError("Win32 failed to register window class for window: %s\n", config.title);
+        hgError("Win32 failed to register window class for window: %s\n", config->title);
 
-    if (config.windowed)
+    if (config->windowed)
     {
-        window->width = config.width;
-        window->height = config.height;
+        window->width = config->width;
+        window->height = config->height;
         window->internals->hwnd = CreateWindowExA(
             0,
             title,

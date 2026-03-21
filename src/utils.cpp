@@ -649,7 +649,7 @@ void hgInitScratchMemory()
         if (arenas[i].memory == nullptr)
         {
             u64 arenaSize = (u32)-1;
-            arenas[i] = {malloc(arenaSize), arenaSize};
+            arenas[i] = {malloc(arenaSize), arenaSize, 0};
         }
     }
 }
@@ -690,7 +690,7 @@ char* hgCString(HgArena* arena, HgStringView str)
     return cStr;
 }
 
-HgString HgString::create(HgArena* arena, u64 capacity)
+HgString hgCreateString(HgArena* arena, u64 capacity)
 {
     HgString str;
     str.chars = hgAlloc<char>(arena, capacity);
@@ -699,7 +699,7 @@ HgString HgString::create(HgArena* arena, u64 capacity)
     return str;
 }
 
-HgString HgString::copy(HgArena* arena, HgStringView str)
+HgString hgCopyString(HgArena* arena, HgStringView str)
 {
     HgString copy;
     copy.chars = hgAlloc<char>(arena, str.length);
@@ -709,53 +709,46 @@ HgString HgString::copy(HgArena* arena, HgStringView str)
     return copy;
 }
 
-void HgString::reserve(HgArena* arena, u64 newCapacity)
+void hgReserveString(HgArena* arena, HgString* str, u64 newCapacity)
 {
-    chars = hgRealloc(arena, chars, capacity, newCapacity);
-    capacity = newCapacity;
+    str->chars = hgRealloc(arena, str->chars, str->capacity, newCapacity);
+    str->capacity = newCapacity;
 }
 
-void HgString::grow(HgArena* arena, f32 factor)
+void hgGrowString(HgArena* arena, HgString* str, f32 factor)
 {
     hgAssert(factor > 1.0f);
-    hgAssert(capacity <= (u64)((f32)SIZE_MAX / factor));
-    reserve(arena, capacity == 0 ? 1 : (u64)((f32)capacity * factor));
+    hgAssert(str->capacity <= (u64)((f32)SIZE_MAX / factor));
+    hgReserveString(arena, str, str->capacity == 0 ? 1 : (u64)((f32)str->capacity * factor));
 }
 
-HgString& HgString::insert(HgArena* arena, u64 index, char c)
+void hgInsertString(HgArena* arena, HgString* dst, u64 idx, HgStringView src)
 {
-    hgAssert(index <= length);
+    hgAssert(idx <= dst->length);
 
-    u64 newLength = length + 1;
-    while (capacity < newLength)
+    u64 newLength = dst->length + src.length;
+    while (dst->capacity < newLength)
     {
-        grow(arena);
+        hgGrowString(arena, dst);
     }
 
-    if (index != length)
-        memmove(&chars[index + 1], &chars[index], length - index);
-    chars[index] = c;
-    length = newLength;
-
-    return *this;
+    if (idx != dst->length)
+        memmove(&dst->chars[idx + src.length], &dst->chars[idx], dst->length - idx);
+    memcpy(&dst->chars[idx], src.chars, src.length);
+    dst->length = newLength;
 }
 
-HgString& HgString::insert(HgArena* arena, u64 index, HgStringView str)
+void hgInsertString(HgArena* arena, HgString* dst, u64 idx, char c)
 {
-    hgAssert(index <= length);
+    hgAssert(idx <= dst->length);
 
-    u64 newLength = length + str.length;
-    while (capacity < newLength)
-    {
-        grow(arena);
-    }
+    if (dst->capacity < dst->length + 1)
+        hgGrowString(arena, dst);
 
-    if (index != length)
-        memmove(&chars[index + str.length], &chars[index], length - index);
-    memcpy(&chars[index], str.chars, str.length);
-    length = newLength;
-
-    return *this;
+    if (idx != dst->length)
+        memmove(&dst->chars[idx + 1], &dst->chars[idx], dst->length - idx);
+    dst->chars[idx] = c;
+    ++dst->length;
 }
 
 bool hgIsWhitespace(char c)
@@ -946,25 +939,25 @@ HgString hgIntToStr(HgArena* arena, i64 num)
     HgArenaScope scratchScope{scratch};
 
     if (num == 0)
-        return HgString::copy(arena, "0");
+        return hgCopyString(arena, "0");
 
     bool isNegative = num < 0;
     u64 unum = (u64)std::abs(num);
 
-    HgString reverse = reverse.create(scratch, 16);
+    HgString reverse = hgCreateString(scratch, 16);
     while (unum != 0)
     {
         u64 digit = unum % 10;
         unum = (u64)((f64)unum / 10.0);
-        reverse.append(scratch, '0' + (char)digit);
+        hgAppendString(scratch, &reverse, '0' + (char)digit);
     }
 
-    HgString ret = ret.create(arena, reverse.length + (isNegative ? 1 : 0));
+    HgString ret = hgCreateString(arena, reverse.length + (isNegative ? 1 : 0));
     if (isNegative)
-        ret.append(arena, '-');
+        hgAppendString(arena, &ret, '-');
     for (u64 i = reverse.length - 1; i < reverse.length; --i)
     {
-        ret.append(arena, reverse[i]);
+        hgAppendString(arena, &ret, reverse[i]);
     }
     return ret;
 }
@@ -975,25 +968,25 @@ HgString hgFloatToStr(HgArena* arena, f64 num, u32 decimalCount)
     HgArenaScope scratchScope{scratch};
 
     if (num == 0.0)
-        return HgString::copy(arena, "0.0");
+        return hgCopyString(arena, "0.0");
 
     HgString intStr = hgIntToStr(scratch, (i64)fabs(num));
 
-    HgString decStr = HgString::create(scratch, decimalCount + 1);
-    decStr.append(scratch, '.');
+    HgString decStr = hgCreateString(scratch, decimalCount + 1);
+    hgAppendString(scratch, &decStr, '.');
 
     f64 decPart = fabs(num);
     for (u64 i = 0; i < decimalCount; ++i)
     {
         decPart *= 10.0;
-        decStr.append(scratch, '0' + (char)((u64)decPart % 10));
+        hgAppendString(scratch, &decStr, '0' + (char)((u64)decPart % 10));
     }
 
     HgString ret{};
     if (num < 0.0)
-        ret.append(arena, '-');
-    ret.append(arena, intStr);
-    ret.append(arena, decStr);
+        hgAppendString(arena, &ret, '-');
+    hgAppendString(arena, &ret, intStr);
+    hgAppendString(arena, &ret, decStr);
     return ret;
 }
 
@@ -1055,19 +1048,19 @@ HgJson HgJsonParser::parseNext()
         case '}': {
             HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
             error->next = nullptr;
-            error->msg = HgString{}
-                .append(arena, "on line ")
-                .append(arena, hgIntToStr(arena, (i64)line))
-                .append(arena, ", found unexpected token \"}\"\n");
+            error->msg = HgString{};
+            hgAppendString(arena, &error->msg, "on line ");
+            hgAppendString(arena, &error->msg, hgIntToStr(arena, (i64)line));
+            hgAppendString(arena, &error->msg, ", found unexpected token \"}\"\n");
             return {nullptr, error};
         }
         case ']': {
             HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
             error->next = nullptr;
-            error->msg = HgString{}
-                .append(arena, "on line ")
-                .append(arena, hgIntToStr(arena, (i64)line))
-                .append(arena, ", found unexpected token \"]\"\n");
+            error->msg = HgString{};
+            hgAppendString(arena, &error->msg, "on line ");
+            hgAppendString(arena, &error->msg, hgIntToStr(arena, (i64)line));
+            hgAppendString(arena, &error->msg, ", found unexpected token \"]\"\n");
             return {nullptr, error};
         }
     }
@@ -1086,12 +1079,12 @@ HgJson HgJsonParser::parseNext()
             ++line;
         ++head;
     }
-    error->msg = HgString{}
-        .append(arena, "on line ")
-        .append(arena, hgIntToStr(arena, (i64)line))
-        .append(arena, ", found unexpected token \"")
-        .append(arena, {&text[begin], &text[head]})
-        .append(arena, "\"\n");
+    error->msg = HgString{};
+    hgAppendString(arena, &error->msg, "on line ");
+    hgAppendString(arena, &error->msg, hgIntToStr(arena, (i64)line));
+    hgAppendString(arena, &error->msg, ", found unexpected token \"");
+    hgAppendString(arena, &error->msg, {&text[begin], &text[head]});
+    hgAppendString(arena, &error->msg, "\"\n");
 
     return {nullptr, error};
 }
@@ -1118,10 +1111,10 @@ HgJson HgJsonParser::parseStruct()
         {
             HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
             error->next = nullptr;
-            error->msg = HgString{}
-                .append(arena, "on line ")
-                .append(arena, hgIntToStr(arena, (i64)line))
-                .append(arena, ", expected struct to terminate\n");
+            error->msg = HgString{};
+            hgAppendString(arena, &error->msg, "on line ");
+            hgAppendString(arena, &error->msg, hgIntToStr(arena, (i64)line));
+            hgAppendString(arena, &error->msg, ", expected struct to terminate\n");
             if (lastError == nullptr)
                 json.errors = lastError = error;
             else
@@ -1133,10 +1126,10 @@ HgJson HgJsonParser::parseStruct()
         {
             HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
             error->next = nullptr;
-            error->msg = HgString{}
-                .append(arena, "on line ")
-                .append(arena, hgIntToStr(arena, (i64)line))
-                .append(arena, ", struct ends with \"]\" instead of \"}\"\n");
+            error->msg = HgString{};
+            hgAppendString(arena, &error->msg, "on line ");
+            hgAppendString(arena, &error->msg, hgIntToStr(arena, (i64)line));
+            hgAppendString(arena, &error->msg, ", struct ends with \"]\" instead of \"}\"\n");
             if (lastError == nullptr)
                 json.errors = lastError = error;
             else
@@ -1175,10 +1168,10 @@ HgJson HgJsonParser::parseStruct()
             {
                 HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
                 error->next = nullptr;
-                error->msg = HgString{}
-                    .append(arena, "on line ")
-                    .append(arena, hgIntToStr(arena, (i64)line))
-                    .append(arena, ", struct has a literal instead of a field\n");
+                error->msg = HgString{};
+                hgAppendString(arena, &error->msg, "on line ");
+                hgAppendString(arena, &error->msg, hgIntToStr(arena, (i64)line));
+                hgAppendString(arena, &error->msg, ", struct has a literal instead of a field\n");
                 if (lastError == nullptr)
                     json.errors = lastError = error;
                 else
@@ -1188,12 +1181,12 @@ HgJson HgJsonParser::parseStruct()
             {
                 HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
                 error->next = nullptr;
-                error->msg = HgString{}
-                    .append(arena, "on line ")
-                    .append(arena, hgIntToStr(arena, (i64)line))
-                    .append(arena, ", struct has a field named \"")
-                    .append(arena, value.file->field.name)
-                    .append(arena, "\" which has no value\n");
+                error->msg = HgString{};
+                hgAppendString(arena, &error->msg, "on line ");
+                hgAppendString(arena, &error->msg, hgIntToStr(arena, (i64)line));
+                hgAppendString(arena, &error->msg, ", struct has a field named \"");
+                hgAppendString(arena, &error->msg, value.file->field.name);
+                hgAppendString(arena, &error->msg, "\" which has no value\n");
                 if (lastError == nullptr)
                     json.errors = lastError = error;
                 else
@@ -1242,10 +1235,10 @@ HgJson HgJsonParser::parseArray()
         {
             HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
             error->next = nullptr;
-            error->msg = HgString{}
-                .append(arena, "on line ")
-                .append(arena, hgIntToStr(arena, (i64)line))
-                .append(arena, ", expected struct to terminate\n");
+            error->msg = HgString{};
+            hgAppendString(arena, &error->msg, "on line ");
+            hgAppendString(arena, &error->msg, hgIntToStr(arena, (i64)line));
+            hgAppendString(arena, &error->msg, ", expected struct to terminate\n");
             if (lastError == nullptr)
                 json.errors = lastError = error;
             else
@@ -1257,10 +1250,10 @@ HgJson HgJsonParser::parseArray()
         {
             HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
             error->next = nullptr;
-            error->msg = HgString{}
-                .append(arena, "on line ")
-                .append(arena, hgIntToStr(arena, (i64)line))
-                .append(arena, ", array ends with \"}\" instead of \"]\"\n");
+            error->msg = HgString{};
+            hgAppendString(arena, &error->msg, "on line ");
+            hgAppendString(arena, &error->msg, hgIntToStr(arena, (i64)line));
+            hgAppendString(arena, &error->msg, ", array ends with \"}\" instead of \"]\"\n");
             if (lastError == nullptr)
                 json.errors = lastError = error;
             else
@@ -1307,10 +1300,10 @@ HgJson HgJsonParser::parseArray()
                 } else {
                     HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
                     error->next = nullptr;
-                    error->msg = HgString{}
-                        .append(arena, "on line ")
-                        .append(arena, hgIntToStr(arena, (i64)line))
-                        .append(arena, ", array has a field as an element\n");
+                    error->msg = HgString{};
+                    hgAppendString(arena, &error->msg, "on line ");
+                    hgAppendString(arena, &error->msg, hgIntToStr(arena, (i64)line));
+                    hgAppendString(arena, &error->msg, ", array has a field as an element\n");
                     if (lastError == nullptr)
                         json.errors = lastError = error;
                     else
@@ -1322,10 +1315,10 @@ HgJson HgJsonParser::parseArray()
             {
                 HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
                 error->next = nullptr;
-                error->msg = HgString{}
-                    .append(arena, "on line ")
-                    .append(arena, hgIntToStr(arena, (i64)line))
-                    .append(arena, ", array has element which is not the same type as the first valid element\n");
+                error->msg = HgString{};
+                hgAppendString(arena, &error->msg, "on line ");
+                hgAppendString(arena, &error->msg, hgIntToStr(arena, (i64)line));
+                hgAppendString(arena, &error->msg, ", array has element which is not the same type as the first valid element\n");
                 if (lastError == nullptr)
                     json.errors = lastError = error;
                 else
@@ -1365,7 +1358,7 @@ HgJson HgJsonParser::parseString()
     if (head < text.length)
     {
         ++head;
-        HgString str = str.create(arena, end - begin);
+        HgString str = hgCreateString(arena, end - begin);
         for (u64 i = begin; i < end; ++i)
         {
             char c = text[i];
@@ -1373,7 +1366,7 @@ HgJson HgJsonParser::parseString()
             {
                 // escape sequences : TODO
             }
-            str.append(arena, c);
+            hgAppendString(arena, &str, c);
         }
 
         HgJson json{};
@@ -1410,10 +1403,10 @@ HgJson HgJsonParser::parseString()
     }
 
     HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
-    error->msg = HgString{}
-        .append(arena, "on line ")
-        .append(arena, hgIntToStr(arena, (i64)line))
-        .append(arena, ", expected string to terminate\n");
+    error->msg = HgString{};
+    hgAppendString(arena, &error->msg, "on line ");
+    hgAppendString(arena, &error->msg, hgIntToStr(arena, (i64)line));
+    hgAppendString(arena, &error->msg, ", expected string to terminate\n");
     return {nullptr, error};
 }
 
@@ -1464,12 +1457,12 @@ HgJson HgJsonParser::parseNumber()
 
     HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
 
-    error->msg = HgString{}
-        .append(arena, "on line ")
-        .append(arena, hgIntToStr(arena, (i64)line))
-        .append(arena, ", expected numeral value, found \"")
-        .append(arena, num)
-        .append(arena, "\"\n");
+    error->msg = HgString{};
+    hgAppendString(arena, &error->msg, "on line ");
+    hgAppendString(arena, &error->msg, hgIntToStr(arena, (i64)line));
+    hgAppendString(arena, &error->msg, ", expected numeral value, found \"");
+    hgAppendString(arena, &error->msg, num);
+    hgAppendString(arena, &error->msg, "\"\n");
 
     while (head < text.length && hgIsWhitespace(text[head]))
     {
@@ -1537,12 +1530,12 @@ HgJson HgJsonParser::parseBoolean()
             ++line;
         ++head;
     }
-    error->msg = HgString{}
-        .append(arena, "on line ")
-        .append(arena, hgIntToStr(arena, (i64)line))
-        .append(arena, ", expected boolean value, found \"")
-        .append(arena, {&text[begin], &text[head]})
-        .append(arena, "\"\n");
+    error->msg = HgString{};
+    hgAppendString(arena, &error->msg, "on line ");
+    hgAppendString(arena, &error->msg, hgIntToStr(arena, (i64)line));
+    hgAppendString(arena, &error->msg, ", expected boolean value, found \"");
+    hgAppendString(arena, &error->msg, {&text[begin], &text[head]});
+    hgAppendString(arena, &error->msg, "\"\n");
 
     if (text[head] == ',')
         ++head;

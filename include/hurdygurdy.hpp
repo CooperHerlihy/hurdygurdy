@@ -324,23 +324,6 @@ struct HgVec2
     explicit constexpr HgVec2(f32 xVal, f32 yVal) : x{xVal}, y{yVal} {}
 
     /**
-     * Access with index
-     */
-    constexpr f32& operator[](u32 index)
-    {
-        hgAssert(index < 2);
-        return *(&x + index);
-    }
-
-    /**
-     * Access with index
-     */
-    constexpr const f32& operator[](u32 index) const {
-        hgAssert(index < 2);
-        return *(&x + index);
-    }
-
-    /**
      * Add another vector in place
      */
     const HgVec2& operator+=(HgVec2 other);
@@ -391,23 +374,6 @@ struct HgVec3
     explicit operator HgVec2()
     {
         return HgVec2{x, y};
-    }
-
-    /**
-     * Access with index
-     */
-    constexpr f32& operator[](u32 index)
-    {
-        hgAssert(index < 3);
-        return *(&x + index);
-    }
-
-    /**
-     * Access with index
-     */
-    constexpr const f32& operator[](u32 index) const {
-        hgAssert(index < 3);
-        return *(&x + index);
     }
 
     /**
@@ -475,23 +441,6 @@ struct HgVec4
     }
 
     /**
-     * Access with index
-     */
-    constexpr f32& operator[](u32 index)
-    {
-        hgAssert(index < 4);
-        return *(&x + index);
-    }
-
-    /**
-     * Access with index
-     */
-    constexpr const f32& operator[](u32 index) const {
-        hgAssert(index < 4);
-        return *(&x + index);
-    }
-
-    /**
      * Add another vector in place
      */
     const HgVec4& operator+=(HgVec4 other);
@@ -535,23 +484,6 @@ struct HgMat2
      * Construct from a list of vectors
      */
     explicit constexpr HgMat2(HgVec2 xVal, HgVec2 yVal) : x{xVal}, y{yVal} {}
-
-    /**
-     * Access with index
-     */
-    constexpr HgVec2& operator[](u32 index)
-    {
-        hgAssert(index < 2);
-        return *(&x + index);
-    }
-
-    /**
-     * Access with index
-     */
-    constexpr const HgVec2& operator[](u32 index) const {
-        hgAssert(index < 2);
-        return *(&x + index);
-    }
 
     /**
      * Add another matrix in place
@@ -599,23 +531,6 @@ struct HgMat3
     explicit constexpr operator HgMat2()
     {
         return HgMat2{HgVec2{x}, HgVec2{y}};
-    }
-
-    /**
-     * Access with index
-     */
-    constexpr HgVec3& operator[](u32 index)
-    {
-        hgAssert(index < 3);
-        return *(&x + index);
-    }
-
-    /**
-     * Access with index
-     */
-    constexpr const HgVec3& operator[](u32 index) const {
-        hgAssert(index < 3);
-        return *(&x + index);
     }
 
     /**
@@ -679,23 +594,6 @@ struct HgMat4
     }
 
     /**
-     * Access with index
-     */
-    constexpr HgVec4& operator[](u32 index)
-    {
-        hgAssert(index < 4);
-        return *(&x + index);
-    }
-
-    /**
-     * Access with index
-     */
-    constexpr const HgVec4& operator[](u32 index) const {
-        hgAssert(index < 4);
-        return *(&x + index);
-    }
-
-    /**
      * Add another matrix in place
      */
     const HgMat4& operator+=(const HgMat4& other);
@@ -733,23 +631,6 @@ struct HgComplex
     explicit constexpr HgComplex(f32 rVal, f32 iVal) : r{rVal}, i{iVal} {}
 
     /**
-     * Access with index
-     */
-    constexpr f32& operator[](u32 index)
-    {
-        hgAssert(index < 2);
-        return *(&r + index);
-    }
-
-    /**
-     * Access with index
-     */
-    constexpr const f32& operator[](u32 index) const {
-        hgAssert(index < 2);
-        return *(&r + index);
-    }
-
-    /**
      * Add another complex number in place
      */
     const HgComplex& operator+=(HgComplex other);
@@ -785,23 +666,6 @@ struct HgQuat
      * Construct from a list of values
      */
     explicit constexpr HgQuat(f32 rVal, f32 iVal, f32 jVal, f32 kVal) : r{rVal}, i{iVal}, j{jVal}, k{kVal} {}
-
-    /**
-     * Access with index
-     */
-    constexpr f32& operator[](u32 index)
-    {
-        hgAssert(index < 4);
-        return *(&r + index);
-    }
-
-    /**
-     * Access with index
-     */
-    constexpr const f32& operator[](u32 index) const {
-        hgAssert(index < 4);
-        return *(&r + index);
-    }
 
     /**
      * Add another quaternion in place
@@ -1567,16 +1431,34 @@ struct HgArena
      * The next allocation to be given out
      */
     u64 head;
+};
+
+/**
+ * Create a guard which restores an arena's head at the end of the scope
+ */
+struct HgArenaScope
+{
+    /**
+     * The arena to restore
+     */
+    HgArena* arena;
+    /**
+     * The arena's original head
+     */
+    u64 head;
 
     /**
-     * Construct uninitialized
+     * Constructs the scope guard
      */
-    HgArena() = default;
+    HgArenaScope(HgArena* arenaVal) : arena{arenaVal}, head{arenaVal->head} {}
 
     /**
-     * Create an arena from a block of memory
+     * Restores the arena's head
      */
-    HgArena(void* memoryVal, u64 capacityVal) : memory{memoryVal}, capacity{capacityVal}, head{0} {}
+    ~HgArenaScope()
+    {
+        arena->head = head;
+    }
 };
 
 /**
@@ -1648,34 +1530,6 @@ T* hgRealloc(HgArena* arena, T* allocation, u64 oldCount, u64 newCount)
     static_assert(std::is_trivially_copyable_v<T>);
     return (T*)hgRealloc(arena, allocation, oldCount * sizeof(T), newCount * sizeof(T), alignof(T));
 }
-
-/**
- * Create a guard which restores an arena's head at the end of the scope
- */
-struct HgArenaScope
-{
-    /**
-     * The arena to restore
-     */
-    HgArena* arena;
-    /**
-     * The arena's original head
-     */
-    u64 head;
-
-    /**
-     * Constructs the scope guard
-     */
-    HgArenaScope(HgArena* arenaVal) : arena{arenaVal}, head{arenaVal->head} {}
-
-    /**
-     * Restores the arena's head
-     */
-    ~HgArenaScope()
-    {
-        arena->head = head;
-    }
-};
 
 /**
  * Initializes scratch arenas
@@ -1802,50 +1656,6 @@ struct HgString
     u64 length;
 
     /**
-     * Creates a new string with empty capacity
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - capacity The capacity to begin with
-     */
-    static HgString create(HgArena* arena, u64 capacity);
-
-    /**
-     * Creates a new string copied from an existing string
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - init The initial string to copy from
-     */
-    static HgString copy(HgArena* arena, HgStringView str);
-
-    /**
-     * Removes all characters
-     */
-    constexpr void reset()
-    {
-        length = 0;
-    }
-
-    /**
-     * Changes the capacity
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - newCapacity The new minimum capacity
-     */
-    void reserve(HgArena* arena, u64 newCapacity);
-
-    /**
-     * Increases the capacity of the string, or inits to 1
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - factor The growth factor to increase by
-     */
-    void grow(HgArena* arena, f32 factor = 2.0f);
-
-    /**
      * Access using the index operator
      */
     constexpr char& operator[](u64 index)
@@ -1877,72 +1687,6 @@ struct HgString
     constexpr char* end() const
     {
         return chars + length;
-    }
-
-    /**
-     * Inserts a char into this string at index
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - c The char to insert
-     */
-    HgString& insert(HgArena* arena, u64 index, char c);
-
-    /**
-     * Appends a char to the end of this string
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - c The char to append
-     */
-    HgString& append(HgArena* arena, char c)
-    {
-        return insert(arena, length, c);
-    }
-
-    /**
-     * Prepends a char to the beginning of this string
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - c The char to prepend
-     */
-    HgString& prepend(HgArena* arena, char c)
-    {
-        return insert(arena, 0, c);
-    }
-
-    /**
-     * Copies another string into this string at index
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - str The string to copy from
-     */
-    HgString& insert(HgArena* arena, u64 index, HgStringView str);
-
-    /**
-     * Copies another string to the end of this string
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - str The string to copy from
-     */
-    HgString& append(HgArena* arena, HgStringView str)
-    {
-        return insert(arena, length, str);
-    }
-
-    /**
-     * Copies another string to the beginning of this string
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - str The string to copy from
-     */
-    HgString& prepend(HgArena* arena, HgStringView str)
-    {
-        return insert(arena, 0, str);
     }
 
     /**
@@ -1984,6 +1728,122 @@ inline bool operator==(const HgString& lhs, const HgString& rhs)
 inline bool operator!=(const HgString& lhs, const HgString& rhs)
 {
     return !(lhs == rhs);
+}
+
+/**
+ * Creates a new string with empty capacity
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - capacity The capacity to begin with
+ */
+HgString hgCreateString(HgArena* arena, u64 capacity);
+
+/**
+ * Creates a new string copied from an existing string
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - init The initial string to copy from
+ */
+HgString hgCopyString(HgArena* arena, HgStringView str);
+
+/**
+ * Create a formatted string : TODO
+ *
+ * Format specifiers
+ * - int (i64): "{i}"
+ * - unsigned int (u64): "{u}"
+ * - hexadecimal (i64): "{x}"
+ * - float with 6 decimals (f64): "{f}"
+ * - float with N decimals (f64): "{fN}"
+ * - char (char): "{c}"
+ * - string (HgStringView): "{s}"
+ * - c string (char*): "{cstr}"
+ *
+ * Use {{ and }} to escape the format specifier
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - fmt The format string
+ * - ... The format parameters
+ */
+HgString hgFormatString(HgArena* arena, HgStringView fmt, ...);
+
+/**
+ * Change the capacity of a string
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - str The string to reserve memory for
+ * - newCapacity The new minimum capacity
+ */
+void hgReserveString(HgArena* arena, HgString* str, u64 newCapacity);
+
+/**
+ * Increases the capacity of the string by a factor, or inits to 1
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - str The string to reserve memory for
+ * - factor The growth factor to increase by
+ */
+void hgGrowString(HgArena* arena, HgString* str, f32 factor = 2.0f);
+
+/**
+ * Copies another string into this string at index
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - dst The string to insert into
+ * - idx The index into dst
+ * - src The string to copy from
+ *
+ * Returns
+ */
+void hgInsertString(HgArena* arena, HgString* dst, u64 idx, HgStringView src);
+
+/**
+ * Copies another string to the end of this string
+ */
+inline void hgAppendString(HgArena* arena, HgString* dst, HgStringView src)
+{
+    hgInsertString(arena, dst, dst->length, src);
+}
+
+/**
+ * Copies another string to the beginning of this string
+ */
+inline void hgPrependString(HgArena* arena, HgString* dst, HgStringView src)
+{
+    hgInsertString(arena, dst, 0, src);
+}
+
+/**
+ * Copies another string into this string at index
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - dst The string to insert into
+ * - idx The index into dst
+ * - src The string to copy from
+ */
+void hgInsertString(HgArena* arena, HgString* dst, u64 idx, char c);
+
+/**
+ * Copies another string to the end of this string
+ */
+inline void hgAppendString(HgArena* arena, HgString* dst, char c)
+{
+    hgInsertString(arena, dst, dst->length, c);
+}
+
+/**
+ * Copies another string to the beginning of this string
+ */
+inline void hgPrependString(HgArena* arena, HgString* dst, char c)
+{
+    hgInsertString(arena, dst, 0, c);
 }
 
 /**
@@ -2037,28 +1897,6 @@ HgString hgFloatToStr(HgArena* arena, f64 num, u32 decimalCount);
 
 // base 2 and 16 string-int conversions : TODO
 // arbitrary base string-int conversions : TODO?
-
-/**
- * Produce a formatted string : TODO
- *
- * Format specifiers
- * - int (i64): "{i}"
- * - unsigned int (u64): "{u}"
- * - hexadecimal (i64): "{x}"
- * - float with 6 decimals (f64): "{f}"
- * - float with N decimals (f64): "{fN}"
- * - char (char): "{c}"
- * - string (HgStringView): "{s}"
- * - c string (char*): "{cstr}"
- *
- * Use {{ and }} to escape the format specifier
- *
- * Parameters
- * - arena The arena to allocate from
- * - fmt The format string
- * - ... The format parameters
- */
-HgString hgFormatString(HgArena* arena, HgStringView fmt, ...);
 
 /**
  * An error contained in the json
@@ -2685,15 +2523,15 @@ struct HgClock
      * The begin time
      */
     std::chrono::time_point<std::chrono::high_resolution_clock> time = std::chrono::high_resolution_clock::now();
-
-    /**
-     * Resets the clock
-     *
-     * Returns
-     * - The time in seconds since the last tick
-     */
-    f64 tick();
 };
+
+/**
+ * Resets the clock
+ *
+ * Returns
+ * - The time in seconds since the last tick
+ */
+f64 hgClockTick(HgClock* clock);
 
 /**
  * Returns the number of concurrent threads available in hardware
@@ -2709,41 +2547,40 @@ struct HgFence
      * The number of events the fence is waiting on
      */
     std::atomic<u32> counter{0};
-
-    /**
-     * Add more events for the fence to wait on
-     *
-     * Parameters
-     * - count The number of added events
-     */
-    void add(u32 count);
-
-    /**
-     * Signal that events have completed
-     *
-     * Parameters
-     * - count The number of signaled events
-     */
-    void signal(u32 count);
-
-    /**
-     * Returns whether all work has been completed
-     */
-    bool isComplete();
-
-    /**
-     * Spin waits for all work submissions to be completed
-     */
-    void waitIndefinite();
-
-    /**
-     * Spin waits for all work submissions to be completed
-     *
-     * Parameters
-     * - timeout The time in seconds to wait before timing out
-     */
-    bool wait(f64 timeout);
 };
+
+/**
+ * Add more events for the fence to wait on
+ *
+ * Parameters
+ * - fence The fence to attach to
+ * - count The number of added events
+ */
+void hgAttachFence(HgFence* fence, u32 count);
+
+/**
+ * Signal that events have completed
+ *
+ * Parameters
+ * - fence The fence to signal
+ * - count The number of signaled events
+ */
+void hgSignalFence(HgFence* fence, u32 count);
+
+/**
+ * Returns whether all work has been completed
+ */
+bool hgIsFenceComplete(const HgFence* fence);
+
+/**
+ * Spin waits for all work submissions to be completed
+ */
+void hgWaitForFenceIndefinite(const HgFence* fence);
+
+/**
+ * Spin waits for all work submissions to be completed
+ */
+bool hgWaitForFenceTimeout(const HgFence* fence, f64 timeoutSeconds);
 
 /**
  * Initialize the thread pool
@@ -2774,7 +2611,7 @@ void hgDeinitThreadPool();
  * - true if the fence was completed
  * - false if the timeout was reached
  */
-bool hgHelpThreadPool(HgFence& fence, f64 timeout);
+bool hgHelpThreadPool(const HgFence* fence, f64 timeout);
 
 /**
  * Pushes work to the thread pool queue to be executed
@@ -3184,7 +3021,7 @@ struct HgCreateImageEx
 /**
  * Create a gpu image with more options
  */
-HgImage* hgCreateImageEx(const HgCreateImageEx& create);
+HgImage* hgCreateImageEx(const HgCreateImageEx* create);
 
 /**
  * Destroy a gpu image
@@ -3348,46 +3185,6 @@ struct HgDescriptor
      * The descriptor id, defaults to null
      */
     u32 id = (u32)-1;
-
-    /**
-     * Get the index from the id
-     */
-    constexpr u32 idx()
-    {
-        return id & 0x0000ffff;
-    }
-
-    /**
-     * Get the generation from the id
-     */
-    constexpr u32 generation()
-    {
-        return (id & 0x0fff0000) >> 16;
-    }
-
-    /**
-     * Increment this descriptor's generation count
-     */
-    constexpr void incrementGeneration()
-    {
-        id += 1 << 16;
-    }
-
-    /**
-     * Get the descriptor type from the id
-     */
-    constexpr HgDescriptorType type()
-    {
-        return (HgDescriptorType)((id & 0xf0000000) >> 28);
-    }
-
-    /**
-     * Increment this descriptor's generation count
-     */
-    constexpr void setType(HgDescriptorType type)
-    {
-        id = (id & 0x0fffffff) | (type << 28);
-    }
 };
 
 /**
@@ -3398,7 +3195,31 @@ HgDescriptor hgCreateDescriptor(HgDescriptorType type);
 /**
  * Destroy a bindless descriptor
  */
-void hgDestroyDescriptor(HgDescriptor descriptor);
+void hgDestroyDescriptor(HgDescriptor desc);
+
+/**
+ * Get the index from the id
+ */
+constexpr u32 hgDescriptorIdx(HgDescriptor desc)
+{
+    return desc.id & 0x0000ffff;
+}
+
+/**
+ * Get the generation from the id
+ */
+constexpr u32 hgDescriptorGeneration(HgDescriptor desc)
+{
+    return (desc.id & 0x0fff0000) >> 16;
+}
+
+/**
+ * Get the descriptor type from the id
+ */
+constexpr HgDescriptorType hgDescriptorType(HgDescriptor desc)
+{
+    return (HgDescriptorType)((desc.id & 0xf0000000) >> 28);
+}
 
 /**
  * Update a bindless descriptor
@@ -3418,7 +3239,7 @@ void hgUpdateDescriptor(
 /**
  * Create a pipeline layout using the global bindless descriptor set layout
  */
-VkPipelineLayout hgCreatePipelineLayout(const VkPushConstantRange& push);
+VkPipelineLayout hgCreatePipelineLayout(const VkPushConstantRange* push);
 
 /**
  * Config for hgCreateGraphicsPipeline
@@ -3521,7 +3342,7 @@ struct HgCreateGraphicsPipeline
  * Parameters
  * - config The pipeline configuration
  */
-VkPipeline hgCreateGraphicsPipeline(const HgCreateGraphicsPipeline& config);
+VkPipeline hgCreateGraphicsPipeline(const HgCreateGraphicsPipeline* config);
 
 /**
  * Bind the pipeline using the bindless descriptor set
@@ -3796,7 +3617,7 @@ struct HgRenderer
      * - height The height of the render area
      * - pass The render pass description
      */
-    void beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgRenderPass& pass);
+    void beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgRenderPass* pass);
 
     /**
      * Ends the render pass
@@ -5122,12 +4943,12 @@ void hgRemoveTexture2D(HgResource textureID);
 /**
  * Update the 2D pipeline's projection matrix
  */
-void hgUpdateProjection2D(const HgMat4& projection);
+void hgUpdateProjection2D(const HgMat4* projection);
 
 /**
  * Updates the 2D pipeline's view matrix
  */
-void hgUpdateView2D(const HgMat4& view);
+void hgUpdateView2D(const HgMat4* view);
 
 /**
  * Issue draw commands for all HgSprite components in the ecs
@@ -5217,12 +5038,12 @@ void hgRemoveModel3D(HgResource modelID);
 /**
  * Update the 3D pipeline's projection matrix
  */
-void hgUpdateProjection3D(const HgMat4& projection);
+void hgUpdateProjection3D(const HgMat4* projection);
 
 /**
  * Update the 3D pipeline's view matrix
  */
-void hgUpdateView3D(const HgMat4& view);
+void hgUpdateView3D(const HgMat4* view);
 
 /**
  * Issue draw commands for all HgModelComp components in the ecs
@@ -5528,7 +5349,7 @@ struct HgWindow
      * - arena The arena to allocate from
      * - config The window configuration
      */
-    static HgWindow* create(HgArena* arena, const HgWindowConfig& config);
+    static HgWindow* create(HgArena* arena, const HgWindowConfig* config);
 
     /**
      * Destroys the window

@@ -209,7 +209,7 @@ void hgInitPipeline3D(
     hgUpdateDescriptor(defaultNormalMap.descriptor, nullptr, &normalInfo);
 
     VkPushConstantRange push{VK_SHADER_STAGE_ALL, 0, sizeof(Push)};
-    pipelineLayout = hgCreatePipelineLayout(push);
+    pipelineLayout = hgCreatePipelineLayout(&push);
 
     VkVertexInputBindingDescription vertexBindings[]{
         {0, sizeof(HgModelVertex), VK_VERTEX_INPUT_RATE_VERTEX},
@@ -237,8 +237,8 @@ void hgInitPipeline3D(
     pipelineConfig.enableDepthRead = true;
     pipelineConfig.enableDepthWrite = true;
 
-    fence.waitIndefinite();
-    pipeline = hgCreateGraphicsPipeline(pipelineConfig);
+    hgWaitForFenceIndefinite(&fence);
+    pipeline = hgCreateGraphicsPipeline(&pipelineConfig);
 }
 
 void hgDeinitPipeline3D()
@@ -268,14 +268,14 @@ void hgDeinitPipeline3D()
     hgDestroyBuffer(vpBuffer);
 }
 
-void hgUpdateProjection3D(const HgMat4& projection)
+void hgUpdateProjection3D(const HgMat4* projection)
 {
-    vpData.proj = projection;
+    vpData.proj = *projection;
 }
 
-void hgUpdateView3D(const HgMat4& view)
+void hgUpdateView3D(const HgMat4* view)
 {
-    vpData.view = view;
+    vpData.view = *view;
 }
 
 void hgDraw3D(HgECS* ecs, VkCommandBuffer cmd)
@@ -369,13 +369,13 @@ void hgDraw3D(HgECS* ecs, VkCommandBuffer cmd)
 
         Push push{};
         push.model = hgModelMatrix3D(transform.position, transform.scale, transform.rotation);
-        push.dirLightIdx = dirLightDesc.idx();
+        push.dirLightIdx = hgDescriptorIdx(dirLightDesc);
         push.dirLightCount = dirLightCount;
-        push.pointLightIdx = pointLightDesc.idx();
+        push.pointLightIdx = hgDescriptorIdx(pointLightDesc);
         push.pointLightCount = pointLightCount;
-        push.vpIdx = vpDesc.idx();
-        push.colorMapIdx = colorMap->descriptor.idx();
-        push.normalMapIdx = normalMap->descriptor.idx();
+        push.vpIdx = hgDescriptorIdx(vpDesc);
+        push.colorMapIdx = hgDescriptorIdx(colorMap->descriptor);
+        push.normalMapIdx = hgDescriptorIdx(normalMap->descriptor);
 
         HgModelResource* gpuModel = hgGetModel(model.modelResource);
         if (gpuModel == nullptr)

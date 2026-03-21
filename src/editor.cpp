@@ -25,7 +25,7 @@ int main()
     windowConfig.height = 900;
     windowConfig.preferredPresentMode = VK_PRESENT_MODE_MAILBOX_KHR;
 
-    HgWindow* window = HgWindow::create(arena, windowConfig);
+    HgWindow* window = HgWindow::create(arena, &windowConfig);
     hgDefer(window->destroy());
 
     hgInitPipeline2D(VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_D32_SFLOAT);
@@ -108,7 +108,7 @@ int main()
     HgClock gameClock{};
     for (;;)
     {
-        f64 delta = gameClock.tick();
+        f64 delta = hgClockTick(&gameClock);
         HgClock cpuClock{};
 
         HgArena* frame = hgGetScratch();
@@ -229,8 +229,8 @@ int main()
                     renderHeight = viewHeight;
 
                     HgMat4 proj = hgPerspective((f32)hgPi * 0.5f, (f32)renderWidth / (f32)renderHeight, 0.1f, 1000.0f);
-                    hgUpdateProjection2D(proj);
-                    hgUpdateProjection3D(proj);
+                    hgUpdateProjection2D(&proj);
+                    hgUpdateProjection3D(&proj);
 
                     ImGui_ImplVulkan_RemoveTexture(renderDescriptor);
                     hgDestroyImageView(depthView);
@@ -289,8 +289,8 @@ int main()
                     }
                 }
                 HgMat4 view = hgViewMatrix(camera.position, camera.scale, camera.rotation);
-                hgUpdateView2D(view);
-                hgUpdateView3D(view);
+                hgUpdateView2D(&view);
+                hgUpdateView3D(&view);
 
                 ImGui::Image((ImTextureID)renderDescriptor, {(f32)renderWidth, (f32)renderHeight});
             }
@@ -340,10 +340,9 @@ int main()
                         HgArenaScope scratchScope{scratch};
                         HgEntity e = scene[i];
 
-                        char* name = HgString::copy(scratch, "Entity ID: ")
-                                .append(scratch, hgIntToStr(scratch, (i64)e.idx()))
-                                .append(scratch, 0)
-                                .chars;
+                        HgString nameStr = hgCopyString(scratch, "Entitiy ID: ");
+                        hgAppendString(scratch, &nameStr, hgIntToStr(scratch, (i64)e.idx()));
+                        char* name = hgCString(scratch, nameStr);
 
                         if (ImGui::TreeNodeEx(name, entityFlags))
                         {
@@ -474,11 +473,11 @@ int main()
 
         ImGui::Render();
 
-        cpuDelta = cpuClock.tick();
+        cpuDelta = hgClockTick(&cpuClock);
         VkCommandBuffer cmd = window->beginRecording();
         if (cmd != nullptr)
         {
-            cpuClock.tick();
+            hgClockTick(&cpuClock);
 
             HgRenderer renderer = renderer.create(frame, 32, 32);
 
@@ -497,7 +496,7 @@ int main()
             renderPass.colorAttachmentCount = 1;
             renderPass.depthAttachment = &renderDepthAttachment;
 
-            renderer.beginPass(cmd, renderWidth, renderHeight, renderPass);
+            renderer.beginPass(cmd, renderWidth, renderHeight, &renderPass);
 
             hgDraw3D(&ecs, cmd);
             hgDraw2D(&ecs, cmd);
@@ -515,7 +514,7 @@ int main()
             guiPass.colorAttachments = &guiColorAttachment;
             guiPass.colorAttachmentCount = 1;
 
-            renderer.beginPass(cmd, window->width, window->height, guiPass);
+            renderer.beginPass(cmd, window->width, window->height, &guiPass);
 
             ImGui_ImplHurdyGurdy_Draw(cmd);
 
@@ -527,7 +526,7 @@ int main()
 
             renderer.barrier(cmd, nullptr, 0, &presentBarrier, 1);
 
-            cpuDelta += cpuClock.tick();
+            cpuDelta += hgClockTick(&cpuClock);
             window->endAndPresent(cmd);
         }
     }

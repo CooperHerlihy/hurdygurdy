@@ -536,7 +536,7 @@ void hgLoadTexture(HgResource id, VkSampler sampler)
         imageInfo.depth = depth;
         imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 
-        tex.image = hgCreateImageEx(imageInfo);
+        tex.image = hgCreateImageEx(&imageInfo);
 
         hgWriteImage(
             tex.image,
@@ -551,7 +551,7 @@ void hgLoadTexture(HgResource id, VkSampler sampler)
 
         tex.descriptor = hgCreateDescriptor(HgDescriptorType_combinedImageSampler);
 
-        VkDescriptorImageInfo descInfo{tex.sampler, tex.view->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+        VkDescriptorImageInfo descInfo = {tex.sampler, tex.view->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
         hgUpdateDescriptor(tex.descriptor, nullptr, &descInfo);
     }
 }

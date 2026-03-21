@@ -69,7 +69,7 @@ void hgTest()
         void* block = malloc(1024);
         hgDefer(free(block));
 
-        HgArena arena{block, 1024};
+        HgArena arena{block, 1024, 0};
 
         for (u32 i = 0; i < 3; ++i)
         {
@@ -115,35 +115,35 @@ void hgTest()
         HgArena* arena = hgGetScratch();
         HgArenaScope arenaScope{arena};
 
-        HgString a = a.copy(arena, "a");
+        HgString a = hgCopyString(arena, "a");
         hgAssert(a[0] == 'a');
         hgAssert(a.capacity == 1);
         hgAssert(a.length == 1);
 
-        HgString abc = abc.copy(arena, "abc");
+        HgString abc = hgCopyString(arena, "abc");
         hgAssert(abc[0] == 'a');
         hgAssert(abc[1] == 'b');
         hgAssert(abc[2] == 'c');
         hgAssert(abc.length == 3);
         hgAssert(abc.capacity == 3);
 
-        a.append(arena, "bc");
+        hgAppendString(arena, &a, "bc");
         hgAssert(a == abc);
 
-        HgString str = str.create(arena, 16);
-        hgAssert(str == HgString::create(arena, 0));
+        HgString str = hgCreateString(arena, 16);
+        hgAssert(str == hgCreateString(arena, 0));
 
-        str.append(arena, "hello");
-        hgAssert(str == HgString::copy(arena, "hello"));
+        hgAppendString(arena, &str, "hello");
+        hgAssert(str == hgCopyString(arena, "hello"));
 
-        str.append(arena, " there");
-        hgAssert(str == HgString::copy(arena, "hello there"));
+        hgAppendString(arena, &str, " there");
+        hgAssert(str == hgCopyString(arena, "hello there"));
 
-        str.prepend(arena, "why ");
-        hgAssert(str == HgString::copy(arena, "why hello there"));
+        hgPrependString(arena, &str, "why ");
+        hgAssert(str == hgCopyString(arena, "why hello there"));
 
-        str.insert(arena, 3, ",");
-        hgAssert(str == HgString::copy(arena, "why, hello there"));
+        hgInsertString(arena, &str, 3, ",");
+        hgAssert(str == hgCopyString(arena, "why, hello there"));
     }
 
     // string utils
@@ -1332,34 +1332,34 @@ void hgTest()
 
         HgHashMap<HgString, u32> map = map.create(arena, 128);
 
-        hgAssert(map.get(HgString::copy(arena, "a")) == nullptr);
-        hgAssert(map.get(HgString::copy(arena, "b")) == nullptr);
-        hgAssert(map.get(HgString::copy(arena, "ab")) == nullptr);
-        hgAssert(map.get(HgString::copy(arena, "supercalifragilisticexpialidocious")) == nullptr);
+        hgAssert(map.get(hgCopyString(arena, "a")) == nullptr);
+        hgAssert(map.get(hgCopyString(arena, "b")) == nullptr);
+        hgAssert(map.get(hgCopyString(arena, "ab")) == nullptr);
+        hgAssert(map.get(hgCopyString(arena, "supercalifragilisticexpialidocious")) == nullptr);
 
-        map.add(HgString::copy(arena, "a"), 1);
-        map.add(HgString::copy(arena, "b"), 2);
-        map.add(HgString::copy(arena, "ab"), 3);
-        map.add(HgString::copy(arena, "supercalifragilisticexpialidocious"), 4);
+        map.add(hgCopyString(arena, "a"), 1);
+        map.add(hgCopyString(arena, "b"), 2);
+        map.add(hgCopyString(arena, "ab"), 3);
+        map.add(hgCopyString(arena, "supercalifragilisticexpialidocious"), 4);
 
-        hgAssert(map.get(HgString::copy(arena, "a")) != nullptr);
-        hgAssert(*map.get(HgString::copy(arena, "a")) == 1);
-        hgAssert(map.get(HgString::copy(arena, "b")) != nullptr);
-        hgAssert(*map.get(HgString::copy(arena, "b")) == 2);
-        hgAssert(map.get(HgString::copy(arena, "ab")) != nullptr);
-        hgAssert(*map.get(HgString::copy(arena, "ab")) == 3);
-        hgAssert(map.get(HgString::copy(arena, "supercalifragilisticexpialidocious")) != nullptr);
-        hgAssert(*map.get(HgString::copy(arena, "supercalifragilisticexpialidocious")) == 4);
+        hgAssert(map.get(hgCopyString(arena, "a")) != nullptr);
+        hgAssert(*map.get(hgCopyString(arena, "a")) == 1);
+        hgAssert(map.get(hgCopyString(arena, "b")) != nullptr);
+        hgAssert(*map.get(hgCopyString(arena, "b")) == 2);
+        hgAssert(map.get(hgCopyString(arena, "ab")) != nullptr);
+        hgAssert(*map.get(hgCopyString(arena, "ab")) == 3);
+        hgAssert(map.get(hgCopyString(arena, "supercalifragilisticexpialidocious")) != nullptr);
+        hgAssert(*map.get(hgCopyString(arena, "supercalifragilisticexpialidocious")) == 4);
 
-        map.remove(HgString::copy(arena, "a"));
-        map.remove(HgString::copy(arena, "b"));
-        map.remove(HgString::copy(arena, "ab"));
-        map.remove(HgString::copy(arena, "supercalifragilisticexpialidocious"));
+        map.remove(hgCopyString(arena, "a"));
+        map.remove(hgCopyString(arena, "b"));
+        map.remove(hgCopyString(arena, "ab"));
+        map.remove(hgCopyString(arena, "supercalifragilisticexpialidocious"));
 
-        hgAssert(map.get(HgString::copy(arena, "a")) == nullptr);
-        hgAssert(map.get(HgString::copy(arena, "b")) == nullptr);
-        hgAssert(map.get(HgString::copy(arena, "ab")) == nullptr);
-        hgAssert(map.get(HgString::copy(arena, "supercalifragilisticexpialidocious")) == nullptr);
+        hgAssert(map.get(hgCopyString(arena, "a")) == nullptr);
+        hgAssert(map.get(hgCopyString(arena, "b")) == nullptr);
+        hgAssert(map.get(hgCopyString(arena, "ab")) == nullptr);
+        hgAssert(map.get(hgCopyString(arena, "supercalifragilisticexpialidocious")) == nullptr);
     }
 
     {
@@ -1373,10 +1373,10 @@ void hgTest()
         hgAssert(map.get("ab") == nullptr);
         hgAssert(map.get("supercalifragilisticexpialidocious") == nullptr);
 
-        map.add(HgString::copy(arena, "a"), 1);
-        map.add(HgString::copy(arena, "b"), 2);
-        map.add(HgString::copy(arena, "ab"), 3);
-        map.add(HgString::copy(arena, "supercalifragilisticexpialidocious"), 4);
+        map.add(hgCopyString(arena, "a"), 1);
+        map.add(hgCopyString(arena, "b"), 2);
+        map.add(hgCopyString(arena, "ab"), 3);
+        map.add(hgCopyString(arena, "supercalifragilisticexpialidocious"), 4);
 
         hgAssert(map.get("a") != nullptr);
         hgAssert(*map.get("a") == 1);
@@ -1530,30 +1530,30 @@ void hgTest()
 
         HgHashSet<HgString> set = set.create(arena, 128);
 
-        hgAssert(!set.has(HgString::copy(arena, "a")));
-        hgAssert(!set.has(HgString::copy(arena, "b")));
-        hgAssert(!set.has(HgString::copy(arena, "ab")));
-        hgAssert(!set.has(HgString::copy(arena, "supercalifragilisticexpialidocious")));
+        hgAssert(!set.has(hgCopyString(arena, "a")));
+        hgAssert(!set.has(hgCopyString(arena, "b")));
+        hgAssert(!set.has(hgCopyString(arena, "ab")));
+        hgAssert(!set.has(hgCopyString(arena, "supercalifragilisticexpialidocious")));
 
-        set.add(HgString::copy(arena, "a"));
-        set.add(HgString::copy(arena, "b"));
-        set.add(HgString::copy(arena, "ab"));
-        set.add(HgString::copy(arena, "supercalifragilisticexpialidocious"));
+        set.add(hgCopyString(arena, "a"));
+        set.add(hgCopyString(arena, "b"));
+        set.add(hgCopyString(arena, "ab"));
+        set.add(hgCopyString(arena, "supercalifragilisticexpialidocious"));
 
-        hgAssert(set.has(HgString::copy(arena, "a")));
-        hgAssert(set.has(HgString::copy(arena, "b")));
-        hgAssert(set.has(HgString::copy(arena, "ab")));
-        hgAssert(set.has(HgString::copy(arena, "supercalifragilisticexpialidocious")));
+        hgAssert(set.has(hgCopyString(arena, "a")));
+        hgAssert(set.has(hgCopyString(arena, "b")));
+        hgAssert(set.has(hgCopyString(arena, "ab")));
+        hgAssert(set.has(hgCopyString(arena, "supercalifragilisticexpialidocious")));
 
-        set.remove(HgString::copy(arena, "a"));
-        set.remove(HgString::copy(arena, "b"));
-        set.remove(HgString::copy(arena, "ab"));
-        set.remove(HgString::copy(arena, "supercalifragilisticexpialidocious"));
+        set.remove(hgCopyString(arena, "a"));
+        set.remove(hgCopyString(arena, "b"));
+        set.remove(hgCopyString(arena, "ab"));
+        set.remove(hgCopyString(arena, "supercalifragilisticexpialidocious"));
 
-        hgAssert(!set.has(HgString::copy(arena, "a")));
-        hgAssert(!set.has(HgString::copy(arena, "b")));
-        hgAssert(!set.has(HgString::copy(arena, "ab")));
-        hgAssert(!set.has(HgString::copy(arena, "supercalifragilisticexpialidocious")));
+        hgAssert(!set.has(hgCopyString(arena, "a")));
+        hgAssert(!set.has(hgCopyString(arena, "b")));
+        hgAssert(!set.has(hgCopyString(arena, "ab")));
+        hgAssert(!set.has(hgCopyString(arena, "supercalifragilisticexpialidocious")));
     }
 
     {
@@ -1567,10 +1567,10 @@ void hgTest()
         hgAssert(!set.has("ab"));
         hgAssert(!set.has("supercalifragilisticexpialidocious"));
 
-        set.add(HgString::copy(arena, "a"));
-        set.add(HgString::copy(arena, "b"));
-        set.add(HgString::copy(arena, "ab"));
-        set.add(HgString::copy(arena, "supercalifragilisticexpialidocious"));
+        set.add(hgCopyString(arena, "a"));
+        set.add(hgCopyString(arena, "b"));
+        set.add(hgCopyString(arena, "ab"));
+        set.add(hgCopyString(arena, "supercalifragilisticexpialidocious"));
 
         hgAssert(set.has("a"));
         hgAssert(set.has("b"));
@@ -1604,9 +1604,9 @@ void hgTest()
             *(bool*)pb = true;
         });
 
-        fence.wait(2.0);
+        hgWaitForFenceTimeout(&fence, 2.0);
 
-        hgAssert(fence.wait(2.0));
+        hgAssert(hgWaitForFenceTimeout(&fence, 2.0));
 
         hgAssert(a == true);
         hgAssert(b == true);
@@ -1624,7 +1624,7 @@ void hgTest()
             });
         }
 
-        hgAssert(hgHelpThreadPool(fence, 2.0));
+        hgAssert(hgHelpThreadPool(&fence, 2.0));
 
         for (bool& val : vals)
         {
@@ -1686,7 +1686,7 @@ void hgTest()
                 thread.join();
             }
 
-            hgAssert(hgHelpThreadPool(fence, 2.0));
+            hgAssert(hgHelpThreadPool(&fence, 2.0));
             for (auto val : vals)
             {
                 hgAssert(val == true);
@@ -1708,7 +1708,7 @@ void hgTest()
             }
         });
 
-        hgAssert(fence.wait(2.0));
+        hgAssert(hgWaitForFenceTimeout(&fence, 2.0));
         for (u32 i = 0; i < sizeof(vals) / sizeof(*vals); ++i)
         {
             hgAssert(vals[i] == true);
@@ -1728,7 +1728,7 @@ void hgTest()
             });
         }
 
-        hgAssert(fence.wait(2.0));
+        hgAssert(hgWaitForFenceTimeout(&fence, 2.0));
         for (u32 i = 0; i < sizeof(vals) / sizeof(*vals); ++i)
         {
             hgAssert(vals[i] == true);
@@ -1750,7 +1750,7 @@ void hgTest()
             });
         }
 
-        hgAssert(fence.wait(2.0));
+        hgAssert(hgWaitForFenceTimeout(&fence, 2.0));
         for (u32 i = 0; i < sizeof(vals) / sizeof(*vals); ++i)
         {
             hgAssert(vals[i] == true);
@@ -1794,7 +1794,7 @@ void hgTest()
                 thread.join();
             }
 
-            hgAssert(fence.wait(2.0));
+            hgAssert(hgWaitForFenceTimeout(&fence, 2.0));
             for (auto val : vals)
             {
                 hgAssert(val == true);
@@ -1942,7 +1942,7 @@ void hgTest()
             hgExportPng(&fence, 1, texId, filePath);
             hgImportPng(&fence, 1, fileId, filePath);
             hgDefer(hgUnloadResource(nullptr, 0, fileId));
-            hgAssert(fence.wait(2.0));
+            hgAssert(hgWaitForFenceTimeout(&fence, 2.0));
 
             HgImageData fileTexture = *hgGetResource(fileId);
 
@@ -2372,6 +2372,6 @@ void hgTest()
         }
     }
 
-    printf("HurdyGurdy: Tests Complete in %fms\n", timer.tick() * 1000.0f);
+    printf("HurdyGurdy: Tests Complete in %fms\n", hgClockTick(&timer) * 1000.0f);
 }
 
