@@ -38,7 +38,7 @@ SHADERS := \
 
 .PHONY: all debug release clean
 
-all: $(BUILD_DIR)/minimal $(BUILD_DIR)/editor $(TEST_DIR)
+all: $(BUILD_DIR)/minimal $(BUILD_DIR)/editor $(SHADERS) $(TEST_DIR)
 
 debug:
 	$(MAKE) CONFIG="$(DEBUG_CONFIG)"
@@ -52,14 +52,8 @@ $(BUILD_DIR):
 $(TEST_DIR):
 	mkdir -p $@
 
-$(BUILD_DIR)/embed_file: $(SRC_DIR)/src/embed_file.cpp | $(BUILD_DIR)
-	c++ $(STD) $(CONFIG) $(WARNINGS) $(INCLUDES) $< -o $@
-
 $(BUILD_DIR)/%.spv: $(SRC_DIR)/src/% | $(BUILD_DIR)
 	glslc -o $@ $<
-
-$(BUILD_DIR)/%.spv.h: $(BUILD_DIR)/%.spv $(BUILD_DIR)/embed_file
-	$(BUILD_DIR)/embed_file $< $(notdir $<) > $@
 
 $(BUILD_DIR)/vk_mem_alloc.o: $(SRC_DIR)/src/vk_mem_alloc.cpp | $(BUILD_DIR)
 	c++ $(STD) $(CONFIG) $(INCLUDES) -c $< -o $@
@@ -73,7 +67,7 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/vendor/imgui/backends/%.cpp | $(BUILD_DIR)
 $(BUILD_DIR)/%.o: $(SRC_DIR)/vendor/imgui/%.cpp | $(BUILD_DIR)
 	c++ $(STD) $(CONFIG) $(INCLUDES) -c $< -o $@
 
-$(BUILD_DIR)/%.o: $(SRC_DIR)/src/%.cpp $(patsubst %, $(BUILD_DIR)/%.spv.h, $(SHADERS)) | $(BUILD_DIR)
+$(BUILD_DIR)/%.o: $(SRC_DIR)/src/%.cpp | $(BUILD_DIR)
 	c++ $(STD) $(CONFIG) $(WARNINGS) $(INCLUDES) -c $< -o $@
 
 LIB_FILES := \

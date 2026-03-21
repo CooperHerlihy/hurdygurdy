@@ -1,18 +1,13 @@
 #version 460
 
-#include "bindless.glsl"
+#include "shader_utils.glsl"
 
-layout (location = 0) out vec3 fPos;
-layout (location = 1) out vec3 fNorm;
-layout (location = 2) out vec4 fTan;
-layout (location = 3) out vec2 fUV;
+layout (location = 0) in vec3 inPosition;
+layout (location = 1) in vec3 inNormal;
+layout (location = 2) in vec4 inTangent;
+layout (location = 3) in vec2 inUVCoord;
 
-layout (location = 0) in vec3 vPos;
-layout (location = 1) in vec3 vNorm;
-layout (location = 2) in vec4 vTan;
-layout (location = 3) in vec2 vUV;
-
-layout (binding = HgBinding_uniformBuffer) uniform VP {
+layout (HgUniformBuffer) uniform VP {
     mat4 proj;
     mat4 view;
 } uniformBuffers[];
@@ -26,22 +21,18 @@ layout (push_constant) uniform Push {
     uint pointLightCount;
     uint colorMapIdx;
     uint normalMapIdx;
-} p;
+} push;
+
+layout (location = 0) out VertexOutput {
+    HgVertex vertex;
+} vOut;
 
 void main()
 {
-    mat4 proj = uniformBuffers[p.vpIdx].proj;
-    mat4 view = uniformBuffers[p.vpIdx].view;
+    vOut.vertex = hgTransformVertex(
+        HgVertex(inPosition, inNormal, inTangent, inUVCoord),
+        uniformBuffers[push.vpIdx].view * push.model);
 
-    mat4 mv = view * p.model;
-    mat3 imv = mat3(transpose(inverse(mv)));
-    vec4 pos = mv * vec4(vPos, 1.0);
-
-    fPos = pos.xyz;
-    fNorm = imv * vNorm;
-    fTan = vec4(imv * vTan.xyz, vTan.w);
-    fUV = vUV;
-
-    gl_Position = proj * pos;
+    gl_Position = uniformBuffers[push.vpIdx].proj * vec4(vOut.vertex.position, 1.0);
 }
 

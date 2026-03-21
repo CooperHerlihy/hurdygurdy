@@ -1,10 +1,8 @@
 #version 460
 
-#include "bindless.glsl"
+#include "shader_utils.glsl"
 
-layout (location = 0) out vec2 fUV;
-
-layout (binding = HgBinding_uniformBuffer) uniform ViewProjection {
+layout (HgUniformBuffer) uniform ViewProjection {
     mat4 proj;
     mat4 view;
 } uniformBuffers[];
@@ -15,25 +13,29 @@ layout (push_constant) uniform Push {
     vec2 uvSize;
     uint vpIdx;
     uint texIdx;
-} p;
+} push;
 
-const vec2 positions[] = vec2[](
-    vec2(0.0, 0.0),
-    vec2(0.0, 1.0),
-    vec2(1.0, 1.0),
-    vec2(1.0, 1.0),
-    vec2(1.0, 0.0),
-    vec2(0.0, 0.0)
-);
+layout (location = 0) out VertexOutput {
+    vec2 vUVCoord;
+};
 
 void main()
 {
-    mat4 proj = uniformBuffers[p.vpIdx].proj;
-    mat4 view = uniformBuffers[p.vpIdx].view;
+    mat4 proj = uniformBuffers[push.vpIdx].proj;
+    mat4 view = uniformBuffers[push.vpIdx].view;
 
-    fUV = positions[gl_VertexIndex] * p.uvSize + p.uvPos;
+    const vec2 positions[] = vec2[](
+        vec2(0.0, 0.0),
+        vec2(0.0, 1.0),
+        vec2(1.0, 1.0),
+        vec2(1.0, 1.0),
+        vec2(1.0, 0.0),
+        vec2(0.0, 0.0)
+    );
+
+    vUVCoord = positions[gl_VertexIndex] * push.uvSize + push.uvPos;
 
     vec2 vertexPos = positions[gl_VertexIndex] - vec2(0.5);
-    gl_Position = proj * view * p.model * vec4(vertexPos, 0.0, 1.0);
+    gl_Position = proj * view * push.model * vec4(vertexPos, 0.0, 1.0);
 }
 

@@ -47,20 +47,9 @@ set SHADERS= ^
 if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
 if not exist "%TEST_DIR%" mkdir "%TEST_DIR%"
 
-cl "%SRC_DIR%\src\embed_file.cpp" ^
-    /Fd:"%BUILD_DIR%\embed_file.pdb" ^
-    /Fo:"%BUILD_DIR%\embed_file.obj" ^
-    /Fe:"%BUILD_DIR%\embed_file.exe" ^
-    %STD% %WARNINGS% %CONFIG% %INCLUDES%
-
 for %%F in (%SHADERS%) do (
     echo %%F
-
     glslc -o "%BUILD_DIR%\%%F.spv" "%SRC_DIR%\src\%%F"
-
-    "%BUILD_DIR%\embed_file.exe" ^
-        "%BUILD_DIR%\%%F.spv" ^
-        "%%F.spv" > "%BUILD_DIR%\%%F.spv.h"
 )
 
 if not exist "%BUILD_DIR%\vk_mem_alloc.obj" (

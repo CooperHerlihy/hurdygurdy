@@ -1,8 +1,5 @@
 #include "hurdygurdy.hpp"
 
-#include "model.vert.spv.h"
-#include "model.frag.spv.h"
-
 struct VPUniform {
     HgMat4 proj;
     HgMat4 view;
@@ -29,9 +26,6 @@ struct Push {
     u32 normalMapIdx;
 };
 
-static VkPipelineLayout pipelineLayout;
-static VkPipeline pipeline;
-
 static HgBuffer* vpBuffer;
 static VPUniform vpData;
 static HgDescriptor vpDesc;
@@ -49,6 +43,9 @@ static VkSampler defaultMapSampler;
 static HgTextureResource defaultColorMap;
 static HgTextureResource defaultNormalMap;
 
+static VkPipelineLayout pipelineLayout;
+static VkPipeline pipeline;
+
 void hgInitPipeline3D(
     VkFormat colorFormat,
     VkFormat depthFormat)
@@ -56,36 +53,18 @@ void hgInitPipeline3D(
     hgAssert(colorFormat != VK_FORMAT_UNDEFINED);
     hgAssert(depthFormat != VK_FORMAT_UNDEFINED);
 
-    VkPushConstantRange push{VK_SHADER_STAGE_ALL, 0, sizeof(Push)};
-    pipelineLayout = hgCreatePipelineLayout(push);
+    HgFence fence;
+    const char* modelVertSpvName = "build/model.vert.spv";
+    const char* modelFragSpvName = "build/model.frag.spv";
+    HgResource modelVertSpvID = hgResourceID(modelVertSpvName);
+    HgResource modelFragSpvID = hgResourceID(modelFragSpvName);
+    hgLoadResource(&fence, 1, modelVertSpvID, modelVertSpvName);
+    hgLoadResource(&fence, 1, modelFragSpvID, modelFragSpvName);
+    hgDefer(hgUnloadResource(nullptr, 0, modelVertSpvID));
+    hgDefer(hgUnloadResource(nullptr, 0, modelFragSpvID));
 
-    VkVertexInputBindingDescription vertexBindings[]{
-        {0, sizeof(HgModelVertex), VK_VERTEX_INPUT_RATE_VERTEX},
-    };
-    VkVertexInputAttributeDescription vertexAttributes[]{
-        {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(HgModelVertex, pos)},
-        {1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(HgModelVertex, norm)},
-        {2, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(HgModelVertex, tan)},
-        {3, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(HgModelVertex, uv)},
-    };
-    HgCreateGraphicsPipeline pipelineConfig{};
-    pipelineConfig.layout = pipelineLayout;
-    pipelineConfig.vertexShader = model_vert_spv;
-    pipelineConfig.vertexShaderSize = model_vert_spv_size;
-    pipelineConfig.fragmentShader = model_frag_spv;
-    pipelineConfig.fragmentShaderSize = model_frag_spv_size;
-    pipelineConfig.colorAttachmentFormats = &colorFormat;
-    pipelineConfig.colorAttachmentCount = 1;
-    pipelineConfig.depthAttachmentFormat = depthFormat;
-    pipelineConfig.vertexBindings = vertexBindings;
-    pipelineConfig.vertexBindingCount = sizeof(vertexBindings) / sizeof(*vertexBindings);
-    pipelineConfig.vertexAttributes = vertexAttributes;
-    pipelineConfig.vertexAttributeCount = sizeof(vertexAttributes) / sizeof(*vertexAttributes);
-    pipelineConfig.cullMode = VK_CULL_MODE_BACK_BIT;
-    pipelineConfig.enableDepthRead = true;
-    pipelineConfig.enableDepthWrite = true;
-
-    pipeline = hgCreateGraphicsPipeline(pipelineConfig);
+    HgBinary* modelVertSpv = hgGetResource(modelVertSpvID);
+    HgBinary* modelFragSpv = hgGetResource(modelFragSpvID);
 
     vpData.proj = HgMat4{1.0f};
     vpData.view = HgMat4{1.0f};
@@ -228,27 +207,65 @@ void hgInitPipeline3D(
     VkDescriptorImageInfo normalInfo =
         {defaultMapSampler, defaultNormalMap.view->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
     hgUpdateDescriptor(defaultNormalMap.descriptor, nullptr, &normalInfo);
+
+    VkPushConstantRange push{VK_SHADER_STAGE_ALL, 0, sizeof(Push)};
+    pipelineLayout = hgCreatePipelineLayout(push);
+
+    VkVertexInputBindingDescription vertexBindings[]{
+        {0, sizeof(HgModelVertex), VK_VERTEX_INPUT_RATE_VERTEX},
+    };
+    VkVertexInputAttributeDescription vertexAttributes[]{
+        {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(HgModelVertex, pos)},
+        {1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(HgModelVertex, norm)},
+        {2, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(HgModelVertex, tan)},
+        {3, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(HgModelVertex, uv)},
+    };
+    HgCreateGraphicsPipeline pipelineConfig{};
+    pipelineConfig.layout = pipelineLayout;
+    pipelineConfig.vertexShader = (u8*)modelVertSpv->data;
+    pipelineConfig.vertexShaderSize = modelVertSpv->size;
+    pipelineConfig.fragmentShader = (u8*)modelFragSpv->data;
+    pipelineConfig.fragmentShaderSize = modelFragSpv->size;
+    pipelineConfig.colorAttachmentFormats = &colorFormat;
+    pipelineConfig.colorAttachmentCount = 1;
+    pipelineConfig.depthAttachmentFormat = depthFormat;
+    pipelineConfig.vertexBindings = vertexBindings;
+    pipelineConfig.vertexBindingCount = sizeof(vertexBindings) / sizeof(*vertexBindings);
+    pipelineConfig.vertexAttributes = vertexAttributes;
+    pipelineConfig.vertexAttributeCount = sizeof(vertexAttributes) / sizeof(*vertexAttributes);
+    pipelineConfig.cullMode = VK_CULL_MODE_BACK_BIT;
+    pipelineConfig.enableDepthRead = true;
+    pipelineConfig.enableDepthWrite = true;
+
+    fence.waitIndefinite();
+    pipeline = hgCreateGraphicsPipeline(pipelineConfig);
 }
 
 void hgDeinitPipeline3D()
 {
+    vkDestroyPipeline(hgVkDevice, pipeline, nullptr);
+    vkDestroyPipelineLayout(hgVkDevice, pipelineLayout, nullptr);
+
     hgDestroyDescriptor(defaultNormalMap.descriptor);
-    hgDestroyDescriptor(defaultColorMap.descriptor);
     hgDestroyImageView(defaultNormalMap.view);
-    hgDestroyImageView(defaultColorMap.view);
     hgDestroyImage(defaultNormalMap.image);
+
+    hgDestroyDescriptor(defaultColorMap.descriptor);
+    hgDestroyImageView(defaultColorMap.view);
     hgDestroyImage(defaultColorMap.image);
+
     vkDestroySampler(hgVkDevice, defaultMapSampler, nullptr);
+
     hgDestroyBuffer(defaultModel.indexBuffer);
     hgDestroyBuffer(defaultModel.vertexBuffer);
+
     hgDestroyDescriptor(pointLightDesc);
     hgDestroyDescriptor(dirLightDesc);
     hgDestroyBuffer(pointLightBuffer);
     hgDestroyBuffer(dirLightBuffer);
+
     hgDestroyDescriptor(vpDesc);
     hgDestroyBuffer(vpBuffer);
-    vkDestroyPipeline(hgVkDevice, pipeline, nullptr);
-    vkDestroyPipelineLayout(hgVkDevice, pipelineLayout, nullptr);
 }
 
 void hgUpdateProjection3D(const HgMat4& projection)

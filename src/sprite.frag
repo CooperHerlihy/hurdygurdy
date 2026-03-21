@@ -1,12 +1,14 @@
 #version 460
 
-#include "bindless.glsl"
+#include "shader_utils.glsl"
+
+layout (location = 0) in VertexOutput {
+    vec2 vUVCoord;
+};
+
+layout (HgCombinedImageSampler) uniform sampler2D uTextures[];
 
 layout (location = 0) out vec4 outColor;
-
-layout (location = 0) in vec2 vUV;
-
-layout (binding = HgBinding_combinedImageSampler) uniform sampler2D uTextures[];
 
 layout (push_constant) uniform Push {
     mat4 model;
@@ -14,10 +16,10 @@ layout (push_constant) uniform Push {
     vec2 uvSize;
     uint vpIdx;
     uint texIdx;
-} p;
+} push;
 
 void main()
 {
-    outColor = texture(uTextures[p.texIdx], vUV);
+    outColor = texture(uTextures[push.texIdx], vUVCoord);
 }
 

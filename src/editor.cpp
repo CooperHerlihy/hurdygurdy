@@ -65,7 +65,7 @@ int main()
     scene[sceneSize++] = pointLight;
     ecs.add<HgTransform>(pointLight) = {};
     ecs.get<HgTransform>(pointLight).position = HgVec3{0, -2, 0};
-    ecs.add<HgPointLight3D>(pointLight) = {HgVec4{1, 1, 1, 2}};
+    ecs.add<HgPointLight3D>(pointLight) = {HgVec4{1, 1, 1, 4}};
 
     HgEntity square = ecs.spawn();
     scene[sceneSize++] = square;
@@ -363,14 +363,14 @@ int main()
                                     if (!ecs.has<HgTransform>(e) && ImGui::Selectable("Transform"))
                                         ecs.add<HgTransform>(e) = {};
 
-                                    if (!ecs.has<HgSprite2D>(e) && ImGui::Selectable("Sprite"))
+                                    if (!ecs.has<HgSprite2D>(e) && ImGui::Selectable("Sprite 2D"))
                                     {
                                         if (!ecs.has<HgTransform>(e))
                                             ecs.add<HgTransform>(e) = {};
                                         ecs.add<HgSprite2D>(e) = {0, HgVec2{0.0f, 0.0f}, HgVec2{1.0f, 1.0f}};
                                     }
 
-                                    if (!ecs.has<HgSprite2D>(e) && ImGui::Selectable("Model 3D"))
+                                    if (!ecs.has<HgModel3D>(e) && ImGui::Selectable("Model 3D"))
                                     {
                                         if (!ecs.has<HgTransform>(e))
                                             ecs.add<HgTransform>(e) = {};

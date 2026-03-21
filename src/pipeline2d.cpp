@@ -1,8 +1,5 @@
 #include "hurdygurdy.hpp"
 
-#include "sprite.vert.spv.h"
-#include "sprite.frag.spv.h"
-
 struct VPUniform {
     HgMat4 proj;
     HgMat4 view;
@@ -16,13 +13,13 @@ struct Push {
     u32 texIdx;
 };
 
-static VkPipelineLayout pipelineLayout;
-static VkPipeline pipeline;
-
 static HgBuffer* vpBuffer;
 static HgDescriptor vpDesc;
 
 static HgTextureResource defaultTex;
+
+static VkPipelineLayout pipelineLayout;
+static VkPipeline pipeline;
 
 void hgInitPipeline2D(
     VkFormat colorFormat,
@@ -31,23 +28,18 @@ void hgInitPipeline2D(
     hgAssert(hgVkDevice != nullptr);
     hgAssert(colorFormat != VK_FORMAT_UNDEFINED);
 
-    VkPushConstantRange push{VK_SHADER_STAGE_ALL, 0, sizeof(Push)};
-    pipelineLayout = hgCreatePipelineLayout(push);
+    HgFence fence;
+    const char* spriteVertSpvName = "build/sprite.vert.spv";
+    const char* spriteFragSpvName = "build/sprite.frag.spv";
+    HgResource spriteVertSpvID = hgResourceID(spriteVertSpvName);
+    HgResource spriteFragSpvID = hgResourceID(spriteFragSpvName);
+    hgLoadResource(&fence, 1, spriteVertSpvID, spriteVertSpvName);
+    hgLoadResource(&fence, 1, spriteFragSpvID, spriteFragSpvName);
+    hgDefer(hgUnloadResource(nullptr, 0, spriteVertSpvID));
+    hgDefer(hgUnloadResource(nullptr, 0, spriteFragSpvID));
 
-    HgCreateGraphicsPipeline pipelineConfig{};
-    pipelineConfig.layout = pipelineLayout;
-    pipelineConfig.vertexShader = sprite_vert_spv;
-    pipelineConfig.vertexShaderSize = sprite_vert_spv_size;
-    pipelineConfig.fragmentShader = sprite_frag_spv;
-    pipelineConfig.fragmentShaderSize = sprite_frag_spv_size;
-    pipelineConfig.colorAttachmentFormats = &colorFormat;
-    pipelineConfig.colorAttachmentCount = 1;
-    pipelineConfig.depthAttachmentFormat = depthFormat;
-    pipelineConfig.enableDepthRead = depthFormat != VK_FORMAT_UNDEFINED;
-    bool enableColorBlend = true;
-    pipelineConfig.colorBlendEnables = &enableColorBlend;
-
-    pipeline = hgCreateGraphicsPipeline(pipelineConfig);
+    HgBinary* spriteVertSpv = hgGetResource(spriteVertSpvID);
+    HgBinary* spriteFragSpv = hgGetResource(spriteFragSpvID);
 
     vpBuffer = hgCreateBuffer(
         sizeof(VPUniform),
@@ -95,18 +87,38 @@ void hgInitPipeline2D(
     imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
     hgUpdateDescriptor(defaultTex.descriptor, nullptr, &imageInfo);
+
+    VkPushConstantRange push{VK_SHADER_STAGE_ALL, 0, sizeof(Push)};
+    pipelineLayout = hgCreatePipelineLayout(push);
+
+    HgCreateGraphicsPipeline pipelineConfig{};
+    pipelineConfig.layout = pipelineLayout;
+    pipelineConfig.vertexShader = (u8*)spriteVertSpv->data;
+    pipelineConfig.vertexShaderSize = spriteVertSpv->size;
+    pipelineConfig.fragmentShader = (u8*)spriteFragSpv->data;
+    pipelineConfig.fragmentShaderSize = spriteFragSpv->size;
+    pipelineConfig.colorAttachmentFormats = &colorFormat;
+    pipelineConfig.colorAttachmentCount = 1;
+    pipelineConfig.depthAttachmentFormat = depthFormat;
+    pipelineConfig.enableDepthRead = depthFormat != VK_FORMAT_UNDEFINED;
+    bool enableColorBlend = true;
+    pipelineConfig.colorBlendEnables = &enableColorBlend;
+
+    pipeline = hgCreateGraphicsPipeline(pipelineConfig);
 }
 
 void hgDeinitPipeline2D()
 {
+    vkDestroyPipeline(hgVkDevice, pipeline, nullptr);
+    vkDestroyPipelineLayout(hgVkDevice, pipelineLayout, nullptr);
+
     hgDestroyDescriptor(defaultTex.descriptor);
     vkDestroySampler(hgVkDevice, defaultTex.sampler, nullptr);
     hgDestroyImageView(defaultTex.view);
     hgDestroyImage(defaultTex.image);
+
     hgDestroyDescriptor(vpDesc);
     hgDestroyBuffer(vpBuffer);
-    vkDestroyPipeline(hgVkDevice, pipeline, nullptr);
-    vkDestroyPipelineLayout(hgVkDevice, pipelineLayout, nullptr);
 }
 
 void hgUpdateProjection2D(const HgMat4& projection)
