@@ -7,6 +7,7 @@ layout (HgStorageImage, rgba8) uniform writeonly image2D images[];
 layout (push_constant) uniform Push {
     uint width;
     uint height;
+    uint tile;
     uint seed;
     uint outImageIdx;
 } push;
@@ -17,7 +18,7 @@ void main()
 {
     uvec3 pos = gl_GlobalInvocationID;
 
-    float noise = hgFractalPerlin2D(push.seed, 4, 64, pos.xy);
+    float noise = hgPerlin2D(push.seed, 32, pos.xy, vec2(push.tile));
 
     vec3 color = vec3(noise * 0.5 + 0.5);
 

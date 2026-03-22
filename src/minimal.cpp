@@ -2,7 +2,15 @@
 
 #include <random>
 
+#define IM_ASSERT hgAssert
+#include "imgui.h"
+
+VkSampler noiseSampler = nullptr;
 HgResource noiseTexID = hgResourceID("noiseTexID");
+
+static u32 noiseWidth = 512;
+static u32 noiseHeight = 512;
+static u32 noiseTile = 0;
 
 void createNoiseTex()
 {
@@ -14,12 +22,9 @@ void createNoiseTex()
     hgLoadResource(&fence, 1, shaderID, "build/noise.comp.spv");
     hgDefer(hgUnloadResource(nullptr, 0, shaderID));
 
-    u32 width = 512;
-    u32 height = 512;
-
     HgImage* image = hgCreateImage(
-        width,
-        height,
+        noiseWidth,
+        noiseHeight,
         VK_FORMAT_R8G8B8A8_UNORM,
         VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 
@@ -37,6 +42,7 @@ void createNoiseTex()
     {
         u32 width;
         u32 height;
+        u32 tile;
         u32 seed;
         u32 outImageIdx;
     };
@@ -62,13 +68,14 @@ void createNoiseTex()
     hgBindComputePipeline(cmd, pipeline, layout);
 
     ComputePush push{};
-    push.width = width;
-    push.height = height;
+    push.width = noiseWidth;
+    push.height = noiseHeight;
+    push.tile = noiseTile;
     push.seed = std::random_device{}();
     push.outImageIdx = hgDescriptorIdx(desc);
     vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_ALL, 0, sizeof(push), &push);
 
-    vkCmdDispatch(cmd, width / 16, height / 16, 1);
+    vkCmdDispatch(cmd, noiseWidth / 16, noiseHeight / 16, 1);
 
     HgRenderPass sampledPass{};
     sampledPass.sampledImages = &view;
@@ -81,7 +88,7 @@ void createNoiseTex()
     HgTextureResource* noiseTex = hgGetTexture(noiseTexID);;
     noiseTex->image = image;
     noiseTex->view = view;
-    noiseTex->sampler = hgCreateSampler(VK_FILTER_LINEAR);
+    noiseTex->sampler = noiseSampler;
     noiseTex->descriptor = hgCreateDescriptor(HgDescriptorType_combinedImageSampler);
 
     VkDescriptorImageInfo noiseTexInfo{noiseTex->sampler, noiseTex->view->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
@@ -110,6 +117,9 @@ int main()
     hgInitPipeline2D(window->format, VK_FORMAT_UNDEFINED);
     hgDefer(hgDeinitPipeline2D());
 
+    noiseSampler = hgCreateSampler(VK_FILTER_LINEAR);
+    hgDefer(vkDestroySampler(hgVkDevice, noiseSampler, nullptr));
+
     createNoiseTex();
     hgDefer(hgUnloadTexture(noiseTexID));
 
@@ -122,6 +132,19 @@ int main()
     HgEntity noiseSquare = ecs.spawn();
     ecs.add<HgTransform>(noiseSquare) = {};
     ecs.add<HgSprite2D>(noiseSquare) = {noiseTexID, HgVec2{0}, HgVec2{1}};
+
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    hgDefer(ImGui::DestroyContext());
+
+    ImGui::StyleColorsDark();
+    ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+
+    ImGui_ImplHurdyGurdy_Init(window, 1, &window->format);
+    hgDefer(ImGui_ImplHurdyGurdy_Shutdown());
 
     HgClock gameClock{};
     for (;;)
@@ -161,6 +184,27 @@ int main()
         HgMat4 view = hgViewMatrix(camera.position, camera.scale, camera.rotation);
         hgUpdateView2D(&view);
 
+        ImGui_ImplHurdyGurdy_NewFrame();
+        ImGui::NewFrame();
+
+        ImGui::Begin("Options");
+
+        if (ImGui::Button("Redraw"))
+        {
+            vkQueueWaitIdle(hgVkQueue);
+
+            hgUnloadTexture(noiseTexID);
+            createNoiseTex();
+        }
+
+        ImGui::DragInt("Width", (int*)&noiseWidth);
+        ImGui::DragInt("Height", (int*)&noiseHeight);
+        ImGui::DragInt("Tile", (int*)&noiseTile);
+
+        ImGui::End();
+
+        ImGui::Render();
+
         VkCommandBuffer cmd = window->beginRecording();
         if (cmd != nullptr)
         {
@@ -178,6 +222,8 @@ int main()
 
             hgDraw2D(&ecs, cmd);
 
+            ImGui_ImplHurdyGurdy_Draw(cmd);
+
             renderer.endPass(cmd);
 
             HgImageBarrier presentBarrier{};
@@ -192,7 +238,5 @@ int main()
 
 quit:
     vkDeviceWaitIdle(hgVkDevice);
-
-    vkDestroySampler(hgVkDevice, hgGetTexture(noiseTexID)->sampler, nullptr);
 }
 

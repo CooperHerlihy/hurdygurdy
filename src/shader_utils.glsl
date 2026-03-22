@@ -181,13 +181,13 @@ vec2 hgNoiseVec2D(uint seed, vec2 pos)
  * Define a function which returns fractal noise from a noise function
  */
 #define hgFractalNoise1DFunctionDef(fractalFunc, noiseFunc) \
-    float fractalFunc(uint seed, float scaleBegin, float scaleEnd, float pos) \
+    float fractalFunc(uint seed, float scaleBegin, float scaleEnd, float pos, float tile) \
     { \
         float noise = 0.0; \
         float octave = 1.0; \
         while (scaleEnd * octave > scaleBegin) \
         { \
-            noise += octave * noiseFunc(seed, octave * scaleEnd, pos); \
+            noise += octave * noiseFunc(seed, octave * scaleEnd, pos, tile); \
             octave *= 0.5; \
         } \
         return noise; \
@@ -197,13 +197,13 @@ vec2 hgNoiseVec2D(uint seed, vec2 pos)
  * Define a function which returns fractal noise from a noise function
  */
 #define hgFractalNoise2DFunctionDef(fractalFunc, noiseFunc) \
-    float fractalFunc(uint seed, float scaleBegin, float scaleEnd, vec2 pos) \
+    float fractalFunc(uint seed, float scaleBegin, float scaleEnd, vec2 pos, vec2 tile) \
     { \
         float noise = 0.0; \
         float octave = 1.0; \
         while (scaleEnd * octave > scaleBegin) \
         { \
-            noise += octave * noiseFunc(seed, octave * scaleEnd, pos); \
+            noise += octave * noiseFunc(seed, octave * scaleEnd, pos, tile); \
             octave *= 0.5; \
         } \
         return noise; \
@@ -213,13 +213,13 @@ vec2 hgNoiseVec2D(uint seed, vec2 pos)
  * Define a function which returns fractal noise from a noise function
  */
 #define hgFractalNoise3DFunctionDef(fractalFunc, noiseFunc) \
-    float fractalFunc(uint seed, float scaleBegin, float scaleEnd, vec3 pos) \
+    float fractalFunc(uint seed, float scaleBegin, float scaleEnd, vec3 pos, vec3 tile) \
     { \
         float noise = 0.0; \
         float octave = 1.0; \
         while (scaleEnd * octave > scaleBegin) \
         { \
-            noise += octave * noiseFunc(seed, octave * scaleEnd, pos); \
+            noise += octave * noiseFunc(seed, octave * scaleEnd, pos, tile); \
             octave *= 0.5; \
         } \
         return noise; \
@@ -229,13 +229,13 @@ vec2 hgNoiseVec2D(uint seed, vec2 pos)
  * Define a function which returns fractal noise from a noise function
  */
 #define hgFractalNoise4DFunctionDef(fractalFunc, noiseFunc) \
-    float fractalFunc(uint seed, float scaleBegin, float scaleEnd, vec4 pos) \
+    float fractalFunc(uint seed, float scaleBegin, float scaleEnd, vec4 pos, vec4 tile) \
     { \
         float noise = 0.0; \
         float octave = 1.0; \
         while (scaleEnd * octave > scaleBegin) \
         { \
-            noise += octave * noiseFunc(seed, octave * scaleEnd, pos); \
+            noise += octave * noiseFunc(seed, octave * scaleEnd, pos, tile); \
             octave *= 0.5; \
         } \
         return noise; \
@@ -248,12 +248,24 @@ vec2 hgNoiseVec2D(uint seed, vec2 pos)
  * - seed The seed for the noise function
  * - scale The number of positions before a new value
  * - pos The position for the noise function
+ * - tile The distance before the repeating, or 0 to never repeat
  */
-float hgValueNoise1D(uint seed, float scale, float pos)
+float hgValueNoise1D(uint seed, float scale, float pos, float tile)
 {
     pos /= scale;
+    tile /= scale;
+
+    float pos0 = floor(pos);
+    float pos1 = pos0 + 1;
+
+    if (tile > 0.0)
+    {
+        pos0 = fract(pos0 / tile) * tile;
+        pos1 = fract(pos1 / tile) * tile;
+    }
+
     return mix(
-        hgNoiseNorm(seed, floor(pos)) * 2.0 - 1.0,
+        hgNoiseNorm(seed, pos0) * 2.0 - 1.0,
         hgNoiseNorm(seed, floor(pos) + 1) * 2.0 - 1.0,
         hgSmooth(fract(pos)));
 }
@@ -265,19 +277,35 @@ float hgValueNoise1D(uint seed, float scale, float pos)
  * - seed The seed for the noise function
  * - scale The number of positions before a new value
  * - pos The position for the noise function
+ * - tile The distance before the repeating, or 0 to never repeat
  */
-float hgValueNoise2D(uint seed, float scale, vec2 pos)
+float hgValueNoise2D(uint seed, float scale, vec2 pos, vec2 tile)
 {
     pos /= scale;
+    tile /= scale;
+
+    vec2 pos00 = floor(pos);
+    vec2 pos10 = pos00 + vec2(1, 0);
+    vec2 pos01 = pos00 + vec2(0, 1);
+    vec2 pos11 = pos00 + vec2(1, 1);
+
+    if (tile.x > 0 && tile.y > 0)
+    {
+        pos00 = fract(pos00 / tile) * tile;
+        pos01 = fract(pos01 / tile) * tile;
+        pos10 = fract(pos10 / tile) * tile;
+        pos11 = fract(pos11 / tile) * tile;
+    }
+
     vec2 t = fract(pos);
     return mix(
         mix(
-            hgNoiseNorm(seed, floor(pos)) * 2.0 - 1.0,
-            hgNoiseNorm(seed, floor(pos) + vec2(1, 0)) * 2.0 - 1.0,
+            hgNoiseNorm(seed, pos00) * 2.0 - 1.0,
+            hgNoiseNorm(seed, pos10) * 2.0 - 1.0,
             hgSmooth(t.x)),
         mix(
-            hgNoiseNorm(seed, floor(pos) + vec2(0, 1)) * 2.0 - 1.0,
-            hgNoiseNorm(seed, floor(pos) + vec2(1, 1)) * 2.0 - 1.0,
+            hgNoiseNorm(seed, pos01) * 2.0 - 1.0,
+            hgNoiseNorm(seed, pos11) * 2.0 - 1.0,
             hgSmooth(t.x)),
         hgSmooth(t.y));
 }
@@ -289,30 +317,54 @@ float hgValueNoise2D(uint seed, float scale, vec2 pos)
  * - seed The seed for the noise function
  * - scale The number of positions before a new value
  * - pos The position for the noise function
+ * - tile The distance before the repeating, or 0 to never repeat
  */
-float hgValueNoise3D(uint seed, float scale, vec3 pos)
+float hgValueNoise3D(uint seed, float scale, vec3 pos, vec3 tile)
 {
     pos /= scale;
+    tile /= scale;
+
+    vec3 pos000 = floor(pos);
+    vec3 pos100 = pos000 + vec3(1, 0, 0);
+    vec3 pos010 = pos000 + vec3(0, 1, 0);
+    vec3 pos110 = pos000 + vec3(1, 1, 0);
+    vec3 pos001 = pos000 + vec3(0, 0, 1);
+    vec3 pos101 = pos000 + vec3(1, 0, 1);
+    vec3 pos011 = pos000 + vec3(0, 1, 1);
+    vec3 pos111 = pos000 + vec3(1, 1, 1);
+
+    if (tile.x > 0 && tile.y > 0)
+    {
+        pos000 = fract(pos000 / tile) * tile;
+        pos010 = fract(pos010 / tile) * tile;
+        pos100 = fract(pos100 / tile) * tile;
+        pos110 = fract(pos110 / tile) * tile;
+        pos001 = fract(pos001 / tile) * tile;
+        pos011 = fract(pos011 / tile) * tile;
+        pos101 = fract(pos101 / tile) * tile;
+        pos111 = fract(pos111 / tile) * tile;
+    }
+
     vec3 t = fract(pos);
     return mix(
         mix(
             mix(
-                hgNoiseNorm(seed, floor(pos)) * 2.0 - 1.0,
-                hgNoiseNorm(seed, floor(pos) + vec3(1, 0, 0)) * 2.0 - 1.0,
+                hgNoiseNorm(seed, pos000) * 2.0 - 1.0,
+                hgNoiseNorm(seed, pos100) * 2.0 - 1.0,
                 hgSmooth(t.x)),
             mix(
-                hgNoiseNorm(seed, floor(pos) + vec3(0, 1, 0)) * 2.0 - 1.0,
-                hgNoiseNorm(seed, floor(pos) + vec3(1, 1, 0)) * 2.0 - 1.0,
+                hgNoiseNorm(seed, pos010) * 2.0 - 1.0,
+                hgNoiseNorm(seed, pos110) * 2.0 - 1.0,
                 hgSmooth(t.x)),
             hgSmooth(t.y)),
         mix(
             mix(
-                hgNoiseNorm(seed, floor(pos) + vec3(0, 0, 1)) * 2.0 - 1.0,
-                hgNoiseNorm(seed, floor(pos) + vec3(1, 0, 1)) * 2.0 - 1.0,
+                hgNoiseNorm(seed, pos001) * 2.0 - 1.0,
+                hgNoiseNorm(seed, pos101) * 2.0 - 1.0,
                 hgSmooth(t.x)),
             mix(
-                hgNoiseNorm(seed, floor(pos) + vec3(0, 1, 1)) * 2.0 - 1.0,
-                hgNoiseNorm(seed, floor(pos) + vec3(1, 1, 1)) * 2.0 - 1.0,
+                hgNoiseNorm(seed, pos011) * 2.0 - 1.0,
+                hgNoiseNorm(seed, pos111) * 2.0 - 1.0,
                 hgSmooth(t.x)),
             hgSmooth(t.y)),
         hgSmooth(t.z));
@@ -325,53 +377,93 @@ float hgValueNoise3D(uint seed, float scale, vec3 pos)
  * - seed The seed for the noise function
  * - scale The number of positions before a new value
  * - pos The position for the noise function
+ * - tile The distance before the repeating, or 0 to never repeat
  */
-float hgValueNoise4D(uint seed, float scale, vec4 pos)
+float hgValueNoise4D(uint seed, float scale, vec4 pos, vec4 tile)
 {
     pos /= scale;
+    tile /= scale;
+
+    vec4 pos0000 = floor(pos);
+    vec4 pos1000 = pos0000 + vec4(1, 0, 0, 0);
+    vec4 pos0100 = pos0000 + vec4(0, 1, 0, 0);
+    vec4 pos1100 = pos0000 + vec4(1, 1, 0, 0);
+    vec4 pos0010 = pos0000 + vec4(0, 0, 1, 0);
+    vec4 pos1010 = pos0000 + vec4(1, 0, 1, 0);
+    vec4 pos0110 = pos0000 + vec4(0, 1, 1, 0);
+    vec4 pos1110 = pos0000 + vec4(1, 1, 1, 0);
+    vec4 pos0001 = pos0000 + vec4(0, 0, 0, 1);
+    vec4 pos1001 = pos0000 + vec4(1, 0, 0, 1);
+    vec4 pos0101 = pos0000 + vec4(0, 1, 0, 1);
+    vec4 pos1101 = pos0000 + vec4(1, 1, 0, 1);
+    vec4 pos0011 = pos0000 + vec4(0, 0, 1, 1);
+    vec4 pos1011 = pos0000 + vec4(1, 0, 1, 1);
+    vec4 pos0111 = pos0000 + vec4(0, 1, 1, 1);
+    vec4 pos1111 = pos0000 + vec4(1, 1, 1, 1);
+
+    if (tile.x > 0 && tile.y > 0)
+    {
+        pos0000 = fract(pos0000 / tile) * tile;
+        pos0100 = fract(pos0100 / tile) * tile;
+        pos1000 = fract(pos1000 / tile) * tile;
+        pos1100 = fract(pos1100 / tile) * tile;
+        pos0010 = fract(pos0010 / tile) * tile;
+        pos0110 = fract(pos0110 / tile) * tile;
+        pos1010 = fract(pos1010 / tile) * tile;
+        pos1110 = fract(pos1110 / tile) * tile;
+        pos0001 = fract(pos0001 / tile) * tile;
+        pos0101 = fract(pos0101 / tile) * tile;
+        pos1001 = fract(pos1001 / tile) * tile;
+        pos1101 = fract(pos1101 / tile) * tile;
+        pos0011 = fract(pos0011 / tile) * tile;
+        pos0111 = fract(pos0111 / tile) * tile;
+        pos1011 = fract(pos1011 / tile) * tile;
+        pos1111 = fract(pos1111 / tile) * tile;
+    }
+
     vec4 t = fract(pos);
     return mix(
         mix(
             mix(
                 mix(
-                    hgNoiseNorm(seed, floor(pos)) * 2.0 - 1.0,
-                    hgNoiseNorm(seed, floor(pos) + vec4(1, 0, 0, 0)) * 2.0 - 1.0,
+                    hgNoiseNorm(seed, pos0000) * 2.0 - 1.0,
+                    hgNoiseNorm(seed, pos1000) * 2.0 - 1.0,
                     hgSmooth(t.x)),
                 mix(
-                    hgNoiseNorm(seed, floor(pos) + vec4(0, 1, 0, 0)) * 2.0 - 1.0,
-                    hgNoiseNorm(seed, floor(pos) + vec4(1, 1, 0, 0)) * 2.0 - 1.0,
+                    hgNoiseNorm(seed, pos0100) * 2.0 - 1.0,
+                    hgNoiseNorm(seed, pos1100) * 2.0 - 1.0,
                     hgSmooth(t.x)),
                 hgSmooth(t.y)),
             mix(
                 mix(
-                    hgNoiseNorm(seed, floor(pos) + vec4(0, 0, 1, 0)) * 2.0 - 1.0,
-                    hgNoiseNorm(seed, floor(pos) + vec4(1, 0, 1, 0)) * 2.0 - 1.0,
+                    hgNoiseNorm(seed, pos0010) * 2.0 - 1.0,
+                    hgNoiseNorm(seed, pos1010) * 2.0 - 1.0,
                     hgSmooth(t.x)),
                 mix(
-                    hgNoiseNorm(seed, floor(pos) + vec4(0, 1, 1, 0)) * 2.0 - 1.0,
-                    hgNoiseNorm(seed, floor(pos) + vec4(1, 1, 1, 0)) * 2.0 - 1.0,
+                    hgNoiseNorm(seed, pos0110) * 2.0 - 1.0,
+                    hgNoiseNorm(seed, pos1110) * 2.0 - 1.0,
                     hgSmooth(t.x)),
                 hgSmooth(t.y)),
             hgSmooth(t.z)),
         mix(
             mix(
                 mix(
-                    hgNoiseNorm(seed, floor(pos) + vec4(0, 0, 0, 1)) * 2.0 - 1.0,
-                    hgNoiseNorm(seed, floor(pos) + vec4(1, 0, 0, 1)) * 2.0 - 1.0,
+                    hgNoiseNorm(seed, pos0001) * 2.0 - 1.0,
+                    hgNoiseNorm(seed, pos1001) * 2.0 - 1.0,
                     hgSmooth(t.x)),
                 mix(
-                    hgNoiseNorm(seed, floor(pos) + vec4(0, 1, 0, 1)) * 2.0 - 1.0,
-                    hgNoiseNorm(seed, floor(pos) + vec4(1, 1, 0, 1)) * 2.0 - 1.0,
+                    hgNoiseNorm(seed, pos0101) * 2.0 - 1.0,
+                    hgNoiseNorm(seed, pos1101) * 2.0 - 1.0,
                     hgSmooth(t.x)),
                 hgSmooth(t.y)),
             mix(
                 mix(
-                    hgNoiseNorm(seed, floor(pos) + vec4(0, 0, 1, 1)) * 2.0 - 1.0,
-                    hgNoiseNorm(seed, floor(pos) + vec4(1, 0, 1, 1)) * 2.0 - 1.0,
+                    hgNoiseNorm(seed, pos0011) * 2.0 - 1.0,
+                    hgNoiseNorm(seed, pos1011) * 2.0 - 1.0,
                     hgSmooth(t.x)),
                 mix(
-                    hgNoiseNorm(seed, floor(pos) + vec4(0, 1, 1, 1)) * 2.0 - 1.0,
-                    hgNoiseNorm(seed, floor(pos) + vec4(1, 1, 1, 1)) * 2.0 - 1.0,
+                    hgNoiseNorm(seed, pos0111) * 2.0 - 1.0,
+                    hgNoiseNorm(seed, pos1111) * 2.0 - 1.0,
                     hgSmooth(t.x)),
                 hgSmooth(t.y)),
             hgSmooth(t.z)),
@@ -390,18 +482,27 @@ hgFractalNoise4DFunctionDef(hgFractalValueNoise4D, hgValueNoise4D)
  * - seed The seed for the noise function
  * - scale The number of positions before a new gradient
  * - pos The position for the noise function
+ * - tile The distance before the repeating, or 0 to never repeat
  */
-float hgPerlin1D(uint seed, float scale, float pos)
+float hgPerlin1D(uint seed, float scale, float pos, float tile)
 {
     pos /= scale;
+    tile /= scale;
 
-    float grad0 = hgNoiseVec1D(seed, floor(pos));
-    float grad1 = hgNoiseVec1D(seed, floor(pos) + 1);
+    float pos0 = floor(pos);
+    float pos1 = pos0 + 1;
 
-    float off0 = fract(pos);
-    float off1 = 1.0 - off0;
+    if (tile > 0.0)
+    {
+        pos0 = fract(pos0 / tile) * tile;
+        pos1 = fract(pos1 / tile) * tile;
+    }
 
-    return mix(grad0 * off0, grad1 * off1, hgSmoothQuintic(off0));
+    float t = fract(pos);
+    return mix(
+        hgNoiseVec1D(seed, pos0) * t,
+        hgNoiseVec1D(seed, pos1) * 1.0 - t,
+        hgSmoothQuintic(t));
 }
 
 /**
@@ -411,25 +512,41 @@ float hgPerlin1D(uint seed, float scale, float pos)
  * - seed The seed for the noise function
  * - scale The number of positions before a new gradient
  * - pos The position for the noise function
+ * - tile The distance before the repeating, or 0 to never repeat
  */
-float hgPerlin2D(uint seed, float scale, vec2 pos)
+float hgPerlin2D(uint seed, float scale, vec2 pos, vec2 tile)
 {
     pos /= scale;
+    tile /= scale;
 
-    vec2 grad00 = hgNoiseVec2D(seed, floor(pos));
-    vec2 grad10 = hgNoiseVec2D(seed, floor(pos) + vec2(1, 0));
-    vec2 grad01 = hgNoiseVec2D(seed, floor(pos) + vec2(0, 1));
-    vec2 grad11 = hgNoiseVec2D(seed, floor(pos) + vec2(1, 1));
+    vec2 pos00 = floor(pos);
+    vec2 pos10 = pos00 + vec2(1, 0);
+    vec2 pos01 = pos00 + vec2(0, 1);
+    vec2 pos11 = pos00 + vec2(1, 1);
 
-    vec2 off00 = fract(pos);
-    vec2 off10 = vec2(off00.x - 1.0, off00.y);
-    vec2 off01 = vec2(off00.x, off00.y - 1.0);
-    vec2 off11 = vec2(off00.x - 1.0, off00.y - 1.0);
+    if (tile.x > 0 && tile.y > 0)
+    {
+        pos00 = fract(pos00 / tile) * tile;
+        pos01 = fract(pos01 / tile) * tile;
+        pos10 = fract(pos10 / tile) * tile;
+        pos11 = fract(pos11 / tile) * tile;
+    }
+
+    vec2 grad00 = hgNoiseVec2D(seed, pos00);
+    vec2 grad10 = hgNoiseVec2D(seed, pos10);
+    vec2 grad01 = hgNoiseVec2D(seed, pos01);
+    vec2 grad11 = hgNoiseVec2D(seed, pos11);
+
+    vec2 t = fract(pos);
+    vec2 off00 = t;
+    vec2 off10 = vec2(t.x - 1.0, t.y);
+    vec2 off01 = vec2(t.x, t.y - 1.0);
+    vec2 off11 = vec2(t.x - 1.0, t.y - 1.0);
 
     return mix(
-        mix(dot(grad00, off00), dot(grad10, off10), hgSmoothQuintic(off00.x)),
-        mix(dot(grad01, off01), dot(grad11, off11), hgSmoothQuintic(off00.x)),
-        hgSmoothQuintic(off00.y));
+        mix(dot(grad00, off00), dot(grad10, off10), hgSmoothQuintic(t.x)),
+        mix(dot(grad01, off01), dot(grad11, off11), hgSmoothQuintic(t.x)),
+        hgSmoothQuintic(t.y));
 }
 
 hgFractalNoise1DFunctionDef(hgFractalPerlin1D, hgPerlin1D)
