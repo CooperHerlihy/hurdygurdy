@@ -371,7 +371,7 @@ struct HgVec3
     /**
      * Downsize to Vec2
      */
-    explicit operator HgVec2()
+    explicit constexpr operator HgVec2()
     {
         return HgVec2{x, y};
     }
@@ -428,14 +428,14 @@ struct HgVec4
     /**
      * Downsize to Vec2
      */
-    explicit operator HgVec2()
+    explicit constexpr operator HgVec2()
     {
         return HgVec2{x, y};
     }
     /**
      * Downsize to Vec3
      */
-    explicit operator HgVec3()
+    explicit constexpr operator HgVec3()
     {
         return HgVec3{x, y, z};
     }

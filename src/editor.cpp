@@ -251,7 +251,7 @@ int main()
                     renderDescriptor = ImGui_ImplVulkan_AddTexture(
                         renderSampler, renderView->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-                    depthImage = depthImage = hgCreateImage(
+                    depthImage = hgCreateImage(
                         renderWidth,
                         renderHeight,
                         VK_FORMAT_D32_SFLOAT,

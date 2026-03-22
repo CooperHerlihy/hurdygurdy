@@ -16,6 +16,13 @@ INCLUDES := \
 	-I$(SRC_DIR)/vendor/imgui \
 	-I$(SRC_DIR)/vendor/imgui/backends
 
+SHADERS := \
+	noise.comp \
+	sprite.vert \
+	sprite.frag \
+	model.vert \
+	model.frag
+
 IMGUI_BACKEND := \
 	imgui_impl_glfw.cpp \
 	imgui_impl_vulkan.cpp
@@ -30,15 +37,13 @@ SRC := \
 	vulkan.cpp \
 	test.cpp
 
-SHADERS := \
-	sprite.vert \
-	sprite.frag \
-	model.vert \
-	model.frag
+TARGETS := \
+	editor \
+	minimal
 
 .PHONY: all debug release clean
 
-all: $(BUILD_DIR)/minimal $(BUILD_DIR)/editor $(SHADERS) $(TEST_DIR)
+all: $(patsubst %, $(BUILD_DIR)/%, $(TARGETS))
 
 debug:
 	$(MAKE) CONFIG="$(DEBUG_CONFIG)"
@@ -52,7 +57,13 @@ $(BUILD_DIR):
 $(TEST_DIR):
 	mkdir -p $@
 
-$(BUILD_DIR)/%.spv: $(SRC_DIR)/src/% | $(BUILD_DIR)
+$(BUILD_DIR)/%.vert.spv: $(SRC_DIR)/src/%.vert | $(BUILD_DIR)
+	glslc -o $@ $<
+
+$(BUILD_DIR)/%.frag.spv: $(SRC_DIR)/src/%.frag | $(BUILD_DIR)
+	glslc -o $@ $<
+
+$(BUILD_DIR)/%.comp.spv: $(SRC_DIR)/src/%.comp | $(BUILD_DIR)
 	glslc -o $@ $<
 
 $(BUILD_DIR)/vk_mem_alloc.o: $(SRC_DIR)/src/vk_mem_alloc.cpp | $(BUILD_DIR)
@@ -78,10 +89,9 @@ LIB_FILES := \
 $(BUILD_DIR)/libhurdygurdy.a: $(LIB_FILES) $(BUILD_DIR)/vk_mem_alloc.o $(BUILD_DIR)/stb.o
 	ar rcs $@ $^
 
-$(BUILD_DIR)/minimal: $(BUILD_DIR)/minimal.o $(BUILD_DIR)/libhurdygurdy.a
-	c++ $(STD) $(CONFIG) $(WARNINGS) -o $@ $< -L$(BUILD_DIR) -lhurdygurdy -lglfw
+SHADERS_SPV := $(patsubst %, $(BUILD_DIR)/%.spv, $(SHADERS))
 
-$(BUILD_DIR)/editor: $(BUILD_DIR)/editor.o $(BUILD_DIR)/libhurdygurdy.a
+$(BUILD_DIR)/%: $(BUILD_DIR)/%.o $(BUILD_DIR)/libhurdygurdy.a | $(SHADERS_SPV) $(TEST_DIR)
 	c++ $(STD) $(CONFIG) $(WARNINGS) -o $@ $< -L$(BUILD_DIR) -lhurdygurdy -lglfw
 
 clean:
