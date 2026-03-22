@@ -1,6 +1,6 @@
 #include "hurdygurdy.hpp"
 
-#include "stb_image_write.h"
+#include <random>
 
 HgResource noiseTexID = hgResourceID("noiseTexID");
 
@@ -14,8 +14,8 @@ void createNoiseTex()
     hgLoadResource(&fence, 1, shaderID, "build/noise.comp.spv");
     hgDefer(hgUnloadResource(nullptr, 0, shaderID));
 
-    u32 width = 256;
-    u32 height = 256;
+    u32 width = 512;
+    u32 height = 512;
 
     HgImage* image = hgCreateImage(
         width,
@@ -35,6 +35,9 @@ void createNoiseTex()
 
     struct ComputePush
     {
+        u32 width;
+        u32 height;
+        u32 seed;
         u32 outImageIdx;
     };
     VkPushConstantRange pushRange{VK_SHADER_STAGE_ALL, 0, sizeof(ComputePush)};
@@ -59,6 +62,9 @@ void createNoiseTex()
     hgBindComputePipeline(cmd, pipeline, layout);
 
     ComputePush push{};
+    push.width = width;
+    push.height = height;
+    push.seed = std::random_device{}();
     push.outImageIdx = hgDescriptorIdx(desc);
     vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_ALL, 0, sizeof(push), &push);
 
@@ -75,7 +81,7 @@ void createNoiseTex()
     HgTextureResource* noiseTex = hgGetTexture(noiseTexID);;
     noiseTex->image = image;
     noiseTex->view = view;
-    noiseTex->sampler = hgCreateSampler(VK_FILTER_NEAREST);
+    noiseTex->sampler = hgCreateSampler(VK_FILTER_LINEAR);
     noiseTex->descriptor = hgCreateDescriptor(HgDescriptorType_combinedImageSampler);
 
     VkDescriptorImageInfo noiseTexInfo{noiseTex->sampler, noiseTex->view->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};

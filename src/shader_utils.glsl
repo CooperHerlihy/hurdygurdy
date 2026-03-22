@@ -12,6 +12,9 @@
 #define HgBindingIdx_uniformBuffer 6
 #define HgBindingIdx_storageBuffer 7
 
+/**
+ * Access bindless descriptors with these as layout qualifiers
+ */
 #define HgSampler binding = HgBindingIdx_sampler
 #define HgCombinedImageSampler binding = HgBindingIdx_combinedImageSampler
 #define HgSampledImage binding = HgBindingIdx_sampledImage
@@ -20,6 +23,24 @@
 #define HgStorageTexelBuffer binding = HgBindingIdx_storageTexelBuffer
 #define HgUniformBuffer binding = HgBindingIdx_uniformBuffer
 #define HgStorageBuffer binding = HgBindingIdx_storageBuffer
+
+/**
+ * The maximum value of uint
+ */
+#define UINT_MAX 4294967295u
+/**
+ * The maximum value of int
+ */
+#define INT_MAX 2147483647
+
+/**
+ * The value of pi
+ */
+#define hgPi 3.1415926535897932
+/**
+ * The value of Euler's number
+ */
+#define hgEuler 2.7182818284590452
 
 /**
  * Square a value
@@ -53,8 +74,203 @@ double square(double val)
     return val * val;
 }
 
-// noise generation : TODO
+/**
+ * Smooth a 0.0 to 1.0 linear gradient
+ */
+float hgSmoothstep(float t)
+{
+    return t * t * (3 - 2 * t);
+}
 
+/**
+ * Smooth a 0.0 to 1.0 linear gradient with a quintic function
+ */
+float hgSmoothstepQuintic(float t)
+{
+    return t * t * t * (t * (t * 6 - 15) + 10);
+}
+
+/**
+ * Generate white noise
+ */
+uint hgNoise(uint seed, uint pos)
+{
+    uint ret = (pos + 384521713u) * 955740521u;
+    ret ^= ret >> 13;
+    ret *= seed * 725937977u;
+    ret ^= ret >> 7;
+    ret *= 358166231u;
+    ret ^= ret >> 11;
+    return ret;
+}
+
+/**
+ * Generate white noise
+ */
+uint hgNoise(uint seed, uvec2 pos)
+{
+    return hgNoise(seed, pos.x + (pos.y * 425537443u));
+}
+
+/**
+ * Generate white noise
+ */
+uint hgNoise(uint seed, uvec3 pos)
+{
+    return hgNoise(seed, pos.x + pos.y * 425537443u + pos.z * 682607u);
+}
+
+/**
+ * Generate white noise
+ */
+uint hgNoise(uint seed, uvec4 pos)
+{
+    return hgNoise(seed, pos.x + pos.y * 425537443u + pos.z * 682607u + pos.w * 9067);
+}
+
+/**
+ * Generate white noise normalized from 0.0 to 1.0
+ */
+float hgNoiseNorm(uint seed, float pos)
+{
+    return float(hgNoise(seed, floatBitsToUint(pos))) / float(UINT_MAX);
+}
+
+/**
+ * Generate white noise normalized from 0.0 to 1.0
+ */
+float hgNoiseNorm(uint seed, vec2 pos)
+{
+    return float(hgNoise(seed, floatBitsToUint(pos))) / float(UINT_MAX);
+}
+
+/**
+ * Generate white noise normalized from 0.0 to 1.0
+ */
+float hgNoiseNorm(uint seed, vec3 pos)
+{
+    return float(hgNoise(seed, floatBitsToUint(pos))) / float(UINT_MAX);
+}
+
+/**
+ * Generate white noise normalized from 0.0 to 1.0
+ */
+float hgNoiseNorm(uint seed, vec4 pos)
+{
+    return float(hgNoise(seed, floatBitsToUint(pos))) / float(UINT_MAX);
+}
+
+/**
+ * Generate white noise unit vector
+ */
+float hgNoiseVec1D(uint seed, float pos)
+{
+    return hgNoiseNorm(seed, pos) * 2.0 - 1.0;
+}
+
+/**
+ * Generate white noise unit vector
+ */
+vec2 hgNoiseVec2D(uint seed, vec2 pos)
+{
+    float rot = 2.0 * hgPi * hgNoiseNorm(seed, pos);
+    return vec2(cos(rot), sin(rot));
+}
+
+/**
+ * Generate Perlin noise
+ *
+ * Parameters
+ * - seed The seed for the noise function
+ * - scale The number of positions before a new gradient
+ * - pos The position for the noise function
+ */
+float hgPerlin1D(uint seed, float scale, float pos)
+{
+    pos /= scale;
+
+    float grad0 = hgNoiseVec1D(seed, floor(pos));
+    float grad1 = hgNoiseVec1D(seed, floor(pos) + 1);
+
+    float off0 = fract(pos);
+    float off1 = 1.0 - off0;
+
+    return mix(grad0 * off0, grad1 * off1, hgSmoothstepQuintic(off0));
+}
+
+/**
+ * Generate Perlin noise
+ *
+ * Parameters
+ * - seed The seed for the noise function
+ * - scale The number of positions before a new gradient
+ * - pos The position for the noise function
+ */
+float hgPerlin2D(uint seed, float scale, vec2 pos)
+{
+    pos /= scale;
+
+    vec2 grad00 = hgNoiseVec2D(seed, floor(pos));
+    vec2 grad10 = hgNoiseVec2D(seed, floor(pos) + vec2(1, 0));
+    vec2 grad01 = hgNoiseVec2D(seed, floor(pos) + vec2(0, 1));
+    vec2 grad11 = hgNoiseVec2D(seed, floor(pos) + vec2(1, 1));
+
+    vec2 off00 = fract(pos);
+    vec2 off10 = vec2(off00.x - 1.0, off00.y);
+    vec2 off01 = vec2(off00.x, off00.y - 1.0);
+    vec2 off11 = vec2(off00.x - 1.0, off00.y - 1.0);
+
+    return mix(
+        mix(dot(grad00, off00), dot(grad10, off10), hgSmoothstepQuintic(off00.x)),
+        mix(dot(grad01, off01), dot(grad11, off11), hgSmoothstepQuintic(off00.x)),
+        hgSmoothstepQuintic(off00.y));
+}
+
+/**
+ * Generate fractal Perlin noise
+ *
+ * Parameters
+ * - seed The seed for the noise function
+ * - scaleBegin The smallest scale to take
+ * - scaleEnd The largest scale to take
+ * - pos The position for the noise function
+ */
+float hgPerlinFractal1D(uint seed, float scaleBegin, float scaleEnd, float pos)
+{
+    float noise = 0.0;
+    float octave = 1.0;
+    while (scaleEnd * octave > scaleBegin)
+    {
+        noise += octave * hgPerlin1D(seed, octave * scaleEnd, pos);
+        octave *= 0.5;
+    }
+    return noise;
+}
+
+/**
+ * Generate fractal Perlin noise
+ *
+ * Parameters
+ * - seed The seed for the noise function
+ * - scaleBegin The smallest scale to take
+ * - scaleEnd The largest scale to take
+ * - pos The position for the noise function
+ */
+float hgPerlinFractal2D(uint seed, float scaleBegin, float scaleEnd, vec2 pos)
+{
+    float noise = 0.0;
+    float octave = 1.0;
+    while (scaleEnd * octave > scaleBegin)
+    {
+        noise += octave * hgPerlin2D(seed, octave * scaleEnd, pos);
+        octave *= 0.5;
+    }
+    return noise;
+}
+
+/**
+ * A vertex
+ */
 struct HgVertex
 {
     vec3 position;
