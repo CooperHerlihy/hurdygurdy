@@ -58,13 +58,13 @@ $(TEST_DIR):
 	mkdir -p $@
 
 $(BUILD_DIR)/%.vert.spv: $(SRC_DIR)/src/%.vert | $(BUILD_DIR)
-	glslc -o $@ $<
+	glslc -o $@ $< -I$(SRC_DIR)/include
 
 $(BUILD_DIR)/%.frag.spv: $(SRC_DIR)/src/%.frag | $(BUILD_DIR)
-	glslc -o $@ $<
+	glslc -o $@ $< -I$(SRC_DIR)/include
 
 $(BUILD_DIR)/%.comp.spv: $(SRC_DIR)/src/%.comp | $(BUILD_DIR)
-	glslc -o $@ $<
+	glslc -o $@ $< -I$(SRC_DIR)/include
 
 $(BUILD_DIR)/vk_mem_alloc.o: $(SRC_DIR)/src/vk_mem_alloc.cpp | $(BUILD_DIR)
 	c++ $(STD) $(CONFIG) $(INCLUDES) -c $< -o $@

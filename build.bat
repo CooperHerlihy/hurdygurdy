@@ -50,7 +50,7 @@ if not exist "%TEST_DIR%" mkdir "%TEST_DIR%"
 
 for %%F in (%SHADERS%) do (
     echo %%F
-    glslc -o "%BUILD_DIR%\%%F.spv" "%SRC_DIR%\src\%%F"
+    glslc -o "%BUILD_DIR%\%%F.spv" "%SRC_DIR%\src\%%F" -I"%SRC_DIR%\include"
 )
 
 if not exist "%BUILD_DIR%\vk_mem_alloc.obj" (
