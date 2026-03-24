@@ -28,6 +28,14 @@ set IMGUI_BACKENDS= ^
     imgui_impl_win32.cpp ^
     imgui_impl_vulkan.cpp
 
+set SHADERS= ^
+    vulkan_perf.comp ^
+    noise.comp ^
+    sprite.vert ^
+    sprite.frag ^
+    model.vert ^
+    model.frag
+
 set SRC= ^
     utils.cpp ^
     concurrency.cpp ^
@@ -38,12 +46,10 @@ set SRC= ^
     vulkan.cpp ^
     test.cpp
 
-set SHADERS= ^
-    noise.comp ^
-    sprite.vert ^
-    sprite.frag ^
-    model.vert ^
-    model.frag
+set TARGETS= ^
+    vulkan_perf.exe ^
+    editor.exe ^
+    minimal.exe
 
 if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
 if not exist "%TEST_DIR%" mkdir "%TEST_DIR%"
@@ -103,18 +109,15 @@ lib /nologo /OUT:"%BUILD_DIR%\hurdygurdy.lib" ^
     "%BUILD_DIR%\stb.obj" ^
     %OBJS%
 
-cl "%SRC_DIR%\src\minimal.cpp" ^
-    /Fd:"%BUILD_DIR%\minimal.pdb" ^
-    /Fo:"%BUILD_DIR%\minimal.obj" ^
-    /Fe:"%BUILD_DIR%\minimal.exe" ^
-    %STD% %WARNINGS% %CONFIG% %INCLUDES% ^
-    "%BUILD_DIR%\hurdygurdy.lib" User32.lib
+for %%F in (%TARGETS%) do (
+    cl "%SRC_DIR%\src\%%~nF.cpp" ^
+        /Fd:"%BUILD_DIR%\%%~nF.pdb" ^
+        /Fo:"%BUILD_DIR%\%%~nF.obj" ^
+        /Fe:"%BUILD_DIR%\%%~nF.exe" ^
+        %STD% %WARNINGS% %CONFIG% %INCLUDES% ^
+        "%BUILD_DIR%\hurdygurdy.lib" User32.lib
 
-cl "%SRC_DIR%\src\editor.cpp" ^
-    /Fd:"%BUILD_DIR%\editor.pdb" ^
-    /Fo:"%BUILD_DIR%\editor.obj" ^
-    /Fe:"%BUILD_DIR%\editor.exe" ^
-    %STD% %WARNINGS% %CONFIG% %INCLUDES% ^
-    "%BUILD_DIR%\hurdygurdy.lib" User32.lib
+    set OBJS=!OBJS! "%BUILD_DIR%\%%~nF.obj"
+)
 
 endlocal

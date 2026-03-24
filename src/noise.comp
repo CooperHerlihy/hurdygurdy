@@ -18,7 +18,7 @@ void main()
 {
     uvec3 pos = gl_GlobalInvocationID;
 
-    float noise = hgPerlin2D(push.seed, 32, pos.xy, vec2(push.tile));
+    float noise = hgFractalPerlin2D(push.seed, 4, 64, pos.xy, vec2(push.tile));
 
     vec3 color = vec3(noise * 0.5 + 0.5);
 
