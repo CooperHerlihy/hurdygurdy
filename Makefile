@@ -17,6 +17,7 @@ INCLUDES := \
 	-I$(SRC_DIR)/vendor/imgui/backends
 
 SHADERS := \
+	vulkan_perf.comp \
 	noise.comp \
 	sprite.vert \
 	sprite.frag \
@@ -38,6 +39,7 @@ SRC := \
 	test.cpp
 
 TARGETS := \
+	vulkan_perf \
 	editor \
 	minimal
 

@@ -276,7 +276,7 @@ void hgInit();
 /**
  * Shuts down the HurdyGurdy library
  */
-void hgExit();
+void hgDeinit();
 
 /**
  * Run Hurdy Gurdy tests, asserting success
@@ -2537,6 +2537,87 @@ struct HgClock
  * - The time in seconds since the last tick
  */
 f64 hgClockTick(HgClock* clock);
+
+/**
+ * A simple performance measurement tool
+ */
+struct HgPerf
+{
+    /**
+     * The clock to keep track of each time
+     */
+    HgClock clock;
+    /**
+     * The measured time for each iteration
+     */
+    f64* times;
+    /**
+     * The max number of measurements
+     */
+    u32 count;
+    /**
+     * The current measurement
+     */
+    u32 current;
+};
+
+/**
+ * Create a performance measurer
+ */
+HgPerf hgCreatePerf(HgArena* arena, u32 count);
+
+/**
+ * Begin the timer for a measurement
+ */
+void hgBeginPerf(HgPerf* perf);
+
+/**
+ * End the timer for a measurement
+ *
+ * Returns
+ * - The time this measurement took
+ */
+f64 hgEndPerf(HgPerf* perf);
+
+/**
+ * A set of statistics from performance measurements
+ */
+struct HgPerfStats
+{
+    /**
+     * The average time of all measurements
+     */
+    f64 avg;
+    /**
+     * The best case (the shortest time)
+     */
+    f64 best;
+    /**
+     * The worst case (the longest time)
+     */
+    f64 worst;
+};
+
+/**
+ * Analyzes the performance measurements for statistics
+ */
+HgPerfStats hgAnalyzePerf(const HgPerf* perf);
+
+/**
+ * The scale to log performance metrics at
+ */
+enum HgPerfScale
+{
+    HgPerfScale_seconds,
+    HgPerfScale_milli,
+    HgPerfScale_micro,
+    HgPerfScale_nano,
+};
+
+/**
+ * Logs performance statistics to stdout
+ */
+void hgLogPerf(HgStringView title, const HgPerfStats* stats, HgPerfScale scale);
 
 /**
  * Returns the number of concurrent threads available in hardware

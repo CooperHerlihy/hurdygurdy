@@ -98,7 +98,7 @@ void createNoiseTex()
 int main()
 {
     hgInit();
-    hgDefer(hgExit());
+    hgDefer(hgDeinit());
 
     hgTest();
 

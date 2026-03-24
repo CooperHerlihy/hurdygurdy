@@ -14,7 +14,7 @@ void hgInit(void)
     hgInitGpuResources();
 }
 
-void hgExit(void)
+void hgDeinit(void)
 {
     hgDeinitGpuResources();
     hgDeinitResource();
@@ -1563,6 +1563,73 @@ HgJson hgParseJson(HgArena* arena, HgStringView text)
     parser.head = 0;
     parser.line = 1;
     return parser.parseNext();
+}
+
+HgPerf hgCreatePerf(HgArena* arena, u32 count)
+{
+    HgPerf perf;
+    perf.times = hgAlloc<f64>(arena, count);
+    perf.count = count;
+    perf.current = 0;
+    return perf;
+}
+
+void hgBeginPerf(HgPerf* perf)
+{
+    hgClockTick(&perf->clock);
+}
+
+f64 hgEndPerf(HgPerf* perf)
+{
+    hgAssert(perf->current < perf->count);
+
+    f64 time = hgClockTick(&perf->clock);
+    perf->times[perf->current++] = time;
+
+    return time;
+}
+
+HgPerfStats hgAnalyzePerf(const HgPerf* perf)
+{
+    HgPerfStats stats;
+    stats.avg = 0.0;
+    stats.best = INFINITY;
+    stats.worst = 0.0;
+
+    for (u32 i = 0; i < perf->current; ++i)
+    {
+        if (perf->times[i] < stats.best)
+            stats.best = perf->times[i];
+        if (perf->times[i] > stats.worst)
+            stats.worst = perf->times[i];
+        stats.avg += perf->times[i];
+    }
+    stats.avg /= (f64)perf->current;
+
+    return stats;
+}
+
+void hgLogPerf(HgStringView title, const HgPerfStats* stats, HgPerfScale scale)
+{
+    switch (scale)
+    {
+        case HgPerfScale_seconds:
+            printf("HG Performance - %.*s: avg: %.4fs, best: %.4fs, worst: %.4fs\n",
+                (int)title.length, title.chars, stats->avg, stats->best, stats->worst);
+            break;
+        case HgPerfScale_milli:
+            printf("HG Performance - %.*s: avg: %.4fms, best: %.4fs, worst: %.4fs\n",
+                (int)title.length, title.chars, stats->avg * 1.e3, stats->best * 1.e3, stats->worst * 1.e3);
+            break;
+        case HgPerfScale_micro:
+            printf("HG Performance - %.*s: avg: %.4fmcs, best: %.4fmcs, worst: %.4fmcs\n",
+                (int)title.length, title.chars, stats->avg * 1.e6, stats->best * 1.e6, stats->worst * 1.e6);
+            break;
+        case HgPerfScale_nano:
+            printf("HG Performance - %.*s: avg: %.4fns, best: %.4fns, worst: %.4fns\n",
+                (int)title.length, title.chars, stats->avg * 1.e9, stats->best * 1.e9, stats->worst * 1.e9);
+            break;
+    }
 }
 
 namespace {

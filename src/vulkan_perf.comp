@@ -1,0 +1,25 @@
+#version 460
+
+#include "shader_utils.glsl"
+
+layout (HgStorageImage, rgba8) uniform writeonly image2D images[];
+
+layout (push_constant) uniform Push {
+    uint seed;
+    uint imageIdx;
+} push;
+
+layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+void main()
+{
+    uvec3 pos = gl_GlobalInvocationID;
+
+    float noise = hgFractalPerlin2D(push.seed, 1, 2048, pos.xy, vec2(0.0));
+
+    imageStore(
+        images[push.imageIdx],
+        ivec2(pos.xy),
+        vec4(vec3(noise * 0.5 + 0.5), 1.0));
+}
+

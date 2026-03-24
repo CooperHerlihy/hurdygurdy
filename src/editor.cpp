@@ -11,7 +11,7 @@ int main()
     hgDefer(hgDebug("Exited successfully\n"));
 
     hgInit();
-    hgDefer(hgExit());
+    hgDefer(hgDeinit());
 
     hgTest();
 
