@@ -1618,7 +1618,7 @@ void hgLogPerf(HgStringView title, const HgPerfStats* stats, HgPerfScale scale)
                 (int)title.length, title.chars, stats->avg, stats->best, stats->worst);
             break;
         case HgPerfScale_milli:
-            printf("HG Performance - %.*s: avg: %.4fms, best: %.4fs, worst: %.4fs\n",
+            printf("HG Performance - %.*s: avg: %.4fms, best: %.4fms, worst: %.4fms\n",
                 (int)title.length, title.chars, stats->avg * 1.e3, stats->best * 1.e3, stats->worst * 1.e3);
             break;
         case HgPerfScale_micro:
