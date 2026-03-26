@@ -54,8 +54,12 @@ int main()
     u32 renderWidth = window->width;
     u32 renderHeight = window->height;
 
-    HgECS ecs = ecs.create(4096);
-    hgDefer(ecs.destroy());
+    HgECS ecs = ecs.create(arena, 1024, 128);
+    ecs.createComponent<HgTransform>(arena, 1024);
+    ecs.createComponent<HgSprite2D>(arena, 1024);
+    ecs.createComponent<HgModel3D>(arena, 1024);
+    ecs.createComponent<HgDirLight3D>(arena, 1024);
+    ecs.createComponent<HgPointLight3D>(arena, 1024);
 
     u32 sceneCapacity = 8;
     HgEntity* scene = hgAlloc<HgEntity>(arena, sceneCapacity);
@@ -111,7 +115,7 @@ int main()
         f64 delta = hgClockTick(&gameClock);
         HgClock cpuClock{};
 
-        HgArena* frame = hgGetScratch();
+        HgArena* frame = hgGetScratch(&arena, 1);
         HgArenaScope frameScope{frame};
 
         if (ecs.alive(square))
@@ -169,10 +173,7 @@ int main()
 
                 if (ImGui::MenuItem("Save Screenshot"))
                 {
-                    HgArena* scratch = hgGetScratch();
-                    HgArenaScope scratchScope{scratch};
-
-                    void* pixels = hgAlloc(scratch, renderWidth * renderHeight * 4, 4);
+                    void* pixels = hgAlloc(frame, renderWidth * renderHeight * 4, 4);
 
                     hgReadImage(
                         pixels,
@@ -336,13 +337,11 @@ int main()
 
                     for (u32 i = 0; i < sceneSize; ++i)
                     {
-                        HgArena* scratch = hgGetScratch();
-                        HgArenaScope scratchScope{scratch};
                         HgEntity e = scene[i];
 
-                        HgString nameStr = hgCopyString(scratch, "Entitiy ID: ");
-                        hgAppendString(scratch, &nameStr, hgIntToStr(scratch, (i64)e.idx()));
-                        char* name = hgCString(scratch, nameStr);
+                        HgString nameStr = hgCopyString(frame, "Entitiy ID: ");
+                        hgAppendString(frame, &nameStr, hgIntToStr(frame, (i64)e.idx()));
+                        char* name = hgCString(frame, nameStr);
 
                         if (ImGui::TreeNodeEx(name, entityFlags))
                         {

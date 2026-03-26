@@ -1,17 +1,24 @@
 #include "hurdygurdy.hpp"
 
-void hgInit(void)
+void hgInit(const HgInit* init)
 {
-    hgInitScratchMemory();
+    static const HgInit defaultInit{};
+
+    if (init == nullptr)
+    {
+        init = &defaultInit;
+    }
+
+    hgInitScratchMemory(init->arenaSize);
     HgArena* arena = hgGetScratch();
 
     hgInitPlatform();
-    hgInitGraphics();
+    hgInitGraphics(arena);
 
-    hgInitThreadPool(arena, 4096, hgHardwareThreadCount() - 2); // main thread, io thread
-    hgInitIOThread(arena, 4096);
-    hgInitResources();
-    hgInitGpuResources();
+    hgInitThreadPool(arena, init->threadPoolQueueSize, hgHardwareThreadCount() - 2); // main thread, io thread
+    hgInitIOThread(arena, init->ioRequestQueueSize);
+    hgInitResources(arena, init->maxResources);
+    hgInitGpuResources(arena, init->maxTextures, init->maxModels);
 }
 
 void hgDeinit(void)
@@ -642,13 +649,13 @@ void* hgRealloc(HgArena* arena, void* allocation, u64 oldSize, u64 newSize, u64 
 static constexpr u32 arenaCount = 2;
 static thread_local HgArena arenas[arenaCount]{};
 
-void hgInitScratchMemory()
+void hgInitScratchMemory(u64 size)
 {
     for (u32 i = 0; i < arenaCount; ++i)
     {
         if (arenas[i].memory == nullptr)
         {
-            u64 arenaSize = (u32)-1;
+            u64 arenaSize = size;
             arenas[i] = {malloc(arenaSize), arenaSize, 0};
         }
     }
@@ -1638,16 +1645,14 @@ namespace {
         u32 capacity;
         u32 count;
 
-        static ComponentArr create(u32 initCount)
+        ComponentArr(u32 initCount)
         {
-            ComponentArr arr;
-            arr.widths = (u32*)malloc(initCount * sizeof(u32));
-            arr.capacity = initCount;
-            arr.count = 0;
-            return arr;
+            widths = (u32*)malloc(initCount * sizeof(u32));
+            capacity = initCount;
+            count = 0;
         }
 
-        void destroy() const {
+        ~ComponentArr() {
             free(widths);
         }
 
@@ -1666,7 +1671,7 @@ namespace {
 
 ComponentArr& componentArr()
 {
-    static ComponentArr components = components.create(1024);
+    static ComponentArr components{1024};
     return components;
 }
 
@@ -1682,52 +1687,45 @@ u32 hgCreateComponentID(u32 width)
     return id;
 }
 
-HgECS HgECS::create(u32 maxEntities)
+HgECS HgECS::create(HgArena* arena, u32 maxEntities, u32 maxComponentTypes)
 {
     HgECS ecs{};
 
+    ecs.pool = hgAlloc<HgEntity>(arena, maxEntities);
     ecs.poolSize = maxEntities;
-    ecs.pool = (HgEntity*)malloc(sizeof(HgEntity) * ecs.poolSize);
-
-    ecs.systemCount = componentArr().count;
-    ecs.systems = (System*)malloc(sizeof(System) * ecs.systemCount);
-
-    for (u32 i = 0; i < ecs.systemCount; ++i)
-    {
-        ecs.systems[i] = {};
-        ecs.systems[i].indices = (u32*)malloc(sizeof(u32) * ecs.poolSize);
-    }
-
+    ecs.systems = ecs.systems.create(arena, maxComponentTypes + 1);
     ecs.reset();
 
     return ecs;
 }
 
-void HgECS::destroy()
+void HgECS::createComponent(HgArena* arena, u32 maxCount, u32 width, u32 align, u32 componentID)
 {
-    for (u32 i = 0; i < systemCount; ++i)
-    {
-        free(systems[i].indices);
-        free(systems[i].entities);
-        free(systems[i].components);
-    }
-    free(systems);
-    free(pool);
+    hgAssert(systems.get(componentID) == nullptr);
+    System* system = systems.add(componentID);
+
+    system->indices = hgAlloc<u32>(arena, poolSize);
+    system->entities = hgAlloc<HgEntity>(arena, maxCount);
+    system->components = hgAlloc(arena, maxCount * width, align);
+    system->count = 0;
+    system->capacity = maxCount;
+
+    memset(system->indices, -1, poolSize * sizeof(*system->indices));
 }
 
 void HgECS::reset()
 {
+    systems.forEach([&] (const u32*, System* system)
+    {
+        memset(system->indices, -1, poolSize * sizeof(*system->indices));
+        system->count = 0;
+    });
+
     for (u32 i = 0; i < poolSize; ++i)
     {
         pool[i] = {i + 1};
     }
     next = {0};
-
-    for (u32 i = 0; i < systemCount; ++i)
-    {
-        memset(systems[i].indices, -1, poolSize * sizeof(*systems[i].indices));
-        systems[i].count = 0;
-    }
 }
 
 HgEntity HgECS::spawn()
@@ -1735,7 +1733,7 @@ HgEntity HgECS::spawn()
     hgAssert(next.idx() < poolSize);
 
     HgEntity entity = next;
-    next= pool[entity.idx()];
+    next = pool[entity.idx()];
     pool[entity.idx()] = entity;
     return entity;
 }
@@ -1744,11 +1742,11 @@ void HgECS::despawn(HgEntity e)
 {
     hgAssert(alive(e));
 
-    for (u32 i = 0; i < systemCount; ++i)
+    systems.forEach([&] (const u32* componentID, System*)
     {
-        if (has(e, i))
-            remove(e, i);
-    }
+        if (has(e, *componentID))
+            remove(e, *componentID);
+    });
     pool[e.idx()] = next;
     next = e;
     next.incrementGeneration();
@@ -1759,113 +1757,129 @@ bool HgECS::alive(HgEntity e)
     return e.idx() < poolSize && pool[e.idx()] == e;
 }
 
-void* HgECS::add(HgEntity e, u32 componentId)
+void* HgECS::add(HgEntity e, u32 componentID)
 {
     hgAssert(alive(e));
-    hgAssert(!has(e, componentId));
+    hgAssert(!has(e, componentID));
 
-    if (systems[componentId].count == systems[componentId].capacity)
-    {
-        u32 newCapacity = systems[componentId].capacity == 0 ? 1 : systems[componentId].capacity * 2;
-        systems[componentId].entities = (HgEntity*)realloc(
-            systems[componentId].entities, sizeof(HgEntity) * newCapacity);
-        systems[componentId].components = (HgEntity*)realloc(
-            systems[componentId].components, componentWidth(componentId) * newCapacity);
-        systems[componentId].capacity = newCapacity;
-    }
+    System* system = systems.get(componentID);
+    hgAssert(system != nullptr);
 
-    systems[componentId].indices[e.idx()] = systems[componentId].count;
-    systems[componentId].entities[systems[componentId].count] = e;
-    void* c = (u8*)systems[componentId].components + componentWidth(componentId) * systems[componentId].count;
-    ++systems[componentId].count;
+    system->indices[e.idx()] = system->count;
+    system->entities[system->count] = e;
+    void* c = (u8*)system->components + componentWidth(componentID) * system->count;
+    ++system->count;
     return c;
 }
 
-void HgECS::remove(HgEntity e, u32 componentId)
+void HgECS::remove(HgEntity e, u32 componentID)
 {
     hgAssert(alive(e));
-    hgAssert(has(e, componentId));
+    hgAssert(has(e, componentID));
 
-    HgEntity last = systems[componentId].entities[systems[componentId].count - 1];
-    systems[componentId].entities[systems[componentId].count - 1] = HgEntity{};
+    System* system = systems.get(componentID);
+    hgAssert(system != nullptr);
+
+    HgEntity last = system->entities[system->count - 1];
+    system->entities[system->count - 1] = HgEntity{};
     if (e != last)
     {
-        u32 idx = systems[componentId].indices[e.idx()];
-        systems[componentId].entities[idx] = last;
-        systems[componentId].indices[last.idx()] = idx;
+        u32 idx = system->indices[e.idx()];
+        system->entities[idx] = last;
+        system->indices[last.idx()] = idx;
         memcpy(
-            (u8*)systems[componentId].components + componentWidth(componentId) * idx,
-            (u8*)systems[componentId].components + componentWidth(componentId) * (systems[componentId].count - 1),
-            componentWidth(componentId));
+            (u8*)system->components + componentWidth(componentID) * idx,
+            (u8*)system->components + componentWidth(componentID) * (system->count - 1),
+            componentWidth(componentID));
     }
-    systems[componentId].indices[e.idx()] = (u32)-1;
-    --systems[componentId].count;
+    system->indices[e.idx()] = (u32)-1;
+    --system->count;
 }
 
-bool HgECS::has(HgEntity e, u32 componentId)
+bool HgECS::has(HgEntity e, u32 componentID)
 {
     hgAssert(alive(e));
-    return systems[componentId].indices[e.idx()] < systems[componentId].count;
+
+    System* system = systems.get(componentID);
+    hgAssert(system != nullptr);
+
+    return system->indices[e.idx()] < system->count;
 }
 
-void* HgECS::get(HgEntity e, u32 componentId)
+void* HgECS::get(HgEntity e, u32 componentID)
 {
     hgAssert(alive(e));
-    hgAssert(has(e, componentId));
-    return (u8*)systems[componentId].components + componentWidth(componentId) * systems[componentId].indices[e.idx()];
+
+    System* system = systems.get(componentID);
+    hgAssert(system != nullptr);
+
+    return (u8*)system->components + componentWidth(componentID) * system->indices[e.idx()];
 }
 
-HgEntity HgECS::get(const void* component, u32 componentId)
+HgEntity HgECS::get(const void* component, u32 componentID)
 {
     hgAssert(component != nullptr);
 
-    u32 idx = (u32)((uptr)component - (uptr)systems[componentId].components) / componentWidth(componentId);
-    return systems[componentId].entities[idx];
+    System* system = systems.get(componentID);
+    hgAssert(system != nullptr);
+
+    return system->entities[(u32)((uptr)component - (uptr)system->components) / componentWidth(componentID)];
 }
 
 u32 HgECS::findSmallest(u32* ids, u32 idCount)
 {
+    u32 smallestCount = (u32)-1;
     u32 smallest = ids[0];
+
     for (u32 i = 1; i < idCount; ++i)
     {
-        if (systems[ids[i]].count < systems[smallest].count)
+        System* system = systems.get(ids[i]);
+        hgAssert(system != nullptr);
+
+        if (system->count < smallestCount)
+        {
+            smallestCount = system->count;
             smallest = ids[i];
+        }
     }
     return smallest;
 }
 
-static void swapIdxLocation(HgECS* ecs, u32 lhs, u32 rhs, u32 componentId)
+static void swapIdxLocation(HgECS* ecs, u32 lhs, u32 rhs, u32 componentID)
 {
-    HgECS::System& system = ecs->systems[componentId];
-    hgAssert(lhs < system.count);
-    hgAssert(rhs < system.count);
+    HgECS::System* system = ecs->systems.get(componentID);
+    hgAssert(system != nullptr);
 
-    HgEntity lhsEntity = system.entities[lhs];
-    HgEntity rhsEntity = system.entities[rhs];
+    hgAssert(lhs < system->count);
+    hgAssert(rhs < system->count);
+
+    HgEntity lhsEntity = system->entities[lhs];
+    HgEntity rhsEntity = system->entities[rhs];
 
     hgAssert(ecs->alive(lhsEntity));
     hgAssert(ecs->alive(rhsEntity));
-    hgAssert(ecs->has(lhsEntity, componentId));
-    hgAssert(ecs->has(rhsEntity, componentId));
+    hgAssert(ecs->has(lhsEntity, componentID));
+    hgAssert(ecs->has(rhsEntity, componentID));
 
     HgArena* scratch = hgGetScratch();
     HgArenaScope scratchScope{scratch};
 
-    system.entities[lhs] = rhsEntity;
-    system.entities[rhs] = lhsEntity;
-    system.indices[lhsEntity.id] = rhs;
-    system.indices[rhsEntity.id] = lhs;
+    system->entities[lhs] = rhsEntity;
+    system->entities[rhs] = lhsEntity;
+    system->indices[lhsEntity.id] = rhs;
+    system->indices[rhsEntity.id] = lhs;
 
-    u32 width = componentWidth(componentId);
-    void* temp = hgAlloc(scratch, componentWidth(componentId), 1);
-    memcpy(temp, (u8*)system.components + width * lhs, width);
-    memcpy((u8*)system.components + width * lhs, (u8*)system.components + width * rhs, width);
-    memcpy((u8*)system.components + width * rhs, temp, width);
+    u32 width = componentWidth(componentID);
+    void* temp = hgAlloc(scratch, componentWidth(componentID), 1);
+    memcpy(temp, (u8*)system->components + width * lhs, width);
+    memcpy((u8*)system->components + width * lhs, (u8*)system->components + width * rhs, width);
+    memcpy((u8*)system->components + width * rhs, temp, width);
 }
 
 namespace {
     struct QuicksortData {
         HgECS* ecs;
+        HgECS::System* system;
         u32 comp;
         void* data;
         bool (*compare)(void*, HgECS* ecs, HgEntity lhs, HgEntity rhs);
@@ -1874,13 +1888,13 @@ namespace {
         {
             while (inc != dec)
             {
-                while (!compare(data, ecs, ecs->systems[comp].entities[dec], ecs->systems[comp].entities[pivot]))
+                while (!compare(data, ecs, system->entities[dec], system->entities[pivot]))
                 {
                     --dec;
                     if (dec == inc)
                         goto finish;
                 }
-                while (!compare(data, ecs, ecs->systems[comp].entities[pivot], ecs->systems[comp].entities[inc]))
+                while (!compare(data, ecs, system->entities[pivot], system->entities[inc]))
                 {
                     ++inc;
                     if (inc == dec)
@@ -1890,7 +1904,7 @@ namespace {
             }
 
         finish:
-            if (compare(data, ecs, ecs->systems[comp].entities[inc], ecs->systems[comp].entities[pivot]))
+            if (compare(data, ecs, system->entities[inc], system->entities[pivot]))
                 swapIdxLocation(ecs, pivot, inc, comp);
 
             return inc;
@@ -1898,8 +1912,6 @@ namespace {
 
         void quicksort(u32 begin, u32 end)
         {
-            hgAssert(begin <= end && end <= ecs->systems[comp].count);
-
             if (begin + 1 >= end)
                 return;
 
@@ -1911,13 +1923,16 @@ namespace {
 }
 
 void HgECS::sort(
-    u32 componentId,
+    u32 componentID,
     void* data,
     bool (*compare)(void*, HgECS* ecs, HgEntity lhs, HgEntity rhs)
 )
 {
-    QuicksortData q{this, componentId, data, compare};
-    q.quicksort(0, systems[componentId].count);
+    HgECS::System* system = systems.get(componentID);
+    hgAssert(system != nullptr);
+
+    QuicksortData q{this, system, componentID, data, compare};
+    q.quicksort(0, system->count);
 }
 
 void hgAddChildEntity(HgECS* ecs, HgEntity parent, HgEntity child)

@@ -7,7 +7,7 @@ static void hgVulkanDeinit();
 static VkDebugUtilsMessengerEXT vkDebugMessenger = nullptr;
 #endif
 
-static void initBindless();
+static void initBindless(HgArena* arena);
 static void deinitBindless();
 
 static VkDescriptorPool bindlessPool = nullptr;
@@ -31,7 +31,7 @@ HgDescriptor uniformBufferPoolNext = {0};
 static HgDescriptor* storageBufferPool = nullptr;
 HgDescriptor storageBufferPoolNext = {0};
 
-void hgInitGraphics()
+void hgInitGraphics(HgArena* arena)
 {
     hgVulkanInit();
 
@@ -94,7 +94,7 @@ void hgInitGraphics()
             hgError("Could note create Vulkan command pool: %s\n", hgVkResultToStr(result));
     }
 
-    initBindless();
+    initBindless(arena);
 }
 
 void hgDeinitGraphics()
@@ -142,9 +142,9 @@ void hgDeinitGraphics()
     hgVulkanDeinit();
 }
 
-static HgDescriptor* createBindlessPool(HgDescriptorType type, HgDescriptor* next)
+static HgDescriptor* createBindlessPool(HgArena* arena, HgDescriptorType type, HgDescriptor* next)
 {
-    HgDescriptor* pool = (HgDescriptor*)malloc(UINT16_MAX * sizeof(HgDescriptor));
+    HgDescriptor* pool = hgAlloc<HgDescriptor>(arena, UINT16_MAX);
 
     for (u32 i = 0; i < UINT16_MAX; ++i)
     {
@@ -157,7 +157,7 @@ static HgDescriptor* createBindlessPool(HgDescriptorType type, HgDescriptor* nex
     return pool;
 }
 
-static void initBindless()
+static void initBindless(HgArena* arena)
 {
     if (bindlessPool == nullptr)
     {
@@ -245,74 +245,41 @@ static void initBindless()
     }
 
     if (samplerPool == nullptr)
-        samplerPool = createBindlessPool(HgDescriptorType_sampler, &samplerPoolNext);
+        samplerPool = createBindlessPool(arena, HgDescriptorType_sampler, &samplerPoolNext);
 
     if (combinedImageSamplerPool == nullptr)
-        combinedImageSamplerPool = createBindlessPool(HgDescriptorType_combinedImageSampler, &combinedImageSamplerPoolNext);
+        combinedImageSamplerPool = createBindlessPool(arena, HgDescriptorType_combinedImageSampler, &combinedImageSamplerPoolNext);
 
     if (sampledImagePool == nullptr)
-        sampledImagePool = createBindlessPool(HgDescriptorType_sampledImage, &sampledImagePoolNext);
+        sampledImagePool = createBindlessPool(arena, HgDescriptorType_sampledImage, &sampledImagePoolNext);
 
     if (storageImagePool == nullptr)
-        storageImagePool = createBindlessPool(HgDescriptorType_storageImage, &storageImagePoolNext);
+        storageImagePool = createBindlessPool(arena, HgDescriptorType_storageImage, &storageImagePoolNext);
 
     if (uniformTexelBufferPool == nullptr)
-        uniformTexelBufferPool = createBindlessPool(HgDescriptorType_uniformTexelBuffer, &uniformTexelBufferPoolNext);
+        uniformTexelBufferPool = createBindlessPool(arena, HgDescriptorType_uniformTexelBuffer, &uniformTexelBufferPoolNext);
 
     if (storageTexelBufferPool == nullptr)
-        storageTexelBufferPool = createBindlessPool(HgDescriptorType_storageTexelBuffer, &storageTexelBufferPoolNext);
+        storageTexelBufferPool = createBindlessPool(arena, HgDescriptorType_storageTexelBuffer, &storageTexelBufferPoolNext);
 
     if (uniformBufferPool == nullptr)
-        uniformBufferPool = createBindlessPool(HgDescriptorType_uniformBuffer, &uniformBufferPoolNext);
+        uniformBufferPool = createBindlessPool(arena, HgDescriptorType_uniformBuffer, &uniformBufferPoolNext);
 
     if (storageBufferPool == nullptr)
-        storageBufferPool = createBindlessPool(HgDescriptorType_storageBuffer, &storageBufferPoolNext);
+        storageBufferPool = createBindlessPool(arena, HgDescriptorType_storageBuffer, &storageBufferPoolNext);
 
 }
 
 static void deinitBindless()
 {
-    if (samplerPool != nullptr)
-    {
-        free(samplerPool);
-        samplerPool = nullptr;
-    }
-    if (combinedImageSamplerPool != nullptr)
-    {
-        free(combinedImageSamplerPool);
-        combinedImageSamplerPool = nullptr;
-    }
-    if (sampledImagePool != nullptr)
-    {
-        free(sampledImagePool);
-        sampledImagePool = nullptr;
-    }
-    if (storageImagePool != nullptr)
-    {
-        free(storageImagePool);
-        storageImagePool = nullptr;
-    }
-    if (uniformTexelBufferPool != nullptr)
-    {
-        free(uniformTexelBufferPool);
-        uniformTexelBufferPool = nullptr;
-    }
-    if (storageTexelBufferPool != nullptr)
-    {
-        free(storageTexelBufferPool);
-        storageTexelBufferPool = nullptr;
-    }
-    if (uniformBufferPool != nullptr)
-    {
-        free(uniformBufferPool);
-        uniformBufferPool = nullptr;
-    }
-    if (storageBufferPool != nullptr)
-    {
-        free(storageBufferPool);
-        storageBufferPool = nullptr;
-    }
-
+    samplerPool = nullptr;
+    combinedImageSamplerPool = nullptr;
+    sampledImagePool = nullptr;
+    storageImagePool = nullptr;
+    uniformTexelBufferPool = nullptr;
+    storageTexelBufferPool = nullptr;
+    uniformBufferPool = nullptr;
+    storageBufferPool = nullptr;
     bindlessSet = nullptr;
 
     if (bindlessLayout != nullptr)

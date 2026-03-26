@@ -334,18 +334,18 @@ void hgDraw3D(HgECS* ecs, VkCommandBuffer cmd)
     PointLightData* pointLights = hgAlloc<PointLightData>(scratch, pointLightCount);
 
     u32 i = 0;
-    ecs->forEach<HgDirLight3D>([&](HgEntity, HgDirLight3D& light)
+    ecs->forEach<HgDirLight3D>([&](HgEntity, HgDirLight3D* light)
     {
-        dirLights[i].dir = HgVec4{HgMat3{vpData.view} * light.dir, 0.0};
-        dirLights[i].color = light.color;
+        dirLights[i].dir = HgVec4{HgMat3{vpData.view} * light->dir, 0.0};
+        dirLights[i].color = light->color;
         ++i;
     });
 
     i = 0;
-    ecs->forEach<HgPointLight3D, HgTransform>([&](HgEntity, HgPointLight3D& light, HgTransform& transform)
+    ecs->forEach<HgPointLight3D, HgTransform>([&](HgEntity, HgPointLight3D* light, HgTransform* transform)
     {
-        pointLights[i].pos = vpData.view * HgVec4{transform.position, 1.0};
-        pointLights[i].color = light.color;
+        pointLights[i].pos = vpData.view * HgVec4{transform->position, 1.0};
+        pointLights[i].color = light->color;
         ++i;
     });
 
@@ -357,18 +357,18 @@ void hgDraw3D(HgECS* ecs, VkCommandBuffer cmd)
 
     hgBindGraphicsPipeline(cmd, pipeline, pipelineLayout);
 
-    ecs->forEach<HgModel3D, HgTransform>([&](HgEntity, HgModel3D& model, HgTransform& transform)
+    ecs->forEach<HgModel3D, HgTransform>([&](HgEntity, HgModel3D* model, HgTransform* transform)
     {
-        HgTextureResource* colorMap = hgGetTexture(model.colorMap);
+        HgTextureResource* colorMap = hgGetTexture(model->colorMap);
         if (colorMap == nullptr)
             colorMap = &defaultColorMap;
 
-        HgTextureResource* normalMap = hgGetTexture(model.normalMap);
+        HgTextureResource* normalMap = hgGetTexture(model->normalMap);
         if (normalMap == nullptr)
             normalMap = &defaultNormalMap;
 
         Push push{};
-        push.model = hgModelMatrix3D(transform.position, transform.scale, transform.rotation);
+        push.model = hgModelMatrix3D(transform->position, transform->scale, transform->rotation);
         push.dirLightIdx = hgDescriptorIdx(dirLightDesc);
         push.dirLightCount = dirLightCount;
         push.pointLightIdx = hgDescriptorIdx(pointLightDesc);
@@ -377,7 +377,7 @@ void hgDraw3D(HgECS* ecs, VkCommandBuffer cmd)
         push.colorMapIdx = hgDescriptorIdx(colorMap->descriptor);
         push.normalMapIdx = hgDescriptorIdx(normalMap->descriptor);
 
-        HgModelResource* gpuModel = hgGetModel(model.modelResource);
+        HgModelResource* gpuModel = hgGetModel(model->modelResource);
         if (gpuModel == nullptr)
             gpuModel = &defaultModel;
 

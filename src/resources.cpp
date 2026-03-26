@@ -3,45 +3,18 @@
 #include "stb_image.h"
 #include "stb_image_write.h"
 
-HgResourceManager HgResourceManager::create(u32 resourceWidth, u32 capacity)
+HgResourceManager HgResourceManager::create(HgArena* arena, u32 width, u32 align, u32 capacity)
 {
     hgAssert(capacity > 0);
 
     HgResourceManager rm;
-    rm.refCounts = (u32*)malloc(capacity * sizeof(u32));
-    rm.ids = (HgResource*)malloc(capacity * sizeof(HgResource));
-    rm.resources = malloc(capacity * resourceWidth);
-    rm.width = resourceWidth;
+    rm.refCounts = hgAlloc<u32>(arena, capacity);
+    rm.ids = hgAlloc<HgResource>(arena, capacity);
+    rm.resources = hgAlloc(arena, capacity * width, align);
+    rm.width = width;
     rm.capacity = capacity;
     rm.reset();
     return rm;
-}
-
-void HgResourceManager::destroy()
-{
-    free(refCounts);
-    free(ids);
-    free(resources);
-}
-
-void HgResourceManager::resize(u32 newSize)
-{
-    HgResourceManager old = *this;
-    hgDefer(old.destroy());
-
-    *this = create(width, newSize);
-    for (u32 i = 0; i < old.capacity; ++i)
-    {
-        if (old.refCounts[i] != (u32)-1)
-        {
-            u32 idx = add(old.ids[i]);
-            refCounts[idx] = old.refCounts[i];
-            memcpy(
-                (u8*)resources + idx * width,
-                (u8*)old.resources + i * width,
-                width);
-        }
-    }
 }
 
 void HgResourceManager::reset()
@@ -57,9 +30,6 @@ u32 HgResourceManager::add(HgResource id)
 {
     HgArena* scratch = hgGetScratch();
     HgArenaScope scratchScope{scratch};
-
-    if ((f32)(count + 1) >= (f32)capacity * 0.5f)
-        resize(capacity * 2);
 
     void* resource = hgAlloc(scratch, width, 16);
     void* resourceTmp = hgAlloc(scratch, width, 16);
@@ -221,20 +191,23 @@ void hgStoreBinary(HgBinary bin, HgStringView path)
 
 HgResourceManager binResources{};
 
-void hgInitResources()
+void hgInitResources(HgArena* arena, u32 maxResources)
 {
-    binResources = binResources.create(sizeof(HgBinary*));
+    binResources = binResources.create(
+        arena,
+        sizeof(HgBinary*),
+        alignof(HgBinary*),
+        maxResources);
 }
 
 void hgDeinitResource()
 {
     binResources.forEach([](HgResource, void* pres)
-            {
+    {
         HgBinary* bin = (HgBinary*)pres;
         free(bin->data);
         free(bin);
     });
-    binResources.destroy();
 }
 
 void hgLoadEmptyResource(HgResource id)
@@ -256,7 +229,7 @@ void hgLoadResource(HgFence* fences, u32 fenceCount, HgResource id, HgStringView
         **bin = {};
 
         hgRequestIO(fences, fenceCount, *bin, path, [](void* pres, HgStringView fpath)
-                {
+        {
             HgBinary& bin = *(HgBinary*)pres;
 
             HgArena* scratch = hgGetScratch();
@@ -477,10 +450,10 @@ void hgExportGltf(HgFence* fences, u32 fenceCount, HgResource id, HgStringView p
     hgError("hgExportGltf : TODO\n");
 }
 
-void hgInitGpuResources()
+void hgInitGpuResources(HgArena* arena, u32 maxTextures, u32 maxModels)
 {
-    HgInitTextures();
-    hgInitModels();
+    HgInitTextures(arena, maxTextures);
+    hgInitModels(arena, maxModels);
 }
 
 void hgDeinitGpuResources()
@@ -491,9 +464,13 @@ void hgDeinitGpuResources()
 
 HgResourceManager gpuTextures{};
 
-void HgInitTextures()
+void HgInitTextures(HgArena* arena, u32 maxTextures)
 {
-    gpuTextures = gpuTextures.create(sizeof(HgTextureResource));
+    gpuTextures = gpuTextures.create(
+        arena,
+        sizeof(HgTextureResource),
+        alignof(HgTextureResource),
+        maxTextures);
 }
 
 void hgDeinitTextures()
@@ -504,7 +481,6 @@ void hgDeinitTextures()
         hgDestroyImageView(tex.view);
         hgDestroyImage(tex.image);
     });
-    gpuTextures.destroy();
 }
 
 void hgLoadEmptyTexture(HgResource id)
@@ -580,9 +556,13 @@ HgTextureResource* hgGetTexture(HgResource id)
 
 HgResourceManager gpuModels{};
 
-void hgInitModels()
+void hgInitModels(HgArena* arena, u32 maxModels)
 {
-    gpuModels = gpuModels.create(sizeof(HgModelResource));
+    gpuModels = gpuModels.create(
+        arena,
+        sizeof(HgModelResource),
+        alignof(HgModelResource),
+        maxModels);
 }
 
 void hgDeinitModels()
@@ -593,7 +573,6 @@ void hgDeinitModels()
         hgDestroyBuffer(model.vertexBuffer);
         hgDestroyBuffer(model.indexBuffer);
     });
-    gpuModels.destroy();
 }
 
 void hgLoadModel(HgResource id)

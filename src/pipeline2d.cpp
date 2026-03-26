@@ -143,16 +143,16 @@ void hgDraw2D(HgECS* ecs, VkCommandBuffer cmd)
 
     hgBindGraphicsPipeline(cmd, pipeline, pipelineLayout);
 
-    ecs->forEach<HgSprite2D, HgTransform>([&](HgEntity, HgSprite2D& sprite, HgTransform& transform) 
+    ecs->forEach<HgSprite2D, HgTransform>([&](HgEntity, HgSprite2D* sprite, HgTransform* transform) 
     {
-        HgTextureResource* texture = hgGetTexture(sprite.texture);
+        HgTextureResource* texture = hgGetTexture(sprite->texture);
         if (texture == nullptr)
             texture = &defaultTex;
 
         Push push{};
-        push.model = hgModelMatrix3D(transform.position, transform.scale, transform.rotation);
-        push.uvPos = sprite.uvPos;
-        push.uvSize = sprite.uvSize;
+        push.model = hgModelMatrix3D(transform->position, transform->scale, transform->rotation);
+        push.uvPos = sprite->uvPos;
+        push.uvSize = sprite->uvSize;
         push.vpIdx = hgDescriptorIdx(vpDesc);
         push.texIdx = hgDescriptorIdx(texture->descriptor);
 

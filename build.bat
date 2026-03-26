@@ -29,7 +29,6 @@ set IMGUI_BACKENDS= ^
     imgui_impl_vulkan.cpp
 
 set SHADERS= ^
-    vulkan_perf.comp ^
     noise.comp ^
     sprite.vert ^
     sprite.frag ^
@@ -47,7 +46,6 @@ set SRC= ^
     test.cpp
 
 set TARGETS= ^
-    vulkan_perf.exe ^
     editor.exe ^
     minimal.exe
 

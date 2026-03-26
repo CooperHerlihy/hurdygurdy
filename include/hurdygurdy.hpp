@@ -261,6 +261,19 @@ typedef float_t f32;
 typedef double_t f64;
 
 /**
+ * The config for the HurdyGurdy library init
+ */
+struct HgInit
+{
+    u64 arenaSize = UINT32_MAX;
+    u32 threadPoolQueueSize = 4096;
+    u32 ioRequestQueueSize = 4096;
+    u32 maxResources = 4096;
+    u32 maxTextures = 4096;
+    u32 maxModels = 4096;
+};
+
+/**
  * Initializes the HurdyGurdy library
  *
  * Subsystems initialized:
@@ -271,7 +284,7 @@ typedef double_t f64;
  * - OS windowing
  * - Hardware graphics
  */
-void hgInit();
+void hgInit(const HgInit* init = nullptr);
 
 /**
  * Shuts down the HurdyGurdy library
@@ -1525,7 +1538,7 @@ void* hgRealloc(HgArena* arena, void* allocation, u64 oldSize, u64 newSize, u64 
  * - The reallocated array, never nullptr
  */
 template<typename T>
-T* hgRealloc(HgArena* arena, T* allocation, u64 oldCount, u64 newCount) 
+T* hgRealloc(HgArena* arena, T* allocation, u64 oldCount, u64 newCount)
 {
     static_assert(std::is_trivially_copyable_v<T>);
     return (T*)hgRealloc(arena, allocation, oldCount * sizeof(T), newCount * sizeof(T), alignof(T));
@@ -1533,8 +1546,11 @@ T* hgRealloc(HgArena* arena, T* allocation, u64 oldCount, u64 newCount)
 
 /**
  * Initializes scratch arenas
+ *
+ * Parameters
+ * - size The size of each arena in bytes
  */
-void hgInitScratchMemory();
+void hgInitScratchMemory(u64 size);
 
 /**
  * Deinitializes scratch arenas
@@ -2323,11 +2339,11 @@ struct HgHashSet
     template<typename Fn>
     void forEach(Fn fn)
     {
-        static_assert(std::is_invocable_r_v<void, Fn, const Value&>);
+        static_assert(std::is_invocable_r_v<void, Fn, const Value*>);
         for (u32 i = 0; i < capacity; ++i)
         {
             if (hasVal[i])
-                fn(vals[i]);
+                fn((const Value*)&vals[i]);
         }
     }
 };
@@ -2505,11 +2521,11 @@ struct HgHashMap
     template<typename Fn>
     void forEach(Fn fn)
     {
-        static_assert(std::is_invocable_r_v<void, Fn, const Key&, Value&>);
+        static_assert(std::is_invocable_r_v<void, Fn, const Key*, Value*>);
         for (u32 i = 0; i < capacity; ++i)
         {
             if (hasVal[i])
-                fn(keys[i], vals[i]);
+                fn((const Key*)&keys[i], &vals[i]);
         }
     }
 };
@@ -2757,7 +2773,7 @@ void hgRequestIO(
 /**
  * Initializes the graphics subsystem, loading all global Vulkan resources
  */
-void hgInitGraphics();
+void hgInitGraphics(HgArena* arena);
 
 /**
  * Deinitializes the graphics subsystem, unloading all global Vulkan resources
@@ -3770,24 +3786,12 @@ struct HgResourceManager
      * Creates a new resource manager
      *
      * Parameters
-     * - resourceWidth The size in bytes of each resource
+     * - arena The arena to allocate from
+     * - width The size in bytes of each resource
+     * - align The alignment in bytes of each resource
      * - capacity The initial number of slots
      */
-    static HgResourceManager create(u32 resourceWidth, u32 capacity = 128);
-
-    /**
-     * Free the resource manager's memory
-     */
-    void destroy();
-
-    /**
-     * Resizes the slots and rehashes all entries
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - newSize The new number of slots
-     */
-    void resize(u32 newSize);
+    static HgResourceManager create(HgArena* arena, u32 width, u32 align, u32 capacity);
 
     /**
      * Empties all slots
@@ -3966,7 +3970,7 @@ void hgStoreBinary(HgBinary bin, HgStringView path);
 /**
  * Initialize the resource manager
  */
-void hgInitResources();
+void hgInitResources(HgArena* arena, u32 maxResources);
 
 /**
  * Deinitialize the resource manager
@@ -4260,7 +4264,7 @@ void hgExportGltf(HgFence* fences, u32 fenceCount, HgResource id, HgStringView p
  * - HgGpuTexture
  * - HgGpuModel
  */
-void hgInitGpuResources();
+void hgInitGpuResources(HgArena* arena, u32 maxTextures, u32 maxModels);
 
 /**
  * Deinitialize all gpu resource managers
@@ -4293,7 +4297,7 @@ struct HgTextureResource
 /**
  * Initialize gpu textures
  */
-void HgInitTextures();
+void HgInitTextures(HgArena* arena, u32 maxTextures);
 
 /**
  * Deinitialize gpu textures
@@ -4360,7 +4364,7 @@ struct HgModelResource
 /**
  * Initialize gpu models
  */
-void hgInitModels();
+void hgInitModels(HgArena* arena, u32 maxModels);
 
 /**
  * Deinitialize gpu models
@@ -4502,27 +4506,45 @@ struct HgECS
     /**
      * The component systems
      */
-    System* systems;
-    /**
-     * The number of component systems
-     */
-    u32 systemCount;
+    HgHashMap<u32, System> systems;
 
     /**
      * Create a new entity component system
      *
      * Parameters
+     * - arena The arena to allocate from
      * - maxEntities The maximum number of entities which can be spawned
+     * - maxComponentTypes The maximum number of types which can be created
      */
-    static HgECS create(u32 maxEntities);
+    static HgECS create(HgArena* arena, u32 maxEntities, u32 maxComponentTypes);
 
     /**
-     * Destroy the entity component system
+     * Create a new component type in the ECS
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - maxCount the maximum number of components in the component system
+     * - width The width of the component type in bytes
+     * - align The alignment of the component type in bytes
+     * - componentID The ID of the component to create
      */
-    void destroy();
+    void createComponent(HgArena* arena, u32 maxCount, u32 width, u32 align, u32 componentID);
 
     /**
-     * Reset the entity component system, despawning all entities
+     * Create a new component type in the ECS
+     *
+     * Parameters
+     * - arena The arena to allocate from
+     * - maxCount the maximum number of components in the component system
+     */
+    template<typename T>
+    void createComponent(HgArena* arena, u32 maxCount)
+    {
+        createComponent(arena, maxCount, sizeof(T), alignof(T), hgComponentID<T>);
+    }
+
+    /**
+     * Remove all component types and despawn all entities
      */
     void reset();
 
@@ -4659,6 +4681,7 @@ struct HgECS
     template<typename T>
     HgEntity get(const T* c)
     {
+        hgAssert(systems.get(hgComponentID<T>) != nullptr);
         return get((void*)c, hgComponentID<T>);
     }
 
@@ -4668,7 +4691,8 @@ struct HgECS
     template<typename T>
     HgEntity* entities()
     {
-        return (HgEntity*)systems[hgComponentID<T>].entities;
+        hgAssert(systems.get(hgComponentID<T>) != nullptr);
+        return (HgEntity*)systems.get(hgComponentID<T>)->entities;
     }
 
     /**
@@ -4677,7 +4701,8 @@ struct HgECS
     template<typename T>
     T* components()
     {
-        return (T*)systems[hgComponentID<T>].components;
+        hgAssert(systems.get(hgComponentID<T>) != nullptr);
+        return (T*)systems.get(hgComponentID<T>)->components;
     }
 
     /**
@@ -4686,7 +4711,8 @@ struct HgECS
     template<typename T>
     u32 count()
     {
-        return systems[hgComponentID<T>].count;
+        hgAssert(systems.get(hgComponentID<T>) != nullptr);
+        return systems.get(hgComponentID<T>)->count;
     }
 
     /**
@@ -4722,14 +4748,14 @@ struct HgECS
     template<typename T, typename Fn>
     void forEachSingle(Fn& fn)
     {
-        static_assert(std::is_invocable_r_v<void, Fn, HgEntity, T&>);
+        static_assert(std::is_invocable_r_v<void, Fn, HgEntity, T*>);
 
         HgEntity* e = entities<T>();
         HgEntity* end = e + count<T>();
         T* c = components<T>();
         for (; e != end; ++e, ++c)
         {
-            fn(*e, *c);
+            fn(*e, c);
         }
     }
 
@@ -4746,15 +4772,18 @@ struct HgECS
     template<typename... Ts, typename Fn>
     void forEachMulti(Fn& fn)
     {
-        static_assert(std::is_invocable_r_v<void, Fn, HgEntity, Ts&...>);
+        static_assert(std::is_invocable_r_v<void, Fn, HgEntity, Ts*...>);
 
         u32 id = findSmallest<Ts...>();
-        HgEntity* e = systems[id].entities;
-        HgEntity* end = e + systems[id].count;
+        System* system = systems.get(id);
+        hgAssert(system != nullptr);
+
+        HgEntity* e = system->entities;
+        HgEntity* end = e + system->count;
         for (; e != end; ++e)
         {
             if (hasAll<Ts...>(*e))
-                fn(*e, get<Ts>(*e)...);
+                fn(*e, &get<Ts>(*e)...);
         }
     }
 
@@ -4795,7 +4824,7 @@ struct HgECS
     template<typename T, typename Fn>
     void forParSingle(Fn& fn)
     {
-        static_assert(std::is_invocable_r_v<void, Fn, HgEntity, T&>);
+        static_assert(std::is_invocable_r_v<void, Fn, HgEntity, T*>);
 
         struct Capture
         {
@@ -4809,7 +4838,7 @@ struct HgECS
             Capture* capture = (Capture*)pcapture;
             (*capture->fn)(
                 capture->ecs->template entities<T>()[idx],
-                capture->ecs->template components<T>()[idx]);
+                &capture->ecs->template components<T>()[idx]);
         });
     }
 
@@ -4826,22 +4855,25 @@ struct HgECS
     template<typename... Ts, typename Fn>
     void forParMulti(Fn& fn)
     {
-        static_assert(std::is_invocable_r_v<void, Fn, HgEntity, Ts&...>);
+        static_assert(std::is_invocable_r_v<void, Fn, HgEntity, Ts*...>);
+
+        System* system = systems.get(findSmallest<Ts...>());
+        hgAssert(system != nullptr);
 
         struct Capture
         {
             HgECS* ecs;
+            System* system;
             Fn* fn;
-            u32 id;
         };
-        Capture capture{this, &fn, findSmallest<Ts...>()};
+        Capture capture{this, system, &fn};
 
-        hgForPar(0, systems[capture.id].count, &capture, [](void* pcapture, u64 idx)
+        hgForPar(0, system->count, &capture, [](void* pcapture, u64 idx)
         {
             Capture* capture = (Capture*)pcapture;
-            HgEntity e = capture->ecs->systems[capture->id].entities[idx];
+            HgEntity e = capture->system->entities[idx];
             if (capture->ecs->template hasAll<Ts...>(e))
-                (*capture->fn)(e, capture->ecs->template get<Ts>(e)...);
+                (*capture->fn)(e, &capture->ecs->template get<Ts>(e)...);
         });
     }
 
