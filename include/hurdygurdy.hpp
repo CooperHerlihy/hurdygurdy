@@ -1397,7 +1397,55 @@ HgMat4 hgOrthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 fa
  */
 HgMat4 hgPerspective(f32 fov, f32 aspect, f32 near, f32 far);
 
-// random number generators : TODO
+/**
+ * Generate white noise
+ */
+u32 hgNoise(u32 seed, u32 pos);
+
+/**
+ * Generate white noise
+ */
+u32 hgNoise(u32 seed, u32 x, u32 y);
+
+/**
+ * Generate white noise
+ */
+u32 hgNoise(u32 seed, u32 x, u32 y, u32 z);
+
+/**
+ * Generate white noise
+ */
+u32 hgNoise(u32 seed, u32 x, u32 y, u32 z, u32 w);
+
+/**
+ * Generate white noise normalized from 0.0 to 1.0
+ */
+f32 hgNoiseNorm(u32 seed, f32 pos);
+
+/**
+ * Generate white noise normalized from 0.0 to 1.0
+ */
+f32 hgNoiseNorm(u32 seed, HgVec2 pos);
+
+/**
+ * Generate white noise normalized from 0.0 to 1.0
+ */
+f32 hgNoiseNorm(u32 seed, HgVec3 pos);
+
+/**
+ * Generate white noise normalized from 0.0 to 1.0
+ */
+f32 hgNoiseNorm(u32 seed, HgVec4 pos);
+
+/**
+ * Generate white noise unit vector
+ */
+f32 hgNoiseVec1D(u32 seed, f32 pos);
+
+/**
+ * Generate white noise unit vector
+ */
+HgVec2 hgNoiseVec2D(u32 seed, HgVec2 pos);
 
 // sort and search algorithms : TODO
 

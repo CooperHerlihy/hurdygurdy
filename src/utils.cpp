@@ -611,6 +611,84 @@ HgMat4 hgPerspective(f32 fov, f32 aspect, f32 near, f32 far)
     };
 }
 
+u32 hgNoise(u32 seed, u32 pos)
+{
+    u32 ret = (pos + 384521713u) * 955740521u;
+    ret ^= ret >> 13;
+    ret *= seed * 725937977u;
+    ret ^= ret >> 7;
+    ret *= 358166231u;
+    ret ^= ret >> 11;
+    return ret;
+}
+
+u32 hgNoise(u32 seed, u32 x, u32 y)
+{
+    return hgNoise(seed, x + (y * 425537443u));
+}
+
+u32 hgNoise(u32 seed, u32 x, u32 y, u32 z)
+{
+    return hgNoise(seed, x + y * 425537443u + z * 682607u);
+}
+
+u32 hgNoise(u32 seed, u32 x, u32 y, u32 z, u32 w)
+{
+    return hgNoise(seed, x + y * 425537443u + z * 682607u + w * 9067);
+}
+
+f32 hgNoiseNorm(u32 seed, f32 pos)
+{
+    union Convert {
+        f32 asF32;
+        u32 asU32;
+    };
+    return (f32)hgNoise(seed, Convert{pos}.asU32) / (f32)UINT32_MAX;
+}
+
+f32 hgNoiseNorm(u32 seed, HgVec2 pos)
+{
+    union Convert {
+        f32 asF32;
+        u32 asU32;
+    };
+    return (f32)hgNoise(seed, Convert{pos.x}.asU32, Convert{pos.y}.asU32) / (f32)UINT32_MAX;
+}
+
+f32 hgNoiseNorm(u32 seed, HgVec3 pos)
+{
+    union Convert {
+        f32 asF32;
+        u32 asU32;
+    };
+    return (f32)hgNoise(seed, Convert{pos.x}.asU32, Convert{pos.y}.asU32, Convert{pos.z}.asU32) / (f32)UINT32_MAX;
+}
+
+f32 hgNoiseNorm(u32 seed, HgVec4 pos)
+{
+    union Convert {
+        f32 asF32;
+        u32 asU32;
+    };
+    return (f32)hgNoise(
+        seed,
+        Convert{pos.x}.asU32,
+        Convert{pos.y}.asU32,
+        Convert{pos.z}.asU32,
+        Convert{pos.w}.asU32) / (f32)UINT32_MAX;
+}
+
+f32 hgNoiseVec1D(u32 seed, f32 pos)
+{
+    return hgNoiseNorm(seed, pos) * 2.0 - 1.0;
+}
+
+HgVec2 hgNoiseVec2D(u32 seed, HgVec2 pos)
+{
+    f32 rot = 2.0 * hgPi * hgNoiseNorm(seed, pos);
+    return HgVec2(std::cos(rot), std::sin(rot));
+}
+
 u32 hgMaxMipmaps(u32 width, u32 height, u32 depth)
 {
     u32 max = width > height ? width : height;
