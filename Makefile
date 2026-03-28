@@ -9,10 +9,13 @@ DEBUG_CONFIG := -g -O0 -fsanitize=undefined -fno-exceptions -fno-rtti
 RELEASE_CONFIG := -O3 -DNDEBUG -fno-exceptions -fno-rtti
 CONFIG := $(DEBUG_CONFIG)
 
+SDL_DEBUG_CONFIG := Debug
+SDL_RELEASE_CONFIG := Debug
+SDL_CONFIG := $(SDL_DEBUG_CONFIG)
+
 INCLUDES := \
 	-I$(BUILD_DIR) \
 	-I$(SRC_DIR)/include \
-	-I$(SRC_DIR)/vendor/libX11/include \
 	-I$(SRC_DIR)/vendor/imgui \
 	-I$(SRC_DIR)/vendor/imgui/backends
 
@@ -24,7 +27,7 @@ SHADERS := \
 	model.frag
 
 IMGUI_BACKEND := \
-	imgui_impl_glfw.cpp \
+	imgui_impl_sdl3.cpp \
 	imgui_impl_vulkan.cpp
 
 SRC := \
@@ -33,7 +36,7 @@ SRC := \
 	resources.cpp \
 	pipeline2d.cpp \
 	pipeline3d.cpp \
-	window_glfw.cpp \
+	window_sdl3.cpp \
 	vulkan.cpp \
 	test.cpp
 
@@ -46,16 +49,30 @@ TARGETS := \
 all: $(patsubst %, $(BUILD_DIR)/%, $(TARGETS))
 
 debug:
-	$(MAKE) CONFIG="$(DEBUG_CONFIG)"
+	$(MAKE) CONFIG="$(DEBUG_CONFIG)" SDL_CONFIG="$(SDL_DEBUG_CONFIG)"
 
 release:
-	$(MAKE) CONFIG="$(RELEASE_CONFIG)"
+	$(MAKE) CONFIG="$(RELEASE_CONFIG)" SDL_CONFIG="$(SDL_RELEASE_CONFIG)"
 
 $(BUILD_DIR):
 	mkdir -p $@
 
 $(TEST_DIR):
 	mkdir -p $@
+
+$(BUILD_DIR)/libSDL3.a: | $(BUILD_DIR)
+	cmake -B$(BUILD_DIR)/SDL3 -S$(SRC_DIR)/vendor/SDL \
+		-DSDL_STATIC=ON \
+		-DSDL_SHARED=OFF \
+		-DSDL_TESTS=OFF
+	cmake --build $(BUILD_DIR)/SDL3 --config RelWithDebugInfo
+	cp $(BUILD_DIR)/SDL3/libSDL3.a $(BUILD_DIR)/libSDL3.a
+
+$(BUILD_DIR)/vk_mem_alloc.o: $(SRC_DIR)/src/vk_mem_alloc.cpp | $(BUILD_DIR)
+	c++ $(STD) $(CONFIG) $(INCLUDES) -c $< -o $@
+
+$(BUILD_DIR)/stb.o: $(SRC_DIR)/src/stb.c | $(BUILD_DIR)
+	c++ $(STD) $(CONFIG) $(INCLUDES) -c $< -o $@
 
 $(BUILD_DIR)/%.vert.spv: $(SRC_DIR)/src/%.vert | $(BUILD_DIR)
 	glslc -o $@ $< -I$(SRC_DIR)/include
@@ -65,12 +82,6 @@ $(BUILD_DIR)/%.frag.spv: $(SRC_DIR)/src/%.frag | $(BUILD_DIR)
 
 $(BUILD_DIR)/%.comp.spv: $(SRC_DIR)/src/%.comp | $(BUILD_DIR)
 	glslc -o $@ $< -I$(SRC_DIR)/include
-
-$(BUILD_DIR)/vk_mem_alloc.o: $(SRC_DIR)/src/vk_mem_alloc.cpp | $(BUILD_DIR)
-	c++ $(STD) $(CONFIG) $(INCLUDES) -c $< -o $@
-
-$(BUILD_DIR)/stb.o: $(SRC_DIR)/src/stb.c | $(BUILD_DIR)
-	c++ $(STD) $(CONFIG) $(INCLUDES) -c $< -o $@
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/vendor/imgui/backends/%.cpp | $(BUILD_DIR)
 	c++ $(STD) $(CONFIG) $(INCLUDES) -c $< -o $@
@@ -91,8 +102,8 @@ $(BUILD_DIR)/libhurdygurdy.a: $(LIB_FILES) $(BUILD_DIR)/vk_mem_alloc.o $(BUILD_D
 
 SHADERS_SPV := $(patsubst %, $(BUILD_DIR)/%.spv, $(SHADERS))
 
-$(BUILD_DIR)/%: $(BUILD_DIR)/%.o $(BUILD_DIR)/libhurdygurdy.a | $(SHADERS_SPV) $(TEST_DIR)
-	c++ $(STD) $(CONFIG) $(WARNINGS) -o $@ $< -L$(BUILD_DIR) -lhurdygurdy -lglfw
+$(BUILD_DIR)/%: $(BUILD_DIR)/%.o $(BUILD_DIR)/libhurdygurdy.a $(BUILD_DIR)/libSDL3.a | $(SHADERS_SPV) $(TEST_DIR)
+	c++ $(STD) $(CONFIG) $(WARNINGS) -o $@ $< -L$(BUILD_DIR) -lhurdygurdy -lSDL3
 
 clean:
 	rm -rf $(BUILD_DIR) $(TEST_DIR)

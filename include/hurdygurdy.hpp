@@ -5393,6 +5393,10 @@ struct HgWindowConfig
      */
     bool windowed;
     /**
+     * Whether the window can be resized
+     */
+    bool resizable;
+    /**
      * The width in pixels if windowed, otherwise ignored
      */
     u32 width;

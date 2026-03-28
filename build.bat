@@ -41,7 +41,7 @@ set SRC= ^
     resources.cpp ^
     pipeline2d.cpp ^
     pipeline3d.cpp ^
-    window_win32.cpp ^
+    window_sdl3.cpp ^
     vulkan.cpp ^
     test.cpp
 
@@ -52,9 +52,13 @@ set TARGETS= ^
 if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
 if not exist "%TEST_DIR%" mkdir "%TEST_DIR%"
 
-for %%F in (%SHADERS%) do (
-    echo %%F
-    glslc -o "%BUILD_DIR%\%%F.spv" "%SRC_DIR%\src\%%F" -I"%SRC_DIR%\include"
+if not exist "%BUILD_DIR%\SDL3.lib" (
+    cmake -B$(BUILD_DIR)\SDL3 -S$(SRC_DIR)\vendor\SDL ^
+        -DSDL_STATIC=ON ^
+        -DSDL_SHARED=OFF ^
+        -DSDL_TESTS=OFF
+    cmake --build $(BUILD_DIR)\SDL3 --config RelWithDebugInfo
+    cp $(BUILD_DIR)\SDL3\libSDL3.a $(BUILD_DIR)\libSDL3.a
 )
 
 if not exist "%BUILD_DIR%\vk_mem_alloc.obj" (
@@ -93,6 +97,11 @@ for %%F in (%IMGUI_BACKENDS%) do (
     set OBJS=!OBJS! "%BUILD_DIR%\%%~nF.obj"
 )
 
+for %%F in (%SHADERS%) do (
+    echo %%F
+    glslc -o "%BUILD_DIR%\%%F.spv" "%SRC_DIR%\src\%%F" -I"%SRC_DIR%\include"
+)
+
 for %%F in (%SRC%) do (
     cl /c "%SRC_DIR%\src\%%F" ^
         /Fd:"%BUILD_DIR%\%%~nF.pdb" ^
@@ -113,7 +122,7 @@ for %%F in (%TARGETS%) do (
         /Fo:"%BUILD_DIR%\%%~nF.obj" ^
         /Fe:"%BUILD_DIR%\%%~nF.exe" ^
         %STD% %WARNINGS% %CONFIG% %INCLUDES% ^
-        "%BUILD_DIR%\hurdygurdy.lib" User32.lib
+        "%BUILD_DIR%\hurdygurdy.lib" "%BUILD_DIR%\SDL3.lib" User32.lib
 
     set OBJS=!OBJS! "%BUILD_DIR%\%%~nF.obj"
 )
