@@ -31,12 +31,7 @@ IMGUI_BACKEND := \
 	imgui_impl_vulkan.cpp
 
 SRC := \
-	utils.cpp \
-	concurrency.cpp \
-	resources.cpp \
-	pipeline2d.cpp \
-	pipeline3d.cpp \
-	window_sdl3.cpp \
+	hurdygurdy.cpp \
 	vulkan.cpp \
 	test.cpp
 

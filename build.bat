@@ -36,12 +36,7 @@ set SHADERS= ^
     model.frag
 
 set SRC= ^
-    utils.cpp ^
-    concurrency.cpp ^
-    resources.cpp ^
-    pipeline2d.cpp ^
-    pipeline3d.cpp ^
-    window_sdl3.cpp ^
+    hurdygurdy.cpp ^
     vulkan.cpp ^
     test.cpp
 

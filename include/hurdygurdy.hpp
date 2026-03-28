@@ -34,11 +34,63 @@
 #include <cstdlib>
 #include <cstring>
 
-#include <algorithm>
 #include <atomic>
+#include <type_traits>
 
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
+
+/**
+ * An 8 bit, 1 byte unsigned integer
+ */
+typedef uint8_t u8;
+/**
+ * A 16 bit, 2 byte unsigned integer
+ */
+typedef uint16_t u16;
+/**
+ * A 32 bit, 4 byte unsigned integer
+ */
+typedef uint32_t u32;
+/**
+ * A 64 bit, 8 byte unsigned integer
+ */
+typedef uint64_t u64;
+
+/**
+ * An 8 bit, 1 byte signed integer
+ */
+typedef int8_t i8;
+/**
+ * A 16 bit, 2 byte signed integer
+ */
+typedef int16_t i16;
+/**
+ * A 32 bit, 4 byte signed integer
+ */
+typedef int32_t i32;
+/**
+ * A 64 bit, 8 byte signed integer
+ */
+typedef int64_t i64;
+
+/**
+ * An unsigned integer representing a pointer
+ */
+typedef uintptr_t uptr;
+/**
+ * A signed integer representing a pointer
+ */
+typedef intptr_t iptr;
+
+/**
+ * A 32 bit, 4 byte floating point value
+ */
+typedef float f32;
+/**
+ * A 64 bit, 8 byte floating point value
+ */
+typedef double f64;
 
 #ifdef __GNUC__
 #define HG_COMPILER_GCC 1
@@ -209,63 +261,13 @@ struct HgDefer
 #endif
 
 /**
- * An 8 bit, 1 byte unsigned integer
- */
-typedef uint8_t u8;
-/**
- * A 16 bit, 2 byte unsigned integer
- */
-typedef uint16_t u16;
-/**
- * A 32 bit, 4 byte unsigned integer
- */
-typedef uint32_t u32;
-/**
- * A 64 bit, 8 byte unsigned integer
- */
-typedef uint64_t u64;
-
-/**
- * An 8 bit, 1 byte signed integer
- */
-typedef int8_t i8;
-/**
- * A 16 bit, 2 byte signed integer
- */
-typedef int16_t i16;
-/**
- * A 32 bit, 4 byte signed integer
- */
-typedef int32_t i32;
-/**
- * A 64 bit, 8 byte signed integer
- */
-typedef int64_t i64;
-
-/**
- * An unsigned integer representing a pointer
- */
-typedef uintptr_t uptr;
-/**
- * A signed integer representing a pointer
- */
-typedef intptr_t iptr;
-
-/**
- * A 32 bit, 4 byte floating point value
- */
-typedef float_t f32;
-/**
- * A 64 bit, 8 byte floating point value
- */
-typedef double_t f64;
-
-/**
  * The config for the HurdyGurdy library init
  */
 struct HgInit
 {
     u64 arenaSize = UINT32_MAX;
+    u32 maxWindows = 8;
+    u32 maxWindowEvents = 2048;
     u32 threadPoolQueueSize = 4096;
     u32 ioRequestQueueSize = 4096;
     u32 maxResources = 4096;
@@ -295,6 +297,49 @@ void hgDeinit();
  * Run Hurdy Gurdy tests, asserting success
  */
 void hgTest();
+
+/**
+ * Aligns a pointer to an alignment
+ *
+ * Parameters
+ * - value The value to align
+ * - alignment The alignment, must be a power of two
+ *
+ * Returns
+ * - The aligned value
+ */
+constexpr uptr hgAlign(uptr value, uptr alignment)
+{
+    hgAssert(alignment > 0 && (alignment & (alignment - 1)) == 0);
+    return (value + alignment - 1) & ~(alignment - 1);
+}
+
+/**
+ * Reverse the endianness of a 16 bit value
+ */
+constexpr u16 hgReverseEndianness(u16 val)
+{
+    return (val & 0xff00 >> 8) & (val & 0x00ff << 8);
+}
+
+/**
+ * Reverse the endianness of a 32 bit value
+ */
+constexpr u32 hgReverseEndianness(u32 val)
+{
+    return (val & 0xff0000 >> 16) & (val & 0x00ff00) & (val & 0x0000ff << 16);
+}
+
+/**
+ * Reverse the endianness of a 64 bit value
+ */
+constexpr u64 hgReverseEndianness(u64 val)
+{
+    return (val & 0xff000000 >> 24) &
+           (val & 0x00ff0000 >> 8) &
+           (val & 0x0000ff00 << 8) &
+           (val & 0x000000ff << 24);
+}
 
 /**
  * The value of Pi
@@ -1447,6 +1492,8 @@ f32 hgNoiseVec1D(u32 seed, f32 pos);
  */
 HgVec2 hgNoiseVec2D(u32 seed, HgVec2 pos);
 
+// value and perlin noise : TODO
+
 // sort and search algorithms : TODO
 
 /**
@@ -1458,22 +1505,6 @@ HgVec2 hgNoiseVec2D(u32 seed, HgVec2 pos);
  * - depth The depth of the image
  */
 u32 hgMaxMipmaps(u32 width, u32 height, u32 depth);
-
-/**
- * Aligns a pointer to an alignment
- *
- * Parameters
- * - value The value to align
- * - alignment The alignment, must be a power of two
- *
- * Returns
- * - The aligned value
- */
-constexpr uptr hgAlign(uptr value, uptr alignment)
-{
-    hgAssert(alignment > 0 && (alignment & (alignment - 1)) == 0);
-    return (value + alignment - 1) & ~(alignment - 1);
-}
 
 /**
  * An arena allocator
@@ -3788,6 +3819,424 @@ struct HgRenderer
 };
 
 /**
+ * Initializes global resources for windowing
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - maxWindows The maximum number of windows that can be created
+ * - maxEvents The maximum number of events a window can hold per frame
+ */
+void hgInitPlatform(HgArena* arena, u32 maxWindows, u32 maxEvents);
+
+/**
+ * Deinitializes global resources for windowing
+ */
+void hgDeinitPlatform();
+
+/**
+ * Get the platform's required instance extensions for windowing
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - extBuffer A pointer to store the extension names
+ *
+ * Returns
+ * - The number of required extensions
+ */
+u32 hgGetPlatformVulkanExtensions(HgArena* arena, HgStringView** extBuffer);
+
+/**
+ * A key on the keyboard or button on the mouse
+ */
+enum HgKey
+{
+    HgKey_none = 0,
+    HgKey_k0,
+    HgKey_k1,
+    HgKey_k2,
+    HgKey_k3,
+    HgKey_k4,
+    HgKey_k5,
+    HgKey_k6,
+    HgKey_k7,
+    HgKey_k8,
+    HgKey_k9,
+    HgKey_q,
+    HgKey_w,
+    HgKey_e,
+    HgKey_r,
+    HgKey_t,
+    HgKey_y,
+    HgKey_u,
+    HgKey_i,
+    HgKey_o,
+    HgKey_p,
+    HgKey_a,
+    HgKey_s,
+    HgKey_d,
+    HgKey_f,
+    HgKey_g,
+    HgKey_h,
+    HgKey_j,
+    HgKey_k,
+    HgKey_l,
+    HgKey_z,
+    HgKey_x,
+    HgKey_c,
+    HgKey_v,
+    HgKey_b,
+    HgKey_n,
+    HgKey_m,
+    HgKey_semicolon,
+    HgKey_colon,
+    HgKey_apostrophe,
+    HgKey_quotation,
+    HgKey_comma,
+    HgKey_period,
+    HgKey_question,
+    HgKey_grave,
+    HgKey_tilde,
+    HgKey_exclamation,
+    HgKey_at,
+    HgKey_hash,
+    HgKey_dollar,
+    HgKey_percent,
+    HgKey_carot,
+    HgKey_ampersand,
+    HgKey_asterisk,
+    HgKey_lparen,
+    HgKey_rparen,
+    HgKey_lbracket,
+    HgKey_rbracket,
+    HgKey_lbrace,
+    HgKey_rbrace,
+    HgKey_equal,
+    HgKey_less,
+    HgKey_greater,
+    HgKey_plus,
+    HgKey_minus,
+    HgKey_slash,
+    HgKey_backslash,
+    HgKey_underscore,
+    HgKey_bar,
+    HgKey_up,
+    HgKey_down,
+    HgKey_left,
+    HgKey_right,
+    HgKey_mouse1,
+    HgKey_mouse2,
+    HgKey_mouse3,
+    HgKey_mouse4,
+    HgKey_mouse5,
+    HgKey_lmouse = HgKey_mouse1,
+    HgKey_rmouse = HgKey_mouse2,
+    HgKey_mmouse = HgKey_mouse3,
+    HgKey_escape,
+    HgKey_space,
+    HgKey_enter,
+    HgKey_backspace,
+    HgKey_kdelete,
+    HgKey_insert,
+    HgKey_tab,
+    HgKey_home,
+    HgKey_end,
+    HgKey_f1,
+    HgKey_f2,
+    HgKey_f3,
+    HgKey_f4,
+    HgKey_f5,
+    HgKey_f6,
+    HgKey_f7,
+    HgKey_f8,
+    HgKey_f9,
+    HgKey_f10,
+    HgKey_f11,
+    HgKey_f12,
+    HgKey_lshift,
+    HgKey_rshift,
+    HgKey_lctrl,
+    HgKey_rctrl,
+    HgKey_lmeta,
+    HgKey_rmeta,
+    HgKey_lalt,
+    HgKey_ralt,
+    HgKey_lsuper,
+    HgKey_rsuper,
+    HgKey_capslock,
+    HgKey_count,
+};
+
+/**
+ * The types of events
+ */
+enum HgKeyEventType
+{
+    HgKeyEventType_none,
+    HgKeyEventType_keyPress,
+    HgKeyEventType_keyRelease,
+    HgKeyEventType_count,
+};
+
+/**
+ * Input event data
+ */
+struct HgKeyEvent
+{
+    /**
+     * The type of event
+     */
+    HgKeyEventType type;
+    /**
+     * The key pressed or released (keyPress or keyRelease)
+     */
+    HgKey key;
+};
+
+/**
+ * Configuration for a window
+ */
+struct HgCreateWindow
+{
+    /**
+     * The title of the window
+     */
+    const char* title = nullptr;
+    /**
+     * The width in pixels if windowed, otherwise ignored
+     */
+    u32 width = 0;
+    /**
+     * The height in pixels if windowed, otherwise ignored
+     */
+    u32 height = 0;
+    /**
+     * Whether the window can be resized
+     */
+    bool fixedSize = false;
+    /**
+     * Whether the window should be windowed or fullscreen
+     *
+     * Note, width and height are ignored if fullscreen is true
+     */
+    bool fullscreen = false;
+    /**
+     * How the swapchain images will be presented
+     *
+     * Note, will fall back to FIFO if unavailable
+     */
+    VkPresentModeKHR preferredPresentMode = VK_PRESENT_MODE_FIFO_KHR;
+    /**
+     * How the swapchain images will be used
+     */
+    VkImageUsageFlags imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    /**
+     * The maximum number of events per update
+     */
+    u32 maxEvents = 2048;
+};
+
+/**
+ * A window
+ */
+struct HgWindow
+{
+    /**
+     * Platform specific resources for a window
+     */
+    void* internals;
+    /**
+     * The window's Vulkan surface
+     */
+    VkSurfaceKHR surface;
+    /**
+     * The swapchain
+     */
+    VkSwapchainKHR swapchain;
+    /**
+     * The swapchain image format
+     */
+    VkFormat format;
+    /**
+     * The number of swapchain images
+     */
+    u32 imageCount;
+    /**
+     * The width of the images 
+     */
+    u32 width;
+    /**
+     * The height of the images
+     */
+    u32 height;
+    /**
+     * The swapchain images
+     */
+    HgImage* images;
+    /**
+     * The swapchain image views
+     */
+    HgImageView* views;
+    /**
+     * How the swapchain images are used
+     */
+    VkImageUsageFlags imageUsage;
+    /**
+     * The swapchain image format
+     */
+    VkPresentModeKHR presentMode;
+
+    /**
+     * The command buffers per image
+     */
+    VkCommandBuffer* cmds;
+    /**
+     * The fences per image
+     */
+    VkFence* frameFinished;
+    /**
+     * The semaphores per image to signal availability
+     */
+    VkSemaphore* imageAvailable;
+    /**
+     * The semaphores per image to signal presentability
+     */
+    VkSemaphore* readyToPresent;
+    /**
+     * The current frame
+     */
+    u32 currentFrame;
+    /**
+     * The current image
+     */
+    u32 currentImage;
+
+    /**
+     * The maximum number of events
+     */
+    u32 maxEvents;
+    /**
+     * The number of events since last update
+     */
+    u32 eventCount;
+    /**
+     * The key events on this window since last update
+     */
+    HgKeyEvent events[1];
+
+    /**
+     * Acquires the next swapchain image and begins its command buffer
+     *
+     * Returns
+     * - The command buffer to record this frame
+     * - nullptr if the swapchain cannot be rendered to
+     */
+    VkCommandBuffer beginRecording();
+
+    /**
+     * Finishes recording the command buffer and presents the swapchain image
+     *
+     * Parameters
+     * - cmd The command buffer given from beginRecording
+     */
+    void endAndPresent(VkCommandBuffer cmd);
+};
+
+/**
+ * Create a new window
+ */
+HgWindow* hgCreateWindow(const HgCreateWindow* config);
+
+/**
+ * Destroy a window
+ */
+void hgDestroyWindow(HgWindow* window);
+
+/**
+ * Processes all events since the last call to process events or startup
+ *
+ * Must be called every frame before querying input
+ * Processes all events, so all windows must be given
+ * Updates the each window's input state
+ *
+ * Parameters
+ * - windows All open windows, must not be nullptr
+ * - windowCount The number of windows
+ */
+void hgProcessEvents();
+
+/**
+ * Returns whether the app has been quit
+ */
+bool hgWasQuit();
+
+/**
+ * Get the key events since last event processing
+ */
+HgKeyEvent* hgGetKeyEvents(HgWindow* window, u32* count);
+
+/**
+ * Returns whether the key is currently down
+ */
+bool hgIsKeyDown(HgKey key);
+
+/**
+ * Returns the current position of the mouse relative to the focused window
+ */
+void hgGetMousePos(f32* x, f32* y);
+
+/**
+ * Gets the change in mouse position in pixels
+ */
+void hgGetMouseDelta(f32* x, f32* y);
+
+/**
+ * Returns whether the mouse is focused on the window
+ */
+bool hgIsMouseFocused(HgWindow* window);
+
+/**
+ * Get the window's size in pixels
+ */
+void hgGetWindowSize(HgWindow* window, u32* x, u32* y);
+
+/**
+ * Initialize ImGui platform backend
+ *
+ * Note, requires GLFW on Linux (for now)
+ *
+ * Parameters
+ * - window The window for ImGui to use
+ */
+void ImGui_ImplHurdyGurdy_Init(
+    HgWindow* window,
+    u32 colorAttachmentCount,
+    const VkFormat* colorFormats,
+    VkFormat depthFormat = VK_FORMAT_UNDEFINED,
+    VkFormat stencilFormat = VK_FORMAT_UNDEFINED);
+
+/**
+ * Deinitializes ImGui platform backend
+ */
+void ImGui_ImplHurdyGurdy_Shutdown();
+
+/**
+ * Create a new ImGui frame for the platform backend
+ */
+void ImGui_ImplHurdyGurdy_NewFrame();
+
+/**
+ * Draw the ImGui frame
+ *
+ * Parameters
+ * - cmd The command buffer to record to
+ */
+void ImGui_ImplHurdyGurdy_Draw(VkCommandBuffer cmd);
+
+// audio system : TODO
+
+// file system : TODO
+
+/**
  * The uuid derived from the resource's name/path
  */
 using HgResource = u64;
@@ -5233,424 +5682,5 @@ void hgUpdateView3D(const HgMat4* view);
  * - cmd The command buffer to record to, must not be nullptr
  */
 void hgDraw3D(HgECS* ecs, VkCommandBuffer cmd);
-
-/**
- * Initializes global resources for windowing
- */
-void hgInitPlatform();
-
-/**
- * Deinitializes global resources for windowing
- */
-void hgDeinitPlatform();
-
-/**
- * Get the platform's required instance extensions for windowing
- *
- * Parameters
- * - arena The arena to allocate from
- * - extBuffer A pointer to store the extension names
- *
- * Returns
- * - The number of required extensions
- */
-u32 hgVkGetPlatformExtensions(HgArena* arena, HgStringView** extBuffer);
-
-// audio system : TODO
-
-/**
- * A key on the keyboard or button on the mouse
- */
-enum HgKey
-{
-    HgKey_none = 0,
-    HgKey_k0,
-    HgKey_k1,
-    HgKey_k2,
-    HgKey_k3,
-    HgKey_k4,
-    HgKey_k5,
-    HgKey_k6,
-    HgKey_k7,
-    HgKey_k8,
-    HgKey_k9,
-    HgKey_q,
-    HgKey_w,
-    HgKey_e,
-    HgKey_r,
-    HgKey_t,
-    HgKey_y,
-    HgKey_u,
-    HgKey_i,
-    HgKey_o,
-    HgKey_p,
-    HgKey_a,
-    HgKey_s,
-    HgKey_d,
-    HgKey_f,
-    HgKey_g,
-    HgKey_h,
-    HgKey_j,
-    HgKey_k,
-    HgKey_l,
-    HgKey_z,
-    HgKey_x,
-    HgKey_c,
-    HgKey_v,
-    HgKey_b,
-    HgKey_n,
-    HgKey_m,
-    HgKey_semicolon,
-    HgKey_colon,
-    HgKey_apostrophe,
-    HgKey_quotation,
-    HgKey_comma,
-    HgKey_period,
-    HgKey_question,
-    HgKey_grave,
-    HgKey_tilde,
-    HgKey_exclamation,
-    HgKey_at,
-    HgKey_hash,
-    HgKey_dollar,
-    HgKey_percent,
-    HgKey_carot,
-    HgKey_ampersand,
-    HgKey_asterisk,
-    HgKey_lparen,
-    HgKey_rparen,
-    HgKey_lbracket,
-    HgKey_rbracket,
-    HgKey_lbrace,
-    HgKey_rbrace,
-    HgKey_equal,
-    HgKey_less,
-    HgKey_greater,
-    HgKey_plus,
-    HgKey_minus,
-    HgKey_slash,
-    HgKey_backslash,
-    HgKey_underscore,
-    HgKey_bar,
-    HgKey_up,
-    HgKey_down,
-    HgKey_left,
-    HgKey_right,
-    HgKey_mouse1,
-    HgKey_mouse2,
-    HgKey_mouse3,
-    HgKey_mouse4,
-    HgKey_mouse5,
-    HgKey_lmouse = HgKey_mouse1,
-    HgKey_rmouse = HgKey_mouse2,
-    HgKey_mmouse = HgKey_mouse3,
-    HgKey_escape,
-    HgKey_space,
-    HgKey_enter,
-    HgKey_backspace,
-    HgKey_kdelete,
-    HgKey_insert,
-    HgKey_tab,
-    HgKey_home,
-    HgKey_end,
-    HgKey_f1,
-    HgKey_f2,
-    HgKey_f3,
-    HgKey_f4,
-    HgKey_f5,
-    HgKey_f6,
-    HgKey_f7,
-    HgKey_f8,
-    HgKey_f9,
-    HgKey_f10,
-    HgKey_f11,
-    HgKey_f12,
-    HgKey_lshift,
-    HgKey_rshift,
-    HgKey_lctrl,
-    HgKey_rctrl,
-    HgKey_lmeta,
-    HgKey_rmeta,
-    HgKey_lalt,
-    HgKey_ralt,
-    HgKey_lsuper,
-    HgKey_rsuper,
-    HgKey_capslock,
-    HgKey_count,
-};
-
-/**
- * Configuration for a window
- */
-struct HgWindowConfig
-{
-    /**
-     * The title of the window
-     */
-    const char* title;
-    /**
-     * Whether the window should be windowed or fullscreen
-     */
-    bool windowed;
-    /**
-     * Whether the window can be resized
-     */
-    bool resizable;
-    /**
-     * The width in pixels if windowed, otherwise ignored
-     */
-    u32 width;
-    /**
-     * The height in pixels if windowed, otherwise ignored
-     */
-    u32 height;
-    /**
-     * How the swapchain images will be used
-     */
-    VkImageUsageFlags imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    /**
-     * How the swapchain images will be presented
-     *
-     * Note, will fall back to FIFO if unavailable
-     */
-    VkPresentModeKHR preferredPresentMode = VK_PRESENT_MODE_FIFO_KHR;
-};
-
-/**
- * A window
- */
-struct HgWindow
-{
-    struct Internals;
-
-    /**
-     * Platform specific resources for a window
-     */
-    Internals* internals;
-    /**
-     * The window's Vulkan surface
-     */
-    VkSurfaceKHR surface;
-    /**
-     * The swapchain
-     */
-    VkSwapchainKHR swapchain;
-    /**
-     * The swapchain image format
-     */
-    VkFormat format;
-    /**
-     * The number of swapchain images
-     */
-    u32 imageCount;
-    /**
-     * The swapchain images
-     */
-    HgImage* images;
-    /**
-     * The swapchain image views
-     */
-    HgImageView* views;
-    /**
-     * How the swapchain images are used
-     */
-    VkImageUsageFlags imageUsage;
-    /**
-     * The swapchain image format
-     */
-    VkPresentModeKHR presentMode;
-
-    /**
-     * The command buffers per image
-     */
-    VkCommandBuffer* cmds;
-    /**
-     * The fences per image
-     */
-    VkFence* frameFinished;
-    /**
-     * The semaphores per image to signal availability
-     */
-    VkSemaphore* imageAvailable;
-    /**
-     * The semaphores per image to signal presentability
-     */
-    VkSemaphore* readyToPresent;
-    /**
-     * The current frame
-     */
-    u32 currentFrame;
-    /**
-     * The current image
-     */
-    u32 currentImage;
-
-    /**
-     * The window's current width
-     */
-    u32 width;
-    /**
-     * The window's current height
-     */
-    u32 height;
-    /**
-     * The current x position of the mouse
-     */
-    f64 mousePosX;
-    /**
-     * The current y position of the mouse
-     */
-    f64 mousePosY;
-    /**
-     * The x distance the mouse has travelled since last frame
-     */
-    f64 mouseDeltaX;
-    /**
-     * The y distance the mouse has travelled since last frame
-     */
-    f64 mouseDeltaY;
-    /**
-     * Which keys are currently being held down
-     */
-    bool isKeyDown[HgKey_count];
-    /**
-     * Which keys were pressed this frame
-     */
-    bool wasKeyPressed[HgKey_count];
-    /**
-     * Which keys were released this frame
-     */
-    bool wasKeyReleased[HgKey_count];
-    /**
-     * Whether this window has been closed
-     */
-    bool wasClosed;
-
-    /**
-     * Creates a window
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - config The window configuration
-     */
-    static HgWindow* create(HgArena* arena, const HgWindowConfig* config);
-
-    /**
-     * Destroys the window
-     */
-    void destroy();
-
-    /**
-     * Acquires the next swapchain image and begins its command buffer
-     *
-     * Returns
-     * - The command buffer to record this frame
-     * - nullptr if the swapchain cannot be rendered to
-     */
-    VkCommandBuffer beginRecording();
-
-    /**
-     * Finishes recording the command buffer and presents the swapchain image
-     *
-     * Parameters
-     * - cmd The command buffer given from beginRecording
-     */
-    void endAndPresent(VkCommandBuffer cmd);
-
-    /**
-     * Sets the window icon : TODO
-     *
-     * Parameters
-     * - iconData The pixels of the image to set the icon to, must not be nullptr
-     * - width The width in pixels of the icon
-     * - height The height in pixels of the icon
-     */
-    void setIcon(u32* iconData, u32 width, u32 height);
-
-    /**
-     * Gets whether the window is fullscreen or not : TODO
-     *
-     * Returns
-     * - Whether the window is fullscreen
-     */
-    bool isFullscreen();
-
-    /**
-     * Sets the window to fullscreen of windowed mode : TODO
-     *
-     * Parameters
-     * - fullscreen Whether to set fullscreen, or set windowed
-     */
-    void setFullscreen(bool fullscreen);
-
-    /**
-     * The builtin cursor images
-     */
-    enum Cursor
-    {
-        Cursor_none = 0,
-        Cursor_arrow,
-        Cursor_text,
-        Cursor_wait,
-        Cursor_cross,
-        Cursor_hand,
-    };
-
-    /**
-     * Sets the window's cursor to a platform defined icon : TODO
-     */
-    void setCursor(Cursor cursor);
-
-    /**
-     * Sets the window's cursor to a custom image : TODO
-     */
-    void setCursorImage(u32* data, u32 width, u32 height);
-};
-
-/**
- * Processes all events since the last call to process events or startup
- *
- * Must be called every frame before querying input
- * Processes all events, so all windows must be given
- * Updates the each window's input state
- *
- * Parameters
- * - windows All open windows, must not be nullptr
- * - windowCount The number of windows
- */
-void hgProcessWindowEvents(HgWindow** windows, u32 windowCount);
-
-/**
- * Initialize ImGui platform backend
- *
- * Note, requires GLFW on Linux (for now)
- *
- * Parameters
- * - window The window for ImGui to use
- */
-void ImGui_ImplHurdyGurdy_Init(
-    HgWindow* window,
-    u32 colorAttachmentCount,
-    const VkFormat* colorFormats,
-    VkFormat depthFormat = VK_FORMAT_UNDEFINED,
-    VkFormat stencilFormat = VK_FORMAT_UNDEFINED);
-
-/**
- * Deinitializes ImGui platform backend
- */
-void ImGui_ImplHurdyGurdy_Shutdown();
-
-/**
- * Create a new ImGui frame for the platform backend
- */
-void ImGui_ImplHurdyGurdy_NewFrame();
-
-/**
- * Draw the ImGui frame
- *
- * Parameters
- * - cmd The command buffer to record to
- */
-void ImGui_ImplHurdyGurdy_Draw(VkCommandBuffer cmd);
 
 #endif // HURDYGURDY_HPP

@@ -18,15 +18,14 @@ int main()
     HgArena* arena = hgGetScratch();
     HgArenaScope arenaScope{arena};
 
-    HgWindowConfig windowConfig{};
+    HgCreateWindow windowConfig{};
     windowConfig.title = "Hg Test";
-    windowConfig.windowed = true;
     windowConfig.width = 1600;
     windowConfig.height = 900;
     windowConfig.preferredPresentMode = VK_PRESENT_MODE_MAILBOX_KHR;
 
-    HgWindow* window = HgWindow::create(arena, &windowConfig);
-    hgDefer(window->destroy());
+    HgWindow* window = hgCreateWindow(&windowConfig);
+    hgDefer(hgDestroyWindow(window));
 
     hgInitPipeline2D(VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_D32_SFLOAT);
     hgDefer(hgDeinitPipeline2D());
@@ -129,8 +128,8 @@ int main()
             cubeRot = hgAxisAngle(HgVec3{0, -1, 0}, (f32)delta) * cubeRot;
         }
 
-        hgProcessWindowEvents(&window, 1);
-        if (window->wasClosed)
+        hgProcessEvents();
+        if (hgWasQuit())
             goto quit;
 
         ImGui_ImplHurdyGurdy_NewFrame();
@@ -263,23 +262,27 @@ int main()
 
                 if (ImGui::IsWindowFocused())
                 {
-                    if (move3D && window->isKeyDown[HgKey_lmouse])
+                    if (move3D && hgIsKeyDown(HgKey_lmouse))
                     {
+                        f32 dx, dy;
+                        hgGetMouseDelta(&dx, &dy);
+
                         f32 rotSpeed = 2.0f;
-                        HgQuat rotX = hgAxisAngle(HgVec3{0, 1, 0}, (f32)window->mouseDeltaX * rotSpeed);
-                        HgQuat rotY = hgAxisAngle(HgVec3{-1, 0, 0}, (f32)window->mouseDeltaY * rotSpeed);
+                        HgQuat rotX = hgAxisAngle(HgVec3{0, 1, 0}, dx * rotSpeed / (f32)renderHeight);
+                        HgQuat rotY = hgAxisAngle(HgVec3{-1, 0, 0}, dy * rotSpeed / (f32)renderHeight);
+
                         camera.rotation = rotX * camera.rotation * rotY;
                     }
 
                     HgVec3 movement = HgVec3{0.0f};
                     if (move3D)
                     {
-                        movement.y += window->isKeyDown[HgKey_lshift] - window->isKeyDown[HgKey_space];
-                        movement.x += window->isKeyDown[HgKey_d] - window->isKeyDown[HgKey_a];
-                        movement.z += window->isKeyDown[HgKey_w] - window->isKeyDown[HgKey_s];
+                        movement.y += hgIsKeyDown(HgKey_lshift) - hgIsKeyDown(HgKey_space);
+                        movement.x += hgIsKeyDown(HgKey_d) - hgIsKeyDown(HgKey_a);
+                        movement.z += hgIsKeyDown(HgKey_w) - hgIsKeyDown(HgKey_s);
                     } else {
-                        movement.y += window->isKeyDown[HgKey_s] - window->isKeyDown[HgKey_w];
-                        movement.x += window->isKeyDown[HgKey_d] - window->isKeyDown[HgKey_a];
+                        movement.y += hgIsKeyDown(HgKey_s) - hgIsKeyDown(HgKey_w);
+                        movement.x += hgIsKeyDown(HgKey_d) - hgIsKeyDown(HgKey_a);
                     }
 
                     if (movement != HgVec3{0.0f})

@@ -15,14 +15,13 @@ int main()
     HgArena* arena = hgGetScratch();
     HgArenaScope arenaScope{arena};
 
-    HgWindowConfig windowConfig{};
+    HgCreateWindow windowConfig{};
     windowConfig.title = "Hg Small Test";
-    windowConfig.windowed = true;
     windowConfig.width = 1200;
     windowConfig.height = 800;
 
-    HgWindow* window = HgWindow::create(arena, &windowConfig);
-    hgDefer(window->destroy());
+    HgWindow* window = hgCreateWindow(&windowConfig);
+    hgDefer(hgDestroyWindow(window));
 
     hgInitPipeline2D(window->format, VK_FORMAT_UNDEFINED);
     hgDefer(hgDeinitPipeline2D());
@@ -118,8 +117,8 @@ int main()
         HgArena* frame = hgGetScratch();
         HgArenaScope frameScope{frame};
 
-        hgProcessWindowEvents(&window, 1);
-        if (window->wasClosed)
+        hgProcessEvents();
+        if (hgWasQuit())
             goto quit;
 
         HgMat4 proj = hgPerspective((f32)hgPi * 0.5f, (f32)window->width / (f32)window->height, 0.1f, 1000.0f);
@@ -127,18 +126,24 @@ int main()
 
         if (!ImGui::GetIO().WantCaptureMouse)
         {
-            if (window->isKeyDown[HgKey_lmouse])
+            if (hgIsKeyDown(HgKey_lmouse))
             {
+                f32 dx, dy;
+                hgGetMouseDelta(&dx, &dy);
+                u32 width, height;
+                hgGetWindowSize(window, &width, &height);
+
                 f32 rotSpeed = 2.0f;
-                HgQuat rotX = hgAxisAngle(HgVec3{0, 1, 0}, (f32)window->mouseDeltaX * rotSpeed);
-                HgQuat rotY = hgAxisAngle(HgVec3{-1, 0, 0}, (f32)window->mouseDeltaY * rotSpeed);
+                HgQuat rotX = hgAxisAngle(HgVec3{0, 1, 0}, dx * rotSpeed / (f32)height);
+                HgQuat rotY = hgAxisAngle(HgVec3{-1, 0, 0}, dy * rotSpeed / (f32)height);
+
                 camera.rotation = rotX * camera.rotation * rotY;
             }
 
             HgVec3 movement = HgVec3{
-                (f32)(window->isKeyDown[HgKey_d] - window->isKeyDown[HgKey_a]),
-                (f32)(window->isKeyDown[HgKey_lshift] - window->isKeyDown[HgKey_space]),
-                (f32)(window->isKeyDown[HgKey_w] - window->isKeyDown[HgKey_s]),
+                (f32)(hgIsKeyDown(HgKey_d) - hgIsKeyDown(HgKey_a)),
+                (f32)(hgIsKeyDown(HgKey_lshift) - hgIsKeyDown(HgKey_space)),
+                (f32)(hgIsKeyDown(HgKey_w) - hgIsKeyDown(HgKey_s)),
             };
             if (movement != HgVec3{0.0f})
             {
