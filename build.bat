@@ -18,14 +18,14 @@ for %%a in (%*) do (
 set INCLUDES= ^
     /I "%BUILD_DIR%" ^
     /I "%SRC_DIR%\include" ^
-    /I "%SRC_DIR%\vendor\libX11\include" ^
+    /I "%SRC_DIR%\vendor\SDL\include" ^
     /I "%SRC_DIR%\vendor\imgui" ^
     /I "%SRC_DIR%\vendor\imgui\backends"
 
 set IMGUI_SRC=vendor/imgui/*.cpp
 
 set IMGUI_BACKENDS= ^
-    imgui_impl_win32.cpp ^
+    imgui_impl_sdl3.cpp ^
     imgui_impl_vulkan.cpp
 
 set SHADERS= ^
@@ -48,12 +48,10 @@ if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
 if not exist "%TEST_DIR%" mkdir "%TEST_DIR%"
 
 if not exist "%BUILD_DIR%\SDL3.lib" (
-    cmake -B$(BUILD_DIR)\SDL3 -S$(SRC_DIR)\vendor\SDL ^
-        -DSDL_STATIC=ON ^
-        -DSDL_SHARED=OFF ^
-        -DSDL_TESTS=OFF
-    cmake --build $(BUILD_DIR)\SDL3 --config RelWithDebugInfo
-    cp $(BUILD_DIR)\SDL3\libSDL3.a $(BUILD_DIR)\libSDL3.a
+    cmake -B"%BUILD_DIR%\SDL3" -S"%SRC_DIR%\vendor\SDL" -DSDL_TESTS=OFF
+    cmake --build "%BUILD_DIR%\SDL3"
+    copy "%BUILD_DIR%\SDL3\Debug\SDL3.lib" "%BUILD_DIR%\SDL3.lib"
+    copy "%BUILD_DIR%\SDL3\Debug\SDL3.dll" "%BUILD_DIR%\SDL3.dll"
 )
 
 if not exist "%BUILD_DIR%\vk_mem_alloc.obj" (

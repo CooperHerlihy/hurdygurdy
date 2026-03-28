@@ -697,12 +697,12 @@ f32 hgNoiseNorm(u32 seed, HgVec4 pos)
 
 f32 hgNoiseVec1D(u32 seed, f32 pos)
 {
-    return hgNoiseNorm(seed, pos) * 2.0 - 1.0;
+    return hgNoiseNorm(seed, pos) * 2.0f - 1.0f;
 }
 
 HgVec2 hgNoiseVec2D(u32 seed, HgVec2 pos)
 {
-    f32 rot = 2.0 * hgPi * hgNoiseNorm(seed, pos);
+    f32 rot = 2.0f * (f32)hgPi * hgNoiseNorm(seed, pos);
     return HgVec2(std::cos(rot), std::sin(rot));
 }
 
@@ -4938,7 +4938,7 @@ void hgInitPlatform(HgArena* arena, u32 maxWindows, u32 maxEvents)
 
     platform.windowPoolCount = maxWindows;
     platform.windowFreeList = hgAlloc<u32>(arena, maxWindows);
-    platform.windowWidth = hgAlign(sizeof(HgWindow) + sizeof(HgKeyEvent) * (maxEvents - 1), alignof(HgWindow));
+    platform.windowWidth = (u32)hgAlign(sizeof(HgWindow) + sizeof(HgKeyEvent) * (maxEvents - 1), alignof(HgWindow));
     platform.windowPool = (HgWindow*)hgAlloc(arena, platform.windowWidth * maxWindows, alignof(HgWindow));
 
     for (u32 i = 0; i < maxWindows; ++i)
@@ -5255,7 +5255,7 @@ HgWindow* hgCreateWindow(const HgCreateWindow* config)
 
 void hgDestroyWindow(HgWindow* window)
 {
-    u32 windowIdx = window - platform.windowPool;
+    u32 windowIdx = (u32)(window - platform.windowPool);
     hgAssert(windowIdx < platform.windowPoolCount);
     hgAssert(platform.windowFreeList[windowIdx] == windowIdx);
 
