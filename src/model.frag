@@ -6,14 +6,12 @@ layout (location = 0) in VertexOutput {
     HgVertex vertex;
 } vIn;
 
-struct DirLight
-{
+struct DirLight {
     vec4 dir;
     vec4 color;
 };
 
-struct PointLight
-{
+struct PointLight {
     vec4 pos;
     vec4 color;
 };

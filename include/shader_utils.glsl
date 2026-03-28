@@ -555,8 +555,7 @@ hgFractalNoise2DFunctionDef(hgFractalPerlin2D, hgPerlin2D)
 /**
  * A vertex
  */
-struct HgVertex
-{
+struct HgVertex {
     vec3 position;
     vec3 normal;
     vec4 tangent;

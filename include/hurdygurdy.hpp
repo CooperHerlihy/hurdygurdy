@@ -33,6 +33,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 
 #include <algorithm>
 #include <atomic>
@@ -166,8 +167,7 @@ typedef double f64;
  * A template to defer code execution until end of scope
  */
 template<typename F>
-struct HgDefer
-{
+struct HgDefer {
     /**
      * The function to execute
      */
@@ -264,8 +264,7 @@ struct HgDefer
 /**
  * The config for the HurdyGurdy library init
  */
-struct HgInit
-{
+struct HgInit {
     u64 arenaSize = UINT32_MAX;
     u32 maxWindows = 8;
     u32 maxWindowEvents = 2048;
@@ -318,23 +317,26 @@ constexpr uptr hgAlign(uptr value, uptr alignment)
 /**
  * Reverse the endianness of a 16 bit value
  */
-constexpr u16 hgReverseEndianness(u16 val)
+constexpr u16 hgReverseEndianness16(u16 val)
 {
-    return (val & 0xff00 >> 8) & (val & 0x00ff << 8);
+    return (val & 0xff00 >> 8) &
+           (val & 0x00ff << 8);
 }
 
 /**
  * Reverse the endianness of a 32 bit value
  */
-constexpr u32 hgReverseEndianness(u32 val)
+constexpr u32 hgReverseEndianness32(u32 val)
 {
-    return (val & 0xff0000 >> 16) & (val & 0x00ff00) & (val & 0x0000ff << 16);
+    return (val & 0xff0000 >> 16) &
+           (val & 0x00ff00) &
+           (val & 0x0000ff << 16);
 }
 
 /**
  * Reverse the endianness of a 64 bit value
  */
-constexpr u64 hgReverseEndianness(u64 val)
+constexpr u64 hgReverseEndianness64(u64 val)
 {
     return (val & 0xff000000 >> 24) &
            (val & 0x00ff0000 >> 8) &
@@ -362,8 +364,7 @@ constexpr u64 hgReverseEndianness(u64 val)
 /**
  * A 2D vector
  */
-struct HgVec2
-{
+struct HgVec2 {
     /**
      * The vector components
      */
@@ -403,8 +404,7 @@ struct HgVec2
 /**
  * A 3D vector
  */
-struct HgVec3
-{
+struct HgVec3 {
     /**
      * The vector components
      */
@@ -456,8 +456,7 @@ struct HgVec3
 /**
  * A 4D vector
  */
-struct HgVec4
-{
+struct HgVec4 {
     /**
      * The vector components
      */
@@ -520,8 +519,7 @@ struct HgVec4
 /**
  * A 2x2 matrix
  */
-struct HgMat2
-{
+struct HgMat2 {
     /**
      * The matrix components
      */
@@ -557,8 +555,7 @@ struct HgMat2
 /**
  * A 3x3 matrix
  */
-struct HgMat3
-{
+struct HgMat3 {
     /**
      * The matrix components
      */
@@ -605,8 +602,7 @@ struct HgMat3
 /**
  * A 4x4 matrix
  */
-struct HgMat4
-{
+struct HgMat4 {
     /**
      * The matrix components
      */
@@ -665,8 +661,7 @@ struct HgMat4
 /**
  * A complex number
  */
-struct HgComplex
-{
+struct HgComplex {
     /**
      * The real part
      */
@@ -702,8 +697,7 @@ struct HgComplex
 /**
  * A quaternion
  */
-struct HgQuat
-{
+struct HgQuat {
     /**
      * The real part
      */
@@ -1510,8 +1504,7 @@ u32 hgMaxMipmaps(u32 width, u32 height, u32 depth);
 /**
  * An arena allocator
  */
-struct HgArena
-{
+struct HgArena {
     /**
      * A pointer to the memory being allocated
      */
@@ -1529,8 +1522,7 @@ struct HgArena
 /**
  * Create a guard which restores an arena's head at the end of the scope
  */
-struct HgArenaScope
-{
+struct HgArenaScope {
     /**
      * The arena to restore
      */
@@ -1652,8 +1644,7 @@ HgArena* hgGetScratch(HgArena const* const* conflicts = nullptr, u32 count = 0);
 /**
  * A span view into a string
  */
-struct HgStringView
-{
+struct HgStringView {
     /**
      * The characters
      */
@@ -1736,8 +1727,7 @@ char* hgCString(HgArena* arena, HgStringView str);
 /**
  * A dynamic string container
  */
-struct HgString
-{
+struct HgString {
     /**
      * The character buffer
      */
@@ -1997,8 +1987,7 @@ HgString hgFloatToStr(HgArena* arena, f64 num, u32 decimalCount);
 /**
  * An error contained in the json
  */
-struct HgJsonError
-{
+struct HgJsonError {
     /**
      * The next error
      */
@@ -2017,8 +2006,7 @@ struct HgJsonNode;
 /**
  * The types contained in nodes
  */
-enum HgJsonType : u32
-{
+enum HgJsonType : u32 {
     HgJsonType_none = 0,
     HgJsonType_struct,
     HgJsonType_field,
@@ -2032,8 +2020,7 @@ enum HgJsonType : u32
 /**
  * A field in a struct
  */
-struct HgJsonField
-{
+struct HgJsonField {
     /**
      * The next field
      */
@@ -2051,8 +2038,7 @@ struct HgJsonField
 /**
  * A struct contained in the json
  */
-struct HgJsonStruct
-{
+struct HgJsonStruct {
     /**
      * The first field
      */
@@ -2062,8 +2048,7 @@ struct HgJsonStruct
 /**
  * An element in an array
  */
-struct HgJsonElem
-{
+struct HgJsonElem {
     /**
      * The next element
      */
@@ -2077,8 +2062,7 @@ struct HgJsonElem
 /**
  * An array contained in the json
  */
-struct HgJsonArray
-{
+struct HgJsonArray {
     /**
      * The first element
      */
@@ -2088,8 +2072,7 @@ struct HgJsonArray
 /**
  * A node in the json file
  */
-struct HgJsonNode
-{
+struct HgJsonNode {
     /**
      * The node's type
      */
@@ -2112,8 +2095,7 @@ struct HgJsonNode
 /**
  * A parsed Json file
  */
-struct HgJson
-{
+struct HgJson {
     /**
      * The successfully parsed nodes
      */
@@ -2286,8 +2268,7 @@ constexpr u64 hgHash(const char* str)
  * A hash set
  */
 template<typename Value, u64 (*hashFn)(Value) = hgHash>
-struct HgHashSet
-{
+struct HgHashSet {
     static_assert(std::is_trivially_copyable_v<Value> && std::is_trivially_destructible_v<Value>);
 
     /**
@@ -2432,8 +2413,7 @@ struct HgHashSet
  * A key-value hash map
  */
 template<typename Key, typename Value, u64 (*hashFn)(Key) = hgHash>
-struct HgHashMap
-{
+struct HgHashMap {
     static_assert(std::is_trivially_copyable_v<Key>
                && std::is_trivially_copyable_v<Value>
                && std::is_trivially_destructible_v<Key>
@@ -2613,8 +2593,7 @@ struct HgHashMap
 /**
  * A high precision clock for timers and game deltas
  */
-struct HgClock
-{
+struct HgClock {
     /**
      * The begin time
      */
@@ -2637,8 +2616,7 @@ f64 hgClockTick(HgClock* clock);
 /**
  * A simple performance measurement tool
  */
-struct HgPerf
-{
+struct HgPerf {
     /**
      * The clock to keep track of each time
      */
@@ -2678,8 +2656,7 @@ f64 hgEndPerf(HgPerf* perf);
 /**
  * A set of statistics from performance measurements
  */
-struct HgPerfStats
-{
+struct HgPerfStats {
     /**
      * The average time of all measurements
      */
@@ -2702,8 +2679,7 @@ HgPerfStats hgAnalyzePerf(const HgPerf* perf);
 /**
  * The scale to log performance metrics at
  */
-enum HgPerfScale
-{
+enum HgPerfScale {
     HgPerfScale_seconds,
     HgPerfScale_milli,
     HgPerfScale_micro,
@@ -2723,8 +2699,7 @@ u32 hgHardwareThreadCount();
 /**
  * A spinlock fence for basic thread synchronization
  */
-struct HgFence
-{
+struct HgFence {
     /**
      * The number of events the fence is waiting on
      */
@@ -3012,8 +2987,7 @@ u32 hgFindVkMemoryTypeIndex(
 /**
  * How an HgBuffer will be accessed
  */
-enum HgBufferMemoryUsage
-{
+enum HgBufferMemoryUsage {
     /**
      * It will only be accessed from the device
      */
@@ -3035,8 +3009,7 @@ enum HgBufferMemoryUsage
 /**
  * How an HgBuffer can be accessed
  */
-enum HgBufferMemoryHostAccess
-{
+enum HgBufferMemoryHostAccess {
     HgBufferMemoryHostAccess_none = 0x0,
     HgBufferMemoryHostAccess_write = 0x1,
     HgBufferMemoryHostAccess_read = 0x2,
@@ -3045,8 +3018,7 @@ enum HgBufferMemoryHostAccess
 /**
  * A gpu buffer
  */
-struct HgBuffer
-{
+struct HgBuffer {
     /**
      * The Vulkan buffer
      */
@@ -3108,8 +3080,7 @@ void hgReadBuffer(void* dst, HgBuffer* src, u64 offset, u64 size);
 /**
  * A gpu image
  */
-struct HgImage
-{
+struct HgImage {
     /**
      * The Vulkan image
      */
@@ -3160,8 +3131,7 @@ HgImage* hgCreateImage(u32 width, u32 height, VkFormat format, VkImageUsageFlags
 /**
  * Config for hgCreateVkImage
  */
-struct HgCreateImageEx
-{
+struct HgCreateImageEx {
     /**
      * The dimensions of the image
      */
@@ -3213,8 +3183,7 @@ void hgDestroyImage(HgImage* image);
 /**
  * A view into a gpu image
  */
-struct HgImageView
-{
+struct HgImageView {
     /**
      * The view
      */
@@ -3345,8 +3314,7 @@ VkSampler hgCreateSampler(
 /**
  * The binding indices for the descriptor types in the bindless layout
  */
-enum HgDescriptorType
-{
+enum HgDescriptorType {
     HgDescriptorType_sampler = 0,
     HgDescriptorType_combinedImageSampler = 1,
     HgDescriptorType_sampledImage = 2,
@@ -3361,8 +3329,7 @@ enum HgDescriptorType
 /**
  * A descriptor in the bindless set
  */
-struct HgDescriptor
-{
+struct HgDescriptor {
     /**
      * The descriptor id, defaults to null
      */
@@ -3426,8 +3393,7 @@ VkPipelineLayout hgCreatePipelineLayout(const VkPushConstantRange* push);
 /**
  * Config for hgCreateGraphicsPipeline
  */
-struct HgCreateGraphicsPipeline
-{
+struct HgCreateGraphicsPipeline {
     /**
      * The pipeline layout
      */
@@ -3575,8 +3541,7 @@ void hgEndVkCmd(VkCommandBuffer cmd);
 /**
  * A rendering attachment
  */
-struct HgRenderAttachment
-{
+struct HgRenderAttachment {
     /**
      * The image attached
      */
@@ -3598,8 +3563,7 @@ struct HgRenderAttachment
 /**
  * A render pass description
  */
-struct HgRenderPass
-{
+struct HgRenderPass {
     /**
      * The uniforms buffer dependencies
      */
@@ -3657,8 +3621,7 @@ struct HgRenderPass
 /**
  * An image dependency barrier
  */
-struct HgImageBarrier
-{
+struct HgImageBarrier {
     /**
      * The image to sychronize
      */
@@ -3680,8 +3643,7 @@ struct HgImageBarrier
 /**
  * A buffer dependency barrier
  */
-struct HgBufferBarrier
-{
+struct HgBufferBarrier {
     /**
      * The buffer to sychronize
      */
@@ -3699,13 +3661,11 @@ struct HgBufferBarrier
 /**
  * A renderer to organize render passes and synchronize resources
  */
-struct HgRenderer
-{
+struct HgRenderer {
     /**
      * A buffer resource
      */
-    struct BufferState
-    {
+    struct BufferState {
         /**
          * Where the image was used last
          */
@@ -3719,8 +3679,7 @@ struct HgRenderer
     /**
      * An image resource
      */
-    struct ImageState
-    {
+    struct ImageState {
         /**
          * Where the image was used last
          */
@@ -3849,8 +3808,7 @@ u32 hgGetPlatformVulkanExtensions(HgArena* arena, HgStringView** extBuffer);
 /**
  * A key on the keyboard or button on the mouse
  */
-enum HgKey
-{
+enum HgKey {
     HgKey_none = 0,
     HgKey_k0,
     HgKey_k1,
@@ -3970,8 +3928,7 @@ enum HgKey
 /**
  * The types of events
  */
-enum HgKeyEventType
-{
+enum HgKeyEventType {
     HgKeyEventType_none,
     HgKeyEventType_keyPress,
     HgKeyEventType_keyRelease,
@@ -3981,8 +3938,7 @@ enum HgKeyEventType
 /**
  * Input event data
  */
-struct HgKeyEvent
-{
+struct HgKeyEvent {
     /**
      * The type of event
      */
@@ -3996,8 +3952,7 @@ struct HgKeyEvent
 /**
  * Configuration for a window
  */
-struct HgCreateWindow
-{
+struct HgCreateWindow {
     /**
      * The title of the window
      */
@@ -4039,8 +3994,7 @@ struct HgCreateWindow
 /**
  * A window
  */
-struct HgWindow
-{
+struct HgWindow {
     /**
      * Platform specific resources for a window
      */
@@ -4253,8 +4207,7 @@ constexpr HgResource hgResourceID(HgStringView name)
 /**
  * A resource manager
  */
-struct HgResourceManager
-{
+struct HgResourceManager {
     /**
      * The reference count for each resource
      */
@@ -4360,8 +4313,7 @@ struct HgResourceManager
 /**
  * A loaded binary file
  */
-struct HgBinary
-{
+struct HgBinary {
     /**
      * The data in the file
      */
@@ -4530,8 +4482,7 @@ HgBinary* hgGetResource(HgResource id);
 /**
  * An image resource
  */
-struct HgImageData
-{
+struct HgImageData {
     /**
      * The identifier prepended to the info
      */
@@ -4540,8 +4491,7 @@ struct HgImageData
     /**
      * The info prepended to an image resource
      */
-    struct Info
-    {
+    struct Info {
         /**
          * The identifier to ensure the file is a Hurdy Gurdy image
          */
@@ -4628,8 +4578,7 @@ void hgExportPng(HgFence* fences, u32 fenceCount, HgResource id, HgStringView pa
 /**
  * A vertex in a model
  */
-struct HgModelVertex
-{
+struct HgModelVertex {
     /**
      * The vertex position
      */
@@ -4651,8 +4600,7 @@ struct HgModelVertex
 /**
  * A 3d model resource
  */
-struct HgModelData
-{
+struct HgModelData {
     /**
      * The identifier prepended to the info
      */
@@ -4661,8 +4609,7 @@ struct HgModelData
     /**
      * The info prendeded to a model resources
      */
-    struct Info
-    {
+    struct Info {
         /**
          * The identifier to ensure the file is a Hurdy Gurdy model
          */
@@ -4772,8 +4719,7 @@ void hgDeinitGpuResources();
 /**
  * A texture stored on the GPU
  */
-struct HgTextureResource
-{
+struct HgTextureResource {
     /**
      * The image
      */
@@ -4835,8 +4781,7 @@ HgTextureResource* hgGetTexture(HgResource id);
 /**
  * A 3D model stored on the gpu
  */
-struct HgModelResource
-{
+struct HgModelResource {
     /**
      * The vertex buffer
      */
@@ -4909,8 +4854,7 @@ inline u32 hgComponentID = hgCreateComponentID(sizeof(T));
 /**
  * An entity in the ecs
  */
-struct HgEntity
-{
+struct HgEntity {
     /**
      * The entity id, defaults to null
      */
@@ -4960,13 +4904,11 @@ constexpr bool operator!=(HgEntity lhs, HgEntity rhs)
 /**
  * An entity component system
  */
-struct HgECS
-{
+struct HgECS {
     /**
      * A system of components
      */
-    struct System
-    {
+    struct System {
         /**
          * The component lookup from entity index
          */
@@ -5324,8 +5266,7 @@ struct HgECS
     {
         static_assert(std::is_invocable_r_v<void, Fn, HgEntity, T*>);
 
-        struct Capture
-        {
+        struct Capture {
             HgECS* ecs;
             Fn* fn;
         };
@@ -5358,8 +5299,7 @@ struct HgECS
         System* system = systems.get(findSmallest<Ts...>());
         hgAssert(system != nullptr);
 
-        struct Capture
-        {
+        struct Capture {
             HgECS* ecs;
             System* system;
             Fn* fn;
@@ -5428,8 +5368,7 @@ struct HgECS
 /**
  * A node component for entities in a hierarchy
  */
-struct HgHierarchy
-{
+struct HgHierarchy {
     /**
      * The entity's parent, if any
      */
@@ -5479,8 +5418,7 @@ void hgDestroyEntity(HgECS* ecs, HgEntity e);
 /**
  * The transform component for entities
  */
-struct HgTransform
-{
+struct HgTransform {
     /**
      * The entity's position in the world
      * - x: -left, +right
@@ -5528,8 +5466,7 @@ void hgMoveEntity(HgECS* ecs, HgEntity e, const HgVec3& dpos, const HgVec3& dsca
 /**
  * A sprite component rendered by the 2d pipeline
  */
-struct HgSprite2D
-{
+struct HgSprite2D {
     /**
      * The texture to draw from
      */
@@ -5592,8 +5529,7 @@ void hgDraw2D(HgECS* ecs, VkCommandBuffer cmd);
 /**
  * A model component rendered by the 3d pipeline
  */
-struct HgModel3D
-{
+struct HgModel3D {
     /**
      * The model to render
      */
@@ -5611,8 +5547,7 @@ struct HgModel3D
 /**
  * A direction light component rendered by the 3d pipeline
  */
-struct HgDirLight3D
-{
+struct HgDirLight3D {
     /**
      * The direction of the light
      */
@@ -5626,8 +5561,7 @@ struct HgDirLight3D
 /**
  * A point light component rendered by the 3d pipeline
  */
-struct HgPointLight3D
-{
+struct HgPointLight3D {
     /**
      * The color of the light
      */

@@ -5,7 +5,7 @@
 -fno-exceptions
 -fno-rtti
 -Iinclude
--Ivendor/SDL3/include
+-Ivendor/SDL/include
 -Ivendor/imgui
 -Ivendor/imgui/backends
 -Ibuild
