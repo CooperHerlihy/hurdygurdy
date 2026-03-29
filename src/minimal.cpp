@@ -49,8 +49,8 @@ int main()
 
     hgWaitForFenceIndefinite(&fence);
     HgBinary* noiseShaderCode = hgGetResource(noiseShaderID);
-    HgPipeline* noisePipeline = hgCreateComputePipeline(sizeof(NoisePush), (u8*)noiseShaderCode->data, noiseShaderCode->size);
-    hgDefer(hgDestroyPipeline(noisePipeline));
+    HgGpuPipeline* noisePipeline = hgCreateGpuComputePipeline(sizeof(NoisePush), (u8*)noiseShaderCode->data, noiseShaderCode->size);
+    hgDefer(hgDestroyGpuPipeline(noisePipeline));
 
     hgUnloadResource(nullptr, 0, noiseShaderID);
 
@@ -63,26 +63,26 @@ int main()
 
     HgTextureResource* noiseTex = hgGetTexture(noiseTexID);
 
-    noiseTex->image = hgCreateImage(
+    noiseTex->image = hgCreateGpuImage(
         noiseWidth,
         noiseHeight,
         HgFormat_r8g8b8a8_unorm,
-        HgImageUsage_storage | HgImageUsage_sampled);
-    noiseTex->view = hgCreateImageView(noiseTex->image, {HgImageAspect_color, 0, 1, 0, 1});
+        HgGpuImageUsage_storage | HgGpuImageUsage_sampled);
+    noiseTex->view = hgCreateGpuView(noiseTex->image, {HgGpuAspect_color, 0, 1, 0, 1});
 
-    HgDescriptor noiseStorageDesc = hgCreateDescriptor(HgDescriptorType_storageImage);
-    hgDefer(hgDestroyDescriptor(noiseStorageDesc));
+    HgGpuDescriptor noiseStorageDesc = hgCreateGpuDescriptor(HgGpuDescriptorType_storageImage);
+    hgDefer(hgDestroyGpuDescriptor(noiseStorageDesc));
 
-    HgImageDescriptorInfo noiseStorageInfo{nullptr, noiseTex->view, HgImageLayout_general};
-    hgUpdateDescriptor(noiseStorageDesc, nullptr, &noiseStorageInfo);
+    HgGpuImageDescriptorInfo noiseStorageInfo{nullptr, noiseTex->view, HgGpuLayout_general};
+    hgUpdateGpuDescriptor(noiseStorageDesc, nullptr, &noiseStorageInfo);
 
-    noiseTex->sampler = hgCreateSampler(HgSamplerFilter_linear);
-    hgDefer(hgDestroySampler(noiseTex->sampler));
+    noiseTex->sampler = hgCreateGpuSampler(HgGpuFilter_linear);
+    hgDefer(hgDestroyGpuSampler(noiseTex->sampler));
 
-    noiseTex->descriptor = hgCreateDescriptor(HgDescriptorType_combinedImageSampler);
+    noiseTex->descriptor = hgCreateGpuDescriptor(HgGpuDescriptorType_combinedImageSampler);
 
-    HgImageDescriptorInfo noiseSamplerInfo{noiseTex->sampler, noiseTex->view, HgImageLayout_shaderReadOnlyOptimal};
-    hgUpdateDescriptor(noiseTex->descriptor, nullptr, &noiseSamplerInfo);
+    HgGpuImageDescriptorInfo noiseSamplerInfo{noiseTex->sampler, noiseTex->view, HgGpuLayout_shaderReadOnly};
+    hgUpdateGpuDescriptor(noiseTex->descriptor, nullptr, &noiseSamplerInfo);
 
     HgTransform camera{};
     camera.position.z = -1;
@@ -173,7 +173,7 @@ int main()
 
         ImGui::Render();
 
-        HgCommandBuffer* cmd = hgWindowBeginRecording(window);
+        HgGpuCommands* cmd = hgWindowBeginRecording(window);
         if (cmd != nullptr)
         {
             HgRenderer renderer = renderer.create(frame, 32, 32);
@@ -184,7 +184,7 @@ int main()
 
             renderer.prepareResources(cmd, &computePass);
 
-            hgCmdBindPipeline(cmd, noisePipeline);
+            hgBindGpuPipeline(cmd, noisePipeline);
 
             NoisePush noisePush{};
             noisePush.width = noiseWidth;
@@ -193,11 +193,11 @@ int main()
             noisePush.scaleEnd = noiseScaleEnd;
             noisePush.tiling = noiseTiling;
             noisePush.seed = noiseSeed;
-            noisePush.outImageIdx = hgDescriptorIdx(noiseStorageDesc);
+            noisePush.outImageIdx = hgGpuDescriptorIdx(noiseStorageDesc);
 
-            hgCmdPushConstants(cmd, noisePipeline, 0, sizeof(noisePush), &noisePush);
+            hgGpuPushConstants(cmd, noisePipeline, 0, &noisePush, sizeof(noisePush));
 
-            hgCmdDispatch(cmd, noiseWidth / 16, noiseHeight / 16, 1);
+            hgGpuCompute(cmd, noiseWidth / 16, noiseHeight / 16, 1);
 
             HgRenderAttachment colorAttachment{};
             colorAttachment.image = hgGetCurrentWindowImage(window);
@@ -219,7 +219,7 @@ int main()
 
             HgImageBarrier presentBarrier{};
             presentBarrier.image = hgGetCurrentWindowImage(window);
-            presentBarrier.nextLayout = HgImageLayout_presentSrc;
+            presentBarrier.nextLayout = HgGpuLayout_presentSrc;
 
             renderer.barrier(cmd, nullptr, 0, &presentBarrier, 1);
 

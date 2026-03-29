@@ -9,6 +9,14 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
 
+inline VkInstance hgVkInstance = nullptr;
+inline VkPhysicalDevice hgVkPhysicalDevice = nullptr;
+inline VkDevice hgVkDevice = nullptr;
+inline VmaAllocator hgVkVma = nullptr;
+inline VkQueue hgVkQueue = nullptr;
+inline u32 hgVkQueueFamily = (u32)-1;
+inline VkCommandPool hgVkCmdPool = nullptr;
+
 struct HgWindow {
     /**
      * Platform specific resources for a window
@@ -41,15 +49,15 @@ struct HgWindow {
     /**
      * The swapchain images
      */
-    HgImage** images;
+    HgGpuImage** images;
     /**
      * The swapchain image views
      */
-    HgImageView** views;
+    HgGpuView** views;
     /**
      * How the swapchain images are used
      */
-    HgImageUsageFlags imageUsage;
+    HgGpuImageUsageFlags imageUsage;
     /**
      * The swapchain image format
      */
@@ -58,7 +66,7 @@ struct HgWindow {
     /**
      * The command buffers per image
      */
-    HgCommandBuffer** cmds;
+    HgGpuCommands** cmds;
     /**
      * The fences per image
      */

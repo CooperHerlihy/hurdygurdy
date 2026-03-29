@@ -7,38 +7,38 @@
 
 #include "imgui_impl_vulkan.h"
 
-struct HgBuffer {
+struct HgGpuBuffer {
     VkBuffer buffer;
     VmaAllocation alloc;
     u64 size;
-    HgBufferMemoryHostAccess access;
+    HgGpuMemoryHostAccess access;
 };
 
-struct HgImage {
+struct HgGpuImage {
     VkImage image;
     VmaAllocation alloc;
-    HgImageType type;
-    HgFormat format;
+    u32 dimensions;
     u32 width;
     u32 height;
     u32 depth;
+    HgFormat format;
     u32 mipLevels;
     u32 arrayLayers;
     u32 msaaSamples;
 };
 
-struct HgImageView {
+struct HgGpuView {
     VkImageView view;
-    const HgImage* image;
-    HgImageViewType type;
-    HgImageAspectFlags aspectFlags;
+    const HgGpuImage* image;
+    HgGpuViewType type;
+    HgGpuAspectFlags aspectFlags;
     u32 baseMipLevel;
     u32 levelCount;
     u32 baseArrayLayer;
     u32 layerCount;
 };
 
-struct HgPipeline {
+struct HgGpuPipeline {
     VkPipelineLayout layout;
     VkPipeline pipeline;
     VkPipelineBindPoint bindPoint;
@@ -50,14 +50,6 @@ static void unloadVulkan();
 static void loadVulkanInstanceFuncs(VkInstance instance);
 static void loadVulkanDeviceFuncs(VkDevice device);
 
-VkInstance hgVkInstance = nullptr;
-VkPhysicalDevice hgVkPhysicalDevice = nullptr;
-VkDevice hgVkDevice = nullptr;
-VmaAllocator hgVkVma = nullptr;
-VkQueue hgVkQueue = nullptr;
-u32 hgVkQueueFamily = (u32)-1;
-VkCommandPool hgVkCmdPool = nullptr;
-
 struct VulkanState {
 #ifdef HG_VK_DEBUG_MESSENGER
     VkDebugUtilsMessengerEXT debugMessenger = nullptr;
@@ -67,22 +59,22 @@ struct VulkanState {
     VkDescriptorSetLayout bindlessLayout = nullptr;
     VkDescriptorSet bindlessSet = nullptr;
 
-    HgDescriptor* samplerPool = nullptr;
-    HgDescriptor samplerPoolNext = {0};
-    HgDescriptor* combinedImageSamplerPool = nullptr;
-    HgDescriptor combinedImageSamplerPoolNext = {0};
-    HgDescriptor* sampledImagePool = nullptr;
-    HgDescriptor sampledImagePoolNext = {0};
-    HgDescriptor* storageImagePool = nullptr;
-    HgDescriptor storageImagePoolNext = {0};
-    HgDescriptor* uniformTexelBufferPool = nullptr;
-    HgDescriptor uniformTexelBufferPoolNext = {0};
-    HgDescriptor* storageTexelBufferPool = nullptr;
-    HgDescriptor storageTexelBufferPoolNext = {0};
-    HgDescriptor* uniformBufferPool = nullptr;
-    HgDescriptor uniformBufferPoolNext = {0};
-    HgDescriptor* storageBufferPool = nullptr;
-    HgDescriptor storageBufferPoolNext = {0};
+    HgGpuDescriptor* samplerPool = nullptr;
+    HgGpuDescriptor samplerPoolNext = {0};
+    HgGpuDescriptor* combinedImageSamplerPool = nullptr;
+    HgGpuDescriptor combinedImageSamplerPoolNext = {0};
+    HgGpuDescriptor* sampledImagePool = nullptr;
+    HgGpuDescriptor sampledImagePoolNext = {0};
+    HgGpuDescriptor* storageImagePool = nullptr;
+    HgGpuDescriptor storageImagePoolNext = {0};
+    HgGpuDescriptor* uniformTexelBufferPool = nullptr;
+    HgGpuDescriptor uniformTexelBufferPoolNext = {0};
+    HgGpuDescriptor* storageTexelBufferPool = nullptr;
+    HgGpuDescriptor storageTexelBufferPoolNext = {0};
+    HgGpuDescriptor* uniformBufferPool = nullptr;
+    HgGpuDescriptor uniformBufferPoolNext = {0};
+    HgGpuDescriptor* storageBufferPool = nullptr;
+    HgGpuDescriptor storageBufferPoolNext = {0};
 };
 
 static VulkanState vulkanState{};
@@ -241,7 +233,7 @@ static const VkDebugUtilsMessengerCreateInfoEXT debugUtilsMessengerInfo{
 
 #endif
 
-static VkInstance createVkInstance(HgStringView* extensions, u32 extensionCount)
+static VkInstance createInstance(HgStringView* extensions, u32 extensionCount)
 {
     if (extensionCount > 0)
         hgAssert(extensions != nullptr);
@@ -289,7 +281,7 @@ static VkInstance createVkInstance(HgStringView* extensions, u32 extensionCount)
     return instance;
 }
 
-static VkDebugUtilsMessengerEXT createVkDebugUtilsMessenger()
+static VkDebugUtilsMessengerEXT createDebugUtilsMessenger()
 {
 #ifdef HG_VK_DEBUG_MESSENGER
     hgAssert(hgVkInstance != nullptr);
@@ -306,7 +298,7 @@ static VkDebugUtilsMessengerEXT createVkDebugUtilsMessenger()
 #endif
 }
 
-static bool findVkQueueFamily(VkPhysicalDevice gpu, u32* queueFamily, VkQueueFlags queueFlags)
+static bool findQueueFamily(VkPhysicalDevice gpu, u32* queueFamily, VkQueueFlags queueFlags)
 {
     hgAssert(gpu != nullptr);
     hgAssert(queueFamily != nullptr);
@@ -334,7 +326,7 @@ static const char* const deviceExtensions[]{
     "VK_KHR_swapchain",
 };
 
-static VkPhysicalDevice findVkPhysicalDevice()
+static VkPhysicalDevice findPhysicalDevice()
 {
     hgAssert(hgVkInstance != nullptr);
 
@@ -375,7 +367,7 @@ nextExt:
             continue;
         }
 
-        if (!findVkQueueFamily(gpu, &family,
+        if (!findQueueFamily(gpu, &family,
                 VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT | VK_QUEUE_COMPUTE_BIT))
             goto nextGpu;
 
@@ -389,7 +381,7 @@ nextGpu:
     return nullptr;
 }
 
-static VkDevice createVkDevice()
+static VkDevice createDevice()
 {
     hgAssert(hgVkPhysicalDevice != nullptr);
     hgAssert(hgVkQueueFamily != (u32)-1);
@@ -454,12 +446,90 @@ static VkDevice createVkDevice()
     return device;
 }
 
-static HgDescriptor* createBindlessPool(HgArena* arena, HgDescriptorType type, HgDescriptor* next)
+static VkDescriptorPool createBindlessDescriptorPool()
+{
+    VkDescriptorPoolSize sizes[]{
+        {VK_DESCRIPTOR_TYPE_SAMPLER, UINT16_MAX},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, UINT16_MAX},
+        {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, UINT16_MAX},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, UINT16_MAX},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, UINT16_MAX},
+        {VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, UINT16_MAX},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, UINT16_MAX},
+        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, UINT16_MAX},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, UINT16_MAX},
+        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, UINT16_MAX},
+        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, UINT16_MAX},
+    };
+
+    VkDescriptorPoolCreateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    info.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
+    info.maxSets = 1;
+    info.poolSizeCount = sizeof(sizes) / sizeof(*sizes);
+    info.pPoolSizes = sizes;
+
+    VkDescriptorPool pool = nullptr;
+    VkResult result = vkCreateDescriptorPool(hgVkDevice, &info, nullptr, &pool);
+    if (pool == nullptr)
+        hgError("Could not create VkDescriptorPool: %s\n", vkResultToStr(result));
+
+    return pool;
+}
+
+static VkDescriptorSetLayout createBindlessDescriptorLayout()
+{
+    VkDescriptorSetLayoutBinding bindings[HgGpuDescriptorType_count]{};
+    VkDescriptorBindingFlags flags[HgGpuDescriptorType_count]{};
+    for (u32 i = 0; i < HgGpuDescriptorType_count; ++i)
+    {
+        bindings[i].descriptorCount = UINT16_MAX;
+        bindings[i].stageFlags = VK_SHADER_STAGE_ALL;
+        flags[i] = VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT | VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
+    }
+    bindings[0].binding = HgGpuDescriptorType_sampler;
+    bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+    bindings[1].binding = HgGpuDescriptorType_combinedImageSampler;
+    bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    bindings[2].binding = HgGpuDescriptorType_sampledImage;
+    bindings[2].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    bindings[3].binding = HgGpuDescriptorType_storageImage;
+    bindings[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    bindings[4].binding = HgGpuDescriptorType_uniformTexelBuffer;
+    bindings[4].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER;
+    bindings[5].binding = HgGpuDescriptorType_storageTexelBuffer;
+    bindings[5].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER;
+    bindings[6].binding = HgGpuDescriptorType_uniformBuffer;
+    bindings[6].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    bindings[7].binding = HgGpuDescriptorType_storageBuffer;
+    bindings[7].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+
+    VkDescriptorSetLayoutBindingFlagsCreateInfo flagsInfo{};
+    flagsInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
+    flagsInfo.bindingCount = sizeof(bindings) / sizeof(*bindings);
+    flagsInfo.pBindingFlags = flags;
+
+    VkDescriptorSetLayoutCreateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    info.pNext = &flagsInfo;
+    info.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+    info.bindingCount = sizeof(bindings) / sizeof(*bindings);
+    info.pBindings = bindings;
+
+    VkDescriptorSetLayout layout = nullptr;
+    VkResult result = vkCreateDescriptorSetLayout(hgVkDevice, &info, nullptr, &layout);
+    if (layout == nullptr)
+        hgError("Could not create bindless VkDescriptorSetLayout: %s\n", vkResultToStr(result));
+
+    return layout;
+}
+
+static HgGpuDescriptor* createBindlessPool(HgArena* arena, HgGpuDescriptorType type, HgGpuDescriptor* next)
 {
     hgAssert(arena != nullptr);
     hgAssert(next != nullptr);
 
-    HgDescriptor* pool = hgAlloc<HgDescriptor>(arena, UINT16_MAX);
+    HgGpuDescriptor* pool = hgAlloc<HgGpuDescriptor>(arena, UINT16_MAX);
 
     for (u32 i = 0; i < UINT16_MAX; ++i)
     {
@@ -489,25 +559,25 @@ void hgInitGraphics(HgArena* arena)
         exts = hgRealloc(scratch, exts, extCount, extCount + 1);
         exts[extCount++] = "VK_EXT_debug_utils";
 #endif
-        hgVkInstance = createVkInstance(exts, extCount);
+        hgVkInstance = createInstance(exts, extCount);
         loadVulkanInstanceFuncs(hgVkInstance);
     }
 
 #ifdef HG_VK_DEBUG_MESSENGER
     if (vulkanState.debugMessenger == nullptr)
-        vulkanState.debugMessenger = createVkDebugUtilsMessenger();
+        vulkanState.debugMessenger = createDebugUtilsMessenger();
 #endif
 
     if (hgVkPhysicalDevice == nullptr)
     {
-        hgVkPhysicalDevice = findVkPhysicalDevice();
-        findVkQueueFamily(hgVkPhysicalDevice, &hgVkQueueFamily,
+        hgVkPhysicalDevice = findPhysicalDevice();
+        findQueueFamily(hgVkPhysicalDevice, &hgVkQueueFamily,
             VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT | VK_QUEUE_COMPUTE_BIT);
     }
 
     if (hgVkDevice == nullptr)
     {
-        hgVkDevice = createVkDevice();
+        hgVkDevice = createDevice();
         loadVulkanDeviceFuncs(hgVkDevice);
         vkGetDeviceQueue(hgVkDevice, hgVkQueueFamily, 0, &hgVkQueue);
     }
@@ -538,76 +608,10 @@ void hgInitGraphics(HgArena* arena)
     }
 
     if (vulkanState.bindlessPool == nullptr)
-    {
-        VkDescriptorPoolSize sizes[]{
-            {VK_DESCRIPTOR_TYPE_SAMPLER, UINT16_MAX},
-            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, UINT16_MAX},
-            {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, UINT16_MAX},
-            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, UINT16_MAX},
-            {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, UINT16_MAX},
-            {VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, UINT16_MAX},
-            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, UINT16_MAX},
-            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, UINT16_MAX},
-            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, UINT16_MAX},
-            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, UINT16_MAX},
-            {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, UINT16_MAX},
-        };
-
-        VkDescriptorPoolCreateInfo info{};
-        info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        info.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
-        info.maxSets = 1;
-        info.poolSizeCount = sizeof(sizes) / sizeof(*sizes);
-        info.pPoolSizes = sizes;
-
-        VkResult result = vkCreateDescriptorPool(hgVkDevice, &info, nullptr, &vulkanState.bindlessPool);
-        if (vulkanState.bindlessPool == nullptr)
-            hgError("Could not create bindless VkDescriptorPool: %s\n", vkResultToStr(result));
-    };
+        vulkanState.bindlessPool = createBindlessDescriptorPool();
 
     if (vulkanState.bindlessLayout == nullptr)
-    {
-        VkDescriptorSetLayoutBinding bindings[HgDescriptorType_count]{};
-        VkDescriptorBindingFlags flags[HgDescriptorType_count]{};
-        for (u32 i = 0; i < HgDescriptorType_count; ++i)
-        {
-            bindings[i].descriptorCount = UINT16_MAX;
-            bindings[i].stageFlags = VK_SHADER_STAGE_ALL;
-            flags[i] = VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT | VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
-        }
-        bindings[0].binding = HgDescriptorType_sampler;
-        bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
-        bindings[1].binding = HgDescriptorType_combinedImageSampler;
-        bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        bindings[2].binding = HgDescriptorType_sampledImage;
-        bindings[2].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-        bindings[3].binding = HgDescriptorType_storageImage;
-        bindings[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-        bindings[4].binding = HgDescriptorType_uniformTexelBuffer;
-        bindings[4].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER;
-        bindings[5].binding = HgDescriptorType_storageTexelBuffer;
-        bindings[5].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER;
-        bindings[6].binding = HgDescriptorType_uniformBuffer;
-        bindings[6].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        bindings[7].binding = HgDescriptorType_storageBuffer;
-        bindings[7].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-
-        VkDescriptorSetLayoutBindingFlagsCreateInfo flagsInfo{};
-        flagsInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
-        flagsInfo.bindingCount = sizeof(bindings) / sizeof(*bindings);
-        flagsInfo.pBindingFlags = flags;
-
-        VkDescriptorSetLayoutCreateInfo info{};
-        info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        info.pNext = &flagsInfo;
-        info.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
-        info.bindingCount = sizeof(bindings) / sizeof(*bindings);
-        info.pBindings = bindings;
-
-        VkResult result = vkCreateDescriptorSetLayout(hgVkDevice, &info, nullptr, &vulkanState.bindlessLayout);
-        if (vulkanState.bindlessLayout == nullptr)
-            hgError("Could not create bindless VkDescriptorSetLayout: %s\n", vkResultToStr(result));
-    }
+        vulkanState.bindlessLayout = createBindlessDescriptorLayout();
 
     if (vulkanState.bindlessSet == nullptr)
     {
@@ -624,35 +628,35 @@ void hgInitGraphics(HgArena* arena)
 
     if (vulkanState.samplerPool == nullptr)
         vulkanState.samplerPool = createBindlessPool(
-            arena, HgDescriptorType_sampler, &vulkanState.samplerPoolNext);
+            arena, HgGpuDescriptorType_sampler, &vulkanState.samplerPoolNext);
 
     if (vulkanState.combinedImageSamplerPool == nullptr)
         vulkanState.combinedImageSamplerPool = createBindlessPool(
-            arena, HgDescriptorType_combinedImageSampler, &vulkanState.combinedImageSamplerPoolNext);
+            arena, HgGpuDescriptorType_combinedImageSampler, &vulkanState.combinedImageSamplerPoolNext);
 
     if (vulkanState.sampledImagePool == nullptr)
         vulkanState.sampledImagePool = createBindlessPool(
-            arena, HgDescriptorType_sampledImage, &vulkanState.sampledImagePoolNext);
+            arena, HgGpuDescriptorType_sampledImage, &vulkanState.sampledImagePoolNext);
 
     if (vulkanState.storageImagePool == nullptr)
         vulkanState.storageImagePool = createBindlessPool(
-            arena, HgDescriptorType_storageImage, &vulkanState.storageImagePoolNext);
+            arena, HgGpuDescriptorType_storageImage, &vulkanState.storageImagePoolNext);
 
     if (vulkanState.uniformTexelBufferPool == nullptr)
         vulkanState.uniformTexelBufferPool = createBindlessPool(
-            arena, HgDescriptorType_uniformTexelBuffer, &vulkanState.uniformTexelBufferPoolNext);
+            arena, HgGpuDescriptorType_uniformTexelBuffer, &vulkanState.uniformTexelBufferPoolNext);
 
     if (vulkanState.storageTexelBufferPool == nullptr)
         vulkanState.storageTexelBufferPool = createBindlessPool(
-            arena, HgDescriptorType_storageTexelBuffer, &vulkanState.storageTexelBufferPoolNext);
+            arena, HgGpuDescriptorType_storageTexelBuffer, &vulkanState.storageTexelBufferPoolNext);
 
     if (vulkanState.uniformBufferPool == nullptr)
         vulkanState.uniformBufferPool = createBindlessPool(
-            arena, HgDescriptorType_uniformBuffer, &vulkanState.uniformBufferPoolNext);
+            arena, HgGpuDescriptorType_uniformBuffer, &vulkanState.uniformBufferPoolNext);
 
     if (vulkanState.storageBufferPool == nullptr)
         vulkanState.storageBufferPool = createBindlessPool(
-            arena, HgDescriptorType_storageBuffer, &vulkanState.storageBufferPoolNext);
+            arena, HgGpuDescriptorType_storageBuffer, &vulkanState.storageBufferPoolNext);
 }
 
 void hgDeinitGraphics()
@@ -725,7 +729,7 @@ void hgGraphicsWaitIdle()
     vkQueueWaitIdle(hgVkQueue);
 }
 
-u32 vkFormatToSize(VkFormat format)
+static u32 vkFormatToSize(VkFormat format)
 {
     switch (format)
     {
@@ -1023,14 +1027,142 @@ u32 vkFormatToSize(VkFormat format)
     }
 }
 
-VkFormat hgFormatToVk(HgFormat format)
+static VkFormat formatToVk(HgFormat format)
 {
     return (VkFormat)format;
 }
 
 u32 hgFormatToSize(HgFormat format)
 {
-    return vkFormatToSize(hgFormatToVk(format));
+    return vkFormatToSize(formatToVk(format));
+}
+
+static VkBufferUsageFlags gpuBufferUsageToVk(HgGpuBufferUsageFlags usage)
+{
+    return (VkBufferUsageFlags)usage;
+}
+
+static VmaAllocationCreateFlags gpuMemoryUsageToVma(HgGpuMemoryUsage usage)
+{
+    switch (usage)
+    {
+        case HgGpuMemoryUsage_deviceOnly:
+            return 0;
+        case HgGpuMemoryUsage_stagingWrite:
+            return VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        case HgGpuMemoryUsage_stagingRead:
+            return VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
+        case HgGpuMemoryUsage_frequentUpdate:
+            return VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                   VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT;
+        default:
+            hgError("Invalid HgGpuMemoryUsage: %d\n", usage);
+    }
+}
+
+static HgGpuMemoryHostAccess gpuMemoryUsageToHostAccess(HgGpuMemoryUsage usage)
+{
+    switch (usage)
+    {
+        case HgGpuMemoryUsage_deviceOnly:
+            return HgGpuMemoryHostAccess_none;
+        case HgGpuMemoryUsage_stagingWrite:
+            return HgGpuMemoryHostAccess_write;
+        case HgGpuMemoryUsage_stagingRead:
+            return HgGpuMemoryHostAccess_read;
+        case HgGpuMemoryUsage_frequentUpdate:
+            return HgGpuMemoryHostAccess_none;
+        default:
+            hgError("Invalid HgGpuMemoryUsage: %d\n", usage);
+    }
+}
+
+static VkImageType imageDimensionsToVk(u32 dimensions)
+{
+    switch (dimensions)
+    {
+        case 1:
+            return VK_IMAGE_TYPE_1D;
+        case 2:
+            return VK_IMAGE_TYPE_2D;
+        case 3:
+            return VK_IMAGE_TYPE_3D;
+        default:
+            hgError("Invalid image dimensions: %d\n", dimensions);
+    }
+}
+
+static VkImageUsageFlags gpuImageUsageToVk(HgGpuImageUsageFlags usage)
+{
+    return (VkImageUsageFlags)usage;
+}
+
+static VkImageLayout gpuLayoutToVk(HgGpuLayout layout)
+{
+    return (VkImageLayout)layout;
+}
+
+static VkSampleCountFlagBits countToMsaaSampleBits(u32 count)
+{
+    switch (count)
+    {
+        case 1:
+            return VK_SAMPLE_COUNT_1_BIT;
+        case 2:
+            return VK_SAMPLE_COUNT_2_BIT;
+        case 4:
+            return VK_SAMPLE_COUNT_4_BIT;
+        case 8:
+            return VK_SAMPLE_COUNT_8_BIT;
+        case 16:
+            return VK_SAMPLE_COUNT_16_BIT;
+        case 32:
+            return VK_SAMPLE_COUNT_32_BIT;
+        case 64:
+            return VK_SAMPLE_COUNT_64_BIT;
+        default:
+            hgError("Invalid msaa sample count\n");
+    }
+}
+
+VkImageViewType gpuViewTypeToVk(HgGpuViewType type)
+{
+    return (VkImageViewType)type;
+}
+
+VkImageAspectFlags gpuAspectToVk(HgGpuAspectFlags aspect)
+{
+    return (VkImageAspectFlags)aspect;
+}
+
+static VkFilter gpuFilterToVk(HgGpuFilter filter)
+{
+    return (VkFilter)filter;
+}
+
+static VkSamplerAddressMode gpuSamplerAddressModeToVk(HgGpuSamplerEdgeMode mode)
+{
+    return (VkSamplerAddressMode)mode;
+}
+
+static VkBorderColor gpuSamplerBorderToVk(HgSamplerBorderColor color)
+{
+    return (VkBorderColor)color;
+}
+
+static VkPrimitiveTopology gpuTopologyToVk(HgGpuTopology topology)
+{
+    return (VkPrimitiveTopology)topology;
+}
+
+static VkPolygonMode gpuPolygonModeToVk(HgGpuPolygonMode mode)
+{
+    return (VkPolygonMode)mode;
+}
+
+static VkCullModeFlags gpuCullModeToVk(HgCullModeFlags mode)
+{
+    return (VkCullModeFlags)mode;
 }
 
 // static u32 findMemoryTypeIndex(
@@ -1072,40 +1204,25 @@ u32 hgFormatToSize(HgFormat format)
 //     hgError("Could not find Vulkan memory type in bitmask: %x\n", bitmask);
 // }
 
-HgBuffer* hgCreateBuffer(
+HgGpuBuffer* hgCreateGpuBuffer(
     u64 size,
-    HgBufferUsageFlags usageFlags,
-    HgBufferMemoryUsage access)
+    HgGpuBufferUsageFlags usageFlags,
+    HgGpuMemoryUsage memoryUsage)
 {
     hgAssert(size > 0);
     hgAssert(usageFlags != 0);
 
-    HgBuffer* buffer = (HgBuffer*)malloc(sizeof(*buffer));
+    HgGpuBuffer* buffer = (HgGpuBuffer*)malloc(sizeof(*buffer));
     *buffer = {};
 
     VkBufferCreateInfo bufferInfo{};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     bufferInfo.size = size;
-    bufferInfo.usage = usageFlags;
+    bufferInfo.usage = gpuBufferUsageToVk(usageFlags);
 
     VmaAllocationCreateInfo allocInfo{};
     allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-    switch (access)
-    {
-    case HgBufferMemoryUsage_deviceOnly:
-        break;
-    case HgBufferMemoryUsage_frequentUpdate:
-        allocInfo.flags
-            = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
-            | VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT;
-        break;
-    case HgBufferMemoryUsage_stagingWrite:
-        allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-        break;
-    case HgBufferMemoryUsage_stagingRead:
-        allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
-        break;
-    }
+    allocInfo.flags = gpuMemoryUsageToVma(memoryUsage);
 
     VkResult result = vmaCreateBuffer(
         hgVkVma,
@@ -1120,30 +1237,21 @@ HgBuffer* hgCreateBuffer(
 
     buffer->size = size;
 
-    switch (access)
+    if (memoryUsage == HgGpuMemoryUsage_frequentUpdate)
     {
-    case HgBufferMemoryUsage_deviceOnly:
-        buffer->access = HgBufferMemoryHostAccess_none;
-        break;
-    case HgBufferMemoryUsage_frequentUpdate:
         VkMemoryPropertyFlags memPropFlags;
         vmaGetAllocationMemoryProperties(hgVkVma, buffer->alloc, &memPropFlags);
         buffer->access = memPropFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-            ? HgBufferMemoryHostAccess_write
-            : HgBufferMemoryHostAccess_none;
-        break;
-    case HgBufferMemoryUsage_stagingWrite:
-        buffer->access = HgBufferMemoryHostAccess_write;
-        break;
-    case HgBufferMemoryUsage_stagingRead:
-        buffer->access = HgBufferMemoryHostAccess_read;
-        break;
+            ? HgGpuMemoryHostAccess_write
+            : HgGpuMemoryHostAccess_none;
+    } else {
+        buffer->access = gpuMemoryUsageToHostAccess(memoryUsage);
     }
 
     return buffer;
 }
 
-void hgDestroyBuffer(HgBuffer *buffer)
+void hgDestroyGpuBuffer(HgGpuBuffer *buffer)
 {
     if (buffer != nullptr)
     {
@@ -1152,7 +1260,7 @@ void hgDestroyBuffer(HgBuffer *buffer)
     }
 }
 
-void hgWriteBuffer(HgBuffer* dst, u64 offset, const void* src, u64 size)
+void hgWriteGpuBuffer(HgGpuBuffer* dst, u64 offset, const void* src, u64 size)
 {
     if (size == 0)
         return;
@@ -1160,7 +1268,7 @@ void hgWriteBuffer(HgBuffer* dst, u64 offset, const void* src, u64 size)
     hgAssert(dst != nullptr);
     hgAssert(src != nullptr);
 
-    if (dst->access & HgBufferMemoryHostAccess_write)
+    if (dst->access & HgGpuMemoryHostAccess_write)
     {
         VkResult result = vmaCopyMemoryToAllocation(hgVkVma, src, dst->alloc, offset, size);
         if (result != VK_SUCCESS)
@@ -1168,11 +1276,11 @@ void hgWriteBuffer(HgBuffer* dst, u64 offset, const void* src, u64 size)
         return;
     }
 
-    HgBuffer* stage = hgCreateBuffer(size, HgBufferUsage_transferSrc, HgBufferMemoryUsage_stagingWrite);
-    hgDefer(hgDestroyBuffer(stage));
-    hgWriteBuffer(stage, 0, src, size);
+    HgGpuBuffer* stage = hgCreateGpuBuffer(size, HgGpuBufferUsage_transferSrc, HgGpuMemoryUsage_stagingWrite);
+    hgDefer(hgDestroyGpuBuffer(stage));
+    hgWriteGpuBuffer(stage, 0, src, size);
 
-    HgCommandBuffer* cmd = hgBeginVkCmd();
+    HgGpuCommands* cmd = hgBeginGpuCommands();
     {
         VkBufferCopy region{};
         region.dstOffset = offset;
@@ -1180,10 +1288,10 @@ void hgWriteBuffer(HgBuffer* dst, u64 offset, const void* src, u64 size)
 
         vkCmdCopyBuffer((VkCommandBuffer)cmd, stage->buffer, dst->buffer, 1, &region);
     }
-    hgEndVkCmd(cmd);
+    hgEndGpuCommands(cmd);
 }
 
-void hgReadBuffer(void* dst, HgBuffer* src, u64 offset, u64 size)
+void hgReadGpuBuffer(void* dst, HgGpuBuffer* src, u64 offset, u64 size)
 {
     if (size == 0)
         return;
@@ -1191,7 +1299,7 @@ void hgReadBuffer(void* dst, HgBuffer* src, u64 offset, u64 size)
     hgAssert(dst != nullptr);
     hgAssert(src != nullptr);
 
-    if (src->access & HgBufferMemoryHostAccess_read)
+    if (src->access & HgGpuMemoryHostAccess_read)
     {
         VkResult result = vmaCopyAllocationToMemory(hgVkVma, src->alloc, offset, dst, size);
         if (result != VK_SUCCESS)
@@ -1199,10 +1307,10 @@ void hgReadBuffer(void* dst, HgBuffer* src, u64 offset, u64 size)
         return;
     }
 
-    HgBuffer* stage = hgCreateBuffer(size, HgBufferUsage_transferDst, HgBufferMemoryUsage_stagingRead);
-    hgDefer(hgDestroyBuffer(stage));
+    HgGpuBuffer* stage = hgCreateGpuBuffer(size, HgGpuBufferUsage_transferDst, HgGpuMemoryUsage_stagingRead);
+    hgDefer(hgDestroyGpuBuffer(stage));
 
-    HgCommandBuffer* cmd = hgBeginVkCmd();
+    HgGpuCommands* cmd = hgBeginGpuCommands();
     {
         VkBufferCopy region{};
         region.srcOffset = offset;
@@ -1210,76 +1318,38 @@ void hgReadBuffer(void* dst, HgBuffer* src, u64 offset, u64 size)
 
         vkCmdCopyBuffer((VkCommandBuffer)cmd, src->buffer, stage->buffer, 1, &region);
     }
-    hgEndVkCmd(cmd);
+    hgEndGpuCommands(cmd);
 
-    hgReadBuffer(dst, stage, 0, size);
+    hgReadGpuBuffer(dst, stage, 0, size);
 }
 
-VkImageType hgImageTypeToVk(HgImageType type)
+HgGpuImage* hgCreateGpuImage(u32 width, u32 height, HgFormat format, HgGpuImageUsageFlags usage)
 {
-    return (VkImageType)type;
-}
-
-VkImageViewType hgImageViewTypeToVk(HgImageViewType type)
-{
-    return (VkImageViewType)type;
-}
-
-VkImageLayout hgImageLayoutToVk(HgImageLayout layout)
-{
-    return (VkImageLayout)layout;
-}
-
-VkSampleCountFlagBits countToMsaaSampleBits(u32 count)
-{
-    switch (count)
-    {
-        case 1:
-            return VK_SAMPLE_COUNT_1_BIT;
-        case 2:
-            return VK_SAMPLE_COUNT_2_BIT;
-        case 4:
-            return VK_SAMPLE_COUNT_4_BIT;
-        case 8:
-            return VK_SAMPLE_COUNT_8_BIT;
-        case 16:
-            return VK_SAMPLE_COUNT_16_BIT;
-        case 32:
-            return VK_SAMPLE_COUNT_32_BIT;
-        case 64:
-            return VK_SAMPLE_COUNT_64_BIT;
-        default:
-            hgError("Invalid msaa sample count\n");
-    }
-}
-
-HgImage* hgCreateImage(u32 width, u32 height, HgFormat format, HgImageUsageFlags usage)
-{
-    HgCreateImageEx create{};
+    HgCreateGpuImageEx create{};
     create.width = width;
     create.height = height;
     create.format = format;
     create.usage = usage;
-    return hgCreateImageEx(&create);
+    return hgCreateGpuImageEx(&create);
 }
 
-HgImage* hgCreateImageEx(const HgCreateImageEx* create)
+HgGpuImage* hgCreateGpuImageEx(const HgCreateGpuImageEx* create)
 {
     hgAssert(create->format != HgFormat_undefined);
     hgAssert(create->usage != 0);
 
-    HgImage* image = (HgImage*)malloc(sizeof(*image));
+    HgGpuImage* image = (HgGpuImage*)malloc(sizeof(*image));
     *image = {};
 
     VkImageCreateInfo imageInfo{};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    imageInfo.imageType = hgImageTypeToVk(create->type);
-    imageInfo.format = hgFormatToVk(create->format);
+    imageInfo.imageType = imageDimensionsToVk(create->dimensions);
+    imageInfo.format = formatToVk(create->format);
     imageInfo.extent = {create->width, create->height, create->depth};
     imageInfo.mipLevels = create->mipLevels;
     imageInfo.arrayLayers = create->arrayLayers;
     imageInfo.samples = countToMsaaSampleBits(create->msaaSamples);
-    imageInfo.usage = create->usage;
+    imageInfo.usage = gpuImageUsageToVk(create->usage);
 
     VmaAllocationCreateInfo allocInfo{};
     allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
@@ -1295,11 +1365,11 @@ HgImage* hgCreateImageEx(const HgCreateImageEx* create)
     if (result != VK_SUCCESS)
         hgError("Could not create VkImage: %s", vkResultToStr(result));
 
-    image->type = create->type;
-    image->format = create->format;
+    image->dimensions = create->dimensions;
     image->width = create->width;
     image->height = create->height;
     image->depth = create->depth;
+    image->format = create->format;
     image->mipLevels = create->mipLevels;
     image->arrayLayers = create->arrayLayers;
     image->msaaSamples = countToMsaaSampleBits(create->msaaSamples);
@@ -1307,7 +1377,7 @@ HgImage* hgCreateImageEx(const HgCreateImageEx* create)
     return image;
 }
 
-void hgDestroyImage(HgImage* image)
+void hgDestroyGpuImage(HgGpuImage* image)
 {
     if (image != nullptr)
     {
@@ -1316,68 +1386,18 @@ void hgDestroyImage(HgImage* image)
     }
 }
 
-HgImageView* hgCreateImageView(
-    const HgImage* image,
-    HgImageSubresource subresource,
-    HgImageViewType type)
-{
-    hgAssert(image != nullptr);
-    hgAssert(subresource.aspectFlags != 0);
-
-    HgImageView* view = (HgImageView*)malloc(sizeof(*view));
-    *view = {};
-
-    VkImageViewCreateInfo info{};
-    info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    info.image = image->image;
-    info.viewType = hgImageViewTypeToVk(type);
-    info.format = hgFormatToVk(image->format);
-    info.subresourceRange.aspectMask = subresource.aspectFlags;
-    info.subresourceRange.baseMipLevel = subresource.baseMipLevel;
-    info.subresourceRange.levelCount = subresource.levelCount;
-    info.subresourceRange.baseArrayLayer = subresource.baseArrayLayer;
-    info.subresourceRange.layerCount = subresource.layerCount;
-
-    VkResult result = vkCreateImageView(hgVkDevice, &info, nullptr, &view->view);
-    if (view == nullptr)
-        hgError("Could not create VkImageView: %s\n", vkResultToStr(result));
-
-    view->image = image;
-    view->type = type;
-    view->aspectFlags = subresource.aspectFlags;
-    view->baseMipLevel = subresource.baseMipLevel;
-    view->levelCount = subresource.levelCount;
-    view->baseArrayLayer = subresource.baseArrayLayer;
-    view->layerCount = subresource.layerCount;
-
-    return view;
-}
-
-void hgDestroyImageView(HgImageView* view)
-{
-    if (view != nullptr)
-    {
-        vkDestroyImageView(hgVkDevice, view->view, nullptr);
-        free(view);
-    }
-}
-
-void hgWriteImage(
-    HgImage* dst,
-    HgImageSubresource subresource,
-    const void* src,
-    HgImageLayout layout)
+void hgWriteGpuImage(HgGpuImage* dst, HgGpuImageRange range, const void* src, HgGpuLayout layout)
 {
     hgAssert(dst != nullptr);
     hgAssert(src != nullptr);
 
     u64 size = dst->width * dst->height * dst->depth * hgFormatToSize(dst->format);
 
-    HgBuffer* stage = hgCreateBuffer(size, HgBufferUsage_transferSrc, HgBufferMemoryUsage_stagingWrite);
-    hgDefer(hgDestroyBuffer(stage));
-    hgWriteBuffer(stage, 0, src, size);
+    HgGpuBuffer* stage = hgCreateGpuBuffer(size, HgGpuBufferUsage_transferSrc, HgGpuMemoryUsage_stagingWrite);
+    hgDefer(hgDestroyGpuBuffer(stage));
+    hgWriteGpuBuffer(stage, 0, src, size);
 
-    HgCommandBuffer* cmd = hgBeginVkCmd();
+    HgGpuCommands* cmd = hgBeginGpuCommands();
 
     VkImageMemoryBarrier2 transferBarrier{};
     transferBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -1385,11 +1405,11 @@ void hgWriteImage(
     transferBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
     transferBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
     transferBarrier.image = dst->image;
-    transferBarrier.subresourceRange.aspectMask = subresource.aspectFlags;
-    transferBarrier.subresourceRange.baseMipLevel = subresource.baseMipLevel;
+    transferBarrier.subresourceRange.aspectMask = gpuAspectToVk(range.aspectFlags);
+    transferBarrier.subresourceRange.baseMipLevel = range.baseMipLevel;
     transferBarrier.subresourceRange.levelCount = 1;
-    transferBarrier.subresourceRange.baseArrayLayer = subresource.baseArrayLayer;
-    transferBarrier.subresourceRange.layerCount = subresource.layerCount;
+    transferBarrier.subresourceRange.baseArrayLayer = range.baseArrayLayer;
+    transferBarrier.subresourceRange.layerCount = range.layerCount;
 
     VkDependencyInfo transferDep{};
     transferDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
@@ -1399,26 +1419,32 @@ void hgWriteImage(
     vkCmdPipelineBarrier2((VkCommandBuffer)cmd, &transferDep);
 
     VkBufferImageCopy region{};
-    region.imageSubresource.aspectMask = subresource.aspectFlags;
-    region.imageSubresource.mipLevel = subresource.baseMipLevel;
-    region.imageSubresource.baseArrayLayer = subresource.baseArrayLayer;
-    region.imageSubresource.layerCount = subresource.layerCount;
+    region.imageSubresource.aspectMask = gpuAspectToVk(range.aspectFlags);
+    region.imageSubresource.mipLevel = range.baseMipLevel;
+    region.imageSubresource.baseArrayLayer = range.baseArrayLayer;
+    region.imageSubresource.layerCount = range.layerCount;
     region.imageExtent = {dst->width, dst->height, dst->depth};
 
-    vkCmdCopyBufferToImage((VkCommandBuffer)cmd, stage->buffer, dst->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    vkCmdCopyBufferToImage(
+        (VkCommandBuffer)cmd,
+        stage->buffer,
+        dst->image,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        1,
+        &region);
 
     VkImageMemoryBarrier2 endBarrier{};
     endBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
     endBarrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
     endBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
     endBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    endBarrier.newLayout = hgImageLayoutToVk(layout);
+    endBarrier.newLayout = gpuLayoutToVk(layout);
     endBarrier.image = dst->image;
-    endBarrier.subresourceRange.aspectMask = subresource.aspectFlags;
-    endBarrier.subresourceRange.baseMipLevel = subresource.baseMipLevel;
+    endBarrier.subresourceRange.aspectMask = gpuAspectToVk(range.aspectFlags);
+    endBarrier.subresourceRange.baseMipLevel = range.baseMipLevel;
     endBarrier.subresourceRange.levelCount = 1;
-    endBarrier.subresourceRange.baseArrayLayer = subresource.baseArrayLayer;
-    endBarrier.subresourceRange.layerCount = subresource.layerCount;
+    endBarrier.subresourceRange.baseArrayLayer = range.baseArrayLayer;
+    endBarrier.subresourceRange.layerCount = range.layerCount;
 
     VkDependencyInfo endDep{};
     endDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
@@ -1427,35 +1453,31 @@ void hgWriteImage(
 
     vkCmdPipelineBarrier2((VkCommandBuffer)cmd, &endDep);
 
-    hgEndVkCmd(cmd);
+    hgEndGpuCommands(cmd);
 }
 
-void hgWriteImageCubemap(
-    HgImage* dst,
-    HgImageSubresource subresource,
-    const void* src,
-    HgImageLayout layout)
+void hgWriteGpuCubemapImage(HgGpuImage* dst, HgGpuImageRange range, const void* src, HgGpuLayout layout)
 {
     hgAssert(dst != nullptr);
-    hgAssert(subresource.baseArrayLayer == 0);
-    hgAssert(subresource.layerCount == 6);
+    hgAssert(range.baseArrayLayer == 0);
+    hgAssert(range.layerCount == 6);
     hgAssert(src != nullptr);
     hgAssert(dst->depth == 1);
 
     u64 size = dst->width * dst->height * hgFormatToSize(dst->format);
 
-    HgBuffer* buffer = hgCreateBuffer(size * 4 * 3, HgBufferUsage_transferSrc, HgBufferMemoryUsage_stagingWrite);
-    hgDefer(hgDestroyBuffer(buffer));
-    hgWriteBuffer(buffer, 0, src, size);
+    HgGpuBuffer* buffer = hgCreateGpuBuffer(size * 4 * 3, HgGpuBufferUsage_transferSrc, HgGpuMemoryUsage_stagingWrite);
+    hgDefer(hgDestroyGpuBuffer(buffer));
+    hgWriteGpuBuffer(buffer, 0, src, size);
 
-    HgImage* stage = hgCreateImage(
+    HgGpuImage* stage = hgCreateGpuImage(
         dst->width * 4,
         dst->height * 3,
         dst->format,
-        HgImageUsage_transferDst | HgImageUsage_transferSrc);
-    hgDefer(hgDestroyImage(stage));
+        HgGpuImageUsage_transferDst | HgGpuImageUsage_transferSrc);
+    hgDefer(hgDestroyGpuImage(stage));
 
-    HgCommandBuffer* cmd = hgBeginVkCmd();
+    HgGpuCommands* cmd = hgBeginGpuCommands();
 
     VkImageMemoryBarrier2 stageBarrier{};
     stageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -1463,11 +1485,11 @@ void hgWriteImageCubemap(
     stageBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
     stageBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
     stageBarrier.image = dst->image;
-    stageBarrier.subresourceRange.aspectMask = subresource.aspectFlags;
-    stageBarrier.subresourceRange.baseMipLevel = subresource.baseMipLevel;
+    stageBarrier.subresourceRange.aspectMask = gpuAspectToVk(range.aspectFlags);
+    stageBarrier.subresourceRange.baseMipLevel = range.baseMipLevel;
     stageBarrier.subresourceRange.levelCount = 1;
-    stageBarrier.subresourceRange.baseArrayLayer = subresource.baseArrayLayer;
-    stageBarrier.subresourceRange.layerCount = subresource.layerCount;
+    stageBarrier.subresourceRange.baseArrayLayer = range.baseArrayLayer;
+    stageBarrier.subresourceRange.layerCount = range.layerCount;
 
     VkDependencyInfo stageDep{};
     stageDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
@@ -1477,13 +1499,19 @@ void hgWriteImageCubemap(
     vkCmdPipelineBarrier2((VkCommandBuffer)cmd, &stageDep);
 
     VkBufferImageCopy stageRegion{};
-    stageRegion.imageSubresource.aspectMask = subresource.aspectFlags;
-    stageRegion.imageSubresource.mipLevel = subresource.baseMipLevel;
-    stageRegion.imageSubresource.baseArrayLayer = subresource.baseArrayLayer;
-    stageRegion.imageSubresource.layerCount = subresource.layerCount;
+    stageRegion.imageSubresource.aspectMask = gpuAspectToVk(range.aspectFlags);
+    stageRegion.imageSubresource.mipLevel = range.baseMipLevel;
+    stageRegion.imageSubresource.baseArrayLayer = range.baseArrayLayer;
+    stageRegion.imageSubresource.layerCount = range.layerCount;
     stageRegion.imageExtent = {dst->width, dst->height, 1};
 
-    vkCmdCopyBufferToImage((VkCommandBuffer)cmd, buffer->buffer, stage->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &stageRegion);
+    vkCmdCopyBufferToImage(
+        (VkCommandBuffer)cmd,
+        buffer->buffer,
+        stage->image,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        1,
+        &stageRegion);
 
     VkImageMemoryBarrier2 transferBarriers[2]{};
 
@@ -1495,7 +1523,7 @@ void hgWriteImageCubemap(
     transferBarriers[0].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
     transferBarriers[0].newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
     transferBarriers[0].image = stage->image;
-    transferBarriers[0].subresourceRange.aspectMask = subresource.aspectFlags;
+    transferBarriers[0].subresourceRange.aspectMask = gpuAspectToVk(range.aspectFlags);
     transferBarriers[0].subresourceRange.baseMipLevel = 0;
     transferBarriers[0].subresourceRange.levelCount = 1;
     transferBarriers[0].subresourceRange.baseArrayLayer = 0;
@@ -1506,11 +1534,11 @@ void hgWriteImageCubemap(
     transferBarriers[1].dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
     transferBarriers[1].newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
     transferBarriers[1].image = dst->image;
-    transferBarriers[1].subresourceRange.aspectMask = subresource.aspectFlags;
-    transferBarriers[1].subresourceRange.baseMipLevel = subresource.baseMipLevel;
+    transferBarriers[1].subresourceRange.aspectMask = gpuAspectToVk(range.aspectFlags);
+    transferBarriers[1].subresourceRange.baseMipLevel = range.baseMipLevel;
     transferBarriers[1].subresourceRange.levelCount = 1;
-    transferBarriers[1].subresourceRange.baseArrayLayer = subresource.baseArrayLayer;
-    transferBarriers[1].subresourceRange.layerCount = subresource.layerCount;
+    transferBarriers[1].subresourceRange.baseArrayLayer = range.baseArrayLayer;
+    transferBarriers[1].subresourceRange.layerCount = range.layerCount;
 
     VkDependencyInfo transferDep{};
     transferDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
@@ -1521,39 +1549,39 @@ void hgWriteImageCubemap(
 
     VkImageCopy regions[6]{};
 
-    regions[0].srcSubresource = {subresource.aspectFlags, 0, 0, 1};
+    regions[0].srcSubresource = {gpuAspectToVk(range.aspectFlags), 0, 0, 1};
     regions[0].srcOffset = {(int)dst->width * 2, (int)dst->height * 1, 0};
-    regions[0].dstSubresource = {subresource.aspectFlags, subresource.baseMipLevel, 0, 1};
+    regions[0].dstSubresource = {gpuAspectToVk(range.aspectFlags), range.baseMipLevel, 0, 1};
     regions[0].dstOffset = {};
     regions[0].extent = {dst->width, dst->height, 1};
 
-    regions[1].srcSubresource = {subresource.aspectFlags, 0, 0, 1};
+    regions[1].srcSubresource = {gpuAspectToVk(range.aspectFlags), 0, 0, 1};
     regions[1].srcOffset = {(int)dst->width * 0, (int)dst->height * 1, 0};
-    regions[1].dstSubresource = {subresource.aspectFlags, subresource.baseMipLevel, 1, 1};
+    regions[1].dstSubresource = {gpuAspectToVk(range.aspectFlags), range.baseMipLevel, 1, 1};
     regions[1].dstOffset = {};
     regions[1].extent = {dst->width, dst->height, 1};
 
-    regions[2].srcSubresource = {subresource.aspectFlags, 0, 0, 1};
+    regions[2].srcSubresource = {gpuAspectToVk(range.aspectFlags), 0, 0, 1};
     regions[2].srcOffset = {(int)dst->width * 1, (int)dst->height * 0, 0};
-    regions[2].dstSubresource = {subresource.aspectFlags, subresource.baseMipLevel, 2, 1};
+    regions[2].dstSubresource = {gpuAspectToVk(range.aspectFlags), range.baseMipLevel, 2, 1};
     regions[2].dstOffset = {};
     regions[2].extent = {dst->width, dst->height, 1};
 
-    regions[3].srcSubresource = {subresource.aspectFlags, 0, 0, 1};
+    regions[3].srcSubresource = {gpuAspectToVk(range.aspectFlags), 0, 0, 1};
     regions[3].srcOffset = {(int)dst->width * 1, (int)dst->height * 2, 0};
-    regions[3].dstSubresource = {subresource.aspectFlags, subresource.baseMipLevel, 3, 1};
+    regions[3].dstSubresource = {gpuAspectToVk(range.aspectFlags), range.baseMipLevel, 3, 1};
     regions[3].dstOffset = {};
     regions[3].extent = {dst->width, dst->height, 1};
 
-    regions[4].srcSubresource = {subresource.aspectFlags, 0, 0, 1};
+    regions[4].srcSubresource = {gpuAspectToVk(range.aspectFlags), 0, 0, 1};
     regions[4].srcOffset = {(int)dst->width * 1, (int)dst->height * 1, 0};
-    regions[4].dstSubresource = {subresource.aspectFlags, subresource.baseMipLevel, 4, 1};
+    regions[4].dstSubresource = {gpuAspectToVk(range.aspectFlags), range.baseMipLevel, 4, 1};
     regions[4].dstOffset = {};
     regions[4].extent = {dst->width, dst->height, 1};
 
-    regions[5].srcSubresource = {subresource.aspectFlags, 0, 0, 1};
+    regions[5].srcSubresource = {gpuAspectToVk(range.aspectFlags), 0, 0, 1};
     regions[5].srcOffset = {(int)dst->width * 3, (int)dst->height * 1, 0};
-    regions[5].dstSubresource = {subresource.aspectFlags, subresource.baseMipLevel, 5, 1};
+    regions[5].dstSubresource = {gpuAspectToVk(range.aspectFlags), range.baseMipLevel, 5, 1};
     regions[5].dstOffset = {};
     regions[5].extent = {dst->width, dst->height, 1};
 
@@ -1571,13 +1599,13 @@ void hgWriteImageCubemap(
     endBarrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
     endBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
     endBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    endBarrier.newLayout = hgImageLayoutToVk(layout);
+    endBarrier.newLayout = gpuLayoutToVk(layout);
     endBarrier.image = dst->image;
-    endBarrier.subresourceRange.aspectMask = subresource.aspectFlags;
-    endBarrier.subresourceRange.baseMipLevel = subresource.baseMipLevel;
+    endBarrier.subresourceRange.aspectMask = gpuAspectToVk(range.aspectFlags);
+    endBarrier.subresourceRange.baseMipLevel = range.baseMipLevel;
     endBarrier.subresourceRange.levelCount = 1;
-    endBarrier.subresourceRange.baseArrayLayer = subresource.baseArrayLayer;
-    endBarrier.subresourceRange.layerCount = subresource.layerCount;
+    endBarrier.subresourceRange.baseArrayLayer = range.baseArrayLayer;
+    endBarrier.subresourceRange.layerCount = range.layerCount;
 
     VkDependencyInfo endDep{};
     endDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
@@ -1586,38 +1614,34 @@ void hgWriteImageCubemap(
 
     vkCmdPipelineBarrier2((VkCommandBuffer)cmd, &endDep);
 
-    hgEndVkCmd(cmd);
+    hgEndGpuCommands(cmd);
 }
 
-void hgReadImage(
-    void* dst,
-    const HgImage* src,
-    HgImageSubresource subresource,
-    HgImageLayout layout)
+void hgReadImage(void* dst, const HgGpuImage* src, HgGpuImageRange range, HgGpuLayout layout)
 {
     hgAssert(src != nullptr);
-    hgAssert(layout != HgImageLayout_undefined);
+    hgAssert(layout != HgGpuLayout_undefined);
     hgAssert(dst != nullptr);
 
     u64 size = src->width * src->height * src->depth * hgFormatToSize(src->format);
 
-    HgBuffer* stage = hgCreateBuffer(size, HgBufferUsage_transferDst, HgBufferMemoryUsage_stagingRead);
-    hgDefer(hgDestroyBuffer(stage));
+    HgGpuBuffer* stage = hgCreateGpuBuffer(size, HgGpuBufferUsage_transferDst, HgGpuMemoryUsage_stagingRead);
+    hgDefer(hgDestroyGpuBuffer(stage));
 
-    HgCommandBuffer* cmd = hgBeginVkCmd();
+    HgGpuCommands* cmd = hgBeginGpuCommands();
 
     VkImageMemoryBarrier2 transferBarrier{};
     transferBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
     transferBarrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
     transferBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-    transferBarrier.oldLayout = hgImageLayoutToVk(layout);
+    transferBarrier.oldLayout = gpuLayoutToVk(layout);
     transferBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
     transferBarrier.image = src->image;
-    transferBarrier.subresourceRange.aspectMask = subresource.aspectFlags;
-    transferBarrier.subresourceRange.baseMipLevel = subresource.baseMipLevel;
+    transferBarrier.subresourceRange.aspectMask = gpuAspectToVk(range.aspectFlags);
+    transferBarrier.subresourceRange.baseMipLevel = range.baseMipLevel;
     transferBarrier.subresourceRange.levelCount = 1;
-    transferBarrier.subresourceRange.baseArrayLayer = subresource.baseArrayLayer;
-    transferBarrier.subresourceRange.layerCount = subresource.layerCount;
+    transferBarrier.subresourceRange.baseArrayLayer = range.baseArrayLayer;
+    transferBarrier.subresourceRange.layerCount = range.layerCount;
 
     VkDependencyInfo transferDep{};
     transferDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
@@ -1627,26 +1651,32 @@ void hgReadImage(
     vkCmdPipelineBarrier2((VkCommandBuffer)cmd, &transferDep);
 
     VkBufferImageCopy region{};
-    region.imageSubresource.aspectMask = subresource.aspectFlags;
-    region.imageSubresource.mipLevel = subresource.baseMipLevel;
-    region.imageSubresource.baseArrayLayer = subresource.baseArrayLayer;
-    region.imageSubresource.layerCount = subresource.layerCount;
+    region.imageSubresource.aspectMask = gpuAspectToVk(range.aspectFlags);
+    region.imageSubresource.mipLevel = range.baseMipLevel;
+    region.imageSubresource.baseArrayLayer = range.baseArrayLayer;
+    region.imageSubresource.layerCount = range.layerCount;
     region.imageExtent = {src->width, src->height, src->depth};
 
-    vkCmdCopyImageToBuffer((VkCommandBuffer)cmd, src->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, stage->buffer, 1, &region);
+    vkCmdCopyImageToBuffer(
+        (VkCommandBuffer)cmd,
+        src->image,
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        stage->buffer,
+        1,
+        &region);
 
     VkImageMemoryBarrier2 endBarrier{};
     endBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
     endBarrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
     endBarrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
     endBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    endBarrier.newLayout = hgImageLayoutToVk(layout);
+    endBarrier.newLayout = gpuLayoutToVk(layout);
     endBarrier.image = src->image;
-    endBarrier.subresourceRange.aspectMask = subresource.aspectFlags;
-    endBarrier.subresourceRange.baseMipLevel = subresource.baseMipLevel;
+    endBarrier.subresourceRange.aspectMask = gpuAspectToVk(range.aspectFlags);
+    endBarrier.subresourceRange.baseMipLevel = range.baseMipLevel;
     endBarrier.subresourceRange.levelCount = 1;
-    endBarrier.subresourceRange.baseArrayLayer = subresource.baseArrayLayer;
-    endBarrier.subresourceRange.layerCount = subresource.layerCount;
+    endBarrier.subresourceRange.baseArrayLayer = range.baseArrayLayer;
+    endBarrier.subresourceRange.layerCount = range.layerCount;
 
     VkDependencyInfo endDep{};
     endDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
@@ -1655,25 +1685,21 @@ void hgReadImage(
 
     vkCmdPipelineBarrier2((VkCommandBuffer)cmd, &endDep);
 
-    hgEndVkCmd(cmd);
+    hgEndGpuCommands(cmd);
 
-    hgReadBuffer(dst, stage, 0, size);
+    hgReadGpuBuffer(dst, stage, 0, size);
 }
 
-void hgGenerateMipmaps(
-    HgImage* image,
-    VkImageAspectFlags aspectFlags,
-    HgImageLayout oldLayout,
-    HgImageLayout newLayout)
+void hgGenerateMipmaps(HgGpuImage* image, VkImageAspectFlags aspectFlags, HgGpuLayout oldLayout, HgGpuLayout newLayout)
 {
     hgAssert(image != nullptr);
     hgAssert(aspectFlags != 0);
-    hgAssert(oldLayout != HgImageLayout_undefined);
-    hgAssert(newLayout != HgImageLayout_undefined);
+    hgAssert(oldLayout != HgGpuLayout_undefined);
+    hgAssert(newLayout != HgGpuLayout_undefined);
     if (image->mipLevels == 1)
         return;
 
-    HgCommandBuffer* cmd = hgBeginVkCmd();
+    HgGpuCommands* cmd = hgBeginGpuCommands();
 
     VkOffset3D mipOffset{};
     mipOffset.x = (i32)image->width;
@@ -1686,10 +1712,10 @@ void hgGenerateMipmaps(
     barrier.srcAccessMask = VK_ACCESS_NONE;
     barrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
     barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-    barrier.oldLayout = hgImageLayoutToVk(oldLayout);
+    barrier.oldLayout = gpuLayoutToVk(oldLayout);
     barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
     barrier.image = image->image;
-    barrier.subresourceRange.aspectMask = aspectFlags;
+    barrier.subresourceRange.aspectMask = gpuAspectToVk(aspectFlags);
     barrier.subresourceRange.levelCount = 1;
     barrier.subresourceRange.layerCount = 1;
 
@@ -1708,13 +1734,13 @@ void hgGenerateMipmaps(
         barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
         barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        barrier.subresourceRange.aspectMask = aspectFlags;
+        barrier.subresourceRange.aspectMask = gpuAspectToVk(aspectFlags);
         barrier.subresourceRange.baseMipLevel = level + 1;
 
         vkCmdPipelineBarrier2((VkCommandBuffer)cmd, &dep);
 
         VkImageBlit blit{};
-        blit.srcSubresource.aspectMask = aspectFlags;
+        blit.srcSubresource.aspectMask = gpuAspectToVk(aspectFlags);
         blit.srcSubresource.mipLevel = level;
         blit.srcSubresource.layerCount = 1;
         blit.srcOffsets[1] = mipOffset;
@@ -1724,7 +1750,7 @@ void hgGenerateMipmaps(
             mipOffset.y /= 2;
         if (mipOffset.z > 1)
             mipOffset.z /= 2;
-        blit.dstSubresource.aspectMask = aspectFlags;
+        blit.dstSubresource.aspectMask = gpuAspectToVk(aspectFlags);
         blit.dstSubresource.mipLevel = level + 1;
         blit.dstSubresource.layerCount = 1;
         blit.dstOffsets[1] = mipOffset;
@@ -1742,7 +1768,7 @@ void hgGenerateMipmaps(
         barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
         barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
         barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-        barrier.subresourceRange.aspectMask = aspectFlags;
+        barrier.subresourceRange.aspectMask = gpuAspectToVk(aspectFlags);
         barrier.subresourceRange.baseMipLevel = level + 1;
 
         vkCmdPipelineBarrier2((VkCommandBuffer)cmd, &dep);
@@ -1753,114 +1779,142 @@ void hgGenerateMipmaps(
     barrier.dstStageMask = VK_PIPELINE_STAGE_NONE;
     barrier.dstAccessMask = VK_ACCESS_NONE;
     barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    barrier.newLayout = hgImageLayoutToVk(newLayout);
-    barrier.subresourceRange.aspectMask = aspectFlags;
+    barrier.newLayout = gpuLayoutToVk(newLayout);
+    barrier.subresourceRange.aspectMask = gpuAspectToVk(aspectFlags);
     barrier.subresourceRange.baseMipLevel = 0;
     barrier.subresourceRange.levelCount = image->mipLevels;
 
     vkCmdPipelineBarrier2((VkCommandBuffer)cmd, &dep);
 
-    hgEndVkCmd(cmd);
+    hgEndGpuCommands(cmd);
 }
 
-static VkFilter hgSamplerFilterToVk(HgSamplerFilter filter)
+HgGpuView* hgCreateGpuView(const HgGpuImage* image, HgGpuImageRange range, HgGpuViewType type)
 {
-    return (VkFilter)filter;
+    hgAssert(image != nullptr);
+    hgAssert(range.aspectFlags != 0);
+
+    HgGpuView* view = (HgGpuView*)malloc(sizeof(*view));
+    *view = {};
+
+    VkImageViewCreateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    info.image = image->image;
+    info.viewType = gpuViewTypeToVk(type);
+    info.format = formatToVk(image->format);
+    info.subresourceRange.aspectMask = gpuAspectToVk(range.aspectFlags);
+    info.subresourceRange.baseMipLevel = range.baseMipLevel;
+    info.subresourceRange.levelCount = range.levelCount;
+    info.subresourceRange.baseArrayLayer = range.baseArrayLayer;
+    info.subresourceRange.layerCount = range.layerCount;
+
+    VkResult result = vkCreateImageView(hgVkDevice, &info, nullptr, &view->view);
+    if (view == nullptr)
+        hgError("Could not create VkImageView: %s\n", vkResultToStr(result));
+
+    view->image = image;
+    view->type = type;
+    view->aspectFlags = gpuAspectToVk(range.aspectFlags);
+    view->baseMipLevel = range.baseMipLevel;
+    view->levelCount = range.levelCount;
+    view->baseArrayLayer = range.baseArrayLayer;
+    view->layerCount = range.layerCount;
+
+    return view;
 }
 
-static VkSamplerAddressMode hgSamplerAddressModeToVk(HgSamplerAddressMode mode)
+void hgDestroyGpuView(HgGpuView* view)
 {
-    return (VkSamplerAddressMode)mode;
+    if (view != nullptr)
+    {
+        vkDestroyImageView(hgVkDevice, view->view, nullptr);
+        free(view);
+    }
 }
 
-static VkBorderColor hgSamplerBorderColorToVk(HgSamplerBorderColor color)
-{
-    return (VkBorderColor)color;
-}
-
-HgSampler* hgCreateSampler(HgSamplerFilter filter, HgSamplerAddressMode addressMode, HgSamplerBorderColor borderColor)
+HgGpuSampler* hgCreateGpuSampler(HgGpuFilter filter, HgGpuSamplerEdgeMode addressMode, HgSamplerBorderColor borderColor)
 {
     VkSamplerCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    info.magFilter = hgSamplerFilterToVk(filter);
-    info.minFilter = hgSamplerFilterToVk(filter);
-    info.mipmapMode = filter == HgSamplerFilter_linear
+    info.magFilter = gpuFilterToVk(filter);
+    info.minFilter = gpuFilterToVk(filter);
+    info.mipmapMode = filter == HgGpuFilter_linear
         ? VK_SAMPLER_MIPMAP_MODE_LINEAR : VK_SAMPLER_MIPMAP_MODE_NEAREST;
-    info.addressModeU = hgSamplerAddressModeToVk(addressMode);
-    info.addressModeV = hgSamplerAddressModeToVk(addressMode);
-    info.addressModeW = hgSamplerAddressModeToVk(addressMode);
+    info.addressModeU = gpuSamplerAddressModeToVk(addressMode);
+    info.addressModeV = gpuSamplerAddressModeToVk(addressMode);
+    info.addressModeW = gpuSamplerAddressModeToVk(addressMode);
     info.mipLodBias = 0.0f;
     info.minLod = 0.0f;
     info.maxLod = 1000.0f;
-    info.borderColor = hgSamplerBorderColorToVk(borderColor);
+    info.borderColor = gpuSamplerBorderToVk(borderColor);
 
     VkSampler sampler = nullptr;
     VkResult result = vkCreateSampler(hgVkDevice, &info, nullptr, &sampler);
     if (sampler == nullptr)
         hgError("Could not create VkSampler: %s", vkResultToStr(result));
 
-    return (HgSampler*)sampler;
+    return (HgGpuSampler*)sampler;
 }
 
-void hgDestroySampler(HgSampler* sampler)
+void hgDestroyGpuSampler(HgGpuSampler* sampler)
 {
     vkDestroySampler(hgVkDevice, (VkSampler)sampler, nullptr);
 }
 
-static HgDescriptor allocDescriptor(HgDescriptor* pool, HgDescriptor* next)
+static HgGpuDescriptor allocDescriptor(HgGpuDescriptor* pool, HgGpuDescriptor* next)
 {
-    HgDescriptor desc = *next;
+    HgGpuDescriptor desc = *next;
 
-    u32 idx = hgDescriptorIdx(*next);
+    u32 idx = hgGpuDescriptorIdx(*next);
     *next = pool[idx];
 
-    pool[hgDescriptorIdx(desc)] = desc;
+    pool[hgGpuDescriptorIdx(desc)] = desc;
     return desc;
 }
 
-static void deallocDescriptor(HgDescriptor* pool, HgDescriptor* next, HgDescriptor desc)
+static void deallocDescriptor(HgGpuDescriptor* pool, HgGpuDescriptor* next, HgGpuDescriptor desc)
 {
-    u32 idx = hgDescriptorIdx(desc);
+    u32 idx = hgGpuDescriptorIdx(desc);
     pool[idx] = *next;
 
     desc.id += 1 << 16;
     *next = desc;
 }
 
-HgDescriptor hgCreateDescriptor(HgDescriptorType type)
+HgGpuDescriptor hgCreateGpuDescriptor(HgGpuDescriptorType type)
 {
     switch (type)
     {
-        case HgDescriptorType_sampler:
-            hgAssert(hgDescriptorIdx(vulkanState.samplerPoolNext) != UINT16_MAX);
+        case HgGpuDescriptorType_sampler:
+            hgAssert(hgGpuDescriptorIdx(vulkanState.samplerPoolNext) != UINT16_MAX);
             return allocDescriptor(vulkanState.samplerPool, &vulkanState.samplerPoolNext);
             break;
-        case HgDescriptorType_combinedImageSampler:
-            hgAssert(hgDescriptorIdx(vulkanState.combinedImageSamplerPoolNext) != UINT16_MAX);
+        case HgGpuDescriptorType_combinedImageSampler:
+            hgAssert(hgGpuDescriptorIdx(vulkanState.combinedImageSamplerPoolNext) != UINT16_MAX);
             return allocDescriptor(vulkanState.combinedImageSamplerPool, &vulkanState.combinedImageSamplerPoolNext);
             break;
-        case HgDescriptorType_sampledImage:
-            hgAssert(hgDescriptorIdx(vulkanState.sampledImagePoolNext) != UINT16_MAX);
+        case HgGpuDescriptorType_sampledImage:
+            hgAssert(hgGpuDescriptorIdx(vulkanState.sampledImagePoolNext) != UINT16_MAX);
             return allocDescriptor(vulkanState.sampledImagePool, &vulkanState.sampledImagePoolNext);
             break;
-        case HgDescriptorType_storageImage:
-            hgAssert(hgDescriptorIdx(vulkanState.storageImagePoolNext) != UINT16_MAX);
+        case HgGpuDescriptorType_storageImage:
+            hgAssert(hgGpuDescriptorIdx(vulkanState.storageImagePoolNext) != UINT16_MAX);
             return allocDescriptor(vulkanState.storageImagePool, &vulkanState.storageImagePoolNext);
             break;
-        case HgDescriptorType_uniformTexelBuffer:
-            hgAssert(hgDescriptorIdx(vulkanState.uniformTexelBufferPoolNext) != UINT16_MAX);
+        case HgGpuDescriptorType_uniformTexelBuffer:
+            hgAssert(hgGpuDescriptorIdx(vulkanState.uniformTexelBufferPoolNext) != UINT16_MAX);
             return allocDescriptor(vulkanState.uniformTexelBufferPool, &vulkanState.uniformTexelBufferPoolNext);
             break;
-        case HgDescriptorType_storageTexelBuffer:
-            hgAssert(hgDescriptorIdx(vulkanState.storageTexelBufferPoolNext) != UINT16_MAX);
+        case HgGpuDescriptorType_storageTexelBuffer:
+            hgAssert(hgGpuDescriptorIdx(vulkanState.storageTexelBufferPoolNext) != UINT16_MAX);
             return allocDescriptor(vulkanState.storageTexelBufferPool, &vulkanState.storageTexelBufferPoolNext);
             break;
-        case HgDescriptorType_uniformBuffer:
-            hgAssert(hgDescriptorIdx(vulkanState.uniformBufferPoolNext) != UINT16_MAX);
+        case HgGpuDescriptorType_uniformBuffer:
+            hgAssert(hgGpuDescriptorIdx(vulkanState.uniformBufferPoolNext) != UINT16_MAX);
             return allocDescriptor(vulkanState.uniformBufferPool, &vulkanState.uniformBufferPoolNext);
             break;
-        case HgDescriptorType_storageBuffer:
-            hgAssert(hgDescriptorIdx(vulkanState.storageBufferPoolNext) != UINT16_MAX);
+        case HgGpuDescriptorType_storageBuffer:
+            hgAssert(hgGpuDescriptorIdx(vulkanState.storageBufferPoolNext) != UINT16_MAX);
             return allocDescriptor(vulkanState.storageBufferPool, &vulkanState.storageBufferPoolNext);
             break;
         default:
@@ -1869,43 +1923,43 @@ HgDescriptor hgCreateDescriptor(HgDescriptorType type)
     }
 }
 
-void hgDestroyDescriptor(HgDescriptor desc)
+void hgDestroyGpuDescriptor(HgGpuDescriptor desc)
 {
-    if (desc.id == HgDescriptor{}.id)
+    if (desc.id == HgGpuDescriptor{}.id)
         return;
 
     switch (hgDescriptorType(desc))
     {
-        case HgDescriptorType_sampler:
-            hgAssert(desc.id == vulkanState.samplerPool[hgDescriptorIdx(desc)].id);
+        case HgGpuDescriptorType_sampler:
+            hgAssert(desc.id == vulkanState.samplerPool[hgGpuDescriptorIdx(desc)].id);
             deallocDescriptor(vulkanState.samplerPool, &vulkanState.samplerPoolNext, desc);
             break;
-        case HgDescriptorType_combinedImageSampler:
-            hgAssert(desc.id == vulkanState.combinedImageSamplerPool[hgDescriptorIdx(desc)].id);
+        case HgGpuDescriptorType_combinedImageSampler:
+            hgAssert(desc.id == vulkanState.combinedImageSamplerPool[hgGpuDescriptorIdx(desc)].id);
             deallocDescriptor(vulkanState.combinedImageSamplerPool, &vulkanState.combinedImageSamplerPoolNext, desc);
             break;
-        case HgDescriptorType_sampledImage:
-            hgAssert(desc.id == vulkanState.sampledImagePool[hgDescriptorIdx(desc)].id);
+        case HgGpuDescriptorType_sampledImage:
+            hgAssert(desc.id == vulkanState.sampledImagePool[hgGpuDescriptorIdx(desc)].id);
             deallocDescriptor(vulkanState.sampledImagePool, &vulkanState.sampledImagePoolNext, desc);
             break;
-        case HgDescriptorType_storageImage:
-            hgAssert(desc.id == vulkanState.storageImagePool[hgDescriptorIdx(desc)].id);
+        case HgGpuDescriptorType_storageImage:
+            hgAssert(desc.id == vulkanState.storageImagePool[hgGpuDescriptorIdx(desc)].id);
             deallocDescriptor(vulkanState.storageImagePool, &vulkanState.storageImagePoolNext, desc);
             break;
-        case HgDescriptorType_uniformTexelBuffer:
-            hgAssert(desc.id == vulkanState.uniformTexelBufferPool[hgDescriptorIdx(desc)].id);
+        case HgGpuDescriptorType_uniformTexelBuffer:
+            hgAssert(desc.id == vulkanState.uniformTexelBufferPool[hgGpuDescriptorIdx(desc)].id);
             deallocDescriptor(vulkanState.uniformTexelBufferPool, &vulkanState.uniformTexelBufferPoolNext, desc);
             break;
-        case HgDescriptorType_storageTexelBuffer:
-            hgAssert(desc.id == vulkanState.storageTexelBufferPool[hgDescriptorIdx(desc)].id);
+        case HgGpuDescriptorType_storageTexelBuffer:
+            hgAssert(desc.id == vulkanState.storageTexelBufferPool[hgGpuDescriptorIdx(desc)].id);
             deallocDescriptor(vulkanState.storageTexelBufferPool, &vulkanState.storageTexelBufferPoolNext, desc);
             break;
-        case HgDescriptorType_uniformBuffer:
-            hgAssert(desc.id == vulkanState.uniformBufferPool[hgDescriptorIdx(desc)].id);
+        case HgGpuDescriptorType_uniformBuffer:
+            hgAssert(desc.id == vulkanState.uniformBufferPool[hgGpuDescriptorIdx(desc)].id);
             deallocDescriptor(vulkanState.uniformBufferPool, &vulkanState.uniformBufferPoolNext, desc);
             break;
-        case HgDescriptorType_storageBuffer:
-            hgAssert(desc.id == vulkanState.storageBufferPool[hgDescriptorIdx(desc)].id);
+        case HgGpuDescriptorType_storageBuffer:
+            hgAssert(desc.id == vulkanState.storageBufferPool[hgGpuDescriptorIdx(desc)].id);
             deallocDescriptor(vulkanState.storageBufferPool, &vulkanState.storageBufferPoolNext, desc);
             break;
         default:
@@ -1914,32 +1968,32 @@ void hgDestroyDescriptor(HgDescriptor desc)
     }
 }
 
-VkDescriptorType hgDescriptorTypeToVk(HgDescriptorType type)
+VkDescriptorType hgDescriptorTypeToVk(HgGpuDescriptorType type)
 {
     switch (type)
     {
-        case HgDescriptorType_sampler:
+        case HgGpuDescriptorType_sampler:
             return VK_DESCRIPTOR_TYPE_SAMPLER;
             break;
-        case HgDescriptorType_combinedImageSampler:
+        case HgGpuDescriptorType_combinedImageSampler:
             return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
             break;
-        case HgDescriptorType_sampledImage:
+        case HgGpuDescriptorType_sampledImage:
             return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
             break;
-        case HgDescriptorType_storageImage:
+        case HgGpuDescriptorType_storageImage:
             return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
             break;
-        case HgDescriptorType_uniformTexelBuffer:
+        case HgGpuDescriptorType_uniformTexelBuffer:
             return VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER;
             break;
-        case HgDescriptorType_storageTexelBuffer:
+        case HgGpuDescriptorType_storageTexelBuffer:
             return VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER;
             break;
-        case HgDescriptorType_uniformBuffer:
+        case HgGpuDescriptorType_uniformBuffer:
             return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
             break;
-        case HgDescriptorType_storageBuffer:
+        case HgGpuDescriptorType_storageBuffer:
             return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
             break;
         default:
@@ -1948,10 +2002,10 @@ VkDescriptorType hgDescriptorTypeToVk(HgDescriptorType type)
     hgAssert(false);
 }
 
-void hgUpdateDescriptor(
-    HgDescriptor descriptor,
-    const HgBufferDescriptorInfo* bufferInfo,
-    const HgImageDescriptorInfo* imageInfo)
+void hgUpdateGpuDescriptor(
+    HgGpuDescriptor descriptor,
+    const HgGpuBufferDescriptorInfo* bufferInfo,
+    const HgGpuImageDescriptorInfo* imageInfo)
 {
     HgArena* scratch = hgGetScratch();
     HgArenaScope scratchScope{scratch};
@@ -1964,7 +2018,7 @@ void hgUpdateDescriptor(
         ? VkDescriptorImageInfo{
             (VkSampler)imageInfo->sampler,
             imageInfo->imageView->view,
-            hgImageLayoutToVk(imageInfo->imageLayout)
+            gpuLayoutToVk(imageInfo->imageLayout)
         }
         : VkDescriptorImageInfo{};
 
@@ -1972,7 +2026,7 @@ void hgUpdateDescriptor(
     write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     write.dstSet = vulkanState.bindlessSet;
     write.dstBinding = hgDescriptorType(descriptor);
-    write.dstArrayElement = hgDescriptorIdx(descriptor);
+    write.dstArrayElement = hgGpuDescriptorIdx(descriptor);
     write.descriptorCount = 1;
     write.descriptorType = hgDescriptorTypeToVk(hgDescriptorType(descriptor));
     write.pBufferInfo = bufferInfo != nullptr ? &bufferVkInfo : nullptr;
@@ -1997,32 +2051,7 @@ static VkShaderModule createShaderModule(const u8* spirvCode, u64 codeSize)
     return shader;
 }
 
-static VkVertexInputRate hgVertexInputRateToVk(HgVertexInputRate rate)
-{
-    return (VkVertexInputRate)rate;
-}
-
-static VkPrimitiveTopology hgPrimitiveTopologyToVk(HgPrimitiveTopology topology)
-{
-    return (VkPrimitiveTopology)topology;
-}
-
-static VkPolygonMode hgPolygonModeToVk(HgPolygonMode mode)
-{
-    return (VkPolygonMode)mode;
-}
-
-static VkCullModeFlags hgCullModeToVk(HgCullModeFlags mode)
-{
-    return (VkCullModeFlags)mode;
-}
-
-static VkFrontFace hgFrontFaceToVk(HgFrontFace front)
-{
-    return (VkFrontFace)front;
-}
-
-HgPipeline* hgCreateGraphicsPipeline(const HgCreateGraphicsPipeline* config)
+HgGpuPipeline* hgCreateGpuGraphicsPipeline(const HgCreateGpuGraphicsPipeline* config)
 {
     hgAssert(config->vertexShader != nullptr);
     hgAssert(config->fragmentShader != nullptr);
@@ -2031,7 +2060,7 @@ HgPipeline* hgCreateGraphicsPipeline(const HgCreateGraphicsPipeline* config)
     if (config->vertexBindingCount > 0)
         hgAssert(config->vertexBindings != nullptr);
 
-    HgPipeline* pipeline = (HgPipeline*)malloc(sizeof(HgPipeline));
+    HgGpuPipeline* pipeline = (HgGpuPipeline*)malloc(sizeof(HgGpuPipeline));
     *pipeline = {};
 
     HgArena* scratch = hgGetScratch();
@@ -2040,7 +2069,7 @@ HgPipeline* hgCreateGraphicsPipeline(const HgCreateGraphicsPipeline* config)
     VkPushConstantRange* pushRanges = hgAlloc<VkPushConstantRange>(scratch, config->pushRangeCount);
     for (u32 i = 0; i < config->pushRangeCount; ++i)
     {
-        pushRanges[i].stageFlags = config->pushRanges[i].stageFlags;
+        pushRanges[i].stageFlags = VK_SHADER_STAGE_ALL;
         pushRanges[i].offset = config->pushRanges[i].offset;
         pushRanges[i].size = config->pushRanges[i].size;
     }
@@ -2077,7 +2106,9 @@ HgPipeline* hgCreateGraphicsPipeline(const HgCreateGraphicsPipeline* config)
     {
         vertexBindings[i].binding = config->vertexBindings[i].binding;
         vertexBindings[i].stride = config->vertexBindings[i].stride;
-        vertexBindings[i].inputRate = hgVertexInputRateToVk(config->vertexBindings[i].inputRate);
+        vertexBindings[i].inputRate = config->vertexBindings[i].instanceRate
+            ? VK_VERTEX_INPUT_RATE_INSTANCE
+            : VK_VERTEX_INPUT_RATE_VERTEX;
     }
 
     VkVertexInputAttributeDescription* vertexAttributes
@@ -2086,7 +2117,7 @@ HgPipeline* hgCreateGraphicsPipeline(const HgCreateGraphicsPipeline* config)
     {
         vertexAttributes[i].location = config->vertexAttributes[i].location;
         vertexAttributes[i].binding = config->vertexAttributes[i].binding;
-        vertexAttributes[i].format = hgFormatToVk(config->vertexAttributes[i].format);
+        vertexAttributes[i].format = formatToVk(config->vertexAttributes[i].format);
         vertexAttributes[i].offset = config->vertexAttributes[i].offset;
     }
 
@@ -2099,7 +2130,7 @@ HgPipeline* hgCreateGraphicsPipeline(const HgCreateGraphicsPipeline* config)
 
     VkPipelineInputAssemblyStateCreateInfo inputAssemblyState{};
     inputAssemblyState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    inputAssemblyState.topology = hgPrimitiveTopologyToVk(config->topology);
+    inputAssemblyState.topology = gpuTopologyToVk(config->topology);
     inputAssemblyState.primitiveRestartEnable = VK_FALSE;
 
     VkPipelineTessellationStateCreateInfo tessellationState{};
@@ -2115,9 +2146,9 @@ HgPipeline* hgCreateGraphicsPipeline(const HgCreateGraphicsPipeline* config)
     rasterizationState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rasterizationState.depthClampEnable = VK_FALSE;
     rasterizationState.rasterizerDiscardEnable = VK_FALSE;
-    rasterizationState.polygonMode = hgPolygonModeToVk(config->polygonMode);
-    rasterizationState.cullMode = hgCullModeToVk(config->cullMode);
-    rasterizationState.frontFace = hgFrontFaceToVk(config->frontFace);
+    rasterizationState.polygonMode = gpuPolygonModeToVk(config->polygonMode);
+    rasterizationState.cullMode = gpuCullModeToVk(config->cullMode);
+    rasterizationState.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rasterizationState.depthBiasEnable = VK_FALSE;
     rasterizationState.depthBiasConstantFactor = 0.0f;
     rasterizationState.depthBiasClamp = 0.0f;
@@ -2186,10 +2217,10 @@ HgPipeline* hgCreateGraphicsPipeline(const HgCreateGraphicsPipeline* config)
     VkFormat* colorFormats = hgAlloc<VkFormat>(scratch, config->colorAttachmentCount);
     for (u32 i = 0; i < config->colorAttachmentCount; ++i)
     {
-        colorFormats[i] = hgFormatToVk(config->colorAttachmentFormats[i]);
+        colorFormats[i] = formatToVk(config->colorAttachmentFormats[i]);
     }
-    VkFormat depthFormat = hgFormatToVk(config->depthAttachmentFormat);
-    VkFormat stencilFormat = hgFormatToVk(config->stencilAttachmentFormat);
+    VkFormat depthFormat = formatToVk(config->depthAttachmentFormat);
+    VkFormat stencilFormat = formatToVk(config->stencilAttachmentFormat);
 
     VkPipelineRenderingCreateInfo renderingInfo{};
     renderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
@@ -2225,12 +2256,12 @@ HgPipeline* hgCreateGraphicsPipeline(const HgCreateGraphicsPipeline* config)
     return pipeline;
 }
 
-HgPipeline* hgCreateComputePipeline(u32 pushSize, const u8* shaderCode, u64 shaderCodeSize)
+HgGpuPipeline* hgCreateGpuComputePipeline(u32 pushSize, const u8* shaderCode, u64 shaderCodeSize)
 {
     hgAssert(shaderCode != nullptr);
     hgAssert(shaderCodeSize > 0);
 
-    HgPipeline* pipeline = (HgPipeline*)malloc(sizeof(HgPipeline));
+    HgGpuPipeline* pipeline = (HgGpuPipeline*)malloc(sizeof(HgGpuPipeline));
     *pipeline = {};
 
     VkPipelineLayoutCreateInfo layoutInfo{};
@@ -2268,13 +2299,13 @@ HgPipeline* hgCreateComputePipeline(u32 pushSize, const u8* shaderCode, u64 shad
     return pipeline;
 }
 
-void hgDestroyPipeline(HgPipeline* pipeline)
+void hgDestroyGpuPipeline(HgGpuPipeline* pipeline)
 {
     vkDestroyPipeline(hgVkDevice, pipeline->pipeline, nullptr);
     vkDestroyPipelineLayout(hgVkDevice, pipeline->layout, nullptr);
 }
 
-HgCommandBuffer* hgBeginVkCmd()
+HgGpuCommands* hgBeginGpuCommands()
 {
     VkCommandBufferAllocateInfo cmdInfo{};
     cmdInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -2290,10 +2321,10 @@ HgCommandBuffer* hgBeginVkCmd()
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
     vkBeginCommandBuffer(cmd, &beginInfo);
-    return (HgCommandBuffer*)cmd;
+    return (HgGpuCommands*)cmd;
 }
 
-void hgEndVkCmd(HgCommandBuffer* cmd)
+void hgEndGpuCommands(HgGpuCommands* cmd)
 {
     hgAssert(cmd != nullptr);
     vkEndCommandBuffer((VkCommandBuffer)cmd);
@@ -2316,13 +2347,13 @@ void hgEndVkCmd(HgCommandBuffer* cmd)
     vkFreeCommandBuffers(hgVkDevice, hgVkCmdPool, 1, (VkCommandBuffer*)&cmd);
 }
 
-void hgCmdBindPipeline(HgCommandBuffer* cmd, HgPipeline* pipeline)
+void hgBindGpuPipeline(HgGpuCommands* cmd, HgGpuPipeline* pipeline)
 {
     vkCmdBindPipeline((VkCommandBuffer)cmd, pipeline->bindPoint, pipeline->pipeline);
     vkCmdBindDescriptorSets((VkCommandBuffer)cmd, pipeline->bindPoint, pipeline->layout, 0, 1, &vulkanState.bindlessSet, 0, nullptr);
 }
 
-void hgCmdPushConstants(HgCommandBuffer* cmd, HgPipeline* pipeline, u32 offset, u32 size, void* push)
+void hgGpuPushConstants(HgGpuCommands* cmd, HgGpuPipeline* pipeline, u32 offset, void* push, u32 size)
 {
     vkCmdPushConstants(
         (VkCommandBuffer)cmd,
@@ -2335,12 +2366,12 @@ void hgCmdPushConstants(HgCommandBuffer* cmd, HgPipeline* pipeline, u32 offset, 
         push);
 }
 
-void hgCmdBindIndexBuffer(HgCommandBuffer* cmd, HgBuffer* buffer, u64 offset)
+void hgBindGpuIndexBuffer(HgGpuCommands* cmd, HgGpuBuffer* buffer, u64 offset)
 {
     vkCmdBindIndexBuffer((VkCommandBuffer)cmd, buffer->buffer, offset, VK_INDEX_TYPE_UINT32);
 }
 
-void hgCmdBindVertexBuffers(HgCommandBuffer* cmd, u32 bindingIdx, HgBuffer** buffers, u64* offsets, u32 bufferCount)
+void hgBindGpuVertexBuffers(HgGpuCommands* cmd, u32 bindingIdx, HgGpuBuffer** buffers, u64* offsets, u32 bufferCount)
 {
     HgArena* scratch = hgGetScratch();
     HgArenaScope scratchScope{scratch};
@@ -2354,23 +2385,23 @@ void hgCmdBindVertexBuffers(HgCommandBuffer* cmd, u32 bindingIdx, HgBuffer** buf
     vkCmdBindVertexBuffers((VkCommandBuffer)cmd, bindingIdx, bufferCount, vkBuffers, offsets);
 }
 
-void hgCmdDraw(HgCommandBuffer* cmd, u32 vertexCount, u32 instanceCount, u32 firstVertex, u32 firstInstance)
+void hgGpuDraw(HgGpuCommands* cmd, u32 vertexBegin, u32 vertexCount, u32 instanceBegin, u32 instanceCount)
 {
-    vkCmdDraw((VkCommandBuffer)cmd, vertexCount, instanceCount, firstVertex, firstInstance);
+    vkCmdDraw((VkCommandBuffer)cmd, vertexCount, instanceCount, vertexBegin, instanceBegin);
 }
 
-void hgCmdDrawIndexed(
-    HgCommandBuffer* cmd,
-    u32 indexCount,
-    u32 instanceCount,
+void hgGpuDrawIndexed(
+    HgGpuCommands* cmd,
     i32 vertexOffset,
-    u32 firstIndex,
-    u32 firstInstance)
+    u32 indexBegin,
+    u32 indexCount,
+    u32 instanceBegin,
+    u32 instanceCount)
 {
-    vkCmdDrawIndexed((VkCommandBuffer)cmd, indexCount, instanceCount, vertexOffset, firstIndex, firstInstance);
+    vkCmdDrawIndexed((VkCommandBuffer)cmd, indexCount, instanceCount, vertexOffset, indexBegin, instanceBegin);
 }
 
-void hgCmdDispatch(HgCommandBuffer* cmd, u32 groupCountX, u32 groupCountY, u32 groupCountZ)
+void hgGpuCompute(HgGpuCommands* cmd, u32 groupCountX, u32 groupCountY, u32 groupCountZ)
 {
     vkCmdDispatch((VkCommandBuffer)cmd, groupCountX, groupCountY, groupCountZ);
 }
@@ -2389,22 +2420,22 @@ void HgRenderer::reset()
     images.empty();
 }
 
-void HgRenderer::setBuffer(HgBuffer* buffer, VkPipelineStageFlags lastStage, VkAccessFlags lastAccess)
+void HgRenderer::setBuffer(HgGpuBuffer* buffer, VkPipelineStageFlags lastStage, VkAccessFlags lastAccess)
 {
     buffers.add(buffer, {lastStage, lastAccess});
 }
 
 void HgRenderer::setImage(
-    HgImageView* image,
+    HgGpuView* image,
     VkPipelineStageFlags lastStage,
     VkAccessFlags lastAccess,
-    HgImageLayout lastLayout)
+    HgGpuLayout lastLayout)
 {
     images.add(image, {lastStage, lastAccess, lastLayout});
 }
 
 void HgRenderer::barrier(
-    HgCommandBuffer* cmd,
+    HgGpuCommands* cmd,
     const HgBufferBarrier* bufferBarriers,
     u32 bufferBarrierCount,
     const HgImageBarrier* imageBarriers,
@@ -2447,11 +2478,11 @@ void HgRenderer::barrier(
         vkImageBarriers[i].srcAccessMask = image->lastAccess;
         vkImageBarriers[i].dstStageMask = imageBarriers[i].nextStage;
         vkImageBarriers[i].dstAccessMask = imageBarriers[i].nextAccess;
-        vkImageBarriers[i].oldLayout = hgImageLayoutToVk(image->lastLayout);
-        vkImageBarriers[i].newLayout = hgImageLayoutToVk(imageBarriers[i].nextLayout);
+        vkImageBarriers[i].oldLayout = gpuLayoutToVk(image->lastLayout);
+        vkImageBarriers[i].newLayout = gpuLayoutToVk(imageBarriers[i].nextLayout);
         vkImageBarriers[i].image = imageBarriers[i].image->image->image;
         vkImageBarriers[i].subresourceRange = {
-            imageBarriers[i].image->aspectFlags,
+            gpuAspectToVk(imageBarriers[i].image->aspectFlags),
             imageBarriers[i].image->baseMipLevel,
             imageBarriers[i].image->levelCount,
             imageBarriers[i].image->baseArrayLayer,
@@ -2473,7 +2504,7 @@ void HgRenderer::barrier(
     vkCmdPipelineBarrier2((VkCommandBuffer)cmd, &dep);
 }
 
-void HgRenderer::prepareResources(HgCommandBuffer* cmd, const HgRenderPass* pass)
+void HgRenderer::prepareResources(HgGpuCommands* cmd, const HgRenderPass* pass)
 {
     HgArena* scratch = hgGetScratch();
     HgArenaScope scratchScope{scratch};
@@ -2552,11 +2583,11 @@ void HgRenderer::prepareResources(HgCommandBuffer* cmd, const HgRenderPass* pass
         imageBarriers[i].srcAccessMask = image->lastAccess;
         imageBarriers[i].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
         imageBarriers[i].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        imageBarriers[i].oldLayout = hgImageLayoutToVk(image->lastLayout);
+        imageBarriers[i].oldLayout = gpuLayoutToVk(image->lastLayout);
         imageBarriers[i].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         imageBarriers[i].image = pass->sampledImages[i - imageBarrierCount]->image->image;
         imageBarriers[i].subresourceRange = {
-            pass->sampledImages[i - imageBarrierCount]->aspectFlags,
+            gpuAspectToVk(pass->sampledImages[i - imageBarrierCount]->aspectFlags),
             pass->sampledImages[i - imageBarrierCount]->baseMipLevel,
             pass->sampledImages[i - imageBarrierCount]->levelCount,
             pass->sampledImages[i - imageBarrierCount]->baseArrayLayer,
@@ -2565,7 +2596,7 @@ void HgRenderer::prepareResources(HgCommandBuffer* cmd, const HgRenderPass* pass
 
         image->lastStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
         image->lastAccess = VK_ACCESS_SHADER_READ_BIT;
-        image->lastLayout = HgImageLayout_shaderReadOnlyOptimal;
+        image->lastLayout = HgGpuLayout_shaderReadOnly;
     }
 
     imageBarrierCount += pass->sampledImageCount;
@@ -2586,11 +2617,11 @@ void HgRenderer::prepareResources(HgCommandBuffer* cmd, const HgRenderPass* pass
         imageBarriers[i].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
         imageBarriers[i].dstAccessMask = VK_ACCESS_SHADER_READ_BIT
                                        | VK_ACCESS_SHADER_WRITE_BIT;
-        imageBarriers[i].oldLayout = hgImageLayoutToVk(image->lastLayout);
+        imageBarriers[i].oldLayout = gpuLayoutToVk(image->lastLayout);
         imageBarriers[i].newLayout = VK_IMAGE_LAYOUT_GENERAL;
         imageBarriers[i].image = pass->storageImages[i - imageBarrierCount]->image->image;
         imageBarriers[i].subresourceRange = {
-            pass->storageImages[i - imageBarrierCount]->aspectFlags,
+            gpuAspectToVk(pass->storageImages[i - imageBarrierCount]->aspectFlags),
             pass->storageImages[i - imageBarrierCount]->baseMipLevel,
             pass->storageImages[i - imageBarrierCount]->levelCount,
             pass->storageImages[i - imageBarrierCount]->baseArrayLayer,
@@ -2600,7 +2631,7 @@ void HgRenderer::prepareResources(HgCommandBuffer* cmd, const HgRenderPass* pass
         image->lastStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
         image->lastAccess = VK_ACCESS_SHADER_READ_BIT
                           | VK_ACCESS_SHADER_WRITE_BIT;
-        image->lastLayout = HgImageLayout_general;
+        image->lastLayout = HgGpuLayout_general;
     }
 
     imageBarrierCount += pass->storageImageCount;
@@ -2620,11 +2651,11 @@ void HgRenderer::prepareResources(HgCommandBuffer* cmd, const HgRenderPass* pass
         imageBarriers[i].srcAccessMask = image->lastAccess;
         imageBarriers[i].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         imageBarriers[i].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        imageBarriers[i].oldLayout = hgImageLayoutToVk(image->lastLayout);
+        imageBarriers[i].oldLayout = gpuLayoutToVk(image->lastLayout);
         imageBarriers[i].newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         imageBarriers[i].image = pass->colorAttachments[i - imageBarrierCount].image->image->image;
         imageBarriers[i].subresourceRange = {
-            pass->colorAttachments[i - imageBarrierCount].image->aspectFlags,
+            gpuAspectToVk(pass->colorAttachments[i - imageBarrierCount].image->aspectFlags),
             pass->colorAttachments[i - imageBarrierCount].image->baseMipLevel,
             pass->colorAttachments[i - imageBarrierCount].image->levelCount,
             pass->colorAttachments[i - imageBarrierCount].image->baseArrayLayer,
@@ -2633,7 +2664,7 @@ void HgRenderer::prepareResources(HgCommandBuffer* cmd, const HgRenderPass* pass
 
         image->lastStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         image->lastAccess = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        image->lastLayout = HgImageLayout_colorAttachmentOptimal;
+        image->lastLayout = HgGpuLayout_colorAttachment;
     }
 
     imageBarrierCount += pass->colorAttachmentCount;
@@ -2656,11 +2687,11 @@ void HgRenderer::prepareResources(HgCommandBuffer* cmd, const HgRenderPass* pass
                                         | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
         imageBarriers[idx].dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT
                                          | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        imageBarriers[idx].oldLayout = hgImageLayoutToVk(image->lastLayout);
+        imageBarriers[idx].oldLayout = gpuLayoutToVk(image->lastLayout);
         imageBarriers[idx].newLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
         imageBarriers[idx].image = pass->depthAttachment->image->image->image;
         imageBarriers[idx].subresourceRange = {
-            pass->depthAttachment->image->aspectFlags,
+            gpuAspectToVk(pass->depthAttachment->image->aspectFlags),
             pass->depthAttachment->image->baseMipLevel,
             pass->depthAttachment->image->levelCount,
             pass->depthAttachment->image->baseArrayLayer,
@@ -2671,7 +2702,7 @@ void HgRenderer::prepareResources(HgCommandBuffer* cmd, const HgRenderPass* pass
                                 | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
         image->lastAccess = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT
                          | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        image->lastLayout = HgImageLayout_depthStencilAttachmentOptimal;
+        image->lastLayout = HgGpuLayout_depthStencilAttachment;
 
         ++imageBarrierCount;
     }
@@ -2694,11 +2725,11 @@ void HgRenderer::prepareResources(HgCommandBuffer* cmd, const HgRenderPass* pass
                                         | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
         imageBarriers[idx].dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT
                                          | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        imageBarriers[idx].oldLayout = hgImageLayoutToVk(image->lastLayout);
+        imageBarriers[idx].oldLayout = gpuLayoutToVk(image->lastLayout);
         imageBarriers[idx].newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         imageBarriers[idx].image = pass->stencilAttachment->image->image->image;
         imageBarriers[idx].subresourceRange = {
-            pass->stencilAttachment->image->aspectFlags,
+            gpuAspectToVk(pass->stencilAttachment->image->aspectFlags),
             pass->stencilAttachment->image->baseMipLevel,
             pass->stencilAttachment->image->levelCount,
             pass->stencilAttachment->image->baseArrayLayer,
@@ -2709,7 +2740,7 @@ void HgRenderer::prepareResources(HgCommandBuffer* cmd, const HgRenderPass* pass
                                 | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
         image->lastAccess = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT
                          | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        image->lastLayout = HgImageLayout_depthStencilAttachmentOptimal;
+        image->lastLayout = HgGpuLayout_depthStencilAttachment;
 
         ++imageBarrierCount;
     }
@@ -2733,7 +2764,7 @@ static VkAttachmentStoreOp hgAttachmentStoreOpToVk(HgAttachmentStoreOp op)
     return (VkAttachmentStoreOp)op;
 }
 
-void HgRenderer::beginPass(HgCommandBuffer* cmd, u32 width, u32 height, const HgRenderPass* pass)
+void HgRenderer::beginPass(HgGpuCommands* cmd, u32 width, u32 height, const HgRenderPass* pass)
 {
     HgArena* scratch = hgGetScratch();
     HgArenaScope scratchScope{scratch};
@@ -2802,7 +2833,7 @@ static VkPresentModeKHR hgPresentModeToVk(HgPresentMode mode)
     return (VkPresentModeKHR)mode;
 }
 
-void HgRenderer::endPass(HgCommandBuffer* cmd)
+void HgRenderer::endPass(HgGpuCommands* cmd)
 {
     vkCmdEndRendering((VkCommandBuffer)cmd);
 }
@@ -2818,20 +2849,20 @@ static void createWindowImages(HgWindow* window)
     for (u32 i = 0; i < window->imageCount; ++i)
     {
         window->images[i]->image = swapImages[i];
-        window->images[i]->type = HgImageType_2D;
+        window->images[i]->dimensions = 2;
         window->images[i]->format = window->format;
         window->images[i]->width = window->width;
         window->images[i]->height = window->height;
         window->images[i]->depth = 1;
         window->images[i]->mipLevels = 1;
         window->images[i]->arrayLayers = 1;
-        window->images[i]->msaaSamples = VK_SAMPLE_COUNT_1_BIT;
+        window->images[i]->msaaSamples = 1;
 
         VkImageViewCreateInfo viewInfo{};
         viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         viewInfo.image = swapImages[i];
         viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        viewInfo.format = hgFormatToVk(window->format);
+        viewInfo.format = formatToVk(window->format);
         viewInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
 
         VkResult viewResult = vkCreateImageView(hgVkDevice, &viewInfo, nullptr, &window->views[i]->view);
@@ -2839,8 +2870,8 @@ static void createWindowImages(HgWindow* window)
             hgError("Could not create VkImageView: %s\n", vkResultToStr(viewResult));
 
         window->views[i]->image = window->images[i];
-        window->views[i]->type = HgImageViewType_2D;
-        window->views[i]->aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
+        window->views[i]->type = HgGpuViewType_2D;
+        window->views[i]->aspectFlags = HgGpuAspect_color;
         window->views[i]->baseMipLevel = 0;
         window->views[i]->levelCount = 1;
         window->views[i]->baseArrayLayer = 0;
@@ -2931,7 +2962,7 @@ void hgInternalResizeWindowSwapchain(HgWindow* window)
     swapchainInfo.surface = window->surface;
     swapchainInfo.minImageCount
         = std::min(surfaceCapabilities.minImageCount, surfaceCapabilities.maxImageCount - 1) + 1;
-    swapchainInfo.imageFormat = hgFormatToVk(window->format);
+    swapchainInfo.imageFormat = formatToVk(window->format);
     swapchainInfo.imageExtent = {window->width, window->height};
     swapchainInfo.imageArrayLayers = 1;
     swapchainInfo.imageUsage = window->imageUsage;
@@ -2950,14 +2981,14 @@ void hgInternalResizeWindowSwapchain(HgWindow* window)
 
     if (window->imageCount != swapImageCount)
     {
-        HgImage* imageData = window->images == nullptr ? nullptr : window->images[0];
-        HgImageView* viewData = window->views == nullptr ? nullptr : window->views[0];
+        HgGpuImage* imageData = window->images == nullptr ? nullptr : window->images[0];
+        HgGpuView* viewData = window->views == nullptr ? nullptr : window->views[0];
 
-        imageData = (HgImage*)realloc(imageData, sizeof(HgImage) * swapImageCount);
-        viewData = (HgImageView*)realloc(viewData, sizeof(HgImageView) * swapImageCount);
+        imageData = (HgGpuImage*)realloc(imageData, sizeof(HgGpuImage) * swapImageCount);
+        viewData = (HgGpuView*)realloc(viewData, sizeof(HgGpuView) * swapImageCount);
 
-        window->images = (HgImage**)realloc(window->images, sizeof(HgImage*) * swapImageCount);
-        window->views = (HgImageView**)realloc(window->views, sizeof(HgImageView*) * swapImageCount);
+        window->images = (HgGpuImage**)realloc(window->images, sizeof(HgGpuImage*) * swapImageCount);
+        window->views = (HgGpuView**)realloc(window->views, sizeof(HgGpuView*) * swapImageCount);
 
         for (u32 i = 0; i < swapImageCount; ++i)
         {
@@ -2965,7 +2996,7 @@ void hgInternalResizeWindowSwapchain(HgWindow* window)
             window->views[i] = viewData + i;
         }
 
-        window->cmds = (HgCommandBuffer**)realloc(window->cmds, sizeof(HgCommandBuffer*) * swapImageCount);
+        window->cmds = (HgGpuCommands**)realloc(window->cmds, sizeof(HgGpuCommands*) * swapImageCount);
         window->frameFinished = (VkFence*)realloc(window->frameFinished, sizeof(VkFence) * swapImageCount);
         window->imageAvailable = (VkSemaphore*)realloc(window->imageAvailable, sizeof(VkSemaphore) * swapImageCount);
         window->readyToPresent = (VkSemaphore*)realloc(window->readyToPresent, sizeof(VkSemaphore) * swapImageCount);
@@ -3048,7 +3079,7 @@ void hgInternalDestroyWindowSwapchain(HgWindow* window)
     free(window->images);
 }
 
-HgCommandBuffer* hgWindowBeginRecording(HgWindow* window)
+HgGpuCommands* hgWindowBeginRecording(HgWindow* window)
 {
     hgAssert(hgVkDevice != nullptr);
     if (window->width == 0 || window->height == 0)
@@ -3074,7 +3105,7 @@ retry:
     if (result != VK_SUCCESS)
         hgError("Could not acquire next image: %s", vkResultToStr(result));
 
-    HgCommandBuffer* cmd = window->cmds[window->currentFrame];
+    HgGpuCommands* cmd = window->cmds[window->currentFrame];
     vkResetCommandBuffer((VkCommandBuffer)cmd, 0);
 
     VkCommandBufferBeginInfo beginInfo{};
@@ -3085,7 +3116,7 @@ retry:
     return cmd;
 }
 
-void hgWindowEndAndPresent(HgWindow* window, HgCommandBuffer* cmd)
+void hgWindowEndAndPresent(HgWindow* window, HgGpuCommands* cmd)
 {
     hgAssert(cmd == window->cmds[window->currentFrame]);
     vkEndCommandBuffer((VkCommandBuffer)cmd);
@@ -3127,10 +3158,10 @@ void hgInternalInitImGuiRenderer(
     VkFormat* colorVkFormats = hgAlloc<VkFormat>(scratch, colorAttachmentCount);
     for (u32 i = 0; i < colorAttachmentCount; ++i)
     {
-        colorVkFormats[i] = hgFormatToVk(colorFormats[i]);
+        colorVkFormats[i] = formatToVk(colorFormats[i]);
     }
-    VkFormat depthVkFormat = hgFormatToVk(depthFormat);
-    VkFormat stencilVkFormat = hgFormatToVk(stencilFormat);
+    VkFormat depthVkFormat = formatToVk(depthFormat);
+    VkFormat stencilVkFormat = formatToVk(stencilFormat);
 
     ImGui_ImplVulkan_InitInfo imguiInfo{};
     imguiInfo.Instance = hgVkInstance;
@@ -3158,9 +3189,9 @@ void hgInternalDeinitImGuiRenderer()
     ImGui_ImplVulkan_Shutdown();
 }
 
-void* ImGui_ImplHurdyGurdy_CreateTexture(HgImageView* view, HgSampler* sampler, HgImageLayout layout)
+void* ImGui_ImplHurdyGurdy_CreateTexture(HgGpuView* view, HgGpuSampler* sampler, HgGpuLayout layout)
 {
-    return ImGui_ImplVulkan_AddTexture((VkSampler)sampler, view->view, hgImageLayoutToVk(layout));
+    return ImGui_ImplVulkan_AddTexture((VkSampler)sampler, view->view, gpuLayoutToVk(layout));
 }
 
 void ImGui_ImplHurdyGurdy_DestroyTexture(void* texture)
@@ -3168,7 +3199,7 @@ void ImGui_ImplHurdyGurdy_DestroyTexture(void* texture)
     ImGui_ImplVulkan_RemoveTexture((VkDescriptorSet)texture);
 }
 
-void ImGui_ImplHurdyGurdy_Draw(HgCommandBuffer* cmd)
+void ImGui_ImplHurdyGurdy_Draw(HgGpuCommands* cmd)
 {
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), (VkCommandBuffer)cmd);
 }

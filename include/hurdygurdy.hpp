@@ -2833,36 +2833,6 @@ void hgDeinitGraphics();
 void hgGraphicsWaitIdle();
 
 /**
- * A gpu buffer
- */
-struct HgBuffer;
-
-/**
- * A gpu image
- */
-struct HgImage;
-
-/**
- * A view into a gpu image
- */
-struct HgImageView;
-
-/**
- * A sampler to access an image view
- */
-struct HgSampler;
-
-/**
- * A shader pipeline
- */
-struct HgPipeline;
-
-/**
- * A gpu command buffer
- */
-struct HgCommandBuffer;
-
-/**
  * Pixel formats
  */
 enum HgFormat {
@@ -3144,55 +3114,267 @@ enum HgFormat {
  */
 u32 hgFormatToSize(HgFormat format);
 
-// Vulkan allocator : TODO?
+/**
+ * A gpu buffer
+ */
+struct HgGpuBuffer;
 
 /**
- * How an HgBuffer will be used
+ * How a gpu buffer will be used
  */
-enum HgBufferUsage {
-    HgBufferUsage_transferSrc = 0x00000001,
-    HgBufferUsage_transferDst = 0x00000002,
-    HgBufferUsage_uniformTexelBuffer = 0x00000004,
-    HgBufferUsage_storageTexelBuffer = 0x00000008,
-    HgBufferUsage_uniformBuffer = 0x00000010,
-    HgBufferUsage_storageBuffer = 0x00000020,
-    HgBufferUsage_indexBuffer = 0x00000040,
-    HgBufferUsage_vertexBuffer = 0x00000080,
-    HgBufferUsage_indirectBuffer = 0x00000100,
+enum HgGpuBufferUsage {
+    HgGpuBufferUsage_transferSrc = 0x00000001,
+    HgGpuBufferUsage_transferDst = 0x00000002,
+    HgGpuBufferUsage_uniformTexelBuffer = 0x00000004,
+    HgGpuBufferUsage_storageTexelBuffer = 0x00000008,
+    HgGpuBufferUsage_uniformBuffer = 0x00000010,
+    HgGpuBufferUsage_storageBuffer = 0x00000020,
+    HgGpuBufferUsage_indexBuffer = 0x00000040,
+    HgGpuBufferUsage_vertexBuffer = 0x00000080,
+    HgGpuBufferUsage_indirectBuffer = 0x00000100,
 };
-
-typedef u32 HgBufferUsageFlags;
+typedef u32 HgGpuBufferUsageFlags;
 
 /**
- * How an HgBuffer will be accessed
+ * How a gpu buffer will be accessed
  */
-enum HgBufferMemoryUsage {
+enum HgGpuMemoryUsage {
     /**
      * It will only be accessed from the device
      */
-    HgBufferMemoryUsage_deviceOnly = 0,
-    /**
-     * It will be frequently written from the host and read on the device
-     */
-    HgBufferMemoryUsage_frequentUpdate,
+    HgGpuMemoryUsage_deviceOnly = 0,
     /**
      * It will be used as a staging buffer to transfer from host to device
      */
-    HgBufferMemoryUsage_stagingWrite,
+    HgGpuMemoryUsage_stagingWrite = 1,
     /**
      * It will be used as a staging buffer to transfer from device to host
      */
-    HgBufferMemoryUsage_stagingRead,
+    HgGpuMemoryUsage_stagingRead = 2,
+    /**
+     * It will be frequently written from the host and read on the device
+     */
+    HgGpuMemoryUsage_frequentUpdate = 3,
 };
 
 /**
- * How an HgBuffer can be accessed
+ * How a gpu buffer can be accessed
  */
-enum HgBufferMemoryHostAccess {
-    HgBufferMemoryHostAccess_none = 0x0,
-    HgBufferMemoryHostAccess_write = 0x1,
-    HgBufferMemoryHostAccess_read = 0x2,
+enum HgGpuMemoryHostAccess {
+    /**
+     * The buffer cannot be accessed by the host
+     */
+    HgGpuMemoryHostAccess_none = 0x0,
+    /**
+     * The buffer can be written to by the host
+     */
+    HgGpuMemoryHostAccess_write = 0x1,
+    /**
+     * The buffer can be read from by the host
+     */
+    HgGpuMemoryHostAccess_read = 0x2,
 };
+
+/**
+ * A gpu image
+ */
+struct HgGpuImage;
+
+/**
+ * How an image will be used
+ */
+enum HgGpuImageUsage {
+    HgGpuImageUsage_transferSrc = 0x00000001,
+    HgGpuImageUsage_transferDst = 0x00000002,
+    HgGpuImageUsage_sampled = 0x00000004,
+    HgGpuImageUsage_storage = 0x00000008,
+    HgGpuImageUsage_colorAttachment = 0x00000010,
+    HgGpuImageUsage_depthStencilAttachment = 0x00000020,
+    HgGpuImageUsage_transientAttachment = 0x00000040,
+    HgGpuImageUsage_inputAttachment = 0x00000080,
+    HgGpuImageUsage_hostTransfer = 0x00400000,
+};
+typedef u32 HgGpuImageUsageFlags;
+
+/**
+ * The layout of an image
+ */
+enum HgGpuLayout {
+    HgGpuLayout_undefined = 0,
+    HgGpuLayout_general = 1,
+    HgGpuLayout_colorAttachment = 2,
+    HgGpuLayout_depthStencilAttachment = 3,
+    HgGpuLayout_depthStencilReadOnly = 4,
+    HgGpuLayout_shaderReadOnly = 5,
+    HgGpuLayout_transferSrc = 6,
+    HgGpuLayout_transferDst = 7,
+    HgGpuLayout_preinitialized = 8,
+    HgGpuLayout_presentSrc = 1000001002,
+};
+
+/**
+ * A view into a gpu image
+ */
+struct HgGpuView;
+
+/**
+ * The dimensionality of an image
+ */
+enum HgGpuViewType {
+    HgGpuViewType_1D = 0,
+    HgGpuViewType_2D = 1,
+    HgGpuViewType_3D = 2,
+    HgGpuViewType_cube = 3,
+    HgGpuViewType_1DArray = 4,
+    HgGpuViewType_2DArray = 5,
+    HgGpuViewType_cubeArray = 6,
+};
+
+/**
+ * The aspect the image will be accessed in
+ */
+enum HgGpuAspect {
+    HgGpuAspect_none = 0,
+    HgGpuAspect_color = 0x00000001,
+    HgGpuAspect_depth = 0x00000002,
+    HgGpuAspect_stencil = 0x00000004,
+    HgGpuAspect_metadata = 0x00000008,
+    HgGpuAspect_plane0 = 0x00000010,
+    HgGpuAspect_plane1 = 0x00000020,
+    HgGpuAspect_plane2 = 0x00000040,
+};
+typedef u32 HgGpuAspectFlags;
+
+/**
+ * A sampler to access an image view
+ */
+struct HgGpuSampler;
+
+/**
+ * How a sampler interpolates between pixels
+ */
+enum HgGpuFilter {
+    HgGpuFilter_nearest = 0,
+    HgGpuFilter_linear = 1,
+};
+
+/**
+ * How a sampler samples off the image's edge
+ */
+enum HgGpuSamplerEdgeMode {
+    HgGpuSamplerEdgeMode_modeRepeat = 0,
+    HgGpuSamplerEdgeMode_modeMirroredRepeat = 1,
+    HgGpuSamplerEdgeMode_modeClampToEdge = 2,
+    HgGpuSamplerEdgeMode_modeClampToBorder = 3,
+    HgGpuSamplerEdgeMode_modeMirrorClampToEdge = 4,
+};
+
+/**
+ * The border color if the sampler edge mode has a border
+ */
+enum HgSamplerBorderColor {
+    HgGpuSamplerBorder_floatTransparentBlack = 0,
+    HgGpuSamplerBorder_intTransparentBlack = 1,
+    HgGpuSamplerBorder_floatOpaqueBlack = 2,
+    HgGpuSamplerBorder_intOpaqueBlack = 3,
+    HgGpuSamplerBorder_floatOpaqueWhite = 4,
+    HgGpuSamplerBorder_intOpaqueWhite = 5,
+};
+
+/**
+ * A gpu resource descriptor
+ */
+struct HgGpuDescriptor {
+    /**
+     * The descriptor id, defaults to null
+     */
+    u32 id = (u32)-1;
+};
+
+/**
+ * Get the index from the id
+ */
+constexpr u32 hgGpuDescriptorIdx(HgGpuDescriptor desc)
+{
+    return desc.id & 0x0000ffff;
+}
+
+/**
+ * Get the generation from the id
+ */
+constexpr u32 hgGpuDescriptorGeneration(HgGpuDescriptor desc)
+{
+    return (desc.id & 0x0fff0000) >> 16;
+}
+
+/**
+ * The binding indices for the descriptor types in the bindless layout
+ */
+enum HgGpuDescriptorType {
+    HgGpuDescriptorType_sampler = 0,
+    HgGpuDescriptorType_combinedImageSampler = 1,
+    HgGpuDescriptorType_sampledImage = 2,
+    HgGpuDescriptorType_storageImage = 3,
+    HgGpuDescriptorType_uniformTexelBuffer = 4,
+    HgGpuDescriptorType_storageTexelBuffer = 5,
+    HgGpuDescriptorType_uniformBuffer = 6,
+    HgGpuDescriptorType_storageBuffer = 7,
+    HgGpuDescriptorType_count,
+};
+
+/**
+ * Get the descriptor type from the id
+ */
+constexpr HgGpuDescriptorType hgDescriptorType(HgGpuDescriptor desc)
+{
+    return (HgGpuDescriptorType)((desc.id & 0xf0000000) >> 28);
+}
+
+/**
+ * A shader pipeline
+ */
+struct HgGpuPipeline;
+
+/**
+ * How the vertex list is interpreted
+ */
+enum HgGpuTopology {
+    HgGpuTopology_pointList = 0,
+    HgGpuTopology_lineList = 1,
+    HgGpuTopology_lineStrip = 2,
+    HgGpuTopology_triangleList = 3,
+    HgGpuTopology_triangleStrip = 4,
+    HgGpuTopology_triangleFan = 5,
+    HgGpuTopology_lineListWithAdjacency = 6,
+    HgGpuTopology_lineStripWithAdjacency = 7,
+    HgGpuTopology_triangleListWithAdjacency = 8,
+    HgGpuTopology_triangleStripWithAdjacency = 9,
+    HgGpuTopology_patchList = 10,
+};
+
+/**
+ * How to treat vertices
+ */
+enum HgGpuPolygonMode {
+    HgGpuPolygonMode_fill = 0,
+    HgGpuPolygonMode_line = 1,
+    HgGpuPolygonMode_point = 2,
+};
+
+enum HgGpuCull {
+    HgGpuCull_none = 0,
+    HgGpuCull_front = 0x00000001,
+    HgGpuCull_back = 0x00000002,
+    HgGpuCull_both = 0x00000003,
+};
+typedef u32 HgCullModeFlags;
+
+/**
+ * A gpu command buffer
+ */
+struct HgGpuCommands;
+
+// Vulkan allocator : TODO?
 
 /**
  * Create a gpu buffer
@@ -3202,15 +3384,15 @@ enum HgBufferMemoryHostAccess {
  * - usageFlags How the buffer will be used
  * - access How the buffer should be accessed
  */
-HgBuffer* hgCreateBuffer(
+HgGpuBuffer* hgCreateGpuBuffer(
     u64 size,
-    HgBufferUsageFlags usageFlags,
-    HgBufferMemoryUsage access = HgBufferMemoryUsage_deviceOnly);
+    HgGpuBufferUsageFlags usageFlags,
+    HgGpuMemoryUsage access = HgGpuMemoryUsage_deviceOnly);
 
 /**
  * Destroy a gpu buffer
  */
-void hgDestroyBuffer(HgBuffer* buffer);
+void hgDestroyGpuBuffer(HgGpuBuffer* buffer);
 
 /**
  * Writes to a gpu buffer
@@ -3221,7 +3403,7 @@ void hgDestroyBuffer(HgBuffer* buffer);
  * - src The data to write, must not be nullptr
  * - size The size in bytes to write
  */
-void hgWriteBuffer(HgBuffer* dst, u64 offset, const void* src, u64 size);
+void hgWriteGpuBuffer(HgGpuBuffer* dst, u64 offset, const void* src, u64 size);
 
 /**
  * Reads from a Vulkan device local buffer through a staging buffer
@@ -3232,92 +3414,21 @@ void hgWriteBuffer(HgBuffer* dst, u64 offset, const void* src, u64 size);
  * - offset The offset in bytes into the dst buffer
  * - size The size in bytes to read
  */
-void hgReadBuffer(void* dst, HgBuffer* src, u64 offset, u64 size);
-
-/**
- * The dimensionality of an image
- */
-enum HgImageType {
-    HgImageType_1D = 0,
-    HgImageType_2D = 1,
-    HgImageType_3D = 2,
-};
-
-/**
- * The dimensionality of an image
- */
-enum HgImageViewType {
-    HgImageViewType_1D = 0,
-    HgImageViewType_2D = 1,
-    HgImageViewType_3D = 2,
-    HgImageViewType_cube = 3,
-    HgImageViewType_1DArray = 4,
-    HgImageViewType_2DArray = 5,
-    HgImageViewType_cubeArray = 6,
-};
-
-/**
- * How an image will be used
- */
-enum HgImageUsage {
-    HgImageUsage_transferSrc = 0x00000001,
-    HgImageUsage_transferDst = 0x00000002,
-    HgImageUsage_sampled = 0x00000004,
-    HgImageUsage_storage = 0x00000008,
-    HgImageUsage_colorAttachment = 0x00000010,
-    HgImageUsage_depthStencilAttachment = 0x00000020,
-    HgImageUsage_transientAttachment = 0x00000040,
-    HgImageUsage_inputAttachment = 0x00000080,
-    HgImageUsage_hostTransfer = 0x00400000,
-};
-
-typedef u32 HgImageUsageFlags;
-
-/**
- * The aspect the image will be accessed in
- */
-enum HgImageAspect {
-    HgImageAspect_none = 0,
-    HgImageAspect_color = 0x00000001,
-    HgImageAspect_depth = 0x00000002,
-    HgImageAspect_stencil = 0x00000004,
-    HgImageAspect_metadata = 0x00000008,
-    HgImageAspect_plane0 = 0x00000010,
-    HgImageAspect_plane1 = 0x00000020,
-    HgImageAspect_plane2 = 0x00000040,
-};
-
-/**
- * The layout of an image
- */
-enum HgImageLayout {
-    HgImageLayout_undefined = 0,
-    HgImageLayout_general = 1,
-    HgImageLayout_colorAttachmentOptimal = 2,
-    HgImageLayout_depthStencilAttachmentOptimal = 3,
-    HgImageLayout_depthStencilReadOnlyOptimal = 4,
-    HgImageLayout_shaderReadOnlyOptimal = 5,
-    HgImageLayout_transferSrcOptimal = 6,
-    HgImageLayout_transferDstOptimal = 7,
-    HgImageLayout_preinitialized = 8,
-    HgImageLayout_presentSrc = 1000001002,
-};
-
-typedef u32 HgImageAspectFlags;
+void hgReadGpuBuffer(void* dst, HgGpuBuffer* src, u64 offset, u64 size);
 
 /**
  * Create a gpu image assuming most defaults
  */
-HgImage* hgCreateImage(u32 width, u32 height, HgFormat format, HgImageUsageFlags usage);
+HgGpuImage* hgCreateGpuImage(u32 width, u32 height, HgFormat format, HgGpuImageUsageFlags usage);
 
 /**
  * Config for hgCreateVkImage
  */
-struct HgCreateImageEx {
+struct HgCreateGpuImageEx {
     /**
      * The dimensions of the image
      */
-    HgImageType type = HgImageType_2D;
+    u32 dimensions = 2;
     /**
      * The width of the image
      */
@@ -3349,27 +3460,27 @@ struct HgCreateImageEx {
     /**
      * How the image will be used, must not be 0
      */
-    HgImageUsageFlags usage = 0;
+    HgGpuImageUsageFlags usage = 0;
 };
 
 /**
  * Create a gpu image with more options
  */
-HgImage* hgCreateImageEx(const HgCreateImageEx* create);
+HgGpuImage* hgCreateGpuImageEx(const HgCreateGpuImageEx* create);
 
 /**
  * Destroy a gpu image
  */
-void hgDestroyImage(HgImage* image);
+void hgDestroyGpuImage(HgGpuImage* image);
 
 /**
  * A subresource range of an image
  */
-struct HgImageSubresource {
+struct HgGpuImageRange {
     /**
      * The aspect of the image
      */
-    HgImageAspectFlags aspectFlags;
+    HgGpuAspectFlags aspectFlags;
     /**
      * The first mip level
      */
@@ -3389,19 +3500,6 @@ struct HgImageSubresource {
 };
 
 /**
- * Create a gpu image view
- */
-HgImageView* hgCreateImageView(
-    const HgImage* image,
-    HgImageSubresource subresource,
-    HgImageViewType type = HgImageViewType_2D);
-
-/**
- * Destroy a gpu image view
- */
-void hgDestroyImageView(HgImageView* view);
-
-/**
  * Write to a gpu image
  *
  * Note, the subresource must have only one mip level
@@ -3412,11 +3510,7 @@ void hgDestroyImageView(HgImageView* view);
  * - src The data to read from
  * - layout The final layout to set the image to
  */
-void hgWriteImage(
-    HgImage* dst,
-    HgImageSubresource subresource,
-    const void* src,
-    HgImageLayout layout);
+void hgWriteGpuImage(HgGpuImage* dst, HgGpuImageRange range, const void* src, HgGpuLayout layout);
 
 /**
  * Write to a gpu image cubemap
@@ -3436,11 +3530,7 @@ void hgWriteImage(
  * - src The data to read from
  * - layout The final layout to set the image to
  */
-void hgWriteImageCubemap(
-    HgImage* dst,
-    HgImageSubresource subresource,
-    const void* src,
-    HgImageLayout layout);
+void hgWriteGpuCubemapImage(HgGpuImage* dst, HgGpuImageRange range, const void* src, HgGpuLayout layout);
 
 /**
  * Read from a gpu image
@@ -3453,11 +3543,7 @@ void hgWriteImageCubemap(
  * - subresource The subresource of the image to read from
  * - layout The layout the image was in before
  */
-void hgReadImage(
-    void* dst,
-    const HgImage* src,
-    HgImageSubresource subresource,
-    HgImageLayout layout);
+void hgReadImage(void* dst, const HgGpuImage* src, HgGpuImageRange range, HgGpuLayout layout);
 
 /**
  * Generates mipmaps from the base level
@@ -3468,33 +3554,17 @@ void hgReadImage(
  * - oldLayout The layout the image was in before
  * - newLayout The layout the image will be set to after
  */
-void hgGenerateMipmaps(
-    HgImage* image,
-    HgImageAspectFlags aspectFlags,
-    HgImageLayout oldLayout,
-    HgImageLayout newLayout);
+void hgGenerateMipmaps(HgGpuImage* image, HgGpuAspectFlags aspectFlags, HgGpuLayout oldLayout, HgGpuLayout newLayout);
 
-enum HgSamplerFilter {
-    HgSamplerFilter_nearest = 0,
-    HgSamplerFilter_linear = 1,
-};
+/**
+ * Create a gpu image view
+ */
+HgGpuView* hgCreateGpuView(const HgGpuImage* image, HgGpuImageRange range, HgGpuViewType type = HgGpuViewType_2D);
 
-enum HgSamplerAddressMode {
-    HgSamplerAddressMode_modeRepeat = 0,
-    HgSamplerAddressMode_modeMirroredRepeat = 1,
-    HgSamplerAddressMode_modeClampToEdge = 2,
-    HgSamplerAddressMode_modeClampToBorder = 3,
-    HgSamplerAddressMode_modeMirrorClampToEdge = 4,
-};
-
-enum HgSamplerBorderColor {
-    HgSamplerBorderColor_floatTransparentBlack = 0,
-    HgSamplerBorderColor_intTransparentBlack = 1,
-    HgSamplerBorderColor_floatOpaqueBlack = 2,
-    HgSamplerBorderColor_intOpaqueBlack = 3,
-    HgSamplerBorderColor_floatOpaqueWhite = 4,
-    HgSamplerBorderColor_intOpaqueWhite = 5,
-};
+/**
+ * Destroy a gpu image view
+ */
+void hgDestroyGpuView(HgGpuView* view);
 
 /**
  * Create a Vulkan sampler
@@ -3504,85 +3574,42 @@ enum HgSamplerBorderColor {
  * - addressMode How the sampler handles address off edges
  * - borderColor The border color if addressMode uses a border
  */
-HgSampler* hgCreateSampler(
-    HgSamplerFilter filter,
-    HgSamplerAddressMode addressMode = HgSamplerAddressMode_modeRepeat,
-    HgSamplerBorderColor borderColor = HgSamplerBorderColor_floatTransparentBlack);
+HgGpuSampler* hgCreateGpuSampler(
+    HgGpuFilter filter,
+    HgGpuSamplerEdgeMode addressMode = HgGpuSamplerEdgeMode_modeRepeat,
+    HgSamplerBorderColor borderColor = HgGpuSamplerBorder_floatTransparentBlack);
 
 /**
  * Destroy a Vulkan sampler
  */
-void hgDestroySampler(HgSampler* sampler);
-
-/**
- * The binding indices for the descriptor types in the bindless layout
- */
-enum HgDescriptorType {
-    HgDescriptorType_sampler = 0,
-    HgDescriptorType_combinedImageSampler = 1,
-    HgDescriptorType_sampledImage = 2,
-    HgDescriptorType_storageImage = 3,
-    HgDescriptorType_uniformTexelBuffer = 4,
-    HgDescriptorType_storageTexelBuffer = 5,
-    HgDescriptorType_uniformBuffer = 6,
-    HgDescriptorType_storageBuffer = 7,
-    HgDescriptorType_count,
-};
-
-/**
- * A descriptor in the bindless set
- */
-struct HgDescriptor {
-    /**
-     * The descriptor id, defaults to null
-     */
-    u32 id = (u32)-1;
-};
+void hgDestroyGpuSampler(HgGpuSampler* sampler);
 
 /**
  * Create a new bindless descriptor
  */
-HgDescriptor hgCreateDescriptor(HgDescriptorType type);
+HgGpuDescriptor hgCreateGpuDescriptor(HgGpuDescriptorType type);
 
 /**
  * Destroy a bindless descriptor
  */
-void hgDestroyDescriptor(HgDescriptor desc);
+void hgDestroyGpuDescriptor(HgGpuDescriptor desc);
 
 /**
- * Get the index from the id
+ * The info to update a buffer descriptor
  */
-constexpr u32 hgDescriptorIdx(HgDescriptor desc)
-{
-    return desc.id & 0x0000ffff;
-}
-
-/**
- * Get the generation from the id
- */
-constexpr u32 hgDescriptorGeneration(HgDescriptor desc)
-{
-    return (desc.id & 0x0fff0000) >> 16;
-}
-
-/**
- * Get the descriptor type from the id
- */
-constexpr HgDescriptorType hgDescriptorType(HgDescriptor desc)
-{
-    return (HgDescriptorType)((desc.id & 0xf0000000) >> 28);
-}
-
-struct HgBufferDescriptorInfo {
-    HgBuffer* buffer;
+struct HgGpuBufferDescriptorInfo {
+    HgGpuBuffer* buffer;
     u64 offset;
     u64 range;
 };
 
-struct HgImageDescriptorInfo {
-    HgSampler* sampler;
-    HgImageView* imageView;
-    HgImageLayout imageLayout;
+/**
+ * The info to update an image descriptor
+ */
+struct HgGpuImageDescriptorInfo {
+    HgGpuSampler* sampler;
+    HgGpuView* imageView;
+    HgGpuLayout imageLayout;
 };
 
 /**
@@ -3592,88 +3619,70 @@ struct HgImageDescriptorInfo {
  * - descriptor The descriptor to update
  * - bufferInfo The buffer info, if the descriptor is a buffer type
  * - imageInfo The image info, if the descriptor is an image type
- * - texelInfo The texel view, if the descriptor is a texel type
  */
-void hgUpdateDescriptor(
-    HgDescriptor descriptor,
-    const HgBufferDescriptorInfo* bufferInfo,
-    const HgImageDescriptorInfo* imageInfo);
+void hgUpdateGpuDescriptor(
+    HgGpuDescriptor descriptor,
+    const HgGpuBufferDescriptorInfo* bufferInfo,
+    const HgGpuImageDescriptorInfo* imageInfo);
 
-enum HgShaderStage {
-    HgShaderStage_VERTEX_BIT = 0x00000001,
-    HgShaderStage_TESSELLATION_CONTROL_BIT = 0x00000002,
-    HgShaderStage_TESSELLATION_EVALUATION_BIT = 0x00000004,
-    HgShaderStage_GEOMETRY_BIT = 0x00000008,
-    HgShaderStage_FRAGMENT_BIT = 0x00000010,
-    HgShaderStage_COMPUTE_BIT = 0x00000020,
-    HgShaderStage_ALL_GRAPHICS = 0x0000001F,
-    HgShaderStage_ALL = 0x7FFFFFFF,
-};
-
-typedef u32 HgShaderStageFlags;
-
-struct HgPushConstantRange {
-    HgShaderStageFlags stageFlags;
+/**
+ * A push constant range in a pipeline
+ */
+struct HgGpuPushRange {
+    /**
+     * The offset in bytes
+     */
     u32 offset;
+    /**
+     * The size of the push in bytes
+     */
     u32 size;
 };
 
-enum HgVertexInputRate {
-    HgVertexInputRate_VERTEX = 0,
-    HgVertexInputRate_INSTANCE = 1,
-};
-
-struct HgVertexInputBindingDescription {
+/**
+ * A vertex binding description in a pipeline
+ */
+struct HgGpuVertexBinding {
+    /**
+     * The binding index
+     */
     u32 binding;
+    /**
+     * The stride between vertices in bytes
+     */
     u32 stride;
-    HgVertexInputRate inputRate;
+    /**
+     * Whether the binding is instances or vertices
+     */
+    bool instanceRate;
 };
 
-struct HgVertexInputAttributeDescription {
+/**
+ * A vertex attribute description in a pipeline
+ */
+struct HgGpuVertexAttribute {
+    /**
+     * The location index
+     */
     u32 location;
+    /**
+     * The vertex binding
+     */
     u32 binding;
+    /**
+     * The format of the attribute
+     */
     HgFormat format;
+    /**
+     * The offset into the binding vertex
+     */
     u32 offset;
-};
-
-enum HgPrimitiveTopology {
-    HgPrimitiveTopology_POINT_LIST = 0,
-    HgPrimitiveTopology_LINE_LIST = 1,
-    HgPrimitiveTopology_LINE_STRIP = 2,
-    HgPrimitiveTopology_TRIANGLE_LIST = 3,
-    HgPrimitiveTopology_TRIANGLE_STRIP = 4,
-    HgPrimitiveTopology_TRIANGLE_FAN = 5,
-    HgPrimitiveTopology_LINE_LIST_WITH_ADJACENCY = 6,
-    HgPrimitiveTopology_LINE_STRIP_WITH_ADJACENCY = 7,
-    HgPrimitiveTopology_TRIANGLE_LIST_WITH_ADJACENCY = 8,
-    HgPrimitiveTopology_TRIANGLE_STRIP_WITH_ADJACENCY = 9,
-    HgPrimitiveTopology_PATCH_LIST = 10,
-};
-
-enum HgPolygonMode {
-    HgPolygonMode_FILL = 0,
-    HgPolygonMode_LINE = 1,
-    HgPolygonMode_POINT = 2,
-};
-
-enum HgCullMode {
-    HgCullMode_NONE = 0,
-    HgCullMode_FRONT_BIT = 0x00000001,
-    HgCullMode_BACK_BIT = 0x00000002,
-    HgCullMode_FRONT_AND_BACK = 0x00000003,
-};
-
-typedef u32 HgCullModeFlags;
-
-enum HgFrontFace {
-    HgFrontFace_COUNTER_CLOCKWISE = 0,
-    HgFrontFace_CLOCKWISE = 1,
 };
 
 /**
  * Config for hgCreateGraphicsPipeline
  */
-struct HgCreateGraphicsPipeline {
+struct HgCreateGpuGraphicsPipeline {
     /**
      * The vertex shader code
      */
@@ -3709,7 +3718,7 @@ struct HgCreateGraphicsPipeline {
     /**
      * The push constant ranges, if any
      */
-    const HgPushConstantRange* pushRanges = nullptr;
+    const HgGpuPushRange* pushRanges = nullptr;
     /**
      * The number of push constant ranges
      */
@@ -3717,7 +3726,7 @@ struct HgCreateGraphicsPipeline {
     /**
      * Descriptions of the vertex bindings, may be nullptr
      */
-    const HgVertexInputBindingDescription* vertexBindings = nullptr;
+    const HgGpuVertexBinding* vertexBindings = nullptr;
     /**
      * The number of vertex bindings
      */
@@ -3725,7 +3734,7 @@ struct HgCreateGraphicsPipeline {
     /**
      * Descriptions of the vertex attributes, may be nullptr
      */
-    const HgVertexInputAttributeDescription* vertexAttributes = nullptr;
+    const HgGpuVertexAttribute* vertexAttributes = nullptr;
     /**
      * The number of vertex attributes
      */
@@ -3733,7 +3742,7 @@ struct HgCreateGraphicsPipeline {
     /**
      * How to interpret vertices into topology
      */
-    HgPrimitiveTopology topology = HgPrimitiveTopology_TRIANGLE_LIST;
+    HgGpuTopology topology = HgGpuTopology_triangleList;
     /**
      * The number of patch control points in the tesselation stage
      */
@@ -3741,15 +3750,11 @@ struct HgCreateGraphicsPipeline {
     /**
      * How polygons are drawn
      */
-    HgPolygonMode polygonMode = HgPolygonMode_FILL;
+    HgGpuPolygonMode polygonMode = HgGpuPolygonMode_fill;
     /**
      * Enables back/front face culling
      */
-    HgCullModeFlags cullMode = HgCullMode_NONE;
-    /**
-     * Which face is treated as the front
-     */
-    HgFrontFace frontFace = HgFrontFace_COUNTER_CLOCKWISE;
+    HgCullModeFlags cullMode = HgGpuCull_none;
     /**
      * How many samples are used in MSAA
      */
@@ -3774,7 +3779,7 @@ struct HgCreateGraphicsPipeline {
  * Parameters
  * - config The pipeline configuration
  */
-HgPipeline* hgCreateGraphicsPipeline(const HgCreateGraphicsPipeline* config);
+HgGpuPipeline* hgCreateGpuGraphicsPipeline(const HgCreateGpuGraphicsPipeline* config);
 
 /**
  * Create a compute pipeline
@@ -3784,12 +3789,12 @@ HgPipeline* hgCreateGraphicsPipeline(const HgCreateGraphicsPipeline* config);
  * - shaderCode The compute shader, must not be nullptr
  * - shaderCodeSize The size in bytes of shaderCode
  */
-HgPipeline* hgCreateComputePipeline(u32 pushSize, const u8* shaderCode, u64 shaderCodeSize);
+HgGpuPipeline* hgCreateGpuComputePipeline(u32 pushSize, const u8* shaderCode, u64 shaderCodeSize);
 
 /**
  * Destroy a graphics or compute pipeline
  */
-void hgDestroyPipeline(HgPipeline* pipeline);
+void hgDestroyGpuPipeline(HgGpuPipeline* pipeline);
 
 /**
  * Begin a command buffer to be executed once
@@ -3797,20 +3802,20 @@ void hgDestroyPipeline(HgPipeline* pipeline);
  * Returns
  * - The command buffer to record, will never be nullptr
  */
-HgCommandBuffer* hgBeginVkCmd();
+HgGpuCommands* hgBeginGpuCommands();
 
 /**
  * Execute the command buffer and wait for completion
  *
  * Parameters
- * - cmd The command buffer from hgvkBeginCommands, must not be nullptr
+ * - cmd The command buffer from hgBeginGpuCommands, must not be nullptr
  */
-void hgEndVkCmd(HgCommandBuffer* cmd);
+void hgEndGpuCommands(HgGpuCommands* cmd);
 
 /**
  * Bind a graphics or compute pipeline
  */
-void hgCmdBindPipeline(HgCommandBuffer* cmd, HgPipeline* pipeline);
+void hgBindGpuPipeline(HgGpuCommands* cmd, HgGpuPipeline* pipeline);
 
 /**
  * Push constants to the shader
@@ -3822,38 +3827,71 @@ void hgCmdBindPipeline(HgCommandBuffer* cmd, HgPipeline* pipeline);
  * - size The size of the data
  * - push The data to push
  */
-void hgCmdPushConstants(HgCommandBuffer* cmd, HgPipeline* pipeline, u32 offset, u32 size, void* push);
+void hgGpuPushConstants(HgGpuCommands* cmd, HgGpuPipeline* pipeline, u32 offset, void* push, u32 size);
 
 /**
  * Bind an index buffer (assumed 32 bit)
+ *
+ * Parameters
+ * - cmd The command buffer to record to
+ * - buffer The buffer to bind
+ * - offset The offset into the buffer
  */
-void hgCmdBindIndexBuffer(HgCommandBuffer* cmd, HgBuffer* buffer, u64 offset);
+void hgBindGpuIndexBuffer(HgGpuCommands* cmd, HgGpuBuffer* buffer, u64 offset = 0);
 
 /**
- * Bind vertex buffers (assumed 32 bit)
+ * Bind vertex buffers
+ *
+ * Parameters
+ * - cmd The command buffer to record to
+ * - bindingIdx The first binding index to bind to
+ * - buffers The buffer to bind
+ * - offsets The offsets into the buffers
+ * - bufferCount The number of buffers
  */
-void hgCmdBindVertexBuffers(HgCommandBuffer* cmd, u32 bindingIdx, HgBuffer** buffers, u64* offsets, u32 bufferCount);
+void hgBindGpuVertexBuffers(HgGpuCommands* cmd, u32 bindingIdx, HgGpuBuffer** buffers, u64* offsets, u32 bufferCount);
 
 /**
  * Issue a draw call
+ *
+ * Parameters
+ * - cmd The command buffer to record to
+ * - vertexBegin The index of the first vertex to draw
+ * - vertexCount The number of vertices to draw
+ * - instanceBegin The index of the first instance to draw
+ * - instanceCount The number of instances to draw
  */
-void hgCmdDraw(HgCommandBuffer* cmd, u32 vertexCount, u32 instanceCount, u32 firstVertex, u32 firstInstance);
+void hgGpuDraw(HgGpuCommands* cmd, u32 vertexBegin, u32 vertexCount, u32 instanceBegin, u32 instanceCount);
 
 /**
  * Issue a draw call using an index buffer
+ *
+ * Parameters
+ * - cmd The command buffer to record to
+ * - vertexOffset The offset added to the indices in the index buffer
+ * - indexBegin The index of the first index to draw
+ * - indexCount The number of indices to draw
+ * - instanceBegin The index of the first instance to draw
+ * - instanceCount The number of instances to draw
  */
-void hgCmdDrawIndexed(
-    HgCommandBuffer* cmd,
-    u32 indexCount,
-    u32 instanceCount,
+void hgGpuDrawIndexed(
+    HgGpuCommands* cmd,
     i32 vertexOffset,
-    u32 firstIndex,
-    u32 firstInstance);
+    u32 indexBegin,
+    u32 indexCount,
+    u32 instanceBegin,
+    u32 instanceCount);
 
 /**
  * Dispatch a compute shader
+ *
+ * Parameters
+ * - cmd The command buffer to record to
+ * - groupCountX The number of workgroups in the x dimension
+ * - groupCountY The number of workgroups in the y dimension
+ * - groupCountZ The number of workgroups in the z dimension
  */
-void hgCmdDispatch(HgCommandBuffer* cmd, u32 groupCountX, u32 groupCountY, u32 groupCountZ);
+void hgGpuCompute(HgGpuCommands* cmd, u32 groupCountX, u32 groupCountY, u32 groupCountZ);
 
 enum HgAttachmentLoadOp {
     HgAttachmentLoadOp_LOAD = 0,
@@ -3889,7 +3927,7 @@ struct HgRenderAttachment {
     /**
      * The image attached
      */
-    const HgImageView* image = nullptr;
+    const HgGpuView* image = nullptr;
     /**
      * How the image will be loaded
      */
@@ -3911,7 +3949,7 @@ struct HgRenderPass {
     /**
      * The uniforms buffer dependencies
      */
-    HgBuffer** uniformBuffers = nullptr;
+    HgGpuBuffer** uniformBuffers = nullptr;
     /**
      * The number of uniform buffers
      */
@@ -3919,7 +3957,7 @@ struct HgRenderPass {
     /**
      * The storage buffer dependencies
      */
-    HgBuffer** storageBuffers = nullptr;
+    HgGpuBuffer** storageBuffers = nullptr;
     /**
      * The number of storage buffers
      */
@@ -3927,7 +3965,7 @@ struct HgRenderPass {
     /**
      * The sampled image dependencies
      */
-    HgImageView** sampledImages = nullptr;
+    HgGpuView** sampledImages = nullptr;
     /**
      * The number of sampled images
      */
@@ -3935,7 +3973,7 @@ struct HgRenderPass {
     /**
      * The storage image dependencies
      */
-    HgImageView** storageImages = nullptr;
+    HgGpuView** storageImages = nullptr;
     /**
      * The number of storage images
      */
@@ -4015,7 +4053,7 @@ struct HgImageBarrier {
     /**
      * The image to sychronize
      */
-    HgImageView* image;
+    HgGpuView* image;
     /**
      * Where the image will be used next
      */
@@ -4027,7 +4065,7 @@ struct HgImageBarrier {
     /**
      * The next layout the image needs to be in
      */
-    HgImageLayout nextLayout;
+    HgGpuLayout nextLayout;
 };
 
 /**
@@ -4037,7 +4075,7 @@ struct HgBufferBarrier {
     /**
      * The buffer to sychronize
      */
-    HgBuffer* buffer;
+    HgGpuBuffer* buffer;
     /**
      * Where the image will be used next
      */
@@ -4081,17 +4119,17 @@ struct HgRenderer {
         /**
          * The last layout the image was in
          */
-        HgImageLayout lastLayout;
+        HgGpuLayout lastLayout;
     };
 
     /**
      * The buffer resources
      */
-    HgHashMap<const HgBuffer*, BufferState, hgPtrHash<const HgBuffer>> buffers;
+    HgHashMap<const HgGpuBuffer*, BufferState, hgPtrHash<const HgGpuBuffer>> buffers;
     /**
      * The image resources
      */
-    HgHashMap<const HgImageView*, ImageState, hgPtrHash<const HgImageView>> images;
+    HgHashMap<const HgGpuView*, ImageState, hgPtrHash<const HgGpuView>> images;
 
     /**
      * Create a new renderer
@@ -4111,16 +4149,16 @@ struct HgRenderer {
     /**
      * Set the state for a buffer
      */
-    void setBuffer(HgBuffer* buffer, HgPipelineStageFlags lastStage, HgAccessFlags lastAccess);
+    void setBuffer(HgGpuBuffer* buffer, HgPipelineStageFlags lastStage, HgAccessFlags lastAccess);
 
     /**
      * Set the state for an image
      */
     void setImage(
-        HgImageView* image,
+        HgGpuView* image,
         HgPipelineStageFlags lastStage,
         HgAccessFlags lastAccess,
-        HgImageLayout lastLayout);
+        HgGpuLayout lastLayout);
 
     /**
      * Creates a barrier for resource uses that are not part of a render pass
@@ -4133,7 +4171,7 @@ struct HgRenderer {
      * - imageBarrierCount The number of image barriers
      */
     void barrier(
-        HgCommandBuffer* cmd,
+        HgGpuCommands* cmd,
         const HgBufferBarrier* bufferBarriers,
         u32 bufferBarrierCount,
         const HgImageBarrier* imageBarriers,
@@ -4146,7 +4184,7 @@ struct HgRenderer {
      * - cmd The command buffer
      * - pass The render pass description
      */
-    void prepareResources(HgCommandBuffer* cmd, const HgRenderPass* pass);
+    void prepareResources(HgGpuCommands* cmd, const HgRenderPass* pass);
 
     /**
      * Prepares resources and begins a render pass
@@ -4157,7 +4195,7 @@ struct HgRenderer {
      * - height The height of the render area
      * - pass The render pass description
      */
-    void beginPass(HgCommandBuffer* cmd, u32 width, u32 height, const HgRenderPass* pass);
+    void beginPass(HgGpuCommands* cmd, u32 width, u32 height, const HgRenderPass* pass);
 
     /**
      * Ends the render pass
@@ -4165,7 +4203,7 @@ struct HgRenderer {
      * Parameters
      * - cmd The command buffer
      */
-    void endPass(HgCommandBuffer* cmd);
+    void endPass(HgGpuCommands* cmd);
 };
 
 /**
@@ -4381,7 +4419,7 @@ struct HgCreateWindow {
     /**
      * How the swapchain images will be used
      */
-    HgImageUsageFlags imageUsage = HgImageUsage_colorAttachment;
+    HgGpuImageUsageFlags imageUsage = HgGpuImageUsage_colorAttachment;
     /**
      * The maximum number of events per update
      */
@@ -4410,7 +4448,7 @@ void hgDestroyWindow(HgWindow* window);
  * - The command buffer to record this frame
  * - nullptr if the swapchain cannot be rendered to
  */
-HgCommandBuffer* hgWindowBeginRecording(HgWindow* window);
+HgGpuCommands* hgWindowBeginRecording(HgWindow* window);
 
 /**
  * Finishes recording the command buffer and presents the swapchain image
@@ -4418,7 +4456,7 @@ HgCommandBuffer* hgWindowBeginRecording(HgWindow* window);
  * Parameters
  * - cmd The command buffer given from beginRecording
  */
-void hgWindowEndAndPresent(HgWindow* window, HgCommandBuffer* cmd);
+void hgWindowEndAndPresent(HgWindow* window, HgGpuCommands* cmd);
 
 /**
  * Processes all events since the last call to process events or startup
@@ -4471,7 +4509,7 @@ void hgGetWindowSize(HgWindow* window, u32* width, u32* height, HgFormat* format
 /**
  * Get the window's current image
  */
-HgImageView* hgGetCurrentWindowImage(HgWindow* window);
+HgGpuView* hgGetCurrentWindowImage(HgWindow* window);
 
 /**
  * Initialize ImGui platform backend
@@ -4496,7 +4534,7 @@ void ImGui_ImplHurdyGurdy_Shutdown();
 /**
  * Create an ImGui texture
  */
-void* ImGui_ImplHurdyGurdy_CreateTexture(HgImageView* view, HgSampler* sampler, HgImageLayout layout);
+void* ImGui_ImplHurdyGurdy_CreateTexture(HgGpuView* view, HgGpuSampler* sampler, HgGpuLayout layout);
 
 /**
  * Create an ImGui texture
@@ -4514,7 +4552,7 @@ void ImGui_ImplHurdyGurdy_NewFrame();
  * Parameters
  * - cmd The command buffer to record to
  */
-void ImGui_ImplHurdyGurdy_Draw(HgCommandBuffer* cmd);
+void ImGui_ImplHurdyGurdy_Draw(HgGpuCommands* cmd);
 
 // audio system : TODO
 
@@ -4958,7 +4996,7 @@ struct HgModelData {
         /**
          * How the vertices should be interpreted in sequence
          */
-        HgPrimitiveTopology topology;
+        HgGpuTopology topology;
         /**
          * The file index of the first vertex
          */
@@ -4996,7 +5034,7 @@ struct HgModelData {
      * Returns
      * - Whether the info could be found
      */
-    bool getInfo(u32* vertexCount, u32* vertexWidth, u32* indexCount, HgPrimitiveTopology* topology);
+    bool getInfo(u32* vertexCount, u32* vertexWidth, u32* indexCount, HgGpuTopology* topology);
 
     /**
      * Returns a pointer to the vertices, never nullptr
@@ -5052,19 +5090,19 @@ struct HgTextureResource {
     /**
      * The image
      */
-    HgImage* image;
+    HgGpuImage* image;
     /**
      * The image view
      */
-    HgImageView* view;
+    HgGpuView* view;
     /**
      * The sampler
      */
-    HgSampler* sampler;
+    HgGpuSampler* sampler;
     /**
      * The descriptor
      */
-    HgDescriptor descriptor;
+    HgGpuDescriptor descriptor;
 };
 
 /**
@@ -5092,7 +5130,7 @@ void hgLoadEmptyTexture(HgResource id);
  * - id The resource to load
  * - sampler The sampler the texture should use
  */
-void hgLoadTexture(HgResource id, HgSampler* sampler);
+void hgLoadTexture(HgResource id, HgGpuSampler* sampler);
 
 /**
  * Unload a texture from the gpu
@@ -5114,11 +5152,11 @@ struct HgModelResource {
     /**
      * The vertex buffer
      */
-    HgBuffer* vertexBuffer;
+    HgGpuBuffer* vertexBuffer;
     /**
      * The index buffer
      */
-    HgBuffer* indexBuffer;
+    HgGpuBuffer* indexBuffer;
     /**
      * The number of vertices
      */
@@ -5853,7 +5891,7 @@ void hgUpdateView2D(const HgMat4* view);
  * - ecs The ecs to draw
  * - cmd The command buffer to record to, must not be nullptr
  */
-void hgDraw2D(HgECS* ecs, HgCommandBuffer* cmd);
+void hgDraw2D(HgECS* ecs, HgGpuCommands* cmd);
 
 /**
  * A model component rendered by the 3d pipeline
@@ -5945,6 +5983,6 @@ void hgUpdateView3D(const HgMat4* view);
  * - ecs The ecs to draw
  * - cmd The command buffer to record to, must not be nullptr
  */
-void hgDraw3D(HgECS* ecs, HgCommandBuffer* cmd);
+void hgDraw3D(HgECS* ecs, HgGpuCommands* cmd);
 
 #endif // HURDYGURDY_HPP

@@ -7,8 +7,6 @@
 
 #include "imgui_impl_sdl3.h"
 
-extern VkInstance hgVkInstance;
-
 void hgInternalCreateWindowSwapchain(HgWindow* window, const HgCreateWindow* config);
 void hgInternalDestroyWindowSwapchain(HgWindow* window);
 void hgInternalResizeWindowSwapchain(HgWindow* window);
@@ -380,6 +378,8 @@ void hgProcessEvents()
     f32 oldMouseX, oldMouseY;
     SDL_GetMouseState(&oldMouseX, &oldMouseY);
 
+    HgKeyEvent windowEvent{};
+
     SDL_Event event;
     while (SDL_PollEvent(&event))
     {
@@ -392,52 +392,40 @@ void hgProcessEvents()
                 state.wasQuit = true;
                 break;
             case SDL_EVENT_WINDOW_RESIZED:
-            {
-                HgWindow* window = *state.windows.get(event.window.windowID);
-                SDL_GetWindowSize(window->sdlWindow, (int*)&window->width, (int*)&window->height);
-                hgInternalResizeWindowSwapchain(window);
-            } break;
+                if (HgWindow** window = state.windows.get(event.window.windowID); window != nullptr)
+                {
+                    SDL_GetWindowSize((*window)->sdlWindow, (int*)&(*window)->width, (int*)&(*window)->height);
+                    hgInternalResizeWindowSwapchain(*window);
+                }
+                break;
             case SDL_EVENT_KEY_DOWN:
-            {
-                HgKeyEvent windowEvent{};
                 windowEvent.type = HgKeyEventType_keyPress;
                 windowEvent.key = sdlKeycodeToHgKey(event.key.key);
                 state.isKeyDown[windowEvent.key] = true;
-
-                HgWindow* window = *state.windows.get(event.key.windowID);
-                window->events[window->eventCount++] = windowEvent;
-            } break;
+                break;
             case SDL_EVENT_KEY_UP:
-            {
-                HgKeyEvent windowEvent{};
                 windowEvent.type = HgKeyEventType_keyRelease;
                 windowEvent.key = sdlKeycodeToHgKey(event.key.key);
                 state.isKeyDown[windowEvent.key] = false;
-
-                HgWindow* window = *state.windows.get(event.key.windowID);
-                window->events[window->eventCount++] = windowEvent;
-            } break;
+                break;
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
-            {
-                HgKeyEvent windowEvent{};
                 windowEvent.type = HgKeyEventType_keyPress;
                 windowEvent.key = sdlButtonToHgKey(event.button.button);
                 state.isKeyDown[windowEvent.key] = true;
-
-                HgWindow* window = *state.windows.get(event.button.windowID);
-                window->events[window->eventCount++] = windowEvent;
-            } break;
+                break;
             case SDL_EVENT_MOUSE_BUTTON_UP:
-            {
-                HgKeyEvent windowEvent{};
                 windowEvent.type = HgKeyEventType_keyRelease;
                 windowEvent.key = sdlButtonToHgKey(event.button.button);
                 state.isKeyDown[windowEvent.key] = false;
-
-                HgWindow* window = *state.windows.get(event.button.windowID);
-                window->events[window->eventCount++] = windowEvent;
-            } break;
+                break;
         }
+    }
+
+    if (windowEvent.type != HgKeyEventType_none)
+    {
+        HgWindow** window = state.windows.get(event.button.windowID);
+        if (window != nullptr)
+            (*window)->events[(*window)->eventCount++] = windowEvent;
     }
 
     f32 newMouseX, newMouseY;
@@ -491,7 +479,7 @@ void hgGetWindowSize(HgWindow* window, u32* width, u32* height, HgFormat* format
         *format = window->format;
 }
 
-HgImageView* hgGetCurrentWindowImage(HgWindow* window)
+HgGpuView* hgGetCurrentWindowImage(HgWindow* window)
 {
     return window->views[window->currentImage];
 }

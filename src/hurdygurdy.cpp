@@ -2559,7 +2559,7 @@ void hgExportPng(HgFence* fences, u32 fenceCount, HgResource id, HgStringView pa
     });
 }
 
-bool HgModelData::getInfo(u32* vertexCount, u32* vertexWidth, u32* indexCount, HgPrimitiveTopology* topology)
+bool HgModelData::getInfo(u32* vertexCount, u32* vertexWidth, u32* indexCount, HgGpuTopology* topology)
 {
     if (file.size >= sizeof(Info) && memcmp(file.data, modelIdentifier, sizeof(modelIdentifier)) == 0)
     {
@@ -2636,8 +2636,8 @@ void hgDeinitTextures()
     gpuTextures.forEach([](HgResource, void* ptex)
     {
         HgTextureResource& tex = *(HgTextureResource*)ptex;
-        hgDestroyImageView(tex.view);
-        hgDestroyImage(tex.image);
+        hgDestroyGpuView(tex.view);
+        hgDestroyGpuImage(tex.image);
     });
 }
 
@@ -2646,7 +2646,7 @@ void hgLoadEmptyTexture(HgResource id)
     gpuTextures.load(id);
 }
 
-void hgLoadTexture(HgResource id, HgSampler* sampler)
+void hgLoadTexture(HgResource id, HgGpuSampler* sampler)
 {
     if (gpuTextures.load(id))
     {
@@ -2668,30 +2668,30 @@ void hgLoadTexture(HgResource id, HgSampler* sampler)
 
         HgTextureResource& tex = *(HgTextureResource*)gpuTextures.get(id);;
 
-        HgCreateImageEx imageInfo{};
+        HgCreateGpuImageEx imageInfo{};
         imageInfo.format = format;
         imageInfo.width = width;
         imageInfo.height = height;
         imageInfo.depth = depth;
-        imageInfo.usage = HgImageUsage_transferDst | HgImageUsage_sampled;
+        imageInfo.usage = HgGpuImageUsage_transferDst | HgGpuImageUsage_sampled;
 
-        tex.image = hgCreateImageEx(&imageInfo);
+        tex.image = hgCreateGpuImageEx(&imageInfo);
 
-        hgWriteImage(
+        hgWriteGpuImage(
             tex.image,
-            {HgImageAspect_color, 0, 1, 0, 1},
+            {HgGpuAspect_color, 0, 1, 0, 1},
             data.getPixels(),
-            HgImageLayout_shaderReadOnlyOptimal);
+            HgGpuLayout_shaderReadOnly);
 
-        tex.view = hgCreateImageView(tex.image, {HgImageAspect_color, 0, 1, 0, 1});
+        tex.view = hgCreateGpuView(tex.image, {HgGpuAspect_color, 0, 1, 0, 1});
 
         hgAssert(sampler != nullptr);
         tex.sampler = sampler;
 
-        tex.descriptor = hgCreateDescriptor(HgDescriptorType_combinedImageSampler);
+        tex.descriptor = hgCreateGpuDescriptor(HgGpuDescriptorType_combinedImageSampler);
 
-        HgImageDescriptorInfo descInfo = {tex.sampler, tex.view, HgImageLayout_shaderReadOnlyOptimal};
-        hgUpdateDescriptor(tex.descriptor, nullptr, &descInfo);
+        HgGpuImageDescriptorInfo descInfo = {tex.sampler, tex.view, HgGpuLayout_shaderReadOnly};
+        hgUpdateGpuDescriptor(tex.descriptor, nullptr, &descInfo);
     }
 }
 
@@ -2700,9 +2700,9 @@ void hgUnloadTexture(HgResource id)
     HgTextureResource tex;
     if (gpuTextures.unload(id, &tex))
     {
-        hgDestroyDescriptor(tex.descriptor);
-        hgDestroyImageView(tex.view);
-        hgDestroyImage(tex.image);
+        hgDestroyGpuDescriptor(tex.descriptor);
+        hgDestroyGpuView(tex.view);
+        hgDestroyGpuImage(tex.image);
         tex = {};
     }
 }
@@ -2728,8 +2728,8 @@ void hgDeinitModels()
     gpuModels.forEach([](HgResource, void* pmodel)
     {
         HgModelResource& model = *(HgModelResource*)pmodel;
-        hgDestroyBuffer(model.vertexBuffer);
-        hgDestroyBuffer(model.indexBuffer);
+        hgDestroyGpuBuffer(model.vertexBuffer);
+        hgDestroyGpuBuffer(model.indexBuffer);
     });
 }
 
@@ -2741,7 +2741,7 @@ void hgLoadModel(HgResource id)
         hgAssert(hgGetResource(id)->data != nullptr);
         HgModelData data = *hgGetResource(id);
 
-        HgPrimitiveTopology topology;
+        HgGpuTopology topology;
         HgModelResource& model = *(HgModelResource*)gpuModels.get(id);
         if (!data.getInfo(
             &model.vertexCount,
@@ -2753,21 +2753,21 @@ void hgLoadModel(HgResource id)
             return;
         }
 
-        model.vertexBuffer = hgCreateBuffer(
+        model.vertexBuffer = hgCreateGpuBuffer(
             model.vertexCount * model.vertexWidth,
-            HgBufferUsage_vertexBuffer | HgBufferUsage_transferDst);
+            HgGpuBufferUsage_vertexBuffer | HgGpuBufferUsage_transferDst);
 
-        model.indexBuffer = hgCreateBuffer(
+        model.indexBuffer = hgCreateGpuBuffer(
             model.indexCount * sizeof(u32),
-            HgBufferUsage_indexBuffer | HgBufferUsage_transferDst);
+            HgGpuBufferUsage_indexBuffer | HgGpuBufferUsage_transferDst);
 
-        hgWriteBuffer(
+        hgWriteGpuBuffer(
             model.vertexBuffer,
             0,
             data.getVertexData(),
             model.vertexCount * model.vertexWidth);
 
-        hgWriteBuffer(
+        hgWriteGpuBuffer(
             model.indexBuffer,
             0,
             data.getIndexData(),
@@ -2780,8 +2780,8 @@ void hgUnloadModel(HgResource id)
     HgModelResource model;
     if (gpuModels.unload(id, &model))
     {
-        hgDestroyBuffer(model.vertexBuffer);
-        hgDestroyBuffer(model.indexBuffer);
+        hgDestroyGpuBuffer(model.vertexBuffer);
+        hgDestroyGpuBuffer(model.indexBuffer);
     }
 }
 
@@ -3225,9 +3225,9 @@ struct Pipeline2DPush {
 };
 
 struct Pipeline2DState {
-    HgPipeline* pipeline;
-    HgBuffer* vpBuffer;
-    HgDescriptor vpDesc;
+    HgGpuPipeline* pipeline;
+    HgGpuBuffer* vpBuffer;
+    HgGpuDescriptor vpDesc;
     HgTextureResource defaultTex;
 };
 
@@ -3253,7 +3253,7 @@ void hgInitPipeline2D(
     HgBinary* spriteVertSpv = hgGetResource(spriteVertSpvID);
     HgBinary* spriteFragSpv = hgGetResource(spriteFragSpvID);
 
-    HgCreateGraphicsPipeline pipelineConfig{};
+    HgCreateGpuGraphicsPipeline pipelineConfig{};
     pipelineConfig.vertexShader = (u8*)spriteVertSpv->data;
     pipelineConfig.vertexShaderSize = spriteVertSpv->size;
     pipelineConfig.fragmentShader = (u8*)spriteFragSpv->data;
@@ -3261,30 +3261,30 @@ void hgInitPipeline2D(
     pipelineConfig.colorAttachmentFormats = &colorFormat;
     pipelineConfig.colorAttachmentCount = 1;
     pipelineConfig.depthAttachmentFormat = depthFormat;
-    HgPushConstantRange push{HgShaderStage_ALL, 0, sizeof(Pipeline2DPush)};
+    HgGpuPushRange push{0, sizeof(Pipeline2DPush)};
     pipelineConfig.pushRanges = &push;
     pipelineConfig.pushRangeCount = 1;
     pipelineConfig.enableDepthRead = depthFormat != HgFormat_undefined;
     bool enableColorBlend = true;
     pipelineConfig.colorBlendEnables = &enableColorBlend;
 
-    pipeline2D.pipeline = hgCreateGraphicsPipeline(&pipelineConfig);
+    pipeline2D.pipeline = hgCreateGpuGraphicsPipeline(&pipelineConfig);
 
-    pipeline2D.vpBuffer = hgCreateBuffer(
+    pipeline2D.vpBuffer = hgCreateGpuBuffer(
         sizeof(Pipeline2DVPUniform),
-        HgBufferUsage_uniformBuffer,
-        HgBufferMemoryUsage_frequentUpdate);
+        HgGpuBufferUsage_uniformBuffer,
+        HgGpuMemoryUsage_frequentUpdate);
 
     Pipeline2DVPUniform vpData{};
     vpData.proj = HgMat4{1.0f};
     vpData.view = HgMat4{1.0f};
 
-    hgWriteBuffer(pipeline2D.vpBuffer, 0, &vpData, sizeof(vpData));
+    hgWriteGpuBuffer(pipeline2D.vpBuffer, 0, &vpData, sizeof(vpData));
 
-    pipeline2D.vpDesc = hgCreateDescriptor(HgDescriptorType_uniformBuffer);
+    pipeline2D.vpDesc = hgCreateGpuDescriptor(HgGpuDescriptorType_uniformBuffer);
 
-    HgBufferDescriptorInfo bufferInfo{pipeline2D.vpBuffer, 0, sizeof(Pipeline2DVPUniform)};
-    hgUpdateDescriptor(pipeline2D.vpDesc, &bufferInfo, nullptr);
+    HgGpuBufferDescriptorInfo bufferInfo{pipeline2D.vpBuffer, 0, sizeof(Pipeline2DVPUniform)};
+    hgUpdateGpuDescriptor(pipeline2D.vpDesc, &bufferInfo, nullptr);
 
     struct Color
     {
@@ -3295,55 +3295,55 @@ void hgInitPipeline2D(
         {0x00, 0x00, 0x00, 0xff}, {0xff, 0x00, 0xff, 0xff},
     };
 
-    pipeline2D.defaultTex.image = hgCreateImage(2, 2, HgFormat_r8g8b8a8_srgb,
-        HgImageUsage_sampled | HgImageUsage_transferDst);
+    pipeline2D.defaultTex.image = hgCreateGpuImage(2, 2, HgFormat_r8g8b8a8_srgb,
+        HgGpuImageUsage_sampled | HgGpuImageUsage_transferDst);
 
-    pipeline2D.defaultTex.view = hgCreateImageView(pipeline2D.defaultTex.image, {HgImageAspect_color, 0, 1, 0, 1});
+    pipeline2D.defaultTex.view = hgCreateGpuView(pipeline2D.defaultTex.image, {HgGpuAspect_color, 0, 1, 0, 1});
 
-    hgWriteImage(
+    hgWriteGpuImage(
         pipeline2D.defaultTex.image,
-        {HgImageAspect_color, 0, 1, 0, 1},
+        {HgGpuAspect_color, 0, 1, 0, 1},
         defaultColors,
-        HgImageLayout_shaderReadOnlyOptimal);
+        HgGpuLayout_shaderReadOnly);
 
-    pipeline2D.defaultTex.sampler = hgCreateSampler(HgSamplerFilter_nearest);
+    pipeline2D.defaultTex.sampler = hgCreateGpuSampler(HgGpuFilter_nearest);
 
-    pipeline2D.defaultTex.descriptor = hgCreateDescriptor(HgDescriptorType_combinedImageSampler);
+    pipeline2D.defaultTex.descriptor = hgCreateGpuDescriptor(HgGpuDescriptorType_combinedImageSampler);
 
-    HgImageDescriptorInfo imageInfo{};
+    HgGpuImageDescriptorInfo imageInfo{};
     imageInfo.sampler = pipeline2D.defaultTex.sampler;
     imageInfo.imageView = pipeline2D.defaultTex.view;
-    imageInfo.imageLayout = HgImageLayout_shaderReadOnlyOptimal;
+    imageInfo.imageLayout = HgGpuLayout_shaderReadOnly;
 
-    hgUpdateDescriptor(pipeline2D.defaultTex.descriptor, nullptr, &imageInfo);
+    hgUpdateGpuDescriptor(pipeline2D.defaultTex.descriptor, nullptr, &imageInfo);
 }
 
 void hgDeinitPipeline2D()
 {
-    hgDestroyPipeline(pipeline2D.pipeline);
+    hgDestroyGpuPipeline(pipeline2D.pipeline);
 
-    hgDestroyDescriptor(pipeline2D.defaultTex.descriptor);
-    hgDestroySampler(pipeline2D.defaultTex.sampler);
-    hgDestroyImageView(pipeline2D.defaultTex.view);
-    hgDestroyImage(pipeline2D.defaultTex.image);
+    hgDestroyGpuDescriptor(pipeline2D.defaultTex.descriptor);
+    hgDestroyGpuSampler(pipeline2D.defaultTex.sampler);
+    hgDestroyGpuView(pipeline2D.defaultTex.view);
+    hgDestroyGpuImage(pipeline2D.defaultTex.image);
 
-    hgDestroyDescriptor(pipeline2D.vpDesc);
-    hgDestroyBuffer(pipeline2D.vpBuffer);
+    hgDestroyGpuDescriptor(pipeline2D.vpDesc);
+    hgDestroyGpuBuffer(pipeline2D.vpBuffer);
 }
 
 void hgUpdateProjection2D(const HgMat4* projection)
 {
     hgAssert(projection != nullptr);
-    hgWriteBuffer(pipeline2D.vpBuffer, offsetof(Pipeline2DVPUniform, proj), projection, sizeof(*projection));
+    hgWriteGpuBuffer(pipeline2D.vpBuffer, offsetof(Pipeline2DVPUniform, proj), projection, sizeof(*projection));
 }
 
 void hgUpdateView2D(const HgMat4* view)
 {
     hgAssert(view != nullptr);
-    hgWriteBuffer(pipeline2D.vpBuffer, offsetof(Pipeline2DVPUniform, view), view, sizeof(*view));
+    hgWriteGpuBuffer(pipeline2D.vpBuffer, offsetof(Pipeline2DVPUniform, view), view, sizeof(*view));
 }
 
-void hgDraw2D(HgECS* ecs, HgCommandBuffer* cmd)
+void hgDraw2D(HgECS* ecs, HgGpuCommands* cmd)
 {
     hgAssert(ecs != nullptr);
     hgAssert(cmd != nullptr);
@@ -3354,7 +3354,7 @@ void hgDraw2D(HgECS* ecs, HgCommandBuffer* cmd)
         return ecs->get<HgTransform>(lhs).position.z > ecs->get<HgTransform>(rhs).position.z;
     });
 
-    hgCmdBindPipeline(cmd, pipeline2D.pipeline);
+    hgBindGpuPipeline(cmd, pipeline2D.pipeline);
 
     ecs->forEach<HgSprite2D, HgTransform>([&](HgEntity, HgSprite2D* sprite, HgTransform* transform) 
     {
@@ -3366,12 +3366,12 @@ void hgDraw2D(HgECS* ecs, HgCommandBuffer* cmd)
         push.model = hgModelMatrix3D(transform->position, transform->scale, transform->rotation);
         push.uvPos = sprite->uvPos;
         push.uvSize = sprite->uvSize;
-        push.vpIdx = hgDescriptorIdx(pipeline2D.vpDesc);
-        push.texIdx = hgDescriptorIdx(texture->descriptor);
+        push.vpIdx = hgGpuDescriptorIdx(pipeline2D.vpDesc);
+        push.texIdx = hgGpuDescriptorIdx(texture->descriptor);
 
-        hgCmdPushConstants(cmd, pipeline2D.pipeline, 0, sizeof(push), &push);
+        hgGpuPushConstants(cmd, pipeline2D.pipeline, 0, &push, sizeof(push));
 
-        hgCmdDraw(cmd, 6, 1, 0, 0);
+        hgGpuDraw(cmd, 0, 6, 0, 1);
     });
 }
 
@@ -3402,22 +3402,22 @@ struct Pipeline3DPush {
 };
 
 struct Pipeline3DState {
-    HgPipeline* pipeline;
+    HgGpuPipeline* pipeline;
 
-    HgBuffer* vpBuffer;
+    HgGpuBuffer* vpBuffer;
     Pipeline3DVPUniform vpData;
-    HgDescriptor vpDesc;
+    HgGpuDescriptor vpDesc;
 
-    HgBuffer* dirLightBuffer;
+    HgGpuBuffer* dirLightBuffer;
     u32 dirLightCapacity;
-    HgDescriptor dirLightDesc;
+    HgGpuDescriptor dirLightDesc;
 
-    HgBuffer* pointLightBuffer;
+    HgGpuBuffer* pointLightBuffer;
     u32 pointLightCapacity;
-    HgDescriptor pointLightDesc;
+    HgGpuDescriptor pointLightDesc;
 
     HgModelResource defaultModel;
-    HgSampler* defaultMapSampler;
+    HgGpuSampler* defaultMapSampler;
     HgTextureResource defaultColorMap;
     HgTextureResource defaultNormalMap;
 };
@@ -3445,16 +3445,16 @@ void hgInitPipeline3D(
     HgBinary* modelVertSpv = hgGetResource(modelVertSpvID);
     HgBinary* modelFragSpv = hgGetResource(modelFragSpvID);
 
-    HgVertexInputBindingDescription vertexBindings[]{
-        {0, sizeof(HgModelVertex), HgVertexInputRate_VERTEX},
+    HgGpuVertexBinding vertexBindings[]{
+        {0, sizeof(HgModelVertex), false},
     };
-    HgVertexInputAttributeDescription vertexAttributes[]{
+    HgGpuVertexAttribute vertexAttributes[]{
         {0, 0, HgFormat_r32g32b32_sfloat, offsetof(HgModelVertex, pos)},
         {1, 0, HgFormat_r32g32b32_sfloat, offsetof(HgModelVertex, norm)},
         {2, 0, HgFormat_r32g32b32a32_sfloat, offsetof(HgModelVertex, tan)},
         {3, 0, HgFormat_r32g32_sfloat, offsetof(HgModelVertex, uv)},
     };
-    HgCreateGraphicsPipeline pipelineConfig{};
+    HgCreateGpuGraphicsPipeline pipelineConfig{};
     pipelineConfig.vertexShader = (u8*)modelVertSpv->data;
     pipelineConfig.vertexShaderSize = modelVertSpv->size;
     pipelineConfig.fragmentShader = (u8*)modelFragSpv->data;
@@ -3462,54 +3462,54 @@ void hgInitPipeline3D(
     pipelineConfig.colorAttachmentFormats = &colorFormat;
     pipelineConfig.colorAttachmentCount = 1;
     pipelineConfig.depthAttachmentFormat = depthFormat;
-    HgPushConstantRange push{HgShaderStage_ALL, 0, sizeof(Pipeline3DPush)};
+    HgGpuPushRange push{0, sizeof(Pipeline3DPush)};
     pipelineConfig.pushRanges = &push;
     pipelineConfig.pushRangeCount = 1;
     pipelineConfig.vertexBindings = vertexBindings;
     pipelineConfig.vertexBindingCount = sizeof(vertexBindings) / sizeof(*vertexBindings);
     pipelineConfig.vertexAttributes = vertexAttributes;
     pipelineConfig.vertexAttributeCount = sizeof(vertexAttributes) / sizeof(*vertexAttributes);
-    pipelineConfig.cullMode = HgCullMode_BACK_BIT;
+    pipelineConfig.cullMode = HgGpuCull_back;
     pipelineConfig.enableDepthRead = true;
     pipelineConfig.enableDepthWrite = true;
 
-    pipeline3D.pipeline = hgCreateGraphicsPipeline(&pipelineConfig);
+    pipeline3D.pipeline = hgCreateGpuGraphicsPipeline(&pipelineConfig);
 
     pipeline3D.vpData.proj = HgMat4{1.0f};
     pipeline3D.vpData.view = HgMat4{1.0f};
 
-    pipeline3D.vpBuffer = hgCreateBuffer(
+    pipeline3D.vpBuffer = hgCreateGpuBuffer(
         sizeof(Pipeline3DVPUniform),
-        HgBufferUsage_uniformBuffer,
-        HgBufferMemoryUsage_frequentUpdate);
+        HgGpuBufferUsage_uniformBuffer,
+        HgGpuMemoryUsage_frequentUpdate);
 
-    hgWriteBuffer(pipeline3D.vpBuffer, 0, &pipeline3D.vpData, sizeof(pipeline3D.vpData));
+    hgWriteGpuBuffer(pipeline3D.vpBuffer, 0, &pipeline3D.vpData, sizeof(pipeline3D.vpData));
 
-    pipeline3D.vpDesc = hgCreateDescriptor(HgDescriptorType_uniformBuffer);
+    pipeline3D.vpDesc = hgCreateGpuDescriptor(HgGpuDescriptorType_uniformBuffer);
 
-    HgBufferDescriptorInfo bufferInfo{pipeline3D.vpBuffer, 0, sizeof(Pipeline3DVPUniform)};
-    hgUpdateDescriptor(pipeline3D.vpDesc, &bufferInfo, nullptr);
+    HgGpuBufferDescriptorInfo bufferInfo{pipeline3D.vpBuffer, 0, sizeof(Pipeline3DVPUniform)};
+    hgUpdateGpuDescriptor(pipeline3D.vpDesc, &bufferInfo, nullptr);
 
     pipeline3D.dirLightCapacity = 4;
-    pipeline3D.dirLightBuffer = hgCreateBuffer(
+    pipeline3D.dirLightBuffer = hgCreateGpuBuffer(
         sizeof(Pipeline3DDirLightData) * pipeline3D.dirLightCapacity,
-        HgBufferUsage_storageBuffer,
-        HgBufferMemoryUsage_frequentUpdate);
+        HgGpuBufferUsage_storageBuffer,
+        HgGpuMemoryUsage_frequentUpdate);
 
     pipeline3D.pointLightCapacity = 4;
-    pipeline3D.pointLightBuffer = hgCreateBuffer(
+    pipeline3D.pointLightBuffer = hgCreateGpuBuffer(
         sizeof(Pipeline3DPointLightData) * pipeline3D.dirLightCapacity,
-        HgBufferUsage_storageBuffer,
-        HgBufferMemoryUsage_frequentUpdate);
+        HgGpuBufferUsage_storageBuffer,
+        HgGpuMemoryUsage_frequentUpdate);
 
-    pipeline3D.dirLightDesc = hgCreateDescriptor(HgDescriptorType_storageBuffer);
-    pipeline3D.pointLightDesc = hgCreateDescriptor(HgDescriptorType_storageBuffer);
+    pipeline3D.dirLightDesc = hgCreateGpuDescriptor(HgGpuDescriptorType_storageBuffer);
+    pipeline3D.pointLightDesc = hgCreateGpuDescriptor(HgGpuDescriptorType_storageBuffer);
 
-    HgBufferDescriptorInfo dirLightBufferInfo{pipeline3D.dirLightBuffer, 0, UINT64_MAX};
-    hgUpdateDescriptor(pipeline3D.dirLightDesc, &dirLightBufferInfo, nullptr);
+    HgGpuBufferDescriptorInfo dirLightBufferInfo{pipeline3D.dirLightBuffer, 0, UINT64_MAX};
+    hgUpdateGpuDescriptor(pipeline3D.dirLightDesc, &dirLightBufferInfo, nullptr);
 
-    HgBufferDescriptorInfo pointLightBufferInfo{pipeline3D.pointLightBuffer, 0, UINT64_MAX};
-    hgUpdateDescriptor(pipeline3D.pointLightDesc, &pointLightBufferInfo, nullptr);
+    HgGpuBufferDescriptorInfo pointLightBufferInfo{pipeline3D.pointLightBuffer, 0, UINT64_MAX};
+    hgUpdateGpuDescriptor(pipeline3D.pointLightDesc, &pointLightBufferInfo, nullptr);
 
     static const HgModelVertex cubeVertices[]{
         {HgVec3{ 0.5f,-0.5f,-0.5f}, HgVec3{ 1, 0, 0}, HgVec4{ 0, 0, 1, 1}, HgVec2{0,0}},
@@ -3552,22 +3552,22 @@ void hgInitPipeline3D(
         20, 21, 22, 20, 22, 23
     };
 
-    pipeline3D.defaultModel.vertexBuffer = hgCreateBuffer(
+    pipeline3D.defaultModel.vertexBuffer = hgCreateGpuBuffer(
         sizeof(cubeVertices),
-        HgBufferUsage_vertexBuffer | HgBufferUsage_transferDst);
+        HgGpuBufferUsage_vertexBuffer | HgGpuBufferUsage_transferDst);
 
-    pipeline3D.defaultModel.indexBuffer = hgCreateBuffer(
+    pipeline3D.defaultModel.indexBuffer = hgCreateGpuBuffer(
         sizeof(cubeIndices),
-        HgBufferUsage_indexBuffer | HgBufferUsage_transferDst);
+        HgGpuBufferUsage_indexBuffer | HgGpuBufferUsage_transferDst);
 
-    hgWriteBuffer(pipeline3D.defaultModel.vertexBuffer, 0, cubeVertices, sizeof(cubeVertices));
-    hgWriteBuffer(pipeline3D.defaultModel.indexBuffer, 0, cubeIndices, sizeof(cubeIndices));
+    hgWriteGpuBuffer(pipeline3D.defaultModel.vertexBuffer, 0, cubeVertices, sizeof(cubeVertices));
+    hgWriteGpuBuffer(pipeline3D.defaultModel.indexBuffer, 0, cubeIndices, sizeof(cubeIndices));
 
     pipeline3D.defaultModel.vertexCount = sizeof(cubeVertices) / sizeof(*cubeVertices);
     pipeline3D.defaultModel.vertexWidth = sizeof(HgModelVertex);
     pipeline3D.defaultModel.indexCount = sizeof(cubeIndices) / sizeof(*cubeIndices);
 
-    pipeline3D.defaultMapSampler = hgCreateSampler(HgSamplerFilter_nearest);
+    pipeline3D.defaultMapSampler = hgCreateGpuSampler(HgGpuFilter_nearest);
 
     pipeline3D.defaultColorMap.sampler = pipeline3D.defaultMapSampler;
     pipeline3D.defaultNormalMap.sampler = pipeline3D.defaultMapSampler;
@@ -3587,63 +3587,63 @@ void hgInitPipeline3D(
         HgVec4{0, 0, -1, 0}, HgVec4{0, 0, -1, 0},
     };
 
-    pipeline3D.defaultColorMap.image = hgCreateImage(3, 3, HgFormat_r8g8b8a8_srgb,
-        HgImageUsage_sampled | HgImageUsage_transferDst);
-    pipeline3D.defaultNormalMap.image = hgCreateImage(2, 2, HgFormat_r32g32b32a32_sfloat,
-        HgImageUsage_sampled | HgImageUsage_transferDst);
+    pipeline3D.defaultColorMap.image = hgCreateGpuImage(3, 3, HgFormat_r8g8b8a8_srgb,
+        HgGpuImageUsage_sampled | HgGpuImageUsage_transferDst);
+    pipeline3D.defaultNormalMap.image = hgCreateGpuImage(2, 2, HgFormat_r32g32b32a32_sfloat,
+        HgGpuImageUsage_sampled | HgGpuImageUsage_transferDst);
 
-    pipeline3D.defaultColorMap.view = hgCreateImageView(
-        pipeline3D.defaultColorMap.image, {HgImageAspect_color, 0, 1, 0, 1});
-    pipeline3D.defaultNormalMap.view = hgCreateImageView(
-        pipeline3D.defaultNormalMap.image, {HgImageAspect_color, 0, 1, 0, 1});
+    pipeline3D.defaultColorMap.view = hgCreateGpuView(
+        pipeline3D.defaultColorMap.image, {HgGpuAspect_color, 0, 1, 0, 1});
+    pipeline3D.defaultNormalMap.view = hgCreateGpuView(
+        pipeline3D.defaultNormalMap.image, {HgGpuAspect_color, 0, 1, 0, 1});
 
-    hgWriteImage(
+    hgWriteGpuImage(
         pipeline3D.defaultColorMap.image,
-        {HgImageAspect_color, 0, 1, 0, 1},
+        {HgGpuAspect_color, 0, 1, 0, 1},
         defaultColors,
-        HgImageLayout_shaderReadOnlyOptimal);
-    hgWriteImage(
+        HgGpuLayout_shaderReadOnly);
+    hgWriteGpuImage(
         pipeline3D.defaultNormalMap.image,
-        {HgImageAspect_color, 0, 1, 0, 1},
+        {HgGpuAspect_color, 0, 1, 0, 1},
         defaultNormals,
-        HgImageLayout_shaderReadOnlyOptimal);
+        HgGpuLayout_shaderReadOnly);
 
-    pipeline3D.defaultColorMap.descriptor = hgCreateDescriptor(HgDescriptorType_combinedImageSampler);
-    pipeline3D.defaultNormalMap.descriptor = hgCreateDescriptor(HgDescriptorType_combinedImageSampler);
+    pipeline3D.defaultColorMap.descriptor = hgCreateGpuDescriptor(HgGpuDescriptorType_combinedImageSampler);
+    pipeline3D.defaultNormalMap.descriptor = hgCreateGpuDescriptor(HgGpuDescriptorType_combinedImageSampler);
 
-    HgImageDescriptorInfo colorInfo =
-        {pipeline3D.defaultMapSampler, pipeline3D.defaultColorMap.view, HgImageLayout_shaderReadOnlyOptimal};
-    hgUpdateDescriptor(pipeline3D.defaultColorMap.descriptor, nullptr, &colorInfo);
+    HgGpuImageDescriptorInfo colorInfo =
+        {pipeline3D.defaultMapSampler, pipeline3D.defaultColorMap.view, HgGpuLayout_shaderReadOnly};
+    hgUpdateGpuDescriptor(pipeline3D.defaultColorMap.descriptor, nullptr, &colorInfo);
 
-    HgImageDescriptorInfo normalInfo =
-        {pipeline3D.defaultMapSampler, pipeline3D.defaultNormalMap.view, HgImageLayout_shaderReadOnlyOptimal};
-    hgUpdateDescriptor(pipeline3D.defaultNormalMap.descriptor, nullptr, &normalInfo);
+    HgGpuImageDescriptorInfo normalInfo =
+        {pipeline3D.defaultMapSampler, pipeline3D.defaultNormalMap.view, HgGpuLayout_shaderReadOnly};
+    hgUpdateGpuDescriptor(pipeline3D.defaultNormalMap.descriptor, nullptr, &normalInfo);
 }
 
 void hgDeinitPipeline3D()
 {
-    hgDestroyPipeline(pipeline3D.pipeline);
+    hgDestroyGpuPipeline(pipeline3D.pipeline);
 
-    hgDestroyDescriptor(pipeline3D.defaultNormalMap.descriptor);
-    hgDestroyImageView(pipeline3D.defaultNormalMap.view);
-    hgDestroyImage(pipeline3D.defaultNormalMap.image);
+    hgDestroyGpuDescriptor(pipeline3D.defaultNormalMap.descriptor);
+    hgDestroyGpuView(pipeline3D.defaultNormalMap.view);
+    hgDestroyGpuImage(pipeline3D.defaultNormalMap.image);
 
-    hgDestroyDescriptor(pipeline3D.defaultColorMap.descriptor);
-    hgDestroyImageView(pipeline3D.defaultColorMap.view);
-    hgDestroyImage(pipeline3D.defaultColorMap.image);
+    hgDestroyGpuDescriptor(pipeline3D.defaultColorMap.descriptor);
+    hgDestroyGpuView(pipeline3D.defaultColorMap.view);
+    hgDestroyGpuImage(pipeline3D.defaultColorMap.image);
 
-    hgDestroySampler(pipeline3D.defaultMapSampler);
+    hgDestroyGpuSampler(pipeline3D.defaultMapSampler);
 
-    hgDestroyBuffer(pipeline3D.defaultModel.indexBuffer);
-    hgDestroyBuffer(pipeline3D.defaultModel.vertexBuffer);
+    hgDestroyGpuBuffer(pipeline3D.defaultModel.indexBuffer);
+    hgDestroyGpuBuffer(pipeline3D.defaultModel.vertexBuffer);
 
-    hgDestroyDescriptor(pipeline3D.pointLightDesc);
-    hgDestroyDescriptor(pipeline3D.dirLightDesc);
-    hgDestroyBuffer(pipeline3D.pointLightBuffer);
-    hgDestroyBuffer(pipeline3D.dirLightBuffer);
+    hgDestroyGpuDescriptor(pipeline3D.pointLightDesc);
+    hgDestroyGpuDescriptor(pipeline3D.dirLightDesc);
+    hgDestroyGpuBuffer(pipeline3D.pointLightBuffer);
+    hgDestroyGpuBuffer(pipeline3D.dirLightBuffer);
 
-    hgDestroyDescriptor(pipeline3D.vpDesc);
-    hgDestroyBuffer(pipeline3D.vpBuffer);
+    hgDestroyGpuDescriptor(pipeline3D.vpDesc);
+    hgDestroyGpuBuffer(pipeline3D.vpBuffer);
 }
 
 void hgUpdateProjection3D(const HgMat4* projection)
@@ -3658,7 +3658,7 @@ void hgUpdateView3D(const HgMat4* view)
     pipeline3D.vpData.view = *view;
 }
 
-void hgDraw3D(HgECS* ecs, HgCommandBuffer* cmd)
+void hgDraw3D(HgECS* ecs, HgGpuCommands* cmd)
 {
     hgAssert(ecs != nullptr);
     hgAssert(cmd != nullptr);
@@ -3666,7 +3666,7 @@ void hgDraw3D(HgECS* ecs, HgCommandBuffer* cmd)
     HgArena* scratch = hgGetScratch();
     HgArenaScope scratchScope{scratch};
 
-    hgWriteBuffer(pipeline3D.vpBuffer, 0, &pipeline3D.vpData, sizeof(pipeline3D.vpData));
+    hgWriteGpuBuffer(pipeline3D.vpBuffer, 0, &pipeline3D.vpData, sizeof(pipeline3D.vpData));
 
     u32 dirLightCount = ecs->count<HgDirLight3D>();
     u32 pointLightCount = ecs->count<HgPointLight3D>();
@@ -3681,14 +3681,14 @@ void hgDraw3D(HgECS* ecs, HgCommandBuffer* cmd)
             pipeline3D.dirLightCapacity *= 2;
         }
 
-        hgDestroyBuffer(pipeline3D.dirLightBuffer);
-        pipeline3D.dirLightBuffer = hgCreateBuffer(
+        hgDestroyGpuBuffer(pipeline3D.dirLightBuffer);
+        pipeline3D.dirLightBuffer = hgCreateGpuBuffer(
             sizeof(Pipeline3DDirLightData) * pipeline3D.dirLightCapacity,
-            HgBufferUsage_storageBuffer,
-            HgBufferMemoryUsage_frequentUpdate);
+            HgGpuBufferUsage_storageBuffer,
+            HgGpuMemoryUsage_frequentUpdate);
 
-        HgBufferDescriptorInfo dirLightBufferInfo{pipeline3D.dirLightBuffer, 0, UINT64_MAX};
-        hgUpdateDescriptor(pipeline3D.dirLightDesc, &dirLightBufferInfo, nullptr);
+        HgGpuBufferDescriptorInfo dirLightBufferInfo{pipeline3D.dirLightBuffer, 0, UINT64_MAX};
+        hgUpdateGpuDescriptor(pipeline3D.dirLightDesc, &dirLightBufferInfo, nullptr);
     }
 
     if (pointLightCount > pipeline3D.pointLightCapacity)
@@ -3701,14 +3701,14 @@ void hgDraw3D(HgECS* ecs, HgCommandBuffer* cmd)
             pipeline3D.pointLightCapacity *= 2;
         }
 
-        hgDestroyBuffer(pipeline3D.pointLightBuffer);
-        pipeline3D.pointLightBuffer = hgCreateBuffer(
+        hgDestroyGpuBuffer(pipeline3D.pointLightBuffer);
+        pipeline3D.pointLightBuffer = hgCreateGpuBuffer(
             sizeof(Pipeline3DPointLightData) * pipeline3D.pointLightCapacity,
-            HgBufferUsage_storageBuffer,
-            HgBufferMemoryUsage_frequentUpdate);
+            HgGpuBufferUsage_storageBuffer,
+            HgGpuMemoryUsage_frequentUpdate);
 
-        HgBufferDescriptorInfo pointLightBufferInfo{pipeline3D.pointLightBuffer, 0, UINT64_MAX};
-        hgUpdateDescriptor(pipeline3D.pointLightDesc, &pointLightBufferInfo, nullptr);
+        HgGpuBufferDescriptorInfo pointLightBufferInfo{pipeline3D.pointLightBuffer, 0, UINT64_MAX};
+        hgUpdateGpuDescriptor(pipeline3D.pointLightDesc, &pointLightBufferInfo, nullptr);
     }
 
     Pipeline3DDirLightData* dirLights = hgAlloc<Pipeline3DDirLightData>(scratch, dirLightCount);
@@ -3731,12 +3731,12 @@ void hgDraw3D(HgECS* ecs, HgCommandBuffer* cmd)
     });
 
     if (dirLightCount > 0)
-        hgWriteBuffer(pipeline3D.dirLightBuffer, 0, dirLights, sizeof(*dirLights) * dirLightCount);
+        hgWriteGpuBuffer(pipeline3D.dirLightBuffer, 0, dirLights, sizeof(*dirLights) * dirLightCount);
 
     if (pointLightCount > 0)
-        hgWriteBuffer(pipeline3D.pointLightBuffer, 0, pointLights, sizeof(*pointLights) * pointLightCount);
+        hgWriteGpuBuffer(pipeline3D.pointLightBuffer, 0, pointLights, sizeof(*pointLights) * pointLightCount);
 
-    hgCmdBindPipeline(cmd, pipeline3D.pipeline);
+    hgBindGpuPipeline(cmd, pipeline3D.pipeline);
 
     ecs->forEach<HgModel3D, HgTransform>([&](HgEntity, HgModel3D* model, HgTransform* transform)
     {
@@ -3750,27 +3750,27 @@ void hgDraw3D(HgECS* ecs, HgCommandBuffer* cmd)
 
         Pipeline3DPush push{};
         push.model = hgModelMatrix3D(transform->position, transform->scale, transform->rotation);
-        push.dirLightIdx = hgDescriptorIdx(pipeline3D.dirLightDesc);
+        push.dirLightIdx = hgGpuDescriptorIdx(pipeline3D.dirLightDesc);
         push.dirLightCount = dirLightCount;
-        push.pointLightIdx = hgDescriptorIdx(pipeline3D.pointLightDesc);
+        push.pointLightIdx = hgGpuDescriptorIdx(pipeline3D.pointLightDesc);
         push.pointLightCount = pointLightCount;
-        push.vpIdx = hgDescriptorIdx(pipeline3D.vpDesc);
-        push.colorMapIdx = hgDescriptorIdx(colorMap->descriptor);
-        push.normalMapIdx = hgDescriptorIdx(normalMap->descriptor);
+        push.vpIdx = hgGpuDescriptorIdx(pipeline3D.vpDesc);
+        push.colorMapIdx = hgGpuDescriptorIdx(colorMap->descriptor);
+        push.normalMapIdx = hgGpuDescriptorIdx(normalMap->descriptor);
 
         HgModelResource* gpuModel = hgGetModel(model->modelResource);
         if (gpuModel == nullptr)
             gpuModel = &pipeline3D.defaultModel;
 
-        hgCmdBindIndexBuffer(cmd, gpuModel->indexBuffer, 0);
+        hgBindGpuIndexBuffer(cmd, gpuModel->indexBuffer);
 
-        HgBuffer* buffers[]{gpuModel->vertexBuffer};
+        HgGpuBuffer* buffers[]{gpuModel->vertexBuffer};
         u64 offsets[]{0};
-        hgCmdBindVertexBuffers(cmd, 0, buffers, offsets, 1);
+        hgBindGpuVertexBuffers(cmd, 0, buffers, offsets, 1);
 
-        hgCmdPushConstants(cmd, pipeline3D.pipeline, 0, sizeof(push), &push);
+        hgGpuPushConstants(cmd, pipeline3D.pipeline, 0, &push, sizeof(push));
 
-        hgCmdDrawIndexed(cmd, gpuModel->indexCount, 1, 0, 0, 0);
+        hgGpuDrawIndexed(cmd, 0, 0, gpuModel->indexCount, 0, 1);
     });
 }
 

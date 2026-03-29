@@ -84,23 +84,23 @@ int main()
     u32 cubeIdx = sceneSize++;
     scene[cubeIdx] = cube;
 
-    HgImage* renderImage = nullptr;
-    hgDefer(hgDestroyImage(renderImage));
+    HgGpuImage* renderImage = nullptr;
+    hgDefer(hgDestroyGpuImage(renderImage));
 
-    HgImageView* renderView = nullptr;
-    hgDefer(hgDestroyImageView(renderView));
+    HgGpuView* renderView = nullptr;
+    hgDefer(hgDestroyGpuView(renderView));
 
-    HgSampler* renderSampler = hgCreateSampler(HgSamplerFilter_nearest);
-    hgDefer(hgDestroySampler(renderSampler));
+    HgGpuSampler* renderSampler = hgCreateGpuSampler(HgGpuFilter_nearest);
+    hgDefer(hgDestroyGpuSampler(renderSampler));
 
     void* renderDescriptor = nullptr;
     hgDefer(ImGui_ImplHurdyGurdy_DestroyTexture(renderDescriptor));
 
-    HgImage* depthImage = nullptr;
-    hgDefer(hgDestroyImage(depthImage));
+    HgGpuImage* depthImage = nullptr;
+    hgDefer(hgDestroyGpuImage(depthImage));
 
-    HgImageView* depthView = nullptr;
-    hgDefer(hgDestroyImageView(depthView));
+    HgGpuView* depthView = nullptr;
+    hgDefer(hgDestroyGpuView(depthView));
 
     bool showRender = true;
     bool showEditor = true;
@@ -178,8 +178,8 @@ int main()
                     hgReadImage(
                         pixels,
                         renderImage,
-                        {HgImageAspect_color, 0, 1, 0, 1},
-                        HgImageLayout_shaderReadOnlyOptimal);
+                        {HgGpuAspect_color, 0, 1, 0, 1},
+                        HgGpuLayout_shaderReadOnly);
 
                     stbi_write_png(
                         "screenshot.png",
@@ -234,33 +234,33 @@ int main()
                     hgUpdateProjection3D(&proj);
 
                     ImGui_ImplHurdyGurdy_DestroyTexture(renderDescriptor);
-                    hgDestroyImageView(depthView);
-                    hgDestroyImage(depthImage);
-                    hgDestroyImageView(renderView);
-                    hgDestroyImage(renderImage);
+                    hgDestroyGpuView(depthView);
+                    hgDestroyGpuImage(depthImage);
+                    hgDestroyGpuView(renderView);
+                    hgDestroyGpuImage(renderImage);
 
-                    renderImage = hgCreateImage(
+                    renderImage = hgCreateGpuImage(
                             renderWidth,
                             renderHeight,
                             HgFormat_r8g8b8a8_srgb,
-                            HgImageUsage_colorAttachment |
-                            HgImageUsage_sampled |
-                            HgImageUsage_transferSrc);
+                            HgGpuImageUsage_colorAttachment |
+                            HgGpuImageUsage_sampled |
+                            HgGpuImageUsage_transferSrc);
 
-                    renderView = hgCreateImageView(renderImage, {HgImageAspect_color, 0, 1, 0, 1});
+                    renderView = hgCreateGpuView(renderImage, {HgGpuAspect_color, 0, 1, 0, 1});
 
                     renderDescriptor = ImGui_ImplHurdyGurdy_CreateTexture(
                         renderView,
                         renderSampler,
-                        HgImageLayout_shaderReadOnlyOptimal);
+                        HgGpuLayout_shaderReadOnly);
 
-                    depthImage = hgCreateImage(
+                    depthImage = hgCreateGpuImage(
                         renderWidth,
                         renderHeight,
                         HgFormat_d32_sfloat,
-                        HgImageUsage_depthStencilAttachment);
+                        HgGpuImageUsage_depthStencilAttachment);
 
-                    depthView = hgCreateImageView(depthImage, {HgImageAspect_depth, 0, 1, 0, 1});
+                    depthView = hgCreateGpuView(depthImage, {HgGpuAspect_depth, 0, 1, 0, 1});
                 }
 
                 if (ImGui::IsWindowFocused())
@@ -479,7 +479,7 @@ int main()
         ImGui::Render();
 
         cpuDelta = hgClockTick(&cpuClock);
-        HgCommandBuffer* cmd = hgWindowBeginRecording(window);
+        HgGpuCommands* cmd = hgWindowBeginRecording(window);
         if (cmd != nullptr)
         {
             hgClockTick(&cpuClock);
@@ -529,7 +529,7 @@ int main()
 
             HgImageBarrier presentBarrier{};
             presentBarrier.image = hgGetCurrentWindowImage(window);
-            presentBarrier.nextLayout = HgImageLayout_presentSrc;
+            presentBarrier.nextLayout = HgGpuLayout_presentSrc;
 
             renderer.barrier(cmd, nullptr, 0, &presentBarrier, 1);
 
