@@ -2994,6 +2994,7 @@ static void createWindowImages(HgWindow* window)
 
     for (u32 i = 0; i < window->imageCount; ++i)
     {
+        window->images[i] = {};
         window->images[i].image = swapImages[i];
         window->images[i].dimensions = 2;
         window->images[i].format = window->format;
@@ -3010,6 +3011,8 @@ static void createWindowImages(HgWindow* window)
         viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
         viewInfo.format = formatToVk(window->format);
         viewInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+
+        window->views[i] = {};
 
         VkResult viewResult = vkCreateImageView(vkState.device, &viewInfo, nullptr, &window->views[i].view);
         if (window->views[i].view == nullptr)

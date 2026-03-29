@@ -34,6 +34,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include <algorithm>
 #include <atomic>
 #include <type_traits>
 
