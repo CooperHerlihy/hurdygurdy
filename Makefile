@@ -34,8 +34,7 @@ IMGUI_BACKEND := \
 
 SRC := \
 	hurdygurdy.cpp \
-	vulkan.cpp \
-	sdl.cpp \
+	external.cpp \
 	test.cpp
 
 TARGETS := \

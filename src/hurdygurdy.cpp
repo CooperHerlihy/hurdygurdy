@@ -2676,7 +2676,7 @@ void hgLoadTexture(HgResource id, HgGpuSampler* sampler)
         imageInfo.usage = HgGpuImageUsage_transferDst | HgGpuImageUsage_sampled;
 
         tex.image = hgCreateGpuImageEx(&imageInfo);
-        tex.view = hgCreateGpuView(tex.image, HgGpuAspect_color, 0, 1, 0, 1);
+        tex.view = hgCreateGpuView(tex.image, 0, 1, 0, 1, HgGpuAspect_color);
 
         hgWriteGpuImage(tex.view, data.getPixels());
 
@@ -3293,7 +3293,7 @@ void hgInitPipeline2D(
     pipeline2D.defaultTex.image = hgCreateGpuImage(2, 2, HgFormat_r8g8b8a8_srgb,
         HgGpuImageUsage_sampled | HgGpuImageUsage_transferDst);
 
-    pipeline2D.defaultTex.view = hgCreateGpuView(pipeline2D.defaultTex.image, HgGpuAspect_color, 0, 1, 0, 1);
+    pipeline2D.defaultTex.view = hgCreateGpuView(pipeline2D.defaultTex.image, 0, 1, 0, 1, HgGpuAspect_color);
 
     hgWriteGpuImage(pipeline2D.defaultTex.view, defaultColors);
 
@@ -3584,9 +3584,9 @@ void hgInitPipeline3D(
         HgGpuImageUsage_sampled | HgGpuImageUsage_transferDst);
 
     pipeline3D.defaultColorMap.view = hgCreateGpuView(
-        pipeline3D.defaultColorMap.image, HgGpuAspect_color, 0, 1, 0, 1);
+        pipeline3D.defaultColorMap.image, 0, 1, 0, 1, HgGpuAspect_color);
     pipeline3D.defaultNormalMap.view = hgCreateGpuView(
-        pipeline3D.defaultNormalMap.image, HgGpuAspect_color, 0, 1, 0, 1);
+        pipeline3D.defaultNormalMap.image, 0, 1, 0, 1, HgGpuAspect_color);
 
     hgWriteGpuImage(pipeline3D.defaultColorMap.view, defaultColors);
     hgWriteGpuImage(pipeline3D.defaultNormalMap.view, defaultNormals);
@@ -3755,33 +3755,5 @@ void hgDraw3D(HgECS* ecs, HgGpuCommands* cmd)
 
         hgGpuDrawIndexed(cmd, 0, 0, gpuModel->indexCount, 0, 1);
     });
-}
-
-void hgInternalInitImGuiPlatform(HgWindow* window);
-void hgInternalInitImGuiRenderer(
-    HgWindow* window,
-    u32 colorAttachmentCount,
-    const HgFormat* colorFormats,
-    HgFormat depthFormat,
-    HgFormat stencilFormat);
-
-void hgInternalDeinitImGuiPlatform();
-void hgInternalDeinitImGuiRenderer();
-
-void ImGui_ImplHurdyGurdy_Init(
-    HgWindow* window,
-    u32 colorAttachmentCount,
-    const HgFormat* colorFormats,
-    HgFormat depthFormat,
-    HgFormat stencilFormat)
-{
-    hgInternalInitImGuiPlatform(window);
-    hgInternalInitImGuiRenderer(window, colorAttachmentCount, colorFormats, depthFormat, stencilFormat);
-}
-
-void ImGui_ImplHurdyGurdy_Shutdown()
-{
-    hgInternalDeinitImGuiRenderer();
-    hgInternalDeinitImGuiPlatform();
 }
 

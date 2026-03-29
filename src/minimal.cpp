@@ -15,17 +15,10 @@ int main()
     HgArena* arena = hgGetScratch();
     HgArenaScope arenaScope{arena};
 
-    HgCreateWindow windowConfig{};
-    windowConfig.title = "Hg Small Test";
-    windowConfig.width = 1200;
-    windowConfig.height = 800;
-
-    HgWindow* window = hgCreateWindow(&windowConfig);
+    HgWindow* window = hgCreateWindow("Hg Small Test", 1200, 800, nullptr);
     hgDefer(hgDestroyWindow(window));
 
-    HgFormat windowFormat;
-    hgGetWindowSize(window, nullptr, nullptr, &windowFormat);
-    hgInitPipeline2D(windowFormat, HgFormat_undefined);
+    hgInitPipeline2D(hgGetWindowFormat(window), HgFormat_undefined);
     hgDefer(hgDeinitPipeline2D());
 
     HgResource noiseShaderID = hgResourceID("build/noise.comp.spv");
@@ -68,7 +61,7 @@ int main()
         noiseHeight,
         HgFormat_r8g8b8a8_unorm,
         HgGpuImageUsage_storage | HgGpuImageUsage_sampled);
-    noiseTex->view = hgCreateGpuView(noiseTex->image, HgGpuAspect_color, 0, 1, 0, 1);
+    noiseTex->view = hgCreateGpuView(noiseTex->image, 0, 1, 0, 1, HgGpuAspect_color);
 
     HgGpuDescriptor noiseStorageDesc = hgCreateGpuDescriptor(HgGpuDescriptorType_storageImage);
     hgDefer(hgDestroyGpuDescriptor(noiseStorageDesc));
@@ -105,7 +98,8 @@ int main()
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    ImGui_ImplHurdyGurdy_Init(window, 1, &windowFormat);
+    HgFormat windowFormat = hgGetWindowFormat(window);
+    ImGui_ImplHurdyGurdy_Init(window, &windowFormat, 1);
     hgDefer(ImGui_ImplHurdyGurdy_Shutdown());
 
     HgClock gameClock{};
@@ -120,23 +114,23 @@ int main()
         if (hgWasQuit())
             goto quit;
 
-        u32 windowWidth, windowHeight;
-        hgGetWindowSize(window, &windowWidth, &windowHeight, nullptr);
-
-        HgMat4 proj = hgPerspective((f32)hgPi * 0.5f, (f32)windowWidth / (f32)windowHeight, 0.1f, 1000.0f);
+        HgMat4 proj = hgPerspective(
+            (f32)hgPi * 0.5f,
+            (f32)hgGetWindowWidth(window) /
+            (f32)hgGetWindowHeight(window),
+            0.1f,
+            1000.0f);
         hgUpdateProjection2D(&proj);
 
         if (!ImGui::GetIO().WantCaptureMouse)
         {
             if (hgIsKeyDown(HgKey_lmouse))
             {
-                f32 dx, dy;
-                hgGetMouseDelta(&dx, &dy);
-
                 f32 rotSpeed = 2.0f;
-                HgQuat rotX = hgAxisAngle(HgVec3{0, 1, 0}, dx * rotSpeed / (f32)windowHeight);
-                HgQuat rotY = hgAxisAngle(HgVec3{-1, 0, 0}, dy * rotSpeed / (f32)windowHeight);
-
+                f32 dx = hgGetMouseDeltaX(window);
+                f32 dy = hgGetMouseDeltaY(window);
+                HgQuat rotX = hgAxisAngle(HgVec3{0, 1, 0}, dx * rotSpeed / (f32)hgGetWindowWidth(window));
+                HgQuat rotY = hgAxisAngle(HgVec3{-1, 0, 0}, dy * rotSpeed / (f32)hgGetWindowWidth(window));
                 camera.rotation = rotX * camera.rotation * rotY;
             }
 
@@ -198,7 +192,7 @@ int main()
             hgGpuCompute(cmd, noiseWidth / 16, noiseHeight / 16, 1);
 
             HgRenderAttachment colorAttachment{};
-            colorAttachment.image = hgGetCurrentWindowImage(window);
+            colorAttachment.image = hgGetWindowCurrentImage(window);
             colorAttachment.loadOp = HgGpuLoadOp_clear;
 
             HgRenderPass pass{};
@@ -207,7 +201,7 @@ int main()
             pass.sampledImages = &noiseTex->view;
             pass.sampledImageCount = 1;
 
-            hgBeginGpuRenderPass(cmd, windowWidth, windowHeight, &pass);
+            hgBeginGpuRenderPass(cmd, hgGetWindowWidth(window), hgGetWindowHeight(window), &pass);
 
             hgDraw2D(&ecs, cmd);
 
@@ -216,7 +210,7 @@ int main()
             hgEndGpuRenderPass(cmd);
 
             HgImageBarrier presentBarrier{};
-            presentBarrier.image = hgGetCurrentWindowImage(window);
+            presentBarrier.image = hgGetWindowCurrentImage(window);
             presentBarrier.nextLayout = HgGpuLayout_presentSrc;
 
             hgGpuMemoryBarrier(cmd, nullptr, 0, &presentBarrier, 1);

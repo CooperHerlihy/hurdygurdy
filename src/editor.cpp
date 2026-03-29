@@ -17,13 +17,10 @@ int main()
     HgArena* arena = hgGetScratch();
     HgArenaScope arenaScope{arena};
 
-    HgCreateWindow windowConfig{};
-    windowConfig.title = "Hg Test";
-    windowConfig.width = 1600;
-    windowConfig.height = 900;
-    windowConfig.preferredPresentMode = HgPresentMode_MAILBOX_KHR;
+    HgWindowConfig windowConfig{};
+    windowConfig.preferredPresentMode = HgPresentMode_mailbox;
 
-    HgWindow* window = hgCreateWindow(&windowConfig);
+    HgWindow* window = hgCreateWindow("Hg Test", 1600, 900, &windowConfig);
     hgDefer(hgDestroyWindow(window));
 
     hgInitPipeline2D(HgFormat_r8g8b8a8_srgb, HgFormat_d32_sfloat);
@@ -42,17 +39,16 @@ int main()
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    HgFormat windowFormat;
-    hgGetWindowSize(window, nullptr, nullptr, &windowFormat);
-    ImGui_ImplHurdyGurdy_Init(window, 1, &windowFormat);
+    HgFormat windowFormat = hgGetWindowFormat(window);
+    ImGui_ImplHurdyGurdy_Init(window, &windowFormat, 1);
     hgDefer(ImGui_ImplHurdyGurdy_Shutdown());
 
     HgTransform camera{};
     camera.position = HgVec3{0, 0, -1};
 
     f32 aspectRatio = 16.0f / 9.0f;
-    u32 renderWidth, renderHeight;
-    hgGetWindowSize(window, &renderWidth, &renderHeight, nullptr);
+    u32 renderWidth = hgGetWindowWidth(window);
+    u32 renderHeight = hgGetWindowHeight(window);
 
     HgECS ecs = ecs.create(arena, 1024, 128);
     ecs.createComponent<HgTransform>(arena, 1024);
@@ -242,7 +238,7 @@ int main()
                             HgGpuImageUsage_sampled |
                             HgGpuImageUsage_transferSrc);
 
-                    renderView = hgCreateGpuView(renderImage, HgGpuAspect_color, 0, 1, 0, 1);
+                    renderView = hgCreateGpuView(renderImage, 0, 1, 0, 1, HgGpuAspect_color);
 
                     renderImGuiTex = ImGui_ImplHurdyGurdy_CreateTexture(
                         renderView,
@@ -255,20 +251,18 @@ int main()
                         HgFormat_d32_sfloat,
                         HgGpuImageUsage_depthStencilAttachment);
 
-                    depthView = hgCreateGpuView(depthImage, HgGpuAspect_depth, 0, 1, 0, 1);
+                    depthView = hgCreateGpuView(depthImage, 0, 1, 0, 1, HgGpuAspect_depth);
                 }
 
                 if (ImGui::IsWindowFocused())
                 {
                     if (move3D && hgIsKeyDown(HgKey_lmouse))
                     {
-                        f32 dx, dy;
-                        hgGetMouseDelta(&dx, &dy);
-
                         f32 rotSpeed = 2.0f;
-                        HgQuat rotX = hgAxisAngle(HgVec3{0, 1, 0}, dx * rotSpeed / (f32)renderHeight);
-                        HgQuat rotY = hgAxisAngle(HgVec3{-1, 0, 0}, dy * rotSpeed / (f32)renderHeight);
-
+                        f32 dx = hgGetMouseDeltaX(window);
+                        f32 dy = hgGetMouseDeltaY(window);
+                        HgQuat rotX = hgAxisAngle(HgVec3{0, 1, 0}, dx * rotSpeed / (f32)hgGetWindowWidth(window));
+                        HgQuat rotY = hgAxisAngle(HgVec3{-1, 0, 0}, dy * rotSpeed / (f32)hgGetWindowWidth(window));
                         camera.rotation = rotX * camera.rotation * rotY;
                     }
 
@@ -502,7 +496,7 @@ int main()
             hgEndGpuRenderPass(cmd);
 
             HgRenderAttachment guiColorAttachment{};
-            guiColorAttachment.image = hgGetCurrentWindowImage(window);
+            guiColorAttachment.image = hgGetWindowCurrentImage(window);
             guiColorAttachment.loadOp = HgGpuLoadOp_clear;
             guiColorAttachment.clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
 
@@ -512,16 +506,14 @@ int main()
             guiPass.colorAttachments = &guiColorAttachment;
             guiPass.colorAttachmentCount = 1;
 
-            u32 width, height;
-            hgGetWindowSize(window, &width, &height, nullptr);
-            hgBeginGpuRenderPass(cmd, width, height, &guiPass);
+            hgBeginGpuRenderPass(cmd, hgGetWindowWidth(window), hgGetWindowHeight(window), &guiPass);
 
             ImGui_ImplHurdyGurdy_Draw(cmd);
 
             hgEndGpuRenderPass(cmd);
 
             HgImageBarrier presentBarrier{};
-            presentBarrier.image = hgGetCurrentWindowImage(window);
+            presentBarrier.image = hgGetWindowCurrentImage(window);
             presentBarrier.nextLayout = HgGpuLayout_presentSrc;
 
             hgGpuMemoryBarrier(cmd, nullptr, 0, &presentBarrier, 1);

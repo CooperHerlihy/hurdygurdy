@@ -1,10 +1,12 @@
 #include "hurdygurdy.hpp"
 
-#include "hurdygurdy_internal.hpp"
-
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
 
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_vulkan.h>
+
+#include "imgui_impl_sdl3.h"
 #include "imgui_impl_vulkan.h"
 
 struct HgGpuBuffer {
@@ -30,8 +32,8 @@ struct HgGpuImage {
 };
 
 struct HgGpuView {
+    HgGpuImage* image;
     VkImageView view;
-    const HgGpuImage* image;
     HgGpuViewType type;
     HgGpuAspectFlags aspectFlags;
     u32 baseMipLevel;
@@ -44,9 +46,39 @@ struct HgGpuView {
 };
 
 struct HgGpuPipeline {
-    VkPipelineLayout layout;
     VkPipeline pipeline;
+    VkPipelineLayout layout;
     VkPipelineBindPoint bindPoint;
+};
+
+struct HgWindow {
+    SDL_Window* sdlWindow;
+    VkSurfaceKHR surface;
+    VkSwapchainKHR swapchain;
+    HgFormat format;
+    u32 width;
+    u32 height;
+    u32 imageCount;
+    HgGpuImageUsageFlags imageUsage;
+    HgPresentMode presentMode;
+    HgGpuImage* images;
+    HgGpuView* views;
+
+    HgGpuCommands** cmds;
+    VkFence* frameFinished;
+    VkSemaphore* imageAvailable;
+    VkSemaphore* readyToPresent;
+    u32 currentFrame;
+    u32 currentImage;
+
+    f32 mouseX;
+    f32 mouseY;
+    f32 mouseDeltaX;
+    f32 mouseDeltaY;
+
+    u32 maxEvents;
+    u32 eventCount;
+    HgKeyEvent events[1];
 };
 
 static void loadVulkan();
@@ -59,6 +91,14 @@ struct VulkanState {
 #ifdef HG_VK_DEBUG_MESSENGER
     VkDebugUtilsMessengerEXT debugMessenger = nullptr;
 #endif
+
+    VkInstance instance = nullptr;
+    VkPhysicalDevice physicalDevice = nullptr;
+    VkDevice device = nullptr;
+    VmaAllocator vma = nullptr;
+    VkQueue queue = nullptr;
+    u32 queueFamily = (u32)-1;
+    VkCommandPool cmdPool = nullptr;
 
     VkDescriptorPool bindlessPool = nullptr;
     VkDescriptorSetLayout bindlessLayout = nullptr;
@@ -82,7 +122,7 @@ struct VulkanState {
     HgGpuDescriptor storageBufferPoolNext = {0};
 };
 
-static VulkanState vulkanState{};
+static VulkanState vkState{};
 
 const char* vkResultToStr(VkResult result)
 {
@@ -289,11 +329,11 @@ static VkInstance createInstance(HgStringView* extensions, u32 extensionCount)
 static VkDebugUtilsMessengerEXT createDebugUtilsMessenger()
 {
 #ifdef HG_VK_DEBUG_MESSENGER
-    hgAssert(hgVkInstance != nullptr);
+    hgAssert(vkState.instance != nullptr);
 
     VkDebugUtilsMessengerEXT messenger = nullptr;
     VkResult result = vkCreateDebugUtilsMessengerEXT(
-        hgVkInstance, &debugUtilsMessengerInfo, nullptr, &messenger);
+        vkState.instance, &debugUtilsMessengerInfo, nullptr, &messenger);
     if (messenger == nullptr)
         hgError("Failed to create Vulkan debug messenger: %s\n", vkResultToStr(result));
 
@@ -333,15 +373,15 @@ static const char* const deviceExtensions[]{
 
 static VkPhysicalDevice findPhysicalDevice()
 {
-    hgAssert(hgVkInstance != nullptr);
+    hgAssert(vkState.instance != nullptr);
 
     HgArena* scratch = hgGetScratch();
     HgArenaScope scratchScope{scratch};
 
     u32 gpuCount;
-    vkEnumeratePhysicalDevices(hgVkInstance, &gpuCount, nullptr);
+    vkEnumeratePhysicalDevices(vkState.instance, &gpuCount, nullptr);
     VkPhysicalDevice* gpus = hgAlloc<VkPhysicalDevice>(scratch, gpuCount);
-    vkEnumeratePhysicalDevices(hgVkInstance, &gpuCount, gpus);
+    vkEnumeratePhysicalDevices(vkState.instance, &gpuCount, gpus);
 
     VkExtensionProperties* extProps = nullptr;
     u32 extPropCount = 0;
@@ -388,8 +428,8 @@ nextGpu:
 
 static VkDevice createDevice()
 {
-    hgAssert(hgVkPhysicalDevice != nullptr);
-    hgAssert(hgVkQueueFamily != (u32)-1);
+    hgAssert(vkState.physicalDevice != nullptr);
+    hgAssert(vkState.queueFamily != (u32)-1);
 
     VkPhysicalDeviceDescriptorIndexingFeatures descriptorIndexingFeature{};
     descriptorIndexingFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
@@ -429,7 +469,7 @@ static VkDevice createDevice()
 
     VkDeviceQueueCreateInfo queueInfo{};
     queueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    queueInfo.queueFamilyIndex = hgVkQueueFamily;
+    queueInfo.queueFamilyIndex = vkState.queueFamily;
     queueInfo.queueCount = 1;
     f32 queuePriority = 1.0f;
     queueInfo.pQueuePriorities = &queuePriority;
@@ -444,7 +484,7 @@ static VkDevice createDevice()
     deviceInfo.pEnabledFeatures = &features;
 
     VkDevice device = nullptr;
-    VkResult result = vkCreateDevice(hgVkPhysicalDevice, &deviceInfo, nullptr, &device);
+    VkResult result = vkCreateDevice(vkState.physicalDevice, &deviceInfo, nullptr, &device);
 
     if (device == nullptr)
         hgError("Could not create Vulkan device: %s\n", vkResultToStr(result));
@@ -475,7 +515,7 @@ static VkDescriptorPool createBindlessDescriptorPool()
     info.pPoolSizes = sizes;
 
     VkDescriptorPool pool = nullptr;
-    VkResult result = vkCreateDescriptorPool(hgVkDevice, &info, nullptr, &pool);
+    VkResult result = vkCreateDescriptorPool(vkState.device, &info, nullptr, &pool);
     if (pool == nullptr)
         hgError("Could not create VkDescriptorPool: %s\n", vkResultToStr(result));
 
@@ -522,7 +562,7 @@ static VkDescriptorSetLayout createBindlessDescriptorLayout()
     info.pBindings = bindings;
 
     VkDescriptorSetLayout layout = nullptr;
-    VkResult result = vkCreateDescriptorSetLayout(hgVkDevice, &info, nullptr, &layout);
+    VkResult result = vkCreateDescriptorSetLayout(vkState.device, &info, nullptr, &layout);
     if (layout == nullptr)
         hgError("Could not create bindless VkDescriptorSetLayout: %s\n", vkResultToStr(result));
 
@@ -553,7 +593,7 @@ void hgInitGraphics(HgArena* arena)
 
     loadVulkan();
 
-    if (hgVkInstance == nullptr)
+    if (vkState.instance == nullptr)
     {
         HgArena* scratch = hgGetScratch();
         HgArenaScope scratchScope{scratch};
@@ -564,166 +604,166 @@ void hgInitGraphics(HgArena* arena)
         exts = hgRealloc(scratch, exts, extCount, extCount + 1);
         exts[extCount++] = "VK_EXT_debug_utils";
 #endif
-        hgVkInstance = createInstance(exts, extCount);
-        loadVulkanInstanceFuncs(hgVkInstance);
+        vkState.instance = createInstance(exts, extCount);
+        loadVulkanInstanceFuncs(vkState.instance);
     }
 
 #ifdef HG_VK_DEBUG_MESSENGER
-    if (vulkanState.debugMessenger == nullptr)
-        vulkanState.debugMessenger = createDebugUtilsMessenger();
+    if (vkState.debugMessenger == nullptr)
+        vkState.debugMessenger = createDebugUtilsMessenger();
 #endif
 
-    if (hgVkPhysicalDevice == nullptr)
+    if (vkState.physicalDevice == nullptr)
     {
-        hgVkPhysicalDevice = findPhysicalDevice();
-        findQueueFamily(hgVkPhysicalDevice, &hgVkQueueFamily,
+        vkState.physicalDevice = findPhysicalDevice();
+        findQueueFamily(vkState.physicalDevice, &vkState.queueFamily,
             VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT | VK_QUEUE_COMPUTE_BIT);
     }
 
-    if (hgVkDevice == nullptr)
+    if (vkState.device == nullptr)
     {
-        hgVkDevice = createDevice();
-        loadVulkanDeviceFuncs(hgVkDevice);
-        vkGetDeviceQueue(hgVkDevice, hgVkQueueFamily, 0, &hgVkQueue);
+        vkState.device = createDevice();
+        loadVulkanDeviceFuncs(vkState.device);
+        vkGetDeviceQueue(vkState.device, vkState.queueFamily, 0, &vkState.queue);
     }
 
-    if (hgVkVma == nullptr)
+    if (vkState.vma == nullptr)
     {
         VmaAllocatorCreateInfo allocatorInfo{};
-        allocatorInfo.physicalDevice = hgVkPhysicalDevice;
-        allocatorInfo.device = hgVkDevice;
-        allocatorInfo.instance = hgVkInstance;
+        allocatorInfo.physicalDevice = vkState.physicalDevice;
+        allocatorInfo.device = vkState.device;
+        allocatorInfo.instance = vkState.instance;
         allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_3;
 
-        VkResult result = vmaCreateAllocator(&allocatorInfo, &hgVkVma);
-        if (hgVkVma == nullptr)
+        VkResult result = vmaCreateAllocator(&allocatorInfo, &vkState.vma);
+        if (vkState.vma == nullptr)
             hgError("Could note create Vulkan memory allocator: %s\n", vkResultToStr(result));
     }
 
-    if (hgVkCmdPool == nullptr)
+    if (vkState.cmdPool == nullptr)
     {
         VkCommandPoolCreateInfo cmdPoolInfo{};
         cmdPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
         cmdPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-        cmdPoolInfo.queueFamilyIndex = hgVkQueueFamily;
+        cmdPoolInfo.queueFamilyIndex = vkState.queueFamily;
 
-        VkResult result = vkCreateCommandPool(hgVkDevice, &cmdPoolInfo, nullptr, &hgVkCmdPool);
-        if (hgVkCmdPool == nullptr)
+        VkResult result = vkCreateCommandPool(vkState.device, &cmdPoolInfo, nullptr, &vkState.cmdPool);
+        if (vkState.cmdPool == nullptr)
             hgError("Could note create Vulkan command pool: %s\n", vkResultToStr(result));
     }
 
-    if (vulkanState.bindlessPool == nullptr)
-        vulkanState.bindlessPool = createBindlessDescriptorPool();
+    if (vkState.bindlessPool == nullptr)
+        vkState.bindlessPool = createBindlessDescriptorPool();
 
-    if (vulkanState.bindlessLayout == nullptr)
-        vulkanState.bindlessLayout = createBindlessDescriptorLayout();
+    if (vkState.bindlessLayout == nullptr)
+        vkState.bindlessLayout = createBindlessDescriptorLayout();
 
-    if (vulkanState.bindlessSet == nullptr)
+    if (vkState.bindlessSet == nullptr)
     {
         VkDescriptorSetAllocateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        info.descriptorPool = vulkanState.bindlessPool;
+        info.descriptorPool = vkState.bindlessPool;
         info.descriptorSetCount = 1;
-        info.pSetLayouts = &vulkanState.bindlessLayout;
+        info.pSetLayouts = &vkState.bindlessLayout;
 
-        VkResult result = vkAllocateDescriptorSets(hgVkDevice, &info, &vulkanState.bindlessSet);
-        if (vulkanState.bindlessSet == nullptr)
+        VkResult result = vkAllocateDescriptorSets(vkState.device, &info, &vkState.bindlessSet);
+        if (vkState.bindlessSet == nullptr)
             hgError("Could not allocate bindless VkDescriptorSet: %s\n", vkResultToStr(result));
     }
 
-    if (vulkanState.samplerPool == nullptr)
-        vulkanState.samplerPool = createBindlessPool(
-            arena, HgGpuDescriptorType_sampler, &vulkanState.samplerPoolNext);
+    if (vkState.samplerPool == nullptr)
+        vkState.samplerPool = createBindlessPool(
+            arena, HgGpuDescriptorType_sampler, &vkState.samplerPoolNext);
 
-    if (vulkanState.combinedImageSamplerPool == nullptr)
-        vulkanState.combinedImageSamplerPool = createBindlessPool(
-            arena, HgGpuDescriptorType_combinedImageSampler, &vulkanState.combinedImageSamplerPoolNext);
+    if (vkState.combinedImageSamplerPool == nullptr)
+        vkState.combinedImageSamplerPool = createBindlessPool(
+            arena, HgGpuDescriptorType_combinedImageSampler, &vkState.combinedImageSamplerPoolNext);
 
-    if (vulkanState.sampledImagePool == nullptr)
-        vulkanState.sampledImagePool = createBindlessPool(
-            arena, HgGpuDescriptorType_sampledImage, &vulkanState.sampledImagePoolNext);
+    if (vkState.sampledImagePool == nullptr)
+        vkState.sampledImagePool = createBindlessPool(
+            arena, HgGpuDescriptorType_sampledImage, &vkState.sampledImagePoolNext);
 
-    if (vulkanState.storageImagePool == nullptr)
-        vulkanState.storageImagePool = createBindlessPool(
-            arena, HgGpuDescriptorType_storageImage, &vulkanState.storageImagePoolNext);
+    if (vkState.storageImagePool == nullptr)
+        vkState.storageImagePool = createBindlessPool(
+            arena, HgGpuDescriptorType_storageImage, &vkState.storageImagePoolNext);
 
-    if (vulkanState.uniformTexelBufferPool == nullptr)
-        vulkanState.uniformTexelBufferPool = createBindlessPool(
-            arena, HgGpuDescriptorType_uniformTexelBuffer, &vulkanState.uniformTexelBufferPoolNext);
+    if (vkState.uniformTexelBufferPool == nullptr)
+        vkState.uniformTexelBufferPool = createBindlessPool(
+            arena, HgGpuDescriptorType_uniformTexelBuffer, &vkState.uniformTexelBufferPoolNext);
 
-    if (vulkanState.storageTexelBufferPool == nullptr)
-        vulkanState.storageTexelBufferPool = createBindlessPool(
-            arena, HgGpuDescriptorType_storageTexelBuffer, &vulkanState.storageTexelBufferPoolNext);
+    if (vkState.storageTexelBufferPool == nullptr)
+        vkState.storageTexelBufferPool = createBindlessPool(
+            arena, HgGpuDescriptorType_storageTexelBuffer, &vkState.storageTexelBufferPoolNext);
 
-    if (vulkanState.uniformBufferPool == nullptr)
-        vulkanState.uniformBufferPool = createBindlessPool(
-            arena, HgGpuDescriptorType_uniformBuffer, &vulkanState.uniformBufferPoolNext);
+    if (vkState.uniformBufferPool == nullptr)
+        vkState.uniformBufferPool = createBindlessPool(
+            arena, HgGpuDescriptorType_uniformBuffer, &vkState.uniformBufferPoolNext);
 
-    if (vulkanState.storageBufferPool == nullptr)
-        vulkanState.storageBufferPool = createBindlessPool(
-            arena, HgGpuDescriptorType_storageBuffer, &vulkanState.storageBufferPoolNext);
+    if (vkState.storageBufferPool == nullptr)
+        vkState.storageBufferPool = createBindlessPool(
+            arena, HgGpuDescriptorType_storageBuffer, &vkState.storageBufferPoolNext);
 }
 
 void hgDeinitGraphics()
 {
-    vulkanState.samplerPool = nullptr;
-    vulkanState.combinedImageSamplerPool = nullptr;
-    vulkanState.sampledImagePool = nullptr;
-    vulkanState.storageImagePool = nullptr;
-    vulkanState.uniformTexelBufferPool = nullptr;
-    vulkanState.storageTexelBufferPool = nullptr;
-    vulkanState.uniformBufferPool = nullptr;
-    vulkanState.storageBufferPool = nullptr;
-    vulkanState.bindlessSet = nullptr;
+    vkState.samplerPool = nullptr;
+    vkState.combinedImageSamplerPool = nullptr;
+    vkState.sampledImagePool = nullptr;
+    vkState.storageImagePool = nullptr;
+    vkState.uniformTexelBufferPool = nullptr;
+    vkState.storageTexelBufferPool = nullptr;
+    vkState.uniformBufferPool = nullptr;
+    vkState.storageBufferPool = nullptr;
+    vkState.bindlessSet = nullptr;
 
-    if (vulkanState.bindlessLayout != nullptr)
+    if (vkState.bindlessLayout != nullptr)
     {
-        vkDestroyDescriptorSetLayout(hgVkDevice, vulkanState.bindlessLayout, nullptr);
-        vulkanState.bindlessLayout = nullptr;
+        vkDestroyDescriptorSetLayout(vkState.device, vkState.bindlessLayout, nullptr);
+        vkState.bindlessLayout = nullptr;
     }
 
-    if (vulkanState.bindlessPool != nullptr)
+    if (vkState.bindlessPool != nullptr)
     {
-        vkDestroyDescriptorPool(hgVkDevice, vulkanState.bindlessPool, nullptr);
-        vulkanState.bindlessPool = nullptr;
+        vkDestroyDescriptorPool(vkState.device, vkState.bindlessPool, nullptr);
+        vkState.bindlessPool = nullptr;
     }
 
-    if (hgVkCmdPool != nullptr)
+    if (vkState.cmdPool != nullptr)
     {
-        vkDestroyCommandPool(hgVkDevice, hgVkCmdPool, nullptr);
-        hgVkCmdPool = nullptr;
+        vkDestroyCommandPool(vkState.device, vkState.cmdPool, nullptr);
+        vkState.cmdPool = nullptr;
     }
 
-    if (hgVkVma != nullptr)
+    if (vkState.vma != nullptr)
     {
-        vmaDestroyAllocator(hgVkVma);
-        hgVkVma = nullptr;
+        vmaDestroyAllocator(vkState.vma);
+        vkState.vma = nullptr;
     }
 
-    if (hgVkDevice != nullptr)
+    if (vkState.device != nullptr)
     {
-        vkDestroyDevice(hgVkDevice, nullptr);
-        hgVkDevice = nullptr;
+        vkDestroyDevice(vkState.device, nullptr);
+        vkState.device = nullptr;
     }
 
-    if (hgVkPhysicalDevice != nullptr)
+    if (vkState.physicalDevice != nullptr)
     {
-        hgVkPhysicalDevice = nullptr;
-        hgVkQueueFamily = (u32)-1;
+        vkState.physicalDevice = nullptr;
+        vkState.queueFamily = (u32)-1;
     }
 
 #ifdef HG_VK_DEBUG_MESSENGER
-    if (vulkanState.debugMessenger != nullptr)
+    if (vkState.debugMessenger != nullptr)
     {
-        vkDestroyDebugUtilsMessengerEXT(hgVkInstance, vulkanState.debugMessenger, nullptr);
-        vulkanState.debugMessenger = nullptr;
+        vkDestroyDebugUtilsMessengerEXT(vkState.instance, vkState.debugMessenger, nullptr);
+        vkState.debugMessenger = nullptr;
     }
 #endif
 
-    if (hgVkInstance != nullptr)
+    if (vkState.instance != nullptr)
     {
-        vkDestroyInstance(hgVkInstance, nullptr);
-        hgVkInstance = nullptr;
+        vkDestroyInstance(vkState.instance, nullptr);
+        vkState.instance = nullptr;
     }
 
     unloadVulkan();
@@ -731,7 +771,7 @@ void hgDeinitGraphics()
 
 void hgGraphicsWaitIdle()
 {
-    vkQueueWaitIdle(hgVkQueue);
+    vkQueueWaitIdle(vkState.queue);
 }
 
 static u32 vkFormatToSize(VkFormat format)
@@ -1185,11 +1225,11 @@ static VkCullModeFlags gpuCullModeToVk(HgCullModeFlags mode)
 //     VkMemoryPropertyFlags preferredFlags,
 //     VkMemoryPropertyFlags unpreferredFlags)
 // {
-//     hgAssert(hgVkPhysicalDevice != nullptr);
+//     hgAssert(vkState.hgVkPhysicalDevice != nullptr);
 //     hgAssert(bitmask != 0);
 //
 //     VkPhysicalDeviceMemoryProperties memProps;
-//     vkGetPhysicalDeviceMemoryProperties(hgVkPhysicalDevice, &memProps);
+//     vkGetPhysicalDeviceMemoryProperties(vkState.hgVkPhysicalDevice, &memProps);
 //
 //     for (u32 i = 0; i < memProps.memoryTypeCount; ++i)
 //     {
@@ -1240,7 +1280,7 @@ HgGpuBuffer* hgCreateGpuBuffer(
     allocInfo.flags = gpuMemoryUsageToVma(memoryUsage);
 
     VkResult result = vmaCreateBuffer(
-        hgVkVma,
+        vkState.vma,
         &bufferInfo,
         &allocInfo,
         &buffer->buffer,
@@ -1255,7 +1295,7 @@ HgGpuBuffer* hgCreateGpuBuffer(
     if (memoryUsage == HgGpuMemoryUsage_frequentUpdate)
     {
         VkMemoryPropertyFlags memPropFlags;
-        vmaGetAllocationMemoryProperties(hgVkVma, buffer->alloc, &memPropFlags);
+        vmaGetAllocationMemoryProperties(vkState.vma, buffer->alloc, &memPropFlags);
         buffer->access = memPropFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
             ? HgGpuMemoryHostAccess_write
             : HgGpuMemoryHostAccess_none;
@@ -1270,7 +1310,7 @@ void hgDestroyGpuBuffer(HgGpuBuffer *buffer)
 {
     if (buffer != nullptr)
     {
-        vmaDestroyBuffer(hgVkVma, buffer->buffer, buffer->alloc);
+        vmaDestroyBuffer(vkState.vma, buffer->buffer, buffer->alloc);
         free(buffer);
     }
 }
@@ -1285,7 +1325,7 @@ void hgWriteGpuBuffer(HgGpuBuffer* dst, u64 offset, const void* src, u64 size)
 
     if (dst->access & HgGpuMemoryHostAccess_write)
     {
-        VkResult result = vmaCopyMemoryToAllocation(hgVkVma, src, dst->alloc, offset, size);
+        VkResult result = vmaCopyMemoryToAllocation(vkState.vma, src, dst->alloc, offset, size);
         if (result != VK_SUCCESS)
             hgError("Could not write gpu buffer: %s", vkResultToStr(result));
         return;
@@ -1319,7 +1359,7 @@ void hgReadGpuBuffer(void* dst, HgGpuBuffer* src, u64 offset, u64 size)
 
     if (src->access & HgGpuMemoryHostAccess_read)
     {
-        VkResult result = vmaCopyAllocationToMemory(hgVkVma, src->alloc, offset, dst, size);
+        VkResult result = vmaCopyAllocationToMemory(vkState.vma, src->alloc, offset, dst, size);
         if (result != VK_SUCCESS)
             hgError("Could not read gpu buffer: %s", vkResultToStr(result));
         return;
@@ -1376,7 +1416,7 @@ HgGpuImage* hgCreateGpuImageEx(const HgCreateGpuImageEx* create)
     allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
 
     VkResult result = vmaCreateImage(
-        hgVkVma,
+        vkState.vma,
         &imageInfo,
         &allocInfo,
         &image->image,
@@ -1402,18 +1442,18 @@ void hgDestroyGpuImage(HgGpuImage* image)
 {
     if (image != nullptr)
     {
-        vmaDestroyImage(hgVkVma, image->image, image->alloc);
+        vmaDestroyImage(vkState.vma, image->image, image->alloc);
         free(image);
     }
 }
 
 HgGpuView* hgCreateGpuView(
-    const HgGpuImage* image,
-    HgGpuAspectFlags aspectFlags,
+    HgGpuImage* image,
     u32 baseMipLevel,
     u32 levelCount,
     u32 baseArrayLayer,
     u32 layerCount,
+    HgGpuAspectFlags aspectFlags,
     HgGpuViewType type)
 {
     hgAssert(image != nullptr);
@@ -1433,7 +1473,7 @@ HgGpuView* hgCreateGpuView(
     info.subresourceRange.baseArrayLayer = baseArrayLayer;
     info.subresourceRange.layerCount = layerCount;
 
-    VkResult result = vkCreateImageView(hgVkDevice, &info, nullptr, &view->view);
+    VkResult result = vkCreateImageView(vkState.device, &info, nullptr, &view->view);
     if (view == nullptr)
         hgError("Could not create VkImageView: %s\n", vkResultToStr(result));
 
@@ -1452,7 +1492,7 @@ void hgDestroyGpuView(HgGpuView* view)
 {
     if (view != nullptr)
     {
-        vkDestroyImageView(hgVkDevice, view->view, nullptr);
+        vkDestroyImageView(vkState.device, view->view, nullptr);
         free(view);
     }
 }
@@ -1817,7 +1857,7 @@ HgGpuSampler* hgCreateGpuSampler(HgGpuFilter filter, HgGpuSamplerEdgeMode addres
     info.borderColor = gpuSamplerBorderToVk(borderColor);
 
     VkSampler sampler = nullptr;
-    VkResult result = vkCreateSampler(hgVkDevice, &info, nullptr, &sampler);
+    VkResult result = vkCreateSampler(vkState.device, &info, nullptr, &sampler);
     if (sampler == nullptr)
         hgError("Could not create VkSampler: %s", vkResultToStr(result));
 
@@ -1826,7 +1866,7 @@ HgGpuSampler* hgCreateGpuSampler(HgGpuFilter filter, HgGpuSamplerEdgeMode addres
 
 void hgDestroyGpuSampler(HgGpuSampler* sampler)
 {
-    vkDestroySampler(hgVkDevice, (VkSampler)sampler, nullptr);
+    vkDestroySampler(vkState.device, (VkSampler)sampler, nullptr);
 }
 
 static HgGpuDescriptor allocDescriptor(HgGpuDescriptor* pool, HgGpuDescriptor* next)
@@ -1854,36 +1894,36 @@ HgGpuDescriptor hgCreateGpuDescriptor(HgGpuDescriptorType type)
     switch (type)
     {
         case HgGpuDescriptorType_sampler:
-            hgAssert(hgGpuDescriptorIdx(vulkanState.samplerPoolNext) != UINT16_MAX);
-            return allocDescriptor(vulkanState.samplerPool, &vulkanState.samplerPoolNext);
+            hgAssert(hgGpuDescriptorIdx(vkState.samplerPoolNext) != UINT16_MAX);
+            return allocDescriptor(vkState.samplerPool, &vkState.samplerPoolNext);
             break;
         case HgGpuDescriptorType_combinedImageSampler:
-            hgAssert(hgGpuDescriptorIdx(vulkanState.combinedImageSamplerPoolNext) != UINT16_MAX);
-            return allocDescriptor(vulkanState.combinedImageSamplerPool, &vulkanState.combinedImageSamplerPoolNext);
+            hgAssert(hgGpuDescriptorIdx(vkState.combinedImageSamplerPoolNext) != UINT16_MAX);
+            return allocDescriptor(vkState.combinedImageSamplerPool, &vkState.combinedImageSamplerPoolNext);
             break;
         case HgGpuDescriptorType_sampledImage:
-            hgAssert(hgGpuDescriptorIdx(vulkanState.sampledImagePoolNext) != UINT16_MAX);
-            return allocDescriptor(vulkanState.sampledImagePool, &vulkanState.sampledImagePoolNext);
+            hgAssert(hgGpuDescriptorIdx(vkState.sampledImagePoolNext) != UINT16_MAX);
+            return allocDescriptor(vkState.sampledImagePool, &vkState.sampledImagePoolNext);
             break;
         case HgGpuDescriptorType_storageImage:
-            hgAssert(hgGpuDescriptorIdx(vulkanState.storageImagePoolNext) != UINT16_MAX);
-            return allocDescriptor(vulkanState.storageImagePool, &vulkanState.storageImagePoolNext);
+            hgAssert(hgGpuDescriptorIdx(vkState.storageImagePoolNext) != UINT16_MAX);
+            return allocDescriptor(vkState.storageImagePool, &vkState.storageImagePoolNext);
             break;
         case HgGpuDescriptorType_uniformTexelBuffer:
-            hgAssert(hgGpuDescriptorIdx(vulkanState.uniformTexelBufferPoolNext) != UINT16_MAX);
-            return allocDescriptor(vulkanState.uniformTexelBufferPool, &vulkanState.uniformTexelBufferPoolNext);
+            hgAssert(hgGpuDescriptorIdx(vkState.uniformTexelBufferPoolNext) != UINT16_MAX);
+            return allocDescriptor(vkState.uniformTexelBufferPool, &vkState.uniformTexelBufferPoolNext);
             break;
         case HgGpuDescriptorType_storageTexelBuffer:
-            hgAssert(hgGpuDescriptorIdx(vulkanState.storageTexelBufferPoolNext) != UINT16_MAX);
-            return allocDescriptor(vulkanState.storageTexelBufferPool, &vulkanState.storageTexelBufferPoolNext);
+            hgAssert(hgGpuDescriptorIdx(vkState.storageTexelBufferPoolNext) != UINT16_MAX);
+            return allocDescriptor(vkState.storageTexelBufferPool, &vkState.storageTexelBufferPoolNext);
             break;
         case HgGpuDescriptorType_uniformBuffer:
-            hgAssert(hgGpuDescriptorIdx(vulkanState.uniformBufferPoolNext) != UINT16_MAX);
-            return allocDescriptor(vulkanState.uniformBufferPool, &vulkanState.uniformBufferPoolNext);
+            hgAssert(hgGpuDescriptorIdx(vkState.uniformBufferPoolNext) != UINT16_MAX);
+            return allocDescriptor(vkState.uniformBufferPool, &vkState.uniformBufferPoolNext);
             break;
         case HgGpuDescriptorType_storageBuffer:
-            hgAssert(hgGpuDescriptorIdx(vulkanState.storageBufferPoolNext) != UINT16_MAX);
-            return allocDescriptor(vulkanState.storageBufferPool, &vulkanState.storageBufferPoolNext);
+            hgAssert(hgGpuDescriptorIdx(vkState.storageBufferPoolNext) != UINT16_MAX);
+            return allocDescriptor(vkState.storageBufferPool, &vkState.storageBufferPoolNext);
             break;
         default:
             hgAssert(false);
@@ -1899,36 +1939,36 @@ void hgDestroyGpuDescriptor(HgGpuDescriptor desc)
     switch (hgDescriptorType(desc))
     {
         case HgGpuDescriptorType_sampler:
-            hgAssert(desc.id == vulkanState.samplerPool[hgGpuDescriptorIdx(desc)].id);
-            deallocDescriptor(vulkanState.samplerPool, &vulkanState.samplerPoolNext, desc);
+            hgAssert(desc.id == vkState.samplerPool[hgGpuDescriptorIdx(desc)].id);
+            deallocDescriptor(vkState.samplerPool, &vkState.samplerPoolNext, desc);
             break;
         case HgGpuDescriptorType_combinedImageSampler:
-            hgAssert(desc.id == vulkanState.combinedImageSamplerPool[hgGpuDescriptorIdx(desc)].id);
-            deallocDescriptor(vulkanState.combinedImageSamplerPool, &vulkanState.combinedImageSamplerPoolNext, desc);
+            hgAssert(desc.id == vkState.combinedImageSamplerPool[hgGpuDescriptorIdx(desc)].id);
+            deallocDescriptor(vkState.combinedImageSamplerPool, &vkState.combinedImageSamplerPoolNext, desc);
             break;
         case HgGpuDescriptorType_sampledImage:
-            hgAssert(desc.id == vulkanState.sampledImagePool[hgGpuDescriptorIdx(desc)].id);
-            deallocDescriptor(vulkanState.sampledImagePool, &vulkanState.sampledImagePoolNext, desc);
+            hgAssert(desc.id == vkState.sampledImagePool[hgGpuDescriptorIdx(desc)].id);
+            deallocDescriptor(vkState.sampledImagePool, &vkState.sampledImagePoolNext, desc);
             break;
         case HgGpuDescriptorType_storageImage:
-            hgAssert(desc.id == vulkanState.storageImagePool[hgGpuDescriptorIdx(desc)].id);
-            deallocDescriptor(vulkanState.storageImagePool, &vulkanState.storageImagePoolNext, desc);
+            hgAssert(desc.id == vkState.storageImagePool[hgGpuDescriptorIdx(desc)].id);
+            deallocDescriptor(vkState.storageImagePool, &vkState.storageImagePoolNext, desc);
             break;
         case HgGpuDescriptorType_uniformTexelBuffer:
-            hgAssert(desc.id == vulkanState.uniformTexelBufferPool[hgGpuDescriptorIdx(desc)].id);
-            deallocDescriptor(vulkanState.uniformTexelBufferPool, &vulkanState.uniformTexelBufferPoolNext, desc);
+            hgAssert(desc.id == vkState.uniformTexelBufferPool[hgGpuDescriptorIdx(desc)].id);
+            deallocDescriptor(vkState.uniformTexelBufferPool, &vkState.uniformTexelBufferPoolNext, desc);
             break;
         case HgGpuDescriptorType_storageTexelBuffer:
-            hgAssert(desc.id == vulkanState.storageTexelBufferPool[hgGpuDescriptorIdx(desc)].id);
-            deallocDescriptor(vulkanState.storageTexelBufferPool, &vulkanState.storageTexelBufferPoolNext, desc);
+            hgAssert(desc.id == vkState.storageTexelBufferPool[hgGpuDescriptorIdx(desc)].id);
+            deallocDescriptor(vkState.storageTexelBufferPool, &vkState.storageTexelBufferPoolNext, desc);
             break;
         case HgGpuDescriptorType_uniformBuffer:
-            hgAssert(desc.id == vulkanState.uniformBufferPool[hgGpuDescriptorIdx(desc)].id);
-            deallocDescriptor(vulkanState.uniformBufferPool, &vulkanState.uniformBufferPoolNext, desc);
+            hgAssert(desc.id == vkState.uniformBufferPool[hgGpuDescriptorIdx(desc)].id);
+            deallocDescriptor(vkState.uniformBufferPool, &vkState.uniformBufferPoolNext, desc);
             break;
         case HgGpuDescriptorType_storageBuffer:
-            hgAssert(desc.id == vulkanState.storageBufferPool[hgGpuDescriptorIdx(desc)].id);
-            deallocDescriptor(vulkanState.storageBufferPool, &vulkanState.storageBufferPoolNext, desc);
+            hgAssert(desc.id == vkState.storageBufferPool[hgGpuDescriptorIdx(desc)].id);
+            deallocDescriptor(vkState.storageBufferPool, &vkState.storageBufferPoolNext, desc);
             break;
         default:
             hgAssert(false);
@@ -1992,7 +2032,7 @@ void hgUpdateGpuDescriptor(
 
     VkWriteDescriptorSet write{};
     write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    write.dstSet = vulkanState.bindlessSet;
+    write.dstSet = vkState.bindlessSet;
     write.dstBinding = hgDescriptorType(descriptor);
     write.dstArrayElement = hgGpuDescriptorIdx(descriptor);
     write.descriptorCount = 1;
@@ -2001,7 +2041,7 @@ void hgUpdateGpuDescriptor(
     write.pImageInfo = imageInfo != nullptr ? &imageVkInfo : nullptr;
     write.pTexelBufferView = nullptr;
 
-    vkUpdateDescriptorSets(hgVkDevice, 1, &write, 0, nullptr);
+    vkUpdateDescriptorSets(vkState.device, 1, &write, 0, nullptr);
 }
 
 static VkShaderModule createShaderModule(const u8* spirvCode, u64 codeSize)
@@ -2012,7 +2052,7 @@ static VkShaderModule createShaderModule(const u8* spirvCode, u64 codeSize)
     info.pCode = (const u32*)spirvCode;
 
     VkShaderModule shader = nullptr;
-    VkResult result = vkCreateShaderModule(hgVkDevice, &info, nullptr, &shader);
+    VkResult result = vkCreateShaderModule(vkState.device, &info, nullptr, &shader);
     if (shader == nullptr)
         hgError("Could not create VkShaderModule: %s\n", vkResultToStr(result));
 
@@ -2045,18 +2085,18 @@ HgGpuPipeline* hgCreateGpuGraphicsPipeline(const HgCreateGpuGraphicsPipeline* co
     VkPipelineLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     layoutInfo.setLayoutCount = 1;
-    layoutInfo.pSetLayouts = &vulkanState.bindlessLayout;
+    layoutInfo.pSetLayouts = &vkState.bindlessLayout;
     layoutInfo.pushConstantRangeCount = config->pushRangeCount;
     layoutInfo.pPushConstantRanges = pushRanges;
 
-    VkResult layoutResult = vkCreatePipelineLayout(hgVkDevice, &layoutInfo, nullptr, &pipeline->layout);
+    VkResult layoutResult = vkCreatePipelineLayout(vkState.device, &layoutInfo, nullptr, &pipeline->layout);
     if (pipeline->layout == nullptr)
         hgError("Could not create VkPipelineLayout: %s\n", vkResultToStr(layoutResult));
 
     VkShaderModule vertexShader = createShaderModule(config->vertexShader, config->vertexShaderSize);
     VkShaderModule fragmentShader = createShaderModule(config->fragmentShader, config->fragmentShaderSize);
-    hgDefer(vkDestroyShaderModule(hgVkDevice, vertexShader, nullptr));
-    hgDefer(vkDestroyShaderModule(hgVkDevice, fragmentShader, nullptr));
+    hgDefer(vkDestroyShaderModule(vkState.device, vertexShader, nullptr));
+    hgDefer(vkDestroyShaderModule(vkState.device, fragmentShader, nullptr));
 
     VkPipelineShaderStageCreateInfo shaderStages[2]{};
     shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -2215,7 +2255,8 @@ HgGpuPipeline* hgCreateGpuGraphicsPipeline(const HgCreateGpuGraphicsPipeline* co
     pipelineInfo.basePipelineHandle = nullptr;
     pipelineInfo.basePipelineIndex = -1;
 
-    VkResult pipelineResult = vkCreateGraphicsPipelines(hgVkDevice, nullptr, 1, &pipelineInfo, nullptr, &pipeline->pipeline);
+    VkResult pipelineResult = vkCreateGraphicsPipelines(
+        vkState.device, nullptr, 1, &pipelineInfo, nullptr, &pipeline->pipeline);
     if (pipeline == nullptr)
         hgError("Failed to create Vulkan graphics pipeline: %s\n", vkResultToStr(pipelineResult));
 
@@ -2235,18 +2276,18 @@ HgGpuPipeline* hgCreateGpuComputePipeline(u32 pushSize, const u8* shaderCode, u6
     VkPipelineLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     layoutInfo.setLayoutCount = 1;
-    layoutInfo.pSetLayouts = &vulkanState.bindlessLayout;
+    layoutInfo.pSetLayouts = &vkState.bindlessLayout;
 
     VkPushConstantRange push{VK_SHADER_STAGE_COMPUTE_BIT, 0, pushSize};
     layoutInfo.pushConstantRangeCount = pushSize > 0 ? 1 : 0;
     layoutInfo.pPushConstantRanges = pushSize > 0 ? &push : nullptr;
 
-    VkResult layoutResult = vkCreatePipelineLayout(hgVkDevice, &layoutInfo, nullptr, &pipeline->layout);
+    VkResult layoutResult = vkCreatePipelineLayout(vkState.device, &layoutInfo, nullptr, &pipeline->layout);
     if (pipeline->layout == nullptr)
         hgError("Could not create VkPipelineLayout: %s\n", vkResultToStr(layoutResult));
 
     VkShaderModule computeShader = createShaderModule(shaderCode, shaderCodeSize);
-    hgDefer(vkDestroyShaderModule(hgVkDevice, computeShader, nullptr));
+    hgDefer(vkDestroyShaderModule(vkState.device, computeShader, nullptr));
 
     VkComputePipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -2258,7 +2299,8 @@ HgGpuPipeline* hgCreateGpuComputePipeline(u32 pushSize, const u8* shaderCode, u6
     pipelineInfo.basePipelineHandle = nullptr;
     pipelineInfo.basePipelineIndex = -1;
 
-    VkResult pipelineResult = vkCreateComputePipelines(hgVkDevice, nullptr, 1, &pipelineInfo, nullptr, &pipeline->pipeline);
+    VkResult pipelineResult = vkCreateComputePipelines(
+        vkState.device, nullptr, 1, &pipelineInfo, nullptr, &pipeline->pipeline);
     if (pipeline == nullptr)
         hgError("Failed to create Vulkan compute pipeline: %s\n", vkResultToStr(pipelineResult));
 
@@ -2269,20 +2311,20 @@ HgGpuPipeline* hgCreateGpuComputePipeline(u32 pushSize, const u8* shaderCode, u6
 
 void hgDestroyGpuPipeline(HgGpuPipeline* pipeline)
 {
-    vkDestroyPipeline(hgVkDevice, pipeline->pipeline, nullptr);
-    vkDestroyPipelineLayout(hgVkDevice, pipeline->layout, nullptr);
+    vkDestroyPipeline(vkState.device, pipeline->pipeline, nullptr);
+    vkDestroyPipelineLayout(vkState.device, pipeline->layout, nullptr);
 }
 
 HgGpuCommands* hgBeginGpuCommands()
 {
     VkCommandBufferAllocateInfo cmdInfo{};
     cmdInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    cmdInfo.commandPool = hgVkCmdPool;
+    cmdInfo.commandPool = vkState.cmdPool;
     cmdInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     cmdInfo.commandBufferCount = 1;
 
     VkCommandBuffer cmd = nullptr;
-    vkAllocateCommandBuffers(hgVkDevice, &cmdInfo, &cmd);
+    vkAllocateCommandBuffers(vkState.device, &cmdInfo, &cmd);
 
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -2301,24 +2343,36 @@ void hgEndGpuCommands(HgGpuCommands* cmd)
     fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 
     VkFence fence = nullptr;
-    vkCreateFence(hgVkDevice, &fenceInfo, nullptr, &fence);
-    hgDefer(vkDestroyFence(hgVkDevice, fence, nullptr));
+    vkCreateFence(vkState.device, &fenceInfo, nullptr, &fence);
+    hgDefer(vkDestroyFence(vkState.device, fence, nullptr));
 
     VkSubmitInfo submit{};
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submit.commandBufferCount = 1;
     submit.pCommandBuffers = (VkCommandBuffer*)&cmd;
 
-    vkQueueSubmit(hgVkQueue, 1, &submit, fence);
-    vkWaitForFences(hgVkDevice, 1, &fence, VK_TRUE, UINT64_MAX);
+    vkQueueSubmit(vkState.queue, 1, &submit, fence);
+    vkWaitForFences(vkState.device, 1, &fence, VK_TRUE, UINT64_MAX);
 
-    vkFreeCommandBuffers(hgVkDevice, hgVkCmdPool, 1, (VkCommandBuffer*)&cmd);
+    vkFreeCommandBuffers(vkState.device, vkState.cmdPool, 1, (VkCommandBuffer*)&cmd);
 }
 
 void hgBindGpuPipeline(HgGpuCommands* cmd, HgGpuPipeline* pipeline)
 {
-    vkCmdBindPipeline((VkCommandBuffer)cmd, pipeline->bindPoint, pipeline->pipeline);
-    vkCmdBindDescriptorSets((VkCommandBuffer)cmd, pipeline->bindPoint, pipeline->layout, 0, 1, &vulkanState.bindlessSet, 0, nullptr);
+    vkCmdBindPipeline(
+        (VkCommandBuffer)cmd,
+        pipeline->bindPoint,
+        pipeline->pipeline);
+
+    vkCmdBindDescriptorSets(
+        (VkCommandBuffer)cmd,
+        pipeline->bindPoint,
+        pipeline->layout,
+        0,
+        1,
+        &vkState.bindlessSet,
+        0,
+        nullptr);
 }
 
 void hgGpuPushConstants(HgGpuCommands* cmd, HgGpuPipeline* pipeline, u32 offset, void* push, u32 size)
@@ -2866,25 +2920,84 @@ void hgEndGpuRenderPass(HgGpuCommands* cmd)
     vkCmdEndRendering((VkCommandBuffer)cmd);
 }
 
+struct PlatformState {
+    u32 windowCapacity = 0;
+    u32 windowWidth = 0;
+    HgWindow* windowPool = nullptr;
+    u32* windowFreeList = nullptr;
+    u32 windowNext = 0;
+
+    HgHashMap<SDL_WindowID, HgWindow*> windows;
+
+    bool wasQuit = false;
+    bool isKeyDown[HgKey_count]{};
+
+    bool imguiInitialized = false;
+};
+
+static PlatformState platformState;
+
+void hgInitPlatform(HgArena* arena, u32 maxWindows, u32 maxEvents)
+{
+    SDL_Init(
+        SDL_INIT_AUDIO |
+        SDL_INIT_VIDEO |
+        SDL_INIT_JOYSTICK |
+        SDL_INIT_GAMEPAD |
+        SDL_INIT_EVENTS);
+
+    platformState.windowCapacity = maxWindows;
+    platformState.windowFreeList = hgAlloc<u32>(arena, maxWindows);
+    platformState.windowWidth = (u32)hgAlign(sizeof(HgWindow) + sizeof(HgKeyEvent) * (maxEvents - 1), alignof(HgWindow));
+    platformState.windowPool = (HgWindow*)hgAlloc(arena, platformState.windowWidth * maxWindows, alignof(HgWindow));
+
+    for (u32 i = 0; i < maxWindows; ++i)
+    {
+        platformState.windowFreeList[i] = i + 1;
+    }
+    platformState.windowNext = 0;
+
+    platformState.windows = platformState.windows.create(arena, maxWindows * 2);
+}
+
+void hgDeinitPlatform()
+{
+    SDL_Quit();
+}
+
+u32 hgGetPlatformVulkanExtensions(HgArena* arena, HgStringView** extBuffer)
+{
+    u32 extCount;
+    const char* const* exts = SDL_Vulkan_GetInstanceExtensions(&extCount);
+
+    *extBuffer = hgAlloc<HgStringView>(arena, extCount);
+    for (u32 i = 0; i < extCount; ++i)
+    {
+        (*extBuffer)[i] = exts[i];
+    }
+
+    return extCount;
+}
+
 static void createWindowImages(HgWindow* window)
 {
     HgArena* scratch = hgGetScratch();
     HgArenaScope scratchScope{scratch};
 
     VkImage* swapImages = hgAlloc<VkImage>(scratch, window->imageCount);
-    vkGetSwapchainImagesKHR(hgVkDevice, window->swapchain, &window->imageCount, swapImages);
+    vkGetSwapchainImagesKHR(vkState.device, window->swapchain, &window->imageCount, swapImages);
 
     for (u32 i = 0; i < window->imageCount; ++i)
     {
-        window->images[i]->image = swapImages[i];
-        window->images[i]->dimensions = 2;
-        window->images[i]->format = window->format;
-        window->images[i]->width = window->width;
-        window->images[i]->height = window->height;
-        window->images[i]->depth = 1;
-        window->images[i]->mipLevels = 1;
-        window->images[i]->arrayLayers = 1;
-        window->images[i]->msaaSamples = 1;
+        window->images[i].image = swapImages[i];
+        window->images[i].dimensions = 2;
+        window->images[i].format = window->format;
+        window->images[i].width = window->width;
+        window->images[i].height = window->height;
+        window->images[i].depth = 1;
+        window->images[i].mipLevels = 1;
+        window->images[i].arrayLayers = 1;
+        window->images[i].msaaSamples = 1;
 
         VkImageViewCreateInfo viewInfo{};
         viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -2893,17 +3006,17 @@ static void createWindowImages(HgWindow* window)
         viewInfo.format = formatToVk(window->format);
         viewInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
 
-        VkResult viewResult = vkCreateImageView(hgVkDevice, &viewInfo, nullptr, &window->views[i]->view);
-        if (window->views[i]->view == nullptr)
+        VkResult viewResult = vkCreateImageView(vkState.device, &viewInfo, nullptr, &window->views[i].view);
+        if (window->views[i].view == nullptr)
             hgError("Could not create VkImageView: %s\n", vkResultToStr(viewResult));
 
-        window->views[i]->image = window->images[i];
-        window->views[i]->type = HgGpuViewType_2D;
-        window->views[i]->aspectFlags = HgGpuAspect_color;
-        window->views[i]->baseMipLevel = 0;
-        window->views[i]->levelCount = 1;
-        window->views[i]->baseArrayLayer = 0;
-        window->views[i]->layerCount = 1;
+        window->views[i].image = &window->images[i];
+        window->views[i].type = HgGpuViewType_2D;
+        window->views[i].aspectFlags = HgGpuAspect_color;
+        window->views[i].baseMipLevel = 0;
+        window->views[i].levelCount = 1;
+        window->views[i].baseArrayLayer = 0;
+        window->views[i].layerCount = 1;
     }
 }
 
@@ -2911,7 +3024,7 @@ static void destroyWindowImages(HgWindow* window)
 {
     for (u32 i = 0; i < window->imageCount; ++i)
     {
-        vkDestroyImageView(hgVkDevice, window->views[i]->view, nullptr);
+        vkDestroyImageView(vkState.device, window->views[i].view, nullptr);
     }
 }
 
@@ -2921,64 +3034,64 @@ static void createWindowCmdchain(HgWindow* window)
         VkCommandBufferAllocateInfo cmdAllocInfo{};
         cmdAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
         cmdAllocInfo.pNext = nullptr;
-        cmdAllocInfo.commandPool = hgVkCmdPool;
+        cmdAllocInfo.commandPool = vkState.cmdPool;
         cmdAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
         cmdAllocInfo.commandBufferCount = window->imageCount;
 
-        vkAllocateCommandBuffers(hgVkDevice, &cmdAllocInfo, (VkCommandBuffer*)window->cmds);
+        vkAllocateCommandBuffers(vkState.device, &cmdAllocInfo, (VkCommandBuffer*)window->cmds);
     }
     for (u32 i = 0; i < window->imageCount; ++i)
     {
         VkFenceCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
         info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-        vkCreateFence(hgVkDevice, &info, nullptr, &window->frameFinished[i]);
+        vkCreateFence(vkState.device, &info, nullptr, &window->frameFinished[i]);
     }
     for (u32 i = 0; i < window->imageCount; ++i)
     {
         VkSemaphoreCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-        vkCreateSemaphore(hgVkDevice, &info, nullptr, &window->imageAvailable[i]);
+        vkCreateSemaphore(vkState.device, &info, nullptr, &window->imageAvailable[i]);
     }
     for (u32 i = 0; i < window->imageCount; ++i)
     {
         VkSemaphoreCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-        vkCreateSemaphore(hgVkDevice, &info, nullptr, &window->readyToPresent[i]);
+        vkCreateSemaphore(vkState.device, &info, nullptr, &window->readyToPresent[i]);
     }
 }
 
 static void destroyWindowCmdchain(HgWindow* window)
 {
     if (window->cmds != nullptr)
-        vkFreeCommandBuffers(hgVkDevice, hgVkCmdPool, window->imageCount, (VkCommandBuffer*)window->cmds);
+        vkFreeCommandBuffers(vkState.device, vkState.cmdPool, window->imageCount, (VkCommandBuffer*)window->cmds);
 
     for (u32 i = 0; i < window->imageCount; ++i)
     {
-        vkDestroyFence(hgVkDevice, window->frameFinished[i], nullptr);
+        vkDestroyFence(vkState.device, window->frameFinished[i], nullptr);
     }
     for (u32 i = 0; i < window->imageCount; ++i)
     {
-        vkDestroySemaphore(hgVkDevice, window->imageAvailable[i], nullptr);
+        vkDestroySemaphore(vkState.device, window->imageAvailable[i], nullptr);
     }
     for (u32 i = 0; i < window->imageCount; ++i)
     {
-        vkDestroySemaphore(hgVkDevice, window->readyToPresent[i], nullptr);
+        vkDestroySemaphore(vkState.device, window->readyToPresent[i], nullptr);
     }
 }
 
-void hgInternalResizeWindowSwapchain(HgWindow* window)
+static void resizeWindowSwapchain(HgWindow* window)
 {
     if (window->width == 0 || window->height == 0)
         return;
 
-    vkQueueWaitIdle(hgVkQueue);
+    vkQueueWaitIdle(vkState.queue);
 
     destroyWindowCmdchain(window);
     destroyWindowImages(window);
 
     VkSurfaceCapabilitiesKHR surfaceCapabilities;
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(hgVkPhysicalDevice, window->surface, &surfaceCapabilities);
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vkState.physicalDevice, window->surface, &surfaceCapabilities);
 
     if (surfaceCapabilities.currentExtent.width != (u32)-1)
         window->width = surfaceCapabilities.currentExtent.width;
@@ -3000,29 +3113,17 @@ void hgInternalResizeWindowSwapchain(HgWindow* window)
     swapchainInfo.clipped = VK_TRUE;
     swapchainInfo.oldSwapchain = window->swapchain;
 
-    VkResult result = vkCreateSwapchainKHR(hgVkDevice, &swapchainInfo, nullptr, &window->swapchain);
+    VkResult result = vkCreateSwapchainKHR(vkState.device, &swapchainInfo, nullptr, &window->swapchain);
     if (window->swapchain == nullptr)
         hgError("Failed to create swapchain: %s\n", vkResultToStr(result));
 
     u32 swapImageCount;
-    vkGetSwapchainImagesKHR(hgVkDevice, window->swapchain, &swapImageCount, nullptr);
+    vkGetSwapchainImagesKHR(vkState.device, window->swapchain, &swapImageCount, nullptr);
 
     if (window->imageCount != swapImageCount)
     {
-        HgGpuImage* imageData = window->images == nullptr ? nullptr : window->images[0];
-        HgGpuView* viewData = window->views == nullptr ? nullptr : window->views[0];
-
-        imageData = (HgGpuImage*)realloc(imageData, sizeof(HgGpuImage) * swapImageCount);
-        viewData = (HgGpuView*)realloc(viewData, sizeof(HgGpuView) * swapImageCount);
-
-        window->images = (HgGpuImage**)realloc(window->images, sizeof(HgGpuImage*) * swapImageCount);
-        window->views = (HgGpuView**)realloc(window->views, sizeof(HgGpuView*) * swapImageCount);
-
-        for (u32 i = 0; i < swapImageCount; ++i)
-        {
-            window->images[i] = imageData + i;
-            window->views[i] = viewData + i;
-        }
+        window->images = (HgGpuImage*)realloc(window->images, sizeof(HgGpuImage) * swapImageCount);
+        window->views = (HgGpuView*)realloc(window->views, sizeof(HgGpuView) * swapImageCount);
 
         window->cmds = (HgGpuCommands**)realloc(window->cmds, sizeof(HgGpuCommands*) * swapImageCount);
         window->frameFinished = (VkFence*)realloc(window->frameFinished, sizeof(VkFence) * swapImageCount);
@@ -3034,7 +3135,7 @@ void hgInternalResizeWindowSwapchain(HgWindow* window)
     createWindowImages(window);
     createWindowCmdchain(window);
 
-    vkDestroySwapchainKHR(hgVkDevice, swapchainInfo.oldSwapchain, nullptr);
+    vkDestroySwapchainKHR(vkState.device, swapchainInfo.oldSwapchain, nullptr);
 }
 
 static HgFormat findSwapchainFormat(VkSurfaceKHR surface)
@@ -3045,9 +3146,9 @@ static HgFormat findSwapchainFormat(VkSurfaceKHR surface)
     HgArenaScope scratchScope{scratch};
 
     u32 formatCount = 0;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(hgVkPhysicalDevice, surface, &formatCount, nullptr);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(vkState.physicalDevice, surface, &formatCount, nullptr);
     VkSurfaceFormatKHR* formats = hgAlloc<VkSurfaceFormatKHR>(scratch, formatCount);
-    vkGetPhysicalDeviceSurfaceFormatsKHR(hgVkPhysicalDevice, surface, &formatCount, formats);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(vkState.physicalDevice, surface, &formatCount, formats);
 
     for (u32 i = 0; i < formatCount; ++i)
     {
@@ -3068,36 +3169,36 @@ static HgPresentMode findSwapchainPresentMode(
     HgArena* scratch = hgGetScratch();
     HgArenaScope scratchScope{scratch};
 
-    if (desiredMode == HgPresentMode_FIFO_KHR)
+    if (desiredMode == HgPresentMode_fifo)
         return desiredMode;
 
     u32 modeCount = 0;
-    vkGetPhysicalDeviceSurfacePresentModesKHR(hgVkPhysicalDevice, surface, &modeCount, nullptr);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(vkState.physicalDevice, surface, &modeCount, nullptr);
     VkPresentModeKHR* presentModes = hgAlloc<VkPresentModeKHR>(scratch, modeCount);
-    vkGetPhysicalDeviceSurfacePresentModesKHR(hgVkPhysicalDevice, surface, &modeCount, presentModes);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(vkState.physicalDevice, surface, &modeCount, presentModes);
 
     for (u32 i = 0; i < modeCount; ++i)
     {
         if (presentModes[i] == hgPresentModeToVk(desiredMode))
             return desiredMode;
     }
-    return HgPresentMode_FIFO_KHR;
+    return HgPresentMode_fifo;
 }
 
-void hgInternalCreateWindowSwapchain(HgWindow* window, const HgCreateWindow* config)
+static void createWindowSwapchain(HgWindow* window, const HgWindowConfig* config)
 {
     window->format = findSwapchainFormat(window->surface);
     window->presentMode = findSwapchainPresentMode(window->surface, config->preferredPresentMode);
     window->imageUsage = config->imageUsage;
-    hgInternalResizeWindowSwapchain(window);
+    resizeWindowSwapchain(window);
 }
 
-void hgInternalDestroyWindowSwapchain(HgWindow* window)
+static void destroyWindowSwapchain(HgWindow* window)
 {
     destroyWindowCmdchain(window);
     destroyWindowImages(window);
 
-    vkDestroySwapchainKHR(hgVkDevice, window->swapchain, nullptr);
+    vkDestroySwapchainKHR(vkState.device, window->swapchain, nullptr);
 
     free(window->cmds);
     free(window->frameFinished);
@@ -3107,19 +3208,103 @@ void hgInternalDestroyWindowSwapchain(HgWindow* window)
     free(window->images);
 }
 
+HgWindow* hgCreateWindow(const char* title, u32 width, u32 height, const HgWindowConfig* config)
+{
+    static const HgWindowConfig defaultConfig{};
+    if (config == nullptr)
+        config = &defaultConfig;
+
+    u32 windowIdx = platformState.windowNext;
+    hgAssert(windowIdx < platformState.windowCapacity);
+    platformState.windowNext = platformState.windowFreeList[windowIdx];
+    platformState.windowFreeList[windowIdx] = windowIdx;
+
+    HgWindow* window = &platformState.windowPool[windowIdx];
+    *window = {};
+
+    if (title == nullptr)
+        title = "Hurdy Gurdy";
+
+    u64 flags = SDL_WINDOW_VULKAN;
+    if (!config->fixedSize)
+        flags |= SDL_WINDOW_RESIZABLE;
+
+    if (config->fullscreen)
+    {
+        int modeCount = 0;
+        SDL_DisplayMode** modes = SDL_GetFullscreenDisplayModes(SDL_GetPrimaryDisplay(), &modeCount);
+        hgDefer(SDL_free(modes));
+
+        width = modes[0]->w;
+        height = modes[0]->h;
+        flags |= SDL_WINDOW_FULLSCREEN;
+    }
+
+    window->sdlWindow = SDL_CreateWindow(title, width, height, flags);
+    if (window->sdlWindow == nullptr)
+        hgError("Failed to create SDL window: %s\n", SDL_GetError());
+
+    bool success = SDL_Vulkan_CreateSurface(window->sdlWindow, vkState.instance, nullptr, &window->surface);
+    if (!success || window->surface == nullptr)
+        hgError("Failed to create Vulkan surface: %s\n", SDL_GetError());
+
+    SDL_WindowID windowID = SDL_GetWindowID(window->sdlWindow);
+    platformState.windows.add(windowID, window);
+
+    SDL_GetWindowSize(window->sdlWindow, (int*)&window->width, (int*)&window->height);
+    createWindowSwapchain(window, config);
+
+    return window;
+}
+
+void hgDestroyWindow(HgWindow* window)
+{
+    u32 windowIdx = (u32)(window - platformState.windowPool);
+    hgAssert(windowIdx < platformState.windowCapacity);
+    hgAssert(platformState.windowFreeList[windowIdx] == windowIdx);
+
+    destroyWindowSwapchain(window);
+
+    vkDestroySurfaceKHR(vkState.instance, window->surface, nullptr);
+    SDL_DestroyWindow(window->sdlWindow);
+
+    platformState.windowFreeList[windowIdx] = platformState.windowNext;
+    platformState.windowNext = windowIdx;
+}
+
+u32 hgGetWindowWidth(HgWindow* window)
+{
+    return window->width;
+}
+
+u32 hgGetWindowHeight(HgWindow* window)
+{
+    return window->height;
+}
+
+HgFormat hgGetWindowFormat(HgWindow* window)
+{
+    return window->format;
+}
+
+HgGpuView* hgGetWindowCurrentImage(HgWindow* window)
+{
+    return &window->views[window->currentImage];
+}
+
 HgGpuCommands* hgWindowBeginRecording(HgWindow* window)
 {
-    hgAssert(hgVkDevice != nullptr);
+    hgAssert(vkState.device != nullptr);
     if (window->width == 0 || window->height == 0)
         return nullptr;
 
 retry:
     window->currentFrame = (window->currentFrame + 1) % window->imageCount;
-    vkWaitForFences(hgVkDevice, 1, &window->frameFinished[window->currentFrame], VK_TRUE, UINT64_MAX);
-    vkResetFences(hgVkDevice, 1, &window->frameFinished[window->currentFrame]);
+    vkWaitForFences(vkState.device, 1, &window->frameFinished[window->currentFrame], VK_TRUE, UINT64_MAX);
+    vkResetFences(vkState.device, 1, &window->frameFinished[window->currentFrame]);
 
     VkResult result = vkAcquireNextImageKHR(
-        hgVkDevice,
+        vkState.device,
         window->swapchain,
         UINT64_MAX,
         window->imageAvailable[window->currentFrame],
@@ -3127,7 +3312,7 @@ retry:
         &window->currentImage);
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
     {
-        hgInternalResizeWindowSwapchain(window);
+        resizeWindowSwapchain(window);
         goto retry;
     }
     if (result != VK_SUCCESS)
@@ -3160,7 +3345,7 @@ void hgWindowEndAndPresent(HgWindow* window, HgGpuCommands* cmd)
     submit.signalSemaphoreCount = 1;
     submit.pSignalSemaphores = &window->readyToPresent[window->currentFrame];
 
-    vkQueueSubmit(hgVkQueue, 1, &submit, window->frameFinished[window->currentFrame]);
+    vkQueueSubmit(vkState.queue, 1, &submit, window->frameFinished[window->currentFrame]);
 
     VkPresentInfoKHR presentInfo{};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -3170,18 +3355,388 @@ void hgWindowEndAndPresent(HgWindow* window, HgGpuCommands* cmd)
     presentInfo.pSwapchains = &window->swapchain;
     presentInfo.pImageIndices = &window->currentImage;
 
-    vkQueuePresentKHR(hgVkQueue, &presentInfo);
+    vkQueuePresentKHR(vkState.queue, &presentInfo);
 }
 
-void hgInternalInitImGuiRenderer(
+static HgKey sdlKeycodeToHgKey(u32 key)
+{
+    switch (key)
+    {
+        case SDLK_0:
+            return HgKey_k0;
+        case SDLK_1:
+            return HgKey_k1;
+        case SDLK_2:
+            return HgKey_k2;
+        case SDLK_3:
+            return HgKey_k3;
+        case SDLK_4:
+            return HgKey_k4;
+        case SDLK_5:
+            return HgKey_k5;
+        case SDLK_6:
+            return HgKey_k6;
+        case SDLK_7:
+            return HgKey_k7;
+        case SDLK_8:
+            return HgKey_k8;
+        case SDLK_9:
+            return HgKey_k9;
+
+        case SDLK_Q:
+            return HgKey_q;
+        case SDLK_W:
+            return HgKey_w;
+        case SDLK_E:
+            return HgKey_e;
+        case SDLK_R:
+            return HgKey_r;
+        case SDLK_T:
+            return HgKey_t;
+        case SDLK_Y:
+            return HgKey_y;
+        case SDLK_U:
+            return HgKey_u;
+        case SDLK_I:
+            return HgKey_i;
+        case SDLK_O:
+            return HgKey_o;
+        case SDLK_P:
+            return HgKey_p;
+        case SDLK_A:
+            return HgKey_a;
+        case SDLK_S:
+            return HgKey_s;
+        case SDLK_D:
+            return HgKey_d;
+        case SDLK_F:
+            return HgKey_f;
+        case SDLK_G:
+            return HgKey_g;
+        case SDLK_H:
+            return HgKey_h;
+        case SDLK_J:
+            return HgKey_j;
+        case SDLK_K:
+            return HgKey_k;
+        case SDLK_L:
+            return HgKey_l;
+        case SDLK_Z:
+            return HgKey_z;
+        case SDLK_X:
+            return HgKey_x;
+        case SDLK_C:
+            return HgKey_c;
+        case SDLK_V:
+            return HgKey_v;
+        case SDLK_B:
+            return HgKey_b;
+        case SDLK_N:
+            return HgKey_n;
+        case SDLK_M:
+            return HgKey_m;
+
+        case SDLK_SEMICOLON:
+            return HgKey_semicolon;
+        case SDLK_COLON:
+            return HgKey_colon;
+        case SDLK_APOSTROPHE:
+            return HgKey_apostrophe;
+        case SDLK_DBLAPOSTROPHE:
+            return HgKey_quotation;
+        case SDLK_COMMA:
+            return HgKey_comma;
+        case SDLK_PERIOD:
+            return HgKey_period;
+        case SDLK_QUESTION:
+            return HgKey_question;
+        case SDLK_GRAVE:
+            return HgKey_grave;
+        case SDLK_TILDE:
+            return HgKey_tilde;
+        case SDLK_EXCLAIM:
+            return HgKey_exclamation;
+        case SDLK_AT:
+            return HgKey_at;
+        case SDLK_HASH:
+            return HgKey_hash;
+        case SDLK_DOLLAR:
+            return HgKey_dollar;
+        case SDLK_PERCENT:
+            return HgKey_percent;
+        case SDLK_CARET:
+            return HgKey_carot;
+        case SDLK_AMPERSAND:
+            return HgKey_ampersand;
+        case SDLK_ASTERISK:
+            return HgKey_asterisk;
+
+        case SDLK_LEFTPAREN:
+            return HgKey_lparen;
+        case SDLK_RIGHTPAREN:
+            return HgKey_rparen;
+        case SDLK_LEFTBRACKET:
+            return HgKey_lbracket;
+        case SDLK_RIGHTBRACKET:
+            return HgKey_rbracket;
+        case SDLK_LEFTBRACE:
+            return HgKey_lbrace;
+        case SDLK_RIGHTBRACE:
+            return HgKey_rbrace;
+
+        case SDLK_EQUALS:
+            return HgKey_equal;
+        case SDLK_LESS:
+            return HgKey_less;
+        case SDLK_GREATER:
+            return HgKey_greater;
+        case SDLK_PLUS:
+            return HgKey_plus;
+        case SDLK_MINUS:
+            return HgKey_minus;
+        case SDLK_SLASH:
+            return HgKey_slash;
+        case SDLK_BACKSLASH:
+            return HgKey_backslash;
+        case SDLK_UNDERSCORE:
+            return HgKey_underscore;
+        case SDLK_PIPE:
+            return HgKey_bar;
+
+        case SDLK_UP:
+            return HgKey_up;
+        case SDLK_DOWN:
+            return HgKey_down;
+        case SDLK_LEFT:
+            return HgKey_left;
+        case SDLK_RIGHT:
+            return HgKey_right;
+
+        case SDLK_ESCAPE:
+            return HgKey_escape;
+        case SDLK_SPACE:
+            return HgKey_space;
+        case SDLK_RETURN:
+            return HgKey_enter;
+        case SDLK_BACKSPACE:
+            return HgKey_backspace;
+        case SDLK_DELETE:
+            return HgKey_kdelete;
+        case SDLK_INSERT:
+            return HgKey_insert;
+        case SDLK_TAB:
+            return HgKey_tab;
+        case SDLK_HOME:
+            return HgKey_home;
+        case SDLK_END:
+            return HgKey_end;
+
+        case SDLK_F1:
+            return HgKey_f1;
+        case SDLK_F2:
+            return HgKey_f2;
+        case SDLK_F3:
+            return HgKey_f3;
+        case SDLK_F4:
+            return HgKey_f4;
+        case SDLK_F5:
+            return HgKey_f5;
+        case SDLK_F6:
+            return HgKey_f6;
+        case SDLK_F7:
+            return HgKey_f7;
+        case SDLK_F8:
+            return HgKey_f8;
+        case SDLK_F9:
+            return HgKey_f9;
+        case SDLK_F10:
+            return HgKey_f10;
+        case SDLK_F11:
+            return HgKey_f11;
+        case SDLK_F12:
+            return HgKey_f12;
+
+        case SDLK_LSHIFT:
+            return HgKey_lshift;
+        case SDLK_RSHIFT:
+            return HgKey_rshift;
+        case SDLK_LCTRL:
+            return HgKey_lctrl;
+        case SDLK_RCTRL:
+            return HgKey_rctrl;
+        case SDLK_LALT:
+            return HgKey_lalt;
+        case SDLK_RALT:
+            return HgKey_ralt;
+        case SDLK_LGUI:
+            return HgKey_lsuper;
+        case SDLK_RGUI:
+            return HgKey_rsuper;
+        case SDLK_CAPSLOCK:
+            return HgKey_capslock;
+    }
+    return HgKey_none;
+}
+
+static HgKey sdlButtonToHgKey(u32 button)
+{
+    switch (button)
+    {
+        case SDL_BUTTON_LEFT:
+            return HgKey_mouse1;
+        case SDL_BUTTON_RIGHT:
+            return HgKey_mouse2;
+        case SDL_BUTTON_MIDDLE:
+            return HgKey_mouse3;
+        case SDL_BUTTON_X1:
+            return HgKey_mouse4;
+        case SDL_BUTTON_X2:
+            return HgKey_mouse5;
+    }
+    return HgKey_none;
+}
+
+void hgProcessEvents()
+{
+    platformState.windows.forEach([&](const SDL_WindowID*, HgWindow** window)
+    {
+        (*window)->mouseDeltaX = 0.0f;
+        (*window)->mouseDeltaY = 0.0f;
+        (*window)->eventCount = 0;
+    });
+
+    SDL_Event event;
+    while (SDL_PollEvent(&event))
+    {
+        HgKeyEvent keyEvent{};
+
+        if (platformState.imguiInitialized)
+            ImGui_ImplSDL3_ProcessEvent(&event);
+
+        switch (event.type)
+        {
+            case SDL_EVENT_QUIT:
+            {
+                platformState.wasQuit = true;
+            } break;
+            case SDL_EVENT_WINDOW_RESIZED:
+            {
+                HgWindow** window = platformState.windows.get(event.window.windowID);
+                if (window != nullptr)
+                {
+                    SDL_GetWindowSize((*window)->sdlWindow, (int*)&(*window)->width, (int*)&(*window)->height);
+                    resizeWindowSwapchain(*window);
+                }
+            } break;
+            case SDL_EVENT_KEY_DOWN:
+            {
+                keyEvent.type = HgKeyEventType_keyPress;
+                keyEvent.key = sdlKeycodeToHgKey(event.key.key);
+                platformState.isKeyDown[keyEvent.key] = true;
+
+                HgWindow** window = platformState.windows.get(event.button.windowID);
+                if (window != nullptr)
+                    (*window)->events[(*window)->eventCount++] = keyEvent;
+            } break;
+            case SDL_EVENT_KEY_UP:
+            {
+                keyEvent.type = HgKeyEventType_keyRelease;
+                keyEvent.key = sdlKeycodeToHgKey(event.key.key);
+                platformState.isKeyDown[keyEvent.key] = false;
+
+                HgWindow** window = platformState.windows.get(event.button.windowID);
+                if (window != nullptr)
+                    (*window)->events[(*window)->eventCount++] = keyEvent;
+            } break;
+            case SDL_EVENT_MOUSE_BUTTON_DOWN:
+            {
+                keyEvent.type = HgKeyEventType_keyPress;
+                keyEvent.key = sdlButtonToHgKey(event.button.button);
+                platformState.isKeyDown[keyEvent.key] = true;
+
+                HgWindow** window = platformState.windows.get(event.button.windowID);
+                if (window != nullptr)
+                    (*window)->events[(*window)->eventCount++] = keyEvent;
+            } break;
+            case SDL_EVENT_MOUSE_BUTTON_UP:
+            {
+                keyEvent.type = HgKeyEventType_keyRelease;
+                keyEvent.key = sdlButtonToHgKey(event.button.button);
+                platformState.isKeyDown[keyEvent.key] = false;
+
+                HgWindow** window = platformState.windows.get(event.button.windowID);
+                if (window != nullptr)
+                    (*window)->events[(*window)->eventCount++] = keyEvent;
+            } break;
+            case SDL_EVENT_MOUSE_MOTION:
+            {
+                HgWindow** window = platformState.windows.get(event.button.windowID);
+                if (window != nullptr) {
+                    (*window)->mouseX = event.motion.x;
+                    (*window)->mouseY = event.motion.y;
+                    (*window)->mouseDeltaX += event.motion.xrel;
+                    (*window)->mouseDeltaY += event.motion.yrel;
+                }
+            } break;
+        }
+    }
+}
+
+bool hgWasQuit()
+{
+    return platformState.wasQuit;
+}
+
+HgKeyEvent* hgGetKeyEvents(HgWindow* window, u32* count)
+{
+    hgAssert(window != nullptr);
+    hgAssert(count != nullptr);
+
+    *count = window->eventCount;
+    return window->events;
+}
+
+bool hgIsKeyDown(HgKey key)
+{
+    return platformState.isKeyDown[key];
+}
+
+f32 hgGetMouseX(HgWindow* window)
+{
+    return window->mouseX;
+}
+
+f32 hgGetMouseY(HgWindow* window)
+{
+    return window->mouseY;
+}
+
+f32 hgGetMouseDeltaX(HgWindow* window)
+{
+    return window->mouseDeltaX;
+}
+
+f32 hgGetMouseDeltaY(HgWindow* window)
+{
+    return window->mouseDeltaY;
+}
+
+bool hgIsFocused(HgWindow* window)
+{
+    return SDL_GetMouseFocus() == window->sdlWindow;
+}
+
+void ImGui_ImplHurdyGurdy_Init(
     HgWindow* window,
-    u32 colorAttachmentCount,
     const HgFormat* colorFormats,
+    u32 colorAttachmentCount,
     HgFormat depthFormat,
     HgFormat stencilFormat)
 {
     HgArena* scratch = hgGetScratch();
     HgArenaScope scratchScope{scratch};
+
+    ImGui_ImplSDL3_InitForVulkan(window->sdlWindow);
 
     VkFormat* colorVkFormats = hgAlloc<VkFormat>(scratch, colorAttachmentCount);
     for (u32 i = 0; i < colorAttachmentCount; ++i)
@@ -3192,11 +3747,11 @@ void hgInternalInitImGuiRenderer(
     VkFormat stencilVkFormat = formatToVk(stencilFormat);
 
     ImGui_ImplVulkan_InitInfo imguiInfo{};
-    imguiInfo.Instance = hgVkInstance;
-    imguiInfo.PhysicalDevice = hgVkPhysicalDevice;
-    imguiInfo.Device = hgVkDevice;
-    imguiInfo.QueueFamily = hgVkQueueFamily;
-    imguiInfo.Queue = hgVkQueue;
+    imguiInfo.Instance = vkState.instance;
+    imguiInfo.PhysicalDevice = vkState.physicalDevice;
+    imguiInfo.Device = vkState.device;
+    imguiInfo.QueueFamily = vkState.queueFamily;
+    imguiInfo.Queue = vkState.queue;
     imguiInfo.DescriptorPoolSize = 1000;
     imguiInfo.MinImageCount = window->imageCount;
     imguiInfo.ImageCount = window->imageCount;
@@ -3210,11 +3765,16 @@ void hgInternalInitImGuiRenderer(
     imguiInfo.PipelineInfoMain.PipelineRenderingCreateInfo.stencilAttachmentFormat = stencilVkFormat;
 
     ImGui_ImplVulkan_Init(&imguiInfo);
+
+    platformState.imguiInitialized = true;
 }
 
-void hgInternalDeinitImGuiRenderer()
+void ImGui_ImplHurdyGurdy_Shutdown()
 {
+    platformState.imguiInitialized = false;
+
     ImGui_ImplVulkan_Shutdown();
+    ImGui_ImplSDL3_Shutdown();
 }
 
 void* ImGui_ImplHurdyGurdy_CreateTexture(HgGpuView* view, HgGpuSampler* sampler, HgGpuLayout layout)
@@ -3225,6 +3785,12 @@ void* ImGui_ImplHurdyGurdy_CreateTexture(HgGpuView* view, HgGpuSampler* sampler,
 void ImGui_ImplHurdyGurdy_DestroyTexture(void* texture)
 {
     ImGui_ImplVulkan_RemoveTexture((VkDescriptorSet)texture);
+}
+
+void ImGui_ImplHurdyGurdy_NewFrame()
+{
+    ImGui_ImplSDL3_NewFrame();
+    ImGui_ImplVulkan_NewFrame();
 }
 
 void ImGui_ImplHurdyGurdy_Draw(HgGpuCommands* cmd)

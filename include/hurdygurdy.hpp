@@ -3527,12 +3527,12 @@ void hgDestroyGpuImage(HgGpuImage* image);
  * Create a gpu image view
  */
 HgGpuView* hgCreateGpuView(
-    const HgGpuImage* image,
-    HgGpuAspectFlags aspectFlags,
+    HgGpuImage* image,
     u32 baseMipLevel,
     u32 levelCount,
     u32 baseArrayLayer,
     u32 layerCount,
+    HgGpuAspectFlags aspectFlags,
     HgGpuViewType type = HgGpuViewType_2D);
 
 /**
@@ -4213,6 +4213,108 @@ void hgDeinitPlatform();
 u32 hgGetPlatformVulkanExtensions(HgArena* arena, HgStringView** extBuffer);
 
 /**
+ * The present mode for the swapchain
+ */
+enum HgPresentMode {
+    HgPresentMode_immediate = 0,
+    HgPresentMode_mailbox = 1,
+    HgPresentMode_fifo = 2,
+    HgPresentMode_fifoRelaxed = 3,
+};
+
+/**
+ * Configuration for a window
+ */
+struct HgWindowConfig {
+    /**
+     * Whether the window can be resized
+     */
+    bool fixedSize = false;
+    /**
+     * Whether the window should be windowed or fullscreen
+     */
+    bool fullscreen = false;
+    /**
+     * How the swapchain images will be presented
+     *
+     * Note, will fall back to FIFO if unavailable
+     */
+    HgPresentMode preferredPresentMode = HgPresentMode_fifo;
+    /**
+     * How the swapchain images will be used
+     */
+    HgGpuImageUsageFlags imageUsage = HgGpuImageUsage_colorAttachment;
+    /**
+     * The maximum number of events per update
+     */
+    u32 maxEvents = 2048;
+};
+
+/**
+ * A window
+ */
+struct HgWindow;
+
+/**
+ * Create a new window
+ *
+ * Note, width and height are ignored if fullscreen is enabled
+ */
+HgWindow* hgCreateWindow(const char* title, u32 width, u32 height, const HgWindowConfig* config);
+
+/**
+ * Destroy a window
+ */
+void hgDestroyWindow(HgWindow* window);
+
+/**
+ * Get the window's width in pixels
+ */
+u32 hgGetWindowWidth(HgWindow* window);
+
+/**
+ * Get the window's width in pixels
+ */
+u32 hgGetWindowHeight(HgWindow* window);
+
+/**
+ * Get the window's width in pixels
+ */
+HgFormat hgGetWindowFormat(HgWindow* window);
+
+/**
+ * Get the window's current image
+ */
+HgGpuView* hgGetWindowCurrentImage(HgWindow* window);
+
+/**
+ * Acquires the next swapchain image and begins its command buffer
+ *
+ * Returns
+ * - The command buffer to record this frame
+ * - nullptr if the swapchain cannot be rendered to
+ */
+HgGpuCommands* hgWindowBeginRecording(HgWindow* window);
+
+/**
+ * Finishes recording the command buffer and presents the swapchain image
+ *
+ * Parameters
+ * - cmd The command buffer given from beginRecording
+ */
+void hgWindowEndAndPresent(HgWindow* window, HgGpuCommands* cmd);
+
+/**
+ * Processes all events since startup or the last call to process events
+ */
+void hgProcessEvents();
+
+/**
+ * Returns whether the app has been quit
+ */
+bool hgWasQuit();
+
+/**
  * A key on the keyboard or button on the mouse
  */
 enum HgKey {
@@ -4336,7 +4438,7 @@ enum HgKey {
  * The types of events
  */
 enum HgKeyEventType {
-    HgKeyEventType_none,
+    HgKeyEventType_none = 0,
     HgKeyEventType_keyPress,
     HgKeyEventType_keyRelease,
     HgKeyEventType_count,
@@ -4356,104 +4458,15 @@ struct HgKeyEvent {
     HgKey key;
 };
 
-enum HgPresentMode {
-    HgPresentMode_IMMEDIATE_KHR = 0,
-    HgPresentMode_MAILBOX_KHR = 1,
-    HgPresentMode_FIFO_KHR = 2,
-    HgPresentMode_FIFO_RELAXED_KHR = 3,
-};
+/**
+ * Returns whether the key is currently down
+ */
+bool hgIsKeyDown(HgKey key);
 
 /**
- * Configuration for a window
+ * Returns whether the mouse is focused on the window
  */
-struct HgCreateWindow {
-    /**
-     * The title of the window
-     */
-    const char* title = nullptr;
-    /**
-     * The width in pixels if windowed, otherwise ignored
-     */
-    u32 width = 0;
-    /**
-     * The height in pixels if windowed, otherwise ignored
-     */
-    u32 height = 0;
-    /**
-     * Whether the window can be resized
-     */
-    bool fixedSize = false;
-    /**
-     * Whether the window should be windowed or fullscreen
-     *
-     * Note, width and height are ignored if fullscreen is true
-     */
-    bool fullscreen = false;
-    /**
-     * How the swapchain images will be presented
-     *
-     * Note, will fall back to FIFO if unavailable
-     */
-    HgPresentMode preferredPresentMode = HgPresentMode_FIFO_KHR;
-    /**
-     * How the swapchain images will be used
-     */
-    HgGpuImageUsageFlags imageUsage = HgGpuImageUsage_colorAttachment;
-    /**
-     * The maximum number of events per update
-     */
-    u32 maxEvents = 2048;
-};
-
-/**
- * A window
- */
-struct HgWindow;
-
-/**
- * Create a new window
- */
-HgWindow* hgCreateWindow(const HgCreateWindow* config);
-
-/**
- * Destroy a window
- */
-void hgDestroyWindow(HgWindow* window);
-
-/**
- * Acquires the next swapchain image and begins its command buffer
- *
- * Returns
- * - The command buffer to record this frame
- * - nullptr if the swapchain cannot be rendered to
- */
-HgGpuCommands* hgWindowBeginRecording(HgWindow* window);
-
-/**
- * Finishes recording the command buffer and presents the swapchain image
- *
- * Parameters
- * - cmd The command buffer given from beginRecording
- */
-void hgWindowEndAndPresent(HgWindow* window, HgGpuCommands* cmd);
-
-/**
- * Processes all events since the last call to process events or startup
- *
- * Must be called every frame before querying input
- * Processes all events, so all windows must be given
- * Updates the each window's input state
- *
- * Parameters
- * - windows All open windows, must not be nullptr
- * - windowCount The number of windows
- */
-void hgProcessEvents();
-
-/**
- * Returns whether the app has been quit
- */
-bool hgWasQuit();
+bool hgIsFocused(HgWindow* window);
 
 /**
  * Get the key events since last event processing
@@ -4461,34 +4474,24 @@ bool hgWasQuit();
 HgKeyEvent* hgGetKeyEvents(HgWindow* window, u32* count);
 
 /**
- * Returns whether the key is currently down
+ * Returns the current x position of the mouse relative to the window
  */
-bool hgIsKeyDown(HgKey key);
+f32 hgGetMouseX(HgWindow* window);
 
 /**
- * Returns the current position of the mouse relative to the focused window
+ * Returns the current y position of the mouse relative to the window
  */
-void hgGetMousePos(f32* x, f32* y);
+f32 hgGetMouseY(HgWindow* window);
 
 /**
- * Gets the change in mouse position in pixels
+ * Gets the change in mouse x position in pixels
  */
-void hgGetMouseDelta(f32* x, f32* y);
+f32 hgGetMouseDeltaX(HgWindow* window);
 
 /**
- * Returns whether the mouse is focused on the window
+ * Gets the change in mouse y position in pixels
  */
-bool hgIsMouseFocused(HgWindow* window);
-
-/**
- * Get the window's size in pixels
- */
-void hgGetWindowSize(HgWindow* window, u32* width, u32* height, HgFormat* format);
-
-/**
- * Get the window's current image
- */
-HgGpuView* hgGetCurrentWindowImage(HgWindow* window);
+f32 hgGetMouseDeltaY(HgWindow* window);
 
 /**
  * Initialize ImGui platform backend
@@ -4500,8 +4503,8 @@ HgGpuView* hgGetCurrentWindowImage(HgWindow* window);
  */
 void ImGui_ImplHurdyGurdy_Init(
     HgWindow* window,
-    u32 colorAttachmentCount,
     const HgFormat* colorFormats,
+    u32 colorAttachmentCount,
     HgFormat depthFormat = HgFormat_undefined,
     HgFormat stencilFormat = HgFormat_undefined);
 
