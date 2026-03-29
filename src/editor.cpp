@@ -47,8 +47,8 @@ int main()
     camera.position = HgVec3{0, 0, -1};
 
     f32 aspectRatio = 16.0f / 9.0f;
-    u32 renderWidth = hgGetWindowWidth(window);
-    u32 renderHeight = hgGetWindowHeight(window);
+    u32 renderWidth = 0;
+    u32 renderHeight = 0;
 
     HgECS ecs = ecs.create(arena, 1024, 128);
     ecs.createComponent<HgTransform>(arena, 1024);
@@ -81,21 +81,17 @@ int main()
     scene[cubeIdx] = cube;
 
     HgGpuImage* renderImage = nullptr;
-    hgDefer(hgDestroyGpuImage(renderImage));
-
     HgGpuView* renderView = nullptr;
-    hgDefer(hgDestroyGpuView(renderView));
-
     HgGpuSampler* renderSampler = hgCreateGpuSampler(HgGpuFilter_nearest);
-    hgDefer(hgDestroyGpuSampler(renderSampler));
-
     void* renderImGuiTex = nullptr;
+    hgDefer(hgDestroyGpuImage(renderImage));
+    hgDefer(hgDestroyGpuView(renderView));
+    hgDefer(hgDestroyGpuSampler(renderSampler));
     hgDefer(ImGui_ImplHurdyGurdy_DestroyTexture(renderImGuiTex));
 
     HgGpuImage* depthImage = nullptr;
-    hgDefer(hgDestroyGpuImage(depthImage));
-
     HgGpuView* depthView = nullptr;
+    hgDefer(hgDestroyGpuImage(depthImage));
     hgDefer(hgDestroyGpuView(depthView));
 
     bool showRender = true;
@@ -231,19 +227,12 @@ int main()
                     hgDestroyGpuImage(renderImage);
 
                     renderImage = hgCreateGpuImage(
-                            renderWidth,
-                            renderHeight,
-                            HgFormat_r8g8b8a8_srgb,
-                            HgGpuImageUsage_colorAttachment |
-                            HgGpuImageUsage_sampled |
-                            HgGpuImageUsage_transferSrc);
-
-                    renderView = hgCreateGpuView(renderImage, 0, 1, 0, 1, HgGpuAspect_color);
-
-                    renderImGuiTex = ImGui_ImplHurdyGurdy_CreateTexture(
-                        renderView,
-                        renderSampler,
-                        HgGpuLayout_shaderReadOnly);
+                        renderWidth,
+                        renderHeight,
+                        HgFormat_r8g8b8a8_srgb,
+                        HgGpuImageUsage_colorAttachment |
+                        HgGpuImageUsage_sampled |
+                        HgGpuImageUsage_transferSrc);
 
                     depthImage = hgCreateGpuImage(
                         renderWidth,
@@ -251,7 +240,10 @@ int main()
                         HgFormat_d32_sfloat,
                         HgGpuImageUsage_depthStencilAttachment);
 
+                    renderView = hgCreateGpuView(renderImage, 0, 1, 0, 1, HgGpuAspect_color);
                     depthView = hgCreateGpuView(depthImage, 0, 1, 0, 1, HgGpuAspect_depth);
+
+                    renderImGuiTex = ImGui_ImplHurdyGurdy_CreateTexture(renderView, renderSampler, HgGpuLayout_shaderReadOnly);
                 }
 
                 if (ImGui::IsWindowFocused())
@@ -259,8 +251,8 @@ int main()
                     if (move3D && hgIsKeyDown(HgKey_lmouse))
                     {
                         f32 rotSpeed = 2.0f;
-                        f32 dx = hgGetMouseDeltaX(window);
-                        f32 dy = hgGetMouseDeltaY(window);
+                        f32 dx = hgGetMouseDeltaX();
+                        f32 dy = hgGetMouseDeltaY();
                         HgQuat rotX = hgAxisAngle(HgVec3{0, 1, 0}, dx * rotSpeed / (f32)hgGetWindowWidth(window));
                         HgQuat rotY = hgAxisAngle(HgVec3{-1, 0, 0}, dy * rotSpeed / (f32)hgGetWindowWidth(window));
                         camera.rotation = rotX * camera.rotation * rotY;
@@ -468,7 +460,7 @@ int main()
         ImGui::Render();
 
         cpuDelta = hgClockTick(&cpuClock);
-        HgGpuCommands* cmd = hgWindowBeginRecording(window);
+        HgGpuCommands* cmd = hgWindowBeginCommands(window);
         if (cmd != nullptr)
         {
             hgClockTick(&cpuClock);

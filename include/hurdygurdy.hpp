@@ -4191,7 +4191,7 @@ void hgEndGpuRenderPass(HgGpuCommands* cmd);
  * Parameters
  * - arena The arena to allocate from
  * - maxWindows The maximum number of windows that can be created
- * - maxEvents The maximum number of events a window can hold per frame
+ * - maxEvents The maximum number of events recorded per frame
  */
 void hgInitPlatform(HgArena* arena, u32 maxWindows, u32 maxEvents);
 
@@ -4244,10 +4244,6 @@ struct HgWindowConfig {
      * How the swapchain images will be used
      */
     HgGpuImageUsageFlags imageUsage = HgGpuImageUsage_colorAttachment;
-    /**
-     * The maximum number of events per update
-     */
-    u32 maxEvents = 2048;
 };
 
 /**
@@ -4294,7 +4290,7 @@ HgGpuView* hgGetWindowCurrentImage(HgWindow* window);
  * - The command buffer to record this frame
  * - nullptr if the swapchain cannot be rendered to
  */
-HgGpuCommands* hgWindowBeginRecording(HgWindow* window);
+HgGpuCommands* hgWindowBeginCommands(HgWindow* window);
 
 /**
  * Finishes recording the command buffer and presents the swapchain image
@@ -4459,19 +4455,29 @@ struct HgKeyEvent {
 };
 
 /**
+ * Get the key events since last event processing
+ */
+HgKeyEvent* hgGetKeyEvents(u32* count);
+
+/**
  * Returns whether the key is currently down
  */
 bool hgIsKeyDown(HgKey key);
 
 /**
+ * Gets the change in mouse x position in pixels
+ */
+f32 hgGetMouseDeltaX();
+
+/**
+ * Gets the change in mouse y position in pixels
+ */
+f32 hgGetMouseDeltaY();
+
+/**
  * Returns whether the mouse is focused on the window
  */
 bool hgIsFocused(HgWindow* window);
-
-/**
- * Get the key events since last event processing
- */
-HgKeyEvent* hgGetKeyEvents(HgWindow* window, u32* count);
 
 /**
  * Returns the current x position of the mouse relative to the window
@@ -4482,16 +4488,6 @@ f32 hgGetMouseX(HgWindow* window);
  * Returns the current y position of the mouse relative to the window
  */
 f32 hgGetMouseY(HgWindow* window);
-
-/**
- * Gets the change in mouse x position in pixels
- */
-f32 hgGetMouseDeltaX(HgWindow* window);
-
-/**
- * Gets the change in mouse y position in pixels
- */
-f32 hgGetMouseDeltaY(HgWindow* window);
 
 /**
  * Initialize ImGui platform backend

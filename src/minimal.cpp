@@ -127,10 +127,10 @@ int main()
             if (hgIsKeyDown(HgKey_lmouse))
             {
                 f32 rotSpeed = 2.0f;
-                f32 dx = hgGetMouseDeltaX(window);
-                f32 dy = hgGetMouseDeltaY(window);
-                HgQuat rotX = hgAxisAngle(HgVec3{0, 1, 0}, dx * rotSpeed / (f32)hgGetWindowWidth(window));
-                HgQuat rotY = hgAxisAngle(HgVec3{-1, 0, 0}, dy * rotSpeed / (f32)hgGetWindowWidth(window));
+                f32 dx = hgGetMouseDeltaX();
+                f32 dy = hgGetMouseDeltaY();
+                HgQuat rotX = hgAxisAngle(HgVec3{0, 1, 0}, dx * rotSpeed / (f32)hgGetWindowHeight(window));
+                HgQuat rotY = hgAxisAngle(HgVec3{-1, 0, 0}, dy * rotSpeed / (f32)hgGetWindowHeight(window));
                 camera.rotation = rotX * camera.rotation * rotY;
             }
 
@@ -167,7 +167,7 @@ int main()
 
         ImGui::Render();
 
-        HgGpuCommands* cmd = hgWindowBeginRecording(window);
+        HgGpuCommands* cmd = hgWindowBeginCommands(window);
         if (cmd != nullptr)
         {
             HgComputePass computePass{};

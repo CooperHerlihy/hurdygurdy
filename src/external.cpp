@@ -53,18 +53,19 @@ struct HgGpuPipeline {
 
 struct HgWindow {
     SDL_Window* sdlWindow;
+
     VkSurfaceKHR surface;
     VkSwapchainKHR swapchain;
-    HgFormat format;
+    u32 imageCount;
     u32 width;
     u32 height;
-    u32 imageCount;
+    HgFormat format;
     HgGpuImageUsageFlags imageUsage;
     HgPresentMode presentMode;
     HgGpuImage* images;
     HgGpuView* views;
 
-    HgGpuCommands** cmds;
+    VkCommandBuffer* cmds;
     VkFence* frameFinished;
     VkSemaphore* imageAvailable;
     VkSemaphore* readyToPresent;
@@ -73,12 +74,6 @@ struct HgWindow {
 
     f32 mouseX;
     f32 mouseY;
-    f32 mouseDeltaX;
-    f32 mouseDeltaY;
-
-    u32 maxEvents;
-    u32 eventCount;
-    HgKeyEvent events[1];
 };
 
 static void loadVulkan();
@@ -2927,10 +2922,16 @@ struct PlatformState {
     u32* windowFreeList = nullptr;
     u32 windowNext = 0;
 
-    HgHashMap<SDL_WindowID, HgWindow*> windows;
+    HgHashMap<SDL_WindowID, HgWindow*> windows = {};
+
+    u32 maxEvents = 0;
+    u32 eventCount = 0;
+    HgKeyEvent* events = nullptr;
 
     bool wasQuit = false;
     bool isKeyDown[HgKey_count]{};
+    f32 mouseDeltaX = 0.0f;
+    f32 mouseDeltaY = 0.0f;
 
     bool imguiInitialized = false;
 };
@@ -2958,6 +2959,10 @@ void hgInitPlatform(HgArena* arena, u32 maxWindows, u32 maxEvents)
     platformState.windowNext = 0;
 
     platformState.windows = platformState.windows.create(arena, maxWindows * 2);
+
+    platformState.maxEvents = maxEvents;
+    platformState.eventCount = 0;
+    platformState.events = hgAlloc<HgKeyEvent>(arena, maxEvents);
 }
 
 void hgDeinitPlatform()
@@ -3125,7 +3130,7 @@ static void resizeWindowSwapchain(HgWindow* window)
         window->images = (HgGpuImage*)realloc(window->images, sizeof(HgGpuImage) * swapImageCount);
         window->views = (HgGpuView*)realloc(window->views, sizeof(HgGpuView) * swapImageCount);
 
-        window->cmds = (HgGpuCommands**)realloc(window->cmds, sizeof(HgGpuCommands*) * swapImageCount);
+        window->cmds = (VkCommandBuffer*)realloc(window->cmds, sizeof(VkCommandBuffer) * swapImageCount);
         window->frameFinished = (VkFence*)realloc(window->frameFinished, sizeof(VkFence) * swapImageCount);
         window->imageAvailable = (VkSemaphore*)realloc(window->imageAvailable, sizeof(VkSemaphore) * swapImageCount);
         window->readyToPresent = (VkSemaphore*)realloc(window->readyToPresent, sizeof(VkSemaphore) * swapImageCount);
@@ -3292,7 +3297,7 @@ HgGpuView* hgGetWindowCurrentImage(HgWindow* window)
     return &window->views[window->currentImage];
 }
 
-HgGpuCommands* hgWindowBeginRecording(HgWindow* window)
+HgGpuCommands* hgWindowBeginCommands(HgWindow* window)
 {
     hgAssert(vkState.device != nullptr);
     if (window->width == 0 || window->height == 0)
@@ -3318,20 +3323,20 @@ retry:
     if (result != VK_SUCCESS)
         hgError("Could not acquire next image: %s", vkResultToStr(result));
 
-    HgGpuCommands* cmd = window->cmds[window->currentFrame];
+    VkCommandBuffer cmd = window->cmds[window->currentFrame];
     vkResetCommandBuffer((VkCommandBuffer)cmd, 0);
 
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-    vkBeginCommandBuffer((VkCommandBuffer)cmd, &beginInfo);
-    return cmd;
+    vkBeginCommandBuffer(cmd, &beginInfo);
+    return (HgGpuCommands*)cmd;
 }
 
 void hgWindowEndAndPresent(HgWindow* window, HgGpuCommands* cmd)
 {
-    hgAssert(cmd == window->cmds[window->currentFrame]);
+    hgAssert((VkCommandBuffer)cmd == window->cmds[window->currentFrame]);
     vkEndCommandBuffer((VkCommandBuffer)cmd);
 
     VkSubmitInfo submit{};
@@ -3341,7 +3346,7 @@ void hgWindowEndAndPresent(HgWindow* window, HgGpuCommands* cmd)
     VkPipelineStageFlags stageFlags{VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
     submit.pWaitDstStageMask = &stageFlags;
     submit.commandBufferCount = 1;
-    submit.pCommandBuffers = (VkCommandBuffer*)&cmd;
+    submit.pCommandBuffers = &window->cmds[window->currentFrame];
     submit.signalSemaphoreCount = 1;
     submit.pSignalSemaphores = &window->readyToPresent[window->currentFrame];
 
@@ -3598,18 +3603,13 @@ static HgKey sdlButtonToHgKey(u32 button)
 
 void hgProcessEvents()
 {
-    platformState.windows.forEach([&](const SDL_WindowID*, HgWindow** window)
-    {
-        (*window)->mouseDeltaX = 0.0f;
-        (*window)->mouseDeltaY = 0.0f;
-        (*window)->eventCount = 0;
-    });
+    platformState.eventCount = 0;
+    platformState.mouseDeltaX = 0.0f;
+    platformState.mouseDeltaY = 0.0f;
 
     SDL_Event event;
     while (SDL_PollEvent(&event))
     {
-        HgKeyEvent keyEvent{};
-
         if (platformState.imguiInitialized)
             ImGui_ImplSDL3_ProcessEvent(&event);
 
@@ -3628,55 +3628,49 @@ void hgProcessEvents()
                     resizeWindowSwapchain(*window);
                 }
             } break;
-            case SDL_EVENT_KEY_DOWN:
+            case SDL_EVENT_MOUSE_MOTION:
             {
-                keyEvent.type = HgKeyEventType_keyPress;
-                keyEvent.key = sdlKeycodeToHgKey(event.key.key);
-                platformState.isKeyDown[keyEvent.key] = true;
+                platformState.mouseDeltaX += event.motion.xrel;
+                platformState.mouseDeltaY += event.motion.yrel;
 
                 HgWindow** window = platformState.windows.get(event.button.windowID);
                 if (window != nullptr)
-                    (*window)->events[(*window)->eventCount++] = keyEvent;
+                {
+                    (*window)->mouseX = event.motion.x;
+                    (*window)->mouseY = event.motion.y;
+                }
+            } break;
+            case SDL_EVENT_KEY_DOWN:
+            {
+                hgAssert(platformState.eventCount < platformState.maxEvents);
+                HgKey key = sdlKeycodeToHgKey(event.key.key);
+
+                platformState.events[platformState.eventCount++] = {HgKeyEventType_keyPress, key};
+                platformState.isKeyDown[key] = true;
             } break;
             case SDL_EVENT_KEY_UP:
             {
-                keyEvent.type = HgKeyEventType_keyRelease;
-                keyEvent.key = sdlKeycodeToHgKey(event.key.key);
-                platformState.isKeyDown[keyEvent.key] = false;
+                hgAssert(platformState.eventCount < platformState.maxEvents);
+                HgKey key = sdlKeycodeToHgKey(event.key.key);
 
-                HgWindow** window = platformState.windows.get(event.button.windowID);
-                if (window != nullptr)
-                    (*window)->events[(*window)->eventCount++] = keyEvent;
+                platformState.events[platformState.eventCount++] = {HgKeyEventType_keyRelease, key};
+                platformState.isKeyDown[key] = false;
             } break;
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
             {
-                keyEvent.type = HgKeyEventType_keyPress;
-                keyEvent.key = sdlButtonToHgKey(event.button.button);
-                platformState.isKeyDown[keyEvent.key] = true;
+                hgAssert(platformState.eventCount < platformState.maxEvents);
+                HgKey key = sdlButtonToHgKey(event.button.button);
 
-                HgWindow** window = platformState.windows.get(event.button.windowID);
-                if (window != nullptr)
-                    (*window)->events[(*window)->eventCount++] = keyEvent;
+                platformState.events[platformState.eventCount++] = {HgKeyEventType_keyPress, key};
+                platformState.isKeyDown[key] = true;
             } break;
             case SDL_EVENT_MOUSE_BUTTON_UP:
             {
-                keyEvent.type = HgKeyEventType_keyRelease;
-                keyEvent.key = sdlButtonToHgKey(event.button.button);
-                platformState.isKeyDown[keyEvent.key] = false;
+                hgAssert(platformState.eventCount < platformState.maxEvents);
+                HgKey key = sdlButtonToHgKey(event.button.button);
 
-                HgWindow** window = platformState.windows.get(event.button.windowID);
-                if (window != nullptr)
-                    (*window)->events[(*window)->eventCount++] = keyEvent;
-            } break;
-            case SDL_EVENT_MOUSE_MOTION:
-            {
-                HgWindow** window = platformState.windows.get(event.button.windowID);
-                if (window != nullptr) {
-                    (*window)->mouseX = event.motion.x;
-                    (*window)->mouseY = event.motion.y;
-                    (*window)->mouseDeltaX += event.motion.xrel;
-                    (*window)->mouseDeltaY += event.motion.yrel;
-                }
+                platformState.events[platformState.eventCount++] = {HgKeyEventType_keyRelease, key};
+                platformState.isKeyDown[key] = false;
             } break;
         }
     }
@@ -3687,13 +3681,11 @@ bool hgWasQuit()
     return platformState.wasQuit;
 }
 
-HgKeyEvent* hgGetKeyEvents(HgWindow* window, u32* count)
+HgKeyEvent* hgGetKeyEvents(u32* count)
 {
-    hgAssert(window != nullptr);
     hgAssert(count != nullptr);
-
-    *count = window->eventCount;
-    return window->events;
+    *count = platformState.eventCount;
+    return platformState.events;
 }
 
 bool hgIsKeyDown(HgKey key)
@@ -3711,14 +3703,14 @@ f32 hgGetMouseY(HgWindow* window)
     return window->mouseY;
 }
 
-f32 hgGetMouseDeltaX(HgWindow* window)
+f32 hgGetMouseDeltaX()
 {
-    return window->mouseDeltaX;
+    return platformState.mouseDeltaX;
 }
 
-f32 hgGetMouseDeltaY(HgWindow* window)
+f32 hgGetMouseDeltaY()
 {
-    return window->mouseDeltaY;
+    return platformState.mouseDeltaY;
 }
 
 bool hgIsFocused(HgWindow* window)
