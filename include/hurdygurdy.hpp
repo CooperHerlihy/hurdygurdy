@@ -3115,6 +3115,56 @@ enum HgFormat {
 u32 hgFormatToSize(HgFormat format);
 
 /**
+ * Where in the pipeline a resource can be accessed
+ */
+enum HgGpuStage {
+    HgGpuStage_none = 0,
+    HgGpuStage_topOfPipe = 0x00000001,
+    HgGpuStage_drawIndirect = 0x00000002,
+    HgGpuStage_vertexInput = 0x00000004,
+    HgGpuStage_vertexShader = 0x00000008,
+    HgGpuStage_tessellationControlShader = 0x00000010,
+    HgGpuStage_tessellationEvaluationShader = 0x00000020,
+    HgGpuStage_geometryShader = 0x00000040,
+    HgGpuStage_fragmentShader = 0x00000080,
+    HgGpuStage_earlyFragmentTests = 0x00000100,
+    HgGpuStage_lateFragmentTests = 0x00000200,
+    HgGpuStage_colorAttachmentOutput = 0x00000400,
+    HgGpuStage_computeShader = 0x00000800,
+    HgGpuStage_transfer = 0x00001000,
+    HgGpuStage_bottomOfPipe = 0x00002000,
+    HgGpuStage_host = 0x00004000,
+    HgGpuStage_allGraphics = 0x00008000,
+    HgGpuStage_allCommands = 0x00010000,
+};
+typedef u32 HgGpuStageFlags;
+
+/**
+ * How a resource can be accessed
+ */
+enum HgAccess {
+    HgGpuAccess_none = 0,
+    HgGpuAccess_indirectCommandRead = 0x00000001,
+    HgGpuAccess_indexRead = 0x00000002,
+    HgGpuAccess_vertexAttributeRead = 0x00000004,
+    HgGpuAccess_uniformRead = 0x00000008,
+    HgGpuAccess_inputAttachmentRead = 0x00000010,
+    HgGpuAccess_shaderRead = 0x00000020,
+    HgGpuAccess_shaderWrite = 0x00000040,
+    HgGpuAccess_colorAttachmentRead = 0x00000080,
+    HgGpuAccess_colorAttachmentWrite = 0x00000100,
+    HgGpuAccess_depthStencilAttachmentRead = 0x00000200,
+    HgGpuAccess_depthStencilAttachmentWrite = 0x00000400,
+    HgGpuAccess_transferRead = 0x00000800,
+    HgGpuAccess_transferWrite = 0x00001000,
+    HgGpuAccess_hostRead = 0x00002000,
+    HgGpuAccess_hostWrite = 0x00004000,
+    HgGpuAccess_memoryRead = 0x00008000,
+    HgGpuAccess_memoryWrite = 0x00010000,
+};
+typedef u32 HgGpuAccessFlags;
+
+/**
  * A gpu buffer
  */
 struct HgGpuBuffer;
@@ -3474,52 +3524,41 @@ HgGpuImage* hgCreateGpuImageEx(const HgCreateGpuImageEx* create);
 void hgDestroyGpuImage(HgGpuImage* image);
 
 /**
- * A subresource range of an image
+ * Create a gpu image view
  */
-struct HgGpuImageRange {
-    /**
-     * The aspect of the image
-     */
-    HgGpuAspectFlags aspectFlags;
-    /**
-     * The first mip level
-     */
-    u32 baseMipLevel;
-    /**
-     * The number of mip levels
-     */
-    u32 levelCount;
-    /**
-     * The first array layer
-     */
-    u32 baseArrayLayer;
-    /**
-     * The number of layers
-     */
-    u32 layerCount;
-};
+HgGpuView* hgCreateGpuView(
+    const HgGpuImage* image,
+    HgGpuAspectFlags aspectFlags,
+    u32 baseMipLevel,
+    u32 levelCount,
+    u32 baseArrayLayer,
+    u32 layerCount,
+    HgGpuViewType type = HgGpuViewType_2D);
+
+/**
+ * Destroy a gpu image view
+ */
+void hgDestroyGpuView(HgGpuView* view);
 
 /**
  * Write to a gpu image
  *
- * Note, the subresource must have only one mip level
+ * Note, only fills the base mip level
  *
  * Parameters
  * - dst The image to write to
- * - subresource The subresource of the image to write to
  * - src The data to read from
- * - layout The final layout to set the image to
  */
-void hgWriteGpuImage(HgGpuImage* dst, HgGpuImageRange range, const void* src, HgGpuLayout layout);
+void hgWriteGpuImage(HgGpuView* dst, const void* src);
 
 /**
  * Write to a gpu image cubemap
  *
- * Note, the subresource must have only one mip level
+ * Note, dst must have at least 6 array layers to fill
  *
- * Note, dst should have 6 array layers, all of which will be filled
+ * Only the base mip level is filled
  *
- * Note, srcData is assumed to be layed out as:
+ * srcData is assumed to be layed out as:
  *  #
  * ####
  *  #
@@ -3528,43 +3567,30 @@ void hgWriteGpuImage(HgGpuImage* dst, HgGpuImageRange range, const void* src, Hg
  * - dst The image to write to
  * - subresource The subresource of the image to write to
  * - src The data to read from
- * - layout The final layout to set the image to
  */
-void hgWriteGpuCubemapImage(HgGpuImage* dst, HgGpuImageRange range, const void* src, HgGpuLayout layout);
+void hgWriteGpuCubemapImage(HgGpuView* dst, const void* src);
 
 /**
  * Read from a gpu image
  *
- * Note, the subresource must have only one mip level
+ * Note, only the base mip level is read
  *
  * Parameters
  * - src The pointer to write to
  * - dst The image to read from
  * - subresource The subresource of the image to read from
- * - layout The layout the image was in before
  */
-void hgReadImage(void* dst, const HgGpuImage* src, HgGpuImageRange range, HgGpuLayout layout);
+void hgReadGpuImage(void* dst, HgGpuView* src);
 
 /**
  * Generates mipmaps from the base level
  *
+ * Note, dst should only have 1 array layer
+ *
  * Parameters
  * - image The image to generate mipmaps for
- * - aspectFlags The image aspect flags
- * - oldLayout The layout the image was in before
- * - newLayout The layout the image will be set to after
  */
-void hgGenerateMipmaps(HgGpuImage* image, HgGpuAspectFlags aspectFlags, HgGpuLayout oldLayout, HgGpuLayout newLayout);
-
-/**
- * Create a gpu image view
- */
-HgGpuView* hgCreateGpuView(const HgGpuImage* image, HgGpuImageRange range, HgGpuViewType type = HgGpuViewType_2D);
-
-/**
- * Destroy a gpu image view
- */
-void hgDestroyGpuView(HgGpuView* view);
+void hgGenerateGpuMipmaps(HgGpuView* dst);
 
 /**
  * Create a Vulkan sampler
@@ -3893,31 +3919,171 @@ void hgGpuDrawIndexed(
  */
 void hgGpuCompute(HgGpuCommands* cmd, u32 groupCountX, u32 groupCountY, u32 groupCountZ);
 
-enum HgAttachmentLoadOp {
-    HgAttachmentLoadOp_LOAD = 0,
-    HgAttachmentLoadOp_CLEAR = 1,
-    HgAttachmentLoadOp_DONT_CARE = 2,
+/**
+ * An image dependency barrier
+ */
+struct HgImageBarrier {
+    /**
+     * The image to sychronize
+     */
+    HgGpuView* image;
+    /**
+     * Where the image will be used next
+     */
+    HgGpuStageFlags nextStage;
+    /**
+     * How the image will be accessed next
+     */
+    HgGpuAccessFlags nextAccess;
+    /**
+     * The next layout the image needs to be in
+     */
+    HgGpuLayout nextLayout;
 };
 
-enum HgAttachmentStoreOp {
-    HgAttachmentStoreOp_STORE = 0,
-    HgAttachmentStoreOp_DONT_CARE = 1,
+/**
+ * A buffer dependency barrier
+ */
+struct HgBufferBarrier {
+    /**
+     * The buffer to sychronize
+     */
+    HgGpuBuffer* buffer;
+    /**
+     * Where the image will be used next
+     */
+    HgGpuStageFlags nextStage;
+    /**
+     * How the image will be accessed next
+     */
+    HgGpuAccessFlags nextAccess;
 };
 
-union HgClearColorValue {
+/**
+ * Creates a barrier for resource uses that are not part of a render pass
+ *
+ * Parameters
+ * - cmd The command buffer
+ * - bufferBarriers The buffer barriers
+ * - bufferBarrierCount The number of buffer barriers
+ * - imageBarriers The image barriers
+ * - imageBarrierCount The number of image barriers
+ */
+void hgGpuMemoryBarrier(
+    HgGpuCommands* cmd,
+    const HgBufferBarrier* bufferBarriers,
+    u32 bufferBarrierCount,
+    const HgImageBarrier* imageBarriers,
+    u32 imageBarrierCount);
+
+/**
+ * A compute pass description
+ */
+struct HgComputePass {
+    /**
+     * The uniforms buffer dependencies
+     */
+    HgGpuBuffer** uniformBuffers = nullptr;
+    /**
+     * The number of uniform buffers
+     */
+    u32 uniformBufferCount = 0;
+    /**
+     * The storage buffer dependencies
+     */
+    HgGpuBuffer** storageBuffers = nullptr;
+    /**
+     * The number of storage buffers
+     */
+    u32 storageBufferCount = 0;
+    /**
+     * The sampled image dependencies
+     */
+    HgGpuView** sampledImages = nullptr;
+    /**
+     * The number of sampled images
+     */
+    u32 sampledImageCount = 0;
+    /**
+     * The storage image dependencies
+     */
+    HgGpuView** storageImages = nullptr;
+    /**
+     * The number of storage images
+     */
+    u32 storageImageCount = 0;
+};
+
+/**
+ * Performs memory barriers for compute shader resources
+ *
+ * Parameters
+ * - cmd The command buffer
+ * - pass The compute pass description
+ */
+void hgGpuComputePass(HgGpuCommands* cmd, const HgComputePass* pass);
+
+/**
+ * The operation to load a render attachment
+ */
+enum HgGpuLoadOp {
+    HgGpuLoadOp_load = 0,
+    HgGpuLoadOp_clear = 1,
+    HgGpuLoadOp_dontCare = 2,
+};
+
+/**
+ * The operation to store a render attachment
+ */
+enum HgGpuStoreOp {
+    HgGpuStoreOp_store = 0,
+    HgGpuStoreOp_dontCare = 1,
+};
+
+/**
+ * The value to clear color attachments to
+ */
+union HgGpuClearValueVolor {
+    /**
+     * The value as f32
+     */
     f32 float32[4];
+    /**
+     * The value as i32
+     */
     i32 int32[4];
+    /**
+     * The value as u32
+     */
     u32 uint32[4];
 };
 
-struct HgClearDepthStencilValue {
+/**
+ * The value to clear depth and stencil attachments to
+ */
+struct HgGpuClearValueDepthStencil {
+    /**
+     * The depth value
+     */
     f32 depth;
+    /**
+     * The stencil value
+     */
     u32 stencil;
 };
 
-union HgClearValue {
-    HgClearColorValue           color;
-    HgClearDepthStencilValue    depthStencil;
+/**
+ * The value to clear a render attachment to
+ */
+union HgGpuClearValue {
+    /**
+     * The value for color attachments
+     */
+    HgGpuClearValueVolor color;
+    /**
+     * The value for depth and stencil attachments
+     */
+    HgGpuClearValueDepthStencil depthStencil;
 };
 
 /**
@@ -3927,19 +4093,19 @@ struct HgRenderAttachment {
     /**
      * The image attached
      */
-    const HgGpuView* image = nullptr;
+    HgGpuView* image = nullptr;
     /**
      * How the image will be loaded
      */
-    HgAttachmentLoadOp loadOp = HgAttachmentLoadOp_CLEAR;
+    HgGpuLoadOp loadOp = HgGpuLoadOp_clear;
     /**
      * How the image will be stored
      */
-    HgAttachmentStoreOp storeOp = HgAttachmentStoreOp_STORE;
+    HgGpuStoreOp storeOp = HgGpuStoreOp_store;
     /**
      * What to clear the image to if cleared
      */
-    HgClearValue clearValue = {};
+    HgGpuClearValue clearValue = {};
 };
 
 /**
@@ -4000,211 +4166,24 @@ struct HgRenderPass {
     const HgRenderAttachment* stencilAttachment = nullptr;
 };
 
-enum HgPipelineStage {
-    HgPipelineStage_TOP_OF_PIPE_BIT = 0x00000001,
-    HgPipelineStage_DRAW_INDIRECT_BIT = 0x00000002,
-    HgPipelineStage_VERTEX_INPUT_BIT = 0x00000004,
-    HgPipelineStage_VERTEX_SHADER_BIT = 0x00000008,
-    HgPipelineStage_TESSELLATION_CONTROL_SHADER_BIT = 0x00000010,
-    HgPipelineStage_TESSELLATION_EVALUATION_SHADER_BIT = 0x00000020,
-    HgPipelineStage_GEOMETRY_SHADER_BIT = 0x00000040,
-    HgPipelineStage_FRAGMENT_SHADER_BIT = 0x00000080,
-    HgPipelineStage_EARLY_FRAGMENT_TESTS_BIT = 0x00000100,
-    HgPipelineStage_LATE_FRAGMENT_TESTS_BIT = 0x00000200,
-    HgPipelineStage_COLOR_ATTACHMENT_OUTPUT_BIT = 0x00000400,
-    HgPipelineStage_COMPUTE_SHADER_BIT = 0x00000800,
-    HgPipelineStage_TRANSFER_BIT = 0x00001000,
-    HgPipelineStage_BOTTOM_OF_PIPE_BIT = 0x00002000,
-    HgPipelineStage_HOST_BIT = 0x00004000,
-    HgPipelineStage_ALL_GRAPHICS_BIT = 0x00008000,
-    HgPipelineStage_ALL_COMMANDS_BIT = 0x00010000,
-    HgPipelineStage_NONE = 0,
-};
-
-typedef u32 HgPipelineStageFlags;
-
-enum HgAccess {
-    HgAccess_INDIRECT_COMMAND_READ_BIT = 0x00000001,
-    HgAccess_INDEX_READ_BIT = 0x00000002,
-    HgAccess_VERTEX_ATTRIBUTE_READ_BIT = 0x00000004,
-    HgAccess_UNIFORM_READ_BIT = 0x00000008,
-    HgAccess_INPUT_ATTACHMENT_READ_BIT = 0x00000010,
-    HgAccess_SHADER_READ_BIT = 0x00000020,
-    HgAccess_SHADER_WRITE_BIT = 0x00000040,
-    HgAccess_COLOR_ATTACHMENT_READ_BIT = 0x00000080,
-    HgAccess_COLOR_ATTACHMENT_WRITE_BIT = 0x00000100,
-    HgAccess_DEPTH_STENCIL_ATTACHMENT_READ_BIT = 0x00000200,
-    HgAccess_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT = 0x00000400,
-    HgAccess_TRANSFER_READ_BIT = 0x00000800,
-    HgAccess_TRANSFER_WRITE_BIT = 0x00001000,
-    HgAccess_HOST_READ_BIT = 0x00002000,
-    HgAccess_HOST_WRITE_BIT = 0x00004000,
-    HgAccess_MEMORY_READ_BIT = 0x00008000,
-    HgAccess_MEMORY_WRITE_BIT = 0x00010000,
-    HgAccess_NONE = 0,
-};
-
-typedef u32 HgAccessFlags;
+/**
+ * Performs render barrier and begins a render pass
+ *
+ * Parameters
+ * - cmd The command buffer
+ * - width The width of the render area
+ * - height The height of the render area
+ * - pass The render pass description
+ */
+void hgBeginGpuRenderPass(HgGpuCommands* cmd, u32 width, u32 height, const HgRenderPass* pass);
 
 /**
- * An image dependency barrier
+ * Ends the render pass
+ *
+ * Parameters
+ * - cmd The command buffer
  */
-struct HgImageBarrier {
-    /**
-     * The image to sychronize
-     */
-    HgGpuView* image;
-    /**
-     * Where the image will be used next
-     */
-    HgPipelineStageFlags nextStage;
-    /**
-     * How the image will be accessed next
-     */
-    HgAccessFlags nextAccess;
-    /**
-     * The next layout the image needs to be in
-     */
-    HgGpuLayout nextLayout;
-};
-
-/**
- * A buffer dependency barrier
- */
-struct HgBufferBarrier {
-    /**
-     * The buffer to sychronize
-     */
-    HgGpuBuffer* buffer;
-    /**
-     * Where the image will be used next
-     */
-    HgPipelineStageFlags nextStage;
-    /**
-     * How the image will be accessed next
-     */
-    HgAccessFlags nextAccess;
-};
-
-/**
- * A renderer to organize render passes and synchronize resources
- */
-struct HgRenderer {
-    /**
-     * A buffer resource
-     */
-    struct BufferState {
-        /**
-         * Where the image was used last
-         */
-        HgPipelineStageFlags lastStage;
-        /**
-         * How the image was accessed last
-         */
-        HgAccessFlags lastAccess;
-    };
-
-    /**
-     * An image resource
-     */
-    struct ImageState {
-        /**
-         * Where the image was used last
-         */
-        HgPipelineStageFlags lastStage;
-        /**
-         * How the image was accessed last
-         */
-        HgAccessFlags lastAccess;
-        /**
-         * The last layout the image was in
-         */
-        HgGpuLayout lastLayout;
-    };
-
-    /**
-     * The buffer resources
-     */
-    HgHashMap<const HgGpuBuffer*, BufferState, hgPtrHash<const HgGpuBuffer>> buffers;
-    /**
-     * The image resources
-     */
-    HgHashMap<const HgGpuView*, ImageState, hgPtrHash<const HgGpuView>> images;
-
-    /**
-     * Create a new renderer
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - maxBuffers The max number of buffer resources
-     * - maxImages The max number of image resources
-     */
-    static HgRenderer create(HgArena* arena, u32 maxBuffers, u32 maxImages);
-
-    /**
-     * Removes all resources
-     */
-    void reset();
-
-    /**
-     * Set the state for a buffer
-     */
-    void setBuffer(HgGpuBuffer* buffer, HgPipelineStageFlags lastStage, HgAccessFlags lastAccess);
-
-    /**
-     * Set the state for an image
-     */
-    void setImage(
-        HgGpuView* image,
-        HgPipelineStageFlags lastStage,
-        HgAccessFlags lastAccess,
-        HgGpuLayout lastLayout);
-
-    /**
-     * Creates a barrier for resource uses that are not part of a render pass
-     *
-     * Parameters
-     * - cmd The command buffer
-     * - bufferBarriers The buffer barriers
-     * - bufferBarrierCount The number of buffer barriers
-     * - imageBarriers The image barriers
-     * - imageBarrierCount The number of image barriers
-     */
-    void barrier(
-        HgGpuCommands* cmd,
-        const HgBufferBarrier* bufferBarriers,
-        u32 bufferBarrierCount,
-        const HgImageBarrier* imageBarriers,
-        u32 imageBarrierCount);
-
-    /**
-     * Performs memory barriers for shader resources
-     *
-     * Parameters
-     * - cmd The command buffer
-     * - pass The render pass description
-     */
-    void prepareResources(HgGpuCommands* cmd, const HgRenderPass* pass);
-
-    /**
-     * Prepares resources and begins a render pass
-     *
-     * Parameters
-     * - cmd The command buffer
-     * - width The width of the render area
-     * - height The height of the render area
-     * - pass The render pass description
-     */
-    void beginPass(HgGpuCommands* cmd, u32 width, u32 height, const HgRenderPass* pass);
-
-    /**
-     * Ends the render pass
-     *
-     * Parameters
-     * - cmd The command buffer
-     */
-    void endPass(HgGpuCommands* cmd);
-};
+void hgEndGpuRenderPass(HgGpuCommands* cmd);
 
 /**
  * Initializes global resources for windowing

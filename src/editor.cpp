@@ -93,8 +93,8 @@ int main()
     HgGpuSampler* renderSampler = hgCreateGpuSampler(HgGpuFilter_nearest);
     hgDefer(hgDestroyGpuSampler(renderSampler));
 
-    void* renderDescriptor = nullptr;
-    hgDefer(ImGui_ImplHurdyGurdy_DestroyTexture(renderDescriptor));
+    void* renderImGuiTex = nullptr;
+    hgDefer(ImGui_ImplHurdyGurdy_DestroyTexture(renderImGuiTex));
 
     HgGpuImage* depthImage = nullptr;
     hgDefer(hgDestroyGpuImage(depthImage));
@@ -175,12 +175,7 @@ int main()
                 {
                     void* pixels = hgAlloc(frame, renderWidth * renderHeight * 4, 4);
 
-                    hgReadImage(
-                        pixels,
-                        renderImage,
-                        {HgGpuAspect_color, 0, 1, 0, 1},
-                        HgGpuLayout_shaderReadOnly);
-
+                    hgReadGpuImage(pixels, renderView);
                     stbi_write_png(
                         "screenshot.png",
                         (int)renderWidth,
@@ -233,7 +228,7 @@ int main()
                     hgUpdateProjection2D(&proj);
                     hgUpdateProjection3D(&proj);
 
-                    ImGui_ImplHurdyGurdy_DestroyTexture(renderDescriptor);
+                    ImGui_ImplHurdyGurdy_DestroyTexture(renderImGuiTex);
                     hgDestroyGpuView(depthView);
                     hgDestroyGpuImage(depthImage);
                     hgDestroyGpuView(renderView);
@@ -247,9 +242,9 @@ int main()
                             HgGpuImageUsage_sampled |
                             HgGpuImageUsage_transferSrc);
 
-                    renderView = hgCreateGpuView(renderImage, {HgGpuAspect_color, 0, 1, 0, 1});
+                    renderView = hgCreateGpuView(renderImage, HgGpuAspect_color, 0, 1, 0, 1);
 
-                    renderDescriptor = ImGui_ImplHurdyGurdy_CreateTexture(
+                    renderImGuiTex = ImGui_ImplHurdyGurdy_CreateTexture(
                         renderView,
                         renderSampler,
                         HgGpuLayout_shaderReadOnly);
@@ -260,7 +255,7 @@ int main()
                         HgFormat_d32_sfloat,
                         HgGpuImageUsage_depthStencilAttachment);
 
-                    depthView = hgCreateGpuView(depthImage, {HgGpuAspect_depth, 0, 1, 0, 1});
+                    depthView = hgCreateGpuView(depthImage, HgGpuAspect_depth, 0, 1, 0, 1);
                 }
 
                 if (ImGui::IsWindowFocused())
@@ -299,7 +294,7 @@ int main()
                 hgUpdateView2D(&view);
                 hgUpdateView3D(&view);
 
-                ImGui::Image((ImTextureID)renderDescriptor, {(f32)renderWidth, (f32)renderHeight});
+                ImGui::Image((ImTextureID)renderImGuiTex, {(f32)renderWidth, (f32)renderHeight});
             }
             ImGui::End();
         }
@@ -484,16 +479,14 @@ int main()
         {
             hgClockTick(&cpuClock);
 
-            HgRenderer renderer = renderer.create(frame, 32, 32);
-
             HgRenderAttachment renderColorAttachment{};
             renderColorAttachment.image = renderView;
-            renderColorAttachment.loadOp = HgAttachmentLoadOp_CLEAR;
+            renderColorAttachment.loadOp = HgGpuLoadOp_clear;
             renderColorAttachment.clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
 
             HgRenderAttachment renderDepthAttachment{};
             renderDepthAttachment.image = depthView;
-            renderDepthAttachment.loadOp = HgAttachmentLoadOp_CLEAR;
+            renderDepthAttachment.loadOp = HgGpuLoadOp_clear;
             renderDepthAttachment.clearValue.depthStencil = {1.0f, 0};
 
             HgRenderPass renderPass{};
@@ -501,16 +494,16 @@ int main()
             renderPass.colorAttachmentCount = 1;
             renderPass.depthAttachment = &renderDepthAttachment;
 
-            renderer.beginPass(cmd, renderWidth, renderHeight, &renderPass);
+            hgBeginGpuRenderPass(cmd, renderWidth, renderHeight, &renderPass);
 
             hgDraw3D(&ecs, cmd);
             hgDraw2D(&ecs, cmd);
 
-            renderer.endPass(cmd);
+            hgEndGpuRenderPass(cmd);
 
             HgRenderAttachment guiColorAttachment{};
             guiColorAttachment.image = hgGetCurrentWindowImage(window);
-            guiColorAttachment.loadOp = HgAttachmentLoadOp_CLEAR;
+            guiColorAttachment.loadOp = HgGpuLoadOp_clear;
             guiColorAttachment.clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
 
             HgRenderPass guiPass{};
@@ -521,17 +514,17 @@ int main()
 
             u32 width, height;
             hgGetWindowSize(window, &width, &height, nullptr);
-            renderer.beginPass(cmd, width, height, &guiPass);
+            hgBeginGpuRenderPass(cmd, width, height, &guiPass);
 
             ImGui_ImplHurdyGurdy_Draw(cmd);
 
-            renderer.endPass(cmd);
+            hgEndGpuRenderPass(cmd);
 
             HgImageBarrier presentBarrier{};
             presentBarrier.image = hgGetCurrentWindowImage(window);
             presentBarrier.nextLayout = HgGpuLayout_presentSrc;
 
-            renderer.barrier(cmd, nullptr, 0, &presentBarrier, 1);
+            hgGpuMemoryBarrier(cmd, nullptr, 0, &presentBarrier, 1);
 
             cpuDelta += hgClockTick(&cpuClock);
             hgWindowEndAndPresent(window, cmd);

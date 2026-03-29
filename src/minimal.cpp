@@ -68,7 +68,7 @@ int main()
         noiseHeight,
         HgFormat_r8g8b8a8_unorm,
         HgGpuImageUsage_storage | HgGpuImageUsage_sampled);
-    noiseTex->view = hgCreateGpuView(noiseTex->image, {HgGpuAspect_color, 0, 1, 0, 1});
+    noiseTex->view = hgCreateGpuView(noiseTex->image, HgGpuAspect_color, 0, 1, 0, 1);
 
     HgGpuDescriptor noiseStorageDesc = hgCreateGpuDescriptor(HgGpuDescriptorType_storageImage);
     hgDefer(hgDestroyGpuDescriptor(noiseStorageDesc));
@@ -176,13 +176,11 @@ int main()
         HgGpuCommands* cmd = hgWindowBeginRecording(window);
         if (cmd != nullptr)
         {
-            HgRenderer renderer = renderer.create(frame, 32, 32);
-
-            HgRenderPass computePass{};
+            HgComputePass computePass{};
             computePass.storageImages = &noiseTex->view;
             computePass.storageImageCount = 1;
 
-            renderer.prepareResources(cmd, &computePass);
+            hgGpuComputePass(cmd, &computePass);
 
             hgBindGpuPipeline(cmd, noisePipeline);
 
@@ -201,7 +199,7 @@ int main()
 
             HgRenderAttachment colorAttachment{};
             colorAttachment.image = hgGetCurrentWindowImage(window);
-            colorAttachment.loadOp = HgAttachmentLoadOp_CLEAR;
+            colorAttachment.loadOp = HgGpuLoadOp_clear;
 
             HgRenderPass pass{};
             pass.colorAttachments = &colorAttachment;
@@ -209,19 +207,19 @@ int main()
             pass.sampledImages = &noiseTex->view;
             pass.sampledImageCount = 1;
 
-            renderer.beginPass(cmd, windowWidth, windowHeight, &pass);
+            hgBeginGpuRenderPass(cmd, windowWidth, windowHeight, &pass);
 
             hgDraw2D(&ecs, cmd);
 
             ImGui_ImplHurdyGurdy_Draw(cmd);
 
-            renderer.endPass(cmd);
+            hgEndGpuRenderPass(cmd);
 
             HgImageBarrier presentBarrier{};
             presentBarrier.image = hgGetCurrentWindowImage(window);
             presentBarrier.nextLayout = HgGpuLayout_presentSrc;
 
-            renderer.barrier(cmd, nullptr, 0, &presentBarrier, 1);
+            hgGpuMemoryBarrier(cmd, nullptr, 0, &presentBarrier, 1);
 
             hgWindowEndAndPresent(window, cmd);
         }

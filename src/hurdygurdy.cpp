@@ -2676,14 +2676,9 @@ void hgLoadTexture(HgResource id, HgGpuSampler* sampler)
         imageInfo.usage = HgGpuImageUsage_transferDst | HgGpuImageUsage_sampled;
 
         tex.image = hgCreateGpuImageEx(&imageInfo);
+        tex.view = hgCreateGpuView(tex.image, HgGpuAspect_color, 0, 1, 0, 1);
 
-        hgWriteGpuImage(
-            tex.image,
-            {HgGpuAspect_color, 0, 1, 0, 1},
-            data.getPixels(),
-            HgGpuLayout_shaderReadOnly);
-
-        tex.view = hgCreateGpuView(tex.image, {HgGpuAspect_color, 0, 1, 0, 1});
+        hgWriteGpuImage(tex.view, data.getPixels());
 
         hgAssert(sampler != nullptr);
         tex.sampler = sampler;
@@ -3298,13 +3293,9 @@ void hgInitPipeline2D(
     pipeline2D.defaultTex.image = hgCreateGpuImage(2, 2, HgFormat_r8g8b8a8_srgb,
         HgGpuImageUsage_sampled | HgGpuImageUsage_transferDst);
 
-    pipeline2D.defaultTex.view = hgCreateGpuView(pipeline2D.defaultTex.image, {HgGpuAspect_color, 0, 1, 0, 1});
+    pipeline2D.defaultTex.view = hgCreateGpuView(pipeline2D.defaultTex.image, HgGpuAspect_color, 0, 1, 0, 1);
 
-    hgWriteGpuImage(
-        pipeline2D.defaultTex.image,
-        {HgGpuAspect_color, 0, 1, 0, 1},
-        defaultColors,
-        HgGpuLayout_shaderReadOnly);
+    hgWriteGpuImage(pipeline2D.defaultTex.view, defaultColors);
 
     pipeline2D.defaultTex.sampler = hgCreateGpuSampler(HgGpuFilter_nearest);
 
@@ -3593,20 +3584,12 @@ void hgInitPipeline3D(
         HgGpuImageUsage_sampled | HgGpuImageUsage_transferDst);
 
     pipeline3D.defaultColorMap.view = hgCreateGpuView(
-        pipeline3D.defaultColorMap.image, {HgGpuAspect_color, 0, 1, 0, 1});
+        pipeline3D.defaultColorMap.image, HgGpuAspect_color, 0, 1, 0, 1);
     pipeline3D.defaultNormalMap.view = hgCreateGpuView(
-        pipeline3D.defaultNormalMap.image, {HgGpuAspect_color, 0, 1, 0, 1});
+        pipeline3D.defaultNormalMap.image, HgGpuAspect_color, 0, 1, 0, 1);
 
-    hgWriteGpuImage(
-        pipeline3D.defaultColorMap.image,
-        {HgGpuAspect_color, 0, 1, 0, 1},
-        defaultColors,
-        HgGpuLayout_shaderReadOnly);
-    hgWriteGpuImage(
-        pipeline3D.defaultNormalMap.image,
-        {HgGpuAspect_color, 0, 1, 0, 1},
-        defaultNormals,
-        HgGpuLayout_shaderReadOnly);
+    hgWriteGpuImage(pipeline3D.defaultColorMap.view, defaultColors);
+    hgWriteGpuImage(pipeline3D.defaultNormalMap.view, defaultNormals);
 
     pipeline3D.defaultColorMap.descriptor = hgCreateGpuDescriptor(HgGpuDescriptorType_combinedImageSampler);
     pipeline3D.defaultNormalMap.descriptor = hgCreateGpuDescriptor(HgGpuDescriptorType_combinedImageSampler);
