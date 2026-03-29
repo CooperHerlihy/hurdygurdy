@@ -23,7 +23,9 @@ int main()
     HgWindow* window = hgCreateWindow(&windowConfig);
     hgDefer(hgDestroyWindow(window));
 
-    hgInitPipeline2D(window->format, VK_FORMAT_UNDEFINED);
+    HgFormat windowFormat;
+    hgGetWindowSize(window, nullptr, nullptr, &windowFormat);
+    hgInitPipeline2D(windowFormat, HgFormat_undefined);
     hgDefer(hgDeinitPipeline2D());
 
     HgResource noiseShaderID = hgResourceID("build/noise.comp.spv");
@@ -44,14 +46,11 @@ int main()
         u32 seed;
         u32 outImageIdx;
     };
-    VkPushConstantRange noisePushRange{VK_SHADER_STAGE_ALL, 0, sizeof(NoisePush)};
-    VkPipelineLayout noiseLayout = hgCreatePipelineLayout(&noisePushRange);
-    hgDefer(vkDestroyPipelineLayout(hgVkDevice, noiseLayout, nullptr));
 
     hgWaitForFenceIndefinite(&fence);
     HgBinary* noiseShaderCode = hgGetResource(noiseShaderID);
-    VkPipeline noisePipeline = hgCreateComputePipeline(noiseLayout, (u8*)noiseShaderCode->data, noiseShaderCode->size);
-    hgDefer(vkDestroyPipeline(hgVkDevice, noisePipeline, nullptr));
+    HgPipeline* noisePipeline = hgCreateComputePipeline(sizeof(NoisePush), (u8*)noiseShaderCode->data, noiseShaderCode->size);
+    hgDefer(hgDestroyPipeline(noisePipeline));
 
     hgUnloadResource(nullptr, 0, noiseShaderID);
 
@@ -67,22 +66,22 @@ int main()
     noiseTex->image = hgCreateImage(
         noiseWidth,
         noiseHeight,
-        VK_FORMAT_R8G8B8A8_UNORM,
-        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
-    noiseTex->view = hgCreateImageView(noiseTex->image, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
+        HgFormat_r8g8b8a8_unorm,
+        HgImageUsage_storage | HgImageUsage_sampled);
+    noiseTex->view = hgCreateImageView(noiseTex->image, {HgImageAspect_color, 0, 1, 0, 1});
 
     HgDescriptor noiseStorageDesc = hgCreateDescriptor(HgDescriptorType_storageImage);
     hgDefer(hgDestroyDescriptor(noiseStorageDesc));
 
-    VkDescriptorImageInfo noiseStorageInfo{nullptr, noiseTex->view->view, VK_IMAGE_LAYOUT_GENERAL};
+    HgImageDescriptorInfo noiseStorageInfo{nullptr, noiseTex->view, HgImageLayout_general};
     hgUpdateDescriptor(noiseStorageDesc, nullptr, &noiseStorageInfo);
 
-    noiseTex->sampler = hgCreateSampler(VK_FILTER_LINEAR);
-    hgDefer(vkDestroySampler(hgVkDevice, noiseTex->sampler, nullptr));
+    noiseTex->sampler = hgCreateSampler(HgSamplerFilter_linear);
+    hgDefer(hgDestroySampler(noiseTex->sampler));
 
     noiseTex->descriptor = hgCreateDescriptor(HgDescriptorType_combinedImageSampler);
 
-    VkDescriptorImageInfo noiseSamplerInfo{noiseTex->sampler, noiseTex->view->view, VK_IMAGE_LAYOUT_GENERAL};
+    HgImageDescriptorInfo noiseSamplerInfo{noiseTex->sampler, noiseTex->view, HgImageLayout_shaderReadOnlyOptimal};
     hgUpdateDescriptor(noiseTex->descriptor, nullptr, &noiseSamplerInfo);
 
     HgTransform camera{};
@@ -106,7 +105,7 @@ int main()
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    ImGui_ImplHurdyGurdy_Init(window, 1, &window->format);
+    ImGui_ImplHurdyGurdy_Init(window, 1, &windowFormat);
     hgDefer(ImGui_ImplHurdyGurdy_Shutdown());
 
     HgClock gameClock{};
@@ -121,7 +120,10 @@ int main()
         if (hgWasQuit())
             goto quit;
 
-        HgMat4 proj = hgPerspective((f32)hgPi * 0.5f, (f32)window->width / (f32)window->height, 0.1f, 1000.0f);
+        u32 windowWidth, windowHeight;
+        hgGetWindowSize(window, &windowWidth, &windowHeight, nullptr);
+
+        HgMat4 proj = hgPerspective((f32)hgPi * 0.5f, (f32)windowWidth / (f32)windowHeight, 0.1f, 1000.0f);
         hgUpdateProjection2D(&proj);
 
         if (!ImGui::GetIO().WantCaptureMouse)
@@ -130,12 +132,10 @@ int main()
             {
                 f32 dx, dy;
                 hgGetMouseDelta(&dx, &dy);
-                u32 width, height;
-                hgGetWindowSize(window, &width, &height);
 
                 f32 rotSpeed = 2.0f;
-                HgQuat rotX = hgAxisAngle(HgVec3{0, 1, 0}, dx * rotSpeed / (f32)height);
-                HgQuat rotY = hgAxisAngle(HgVec3{-1, 0, 0}, dy * rotSpeed / (f32)height);
+                HgQuat rotX = hgAxisAngle(HgVec3{0, 1, 0}, dx * rotSpeed / (f32)windowHeight);
+                HgQuat rotY = hgAxisAngle(HgVec3{-1, 0, 0}, dy * rotSpeed / (f32)windowHeight);
 
                 camera.rotation = rotX * camera.rotation * rotY;
             }
@@ -173,7 +173,7 @@ int main()
 
         ImGui::Render();
 
-        VkCommandBuffer cmd = window->beginRecording();
+        HgCommandBuffer* cmd = hgWindowBeginRecording(window);
         if (cmd != nullptr)
         {
             HgRenderer renderer = renderer.create(frame, 32, 32);
@@ -184,7 +184,7 @@ int main()
 
             renderer.prepareResources(cmd, &computePass);
 
-            hgBindComputePipeline(cmd, noisePipeline, noiseLayout);
+            hgCmdBindPipeline(cmd, noisePipeline);
 
             NoisePush noisePush{};
             noisePush.width = noiseWidth;
@@ -195,13 +195,13 @@ int main()
             noisePush.seed = noiseSeed;
             noisePush.outImageIdx = hgDescriptorIdx(noiseStorageDesc);
 
-            vkCmdPushConstants(cmd, noiseLayout, VK_SHADER_STAGE_ALL, 0, sizeof(noisePush), &noisePush);
+            hgCmdPushConstants(cmd, noisePipeline, 0, sizeof(noisePush), &noisePush);
 
-            vkCmdDispatch(cmd, noiseWidth / 16, noiseHeight / 16, 1);
+            hgCmdDispatch(cmd, noiseWidth / 16, noiseHeight / 16, 1);
 
             HgRenderAttachment colorAttachment{};
-            colorAttachment.image = &window->views[window->currentImage];
-            colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            colorAttachment.image = hgGetCurrentWindowImage(window);
+            colorAttachment.loadOp = HgAttachmentLoadOp_CLEAR;
 
             HgRenderPass pass{};
             pass.colorAttachments = &colorAttachment;
@@ -209,7 +209,7 @@ int main()
             pass.sampledImages = &noiseTex->view;
             pass.sampledImageCount = 1;
 
-            renderer.beginPass(cmd, window->width, window->height, &pass);
+            renderer.beginPass(cmd, windowWidth, windowHeight, &pass);
 
             hgDraw2D(&ecs, cmd);
 
@@ -218,16 +218,16 @@ int main()
             renderer.endPass(cmd);
 
             HgImageBarrier presentBarrier{};
-            presentBarrier.image = &window->views[window->currentImage];
-            presentBarrier.nextLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+            presentBarrier.image = hgGetCurrentWindowImage(window);
+            presentBarrier.nextLayout = HgImageLayout_presentSrc;
 
             renderer.barrier(cmd, nullptr, 0, &presentBarrier, 1);
 
-            window->endAndPresent(cmd);
+            hgWindowEndAndPresent(window, cmd);
         }
     }
 
 quit:
-    vkDeviceWaitIdle(hgVkDevice);
+    hgGraphicsWaitIdle();
 }
 

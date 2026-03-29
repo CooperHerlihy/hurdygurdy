@@ -1,10 +1,17 @@
 #include "hurdygurdy.hpp"
 
+#include "hurdygurdy_internal.hpp"
+
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
 
 #include "imgui_impl_sdl3.h"
-#include "imgui_impl_vulkan.h"
+
+extern VkInstance hgVkInstance;
+
+void hgInternalCreateWindowSwapchain(HgWindow* window, const HgCreateWindow* config);
+void hgInternalDestroyWindowSwapchain(HgWindow* window);
+void hgInternalResizeWindowSwapchain(HgWindow* window);
 
 struct PlatformState {
     u32 windowCapacity = 0;
@@ -69,295 +76,6 @@ u32 hgGetPlatformVulkanExtensions(HgArena* arena, HgStringView** extBuffer)
     return extCount;
 }
 
-static void createWindowImages(HgWindow* window)
-{
-    HgArena* scratch = hgGetScratch();
-    HgArenaScope scratchScope{scratch};
-
-    VkImage* swapImages = hgAlloc<VkImage>(scratch, window->imageCount);
-    vkGetSwapchainImagesKHR(hgVkDevice, window->swapchain, &window->imageCount, swapImages);
-
-    for (u32 i = 0; i < window->imageCount; ++i)
-    {
-        window->images[i].image = swapImages[i];
-        window->images[i].type = VK_IMAGE_TYPE_2D;
-        window->images[i].format = window->format;
-        window->images[i].width = window->width;
-        window->images[i].height = window->height;
-        window->images[i].depth = 1;
-        window->images[i].mipLevels = 1;
-        window->images[i].arrayLayers = 1;
-        window->images[i].msaaSamples = VK_SAMPLE_COUNT_1_BIT;
-
-        VkImageViewCreateInfo viewInfo{};
-        viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        viewInfo.image = swapImages[i];
-        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        viewInfo.format = window->format;
-        viewInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-
-        VkResult viewResult = vkCreateImageView(hgVkDevice, &viewInfo, nullptr, &window->views[i].view);
-        if (window->views[i].view == nullptr)
-            hgError("Could not create VkImageView: %s\n", hgVkResultToStr(viewResult));
-
-        window->views[i].image = &window->images[i];
-        window->views[i].type = VK_IMAGE_VIEW_TYPE_2D;
-        window->views[i].aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
-        window->views[i].baseMipLevel = 0;
-        window->views[i].levelCount = 1;
-        window->views[i].baseArrayLayer = 0;
-        window->views[i].layerCount = 1;
-    }
-}
-
-static void destroyWindowImages(HgWindow* window)
-{
-    for (u32 i = 0; i < window->imageCount; ++i)
-    {
-        vkDestroyImageView(hgVkDevice, window->views[i].view, nullptr);
-    }
-}
-
-static void createWindowCmdchain(HgWindow* window)
-{
-    if (window->imageCount > 0) {
-        VkCommandBufferAllocateInfo cmdAllocInfo{};
-        cmdAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        cmdAllocInfo.pNext = nullptr;
-        cmdAllocInfo.commandPool = hgVkCmdPool;
-        cmdAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        cmdAllocInfo.commandBufferCount = window->imageCount;
-
-        vkAllocateCommandBuffers(hgVkDevice, &cmdAllocInfo, window->cmds);
-    }
-    for (u32 i = 0; i < window->imageCount; ++i)
-    {
-        VkFenceCreateInfo info{};
-        info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-        info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-        vkCreateFence(hgVkDevice, &info, nullptr, &window->frameFinished[i]);
-    }
-    for (u32 i = 0; i < window->imageCount; ++i)
-    {
-        VkSemaphoreCreateInfo info{};
-        info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-        vkCreateSemaphore(hgVkDevice, &info, nullptr, &window->imageAvailable[i]);
-    }
-    for (u32 i = 0; i < window->imageCount; ++i)
-    {
-        VkSemaphoreCreateInfo info{};
-        info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-        vkCreateSemaphore(hgVkDevice, &info, nullptr, &window->readyToPresent[i]);
-    }
-}
-
-static void destroyWindowCmdchain(HgWindow* window)
-{
-    if (window->cmds != nullptr)
-        vkFreeCommandBuffers(hgVkDevice, hgVkCmdPool, window->imageCount, window->cmds);
-
-    for (u32 i = 0; i < window->imageCount; ++i)
-    {
-        vkDestroyFence(hgVkDevice, window->frameFinished[i], nullptr);
-    }
-    for (u32 i = 0; i < window->imageCount; ++i)
-    {
-        vkDestroySemaphore(hgVkDevice, window->imageAvailable[i], nullptr);
-    }
-    for (u32 i = 0; i < window->imageCount; ++i)
-    {
-        vkDestroySemaphore(hgVkDevice, window->readyToPresent[i], nullptr);
-    }
-}
-
-static void resizeWindowSwapchain(HgWindow* window)
-{
-    if (window->width == 0 || window->height == 0)
-        return;
-
-    vkQueueWaitIdle(hgVkQueue);
-
-    destroyWindowCmdchain(window);
-    destroyWindowImages(window);
-
-    VkSurfaceCapabilitiesKHR surfaceCapabilities;
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(hgVkPhysicalDevice, window->surface, &surfaceCapabilities);
-
-    if (surfaceCapabilities.currentExtent.width != (u32)-1)
-        window->width = surfaceCapabilities.currentExtent.width;
-    if (surfaceCapabilities.currentExtent.height != (u32)-1)
-        window->height = surfaceCapabilities.currentExtent.height;
-
-    VkSwapchainCreateInfoKHR swapchainInfo{};
-    swapchainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    swapchainInfo.surface = window->surface;
-    swapchainInfo.minImageCount
-        = std::min(surfaceCapabilities.minImageCount, surfaceCapabilities.maxImageCount - 1) + 1;
-    swapchainInfo.imageFormat = window->format;
-    swapchainInfo.imageExtent = {window->width, window->height};
-    swapchainInfo.imageArrayLayers = 1;
-    swapchainInfo.imageUsage = window->imageUsage;
-    swapchainInfo.preTransform = surfaceCapabilities.currentTransform;
-    swapchainInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    swapchainInfo.presentMode = window->presentMode;
-    swapchainInfo.clipped = VK_TRUE;
-    swapchainInfo.oldSwapchain = window->swapchain;
-
-    VkResult result = vkCreateSwapchainKHR(hgVkDevice, &swapchainInfo, nullptr, &window->swapchain);
-    if (window->swapchain == nullptr)
-        hgError("Failed to create swapchain: %s\n", hgVkResultToStr(result));
-
-    u32 swapImageCount;
-    vkGetSwapchainImagesKHR(hgVkDevice, window->swapchain, &swapImageCount, nullptr);
-
-    if (window->imageCount != swapImageCount)
-    {
-        window->images = (HgImage*)realloc(window->images, sizeof(HgImage) * swapImageCount);
-        window->views = (HgImageView*)realloc(window->views, sizeof(HgImageView) * swapImageCount);
-
-        window->cmds = (VkCommandBuffer*)realloc(window->cmds, sizeof(VkCommandBuffer) * swapImageCount);
-        window->frameFinished = (VkFence*)realloc(window->frameFinished, sizeof(VkFence) * swapImageCount);
-        window->imageAvailable = (VkSemaphore*)realloc(window->imageAvailable, sizeof(VkSemaphore) * swapImageCount);
-        window->readyToPresent = (VkSemaphore*)realloc(window->readyToPresent, sizeof(VkSemaphore) * swapImageCount);
-
-        window->imageCount = swapImageCount;
-    }
-    createWindowImages(window);
-    createWindowCmdchain(window);
-
-    vkDestroySwapchainKHR(hgVkDevice, swapchainInfo.oldSwapchain, nullptr);
-}
-
-static VkFormat findSwapchainFormat(VkSurfaceKHR surface)
-{
-    hgAssert(surface != nullptr);
-
-    HgArena* scratch = hgGetScratch();
-    HgArenaScope scratchScope{scratch};
-
-    u32 formatCount = 0;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(hgVkPhysicalDevice, surface, &formatCount, nullptr);
-    VkSurfaceFormatKHR* formats = hgAlloc<VkSurfaceFormatKHR>(scratch, formatCount);
-    vkGetPhysicalDeviceSurfaceFormatsKHR(hgVkPhysicalDevice, surface, &formatCount, formats);
-
-    for (u32 i = 0; i < formatCount; ++i)
-    {
-        if (formats[i].format == VK_FORMAT_R8G8B8A8_SRGB)
-            return VK_FORMAT_R8G8B8A8_SRGB;
-        if (formats[i].format == VK_FORMAT_B8G8R8A8_SRGB)
-            return VK_FORMAT_B8G8R8A8_SRGB;
-    }
-    hgError("No supported swapchain formats\n");
-}
-
-static VkPresentModeKHR findSwapchainPresentMode(
-    VkSurfaceKHR surface,
-    VkPresentModeKHR desiredMode)
-{
-    hgAssert(surface != nullptr);
-
-    HgArena* scratch = hgGetScratch();
-    HgArenaScope scratchScope{scratch};
-
-    if (desiredMode == VK_PRESENT_MODE_FIFO_KHR)
-        return desiredMode;
-
-    u32 modeCount = 0;
-    vkGetPhysicalDeviceSurfacePresentModesKHR(hgVkPhysicalDevice, surface, &modeCount, nullptr);
-    VkPresentModeKHR* presentModes = hgAlloc<VkPresentModeKHR>(scratch, modeCount);
-    vkGetPhysicalDeviceSurfacePresentModesKHR(hgVkPhysicalDevice, surface, &modeCount, presentModes);
-
-    for (u32 i = 0; i < modeCount; ++i)
-    {
-        if (presentModes[i] == desiredMode)
-            return desiredMode;
-    }
-    return VK_PRESENT_MODE_FIFO_KHR;
-}
-
-static void createWindowSwapchain(HgWindow* window, const HgCreateWindow* config)
-{
-    window->format = findSwapchainFormat(window->surface);
-    window->presentMode = findSwapchainPresentMode(window->surface, config->preferredPresentMode);
-    window->imageUsage = config->imageUsage;
-    resizeWindowSwapchain(window);
-}
-
-static void destroyWindowSwapchain(HgWindow* window)
-{
-    destroyWindowCmdchain(window);
-    destroyWindowImages(window);
-
-    vkDestroySwapchainKHR(hgVkDevice, window->swapchain, nullptr);
-
-    free(window->cmds);
-    free(window->frameFinished);
-    free(window->imageAvailable);
-    free(window->readyToPresent);
-    free(window->views);
-    free(window->images);
-}
-
-VkCommandBuffer HgWindow::beginRecording()
-{
-    hgAssert(hgVkDevice != nullptr);
-    if (width == 0 || height == 0)
-        return nullptr;
-
-retry:
-    currentFrame = (currentFrame + 1) % imageCount;
-    vkWaitForFences(hgVkDevice, 1, &frameFinished[currentFrame], VK_TRUE, UINT64_MAX);
-    vkResetFences(hgVkDevice, 1, &frameFinished[currentFrame]);
-
-    VkResult result = vkAcquireNextImageKHR(
-        hgVkDevice, swapchain, UINT64_MAX, imageAvailable[currentFrame], nullptr, &currentImage);
-    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
-    {
-        resizeWindowSwapchain(this);
-        goto retry;
-    }
-    if (result != VK_SUCCESS)
-        hgError("Could not acquire next image: %s", hgVkResultToStr(result));
-
-    VkCommandBuffer cmd = cmds[currentFrame];
-    vkResetCommandBuffer(cmd, 0);
-
-    VkCommandBufferBeginInfo beginInfo{};
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-    vkBeginCommandBuffer(cmd, &beginInfo);
-    return cmd;
-}
-
-void HgWindow::endAndPresent(VkCommandBuffer cmd)
-{
-    hgAssert(cmd == cmds[currentFrame]);
-    vkEndCommandBuffer(cmd);
-
-    VkSubmitInfo submit{};
-    submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit.waitSemaphoreCount = 1;
-    submit.pWaitSemaphores = &imageAvailable[currentFrame];
-    VkPipelineStageFlags stageFlags{VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-    submit.pWaitDstStageMask = &stageFlags;
-    submit.commandBufferCount = 1;
-    submit.pCommandBuffers = &cmd;
-    submit.signalSemaphoreCount = 1;
-    submit.pSignalSemaphores = &readyToPresent[currentFrame];
-
-    vkQueueSubmit(hgVkQueue, 1, &submit, frameFinished[currentFrame]);
-
-    VkPresentInfoKHR presentInfo{};
-    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-    presentInfo.waitSemaphoreCount = 1;
-    presentInfo.pWaitSemaphores = &readyToPresent[currentFrame];
-    presentInfo.swapchainCount = 1;
-    presentInfo.pSwapchains = &swapchain;
-    presentInfo.pImageIndices = &currentImage;
-
-    vkQueuePresentKHR(hgVkQueue, &presentInfo);
-}
 
 HgWindow* hgCreateWindow(const HgCreateWindow* config)
 {
@@ -376,7 +94,7 @@ HgWindow* hgCreateWindow(const HgCreateWindow* config)
         int modeCount = 0;
         SDL_DisplayMode** modes = SDL_GetFullscreenDisplayModes(SDL_GetPrimaryDisplay(), &modeCount);
 
-        window->internals = SDL_CreateWindow(
+        window->sdlWindow = SDL_CreateWindow(
             title,
             modes[0]->w,
             modes[0]->h,
@@ -384,22 +102,22 @@ HgWindow* hgCreateWindow(const HgCreateWindow* config)
 
         SDL_free(modes);
     } else {
-        window->internals = SDL_CreateWindow(
+        window->sdlWindow = SDL_CreateWindow(
             title,
             config->width,
             config->height,
             SDL_WINDOW_VULKAN | (config->fixedSize ? 0 : SDL_WINDOW_RESIZABLE));
     }
 
-    bool success = SDL_Vulkan_CreateSurface((SDL_Window*)window->internals, hgVkInstance, nullptr, &window->surface);
+    bool success = SDL_Vulkan_CreateSurface(window->sdlWindow, hgVkInstance, nullptr, &window->surface);
     if (!success || window->surface == nullptr)
         hgError("Failed to create Vulkan surface: %s\n", SDL_GetError());
 
-    SDL_WindowID windowID = SDL_GetWindowID((SDL_Window*)window->internals);
+    SDL_WindowID windowID = SDL_GetWindowID(window->sdlWindow);
     state.windows.add(windowID, window);
 
-    SDL_GetWindowSize((SDL_Window*)window->internals, (int*)&window->width, (int*)&window->height);
-    createWindowSwapchain(window, config);
+    SDL_GetWindowSize(window->sdlWindow, (int*)&window->width, (int*)&window->height);
+    hgInternalCreateWindowSwapchain(window, config);
 
     return window;
 }
@@ -410,10 +128,10 @@ void hgDestroyWindow(HgWindow* window)
     hgAssert(windowIdx < state.windowCapacity);
     hgAssert(state.windowFreeList[windowIdx] == windowIdx);
 
-    destroyWindowSwapchain(window);
+    hgInternalDestroyWindowSwapchain(window);
 
     vkDestroySurfaceKHR(hgVkInstance, window->surface, nullptr);
-    SDL_DestroyWindow((SDL_Window*)window->internals);
+    SDL_DestroyWindow(window->sdlWindow);
 
     state.windowFreeList[windowIdx] = state.windowNext;
     state.windowNext = windowIdx;
@@ -676,8 +394,8 @@ void hgProcessEvents()
             case SDL_EVENT_WINDOW_RESIZED:
             {
                 HgWindow* window = *state.windows.get(event.window.windowID);
-                SDL_GetWindowSize((SDL_Window*)window->internals, (int*)&window->width, (int*)&window->height);
-                resizeWindowSwapchain(window);
+                SDL_GetWindowSize(window->sdlWindow, (int*)&window->width, (int*)&window->height);
+                hgInternalResizeWindowSwapchain(window);
             } break;
             case SDL_EVENT_KEY_DOWN:
             {
@@ -760,70 +478,38 @@ void hgGetMouseDelta(f32* x, f32* y)
 
 bool hgIsMouseFocused(HgWindow* window)
 {
-    return SDL_GetMouseFocus() == (SDL_Window*)window->internals;
+    return SDL_GetMouseFocus() == window->sdlWindow;
 }
 
-void hgGetWindowSize(HgWindow* window, u32* x, u32* y)
+void hgGetWindowSize(HgWindow* window, u32* width, u32* height, HgFormat* format)
 {
-    *x = window->width;
-    *y = window->height;
+    if (width != nullptr)
+        *width = window->width;
+    if (height != nullptr)
+        *height = window->height;
+    if (format != nullptr)
+        *format = window->format;
 }
 
-void ImGui_ImplHurdyGurdy_Init(
-    HgWindow* window,
-    u32 colorAttachmentCount,
-    const VkFormat* colorFormats,
-    VkFormat depthFormat,
-    VkFormat stencilFormat)
+HgImageView* hgGetCurrentWindowImage(HgWindow* window)
 {
-    ImGui_ImplSDL3_InitForVulkan((SDL_Window*)window->internals);
+    return window->views[window->currentImage];
+}
 
-    ImGui_ImplVulkan_InitInfo imguiInfo{};
-    imguiInfo.Instance = hgVkInstance;
-    imguiInfo.PhysicalDevice = hgVkPhysicalDevice;
-    imguiInfo.Device = hgVkDevice;
-    imguiInfo.QueueFamily = hgVkQueueFamily;
-    imguiInfo.Queue = hgVkQueue;
-    imguiInfo.DescriptorPoolSize = 1000;
-    imguiInfo.MinImageCount = window->imageCount;
-    imguiInfo.ImageCount = window->imageCount;
-    imguiInfo.MinAllocationSize = 1 << 20;
-    imguiInfo.UseDynamicRendering = true;
-    imguiInfo.PipelineInfoMain.PipelineRenderingCreateInfo.sType
-        = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
-    imguiInfo.PipelineInfoMain.PipelineRenderingCreateInfo.colorAttachmentCount = colorAttachmentCount;
-    imguiInfo.PipelineInfoMain.PipelineRenderingCreateInfo.pColorAttachmentFormats = colorFormats;
-    imguiInfo.PipelineInfoMain.PipelineRenderingCreateInfo.depthAttachmentFormat = depthFormat;
-    imguiInfo.PipelineInfoMain.PipelineRenderingCreateInfo.stencilAttachmentFormat = stencilFormat;
-#ifdef HG_VK_DEBUG_MESSENGER
-    imguiInfo.CheckVkResultFn = [](VkResult err)
-    {
-        if (err != VK_SUCCESS)
-            hgWarn("Vulkan error from ImGui: %s\n", hgVkResultToStr(err));
-    };
-#endif
-
-    ImGui_ImplVulkan_Init(&imguiInfo);
-
+void hgInternalInitImGuiPlatform(HgWindow* window)
+{
+    ImGui_ImplSDL3_InitForVulkan(window->sdlWindow);
     state.imguiInitialized = true;
 }
 
-void ImGui_ImplHurdyGurdy_Shutdown()
+void hgInternalDeinitImGuiPlatform()
 {
     state.imguiInitialized = false;
-
-    ImGui_ImplVulkan_Shutdown();
     ImGui_ImplSDL3_Shutdown();
 }
 
 void ImGui_ImplHurdyGurdy_NewFrame()
 {
     ImGui_ImplSDL3_NewFrame();
-    ImGui_ImplVulkan_NewFrame();
-}
-
-void ImGui_ImplHurdyGurdy_Draw(VkCommandBuffer cmd)
-{
-    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
 }
 

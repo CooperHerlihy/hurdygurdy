@@ -5,6 +5,7 @@
 -fno-exceptions
 -fno-rtti
 -Iinclude
+-Ivendor/Vulkan-Headers/include
 -Ivendor/SDL/include
 -Ivendor/imgui
 -Ivendor/imgui/backends

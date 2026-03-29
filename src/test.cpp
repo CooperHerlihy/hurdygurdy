@@ -1860,7 +1860,7 @@ void hgTest()
         u32 blue =   color{0x00, 0x00, 0xff, 0xff};
         u32 yellow = color{0xff, 0xff, 0x00, 0xff};
 
-        constexpr VkFormat saveFormat = VK_FORMAT_R8G8B8A8_SRGB;
+        constexpr HgFormat saveFormat = HgFormat_r8g8b8a8_srgb;
         constexpr u32 saveWidth = 2;
         constexpr u32 saveHeight = 2;
         constexpr u32 saveDepth = 1;
@@ -1874,7 +1874,7 @@ void hgTest()
         {
             HgImageData::Info info;
             memcpy(info.identifier, HgImageData::imageIdentifier, sizeof(HgImageData::imageIdentifier));
-            info.format = VK_FORMAT_R8G8B8A8_SRGB;
+            info.format = HgFormat_r8g8b8a8_srgb;
             info.width = saveWidth;
             info.height = saveHeight;
             info.depth = saveDepth;
@@ -1890,14 +1890,14 @@ void hgTest()
         {
             HgImageData texture = bin;
 
-            VkFormat format;
+            HgFormat format;
             u32 width, height, depth;
             hgAssert(texture.getInfo(&format, &width, &height, &depth));
             hgAssert(format == saveFormat);
             hgAssert(width == saveWidth);
             hgAssert(height == saveHeight);
             hgAssert(depth == saveDepth);
-            hgAssert(width * height * depth * hgVkFormatToSize(format) == sizeof(saveData));
+            hgAssert(width * height * depth * hgFormatToSize((HgFormat)format) == sizeof(saveData));
 
             void* pixels = texture.getPixels();
             hgAssert(pixels != nullptr);
@@ -1910,14 +1910,14 @@ void hgTest()
             hgStoreBinary(bin, filePath);
             HgImageData fileTexture = hgLoadBinary(arena, filePath);
 
-            VkFormat format;
+            HgFormat format;
             u32 width, height, depth;
             hgAssert(fileTexture.getInfo(&format, &width, &height, &depth));
             hgAssert(format == saveFormat);
             hgAssert(width == saveWidth);
             hgAssert(height == saveHeight);
             hgAssert(depth == saveDepth);
-            hgAssert(width * height * depth * hgVkFormatToSize(format) == sizeof(saveData));
+            hgAssert(width * height * depth * hgFormatToSize((HgFormat)format) == sizeof(saveData));
 
             void* pixels = fileTexture.getPixels();
             hgAssert(pixels != nullptr);
@@ -1946,14 +1946,14 @@ void hgTest()
 
             HgImageData fileTexture = *hgGetResource(fileId);
 
-            VkFormat format;
+            HgFormat format;
             u32 width, height, depth;
             hgAssert(fileTexture.getInfo(&format, &width, &height, &depth));
             hgAssert(format == saveFormat);
             hgAssert(width == saveWidth);
             hgAssert(height == saveHeight);
             hgAssert(depth == saveDepth);
-            hgAssert(width * height * depth * hgVkFormatToSize(format) == sizeof(saveData));
+            hgAssert(width * height * depth * hgFormatToSize((HgFormat)format) == sizeof(saveData));
 
             void* pixels = fileTexture.getPixels();
             hgAssert(pixels != nullptr);

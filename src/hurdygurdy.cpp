@@ -2461,7 +2461,7 @@ HgBinary* hgGetResource(HgResource id)
     return res == nullptr ? nullptr : *res;
 }
 
-bool HgImageData::getInfo(VkFormat* format, u32* width, u32* height, u32* depth)
+bool HgImageData::getInfo(HgFormat* format, u32* width, u32* height, u32* depth)
 {
     if (bin.size >= sizeof(Info) && memcmp(bin.data, imageIdentifier, sizeof(imageIdentifier)) == 0)
     {
@@ -2509,7 +2509,7 @@ void hgImportPng(HgFence* fences, u32 fenceCount, HgResource id, HgStringView pa
 
         HgImageData::Info info;
         memcpy(info.identifier, HgImageData::imageIdentifier, sizeof(HgImageData::imageIdentifier));
-        info.format = VK_FORMAT_R8G8B8A8_SRGB;
+        info.format = HgFormat_r8g8b8a8_srgb;
         info.width = (u32)width;
         info.height = (u32)height;
         info.depth = 1;
@@ -2546,7 +2546,7 @@ void hgExportPng(HgFence* fences, u32 fenceCount, HgResource id, HgStringView pa
             return;
         }
 
-        VkFormat format;
+        HgFormat format;
         u32 width, height, depth;
         if (!tex.getInfo(&format, &width, &height, &depth))
         {
@@ -2559,7 +2559,7 @@ void hgExportPng(HgFence* fences, u32 fenceCount, HgResource id, HgStringView pa
     });
 }
 
-bool HgModelData::getInfo(u32* vertexCount, u32* vertexWidth, u32* indexCount, VkPrimitiveTopology* topology)
+bool HgModelData::getInfo(u32* vertexCount, u32* vertexWidth, u32* indexCount, HgPrimitiveTopology* topology)
 {
     if (file.size >= sizeof(Info) && memcmp(file.data, modelIdentifier, sizeof(modelIdentifier)) == 0)
     {
@@ -2646,7 +2646,7 @@ void hgLoadEmptyTexture(HgResource id)
     gpuTextures.load(id);
 }
 
-void hgLoadTexture(HgResource id, VkSampler sampler)
+void hgLoadTexture(HgResource id, HgSampler* sampler)
 {
     if (gpuTextures.load(id))
     {
@@ -2654,7 +2654,7 @@ void hgLoadTexture(HgResource id, VkSampler sampler)
         hgAssert(hgGetResource(id)->data != nullptr);
         HgImageData data = *hgGetResource(id);
 
-        VkFormat format;
+        HgFormat format;
         u32 width, height, depth;
         if (!data.getInfo(&format, &width, &height, &depth))
         {
@@ -2673,24 +2673,24 @@ void hgLoadTexture(HgResource id, VkSampler sampler)
         imageInfo.width = width;
         imageInfo.height = height;
         imageInfo.depth = depth;
-        imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+        imageInfo.usage = HgImageUsage_transferDst | HgImageUsage_sampled;
 
         tex.image = hgCreateImageEx(&imageInfo);
 
         hgWriteImage(
             tex.image,
-            {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+            {HgImageAspect_color, 0, 1, 0, 1},
             data.getPixels(),
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+            HgImageLayout_shaderReadOnlyOptimal);
 
-        tex.view = hgCreateImageView(tex.image, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
+        tex.view = hgCreateImageView(tex.image, {HgImageAspect_color, 0, 1, 0, 1});
 
         hgAssert(sampler != nullptr);
         tex.sampler = sampler;
 
         tex.descriptor = hgCreateDescriptor(HgDescriptorType_combinedImageSampler);
 
-        VkDescriptorImageInfo descInfo = {tex.sampler, tex.view->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+        HgImageDescriptorInfo descInfo = {tex.sampler, tex.view, HgImageLayout_shaderReadOnlyOptimal};
         hgUpdateDescriptor(tex.descriptor, nullptr, &descInfo);
     }
 }
@@ -2741,7 +2741,7 @@ void hgLoadModel(HgResource id)
         hgAssert(hgGetResource(id)->data != nullptr);
         HgModelData data = *hgGetResource(id);
 
-        VkPrimitiveTopology topology;
+        HgPrimitiveTopology topology;
         HgModelResource& model = *(HgModelResource*)gpuModels.get(id);
         if (!data.getInfo(
             &model.vertexCount,
@@ -2755,11 +2755,11 @@ void hgLoadModel(HgResource id)
 
         model.vertexBuffer = hgCreateBuffer(
             model.vertexCount * model.vertexWidth,
-            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+            HgBufferUsage_vertexBuffer | HgBufferUsage_transferDst);
 
         model.indexBuffer = hgCreateBuffer(
             model.indexCount * sizeof(u32),
-            VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+            HgBufferUsage_indexBuffer | HgBufferUsage_transferDst);
 
         hgWriteBuffer(
             model.vertexBuffer,
@@ -3225,8 +3225,7 @@ struct Pipeline2DPush {
 };
 
 struct Pipeline2DState {
-    VkPipelineLayout layout;
-    VkPipeline pipeline;
+    HgPipeline* pipeline;
     HgBuffer* vpBuffer;
     HgDescriptor vpDesc;
     HgTextureResource defaultTex;
@@ -3235,11 +3234,10 @@ struct Pipeline2DState {
 static Pipeline2DState pipeline2D{};
 
 void hgInitPipeline2D(
-    VkFormat colorFormat,
-    VkFormat depthFormat)
+    HgFormat colorFormat,
+    HgFormat depthFormat)
 {
-    hgAssert(hgVkDevice != nullptr);
-    hgAssert(colorFormat != VK_FORMAT_UNDEFINED);
+    hgAssert(colorFormat != HgFormat_undefined);
 
     HgFence fence;
     const char* spriteVertSpvName = "build/sprite.vert.spv";
@@ -3251,14 +3249,11 @@ void hgInitPipeline2D(
     hgDefer(hgUnloadResource(nullptr, 0, spriteVertSpvID));
     hgDefer(hgUnloadResource(nullptr, 0, spriteFragSpvID));
 
+    hgWaitForFenceIndefinite(&fence);
     HgBinary* spriteVertSpv = hgGetResource(spriteVertSpvID);
     HgBinary* spriteFragSpv = hgGetResource(spriteFragSpvID);
 
-    VkPushConstantRange push{VK_SHADER_STAGE_ALL, 0, sizeof(Pipeline2DPush)};
-    pipeline2D.layout = hgCreatePipelineLayout(&push);
-
     HgCreateGraphicsPipeline pipelineConfig{};
-    pipelineConfig.layout = pipeline2D.layout;
     pipelineConfig.vertexShader = (u8*)spriteVertSpv->data;
     pipelineConfig.vertexShaderSize = spriteVertSpv->size;
     pipelineConfig.fragmentShader = (u8*)spriteFragSpv->data;
@@ -3266,7 +3261,10 @@ void hgInitPipeline2D(
     pipelineConfig.colorAttachmentFormats = &colorFormat;
     pipelineConfig.colorAttachmentCount = 1;
     pipelineConfig.depthAttachmentFormat = depthFormat;
-    pipelineConfig.enableDepthRead = depthFormat != VK_FORMAT_UNDEFINED;
+    HgPushConstantRange push{HgShaderStage_ALL, 0, sizeof(Pipeline2DPush)};
+    pipelineConfig.pushRanges = &push;
+    pipelineConfig.pushRangeCount = 1;
+    pipelineConfig.enableDepthRead = depthFormat != HgFormat_undefined;
     bool enableColorBlend = true;
     pipelineConfig.colorBlendEnables = &enableColorBlend;
 
@@ -3274,7 +3272,7 @@ void hgInitPipeline2D(
 
     pipeline2D.vpBuffer = hgCreateBuffer(
         sizeof(Pipeline2DVPUniform),
-        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        HgBufferUsage_uniformBuffer,
         HgBufferMemoryUsage_frequentUpdate);
 
     Pipeline2DVPUniform vpData{};
@@ -3285,7 +3283,7 @@ void hgInitPipeline2D(
 
     pipeline2D.vpDesc = hgCreateDescriptor(HgDescriptorType_uniformBuffer);
 
-    VkDescriptorBufferInfo bufferInfo{pipeline2D.vpBuffer->buffer, 0, sizeof(Pipeline2DVPUniform)};
+    HgBufferDescriptorInfo bufferInfo{pipeline2D.vpBuffer, 0, sizeof(Pipeline2DVPUniform)};
     hgUpdateDescriptor(pipeline2D.vpDesc, &bufferInfo, nullptr);
 
     struct Color
@@ -3297,36 +3295,35 @@ void hgInitPipeline2D(
         {0x00, 0x00, 0x00, 0xff}, {0xff, 0x00, 0xff, 0xff},
     };
 
-    pipeline2D.defaultTex.image = hgCreateImage(2, 2, VK_FORMAT_R8G8B8A8_SRGB,
-        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+    pipeline2D.defaultTex.image = hgCreateImage(2, 2, HgFormat_r8g8b8a8_srgb,
+        HgImageUsage_sampled | HgImageUsage_transferDst);
 
-    pipeline2D.defaultTex.view = hgCreateImageView(pipeline2D.defaultTex.image, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
+    pipeline2D.defaultTex.view = hgCreateImageView(pipeline2D.defaultTex.image, {HgImageAspect_color, 0, 1, 0, 1});
 
     hgWriteImage(
         pipeline2D.defaultTex.image,
-        {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+        {HgImageAspect_color, 0, 1, 0, 1},
         defaultColors,
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        HgImageLayout_shaderReadOnlyOptimal);
 
-    pipeline2D.defaultTex.sampler = hgCreateSampler(VK_FILTER_NEAREST);
+    pipeline2D.defaultTex.sampler = hgCreateSampler(HgSamplerFilter_nearest);
 
     pipeline2D.defaultTex.descriptor = hgCreateDescriptor(HgDescriptorType_combinedImageSampler);
 
-    VkDescriptorImageInfo imageInfo{};
+    HgImageDescriptorInfo imageInfo{};
     imageInfo.sampler = pipeline2D.defaultTex.sampler;
-    imageInfo.imageView = pipeline2D.defaultTex.view->view;
-    imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    imageInfo.imageView = pipeline2D.defaultTex.view;
+    imageInfo.imageLayout = HgImageLayout_shaderReadOnlyOptimal;
 
     hgUpdateDescriptor(pipeline2D.defaultTex.descriptor, nullptr, &imageInfo);
 }
 
 void hgDeinitPipeline2D()
 {
-    vkDestroyPipeline(hgVkDevice, pipeline2D.pipeline, nullptr);
-    vkDestroyPipelineLayout(hgVkDevice, pipeline2D.layout, nullptr);
+    hgDestroyPipeline(pipeline2D.pipeline);
 
     hgDestroyDescriptor(pipeline2D.defaultTex.descriptor);
-    vkDestroySampler(hgVkDevice, pipeline2D.defaultTex.sampler, nullptr);
+    hgDestroySampler(pipeline2D.defaultTex.sampler);
     hgDestroyImageView(pipeline2D.defaultTex.view);
     hgDestroyImage(pipeline2D.defaultTex.image);
 
@@ -3346,7 +3343,7 @@ void hgUpdateView2D(const HgMat4* view)
     hgWriteBuffer(pipeline2D.vpBuffer, offsetof(Pipeline2DVPUniform, view), view, sizeof(*view));
 }
 
-void hgDraw2D(HgECS* ecs, VkCommandBuffer cmd)
+void hgDraw2D(HgECS* ecs, HgCommandBuffer* cmd)
 {
     hgAssert(ecs != nullptr);
     hgAssert(cmd != nullptr);
@@ -3357,7 +3354,7 @@ void hgDraw2D(HgECS* ecs, VkCommandBuffer cmd)
         return ecs->get<HgTransform>(lhs).position.z > ecs->get<HgTransform>(rhs).position.z;
     });
 
-    hgBindGraphicsPipeline(cmd, pipeline2D.pipeline, pipeline2D.layout);
+    hgCmdBindPipeline(cmd, pipeline2D.pipeline);
 
     ecs->forEach<HgSprite2D, HgTransform>([&](HgEntity, HgSprite2D* sprite, HgTransform* transform) 
     {
@@ -3372,9 +3369,9 @@ void hgDraw2D(HgECS* ecs, VkCommandBuffer cmd)
         push.vpIdx = hgDescriptorIdx(pipeline2D.vpDesc);
         push.texIdx = hgDescriptorIdx(texture->descriptor);
 
-        vkCmdPushConstants(cmd, pipeline2D.layout, VK_SHADER_STAGE_ALL, 0, sizeof(push), &push);
+        hgCmdPushConstants(cmd, pipeline2D.pipeline, 0, sizeof(push), &push);
 
-        vkCmdDraw(cmd, 6, 1, 0, 0);
+        hgCmdDraw(cmd, 6, 1, 0, 0);
     });
 }
 
@@ -3405,6 +3402,8 @@ struct Pipeline3DPush {
 };
 
 struct Pipeline3DState {
+    HgPipeline* pipeline;
+
     HgBuffer* vpBuffer;
     Pipeline3DVPUniform vpData;
     HgDescriptor vpDesc;
@@ -3418,22 +3417,19 @@ struct Pipeline3DState {
     HgDescriptor pointLightDesc;
 
     HgModelResource defaultModel;
-    VkSampler defaultMapSampler;
+    HgSampler* defaultMapSampler;
     HgTextureResource defaultColorMap;
     HgTextureResource defaultNormalMap;
-
-    VkPipelineLayout pipelineLayout;
-    VkPipeline pipeline;
 };
 
 static Pipeline3DState pipeline3D{};
 
 void hgInitPipeline3D(
-    VkFormat colorFormat,
-    VkFormat depthFormat)
+    HgFormat colorFormat,
+    HgFormat depthFormat)
 {
-    hgAssert(colorFormat != VK_FORMAT_UNDEFINED);
-    hgAssert(depthFormat != VK_FORMAT_UNDEFINED);
+    hgAssert(colorFormat != HgFormat_undefined);
+    hgAssert(depthFormat != HgFormat_undefined);
 
     HgFence fence;
     const char* modelVertSpvName = "build/model.vert.spv";
@@ -3445,43 +3441,74 @@ void hgInitPipeline3D(
     hgDefer(hgUnloadResource(nullptr, 0, modelVertSpvID));
     hgDefer(hgUnloadResource(nullptr, 0, modelFragSpvID));
 
+    hgWaitForFenceIndefinite(&fence);
     HgBinary* modelVertSpv = hgGetResource(modelVertSpvID);
     HgBinary* modelFragSpv = hgGetResource(modelFragSpvID);
+
+    HgVertexInputBindingDescription vertexBindings[]{
+        {0, sizeof(HgModelVertex), HgVertexInputRate_VERTEX},
+    };
+    HgVertexInputAttributeDescription vertexAttributes[]{
+        {0, 0, HgFormat_r32g32b32_sfloat, offsetof(HgModelVertex, pos)},
+        {1, 0, HgFormat_r32g32b32_sfloat, offsetof(HgModelVertex, norm)},
+        {2, 0, HgFormat_r32g32b32a32_sfloat, offsetof(HgModelVertex, tan)},
+        {3, 0, HgFormat_r32g32_sfloat, offsetof(HgModelVertex, uv)},
+    };
+    HgCreateGraphicsPipeline pipelineConfig{};
+    pipelineConfig.vertexShader = (u8*)modelVertSpv->data;
+    pipelineConfig.vertexShaderSize = modelVertSpv->size;
+    pipelineConfig.fragmentShader = (u8*)modelFragSpv->data;
+    pipelineConfig.fragmentShaderSize = modelFragSpv->size;
+    pipelineConfig.colorAttachmentFormats = &colorFormat;
+    pipelineConfig.colorAttachmentCount = 1;
+    pipelineConfig.depthAttachmentFormat = depthFormat;
+    HgPushConstantRange push{HgShaderStage_ALL, 0, sizeof(Pipeline3DPush)};
+    pipelineConfig.pushRanges = &push;
+    pipelineConfig.pushRangeCount = 1;
+    pipelineConfig.vertexBindings = vertexBindings;
+    pipelineConfig.vertexBindingCount = sizeof(vertexBindings) / sizeof(*vertexBindings);
+    pipelineConfig.vertexAttributes = vertexAttributes;
+    pipelineConfig.vertexAttributeCount = sizeof(vertexAttributes) / sizeof(*vertexAttributes);
+    pipelineConfig.cullMode = HgCullMode_BACK_BIT;
+    pipelineConfig.enableDepthRead = true;
+    pipelineConfig.enableDepthWrite = true;
+
+    pipeline3D.pipeline = hgCreateGraphicsPipeline(&pipelineConfig);
 
     pipeline3D.vpData.proj = HgMat4{1.0f};
     pipeline3D.vpData.view = HgMat4{1.0f};
 
     pipeline3D.vpBuffer = hgCreateBuffer(
         sizeof(Pipeline3DVPUniform),
-        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        HgBufferUsage_uniformBuffer,
         HgBufferMemoryUsage_frequentUpdate);
 
     hgWriteBuffer(pipeline3D.vpBuffer, 0, &pipeline3D.vpData, sizeof(pipeline3D.vpData));
 
     pipeline3D.vpDesc = hgCreateDescriptor(HgDescriptorType_uniformBuffer);
 
-    VkDescriptorBufferInfo bufferInfo{pipeline3D.vpBuffer->buffer, 0, sizeof(Pipeline3DVPUniform)};
+    HgBufferDescriptorInfo bufferInfo{pipeline3D.vpBuffer, 0, sizeof(Pipeline3DVPUniform)};
     hgUpdateDescriptor(pipeline3D.vpDesc, &bufferInfo, nullptr);
 
     pipeline3D.dirLightCapacity = 4;
     pipeline3D.dirLightBuffer = hgCreateBuffer(
         sizeof(Pipeline3DDirLightData) * pipeline3D.dirLightCapacity,
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        HgBufferUsage_storageBuffer,
         HgBufferMemoryUsage_frequentUpdate);
 
     pipeline3D.pointLightCapacity = 4;
     pipeline3D.pointLightBuffer = hgCreateBuffer(
         sizeof(Pipeline3DPointLightData) * pipeline3D.dirLightCapacity,
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        HgBufferUsage_storageBuffer,
         HgBufferMemoryUsage_frequentUpdate);
 
     pipeline3D.dirLightDesc = hgCreateDescriptor(HgDescriptorType_storageBuffer);
     pipeline3D.pointLightDesc = hgCreateDescriptor(HgDescriptorType_storageBuffer);
 
-    VkDescriptorBufferInfo dirLightBufferInfo{pipeline3D.dirLightBuffer->buffer, 0, VK_WHOLE_SIZE};
+    HgBufferDescriptorInfo dirLightBufferInfo{pipeline3D.dirLightBuffer, 0, UINT64_MAX};
     hgUpdateDescriptor(pipeline3D.dirLightDesc, &dirLightBufferInfo, nullptr);
 
-    VkDescriptorBufferInfo pointLightBufferInfo{pipeline3D.pointLightBuffer->buffer, 0, VK_WHOLE_SIZE};
+    HgBufferDescriptorInfo pointLightBufferInfo{pipeline3D.pointLightBuffer, 0, UINT64_MAX};
     hgUpdateDescriptor(pipeline3D.pointLightDesc, &pointLightBufferInfo, nullptr);
 
     static const HgModelVertex cubeVertices[]{
@@ -3527,11 +3554,11 @@ void hgInitPipeline3D(
 
     pipeline3D.defaultModel.vertexBuffer = hgCreateBuffer(
         sizeof(cubeVertices),
-        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+        HgBufferUsage_vertexBuffer | HgBufferUsage_transferDst);
 
     pipeline3D.defaultModel.indexBuffer = hgCreateBuffer(
         sizeof(cubeIndices),
-        VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+        HgBufferUsage_indexBuffer | HgBufferUsage_transferDst);
 
     hgWriteBuffer(pipeline3D.defaultModel.vertexBuffer, 0, cubeVertices, sizeof(cubeVertices));
     hgWriteBuffer(pipeline3D.defaultModel.indexBuffer, 0, cubeIndices, sizeof(cubeIndices));
@@ -3540,7 +3567,7 @@ void hgInitPipeline3D(
     pipeline3D.defaultModel.vertexWidth = sizeof(HgModelVertex);
     pipeline3D.defaultModel.indexCount = sizeof(cubeIndices) / sizeof(*cubeIndices);
 
-    pipeline3D.defaultMapSampler = hgCreateSampler(VK_FILTER_NEAREST);
+    pipeline3D.defaultMapSampler = hgCreateSampler(HgSamplerFilter_nearest);
 
     pipeline3D.defaultColorMap.sampler = pipeline3D.defaultMapSampler;
     pipeline3D.defaultNormalMap.sampler = pipeline3D.defaultMapSampler;
@@ -3560,75 +3587,42 @@ void hgInitPipeline3D(
         HgVec4{0, 0, -1, 0}, HgVec4{0, 0, -1, 0},
     };
 
-    pipeline3D.defaultColorMap.image = hgCreateImage(3, 3, VK_FORMAT_R8G8B8A8_SRGB,
-        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
-    pipeline3D.defaultNormalMap.image = hgCreateImage(2, 2, VK_FORMAT_R32G32B32A32_SFLOAT,
-        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+    pipeline3D.defaultColorMap.image = hgCreateImage(3, 3, HgFormat_r8g8b8a8_srgb,
+        HgImageUsage_sampled | HgImageUsage_transferDst);
+    pipeline3D.defaultNormalMap.image = hgCreateImage(2, 2, HgFormat_r32g32b32a32_sfloat,
+        HgImageUsage_sampled | HgImageUsage_transferDst);
 
     pipeline3D.defaultColorMap.view = hgCreateImageView(
-        pipeline3D.defaultColorMap.image, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
+        pipeline3D.defaultColorMap.image, {HgImageAspect_color, 0, 1, 0, 1});
     pipeline3D.defaultNormalMap.view = hgCreateImageView(
-        pipeline3D.defaultNormalMap.image, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
+        pipeline3D.defaultNormalMap.image, {HgImageAspect_color, 0, 1, 0, 1});
 
     hgWriteImage(
         pipeline3D.defaultColorMap.image,
-        {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+        {HgImageAspect_color, 0, 1, 0, 1},
         defaultColors,
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        HgImageLayout_shaderReadOnlyOptimal);
     hgWriteImage(
         pipeline3D.defaultNormalMap.image,
-        {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+        {HgImageAspect_color, 0, 1, 0, 1},
         defaultNormals,
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        HgImageLayout_shaderReadOnlyOptimal);
 
     pipeline3D.defaultColorMap.descriptor = hgCreateDescriptor(HgDescriptorType_combinedImageSampler);
     pipeline3D.defaultNormalMap.descriptor = hgCreateDescriptor(HgDescriptorType_combinedImageSampler);
 
-    VkDescriptorImageInfo colorInfo =
-        {pipeline3D.defaultMapSampler, pipeline3D.defaultColorMap.view->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    HgImageDescriptorInfo colorInfo =
+        {pipeline3D.defaultMapSampler, pipeline3D.defaultColorMap.view, HgImageLayout_shaderReadOnlyOptimal};
     hgUpdateDescriptor(pipeline3D.defaultColorMap.descriptor, nullptr, &colorInfo);
 
-    VkDescriptorImageInfo normalInfo =
-        {pipeline3D.defaultMapSampler, pipeline3D.defaultNormalMap.view->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    HgImageDescriptorInfo normalInfo =
+        {pipeline3D.defaultMapSampler, pipeline3D.defaultNormalMap.view, HgImageLayout_shaderReadOnlyOptimal};
     hgUpdateDescriptor(pipeline3D.defaultNormalMap.descriptor, nullptr, &normalInfo);
-
-    VkPushConstantRange push{VK_SHADER_STAGE_ALL, 0, sizeof(Pipeline3DPush)};
-    pipeline3D.pipelineLayout = hgCreatePipelineLayout(&push);
-
-    VkVertexInputBindingDescription vertexBindings[]{
-        {0, sizeof(HgModelVertex), VK_VERTEX_INPUT_RATE_VERTEX},
-    };
-    VkVertexInputAttributeDescription vertexAttributes[]{
-        {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(HgModelVertex, pos)},
-        {1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(HgModelVertex, norm)},
-        {2, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(HgModelVertex, tan)},
-        {3, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(HgModelVertex, uv)},
-    };
-    HgCreateGraphicsPipeline pipelineConfig{};
-    pipelineConfig.layout = pipeline3D.pipelineLayout;
-    pipelineConfig.vertexShader = (u8*)modelVertSpv->data;
-    pipelineConfig.vertexShaderSize = modelVertSpv->size;
-    pipelineConfig.fragmentShader = (u8*)modelFragSpv->data;
-    pipelineConfig.fragmentShaderSize = modelFragSpv->size;
-    pipelineConfig.colorAttachmentFormats = &colorFormat;
-    pipelineConfig.colorAttachmentCount = 1;
-    pipelineConfig.depthAttachmentFormat = depthFormat;
-    pipelineConfig.vertexBindings = vertexBindings;
-    pipelineConfig.vertexBindingCount = sizeof(vertexBindings) / sizeof(*vertexBindings);
-    pipelineConfig.vertexAttributes = vertexAttributes;
-    pipelineConfig.vertexAttributeCount = sizeof(vertexAttributes) / sizeof(*vertexAttributes);
-    pipelineConfig.cullMode = VK_CULL_MODE_BACK_BIT;
-    pipelineConfig.enableDepthRead = true;
-    pipelineConfig.enableDepthWrite = true;
-
-    hgWaitForFenceIndefinite(&fence);
-    pipeline3D.pipeline = hgCreateGraphicsPipeline(&pipelineConfig);
 }
 
 void hgDeinitPipeline3D()
 {
-    vkDestroyPipeline(hgVkDevice, pipeline3D.pipeline, nullptr);
-    vkDestroyPipelineLayout(hgVkDevice, pipeline3D.pipelineLayout, nullptr);
+    hgDestroyPipeline(pipeline3D.pipeline);
 
     hgDestroyDescriptor(pipeline3D.defaultNormalMap.descriptor);
     hgDestroyImageView(pipeline3D.defaultNormalMap.view);
@@ -3638,7 +3632,7 @@ void hgDeinitPipeline3D()
     hgDestroyImageView(pipeline3D.defaultColorMap.view);
     hgDestroyImage(pipeline3D.defaultColorMap.image);
 
-    vkDestroySampler(hgVkDevice, pipeline3D.defaultMapSampler, nullptr);
+    hgDestroySampler(pipeline3D.defaultMapSampler);
 
     hgDestroyBuffer(pipeline3D.defaultModel.indexBuffer);
     hgDestroyBuffer(pipeline3D.defaultModel.vertexBuffer);
@@ -3664,7 +3658,7 @@ void hgUpdateView3D(const HgMat4* view)
     pipeline3D.vpData.view = *view;
 }
 
-void hgDraw3D(HgECS* ecs, VkCommandBuffer cmd)
+void hgDraw3D(HgECS* ecs, HgCommandBuffer* cmd)
 {
     hgAssert(ecs != nullptr);
     hgAssert(cmd != nullptr);
@@ -3679,7 +3673,7 @@ void hgDraw3D(HgECS* ecs, VkCommandBuffer cmd)
 
     if (dirLightCount > pipeline3D.dirLightCapacity)
     {
-        vkQueueWaitIdle(hgVkQueue);
+        hgGraphicsWaitIdle();
 
         pipeline3D.dirLightCapacity = pipeline3D.dirLightCapacity == 0 ? 1 : pipeline3D.dirLightCapacity * 2;
         while (pipeline3D.dirLightCapacity < dirLightCount)
@@ -3690,16 +3684,16 @@ void hgDraw3D(HgECS* ecs, VkCommandBuffer cmd)
         hgDestroyBuffer(pipeline3D.dirLightBuffer);
         pipeline3D.dirLightBuffer = hgCreateBuffer(
             sizeof(Pipeline3DDirLightData) * pipeline3D.dirLightCapacity,
-            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+            HgBufferUsage_storageBuffer,
             HgBufferMemoryUsage_frequentUpdate);
 
-        VkDescriptorBufferInfo dirLightBufferInfo{pipeline3D.dirLightBuffer->buffer, 0, VK_WHOLE_SIZE};
+        HgBufferDescriptorInfo dirLightBufferInfo{pipeline3D.dirLightBuffer, 0, UINT64_MAX};
         hgUpdateDescriptor(pipeline3D.dirLightDesc, &dirLightBufferInfo, nullptr);
     }
 
     if (pointLightCount > pipeline3D.pointLightCapacity)
     {
-        vkQueueWaitIdle(hgVkQueue);
+        hgGraphicsWaitIdle();
 
         pipeline3D.pointLightCapacity = pipeline3D.pointLightCapacity == 0 ? 1 : pipeline3D.pointLightCapacity * 2;
         while (pipeline3D.pointLightCapacity < pointLightCount)
@@ -3710,10 +3704,10 @@ void hgDraw3D(HgECS* ecs, VkCommandBuffer cmd)
         hgDestroyBuffer(pipeline3D.pointLightBuffer);
         pipeline3D.pointLightBuffer = hgCreateBuffer(
             sizeof(Pipeline3DPointLightData) * pipeline3D.pointLightCapacity,
-            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+            HgBufferUsage_storageBuffer,
             HgBufferMemoryUsage_frequentUpdate);
 
-        VkDescriptorBufferInfo pointLightBufferInfo{pipeline3D.pointLightBuffer->buffer, 0, VK_WHOLE_SIZE};
+        HgBufferDescriptorInfo pointLightBufferInfo{pipeline3D.pointLightBuffer, 0, UINT64_MAX};
         hgUpdateDescriptor(pipeline3D.pointLightDesc, &pointLightBufferInfo, nullptr);
     }
 
@@ -3742,7 +3736,7 @@ void hgDraw3D(HgECS* ecs, VkCommandBuffer cmd)
     if (pointLightCount > 0)
         hgWriteBuffer(pipeline3D.pointLightBuffer, 0, pointLights, sizeof(*pointLights) * pointLightCount);
 
-    hgBindGraphicsPipeline(cmd, pipeline3D.pipeline, pipeline3D.pipelineLayout);
+    hgCmdBindPipeline(cmd, pipeline3D.pipeline);
 
     ecs->forEach<HgModel3D, HgTransform>([&](HgEntity, HgModel3D* model, HgTransform* transform)
     {
@@ -3768,15 +3762,43 @@ void hgDraw3D(HgECS* ecs, VkCommandBuffer cmd)
         if (gpuModel == nullptr)
             gpuModel = &pipeline3D.defaultModel;
 
-        vkCmdBindIndexBuffer(cmd, gpuModel->indexBuffer->buffer, 0, VK_INDEX_TYPE_UINT32);
+        hgCmdBindIndexBuffer(cmd, gpuModel->indexBuffer, 0);
 
-        VkBuffer buffers[]{gpuModel->vertexBuffer->buffer};
-        VkDeviceSize offsets[]{0};
-        vkCmdBindVertexBuffers(cmd, 0, 1, buffers, offsets);
+        HgBuffer* buffers[]{gpuModel->vertexBuffer};
+        u64 offsets[]{0};
+        hgCmdBindVertexBuffers(cmd, 0, buffers, offsets, 1);
 
-        vkCmdPushConstants(cmd, pipeline3D.pipelineLayout, VK_SHADER_STAGE_ALL, 0, sizeof(push), &push);
+        hgCmdPushConstants(cmd, pipeline3D.pipeline, 0, sizeof(push), &push);
 
-        vkCmdDrawIndexed(cmd, gpuModel->indexCount, 1, 0, 0, 0);
+        hgCmdDrawIndexed(cmd, gpuModel->indexCount, 1, 0, 0, 0);
     });
+}
+
+void hgInternalInitImGuiPlatform(HgWindow* window);
+void hgInternalInitImGuiRenderer(
+    HgWindow* window,
+    u32 colorAttachmentCount,
+    const HgFormat* colorFormats,
+    HgFormat depthFormat,
+    HgFormat stencilFormat);
+
+void hgInternalDeinitImGuiPlatform();
+void hgInternalDeinitImGuiRenderer();
+
+void ImGui_ImplHurdyGurdy_Init(
+    HgWindow* window,
+    u32 colorAttachmentCount,
+    const HgFormat* colorFormats,
+    HgFormat depthFormat,
+    HgFormat stencilFormat)
+{
+    hgInternalInitImGuiPlatform(window);
+    hgInternalInitImGuiRenderer(window, colorAttachmentCount, colorFormats, depthFormat, stencilFormat);
+}
+
+void ImGui_ImplHurdyGurdy_Shutdown()
+{
+    hgInternalDeinitImGuiRenderer();
+    hgInternalDeinitImGuiPlatform();
 }
 

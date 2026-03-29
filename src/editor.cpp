@@ -4,7 +4,6 @@
 
 #define IM_ASSERT hgAssert
 #include "imgui.h"
-#include "imgui_impl_vulkan.h"
 
 int main()
 {
@@ -22,15 +21,15 @@ int main()
     windowConfig.title = "Hg Test";
     windowConfig.width = 1600;
     windowConfig.height = 900;
-    windowConfig.preferredPresentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+    windowConfig.preferredPresentMode = HgPresentMode_MAILBOX_KHR;
 
     HgWindow* window = hgCreateWindow(&windowConfig);
     hgDefer(hgDestroyWindow(window));
 
-    hgInitPipeline2D(VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_D32_SFLOAT);
+    hgInitPipeline2D(HgFormat_r8g8b8a8_srgb, HgFormat_d32_sfloat);
     hgDefer(hgDeinitPipeline2D());
 
-    hgInitPipeline3D(VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_D32_SFLOAT);
+    hgInitPipeline3D(HgFormat_r8g8b8a8_srgb, HgFormat_d32_sfloat);
     hgDefer(hgDeinitPipeline3D());
 
     IMGUI_CHECKVERSION();
@@ -43,15 +42,17 @@ int main()
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    ImGui_ImplHurdyGurdy_Init(window, 1, &window->format);
+    HgFormat windowFormat;
+    hgGetWindowSize(window, nullptr, nullptr, &windowFormat);
+    ImGui_ImplHurdyGurdy_Init(window, 1, &windowFormat);
     hgDefer(ImGui_ImplHurdyGurdy_Shutdown());
 
     HgTransform camera{};
     camera.position = HgVec3{0, 0, -1};
 
     f32 aspectRatio = 16.0f / 9.0f;
-    u32 renderWidth = window->width;
-    u32 renderHeight = window->height;
+    u32 renderWidth, renderHeight;
+    hgGetWindowSize(window, &renderWidth, &renderHeight, nullptr);
 
     HgECS ecs = ecs.create(arena, 1024, 128);
     ecs.createComponent<HgTransform>(arena, 1024);
@@ -89,11 +90,11 @@ int main()
     HgImageView* renderView = nullptr;
     hgDefer(hgDestroyImageView(renderView));
 
-    VkSampler renderSampler = hgCreateSampler(VK_FILTER_NEAREST);
-    hgDefer(vkDestroySampler(hgVkDevice, renderSampler, nullptr));
+    HgSampler* renderSampler = hgCreateSampler(HgSamplerFilter_nearest);
+    hgDefer(hgDestroySampler(renderSampler));
 
-    VkDescriptorSet renderDescriptor = nullptr;
-    hgDefer(ImGui_ImplVulkan_RemoveTexture(renderDescriptor));
+    void* renderDescriptor = nullptr;
+    hgDefer(ImGui_ImplHurdyGurdy_DestroyTexture(renderDescriptor));
 
     HgImage* depthImage = nullptr;
     hgDefer(hgDestroyImage(depthImage));
@@ -177,8 +178,8 @@ int main()
                     hgReadImage(
                         pixels,
                         renderImage,
-                        {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+                        {HgImageAspect_color, 0, 1, 0, 1},
+                        HgImageLayout_shaderReadOnlyOptimal);
 
                     stbi_write_png(
                         "screenshot.png",
@@ -223,7 +224,7 @@ int main()
                 u32 viewWidth = fixedAspect ? (u32)((f32)viewHeight * aspectRatio) : (u32)size.x;
                 if (renderWidth != viewWidth || renderHeight != viewHeight)
                 {
-                    vkQueueWaitIdle(hgVkQueue);
+                    hgGraphicsWaitIdle();
 
                     renderWidth = viewWidth;
                     renderHeight = viewHeight;
@@ -232,7 +233,7 @@ int main()
                     hgUpdateProjection2D(&proj);
                     hgUpdateProjection3D(&proj);
 
-                    ImGui_ImplVulkan_RemoveTexture(renderDescriptor);
+                    ImGui_ImplHurdyGurdy_DestroyTexture(renderDescriptor);
                     hgDestroyImageView(depthView);
                     hgDestroyImage(depthImage);
                     hgDestroyImageView(renderView);
@@ -241,23 +242,25 @@ int main()
                     renderImage = hgCreateImage(
                             renderWidth,
                             renderHeight,
-                            VK_FORMAT_R8G8B8A8_SRGB,
-                            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-                            VK_IMAGE_USAGE_SAMPLED_BIT |
-                            VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+                            HgFormat_r8g8b8a8_srgb,
+                            HgImageUsage_colorAttachment |
+                            HgImageUsage_sampled |
+                            HgImageUsage_transferSrc);
 
-                    renderView = hgCreateImageView(renderImage, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
+                    renderView = hgCreateImageView(renderImage, {HgImageAspect_color, 0, 1, 0, 1});
 
-                    renderDescriptor = ImGui_ImplVulkan_AddTexture(
-                        renderSampler, renderView->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+                    renderDescriptor = ImGui_ImplHurdyGurdy_CreateTexture(
+                        renderView,
+                        renderSampler,
+                        HgImageLayout_shaderReadOnlyOptimal);
 
                     depthImage = hgCreateImage(
                         renderWidth,
                         renderHeight,
-                        VK_FORMAT_D32_SFLOAT,
-                        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
+                        HgFormat_d32_sfloat,
+                        HgImageUsage_depthStencilAttachment);
 
-                    depthView = hgCreateImageView(depthImage, {VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1});
+                    depthView = hgCreateImageView(depthImage, {HgImageAspect_depth, 0, 1, 0, 1});
                 }
 
                 if (ImGui::IsWindowFocused())
@@ -476,7 +479,7 @@ int main()
         ImGui::Render();
 
         cpuDelta = hgClockTick(&cpuClock);
-        VkCommandBuffer cmd = window->beginRecording();
+        HgCommandBuffer* cmd = hgWindowBeginRecording(window);
         if (cmd != nullptr)
         {
             hgClockTick(&cpuClock);
@@ -485,12 +488,12 @@ int main()
 
             HgRenderAttachment renderColorAttachment{};
             renderColorAttachment.image = renderView;
-            renderColorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            renderColorAttachment.loadOp = HgAttachmentLoadOp_CLEAR;
             renderColorAttachment.clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
 
             HgRenderAttachment renderDepthAttachment{};
             renderDepthAttachment.image = depthView;
-            renderDepthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            renderDepthAttachment.loadOp = HgAttachmentLoadOp_CLEAR;
             renderDepthAttachment.clearValue.depthStencil = {1.0f, 0};
 
             HgRenderPass renderPass{};
@@ -506,8 +509,8 @@ int main()
             renderer.endPass(cmd);
 
             HgRenderAttachment guiColorAttachment{};
-            guiColorAttachment.image = &window->views[window->currentImage];
-            guiColorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            guiColorAttachment.image = hgGetCurrentWindowImage(window);
+            guiColorAttachment.loadOp = HgAttachmentLoadOp_CLEAR;
             guiColorAttachment.clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
 
             HgRenderPass guiPass{};
@@ -516,23 +519,25 @@ int main()
             guiPass.colorAttachments = &guiColorAttachment;
             guiPass.colorAttachmentCount = 1;
 
-            renderer.beginPass(cmd, window->width, window->height, &guiPass);
+            u32 width, height;
+            hgGetWindowSize(window, &width, &height, nullptr);
+            renderer.beginPass(cmd, width, height, &guiPass);
 
             ImGui_ImplHurdyGurdy_Draw(cmd);
 
             renderer.endPass(cmd);
 
             HgImageBarrier presentBarrier{};
-            presentBarrier.image = &window->views[window->currentImage];
-            presentBarrier.nextLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+            presentBarrier.image = hgGetCurrentWindowImage(window);
+            presentBarrier.nextLayout = HgImageLayout_presentSrc;
 
             renderer.barrier(cmd, nullptr, 0, &presentBarrier, 1);
 
             cpuDelta += hgClockTick(&cpuClock);
-            window->endAndPresent(cmd);
+            hgWindowEndAndPresent(window, cmd);
         }
     }
 quit:
-    vkDeviceWaitIdle(hgVkDevice);
+    hgGraphicsWaitIdle();
 }
 

@@ -33,14 +33,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <ctime>
 
-#include <algorithm>
 #include <atomic>
 #include <type_traits>
-
-#include <vulkan/vulkan.h>
-#include <vk_mem_alloc.h>
 
 /**
  * An 8 bit, 1 byte unsigned integer
@@ -317,26 +312,23 @@ constexpr uptr hgAlign(uptr value, uptr alignment)
 /**
  * Reverse the endianness of a 16 bit value
  */
-constexpr u16 hgReverseEndianness16(u16 val)
+constexpr u16 hgReverseEndianness(u16 val)
 {
-    return (val & 0xff00 >> 8) &
-           (val & 0x00ff << 8);
+    return (val & 0xff00 >> 8) & (val & 0x00ff << 8);
 }
 
 /**
  * Reverse the endianness of a 32 bit value
  */
-constexpr u32 hgReverseEndianness32(u32 val)
+constexpr u32 hgReverseEndianness(u32 val)
 {
-    return (val & 0xff0000 >> 16) &
-           (val & 0x00ff00) &
-           (val & 0x0000ff << 16);
+    return (val & 0xff0000 >> 16) & (val & 0x00ff00) & (val & 0x0000ff << 16);
 }
 
 /**
  * Reverse the endianness of a 64 bit value
  */
-constexpr u64 hgReverseEndianness64(u64 val)
+constexpr u64 hgReverseEndianness(u64 val)
 {
     return (val & 0xff000000 >> 24) &
            (val & 0x00ff0000 >> 8) &
@@ -2836,65 +2828,313 @@ void hgInitGraphics(HgArena* arena);
 void hgDeinitGraphics();
 
 /**
- * Loads the Vulkan functions which use the instance
- *
- * Parameters
- * - instance The Vulkan instance, must not be nullptr
+ * Wait for the GPU to finish work
  */
-void hgLoadVulkanInstanceFuncs(VkInstance instance);
+void hgGraphicsWaitIdle();
 
 /**
- * Loads the Vulkan functions which use the device
- *
- * Parameters
- * - device The Vulkan device, must not be nullptr
+ * A gpu buffer
  */
-void hgLoadVulkanDeviceFuncs(VkDevice device);
+struct HgBuffer;
 
 /**
- * The global Vulkan instance
+ * A gpu image
  */
-inline VkInstance hgVkInstance = nullptr;
+struct HgImage;
 
 /**
- * The global Vulkan physical device
+ * A view into a gpu image
  */
-inline VkPhysicalDevice hgVkPhysicalDevice = nullptr;
-/**
- * The global Vulkan logical device
- */
-inline VkDevice hgVkDevice = nullptr;
-/**
- * The global Vulkan memory allocator
- */
-inline VmaAllocator hgVkVma = nullptr;
+struct HgImageView;
 
 /**
- * The global Vulkan queue
+ * A sampler to access an image view
  */
-inline VkQueue hgVkQueue = nullptr;
-/**
- * The global Vulkan queue family
- */
-inline u32 hgVkQueueFamily = (u32)-1;
-/**
- * The global Vulkan command pool
- */
-inline VkCommandPool hgVkCmdPool = nullptr;
+struct HgSampler;
 
 /**
- * Turns a VkResult into a string
- *
- * Parameters
- * - result The result enum to stringify
- *
- * Returns
- * - The string of the enum value's name
+ * A shader pipeline
  */
-const char* hgVkResultToStr(VkResult result);
+struct HgPipeline;
 
 /**
- * Turns a VkFormat into the size in bytes
+ * A gpu command buffer
+ */
+struct HgCommandBuffer;
+
+/**
+ * Pixel formats
+ */
+enum HgFormat {
+    HgFormat_undefined = 0,
+    HgFormat_r4g4_unorm_pack8 = 1,
+    HgFormat_r4g4b4a4_unorm_pack16 = 2,
+    HgFormat_b4g4r4a4_unorm_pack16 = 3,
+    HgFormat_r5g6b5_unorm_pack16 = 4,
+    HgFormat_b5g6r5_unorm_pack16 = 5,
+    HgFormat_r5g5b5a1_unorm_pack16 = 6,
+    HgFormat_b5g5r5a1_unorm_pack16 = 7,
+    HgFormat_a1r5g5b5_unorm_pack16 = 8,
+    HgFormat_r8_unorm = 9,
+    HgFormat_r8_snorm = 10,
+    HgFormat_r8_uscaled = 11,
+    HgFormat_r8_sscaled = 12,
+    HgFormat_r8_uint = 13,
+    HgFormat_r8_sint = 14,
+    HgFormat_r8_srgb = 15,
+    HgFormat_r8g8_unorm = 16,
+    HgFormat_r8g8_snorm = 17,
+    HgFormat_r8g8_uscaled = 18,
+    HgFormat_r8g8_sscaled = 19,
+    HgFormat_r8g8_uint = 20,
+    HgFormat_r8g8_sint = 21,
+    HgFormat_r8g8_srgb = 22,
+    HgFormat_r8g8b8_unorm = 23,
+    HgFormat_r8g8b8_snorm = 24,
+    HgFormat_r8g8b8_uscaled = 25,
+    HgFormat_r8g8b8_sscaled = 26,
+    HgFormat_r8g8b8_uint = 27,
+    HgFormat_r8g8b8_sint = 28,
+    HgFormat_r8g8b8_srgb = 29,
+    HgFormat_b8g8r8_unorm = 30,
+    HgFormat_b8g8r8_snorm = 31,
+    HgFormat_b8g8r8_uscaled = 32,
+    HgFormat_b8g8r8_sscaled = 33,
+    HgFormat_b8g8r8_uint = 34,
+    HgFormat_b8g8r8_sint = 35,
+    HgFormat_b8g8r8_srgb = 36,
+    HgFormat_r8g8b8a8_unorm = 37,
+    HgFormat_r8g8b8a8_snorm = 38,
+    HgFormat_r8g8b8a8_uscaled = 39,
+    HgFormat_r8g8b8a8_sscaled = 40,
+    HgFormat_r8g8b8a8_uint = 41,
+    HgFormat_r8g8b8a8_sint = 42,
+    HgFormat_r8g8b8a8_srgb = 43,
+    HgFormat_b8g8r8a8_unorm = 44,
+    HgFormat_b8g8r8a8_snorm = 45,
+    HgFormat_b8g8r8a8_uscaled = 46,
+    HgFormat_b8g8r8a8_sscaled = 47,
+    HgFormat_b8g8r8a8_uint = 48,
+    HgFormat_b8g8r8a8_sint = 49,
+    HgFormat_b8g8r8a8_srgb = 50,
+    HgFormat_a8b8g8r8_unorm_pack32 = 51,
+    HgFormat_a8b8g8r8_snorm_pack32 = 52,
+    HgFormat_a8b8g8r8_uscaled_pack32 = 53,
+    HgFormat_a8b8g8r8_sscaled_pack32 = 54,
+    HgFormat_a8b8g8r8_uint_pack32 = 55,
+    HgFormat_a8b8g8r8_sint_pack32 = 56,
+    HgFormat_a8b8g8r8_srgb_pack32 = 57,
+    HgFormat_a2r10g10b10_unorm_pack32 = 58,
+    HgFormat_a2r10g10b10_snorm_pack32 = 59,
+    HgFormat_a2r10g10b10_uscaled_pack32 = 60,
+    HgFormat_a2r10g10b10_sscaled_pack32 = 61,
+    HgFormat_a2r10g10b10_uint_pack32 = 62,
+    HgFormat_a2r10g10b10_sint_pack32 = 63,
+    HgFormat_a2b10g10r10_unorm_pack32 = 64,
+    HgFormat_a2b10g10r10_snorm_pack32 = 65,
+    HgFormat_a2b10g10r10_uscaled_pack32 = 66,
+    HgFormat_a2b10g10r10_sscaled_pack32 = 67,
+    HgFormat_a2b10g10r10_uint_pack32 = 68,
+    HgFormat_a2b10g10r10_sint_pack32 = 69,
+    HgFormat_r16_unorm = 70,
+    HgFormat_r16_snorm = 71,
+    HgFormat_r16_uscaled = 72,
+    HgFormat_r16_sscaled = 73,
+    HgFormat_r16_uint = 74,
+    HgFormat_r16_sint = 75,
+    HgFormat_r16_sfloat = 76,
+    HgFormat_r16g16_unorm = 77,
+    HgFormat_r16g16_snorm = 78,
+    HgFormat_r16g16_uscaled = 79,
+    HgFormat_r16g16_sscaled = 80,
+    HgFormat_r16g16_uint = 81,
+    HgFormat_r16g16_sint = 82,
+    HgFormat_r16g16_sfloat = 83,
+    HgFormat_r16g16b16_unorm = 84,
+    HgFormat_r16g16b16_snorm = 85,
+    HgFormat_r16g16b16_uscaled = 86,
+    HgFormat_r16g16b16_sscaled = 87,
+    HgFormat_r16g16b16_uint = 88,
+    HgFormat_r16g16b16_sint = 89,
+    HgFormat_r16g16b16_sfloat = 90,
+    HgFormat_r16g16b16a16_unorm = 91,
+    HgFormat_r16g16b16a16_snorm = 92,
+    HgFormat_r16g16b16a16_uscaled = 93,
+    HgFormat_r16g16b16a16_sscaled = 94,
+    HgFormat_r16g16b16a16_uint = 95,
+    HgFormat_r16g16b16a16_sint = 96,
+    HgFormat_r16g16b16a16_sfloat = 97,
+    HgFormat_r32_uint = 98,
+    HgFormat_r32_sint = 99,
+    HgFormat_r32_sfloat = 100,
+    HgFormat_r32g32_uint = 101,
+    HgFormat_r32g32_sint = 102,
+    HgFormat_r32g32_sfloat = 103,
+    HgFormat_r32g32b32_uint = 104,
+    HgFormat_r32g32b32_sint = 105,
+    HgFormat_r32g32b32_sfloat = 106,
+    HgFormat_r32g32b32a32_uint = 107,
+    HgFormat_r32g32b32a32_sint = 108,
+    HgFormat_r32g32b32a32_sfloat = 109,
+    HgFormat_r64_uint = 110,
+    HgFormat_r64_sint = 111,
+    HgFormat_r64_sfloat = 112,
+    HgFormat_r64g64_uint = 113,
+    HgFormat_r64g64_sint = 114,
+    HgFormat_r64g64_sfloat = 115,
+    HgFormat_r64g64b64_uint = 116,
+    HgFormat_r64g64b64_sint = 117,
+    HgFormat_r64g64b64_sfloat = 118,
+    HgFormat_r64g64b64a64_uint = 119,
+    HgFormat_r64g64b64a64_sint = 120,
+    HgFormat_r64g64b64a64_sfloat = 121,
+    HgFormat_b10g11r11_ufloat_pack32 = 122,
+    HgFormat_e5b9g9r9_ufloat_pack32 = 123,
+    HgFormat_d16_unorm = 124,
+    HgFormat_x8_d24_unorm_pack32 = 125,
+    HgFormat_d32_sfloat = 126,
+    HgFormat_s8_uint = 127,
+    HgFormat_d16_unorm_s8_uint = 128,
+    HgFormat_d24_unorm_s8_uint = 129,
+    HgFormat_d32_sfloat_s8_uint = 130,
+    HgFormat_bc1_rgb_unorm_block = 131,
+    HgFormat_bc1_rgb_srgb_block = 132,
+    HgFormat_bc1_rgba_unorm_block = 133,
+    HgFormat_bc1_rgba_srgb_block = 134,
+    HgFormat_bc2_unorm_block = 135,
+    HgFormat_bc2_srgb_block = 136,
+    HgFormat_bc3_unorm_block = 137,
+    HgFormat_bc3_srgb_block = 138,
+    HgFormat_bc4_unorm_block = 139,
+    HgFormat_bc4_snorm_block = 140,
+    HgFormat_bc5_unorm_block = 141,
+    HgFormat_bc5_snorm_block = 142,
+    HgFormat_bc6h_ufloat_block = 143,
+    HgFormat_bc6h_sfloat_block = 144,
+    HgFormat_bc7_unorm_block = 145,
+    HgFormat_bc7_srgb_block = 146,
+    HgFormat_etc2_r8g8b8_unorm_block = 147,
+    HgFormat_etc2_r8g8b8_srgb_block = 148,
+    HgFormat_etc2_r8g8b8a1_unorm_block = 149,
+    HgFormat_etc2_r8g8b8a1_srgb_block = 150,
+    HgFormat_etc2_r8g8b8a8_unorm_block = 151,
+    HgFormat_etc2_r8g8b8a8_srgb_block = 152,
+    HgFormat_eac_r11_unorm_block = 153,
+    HgFormat_eac_r11_snorm_block = 154,
+    HgFormat_eac_r11g11_unorm_block = 155,
+    HgFormat_eac_r11g11_snorm_block = 156,
+    HgFormat_astc_4x4_unorm_block = 157,
+    HgFormat_astc_4x4_srgb_block = 158,
+    HgFormat_astc_5x4_unorm_block = 159,
+    HgFormat_astc_5x4_srgb_block = 160,
+    HgFormat_astc_5x5_unorm_block = 161,
+    HgFormat_astc_5x5_srgb_block = 162,
+    HgFormat_astc_6x5_unorm_block = 163,
+    HgFormat_astc_6x5_srgb_block = 164,
+    HgFormat_astc_6x6_unorm_block = 165,
+    HgFormat_astc_6x6_srgb_block = 166,
+    HgFormat_astc_8x5_unorm_block = 167,
+    HgFormat_astc_8x5_srgb_block = 168,
+    HgFormat_astc_8x6_unorm_block = 169,
+    HgFormat_astc_8x6_srgb_block = 170,
+    HgFormat_astc_8x8_unorm_block = 171,
+    HgFormat_astc_8x8_srgb_block = 172,
+    HgFormat_astc_10x5_unorm_block = 173,
+    HgFormat_astc_10x5_srgb_block = 174,
+    HgFormat_astc_10x6_unorm_block = 175,
+    HgFormat_astc_10x6_srgb_block = 176,
+    HgFormat_astc_10x8_unorm_block = 177,
+    HgFormat_astc_10x8_srgb_block = 178,
+    HgFormat_astc_10x10_unorm_block = 179,
+    HgFormat_astc_10x10_srgb_block = 180,
+    HgFormat_astc_12x10_unorm_block = 181,
+    HgFormat_astc_12x10_srgb_block = 182,
+    HgFormat_astc_12x12_unorm_block = 183,
+    HgFormat_astc_12x12_srgb_block = 184,
+    HgFormat_g8b8g8r8_422_unorm = 1000156000,
+    HgFormat_b8g8r8g8_422_unorm = 1000156001,
+    HgFormat_g8_b8_r8_3plane_420_unorm = 1000156002,
+    HgFormat_g8_b8r8_2plane_420_unorm = 1000156003,
+    HgFormat_g8_b8_r8_3plane_422_unorm = 1000156004,
+    HgFormat_g8_b8r8_2plane_422_unorm = 1000156005,
+    HgFormat_g8_b8_r8_3plane_444_unorm = 1000156006,
+    HgFormat_r10x6_unorm_pack16 = 1000156007,
+    HgFormat_r10x6g10x6_unorm_2pack16 = 1000156008,
+    HgFormat_r10x6g10x6b10x6a10x6_unorm_4pack16 = 1000156009,
+    HgFormat_g10x6b10x6g10x6r10x6_422_unorm_4pack16 = 1000156010,
+    HgFormat_b10x6g10x6r10x6g10x6_422_unorm_4pack16 = 1000156011,
+    HgFormat_g10x6_b10x6_r10x6_3plane_420_unorm_3pack16 = 1000156012,
+    HgFormat_g10x6_b10x6r10x6_2plane_420_unorm_3pack16 = 1000156013,
+    HgFormat_g10x6_b10x6_r10x6_3plane_422_unorm_3pack16 = 1000156014,
+    HgFormat_g10x6_b10x6r10x6_2plane_422_unorm_3pack16 = 1000156015,
+    HgFormat_g10x6_b10x6_r10x6_3plane_444_unorm_3pack16 = 1000156016,
+    HgFormat_r12x4_unorm_pack16 = 1000156017,
+    HgFormat_r12x4g12x4_unorm_2pack16 = 1000156018,
+    HgFormat_r12x4g12x4b12x4a12x4_unorm_4pack16 = 1000156019,
+    HgFormat_g12x4b12x4g12x4r12x4_422_unorm_4pack16 = 1000156020,
+    HgFormat_b12x4g12x4r12x4g12x4_422_unorm_4pack16 = 1000156021,
+    HgFormat_g12x4_b12x4_r12x4_3plane_420_unorm_3pack16 = 1000156022,
+    HgFormat_g12x4_b12x4r12x4_2plane_420_unorm_3pack16 = 1000156023,
+    HgFormat_g12x4_b12x4_r12x4_3plane_422_unorm_3pack16 = 1000156024,
+    HgFormat_g12x4_b12x4r12x4_2plane_422_unorm_3pack16 = 1000156025,
+    HgFormat_g12x4_b12x4_r12x4_3plane_444_unorm_3pack16 = 1000156026,
+    HgFormat_g16b16g16r16_422_unorm = 1000156027,
+    HgFormat_b16g16r16g16_422_unorm = 1000156028,
+    HgFormat_g16_b16_r16_3plane_420_unorm = 1000156029,
+    HgFormat_g16_b16r16_2plane_420_unorm = 1000156030,
+    HgFormat_g16_b16_r16_3plane_422_unorm = 1000156031,
+    HgFormat_g16_b16r16_2plane_422_unorm = 1000156032,
+    HgFormat_g16_b16_r16_3plane_444_unorm = 1000156033,
+    HgFormat_g8_b8r8_2plane_444_unorm = 1000330000,
+    HgFormat_g10x6_b10x6r10x6_2plane_444_unorm_3pack16 = 1000330001,
+    HgFormat_g12x4_b12x4r12x4_2plane_444_unorm_3pack16 = 1000330002,
+    HgFormat_g16_b16r16_2plane_444_unorm = 1000330003,
+    HgFormat_a4r4g4b4_unorm_pack16 = 1000340000,
+    HgFormat_a4b4g4r4_unorm_pack16 = 1000340001,
+    HgFormat_astc_4x4_sfloat_block = 1000066000,
+    HgFormat_astc_5x4_sfloat_block = 1000066001,
+    HgFormat_astc_5x5_sfloat_block = 1000066002,
+    HgFormat_astc_6x5_sfloat_block = 1000066003,
+    HgFormat_astc_6x6_sfloat_block = 1000066004,
+    HgFormat_astc_8x5_sfloat_block = 1000066005,
+    HgFormat_astc_8x6_sfloat_block = 1000066006,
+    HgFormat_astc_8x8_sfloat_block = 1000066007,
+    HgFormat_astc_10x5_sfloat_block = 1000066008,
+    HgFormat_astc_10x6_sfloat_block = 1000066009,
+    HgFormat_astc_10x8_sfloat_block = 1000066010,
+    HgFormat_astc_10x10_sfloat_block = 1000066011,
+    HgFormat_astc_12x10_sfloat_block = 1000066012,
+    HgFormat_astc_12x12_sfloat_block = 1000066013,
+    HgFormat_a1b5g5r5_unorm_pack16 = 1000470000,
+    HgFormat_a8_unorm = 1000470001,
+    HgFormat_pvrtc1_2bpp_unorm_block_img = 1000054000,
+    HgFormat_pvrtc1_4bpp_unorm_block_img = 1000054001,
+    HgFormat_pvrtc2_2bpp_unorm_block_img = 1000054002,
+    HgFormat_pvrtc2_4bpp_unorm_block_img = 1000054003,
+    HgFormat_pvrtc1_2bpp_srgb_block_img = 1000054004,
+    HgFormat_pvrtc1_4bpp_srgb_block_img = 1000054005,
+    HgFormat_pvrtc2_2bpp_srgb_block_img = 1000054006,
+    HgFormat_pvrtc2_4bpp_srgb_block_img = 1000054007,
+    HgFormat_r8_bool_arm = 1000460000,
+    HgFormat_r16g16_sfixed5_nv = 1000464000,
+    HgFormat_r10x6_uint_pack16_arm = 1000609000,
+    HgFormat_r10x6g10x6_uint_2pack16_arm = 1000609001,
+    HgFormat_r10x6g10x6b10x6a10x6_uint_4pack16_arm = 1000609002,
+    HgFormat_r12x4_uint_pack16_arm = 1000609003,
+    HgFormat_r12x4g12x4_uint_2pack16_arm = 1000609004,
+    HgFormat_r12x4g12x4b12x4a12x4_uint_4pack16_arm = 1000609005,
+    HgFormat_r14x2_uint_pack16_arm = 1000609006,
+    HgFormat_r14x2g14x2_uint_2pack16_arm = 1000609007,
+    HgFormat_r14x2g14x2b14x2a14x2_uint_4pack16_arm = 1000609008,
+    HgFormat_r14x2_unorm_pack16_arm = 1000609009,
+    HgFormat_r14x2g14x2_unorm_2pack16_arm = 1000609010,
+    HgFormat_r14x2g14x2b14x2a14x2_unorm_4pack16_arm = 1000609011,
+    HgFormat_g14x2_b14x2r14x2_2plane_420_unorm_3pack16_arm = 1000609012,
+    HgFormat_g14x2_b14x2r14x2_2plane_422_unorm_3pack16_arm = 1000609013,
+};
+
+/**
+ * Turns a HgFormat into the size in bytes
  *
  * Parameters
  * - format The format to get the size of
@@ -2902,87 +3142,26 @@ const char* hgVkResultToStr(VkResult result);
  * Returns
  * - The size of the format in bytes
  */
-u32 hgVkFormatToSize(VkFormat format);
-
-/**
- * Creates a Vulkan instance with sensible defaults
- *
- * In debug mode, enables debug messaging
- *
- * Parameters
- * - extensions The instance extensions to load
- * - extensionCount The number of extensions
- *
- * Returns
- * - The created VkInstance, will never be nullptr
- */
-VkInstance hgCreateVkInstance(HgStringView* extensions, u32 extensionCount);
-
-/**
- * Creates a Vulkan debug messenger
- *
- * Returns
- * - The created debug messenger, or nullptr if debug messenger is disabled
- */
-VkDebugUtilsMessengerEXT hgCreateVkDebugUtilsMessenger();
-
-/**
- * Find the first queue family index which supports the the queue flags
- *
- * Parameters
- * - gpu The physical device, must not be nullptr
- * - queueFamily Where to store the family, if found
- * - queueFlags The flags required of the queue family
- *
- * Returns
- * - Whether a queue family was found and stored in queueFamily
- */
-bool hgFindVkQueueFamily(VkPhysicalDevice gpu, u32* queueFamily, VkQueueFlags queueFlags);
-
-/**
- * Finds a Vulkan physical device with a general purpose queue family
- *
- * The physical device will have at least one queue family which supports both
- * graphics, transfer, and compute
- *
- * Returns
- * - The physical device
- * - nullptr if none was found
- */
-VkPhysicalDevice hgFindVkPhysicalDevice();
-
-/**
- * Creates a Vulkan logical device with a single general purpose queue
- *
- * The device will have queue 0 in hgVkQueueFamily
- *
- * Returns
- * - The physical device, will never be nullptr
- */
-VkDevice hgCreateVkDevice();
-
-/**
- * Attempts to find the index of a memory type which has the desired flags and
- * does not have the undesired flags
- *
- * Note, if no such memory type exists, the next best thing will be found
- *
- * The bitmask must not mask out all memory types
- *
- * Parameters
- * - bitmask A bitmask of which memory types cannot be used, must not be 0
- * - preferredFlags The flags which the type should have, though may not
- * - unpreferredFlags The flags which the type should not have, though may have
- *
- * Returns
- * - The found index of the memory type
- */
-u32 hgFindVkMemoryTypeIndex(
-    u32 bitmask,
-    VkMemoryPropertyFlags preferredFlags = 0,
-    VkMemoryPropertyFlags unpreferredFlags = 0);
+u32 hgFormatToSize(HgFormat format);
 
 // Vulkan allocator : TODO?
+
+/**
+ * How an HgBuffer will be used
+ */
+enum HgBufferUsage {
+    HgBufferUsage_transferSrc = 0x00000001,
+    HgBufferUsage_transferDst = 0x00000002,
+    HgBufferUsage_uniformTexelBuffer = 0x00000004,
+    HgBufferUsage_storageTexelBuffer = 0x00000008,
+    HgBufferUsage_uniformBuffer = 0x00000010,
+    HgBufferUsage_storageBuffer = 0x00000020,
+    HgBufferUsage_indexBuffer = 0x00000040,
+    HgBufferUsage_vertexBuffer = 0x00000080,
+    HgBufferUsage_indirectBuffer = 0x00000100,
+};
+
+typedef u32 HgBufferUsageFlags;
 
 /**
  * How an HgBuffer will be accessed
@@ -3016,38 +3195,16 @@ enum HgBufferMemoryHostAccess {
 };
 
 /**
- * A gpu buffer
- */
-struct HgBuffer {
-    /**
-     * The Vulkan buffer
-     */
-    VkBuffer buffer;
-    /**
-     * The buffer's allocation
-     */
-    VmaAllocation alloc;
-    /**
-     * The size of the buffer
-     */
-    u64 size;
-    /**
-     * How the buffer can be accessed
-     */
-    HgBufferMemoryHostAccess access;
-};
-
-/**
  * Create a gpu buffer
  *
  * Parameters
  * - size The size in bytes of the buffer
- * - usage How the buffer will be used
+ * - usageFlags How the buffer will be used
  * - access How the buffer should be accessed
  */
 HgBuffer* hgCreateBuffer(
     u64 size,
-    VkBufferUsageFlags usage,
+    HgBufferUsageFlags usageFlags,
     HgBufferMemoryUsage access = HgBufferMemoryUsage_deviceOnly);
 
 /**
@@ -3078,55 +3235,80 @@ void hgWriteBuffer(HgBuffer* dst, u64 offset, const void* src, u64 size);
 void hgReadBuffer(void* dst, HgBuffer* src, u64 offset, u64 size);
 
 /**
- * A gpu image
+ * The dimensionality of an image
  */
-struct HgImage {
-    /**
-     * The Vulkan image
-     */
-    VkImage image;
-    /**
-     * The image's allocation
-     */
-    VmaAllocation alloc;
-    /**
-     * The type of image
-     */
-    VkImageType type;
-    /**
-     * The pixel format
-     */
-    VkFormat format;
-    /**
-     * The width in pixels
-     */
-    u32 width;
-    /**
-     * The height in pixels
-     */
-    u32 height;
-    /**
-     * The depth in pixels
-     */
-    u32 depth;
-    /**
-     * The number of mipmap levels
-     */
-    u32 mipLevels;
-    /**
-     * The number of array layers
-     */
-    u32 arrayLayers;
-    /**
-     * The number of msaa samples
-     */
-    VkSampleCountFlagBits msaaSamples;
+enum HgImageType {
+    HgImageType_1D = 0,
+    HgImageType_2D = 1,
+    HgImageType_3D = 2,
 };
+
+/**
+ * The dimensionality of an image
+ */
+enum HgImageViewType {
+    HgImageViewType_1D = 0,
+    HgImageViewType_2D = 1,
+    HgImageViewType_3D = 2,
+    HgImageViewType_cube = 3,
+    HgImageViewType_1DArray = 4,
+    HgImageViewType_2DArray = 5,
+    HgImageViewType_cubeArray = 6,
+};
+
+/**
+ * How an image will be used
+ */
+enum HgImageUsage {
+    HgImageUsage_transferSrc = 0x00000001,
+    HgImageUsage_transferDst = 0x00000002,
+    HgImageUsage_sampled = 0x00000004,
+    HgImageUsage_storage = 0x00000008,
+    HgImageUsage_colorAttachment = 0x00000010,
+    HgImageUsage_depthStencilAttachment = 0x00000020,
+    HgImageUsage_transientAttachment = 0x00000040,
+    HgImageUsage_inputAttachment = 0x00000080,
+    HgImageUsage_hostTransfer = 0x00400000,
+};
+
+typedef u32 HgImageUsageFlags;
+
+/**
+ * The aspect the image will be accessed in
+ */
+enum HgImageAspect {
+    HgImageAspect_none = 0,
+    HgImageAspect_color = 0x00000001,
+    HgImageAspect_depth = 0x00000002,
+    HgImageAspect_stencil = 0x00000004,
+    HgImageAspect_metadata = 0x00000008,
+    HgImageAspect_plane0 = 0x00000010,
+    HgImageAspect_plane1 = 0x00000020,
+    HgImageAspect_plane2 = 0x00000040,
+};
+
+/**
+ * The layout of an image
+ */
+enum HgImageLayout {
+    HgImageLayout_undefined = 0,
+    HgImageLayout_general = 1,
+    HgImageLayout_colorAttachmentOptimal = 2,
+    HgImageLayout_depthStencilAttachmentOptimal = 3,
+    HgImageLayout_depthStencilReadOnlyOptimal = 4,
+    HgImageLayout_shaderReadOnlyOptimal = 5,
+    HgImageLayout_transferSrcOptimal = 6,
+    HgImageLayout_transferDstOptimal = 7,
+    HgImageLayout_preinitialized = 8,
+    HgImageLayout_presentSrc = 1000001002,
+};
+
+typedef u32 HgImageAspectFlags;
 
 /**
  * Create a gpu image assuming most defaults
  */
-HgImage* hgCreateImage(u32 width, u32 height, VkFormat format, VkImageUsageFlags usage);
+HgImage* hgCreateImage(u32 width, u32 height, HgFormat format, HgImageUsageFlags usage);
 
 /**
  * Config for hgCreateVkImage
@@ -3135,7 +3317,7 @@ struct HgCreateImageEx {
     /**
      * The dimensions of the image
      */
-    VkImageType type = VK_IMAGE_TYPE_2D;
+    HgImageType type = HgImageType_2D;
     /**
      * The width of the image
      */
@@ -3149,9 +3331,9 @@ struct HgCreateImageEx {
      */
     u32 depth = 1;
     /**
-     * The format of the image, must not be UNDEFINED
+     * The format of the image, must not be undefined
      */
-    VkFormat format = VK_FORMAT_UNDEFINED;
+    HgFormat format = HgFormat_undefined;
     /**
      * The number of mip level
      */
@@ -3163,11 +3345,11 @@ struct HgCreateImageEx {
     /**
      * The number of MSAA samples
      */
-    VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
+    u32 msaaSamples = 1;
     /**
      * How the image will be used, must not be 0
      */
-    VkImageUsageFlags usage = 0;
+    HgImageUsageFlags usage = 0;
 };
 
 /**
@@ -3181,31 +3363,19 @@ HgImage* hgCreateImageEx(const HgCreateImageEx* create);
 void hgDestroyImage(HgImage* image);
 
 /**
- * A view into a gpu image
+ * A subresource range of an image
  */
-struct HgImageView {
+struct HgImageSubresource {
     /**
-     * The view
+     * The aspect of the image
      */
-    VkImageView view;
-    /**
-     * The image viewed
-     */
-    const HgImage* image;
-    /**
-     * The type of view
-     */
-    VkImageViewType type;
-    /**
-     * The image aspect
-     */
-    VkImageAspectFlags aspectFlags;
+    HgImageAspectFlags aspectFlags;
     /**
      * The first mip level
      */
     u32 baseMipLevel;
     /**
-     * The number of mip levels including the base
+     * The number of mip levels
      */
     u32 levelCount;
     /**
@@ -3213,7 +3383,7 @@ struct HgImageView {
      */
     u32 baseArrayLayer;
     /**
-     * The number of array layers including the base
+     * The number of layers
      */
     u32 layerCount;
 };
@@ -3223,8 +3393,8 @@ struct HgImageView {
  */
 HgImageView* hgCreateImageView(
     const HgImage* image,
-    VkImageSubresourceRange subresource,
-    VkImageViewType type = VK_IMAGE_VIEW_TYPE_2D);
+    HgImageSubresource subresource,
+    HgImageViewType type = HgImageViewType_2D);
 
 /**
  * Destroy a gpu image view
@@ -3234,6 +3404,8 @@ void hgDestroyImageView(HgImageView* view);
 /**
  * Write to a gpu image
  *
+ * Note, the subresource must have only one mip level
+ *
  * Parameters
  * - dst The image to write to
  * - subresource The subresource of the image to write to
@@ -3242,12 +3414,14 @@ void hgDestroyImageView(HgImageView* view);
  */
 void hgWriteImage(
     HgImage* dst,
-    VkImageSubresourceLayers subresource,
+    HgImageSubresource subresource,
     const void* src,
-    VkImageLayout layout);
+    HgImageLayout layout);
 
 /**
  * Write to a gpu image cubemap
+ *
+ * Note, the subresource must have only one mip level
  *
  * Note, dst should have 6 array layers, all of which will be filled
  *
@@ -3264,12 +3438,14 @@ void hgWriteImage(
  */
 void hgWriteImageCubemap(
     HgImage* dst,
-    VkImageSubresourceLayers subresource,
+    HgImageSubresource subresource,
     const void* src,
-    VkImageLayout layout);
+    HgImageLayout layout);
 
 /**
  * Read from a gpu image
+ *
+ * Note, the subresource must have only one mip level
  *
  * Parameters
  * - src The pointer to write to
@@ -3280,8 +3456,8 @@ void hgWriteImageCubemap(
 void hgReadImage(
     void* dst,
     const HgImage* src,
-    VkImageSubresourceLayers subresource,
-    VkImageLayout layout);
+    HgImageSubresource subresource,
+    HgImageLayout layout);
 
 /**
  * Generates mipmaps from the base level
@@ -3294,9 +3470,31 @@ void hgReadImage(
  */
 void hgGenerateMipmaps(
     HgImage* image,
-    VkImageAspectFlags aspectFlags,
-    VkImageLayout oldLayout,
-    VkImageLayout newLayout);
+    HgImageAspectFlags aspectFlags,
+    HgImageLayout oldLayout,
+    HgImageLayout newLayout);
+
+enum HgSamplerFilter {
+    HgSamplerFilter_nearest = 0,
+    HgSamplerFilter_linear = 1,
+};
+
+enum HgSamplerAddressMode {
+    HgSamplerAddressMode_modeRepeat = 0,
+    HgSamplerAddressMode_modeMirroredRepeat = 1,
+    HgSamplerAddressMode_modeClampToEdge = 2,
+    HgSamplerAddressMode_modeClampToBorder = 3,
+    HgSamplerAddressMode_modeMirrorClampToEdge = 4,
+};
+
+enum HgSamplerBorderColor {
+    HgSamplerBorderColor_floatTransparentBlack = 0,
+    HgSamplerBorderColor_intTransparentBlack = 1,
+    HgSamplerBorderColor_floatOpaqueBlack = 2,
+    HgSamplerBorderColor_intOpaqueBlack = 3,
+    HgSamplerBorderColor_floatOpaqueWhite = 4,
+    HgSamplerBorderColor_intOpaqueWhite = 5,
+};
 
 /**
  * Create a Vulkan sampler
@@ -3306,10 +3504,15 @@ void hgGenerateMipmaps(
  * - addressMode How the sampler handles address off edges
  * - borderColor The border color if addressMode uses a border
  */
-VkSampler hgCreateSampler(
-    VkFilter filter,
-    VkSamplerAddressMode addressMode = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-    VkBorderColor borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK);
+HgSampler* hgCreateSampler(
+    HgSamplerFilter filter,
+    HgSamplerAddressMode addressMode = HgSamplerAddressMode_modeRepeat,
+    HgSamplerBorderColor borderColor = HgSamplerBorderColor_floatTransparentBlack);
+
+/**
+ * Destroy a Vulkan sampler
+ */
+void hgDestroySampler(HgSampler* sampler);
 
 /**
  * The binding indices for the descriptor types in the bindless layout
@@ -3370,6 +3573,18 @@ constexpr HgDescriptorType hgDescriptorType(HgDescriptor desc)
     return (HgDescriptorType)((desc.id & 0xf0000000) >> 28);
 }
 
+struct HgBufferDescriptorInfo {
+    HgBuffer* buffer;
+    u64 offset;
+    u64 range;
+};
+
+struct HgImageDescriptorInfo {
+    HgSampler* sampler;
+    HgImageView* imageView;
+    HgImageLayout imageLayout;
+};
+
 /**
  * Update a bindless descriptor
  *
@@ -3381,23 +3596,84 @@ constexpr HgDescriptorType hgDescriptorType(HgDescriptor desc)
  */
 void hgUpdateDescriptor(
     HgDescriptor descriptor,
-    const VkDescriptorBufferInfo* bufferInfo,
-    const VkDescriptorImageInfo* imageInfo,
-    const VkBufferView* texelInfo = nullptr);
+    const HgBufferDescriptorInfo* bufferInfo,
+    const HgImageDescriptorInfo* imageInfo);
 
-/**
- * Create a pipeline layout using the global bindless descriptor set layout
- */
-VkPipelineLayout hgCreatePipelineLayout(const VkPushConstantRange* push);
+enum HgShaderStage {
+    HgShaderStage_VERTEX_BIT = 0x00000001,
+    HgShaderStage_TESSELLATION_CONTROL_BIT = 0x00000002,
+    HgShaderStage_TESSELLATION_EVALUATION_BIT = 0x00000004,
+    HgShaderStage_GEOMETRY_BIT = 0x00000008,
+    HgShaderStage_FRAGMENT_BIT = 0x00000010,
+    HgShaderStage_COMPUTE_BIT = 0x00000020,
+    HgShaderStage_ALL_GRAPHICS = 0x0000001F,
+    HgShaderStage_ALL = 0x7FFFFFFF,
+};
+
+typedef u32 HgShaderStageFlags;
+
+struct HgPushConstantRange {
+    HgShaderStageFlags stageFlags;
+    u32 offset;
+    u32 size;
+};
+
+enum HgVertexInputRate {
+    HgVertexInputRate_VERTEX = 0,
+    HgVertexInputRate_INSTANCE = 1,
+};
+
+struct HgVertexInputBindingDescription {
+    u32 binding;
+    u32 stride;
+    HgVertexInputRate inputRate;
+};
+
+struct HgVertexInputAttributeDescription {
+    u32 location;
+    u32 binding;
+    HgFormat format;
+    u32 offset;
+};
+
+enum HgPrimitiveTopology {
+    HgPrimitiveTopology_POINT_LIST = 0,
+    HgPrimitiveTopology_LINE_LIST = 1,
+    HgPrimitiveTopology_LINE_STRIP = 2,
+    HgPrimitiveTopology_TRIANGLE_LIST = 3,
+    HgPrimitiveTopology_TRIANGLE_STRIP = 4,
+    HgPrimitiveTopology_TRIANGLE_FAN = 5,
+    HgPrimitiveTopology_LINE_LIST_WITH_ADJACENCY = 6,
+    HgPrimitiveTopology_LINE_STRIP_WITH_ADJACENCY = 7,
+    HgPrimitiveTopology_TRIANGLE_LIST_WITH_ADJACENCY = 8,
+    HgPrimitiveTopology_TRIANGLE_STRIP_WITH_ADJACENCY = 9,
+    HgPrimitiveTopology_PATCH_LIST = 10,
+};
+
+enum HgPolygonMode {
+    HgPolygonMode_FILL = 0,
+    HgPolygonMode_LINE = 1,
+    HgPolygonMode_POINT = 2,
+};
+
+enum HgCullMode {
+    HgCullMode_NONE = 0,
+    HgCullMode_FRONT_BIT = 0x00000001,
+    HgCullMode_BACK_BIT = 0x00000002,
+    HgCullMode_FRONT_AND_BACK = 0x00000003,
+};
+
+typedef u32 HgCullModeFlags;
+
+enum HgFrontFace {
+    HgFrontFace_COUNTER_CLOCKWISE = 0,
+    HgFrontFace_CLOCKWISE = 1,
+};
 
 /**
  * Config for hgCreateGraphicsPipeline
  */
 struct HgCreateGraphicsPipeline {
-    /**
-     * The pipeline layout
-     */
-    VkPipelineLayout layout = nullptr;
     /**
      * The vertex shader code
      */
@@ -3417,7 +3693,7 @@ struct HgCreateGraphicsPipeline {
     /**
      * The format of the color attachments, none can be UNDEFINED
      */
-    const VkFormat* colorAttachmentFormats = nullptr;
+    const HgFormat* colorAttachmentFormats = nullptr;
     /**
      * The number of color attachment formats
      */
@@ -3425,15 +3701,23 @@ struct HgCreateGraphicsPipeline {
     /**
      * The format of the depth attachment, no depth attachment if UNDEFINED
      */
-    VkFormat depthAttachmentFormat = VK_FORMAT_UNDEFINED;
+    HgFormat depthAttachmentFormat = HgFormat_undefined;
     /**
      * The format of the stencil attachment, no stencil attachment if UNDEFINED
      */
-    VkFormat stencilAttachmentFormat = VK_FORMAT_UNDEFINED;
+    HgFormat stencilAttachmentFormat = HgFormat_undefined;
+    /**
+     * The push constant ranges, if any
+     */
+    const HgPushConstantRange* pushRanges = nullptr;
+    /**
+     * The number of push constant ranges
+     */
+    u32 pushRangeCount;
     /**
      * Descriptions of the vertex bindings, may be nullptr
      */
-    const VkVertexInputBindingDescription* vertexBindings = nullptr;
+    const HgVertexInputBindingDescription* vertexBindings = nullptr;
     /**
      * The number of vertex bindings
      */
@@ -3441,7 +3725,7 @@ struct HgCreateGraphicsPipeline {
     /**
      * Descriptions of the vertex attributes, may be nullptr
      */
-    const VkVertexInputAttributeDescription* vertexAttributes = nullptr;
+    const HgVertexInputAttributeDescription* vertexAttributes = nullptr;
     /**
      * The number of vertex attributes
      */
@@ -3449,7 +3733,7 @@ struct HgCreateGraphicsPipeline {
     /**
      * How to interpret vertices into topology
      */
-    VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    HgPrimitiveTopology topology = HgPrimitiveTopology_TRIANGLE_LIST;
     /**
      * The number of patch control points in the tesselation stage
      */
@@ -3457,19 +3741,19 @@ struct HgCreateGraphicsPipeline {
     /**
      * How polygons are drawn
      */
-    VkPolygonMode polygonMode = VK_POLYGON_MODE_FILL;
+    HgPolygonMode polygonMode = HgPolygonMode_FILL;
     /**
      * Enables back/front face culling
      */
-    VkCullModeFlagBits cullMode = VK_CULL_MODE_NONE;
+    HgCullModeFlags cullMode = HgCullMode_NONE;
     /**
      * Which face is treated as the front
      */
-    VkFrontFace frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    HgFrontFace frontFace = HgFrontFace_COUNTER_CLOCKWISE;
     /**
      * How many samples are used in MSAA
      */
-    VkSampleCountFlagBits multisampleCount = VK_SAMPLE_COUNT_1_BIT;
+    u32 multisampleCount = 1;
     /**
      * Enables culling fragments by comparing to a depth buffer
      */
@@ -3485,42 +3769,27 @@ struct HgCreateGraphicsPipeline {
 };
 
 /**
- * Creates a graphics pipeline
+ * Create a graphics pipeline
  *
  * Parameters
  * - config The pipeline configuration
  */
-VkPipeline hgCreateGraphicsPipeline(const HgCreateGraphicsPipeline* config);
+HgPipeline* hgCreateGraphicsPipeline(const HgCreateGraphicsPipeline* config);
 
 /**
- * Bind the pipeline using the bindless descriptor set
+ * Create a compute pipeline
  *
  * Parameters
- * - cmd The command buffer
- * - pipeline The pipeline to bind
- * - pipelineLayout The layout of the pipeline
- */
-void hgBindGraphicsPipeline(VkCommandBuffer cmd, VkPipeline pipeline, VkPipelineLayout pipelineLayout);
-
-/**
- * Creates a compute pipeline
- *
- * Parameters
- * - layout The pipeline layout, must not be nullptr
+ * - pushSize The size of the push constant
  * - shaderCode The compute shader, must not be nullptr
  * - shaderCodeSize The size in bytes of shaderCode
  */
-VkPipeline hgCreateComputePipeline(VkPipelineLayout layout, const u8* shaderCode, u64 shaderCodeSize);
+HgPipeline* hgCreateComputePipeline(u32 pushSize, const u8* shaderCode, u64 shaderCodeSize);
 
 /**
- * Bind the pipeline using the bindless descriptor set
- *
- * Parameters
- * - cmd The command buffer
- * - pipeline The pipeline to bind
- * - pipelineLayout The layout of the pipeline
+ * Destroy a graphics or compute pipeline
  */
-void hgBindComputePipeline(VkCommandBuffer cmd, VkPipeline pipeline, VkPipelineLayout pipelineLayout);
+void hgDestroyPipeline(HgPipeline* pipeline);
 
 /**
  * Begin a command buffer to be executed once
@@ -3528,7 +3797,7 @@ void hgBindComputePipeline(VkCommandBuffer cmd, VkPipeline pipeline, VkPipelineL
  * Returns
  * - The command buffer to record, will never be nullptr
  */
-VkCommandBuffer hgBeginVkCmd();
+HgCommandBuffer* hgBeginVkCmd();
 
 /**
  * Execute the command buffer and wait for completion
@@ -3536,7 +3805,82 @@ VkCommandBuffer hgBeginVkCmd();
  * Parameters
  * - cmd The command buffer from hgvkBeginCommands, must not be nullptr
  */
-void hgEndVkCmd(VkCommandBuffer cmd);
+void hgEndVkCmd(HgCommandBuffer* cmd);
+
+/**
+ * Bind a graphics or compute pipeline
+ */
+void hgCmdBindPipeline(HgCommandBuffer* cmd, HgPipeline* pipeline);
+
+/**
+ * Push constants to the shader
+ *
+ * Parameters
+ * - cmd The command buffer to record to
+ * - pipeline The pipeline to push to
+ * - offset The offset into the push range
+ * - size The size of the data
+ * - push The data to push
+ */
+void hgCmdPushConstants(HgCommandBuffer* cmd, HgPipeline* pipeline, u32 offset, u32 size, void* push);
+
+/**
+ * Bind an index buffer (assumed 32 bit)
+ */
+void hgCmdBindIndexBuffer(HgCommandBuffer* cmd, HgBuffer* buffer, u64 offset);
+
+/**
+ * Bind vertex buffers (assumed 32 bit)
+ */
+void hgCmdBindVertexBuffers(HgCommandBuffer* cmd, u32 bindingIdx, HgBuffer** buffers, u64* offsets, u32 bufferCount);
+
+/**
+ * Issue a draw call
+ */
+void hgCmdDraw(HgCommandBuffer* cmd, u32 vertexCount, u32 instanceCount, u32 firstVertex, u32 firstInstance);
+
+/**
+ * Issue a draw call using an index buffer
+ */
+void hgCmdDrawIndexed(
+    HgCommandBuffer* cmd,
+    u32 indexCount,
+    u32 instanceCount,
+    i32 vertexOffset,
+    u32 firstIndex,
+    u32 firstInstance);
+
+/**
+ * Dispatch a compute shader
+ */
+void hgCmdDispatch(HgCommandBuffer* cmd, u32 groupCountX, u32 groupCountY, u32 groupCountZ);
+
+enum HgAttachmentLoadOp {
+    HgAttachmentLoadOp_LOAD = 0,
+    HgAttachmentLoadOp_CLEAR = 1,
+    HgAttachmentLoadOp_DONT_CARE = 2,
+};
+
+enum HgAttachmentStoreOp {
+    HgAttachmentStoreOp_STORE = 0,
+    HgAttachmentStoreOp_DONT_CARE = 1,
+};
+
+union HgClearColorValue {
+    f32 float32[4];
+    i32 int32[4];
+    u32 uint32[4];
+};
+
+struct HgClearDepthStencilValue {
+    f32 depth;
+    u32 stencil;
+};
+
+union HgClearValue {
+    HgClearColorValue           color;
+    HgClearDepthStencilValue    depthStencil;
+};
 
 /**
  * A rendering attachment
@@ -3549,15 +3893,15 @@ struct HgRenderAttachment {
     /**
      * How the image will be loaded
      */
-    VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    HgAttachmentLoadOp loadOp = HgAttachmentLoadOp_CLEAR;
     /**
      * How the image will be stored
      */
-    VkAttachmentStoreOp storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    HgAttachmentStoreOp storeOp = HgAttachmentStoreOp_STORE;
     /**
      * What to clear the image to if cleared
      */
-    VkClearValue clearValue = {};
+    HgClearValue clearValue = {};
 };
 
 /**
@@ -3618,6 +3962,52 @@ struct HgRenderPass {
     const HgRenderAttachment* stencilAttachment = nullptr;
 };
 
+enum HgPipelineStage {
+    HgPipelineStage_TOP_OF_PIPE_BIT = 0x00000001,
+    HgPipelineStage_DRAW_INDIRECT_BIT = 0x00000002,
+    HgPipelineStage_VERTEX_INPUT_BIT = 0x00000004,
+    HgPipelineStage_VERTEX_SHADER_BIT = 0x00000008,
+    HgPipelineStage_TESSELLATION_CONTROL_SHADER_BIT = 0x00000010,
+    HgPipelineStage_TESSELLATION_EVALUATION_SHADER_BIT = 0x00000020,
+    HgPipelineStage_GEOMETRY_SHADER_BIT = 0x00000040,
+    HgPipelineStage_FRAGMENT_SHADER_BIT = 0x00000080,
+    HgPipelineStage_EARLY_FRAGMENT_TESTS_BIT = 0x00000100,
+    HgPipelineStage_LATE_FRAGMENT_TESTS_BIT = 0x00000200,
+    HgPipelineStage_COLOR_ATTACHMENT_OUTPUT_BIT = 0x00000400,
+    HgPipelineStage_COMPUTE_SHADER_BIT = 0x00000800,
+    HgPipelineStage_TRANSFER_BIT = 0x00001000,
+    HgPipelineStage_BOTTOM_OF_PIPE_BIT = 0x00002000,
+    HgPipelineStage_HOST_BIT = 0x00004000,
+    HgPipelineStage_ALL_GRAPHICS_BIT = 0x00008000,
+    HgPipelineStage_ALL_COMMANDS_BIT = 0x00010000,
+    HgPipelineStage_NONE = 0,
+};
+
+typedef u32 HgPipelineStageFlags;
+
+enum HgAccess {
+    HgAccess_INDIRECT_COMMAND_READ_BIT = 0x00000001,
+    HgAccess_INDEX_READ_BIT = 0x00000002,
+    HgAccess_VERTEX_ATTRIBUTE_READ_BIT = 0x00000004,
+    HgAccess_UNIFORM_READ_BIT = 0x00000008,
+    HgAccess_INPUT_ATTACHMENT_READ_BIT = 0x00000010,
+    HgAccess_SHADER_READ_BIT = 0x00000020,
+    HgAccess_SHADER_WRITE_BIT = 0x00000040,
+    HgAccess_COLOR_ATTACHMENT_READ_BIT = 0x00000080,
+    HgAccess_COLOR_ATTACHMENT_WRITE_BIT = 0x00000100,
+    HgAccess_DEPTH_STENCIL_ATTACHMENT_READ_BIT = 0x00000200,
+    HgAccess_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT = 0x00000400,
+    HgAccess_TRANSFER_READ_BIT = 0x00000800,
+    HgAccess_TRANSFER_WRITE_BIT = 0x00001000,
+    HgAccess_HOST_READ_BIT = 0x00002000,
+    HgAccess_HOST_WRITE_BIT = 0x00004000,
+    HgAccess_MEMORY_READ_BIT = 0x00008000,
+    HgAccess_MEMORY_WRITE_BIT = 0x00010000,
+    HgAccess_NONE = 0,
+};
+
+typedef u32 HgAccessFlags;
+
 /**
  * An image dependency barrier
  */
@@ -3629,15 +4019,15 @@ struct HgImageBarrier {
     /**
      * Where the image will be used next
      */
-    VkPipelineStageFlags nextStage;
+    HgPipelineStageFlags nextStage;
     /**
      * How the image will be accessed next
      */
-    VkAccessFlags nextAccess;
+    HgAccessFlags nextAccess;
     /**
      * The next layout the image needs to be in
      */
-    VkImageLayout nextLayout;
+    HgImageLayout nextLayout;
 };
 
 /**
@@ -3651,11 +4041,11 @@ struct HgBufferBarrier {
     /**
      * Where the image will be used next
      */
-    VkPipelineStageFlags nextStage;
+    HgPipelineStageFlags nextStage;
     /**
      * How the image will be accessed next
      */
-    VkAccessFlags nextAccess;
+    HgAccessFlags nextAccess;
 };
 
 /**
@@ -3669,11 +4059,11 @@ struct HgRenderer {
         /**
          * Where the image was used last
          */
-        VkPipelineStageFlags lastStage;
+        HgPipelineStageFlags lastStage;
         /**
          * How the image was accessed last
          */
-        VkAccessFlags lastAccess;
+        HgAccessFlags lastAccess;
     };
 
     /**
@@ -3683,15 +4073,15 @@ struct HgRenderer {
         /**
          * Where the image was used last
          */
-        VkPipelineStageFlags lastStage;
+        HgPipelineStageFlags lastStage;
         /**
          * How the image was accessed last
          */
-        VkAccessFlags lastAccess;
+        HgAccessFlags lastAccess;
         /**
          * The last layout the image was in
          */
-        VkImageLayout lastLayout;
+        HgImageLayout lastLayout;
     };
 
     /**
@@ -3721,16 +4111,16 @@ struct HgRenderer {
     /**
      * Set the state for a buffer
      */
-    void setBuffer(HgBuffer* buffer, VkPipelineStageFlags lastStage, VkAccessFlags lastAccess);
+    void setBuffer(HgBuffer* buffer, HgPipelineStageFlags lastStage, HgAccessFlags lastAccess);
 
     /**
      * Set the state for an image
      */
     void setImage(
         HgImageView* image,
-        VkPipelineStageFlags lastStage,
-        VkAccessFlags lastAccess,
-        VkImageLayout lastLayout);
+        HgPipelineStageFlags lastStage,
+        HgAccessFlags lastAccess,
+        HgImageLayout lastLayout);
 
     /**
      * Creates a barrier for resource uses that are not part of a render pass
@@ -3743,7 +4133,7 @@ struct HgRenderer {
      * - imageBarrierCount The number of image barriers
      */
     void barrier(
-        VkCommandBuffer cmd,
+        HgCommandBuffer* cmd,
         const HgBufferBarrier* bufferBarriers,
         u32 bufferBarrierCount,
         const HgImageBarrier* imageBarriers,
@@ -3756,7 +4146,7 @@ struct HgRenderer {
      * - cmd The command buffer
      * - pass The render pass description
      */
-    void prepareResources(VkCommandBuffer cmd, const HgRenderPass* pass);
+    void prepareResources(HgCommandBuffer* cmd, const HgRenderPass* pass);
 
     /**
      * Prepares resources and begins a render pass
@@ -3767,7 +4157,7 @@ struct HgRenderer {
      * - height The height of the render area
      * - pass The render pass description
      */
-    void beginPass(VkCommandBuffer cmd, u32 width, u32 height, const HgRenderPass* pass);
+    void beginPass(HgCommandBuffer* cmd, u32 width, u32 height, const HgRenderPass* pass);
 
     /**
      * Ends the render pass
@@ -3775,7 +4165,7 @@ struct HgRenderer {
      * Parameters
      * - cmd The command buffer
      */
-    void endPass(VkCommandBuffer cmd);
+    void endPass(HgCommandBuffer* cmd);
 };
 
 /**
@@ -3949,6 +4339,13 @@ struct HgKeyEvent {
     HgKey key;
 };
 
+enum HgPresentMode {
+    HgPresentMode_IMMEDIATE_KHR = 0,
+    HgPresentMode_MAILBOX_KHR = 1,
+    HgPresentMode_FIFO_KHR = 2,
+    HgPresentMode_FIFO_RELAXED_KHR = 3,
+};
+
 /**
  * Configuration for a window
  */
@@ -3980,11 +4377,11 @@ struct HgCreateWindow {
      *
      * Note, will fall back to FIFO if unavailable
      */
-    VkPresentModeKHR preferredPresentMode = VK_PRESENT_MODE_FIFO_KHR;
+    HgPresentMode preferredPresentMode = HgPresentMode_FIFO_KHR;
     /**
      * How the swapchain images will be used
      */
-    VkImageUsageFlags imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    HgImageUsageFlags imageUsage = HgImageUsage_colorAttachment;
     /**
      * The maximum number of events per update
      */
@@ -3994,107 +4391,7 @@ struct HgCreateWindow {
 /**
  * A window
  */
-struct HgWindow {
-    /**
-     * Platform specific resources for a window
-     */
-    void* internals;
-    /**
-     * The window's Vulkan surface
-     */
-    VkSurfaceKHR surface;
-    /**
-     * The swapchain
-     */
-    VkSwapchainKHR swapchain;
-    /**
-     * The swapchain image format
-     */
-    VkFormat format;
-    /**
-     * The number of swapchain images
-     */
-    u32 imageCount;
-    /**
-     * The width of the images 
-     */
-    u32 width;
-    /**
-     * The height of the images
-     */
-    u32 height;
-    /**
-     * The swapchain images
-     */
-    HgImage* images;
-    /**
-     * The swapchain image views
-     */
-    HgImageView* views;
-    /**
-     * How the swapchain images are used
-     */
-    VkImageUsageFlags imageUsage;
-    /**
-     * The swapchain image format
-     */
-    VkPresentModeKHR presentMode;
-
-    /**
-     * The command buffers per image
-     */
-    VkCommandBuffer* cmds;
-    /**
-     * The fences per image
-     */
-    VkFence* frameFinished;
-    /**
-     * The semaphores per image to signal availability
-     */
-    VkSemaphore* imageAvailable;
-    /**
-     * The semaphores per image to signal presentability
-     */
-    VkSemaphore* readyToPresent;
-    /**
-     * The current frame
-     */
-    u32 currentFrame;
-    /**
-     * The current image
-     */
-    u32 currentImage;
-
-    /**
-     * The maximum number of events
-     */
-    u32 maxEvents;
-    /**
-     * The number of events since last update
-     */
-    u32 eventCount;
-    /**
-     * The key events on this window since last update
-     */
-    HgKeyEvent events[1];
-
-    /**
-     * Acquires the next swapchain image and begins its command buffer
-     *
-     * Returns
-     * - The command buffer to record this frame
-     * - nullptr if the swapchain cannot be rendered to
-     */
-    VkCommandBuffer beginRecording();
-
-    /**
-     * Finishes recording the command buffer and presents the swapchain image
-     *
-     * Parameters
-     * - cmd The command buffer given from beginRecording
-     */
-    void endAndPresent(VkCommandBuffer cmd);
-};
+struct HgWindow;
 
 /**
  * Create a new window
@@ -4105,6 +4402,23 @@ HgWindow* hgCreateWindow(const HgCreateWindow* config);
  * Destroy a window
  */
 void hgDestroyWindow(HgWindow* window);
+
+/**
+ * Acquires the next swapchain image and begins its command buffer
+ *
+ * Returns
+ * - The command buffer to record this frame
+ * - nullptr if the swapchain cannot be rendered to
+ */
+HgCommandBuffer* hgWindowBeginRecording(HgWindow* window);
+
+/**
+ * Finishes recording the command buffer and presents the swapchain image
+ *
+ * Parameters
+ * - cmd The command buffer given from beginRecording
+ */
+void hgWindowEndAndPresent(HgWindow* window, HgCommandBuffer* cmd);
 
 /**
  * Processes all events since the last call to process events or startup
@@ -4152,7 +4466,12 @@ bool hgIsMouseFocused(HgWindow* window);
 /**
  * Get the window's size in pixels
  */
-void hgGetWindowSize(HgWindow* window, u32* x, u32* y);
+void hgGetWindowSize(HgWindow* window, u32* width, u32* height, HgFormat* format);
+
+/**
+ * Get the window's current image
+ */
+HgImageView* hgGetCurrentWindowImage(HgWindow* window);
 
 /**
  * Initialize ImGui platform backend
@@ -4165,14 +4484,24 @@ void hgGetWindowSize(HgWindow* window, u32* x, u32* y);
 void ImGui_ImplHurdyGurdy_Init(
     HgWindow* window,
     u32 colorAttachmentCount,
-    const VkFormat* colorFormats,
-    VkFormat depthFormat = VK_FORMAT_UNDEFINED,
-    VkFormat stencilFormat = VK_FORMAT_UNDEFINED);
+    const HgFormat* colorFormats,
+    HgFormat depthFormat = HgFormat_undefined,
+    HgFormat stencilFormat = HgFormat_undefined);
 
 /**
  * Deinitializes ImGui platform backend
  */
 void ImGui_ImplHurdyGurdy_Shutdown();
+
+/**
+ * Create an ImGui texture
+ */
+void* ImGui_ImplHurdyGurdy_CreateTexture(HgImageView* view, HgSampler* sampler, HgImageLayout layout);
+
+/**
+ * Create an ImGui texture
+ */
+void ImGui_ImplHurdyGurdy_DestroyTexture(void* texture);
 
 /**
  * Create a new ImGui frame for the platform backend
@@ -4185,7 +4514,7 @@ void ImGui_ImplHurdyGurdy_NewFrame();
  * Parameters
  * - cmd The command buffer to record to
  */
-void ImGui_ImplHurdyGurdy_Draw(VkCommandBuffer cmd);
+void ImGui_ImplHurdyGurdy_Draw(HgCommandBuffer* cmd);
 
 // audio system : TODO
 
@@ -4499,7 +4828,7 @@ struct HgImageData {
         /**
          * The format of each pixel
          */
-        VkFormat format;
+        HgFormat format;
         /**
          * The width in pixels
          */
@@ -4545,7 +4874,7 @@ struct HgImageData {
      * Returns
      * - Whether the info could be found
      */
-    bool getInfo(VkFormat* format, u32* width, u32* height, u32* depth);
+    bool getInfo(HgFormat* format, u32* width, u32* height, u32* depth);
 
     /**
      * Returns a pointer to the pixels, never nullptr
@@ -4629,7 +4958,7 @@ struct HgModelData {
         /**
          * How the vertices should be interpreted in sequence
          */
-        VkPrimitiveTopology topology;
+        HgPrimitiveTopology topology;
         /**
          * The file index of the first vertex
          */
@@ -4667,7 +4996,7 @@ struct HgModelData {
      * Returns
      * - Whether the info could be found
      */
-    bool getInfo(u32* vertexCount, u32* vertexWidth, u32* indexCount, VkPrimitiveTopology* topology);
+    bool getInfo(u32* vertexCount, u32* vertexWidth, u32* indexCount, HgPrimitiveTopology* topology);
 
     /**
      * Returns a pointer to the vertices, never nullptr
@@ -4731,7 +5060,7 @@ struct HgTextureResource {
     /**
      * The sampler
      */
-    VkSampler sampler;
+    HgSampler* sampler;
     /**
      * The descriptor
      */
@@ -4763,7 +5092,7 @@ void hgLoadEmptyTexture(HgResource id);
  * - id The resource to load
  * - sampler The sampler the texture should use
  */
-void hgLoadTexture(HgResource id, VkSampler sampler);
+void hgLoadTexture(HgResource id, HgSampler* sampler);
 
 /**
  * Unload a texture from the gpu
@@ -5489,8 +5818,8 @@ struct HgSprite2D {
  * - depthFormat The format of the depth attachment, if any
  */
 void hgInitPipeline2D(
-    VkFormat colorFormat,
-    VkFormat depthFormat);
+    HgFormat colorFormat,
+    HgFormat depthFormat);
 
 /**
  * Deinitialize the 2D pipeline
@@ -5524,7 +5853,7 @@ void hgUpdateView2D(const HgMat4* view);
  * - ecs The ecs to draw
  * - cmd The command buffer to record to, must not be nullptr
  */
-void hgDraw2D(HgECS* ecs, VkCommandBuffer cmd);
+void hgDraw2D(HgECS* ecs, HgCommandBuffer* cmd);
 
 /**
  * A model component rendered by the 3d pipeline
@@ -5576,8 +5905,8 @@ struct HgPointLight3D {
  * - depthFormat The format of the depth attachment, must not be UNDEFINED
  */
 void hgInitPipeline3D(
-    VkFormat colorFormat,
-    VkFormat depthFormat);
+    HgFormat colorFormat,
+    HgFormat depthFormat);
 
 /**
  * Deinitialize the 3D pipeline
@@ -5616,6 +5945,6 @@ void hgUpdateView3D(const HgMat4* view);
  * - ecs The ecs to draw
  * - cmd The command buffer to record to, must not be nullptr
  */
-void hgDraw3D(HgECS* ecs, VkCommandBuffer cmd);
+void hgDraw3D(HgECS* ecs, HgCommandBuffer* cmd);
 
 #endif // HURDYGURDY_HPP
