@@ -739,4 +739,3 @@ float hgBlinnPhong(
         : 0.0;
     return ambient + diffuse * kdiffuse + specular * kspecular;
 };
-

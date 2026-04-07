@@ -51,6 +51,14 @@ struct HgGpuPipeline {
     VkPipelineBindPoint bindPoint;
 };
 
+struct HgGpuCommandChain {
+    u32 frameCount;
+    u32 currentFrame;
+    VkCommandBuffer* cmds;
+    VkSemaphore* frameRendered;
+    VkFence* frameFinished;
+};
+
 struct HgWindow {
     SDL_Window* sdlWindow;
 
@@ -2505,7 +2513,7 @@ void hgGpuComputePass(HgGpuCommands* cmd, const HgComputePass* pass)
     VkImageMemoryBarrier2* imageBarriers = nullptr;
     u32 imageBarrierCount = 0;
 
-    bufferBarriers = hgRealloc<VkBufferMemoryBarrier2>(scratch, 
+    bufferBarriers = hgRealloc<VkBufferMemoryBarrier2>(scratch,
         bufferBarriers, bufferBarrierCount, bufferBarrierCount + pass->uniformBufferCount);
 
     for (u32 i = bufferBarrierCount; i < bufferBarrierCount + pass->uniformBufferCount; ++i)
@@ -2527,7 +2535,7 @@ void hgGpuComputePass(HgGpuCommands* cmd, const HgComputePass* pass)
 
     bufferBarrierCount += pass->uniformBufferCount;
 
-    bufferBarriers = hgRealloc<VkBufferMemoryBarrier2>(scratch, 
+    bufferBarriers = hgRealloc<VkBufferMemoryBarrier2>(scratch,
         bufferBarriers, bufferBarrierCount, bufferBarrierCount + pass->storageBufferCount);
 
     for (u32 i = bufferBarrierCount; i < bufferBarrierCount + pass->storageBufferCount; ++i)
@@ -2549,7 +2557,7 @@ void hgGpuComputePass(HgGpuCommands* cmd, const HgComputePass* pass)
 
     bufferBarrierCount += pass->storageBufferCount;
 
-    imageBarriers = hgRealloc<VkImageMemoryBarrier2>(scratch, 
+    imageBarriers = hgRealloc<VkImageMemoryBarrier2>(scratch,
         imageBarriers, imageBarrierCount, imageBarrierCount + pass->sampledImageCount);
 
     for (u32 i = imageBarrierCount; i < imageBarrierCount + pass->sampledImageCount; ++i)
@@ -2580,7 +2588,7 @@ void hgGpuComputePass(HgGpuCommands* cmd, const HgComputePass* pass)
 
     imageBarrierCount += pass->sampledImageCount;
 
-    imageBarriers = hgRealloc<VkImageMemoryBarrier2>(scratch, 
+    imageBarriers = hgRealloc<VkImageMemoryBarrier2>(scratch,
         imageBarriers, imageBarrierCount, imageBarrierCount + pass->storageImageCount);
 
     for (u32 i = imageBarrierCount; i < imageBarrierCount + pass->storageImageCount; ++i)
@@ -2631,7 +2639,7 @@ void hgBeginGpuRenderPass(HgGpuCommands* cmd, u32 width, u32 height, const HgRen
     VkImageMemoryBarrier2* imageBarriers = nullptr;
     u32 imageBarrierCount = 0;
 
-    bufferBarriers = hgRealloc<VkBufferMemoryBarrier2>(scratch, 
+    bufferBarriers = hgRealloc<VkBufferMemoryBarrier2>(scratch,
         bufferBarriers, bufferBarrierCount, bufferBarrierCount + pass->uniformBufferCount);
 
     for (u32 i = bufferBarrierCount; i < bufferBarrierCount + pass->uniformBufferCount; ++i)
@@ -2653,7 +2661,7 @@ void hgBeginGpuRenderPass(HgGpuCommands* cmd, u32 width, u32 height, const HgRen
 
     bufferBarrierCount += pass->uniformBufferCount;
 
-    bufferBarriers = hgRealloc<VkBufferMemoryBarrier2>(scratch, 
+    bufferBarriers = hgRealloc<VkBufferMemoryBarrier2>(scratch,
         bufferBarriers, bufferBarrierCount, bufferBarrierCount + pass->storageBufferCount);
 
     for (u32 i = bufferBarrierCount; i < bufferBarrierCount + pass->storageBufferCount; ++i)
@@ -2675,7 +2683,7 @@ void hgBeginGpuRenderPass(HgGpuCommands* cmd, u32 width, u32 height, const HgRen
 
     bufferBarrierCount += pass->storageBufferCount;
 
-    imageBarriers = hgRealloc<VkImageMemoryBarrier2>(scratch, 
+    imageBarriers = hgRealloc<VkImageMemoryBarrier2>(scratch,
         imageBarriers, imageBarrierCount, imageBarrierCount + pass->sampledImageCount);
 
     for (u32 i = imageBarrierCount; i < imageBarrierCount + pass->sampledImageCount; ++i)
@@ -2706,7 +2714,7 @@ void hgBeginGpuRenderPass(HgGpuCommands* cmd, u32 width, u32 height, const HgRen
 
     imageBarrierCount += pass->sampledImageCount;
 
-    imageBarriers = hgRealloc<VkImageMemoryBarrier2>(scratch, 
+    imageBarriers = hgRealloc<VkImageMemoryBarrier2>(scratch,
         imageBarriers, imageBarrierCount, imageBarrierCount + pass->storageImageCount);
 
     for (u32 i = imageBarrierCount; i < imageBarrierCount + pass->storageImageCount; ++i)
@@ -5426,4 +5434,3 @@ static void unloadVulkan()
 #endif
 
 #undef HG_LOAD_VULKAN_FUNC
-

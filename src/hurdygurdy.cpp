@@ -31,7 +31,7 @@ void hgInit(const HgInit* init)
     hgInitGpuResources(arena, init->maxTextures, init->maxModels);
 }
 
-void hgDeinit(void)
+void hgDeinit()
 {
     hgDeinitGpuResources();
     hgDeinitResource();
@@ -3347,7 +3347,7 @@ void hgDraw2D(HgECS* ecs, HgGpuCommands* cmd)
 
     hgBindGpuPipeline(cmd, pipeline2D.pipeline);
 
-    ecs->forEach<HgSprite2D, HgTransform>([&](HgEntity, HgSprite2D* sprite, HgTransform* transform) 
+    ecs->forEach<HgSprite2D, HgTransform>([&](HgEntity, HgSprite2D* sprite, HgTransform* transform)
     {
         HgTextureResource* texture = hgGetTexture(sprite->texture);
         if (texture == nullptr)
@@ -3756,4 +3756,3 @@ void hgDraw3D(HgECS* ecs, HgGpuCommands* cmd)
         hgGpuDrawIndexed(cmd, 0, 0, gpuModel->indexCount, 0, 1);
     });
 }
-

@@ -2511,7 +2511,7 @@ struct HgHashMap {
      * Remove a key-value pair from the hash map, and stores it
      *
      * Parameters
-     * - key The key to remove 
+     * - key The key to remove
      * - value A pointer to store the value, if found
      *
      * Returns
@@ -3424,6 +3424,11 @@ typedef u32 HgCullModeFlags;
  * A gpu command buffer
  */
 struct HgGpuCommands;
+
+/**
+ * A chain of command pools to record and execute multiple frames in flight
+ */
+struct HgGpuCommandChain;
 
 // Vulkan allocator : TODO?
 
@@ -5865,7 +5870,7 @@ void hgUpdateView2D(const HgMat4* view);
 
 /**
  * Issue draw commands for all HgSprite components in the ecs
- * 
+ *
  * Parameters
  * - ecs The ecs to draw
  * - cmd The command buffer to record to, must not be nullptr
@@ -5957,7 +5962,7 @@ void hgUpdateView3D(const HgMat4* view);
 
 /**
  * Issue draw commands for all HgModelComp components in the ecs
- * 
+ *
  * Parameters
  * - ecs The ecs to draw
  * - cmd The command buffer to record to, must not be nullptr
