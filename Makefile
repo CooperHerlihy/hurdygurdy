@@ -5,19 +5,14 @@ TEST_DIR := $(SRC_DIR)/hg_test_dir
 STD := -std=c++17 -MMD -MP
 WARNINGS := -Werror -Wall -Wextra -pedantic
 
-DEBUG_CONFIG := -g -O0 -fsanitize=undefined -fno-exceptions -fno-rtti
+DEBUG_CONFIG := -g -Og -fsanitize=undefined -fno-exceptions -fno-rtti
 RELEASE_CONFIG := -O3 -DNDEBUG -fno-exceptions -fno-rtti
 CONFIG := $(DEBUG_CONFIG)
-
-SDL_DEBUG_CONFIG := Debug
-SDL_RELEASE_CONFIG := Debug
-SDL_CONFIG := $(SDL_DEBUG_CONFIG)
 
 INCLUDES := \
 	-I$(BUILD_DIR) \
 	-I$(SRC_DIR)/include \
 	-I$(SRC_DIR)/vendor/Vulkan-Headers/include \
-	-I$(SRC_DIR)/vendor/SDL/include \
 	-I$(SRC_DIR)/vendor/imgui \
 	-I$(SRC_DIR)/vendor/imgui/backends
 
@@ -46,24 +41,16 @@ TARGETS := \
 all: $(patsubst %, $(BUILD_DIR)/%, $(TARGETS))
 
 debug:
-	$(MAKE) CONFIG="$(DEBUG_CONFIG)" SDL_CONFIG="$(SDL_DEBUG_CONFIG)"
+	$(MAKE) CONFIG="$(DEBUG_CONFIG)"
 
 release:
-	$(MAKE) CONFIG="$(RELEASE_CONFIG)" SDL_CONFIG="$(SDL_RELEASE_CONFIG)"
+	$(MAKE) CONFIG="$(RELEASE_CONFIG)"
 
 $(BUILD_DIR):
 	mkdir -p $@
 
 $(TEST_DIR):
 	mkdir -p $@
-
-$(BUILD_DIR)/libSDL3.a: | $(BUILD_DIR)
-	cmake -B$(BUILD_DIR)/SDL3 -S$(SRC_DIR)/vendor/SDL \
-		-DSDL_STATIC=ON \
-		-DSDL_SHARED=OFF \
-		-DSDL_TESTS=OFF
-	cmake --build $(BUILD_DIR)/SDL3 --config RelWithDebugInfo
-	cp $(BUILD_DIR)/SDL3/libSDL3.a $(BUILD_DIR)/libSDL3.a
 
 $(BUILD_DIR)/vk_mem_alloc.o: $(SRC_DIR)/src/vk_mem_alloc.cpp | $(BUILD_DIR)
 	c++ $(STD) $(CONFIG) $(INCLUDES) -c $< -o $@
@@ -99,7 +86,7 @@ $(BUILD_DIR)/libhurdygurdy.a: $(LIB_FILES) $(BUILD_DIR)/vk_mem_alloc.o $(BUILD_D
 
 SHADERS_SPV := $(patsubst %, $(BUILD_DIR)/%.spv, $(SHADERS))
 
-$(BUILD_DIR)/%: $(BUILD_DIR)/%.o $(BUILD_DIR)/libhurdygurdy.a $(BUILD_DIR)/libSDL3.a | $(SHADERS_SPV) $(TEST_DIR)
+$(BUILD_DIR)/%: $(BUILD_DIR)/%.o $(BUILD_DIR)/libhurdygurdy.a | $(SHADERS_SPV) $(TEST_DIR)
 	c++ $(STD) $(CONFIG) $(WARNINGS) -o $@ $< -L$(BUILD_DIR) -lhurdygurdy -lSDL3
 
 clean:
