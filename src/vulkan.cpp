@@ -73,7 +73,7 @@ struct HgWindow {
     f32 mouseY;
 };
 
-struct FrameState {
+struct Frame {
     HgWindow** windows;
     u32 windowCapacity;
     u32 windowCount;
@@ -98,24 +98,27 @@ struct VulkanState {
     VkDescriptorSetLayout bindlessLayout = nullptr;
     VkDescriptorSet bindlessSet = nullptr;
 
-    HgGpuDescriptor* samplerPool = nullptr;
-    HgGpuDescriptor samplerPoolNext = {0};
-    HgGpuDescriptor* combinedImageSamplerPool = nullptr;
-    HgGpuDescriptor combinedImageSamplerPoolNext = {0};
-    HgGpuDescriptor* sampledImagePool = nullptr;
-    HgGpuDescriptor sampledImagePoolNext = {0};
-    HgGpuDescriptor* storageImagePool = nullptr;
-    HgGpuDescriptor storageImagePoolNext = {0};
-    HgGpuDescriptor* uniformTexelBufferPool = nullptr;
-    HgGpuDescriptor uniformTexelBufferPoolNext = {0};
-    HgGpuDescriptor* storageTexelBufferPool = nullptr;
-    HgGpuDescriptor storageTexelBufferPoolNext = {0};
-    HgGpuDescriptor* uniformBufferPool = nullptr;
-    HgGpuDescriptor uniformBufferPoolNext = {0};
-    HgGpuDescriptor* storageBufferPool = nullptr;
-    HgGpuDescriptor storageBufferPoolNext = {0};
+    HgGpuDescriptor** descriptorPools = nullptr;
+    HgGpuDescriptor* descriptorPoolNexts = nullptr;
 
-    FrameState* frames = nullptr;
+    // HgGpuDescriptor* samplerPool = nullptr;
+    // HgGpuDescriptor samplerPoolNext = {0};
+    // HgGpuDescriptor* combinedImageSamplerPool = nullptr;
+    // HgGpuDescriptor combinedImageSamplerPoolNext = {0};
+    // HgGpuDescriptor* sampledImagePool = nullptr;
+    // HgGpuDescriptor sampledImagePoolNext = {0};
+    // HgGpuDescriptor* storageImagePool = nullptr;
+    // HgGpuDescriptor storageImagePoolNext = {0};
+    // HgGpuDescriptor* uniformTexelBufferPool = nullptr;
+    // HgGpuDescriptor uniformTexelBufferPoolNext = {0};
+    // HgGpuDescriptor* storageTexelBufferPool = nullptr;
+    // HgGpuDescriptor storageTexelBufferPoolNext = {0};
+    // HgGpuDescriptor* uniformBufferPool = nullptr;
+    // HgGpuDescriptor uniformBufferPoolNext = {0};
+    // HgGpuDescriptor* storageBufferPool = nullptr;
+    // HgGpuDescriptor storageBufferPoolNext = {0};
+
+    Frame* frames = nullptr;
     u32 frameCount = 0;
     u32 currentFrame = 0;
 };
@@ -589,11 +592,11 @@ static HgGpuDescriptor* createBindlessPool(HgArena* arena, HgGpuDescriptorType t
     return pool;
 }
 
-static FrameState createFrame(HgArena* arena, u32 maxWindows)
+static Frame createFrame(HgArena* arena, u32 maxWindows)
 {
     hgAssert(arena != nullptr);
 
-    FrameState frame{};
+    Frame frame{};
 
     frame.windows = hgAlloc<HgWindow*>(arena, maxWindows);
     frame.windowCapacity = maxWindows;
@@ -703,41 +706,19 @@ void hgGpuInit(HgArena* arena, u32 maxFramesInFlight, u32 maxWindows)
             hgError("Could not allocate bindless VkDescriptorSet: %s\n", vkResultToStr(result));
     }
 
-    if (vkState.samplerPool == nullptr)
-        vkState.samplerPool = createBindlessPool(
-            arena, HgGpuDescriptorType_sampler, &vkState.samplerPoolNext);
-
-    if (vkState.combinedImageSamplerPool == nullptr)
-        vkState.combinedImageSamplerPool = createBindlessPool(
-            arena, HgGpuDescriptorType_combinedImageSampler, &vkState.combinedImageSamplerPoolNext);
-
-    if (vkState.sampledImagePool == nullptr)
-        vkState.sampledImagePool = createBindlessPool(
-            arena, HgGpuDescriptorType_sampledImage, &vkState.sampledImagePoolNext);
-
-    if (vkState.storageImagePool == nullptr)
-        vkState.storageImagePool = createBindlessPool(
-            arena, HgGpuDescriptorType_storageImage, &vkState.storageImagePoolNext);
-
-    if (vkState.uniformTexelBufferPool == nullptr)
-        vkState.uniformTexelBufferPool = createBindlessPool(
-            arena, HgGpuDescriptorType_uniformTexelBuffer, &vkState.uniformTexelBufferPoolNext);
-
-    if (vkState.storageTexelBufferPool == nullptr)
-        vkState.storageTexelBufferPool = createBindlessPool(
-            arena, HgGpuDescriptorType_storageTexelBuffer, &vkState.storageTexelBufferPoolNext);
-
-    if (vkState.uniformBufferPool == nullptr)
-        vkState.uniformBufferPool = createBindlessPool(
-            arena, HgGpuDescriptorType_uniformBuffer, &vkState.uniformBufferPoolNext);
-
-    if (vkState.storageBufferPool == nullptr)
-        vkState.storageBufferPool = createBindlessPool(
-            arena, HgGpuDescriptorType_storageBuffer, &vkState.storageBufferPoolNext);
+    if (vkState.descriptorPools == nullptr)
+    {
+        vkState.descriptorPools = hgAlloc<HgGpuDescriptor*>(arena, HgGpuDescriptorType_count);
+        vkState.descriptorPoolNexts = hgAlloc<HgGpuDescriptor>(arena, HgGpuDescriptorType_count);
+        for (u32 i = 0; i < HgGpuDescriptorType_count; ++i)
+        {
+            vkState.descriptorPools[i] = createBindlessPool(arena, (HgGpuDescriptorType)i, &vkState.descriptorPoolNexts[i]);
+        }
+    }
 
     if (vkState.frames == nullptr)
     {
-        vkState.frames = hgAlloc<FrameState>(arena, maxFramesInFlight);
+        vkState.frames = hgAlloc<Frame>(arena, maxFramesInFlight);
         vkState.frameCount = maxFramesInFlight;
         vkState.currentFrame = 0;
 
@@ -762,15 +743,8 @@ void hgGpuDeinit()
         vkState.frames = nullptr;
     }
 
-    vkState.samplerPool = nullptr;
-    vkState.combinedImageSamplerPool = nullptr;
-    vkState.sampledImagePool = nullptr;
-    vkState.storageImagePool = nullptr;
-    vkState.uniformTexelBufferPool = nullptr;
-    vkState.storageTexelBufferPool = nullptr;
-    vkState.uniformBufferPool = nullptr;
-    vkState.storageBufferPool = nullptr;
-    vkState.bindlessSet = nullptr;
+    vkState.descriptorPools = nullptr;
+    vkState.descriptorPoolNexts = nullptr;
 
     if (vkState.bindlessLayout != nullptr)
     {
@@ -1925,66 +1899,18 @@ void hgGpuSamplerDestroy(HgGpuSampler* sampler)
     vkDestroySampler(vkState.device, (VkSampler)sampler, nullptr);
 }
 
-static HgGpuDescriptor allocDescriptor(HgGpuDescriptor* pool, HgGpuDescriptor* next)
-{
-    HgGpuDescriptor desc = *next;
-
-    u32 idx = hgGpuDescriptorIdx(*next);
-    *next = pool[idx];
-
-    pool[hgGpuDescriptorIdx(desc)] = desc;
-    return desc;
-}
-
-static void deallocDescriptor(HgGpuDescriptor* pool, HgGpuDescriptor* next, HgGpuDescriptor desc)
-{
-    u32 idx = hgGpuDescriptorIdx(desc);
-    pool[idx] = *next;
-
-    desc.id += 1 << 16;
-    *next = desc;
-}
-
 HgGpuDescriptor hgGpuDescriptorCreate(HgGpuDescriptorType type)
 {
-    switch (type)
-    {
-        case HgGpuDescriptorType_sampler:
-            hgAssert(hgGpuDescriptorIdx(vkState.samplerPoolNext) != UINT16_MAX);
-            return allocDescriptor(vkState.samplerPool, &vkState.samplerPoolNext);
-            break;
-        case HgGpuDescriptorType_combinedImageSampler:
-            hgAssert(hgGpuDescriptorIdx(vkState.combinedImageSamplerPoolNext) != UINT16_MAX);
-            return allocDescriptor(vkState.combinedImageSamplerPool, &vkState.combinedImageSamplerPoolNext);
-            break;
-        case HgGpuDescriptorType_sampledImage:
-            hgAssert(hgGpuDescriptorIdx(vkState.sampledImagePoolNext) != UINT16_MAX);
-            return allocDescriptor(vkState.sampledImagePool, &vkState.sampledImagePoolNext);
-            break;
-        case HgGpuDescriptorType_storageImage:
-            hgAssert(hgGpuDescriptorIdx(vkState.storageImagePoolNext) != UINT16_MAX);
-            return allocDescriptor(vkState.storageImagePool, &vkState.storageImagePoolNext);
-            break;
-        case HgGpuDescriptorType_uniformTexelBuffer:
-            hgAssert(hgGpuDescriptorIdx(vkState.uniformTexelBufferPoolNext) != UINT16_MAX);
-            return allocDescriptor(vkState.uniformTexelBufferPool, &vkState.uniformTexelBufferPoolNext);
-            break;
-        case HgGpuDescriptorType_storageTexelBuffer:
-            hgAssert(hgGpuDescriptorIdx(vkState.storageTexelBufferPoolNext) != UINT16_MAX);
-            return allocDescriptor(vkState.storageTexelBufferPool, &vkState.storageTexelBufferPoolNext);
-            break;
-        case HgGpuDescriptorType_uniformBuffer:
-            hgAssert(hgGpuDescriptorIdx(vkState.uniformBufferPoolNext) != UINT16_MAX);
-            return allocDescriptor(vkState.uniformBufferPool, &vkState.uniformBufferPoolNext);
-            break;
-        case HgGpuDescriptorType_storageBuffer:
-            hgAssert(hgGpuDescriptorIdx(vkState.storageBufferPoolNext) != UINT16_MAX);
-            return allocDescriptor(vkState.storageBufferPool, &vkState.storageBufferPoolNext);
-            break;
-        default:
-            break;
-    }
-    hgError("invalid HgGpuDescriptorType: %d", type);
+    hgAssert(type < HgGpuDescriptorType_count);
+    hgAssert(hgGpuDescriptorIdx(vkState.descriptorPoolNexts[type]) != UINT16_MAX);
+
+    HgGpuDescriptor desc = vkState.descriptorPoolNexts[type];
+
+    u32 idx = hgGpuDescriptorIdx(vkState.descriptorPoolNexts[type]);
+    vkState.descriptorPoolNexts[type] = vkState.descriptorPools[type][idx];
+
+    vkState.descriptorPools[type][hgGpuDescriptorIdx(desc)] = desc;
+    return desc;
 }
 
 void hgGpuDescriptorDestroy(HgGpuDescriptor desc)
@@ -1992,44 +1918,15 @@ void hgGpuDescriptorDestroy(HgGpuDescriptor desc)
     if (desc.id == HgGpuDescriptor{}.id)
         return;
 
-    switch (hgGpuDescriptorType(desc))
-    {
-        case HgGpuDescriptorType_sampler:
-            hgAssert(desc.id == vkState.samplerPool[hgGpuDescriptorIdx(desc)].id);
-            deallocDescriptor(vkState.samplerPool, &vkState.samplerPoolNext, desc);
-            break;
-        case HgGpuDescriptorType_combinedImageSampler:
-            hgAssert(desc.id == vkState.combinedImageSamplerPool[hgGpuDescriptorIdx(desc)].id);
-            deallocDescriptor(vkState.combinedImageSamplerPool, &vkState.combinedImageSamplerPoolNext, desc);
-            break;
-        case HgGpuDescriptorType_sampledImage:
-            hgAssert(desc.id == vkState.sampledImagePool[hgGpuDescriptorIdx(desc)].id);
-            deallocDescriptor(vkState.sampledImagePool, &vkState.sampledImagePoolNext, desc);
-            break;
-        case HgGpuDescriptorType_storageImage:
-            hgAssert(desc.id == vkState.storageImagePool[hgGpuDescriptorIdx(desc)].id);
-            deallocDescriptor(vkState.storageImagePool, &vkState.storageImagePoolNext, desc);
-            break;
-        case HgGpuDescriptorType_uniformTexelBuffer:
-            hgAssert(desc.id == vkState.uniformTexelBufferPool[hgGpuDescriptorIdx(desc)].id);
-            deallocDescriptor(vkState.uniformTexelBufferPool, &vkState.uniformTexelBufferPoolNext, desc);
-            break;
-        case HgGpuDescriptorType_storageTexelBuffer:
-            hgAssert(desc.id == vkState.storageTexelBufferPool[hgGpuDescriptorIdx(desc)].id);
-            deallocDescriptor(vkState.storageTexelBufferPool, &vkState.storageTexelBufferPoolNext, desc);
-            break;
-        case HgGpuDescriptorType_uniformBuffer:
-            hgAssert(desc.id == vkState.uniformBufferPool[hgGpuDescriptorIdx(desc)].id);
-            deallocDescriptor(vkState.uniformBufferPool, &vkState.uniformBufferPoolNext, desc);
-            break;
-        case HgGpuDescriptorType_storageBuffer:
-            hgAssert(desc.id == vkState.storageBufferPool[hgGpuDescriptorIdx(desc)].id);
-            deallocDescriptor(vkState.storageBufferPool, &vkState.storageBufferPoolNext, desc);
-            break;
-        default:
-            hgAssert(false);
-            break;
-    }
+    HgGpuDescriptorType type = hgGpuDescriptorType(desc);
+
+    hgAssert(desc.id == vkState.descriptorPools[type][hgGpuDescriptorIdx(desc)].id);
+
+    u32 idx = hgGpuDescriptorIdx(desc);
+    vkState.descriptorPools[type][idx] = vkState.descriptorPoolNexts[type];
+
+    desc.id += 1 << 16;
+    vkState.descriptorPoolNexts[type] = desc;
 }
 
 VkDescriptorType hgDescriptorTypeToVk(HgGpuDescriptorType type)
@@ -3299,7 +3196,7 @@ void hgWindowDestroy(HgWindow* window)
 HgGpuCmd* hgGpuFrameBegin(HgWindow** windows, u32 windowCount)
 {
     vkState.currentFrame = (vkState.currentFrame + 1) % vkState.frameCount;
-    FrameState* frame = &vkState.frames[vkState.currentFrame];
+    Frame* frame = &vkState.frames[vkState.currentFrame];
 
     hgAssert(windowCount < frame->windowCapacity);
     if (windowCount > 0)
@@ -3364,7 +3261,7 @@ void hgGpuFrameEnd(HgGpuCmd* cmd)
     HgArena* scratch = hgScratch();
     HgArenaScope scratchScope{scratch};
 
-    FrameState* frame = &vkState.frames[vkState.currentFrame];
+    Frame* frame = &vkState.frames[vkState.currentFrame];
 
     VkPipelineStageFlags* waitStages = hgAlloc<VkPipelineStageFlags>(scratch, frame->windowCount);
     VkSemaphore* imageAvailableSemaphores = hgAlloc<VkSemaphore>(scratch, frame->windowCount);

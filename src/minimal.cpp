@@ -18,8 +18,8 @@ int main()
     HgWindow* window = hgWindowCreate("Hg Small Test", 1200, 800, nullptr);
     hgDefer(hgWindowDestroy(window));
 
-    HgWindow* window2 = hgWindowCreate("Hg Small Test", 1200, 800, nullptr);
-    hgDefer(hgWindowDestroy(window));
+    // HgWindow* window2 = hgWindowCreate("Hg Small Test", 1200, 800, nullptr);
+    // hgDefer(hgWindowDestroy(window));
 
     hgInitPipeline2D(hgWindowFormat(window), HgFormat_undefined);
     hgDefer(hgDeinitPipeline2D());
@@ -170,8 +170,8 @@ int main()
 
         ImGui::Render();
 
-        HgWindow* windows[] = {window, window2};
-        HgGpuCmd* cmd = hgGpuFrameBegin(windows, 2);
+        HgWindow* windows[] = {window};
+        HgGpuCmd* cmd = hgGpuFrameBegin(windows, sizeof(windows) / sizeof(*windows));
 
         HgGpuComputePass computePass{};
         computePass.storageImages = &noiseTex->view;
@@ -221,32 +221,32 @@ int main()
             hgGpuMemoryBarrier(cmd, nullptr, 0, &presentBarrier, 1);
         }
 
-        if (hgWindowCurrentImage(window2) != nullptr)
-        {
-            HgGpuRenderAttachment colorAttachment{};
-            colorAttachment.image = hgWindowCurrentImage(window2);
-            colorAttachment.loadOp = HgGpuLoadOp_clear;
-
-            HgGpuRenderPass pass{};
-            pass.colorAttachments = &colorAttachment;
-            pass.colorAttachmentCount = 1;
-            pass.sampledImages = &noiseTex->view;
-            pass.sampledImageCount = 1;
-
-            hgGpuRenderPassBegin(cmd, hgWindowWidth(window2), hgWindowHeight(window2), &pass);
-
-            hgDraw2D(&ecs, cmd);
-
-            hgImGuiDraw(cmd);
-
-            hgGpuRenderPassEnd(cmd);
-
-            HgGpuImageBarrier presentBarrier{};
-            presentBarrier.image = hgWindowCurrentImage(window2);
-            presentBarrier.nextLayout = HgGpuLayout_presentSrc;
-
-            hgGpuMemoryBarrier(cmd, nullptr, 0, &presentBarrier, 1);
-        }
+        // if (hgWindowCurrentImage(window2) != nullptr)
+        // {
+        //     HgGpuRenderAttachment colorAttachment{};
+        //     colorAttachment.image = hgWindowCurrentImage(window2);
+        //     colorAttachment.loadOp = HgGpuLoadOp_clear;
+        //
+        //     HgGpuRenderPass pass{};
+        //     pass.colorAttachments = &colorAttachment;
+        //     pass.colorAttachmentCount = 1;
+        //     pass.sampledImages = &noiseTex->view;
+        //     pass.sampledImageCount = 1;
+        //
+        //     hgGpuRenderPassBegin(cmd, hgWindowWidth(window2), hgWindowHeight(window2), &pass);
+        //
+        //     hgDraw2D(&ecs, cmd);
+        //
+        //     hgImGuiDraw(cmd);
+        //
+        //     hgGpuRenderPassEnd(cmd);
+        //
+        //     HgGpuImageBarrier presentBarrier{};
+        //     presentBarrier.image = hgWindowCurrentImage(window2);
+        //     presentBarrier.nextLayout = HgGpuLayout_presentSrc;
+        //
+        //     hgGpuMemoryBarrier(cmd, nullptr, 0, &presentBarrier, 1);
+        // }
 
         hgGpuFrameEnd(cmd);
     }
