@@ -84,11 +84,11 @@ typedef intptr_t iptr;
 /**
  * A 32 bit, 4 byte floating point value
  */
-typedef float f32;
+typedef float_t f32;
 /**
  * A 64 bit, 8 byte floating point value
  */
-typedef double f64;
+typedef double_t f64;
 
 #ifdef __GNUC__
 #define HG_COMPILER_GCC 1
@@ -262,13 +262,18 @@ struct HgDefer {
  */
 struct HgInit {
     u64 arenaSize = UINT32_MAX;
+
     u32 maxWindows = 8;
     u32 maxWindowEvents = 2048;
-    u32 threadPoolQueueSize = 4096;
-    u32 ioRequestQueueSize = 4096;
-    u32 maxResources = 4096;
-    u32 maxTextures = 4096;
-    u32 maxModels = 4096;
+
+    u32 threadPoolQueueSize = 2048;
+    u32 ioRequestQueueSize = 2048;
+
+    u32 maxResources = 2048;
+    u32 maxTextures = 2048;
+    u32 maxModels = 2048;
+
+    u32 maxFramesInFlight = 2;
 };
 
 /**
@@ -282,7 +287,7 @@ struct HgInit {
  * - OS windowing
  * - Hardware graphics
  */
-void hgInit(const HgInit* init = nullptr);
+void hgInit(const HgInit* init);
 
 /**
  * Shuts down the HurdyGurdy library
@@ -313,7 +318,7 @@ constexpr uptr hgAlign(uptr value, uptr alignment)
 /**
  * Reverse the endianness of a 16 bit value
  */
-constexpr u16 hgReverseEndianness(u16 val)
+constexpr u16 hgEndianReverse16(u16 val)
 {
     return (val & 0xff00 >> 8) & (val & 0x00ff << 8);
 }
@@ -321,7 +326,7 @@ constexpr u16 hgReverseEndianness(u16 val)
 /**
  * Reverse the endianness of a 32 bit value
  */
-constexpr u32 hgReverseEndianness(u32 val)
+constexpr u32 hgEndianReverse32(u32 val)
 {
     return (val & 0xff0000 >> 16) & (val & 0x00ff00) & (val & 0x0000ff << 16);
 }
@@ -329,7 +334,7 @@ constexpr u32 hgReverseEndianness(u32 val)
 /**
  * Reverse the endianness of a 64 bit value
  */
-constexpr u64 hgReverseEndianness(u64 val)
+constexpr u64 hgEndianReverse64(u64 val)
 {
     return (val & 0xff000000 >> 24) &
            (val & 0x00ff0000 >> 8) &
@@ -860,7 +865,7 @@ constexpr bool operator!=(HgQuat lhs, HgQuat rhs)
  * - lhs The left-hand side vector, must not be nullptr
  * - rhs The right-hand side vector, must not be nullptr
  */
-void hgAddVec(u32 size, f32* dst, const f32* lhs, const f32* rhs);
+void hgVecAdd(u32 size, f32* dst, const f32* lhs, const f32* rhs);
 
 /**
  * Add 2D vectors
@@ -895,7 +900,7 @@ constexpr HgVec4 operator+(HgVec4 lhs, HgVec4 rhs)
  * - lhs The left-hand side vector, must not be nullptr
  * - rhs The right-hand side vector, must not be nullptr
  */
-void hgSubVec(u32 size, f32* dst, const f32* lhs, const f32* rhs);
+void hgVecSub(u32 size, f32* dst, const f32* lhs, const f32* rhs);
 
 /**
  * Subtract 2D vectors
@@ -930,7 +935,7 @@ constexpr HgVec4 operator-(HgVec4 lhs, HgVec4 rhs)
  * - lhs The left-hand side vector, must not be nullptr
  * - rhs The right-hand side vector, must not be nullptr
  */
-void hgPairwiseMulVec(u32 size, f32* dst, const f32* lhs, const f32* rhs);
+void hgVecMulPairwise(u32 size, f32* dst, const f32* lhs, const f32* rhs);
 
 /**
  * Multiply pairwise 2D vectors
@@ -959,7 +964,7 @@ constexpr HgVec4 operator*(HgVec4 lhs, HgVec4 rhs)
 /**
  * Multiply a scalar and a vector
  */
-void hgMulVecScalar(u32 size, f32* dst, f32 scalar, const f32* vec);
+void hgVecMulScalar(u32 size, f32* dst, f32 scalar, const f32* vec);
 
 /**
  * Multiply a scalar and a 2D vector
@@ -1020,7 +1025,7 @@ constexpr HgVec4 operator*(HgVec4 vec, f32 scalar)
  * - lhs The left-hand side vector, must not be nullptr
  * - rhs The right-hand side vector, must not be nullptr
  */
-void hgPairwiseDivVec(u32 size, f32* dst, const f32* lhs, const f32* rhs);
+void hgVecDivPairwise(u32 size, f32* dst, const f32* lhs, const f32* rhs);
 
 /**
  * Divide pairwise 2D vectors
@@ -1060,7 +1065,7 @@ constexpr HgVec4 operator/(HgVec4 lhs, HgVec4 rhs)
  *
  * Note, cannot divide by 0
  */
-void hgDivVecScalar(u32 size, f32* dst, const f32* vec, f32 scalar);
+void hgVecDivScalar(u32 size, f32* dst, const f32* vec, f32 scalar);
 
 /**
  * Divide a 2D vector by a scalar
@@ -1104,12 +1109,12 @@ constexpr HgVec4 operator/(HgVec4 vec, f32 scalar)
  * - lhs The left-hand side vector, must not be nullptr
  * - rhs The right-hand side vector, must not be nullptr
  */
-void hgDot(u32 size, f32* dst, const f32* lhs, const f32* rhs);
+void hgVecDot(u32 size, f32* dst, const f32* lhs, const f32* rhs);
 
 /**
  * Compute the dot product of 2D vectors
  */
-constexpr f32 hgDot(HgVec2 lhs, HgVec2 rhs)
+constexpr f32 hgVecDot2(HgVec2 lhs, HgVec2 rhs)
 {
     return lhs.x * rhs.x + lhs.y * rhs.y;
 }
@@ -1117,7 +1122,7 @@ constexpr f32 hgDot(HgVec2 lhs, HgVec2 rhs)
 /**
  * Compute the dot product of 3D vectors
  */
-constexpr f32 hgDot(HgVec3 lhs, HgVec3 rhs)
+constexpr f32 hgVecDot3(HgVec3 lhs, HgVec3 rhs)
 {
     return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
 }
@@ -1125,7 +1130,7 @@ constexpr f32 hgDot(HgVec3 lhs, HgVec3 rhs)
 /**
  * Compute the dot product of 4D vectors
  */
-constexpr f32 hgDot(HgVec4 lhs, HgVec4 rhs)
+constexpr f32 hgVecDot3(HgVec4 lhs, HgVec4 rhs)
 {
     return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z + lhs.w * rhs.w;
 }
@@ -1138,50 +1143,50 @@ constexpr f32 hgDot(HgVec4 lhs, HgVec4 rhs)
  * - dst The destination vector, must not be nullptr
  * - vec The vector to compute the length of, must not be nullptr
  */
-void hgLen(u32 size, f32* dst, const f32* vec);
+void hgVecLen(u32 size, f32* dst, const f32* vec);
 
 /**
  * Compute the length of a 2D vector
  */
-f32 hgLen(HgVec2 vec);
+f32 hgVecLen2(HgVec2 vec);
 
 /**
  * Compute the length of a 3D vector
  */
-f32 hgLen(HgVec3 vec);
+f32 hgVecLen3(HgVec3 vec);
 
 /**
  * Compute the length of a 4D vector
  */
-f32 hgLen(HgVec4 vec);
+f32 hgVecLen4(HgVec4 vec);
 
 /**
  * Normalize a vector
  *
  * Note, cannot normalize 0
  */
-void hgNorm(u32 size, f32* dst, const f32* vec);
+void hgVecNorm(u32 size, f32* dst, const f32* vec);
 
 /**
  * Normalize a 2D vector
  *
  * Note, cannot normalize 0
  */
-HgVec2 hgNorm(HgVec2 vec);
+HgVec2 hgVecNorm2(HgVec2 vec);
 
 /**
  * Normalize a 3D vector
  *
  * Note, cannot normalize 0
  */
-HgVec3 hgNorm(HgVec3 vec);
+HgVec3 hgVecNorm3(HgVec3 vec);
 
 /**
  * Normalize a 4D vector
  *
  * Note, cannot normalize 0
  */
-HgVec4 hgNorm(HgVec4 vec);
+HgVec4 hgVecNorm4(HgVec4 vec);
 
 /**
  * Compute the cross product of 3D vectors
@@ -1191,12 +1196,12 @@ HgVec4 hgNorm(HgVec4 vec);
  * - lhs The left-hand side vector, must not be nullptr
  * - rhs The right-hand side vector, must not be nullptr
  */
-void hgCross(f32* dst, const f32* lhs, const f32* rhs);
+void hgVecCross(f32* dst, const f32* lhs, const f32* rhs);
 
 /**
  * Compute the cross product of 3D vectors
  */
-HgVec3 hgCross(HgVec3 lhs, HgVec3 rhs);
+HgVec3 hgVecCross(HgVec3 lhs, HgVec3 rhs);
 
 /**
  * Add arbitrary size matrices
@@ -1208,7 +1213,7 @@ HgVec3 hgCross(HgVec3 lhs, HgVec3 rhs);
  * - lhs The left-hand side matrix, must not be nullptr
  * - rhs The right-hand side matrix, must not be nullptr
  */
-void hgAddMat(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs);
+void hgMatAdd(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs);
 
 /**
  * Add 2x2 matrices
@@ -1235,7 +1240,7 @@ HgMat4 operator+(const HgMat4& lhs, const HgMat4& rhs);
  * - lhs The left-hand side matrix, must not be nullptr
  * - rhs The right-hand side matrix, must not be nullptr
  */
-void hgSubMat(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs);
+void hgMatSub(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs);
 
 /**
  * Subtract 2x2 matrices
@@ -1264,7 +1269,7 @@ HgMat4 operator-(const HgMat4& lhs, const HgMat4& rhs);
  * - hr The height of the right-hand side matrix
  * - rhs The right-hand side matrix, must not be nullptr
  */
-void hgMulMat(f32* dst, u32 wl, u32 hl, const f32* lhs, u32 wr, u32 hr, const f32* rhs);
+void hgMatMul(f32* dst, u32 wl, u32 hl, const f32* lhs, u32 wr, u32 hr, const f32* rhs);
 
 /**
  * Multiply 2x2 matrices
@@ -1291,7 +1296,7 @@ HgMat4 operator*(const HgMat4& lhs, const HgMat4& rhs);
  * - mat The matrix to multiply with, must not be nullptr
  * - vec The vector to multiply with, must not be nullptr
  */
-void hgMulMatVec(u32 width, u32 height, f32* dst, const f32* mat, const f32* vec);
+void hgMatMulVec(u32 width, u32 height, f32* dst, const f32* mat, const f32* vec);
 
 /**
  * Multiply a 2x2 matrix and a 2D vector
@@ -1356,7 +1361,7 @@ HgQuat operator*(HgQuat lhs, HgQuat rhs);
 /**
  * Compute the conjugate of a quaternion
  */
-constexpr HgQuat hgConj(HgQuat quat)
+constexpr HgQuat hgQuatConj(HgQuat quat)
 {
     return HgQuat{quat.r, -quat.i, -quat.j, -quat.k};
 }
@@ -1364,17 +1369,17 @@ constexpr HgQuat hgConj(HgQuat quat)
 /**
  * Create a rotation quaternion from an axis and angle
  */
-HgQuat hgAxisAngle(HgVec3 axis, f32 angle);
+HgQuat hgQuatAxisAngle(HgVec3 axis, f32 angle);
 
 /**
  * Rotate a 3D vector using a quaternion
  */
-HgVec3 hgRotate(HgQuat lhs, HgVec3 rhs);
+HgVec3 hgVecRotate(HgQuat lhs, HgVec3 rhs);
 
 /**
  * Rotate a 3x3 matrix using a quaternion
  */
-HgMat3 hgRotate(HgQuat lhs, HgMat3 rhs);
+HgMat3 hgMatRotate(HgQuat lhs, HgMat3 rhs);
 
 /**
  * Creates a model matrix for 2D graphics
@@ -1384,7 +1389,7 @@ HgMat3 hgRotate(HgQuat lhs, HgMat3 rhs);
  * - scale The scale of the model
  * - rotation The rotation of the model
  */
-HgMat4 hgModelMatrix2D(HgVec3 position, HgVec2 scale, f32 rotation);
+HgMat4 hgMatModel2D(HgVec3 position, HgVec2 scale, f32 rotation);
 
 /**
  * Creates a model matrix for 3D graphics
@@ -1394,7 +1399,7 @@ HgMat4 hgModelMatrix2D(HgVec3 position, HgVec2 scale, f32 rotation);
  * - scale The scale of the model
  * - rotation The rotation of the model
  */
-HgMat4 hgModelMatrix3D(const HgVec3& position, const HgVec3& scale, const HgQuat& rotation);
+HgMat4 hgMatModel3D(const HgVec3& position, const HgVec3& scale, const HgQuat& rotation);
 
 /**
  * Creates a view matrix
@@ -1404,7 +1409,7 @@ HgMat4 hgModelMatrix3D(const HgVec3& position, const HgVec3& scale, const HgQuat
  * - zoom The zoom of the camera
  * - rotation The rotation of the camera
  */
-HgMat4 hgViewMatrix(const HgVec3& position, const HgVec3& zoom, const HgQuat& rotation);
+HgMat4 hgMatView(const HgVec3& position, const HgVec3& zoom, const HgQuat& rotation);
 
 /**
  * Creates an orthographic projection matrix
@@ -1417,7 +1422,7 @@ HgMat4 hgViewMatrix(const HgVec3& position, const HgVec3& zoom, const HgQuat& ro
  * - near The near plane of the view frustum
  * - far The far plane of the view frustum
  */
-HgMat4 hgOrthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far);
+HgMat4 hgMatOrthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far);
 
 /**
  * Creates a perspective projection matrix
@@ -1428,7 +1433,7 @@ HgMat4 hgOrthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 fa
  * - near The near plane of the projection, must be greater than 0.0f
  * - far The far plane of the projection, must be greater than near
  */
-HgMat4 hgPerspective(f32 fov, f32 aspect, f32 near, f32 far);
+HgMat4 hgMatPerspective(f32 fov, f32 aspect, f32 near, f32 far);
 
 /**
  * Generate white noise
@@ -1438,17 +1443,17 @@ u32 hgNoise(u32 seed, u32 pos);
 /**
  * Generate white noise
  */
-u32 hgNoise(u32 seed, u32 x, u32 y);
+u32 hgNoise2D(u32 seed, u32 x, u32 y);
 
 /**
  * Generate white noise
  */
-u32 hgNoise(u32 seed, u32 x, u32 y, u32 z);
+u32 hgNoise3D(u32 seed, u32 x, u32 y, u32 z);
 
 /**
  * Generate white noise
  */
-u32 hgNoise(u32 seed, u32 x, u32 y, u32 z, u32 w);
+u32 hgNoise4D(u32 seed, u32 x, u32 y, u32 z, u32 w);
 
 /**
  * Generate white noise normalized from 0.0 to 1.0
@@ -1458,17 +1463,17 @@ f32 hgNoiseNorm(u32 seed, f32 pos);
 /**
  * Generate white noise normalized from 0.0 to 1.0
  */
-f32 hgNoiseNorm(u32 seed, HgVec2 pos);
+f32 hgNoiseNorm2D(u32 seed, HgVec2 pos);
 
 /**
  * Generate white noise normalized from 0.0 to 1.0
  */
-f32 hgNoiseNorm(u32 seed, HgVec3 pos);
+f32 hgNoiseNorm3D(u32 seed, HgVec3 pos);
 
 /**
  * Generate white noise normalized from 0.0 to 1.0
  */
-f32 hgNoiseNorm(u32 seed, HgVec4 pos);
+f32 hgNoiseNorm4D(u32 seed, HgVec4 pos);
 
 /**
  * Generate white noise unit vector
@@ -1492,7 +1497,7 @@ HgVec2 hgNoiseVec2D(u32 seed, HgVec2 pos);
  * - height The height of the image
  * - depth The depth of the image
  */
-u32 hgMaxMipmaps(u32 width, u32 height, u32 depth);
+u32 hgGetMaxMipmaps(u32 width, u32 height, u32 depth);
 
 /**
  * An arena allocator
@@ -1615,12 +1620,12 @@ T* hgRealloc(HgArena* arena, T* allocation, u64 oldCount, u64 newCount)
  * Parameters
  * - size The size of each arena in bytes
  */
-void hgInitScratchMemory(u64 size);
+void hgScratchInit(u64 size);
 
 /**
  * Deinitializes scratch arenas
  */
-void hgDeinitScratchMemory();
+void hgScratchDeinit();
 
 /**
  * Get a scratch arena for temporary allocations, accounting for conflicts
@@ -1632,7 +1637,7 @@ void hgDeinitScratchMemory();
  * Returns
  * - A scratch arena, never nullptr
  */
-HgArena* hgGetScratch(HgArena const* const* conflicts = nullptr, u32 count = 0);
+HgArena* hgScratch(HgArena const* const* conflicts = nullptr, u32 count = 0);
 
 /**
  * A span view into a string
@@ -1690,23 +1695,23 @@ struct HgStringView {
         hgAssert(index < length);
         return chars[index];
     }
-
-    /**
-     * For c++ ranged based for
-     */
-    constexpr const char* begin() const
-    {
-        return chars;
-    }
-
-    /**
-     * For c++ ranged based for
-     */
-    constexpr const char* end() const
-    {
-        return chars + length;
-    }
 };
+
+/**
+ * Compare string views
+ */
+constexpr bool operator==(HgStringView lhs, HgStringView rhs)
+{
+    return lhs.length == rhs.length && memcmp(lhs.chars, rhs.chars, lhs.length) == 0;
+}
+
+/**
+ * Compare string views
+ */
+constexpr bool operator!=(HgStringView lhs, HgStringView rhs)
+{
+    return !(lhs == rhs);
+}
 
 /**
  * Create a null terminated string for C interop
@@ -1753,22 +1758,6 @@ struct HgString {
     }
 
     /**
-     * For c++ ranged based for loop
-     */
-    constexpr char* begin() const
-    {
-        return chars;
-    }
-
-    /**
-     * For c++ ranged based for loop
-     */
-    constexpr char* end() const
-    {
-        return chars + length;
-    }
-
-    /**
      * Implicit converts to a string view
      */
     constexpr operator HgStringView() const
@@ -1776,22 +1765,6 @@ struct HgString {
         return {chars, length};
     }
 };
-
-/**
- * Compare string views
- */
-constexpr bool operator==(HgStringView lhs, HgStringView rhs)
-{
-    return lhs.length == rhs.length && memcmp(lhs.chars, rhs.chars, lhs.length) == 0;
-}
-
-/**
- * Compare string views
- */
-constexpr bool operator!=(HgStringView lhs, HgStringView rhs)
-{
-    return !(lhs == rhs);
-}
 
 /**
  * Compare strings
@@ -1816,7 +1789,7 @@ inline bool operator!=(const HgString& lhs, const HgString& rhs)
  * - arena The arena to allocate from
  * - capacity The capacity to begin with
  */
-HgString hgCreateString(HgArena* arena, u64 capacity);
+HgString hgStringCreate(HgArena* arena, u64 capacity);
 
 /**
  * Creates a new string copied from an existing string
@@ -1825,7 +1798,7 @@ HgString hgCreateString(HgArena* arena, u64 capacity);
  * - arena The arena to allocate from
  * - init The initial string to copy from
  */
-HgString hgCopyString(HgArena* arena, HgStringView str);
+HgString hgStringCopy(HgArena* arena, HgStringView str);
 
 /**
  * Create a formatted string : TODO
@@ -1847,7 +1820,7 @@ HgString hgCopyString(HgArena* arena, HgStringView str);
  * - fmt The format string
  * - ... The format parameters
  */
-HgString hgFormatString(HgArena* arena, HgStringView fmt, ...);
+HgString hgStringFormat(HgArena* arena, HgStringView fmt, ...);
 
 /**
  * Change the capacity of a string
@@ -1857,7 +1830,7 @@ HgString hgFormatString(HgArena* arena, HgStringView fmt, ...);
  * - str The string to reserve memory for
  * - newCapacity The new minimum capacity
  */
-void hgReserveString(HgArena* arena, HgString* str, u64 newCapacity);
+void hgStringReserve(HgArena* arena, HgString* str, u64 newCapacity);
 
 /**
  * Increases the capacity of the string by a factor, or inits to 1
@@ -1867,7 +1840,7 @@ void hgReserveString(HgArena* arena, HgString* str, u64 newCapacity);
  * - str The string to reserve memory for
  * - factor The growth factor to increase by
  */
-void hgGrowString(HgArena* arena, HgString* str, f32 factor = 2.0f);
+void hgStringGrow(HgArena* arena, HgString* str, f64 factor);
 
 /**
  * Copies another string into this string at index
@@ -1880,22 +1853,22 @@ void hgGrowString(HgArena* arena, HgString* str, f32 factor = 2.0f);
  *
  * Returns
  */
-void hgInsertString(HgArena* arena, HgString* dst, u64 idx, HgStringView src);
+void hgStringInsert(HgArena* arena, HgString* dst, u64 idx, HgStringView src);
 
 /**
  * Copies another string to the end of this string
  */
-inline void hgAppendString(HgArena* arena, HgString* dst, HgStringView src)
+inline void hgStringAppend(HgArena* arena, HgString* dst, HgStringView src)
 {
-    hgInsertString(arena, dst, dst->length, src);
+    hgStringInsert(arena, dst, dst->length, src);
 }
 
 /**
  * Copies another string to the beginning of this string
  */
-inline void hgPrependString(HgArena* arena, HgString* dst, HgStringView src)
+inline void hgStringPrepend(HgArena* arena, HgString* dst, HgStringView src)
 {
-    hgInsertString(arena, dst, 0, src);
+    hgStringInsert(arena, dst, 0, src);
 }
 
 /**
@@ -1907,22 +1880,22 @@ inline void hgPrependString(HgArena* arena, HgString* dst, HgStringView src)
  * - idx The index into dst
  * - src The string to copy from
  */
-void hgInsertString(HgArena* arena, HgString* dst, u64 idx, char c);
+void hgStringInsertc(HgArena* arena, HgString* dst, u64 idx, char c);
 
 /**
  * Copies another string to the end of this string
  */
-inline void hgAppendString(HgArena* arena, HgString* dst, char c)
+inline void hgStringAppendc(HgArena* arena, HgString* dst, char c)
 {
-    hgInsertString(arena, dst, dst->length, c);
+    hgStringInsertc(arena, dst, dst->length, c);
 }
 
 /**
  * Copies another string to the beginning of this string
  */
-inline void hgPrependString(HgArena* arena, HgString* dst, char c)
+inline void hgStringPrependc(HgArena* arena, HgString* dst, char c)
 {
-    hgInsertString(arena, dst, 0, c);
+    hgStringInsertc(arena, dst, 0, c);
 }
 
 /**
@@ -1938,7 +1911,7 @@ bool hgIsNumeral(char c);
 /**
  * Check whether a string is a base 10 integer
  */
-bool hgIsIntenger(HgStringView str);
+bool hgIsInteger(HgStringView str);
 
 /**
  * Check whether a string is a base 10 floating point number
@@ -1948,12 +1921,12 @@ bool hgIsFloat(HgStringView str);
 /**
  * Create an integer from a base 10 string
  */
-i64 hgStrToInt(HgStringView str);
+i64 hgStringToInteger(HgStringView str);
 
 /**
  * Create a float from a base 10 string
  */
-f64 hgStrToFloat(HgStringView str);
+f64 hgStringToFloat(HgStringView str);
 
 /**
  * Create a base 10 string from an integer
@@ -1962,7 +1935,7 @@ f64 hgStrToFloat(HgStringView str);
  * - arena The arena to allocate from
  * - num The integer number to create from
  */
-HgString hgIntToStr(HgArena* arena, i64 num);
+HgString hgIntegerToString(HgArena* arena, i64 num);
 
 /**
  * Create a base 10 string from an integer
@@ -1972,7 +1945,7 @@ HgString hgIntToStr(HgArena* arena, i64 num);
  * - num The integer number to create from
  * - decimalCount The number of trailing decimal digits
  */
-HgString hgFloatToStr(HgArena* arena, f64 num, u32 decimalCount);
+HgString hgFloatToString(HgArena* arena, f64 num, u32 decimalCount);
 
 // base 2 and 16 string-int conversions : TODO
 // arbitrary base string-int conversions : TODO?
@@ -2073,8 +2046,7 @@ struct HgJsonNode {
     /**
      * The value in the node
      */
-    union
-    {
+    union {
         HgJsonStruct jstruct;
         HgJsonField field;
         HgJsonArray array;
@@ -2180,8 +2152,7 @@ constexpr u64 hgHash(i64 val)
  */
 constexpr u64 hgHash(f32 val)
 {
-    union
-    {
+    union {
         f32 asFloat;
         u64 asHash;
     } u{};
@@ -2194,8 +2165,7 @@ constexpr u64 hgHash(f32 val)
  */
 constexpr u64 hgHash(f64 val)
 {
-    union
-    {
+    union {
         f64 asFloat;
         u64 asHash;
     } u{};
@@ -2209,8 +2179,7 @@ constexpr u64 hgHash(f64 val)
 template<typename T>
 constexpr u64 hgPtrHash(T* val)
 {
-    union
-    {
+    union {
         T* asPtr;
         uptr asUptr;
     } u{};
@@ -2233,9 +2202,9 @@ constexpr u64 hgHash(HgStringView str)
 {
     u64 ret = 0;
     u64 mult = 1;
-    for (char c : str)
+    for (u32 i = 0; i < str.length; ++i)
     {
-        ret += (u64)c * mult;
+        ret += (u64)str[i] * mult;
         mult *= 257;
     }
     return ret;
@@ -2260,10 +2229,14 @@ constexpr u64 hgHash(const char* str)
 /**
  * A hash set
  */
-template<typename Value, u64 (*hashFn)(Value) = hgHash>
-struct HgHashSet {
-    static_assert(std::is_trivially_copyable_v<Value> && std::is_trivially_destructible_v<Value>);
+template<typename V, u64 (*HashFn)(V) = hgHash>
+struct HgSet {
+    static_assert(std::is_trivially_copyable_v<V> && std::is_trivially_destructible_v<V>);
 
+    /**
+     * The hash function
+     */
+    static constexpr u64 (*hashFn)(V) = HashFn;
     /**
      * Whether each index has a value
      */
@@ -2271,7 +2244,7 @@ struct HgHashSet {
     /**
      * Where the values are stored;
      */
-    Value* vals;
+    V* vals;
     /**
      * The max number of vals
      */
@@ -2280,138 +2253,139 @@ struct HgHashSet {
      * The current number of values that are stored
      */
     u32 count;
-
-    /**
-     * Creates a new hash set
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - slotCount The max number of slots to store values in
-     */
-    static HgHashSet create(HgArena* arena, u32 slotCount)
-    {
-        hgAssert(slotCount > 0);
-
-        HgHashSet set;
-        set.hasVal = hgAlloc<bool>(arena, slotCount);
-        set.vals = hgAlloc<Value>(arena, slotCount);
-        set.capacity = slotCount;
-        set.empty();
-        return set;
-    }
-
-    /**
-     * Empties all slots
-     */
-    void empty()
-    {
-        for (u32 i = 0; i < capacity; ++i)
-        {
-            hasVal[i] = false;
-        }
-        count = 0;
-    }
-
-    /**
-     * Add a value to the set
-     */
-    void add(Value val)
-    {
-        hgAssert(count < capacity - 1);
-
-        u32 idx = hashFn(val) % capacity;
-        for (u32 dist = 0; hasVal[idx] && vals[idx] != val; ++dist)
-        {
-            u32 otherDist = hashFn(vals[idx]) % capacity - idx;
-            if (otherDist > capacity)
-                otherDist += capacity;
-
-            if (otherDist < dist)
-            {
-                Value valTmp = vals[idx];
-                vals[idx] = val;
-                val = valTmp;
-                dist = otherDist;
-            }
-
-            idx = (idx + 1) % capacity;
-        }
-
-        hasVal[idx] = true;
-        vals[idx] = val;
-        ++count;
-    }
-
-    /**
-     * Remove a value from the set
-     */
-    void remove(const Value& val)
-    {
-        u32 idx = hashFn(val) % capacity;
-        while (hasVal[idx])
-        {
-            if (vals[idx] == val)
-                break;
-            idx = (idx + 1) % capacity;
-        }
-        if (!hasVal[idx])
-            return;
-
-        u32 next = (idx + 1) % capacity;
-        while (hasVal[next])
-        {
-            if (hashFn(vals[next]) % capacity != next)
-            {
-                vals[idx] = vals[next];
-                idx = next;
-            }
-            next = (next + 1) % capacity;
-        }
-        hasVal[idx] = false;
-        --count;
-    }
-
-    /**
-     * Checks whether a value is contained in the set
-     */
-    bool has(const Value& val) const
-    {
-        for (u32 idx = hashFn(val) % capacity; hasVal[idx]; idx = (idx + 1) % capacity)
-        {
-            if (vals[idx] == val)
-                return true;
-        }
-        return false;
-    }
-
-    /**
-     * Execute a function for every value
-     *
-     * Parameters
-     * - fn The function to execute
-     */
-    template<typename Fn>
-    void forEach(Fn fn)
-    {
-        static_assert(std::is_invocable_r_v<void, Fn, const Value*>);
-        for (u32 i = 0; i < capacity; ++i)
-        {
-            if (hasVal[i])
-                fn((const Value*)&vals[i]);
-        }
-    }
 };
+
+/**
+ * Creates a new hash set
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - slotCount The max number of slots to store values in
+ */
+template<typename V>
+HgSet<V> hgSetCreate(HgArena* arena, u32 slotCount)
+{
+    hgAssert(slotCount > 0);
+
+    HgSet<V> set;
+    set.hasVal = hgAlloc<bool>(arena, slotCount);
+    set.vals = hgAlloc<V>(arena, slotCount);
+    set.capacity = slotCount;
+    hgSetReset(&set);
+    return set;
+}
+
+/**
+ * Empties all slots
+ */
+template<typename V>
+void hgSetReset(HgSet<V>* set)
+{
+    for (u32 i = 0; i < set->capacity; ++i)
+    {
+        set->hasVal[i] = false;
+    }
+    set->count = 0;
+}
+
+/**
+ * Add a value to the set
+ */
+template<typename V, typename T = V>
+void hgSetAdd(HgSet<V>* set, const T& val)
+{
+    static_assert(std::is_convertible_v<T, V>);
+    V v = (V)val;
+
+    hgAssert(set->count < set->capacity - 1);
+
+    u32 idx = set->hashFn(v) % set->capacity;
+    for (u32 dist = 0; set->hasVal[idx] && set->vals[idx] != v; ++dist)
+    {
+        u32 otherDist = set->hashFn(set->vals[idx]) % set->capacity - idx;
+        if (otherDist > set->capacity)
+            otherDist += set->capacity;
+
+        if (otherDist < dist)
+        {
+            V valTmp = set->vals[idx];
+            set->vals[idx] = v;
+            v = valTmp;
+            dist = otherDist;
+        }
+
+        idx = (idx + 1) % set->capacity;
+    }
+
+    set->hasVal[idx] = true;
+    set->vals[idx] = v;
+    ++set->count;
+}
+
+/**
+ * Remove a value from the set
+ */
+template<typename V, typename T = V>
+void hgSetRemove(HgSet<V>* set, const T& val)
+{
+    static_assert(std::is_convertible_v<T, V>);
+    V v = (V)val;
+
+    u32 idx = set->hashFn(v) % set->capacity;
+    while (set->hasVal[idx])
+    {
+        if (set->vals[idx] == v)
+            break;
+        idx = (idx + 1) % set->capacity;
+    }
+    if (!set->hasVal[idx])
+        return;
+
+    u32 next = (idx + 1) % set->capacity;
+    while (set->hasVal[next])
+    {
+        if (set->hashFn(set->vals[next]) % set->capacity != next)
+        {
+            set->vals[idx] = set->vals[next];
+            idx = next;
+        }
+        next = (next + 1) % set->capacity;
+    }
+    set->hasVal[idx] = false;
+    --set->count;
+}
+
+/**
+ * Checks whether a value is contained in the set
+ */
+template<typename V, typename T = V>
+bool hgSetHas(const HgSet<V>* set, const T& val)
+{
+    static_assert(std::is_convertible_v<T, V>);
+    V v = (V)val;
+
+    for (u32 idx = set->hashFn(v) % set->capacity; set->hasVal[idx]; idx = (idx + 1) % set->capacity)
+    {
+        if (set->vals[idx] == v)
+            return true;
+    }
+    return false;
+}
 
 /**
  * A key-value hash map
  */
-template<typename Key, typename Value, u64 (*hashFn)(Key) = hgHash>
-struct HgHashMap {
-    static_assert(std::is_trivially_copyable_v<Key>
-               && std::is_trivially_copyable_v<Value>
-               && std::is_trivially_destructible_v<Key>
-               && std::is_trivially_destructible_v<Value>);
+template<typename K, typename V, u64 (*HashFn)(K) = hgHash>
+struct HgMap {
+    static_assert(std::is_trivially_copyable_v<K>
+               && std::is_trivially_copyable_v<V>
+               && std::is_trivially_destructible_v<K>
+               && std::is_trivially_destructible_v<V>);
 
+    /**
+     * The hash function
+     */
+    static constexpr u64 (*hashFn)(K) = HashFn;
     /**
      * Whether each index has a value
      */
@@ -2419,11 +2393,11 @@ struct HgHashMap {
     /**
      * Where the keys are stored;
      */
-    Key* keys;
+    K* keys;
     /**
      * Where the values are stored
      */
-    Value* vals;
+    V* vals;
     /**
      * The max number of key value pairs
      */
@@ -2432,156 +2406,154 @@ struct HgHashMap {
      * The current number of values that are stored
      */
     u32 count;
-
-    /**
-     * Creates a new hash map
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - slotCount The max number of slots to store values in
-     */
-    static HgHashMap create(HgArena* arena, u32 slotCount)
-    {
-        hgAssert(slotCount > 0);
-
-        HgHashMap map;
-        map.hasVal = hgAlloc<bool>(arena, slotCount);
-        map.keys = hgAlloc<Key>(arena, slotCount);
-        map.vals = hgAlloc<Value>(arena, slotCount);
-        map.capacity = slotCount;
-        map.empty();
-        return map;
-    }
-
-    /**
-     * Empties all slots
-     */
-    void empty()
-    {
-        for (u32 i = 0; i < capacity; ++i)
-        {
-            hasVal[i] = false;
-        }
-        count = 0;
-    }
-
-    /**
-     * Add a key-value pair to the hash map
-     *
-     * Parameters
-     * - key The key to add
-     *
-     * Returns
-     * - A reference to the added value
-     */
-    Value* add(Key key, Value val = {})
-    {
-        hgAssert(count < capacity - 1);
-
-        u32 idx = hashFn(key) % capacity;
-        for (u32 dist = 0; hasVal[idx] && keys[idx] != key; ++dist)
-        {
-            u32 otherDist = hashFn(keys[idx]) % capacity - idx;
-            if (otherDist > capacity)
-                otherDist += capacity;
-
-            if (otherDist < dist)
-            {
-                Key keyTmp = keys[idx];
-                Value valTmp = vals[idx];
-                keys[idx] = key;
-                vals[idx] = val;
-                key = keyTmp;
-                val = valTmp;
-                dist = otherDist;
-            }
-
-            idx = (idx + 1) % capacity;
-        }
-
-        hasVal[idx] = true;
-        keys[idx] = key;
-        vals[idx] = val;
-        ++count;
-
-        return vals + idx;
-    }
-
-    /**
-     * Remove a key-value pair from the hash map, and stores it
-     *
-     * Parameters
-     * - key The key to remove
-     * - value A pointer to store the value, if found
-     *
-     * Returns
-     * - Whether a value was found and stored in value
-     */
-    bool remove(const Key& key, Value* value = nullptr)
-    {
-        u32 idx = hashFn(key) % capacity;
-        while (hasVal[idx])
-        {
-            if (keys[idx] == key)
-                break;
-            idx = (idx + 1) % capacity;
-        }
-        if (!hasVal[idx])
-            return false;
-
-        if (value != nullptr)
-            *value = vals[idx];
-
-        u32 next = (idx + 1) % capacity;
-        while (hasVal[next])
-        {
-            if (hashFn(keys[next]) % capacity != next)
-            {
-                keys[idx] = keys[next];
-                vals[idx] = vals[next];
-                idx = next;
-            }
-            next = (next + 1)  % capacity;
-        }
-        hasVal[idx] = false;
-        --count;
-
-        return true;
-    }
-
-    /**
-     * Gets the value stored at a key
-     *
-     * Returns
-     * - A pointer to the value, or nullptr if it does not exist
-     */
-    Value* get(const Key& key) const
-    {
-        for (u32 idx = hashFn(key) % capacity; hasVal[idx]; idx = (idx + 1) % capacity)
-        {
-            if (keys[idx] == key)
-                return vals + idx;
-        }
-        return nullptr;
-    }
-
-    /**
-     * Execute a function for every key-value pair
-     *
-     * Parameters
-     * - fn The function to execute
-     */
-    template<typename Fn>
-    void forEach(Fn fn)
-    {
-        static_assert(std::is_invocable_r_v<void, Fn, const Key*, Value*>);
-        for (u32 i = 0; i < capacity; ++i)
-        {
-            if (hasVal[i])
-                fn((const Key*)&keys[i], &vals[i]);
-        }
-    }
 };
+
+/**
+ * Creates a new hash map
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - slotCount The max number of slots to store values in
+ */
+template<typename K, typename V>
+HgMap<K, V> hgMapCreate(HgArena* arena, u32 slotCount)
+{
+    hgAssert(slotCount > 0);
+
+    HgMap<K, V> map;
+    map.hasVal = hgAlloc<bool>(arena, slotCount);
+    map.keys = hgAlloc<K>(arena, slotCount);
+    map.vals = hgAlloc<V>(arena, slotCount);
+    map.capacity = slotCount;
+    hgMapReset(&map);
+    return map;
+}
+
+/**
+ * Empties all slots
+ */
+template<typename K, typename V>
+void hgMapReset(HgMap<K, V>* map)
+{
+    for (u32 i = 0; i < map->capacity; ++i)
+    {
+        map->hasVal[i] = false;
+    }
+    map->count = 0;
+}
+
+/**
+ * Add a key-value pair to the hash map
+ *
+ * Parameters
+ * - key The key to add
+ *
+ * Returns
+ * - A reference to the added value
+ */
+template<typename K, typename V, typename T = K, typename U = V>
+V* hgMapAdd(HgMap<K, V>* map, const T& key, const U& val)
+{
+    static_assert(std::is_convertible_v<T, K> && std::is_convertible_v<U, V>);
+    K k = (K)key;
+    V v = (V)val;
+
+    hgAssert(map->count < map->capacity - 1);
+
+    u32 idx = map->hashFn(k) % map->capacity;
+    for (u32 dist = 0; map->hasVal[idx] && map->keys[idx] != k; ++dist)
+    {
+        u32 otherDist = map->hashFn(map->keys[idx]) % map->capacity - idx;
+        if (otherDist > map->capacity)
+            otherDist += map->capacity;
+
+        if (otherDist < dist)
+        {
+            K keyTmp = map->keys[idx];
+            V valTmp = map->vals[idx];
+            map->keys[idx] = k;
+            map->vals[idx] = v;
+            k = keyTmp;
+            v = valTmp;
+            dist = otherDist;
+        }
+
+        idx = (idx + 1) % map->capacity;
+    }
+
+    map->hasVal[idx] = true;
+    map->keys[idx] = k;
+    map->vals[idx] = v;
+    ++map->count;
+
+    return map->vals + idx;
+}
+
+/**
+ * Remove a key-value pair from the hash map, and stores it
+ *
+ * Parameters
+ * - key The key to remove
+ * - val A pointer to store the value, if found
+ *
+ * Returns
+ * - Whether a value was found and stored in value
+ */
+template<typename K, typename V, typename T = K>
+bool hgMapRemove(HgMap<K, V>* map, const T& key, V* val = nullptr)
+{
+    static_assert(std::is_convertible_v<T, K>);
+    K k = (K)key;
+
+    u32 idx = map->hashFn(k) % map->capacity;
+    while (map->hasVal[idx])
+    {
+        if (map->keys[idx] == k)
+            break;
+        idx = (idx + 1) % map->capacity;
+    }
+    if (!map->hasVal[idx])
+        return false;
+
+    if (val != nullptr)
+        *val = map->vals[idx];
+
+    u32 next = (idx + 1) % map->capacity;
+    while (map->hasVal[next])
+    {
+        if (map->hashFn(map->keys[next]) % map->capacity != next)
+        {
+            map->keys[idx] = map->keys[next];
+            map->vals[idx] = map->vals[next];
+            idx = next;
+        }
+        next = (next + 1)  % map->capacity;
+    }
+    map->hasVal[idx] = false;
+    --map->count;
+
+    return true;
+}
+
+/**
+ * Gets the value stored at a key
+ *
+ * Returns
+ * - A pointer to the value, or nullptr if it does not exist
+ */
+template<typename K, typename V, typename T = K>
+V* hgMapGet(const HgMap<K, V>* map, const T& key)
+{
+    static_assert(std::is_convertible_v<T, K>);
+    K k = (K)key;
+
+    for (u32 idx = map->hashFn(key) % map->capacity; map->hasVal[idx]; idx = (idx + 1) % map->capacity)
+    {
+        if (map->keys[idx] == k)
+            return map->vals + idx;
+    }
+    return nullptr;
+}
 
 /**
  * A high precision clock for timers and game deltas
@@ -2631,12 +2603,12 @@ struct HgPerf {
 /**
  * Create a performance measurer
  */
-HgPerf hgCreatePerf(HgArena* arena, u32 count);
+HgPerf hgPerfCreate(HgArena* arena, u32 count);
 
 /**
  * Begin the timer for a measurement
  */
-void hgBeginPerf(HgPerf* perf);
+void hgPerfBegin(HgPerf* perf);
 
 /**
  * End the timer for a measurement
@@ -2644,7 +2616,7 @@ void hgBeginPerf(HgPerf* perf);
  * Returns
  * - The time this measurement took
  */
-f64 hgEndPerf(HgPerf* perf);
+f64 hgPerfEnd(HgPerf* perf);
 
 /**
  * A set of statistics from performance measurements
@@ -2667,7 +2639,7 @@ struct HgPerfStats {
 /**
  * Analyzes the performance measurements for statistics
  */
-HgPerfStats hgAnalyzePerf(const HgPerf* perf);
+HgPerfStats hgPerfAnalyze(const HgPerf* perf);
 
 /**
  * The scale to log performance metrics at
@@ -2682,7 +2654,7 @@ enum HgPerfScale {
 /**
  * Logs performance statistics to stdout
  */
-void hgLogPerf(HgStringView title, const HgPerfStats* stats, HgPerfScale scale);
+void hgPerfLog(HgStringView title, const HgPerfStats* stats, HgPerfScale scale);
 
 /**
  * Returns the number of concurrent threads available in hardware
@@ -2706,7 +2678,7 @@ struct HgFence {
  * - fence The fence to attach to
  * - count The number of added events
  */
-void hgAttachFence(HgFence* fence, u32 count);
+void hgFenceAttach(HgFence* fence, u32 count);
 
 /**
  * Signal that events have completed
@@ -2715,22 +2687,22 @@ void hgAttachFence(HgFence* fence, u32 count);
  * - fence The fence to signal
  * - count The number of signaled events
  */
-void hgSignalFence(HgFence* fence, u32 count);
+void hgFenceSignal(HgFence* fence, u32 count);
 
 /**
  * Returns whether all work has been completed
  */
-bool hgIsFenceComplete(const HgFence* fence);
+bool hgFenceIsComplete(const HgFence* fence);
 
 /**
  * Spin waits for all work submissions to be completed
  */
-void hgWaitForFenceIndefinite(const HgFence* fence);
+bool hgFenceWait(const HgFence* fence, f64 timeoutSeconds);
 
 /**
  * Spin waits for all work submissions to be completed
  */
-bool hgWaitForFenceTimeout(const HgFence* fence, f64 timeoutSeconds);
+void hgFenceWaitIndefinite(const HgFence* fence);
 
 /**
  * Initialize the thread pool
@@ -2743,12 +2715,12 @@ bool hgWaitForFenceTimeout(const HgFence* fence, f64 timeoutSeconds);
  * - queueSize The max capacity of the thread work queue
  * - threadCount The number of threads to spawn in the pool
  */
-void hgInitThreadPool(HgArena* arena, u32 queueSize, u32 threadCount);
+void hgThreadsInit(HgArena* arena, u32 queueSize, u32 threadCount);
 
 /**
  * Deinitialize the thread pool
  */
-void hgDeinitThreadPool();
+void hgThreadsDeinit();
 
 /**
  * Wait on a fence, and help complete work in the meantime
@@ -2761,18 +2733,17 @@ void hgDeinitThreadPool();
  * - true if the fence was completed
  * - false if the timeout was reached
  */
-bool hgHelpThreadPool(const HgFence* fence, f64 timeout);
+bool hgThreadsHelp(const HgFence* fence, f64 timeout);
 
 /**
  * Pushes work to the thread pool queue to be executed
  *
  * Parameters
- * - fences The fences to signal upon completion
- * - fenceCount The number of fences
+ * - fence The fences to signal upon completion
  * - data The data passed to the function
  * - work The function to be executed
  */
-void hgCallPar(HgFence* fences, u32 fenceCount, void* data, void (*fn)(void*));
+void hgThreadsCall(HgFence* fence, void* data, void (*fn)(void* data));
 
 /**
  * Iterates in parallel over a function n times using the thread pool
@@ -2785,7 +2756,7 @@ void hgCallPar(HgFence* fences, u32 fenceCount, void* data, void (*fn)(void*));
  * - data The data pointer passed to fn
  * - fn The function to use to iterate, takes begin and end indicces
  */
-void hgForPar(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx));
+void hgThreadsFor(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx));
 
 /**
  * Initializes the IO thread
@@ -2794,44 +2765,38 @@ void hgForPar(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx));
  * - arena The arena to allocate from
  * - queueSize The max concurrent request capacity
  */
-void hgInitIOThread(HgArena* arena, u32 queueSize);
+void hgIoInit(HgArena* arena, u32 queueSize);
 
 /**
  * Deinitializes the IO thread
  */
-void hgDeinitIOThread();
+void hgIoDeinit();
 
 /**
  * Make an asynchronous IO request on the IO thread
  *
  * Parameters
- * - fences The fences to signal on completion
- * - fenceCount The number of fences
+ * - fence The fence to signal on completion
  * - resource The resource pointer passed to fn
  * - path The path string passed to fn
  * - fn The function to execute
  */
-void hgRequestIO(
-    HgFence* fences,
-    u32 fenceCount,
-    void* resource,
-    HgStringView path,
-    void (*fn)(void* resource, HgStringView path));
+void hgIoRequest(HgFence* fence, void* resource, HgStringView path, void (*fn)(void* resource, HgStringView path));
 
 /**
  * Initializes the graphics subsystem, loading all global Vulkan resources
  */
-void hgInitGraphics(HgArena* arena);
+void hgGpuInit(HgArena* arena, u32 maxFramesInFlight, u32 maxWindows);
 
 /**
  * Deinitializes the graphics subsystem, unloading all global Vulkan resources
  */
-void hgDeinitGraphics();
+void hgGpuDeinit();
 
 /**
  * Wait for the GPU to finish work
  */
-void hgGraphicsWaitIdle();
+void hgGpuWaitIdle();
 
 /**
  * Pixel formats
@@ -3115,6 +3080,8 @@ enum HgFormat {
  */
 u32 hgFormatToSize(HgFormat format);
 
+// Vulkan allocator : TODO?
+
 /**
  * Where in the pipeline a resource can be accessed
  */
@@ -3143,7 +3110,7 @@ typedef u32 HgGpuStageFlags;
 /**
  * How a resource can be accessed
  */
-enum HgAccess {
+enum HgGpuAccess {
     HgGpuAccess_none = 0,
     HgGpuAccess_indirectCommandRead = 0x00000001,
     HgGpuAccess_indexRead = 0x00000002,
@@ -3227,6 +3194,46 @@ enum HgGpuMemoryHostAccess {
 };
 
 /**
+ * Create a gpu buffer
+ *
+ * Parameters
+ * - size The size in bytes of the buffer
+ * - usageFlags How the buffer will be used
+ * - access How the buffer should be accessed
+ */
+HgGpuBuffer* hgGpuBufferCreate(
+    u64 size,
+    HgGpuBufferUsageFlags usageFlags,
+    HgGpuMemoryUsage access = HgGpuMemoryUsage_deviceOnly);
+
+/**
+ * Destroy a gpu buffer
+ */
+void hgGpuBufferDestroy(HgGpuBuffer* buffer);
+
+/**
+ * Writes to a gpu buffer
+ *
+ * Parameters
+ * - dst The buffer to write to, must not be nullptr
+ * - offset The offset in bytes into the dst buffer
+ * - src The data to write, must not be nullptr
+ * - size The size in bytes to write
+ */
+void hgGpuBufferWrite(HgGpuBuffer* dst, u64 offset, const void* src, u64 size);
+
+/**
+ * Reads from a Vulkan device local buffer through a staging buffer
+ *
+ * Parameters
+ * - dst The location to write to, must not be nullptr
+ * - src The buffer to read from, must not be nullptr
+ * - offset The offset in bytes into the dst buffer
+ * - size The size in bytes to read
+ */
+void hgGpuBufferRead(void* dst, HgGpuBuffer* src, u64 offset, u64 size);
+
+/**
  * A gpu image
  */
 struct HgGpuImage;
@@ -3264,6 +3271,63 @@ enum HgGpuLayout {
 };
 
 /**
+ * Create a gpu image assuming most defaults
+ */
+HgGpuImage* hgGpuImageCreate(u32 width, u32 height, HgFormat format, HgGpuImageUsageFlags usage);
+
+/**
+ * Config for hgCreateVkImage
+ */
+struct HgGpuImageCreateEx {
+    /**
+     * The dimensions of the image
+     */
+    u32 dimensions = 2;
+    /**
+     * The width of the image
+     */
+    u32 width = 1;
+    /**
+     * The height of the image
+     */
+    u32 height = 1;
+    /**
+     * The depth of the image
+     */
+    u32 depth = 1;
+    /**
+     * The format of the image, must not be undefined
+     */
+    HgFormat format = HgFormat_undefined;
+    /**
+     * The number of mip level
+     */
+    u32 mipLevels = 1;
+    /**
+     * The number of array layers
+     */
+    u32 arrayLayers = 1;
+    /**
+     * The number of MSAA samples
+     */
+    u32 msaaSamples = 1;
+    /**
+     * How the image will be used, must not be 0
+     */
+    HgGpuImageUsageFlags usage = 0;
+};
+
+/**
+ * Create a gpu image with more options
+ */
+HgGpuImage* hgGpuImageCreateEx(const HgGpuImageCreateEx* create);
+
+/**
+ * Destroy a gpu image
+ */
+void hgGpuImageDestroy(HgGpuImage* image);
+
+/**
  * A view into a gpu image
  */
 struct HgGpuView;
@@ -3295,6 +3359,75 @@ enum HgGpuAspect {
     HgGpuAspect_plane2 = 0x00000040,
 };
 typedef u32 HgGpuAspectFlags;
+
+/**
+ * Create a gpu image view
+ */
+HgGpuView* hgGpuViewCreate(
+    HgGpuImage* image,
+    u32 baseMipLevel,
+    u32 levelCount,
+    u32 baseArrayLayer,
+    u32 layerCount,
+    HgGpuAspectFlags aspectFlags,
+    HgGpuViewType type = HgGpuViewType_2D);
+
+/**
+ * Destroy a gpu image view
+ */
+void hgGpuViewDestroy(HgGpuView* view);
+
+/**
+ * Write to a gpu image
+ *
+ * Note, only fills the base mip level
+ *
+ * Parameters
+ * - dst The image to write to
+ * - src The data to read from
+ */
+void hgGpuImageWrite(HgGpuView* dst, const void* src);
+
+/**
+ * Write to a gpu image cubemap
+ *
+ * Note, dst must have at least 6 array layers to fill
+ *
+ * Only the base mip level is filled
+ *
+ * srcData is assumed to be layed out as:
+ *  #
+ * ####
+ *  #
+ *
+ * Parameters
+ * - dst The image to write to
+ * - subresource The subresource of the image to write to
+ * - src The data to read from
+ */
+void hgGpuImageWriteCubemap(HgGpuView* dst, const void* src);
+
+/**
+ * Read from a gpu image
+ *
+ * Note, only the base mip level is read
+ *
+ * Parameters
+ * - src The pointer to write to
+ * - dst The image to read from
+ * - subresource The subresource of the image to read from
+ */
+void hgGpuImageRead(void* dst, HgGpuView* src);
+
+/**
+ * Generates mipmaps from the base level
+ *
+ * Note, dst should only have 1 array layer
+ *
+ * Parameters
+ * - image The image to generate mipmaps for
+ */
+void hgGpuImageGenMipmaps(HgGpuView* dst);
 
 /**
  * A sampler to access an image view
@@ -3331,6 +3464,24 @@ enum HgSamplerBorderColor {
     HgGpuSamplerBorder_floatOpaqueWhite = 4,
     HgGpuSamplerBorder_intOpaqueWhite = 5,
 };
+
+/**
+ * Create a Vulkan sampler
+ *
+ * Parameters
+ * - filter How the sampler interpolates between image values
+ * - addressMode How the sampler handles address off edges
+ * - borderColor The border color if addressMode uses a border
+ */
+HgGpuSampler* hgGpuSamplerCreate(
+    HgGpuFilter filter,
+    HgGpuSamplerEdgeMode addressMode = HgGpuSamplerEdgeMode_modeRepeat,
+    HgSamplerBorderColor borderColor = HgGpuSamplerBorder_floatTransparentBlack);
+
+/**
+ * Destroy a Vulkan sampler
+ */
+void hgGpuSamplerDestroy(HgGpuSampler* sampler);
 
 /**
  * A gpu resource descriptor
@@ -3376,255 +3527,20 @@ enum HgGpuDescriptorType {
 /**
  * Get the descriptor type from the id
  */
-constexpr HgGpuDescriptorType hgDescriptorType(HgGpuDescriptor desc)
+constexpr HgGpuDescriptorType hgGpuDescriptorType(HgGpuDescriptor desc)
 {
     return (HgGpuDescriptorType)((desc.id & 0xf0000000) >> 28);
 }
 
 /**
- * A shader pipeline
- */
-struct HgGpuPipeline;
-
-/**
- * How the vertex list is interpreted
- */
-enum HgGpuTopology {
-    HgGpuTopology_pointList = 0,
-    HgGpuTopology_lineList = 1,
-    HgGpuTopology_lineStrip = 2,
-    HgGpuTopology_triangleList = 3,
-    HgGpuTopology_triangleStrip = 4,
-    HgGpuTopology_triangleFan = 5,
-    HgGpuTopology_lineListWithAdjacency = 6,
-    HgGpuTopology_lineStripWithAdjacency = 7,
-    HgGpuTopology_triangleListWithAdjacency = 8,
-    HgGpuTopology_triangleStripWithAdjacency = 9,
-    HgGpuTopology_patchList = 10,
-};
-
-/**
- * How to treat vertices
- */
-enum HgGpuPolygonMode {
-    HgGpuPolygonMode_fill = 0,
-    HgGpuPolygonMode_line = 1,
-    HgGpuPolygonMode_point = 2,
-};
-
-enum HgGpuCull {
-    HgGpuCull_none = 0,
-    HgGpuCull_front = 0x00000001,
-    HgGpuCull_back = 0x00000002,
-    HgGpuCull_both = 0x00000003,
-};
-typedef u32 HgCullModeFlags;
-
-/**
- * A gpu command buffer
- */
-struct HgGpuCommands;
-
-/**
- * A chain of command pools to record and execute multiple frames in flight
- */
-struct HgGpuCommandChain;
-
-// Vulkan allocator : TODO?
-
-/**
- * Create a gpu buffer
- *
- * Parameters
- * - size The size in bytes of the buffer
- * - usageFlags How the buffer will be used
- * - access How the buffer should be accessed
- */
-HgGpuBuffer* hgCreateGpuBuffer(
-    u64 size,
-    HgGpuBufferUsageFlags usageFlags,
-    HgGpuMemoryUsage access = HgGpuMemoryUsage_deviceOnly);
-
-/**
- * Destroy a gpu buffer
- */
-void hgDestroyGpuBuffer(HgGpuBuffer* buffer);
-
-/**
- * Writes to a gpu buffer
- *
- * Parameters
- * - dst The buffer to write to, must not be nullptr
- * - offset The offset in bytes into the dst buffer
- * - src The data to write, must not be nullptr
- * - size The size in bytes to write
- */
-void hgWriteGpuBuffer(HgGpuBuffer* dst, u64 offset, const void* src, u64 size);
-
-/**
- * Reads from a Vulkan device local buffer through a staging buffer
- *
- * Parameters
- * - dst The location to write to, must not be nullptr
- * - src The buffer to read from, must not be nullptr
- * - offset The offset in bytes into the dst buffer
- * - size The size in bytes to read
- */
-void hgReadGpuBuffer(void* dst, HgGpuBuffer* src, u64 offset, u64 size);
-
-/**
- * Create a gpu image assuming most defaults
- */
-HgGpuImage* hgCreateGpuImage(u32 width, u32 height, HgFormat format, HgGpuImageUsageFlags usage);
-
-/**
- * Config for hgCreateVkImage
- */
-struct HgCreateGpuImageEx {
-    /**
-     * The dimensions of the image
-     */
-    u32 dimensions = 2;
-    /**
-     * The width of the image
-     */
-    u32 width = 1;
-    /**
-     * The height of the image
-     */
-    u32 height = 1;
-    /**
-     * The depth of the image
-     */
-    u32 depth = 1;
-    /**
-     * The format of the image, must not be undefined
-     */
-    HgFormat format = HgFormat_undefined;
-    /**
-     * The number of mip level
-     */
-    u32 mipLevels = 1;
-    /**
-     * The number of array layers
-     */
-    u32 arrayLayers = 1;
-    /**
-     * The number of MSAA samples
-     */
-    u32 msaaSamples = 1;
-    /**
-     * How the image will be used, must not be 0
-     */
-    HgGpuImageUsageFlags usage = 0;
-};
-
-/**
- * Create a gpu image with more options
- */
-HgGpuImage* hgCreateGpuImageEx(const HgCreateGpuImageEx* create);
-
-/**
- * Destroy a gpu image
- */
-void hgDestroyGpuImage(HgGpuImage* image);
-
-/**
- * Create a gpu image view
- */
-HgGpuView* hgCreateGpuView(
-    HgGpuImage* image,
-    u32 baseMipLevel,
-    u32 levelCount,
-    u32 baseArrayLayer,
-    u32 layerCount,
-    HgGpuAspectFlags aspectFlags,
-    HgGpuViewType type = HgGpuViewType_2D);
-
-/**
- * Destroy a gpu image view
- */
-void hgDestroyGpuView(HgGpuView* view);
-
-/**
- * Write to a gpu image
- *
- * Note, only fills the base mip level
- *
- * Parameters
- * - dst The image to write to
- * - src The data to read from
- */
-void hgWriteGpuImage(HgGpuView* dst, const void* src);
-
-/**
- * Write to a gpu image cubemap
- *
- * Note, dst must have at least 6 array layers to fill
- *
- * Only the base mip level is filled
- *
- * srcData is assumed to be layed out as:
- *  #
- * ####
- *  #
- *
- * Parameters
- * - dst The image to write to
- * - subresource The subresource of the image to write to
- * - src The data to read from
- */
-void hgWriteGpuCubemapImage(HgGpuView* dst, const void* src);
-
-/**
- * Read from a gpu image
- *
- * Note, only the base mip level is read
- *
- * Parameters
- * - src The pointer to write to
- * - dst The image to read from
- * - subresource The subresource of the image to read from
- */
-void hgReadGpuImage(void* dst, HgGpuView* src);
-
-/**
- * Generates mipmaps from the base level
- *
- * Note, dst should only have 1 array layer
- *
- * Parameters
- * - image The image to generate mipmaps for
- */
-void hgGenerateGpuMipmaps(HgGpuView* dst);
-
-/**
- * Create a Vulkan sampler
- *
- * Parameters
- * - filter How the sampler interpolates between image values
- * - addressMode How the sampler handles address off edges
- * - borderColor The border color if addressMode uses a border
- */
-HgGpuSampler* hgCreateGpuSampler(
-    HgGpuFilter filter,
-    HgGpuSamplerEdgeMode addressMode = HgGpuSamplerEdgeMode_modeRepeat,
-    HgSamplerBorderColor borderColor = HgGpuSamplerBorder_floatTransparentBlack);
-
-/**
- * Destroy a Vulkan sampler
- */
-void hgDestroyGpuSampler(HgGpuSampler* sampler);
-
-/**
  * Create a new bindless descriptor
  */
-HgGpuDescriptor hgCreateGpuDescriptor(HgGpuDescriptorType type);
+HgGpuDescriptor hgGpuDescriptorCreate(HgGpuDescriptorType type);
 
 /**
  * Destroy a bindless descriptor
  */
-void hgDestroyGpuDescriptor(HgGpuDescriptor desc);
+void hgGpuDescriptorDestroy(HgGpuDescriptor desc);
 
 /**
  * The info to update a buffer descriptor
@@ -3652,10 +3568,15 @@ struct HgGpuImageDescriptorInfo {
  * - bufferInfo The buffer info, if the descriptor is a buffer type
  * - imageInfo The image info, if the descriptor is an image type
  */
-void hgUpdateGpuDescriptor(
+void hgGpuDescriptorUpdate(
     HgGpuDescriptor descriptor,
     const HgGpuBufferDescriptorInfo* bufferInfo,
     const HgGpuImageDescriptorInfo* imageInfo);
+
+/**
+ * A shader pipeline
+ */
+struct HgGpuPipeline;
 
 /**
  * A push constant range in a pipeline
@@ -3710,6 +3631,40 @@ struct HgGpuVertexAttribute {
      */
     u32 offset;
 };
+
+/**
+ * How the vertex list is interpreted
+ */
+enum HgGpuTopology {
+    HgGpuTopology_pointList = 0,
+    HgGpuTopology_lineList = 1,
+    HgGpuTopology_lineStrip = 2,
+    HgGpuTopology_triangleList = 3,
+    HgGpuTopology_triangleStrip = 4,
+    HgGpuTopology_triangleFan = 5,
+    HgGpuTopology_lineListWithAdjacency = 6,
+    HgGpuTopology_lineStripWithAdjacency = 7,
+    HgGpuTopology_triangleListWithAdjacency = 8,
+    HgGpuTopology_triangleStripWithAdjacency = 9,
+    HgGpuTopology_patchList = 10,
+};
+
+/**
+ * How to treat vertices
+ */
+enum HgGpuPolygonMode {
+    HgGpuPolygonMode_fill = 0,
+    HgGpuPolygonMode_line = 1,
+    HgGpuPolygonMode_point = 2,
+};
+
+enum HgGpuCull {
+    HgGpuCull_none = 0,
+    HgGpuCull_front = 0x00000001,
+    HgGpuCull_back = 0x00000002,
+    HgGpuCull_both = 0x00000003,
+};
+typedef u32 HgGpuCullFlags;
 
 /**
  * Config for hgCreateGraphicsPipeline
@@ -3786,7 +3741,7 @@ struct HgCreateGpuGraphicsPipeline {
     /**
      * Enables back/front face culling
      */
-    HgCullModeFlags cullMode = HgGpuCull_none;
+    HgGpuCullFlags cullMode = HgGpuCull_none;
     /**
      * How many samples are used in MSAA
      */
@@ -3811,7 +3766,7 @@ struct HgCreateGpuGraphicsPipeline {
  * Parameters
  * - config The pipeline configuration
  */
-HgGpuPipeline* hgCreateGpuGraphicsPipeline(const HgCreateGpuGraphicsPipeline* config);
+HgGpuPipeline* hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* config);
 
 /**
  * Create a compute pipeline
@@ -3821,12 +3776,17 @@ HgGpuPipeline* hgCreateGpuGraphicsPipeline(const HgCreateGpuGraphicsPipeline* co
  * - shaderCode The compute shader, must not be nullptr
  * - shaderCodeSize The size in bytes of shaderCode
  */
-HgGpuPipeline* hgCreateGpuComputePipeline(u32 pushSize, const u8* shaderCode, u64 shaderCodeSize);
+HgGpuPipeline* hgGpuPipelineCreateCompute(u32 pushSize, const u8* shaderCode, u64 shaderCodeSize);
 
 /**
  * Destroy a graphics or compute pipeline
  */
-void hgDestroyGpuPipeline(HgGpuPipeline* pipeline);
+void hgGpuPipelineDestroy(HgGpuPipeline* pipeline);
+
+/**
+ * A gpu command buffer
+ */
+struct HgGpuCmd;
 
 /**
  * Begin a command buffer to be executed once
@@ -3834,7 +3794,7 @@ void hgDestroyGpuPipeline(HgGpuPipeline* pipeline);
  * Returns
  * - The command buffer to record, will never be nullptr
  */
-HgGpuCommands* hgBeginGpuCommands();
+HgGpuCmd* hgGpuCmdBegin();
 
 /**
  * Execute the command buffer and wait for completion
@@ -3842,12 +3802,12 @@ HgGpuCommands* hgBeginGpuCommands();
  * Parameters
  * - cmd The command buffer from hgBeginGpuCommands, must not be nullptr
  */
-void hgEndGpuCommands(HgGpuCommands* cmd);
+void hgGpuCmdEnd(HgGpuCmd* cmd);
 
 /**
  * Bind a graphics or compute pipeline
  */
-void hgBindGpuPipeline(HgGpuCommands* cmd, HgGpuPipeline* pipeline);
+void hgGpuBindPipeline(HgGpuCmd* cmd, HgGpuPipeline* pipeline);
 
 /**
  * Push constants to the shader
@@ -3859,7 +3819,7 @@ void hgBindGpuPipeline(HgGpuCommands* cmd, HgGpuPipeline* pipeline);
  * - size The size of the data
  * - push The data to push
  */
-void hgGpuPushConstants(HgGpuCommands* cmd, HgGpuPipeline* pipeline, u32 offset, void* push, u32 size);
+void hgGpuPushConstants(HgGpuCmd* cmd, HgGpuPipeline* pipeline, u32 offset, void* push, u32 size);
 
 /**
  * Bind an index buffer (assumed 32 bit)
@@ -3869,7 +3829,7 @@ void hgGpuPushConstants(HgGpuCommands* cmd, HgGpuPipeline* pipeline, u32 offset,
  * - buffer The buffer to bind
  * - offset The offset into the buffer
  */
-void hgBindGpuIndexBuffer(HgGpuCommands* cmd, HgGpuBuffer* buffer, u64 offset = 0);
+void hgGpuBindIndexBuffer(HgGpuCmd* cmd, HgGpuBuffer* buffer, u64 offset = 0);
 
 /**
  * Bind vertex buffers
@@ -3881,7 +3841,7 @@ void hgBindGpuIndexBuffer(HgGpuCommands* cmd, HgGpuBuffer* buffer, u64 offset = 
  * - offsets The offsets into the buffers
  * - bufferCount The number of buffers
  */
-void hgBindGpuVertexBuffers(HgGpuCommands* cmd, u32 bindingIdx, HgGpuBuffer** buffers, u64* offsets, u32 bufferCount);
+void hgGpuBindVertexBuffers(HgGpuCmd* cmd, u32 bindingIdx, HgGpuBuffer** buffers, u64* offsets, u32 bufferCount);
 
 /**
  * Issue a draw call
@@ -3893,7 +3853,7 @@ void hgBindGpuVertexBuffers(HgGpuCommands* cmd, u32 bindingIdx, HgGpuBuffer** bu
  * - instanceBegin The index of the first instance to draw
  * - instanceCount The number of instances to draw
  */
-void hgGpuDraw(HgGpuCommands* cmd, u32 vertexBegin, u32 vertexCount, u32 instanceBegin, u32 instanceCount);
+void hgGpuDraw(HgGpuCmd* cmd, u32 vertexBegin, u32 vertexCount, u32 instanceBegin, u32 instanceCount);
 
 /**
  * Issue a draw call using an index buffer
@@ -3907,7 +3867,7 @@ void hgGpuDraw(HgGpuCommands* cmd, u32 vertexBegin, u32 vertexCount, u32 instanc
  * - instanceCount The number of instances to draw
  */
 void hgGpuDrawIndexed(
-    HgGpuCommands* cmd,
+    HgGpuCmd* cmd,
     i32 vertexOffset,
     u32 indexBegin,
     u32 indexCount,
@@ -3923,12 +3883,12 @@ void hgGpuDrawIndexed(
  * - groupCountY The number of workgroups in the y dimension
  * - groupCountZ The number of workgroups in the z dimension
  */
-void hgGpuCompute(HgGpuCommands* cmd, u32 groupCountX, u32 groupCountY, u32 groupCountZ);
+void hgGpuCompute(HgGpuCmd* cmd, u32 groupCountX, u32 groupCountY, u32 groupCountZ);
 
 /**
  * An image dependency barrier
  */
-struct HgImageBarrier {
+struct HgGpuImageBarrier {
     /**
      * The image to sychronize
      */
@@ -3950,7 +3910,7 @@ struct HgImageBarrier {
 /**
  * A buffer dependency barrier
  */
-struct HgBufferBarrier {
+struct HgGpuBufferBarrier {
     /**
      * The buffer to sychronize
      */
@@ -3976,16 +3936,16 @@ struct HgBufferBarrier {
  * - imageBarrierCount The number of image barriers
  */
 void hgGpuMemoryBarrier(
-    HgGpuCommands* cmd,
-    const HgBufferBarrier* bufferBarriers,
+    HgGpuCmd* cmd,
+    const HgGpuBufferBarrier* bufferBarriers,
     u32 bufferBarrierCount,
-    const HgImageBarrier* imageBarriers,
+    const HgGpuImageBarrier* imageBarriers,
     u32 imageBarrierCount);
 
 /**
  * A compute pass description
  */
-struct HgComputePass {
+struct HgGpuComputePass {
     /**
      * The uniforms buffer dependencies
      */
@@ -4027,7 +3987,7 @@ struct HgComputePass {
  * - cmd The command buffer
  * - pass The compute pass description
  */
-void hgGpuComputePass(HgGpuCommands* cmd, const HgComputePass* pass);
+void hgGpuComputePass(HgGpuCmd* cmd, const HgGpuComputePass* pass);
 
 /**
  * The operation to load a render attachment
@@ -4095,7 +4055,7 @@ union HgGpuClearValue {
 /**
  * A rendering attachment
  */
-struct HgRenderAttachment {
+struct HgGpuRenderAttachment {
     /**
      * The image attached
      */
@@ -4117,7 +4077,7 @@ struct HgRenderAttachment {
 /**
  * A render pass description
  */
-struct HgRenderPass {
+struct HgGpuRenderPass {
     /**
      * The uniforms buffer dependencies
      */
@@ -4153,7 +4113,7 @@ struct HgRenderPass {
     /**
      * The color images to write to
      */
-    const HgRenderAttachment* colorAttachments = nullptr;
+    const HgGpuRenderAttachment* colorAttachments = nullptr;
     /**
      * The number of color attachments
      */
@@ -4165,11 +4125,11 @@ struct HgRenderPass {
     /**
      * The depth attachment, if any
      */
-    const HgRenderAttachment* depthAttachment = nullptr;
+    const HgGpuRenderAttachment* depthAttachment = nullptr;
     /**
      * The stencil attachment, if any
      */
-    const HgRenderAttachment* stencilAttachment = nullptr;
+    const HgGpuRenderAttachment* stencilAttachment = nullptr;
 };
 
 /**
@@ -4181,7 +4141,7 @@ struct HgRenderPass {
  * - height The height of the render area
  * - pass The render pass description
  */
-void hgBeginGpuRenderPass(HgGpuCommands* cmd, u32 width, u32 height, const HgRenderPass* pass);
+void hgGpuRenderPassBegin(HgGpuCmd* cmd, u32 width, u32 height, const HgGpuRenderPass* pass);
 
 /**
  * Ends the render pass
@@ -4189,7 +4149,7 @@ void hgBeginGpuRenderPass(HgGpuCommands* cmd, u32 width, u32 height, const HgRen
  * Parameters
  * - cmd The command buffer
  */
-void hgEndGpuRenderPass(HgGpuCommands* cmd);
+void hgGpuRenderPassEnd(HgGpuCmd* cmd);
 
 /**
  * Initializes global resources for windowing
@@ -4199,12 +4159,12 @@ void hgEndGpuRenderPass(HgGpuCommands* cmd);
  * - maxWindows The maximum number of windows that can be created
  * - maxEvents The maximum number of events recorded per frame
  */
-void hgInitPlatform(HgArena* arena, u32 maxWindows, u32 maxEvents);
+void hgPlatformInit(HgArena* arena, u32 maxWindows, u32 maxEvents);
 
 /**
  * Deinitializes global resources for windowing
  */
-void hgDeinitPlatform();
+void hgPlatformDeinit();
 
 /**
  * Get the platform's required instance extensions for windowing
@@ -4216,16 +4176,16 @@ void hgDeinitPlatform();
  * Returns
  * - The number of required extensions
  */
-u32 hgGetPlatformVulkanExtensions(HgArena* arena, HgStringView** extBuffer);
+u32 hgPlatformGetVulkanExtensions(HgArena* arena, HgStringView** extBuffer);
 
 /**
  * The present mode for the swapchain
  */
-enum HgPresentMode {
-    HgPresentMode_immediate = 0,
-    HgPresentMode_mailbox = 1,
-    HgPresentMode_fifo = 2,
-    HgPresentMode_fifoRelaxed = 3,
+enum HgGpuPresentMode {
+    HgGpuPresentMode_immediate = 0,
+    HgGpuPresentMode_mailbox = 1,
+    HgGpuPresentMode_fifo = 2,
+    HgGpuPresentMode_fifoRelaxed = 3,
 };
 
 /**
@@ -4243,9 +4203,9 @@ struct HgWindowConfig {
     /**
      * How the swapchain images will be presented
      *
-     * Note, will fall back to FIFO if unavailable
+     * Note, will fall back to FIFO if preferred is unavailable
      */
-    HgPresentMode preferredPresentMode = HgPresentMode_fifo;
+    HgGpuPresentMode preferredPresentMode = HgGpuPresentMode_fifo;
     /**
      * How the swapchain images will be used
      */
@@ -4262,54 +4222,53 @@ struct HgWindow;
  *
  * Note, width and height are ignored if fullscreen is enabled
  */
-HgWindow* hgCreateWindow(const char* title, u32 width, u32 height, const HgWindowConfig* config);
+HgWindow* hgWindowCreate(const char* title, u32 width, u32 height, const HgWindowConfig* config);
 
 /**
  * Destroy a window
  */
-void hgDestroyWindow(HgWindow* window);
+void hgWindowDestroy(HgWindow* window);
 
 /**
- * Get the window's width in pixels
- */
-u32 hgGetWindowWidth(HgWindow* window);
-
-/**
- * Get the window's width in pixels
- */
-u32 hgGetWindowHeight(HgWindow* window);
-
-/**
- * Get the window's width in pixels
- */
-HgFormat hgGetWindowFormat(HgWindow* window);
-
-/**
- * Get the window's current image
- */
-HgGpuView* hgGetWindowCurrentImage(HgWindow* window);
-
-/**
- * Acquires the next swapchain image and begins its command buffer
+ * Acquire an image from each swapchain and begin a command buffer
  *
  * Returns
  * - The command buffer to record this frame
- * - nullptr if the swapchain cannot be rendered to
  */
-HgGpuCommands* hgWindowBeginCommands(HgWindow* window);
+HgGpuCmd* hgGpuFrameBegin(HgWindow** windows, u32 windowCount);
 
 /**
- * Finishes recording the command buffer and presents the swapchain image
+ * Finishes recording the command buffer and presents the window images
  *
  * Parameters
- * - cmd The command buffer given from beginRecording
+ * - cmd The command buffer given from beginFrame
  */
-void hgWindowEndAndPresent(HgWindow* window, HgGpuCommands* cmd);
+void hgGpuFrameEnd(HgGpuCmd* cmd);
+
+/**
+ * Returns the window's current image, or nullptr if it could not be acquired
+ */
+HgGpuView* hgWindowCurrentImage(HgWindow* window);
 
 /**
  * Processes all events since startup or the last call to process events
  */
 void hgProcessEvents();
+
+/**
+ * Get the window's width in pixels
+ */
+u32 hgWindowWidth(HgWindow* window);
+
+/**
+ * Get the window's width in pixels
+ */
+u32 hgWindowHeight(HgWindow* window);
+
+/**
+ * Get the window's width in pixels
+ */
+HgFormat hgWindowFormat(HgWindow* window);
 
 /**
  * Returns whether the app has been quit
@@ -4494,49 +4453,6 @@ f32 hgGetMouseX(HgWindow* window);
  * Returns the current y position of the mouse relative to the window
  */
 f32 hgGetMouseY(HgWindow* window);
-
-/**
- * Initialize ImGui platform backend
- *
- * Note, requires GLFW on Linux (for now)
- *
- * Parameters
- * - window The window for ImGui to use
- */
-void ImGui_ImplHurdyGurdy_Init(
-    HgWindow* window,
-    const HgFormat* colorFormats,
-    u32 colorAttachmentCount,
-    HgFormat depthFormat = HgFormat_undefined,
-    HgFormat stencilFormat = HgFormat_undefined);
-
-/**
- * Deinitializes ImGui platform backend
- */
-void ImGui_ImplHurdyGurdy_Shutdown();
-
-/**
- * Create an ImGui texture
- */
-void* ImGui_ImplHurdyGurdy_CreateTexture(HgGpuView* view, HgGpuSampler* sampler, HgGpuLayout layout);
-
-/**
- * Create an ImGui texture
- */
-void ImGui_ImplHurdyGurdy_DestroyTexture(void* texture);
-
-/**
- * Create a new ImGui frame for the platform backend
- */
-void ImGui_ImplHurdyGurdy_NewFrame();
-
-/**
- * Draw the ImGui frame
- *
- * Parameters
- * - cmd The command buffer to record to
- */
-void ImGui_ImplHurdyGurdy_Draw(HgGpuCommands* cmd);
 
 // audio system : TODO
 
@@ -4790,33 +4706,30 @@ void hgLoadEmptyResource(HgResource id);
  * Loads a resource (or just increments the reference count)
  *
  * Parameters
- * - fence The fences to signal on completion
- * - fenceCount The number of fences
+ * - fence The fence to signal on completion
  * - id The resource to load into
  * - path The filepath to load from
  */
-void hgLoadResource(HgFence* fences, u32 fenceCount, HgResource id, HgStringView path);
+void hgLoadResource(HgFence* fence, HgResource id, HgStringView path);
 
 /**
  * Unloads a resource (or just decrements the reference count)
  *
  * Parameters
- * - fence The fences to signal on completion
- * - fenceCount The number of fences
+ * - fence The fence to signal on completion
  * - id The resource to load into
  */
-void hgUnloadResource(HgFence* fences, u32 fenceCount, HgResource id);
+void hgUnloadResource(HgFence* fence, HgResource id);
 
 /**
  * Stores a resource to disc
  *
  * Parameters
- * - fence The fences to signal on completion
- * - fenceCount The number of fences
+ * - fence The fence to signal on completion
  * - id The resource to load into
  * - path The filepath to store to
  */
-void hgStoreResource(HgFence* fences, u32 fenceCount, HgResource id, HgStringView path);
+void hgStoreResource(HgFence* fence, HgResource id, HgStringView path);
 
 /**
  * Get a resource from the global store
@@ -4908,23 +4821,21 @@ struct HgImageData {
  * Load an external image file into a resource in the Hurdy Gurdy format
  *
  * Parameters
- * - fences The fences to wait on
- * - fenceCount The number of fences
+ * - fence The fence to wait on
  * - id The resource to load into
  * - path The path of the file to import
  */
-void hgImportPng(HgFence* fences, u32 fenceCount, HgResource id, HgStringView path);
+void hgImportPng(HgFence* fence, HgResource id, HgStringView path);
 
 /**
  * Store a image resource onto disc in an external file format
  *
  * Parameters
- * - fences The fences to wait on
- * - fenceCount The number of fences
+ * - fence The fence to wait on
  * - id The resource to export
  * - path The path of the file to export to
  */
-void hgExportPng(HgFence* fences, u32 fenceCount, HgResource id, HgStringView path);
+void hgExportPng(HgFence* fence, HgResource id, HgStringView path);
 
 /**
  * A vertex in a model
@@ -5035,23 +4946,21 @@ struct HgModelData {
  * Load an external model file into a resource in the Hurdy Gurdy format : TODO
  *
  * Parameters
- * - fences The fences to wait on
- * - fenceCount The number of fences
+ * - fence The fence to wait on
  * - id The resource to load to
  * - path The path of the file to import
  */
-void hgImportGltf(HgFence* fences, u32 fenceCount, HgResource id, HgStringView path);
+void hgImportGltf(HgFence* fence, HgResource id, HgStringView path);
 
 /**
  * Store a model resource onto disc in an external file format : TODO
  *
  * Parameters
- * - fences The fences to wait on
- * - fenceCount The number of fences
+ * - fence The fence to wait on
  * - id The resource to export
  * - path The path of the file to export to
  */
-void hgExportGltf(HgFence* fences, u32 fenceCount, HgResource id, HgStringView path);
+void hgExportGltf(HgFence* fence, HgResource id, HgStringView path);
 
 /**
  * Initialize all gpu resource managers
@@ -5297,7 +5206,7 @@ struct HgECS {
     /**
      * The component systems
      */
-    HgHashMap<u32, System> systems;
+    HgMap<u32, System> systems;
 
     /**
      * Create a new entity component system
@@ -5472,7 +5381,7 @@ struct HgECS {
     template<typename T>
     HgEntity get(const T* c)
     {
-        hgAssert(systems.get(hgComponentID<T>) != nullptr);
+        hgAssert(hgMapGet(&systems, hgComponentID<T>) != nullptr);
         return get((void*)c, hgComponentID<T>);
     }
 
@@ -5482,8 +5391,8 @@ struct HgECS {
     template<typename T>
     HgEntity* entities()
     {
-        hgAssert(systems.get(hgComponentID<T>) != nullptr);
-        return (HgEntity*)systems.get(hgComponentID<T>)->entities;
+        hgAssert(hgMapGet(&systems, hgComponentID<T>) != nullptr);
+        return (HgEntity*)hgMapGet(&systems, hgComponentID<T>)->entities;
     }
 
     /**
@@ -5492,8 +5401,8 @@ struct HgECS {
     template<typename T>
     T* components()
     {
-        hgAssert(systems.get(hgComponentID<T>) != nullptr);
-        return (T*)systems.get(hgComponentID<T>)->components;
+        hgAssert(hgMapGet(&systems, hgComponentID<T>) != nullptr);
+        return (T*)hgMapGet(&systems, hgComponentID<T>)->components;
     }
 
     /**
@@ -5502,8 +5411,8 @@ struct HgECS {
     template<typename T>
     u32 count()
     {
-        hgAssert(systems.get(hgComponentID<T>) != nullptr);
-        return systems.get(hgComponentID<T>)->count;
+        hgAssert(hgMapGet(&systems, hgComponentID<T>) != nullptr);
+        return hgMapGet(&systems, hgComponentID<T>)->count;
     }
 
     /**
@@ -5566,7 +5475,7 @@ struct HgECS {
         static_assert(std::is_invocable_r_v<void, Fn, HgEntity, Ts*...>);
 
         u32 id = findSmallest<Ts...>();
-        System* system = systems.get(id);
+        System* system = hgMapGet(&systems, id);
         hgAssert(system != nullptr);
 
         HgEntity* e = system->entities;
@@ -5623,7 +5532,7 @@ struct HgECS {
         };
         Capture capture{this, &fn};
 
-        hgForPar(0, count<T>(), &capture, [](void* pcapture, u64 idx)
+        hgThreadsFor(0, count<T>(), &capture, [](void* pcapture, u64 idx)
         {
             Capture* capture = (Capture*)pcapture;
             (*capture->fn)(
@@ -5647,7 +5556,7 @@ struct HgECS {
     {
         static_assert(std::is_invocable_r_v<void, Fn, HgEntity, Ts*...>);
 
-        System* system = systems.get(findSmallest<Ts...>());
+        System* system = hgMapGet(&systems, findSmallest<Ts...>());
         hgAssert(system != nullptr);
 
         struct Capture {
@@ -5657,7 +5566,7 @@ struct HgECS {
         };
         Capture capture{this, system, &fn};
 
-        hgForPar(0, system->count, &capture, [](void* pcapture, u64 idx)
+        hgThreadsFor(0, system->count, &capture, [](void* pcapture, u64 idx)
         {
             Capture* capture = (Capture*)pcapture;
             HgEntity e = capture->system->entities[idx];
@@ -5875,7 +5784,7 @@ void hgUpdateView2D(const HgMat4* view);
  * - ecs The ecs to draw
  * - cmd The command buffer to record to, must not be nullptr
  */
-void hgDraw2D(HgECS* ecs, HgGpuCommands* cmd);
+void hgDraw2D(HgECS* ecs, HgGpuCmd* cmd);
 
 /**
  * A model component rendered by the 3d pipeline
@@ -5967,6 +5876,49 @@ void hgUpdateView3D(const HgMat4* view);
  * - ecs The ecs to draw
  * - cmd The command buffer to record to, must not be nullptr
  */
-void hgDraw3D(HgECS* ecs, HgGpuCommands* cmd);
+void hgDraw3D(HgECS* ecs, HgGpuCmd* cmd);
+
+/**
+ * Initialize ImGui platform backend
+ *
+ * Note, requires GLFW on Linux (for now)
+ *
+ * Parameters
+ * - window The window for ImGui to use
+ */
+void hgImGuiInit(
+    HgWindow* window,
+    const HgFormat* colorFormats,
+    u32 colorAttachmentCount,
+    HgFormat depthFormat = HgFormat_undefined,
+    HgFormat stencilFormat = HgFormat_undefined);
+
+/**
+ * Deinitializes ImGui platform backend
+ */
+void hgImGuiDeinit();
+
+/**
+ * Create an ImGui texture
+ */
+void* hgImGuiTextureCreate(HgGpuView* view, HgGpuSampler* sampler, HgGpuLayout layout);
+
+/**
+ * Create an ImGui texture
+ */
+void hgImGuiTextureDestroy(void* texture);
+
+/**
+ * Create a new ImGui frame for the platform backend
+ */
+void hgImGuiNewFrame();
+
+/**
+ * Draw the ImGui frame
+ *
+ * Parameters
+ * - cmd The command buffer to record to
+ */
+void hgImGuiDraw(HgGpuCmd* cmd);
 
 #endif // HURDYGURDY_HPP

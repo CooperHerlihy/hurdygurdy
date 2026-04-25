@@ -7,23 +7,26 @@
 
 int main()
 {
-    hgInit();
+    hgInit(nullptr);
     hgDefer(hgDeinit());
 
     hgTest();
 
-    HgArena* arena = hgGetScratch();
+    HgArena* arena = hgScratch();
     HgArenaScope arenaScope{arena};
 
-    HgWindow* window = hgCreateWindow("Hg Small Test", 1200, 800, nullptr);
-    hgDefer(hgDestroyWindow(window));
+    HgWindow* window = hgWindowCreate("Hg Small Test", 1200, 800, nullptr);
+    hgDefer(hgWindowDestroy(window));
 
-    hgInitPipeline2D(hgGetWindowFormat(window), HgFormat_undefined);
+    HgWindow* window2 = hgWindowCreate("Hg Small Test", 1200, 800, nullptr);
+    hgDefer(hgWindowDestroy(window));
+
+    hgInitPipeline2D(hgWindowFormat(window), HgFormat_undefined);
     hgDefer(hgDeinitPipeline2D());
 
     HgResource noiseShaderID = hgResourceID("build/noise.comp.spv");
     HgFence fence;
-    hgLoadResource(&fence, 1, noiseShaderID, "build/noise.comp.spv");
+    hgLoadResource(&fence, noiseShaderID, "build/noise.comp.spv");
 
     u32 noiseSeed = std::random_device{}();
     u32 noiseScaleBegin = 4;
@@ -40,12 +43,12 @@ int main()
         u32 outImageIdx;
     };
 
-    hgWaitForFenceIndefinite(&fence);
+    hgFenceWaitIndefinite(&fence);
     HgBinary* noiseShaderCode = hgGetResource(noiseShaderID);
-    HgGpuPipeline* noisePipeline = hgCreateGpuComputePipeline(sizeof(NoisePush), (u8*)noiseShaderCode->data, noiseShaderCode->size);
-    hgDefer(hgDestroyGpuPipeline(noisePipeline));
+    HgGpuPipeline* noisePipeline = hgGpuPipelineCreateCompute(sizeof(NoisePush), (u8*)noiseShaderCode->data, noiseShaderCode->size);
+    hgDefer(hgGpuPipelineDestroy(noisePipeline));
 
-    hgUnloadResource(nullptr, 0, noiseShaderID);
+    hgUnloadResource(nullptr, noiseShaderID);
 
     u32 noiseWidth = 256;
     u32 noiseHeight = 256;
@@ -56,26 +59,26 @@ int main()
 
     HgTextureResource* noiseTex = hgGetTexture(noiseTexID);
 
-    noiseTex->image = hgCreateGpuImage(
+    noiseTex->image = hgGpuImageCreate(
         noiseWidth,
         noiseHeight,
         HgFormat_r8g8b8a8_unorm,
         HgGpuImageUsage_storage | HgGpuImageUsage_sampled);
-    noiseTex->view = hgCreateGpuView(noiseTex->image, 0, 1, 0, 1, HgGpuAspect_color);
+    noiseTex->view = hgGpuViewCreate(noiseTex->image, 0, 1, 0, 1, HgGpuAspect_color);
 
-    HgGpuDescriptor noiseStorageDesc = hgCreateGpuDescriptor(HgGpuDescriptorType_storageImage);
-    hgDefer(hgDestroyGpuDescriptor(noiseStorageDesc));
+    HgGpuDescriptor noiseStorageDesc = hgGpuDescriptorCreate(HgGpuDescriptorType_storageImage);
+    hgDefer(hgGpuDescriptorDestroy(noiseStorageDesc));
 
     HgGpuImageDescriptorInfo noiseStorageInfo{nullptr, noiseTex->view, HgGpuLayout_general};
-    hgUpdateGpuDescriptor(noiseStorageDesc, nullptr, &noiseStorageInfo);
+    hgGpuDescriptorUpdate(noiseStorageDesc, nullptr, &noiseStorageInfo);
 
-    noiseTex->sampler = hgCreateGpuSampler(HgGpuFilter_linear);
-    hgDefer(hgDestroyGpuSampler(noiseTex->sampler));
+    noiseTex->sampler = hgGpuSamplerCreate(HgGpuFilter_linear);
+    hgDefer(hgGpuSamplerDestroy(noiseTex->sampler));
 
-    noiseTex->descriptor = hgCreateGpuDescriptor(HgGpuDescriptorType_combinedImageSampler);
+    noiseTex->descriptor = hgGpuDescriptorCreate(HgGpuDescriptorType_combinedImageSampler);
 
     HgGpuImageDescriptorInfo noiseSamplerInfo{noiseTex->sampler, noiseTex->view, HgGpuLayout_shaderReadOnly};
-    hgUpdateGpuDescriptor(noiseTex->descriptor, nullptr, &noiseSamplerInfo);
+    hgGpuDescriptorUpdate(noiseTex->descriptor, nullptr, &noiseSamplerInfo);
 
     HgTransform camera{};
     camera.position.z = -1;
@@ -98,26 +101,26 @@ int main()
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    HgFormat windowFormat = hgGetWindowFormat(window);
-    ImGui_ImplHurdyGurdy_Init(window, &windowFormat, 1);
-    hgDefer(ImGui_ImplHurdyGurdy_Shutdown());
+    HgFormat windowFormat = hgWindowFormat(window);
+    hgImGuiInit(window, &windowFormat, 1);
+    hgDefer(hgImGuiDeinit());
 
     HgClock gameClock{};
     for (;;)
     {
         f64 delta = hgClockTick(&gameClock);
 
-        HgArena* frame = hgGetScratch();
+        HgArena* frame = hgScratch();
         HgArenaScope frameScope{frame};
 
         hgProcessEvents();
         if (hgWasQuit())
             goto quit;
 
-        HgMat4 proj = hgPerspective(
+        HgMat4 proj = hgMatPerspective(
             (f32)hgPi * 0.5f,
-            (f32)hgGetWindowWidth(window) /
-            (f32)hgGetWindowHeight(window),
+            (f32)hgWindowWidth(window) /
+            (f32)hgWindowHeight(window),
             0.1f,
             1000.0f);
         hgUpdateProjection2D(&proj);
@@ -129,8 +132,8 @@ int main()
                 f32 rotSpeed = 2.0f;
                 f32 dx = hgGetMouseDeltaX();
                 f32 dy = hgGetMouseDeltaY();
-                HgQuat rotX = hgAxisAngle(HgVec3{0, 1, 0}, dx * rotSpeed / (f32)hgGetWindowHeight(window));
-                HgQuat rotY = hgAxisAngle(HgVec3{-1, 0, 0}, dy * rotSpeed / (f32)hgGetWindowHeight(window));
+                HgQuat rotX = hgQuatAxisAngle(HgVec3{0, 1, 0}, dx * rotSpeed / (f32)hgWindowHeight(window));
+                HgQuat rotY = hgQuatAxisAngle(HgVec3{-1, 0, 0}, dy * rotSpeed / (f32)hgWindowHeight(window));
                 camera.rotation = rotX * camera.rotation * rotY;
             }
 
@@ -142,15 +145,15 @@ int main()
             if (movement != HgVec3{0.0f})
             {
                 f32 moveSpeed = 1.5f;
-                HgVec3 rotated = hgRotate(camera.rotation, HgVec3{movement.x, 0.0f, movement.z});
-                camera.position += hgNorm(HgVec3{rotated.x, movement.y, rotated.z}) * moveSpeed * (f32)delta;
+                HgVec3 rotated = hgVecRotate(camera.rotation, HgVec3{movement.x, 0.0f, movement.z});
+                camera.position += hgVecNorm3(HgVec3{rotated.x, movement.y, rotated.z}) * moveSpeed * (f32)delta;
             }
 
-            HgMat4 view = hgViewMatrix(camera.position, camera.scale, camera.rotation);
+            HgMat4 view = hgMatView(camera.position, camera.scale, camera.rotation);
             hgUpdateView2D(&view);
         }
 
-        ImGui_ImplHurdyGurdy_NewFrame();
+        hgImGuiNewFrame();
         ImGui::NewFrame();
 
         if (ImGui::Begin("Options"))
@@ -167,59 +170,88 @@ int main()
 
         ImGui::Render();
 
-        HgGpuCommands* cmd = hgWindowBeginCommands(window);
-        if (cmd != nullptr)
+        HgWindow* windows[] = {window, window2};
+        HgGpuCmd* cmd = hgGpuFrameBegin(windows, 2);
+
+        HgGpuComputePass computePass{};
+        computePass.storageImages = &noiseTex->view;
+        computePass.storageImageCount = 1;
+
+        hgGpuComputePass(cmd, &computePass);
+
+        hgGpuBindPipeline(cmd, noisePipeline);
+
+        NoisePush noisePush{};
+        noisePush.width = noiseWidth;
+        noisePush.height = noiseHeight;
+        noisePush.scaleBegin = noiseScaleBegin;
+        noisePush.scaleEnd = noiseScaleEnd;
+        noisePush.tiling = noiseTiling;
+        noisePush.seed = noiseSeed;
+        noisePush.outImageIdx = hgGpuDescriptorIdx(noiseStorageDesc);
+
+        hgGpuPushConstants(cmd, noisePipeline, 0, &noisePush, sizeof(noisePush));
+
+        hgGpuCompute(cmd, noiseWidth / 16, noiseHeight / 16, 1);
+
+        if (hgWindowCurrentImage(window) != nullptr)
         {
-            HgComputePass computePass{};
-            computePass.storageImages = &noiseTex->view;
-            computePass.storageImageCount = 1;
-
-            hgGpuComputePass(cmd, &computePass);
-
-            hgBindGpuPipeline(cmd, noisePipeline);
-
-            NoisePush noisePush{};
-            noisePush.width = noiseWidth;
-            noisePush.height = noiseHeight;
-            noisePush.scaleBegin = noiseScaleBegin;
-            noisePush.scaleEnd = noiseScaleEnd;
-            noisePush.tiling = noiseTiling;
-            noisePush.seed = noiseSeed;
-            noisePush.outImageIdx = hgGpuDescriptorIdx(noiseStorageDesc);
-
-            hgGpuPushConstants(cmd, noisePipeline, 0, &noisePush, sizeof(noisePush));
-
-            hgGpuCompute(cmd, noiseWidth / 16, noiseHeight / 16, 1);
-
-            HgRenderAttachment colorAttachment{};
-            colorAttachment.image = hgGetWindowCurrentImage(window);
+            HgGpuRenderAttachment colorAttachment{};
+            colorAttachment.image = hgWindowCurrentImage(window);
             colorAttachment.loadOp = HgGpuLoadOp_clear;
 
-            HgRenderPass pass{};
+            HgGpuRenderPass pass{};
             pass.colorAttachments = &colorAttachment;
             pass.colorAttachmentCount = 1;
             pass.sampledImages = &noiseTex->view;
             pass.sampledImageCount = 1;
 
-            hgBeginGpuRenderPass(cmd, hgGetWindowWidth(window), hgGetWindowHeight(window), &pass);
+            hgGpuRenderPassBegin(cmd, hgWindowWidth(window), hgWindowHeight(window), &pass);
 
             hgDraw2D(&ecs, cmd);
 
-            ImGui_ImplHurdyGurdy_Draw(cmd);
+            hgImGuiDraw(cmd);
 
-            hgEndGpuRenderPass(cmd);
+            hgGpuRenderPassEnd(cmd);
 
-            HgImageBarrier presentBarrier{};
-            presentBarrier.image = hgGetWindowCurrentImage(window);
+            HgGpuImageBarrier presentBarrier{};
+            presentBarrier.image = hgWindowCurrentImage(window);
             presentBarrier.nextLayout = HgGpuLayout_presentSrc;
 
             hgGpuMemoryBarrier(cmd, nullptr, 0, &presentBarrier, 1);
-
-            hgWindowEndAndPresent(window, cmd);
         }
+
+        if (hgWindowCurrentImage(window2) != nullptr)
+        {
+            HgGpuRenderAttachment colorAttachment{};
+            colorAttachment.image = hgWindowCurrentImage(window2);
+            colorAttachment.loadOp = HgGpuLoadOp_clear;
+
+            HgGpuRenderPass pass{};
+            pass.colorAttachments = &colorAttachment;
+            pass.colorAttachmentCount = 1;
+            pass.sampledImages = &noiseTex->view;
+            pass.sampledImageCount = 1;
+
+            hgGpuRenderPassBegin(cmd, hgWindowWidth(window2), hgWindowHeight(window2), &pass);
+
+            hgDraw2D(&ecs, cmd);
+
+            hgImGuiDraw(cmd);
+
+            hgGpuRenderPassEnd(cmd);
+
+            HgGpuImageBarrier presentBarrier{};
+            presentBarrier.image = hgWindowCurrentImage(window2);
+            presentBarrier.nextLayout = HgGpuLayout_presentSrc;
+
+            hgGpuMemoryBarrier(cmd, nullptr, 0, &presentBarrier, 1);
+        }
+
+        hgGpuFrameEnd(cmd);
     }
 
 quit:
-    hgGraphicsWaitIdle();
+    hgGpuWaitIdle();
 }
 

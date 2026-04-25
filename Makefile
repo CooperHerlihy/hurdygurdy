@@ -12,6 +12,7 @@ CONFIG := $(DEBUG_CONFIG)
 INCLUDES := \
 	-I$(BUILD_DIR) \
 	-I$(SRC_DIR)/include \
+	-I$(SRC_DIR)/vendor/SDL/include \
 	-I$(SRC_DIR)/vendor/Vulkan-Headers/include \
 	-I$(SRC_DIR)/vendor/imgui \
 	-I$(SRC_DIR)/vendor/imgui/backends
@@ -29,7 +30,8 @@ IMGUI_BACKEND := \
 
 SRC := \
 	hurdygurdy.cpp \
-	external.cpp \
+	vulkan.cpp \
+	sdl.cpp \
 	test.cpp
 
 TARGETS := \

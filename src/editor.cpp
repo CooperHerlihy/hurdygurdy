@@ -9,19 +9,19 @@ int main()
 {
     hgDefer(hgDebug("Exited successfully\n"));
 
-    hgInit();
+    hgInit(nullptr);
     hgDefer(hgDeinit());
 
     hgTest();
 
-    HgArena* arena = hgGetScratch();
+    HgArena* arena = hgScratch();
     HgArenaScope arenaScope{arena};
 
     HgWindowConfig windowConfig{};
-    windowConfig.preferredPresentMode = HgPresentMode_mailbox;
+    windowConfig.preferredPresentMode = HgGpuPresentMode_mailbox;
 
-    HgWindow* window = hgCreateWindow("Hg Test", 1600, 900, &windowConfig);
-    hgDefer(hgDestroyWindow(window));
+    HgWindow* window = hgWindowCreate("Hg Test", 1600, 900, &windowConfig);
+    hgDefer(hgWindowDestroy(window));
 
     hgInitPipeline2D(HgFormat_r8g8b8a8_srgb, HgFormat_d32_sfloat);
     hgDefer(hgDeinitPipeline2D());
@@ -39,9 +39,9 @@ int main()
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    HgFormat windowFormat = hgGetWindowFormat(window);
-    ImGui_ImplHurdyGurdy_Init(window, &windowFormat, 1);
-    hgDefer(ImGui_ImplHurdyGurdy_Shutdown());
+    HgFormat windowFormat = hgWindowFormat(window);
+    hgImGuiInit(window, &windowFormat, 1);
+    hgDefer(hgImGuiDeinit());
 
     HgTransform camera{};
     camera.position = HgVec3{0, 0, -1};
@@ -82,17 +82,17 @@ int main()
 
     HgGpuImage* renderImage = nullptr;
     HgGpuView* renderView = nullptr;
-    HgGpuSampler* renderSampler = hgCreateGpuSampler(HgGpuFilter_nearest);
+    HgGpuSampler* renderSampler = hgGpuSamplerCreate(HgGpuFilter_nearest);
     void* renderImGuiTex = nullptr;
-    hgDefer(hgDestroyGpuImage(renderImage));
-    hgDefer(hgDestroyGpuView(renderView));
-    hgDefer(hgDestroyGpuSampler(renderSampler));
-    hgDefer(ImGui_ImplHurdyGurdy_DestroyTexture(renderImGuiTex));
+    hgDefer(hgGpuImageDestroy(renderImage));
+    hgDefer(hgGpuViewDestroy(renderView));
+    hgDefer(hgGpuSamplerDestroy(renderSampler));
+    hgDefer(hgImGuiTextureDestroy(renderImGuiTex));
 
     HgGpuImage* depthImage = nullptr;
     HgGpuView* depthView = nullptr;
-    hgDefer(hgDestroyGpuImage(depthImage));
-    hgDefer(hgDestroyGpuView(depthView));
+    hgDefer(hgGpuImageDestroy(depthImage));
+    hgDefer(hgGpuViewDestroy(depthView));
 
     bool showRender = true;
     bool showEditor = true;
@@ -107,25 +107,25 @@ int main()
         f64 delta = hgClockTick(&gameClock);
         HgClock cpuClock{};
 
-        HgArena* frame = hgGetScratch(&arena, 1);
+        HgArena* frame = hgScratch(&arena, 1);
         HgArenaScope frameScope{frame};
 
         if (ecs.alive(square))
         {
             HgQuat& squareRot = ecs.get<HgTransform>(square).rotation;
-            squareRot = hgAxisAngle(HgVec3{0, -1, 0}, (f32)delta) * squareRot;
+            squareRot = hgQuatAxisAngle(HgVec3{0, -1, 0}, (f32)delta) * squareRot;
         }
         if (ecs.alive(cube))
         {
             HgQuat& cubeRot = ecs.get<HgTransform>(cube).rotation;
-            cubeRot = hgAxisAngle(HgVec3{0, -1, 0}, (f32)delta) * cubeRot;
+            cubeRot = hgQuatAxisAngle(HgVec3{0, -1, 0}, (f32)delta) * cubeRot;
         }
 
         hgProcessEvents();
         if (hgWasQuit())
             goto quit;
 
-        ImGui_ImplHurdyGurdy_NewFrame();
+        hgImGuiNewFrame();
         ImGui::NewFrame();
 
         ImGuiID dockspaceID = ImGui::GetID("dockspace");
@@ -167,7 +167,7 @@ int main()
                 {
                     void* pixels = hgAlloc(frame, renderWidth * renderHeight * 4, 4);
 
-                    hgReadGpuImage(pixels, renderView);
+                    hgGpuImageRead(pixels, renderView);
                     stbi_write_png(
                         "screenshot.png",
                         (int)renderWidth,
@@ -207,26 +207,26 @@ int main()
             {
                 ImVec2 size = ImGui::GetContentRegionAvail();
 
-                u32 viewHeight = fixedAspect ? (u32)std::min(size.y, size.x / aspectRatio) : (u32)size.y;
-                u32 viewWidth = fixedAspect ? (u32)((f32)viewHeight * aspectRatio) : (u32)size.x;
+                u32 viewHeight = std::max((u32)1, fixedAspect ? (u32)std::min(size.y, size.x / aspectRatio) : (u32)size.y);
+                u32 viewWidth = std::max((u32)1, fixedAspect ? (u32)((f32)viewHeight * aspectRatio) : (u32)size.x);
                 if (renderWidth != viewWidth || renderHeight != viewHeight)
                 {
-                    hgGraphicsWaitIdle();
+                    hgGpuWaitIdle();
 
                     renderWidth = viewWidth;
                     renderHeight = viewHeight;
 
-                    HgMat4 proj = hgPerspective((f32)hgPi * 0.5f, (f32)renderWidth / (f32)renderHeight, 0.1f, 1000.0f);
+                    HgMat4 proj = hgMatPerspective((f32)hgPi * 0.5f, (f32)renderWidth / (f32)renderHeight, 0.1f, 1000.0f);
                     hgUpdateProjection2D(&proj);
                     hgUpdateProjection3D(&proj);
 
-                    ImGui_ImplHurdyGurdy_DestroyTexture(renderImGuiTex);
-                    hgDestroyGpuView(depthView);
-                    hgDestroyGpuImage(depthImage);
-                    hgDestroyGpuView(renderView);
-                    hgDestroyGpuImage(renderImage);
+                    hgImGuiTextureDestroy(renderImGuiTex);
+                    hgGpuViewDestroy(depthView);
+                    hgGpuImageDestroy(depthImage);
+                    hgGpuViewDestroy(renderView);
+                    hgGpuImageDestroy(renderImage);
 
-                    renderImage = hgCreateGpuImage(
+                    renderImage = hgGpuImageCreate(
                         renderWidth,
                         renderHeight,
                         HgFormat_r8g8b8a8_srgb,
@@ -234,16 +234,16 @@ int main()
                         HgGpuImageUsage_sampled |
                         HgGpuImageUsage_transferSrc);
 
-                    depthImage = hgCreateGpuImage(
+                    depthImage = hgGpuImageCreate(
                         renderWidth,
                         renderHeight,
                         HgFormat_d32_sfloat,
                         HgGpuImageUsage_depthStencilAttachment);
 
-                    renderView = hgCreateGpuView(renderImage, 0, 1, 0, 1, HgGpuAspect_color);
-                    depthView = hgCreateGpuView(depthImage, 0, 1, 0, 1, HgGpuAspect_depth);
+                    renderView = hgGpuViewCreate(renderImage, 0, 1, 0, 1, HgGpuAspect_color);
+                    depthView = hgGpuViewCreate(depthImage, 0, 1, 0, 1, HgGpuAspect_depth);
 
-                    renderImGuiTex = ImGui_ImplHurdyGurdy_CreateTexture(renderView, renderSampler, HgGpuLayout_shaderReadOnly);
+                    renderImGuiTex = hgImGuiTextureCreate(renderView, renderSampler, HgGpuLayout_shaderReadOnly);
                 }
 
                 if (ImGui::IsWindowFocused())
@@ -253,8 +253,8 @@ int main()
                         f32 rotSpeed = 2.0f;
                         f32 dx = hgGetMouseDeltaX();
                         f32 dy = hgGetMouseDeltaY();
-                        HgQuat rotX = hgAxisAngle(HgVec3{0, 1, 0}, dx * rotSpeed / (f32)hgGetWindowWidth(window));
-                        HgQuat rotY = hgAxisAngle(HgVec3{-1, 0, 0}, dy * rotSpeed / (f32)hgGetWindowWidth(window));
+                        HgQuat rotX = hgQuatAxisAngle(HgVec3{0, 1, 0}, dx * rotSpeed / (f32)hgWindowWidth(window));
+                        HgQuat rotY = hgQuatAxisAngle(HgVec3{-1, 0, 0}, dy * rotSpeed / (f32)hgWindowWidth(window));
                         camera.rotation = rotX * camera.rotation * rotY;
                     }
 
@@ -272,11 +272,11 @@ int main()
                     if (movement != HgVec3{0.0f})
                     {
                         f32 moveSpeed = 1.5f;
-                        HgVec3 rotated = hgRotate(camera.rotation, HgVec3{movement.x, 0.0f, movement.z});
-                        camera.position += hgNorm(HgVec3{rotated.x, movement.y, rotated.z}) * moveSpeed * (f32)delta;
+                        HgVec3 rotated = hgVecRotate(camera.rotation, HgVec3{movement.x, 0.0f, movement.z});
+                        camera.position += hgVecNorm3(HgVec3{rotated.x, movement.y, rotated.z}) * moveSpeed * (f32)delta;
                     }
                 }
-                HgMat4 view = hgViewMatrix(camera.position, camera.scale, camera.rotation);
+                HgMat4 view = hgMatView(camera.position, camera.scale, camera.rotation);
                 hgUpdateView2D(&view);
                 hgUpdateView3D(&view);
 
@@ -326,8 +326,8 @@ int main()
                     {
                         HgEntity e = scene[i];
 
-                        HgString nameStr = hgCopyString(frame, "Entitiy ID: ");
-                        hgAppendString(frame, &nameStr, hgIntToStr(frame, (i64)e.idx()));
+                        HgString nameStr = hgStringCopy(frame, "Entitiy ID: ");
+                        hgStringAppend(frame, &nameStr, hgIntegerToString(frame, (i64)e.idx()));
                         char* name = hgCString(frame, nameStr);
 
                         if (ImGui::TreeNodeEx(name, entityFlags))
@@ -460,61 +460,60 @@ int main()
         ImGui::Render();
 
         cpuDelta = hgClockTick(&cpuClock);
-        HgGpuCommands* cmd = hgWindowBeginCommands(window);
-        if (cmd != nullptr)
+        HgGpuCmd* cmd = hgGpuFrameBegin(&window, 1);
+        if (hgWindowCurrentImage(window) != nullptr)
         {
             hgClockTick(&cpuClock);
 
-            HgRenderAttachment renderColorAttachment{};
+            HgGpuRenderAttachment renderColorAttachment{};
             renderColorAttachment.image = renderView;
             renderColorAttachment.loadOp = HgGpuLoadOp_clear;
             renderColorAttachment.clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
 
-            HgRenderAttachment renderDepthAttachment{};
+            HgGpuRenderAttachment renderDepthAttachment{};
             renderDepthAttachment.image = depthView;
             renderDepthAttachment.loadOp = HgGpuLoadOp_clear;
             renderDepthAttachment.clearValue.depthStencil = {1.0f, 0};
 
-            HgRenderPass renderPass{};
+            HgGpuRenderPass renderPass{};
             renderPass.colorAttachments = &renderColorAttachment;
             renderPass.colorAttachmentCount = 1;
             renderPass.depthAttachment = &renderDepthAttachment;
 
-            hgBeginGpuRenderPass(cmd, renderWidth, renderHeight, &renderPass);
+            hgGpuRenderPassBegin(cmd, renderWidth, renderHeight, &renderPass);
 
             hgDraw3D(&ecs, cmd);
             hgDraw2D(&ecs, cmd);
 
-            hgEndGpuRenderPass(cmd);
+            hgGpuRenderPassEnd(cmd);
 
-            HgRenderAttachment guiColorAttachment{};
-            guiColorAttachment.image = hgGetWindowCurrentImage(window);
+            HgGpuRenderAttachment guiColorAttachment{};
+            guiColorAttachment.image = hgWindowCurrentImage(window);
             guiColorAttachment.loadOp = HgGpuLoadOp_clear;
             guiColorAttachment.clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
 
-            HgRenderPass guiPass{};
+            HgGpuRenderPass guiPass{};
             guiPass.sampledImages = &renderView;
             guiPass.sampledImageCount = 1;
             guiPass.colorAttachments = &guiColorAttachment;
             guiPass.colorAttachmentCount = 1;
 
-            hgBeginGpuRenderPass(cmd, hgGetWindowWidth(window), hgGetWindowHeight(window), &guiPass);
+            hgGpuRenderPassBegin(cmd, hgWindowWidth(window), hgWindowHeight(window), &guiPass);
 
-            ImGui_ImplHurdyGurdy_Draw(cmd);
+            hgImGuiDraw(cmd);
 
-            hgEndGpuRenderPass(cmd);
+            hgGpuRenderPassEnd(cmd);
 
-            HgImageBarrier presentBarrier{};
-            presentBarrier.image = hgGetWindowCurrentImage(window);
+            HgGpuImageBarrier presentBarrier{};
+            presentBarrier.image = hgWindowCurrentImage(window);
             presentBarrier.nextLayout = HgGpuLayout_presentSrc;
 
             hgGpuMemoryBarrier(cmd, nullptr, 0, &presentBarrier, 1);
-
-            cpuDelta += hgClockTick(&cpuClock);
-            hgWindowEndAndPresent(window, cmd);
         }
+        cpuDelta += hgClockTick(&cpuClock);
+        hgGpuFrameEnd(cmd);
     }
 quit:
-    hgGraphicsWaitIdle();
+    hgGpuWaitIdle();
 }
 
