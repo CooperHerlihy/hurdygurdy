@@ -3047,9 +3047,6 @@ u32 hgPlatformGetVulkanExtensions(HgArena* arena, HgStringView** extBuffer)
 
 static void resizeWindowSwapchain(HgWindow* window)
 {
-    if (window->width == 0 || window->height == 0)
-        return;
-
     HgArena* scratch = hgScratch();
     HgArenaScope scratchScope{scratch};
 
@@ -3062,97 +3059,106 @@ static void resizeWindowSwapchain(HgWindow* window)
         vkDestroySemaphore(vkState.device, window->readyToPresent[i], nullptr);
     }
 
-    VkSurfaceCapabilitiesKHR surfaceCapabilities;
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vkState.physicalDevice, window->surface, &surfaceCapabilities);
+    VkSwapchainKHR oldSwapchain = window->swapchain;
 
-    if (surfaceCapabilities.currentExtent.width != (u32)-1)
-        window->width = surfaceCapabilities.currentExtent.width;
-    if (surfaceCapabilities.currentExtent.height != (u32)-1)
-        window->height = surfaceCapabilities.currentExtent.height;
+    VkSurfaceCapabilitiesKHR capabilities;
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vkState.physicalDevice, window->surface, &capabilities);
 
-    VkSwapchainCreateInfoKHR swapchainInfo{};
-    swapchainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    swapchainInfo.surface = window->surface;
-    swapchainInfo.minImageCount
-        = std::min(surfaceCapabilities.minImageCount, surfaceCapabilities.maxImageCount - 1) + 1;
-    swapchainInfo.imageFormat = formatToVk(window->format);
-    swapchainInfo.imageExtent = {window->width, window->height};
-    swapchainInfo.imageArrayLayers = 1;
-    swapchainInfo.imageUsage = window->imageUsage;
-    swapchainInfo.preTransform = surfaceCapabilities.currentTransform;
-    swapchainInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    swapchainInfo.presentMode = hgPresentModeToVk(window->presentMode);
-    swapchainInfo.clipped = VK_TRUE;
-    swapchainInfo.oldSwapchain = window->swapchain;
+    if (capabilities.currentExtent.width != (u32)-1)
+        window->width = capabilities.currentExtent.width;
+    if (capabilities.currentExtent.height != (u32)-1)
+        window->height = capabilities.currentExtent.height;
 
-    VkResult result = vkCreateSwapchainKHR(vkState.device, &swapchainInfo, nullptr, &window->swapchain);
-    if (window->swapchain == nullptr)
-        hgError("Failed to create swapchain: %s\n", vkResultToStr(result));
-
-    u32 swapImageCount;
-    vkGetSwapchainImagesKHR(vkState.device, window->swapchain, &swapImageCount, nullptr);
-
-    if (window->imageCount != swapImageCount)
+    if (window->width != 0 && window->height != 0)
     {
-        window->images = (HgGpuImage*)realloc(window->images, sizeof(HgGpuImage) * swapImageCount);
-        window->views = (HgGpuView*)realloc(window->views, sizeof(HgGpuView) * swapImageCount);
-        window->imageAvailable = (VkSemaphore*)realloc(window->imageAvailable, sizeof(VkSemaphore) * swapImageCount);
-        window->readyToPresent = (VkSemaphore*)realloc(window->readyToPresent, sizeof(VkSemaphore) * swapImageCount);
-        window->imageCount = swapImageCount;
+        VkSwapchainCreateInfoKHR swapchainInfo{};
+        swapchainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+        swapchainInfo.surface = window->surface;
+        swapchainInfo.minImageCount = std::min(capabilities.minImageCount, capabilities.maxImageCount - 1) + 1;
+        swapchainInfo.imageFormat = formatToVk(window->format);
+        swapchainInfo.imageExtent = {window->width, window->height};
+        swapchainInfo.imageArrayLayers = 1;
+        swapchainInfo.imageUsage = window->imageUsage;
+        swapchainInfo.preTransform = capabilities.currentTransform;
+        swapchainInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+        swapchainInfo.presentMode = hgPresentModeToVk(window->presentMode);
+        swapchainInfo.clipped = VK_TRUE;
+        swapchainInfo.oldSwapchain = window->swapchain;
+
+        VkResult result = vkCreateSwapchainKHR(vkState.device, &swapchainInfo, nullptr, &window->swapchain);
+        if (window->swapchain == nullptr)
+            hgError("Failed to create swapchain: %s\n", vkResultToStr(result));
+
+        u32 swapImageCount;
+        vkGetSwapchainImagesKHR(vkState.device, window->swapchain, &swapImageCount, nullptr);
+
+        if (window->imageCount != swapImageCount)
+        {
+            window->images = (HgGpuImage*)realloc(window->images, sizeof(HgGpuImage) * swapImageCount);
+            window->views = (HgGpuView*)realloc(window->views, sizeof(HgGpuView) * swapImageCount);
+            window->imageAvailable = (VkSemaphore*)realloc(window->imageAvailable, sizeof(VkSemaphore) * swapImageCount);
+            window->readyToPresent = (VkSemaphore*)realloc(window->readyToPresent, sizeof(VkSemaphore) * swapImageCount);
+            window->imageCount = swapImageCount;
+        }
+
+        VkImage* swapImages = hgAlloc<VkImage>(scratch, window->imageCount);
+        vkGetSwapchainImagesKHR(vkState.device, window->swapchain, &window->imageCount, swapImages);
+
+        for (u32 i = 0; i < window->imageCount; ++i)
+        {
+            window->images[i] = {};
+            window->images[i].image = swapImages[i];
+            window->images[i].dimensions = 2;
+            window->images[i].format = window->format;
+            window->images[i].width = window->width;
+            window->images[i].height = window->height;
+            window->images[i].depth = 1;
+            window->images[i].mipLevels = 1;
+            window->images[i].arrayLayers = 1;
+            window->images[i].msaaSamples = 1;
+
+            VkImageViewCreateInfo viewInfo{};
+            viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            viewInfo.image = swapImages[i];
+            viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+            viewInfo.format = formatToVk(window->format);
+            viewInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+
+            window->views[i] = {};
+
+            VkResult viewResult = vkCreateImageView(vkState.device, &viewInfo, nullptr, &window->views[i].view);
+            if (window->views[i].view == nullptr)
+                hgError("Could not create VkImageView: %s\n", vkResultToStr(viewResult));
+
+            window->views[i].image = &window->images[i];
+            window->views[i].type = HgGpuViewType_2D;
+            window->views[i].aspectFlags = HgGpuAspect_color;
+            window->views[i].baseMipLevel = 0;
+            window->views[i].levelCount = 1;
+            window->views[i].baseArrayLayer = 0;
+            window->views[i].layerCount = 1;
+
+            VkSemaphoreCreateInfo semaphoreInfo{};
+            semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+            VkResult imageAvailableResult = vkCreateSemaphore(vkState.device, &semaphoreInfo, nullptr, &window->imageAvailable[i]);
+            if (window->imageAvailable[i] == nullptr)
+                hgError("Could not create VkSemaphore: %s\n", vkResultToStr(imageAvailableResult));
+
+            VkResult readyToPresentResult = vkCreateSemaphore(vkState.device, &semaphoreInfo, nullptr, &window->readyToPresent[i]);
+            if (window->readyToPresent[i] == nullptr)
+                hgError("Could not create VkSemaphore: %s\n", vkResultToStr(readyToPresentResult));
+        }
+    }
+    else
+    {
+        window->swapchain = nullptr;
     }
 
-    VkImage* swapImages = hgAlloc<VkImage>(scratch, window->imageCount);
-    vkGetSwapchainImagesKHR(vkState.device, window->swapchain, &window->imageCount, swapImages);
-
-    for (u32 i = 0; i < window->imageCount; ++i)
-    {
-        window->images[i] = {};
-        window->images[i].image = swapImages[i];
-        window->images[i].dimensions = 2;
-        window->images[i].format = window->format;
-        window->images[i].width = window->width;
-        window->images[i].height = window->height;
-        window->images[i].depth = 1;
-        window->images[i].mipLevels = 1;
-        window->images[i].arrayLayers = 1;
-        window->images[i].msaaSamples = 1;
-
-        VkImageViewCreateInfo viewInfo{};
-        viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        viewInfo.image = swapImages[i];
-        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        viewInfo.format = formatToVk(window->format);
-        viewInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-
-        window->views[i] = {};
-
-        VkResult viewResult = vkCreateImageView(vkState.device, &viewInfo, nullptr, &window->views[i].view);
-        if (window->views[i].view == nullptr)
-            hgError("Could not create VkImageView: %s\n", vkResultToStr(viewResult));
-
-        window->views[i].image = &window->images[i];
-        window->views[i].type = HgGpuViewType_2D;
-        window->views[i].aspectFlags = HgGpuAspect_color;
-        window->views[i].baseMipLevel = 0;
-        window->views[i].levelCount = 1;
-        window->views[i].baseArrayLayer = 0;
-        window->views[i].layerCount = 1;
-
-        VkSemaphoreCreateInfo semaphoreInfo{};
-        semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-        VkResult imageAvailableResult = vkCreateSemaphore(vkState.device, &semaphoreInfo, nullptr, &window->imageAvailable[i]);
-        if (window->imageAvailable[i] == nullptr)
-            hgError("Could not create VkSemaphore: %s\n", vkResultToStr(imageAvailableResult));
-
-        VkResult readyToPresentResult = vkCreateSemaphore(vkState.device, &semaphoreInfo, nullptr, &window->readyToPresent[i]);
-        if (window->readyToPresent[i] == nullptr)
-            hgError("Could not create VkSemaphore: %s\n", vkResultToStr(readyToPresentResult));
-    }
     window->imageIdx = (u32)-1;
     window->semaphoreIdx = 0;
 
-    vkDestroySwapchainKHR(vkState.device, swapchainInfo.oldSwapchain, nullptr);
+    vkDestroySwapchainKHR(vkState.device, oldSwapchain, nullptr);
 }
 
 static HgFormat findSwapchainFormat(VkSurfaceKHR surface)
@@ -3305,6 +3311,9 @@ HgGpuCmd* hgGpuFrameBegin(HgWindow** windows, u32 windowCount)
     frame->windowCount = 0;
     for (u32 i = 0; i < windowCount; ++i)
     {
+        if (windows[i]->swapchain == nullptr)
+            continue;
+
         VkResult result = vkAcquireNextImageKHR(
             vkState.device,
             windows[i]->swapchain,
@@ -3390,15 +3399,18 @@ void hgGpuFrameEnd(HgGpuCmd* cmd)
 
     vkQueueSubmit(vkState.queue, 1, &submit, frame->fence);
 
-    VkPresentInfoKHR presentInfo{};
-    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-    presentInfo.waitSemaphoreCount = frame->windowCount;
-    presentInfo.pWaitSemaphores = readyToPresentSemaphores;
-    presentInfo.swapchainCount = frame->windowCount;
-    presentInfo.pSwapchains = swapchains;
-    presentInfo.pImageIndices = imageIndices;
+    if (frame->windowCount > 0)
+    {
+        VkPresentInfoKHR presentInfo{};
+        presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        presentInfo.waitSemaphoreCount = frame->windowCount;
+        presentInfo.pWaitSemaphores = readyToPresentSemaphores;
+        presentInfo.swapchainCount = frame->windowCount;
+        presentInfo.pSwapchains = swapchains;
+        presentInfo.pImageIndices = imageIndices;
 
-    vkQueuePresentKHR(vkState.queue, &presentInfo);
+        vkQueuePresentKHR(vkState.queue, &presentInfo);
+    }
 }
 
 HgGpuView* hgWindowCurrentImage(HgWindow* window)
