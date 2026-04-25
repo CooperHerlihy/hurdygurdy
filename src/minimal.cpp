@@ -21,7 +21,7 @@ int main()
     // HgWindow* window2 = hgWindowCreate("Hg Small Test", 1200, 800, nullptr);
     // hgDefer(hgWindowDestroy(window));
 
-    hgInitPipeline2D(hgWindowFormat(window), HgFormat_undefined);
+    hgInitPipeline2D(hgWindowImageFormat(window), HgFormat_undefined);
     hgDefer(hgDeinitPipeline2D());
 
     HgResource noiseShaderID = hgResourceID("build/noise.comp.spv");
@@ -101,7 +101,7 @@ int main()
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    HgFormat windowFormat = hgWindowFormat(window);
+    HgFormat windowFormat = hgWindowImageFormat(window);
     hgImGuiInit(window, &windowFormat, 1);
     hgDefer(hgImGuiDeinit());
 
@@ -114,7 +114,7 @@ int main()
         HgArenaScope frameScope{frame};
 
         hgProcessEvents();
-        if (hgWasQuit())
+        if (hgWasQuit() || hgWindowWasClosed(window))
             goto quit;
 
         HgMat4 proj = hgMatPerspective(
@@ -127,20 +127,18 @@ int main()
 
         if (!ImGui::GetIO().WantCaptureMouse)
         {
-            if (hgIsKeyDown(HgKey_lmouse))
+            if (hgIsButtonDown(window, HgButton_lmouse))
             {
                 f32 rotSpeed = 2.0f;
-                f32 dx = hgGetMouseDeltaX();
-                f32 dy = hgGetMouseDeltaY();
-                HgQuat rotX = hgQuatAxisAngle(HgVec3{0, 1, 0}, dx * rotSpeed / (f32)hgWindowHeight(window));
-                HgQuat rotY = hgQuatAxisAngle(HgVec3{-1, 0, 0}, dy * rotSpeed / (f32)hgWindowHeight(window));
+                HgQuat rotX = hgQuatAxisAngle(HgVec3{ 0, 1, 0}, hgMouseDeltaX(window) * rotSpeed);
+                HgQuat rotY = hgQuatAxisAngle(HgVec3{-1, 0, 0}, hgMouseDeltaY(window) * rotSpeed);
                 camera.rotation = rotX * camera.rotation * rotY;
             }
 
             HgVec3 movement = HgVec3{
-                (f32)(hgIsKeyDown(HgKey_d) - hgIsKeyDown(HgKey_a)),
-                (f32)(hgIsKeyDown(HgKey_lshift) - hgIsKeyDown(HgKey_space)),
-                (f32)(hgIsKeyDown(HgKey_w) - hgIsKeyDown(HgKey_s)),
+                (f32)(hgIsButtonDown(window, HgButton_d) - hgIsButtonDown(window, HgButton_a)),
+                (f32)(hgIsButtonDown(window, HgButton_lshift) - hgIsButtonDown(window, HgButton_space)),
+                (f32)(hgIsButtonDown(window, HgButton_w) - hgIsButtonDown(window, HgButton_s)),
             };
             if (movement != HgVec3{0.0f})
             {
@@ -194,10 +192,10 @@ int main()
 
         hgGpuCompute(cmd, noiseWidth / 16, noiseHeight / 16, 1);
 
-        if (hgWindowCurrentImage(window) != nullptr)
+        if (hgWindowImageView(window) != nullptr)
         {
             HgGpuRenderAttachment colorAttachment{};
-            colorAttachment.image = hgWindowCurrentImage(window);
+            colorAttachment.image = hgWindowImageView(window);
             colorAttachment.loadOp = HgGpuLoadOp_clear;
 
             HgGpuRenderPass pass{};
@@ -215,7 +213,7 @@ int main()
             hgGpuRenderPassEnd(cmd);
 
             HgGpuImageBarrier presentBarrier{};
-            presentBarrier.image = hgWindowCurrentImage(window);
+            presentBarrier.image = hgWindowImageView(window);
             presentBarrier.nextLayout = HgGpuLayout_presentSrc;
 
             hgGpuMemoryBarrier(cmd, nullptr, 0, &presentBarrier, 1);

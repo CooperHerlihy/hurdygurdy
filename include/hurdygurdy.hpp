@@ -263,17 +263,18 @@ struct HgDefer {
 struct HgInit {
     u64 arenaSize = UINT32_MAX;
 
-    u32 maxWindows = 8;
-    u32 maxWindowEvents = 2048;
-
     u32 threadPoolQueueSize = 2048;
     u32 ioRequestQueueSize = 2048;
 
-    u32 maxResources = 2048;
-    u32 maxTextures = 2048;
-    u32 maxModels = 2048;
-
     u32 maxFramesInFlight = 2;
+
+    u32 maxWindows = 8;
+    u32 maxWindowEvents = 2048;
+
+    u32 maxResources = 512;
+    u32 maxTextures = 512;
+    u32 maxModels = 512;
+
 };
 
 /**
@@ -284,7 +285,7 @@ struct HgInit {
  * - Thread pool
  * - IO thread
  * - Resource managers
- * - OS windowing
+ * - Windowing/input
  * - Hardware graphics
  */
 void hgInit(const HgInit* init);
@@ -2784,9 +2785,22 @@ void hgIoDeinit();
 void hgIoRequest(HgFence* fence, void* resource, HgStringView path, void (*fn)(void* resource, HgStringView path));
 
 /**
+ * Gpu init config
+ */
+struct HgGpuInit {
+    // u32 maxGpuBuffers = 512;
+    // u32 maxGpuImages = 512;
+    // u32 maxGpuView = 512;
+    // u32 maxGpuPipelines = 512;
+
+    u32 maxFramesInFlight = 2;
+    u32 maxWindows = 8;
+};
+
+/**
  * Initializes the graphics subsystem, loading all global Vulkan resources
  */
-void hgGpuInit(HgArena* arena, u32 maxFramesInFlight, u32 maxWindows);
+void hgGpuInit(HgArena* arena, HgGpuInit* config);
 
 /**
  * Deinitializes the graphics subsystem, unloading all global Vulkan resources
@@ -4248,12 +4262,190 @@ void hgGpuFrameEnd(HgGpuCmd* cmd);
 /**
  * Returns the window's current image, or nullptr if it could not be acquired
  */
-HgGpuView* hgWindowCurrentImage(HgWindow* window);
+HgGpuView* hgWindowImageView(HgWindow* window);
+
+/**
+ * Get the window's width in pixels
+ */
+HgFormat hgWindowImageFormat(HgWindow* window);
 
 /**
  * Processes all events since startup or the last call to process events
  */
 void hgProcessEvents();
+
+/**
+ * The types of events
+ */
+enum HgWindowEventType {
+    HgWindowEventType_none = 0,
+    HgWindowEventType_buttonPress,
+    HgWindowEventType_buttonRelease,
+    HgWindowEventType_count,
+};
+
+/**
+ * The button inputs
+ */
+enum HgButton {
+    HgButton_none = 0,
+    HgButton_k0,
+    HgButton_k1,
+    HgButton_k2,
+    HgButton_k3,
+    HgButton_k4,
+    HgButton_k5,
+    HgButton_k6,
+    HgButton_k7,
+    HgButton_k8,
+    HgButton_k9,
+    HgButton_q,
+    HgButton_w,
+    HgButton_e,
+    HgButton_r,
+    HgButton_t,
+    HgButton_y,
+    HgButton_u,
+    HgButton_i,
+    HgButton_o,
+    HgButton_p,
+    HgButton_a,
+    HgButton_s,
+    HgButton_d,
+    HgButton_f,
+    HgButton_g,
+    HgButton_h,
+    HgButton_j,
+    HgButton_k,
+    HgButton_l,
+    HgButton_z,
+    HgButton_x,
+    HgButton_c,
+    HgButton_v,
+    HgButton_b,
+    HgButton_n,
+    HgButton_m,
+    HgButton_semicolon,
+    HgButton_colon,
+    HgButton_apostrophe,
+    HgButton_quotation,
+    HgButton_comma,
+    HgButton_period,
+    HgButton_question,
+    HgButton_grave,
+    HgButton_tilde,
+    HgButton_exclamation,
+    HgButton_at,
+    HgButton_hash,
+    HgButton_dollar,
+    HgButton_percent,
+    HgButton_carot,
+    HgButton_ampersand,
+    HgButton_asterisk,
+    HgButton_lparen,
+    HgButton_rparen,
+    HgButton_lbracket,
+    HgButton_rbracket,
+    HgButton_lbrace,
+    HgButton_rbrace,
+    HgButton_equal,
+    HgButton_less,
+    HgButton_greater,
+    HgButton_plus,
+    HgButton_minus,
+    HgButton_slash,
+    HgButton_backslash,
+    HgButton_underscore,
+    HgButton_bar,
+    HgButton_up,
+    HgButton_down,
+    HgButton_left,
+    HgButton_right,
+    HgButton_mouse1,
+    HgButton_mouse2,
+    HgButton_mouse3,
+    HgButton_mouse4,
+    HgButton_mouse5,
+    HgButton_lmouse = HgButton_mouse1,
+    HgButton_rmouse = HgButton_mouse2,
+    HgButton_mmouse = HgButton_mouse3,
+    HgButton_escape,
+    HgButton_space,
+    HgButton_enter,
+    HgButton_backspace,
+    HgButton_kdelete,
+    HgButton_insert,
+    HgButton_tab,
+    HgButton_home,
+    HgButton_end,
+    HgButton_f1,
+    HgButton_f2,
+    HgButton_f3,
+    HgButton_f4,
+    HgButton_f5,
+    HgButton_f6,
+    HgButton_f7,
+    HgButton_f8,
+    HgButton_f9,
+    HgButton_f10,
+    HgButton_f11,
+    HgButton_f12,
+    HgButton_lshift,
+    HgButton_rshift,
+    HgButton_lctrl,
+    HgButton_rctrl,
+    HgButton_lmeta,
+    HgButton_rmeta,
+    HgButton_lalt,
+    HgButton_ralt,
+    HgButton_lsuper,
+    HgButton_rsuper,
+    HgButton_capslock,
+    HgButton_count,
+};
+
+/**
+ * A button input event
+ */
+struct HgWindowButtonEvent {
+    /**
+     * The type of event
+     */
+    HgWindowEventType type;
+    /**
+     * The button which was pressed or released
+     */
+    HgButton button;
+};
+
+/**
+ * Input event data
+ */
+union HgWindowEvent {
+    /**
+     * The type of event
+     */
+    HgWindowEventType type;
+    /**
+     * The button press or release event
+     */
+    HgWindowButtonEvent button;
+};
+
+/**
+ * Returns whether the application was quit
+ */
+bool hgWasQuit();
+
+/**
+ * Returns whether the window was closed
+ */
+bool hgWindowWasClosed(HgWindow* window);
+
+/**
+ * Returns whether the mouse is focused on the window
+ */
+bool hgWindowIsFocused(HgWindow* window);
 
 /**
  * Get the window's width in pixels
@@ -4266,193 +4458,34 @@ u32 hgWindowWidth(HgWindow* window);
 u32 hgWindowHeight(HgWindow* window);
 
 /**
- * Get the window's width in pixels
- */
-HgFormat hgWindowFormat(HgWindow* window);
-
-/**
- * Returns whether the app has been quit
- */
-bool hgWasQuit();
-
-/**
- * A key on the keyboard or button on the mouse
- */
-enum HgKey {
-    HgKey_none = 0,
-    HgKey_k0,
-    HgKey_k1,
-    HgKey_k2,
-    HgKey_k3,
-    HgKey_k4,
-    HgKey_k5,
-    HgKey_k6,
-    HgKey_k7,
-    HgKey_k8,
-    HgKey_k9,
-    HgKey_q,
-    HgKey_w,
-    HgKey_e,
-    HgKey_r,
-    HgKey_t,
-    HgKey_y,
-    HgKey_u,
-    HgKey_i,
-    HgKey_o,
-    HgKey_p,
-    HgKey_a,
-    HgKey_s,
-    HgKey_d,
-    HgKey_f,
-    HgKey_g,
-    HgKey_h,
-    HgKey_j,
-    HgKey_k,
-    HgKey_l,
-    HgKey_z,
-    HgKey_x,
-    HgKey_c,
-    HgKey_v,
-    HgKey_b,
-    HgKey_n,
-    HgKey_m,
-    HgKey_semicolon,
-    HgKey_colon,
-    HgKey_apostrophe,
-    HgKey_quotation,
-    HgKey_comma,
-    HgKey_period,
-    HgKey_question,
-    HgKey_grave,
-    HgKey_tilde,
-    HgKey_exclamation,
-    HgKey_at,
-    HgKey_hash,
-    HgKey_dollar,
-    HgKey_percent,
-    HgKey_carot,
-    HgKey_ampersand,
-    HgKey_asterisk,
-    HgKey_lparen,
-    HgKey_rparen,
-    HgKey_lbracket,
-    HgKey_rbracket,
-    HgKey_lbrace,
-    HgKey_rbrace,
-    HgKey_equal,
-    HgKey_less,
-    HgKey_greater,
-    HgKey_plus,
-    HgKey_minus,
-    HgKey_slash,
-    HgKey_backslash,
-    HgKey_underscore,
-    HgKey_bar,
-    HgKey_up,
-    HgKey_down,
-    HgKey_left,
-    HgKey_right,
-    HgKey_mouse1,
-    HgKey_mouse2,
-    HgKey_mouse3,
-    HgKey_mouse4,
-    HgKey_mouse5,
-    HgKey_lmouse = HgKey_mouse1,
-    HgKey_rmouse = HgKey_mouse2,
-    HgKey_mmouse = HgKey_mouse3,
-    HgKey_escape,
-    HgKey_space,
-    HgKey_enter,
-    HgKey_backspace,
-    HgKey_kdelete,
-    HgKey_insert,
-    HgKey_tab,
-    HgKey_home,
-    HgKey_end,
-    HgKey_f1,
-    HgKey_f2,
-    HgKey_f3,
-    HgKey_f4,
-    HgKey_f5,
-    HgKey_f6,
-    HgKey_f7,
-    HgKey_f8,
-    HgKey_f9,
-    HgKey_f10,
-    HgKey_f11,
-    HgKey_f12,
-    HgKey_lshift,
-    HgKey_rshift,
-    HgKey_lctrl,
-    HgKey_rctrl,
-    HgKey_lmeta,
-    HgKey_rmeta,
-    HgKey_lalt,
-    HgKey_ralt,
-    HgKey_lsuper,
-    HgKey_rsuper,
-    HgKey_capslock,
-    HgKey_count,
-};
-
-/**
- * The types of events
- */
-enum HgKeyEventType {
-    HgKeyEventType_none = 0,
-    HgKeyEventType_keyPress,
-    HgKeyEventType_keyRelease,
-    HgKeyEventType_count,
-};
-
-/**
- * Input event data
- */
-struct HgKeyEvent {
-    /**
-     * The type of event
-     */
-    HgKeyEventType type;
-    /**
-     * The key pressed or released (keyPress or keyRelease)
-     */
-    HgKey key;
-};
-
-/**
- * Get the key events since last event processing
- */
-HgKeyEvent* hgGetKeyEvents(u32* count);
-
-/**
- * Returns whether the key is currently down
- */
-bool hgIsKeyDown(HgKey key);
-
-/**
- * Gets the change in mouse x position in pixels
- */
-f32 hgGetMouseDeltaX();
-
-/**
- * Gets the change in mouse y position in pixels
- */
-f32 hgGetMouseDeltaY();
-
-/**
- * Returns whether the mouse is focused on the window
- */
-bool hgIsFocused(HgWindow* window);
-
-/**
  * Returns the current x position of the mouse relative to the window
  */
-f32 hgGetMouseX(HgWindow* window);
+f32 hgMouseX(HgWindow* window);
 
 /**
  * Returns the current y position of the mouse relative to the window
  */
-f32 hgGetMouseY(HgWindow* window);
+f32 hgMouseY(HgWindow* window);
+
+/**
+ * Returns the change in x position of the mouse relative to the window height
+ */
+f32 hgMouseDeltaX(HgWindow* window);
+
+/**
+ * Returns the change in y position of the mouse relative to the window height
+ */
+f32 hgMouseDeltaY(HgWindow* window);
+
+/**
+ * Returns whether the key is currently down
+ */
+bool hgIsButtonDown(HgWindow* window, HgButton key);
+
+/**
+ * Get the key events since last event processing
+ */
+HgWindowEvent* hgWindowEvents(HgWindow* window, u32* count);
 
 // audio system : TODO
 

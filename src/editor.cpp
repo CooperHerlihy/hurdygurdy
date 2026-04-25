@@ -39,7 +39,7 @@ int main()
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    HgFormat windowFormat = hgWindowFormat(window);
+    HgFormat windowFormat = hgWindowImageFormat(window);
     hgImGuiInit(window, &windowFormat, 1);
     hgDefer(hgImGuiDeinit());
 
@@ -122,7 +122,7 @@ int main()
         }
 
         hgProcessEvents();
-        if (hgWasQuit())
+        if (hgWasQuit() || hgWindowWasClosed(window))
             goto quit;
 
         hgImGuiNewFrame();
@@ -248,32 +248,30 @@ int main()
 
                 if (ImGui::IsWindowFocused())
                 {
-                    if (move3D && hgIsKeyDown(HgKey_lmouse))
+                    if (move3D && hgIsButtonDown(window, HgButton_lmouse))
                     {
                         f32 rotSpeed = 2.0f;
-                        f32 dx = hgGetMouseDeltaX();
-                        f32 dy = hgGetMouseDeltaY();
-                        HgQuat rotX = hgQuatAxisAngle(HgVec3{0, 1, 0}, dx * rotSpeed / (f32)hgWindowWidth(window));
-                        HgQuat rotY = hgQuatAxisAngle(HgVec3{-1, 0, 0}, dy * rotSpeed / (f32)hgWindowWidth(window));
+                        HgQuat rotX = hgQuatAxisAngle(HgVec3{ 0, 1, 0}, hgMouseDeltaX(window) * rotSpeed);
+                        HgQuat rotY = hgQuatAxisAngle(HgVec3{-1, 0, 0}, hgMouseDeltaY(window) * rotSpeed);
                         camera.rotation = rotX * camera.rotation * rotY;
                     }
 
                     HgVec3 movement = HgVec3{0.0f};
                     if (move3D)
                     {
-                        movement.y += hgIsKeyDown(HgKey_lshift) - hgIsKeyDown(HgKey_space);
-                        movement.x += hgIsKeyDown(HgKey_d) - hgIsKeyDown(HgKey_a);
-                        movement.z += hgIsKeyDown(HgKey_w) - hgIsKeyDown(HgKey_s);
+                        movement.y += hgIsButtonDown(window, HgButton_lshift) - hgIsButtonDown(window, HgButton_space);
+                        movement.x += hgIsButtonDown(window, HgButton_d) - hgIsButtonDown(window, HgButton_a);
+                        movement.z += hgIsButtonDown(window, HgButton_w) - hgIsButtonDown(window, HgButton_s);
                     } else {
-                        movement.y += hgIsKeyDown(HgKey_s) - hgIsKeyDown(HgKey_w);
-                        movement.x += hgIsKeyDown(HgKey_d) - hgIsKeyDown(HgKey_a);
+                        movement.y += hgIsButtonDown(window, HgButton_s) - hgIsButtonDown(window, HgButton_w);
+                        movement.x += hgIsButtonDown(window, HgButton_d) - hgIsButtonDown(window, HgButton_a);
                     }
 
                     if (movement != HgVec3{0.0f})
                     {
-                        f32 moveSpeed = 1.5f;
+                        f32 moveSpeed = 1.5f * (f32)delta;
                         HgVec3 rotated = hgVecRotate(camera.rotation, HgVec3{movement.x, 0.0f, movement.z});
-                        camera.position += hgVecNorm3(HgVec3{rotated.x, movement.y, rotated.z}) * moveSpeed * (f32)delta;
+                        camera.position += hgVecNorm3(HgVec3{rotated.x, movement.y, rotated.z}) * moveSpeed;
                     }
                 }
                 HgMat4 view = hgMatView(camera.position, camera.scale, camera.rotation);
@@ -461,7 +459,7 @@ int main()
 
         cpuDelta = hgClockTick(&cpuClock);
         HgGpuCmd* cmd = hgGpuFrameBegin(&window, 1);
-        if (hgWindowCurrentImage(window) != nullptr)
+        if (hgWindowImageView(window) != nullptr)
         {
             hgClockTick(&cpuClock);
 
@@ -488,7 +486,7 @@ int main()
             hgGpuRenderPassEnd(cmd);
 
             HgGpuRenderAttachment guiColorAttachment{};
-            guiColorAttachment.image = hgWindowCurrentImage(window);
+            guiColorAttachment.image = hgWindowImageView(window);
             guiColorAttachment.loadOp = HgGpuLoadOp_clear;
             guiColorAttachment.clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
 
@@ -505,7 +503,7 @@ int main()
             hgGpuRenderPassEnd(cmd);
 
             HgGpuImageBarrier presentBarrier{};
-            presentBarrier.image = hgWindowCurrentImage(window);
+            presentBarrier.image = hgWindowImageView(window);
             presentBarrier.nextLayout = HgGpuLayout_presentSrc;
 
             hgGpuMemoryBarrier(cmd, nullptr, 0, &presentBarrier, 1);

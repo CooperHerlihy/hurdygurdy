@@ -22,7 +22,11 @@ void hgInit(const HgInit* init)
     HgArena* arena = hgScratch();
 
     hgPlatformInit(arena, init->maxWindows, init->maxWindowEvents);
-    hgGpuInit(arena, init->maxFramesInFlight, init->maxWindows);
+
+    HgGpuInit gpuInit{};
+    gpuInit.maxFramesInFlight = init->maxFramesInFlight;
+    gpuInit.maxWindows = init->maxWindows;
+    hgGpuInit(arena, &gpuInit);
 
     u32 workerCount = (u32)std::max(1, (i32)hgHardwareThreadCount() - 2); // main thread, io thread
     hgThreadsInit(arena, init->threadPoolQueueSize, workerCount);

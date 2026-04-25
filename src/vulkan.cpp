@@ -57,8 +57,6 @@ struct HgWindow {
     VkSurfaceKHR surface;
     VkSwapchainKHR swapchain;
     u32 imageCount;
-    u32 width;
-    u32 height;
     HgFormat format;
     HgGpuImageUsageFlags imageUsage;
     HgGpuPresentMode presentMode;
@@ -69,8 +67,16 @@ struct HgWindow {
     u32 imageIdx;
     u32 semaphoreIdx;
 
+    u32 width;
+    u32 height;
     f32 mouseX;
     f32 mouseY;
+    bool isKeyDown[HgButton_count]{};
+    bool wasClosed = false;
+
+    u32 eventCapacity;
+    u32 eventCount;
+    HgWindowEvent events[1];
 };
 
 struct Frame {
@@ -100,23 +106,6 @@ struct VulkanState {
 
     HgGpuDescriptor** descriptorPools = nullptr;
     HgGpuDescriptor* descriptorPoolNexts = nullptr;
-
-    // HgGpuDescriptor* samplerPool = nullptr;
-    // HgGpuDescriptor samplerPoolNext = {0};
-    // HgGpuDescriptor* combinedImageSamplerPool = nullptr;
-    // HgGpuDescriptor combinedImageSamplerPoolNext = {0};
-    // HgGpuDescriptor* sampledImagePool = nullptr;
-    // HgGpuDescriptor sampledImagePoolNext = {0};
-    // HgGpuDescriptor* storageImagePool = nullptr;
-    // HgGpuDescriptor storageImagePoolNext = {0};
-    // HgGpuDescriptor* uniformTexelBufferPool = nullptr;
-    // HgGpuDescriptor uniformTexelBufferPoolNext = {0};
-    // HgGpuDescriptor* storageTexelBufferPool = nullptr;
-    // HgGpuDescriptor storageTexelBufferPoolNext = {0};
-    // HgGpuDescriptor* uniformBufferPool = nullptr;
-    // HgGpuDescriptor uniformBufferPoolNext = {0};
-    // HgGpuDescriptor* storageBufferPool = nullptr;
-    // HgGpuDescriptor storageBufferPoolNext = {0};
 
     Frame* frames = nullptr;
     u32 frameCount = 0;
@@ -622,7 +611,7 @@ static Frame createFrame(HgArena* arena, u32 maxWindows)
     return frame;
 }
 
-void hgGpuInit(HgArena* arena, u32 maxFramesInFlight, u32 maxWindows)
+void hgGpuInit(HgArena* arena, HgGpuInit* config)
 {
     hgAssert(arena != nullptr);
 
@@ -718,13 +707,13 @@ void hgGpuInit(HgArena* arena, u32 maxFramesInFlight, u32 maxWindows)
 
     if (vkState.frames == nullptr)
     {
-        vkState.frames = hgAlloc<Frame>(arena, maxFramesInFlight);
-        vkState.frameCount = maxFramesInFlight;
+        vkState.frames = hgAlloc<Frame>(arena, config->maxFramesInFlight);
+        vkState.frameCount = config->maxFramesInFlight;
         vkState.currentFrame = 0;
 
         for (u32 i = 0; i < vkState.frameCount; ++i)
         {
-            vkState.frames[i] = createFrame(arena, maxWindows);
+            vkState.frames[i] = createFrame(arena, config->maxWindows);
         }
     }
 }
@@ -2875,26 +2864,23 @@ void hgGpuRenderPassEnd(HgGpuCmd* cmd)
 
 struct PlatformState {
     u32 windowCapacity = 0;
-    u32 windowWidth = 0;
-    HgWindow* windowPool = nullptr;
     u32* windowFreeList = nullptr;
     u32 windowNext = 0;
 
+    u32 windowWidth = 0;
+    u32 windowMaxEvents = 0;
+    HgWindow* windowPool = nullptr;
+
     HgMap<SDL_WindowID, HgWindow*> windows = {};
 
-    u32 maxEvents = 0;
-    u32 eventCount = 0;
-    HgKeyEvent* events = nullptr;
-
+    f32 mouseDX = 0.0f;
+    f32 mouseDY = 0.0f;
     bool wasQuit = false;
-    bool isKeyDown[HgKey_count]{};
-    f32 mouseDeltaX = 0.0f;
-    f32 mouseDeltaY = 0.0f;
 
     bool imguiInitialized = false;
 };
 
-static PlatformState platformState;
+static PlatformState platformState{};
 
 void hgPlatformInit(HgArena* arena, u32 maxWindows, u32 maxEvents)
 {
@@ -2907,20 +2893,17 @@ void hgPlatformInit(HgArena* arena, u32 maxWindows, u32 maxEvents)
 
     platformState.windowCapacity = maxWindows;
     platformState.windowFreeList = hgAlloc<u32>(arena, maxWindows);
-    platformState.windowWidth = (u32)hgAlign(sizeof(HgWindow) + sizeof(HgKeyEvent) * (maxEvents - 1), alignof(HgWindow));
-    platformState.windowPool = (HgWindow*)hgAlloc(arena, platformState.windowWidth * maxWindows, alignof(HgWindow));
-
     for (u32 i = 0; i < maxWindows; ++i)
     {
         platformState.windowFreeList[i] = i + 1;
     }
     platformState.windowNext = 0;
 
-    platformState.windows = hgMapCreate<SDL_WindowID, HgWindow*>(arena, maxWindows * 2);
+    platformState.windowMaxEvents = maxEvents;
+    platformState.windowWidth = (u32)hgAlign(sizeof(HgWindow) + sizeof(HgWindowEvent) * (maxEvents - 1), alignof(HgWindow));
+    platformState.windowPool = (HgWindow*)hgAlloc(arena, platformState.windowWidth * maxWindows, alignof(HgWindow));
 
-    platformState.maxEvents = maxEvents;
-    platformState.eventCount = 0;
-    platformState.events = hgAlloc<HgKeyEvent>(arena, maxEvents);
+    platformState.windows = hgMapCreate<SDL_WindowID, HgWindow*>(arena, maxWindows * 2);
 }
 
 void hgPlatformDeinit()
@@ -3175,6 +3158,9 @@ HgWindow* hgWindowCreate(const char* title, u32 width, u32 height, const HgWindo
     SDL_GetWindowSize(window->sdlWindow, (int*)&window->width, (int*)&window->height);
     createWindowSwapchain(window, config);
 
+    window->eventCapacity = platformState.windowMaxEvents;
+    window->eventCount = 0;
+
     return window;
 }
 
@@ -3310,254 +3296,264 @@ void hgGpuFrameEnd(HgGpuCmd* cmd)
     }
 }
 
-HgGpuView* hgWindowCurrentImage(HgWindow* window)
+HgGpuView* hgWindowImageView(HgWindow* window)
 {
     return window->imageIdx < window->imageCount ? &window->views[window->imageIdx] : nullptr;
 }
 
-static HgKey sdlKeycodeToHgKey(u32 key)
+HgFormat hgWindowImageFormat(HgWindow* window)
+{
+    return window->format;
+}
+
+static HgButton sdlKeycodeToHgButton(u32 key)
 {
     switch (key)
     {
         case SDLK_0:
-            return HgKey_k0;
+            return HgButton_k0;
         case SDLK_1:
-            return HgKey_k1;
+            return HgButton_k1;
         case SDLK_2:
-            return HgKey_k2;
+            return HgButton_k2;
         case SDLK_3:
-            return HgKey_k3;
+            return HgButton_k3;
         case SDLK_4:
-            return HgKey_k4;
+            return HgButton_k4;
         case SDLK_5:
-            return HgKey_k5;
+            return HgButton_k5;
         case SDLK_6:
-            return HgKey_k6;
+            return HgButton_k6;
         case SDLK_7:
-            return HgKey_k7;
+            return HgButton_k7;
         case SDLK_8:
-            return HgKey_k8;
+            return HgButton_k8;
         case SDLK_9:
-            return HgKey_k9;
+            return HgButton_k9;
 
         case SDLK_Q:
-            return HgKey_q;
+            return HgButton_q;
         case SDLK_W:
-            return HgKey_w;
+            return HgButton_w;
         case SDLK_E:
-            return HgKey_e;
+            return HgButton_e;
         case SDLK_R:
-            return HgKey_r;
+            return HgButton_r;
         case SDLK_T:
-            return HgKey_t;
+            return HgButton_t;
         case SDLK_Y:
-            return HgKey_y;
+            return HgButton_y;
         case SDLK_U:
-            return HgKey_u;
+            return HgButton_u;
         case SDLK_I:
-            return HgKey_i;
+            return HgButton_i;
         case SDLK_O:
-            return HgKey_o;
+            return HgButton_o;
         case SDLK_P:
-            return HgKey_p;
+            return HgButton_p;
         case SDLK_A:
-            return HgKey_a;
+            return HgButton_a;
         case SDLK_S:
-            return HgKey_s;
+            return HgButton_s;
         case SDLK_D:
-            return HgKey_d;
+            return HgButton_d;
         case SDLK_F:
-            return HgKey_f;
+            return HgButton_f;
         case SDLK_G:
-            return HgKey_g;
+            return HgButton_g;
         case SDLK_H:
-            return HgKey_h;
+            return HgButton_h;
         case SDLK_J:
-            return HgKey_j;
+            return HgButton_j;
         case SDLK_K:
-            return HgKey_k;
+            return HgButton_k;
         case SDLK_L:
-            return HgKey_l;
+            return HgButton_l;
         case SDLK_Z:
-            return HgKey_z;
+            return HgButton_z;
         case SDLK_X:
-            return HgKey_x;
+            return HgButton_x;
         case SDLK_C:
-            return HgKey_c;
+            return HgButton_c;
         case SDLK_V:
-            return HgKey_v;
+            return HgButton_v;
         case SDLK_B:
-            return HgKey_b;
+            return HgButton_b;
         case SDLK_N:
-            return HgKey_n;
+            return HgButton_n;
         case SDLK_M:
-            return HgKey_m;
+            return HgButton_m;
 
         case SDLK_SEMICOLON:
-            return HgKey_semicolon;
+            return HgButton_semicolon;
         case SDLK_COLON:
-            return HgKey_colon;
+            return HgButton_colon;
         case SDLK_APOSTROPHE:
-            return HgKey_apostrophe;
+            return HgButton_apostrophe;
         case SDLK_DBLAPOSTROPHE:
-            return HgKey_quotation;
+            return HgButton_quotation;
         case SDLK_COMMA:
-            return HgKey_comma;
+            return HgButton_comma;
         case SDLK_PERIOD:
-            return HgKey_period;
+            return HgButton_period;
         case SDLK_QUESTION:
-            return HgKey_question;
+            return HgButton_question;
         case SDLK_GRAVE:
-            return HgKey_grave;
+            return HgButton_grave;
         case SDLK_TILDE:
-            return HgKey_tilde;
+            return HgButton_tilde;
         case SDLK_EXCLAIM:
-            return HgKey_exclamation;
+            return HgButton_exclamation;
         case SDLK_AT:
-            return HgKey_at;
+            return HgButton_at;
         case SDLK_HASH:
-            return HgKey_hash;
+            return HgButton_hash;
         case SDLK_DOLLAR:
-            return HgKey_dollar;
+            return HgButton_dollar;
         case SDLK_PERCENT:
-            return HgKey_percent;
+            return HgButton_percent;
         case SDLK_CARET:
-            return HgKey_carot;
+            return HgButton_carot;
         case SDLK_AMPERSAND:
-            return HgKey_ampersand;
+            return HgButton_ampersand;
         case SDLK_ASTERISK:
-            return HgKey_asterisk;
+            return HgButton_asterisk;
 
         case SDLK_LEFTPAREN:
-            return HgKey_lparen;
+            return HgButton_lparen;
         case SDLK_RIGHTPAREN:
-            return HgKey_rparen;
+            return HgButton_rparen;
         case SDLK_LEFTBRACKET:
-            return HgKey_lbracket;
+            return HgButton_lbracket;
         case SDLK_RIGHTBRACKET:
-            return HgKey_rbracket;
+            return HgButton_rbracket;
         case SDLK_LEFTBRACE:
-            return HgKey_lbrace;
+            return HgButton_lbrace;
         case SDLK_RIGHTBRACE:
-            return HgKey_rbrace;
+            return HgButton_rbrace;
 
         case SDLK_EQUALS:
-            return HgKey_equal;
+            return HgButton_equal;
         case SDLK_LESS:
-            return HgKey_less;
+            return HgButton_less;
         case SDLK_GREATER:
-            return HgKey_greater;
+            return HgButton_greater;
         case SDLK_PLUS:
-            return HgKey_plus;
+            return HgButton_plus;
         case SDLK_MINUS:
-            return HgKey_minus;
+            return HgButton_minus;
         case SDLK_SLASH:
-            return HgKey_slash;
+            return HgButton_slash;
         case SDLK_BACKSLASH:
-            return HgKey_backslash;
+            return HgButton_backslash;
         case SDLK_UNDERSCORE:
-            return HgKey_underscore;
+            return HgButton_underscore;
         case SDLK_PIPE:
-            return HgKey_bar;
+            return HgButton_bar;
 
         case SDLK_UP:
-            return HgKey_up;
+            return HgButton_up;
         case SDLK_DOWN:
-            return HgKey_down;
+            return HgButton_down;
         case SDLK_LEFT:
-            return HgKey_left;
+            return HgButton_left;
         case SDLK_RIGHT:
-            return HgKey_right;
+            return HgButton_right;
 
         case SDLK_ESCAPE:
-            return HgKey_escape;
+            return HgButton_escape;
         case SDLK_SPACE:
-            return HgKey_space;
+            return HgButton_space;
         case SDLK_RETURN:
-            return HgKey_enter;
+            return HgButton_enter;
         case SDLK_BACKSPACE:
-            return HgKey_backspace;
+            return HgButton_backspace;
         case SDLK_DELETE:
-            return HgKey_kdelete;
+            return HgButton_kdelete;
         case SDLK_INSERT:
-            return HgKey_insert;
+            return HgButton_insert;
         case SDLK_TAB:
-            return HgKey_tab;
+            return HgButton_tab;
         case SDLK_HOME:
-            return HgKey_home;
+            return HgButton_home;
         case SDLK_END:
-            return HgKey_end;
+            return HgButton_end;
 
         case SDLK_F1:
-            return HgKey_f1;
+            return HgButton_f1;
         case SDLK_F2:
-            return HgKey_f2;
+            return HgButton_f2;
         case SDLK_F3:
-            return HgKey_f3;
+            return HgButton_f3;
         case SDLK_F4:
-            return HgKey_f4;
+            return HgButton_f4;
         case SDLK_F5:
-            return HgKey_f5;
+            return HgButton_f5;
         case SDLK_F6:
-            return HgKey_f6;
+            return HgButton_f6;
         case SDLK_F7:
-            return HgKey_f7;
+            return HgButton_f7;
         case SDLK_F8:
-            return HgKey_f8;
+            return HgButton_f8;
         case SDLK_F9:
-            return HgKey_f9;
+            return HgButton_f9;
         case SDLK_F10:
-            return HgKey_f10;
+            return HgButton_f10;
         case SDLK_F11:
-            return HgKey_f11;
+            return HgButton_f11;
         case SDLK_F12:
-            return HgKey_f12;
+            return HgButton_f12;
 
         case SDLK_LSHIFT:
-            return HgKey_lshift;
+            return HgButton_lshift;
         case SDLK_RSHIFT:
-            return HgKey_rshift;
+            return HgButton_rshift;
         case SDLK_LCTRL:
-            return HgKey_lctrl;
+            return HgButton_lctrl;
         case SDLK_RCTRL:
-            return HgKey_rctrl;
+            return HgButton_rctrl;
         case SDLK_LALT:
-            return HgKey_lalt;
+            return HgButton_lalt;
         case SDLK_RALT:
-            return HgKey_ralt;
+            return HgButton_ralt;
         case SDLK_LGUI:
-            return HgKey_lsuper;
+            return HgButton_lsuper;
         case SDLK_RGUI:
-            return HgKey_rsuper;
+            return HgButton_rsuper;
         case SDLK_CAPSLOCK:
-            return HgKey_capslock;
+            return HgButton_capslock;
     }
-    return HgKey_none;
+    return HgButton_none;
 }
 
-static HgKey sdlButtonToHgKey(u32 button)
+static HgButton sdlButtonToHgButton(u32 button)
 {
     switch (button)
     {
         case SDL_BUTTON_LEFT:
-            return HgKey_mouse1;
+            return HgButton_mouse1;
         case SDL_BUTTON_RIGHT:
-            return HgKey_mouse2;
+            return HgButton_mouse2;
         case SDL_BUTTON_MIDDLE:
-            return HgKey_mouse3;
+            return HgButton_mouse3;
         case SDL_BUTTON_X1:
-            return HgKey_mouse4;
+            return HgButton_mouse4;
         case SDL_BUTTON_X2:
-            return HgKey_mouse5;
+            return HgButton_mouse5;
     }
-    return HgKey_none;
+    return HgButton_none;
 }
 
 void hgProcessEvents()
 {
-    platformState.eventCount = 0;
-    platformState.mouseDeltaX = 0.0f;
-    platformState.mouseDeltaY = 0.0f;
+    platformState.mouseDX = 0;
+    platformState.mouseDY = 0;
+
+    for (u32 i = 0; i < platformState.windows.capacity; ++i)
+    {
+        if (platformState.windows.hasVal[i])
+            platformState.windows.vals[i]->eventCount = 0;
+    }
 
     SDL_Event event;
     while (SDL_PollEvent(&event))
@@ -3568,8 +3564,13 @@ void hgProcessEvents()
         switch (event.type)
         {
             case SDL_EVENT_QUIT:
-            {
                 platformState.wasQuit = true;
+                break;
+            case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
+            {
+                HgWindow** window = hgMapGet(&platformState.windows, event.window.windowID);
+                if (window != nullptr)
+                    (*window)->wasClosed = true;
             } break;
             case SDL_EVENT_WINDOW_RESIZED:
             {
@@ -3582,65 +3583,73 @@ void hgProcessEvents()
             } break;
             case SDL_EVENT_MOUSE_MOTION:
             {
-                platformState.mouseDeltaX += event.motion.xrel;
-                platformState.mouseDeltaY += event.motion.yrel;
-
                 HgWindow** window = hgMapGet(&platformState.windows, event.button.windowID);
                 if (window != nullptr)
                 {
                     (*window)->mouseX = event.motion.x;
                     (*window)->mouseY = event.motion.y;
                 }
+                platformState.mouseDX += event.motion.xrel;
+                platformState.mouseDY += event.motion.yrel;
             } break;
             case SDL_EVENT_KEY_DOWN:
             {
-                hgAssert(platformState.eventCount < platformState.maxEvents);
-                HgKey key = sdlKeycodeToHgKey(event.key.key);
+                HgButton key = sdlKeycodeToHgButton(event.key.key);
+                HgWindow** window = hgMapGet(&platformState.windows, event.key.windowID);
+                if (window != nullptr)
+                {
+                    HgWindowEvent event{};
+                    event.button.type = HgWindowEventType_buttonPress;
+                    event.button.button = key;
 
-                platformState.events[platformState.eventCount++] = {HgKeyEventType_keyPress, key};
-                platformState.isKeyDown[key] = true;
+                    (*window)->events[(*window)->eventCount++] = event;
+                    (*window)->isKeyDown[key] = true;
+                }
             } break;
             case SDL_EVENT_KEY_UP:
             {
-                hgAssert(platformState.eventCount < platformState.maxEvents);
-                HgKey key = sdlKeycodeToHgKey(event.key.key);
+                HgButton key = sdlKeycodeToHgButton(event.key.key);
+                HgWindow** window = hgMapGet(&platformState.windows, event.key.windowID);
+                if (window != nullptr)
+                {
+                    HgWindowEvent event{};
+                    event.button.type = HgWindowEventType_buttonRelease;
+                    event.button.button = key;
 
-                platformState.events[platformState.eventCount++] = {HgKeyEventType_keyRelease, key};
-                platformState.isKeyDown[key] = false;
+                    (*window)->events[(*window)->eventCount++] = event;
+                    (*window)->isKeyDown[key] = false;
+                }
             } break;
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
             {
-                hgAssert(platformState.eventCount < platformState.maxEvents);
-                HgKey key = sdlButtonToHgKey(event.button.button);
+                HgButton key = sdlButtonToHgButton(event.button.button);
+                HgWindow** window = hgMapGet(&platformState.windows, event.button.windowID);
+                if (window != nullptr)
+                {
+                    HgWindowEvent event{};
+                    event.button.type = HgWindowEventType_buttonPress;
+                    event.button.button = key;
 
-                platformState.events[platformState.eventCount++] = {HgKeyEventType_keyPress, key};
-                platformState.isKeyDown[key] = true;
+                    (*window)->events[(*window)->eventCount++] = event;
+                    (*window)->isKeyDown[key] = true;
+                }
             } break;
             case SDL_EVENT_MOUSE_BUTTON_UP:
             {
-                hgAssert(platformState.eventCount < platformState.maxEvents);
-                HgKey key = sdlButtonToHgKey(event.button.button);
+                HgButton key = sdlButtonToHgButton(event.button.button);
+                HgWindow** window = hgMapGet(&platformState.windows, event.button.windowID);
+                if (window != nullptr)
+                {
+                    HgWindowEvent event{};
+                    event.button.type = HgWindowEventType_buttonRelease;
+                    event.button.button = key;
 
-                platformState.events[platformState.eventCount++] = {HgKeyEventType_keyRelease, key};
-                platformState.isKeyDown[key] = false;
+                    (*window)->events[(*window)->eventCount++] = event;
+                    (*window)->isKeyDown[key] = false;
+                }
             } break;
         }
     }
-}
-
-u32 hgWindowWidth(HgWindow* window)
-{
-    return window->width;
-}
-
-u32 hgWindowHeight(HgWindow* window)
-{
-    return window->height;
-}
-
-HgFormat hgWindowFormat(HgWindow* window)
-{
-    return window->format;
 }
 
 bool hgWasQuit()
@@ -3648,41 +3657,66 @@ bool hgWasQuit()
     return platformState.wasQuit;
 }
 
-HgKeyEvent* hgGetKeyEvents(u32* count)
+bool hgWindowWasClosed(HgWindow* window)
 {
-    hgAssert(count != nullptr);
-    *count = platformState.eventCount;
-    return platformState.events;
+    hgAssert(window != nullptr);
+    return window->wasClosed;
 }
 
-bool hgIsKeyDown(HgKey key)
+bool hgWindowIsFocused(HgWindow* window)
 {
-    return platformState.isKeyDown[key];
+    hgAssert(window != nullptr);
+    return SDL_GetMouseFocus() == window->sdlWindow;
 }
 
-f32 hgGetMouseX(HgWindow* window)
+u32 hgWindowWidth(HgWindow* window)
 {
+    hgAssert(window != nullptr);
+    return window->width;
+}
+
+u32 hgWindowHeight(HgWindow* window)
+{
+    hgAssert(window != nullptr);
+    return window->height;
+}
+
+f32 hgMouseX(HgWindow* window)
+{
+    hgAssert(window != nullptr);
     return window->mouseX;
 }
 
-f32 hgGetMouseY(HgWindow* window)
+f32 hgMouseY(HgWindow* window)
 {
+    hgAssert(window != nullptr);
     return window->mouseY;
 }
 
-f32 hgGetMouseDeltaX()
+f32 hgMouseDeltaX(HgWindow* window)
 {
-    return platformState.mouseDeltaX;
+    hgAssert(window != nullptr);
+    return platformState.mouseDX / (f32)window->height;
 }
 
-f32 hgGetMouseDeltaY()
+f32 hgMouseDeltaY(HgWindow* window)
 {
-    return platformState.mouseDeltaY;
+    hgAssert(window != nullptr);
+    return platformState.mouseDY / (f32)window->height;
 }
 
-bool hgIsFocused(HgWindow* window)
+bool hgIsButtonDown(HgWindow* window, HgButton key)
 {
-    return SDL_GetMouseFocus() == window->sdlWindow;
+    hgAssert(window != nullptr);
+    return window->isKeyDown[key];
+}
+
+HgWindowEvent* hgWindowEvents(HgWindow* window, u32* count)
+{
+    hgAssert(window != nullptr);
+    hgAssert(count != nullptr);
+    *count = window->eventCount;
+    return window->events;
 }
 
 void hgImGuiInit(
