@@ -25,8 +25,9 @@ int main()
     hgDefer(hgDeinitPipeline2D());
 
     HgResource noiseShaderID = hgResourceID("build/noise.comp.spv");
-    HgFence fence;
-    hgLoadResource(&fence, noiseShaderID, "build/noise.comp.spv");
+    HgFence fence = hgFenceCreate();
+    hgDefer(hgFenceDestroy(fence));
+    hgLoadResource(fence, noiseShaderID, "build/noise.comp.spv");
 
     u32 noiseSeed = std::random_device{}();
     u32 noiseScaleBegin = 4;
@@ -43,12 +44,12 @@ int main()
         u32 outImageIdx;
     };
 
-    hgFenceWaitIndefinite(&fence);
+    hgFenceWaitIndefinite(fence);
     HgBinary* noiseShaderCode = hgGetResource(noiseShaderID);
     HgGpuPipeline* noisePipeline = hgGpuPipelineCreateCompute(sizeof(NoisePush), (u8*)noiseShaderCode->data, noiseShaderCode->size);
     hgDefer(hgGpuPipelineDestroy(noisePipeline));
 
-    hgUnloadResource(nullptr, noiseShaderID);
+    hgUnloadResource(HgFence{}, noiseShaderID);
 
     u32 noiseWidth = 256;
     u32 noiseHeight = 256;

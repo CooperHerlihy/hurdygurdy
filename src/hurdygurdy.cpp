@@ -1,5 +1,6 @@
 #include "hurdygurdy.hpp"
 
+#include <atomic>
 #include <condition_variable>
 #include <mutex>
 #include <thread>
@@ -28,9 +29,12 @@ void hgInit(const HgInit* init)
     gpuInit.maxWindows = init->maxWindows;
     hgGpuInit(arena, &gpuInit);
 
+    hgFencesInit(arena, init->maxFences);
+
     u32 workerCount = (u32)std::max(1, (i32)hgHardwareThreadCount() - 2); // main thread, io thread
     hgThreadsInit(arena, init->threadPoolQueueSize, workerCount);
     hgIoInit(arena, init->ioRequestQueueSize);
+
     hgInitResources(arena, init->maxResources);
     hgInitGpuResources(arena, init->maxTextures, init->maxModels);
 }
@@ -41,6 +45,7 @@ void hgDeinit()
     hgDeinitResource();
     hgIoDeinit();
     hgThreadsDeinit();
+    hgFencesDeinit();
 
     hgGpuDeinit();
     hgPlatformDeinit();
@@ -1794,27 +1799,51 @@ u32 hgHardwareThreadCount()
     return (u32)std::thread::hardware_concurrency();
 }
 
-void hgFenceAttach(HgFence* fence, u32 count)
+struct FenceData {
+    std::atomic<u32> counter{0};
+};
+
+HgPool<FenceData> fencePool{};
+
+void hgFencesInit(HgArena* arena, u32 maxFences)
 {
-    hgAssert(fence != nullptr);
-    fence->counter.fetch_add(count);
+    fencePool = hgPoolCreate<FenceData>(arena, maxFences);
 }
 
-void hgFenceSignal(HgFence* fence, u32 count)
+void hgFencesDeinit()
 {
-    hgAssert(fence != nullptr);
-    fence->counter.fetch_sub(count);
+    fencePool = {};
 }
 
-bool hgFenceIsComplete(const HgFence* fence)
+HgFence hgFenceCreate()
 {
-    hgAssert(fence != nullptr);
-    return fence->counter.load() == 0;
+    HgHandle handle = {hgPoolAlloc(&fencePool)};
+    new (hgPoolGet(&fencePool, handle)) FenceData{0};
+    return {handle};
 }
 
-bool hgFenceWait(const HgFence* fence, f64 timeoutSeconds)
+void hgFenceDestroy(HgFence fence)
 {
-    hgAssert(fence != nullptr);
+    hgPoolFree(&fencePool, fence.handle);
+}
+
+void hgFenceAttach(HgFence fence, u32 count)
+{
+    hgPoolGet(&fencePool, fence.handle)->counter.fetch_add(count);
+}
+
+void hgFenceSignal(HgFence fence, u32 count)
+{
+    hgPoolGet(&fencePool, fence.handle)->counter.fetch_sub(count);
+}
+
+bool hgFenceIsComplete(HgFence fence)
+{
+    return hgPoolGet(&fencePool, fence.handle)->counter.load() == 0;
+}
+
+bool hgFenceWait(HgFence fence, f64 timeoutSeconds)
+{
     auto end = std::chrono::steady_clock::now() + std::chrono::duration<f64>(timeoutSeconds);
     while (!hgFenceIsComplete(fence) && std::chrono::steady_clock::now() < end)
     {
@@ -1823,9 +1852,8 @@ bool hgFenceWait(const HgFence* fence, f64 timeoutSeconds)
     return hgFenceIsComplete(fence);
 }
 
-void hgFenceWaitIndefinite(const HgFence* fence)
+void hgFenceWaitIndefinite(HgFence fence)
 {
-    hgAssert(fence != nullptr);
     while (!hgFenceIsComplete(fence))
     {
         _mm_pause();
@@ -1833,7 +1861,7 @@ void hgFenceWaitIndefinite(const HgFence* fence)
 }
 
 struct ThreadWork {
-    HgFence* fence;
+    HgFence fence;
     void* data;
     void (*fn)(void*);
 };
@@ -1883,7 +1911,7 @@ static bool poolExecute()
     hgAssert(work.fn != nullptr);
     work.fn(work.data);
 
-    if (work.fence != nullptr)
+    if (work.fence.handle.id != HgHandle{}.id)
         hgFenceSignal(work.fence, 1);
     return true;
 }
@@ -1957,10 +1985,8 @@ void hgThreadsDeinit()
     threadPool.mtx.~mutex();
 }
 
-bool hgThreadsHelp(const HgFence* fence, f64 timeout)
+bool hgThreadsHelp(HgFence fence, f64 timeout)
 {
-    hgAssert(fence != nullptr);
-
     auto end = std::chrono::steady_clock::now() + std::chrono::duration<f64>(timeout);
     while (!hgFenceIsComplete(fence) && std::chrono::steady_clock::now() < end)
     {
@@ -1970,10 +1996,10 @@ bool hgThreadsHelp(const HgFence* fence, f64 timeout)
     return hgFenceIsComplete(fence);
 }
 
-void hgThreadsCall(HgFence* fence, void* data, void (*fn)(void* data))
+void hgThreadsCall(HgFence fence, void* data, void (*fn)(void* data))
 {
     hgAssert(fn != nullptr);
-    if (fence != nullptr)
+    if (fence.handle.id != HgHandle{}.id)
         hgFenceAttach(fence, 1);
 
     u32 idx = threadPool.workingHead.fetch_add(1) & (threadPool.workCapacity - 1);
@@ -2007,7 +2033,9 @@ void hgThreadsFor(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx
 
     u64 chunkSize = (u64)std::ceil((f32)(end - begin) / (8.0f * (f32)hgHardwareThreadCount()));
 
-    HgFence fence;
+    HgFence fence = hgFenceCreate();
+    hgDefer(hgFenceDestroy(fence));
+
     for (u64 i = begin; i < end; i += chunkSize)
     {
         struct Capture
@@ -2024,7 +2052,7 @@ void hgThreadsFor(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx
         capture->begin = i;
         capture->end = std::min(i + chunkSize, end);
 
-        hgThreadsCall(&fence, capture, [](void* pcapture)
+        hgThreadsCall(fence, capture, [](void* pcapture)
         {
             Capture* capture = (Capture*)pcapture;
             for (u64 i = capture->begin; i < capture->end; ++i)
@@ -2033,11 +2061,11 @@ void hgThreadsFor(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx
             }
         });
     }
-    hgThreadsHelp(&fence, INFINITY);
+    hgThreadsHelp(fence, INFINITY);
 }
 
 struct IORequest {
-    HgFence* fence;
+    HgFence fence;
     void* resource;
     HgStringView path;
     void (*fn)(void* resource, HgStringView path);
@@ -2072,7 +2100,7 @@ static bool ioPop()
     hgAssert(request.fn != nullptr);
     request.fn(request.resource, request.path);
 
-    if (request.fence != nullptr)
+    if (request.fence.handle.id != HgHandle{}.id)
         hgFenceSignal(request.fence, 1);
     return true;
 }
@@ -2115,10 +2143,10 @@ void hgIoDeinit()
     ioThread.thread.join();
 }
 
-void hgIoRequest(HgFence* fence, void* resource, HgStringView path, void (*fn)(void* resource, HgStringView path))
+void hgIoRequest(HgFence fence, void* resource, HgStringView path, void (*fn)(void* resource, HgStringView path))
 {
     hgAssert(fn != nullptr);
-    if (fence != nullptr)
+    if (fence.handle.id != HgHandle{}.id)
         hgFenceAttach(fence, 1);
 
     u32 idx = ioThread.workingHead.fetch_add(1) & (ioThread.requestCapacity - 1);
@@ -2357,7 +2385,7 @@ void hgLoadEmptyResource(HgResource id)
     }
 }
 
-void hgLoadResource(HgFence* fence, HgResource id, HgStringView path)
+void hgLoadResource(HgFence fence, HgResource id, HgStringView path)
 {
     if (binResources.load(id))
     {
@@ -2402,7 +2430,7 @@ void hgLoadResource(HgFence* fence, HgResource id, HgStringView path)
     }
 }
 
-void hgUnloadResource(HgFence* fence, HgResource id)
+void hgUnloadResource(HgFence fence, HgResource id)
 {
     HgBinary* bin;
     if (binResources.unload(id, &bin))
@@ -2416,7 +2444,7 @@ void hgUnloadResource(HgFence* fence, HgResource id)
     }
 }
 
-void hgStoreResource(HgFence* fence, HgResource id, HgStringView path)
+void hgStoreResource(HgFence fence, HgResource id, HgStringView path)
 {
     HgBinary** res = (HgBinary**)binResources.get(id);
     if (res == nullptr || *res == nullptr)
@@ -2462,7 +2490,7 @@ void* HgImageData::getPixels()
     return bin.data;
 }
 
-void hgImportPng(HgFence* fence, HgResource id, HgStringView path)
+void hgImportPng(HgFence fence, HgResource id, HgStringView path)
 {
     hgLoadResource(fence, id, path);
 
@@ -2499,7 +2527,7 @@ void hgImportPng(HgFence* fence, HgResource id, HgStringView path)
     });
 }
 
-void hgExportPng(HgFence* fence, HgResource id, HgStringView path)
+void hgExportPng(HgFence fence, HgResource id, HgStringView path)
 {
     HgBinary* resource = hgGetResource(id);
     if (resource == nullptr)
@@ -2569,7 +2597,7 @@ void* HgModelData::getIndexData()
     return nullptr;
 }
 
-void hgImportGltf(HgFence* fence, HgResource id, HgStringView path)
+void hgImportGltf(HgFence fence, HgResource id, HgStringView path)
 {
     (void)fence;
     (void)id;
@@ -2577,7 +2605,7 @@ void hgImportGltf(HgFence* fence, HgResource id, HgStringView path)
     hgError("hgImportGltf not implemented yet : TODO\n");
 }
 
-void hgExportGltf(HgFence* fence, HgResource id, HgStringView path)
+void hgExportGltf(HgFence fence, HgResource id, HgStringView path)
 {
     (void)fence;
     (void)id;
@@ -3214,17 +3242,19 @@ void hgInitPipeline2D(
 {
     hgAssert(colorFormat != HgFormat_undefined);
 
-    HgFence fence;
+    HgFence fence = hgFenceCreate();
+    hgDefer(hgFenceDestroy(fence));
+
     const char* spriteVertSpvName = "build/sprite.vert.spv";
     const char* spriteFragSpvName = "build/sprite.frag.spv";
     HgResource spriteVertSpvID = hgResourceID(spriteVertSpvName);
     HgResource spriteFragSpvID = hgResourceID(spriteFragSpvName);
-    hgLoadResource(&fence, spriteVertSpvID, spriteVertSpvName);
-    hgLoadResource(&fence, spriteFragSpvID, spriteFragSpvName);
-    hgDefer(hgUnloadResource(nullptr, spriteVertSpvID));
-    hgDefer(hgUnloadResource(nullptr, spriteFragSpvID));
+    hgLoadResource(fence, spriteVertSpvID, spriteVertSpvName);
+    hgLoadResource(fence, spriteFragSpvID, spriteFragSpvName);
+    hgDefer(hgUnloadResource(HgFence{}, spriteVertSpvID));
+    hgDefer(hgUnloadResource(HgFence{}, spriteFragSpvID));
 
-    hgFenceWaitIndefinite(&fence);
+    hgFenceWaitIndefinite(fence);
     HgBinary* spriteVertSpv = hgGetResource(spriteVertSpvID);
     HgBinary* spriteFragSpv = hgGetResource(spriteFragSpvID);
 
@@ -3402,17 +3432,19 @@ void hgInitPipeline3D(
     hgAssert(colorFormat != HgFormat_undefined);
     hgAssert(depthFormat != HgFormat_undefined);
 
-    HgFence fence;
+    HgFence fence = hgFenceCreate();
+    hgDefer(hgFenceDestroy(fence));
+
     const char* modelVertSpvName = "build/model.vert.spv";
     const char* modelFragSpvName = "build/model.frag.spv";
     HgResource modelVertSpvID = hgResourceID(modelVertSpvName);
     HgResource modelFragSpvID = hgResourceID(modelFragSpvName);
-    hgLoadResource(&fence, modelVertSpvID, modelVertSpvName);
-    hgLoadResource(&fence, modelFragSpvID, modelFragSpvName);
-    hgDefer(hgUnloadResource(nullptr, modelVertSpvID));
-    hgDefer(hgUnloadResource(nullptr, modelFragSpvID));
+    hgLoadResource(fence, modelVertSpvID, modelVertSpvName);
+    hgLoadResource(fence, modelFragSpvID, modelFragSpvName);
+    hgDefer(hgUnloadResource(HgFence{}, modelVertSpvID));
+    hgDefer(hgUnloadResource(HgFence{}, modelFragSpvID));
 
-    hgFenceWaitIndefinite(&fence);
+    hgFenceWaitIndefinite(fence);
     HgBinary* modelVertSpv = hgGetResource(modelVertSpvID);
     HgBinary* modelFragSpv = hgGetResource(modelFragSpvID);
 

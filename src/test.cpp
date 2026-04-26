@@ -1,5 +1,6 @@
 #include "hurdygurdy.hpp"
 
+#include <atomic>
 #include <thread>
 
 #include <emmintrin.h>
@@ -119,6 +120,44 @@ void hgTest()
 
             arena.head = 0;
         }
+    }
+
+    // HgHandle and HgPool
+    {
+        HgArena* arena = hgScratch();
+        HgArenaScope arenaScope{arena};
+
+        HgPool<u32> pool = hgPoolCreate<u32>(arena, 32);
+
+        HgHandle u1 = hgPoolAlloc(&pool);
+        hgAssert(hgPoolAlive(&pool, u1));
+        hgAssert(u1.id == 0);
+        hgAssert(hgPoolGet(&pool, u1) != nullptr);
+        *hgPoolGet(&pool, u1) = 12;
+        hgAssert(*hgPoolGet(&pool, u1) == 12);
+
+        HgHandle u2 = hgPoolAlloc(&pool);
+        hgAssert(hgPoolAlive(&pool, u2));
+        hgAssert(u2.id == 1);
+        hgAssert(hgPoolGet(&pool, u2) != nullptr);
+        *hgPoolGet(&pool, u2) = 42;
+        hgAssert(*hgPoolGet(&pool, u2) == 42);
+
+        hgPoolFree(&pool, u1);
+        hgAssert(!hgPoolAlive(&pool, u1));
+
+        HgHandle u12 = hgPoolAlloc(&pool);
+        hgAssert(hgPoolAlive(&pool, u12));
+        hgAssert(!hgPoolAlive(&pool, u1));
+        hgAssert(u12.id != 0);
+        hgAssert(hgHandleIdx(u12) == 0);
+        hgAssert(hgPoolGet(&pool, u12) != nullptr);
+        hgAssert(*hgPoolGet(&pool, u12) == 12);
+
+        hgPoolReset(&pool);
+        hgAssert(!hgPoolAlive(&pool, u1));
+        hgAssert(!hgPoolAlive(&pool, u2));
+        hgAssert(!hgPoolAlive(&pool, u12));
     }
 
     // HgString
@@ -1551,41 +1590,43 @@ void hgTest()
 
     // thread pool
     {
-        HgFence fence;
+        HgFence fence = hgFenceCreate();
+        hgDefer(hgFenceDestroy(fence));
 
         bool a = false;
         bool b = false;
 
-        hgThreadsCall(&fence, &a, [](void *pa)
+        hgThreadsCall(fence, &a, [](void *pa)
         {
             *(bool*)pa = true;
         });
-        hgThreadsCall(&fence, &b, [](void *pb)
+        hgThreadsCall(fence, &b, [](void *pb)
         {
             *(bool*)pb = true;
         });
 
-        hgFenceWait(&fence, 2.0);
+        hgFenceWait(fence, 2.0);
 
-        hgAssert(hgFenceWait(&fence, 2.0));
+        hgAssert(hgFenceWait(fence, 2.0));
 
         hgAssert(a == true);
         hgAssert(b == true);
     }
 
     {
-        HgFence fence;
+        HgFence fence = hgFenceCreate();
+        hgDefer(hgFenceDestroy(fence));
 
         bool vals[100]{};
         for (bool& val : vals)
         {
-            hgThreadsCall(&fence, &val, [](void* data)
+            hgThreadsCall(fence, &val, [](void* data)
             {
                 *(bool*)data = true;
             });
         }
 
-        hgAssert(hgThreadsHelp(&fence, 2.0));
+        hgAssert(hgThreadsHelp(fence, 2.0));
 
         for (bool& val : vals)
         {
@@ -1609,7 +1650,8 @@ void hgTest()
     }
 
     {
-        HgFence fence;
+        HgFence fence = hgFenceCreate();
+        hgDefer(hgFenceDestroy(fence));
 
         for (u32 n = 0; n < 3; ++n)
         {
@@ -1633,7 +1675,7 @@ void hgTest()
                 u32 end = begin + 25;
                 for (u32 i = begin; i < end; ++i)
                 {
-                    hgThreadsCall(&fence, vals + i, fn);
+                    hgThreadsCall(fence, vals + i, fn);
                 }
             };
             for (u32 j = 0; j < sizeof(producers) / sizeof(*producers); ++j)
@@ -1647,7 +1689,7 @@ void hgTest()
                 thread.join();
             }
 
-            hgAssert(hgThreadsHelp(&fence, 2.0));
+            hgAssert(hgThreadsHelp(fence, 2.0));
             for (auto val : vals)
             {
                 hgAssert(val == true);
@@ -1657,11 +1699,12 @@ void hgTest()
 
     // io thread
     {
-        HgFence fence;
+        HgFence fence = hgFenceCreate();
+        hgDefer(hgFenceDestroy(fence));
 
         bool vals[100]{};
 
-        hgIoRequest(&fence, vals, {}, [](void* pvals, HgStringView)
+        hgIoRequest(fence, vals, {}, [](void* pvals, HgStringView)
         {
             for (u32 i = 0; i < sizeof(vals) / sizeof(*vals); ++i)
             {
@@ -1669,7 +1712,7 @@ void hgTest()
             }
         });
 
-        hgAssert(hgFenceWait(&fence, 2.0));
+        hgAssert(hgFenceWait(fence, 2.0));
         for (u32 i = 0; i < sizeof(vals) / sizeof(*vals); ++i)
         {
             hgAssert(vals[i] == true);
@@ -1677,19 +1720,20 @@ void hgTest()
     }
 
     {
-        HgFence fence;
+        HgFence fence = hgFenceCreate();
+        hgDefer(hgFenceDestroy(fence));
 
         bool vals[100]{};
 
         for (u32 i = 0; i < sizeof(vals) / sizeof(*vals); ++i)
         {
-            hgIoRequest(&fence, &vals[i], {}, [](void* pval, HgStringView)
+            hgIoRequest(fence, &vals[i], {}, [](void* pval, HgStringView)
             {
                 *(bool*)pval = true;
             });
         }
 
-        hgAssert(hgFenceWait(&fence, 2.0));
+        hgAssert(hgFenceWait(fence, 2.0));
         for (u32 i = 0; i < sizeof(vals) / sizeof(*vals); ++i)
         {
             hgAssert(vals[i] == true);
@@ -1697,7 +1741,8 @@ void hgTest()
     }
 
     {
-        HgFence fence;
+        HgFence fence = hgFenceCreate();
+        hgDefer(hgFenceDestroy(fence));
 
         bool vals[100]{};
 
@@ -1705,13 +1750,13 @@ void hgTest()
 
         for (u32 i = 1; i < sizeof(vals) / sizeof(*vals); ++i)
         {
-            hgIoRequest(&fence, &vals[i], {}, [](void* pval, HgStringView)
+            hgIoRequest(fence, &vals[i], {}, [](void* pval, HgStringView)
             {
                 *(bool*)pval = *((bool*)pval - 1);
             });
         }
 
-        hgAssert(hgFenceWait(&fence, 2.0));
+        hgAssert(hgFenceWait(fence, 2.0));
         for (u32 i = 0; i < sizeof(vals) / sizeof(*vals); ++i)
         {
             hgAssert(vals[i] == true);
@@ -1719,7 +1764,8 @@ void hgTest()
     }
 
     {
-        HgFence fence;
+        HgFence fence = hgFenceCreate();
+        hgDefer(hgFenceDestroy(fence));
 
         for (u32 n = 0; n < 3; ++n)
         {
@@ -1738,7 +1784,7 @@ void hgTest()
                 u32 end = begin + 25;
                 for (u32 i = begin; i < end; ++i)
                 {
-                    hgIoRequest(&fence, &vals[i], {}, [](void* pval, HgStringView)
+                    hgIoRequest(fence, &vals[i], {}, [](void* pval, HgStringView)
                     {
                         *(bool*)pval = !*(bool*)pval;
                     });
@@ -1755,7 +1801,7 @@ void hgTest()
                 thread.join();
             }
 
-            hgAssert(hgFenceWait(&fence, 2.0));
+            hgAssert(hgFenceWait(fence, 2.0));
             for (auto val : vals)
             {
                 hgAssert(val == true);
@@ -1896,14 +1942,16 @@ void hgTest()
             *pbinRes = bin;
             hgDefer({
                 *hgGetResource(texId) = {};
-                hgUnloadResource(nullptr, texId);
+                hgUnloadResource(HgFence{}, texId);
             });
 
-            HgFence fence;
-            hgExportPng(&fence, texId, filePath);
-            hgImportPng(&fence, fileId, filePath);
-            hgDefer(hgUnloadResource(nullptr, fileId));
-            hgAssert(hgFenceWait(&fence, 2.0));
+            HgFence fence = hgFenceCreate();
+            hgDefer(hgFenceDestroy(fence));
+
+            hgExportPng(fence, texId, filePath);
+            hgImportPng(fence, fileId, filePath);
+            hgDefer(hgUnloadResource(HgFence{}, fileId));
+            hgAssert(hgFenceWait(fence, 2.0));
 
             HgImageData fileTexture = *hgGetResource(fileId);
 

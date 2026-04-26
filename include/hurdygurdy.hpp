@@ -35,7 +35,6 @@
 #include <cstring>
 
 #include <algorithm>
-#include <atomic>
 #include <type_traits>
 
 /**
@@ -263,6 +262,7 @@ struct HgDefer {
 struct HgInit {
     u64 arenaSize = UINT32_MAX;
 
+    u32 maxFences = 2048;
     u32 threadPoolQueueSize = 2048;
     u32 ioRequestQueueSize = 2048;
 
@@ -1641,6 +1641,148 @@ void hgScratchDeinit();
 HgArena* hgScratch(HgArena const* const* conflicts = nullptr, u32 count = 0);
 
 /**
+ * A generation counted handle
+ */
+struct HgHandle {
+    /**
+     * The handle id
+     */
+    u32 id = (u32)-1;
+};
+
+static constexpr u32 hgHandleIdxBits = 24;
+
+/**
+ * Get the index from a handle
+ */
+constexpr u32 hgHandleIdx(HgHandle handle)
+{
+    return handle.id & ((1 << hgHandleIdxBits) - 1);
+}
+
+/**
+ * Get the generation from a handle
+ */
+constexpr u32 hgHandleGeneration(HgHandle handle)
+{
+    return handle.id & ~((1 << hgHandleIdxBits) - 1);
+}
+
+/**
+ * Returns a new handle at the same index
+ */
+constexpr HgHandle hgHandleNextGeneration(HgHandle handle)
+{
+    return {handle.id + (1 << hgHandleIdxBits)};
+}
+
+/**
+ * A resource pool
+ */
+template<typename T>
+struct HgPool {
+    /**
+     * The values stored in the pool
+     */
+    T* vals;
+    /**
+     * The handle free list
+     */
+    HgHandle* freeList;
+    /**
+     * The next handle in the free list
+     */
+    HgHandle next;
+    /**
+     * The capacity of the pool
+     */
+    u32 capacity;
+};
+
+/**
+ * Reset a resource pool
+ */
+template<typename T>
+void hgPoolReset(HgPool<T>* pool)
+{
+    hgAssert(pool != nullptr);
+
+    for (u32 i = 0; i < pool->capacity; ++i)
+    {
+        pool->freeList[i] = {i + 1};
+    }
+    pool->next = {0};
+}
+
+/**
+ * Create a new resource pool
+ */
+template<typename T>
+HgPool<T> hgPoolCreate(HgArena* arena, u32 capacity)
+{
+    hgAssert(arena != nullptr);
+    hgAssert(capacity > 0);
+
+    HgPool<T> pool{};
+    pool.vals = hgAlloc<T>(arena, capacity);
+    pool.freeList = hgAlloc<HgHandle>(arena, capacity);
+    pool.capacity = capacity;
+    hgPoolReset(&pool);
+
+    return pool;
+}
+
+/**
+ * Allocate a resource from a pool
+ *
+ * Note, does not initialize the resource
+ */
+template<typename T>
+HgHandle hgPoolAlloc(HgPool<T>* pool)
+{
+    hgAssert(pool != nullptr);
+    hgAssert(hgHandleIdx(pool->next) < pool->capacity);
+
+    HgHandle handle = pool->next;
+    pool->next = pool->freeList[hgHandleIdx(handle)];
+    pool->freeList[hgHandleIdx(handle)] = handle;
+    return handle;
+}
+
+/**
+ * Free a resource back into a pool
+ *
+ * Note, the resource handle must be valid and alive
+ */
+template<typename T>
+void hgPoolFree(HgPool<T>* pool, HgHandle handle)
+{
+    hgAssert(pool->freeList[hgHandleIdx(handle)].id == handle.id);
+    pool->freeList[hgHandleIdx(handle)] = pool->next;
+    pool->next = hgHandleNextGeneration(handle);
+}
+
+/**
+ * Returns whether a handle is alive in the pool
+ */
+template<typename T>
+bool hgPoolAlive(HgPool<T>* pool, HgHandle handle)
+{
+    return pool->freeList[hgHandleIdx(handle)].id == handle.id;
+}
+
+/**
+ * Get a resource from a pool
+ */
+template<typename T>
+T* hgPoolGet(HgPool<T>* pool, HgHandle handle)
+{
+    // return hgPoolAlive(pool, handle) ? &pool->vals[hgHandleIdx(handle)] : nullptr;
+    hgAssert(hgPoolAlive(pool, handle));
+    return &pool->vals[hgHandleIdx(handle)];
+}
+
+/**
  * A span view into a string
  */
 struct HgStringView {
@@ -2667,10 +2809,30 @@ u32 hgHardwareThreadCount();
  */
 struct HgFence {
     /**
-     * The number of events the fence is waiting on
+     * The handle to the fence
      */
-    std::atomic<u32> counter{0};
+    HgHandle handle;
 };
+
+/**
+ * Initialize fences
+ */
+void hgFencesInit(HgArena* arena, u32 maxFences);
+
+/**
+ * Deinitialize fences
+ */
+void hgFencesDeinit();
+
+/**
+ * Create a new fence
+ */
+HgFence hgFenceCreate();
+
+/**
+ * Destroy a fence
+ */
+void hgFenceDestroy(HgFence fence);
 
 /**
  * Add more events for the fence to wait on
@@ -2679,7 +2841,7 @@ struct HgFence {
  * - fence The fence to attach to
  * - count The number of added events
  */
-void hgFenceAttach(HgFence* fence, u32 count);
+void hgFenceAttach(HgFence fence, u32 count);
 
 /**
  * Signal that events have completed
@@ -2688,22 +2850,22 @@ void hgFenceAttach(HgFence* fence, u32 count);
  * - fence The fence to signal
  * - count The number of signaled events
  */
-void hgFenceSignal(HgFence* fence, u32 count);
+void hgFenceSignal(HgFence fence, u32 count);
 
 /**
  * Returns whether all work has been completed
  */
-bool hgFenceIsComplete(const HgFence* fence);
+bool hgFenceIsComplete(HgFence fence);
 
 /**
  * Spin waits for all work submissions to be completed
  */
-bool hgFenceWait(const HgFence* fence, f64 timeoutSeconds);
+bool hgFenceWait(HgFence fence, f64 timeoutSeconds);
 
 /**
  * Spin waits for all work submissions to be completed
  */
-void hgFenceWaitIndefinite(const HgFence* fence);
+void hgFenceWaitIndefinite(HgFence fence);
 
 /**
  * Initialize the thread pool
@@ -2734,7 +2896,7 @@ void hgThreadsDeinit();
  * - true if the fence was completed
  * - false if the timeout was reached
  */
-bool hgThreadsHelp(const HgFence* fence, f64 timeout);
+bool hgThreadsHelp(HgFence fence, f64 timeout);
 
 /**
  * Pushes work to the thread pool queue to be executed
@@ -2744,7 +2906,7 @@ bool hgThreadsHelp(const HgFence* fence, f64 timeout);
  * - data The data passed to the function
  * - work The function to be executed
  */
-void hgThreadsCall(HgFence* fence, void* data, void (*fn)(void* data));
+void hgThreadsCall(HgFence fence, void* data, void (*fn)(void* data));
 
 /**
  * Iterates in parallel over a function n times using the thread pool
@@ -2782,7 +2944,7 @@ void hgIoDeinit();
  * - path The path string passed to fn
  * - fn The function to execute
  */
-void hgIoRequest(HgFence* fence, void* resource, HgStringView path, void (*fn)(void* resource, HgStringView path));
+void hgIoRequest(HgFence fence, void* resource, HgStringView path, void (*fn)(void* resource, HgStringView path));
 
 /**
  * Gpu init config
@@ -4743,7 +4905,7 @@ void hgLoadEmptyResource(HgResource id);
  * - id The resource to load into
  * - path The filepath to load from
  */
-void hgLoadResource(HgFence* fence, HgResource id, HgStringView path);
+void hgLoadResource(HgFence fence, HgResource id, HgStringView path);
 
 /**
  * Unloads a resource (or just decrements the reference count)
@@ -4752,7 +4914,7 @@ void hgLoadResource(HgFence* fence, HgResource id, HgStringView path);
  * - fence The fence to signal on completion
  * - id The resource to load into
  */
-void hgUnloadResource(HgFence* fence, HgResource id);
+void hgUnloadResource(HgFence fence, HgResource id);
 
 /**
  * Stores a resource to disc
@@ -4762,7 +4924,7 @@ void hgUnloadResource(HgFence* fence, HgResource id);
  * - id The resource to load into
  * - path The filepath to store to
  */
-void hgStoreResource(HgFence* fence, HgResource id, HgStringView path);
+void hgStoreResource(HgFence fence, HgResource id, HgStringView path);
 
 /**
  * Get a resource from the global store
@@ -4858,7 +5020,7 @@ struct HgImageData {
  * - id The resource to load into
  * - path The path of the file to import
  */
-void hgImportPng(HgFence* fence, HgResource id, HgStringView path);
+void hgImportPng(HgFence fence, HgResource id, HgStringView path);
 
 /**
  * Store a image resource onto disc in an external file format
@@ -4868,7 +5030,7 @@ void hgImportPng(HgFence* fence, HgResource id, HgStringView path);
  * - id The resource to export
  * - path The path of the file to export to
  */
-void hgExportPng(HgFence* fence, HgResource id, HgStringView path);
+void hgExportPng(HgFence fence, HgResource id, HgStringView path);
 
 /**
  * A vertex in a model
@@ -4983,7 +5145,7 @@ struct HgModelData {
  * - id The resource to load to
  * - path The path of the file to import
  */
-void hgImportGltf(HgFence* fence, HgResource id, HgStringView path);
+void hgImportGltf(HgFence fence, HgResource id, HgStringView path);
 
 /**
  * Store a model resource onto disc in an external file format : TODO
@@ -4993,7 +5155,7 @@ void hgImportGltf(HgFence* fence, HgResource id, HgStringView path);
  * - id The resource to export
  * - path The path of the file to export to
  */
-void hgExportGltf(HgFence* fence, HgResource id, HgStringView path);
+void hgExportGltf(HgFence fence, HgResource id, HgStringView path);
 
 /**
  * Initialize all gpu resource managers
