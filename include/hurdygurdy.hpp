@@ -271,10 +271,11 @@ struct HgInit {
     u32 maxWindows = 8;
     u32 maxWindowEvents = 2048;
 
-    u32 maxResources = 512;
-    u32 maxTextures = 512;
-    u32 maxModels = 512;
-
+    u32 maxBinaries = 256;
+    u32 maxImages = 256;
+    u32 maxTextures = 256;
+    u32 maxMeshes = 256;
+    u32 maxModels = 256;
 };
 
 /**
@@ -1641,148 +1642,6 @@ void hgScratchDeinit();
 HgArena* hgScratch(HgArena const* const* conflicts = nullptr, u32 count = 0);
 
 /**
- * A generation counted handle
- */
-struct HgHandle {
-    /**
-     * The handle id
-     */
-    u32 id = (u32)-1;
-};
-
-static constexpr u32 hgHandleIdxBits = 24;
-
-/**
- * Get the index from a handle
- */
-constexpr u32 hgHandleIdx(HgHandle handle)
-{
-    return handle.id & ((1 << hgHandleIdxBits) - 1);
-}
-
-/**
- * Get the generation from a handle
- */
-constexpr u32 hgHandleGeneration(HgHandle handle)
-{
-    return handle.id & ~((1 << hgHandleIdxBits) - 1);
-}
-
-/**
- * Returns a new handle at the same index
- */
-constexpr HgHandle hgHandleNextGeneration(HgHandle handle)
-{
-    return {handle.id + (1 << hgHandleIdxBits)};
-}
-
-/**
- * A resource pool
- */
-template<typename T>
-struct HgPool {
-    /**
-     * The values stored in the pool
-     */
-    T* vals;
-    /**
-     * The handle free list
-     */
-    HgHandle* freeList;
-    /**
-     * The next handle in the free list
-     */
-    HgHandle next;
-    /**
-     * The capacity of the pool
-     */
-    u32 capacity;
-};
-
-/**
- * Reset a resource pool
- */
-template<typename T>
-void hgPoolReset(HgPool<T>* pool)
-{
-    hgAssert(pool != nullptr);
-
-    for (u32 i = 0; i < pool->capacity; ++i)
-    {
-        pool->freeList[i] = {i + 1};
-    }
-    pool->next = {0};
-}
-
-/**
- * Create a new resource pool
- */
-template<typename T>
-HgPool<T> hgPoolCreate(HgArena* arena, u32 capacity)
-{
-    hgAssert(arena != nullptr);
-    hgAssert(capacity > 0);
-
-    HgPool<T> pool{};
-    pool.vals = hgAlloc<T>(arena, capacity);
-    pool.freeList = hgAlloc<HgHandle>(arena, capacity);
-    pool.capacity = capacity;
-    hgPoolReset(&pool);
-
-    return pool;
-}
-
-/**
- * Allocate a resource from a pool
- *
- * Note, does not initialize the resource
- */
-template<typename T>
-HgHandle hgPoolAlloc(HgPool<T>* pool)
-{
-    hgAssert(pool != nullptr);
-    hgAssert(hgHandleIdx(pool->next) < pool->capacity);
-
-    HgHandle handle = pool->next;
-    pool->next = pool->freeList[hgHandleIdx(handle)];
-    pool->freeList[hgHandleIdx(handle)] = handle;
-    return handle;
-}
-
-/**
- * Free a resource back into a pool
- *
- * Note, the resource handle must be valid and alive
- */
-template<typename T>
-void hgPoolFree(HgPool<T>* pool, HgHandle handle)
-{
-    hgAssert(pool->freeList[hgHandleIdx(handle)].id == handle.id);
-    pool->freeList[hgHandleIdx(handle)] = pool->next;
-    pool->next = hgHandleNextGeneration(handle);
-}
-
-/**
- * Returns whether a handle is alive in the pool
- */
-template<typename T>
-bool hgPoolAlive(HgPool<T>* pool, HgHandle handle)
-{
-    return pool->freeList[hgHandleIdx(handle)].id == handle.id;
-}
-
-/**
- * Get a resource from a pool
- */
-template<typename T>
-T* hgPoolGet(HgPool<T>* pool, HgHandle handle)
-{
-    // return hgPoolAlive(pool, handle) ? &pool->vals[hgHandleIdx(handle)] : nullptr;
-    hgAssert(hgPoolAlive(pool, handle));
-    return &pool->vals[hgHandleIdx(handle)];
-}
-
-/**
  * A span view into a string
  */
 struct HgStringView {
@@ -2227,6 +2086,150 @@ struct HgJson {
 HgJson hgParseJson(HgArena* arena, HgStringView text);
 
 /**
+ * A generation counted handle
+ */
+struct HgHandle {
+    /**
+     * The handle id
+     */
+    u32 id = (u32)-1;
+};
+
+static constexpr u32 hgHandleIdxBits = 24;
+
+/**
+ * Get the index from a handle
+ */
+constexpr u32 hgHandleIdx(HgHandle handle)
+{
+    return handle.id & ((1 << hgHandleIdxBits) - 1);
+}
+
+/**
+ * Get the generation from a handle
+ */
+constexpr u32 hgHandleGeneration(HgHandle handle)
+{
+    return handle.id & ~((1 << hgHandleIdxBits) - 1);
+}
+
+/**
+ * Returns a new handle at the same index
+ */
+constexpr HgHandle hgHandleNextGeneration(HgHandle handle)
+{
+    return {handle.id + (1 << hgHandleIdxBits)};
+}
+
+/**
+ * An object pool
+ */
+template<typename T>
+struct HgPool {
+    static_assert(std::is_trivially_copyable_v<T> && std::is_trivially_destructible_v<T>);
+
+    /**
+     * The values stored in the pool
+     */
+    T* vals;
+    /**
+     * The handle free list
+     */
+    HgHandle* freeList;
+    /**
+     * The next handle in the free list
+     */
+    HgHandle next;
+    /**
+     * The capacity of the pool
+     */
+    u32 capacity;
+};
+
+/**
+ * Reset an object pool
+ */
+template<typename T>
+void hgPoolReset(HgPool<T>* pool)
+{
+    hgAssert(pool != nullptr);
+
+    for (u32 i = 0; i < pool->capacity; ++i)
+    {
+        pool->freeList[i] = {i + 1};
+    }
+    pool->next = {0};
+}
+
+/**
+ * Create a new object pool
+ */
+template<typename T>
+HgPool<T> hgPoolCreate(HgArena* arena, u32 capacity)
+{
+    hgAssert(arena != nullptr);
+    hgAssert(capacity > 0);
+
+    HgPool<T> pool{};
+    pool.vals = hgAlloc<T>(arena, capacity);
+    pool.freeList = hgAlloc<HgHandle>(arena, capacity);
+    pool.capacity = capacity;
+    hgPoolReset(&pool);
+
+    return pool;
+}
+
+/**
+ * Allocate an object from a pool
+ *
+ * Note, does not initialize the object
+ */
+template<typename T>
+HgHandle hgPoolAlloc(HgPool<T>* pool)
+{
+    hgAssert(pool != nullptr);
+    hgAssert(hgHandleIdx(pool->next) < pool->capacity);
+
+    HgHandle handle = pool->next;
+    pool->next = pool->freeList[hgHandleIdx(handle)];
+    pool->freeList[hgHandleIdx(handle)] = handle;
+    return handle;
+}
+
+/**
+ * Free an object back into a pool
+ *
+ * Note, the object handle must be valid and alive
+ */
+template<typename T>
+void hgPoolFree(HgPool<T>* pool, HgHandle handle)
+{
+    hgAssert(pool->freeList[hgHandleIdx(handle)].id == handle.id);
+    pool->freeList[hgHandleIdx(handle)] = pool->next;
+    pool->next = hgHandleNextGeneration(handle);
+}
+
+/**
+ * Returns whether a handle is alive in the pool
+ */
+template<typename T>
+bool hgPoolAlive(HgPool<T>* pool, HgHandle handle)
+{
+    return pool->freeList[hgHandleIdx(handle)].id == handle.id;
+}
+
+/**
+ * Get an object from a pool
+ */
+template<typename T>
+T* hgPoolGet(HgPool<T>* pool, HgHandle handle)
+{
+    // return hgPoolAlive(pool, handle) ? &pool->vals[hgHandleIdx(handle)] : nullptr;
+    hgAssert(hgPoolAlive(pool, handle));
+    return &pool->vals[hgHandleIdx(handle)];
+}
+
+/**
  * Hash map hashing for u8
  */
 constexpr u64 hgHash(u8 val)
@@ -2339,6 +2342,14 @@ constexpr u64 hgHash(void* val)
 }
 
 /**
+ * Hash map hashing for HgHandle
+ */
+constexpr u64 hgHash(HgHandle handle)
+{
+    return handle.id;
+}
+
+/**
  * Hash map hashing for strings
  */
 constexpr u64 hgHash(HgStringView str)
@@ -2372,14 +2383,10 @@ constexpr u64 hgHash(const char* str)
 /**
  * A hash set
  */
-template<typename V, u64 (*HashFn)(V) = hgHash>
+template<typename V, u64 (*hashFn)(V) = hgHash>
 struct HgSet {
     static_assert(std::is_trivially_copyable_v<V> && std::is_trivially_destructible_v<V>);
 
-    /**
-     * The hash function
-     */
-    static constexpr u64 (*hashFn)(V) = HashFn;
     /**
      * Whether each index has a value
      */
@@ -2405,12 +2412,12 @@ struct HgSet {
  * - arena The arena to allocate from
  * - slotCount The max number of slots to store values in
  */
-template<typename V>
-HgSet<V> hgSetCreate(HgArena* arena, u32 slotCount)
+template<typename V, u64 (*hashFn)(V) = hgHash>
+HgSet<V, hashFn> hgSetCreate(HgArena* arena, u32 slotCount)
 {
     hgAssert(slotCount > 0);
 
-    HgSet<V> set;
+    HgSet<V, hashFn> set;
     set.hasVal = hgAlloc<bool>(arena, slotCount);
     set.vals = hgAlloc<V>(arena, slotCount);
     set.capacity = slotCount;
@@ -2421,8 +2428,8 @@ HgSet<V> hgSetCreate(HgArena* arena, u32 slotCount)
 /**
  * Empties all slots
  */
-template<typename V>
-void hgSetReset(HgSet<V>* set)
+template<typename V, u64 (*hashFn)(V) = hgHash>
+void hgSetReset(HgSet<V, hashFn>* set)
 {
     for (u32 i = 0; i < set->capacity; ++i)
     {
@@ -2434,18 +2441,18 @@ void hgSetReset(HgSet<V>* set)
 /**
  * Add a value to the set
  */
-template<typename V, typename T = V>
-void hgSetAdd(HgSet<V>* set, const T& val)
+template<typename V, typename T = V, u64 (*hashFn)(V) = hgHash>
+void hgSetAdd(HgSet<V, hashFn>* set, const T& val)
 {
     static_assert(std::is_convertible_v<T, V>);
     V v = (V)val;
 
     hgAssert(set->count < set->capacity - 1);
 
-    u32 idx = set->hashFn(v) % set->capacity;
+    u32 idx = hashFn(v) % set->capacity;
     for (u32 dist = 0; set->hasVal[idx] && set->vals[idx] != v; ++dist)
     {
-        u32 otherDist = set->hashFn(set->vals[idx]) % set->capacity - idx;
+        u32 otherDist = hashFn(set->vals[idx]) % set->capacity - idx;
         if (otherDist > set->capacity)
             otherDist += set->capacity;
 
@@ -2468,13 +2475,13 @@ void hgSetAdd(HgSet<V>* set, const T& val)
 /**
  * Remove a value from the set
  */
-template<typename V, typename T = V>
-void hgSetRemove(HgSet<V>* set, const T& val)
+template<typename V, typename T = V, u64 (*hashFn)(V) = hgHash>
+void hgSetRemove(HgSet<V, hashFn>* set, const T& val)
 {
     static_assert(std::is_convertible_v<T, V>);
     V v = (V)val;
 
-    u32 idx = set->hashFn(v) % set->capacity;
+    u32 idx = hashFn(v) % set->capacity;
     while (set->hasVal[idx])
     {
         if (set->vals[idx] == v)
@@ -2487,7 +2494,7 @@ void hgSetRemove(HgSet<V>* set, const T& val)
     u32 next = (idx + 1) % set->capacity;
     while (set->hasVal[next])
     {
-        if (set->hashFn(set->vals[next]) % set->capacity != next)
+        if (hashFn(set->vals[next]) % set->capacity != next)
         {
             set->vals[idx] = set->vals[next];
             idx = next;
@@ -2501,13 +2508,13 @@ void hgSetRemove(HgSet<V>* set, const T& val)
 /**
  * Checks whether a value is contained in the set
  */
-template<typename V, typename T = V>
+template<typename V, typename T = V, u64 (*hashFn)(V) = hgHash>
 bool hgSetHas(const HgSet<V>* set, const T& val)
 {
     static_assert(std::is_convertible_v<T, V>);
     V v = (V)val;
 
-    for (u32 idx = set->hashFn(v) % set->capacity; set->hasVal[idx]; idx = (idx + 1) % set->capacity)
+    for (u32 idx = hashFn(v) % set->capacity; set->hasVal[idx]; idx = (idx + 1) % set->capacity)
     {
         if (set->vals[idx] == v)
             return true;
@@ -2518,17 +2525,13 @@ bool hgSetHas(const HgSet<V>* set, const T& val)
 /**
  * A key-value hash map
  */
-template<typename K, typename V, u64 (*HashFn)(K) = hgHash>
+template<typename K, typename V, u64 (*hashFn)(K) = hgHash>
 struct HgMap {
     static_assert(std::is_trivially_copyable_v<K>
                && std::is_trivially_copyable_v<V>
                && std::is_trivially_destructible_v<K>
                && std::is_trivially_destructible_v<V>);
 
-    /**
-     * The hash function
-     */
-    static constexpr u64 (*hashFn)(K) = HashFn;
     /**
      * Whether each index has a value
      */
@@ -2558,8 +2561,8 @@ struct HgMap {
  * - arena The arena to allocate from
  * - slotCount The max number of slots to store values in
  */
-template<typename K, typename V>
-HgMap<K, V> hgMapCreate(HgArena* arena, u32 slotCount)
+template<typename K, typename V, u64 (*hashFn)(K) = hgHash>
+HgMap<K, V, hashFn> hgMapCreate(HgArena* arena, u32 slotCount)
 {
     hgAssert(slotCount > 0);
 
@@ -2575,8 +2578,8 @@ HgMap<K, V> hgMapCreate(HgArena* arena, u32 slotCount)
 /**
  * Empties all slots
  */
-template<typename K, typename V>
-void hgMapReset(HgMap<K, V>* map)
+template<typename K, typename V, u64 (*hashFn)(K) = hgHash>
+void hgMapReset(HgMap<K, V, hashFn>* map)
 {
     for (u32 i = 0; i < map->capacity; ++i)
     {
@@ -2594,8 +2597,8 @@ void hgMapReset(HgMap<K, V>* map)
  * Returns
  * - A reference to the added value
  */
-template<typename K, typename V, typename T = K, typename U = V>
-V* hgMapAdd(HgMap<K, V>* map, const T& key, const U& val)
+template<typename K, typename V, typename T = K, typename U = V, u64 (*hashFn)(K) = hgHash>
+V* hgMapAdd(HgMap<K, V, hashFn>* map, const T& key, const U& val)
 {
     static_assert(std::is_convertible_v<T, K> && std::is_convertible_v<U, V>);
     K k = (K)key;
@@ -2603,10 +2606,10 @@ V* hgMapAdd(HgMap<K, V>* map, const T& key, const U& val)
 
     hgAssert(map->count < map->capacity - 1);
 
-    u32 idx = map->hashFn(k) % map->capacity;
+    u32 idx = hashFn(k) % map->capacity;
     for (u32 dist = 0; map->hasVal[idx] && map->keys[idx] != k; ++dist)
     {
-        u32 otherDist = map->hashFn(map->keys[idx]) % map->capacity - idx;
+        u32 otherDist = hashFn(map->keys[idx]) % map->capacity - idx;
         if (otherDist > map->capacity)
             otherDist += map->capacity;
 
@@ -2642,13 +2645,13 @@ V* hgMapAdd(HgMap<K, V>* map, const T& key, const U& val)
  * Returns
  * - Whether a value was found and stored in value
  */
-template<typename K, typename V, typename T = K>
-bool hgMapRemove(HgMap<K, V>* map, const T& key, V* val = nullptr)
+template<typename K, typename V, typename T = K, u64 (*hashFn)(K) = hgHash>
+bool hgMapRemove(HgMap<K, V, hashFn>* map, const T& key, V* val = nullptr)
 {
     static_assert(std::is_convertible_v<T, K>);
     K k = (K)key;
 
-    u32 idx = map->hashFn(k) % map->capacity;
+    u32 idx = hashFn(k) % map->capacity;
     while (map->hasVal[idx])
     {
         if (map->keys[idx] == k)
@@ -2664,7 +2667,7 @@ bool hgMapRemove(HgMap<K, V>* map, const T& key, V* val = nullptr)
     u32 next = (idx + 1) % map->capacity;
     while (map->hasVal[next])
     {
-        if (map->hashFn(map->keys[next]) % map->capacity != next)
+        if (hashFn(map->keys[next]) % map->capacity != next)
         {
             map->keys[idx] = map->keys[next];
             map->vals[idx] = map->vals[next];
@@ -2684,13 +2687,13 @@ bool hgMapRemove(HgMap<K, V>* map, const T& key, V* val = nullptr)
  * Returns
  * - A pointer to the value, or nullptr if it does not exist
  */
-template<typename K, typename V, typename T = K>
-V* hgMapGet(const HgMap<K, V>* map, const T& key)
+template<typename K, typename V, typename T = K, u64 (*hashFn)(K) = hgHash>
+V* hgMapGet(const HgMap<K, V, hashFn>* map, const T& key)
 {
     static_assert(std::is_convertible_v<T, K>);
     K k = (K)key;
 
-    for (u32 idx = map->hashFn(key) % map->capacity; map->hasVal[idx]; idx = (idx + 1) % map->capacity)
+    for (u32 idx = hashFn(key) % map->capacity; map->hasVal[idx]; idx = (idx + 1) % map->capacity)
     {
         if (map->keys[idx] == k)
             return map->vals + idx;
@@ -2940,11 +2943,11 @@ void hgIoDeinit();
  *
  * Parameters
  * - fence The fence to signal on completion
- * - resource The resource pointer passed to fn
+ * - data The data pointer passed to fn
  * - path The path string passed to fn
  * - fn The function to execute
  */
-void hgIoRequest(HgFence fence, void* resource, HgStringView path, void (*fn)(void* resource, HgStringView path));
+void hgIoRequest(HgFence fence, void* data, HgStringView path, void (*fn)(void* data, HgStringView path));
 
 /**
  * Gpu init config
@@ -4654,126 +4657,189 @@ HgWindowEvent* hgWindowEvents(HgWindow* window, u32* count);
 // file system : TODO
 
 /**
- * The uuid derived from the resource's name/path
+ * Initialize all default HurdyGurdy asset types
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - maxBinaries The max number of binary assets
  */
-using HgResource = u64;
+void hgAssetsInit(HgArena* arena, u32 maxBinaries, u32 maxImages, u32 maxTextures, u32 maxMeshes, u32 maxModels);
 
 /**
- * Get the resource uuid from the name/path
+ * Typed handles for assets
  */
-constexpr HgResource hgResourceID(HgStringView name)
-{
-    return hgHash(name);
-}
-
-/**
- * A resource manager
- */
-struct HgResourceManager {
-    /**
-     * The reference count for each resource
-     */
-    u32* refCounts;
-    /**
-     * Where the resource ids are stored;
-     */
-    HgResource* ids;
-    /**
-     * Where the resources are stored;
-     */
-    void* resources;
-    /**
-     * The size of each resource in bytes
-     */
-    u32 width;
-    /**
-     * The current number of resources that are stored
-     */
-    u32 count;
-    /**
-     * The max number of resources
-     */
-    u32 capacity;
+template<typename T>
+struct HgAssetHandle {
+    static_assert(std::is_trivially_copyable_v<T> && std::is_trivially_destructible_v<T>);
 
     /**
-     * Creates a new resource manager
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - width The size in bytes of each resource
-     * - align The alignment in bytes of each resource
-     * - capacity The initial number of slots
+     * The handle value
      */
-    static HgResourceManager create(HgArena* arena, u32 width, u32 align, u32 capacity);
-
-    /**
-     * Empties all slots
-     */
-    void reset();
-
-    /**
-     * Add a resource to the resource manager
-     *
-     * Returns
-     * - The new index of the resource
-     */
-    u32 add(HgResource id);
-
-    /**
-     * Remove a resource from the resource manager
-     */
-    void remove(HgResource id);
-
-    /**
-     * Increment the resource's reference count
-     *
-     * Note, automatically adds the resource if needed
-     *
-     * Returns
-     * - Whether the reference count was 0, and needs to be loaded
-     */
-    bool load(HgResource id);
-
-    /**
-     * Decrement the resource's reference count
-     *
-     * Parameters
-     * - id The resource to unload
-     * - resource A pointer to store the resource if it needs to be unloaded
-     *
-     * Returns
-     * - Whether the reference count dropped to 0, and needs to be unloaded
-     */
-    bool unload(HgResource id, void* resource);
-
-    /**
-     * Get a pointer to a resource
-     *
-     * Returns
-     * - A pointer to the resource, or nullptr if it is not loaded
-     */
-    void* get(HgResource id);
-
-    /**
-     * Execute a function for every key-value pair
-     *
-     * Parameters
-     * - fn The function to execute
-     */
-    template<typename Fn>
-    void forEach(Fn fn)
-    {
-        static_assert(std::is_invocable_r_v<void, Fn, HgResource, void*>);
-        for (u32 i = 0; i < capacity; ++i)
-        {
-            if (refCounts[i] != (u32)-1 && refCounts[i] > 0)
-                fn(ids[i], (u8*)resources + i * width);
-        }
-    }
+    HgHandle handle;
 };
 
 /**
- * A loaded binary file
+ * The extra data associated with assets
+ */
+template<typename T>
+struct HgAssetData {
+    static_assert(std::is_trivially_copyable_v<T> && std::is_trivially_destructible_v<T>);
+
+    /**
+     * The asset
+     */
+    T asset;
+    /**
+     * The reference count
+     */
+    u32 refCount;
+    /**
+     * Whether the asset has finished loading
+     */
+    HgFence isLoaded;
+    /**
+     * The unique path for caching
+     */
+    HgStringView path;
+};
+
+/**
+ * A asset manager
+ */
+template<typename T>
+struct HgAssetManager {
+    static_assert(std::is_trivially_copyable_v<T> && std::is_trivially_destructible_v<T>);
+
+    /**
+     * The asset lookup
+     */
+    HgMap<HgStringView, HgHandle> map;
+    /**
+     * The asset pool
+     */
+    HgPool<HgAssetData<T>> pool;
+};
+
+/**
+ * Create an asset manager
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - maxAssets The max number of assets which can be created in the manager
+ *
+ * Returns
+ * - The created asset manager
+ */
+template<typename T>
+HgAssetManager<T> hgAssetManagerCreate(HgArena* arena, u32 maxAssets)
+{
+    HgAssetManager<T> am{};
+    am.map = hgMapCreate<HgStringView, HgHandle>(arena, maxAssets * 2);
+    am.pool = hgPoolCreate<HgAssetData<T>>(arena, maxAssets);
+    return am;
+}
+
+/**
+ * Create an asset (or increment the ref count)
+ *
+ * Parameters
+ * - assets The asset manager to create in
+ * - path The unique path for caching
+ * - out A pointer to return the handle
+ *
+ * Returns
+ * - Whether the asset needs to be loaded
+ */
+template<typename T>
+bool hgAssetCreate(HgAssetManager<T>* assets, HgStringView path, HgAssetHandle<T>* out)
+{
+    HgHandle* handle = hgMapGet(&assets->map, path);
+    if (handle != nullptr)
+    {
+        *out = {*handle};
+        return false;
+    }
+
+    char* pathStore = (char*)malloc(path.length);
+    memcpy(pathStore, path.chars, path.length);
+
+    handle = hgMapAdd(&assets->map, {pathStore, path.length}, hgPoolAlloc(&assets->pool));
+
+    HgAssetData<T>* data = hgPoolGet(&assets->pool, *handle);
+    data->path = {pathStore, path.length};
+    data->isLoaded = hgFenceCreate();
+    data->refCount = 1;
+    data->asset = {};
+
+    *out = {*handle};
+    return true;
+}
+
+/**
+ * Destroy an asset (or decrement the ref count)
+ *
+ * Parameters
+ * - assets The asset manager to destroy from
+ * - handle The asset to destroy
+ * - asset A pointer to return the asset, if destroyed
+ *
+ * Returns
+ * - Whether the asset needs to be unloaded
+ */
+template<typename T>
+bool hgAssetDestroy(HgAssetManager<T>* assets, HgAssetHandle<T> handle, T* asset)
+{
+    hgAssert(hgPoolAlive(&assets->pool, handle.handle));
+
+    HgAssetData<T>* data = hgPoolGet(&assets->pool, handle.handle);
+    if (--data->refCount == 0)
+    {
+        *asset = data->asset;
+        hgFenceDestroy(data->isLoaded);
+        free((void*)data->path.chars);
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Returns the asset's data
+ */
+template<typename T>
+T* hgAssetGet(HgAssetManager<T>* assets, HgAssetHandle<T> handle)
+{
+    return &hgPoolGet(&assets->pool, handle.handle)->asset;
+}
+
+/**
+ * Returns the reference count associated with an asset
+ */
+template<typename T>
+u32 hgAssetRefCount(HgAssetManager<T>* assets, HgAssetHandle<T> handle)
+{
+    return hgPoolGet(&assets->pool, handle.handle)->refCount;
+}
+
+/**
+ * Returns the fence associated with an asset, whether it is finished loading
+ */
+template<typename T>
+HgFence hgAssetFence(HgAssetManager<T>* assets, HgAssetHandle<T> handle)
+{
+    return hgPoolGet(&assets->pool, handle.handle)->isLoaded;
+}
+
+/**
+ * Returns the path associated with an asset
+ */
+template<typename T>
+HgStringView hgAssetPath(HgAssetManager<T>* assets, HgAssetHandle<T> handle)
+{
+    return hgPoolGet(&assets->pool, handle.handle)->path;
+}
+
+/**
+ * A binary asset
  */
 struct HgBinary {
     /**
@@ -4784,253 +4850,211 @@ struct HgBinary {
      * The size of the file in bytes
      */
     u64 size;
-
-    /**
-     * Resize the file
-     *
-     * Parameters
-     * - arena The arena to allocate from
-     * - newSize The new size of the file in bytes
-     */
-    void resize(HgArena* arena, u64 newSize)
-    {
-        data = hgRealloc(arena, data, size, newSize, 1);
-        size = newSize;
-    }
-
-    /**
-     * Read data at index into a buffer
-     *
-     * Parameters
-     * - idx The index into the file in bytes to read from
-     * - dst A pointer to store the read data
-     * - size The size in bytes to read
-     */
-    void read(u64 idx, void* dst, u64 len) const
-    {
-        hgAssert(idx + len <= size);
-        memcpy(dst, (u8*)data + idx, len);
-    }
-
-    /**
-     * Read data of arbitrary type from the file
-     *
-     * Parameters
-     * - idx The index into the file in bytes to read from
-     */
-    template<typename T>
-    T read(u64 idx) const
-    {
-        T ret;
-        read(idx, &ret, sizeof(T));
-        return ret;
-    }
-
-    /**
-     * Overwrite data at the index
-     *
-     * Parameters
-     * - idx The index into the file to overwrite
-     * - src The data to write
-     * - size The size of the data in bytes
-     */
-    void overwrite(u64 idx, const void* src, u64 len)
-    {
-        hgAssert(idx + len <= size);
-        memcpy((u8*)data + idx, src, len);
-    }
-
-    /**
-     * Overwrite data of arbitrary type at the index
-     *
-     * Parameters
-     * - idx The index into the file to overwrite
-     * - src The data to write
-     */
-    template<typename T>
-    void overwrite(u64 idx, const T& src)
-    {
-        overwrite(idx, &src, sizeof(T));
-    }
 };
 
 /**
- * Load a binary file from disc
- *
- * Note, this is blocking
+ * A binary file asset handle
+ */
+typedef HgAssetHandle<HgBinary> HgBinaryHandle;
+
+/**
+ * Initialize binary asset manager
+ */
+void hgAssetsInitBinaries(HgArena* arena, u32 maxBinaries);
+
+/**
+ * Load a binary file from disc asynchronously, or increment the ref count
  *
  * Parameters
- * - arena The arena to allocate from
  * - path The file path to the image
  *
  * Returns
- * - The loaded binary
+ * - The binary
  */
-HgBinary hgLoadBinary(HgArena* arena, HgStringView path);
+HgBinaryHandle hgBinaryLoad(HgStringView path);
 
 /**
- * Store a binary file to disc
+ * Unload a binary file from memory, or decrement the ref count
+ */
+void hgBinaryUnload(HgBinaryHandle handle);
+
+/**
+ * Get the binary asset
+ */
+HgBinary* hgBinaryGet(HgBinaryHandle handle);
+
+/**
+ * Resize the file
  *
- * Note, this is blocking
+ * Parameters
+ * - arena The arena to allocate from
+ * - newSize The new size of the file in bytes
+ */
+HgBinary hgBinaryResize(HgArena* arena, const HgBinary* bin, u64 newSize);
+
+/**
+ * Read data at index into a buffer
+ *
+ * Parameters
+ * - idx The index into the file in bytes to read from
+ * - dst A pointer to store the read data
+ * - size The size in bytes to read
+ */
+void hgBinaryRead(const HgBinary* bin, u64 idx, void* dst, u64 len);
+
+/**
+ * Read data of arbitrary type from the file
+ *
+ * Parameters
+ * - idx The index into the file in bytes to read from
+ */
+template<typename T>
+T hgBinaryRead(const HgBinary* bin, u64 idx)
+{
+    T ret;
+    hgBinaryRead(bin, idx, &ret, sizeof(T));
+    return ret;
+}
+
+/**
+ * Overwrite data at the index
+ *
+ * Parameters
+ * - idx The index into the file to overwrite
+ * - src The data to write
+ * - size The size of the data in bytes
+ */
+void hgBinaryOverwrite(HgBinary* bin, u64 idx, const void* src, u64 len);
+
+/**
+ * Overwrite data of arbitrary type at the index
+ *
+ * Parameters
+ * - idx The index into the file to overwrite
+ * - src The data to write
+ */
+template<typename T>
+void hgBinaryOverwrite(u64 idx, const T& src)
+{
+    overwrite(idx, &src, sizeof(T));
+}
+
+/**
+ * Store a binary file to disc asynchronously
  *
  * Parameters
  * - bin The binary to store
  * - path The file path to store at
  */
-void hgStoreBinary(HgBinary bin, HgStringView path);
+void hgBinaryStore(HgBinary* bin, HgStringView path);
 
 /**
- * Initialize the resource manager
+ * An image asset
  */
-void hgInitResources(HgArena* arena, u32 maxResources);
-
-/**
- * Deinitialize the resource manager
- */
-void hgDeinitResource();
-
-/**
- * Loads an empty resource (or just increments the reference count)
- *
- * Parameters
- * - id The resource to load
- */
-void hgLoadEmptyResource(HgResource id);
-
-/**
- * Loads a resource (or just increments the reference count)
- *
- * Parameters
- * - fence The fence to signal on completion
- * - id The resource to load into
- * - path The filepath to load from
- */
-void hgLoadResource(HgFence fence, HgResource id, HgStringView path);
-
-/**
- * Unloads a resource (or just decrements the reference count)
- *
- * Parameters
- * - fence The fence to signal on completion
- * - id The resource to load into
- */
-void hgUnloadResource(HgFence fence, HgResource id);
-
-/**
- * Stores a resource to disc
- *
- * Parameters
- * - fence The fence to signal on completion
- * - id The resource to load into
- * - path The filepath to store to
- */
-void hgStoreResource(HgFence fence, HgResource id, HgStringView path);
-
-/**
- * Get a resource from the global store
- *
- * Parameters
- * - id The resource to get
- *
- * Returns
- * - A pointer to the resource binary
- * - nullptr, if the resource is not loaded
- */
-HgBinary* hgGetResource(HgResource id);
-
-/**
- * An image resource
- */
-struct HgImageData {
+struct HgImage {
     /**
-     * The identifier prepended to the info
+     * The width of the image in pixels
      */
-    static constexpr char imageIdentifier[] = "HGIMAGE";
-
+    u32 width;
     /**
-     * The info prepended to an image resource
+     * The height of the image in pixels
      */
-    struct Info {
-        /**
-         * The identifier to ensure the file is a Hurdy Gurdy image
-         */
-        char identifier[sizeof(imageIdentifier)];
-        /**
-         * The format of each pixel
-         */
-        HgFormat format;
-        /**
-         * The width in pixels
-         */
-        u32 width;
-        /**
-         * The height in pixels
-         */
-        u32 height;
-        /**
-         * The depth in pixels
-         */
-        u32 depth;
-        /**
-         * The index of the pixels
-         */
-        u64 pixelsBegin;
-    };
-
+    u32 height;
     /**
-     * The image data
+     * The depth of the image in pixels
      */
-    HgBinary bin;
-
+    u32 depth;
     /**
-     * Construct uninitialized
+     * The format of each pixel
      */
-    HgImageData() = default;
-
+    HgFormat format;
     /**
-     * Implicit conversion from binary file
+     * The pixel data, aligned to 16 bytes
      */
-    HgImageData(HgBinary fileVal) : bin(fileVal) {}
-
-    /**
-     * Get the image info from the file
-     *
-     * Parameters
-     * - format Where to store the format
-     * - width Where to store the width
-     * - height Where to store the height
-     * - depth Where to store the depth
-     *
-     * Returns
-     * - Whether the info could be found
-     */
-    bool getInfo(HgFormat* format, u32* width, u32* height, u32* depth);
-
-    /**
-     * Returns a pointer to the pixels, never nullptr
-     */
-    void* getPixels();
+    void* pixels;
 };
 
 /**
- * Load an external image file into a resource in the Hurdy Gurdy format
- *
- * Parameters
- * - fence The fence to wait on
- * - id The resource to load into
- * - path The path of the file to import
+ * A handle to an image
  */
-void hgImportPng(HgFence fence, HgResource id, HgStringView path);
+typedef HgAssetHandle<HgImage> HgImageHandle;
 
 /**
- * Store a image resource onto disc in an external file format
- *
- * Parameters
- * - fence The fence to wait on
- * - id The resource to export
- * - path The path of the file to export to
+ * Initialize image assets
  */
-void hgExportPng(HgFence fence, HgResource id, HgStringView path);
+void hgAssetsInitImages(HgArena* arena, u32 maxImages);
+
+/**
+ * Load an image asset asynchronously, or increment the ref count
+ */
+HgImageHandle hgImageLoad(HgStringView path);
+
+/**
+ * Unload an image asset, or decrement the ref count
+ */
+void hgImageUnload(HgImageHandle handle);
+
+/**
+ * Get the image asset
+ */
+HgImage* hgImageGet(HgImageHandle handle);
+
+/**
+ * Store an image to disc in the png format
+ */
+void hgImageStorePng(HgImage* image, HgStringView path, HgFence fence);
+
+/**
+ * A texture asset stored on the GPU
+ */
+struct HgTexture {
+    /**
+     * The image
+     */
+    HgGpuImage* image;
+    /**
+     * The image view
+     */
+    HgGpuView* view;
+    /**
+     * The sampler
+     */
+    HgGpuSampler* sampler;
+    /**
+     * The descriptor
+     */
+    HgGpuDescriptor descriptor;
+};
+
+/**
+ * A handle to a texture asset
+ */
+typedef HgAssetHandle<HgTexture> HgTextureHandle;
+
+/**
+ * Initialize gpu textures
+ */
+void hgAssetsInitTextures(HgArena* arena, u32 maxTextures);
+
+/**
+ * Load a texture, or increment the ref count (blocking)
+ *
+ * Note, image data can be preloaded asynchronously to speed up texture loading
+ */
+HgTextureHandle hgTextureLoad(HgStringView path);
+
+/**
+ * Unload a texture from the gpu
+ */
+void hgTextureUnload(HgTextureHandle handle);
+
+/**
+ * Gets a gpu texture resource
+ *
+ * Returns
+ * - The gpu texture, or nullptr if it is not loaded
+ */
+HgTexture* hgTextureGet(HgTextureHandle handle);
 
 /**
  * A vertex in a model
@@ -5055,188 +5079,69 @@ struct HgModelVertex {
 };
 
 /**
- * A 3d model resource
+ * Data for a 3d model asset
  */
-struct HgModelData {
+struct HgMesh {
     /**
-     * The identifier prepended to the info
+     * The file index of the first vertex
      */
-    static constexpr char modelIdentifier[] = "HGMODEL";
-
+    HgModelVertex* vertices;
     /**
-     * The info prendeded to a model resources
+     * The file index of the first geometry index
      */
-    struct Info {
-        /**
-         * The identifier to ensure the file is a Hurdy Gurdy model
-         */
-        char identifier[sizeof(modelIdentifier)];
-        /**
-         * The number of vertices
-         */
-        u32 vertexCount;
-        /**
-         * The size of each vertex in bytes
-         */
-        u32 vertexWidth;
-        /**
-         * The number of indices (4 bytes each)
-         */
-        u32 indexCount;
-        /**
-         * How the vertices should be interpreted in sequence
-         */
-        HgGpuTopology topology;
-        /**
-         * The file index of the first vertex
-         */
-        u64 verticesBegin;
-        /**
-         * The file index of the first geometry index
-         */
-        u64 indicesBegin;
-    };
-
+    u32* indices;
     /**
-     * The model data
+     * The number of vertices
      */
-    HgBinary file;
-
+    u32 vertexCount;
     /**
-     * Construct uninitialized
+     * The size of each vertex in bytes
      */
-    HgModelData() = default;
-
+    u32 vertexWidth;
     /**
-     * Implicit conversion from binary file
+     * The number of indices (4 bytes each)
      */
-    HgModelData(HgBinary fileVal) : file{fileVal} {}
-
+    u32 indexCount;
     /**
-     * Get the model info from the file
-     *
-     * Parameters
-     * - vertexCount How many vertices are in the model
-     * - vertexWidth The size of each vertex in bytes
-     * - indexCount How many indices are in the model
-     * - topology How the vertices should be interpreted in sequence
-     *
-     * Returns
-     * - Whether the info could be found
+     * How the vertices should be interpreted in sequence
      */
-    bool getInfo(u32* vertexCount, u32* vertexWidth, u32* indexCount, HgGpuTopology* topology);
-
-    /**
-     * Returns a pointer to the vertices, never nullptr
-     */
-    void* getVertexData();
-
-    /**
-     * Returns a pointer to the vertices, or nullptr if it could not be found
-     */
-    void* getIndexData();
+    HgGpuTopology topology;
 };
 
 /**
- * Load an external model file into a resource in the Hurdy Gurdy format : TODO
- *
- * Parameters
- * - fence The fence to wait on
- * - id The resource to load to
- * - path The path of the file to import
+ * A handle to a model data asset
  */
-void hgImportGltf(HgFence fence, HgResource id, HgStringView path);
+typedef HgAssetHandle<HgMesh> HgMeshHandle;
 
 /**
- * Store a model resource onto disc in an external file format : TODO
- *
- * Parameters
- * - fence The fence to wait on
- * - id The resource to export
- * - path The path of the file to export to
+ * Initialize model data assets
  */
-void hgExportGltf(HgFence fence, HgResource id, HgStringView path);
+void hgAssetsInitMeshes(HgArena* arena, u32 maxModels);
 
 /**
- * Initialize all gpu resource managers
- *
- * Resources
- * - HgGpuTexture
- * - HgGpuModel
+ * Load a model data asset asynchronously, or increment the ref count
  */
-void hgInitGpuResources(HgArena* arena, u32 maxTextures, u32 maxModels);
+HgMeshHandle hgMeshLoad(HgStringView path);
 
 /**
- * Deinitialize all gpu resource managers
+ * Unload a model data asset, or decrement the ref count
  */
-void hgDeinitGpuResources();
+void hgMeshUnload(HgMeshHandle handle);
 
 /**
- * A texture stored on the GPU
+ * Get the model data asset
  */
-struct HgTextureResource {
-    /**
-     * The image
-     */
-    HgGpuImage* image;
-    /**
-     * The image view
-     */
-    HgGpuView* view;
-    /**
-     * The sampler
-     */
-    HgGpuSampler* sampler;
-    /**
-     * The descriptor
-     */
-    HgGpuDescriptor descriptor;
-};
+HgMesh* hgMeshGet(HgMeshHandle handle);
 
 /**
- * Initialize gpu textures
+ * Store the model data to disc in gltf format : TODO
  */
-void HgInitTextures(HgArena* arena, u32 maxTextures);
-
-/**
- * Deinitialize gpu textures
- */
-void hgDeinitTextures();
-
-/**
- * Load an empty texture
- */
-void hgLoadEmptyTexture(HgResource id);
-
-/**
- * Load a texture from the cpu to the gpu
- *
- * Note, if the texture is not already loaded to the gpu, it must be available
- * on the cpu to load from
- *
- * Parameters
- * - id The resource to load
- * - sampler The sampler the texture should use
- */
-void hgLoadTexture(HgResource id, HgGpuSampler* sampler);
-
-/**
- * Unload a texture from the gpu
- */
-void hgUnloadTexture(HgResource id);
-
-/**
- * Gets a gpu texture resource
- *
- * Returns
- * - The gpu texture, or nullptr if it is not loaded
- */
-HgTextureResource* hgGetTexture(HgResource id);
+void hgMeshStoreGltf(HgMesh* data, HgStringView path, HgFence fence);
 
 /**
  * A 3D model stored on the gpu
  */
-struct HgModelResource {
+struct HgModel {
     /**
      * The vertex buffer
      */
@@ -5260,27 +5165,26 @@ struct HgModelResource {
 };
 
 /**
- * Initialize gpu models
+ * A gpu model handle
  */
-void hgInitModels(HgArena* arena, u32 maxModels);
+typedef HgAssetHandle<HgModel> HgModelHandle;
 
 /**
- * Deinitialize gpu models
+ * Initialize gpu model assets
  */
-void hgDeinitModels();
+void hgAssetsInitModels(HgArena* arena, u32 maxModels);
 
 /**
- * Load a model from the cpu to the gpu
+ * Load a 3d model, or increment the ref count (blocking)
  *
- * Note, if the model is not already loaded to the gpu, it must be available
- * on the cpu to load from
+ * Note, model data can be preloaded asynchronously to speed up model loading
  */
-void hgLoadModel(HgResource id);
+HgModelHandle hgModelLoad(HgStringView path);
 
 /**
- * Unload a model from the gpu
+ * Unload a model asset from the gpu
  */
-void hgUnloadModel(HgResource id);
+void hgUnloadModel(HgModelHandle handle);
 
 /**
  * Gets a gpu model resource
@@ -5288,7 +5192,7 @@ void hgUnloadModel(HgResource id);
  * Returns
  * - The gpu model, or nullptr if it is not loaded
  */
-HgModelResource* hgGetModel(HgResource id);
+HgModel* hgGetModel(HgModelHandle handle);
 
 /**
  * Creates a new id for a component
@@ -5925,7 +5829,7 @@ struct HgSprite2D {
     /**
      * The texture to draw from
      */
-    HgResource texture;
+    HgTexture* texture;
     /**
      * The beginning coordinate to read from texture, [0.0, 1.0]
      */
@@ -5955,12 +5859,12 @@ void hgDeinitPipeline2D();
 /**
  * Add a texture to the 2D pipeline
  */
-void hgAddTexture2D(HgResource textureID);
+void hgAddTexture2D(HgTexture* textureID);
 
 /**
  * Remove a texture from the 2D pipeline
  */
-void hgRemoveTexture2D(HgResource textureID);
+void hgRemoveTexture2D(HgTexture* textureID);
 
 /**
  * Update the 2D pipeline's projection matrix
@@ -5988,15 +5892,15 @@ struct HgModel3D {
     /**
      * The model to render
      */
-    HgResource modelResource;
+    HgModel* modelResource;
     /**
      * The model's color map
      */
-    HgResource colorMap;
+    HgTexture* colorMap;
     /**
      * The model's normal map
      */
-    HgResource normalMap;
+    HgTexture* normalMap;
 };
 
 /**
@@ -6047,12 +5951,12 @@ void hgDeinitPipeline3D();
  * - colorID The model's color texture
  * - normalID The model's normal texture, if any
  */
-void hgAddModel3D(HgResource modelID, HgResource colorID, HgResource normalID);
+void hgAddModel3D(HgModel* modelID, HgTexture* colorID, HgTexture* normalID);
 
 /**
  * Remove a model from the 3D pipeline
  */
-void hgRemoveModel3D(HgResource modelID);
+void hgRemoveModel3D(HgModel* modelID);
 
 /**
  * Update the 3D pipeline's projection matrix

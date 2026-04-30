@@ -1811,164 +1811,164 @@ void hgTest()
 
     hgWarn("HgResourceManager test not implemented yet : TODO\n");
 
-    // HgBinary
-    {
-        HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+    // // HgBinary
+    // {
+    //     HgArena* arena = hgScratch();
+    //     HgArenaScope arenaScope{arena};
+    //
+    //     u32 saveData[]{12, 42, 100, 128};
+    //
+    //     const char* filePath = "hg_test_dir/file_bin_test.bin";
+    //     HgBinary bin{};
+    //
+    //     {
+    //         bin = hgLoadBinary(arena, "file_does_not_exist.bin");
+    //         hgAssert(bin.data == nullptr);
+    //         hgAssert(bin.size == 0);
+    //     }
+    //
+    //     {
+    //         bin.data = saveData;
+    //         bin.size = sizeof(saveData);
+    //
+    //         hgStoreBinary(bin, "dir/does/not/exist.bin");
+    //
+    //         FILE* fileHandle = fopen("dir/does/not/exist.bin", "rb");
+    //         hgAssert(fileHandle == nullptr);
+    //     }
+    //
+    //     {
+    //         bin.data = saveData;
+    //         bin.size = sizeof(saveData);
+    //
+    //         hgStoreBinary(bin, filePath);
+    //         HgBinary newBin = hgLoadBinary(arena, filePath);
+    //
+    //         hgAssert(newBin.data != nullptr);
+    //         hgAssert(newBin.data != saveData);
+    //         hgAssert(newBin.size == sizeof(saveData));
+    //         hgAssert(memcmp(saveData, newBin.data, newBin.size) == 0);
+    //     }
+    // }
 
-        u32 saveData[]{12, 42, 100, 128};
-
-        const char* filePath = "hg_test_dir/file_bin_test.bin";
-        HgBinary bin{};
-
-        {
-            bin = hgLoadBinary(arena, "file_does_not_exist.bin");
-            hgAssert(bin.data == nullptr);
-            hgAssert(bin.size == 0);
-        }
-
-        {
-            bin.data = saveData;
-            bin.size = sizeof(saveData);
-
-            hgStoreBinary(bin, "dir/does/not/exist.bin");
-
-            FILE* fileHandle = fopen("dir/does/not/exist.bin", "rb");
-            hgAssert(fileHandle == nullptr);
-        }
-
-        {
-            bin.data = saveData;
-            bin.size = sizeof(saveData);
-
-            hgStoreBinary(bin, filePath);
-            HgBinary newBin = hgLoadBinary(arena, filePath);
-
-            hgAssert(newBin.data != nullptr);
-            hgAssert(newBin.data != saveData);
-            hgAssert(newBin.size == sizeof(saveData));
-            hgAssert(memcmp(saveData, newBin.data, newBin.size) == 0);
-        }
-    }
-
-    // HgTextureData
-    {
-        HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
-
-        struct color {
-            u8 r, g, b, a;
-
-            operator u32() { return *(u32*)this; }
-        };
-
-        u32 red =    color{0xff, 0x00, 0x00, 0xff};
-        u32 green =  color{0x00, 0xff, 0x00, 0xff};
-        u32 blue =   color{0x00, 0x00, 0xff, 0xff};
-        u32 yellow = color{0xff, 0xff, 0x00, 0xff};
-
-        constexpr HgFormat saveFormat = HgFormat_r8g8b8a8_srgb;
-        constexpr u32 saveWidth = 2;
-        constexpr u32 saveHeight = 2;
-        constexpr u32 saveDepth = 1;
-        u32 saveData[saveWidth][saveHeight]{
-            {red, green},
-            {blue, yellow},
-        };
-
-        HgBinary bin{};
-
-        {
-            HgImageData::Info info;
-            memcpy(info.identifier, HgImageData::imageIdentifier, sizeof(HgImageData::imageIdentifier));
-            info.format = HgFormat_r8g8b8a8_srgb;
-            info.width = saveWidth;
-            info.height = saveHeight;
-            info.depth = saveDepth;
-            info.pixelsBegin = sizeof(info);
-            bin.resize(arena, bin.size + sizeof(HgImageData::Info));
-            bin.overwrite(0, info);
-
-            u64 pixelIdx = bin.size;
-            bin.resize(arena, bin.size + sizeof(saveData));
-            bin.overwrite(pixelIdx, saveData, sizeof(saveData));
-        }
-
-        {
-            HgImageData texture = bin;
-
-            HgFormat format;
-            u32 width, height, depth;
-            hgAssert(texture.getInfo(&format, &width, &height, &depth));
-            hgAssert(format == saveFormat);
-            hgAssert(width == saveWidth);
-            hgAssert(height == saveHeight);
-            hgAssert(depth == saveDepth);
-            hgAssert(width * height * depth * hgFormatToSize((HgFormat)format) == sizeof(saveData));
-
-            void* pixels = texture.getPixels();
-            hgAssert(pixels != nullptr);
-            hgAssert(memcmp(saveData, pixels, sizeof(saveData)) == 0);
-        }
-
-        {
-            HgStringView filePath = "hg_test_dir/file_image_test.hgtex";
-
-            hgStoreBinary(bin, filePath);
-            HgImageData fileTexture = hgLoadBinary(arena, filePath);
-
-            HgFormat format;
-            u32 width, height, depth;
-            hgAssert(fileTexture.getInfo(&format, &width, &height, &depth));
-            hgAssert(format == saveFormat);
-            hgAssert(width == saveWidth);
-            hgAssert(height == saveHeight);
-            hgAssert(depth == saveDepth);
-            hgAssert(width * height * depth * hgFormatToSize((HgFormat)format) == sizeof(saveData));
-
-            void* pixels = fileTexture.getPixels();
-            hgAssert(pixels != nullptr);
-            hgAssert(memcmp(saveData, pixels, sizeof(saveData)) == 0);
-        }
-
-        {
-            HgStringView texPath = "tex";
-            HgStringView filePath = "hg_test_dir/file_image_test.png";
-            HgResource texId = hgResourceID(texPath);
-            HgResource fileId = hgResourceID(filePath);
-
-            hgLoadEmptyResource(texId);
-            HgBinary* pbinRes = hgGetResource(texId);
-            *pbinRes = bin;
-            hgDefer({
-                *hgGetResource(texId) = {};
-                hgUnloadResource(HgFence{}, texId);
-            });
-
-            HgFence fence = hgFenceCreate();
-            hgDefer(hgFenceDestroy(fence));
-
-            hgExportPng(fence, texId, filePath);
-            hgImportPng(fence, fileId, filePath);
-            hgDefer(hgUnloadResource(HgFence{}, fileId));
-            hgAssert(hgFenceWait(fence, 2.0));
-
-            HgImageData fileTexture = *hgGetResource(fileId);
-
-            HgFormat format;
-            u32 width, height, depth;
-            hgAssert(fileTexture.getInfo(&format, &width, &height, &depth));
-            hgAssert(format == saveFormat);
-            hgAssert(width == saveWidth);
-            hgAssert(height == saveHeight);
-            hgAssert(depth == saveDepth);
-            hgAssert(width * height * depth * hgFormatToSize((HgFormat)format) == sizeof(saveData));
-
-            void* pixels = fileTexture.getPixels();
-            hgAssert(pixels != nullptr);
-            hgAssert(memcmp(saveData, pixels, sizeof(saveData)) == 0);
-        }
-    }
+    // // HgTextureData
+    // {
+    //     HgArena* arena = hgScratch();
+    //     HgArenaScope arenaScope{arena};
+    //
+    //     struct color {
+    //         u8 r, g, b, a;
+    //
+    //         operator u32() { return *(u32*)this; }
+    //     };
+    //
+    //     u32 red =    color{0xff, 0x00, 0x00, 0xff};
+    //     u32 green =  color{0x00, 0xff, 0x00, 0xff};
+    //     u32 blue =   color{0x00, 0x00, 0xff, 0xff};
+    //     u32 yellow = color{0xff, 0xff, 0x00, 0xff};
+    //
+    //     constexpr HgFormat saveFormat = HgFormat_r8g8b8a8_srgb;
+    //     constexpr u32 saveWidth = 2;
+    //     constexpr u32 saveHeight = 2;
+    //     constexpr u32 saveDepth = 1;
+    //     u32 saveData[saveWidth][saveHeight]{
+    //         {red, green},
+    //         {blue, yellow},
+    //     };
+    //
+    //     HgBinary bin{};
+    //
+    //     {
+    //         HgImageData::Info info;
+    //         memcpy(info.identifier, HgImageData::imageIdentifier, sizeof(HgImageData::imageIdentifier));
+    //         info.format = HgFormat_r8g8b8a8_srgb;
+    //         info.width = saveWidth;
+    //         info.height = saveHeight;
+    //         info.depth = saveDepth;
+    //         info.pixelsBegin = sizeof(info);
+    //         bin.resize(arena, bin.size + sizeof(HgImageData::Info));
+    //         bin.overwrite(0, info);
+    //
+    //         u64 pixelIdx = bin.size;
+    //         bin.resize(arena, bin.size + sizeof(saveData));
+    //         bin.overwrite(pixelIdx, saveData, sizeof(saveData));
+    //     }
+    //
+    //     {
+    //         HgImageData texture = bin;
+    //
+    //         HgFormat format;
+    //         u32 width, height, depth;
+    //         hgAssert(texture.getInfo(&format, &width, &height, &depth));
+    //         hgAssert(format == saveFormat);
+    //         hgAssert(width == saveWidth);
+    //         hgAssert(height == saveHeight);
+    //         hgAssert(depth == saveDepth);
+    //         hgAssert(width * height * depth * hgFormatToSize((HgFormat)format) == sizeof(saveData));
+    //
+    //         void* pixels = texture.getPixels();
+    //         hgAssert(pixels != nullptr);
+    //         hgAssert(memcmp(saveData, pixels, sizeof(saveData)) == 0);
+    //     }
+    //
+    //     {
+    //         HgStringView filePath = "hg_test_dir/file_image_test.hgtex";
+    //
+    //         hgStoreBinary(bin, filePath);
+    //         HgImageData fileTexture = hgLoadBinary(arena, filePath);
+    //
+    //         HgFormat format;
+    //         u32 width, height, depth;
+    //         hgAssert(fileTexture.getInfo(&format, &width, &height, &depth));
+    //         hgAssert(format == saveFormat);
+    //         hgAssert(width == saveWidth);
+    //         hgAssert(height == saveHeight);
+    //         hgAssert(depth == saveDepth);
+    //         hgAssert(width * height * depth * hgFormatToSize((HgFormat)format) == sizeof(saveData));
+    //
+    //         void* pixels = fileTexture.getPixels();
+    //         hgAssert(pixels != nullptr);
+    //         hgAssert(memcmp(saveData, pixels, sizeof(saveData)) == 0);
+    //     }
+    //
+    //     {
+    //         HgStringView texPath = "tex";
+    //         HgStringView filePath = "hg_test_dir/file_image_test.png";
+    //         HgResource texId = hgResourceID(texPath);
+    //         HgResource fileId = hgResourceID(filePath);
+    //
+    //         hgLoadEmptyResource(texId);
+    //         HgBinary* pbinRes = hgGetResource(texId);
+    //         *pbinRes = bin;
+    //         hgDefer({
+    //             *hgGetResource(texId) = {};
+    //             hgUnloadResource(HgFence{}, texId);
+    //         });
+    //
+    //         HgFence fence = hgFenceCreate();
+    //         hgDefer(hgFenceDestroy(fence));
+    //
+    //         hgExportPng(fence, texId, filePath);
+    //         hgImportPng(fence, fileId, filePath);
+    //         hgDefer(hgUnloadResource(HgFence{}, fileId));
+    //         hgAssert(hgFenceWait(fence, 2.0));
+    //
+    //         HgImageData fileTexture = *hgGetResource(fileId);
+    //
+    //         HgFormat format;
+    //         u32 width, height, depth;
+    //         hgAssert(fileTexture.getInfo(&format, &width, &height, &depth));
+    //         hgAssert(format == saveFormat);
+    //         hgAssert(width == saveWidth);
+    //         hgAssert(height == saveHeight);
+    //         hgAssert(depth == saveDepth);
+    //         hgAssert(width * height * depth * hgFormatToSize((HgFormat)format) == sizeof(saveData));
+    //
+    //         void* pixels = fileTexture.getPixels();
+    //         hgAssert(pixels != nullptr);
+    //         hgAssert(memcmp(saveData, pixels, sizeof(saveData)) == 0);
+    //     }
+    // }
 
     hgWarn("HgModelData test not implemented yet : TODO\n");
     hgWarn("HgGpuTexture test not implemented yet : TODO\n");

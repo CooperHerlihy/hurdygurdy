@@ -24,10 +24,7 @@ int main()
     hgInitPipeline2D(hgWindowImageFormat(window), HgFormat_undefined);
     hgDefer(hgDeinitPipeline2D());
 
-    HgResource noiseShaderID = hgResourceID("build/noise.comp.spv");
-    HgFence fence = hgFenceCreate();
-    hgDefer(hgFenceDestroy(fence));
-    hgLoadResource(fence, noiseShaderID, "build/noise.comp.spv");
+    HgBinaryHandle noiseShaderHandle = hgBinaryLoad("build/noise.comp.spv");
 
     u32 noiseSeed = std::random_device{}();
     u32 noiseScaleBegin = 4;
@@ -44,42 +41,41 @@ int main()
         u32 outImageIdx;
     };
 
-    hgFenceWaitIndefinite(fence);
-    HgBinary* noiseShaderCode = hgGetResource(noiseShaderID);
+    HgBinary* noiseShaderCode = hgBinaryGet(noiseShaderHandle);
     HgGpuPipeline* noisePipeline = hgGpuPipelineCreateCompute(sizeof(NoisePush), (u8*)noiseShaderCode->data, noiseShaderCode->size);
     hgDefer(hgGpuPipelineDestroy(noisePipeline));
 
-    hgUnloadResource(HgFence{}, noiseShaderID);
+    hgBinaryUnload(noiseShaderHandle);
 
     u32 noiseWidth = 256;
     u32 noiseHeight = 256;
 
-    HgResource noiseTexID = hgResourceID("noiseTex");
-    hgLoadEmptyTexture(noiseTexID);
-    hgDefer(hgUnloadTexture(noiseTexID));
+    HgTexture noiseTex{};
 
-    HgTextureResource* noiseTex = hgGetTexture(noiseTexID);
-
-    noiseTex->image = hgGpuImageCreate(
+    noiseTex.image = hgGpuImageCreate(
         noiseWidth,
         noiseHeight,
         HgFormat_r8g8b8a8_unorm,
         HgGpuImageUsage_storage | HgGpuImageUsage_sampled);
-    noiseTex->view = hgGpuViewCreate(noiseTex->image, 0, 1, 0, 1, HgGpuAspect_color);
+    hgDefer(hgGpuImageDestroy(noiseTex.image));
+
+    noiseTex.view = hgGpuViewCreate(noiseTex.image, 0, 1, 0, 1, HgGpuAspect_color);
+    hgDefer(hgGpuViewDestroy(noiseTex.view));
 
     HgGpuDescriptor noiseStorageDesc = hgGpuDescriptorCreate(HgGpuDescriptorType_storageImage);
     hgDefer(hgGpuDescriptorDestroy(noiseStorageDesc));
 
-    HgGpuImageDescriptorInfo noiseStorageInfo{nullptr, noiseTex->view, HgGpuLayout_general};
+    HgGpuImageDescriptorInfo noiseStorageInfo{nullptr, noiseTex.view, HgGpuLayout_general};
     hgGpuDescriptorUpdate(noiseStorageDesc, nullptr, &noiseStorageInfo);
 
-    noiseTex->sampler = hgGpuSamplerCreate(HgGpuFilter_linear);
-    hgDefer(hgGpuSamplerDestroy(noiseTex->sampler));
+    noiseTex.sampler = hgGpuSamplerCreate(HgGpuFilter_linear);
+    hgDefer(hgGpuSamplerDestroy(noiseTex.sampler));
 
-    noiseTex->descriptor = hgGpuDescriptorCreate(HgGpuDescriptorType_combinedImageSampler);
+    noiseTex.descriptor = hgGpuDescriptorCreate(HgGpuDescriptorType_combinedImageSampler);
+    hgDefer(hgGpuDescriptorDestroy(noiseTex.descriptor));
 
-    HgGpuImageDescriptorInfo noiseSamplerInfo{noiseTex->sampler, noiseTex->view, HgGpuLayout_shaderReadOnly};
-    hgGpuDescriptorUpdate(noiseTex->descriptor, nullptr, &noiseSamplerInfo);
+    HgGpuImageDescriptorInfo noiseSamplerInfo{noiseTex.sampler, noiseTex.view, HgGpuLayout_shaderReadOnly};
+    hgGpuDescriptorUpdate(noiseTex.descriptor, nullptr, &noiseSamplerInfo);
 
     HgTransform camera{};
     camera.position.z = -1;
@@ -90,7 +86,7 @@ int main()
 
     HgEntity noiseSquare = ecs.spawn();
     ecs.add<HgTransform>(noiseSquare) = {};
-    ecs.add<HgSprite2D>(noiseSquare) = {noiseTexID, HgVec2{0}, HgVec2{1}};
+    ecs.add<HgSprite2D>(noiseSquare) = {&noiseTex, HgVec2{0}, HgVec2{1}};
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -173,7 +169,7 @@ int main()
         HgGpuCmd* cmd = hgGpuFrameBegin(windows, sizeof(windows) / sizeof(*windows));
 
         HgGpuComputePass computePass{};
-        computePass.storageImages = &noiseTex->view;
+        computePass.storageImages = &noiseTex.view;
         computePass.storageImageCount = 1;
 
         hgGpuComputePass(cmd, &computePass);
@@ -202,7 +198,7 @@ int main()
             HgGpuRenderPass pass{};
             pass.colorAttachments = &colorAttachment;
             pass.colorAttachmentCount = 1;
-            pass.sampledImages = &noiseTex->view;
+            pass.sampledImages = &noiseTex.view;
             pass.sampledImageCount = 1;
 
             hgGpuRenderPassBegin(cmd, hgWindowWidth(window), hgWindowHeight(window), &pass);
