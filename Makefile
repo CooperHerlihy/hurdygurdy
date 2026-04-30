@@ -40,7 +40,9 @@ TARGETS := \
 
 .PHONY: all debug release clean
 
-all: $(patsubst %, $(BUILD_DIR)/%, $(TARGETS))
+SHADERS_SPV := 
+
+all: $(patsubst %, $(BUILD_DIR)/%, $(TARGETS)) $(patsubst %, $(BUILD_DIR)/%.spv, $(SHADERS))
 
 debug:
 	$(MAKE) CONFIG="$(DEBUG_CONFIG)"
@@ -86,9 +88,7 @@ LIB_FILES := \
 $(BUILD_DIR)/libhurdygurdy.a: $(LIB_FILES) $(BUILD_DIR)/vk_mem_alloc.o $(BUILD_DIR)/stb.o
 	ar rcs $@ $^
 
-SHADERS_SPV := $(patsubst %, $(BUILD_DIR)/%.spv, $(SHADERS))
-
-$(BUILD_DIR)/%: $(BUILD_DIR)/%.o $(BUILD_DIR)/libhurdygurdy.a | $(SHADERS_SPV) $(TEST_DIR)
+$(BUILD_DIR)/%: $(BUILD_DIR)/%.o $(BUILD_DIR)/libhurdygurdy.a | $(TEST_DIR)
 	c++ $(STD) $(CONFIG) $(WARNINGS) -o $@ $< -L$(BUILD_DIR) -lhurdygurdy -lSDL3
 
 clean:
