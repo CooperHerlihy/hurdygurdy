@@ -2573,61 +2573,51 @@ u32 hgCreateComponentID(u32 width)
     return id;
 }
 
-HgECS HgECS::create(HgArena* arena, u32 maxEntities, u32 maxComponentTypes)
+HgEcs HgEcs::create(HgArena* arena, u32 maxEntities, u32 maxComponentTypes)
 {
-    HgECS ecs{};
+    HgEcs ecs{};
 
-    ecs.pool = hgAlloc<HgEntity>(arena, maxEntities);
-    ecs.poolSize = maxEntities;
+    ecs.entityPool = hgPoolCreate<void>(arena, maxEntities);
     ecs.systems = hgMapCreate<u32, System>(arena, maxComponentTypes + 1);
     ecs.reset();
 
     return ecs;
 }
 
-void HgECS::createComponent(HgArena* arena, u32 maxCount, u32 width, u32 align, u32 componentID)
+void HgEcs::createComponent(HgArena* arena, u32 maxCount, u32 width, u32 align, u32 componentID)
 {
     hgAssert(hgMapGet(&systems, componentID) == nullptr);
     System* system = hgMapAdd(&systems, componentID, {});
 
-    system->indices = hgAlloc<u32>(arena, poolSize);
+    system->indices = hgAlloc<u32>(arena, entityPool.capacity);
     system->entities = hgAlloc<HgEntity>(arena, maxCount);
     system->components = hgAlloc(arena, maxCount * width, align);
     system->count = 0;
     system->capacity = maxCount;
 
-    memset(system->indices, -1, poolSize * sizeof(*system->indices));
+    memset(system->indices, -1, entityPool.capacity * sizeof(*system->indices));
 }
 
-void HgECS::reset()
+void HgEcs::reset()
 {
     for (u32 i = 0; i < systems.capacity; ++i)
     {
         if (systems.hasVal[i])
         {
-            memset(systems.vals[i].indices, -1, poolSize * sizeof(*systems.vals[i].indices));
+            memset(systems.vals[i].indices, -1, entityPool.capacity * sizeof(*systems.vals[i].indices));
             systems.vals[i].count = 0;
         }
     }
 
-    for (u32 i = 0; i < poolSize; ++i)
-    {
-        pool[i] = {i + 1};
-    }
-    next = {0};
+    hgPoolReset(&entityPool);
 }
 
-HgEntity HgECS::spawn()
+HgEntity HgEcs::spawn()
 {
-    hgAssert(next.idx() < poolSize);
-
-    HgEntity entity = next;
-    next = pool[entity.idx()];
-    pool[entity.idx()] = entity;
-    return entity;
+    return {hgPoolAlloc(&entityPool)};
 }
 
-void HgECS::despawn(HgEntity e)
+void HgEcs::despawn(HgEntity e)
 {
     hgAssert(alive(e));
 
@@ -2636,17 +2626,15 @@ void HgECS::despawn(HgEntity e)
         if (systems.hasVal[i] && has(e, systems.keys[i]))
             remove(e, systems.keys[i]);
     }
-    pool[e.idx()] = next;
-    next = e;
-    next.incrementGeneration();
+    hgPoolFree(&entityPool, e.handle);
 }
 
-bool HgECS::alive(HgEntity e)
+bool HgEcs::alive(HgEntity e)
 {
-    return e.idx() < poolSize && pool[e.idx()] == e;
+    return hgPoolAlive(&entityPool, e.handle);
 }
 
-void* HgECS::add(HgEntity e, u32 componentID)
+void* HgEcs::add(HgEntity e, u32 componentID)
 {
     hgAssert(alive(e));
     hgAssert(!has(e, componentID));
@@ -2654,14 +2642,14 @@ void* HgECS::add(HgEntity e, u32 componentID)
     System* system = hgMapGet(&systems, componentID);
     hgAssert(system != nullptr);
 
-    system->indices[e.idx()] = system->count;
+    system->indices[hgHandleIdx(e.handle)] = system->count;
     system->entities[system->count] = e;
     void* c = (u8*)system->components + componentWidth(componentID) * system->count;
     ++system->count;
     return c;
 }
 
-void HgECS::remove(HgEntity e, u32 componentID)
+void HgEcs::remove(HgEntity e, u32 componentID)
 {
     hgAssert(alive(e));
     hgAssert(has(e, componentID));
@@ -2671,41 +2659,41 @@ void HgECS::remove(HgEntity e, u32 componentID)
 
     HgEntity last = system->entities[system->count - 1];
     system->entities[system->count - 1] = HgEntity{};
-    if (e != last)
+    if (e.handle.id != last.handle.id)
     {
-        u32 idx = system->indices[e.idx()];
+        u32 idx = system->indices[hgHandleIdx(e.handle)];
         system->entities[idx] = last;
-        system->indices[last.idx()] = idx;
+        system->indices[hgHandleIdx(last.handle)] = idx;
         memcpy(
             (u8*)system->components + componentWidth(componentID) * idx,
             (u8*)system->components + componentWidth(componentID) * (system->count - 1),
             componentWidth(componentID));
     }
-    system->indices[e.idx()] = (u32)-1;
+    system->indices[hgHandleIdx(e.handle)] = (u32)-1;
     --system->count;
 }
 
-bool HgECS::has(HgEntity e, u32 componentID)
+bool HgEcs::has(HgEntity e, u32 componentID)
 {
     hgAssert(alive(e));
 
     System* system = hgMapGet(&systems, componentID);
     hgAssert(system != nullptr);
 
-    return system->indices[e.idx()] < system->count;
+    return system->indices[hgHandleIdx(e.handle)] < system->count;
 }
 
-void* HgECS::get(HgEntity e, u32 componentID)
+void* HgEcs::get(HgEntity e, u32 componentID)
 {
     hgAssert(alive(e));
 
     System* system = hgMapGet(&systems, componentID);
     hgAssert(system != nullptr);
 
-    return (u8*)system->components + componentWidth(componentID) * system->indices[e.idx()];
+    return (u8*)system->components + componentWidth(componentID) * system->indices[hgHandleIdx(e.handle)];
 }
 
-HgEntity HgECS::get(const void* component, u32 componentID)
+HgEntity HgEcs::get(const void* component, u32 componentID)
 {
     hgAssert(component != nullptr);
 
@@ -2715,7 +2703,7 @@ HgEntity HgECS::get(const void* component, u32 componentID)
     return system->entities[(u32)((uptr)component - (uptr)system->components) / componentWidth(componentID)];
 }
 
-u32 HgECS::findSmallest(u32* ids, u32 idCount)
+u32 HgEcs::findSmallest(u32* ids, u32 idCount)
 {
     u32 smallestCount = (u32)-1;
     u32 smallest = ids[0];
@@ -2734,9 +2722,9 @@ u32 HgECS::findSmallest(u32* ids, u32 idCount)
     return smallest;
 }
 
-static void swapIdxLocation(HgECS* ecs, u32 lhs, u32 rhs, u32 componentID)
+static void swapIdxLocation(HgEcs* ecs, u32 lhs, u32 rhs, u32 componentID)
 {
-    HgECS::System* system = hgMapGet(&ecs->systems, componentID);
+    HgEcs::System* system = hgMapGet(&ecs->systems, componentID);
     hgAssert(system != nullptr);
 
     hgAssert(lhs < system->count);
@@ -2755,8 +2743,8 @@ static void swapIdxLocation(HgECS* ecs, u32 lhs, u32 rhs, u32 componentID)
 
     system->entities[lhs] = rhsEntity;
     system->entities[rhs] = lhsEntity;
-    system->indices[lhsEntity.id] = rhs;
-    system->indices[rhsEntity.id] = lhs;
+    system->indices[hgHandleIdx(lhsEntity.handle)] = rhs;
+    system->indices[hgHandleIdx(rhsEntity.handle)] = lhs;
 
     u32 width = componentWidth(componentID);
     void* temp = hgAlloc(scratch, componentWidth(componentID), 1);
@@ -2767,11 +2755,11 @@ static void swapIdxLocation(HgECS* ecs, u32 lhs, u32 rhs, u32 componentID)
 
 namespace {
     struct QuicksortData {
-        HgECS* ecs;
-        HgECS::System* system;
+        HgEcs* ecs;
+        HgEcs::System* system;
         u32 comp;
         void* data;
-        bool (*compare)(void*, HgECS* ecs, HgEntity lhs, HgEntity rhs);
+        bool (*compare)(void*, HgEcs* ecs, HgEntity lhs, HgEntity rhs);
 
         u32 quicksortInter(u32 pivot, u32 inc, u32 dec)
         {
@@ -2811,21 +2799,21 @@ namespace {
     };
 }
 
-void HgECS::sort(
+void HgEcs::sort(
     u32 componentID,
     void* data,
-    bool (*compare)(void*, HgECS* ecs, HgEntity lhs, HgEntity rhs))
+    bool (*compare)(void*, HgEcs* ecs, HgEntity lhs, HgEntity rhs))
 {
     hgAssert(compare != nullptr);
 
-    HgECS::System* system = hgMapGet(&systems, componentID);
+    HgEcs::System* system = hgMapGet(&systems, componentID);
     hgAssert(system != nullptr);
 
     QuicksortData q{this, system, componentID, data, compare};
     q.quicksort(0, system->count);
 }
 
-void hgAddChildEntity(HgECS* ecs, HgEntity parent, HgEntity child)
+void hgAddChildEntity(HgEcs* ecs, HgEntity parent, HgEntity child)
 {
     hgAssert(ecs != nullptr);
 
@@ -2833,9 +2821,9 @@ void hgAddChildEntity(HgECS* ecs, HgEntity parent, HgEntity child)
     HgHierarchy& oldFirst = ecs->get<HgHierarchy>(node.firstChild);
     HgHierarchy& newFirst = ecs->get<HgHierarchy>(child);
 
-    hgAssert(newFirst.parent == HgEntity{});
-    hgAssert(newFirst.prevSibling == HgEntity{});
-    hgAssert(newFirst.nextSibling == HgEntity{});
+    hgAssert(newFirst.parent.handle.id == HgEntity{}.handle.id);
+    hgAssert(newFirst.prevSibling.handle.id == HgEntity{}.handle.id);
+    hgAssert(newFirst.nextSibling.handle.id == HgEntity{}.handle.id);
 
     newFirst.parent = parent;
     newFirst.nextSibling = node.firstChild;
@@ -2844,21 +2832,21 @@ void hgAddChildEntity(HgECS* ecs, HgEntity parent, HgEntity child)
     node.firstChild = child;
 }
 
-void hgDetachEntity(HgECS* ecs, HgEntity e)
+void hgDetachEntity(HgEcs* ecs, HgEntity e)
 {
     hgAssert(ecs != nullptr);
 
     HgHierarchy& node = ecs->get<HgHierarchy>(e);
-    if (node.parent != HgEntity{})
+    if (node.parent.handle.id != HgEntity{}.handle.id)
     {
-        if (node.prevSibling == HgEntity{})
+        if (node.prevSibling.handle.id == HgEntity{}.handle.id)
             ecs->get<HgHierarchy>(node.parent).firstChild = node.nextSibling;
         else
             ecs->get<HgHierarchy>(node.prevSibling).nextSibling = node.nextSibling;
         ecs->get<HgHierarchy>(node.nextSibling).prevSibling = node.prevSibling;
 
         HgEntity child = node.firstChild;
-        while (child != HgEntity{})
+        while (child.handle.id != HgEntity{}.handle.id)
         {
             HgHierarchy& tf = ecs->get<HgHierarchy>(child);
             HgEntity next = tf.nextSibling;
@@ -2869,10 +2857,10 @@ void hgDetachEntity(HgECS* ecs, HgEntity e)
             child = next;
         }
     } else {
-        hgAssert(node.prevSibling == HgEntity{});
-        hgAssert(node.nextSibling == HgEntity{});
+        hgAssert(node.prevSibling.handle.id == HgEntity{}.handle.id);
+        hgAssert(node.nextSibling.handle.id == HgEntity{}.handle.id);
         HgEntity child = node.firstChild;
-        while (child != HgEntity{})
+        while (child.handle.id != HgEntity{}.handle.id)
         {
             HgHierarchy& tf = ecs->get<HgHierarchy>(child);
             child = tf.nextSibling;
@@ -2884,13 +2872,13 @@ void hgDetachEntity(HgECS* ecs, HgEntity e)
     node = {};
 }
 
-void hgDestroyEntity(HgECS* ecs, HgEntity e)
+void hgDestroyEntity(HgEcs* ecs, HgEntity e)
 {
     hgAssert(ecs != nullptr);
 
     HgHierarchy& node = ecs->get<HgHierarchy>(e);
     HgEntity child = node.firstChild;
-    while (child != HgEntity{})
+    while (child.handle.id != HgEntity{}.handle.id)
     {
         HgHierarchy& tf = ecs->get<HgHierarchy>(child);
         HgEntity next = tf.nextSibling;
@@ -2900,19 +2888,19 @@ void hgDestroyEntity(HgECS* ecs, HgEntity e)
         hgDestroyEntity(ecs, child);
         child = next;
     }
-    if (node.parent != HgEntity{})
+    if (node.parent.handle.id != HgEntity{}.handle.id)
     {
-        if (node.prevSibling != HgEntity{})
+        if (node.prevSibling.handle.id != HgEntity{}.handle.id)
             ecs->get<HgHierarchy>(node.prevSibling).nextSibling = node.nextSibling;
         else
             ecs->get<HgHierarchy>(node.parent).firstChild = node.nextSibling;
-        if (node.nextSibling != HgEntity{})
+        if (node.nextSibling.handle.id != HgEntity{}.handle.id)
             ecs->get<HgHierarchy>(node.nextSibling).prevSibling = HgEntity{};
     }
     ecs->despawn(e);
 }
 
-void hgSetEntity(HgECS* ecs, HgEntity e, const HgVec3& pos, const HgVec3& scale, const HgQuat& rot)
+void hgSetEntity(HgEcs* ecs, HgEntity e, const HgVec3& pos, const HgVec3& scale, const HgQuat& rot)
 {
     hgAssert(ecs != nullptr);
 
@@ -2921,7 +2909,7 @@ void hgSetEntity(HgECS* ecs, HgEntity e, const HgVec3& pos, const HgVec3& scale,
     {
         HgHierarchy& node = ecs->get<HgHierarchy>(e);
         HgEntity child = node.firstChild;
-        while (child != HgEntity{})
+        while (child.handle.id != HgEntity{}.handle.id)
         {
             HgHierarchy& cNode = ecs->get<HgHierarchy>(child);
             HgTransform& cTf = ecs->get<HgTransform>(child);
@@ -2941,7 +2929,7 @@ void hgSetEntity(HgECS* ecs, HgEntity e, const HgVec3& pos, const HgVec3& scale,
     tf.rotation = rot;
 }
 
-void hgMoveEntity(HgECS* ecs, HgEntity e, const HgVec3& dpos, const HgVec3& dscale, const HgQuat& drot)
+void hgMoveEntity(HgEcs* ecs, HgEntity e, const HgVec3& dpos, const HgVec3& dscale, const HgQuat& drot)
 {
     hgAssert(ecs != nullptr);
 
@@ -3074,12 +3062,12 @@ void hgUpdateView2D(const HgMat4* view)
     hgGpuBufferWrite(pipeline2D.vpBuffer, offsetof(Pipeline2DVPUniform, view), view, sizeof(*view));
 }
 
-void hgDraw2D(HgECS* ecs, HgGpuCmd* cmd)
+void hgDraw2D(HgEcs* ecs, HgGpuCmd* cmd)
 {
     hgAssert(ecs != nullptr);
     hgAssert(cmd != nullptr);
 
-    ecs->sort<HgSprite2D>(nullptr, [](void*, HgECS* ecs, HgEntity lhs, HgEntity rhs) -> bool {
+    ecs->sort<HgSprite2D>(nullptr, [](void*, HgEcs* ecs, HgEntity lhs, HgEntity rhs) -> bool {
         hgAssert(ecs->has<HgTransform>(lhs));
         hgAssert(ecs->has<HgTransform>(rhs));
         return ecs->get<HgTransform>(lhs).position.z > ecs->get<HgTransform>(rhs).position.z;
@@ -3378,7 +3366,7 @@ void hgUpdateView3D(const HgMat4* view)
     pipeline3D.vpData.view = *view;
 }
 
-void hgDraw3D(HgECS* ecs, HgGpuCmd* cmd)
+void hgDraw3D(HgEcs* ecs, HgGpuCmd* cmd)
 {
     hgAssert(ecs != nullptr);
     hgAssert(cmd != nullptr);

@@ -50,7 +50,7 @@ int main()
     u32 renderWidth = 0;
     u32 renderHeight = 0;
 
-    HgECS ecs = ecs.create(arena, 1024, 128);
+    HgEcs ecs = ecs.create(arena, 1024, 128);
     ecs.createComponent<HgTransform>(arena, 1024);
     ecs.createComponent<HgSprite2D>(arena, 1024);
     ecs.createComponent<HgModel3D>(arena, 1024);
@@ -325,7 +325,7 @@ int main()
                         HgEntity e = scene[i];
 
                         HgString nameStr = hgStringCopy(frame, "Entitiy ID: ");
-                        hgStringAppend(frame, &nameStr, hgIntegerToString(frame, (i64)e.idx()));
+                        hgStringAppend(frame, &nameStr, hgIntegerToString(frame, (i64)hgHandleIdx(e.handle)));
                         char* name = hgCString(frame, nameStr);
 
                         if (ImGui::TreeNodeEx(name, entityFlags))

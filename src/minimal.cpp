@@ -80,7 +80,7 @@ int main()
     HgTransform camera{};
     camera.position.z = -1;
 
-    HgECS ecs = ecs.create(arena, 128, 128);
+    HgEcs ecs = ecs.create(arena, 128, 128);
     ecs.createComponent<HgTransform>(arena, 128);
     ecs.createComponent<HgSprite2D>(arena, 128);
 

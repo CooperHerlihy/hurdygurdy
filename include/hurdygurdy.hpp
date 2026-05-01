@@ -2150,7 +2150,7 @@ struct HgPool {
  * Reset an object pool
  */
 template<typename T>
-void hgPoolReset(HgPool<T>* pool)
+constexpr void hgPoolReset(HgPool<T>* pool)
 {
     hgAssert(pool != nullptr);
 
@@ -2185,7 +2185,7 @@ HgPool<T> hgPoolCreate(HgArena* arena, u32 capacity)
  * Note, does not initialize the object
  */
 template<typename T>
-HgHandle hgPoolAlloc(HgPool<T>* pool)
+constexpr HgHandle hgPoolAlloc(HgPool<T>* pool)
 {
     hgAssert(pool != nullptr);
     hgAssert(hgHandleIdx(pool->next) < pool->capacity);
@@ -2197,36 +2197,76 @@ HgHandle hgPoolAlloc(HgPool<T>* pool)
 }
 
 /**
+ * Returns whether a handle is alive in the pool
+ */
+template<typename T>
+constexpr bool hgPoolAlive(HgPool<T>* pool, HgHandle handle)
+{
+    return hgHandleIdx(handle) < pool->capacity && pool->freeList[hgHandleIdx(handle)].id == handle.id;
+}
+
+/**
  * Free an object back into a pool
  *
  * Note, the object handle must be valid and alive
  */
 template<typename T>
-void hgPoolFree(HgPool<T>* pool, HgHandle handle)
+constexpr void hgPoolFree(HgPool<T>* pool, HgHandle handle)
 {
-    hgAssert(pool->freeList[hgHandleIdx(handle)].id == handle.id);
+    hgAssert(hgPoolAlive(pool, handle));
     pool->freeList[hgHandleIdx(handle)] = pool->next;
     pool->next = hgHandleNextGeneration(handle);
-}
-
-/**
- * Returns whether a handle is alive in the pool
- */
-template<typename T>
-bool hgPoolAlive(HgPool<T>* pool, HgHandle handle)
-{
-    return pool->freeList[hgHandleIdx(handle)].id == handle.id;
 }
 
 /**
  * Get an object from a pool
  */
 template<typename T>
-T* hgPoolGet(HgPool<T>* pool, HgHandle handle)
+constexpr T* hgPoolGet(HgPool<T>* pool, HgHandle handle)
 {
-    // return hgPoolAlive(pool, handle) ? &pool->vals[hgHandleIdx(handle)] : nullptr;
     hgAssert(hgPoolAlive(pool, handle));
     return &pool->vals[hgHandleIdx(handle)];
+}
+
+/**
+ * A pool of indices
+ */
+typedef HgPool<void> HgIndexPool;
+
+/**
+ * A pool of indices
+ */
+template<>
+struct HgPool<void> {
+    /**
+     * The handle free list
+     */
+    HgHandle* freeList;
+    /**
+     * The next handle in the free list
+     */
+    HgHandle next;
+    /**
+     * The capacity of the pool
+     */
+    u32 capacity;
+};
+
+/**
+ * Create a new object pool
+ */
+template<>
+inline HgPool<void> hgPoolCreate(HgArena* arena, u32 capacity)
+{
+    hgAssert(arena != nullptr);
+    hgAssert(capacity > 0);
+
+    HgPool<void> pool{};
+    pool.freeList = hgAlloc<HgHandle>(arena, capacity);
+    pool.capacity = capacity;
+    hgPoolReset(&pool);
+
+    return pool;
 }
 
 /**
@@ -4704,7 +4744,7 @@ struct HgAssetData {
 };
 
 /**
- * A asset manager
+ * An asset manager
  */
 template<typename T>
 struct HgAssetManager {
@@ -5215,55 +5255,15 @@ inline u32 hgComponentID = hgCreateComponentID(sizeof(T));
  */
 struct HgEntity {
     /**
-     * The entity id, defaults to null
+     * The entity handle
      */
-    u32 id = (u32)-1;
-
-    /**
-     * Get the index from the id
-     */
-    constexpr u32 idx()
-    {
-        return id & 0x00ffffff;
-    }
-
-    /**
-     * Get the generation from the id
-     */
-    constexpr u32 generation()
-    {
-        return (id & 0xff000000) >> 24;
-    }
-
-    /**
-     * Increment this entity's generation count
-     */
-    constexpr void incrementGeneration()
-    {
-        id += 1 << 24;
-    }
+    HgHandle handle;
 };
-
-/**
- * Compare entities
- */
-constexpr bool operator==(HgEntity lhs, HgEntity rhs)
-{
-    return lhs.id == rhs.id;
-}
-
-/**
- * Compare entities
- */
-constexpr bool operator!=(HgEntity lhs, HgEntity rhs)
-{
-    return lhs.id != rhs.id;
-}
 
 /**
  * An entity component system
  */
-struct HgECS {
+struct HgEcs {
     /**
      * A system of components
      */
@@ -5291,17 +5291,9 @@ struct HgECS {
     };
 
     /**
-     * The entities, ready to be spawned
+     * The entity pool
      */
-    HgEntity* pool;
-    /**
-     * The next entity to spawn
-     */
-    HgEntity next;
-    /**
-     * The capacity of the entity pool
-     */
-    u32 poolSize;
+    HgIndexPool entityPool;
     /**
      * The component systems
      */
@@ -5315,7 +5307,7 @@ struct HgECS {
      * - maxEntities The maximum number of entities which can be spawned
      * - maxComponentTypes The maximum number of types which can be created
      */
-    static HgECS create(HgArena* arena, u32 maxEntities, u32 maxComponentTypes);
+    static HgEcs create(HgArena* arena, u32 maxEntities, u32 maxComponentTypes);
 
     /**
      * Create a new component type in the ECS
@@ -5626,7 +5618,7 @@ struct HgECS {
         static_assert(std::is_invocable_r_v<void, Fn, HgEntity, T*>);
 
         struct Capture {
-            HgECS* ecs;
+            HgEcs* ecs;
             Fn* fn;
         };
         Capture capture{this, &fn};
@@ -5659,7 +5651,7 @@ struct HgECS {
         hgAssert(system != nullptr);
 
         struct Capture {
-            HgECS* ecs;
+            HgEcs* ecs;
             System* system;
             Fn* fn;
         };
@@ -5708,7 +5700,7 @@ struct HgECS {
      * - data The data passed to compare
      * - compare The comparison function
      */
-    void sort(u32 componentID, void* data, bool (*compare)(void*, HgECS* ecs, HgEntity lhs, HgEntity rhs));
+    void sort(u32 componentID, void* data, bool (*compare)(void*, HgEcs* ecs, HgEntity lhs, HgEntity rhs));
 
     /**
      * Sort components
@@ -5718,7 +5710,7 @@ struct HgECS {
      * - compare The comparison function
      */
     template<typename T>
-    void sort(void* data, bool (*compare)(void*, HgECS* ecs, HgEntity lhs, HgEntity rhs))
+    void sort(void* data, bool (*compare)(void*, HgEcs* ecs, HgEntity lhs, HgEntity rhs))
     {
         sort(hgComponentID<T>, data, compare);
     }
@@ -5754,7 +5746,7 @@ struct HgHierarchy {
  * - parent The parent to add to, must be alive
  * - child The child to add, must be alive
  */
-void hgAddChildEntity(HgECS* ecs, HgEntity parent, HgEntity child);
+void hgAddChildEntity(HgEcs* ecs, HgEntity parent, HgEntity child);
 
 /**
  * Remove the entity from its hierarchy
@@ -5763,7 +5755,7 @@ void hgAddChildEntity(HgECS* ecs, HgEntity parent, HgEntity child);
  * - ecs The ecs
  * - e The entity to detach, must be alive
  */
-void hgDetachEntity(HgECS* ecs, HgEntity e);
+void hgDetachEntity(HgEcs* ecs, HgEntity e);
 
 /**
  * Destroy the entity and all its children in a hierarchy
@@ -5772,7 +5764,7 @@ void hgDetachEntity(HgECS* ecs, HgEntity e);
  * - ecs The ecs
  * - e The entity to destroy to, must be alive
  */
-void hgDestroyEntity(HgECS* ecs, HgEntity e);
+void hgDestroyEntity(HgEcs* ecs, HgEntity e);
 
 /**
  * The transform component for entities
@@ -5808,7 +5800,7 @@ struct HgTransform {
  * - scale The new scale
  * - rot The new rotation
  */
-void hgSetEntity(HgECS* ecs, HgEntity e, const HgVec3& pos, const HgVec3& scale, const HgQuat& rot);
+void hgSetEntity(HgEcs* ecs, HgEntity e, const HgVec3& pos, const HgVec3& scale, const HgQuat& rot);
 
 /**
  * Move this transform and all children by a delta
@@ -5820,7 +5812,7 @@ void hgSetEntity(HgECS* ecs, HgEntity e, const HgVec3& pos, const HgVec3& scale,
  * - dscale The change in scale, multiplied to current scale
  * - drot The change in rotation, applied to current rotation
  */
-void hgMoveEntity(HgECS* ecs, HgEntity e, const HgVec3& dpos, const HgVec3& dscale, const HgQuat& drot);
+void hgMoveEntity(HgEcs* ecs, HgEntity e, const HgVec3& dpos, const HgVec3& dscale, const HgQuat& drot);
 
 /**
  * A sprite component rendered by the 2d pipeline
@@ -5857,16 +5849,6 @@ void hgInitPipeline2D(
 void hgDeinitPipeline2D();
 
 /**
- * Add a texture to the 2D pipeline
- */
-void hgAddTexture2D(HgTexture* textureID);
-
-/**
- * Remove a texture from the 2D pipeline
- */
-void hgRemoveTexture2D(HgTexture* textureID);
-
-/**
  * Update the 2D pipeline's projection matrix
  */
 void hgUpdateProjection2D(const HgMat4* projection);
@@ -5883,7 +5865,7 @@ void hgUpdateView2D(const HgMat4* view);
  * - ecs The ecs to draw
  * - cmd The command buffer to record to, must not be nullptr
  */
-void hgDraw2D(HgECS* ecs, HgGpuCmd* cmd);
+void hgDraw2D(HgEcs* ecs, HgGpuCmd* cmd);
 
 /**
  * A model component rendered by the 3d pipeline
@@ -5944,21 +5926,6 @@ void hgInitPipeline3D(
 void hgDeinitPipeline3D();
 
 /**
- * Add a model to the 3D pipeline
- *
- * Parameters
- * - modelID The model to add
- * - colorID The model's color texture
- * - normalID The model's normal texture, if any
- */
-void hgAddModel3D(HgModel* modelID, HgTexture* colorID, HgTexture* normalID);
-
-/**
- * Remove a model from the 3D pipeline
- */
-void hgRemoveModel3D(HgModel* modelID);
-
-/**
  * Update the 3D pipeline's projection matrix
  */
 void hgUpdateProjection3D(const HgMat4* projection);
@@ -5975,7 +5942,7 @@ void hgUpdateView3D(const HgMat4* view);
  * - ecs The ecs to draw
  * - cmd The command buffer to record to, must not be nullptr
  */
-void hgDraw3D(HgECS* ecs, HgGpuCmd* cmd);
+void hgDraw3D(HgEcs* ecs, HgGpuCmd* cmd);
 
 /**
  * Initialize ImGui platform backend

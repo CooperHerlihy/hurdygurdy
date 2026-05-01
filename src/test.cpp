@@ -1809,7 +1809,7 @@ void hgTest()
         }
     }
 
-    hgWarn("HgResourceManager test not implemented yet : TODO\n");
+    hgWarn("HgAssetManager test not implemented yet : TODO\n");
 
     // // HgBinary
     // {
@@ -1970,16 +1970,16 @@ void hgTest()
     //     }
     // }
 
-    hgWarn("HgModelData test not implemented yet : TODO\n");
-    hgWarn("HgGpuTexture test not implemented yet : TODO\n");
-    hgWarn("HgGpuModel test not implemented yet : TODO\n");
+    hgWarn("HgMesh test not implemented yet : TODO\n");
+    hgWarn("HgTexture test not implemented yet : TODO\n");
+    hgWarn("HgModel test not implemented yet : TODO\n");
 
     // HgECS
     {
         HgArena* arena = hgScratch();
         HgArenaScope arenaScope{arena};
 
-        HgECS ecs = ecs.create(arena, 1024, 128);
+        HgEcs ecs = ecs.create(arena, 1024, 128);
         ecs.createComponent<u32>(arena, 1024);
         ecs.createComponent<u64>(arena, 1024);
 
@@ -1994,7 +1994,7 @@ void hgTest()
         hgAssert(!ecs.alive(e1));
         e3 = ecs.spawn();
         hgAssert(ecs.alive(e3));
-        hgAssert(e3.idx() == e1.idx() && e3 != e1);
+        hgAssert(hgHandleIdx(e3.handle) == hgHandleIdx(e1.handle) && e3.handle.id != e1.handle.id);
 
         e1 = ecs.spawn();
         hgAssert(ecs.alive(e1));
@@ -2059,13 +2059,13 @@ void hgTest()
                 switch (*c)
                 {
                     case 12:
-                        has12 = e == e1;
+                        has12 = e.handle.id == e1.handle.id;
                         break;
                     case 42:
-                        has42 = e == e2;
+                        has42 = e.handle.id == e2.handle.id;
                         break;
                     case 100:
-                        has100 = e == e3;
+                        has100 = e.handle.id == e3.handle.id;
                         break;
                     default:
                         hasUnknown = true;
@@ -2095,13 +2095,13 @@ void hgTest()
                 switch (*comp32)
                 {
                     case 12:
-                        has12 = e == e1;
+                        has12 = e.handle.id == e1.handle.id;
                         break;
                     case 42:
-                        has42 = e == e2;
+                        has42 = e.handle.id == e2.handle.id;
                         break;
                     case 100:
-                        has100 = e == e3;
+                        has100 = e.handle.id == e3.handle.id;
                         break;
                     default:
                         hasUnknown = true;
@@ -2110,10 +2110,10 @@ void hgTest()
                 switch (*comp64)
                 {
                     case 2042:
-                        has2042 = e == e2;
+                        has2042 = e.handle.id == e2.handle.id;
                         break;
                     case 2100:
-                        has2100 = e == e3;
+                        has2100 = e.handle.id == e3.handle.id;
                         break;
                     default:
                         hasUnknown = true;
@@ -2142,13 +2142,13 @@ void hgTest()
                 switch (*c)
                 {
                     case 12:
-                        has12 = e == e1;
+                        has12 = e.handle.id == e1.handle.id;
                         break;
                     case 42:
-                        has42 = e == e2;
+                        has42 = e.handle.id == e2.handle.id;
                         break;
                     case 100:
-                        has100 = e == e3;
+                        has100 = e.handle.id == e3.handle.id;
                         break;
                     default:
                         hasUnknown = true;
@@ -2236,7 +2236,7 @@ void hgTest()
 
         ecs.reset();
 
-        auto comparison = [](void*, HgECS* ecs, HgEntity lhs, HgEntity rhs)
+        auto comparison = [](void*, HgEcs* ecs, HgEntity lhs, HgEntity rhs)
         {
             return ecs->get<u32>(lhs) < ecs->get<u32>(rhs);
         };
