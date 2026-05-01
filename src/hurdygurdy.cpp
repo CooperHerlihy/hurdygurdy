@@ -1696,13 +1696,6 @@ HgJson hgParseJson(HgArena* arena, HgStringView text)
     return jsonParseNext(arena, &parseState);
 }
 
-HgClock::HgClock()
-{
-    timespec ts;
-    timespec_get(&ts, TIME_UTC);
-    time = (f64)ts.tv_sec + (f64)ts.tv_nsec * 1e-9;
-}
-
 f64 hgClockTick(HgClock* clock)
 {
     hgAssert(clock != nullptr);

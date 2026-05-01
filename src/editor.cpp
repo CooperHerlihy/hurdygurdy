@@ -101,7 +101,8 @@ int main()
     bool fixedAspect = false;
     f64 cpuDelta = 0.0;
 
-    HgClock gameClock{};
+    HgClock gameClock;
+    hgClockTick(&gameClock);
     for (;;)
     {
         f64 delta = hgClockTick(&gameClock);

@@ -20,7 +20,8 @@ void hgTest()
 {
     printf("HurdyGurdy: Tests Begun\n");
 
-    HgClock timer{};
+    HgClock timer;
+    hgClockTick(&timer);
 
     // HgMat
     {

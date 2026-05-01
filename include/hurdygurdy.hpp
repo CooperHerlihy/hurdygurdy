@@ -2269,9 +2269,13 @@ inline HgPool<void> hgPoolCreate(HgArena* arena, u32 capacity)
     return pool;
 }
 
+template<typename T>
+constexpr u64 hgHash(T val);
+
 /**
  * Hash map hashing for u8
  */
+template<>
 constexpr u64 hgHash(u8 val)
 {
     return (u64)val;
@@ -2280,6 +2284,7 @@ constexpr u64 hgHash(u8 val)
 /**
  * Hash map hashing for u16
  */
+template<>
 constexpr u64 hgHash(u16 val)
 {
     return (u64)val;
@@ -2288,6 +2293,7 @@ constexpr u64 hgHash(u16 val)
 /**
  * Hash map hashing for u32
  */
+template<>
 constexpr u64 hgHash(u32 val)
 {
     return (u64)val;
@@ -2296,6 +2302,7 @@ constexpr u64 hgHash(u32 val)
 /**
  * Hash map hashing for u64
  */
+template<>
 constexpr u64 hgHash(u64 val)
 {
     return (u64)val;
@@ -2304,6 +2311,7 @@ constexpr u64 hgHash(u64 val)
 /**
  * Hash map hashing for i8
  */
+template<>
 constexpr u64 hgHash(i8 val)
 {
     return (u64)val;
@@ -2312,6 +2320,7 @@ constexpr u64 hgHash(i8 val)
 /**
  * Hash map hashing for i16
  */
+template<>
 constexpr u64 hgHash(i16 val)
 {
     return (u64)val;
@@ -2320,6 +2329,7 @@ constexpr u64 hgHash(i16 val)
 /**
  * Hash map hashing for i32
  */
+template<>
 constexpr u64 hgHash(i32 val)
 {
     return (u64)val;
@@ -2328,6 +2338,7 @@ constexpr u64 hgHash(i32 val)
 /**
  * Hash map hashing for i64
  */
+template<>
 constexpr u64 hgHash(i64 val)
 {
     return (u64)val;
@@ -2336,6 +2347,7 @@ constexpr u64 hgHash(i64 val)
 /**
  * Hash map hashing for f32
  */
+template<>
 constexpr u64 hgHash(f32 val)
 {
     union {
@@ -2349,6 +2361,7 @@ constexpr u64 hgHash(f32 val)
 /**
  * Hash map hashing for f64
  */
+template<>
 constexpr u64 hgHash(f64 val)
 {
     union {
@@ -2376,6 +2389,7 @@ constexpr u64 hgPtrHash(T* val)
 /**
  * Hash map hashing for void*
  */
+template<>
 constexpr u64 hgHash(void* val)
 {
     return hgPtrHash<void>(val);
@@ -2384,6 +2398,7 @@ constexpr u64 hgHash(void* val)
 /**
  * Hash map hashing for HgHandle
  */
+template<>
 constexpr u64 hgHash(HgHandle handle)
 {
     return handle.id;
@@ -2392,6 +2407,7 @@ constexpr u64 hgHash(HgHandle handle)
 /**
  * Hash map hashing for strings
  */
+template<>
 constexpr u64 hgHash(HgStringView str)
 {
     u64 ret = 0;
@@ -2407,6 +2423,7 @@ constexpr u64 hgHash(HgStringView str)
 /**
  * Hash map hashing for HgString
  */
+template<>
 constexpr u64 hgHash(HgString str)
 {
     return hgHash(HgStringView{str});
@@ -2415,6 +2432,7 @@ constexpr u64 hgHash(HgString str)
 /**
  * Hash map hashing for C string
  */
+template<>
 constexpr u64 hgHash(const char* str)
 {
     return hgHash(HgStringView{str});
@@ -2423,7 +2441,7 @@ constexpr u64 hgHash(const char* str)
 /**
  * A hash set
  */
-template<typename V, u64 (*hashFn)(V) = hgHash>
+template<typename V>
 struct HgSet {
     static_assert(std::is_trivially_copyable_v<V> && std::is_trivially_destructible_v<V>);
 
@@ -2452,12 +2470,12 @@ struct HgSet {
  * - arena The arena to allocate from
  * - slotCount The max number of slots to store values in
  */
-template<typename V, u64 (*hashFn)(V) = hgHash>
-HgSet<V, hashFn> hgSetCreate(HgArena* arena, u32 slotCount)
+template<typename V>
+HgSet<V> hgSetCreate(HgArena* arena, u32 slotCount)
 {
     hgAssert(slotCount > 0);
 
-    HgSet<V, hashFn> set;
+    HgSet<V> set;
     set.hasVal = hgAlloc<bool>(arena, slotCount);
     set.vals = hgAlloc<V>(arena, slotCount);
     set.capacity = slotCount;
@@ -2468,8 +2486,8 @@ HgSet<V, hashFn> hgSetCreate(HgArena* arena, u32 slotCount)
 /**
  * Empties all slots
  */
-template<typename V, u64 (*hashFn)(V) = hgHash>
-void hgSetReset(HgSet<V, hashFn>* set)
+template<typename V>
+void hgSetReset(HgSet<V>* set)
 {
     for (u32 i = 0; i < set->capacity; ++i)
     {
@@ -2481,18 +2499,18 @@ void hgSetReset(HgSet<V, hashFn>* set)
 /**
  * Add a value to the set
  */
-template<typename V, typename T = V, u64 (*hashFn)(V) = hgHash>
-void hgSetAdd(HgSet<V, hashFn>* set, const T& val)
+template<typename V, typename T = V>
+void hgSetAdd(HgSet<V>* set, const T& val)
 {
     static_assert(std::is_convertible_v<T, V>);
     V v = (V)val;
 
     hgAssert(set->count < set->capacity - 1);
 
-    u32 idx = hashFn(v) % set->capacity;
+    u32 idx = hgHash(v) % set->capacity;
     for (u32 dist = 0; set->hasVal[idx] && set->vals[idx] != v; ++dist)
     {
-        u32 otherDist = hashFn(set->vals[idx]) % set->capacity - idx;
+        u32 otherDist = hgHash(set->vals[idx]) % set->capacity - idx;
         if (otherDist > set->capacity)
             otherDist += set->capacity;
 
@@ -2515,13 +2533,13 @@ void hgSetAdd(HgSet<V, hashFn>* set, const T& val)
 /**
  * Remove a value from the set
  */
-template<typename V, typename T = V, u64 (*hashFn)(V) = hgHash>
-void hgSetRemove(HgSet<V, hashFn>* set, const T& val)
+template<typename V, typename T = V>
+void hgSetRemove(HgSet<V>* set, const T& val)
 {
     static_assert(std::is_convertible_v<T, V>);
     V v = (V)val;
 
-    u32 idx = hashFn(v) % set->capacity;
+    u32 idx = hgHash(v) % set->capacity;
     while (set->hasVal[idx])
     {
         if (set->vals[idx] == v)
@@ -2534,7 +2552,7 @@ void hgSetRemove(HgSet<V, hashFn>* set, const T& val)
     u32 next = (idx + 1) % set->capacity;
     while (set->hasVal[next])
     {
-        if (hashFn(set->vals[next]) % set->capacity != next)
+        if (hgHash(set->vals[next]) % set->capacity != next)
         {
             set->vals[idx] = set->vals[next];
             idx = next;
@@ -2548,13 +2566,13 @@ void hgSetRemove(HgSet<V, hashFn>* set, const T& val)
 /**
  * Checks whether a value is contained in the set
  */
-template<typename V, typename T = V, u64 (*hashFn)(V) = hgHash>
+template<typename V, typename T = V>
 bool hgSetHas(const HgSet<V>* set, const T& val)
 {
     static_assert(std::is_convertible_v<T, V>);
     V v = (V)val;
 
-    for (u32 idx = hashFn(v) % set->capacity; set->hasVal[idx]; idx = (idx + 1) % set->capacity)
+    for (u32 idx = hgHash(v) % set->capacity; set->hasVal[idx]; idx = (idx + 1) % set->capacity)
     {
         if (set->vals[idx] == v)
             return true;
@@ -2565,7 +2583,7 @@ bool hgSetHas(const HgSet<V>* set, const T& val)
 /**
  * A key-value hash map
  */
-template<typename K, typename V, u64 (*hashFn)(K) = hgHash>
+template<typename K, typename V>
 struct HgMap {
     static_assert(std::is_trivially_copyable_v<K>
                && std::is_trivially_copyable_v<V>
@@ -2601,8 +2619,8 @@ struct HgMap {
  * - arena The arena to allocate from
  * - slotCount The max number of slots to store values in
  */
-template<typename K, typename V, u64 (*hashFn)(K) = hgHash>
-HgMap<K, V, hashFn> hgMapCreate(HgArena* arena, u32 slotCount)
+template<typename K, typename V>
+HgMap<K, V> hgMapCreate(HgArena* arena, u32 slotCount)
 {
     hgAssert(slotCount > 0);
 
@@ -2618,8 +2636,8 @@ HgMap<K, V, hashFn> hgMapCreate(HgArena* arena, u32 slotCount)
 /**
  * Empties all slots
  */
-template<typename K, typename V, u64 (*hashFn)(K) = hgHash>
-void hgMapReset(HgMap<K, V, hashFn>* map)
+template<typename K, typename V>
+void hgMapReset(HgMap<K, V>* map)
 {
     for (u32 i = 0; i < map->capacity; ++i)
     {
@@ -2637,8 +2655,8 @@ void hgMapReset(HgMap<K, V, hashFn>* map)
  * Returns
  * - A reference to the added value
  */
-template<typename K, typename V, typename T = K, typename U = V, u64 (*hashFn)(K) = hgHash>
-V* hgMapAdd(HgMap<K, V, hashFn>* map, const T& key, const U& val)
+template<typename K, typename V, typename T = K, typename U = V>
+V* hgMapAdd(HgMap<K, V>* map, const T& key, const U& val)
 {
     static_assert(std::is_convertible_v<T, K> && std::is_convertible_v<U, V>);
     K k = (K)key;
@@ -2646,10 +2664,10 @@ V* hgMapAdd(HgMap<K, V, hashFn>* map, const T& key, const U& val)
 
     hgAssert(map->count < map->capacity - 1);
 
-    u32 idx = hashFn(k) % map->capacity;
+    u32 idx = hgHash(k) % map->capacity;
     for (u32 dist = 0; map->hasVal[idx] && map->keys[idx] != k; ++dist)
     {
-        u32 otherDist = hashFn(map->keys[idx]) % map->capacity - idx;
+        u32 otherDist = hgHash(map->keys[idx]) % map->capacity - idx;
         if (otherDist > map->capacity)
             otherDist += map->capacity;
 
@@ -2685,13 +2703,13 @@ V* hgMapAdd(HgMap<K, V, hashFn>* map, const T& key, const U& val)
  * Returns
  * - Whether a value was found and stored in value
  */
-template<typename K, typename V, typename T = K, u64 (*hashFn)(K) = hgHash>
-bool hgMapRemove(HgMap<K, V, hashFn>* map, const T& key, V* val = nullptr)
+template<typename K, typename V, typename T = K>
+bool hgMapRemove(HgMap<K, V>* map, const T& key, V* val = nullptr)
 {
     static_assert(std::is_convertible_v<T, K>);
     K k = (K)key;
 
-    u32 idx = hashFn(k) % map->capacity;
+    u32 idx = hgHash(k) % map->capacity;
     while (map->hasVal[idx])
     {
         if (map->keys[idx] == k)
@@ -2707,7 +2725,7 @@ bool hgMapRemove(HgMap<K, V, hashFn>* map, const T& key, V* val = nullptr)
     u32 next = (idx + 1) % map->capacity;
     while (map->hasVal[next])
     {
-        if (hashFn(map->keys[next]) % map->capacity != next)
+        if (hgHash(map->keys[next]) % map->capacity != next)
         {
             map->keys[idx] = map->keys[next];
             map->vals[idx] = map->vals[next];
@@ -2727,13 +2745,13 @@ bool hgMapRemove(HgMap<K, V, hashFn>* map, const T& key, V* val = nullptr)
  * Returns
  * - A pointer to the value, or nullptr if it does not exist
  */
-template<typename K, typename V, typename T = K, u64 (*hashFn)(K) = hgHash>
-V* hgMapGet(const HgMap<K, V, hashFn>* map, const T& key)
+template<typename K, typename V, typename T = K>
+V* hgMapGet(const HgMap<K, V>* map, const T& key)
 {
     static_assert(std::is_convertible_v<T, K>);
     K k = (K)key;
 
-    for (u32 idx = hashFn(key) % map->capacity; map->hasVal[idx]; idx = (idx + 1) % map->capacity)
+    for (u32 idx = hgHash(key) % map->capacity; map->hasVal[idx]; idx = (idx + 1) % map->capacity)
     {
         if (map->keys[idx] == k)
             return map->vals + idx;
@@ -2749,11 +2767,6 @@ struct HgClock {
      * The begin time
      */
     f64 time;
-
-    /**
-     * Begin clock at construction
-     */
-    HgClock();
 };
 
 /**

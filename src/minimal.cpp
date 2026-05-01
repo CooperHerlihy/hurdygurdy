@@ -102,7 +102,8 @@ int main()
     hgImGuiInit(window, &windowFormat, 1);
     hgDefer(hgImGuiDeinit());
 
-    HgClock gameClock{};
+    HgClock gameClock;
+    hgClockTick(&gameClock);
     for (;;)
     {
         f64 delta = hgClockTick(&gameClock);
