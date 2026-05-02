@@ -71,7 +71,7 @@ int main()
     scene[sceneSize++] = square;
     ecs.add<HgTransform>(square) = {};
     ecs.get<HgTransform>(square).position = HgVec3{-1, 0, 1};
-    ecs.add<HgSprite2D>(square) = {0, HgVec2{0.0f}, HgVec2{1.0f}};
+    ecs.add<HgSprite2D>(square) = {HgTextureHandle{}, HgVec2{0.0f}, HgVec2{1.0f}};
 
     HgEntity cube = ecs.spawn();
     ecs.add<HgTransform>(cube) = {};
@@ -351,7 +351,7 @@ int main()
                                     {
                                         if (!ecs.has<HgTransform>(e))
                                             ecs.add<HgTransform>(e) = {};
-                                        ecs.add<HgSprite2D>(e) = {0, HgVec2{0.0f, 0.0f}, HgVec2{1.0f, 1.0f}};
+                                        ecs.add<HgSprite2D>(e) = {HgTextureHandle{}, HgVec2{0.0f, 0.0f}, HgVec2{1.0f, 1.0f}};
                                     }
 
                                     if (!ecs.has<HgModel3D>(e) && ImGui::Selectable("Model 3D"))

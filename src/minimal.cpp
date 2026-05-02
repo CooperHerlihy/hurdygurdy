@@ -18,13 +18,10 @@ int main()
     HgWindow* window = hgWindowCreate("Hg Small Test", 1200, 800, nullptr);
     hgDefer(hgWindowDestroy(window));
 
-    // HgWindow* window2 = hgWindowCreate("Hg Small Test", 1200, 800, nullptr);
-    // hgDefer(hgWindowDestroy(window));
-
     hgInitPipeline2D(hgWindowImageFormat(window), HgFormat_undefined);
     hgDefer(hgDeinitPipeline2D());
 
-    HgBinaryHandle noiseShaderHandle = hgBinaryLoad("build/noise.comp.spv");
+    HgBinaryHandle noiseShaderHandle = hgAssetLoad<HgBinary>("build/noise.comp.spv");
 
     u32 noiseSeed = std::random_device{}();
     u32 noiseScaleBegin = 4;
@@ -41,41 +38,42 @@ int main()
         u32 outImageIdx;
     };
 
-    HgBinary* noiseShaderCode = hgBinaryGet(noiseShaderHandle);
+    HgBinary* noiseShaderCode = hgAssetGet(noiseShaderHandle);
     HgGpuPipeline* noisePipeline = hgGpuPipelineCreateCompute(sizeof(NoisePush), (u8*)noiseShaderCode->data, noiseShaderCode->size);
     hgDefer(hgGpuPipelineDestroy(noisePipeline));
 
-    hgBinaryUnload(noiseShaderHandle);
+    hgAssetUnload(noiseShaderHandle);
 
     u32 noiseWidth = 256;
     u32 noiseHeight = 256;
 
-    HgTexture noiseTex{};
+    HgTextureHandle noiseTexHandle = hgAssetCreate<HgTexture>(HgStringView{});
+    HgTexture* noiseTex = hgAssetGet(noiseTexHandle);
 
-    noiseTex.image = hgGpuImageCreate(
+    noiseTex->image = hgGpuImageCreate(
         noiseWidth,
         noiseHeight,
         HgFormat_r8g8b8a8_unorm,
         HgGpuImageUsage_storage | HgGpuImageUsage_sampled);
-    hgDefer(hgGpuImageDestroy(noiseTex.image));
+    hgDefer(hgGpuImageDestroy(noiseTex->image));
 
-    noiseTex.view = hgGpuViewCreate(noiseTex.image, 0, 1, 0, 1, HgGpuAspect_color);
-    hgDefer(hgGpuViewDestroy(noiseTex.view));
+    noiseTex->view = hgGpuViewCreate(noiseTex->image, 0, 1, 0, 1, HgGpuAspect_color);
+    hgDefer(hgGpuViewDestroy(noiseTex->view));
 
     HgGpuDescriptor noiseStorageDesc = hgGpuDescriptorCreate(HgGpuDescriptorType_storageImage);
     hgDefer(hgGpuDescriptorDestroy(noiseStorageDesc));
 
-    HgGpuImageDescriptorInfo noiseStorageInfo{nullptr, noiseTex.view, HgGpuLayout_general};
+    HgGpuImageDescriptorInfo noiseStorageInfo{nullptr, noiseTex->view, HgGpuLayout_general};
     hgGpuDescriptorUpdate(noiseStorageDesc, nullptr, &noiseStorageInfo);
 
-    noiseTex.sampler = hgGpuSamplerCreate(HgGpuFilter_linear);
-    hgDefer(hgGpuSamplerDestroy(noiseTex.sampler));
+    noiseTex->sampler = hgGpuSamplerCreate(HgGpuFilter_linear);
+    hgDefer(hgGpuSamplerDestroy(noiseTex->sampler));
 
-    noiseTex.descriptor = hgGpuDescriptorCreate(HgGpuDescriptorType_combinedImageSampler);
-    hgDefer(hgGpuDescriptorDestroy(noiseTex.descriptor));
+    noiseTex->descriptor = hgGpuDescriptorCreate(HgGpuDescriptorType_combinedImageSampler);
+    hgDefer(hgGpuDescriptorDestroy(noiseTex->descriptor));
 
-    HgGpuImageDescriptorInfo noiseSamplerInfo{noiseTex.sampler, noiseTex.view, HgGpuLayout_shaderReadOnly};
-    hgGpuDescriptorUpdate(noiseTex.descriptor, nullptr, &noiseSamplerInfo);
+    HgGpuImageDescriptorInfo noiseSamplerInfo{noiseTex->sampler, noiseTex->view, HgGpuLayout_shaderReadOnly};
+    hgGpuDescriptorUpdate(noiseTex->descriptor, nullptr, &noiseSamplerInfo);
 
     HgTransform camera{};
     camera.position.z = -1;
@@ -86,7 +84,7 @@ int main()
 
     HgEntity noiseSquare = ecs.spawn();
     ecs.add<HgTransform>(noiseSquare) = {};
-    ecs.add<HgSprite2D>(noiseSquare) = {&noiseTex, HgVec2{0}, HgVec2{1}};
+    ecs.add<HgSprite2D>(noiseSquare) = {noiseTexHandle, HgVec2{0}, HgVec2{1}};
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -170,7 +168,7 @@ int main()
         HgGpuCmd* cmd = hgGpuFrameBegin(windows, sizeof(windows) / sizeof(*windows));
 
         HgGpuComputePass computePass{};
-        computePass.storageImages = &noiseTex.view;
+        computePass.storageImages = &noiseTex->view;
         computePass.storageImageCount = 1;
 
         hgGpuComputePass(cmd, &computePass);
@@ -199,7 +197,7 @@ int main()
             HgGpuRenderPass pass{};
             pass.colorAttachments = &colorAttachment;
             pass.colorAttachmentCount = 1;
-            pass.sampledImages = &noiseTex.view;
+            pass.sampledImages = &noiseTex->view;
             pass.sampledImageCount = 1;
 
             hgGpuRenderPassBegin(cmd, hgWindowWidth(window), hgWindowHeight(window), &pass);
@@ -216,33 +214,6 @@ int main()
 
             hgGpuMemoryBarrier(cmd, nullptr, 0, &presentBarrier, 1);
         }
-
-        // if (hgWindowCurrentImage(window2) != nullptr)
-        // {
-        //     HgGpuRenderAttachment colorAttachment{};
-        //     colorAttachment.image = hgWindowCurrentImage(window2);
-        //     colorAttachment.loadOp = HgGpuLoadOp_clear;
-        //
-        //     HgGpuRenderPass pass{};
-        //     pass.colorAttachments = &colorAttachment;
-        //     pass.colorAttachmentCount = 1;
-        //     pass.sampledImages = &noiseTex->view;
-        //     pass.sampledImageCount = 1;
-        //
-        //     hgGpuRenderPassBegin(cmd, hgWindowWidth(window2), hgWindowHeight(window2), &pass);
-        //
-        //     hgDraw2D(&ecs, cmd);
-        //
-        //     hgImGuiDraw(cmd);
-        //
-        //     hgGpuRenderPassEnd(cmd);
-        //
-        //     HgGpuImageBarrier presentBarrier{};
-        //     presentBarrier.image = hgWindowCurrentImage(window2);
-        //     presentBarrier.nextLayout = HgGpuLayout_presentSrc;
-        //
-        //     hgGpuMemoryBarrier(cmd, nullptr, 0, &presentBarrier, 1);
-        // }
 
         hgGpuFrameEnd(cmd);
     }

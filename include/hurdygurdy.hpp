@@ -1681,6 +1681,9 @@ struct HgStringView {
      */
     constexpr HgStringView(const char* cStr) : chars{cStr}, length{0}
     {
+        if (cStr == nullptr)
+            return;
+
         while (cStr[length] != '\0')
         {
             ++length;
@@ -2119,6 +2122,14 @@ constexpr u32 hgHandleGeneration(HgHandle handle)
 constexpr HgHandle hgHandleNextGeneration(HgHandle handle)
 {
     return {handle.id + (1 << hgHandleIdxBits)};
+}
+
+/**
+ * Returns whether the handle is the null handle
+ */
+constexpr bool hgHandleIsNull(HgHandle handle)
+{
+    return handle.id == HgHandle{}.id;
 }
 
 /**
@@ -2915,6 +2926,13 @@ bool hgFenceIsComplete(HgFence fence);
 
 /**
  * Spin waits for all work submissions to be completed
+ *
+ * Parameters
+ * - fence The fence to wait on
+ * - timeoutSeconds The time in seconds to wait before timing out
+ *
+ * Returns
+ * - true if the fence was completed, false if the timeout was triggered
  */
 bool hgFenceWait(HgFence fence, f64 timeoutSeconds);
 
@@ -4711,12 +4729,14 @@ HgWindowEvent* hgWindowEvents(HgWindow* window, u32* count);
 
 /**
  * Initialize all default HurdyGurdy asset types
- *
- * Parameters
- * - arena The arena to allocate from
- * - maxBinaries The max number of binary assets
  */
-void hgAssetsInit(HgArena* arena, u32 maxBinaries, u32 maxImages, u32 maxTextures, u32 maxMeshes, u32 maxModels);
+void hgAssetInitDefaults(
+    HgArena* arena,
+    u32 maxBinaries,
+    u32 maxImages,
+    u32 maxTextures,
+    u32 maxMeshes,
+    u32 maxModels);
 
 /**
  * Typed handles for assets
@@ -4774,6 +4794,12 @@ struct HgAssetManager {
 };
 
 /**
+ * The global asset managers
+ */
+template<typename T>
+inline HgAssetManager<T> hgAssets{};
+
+/**
  * Create an asset manager
  *
  * Parameters
@@ -4784,111 +4810,148 @@ struct HgAssetManager {
  * - The created asset manager
  */
 template<typename T>
-HgAssetManager<T> hgAssetManagerCreate(HgArena* arena, u32 maxAssets)
+void hgAssetInit(HgArena* arena, u32 maxAssets)
 {
-    HgAssetManager<T> am{};
-    am.map = hgMapCreate<HgStringView, HgHandle>(arena, maxAssets * 2);
-    am.pool = hgPoolCreate<HgAssetData<T>>(arena, maxAssets);
-    return am;
+    hgAssets<T>.map = hgMapCreate<HgStringView, HgHandle>(arena, maxAssets * 2);
+    hgAssets<T>.pool = hgPoolCreate<HgAssetData<T>>(arena, maxAssets);
 }
 
 /**
  * Create an asset (or increment the ref count)
  *
- * Parameters
- * - assets The asset manager to create in
- * - path The unique path for caching
- * - out A pointer to return the handle
- *
- * Returns
- * - Whether the asset needs to be loaded
+ * Leave the path empty to create a unique asset
  */
 template<typename T>
-bool hgAssetCreate(HgAssetManager<T>* assets, HgStringView path, HgAssetHandle<T>* out)
+HgAssetHandle<T> hgAssetCreate(HgStringView path)
 {
-    HgHandle* handle = hgMapGet(&assets->map, path);
-    if (handle != nullptr)
+    if (path.chars == nullptr || path.length == 0)
     {
-        *out = {*handle};
-        return false;
+        HgHandle handle = hgPoolAlloc(&hgAssets<T>.pool);
+
+        HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle);
+        data->path = {};
+        data->isLoaded = hgFenceCreate();
+        data->refCount = 1;
+        data->asset = {};
+
+        return {handle};
     }
+    else
+    {
+        HgHandle* handle = hgMapGet(&hgAssets<T>.map, path);
+        if (handle != nullptr)
+        {
+            ++hgPoolGet(&hgAssets<T>.pool, *handle)->refCount;
+        }
+        else
+        {
+            char* pathStore = (char*)malloc(path.length);
+            memcpy(pathStore, path.chars, path.length);
 
-    char* pathStore = (char*)malloc(path.length);
-    memcpy(pathStore, path.chars, path.length);
+            handle = hgMapAdd(&hgAssets<T>.map, {pathStore, path.length}, hgPoolAlloc(&hgAssets<T>.pool));
 
-    handle = hgMapAdd(&assets->map, {pathStore, path.length}, hgPoolAlloc(&assets->pool));
-
-    HgAssetData<T>* data = hgPoolGet(&assets->pool, *handle);
-    data->path = {pathStore, path.length};
-    data->isLoaded = hgFenceCreate();
-    data->refCount = 1;
-    data->asset = {};
-
-    *out = {*handle};
-    return true;
+            HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, *handle);
+            data->path = {pathStore, path.length};
+            data->isLoaded = hgFenceCreate();
+            data->refCount = 1;
+            data->asset = {};
+        }
+        return {*handle};
+    }
 }
 
 /**
  * Destroy an asset (or decrement the ref count)
- *
- * Parameters
- * - assets The asset manager to destroy from
- * - handle The asset to destroy
- * - asset A pointer to return the asset, if destroyed
- *
- * Returns
- * - Whether the asset needs to be unloaded
  */
 template<typename T>
-bool hgAssetDestroy(HgAssetManager<T>* assets, HgAssetHandle<T> handle, T* asset)
+void hgAssetDestroy(HgAssetHandle<T> handle)
 {
-    hgAssert(hgPoolAlive(&assets->pool, handle.handle));
+    hgAssert(hgPoolAlive(&hgAssets<T>.pool, handle.handle));
 
-    HgAssetData<T>* data = hgPoolGet(&assets->pool, handle.handle);
+    HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle.handle);
     if (--data->refCount == 0)
     {
-        *asset = data->asset;
+        if (data->path != nullptr)
+        {
+            hgMapRemove(&hgAssets<T>.map, data->path);
+            free((void*)data->path.chars);
+        }
         hgFenceDestroy(data->isLoaded);
-        free((void*)data->path.chars);
-        return true;
+        hgPoolFree(&hgAssets<T>.pool, handle.handle);
     }
-    return false;
+}
+
+/**
+ * Load an asset, implemented per asset type
+ */
+template<typename T>
+void hgAssetLoadImpl(HgAssetData<T>* data);
+
+/**
+ * Unload an asset, implemented per asset type
+ */
+template<typename T>
+void hgAssetUnloadImpl(HgAssetData<T>* data);
+
+/**
+ * Create an asset and load it from disc (or increment the ref count)
+ */
+template<typename T>
+HgAssetHandle<T> hgAssetLoad(HgStringView path)
+{
+    HgAssetHandle<T> handle = hgAssetCreate<T>(path);
+    HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle.handle);
+    if (data->refCount == 1)
+    {
+        hgAssetLoadImpl(data);
+    }
+    return handle;
+}
+
+/**
+ * Destroy an asset and unload it (or decrement the ref count)
+ */
+template<typename T>
+void hgAssetUnload(HgAssetHandle<T> handle)
+{
+    HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle.handle);
+    if (data->refCount == 1)
+    {
+        hgAssetUnloadImpl(data);
+    }
+    hgAssetDestroy(handle);
+}
+
+/**
+ * Hot reload an asset
+ */
+template<typename T>
+void hgAssetReload(HgAssetHandle<T> handle)
+{
+    HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle.handle);
+    hgAssetUnloadImpl(data);
+    hgAssetLoadImpl(data);
 }
 
 /**
  * Returns the asset's data
  */
 template<typename T>
-T* hgAssetGet(HgAssetManager<T>* assets, HgAssetHandle<T> handle)
+T* hgAssetGet(HgAssetHandle<T> handle)
 {
-    return &hgPoolGet(&assets->pool, handle.handle)->asset;
-}
-
-/**
- * Returns the reference count associated with an asset
- */
-template<typename T>
-u32 hgAssetRefCount(HgAssetManager<T>* assets, HgAssetHandle<T> handle)
-{
-    return hgPoolGet(&assets->pool, handle.handle)->refCount;
-}
-
-/**
- * Returns the fence associated with an asset, whether it is finished loading
- */
-template<typename T>
-HgFence hgAssetFence(HgAssetManager<T>* assets, HgAssetHandle<T> handle)
-{
-    return hgPoolGet(&assets->pool, handle.handle)->isLoaded;
+    HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle.handle);
+    hgAssert(data->refCount > 0);
+    hgFenceWaitIndefinite(data->isLoaded);
+    return &data->asset;
 }
 
 /**
  * Returns the path associated with an asset
  */
 template<typename T>
-HgStringView hgAssetPath(HgAssetManager<T>* assets, HgAssetHandle<T> handle)
+HgStringView hgAssetPath(HgAssetHandle<T> handle)
 {
-    return hgPoolGet(&assets->pool, handle.handle)->path;
+    return hgPoolGet(&hgAssets<T>.pool, handle.handle)->path;
 }
 
 /**
@@ -4911,30 +4974,14 @@ struct HgBinary {
 typedef HgAssetHandle<HgBinary> HgBinaryHandle;
 
 /**
- * Initialize binary asset manager
- */
-void hgAssetsInitBinaries(HgArena* arena, u32 maxBinaries);
-
-/**
- * Load a binary file from disc asynchronously, or increment the ref count
+ * Store a binary file to disc asynchronously
  *
  * Parameters
- * - path The file path to the image
- *
- * Returns
- * - The binary
+ * - bin The binary to store
+ * - path The file path to store at
+ * - fence The fence to signal on completion
  */
-HgBinaryHandle hgBinaryLoad(HgStringView path);
-
-/**
- * Unload a binary file from memory, or decrement the ref count
- */
-void hgBinaryUnload(HgBinaryHandle handle);
-
-/**
- * Get the binary asset
- */
-HgBinary* hgBinaryGet(HgBinaryHandle handle);
+void hgBinaryStore(HgBinary* bin, HgStringView path, HgFence fence);
 
 /**
  * Resize the file
@@ -4993,15 +5040,6 @@ void hgBinaryOverwrite(u64 idx, const T& src)
 }
 
 /**
- * Store a binary file to disc asynchronously
- *
- * Parameters
- * - bin The binary to store
- * - path The file path to store at
- */
-void hgBinaryStore(HgBinary* bin, HgStringView path);
-
-/**
  * An image asset
  */
 struct HgImage {
@@ -5031,26 +5069,6 @@ struct HgImage {
  * A handle to an image
  */
 typedef HgAssetHandle<HgImage> HgImageHandle;
-
-/**
- * Initialize image assets
- */
-void hgAssetsInitImages(HgArena* arena, u32 maxImages);
-
-/**
- * Load an image asset asynchronously, or increment the ref count
- */
-HgImageHandle hgImageLoad(HgStringView path);
-
-/**
- * Unload an image asset, or decrement the ref count
- */
-void hgImageUnload(HgImageHandle handle);
-
-/**
- * Get the image asset
- */
-HgImage* hgImageGet(HgImageHandle handle);
 
 /**
  * Store an image to disc in the png format
@@ -5085,34 +5103,9 @@ struct HgTexture {
 typedef HgAssetHandle<HgTexture> HgTextureHandle;
 
 /**
- * Initialize gpu textures
- */
-void hgAssetsInitTextures(HgArena* arena, u32 maxTextures);
-
-/**
- * Load a texture, or increment the ref count (blocking)
- *
- * Note, image data can be preloaded asynchronously to speed up texture loading
- */
-HgTextureHandle hgTextureLoad(HgStringView path);
-
-/**
- * Unload a texture from the gpu
- */
-void hgTextureUnload(HgTextureHandle handle);
-
-/**
- * Gets a gpu texture resource
- *
- * Returns
- * - The gpu texture, or nullptr if it is not loaded
- */
-HgTexture* hgTextureGet(HgTextureHandle handle);
-
-/**
  * A vertex in a model
  */
-struct HgModelVertex {
+struct HgMeshVertex {
     /**
      * The vertex position
      */
@@ -5138,7 +5131,7 @@ struct HgMesh {
     /**
      * The file index of the first vertex
      */
-    HgModelVertex* vertices;
+    HgMeshVertex* vertices;
     /**
      * The file index of the first geometry index
      */
@@ -5165,26 +5158,6 @@ struct HgMesh {
  * A handle to a model data asset
  */
 typedef HgAssetHandle<HgMesh> HgMeshHandle;
-
-/**
- * Initialize model data assets
- */
-void hgAssetsInitMeshes(HgArena* arena, u32 maxModels);
-
-/**
- * Load a model data asset asynchronously, or increment the ref count
- */
-HgMeshHandle hgMeshLoad(HgStringView path);
-
-/**
- * Unload a model data asset, or decrement the ref count
- */
-void hgMeshUnload(HgMeshHandle handle);
-
-/**
- * Get the model data asset
- */
-HgMesh* hgMeshGet(HgMeshHandle handle);
 
 /**
  * Store the model data to disc in gltf format : TODO
@@ -5221,31 +5194,6 @@ struct HgModel {
  * A gpu model handle
  */
 typedef HgAssetHandle<HgModel> HgModelHandle;
-
-/**
- * Initialize gpu model assets
- */
-void hgAssetsInitModels(HgArena* arena, u32 maxModels);
-
-/**
- * Load a 3d model, or increment the ref count (blocking)
- *
- * Note, model data can be preloaded asynchronously to speed up model loading
- */
-HgModelHandle hgModelLoad(HgStringView path);
-
-/**
- * Unload a model asset from the gpu
- */
-void hgUnloadModel(HgModelHandle handle);
-
-/**
- * Gets a gpu model resource
- *
- * Returns
- * - The gpu model, or nullptr if it is not loaded
- */
-HgModel* hgGetModel(HgModelHandle handle);
 
 /**
  * Creates a new id for a component
@@ -5834,7 +5782,7 @@ struct HgSprite2D {
     /**
      * The texture to draw from
      */
-    HgTexture* texture;
+    HgTextureHandle texture;
     /**
      * The beginning coordinate to read from texture, [0.0, 1.0]
      */
@@ -5887,15 +5835,15 @@ struct HgModel3D {
     /**
      * The model to render
      */
-    HgModel* modelResource;
+    HgModelHandle model;
     /**
      * The model's color map
      */
-    HgTexture* colorMap;
+    HgTextureHandle colorMap;
     /**
      * The model's normal map
      */
-    HgTexture* normalMap;
+    HgTextureHandle normalMap;
 };
 
 /**
