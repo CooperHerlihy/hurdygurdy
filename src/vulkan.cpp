@@ -3598,11 +3598,11 @@ void hgProcessEvents()
                 HgWindow** window = hgMapGet(&platformState.windows, event.key.windowID);
                 if (window != nullptr)
                 {
-                    HgWindowEvent event{};
-                    event.button.type = HgWindowEventType_buttonPress;
-                    event.button.button = key;
+                    HgWindowEvent windowEvent{};
+                    windowEvent.button.type = HgWindowEventType_buttonPress;
+                    windowEvent.button.button = key;
 
-                    (*window)->events[(*window)->eventCount++] = event;
+                    (*window)->events[(*window)->eventCount++] = windowEvent;
                     (*window)->isKeyDown[key] = true;
                 }
             } break;
@@ -3612,11 +3612,11 @@ void hgProcessEvents()
                 HgWindow** window = hgMapGet(&platformState.windows, event.key.windowID);
                 if (window != nullptr)
                 {
-                    HgWindowEvent event{};
-                    event.button.type = HgWindowEventType_buttonRelease;
-                    event.button.button = key;
+                    HgWindowEvent windowEvent{};
+                    windowEvent.button.type = HgWindowEventType_buttonRelease;
+                    windowEvent.button.button = key;
 
-                    (*window)->events[(*window)->eventCount++] = event;
+                    (*window)->events[(*window)->eventCount++] = windowEvent;
                     (*window)->isKeyDown[key] = false;
                 }
             } break;
@@ -3626,11 +3626,11 @@ void hgProcessEvents()
                 HgWindow** window = hgMapGet(&platformState.windows, event.button.windowID);
                 if (window != nullptr)
                 {
-                    HgWindowEvent event{};
-                    event.button.type = HgWindowEventType_buttonPress;
-                    event.button.button = key;
+                    HgWindowEvent windowEvent{};
+                    windowEvent.button.type = HgWindowEventType_buttonPress;
+                    windowEvent.button.button = key;
 
-                    (*window)->events[(*window)->eventCount++] = event;
+                    (*window)->events[(*window)->eventCount++] = windowEvent;
                     (*window)->isKeyDown[key] = true;
                 }
             } break;
@@ -3640,11 +3640,11 @@ void hgProcessEvents()
                 HgWindow** window = hgMapGet(&platformState.windows, event.button.windowID);
                 if (window != nullptr)
                 {
-                    HgWindowEvent event{};
-                    event.button.type = HgWindowEventType_buttonRelease;
-                    event.button.button = key;
+                    HgWindowEvent windowEvent{};
+                    windowEvent.button.type = HgWindowEventType_buttonRelease;
+                    windowEvent.button.button = key;
 
-                    (*window)->events[(*window)->eventCount++] = event;
+                    (*window)->events[(*window)->eventCount++] = windowEvent;
                     (*window)->isKeyDown[key] = false;
                 }
             } break;

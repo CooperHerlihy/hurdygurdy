@@ -2137,7 +2137,7 @@ constexpr bool hgHandleIsNull(HgHandle handle)
  */
 template<typename T>
 struct HgPool {
-    static_assert(std::is_trivially_copyable_v<T> && std::is_trivially_destructible_v<T>);
+    static_assert(std::is_trivially_destructible_v<T>);
 
     /**
      * The values stored in the pool
