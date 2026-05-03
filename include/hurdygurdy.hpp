@@ -4307,7 +4307,7 @@ union HgGpuClearValue {
  */
 struct HgGpuRenderAttachment {
     /**
-     * The image attached
+     * The image attached, must not be nullptr
      */
     HgGpuView* image = nullptr;
     /**
@@ -5797,8 +5797,8 @@ struct HgSprite2D {
  * Initialize the 2D pipeline
  *
  * Parameters
- * - colorFormat The format of the color attachment, must not be UNDEFINED
- * - depthFormat The format of the depth attachment, if any
+ * - colorFormat The format of the color attachment, must not be undefined
+ * - depthFormat The format of the depth attachment, must not be undefined
  */
 void hgInitPipeline2D(
     HgFormat colorFormat,
@@ -5874,8 +5874,8 @@ struct HgPointLight3D {
  * Initialize the 3D pipeline
  *
  * Parameters
- * - colorFormat The format of the color attachment, must not be UNDEFINED
- * - depthFormat The format of the depth attachment, must not be UNDEFINED
+ * - colorFormat The format of the color attachment, must not be undefined
+ * - depthFormat The format of the depth attachment, must not be undefined
  */
 void hgInitPipeline3D(
     HgFormat colorFormat,

@@ -2857,6 +2857,7 @@ void hgInitPipeline2D(
     HgFormat depthFormat)
 {
     hgAssert(colorFormat != HgFormat_undefined);
+    hgAssert(depthFormat != HgFormat_undefined);
 
     HgBinaryHandle spriteVertSpvHandle = hgAssetLoad<HgBinary>("build/sprite.vert.spv");
     HgBinaryHandle spriteFragSpvHandle = hgAssetLoad<HgBinary>("build/sprite.frag.spv");
@@ -2877,7 +2878,8 @@ void hgInitPipeline2D(
     HgGpuPushRange push{0, sizeof(Pipeline2DPush)};
     pipelineConfig.pushRanges = &push;
     pipelineConfig.pushRangeCount = 1;
-    pipelineConfig.enableDepthRead = depthFormat != HgFormat_undefined;
+    pipelineConfig.enableDepthRead = true;
+    pipelineConfig.enableDepthWrite = true;
     bool enableColorBlend = true;
     pipelineConfig.colorBlendEnables = &enableColorBlend;
 
@@ -2957,11 +2959,11 @@ void hgDraw2D(HgEcs* ecs, HgGpuCmd* cmd)
     hgAssert(ecs != nullptr);
     hgAssert(cmd != nullptr);
 
-    ecs->sort<HgSprite2D>(nullptr, [](void*, HgEcs* ecs, HgEntity lhs, HgEntity rhs) -> bool {
-        hgAssert(ecs->has<HgTransform>(lhs));
-        hgAssert(ecs->has<HgTransform>(rhs));
-        return ecs->get<HgTransform>(lhs).position.z > ecs->get<HgTransform>(rhs).position.z;
-    });
+    // ecs->sort<HgSprite2D>(nullptr, [](void*, HgEcs* ecs, HgEntity lhs, HgEntity rhs) -> bool {
+    //     hgAssert(ecs->has<HgTransform>(lhs));
+    //     hgAssert(ecs->has<HgTransform>(rhs));
+    //     return ecs->get<HgTransform>(lhs).position.z > ecs->get<HgTransform>(rhs).position.z;
+    // });
 
     hgGpuBindPipeline(cmd, pipeline2D.pipeline);
 

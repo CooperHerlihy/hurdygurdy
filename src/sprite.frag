@@ -21,5 +21,7 @@ layout (push_constant) uniform Push {
 void main()
 {
     outColor = texture(uTextures[push.texIdx], vUVCoord);
+    if (outColor.w == 0.0)
+        discard;
 }
 

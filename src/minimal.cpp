@@ -18,8 +18,15 @@ int main()
     HgWindow* window = hgWindowCreate("Hg Small Test", 1200, 800, nullptr);
     hgDefer(hgWindowDestroy(window));
 
-    hgInitPipeline2D(hgWindowImageFormat(window), HgFormat_undefined);
+    hgInitPipeline2D(hgWindowImageFormat(window), HgFormat_d32_sfloat);
     hgDefer(hgDeinitPipeline2D());
+
+    u32 depthWidth = 0;
+    u32 depthHeight = 0;
+    HgGpuImage* depthImage = nullptr;
+    hgDefer(hgGpuImageDestroy(depthImage));
+    HgGpuView* depthView = nullptr;
+    hgDefer(hgGpuViewDestroy(depthView));
 
     HgBinaryHandle noiseShaderHandle = hgAssetLoad<HgBinary>("build/noise.comp.spv");
 
@@ -97,7 +104,7 @@ int main()
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
     HgFormat windowFormat = hgWindowImageFormat(window);
-    hgImGuiInit(window, &windowFormat, 1);
+    hgImGuiInit(window, &windowFormat, 1, HgFormat_d32_sfloat);
     hgDefer(hgImGuiDeinit());
 
     HgClock gameClock;
@@ -112,6 +119,19 @@ int main()
         hgProcessEvents();
         if (hgWasQuit() || hgWindowWasClosed(window))
             goto quit;
+
+        if (depthWidth != hgWindowWidth(window) || depthHeight != hgWindowHeight(window))
+        {
+            hgGpuViewDestroy(depthView);
+            hgGpuImageDestroy(depthImage);
+
+            depthWidth = hgWindowWidth(window);
+            depthHeight = hgWindowHeight(window);
+
+            depthImage = hgGpuImageCreate(depthWidth, depthHeight, HgFormat_d32_sfloat,
+                HgGpuImageUsage_depthStencilAttachment);
+            depthView = hgGpuViewCreate(depthImage, 0, 1, 0, 1, HgGpuAspect_depth);
+        }
 
         HgMat4 proj = hgMatPerspective(
             (f32)hgPi * 0.5f,
@@ -192,11 +212,15 @@ int main()
         {
             HgGpuRenderAttachment colorAttachment{};
             colorAttachment.image = hgWindowImageView(window);
-            colorAttachment.loadOp = HgGpuLoadOp_clear;
+
+            HgGpuRenderAttachment depthAttachment{};
+            depthAttachment.image = depthView;
+            depthAttachment.clearValue.depthStencil.depth = 1.0f;
 
             HgGpuRenderPass pass{};
             pass.colorAttachments = &colorAttachment;
             pass.colorAttachmentCount = 1;
+            pass.depthAttachment = &depthAttachment;
             pass.sampledImages = &noiseTex->view;
             pass.sampledImageCount = 1;
 
