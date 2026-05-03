@@ -65,7 +65,7 @@ struct HgWindow {
     VkSemaphore* imageAvailable;
     VkSemaphore* readyToPresent;
     u32 imageIdx;
-    u32 semaphoreIdx;
+    u32 imageAvailableIdx;
 
     u32 width;
     u32 height;
@@ -3036,7 +3036,7 @@ static void resizeWindowSwapchain(HgWindow* window)
     }
 
     window->imageIdx = (u32)-1;
-    window->semaphoreIdx = 0;
+    window->imageAvailableIdx = 0;
 
     vkDestroySwapchainKHR(vkState.device, oldSwapchain, nullptr);
 }
@@ -3201,7 +3201,7 @@ HgGpuCmd* hgGpuFrameBegin(HgWindow** windows, u32 windowCount)
             vkState.device,
             windows[i]->swapchain,
             UINT64_MAX,
-            windows[i]->imageAvailable[windows[i]->semaphoreIdx],
+            windows[i]->imageAvailable[windows[i]->imageAvailableIdx],
             nullptr,
             &windows[i]->imageIdx);
 
@@ -3261,9 +3261,9 @@ void hgGpuFrameEnd(HgGpuCmd* cmd)
         HgWindow* window = frame->windows[i];
 
         waitStages[i] = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        imageAvailableSemaphores[i] = window->imageAvailable[window->semaphoreIdx];
-        readyToPresentSemaphores[i] = window->imageAvailable[window->semaphoreIdx];
-        window->semaphoreIdx = (window->semaphoreIdx + 1) % window->imageCount;
+        imageAvailableSemaphores[i] = window->imageAvailable[window->imageAvailableIdx];
+        readyToPresentSemaphores[i] = window->readyToPresent[window->imageIdx];
+        window->imageAvailableIdx = (window->imageAvailableIdx + 1) % window->imageCount;
 
         swapchains[i] = window->swapchain;
         imageIndices[i] = window->imageIdx;

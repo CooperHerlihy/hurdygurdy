@@ -18,6 +18,7 @@ int main()
     HgArenaScope arenaScope{arena};
 
     HgWindowConfig windowConfig{};
+    windowConfig.fullscreen = true;
     windowConfig.preferredPresentMode = HgGpuPresentMode_mailbox;
 
     HgWindow* window = hgWindowCreate("Hg Test", 1600, 900, &windowConfig);

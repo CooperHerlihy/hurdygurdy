@@ -15,18 +15,14 @@ int main()
     HgArena* arena = hgScratch();
     HgArenaScope arenaScope{arena};
 
-    HgWindow* window = hgWindowCreate("Hg Small Test", 1200, 800, nullptr);
+    HgWindowConfig windowConfig{};
+    windowConfig.preferredPresentMode = HgGpuPresentMode_mailbox;
+
+    HgWindow* window = hgWindowCreate("Hg Small Test", 1200, 800, &windowConfig);
     hgDefer(hgWindowDestroy(window));
 
     hgInitPipeline2D(hgWindowImageFormat(window), HgFormat_d32_sfloat);
     hgDefer(hgDeinitPipeline2D());
-
-    u32 depthWidth = 0;
-    u32 depthHeight = 0;
-    HgGpuImage* depthImage = nullptr;
-    hgDefer(hgGpuImageDestroy(depthImage));
-    HgGpuView* depthView = nullptr;
-    hgDefer(hgGpuViewDestroy(depthView));
 
     HgBinaryHandle noiseShaderHandle = hgAssetLoad<HgBinary>("build/noise.comp.spv");
 
@@ -92,6 +88,13 @@ int main()
     HgEntity noiseSquare = ecs.spawn();
     ecs.add<HgTransform>(noiseSquare) = {};
     ecs.add<HgSprite2D>(noiseSquare) = {noiseTexHandle, HgVec2{0}, HgVec2{1}};
+
+    u32 depthWidth = 0;
+    u32 depthHeight = 0;
+    HgGpuImage* depthImage = nullptr;
+    HgGpuView* depthView = nullptr;
+    hgDefer(hgGpuImageDestroy(depthImage));
+    hgDefer(hgGpuViewDestroy(depthView));
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
