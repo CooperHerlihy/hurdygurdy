@@ -21,13 +21,8 @@ int main()
     windowConfig.fullscreen = true;
     // windowConfig.preferredPresentMode = HgGpuPresentMode_mailbox;
 
-    HgWindow* window = hgWindowCreate("Hg Test", 1600, 900, &windowConfig);
+    HgWindow* window = hgWindowCreate("Hg Editor Example", 1600, 900, &windowConfig);
     hgDefer(hgWindowDestroy(window));
-
-    hgSpritesInit(HgFormat_r8g8b8a8_srgb, HgFormat_d32_sfloat);
-    hgModelsInit(HgFormat_r8g8b8a8_srgb, HgFormat_d32_sfloat);
-    hgDefer(hgSpritesDeinit());
-    hgDefer(hgModelsDeinit());
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -39,8 +34,7 @@ int main()
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    HgFormat windowFormat = hgWindowImageFormat(window);
-    hgImGuiInit(window, &windowFormat, 1);
+    hgImGuiInit(window, hgWindowImageFormat(window));
     hgDefer(hgImGuiDeinit());
 
     u32 width = 0;
@@ -61,13 +55,19 @@ int main()
     hgDefer(hgGpuImageDestroy(depthImage));
     hgDefer(hgGpuViewDestroy(depthView));
 
+    hgSpritesInit(HgFormat_r8g8b8a8_srgb, HgFormat_d32_sfloat);
+    hgModelsInit(HgFormat_r8g8b8a8_srgb, HgFormat_d32_sfloat);
+    hgDefer(hgSpritesDeinit());
+    hgDefer(hgModelsDeinit());
+
     HgEcs ecs = ecs.create(arena, 4096, 64);
+    // ecs.createComponent<HgNode>(arena, 1024);
     ecs.createComponent<HgTransform>(arena, 1024);
     ecs.createComponent<HgCamera>(arena, 8);
     ecs.createComponent<HgSprite>(arena, 256);
-    ecs.createComponent<HgModel>(arena, 256);
     ecs.createComponent<HgDirLight>(arena, 64);
     ecs.createComponent<HgPointLight>(arena, 64);
+    ecs.createComponent<HgModel>(arena, 256);
 
     u32 sceneCapacity = 32;
     HgEntity* scene = hgAlloc<HgEntity>(arena, sceneCapacity);
@@ -76,18 +76,18 @@ int main()
     HgEntity camera = ecs.spawn();
     scene[sceneSize++] = camera;
 
+    HgTransform* cameraTf = ecs.add<HgTransform>(camera);
+    *cameraTf = {};
+    cameraTf->position = HgVec3{0, 0, -1};
+
     HgCamera* cameraC = ecs.add<HgCamera>(camera);
     *cameraC = {};
-    hgCameraCreate(cameraC);
-    hgDefer(hgCameraDestroy(cameraC));
     cameraC->type = HgCameraType_perspective;
     cameraC->perspective.fov = (f32)hgPi * 0.5f;
     cameraC->perspective.near = 0.1f;
     cameraC->perspective.far = 1000.0f;
-
-    HgTransform* cameraTf = ecs.add<HgTransform>(camera);
-    *cameraTf = {};
-    cameraTf->position = HgVec3{0, 0, -1};
+    hgCameraCreate(cameraC);
+    hgDefer(hgCameraDestroy(cameraC));
 
     HgEntity pointLight = ecs.spawn();
     scene[sceneSize++] = pointLight;
@@ -102,11 +102,10 @@ int main()
     *ecs.add<HgSprite>(square) = {HgGpuTextureHandle{}, HgVec2{0.0f}, HgVec2{1.0f}};
 
     HgEntity cube = ecs.spawn();
+    scene[sceneSize++] = cube;
     *ecs.add<HgTransform>(cube) = {};
     ecs.get<HgTransform>(cube)->position = HgVec3{1, 0, 1};
-    *ecs.add<HgModel>(cube) = {};
-    u32 cubeIdx = sceneSize++;
-    scene[cubeIdx] = cube;
+    *ecs.add<HgModel>(cube) = {HgGpuMeshHandle{}, HgGpuTextureHandle{}, HgGpuTextureHandle{}};
 
     bool showRender = true;
     bool showEditor = true;
@@ -227,12 +226,10 @@ int main()
                 u32 viewWidth = std::max((u32)1, fixedAspect ? (u32)((f32)viewHeight * aspectRatio) : (u32)size.x);
                 if (width != viewWidth || height != viewHeight)
                 {
-                    hgGpuWaitIdle();
-
                     width = viewWidth;
                     height = viewHeight;
-                    cameraC->perspective.aspect = (f32)width / (f32)height;
 
+                    hgGpuWaitIdle();
                     hgImGuiTextureDestroy(renderImGuiTex);
                     hgGpuViewDestroy(depthView);
                     hgGpuImageDestroy(depthImage);
@@ -257,6 +254,8 @@ int main()
                     depthView = hgGpuViewCreate(depthImage, 0, 1, 0, 1, HgGpuAspect_depth);
 
                     renderImGuiTex = hgImGuiTextureCreate(renderView, renderSampler, HgGpuLayout_shaderReadOnly);
+
+                    cameraC->perspective.aspect = (f32)width / (f32)height;
                 }
 
                 if (ImGui::IsWindowFocused())

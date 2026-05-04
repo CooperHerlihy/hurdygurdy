@@ -5975,11 +5975,13 @@ void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd);
  *
  * Parameters
  * - window The window for ImGui to use
+ * - colorFormat The format the color target will be in
+ * - depthFormat The format the depth buffer will be in, if used
+ * - stencilFormat The format the stencil will be in, if used
  */
 void hgImGuiInit(
     HgWindow* window,
-    const HgFormat* colorFormats,
-    u32 colorAttachmentCount,
+    HgFormat colorFormat,
     HgFormat depthFormat = HgFormat_undefined,
     HgFormat stencilFormat = HgFormat_undefined);
 

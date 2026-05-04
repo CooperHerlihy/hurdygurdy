@@ -3721,21 +3721,18 @@ HgWindowEvent* hgWindowEvents(HgWindow* window, u32* count)
 
 void hgImGuiInit(
     HgWindow* window,
-    const HgFormat* colorFormats,
-    u32 colorAttachmentCount,
+    HgFormat colorFormat,
     HgFormat depthFormat,
     HgFormat stencilFormat)
 {
+    hgAssert(colorFormat != HgFormat_undefined);
+
     HgArena* scratch = hgScratch();
     HgArenaScope scratchScope{scratch};
 
     ImGui_ImplSDL3_InitForVulkan(window->sdlWindow);
 
-    VkFormat* colorVkFormats = hgAlloc<VkFormat>(scratch, colorAttachmentCount);
-    for (u32 i = 0; i < colorAttachmentCount; ++i)
-    {
-        colorVkFormats[i] = formatToVk(colorFormats[i]);
-    }
+    VkFormat colorVkFormat = formatToVk(colorFormat);
     VkFormat depthVkFormat = formatToVk(depthFormat);
     VkFormat stencilVkFormat = formatToVk(stencilFormat);
 
@@ -3752,8 +3749,8 @@ void hgImGuiInit(
     imguiInfo.UseDynamicRendering = true;
     imguiInfo.PipelineInfoMain.PipelineRenderingCreateInfo.sType
         = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
-    imguiInfo.PipelineInfoMain.PipelineRenderingCreateInfo.colorAttachmentCount = colorAttachmentCount;
-    imguiInfo.PipelineInfoMain.PipelineRenderingCreateInfo.pColorAttachmentFormats = colorVkFormats;
+    imguiInfo.PipelineInfoMain.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
+    imguiInfo.PipelineInfoMain.PipelineRenderingCreateInfo.pColorAttachmentFormats = &colorVkFormat;
     imguiInfo.PipelineInfoMain.PipelineRenderingCreateInfo.depthAttachmentFormat = depthVkFormat;
     imguiInfo.PipelineInfoMain.PipelineRenderingCreateInfo.stencilAttachmentFormat = stencilVkFormat;
 

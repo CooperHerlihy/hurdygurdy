@@ -44,6 +44,7 @@ set SRC= ^
 
 set TARGETS= ^
     editor.exe ^
+    noise.exe ^
     minimal.exe
 
 if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"

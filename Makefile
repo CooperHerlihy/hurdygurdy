@@ -36,6 +36,7 @@ SRC := \
 
 TARGETS := \
 	editor \
+	noise \
 	minimal
 
 .PHONY: all debug release clean
