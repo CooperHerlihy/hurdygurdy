@@ -65,7 +65,6 @@ struct HgWindow {
     VkSemaphore* imageAvailable;
     VkSemaphore* readyToPresent;
     u32 imageIdx;
-    u32 imageAvailableIdx;
 
     u32 width;
     u32 height;
@@ -1307,7 +1306,7 @@ HgGpuBuffer* hgGpuBufferCreate(
         nullptr);
 
     if (result != VK_SUCCESS)
-        hgError("Could not create VkBuffer: %s", vkResultToStr(result));
+        hgError("Could not create VkBuffer: %s\n", vkResultToStr(result));
 
     buffer->size = size;
 
@@ -1346,7 +1345,7 @@ void hgGpuBufferWrite(HgGpuBuffer* dst, u64 offset, const void* src, u64 size)
     {
         VkResult result = vmaCopyMemoryToAllocation(vkState.vma, src, dst->alloc, offset, size);
         if (result != VK_SUCCESS)
-            hgError("Could not write gpu buffer: %s", vkResultToStr(result));
+            hgError("Could not write gpu buffer: %s\n", vkResultToStr(result));
         return;
     }
 
@@ -1380,7 +1379,7 @@ void hgGpuBufferRead(void* dst, HgGpuBuffer* src, u64 offset, u64 size)
     {
         VkResult result = vmaCopyAllocationToMemory(vkState.vma, src->alloc, offset, dst, size);
         if (result != VK_SUCCESS)
-            hgError("Could not read gpu buffer: %s", vkResultToStr(result));
+            hgError("Could not read gpu buffer: %s\n", vkResultToStr(result));
         return;
     }
 
@@ -1443,7 +1442,7 @@ HgGpuImage* hgGpuImageCreateEx(const HgGpuImageCreateEx* create)
         nullptr);
 
     if (result != VK_SUCCESS)
-        hgError("Could not create VkImage: %s", vkResultToStr(result));
+        hgError("Could not create VkImage: %s\n", vkResultToStr(result));
 
     image->dimensions = create->dimensions;
     image->width = create->width;
@@ -1878,7 +1877,7 @@ HgGpuSampler* hgGpuSamplerCreate(HgGpuFilter filter, HgGpuSamplerEdgeMode addres
     VkSampler sampler = nullptr;
     VkResult result = vkCreateSampler(vkState.device, &info, nullptr, &sampler);
     if (sampler == nullptr)
-        hgError("Could not create VkSampler: %s", vkResultToStr(result));
+        hgError("Could not create VkSampler: %s\n", vkResultToStr(result));
 
     return (HgGpuSampler*)sampler;
 }
@@ -2935,8 +2934,15 @@ static void resizeWindowSwapchain(HgWindow* window)
     for (u32 i = 0; i < window->imageCount; ++i)
     {
         vkDestroyImageView(vkState.device, window->views[i].view, nullptr);
-        vkDestroySemaphore(vkState.device, window->imageAvailable[i], nullptr);
         vkDestroySemaphore(vkState.device, window->readyToPresent[i], nullptr);
+        window->views[i].view = nullptr;
+        window->readyToPresent[i] = nullptr;
+    }
+
+    for (u32 i = 0; i < vkState.frameCount; ++i)
+    {
+        vkDestroySemaphore(vkState.device, window->imageAvailable[i], nullptr);
+        window->imageAvailable[i] = nullptr;
     }
 
     VkSwapchainKHR oldSwapchain = window->swapchain;
@@ -2976,7 +2982,6 @@ static void resizeWindowSwapchain(HgWindow* window)
         {
             window->images = (HgGpuImage*)realloc(window->images, sizeof(HgGpuImage) * swapImageCount);
             window->views = (HgGpuView*)realloc(window->views, sizeof(HgGpuView) * swapImageCount);
-            window->imageAvailable = (VkSemaphore*)realloc(window->imageAvailable, sizeof(VkSemaphore) * swapImageCount);
             window->readyToPresent = (VkSemaphore*)realloc(window->readyToPresent, sizeof(VkSemaphore) * swapImageCount);
             window->imageCount = swapImageCount;
         }
@@ -3021,13 +3026,19 @@ static void resizeWindowSwapchain(HgWindow* window)
             VkSemaphoreCreateInfo semaphoreInfo{};
             semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-            VkResult imageAvailableResult = vkCreateSemaphore(vkState.device, &semaphoreInfo, nullptr, &window->imageAvailable[i]);
-            if (window->imageAvailable[i] == nullptr)
-                hgError("Could not create VkSemaphore: %s\n", vkResultToStr(imageAvailableResult));
-
             VkResult readyToPresentResult = vkCreateSemaphore(vkState.device, &semaphoreInfo, nullptr, &window->readyToPresent[i]);
             if (window->readyToPresent[i] == nullptr)
                 hgError("Could not create VkSemaphore: %s\n", vkResultToStr(readyToPresentResult));
+        }
+
+        for (u32 i = 0; i < vkState.frameCount; ++i)
+        {
+            VkSemaphoreCreateInfo semaphoreInfo{};
+            semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+            VkResult imageAvailableResult = vkCreateSemaphore(vkState.device, &semaphoreInfo, nullptr, &window->imageAvailable[i]);
+            if (window->imageAvailable[i] == nullptr)
+                hgError("Could not create VkSemaphore: %s\n", vkResultToStr(imageAvailableResult));
         }
     }
     else
@@ -3036,7 +3047,6 @@ static void resizeWindowSwapchain(HgWindow* window)
     }
 
     window->imageIdx = (u32)-1;
-    window->imageAvailableIdx = 0;
 
     vkDestroySwapchainKHR(vkState.device, oldSwapchain, nullptr);
 }
@@ -3093,6 +3103,13 @@ static void createWindowSwapchain(HgWindow* window, const HgWindowConfig* config
     window->format = findSwapchainFormat(window->surface);
     window->presentMode = findSwapchainPresentMode(window->surface, config->preferredPresentMode);
     window->imageUsage = config->imageUsage;
+
+    window->imageAvailable = (VkSemaphore*)malloc(sizeof(VkSemaphore) * vkState.frameCount);
+    for (u32 i = 0; i < vkState.frameCount; ++i)
+    {
+        window->imageAvailable[i] = nullptr;
+    }
+
     resizeWindowSwapchain(window);
 }
 
@@ -3101,9 +3118,14 @@ static void destroyWindowSwapchain(HgWindow* window)
     for (u32 i = 0; i < window->imageCount; ++i)
     {
         vkDestroyImageView(vkState.device, window->views[i].view, nullptr);
-        vkDestroySemaphore(vkState.device, window->imageAvailable[i], nullptr);
         vkDestroySemaphore(vkState.device, window->readyToPresent[i], nullptr);
     }
+
+    for (u32 i = 0; i < vkState.frameCount; ++i)
+    {
+        vkDestroySemaphore(vkState.device, window->imageAvailable[i], nullptr);
+    }
+
     vkDestroySwapchainKHR(vkState.device, window->swapchain, nullptr);
 
     free(window->readyToPresent);
@@ -3181,7 +3203,6 @@ void hgWindowDestroy(HgWindow* window)
 
 HgGpuCmd* hgGpuFrameBegin(HgWindow** windows, u32 windowCount)
 {
-    vkState.currentFrame = (vkState.currentFrame + 1) % vkState.frameCount;
     Frame* frame = &vkState.frames[vkState.currentFrame];
 
     hgAssert(windowCount < frame->windowCapacity);
@@ -3201,7 +3222,7 @@ HgGpuCmd* hgGpuFrameBegin(HgWindow** windows, u32 windowCount)
             vkState.device,
             windows[i]->swapchain,
             UINT64_MAX,
-            windows[i]->imageAvailable[windows[i]->imageAvailableIdx],
+            windows[i]->imageAvailable[vkState.currentFrame],
             nullptr,
             &windows[i]->imageIdx);
 
@@ -3216,7 +3237,7 @@ HgGpuCmd* hgGpuFrameBegin(HgWindow** windows, u32 windowCount)
         }
         else
         {
-            hgError("Could not acquire next image: %s", vkResultToStr(result));
+            hgError("Could not acquire next image: %s\n", vkResultToStr(result));
         }
     }
 
@@ -3261,9 +3282,8 @@ void hgGpuFrameEnd(HgGpuCmd* cmd)
         HgWindow* window = frame->windows[i];
 
         waitStages[i] = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        imageAvailableSemaphores[i] = window->imageAvailable[window->imageAvailableIdx];
+        imageAvailableSemaphores[i] = window->imageAvailable[vkState.currentFrame];
         readyToPresentSemaphores[i] = window->readyToPresent[window->imageIdx];
-        window->imageAvailableIdx = (window->imageAvailableIdx + 1) % window->imageCount;
 
         swapchains[i] = window->swapchain;
         imageIndices[i] = window->imageIdx;
@@ -3294,6 +3314,8 @@ void hgGpuFrameEnd(HgGpuCmd* cmd)
 
         vkQueuePresentKHR(vkState.queue, &presentInfo);
     }
+
+    vkState.currentFrame = (vkState.currentFrame + 1) % vkState.frameCount;
 }
 
 HgGpuView* hgWindowImageView(HgWindow* window)
@@ -3572,6 +3594,8 @@ void hgProcessEvents()
                 if (window != nullptr)
                     (*window)->wasClosed = true;
             } break;
+            case SDL_EVENT_WINDOW_MINIMIZED: [[fallthrough]];
+            case SDL_EVENT_WINDOW_RESTORED: [[fallthrough]];
             case SDL_EVENT_WINDOW_RESIZED:
             {
                 HgWindow** window = hgMapGet(&platformState.windows, event.window.windowID);

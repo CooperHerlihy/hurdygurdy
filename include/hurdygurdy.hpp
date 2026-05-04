@@ -266,7 +266,7 @@ struct HgInit {
     u32 threadPoolQueueSize = 2048;
     u32 ioRequestQueueSize = 2048;
 
-    u32 maxFramesInFlight = 4;
+    u32 maxFramesInFlight = 2;
 
     u32 maxWindows = 8;
     u32 maxWindowEvents = 2048;
