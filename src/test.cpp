@@ -1885,7 +1885,7 @@ void hgTest()
 
         HgStringView path = "hg_test_dir/image_test.png";
 
-        HgImage testImage{};
+        HgTexture testImage{};
         testImage.width = 2;
         testImage.height = 2;
         testImage.depth = 1;
@@ -1896,18 +1896,18 @@ void hgTest()
         hgDefer(hgFenceDestroy(fence));
 
         {
-            hgImageStorePng(&testImage, path, fence);
+            hgTextureStorePng(&testImage, path, fence);
             hgAssert(hgFenceWait(fence, 2.0));
 
-            HgImageHandle imageHandle = hgAssetLoad<HgImage>(path);
-            HgImage* image = hgAssetGet(imageHandle);
+            HgTextureHandle imageHandle = hgAssetLoad<HgTexture>(path);
+            HgTexture* image = hgAssetGet(imageHandle);
             hgAssert(image->width == testImage.width);
             hgAssert(image->height == testImage.height);
             hgAssert(memcmp(image->pixels, saveData, sizeof(saveData)) == 0);
         }
     }
 
-    hgWarn("HgMesh test not implemented yet : TODO\n");
+    hgWarn("HgMesh test : TODO\n");
 
     // HgECS
     {
@@ -1939,27 +1939,27 @@ void hgTest()
             hgAssert(!ecs.has<u32>(e2));
             hgAssert(!ecs.has<u32>(e3));
 
-            ecs.add<u32>(e1) = 1;
-            hgAssert(ecs.has<u32>(e1) && ecs.get<u32>(e1) == 1);
+            *ecs.add<u32>(e1) = 1;
+            hgAssert(ecs.has<u32>(e1) && *ecs.get<u32>(e1) == 1);
             hgAssert(!ecs.has<u32>(e2));
             hgAssert(!ecs.has<u32>(e3));
-            ecs.add<u32>(e2) = 2;
-            hgAssert(ecs.has<u32>(e1) && ecs.get<u32>(e1) == 1);
-            hgAssert(ecs.has<u32>(e2) && ecs.get<u32>(e2) == 2);
+            *ecs.add<u32>(e2) = 2;
+            hgAssert(ecs.has<u32>(e1) && *ecs.get<u32>(e1) == 1);
+            hgAssert(ecs.has<u32>(e2) && *ecs.get<u32>(e2) == 2);
             hgAssert(!ecs.has<u32>(e3));
-            ecs.add<u32>(e3) = 3;
-            hgAssert(ecs.has<u32>(e1) && ecs.get<u32>(e1) == 1);
-            hgAssert(ecs.has<u32>(e2) && ecs.get<u32>(e2) == 2);
-            hgAssert(ecs.has<u32>(e3) && ecs.get<u32>(e3) == 3);
+            *ecs.add<u32>(e3) = 3;
+            hgAssert(ecs.has<u32>(e1) && *ecs.get<u32>(e1) == 1);
+            hgAssert(ecs.has<u32>(e2) && *ecs.get<u32>(e2) == 2);
+            hgAssert(ecs.has<u32>(e3) && *ecs.get<u32>(e3) == 3);
 
             ecs.remove<u32>(e1);
             hgAssert(!ecs.has<u32>(e1));
-            hgAssert(ecs.has<u32>(e2) && ecs.get<u32>(e2) == 2);
-            hgAssert(ecs.has<u32>(e3) && ecs.get<u32>(e3) == 3);
+            hgAssert(ecs.has<u32>(e2) && *ecs.get<u32>(e2) == 2);
+            hgAssert(ecs.has<u32>(e3) && *ecs.get<u32>(e3) == 3);
             ecs.remove<u32>(e2);
             hgAssert(!ecs.has<u32>(e1));
             hgAssert(!ecs.has<u32>(e2));
-            hgAssert(ecs.has<u32>(e3) && ecs.get<u32>(e3) == 3);
+            hgAssert(ecs.has<u32>(e3) && *ecs.get<u32>(e3) == 3);
             ecs.remove<u32>(e3);
             hgAssert(!ecs.has<u32>(e1));
             hgAssert(!ecs.has<u32>(e2));
@@ -1979,9 +1979,9 @@ void hgTest()
         }
 
         {
-            ecs.add<u32>(e1) = 12;
-            ecs.add<u32>(e2) = 42;
-            ecs.add<u32>(e3) = 100;
+            *ecs.add<u32>(e1) = 12;
+            *ecs.add<u32>(e2) = 42;
+            *ecs.add<u32>(e3) = 100;
             hgAssert(ecs.count<u32>() == 3);
             hgAssert(ecs.count<u64>() == 0);
 
@@ -2014,8 +2014,8 @@ void hgTest()
         }
 
         {
-            ecs.add<u64>(e2) = 2042;
-            ecs.add<u64>(e3) = 2100;
+            *ecs.add<u64>(e2) = 2042;
+            *ecs.add<u64>(e3) = 2100;
             hgAssert(ecs.count<u32>() == 3);
             hgAssert(ecs.count<u64>() == 2);
 
@@ -2113,14 +2113,14 @@ void hgTest()
                 switch (i % 3)
                 {
                     case 0:
-                        ecs.add<u32>(e) = 12;
-                        ecs.add<u64>(e) = 42;
+                        *ecs.add<u32>(e) = 12;
+                        *ecs.add<u64>(e) = 42;
                         break;
                     case 1:
-                        ecs.add<u32>(e) = 12;
+                        *ecs.add<u32>(e) = 12;
                         break;
                     case 2:
-                        ecs.add<u64>(e) = 42;
+                        *ecs.add<u64>(e) = 42;
                         break;
                 }
             }
@@ -2173,11 +2173,11 @@ void hgTest()
 
         auto comparison = [](void*, HgEcs* ecs, HgEntity lhs, HgEntity rhs)
         {
-            return ecs->get<u32>(lhs) < ecs->get<u32>(rhs);
+            return *ecs->get<u32>(lhs) < *ecs->get<u32>(rhs);
         };
 
         {
-            ecs.add<u32>(ecs.spawn()) = 42;
+            *ecs.add<u32>(ecs.spawn()) = 42;
 
             ecs.sort<u32>(nullptr, comparison);
 
@@ -2196,7 +2196,7 @@ void hgTest()
             u32 smallScramble1[]{1, 0};
             for (u32 i = 0; i < sizeof(smallScramble1) / sizeof(*smallScramble1); ++i)
             {
-                ecs.add<u32>(ecs.spawn()) = smallScramble1[i];
+                *ecs.add<u32>(ecs.spawn()) = smallScramble1[i];
             }
 
             {
@@ -2234,7 +2234,7 @@ void hgTest()
             u32 mediumScramble1[]{8, 9, 1, 6, 0, 3, 7, 2, 5, 4};
             for (u32 i = 0; i < sizeof(mediumScramble1) / sizeof(*mediumScramble1); ++i)
             {
-                ecs.add<u32>(ecs.spawn()) = mediumScramble1[i];
+                *ecs.add<u32>(ecs.spawn()) = mediumScramble1[i];
             }
             ecs.sort<u32>(nullptr, comparison);
 
@@ -2255,7 +2255,7 @@ void hgTest()
             u32 mediumScramble2[]{3, 9, 7, 6, 8, 5, 0, 1, 2, 4};
             for (u32 i = 0; i < sizeof(mediumScramble2) / sizeof(*mediumScramble2); ++i)
             {
-                ecs.add<u32>(ecs.spawn()) = mediumScramble2[i];
+                *ecs.add<u32>(ecs.spawn()) = mediumScramble2[i];
             }
             ecs.sort<u32>(nullptr, comparison);
             ecs.sort<u32>(nullptr, comparison);
@@ -2276,7 +2276,7 @@ void hgTest()
         {
             for (u32 i = 127; i < 128; --i)
             {
-                ecs.add<u32>(ecs.spawn()) = i;
+                *ecs.add<u32>(ecs.spawn()) = i;
             }
             ecs.sort<u32>(nullptr, comparison);
 
@@ -2296,7 +2296,7 @@ void hgTest()
         {
             for (u32 i = 127; i < 128; --i)
             {
-                ecs.add<u32>(ecs.spawn()) = i / 2;
+                *ecs.add<u32>(ecs.spawn()) = i / 2;
             }
             ecs.sort<u32>(nullptr, comparison);
             ecs.sort<u32>(nullptr, comparison);
@@ -2314,6 +2314,9 @@ void hgTest()
             ecs.reset();
         }
     }
+
+    hgWarn("HgNode test : TODO\n");
+    hgWarn("HgTransform test : TODO\n");
 
     printf("HurdyGurdy: Tests Complete in %fms\n", hgClockTick(&timer) * 1000.0f);
 }

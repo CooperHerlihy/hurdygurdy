@@ -35,7 +35,7 @@ void hgInit(const HgInit* init)
     hgThreadsInit(arena, init->threadPoolQueueSize, workerCount);
     hgIoInit(arena, init->ioRequestQueueSize);
 
-    hgAssetInitDefaults(arena, init->maxBinaries, init->maxImages, init->maxTextures, init->maxMeshes, init->maxModels);
+    hgAssetInitDefaults(arena, init->maxBinaries, init->maxTextures, init->maxGpuTextures, init->maxMeshes, init->maxGpuMeshes);
 }
 
 void hgDeinit()
@@ -2159,16 +2159,16 @@ void hgIoRequest(HgFence fence, void* data, HgStringView path, void (*fn)(void* 
 void hgAssetInitDefaults(
     HgArena* arena,
     u32 maxBinaries,
-    u32 maxImages,
     u32 maxTextures,
+    u32 maxGpuTextures,
     u32 maxMeshes,
-    u32 maxModels)
+    u32 maxGpuMeshes)
 {
     hgAssetInit<HgBinary>(arena, maxBinaries);
-    hgAssetInit<HgImage>(arena, maxImages);
     hgAssetInit<HgTexture>(arena, maxTextures);
+    hgAssetInit<HgGpuTexture>(arena, maxGpuTextures);
     hgAssetInit<HgMesh>(arena, maxMeshes);
-    hgAssetInit<HgModel>(arena, maxModels);
+    hgAssetInit<HgGpuMesh>(arena, maxGpuMeshes);
 }
 
 template<>
@@ -2265,73 +2265,73 @@ void hgBinaryOverwrite(HgBinary* bin, u64 idx, const void* src, u64 len)
 }
 
 template<>
-void hgAssetLoadImpl<HgImage>(HgAssetData<HgImage>* data)
+void hgAssetLoadImpl<HgTexture>(HgAssetData<HgTexture>* data)
 {
-    hgIoRequest(data->isLoaded, &data->asset, data->path, [](void* pimage, HgStringView path)
+    hgIoRequest(data->isLoaded, &data->asset, data->path, [](void* ptex, HgStringView path)
     {
-        HgImage* image = (HgImage*)pimage;
+        HgTexture* tex = (HgTexture*)ptex;
 
         HgArena* scratch = hgScratch();
         HgArenaScope scratchScope{scratch};
         char* cpath = hgCString(scratch, path);
 
         int x, y, channels;
-        image->pixels = stbi_load(cpath, &x, &y, &channels, 4);
-        if (image->pixels == nullptr)
+        tex->pixels = stbi_load(cpath, &x, &y, &channels, 4);
+        if (tex->pixels == nullptr)
         {
             hgWarn("Could not load image: %s\n", cpath);
             return;
         }
-        image->width = (u32)x;
-        image->height = (u32)y;
-        image->depth = 1;
-        image->format = HgFormat_r8g8b8a8_srgb;
+        tex->width = (u32)x;
+        tex->height = (u32)y;
+        tex->depth = 1;
+        tex->format = HgFormat_r8g8b8a8_srgb;
     });
 }
 
 template<>
-void hgAssetUnloadImpl<HgImage>(HgAssetData<HgImage>* data)
+void hgAssetUnloadImpl<HgTexture>(HgAssetData<HgTexture>* data)
 {
     hgFenceWaitIndefinite(data->isLoaded);
     free(data->asset.pixels);
 }
 
-void hgImageStorePng(HgImage* image, HgStringView path, HgFence fence)
+void hgTextureStorePng(HgTexture* texture, HgStringView path, HgFence fence)
 {
-    hgIoRequest(fence, image, path, [](void* pimage, HgStringView fpath)
+    hgIoRequest(fence, texture, path, [](void* ptex, HgStringView fpath)
     {
         HgArena* scratch = hgScratch();
         HgArenaScope scratchScope{scratch};
         char* cpath = hgCString(scratch, fpath);
 
-        HgImage* image = (HgImage*)pimage;
-        stbi_write_png(cpath, (int)image->width, (int)image->height, 4, image->pixels, (int)(image->width * sizeof(u32)));
+        HgTexture* tex = (HgTexture*)ptex;
+        stbi_write_png(cpath, (int)tex->width, (int)tex->height, 4, tex->pixels, (int)(tex->width * sizeof(u32)));
     });
 }
 
 template<>
-void hgAssetLoadImpl<HgTexture>(HgAssetData<HgTexture>* data)
+void hgAssetLoadImpl<HgGpuTexture>(HgAssetData<HgGpuTexture>* data)
 {
-    HgImageHandle imageHandle = hgAssetLoad<HgImage>(data->path);
-    hgDefer(hgAssetUnload(imageHandle));
+    HgTextureHandle texHandle = hgAssetLoad<HgTexture>(data->path);
+    hgDefer(hgAssetUnload(texHandle));
 
-    HgImage* image = hgAssetGet(imageHandle); 
-    if (image->pixels == nullptr)
+    HgTexture* tex = hgAssetGet(texHandle); 
+    if (tex->pixels == nullptr)
     {
         hgWarn("Could not load image: %.*s\n", (int)data->path.length, data->path.chars);
     }
 
     HgGpuImageCreateEx imageInfo{};
-    imageInfo.format = image->format;
-    imageInfo.width = image->width;
-    imageInfo.height = image->height;
-    imageInfo.depth = image->depth;
+    imageInfo.format = tex->format;
+    imageInfo.width = tex->width;
+    imageInfo.height = tex->height;
+    imageInfo.depth = tex->depth;
     imageInfo.usage = HgGpuImageUsage_transferDst | HgGpuImageUsage_sampled;
 
     data->asset.image = hgGpuImageCreateEx(&imageInfo);
     data->asset.view = hgGpuViewCreate(data->asset.image, 0, 1, 0, 1, HgGpuAspect_color);
 
-    hgGpuImageWrite(data->asset.view, image->pixels);
+    hgGpuImageWrite(data->asset.view, tex->pixels);
 
     data->asset.sampler = hgGpuSamplerCreate(HgGpuFilter_linear);
 
@@ -2342,7 +2342,7 @@ void hgAssetLoadImpl<HgTexture>(HgAssetData<HgTexture>* data)
 }
 
 template<>
-void hgAssetUnloadImpl<HgTexture>(HgAssetData<HgTexture>* data)
+void hgAssetUnloadImpl<HgGpuTexture>(HgAssetData<HgGpuTexture>* data)
 {
     hgGpuDescriptorDestroy(data->asset.descriptor);
     hgGpuSamplerDestroy(data->asset.sampler);
@@ -2374,7 +2374,7 @@ void hgMeshStoreGltf(HgMesh* data, HgStringView path, HgFence fence)
 }
 
 template<>
-void hgAssetLoadImpl<HgModel>(HgAssetData<HgModel>* data)
+void hgAssetLoadImpl<HgGpuMesh>(HgAssetData<HgGpuMesh>* data)
 {
     HgMeshHandle meshHandle = hgAssetLoad<HgMesh>(data->path);
     hgDefer(hgAssetUnload(meshHandle));
@@ -2412,7 +2412,7 @@ void hgAssetLoadImpl<HgModel>(HgAssetData<HgModel>* data)
 }
 
 template<>
-void hgAssetUnloadImpl<HgModel>(HgAssetData<HgModel>* data)
+void hgAssetUnloadImpl<HgGpuMesh>(HgAssetData<HgGpuMesh>* data)
 {
     hgGpuBufferDestroy(data->asset.vertexBuffer);
     hgGpuBufferDestroy(data->asset.indexBuffer);
@@ -2706,134 +2706,184 @@ void HgEcs::sort(
     q.quicksort(0, system->count);
 }
 
-void hgAddChildEntity(HgEcs* ecs, HgEntity parent, HgEntity child)
+void hgNodeAddChild(HgEcs* ecs, HgEntity parent, HgEntity child)
 {
     hgAssert(ecs != nullptr);
 
-    HgHierarchy& node = ecs->get<HgHierarchy>(parent);
-    HgHierarchy& oldFirst = ecs->get<HgHierarchy>(node.firstChild);
-    HgHierarchy& newFirst = ecs->get<HgHierarchy>(child);
+    HgNode* node = ecs->get<HgNode>(parent);
+    HgNode* oldFirst = ecs->get<HgNode>(node->firstChild);
+    HgNode* newFirst = ecs->get<HgNode>(child);
 
-    hgAssert(newFirst.parent.handle.id == HgEntity{}.handle.id);
-    hgAssert(newFirst.prevSibling.handle.id == HgEntity{}.handle.id);
-    hgAssert(newFirst.nextSibling.handle.id == HgEntity{}.handle.id);
+    hgAssert(newFirst->parent.handle.id == HgEntity{}.handle.id);
+    hgAssert(newFirst->prevSibling.handle.id == HgEntity{}.handle.id);
+    hgAssert(newFirst->nextSibling.handle.id == HgEntity{}.handle.id);
 
-    newFirst.parent = parent;
-    newFirst.nextSibling = node.firstChild;
+    newFirst->parent = parent;
+    newFirst->nextSibling = node->firstChild;
 
-    oldFirst.prevSibling = child;
-    node.firstChild = child;
+    oldFirst->prevSibling = child;
+    node->firstChild = child;
 }
 
-void hgDetachEntity(HgEcs* ecs, HgEntity e)
+void hgNodeDetach(HgEcs* ecs, HgEntity e)
 {
     hgAssert(ecs != nullptr);
 
-    HgHierarchy& node = ecs->get<HgHierarchy>(e);
-    if (node.parent.handle.id != HgEntity{}.handle.id)
+    HgNode* node = ecs->get<HgNode>(e);
+    if (node->parent.handle.id != HgEntity{}.handle.id)
     {
-        if (node.prevSibling.handle.id == HgEntity{}.handle.id)
-            ecs->get<HgHierarchy>(node.parent).firstChild = node.nextSibling;
+        if (node->prevSibling.handle.id == HgEntity{}.handle.id)
+            ecs->get<HgNode>(node->parent)->firstChild = node->nextSibling;
         else
-            ecs->get<HgHierarchy>(node.prevSibling).nextSibling = node.nextSibling;
-        ecs->get<HgHierarchy>(node.nextSibling).prevSibling = node.prevSibling;
+            ecs->get<HgNode>(node->prevSibling)->nextSibling = node->nextSibling;
+        ecs->get<HgNode>(node->nextSibling)->prevSibling = node->prevSibling;
 
-        HgEntity child = node.firstChild;
+        HgEntity child = node->firstChild;
         while (child.handle.id != HgEntity{}.handle.id)
         {
-            HgHierarchy& tf = ecs->get<HgHierarchy>(child);
-            HgEntity next = tf.nextSibling;
-            tf.parent = HgEntity{};
-            tf.nextSibling = HgEntity{};
-            tf.prevSibling = HgEntity{};
-            hgAddChildEntity(ecs, node.parent, child);
+            HgNode* tf = ecs->get<HgNode>(child);
+            HgEntity next = tf->nextSibling;
+            tf->parent = HgEntity{};
+            tf->nextSibling = HgEntity{};
+            tf->prevSibling = HgEntity{};
+            hgNodeAddChild(ecs, node->parent, child);
             child = next;
         }
     } else {
-        hgAssert(node.prevSibling.handle.id == HgEntity{}.handle.id);
-        hgAssert(node.nextSibling.handle.id == HgEntity{}.handle.id);
-        HgEntity child = node.firstChild;
+        hgAssert(node->prevSibling.handle.id == HgEntity{}.handle.id);
+        hgAssert(node->nextSibling.handle.id == HgEntity{}.handle.id);
+        HgEntity child = node->firstChild;
         while (child.handle.id != HgEntity{}.handle.id)
         {
-            HgHierarchy& tf = ecs->get<HgHierarchy>(child);
-            child = tf.nextSibling;
-            tf.parent = HgEntity{};
-            tf.nextSibling = HgEntity{};
-            tf.prevSibling = HgEntity{};
+            HgNode* tf = ecs->get<HgNode>(child);
+            child = tf->nextSibling;
+            tf->parent = HgEntity{};
+            tf->nextSibling = HgEntity{};
+            tf->prevSibling = HgEntity{};
         }
     }
     node = {};
 }
 
-void hgDestroyEntity(HgEcs* ecs, HgEntity e)
+void hgNodeDestroy(HgEcs* ecs, HgEntity e)
 {
     hgAssert(ecs != nullptr);
 
-    HgHierarchy& node = ecs->get<HgHierarchy>(e);
-    HgEntity child = node.firstChild;
+    HgNode* node = ecs->get<HgNode>(e);
+    HgEntity child = node->firstChild;
     while (child.handle.id != HgEntity{}.handle.id)
     {
-        HgHierarchy& tf = ecs->get<HgHierarchy>(child);
-        HgEntity next = tf.nextSibling;
-        tf.parent = HgEntity{};
-        tf.prevSibling = HgEntity{};
-        tf.nextSibling = HgEntity{};
-        hgDestroyEntity(ecs, child);
+        HgNode* tf = ecs->get<HgNode>(child);
+        HgEntity next = tf->nextSibling;
+        tf->parent = HgEntity{};
+        tf->prevSibling = HgEntity{};
+        tf->nextSibling = HgEntity{};
+        hgNodeDestroy(ecs, child);
         child = next;
     }
-    if (node.parent.handle.id != HgEntity{}.handle.id)
+    if (node->parent.handle.id != HgEntity{}.handle.id)
     {
-        if (node.prevSibling.handle.id != HgEntity{}.handle.id)
-            ecs->get<HgHierarchy>(node.prevSibling).nextSibling = node.nextSibling;
+        if (node->prevSibling.handle.id != HgEntity{}.handle.id)
+            ecs->get<HgNode>(node->prevSibling)->nextSibling = node->nextSibling;
         else
-            ecs->get<HgHierarchy>(node.parent).firstChild = node.nextSibling;
-        if (node.nextSibling.handle.id != HgEntity{}.handle.id)
-            ecs->get<HgHierarchy>(node.nextSibling).prevSibling = HgEntity{};
+            ecs->get<HgNode>(node->parent)->firstChild = node->nextSibling;
+        if (node->nextSibling.handle.id != HgEntity{}.handle.id)
+            ecs->get<HgNode>(node->nextSibling)->prevSibling = HgEntity{};
     }
     ecs->despawn(e);
 }
 
-void hgSetEntity(HgEcs* ecs, HgEntity e, const HgVec3& pos, const HgVec3& scale, const HgQuat& rot)
+void hgTransformSet(HgEcs* ecs, HgEntity e, const HgVec3& pos, const HgVec3& scale, const HgQuat& rot)
 {
     hgAssert(ecs != nullptr);
 
-    HgTransform& tf = ecs->get<HgTransform>(e);
-    if (ecs->has<HgHierarchy>(e))
+    HgTransform* tf = ecs->get<HgTransform>(e);
+    if (ecs->has<HgNode>(e))
     {
-        HgHierarchy& node = ecs->get<HgHierarchy>(e);
-        HgEntity child = node.firstChild;
+        HgNode* node = ecs->get<HgNode>(e);
+        HgEntity child = node->firstChild;
         while (child.handle.id != HgEntity{}.handle.id)
         {
-            HgHierarchy& cNode = ecs->get<HgHierarchy>(child);
-            HgTransform& cTf = ecs->get<HgTransform>(child);
+            HgNode* cNode = ecs->get<HgNode>(child);
+            HgTransform* cTf = ecs->get<HgTransform>(child);
             HgTransform rel;
-            rel.position = cTf.position - tf.position;
-            rel.scale = cTf.scale / tf.scale;
-            rel.rotation = hgQuatConj(tf.rotation) * cTf.rotation;
+            rel.position = cTf->position - tf->position;
+            rel.scale = cTf->scale / tf->scale;
+            rel.rotation = hgQuatConj(tf->rotation) * cTf->rotation;
             // hgSetEntity(ecs, child, // : TODO
             //     hgRotate(r, (cTf.position - tf.position) * s / cTf.scale + p),
             //     s * cTf.scale / tf.scale,
             //     r);
-            child = cNode.nextSibling;
+            child = cNode->nextSibling;
         }
     }
-    tf.position = pos;
-    tf.scale = scale;
-    tf.rotation = rot;
+    tf->position = pos;
+    tf->scale = scale;
+    tf->rotation = rot;
 }
 
-void hgMoveEntity(HgEcs* ecs, HgEntity e, const HgVec3& dpos, const HgVec3& dscale, const HgQuat& drot)
+void hgTransformMove(HgEcs* ecs, HgEntity e, const HgVec3& dpos, const HgVec3& dscale, const HgQuat& drot)
 {
     hgAssert(ecs != nullptr);
 
-    HgTransform& tf = ecs->get<HgTransform>(e);
-    hgSetEntity(ecs, e, tf.position + dpos, tf.scale * dscale, drot * tf.rotation);
+    HgTransform* tf = ecs->get<HgTransform>(e);
+    hgTransformSet(ecs, e, tf->position + dpos, tf->scale * dscale, drot * tf->rotation);
 }
 
-struct Pipeline2DVPUniform {
+struct VPUniform {
     HgMat4 proj;
     HgMat4 view;
 };
+
+void hgCameraCreate(HgCamera* camera)
+{
+    camera->vpBuffer = hgGpuBufferCreate(
+        sizeof(VPUniform),
+        HgGpuBufferUsage_uniformBuffer,
+        HgGpuMemoryUsage_frequentUpdate);
+
+    camera->vpDesc = hgGpuDescriptorCreate(HgGpuDescriptorType_uniformBuffer);
+
+    HgGpuBufferDescriptorInfo info{camera->vpBuffer, 0, UINT64_MAX};
+    hgGpuDescriptorUpdate(camera->vpDesc, &info, nullptr);
+}
+
+void hgCameraDestroy(HgCamera* camera)
+{
+    hgGpuDescriptorDestroy(camera->vpDesc);
+    hgGpuBufferDestroy(camera->vpBuffer);
+}
+
+void hgCameraUpdate(HgEcs* ecs, HgEntity e)
+{
+    hgAssert(ecs->has<HgTransform>(e));
+    HgTransform* transform = ecs->get<HgTransform>(e);
+    HgCamera* camera = ecs->get<HgCamera>(e);
+    hgAssert(camera->type == HgCameraType_perspective || camera->type == HgCameraType_orthographic);
+
+    VPUniform vp;
+    vp.view = hgMatView(transform->position, transform->scale, transform->rotation);
+    if (camera->type == HgCameraType_perspective)
+    {
+        vp.proj = hgMatPerspective(
+            camera->perspective.fov,
+            camera->perspective.aspect,
+            camera->perspective.near,
+            camera->perspective.far);
+    }
+    else
+    {
+        vp.proj = hgMatOrthographic(
+            camera->orthographic.left,
+            camera->orthographic.right,
+            camera->orthographic.top,
+            camera->orthographic.bottom,
+            camera->orthographic.near,
+            camera->orthographic.far);
+    }
+
+    hgGpuBufferWrite(camera->vpBuffer, 0, &vp, sizeof(vp));
+}
 
 struct Pipeline2DPush {
     HgMat4 model;
@@ -2845,14 +2895,12 @@ struct Pipeline2DPush {
 
 struct Pipeline2DState {
     HgGpuPipeline* pipeline;
-    HgGpuBuffer* vpBuffer;
-    HgGpuDescriptor vpDesc;
-    HgTexture defaultTex;
+    HgGpuTexture defaultTex;
 };
 
 static Pipeline2DState pipeline2D{};
 
-void hgInitPipeline2D(
+void hgSpritesInit(
     HgFormat colorFormat,
     HgFormat depthFormat)
 {
@@ -2885,22 +2933,6 @@ void hgInitPipeline2D(
 
     pipeline2D.pipeline = hgGpuPipelineCreateGraphics(&pipelineConfig);
 
-    pipeline2D.vpBuffer = hgGpuBufferCreate(
-        sizeof(Pipeline2DVPUniform),
-        HgGpuBufferUsage_uniformBuffer,
-        HgGpuMemoryUsage_frequentUpdate);
-
-    Pipeline2DVPUniform vpData{};
-    vpData.proj = HgMat4{1.0f};
-    vpData.view = HgMat4{1.0f};
-
-    hgGpuBufferWrite(pipeline2D.vpBuffer, 0, &vpData, sizeof(vpData));
-
-    pipeline2D.vpDesc = hgGpuDescriptorCreate(HgGpuDescriptorType_uniformBuffer);
-
-    HgGpuBufferDescriptorInfo bufferInfo{pipeline2D.vpBuffer, 0, sizeof(Pipeline2DVPUniform)};
-    hgGpuDescriptorUpdate(pipeline2D.vpDesc, &bufferInfo, nullptr);
-
     struct Color
     {
         u8 r, g, b, a;
@@ -2929,7 +2961,7 @@ void hgInitPipeline2D(
     hgGpuDescriptorUpdate(pipeline2D.defaultTex.descriptor, nullptr, &imageInfo);
 }
 
-void hgDeinitPipeline2D()
+void hgSpritesDeinit()
 {
     hgGpuPipelineDestroy(pipeline2D.pipeline);
 
@@ -2937,39 +2969,18 @@ void hgDeinitPipeline2D()
     hgGpuSamplerDestroy(pipeline2D.defaultTex.sampler);
     hgGpuViewDestroy(pipeline2D.defaultTex.view);
     hgGpuImageDestroy(pipeline2D.defaultTex.image);
-
-    hgGpuDescriptorDestroy(pipeline2D.vpDesc);
-    hgGpuBufferDestroy(pipeline2D.vpBuffer);
 }
 
-void hgUpdateProjection2D(const HgMat4* projection)
-{
-    hgAssert(projection != nullptr);
-    hgGpuBufferWrite(pipeline2D.vpBuffer, offsetof(Pipeline2DVPUniform, proj), projection, sizeof(*projection));
-}
-
-void hgUpdateView2D(const HgMat4* view)
-{
-    hgAssert(view != nullptr);
-    hgGpuBufferWrite(pipeline2D.vpBuffer, offsetof(Pipeline2DVPUniform, view), view, sizeof(*view));
-}
-
-void hgDraw2D(HgEcs* ecs, HgGpuCmd* cmd)
+void hgSpritesDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 {
     hgAssert(ecs != nullptr);
     hgAssert(cmd != nullptr);
 
-    // ecs->sort<HgSprite2D>(nullptr, [](void*, HgEcs* ecs, HgEntity lhs, HgEntity rhs) -> bool {
-    //     hgAssert(ecs->has<HgTransform>(lhs));
-    //     hgAssert(ecs->has<HgTransform>(rhs));
-    //     return ecs->get<HgTransform>(lhs).position.z > ecs->get<HgTransform>(rhs).position.z;
-    // });
-
     hgGpuBindPipeline(cmd, pipeline2D.pipeline);
 
-    ecs->forEach<HgSprite2D, HgTransform>([&](HgEntity, HgSprite2D* sprite, HgTransform* transform)
+    ecs->forEach<HgSprite, HgTransform>([&](HgEntity, HgSprite* sprite, HgTransform* transform)
     {
-        HgTexture* texture = hgHandleIsNull(sprite->texture.handle)
+        HgGpuTexture* texture = hgHandleIsNull(sprite->texture.handle)
             ? &pipeline2D.defaultTex
             : hgAssetGet(sprite->texture);
 
@@ -2977,7 +2988,7 @@ void hgDraw2D(HgEcs* ecs, HgGpuCmd* cmd)
         push.model = hgMatModel3D(transform->position, transform->scale, transform->rotation);
         push.uvPos = sprite->uvPos;
         push.uvSize = sprite->uvSize;
-        push.vpIdx = hgGpuDescriptorIdx(pipeline2D.vpDesc);
+        push.vpIdx = hgGpuDescriptorIdx(ecs->get<HgCamera>(camera)->vpDesc);
         push.texIdx = hgGpuDescriptorIdx(texture->descriptor);
 
         hgGpuPushConstants(cmd, pipeline2D.pipeline, 0, &push, sizeof(push));
@@ -2985,11 +2996,6 @@ void hgDraw2D(HgEcs* ecs, HgGpuCmd* cmd)
         hgGpuDraw(cmd, 0, 6, 0, 1);
     });
 }
-
-struct Pipeline3DVPUniform {
-    HgMat4 proj;
-    HgMat4 view;
-};
 
 struct Pipeline3DDirLightData {
     HgVec4 dir;
@@ -3015,10 +3021,6 @@ struct Pipeline3DPush {
 struct Pipeline3DState {
     HgGpuPipeline* pipeline;
 
-    HgGpuBuffer* vpBuffer;
-    Pipeline3DVPUniform vpData;
-    HgGpuDescriptor vpDesc;
-
     HgGpuBuffer* dirLightBuffer;
     u32 dirLightCapacity;
     HgGpuDescriptor dirLightDesc;
@@ -3027,15 +3029,15 @@ struct Pipeline3DState {
     u32 pointLightCapacity;
     HgGpuDescriptor pointLightDesc;
 
-    HgModel defaultModel;
+    HgGpuMesh defaultModel;
     HgGpuSampler* defaultMapSampler;
-    HgTexture defaultColorMap;
-    HgTexture defaultNormalMap;
+    HgGpuTexture defaultColorMap;
+    HgGpuTexture defaultNormalMap;
 };
 
 static Pipeline3DState pipeline3D{};
 
-void hgInitPipeline3D(
+void hgModelsInit(
     HgFormat colorFormat,
     HgFormat depthFormat)
 {
@@ -3079,21 +3081,6 @@ void hgInitPipeline3D(
     pipelineConfig.enableDepthWrite = true;
 
     pipeline3D.pipeline = hgGpuPipelineCreateGraphics(&pipelineConfig);
-
-    pipeline3D.vpData.proj = HgMat4{1.0f};
-    pipeline3D.vpData.view = HgMat4{1.0f};
-
-    pipeline3D.vpBuffer = hgGpuBufferCreate(
-        sizeof(Pipeline3DVPUniform),
-        HgGpuBufferUsage_uniformBuffer,
-        HgGpuMemoryUsage_frequentUpdate);
-
-    hgGpuBufferWrite(pipeline3D.vpBuffer, 0, &pipeline3D.vpData, sizeof(pipeline3D.vpData));
-
-    pipeline3D.vpDesc = hgGpuDescriptorCreate(HgGpuDescriptorType_uniformBuffer);
-
-    HgGpuBufferDescriptorInfo bufferInfo{pipeline3D.vpBuffer, 0, sizeof(Pipeline3DVPUniform)};
-    hgGpuDescriptorUpdate(pipeline3D.vpDesc, &bufferInfo, nullptr);
 
     pipeline3D.dirLightCapacity = 4;
     pipeline3D.dirLightBuffer = hgGpuBufferCreate(
@@ -3217,7 +3204,7 @@ void hgInitPipeline3D(
     hgGpuDescriptorUpdate(pipeline3D.defaultNormalMap.descriptor, nullptr, &normalInfo);
 }
 
-void hgDeinitPipeline3D()
+void hgModelsDeinit()
 {
     hgGpuPipelineDestroy(pipeline3D.pipeline);
 
@@ -3238,24 +3225,9 @@ void hgDeinitPipeline3D()
     hgGpuDescriptorDestroy(pipeline3D.dirLightDesc);
     hgGpuBufferDestroy(pipeline3D.pointLightBuffer);
     hgGpuBufferDestroy(pipeline3D.dirLightBuffer);
-
-    hgGpuDescriptorDestroy(pipeline3D.vpDesc);
-    hgGpuBufferDestroy(pipeline3D.vpBuffer);
 }
 
-void hgUpdateProjection3D(const HgMat4* projection)
-{
-    hgAssert(projection != nullptr);
-    pipeline3D.vpData.proj = *projection;
-}
-
-void hgUpdateView3D(const HgMat4* view)
-{
-    hgAssert(view != nullptr);
-    pipeline3D.vpData.view = *view;
-}
-
-void hgDraw3D(HgEcs* ecs, HgGpuCmd* cmd)
+void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 {
     hgAssert(ecs != nullptr);
     hgAssert(cmd != nullptr);
@@ -3263,10 +3235,13 @@ void hgDraw3D(HgEcs* ecs, HgGpuCmd* cmd)
     HgArena* scratch = hgScratch();
     HgArenaScope scratchScope{scratch};
 
-    hgGpuBufferWrite(pipeline3D.vpBuffer, 0, &pipeline3D.vpData, sizeof(pipeline3D.vpData));
+    HgCamera* cameraC = ecs->get<HgCamera>(camera);
+    HgTransform* cameraTf = ecs->get<HgTransform>(camera);
 
-    u32 dirLightCount = ecs->count<HgDirLight3D>();
-    u32 pointLightCount = ecs->count<HgPointLight3D>();
+    HgMat4 view = hgMatView(cameraTf->position, cameraTf->scale, cameraTf->rotation);
+
+    u32 dirLightCount = ecs->count<HgDirLight>();
+    u32 pointLightCount = ecs->count<HgPointLight>();
 
     if (dirLightCount > pipeline3D.dirLightCapacity)
     {
@@ -3312,17 +3287,17 @@ void hgDraw3D(HgEcs* ecs, HgGpuCmd* cmd)
     Pipeline3DPointLightData* pointLights = hgAlloc<Pipeline3DPointLightData>(scratch, pointLightCount);
 
     u32 i = 0;
-    ecs->forEach<HgDirLight3D>([&](HgEntity, HgDirLight3D* light)
+    ecs->forEach<HgDirLight>([&](HgEntity, HgDirLight* light)
     {
-        dirLights[i].dir = HgVec4{HgMat3{pipeline3D.vpData.view} * light->dir, 0.0};
+        dirLights[i].dir = HgVec4{HgMat3{view} * light->dir, 0.0};
         dirLights[i].color = light->color;
         ++i;
     });
 
     i = 0;
-    ecs->forEach<HgPointLight3D, HgTransform>([&](HgEntity, HgPointLight3D* light, HgTransform* transform)
+    ecs->forEach<HgPointLight, HgTransform>([&](HgEntity, HgPointLight* light, HgTransform* transform)
     {
-        pointLights[i].pos = pipeline3D.vpData.view * HgVec4{transform->position, 1.0};
+        pointLights[i].pos = view * HgVec4{transform->position, 1.0};
         pointLights[i].color = light->color;
         ++i;
     });
@@ -3335,13 +3310,13 @@ void hgDraw3D(HgEcs* ecs, HgGpuCmd* cmd)
 
     hgGpuBindPipeline(cmd, pipeline3D.pipeline);
 
-    ecs->forEach<HgModel3D, HgTransform>([&](HgEntity, HgModel3D* model, HgTransform* transform)
+    ecs->forEach<HgModel, HgTransform>([&](HgEntity, HgModel* model, HgTransform* transform)
     {
-        HgTexture* colorMap = hgHandleIsNull(model->colorMap.handle)
+        HgGpuTexture* colorMap = hgHandleIsNull(model->colorMap.handle)
             ? &pipeline3D.defaultColorMap
             : hgAssetGet(model->colorMap);
 
-        HgTexture* normalMap = hgHandleIsNull(model->normalMap.handle)
+        HgGpuTexture* normalMap = hgHandleIsNull(model->normalMap.handle)
             ? &pipeline3D.defaultNormalMap
             : hgAssetGet(model->normalMap);
 
@@ -3351,11 +3326,11 @@ void hgDraw3D(HgEcs* ecs, HgGpuCmd* cmd)
         push.dirLightCount = dirLightCount;
         push.pointLightIdx = hgGpuDescriptorIdx(pipeline3D.pointLightDesc);
         push.pointLightCount = pointLightCount;
-        push.vpIdx = hgGpuDescriptorIdx(pipeline3D.vpDesc);
+        push.vpIdx = hgGpuDescriptorIdx(cameraC->vpDesc);
         push.colorMapIdx = hgGpuDescriptorIdx(colorMap->descriptor);
         push.normalMapIdx = hgGpuDescriptorIdx(normalMap->descriptor);
 
-        HgModel* gpuModel = hgHandleIsNull(model->model.handle)
+        HgGpuMesh* gpuModel = hgHandleIsNull(model->model.handle)
             ? &pipeline3D.defaultModel
             : hgAssetGet(model->model);
 

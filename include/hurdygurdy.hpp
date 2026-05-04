@@ -266,16 +266,16 @@ struct HgInit {
     u32 threadPoolQueueSize = 2048;
     u32 ioRequestQueueSize = 2048;
 
-    u32 maxFramesInFlight = 2;
+    u32 maxFramesInFlight = 4;
 
     u32 maxWindows = 8;
     u32 maxWindowEvents = 2048;
 
     u32 maxBinaries = 256;
-    u32 maxImages = 256;
     u32 maxTextures = 256;
+    u32 maxGpuTextures = 256;
     u32 maxMeshes = 256;
-    u32 maxModels = 256;
+    u32 maxGpuMeshes = 256;
 };
 
 /**
@@ -2854,7 +2854,7 @@ HgPerfStats hgPerfAnalyze(const HgPerf* perf);
 /**
  * The scale to log performance metrics at
  */
-enum HgPerfScale {
+enum HgPerfScale : u32 {
     HgPerfScale_seconds,
     HgPerfScale_milli,
     HgPerfScale_micro,
@@ -3051,7 +3051,7 @@ void hgGpuWaitIdle();
 /**
  * Pixel formats
  */
-enum HgFormat {
+enum HgFormat : u32 {
     HgFormat_undefined = 0,
     HgFormat_r4g4_unorm_pack8 = 1,
     HgFormat_r4g4b4a4_unorm_pack16 = 2,
@@ -3335,7 +3335,7 @@ u32 hgFormatToSize(HgFormat format);
 /**
  * Where in the pipeline a resource can be accessed
  */
-enum HgGpuStage {
+enum HgGpuStage : u32 {
     HgGpuStage_none = 0,
     HgGpuStage_topOfPipe = 0x00000001,
     HgGpuStage_drawIndirect = 0x00000002,
@@ -3360,7 +3360,7 @@ typedef u32 HgGpuStageFlags;
 /**
  * How a resource can be accessed
  */
-enum HgGpuAccess {
+enum HgGpuAccess : u32 {
     HgGpuAccess_none = 0,
     HgGpuAccess_indirectCommandRead = 0x00000001,
     HgGpuAccess_indexRead = 0x00000002,
@@ -3390,7 +3390,7 @@ struct HgGpuBuffer;
 /**
  * How a gpu buffer will be used
  */
-enum HgGpuBufferUsage {
+enum HgGpuBufferUsage : u32 {
     HgGpuBufferUsage_transferSrc = 0x00000001,
     HgGpuBufferUsage_transferDst = 0x00000002,
     HgGpuBufferUsage_uniformTexelBuffer = 0x00000004,
@@ -3406,7 +3406,7 @@ typedef u32 HgGpuBufferUsageFlags;
 /**
  * How a gpu buffer will be accessed
  */
-enum HgGpuMemoryUsage {
+enum HgGpuMemoryUsage : u32 {
     /**
      * It will only be accessed from the device
      */
@@ -3428,7 +3428,7 @@ enum HgGpuMemoryUsage {
 /**
  * How a gpu buffer can be accessed
  */
-enum HgGpuMemoryHostAccess {
+enum HgGpuMemoryHostAccess : u32 {
     /**
      * The buffer cannot be accessed by the host
      */
@@ -3491,7 +3491,7 @@ struct HgGpuImage;
 /**
  * How an image will be used
  */
-enum HgGpuImageUsage {
+enum HgGpuImageUsage : u32 {
     HgGpuImageUsage_transferSrc = 0x00000001,
     HgGpuImageUsage_transferDst = 0x00000002,
     HgGpuImageUsage_sampled = 0x00000004,
@@ -3507,7 +3507,7 @@ typedef u32 HgGpuImageUsageFlags;
 /**
  * The layout of an image
  */
-enum HgGpuLayout {
+enum HgGpuLayout : u32 {
     HgGpuLayout_undefined = 0,
     HgGpuLayout_general = 1,
     HgGpuLayout_colorAttachment = 2,
@@ -3526,7 +3526,7 @@ enum HgGpuLayout {
 HgGpuImage* hgGpuImageCreate(u32 width, u32 height, HgFormat format, HgGpuImageUsageFlags usage);
 
 /**
- * Config for hgCreateVkImage
+ * Config for hgGpuImageCreateEx
  */
 struct HgGpuImageCreateEx {
     /**
@@ -3585,7 +3585,7 @@ struct HgGpuView;
 /**
  * The dimensionality of an image
  */
-enum HgGpuViewType {
+enum HgGpuViewType : u32 {
     HgGpuViewType_1D = 0,
     HgGpuViewType_2D = 1,
     HgGpuViewType_3D = 2,
@@ -3598,7 +3598,7 @@ enum HgGpuViewType {
 /**
  * The aspect the image will be accessed in
  */
-enum HgGpuAspect {
+enum HgGpuAspect : u32 {
     HgGpuAspect_none = 0,
     HgGpuAspect_color = 0x00000001,
     HgGpuAspect_depth = 0x00000002,
@@ -3687,7 +3687,7 @@ struct HgGpuSampler;
 /**
  * How a sampler interpolates between pixels
  */
-enum HgGpuFilter {
+enum HgGpuFilter : u32 {
     HgGpuFilter_nearest = 0,
     HgGpuFilter_linear = 1,
 };
@@ -3695,7 +3695,7 @@ enum HgGpuFilter {
 /**
  * How a sampler samples off the image's edge
  */
-enum HgGpuSamplerEdgeMode {
+enum HgGpuSamplerEdgeMode : u32 {
     HgGpuSamplerEdgeMode_modeRepeat = 0,
     HgGpuSamplerEdgeMode_modeMirroredRepeat = 1,
     HgGpuSamplerEdgeMode_modeClampToEdge = 2,
@@ -3706,7 +3706,7 @@ enum HgGpuSamplerEdgeMode {
 /**
  * The border color if the sampler edge mode has a border
  */
-enum HgSamplerBorderColor {
+enum HgSamplerBorderColor : u32 {
     HgGpuSamplerBorder_floatTransparentBlack = 0,
     HgGpuSamplerBorder_intTransparentBlack = 1,
     HgGpuSamplerBorder_floatOpaqueBlack = 2,
@@ -3762,7 +3762,7 @@ constexpr u32 hgGpuDescriptorGeneration(HgGpuDescriptor desc)
 /**
  * The binding indices for the descriptor types in the bindless layout
  */
-enum HgGpuDescriptorType {
+enum HgGpuDescriptorType : u32 {
     HgGpuDescriptorType_sampler = 0,
     HgGpuDescriptorType_combinedImageSampler = 1,
     HgGpuDescriptorType_sampledImage = 2,
@@ -3885,7 +3885,7 @@ struct HgGpuVertexAttribute {
 /**
  * How the vertex list is interpreted
  */
-enum HgGpuTopology {
+enum HgGpuTopology : u32 {
     HgGpuTopology_pointList = 0,
     HgGpuTopology_lineList = 1,
     HgGpuTopology_lineStrip = 2,
@@ -3902,13 +3902,13 @@ enum HgGpuTopology {
 /**
  * How to treat vertices
  */
-enum HgGpuPolygonMode {
+enum HgGpuPolygonMode : u32 {
     HgGpuPolygonMode_fill = 0,
     HgGpuPolygonMode_line = 1,
     HgGpuPolygonMode_point = 2,
 };
 
-enum HgGpuCull {
+enum HgGpuCull : u32 {
     HgGpuCull_none = 0,
     HgGpuCull_front = 0x00000001,
     HgGpuCull_back = 0x00000002,
@@ -4242,7 +4242,7 @@ void hgGpuComputePass(HgGpuCmd* cmd, const HgGpuComputePass* pass);
 /**
  * The operation to load a render attachment
  */
-enum HgGpuLoadOp {
+enum HgGpuLoadOp : u32 {
     HgGpuLoadOp_load = 0,
     HgGpuLoadOp_clear = 1,
     HgGpuLoadOp_dontCare = 2,
@@ -4251,7 +4251,7 @@ enum HgGpuLoadOp {
 /**
  * The operation to store a render attachment
  */
-enum HgGpuStoreOp {
+enum HgGpuStoreOp : u32 {
     HgGpuStoreOp_store = 0,
     HgGpuStoreOp_dontCare = 1,
 };
@@ -4431,7 +4431,7 @@ u32 hgPlatformGetVulkanExtensions(HgArena* arena, HgStringView** extBuffer);
 /**
  * The present mode for the swapchain
  */
-enum HgGpuPresentMode {
+enum HgGpuPresentMode : u32 {
     HgGpuPresentMode_immediate = 0,
     HgGpuPresentMode_mailbox = 1,
     HgGpuPresentMode_fifo = 2,
@@ -4513,7 +4513,7 @@ void hgProcessEvents();
 /**
  * The types of events
  */
-enum HgWindowEventType {
+enum HgWindowEventType : u32 {
     HgWindowEventType_none = 0,
     HgWindowEventType_buttonPress,
     HgWindowEventType_buttonRelease,
@@ -4523,7 +4523,7 @@ enum HgWindowEventType {
 /**
  * The button inputs
  */
-enum HgButton {
+enum HgButton : u32 {
     HgButton_none = 0,
     HgButton_k0,
     HgButton_k1,
@@ -4733,10 +4733,10 @@ HgWindowEvent* hgWindowEvents(HgWindow* window, u32* count);
 void hgAssetInitDefaults(
     HgArena* arena,
     u32 maxBinaries,
-    u32 maxImages,
     u32 maxTextures,
+    u32 maxGpuTextures,
     u32 maxMeshes,
-    u32 maxModels);
+    u32 maxGpuMeshes);
 
 /**
  * Typed handles for assets
@@ -5040,19 +5040,19 @@ void hgBinaryOverwrite(u64 idx, const T& src)
 }
 
 /**
- * An image asset
+ * A texture asset
  */
-struct HgImage {
+struct HgTexture {
     /**
-     * The width of the image in pixels
+     * The width of the texture in pixels
      */
     u32 width;
     /**
-     * The height of the image in pixels
+     * The height of the texture in pixels
      */
     u32 height;
     /**
-     * The depth of the image in pixels
+     * The depth of the texture in pixels
      */
     u32 depth;
     /**
@@ -5066,19 +5066,19 @@ struct HgImage {
 };
 
 /**
- * A handle to an image
+ * A handle to a texture
  */
-typedef HgAssetHandle<HgImage> HgImageHandle;
+typedef HgAssetHandle<HgTexture> HgTextureHandle;
 
 /**
  * Store an image to disc in the png format
  */
-void hgImageStorePng(HgImage* image, HgStringView path, HgFence fence);
+void hgTextureStorePng(HgTexture* texture, HgStringView path, HgFence fence);
 
 /**
- * A texture asset stored on the GPU
+ * A texture asset stored on the gpu
  */
-struct HgTexture {
+struct HgGpuTexture {
     /**
      * The image
      */
@@ -5100,10 +5100,10 @@ struct HgTexture {
 /**
  * A handle to a texture asset
  */
-typedef HgAssetHandle<HgTexture> HgTextureHandle;
+typedef HgAssetHandle<HgGpuTexture> HgGpuTextureHandle;
 
 /**
- * A vertex in a model
+ * A vertex in a mesh
  */
 struct HgMeshVertex {
     /**
@@ -5125,7 +5125,7 @@ struct HgMeshVertex {
 };
 
 /**
- * Data for a 3d model asset
+ * A 3d mesh asset
  */
 struct HgMesh {
     /**
@@ -5155,7 +5155,7 @@ struct HgMesh {
 };
 
 /**
- * A handle to a model data asset
+ * A handle to a 2d mesh asset
  */
 typedef HgAssetHandle<HgMesh> HgMeshHandle;
 
@@ -5165,9 +5165,9 @@ typedef HgAssetHandle<HgMesh> HgMeshHandle;
 void hgMeshStoreGltf(HgMesh* data, HgStringView path, HgFence fence);
 
 /**
- * A 3D model stored on the gpu
+ * A 3d mesh asset stored on the gpu
  */
-struct HgModel {
+struct HgGpuMesh {
     /**
      * The vertex buffer
      */
@@ -5191,9 +5191,9 @@ struct HgModel {
 };
 
 /**
- * A gpu model handle
+ * A gpu mesh asset handle
  */
-typedef HgAssetHandle<HgModel> HgModelHandle;
+typedef HgAssetHandle<HgGpuMesh> HgGpuMeshHandle;
 
 /**
  * Creates a new id for a component
@@ -5336,9 +5336,9 @@ struct HgEcs {
      * - A reference to the created component
      */
     template<typename T>
-    T& add(HgEntity e)
+    T* add(HgEntity e)
     {
-        return *(T*)add(e, hgComponentID<T>);
+        return (T*)add(e, hgComponentID<T>);
     }
 
     /**
@@ -5410,9 +5410,9 @@ struct HgEcs {
      * - A reference to the entity's component
      */
     template<typename T>
-    T& get(HgEntity e)
+    T* get(HgEntity e)
     {
-        return *(T*)get(e, hgComponentID<T>);
+        return (T*)get(e, hgComponentID<T>);
     }
 
     /**
@@ -5535,7 +5535,7 @@ struct HgEcs {
         for (; e != end; ++e)
         {
             if (hasAll<Ts...>(*e))
-                fn(*e, &get<Ts>(*e)...);
+                fn(*e, get<Ts>(*e)...);
         }
     }
 
@@ -5623,7 +5623,7 @@ struct HgEcs {
             Capture* capture = (Capture*)pcapture;
             HgEntity e = capture->system->entities[idx];
             if (capture->ecs->template hasAll<Ts...>(e))
-                (*capture->fn)(e, &capture->ecs->template get<Ts>(e)...);
+                (*capture->fn)(e, capture->ecs->template get<Ts>(e)...);
         });
     }
 
@@ -5680,7 +5680,7 @@ struct HgEcs {
 /**
  * A node component for entities in a hierarchy
  */
-struct HgHierarchy {
+struct HgNode {
     /**
      * The entity's parent, if any
      */
@@ -5707,7 +5707,7 @@ struct HgHierarchy {
  * - parent The parent to add to, must be alive
  * - child The child to add, must be alive
  */
-void hgAddChildEntity(HgEcs* ecs, HgEntity parent, HgEntity child);
+void hgNodeAddChild(HgEcs* ecs, HgEntity parent, HgEntity child);
 
 /**
  * Remove the entity from its hierarchy
@@ -5716,7 +5716,7 @@ void hgAddChildEntity(HgEcs* ecs, HgEntity parent, HgEntity child);
  * - ecs The ecs
  * - e The entity to detach, must be alive
  */
-void hgDetachEntity(HgEcs* ecs, HgEntity e);
+void hgNodeDetach(HgEcs* ecs, HgEntity e);
 
 /**
  * Destroy the entity and all its children in a hierarchy
@@ -5725,7 +5725,7 @@ void hgDetachEntity(HgEcs* ecs, HgEntity e);
  * - ecs The ecs
  * - e The entity to destroy to, must be alive
  */
-void hgDestroyEntity(HgEcs* ecs, HgEntity e);
+void hgNodeDestroy(HgEcs* ecs, HgEntity e);
 
 /**
  * The transform component for entities
@@ -5761,7 +5761,7 @@ struct HgTransform {
  * - scale The new scale
  * - rot The new rotation
  */
-void hgSetEntity(HgEcs* ecs, HgEntity e, const HgVec3& pos, const HgVec3& scale, const HgQuat& rot);
+void hgTransformSet(HgEcs* ecs, HgEntity e, const HgVec3& pos, const HgVec3& scale, const HgQuat& rot);
 
 /**
  * Move this transform and all children by a delta
@@ -5773,16 +5773,97 @@ void hgSetEntity(HgEcs* ecs, HgEntity e, const HgVec3& pos, const HgVec3& scale,
  * - dscale The change in scale, multiplied to current scale
  * - drot The change in rotation, applied to current rotation
  */
-void hgMoveEntity(HgEcs* ecs, HgEntity e, const HgVec3& dpos, const HgVec3& dscale, const HgQuat& drot);
+void hgTransformMove(HgEcs* ecs, HgEntity e, const HgVec3& dpos, const HgVec3& dscale, const HgQuat& drot);
 
 /**
- * A sprite component rendered by the 2d pipeline
+ * The types of camera projections
  */
-struct HgSprite2D {
+enum HgCameraType : u32 {
+    HgCameraType_perspective,
+    HgCameraType_orthographic,
+};
+
+/**
+ * A perspective camera
+ */
+struct HgCameraPerspective {
+    /**
+     * The field of view
+     */
+    f32 fov;
+    /**
+     * The aspect ratio
+     */
+    f32 aspect;
+    /**
+     * The near clipping plane
+     */
+    f32 near;
+    /**
+     * The far clipping plane
+     */
+    f32 far;
+};
+
+/**
+ * An orthographic camera
+ */
+struct HgCameraOrthographic {
+    /**
+     * The clipping planes in each direction
+     */
+    f32 left, right, top, bottom, near, far;
+};
+
+/**
+ * A camera component
+ */
+struct HgCamera {
+    /**
+     * The gpu view projection data
+     */
+    HgGpuBuffer* vpBuffer;
+    /**
+     * The gpu pointer to the vpBuffer
+     */
+    HgGpuDescriptor vpDesc;
+    /**
+     * The type of camera
+     */
+    HgCameraType type;
+    /**
+     * An orthographic camera
+     */
+    HgCameraOrthographic orthographic;
+    /**
+     * A perspective camera
+     */
+    HgCameraPerspective perspective;
+};
+
+/**
+ * Create camera gpu resources
+ */
+void hgCameraCreate(HgCamera* camera);
+
+/**
+ * Destroy camera gpu resources
+ */
+void hgCameraDestroy(HgCamera* camera);
+
+/**
+ * Update the camera's gpu side data, must have a camera and transform
+ */
+void hgCameraUpdate(HgEcs* ecs, HgEntity e);
+
+/**
+ * A sprite component
+ */
+struct HgSprite {
     /**
      * The texture to draw from
      */
-    HgTextureHandle texture;
+    HgGpuTextureHandle texture;
     /**
      * The beginning coordinate to read from texture, [0.0, 1.0]
      */
@@ -5800,56 +5881,29 @@ struct HgSprite2D {
  * - colorFormat The format of the color attachment, must not be undefined
  * - depthFormat The format of the depth attachment, must not be undefined
  */
-void hgInitPipeline2D(
+void hgSpritesInit(
     HgFormat colorFormat,
     HgFormat depthFormat);
 
 /**
  * Deinitialize the 2D pipeline
  */
-void hgDeinitPipeline2D();
+void hgSpritesDeinit();
 
 /**
- * Update the 2D pipeline's projection matrix
- */
-void hgUpdateProjection2D(const HgMat4* projection);
-
-/**
- * Updates the 2D pipeline's view matrix
- */
-void hgUpdateView2D(const HgMat4* view);
-
-/**
- * Issue draw commands for all HgSprite components in the ecs
+ * Issue draw commands for all HgSprite2D components in the ecs
  *
  * Parameters
  * - ecs The ecs to draw
+ * - camera The camera entity to use
  * - cmd The command buffer to record to, must not be nullptr
  */
-void hgDraw2D(HgEcs* ecs, HgGpuCmd* cmd);
+void hgSpritesDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd);
 
 /**
- * A model component rendered by the 3d pipeline
+ * A directional light component
  */
-struct HgModel3D {
-    /**
-     * The model to render
-     */
-    HgModelHandle model;
-    /**
-     * The model's color map
-     */
-    HgTextureHandle colorMap;
-    /**
-     * The model's normal map
-     */
-    HgTextureHandle normalMap;
-};
-
-/**
- * A direction light component rendered by the 3d pipeline
- */
-struct HgDirLight3D {
+struct HgDirLight {
     /**
      * The direction of the light
      */
@@ -5861,13 +5915,31 @@ struct HgDirLight3D {
 };
 
 /**
- * A point light component rendered by the 3d pipeline
+ * A point light component, should have a transform
  */
-struct HgPointLight3D {
+struct HgPointLight {
     /**
      * The color of the light
      */
     HgVec4 color;
+};
+
+/**
+ * A model component
+ */
+struct HgModel {
+    /**
+     * The model to render
+     */
+    HgGpuMeshHandle model;
+    /**
+     * The model's color map
+     */
+    HgGpuTextureHandle colorMap;
+    /**
+     * The model's normal map
+     */
+    HgGpuTextureHandle normalMap;
 };
 
 /**
@@ -5877,33 +5949,24 @@ struct HgPointLight3D {
  * - colorFormat The format of the color attachment, must not be undefined
  * - depthFormat The format of the depth attachment, must not be undefined
  */
-void hgInitPipeline3D(
+void hgModelsInit(
     HgFormat colorFormat,
     HgFormat depthFormat);
 
 /**
  * Deinitialize the 3D pipeline
  */
-void hgDeinitPipeline3D();
+void hgModelsDeinit();
 
 /**
- * Update the 3D pipeline's projection matrix
- */
-void hgUpdateProjection3D(const HgMat4* projection);
-
-/**
- * Update the 3D pipeline's view matrix
- */
-void hgUpdateView3D(const HgMat4* view);
-
-/**
- * Issue draw commands for all HgModelComp components in the ecs
+ * Issue draw commands for all HgModel3D components in the ecs
  *
  * Parameters
  * - ecs The ecs to draw
+ * - camera The camera entity to use
  * - cmd The command buffer to record to, must not be nullptr
  */
-void hgDraw3D(HgEcs* ecs, HgGpuCmd* cmd);
+void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd);
 
 /**
  * Initialize ImGui platform backend

@@ -15,14 +15,11 @@ int main()
     HgArena* arena = hgScratch();
     HgArenaScope arenaScope{arena};
 
-    HgWindowConfig windowConfig{};
-    windowConfig.preferredPresentMode = HgGpuPresentMode_mailbox;
-
-    HgWindow* window = hgWindowCreate("Hg Small Test", 1200, 800, &windowConfig);
+    HgWindow* window = hgWindowCreate("Hg Small Test", 1200, 800, nullptr);
     hgDefer(hgWindowDestroy(window));
 
-    hgInitPipeline2D(hgWindowImageFormat(window), HgFormat_d32_sfloat);
-    hgDefer(hgDeinitPipeline2D());
+    hgSpritesInit(hgWindowImageFormat(window), HgFormat_d32_sfloat);
+    hgDefer(hgSpritesDeinit());
 
     HgBinaryHandle noiseShaderHandle = hgAssetLoad<HgBinary>("build/noise.comp.spv");
 
@@ -50,8 +47,8 @@ int main()
     u32 noiseWidth = 256;
     u32 noiseHeight = 256;
 
-    HgTextureHandle noiseTexHandle = hgAssetCreate<HgTexture>(HgStringView{});
-    HgTexture* noiseTex = hgAssetGet(noiseTexHandle);
+    HgGpuTextureHandle noiseTexHandle = hgAssetCreate<HgGpuTexture>(HgStringView{});
+    HgGpuTexture* noiseTex = hgAssetGet(noiseTexHandle);
 
     noiseTex->image = hgGpuImageCreate(
         noiseWidth,
@@ -78,19 +75,33 @@ int main()
     HgGpuImageDescriptorInfo noiseSamplerInfo{noiseTex->sampler, noiseTex->view, HgGpuLayout_shaderReadOnly};
     hgGpuDescriptorUpdate(noiseTex->descriptor, nullptr, &noiseSamplerInfo);
 
-    HgTransform camera{};
-    camera.position.z = -1;
-
     HgEcs ecs = ecs.create(arena, 128, 128);
     ecs.createComponent<HgTransform>(arena, 128);
-    ecs.createComponent<HgSprite2D>(arena, 128);
+    ecs.createComponent<HgCamera>(arena, 8);
+    ecs.createComponent<HgSprite>(arena, 128);
+
+    HgEntity camera = ecs.spawn();
+    HgCamera* cameraC = ecs.add<HgCamera>(camera);
+    HgTransform* cameraTf = ecs.add<HgTransform>(camera);
+
+    *cameraC = {};
+    hgCameraCreate(cameraC);
+    hgDefer(hgCameraDestroy(cameraC));
+    cameraC->type = HgCameraType_perspective;
+    cameraC->perspective.fov = (f32)hgPi * 0.5f;
+    cameraC->perspective.near = 0.1f;
+    cameraC->perspective.far = 1000.0f;
+
+    *cameraTf = {};
+    cameraTf->position = HgVec3{0, 0, -1};
 
     HgEntity noiseSquare = ecs.spawn();
-    ecs.add<HgTransform>(noiseSquare) = {};
-    ecs.add<HgSprite2D>(noiseSquare) = {noiseTexHandle, HgVec2{0}, HgVec2{1}};
+    *ecs.add<HgTransform>(noiseSquare) = {};
+    *ecs.add<HgSprite>(noiseSquare) = {noiseTexHandle, HgVec2{0}, HgVec2{1}};
 
-    u32 depthWidth = 0;
-    u32 depthHeight = 0;
+    u32 width = 0;
+    u32 height = 0;
+
     HgGpuImage* depthImage = nullptr;
     HgGpuView* depthView = nullptr;
     hgDefer(hgGpuImageDestroy(depthImage));
@@ -123,26 +134,19 @@ int main()
         if (hgWasQuit() || hgWindowWasClosed(window))
             goto quit;
 
-        if (depthWidth != hgWindowWidth(window) || depthHeight != hgWindowHeight(window))
+        if (width != hgWindowWidth(window) || height != hgWindowHeight(window))
         {
             hgGpuViewDestroy(depthView);
             hgGpuImageDestroy(depthImage);
 
-            depthWidth = hgWindowWidth(window);
-            depthHeight = hgWindowHeight(window);
+            width = hgWindowWidth(window);
+            height = hgWindowHeight(window);
 
-            depthImage = hgGpuImageCreate(depthWidth, depthHeight, HgFormat_d32_sfloat,
-                HgGpuImageUsage_depthStencilAttachment);
+            depthImage = hgGpuImageCreate(width, height, HgFormat_d32_sfloat, HgGpuImageUsage_depthStencilAttachment);
             depthView = hgGpuViewCreate(depthImage, 0, 1, 0, 1, HgGpuAspect_depth);
-        }
 
-        HgMat4 proj = hgMatPerspective(
-            (f32)hgPi * 0.5f,
-            (f32)hgWindowWidth(window) /
-            (f32)hgWindowHeight(window),
-            0.1f,
-            1000.0f);
-        hgUpdateProjection2D(&proj);
+            cameraC->perspective.aspect = (f32)hgWindowWidth(window) / (f32)hgWindowHeight(window);
+        }
 
         if (!ImGui::GetIO().WantCaptureMouse)
         {
@@ -151,7 +155,7 @@ int main()
                 f32 rotSpeed = 2.0f;
                 HgQuat rotX = hgQuatAxisAngle(HgVec3{ 0, 1, 0}, hgMouseDeltaX(window) * rotSpeed);
                 HgQuat rotY = hgQuatAxisAngle(HgVec3{-1, 0, 0}, hgMouseDeltaY(window) * rotSpeed);
-                camera.rotation = rotX * camera.rotation * rotY;
+                cameraTf->rotation = rotX * cameraTf->rotation * rotY;
             }
 
             HgVec3 movement = HgVec3{
@@ -162,12 +166,9 @@ int main()
             if (movement != HgVec3{0.0f})
             {
                 f32 moveSpeed = 1.5f;
-                HgVec3 rotated = hgVecRotate(camera.rotation, HgVec3{movement.x, 0.0f, movement.z});
-                camera.position += hgVecNorm3(HgVec3{rotated.x, movement.y, rotated.z}) * moveSpeed * (f32)delta;
+                HgVec3 rotated = hgVecRotate(cameraTf->rotation, HgVec3{movement.x, 0.0f, movement.z});
+                cameraTf->position += hgVecNorm3(HgVec3{rotated.x, movement.y, rotated.z}) * moveSpeed * (f32)delta;
             }
-
-            HgMat4 view = hgMatView(camera.position, camera.scale, camera.rotation);
-            hgUpdateView2D(&view);
         }
 
         hgImGuiNewFrame();
@@ -229,7 +230,8 @@ int main()
 
             hgGpuRenderPassBegin(cmd, hgWindowWidth(window), hgWindowHeight(window), &pass);
 
-            hgDraw2D(&ecs, cmd);
+            hgCameraUpdate(&ecs, camera);
+            hgSpritesDraw(&ecs, camera, cmd);
 
             hgImGuiDraw(cmd);
 
