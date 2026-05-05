@@ -31,6 +31,8 @@ set IMGUI_BACKENDS= ^
 
 set SHADERS= ^
     noise.comp ^
+	skybox.vert ^
+	skybox.frag ^
     sprite.vert ^
     sprite.frag ^
     model.vert ^

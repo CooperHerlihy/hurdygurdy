@@ -1175,6 +1175,11 @@ static VkImageLayout gpuLayoutToVk(HgGpuLayout layout)
     return (VkImageLayout)layout;
 }
 
+static VkImageCreateFlags gpuImageConfigFlagsToVk(HgGpuImageConfigFlags flags)
+{
+    return (VkImageCreateFlags)flags;
+}
+
 static VkSampleCountFlagBits countToMsaaSampleBits(u32 count)
 {
     switch (count)
@@ -1422,6 +1427,7 @@ HgGpuImage* hgGpuImageCreateEx(const HgGpuImageCreateEx* create)
 
     VkImageCreateInfo imageInfo{};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageInfo.flags = gpuImageConfigFlagsToVk(create->flags);
     imageInfo.imageType = imageDimensionsToVk(create->dimensions);
     imageInfo.format = formatToVk(create->format);
     imageInfo.extent = {create->width, create->height, create->depth};
@@ -1573,7 +1579,7 @@ void hgGpuImageWriteCubemap(HgGpuView* dst, const void* src)
 {
     hgAssert(dst != nullptr);
     hgAssert(dst->baseArrayLayer == 0);
-    hgAssert(dst->layerCount >= dst->baseArrayLayer + 6);
+    hgAssert(dst->layerCount >= 6);
     hgAssert(src != nullptr);
     hgAssert(dst->image->depth == 1);
 
@@ -1581,7 +1587,8 @@ void hgGpuImageWriteCubemap(HgGpuView* dst, const void* src)
 
     HgGpuBuffer* buffer = hgGpuBufferCreate(size * 4 * 3, HgGpuBufferUsage_transferSrc, HgGpuMemoryUsage_stagingWrite);
     hgDefer(hgGpuBufferDestroy(buffer));
-    hgGpuBufferWrite(buffer, 0, src, size);
+
+    hgGpuBufferWrite(buffer, 0, src, size * 4 * 3);
 
     HgGpuImage* stage = hgGpuImageCreate(
         dst->image->width * 4,
@@ -1597,12 +1604,12 @@ void hgGpuImageWriteCubemap(HgGpuView* dst, const void* src)
     stageBarrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
     stageBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
     stageBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    stageBarrier.image = dst->image->image;
+    stageBarrier.image = stage->image;
     stageBarrier.subresourceRange.aspectMask = gpuAspectToVk(dst->aspectFlags);
-    stageBarrier.subresourceRange.baseMipLevel = dst->baseMipLevel;
-    stageBarrier.subresourceRange.levelCount = dst->levelCount;
-    stageBarrier.subresourceRange.baseArrayLayer = dst->baseArrayLayer;
-    stageBarrier.subresourceRange.layerCount = dst->layerCount;
+    stageBarrier.subresourceRange.baseMipLevel = 0;
+    stageBarrier.subresourceRange.levelCount = 1;
+    stageBarrier.subresourceRange.baseArrayLayer = 0;
+    stageBarrier.subresourceRange.layerCount = 1;
 
     VkDependencyInfo stageDep{};
     stageDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
@@ -1613,7 +1620,7 @@ void hgGpuImageWriteCubemap(HgGpuView* dst, const void* src)
 
     VkBufferImageCopy stageRegion{};
     stageRegion.imageSubresource = {gpuAspectToVk(dst->aspectFlags), 0, 0, 1};
-    stageRegion.imageExtent = {dst->image->width, dst->image->height, 1};
+    stageRegion.imageExtent = {dst->image->width * 4, dst->image->height * 3, 1};
 
     vkCmdCopyBufferToImage(
         (VkCommandBuffer)cmd,
@@ -1672,13 +1679,13 @@ void hgGpuImageWriteCubemap(HgGpuView* dst, const void* src)
     regions[1].extent = {dst->image->width, dst->image->height, 1};
 
     regions[2].srcSubresource = {gpuAspectToVk(dst->aspectFlags), 0, 0, 1};
-    regions[2].srcOffset = {(int)dst->image->width * 1, (int)dst->image->height * 0, 0};
+    regions[2].srcOffset = {(int)dst->image->width * 1, (int)dst->image->height * 2, 0};
     regions[2].dstSubresource = {gpuAspectToVk(dst->aspectFlags), dst->baseMipLevel, 2, 1};
     regions[2].dstOffset = {};
     regions[2].extent = {dst->image->width, dst->image->height, 1};
 
     regions[3].srcSubresource = {gpuAspectToVk(dst->aspectFlags), 0, 0, 1};
-    regions[3].srcOffset = {(int)dst->image->width * 1, (int)dst->image->height * 2, 0};
+    regions[3].srcOffset = {(int)dst->image->width * 1, (int)dst->image->height * 0, 0};
     regions[3].dstSubresource = {gpuAspectToVk(dst->aspectFlags), dst->baseMipLevel, 3, 1};
     regions[3].dstOffset = {};
     regions[3].extent = {dst->image->width, dst->image->height, 1};
@@ -1985,7 +1992,7 @@ void hgGpuDescriptorUpdate(
     vkUpdateDescriptorSets(vkState.device, 1, &write, 0, nullptr);
 }
 
-static VkShaderModule createShaderModule(const u8* spirvCode, u64 codeSize)
+static VkShaderModule createShaderModule(const void* spirvCode, u64 codeSize)
 {
     VkShaderModuleCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;

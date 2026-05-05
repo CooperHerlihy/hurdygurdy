@@ -57,6 +57,8 @@ int main()
 
     hgSpritesInit(HgFormat_r8g8b8a8_srgb, HgFormat_d32_sfloat);
     hgModelsInit(HgFormat_r8g8b8a8_srgb, HgFormat_d32_sfloat);
+    hgSkyboxInit(HgFormat_r8g8b8a8_srgb, HgFormat_d32_sfloat);
+    hgDefer(hgSkyboxDeinit());
     hgDefer(hgSpritesDeinit());
     hgDefer(hgModelsDeinit());
 
@@ -64,6 +66,7 @@ int main()
     // ecs.createComponent<HgNode>(arena, 1024);
     ecs.createComponent<HgTransform>(arena, 1024);
     ecs.createComponent<HgCamera>(arena, 8);
+    ecs.createComponent<HgSkybox>(arena, 8);
     ecs.createComponent<HgSprite>(arena, 256);
     ecs.createComponent<HgDirLight>(arena, 64);
     ecs.createComponent<HgPointLight>(arena, 64);
@@ -88,6 +91,10 @@ int main()
     cameraC->perspective.far = 1000.0f;
     hgCameraCreate(cameraC);
     hgDefer(hgCameraDestroy(cameraC));
+
+    HgEntity skybox = ecs.spawn();
+    scene[sceneSize++] = skybox;
+    *ecs.add<HgSkybox>(skybox) = {};
 
     HgEntity pointLight = ecs.spawn();
     scene[sceneSize++] = pointLight;
@@ -490,6 +497,7 @@ int main()
             hgGpuRenderPassBegin(cmd, width, height, &renderPass);
 
             hgCameraUpdate(&ecs, camera);
+            hgSkyboxDraw(&ecs, camera, cmd);
             hgSpritesDraw(&ecs, camera, cmd);
             hgModelsDraw(&ecs, camera, cmd);
 

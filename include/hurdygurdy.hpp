@@ -3521,6 +3521,14 @@ enum HgGpuLayout : u32 {
 };
 
 /**
+ * Extra config flags for image creation
+ */
+enum HgGpuImageConfig : u32 {
+    HgGpuImageConfig_cubeCompatible = 0x00000010,
+};
+typedef u32 HgGpuImageConfigFlags;
+
+/**
  * Create a gpu image assuming most defaults
  */
 HgGpuImage* hgGpuImageCreate(u32 width, u32 height, HgFormat format, HgGpuImageUsageFlags usage);
@@ -3565,6 +3573,10 @@ struct HgGpuImageCreateEx {
      * How the image will be used, must not be 0
      */
     HgGpuImageUsageFlags usage = 0;
+    /**
+     * Extra config flags
+     */
+    HgGpuImageConfigFlags flags = 0;
 };
 
 /**
@@ -3923,7 +3935,7 @@ struct HgCreateGpuGraphicsPipeline {
     /**
      * The vertex shader code
      */
-    const u8* vertexShader = nullptr;
+    const void* vertexShader = nullptr;
     /**
      * The size in bytes of the vertex shader code
      */
@@ -3931,7 +3943,7 @@ struct HgCreateGpuGraphicsPipeline {
     /**
      * The fragment shader code
      */
-    const u8* fragmentShader = nullptr;
+    const void* fragmentShader = nullptr;
     /**
      * The size in bytes of the fragment shader code
      */
@@ -5875,18 +5887,16 @@ struct HgSprite {
 };
 
 /**
- * Initialize the 2D pipeline
+ * Initialize the sprite pipeline
  *
  * Parameters
  * - colorFormat The format of the color attachment, must not be undefined
  * - depthFormat The format of the depth attachment, must not be undefined
  */
-void hgSpritesInit(
-    HgFormat colorFormat,
-    HgFormat depthFormat);
+void hgSpritesInit(HgFormat colorFormat, HgFormat depthFormat);
 
 /**
- * Deinitialize the 2D pipeline
+ * Deinitialize the sprite pipeline
  */
 void hgSpritesDeinit();
 
@@ -5899,6 +5909,40 @@ void hgSpritesDeinit();
  * - cmd The command buffer to record to, must not be nullptr
  */
 void hgSpritesDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd);
+
+/**
+ * A skybox component
+ */
+struct HgSkybox {
+    /**
+     * The cubemap texture
+     */
+    HgGpuTextureHandle texture;
+};
+
+/**
+ * Initialize the skybox pipeline
+ *
+ * Parameters
+ * - colorFormat The format of the color attachment, must not be undefined
+ * - depthFormat The format of the depth attachment, if used
+ */
+void hgSkyboxInit(HgFormat colorFormat, HgFormat depthFormat);
+
+/**
+ * Deinitialize the skybox pipeline
+ */
+void hgSkyboxDeinit();
+
+/**
+ * Draw a skybox from a texture
+ *
+ * Parameters
+ * - ecs The ecs with the camera
+ * - camera The camera entity to use
+ * - cmd The command buffer to record to, must not be nullptr
+ */
+void hgSkyboxDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd);
 
 /**
  * A directional light component
@@ -5925,7 +5969,7 @@ struct HgPointLight {
 };
 
 /**
- * A model component
+ * A 3D model component
  */
 struct HgModel {
     /**
@@ -5943,18 +5987,16 @@ struct HgModel {
 };
 
 /**
- * Initialize the 3D pipeline
+ * Initialize the 3D model pipeline
  *
  * Parameters
  * - colorFormat The format of the color attachment, must not be undefined
  * - depthFormat The format of the depth attachment, must not be undefined
  */
-void hgModelsInit(
-    HgFormat colorFormat,
-    HgFormat depthFormat);
+void hgModelsInit(HgFormat colorFormat, HgFormat depthFormat);
 
 /**
- * Deinitialize the 3D pipeline
+ * Deinitialize the 3D model pipeline
  */
 void hgModelsDeinit();
 

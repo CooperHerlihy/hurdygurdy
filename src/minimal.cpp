@@ -54,9 +54,6 @@ int main()
     {
         f64 delta = hgClockTick(&gameClock);
 
-        HgArena* frame = hgScratch();
-        HgArenaScope frameScope{frame};
-
         hgProcessEvents();
         if (hgWasQuit() || hgWindowWasClosed(window))
             goto quit;
