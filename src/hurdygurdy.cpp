@@ -2937,7 +2937,7 @@ void hgSpritesInit(
     {
         u8 r, g, b, a;
     };
-    static const Color defaultColors[]{
+    Color defaultColors[]{
         {0xff, 0x00, 0xff, 0xff}, {0x00, 0x00, 0x00, 0xff},
         {0x00, 0x00, 0x00, 0xff}, {0xff, 0x00, 0xff, 0xff},
     };
@@ -3041,11 +3041,11 @@ void hgSkyboxInit(HgFormat colorFormat, HgFormat depthFormat)
     {
         u8 r, g, b, a;
     };
-    Color top = {0xff, 0xff, 0xff, 0xff};
-    Color mid = {0x00, 0x00, 0xff, 0xff};
-    Color bot = {0x00, 0x00, 0x00, 0x00};
-    Color nul = {0x00, 0xff, 0xff, 0xff};
-    static const Color defaultColors[12 * 4]{
+    Color top = {0x00, 0x22, 0x44, 0xff};
+    Color mid = {0x00, 0x11, 0x33, 0xff};
+    Color bot = {0x00, 0x00, 0x00, 0xff};
+    Color nul = {0x00, 0x00, 0x00, 0x00};
+    Color defaultColors[]{
         nul, top, nul, nul,
         mid, mid, mid, mid,
         nul, bot, nul, nul,
@@ -3214,7 +3214,7 @@ void hgModelsInit(
     HgGpuBufferDescriptorInfo pointLightBufferInfo{modelPipeline.pointLightBuffer, 0, UINT64_MAX};
     hgGpuDescriptorUpdate(modelPipeline.pointLightDesc, &pointLightBufferInfo, nullptr);
 
-    static const HgMeshVertex cubeVertices[]{
+    HgMeshVertex cubeVertices[]{
         {HgVec3{ 0.5f,-0.5f,-0.5f}, HgVec3{ 1, 0, 0}, HgVec4{ 0, 0, 1, 1}, HgVec2{0,0}},
         {HgVec3{ 0.5f, 0.5f,-0.5f}, HgVec3{ 1, 0, 0}, HgVec4{ 0, 0, 1, 1}, HgVec2{1,0}},
         {HgVec3{ 0.5f, 0.5f, 0.5f}, HgVec3{ 1, 0, 0}, HgVec4{ 0, 0, 1, 1}, HgVec2{1,1}},
@@ -3246,7 +3246,7 @@ void hgModelsInit(
         {HgVec3{ 0.5f, 0.5f,-0.5f}, HgVec3{ 0, 0,-1}, HgVec4{-1, 0, 0, 1}, HgVec2{0,1}},
     };
 
-    static u32 cubeIndices[]{
+    u32 cubeIndices[]{
          0,  1,  2,  0,  2,  3,
          4,  5,  6,  4,  6,  7,
          8,  9, 10,  8, 10, 11,
@@ -3279,20 +3279,17 @@ void hgModelsInit(
     {
         u8 r, g, b, a;
     };
-    static const Color defaultColors[]{
+    Color defaultColors[]{
         {0xff, 0x00, 0xff, 0xff}, {0x00, 0x00, 0x00, 0xff}, {0xff, 0x00, 0xff, 0xff},
         {0x00, 0x00, 0x00, 0xff}, {0xff, 0x00, 0xff, 0xff}, {0x00, 0x00, 0x00, 0xff},
         {0xff, 0x00, 0xff, 0xff}, {0x00, 0x00, 0x00, 0xff}, {0xff, 0x00, 0xff, 0xff},
     };
 
-    static const HgVec4 defaultNormals[]{
-        HgVec4{0, 0, -1, 0}, HgVec4{0, 0, -1, 0},
-        HgVec4{0, 0, -1, 0}, HgVec4{0, 0, -1, 0},
-    };
+    HgVec4 defaultNormal{0, 0, -1, 0};
 
     modelPipeline.defaultColorMap.image = hgGpuImageCreate(3, 3, HgFormat_r8g8b8a8_srgb,
         HgGpuImageUsage_sampled | HgGpuImageUsage_transferDst);
-    modelPipeline.defaultNormalMap.image = hgGpuImageCreate(2, 2, HgFormat_r32g32b32a32_sfloat,
+    modelPipeline.defaultNormalMap.image = hgGpuImageCreate(1, 1, HgFormat_r32g32b32a32_sfloat,
         HgGpuImageUsage_sampled | HgGpuImageUsage_transferDst);
 
     modelPipeline.defaultColorMap.view = hgGpuViewCreate(
@@ -3301,7 +3298,7 @@ void hgModelsInit(
         modelPipeline.defaultNormalMap.image, 0, 1, 0, 1, HgGpuAspect_color);
 
     hgGpuImageWrite(modelPipeline.defaultColorMap.view, defaultColors);
-    hgGpuImageWrite(modelPipeline.defaultNormalMap.view, defaultNormals);
+    hgGpuImageWrite(modelPipeline.defaultNormalMap.view, &defaultNormal);
 
     modelPipeline.defaultColorMap.descriptor = hgGpuDescriptorCreate(HgGpuDescriptorType_combinedImageSampler);
     modelPipeline.defaultNormalMap.descriptor = hgGpuDescriptorCreate(HgGpuDescriptorType_combinedImageSampler);
