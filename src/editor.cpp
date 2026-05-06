@@ -62,28 +62,28 @@ int main()
     hgDefer(hgSpritesDeinit());
     hgDefer(hgModelsDeinit());
 
-    HgEcs ecs = ecs.create(arena, 4096, 64);
-    // ecs.createComponent<HgNode>(arena, 1024);
-    ecs.createComponent<HgTransform>(arena, 1024);
-    ecs.createComponent<HgCamera>(arena, 8);
-    ecs.createComponent<HgSkybox>(arena, 8);
-    ecs.createComponent<HgSprite>(arena, 256);
-    ecs.createComponent<HgDirLight>(arena, 64);
-    ecs.createComponent<HgPointLight>(arena, 64);
-    ecs.createComponent<HgModel>(arena, 256);
+    HgEcs ecs = hgEcsCreate(arena, 4096, 64);
+    // hgEcsRegisterType(&ecs, arena, HgNode, 1024);
+    hgEcsRegisterType(&ecs, arena, HgTransform, 1024);
+    hgEcsRegisterType(&ecs, arena, HgCamera, 8);
+    hgEcsRegisterType(&ecs, arena, HgSkybox, 8);
+    hgEcsRegisterType(&ecs, arena, HgSprite, 256);
+    hgEcsRegisterType(&ecs, arena, HgDirLight, 64);
+    hgEcsRegisterType(&ecs, arena, HgPointLight, 64);
+    hgEcsRegisterType(&ecs, arena, HgModel, 256);
 
     u32 sceneCapacity = 32;
     HgEntity* scene = hgAlloc<HgEntity>(arena, sceneCapacity);
     u32 sceneSize = 0;
 
-    HgEntity camera = ecs.spawn();
+    HgEntity camera = hgEcsCreate(&ecs);
     scene[sceneSize++] = camera;
 
-    HgTransform* cameraTf = ecs.add<HgTransform>(camera);
+    HgTransform* cameraTf = hgEcsAdd<HgTransform>(&ecs, camera);
     *cameraTf = {};
     cameraTf->position = HgVec3{0, 0, -1};
 
-    HgCamera* cameraC = ecs.add<HgCamera>(camera);
+    HgCamera* cameraC = hgEcsAdd<HgCamera>(&ecs, camera);
     *cameraC = {};
     cameraC->type = HgCameraType_perspective;
     cameraC->perspective.fov = (f32)hgPi * 0.5f;
@@ -92,27 +92,27 @@ int main()
     hgCameraCreate(cameraC);
     hgDefer(hgCameraDestroy(cameraC));
 
-    HgEntity skybox = ecs.spawn();
+    HgEntity skybox = hgEcsCreate(&ecs);
     scene[sceneSize++] = skybox;
-    *ecs.add<HgSkybox>(skybox) = {};
+    *hgEcsAdd<HgSkybox>(&ecs, skybox) = {};
 
-    HgEntity pointLight = ecs.spawn();
+    HgEntity pointLight = hgEcsCreate(&ecs);
     scene[sceneSize++] = pointLight;
-    *ecs.add<HgTransform>(pointLight) = {};
-    ecs.get<HgTransform>(pointLight)->position = HgVec3{0, -2, 0};
-    *ecs.add<HgPointLight>(pointLight) = {HgVec4{1, 1, 1, 4}};
+    *hgEcsAdd<HgTransform>(&ecs, pointLight) = {};
+    hgEcsGet<HgTransform>(&ecs, pointLight)->position = HgVec3{0, -2, 0};
+    *hgEcsAdd<HgPointLight>(&ecs, pointLight) = {HgVec4{1, 1, 1, 4}};
 
-    HgEntity square = ecs.spawn();
+    HgEntity square = hgEcsCreate(&ecs);
     scene[sceneSize++] = square;
-    *ecs.add<HgTransform>(square) = {};
-    ecs.get<HgTransform>(square)->position = HgVec3{-1, 0, 1};
-    *ecs.add<HgSprite>(square) = {HgGpuTextureHandle{}, HgVec2{0.0f}, HgVec2{1.0f}};
+    *hgEcsAdd<HgTransform>(&ecs, square) = {};
+    hgEcsGet<HgTransform>(&ecs, square)->position = HgVec3{-1, 0, 1};
+    *hgEcsAdd<HgSprite>(&ecs, square) = {HgGpuTextureHandle{}, HgVec2{0.0f}, HgVec2{1.0f}};
 
-    HgEntity cube = ecs.spawn();
+    HgEntity cube = hgEcsCreate(&ecs);
     scene[sceneSize++] = cube;
-    *ecs.add<HgTransform>(cube) = {};
-    ecs.get<HgTransform>(cube)->position = HgVec3{1, 0, 1};
-    *ecs.add<HgModel>(cube) = {HgGpuMeshHandle{}, HgGpuTextureHandle{}, HgGpuTextureHandle{}};
+    *hgEcsAdd<HgTransform>(&ecs, cube) = {};
+    hgEcsGet<HgTransform>(&ecs, cube)->position = HgVec3{1, 0, 1};
+    *hgEcsAdd<HgModel>(&ecs, cube) = {HgGpuMeshHandle{}, HgGpuTextureHandle{}, HgGpuTextureHandle{}};
 
     bool showRender = true;
     bool showEditor = true;
@@ -132,14 +132,14 @@ int main()
         HgArena* frame = hgScratch(&arena, 1);
         HgArenaScope frameScope{frame};
 
-        if (ecs.alive(square))
+        if (hgEcsAlive(&ecs, square))
         {
-            HgQuat& squareRot = ecs.get<HgTransform>(square)->rotation;
+            HgQuat& squareRot = hgEcsGet<HgTransform>(&ecs, square)->rotation;
             squareRot = hgQuatAxisAngle(HgVec3{0, -1, 0}, (f32)delta) * squareRot;
         }
-        if (ecs.alive(cube))
+        if (hgEcsAlive(&ecs, cube))
         {
-            HgQuat& cubeRot = ecs.get<HgTransform>(cube)->rotation;
+            HgQuat& cubeRot = hgEcsGet<HgTransform>(&ecs, cube)->rotation;
             cubeRot = hgQuatAxisAngle(HgVec3{0, -1, 0}, (f32)delta) * cubeRot;
         }
 
@@ -326,14 +326,14 @@ int main()
                 ImGuiTreeNodeFlags entityFlags = ImGuiTreeNodeFlags_DefaultOpen;
                 if (ImGui::CollapsingHeader("Entities", entityFlags))
                 {
-                    if (ImGui::Button("Spawn Entity"))
+                    if (ImGui::Button("Create Entity"))
                     {
                         if (sceneSize == sceneCapacity)
                         {
                             scene = hgRealloc(arena, scene, sceneCapacity, sceneCapacity * 2);
                             sceneCapacity *= 2;
                         }
-                        scene[sceneSize++] = ecs.spawn();
+                        scene[sceneSize++] = hgEcsCreate(&ecs);
                     }
 
                     for (u32 i = 0; i < sceneSize; ++i)
@@ -346,9 +346,9 @@ int main()
 
                         if (ImGui::TreeNodeEx(name, entityFlags))
                         {
-                            if (ImGui::Button("Despawn Entity"))
+                            if (ImGui::Button("Destroy Entity"))
                             {
-                                ecs.despawn(e);
+                                hgEcsDestroy(&ecs, e);
                                 memmove(scene + i, scene + i + 1, sizeof(HgEntity) * (--sceneSize - i));
                                 --i;
                             } else {
@@ -359,31 +359,31 @@ int main()
                                 {
                                     ImGui::SeparatorText("Components");
 
-                                    if (!ecs.has<HgTransform>(e) && ImGui::Selectable("Transform"))
-                                        *ecs.add<HgTransform>(e) = {};
+                                    if (!hgEcsHas<HgTransform>(&ecs, e) && ImGui::Selectable("Transform"))
+                                        *hgEcsAdd<HgTransform>(&ecs, e) = {};
 
-                                    if (!ecs.has<HgSprite>(e) && ImGui::Selectable("Sprite 2D"))
+                                    if (!hgEcsHas<HgSprite>(&ecs, e) && ImGui::Selectable("Sprite 2D"))
                                     {
-                                        if (!ecs.has<HgTransform>(e))
-                                            *ecs.add<HgTransform>(e) = {};
-                                        *ecs.add<HgSprite>(e) = {HgGpuTextureHandle{}, HgVec2{0.0f, 0.0f}, HgVec2{1.0f, 1.0f}};
+                                        if (!hgEcsHas<HgTransform>(&ecs, e))
+                                            *hgEcsAdd<HgTransform>(&ecs, e) = {};
+                                        *hgEcsAdd<HgSprite>(&ecs, e) = {HgGpuTextureHandle{}, HgVec2{0.0f, 0.0f}, HgVec2{1.0f, 1.0f}};
                                     }
 
-                                    if (!ecs.has<HgModel>(e) && ImGui::Selectable("Model 3D"))
+                                    if (!hgEcsHas<HgModel>(&ecs, e) && ImGui::Selectable("Model 3D"))
                                     {
-                                        if (!ecs.has<HgTransform>(e))
-                                            *ecs.add<HgTransform>(e) = {};
-                                        *ecs.add<HgModel>(e) = {};
+                                        if (!hgEcsHas<HgTransform>(&ecs, e))
+                                            *hgEcsAdd<HgTransform>(&ecs, e) = {};
+                                        *hgEcsAdd<HgModel>(&ecs, e) = {};
                                     }
 
-                                    if (!ecs.has<HgDirLight>(e) && ImGui::Selectable("Direction Light 3D"))
-                                        *ecs.add<HgDirLight>(e) = {};
+                                    if (!hgEcsHas<HgDirLight>(&ecs, e) && ImGui::Selectable("Direction Light 3D"))
+                                        *hgEcsAdd<HgDirLight>(&ecs, e) = {};
 
-                                    if (!ecs.has<HgPointLight>(e) && ImGui::Selectable("Point Light 3D"))
+                                    if (!hgEcsHas<HgPointLight>(&ecs, e) && ImGui::Selectable("Point Light 3D"))
                                     {
-                                        if (!ecs.has<HgTransform>(e))
-                                            *ecs.add<HgTransform>(e) = {};
-                                        *ecs.add<HgPointLight>(e) = {};
+                                        if (!hgEcsHas<HgTransform>(&ecs, e))
+                                            *hgEcsAdd<HgTransform>(&ecs, e) = {};
+                                        *hgEcsAdd<HgPointLight>(&ecs, e) = {};
                                     }
 
                                     ImGui::EndPopup();
@@ -396,66 +396,66 @@ int main()
                                 {
                                     ImGui::SeparatorText("Components");
 
-                                    if (ecs.has<HgTransform>(e) && ImGui::Selectable("Transform"))
+                                    if (hgEcsHas<HgTransform>(&ecs, e) && ImGui::Selectable("Transform"))
                                     {
-                                        ecs.remove<HgTransform>(e);
-                                        if (ecs.has<HgSprite>(e))
-                                            ecs.remove<HgSprite>(e);
-                                        if (ecs.has<HgModel>(e))
-                                            ecs.remove<HgModel>(e);
-                                        if (ecs.has<HgPointLight>(e))
-                                            ecs.remove<HgPointLight>(e);
+                                        hgEcsRemove<HgTransform>(&ecs, e);
+                                        if (hgEcsHas<HgSprite>(&ecs, e))
+                                            hgEcsRemove<HgSprite>(&ecs, e);
+                                        if (hgEcsHas<HgModel>(&ecs, e))
+                                            hgEcsRemove<HgModel>(&ecs, e);
+                                        if (hgEcsHas<HgPointLight>(&ecs, e))
+                                            hgEcsRemove<HgPointLight>(&ecs, e);
                                     }
 
-                                    if (ecs.has<HgSprite>(e) && ImGui::Selectable("Sprite"))
-                                        ecs.remove<HgSprite>(e);
+                                    if (hgEcsHas<HgSprite>(&ecs, e) && ImGui::Selectable("Sprite"))
+                                        hgEcsRemove<HgSprite>(&ecs, e);
 
-                                    if (ecs.has<HgModel>(e) && ImGui::Selectable("Model 3D"))
-                                        ecs.remove<HgModel>(e);
+                                    if (hgEcsHas<HgModel>(&ecs, e) && ImGui::Selectable("Model 3D"))
+                                        hgEcsRemove<HgModel>(&ecs, e);
 
-                                    if (ecs.has<HgDirLight>(e) && ImGui::Selectable("Direction Light 3D"))
-                                        ecs.remove<HgDirLight>(e);
+                                    if (hgEcsHas<HgDirLight>(&ecs, e) && ImGui::Selectable("Direction Light 3D"))
+                                        hgEcsRemove<HgDirLight>(&ecs, e);
 
-                                    if (ecs.has<HgPointLight>(e) && ImGui::Selectable("Point Light 3D"))
-                                        ecs.remove<HgPointLight>(e);
+                                    if (hgEcsHas<HgPointLight>(&ecs, e) && ImGui::Selectable("Point Light 3D"))
+                                        hgEcsRemove<HgPointLight>(&ecs, e);
 
                                     ImGui::EndPopup();
                                 }
 
                                 ImGuiTreeNodeFlags componentFlags = entityFlags;
 
-                                if (ecs.has<HgTransform>(e) && ImGui::TreeNodeEx("Transform", componentFlags))
+                                if (hgEcsHas<HgTransform>(&ecs, e) && ImGui::TreeNodeEx("Transform", componentFlags))
                                 {
-                                    HgTransform* tf = ecs.get<HgTransform>(e);
+                                    HgTransform* tf = hgEcsGet<HgTransform>(&ecs, e);
                                     ImGui::DragFloat3("Position", &tf->position.x, 0.01f);
                                     ImGui::DragFloat3("Scale", &tf->scale.x, 0.01f);
                                     ImGui::TreePop();
                                 }
 
-                                if (ecs.has<HgSprite>(e) && ImGui::TreeNodeEx("Sprite", componentFlags))
+                                if (hgEcsHas<HgSprite>(&ecs, e) && ImGui::TreeNodeEx("Sprite", componentFlags))
                                 {
-                                    HgSprite* s = ecs.get<HgSprite>(e);
+                                    HgSprite* s = hgEcsGet<HgSprite>(&ecs, e);
                                     ImGui::DragFloat2("UV Position", &s->uvPos.x, 0.01f);
                                     ImGui::DragFloat2("UV Size", &s->uvSize.x, 0.01f);
                                     ImGui::TreePop();
                                 }
 
-                                if (ecs.has<HgModel>(e) && ImGui::TreeNodeEx("Model 3D", componentFlags))
+                                if (hgEcsHas<HgModel>(&ecs, e) && ImGui::TreeNodeEx("Model 3D", componentFlags))
                                 {
                                     ImGui::TreePop();
                                 }
 
-                                if (ecs.has<HgDirLight>(e) && ImGui::TreeNodeEx("Directional Light 3D", componentFlags))
+                                if (hgEcsHas<HgDirLight>(&ecs, e) && ImGui::TreeNodeEx("Directional Light 3D", componentFlags))
                                 {
-                                    HgDirLight* l = ecs.get<HgDirLight>(e);
+                                    HgDirLight* l = hgEcsGet<HgDirLight>(&ecs, e);
                                     ImGui::DragFloat3("Direction", &l->dir.x, 0.01f);
                                     ImGui::DragFloat4("Color", &l->color.x, 0.01f);
                                     ImGui::TreePop();
                                 }
 
-                                if (ecs.has<HgPointLight>(e) && ImGui::TreeNodeEx("Point Light 3D", componentFlags))
+                                if (hgEcsHas<HgPointLight>(&ecs, e) && ImGui::TreeNodeEx("Point Light 3D", componentFlags))
                                 {
-                                    HgPointLight* l = ecs.get<HgPointLight>(e);
+                                    HgPointLight* l = hgEcsGet<HgPointLight>(&ecs, e);
                                     ImGui::DragFloat4("Color", &l->color.x, 0.01f);
                                     ImGui::TreePop();
                                 }

@@ -1914,82 +1914,82 @@ void hgTest()
         HgArena* arena = hgScratch();
         HgArenaScope arenaScope{arena};
 
-        HgEcs ecs = ecs.create(arena, 1024, 128);
-        ecs.createComponent<u32>(arena, 1024);
-        ecs.createComponent<u64>(arena, 1024);
+        HgEcs ecs = hgEcsCreate(arena, 1024, 128);
+        hgEcsRegisterType(&ecs, arena, u32, 1024);
+        hgEcsRegisterType(&ecs, arena, u64, 1024);
 
-        HgEntity e1 = ecs.spawn();
-        HgEntity e2 = ecs.spawn();
+        HgEntity e1 = hgEcsCreate(&ecs);
+        HgEntity e2 = hgEcsCreate(&ecs);
         HgEntity e3 = {};
-        hgAssert(ecs.alive(e1));
-        hgAssert(ecs.alive(e2));
-        hgAssert(!ecs.alive(e3));
+        hgAssert(hgEcsAlive(&ecs, e1));
+        hgAssert(hgEcsAlive(&ecs, e2));
+        hgAssert(!hgEcsAlive(&ecs, e3));
 
-        ecs.despawn(e1);
-        hgAssert(!ecs.alive(e1));
-        e3 = ecs.spawn();
-        hgAssert(ecs.alive(e3));
+        hgEcsDestroy(&ecs, e1);
+        hgAssert(!hgEcsAlive(&ecs, e1));
+        e3 = hgEcsCreate(&ecs);
+        hgAssert(hgEcsAlive(&ecs, e3));
         hgAssert(hgHandleIdx(e3.handle) == hgHandleIdx(e1.handle) && e3.handle.id != e1.handle.id);
 
-        e1 = ecs.spawn();
-        hgAssert(ecs.alive(e1));
+        e1 = hgEcsCreate(&ecs);
+        hgAssert(hgEcsAlive(&ecs, e1));
 
         {
-            hgAssert(!ecs.has<u32>(e1));
-            hgAssert(!ecs.has<u32>(e2));
-            hgAssert(!ecs.has<u32>(e3));
+            hgAssert(!hgEcsHas<u32>(&ecs, e1));
+            hgAssert(!hgEcsHas<u32>(&ecs, e2));
+            hgAssert(!hgEcsHas<u32>(&ecs, e3));
 
-            *ecs.add<u32>(e1) = 1;
-            hgAssert(ecs.has<u32>(e1) && *ecs.get<u32>(e1) == 1);
-            hgAssert(!ecs.has<u32>(e2));
-            hgAssert(!ecs.has<u32>(e3));
-            *ecs.add<u32>(e2) = 2;
-            hgAssert(ecs.has<u32>(e1) && *ecs.get<u32>(e1) == 1);
-            hgAssert(ecs.has<u32>(e2) && *ecs.get<u32>(e2) == 2);
-            hgAssert(!ecs.has<u32>(e3));
-            *ecs.add<u32>(e3) = 3;
-            hgAssert(ecs.has<u32>(e1) && *ecs.get<u32>(e1) == 1);
-            hgAssert(ecs.has<u32>(e2) && *ecs.get<u32>(e2) == 2);
-            hgAssert(ecs.has<u32>(e3) && *ecs.get<u32>(e3) == 3);
+            *hgEcsAdd<u32>(&ecs, e1) = 1;
+            hgAssert(hgEcsHas<u32>(&ecs, e1) && *hgEcsGet<u32>(&ecs, e1) == 1);
+            hgAssert(!hgEcsHas<u32>(&ecs, e2));
+            hgAssert(!hgEcsHas<u32>(&ecs, e3));
+            *hgEcsAdd<u32>(&ecs, e2) = 2;
+            hgAssert(hgEcsHas<u32>(&ecs, e1) && *hgEcsGet<u32>(&ecs, e1) == 1);
+            hgAssert(hgEcsHas<u32>(&ecs, e2) && *hgEcsGet<u32>(&ecs, e2) == 2);
+            hgAssert(!hgEcsHas<u32>(&ecs, e3));
+            *hgEcsAdd<u32>(&ecs, e3) = 3;
+            hgAssert(hgEcsHas<u32>(&ecs, e1) && *hgEcsGet<u32>(&ecs, e1) == 1);
+            hgAssert(hgEcsHas<u32>(&ecs, e2) && *hgEcsGet<u32>(&ecs, e2) == 2);
+            hgAssert(hgEcsHas<u32>(&ecs, e3) && *hgEcsGet<u32>(&ecs, e3) == 3);
 
-            ecs.remove<u32>(e1);
-            hgAssert(!ecs.has<u32>(e1));
-            hgAssert(ecs.has<u32>(e2) && *ecs.get<u32>(e2) == 2);
-            hgAssert(ecs.has<u32>(e3) && *ecs.get<u32>(e3) == 3);
-            ecs.remove<u32>(e2);
-            hgAssert(!ecs.has<u32>(e1));
-            hgAssert(!ecs.has<u32>(e2));
-            hgAssert(ecs.has<u32>(e3) && *ecs.get<u32>(e3) == 3);
-            ecs.remove<u32>(e3);
-            hgAssert(!ecs.has<u32>(e1));
-            hgAssert(!ecs.has<u32>(e2));
-            hgAssert(!ecs.has<u32>(e3));
+            hgEcsRemove<u32>(&ecs, e1);
+            hgAssert(!hgEcsHas<u32>(&ecs, e1));
+            hgAssert(hgEcsHas<u32>(&ecs, e2) && *hgEcsGet<u32>(&ecs, e2) == 2);
+            hgAssert(hgEcsHas<u32>(&ecs, e3) && *hgEcsGet<u32>(&ecs, e3) == 3);
+            hgEcsRemove<u32>(&ecs, e2);
+            hgAssert(!hgEcsHas<u32>(&ecs, e1));
+            hgAssert(!hgEcsHas<u32>(&ecs, e2));
+            hgAssert(hgEcsHas<u32>(&ecs, e3) && *hgEcsGet<u32>(&ecs, e3) == 3);
+            hgEcsRemove<u32>(&ecs, e3);
+            hgAssert(!hgEcsHas<u32>(&ecs, e1));
+            hgAssert(!hgEcsHas<u32>(&ecs, e2));
+            hgAssert(!hgEcsHas<u32>(&ecs, e3));
         }
 
         {
             bool hasUnknown = false;
-            ecs.forEach<u32>([&](HgEntity, u32*)
+            hgEcsForEach<u32>(&ecs, [&](HgEntity, u32*)
             {
                 hasUnknown = true;
             });
             hgAssert(!hasUnknown);
 
-            hgAssert(ecs.count<u32>() == 0);
-            hgAssert(ecs.count<u64>() == 0);
+            hgAssert(hgEcsCount<u32>(&ecs) == 0);
+            hgAssert(hgEcsCount<u64>(&ecs) == 0);
         }
 
         {
-            *ecs.add<u32>(e1) = 12;
-            *ecs.add<u32>(e2) = 42;
-            *ecs.add<u32>(e3) = 100;
-            hgAssert(ecs.count<u32>() == 3);
-            hgAssert(ecs.count<u64>() == 0);
+            *hgEcsAdd<u32>(&ecs, e1) = 12;
+            *hgEcsAdd<u32>(&ecs, e2) = 42;
+            *hgEcsAdd<u32>(&ecs, e3) = 100;
+            hgAssert(hgEcsCount<u32>(&ecs) == 3);
+            hgAssert(hgEcsCount<u64>(&ecs) == 0);
 
             bool hasUnknown = false;
             bool has12 = false;
             bool has42 = false;
             bool has100 = false;
-            ecs.forEach<u32>([&](HgEntity e, u32* c)
+            hgEcsForEach<u32>(&ecs, [&](HgEntity e, u32* c)
             {
                 switch (*c)
                 {
@@ -2014,10 +2014,10 @@ void hgTest()
         }
 
         {
-            *ecs.add<u64>(e2) = 2042;
-            *ecs.add<u64>(e3) = 2100;
-            hgAssert(ecs.count<u32>() == 3);
-            hgAssert(ecs.count<u64>() == 2);
+            *hgEcsAdd<u64>(&ecs, e2) = 2042;
+            *hgEcsAdd<u64>(&ecs, e3) = 2100;
+            hgAssert(hgEcsCount<u32>(&ecs) == 3);
+            hgAssert(hgEcsCount<u64>(&ecs) == 2);
 
             bool hasUnknown = false;
             bool has12 = false;
@@ -2025,7 +2025,7 @@ void hgTest()
             bool has100 = false;
             bool has2042 = false;
             bool has2100 = false;
-            ecs.forEach<u32, u64>([&](HgEntity e, u32* comp32, u64* comp64)
+            hgEcsForEach<u32, u64>(&ecs, [&](HgEntity e, u32* comp32, u64* comp64)
             {
                 switch (*comp32)
                 {
@@ -2064,15 +2064,15 @@ void hgTest()
         }
 
         {
-            ecs.despawn(e1);
-            hgAssert(ecs.count<u32>() == 2);
-            hgAssert(ecs.count<u64>() == 2);
+            hgEcsDestroy(&ecs, e1);
+            hgAssert(hgEcsCount<u32>(&ecs) == 2);
+            hgAssert(hgEcsCount<u64>(&ecs) == 2);
 
             bool hasUnknown = false;
             bool has12 = false;
             bool has42 = false;
             bool has100 = false;
-            ecs.forEach<u32>([&](HgEntity e, u32* c)
+            hgEcsForEach<u32>(&ecs, [&](HgEntity e, u32* c)
             {
                 switch (*c)
                 {
@@ -2097,67 +2097,67 @@ void hgTest()
         }
 
         {
-            ecs.despawn(e2);
-            hgAssert(ecs.count<u32>() == 1);
-            hgAssert(ecs.count<u64>() == 1);
+            hgEcsDestroy(&ecs, e2);
+            hgAssert(hgEcsCount<u32>(&ecs) == 1);
+            hgAssert(hgEcsCount<u64>(&ecs) == 1);
         }
 
-        ecs.reset();
-        hgAssert(ecs.count<u32>() == 0);
-        hgAssert(ecs.count<u64>() == 0);
+        hgEcsReset(&ecs);
+        hgAssert(hgEcsCount<u32>(&ecs) == 0);
+        hgAssert(hgEcsCount<u64>(&ecs) == 0);
 
         {
             for (u32 i = 0; i < 300; ++i)
             {
-                HgEntity e = ecs.spawn();
+                HgEntity e = hgEcsCreate(&ecs);
                 switch (i % 3)
                 {
                     case 0:
-                        *ecs.add<u32>(e) = 12;
-                        *ecs.add<u64>(e) = 42;
+                        *hgEcsAdd<u32>(&ecs, e) = 12;
+                        *hgEcsAdd<u64>(&ecs, e) = 42;
                         break;
                     case 1:
-                        *ecs.add<u32>(e) = 12;
+                        *hgEcsAdd<u32>(&ecs, e) = 12;
                         break;
                     case 2:
-                        *ecs.add<u64>(e) = 42;
+                        *hgEcsAdd<u64>(&ecs, e) = 42;
                         break;
                 }
             }
 
             bool success;
-            ecs.forPar<u32>([&](HgEntity, u32* c)
+            hgEcsForPar<u32>(&ecs, [&](HgEntity, u32* c)
             {
                 *c += 4;
             });
             success = true;
-            ecs.forEach<u32>([&](HgEntity, u32* c)
+            hgEcsForEach<u32>(&ecs, [&](HgEntity, u32* c)
             {
                 if (*c != 16)
                     success = false;
             });
             hgAssert(success);
 
-            ecs.forPar<u64>([&](HgEntity, u64* c)
+            hgEcsForPar<u64>(&ecs, [&](HgEntity, u64* c)
             {
                 *c += 3;
             });
             success = true;
-            ecs.forEach<u64>([&](HgEntity, u64* c)
+            hgEcsForEach<u64>(&ecs, [&](HgEntity, u64* c)
             {
                 if (*c != 45)
                     success = false;
             });
             hgAssert(success);
 
-            ecs.forPar<u32, u64>([&](HgEntity, u32* c32, u64* c64)
+            hgEcsForPar<u32, u64>(&ecs, [&](HgEntity, u32* c32, u64* c64)
             {
                 *c64 -= *c32;
             });
             success = true;
-            ecs.forEach<u64>([&](HgEntity e, u64* c)
+            hgEcsForEach<u64>(&ecs, [&](HgEntity e, u64* c)
             {
-                if (ecs.has<u32>(e))
+                if (hgEcsHas<u32>(&ecs, e))
                 {
                     if (*c != 29)
                         success = false;
@@ -2169,42 +2169,42 @@ void hgTest()
             hgAssert(success);
         }
 
-        ecs.reset();
+        hgEcsReset(&ecs);
 
         auto comparison = [](void*, HgEcs* ecs, HgEntity lhs, HgEntity rhs)
         {
-            return *ecs->get<u32>(lhs) < *ecs->get<u32>(rhs);
+            return *hgEcsGet<u32>(ecs, lhs) < *hgEcsGet<u32>(ecs, rhs);
         };
 
         {
-            *ecs.add<u32>(ecs.spawn()) = 42;
+            *hgEcsAdd<u32>(&ecs, hgEcsCreate(&ecs)) = 42;
 
-            ecs.sort<u32>(nullptr, comparison);
+            hgEcsSort<u32>(&ecs, nullptr, comparison);
 
             bool success = true;
-            ecs.forEach<u32>([&](HgEntity, u32* c)
+            hgEcsForEach<u32>(&ecs, [&](HgEntity, u32* c)
             {
                 if (*c != 42)
                     success = false;
             });
             hgAssert(success);
 
-            ecs.reset();
+            hgEcsReset(&ecs);
         }
 
         {
             u32 smallScramble1[]{1, 0};
             for (u32 i = 0; i < sizeof(smallScramble1) / sizeof(*smallScramble1); ++i)
             {
-                *ecs.add<u32>(ecs.spawn()) = smallScramble1[i];
+                *hgEcsAdd<u32>(&ecs, hgEcsCreate(&ecs)) = smallScramble1[i];
             }
 
             {
-                ecs.sort<u32>(nullptr, comparison);
+                hgEcsSort<u32>(&ecs, nullptr, comparison);
 
                 bool success = true;
                 u32 elem = 0;
-                ecs.forEach<u32>([&](HgEntity, u32* c)
+                hgEcsForEach<u32>(&ecs, [&](HgEntity, u32* c)
                 {
                     if (*c != elem)
                         success = false;
@@ -2214,11 +2214,11 @@ void hgTest()
             }
 
             {
-                ecs.sort<u32>(nullptr, comparison);
+                hgEcsSort<u32>(&ecs, nullptr, comparison);
 
                 bool success = true;
                 u32 elem = 0;
-                ecs.forEach<u32>([&](HgEntity, u32* c)
+                hgEcsForEach<u32>(&ecs, [&](HgEntity, u32* c)
                 {
                     if (*c != elem)
                         success = false;
@@ -2227,20 +2227,20 @@ void hgTest()
                 hgAssert(success);
             }
 
-            ecs.reset();
+            hgEcsReset(&ecs);
         }
 
         {
             u32 mediumScramble1[]{8, 9, 1, 6, 0, 3, 7, 2, 5, 4};
             for (u32 i = 0; i < sizeof(mediumScramble1) / sizeof(*mediumScramble1); ++i)
             {
-                *ecs.add<u32>(ecs.spawn()) = mediumScramble1[i];
+                *hgEcsAdd<u32>(&ecs, hgEcsCreate(&ecs)) = mediumScramble1[i];
             }
-            ecs.sort<u32>(nullptr, comparison);
+            hgEcsSort<u32>(&ecs, nullptr, comparison);
 
             bool success = true;
             u32 elem = 0;
-            ecs.forEach<u32>([&](HgEntity, u32* c)
+            hgEcsForEach<u32>(&ecs, [&](HgEntity, u32* c)
             {
                 if (*c != elem)
                     success = false;
@@ -2248,21 +2248,21 @@ void hgTest()
             });
             hgAssert(success);
 
-            ecs.reset();
+            hgEcsReset(&ecs);
         }
 
         {
             u32 mediumScramble2[]{3, 9, 7, 6, 8, 5, 0, 1, 2, 4};
             for (u32 i = 0; i < sizeof(mediumScramble2) / sizeof(*mediumScramble2); ++i)
             {
-                *ecs.add<u32>(ecs.spawn()) = mediumScramble2[i];
+                *hgEcsAdd<u32>(&ecs, hgEcsCreate(&ecs)) = mediumScramble2[i];
             }
-            ecs.sort<u32>(nullptr, comparison);
-            ecs.sort<u32>(nullptr, comparison);
+            hgEcsSort<u32>(&ecs, nullptr, comparison);
+            hgEcsSort<u32>(&ecs, nullptr, comparison);
 
             bool success = true;
             u32 elem = 0;
-            ecs.forEach<u32>([&](HgEntity, u32* c)
+            hgEcsForEach<u32>(&ecs, [&](HgEntity, u32* c)
             {
                 if (*c != elem)
                     success = false;
@@ -2270,19 +2270,19 @@ void hgTest()
             });
             hgAssert(success);
 
-            ecs.reset();
+            hgEcsReset(&ecs);
         }
 
         {
             for (u32 i = 127; i < 128; --i)
             {
-                *ecs.add<u32>(ecs.spawn()) = i;
+                *hgEcsAdd<u32>(&ecs, hgEcsCreate(&ecs)) = i;
             }
-            ecs.sort<u32>(nullptr, comparison);
+            hgEcsSort<u32>(&ecs, nullptr, comparison);
 
             bool success = true;
             u32 elem = 0;
-            ecs.forEach<u32>([&](HgEntity, u32* c)
+            hgEcsForEach<u32>(&ecs, [&](HgEntity, u32* c)
             {
                 if (*c != elem)
                     success = false;
@@ -2290,20 +2290,20 @@ void hgTest()
             });
             hgAssert(success);
 
-            ecs.reset();
+            hgEcsReset(&ecs);
         }
 
         {
             for (u32 i = 127; i < 128; --i)
             {
-                *ecs.add<u32>(ecs.spawn()) = i / 2;
+                *hgEcsAdd<u32>(&ecs, hgEcsCreate(&ecs)) = i / 2;
             }
-            ecs.sort<u32>(nullptr, comparison);
-            ecs.sort<u32>(nullptr, comparison);
+            hgEcsSort<u32>(&ecs, nullptr, comparison);
+            hgEcsSort<u32>(&ecs, nullptr, comparison);
 
             bool success = true;
             u32 elem = 0;
-            ecs.forEach<u32>([&](HgEntity, u32* c)
+            hgEcsForEach<u32>(&ecs, [&](HgEntity, u32* c)
             {
                 if (*c != elem / 2)
                     success = false;
@@ -2311,7 +2311,7 @@ void hgTest()
             });
             hgAssert(success);
 
-            ecs.reset();
+            hgEcsReset(&ecs);
         }
     }
 

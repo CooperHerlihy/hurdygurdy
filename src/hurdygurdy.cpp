@@ -2418,136 +2418,88 @@ void hgAssetUnloadImpl<HgGpuMesh>(HgAssetData<HgGpuMesh>* data)
     hgGpuBufferDestroy(data->asset.indexBuffer);
 }
 
-namespace {
-    struct ComponentArr {
-        u32* widths;
-        u32 capacity;
-        u32 count;
-
-        ComponentArr(u32 initCount)
-        {
-            widths = (u32*)malloc(initCount * sizeof(u32));
-            capacity = initCount;
-            count = 0;
-        }
-
-        ~ComponentArr() {
-            free(widths);
-        }
-
-        void push(u32 width)
-        {
-            if (capacity == count)
-            {
-                u32 newCapacity = capacity == 0 ? 1 : capacity * 2;
-                widths = (u32*)realloc(widths, newCapacity);
-                capacity = newCapacity;
-            }
-            widths[count++] = width;
-        }
-    };
-}
-
-ComponentArr& componentArr()
-{
-    static ComponentArr components{1024};
-    return components;
-}
-
-static u32 componentWidth(u32 id)
-{
-    return componentArr().widths[id];
-}
-
-u32 hgCreateComponentID(u32 width)
-{
-    u32 id = componentArr().count;
-    componentArr().push(width);
-    return id;
-}
-
-HgEcs HgEcs::create(HgArena* arena, u32 maxEntities, u32 maxComponentTypes)
+HgEcs hgEcsCreate(HgArena* arena, u32 maxEntities, u32 maxComponentTypes)
 {
     HgEcs ecs{};
-
     ecs.entityPool = hgPoolCreate<void>(arena, maxEntities);
-    ecs.systems = hgMapCreate<u32, System>(arena, maxComponentTypes + 1);
-    ecs.reset();
-
+    ecs.systems = hgMapCreate<u64, HgComponent>(arena, maxComponentTypes + 1);
+    hgEcsReset(&ecs);
     return ecs;
 }
 
-void HgEcs::createComponent(HgArena* arena, u32 maxCount, u32 width, u32 align, u32 componentID)
+void hgEcsRegisterComponent(HgEcs* ecs, HgArena* arena, u64 id, HgStringView name, u32 width, u32 align, u32 maxCount)
 {
-    hgAssert(hgMapGet(&systems, componentID) == nullptr);
-    System* system = hgMapAdd(&systems, componentID, {});
+    hgAssert(hgMapGet(&ecs->systems, id) == nullptr);
+    HgComponent* system = hgMapAdd(&ecs->systems, id, {});
 
-    system->indices = hgAlloc<u32>(arena, entityPool.capacity);
+    system->name = name;
+    system->indices = hgAlloc<u32>(arena, ecs->entityPool.capacity);
     system->entities = hgAlloc<HgEntity>(arena, maxCount);
     system->components = hgAlloc(arena, maxCount * width, align);
+    system->width = width;
     system->count = 0;
     system->capacity = maxCount;
 
-    memset(system->indices, -1, entityPool.capacity * sizeof(*system->indices));
+    memset(system->indices, -1, ecs->entityPool.capacity * sizeof(*system->indices));
 }
 
-void HgEcs::reset()
+void hgEcsReset(HgEcs* ecs)
 {
-    for (u32 i = 0; i < systems.capacity; ++i)
+    for (u32 i = 0; i < ecs->systems.capacity; ++i)
     {
-        if (systems.hasVal[i])
+        if (ecs->systems.hasVal[i])
         {
-            memset(systems.vals[i].indices, -1, entityPool.capacity * sizeof(*systems.vals[i].indices));
-            systems.vals[i].count = 0;
+            memset(ecs->systems.vals[i].indices, -1, ecs->entityPool.capacity * sizeof(*ecs->systems.vals[i].indices));
+            ecs->systems.vals[i].count = 0;
         }
     }
 
-    hgPoolReset(&entityPool);
+    hgPoolReset(&ecs->entityPool);
 }
 
-HgEntity HgEcs::spawn()
+HgEntity hgEcsCreate(HgEcs* ecs)
 {
-    return {hgPoolAlloc(&entityPool)};
+    return {hgPoolAlloc(&ecs->entityPool)};
 }
 
-void HgEcs::despawn(HgEntity e)
+void hgEcsDestroy(HgEcs* ecs, HgEntity e)
 {
-    hgAssert(alive(e));
+    hgAssert(hgEcsAlive(ecs, e));
 
-    for (u32 i = 0; i < systems.capacity; ++i)
+    for (u32 i = 0; i < ecs->systems.capacity; ++i)
     {
-        if (systems.hasVal[i] && has(e, systems.keys[i]))
-            remove(e, systems.keys[i]);
+        if (ecs->systems.hasVal[i] && hgEcsHas(ecs, e, ecs->systems.keys[i]))
+            hgEcsRemove(ecs, e, ecs->systems.keys[i]);
     }
-    hgPoolFree(&entityPool, e.handle);
+    hgPoolFree(&ecs->entityPool, e.handle);
 }
 
-bool HgEcs::alive(HgEntity e)
+bool hgEcsAlive(HgEcs* ecs, HgEntity e)
 {
-    return hgPoolAlive(&entityPool, e.handle);
+    return hgPoolAlive(&ecs->entityPool, e.handle);
 }
 
-void* HgEcs::add(HgEntity e, u32 componentID)
+void* hgEcsAdd(HgEcs* ecs, HgEntity e, u64 componentId)
 {
-    hgAssert(alive(e));
-    hgAssert(!has(e, componentID));
+    hgAssert(hgEcsAlive(ecs, e));
+    hgAssert(!hgEcsHas(ecs, e, componentId));
 
-    System* system = hgMapGet(&systems, componentID);
+    HgComponent* system = hgMapGet(&ecs->systems, componentId);
     hgAssert(system != nullptr);
 
     system->indices[hgHandleIdx(e.handle)] = system->count;
     system->entities[system->count] = e;
-    void* c = (u8*)system->components + componentWidth(componentID) * system->count;
+    void* c = (u8*)system->components + system->width * system->count;
     ++system->count;
     return c;
 }
 
-void HgEcs::remove(HgEntity e, u32 componentID)
+void hgEcsRemove(HgEcs* ecs, HgEntity e, u64 componentId)
 {
-    hgAssert(alive(e));
-    hgAssert(has(e, componentID));
+    hgAssert(hgEcsAlive(ecs, e));
+    hgAssert(hgEcsHas(ecs, e, componentId));
 
-    System* system = hgMapGet(&systems, componentID);
+    HgComponent* system = hgMapGet(&ecs->systems, componentId);
     hgAssert(system != nullptr);
 
     HgEntity last = system->entities[system->count - 1];
@@ -2558,52 +2510,70 @@ void HgEcs::remove(HgEntity e, u32 componentID)
         system->entities[idx] = last;
         system->indices[hgHandleIdx(last.handle)] = idx;
         memcpy(
-            (u8*)system->components + componentWidth(componentID) * idx,
-            (u8*)system->components + componentWidth(componentID) * (system->count - 1),
-            componentWidth(componentID));
+            (u8*)system->components + system->width * idx,
+            (u8*)system->components + system->width * (system->count - 1),
+            system->width);
     }
     system->indices[hgHandleIdx(e.handle)] = (u32)-1;
     --system->count;
 }
 
-bool HgEcs::has(HgEntity e, u32 componentID)
+bool hgEcsHas(HgEcs* ecs, HgEntity e, u64 componentId)
 {
-    hgAssert(alive(e));
+    hgAssert(hgEcsAlive(ecs, e));
 
-    System* system = hgMapGet(&systems, componentID);
+    HgComponent* system = hgMapGet(&ecs->systems, componentId);
     hgAssert(system != nullptr);
 
     return system->indices[hgHandleIdx(e.handle)] < system->count;
 }
 
-void* HgEcs::get(HgEntity e, u32 componentID)
+void* hgEcsGet(HgEcs* ecs, HgEntity e, u64 componentId)
 {
-    hgAssert(alive(e));
+    hgAssert(hgEcsAlive(ecs, e));
 
-    System* system = hgMapGet(&systems, componentID);
+    HgComponent* system = hgMapGet(&ecs->systems, componentId);
     hgAssert(system != nullptr);
 
-    return (u8*)system->components + componentWidth(componentID) * system->indices[hgHandleIdx(e.handle)];
+    return (u8*)system->components + system->width * system->indices[hgHandleIdx(e.handle)];
 }
 
-HgEntity HgEcs::get(const void* component, u32 componentID)
+HgEntity hgEcsGetEntity(HgEcs* ecs, const void* component, u64 componentId)
 {
     hgAssert(component != nullptr);
 
-    System* system = hgMapGet(&systems, componentID);
+    HgComponent* system = hgMapGet(&ecs->systems, componentId);
     hgAssert(system != nullptr);
 
-    return system->entities[(u32)((uptr)component - (uptr)system->components) / componentWidth(componentID)];
+    return system->entities[(u32)((uptr)component - (uptr)system->components) / system->width];
 }
 
-u32 HgEcs::findSmallest(u32* ids, u32 idCount)
+HgEntity* hgEcsEntities(HgEcs* ecs, u64 componentId)
+{
+    hgAssert(hgMapGet(&ecs->systems, componentId) != nullptr);
+    return hgMapGet(&ecs->systems, componentId)->entities;
+}
+
+void* hgEcsComponents(HgEcs* ecs, u64 componentId)
+{
+    hgAssert(hgMapGet(&ecs->systems, componentId) != nullptr);
+    return hgMapGet(&ecs->systems, componentId)->components;
+}
+
+u32 hgEcsCount(HgEcs* ecs, u64 componentId)
+{
+    hgAssert(hgMapGet(&ecs->systems, componentId) != nullptr);
+    return hgMapGet(&ecs->systems, componentId)->count;
+}
+
+u64 hgEcsFindSmallest(HgEcs* ecs, u64* ids, u32 idCount)
 {
     u32 smallestCount = (u32)-1;
-    u32 smallest = ids[0];
+    u64 smallest = ids[0];
 
     for (u32 i = 1; i < idCount; ++i)
     {
-        System* system = hgMapGet(&systems, ids[i]);
+        HgComponent* system = hgMapGet(&ecs->systems, ids[i]);
         hgAssert(system != nullptr);
 
         if (system->count < smallestCount)
@@ -2615,9 +2585,9 @@ u32 HgEcs::findSmallest(u32* ids, u32 idCount)
     return smallest;
 }
 
-static void swapIdxLocation(HgEcs* ecs, u32 lhs, u32 rhs, u32 componentID)
+static void swapIdxLocation(HgEcs* ecs, u32 lhs, u32 rhs, u64 componentId)
 {
-    HgEcs::System* system = hgMapGet(&ecs->systems, componentID);
+    HgComponent* system = hgMapGet(&ecs->systems, componentId);
     hgAssert(system != nullptr);
 
     hgAssert(lhs < system->count);
@@ -2626,10 +2596,10 @@ static void swapIdxLocation(HgEcs* ecs, u32 lhs, u32 rhs, u32 componentID)
     HgEntity lhsEntity = system->entities[lhs];
     HgEntity rhsEntity = system->entities[rhs];
 
-    hgAssert(ecs->alive(lhsEntity));
-    hgAssert(ecs->alive(rhsEntity));
-    hgAssert(ecs->has(lhsEntity, componentID));
-    hgAssert(ecs->has(rhsEntity, componentID));
+    hgAssert(hgEcsAlive(ecs, lhsEntity));
+    hgAssert(hgEcsAlive(ecs, rhsEntity));
+    hgAssert(hgEcsHas(ecs, lhsEntity, componentId));
+    hgAssert(hgEcsHas(ecs, rhsEntity, componentId));
 
     HgArena* scratch = hgScratch();
     HgArenaScope scratchScope{scratch};
@@ -2639,18 +2609,26 @@ static void swapIdxLocation(HgEcs* ecs, u32 lhs, u32 rhs, u32 componentID)
     system->indices[hgHandleIdx(lhsEntity.handle)] = rhs;
     system->indices[hgHandleIdx(rhsEntity.handle)] = lhs;
 
-    u32 width = componentWidth(componentID);
-    void* temp = hgAlloc(scratch, componentWidth(componentID), 1);
-    memcpy(temp, (u8*)system->components + width * lhs, width);
-    memcpy((u8*)system->components + width * lhs, (u8*)system->components + width * rhs, width);
-    memcpy((u8*)system->components + width * rhs, temp, width);
+    void* temp = hgAlloc(scratch, system->width, 1);
+    memcpy(
+        temp,
+        (u8*)system->components + system->width * lhs,
+        system->width);
+    memcpy(
+        (u8*)system->components + system->width * lhs,
+        (u8*)system->components + system->width * rhs,
+        system->width);
+    memcpy(
+        (u8*)system->components + system->width * rhs,
+        temp,
+        system->width);
 }
 
 namespace {
     struct QuicksortData {
         HgEcs* ecs;
-        HgEcs::System* system;
-        u32 comp;
+        HgComponent* system;
+        u64 comp;
         void* data;
         bool (*compare)(void*, HgEcs* ecs, HgEntity lhs, HgEntity rhs);
 
@@ -2692,17 +2670,18 @@ namespace {
     };
 }
 
-void HgEcs::sort(
-    u32 componentID,
+void hgEcsSort(
+    HgEcs* ecs,
+    u64 componentId,
     void* data,
     bool (*compare)(void*, HgEcs* ecs, HgEntity lhs, HgEntity rhs))
 {
     hgAssert(compare != nullptr);
 
-    HgEcs::System* system = hgMapGet(&systems, componentID);
+    HgComponent* system = hgMapGet(&ecs->systems, componentId);
     hgAssert(system != nullptr);
 
-    QuicksortData q{this, system, componentID, data, compare};
+    QuicksortData q{ecs, system, componentId, data, compare};
     q.quicksort(0, system->count);
 }
 
@@ -2710,9 +2689,9 @@ void hgNodeAddChild(HgEcs* ecs, HgEntity parent, HgEntity child)
 {
     hgAssert(ecs != nullptr);
 
-    HgNode* node = ecs->get<HgNode>(parent);
-    HgNode* oldFirst = ecs->get<HgNode>(node->firstChild);
-    HgNode* newFirst = ecs->get<HgNode>(child);
+    HgNode* node = hgEcsGet<HgNode>(ecs, parent);
+    HgNode* oldFirst = hgEcsGet<HgNode>(ecs, node->firstChild);
+    HgNode* newFirst = hgEcsGet<HgNode>(ecs, child);
 
     hgAssert(newFirst->parent.handle.id == HgEntity{}.handle.id);
     hgAssert(newFirst->prevSibling.handle.id == HgEntity{}.handle.id);
@@ -2729,19 +2708,19 @@ void hgNodeDetach(HgEcs* ecs, HgEntity e)
 {
     hgAssert(ecs != nullptr);
 
-    HgNode* node = ecs->get<HgNode>(e);
+    HgNode* node = hgEcsGet<HgNode>(ecs, e);
     if (node->parent.handle.id != HgEntity{}.handle.id)
     {
         if (node->prevSibling.handle.id == HgEntity{}.handle.id)
-            ecs->get<HgNode>(node->parent)->firstChild = node->nextSibling;
+            hgEcsGet<HgNode>(ecs, node->parent)->firstChild = node->nextSibling;
         else
-            ecs->get<HgNode>(node->prevSibling)->nextSibling = node->nextSibling;
-        ecs->get<HgNode>(node->nextSibling)->prevSibling = node->prevSibling;
+            hgEcsGet<HgNode>(ecs, node->prevSibling)->nextSibling = node->nextSibling;
+        hgEcsGet<HgNode>(ecs, node->nextSibling)->prevSibling = node->prevSibling;
 
         HgEntity child = node->firstChild;
         while (child.handle.id != HgEntity{}.handle.id)
         {
-            HgNode* tf = ecs->get<HgNode>(child);
+            HgNode* tf = hgEcsGet<HgNode>(ecs, child);
             HgEntity next = tf->nextSibling;
             tf->parent = HgEntity{};
             tf->nextSibling = HgEntity{};
@@ -2755,7 +2734,7 @@ void hgNodeDetach(HgEcs* ecs, HgEntity e)
         HgEntity child = node->firstChild;
         while (child.handle.id != HgEntity{}.handle.id)
         {
-            HgNode* tf = ecs->get<HgNode>(child);
+            HgNode* tf = hgEcsGet<HgNode>(ecs, child);
             child = tf->nextSibling;
             tf->parent = HgEntity{};
             tf->nextSibling = HgEntity{};
@@ -2769,11 +2748,11 @@ void hgNodeDestroy(HgEcs* ecs, HgEntity e)
 {
     hgAssert(ecs != nullptr);
 
-    HgNode* node = ecs->get<HgNode>(e);
+    HgNode* node = hgEcsGet<HgNode>(ecs, e);
     HgEntity child = node->firstChild;
     while (child.handle.id != HgEntity{}.handle.id)
     {
-        HgNode* tf = ecs->get<HgNode>(child);
+        HgNode* tf = hgEcsGet<HgNode>(ecs, child);
         HgEntity next = tf->nextSibling;
         tf->parent = HgEntity{};
         tf->prevSibling = HgEntity{};
@@ -2784,28 +2763,28 @@ void hgNodeDestroy(HgEcs* ecs, HgEntity e)
     if (node->parent.handle.id != HgEntity{}.handle.id)
     {
         if (node->prevSibling.handle.id != HgEntity{}.handle.id)
-            ecs->get<HgNode>(node->prevSibling)->nextSibling = node->nextSibling;
+            hgEcsGet<HgNode>(ecs, node->prevSibling)->nextSibling = node->nextSibling;
         else
-            ecs->get<HgNode>(node->parent)->firstChild = node->nextSibling;
+            hgEcsGet<HgNode>(ecs, node->parent)->firstChild = node->nextSibling;
         if (node->nextSibling.handle.id != HgEntity{}.handle.id)
-            ecs->get<HgNode>(node->nextSibling)->prevSibling = HgEntity{};
+            hgEcsGet<HgNode>(ecs, node->nextSibling)->prevSibling = HgEntity{};
     }
-    ecs->despawn(e);
+    hgEcsDestroy(ecs, e);
 }
 
 void hgTransformSet(HgEcs* ecs, HgEntity e, const HgVec3& pos, const HgVec3& scale, const HgQuat& rot)
 {
     hgAssert(ecs != nullptr);
 
-    HgTransform* tf = ecs->get<HgTransform>(e);
-    if (ecs->has<HgNode>(e))
+    HgTransform* tf = hgEcsGet<HgTransform>(ecs, e);
+    if (hgEcsHas<HgNode>(ecs, e))
     {
-        HgNode* node = ecs->get<HgNode>(e);
+        HgNode* node = hgEcsGet<HgNode>(ecs, e);
         HgEntity child = node->firstChild;
         while (child.handle.id != HgEntity{}.handle.id)
         {
-            HgNode* cNode = ecs->get<HgNode>(child);
-            HgTransform* cTf = ecs->get<HgTransform>(child);
+            HgNode* cNode = hgEcsGet<HgNode>(ecs, child);
+            HgTransform* cTf = hgEcsGet<HgTransform>(ecs, child);
             HgTransform rel;
             rel.position = cTf->position - tf->position;
             rel.scale = cTf->scale / tf->scale;
@@ -2826,7 +2805,7 @@ void hgTransformMove(HgEcs* ecs, HgEntity e, const HgVec3& dpos, const HgVec3& d
 {
     hgAssert(ecs != nullptr);
 
-    HgTransform* tf = ecs->get<HgTransform>(e);
+    HgTransform* tf = hgEcsGet<HgTransform>(ecs, e);
     hgTransformSet(ecs, e, tf->position + dpos, tf->scale * dscale, drot * tf->rotation);
 }
 
@@ -2856,9 +2835,9 @@ void hgCameraDestroy(HgCamera* camera)
 
 void hgCameraUpdate(HgEcs* ecs, HgEntity e)
 {
-    hgAssert(ecs->has<HgTransform>(e));
-    HgTransform* transform = ecs->get<HgTransform>(e);
-    HgCamera* camera = ecs->get<HgCamera>(e);
+    hgAssert(hgEcsHas<HgTransform>(ecs, e));
+    HgTransform* transform = hgEcsGet<HgTransform>(ecs, e);
+    HgCamera* camera = hgEcsGet<HgCamera>(ecs, e);
     hgAssert(camera->type == HgCameraType_perspective || camera->type == HgCameraType_orthographic);
 
     VPUniform vp;
@@ -2978,7 +2957,7 @@ void hgSpritesDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 
     hgGpuBindPipeline(cmd, spritePipeline.pipeline);
 
-    ecs->forEach<HgSprite, HgTransform>([&](HgEntity, HgSprite* sprite, HgTransform* transform)
+    hgEcsForEach<HgSprite, HgTransform>(ecs, [&](HgEntity, HgSprite* sprite, HgTransform* transform)
     {
         HgGpuTexture* texture = hgHandleIsNull(sprite->texture.handle)
             ? &spritePipeline.defaultTex
@@ -2988,7 +2967,7 @@ void hgSpritesDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
         push.model = hgMatModel3D(transform->position, transform->scale, transform->rotation);
         push.uvPos = sprite->uvPos;
         push.uvSize = sprite->uvSize;
-        push.vpIdx = hgGpuDescriptorIdx(ecs->get<HgCamera>(camera)->vpDesc);
+        push.vpIdx = hgGpuDescriptorIdx(hgEcsGet<HgCamera>(ecs, camera)->vpDesc);
         push.texIdx = hgGpuDescriptorIdx(texture->descriptor);
 
         hgGpuPushConstants(cmd, spritePipeline.pipeline, 0, &push, sizeof(push));
@@ -3044,7 +3023,7 @@ void hgSkyboxInit(HgFormat colorFormat, HgFormat depthFormat)
     Color top = {0x00, 0x22, 0x44, 0xff};
     Color mid = {0x00, 0x11, 0x33, 0xff};
     Color bot = {0x00, 0x00, 0x00, 0xff};
-    Color nul = {0x00, 0x00, 0x00, 0x00};
+    Color nul = {};
     Color defaultColors[]{
         nul, top, nul, nul,
         mid, mid, mid, mid,
@@ -3092,14 +3071,14 @@ void hgSkyboxDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 {
     hgGpuBindPipeline(cmd, skyboxPipeline.pipeline);
 
-    ecs->forEach<HgSkybox>([&](HgEntity, HgSkybox* skybox)
+    hgEcsForEach<HgSkybox>(ecs, [&](HgEntity, HgSkybox* skybox)
     {
         HgGpuTexture* texture = hgHandleIsNull(skybox->texture.handle)
             ? &skyboxPipeline.defaultTex
             : hgAssetGet(skybox->texture);
 
         SkyboxPipelinePush push{};
-        push.vpIdx = hgGpuDescriptorIdx(ecs->get<HgCamera>(camera)->vpDesc);
+        push.vpIdx = hgGpuDescriptorIdx(hgEcsGet<HgCamera>(ecs, camera)->vpDesc);
         push.texIdx = hgGpuDescriptorIdx(texture->descriptor);
 
         hgGpuPushConstants(cmd, skyboxPipeline.pipeline, 0, &push, sizeof(push));
@@ -3343,13 +3322,13 @@ void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
     HgArena* scratch = hgScratch();
     HgArenaScope scratchScope{scratch};
 
-    HgCamera* cameraC = ecs->get<HgCamera>(camera);
-    HgTransform* cameraTf = ecs->get<HgTransform>(camera);
+    HgCamera* cameraC = hgEcsGet<HgCamera>(ecs, camera);
+    HgTransform* cameraTf = hgEcsGet<HgTransform>(ecs, camera);
 
     HgMat4 view = hgMatView(cameraTf->position, cameraTf->scale, cameraTf->rotation);
 
-    u32 dirLightCount = ecs->count<HgDirLight>();
-    u32 pointLightCount = ecs->count<HgPointLight>();
+    u32 dirLightCount = hgEcsCount<HgDirLight>(ecs);
+    u32 pointLightCount = hgEcsCount<HgPointLight>(ecs);
 
     if (dirLightCount > modelPipeline.dirLightCapacity)
     {
@@ -3395,7 +3374,7 @@ void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
     ModelPipelinePointLightData* pointLights = hgAlloc<ModelPipelinePointLightData>(scratch, pointLightCount);
 
     u32 i = 0;
-    ecs->forEach<HgDirLight>([&](HgEntity, HgDirLight* light)
+    hgEcsForEach<HgDirLight>(ecs, [&](HgEntity, HgDirLight* light)
     {
         dirLights[i].dir = HgVec4{HgMat3{view} * light->dir, 0.0};
         dirLights[i].color = light->color;
@@ -3403,7 +3382,7 @@ void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
     });
 
     i = 0;
-    ecs->forEach<HgPointLight, HgTransform>([&](HgEntity, HgPointLight* light, HgTransform* transform)
+    hgEcsForEach<HgPointLight, HgTransform>(ecs, [&](HgEntity, HgPointLight* light, HgTransform* transform)
     {
         pointLights[i].pos = view * HgVec4{transform->position, 1.0};
         pointLights[i].color = light->color;
@@ -3418,7 +3397,7 @@ void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 
     hgGpuBindPipeline(cmd, modelPipeline.pipeline);
 
-    ecs->forEach<HgModel, HgTransform>([&](HgEntity, HgModel* model, HgTransform* transform)
+    hgEcsForEach<HgModel, HgTransform>(ecs, [&](HgEntity, HgModel* model, HgTransform* transform)
     {
         HgGpuTexture* colorMap = hgHandleIsNull(model->colorMap.handle)
             ? &modelPipeline.defaultColorMap

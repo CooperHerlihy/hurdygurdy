@@ -24,18 +24,18 @@ int main()
     hgSpritesInit(hgWindowImageFormat(window), HgFormat_d32_sfloat);
     hgDefer(hgSpritesDeinit());
 
-    HgEcs ecs = ecs.create(arena, 128, 128);
-    ecs.createComponent<HgTransform>(arena, 128);
-    ecs.createComponent<HgCamera>(arena, 8);
-    ecs.createComponent<HgSprite>(arena, 128);
+    HgEcs ecs = hgEcsCreate(arena, 128, 128);
+    hgEcsRegisterType(&ecs, arena, HgTransform, 128);
+    hgEcsRegisterType(&ecs, arena, HgCamera, 8);
+    hgEcsRegisterType(&ecs, arena, HgSprite, 128);
 
-    HgEntity camera = ecs.spawn();
+    HgEntity camera = hgEcsCreate(&ecs);
 
-    HgTransform* cameraTf = ecs.add<HgTransform>(camera);
+    HgTransform* cameraTf = hgEcsAdd<HgTransform>(&ecs, camera);
     *cameraTf = {};
     cameraTf->position = HgVec3{0, 0, -2};
 
-    HgCamera* cameraC = ecs.add<HgCamera>(camera);
+    HgCamera* cameraC = hgEcsAdd<HgCamera>(&ecs, camera);
     *cameraC = {};
     cameraC->type = HgCameraType_perspective;
     cameraC->perspective.fov = (f32)hgPi * 0.5f;
@@ -44,9 +44,9 @@ int main()
     hgCameraCreate(cameraC);
     hgDefer(hgCameraDestroy(cameraC));
 
-    HgEntity square = ecs.spawn();
-    *ecs.add<HgTransform>(square) = {};
-    *ecs.add<HgSprite>(square) = {HgGpuTextureHandle{}, HgVec2{0}, HgVec2{1}};
+    HgEntity square = hgEcsCreate(&ecs);
+    *hgEcsAdd<HgTransform>(&ecs, square) = {};
+    *hgEcsAdd<HgSprite>(&ecs, square) = {HgGpuTextureHandle{}, HgVec2{0}, HgVec2{1}};
 
     HgClock gameClock;
     hgClockTick(&gameClock);
