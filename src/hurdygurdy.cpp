@@ -2420,93 +2420,131 @@ void hgAssetUnloadImpl<HgGpuMesh>(HgAssetData<HgGpuMesh>* data)
 
 HgEcs hgEcsCreate(HgArena* arena, u32 maxEntities, u32 maxComponentTypes)
 {
+    hgAssert(arena != nullptr);
+
     HgEcs ecs{};
-    ecs.entityPool = hgPoolCreate<void>(arena, maxEntities);
-    ecs.systems = hgMapCreate<u64, HgComponent>(arena, maxComponentTypes + 1);
+    ecs.entities = hgPoolCreate<void>(arena, maxEntities);
+    ecs.components = hgMapCreate<u64, HgComponent>(arena, maxComponentTypes + 1);
     hgEcsReset(&ecs);
     return ecs;
 }
 
-void hgEcsRegisterComponent(HgEcs* ecs, HgArena* arena, u64 id, HgStringView name, u32 width, u32 align, u32 maxCount)
-{
-    hgAssert(hgMapGet(&ecs->systems, id) == nullptr);
-    HgComponent* system = hgMapAdd(&ecs->systems, id, {});
-
-    system->name = name;
-    system->indices = hgAlloc<u32>(arena, ecs->entityPool.capacity);
-    system->entities = hgAlloc<HgEntity>(arena, maxCount);
-    system->components = hgAlloc(arena, maxCount * width, align);
-    system->width = width;
-    system->count = 0;
-    system->capacity = maxCount;
-
-    memset(system->indices, -1, ecs->entityPool.capacity * sizeof(*system->indices));
-}
-
 void hgEcsReset(HgEcs* ecs)
 {
-    for (u32 i = 0; i < ecs->systems.capacity; ++i)
+    hgAssert(ecs != nullptr);
+
+    for (u32 i = 0; i < ecs->components.capacity; ++i)
     {
-        if (ecs->systems.hasVal[i])
+        if (ecs->components.hasVal[i])
         {
-            memset(ecs->systems.vals[i].indices, -1, ecs->entityPool.capacity * sizeof(*ecs->systems.vals[i].indices));
-            ecs->systems.vals[i].count = 0;
+            HgComponent* system = &ecs->components.vals[i];
+
+            for (u32 c = 0; c < system->count; ++c)
+            {
+                system->remove(ecs, (u8*)system->components + c * system->width);
+            }
+            memset(system->indices, -1, ecs->entities.capacity * sizeof(*system->indices));
+            system->count = 0;
         }
     }
 
-    hgPoolReset(&ecs->entityPool);
+    hgPoolReset(&ecs->entities);
+}
+
+void hgEcsRegisterComponent(HgEcs* ecs, HgArena* arena, HgEcsRegisterComponent* config)
+{
+    hgAssert(ecs != nullptr);
+
+    u64 id = hgHash(config->name);
+    hgAssert(hgMapGet(&ecs->components, id) == nullptr);
+
+    HgComponent* system = hgMapAdd(&ecs->components, id, {});
+
+    system->indices = hgAlloc<u32>(arena, ecs->entities.capacity);
+    system->entities = hgAlloc<HgEntity>(arena, config->max);
+    system->components = hgAlloc(arena, config->max * config->width, config->align);
+    system->width = config->width;
+    system->count = 0;
+    system->capacity = config->max;
+
+    system->name = config->name;
+    system->add = config->add;
+    system->remove = config->remove;
+    system->serialize = config->serialize;
+    system->deserialize = config->deserialize;
+
+    memset(system->indices, -1, ecs->entities.capacity * sizeof(*system->indices));
+}
+
+HgStringView hgEcsComponentName(HgEcs* ecs, u64 componentId)
+{
+    hgAssert(ecs != nullptr);
+
+    HgComponent* system = hgMapGet(&ecs->components, componentId);
+    hgAssert(system != nullptr);
+
+    return system->name;
 }
 
 HgEntity hgEcsCreate(HgEcs* ecs)
 {
-    return {hgPoolAlloc(&ecs->entityPool)};
+    hgAssert(ecs != nullptr);
+    return {hgPoolAlloc(&ecs->entities)};
 }
 
 void hgEcsDestroy(HgEcs* ecs, HgEntity e)
 {
+    hgAssert(ecs != nullptr);
     hgAssert(hgEcsAlive(ecs, e));
 
-    for (u32 i = 0; i < ecs->systems.capacity; ++i)
+    for (u32 i = 0; i < ecs->components.capacity; ++i)
     {
-        if (ecs->systems.hasVal[i] && hgEcsHas(ecs, e, ecs->systems.keys[i]))
-            hgEcsRemove(ecs, e, ecs->systems.keys[i]);
+        if (ecs->components.hasVal[i] && hgEcsHas(ecs, e, ecs->components.keys[i]))
+            hgEcsRemove(ecs, e, ecs->components.keys[i]);
     }
-    hgPoolFree(&ecs->entityPool, e.handle);
+    hgPoolFree(&ecs->entities, e.handle);
 }
 
 bool hgEcsAlive(HgEcs* ecs, HgEntity e)
 {
-    return hgPoolAlive(&ecs->entityPool, e.handle);
+    hgAssert(ecs != nullptr);
+    return hgPoolAlive(&ecs->entities, e.handle);
 }
 
 void* hgEcsAdd(HgEcs* ecs, HgEntity e, u64 componentId)
 {
+    hgAssert(ecs != nullptr);
     hgAssert(hgEcsAlive(ecs, e));
     hgAssert(!hgEcsHas(ecs, e, componentId));
 
-    HgComponent* system = hgMapGet(&ecs->systems, componentId);
+    HgComponent* system = hgMapGet(&ecs->components, componentId);
     hgAssert(system != nullptr);
 
     system->indices[hgHandleIdx(e.handle)] = system->count;
     system->entities[system->count] = e;
     void* c = (u8*)system->components + system->width * system->count;
     ++system->count;
+
+    system->add(ecs, c);
     return c;
 }
 
 void hgEcsRemove(HgEcs* ecs, HgEntity e, u64 componentId)
 {
+    hgAssert(ecs != nullptr);
     hgAssert(hgEcsAlive(ecs, e));
     hgAssert(hgEcsHas(ecs, e, componentId));
 
-    HgComponent* system = hgMapGet(&ecs->systems, componentId);
+    HgComponent* system = hgMapGet(&ecs->components, componentId);
     hgAssert(system != nullptr);
+
+    u32 idx = system->indices[hgHandleIdx(e.handle)];
+    system->remove(ecs, (u8*)system->components + system->width * idx);
 
     HgEntity last = system->entities[system->count - 1];
     system->entities[system->count - 1] = HgEntity{};
     if (e.handle.id != last.handle.id)
     {
-        u32 idx = system->indices[hgHandleIdx(e.handle)];
         system->entities[idx] = last;
         system->indices[hgHandleIdx(last.handle)] = idx;
         memcpy(
@@ -2520,9 +2558,10 @@ void hgEcsRemove(HgEcs* ecs, HgEntity e, u64 componentId)
 
 bool hgEcsHas(HgEcs* ecs, HgEntity e, u64 componentId)
 {
+    hgAssert(ecs != nullptr);
     hgAssert(hgEcsAlive(ecs, e));
 
-    HgComponent* system = hgMapGet(&ecs->systems, componentId);
+    HgComponent* system = hgMapGet(&ecs->components, componentId);
     hgAssert(system != nullptr);
 
     return system->indices[hgHandleIdx(e.handle)] < system->count;
@@ -2530,9 +2569,10 @@ bool hgEcsHas(HgEcs* ecs, HgEntity e, u64 componentId)
 
 void* hgEcsGet(HgEcs* ecs, HgEntity e, u64 componentId)
 {
+    hgAssert(ecs != nullptr);
     hgAssert(hgEcsAlive(ecs, e));
 
-    HgComponent* system = hgMapGet(&ecs->systems, componentId);
+    HgComponent* system = hgMapGet(&ecs->components, componentId);
     hgAssert(system != nullptr);
 
     return (u8*)system->components + system->width * system->indices[hgHandleIdx(e.handle)];
@@ -2540,9 +2580,10 @@ void* hgEcsGet(HgEcs* ecs, HgEntity e, u64 componentId)
 
 HgEntity hgEcsGetEntity(HgEcs* ecs, const void* component, u64 componentId)
 {
+    hgAssert(ecs != nullptr);
     hgAssert(component != nullptr);
 
-    HgComponent* system = hgMapGet(&ecs->systems, componentId);
+    HgComponent* system = hgMapGet(&ecs->components, componentId);
     hgAssert(system != nullptr);
 
     return system->entities[(u32)((uptr)component - (uptr)system->components) / system->width];
@@ -2550,30 +2591,35 @@ HgEntity hgEcsGetEntity(HgEcs* ecs, const void* component, u64 componentId)
 
 HgEntity* hgEcsEntities(HgEcs* ecs, u64 componentId)
 {
-    hgAssert(hgMapGet(&ecs->systems, componentId) != nullptr);
-    return hgMapGet(&ecs->systems, componentId)->entities;
+    hgAssert(ecs != nullptr);
+    hgAssert(hgMapGet(&ecs->components, componentId) != nullptr);
+    return hgMapGet(&ecs->components, componentId)->entities;
 }
 
 void* hgEcsComponents(HgEcs* ecs, u64 componentId)
 {
-    hgAssert(hgMapGet(&ecs->systems, componentId) != nullptr);
-    return hgMapGet(&ecs->systems, componentId)->components;
+    hgAssert(ecs != nullptr);
+    hgAssert(hgMapGet(&ecs->components, componentId) != nullptr);
+    return hgMapGet(&ecs->components, componentId)->components;
 }
 
 u32 hgEcsCount(HgEcs* ecs, u64 componentId)
 {
-    hgAssert(hgMapGet(&ecs->systems, componentId) != nullptr);
-    return hgMapGet(&ecs->systems, componentId)->count;
+    hgAssert(ecs != nullptr);
+    hgAssert(hgMapGet(&ecs->components, componentId) != nullptr);
+    return hgMapGet(&ecs->components, componentId)->count;
 }
 
 u64 hgEcsFindSmallest(HgEcs* ecs, u64* ids, u32 idCount)
 {
+    hgAssert(ecs != nullptr);
+
     u32 smallestCount = (u32)-1;
     u64 smallest = ids[0];
 
     for (u32 i = 1; i < idCount; ++i)
     {
-        HgComponent* system = hgMapGet(&ecs->systems, ids[i]);
+        HgComponent* system = hgMapGet(&ecs->components, ids[i]);
         hgAssert(system != nullptr);
 
         if (system->count < smallestCount)
@@ -2587,7 +2633,9 @@ u64 hgEcsFindSmallest(HgEcs* ecs, u64* ids, u32 idCount)
 
 static void swapIdxLocation(HgEcs* ecs, u32 lhs, u32 rhs, u64 componentId)
 {
-    HgComponent* system = hgMapGet(&ecs->systems, componentId);
+    hgAssert(ecs != nullptr);
+
+    HgComponent* system = hgMapGet(&ecs->components, componentId);
     hgAssert(system != nullptr);
 
     hgAssert(lhs < system->count);
@@ -2676,14 +2724,50 @@ void hgEcsSort(
     void* data,
     bool (*compare)(void*, HgEcs* ecs, HgEntity lhs, HgEntity rhs))
 {
+    hgAssert(ecs != nullptr);
     hgAssert(compare != nullptr);
 
-    HgComponent* system = hgMapGet(&ecs->systems, componentId);
+    HgComponent* system = hgMapGet(&ecs->components, componentId);
     hgAssert(system != nullptr);
 
     QuicksortData q{ecs, system, componentId, data, compare};
     q.quicksort(0, system->count);
 }
+
+struct HgEcsSerializationComponentDesc {
+    u32 nameString;
+    u32 entitiesBegin;
+    u32 dataBegin;
+    u32 width;
+    u32 count;
+};
+
+struct HgEcsSerializationAssetDesc {
+    u32 pathString;
+};
+
+struct HgEcsSerializationStringDesc {
+    u32 begin;
+    u32 size;
+};
+
+struct HgEcsSerializationHeader {
+    u32 entityCount;
+
+    u32 componentsBegin;
+    u32 componentCount;
+
+    u32 stringsBegin;
+    u32 stringCount;
+};
+
+// HgBinary* hgEcsSerialize(HgArena* arena, HgEcs* ecs, HgEntity root)
+// {
+// }
+
+// HgEntity hgEcsDeserialize(HgEcs* ecs, HgBinary* scene)
+// {
+// }
 
 void hgNodeAddChild(HgEcs* ecs, HgEntity parent, HgEntity child)
 {
@@ -2814,8 +2898,13 @@ struct VPUniform {
     HgMat4 view;
 };
 
-void hgCameraCreate(HgCamera* camera)
+template<>
+void hgEcsAddImpl(HgEcs*, HgCamera* camera)
 {
+    hgDebug("added camera\n");
+
+    *camera = {};
+
     camera->vpBuffer = hgGpuBufferCreate(
         sizeof(VPUniform),
         HgGpuBufferUsage_uniformBuffer,
@@ -2827,7 +2916,8 @@ void hgCameraCreate(HgCamera* camera)
     hgGpuDescriptorUpdate(camera->vpDesc, &info, nullptr);
 }
 
-void hgCameraDestroy(HgCamera* camera)
+template<>
+void hgEcsRemoveImpl(HgEcs*, HgCamera* camera)
 {
     hgGpuDescriptorDestroy(camera->vpDesc);
     hgGpuBufferDestroy(camera->vpBuffer);
@@ -2862,6 +2952,12 @@ void hgCameraUpdate(HgEcs* ecs, HgEntity e)
     }
 
     hgGpuBufferWrite(camera->vpBuffer, 0, &vp, sizeof(vp));
+}
+
+template<>
+void hgEcsAddImpl(HgEcs*, HgSprite* sprite)
+{
+    *sprite = {};
 }
 
 struct SpritePipelinePush {
@@ -2974,6 +3070,12 @@ void hgSpritesDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 
         hgGpuDraw(cmd, 0, 6, 0, 1);
     });
+}
+
+template<>
+void hgEcsAddImpl(HgEcs*, HgSkybox* skybox)
+{
+    *skybox = {};
 }
 
 struct SkyboxPipelinePush {

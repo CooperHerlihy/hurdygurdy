@@ -63,6 +63,8 @@ int main()
     hgDefer(hgModelsDeinit());
 
     HgEcs ecs = hgEcsCreate(arena, 4096, 64);
+    hgDefer(hgEcsReset(&ecs));
+
     // hgEcsRegisterType(&ecs, arena, HgNode, 1024);
     hgEcsRegisterType(&ecs, arena, HgTransform, 1024);
     hgEcsRegisterType(&ecs, arena, HgCamera, 8);
@@ -84,13 +86,10 @@ int main()
     cameraTf->position = HgVec3{0, 0, -1};
 
     HgCamera* cameraC = hgEcsAdd<HgCamera>(&ecs, camera);
-    *cameraC = {};
     cameraC->type = HgCameraType_perspective;
     cameraC->perspective.fov = (f32)hgPi * 0.5f;
     cameraC->perspective.near = 0.1f;
     cameraC->perspective.far = 1000.0f;
-    hgCameraCreate(cameraC);
-    hgDefer(hgCameraDestroy(cameraC));
 
     HgEntity skybox = hgEcsCreate(&ecs);
     scene[sceneSize++] = skybox;

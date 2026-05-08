@@ -97,6 +97,8 @@ int main()
     hgAssetUnload(noiseShaderHandle);
 
     HgEcs ecs = hgEcsCreate(arena, 128, 128);
+    hgDefer(hgEcsReset(&ecs));
+
     hgEcsRegisterType(&ecs, arena, HgTransform, 128);
     hgEcsRegisterType(&ecs, arena, HgCamera, 8);
     hgEcsRegisterType(&ecs, arena, HgSprite, 128);
@@ -108,13 +110,10 @@ int main()
     cameraTf->position = HgVec3{0, 0, -1};
 
     HgCamera* cameraC = hgEcsAdd<HgCamera>(&ecs, camera);
-    *cameraC = {};
     cameraC->type = HgCameraType_perspective;
     cameraC->perspective.fov = (f32)hgPi * 0.5f;
     cameraC->perspective.near = 0.1f;
     cameraC->perspective.far = 1000.0f;
-    hgCameraCreate(cameraC);
-    hgDefer(hgCameraDestroy(cameraC));
 
     HgEntity noiseSquare = hgEcsCreate(&ecs);
     *hgEcsAdd<HgTransform>(&ecs, noiseSquare) = {};
