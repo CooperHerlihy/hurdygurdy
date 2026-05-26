@@ -1830,6 +1830,14 @@ inline bool operator!=(const HgString& lhs, const HgString& rhs)
 }
 
 /**
+ * Get the character pointer
+ */
+inline char* hgStringChars(HgString* str)
+{
+    return str->length <= 24 ? str->small.chars : str->large.chars;
+}
+
+/**
  * Creates a new string copied from an existing string
  *
  * Parameters
@@ -5393,7 +5401,7 @@ struct HgComponent {
     void (*serialize)(
         HgArena* stringArena,
         HgMap<HgEntity, u32>* entities,
-        HgMap<HgStringView, u32>* strings,
+        HgMap<HgString, u32>* strings,
         void* srcComponent,
         void* dstData);
     /**
@@ -5481,7 +5489,7 @@ struct HgEcsRegisterComponent {
     void (*serialize)(
         HgArena* stringArena,
         HgMap<HgEntity, u32>* entities,
-        HgMap<HgStringView, u32>* strings,
+        HgMap<HgString, u32>* strings,
         void* srcComponent,
         void* dstData);
     /**
@@ -5535,7 +5543,7 @@ template<typename T>
 void hgEcsSerializeImpl(
     HgArena* stringArena,
     HgMap<HgEntity, u32>* entities,
-    HgMap<HgStringView, u32>* strings,
+    HgMap<HgString, u32>* strings,
     T* srcComponent,
     void* dstData)
 {
@@ -5583,7 +5591,7 @@ void hgEcsDeserializeImpl(
         registerComponent.serialize = []( \
             HgArena* stringArena, \
             HgMap<HgEntity, u32>* entities, \
-            HgMap<HgStringView, u32>* strings, \
+            HgMap<HgString, u32>* strings, \
             void* srcComponent, \
             void* dstData) \
         { \
@@ -6053,7 +6061,7 @@ template<>
 void hgEcsSerializeImpl(
     HgArena* stringArena,
     HgMap<HgEntity, u32>* entities,
-    HgMap<HgStringView, u32>* strings,
+    HgMap<HgString, u32>* strings,
     HgNode* srcComponent,
     void* dstData);
 

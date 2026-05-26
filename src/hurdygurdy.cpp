@@ -2764,7 +2764,7 @@ struct EcsSerialComponent {
 
 struct EcsSerialScene {
     HgMap<HgEntity, u32> entities;
-    HgMap<HgStringView, u32> strings;
+    HgMap<HgString, u32> strings;
     HgMap<u64, EcsSerialComponent> components;
 };
 
@@ -2795,11 +2795,12 @@ void ecsSerialGatherData(HgArena* arena, HgEcs* ecs, HgEntity root, EcsSerialSce
             {
                 compData = hgMapAdd(&scene->components, ecs->components.keys[c], {});
 
-                u32* nameString = hgMapGet(&scene->strings, ecs->components.vals[c].name);
-                if (nameString == nullptr)
-                    nameString = hgMapAdd(&scene->strings, ecs->components.vals[c].name, scene->strings.count);
+                HgString name = hgStringCopy(arena, ecs->components.vals[c].name);
+                u32* nameIdx = hgMapGet(&scene->strings, name);
+                if (nameIdx == nullptr)
+                    nameIdx = hgMapAdd(&scene->strings, name, scene->strings.count);
 
-                compData->nameString = *nameString;
+                compData->nameString = *nameIdx;
                 compData->entities = hgAlloc<u32>(arena, ecs->entities.capacity);
                 compData->data = hgAlloc(arena, ecs->components.vals[c].width * ecs->entities.capacity, 1);
                 compData->dataWidth = ecs->components.vals[c].serialWidth;
@@ -2886,7 +2887,7 @@ HgBinary ecsSerialWriteBin(HgArena* arena, EcsSerialScene* data)
             bin = hgBinaryResize(arena, &bin, bin.size + str.length);
 
             hgBinaryOverwrite(&bin, header.stringsBegin + sizeof(str) * data->strings.vals[s], str);
-            hgBinaryOverwrite(&bin, str.begin, data->strings.keys[s].chars, str.length);
+            hgBinaryOverwrite(&bin, str.begin, hgStringChars(&data->strings.keys[s]), str.length);
         }
     }
 
@@ -2903,7 +2904,7 @@ HgBinary hgEcsSerialize(HgArena* arena, HgEcs* ecs, HgEntity root)
 
     EcsSerialScene data;
     data.entities = hgMapCreate<HgEntity, u32>(scratch, ecs->entities.capacity);
-    data.strings = hgMapCreate<HgStringView, u32>(scratch, 4096);
+    data.strings = hgMapCreate<HgString, u32>(scratch, 4096);
     data.components = hgMapCreate<u64, EcsSerialComponent>(scratch, ecs->components.count * 2);
 
     ecsSerialFindEntities(ecs, root, &data);
@@ -2985,7 +2986,7 @@ template<>
 void hgEcsSerializeImpl(
     HgArena*,
     HgMap<HgEntity, u32>* entities,
-    HgMap<HgStringView, u32>*,
+    HgMap<HgString, u32>*,
     HgNode* src,
     void* dst)
 {
