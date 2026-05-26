@@ -5317,12 +5317,19 @@ constexpr bool operator!=(HgEntity lhs, HgEntity rhs)
 template<typename T>
 inline u64 hgComponentId = (u64)-1;
 
+/**
+ * An entity Component System
+ */
 struct HgEcs;
 
 /**
  * A system of components
  */
 struct HgComponent {
+    /**
+     * The name of the component type
+     */
+    HgStringView name;
     /**
      * The component lookup from entity index
      */
@@ -5348,10 +5355,6 @@ struct HgComponent {
      */
     u32 capacity;
     /**
-     * The name of the component type
-     */
-    HgStringView name;
-    /**
      * The function called on adding the component
      */
     void (*add)(void* component);
@@ -5359,6 +5362,10 @@ struct HgComponent {
      * The function called on removing the component
      */
     void (*remove)(void* component);
+    /**
+     * The width of each component serialized in bytes
+     */
+    u32 serialWidth;
     /**
      * The function called on serializing the component
      *
@@ -5505,7 +5512,7 @@ void hgEcsRemoveImpl(T* component)
  * The width in bytes of the serialized component
  */
 template<typename T>
-u32 hgEcsSerialWidthImpl = sizeof(T);
+inline constexpr u32 hgEcsSerialWidthImpl = sizeof(T);
 
 /**
  * The function called on serializing the component
@@ -5532,7 +5539,7 @@ void hgEcsDeserializeImpl(
     HgEntity* entities,
     HgStringView* strings,
     void* srcData,
-    void* dstComponent)
+    T* dstComponent)
 {
     (void)entities;
     (void)strings;
@@ -5545,21 +5552,21 @@ void hgEcsDeserializeImpl(
 #define hgEcsRegisterType(ecs, arena, type, maxCount) \
     do { \
         hgComponentId<type> = hgHash(#type); \
-        HgEcsRegisterComponent registerComponentInternal{}; \
-        registerComponentInternal.name = #type; \
-        registerComponentInternal.align = alignof(type); \
-        registerComponentInternal.width = sizeof(type); \
-        registerComponentInternal.max = maxCount; \
-        registerComponentInternal.add = [](void* component) \
+        HgEcsRegisterComponent registerComponent{}; \
+        registerComponent.name = #type; \
+        registerComponent.align = alignof(type); \
+        registerComponent.width = sizeof(type); \
+        registerComponent.max = maxCount; \
+        registerComponent.add = [](void* component) \
         { \
             hgEcsAddImpl<type>((type*)component); \
         }; \
-        registerComponentInternal.remove = [](void* component) \
+        registerComponent.remove = [](void* component) \
         { \
             hgEcsRemoveImpl<type>((type*)component); \
         }; \
-        registerComponentInternal.serialWidth = hgEcsSerialWidthImpl<u32>; \
-        registerComponentInternal.serialize = []( \
+        registerComponent.serialWidth = hgEcsSerialWidthImpl<type>; \
+        registerComponent.serialize = []( \
             HgArena* stringArena, \
             HgMap<HgEntity, u32>* entities, \
             HgMap<HgStringView, u32>* strings, \
@@ -5573,7 +5580,7 @@ void hgEcsDeserializeImpl(
                 (type*)srcComponent, \
                 dstData); \
         }; \
-        registerComponentInternal.deserialize = []( \
+        registerComponent.deserialize = []( \
             HgEntity* entities, \
             HgStringView* strings, \
             void* srcData, \
@@ -5585,7 +5592,7 @@ void hgEcsDeserializeImpl(
                 srcData, \
                 (type*)dstComponent); \
         }; \
-        hgEcsRegisterComponent(ecs, arena, &registerComponentInternal); \
+        hgEcsRegisterComponent(ecs, arena, &registerComponent); \
     } while (0)
 
 /**
@@ -6011,6 +6018,40 @@ struct HgNode {
      */
     HgEntity firstChild{};
 };
+
+/**
+ * The serialized form for HgNode
+ */
+struct HgNodeSerial {
+    u32 parent;
+    u32 nextSibling;
+    u32 prevSibling;
+    u32 firstChild;
+};
+
+template<>
+inline constexpr u32 hgEcsSerialWidthImpl<HgNode> = sizeof(HgNodeSerial);
+
+/**
+ * HgNode serialization implementation
+ */
+template<>
+void hgEcsSerializeImpl(
+    HgArena* stringArena,
+    HgMap<HgEntity, u32>* entities,
+    HgMap<HgStringView, u32>* strings,
+    HgNode* srcComponent,
+    void* dstData);
+
+/**
+ * HgNode deserialization implementation
+ */
+template<>
+void hgEcsDeserializeImpl(
+    HgEntity* entities,
+    HgStringView* strings,
+    void* srcData,
+    HgNode* dstComponent);
 
 /**
  * Add a new child to an entity in a hierarchy

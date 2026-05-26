@@ -1909,7 +1909,7 @@ void hgTest()
 
     hgWarn("HgMesh test : TODO\n");
 
-    // HgEcs
+    // HgEcs basics
     {
         HgArena* arena = hgScratch();
         HgArenaScope arenaScope{arena};
@@ -2101,10 +2101,16 @@ void hgTest()
             hgAssert(hgEcsCount<u32>(&ecs) == 1);
             hgAssert(hgEcsCount<u64>(&ecs) == 1);
         }
+    }
 
-        hgEcsReset(&ecs);
-        hgAssert(hgEcsCount<u32>(&ecs) == 0);
-        hgAssert(hgEcsCount<u64>(&ecs) == 0);
+    // Ecs concurrency
+    {
+        HgArena* arena = hgScratch();
+        HgArenaScope arenaScope{arena};
+
+        HgEcs ecs = hgEcsCreate(arena, 1024, 128);
+        hgEcsRegisterType(&ecs, arena, u32, 1024);
+        hgEcsRegisterType(&ecs, arena, u64, 1024);
 
         {
             for (u32 i = 0; i < 300; ++i)
@@ -2168,8 +2174,16 @@ void hgTest()
             });
             hgAssert(success);
         }
+    }
 
-        hgEcsReset(&ecs);
+    // Ecs sort
+    {
+        HgArena* arena = hgScratch();
+        HgArenaScope arenaScope{arena};
+
+        HgEcs ecs = hgEcsCreate(arena, 1024, 128);
+        hgEcsRegisterType(&ecs, arena, u32, 1024);
+        hgEcsRegisterType(&ecs, arena, u64, 1024);
 
         auto comparison = [](void*, HgEcs* ecs, HgEntity lhs, HgEntity rhs)
         {
@@ -2320,15 +2334,73 @@ void hgTest()
         HgArena* arena = hgScratch();
         HgArenaScope arenaScope{arena};
 
-        HgEcs ecs = hgEcsCreate(arena, 1024, 128);
-        hgDefer(hgEcsReset(&ecs));
+        HgBinary scene{};
 
-        hgEcsRegisterType(&ecs, arena, u32, 128);
+        {
+            HgEcs ecs = hgEcsCreate(arena, 1024, 128);
+            hgDefer(hgEcsReset(&ecs));
 
-        // create scene
-        // serialize scene
-        // deserialize scene
-        // check equality
+            hgEcsRegisterType(&ecs, arena, HgNode, 128);
+            hgEcsRegisterType(&ecs, arena, u32, 128);
+
+            HgEntity root = hgEcsSpawn(&ecs);
+            HgEntity a = hgEcsSpawn(&ecs);
+            HgEntity b = hgEcsSpawn(&ecs);
+
+            hgEcsAdd<HgNode>(&ecs, root);
+            hgEcsAdd<HgNode>(&ecs, a);
+            hgEcsAdd<HgNode>(&ecs, b);
+
+            *hgEcsAdd<u32>(&ecs, a) = 12;
+            *hgEcsAdd<u32>(&ecs, b) = 42;
+
+            hgNodeAddChild(&ecs, root, b);
+            hgNodeAddChild(&ecs, root, a);
+
+            scene = hgEcsSerialize(arena, &ecs, root);
+        }
+
+        {
+            HgEcs ecs = hgEcsCreate(arena, 1024, 128);
+            hgDefer(hgEcsReset(&ecs));
+
+            hgEcsRegisterType(&ecs, arena, HgNode, 128);
+            hgEcsRegisterType(&ecs, arena, u32, 128);
+
+            HgEntity root = hgEcsDeserialize(&ecs, scene);
+            hgAssert(hgEcsHas<HgNode>(&ecs, root));
+            HgNode* rootNode = hgEcsGet<HgNode>(&ecs, root);
+            hgAssert(hgHandleIsNull(rootNode->parent.handle));
+            hgAssert(hgHandleIsNull(rootNode->nextSibling.handle));
+            hgAssert(hgHandleIsNull(rootNode->prevSibling.handle));
+            hgAssert(!hgHandleIsNull(rootNode->firstChild.handle));
+
+            HgEntity a = rootNode->firstChild;
+            hgAssert(!hgHandleIsNull(a.handle));
+
+            hgAssert(hgEcsHas<HgNode>(&ecs, a));
+            HgNode* aNode = hgEcsGet<HgNode>(&ecs, a);
+            hgAssert(aNode->parent == root);
+            hgAssert(hgHandleIsNull(aNode->prevSibling.handle));
+            hgAssert(!hgHandleIsNull(aNode->nextSibling.handle));
+            hgAssert(hgHandleIsNull(aNode->firstChild.handle));
+
+            HgEntity b = aNode->nextSibling;
+            hgAssert(!hgHandleIsNull(b.handle));
+
+            hgAssert(hgEcsHas<HgNode>(&ecs, b));
+            HgNode* bNode = hgEcsGet<HgNode>(&ecs, b);
+            hgAssert(bNode->parent == root);
+            hgAssert(bNode->prevSibling == a);
+            hgAssert(hgHandleIsNull(bNode->nextSibling.handle));
+            hgAssert(hgHandleIsNull(bNode->firstChild.handle));
+
+            hgAssert(hgEcsHas<u32>(&ecs, a));
+            hgAssert(*hgEcsGet<u32>(&ecs, a) == 12);
+
+            hgAssert(hgEcsHas<u32>(&ecs, b));
+            hgAssert(*hgEcsGet<u32>(&ecs, b) == 42);
+        }
     }
 
     // HgNode
