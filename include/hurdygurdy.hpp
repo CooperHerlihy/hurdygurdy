@@ -1728,21 +1728,49 @@ constexpr bool operator!=(HgStringView lhs, HgStringView rhs)
 char* hgCString(HgArena* arena, HgStringView str);
 
 /**
- * A dynamic string container
+ * A small dynamic string container
  */
-struct HgString {
+struct HgStringSmall {
     /**
-     * The character buffer
+     * The length, available in all strings
+     */
+    u64 length;
+    /**
+     * The character data of the small string
+     */
+    char chars[24];
+};
+
+/**
+ * A large dynamic string container
+ */
+struct HgStringLarge {
+    /**
+     * The length, available in all strings
+     */
+    u64 length;
+    /**
+     * A pointer to the character data of a large string
      */
     char* chars;
-    /**
-     * The max number of characters in the buffer
-     */
-    u64 capacity;
+};
+
+/**
+ * A dynamic string container with small string optimization
+ */
+union HgString {
     /**
      * The number of characters currently in the string
      */
     u64 length;
+    /**
+     * A small string
+     */
+    HgStringSmall small;
+    /**
+     * A large string
+     */
+    HgStringLarge large;
 
     /**
      * Access using the index operator
@@ -1750,7 +1778,10 @@ struct HgString {
     constexpr char& operator[](u64 index)
     {
         hgAssert(index < length);
-        return chars[index];
+        if (length <= 24)
+            return small.chars[index];
+        else
+            return large.chars[index];
     }
 
     /**
@@ -1759,7 +1790,10 @@ struct HgString {
     constexpr const char& operator[](u64 index) const
     {
         hgAssert(index < length);
-        return chars[index];
+        if (length <= 24)
+            return small.chars[index];
+        else
+            return large.chars[index];
     }
 
     /**
@@ -1767,7 +1801,10 @@ struct HgString {
      */
     constexpr operator HgStringView() const
     {
-        return {chars, length};
+        if (length <= 24)
+            return {small.chars, length};
+        else
+            return {large.chars, length};
     }
 };
 
@@ -1776,7 +1813,12 @@ struct HgString {
  */
 inline bool operator==(const HgString& lhs, const HgString& rhs)
 {
-    return lhs.length == rhs.length && memcmp(lhs.chars, rhs.chars, lhs.length) == 0;
+    if (lhs.length != rhs.length)
+        return false;
+    if (lhs.length <= 24)
+        return memcmp(lhs.small.chars, rhs.small.chars, lhs.length) == 0;
+    else
+        return memcmp(lhs.large.chars, rhs.large.chars, lhs.length) == 0;
 }
 
 /**
@@ -1786,15 +1828,6 @@ inline bool operator!=(const HgString& lhs, const HgString& rhs)
 {
     return !(lhs == rhs);
 }
-
-/**
- * Creates a new string with empty capacity
- *
- * Parameters
- * - arena The arena to allocate from
- * - capacity The capacity to begin with
- */
-HgString hgStringCreate(HgArena* arena, u64 capacity);
 
 /**
  * Creates a new string copied from an existing string
@@ -1828,40 +1861,18 @@ HgString hgStringCopy(HgArena* arena, HgStringView str);
 HgString hgStringFormat(HgArena* arena, HgStringView fmt, ...);
 
 /**
- * Change the capacity of a string
- *
- * Parameters
- * - arena The arena to allocate from
- * - str The string to reserve memory for
- * - newCapacity The new minimum capacity
- */
-void hgStringReserve(HgArena* arena, HgString* str, u64 newCapacity);
-
-/**
- * Increases the capacity of the string by a factor, or inits to 1
- *
- * Parameters
- * - arena The arena to allocate from
- * - str The string to reserve memory for
- * - factor The growth factor to increase by
- */
-void hgStringGrow(HgArena* arena, HgString* str, f64 factor);
-
-/**
- * Copies another string into this string at index
+ * Copies another string into the string at index
  *
  * Parameters
  * - arena The arena to allocate from
  * - dst The string to insert into
  * - idx The index into dst
  * - src The string to copy from
- *
- * Returns
  */
 void hgStringInsert(HgArena* arena, HgString* dst, u64 idx, HgStringView src);
 
 /**
- * Copies another string to the end of this string
+ * Copies another string to the end of the string
  */
 inline void hgStringAppend(HgArena* arena, HgString* dst, HgStringView src)
 {
@@ -1869,7 +1880,7 @@ inline void hgStringAppend(HgArena* arena, HgString* dst, HgStringView src)
 }
 
 /**
- * Copies another string to the beginning of this string
+ * Copies another string to the beginning of the string
  */
 inline void hgStringPrepend(HgArena* arena, HgString* dst, HgStringView src)
 {
@@ -1877,18 +1888,21 @@ inline void hgStringPrepend(HgArena* arena, HgString* dst, HgStringView src)
 }
 
 /**
- * Copies another string into this string at index
+ * Copies a character into the string at index
  *
  * Parameters
  * - arena The arena to allocate from
  * - dst The string to insert into
  * - idx The index into dst
- * - src The string to copy from
+ * - c The character to insert
  */
-void hgStringInsertc(HgArena* arena, HgString* dst, u64 idx, char c);
+inline void hgStringInsertc(HgArena* arena, HgString* dst, u64 idx, char c)
+{
+    hgStringInsert(arena, dst, idx, {&c, 1});
+}
 
 /**
- * Copies another string to the end of this string
+ * Copies another string to the end of the string
  */
 inline void hgStringAppendc(HgArena* arena, HgString* dst, char c)
 {
@@ -1896,7 +1910,7 @@ inline void hgStringAppendc(HgArena* arena, HgString* dst, char c)
 }
 
 /**
- * Copies another string to the beginning of this string
+ * Copies another string to the beginning of the string
  */
 inline void hgStringPrependc(HgArena* arena, HgString* dst, char c)
 {

@@ -803,45 +803,22 @@ char* hgCString(HgArena* arena, HgStringView str)
     return cStr;
 }
 
-HgString hgStringCreate(HgArena* arena, u64 capacity)
-{
-    hgAssert(arena != nullptr);
-
-    HgString str;
-    str.chars = hgAlloc<char>(arena, capacity);
-    str.capacity = capacity;
-    str.length = 0;
-    return str;
-}
-
 HgString hgStringCopy(HgArena* arena, HgStringView str)
 {
     hgAssert(arena != nullptr);
 
-    HgString copy;
-    copy.chars = hgAlloc<char>(arena, str.length);
-    copy.capacity = str.length;
+    HgString copy{};
+    if (str.length <= 24)
+    {
+        memcpy(copy.small.chars, str.chars, str.length);
+    }
+    else
+    {
+        copy.large.chars = hgAlloc<char>(arena, str.length);
+        memcpy(copy.large.chars, str.chars, str.length);
+    }
     copy.length = str.length;
-    memcpy(copy.chars, str.chars, str.length);
     return copy;
-}
-
-void hgStringReserve(HgArena* arena, HgString* str, u64 newCapacity)
-{
-    hgAssert(arena != nullptr);
-
-    str->chars = hgRealloc(arena, str->chars, str->capacity, newCapacity);
-    str->capacity = newCapacity;
-}
-
-void hgStringGrow(HgArena* arena, HgString* str, f64 factor)
-{
-    hgAssert(arena != nullptr);
-    hgAssert(str != nullptr);
-    hgAssert(factor > 1.0f);
-
-    hgAssert(str->capacity <= (u64)((f32)SIZE_MAX / factor));
-    hgStringReserve(arena, str, str->capacity == 0 ? 1 : (u64)((f64)str->capacity * factor));
 }
 
 void hgStringInsert(HgArena* arena, HgString* dst, u64 idx, HgStringView src)
@@ -853,30 +830,38 @@ void hgStringInsert(HgArena* arena, HgString* dst, u64 idx, HgStringView src)
         hgAssert(src.chars != nullptr);
 
     u64 newLength = dst->length + src.length;
-    while (dst->capacity < newLength)
+
+    if (newLength <= 24)
     {
-        hgStringGrow(arena, dst, 2.0);
+        if (idx != dst->length)
+            memmove(&dst->small.chars[idx + src.length], &dst->small.chars[idx], dst->length - idx);
+        memcpy(&dst->small.chars[idx], src.chars, src.length);
+
+        dst->length = newLength;
     }
+    else if (dst->length <= 24)
+    {
+        char* chars = hgAlloc<char>(arena, newLength);
 
-    if (idx != dst->length)
-        memmove(&dst->chars[idx + src.length], &dst->chars[idx], dst->length - idx);
-    memcpy(&dst->chars[idx], src.chars, src.length);
-    dst->length = newLength;
-}
+        if (idx > 0)
+            memcpy(chars, dst->small.chars, idx);
+        memcpy(chars + idx, src.chars, src.length);
+        if (idx != dst->length)
+            memcpy(chars + idx + src.length, dst->small.chars + idx, dst->length - idx);
 
-void hgStringInsertc(HgArena* arena, HgString* dst, u64 idx, char c)
-{
-    hgAssert(arena != nullptr);
-    hgAssert(dst != nullptr);
-    hgAssert(idx <= dst->length);
+        dst->large.chars = chars;
+        dst->length = newLength;
+    }
+    else
+    {
+        dst->large.chars = hgRealloc(arena, dst->large.chars, dst->length, newLength);
 
-    if (dst->capacity < dst->length + 1)
-        hgStringGrow(arena, dst, 2.0);
+        if (idx != dst->length)
+            memmove(&dst->large.chars[idx + src.length], &dst->large.chars[idx], dst->length - idx);
+        memcpy(&dst->large.chars[idx], src.chars, src.length);
 
-    if (idx != dst->length)
-        memmove(&dst->chars[idx + 1], &dst->chars[idx], dst->length - idx);
-    dst->chars[idx] = c;
-    ++dst->length;
+        dst->length = newLength;
+    }
 }
 
 bool hgIsWhitespace(char c)
@@ -1074,7 +1059,7 @@ HgString hgIntegerToString(HgArena* arena, i64 num)
     bool isNegative = num < 0;
     u64 unum = (u64)std::abs(num);
 
-    HgString reverse = hgStringCreate(scratch, 16);
+    HgString reverse{};
     while (unum != 0)
     {
         u64 digit = unum % 10;
@@ -1082,7 +1067,7 @@ HgString hgIntegerToString(HgArena* arena, i64 num)
         hgStringAppendc(scratch, &reverse, '0' + (char)digit);
     }
 
-    HgString ret = hgStringCreate(arena, reverse.length + (isNegative ? 1 : 0));
+    HgString ret{};
     if (isNegative)
         hgStringAppendc(arena, &ret, '-');
     for (u64 i = reverse.length - 1; i < reverse.length; --i)
@@ -1104,7 +1089,7 @@ HgString hgFloatToString(HgArena* arena, f64 num, u32 decimalCount)
 
     HgString intStr = hgIntegerToString(scratch, (i64)fabs(num));
 
-    HgString decStr = hgStringCreate(scratch, decimalCount + 1);
+    HgString decStr{};
     hgStringAppendc(scratch, &decStr, '.');
 
     f64 decPart = fabs(num);
@@ -1485,7 +1470,7 @@ static HgJson jsonParseString(HgArena* arena, JsonParseState* state)
     if (state->head < state->text.length)
     {
         ++state->head;
-        HgString str = hgStringCreate(arena, end - begin);
+        HgString str{};
         for (u64 i = begin; i < end; ++i)
         {
             char c = state->text[i];

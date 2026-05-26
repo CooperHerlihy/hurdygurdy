@@ -168,7 +168,6 @@ void hgTest()
 
         HgString a = hgStringCopy(arena, "a");
         hgAssert(a[0] == 'a');
-        hgAssert(a.capacity == 1);
         hgAssert(a.length == 1);
 
         HgString abc = hgStringCopy(arena, "abc");
@@ -176,13 +175,11 @@ void hgTest()
         hgAssert(abc[1] == 'b');
         hgAssert(abc[2] == 'c');
         hgAssert(abc.length == 3);
-        hgAssert(abc.capacity == 3);
 
         hgStringAppend(arena, &a, "bc");
         hgAssert(a == abc);
 
-        HgString str = hgStringCreate(arena, 16);
-        hgAssert(str == hgStringCreate(arena, 0));
+        HgString str{};
 
         hgStringAppend(arena, &str, "hello");
         hgAssert(str == hgStringCopy(arena, "hello"));
@@ -195,6 +192,9 @@ void hgTest()
 
         hgStringInsert(arena, &str, 3, ",");
         hgAssert(str == hgStringCopy(arena, "why, hello there"));
+
+        hgStringPrepend(arena, &str, "aaaaaaaaaaaaaaaaaaaaaaaa ");
+        hgAssert(str == hgStringCopy(arena, "aaaaaaaaaaaaaaaaaaaaaaaa why, hello there"));
     }
 
     // string utils
@@ -1417,17 +1417,17 @@ void hgTest()
         HgArena* arena = hgScratch();
         HgArenaScope arenaScope{arena};
 
-        HgMap<HgStringView, u32> map = hgMapCreate<HgStringView, u32>(arena, 128);
+        HgMap<HgStringView, u32> map = hgMapCreate<HgStringView, u32>(arena, 6);
 
         hgAssert(hgMapGet(&map, "a") == nullptr);
         hgAssert(hgMapGet(&map, "b") == nullptr);
         hgAssert(hgMapGet(&map, "ab") == nullptr);
         hgAssert(hgMapGet(&map, "supercalifragilisticexpialidocious") == nullptr);
 
-        hgMapAdd(&map, hgStringCopy(arena, "a"), 1);
-        hgMapAdd(&map, hgStringCopy(arena, "b"), 2);
-        hgMapAdd(&map, hgStringCopy(arena, "ab"), 3);
-        hgMapAdd(&map, hgStringCopy(arena, "supercalifragilisticexpialidocious"), 4);
+        hgMapAdd(&map, "a", 1);
+        hgMapAdd(&map, "b", 2);
+        hgMapAdd(&map, "ab", 3);
+        hgMapAdd(&map, "supercalifragilisticexpialidocious", 4);
 
         hgAssert(hgMapGet(&map, "a") != nullptr);
         hgAssert(*hgMapGet(&map, "a") == 1);
@@ -1568,10 +1568,10 @@ void hgTest()
         hgAssert(!hgSetHas(&set, "ab"));
         hgAssert(!hgSetHas(&set, "supercalifragilisticexpialidocious"));
 
-        hgSetAdd(&set, hgStringCopy(arena, "a"));
-        hgSetAdd(&set, hgStringCopy(arena, "b"));
-        hgSetAdd(&set, hgStringCopy(arena, "ab"));
-        hgSetAdd(&set, hgStringCopy(arena, "supercalifragilisticexpialidocious"));
+        hgSetAdd(&set, "a");
+        hgSetAdd(&set, "b");
+        hgSetAdd(&set, "ab");
+        hgSetAdd(&set, "supercalifragilisticexpialidocious");
 
         hgAssert(hgSetHas(&set, "a"));
         hgAssert(hgSetHas(&set, "b"));
