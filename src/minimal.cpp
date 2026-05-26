@@ -31,7 +31,7 @@ int main()
     hgEcsRegisterType(&ecs, arena, HgCamera, 8);
     hgEcsRegisterType(&ecs, arena, HgSprite, 128);
 
-    HgEntity camera = hgEcsCreate(&ecs);
+    HgEntity camera = hgEcsSpawn(&ecs);
 
     HgTransform* cameraTf = hgEcsAdd<HgTransform>(&ecs, camera);
     *cameraTf = {};
@@ -43,7 +43,7 @@ int main()
     cameraC->perspective.near = 0.1f;
     cameraC->perspective.far = 1000.0f;
 
-    HgEntity square = hgEcsCreate(&ecs);
+    HgEntity square = hgEcsSpawn(&ecs);
     *hgEcsAdd<HgTransform>(&ecs, square) = {};
     *hgEcsAdd<HgSprite>(&ecs, square) = {HgGpuTextureHandle{}, HgVec2{0}, HgVec2{1}};
 

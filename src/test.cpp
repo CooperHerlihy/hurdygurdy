@@ -1909,7 +1909,7 @@ void hgTest()
 
     hgWarn("HgMesh test : TODO\n");
 
-    // HgECS
+    // HgEcs
     {
         HgArena* arena = hgScratch();
         HgArenaScope arenaScope{arena};
@@ -1918,20 +1918,20 @@ void hgTest()
         hgEcsRegisterType(&ecs, arena, u32, 1024);
         hgEcsRegisterType(&ecs, arena, u64, 1024);
 
-        HgEntity e1 = hgEcsCreate(&ecs);
-        HgEntity e2 = hgEcsCreate(&ecs);
+        HgEntity e1 = hgEcsSpawn(&ecs);
+        HgEntity e2 = hgEcsSpawn(&ecs);
         HgEntity e3 = {};
         hgAssert(hgEcsAlive(&ecs, e1));
         hgAssert(hgEcsAlive(&ecs, e2));
         hgAssert(!hgEcsAlive(&ecs, e3));
 
-        hgEcsDestroy(&ecs, e1);
+        hgEcsDespawn(&ecs, e1);
         hgAssert(!hgEcsAlive(&ecs, e1));
-        e3 = hgEcsCreate(&ecs);
+        e3 = hgEcsSpawn(&ecs);
         hgAssert(hgEcsAlive(&ecs, e3));
         hgAssert(hgHandleIdx(e3.handle) == hgHandleIdx(e1.handle) && e3.handle.id != e1.handle.id);
 
-        e1 = hgEcsCreate(&ecs);
+        e1 = hgEcsSpawn(&ecs);
         hgAssert(hgEcsAlive(&ecs, e1));
 
         {
@@ -2064,7 +2064,7 @@ void hgTest()
         }
 
         {
-            hgEcsDestroy(&ecs, e1);
+            hgEcsDespawn(&ecs, e1);
             hgAssert(hgEcsCount<u32>(&ecs) == 2);
             hgAssert(hgEcsCount<u64>(&ecs) == 2);
 
@@ -2097,7 +2097,7 @@ void hgTest()
         }
 
         {
-            hgEcsDestroy(&ecs, e2);
+            hgEcsDespawn(&ecs, e2);
             hgAssert(hgEcsCount<u32>(&ecs) == 1);
             hgAssert(hgEcsCount<u64>(&ecs) == 1);
         }
@@ -2109,7 +2109,7 @@ void hgTest()
         {
             for (u32 i = 0; i < 300; ++i)
             {
-                HgEntity e = hgEcsCreate(&ecs);
+                HgEntity e = hgEcsSpawn(&ecs);
                 switch (i % 3)
                 {
                     case 0:
@@ -2177,7 +2177,7 @@ void hgTest()
         };
 
         {
-            *hgEcsAdd<u32>(&ecs, hgEcsCreate(&ecs)) = 42;
+            *hgEcsAdd<u32>(&ecs, hgEcsSpawn(&ecs)) = 42;
 
             hgEcsSort<u32>(&ecs, nullptr, comparison);
 
@@ -2196,7 +2196,7 @@ void hgTest()
             u32 smallScramble1[]{1, 0};
             for (u32 i = 0; i < sizeof(smallScramble1) / sizeof(*smallScramble1); ++i)
             {
-                *hgEcsAdd<u32>(&ecs, hgEcsCreate(&ecs)) = smallScramble1[i];
+                *hgEcsAdd<u32>(&ecs, hgEcsSpawn(&ecs)) = smallScramble1[i];
             }
 
             {
@@ -2234,7 +2234,7 @@ void hgTest()
             u32 mediumScramble1[]{8, 9, 1, 6, 0, 3, 7, 2, 5, 4};
             for (u32 i = 0; i < sizeof(mediumScramble1) / sizeof(*mediumScramble1); ++i)
             {
-                *hgEcsAdd<u32>(&ecs, hgEcsCreate(&ecs)) = mediumScramble1[i];
+                *hgEcsAdd<u32>(&ecs, hgEcsSpawn(&ecs)) = mediumScramble1[i];
             }
             hgEcsSort<u32>(&ecs, nullptr, comparison);
 
@@ -2255,7 +2255,7 @@ void hgTest()
             u32 mediumScramble2[]{3, 9, 7, 6, 8, 5, 0, 1, 2, 4};
             for (u32 i = 0; i < sizeof(mediumScramble2) / sizeof(*mediumScramble2); ++i)
             {
-                *hgEcsAdd<u32>(&ecs, hgEcsCreate(&ecs)) = mediumScramble2[i];
+                *hgEcsAdd<u32>(&ecs, hgEcsSpawn(&ecs)) = mediumScramble2[i];
             }
             hgEcsSort<u32>(&ecs, nullptr, comparison);
             hgEcsSort<u32>(&ecs, nullptr, comparison);
@@ -2276,7 +2276,7 @@ void hgTest()
         {
             for (u32 i = 127; i < 128; --i)
             {
-                *hgEcsAdd<u32>(&ecs, hgEcsCreate(&ecs)) = i;
+                *hgEcsAdd<u32>(&ecs, hgEcsSpawn(&ecs)) = i;
             }
             hgEcsSort<u32>(&ecs, nullptr, comparison);
 
@@ -2296,7 +2296,7 @@ void hgTest()
         {
             for (u32 i = 127; i < 128; --i)
             {
-                *hgEcsAdd<u32>(&ecs, hgEcsCreate(&ecs)) = i / 2;
+                *hgEcsAdd<u32>(&ecs, hgEcsSpawn(&ecs)) = i / 2;
             }
             hgEcsSort<u32>(&ecs, nullptr, comparison);
             hgEcsSort<u32>(&ecs, nullptr, comparison);
@@ -2315,7 +2315,110 @@ void hgTest()
         }
     }
 
-    hgWarn("HgNode test : TODO\n");
+    // HgEcs serialization
+    {
+        HgArena* arena = hgScratch();
+        HgArenaScope arenaScope{arena};
+
+        HgEcs ecs = hgEcsCreate(arena, 1024, 128);
+        hgDefer(hgEcsReset(&ecs));
+
+        hgEcsRegisterType(&ecs, arena, u32, 128);
+
+        // create scene
+        // serialize scene
+        // deserialize scene
+        // check equality
+    }
+
+    // HgNode
+    {
+        HgArena* arena = hgScratch();
+        HgArenaScope arenaScope{arena};
+
+        HgEcs ecs = hgEcsCreate(arena, 1024, 128);
+        hgDefer(hgEcsReset(&ecs));
+
+        hgEcsRegisterType(&ecs, arena, HgNode, 128);
+
+        {
+            HgEntity a = hgEcsSpawn(&ecs);
+            HgEntity b = hgEcsSpawn(&ecs);
+            HgEntity aa = hgEcsSpawn(&ecs);
+            HgEntity ab = hgEcsSpawn(&ecs);
+
+            *hgEcsAdd<HgNode>(&ecs, a) = {};
+            *hgEcsAdd<HgNode>(&ecs, b) = {};
+            *hgEcsAdd<HgNode>(&ecs, aa) = {};
+            *hgEcsAdd<HgNode>(&ecs, ab) = {};
+
+            hgNodeAddChild(&ecs, a, aa);
+            hgNodeAddChild(&ecs, a, ab);
+
+            hgAssert(hgEcsAlive(&ecs, a));
+            hgAssert(hgEcsAlive(&ecs, b));
+            hgAssert(hgEcsAlive(&ecs, aa));
+            hgAssert(hgEcsAlive(&ecs, ab));
+
+            hgNodeDestroy(&ecs, a);
+
+            hgAssert(!hgEcsAlive(&ecs, a));
+            hgAssert(hgEcsAlive(&ecs, b));
+            hgAssert(!hgEcsAlive(&ecs, aa));
+            hgAssert(!hgEcsAlive(&ecs, ab));
+
+            hgEcsDespawn(&ecs, b);
+        }
+
+        {
+            HgEntity a = hgEcsSpawn(&ecs);
+            HgEntity b = hgEcsSpawn(&ecs);
+            HgEntity aa = hgEcsSpawn(&ecs);
+            HgEntity ab = hgEcsSpawn(&ecs);
+            HgEntity aba = hgEcsSpawn(&ecs);
+            HgEntity abb = hgEcsSpawn(&ecs);
+
+            *hgEcsAdd<HgNode>(&ecs, a) = {};
+            *hgEcsAdd<HgNode>(&ecs, b) = {};
+            *hgEcsAdd<HgNode>(&ecs, aa) = {};
+            *hgEcsAdd<HgNode>(&ecs, ab) = {};
+            *hgEcsAdd<HgNode>(&ecs, aba) = {};
+            *hgEcsAdd<HgNode>(&ecs, abb) = {};
+
+            hgNodeAddChild(&ecs, ab, aba);
+            hgNodeAddChild(&ecs, ab, abb);
+            hgNodeAddChild(&ecs, a, aa);
+            hgNodeAddChild(&ecs, a, ab);
+
+            hgAssert(hgEcsAlive(&ecs, a));
+            hgAssert(hgEcsAlive(&ecs, b));
+            hgAssert(hgEcsAlive(&ecs, aa));
+            hgAssert(hgEcsAlive(&ecs, ab));
+            hgAssert(hgEcsAlive(&ecs, aba));
+            hgAssert(hgEcsAlive(&ecs, abb));
+
+            hgNodeDestroy(&ecs, ab);
+
+            hgAssert(hgEcsAlive(&ecs, a));
+            hgAssert(hgEcsAlive(&ecs, b));
+            hgAssert(hgEcsAlive(&ecs, aa));
+            hgAssert(!hgEcsAlive(&ecs, ab));
+            hgAssert(!hgEcsAlive(&ecs, aba));
+            hgAssert(!hgEcsAlive(&ecs, abb));
+
+            hgNodeDestroy(&ecs, a);
+
+            hgAssert(!hgEcsAlive(&ecs, a));
+            hgAssert(hgEcsAlive(&ecs, b));
+            hgAssert(!hgEcsAlive(&ecs, aa));
+            hgAssert(!hgEcsAlive(&ecs, ab));
+            hgAssert(!hgEcsAlive(&ecs, aba));
+            hgAssert(!hgEcsAlive(&ecs, abb));
+
+            hgEcsDespawn(&ecs, b);
+        }
+    }
+
     hgWarn("HgTransform test : TODO\n");
 
     printf("HurdyGurdy: Tests Complete in %fms\n", hgClockTick(&timer) * 1000.0f);

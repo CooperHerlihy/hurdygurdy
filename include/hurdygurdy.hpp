@@ -2098,6 +2098,16 @@ struct HgHandle {
     u32 id = (u32)-1;
 };
 
+constexpr bool operator==(HgHandle lhs, HgHandle rhs)
+{
+    return lhs.id == rhs.id;
+}
+
+constexpr bool operator!=(HgHandle lhs, HgHandle rhs)
+{
+    return lhs.id != rhs.id;
+}
+
 static constexpr u32 hgHandleIdxBits = 24;
 
 /**
@@ -4997,13 +5007,13 @@ typedef HgAssetHandle<HgBinary> HgBinaryHandle;
  * HgBinary asset load implementation
  */
 template<>
-void hgAssetLoadImpl<HgBinary>(HgAssetData<HgBinary>* data);
+void hgAssetLoadImpl(HgAssetData<HgBinary>* data);
 
 /**
  * HgBinary asset unload implementation
  */
 template<>
-void hgAssetUnloadImpl<HgBinary>(HgAssetData<HgBinary>* data);
+void hgAssetUnloadImpl(HgAssetData<HgBinary>* data);
 
 /**
  * Store a binary file to disc asynchronously
@@ -5066,9 +5076,9 @@ void hgBinaryOverwrite(HgBinary* bin, u64 idx, const void* src, u64 len);
  * - src The data to write
  */
 template<typename T>
-void hgBinaryOverwrite(u64 idx, const T& src)
+void hgBinaryOverwrite(HgBinary* bin, u64 idx, const T& src)
 {
-    overwrite(idx, &src, sizeof(T));
+    hgBinaryOverwrite(bin, idx, &src, sizeof(T));
 }
 
 /**
@@ -5106,13 +5116,13 @@ typedef HgAssetHandle<HgTexture> HgTextureHandle;
  * HgTexture asset load implementation
  */
 template<>
-void hgAssetLoadImpl<HgTexture>(HgAssetData<HgTexture>* data);
+void hgAssetLoadImpl(HgAssetData<HgTexture>* data);
 
 /**
  * HgTexture asset unload implementation
  */
 template<>
-void hgAssetUnloadImpl<HgTexture>(HgAssetData<HgTexture>* data);
+void hgAssetUnloadImpl(HgAssetData<HgTexture>* data);
 
 /**
  * Store an image to disc in the png format
@@ -5150,13 +5160,13 @@ typedef HgAssetHandle<HgGpuTexture> HgGpuTextureHandle;
  * HgGpuTexture asset load implementation
  */
 template<>
-void hgAssetLoadImpl<HgGpuTexture>(HgAssetData<HgGpuTexture>* data);
+void hgAssetLoadImpl(HgAssetData<HgGpuTexture>* data);
 
 /**
  * HgGpuTexture asset unload implementation
  */
 template<>
-void hgAssetUnloadImpl<HgGpuTexture>(HgAssetData<HgGpuTexture>* data);
+void hgAssetUnloadImpl(HgAssetData<HgGpuTexture>* data);
 
 /**
  * A vertex in a mesh
@@ -5219,13 +5229,13 @@ typedef HgAssetHandle<HgMesh> HgMeshHandle;
  * HgMesh asset load implementation
  */
 template<>
-void hgAssetLoadImpl<HgMesh>(HgAssetData<HgMesh>* data);
+void hgAssetLoadImpl(HgAssetData<HgMesh>* data);
 
 /**
  * HgMesh asset unload implementation
  */
 template<>
-void hgAssetUnloadImpl<HgMesh>(HgAssetData<HgMesh>* data);
+void hgAssetUnloadImpl(HgAssetData<HgMesh>* data);
 
 /**
  * Store the model data to disc in gltf format : TODO
@@ -5267,13 +5277,13 @@ typedef HgAssetHandle<HgGpuMesh> HgGpuMeshHandle;
  * HgGpuMesh asset load implementation
  */
 template<>
-void hgAssetLoadImpl<HgGpuMesh>(HgAssetData<HgGpuMesh>* data);
+void hgAssetLoadImpl(HgAssetData<HgGpuMesh>* data);
 
 /**
  * HgGpuMesh asset unload implementation
  */
 template<>
-void hgAssetUnloadImpl<HgGpuMesh>(HgAssetData<HgGpuMesh>* data);
+void hgAssetUnloadImpl(HgAssetData<HgGpuMesh>* data);
 
 /**
  * An entity in the ecs
@@ -5284,6 +5294,22 @@ struct HgEntity {
      */
     HgHandle handle;
 };
+
+template<>
+constexpr u64 hgHash(HgEntity e)
+{
+    return hgHash(e.handle);
+}
+
+constexpr bool operator==(HgEntity lhs, HgEntity rhs)
+{
+    return lhs.handle == rhs.handle;
+}
+
+constexpr bool operator!=(HgEntity lhs, HgEntity rhs)
+{
+    return lhs.handle != rhs.handle;
+}
 
 /**
  * The unique component id for a type
@@ -5328,19 +5354,41 @@ struct HgComponent {
     /**
      * The function called on adding the component
      */
-    void (*add)(HgEcs* ecs, void* component);
+    void (*add)(void* component);
     /**
      * The function called on removing the component
      */
-    void (*remove)(HgEcs* ecs, void* component);
+    void (*remove)(void* component);
     /**
      * The function called on serializing the component
+     *
+     * Parameters
+     * - stringArena The arena to allocate strings from, if not in the map
+     * - entities The stored indices of entities
+     * - strings The stored indices of strings
+     * - srcComponent The component to serialize
+     * - dstData Where to store the component data, may not be aligned
      */
-    void (*serialize)(HgEcs* ecs, void* srcComponent, void* dstData);
+    void (*serialize)(
+        HgArena* stringArena,
+        HgMap<HgEntity, u32>* entities,
+        HgMap<HgStringView, u32>* strings,
+        void* srcComponent,
+        void* dstData);
     /**
      * The function called on deserializing the component
+     *
+     * Parameters
+     * - entities The entities from stored indices
+     * - strings The strings from stored indices
+     * - srcData The component to deserialize, may not be aligned
+     * - dstComponent Where to load the component
      */
-    void (*deserialize)(HgEcs* ecs, void* srcData, void* dstComponent);
+    void (*deserialize)(
+        HgEntity* entities,
+        HgStringView* strings,
+        void* srcData,
+        void* dstComponent);
 };
 
 /**
@@ -5397,11 +5445,11 @@ struct HgEcsRegisterComponent {
     /**
      * The function called on adding the component
      */
-    void (*add)(HgEcs* ecs, void* component);
+    void (*add)(void* component);
     /**
      * The function called on removing the component
      */
-    void (*remove)(HgEcs* ecs, void* component);
+    void (*remove)(void* component);
     /**
      * The width in bytes of the serialized component
      */
@@ -5409,11 +5457,20 @@ struct HgEcsRegisterComponent {
     /**
      * The function called on serializing the component
      */
-    void (*serialize)(HgEcs* ecs, void* srcComponent, void* dstData);
+    void (*serialize)(
+        HgArena* stringArena,
+        HgMap<HgEntity, u32>* entities,
+        HgMap<HgStringView, u32>* strings,
+        void* srcComponent,
+        void* dstData);
     /**
      * The function called on deserializing the component
      */
-    void (*deserialize)(HgEcs* ecs, void* srcData, void* dstComponent);
+    void (*deserialize)(
+        HgEntity* entities,
+        HgStringView* strings,
+        void* srcData,
+        void* dstComponent);
 };
 
 /**
@@ -5430,9 +5487,8 @@ void hgEcsRegisterComponent(HgEcs* ecs, HgArena* arena, HgEcsRegisterComponent* 
  * The function called on adding the component
  */
 template<typename T>
-void hgEcsAddImpl(HgEcs* ecs, T* component)
+void hgEcsAddImpl(T* component)
 {
-    (void)ecs;
     (void)component;
 }
 
@@ -5440,9 +5496,8 @@ void hgEcsAddImpl(HgEcs* ecs, T* component)
  * The function called on removing the component
  */
 template<typename T>
-void hgEcsRemoveImpl(HgEcs* ecs, T* component)
+void hgEcsRemoveImpl(T* component)
 {
-    (void)ecs;
     (void)component;
 }
 
@@ -5450,28 +5505,38 @@ void hgEcsRemoveImpl(HgEcs* ecs, T* component)
  * The width in bytes of the serialized component
  */
 template<typename T>
-u32 hgEcsSerialWidthImpl = 0;
+u32 hgEcsSerialWidthImpl = sizeof(T);
 
 /**
  * The function called on serializing the component
  */
 template<typename T>
-void hgEcsSerializeImpl(HgEcs* ecs, T* srcComponent, void* dstData)
+void hgEcsSerializeImpl(
+    HgArena* stringArena,
+    HgMap<HgEntity, u32>* entities,
+    HgMap<HgStringView, u32>* strings,
+    T* srcComponent,
+    void* dstData)
 {
-    (void)ecs;
-    (void)srcComponent;
-    (void)dstData;
+    (void)stringArena;
+    (void)entities;
+    (void)strings;
+    memcpy(dstData, srcComponent, sizeof(T));
 }
 
 /**
  * The function called on deserializing the component
  */
 template<typename T>
-void hgEcsDeserializeImpl(HgEcs* ecs, void* srcData, T* dstComponent)
+void hgEcsDeserializeImpl(
+    HgEntity* entities,
+    HgStringView* strings,
+    void* srcData,
+    void* dstComponent)
 {
-    (void)ecs;
-    (void)srcData;
-    (void)dstComponent;
+    (void)entities;
+    (void)strings;
+    memcpy(dstComponent, srcData, sizeof(T));
 }
 
 /**
@@ -5485,18 +5550,40 @@ void hgEcsDeserializeImpl(HgEcs* ecs, void* srcData, T* dstComponent)
         registerComponentInternal.align = alignof(type); \
         registerComponentInternal.width = sizeof(type); \
         registerComponentInternal.max = maxCount; \
-        registerComponentInternal.add = [](HgEcs* pecs, void* component) { \
-            hgEcsAddImpl<type>(pecs, (type*)component); \
+        registerComponentInternal.add = [](void* component) \
+        { \
+            hgEcsAddImpl<type>((type*)component); \
         }; \
-        registerComponentInternal.remove = [](HgEcs* pecs, void* component) { \
-            hgEcsRemoveImpl<type>(pecs, (type*)component); \
+        registerComponentInternal.remove = [](void* component) \
+        { \
+            hgEcsRemoveImpl<type>((type*)component); \
         }; \
         registerComponentInternal.serialWidth = hgEcsSerialWidthImpl<u32>; \
-        registerComponentInternal.serialize = [](HgEcs* pecs, void* srcComponent, void* dstData) { \
-            hgEcsSerializeImpl<type>(pecs, (type*)srcComponent, dstData); \
+        registerComponentInternal.serialize = []( \
+            HgArena* stringArena, \
+            HgMap<HgEntity, u32>* entities, \
+            HgMap<HgStringView, u32>* strings, \
+            void* srcComponent, \
+            void* dstData) \
+        { \
+            hgEcsSerializeImpl<type>( \
+                stringArena, \
+                entities, \
+                strings, \
+                (type*)srcComponent, \
+                dstData); \
         }; \
-        registerComponentInternal.deserialize = [](HgEcs* pecs, void* srcData, void* dstComponent) { \
-            hgEcsDeserializeImpl<type>(pecs, srcData, (type*)dstComponent); \
+        registerComponentInternal.deserialize = []( \
+            HgEntity* entities, \
+            HgStringView* strings, \
+            void* srcData, \
+            void* dstComponent) \
+        { \
+            hgEcsDeserializeImpl<type>( \
+                entities, \
+                strings, \
+                srcData, \
+                (type*)dstComponent); \
         }; \
         hgEcsRegisterComponent(ecs, arena, &registerComponentInternal); \
     } while (0)
@@ -5509,14 +5596,14 @@ HgStringView hgEcsComponentName(HgEcs* ecs, u64 componentId);
 /**
  * Return a new entity
  */
-HgEntity hgEcsCreate(HgEcs* ecs);
+HgEntity hgEcsSpawn(HgEcs* ecs);
 
 /**
  * Destroy an entity
  *
  * Note, this function will invalidate iterators
  */
-void hgEcsDestroy(HgEcs* ecs, HgEntity e);
+void hgEcsDespawn(HgEcs* ecs, HgEntity e);
 
 /**
  * Return whether an entity is alive
@@ -5893,35 +5980,15 @@ void hgEcsSort(HgEcs* ecs, void* data, bool (*compare)(void*, HgEcs* ecs, HgEnti
     hgEcsSort(ecs, hgComponentId<T>, data, compare);
 }
 
-struct HgEcsSerializationComponent {
-    u32 nameString;
-    HgEntity* entities;
-    HgBinary data;
-    u32 width;
-    u32 count;
-};
-
-struct HgEcsSerializationData {
-    HgEntity* entities;
-    u32 entityCount;
-    u32 entityCapacity;
-
-    HgMap<u64, HgEcsSerializationComponent> components;
-
-    HgStringView* strings;
-    u32 stringCount;
-    u32 stringCapacity;
-};
-
 /**
  * Serialize a scene from a root entity
  */
-HgBinary* hgEcsSerialize(HgArena* arena, HgEcs* ecs, HgEntity root);
+HgBinary hgEcsSerialize(HgArena* arena, HgEcs* ecs, HgEntity root);
 
 /**
  * Deserialize a scene and return the root entity
  */
-HgEntity hgEcsDeserialize(HgEcs* ecs, HgBinary* scene);
+HgEntity hgEcsDeserialize(HgEcs* ecs, HgBinary scene);
 
 /**
  * A node component for entities in a hierarchy
@@ -6091,13 +6158,13 @@ struct HgCamera {
  * HgCamera ecs add implementation
  */
 template<>
-void hgEcsAddImpl(HgEcs*, HgCamera* camera);
+void hgEcsAddImpl(HgCamera* camera);
 
 /**
  * HgCamera ecs remove implementation
  */
 template<>
-void hgEcsRemoveImpl(HgEcs*, HgCamera* camera);
+void hgEcsRemoveImpl(HgCamera* camera);
 
 /**
  * Update the camera's gpu side data, must have a camera and transform

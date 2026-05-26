@@ -78,7 +78,7 @@ int main()
     HgEntity* scene = hgAlloc<HgEntity>(arena, sceneCapacity);
     u32 sceneSize = 0;
 
-    HgEntity camera = hgEcsCreate(&ecs);
+    HgEntity camera = hgEcsSpawn(&ecs);
     scene[sceneSize++] = camera;
 
     HgTransform* cameraTf = hgEcsAdd<HgTransform>(&ecs, camera);
@@ -91,23 +91,23 @@ int main()
     cameraC->perspective.near = 0.1f;
     cameraC->perspective.far = 1000.0f;
 
-    HgEntity skybox = hgEcsCreate(&ecs);
+    HgEntity skybox = hgEcsSpawn(&ecs);
     scene[sceneSize++] = skybox;
     *hgEcsAdd<HgSkybox>(&ecs, skybox) = {};
 
-    HgEntity pointLight = hgEcsCreate(&ecs);
+    HgEntity pointLight = hgEcsSpawn(&ecs);
     scene[sceneSize++] = pointLight;
     *hgEcsAdd<HgTransform>(&ecs, pointLight) = {};
     hgEcsGet<HgTransform>(&ecs, pointLight)->position = HgVec3{0, -2, 0};
     *hgEcsAdd<HgPointLight>(&ecs, pointLight) = {HgVec4{1, 1, 1, 4}};
 
-    HgEntity square = hgEcsCreate(&ecs);
+    HgEntity square = hgEcsSpawn(&ecs);
     scene[sceneSize++] = square;
     *hgEcsAdd<HgTransform>(&ecs, square) = {};
     hgEcsGet<HgTransform>(&ecs, square)->position = HgVec3{-1, 0, 1};
     *hgEcsAdd<HgSprite>(&ecs, square) = {HgGpuTextureHandle{}, HgVec2{0.0f}, HgVec2{1.0f}};
 
-    HgEntity cube = hgEcsCreate(&ecs);
+    HgEntity cube = hgEcsSpawn(&ecs);
     scene[sceneSize++] = cube;
     *hgEcsAdd<HgTransform>(&ecs, cube) = {};
     hgEcsGet<HgTransform>(&ecs, cube)->position = HgVec3{1, 0, 1};
@@ -332,7 +332,7 @@ int main()
                             scene = hgRealloc(arena, scene, sceneCapacity, sceneCapacity * 2);
                             sceneCapacity *= 2;
                         }
-                        scene[sceneSize++] = hgEcsCreate(&ecs);
+                        scene[sceneSize++] = hgEcsSpawn(&ecs);
                     }
 
                     for (u32 i = 0; i < sceneSize; ++i)
@@ -347,7 +347,7 @@ int main()
                         {
                             if (ImGui::Button("Destroy Entity"))
                             {
-                                hgEcsDestroy(&ecs, e);
+                                hgEcsDespawn(&ecs, e);
                                 memmove(scene + i, scene + i + 1, sizeof(HgEntity) * (--sceneSize - i));
                                 --i;
                             } else {

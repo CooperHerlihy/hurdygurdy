@@ -2172,7 +2172,7 @@ void hgAssetInitDefaults(
 }
 
 template<>
-void hgAssetLoadImpl<HgBinary>(HgAssetData<HgBinary>* data)
+void hgAssetLoadImpl(HgAssetData<HgBinary>* data)
 {
     hgIoRequest(data->isLoaded, &data->asset, data->path, [](void* pbin, HgStringView path)
     {
@@ -2212,7 +2212,7 @@ void hgAssetLoadImpl<HgBinary>(HgAssetData<HgBinary>* data)
 }
 
 template<>
-void hgAssetUnloadImpl<HgBinary>(HgAssetData<HgBinary>* data)
+void hgAssetUnloadImpl(HgAssetData<HgBinary>* data)
 {
     hgFenceWaitIndefinite(data->isLoaded);
     free(data->asset.data);
@@ -2265,7 +2265,7 @@ void hgBinaryOverwrite(HgBinary* bin, u64 idx, const void* src, u64 len)
 }
 
 template<>
-void hgAssetLoadImpl<HgTexture>(HgAssetData<HgTexture>* data)
+void hgAssetLoadImpl(HgAssetData<HgTexture>* data)
 {
     hgIoRequest(data->isLoaded, &data->asset, data->path, [](void* ptex, HgStringView path)
     {
@@ -2290,7 +2290,7 @@ void hgAssetLoadImpl<HgTexture>(HgAssetData<HgTexture>* data)
 }
 
 template<>
-void hgAssetUnloadImpl<HgTexture>(HgAssetData<HgTexture>* data)
+void hgAssetUnloadImpl(HgAssetData<HgTexture>* data)
 {
     hgFenceWaitIndefinite(data->isLoaded);
     free(data->asset.pixels);
@@ -2310,7 +2310,7 @@ void hgTextureStorePng(HgTexture* texture, HgStringView path, HgFence fence)
 }
 
 template<>
-void hgAssetLoadImpl<HgGpuTexture>(HgAssetData<HgGpuTexture>* data)
+void hgAssetLoadImpl(HgAssetData<HgGpuTexture>* data)
 {
     HgTextureHandle texHandle = hgAssetLoad<HgTexture>(data->path);
     hgDefer(hgAssetUnload(texHandle));
@@ -2342,7 +2342,7 @@ void hgAssetLoadImpl<HgGpuTexture>(HgAssetData<HgGpuTexture>* data)
 }
 
 template<>
-void hgAssetUnloadImpl<HgGpuTexture>(HgAssetData<HgGpuTexture>* data)
+void hgAssetUnloadImpl(HgAssetData<HgGpuTexture>* data)
 {
     hgGpuDescriptorDestroy(data->asset.descriptor);
     hgGpuSamplerDestroy(data->asset.sampler);
@@ -2351,14 +2351,14 @@ void hgAssetUnloadImpl<HgGpuTexture>(HgAssetData<HgGpuTexture>* data)
 }
 
 template<>
-void hgAssetLoadImpl<HgMesh>(HgAssetData<HgMesh>* data)
+void hgAssetLoadImpl(HgAssetData<HgMesh>* data)
 {
     (void)data;
     hgError("load gltf file : TODO\n");
 }
 
 template<>
-void hgAssetUnloadImpl<HgMesh>(HgAssetData<HgMesh>* data)
+void hgAssetUnloadImpl(HgAssetData<HgMesh>* data)
 {
     hgFenceWaitIndefinite(data->isLoaded);
     free(data->asset.indices);
@@ -2374,7 +2374,7 @@ void hgMeshStoreGltf(HgMesh* data, HgStringView path, HgFence fence)
 }
 
 template<>
-void hgAssetLoadImpl<HgGpuMesh>(HgAssetData<HgGpuMesh>* data)
+void hgAssetLoadImpl(HgAssetData<HgGpuMesh>* data)
 {
     HgMeshHandle meshHandle = hgAssetLoad<HgMesh>(data->path);
     hgDefer(hgAssetUnload(meshHandle));
@@ -2412,7 +2412,7 @@ void hgAssetLoadImpl<HgGpuMesh>(HgAssetData<HgGpuMesh>* data)
 }
 
 template<>
-void hgAssetUnloadImpl<HgGpuMesh>(HgAssetData<HgGpuMesh>* data)
+void hgAssetUnloadImpl(HgAssetData<HgGpuMesh>* data)
 {
     hgGpuBufferDestroy(data->asset.vertexBuffer);
     hgGpuBufferDestroy(data->asset.indexBuffer);
@@ -2441,7 +2441,7 @@ void hgEcsReset(HgEcs* ecs)
 
             for (u32 c = 0; c < system->count; ++c)
             {
-                system->remove(ecs, (u8*)system->components + c * system->width);
+                system->remove((u8*)system->components + c * system->width);
             }
             memset(system->indices, -1, ecs->entities.capacity * sizeof(*system->indices));
             system->count = 0;
@@ -2486,13 +2486,13 @@ HgStringView hgEcsComponentName(HgEcs* ecs, u64 componentId)
     return system->name;
 }
 
-HgEntity hgEcsCreate(HgEcs* ecs)
+HgEntity hgEcsSpawn(HgEcs* ecs)
 {
     hgAssert(ecs != nullptr);
     return {hgPoolAlloc(&ecs->entities)};
 }
 
-void hgEcsDestroy(HgEcs* ecs, HgEntity e)
+void hgEcsDespawn(HgEcs* ecs, HgEntity e)
 {
     hgAssert(ecs != nullptr);
     hgAssert(hgEcsAlive(ecs, e));
@@ -2525,7 +2525,7 @@ void* hgEcsAdd(HgEcs* ecs, HgEntity e, u64 componentId)
     void* c = (u8*)system->components + system->width * system->count;
     ++system->count;
 
-    system->add(ecs, c);
+    system->add(c);
     return c;
 }
 
@@ -2539,7 +2539,7 @@ void hgEcsRemove(HgEcs* ecs, HgEntity e, u64 componentId)
     hgAssert(system != nullptr);
 
     u32 idx = system->indices[hgHandleIdx(e.handle)];
-    system->remove(ecs, (u8*)system->components + system->width * idx);
+    system->remove((u8*)system->components + system->width * idx);
 
     HgEntity last = system->entities[system->count - 1];
     system->entities[system->count - 1] = HgEntity{};
@@ -2574,6 +2574,7 @@ void* hgEcsGet(HgEcs* ecs, HgEntity e, u64 componentId)
 
     HgComponent* system = hgMapGet(&ecs->components, componentId);
     hgAssert(system != nullptr);
+    hgAssert(system->indices[hgHandleIdx(e.handle)] < system->count);
 
     return (u8*)system->components + system->width * system->indices[hgHandleIdx(e.handle)];
 }
@@ -2734,24 +2735,17 @@ void hgEcsSort(
     q.quicksort(0, system->count);
 }
 
-struct HgEcsSerializationComponentDesc {
-    u32 nameString;
-    u32 entitiesBegin;
-    u32 dataBegin;
-    u32 width;
-    u32 count;
-};
+static constexpr char ecsSceneTag[] = "HgScene";
+static constexpr u32 ecsSceneVersionMajor = 0;
+static constexpr u32 ecsSceneVersionMinor = 0;
+static constexpr u32 ecsSceneVersionPatch = 0;
 
-struct HgEcsSerializationAssetDesc {
-    u32 pathString;
-};
+struct EcsSerialHeader {
+    char tag[sizeof(ecsSceneTag)];
+    u32 versionMajor;
+    u32 versionMinor;
+    u32 versionPatch;
 
-struct HgEcsSerializationStringDesc {
-    u32 begin;
-    u32 size;
-};
-
-struct HgEcsSerializationHeader {
     u32 entityCount;
 
     u32 componentsBegin;
@@ -2761,99 +2755,340 @@ struct HgEcsSerializationHeader {
     u32 stringCount;
 };
 
-// HgBinary* hgEcsSerialize(HgArena* arena, HgEcs* ecs, HgEntity root)
-// {
-// }
+struct EcsSerialComponentDesc {
+    u32 nameString;
+    u32 entitiesBegin;
+    u32 dataBegin;
+    u32 dataWidth;
+    u32 count;
+};
 
-// HgEntity hgEcsDeserialize(HgEcs* ecs, HgBinary* scene)
-// {
-// }
+struct EcsSerialStringDesc {
+    u32 begin;
+    u32 length;
+};
+
+struct EcsSerialComponent {
+    u32 nameString;
+    u32* entities;
+    void* data;
+    u32 width;
+    u32 count;
+};
+
+struct EcsSerialScene {
+    HgMap<HgEntity, u32> entities;
+    HgMap<HgStringView, u32> strings;
+    HgMap<u64, EcsSerialComponent> components;
+};
+
+void ecsSerialFindEntities(HgEcs* ecs, HgEntity root, EcsSerialScene* scene)
+{
+    if (hgEcsAlive(ecs, root))
+    {
+        hgMapAdd(&scene->entities, root, scene->entities.count);
+        if (hgEcsHas<HgNode>(ecs, root))
+        {
+            HgNode* node = hgEcsGet<HgNode>(ecs, root);
+            ecsSerialFindEntities(ecs, node->firstChild, scene);
+            ecsSerialFindEntities(ecs, node->nextSibling, scene);
+        }
+    }
+}
+
+void ecsSerialGatherData(HgArena* arena, HgEcs* ecs, HgEntity root, EcsSerialScene* scene)
+{
+    if (hgEcsAlive(ecs, root))
+    {
+        for (u32 c = 0; c < ecs->components.capacity; ++c)
+        {
+            if (ecs->components.hasVal[c] && hgEcsHas(ecs, root, ecs->components.keys[c]))
+            {
+                EcsSerialComponent* compData = hgMapGet(&scene->components, ecs->components.keys[c]);
+                if (compData == nullptr)
+                {
+                    compData = hgMapAdd(&scene->components, ecs->components.keys[c], {});
+
+                    u32* nameString = hgMapGet(&scene->strings, ecs->components.vals[c].name);
+                    if (nameString == nullptr)
+                        nameString = hgMapAdd(&scene->strings, ecs->components.vals[c].name, scene->strings.count);
+
+                    compData->nameString = *nameString;
+                    compData->entities = hgAlloc<u32>(arena, ecs->entities.capacity);
+                    compData->data = hgAlloc(arena, ecs->components.vals[c].width * ecs->entities.capacity, 1);
+                    compData->width = ecs->components.vals[c].width;
+                    compData->count = 0;
+                }
+
+                compData->entities[compData->count] = *hgMapGet(&scene->entities, root);
+                ecs->components.vals[c].serialize(
+                    arena,
+                    &scene->entities,
+                    &scene->strings,
+                    hgEcsGet(ecs, root, ecs->components.keys[c]),
+                    (u8*)compData->data + compData->width * compData->count);
+                ++compData->count;
+            }
+        };
+
+        if (hgEcsHas<HgNode>(ecs, root))
+        {
+            HgNode* node = hgEcsGet<HgNode>(ecs, root);
+            ecsSerialGatherData(arena, ecs, node->firstChild, scene);
+            ecsSerialGatherData(arena, ecs, node->nextSibling, scene);
+        }
+    }
+}
+
+HgBinary ecsSerialWriteBin(HgArena* arena, EcsSerialScene* data)
+{
+    EcsSerialHeader header{};
+    memcpy(header.tag, ecsSceneTag, sizeof(ecsSceneTag));
+    header.versionMajor = ecsSceneVersionMajor;
+    header.versionMinor = ecsSceneVersionMinor;
+    header.versionPatch = ecsSceneVersionPatch;
+
+    header.entityCount = data->entities.count;
+
+    HgBinary bin{};
+
+    bin = hgBinaryResize(arena, &bin, bin.size + sizeof(header));
+
+    header.componentsBegin = bin.size;
+    header.componentCount = data->components.count;
+
+    bin = hgBinaryResize(arena, &bin, bin.size + sizeof(EcsSerialComponentDesc) * header.componentCount);
+
+    header.stringsBegin = bin.size;
+    header.stringCount = data->strings.count;
+
+    bin = hgBinaryResize(arena, &bin, bin.size + sizeof(EcsSerialStringDesc) * header.componentCount);
+
+    hgBinaryOverwrite(&bin, 0, header);
+
+    u32 compIdx = 0;
+    for (u32 c = 0; c < data->components.capacity; ++c)
+    {
+        if (data->components.hasVal[c])
+        {
+            EcsSerialComponentDesc comp{};
+            comp.nameString = data->components.vals[c].nameString;
+            comp.dataWidth = data->components.vals[c].width;
+            comp.count = data->components.vals[c].count;
+
+            comp.entitiesBegin = bin.size;
+            bin = hgBinaryResize(arena, &bin, bin.size + sizeof(u32) * comp.count);
+            comp.dataBegin = bin.size;
+            bin = hgBinaryResize(arena, &bin, bin.size + comp.dataWidth * comp.count);
+
+            hgBinaryOverwrite(&bin, header.componentsBegin + sizeof(comp) * compIdx, comp);
+            hgBinaryOverwrite(&bin, comp.entitiesBegin, data->components.vals[c].entities, sizeof(u32) * comp.count);
+            hgBinaryOverwrite(&bin, comp.dataBegin, data->components.vals[c].data, comp.dataWidth * comp.count);
+
+            ++compIdx;
+        }
+    }
+
+    u32 strIdx = 0;
+    for (u32 s = 0; s < data->strings.capacity; ++s)
+    {
+        if (data->strings.hasVal[s])
+        {
+            EcsSerialStringDesc comp{};
+            comp.begin = bin.size;
+            comp.length = data->strings.keys[s].length;
+            bin = hgBinaryResize(arena, &bin, bin.size + comp.length);
+
+            hgBinaryOverwrite(&bin, header.stringsBegin + sizeof(comp) * strIdx, comp);
+            hgBinaryOverwrite(&bin, comp.begin, data->strings.keys[s].chars, comp.length);
+
+            ++strIdx;
+        }
+    }
+
+    return bin;
+}
+
+HgBinary hgEcsSerialize(HgArena* arena, HgEcs* ecs, HgEntity root)
+{
+    hgAssert(arena != nullptr);
+    hgAssert(ecs != nullptr);
+
+    HgArena* scratch = hgScratch(&arena, 1);
+    HgArenaScope scratchScope{scratch};
+
+    EcsSerialScene data;
+    data.entities = hgMapCreate<HgEntity, u32>(scratch, ecs->entities.capacity);
+    data.strings = hgMapCreate<HgStringView, u32>(scratch, 4096);
+    data.components = hgMapCreate<u64, EcsSerialComponent>(scratch, ecs->components.count * 2);
+
+    ecsSerialFindEntities(ecs, root, &data);
+    ecsSerialGatherData(scratch, ecs, root, &data);
+    return ecsSerialWriteBin(arena, &data);
+}
+
+struct EcsDeserialScene {
+    HgEntity* entities;
+    u32 entityCount;
+};
+
+HgEntity hgEcsDeserialize(HgEcs* ecs, HgBinary scene)
+{
+    HgArena* scratch = hgScratch();
+    HgArenaScope scratchScope{scratch};
+
+    EcsSerialHeader header = hgBinaryRead<EcsSerialHeader>(&scene, 0);
+
+    if (memcmp(header.tag, ecsSceneTag, sizeof(ecsSceneTag)) != 0)
+    {
+        hgWarn("Scene file could not be read, does not have a header\n");
+        return HgEntity{};
+    }
+    else if (header.versionMajor != ecsSceneVersionMajor)
+    {
+        hgWarn("Scene file has wrong major version: %d instead of %d", header.versionMajor, ecsSceneVersionMajor);
+    }
+    else if (header.versionMinor != ecsSceneVersionMinor)
+    {
+        hgWarn("Scene file has wrong minor version: %d instead of %d", header.versionMinor, ecsSceneVersionMinor);
+    }
+    else if (header.versionPatch != ecsSceneVersionPatch)
+    {
+        hgWarn("Scene file has wrong patch version: %d instead of %d", header.versionPatch, ecsSceneVersionPatch);
+    }
+
+    HgEntity* entities = hgAlloc<HgEntity>(scratch, header.entityCount);
+    for (u32 i = 0; i < header.entityCount; ++i)
+    {
+        entities[i] = hgEcsSpawn(ecs);
+    }
+
+    HgStringView* strings = hgAlloc<HgStringView>(scratch, header.stringCount);
+    for (u32 i = 0; i < header.stringCount; ++i)
+    {
+        EcsSerialStringDesc str = hgBinaryRead<EcsSerialStringDesc>(
+            &scene, header.stringsBegin + i * sizeof(EcsSerialStringDesc));
+
+        strings[i].chars = (char*)((u8*)scene.data + str.begin);
+        strings[i].length = str.length;
+    }
+
+    for (u32 i = 0; i < header.componentCount; ++i)
+    {
+        EcsSerialComponentDesc comp = hgBinaryRead<EcsSerialComponentDesc>(
+            &scene, header.componentsBegin + i * sizeof(EcsSerialComponent));
+
+        u64 componentId = hgHash(strings[comp.nameString]);
+
+        for (u32 j = 0; j < comp.count; ++j)
+        {
+            HgEntity e = entities[hgBinaryRead<u32>(&scene, comp.entitiesBegin + j * sizeof(u32))];
+
+            hgMapGet(&ecs->components, componentId)->deserialize(
+                entities,
+                strings,
+                (u8*)scene.data + comp.dataBegin + j * comp.dataWidth,
+                hgEcsAdd(ecs, e, componentId));
+        }
+    }
+
+    return entities[0];
+}
 
 void hgNodeAddChild(HgEcs* ecs, HgEntity parent, HgEntity child)
 {
     hgAssert(ecs != nullptr);
+    hgAssert(hgEcsAlive(ecs, parent));
+    hgAssert(hgEcsAlive(ecs, child));
 
     HgNode* node = hgEcsGet<HgNode>(ecs, parent);
-    HgNode* oldFirst = hgEcsGet<HgNode>(ecs, node->firstChild);
-    HgNode* newFirst = hgEcsGet<HgNode>(ecs, child);
+    HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
 
-    hgAssert(newFirst->parent.handle.id == HgEntity{}.handle.id);
-    hgAssert(newFirst->prevSibling.handle.id == HgEntity{}.handle.id);
-    hgAssert(newFirst->nextSibling.handle.id == HgEntity{}.handle.id);
+    hgAssert(hgHandleIsNull(childNode->parent.handle));
+    hgAssert(hgHandleIsNull(childNode->prevSibling.handle));
+    hgAssert(hgHandleIsNull(childNode->nextSibling.handle));
 
-    newFirst->parent = parent;
-    newFirst->nextSibling = node->firstChild;
-
-    oldFirst->prevSibling = child;
+    if (!hgHandleIsNull(node->firstChild.handle))
+    {
+        hgEcsGet<HgNode>(ecs, node->firstChild)->prevSibling = child;
+        childNode->nextSibling = node->firstChild;
+    }
     node->firstChild = child;
+    childNode->parent = parent;
 }
 
 void hgNodeDetach(HgEcs* ecs, HgEntity e)
 {
     hgAssert(ecs != nullptr);
+    hgAssert(hgEcsAlive(ecs, e));
 
     HgNode* node = hgEcsGet<HgNode>(ecs, e);
-    if (node->parent.handle.id != HgEntity{}.handle.id)
+    if (hgHandleIsNull(node->parent.handle))
     {
-        if (node->prevSibling.handle.id == HgEntity{}.handle.id)
-            hgEcsGet<HgNode>(ecs, node->parent)->firstChild = node->nextSibling;
-        else
-            hgEcsGet<HgNode>(ecs, node->prevSibling)->nextSibling = node->nextSibling;
-        hgEcsGet<HgNode>(ecs, node->nextSibling)->prevSibling = node->prevSibling;
+        hgAssert(hgHandleIsNull(node->prevSibling.handle));
+        hgAssert(hgHandleIsNull(node->nextSibling.handle));
 
         HgEntity child = node->firstChild;
-        while (child.handle.id != HgEntity{}.handle.id)
+        while (!hgHandleIsNull(child.handle))
         {
-            HgNode* tf = hgEcsGet<HgNode>(ecs, child);
-            HgEntity next = tf->nextSibling;
-            tf->parent = HgEntity{};
-            tf->nextSibling = HgEntity{};
-            tf->prevSibling = HgEntity{};
-            hgNodeAddChild(ecs, node->parent, child);
+            HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
+            HgEntity next = childNode->nextSibling;
+            childNode->parent = HgEntity{};
+            childNode->nextSibling = HgEntity{};
+            childNode->prevSibling = HgEntity{};
             child = next;
         }
     } else {
-        hgAssert(node->prevSibling.handle.id == HgEntity{}.handle.id);
-        hgAssert(node->nextSibling.handle.id == HgEntity{}.handle.id);
+        if (!hgHandleIsNull(node->prevSibling.handle))
+            hgEcsGet<HgNode>(ecs, node->prevSibling)->nextSibling = node->nextSibling;
+        else
+            hgEcsGet<HgNode>(ecs, node->parent)->firstChild = node->nextSibling;
+
+        if (!hgHandleIsNull(node->nextSibling.handle))
+            hgEcsGet<HgNode>(ecs, node->nextSibling)->prevSibling = node->prevSibling;
+
         HgEntity child = node->firstChild;
-        while (child.handle.id != HgEntity{}.handle.id)
+        while (!hgHandleIsNull(child.handle))
         {
-            HgNode* tf = hgEcsGet<HgNode>(ecs, child);
-            child = tf->nextSibling;
-            tf->parent = HgEntity{};
-            tf->nextSibling = HgEntity{};
-            tf->prevSibling = HgEntity{};
+            HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
+            HgEntity next = childNode->nextSibling;
+            childNode->parent = HgEntity{};
+            childNode->nextSibling = HgEntity{};
+            childNode->prevSibling = HgEntity{};
+            hgNodeAddChild(ecs, node->parent, child);
+            child = next;
         }
     }
-    node = {};
+    *node = {};
 }
 
 void hgNodeDestroy(HgEcs* ecs, HgEntity e)
 {
     hgAssert(ecs != nullptr);
+    hgAssert(hgEcsAlive(ecs, e));
 
     HgNode* node = hgEcsGet<HgNode>(ecs, e);
-    HgEntity child = node->firstChild;
-    while (child.handle.id != HgEntity{}.handle.id)
+    if (!hgHandleIsNull(node->parent.handle))
     {
-        HgNode* tf = hgEcsGet<HgNode>(ecs, child);
-        HgEntity next = tf->nextSibling;
-        tf->parent = HgEntity{};
-        tf->prevSibling = HgEntity{};
-        tf->nextSibling = HgEntity{};
-        hgNodeDestroy(ecs, child);
-        child = next;
-    }
-    if (node->parent.handle.id != HgEntity{}.handle.id)
-    {
-        if (node->prevSibling.handle.id != HgEntity{}.handle.id)
+        if (!hgHandleIsNull(node->prevSibling.handle))
             hgEcsGet<HgNode>(ecs, node->prevSibling)->nextSibling = node->nextSibling;
         else
             hgEcsGet<HgNode>(ecs, node->parent)->firstChild = node->nextSibling;
-        if (node->nextSibling.handle.id != HgEntity{}.handle.id)
-            hgEcsGet<HgNode>(ecs, node->nextSibling)->prevSibling = HgEntity{};
+
+        if (!hgHandleIsNull(node->nextSibling.handle))
+            hgEcsGet<HgNode>(ecs, node->nextSibling)->prevSibling = node->prevSibling;
     }
-    hgEcsDestroy(ecs, e);
+
+    HgEntity child = node->firstChild;
+    while (!hgHandleIsNull(child.handle))
+    {
+        HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
+        HgEntity next = childNode->nextSibling;
+        hgNodeDestroy(ecs, child);
+        child = next;
+    }
+
+    hgEcsDespawn(ecs, e);
 }
 
 void hgTransformSet(HgEcs* ecs, HgEntity e, const HgVec3& pos, const HgVec3& scale, const HgQuat& rot)
@@ -2899,10 +3134,8 @@ struct VPUniform {
 };
 
 template<>
-void hgEcsAddImpl(HgEcs*, HgCamera* camera)
+void hgEcsAddImpl(HgCamera* camera)
 {
-    hgDebug("added camera\n");
-
     *camera = {};
 
     camera->vpBuffer = hgGpuBufferCreate(
@@ -2917,7 +3150,7 @@ void hgEcsAddImpl(HgEcs*, HgCamera* camera)
 }
 
 template<>
-void hgEcsRemoveImpl(HgEcs*, HgCamera* camera)
+void hgEcsRemoveImpl(HgCamera* camera)
 {
     hgGpuDescriptorDestroy(camera->vpDesc);
     hgGpuBufferDestroy(camera->vpBuffer);
@@ -2952,12 +3185,6 @@ void hgCameraUpdate(HgEcs* ecs, HgEntity e)
     }
 
     hgGpuBufferWrite(camera->vpBuffer, 0, &vp, sizeof(vp));
-}
-
-template<>
-void hgEcsAddImpl(HgEcs*, HgSprite* sprite)
-{
-    *sprite = {};
 }
 
 struct SpritePipelinePush {
@@ -3070,12 +3297,6 @@ void hgSpritesDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 
         hgGpuDraw(cmd, 0, 6, 0, 1);
     });
-}
-
-template<>
-void hgEcsAddImpl(HgEcs*, HgSkybox* skybox)
-{
-    *skybox = {};
 }
 
 struct SkyboxPipelinePush {
