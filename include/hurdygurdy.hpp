@@ -5489,7 +5489,7 @@ void hgEcsRegisterComponent(HgEcs* ecs, HgArena* arena, HgEcsRegisterComponent* 
 template<typename T>
 void hgEcsAddImpl(T* component)
 {
-    (void)component;
+    *component = {};
 }
 
 /**
@@ -6178,15 +6178,15 @@ struct HgSprite {
     /**
      * The texture to draw from
      */
-    HgGpuTextureHandle texture;
+    HgGpuTextureHandle texture = {};
     /**
      * The beginning coordinate to read from texture, [0.0, 1.0]
      */
-    HgVec2 uvPos;
+    HgVec2 uvPos{0.0f, 0.0f};
     /**
      * The size of the region to read from texture, [0.0, 1.0]
      */
-    HgVec2 uvSize;
+    HgVec2 uvSize{1.0f, 1.0f};
 };
 
 /**

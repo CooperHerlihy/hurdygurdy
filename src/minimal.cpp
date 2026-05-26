@@ -34,7 +34,6 @@ int main()
     HgEntity camera = hgEcsSpawn(&ecs);
 
     HgTransform* cameraTf = hgEcsAdd<HgTransform>(&ecs, camera);
-    *cameraTf = {};
     cameraTf->position = HgVec3{0, 0, -2};
 
     HgCamera* cameraC = hgEcsAdd<HgCamera>(&ecs, camera);
@@ -44,7 +43,7 @@ int main()
     cameraC->perspective.far = 1000.0f;
 
     HgEntity square = hgEcsSpawn(&ecs);
-    *hgEcsAdd<HgTransform>(&ecs, square) = {};
+    hgEcsAdd<HgTransform>(&ecs, square);
     *hgEcsAdd<HgSprite>(&ecs, square) = {HgGpuTextureHandle{}, HgVec2{0}, HgVec2{1}};
 
     HgClock gameClock;

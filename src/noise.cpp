@@ -106,7 +106,6 @@ int main()
     HgEntity camera = hgEcsSpawn(&ecs);
 
     HgTransform* cameraTf = hgEcsAdd<HgTransform>(&ecs, camera);
-    *cameraTf = {};
     cameraTf->position = HgVec3{0, 0, -1};
 
     HgCamera* cameraC = hgEcsAdd<HgCamera>(&ecs, camera);
@@ -116,7 +115,7 @@ int main()
     cameraC->perspective.far = 1000.0f;
 
     HgEntity noiseSquare = hgEcsSpawn(&ecs);
-    *hgEcsAdd<HgTransform>(&ecs, noiseSquare) = {};
+    hgEcsAdd<HgTransform>(&ecs, noiseSquare);
     *hgEcsAdd<HgSprite>(&ecs, noiseSquare) = {noiseTexHandle, HgVec2{0}, HgVec2{1}};
 
     HgClock gameClock;
