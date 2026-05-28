@@ -1436,7 +1436,7 @@ HgMat4 hgMatView(const HgVec3& position, const HgVec3& zoom, const HgQuat& rotat
 /**
  * Creates a view matrix from a model matrix
  *
- * Note, removes any scaling/shearing
+ * Note, shearing causes distortion
  */
 HgMat4 hgMatModelToView(const HgMat4& model);
 

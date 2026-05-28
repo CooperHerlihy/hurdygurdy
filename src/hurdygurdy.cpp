@@ -641,11 +641,11 @@ HgMat4 hgMatModelToView(const HgMat4& model)
     if (HgVec3{model.x} == HgVec3{0} || HgVec3{model.y} == HgVec3{0} || HgVec3{model.z} == HgVec3{0})
         return HgMat4{HgMat3{0}};
 
-    HgMat3 inv3{model};
-    inv3.x = hgVecNorm3(HgVec3{model.x});
-    inv3.z = hgVecNorm3(hgCross(inv3.x, HgVec3{model.y}));
-    inv3.y = hgVecNorm3(hgCross(inv3.z, inv3.x));
-    inv3 = hgMatTranspose3(inv3);
+    HgMat3 inv3 = hgMatTranspose3(HgMat3{
+        hgVecNorm3(HgVec3{model.x}),
+        hgVecNorm3(HgVec3{model.y}),
+        hgVecNorm3(HgVec3{model.z}),
+    });
     HgMat4 inv4{inv3};
     inv4.w = HgVec4{HgVec3{inv3 * HgVec3{model.w} * -1}, 1};
     return inv4;

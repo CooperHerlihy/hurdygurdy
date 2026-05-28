@@ -24,9 +24,7 @@ static HgEntity root;
 
 static HgEntity player;
 static HgTransform* transform;
-
-static HgEntity camera;
-static HgCamera* cameraC;
+static HgCamera* camera;
 
 static bool showEditor = true;
 static bool showRender = true;
@@ -96,17 +94,17 @@ void init(HgArena* arena)
     hgEcsAdd<HgNode>(&ecs, player);
     transform = hgEcsAdd<HgTransform>(&ecs, player);
     transform->position = HgVec3{0, 0, -1};
-
-    camera = hgEcsSpawn(&ecs);
-    *hgEcsAdd<Name>(&ecs, camera) = {"camera"};
-    hgEcsAdd<HgNode>(&ecs, camera);
-    hgNodeAddChild(&ecs, player, camera);
-    hgEcsAdd<HgTransform>(&ecs, camera);
-    cameraC = hgEcsAdd<HgCamera>(&ecs, camera);
-    cameraC->type = HgCameraType_perspective;
-    cameraC->perspective.fov = (f32)hgPi * 0.5f;
-    cameraC->perspective.near = 0.01f;
-    cameraC->perspective.far = 1000.0f;
+    camera = hgEcsAdd<HgCamera>(&ecs, player);
+    camera->type = HgCameraType_perspective;
+    camera->perspective.fov = (f32)hgPi * 0.5f;
+    camera->perspective.near = 0.01f;
+    camera->perspective.far = 1000.0f;
+    camera->orthographic.left = -1;
+    camera->orthographic.right = 1;
+    camera->orthographic.top = -1;
+    camera->orthographic.bottom = 1;
+    camera->orthographic.near = 0;
+    camera->orthographic.far = 10;
 
     HgEntity skybox = hgEcsSpawn(&ecs);
     *hgEcsAdd<Name>(&ecs, skybox) = {"skybox"};
@@ -350,6 +348,33 @@ void drawEditorEntity(HgArena* frame, HgEntity e)
             ImGui::TreePop();
         }
 
+        if (hgEcsHas<HgCamera>(&ecs, e) && ImGui::TreeNodeEx("Camera", componentFlags))
+        {
+            HgCamera* c = hgEcsGet<HgCamera>(&ecs, e);
+            if (c->type == HgCameraType_perspective)
+            {
+                if (ImGui::Button("Perspective"))
+                    c->type = HgCameraType_orthographic;
+                ImGui::DragFloat("FoV", &c->perspective.fov, 0.01f);
+                ImGui::DragFloat("Aspect", &c->perspective.aspect, 0.01f);
+                ImGui::DragFloat("Near", &c->perspective.near, 0.01f, 0.01f);
+                ImGui::DragFloat("Far", &c->perspective.far, 0.01f);
+            }
+            else if (c->type == HgCameraType_orthographic)
+            {
+                if (ImGui::Button("Orthographic"))
+                    c->type = HgCameraType_perspective;
+                ImGui::DragFloat2("Left, Right", &c->orthographic.left);
+                ImGui::DragFloat2("Top, Bottom", &c->orthographic.top);
+                ImGui::DragFloat2("Near, Far", &c->orthographic.near);
+            }
+            else
+            {
+                hgAssert(false);
+            }
+            ImGui::TreePop();
+        }
+
         if (hgEcsHas<HgSprite>(&ecs, e) && ImGui::TreeNodeEx("Sprite", componentFlags))
         {
             HgSprite* s = hgEcsGet<HgSprite>(&ecs, e);
@@ -469,7 +494,7 @@ void drawRender()
 
             renderImGuiTex = hgImGuiTextureCreate(renderView, renderSampler, HgGpuLayout_shaderReadOnly);
 
-            cameraC->perspective.aspect = (f32)width / (f32)height;
+            camera->perspective.aspect = (f32)width / (f32)height;
         }
 
         ImGui::Image((ImTextureID)renderImGuiTex, {(f32)width, (f32)height});
@@ -501,10 +526,10 @@ void render()
 
         hgGpuRenderPassBegin(cmd, width, height, &renderPass);
 
-        hgCameraUpdate(&ecs, camera);
-        hgSkyboxDraw(&ecs, camera, cmd);
-        hgSpritesDraw(&ecs, camera, cmd);
-        hgModelsDraw(&ecs, camera, cmd);
+        hgCameraUpdate(&ecs, player);
+        hgSkyboxDraw(&ecs, player, cmd);
+        hgSpritesDraw(&ecs, player, cmd);
+        hgModelsDraw(&ecs, player, cmd);
 
         hgGpuRenderPassEnd(cmd);
 
@@ -590,13 +615,6 @@ int main()
         hgEcsForEach<Spin, HgTransform>(&ecs, [&](HgEntity e, Spin* spin, HgTransform* tf)
         {
             tf->rotation = hgQuatAxisAngle(HgVec3{0, -1, 0}, (f32)delta * spin->speed) * tf->rotation;
-
-            // hgTransformMove(&ecs, e, {}, {}, hgQuatAxisAngle(HgVec3{0, -1, 0}, (f32)delta * spin->speed));
-
-            // hgTransformMove(&ecs, e, HgVec3{0.05f * (f32)delta, 0, 0});
-
-            // hgTransformMove(&ecs, e, HgVec3{}, HgVec3{1.0f + 0.1f * (f32)delta, 1, 1});
-
             hgTransformUpdate(&ecs, e);
         });
 
