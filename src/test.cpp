@@ -16,6 +16,13 @@
     } \
 } while(0)
 
+bool vec3comp(HgVec3 lhs, HgVec3 rhs)
+{
+    return abs(lhs.x - rhs.x) < 1e-6F
+        && abs(lhs.y - rhs.y) < 1e-6F
+        && abs(lhs.z - rhs.z) < 1e-6F;
+}
+
 void hgTest()
 {
     printf("HurdyGurdy: Tests Begun\n");
@@ -1914,9 +1921,11 @@ void hgTest()
         HgArena* arena = hgScratch();
         HgArenaScope arenaScope{arena};
 
-        HgEcs ecs = hgEcsCreate(arena, 1024, 128);
-        hgEcsRegisterType(&ecs, arena, u32, 1024);
-        hgEcsRegisterType(&ecs, arena, u64, 1024);
+        HgEcs ecs = hgEcsCreate(arena, 256, 4);
+        hgDefer(hgEcsReset(&ecs));
+
+        hgEcsRegisterType(&ecs, arena, u32, 256);
+        hgEcsRegisterType(&ecs, arena, u64, 256);
 
         HgEntity e1 = hgEcsSpawn(&ecs);
         HgEntity e2 = hgEcsSpawn(&ecs);
@@ -2108,12 +2117,14 @@ void hgTest()
         HgArena* arena = hgScratch();
         HgArenaScope arenaScope{arena};
 
-        HgEcs ecs = hgEcsCreate(arena, 1024, 128);
-        hgEcsRegisterType(&ecs, arena, u32, 1024);
-        hgEcsRegisterType(&ecs, arena, u64, 1024);
+        HgEcs ecs = hgEcsCreate(arena, 256, 4);
+        hgDefer(hgEcsReset(&ecs));
+
+        hgEcsRegisterType(&ecs, arena, u32, 256);
+        hgEcsRegisterType(&ecs, arena, u64, 256);
 
         {
-            for (u32 i = 0; i < 300; ++i)
+            for (u32 i = 0; i < 200; ++i)
             {
                 HgEntity e = hgEcsSpawn(&ecs);
                 switch (i % 3)
@@ -2181,9 +2192,11 @@ void hgTest()
         HgArena* arena = hgScratch();
         HgArenaScope arenaScope{arena};
 
-        HgEcs ecs = hgEcsCreate(arena, 1024, 128);
-        hgEcsRegisterType(&ecs, arena, u32, 1024);
-        hgEcsRegisterType(&ecs, arena, u64, 1024);
+        HgEcs ecs = hgEcsCreate(arena, 256, 4);
+        hgDefer(hgEcsReset(&ecs));
+
+        hgEcsRegisterType(&ecs, arena, u32, 256);
+        hgEcsRegisterType(&ecs, arena, u64, 256);
 
         auto comparison = [](void*, HgEcs* ecs, HgEntity lhs, HgEntity rhs)
         {
@@ -2337,7 +2350,7 @@ void hgTest()
         HgBinary scene{};
 
         {
-            HgEcs ecs = hgEcsCreate(arena, 1024, 128);
+            HgEcs ecs = hgEcsCreate(arena, 128, 4);
             hgDefer(hgEcsReset(&ecs));
 
             hgEcsRegisterType(&ecs, arena, HgNode, 128);
@@ -2361,7 +2374,7 @@ void hgTest()
         }
 
         {
-            HgEcs ecs = hgEcsCreate(arena, 1024, 128);
+            HgEcs ecs = hgEcsCreate(arena, 128, 4);
             hgDefer(hgEcsReset(&ecs));
 
             hgEcsRegisterType(&ecs, arena, HgNode, 128);
@@ -2408,7 +2421,7 @@ void hgTest()
         HgArena* arena = hgScratch();
         HgArenaScope arenaScope{arena};
 
-        HgEcs ecs = hgEcsCreate(arena, 1024, 128);
+        HgEcs ecs = hgEcsCreate(arena, 128, 4);
         hgDefer(hgEcsReset(&ecs));
 
         hgEcsRegisterType(&ecs, arena, HgNode, 128);
@@ -2491,7 +2504,108 @@ void hgTest()
         }
     }
 
-    hgWarn("HgTransform test : TODO\n");
+    // HgTransform
+    {
+        HgArena* arena = hgScratch();
+        HgArenaScope arenaScope{arena};
+
+        HgEcs ecs = hgEcsCreate(arena, 128, 4);
+        hgDefer(hgEcsReset(&ecs));
+
+        hgEcsRegisterType(&ecs, arena, HgNode, 128);
+        hgEcsRegisterType(&ecs, arena, HgTransform, 128);
+
+        HgEntity ae = hgEcsSpawn(&ecs);
+        HgEntity aae = hgEcsSpawn(&ecs);
+        HgEntity abe = hgEcsSpawn(&ecs);
+
+        hgEcsAdd<HgNode>(&ecs, ae);
+        hgEcsAdd<HgNode>(&ecs, aae);
+        hgEcsAdd<HgNode>(&ecs, abe);
+
+        hgEcsAdd<HgTransform>(&ecs, ae);
+        hgEcsAdd<HgTransform>(&ecs, aae);
+        hgEcsAdd<HgTransform>(&ecs, abe);
+
+        hgNodeAddChild(&ecs, ae, aae);
+        hgNodeAddChild(&ecs, ae, abe);
+
+        HgTransform* a = hgEcsGet<HgTransform>(&ecs, ae);
+        HgTransform* aa = hgEcsGet<HgTransform>(&ecs, aae);
+        HgTransform* ab = hgEcsGet<HgTransform>(&ecs, abe);
+
+        {
+            *a = *aa = *ab = {};
+            a->position = HgVec3{0.0f, 0.0f, 0.0f};
+            aa->position = HgVec3{1.0f, 0.0f, 0.0f};
+            ab->position = HgVec3{0.0f, 1.0f, 0.0f};
+
+            hgTransformMove(
+                &ecs,
+                ae,
+                HgVec3{1.0f, 0.0f, 0.5f});
+
+            hgAssert(a->position == HgVec3(1.0f, 0.0f, 0.5f));
+            hgAssert(aa->position == HgVec3(2.0f, 0.0f, 0.5f));
+            hgAssert(ab->position == HgVec3(1.0f, 1.0f, 0.5f));
+        }
+
+        {
+            *a = *aa = *ab = {};
+            a->scale = HgVec3{1.0f, 1.0f, 1.0f};
+            aa->scale = HgVec3{2.0f, 4.0f, 2.0f};
+            ab->scale = HgVec3{0.5f, 0.25f, 0.5f};
+
+            hgTransformMove(
+                &ecs,
+                ae,
+                HgVec3{0.0f, 0.0f, 0.0f},
+                HgVec3{2.0f, 2.0f, 4.0f});
+
+            hgAssert(a->scale == HgVec3(2.0f, 2.0f, 4.0f));
+            hgAssert(aa->scale == HgVec3(4.0f, 8.0f, 8.0f));
+            hgAssert(ab->scale == HgVec3(1.0f, 0.5f, 2.0f));
+        }
+
+        {
+            *a = *aa = *ab = {};
+            a->position = HgVec3{1.0f, 0.0f, 0.0f};
+            aa->position = HgVec3{3.0f, 0.0f, 0.0f};
+            ab->position = HgVec3{0.0f, 1.0f, 0.0f};
+
+            hgTransformMove(
+                &ecs,
+                ae,
+                HgVec3{0.0f, 0.0f, 0.0f},
+                HgVec3{2.0f, 0.5f, 0.0f});
+
+            hgAssert(a->position == HgVec3(1.0f, 0.0f, 0.0f));
+            hgAssert(aa->position == HgVec3(5.0f, 0.0f, 0.0f));
+            hgAssert(ab->position == HgVec3(-1.0f, 0.5f, 0.0f));
+        }
+
+        {
+            *a = *aa = *ab = {};
+            a->rotation = HgQuat{1, 0, 0, 0};
+            aa->rotation = hgQuatAxisAngle(HgVec3{1, 0, 0}, hgPi / 2);
+            ab->rotation = hgQuatAxisAngle(HgVec3{0, 1, 0}, hgPi / 2);
+
+            hgAssert(vec3comp(hgVecRotate(a->rotation, HgVec3(1, 1, 1)), HgVec3(1, 1, 1)));
+            hgAssert(vec3comp(hgVecRotate(aa->rotation, HgVec3(1, 1, 1)), HgVec3(1, -1, 1)));
+            hgAssert(vec3comp(hgVecRotate(ab->rotation, HgVec3(1, 1, 1)), HgVec3(1, 1, -1)));
+
+            hgTransformMove(
+                &ecs,
+                ae,
+                HgVec3{0.0f, 0.0f, 0.0f},
+                HgVec3{1.0f, 1.0f, 1.0f},
+                hgQuatAxisAngle(HgVec3{1, 0, 0}, hgPi / 2));
+
+            hgAssert(vec3comp(hgVecRotate(a->rotation, HgVec3(1, 1, 1)), HgVec3(1, -1, 1)));
+            hgAssert(vec3comp(hgVecRotate(aa->rotation, HgVec3(1, 1, 1)), HgVec3(1, -1, -1)));
+            hgAssert(vec3comp(hgVecRotate(ab->rotation, HgVec3(1, 1, 1)), HgVec3(1, 1, 1)));
+        }
+    }
 
     printf("HurdyGurdy: Tests Complete in %fms\n", hgClockTick(&timer) * 1000.0f);
 }

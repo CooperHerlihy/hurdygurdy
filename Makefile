@@ -43,8 +43,6 @@ TARGETS := \
 
 .PHONY: all debug release clean
 
-SHADERS_SPV := 
-
 all: $(patsubst %, $(BUILD_DIR)/%, $(TARGETS)) $(patsubst %, $(BUILD_DIR)/%.spv, $(SHADERS))
 
 debug:
@@ -65,13 +63,13 @@ $(BUILD_DIR)/vk_mem_alloc.o: $(SRC_DIR)/src/vk_mem_alloc.cpp | $(BUILD_DIR)
 $(BUILD_DIR)/stb.o: $(SRC_DIR)/src/stb.c | $(BUILD_DIR)
 	c++ $(STD) $(CONFIG) $(INCLUDES) -c $< -o $@
 
-$(BUILD_DIR)/%.vert.spv: $(SRC_DIR)/src/%.vert | $(BUILD_DIR)
+$(BUILD_DIR)/%.vert.spv: $(SRC_DIR)/src/%.vert $(SRC_DIR)/include/hurdygurdy.glsl | $(BUILD_DIR)
 	glslc -o $@ $< -I$(SRC_DIR)/include
 
-$(BUILD_DIR)/%.frag.spv: $(SRC_DIR)/src/%.frag | $(BUILD_DIR)
+$(BUILD_DIR)/%.frag.spv: $(SRC_DIR)/src/%.frag $(SRC_DIR)/include/hurdygurdy.glsl | $(BUILD_DIR)
 	glslc -o $@ $< -I$(SRC_DIR)/include
 
-$(BUILD_DIR)/%.comp.spv: $(SRC_DIR)/src/%.comp | $(BUILD_DIR)
+$(BUILD_DIR)/%.comp.spv: $(SRC_DIR)/src/%.comp $(SRC_DIR)/include/hurdygurdy.glsl | $(BUILD_DIR)
 	glslc -o $@ $< -I$(SRC_DIR)/include
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/vendor/imgui/backends/%.cpp | $(BUILD_DIR)

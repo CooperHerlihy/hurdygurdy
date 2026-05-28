@@ -50,7 +50,7 @@ void init(HgArena* arena)
 {
     HgWindowConfig windowConfig{};
     windowConfig.fullscreen = true;
-    // windowConfig.preferredPresentMode = HgGpuPresentMode_mailbox;
+    windowConfig.preferredPresentMode = HgGpuPresentMode_mailbox;
 
     window = hgWindowCreate("Hg Editor Example", 1600, 900, &windowConfig);
 
@@ -99,7 +99,7 @@ void init(HgArena* arena)
 
     cameraC->type = HgCameraType_perspective;
     cameraC->perspective.fov = (f32)hgPi * 0.5f;
-    cameraC->perspective.near = 0.1f;
+    cameraC->perspective.near = 0.01f;
     cameraC->perspective.far = 1000.0f;
 
     HgEntity skybox = hgEcsSpawn(&ecs);
@@ -114,24 +114,55 @@ void init(HgArena* arena)
     hgEcsGet<HgTransform>(&ecs, pointLight)->position = HgVec3{0, -2, 0};
     *hgEcsAdd<HgPointLight>(&ecs, pointLight) = {HgVec4{1, 1, 1, 4}};
 
-    HgEntity square = hgEcsSpawn(&ecs);
-    *hgEcsAdd<Name>(&ecs, square) = {"square"};
-    hgEcsAdd<HgNode>(&ecs, square);
-    hgEcsAdd<HgTransform>(&ecs, square);
-    hgEcsGet<HgTransform>(&ecs, square)->position = HgVec3{-1, 0, 1};
-    *hgEcsAdd<HgSprite>(&ecs, square) = {HgGpuTextureHandle{}, HgVec2{0.0f}, HgVec2{1.0f}};
-    *hgEcsAdd<Spin>(&ecs, square) = {1.0f};
+    // HgEntity square = hgEcsSpawn(&ecs);
+    // *hgEcsAdd<Name>(&ecs, square) = {"square"};
+    // hgEcsAdd<HgNode>(&ecs, square);
+    // hgEcsAdd<HgTransform>(&ecs, square);
+    // hgEcsGet<HgTransform>(&ecs, square)->position = HgVec3{-1, 0, 1};
+    // *hgEcsAdd<HgSprite>(&ecs, square) = {HgGpuTextureHandle{}, HgVec2{0.0f}, HgVec2{1.0f}};
+    // *hgEcsAdd<Spin>(&ecs, square) = {1.0f};
+    //
+    // HgEntity cube = hgEcsSpawn(&ecs);
+    // *hgEcsAdd<Name>(&ecs, cube) = {"cube"};
+    // hgEcsAdd<HgNode>(&ecs, cube);
+    // hgEcsAdd<HgTransform>(&ecs, cube);
+    // hgEcsGet<HgTransform>(&ecs, cube)->position = HgVec3{1, 0, 1};
+    // *hgEcsAdd<HgModel>(&ecs, cube) = {HgGpuMeshHandle{}, HgGpuTextureHandle{}, HgGpuTextureHandle{}};
+    // *hgEcsAdd<Spin>(&ecs, cube) = {1.0f};
 
-    HgEntity cube = hgEcsSpawn(&ecs);
-    *hgEcsAdd<Name>(&ecs, cube) = {"cube"};
-    hgEcsAdd<HgNode>(&ecs, cube);
-    hgEcsAdd<HgTransform>(&ecs, cube);
-    hgEcsGet<HgTransform>(&ecs, cube)->position = HgVec3{1, 0, 1};
-    *hgEcsAdd<HgModel>(&ecs, cube) = {HgGpuMeshHandle{}, HgGpuTextureHandle{}, HgGpuTextureHandle{}};
-    *hgEcsAdd<Spin>(&ecs, cube) = {1.0f};
+    HgEntity cubeA = hgEcsSpawn(&ecs);
+    *hgEcsAdd<Name>(&ecs, cubeA) = {"cubeA"};
+    hgEcsAdd<HgNode>(&ecs, cubeA);
+    hgEcsAdd<HgTransform>(&ecs, cubeA);
+    hgEcsGet<HgTransform>(&ecs, cubeA)->scale = HgVec3{.3, .3, .3};
+    hgEcsGet<HgTransform>(&ecs, cubeA)->position = HgVec3{0, 0, 0};
+    *hgEcsAdd<HgModel>(&ecs, cubeA) = {HgGpuMeshHandle{}, HgGpuTextureHandle{}, HgGpuTextureHandle{}};
+    *hgEcsAdd<Spin>(&ecs, cubeA) = {1.0f};
 
-    hgNodeAddChild(&ecs, root, cube);
-    hgNodeAddChild(&ecs, root, square);
+    HgEntity cubeAA = hgEcsSpawn(&ecs);
+    *hgEcsAdd<Name>(&ecs, cubeAA) = {"cubeAA"};
+    hgEcsAdd<HgNode>(&ecs, cubeAA);
+    hgEcsAdd<HgTransform>(&ecs, cubeAA);
+    hgEcsGet<HgTransform>(&ecs, cubeAA)->scale = HgVec3{.3, .3, .3};
+    hgEcsGet<HgTransform>(&ecs, cubeAA)->position = HgVec3{.5, 0, 0};
+    *hgEcsAdd<HgModel>(&ecs, cubeAA) = {HgGpuMeshHandle{}, HgGpuTextureHandle{}, HgGpuTextureHandle{}};
+    // *hgEcsAdd<Spin>(&ecs, cubeAA) = {1.0f};
+
+    HgEntity cubeAB = hgEcsSpawn(&ecs);
+    *hgEcsAdd<Name>(&ecs, cubeAB) = {"cubeAB"};
+    hgEcsAdd<HgNode>(&ecs, cubeAB);
+    hgEcsAdd<HgTransform>(&ecs, cubeAB);
+    hgEcsGet<HgTransform>(&ecs, cubeAB)->scale = HgVec3{.3, .3, .3};
+    hgEcsGet<HgTransform>(&ecs, cubeAB)->position = HgVec3{-.5, 0, 0};
+    *hgEcsAdd<HgModel>(&ecs, cubeAB) = {HgGpuMeshHandle{}, HgGpuTextureHandle{}, HgGpuTextureHandle{}};
+    // *hgEcsAdd<Spin>(&ecs, cubeAB) = {1.0f};
+
+    hgNodeAddChild(&ecs, cubeA, cubeAA);
+    hgNodeAddChild(&ecs, cubeA, cubeAB);
+
+    hgNodeAddChild(&ecs, root, cubeA);
+    // hgNodeAddChild(&ecs, root, cube);
+    // hgNodeAddChild(&ecs, root, square);
     hgNodeAddChild(&ecs, root, pointLight);
     hgNodeAddChild(&ecs, root, skybox);
     hgNodeAddChild(&ecs, root, camera);
@@ -576,9 +607,21 @@ int main()
         if (hgWasQuit() || hgWindowWasClosed(window))
             goto quit;
 
-        hgEcsForPar<Spin, HgTransform>(&ecs, [&](HgEntity, Spin* spin, HgTransform* tf)
+        hgEcsForPar<Spin, HgTransform>(&ecs, [&](HgEntity e, Spin* spin, HgTransform*)
         {
-            tf->rotation = hgQuatAxisAngle(HgVec3{0, -1, 0}, (f32)delta * spin->speed) * tf->rotation;
+            // tf->rotation = hgQuatAxisAngle(HgVec3{0, -1, 0}, (f32)delta * spin->speed) * tf->rotation;
+            // hgTransformMove(&ecs, e, {}, {}, hgQuatAxisAngle(HgVec3{0, -1, 0}, (f32)delta * spin->speed));
+
+            // hgTransformMove(&ecs, e, HgVec3{0.05f * (f32)delta, 0, 0});
+
+            // hgTransformMove(&ecs, e, HgVec3{}, HgVec3{1.0f + 0.1f * (f32)delta, 1, 1});
+
+            hgTransformMove(
+                &ecs,
+                e,
+                HgVec3{},
+                HgVec3{1},
+                hgQuatAxisAngle(HgVec3{0, -1, 0}, (f32)delta * spin->speed));
         });
 
         if (renderHovered)

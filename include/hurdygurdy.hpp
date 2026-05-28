@@ -6128,7 +6128,7 @@ struct HgTransform {
 };
 
 /**
- * Set this transform and move all children by accordingly : TODO
+ * Set the transform and move children by accordingly
  *
  * Parameters
  * - ecs The ecs
@@ -6140,7 +6140,7 @@ struct HgTransform {
 void hgTransformSet(HgEcs* ecs, HgEntity e, const HgVec3& pos, const HgVec3& scale, const HgQuat& rot);
 
 /**
- * Move this transform and all children by a delta
+ * Move the transform and all children by a delta
  *
  * Parameters
  * - ecs The ecs
@@ -6149,7 +6149,12 @@ void hgTransformSet(HgEcs* ecs, HgEntity e, const HgVec3& pos, const HgVec3& sca
  * - dscale The change in scale, multiplied to current scale
  * - drot The change in rotation, applied to current rotation
  */
-void hgTransformMove(HgEcs* ecs, HgEntity e, const HgVec3& dpos, const HgVec3& dscale, const HgQuat& drot);
+void hgTransformMove(
+    HgEcs* ecs,
+    HgEntity e,
+    const HgVec3& dpos,
+    const HgVec3& dscale = HgVec3{1.0f, 1.0f, 1.0f},
+    const HgQuat& drot = HgQuat{1.0f, 0.0f, 0.0f, 0.0f});
 
 /**
  * The types of camera projections

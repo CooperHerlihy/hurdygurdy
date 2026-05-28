@@ -3118,19 +3118,22 @@ void hgTransformSet(HgEcs* ecs, HgEntity e, const HgVec3& pos, const HgVec3& sca
     {
         HgNode* node = hgEcsGet<HgNode>(ecs, e);
         HgEntity child = node->firstChild;
-        while (child.handle.id != HgEntity{}.handle.id)
+        while (!hgHandleIsNull(child.handle))
         {
-            HgNode* cNode = hgEcsGet<HgNode>(ecs, child);
-            HgTransform* cTf = hgEcsGet<HgTransform>(ecs, child);
-            HgTransform rel;
-            rel.position = cTf->position - tf->position;
-            rel.scale = cTf->scale / tf->scale;
-            rel.rotation = hgQuatConj(tf->rotation) * cTf->rotation;
-            // hgSetEntity(ecs, child, // : TODO
-            //     hgRotate(r, (cTf.position - tf.position) * s / cTf.scale + p),
-            //     s * cTf.scale / tf.scale,
-            //     r);
-            child = cNode->nextSibling;
+            HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
+            HgTransform* childTf = hgEcsGet<HgTransform>(ecs, child);
+
+            HgVec3 relPos = hgVecRotate(hgQuatConj(tf->rotation), (childTf->position - tf->position)) / tf->scale;
+            HgVec3 newRelPos = hgVecRotate(rot, relPos * scale);
+
+            hgTransformSet(
+                ecs,
+                child,
+                pos + newRelPos,
+                scale * childTf->scale / tf->scale,
+                rot * hgQuatConj(tf->rotation) * childTf->rotation);
+
+            child = childNode->nextSibling;
         }
     }
     tf->position = pos;

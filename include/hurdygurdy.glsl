@@ -569,7 +569,7 @@ HgVertex hgTransformVertex(HgVertex vertex, mat4 matrix)
 {
     vec4 pos = matrix * vec4(vertex.position, 1.0);
 
-    mat3 imatrix = mat3(transpose(inverse(matrix)));
+    mat3 imatrix = transpose(inverse(mat3(matrix)));
     vec3 normal = imatrix * vertex.normal;
     vec4 tangent = vec4(imatrix * vertex.tangent.xyz, vertex.tangent.w);
 
