@@ -24,23 +24,21 @@ int main()
     hgSpritesInit(hgWindowImageFormat(window), HgFormat_d32_sfloat);
     hgDefer(hgSpritesDeinit());
 
-    HgEcs ecs = hgEcsCreate(arena, 128, 128);
+    HgEcs ecs = hgEcsCreate(arena, 128, 16);
     hgDefer(hgEcsReset(&ecs));
 
-    hgEcsRegisterType(&ecs, arena, HgTransform, 128);
     hgEcsRegisterType(&ecs, arena, HgCamera, 8);
+    hgEcsRegisterType(&ecs, arena, HgTransform, 128);
     hgEcsRegisterType(&ecs, arena, HgSprite, 128);
 
     HgEntity camera = hgEcsSpawn(&ecs);
-
-    HgTransform* cameraTf = hgEcsAdd<HgTransform>(&ecs, camera);
-    cameraTf->position = HgVec3{0, 0, -2};
-
     HgCamera* cameraC = hgEcsAdd<HgCamera>(&ecs, camera);
+    HgTransform* cameraTf = hgEcsAdd<HgTransform>(&ecs, camera);
     cameraC->type = HgCameraType_perspective;
     cameraC->perspective.fov = (f32)hgPi * 0.5f;
     cameraC->perspective.near = 0.1f;
     cameraC->perspective.far = 1000.0f;
+    cameraTf->position = HgVec3{0, 0, -2};
 
     HgEntity square = hgEcsSpawn(&ecs);
     hgEcsAdd<HgTransform>(&ecs, square);
@@ -90,6 +88,8 @@ int main()
             HgVec3 rotated = hgVecRotate(cameraTf->rotation, HgVec3{movement.x, 0.0f, movement.z});
             cameraTf->position += hgVecNorm3(HgVec3{rotated.x, movement.y, rotated.z}) * moveSpeed * (f32)delta;
         }
+
+        hgTransformUpdate(&ecs, camera);
 
         HgGpuCmd* cmd = hgGpuFrameBegin(&window, 1);
         if (hgWindowImageView(window) != nullptr)

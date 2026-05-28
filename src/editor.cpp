@@ -22,8 +22,10 @@ static HgGpuView* depthView = nullptr;
 static HgEcs ecs = {};
 static HgEntity root;
 
+static HgEntity player;
+static HgTransform* transform;
+
 static HgEntity camera;
-static HgTransform* cameraTf;
 static HgCamera* cameraC;
 
 static bool showEditor = true;
@@ -50,7 +52,7 @@ void init(HgArena* arena)
 {
     HgWindowConfig windowConfig{};
     windowConfig.fullscreen = true;
-    windowConfig.preferredPresentMode = HgGpuPresentMode_mailbox;
+    // windowConfig.preferredPresentMode = HgGpuPresentMode_mailbox;
 
     window = hgWindowCreate("Hg Editor Example", 1600, 900, &windowConfig);
 
@@ -74,8 +76,8 @@ void init(HgArena* arena)
     ecs = hgEcsCreate(arena, 1024, 64);
 
     hgEcsRegisterType(&ecs, arena, HgNode, 1024);
-    hgEcsRegisterType(&ecs, arena, HgTransform, 1024);
     hgEcsRegisterType(&ecs, arena, HgCamera, 8);
+    hgEcsRegisterType(&ecs, arena, HgTransform, 1024);
     hgEcsRegisterType(&ecs, arena, HgSkybox, 8);
     hgEcsRegisterType(&ecs, arena, HgSprite, 256);
     hgEcsRegisterType(&ecs, arena, HgDirLight, 64);
@@ -89,14 +91,18 @@ void init(HgArena* arena)
     *hgEcsAdd<Name>(&ecs, root) = {"root"};
     hgEcsAdd<HgNode>(&ecs, root);
 
+    player = hgEcsSpawn(&ecs);
+    *hgEcsAdd<Name>(&ecs, player) = {"player"};
+    hgEcsAdd<HgNode>(&ecs, player);
+    transform = hgEcsAdd<HgTransform>(&ecs, player);
+    transform->position = HgVec3{0, 0, -1};
+
     camera = hgEcsSpawn(&ecs);
     *hgEcsAdd<Name>(&ecs, camera) = {"camera"};
     hgEcsAdd<HgNode>(&ecs, camera);
-    cameraTf = hgEcsAdd<HgTransform>(&ecs, camera);
+    hgNodeAddChild(&ecs, player, camera);
+    hgEcsAdd<HgTransform>(&ecs, camera);
     cameraC = hgEcsAdd<HgCamera>(&ecs, camera);
-
-    cameraTf->position = HgVec3{0, 0, -1};
-
     cameraC->type = HgCameraType_perspective;
     cameraC->perspective.fov = (f32)hgPi * 0.5f;
     cameraC->perspective.near = 0.01f;
@@ -113,59 +119,31 @@ void init(HgArena* arena)
     hgEcsAdd<HgTransform>(&ecs, pointLight);
     hgEcsGet<HgTransform>(&ecs, pointLight)->position = HgVec3{0, -2, 0};
     *hgEcsAdd<HgPointLight>(&ecs, pointLight) = {HgVec4{1, 1, 1, 4}};
+    hgTransformUpdate(&ecs, pointLight);
 
-    // HgEntity square = hgEcsSpawn(&ecs);
-    // *hgEcsAdd<Name>(&ecs, square) = {"square"};
-    // hgEcsAdd<HgNode>(&ecs, square);
-    // hgEcsAdd<HgTransform>(&ecs, square);
-    // hgEcsGet<HgTransform>(&ecs, square)->position = HgVec3{-1, 0, 1};
-    // *hgEcsAdd<HgSprite>(&ecs, square) = {HgGpuTextureHandle{}, HgVec2{0.0f}, HgVec2{1.0f}};
-    // *hgEcsAdd<Spin>(&ecs, square) = {1.0f};
-    //
-    // HgEntity cube = hgEcsSpawn(&ecs);
-    // *hgEcsAdd<Name>(&ecs, cube) = {"cube"};
-    // hgEcsAdd<HgNode>(&ecs, cube);
-    // hgEcsAdd<HgTransform>(&ecs, cube);
-    // hgEcsGet<HgTransform>(&ecs, cube)->position = HgVec3{1, 0, 1};
-    // *hgEcsAdd<HgModel>(&ecs, cube) = {HgGpuMeshHandle{}, HgGpuTextureHandle{}, HgGpuTextureHandle{}};
-    // *hgEcsAdd<Spin>(&ecs, cube) = {1.0f};
+    HgEntity square = hgEcsSpawn(&ecs);
+    *hgEcsAdd<Name>(&ecs, square) = {"square"};
+    hgEcsAdd<HgNode>(&ecs, square);
+    hgEcsAdd<HgTransform>(&ecs, square);
+    hgEcsGet<HgTransform>(&ecs, square)->position = HgVec3{-1, 0, 1};
+    hgTransformUpdate(&ecs, square);
+    *hgEcsAdd<HgSprite>(&ecs, square) = {HgGpuTextureHandle{}, HgVec2{0.0f}, HgVec2{1.0f}};
+    *hgEcsAdd<Spin>(&ecs, square) = {1.0f};
 
-    HgEntity cubeA = hgEcsSpawn(&ecs);
-    *hgEcsAdd<Name>(&ecs, cubeA) = {"cubeA"};
-    hgEcsAdd<HgNode>(&ecs, cubeA);
-    hgEcsAdd<HgTransform>(&ecs, cubeA);
-    hgEcsGet<HgTransform>(&ecs, cubeA)->scale = HgVec3{.3, .3, .3};
-    hgEcsGet<HgTransform>(&ecs, cubeA)->position = HgVec3{0, 0, 0};
-    *hgEcsAdd<HgModel>(&ecs, cubeA) = {HgGpuMeshHandle{}, HgGpuTextureHandle{}, HgGpuTextureHandle{}};
-    *hgEcsAdd<Spin>(&ecs, cubeA) = {1.0f};
+    HgEntity cube = hgEcsSpawn(&ecs);
+    *hgEcsAdd<Name>(&ecs, cube) = {"cube"};
+    hgEcsAdd<HgNode>(&ecs, cube);
+    hgEcsAdd<HgTransform>(&ecs, cube);
+    hgEcsGet<HgTransform>(&ecs, cube)->position = HgVec3{1, 0, 1};
+    hgTransformUpdate(&ecs, cube);
+    *hgEcsAdd<HgModel>(&ecs, cube) = {HgGpuMeshHandle{}, HgGpuTextureHandle{}, HgGpuTextureHandle{}};
+    *hgEcsAdd<Spin>(&ecs, cube) = {1.0f};
 
-    HgEntity cubeAA = hgEcsSpawn(&ecs);
-    *hgEcsAdd<Name>(&ecs, cubeAA) = {"cubeAA"};
-    hgEcsAdd<HgNode>(&ecs, cubeAA);
-    hgEcsAdd<HgTransform>(&ecs, cubeAA);
-    hgEcsGet<HgTransform>(&ecs, cubeAA)->scale = HgVec3{.3, .3, .3};
-    hgEcsGet<HgTransform>(&ecs, cubeAA)->position = HgVec3{.5, 0, 0};
-    *hgEcsAdd<HgModel>(&ecs, cubeAA) = {HgGpuMeshHandle{}, HgGpuTextureHandle{}, HgGpuTextureHandle{}};
-    // *hgEcsAdd<Spin>(&ecs, cubeAA) = {1.0f};
-
-    HgEntity cubeAB = hgEcsSpawn(&ecs);
-    *hgEcsAdd<Name>(&ecs, cubeAB) = {"cubeAB"};
-    hgEcsAdd<HgNode>(&ecs, cubeAB);
-    hgEcsAdd<HgTransform>(&ecs, cubeAB);
-    hgEcsGet<HgTransform>(&ecs, cubeAB)->scale = HgVec3{.3, .3, .3};
-    hgEcsGet<HgTransform>(&ecs, cubeAB)->position = HgVec3{-.5, 0, 0};
-    *hgEcsAdd<HgModel>(&ecs, cubeAB) = {HgGpuMeshHandle{}, HgGpuTextureHandle{}, HgGpuTextureHandle{}};
-    // *hgEcsAdd<Spin>(&ecs, cubeAB) = {1.0f};
-
-    hgNodeAddChild(&ecs, cubeA, cubeAA);
-    hgNodeAddChild(&ecs, cubeA, cubeAB);
-
-    hgNodeAddChild(&ecs, root, cubeA);
-    // hgNodeAddChild(&ecs, root, cube);
-    // hgNodeAddChild(&ecs, root, square);
+    hgNodeAddChild(&ecs, root, cube);
+    hgNodeAddChild(&ecs, root, square);
     hgNodeAddChild(&ecs, root, pointLight);
     hgNodeAddChild(&ecs, root, skybox);
-    hgNodeAddChild(&ecs, root, camera);
+    hgNodeAddChild(&ecs, root, player);
 }
 
 void deinit()
@@ -336,10 +314,10 @@ void drawEditorEntity(HgArena* frame, HgEntity e)
             if (ImGui::BeginMenu("Add Component"))
             {
                 addComponent<HgTransform>(e, "Transform");
-                addComponent<HgSprite, HgTransform>(e, "Sprite 2D");
-                addComponent<HgModel, HgTransform>(e, "Model 3D");
+                addComponent<HgSprite>(e, "Sprite 2D");
+                addComponent<HgModel>(e, "Model 3D");
                 addComponent<HgDirLight>(e, "Directional Light");
-                addComponent<HgPointLight, HgTransform>(e, "Point Light");
+                addComponent<HgPointLight>(e, "Point Light");
                 addComponent<Spin>(e, "Spin");
 
                 ImGui::EndMenu();
@@ -365,8 +343,10 @@ void drawEditorEntity(HgArena* frame, HgEntity e)
         if (hgEcsHas<HgTransform>(&ecs, e) && ImGui::TreeNodeEx("Transform", componentFlags))
         {
             HgTransform* tf = hgEcsGet<HgTransform>(&ecs, e);
-            ImGui::DragFloat3("Position", &tf->position.x, 0.01f);
-            ImGui::DragFloat3("Scale", &tf->scale.x, 0.01f);
+            if (ImGui::DragFloat3("Position", &tf->position.x, 0.01f) +
+                ImGui::DragFloat3("Scale", &tf->scale.x, 0.01f) +
+                ImGui::DragFloat4("Rotation", &tf->rotation.r, 0.01f))
+                hgTransformUpdate(&ecs, e);
             ImGui::TreePop();
         }
 
@@ -428,9 +408,10 @@ void drawEditor(HgArena* frame)
             ImGui::SeparatorText("Camera");
             if (ImGui::Button("Reset Camera"))
             {
-                cameraTf->position = HgVec3{0, 0, -1};
-                cameraTf->scale = HgVec3{1, 1, 1};
-                cameraTf->rotation = HgQuat{1, 0, 0, 0};
+                transform->position = HgVec3{0, 0, -1};
+                transform->scale = HgVec3{1, 1, 1};
+                transform->rotation = HgQuat{1, 0, 0, 0};
+                hgTransformUpdate(&ecs, player);
             }
             ImGui::Checkbox("3D Movement", &move3D);
             ImGui::Checkbox("Fixed Aspect", &fixedAspect);
@@ -576,7 +557,6 @@ void drawUI(HgArena* frame)
     ImGui::Render();
 }
 
-
 int main()
 {
     hgDefer(hgDebug("Exited successfully\n"));
@@ -607,21 +587,17 @@ int main()
         if (hgWasQuit() || hgWindowWasClosed(window))
             goto quit;
 
-        hgEcsForPar<Spin, HgTransform>(&ecs, [&](HgEntity e, Spin* spin, HgTransform*)
+        hgEcsForEach<Spin, HgTransform>(&ecs, [&](HgEntity e, Spin* spin, HgTransform* tf)
         {
-            // tf->rotation = hgQuatAxisAngle(HgVec3{0, -1, 0}, (f32)delta * spin->speed) * tf->rotation;
+            tf->rotation = hgQuatAxisAngle(HgVec3{0, -1, 0}, (f32)delta * spin->speed) * tf->rotation;
+
             // hgTransformMove(&ecs, e, {}, {}, hgQuatAxisAngle(HgVec3{0, -1, 0}, (f32)delta * spin->speed));
 
             // hgTransformMove(&ecs, e, HgVec3{0.05f * (f32)delta, 0, 0});
 
             // hgTransformMove(&ecs, e, HgVec3{}, HgVec3{1.0f + 0.1f * (f32)delta, 1, 1});
 
-            hgTransformMove(
-                &ecs,
-                e,
-                HgVec3{},
-                HgVec3{1},
-                hgQuatAxisAngle(HgVec3{0, -1, 0}, (f32)delta * spin->speed));
+            hgTransformUpdate(&ecs, e);
         });
 
         if (renderHovered)
@@ -631,7 +607,7 @@ int main()
                 f32 rotSpeed = 2.0f;
                 HgQuat rotX = hgQuatAxisAngle(HgVec3{ 0, 1, 0}, hgMouseDeltaX(window) * rotSpeed);
                 HgQuat rotY = hgQuatAxisAngle(HgVec3{-1, 0, 0}, hgMouseDeltaY(window) * rotSpeed);
-                cameraTf->rotation = rotX * cameraTf->rotation * rotY;
+                transform->rotation = rotX * transform->rotation * rotY;
             }
 
             HgVec3 movement = HgVec3{0.0f};
@@ -648,9 +624,11 @@ int main()
             if (movement != HgVec3{0.0f})
             {
                 f32 moveSpeed = 1.5f * (f32)delta;
-                HgVec3 rotated = hgVecRotate(cameraTf->rotation, HgVec3{movement.x, 0.0f, movement.z});
-                cameraTf->position += hgVecNorm3(HgVec3{rotated.x, movement.y, rotated.z}) * moveSpeed;
+                HgVec3 rotated = hgVecRotate(transform->rotation, HgVec3{movement.x, 0.0f, movement.z});
+                transform->position += hgVecNorm3(HgVec3{rotated.x, movement.y, rotated.z}) * moveSpeed;
             }
+
+            hgTransformUpdate(&ecs, player);
         }
 
         drawUI(frame);

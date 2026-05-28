@@ -430,7 +430,7 @@ struct HgVec3 {
     /**
      * Downsize to Vec2
      */
-    explicit constexpr operator HgVec2()
+    explicit constexpr operator HgVec2() const
     {
         return HgVec2{x, y};
     }
@@ -486,14 +486,14 @@ struct HgVec4 {
     /**
      * Downsize to Vec2
      */
-    explicit constexpr operator HgVec2()
+    explicit constexpr operator HgVec2() const
     {
         return HgVec2{x, y};
     }
     /**
      * Downsize to Vec3
      */
-    explicit constexpr operator HgVec3()
+    explicit constexpr operator HgVec3() const
     {
         return HgVec3{x, y, z};
     }
@@ -584,7 +584,7 @@ struct HgMat3 {
     /**
      * Downsize to Mat2
      */
-    explicit constexpr operator HgMat2()
+    explicit constexpr operator HgMat2() const
     {
         return HgMat2{HgVec2{x}, HgVec2{y}};
     }
@@ -636,14 +636,14 @@ struct HgMat4 {
     /**
      * Downsize to Mat2
      */
-    explicit constexpr operator HgMat2()
+    explicit constexpr operator HgMat2() const
     {
         return HgMat2{HgVec2{x}, HgVec2{y}};
     }
     /**
      * Downsize to Mat3
      */
-    explicit constexpr operator HgMat3()
+    explicit constexpr operator HgMat3() const
     {
         return HgMat3{HgVec3{x}, HgVec3{y}, HgVec3{z}};
     }
@@ -1316,6 +1316,26 @@ HgVec3 operator*(const HgMat3& lhs, HgVec3 rhs);
 HgVec4 operator*(const HgMat4& lhs, HgVec4 rhs);
 
 /**
+ * Transpose the matrix
+ */
+void hgMatTranspose(u32 width, u32 height, f32* dst, const f32* mat);
+
+/**
+ * Transpose the matrix
+ */
+HgMat2 hgMatTranspose2(const HgMat2& mat);
+
+/**
+ * Transpose the matrix
+ */
+HgMat3 hgMatTranspose3(const HgMat3& mat);
+
+/**
+ * Transpose the matrix
+ */
+HgMat4 hgMatTranspose4(const HgMat4& mat);
+
+/**
  * Add complex numbers
  */
 constexpr HgComplex operator+(HgComplex lhs, HgComplex rhs)
@@ -1412,6 +1432,13 @@ HgMat4 hgMatModel3D(const HgVec3& position, const HgVec3& scale, const HgQuat& r
  * - rotation The rotation of the camera
  */
 HgMat4 hgMatView(const HgVec3& position, const HgVec3& zoom, const HgQuat& rotation);
+
+/**
+ * Creates a view matrix from a model matrix
+ *
+ * Note, removes any scaling/shearing
+ */
+HgMat4 hgMatModelToView(const HgMat4& model);
 
 /**
  * Creates an orthographic projection matrix
@@ -6104,57 +6131,45 @@ void hgNodeDetach(HgEcs* ecs, HgEntity e);
 void hgNodeDestroy(HgEcs* ecs, HgEntity e);
 
 /**
- * The transform component for entities
+ * The transform component for entities in absolute space
  */
 struct HgTransform {
     /**
-     * The entity's position in the world
+     * The entity's transform model matrix in world space
+     */
+    HgMat4 mat{1.0f};
+    /**
+     * The entity's position relative to its parent
      * - x: -left, +right
      * - y: -up, +down
      * - z: -backward, +forward
      */
     HgVec3 position{0.0f, 0.0f, 0.0f};
     /**
-     * The entity's scaling
+     * The entity's scaling relative to its parent
      * - x: horizonatal
      * - y: vertical
      * - z: depth
      */
     HgVec3 scale{1.0f, 1.0f, 1.0f};
     /**
-     * The entity's rotation in the world
+     * The entity's rotation relative to its parent
      */
     HgQuat rotation{1.0f, 0.0f, 0.0f, 0.0f};
 };
 
 /**
- * Set the transform and move children by accordingly
- *
- * Parameters
- * - ecs The ecs
- * - e The entity to set, must be alive
- * - pos The new position
- * - scale The new scale
- * - rot The new rotation
+ * Get the position from HgTransform mat
  */
-void hgTransformSet(HgEcs* ecs, HgEntity e, const HgVec3& pos, const HgVec3& scale, const HgQuat& rot);
+constexpr HgVec3 hgTransformWorldPos(HgTransform& tf)
+{
+    return HgVec3{tf.mat.w};
+}
 
 /**
- * Move the transform and all children by a delta
- *
- * Parameters
- * - ecs The ecs
- * - e The entity to move, must be alive
- * - dpos The change in position, added to current position
- * - dscale The change in scale, multiplied to current scale
- * - drot The change in rotation, applied to current rotation
+ * Update HgTransform for the entity and its children to the HgTransformLocal
  */
-void hgTransformMove(
-    HgEcs* ecs,
-    HgEntity e,
-    const HgVec3& dpos,
-    const HgVec3& dscale = HgVec3{1.0f, 1.0f, 1.0f},
-    const HgQuat& drot = HgQuat{1.0f, 0.0f, 0.0f, 0.0f});
+void hgTransformUpdate(HgEcs* ecs, HgEntity e);
 
 /**
  * The types of camera projections

@@ -194,6 +194,38 @@ const HgMat4& HgMat4::operator-=(const HgMat4& other)
     return* this;
 }
 
+void hgMatTranspose(u32 width, u32 height, f32* dst, const f32* mat)
+{
+    for (u32 i = 0; i < width; ++i)
+    {
+        for (u32 j = 0; j < height; ++j)
+        {
+            dst[j * width + i] = mat[i * height + j];
+        }
+    }
+}
+
+HgMat2 hgMatTranspose2(const HgMat2& mat)
+{
+    HgMat2 ret;
+    hgMatTranspose(2, 2, &ret.x.x, &mat.x.x);
+    return ret;
+}
+
+HgMat3 hgMatTranspose3(const HgMat3& mat)
+{
+    HgMat3 ret;
+    hgMatTranspose(3, 3, &ret.x.x, &mat.x.x);
+    return ret;
+}
+
+HgMat4 hgMatTranspose4(const HgMat4& mat)
+{
+    HgMat4 ret;
+    hgMatTranspose(4, 4, &ret.x.x, &mat.x.x);
+    return ret;
+}
+
 const HgComplex& HgComplex::operator+=(HgComplex other)
 {
     r += other.r;
@@ -602,6 +634,21 @@ HgMat4 hgMatView(const HgVec3& position, const HgVec3& zoom, const HgQuat& rotat
     pos.w.y = -position.y;
     pos.w.z = -position.z;
     return rot * pos;
+}
+
+HgMat4 hgMatModelToView(const HgMat4& model)
+{
+    if (HgVec3{model.x} == HgVec3{0} || HgVec3{model.y} == HgVec3{0} || HgVec3{model.z} == HgVec3{0})
+        return HgMat4{HgMat3{0}};
+
+    HgMat3 inv3{model};
+    inv3.x = hgVecNorm3(HgVec3{model.x});
+    inv3.z = hgVecNorm3(hgCross(inv3.x, HgVec3{model.y}));
+    inv3.y = hgVecNorm3(hgCross(inv3.z, inv3.x));
+    inv3 = hgMatTranspose3(inv3);
+    HgMat4 inv4{inv3};
+    inv4.w = HgVec4{HgVec3{inv3 * HgVec3{model.w} * -1}, 1};
+    return inv4;
 }
 
 HgMat4 hgMatOrthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far)
@@ -3109,44 +3156,56 @@ void hgNodeDestroy(HgEcs* ecs, HgEntity e)
     hgEcsDespawn(ecs, e);
 }
 
-void hgTransformSet(HgEcs* ecs, HgEntity e, const HgVec3& pos, const HgVec3& scale, const HgQuat& rot)
+void transformUpdateChild(HgEcs* ecs, HgEntity e)
 {
-    hgAssert(ecs != nullptr);
+    hgAssert(hgEcsHas<HgTransform>(ecs, e));
+
+    HgNode* node = hgEcsGet<HgNode>(ecs, e);
 
     HgTransform* tf = hgEcsGet<HgTransform>(ecs, e);
+
+    tf->mat = hgEcsGet<HgTransform>(ecs, node->parent)->mat
+            * hgMatModel3D(tf->position, tf->scale, tf->rotation);
+
+    HgEntity child = node->firstChild;
+    while (!hgHandleIsNull(child.handle))
+    {
+        hgTransformUpdate(ecs, child);
+        child = hgEcsGet<HgNode>(ecs, child)->nextSibling;
+    }
+}
+
+void hgTransformUpdate(HgEcs* ecs, HgEntity e)
+{
+    hgAssert(ecs != nullptr);
+    hgAssert(hgEcsAlive(ecs, e));
+    hgAssert(hgEcsHas<HgTransform>(ecs, e));
+
     if (hgEcsHas<HgNode>(ecs, e))
     {
         HgNode* node = hgEcsGet<HgNode>(ecs, e);
-        HgEntity child = node->firstChild;
-        while (!hgHandleIsNull(child.handle))
+        if (!hgHandleIsNull(node->parent.handle) && hgEcsHas<HgTransform>(ecs, node->parent))
         {
-            HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
-            HgTransform* childTf = hgEcsGet<HgTransform>(ecs, child);
+            transformUpdateChild(ecs, e);
+        }
+        else
+        {
+            HgTransform* tf = hgEcsGet<HgTransform>(ecs, e);
+            tf->mat = hgMatModel3D(tf->position, tf->scale, tf->rotation);
 
-            HgVec3 relPos = hgVecRotate(hgQuatConj(tf->rotation), (childTf->position - tf->position)) / tf->scale;
-            HgVec3 newRelPos = hgVecRotate(rot, relPos * scale);
-
-            hgTransformSet(
-                ecs,
-                child,
-                pos + newRelPos,
-                scale * childTf->scale / tf->scale,
-                rot * hgQuatConj(tf->rotation) * childTf->rotation);
-
-            child = childNode->nextSibling;
+            HgEntity child = node->firstChild;
+            while (!hgHandleIsNull(child.handle))
+            {
+                transformUpdateChild(ecs, child);
+                child = hgEcsGet<HgNode>(ecs, child)->nextSibling;
+            }
         }
     }
-    tf->position = pos;
-    tf->scale = scale;
-    tf->rotation = rot;
-}
-
-void hgTransformMove(HgEcs* ecs, HgEntity e, const HgVec3& dpos, const HgVec3& dscale, const HgQuat& drot)
-{
-    hgAssert(ecs != nullptr);
-
-    HgTransform* tf = hgEcsGet<HgTransform>(ecs, e);
-    hgTransformSet(ecs, e, tf->position + dpos, tf->scale * dscale, drot * tf->rotation);
+    else
+    {
+        HgTransform* tf = hgEcsGet<HgTransform>(ecs, e);
+        tf->mat = hgMatModel3D(tf->position, tf->scale, tf->rotation);
+    }
 }
 
 struct VPUniform {
@@ -3179,13 +3238,16 @@ void hgEcsRemoveImpl(HgCamera* camera)
 
 void hgCameraUpdate(HgEcs* ecs, HgEntity e)
 {
+    hgAssert(ecs != nullptr);
+    hgAssert(hgEcsHas<HgCamera>(ecs, e));
     hgAssert(hgEcsHas<HgTransform>(ecs, e));
-    HgTransform* transform = hgEcsGet<HgTransform>(ecs, e);
+
     HgCamera* camera = hgEcsGet<HgCamera>(ecs, e);
+    HgTransform* tf = hgEcsGet<HgTransform>(ecs, e);
     hgAssert(camera->type == HgCameraType_perspective || camera->type == HgCameraType_orthographic);
 
-    VPUniform vp;
-    vp.view = hgMatView(transform->position, transform->scale, transform->rotation);
+    VPUniform vp{};
+    vp.view = hgMatModelToView(tf->mat);
     if (camera->type == HgCameraType_perspective)
     {
         vp.proj = hgMatPerspective(
@@ -3301,14 +3363,14 @@ void hgSpritesDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 
     hgGpuBindPipeline(cmd, spritePipeline.pipeline);
 
-    hgEcsForEach<HgSprite, HgTransform>(ecs, [&](HgEntity, HgSprite* sprite, HgTransform* transform)
+    hgEcsForEach<HgSprite, HgTransform>(ecs, [&](HgEntity, HgSprite* sprite, HgTransform* tf)
     {
         HgGpuTexture* texture = hgHandleIsNull(sprite->texture.handle)
             ? &spritePipeline.defaultTex
             : hgAssetGet(sprite->texture);
 
         SpritePipelinePush push{};
-        push.model = hgMatModel3D(transform->position, transform->scale, transform->rotation);
+        push.model = tf->mat;
         push.uvPos = sprite->uvPos;
         push.uvSize = sprite->uvSize;
         push.vpIdx = hgGpuDescriptorIdx(hgEcsGet<HgCamera>(ecs, camera)->vpDesc);
@@ -3669,7 +3731,7 @@ void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
     HgCamera* cameraC = hgEcsGet<HgCamera>(ecs, camera);
     HgTransform* cameraTf = hgEcsGet<HgTransform>(ecs, camera);
 
-    HgMat4 view = hgMatView(cameraTf->position, cameraTf->scale, cameraTf->rotation);
+    HgMat4 view = hgMatModelToView(cameraTf->mat);
 
     u32 dirLightCount = hgEcsCount<HgDirLight>(ecs);
     u32 pointLightCount = hgEcsCount<HgPointLight>(ecs);
@@ -3726,9 +3788,9 @@ void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
     });
 
     i = 0;
-    hgEcsForEach<HgPointLight, HgTransform>(ecs, [&](HgEntity, HgPointLight* light, HgTransform* transform)
+    hgEcsForEach<HgPointLight, HgTransform>(ecs, [&](HgEntity, HgPointLight* light, HgTransform* tf)
     {
-        pointLights[i].pos = view * HgVec4{transform->position, 1.0};
+        pointLights[i].pos = view * HgVec4{hgTransformWorldPos(*tf), 1.0};
         pointLights[i].color = light->color;
         ++i;
     });
@@ -3741,7 +3803,7 @@ void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 
     hgGpuBindPipeline(cmd, modelPipeline.pipeline);
 
-    hgEcsForEach<HgModel, HgTransform>(ecs, [&](HgEntity, HgModel* model, HgTransform* transform)
+    hgEcsForEach<HgModel, HgTransform>(ecs, [&](HgEntity, HgModel* model, HgTransform* tf)
     {
         HgGpuTexture* colorMap = hgHandleIsNull(model->colorMap.handle)
             ? &modelPipeline.defaultColorMap
@@ -3752,7 +3814,7 @@ void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
             : hgAssetGet(model->normalMap);
 
         ModelPipelinePush push{};
-        push.model = hgMatModel3D(transform->position, transform->scale, transform->rotation);
+        push.model = tf->mat;
         push.dirLightIdx = hgGpuDescriptorIdx(modelPipeline.dirLightDesc);
         push.dirLightCount = dirLightCount;
         push.pointLightIdx = hgGpuDescriptorIdx(modelPipeline.pointLightDesc);
