@@ -3456,8 +3456,6 @@ enum HgGpuBufferUsage : u32 {
     HgGpuBufferUsage_storageTexelBuffer = 0x00000008,
     HgGpuBufferUsage_uniformBuffer = 0x00000010,
     HgGpuBufferUsage_storageBuffer = 0x00000020,
-    HgGpuBufferUsage_indexBuffer = 0x00000040,
-    HgGpuBufferUsage_vertexBuffer = 0x00000080,
     HgGpuBufferUsage_indirectBuffer = 0x00000100,
 };
 typedef u32 HgGpuBufferUsageFlags;
@@ -3914,46 +3912,6 @@ struct HgGpuPushRange {
 };
 
 /**
- * A vertex binding description in a pipeline
- */
-struct HgGpuVertexBinding {
-    /**
-     * The binding index
-     */
-    u32 binding;
-    /**
-     * The stride between vertices in bytes
-     */
-    u32 stride;
-    /**
-     * Whether the binding is instances or vertices
-     */
-    bool instanceRate;
-};
-
-/**
- * A vertex attribute description in a pipeline
- */
-struct HgGpuVertexAttribute {
-    /**
-     * The location index
-     */
-    u32 location;
-    /**
-     * The vertex binding
-     */
-    u32 binding;
-    /**
-     * The format of the attribute
-     */
-    HgFormat format;
-    /**
-     * The offset into the binding vertex
-     */
-    u32 offset;
-};
-
-/**
  * How the vertex list is interpreted
  */
 enum HgGpuTopology : u32 {
@@ -4031,22 +3989,6 @@ struct HgCreateGpuGraphicsPipeline {
      * The number of push constant ranges
      */
     u32 pushRangeCount;
-    /**
-     * Descriptions of the vertex bindings, may be nullptr
-     */
-    const HgGpuVertexBinding* vertexBindings = nullptr;
-    /**
-     * The number of vertex bindings
-     */
-    u32 vertexBindingCount = 0;
-    /**
-     * Descriptions of the vertex attributes, may be nullptr
-     */
-    const HgGpuVertexAttribute* vertexAttributes = nullptr;
-    /**
-     * The number of vertex attributes
-     */
-    u32 vertexAttributeCount = 0;
     /**
      * How to interpret vertices into topology
      */
@@ -4143,28 +4085,6 @@ void hgGpuBindPipeline(HgGpuCmd* cmd, HgGpuPipeline* pipeline);
 void hgGpuPushConstants(HgGpuCmd* cmd, HgGpuPipeline* pipeline, u32 offset, void* push, u32 size);
 
 /**
- * Bind an index buffer (assumed 32 bit)
- *
- * Parameters
- * - cmd The command buffer to record to
- * - buffer The buffer to bind
- * - offset The offset into the buffer
- */
-void hgGpuBindIndexBuffer(HgGpuCmd* cmd, HgGpuBuffer* buffer, u64 offset = 0);
-
-/**
- * Bind vertex buffers
- *
- * Parameters
- * - cmd The command buffer to record to
- * - bindingIdx The first binding index to bind to
- * - buffers The buffer to bind
- * - offsets The offsets into the buffers
- * - bufferCount The number of buffers
- */
-void hgGpuBindVertexBuffers(HgGpuCmd* cmd, u32 bindingIdx, HgGpuBuffer** buffers, u64* offsets, u32 bufferCount);
-
-/**
  * Issue a draw call
  *
  * Parameters
@@ -4175,25 +4095,6 @@ void hgGpuBindVertexBuffers(HgGpuCmd* cmd, u32 bindingIdx, HgGpuBuffer** buffers
  * - instanceCount The number of instances to draw
  */
 void hgGpuDraw(HgGpuCmd* cmd, u32 vertexBegin, u32 vertexCount, u32 instanceBegin, u32 instanceCount);
-
-/**
- * Issue a draw call using an index buffer
- *
- * Parameters
- * - cmd The command buffer to record to
- * - vertexOffset The offset added to the indices in the index buffer
- * - indexBegin The index of the first index to draw
- * - indexCount The number of indices to draw
- * - instanceBegin The index of the first instance to draw
- * - instanceCount The number of instances to draw
- */
-void hgGpuDrawIndexed(
-    HgGpuCmd* cmd,
-    i32 vertexOffset,
-    u32 indexBegin,
-    u32 indexCount,
-    u32 instanceBegin,
-    u32 instanceCount);
 
 /**
  * Dispatch a compute shader
@@ -5224,19 +5125,19 @@ struct HgMeshVertex {
     /**
      * The vertex position
      */
-    HgVec3 pos;
+    alignas(16) HgVec3 pos;
     /**
      * The vertex normal
      */
-    HgVec3 norm;
+    alignas(16) HgVec3 norm;
     /**
      * The vertex tangent
      */
-    HgVec4 tan;
+    alignas(16) HgVec4 tan;
     /**
      * The vertex uv coordinate
      */
-    HgVec2 uv;
+    alignas(16) HgVec2 uv;
 };
 
 /**
@@ -5303,6 +5204,14 @@ struct HgGpuMesh {
      * The index buffer
      */
     HgGpuBuffer* indexBuffer;
+    /**
+     * The descriptor for the vertex buffer
+     */
+    HgGpuDescriptor vertexDesc;
+    /**
+     * The descriptor for the index buffer
+     */
+    HgGpuDescriptor indexDesc;
     /**
      * The number of vertices
      */

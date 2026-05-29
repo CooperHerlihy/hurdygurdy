@@ -312,11 +312,11 @@ void drawEditorEntity(HgArena* frame, HgEntity e)
             if (ImGui::BeginMenu("Add Component"))
             {
                 addComponent<HgTransform>(e, "Transform");
-                addComponent<HgSprite>(e, "Sprite 2D");
-                addComponent<HgModel>(e, "Model 3D");
-                addComponent<HgDirLight>(e, "Directional Light");
-                addComponent<HgPointLight>(e, "Point Light");
-                addComponent<Spin>(e, "Spin");
+                addComponent<HgSprite, HgTransform>(e, "Sprite 2D");
+                addComponent<HgModel, HgTransform>(e, "Model 3D");
+                addComponent<HgDirLight, HgTransform>(e, "Directional Light");
+                addComponent<HgPointLight, HgTransform>(e, "Point Light");
+                addComponent<Spin, HgTransform>(e, "Spin");
 
                 ImGui::EndMenu();
             }

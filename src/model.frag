@@ -28,13 +28,15 @@ layout (HgCombinedImageSampler) uniform sampler2D uTextures[];
 
 layout (push_constant) uniform Push {
     mat4 model;
-    uint vpIdx;
+    uint indicesIdx;
+    uint verticesIdx;
+    uint viewProjIdx;
+    uint normalMapIdx;
+    uint colorMapIdx;
     uint dirLightIdx;
     uint dirLightCount;
     uint pointLightIdx;
     uint pointLightCount;
-    uint colorMapIdx;
-    uint normalMapIdx;
 } push;
 
 layout (location = 0) out vec4 outColor;

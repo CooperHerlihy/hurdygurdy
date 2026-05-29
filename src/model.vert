@@ -2,10 +2,13 @@
 
 #include "hurdygurdy.glsl"
 
-layout (location = 0) in vec3 inPosition;
-layout (location = 1) in vec3 inNormal;
-layout (location = 2) in vec4 inTangent;
-layout (location = 3) in vec2 inUVCoord;
+layout (HgStorageBuffer) readonly buffer Indices {
+    uint indices[];
+} indexBufs[];
+
+layout (HgStorageBuffer) readonly buffer Vertices {
+    HgVertex verts[];
+} vertexBufs[];
 
 layout (HgUniformBuffer) uniform VP {
     mat4 proj;
@@ -14,13 +17,15 @@ layout (HgUniformBuffer) uniform VP {
 
 layout (push_constant) uniform Push {
     mat4 model;
-    uint vpIdx;
+    uint indicesIdx;
+    uint verticesIdx;
+    uint viewProjIdx;
+    uint normalMapIdx;
+    uint colorMapIdx;
     uint dirLightIdx;
     uint dirLightCount;
     uint pointLightIdx;
     uint pointLightCount;
-    uint colorMapIdx;
-    uint normalMapIdx;
 } push;
 
 layout (location = 0) out VertexOutput {
@@ -29,10 +34,12 @@ layout (location = 0) out VertexOutput {
 
 void main()
 {
-    vOut.vertex = hgTransformVertex(
-        HgVertex(inPosition, inNormal, inTangent, inUVCoord),
-        uniformBuffers[push.vpIdx].view * push.model);
+    uint idx = indexBufs[push.indicesIdx].indices[gl_VertexIndex];
+    HgVertex vert = vertexBufs[push.verticesIdx].verts[idx];
+    mat4 mv = uniformBuffers[push.viewProjIdx].view * push.model;
+    mat4 p = uniformBuffers[push.viewProjIdx].proj;
 
-    gl_Position = uniformBuffers[push.vpIdx].proj * vec4(vOut.vertex.position, 1.0);
+    vOut.vertex = hgTransformVertex(vert, mv);
+    gl_Position = p * vec4(vOut.vertex.position, 1.0);
 }
 

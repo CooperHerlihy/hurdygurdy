@@ -2013,8 +2013,6 @@ HgGpuPipeline* hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* co
     hgAssert(config->fragmentShader != nullptr);
     if (config->colorAttachmentCount > 0)
         hgAssert(config->colorAttachmentFormats != nullptr);
-    if (config->vertexBindingCount > 0)
-        hgAssert(config->vertexBindings != nullptr);
 
     HgGpuPipeline* pipeline = (HgGpuPipeline*)malloc(sizeof(HgGpuPipeline));
     *pipeline = {};
@@ -2056,33 +2054,8 @@ HgGpuPipeline* hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* co
     shaderStages[1].module = fragmentShader;
     shaderStages[1].pName = "main";
 
-    VkVertexInputBindingDescription* vertexBindings
-        = hgAlloc<VkVertexInputBindingDescription>(scratch, config->vertexBindingCount);
-    for (u32 i = 0; i < config->vertexBindingCount; ++i)
-    {
-        vertexBindings[i].binding = config->vertexBindings[i].binding;
-        vertexBindings[i].stride = config->vertexBindings[i].stride;
-        vertexBindings[i].inputRate = config->vertexBindings[i].instanceRate
-            ? VK_VERTEX_INPUT_RATE_INSTANCE
-            : VK_VERTEX_INPUT_RATE_VERTEX;
-    }
-
-    VkVertexInputAttributeDescription* vertexAttributes
-        = hgAlloc<VkVertexInputAttributeDescription>(scratch, config->vertexAttributeCount);
-    for (u32 i = 0; i < config->vertexAttributeCount; ++i)
-    {
-        vertexAttributes[i].location = config->vertexAttributes[i].location;
-        vertexAttributes[i].binding = config->vertexAttributes[i].binding;
-        vertexAttributes[i].format = formatToVk(config->vertexAttributes[i].format);
-        vertexAttributes[i].offset = config->vertexAttributes[i].offset;
-    }
-
     VkPipelineVertexInputStateCreateInfo vertexInputState{};
     vertexInputState.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertexInputState.vertexBindingDescriptionCount = (u32)config->vertexBindingCount;
-    vertexInputState.pVertexBindingDescriptions = vertexBindings;
-    vertexInputState.vertexAttributeDescriptionCount = (u32)config->vertexAttributeCount;
-    vertexInputState.pVertexAttributeDescriptions = vertexAttributes;
 
     VkPipelineInputAssemblyStateCreateInfo inputAssemblyState{};
     inputAssemblyState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -2336,39 +2309,9 @@ void hgGpuPushConstants(HgGpuCmd* cmd, HgGpuPipeline* pipeline, u32 offset, void
         push);
 }
 
-void hgGpuBindIndexBuffer(HgGpuCmd* cmd, HgGpuBuffer* buffer, u64 offset)
-{
-    vkCmdBindIndexBuffer((VkCommandBuffer)cmd, buffer->buffer, offset, VK_INDEX_TYPE_UINT32);
-}
-
-void hgGpuBindVertexBuffers(HgGpuCmd* cmd, u32 bindingIdx, HgGpuBuffer** buffers, u64* offsets, u32 bufferCount)
-{
-    HgArena* scratch = hgScratch();
-    HgArenaScope scratchScope{scratch};
-
-    VkBuffer* vkBuffers = hgAlloc<VkBuffer>(scratch, bufferCount);
-    for (u32 i = 0; i < bufferCount; ++i)
-    {
-        vkBuffers[i] = buffers[i]->buffer;
-    }
-
-    vkCmdBindVertexBuffers((VkCommandBuffer)cmd, bindingIdx, bufferCount, vkBuffers, offsets);
-}
-
 void hgGpuDraw(HgGpuCmd* cmd, u32 vertexBegin, u32 vertexCount, u32 instanceBegin, u32 instanceCount)
 {
     vkCmdDraw((VkCommandBuffer)cmd, vertexCount, instanceCount, vertexBegin, instanceBegin);
-}
-
-void hgGpuDrawIndexed(
-    HgGpuCmd* cmd,
-    i32 vertexOffset,
-    u32 indexBegin,
-    u32 indexCount,
-    u32 instanceBegin,
-    u32 instanceCount)
-{
-    vkCmdDrawIndexed((VkCommandBuffer)cmd, indexCount, instanceCount, vertexOffset, indexBegin, instanceBegin);
 }
 
 void hgGpuCompute(HgGpuCmd* cmd, u32 groupCountX, u32 groupCountY, u32 groupCountZ)
