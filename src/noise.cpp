@@ -57,23 +57,8 @@ int main()
         HgGpuImageUsage_storage | HgGpuImageUsage_sampled);
     hgDefer(hgGpuImageDestroy(noiseTex->image));
 
-    noiseTex->view = hgGpuViewCreate(noiseTex->image, 0, 1, 0, 1, HgGpuAspect_color);
+    noiseTex->view = hgGpuViewCreate(noiseTex->image, HgGpuAspect_color, HgGpuFilter_nearest);
     hgDefer(hgGpuViewDestroy(noiseTex->view));
-
-    HgGpuDescriptor noiseStorageDesc = hgGpuDescriptorCreate(HgGpuDescriptorType_storageImage);
-    hgDefer(hgGpuDescriptorDestroy(noiseStorageDesc));
-
-    HgGpuImageDescriptorInfo noiseStorageInfo{nullptr, noiseTex->view, HgGpuLayout_general};
-    hgGpuDescriptorUpdate(noiseStorageDesc, nullptr, &noiseStorageInfo);
-
-    noiseTex->sampler = hgGpuSamplerCreate(HgGpuFilter_linear);
-    hgDefer(hgGpuSamplerDestroy(noiseTex->sampler));
-
-    noiseTex->descriptor = hgGpuDescriptorCreate(HgGpuDescriptorType_combinedImageSampler);
-    hgDefer(hgGpuDescriptorDestroy(noiseTex->descriptor));
-
-    HgGpuImageDescriptorInfo noiseSamplerInfo{noiseTex->sampler, noiseTex->view, HgGpuLayout_shaderReadOnly};
-    hgGpuDescriptorUpdate(noiseTex->descriptor, nullptr, &noiseSamplerInfo);
 
     u32 noiseSeed = std::random_device{}();
     u32 noiseScaleBegin = 4;
@@ -136,7 +121,7 @@ int main()
             hgGpuImageDestroy(depthImage);
 
             depthImage = hgGpuImageCreate(width, height, HgFormat_d32_sfloat, HgGpuImageUsage_depthStencilAttachment);
-            depthView = hgGpuViewCreate(depthImage, 0, 1, 0, 1, HgGpuAspect_depth);
+            depthView = hgGpuViewCreate(depthImage, HgGpuAspect_depth);
 
             cameraC->perspective.aspect = (f32)width / (f32)height;
         }
@@ -198,7 +183,7 @@ int main()
         noisePush.scaleEnd = noiseScaleEnd;
         noisePush.tiling = noiseTiling;
         noisePush.seed = noiseSeed;
-        noisePush.outImageIdx = hgGpuDescriptorIdx(noiseStorageDesc);
+        noisePush.outImageIdx = hgGpuImageSamplerDescriptor(noiseTex->view);
 
         hgGpuPushConstants(cmd, noisePipeline, 0, &noisePush, sizeof(noisePush));
 

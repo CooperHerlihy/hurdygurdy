@@ -12,15 +12,15 @@ layout (push_constant) uniform Push {
     mat4 model;
     vec2 uvPos;
     vec2 uvSize;
-    uint vpIdx;
-    uint texIdx;
+    uint vp;
+    uint tex;
 } push;
 
 layout (location = 0) out vec4 outColor;
 
 void main()
 {
-    outColor = texture(uTextures[push.texIdx], vUVCoord);
+    outColor = texture(uTextures[push.tex], vUVCoord);
     if (outColor.w == 0.0)
         discard;
 }

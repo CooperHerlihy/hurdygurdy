@@ -3519,6 +3519,16 @@ HgGpuBuffer* hgGpuBufferCreate(
 void hgGpuBufferDestroy(HgGpuBuffer* buffer);
 
 /**
+ * Get the uniform buffer descriptor index from the buffer
+ */
+u32 hgGpuBufferUniformDescriptor(HgGpuBuffer* buffer);
+
+/**
+ * Get the storage buffer descriptor index from the buffer
+ */
+u32 hgGpuBufferStorageDescriptor(HgGpuBuffer* buffer);
+
+/**
  * Writes to a gpu buffer
  *
  * Parameters
@@ -3637,7 +3647,7 @@ struct HgGpuImageCreateEx {
 };
 
 /**
- * Create a gpu image with more options
+ * Create a gpu image with extended options
  */
 HgGpuImage* hgGpuImageCreateEx(const HgGpuImageCreateEx* create);
 
@@ -3680,21 +3690,82 @@ enum HgGpuAspect : u32 {
 typedef u32 HgGpuAspectFlags;
 
 /**
+ * How a sampler interpolates between pixels
+ */
+enum HgGpuFilter : u32 {
+    HgGpuFilter_nearest = 0,
+    HgGpuFilter_linear = 1,
+    HgGpuFilter_count,
+};
+
+/**
+ * How a sampler samples off the image's edge
+ */
+enum HgGpuSamplerEdgeMode : u32 {
+    HgGpuSamplerEdgeMode_repeat = 0,
+    HgGpuSamplerEdgeMode_mirroredRepeat = 1,
+    HgGpuSamplerEdgeMode_clampToEdge = 2,
+    HgGpuSamplerEdgeMode_clampToBorder = 3,
+    HgGpuSamplerEdgeMode_mirrorClampToEdge = 4,
+    HgGpuSamplerEdgeMode_count,
+};
+
+/**
+ * The border color if the sampler edge mode has a border
+ */
+enum HgGpuSamplerBorder : u32 {
+    HgGpuSamplerBorder_floatTransparentBlack = 0,
+    HgGpuSamplerBorder_intTransparentBlack = 1,
+    HgGpuSamplerBorder_floatOpaqueBlack = 2,
+    HgGpuSamplerBorder_intOpaqueBlack = 3,
+    HgGpuSamplerBorder_floatOpaqueWhite = 4,
+    HgGpuSamplerBorder_intOpaqueWhite = 5,
+    HgGpuSamplerBorder_count,
+};
+
+/**
  * Create a gpu image view
  */
 HgGpuView* hgGpuViewCreate(
     HgGpuImage* image,
-    u32 baseMipLevel,
-    u32 levelCount,
-    u32 baseArrayLayer,
-    u32 layerCount,
     HgGpuAspectFlags aspectFlags,
-    HgGpuViewType type = HgGpuViewType_2D);
+    HgGpuFilter filter = HgGpuFilter_nearest);
+
+/**
+ * Config for hgGpuViewCreateEx
+ */
+struct HgGpuViewCreateEx {
+    HgGpuImage* image;
+    u32 baseMipLevel;
+    u32 levelCount;
+    u32 baseArrayLayer;
+    u32 layerCount;
+    HgGpuAspectFlags aspectFlags;
+    HgGpuViewType type;
+    HgGpuFilter filter;
+    HgGpuSamplerEdgeMode edgeMode;
+    HgGpuSamplerBorder border;
+};
+
+/**
+ * Create a gpu image view with extended config
+ */
+HgGpuView* hgGpuViewCreateEx(const HgGpuViewCreateEx* config);
 
 /**
  * Destroy a gpu image view
  */
 void hgGpuViewDestroy(HgGpuView* view);
+
+/**
+ * Get the image sampler descriptor index from the image view
+ */
+u32 hgGpuImageSamplerDescriptor(HgGpuView* view);
+
+/**
+ * Get the storage image descriptor index from the image view
+ */
+u32 hgGpuImageStorageDescriptor(HgGpuView* view);
 
 /**
  * Write to a gpu image
@@ -3747,150 +3818,6 @@ void hgGpuImageRead(void* dst, HgGpuView* src);
  * - image The image to generate mipmaps for
  */
 void hgGpuImageGenMipmaps(HgGpuView* dst);
-
-/**
- * A sampler to access an image view
- */
-struct HgGpuSampler;
-
-/**
- * How a sampler interpolates between pixels
- */
-enum HgGpuFilter : u32 {
-    HgGpuFilter_nearest = 0,
-    HgGpuFilter_linear = 1,
-};
-
-/**
- * How a sampler samples off the image's edge
- */
-enum HgGpuSamplerEdgeMode : u32 {
-    HgGpuSamplerEdgeMode_modeRepeat = 0,
-    HgGpuSamplerEdgeMode_modeMirroredRepeat = 1,
-    HgGpuSamplerEdgeMode_modeClampToEdge = 2,
-    HgGpuSamplerEdgeMode_modeClampToBorder = 3,
-    HgGpuSamplerEdgeMode_modeMirrorClampToEdge = 4,
-};
-
-/**
- * The border color if the sampler edge mode has a border
- */
-enum HgSamplerBorderColor : u32 {
-    HgGpuSamplerBorder_floatTransparentBlack = 0,
-    HgGpuSamplerBorder_intTransparentBlack = 1,
-    HgGpuSamplerBorder_floatOpaqueBlack = 2,
-    HgGpuSamplerBorder_intOpaqueBlack = 3,
-    HgGpuSamplerBorder_floatOpaqueWhite = 4,
-    HgGpuSamplerBorder_intOpaqueWhite = 5,
-};
-
-/**
- * Create a Vulkan sampler
- *
- * Parameters
- * - filter How the sampler interpolates between image values
- * - addressMode How the sampler handles address off edges
- * - borderColor The border color if addressMode uses a border
- */
-HgGpuSampler* hgGpuSamplerCreate(
-    HgGpuFilter filter,
-    HgGpuSamplerEdgeMode addressMode = HgGpuSamplerEdgeMode_modeRepeat,
-    HgSamplerBorderColor borderColor = HgGpuSamplerBorder_floatTransparentBlack);
-
-/**
- * Destroy a Vulkan sampler
- */
-void hgGpuSamplerDestroy(HgGpuSampler* sampler);
-
-/**
- * A gpu resource descriptor
- */
-struct HgGpuDescriptor {
-    /**
-     * The descriptor id, defaults to null
-     */
-    u32 id = (u32)-1;
-};
-
-/**
- * Get the index from the id
- */
-constexpr u32 hgGpuDescriptorIdx(HgGpuDescriptor desc)
-{
-    return desc.id & 0x0000ffff;
-}
-
-/**
- * Get the generation from the id
- */
-constexpr u32 hgGpuDescriptorGeneration(HgGpuDescriptor desc)
-{
-    return (desc.id & 0x0fff0000) >> 16;
-}
-
-/**
- * The binding indices for the descriptor types in the bindless layout
- */
-enum HgGpuDescriptorType : u32 {
-    HgGpuDescriptorType_sampler = 0,
-    HgGpuDescriptorType_combinedImageSampler = 1,
-    HgGpuDescriptorType_sampledImage = 2,
-    HgGpuDescriptorType_storageImage = 3,
-    HgGpuDescriptorType_uniformTexelBuffer = 4,
-    HgGpuDescriptorType_storageTexelBuffer = 5,
-    HgGpuDescriptorType_uniformBuffer = 6,
-    HgGpuDescriptorType_storageBuffer = 7,
-    HgGpuDescriptorType_count,
-};
-
-/**
- * Get the descriptor type from the id
- */
-constexpr HgGpuDescriptorType hgGpuDescriptorType(HgGpuDescriptor desc)
-{
-    return (HgGpuDescriptorType)((desc.id & 0xf0000000) >> 28);
-}
-
-/**
- * Create a new bindless descriptor
- */
-HgGpuDescriptor hgGpuDescriptorCreate(HgGpuDescriptorType type);
-
-/**
- * Destroy a bindless descriptor
- */
-void hgGpuDescriptorDestroy(HgGpuDescriptor desc);
-
-/**
- * The info to update a buffer descriptor
- */
-struct HgGpuBufferDescriptorInfo {
-    HgGpuBuffer* buffer;
-    u64 offset;
-    u64 range;
-};
-
-/**
- * The info to update an image descriptor
- */
-struct HgGpuImageDescriptorInfo {
-    HgGpuSampler* sampler;
-    HgGpuView* imageView;
-    HgGpuLayout imageLayout;
-};
-
-/**
- * Update a bindless descriptor
- *
- * Parameters
- * - descriptor The descriptor to update
- * - bufferInfo The buffer info, if the descriptor is a buffer type
- * - imageInfo The image info, if the descriptor is an image type
- */
-void hgGpuDescriptorUpdate(
-    HgGpuDescriptor descriptor,
-    const HgGpuBufferDescriptorInfo* bufferInfo,
-    const HgGpuImageDescriptorInfo* imageInfo);
 
 /**
  * A shader pipeline
@@ -5091,14 +5018,6 @@ struct HgGpuTexture {
      * The image view
      */
     HgGpuView* view;
-    /**
-     * The sampler
-     */
-    HgGpuSampler* sampler;
-    /**
-     * The descriptor
-     */
-    HgGpuDescriptor descriptor;
 };
 
 /**
@@ -5204,14 +5123,6 @@ struct HgGpuMesh {
      * The index buffer
      */
     HgGpuBuffer* indexBuffer;
-    /**
-     * The descriptor for the vertex buffer
-     */
-    HgGpuDescriptor vertexDesc;
-    /**
-     * The descriptor for the index buffer
-     */
-    HgGpuDescriptor indexDesc;
     /**
      * The number of vertices
      */
@@ -6129,10 +6040,6 @@ struct HgCamera {
      */
     HgGpuBuffer* vpBuffer;
     /**
-     * The gpu pointer to the vpBuffer, created/destroyed on add/remove
-     */
-    HgGpuDescriptor vpDesc;
-    /**
      * The type of camera
      */
     HgCameraType type;
@@ -6330,7 +6237,7 @@ void hgImGuiDeinit();
 /**
  * Create an ImGui texture
  */
-void* hgImGuiTextureCreate(HgGpuView* view, HgGpuSampler* sampler, HgGpuLayout layout);
+void* hgImGuiTextureCreate(HgGpuView* view, HgGpuLayout layout);
 
 /**
  * Create an ImGui texture

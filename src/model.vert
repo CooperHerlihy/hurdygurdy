@@ -17,14 +17,14 @@ layout (HgUniformBuffer) uniform VP {
 
 layout (push_constant) uniform Push {
     mat4 model;
-    uint indicesIdx;
-    uint verticesIdx;
-    uint viewProjIdx;
-    uint normalMapIdx;
-    uint colorMapIdx;
-    uint dirLightIdx;
+    uint indices;
+    uint vertices;
+    uint viewProj;
+    uint normalMap;
+    uint colorMap;
+    uint dirLights;
     uint dirLightCount;
-    uint pointLightIdx;
+    uint pointLights;
     uint pointLightCount;
 } push;
 
@@ -34,10 +34,10 @@ layout (location = 0) out VertexOutput {
 
 void main()
 {
-    uint idx = indexBufs[push.indicesIdx].indices[gl_VertexIndex];
-    HgVertex vert = vertexBufs[push.verticesIdx].verts[idx];
-    mat4 mv = uniformBuffers[push.viewProjIdx].view * push.model;
-    mat4 p = uniformBuffers[push.viewProjIdx].proj;
+    uint idx = indexBufs[push.indices].indices[gl_VertexIndex];
+    HgVertex vert = vertexBufs[push.vertices].verts[idx];
+    mat4 mv = uniformBuffers[push.viewProj].view * push.model;
+    mat4 p = uniformBuffers[push.viewProj].proj;
 
     vOut.vertex = hgTransformVertex(vert, mv);
     gl_Position = p * vec4(vOut.vertex.position, 1.0);

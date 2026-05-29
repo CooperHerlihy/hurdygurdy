@@ -9,14 +9,14 @@ layout (location = 0) in VertexOutput {
 layout (HgCombinedImageSampler) uniform samplerCube uTextures[];
 
 layout (push_constant) uniform Push {
-    uint vpIdx;
-    uint texIdx;
+    uint vp;
+    uint tex;
 } push;
 
 layout (location = 0) out vec4 outColor;
 
 void main()
 {
-    outColor = texture(uTextures[push.texIdx], vUVCoord);
+    outColor = texture(uTextures[push.tex], vUVCoord);
 }
 

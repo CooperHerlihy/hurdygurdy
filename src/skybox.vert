@@ -8,8 +8,8 @@ layout (HgUniformBuffer) uniform ViewProjection {
 } uniformBuffers[];
 
 layout (push_constant) uniform Push {
-    uint vpIdx;
-    uint texIdx;
+    uint vp;
+    uint tex;
 } push;
 
 layout (location = 0) out VertexOutput {
@@ -18,8 +18,8 @@ layout (location = 0) out VertexOutput {
 
 void main()
 {
-    mat4 proj = uniformBuffers[push.vpIdx].proj;
-    mat4 view = uniformBuffers[push.vpIdx].view;
+    mat4 proj = uniformBuffers[push.vp].proj;
+    mat4 view = uniformBuffers[push.vp].view;
 
     const vec3 positions[] = vec3[](
         // back face

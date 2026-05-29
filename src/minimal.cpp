@@ -64,7 +64,7 @@ int main()
             hgGpuImageDestroy(depthImage);
 
             depthImage = hgGpuImageCreate(width, height, HgFormat_d32_sfloat, HgGpuImageUsage_depthStencilAttachment);
-            depthView = hgGpuViewCreate(depthImage, 0, 1, 0, 1, HgGpuAspect_depth);
+            depthView = hgGpuViewCreate(depthImage, HgGpuAspect_depth);
 
             cameraC->perspective.aspect = (f32)width / (f32)height;
         }

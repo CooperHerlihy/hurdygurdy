@@ -28,14 +28,14 @@ layout (HgCombinedImageSampler) uniform sampler2D uTextures[];
 
 layout (push_constant) uniform Push {
     mat4 model;
-    uint indicesIdx;
-    uint verticesIdx;
-    uint viewProjIdx;
-    uint normalMapIdx;
-    uint colorMapIdx;
-    uint dirLightIdx;
+    uint indices;
+    uint vertices;
+    uint viewProj;
+    uint normalMap;
+    uint colorMap;
+    uint dirLights;
     uint dirLightCount;
-    uint pointLightIdx;
+    uint pointLights;
     uint pointLightCount;
 } push;
 
@@ -44,7 +44,7 @@ layout (location = 0) out vec4 outColor;
 void main()
 {
     vec3 normal = hgTransformNormalMap(
-        texture(uTextures[push.normalMapIdx], vIn.vertex.uvCoord).xyz,
+        texture(uTextures[push.normalMap], vIn.vertex.uvCoord).xyz,
         vIn.vertex.normal,
         vIn.vertex.tangent);
 
@@ -54,7 +54,7 @@ void main()
 
     for (uint i = 0; i < push.dirLightCount; ++i)
     {
-        DirLight light = dirLights[push.dirLightIdx].lights[i];
+        DirLight light = dirLights[push.dirLights].lights[i];
 
         lighting +=
             light.color.xyz *
@@ -71,7 +71,7 @@ void main()
 
     for (uint i = 0; i < push.pointLightCount; ++i)
     {
-        PointLight light = pointLights[push.pointLightIdx].lights[i];
+        PointLight light = pointLights[push.pointLights].lights[i];
 
         vec3 lightPosRel = light.pos.xyz - vIn.vertex.position;
         lighting +=
@@ -89,7 +89,7 @@ void main()
     }
 
     vec3 color = texture(
-        uTextures[push.colorMapIdx],
+        uTextures[push.colorMap],
         vIn.vertex.uvCoord).xyz
         * lighting;
     outColor = vec4(hgAcesFittedTonemap(color), 1.0);

@@ -13,7 +13,6 @@ static f32 aspectRatio = 16.0f / 9.0f;
 
 static HgGpuImage* renderImage = nullptr;
 static HgGpuView* renderView = nullptr;
-static HgGpuSampler* renderSampler = nullptr;
 static void* renderImGuiTex = nullptr;
 
 static HgGpuImage* depthImage = nullptr;
@@ -64,8 +63,6 @@ void init(HgArena* arena)
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
     hgImGuiInit(window, hgWindowImageFormat(window));
-
-    renderSampler = hgGpuSamplerCreate(HgGpuFilter_nearest);
 
     hgSpritesInit(HgFormat_r8g8b8a8_srgb, HgFormat_d32_sfloat);
     hgModelsInit(HgFormat_r8g8b8a8_srgb, HgFormat_d32_sfloat);
@@ -157,7 +154,6 @@ void deinit()
 
     hgGpuImageDestroy(renderImage);
     hgGpuViewDestroy(renderView);
-    hgGpuSamplerDestroy(renderSampler);
     hgImGuiTextureDestroy(renderImGuiTex);
 
     hgImGuiDeinit();
@@ -489,10 +485,10 @@ void drawRender()
                 HgFormat_d32_sfloat,
                 HgGpuImageUsage_depthStencilAttachment);
 
-            renderView = hgGpuViewCreate(renderImage, 0, 1, 0, 1, HgGpuAspect_color);
-            depthView = hgGpuViewCreate(depthImage, 0, 1, 0, 1, HgGpuAspect_depth);
+            renderView = hgGpuViewCreate(renderImage, HgGpuAspect_color, HgGpuFilter_nearest);
+            depthView = hgGpuViewCreate(depthImage, HgGpuAspect_depth, HgGpuFilter_nearest);
 
-            renderImGuiTex = hgImGuiTextureCreate(renderView, renderSampler, HgGpuLayout_shaderReadOnly);
+            renderImGuiTex = hgImGuiTextureCreate(renderView, HgGpuLayout_shaderReadOnly);
 
             camera->perspective.aspect = (f32)width / (f32)height;
         }

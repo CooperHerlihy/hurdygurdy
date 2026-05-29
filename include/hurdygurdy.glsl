@@ -3,24 +3,16 @@
 /**
  * Access bindless descriptors with these binding indices
  */
-#define HgBindingIdx_sampler 0
-#define HgBindingIdx_combinedImageSampler 1
-#define HgBindingIdx_sampledImage 2
-#define HgBindingIdx_storageImage 3
-#define HgBindingIdx_uniformTexelBuffer 4
-#define HgBindingIdx_storageTexelBuffer 5
-#define HgBindingIdx_uniformBuffer 6
-#define HgBindingIdx_storageBuffer 7
+#define HgBindingIdx_combinedImageSampler 0
+#define HgBindingIdx_storageImage 1
+#define HgBindingIdx_uniformBuffer 2
+#define HgBindingIdx_storageBuffer 3
 
 /**
  * Access bindless descriptors with these as layout qualifiers
  */
-#define HgSampler binding = HgBindingIdx_sampler
 #define HgCombinedImageSampler binding = HgBindingIdx_combinedImageSampler
-#define HgSampledImage binding = HgBindingIdx_sampledImage
 #define HgStorageImage binding = HgBindingIdx_storageImage
-#define HgUniformTexelBuffer binding = HgBindingIdx_uniformTexelBuffer
-#define HgStorageTexelBuffer binding = HgBindingIdx_storageTexelBuffer
 #define HgUniformBuffer binding = HgBindingIdx_uniformBuffer
 #define HgStorageBuffer binding = HgBindingIdx_storageBuffer
 
@@ -739,3 +731,4 @@ float hgBlinnPhong(
         : 0.0;
     return ambient + diffuse * kdiffuse + specular * kspecular;
 };
+

@@ -9,10 +9,39 @@
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_vulkan.h"
 
+struct Descriptor {
+    u32 id = (u32)-1;
+};
+
+constexpr u32 descriptorIdx(Descriptor desc)
+{
+    return desc.id & 0x0000ffff;
+}
+
+constexpr u32 descriptorGeneration(Descriptor desc)
+{
+    return (desc.id & 0x0fff0000) >> 16;
+}
+
+enum DescriptorType : u32 {
+    DescriptorType_combinedImageSampler = 0,
+    DescriptorType_storageImage = 1,
+    DescriptorType_uniformBuffer = 2,
+    DescriptorType_storageBuffer = 3,
+    DescriptorType_count,
+};
+
+constexpr DescriptorType descriptorType(Descriptor desc)
+{
+    return (DescriptorType)((desc.id & 0xf0000000) >> 28);
+}
+
 struct HgGpuBuffer {
     VkBuffer buffer;
     VmaAllocation alloc;
     u64 size;
+    Descriptor uniformDesc;
+    Descriptor storageDesc;
     HgGpuMemoryHostAccess access;
     HgGpuStageFlags lastStage;
     HgGpuAccessFlags lastAccess;
@@ -21,25 +50,53 @@ struct HgGpuBuffer {
 struct HgGpuImage {
     VkImage image;
     VmaAllocation alloc;
-    u32 dimensions;
+    HgGpuImageUsageFlags usage;
+    HgFormat format;
     u32 width;
     u32 height;
     u32 depth;
-    HgFormat format;
-    u32 mipLevels;
-    u32 arrayLayers;
-    u32 msaaSamples;
+    u8 dimensions;
+    u8 mipLevels;
+    u8 arrayLayers;
+    u8 msaaSamples;
 };
+
+struct SamplerInfo {
+    HgGpuFilter filter;
+    HgGpuSamplerEdgeMode mode;
+    HgGpuSamplerBorder border;
+};
+
+template<>
+constexpr u64 hgHash(SamplerInfo info)
+{
+    return info.border + (info.mode << 4) + (info.filter << 8);
+}
+
+constexpr bool operator==(const SamplerInfo& lhs, const SamplerInfo& rhs)
+{
+    return lhs.filter == rhs.filter
+        && lhs.mode == rhs.mode
+        && lhs.border == rhs.border;
+}
+
+constexpr bool operator!=(const SamplerInfo& lhs, const SamplerInfo& rhs)
+{
+    return !(lhs == rhs);
+}
 
 struct HgGpuView {
     HgGpuImage* image;
     VkImageView view;
+    VkSampler sampler;
+    Descriptor samplerDesc;
+    Descriptor storageDesc;
     HgGpuViewType type;
     HgGpuAspectFlags aspectFlags;
-    u32 baseMipLevel;
-    u32 levelCount;
-    u32 baseArrayLayer;
-    u32 layerCount;
+    u8 baseMipLevel;
+    u8 levelCount;
+    u8 baseArrayLayer;
+    u8 layerCount;
     HgGpuStageFlags lastStage;
     HgGpuAccessFlags lastAccess;
     HgGpuLayout lastLayout;
@@ -103,8 +160,10 @@ struct VulkanState {
     VkDescriptorSetLayout bindlessLayout = nullptr;
     VkDescriptorSet bindlessSet = nullptr;
 
-    HgGpuDescriptor** descriptorPools = nullptr;
-    HgGpuDescriptor* descriptorPoolNexts = nullptr;
+    Descriptor** descriptorPools = nullptr;
+    Descriptor* descriptorPoolNexts = nullptr;
+
+    HgMap<SamplerInfo, VkSampler> samplers;
 
     Frame* frames = nullptr;
     u32 frameCount = 0;
@@ -517,30 +576,22 @@ static VkDescriptorPool createBindlessDescriptorPool()
 
 static VkDescriptorSetLayout createBindlessDescriptorLayout()
 {
-    VkDescriptorSetLayoutBinding bindings[HgGpuDescriptorType_count]{};
-    VkDescriptorBindingFlags flags[HgGpuDescriptorType_count]{};
-    for (u32 i = 0; i < HgGpuDescriptorType_count; ++i)
+    VkDescriptorSetLayoutBinding bindings[DescriptorType_count]{};
+    VkDescriptorBindingFlags flags[DescriptorType_count]{};
+    for (u32 i = 0; i < DescriptorType_count; ++i)
     {
         bindings[i].descriptorCount = UINT16_MAX;
         bindings[i].stageFlags = VK_SHADER_STAGE_ALL;
         flags[i] = VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT | VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
     }
-    bindings[0].binding = HgGpuDescriptorType_sampler;
-    bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
-    bindings[1].binding = HgGpuDescriptorType_combinedImageSampler;
-    bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    bindings[2].binding = HgGpuDescriptorType_sampledImage;
-    bindings[2].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-    bindings[3].binding = HgGpuDescriptorType_storageImage;
-    bindings[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-    bindings[4].binding = HgGpuDescriptorType_uniformTexelBuffer;
-    bindings[4].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER;
-    bindings[5].binding = HgGpuDescriptorType_storageTexelBuffer;
-    bindings[5].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER;
-    bindings[6].binding = HgGpuDescriptorType_uniformBuffer;
-    bindings[6].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    bindings[7].binding = HgGpuDescriptorType_storageBuffer;
-    bindings[7].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    bindings[0].binding = DescriptorType_combinedImageSampler;
+    bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    bindings[1].binding = DescriptorType_storageImage;
+    bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    bindings[2].binding = DescriptorType_uniformBuffer;
+    bindings[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    bindings[3].binding = DescriptorType_storageBuffer;
+    bindings[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 
     VkDescriptorSetLayoutBindingFlagsCreateInfo flagsInfo{};
     flagsInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
@@ -562,12 +613,12 @@ static VkDescriptorSetLayout createBindlessDescriptorLayout()
     return layout;
 }
 
-static HgGpuDescriptor* createBindlessPool(HgArena* arena, HgGpuDescriptorType type, HgGpuDescriptor* next)
+static Descriptor* createBindlessPool(HgArena* arena, DescriptorType type, Descriptor* next)
 {
     hgAssert(arena != nullptr);
     hgAssert(next != nullptr);
 
-    HgGpuDescriptor* pool = hgAlloc<HgGpuDescriptor>(arena, UINT16_MAX);
+    Descriptor* pool = hgAlloc<Descriptor>(arena, UINT16_MAX);
 
     for (u32 i = 0; i < UINT16_MAX; ++i)
     {
@@ -578,6 +629,21 @@ static HgGpuDescriptor* createBindlessPool(HgArena* arena, HgGpuDescriptorType t
     next->id = (next->id & 0x0fffffff) | (type << 28);
 
     return pool;
+}
+
+static VkFilter gpuFilterToVk(HgGpuFilter filter)
+{
+    return (VkFilter)filter;
+}
+
+static VkSamplerAddressMode gpuSamplerAddressModeToVk(HgGpuSamplerEdgeMode mode)
+{
+    return (VkSamplerAddressMode)mode;
+}
+
+static VkBorderColor gpuSamplerBorderToVk(HgGpuSamplerBorder color)
+{
+    return (VkBorderColor)color;
 }
 
 static Frame createFrame(HgArena* arena, u32 maxWindows)
@@ -696,12 +762,22 @@ void hgGpuInit(HgArena* arena, HgGpuInit* config)
 
     if (vkState.descriptorPools == nullptr)
     {
-        vkState.descriptorPools = hgAlloc<HgGpuDescriptor*>(arena, HgGpuDescriptorType_count);
-        vkState.descriptorPoolNexts = hgAlloc<HgGpuDescriptor>(arena, HgGpuDescriptorType_count);
-        for (u32 i = 0; i < HgGpuDescriptorType_count; ++i)
+        vkState.descriptorPools = hgAlloc<Descriptor*>(arena, DescriptorType_count);
+        vkState.descriptorPoolNexts = hgAlloc<Descriptor>(arena, DescriptorType_count);
+        for (u32 i = 0; i < DescriptorType_count; ++i)
         {
-            vkState.descriptorPools[i] = createBindlessPool(arena, (HgGpuDescriptorType)i, &vkState.descriptorPoolNexts[i]);
+            vkState.descriptorPools[i] = createBindlessPool(arena, (DescriptorType)i, &vkState.descriptorPoolNexts[i]);
         }
+    }
+
+    if (vkState.samplers.capacity == 0)
+    {
+        vkState.samplers = hgMapCreate<SamplerInfo, VkSampler>(
+            arena,
+            2 *
+            HgGpuFilter_count *
+            HgGpuSamplerEdgeMode_count *
+            HgGpuSamplerBorder_count);
     }
 
     if (vkState.frames == nullptr)
@@ -730,6 +806,15 @@ void hgGpuDeinit()
         vkState.frameCount = 0;
         vkState.frames = nullptr;
     }
+
+    for (u32 i = 0; i < vkState.samplers.capacity; ++i)
+    {
+        if (vkState.samplers.hasVal[i])
+        {
+            vkDestroySampler(vkState.device, vkState.samplers.vals[i], nullptr);
+        }
+    }
+    hgMapReset(&vkState.samplers);
 
     vkState.descriptorPools = nullptr;
     vkState.descriptorPoolNexts = nullptr;
@@ -1110,6 +1195,24 @@ static VkAccessFlags gpuAccessToVk(HgGpuAccessFlags access)
     return (VkAccessFlags)access;
 }
 
+static VkDescriptorType descriptorTypeToVk(DescriptorType type)
+{
+    switch (type)
+    {
+        case DescriptorType_combinedImageSampler:
+            return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        case DescriptorType_storageImage:
+            return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        case DescriptorType_uniformBuffer:
+            return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        case DescriptorType_storageBuffer:
+            return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        default:
+            break;
+    }
+    hgError("invalid HgGpuDescriptorType: %d", type);
+}
+
 static VkBufferUsageFlags gpuBufferUsageToVk(HgGpuBufferUsageFlags usage)
 {
     return (VkBufferUsageFlags)usage;
@@ -1150,7 +1253,7 @@ static HgGpuMemoryHostAccess gpuMemoryUsageToHostAccess(HgGpuMemoryUsage usage)
     }
 }
 
-static VkImageType imageDimensionsToVk(u32 dimensions)
+static VkImageType imageDimensionsToVkImage(u32 dimensions)
 {
     switch (dimensions)
     {
@@ -1203,6 +1306,21 @@ static VkSampleCountFlagBits countToMsaaSampleBits(u32 count)
     }
 }
 
+static HgGpuViewType imageDimensionsToHgView(u32 dimensions)
+{
+    switch (dimensions)
+    {
+        case 1:
+            return HgGpuViewType_1D;
+        case 2:
+            return HgGpuViewType_2D;
+        case 3:
+            return HgGpuViewType_3D;
+        default:
+            hgError("Invalid image dimensions: %d\n", dimensions);
+    }
+}
+
 VkImageViewType gpuViewTypeToVk(HgGpuViewType type)
 {
     return (VkImageViewType)type;
@@ -1211,21 +1329,6 @@ VkImageViewType gpuViewTypeToVk(HgGpuViewType type)
 VkImageAspectFlags gpuAspectToVk(HgGpuAspectFlags aspect)
 {
     return (VkImageAspectFlags)aspect;
-}
-
-static VkFilter gpuFilterToVk(HgGpuFilter filter)
-{
-    return (VkFilter)filter;
-}
-
-static VkSamplerAddressMode gpuSamplerAddressModeToVk(HgGpuSamplerEdgeMode mode)
-{
-    return (VkSamplerAddressMode)mode;
-}
-
-static VkBorderColor gpuSamplerBorderToVk(HgSamplerBorderColor color)
-{
-    return (VkBorderColor)color;
 }
 
 static VkPrimitiveTopology gpuTopologyToVk(HgGpuTopology topology)
@@ -1282,6 +1385,79 @@ static VkCullModeFlags gpuCullModeToVk(HgGpuCullFlags mode)
 //     hgError("Could not find Vulkan memory type in bitmask: %x\n", bitmask);
 // }
 
+struct DescriptorBufferInfo {
+    HgGpuBuffer* buffer;
+    u64 offset;
+    u64 range;
+};
+
+struct DescriptorImageInfo {
+    HgGpuView* imageView;
+    HgGpuLayout imageLayout;
+};
+
+static Descriptor descriptorCreate(
+    DescriptorType type,
+    const DescriptorBufferInfo* bufferInfo,
+    const DescriptorImageInfo* imageInfo)
+{
+    hgAssert(type < DescriptorType_count);
+    hgAssert(descriptorIdx(vkState.descriptorPoolNexts[type]) != UINT16_MAX);
+
+    HgArena* scratch = hgScratch();
+    HgArenaScope scratchScope{scratch};
+
+    Descriptor desc = vkState.descriptorPoolNexts[type];
+
+    u32 idx = descriptorIdx(vkState.descriptorPoolNexts[type]);
+    vkState.descriptorPoolNexts[type] = vkState.descriptorPools[type][idx];
+
+    vkState.descriptorPools[type][descriptorIdx(desc)] = desc;
+
+    VkDescriptorBufferInfo bufferVkInfo = bufferInfo != nullptr
+        ? VkDescriptorBufferInfo{bufferInfo->buffer->buffer, bufferInfo->offset, bufferInfo->range}
+        : VkDescriptorBufferInfo{};
+
+    VkDescriptorImageInfo imageVkInfo = imageInfo != nullptr
+        ? VkDescriptorImageInfo{
+            imageInfo->imageView->sampler,
+            imageInfo->imageView->view,
+            gpuLayoutToVk(imageInfo->imageLayout)
+        }
+        : VkDescriptorImageInfo{};
+
+    VkWriteDescriptorSet write{};
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstSet = vkState.bindlessSet;
+    write.dstBinding = type;
+    write.dstArrayElement = idx;
+    write.descriptorCount = 1;
+    write.descriptorType = descriptorTypeToVk(type);
+    write.pBufferInfo = bufferInfo != nullptr ? &bufferVkInfo : nullptr;
+    write.pImageInfo = imageInfo != nullptr ? &imageVkInfo : nullptr;
+    write.pTexelBufferView = nullptr;
+
+    vkUpdateDescriptorSets(vkState.device, 1, &write, 0, nullptr);
+
+    return desc;
+}
+
+static void descriptorDestroy(Descriptor desc)
+{
+    if (desc.id == Descriptor{}.id)
+        return;
+
+    DescriptorType type = descriptorType(desc);
+
+    hgAssert(desc.id == vkState.descriptorPools[type][descriptorIdx(desc)].id);
+
+    u32 idx = descriptorIdx(desc);
+    vkState.descriptorPools[type][idx] = vkState.descriptorPoolNexts[type];
+
+    desc.id += 1 << 16;
+    vkState.descriptorPoolNexts[type] = desc;
+}
+
 HgGpuBuffer* hgGpuBufferCreate(
     u64 size,
     HgGpuBufferUsageFlags usageFlags,
@@ -1313,6 +1489,18 @@ HgGpuBuffer* hgGpuBufferCreate(
     if (result != VK_SUCCESS)
         hgError("Could not create VkBuffer: %s\n", vkResultToStr(result));
 
+    if (usageFlags & HgGpuBufferUsage_uniformBuffer)
+    {
+        DescriptorBufferInfo descInfo{buffer, 0, size};
+        buffer->uniformDesc = descriptorCreate(DescriptorType_uniformBuffer, &descInfo, nullptr);
+    }
+
+    if (usageFlags & HgGpuBufferUsage_storageBuffer)
+    {
+        DescriptorBufferInfo descInfo{buffer, 0, size};
+        buffer->storageDesc = descriptorCreate(DescriptorType_storageBuffer, &descInfo, nullptr);
+    }
+
     buffer->size = size;
 
     if (memoryUsage == HgGpuMemoryUsage_frequentUpdate)
@@ -1333,9 +1521,29 @@ void hgGpuBufferDestroy(HgGpuBuffer *buffer)
 {
     if (buffer != nullptr)
     {
+        descriptorDestroy(buffer->storageDesc);
+        descriptorDestroy(buffer->uniformDesc);
         vmaDestroyBuffer(vkState.vma, buffer->buffer, buffer->alloc);
         free(buffer);
     }
+}
+
+u32 hgGpuBufferUniformDescriptor(HgGpuBuffer* buffer)
+{
+    Descriptor desc = buffer->uniformDesc;
+    DescriptorType type = descriptorType(desc);
+
+    hgAssert(desc.id == vkState.descriptorPools[type][descriptorIdx(desc)].id);
+    return descriptorIdx(desc);
+}
+
+u32 hgGpuBufferStorageDescriptor(HgGpuBuffer* buffer)
+{
+    Descriptor desc = buffer->storageDesc;
+    DescriptorType type = descriptorType(desc);
+
+    hgAssert(desc.id == vkState.descriptorPools[type][descriptorIdx(desc)].id);
+    return descriptorIdx(desc);
 }
 
 void hgGpuBufferWrite(HgGpuBuffer* dst, u64 offset, const void* src, u64 size)
@@ -1428,7 +1636,7 @@ HgGpuImage* hgGpuImageCreateEx(const HgGpuImageCreateEx* create)
     VkImageCreateInfo imageInfo{};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     imageInfo.flags = gpuImageConfigFlagsToVk(create->flags);
-    imageInfo.imageType = imageDimensionsToVk(create->dimensions);
+    imageInfo.imageType = imageDimensionsToVkImage(create->dimensions);
     imageInfo.format = formatToVk(create->format);
     imageInfo.extent = {create->width, create->height, create->depth};
     imageInfo.mipLevels = create->mipLevels;
@@ -1450,11 +1658,12 @@ HgGpuImage* hgGpuImageCreateEx(const HgGpuImageCreateEx* create)
     if (result != VK_SUCCESS)
         hgError("Could not create VkImage: %s\n", vkResultToStr(result));
 
-    image->dimensions = create->dimensions;
+    image->usage = create->usage;
+    image->format = create->format;
     image->width = create->width;
     image->height = create->height;
     image->depth = create->depth;
-    image->format = create->format;
+    image->dimensions = create->dimensions;
     image->mipLevels = create->mipLevels;
     image->arrayLayers = create->arrayLayers;
     image->msaaSamples = countToMsaaSampleBits(create->msaaSamples);
@@ -1471,43 +1680,108 @@ void hgGpuImageDestroy(HgGpuImage* image)
     }
 }
 
+static VkSampler samplerCreate(SamplerInfo* desc)
+{
+    VkSamplerCreateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    info.magFilter = gpuFilterToVk(desc->filter);
+    info.minFilter = gpuFilterToVk(desc->filter);
+    info.mipmapMode = desc->filter == HgGpuFilter_linear
+        ? VK_SAMPLER_MIPMAP_MODE_LINEAR
+        : VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    info.addressModeU = gpuSamplerAddressModeToVk(desc->mode);
+    info.addressModeV = gpuSamplerAddressModeToVk(desc->mode);
+    info.addressModeW = gpuSamplerAddressModeToVk(desc->mode);
+    info.mipLodBias = 0.0f;
+    info.minLod = 0.0f;
+    info.maxLod = 1000.0f;
+    info.borderColor = gpuSamplerBorderToVk(desc->border);
+
+    VkSampler sampler = nullptr;
+    VkResult result = vkCreateSampler(vkState.device, &info, nullptr, &sampler);
+    if (sampler == nullptr)
+        hgError("Could not create VkSampler: %s\n", vkResultToStr(result));
+
+    return sampler;
+}
+
+static VkSampler samplerGet(
+    HgGpuFilter filter,
+    HgGpuSamplerEdgeMode addressMode = HgGpuSamplerEdgeMode_repeat,
+    HgGpuSamplerBorder borderColor = HgGpuSamplerBorder_floatTransparentBlack)
+{
+    SamplerInfo desc = {filter, addressMode, borderColor};
+    VkSampler* sampler = hgMapGet(&vkState.samplers, desc);
+    if (sampler == nullptr)
+    {
+        sampler = hgMapAdd(&vkState.samplers, desc, samplerCreate(&desc));
+    }
+    return *sampler;
+}
+
 HgGpuView* hgGpuViewCreate(
     HgGpuImage* image,
-    u32 baseMipLevel,
-    u32 levelCount,
-    u32 baseArrayLayer,
-    u32 layerCount,
     HgGpuAspectFlags aspectFlags,
-    HgGpuViewType type)
+    HgGpuFilter filter)
 {
-    hgAssert(image != nullptr);
-    hgAssert(aspectFlags != 0);
+    HgGpuViewCreateEx config{};
+    config.image = image;
+    config.baseMipLevel = 0;
+    config.levelCount = image->mipLevels;
+    config.baseArrayLayer = 0;
+    config.layerCount = image->arrayLayers;
+    config.aspectFlags = aspectFlags;
+    config.type = imageDimensionsToHgView(image->dimensions);
+    config.filter = filter;
+    config.edgeMode = HgGpuSamplerEdgeMode_repeat;
+    config.border = HgGpuSamplerBorder_floatTransparentBlack;
+    return hgGpuViewCreateEx(&config);
+}
+
+HgGpuView* hgGpuViewCreateEx(const HgGpuViewCreateEx* config)
+{
+    hgAssert(config->image != nullptr);
+    hgAssert(config->aspectFlags != 0);
 
     HgGpuView* view = (HgGpuView*)malloc(sizeof(*view));
     *view = {};
 
     VkImageViewCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    info.image = image->image;
-    info.viewType = gpuViewTypeToVk(type);
-    info.format = formatToVk(image->format);
-    info.subresourceRange.aspectMask = gpuAspectToVk(aspectFlags);
-    info.subresourceRange.baseMipLevel = baseMipLevel;
-    info.subresourceRange.levelCount = levelCount;
-    info.subresourceRange.baseArrayLayer = baseArrayLayer;
-    info.subresourceRange.layerCount = layerCount;
+    info.image = config->image->image;
+    info.viewType = gpuViewTypeToVk(config->type);
+    info.format = formatToVk(config->image->format);
+    info.subresourceRange.aspectMask = gpuAspectToVk(config->aspectFlags);
+    info.subresourceRange.baseMipLevel = config->baseMipLevel;
+    info.subresourceRange.levelCount = config->levelCount;
+    info.subresourceRange.baseArrayLayer = config->baseArrayLayer;
+    info.subresourceRange.layerCount = config->layerCount;
 
     VkResult result = vkCreateImageView(vkState.device, &info, nullptr, &view->view);
     if (view == nullptr)
         hgError("Could not create VkImageView: %s\n", vkResultToStr(result));
 
-    view->image = image;
-    view->type = type;
-    view->aspectFlags = aspectFlags;
-    view->baseMipLevel = baseMipLevel;
-    view->levelCount = levelCount;
-    view->baseArrayLayer = baseArrayLayer;
-    view->layerCount = layerCount;
+    if (config->image->usage & HgGpuImageUsage_sampled)
+    {
+        view->sampler = samplerGet(config->filter, config->edgeMode, config->border);
+
+        DescriptorImageInfo descInfo{view, HgGpuLayout_shaderReadOnly};
+        view->samplerDesc = descriptorCreate(DescriptorType_combinedImageSampler, nullptr, &descInfo);
+    }
+
+    if (config->image->usage & HgGpuImageUsage_storage)
+    {
+        DescriptorImageInfo descInfo{view, HgGpuLayout_general};
+        view->storageDesc = descriptorCreate(DescriptorType_storageImage, nullptr, &descInfo);
+    }
+
+    view->image = config->image;
+    view->type = config->type;
+    view->aspectFlags = config->aspectFlags;
+    view->baseMipLevel = config->baseMipLevel;
+    view->levelCount = config->levelCount;
+    view->baseArrayLayer = config->baseArrayLayer;
+    view->layerCount = config->layerCount;
 
     return view;
 }
@@ -1516,9 +1790,29 @@ void hgGpuViewDestroy(HgGpuView* view)
 {
     if (view != nullptr)
     {
+        descriptorDestroy(view->storageDesc);
+        descriptorDestroy(view->samplerDesc);
         vkDestroyImageView(vkState.device, view->view, nullptr);
         free(view);
     }
+}
+
+u32 hgGpuImageSamplerDescriptor(HgGpuView* view)
+{
+    Descriptor desc = view->samplerDesc;
+    DescriptorType type = descriptorType(desc);
+
+    hgAssert(desc.id == vkState.descriptorPools[type][descriptorIdx(desc)].id);
+    return descriptorIdx(desc);
+}
+
+u32 hgGpuImageStorageDescriptor(HgGpuView* view)
+{
+    Descriptor desc = view->storageDesc;
+    DescriptorType type = descriptorType(desc);
+
+    hgAssert(desc.id == vkState.descriptorPools[type][descriptorIdx(desc)].id);
+    return descriptorIdx(desc);
 }
 
 void hgGpuImageWrite(HgGpuView* dst, const void* src)
@@ -1811,7 +2105,7 @@ void hgGpuImageGenMipmaps(HgGpuView* dst)
 
     vkCmdPipelineBarrier2((VkCommandBuffer)cmd, &dep);
 
-    for (u32 level = 0; level < dst->levelCount - 1; ++level)
+    for (u32 level = 0; level < (u32)dst->levelCount - 1; ++level)
     {
         barrier.srcStageMask = VK_PIPELINE_STAGE_NONE;
         barrier.srcAccessMask = VK_ACCESS_NONE;
@@ -1864,132 +2158,6 @@ void hgGpuImageGenMipmaps(HgGpuView* dst)
     dst->lastStage = HgGpuStage_transfer;
     dst->lastAccess = HgGpuAccess_transferRead;
     dst->lastLayout = HgGpuLayout_transferSrc;
-}
-
-HgGpuSampler* hgGpuSamplerCreate(HgGpuFilter filter, HgGpuSamplerEdgeMode addressMode, HgSamplerBorderColor borderColor)
-{
-    VkSamplerCreateInfo info{};
-    info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    info.magFilter = gpuFilterToVk(filter);
-    info.minFilter = gpuFilterToVk(filter);
-    info.mipmapMode = filter == HgGpuFilter_linear ? VK_SAMPLER_MIPMAP_MODE_LINEAR : VK_SAMPLER_MIPMAP_MODE_NEAREST;
-    info.addressModeU = gpuSamplerAddressModeToVk(addressMode);
-    info.addressModeV = gpuSamplerAddressModeToVk(addressMode);
-    info.addressModeW = gpuSamplerAddressModeToVk(addressMode);
-    info.mipLodBias = 0.0f;
-    info.minLod = 0.0f;
-    info.maxLod = 1000.0f;
-    info.borderColor = gpuSamplerBorderToVk(borderColor);
-
-    VkSampler sampler = nullptr;
-    VkResult result = vkCreateSampler(vkState.device, &info, nullptr, &sampler);
-    if (sampler == nullptr)
-        hgError("Could not create VkSampler: %s\n", vkResultToStr(result));
-
-    return (HgGpuSampler*)sampler;
-}
-
-void hgGpuSamplerDestroy(HgGpuSampler* sampler)
-{
-    vkDestroySampler(vkState.device, (VkSampler)sampler, nullptr);
-}
-
-HgGpuDescriptor hgGpuDescriptorCreate(HgGpuDescriptorType type)
-{
-    hgAssert(type < HgGpuDescriptorType_count);
-    hgAssert(hgGpuDescriptorIdx(vkState.descriptorPoolNexts[type]) != UINT16_MAX);
-
-    HgGpuDescriptor desc = vkState.descriptorPoolNexts[type];
-
-    u32 idx = hgGpuDescriptorIdx(vkState.descriptorPoolNexts[type]);
-    vkState.descriptorPoolNexts[type] = vkState.descriptorPools[type][idx];
-
-    vkState.descriptorPools[type][hgGpuDescriptorIdx(desc)] = desc;
-    return desc;
-}
-
-void hgGpuDescriptorDestroy(HgGpuDescriptor desc)
-{
-    if (desc.id == HgGpuDescriptor{}.id)
-        return;
-
-    HgGpuDescriptorType type = hgGpuDescriptorType(desc);
-
-    hgAssert(desc.id == vkState.descriptorPools[type][hgGpuDescriptorIdx(desc)].id);
-
-    u32 idx = hgGpuDescriptorIdx(desc);
-    vkState.descriptorPools[type][idx] = vkState.descriptorPoolNexts[type];
-
-    desc.id += 1 << 16;
-    vkState.descriptorPoolNexts[type] = desc;
-}
-
-VkDescriptorType hgDescriptorTypeToVk(HgGpuDescriptorType type)
-{
-    switch (type)
-    {
-        case HgGpuDescriptorType_sampler:
-            return VK_DESCRIPTOR_TYPE_SAMPLER;
-            break;
-        case HgGpuDescriptorType_combinedImageSampler:
-            return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            break;
-        case HgGpuDescriptorType_sampledImage:
-            return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-            break;
-        case HgGpuDescriptorType_storageImage:
-            return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-            break;
-        case HgGpuDescriptorType_uniformTexelBuffer:
-            return VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER;
-            break;
-        case HgGpuDescriptorType_storageTexelBuffer:
-            return VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER;
-            break;
-        case HgGpuDescriptorType_uniformBuffer:
-            return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-            break;
-        case HgGpuDescriptorType_storageBuffer:
-            return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-            break;
-        default:
-            break;
-    }
-    hgError("invalid HgGpuDescriptorType: %d", type);
-}
-
-void hgGpuDescriptorUpdate(
-    HgGpuDescriptor descriptor,
-    const HgGpuBufferDescriptorInfo* bufferInfo,
-    const HgGpuImageDescriptorInfo* imageInfo)
-{
-    HgArena* scratch = hgScratch();
-    HgArenaScope scratchScope{scratch};
-
-    VkDescriptorBufferInfo bufferVkInfo = bufferInfo != nullptr
-        ? VkDescriptorBufferInfo{bufferInfo->buffer->buffer, bufferInfo->offset, bufferInfo->range}
-        : VkDescriptorBufferInfo{};
-
-    VkDescriptorImageInfo imageVkInfo = imageInfo != nullptr
-        ? VkDescriptorImageInfo{
-            (VkSampler)imageInfo->sampler,
-            imageInfo->imageView->view,
-            gpuLayoutToVk(imageInfo->imageLayout)
-        }
-        : VkDescriptorImageInfo{};
-
-    VkWriteDescriptorSet write{};
-    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    write.dstSet = vkState.bindlessSet;
-    write.dstBinding = hgGpuDescriptorType(descriptor);
-    write.dstArrayElement = hgGpuDescriptorIdx(descriptor);
-    write.descriptorCount = 1;
-    write.descriptorType = hgDescriptorTypeToVk(hgGpuDescriptorType(descriptor));
-    write.pBufferInfo = bufferInfo != nullptr ? &bufferVkInfo : nullptr;
-    write.pImageInfo = imageInfo != nullptr ? &imageVkInfo : nullptr;
-    write.pTexelBufferView = nullptr;
-
-    vkUpdateDescriptorSets(vkState.device, 1, &write, 0, nullptr);
 }
 
 static VkShaderModule createShaderModule(const void* spirvCode, u64 codeSize)
@@ -3741,9 +3909,9 @@ void hgImGuiDeinit()
     ImGui_ImplSDL3_Shutdown();
 }
 
-void* hgImGuiTextureCreate(HgGpuView* view, HgGpuSampler* sampler, HgGpuLayout layout)
+void* hgImGuiTextureCreate(HgGpuView* view, HgGpuLayout layout)
 {
-    return ImGui_ImplVulkan_AddTexture((VkSampler)sampler, view->view, gpuLayoutToVk(layout));
+    return ImGui_ImplVulkan_AddTexture(view->sampler, view->view, gpuLayoutToVk(layout));
 }
 
 void hgImGuiTextureDestroy(void* texture)
