@@ -25,6 +25,10 @@ void hgInit(const HgInit* init)
     hgPlatformInit(arena, init->maxWindows, init->maxWindowEvents);
 
     HgGpuInit gpuInit{};
+    gpuInit.maxBuffers = init->maxBuffers;
+    gpuInit.maxImages = init->maxImages;
+    gpuInit.maxViews = init->maxViews;
+    gpuInit.maxPipelines = init->maxPipelines;
     gpuInit.maxFramesInFlight = init->maxFramesInFlight;
     gpuInit.maxWindows = init->maxWindows;
     hgGpuInit(arena, &gpuInit);
@@ -34,11 +38,19 @@ void hgInit(const HgInit* init)
     u32 workerCount = (u32)std::max(1, (i32)hgHardwareThreadCount() - 1); // main thread
     hgThreadsInit(arena, init->threadPoolQueueSize, workerCount);
 
-    hgAssetInitDefaults(arena, init->maxBinaries, init->maxTextures, init->maxGpuTextures, init->maxMeshes, init->maxGpuMeshes);
+    hgAssetInitDefaults(
+        arena,
+        init->maxBinaries,
+        init->maxTextures,
+        init->maxGpuTextures,
+        init->maxMeshes,
+        init->maxGpuMeshes);
 }
 
 void hgDeinit()
 {
+    hgAssetDeinitDefaults();
+
     hgThreadsDeinit();
     hgConcurrencyDeinit();
 
@@ -2142,6 +2154,15 @@ void hgAssetInitDefaults(
     hgAssetInit<HgGpuTexture>(arena, maxGpuTextures);
     hgAssetInit<HgMesh>(arena, maxMeshes);
     hgAssetInit<HgGpuMesh>(arena, maxGpuMeshes);
+}
+
+void hgAssetDeinitDefaults()
+{
+    hgAssetDeinit<HgGpuMesh>();
+    hgAssetDeinit<HgMesh>();
+    hgAssetDeinit<HgGpuTexture>();
+    hgAssetDeinit<HgTexture>();
+    hgAssetDeinit<HgBinary>();
 }
 
 template<>

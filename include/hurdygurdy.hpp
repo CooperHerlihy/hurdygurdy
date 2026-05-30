@@ -266,8 +266,12 @@ struct HgInit {
     u32 maxFences = 2048;
     u32 threadPoolQueueSize = 2048;
 
-    u32 maxFramesInFlight = 2;
+    u32 maxBuffers = 512;
+    u32 maxImages = 512;
+    u32 maxViews = 512;
+    u32 maxPipelines = 512;
 
+    u32 maxFramesInFlight = 2;
     u32 maxWindows = 8;
     u32 maxWindowEvents = 2048;
 
@@ -3121,13 +3125,13 @@ void hgThreadsFor(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx
  * Gpu init config
  */
 struct HgGpuInit {
-    u32 maxBuffers = 512;
-    u32 maxImages = 512;
-    u32 maxViews = 512;
-    u32 maxPipelines = 512;
+    u32 maxBuffers;
+    u32 maxImages;
+    u32 maxViews;
+    u32 maxPipelines;
 
-    u32 maxFramesInFlight = 2;
-    u32 maxWindows = 8;
+    u32 maxFramesInFlight;
+    u32 maxWindows;
 };
 
 /**
@@ -4699,6 +4703,11 @@ void hgAssetInitDefaults(
     u32 maxGpuTextures,
     u32 maxMeshes,
     u32 maxGpuMeshes);
+
+/**
+ * Deinitialize all default HurdyGurdy asset types
+ */
+void hgAssetDeinitDefaults();
 
 /**
  * The extra data associated with assets
