@@ -3069,8 +3069,8 @@ static PlatformState platformState{};
 
 static HgWindowData* windowGet(HgWindow window)
 {
-    hgAssert(hgPoolAlive(&platformState.handles, window.handle));
-    u32 idx = hgHandleIdx(window.handle);
+    hgAssert(hgPoolAlive(&platformState.handles, {window.id}));
+    u32 idx = hgHandleIdx(window);
     u32 width = platformState.windowWidth;
     return (HgWindowData*)((u8*)platformState.windowPool + width * idx);
 }
@@ -3340,8 +3340,8 @@ HgWindow hgWindowCreate(const char* title, u32 width, u32 height, const HgWindow
     if (config == nullptr)
         config = &defaultConfig;
 
-    HgWindow window = {hgPoolAlloc(&platformState.handles)};
-    HgWindowData* data = &platformState.windowPool[hgHandleIdx(window.handle)];
+    HgWindow window = {hgPoolAlloc(&platformState.handles).id};
+    HgWindowData* data = &platformState.windowPool[hgHandleIdx(window)];
     memset((void*)data, 0, platformState.windowWidth);
     *data = {};
 
@@ -3395,7 +3395,7 @@ void hgWindowDestroy(HgWindow window)
     vkDestroySurfaceKHR(vkState.instance, data->surface, nullptr);
     SDL_DestroyWindow(data->sdlWindow);
 
-    hgPoolFree(&platformState.handles, window.handle);
+    hgPoolFree(&platformState.handles, {window.id});
 }
 
 HgGpuCmd* hgGpuFrameBegin(HgWindow* windows, u32 windowCount)

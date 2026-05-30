@@ -284,7 +284,6 @@ struct HgInit {
  * Subsystems initialized:
  * - Arena allocation
  * - Thread pool
- * - IO thread
  * - Resource managers
  * - Windowing/input
  * - Hardware graphics
@@ -4421,39 +4420,14 @@ struct HgWindowConfig {
 };
 
 /**
+ * The implementation data for HgWindow
+ */
+struct HgWindowData;
+
+/**
  * A window
  */
-struct HgWindow {
-    /**
-     * The handle to the window
-     */
-    HgIndexHandle handle;
-};
-
-/**
- * Compare windows
- */
-constexpr bool operator==(HgWindow lhs, HgWindow rhs)
-{
-    return lhs.handle == rhs.handle;
-}
-
-/**
- * Compare windows
- */
-constexpr bool operator!=(HgWindow lhs, HgWindow rhs)
-{
-    return lhs.handle != rhs.handle;
-}
-
-/**
- * Hashing for windows
- */
-template<>
-constexpr u64 hgHash(HgWindow window)
-{
-    return hgHash(window.handle);
-}
+typedef HgHandle<HgWindowData> HgWindow;
 
 /**
  * Create a new window
