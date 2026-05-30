@@ -1549,29 +1549,9 @@ struct HgArena {
 /**
  * Create a guard which restores an arena's head at the end of the scope
  */
-struct HgArenaScope {
-    /**
-     * The arena to restore
-     */
-    HgArena* arena;
-    /**
-     * The arena's original head
-     */
-    u64 head;
-
-    /**
-     * Constructs the scope guard
-     */
-    HgArenaScope(HgArena* arenaVal) : arena{arenaVal}, head{arenaVal->head} {}
-
-    /**
-     * Restores the arena's head
-     */
-    ~HgArenaScope()
-    {
-        arena->head = head;
-    }
-};
+#define hgArenaScope(arena) \
+    u64 hgArenaHead_##arena = arena->head; \
+    hgDefer(arena->head = hgArenaHead_##arena);
 
 /**
  * Allocates memory from an arena

@@ -1098,7 +1098,7 @@ HgString hgIntegerToString(HgArena* arena, i64 num)
     hgAssert(arena != nullptr);
 
     HgArena* scratch = hgScratch(&arena, 1);
-    HgArenaScope scratchScope{scratch};
+    hgArenaScope(scratch);
 
     if (num == 0)
         return hgStringCopy(arena, "0");
@@ -1129,7 +1129,7 @@ HgString hgFloatToString(HgArena* arena, f64 num, u32 decimalCount)
     hgAssert(arena != nullptr);
 
     HgArena* scratch = hgScratch(&arena, 1);
-    HgArenaScope scratchScope{scratch};
+    hgArenaScope(scratch);
 
     if (num == 0.0)
         return hgStringCopy(arena, "0.0");
@@ -2051,7 +2051,7 @@ void hgThreadsFor(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx
     hgAssert(fn != nullptr);
 
     HgArena* scratch = hgScratch();
-    HgArenaScope scratchScope{scratch};
+    hgArenaScope(scratch);
 
     u64 chunkSize = (u64)std::ceil((f32)(end - begin) / (8.0f * (f32)hgHardwareThreadCount()));
 
@@ -2211,7 +2211,7 @@ void hgAssetLoadImpl(HgAssetData<HgBinary>* data)
         HgBinary* bin = (HgBinary*)pbin;
 
         HgArena* scratch = hgScratch();
-        HgArenaScope scratchScope{scratch};
+        hgArenaScope(scratch);
 
         char* cpath = hgCString(scratch, path);
 
@@ -2257,7 +2257,7 @@ void hgBinaryStore(HgBinary* bin, HgStringView path, HgFence fence)
         HgBinary* bin = (HgBinary*)pbin;
 
         HgArena* scratch = hgScratch();
-        HgArenaScope scratchScope{scratch};
+        hgArenaScope(scratch);
 
         char* cpath = hgCString(scratch, path);
 
@@ -2304,7 +2304,7 @@ void hgAssetLoadImpl(HgAssetData<HgTexture>* data)
         HgTexture* tex = (HgTexture*)ptex;
 
         HgArena* scratch = hgScratch();
-        HgArenaScope scratchScope{scratch};
+        hgArenaScope(scratch);
         char* cpath = hgCString(scratch, path);
 
         int x, y, channels;
@@ -2333,7 +2333,7 @@ void hgTextureStorePng(HgTexture* texture, HgStringView path, HgFence fence)
     hgIoRequest(fence, texture, path, [](void* ptex, HgStringView fpath)
     {
         HgArena* scratch = hgScratch();
-        HgArenaScope scratchScope{scratch};
+        hgArenaScope(scratch);
         char* cpath = hgCString(scratch, fpath);
 
         HgTexture* tex = (HgTexture*)ptex;
@@ -2675,7 +2675,7 @@ static void swapIdxLocation(HgEcs* ecs, u32 lhs, u32 rhs, u64 componentId)
     hgAssert(hgEcsHas(ecs, rhsEntity, componentId));
 
     HgArena* scratch = hgScratch();
-    HgArenaScope scratchScope{scratch};
+    hgArenaScope(scratch);
 
     system->entities[lhs] = rhsEntity;
     system->entities[rhs] = lhsEntity;
@@ -2938,7 +2938,7 @@ HgBinary hgEcsSerialize(HgArena* arena, HgEcs* ecs, HgEntity root)
     hgAssert(ecs != nullptr);
 
     HgArena* scratch = hgScratch(&arena, 1);
-    HgArenaScope scratchScope{scratch};
+    hgArenaScope(scratch);
 
     EcsSerialScene data;
     data.entities = hgMapCreate<HgEntity, u32>(scratch, ecs->entities.capacity);
@@ -2958,7 +2958,7 @@ struct EcsDeserialScene {
 HgEntity hgEcsDeserialize(HgEcs* ecs, HgBinary scene)
 {
     HgArena* scratch = hgScratch();
-    HgArenaScope scratchScope{scratch};
+    hgArenaScope(scratch);
 
     EcsSerialHeader header = hgBinaryRead<EcsSerialHeader>(&scene, 0);
 
@@ -3649,7 +3649,7 @@ void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
     hgAssert(cmd != nullptr);
 
     HgArena* scratch = hgScratch();
-    HgArenaScope scratchScope{scratch};
+    hgArenaScope(scratch);
 
     HgCamera* cameraC = hgEcsGet<HgCamera>(ecs, camera);
     HgTransform* cameraTf = hgEcsGet<HgTransform>(ecs, camera);

@@ -338,7 +338,7 @@ static VkInstance createInstance(HgStringView* extensions, u32 extensionCount)
         hgAssert(extensions != nullptr);
 
     HgArena* scratch = hgScratch();
-    HgArenaScope scratchScope{scratch};
+    hgArenaScope(scratch);
 
     VkApplicationInfo appInfo{};
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -401,7 +401,7 @@ static bool findQueueFamily(VkPhysicalDevice gpu, u32* queueFamily, VkQueueFlags
     hgAssert(queueFamily != nullptr);
 
     HgArena* scratch = hgScratch();
-    HgArenaScope scratchScope{scratch};
+    hgArenaScope(scratch);
 
     u32 familyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(gpu, &familyCount, nullptr);
@@ -428,7 +428,7 @@ static VkPhysicalDevice findPhysicalDevice()
     hgAssert(vkState.instance != nullptr);
 
     HgArena* scratch = hgScratch();
-    HgArenaScope scratchScope{scratch};
+    hgArenaScope(scratch);
 
     u32 gpuCount;
     vkEnumeratePhysicalDevices(vkState.instance, &gpuCount, nullptr);
@@ -685,7 +685,7 @@ void hgGpuInit(HgArena* arena, HgGpuInit* config)
     if (vkState.instance == nullptr)
     {
         HgArena* scratch = hgScratch();
-        HgArenaScope scratchScope{scratch};
+        hgArenaScope(scratch);
 
         HgStringView* exts;
         u32 extCount = hgPlatformGetVulkanExtensions(scratch, &exts);
@@ -1405,7 +1405,7 @@ static Descriptor descriptorCreate(
     hgAssert(descriptorIdx(vkState.descriptorPoolNexts[type]) != UINT16_MAX);
 
     HgArena* scratch = hgScratch();
-    HgArenaScope scratchScope{scratch};
+    hgArenaScope(scratch);
 
     Descriptor desc = vkState.descriptorPoolNexts[type];
 
@@ -2178,7 +2178,7 @@ HgGpuPipeline* hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* co
     *pipeline = {};
 
     HgArena* scratch = hgScratch();
-    HgArenaScope scratchScope{scratch};
+    hgArenaScope(scratch);
 
     VkPushConstantRange* pushRanges = hgAlloc<VkPushConstantRange>(scratch, config->pushRangeCount);
     for (u32 i = 0; i < config->pushRangeCount; ++i)
@@ -2487,7 +2487,7 @@ void hgGpuMemoryBarrier(
     u32 imageBarrierCount)
 {
     HgArena* scratch = hgScratch();
-    HgArenaScope scratchScope{scratch};
+    hgArenaScope(scratch);
 
     VkBufferMemoryBarrier2* vkBufferBarriers = hgAlloc<VkBufferMemoryBarrier2>(scratch, imageBarrierCount);
     VkImageMemoryBarrier2* vkImageBarriers = hgAlloc<VkImageMemoryBarrier2>(scratch, imageBarrierCount);
@@ -2554,7 +2554,7 @@ static VkAttachmentStoreOp gpuStoreOpToVk(HgGpuStoreOp op)
 void hgGpuComputePass(HgGpuCmd* cmd, const HgGpuComputePass* pass)
 {
     HgArena* scratch = hgScratch();
-    HgArenaScope scratchScope{scratch};
+    hgArenaScope(scratch);
 
     VkBufferMemoryBarrier2* bufferBarriers = nullptr;
     u32 bufferBarrierCount = 0;
@@ -2680,7 +2680,7 @@ void hgGpuComputePass(HgGpuCmd* cmd, const HgGpuComputePass* pass)
 void hgGpuRenderPassBegin(HgGpuCmd* cmd, u32 width, u32 height, const HgGpuRenderPass* pass)
 {
     HgArena* scratch = hgScratch();
-    HgArenaScope scratchScope{scratch};
+    hgArenaScope(scratch);
 
     VkBufferMemoryBarrier2* bufferBarriers = nullptr;
     u32 bufferBarrierCount = 0;
@@ -3037,7 +3037,7 @@ u32 hgPlatformGetVulkanExtensions(HgArena* arena, HgStringView** extBuffer)
 static void resizeWindowSwapchain(HgWindow* window)
 {
     HgArena* scratch = hgScratch();
-    HgArenaScope scratchScope{scratch};
+    hgArenaScope(scratch);
 
     vkQueueWaitIdle(vkState.queue);
 
@@ -3166,7 +3166,7 @@ static HgFormat findSwapchainFormat(VkSurfaceKHR surface)
     hgAssert(surface != nullptr);
 
     HgArena* scratch = hgScratch();
-    HgArenaScope scratchScope{scratch};
+    hgArenaScope(scratch);
 
     u32 formatCount = 0;
     vkGetPhysicalDeviceSurfaceFormatsKHR(vkState.physicalDevice, surface, &formatCount, nullptr);
@@ -3190,7 +3190,7 @@ static HgGpuPresentMode findSwapchainPresentMode(
     hgAssert(surface != nullptr);
 
     HgArena* scratch = hgScratch();
-    HgArenaScope scratchScope{scratch};
+    hgArenaScope(scratch);
 
     if (desiredMode == HgGpuPresentMode_fifo)
         return desiredMode;
@@ -3376,7 +3376,7 @@ void hgGpuFrameEnd(HgGpuCmd* cmd)
     vkEndCommandBuffer((VkCommandBuffer)cmd);
 
     HgArena* scratch = hgScratch();
-    HgArenaScope scratchScope{scratch};
+    hgArenaScope(scratch);
 
     Frame* frame = &vkState.frames[vkState.currentFrame];
 
@@ -3862,7 +3862,7 @@ void hgImGuiInit(
     hgAssert(colorFormat != HgFormat_undefined);
 
     HgArena* scratch = hgScratch();
-    HgArenaScope scratchScope{scratch};
+    hgArenaScope(scratch);
 
     ImGui_ImplSDL3_InitForVulkan(window->sdlWindow);
 

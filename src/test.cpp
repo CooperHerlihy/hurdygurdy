@@ -124,7 +124,7 @@ void hgTest()
     // HgHandle and HgPool
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         HgPool<u32> pool = hgPoolCreate<u32>(arena, 32);
 
@@ -162,7 +162,7 @@ void hgTest()
     // HgString
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         HgString a = hgStringCopy(arena, "a");
         hgAssert(a[0] == 'a');
@@ -198,7 +198,7 @@ void hgTest()
     // string utils
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         hgAssert(hgIsWhitespace(' '));
         hgAssert(hgIsWhitespace('\t'));
@@ -460,7 +460,7 @@ void hgTest()
     // HgJson
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         HgStringView file = R"(
         )";
@@ -473,7 +473,7 @@ void hgTest()
 
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         HgStringView file = R"(
             {
@@ -492,7 +492,7 @@ void hgTest()
 
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         HgStringView file = R"(
             {
@@ -516,7 +516,7 @@ void hgTest()
 
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         HgStringView file = R"(
             {
@@ -540,7 +540,7 @@ void hgTest()
 
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         HgStringView file = R"(
             {
@@ -567,7 +567,7 @@ void hgTest()
 
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         HgStringView file = R"(
             {
@@ -594,7 +594,7 @@ void hgTest()
 
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         HgStringView file = R"(
             {
@@ -621,7 +621,7 @@ void hgTest()
 
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         HgStringView file = R"(
             {
@@ -648,7 +648,7 @@ void hgTest()
 
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         HgStringView file = R"(
             {
@@ -675,7 +675,7 @@ void hgTest()
 
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         HgStringView file = R"(
             {
@@ -702,7 +702,7 @@ void hgTest()
 
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         HgStringView file = R"(
             {
@@ -729,7 +729,7 @@ void hgTest()
 
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         HgStringView file = R"(
             {
@@ -764,7 +764,7 @@ void hgTest()
 
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         HgStringView file = R"(
             {
@@ -815,7 +815,7 @@ void hgTest()
 
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         HgStringView file = R"(
             {
@@ -866,7 +866,7 @@ void hgTest()
 
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         HgStringView file = R"(
             {
@@ -916,7 +916,7 @@ void hgTest()
 
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         HgStringView file = R"(
             {
@@ -976,7 +976,7 @@ void hgTest()
 
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         HgStringView file = R"(
             {
@@ -1155,7 +1155,7 @@ void hgTest()
     // HgHashSet
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         constexpr u32 count = 128;
 
@@ -1228,7 +1228,7 @@ void hgTest()
     // HgHashMap
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         constexpr u32 count = 128;
 
@@ -1301,7 +1301,7 @@ void hgTest()
 
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         using StrHash = u64;
 
@@ -1340,7 +1340,7 @@ void hgTest()
 
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         HgMap<const char*, u32> map = hgMapCreate<const char*, u32>(arena, 128);
 
@@ -1377,7 +1377,7 @@ void hgTest()
 
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         HgMap<HgString, u32> map = hgMapCreate<HgString, u32>(arena, 128);
 
@@ -1413,7 +1413,7 @@ void hgTest()
 
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         HgMap<HgStringView, u32> map = hgMapCreate<HgStringView, u32>(arena, 6);
 
@@ -1449,7 +1449,7 @@ void hgTest()
 
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         using StrHash = u64;
 
@@ -1488,7 +1488,7 @@ void hgTest()
 
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         HgSet<const char*> set = hgSetCreate<const char*>(arena, 128);
 
@@ -1525,7 +1525,7 @@ void hgTest()
 
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         HgSet<HgString> set = hgSetCreate<HgString>(arena, 128);
 
@@ -1557,7 +1557,7 @@ void hgTest()
 
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         HgSet<HgStringView> set = hgSetCreate<HgStringView>(arena, 128);
 
@@ -1910,7 +1910,7 @@ void hgTest()
     // HgEcs basics
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         HgEcs ecs = hgEcsCreate(arena, 256, 4);
         hgDefer(hgEcsReset(&ecs));
@@ -2106,7 +2106,7 @@ void hgTest()
     // Ecs concurrency
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         HgEcs ecs = hgEcsCreate(arena, 256, 4);
         hgDefer(hgEcsReset(&ecs));
@@ -2181,7 +2181,7 @@ void hgTest()
     // Ecs sort
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         HgEcs ecs = hgEcsCreate(arena, 256, 4);
         hgDefer(hgEcsReset(&ecs));
@@ -2336,7 +2336,7 @@ void hgTest()
     // HgEcs serialization
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         HgBinary scene{};
 
@@ -2410,7 +2410,7 @@ void hgTest()
     // HgNode
     {
         HgArena* arena = hgScratch();
-        HgArenaScope arenaScope{arena};
+        hgArenaScope(arena);
 
         HgEcs ecs = hgEcsCreate(arena, 128, 4);
         hgDefer(hgEcsReset(&ecs));
@@ -2498,7 +2498,7 @@ void hgTest()
     // // HgTransform
     // {
     //     HgArena* arena = hgScratch();
-    //     HgArenaScope arenaScope{arena};
+    //     hgArenaScope(arena);
     //
     //     HgEcs ecs = hgEcsCreate(arena, 128, 4);
     //     hgDefer(hgEcsReset(&ecs));

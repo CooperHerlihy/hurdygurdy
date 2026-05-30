@@ -593,7 +593,7 @@ int main()
     hgTest();
 
     HgArena* arena = hgScratch();
-    HgArenaScope arenaScope{arena};
+    hgArenaScope(arena);
 
     init(arena);
     hgDefer(deinit());
@@ -605,7 +605,7 @@ int main()
         delta = hgClockTick(&gameClock);
 
         HgArena* frame = hgScratch(&arena, 1);
-        HgArenaScope frameScope{frame};
+        hgArenaScope(frame);
 
         hgProcessEvents();
         if (hgWasQuit() || hgWindowWasClosed(window))

@@ -8,7 +8,7 @@ int main()
     hgTest();
 
     HgArena* arena = hgScratch();
-    HgArenaScope arenaScope{arena};
+    hgArenaScope(arena);
 
     HgWindow* window = hgWindowCreate("Hg Minimal Example", 1200, 800, nullptr);
     hgDefer(hgWindowDestroy(window));
