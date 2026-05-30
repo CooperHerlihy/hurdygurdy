@@ -506,7 +506,7 @@ void render()
 {
     HgGpuCmd* cmd = hgGpuFrameBegin(&window, 1);
     hgClockTick(&cpuClock);
-    if (!hgHandleIsNull(hgWindowImageView(window).handle))
+    if (!hgHandleIsNull(hgWindowImageView(window)))
     {
         HgGpuRenderAttachment renderColorAttachment{};
         renderColorAttachment.image = renderView;

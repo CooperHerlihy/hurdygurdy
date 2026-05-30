@@ -1490,7 +1490,7 @@ static void descriptorDestroy(Descriptor desc)
 
 static HgGpuBufferData* bufferGet(HgGpuBuffer buffer)
 {
-    return hgPoolGet(&vkState.buffers, buffer.handle);
+    return hgPoolGet(&vkState.buffers, buffer);
 }
 
 HgGpuBuffer hgGpuBufferCreate(
@@ -1555,7 +1555,7 @@ HgGpuBuffer hgGpuBufferCreate(
 
 void hgGpuBufferDestroy(HgGpuBuffer buffer)
 {
-    if (hgPoolAlive(&vkState.buffers, buffer.handle))
+    if (hgPoolAlive(&vkState.buffers, buffer))
     {
         HgGpuBufferData* bufferData = bufferGet(buffer);
         descriptorDestroy(bufferData->storageDesc);
@@ -1649,7 +1649,7 @@ void hgGpuBufferRead(void* dst, HgGpuBuffer src, u64 offset, u64 size)
 
 static HgGpuImageData* imageGet(HgGpuImage image)
 {
-    return hgPoolGet(&vkState.images, image.handle);
+    return hgPoolGet(&vkState.images, image);
 }
 
 HgGpuImage hgGpuImageCreate(u32 width, u32 height, HgFormat format, HgGpuImageUsageFlags usage)
@@ -1711,7 +1711,7 @@ HgGpuImage hgGpuImageCreateEx(const HgGpuImageCreateEx* create)
 
 void hgGpuImageDestroy(HgGpuImage image)
 {
-    if (hgPoolAlive(&vkState.images, image.handle))
+    if (hgPoolAlive(&vkState.images, image))
     {
         HgGpuImageData* imageData = imageGet(image);
         vmaDestroyImage(vkState.vma, imageData->image, imageData->alloc);
@@ -1759,7 +1759,7 @@ static VkSampler samplerGet(
 
 static HgGpuViewData* viewGet(HgGpuView view)
 {
-    return hgPoolGet(&vkState.views, view.handle);
+    return hgPoolGet(&vkState.views, view);
 }
 
 HgGpuView hgGpuViewCreate(
@@ -1835,7 +1835,7 @@ HgGpuView hgGpuViewCreateEx(const HgGpuViewCreateEx* config)
 
 void hgGpuViewDestroy(HgGpuView view)
 {
-    if (hgPoolAlive(&vkState.views, view.handle))
+    if (hgPoolAlive(&vkState.views, view))
     {
         HgGpuViewData* viewData = viewGet(view);
         descriptorDestroy(viewData->storageDesc);
@@ -2228,7 +2228,7 @@ static VkShaderModule createShaderModule(const void* spirvCode, u64 codeSize)
 
 static HgGpuPipelineData* pipelineGet(HgGpuPipeline pipeline)
 {
-    return hgPoolGet(&vkState.pipelines, pipeline.handle);
+    return hgPoolGet(&vkState.pipelines, pipeline);
 }
 
 HgGpuPipeline hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* config)
@@ -2458,7 +2458,7 @@ HgGpuPipeline hgGpuPipelineCreateCompute(u32 pushSize, const u8* shaderCode, u64
 
 void hgGpuPipelineDestroy(HgGpuPipeline pipeline)
 {
-    if (hgPoolAlive(&vkState.pipelines, pipeline.handle))
+    if (hgPoolAlive(&vkState.pipelines, pipeline))
     {
         HgGpuPipelineData* pipelineData = pipelineGet(pipeline);
         vkDestroyPipeline(vkState.device, pipelineData->pipeline, nullptr);
@@ -3067,10 +3067,10 @@ struct PlatformState {
 
 static PlatformState platformState{};
 
-static HgWindowData* windowGet(HgWindow handle)
+static HgWindowData* windowGet(HgWindow window)
 {
-    hgAssert(hgPoolAlive(&platformState.handles, handle.handle));
-    u32 idx = hgHandleIdx(handle.handle);
+    hgAssert(hgPoolAlive(&platformState.handles, window.handle));
+    u32 idx = hgHandleIdx(window.handle);
     u32 width = platformState.windowWidth;
     return (HgWindowData*)((u8*)platformState.windowPool + width * idx);
 }
@@ -3127,8 +3127,8 @@ static void resizeWindowSwapchain(HgWindowData* window)
         vkDestroySemaphore(vkState.device, window->readyToPresent[i], nullptr);
         window->readyToPresent[i] = nullptr;
 
-        hgPoolFree(&vkState.views, window->views[i].handle);
-        hgPoolFree(&vkState.images, window->images[i].handle);
+        hgPoolFree(&vkState.views, window->views[i]);
+        hgPoolFree(&vkState.images, window->images[i]);
     }
 
     for (u32 i = 0; i < vkState.frameCount; ++i)
@@ -3317,8 +3317,8 @@ static void destroyWindowSwapchain(HgWindowData* window)
     {
         vkDestroySemaphore(vkState.device, window->readyToPresent[i], nullptr);
         vkDestroyImageView(vkState.device, viewGet(window->views[i])->view, nullptr);
-        hgPoolFree(&vkState.views, window->views[i].handle);
-        hgPoolFree(&vkState.images, window->images[i].handle);
+        hgPoolFree(&vkState.views, window->views[i]);
+        hgPoolFree(&vkState.images, window->images[i]);
     }
 
     for (u32 i = 0; i < vkState.frameCount; ++i)

@@ -2114,6 +2114,7 @@ HgJson hgParseJson(HgArena* arena, HgStringView text);
 /**
  * A generation counted handle
  */
+template<typename T>
 struct HgHandle {
     /**
      * The handle id
@@ -2121,14 +2122,22 @@ struct HgHandle {
     u32 id = (u32)-1;
 };
 
-constexpr bool operator==(HgHandle lhs, HgHandle rhs)
+template<typename T>
+constexpr bool operator==(HgHandle<T> lhs, HgHandle<T> rhs)
 {
     return lhs.id == rhs.id;
 }
 
-constexpr bool operator!=(HgHandle lhs, HgHandle rhs)
+template<typename T>
+constexpr bool operator!=(HgHandle<T> lhs, HgHandle<T> rhs)
 {
     return lhs.id != rhs.id;
+}
+
+template<typename T>
+constexpr u64 hgHash(HgHandle<T> handle)
+{
+    return handle.id;
 }
 
 static constexpr u32 hgHandleIdxBits = 24;
@@ -2136,7 +2145,8 @@ static constexpr u32 hgHandleIdxBits = 24;
 /**
  * Get the index from a handle
  */
-constexpr u32 hgHandleIdx(HgHandle handle)
+template<typename T>
+constexpr u32 hgHandleIdx(HgHandle<T> handle)
 {
     return handle.id & ((1 << hgHandleIdxBits) - 1);
 }
@@ -2144,7 +2154,8 @@ constexpr u32 hgHandleIdx(HgHandle handle)
 /**
  * Get the generation from a handle
  */
-constexpr u32 hgHandleGeneration(HgHandle handle)
+template<typename T>
+constexpr u32 hgHandleGeneration(HgHandle<T> handle)
 {
     return handle.id & ~((1 << hgHandleIdxBits) - 1);
 }
@@ -2152,7 +2163,8 @@ constexpr u32 hgHandleGeneration(HgHandle handle)
 /**
  * Returns a new handle at the same index
  */
-constexpr HgHandle hgHandleNextGeneration(HgHandle handle)
+template<typename T>
+constexpr HgHandle<T> hgHandleNextGeneration(HgHandle<T> handle)
 {
     return {handle.id + (1 << hgHandleIdxBits)};
 }
@@ -2160,9 +2172,10 @@ constexpr HgHandle hgHandleNextGeneration(HgHandle handle)
 /**
  * Returns whether the handle is the null handle
  */
-constexpr bool hgHandleIsNull(HgHandle handle)
+template<typename T>
+constexpr bool hgHandleIsNull(HgHandle<T> handle)
 {
-    return handle.id == HgHandle{}.id;
+    return handle.id == HgHandle<T>{}.id;
 }
 
 /**
@@ -2179,11 +2192,11 @@ struct HgPool {
     /**
      * The handle free list
      */
-    HgHandle* freeList;
+    HgHandle<T>* freeList;
     /**
      * The next handle in the free list
      */
-    HgHandle next;
+    HgHandle<T> next;
     /**
      * The capacity of the pool
      */
@@ -2216,7 +2229,7 @@ HgPool<T> hgPoolCreate(HgArena* arena, u32 capacity)
 
     HgPool<T> pool{};
     pool.vals = hgAlloc<T>(arena, capacity);
-    pool.freeList = hgAlloc<HgHandle>(arena, capacity);
+    pool.freeList = hgAlloc<HgHandle<T>>(arena, capacity);
     pool.capacity = capacity;
     hgPoolReset(&pool);
 
@@ -2229,7 +2242,7 @@ HgPool<T> hgPoolCreate(HgArena* arena, u32 capacity)
  * Note, does not initialize the object
  */
 template<typename T>
-constexpr HgHandle hgPoolAlloc(HgPool<T>* pool)
+constexpr HgHandle<T> hgPoolAlloc(HgPool<T>* pool)
 {
     hgAssert(pool != nullptr);
     hgAssert(hgHandleIdx(pool->next) < pool->capacity);
@@ -2244,7 +2257,7 @@ constexpr HgHandle hgPoolAlloc(HgPool<T>* pool)
  * Returns whether a handle is alive in the pool
  */
 template<typename T>
-constexpr bool hgPoolAlive(HgPool<T>* pool, HgHandle handle)
+constexpr bool hgPoolAlive(HgPool<T>* pool, HgHandle<T> handle)
 {
     return hgHandleIdx(handle) < pool->capacity && pool->freeList[hgHandleIdx(handle)].id == handle.id;
 }
@@ -2255,7 +2268,7 @@ constexpr bool hgPoolAlive(HgPool<T>* pool, HgHandle handle)
  * Note, the object handle must be valid and alive
  */
 template<typename T>
-constexpr void hgPoolFree(HgPool<T>* pool, HgHandle handle)
+constexpr void hgPoolFree(HgPool<T>* pool, HgHandle<T> handle)
 {
     hgAssert(hgPoolAlive(pool, handle));
     pool->freeList[hgHandleIdx(handle)] = pool->next;
@@ -2266,11 +2279,13 @@ constexpr void hgPoolFree(HgPool<T>* pool, HgHandle handle)
  * Get an object from a pool
  */
 template<typename T>
-constexpr T* hgPoolGet(HgPool<T>* pool, HgHandle handle)
+constexpr T* hgPoolGet(HgPool<T>* pool, HgHandle<T> handle)
 {
     hgAssert(hgPoolAlive(pool, handle));
     return &pool->vals[hgHandleIdx(handle)];
 }
+
+typedef HgHandle<void> HgIndexHandle;
 
 /**
  * A pool of indices
@@ -2285,11 +2300,11 @@ struct HgPool<void> {
     /**
      * The handle free list
      */
-    HgHandle* freeList;
+    HgIndexHandle* freeList;
     /**
      * The next handle in the free list
      */
-    HgHandle next;
+    HgIndexHandle next;
     /**
      * The capacity of the pool
      */
@@ -2306,7 +2321,7 @@ inline HgPool<void> hgPoolCreate(HgArena* arena, u32 capacity)
     hgAssert(capacity > 0);
 
     HgPool<void> pool{};
-    pool.freeList = hgAlloc<HgHandle>(arena, capacity);
+    pool.freeList = hgAlloc<HgIndexHandle>(arena, capacity);
     pool.capacity = capacity;
     hgPoolReset(&pool);
 
@@ -2443,7 +2458,7 @@ constexpr u64 hgHash(void* val)
  * Hash map hashing for HgHandle
  */
 template<>
-constexpr u64 hgHash(HgHandle handle)
+constexpr u64 hgHash(HgIndexHandle handle)
 {
     return handle.id;
 }
@@ -2941,14 +2956,14 @@ void hgPerfLog(HgStringView title, const HgPerfStats* stats, HgPerfScale scale);
 u32 hgHardwareThreadCount();
 
 /**
+ * The implementation data for HgFence
+ */
+struct HgFenceData;
+
+/**
  * A spinlock fence for basic thread synchronization
  */
-struct HgFence {
-    /**
-     * The handle to the fence
-     */
-    HgHandle handle;
-};
+typedef HgHandle<HgFenceData> HgFence;
 
 /**
  * Initialize fences
@@ -3452,11 +3467,14 @@ enum HgGpuAccess : u32 {
 typedef u32 HgGpuAccessFlags;
 
 /**
+ * The implementation data for HgGpuBuffer
+ */
+struct HgGpuBufferData;
+
+/**
  * A gpu buffer
  */
-struct HgGpuBuffer {
-    HgHandle handle;
-};
+typedef HgHandle<HgGpuBufferData> HgGpuBuffer;
 
 /**
  * How a gpu buffer will be used
@@ -3563,11 +3581,14 @@ void hgGpuBufferWrite(HgGpuBuffer dst, u64 offset, const void* src, u64 size);
 void hgGpuBufferRead(void* dst, HgGpuBuffer src, u64 offset, u64 size);
 
 /**
+ * The implementation data for HgGpuImage
+ */
+struct HgGpuImageData;
+
+/**
  * A gpu image
  */
-struct HgGpuImage {
-    HgHandle handle;
-};
+typedef HgHandle<HgGpuImageData> HgGpuImage;
 
 /**
  * How an image will be used
@@ -3671,11 +3692,14 @@ HgGpuImage hgGpuImageCreateEx(const HgGpuImageCreateEx* create);
 void hgGpuImageDestroy(HgGpuImage image);
 
 /**
- * A view into a gpu image
+ * The implementation data for HgGpuView
  */
-struct HgGpuView {
-    HgHandle handle;
-};
+struct HgGpuViewData;
+
+/**
+ * A gpu view
+ */
+typedef HgHandle<HgGpuViewData> HgGpuView;
 
 /**
  * The dimensionality of an image
@@ -3836,11 +3860,14 @@ void hgGpuImageRead(void* dst, HgGpuView src);
 void hgGpuImageGenMipmaps(HgGpuView dst);
 
 /**
- * A shader pipeline
+ * The implementation data for HgGpuPipeline
  */
-struct HgGpuPipeline {
-    HgHandle handle;
-};
+struct HgGpuPipelineData;
+
+/**
+ * A gpu pipeline
+ */
+typedef HgHandle<HgGpuPipelineData> HgGpuPipeline;
 
 /**
  * A push constant range in a pipeline
@@ -4383,8 +4410,36 @@ struct HgWindowConfig {
  * A window
  */
 struct HgWindow {
-    HgHandle handle;
+    /**
+     * The handle to the window
+     */
+    HgIndexHandle handle;
 };
+
+/**
+ * Compare windows
+ */
+constexpr bool operator==(HgWindow lhs, HgWindow rhs)
+{
+    return lhs.handle == rhs.handle;
+}
+
+/**
+ * Compare windows
+ */
+constexpr bool operator!=(HgWindow lhs, HgWindow rhs)
+{
+    return lhs.handle != rhs.handle;
+}
+
+/**
+ * Hashing for windows
+ */
+template<>
+constexpr u64 hgHash(HgWindow window)
+{
+    return hgHash(window.handle);
+}
 
 /**
  * Create a new window
@@ -4658,19 +4713,6 @@ void hgAssetInitDefaults(
     u32 maxGpuMeshes);
 
 /**
- * Typed handles for assets
- */
-template<typename T>
-struct HgAssetHandle {
-    static_assert(std::is_trivially_copyable_v<T> && std::is_trivially_destructible_v<T>);
-
-    /**
-     * The handle value
-     */
-    HgHandle handle;
-};
-
-/**
  * The extra data associated with assets
  */
 template<typename T>
@@ -4696,6 +4738,12 @@ struct HgAssetData {
 };
 
 /**
+ * A handle to an asset
+ */
+template<typename T>
+using HgAssetHandle = HgHandle<HgAssetData<T>>;
+
+/**
  * An asset manager
  */
 template<typename T>
@@ -4705,7 +4753,7 @@ struct HgAssetManager {
     /**
      * The asset lookup
      */
-    HgMap<HgStringView, HgHandle> map;
+    HgMap<HgStringView, HgAssetHandle<T>> map;
     /**
      * The asset pool
      */
@@ -4731,7 +4779,7 @@ inline HgAssetManager<T> hgAssets{};
 template<typename T>
 void hgAssetInit(HgArena* arena, u32 maxAssets)
 {
-    hgAssets<T>.map = hgMapCreate<HgStringView, HgHandle>(arena, maxAssets * 2);
+    hgAssets<T>.map = hgMapCreate<HgStringView, HgAssetHandle<T>>(arena, maxAssets * 2);
     hgAssets<T>.pool = hgPoolCreate<HgAssetData<T>>(arena, maxAssets);
 }
 
@@ -4745,7 +4793,7 @@ HgAssetHandle<T> hgAssetCreate(HgStringView path)
 {
     if (path.chars == nullptr || path.length == 0)
     {
-        HgHandle handle = hgPoolAlloc(&hgAssets<T>.pool);
+        HgHandle<HgAssetData<T>> handle = hgPoolAlloc(&hgAssets<T>.pool);
 
         HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle);
         data->path = {};
@@ -4753,11 +4801,11 @@ HgAssetHandle<T> hgAssetCreate(HgStringView path)
         data->refCount = 1;
         data->asset = {};
 
-        return {handle};
+        return {handle.id};
     }
     else
     {
-        HgHandle* handle = hgMapGet(&hgAssets<T>.map, path);
+        HgAssetHandle<T>* handle = hgMapGet(&hgAssets<T>.map, path);
         if (handle != nullptr)
         {
             ++hgPoolGet(&hgAssets<T>.pool, *handle)->refCount;
@@ -4774,7 +4822,7 @@ HgAssetHandle<T> hgAssetCreate(HgStringView path)
             data->refCount = 1;
             data->asset = {};
         }
-        return {*handle};
+        return {handle->id};
     }
 }
 
@@ -4784,9 +4832,9 @@ HgAssetHandle<T> hgAssetCreate(HgStringView path)
 template<typename T>
 void hgAssetDestroy(HgAssetHandle<T> handle)
 {
-    hgAssert(hgPoolAlive(&hgAssets<T>.pool, handle.handle));
+    hgAssert(hgPoolAlive(&hgAssets<T>.pool, handle));
 
-    HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle.handle);
+    HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle);
     if (--data->refCount == 0)
     {
         if (data->path != nullptr)
@@ -4795,7 +4843,7 @@ void hgAssetDestroy(HgAssetHandle<T> handle)
             free((void*)data->path.chars);
         }
         hgFenceDestroy(data->isLoaded);
-        hgPoolFree(&hgAssets<T>.pool, handle.handle);
+        hgPoolFree(&hgAssets<T>.pool, handle);
     }
 }
 
@@ -4826,7 +4874,7 @@ template<typename T>
 HgAssetHandle<T> hgAssetLoad(HgStringView path)
 {
     HgAssetHandle<T> handle = hgAssetCreate<T>(path);
-    HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle.handle);
+    HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle);
     if (data->refCount == 1)
     {
         hgAssetLoadImpl(data);
@@ -4840,7 +4888,7 @@ HgAssetHandle<T> hgAssetLoad(HgStringView path)
 template<typename T>
 void hgAssetUnload(HgAssetHandle<T> handle)
 {
-    HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle.handle);
+    HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle);
     if (data->refCount == 1)
     {
         hgAssetUnloadImpl(data);
@@ -4854,7 +4902,7 @@ void hgAssetUnload(HgAssetHandle<T> handle)
 template<typename T>
 void hgAssetReload(HgAssetHandle<T> handle)
 {
-    HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle.handle);
+    HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle);
     hgAssetUnloadImpl(data);
     hgAssetLoadImpl(data);
 }
@@ -4865,7 +4913,7 @@ void hgAssetReload(HgAssetHandle<T> handle)
 template<typename T>
 T* hgAssetGet(HgAssetHandle<T> handle)
 {
-    HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle.handle);
+    HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle);
     hgAssert(data->refCount > 0);
     hgFenceWaitIndefinite(data->isLoaded);
     return &data->asset;
@@ -4877,7 +4925,7 @@ T* hgAssetGet(HgAssetHandle<T> handle)
 template<typename T>
 HgStringView hgAssetPath(HgAssetHandle<T> handle)
 {
-    return hgPoolGet(&hgAssets<T>.pool, handle.handle)->path;
+    return hgPoolGet(&hgAssets<T>.pool, handle)->path;
 }
 
 /**
@@ -5180,23 +5228,32 @@ struct HgEntity {
     /**
      * The entity handle
      */
-    HgHandle handle;
+    HgIndexHandle handle;
 };
 
-template<>
-constexpr u64 hgHash(HgEntity e)
-{
-    return hgHash(e.handle);
-}
-
+/**
+ * Compare entities
+ */
 constexpr bool operator==(HgEntity lhs, HgEntity rhs)
 {
     return lhs.handle == rhs.handle;
 }
 
+/**
+ * Compare entities
+ */
 constexpr bool operator!=(HgEntity lhs, HgEntity rhs)
 {
     return lhs.handle != rhs.handle;
+}
+
+/**
+ * Hashing for entities
+ */
+template<>
+constexpr u64 hgHash(HgEntity e)
+{
+    return hgHash(e.handle);
 }
 
 /**

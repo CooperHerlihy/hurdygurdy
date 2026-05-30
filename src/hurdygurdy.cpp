@@ -1818,15 +1818,15 @@ u32 hgHardwareThreadCount()
     return (u32)std::thread::hardware_concurrency();
 }
 
-struct FenceData {
+struct HgFenceData {
     std::atomic<u32> counter{0};
 };
 
-HgPool<FenceData> fencePool{};
+HgPool<HgFenceData> fencePool{};
 
 void hgFencesInit(HgArena* arena, u32 maxFences)
 {
-    fencePool = hgPoolCreate<FenceData>(arena, maxFences);
+    fencePool = hgPoolCreate<HgFenceData>(arena, maxFences);
 }
 
 void hgFencesDeinit()
@@ -1836,29 +1836,29 @@ void hgFencesDeinit()
 
 HgFence hgFenceCreate()
 {
-    HgHandle handle = {hgPoolAlloc(&fencePool)};
-    new (hgPoolGet(&fencePool, handle)) FenceData{0};
-    return {handle};
+    HgFence fence = hgPoolAlloc(&fencePool);
+    new (hgPoolGet(&fencePool, fence)) HgFenceData{0};
+    return fence;
 }
 
 void hgFenceDestroy(HgFence fence)
 {
-    hgPoolFree(&fencePool, fence.handle);
+    hgPoolFree(&fencePool, fence);
 }
 
 void hgFenceAttach(HgFence fence, u32 count)
 {
-    hgPoolGet(&fencePool, fence.handle)->counter.fetch_add(count);
+    hgPoolGet(&fencePool, fence)->counter.fetch_add(count);
 }
 
 void hgFenceSignal(HgFence fence, u32 count)
 {
-    hgPoolGet(&fencePool, fence.handle)->counter.fetch_sub(count);
+    hgPoolGet(&fencePool, fence)->counter.fetch_sub(count);
 }
 
 bool hgFenceIsComplete(HgFence fence)
 {
-    return hgPoolGet(&fencePool, fence.handle)->counter.load() == 0;
+    return hgPoolGet(&fencePool, fence)->counter.load() == 0;
 }
 
 bool hgFenceWait(HgFence fence, f64 timeoutSeconds)
@@ -1930,7 +1930,7 @@ static bool poolExecute()
     hgAssert(work.fn != nullptr);
     work.fn(work.data);
 
-    if (!hgHandleIsNull(work.fence.handle))
+    if (!hgHandleIsNull(work.fence))
         hgFenceSignal(work.fence, 1);
     return true;
 }
@@ -2018,7 +2018,7 @@ bool hgThreadsHelp(HgFence fence, f64 timeout)
 void hgThreadsCall(HgFence fence, void* data, void (*fn)(void* data))
 {
     hgAssert(fn != nullptr);
-    if (!hgHandleIsNull(fence.handle))
+    if (!hgHandleIsNull(fence))
         hgFenceAttach(fence, 1);
 
     u32 idx = threadPool.workingHead.fetch_add(1) & (threadPool.workCapacity - 1);
@@ -2119,7 +2119,7 @@ static bool ioPop()
     hgAssert(request.fn != nullptr);
     request.fn(request.resource, request.path);
 
-    if (!hgHandleIsNull(request.fence.handle))
+    if (!hgHandleIsNull(request.fence))
         hgFenceSignal(request.fence, 1);
     return true;
 }
@@ -2165,7 +2165,7 @@ void hgIoDeinit()
 void hgIoRequest(HgFence fence, void* data, HgStringView path, void (*fn)(void* data, HgStringView path))
 {
     hgAssert(fn != nullptr);
-    if (!hgHandleIsNull(fence.handle))
+    if (!hgHandleIsNull(fence))
         hgFenceAttach(fence, 1);
 
     u32 idx = ioThread.workingHead.fetch_add(1) & (ioThread.requestCapacity - 1);
@@ -3334,7 +3334,7 @@ void hgSpritesDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 
     hgEcsForEach<HgSprite, HgTransform>(ecs, [&](HgEntity, HgSprite* sprite, HgTransform* tf)
     {
-        HgGpuTexture* texture = hgHandleIsNull(sprite->texture.handle)
+        HgGpuTexture* texture = hgHandleIsNull(sprite->texture)
             ? &spritePipeline.defaultTex
             : hgAssetGet(sprite->texture);
 
@@ -3445,7 +3445,7 @@ void hgSkyboxDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 
     hgEcsForEach<HgSkybox>(ecs, [&](HgEntity, HgSkybox* skybox)
     {
-        HgGpuTexture* texture = hgHandleIsNull(skybox->texture.handle)
+        HgGpuTexture* texture = hgHandleIsNull(skybox->texture)
             ? &skyboxPipeline.defaultTex
             : hgAssetGet(skybox->texture);
 
@@ -3721,15 +3721,15 @@ void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 
     hgEcsForEach<HgModel, HgTransform>(ecs, [&](HgEntity, HgModel* model, HgTransform* tf)
     {
-        HgGpuTexture* colorMap = hgHandleIsNull(model->colorMap.handle)
+        HgGpuTexture* colorMap = hgHandleIsNull(model->colorMap)
             ? &modelPipeline.defaultColorMap
             : hgAssetGet(model->colorMap);
 
-        HgGpuTexture* normalMap = hgHandleIsNull(model->normalMap.handle)
+        HgGpuTexture* normalMap = hgHandleIsNull(model->normalMap)
             ? &modelPipeline.defaultNormalMap
             : hgAssetGet(model->normalMap);
 
-        HgGpuMesh* gpuModel = hgHandleIsNull(model->model.handle)
+        HgGpuMesh* gpuModel = hgHandleIsNull(model->model)
             ? &modelPipeline.defaultModel
             : hgAssetGet(model->model);
 

@@ -189,7 +189,7 @@ int main()
 
         hgGpuCompute(cmd, noiseWidth / 16, noiseHeight / 16, 1);
 
-        if (!hgHandleIsNull(hgWindowImageView(window).handle))
+        if (!hgHandleIsNull(hgWindowImageView(window)))
         {
             HgGpuRenderAttachment colorAttachment{};
             colorAttachment.image = hgWindowImageView(window);
