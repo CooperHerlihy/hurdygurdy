@@ -5,6 +5,8 @@
 #define IM_ASSERT hgAssert
 #include "imgui.h"
 
+#include <emmintrin.h>
+
 static HgWindow window = {};
 
 static u32 width = 0;
@@ -36,7 +38,7 @@ static f64 delta = 0.0;
 HgClock cpuClock;
 static f64 cpuDelta = 0.0;
 
-static bool quit = false;
+volatile static bool quit = false;
 static bool renderHovered = false;
 
 struct Name {
@@ -598,9 +600,18 @@ int main()
     init(arena);
     hgDefer(deinit());
 
+    // temporary, trick the OS into thinking we're important
+    hgThreadsCall(HgFence{}, nullptr, [](void*)
+    {
+        while(!quit)
+        {
+            _mm_pause();
+        }
+    });
+
     HgClock gameClock;
     hgClockTick(&gameClock);
-    for (;;)
+    while (!quit)
     {
         delta = hgClockTick(&gameClock);
 
@@ -609,7 +620,7 @@ int main()
 
         hgProcessEvents();
         if (hgWasQuit() || hgWindowWasClosed(window))
-            goto quit;
+            quit = true;
 
         hgEcsForEach<Spin, HgTransform>(&ecs, [&](HgEntity e, Spin* spin, HgTransform* tf)
         {
@@ -653,7 +664,6 @@ int main()
         cpuDelta += hgClockTick(&cpuClock);
         render();
     }
-quit:
     hgGpuWaitIdle();
 }
 

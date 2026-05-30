@@ -1710,7 +1710,6 @@ void hgTest()
         hgDefer(hgMutexDestroy(c.mtx));
 
         c.count = 0;
-
         hgThreadsFor(0, 100, &c, [](void* pc, u64)
         {
             Capture* c = (Capture*)pc;
@@ -1721,135 +1720,25 @@ void hgTest()
                 ++c->count;
             }
         });
-
         hgAssert(c.count == 1000000);
-    }
-
-    // io thread
-    {
-        HgFence fence = hgFenceCreate();
-        hgDefer(hgFenceDestroy(fence));
-
-        bool vals[100]{};
-
-        hgIoRequest(fence, vals, {}, [](void* pvals, HgStringView)
-        {
-            for (u32 i = 0; i < sizeof(vals) / sizeof(*vals); ++i)
-            {
-                ((bool*)pvals)[i] = true;
-            }
-        });
-
-        hgAssert(hgFenceWait(fence, 2.0));
-        for (u32 i = 0; i < sizeof(vals) / sizeof(*vals); ++i)
-        {
-            hgAssert(vals[i] == true);
-        }
-    }
-
-    {
-        HgFence fence = hgFenceCreate();
-        hgDefer(hgFenceDestroy(fence));
-
-        bool vals[100]{};
-
-        for (u32 i = 0; i < sizeof(vals) / sizeof(*vals); ++i)
-        {
-            hgIoRequest(fence, &vals[i], {}, [](void* pval, HgStringView)
-            {
-                *(bool*)pval = true;
-            });
-        }
-
-        hgAssert(hgFenceWait(fence, 2.0));
-        for (u32 i = 0; i < sizeof(vals) / sizeof(*vals); ++i)
-        {
-            hgAssert(vals[i] == true);
-        }
-    }
-
-    {
-        HgFence fence = hgFenceCreate();
-        hgDefer(hgFenceDestroy(fence));
-
-        bool vals[100]{};
-
-        vals[0] = true;
-
-        for (u32 i = 1; i < sizeof(vals) / sizeof(*vals); ++i)
-        {
-            hgIoRequest(fence, &vals[i], {}, [](void* pval, HgStringView)
-            {
-                *(bool*)pval = *((bool*)pval - 1);
-            });
-        }
-
-        hgAssert(hgFenceWait(fence, 2.0));
-        for (u32 i = 0; i < sizeof(vals) / sizeof(*vals); ++i)
-        {
-            hgAssert(vals[i] == true);
-        }
-    }
-
-    {
-        HgFence fence = hgFenceCreate();
-        hgDefer(hgFenceDestroy(fence));
-
-        for (u32 n = 0; n < 3; ++n)
-        {
-            std::atomic_bool start{false};
-            std::thread producers[4];
-
-            bool vals[100]{};
-
-            auto prodFn = [&](u32 idx)
-            {
-                while (!start)
-                {
-                    _mm_pause();
-                }
-                u32 begin = idx * 25;
-                u32 end = begin + 25;
-                for (u32 i = begin; i < end; ++i)
-                {
-                    hgIoRequest(fence, &vals[i], {}, [](void* pval, HgStringView)
-                    {
-                        *(bool*)pval = !*(bool*)pval;
-                    });
-                }
-            };
-            for (u32 j = 0; j < sizeof(producers) / sizeof(*producers); ++j)
-            {
-                producers[j] = std::thread(prodFn, j);
-            }
-
-            start.store(true);
-            for (auto& thread : producers)
-            {
-                thread.join();
-            }
-
-            hgAssert(hgFenceWait(fence, 2.0));
-            for (auto val : vals)
-            {
-                hgAssert(val == true);
-            }
-        }
     }
 
     // HgAssetManager and HgBinary
     {
         {
-            HgBinaryHandle bin1 = hgAssetCreate<HgBinary>("test");
-            hgAssert(hgAssetPath(bin1) == "test");
-            HgBinary* bin = hgAssetGet(bin1);
-            hgAssert(bin != nullptr);
-            HgBinaryHandle bin1other = hgAssetCreate<HgBinary>("test");
-            hgAssert(hgAssetPath(bin1other) == "test");
-            hgAssert(hgAssetGet(bin1other) == bin);
-            hgAssetDestroy(bin1);
-            hgAssert(hgAssetGet(bin1other) == bin);
-            hgAssetDestroy(bin1other);
+            HgBinaryHandle bin1 = hgAssetLoad<HgBinary>("");
+            hgAssert(hgAssetPath(bin1) == "");
+            HgBinary* bin1Data = hgAssetGet(bin1);
+            hgAssert(bin1Data != nullptr);
+
+            HgBinaryHandle bin2 = hgAssetLoad<HgBinary>("");
+            hgAssert(hgAssetPath(bin2) == "");
+            HgBinary* bin2Data = hgAssetGet(bin2);
+            hgAssert(bin2Data != nullptr);
+            hgAssert(bin2Data != bin1Data);
+
+            hgAssetUnload(bin1);
+            hgAssetUnload(bin2);
         }
 
         {
@@ -1857,7 +1746,7 @@ void hgTest()
             HgBinary* bin = hgAssetGet(binHandle);
             hgAssert(bin->data == nullptr);
             hgAssert(bin->size == 0);
-            hgAssetDestroy(binHandle);
+            hgAssetUnload(binHandle);
         }
 
         u32 saveData[]{12, 42, 100, 128};
@@ -1881,6 +1770,7 @@ void hgTest()
             HgStringView filePath = "hg_test_dir/file_bin_test.bin";
 
             hgBinaryStore(&bin, filePath, fence);
+            hgAssert(hgFenceWait(fence, 2.0));
 
             HgBinaryHandle binHandle = hgAssetLoad<HgBinary>(filePath);
             HgBinary* newBin = hgAssetGet(binHandle);
@@ -1889,6 +1779,48 @@ void hgTest()
             hgAssert(newBin->data != saveData);
             hgAssert(newBin->size == sizeof(saveData));
             hgAssert(memcmp(saveData, newBin->data, newBin->size) == 0);
+
+            HgBinaryHandle binHandle2 = hgAssetLoad<HgBinary>(filePath);
+            HgBinary* newBin2 = hgAssetGet(binHandle2);
+            hgAssert(newBin2 == newBin);
+
+            hgAssetUnload(binHandle);
+            hgAssert(hgAssetGet(binHandle2) == newBin);
+            hgAssetUnload(binHandle2);
+            hgAssert(hgAssetGet(binHandle2) == nullptr);
+        }
+    }
+
+    // HgAssetManager and HgBinary async
+    {
+        u32 saveData[]{12, 42, 100, 128};
+
+        HgFence fence = hgFenceCreate();
+        hgDefer(hgFenceDestroy(fence));
+
+        {
+            HgBinary bin{saveData, sizeof(saveData)};
+
+            HgStringView filePath = "hg_test_dir/file_bin_test.bin";
+
+            hgBinaryStore(&bin, filePath, fence);
+            hgAssert(hgFenceWait(fence, 2.0));
+
+            HgBinaryHandle binHandle = hgAssetLoadAsync<HgBinary>(filePath);
+            HgBinary* newBin = hgAssetGet(binHandle);
+
+            hgAssert(newBin->data != nullptr);
+            hgAssert(newBin->data != saveData);
+            hgAssert(newBin->size == sizeof(saveData));
+            hgAssert(memcmp(saveData, newBin->data, newBin->size) == 0);
+
+            HgBinaryHandle binHandle2 = hgAssetLoadAsync<HgBinary>(filePath);
+            HgBinary* newBin2 = hgAssetGet(binHandle2);
+            hgAssert(newBin2 == newBin);
+
+            hgAssetUnloadAsync(binHandle);
+            hgAssert(hgAssetGet(binHandle2) == newBin);
+            hgAssetUnloadAsync(binHandle2);
         }
     }
 
@@ -1921,12 +1853,12 @@ void hgTest()
 
         HgFence fence = hgFenceCreate();
         hgDefer(hgFenceDestroy(fence));
-
         {
             hgTextureStorePng(&testImage, path, fence);
             hgAssert(hgFenceWait(fence, 2.0));
 
             HgTextureHandle imageHandle = hgAssetLoad<HgTexture>(path);
+            hgDefer(hgAssetUnload(imageHandle));
             HgTexture* image = hgAssetGet(imageHandle);
             hgAssert(image->width == testImage.width);
             hgAssert(image->height == testImage.height);

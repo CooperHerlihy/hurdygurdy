@@ -47,7 +47,7 @@ int main()
     u32 noiseWidth = 256;
     u32 noiseHeight = 256;
 
-    HgGpuTextureHandle noiseTexHandle = hgAssetCreate<HgGpuTexture>(HgStringView{});
+    HgGpuTextureHandle noiseTexHandle = hgAssetLoad<HgGpuTexture>({});
     HgGpuTexture* noiseTex = hgAssetGet(noiseTexHandle);
 
     noiseTex->image = hgGpuImageCreate(

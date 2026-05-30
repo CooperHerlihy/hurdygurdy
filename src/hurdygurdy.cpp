@@ -31,16 +31,14 @@ void hgInit(const HgInit* init)
 
     hgConcurrencyInit(arena, init->maxMutices, init->maxFences);
 
-    u32 workerCount = (u32)std::max(1, (i32)hgHardwareThreadCount() - 2); // main thread, io thread
+    u32 workerCount = (u32)std::max(1, (i32)hgHardwareThreadCount() - 1); // main thread
     hgThreadsInit(arena, init->threadPoolQueueSize, workerCount);
-    hgIoInit(arena, init->ioRequestQueueSize);
 
     hgAssetInitDefaults(arena, init->maxBinaries, init->maxTextures, init->maxGpuTextures, init->maxMeshes, init->maxGpuMeshes);
 }
 
 void hgDeinit()
 {
-    hgIoDeinit();
     hgThreadsDeinit();
     hgConcurrencyDeinit();
 
@@ -1897,16 +1895,16 @@ bool hgFenceIsComplete(HgFence fence)
 bool hgFenceWait(HgFence fence, f64 timeoutSeconds)
 {
     auto end = std::chrono::steady_clock::now() + std::chrono::duration<f64>(timeoutSeconds);
-    while (!hgFenceIsComplete(fence) && std::chrono::steady_clock::now() < end)
+    while (hgPoolAlive(&fencePool, fence) && !hgFenceIsComplete(fence) && std::chrono::steady_clock::now() < end)
     {
         _mm_pause();
     }
-    return hgFenceIsComplete(fence);
+    return !hgPoolAlive(&fencePool, fence) || hgFenceIsComplete(fence);
 }
 
 void hgFenceWaitIndefinite(HgFence fence)
 {
-    while (!hgFenceIsComplete(fence))
+    while (hgPoolAlive(&fencePool, fence) && !hgFenceIsComplete(fence))
     {
         _mm_pause();
     }
@@ -2008,6 +2006,9 @@ void hgThreadsInit(HgArena* arena, u32 queueSize, u32 threadCount)
     for (u32 i = 0; i < threadCount; ++i)
     {
         new (threadPool.threads + i) std::thread([] {
+            hgScratchInit((u32)-1);
+            hgDefer(hgScratchDeinit());
+
             for (;;)
             {
                 std::unique_lock<std::mutex> lock{threadPool.mtx};
@@ -2128,108 +2129,6 @@ void hgThreadsFor(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx
     hgThreadsHelp(fence, INFINITY);
 }
 
-struct IORequest {
-    HgFence fence;
-    void* resource;
-    HgStringView path;
-    void (*fn)(void* resource, HgStringView path);
-};
-
-struct IOThreadState {
-    std::thread thread{};
-    std::atomic_bool shouldClose = false;
-
-    IORequest* requests = nullptr;
-    std::atomic_bool* hasRequest = nullptr;
-    u32 requestCapacity = 0;
-
-    std::atomic<u32> tail = 0;
-    std::atomic<u32> head = 0;
-    std::atomic<u32> workingHead = 0;
-};
-
-static IOThreadState ioThread{};
-
-static bool ioPop()
-{
-    u32 idx = ioThread.tail.load() & (ioThread.requestCapacity - 1);
-    if (idx == ioThread.head.load())
-        return false;
-
-    IORequest request = ioThread.requests[idx];
-    ioThread.hasRequest[idx].store(false);
-
-    ioThread.tail.fetch_add(1);
-
-    hgAssert(request.fn != nullptr);
-    request.fn(request.resource, request.path);
-
-    if (!hgHandleIsNull(request.fence))
-        hgFenceSignal(request.fence, 1);
-    return true;
-}
-
-void hgIoInit(HgArena* arena, u32 queueSize)
-{
-    hgAssert(arena != nullptr);
-    hgAssert(queueSize > 1 && (queueSize & (queueSize - 1)) == 0);
-
-    ioThread.requests = hgAlloc<IORequest>(arena, queueSize);
-    ioThread.hasRequest = hgAlloc<std::atomic_bool>(arena, queueSize);
-    ioThread.requestCapacity = queueSize;
-
-    ioThread.tail.store(0);
-    ioThread.head.store(0);
-    ioThread.workingHead.store(0);
-    for (u32 i = 0; i < ioThread.requestCapacity; ++i)
-    {
-        ioThread.hasRequest[i].store(false);
-    }
-
-    ioThread.shouldClose.store(false);
-    ioThread.thread = std::thread([]()
-    {
-        hgScratchInit(UINT32_MAX);
-
-        while (!ioThread.shouldClose.load())
-        {
-            if (!ioPop())
-                poolExecute();
-        }
-
-        hgScratchDeinit();
-    });
-}
-
-void hgIoDeinit()
-{
-    ioThread.shouldClose.store(true);
-    ioThread.thread.join();
-}
-
-void hgIoRequest(HgFence fence, void* data, HgStringView path, void (*fn)(void* data, HgStringView path))
-{
-    hgAssert(fn != nullptr);
-    if (!hgHandleIsNull(fence))
-        hgFenceAttach(fence, 1);
-
-    u32 idx = ioThread.workingHead.fetch_add(1) & (ioThread.requestCapacity - 1);
-
-    ioThread.requests[idx].fence = fence;
-    ioThread.requests[idx].resource = data;
-    ioThread.requests[idx].path = path;
-    ioThread.requests[idx].fn = fn;
-    ioThread.hasRequest[idx].store(true);
-
-    u32 h = ioThread.head.load();
-    while (ioThread.hasRequest[h].load())
-    {
-        u32 next = (h + 1) & (ioThread.requestCapacity - 1);
-        ioThread.head.compare_exchange_strong(h, next);
-        h = next;
-    }
-}
-
 void hgAssetInitDefaults(
     HgArena* arena,
     u32 maxBinaries,
@@ -2248,41 +2147,36 @@ void hgAssetInitDefaults(
 template<>
 void hgAssetLoadImpl(HgAssetData<HgBinary>* data)
 {
-    hgIoRequest(data->isLoaded, &data->asset, data->path, [](void* pbin, HgStringView path)
+    HgArena* scratch = hgScratch();
+    hgArenaScope(scratch);
+
+    char* cpath = hgCString(scratch, data->path);
+
+    FILE* fileHandle = fopen(cpath, "rb");
+    if (fileHandle == nullptr)
     {
-        HgBinary* bin = (HgBinary*)pbin;
+    hgWarn("Could not find file to read binary: %s\n", cpath);
+    return;
+    }
+    hgDefer(fclose(fileHandle));
 
-        HgArena* scratch = hgScratch();
-        hgArenaScope(scratch);
-
-        char* cpath = hgCString(scratch, path);
-
-        FILE* fileHandle = fopen(cpath, "rb");
-        if (fileHandle == nullptr)
-        {
-        hgWarn("Could not find file to read binary: %s\n", cpath);
+    if (fseek(fileHandle, 0, SEEK_END) != 0)
+    {
+        hgWarn("Failed to read binary from file: %s\n", cpath);
         return;
-        }
-        hgDefer(fclose(fileHandle));
+    }
 
-        if (fseek(fileHandle, 0, SEEK_END) != 0)
-        {
-            hgWarn("Failed to read binary from file: %s\n", cpath);
-            return;
-        }
+    data->asset.size = (u32)ftell(fileHandle);
+    data->asset.data = malloc(data->asset.size);
 
-        bin->size = (u32)ftell(fileHandle);
-        bin->data = malloc(bin->size);
-
-        rewind(fileHandle);
-        if (fread(bin->data, 1, bin->size, fileHandle) != bin->size)
-        {
-            free(bin->data);
-            *bin = {};
-            hgWarn("Failed to read binary from file: %s\n", cpath);
-            return;
-        }
-    });
+    rewind(fileHandle);
+    if (fread(data->asset.data, 1, data->asset.size, fileHandle) != data->asset.size)
+    {
+        free(data->asset.data);
+        data->asset = {};
+        hgWarn("Failed to read binary from file: %s\n", cpath);
+        return;
+    }
 }
 
 template<>
@@ -2294,14 +2188,24 @@ void hgAssetUnloadImpl(HgAssetData<HgBinary>* data)
 
 void hgBinaryStore(HgBinary* bin, HgStringView path, HgFence fence)
 {
-    hgIoRequest(fence, bin, path, [](void* pbin, HgStringView path)
+    struct Capture {
+        HgBinary bin;
+        HgStringOwner path;
+    };
+    Capture* c = (Capture*)malloc(sizeof(*c));
+    c->bin = *bin;
+    c->path = hgStringAlloc(path);
+
+    hgThreadsCall(fence, c, [](void* pc)
     {
-        HgBinary* bin = (HgBinary*)pbin;
+        Capture* c = (Capture*)pc;
+        hgDefer(free(c));
+        hgDefer(hgStringFree(&c->path));
 
         HgArena* scratch = hgScratch();
         hgArenaScope(scratch);
 
-        char* cpath = hgCString(scratch, path);
+        char* cpath = hgCString(scratch, c->path);
 
         FILE* fileHandle = fopen(cpath, "wb");
         if (fileHandle == nullptr)
@@ -2311,7 +2215,7 @@ void hgBinaryStore(HgBinary* bin, HgStringView path, HgFence fence)
         }
         hgDefer(fclose(fileHandle));
 
-        if (fwrite(bin->data, 1, bin->size, fileHandle) != bin->size)
+        if (fwrite(c->bin.data, 1, c->bin.size, fileHandle) != c->bin.size)
         {
             hgWarn("Failed to write binary data to file: %s\n", cpath);
         }
@@ -2341,26 +2245,21 @@ void hgBinaryOverwrite(HgBinary* bin, u64 idx, const void* src, u64 len)
 template<>
 void hgAssetLoadImpl(HgAssetData<HgTexture>* data)
 {
-    hgIoRequest(data->isLoaded, &data->asset, data->path, [](void* ptex, HgStringView path)
+    HgArena* scratch = hgScratch();
+    hgArenaScope(scratch);
+    char* cpath = hgCString(scratch, data->path);
+
+    int x, y, channels;
+    data->asset.pixels = stbi_load(cpath, &x, &y, &channels, 4);
+    if (data->asset.pixels == nullptr)
     {
-        HgTexture* tex = (HgTexture*)ptex;
-
-        HgArena* scratch = hgScratch();
-        hgArenaScope(scratch);
-        char* cpath = hgCString(scratch, path);
-
-        int x, y, channels;
-        tex->pixels = stbi_load(cpath, &x, &y, &channels, 4);
-        if (tex->pixels == nullptr)
-        {
-            hgWarn("Could not load image: %s\n", cpath);
-            return;
-        }
-        tex->width = (u32)x;
-        tex->height = (u32)y;
-        tex->depth = 1;
-        tex->format = HgFormat_r8g8b8a8_srgb;
-    });
+        hgWarn("Could not load image: %s\n", cpath);
+        return;
+    }
+    data->asset.width = (u32)x;
+    data->asset.height = (u32)y;
+    data->asset.depth = 1;
+    data->asset.format = HgFormat_r8g8b8a8_srgb;
 }
 
 template<>
@@ -2372,14 +2271,32 @@ void hgAssetUnloadImpl(HgAssetData<HgTexture>* data)
 
 void hgTextureStorePng(HgTexture* texture, HgStringView path, HgFence fence)
 {
-    hgIoRequest(fence, texture, path, [](void* ptex, HgStringView fpath)
+    struct Capture {
+        HgTexture tex;
+        HgStringOwner path;
+    };
+    Capture* c = (Capture*)malloc(sizeof(*c));
+    c->tex = *texture;
+    c->path = hgStringAlloc(path);
+
+    hgThreadsCall(fence, c, [](void* pc)
     {
+        Capture* c = (Capture*)pc;
+        hgDefer(free(c));
+        hgDefer(hgStringFree(&c->path));
+
         HgArena* scratch = hgScratch();
         hgArenaScope(scratch);
-        char* cpath = hgCString(scratch, fpath);
 
-        HgTexture* tex = (HgTexture*)ptex;
-        stbi_write_png(cpath, (int)tex->width, (int)tex->height, 4, tex->pixels, (int)(tex->width * sizeof(u32)));
+        char* cpath = hgCString(scratch, c->path);
+
+        stbi_write_png(
+            cpath,
+            (int)c->tex.width,
+            (int)c->tex.height,
+            4,
+            c->tex.pixels,
+            (int)(c->tex.width * sizeof(u32)));
     });
 }
 
