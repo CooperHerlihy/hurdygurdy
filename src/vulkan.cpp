@@ -1531,18 +1531,14 @@ void hgGpuBufferDestroy(HgGpuBuffer *buffer)
 u32 hgGpuBufferUniformDescriptor(HgGpuBuffer* buffer)
 {
     Descriptor desc = buffer->uniformDesc;
-    DescriptorType type = descriptorType(desc);
-
-    hgAssert(desc.id == vkState.descriptorPools[type][descriptorIdx(desc)].id);
+    hgAssert(desc.id == vkState.descriptorPools[descriptorType(desc)][descriptorIdx(desc)].id);
     return descriptorIdx(desc);
 }
 
 u32 hgGpuBufferStorageDescriptor(HgGpuBuffer* buffer)
 {
     Descriptor desc = buffer->storageDesc;
-    DescriptorType type = descriptorType(desc);
-
-    hgAssert(desc.id == vkState.descriptorPools[type][descriptorIdx(desc)].id);
+    hgAssert(desc.id == vkState.descriptorPools[descriptorType(desc)][descriptorIdx(desc)].id);
     return descriptorIdx(desc);
 }
 
@@ -1800,18 +1796,14 @@ void hgGpuViewDestroy(HgGpuView* view)
 u32 hgGpuImageSamplerDescriptor(HgGpuView* view)
 {
     Descriptor desc = view->samplerDesc;
-    DescriptorType type = descriptorType(desc);
-
-    hgAssert(desc.id == vkState.descriptorPools[type][descriptorIdx(desc)].id);
+    hgAssert(desc.id == vkState.descriptorPools[descriptorType(desc)][descriptorIdx(desc)].id);
     return descriptorIdx(desc);
 }
 
 u32 hgGpuImageStorageDescriptor(HgGpuView* view)
 {
     Descriptor desc = view->storageDesc;
-    DescriptorType type = descriptorType(desc);
-
-    hgAssert(desc.id == vkState.descriptorPools[type][descriptorIdx(desc)].id);
+    hgAssert(desc.id == vkState.descriptorPools[descriptorType(desc)][descriptorIdx(desc)].id);
     return descriptorIdx(desc);
 }
 
@@ -4063,6 +4055,44 @@ struct HgVulkanFuncs {
 
 static HgVulkanFuncs vulkanFuncs{};
 
+static HgLibrary* libvulkan = nullptr;
+
+#define HG_LOAD_VULKAN_FUNC(name) \
+    vulkanFuncs. name = (PFN_##name)vulkanFuncs.vkGetInstanceProcAddr(nullptr, #name); \
+    if (vulkanFuncs. name == nullptr) { hgError("Could not load " #name "\n"); }
+
+static void loadVulkan()
+{
+    if (libvulkan == nullptr)
+        libvulkan = hgLibraryLoad(
+#if defined(HG_PLATFORM_LINUX)
+            "libvulkan.so.1"
+#elif defined(HG_PLATFORM_WINDOWS)
+            "vulkan-1.dll"
+#endif
+        );
+
+    if (libvulkan == nullptr)
+        hgError("Could not load vulkan\n");
+
+    *(void**)&vulkanFuncs.vkGetInstanceProcAddr = hgLibraryFindFunction(libvulkan, "vkGetInstanceProcAddr");
+    if (vulkanFuncs.vkGetInstanceProcAddr == nullptr)
+        hgError("Could not load vkGetInstanceProcAddr\n");
+
+    HG_LOAD_VULKAN_FUNC(vkCreateInstance);
+}
+
+#undef HG_LOAD_VULKAN_FUNC
+
+static void unloadVulkan()
+{
+    if (libvulkan != nullptr)
+    {
+        hgLibraryUnload(libvulkan);
+        libvulkan = nullptr;
+    }
+}
+
 #define HG_LOAD_VULKAN_INSTANCE_FUNC(instance, name) \
     vulkanFuncs. name = (PFN_##name)vulkanFuncs.vkGetInstanceProcAddr(instance, #name); \
     if (vulkanFuncs. name == nullptr) { hgError("Could not load " #name "\n"); }
@@ -5498,68 +5528,3 @@ void vkCmdDispatch(
         z);
 }
 
-static void* libvulkan = nullptr;
-
-#define HG_LOAD_VULKAN_FUNC(name) \
-    vulkanFuncs. name = (PFN_##name)vulkanFuncs.vkGetInstanceProcAddr(nullptr, #name); \
-    if (vulkanFuncs. name == nullptr) { hgError("Could not load " #name "\n"); }
-
-#if defined(HG_PLATFORM_LINUX)
-
-#include <dlfcn.h>
-
-static void loadVulkan()
-{
-    if (libvulkan == nullptr)
-        libvulkan = dlopen("libvulkan.so.1", RTLD_LAZY);
-    if (libvulkan == nullptr)
-        hgError("Could not load vulkan dynamic lib: %s\n", dlerror());
-
-    *(void**)&vulkanFuncs.vkGetInstanceProcAddr = dlsym(libvulkan, "vkGetInstanceProcAddr");
-    if (vulkanFuncs.vkGetInstanceProcAddr == nullptr)
-        hgError("Could not load vkGetInstanceProcAddr: %s\n", dlerror());
-
-    HG_LOAD_VULKAN_FUNC(vkCreateInstance);
-}
-
-static void unloadVulkan()
-{
-    if (libvulkan != nullptr)
-    {
-        dlclose(libvulkan);
-        libvulkan = nullptr;
-    }
-}
-
-#elif defined(HG_PLATFORM_WINDOWS)
-
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-
-static void loadVulkan()
-{
-    if (libvulkan == nullptr)
-        libvulkan = (void*)LoadLibraryA("vulkan-1.dll");
-    if (libvulkan == nullptr)
-        hgError("Could not load vulkan dynamic lib\n");
-
-    vulkanFuncs.vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr)
-        GetProcAddress((HMODULE)libvulkan, "vkGetInstanceProcAddr");
-    if (vulkanFuncs.vkGetInstanceProcAddr == nullptr)
-        hgError("Could not load vkGetInstanceProcAddr\n");
-
-    HG_LOAD_VULKAN_FUNC(vkCreateInstance);
-}
-
-static void unloadVulkan()
-{
-    if (libvulkan != nullptr)
-    {
-        FreeLibrary((HMODULE)libvulkan);
-        libvulkan = nullptr;
-    }
-}
-
-#endif
-
-#undef HG_LOAD_VULKAN_FUNC

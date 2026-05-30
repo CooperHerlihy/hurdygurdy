@@ -3303,8 +3303,7 @@ void hgSpritesInit(
 
     spritePipeline.pipeline = hgGpuPipelineCreateGraphics(&pipelineConfig);
 
-    struct Color
-    {
+    struct Color {
         u8 r, g, b, a;
     };
     Color defaultColors[]{
@@ -3395,8 +3394,7 @@ void hgSkyboxInit(HgFormat colorFormat, HgFormat depthFormat)
 
     skyboxPipeline.pipeline = hgGpuPipelineCreateGraphics(&pipelineConfig);
 
-    struct Color
-    {
+    struct Color {
         u8 r, g, b, a;
     };
     Color top = {0x00, 0x22, 0x44, 0xff};
@@ -3535,13 +3533,13 @@ void hgModelsInit(
 
     modelPipeline.pipeline = hgGpuPipelineCreateGraphics(&pipelineConfig);
 
-    modelPipeline.dirLightCapacity = 4;
+    modelPipeline.dirLightCapacity = 16;
     modelPipeline.dirLightBuffer = hgGpuBufferCreate(
         sizeof(ModelPipelineDirLightData) * modelPipeline.dirLightCapacity,
         HgGpuBufferUsage_storageBuffer,
         HgGpuMemoryUsage_frequentUpdate);
 
-    modelPipeline.pointLightCapacity = 4;
+    modelPipeline.pointLightCapacity = 64;
     modelPipeline.pointLightBuffer = hgGpuBufferCreate(
         sizeof(ModelPipelinePointLightData) * modelPipeline.dirLightCapacity,
         HgGpuBufferUsage_storageBuffer,
@@ -3603,8 +3601,7 @@ void hgModelsInit(
     modelPipeline.defaultModel.vertexWidth = sizeof(HgMeshVertex);
     modelPipeline.defaultModel.indexCount = sizeof(cubeIndices) / sizeof(*cubeIndices);
 
-    struct Color
-    {
+    struct Color {
         u8 r, g, b, a;
     };
     Color defaultColors[]{
@@ -3756,3 +3753,4 @@ void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
         hgGpuDraw(cmd, 0, gpuModel->indexCount, 0, 1);
     });
 }
+

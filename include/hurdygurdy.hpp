@@ -198,7 +198,7 @@ struct HgDefer {
  * Parameters
  * - ... The message to print and its format parameters
  */
-#define hgDebug(...) do { { (void)fprintf(stderr, "HurdyGurdy Debug: " __VA_ARGS__); } } while(0)
+#define hgDebug(...) do { (void)fprintf(stderr, "HurdyGurdy Debug: " __VA_ARGS__); } while(0)
 
 /**
  * Formats and logs a warning message to stderr
@@ -2828,6 +2828,33 @@ V* hgMapGet(const HgMap<K, V>* map, const T& key)
     }
     return nullptr;
 }
+
+/**
+ * A dynamically loaded library
+ */
+struct HgLibrary;
+
+/**
+ * Load a dynamic library
+ */
+HgLibrary* hgLibraryLoad(HgStringView path);
+
+/**
+ * Unload a dynamic library
+ */
+void hgLibraryUnload(HgLibrary* lib);
+
+/**
+ * Find a function from a dynamic library
+ *
+ * Parameters
+ * - lib The dynamic library to load from
+ * - path The symbol of the function to load
+ *
+ * Returns
+ * - A function pointer to the found symbol, or nullptr not found
+ */
+void* hgLibraryFindFunction(HgLibrary* lib, HgStringView symbol);
 
 /**
  * A high precision clock for timers and game deltas

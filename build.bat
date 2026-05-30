@@ -40,8 +40,8 @@ set SHADERS= ^
 
 set SRC= ^
     hurdygurdy.cpp ^
+    platform.cpp ^
     vulkan.cpp ^
-    sdl.cpp ^
     test.cpp
 
 set TARGETS= ^

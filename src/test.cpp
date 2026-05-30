@@ -1,20 +1,11 @@
+#undef HG_NO_ASSERTIONS
+#define HG_ASSERTIONS 1
 #include "hurdygurdy.hpp"
 
 #include <atomic>
 #include <thread>
 
 #include <emmintrin.h>
-
-#ifdef hgAssert
-#undef hgAssert
-#endif
-
-#define hgAssert(cond) do { \
-    if (!(cond)) \
-    { \
-        hgError("Test assertion failed in " __FILE__ ":%d %s() " #cond "\n", __LINE__, __func__); \
-    } \
-} while(0)
 
 bool vec3comp(HgVec3 lhs, HgVec3 rhs)
 {

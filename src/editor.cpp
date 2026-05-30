@@ -32,6 +32,8 @@ static bool fixedAspect = false;
 static bool move3D = true;
 
 static f64 delta = 0.0;
+
+HgClock cpuClock;
 static f64 cpuDelta = 0.0;
 
 static bool quit = false;
@@ -293,7 +295,6 @@ void drawEditorEntity(HgArena* frame, HgEntity e)
 
             if (ImGui::MenuItem("Destroy"))
             {
-                // hgEcsDespawn(&ecs, e);
                 hgNodeDestroy(&ecs, e);
                 return;
             }
@@ -425,6 +426,7 @@ void drawEditor(HgArena* frame)
             ImGui::SeparatorText("Time");
             ImGui::Text("total: %.3fms", delta * 1.0e3);
             ImGui::Text("cpu: %.3fms", cpuDelta * 1.0e3);
+            cpuDelta = 0.0;
 
             ImGui::SeparatorText("Camera");
             if (ImGui::Button("Reset Camera"))
@@ -503,6 +505,7 @@ void drawRender()
 void render()
 {
     HgGpuCmd* cmd = hgGpuFrameBegin(&window, 1);
+    hgClockTick(&cpuClock);
     if (hgWindowImageView(window) != nullptr)
     {
         HgGpuRenderAttachment renderColorAttachment{};
@@ -552,7 +555,9 @@ void render()
 
         hgGpuMemoryBarrier(cmd, nullptr, 0, &presentBarrier, 1);
     }
+    cpuDelta += hgClockTick(&cpuClock);
     hgGpuFrameEnd(cmd);
+    hgClockTick(&cpuClock);
 }
 
 void drawUI(HgArena* frame)
@@ -598,8 +603,6 @@ int main()
     for (;;)
     {
         delta = hgClockTick(&gameClock);
-        HgClock cpuClock;
-        hgClockTick(&cpuClock);
 
         HgArena* frame = hgScratch(&arena, 1);
         HgArenaScope frameScope{frame};
@@ -647,7 +650,7 @@ int main()
 
         drawUI(frame);
 
-        cpuDelta = hgClockTick(&cpuClock);
+        cpuDelta += hgClockTick(&cpuClock);
         render();
     }
 quit:
