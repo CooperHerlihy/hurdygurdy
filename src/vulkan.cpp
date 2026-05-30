@@ -1488,6 +1488,11 @@ static void descriptorDestroy(Descriptor desc)
     vkState.descriptorPoolNexts[type] = desc;
 }
 
+static HgGpuBufferData* bufferGet(HgGpuBuffer buffer)
+{
+    return hgPoolGet(&vkState.buffers, buffer.handle);
+}
+
 HgGpuBuffer hgGpuBufferCreate(
     u64 size,
     HgGpuBufferUsageFlags usageFlags,
@@ -1497,7 +1502,7 @@ HgGpuBuffer hgGpuBufferCreate(
     hgAssert(usageFlags != 0);
 
     HgGpuBuffer buffer = {hgPoolAlloc(&vkState.buffers)};
-    HgGpuBufferData* bufferData = hgPoolGet(&vkState.buffers, buffer.handle);
+    HgGpuBufferData* bufferData = bufferGet(buffer);
     *bufferData = {};
 
     VkBufferCreateInfo bufferInfo{};
@@ -1552,7 +1557,7 @@ void hgGpuBufferDestroy(HgGpuBuffer buffer)
 {
     if (hgPoolAlive(&vkState.buffers, buffer.handle))
     {
-        HgGpuBufferData* bufferData = hgPoolGet(&vkState.buffers, buffer.handle);
+        HgGpuBufferData* bufferData = bufferGet(buffer);
         descriptorDestroy(bufferData->storageDesc);
         descriptorDestroy(bufferData->uniformDesc);
         vmaDestroyBuffer(vkState.vma, bufferData->buffer, bufferData->alloc);
@@ -1561,16 +1566,14 @@ void hgGpuBufferDestroy(HgGpuBuffer buffer)
 
 u32 hgGpuBufferUniformDescriptor(HgGpuBuffer buffer)
 {
-    HgGpuBufferData* bufferData = hgPoolGet(&vkState.buffers, buffer.handle);
-    Descriptor desc = bufferData->uniformDesc;
+    Descriptor desc = bufferGet(buffer)->uniformDesc;
     hgAssert(desc.id == vkState.descriptorPools[descriptorType(desc)][descriptorIdx(desc)].id);
     return descriptorIdx(desc);
 }
 
 u32 hgGpuBufferStorageDescriptor(HgGpuBuffer buffer)
 {
-    HgGpuBufferData* bufferData = hgPoolGet(&vkState.buffers, buffer.handle);
-    Descriptor desc = bufferData->storageDesc;
+    Descriptor desc = bufferGet(buffer)->storageDesc;
     hgAssert(desc.id == vkState.descriptorPools[descriptorType(desc)][descriptorIdx(desc)].id);
     return descriptorIdx(desc);
 }
@@ -1580,7 +1583,7 @@ void hgGpuBufferWrite(HgGpuBuffer dst, u64 offset, const void* src, u64 size)
     if (size == 0)
         return;
 
-    HgGpuBufferData* dstData = hgPoolGet(&vkState.buffers, dst.handle);
+    HgGpuBufferData* dstData = bufferGet(dst);
     hgAssert(src != nullptr);
 
     if (dstData->access & HgGpuMemoryHostAccess_write)
@@ -1601,7 +1604,7 @@ void hgGpuBufferWrite(HgGpuBuffer dst, u64 offset, const void* src, u64 size)
     region.dstOffset = offset;
     region.size = size;
 
-    vkCmdCopyBuffer((VkCommandBuffer)cmd, hgPoolGet(&vkState.buffers, stage.handle)->buffer, dstData->buffer, 1, &region);
+    vkCmdCopyBuffer((VkCommandBuffer)cmd, bufferGet(stage)->buffer, dstData->buffer, 1, &region);
 
     hgGpuCmdEnd(cmd);
 
@@ -1615,7 +1618,7 @@ void hgGpuBufferRead(void* dst, HgGpuBuffer src, u64 offset, u64 size)
         return;
 
     hgAssert(dst != nullptr);
-    HgGpuBufferData* srcData = hgPoolGet(&vkState.buffers, src.handle);
+    HgGpuBufferData* srcData = bufferGet(src);
 
     if (srcData->access & HgGpuMemoryHostAccess_read)
     {
@@ -1634,7 +1637,7 @@ void hgGpuBufferRead(void* dst, HgGpuBuffer src, u64 offset, u64 size)
     region.srcOffset = offset;
     region.size = size;
 
-    vkCmdCopyBuffer((VkCommandBuffer)cmd, srcData->buffer, hgPoolGet(&vkState.buffers, stage.handle)->buffer, 1, &region);
+    vkCmdCopyBuffer((VkCommandBuffer)cmd, srcData->buffer, bufferGet(stage)->buffer, 1, &region);
 
     hgGpuCmdEnd(cmd);
 
@@ -1642,6 +1645,11 @@ void hgGpuBufferRead(void* dst, HgGpuBuffer src, u64 offset, u64 size)
 
     srcData->lastStage = HgGpuStage_transfer;
     srcData->lastAccess = HgGpuAccess_transferRead;
+}
+
+static HgGpuImageData* imageGet(HgGpuImage image)
+{
+    return hgPoolGet(&vkState.images, image.handle);
 }
 
 HgGpuImage hgGpuImageCreate(u32 width, u32 height, HgFormat format, HgGpuImageUsageFlags usage)
@@ -1660,7 +1668,7 @@ HgGpuImage hgGpuImageCreateEx(const HgGpuImageCreateEx* create)
     hgAssert(create->usage != 0);
 
     HgGpuImage image = {hgPoolAlloc(&vkState.images)};
-    HgGpuImageData* imageData = hgPoolGet(&vkState.images, image.handle);
+    HgGpuImageData* imageData = imageGet(image);
     *imageData = {};
 
     VkImageCreateInfo imageInfo{};
@@ -1705,7 +1713,7 @@ void hgGpuImageDestroy(HgGpuImage image)
 {
     if (hgPoolAlive(&vkState.images, image.handle))
     {
-        HgGpuImageData* imageData = hgPoolGet(&vkState.images, image.handle);
+        HgGpuImageData* imageData = imageGet(image);
         vmaDestroyImage(vkState.vma, imageData->image, imageData->alloc);
     }
 }
@@ -1749,12 +1757,17 @@ static VkSampler samplerGet(
     return *sampler;
 }
 
+static HgGpuViewData* viewGet(HgGpuView view)
+{
+    return hgPoolGet(&vkState.views, view.handle);
+}
+
 HgGpuView hgGpuViewCreate(
     HgGpuImage image,
     HgGpuAspectFlags aspectFlags,
     HgGpuFilter filter)
 {
-    HgGpuImageData* imageData = hgPoolGet(&vkState.images, image.handle);
+    HgGpuImageData* imageData = imageGet(image);
 
     HgGpuViewCreateEx config{};
     config.image = image;
@@ -1775,10 +1788,10 @@ HgGpuView hgGpuViewCreateEx(const HgGpuViewCreateEx* config)
     hgAssert(config->aspectFlags != 0);
 
     HgGpuView view = {hgPoolAlloc(&vkState.views)};
-    HgGpuViewData* viewData = hgPoolGet(&vkState.views, view.handle);
+    HgGpuViewData* viewData = viewGet(view);
     *viewData = {};
 
-    HgGpuImageData* imageData = hgPoolGet(&vkState.images, config->image.handle);
+    HgGpuImageData* imageData = imageGet(config->image);
 
     VkImageViewCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -1824,7 +1837,7 @@ void hgGpuViewDestroy(HgGpuView view)
 {
     if (hgPoolAlive(&vkState.views, view.handle))
     {
-        HgGpuViewData* viewData = hgPoolGet(&vkState.views, view.handle);
+        HgGpuViewData* viewData = viewGet(view);
         descriptorDestroy(viewData->storageDesc);
         descriptorDestroy(viewData->samplerDesc);
         vkDestroyImageView(vkState.device, viewData->view, nullptr);
@@ -1833,23 +1846,21 @@ void hgGpuViewDestroy(HgGpuView view)
 
 u32 hgGpuImageSamplerDescriptor(HgGpuView view)
 {
-    HgGpuViewData* viewData = hgPoolGet(&vkState.views, view.handle);
-    Descriptor desc = viewData->samplerDesc;
+    Descriptor desc = viewGet(view)->samplerDesc;
     hgAssert(desc.id == vkState.descriptorPools[descriptorType(desc)][descriptorIdx(desc)].id);
     return descriptorIdx(desc);
 }
 
 u32 hgGpuImageStorageDescriptor(HgGpuView view)
 {
-    HgGpuViewData* viewData = hgPoolGet(&vkState.views, view.handle);
-    Descriptor desc = viewData->storageDesc;
+    Descriptor desc = viewGet(view)->storageDesc;
     hgAssert(desc.id == vkState.descriptorPools[descriptorType(desc)][descriptorIdx(desc)].id);
     return descriptorIdx(desc);
 }
 
 void hgGpuImageWrite(HgGpuView dst, const void* src)
 {
-    HgGpuViewData* dstData = hgPoolGet(&vkState.views, dst.handle);
+    HgGpuViewData* dstData = viewGet(dst);
     hgAssert(src != nullptr);
 
     u64 size = dstData->image->width
@@ -1891,7 +1902,7 @@ void hgGpuImageWrite(HgGpuView dst, const void* src)
 
     vkCmdCopyBufferToImage(
         (VkCommandBuffer)cmd,
-        hgPoolGet(&vkState.buffers, stage.handle)->buffer,
+        bufferGet(stage)->buffer,
         dstData->image->image,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         1,
@@ -1906,7 +1917,7 @@ void hgGpuImageWrite(HgGpuView dst, const void* src)
 
 void hgGpuImageWriteCubemap(HgGpuView dst, const void* src)
 {
-    HgGpuViewData* dstData = hgPoolGet(&vkState.views, dst.handle);
+    HgGpuViewData* dstData = viewGet(dst);
     hgAssert(dstData->image->depth == 1);
     hgAssert(dstData->baseArrayLayer == 0);
     hgAssert(dstData->layerCount >= 6);
@@ -1926,7 +1937,7 @@ void hgGpuImageWriteCubemap(HgGpuView dst, const void* src)
         HgGpuImageUsage_transferDst | HgGpuImageUsage_transferSrc);
     hgDefer(hgGpuImageDestroy(stage));
 
-    HgGpuImageData* stageData = hgPoolGet(&vkState.images, stage.handle);
+    HgGpuImageData* stageData = imageGet(stage);
 
     HgGpuCmd* cmd = hgGpuCmdBegin();
 
@@ -1955,7 +1966,7 @@ void hgGpuImageWriteCubemap(HgGpuView dst, const void* src)
 
     vkCmdCopyBufferToImage(
         (VkCommandBuffer)cmd,
-        hgPoolGet(&vkState.buffers, buffer.handle)->buffer,
+        bufferGet(buffer)->buffer,
         stageData->image,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         1,
@@ -2051,7 +2062,7 @@ void hgGpuImageWriteCubemap(HgGpuView dst, const void* src)
 
 void hgGpuImageRead(void* dst, HgGpuView src)
 {
-    HgGpuViewData* srcData = hgPoolGet(&vkState.views, src.handle);
+    HgGpuViewData* srcData = viewGet(src);
     hgAssert(srcData->lastLayout != HgGpuLayout_undefined);
     hgAssert(dst != nullptr);
 
@@ -2098,7 +2109,7 @@ void hgGpuImageRead(void* dst, HgGpuView src)
         (VkCommandBuffer)cmd,
         srcData->image->image,
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        hgPoolGet(&vkState.buffers, stage.handle)->buffer,
+        bufferGet(stage)->buffer,
         1,
         &region);
 
@@ -2113,7 +2124,7 @@ void hgGpuImageRead(void* dst, HgGpuView src)
 
 void hgGpuImageGenMipmaps(HgGpuView dst)
 {
-    HgGpuViewData* dstData = hgPoolGet(&vkState.views, dst.handle);
+    HgGpuViewData* dstData = viewGet(dst);
     hgAssert(dstData->lastLayout != HgGpuLayout_undefined);
     if (dstData->levelCount == 1)
         return;
@@ -2215,6 +2226,11 @@ static VkShaderModule createShaderModule(const void* spirvCode, u64 codeSize)
     return shader;
 }
 
+static HgGpuPipelineData* pipelineGet(HgGpuPipeline pipeline)
+{
+    return hgPoolGet(&vkState.pipelines, pipeline.handle);
+}
+
 HgGpuPipeline hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* config)
 {
     hgAssert(config->vertexShader != nullptr);
@@ -2223,7 +2239,7 @@ HgGpuPipeline hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* con
         hgAssert(config->colorAttachmentFormats != nullptr);
 
     HgGpuPipeline pipeline = {hgPoolAlloc(&vkState.pipelines)};
-    HgGpuPipelineData* pipelineData = hgPoolGet(&vkState.pipelines, pipeline.handle);
+    HgGpuPipelineData* pipelineData = pipelineGet(pipeline);
     *pipelineData = {};
 
     HgArena* scratch = hgScratch();
@@ -2401,7 +2417,7 @@ HgGpuPipeline hgGpuPipelineCreateCompute(u32 pushSize, const u8* shaderCode, u64
     hgAssert(shaderCodeSize > 0);
 
     HgGpuPipeline pipeline = {hgPoolAlloc(&vkState.pipelines)};
-    HgGpuPipelineData* pipelineData = hgPoolGet(&vkState.pipelines, pipeline.handle);
+    HgGpuPipelineData* pipelineData = pipelineGet(pipeline);
     *pipelineData = {};
 
     VkPipelineLayoutCreateInfo layoutInfo{};
@@ -2444,7 +2460,7 @@ void hgGpuPipelineDestroy(HgGpuPipeline pipeline)
 {
     if (hgPoolAlive(&vkState.pipelines, pipeline.handle))
     {
-        HgGpuPipelineData* pipelineData = hgPoolGet(&vkState.pipelines, pipeline.handle);
+        HgGpuPipelineData* pipelineData = pipelineGet(pipeline);
         vkDestroyPipeline(vkState.device, pipelineData->pipeline, nullptr);
         vkDestroyPipelineLayout(vkState.device, pipelineData->layout, nullptr);
     }
@@ -2494,7 +2510,7 @@ void hgGpuCmdEnd(HgGpuCmd* cmd)
 
 void hgGpuBindPipeline(HgGpuCmd* cmd, HgGpuPipeline pipeline)
 {
-    HgGpuPipelineData* pipelineData = hgPoolGet(&vkState.pipelines, pipeline.handle);
+    HgGpuPipelineData* pipelineData = pipelineGet(pipeline);
 
     vkCmdBindPipeline(
         (VkCommandBuffer)cmd,
@@ -2514,7 +2530,7 @@ void hgGpuBindPipeline(HgGpuCmd* cmd, HgGpuPipeline pipeline)
 
 void hgGpuPushConstants(HgGpuCmd* cmd, HgGpuPipeline pipeline, u32 offset, void* push, u32 size)
 {
-    HgGpuPipelineData* pipelineData = hgPoolGet(&vkState.pipelines, pipeline.handle);
+    HgGpuPipelineData* pipelineData = pipelineGet(pipeline);
 
     vkCmdPushConstants(
         (VkCommandBuffer)cmd,
@@ -2552,7 +2568,7 @@ void hgGpuMemoryBarrier(
 
     for (u32 i = 0; i < bufferBarrierCount; ++i)
     {
-        HgGpuBufferData* buffer = hgPoolGet(&vkState.buffers, bufferBarriers[i].buffer.handle);
+        HgGpuBufferData* buffer = bufferGet(bufferBarriers[i].buffer);
 
         vkBufferBarriers[i] = {};
         vkBufferBarriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
@@ -2569,7 +2585,7 @@ void hgGpuMemoryBarrier(
 
     for (u32 i = 0; i < imageBarrierCount; ++i)
     {
-        HgGpuViewData* image = hgPoolGet(&vkState.views, imageBarriers[i].image.handle);
+        HgGpuViewData* image = viewGet(imageBarriers[i].image);
 
         vkImageBarriers[i] = {};
         vkImageBarriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -2628,7 +2644,7 @@ void hgGpuComputePass(HgGpuCmd* cmd, const HgGpuComputePass* pass)
 
     for (u32 i = bufferBarrierCount; i < bufferBarrierCount + pass->uniformBufferCount; ++i)
     {
-        HgGpuBufferData* buffer = hgPoolGet(&vkState.buffers, pass->uniformBuffers[i - bufferBarrierCount].handle);
+        HgGpuBufferData* buffer = bufferGet(pass->uniformBuffers[i - bufferBarrierCount]);
 
         bufferBarriers[i] = {};
         bufferBarriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
@@ -2650,7 +2666,7 @@ void hgGpuComputePass(HgGpuCmd* cmd, const HgGpuComputePass* pass)
 
     for (u32 i = bufferBarrierCount; i < bufferBarrierCount + pass->storageBufferCount; ++i)
     {
-        HgGpuBufferData* buffer = hgPoolGet(&vkState.buffers, pass->storageBuffers[i - bufferBarrierCount].handle);
+        HgGpuBufferData* buffer = bufferGet(pass->storageBuffers[i - bufferBarrierCount]);
 
         bufferBarriers[i] = {};
         bufferBarriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
@@ -2672,7 +2688,7 @@ void hgGpuComputePass(HgGpuCmd* cmd, const HgGpuComputePass* pass)
 
     for (u32 i = imageBarrierCount; i < imageBarrierCount + pass->sampledImageCount; ++i)
     {
-        HgGpuViewData* image = hgPoolGet(&vkState.views, pass->sampledImages[i - imageBarrierCount].handle);
+        HgGpuViewData* image = viewGet(pass->sampledImages[i - imageBarrierCount]);
 
         imageBarriers[i] = {};
         imageBarriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -2703,7 +2719,7 @@ void hgGpuComputePass(HgGpuCmd* cmd, const HgGpuComputePass* pass)
 
     for (u32 i = imageBarrierCount; i < imageBarrierCount + pass->storageImageCount; ++i)
     {
-        HgGpuViewData* image = hgPoolGet(&vkState.views, pass->storageImages[i - imageBarrierCount].handle);
+        HgGpuViewData* image = viewGet(pass->storageImages[i - imageBarrierCount]);
 
         imageBarriers[i] = {};
         imageBarriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -2754,7 +2770,7 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, u32 width, u32 height, const HgGpuRende
 
     for (u32 i = bufferBarrierCount; i < bufferBarrierCount + pass->uniformBufferCount; ++i)
     {
-        HgGpuBufferData* buffer = hgPoolGet(&vkState.buffers, pass->uniformBuffers[i - bufferBarrierCount].handle);
+        HgGpuBufferData* buffer = bufferGet(pass->uniformBuffers[i - bufferBarrierCount]);
 
         bufferBarriers[i] = {};
         bufferBarriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
@@ -2776,7 +2792,7 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, u32 width, u32 height, const HgGpuRende
 
     for (u32 i = bufferBarrierCount; i < bufferBarrierCount + pass->storageBufferCount; ++i)
     {
-        HgGpuBufferData* buffer = hgPoolGet(&vkState.buffers, pass->storageBuffers[i - bufferBarrierCount].handle);
+        HgGpuBufferData* buffer = bufferGet(pass->storageBuffers[i - bufferBarrierCount]);
 
         bufferBarriers[i] = {};
         bufferBarriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
@@ -2798,7 +2814,7 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, u32 width, u32 height, const HgGpuRende
 
     for (u32 i = imageBarrierCount; i < imageBarrierCount + pass->sampledImageCount; ++i)
     {
-        HgGpuViewData* image = hgPoolGet(&vkState.views, pass->sampledImages[i - imageBarrierCount].handle);
+        HgGpuViewData* image = viewGet(pass->sampledImages[i - imageBarrierCount]);
 
         imageBarriers[i] = {};
         imageBarriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -2829,7 +2845,7 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, u32 width, u32 height, const HgGpuRende
 
     for (u32 i = imageBarrierCount; i < imageBarrierCount + pass->storageImageCount; ++i)
     {
-        HgGpuViewData* image = hgPoolGet(&vkState.views, pass->storageImages[i - imageBarrierCount].handle);
+        HgGpuViewData* image = viewGet(pass->storageImages[i - imageBarrierCount]);
 
         imageBarriers[i] = {};
         imageBarriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -2860,7 +2876,7 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, u32 width, u32 height, const HgGpuRende
 
     for (u32 i = imageBarrierCount; i < imageBarrierCount + pass->colorAttachmentCount; ++i)
     {
-        HgGpuViewData* image = hgPoolGet(&vkState.views, pass->colorAttachments[i - imageBarrierCount].image.handle);
+        HgGpuViewData* image = viewGet(pass->colorAttachments[i - imageBarrierCount].image);
 
         imageBarriers[i] = {};
         imageBarriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -2892,7 +2908,7 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, u32 width, u32 height, const HgGpuRende
         imageBarriers = hgRealloc<VkImageMemoryBarrier2>(
             scratch, imageBarriers, imageBarrierCount, imageBarrierCount + 1);
 
-        HgGpuViewData* image = hgPoolGet(&vkState.views, pass->depthAttachment->image.handle);
+        HgGpuViewData* image = viewGet(pass->depthAttachment->image);
 
         u32 idx = imageBarrierCount;
         imageBarriers[idx] = {};
@@ -2927,7 +2943,7 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, u32 width, u32 height, const HgGpuRende
         imageBarriers = hgRealloc<VkImageMemoryBarrier2>(
             scratch, imageBarriers, imageBarrierCount, imageBarrierCount + 1);
 
-        HgGpuViewData* image = hgPoolGet(&vkState.views, pass->stencilAttachment->image.handle);
+        HgGpuViewData* image = viewGet(pass->stencilAttachment->image);
 
         u32 idx = imageBarrierCount;
         imageBarriers[idx] = {};
@@ -2973,7 +2989,7 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, u32 width, u32 height, const HgGpuRende
     {
         colorAttachments[i] = {};
         colorAttachments[i].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        colorAttachments[i].imageView = hgPoolGet(&vkState.views, pass->colorAttachments[i].image.handle)->view;
+        colorAttachments[i].imageView = viewGet(pass->colorAttachments[i].image)->view;
         colorAttachments[i].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         colorAttachments[i].loadOp = gpuLoadOpToVk(pass->colorAttachments[i].loadOp);
         colorAttachments[i].storeOp = gpuStoreOpToVk(pass->colorAttachments[i].storeOp);
@@ -2984,7 +3000,7 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, u32 width, u32 height, const HgGpuRende
     if (pass->depthAttachment != nullptr)
     {
         depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        depthAttachment.imageView = hgPoolGet(&vkState.views, pass->depthAttachment->image.handle)->view;
+        depthAttachment.imageView = viewGet(pass->depthAttachment->image)->view;
         depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
         depthAttachment.loadOp = gpuLoadOpToVk(pass->depthAttachment->loadOp);
         depthAttachment.storeOp = gpuStoreOpToVk(pass->depthAttachment->storeOp);
@@ -2995,7 +3011,7 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, u32 width, u32 height, const HgGpuRende
     if (pass->stencilAttachment != nullptr)
     {
         stencilAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        stencilAttachment.imageView = hgPoolGet(&vkState.views, pass->stencilAttachment->image.handle)->view;
+        stencilAttachment.imageView = viewGet(pass->stencilAttachment->image)->view;
         stencilAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         stencilAttachment.loadOp = gpuLoadOpToVk(pass->stencilAttachment->loadOp);
         stencilAttachment.storeOp = gpuStoreOpToVk(pass->stencilAttachment->storeOp);
@@ -3106,7 +3122,7 @@ static void resizeWindowSwapchain(HgWindowData* window)
     for (u32 i = 0; i < window->imageCount; ++i)
     {
 
-        vkDestroyImageView(vkState.device, hgPoolGet(&vkState.views, window->views[i].handle)->view, nullptr);
+        vkDestroyImageView(vkState.device, viewGet(window->views[i])->view, nullptr);
 
         vkDestroySemaphore(vkState.device, window->readyToPresent[i], nullptr);
         window->readyToPresent[i] = nullptr;
@@ -3168,7 +3184,7 @@ static void resizeWindowSwapchain(HgWindowData* window)
         for (u32 i = 0; i < window->imageCount; ++i)
         {
             window->images[i] = {hgPoolAlloc(&vkState.images)};
-            HgGpuImageData* imageData = hgPoolGet(&vkState.images, window->images[i].handle);
+            HgGpuImageData* imageData = imageGet(window->images[i]);
 
             *imageData = {};
             imageData->image = swapImages[i];
@@ -3189,7 +3205,7 @@ static void resizeWindowSwapchain(HgWindowData* window)
             viewInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
 
             window->views[i] = {hgPoolAlloc(&vkState.views)};
-            HgGpuViewData* viewData = hgPoolGet(&vkState.views, window->views[i].handle);
+            HgGpuViewData* viewData = viewGet(window->views[i]);
 
             *viewData = {};
 
@@ -3300,7 +3316,7 @@ static void destroyWindowSwapchain(HgWindowData* window)
     for (u32 i = 0; i < window->imageCount; ++i)
     {
         vkDestroySemaphore(vkState.device, window->readyToPresent[i], nullptr);
-        vkDestroyImageView(vkState.device, hgPoolGet(&vkState.views, window->views[i].handle)->view, nullptr);
+        vkDestroyImageView(vkState.device, viewGet(window->views[i])->view, nullptr);
         hgPoolFree(&vkState.views, window->views[i].handle);
         hgPoolFree(&vkState.images, window->images[i].handle);
     }
@@ -3978,7 +3994,7 @@ void hgImGuiDeinit()
 
 void* hgImGuiTextureCreate(HgGpuView view, HgGpuLayout layout)
 {
-    HgGpuViewData* viewData = hgPoolGet(&vkState.views, view.handle);
+    HgGpuViewData* viewData = viewGet(view);
     return ImGui_ImplVulkan_AddTexture(viewData->sampler, viewData->view, gpuLayoutToVk(layout));
 }
 
