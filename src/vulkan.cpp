@@ -3299,6 +3299,9 @@ void hgWindowDestroy(HgWindow window)
 
     destroyWindowSwapchain(data);
 
+    SDL_WindowID windowID = SDL_GetWindowID(data->sdlWindow);
+    hgMapRemove(&platformState.ids, windowID);
+
     vkDestroySurfaceKHR(vkState.instance, data->surface, nullptr);
     SDL_DestroyWindow(data->sdlWindow);
 
