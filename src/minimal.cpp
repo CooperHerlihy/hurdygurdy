@@ -10,7 +10,7 @@ int main()
     HgArena* arena = hgScratch();
     hgArenaScope(arena);
 
-    HgWindow* window = hgWindowCreate("Hg Minimal Example", 1200, 800, nullptr);
+    HgWindow window = hgWindowCreate("Hg Minimal Example", 1200, 800, nullptr);
     hgDefer(hgWindowDestroy(window));
 
     u32 width = 0;

@@ -5,7 +5,7 @@
 #define IM_ASSERT hgAssert
 #include "imgui.h"
 
-static HgWindow* window = nullptr;
+static HgWindow window = {};
 
 static u32 width = 0;
 static u32 height = 0;

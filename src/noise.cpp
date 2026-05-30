@@ -15,7 +15,7 @@ int main()
     HgArena* arena = hgScratch();
     hgArenaScope(arena);
 
-    HgWindow* window = hgWindowCreate("Hg Noise Test", 1200, 800, nullptr);
+    HgWindow window = hgWindowCreate("Hg Noise Test", 1200, 800, nullptr);
     hgDefer(hgWindowDestroy(window));
 
     u32 width = 0;

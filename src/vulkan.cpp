@@ -108,7 +108,7 @@ struct HgGpuPipeline {
     VkPipelineBindPoint bindPoint;
 };
 
-struct HgWindow {
+struct HgWindowData {
     SDL_Window* sdlWindow;
 
     VkSurfaceKHR surface;
@@ -136,7 +136,7 @@ struct HgWindow {
 };
 
 struct Frame {
-    HgWindow** windows;
+    HgWindow* windows;
     u32 windowCapacity;
     u32 windowCount;
     VkCommandPool cmdPool;
@@ -652,7 +652,7 @@ static Frame createFrame(HgArena* arena, u32 maxWindows)
 
     Frame frame{};
 
-    frame.windows = hgAlloc<HgWindow*>(arena, maxWindows);
+    frame.windows = hgAlloc<HgWindow>(arena, maxWindows);
     frame.windowCapacity = maxWindows;
     frame.windowCount = 0;
 
@@ -2972,15 +2972,13 @@ void hgGpuRenderPassEnd(HgGpuCmd* cmd)
 }
 
 struct PlatformState {
-    u32 windowCapacity = 0;
-    u32* windowFreeList = nullptr;
-    u32 windowNext = 0;
+    HgIndexPool handles = {};
 
     u32 windowWidth = 0;
     u32 windowMaxEvents = 0;
-    HgWindow* windowPool = nullptr;
+    HgWindowData* windowPool = nullptr;
 
-    HgMap<SDL_WindowID, HgWindow*> windows = {};
+    HgMap<SDL_WindowID, HgWindowData*> ids = {};
 
     f32 mouseDX = 0.0f;
     f32 mouseDY = 0.0f;
@@ -2991,6 +2989,14 @@ struct PlatformState {
 
 static PlatformState platformState{};
 
+static HgWindowData* windowGet(HgWindow handle)
+{
+    hgAssert(hgPoolAlive(&platformState.handles, handle.handle));
+    u32 idx = hgHandleIdx(handle.handle);
+    u32 width = platformState.windowWidth;
+    return (HgWindowData*)((u8*)platformState.windowPool + width * idx);
+}
+
 void hgPlatformInit(HgArena* arena, u32 maxWindows, u32 maxEvents)
 {
     SDL_Init(
@@ -3000,19 +3006,13 @@ void hgPlatformInit(HgArena* arena, u32 maxWindows, u32 maxEvents)
         SDL_INIT_GAMEPAD |
         SDL_INIT_EVENTS);
 
-    platformState.windowCapacity = maxWindows;
-    platformState.windowFreeList = hgAlloc<u32>(arena, maxWindows);
-    for (u32 i = 0; i < maxWindows; ++i)
-    {
-        platformState.windowFreeList[i] = i + 1;
-    }
-    platformState.windowNext = 0;
+    platformState.handles = hgPoolCreate<void>(arena, maxWindows);
 
     platformState.windowMaxEvents = maxEvents;
-    platformState.windowWidth = (u32)hgAlign(sizeof(HgWindow) + sizeof(HgWindowEvent) * (maxEvents - 1), alignof(HgWindow));
-    platformState.windowPool = (HgWindow*)hgAlloc(arena, platformState.windowWidth * maxWindows, alignof(HgWindow));
+    platformState.windowWidth = (u32)hgAlign(sizeof(HgWindowData) + sizeof(HgWindowEvent) * (maxEvents - 1), alignof(HgWindowData));
+    platformState.windowPool = (HgWindowData*)hgAlloc(arena, platformState.windowWidth * maxWindows, alignof(HgWindowData));
 
-    platformState.windows = hgMapCreate<SDL_WindowID, HgWindow*>(arena, maxWindows * 2);
+    platformState.ids = hgMapCreate<SDL_WindowID, HgWindowData*>(arena, maxWindows * 2);
 }
 
 void hgPlatformDeinit()
@@ -3034,7 +3034,7 @@ u32 hgPlatformGetVulkanExtensions(HgArena* arena, HgStringView** extBuffer)
     return extCount;
 }
 
-static void resizeWindowSwapchain(HgWindow* window)
+static void resizeWindowSwapchain(HgWindowData* window)
 {
     HgArena* scratch = hgScratch();
     hgArenaScope(scratch);
@@ -3208,7 +3208,7 @@ static HgGpuPresentMode findSwapchainPresentMode(
     return HgGpuPresentMode_fifo;
 }
 
-static void createWindowSwapchain(HgWindow* window, const HgWindowConfig* config)
+static void createWindowSwapchain(HgWindowData* window, const HgWindowConfig* config)
 {
     window->format = findSwapchainFormat(window->surface);
     window->presentMode = findSwapchainPresentMode(window->surface, config->preferredPresentMode);
@@ -3223,7 +3223,7 @@ static void createWindowSwapchain(HgWindow* window, const HgWindowConfig* config
     resizeWindowSwapchain(window);
 }
 
-static void destroyWindowSwapchain(HgWindow* window)
+static void destroyWindowSwapchain(HgWindowData* window)
 {
     for (u32 i = 0; i < window->imageCount; ++i)
     {
@@ -3244,19 +3244,16 @@ static void destroyWindowSwapchain(HgWindow* window)
     free(window->images);
 }
 
-HgWindow* hgWindowCreate(const char* title, u32 width, u32 height, const HgWindowConfig* config)
+HgWindow hgWindowCreate(const char* title, u32 width, u32 height, const HgWindowConfig* config)
 {
     static const HgWindowConfig defaultConfig{};
     if (config == nullptr)
         config = &defaultConfig;
 
-    u32 windowIdx = platformState.windowNext;
-    hgAssert(windowIdx < platformState.windowCapacity);
-    platformState.windowNext = platformState.windowFreeList[windowIdx];
-    platformState.windowFreeList[windowIdx] = windowIdx;
-
-    HgWindow* window = &platformState.windowPool[windowIdx];
-    *window = {};
+    HgWindow window = {hgPoolAlloc(&platformState.handles)};
+    HgWindowData* data = &platformState.windowPool[hgHandleIdx(window.handle)];
+    memset((void*)data, 0, platformState.windowWidth);
+    *data = {};
 
     if (title == nullptr)
         title = "Hurdy Gurdy";
@@ -3276,42 +3273,39 @@ HgWindow* hgWindowCreate(const char* title, u32 width, u32 height, const HgWindo
         flags |= SDL_WINDOW_FULLSCREEN;
     }
 
-    window->sdlWindow = SDL_CreateWindow(title, width, height, flags);
-    if (window->sdlWindow == nullptr)
+    data->sdlWindow = SDL_CreateWindow(title, width, height, flags);
+    if (data->sdlWindow == nullptr)
         hgError("Failed to create SDL window: %s\n", SDL_GetError());
 
-    bool success = SDL_Vulkan_CreateSurface(window->sdlWindow, vkState.instance, nullptr, &window->surface);
-    if (!success || window->surface == nullptr)
+    bool success = SDL_Vulkan_CreateSurface(data->sdlWindow, vkState.instance, nullptr, &data->surface);
+    if (!success || data->surface == nullptr)
         hgError("Failed to create Vulkan surface: %s\n", SDL_GetError());
 
-    SDL_WindowID windowID = SDL_GetWindowID(window->sdlWindow);
-    hgMapAdd(&platformState.windows, windowID, window);
+    SDL_WindowID windowID = SDL_GetWindowID(data->sdlWindow);
+    hgMapAdd(&platformState.ids, windowID, data);
 
-    SDL_GetWindowSize(window->sdlWindow, (int*)&window->width, (int*)&window->height);
-    createWindowSwapchain(window, config);
+    SDL_GetWindowSize(data->sdlWindow, (int*)&data->width, (int*)&data->height);
+    createWindowSwapchain(data, config);
 
-    window->eventCapacity = platformState.windowMaxEvents;
-    window->eventCount = 0;
+    data->eventCapacity = platformState.windowMaxEvents;
+    data->eventCount = 0;
 
     return window;
 }
 
-void hgWindowDestroy(HgWindow* window)
+void hgWindowDestroy(HgWindow window)
 {
-    u32 windowIdx = (u32)(window - platformState.windowPool);
-    hgAssert(windowIdx < platformState.windowCapacity);
-    hgAssert(platformState.windowFreeList[windowIdx] == windowIdx);
+    HgWindowData* data = windowGet(window);
 
-    destroyWindowSwapchain(window);
+    destroyWindowSwapchain(data);
 
-    vkDestroySurfaceKHR(vkState.instance, window->surface, nullptr);
-    SDL_DestroyWindow(window->sdlWindow);
+    vkDestroySurfaceKHR(vkState.instance, data->surface, nullptr);
+    SDL_DestroyWindow(data->sdlWindow);
 
-    platformState.windowFreeList[windowIdx] = platformState.windowNext;
-    platformState.windowNext = windowIdx;
+    hgPoolFree(&platformState.handles, window.handle);
 }
 
-HgGpuCmd* hgGpuFrameBegin(HgWindow** windows, u32 windowCount)
+HgGpuCmd* hgGpuFrameBegin(HgWindow* windows, u32 windowCount)
 {
     Frame* frame = &vkState.frames[vkState.currentFrame];
 
@@ -3325,16 +3319,17 @@ HgGpuCmd* hgGpuFrameBegin(HgWindow** windows, u32 windowCount)
     frame->windowCount = 0;
     for (u32 i = 0; i < windowCount; ++i)
     {
-        if (windows[i]->swapchain == nullptr)
+        HgWindowData* window = windowGet(windows[i]);
+        if (window->swapchain == nullptr)
             continue;
 
         VkResult result = vkAcquireNextImageKHR(
             vkState.device,
-            windows[i]->swapchain,
+            window->swapchain,
             UINT64_MAX,
-            windows[i]->imageAvailable[vkState.currentFrame],
+            window->imageAvailable[vkState.currentFrame],
             nullptr,
-            &windows[i]->imageIdx);
+            &window->imageIdx);
 
         if (result == VK_SUCCESS)
         {
@@ -3342,8 +3337,8 @@ HgGpuCmd* hgGpuFrameBegin(HgWindow** windows, u32 windowCount)
         }
         else if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
         {
-            resizeWindowSwapchain(windows[i]);
-            windows[i]->imageIdx = (u32)-1;
+            resizeWindowSwapchain(window);
+            window->imageIdx = (u32)-1;
         }
         else
         {
@@ -3389,7 +3384,7 @@ void hgGpuFrameEnd(HgGpuCmd* cmd)
 
     for (u32 i = 0; i < frame->windowCount; ++i)
     {
-        HgWindow* window = frame->windows[i];
+        HgWindowData* window = windowGet(frame->windows[i]);
 
         waitStages[i] = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         imageAvailableSemaphores[i] = window->imageAvailable[vkState.currentFrame];
@@ -3428,14 +3423,16 @@ void hgGpuFrameEnd(HgGpuCmd* cmd)
     vkState.currentFrame = (vkState.currentFrame + 1) % vkState.frameCount;
 }
 
-HgGpuView* hgWindowImageView(HgWindow* window)
+HgGpuView* hgWindowImageView(HgWindow window)
 {
-    return window->imageIdx < window->imageCount ? &window->views[window->imageIdx] : nullptr;
+    HgWindowData* data = windowGet(window);
+    return data->imageIdx < data->imageCount ? &data->views[data->imageIdx] : nullptr;
 }
 
-HgFormat hgWindowImageFormat(HgWindow* window)
+HgFormat hgWindowImageFormat(HgWindow window)
 {
-    return window->format;
+    HgWindowData* data = windowGet(window);
+    return data->format;
 }
 
 static HgButton sdlKeycodeToHgButton(u32 key)
@@ -3681,10 +3678,10 @@ void hgProcessEvents()
     platformState.mouseDX = 0;
     platformState.mouseDY = 0;
 
-    for (u32 i = 0; i < platformState.windows.capacity; ++i)
+    for (u32 i = 0; i < platformState.ids.capacity; ++i)
     {
-        if (platformState.windows.hasVal[i])
-            platformState.windows.vals[i]->eventCount = 0;
+        if (platformState.ids.hasVal[i])
+            platformState.ids.vals[i]->eventCount = 0;
     }
 
     SDL_Event event;
@@ -3700,7 +3697,7 @@ void hgProcessEvents()
                 break;
             case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
             {
-                HgWindow** window = hgMapGet(&platformState.windows, event.window.windowID);
+                HgWindowData** window = hgMapGet(&platformState.ids, event.window.windowID);
                 if (window != nullptr)
                     (*window)->wasClosed = true;
             } break;
@@ -3708,7 +3705,7 @@ void hgProcessEvents()
             case SDL_EVENT_WINDOW_RESTORED: [[fallthrough]];
             case SDL_EVENT_WINDOW_RESIZED:
             {
-                HgWindow** window = hgMapGet(&platformState.windows, event.window.windowID);
+                HgWindowData** window = hgMapGet(&platformState.ids, event.window.windowID);
                 if (window != nullptr)
                 {
                     SDL_GetWindowSize((*window)->sdlWindow, (int*)&(*window)->width, (int*)&(*window)->height);
@@ -3717,7 +3714,7 @@ void hgProcessEvents()
             } break;
             case SDL_EVENT_MOUSE_MOTION:
             {
-                HgWindow** window = hgMapGet(&platformState.windows, event.button.windowID);
+                HgWindowData** window = hgMapGet(&platformState.ids, event.button.windowID);
                 if (window != nullptr)
                 {
                     (*window)->mouseX = event.motion.x;
@@ -3729,7 +3726,7 @@ void hgProcessEvents()
             case SDL_EVENT_KEY_DOWN:
             {
                 HgButton key = sdlKeycodeToHgButton(event.key.key);
-                HgWindow** window = hgMapGet(&platformState.windows, event.key.windowID);
+                HgWindowData** window = hgMapGet(&platformState.ids, event.key.windowID);
                 if (window != nullptr)
                 {
                     HgWindowEvent windowEvent{};
@@ -3743,7 +3740,7 @@ void hgProcessEvents()
             case SDL_EVENT_KEY_UP:
             {
                 HgButton key = sdlKeycodeToHgButton(event.key.key);
-                HgWindow** window = hgMapGet(&platformState.windows, event.key.windowID);
+                HgWindowData** window = hgMapGet(&platformState.ids, event.key.windowID);
                 if (window != nullptr)
                 {
                     HgWindowEvent windowEvent{};
@@ -3757,7 +3754,7 @@ void hgProcessEvents()
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
             {
                 HgButton key = sdlButtonToHgButton(event.button.button);
-                HgWindow** window = hgMapGet(&platformState.windows, event.button.windowID);
+                HgWindowData** window = hgMapGet(&platformState.ids, event.button.windowID);
                 if (window != nullptr)
                 {
                     HgWindowEvent windowEvent{};
@@ -3771,7 +3768,7 @@ void hgProcessEvents()
             case SDL_EVENT_MOUSE_BUTTON_UP:
             {
                 HgButton key = sdlButtonToHgButton(event.button.button);
-                HgWindow** window = hgMapGet(&platformState.windows, event.button.windowID);
+                HgWindowData** window = hgMapGet(&platformState.ids, event.button.windowID);
                 if (window != nullptr)
                 {
                     HgWindowEvent windowEvent{};
@@ -3791,80 +3788,81 @@ bool hgWasQuit()
     return platformState.wasQuit;
 }
 
-bool hgWindowWasClosed(HgWindow* window)
+bool hgWindowWasClosed(HgWindow window)
 {
-    hgAssert(window != nullptr);
-    return window->wasClosed;
+    HgWindowData* data = windowGet(window);
+    return data->wasClosed;
 }
 
-bool hgWindowIsFocused(HgWindow* window)
+bool hgWindowIsFocused(HgWindow window)
 {
-    hgAssert(window != nullptr);
-    return SDL_GetMouseFocus() == window->sdlWindow;
+    HgWindowData* data = windowGet(window);
+    return SDL_GetMouseFocus() == data->sdlWindow;
 }
 
-u32 hgWindowWidth(HgWindow* window)
+u32 hgWindowWidth(HgWindow window)
 {
-    hgAssert(window != nullptr);
-    return window->width;
+    HgWindowData* data = windowGet(window);
+    return data->width;
 }
 
-u32 hgWindowHeight(HgWindow* window)
+u32 hgWindowHeight(HgWindow window)
 {
-    hgAssert(window != nullptr);
-    return window->height;
+    HgWindowData* data = windowGet(window);
+    return data->height;
 }
 
-f32 hgMouseX(HgWindow* window)
+f32 hgMouseX(HgWindow window)
 {
-    hgAssert(window != nullptr);
-    return window->mouseX;
+    HgWindowData* data = windowGet(window);
+    return data->mouseX;
 }
 
-f32 hgMouseY(HgWindow* window)
+f32 hgMouseY(HgWindow window)
 {
-    hgAssert(window != nullptr);
-    return window->mouseY;
+    HgWindowData* data = windowGet(window);
+    return data->mouseY;
 }
 
-f32 hgMouseDeltaX(HgWindow* window)
+f32 hgMouseDeltaX(HgWindow window)
 {
-    hgAssert(window != nullptr);
-    return platformState.mouseDX / (f32)window->height;
+    HgWindowData* data = windowGet(window);
+    return platformState.mouseDX / (f32)data->height;
 }
 
-f32 hgMouseDeltaY(HgWindow* window)
+f32 hgMouseDeltaY(HgWindow window)
 {
-    hgAssert(window != nullptr);
-    return platformState.mouseDY / (f32)window->height;
+    HgWindowData* data = windowGet(window);
+    return platformState.mouseDY / (f32)data->height;
 }
 
-bool hgIsButtonDown(HgWindow* window, HgButton key)
+bool hgIsButtonDown(HgWindow window, HgButton key)
 {
-    hgAssert(window != nullptr);
-    return window->isKeyDown[key];
+    HgWindowData* data = windowGet(window);
+    return data->isKeyDown[key];
 }
 
-HgWindowEvent* hgWindowEvents(HgWindow* window, u32* count)
+HgWindowEvent* hgWindowEvents(HgWindow window, u32* count)
 {
-    hgAssert(window != nullptr);
+    HgWindowData* data = windowGet(window);
     hgAssert(count != nullptr);
-    *count = window->eventCount;
-    return window->events;
+    *count = data->eventCount;
+    return data->events;
 }
 
 void hgImGuiInit(
-    HgWindow* window,
+    HgWindow window,
     HgFormat colorFormat,
     HgFormat depthFormat,
     HgFormat stencilFormat)
 {
+    HgWindowData* data = windowGet(window);
     hgAssert(colorFormat != HgFormat_undefined);
 
     HgArena* scratch = hgScratch();
     hgArenaScope(scratch);
 
-    ImGui_ImplSDL3_InitForVulkan(window->sdlWindow);
+    ImGui_ImplSDL3_InitForVulkan(data->sdlWindow);
 
     VkFormat colorVkFormat = formatToVk(colorFormat);
     VkFormat depthVkFormat = formatToVk(depthFormat);
@@ -3877,8 +3875,8 @@ void hgImGuiInit(
     imguiInfo.QueueFamily = vkState.queueFamily;
     imguiInfo.Queue = vkState.queue;
     imguiInfo.DescriptorPoolSize = 1000;
-    imguiInfo.MinImageCount = window->imageCount;
-    imguiInfo.ImageCount = window->imageCount;
+    imguiInfo.MinImageCount = data->imageCount;
+    imguiInfo.ImageCount = data->imageCount;
     imguiInfo.MinAllocationSize = 1 << 20;
     imguiInfo.UseDynamicRendering = true;
     imguiInfo.PipelineInfoMain.PipelineRenderingCreateInfo.sType
