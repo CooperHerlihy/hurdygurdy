@@ -11,12 +11,12 @@ static u32 width = 0;
 static u32 height = 0;
 static f32 aspectRatio = 16.0f / 9.0f;
 
-static HgGpuImage* renderImage = nullptr;
-static HgGpuView* renderView = nullptr;
-static void* renderImGuiTex = nullptr;
+static HgGpuImage renderImage;
+static HgGpuView renderView;
+static void* renderImGuiTex;
 
-static HgGpuImage* depthImage = nullptr;
-static HgGpuView* depthView = nullptr;
+static HgGpuImage depthImage;
+static HgGpuView depthView;
 
 static HgEcs ecs = {};
 static HgEntity root;
@@ -506,7 +506,7 @@ void render()
 {
     HgGpuCmd* cmd = hgGpuFrameBegin(&window, 1);
     hgClockTick(&cpuClock);
-    if (hgWindowImageView(window) != nullptr)
+    if (!hgHandleIsNull(hgWindowImageView(window).handle))
     {
         HgGpuRenderAttachment renderColorAttachment{};
         renderColorAttachment.image = renderView;

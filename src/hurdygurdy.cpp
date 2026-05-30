@@ -3261,7 +3261,7 @@ struct SpritePipelinePush {
 };
 
 struct SpritePipelineState {
-    HgGpuPipeline* pipeline;
+    HgGpuPipeline pipeline;
     HgGpuTexture defaultTex;
 };
 
@@ -3357,7 +3357,7 @@ struct SkyboxPipelinePush {
 };
 
 struct SkyboxPipelineState {
-    HgGpuPipeline* pipeline;
+    HgGpuPipeline pipeline;
     HgGpuTexture defaultTex;
 };
 
@@ -3483,12 +3483,12 @@ struct ModelPipelinePush {
 };
 
 struct ModelPipelineState {
-    HgGpuPipeline* pipeline;
+    HgGpuPipeline pipeline;
 
-    HgGpuBuffer* dirLightBuffer;
+    HgGpuBuffer dirLightBuffer;
     u32 dirLightCapacity;
 
-    HgGpuBuffer* pointLightBuffer;
+    HgGpuBuffer pointLightBuffer;
     u32 pointLightCapacity;
 
     HgGpuMesh defaultModel;

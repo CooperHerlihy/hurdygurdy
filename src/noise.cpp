@@ -21,8 +21,8 @@ int main()
     u32 width = 0;
     u32 height = 0;
 
-    HgGpuImage* depthImage = nullptr;
-    HgGpuView* depthView = nullptr;
+    HgGpuImage depthImage;
+    HgGpuView depthView;
     hgDefer(hgGpuImageDestroy(depthImage));
     hgDefer(hgGpuViewDestroy(depthView));
 
@@ -76,7 +76,7 @@ int main()
     };
 
     HgBinary* noiseShaderCode = hgAssetGet(noiseShaderHandle);
-    HgGpuPipeline* noisePipeline = hgGpuPipelineCreateCompute(sizeof(NoisePush), (u8*)noiseShaderCode->data, noiseShaderCode->size);
+    HgGpuPipeline noisePipeline = hgGpuPipelineCreateCompute(sizeof(NoisePush), (u8*)noiseShaderCode->data, noiseShaderCode->size);
     hgDefer(hgGpuPipelineDestroy(noisePipeline));
 
     hgAssetUnload(noiseShaderHandle);
@@ -189,7 +189,7 @@ int main()
 
         hgGpuCompute(cmd, noiseWidth / 16, noiseHeight / 16, 1);
 
-        if (hgWindowImageView(window) != nullptr)
+        if (!hgHandleIsNull(hgWindowImageView(window).handle))
         {
             HgGpuRenderAttachment colorAttachment{};
             colorAttachment.image = hgWindowImageView(window);

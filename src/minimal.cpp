@@ -16,8 +16,8 @@ int main()
     u32 width = 0;
     u32 height = 0;
 
-    HgGpuImage* depthImage = nullptr;
-    HgGpuView* depthView = nullptr;
+    HgGpuImage depthImage;
+    HgGpuView depthView;
     hgDefer(hgGpuImageDestroy(depthImage));
     hgDefer(hgGpuViewDestroy(depthView));
 
@@ -92,7 +92,7 @@ int main()
         hgTransformUpdate(&ecs, camera);
 
         HgGpuCmd* cmd = hgGpuFrameBegin(&window, 1);
-        if (hgWindowImageView(window) != nullptr)
+        if (!hgHandleIsNull(hgWindowImageView(window).handle))
         {
             HgGpuRenderAttachment colorAttachment{};
             colorAttachment.image = hgWindowImageView(window);
