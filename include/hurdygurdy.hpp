@@ -262,6 +262,7 @@ struct HgDefer {
 struct HgInit {
     u64 arenaSize = UINT32_MAX;
 
+    u32 maxMutices = 2048;
     u32 maxFences = 2048;
     u32 threadPoolQueueSize = 2048;
     u32 ioRequestQueueSize = 2048;
@@ -2956,6 +2957,55 @@ void hgPerfLog(HgStringView title, const HgPerfStats* stats, HgPerfScale scale);
 u32 hgHardwareThreadCount();
 
 /**
+ * Initialize synchronization primitives
+ */
+void hgConcurrencyInit(HgArena* arena, u32 maxMutices, u32 maxFences);
+
+/**
+ * Deinitialize synchronization primitives
+ */
+void hgConcurrencyDeinit();
+
+/**
+ * The implementation data for HgMutex
+ */
+struct HgMutexData;
+
+/**
+ * A spinlock mutex for basic thread synchronization
+ */
+typedef HgHandle<HgMutexData> HgMutex;
+
+/**
+ * Create a new mutex
+ */
+HgMutex hgMutexCreate();
+
+/**
+ * Destroy a mutex
+ */
+void hgMutexDestroy(HgMutex mtx);
+
+/**
+ * Wait until the mutex is acquired
+ */
+void hgMutexAcquire(HgMutex mtx);
+
+/**
+ * Try to acquire the mutex
+ *
+ * Returns
+ * - true if acquisition succeeded
+ * - false if the mutex was already in use
+ */
+bool hgMutexTryAcquire(HgMutex mtx);
+
+/**
+ * Release the mutex lock
+ */
+void hgMutexRelease(HgMutex mtx);
+
+/**
  * The implementation data for HgFence
  */
 struct HgFenceData;
@@ -2964,16 +3014,6 @@ struct HgFenceData;
  * A spinlock fence for basic thread synchronization
  */
 typedef HgHandle<HgFenceData> HgFence;
-
-/**
- * Initialize fences
- */
-void hgFencesInit(HgArena* arena, u32 maxFences);
-
-/**
- * Deinitialize fences
- */
-void hgFencesDeinit();
 
 /**
  * Create a new fence

@@ -29,7 +29,7 @@ void hgInit(const HgInit* init)
     gpuInit.maxWindows = init->maxWindows;
     hgGpuInit(arena, &gpuInit);
 
-    hgFencesInit(arena, init->maxFences);
+    hgConcurrencyInit(arena, init->maxMutices, init->maxFences);
 
     u32 workerCount = (u32)std::max(1, (i32)hgHardwareThreadCount() - 2); // main thread, io thread
     hgThreadsInit(arena, init->threadPoolQueueSize, workerCount);
@@ -42,7 +42,7 @@ void hgDeinit()
 {
     hgIoDeinit();
     hgThreadsDeinit();
-    hgFencesDeinit();
+    hgConcurrencyDeinit();
 
     hgGpuDeinit();
     hgPlatformDeinit();
@@ -1818,21 +1818,54 @@ u32 hgHardwareThreadCount()
     return (u32)std::thread::hardware_concurrency();
 }
 
+struct HgMutexData {
+    std::atomic_bool acquired;
+};
+
+static HgPool<HgMutexData> mutexPool{};
+
+HgMutex hgMutexCreate()
+{
+    HgMutex mtx = hgPoolAlloc(&mutexPool);
+    new (hgPoolGet(&mutexPool, mtx)) HgMutexData{false};
+    return mtx;
+}
+
+void hgMutexDestroy(HgMutex mtx)
+{
+    hgPoolFree(&mutexPool, mtx);
+}
+
+void hgMutexAcquire(HgMutex mtx)
+{
+    HgMutexData* data = hgPoolGet(&mutexPool, mtx);
+    bool acquired = false;
+    while (!data->acquired.compare_exchange_weak(acquired, true))
+    {
+        _mm_pause();
+        acquired = false;
+    }
+}
+
+bool hgMutexTryAcquire(HgMutex mtx)
+{
+    HgMutexData* data = hgPoolGet(&mutexPool, mtx);
+    bool acquired = false;
+    return data->acquired.compare_exchange_weak(acquired, true);
+}
+
+void hgMutexRelease(HgMutex mtx)
+{
+    HgMutexData* data = hgPoolGet(&mutexPool, mtx);
+    hgAssert(data->acquired);
+    data->acquired.store(false);
+}
+
 struct HgFenceData {
     std::atomic<u32> counter{0};
 };
 
-HgPool<HgFenceData> fencePool{};
-
-void hgFencesInit(HgArena* arena, u32 maxFences)
-{
-    fencePool = hgPoolCreate<HgFenceData>(arena, maxFences);
-}
-
-void hgFencesDeinit()
-{
-    fencePool = {};
-}
+static HgPool<HgFenceData> fencePool{};
 
 HgFence hgFenceCreate()
 {
@@ -1877,6 +1910,18 @@ void hgFenceWaitIndefinite(HgFence fence)
     {
         _mm_pause();
     }
+}
+
+void hgConcurrencyInit(HgArena* arena, u32 maxMutices, u32 maxFences)
+{
+    mutexPool = hgPoolCreate<HgMutexData>(arena, maxMutices);
+    fencePool = hgPoolCreate<HgFenceData>(arena, maxFences);
+}
+
+void hgConcurrencyDeinit()
+{
+    fencePool = {};
+    mutexPool = {};
 }
 
 struct ThreadWork {

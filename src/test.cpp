@@ -1589,111 +1589,140 @@ void hgTest()
 
     // thread pool
     {
-        HgFence fence = hgFenceCreate();
-        hgDefer(hgFenceDestroy(fence));
-
-        bool a = false;
-        bool b = false;
-
-        hgThreadsCall(fence, &a, [](void *pa)
         {
-            *(bool*)pa = true;
-        });
-        hgThreadsCall(fence, &b, [](void *pb)
-        {
-            *(bool*)pb = true;
-        });
+            HgFence fence = hgFenceCreate();
+            hgDefer(hgFenceDestroy(fence));
 
-        hgFenceWait(fence, 2.0);
+            bool a = false;
+            bool b = false;
 
-        hgAssert(hgFenceWait(fence, 2.0));
-
-        hgAssert(a == true);
-        hgAssert(b == true);
-    }
-
-    {
-        HgFence fence = hgFenceCreate();
-        hgDefer(hgFenceDestroy(fence));
-
-        bool vals[100]{};
-        for (bool& val : vals)
-        {
-            hgThreadsCall(fence, &val, [](void* data)
+            hgThreadsCall(fence, &a, [](void *pa)
             {
-                *(bool*)data = true;
+                *(bool*)pa = true;
             });
+            hgThreadsCall(fence, &b, [](void *pb)
+            {
+                *(bool*)pb = true;
+            });
+
+            hgFenceWait(fence, 2.0);
+
+            hgAssert(hgFenceWait(fence, 2.0));
+
+            hgAssert(a == true);
+            hgAssert(b == true);
         }
 
-        hgAssert(hgThreadsHelp(fence, 2.0));
-
-        for (bool& val : vals)
         {
-            hgAssert(val == true);
-        }
-    }
-
-    {
-        bool vals[100]{};
-
-        auto fn = [](void* pvals, u64 idx)
-        {
-            ((bool*)pvals)[idx] = true;
-        };
-        hgThreadsFor(0, sizeof(vals) / sizeof(*vals), vals, fn);
-
-        for (bool& val : vals)
-        {
-            hgAssert(val == true);
-        }
-    }
-
-    {
-        HgFence fence = hgFenceCreate();
-        hgDefer(hgFenceDestroy(fence));
-
-        for (u32 n = 0; n < 3; ++n)
-        {
-            std::atomic_bool start{false};
-            std::thread producers[4];
+            HgFence fence = hgFenceCreate();
+            hgDefer(hgFenceDestroy(fence));
 
             bool vals[100]{};
-
-            auto fn = [](void* pval)
+            for (bool& val : vals)
             {
-                *((bool*)pval) = !*((bool*)pval);
-            };
-
-            auto prodFn = [&](u32 idx)
-            {
-                while (!start)
+                hgThreadsCall(fence, &val, [](void* data)
                 {
-                    _mm_pause();
-                }
-                u32 begin = idx * 25;
-                u32 end = begin + 25;
-                for (u32 i = begin; i < end; ++i)
-                {
-                    hgThreadsCall(fence, vals + i, fn);
-                }
-            };
-            for (u32 j = 0; j < sizeof(producers) / sizeof(*producers); ++j)
-            {
-                producers[j] = std::thread(prodFn, j);
-            }
-
-            start.store(true);
-            for (auto& thread : producers)
-            {
-                thread.join();
+                    *(bool*)data = true;
+                });
             }
 
             hgAssert(hgThreadsHelp(fence, 2.0));
-            for (auto val : vals)
+
+            for (bool& val : vals)
             {
                 hgAssert(val == true);
             }
         }
+
+        {
+            bool vals[100]{};
+
+            auto fn = [](void* pvals, u64 idx)
+            {
+                ((bool*)pvals)[idx] = true;
+            };
+            hgThreadsFor(0, sizeof(vals) / sizeof(*vals), vals, fn);
+
+            for (bool& val : vals)
+            {
+                hgAssert(val == true);
+            }
+        }
+
+        {
+            HgFence fence = hgFenceCreate();
+            hgDefer(hgFenceDestroy(fence));
+
+            for (u32 n = 0; n < 3; ++n)
+            {
+                std::atomic_bool start{false};
+                std::thread producers[4];
+
+                bool vals[100]{};
+
+                auto fn = [](void* pval)
+                {
+                    *((bool*)pval) = !*((bool*)pval);
+                };
+
+                auto prodFn = [&](u32 idx)
+                {
+                    while (!start)
+                    {
+                        _mm_pause();
+                    }
+                    u32 begin = idx * 25;
+                    u32 end = begin + 25;
+                    for (u32 i = begin; i < end; ++i)
+                    {
+                        hgThreadsCall(fence, vals + i, fn);
+                    }
+                };
+                for (u32 j = 0; j < sizeof(producers) / sizeof(*producers); ++j)
+                {
+                    producers[j] = std::thread(prodFn, j);
+                }
+
+                start.store(true);
+                for (auto& thread : producers)
+                {
+                    thread.join();
+                }
+
+                hgAssert(hgThreadsHelp(fence, 2.0));
+                for (auto val : vals)
+                {
+                    hgAssert(val == true);
+                }
+            }
+        }
+    }
+
+    // HgMutex
+    {
+        struct Capture {
+            HgMutex mtx;
+            u32 count;
+        };
+        Capture c{};
+
+        c.mtx = hgMutexCreate();
+        hgDefer(hgMutexDestroy(c.mtx));
+
+        c.count = 0;
+
+        hgThreadsFor(0, 100, &c, [](void* pc, u64)
+        {
+            Capture* c = (Capture*)pc;
+            hgMutexAcquire(c->mtx);
+            hgDefer(hgMutexRelease(c->mtx));
+            for (u32 i = 0; i < 10000; ++i)
+            {
+                ++c->count;
+            }
+        });
+
+        hgAssert(c.count == 1000000);
     }
 
     // io thread
