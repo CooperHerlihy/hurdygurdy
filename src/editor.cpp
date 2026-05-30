@@ -278,7 +278,7 @@ void drawEditorEntity(HgArena* frame, HgEntity e)
     }
     else
     {
-        HgString nameStr = hgStringCopy(frame, "ID ");
+        HgStringBuilder nameStr = hgStringCopy(frame, "ID ");
         hgStringAppend(frame, &nameStr, hgIntegerToString(frame, (i64)hgHandleIdx(e.handle)));
         name = hgCString(frame, nameStr);
     }

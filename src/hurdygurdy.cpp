@@ -850,25 +850,18 @@ char* hgCString(HgArena* arena, HgStringView str)
     return cStr;
 }
 
-HgString hgStringCopy(HgArena* arena, HgStringView str)
+HgStringBuilder hgStringCopy(HgArena* arena, HgStringView str)
 {
     hgAssert(arena != nullptr);
 
-    HgString copy{};
-    if (str.length <= 24)
-    {
-        memcpy(copy.small.chars, str.chars, str.length);
-    }
-    else
-    {
-        copy.large.chars = hgAlloc<char>(arena, str.length);
-        memcpy(copy.large.chars, str.chars, str.length);
-    }
+    HgStringBuilder copy{};
+    copy.chars = hgAlloc<char>(arena, str.length);
+    memcpy(copy.chars, str.chars, str.length);
     copy.length = str.length;
     return copy;
 }
 
-void hgStringInsert(HgArena* arena, HgString* dst, u64 idx, HgStringView src)
+void hgStringInsert(HgArena* arena, HgStringBuilder* dst, u64 idx, HgStringView src)
 {
     hgAssert(arena != nullptr);
     hgAssert(dst != nullptr);
@@ -878,37 +871,27 @@ void hgStringInsert(HgArena* arena, HgString* dst, u64 idx, HgStringView src)
 
     u64 newLength = dst->length + src.length;
 
-    if (newLength <= 24)
-    {
-        if (idx != dst->length)
-            memmove(&dst->small.chars[idx + src.length], &dst->small.chars[idx], dst->length - idx);
-        memcpy(&dst->small.chars[idx], src.chars, src.length);
+    dst->chars = hgRealloc(arena, dst->chars, dst->length, newLength);
 
-        dst->length = newLength;
-    }
-    else if (dst->length <= 24)
-    {
-        char* chars = hgAlloc<char>(arena, newLength);
+    if (idx != dst->length)
+        memmove(&dst->chars[idx + src.length], &dst->chars[idx], dst->length - idx);
+    memcpy(&dst->chars[idx], src.chars, src.length);
 
-        if (idx > 0)
-            memcpy(chars, dst->small.chars, idx);
-        memcpy(chars + idx, src.chars, src.length);
-        if (idx != dst->length)
-            memcpy(chars + idx + src.length, dst->small.chars + idx, dst->length - idx);
+    dst->length = newLength;
+}
 
-        dst->large.chars = chars;
-        dst->length = newLength;
-    }
-    else
-    {
-        dst->large.chars = hgRealloc(arena, dst->large.chars, dst->length, newLength);
+HgStringOwner hgStringAlloc(HgStringView data)
+{
+    HgStringOwner str{};
+    str.chars = (char*)malloc(data.length);
+    memcpy((char*)str.chars, data.chars, data.length);
+    str.length = data.length;
+    return str;
+}
 
-        if (idx != dst->length)
-            memmove(&dst->large.chars[idx + src.length], &dst->large.chars[idx], dst->length - idx);
-        memcpy(&dst->large.chars[idx], src.chars, src.length);
-
-        dst->length = newLength;
-    }
+void hgStringFree(HgStringOwner* str)
+{
+    free((char*)str->chars);
 }
 
 bool hgIsWhitespace(char c)
@@ -1093,7 +1076,7 @@ f64 hgStringToFloat(HgStringView str)
     return ret;
 }
 
-HgString hgIntegerToString(HgArena* arena, i64 num)
+HgStringBuilder hgIntegerToString(HgArena* arena, i64 num)
 {
     hgAssert(arena != nullptr);
 
@@ -1106,7 +1089,7 @@ HgString hgIntegerToString(HgArena* arena, i64 num)
     bool isNegative = num < 0;
     u64 unum = (u64)std::abs(num);
 
-    HgString reverse{};
+    HgStringBuilder reverse{};
     while (unum != 0)
     {
         u64 digit = unum % 10;
@@ -1114,7 +1097,7 @@ HgString hgIntegerToString(HgArena* arena, i64 num)
         hgStringAppendc(scratch, &reverse, '0' + (char)digit);
     }
 
-    HgString ret{};
+    HgStringBuilder ret{};
     if (isNegative)
         hgStringAppendc(arena, &ret, '-');
     for (u64 i = reverse.length - 1; i < reverse.length; --i)
@@ -1124,7 +1107,7 @@ HgString hgIntegerToString(HgArena* arena, i64 num)
     return ret;
 }
 
-HgString hgFloatToString(HgArena* arena, f64 num, u32 decimalCount)
+HgStringBuilder hgFloatToString(HgArena* arena, f64 num, u32 decimalCount)
 {
     hgAssert(arena != nullptr);
 
@@ -1134,9 +1117,9 @@ HgString hgFloatToString(HgArena* arena, f64 num, u32 decimalCount)
     if (num == 0.0)
         return hgStringCopy(arena, "0.0");
 
-    HgString intStr = hgIntegerToString(scratch, (i64)fabs(num));
+    HgStringBuilder intStr = hgIntegerToString(scratch, (i64)fabs(num));
 
-    HgString decStr{};
+    HgStringBuilder decStr{};
     hgStringAppendc(scratch, &decStr, '.');
 
     f64 decPart = fabs(num);
@@ -1146,7 +1129,7 @@ HgString hgFloatToString(HgArena* arena, f64 num, u32 decimalCount)
         hgStringAppendc(scratch, &decStr, '0' + (char)((u64)decPart % 10));
     }
 
-    HgString ret{};
+    HgStringBuilder ret{};
     if (num < 0.0)
         hgStringAppendc(arena, &ret, '-');
     hgStringAppend(arena, &ret, intStr);
@@ -1154,7 +1137,7 @@ HgString hgFloatToString(HgArena* arena, f64 num, u32 decimalCount)
     return ret;
 }
 
-HgString hgStringFormat(HgArena* arena, HgStringView fmt, ...)
+HgStringBuilder hgStringFormat(HgArena* arena, HgStringView fmt, ...)
 {
     (void)arena;
     (void)fmt;
@@ -1207,19 +1190,21 @@ static HgJson jsonParseNext(HgArena* arena, JsonParseState* state)
         case '}': {
             HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
             error->next = nullptr;
-            error->msg = HgString{};
-            hgStringAppend(arena, &error->msg, "on line ");
-            hgStringAppend(arena, &error->msg, hgIntegerToString(arena, (i64)state->line));
-            hgStringAppend(arena, &error->msg, ", found unexpected token \"}\"\n");
+            HgStringBuilder msg{};
+            hgStringAppend(arena, &msg, "on line ");
+            hgStringAppend(arena, &msg, hgIntegerToString(arena, (i64)state->line));
+            hgStringAppend(arena, &msg, ", found unexpected token \"}\"\n");
+            error->msg = msg;
             return {nullptr, error};
         }
         case ']': {
             HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
             error->next = nullptr;
-            error->msg = HgString{};
-            hgStringAppend(arena, &error->msg, "on line ");
-            hgStringAppend(arena, &error->msg, hgIntegerToString(arena, (i64)state->line));
-            hgStringAppend(arena, &error->msg, ", found unexpected token \"]\"\n");
+            HgStringBuilder msg{};
+            hgStringAppend(arena, &msg, "on line ");
+            hgStringAppend(arena, &msg, hgIntegerToString(arena, (i64)state->line));
+            hgStringAppend(arena, &msg, ", found unexpected token \"]\"\n");
+            error->msg = msg;
             return {nullptr, error};
         }
     }
@@ -1238,12 +1223,13 @@ static HgJson jsonParseNext(HgArena* arena, JsonParseState* state)
             ++state->line;
         ++state->head;
     }
-    error->msg = HgString{};
-    hgStringAppend(arena, &error->msg, "on line ");
-    hgStringAppend(arena, &error->msg, hgIntegerToString(arena, (i64)state->line));
-    hgStringAppend(arena, &error->msg, ", found unexpected token \"");
-    hgStringAppend(arena, &error->msg, {&state->text[begin], &state->text[state->head]});
-    hgStringAppend(arena, &error->msg, "\"\n");
+    HgStringBuilder msg{};
+    hgStringAppend(arena, &msg, "on line ");
+    hgStringAppend(arena, &msg, hgIntegerToString(arena, (i64)state->line));
+    hgStringAppend(arena, &msg, ", found unexpected token \"");
+    hgStringAppend(arena, &msg, {&state->text[begin], &state->text[state->head]});
+    hgStringAppend(arena, &msg, "\"\n");
+    error->msg = msg;
 
     return {nullptr, error};
 }
@@ -1270,10 +1256,11 @@ static HgJson jsonParseStruct(HgArena* arena, JsonParseState* state)
         {
             HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
             error->next = nullptr;
-            error->msg = HgString{};
-            hgStringAppend(arena, &error->msg, "on line ");
-            hgStringAppend(arena, &error->msg, hgIntegerToString(arena, (i64)state->line));
-            hgStringAppend(arena, &error->msg, ", expected struct to terminate\n");
+            HgStringBuilder msg{};
+            hgStringAppend(arena, &msg, "on line ");
+            hgStringAppend(arena, &msg, hgIntegerToString(arena, (i64)state->line));
+            hgStringAppend(arena, &msg, ", expected struct to terminate\n");
+            error->msg = msg;
             if (lastError == nullptr)
                 json.errors = lastError = error;
             else
@@ -1285,10 +1272,11 @@ static HgJson jsonParseStruct(HgArena* arena, JsonParseState* state)
         {
             HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
             error->next = nullptr;
-            error->msg = HgString{};
-            hgStringAppend(arena, &error->msg, "on line ");
-            hgStringAppend(arena, &error->msg, hgIntegerToString(arena, (i64)state->line));
-            hgStringAppend(arena, &error->msg, ", struct ends with \"]\" instead of \"}\"\n");
+            HgStringBuilder msg{};
+            hgStringAppend(arena, &msg, "on line ");
+            hgStringAppend(arena, &msg, hgIntegerToString(arena, (i64)state->line));
+            hgStringAppend(arena, &msg, ", struct ends with \"]\" instead of \"}\"\n");
+            error->msg = msg;
             if (lastError == nullptr)
                 json.errors = lastError = error;
             else
@@ -1327,10 +1315,11 @@ static HgJson jsonParseStruct(HgArena* arena, JsonParseState* state)
             {
                 HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
                 error->next = nullptr;
-                error->msg = HgString{};
-                hgStringAppend(arena, &error->msg, "on line ");
-                hgStringAppend(arena, &error->msg, hgIntegerToString(arena, (i64)state->line));
-                hgStringAppend(arena, &error->msg, ", struct has a literal instead of a field\n");
+                HgStringBuilder msg{};
+                hgStringAppend(arena, &msg, "on line ");
+                hgStringAppend(arena, &msg, hgIntegerToString(arena, (i64)state->line));
+                hgStringAppend(arena, &msg, ", struct has a literal instead of a field\n");
+                error->msg = msg;
                 if (lastError == nullptr)
                     json.errors = lastError = error;
                 else
@@ -1340,12 +1329,13 @@ static HgJson jsonParseStruct(HgArena* arena, JsonParseState* state)
             {
                 HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
                 error->next = nullptr;
-                error->msg = HgString{};
-                hgStringAppend(arena, &error->msg, "on line ");
-                hgStringAppend(arena, &error->msg, hgIntegerToString(arena, (i64)state->line));
-                hgStringAppend(arena, &error->msg, ", struct has a field named \"");
-                hgStringAppend(arena, &error->msg, value.file->field.name);
-                hgStringAppend(arena, &error->msg, "\" which has no value\n");
+                HgStringBuilder msg{};
+                hgStringAppend(arena, &msg, "on line ");
+                hgStringAppend(arena, &msg, hgIntegerToString(arena, (i64)state->line));
+                hgStringAppend(arena, &msg, ", struct has a field named \"");
+                hgStringAppend(arena, &msg, value.file->field.name);
+                hgStringAppend(arena, &msg, "\" which has no value\n");
+                error->msg = msg;
                 if (lastError == nullptr)
                     json.errors = lastError = error;
                 else
@@ -1394,10 +1384,11 @@ static HgJson jsonParseArray(HgArena* arena, JsonParseState* state)
         {
             HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
             error->next = nullptr;
-            error->msg = HgString{};
-            hgStringAppend(arena, &error->msg, "on line ");
-            hgStringAppend(arena, &error->msg, hgIntegerToString(arena, (i64)state->line));
-            hgStringAppend(arena, &error->msg, ", expected struct to terminate\n");
+            HgStringBuilder msg{};
+            hgStringAppend(arena, &msg, "on line ");
+            hgStringAppend(arena, &msg, hgIntegerToString(arena, (i64)state->line));
+            hgStringAppend(arena, &msg, ", expected struct to terminate\n");
+            error->msg = msg;
             if (lastError == nullptr)
                 json.errors = lastError = error;
             else
@@ -1409,10 +1400,11 @@ static HgJson jsonParseArray(HgArena* arena, JsonParseState* state)
         {
             HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
             error->next = nullptr;
-            error->msg = HgString{};
-            hgStringAppend(arena, &error->msg, "on line ");
-            hgStringAppend(arena, &error->msg, hgIntegerToString(arena, (i64)state->line));
-            hgStringAppend(arena, &error->msg, ", array ends with \"}\" instead of \"]\"\n");
+            HgStringBuilder msg{};
+            hgStringAppend(arena, &msg, "on line ");
+            hgStringAppend(arena, &msg, hgIntegerToString(arena, (i64)state->line));
+            hgStringAppend(arena, &msg, ", array ends with \"}\" instead of \"]\"\n");
+            error->msg = msg;
             if (lastError == nullptr)
                 json.errors = lastError = error;
             else
@@ -1459,10 +1451,11 @@ static HgJson jsonParseArray(HgArena* arena, JsonParseState* state)
                 } else {
                     HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
                     error->next = nullptr;
-                    error->msg = HgString{};
-                    hgStringAppend(arena, &error->msg, "on line ");
-                    hgStringAppend(arena, &error->msg, hgIntegerToString(arena, (i64)state->line));
-                    hgStringAppend(arena, &error->msg, ", array has a field as an element\n");
+                    HgStringBuilder msg{};
+                    hgStringAppend(arena, &msg, "on line ");
+                    hgStringAppend(arena, &msg, hgIntegerToString(arena, (i64)state->line));
+                    hgStringAppend(arena, &msg, ", array has a field as an element\n");
+                    error->msg = msg;
                     if (lastError == nullptr)
                         json.errors = lastError = error;
                     else
@@ -1474,10 +1467,11 @@ static HgJson jsonParseArray(HgArena* arena, JsonParseState* state)
             {
                 HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
                 error->next = nullptr;
-                error->msg = HgString{};
-                hgStringAppend(arena, &error->msg, "on line ");
-                hgStringAppend(arena, &error->msg, hgIntegerToString(arena, (i64)state->line));
-                hgStringAppend(arena, &error->msg, ", array has element which is not the same type as the first valid element\n");
+                HgStringBuilder msg{};
+                hgStringAppend(arena, &msg, "on line ");
+                hgStringAppend(arena, &msg, hgIntegerToString(arena, (i64)state->line));
+                hgStringAppend(arena, &msg, ", array has element which is not the same type as the first valid element\n");
+                error->msg = msg;
                 if (lastError == nullptr)
                     json.errors = lastError = error;
                 else
@@ -1517,7 +1511,7 @@ static HgJson jsonParseString(HgArena* arena, JsonParseState* state)
     if (state->head < state->text.length)
     {
         ++state->head;
-        HgString str{};
+        HgStringBuilder str{};
         for (u64 i = begin; i < end; ++i)
         {
             char c = state->text[i];
@@ -1562,10 +1556,11 @@ static HgJson jsonParseString(HgArena* arena, JsonParseState* state)
     }
 
     HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
-    error->msg = HgString{};
-    hgStringAppend(arena, &error->msg, "on line ");
-    hgStringAppend(arena, &error->msg, hgIntegerToString(arena, (i64)state->line));
-    hgStringAppend(arena, &error->msg, ", expected string to terminate\n");
+    HgStringBuilder msg{};
+    hgStringAppend(arena, &msg, "on line ");
+    hgStringAppend(arena, &msg, hgIntegerToString(arena, (i64)state->line));
+    hgStringAppend(arena, &msg, ", expected string to terminate\n");
+    error->msg = msg;
     return {nullptr, error};
 }
 
@@ -1616,12 +1611,13 @@ static HgJson jsonParseNumber(HgArena* arena, JsonParseState* state)
 
     HgJsonError* error = hgAlloc<HgJsonError>(arena, 1);
 
-    error->msg = HgString{};
-    hgStringAppend(arena, &error->msg, "on line ");
-    hgStringAppend(arena, &error->msg, hgIntegerToString(arena, (i64)state->line));
-    hgStringAppend(arena, &error->msg, ", expected numeral value, found \"");
-    hgStringAppend(arena, &error->msg, num);
-    hgStringAppend(arena, &error->msg, "\"\n");
+    HgStringBuilder msg{};
+    hgStringAppend(arena, &msg, "on line ");
+    hgStringAppend(arena, &msg, hgIntegerToString(arena, (i64)state->line));
+    hgStringAppend(arena, &msg, ", expected numeral value, found \"");
+    hgStringAppend(arena, &msg, num);
+    hgStringAppend(arena, &msg, "\"\n");
+    error->msg = msg;
 
     while (state->head < state->text.length && hgIsWhitespace(state->text[state->head]))
     {
@@ -1689,12 +1685,13 @@ static HgJson jsonParseBoolean(HgArena* arena, JsonParseState* state)
             ++state->line;
         ++state->head;
     }
-    error->msg = HgString{};
-    hgStringAppend(arena, &error->msg, "on line ");
-    hgStringAppend(arena, &error->msg, hgIntegerToString(arena, (i64)state->line));
-    hgStringAppend(arena, &error->msg, ", expected boolean value, found \"");
-    hgStringAppend(arena, &error->msg, {&state->text[begin], &state->text[state->head]});
-    hgStringAppend(arena, &error->msg, "\"\n");
+    HgStringBuilder msg{};
+    hgStringAppend(arena, &msg, "on line ");
+    hgStringAppend(arena, &msg, hgIntegerToString(arena, (i64)state->line));
+    hgStringAppend(arena, &msg, ", expected boolean value, found \"");
+    hgStringAppend(arena, &msg, {&state->text[begin], &state->text[state->head]});
+    hgStringAppend(arena, &msg, "\"\n");
+    error->msg = msg;
 
     if (state->text[state->head] == ',')
         ++state->head;
@@ -2483,7 +2480,7 @@ void hgEcsRegisterComponent(HgEcs* ecs, HgArena* arena, HgEcsRegisterComponent* 
 
     HgComponent* system = hgMapAdd(&ecs->components, id, {});
 
-    system->name = config->name;
+    system->name = hgStringCopy(arena, config->name);
     system->indices = hgAlloc<u32>(arena, ecs->entities.capacity);
     system->entities = hgAlloc<HgEntity>(arena, config->max);
     system->components = hgAlloc(arena, config->max * config->width, config->align);
@@ -2802,7 +2799,7 @@ struct EcsSerialComponent {
 
 struct EcsSerialScene {
     HgMap<HgEntity, u32> entities;
-    HgMap<HgString, u32> strings;
+    HgMap<HgStringView, u32> strings;
     HgMap<u64, EcsSerialComponent> components;
 };
 
@@ -2833,7 +2830,7 @@ void ecsSerialGatherData(HgArena* arena, HgEcs* ecs, HgEntity root, EcsSerialSce
             {
                 compData = hgMapAdd(&scene->components, ecs->components.keys[c], {});
 
-                HgString name = hgStringCopy(arena, ecs->components.vals[c].name);
+                HgStringBuilder name = hgStringCopy(arena, ecs->components.vals[c].name);
                 u32* nameIdx = hgMapGet(&scene->strings, name);
                 if (nameIdx == nullptr)
                     nameIdx = hgMapAdd(&scene->strings, name, scene->strings.count);
@@ -2925,7 +2922,7 @@ HgBinary ecsSerialWriteBin(HgArena* arena, EcsSerialScene* data)
             bin = hgBinaryResize(arena, &bin, bin.size + str.length);
 
             hgBinaryOverwrite(&bin, header.stringsBegin + sizeof(str) * data->strings.vals[s], str);
-            hgBinaryOverwrite(&bin, str.begin, hgStringChars(&data->strings.keys[s]), str.length);
+            hgBinaryOverwrite(&bin, str.begin, data->strings.keys[s].chars, str.length);
         }
     }
 
@@ -2942,7 +2939,7 @@ HgBinary hgEcsSerialize(HgArena* arena, HgEcs* ecs, HgEntity root)
 
     EcsSerialScene data;
     data.entities = hgMapCreate<HgEntity, u32>(scratch, ecs->entities.capacity);
-    data.strings = hgMapCreate<HgString, u32>(scratch, 4096);
+    data.strings = hgMapCreate<HgStringView, u32>(scratch, 4096);
     data.components = hgMapCreate<u64, EcsSerialComponent>(scratch, ecs->components.count * 2);
 
     ecsSerialFindEntities(ecs, root, &data);
@@ -3024,7 +3021,7 @@ template<>
 void hgEcsSerializeImpl(
     HgArena*,
     HgMap<HgEntity, u32>* entities,
-    HgMap<HgString, u32>*,
+    HgMap<HgStringView, u32>*,
     HgNode* src,
     void* dst)
 {

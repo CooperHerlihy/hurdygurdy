@@ -1735,72 +1735,25 @@ constexpr bool operator!=(HgStringView lhs, HgStringView rhs)
 char* hgCString(HgArena* arena, HgStringView str);
 
 /**
- * A small dynamic string container
+ * A string builder using arenas
  */
-struct HgStringSmall {
+struct HgStringBuilder {
     /**
-     * The length, available in all strings
-     */
-    u64 length;
-    /**
-     * The character data of the small string
-     */
-    char chars[24];
-};
-
-/**
- * A large dynamic string container
- */
-struct HgStringLarge {
-    /**
-     * The length, available in all strings
-     */
-    u64 length;
-    /**
-     * A pointer to the character data of a large string
+     * The string data
      */
     char* chars;
-};
-
-/**
- * A dynamic string container with small string optimization
- */
-union HgString {
     /**
      * The number of characters currently in the string
      */
     u64 length;
-    /**
-     * A small string
-     */
-    HgStringSmall small;
-    /**
-     * A large string
-     */
-    HgStringLarge large;
 
     /**
      * Access using the index operator
      */
-    constexpr char& operator[](u64 index)
+    constexpr char& operator[](u64 index) const
     {
         hgAssert(index < length);
-        if (length <= 24)
-            return small.chars[index];
-        else
-            return large.chars[index];
-    }
-
-    /**
-     * Access using the index operator in a const context
-     */
-    constexpr const char& operator[](u64 index) const
-    {
-        hgAssert(index < length);
-        if (length <= 24)
-            return small.chars[index];
-        else
-            return large.chars[index];
+        return chars[index];
     }
 
     /**
@@ -1808,40 +1761,24 @@ union HgString {
      */
     constexpr operator HgStringView() const
     {
-        if (length <= 24)
-            return {small.chars, length};
-        else
-            return {large.chars, length};
+        return {chars, length};
     }
 };
 
 /**
- * Compare strings
+ * Compare string builders
  */
-inline bool operator==(const HgString& lhs, const HgString& rhs)
+inline bool operator==(const HgStringBuilder& lhs, const HgStringBuilder& rhs)
 {
-    if (lhs.length != rhs.length)
-        return false;
-    if (lhs.length <= 24)
-        return memcmp(lhs.small.chars, rhs.small.chars, lhs.length) == 0;
-    else
-        return memcmp(lhs.large.chars, rhs.large.chars, lhs.length) == 0;
+    return HgStringView{lhs} == HgStringView{rhs};
 }
 
 /**
- * Compare strings
+ * Compare string builders
  */
-inline bool operator!=(const HgString& lhs, const HgString& rhs)
+inline bool operator!=(const HgStringBuilder& lhs, const HgStringBuilder& rhs)
 {
     return !(lhs == rhs);
-}
-
-/**
- * Get the character pointer
- */
-inline char* hgStringChars(HgString* str)
-{
-    return str->length <= 24 ? str->small.chars : str->large.chars;
 }
 
 /**
@@ -1851,7 +1788,7 @@ inline char* hgStringChars(HgString* str)
  * - arena The arena to allocate from
  * - init The initial string to copy from
  */
-HgString hgStringCopy(HgArena* arena, HgStringView str);
+HgStringBuilder hgStringCopy(HgArena* arena, HgStringView str);
 
 /**
  * Create a formatted string : TODO
@@ -1873,7 +1810,7 @@ HgString hgStringCopy(HgArena* arena, HgStringView str);
  * - fmt The format string
  * - ... The format parameters
  */
-HgString hgStringFormat(HgArena* arena, HgStringView fmt, ...);
+HgStringBuilder hgStringFormat(HgArena* arena, HgStringView fmt, ...);
 
 /**
  * Copies another string into the string at index
@@ -1884,12 +1821,12 @@ HgString hgStringFormat(HgArena* arena, HgStringView fmt, ...);
  * - idx The index into dst
  * - src The string to copy from
  */
-void hgStringInsert(HgArena* arena, HgString* dst, u64 idx, HgStringView src);
+void hgStringInsert(HgArena* arena, HgStringBuilder* dst, u64 idx, HgStringView src);
 
 /**
  * Copies another string to the end of the string
  */
-inline void hgStringAppend(HgArena* arena, HgString* dst, HgStringView src)
+inline void hgStringAppend(HgArena* arena, HgStringBuilder* dst, HgStringView src)
 {
     hgStringInsert(arena, dst, dst->length, src);
 }
@@ -1897,7 +1834,7 @@ inline void hgStringAppend(HgArena* arena, HgString* dst, HgStringView src)
 /**
  * Copies another string to the beginning of the string
  */
-inline void hgStringPrepend(HgArena* arena, HgString* dst, HgStringView src)
+inline void hgStringPrepend(HgArena* arena, HgStringBuilder* dst, HgStringView src)
 {
     hgStringInsert(arena, dst, 0, src);
 }
@@ -1911,7 +1848,7 @@ inline void hgStringPrepend(HgArena* arena, HgString* dst, HgStringView src)
  * - idx The index into dst
  * - c The character to insert
  */
-inline void hgStringInsertc(HgArena* arena, HgString* dst, u64 idx, char c)
+inline void hgStringInsertc(HgArena* arena, HgStringBuilder* dst, u64 idx, char c)
 {
     hgStringInsert(arena, dst, idx, {&c, 1});
 }
@@ -1919,7 +1856,7 @@ inline void hgStringInsertc(HgArena* arena, HgString* dst, u64 idx, char c)
 /**
  * Copies another string to the end of the string
  */
-inline void hgStringAppendc(HgArena* arena, HgString* dst, char c)
+inline void hgStringAppendc(HgArena* arena, HgStringBuilder* dst, char c)
 {
     hgStringInsertc(arena, dst, dst->length, c);
 }
@@ -1927,10 +1864,67 @@ inline void hgStringAppendc(HgArena* arena, HgString* dst, char c)
 /**
  * Copies another string to the beginning of the string
  */
-inline void hgStringPrependc(HgArena* arena, HgString* dst, char c)
+inline void hgStringPrependc(HgArena* arena, HgStringBuilder* dst, char c)
 {
     hgStringInsertc(arena, dst, 0, c);
 }
+
+/**
+ * A dynamically allocated owning string
+ */
+struct HgStringOwner {
+    /**
+     * The string characters
+     */
+    const char* chars;
+    /**
+     * The length of the string
+     */
+    u64 length;
+
+    /**
+     * Access using the index operator
+     */
+    constexpr const char& operator[](u64 index) const
+    {
+        hgAssert(index < length);
+        return chars[index];
+    }
+
+    /**
+     * Implicit converts to a string view
+     */
+    constexpr operator HgStringView() const
+    {
+        return {chars, length};
+    }
+};
+
+/**
+ * Compare string builders
+ */
+inline bool operator==(const HgStringOwner& lhs, const HgStringOwner& rhs)
+{
+    return HgStringView{lhs} == HgStringView{rhs};
+}
+
+/**
+ * Compare string builders
+ */
+inline bool operator!=(const HgStringOwner& lhs, const HgStringOwner& rhs)
+{
+    return !(lhs == rhs);
+}
+
+/**
+ * Allocate a new HgString
+ */
+HgStringOwner hgStringAlloc(HgStringView data);
+
+/**
+ * Free an HgString
+ */
+void hgStringFree(HgStringOwner* str);
 
 /**
  * Check whether a character is whitespace (space, tab, or newline)
@@ -1969,7 +1963,7 @@ f64 hgStringToFloat(HgStringView str);
  * - arena The arena to allocate from
  * - num The integer number to create from
  */
-HgString hgIntegerToString(HgArena* arena, i64 num);
+HgStringBuilder hgIntegerToString(HgArena* arena, i64 num);
 
 /**
  * Create a base 10 string from an integer
@@ -1979,7 +1973,7 @@ HgString hgIntegerToString(HgArena* arena, i64 num);
  * - num The integer number to create from
  * - decimalCount The number of trailing decimal digits
  */
-HgString hgFloatToString(HgArena* arena, f64 num, u32 decimalCount);
+HgStringBuilder hgFloatToString(HgArena* arena, f64 num, u32 decimalCount);
 
 // base 2 and 16 string-int conversions : TODO
 // arbitrary base string-int conversions : TODO?
@@ -1995,7 +1989,7 @@ struct HgJsonError {
     /**
      * The error message
      */
-    HgString msg;
+    HgStringView msg;
 };
 
 /**
@@ -2028,7 +2022,7 @@ struct HgJsonField {
     /**
      * The name of the field
      */
-    HgString name;
+    HgStringView name;
     /**
      * The value stored in the field
      */
@@ -2084,7 +2078,7 @@ struct HgJsonNode {
         HgJsonStruct jstruct;
         HgJsonField field;
         HgJsonArray array;
-        HgString string;
+        HgStringView string;
         f64 floating;
         i64 integer;
         bool boolean;
@@ -2471,10 +2465,19 @@ constexpr u64 hgHash(HgStringView str)
 }
 
 /**
- * Hash map hashing for HgString
+ * Hash map hashing for HgStringBuilder
  */
 template<>
-constexpr u64 hgHash(HgString str)
+constexpr u64 hgHash(HgStringBuilder str)
+{
+    return hgHash(HgStringView{str});
+}
+
+/**
+ * Hash map hashing for HgStringOwner
+ */
+template<>
+constexpr u64 hgHash(HgStringOwner str)
 {
     return hgHash(HgStringView{str});
 }
@@ -4679,7 +4682,7 @@ struct HgAssetData {
     /**
      * The unique path for caching
      */
-    HgStringView path;
+    HgStringOwner path;
 };
 
 /**
@@ -4751,13 +4754,12 @@ HgAssetHandle<T> hgAssetCreate(HgStringView path)
         }
         else
         {
-            char* pathStore = (char*)malloc(path.length);
-            memcpy(pathStore, path.chars, path.length);
+            HgStringOwner pathStore = hgStringAlloc(path);
 
-            handle = hgMapAdd(&hgAssets<T>.map, {pathStore, path.length}, hgPoolAlloc(&hgAssets<T>.pool));
+            handle = hgMapAdd(&hgAssets<T>.map, pathStore, hgPoolAlloc(&hgAssets<T>.pool));
 
             HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, *handle);
-            data->path = {pathStore, path.length};
+            data->path = pathStore;
             data->isLoaded = hgFenceCreate();
             data->refCount = 1;
             data->asset = {};
@@ -5255,7 +5257,7 @@ struct HgComponent {
     void (*serialize)(
         HgArena* stringArena,
         HgMap<HgEntity, u32>* entities,
-        HgMap<HgString, u32>* strings,
+        HgMap<HgStringView, u32>* strings,
         void* srcComponent,
         void* dstData);
     /**
@@ -5299,7 +5301,7 @@ struct HgEcs {
 HgEcs hgEcsCreate(HgArena* arena, u32 maxEntities, u32 maxComponentTypes);
 
 /**
- * Remove all component types and destroy all entities
+ * Destroy all entities
  */
 void hgEcsReset(HgEcs* ecs);
 
@@ -5343,7 +5345,7 @@ struct HgEcsRegisterComponent {
     void (*serialize)(
         HgArena* stringArena,
         HgMap<HgEntity, u32>* entities,
-        HgMap<HgString, u32>* strings,
+        HgMap<HgStringView, u32>* strings,
         void* srcComponent,
         void* dstData);
     /**
@@ -5397,7 +5399,7 @@ template<typename T>
 void hgEcsSerializeImpl(
     HgArena* stringArena,
     HgMap<HgEntity, u32>* entities,
-    HgMap<HgString, u32>* strings,
+    HgMap<HgStringView, u32>* strings,
     T* srcComponent,
     void* dstData)
 {
@@ -5445,7 +5447,7 @@ void hgEcsDeserializeImpl(
         registerComponent.serialize = []( \
             HgArena* stringArena, \
             HgMap<HgEntity, u32>* entities, \
-            HgMap<HgString, u32>* strings, \
+            HgMap<HgStringView, u32>* strings, \
             void* srcComponent, \
             void* dstData) \
         { \
@@ -5915,7 +5917,7 @@ template<>
 void hgEcsSerializeImpl(
     HgArena* stringArena,
     HgMap<HgEntity, u32>* entities,
-    HgMap<HgString, u32>* strings,
+    HgMap<HgStringView, u32>* strings,
     HgNode* srcComponent,
     void* dstData);
 
