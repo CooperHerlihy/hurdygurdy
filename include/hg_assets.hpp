@@ -158,61 +158,117 @@ void hgAssetUnloadImpl(HgAssetData<T>* data)
 }
 
 /**
- * Load an asset (or increment the ref count)
- *
- * Parameters
- * - path Either the path to load from, or empty to create a unique empty asset
- *
- * Returns
- * - A handle to the created asset
+ * Create a unique empty asset
  */
 template<typename T>
-HgAssetHandle<T> hgAssetLoad(HgStringView path = {})
+HgAssetHandle<T> hgAssetCreate()
 {
-    if (path == "")
+    hgMutexAcquire(hgAssets<T>.mtx);
+    HgHandle handle = hgPoolAlloc(&hgAssets<T>.pool);
+    hgMutexRelease(hgAssets<T>.mtx);
+
+    HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle);
+    data->path = {};
+    data->isLoaded = hgFenceCreate();
+    data->refCount = 1;
+    data->asset = {};
+
+    return {handle};
+}
+
+/**
+ * Load an asset (or increment the ref count)
+ */
+template<typename T>
+HgAssetHandle<T> hgAssetLoad(HgStringView path)
+{
+    hgMutexAcquire(hgAssets<T>.mtx);
+    HgAssetHandle<T>* asset = hgMapGet(&hgAssets<T>.map, path);
+    if (asset != nullptr)
     {
-        hgMutexAcquire(hgAssets<T>.mtx);
-        HgHandle handle = hgPoolAlloc(&hgAssets<T>.pool);
+        ++hgPoolGet(&hgAssets<T>.pool, asset->handle)->refCount;
         hgMutexRelease(hgAssets<T>.mtx);
-
-        HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle);
-        data->path = {};
-        data->isLoaded = hgFenceCreate();
-        data->refCount = 1;
-        data->asset = {};
-
-        return {handle};
+        return *asset;
     }
-    else
+
+    HgHandle handle = hgPoolAlloc(&hgAssets<T>.pool);
+
+    HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle);
+    data->path = hgStringAlloc(path);
+    data->isLoaded = hgFenceCreate();
+    data->refCount = 1;
+    data->asset = {};
+
+    hgMapAdd(&hgAssets<T>.map, data->path, {handle});
+
+    hgFenceAttach(data->isLoaded, 1);
+    hgMutexRelease(hgAssets<T>.mtx);
+    hgAssetLoadImpl(data);
+    hgFenceSignal(data->isLoaded, 1);
+
+    return {handle};
+}
+
+/**
+ * Load an asset asynchronously
+ */
+template<typename T>
+HgAssetHandle<T> hgAssetLoadAsync(HgStringView path)
+{
+    hgMutexAcquire(hgAssets<T>.mtx);
+    HgAssetHandle<T>* asset = hgMapGet(&hgAssets<T>.map, path);
+    if (asset != nullptr)
     {
-        hgMutexAcquire(hgAssets<T>.mtx);
-        HgAssetHandle<T>* asset = hgMapGet(&hgAssets<T>.map, path);
-        if (asset != nullptr)
-        {
-            ++hgPoolGet(&hgAssets<T>.pool, asset->handle)->refCount;
-            hgMutexRelease(hgAssets<T>.mtx);
-            return *asset;
-        }
-        else
-        {
-            HgHandle handle = hgPoolAlloc(&hgAssets<T>.pool);
-
-            HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle);
-            data->path = hgStringAlloc(path);
-            data->isLoaded = hgFenceCreate();
-            data->refCount = 1;
-            data->asset = {};
-
-            hgMapAdd(&hgAssets<T>.map, data->path, {handle});
-
-            hgFenceAttach(data->isLoaded, 1);
-            hgMutexRelease(hgAssets<T>.mtx);
-            hgAssetLoadImpl(data);
-            hgFenceSignal(data->isLoaded, 1);
-
-            return {handle};
-        }
+        ++hgPoolGet(&hgAssets<T>.pool, asset->handle)->refCount;
+        hgMutexRelease(hgAssets<T>.mtx);
+        return *asset;
     }
+
+    HgHandle handle = hgPoolAlloc(&hgAssets<T>.pool);
+
+    HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle);
+    data->path = hgStringAlloc(path);
+    data->isLoaded = hgFenceCreate();
+    data->refCount = 1;
+    data->asset = {};
+
+    hgMapAdd(&hgAssets<T>.map, data->path, {handle});
+
+    hgThreadsCall(data->isLoaded, data, [](void* pdata)
+    {
+        hgAssetLoadImpl((HgAssetData<T>*)pdata);
+    });
+    hgMutexRelease(hgAssets<T>.mtx);
+
+    return {handle};
+}
+
+/**
+ * Hot reload an asset
+ */
+template<typename T>
+void hgAssetReload(HgAssetHandle<T> asset)
+{
+    HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, asset.handle);
+    hgFenceAttach(data->isLoaded);
+    hgAssetUnloadImpl(data);
+    hgAssetLoadImpl(data);
+    hgFenceSignal(data->isLoaded);
+}
+
+/**
+ * Hot reload an asset asynchronously
+ */
+template<typename T>
+void hgAssetReloadAsync(HgAssetHandle<T> asset)
+{
+    HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, asset.handle);
+    hgThreadsCall(data->isLoaded, data, [](void* pdata)
+    {
+        HgAssetData<T>* data = (HgAssetData<T>*)pdata;
+        hgAssetUnloadImpl(data);
+        hgAssetLoadImpl(data);
+    });
 }
 
 /**
@@ -232,135 +288,13 @@ void hgAssetUnload(HgAssetHandle<T> asset)
             if (data->path != nullptr)
             {
                 hgMapRemove(&hgAssets<T>.map, data->path);
-                free((void*)data->path.chars);
+                hgStringFree(&data->path);
             }
             hgFenceDestroy(data->isLoaded);
             hgPoolFree(&hgAssets<T>.pool, asset.handle);
         }
         hgMutexRelease(hgAssets<T>.mtx);
     }
-}
-
-/**
- * Hot reload an asset
- */
-template<typename T>
-void hgAssetReload(HgAssetHandle<T> asset)
-{
-    HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, asset.handle);
-    hgFenceAttach(data->isLoaded);
-    hgAssetUnloadImpl(data);
-    hgAssetLoadImpl(data);
-    hgFenceSignal(data->isLoaded);
-}
-
-/**
- * Load an asset asynchronously
- */
-template<typename T>
-HgAssetHandle<T> hgAssetLoadAsync(HgStringView path = {})
-{
-    if (path == "")
-    {
-        hgMutexAcquire(hgAssets<T>.mtx);
-        HgHandle handle = hgPoolAlloc(&hgAssets<T>.pool);
-        hgMutexRelease(hgAssets<T>.mtx);
-
-        HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle);
-        data->path = {};
-        data->isLoaded = hgFenceCreate();
-        data->refCount = 1;
-        data->asset = {};
-
-        return {handle};
-    }
-    else
-    {
-        hgMutexAcquire(hgAssets<T>.mtx);
-        HgAssetHandle<T>* asset = hgMapGet(&hgAssets<T>.map, path);
-        if (asset != nullptr)
-        {
-            ++hgPoolGet(&hgAssets<T>.pool, asset->handle)->refCount;
-            hgMutexRelease(hgAssets<T>.mtx);
-            return *asset;
-        }
-        else
-        {
-            HgHandle handle = hgPoolAlloc(&hgAssets<T>.pool);
-
-            HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle);
-            data->path = hgStringAlloc(path);
-            data->isLoaded = hgFenceCreate();
-            data->refCount = 1;
-            data->asset = {};
-
-            hgMapAdd(&hgAssets<T>.map, data->path, {handle});
-
-            hgThreadsCall(data->isLoaded, data, [](void* pdata)
-            {
-                hgAssetLoadImpl((HgAssetData<T>*)pdata);
-            });
-            hgMutexRelease(hgAssets<T>.mtx);
-
-            return {handle};
-        }
-    }
-}
-
-/**
- * Unload an asset asynchronously
- */
-template<typename T>
-void hgAssetUnloadAsync(HgAssetHandle<T> asset)
-{
-    if (hgPoolAlive(&hgAssets<T>.pool, asset.handle))
-    {
-        static_assert(sizeof(void*) >= sizeof(HgAssetHandle<T>));
-        union HandleData {
-            void* p;
-            HgHandle handle;
-        };
-        HandleData handleData{};
-        handleData.handle = asset.handle;
-
-        hgThreadsCall(HgFence{}, handleData.p, [](void* phandle)
-        {
-            HandleData handleData{};
-            handleData.p = phandle;
-            HgHandle handle = handleData.handle;
-            HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle);
-
-            hgMutexAcquire(hgAssets<T>.mtx);
-            if (--data->refCount == 0)
-            {
-                hgAssetUnloadImpl(data);
-
-                if (data->path != nullptr)
-                {
-                    hgMapRemove(&hgAssets<T>.map, data->path);
-                    free((void*)data->path.chars);
-                }
-                hgFenceDestroy(data->isLoaded);
-                hgPoolFree(&hgAssets<T>.pool, handle);
-            }
-            hgMutexRelease(hgAssets<T>.mtx);
-        });
-    }
-}
-
-/**
- * Hot reload an asset asynchronously
- */
-template<typename T>
-void hgAssetReloadAsync(HgAssetHandle<T> asset)
-{
-    HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, asset.handle);
-    hgThreadsCall(data->isLoaded, data, [](void* pdata)
-    {
-        HgAssetData<T>* data = (HgAssetData<T>*)pdata;
-        hgAssetUnloadImpl(data);
-        hgAssetLoadImpl(data);
-    });
 }
 
 /**

@@ -1726,12 +1726,12 @@ void hgTest()
     // HgAssetManager and HgBinary
     {
         {
-            HgBinaryHandle bin1 = hgAssetLoad<HgBinary>("");
+            HgBinaryHandle bin1 = hgAssetCreate<HgBinary>();
             hgAssert(hgAssetPath(bin1) == "");
             HgBinary* bin1Data = hgAssetGet(bin1);
             hgAssert(bin1Data != nullptr);
 
-            HgBinaryHandle bin2 = hgAssetLoad<HgBinary>("");
+            HgBinaryHandle bin2 = hgAssetCreate<HgBinary>();
             hgAssert(hgAssetPath(bin2) == "");
             HgBinary* bin2Data = hgAssetGet(bin2);
             hgAssert(bin2Data != nullptr);
@@ -1818,9 +1818,10 @@ void hgTest()
             HgBinary* newBin2 = hgAssetGet(binHandle2);
             hgAssert(newBin2 == newBin);
 
-            hgAssetUnloadAsync(binHandle);
+            hgAssetUnload(binHandle);
             hgAssert(hgAssetGet(binHandle2) == newBin);
-            hgAssetUnloadAsync(binHandle2);
+            hgAssetUnload(binHandle2);
+            hgAssert(hgAssetGet(binHandle2) == nullptr);
         }
     }
 
