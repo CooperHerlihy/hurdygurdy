@@ -600,6 +600,39 @@ int main()
     init(arena);
     hgDefer(deinit());
 
+    HgAudioPlayer audioPlayer = hgAudioPlayerCreate(HgAudioFormat_f32, 8000, 1);
+    hgDefer(hgAudioPlayerDestroy(audioPlayer));
+
+    f32 audioBase[8000];
+    for (u32 i = 0; i < 8000; ++i)
+    {
+
+        // // saw harmonics
+        // f32 t = (f32)i * (f32)hgPi * 2.0f / 8000.0f;
+        // audioBase[i] = 0;
+        // for (u32 j = 1; j <= 64; ++j)
+        // {
+        //     f32 x = (f32)j;
+        //     audioBase[i] += 1.0f / x * std::sin(100.f * t * x);
+        // }
+
+        // // square harmonics
+        // f32 t = (f32)i * (f32)hgPi * 2.0f / 8000.0f;
+        // audioBase[i] = 0;
+        // for (u32 j = 1; j <= 64; ++j)
+        // {
+        //     f32 x = (f32)j * 2.0f - 1.0f;
+        //     audioBase[i] += 1.0f / x * std::sin(100.f * t * x);
+        // }
+
+        // square exact
+        if (i % 80 < 40)
+            audioBase[i] = 1.0f;
+        else
+            audioBase[i] = -1.0f;
+
+    }
+
     // temporary, trick the OS into thinking we're important
     hgThreadsCall(HgFence{}, nullptr, [](void*)
     {
@@ -621,6 +654,9 @@ int main()
         hgProcessEvents();
         if (hgWasQuit() || hgWindowWasClosed(window))
             quit = true;
+
+        if (hgAudioPlayerQueuedSize(audioPlayer) < (int)sizeof(audioBase))
+            hgAudioPlayerPush(audioPlayer, audioBase, sizeof(audioBase));
 
         hgEcsForEach<Spin, HgTransform>(&ecs, [&](HgEntity e, Spin* spin, HgTransform* tf)
         {

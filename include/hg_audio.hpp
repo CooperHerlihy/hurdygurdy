@@ -27,6 +27,81 @@
 #ifndef HG_AUDIO_HPP
 #define HG_AUDIO_HPP
 
-// audio system : TODO
+#include "hg_core.hpp"
+#include "hg_memory.hpp"
+#include "hg_templates.hpp"
+
+/**
+ * Initialize the audio system
+ */
+void hgAudioInit(HgArena* arena, u32 maxPlayers);
+
+/**
+ * Deinitialize the audio system
+ */
+void hgAudioDeinit();
+
+/**
+ * An audio player
+ */
+struct HgAudioPlayer {
+    HgHandle handle;
+};
+
+/**
+ * Audio formats
+ */
+enum HgAudioFormat : u32 {
+    /**
+     * Unsigned 8 bit int
+     */
+    HgAudioFormat_u8,
+    /**
+     * Signed 8 bit int
+     */
+    HgAudioFormat_s8,
+    /**
+     * Signed 16 bit int
+     */
+    HgAudioFormat_s16,
+    /**
+     * Signed 32 bit int
+     */
+    HgAudioFormat_s32,
+    /**
+     * 32 bit float
+     */
+    HgAudioFormat_f32,
+};
+
+/**
+ * Create a new audio player
+ *
+ * Parameters
+ * - format The format that will be pushed to the player
+ * - frequency The segments per second to play
+ * - channels The number of channels (mono, stereo, etc.)
+ */
+HgAudioPlayer hgAudioPlayerCreate(HgAudioFormat format, u32 frequency, u32 channels);
+
+/**
+ * Destroy an audio player
+ */
+void hgAudioPlayerDestroy(HgAudioPlayer);
+
+/**
+ * Push data to the audio player
+ */
+void hgAudioPlayerPush(HgAudioPlayer player, const void* data, u64 size);
+
+/**
+ * Returns the amount of audio still queued in bytes
+ */
+u64 hgAudioPlayerQueuedSize(HgAudioPlayer player);
+
+/**
+ * Clear data from the audio player
+ */
+void hgAudioPlayerClear(HgAudioPlayer player);
 
 #endif // HG_AUDIO_HPP

@@ -38,6 +38,8 @@ void hgInit(const HgInit* init)
     u32 workerCount = (u32)std::max(1, (i32)hgHardwareThreadCount() - 1); // main thread
     hgThreadsInit(arena, init->threadPoolQueueSize, workerCount);
 
+    hgAudioInit(arena, init->maxAudioPlayers);
+
     hgAssetInitDefaults(
         arena,
         init->maxBinaries,
@@ -50,6 +52,8 @@ void hgInit(const HgInit* init)
 void hgDeinit()
 {
     hgAssetDeinitDefaults();
+
+    hgAudioDeinit();
 
     hgThreadsDeinit();
     hgConcurrencyDeinit();

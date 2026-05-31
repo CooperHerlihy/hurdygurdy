@@ -272,6 +272,8 @@ struct HgInit {
     u32 maxWindows = 8;
     u32 maxWindowEvents = 2048;
 
+    u32 maxAudioPlayers = 64;
+
     u32 maxBinaries = 256;
     u32 maxTextures = 256;
     u32 maxGpuTextures = 256;
