@@ -22,7 +22,11 @@ void hgInit(const HgInit* init)
     hgScratchInit(init->arenaSize);
     HgArena* arena = hgScratch();
 
-    hgPlatformInit(arena, init->maxWindows, init->maxWindowEvents);
+    hgPlatformInit(
+        arena,
+        init->maxWindows,
+        init->maxWindowEvents,
+        init->maxAudioPlayers);
 
     HgGpuInit gpuInit{};
     gpuInit.maxBuffers = init->maxBuffers;
@@ -38,8 +42,6 @@ void hgInit(const HgInit* init)
     u32 workerCount = (u32)std::max(1, (i32)hgHardwareThreadCount() - 1); // main thread
     hgThreadsInit(arena, init->threadPoolQueueSize, workerCount);
 
-    hgAudioInit(arena, init->maxAudioPlayers);
-
     hgAssetInitDefaults(
         arena,
         init->maxBinaries,
@@ -52,8 +54,6 @@ void hgInit(const HgInit* init)
 void hgDeinit()
 {
     hgAssetDeinitDefaults();
-
-    hgAudioDeinit();
 
     hgThreadsDeinit();
     hgConcurrencyDeinit();
@@ -3760,4 +3760,139 @@ void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
         hgGpuDraw(cmd, 0, gpuModel->indexCount, 0, 1);
     });
 }
+
+// struct HgAudioPlayerDesc {
+//     HgAudioFormat format;
+//     u32 frequency;
+//     u32 channels;
+// };
+//
+// template<>
+// constexpr u64 hgHash(HgAudioPlayerDesc desc)
+// {
+//     (void)desc;
+//     return desc.frequency + (desc.channels << 24) + (desc.format << 28);
+// }
+//
+// static bool operator==(const HgAudioPlayerDesc& lhs, const HgAudioPlayerDesc& rhs)
+// {
+//     return memcmp(&lhs, &rhs, sizeof(HgAudioPlayerDesc)) == 0;
+// }
+//
+// static bool operator!=(const HgAudioPlayerDesc& lhs, const HgAudioPlayerDesc& rhs)
+// {
+//     return !(lhs == rhs);
+// }
+//
+// void hgAudioInit(HgArena* arena, u32 maxPlayers)
+// {
+// }
+//
+// void hgAudioDeinit()
+// {
+// }
+//
+// template<>
+// void hgAssetLoadImpl(HgAssetData<HgAudio>* data)
+// {
+//     (void)data;
+//     hgError("Load audio file impl : TODO\n");
+// }
+//
+// template<>
+// void hgAssetUnloadImpl(HgAssetData<HgAudio>* data)
+// {
+//     (void)data;
+//     hgError("Unload audio file impl : TODO\n");
+// }
+//
+// void hgAudioUpdate(HgEcs* ecs, HgEntity listener)
+// {
+//     hgEcsForPar<HgAudioSource>(ecs, [&](HgEntity e, HgAudioSource* src)
+//     {
+//         HgAudio* audio = hgAssetGet(src->audio);
+//         if (src->position == audio->size && !src->repeat)
+//             return;
+//
+//         HgArena* scratch = hgScratch();
+//         hgArenaScope(scratch);
+//
+//         u64 queued = hgAudioPlayerQueuedSize(src->player);
+//         u64 sizeToPush = (u64)((f32)audio->frequency / 4.0f) - queued;
+//
+//         void* queue = hgAlloc(scratch, sizeToPush, hgAudioFormatSize(audio->format));
+//         u64 queueSize = 0;
+//
+//         while (queueSize < sizeToPush)
+//         {
+//             u64 audioRemaining = audio->size - src->position;
+//             u64 sizeToQueue = std::min(sizeToPush, audioRemaining);
+//             memcpy(queue, (u8*)audio->data + src->position, sizeToQueue);
+//             queueSize += sizeToQueue;
+//             src->position += sizeToQueue;
+//
+//             if (!src->repeat)
+//                 break;
+//
+//             if (src->position == audio->size)
+//                 src->position = 0;
+//         }
+//
+//         if (hgEcsHas<HgTransform>(ecs, e))
+//         {
+//             hgAssert(hgEcsHas<HgTransform>(ecs, listener));
+//
+//             HgVec3 relPos = hgTransformWorldPos(*hgEcsGet<HgTransform>(ecs, listener))
+//                           - hgTransformWorldPos(*hgEcsGet<HgTransform>(ecs, e));
+//             f32 dist = hgVecDot3(relPos, relPos);
+//             f32 factor = 1.0f / dist;
+//
+//             switch (audio->format)
+//             {
+//                 case HgAudioFormat_u8:
+//                     for (u64 i = 0; i < sizeToPush / sizeof(u8); ++i)
+//                     {
+//                         u8 val = ((u8*)queue)[i];
+//                         val = (u8)((f32)val * factor);
+//                         ((u8*)queue)[i] = val;
+//                     }
+//                     break;
+//                 case HgAudioFormat_s8:
+//                     for (u64 i = 0; i < sizeToPush / sizeof(i8); ++i)
+//                     {
+//                         i8 val = ((i8*)queue)[i];
+//                         val = (i8)((f32)val * factor);
+//                         ((i8*)queue)[i] = val;
+//                     }
+//                     break;
+//                 case HgAudioFormat_s16:
+//                     for (u64 i = 0; i < sizeToPush / sizeof(i16); ++i)
+//                     {
+//                         i16 val = ((i16*)queue)[i];
+//                         val = (i16)((f32)val * factor);
+//                         ((i16*)queue)[i] = val;
+//                     }
+//                     break;
+//                 case HgAudioFormat_s32:
+//                     for (u64 i = 0; i < sizeToPush / sizeof(i32); ++i)
+//                     {
+//                         i32 val = ((i32*)queue)[i];
+//                         val = (i32)((f32)val * factor);
+//                         ((i32*)queue)[i] = val;
+//                     }
+//                     break;
+//                 case HgAudioFormat_f32:
+//                     for (u64 i = 0; i < sizeToPush / sizeof(f32); ++i)
+//                     {
+//                         ((f32*)queue)[i] *= factor;
+//                     }
+//                     break;
+//                 default:
+//                     hgError("Invalid audio format enum: %u\n", audio->format);
+//             }
+//         }
+//
+//         hgAudioPlayerPush(src->player, queue, queueSize);
+//     });
+// }
 

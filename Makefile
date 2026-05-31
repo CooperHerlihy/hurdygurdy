@@ -33,7 +33,6 @@ IMGUI_BACKEND := \
 SRC := \
 	hurdygurdy.cpp \
 	platform.cpp \
-	vulkan.cpp \
 	test.cpp
 
 TARGETS := \

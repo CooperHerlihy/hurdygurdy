@@ -30,6 +30,7 @@
 #include "hg_core.hpp"
 #include "hg_memory.hpp"
 #include "hg_templates.hpp"
+#include "hg_ecs.hpp"
 
 /**
  * Initialize the audio system
@@ -75,6 +76,11 @@ enum HgAudioFormat : u32 {
 };
 
 /**
+ * Returns the size in bytes of the format
+ */
+u32 hgAudioFormatSize(HgAudioFormat format);
+
+/**
  * Create a new audio player
  *
  * Parameters
@@ -103,5 +109,56 @@ u64 hgAudioPlayerQueuedSize(HgAudioPlayer player);
  * Clear data from the audio player
  */
 void hgAudioPlayerClear(HgAudioPlayer player);
+
+/**
+ * Audio data asset
+ */
+struct HgAudio {
+    void* data;
+    u64 size;
+    HgAudioFormat format;
+    u32 frequency;
+    u32 channels;
+};
+
+/**
+ * A handle to an audio asset
+ */
+typedef HgAssetHandle<HgAudio> HgAudioHandle;
+
+/**
+ * HgAudioData asset load implementation
+ */
+template<>
+void hgAssetLoadImpl(HgAssetData<HgAudio>* data);
+
+/**
+ * HgAudioData asset unload implementation
+ */
+template<>
+void hgAssetUnloadImpl(HgAssetData<HgAudio>* data);
+
+/**
+ * An audio source component
+ */
+struct HgAudioSource {
+    /**
+     * The audio to play from
+     */
+    HgAudioHandle audio;
+    /**
+     * The current audio position
+     */
+    u64 position;
+    /**
+     * Whether the source should repeat playing
+     */
+    bool repeat;
+};
+
+/**
+ * Update all audio sources, playing sound if needed
+ */
+void hgAudioUpdate(HgEcs* ecs, HgEntity listener);
 
 #endif // HG_AUDIO_HPP

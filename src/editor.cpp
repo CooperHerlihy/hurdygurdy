@@ -82,6 +82,7 @@ void init(HgArena* arena)
     hgEcsRegisterType(&ecs, arena, HgDirLight, 64);
     hgEcsRegisterType(&ecs, arena, HgPointLight, 64);
     hgEcsRegisterType(&ecs, arena, HgModel, 256);
+    hgEcsRegisterType(&ecs, arena, HgAudioSource, 64);
 
     hgEcsRegisterType(&ecs, arena, Name, 1024);
     hgEcsRegisterType(&ecs, arena, Spin, 256);
@@ -136,6 +137,7 @@ void init(HgArena* arena)
     hgEcsGet<HgTransform>(&ecs, cube)->position = HgVec3{1, 0, 1};
     hgTransformUpdate(&ecs, cube);
     *hgEcsAdd<HgModel>(&ecs, cube) = {HgGpuMeshHandle{}, HgGpuTextureHandle{}, HgGpuTextureHandle{}};
+    hgEcsAdd<HgAudioSource>(&ecs, cube);
     *hgEcsAdd<Spin>(&ecs, cube) = {1.0f};
 
     hgNodeAddChild(&ecs, root, cube);

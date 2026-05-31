@@ -28,36 +28,7 @@
 #define HG_WINDOW_HPP
 
 #include "hg_core.hpp"
-#include "hg_memory.hpp"
-#include "hg_strings.hpp"
 #include "hg_gpu.hpp"
-
-/**
- * Initializes global resources for windowing
- *
- * Parameters
- * - arena The arena to allocate from
- * - maxWindows The maximum number of windows that can be created
- * - maxEvents The maximum number of events recorded per frame
- */
-void hgPlatformInit(HgArena* arena, u32 maxWindows, u32 maxEvents);
-
-/**
- * Deinitializes global resources for windowing
- */
-void hgPlatformDeinit();
-
-/**
- * Get the platform's required instance extensions for windowing
- *
- * Parameters
- * - arena The arena to allocate from
- * - extBuffer A pointer to store the extension names
- *
- * Returns
- * - The number of required extensions
- */
-u32 hgPlatformGetVulkanExtensions(HgArena* arena, HgStringView** extBuffer);
 
 /**
  * The present mode for the swapchain

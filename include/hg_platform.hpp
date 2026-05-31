@@ -24,23 +24,39 @@
  * =============================================================================
  */
 
-#ifndef HURDYGURDY_HPP
-#define HURDYGURDY_HPP
+#ifndef HG_PLATFORM_HPP
+#define HG_PLATFORM_HPP
 
 #include "hg_core.hpp"
-#include "hg_math.hpp"
 #include "hg_memory.hpp"
-#include "hg_templates.hpp"
 #include "hg_strings.hpp"
-#include "hg_library.hpp"
-#include "hg_time.hpp"
-#include "hg_concurrency.hpp"
-#include "hg_platform.hpp"
-#include "hg_gpu.hpp"
-#include "hg_window.hpp"
-#include "hg_audio.hpp"
-#include "hg_assets.hpp"
-#include "hg_ecs.hpp"
-#include "hg_rendering.hpp"
 
-#endif // HURDYGURDY_HPP
+/**
+ * Initializes global platform resources
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - maxWindows The maximum number of windows that can be created
+ * - maxEvents The maximum number of events recorded per frame
+ * - maxAudioPlayers The maximum number of audio players
+ */
+void hgPlatformInit(HgArena* arena, u32 maxWindows, u32 maxEvents, u32 maxAudioPlayers);
+
+/**
+ * Deinitializes global platform resources
+ */
+void hgPlatformDeinit();
+
+/**
+ * Get the platform's required instance extensions for windowing
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - extBuffer A pointer to store the extension names
+ *
+ * Returns
+ * - The number of required extensions
+ */
+u32 hgPlatformGetVulkanExtensions(HgArena* arena, HgStringView** extBuffer);
+
+#endif // HG_PLATFORM_HPP
