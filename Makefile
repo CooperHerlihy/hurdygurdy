@@ -12,6 +12,7 @@ CONFIG := $(DEBUG_CONFIG)
 INCLUDES := \
 	-I$(BUILD_DIR) \
 	-I$(SRC_DIR)/include \
+	-I$(SRC_DIR)/vendor \
 	-I$(SRC_DIR)/vendor/SDL/include \
 	-I$(SRC_DIR)/vendor/Vulkan-Headers/include \
 	-I$(SRC_DIR)/vendor/imgui \

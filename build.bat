@@ -18,8 +18,9 @@ for %%a in (%*) do (
 set INCLUDES= ^
     /I "%BUILD_DIR%" ^
     /I "%SRC_DIR%\include" ^
-    /I "%SRC_DIR%\vendor\Vulkan-Headers\include" ^
+    /I "%SRC_DIR%\vendor" ^
     /I "%SRC_DIR%\vendor\SDL\include" ^
+    /I "%SRC_DIR%\vendor\Vulkan-Headers\include" ^
     /I "%SRC_DIR%\vendor\imgui" ^
     /I "%SRC_DIR%\vendor\imgui\backends"
 
@@ -31,8 +32,8 @@ set IMGUI_BACKENDS= ^
 
 set SHADERS= ^
     noise.comp ^
-	skybox.vert ^
-	skybox.frag ^
+    skybox.vert ^
+    skybox.frag ^
     sprite.vert ^
     sprite.frag ^
     model.vert ^
