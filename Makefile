@@ -10,7 +10,6 @@ RELEASE_CONFIG := -O3 -DNDEBUG -fno-exceptions -fno-rtti
 CONFIG := $(DEBUG_CONFIG)
 
 INCLUDES := \
-	-I$(BUILD_DIR) \
 	-I$(SRC_DIR)/include \
 	-I$(SRC_DIR)/vendor \
 	-I$(SRC_DIR)/vendor/SDL/include \

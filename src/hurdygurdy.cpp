@@ -3128,7 +3128,28 @@ void hgNodeDestroy(HgEcs* ecs, HgEntity e)
     hgEcsDespawn(ecs, e);
 }
 
-void transformUpdateChild(HgEcs* ecs, HgEntity e)
+template<>
+void hgEcsSerializeImpl(
+    HgArena*,
+    HgMap<HgEntity, u32>*,
+    HgMap<HgStringView, u32>*,
+    HgTransform* srcComponent,
+    void* dstData)
+{
+    memcpy(dstData, &srcComponent->position, sizeof(HgTransformSerial));
+}
+
+template<>
+void hgEcsDeserializeImpl(
+    HgEntity*,
+    HgStringView*,
+    void* srcData,
+    HgTransform* dstComponent)
+{
+    memcpy(&dstComponent->position, srcData, sizeof(HgTransformSerial));
+}
+
+static void transformUpdateChild(HgEcs* ecs, HgEntity e)
 {
     hgAssert(hgEcsHas<HgTransform>(ecs, e));
 

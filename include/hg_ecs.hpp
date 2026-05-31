@@ -788,6 +788,9 @@ struct HgNodeSerial {
     u32 firstChild;
 };
 
+/**
+ * HgNode serialize width
+ */
 template<>
 inline constexpr u32 hgEcsSerialWidthImpl<HgNode> = sizeof(HgNodeSerial);
 
@@ -867,6 +870,42 @@ struct HgTransform {
      */
     HgQuat rotation{1.0f, 0.0f, 0.0f, 0.0f};
 };
+
+/**
+ * The serialized form for HgTransform
+ */
+struct HgTransformSerial {
+    HgVec3 position;
+    HgVec3 scale;
+    HgQuat rotation;
+};
+
+/**
+ * HgTransform serialize width
+ */
+template<>
+inline constexpr u32 hgEcsSerialWidthImpl<HgTransform> = sizeof(HgTransformSerial);
+
+/**
+ * HgTransform serialize implementation
+ */
+template<>
+void hgEcsSerializeImpl(
+    HgArena* stringArena,
+    HgMap<HgEntity, u32>* entities,
+    HgMap<HgStringView, u32>* strings,
+    HgTransform* srcComponent,
+    void* dstData);
+
+/**
+ * HgTransform deserialize implementation
+ */
+template<>
+void hgEcsDeserializeImpl(
+    HgEntity* entities,
+    HgStringView* strings,
+    void* srcData,
+    HgTransform* dstComponent);
 
 /**
  * Get the position from HgTransform mat

@@ -16,7 +16,6 @@ for %%a in (%*) do (
 )
 
 set INCLUDES= ^
-    /I "%BUILD_DIR%" ^
     /I "%SRC_DIR%\include" ^
     /I "%SRC_DIR%\vendor" ^
     /I "%SRC_DIR%\vendor\SDL\include" ^
