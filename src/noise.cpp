@@ -47,7 +47,7 @@ int main()
     u32 noiseWidth = 256;
     u32 noiseHeight = 256;
 
-    HgGpuTextureHandle noiseTexHandle = hgAssetLoad<HgGpuTexture>({});
+    HgGpuTextureHandle noiseTexHandle = hgAssetCreate<HgGpuTexture>();
     HgGpuTexture* noiseTex = hgAssetGet(noiseTexHandle);
 
     noiseTex->image = hgGpuImageCreate(
@@ -147,6 +147,8 @@ int main()
                 HgVec3 rotated = hgVecRotate(cameraTf->rotation, HgVec3{movement.x, 0.0f, movement.z});
                 cameraTf->position += hgVecNorm3(HgVec3{rotated.x, movement.y, rotated.z}) * moveSpeed * (f32)delta;
             }
+
+            hgTransformUpdate(&ecs, camera);
         }
 
         hgImGuiNewFrame();
@@ -183,7 +185,7 @@ int main()
         noisePush.scaleEnd = noiseScaleEnd;
         noisePush.tiling = noiseTiling;
         noisePush.seed = noiseSeed;
-        noisePush.outImageIdx = hgGpuImageSamplerDescriptor(noiseTex->view);
+        noisePush.outImageIdx = hgGpuImageStorageDescriptor(noiseTex->view);
 
         hgGpuPushConstants(cmd, noisePipeline, 0, &noisePush, sizeof(noisePush));
 

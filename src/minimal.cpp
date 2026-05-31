@@ -42,7 +42,7 @@ int main()
 
     HgEntity square = hgEcsSpawn(&ecs);
     hgEcsAdd<HgTransform>(&ecs, square);
-    *hgEcsAdd<HgSprite>(&ecs, square) = {HgGpuTextureHandle{}, HgVec2{0}, HgVec2{1}};
+    hgEcsAdd<HgSprite>(&ecs, square);
 
     HgClock gameClock;
     hgClockTick(&gameClock);

@@ -157,7 +157,7 @@ struct VulkanState {
     u32 currentFrame = 0;
 };
 
-static VulkanState vkState{};
+static VulkanState vk{};
 
 const char* vkResultToStr(VkResult result)
 {
@@ -370,11 +370,11 @@ static VkInstance createInstance(HgStringView* extensions, u32 extensionCount)
 #ifdef HG_VK_DEBUG_MESSENGER
 static VkDebugUtilsMessengerEXT createDebugUtilsMessenger()
 {
-    hgAssert(vkState.instance != nullptr);
+    hgAssert(vk.instance != nullptr);
 
     VkDebugUtilsMessengerEXT messenger = nullptr;
     VkResult result = vkCreateDebugUtilsMessengerEXT(
-        vkState.instance, &debugUtilsMessengerInfo, nullptr, &messenger);
+        vk.instance, &debugUtilsMessengerInfo, nullptr, &messenger);
     if (messenger == nullptr)
         hgError("Failed to create Vulkan debug messenger: %s\n", vkResultToStr(result));
 
@@ -412,15 +412,15 @@ static const char* const deviceExtensions[]{
 
 static VkPhysicalDevice findPhysicalDevice()
 {
-    hgAssert(vkState.instance != nullptr);
+    hgAssert(vk.instance != nullptr);
 
     HgArena* scratch = hgScratch();
     hgArenaScope(scratch);
 
     u32 gpuCount;
-    vkEnumeratePhysicalDevices(vkState.instance, &gpuCount, nullptr);
+    vkEnumeratePhysicalDevices(vk.instance, &gpuCount, nullptr);
     VkPhysicalDevice* gpus = hgAlloc<VkPhysicalDevice>(scratch, gpuCount);
-    vkEnumeratePhysicalDevices(vkState.instance, &gpuCount, gpus);
+    vkEnumeratePhysicalDevices(vk.instance, &gpuCount, gpus);
 
     VkExtensionProperties* extProps = nullptr;
     u32 extPropCount = 0;
@@ -467,8 +467,8 @@ nextGpu:
 
 static VkDevice createDevice()
 {
-    hgAssert(vkState.physicalDevice != nullptr);
-    hgAssert(vkState.queueFamily != (u32)-1);
+    hgAssert(vk.physicalDevice != nullptr);
+    hgAssert(vk.queueFamily != (u32)-1);
 
     VkPhysicalDeviceDescriptorIndexingFeatures descriptorIndexingFeature{};
     descriptorIndexingFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
@@ -508,7 +508,7 @@ static VkDevice createDevice()
 
     VkDeviceQueueCreateInfo queueInfo{};
     queueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    queueInfo.queueFamilyIndex = vkState.queueFamily;
+    queueInfo.queueFamilyIndex = vk.queueFamily;
     queueInfo.queueCount = 1;
     f32 queuePriority = 1.0f;
     queueInfo.pQueuePriorities = &queuePriority;
@@ -523,7 +523,7 @@ static VkDevice createDevice()
     deviceInfo.pEnabledFeatures = &features;
 
     VkDevice device = nullptr;
-    VkResult result = vkCreateDevice(vkState.physicalDevice, &deviceInfo, nullptr, &device);
+    VkResult result = vkCreateDevice(vk.physicalDevice, &deviceInfo, nullptr, &device);
 
     if (device == nullptr)
         hgError("Could not create Vulkan device: %s\n", vkResultToStr(result));
@@ -554,7 +554,7 @@ static VkDescriptorPool createBindlessDescriptorPool()
     info.pPoolSizes = sizes;
 
     VkDescriptorPool pool = nullptr;
-    VkResult result = vkCreateDescriptorPool(vkState.device, &info, nullptr, &pool);
+    VkResult result = vkCreateDescriptorPool(vk.device, &info, nullptr, &pool);
     if (pool == nullptr)
         hgError("Could not create VkDescriptorPool: %s\n", vkResultToStr(result));
 
@@ -593,7 +593,7 @@ static VkDescriptorSetLayout createBindlessDescriptorLayout()
     info.pBindings = bindings;
 
     VkDescriptorSetLayout layout = nullptr;
-    VkResult result = vkCreateDescriptorSetLayout(vkState.device, &info, nullptr, &layout);
+    VkResult result = vkCreateDescriptorSetLayout(vk.device, &info, nullptr, &layout);
     if (layout == nullptr)
         hgError("Could not create bindless VkDescriptorSetLayout: %s\n", vkResultToStr(result));
 
@@ -628,9 +628,9 @@ static Frame createFrame(HgArena* arena, u32 maxWindows)
     VkCommandPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    poolInfo.queueFamilyIndex = vkState.queueFamily;
+    poolInfo.queueFamilyIndex = vk.queueFamily;
 
-    VkResult poolResult = vkCreateCommandPool(vkState.device, &poolInfo, nullptr, &frame.cmdPool);
+    VkResult poolResult = vkCreateCommandPool(vk.device, &poolInfo, nullptr, &frame.cmdPool);
     if (frame.cmdPool == nullptr)
         hgError("Could not create Vulkan command pool: %s\n", vkResultToStr(poolResult));
 
@@ -638,7 +638,7 @@ static Frame createFrame(HgArena* arena, u32 maxWindows)
     fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-    VkResult fenceResult = vkCreateFence(vkState.device, &fenceInfo, nullptr, &frame.fence);
+    VkResult fenceResult = vkCreateFence(vk.device, &fenceInfo, nullptr, &frame.fence);
     if (frame.fence == nullptr)
         hgError("Could not create Vulkan fence: %s\n", vkResultToStr(fenceResult));
 
@@ -651,7 +651,7 @@ void hgGpuInit(HgArena* arena, HgGpuInit* config)
 
     loadVulkan();
 
-    if (vkState.instance == nullptr)
+    if (vk.instance == nullptr)
     {
         HgArena* scratch = hgScratch();
         hgArenaScope(scratch);
@@ -662,104 +662,104 @@ void hgGpuInit(HgArena* arena, HgGpuInit* config)
         exts = hgRealloc(scratch, exts, extCount, extCount + 1);
         exts[extCount++] = "VK_EXT_debug_utils";
 #endif
-        vkState.instance = createInstance(exts, extCount);
-        loadVulkanInstanceFuncs(vkState.instance);
+        vk.instance = createInstance(exts, extCount);
+        loadVulkanInstanceFuncs(vk.instance);
     }
 
 #ifdef HG_VK_DEBUG_MESSENGER
-    if (vkState.debugMessenger == nullptr)
-        vkState.debugMessenger = createDebugUtilsMessenger();
+    if (vk.debugMessenger == nullptr)
+        vk.debugMessenger = createDebugUtilsMessenger();
 #endif
 
-    if (vkState.physicalDevice == nullptr)
+    if (vk.physicalDevice == nullptr)
     {
-        vkState.physicalDevice = findPhysicalDevice();
-        findQueueFamily(vkState.physicalDevice, &vkState.queueFamily,
+        vk.physicalDevice = findPhysicalDevice();
+        findQueueFamily(vk.physicalDevice, &vk.queueFamily,
             VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT | VK_QUEUE_COMPUTE_BIT);
     }
 
-    if (vkState.device == nullptr)
+    if (vk.device == nullptr)
     {
-        vkState.device = createDevice();
-        loadVulkanDeviceFuncs(vkState.device);
-        vkGetDeviceQueue(vkState.device, vkState.queueFamily, 0, &vkState.queue);
+        vk.device = createDevice();
+        loadVulkanDeviceFuncs(vk.device);
+        vkGetDeviceQueue(vk.device, vk.queueFamily, 0, &vk.queue);
     }
 
-    if (vkState.vma == nullptr)
+    if (vk.vma == nullptr)
     {
         VmaAllocatorCreateInfo allocatorInfo{};
-        allocatorInfo.physicalDevice = vkState.physicalDevice;
-        allocatorInfo.device = vkState.device;
-        allocatorInfo.instance = vkState.instance;
+        allocatorInfo.physicalDevice = vk.physicalDevice;
+        allocatorInfo.device = vk.device;
+        allocatorInfo.instance = vk.instance;
         allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_3;
 
-        VkResult result = vmaCreateAllocator(&allocatorInfo, &vkState.vma);
-        if (vkState.vma == nullptr)
+        VkResult result = vmaCreateAllocator(&allocatorInfo, &vk.vma);
+        if (vk.vma == nullptr)
             hgError("Could not create Vulkan memory allocator: %s\n", vkResultToStr(result));
     }
 
-    if (vkState.cmdPool == nullptr)
+    if (vk.cmdPool == nullptr)
     {
         VkCommandPoolCreateInfo cmdPoolInfo{};
         cmdPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
         cmdPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-        cmdPoolInfo.queueFamilyIndex = vkState.queueFamily;
+        cmdPoolInfo.queueFamilyIndex = vk.queueFamily;
 
-        VkResult result = vkCreateCommandPool(vkState.device, &cmdPoolInfo, nullptr, &vkState.cmdPool);
-        if (vkState.cmdPool == nullptr)
+        VkResult result = vkCreateCommandPool(vk.device, &cmdPoolInfo, nullptr, &vk.cmdPool);
+        if (vk.cmdPool == nullptr)
             hgError("Could not create Vulkan command pool: %s\n", vkResultToStr(result));
     }
 
-    if (vkState.bindlessPool == nullptr)
-        vkState.bindlessPool = createBindlessDescriptorPool();
+    if (vk.bindlessPool == nullptr)
+        vk.bindlessPool = createBindlessDescriptorPool();
 
-    if (vkState.bindlessLayout == nullptr)
-        vkState.bindlessLayout = createBindlessDescriptorLayout();
+    if (vk.bindlessLayout == nullptr)
+        vk.bindlessLayout = createBindlessDescriptorLayout();
 
-    if (vkState.bindlessSet == nullptr)
+    if (vk.bindlessSet == nullptr)
     {
         VkDescriptorSetAllocateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        info.descriptorPool = vkState.bindlessPool;
+        info.descriptorPool = vk.bindlessPool;
         info.descriptorSetCount = 1;
-        info.pSetLayouts = &vkState.bindlessLayout;
+        info.pSetLayouts = &vk.bindlessLayout;
 
-        VkResult result = vkAllocateDescriptorSets(vkState.device, &info, &vkState.bindlessSet);
-        if (vkState.bindlessSet == nullptr)
+        VkResult result = vkAllocateDescriptorSets(vk.device, &info, &vk.bindlessSet);
+        if (vk.bindlessSet == nullptr)
             hgError("Could not allocate bindless VkDescriptorSet: %s\n", vkResultToStr(result));
     }
 
     for (u32 i = 0; i < DescriptorType_count; ++i)
     {
-        if (vkState.descriptorPools[i].capacity == 0)
+        if (vk.descriptorPools[i].capacity == 0)
         {
-            vkState.descriptorPools[i] = hgPoolCreate<void>(arena, UINT16_MAX);
+            vk.descriptorPools[i] = hgPoolCreate<void>(arena, UINT16_MAX);
         }
     }
 
-    if (vkState.buffers.capacity == 0)
+    if (vk.buffers.capacity == 0)
     {
-        vkState.buffers = hgPoolCreate<HgGpuBufferData>(arena, config->maxBuffers);
+        vk.buffers = hgPoolCreate<HgGpuBufferData>(arena, config->maxBuffers);
     }
 
-    if (vkState.images.capacity == 0)
+    if (vk.images.capacity == 0)
     {
-        vkState.images = hgPoolCreate<HgGpuImageData>(arena, config->maxImages);
+        vk.images = hgPoolCreate<HgGpuImageData>(arena, config->maxImages);
     }
 
-    if (vkState.views.capacity == 0)
+    if (vk.views.capacity == 0)
     {
-        vkState.views = hgPoolCreate<HgGpuViewData>(arena, config->maxViews);
+        vk.views = hgPoolCreate<HgGpuViewData>(arena, config->maxViews);
     }
 
-    if (vkState.pipelines.capacity == 0)
+    if (vk.pipelines.capacity == 0)
     {
-        vkState.pipelines = hgPoolCreate<HgGpuPipelineData>(arena, config->maxPipelines);
+        vk.pipelines = hgPoolCreate<HgGpuPipelineData>(arena, config->maxPipelines);
     }
 
-    if (vkState.samplers.capacity == 0)
+    if (vk.samplers.capacity == 0)
     {
-        vkState.samplers = hgMapCreate<SamplerInfo, VkSampler>(
+        vk.samplers = hgMapCreate<SamplerInfo, VkSampler>(
             arena,
             2 *
             HgGpuFilter_count *
@@ -767,100 +767,100 @@ void hgGpuInit(HgArena* arena, HgGpuInit* config)
             HgGpuSamplerBorder_count);
     }
 
-    if (vkState.frames == nullptr)
+    if (vk.frames == nullptr)
     {
-        vkState.frames = hgAlloc<Frame>(arena, config->maxFramesInFlight);
-        vkState.frameCount = config->maxFramesInFlight;
-        vkState.currentFrame = 0;
+        vk.frames = hgAlloc<Frame>(arena, config->maxFramesInFlight);
+        vk.frameCount = config->maxFramesInFlight;
+        vk.currentFrame = 0;
 
-        for (u32 i = 0; i < vkState.frameCount; ++i)
+        for (u32 i = 0; i < vk.frameCount; ++i)
         {
-            vkState.frames[i] = createFrame(arena, config->maxWindows);
+            vk.frames[i] = createFrame(arena, config->maxWindows);
         }
     }
 }
 
 void hgGpuDeinit()
 {
-    if (vkState.frames != nullptr)
+    if (vk.frames != nullptr)
     {
-        for (u32 i = 0; i < vkState.frameCount; ++i)
+        for (u32 i = 0; i < vk.frameCount; ++i)
         {
-            vkDestroyCommandPool(vkState.device, vkState.frames[i].cmdPool, nullptr);
-            vkDestroyFence(vkState.device, vkState.frames[i].fence, nullptr);
+            vkDestroyCommandPool(vk.device, vk.frames[i].cmdPool, nullptr);
+            vkDestroyFence(vk.device, vk.frames[i].fence, nullptr);
         }
-        vkState.currentFrame = 0;
-        vkState.frameCount = 0;
-        vkState.frames = nullptr;
+        vk.currentFrame = 0;
+        vk.frameCount = 0;
+        vk.frames = nullptr;
     }
 
-    for (u32 i = 0; i < vkState.samplers.capacity; ++i)
+    for (u32 i = 0; i < vk.samplers.capacity; ++i)
     {
-        if (vkState.samplers.hasVal[i])
+        if (vk.samplers.hasVal[i])
         {
-            vkDestroySampler(vkState.device, vkState.samplers.vals[i], nullptr);
+            vkDestroySampler(vk.device, vk.samplers.vals[i], nullptr);
         }
     }
-    hgMapReset(&vkState.samplers);
+    hgMapReset(&vk.samplers);
 
-    vkState.pipelines = {};
-    vkState.views = {};
-    vkState.images = {};
-    vkState.buffers = {};
+    vk.pipelines = {};
+    vk.views = {};
+    vk.images = {};
+    vk.buffers = {};
 
     for (u32 i = 0; i < DescriptorType_count; ++i)
     {
-        vkState.descriptorPools[i] = {};
+        vk.descriptorPools[i] = {};
     }
 
-    if (vkState.bindlessLayout != nullptr)
+    if (vk.bindlessLayout != nullptr)
     {
-        vkDestroyDescriptorSetLayout(vkState.device, vkState.bindlessLayout, nullptr);
-        vkState.bindlessLayout = nullptr;
+        vkDestroyDescriptorSetLayout(vk.device, vk.bindlessLayout, nullptr);
+        vk.bindlessLayout = nullptr;
     }
 
-    if (vkState.bindlessPool != nullptr)
+    if (vk.bindlessPool != nullptr)
     {
-        vkDestroyDescriptorPool(vkState.device, vkState.bindlessPool, nullptr);
-        vkState.bindlessPool = nullptr;
+        vkDestroyDescriptorPool(vk.device, vk.bindlessPool, nullptr);
+        vk.bindlessPool = nullptr;
     }
 
-    if (vkState.cmdPool != nullptr)
+    if (vk.cmdPool != nullptr)
     {
-        vkDestroyCommandPool(vkState.device, vkState.cmdPool, nullptr);
-        vkState.cmdPool = nullptr;
+        vkDestroyCommandPool(vk.device, vk.cmdPool, nullptr);
+        vk.cmdPool = nullptr;
     }
 
-    if (vkState.vma != nullptr)
+    if (vk.vma != nullptr)
     {
-        vmaDestroyAllocator(vkState.vma);
-        vkState.vma = nullptr;
+        vmaDestroyAllocator(vk.vma);
+        vk.vma = nullptr;
     }
 
-    if (vkState.device != nullptr)
+    if (vk.device != nullptr)
     {
-        vkDestroyDevice(vkState.device, nullptr);
-        vkState.device = nullptr;
+        vkDestroyDevice(vk.device, nullptr);
+        vk.device = nullptr;
     }
 
-    if (vkState.physicalDevice != nullptr)
+    if (vk.physicalDevice != nullptr)
     {
-        vkState.physicalDevice = nullptr;
-        vkState.queueFamily = (u32)-1;
+        vk.physicalDevice = nullptr;
+        vk.queueFamily = (u32)-1;
     }
 
 #ifdef HG_VK_DEBUG_MESSENGER
-    if (vkState.debugMessenger != nullptr)
+    if (vk.debugMessenger != nullptr)
     {
-        vkDestroyDebugUtilsMessengerEXT(vkState.instance, vkState.debugMessenger, nullptr);
-        vkState.debugMessenger = nullptr;
+        vkDestroyDebugUtilsMessengerEXT(vk.instance, vk.debugMessenger, nullptr);
+        vk.debugMessenger = nullptr;
     }
 #endif
 
-    if (vkState.instance != nullptr)
+    if (vk.instance != nullptr)
     {
-        vkDestroyInstance(vkState.instance, nullptr);
-        vkState.instance = nullptr;
+        vkDestroyInstance(vk.instance, nullptr);
+        vk.instance = nullptr;
     }
 
     unloadVulkan();
@@ -868,7 +868,7 @@ void hgGpuDeinit()
 
 void hgGpuWaitIdle()
 {
-    vkQueueWaitIdle(vkState.queue);
+    vkQueueWaitIdle(vk.queue);
 }
 
 static u32 vkFormatToSize(VkFormat format)
@@ -1400,7 +1400,7 @@ static Descriptor descriptorCreate(
     HgArena* scratch = hgScratch();
     hgArenaScope(scratch);
 
-    Descriptor desc = hgPoolAlloc(&vkState.descriptorPools[type]);
+    Descriptor desc = hgPoolAlloc(&vk.descriptorPools[type]);
 
     VkDescriptorBufferInfo bufferVkInfo = bufferInfo != nullptr
         ? VkDescriptorBufferInfo{bufferInfo->buffer->buffer, bufferInfo->offset, bufferInfo->range}
@@ -1416,7 +1416,7 @@ static Descriptor descriptorCreate(
 
     VkWriteDescriptorSet write{};
     write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    write.dstSet = vkState.bindlessSet;
+    write.dstSet = vk.bindlessSet;
     write.dstBinding = type;
     write.dstArrayElement = hgHandleIdx(desc);
     write.descriptorCount = 1;
@@ -1425,7 +1425,7 @@ static Descriptor descriptorCreate(
     write.pImageInfo = imageInfo != nullptr ? &imageVkInfo : nullptr;
     write.pTexelBufferView = nullptr;
 
-    vkUpdateDescriptorSets(vkState.device, 1, &write, 0, nullptr);
+    vkUpdateDescriptorSets(vk.device, 1, &write, 0, nullptr);
 
     return desc;
 }
@@ -1434,13 +1434,13 @@ static void descriptorDestroy(Descriptor desc, DescriptorType type)
 {
     if (!hgNullHandle(desc))
     {
-        hgPoolFree(&vkState.descriptorPools[type], desc);
+        hgPoolFree(&vk.descriptorPools[type], desc);
     }
 }
 
 static HgGpuBufferData* bufferGet(HgGpuBuffer buffer)
 {
-    return hgPoolGet(&vkState.buffers, buffer.handle);
+    return hgPoolGet(&vk.buffers, buffer.handle);
 }
 
 HgGpuBuffer hgGpuBufferCreate(
@@ -1451,7 +1451,7 @@ HgGpuBuffer hgGpuBufferCreate(
     hgAssert(size > 0);
     hgAssert(usageFlags != 0);
 
-    HgGpuBuffer buffer = {hgPoolAlloc(&vkState.buffers)};
+    HgGpuBuffer buffer = {hgPoolAlloc(&vk.buffers)};
     HgGpuBufferData* bufferData = bufferGet(buffer);
     *bufferData = {};
 
@@ -1465,7 +1465,7 @@ HgGpuBuffer hgGpuBufferCreate(
     allocInfo.flags = gpuMemoryUsageToVma(memoryUsage);
 
     VkResult result = vmaCreateBuffer(
-        vkState.vma,
+        vk.vma,
         &bufferInfo,
         &allocInfo,
         &bufferData->buffer,
@@ -1492,7 +1492,7 @@ HgGpuBuffer hgGpuBufferCreate(
     if (memoryUsage == HgGpuMemoryUsage_frequentUpdate)
     {
         VkMemoryPropertyFlags memPropFlags;
-        vmaGetAllocationMemoryProperties(vkState.vma, bufferData->alloc, &memPropFlags);
+        vmaGetAllocationMemoryProperties(vk.vma, bufferData->alloc, &memPropFlags);
         bufferData->access = memPropFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
             ? HgGpuMemoryHostAccess_write
             : HgGpuMemoryHostAccess_none;
@@ -1505,26 +1505,26 @@ HgGpuBuffer hgGpuBufferCreate(
 
 void hgGpuBufferDestroy(HgGpuBuffer buffer)
 {
-    if (hgPoolAlive(&vkState.buffers, buffer.handle))
+    if (hgPoolAlive(&vk.buffers, buffer.handle))
     {
         HgGpuBufferData* bufferData = bufferGet(buffer);
         descriptorDestroy(bufferData->storageDesc, DescriptorType_storageBuffer);
         descriptorDestroy(bufferData->uniformDesc, DescriptorType_uniformBuffer);
-        vmaDestroyBuffer(vkState.vma, bufferData->buffer, bufferData->alloc);
+        vmaDestroyBuffer(vk.vma, bufferData->buffer, bufferData->alloc);
     }
 }
 
 u32 hgGpuBufferUniformDescriptor(HgGpuBuffer buffer)
 {
     Descriptor desc = bufferGet(buffer)->uniformDesc;
-    hgAssert(hgPoolAlive(&vkState.descriptorPools[DescriptorType_uniformBuffer], desc));
+    hgAssert(hgPoolAlive(&vk.descriptorPools[DescriptorType_uniformBuffer], desc));
     return hgHandleIdx(desc);
 }
 
 u32 hgGpuBufferStorageDescriptor(HgGpuBuffer buffer)
 {
     Descriptor desc = bufferGet(buffer)->storageDesc;
-    hgAssert(hgPoolAlive(&vkState.descriptorPools[DescriptorType_storageBuffer], desc));
+    hgAssert(hgPoolAlive(&vk.descriptorPools[DescriptorType_storageBuffer], desc));
     return hgHandleIdx(desc);
 }
 
@@ -1538,7 +1538,7 @@ void hgGpuBufferWrite(HgGpuBuffer dst, u64 offset, const void* src, u64 size)
 
     if (dstData->access & HgGpuMemoryHostAccess_write)
     {
-        VkResult result = vmaCopyMemoryToAllocation(vkState.vma, src, dstData->alloc, offset, size);
+        VkResult result = vmaCopyMemoryToAllocation(vk.vma, src, dstData->alloc, offset, size);
         if (result != VK_SUCCESS)
             hgError("Could not write gpu buffer: %s\n", vkResultToStr(result));
         return;
@@ -1572,7 +1572,7 @@ void hgGpuBufferRead(void* dst, HgGpuBuffer src, u64 offset, u64 size)
 
     if (srcData->access & HgGpuMemoryHostAccess_read)
     {
-        VkResult result = vmaCopyAllocationToMemory(vkState.vma, srcData->alloc, offset, dst, size);
+        VkResult result = vmaCopyAllocationToMemory(vk.vma, srcData->alloc, offset, dst, size);
         if (result != VK_SUCCESS)
             hgError("Could not read gpu buffer: %s\n", vkResultToStr(result));
         return;
@@ -1599,7 +1599,7 @@ void hgGpuBufferRead(void* dst, HgGpuBuffer src, u64 offset, u64 size)
 
 static HgGpuImageData* imageGet(HgGpuImage image)
 {
-    return hgPoolGet(&vkState.images, image.handle);
+    return hgPoolGet(&vk.images, image.handle);
 }
 
 HgGpuImage hgGpuImageCreate(u32 width, u32 height, HgFormat format, HgGpuImageUsageFlags usage)
@@ -1617,7 +1617,7 @@ HgGpuImage hgGpuImageCreateEx(const HgGpuImageCreateEx* create)
     hgAssert(create->format != HgFormat_undefined);
     hgAssert(create->usage != 0);
 
-    HgGpuImage image = {hgPoolAlloc(&vkState.images)};
+    HgGpuImage image = {hgPoolAlloc(&vk.images)};
     HgGpuImageData* imageData = imageGet(image);
     *imageData = {};
 
@@ -1636,7 +1636,7 @@ HgGpuImage hgGpuImageCreateEx(const HgGpuImageCreateEx* create)
     allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
 
     VkResult result = vmaCreateImage(
-        vkState.vma,
+        vk.vma,
         &imageInfo,
         &allocInfo,
         &imageData->image,
@@ -1661,10 +1661,10 @@ HgGpuImage hgGpuImageCreateEx(const HgGpuImageCreateEx* create)
 
 void hgGpuImageDestroy(HgGpuImage image)
 {
-    if (hgPoolAlive(&vkState.images, image.handle))
+    if (hgPoolAlive(&vk.images, image.handle))
     {
         HgGpuImageData* imageData = imageGet(image);
-        vmaDestroyImage(vkState.vma, imageData->image, imageData->alloc);
+        vmaDestroyImage(vk.vma, imageData->image, imageData->alloc);
     }
 }
 
@@ -1686,7 +1686,7 @@ static VkSampler samplerCreate(SamplerInfo* desc)
     info.borderColor = gpuSamplerBorderToVk(desc->border);
 
     VkSampler sampler = nullptr;
-    VkResult result = vkCreateSampler(vkState.device, &info, nullptr, &sampler);
+    VkResult result = vkCreateSampler(vk.device, &info, nullptr, &sampler);
     if (sampler == nullptr)
         hgError("Could not create VkSampler: %s\n", vkResultToStr(result));
 
@@ -1699,17 +1699,17 @@ static VkSampler samplerGet(
     HgGpuSamplerBorder borderColor = HgGpuSamplerBorder_floatTransparentBlack)
 {
     SamplerInfo desc = {filter, addressMode, borderColor};
-    VkSampler* sampler = hgMapGet(&vkState.samplers, desc);
+    VkSampler* sampler = hgMapGet(&vk.samplers, desc);
     if (sampler == nullptr)
     {
-        sampler = hgMapAdd(&vkState.samplers, desc, samplerCreate(&desc));
+        sampler = hgMapAdd(&vk.samplers, desc, samplerCreate(&desc));
     }
     return *sampler;
 }
 
 static HgGpuViewData* viewGet(HgGpuView view)
 {
-    return hgPoolGet(&vkState.views, view.handle);
+    return hgPoolGet(&vk.views, view.handle);
 }
 
 HgGpuView hgGpuViewCreate(
@@ -1737,7 +1737,7 @@ HgGpuView hgGpuViewCreateEx(const HgGpuViewCreateEx* config)
 {
     hgAssert(config->aspectFlags != 0);
 
-    HgGpuView view = {hgPoolAlloc(&vkState.views)};
+    HgGpuView view = {hgPoolAlloc(&vk.views)};
     HgGpuViewData* viewData = viewGet(view);
     *viewData = {};
 
@@ -1754,7 +1754,7 @@ HgGpuView hgGpuViewCreateEx(const HgGpuViewCreateEx* config)
     info.subresourceRange.baseArrayLayer = config->baseArrayLayer;
     info.subresourceRange.layerCount = config->layerCount;
 
-    VkResult result = vkCreateImageView(vkState.device, &info, nullptr, &viewData->view);
+    VkResult result = vkCreateImageView(vk.device, &info, nullptr, &viewData->view);
     if (viewData == nullptr)
         hgError("Could not create VkImageView: %s\n", vkResultToStr(result));
 
@@ -1785,26 +1785,26 @@ HgGpuView hgGpuViewCreateEx(const HgGpuViewCreateEx* config)
 
 void hgGpuViewDestroy(HgGpuView view)
 {
-    if (hgPoolAlive(&vkState.views, view.handle))
+    if (hgPoolAlive(&vk.views, view.handle))
     {
         HgGpuViewData* viewData = viewGet(view);
         descriptorDestroy(viewData->storageDesc, DescriptorType_storageImage);
         descriptorDestroy(viewData->samplerDesc, DescriptorType_combinedImageSampler);
-        vkDestroyImageView(vkState.device, viewData->view, nullptr);
+        vkDestroyImageView(vk.device, viewData->view, nullptr);
     }
 }
 
 u32 hgGpuImageSamplerDescriptor(HgGpuView view)
 {
     Descriptor desc = viewGet(view)->samplerDesc;
-    hgAssert(hgPoolAlive(&vkState.descriptorPools[DescriptorType_combinedImageSampler], desc));
+    hgAssert(hgPoolAlive(&vk.descriptorPools[DescriptorType_combinedImageSampler], desc));
     return hgHandleIdx(desc);
 }
 
 u32 hgGpuImageStorageDescriptor(HgGpuView view)
 {
     Descriptor desc = viewGet(view)->storageDesc;
-    hgAssert(hgPoolAlive(&vkState.descriptorPools[DescriptorType_storageImage], desc));
+    hgAssert(hgPoolAlive(&vk.descriptorPools[DescriptorType_storageImage], desc));
     return hgHandleIdx(desc);
 }
 
@@ -2169,7 +2169,7 @@ static VkShaderModule createShaderModule(const void* spirvCode, u64 codeSize)
     info.pCode = (const u32*)spirvCode;
 
     VkShaderModule shader = nullptr;
-    VkResult result = vkCreateShaderModule(vkState.device, &info, nullptr, &shader);
+    VkResult result = vkCreateShaderModule(vk.device, &info, nullptr, &shader);
     if (shader == nullptr)
         hgError("Could not create VkShaderModule: %s\n", vkResultToStr(result));
 
@@ -2178,7 +2178,7 @@ static VkShaderModule createShaderModule(const void* spirvCode, u64 codeSize)
 
 static HgGpuPipelineData* pipelineGet(HgGpuPipeline pipeline)
 {
-    return hgPoolGet(&vkState.pipelines, pipeline.handle);
+    return hgPoolGet(&vk.pipelines, pipeline.handle);
 }
 
 HgGpuPipeline hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* config)
@@ -2188,7 +2188,7 @@ HgGpuPipeline hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* con
     if (config->colorAttachmentCount > 0)
         hgAssert(config->colorAttachmentFormats != nullptr);
 
-    HgGpuPipeline pipeline = {hgPoolAlloc(&vkState.pipelines)};
+    HgGpuPipeline pipeline = {hgPoolAlloc(&vk.pipelines)};
     HgGpuPipelineData* pipelineData = pipelineGet(pipeline);
     *pipelineData = {};
 
@@ -2206,18 +2206,18 @@ HgGpuPipeline hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* con
     VkPipelineLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     layoutInfo.setLayoutCount = 1;
-    layoutInfo.pSetLayouts = &vkState.bindlessLayout;
+    layoutInfo.pSetLayouts = &vk.bindlessLayout;
     layoutInfo.pushConstantRangeCount = config->pushRangeCount;
     layoutInfo.pPushConstantRanges = pushRanges;
 
-    VkResult layoutResult = vkCreatePipelineLayout(vkState.device, &layoutInfo, nullptr, &pipelineData->layout);
+    VkResult layoutResult = vkCreatePipelineLayout(vk.device, &layoutInfo, nullptr, &pipelineData->layout);
     if (pipelineData->layout == nullptr)
         hgError("Could not create VkPipelineLayout: %s\n", vkResultToStr(layoutResult));
 
     VkShaderModule vertexShader = createShaderModule(config->vertexShader, config->vertexShaderSize);
     VkShaderModule fragmentShader = createShaderModule(config->fragmentShader, config->fragmentShaderSize);
-    hgDefer(vkDestroyShaderModule(vkState.device, vertexShader, nullptr));
-    hgDefer(vkDestroyShaderModule(vkState.device, fragmentShader, nullptr));
+    hgDefer(vkDestroyShaderModule(vk.device, vertexShader, nullptr));
+    hgDefer(vkDestroyShaderModule(vk.device, fragmentShader, nullptr));
 
     VkPipelineShaderStageCreateInfo shaderStages[2]{};
     shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -2352,7 +2352,7 @@ HgGpuPipeline hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* con
     pipelineInfo.basePipelineIndex = -1;
 
     VkResult pipelineResult = vkCreateGraphicsPipelines(
-        vkState.device, nullptr, 1, &pipelineInfo, nullptr, &pipelineData->pipeline);
+        vk.device, nullptr, 1, &pipelineInfo, nullptr, &pipelineData->pipeline);
     if (pipelineData == nullptr)
         hgError("Failed to create Vulkan graphics pipeline: %s\n", vkResultToStr(pipelineResult));
 
@@ -2366,25 +2366,25 @@ HgGpuPipeline hgGpuPipelineCreateCompute(u32 pushSize, const u8* shaderCode, u64
     hgAssert(shaderCode != nullptr);
     hgAssert(shaderCodeSize > 0);
 
-    HgGpuPipeline pipeline = {hgPoolAlloc(&vkState.pipelines)};
+    HgGpuPipeline pipeline = {hgPoolAlloc(&vk.pipelines)};
     HgGpuPipelineData* pipelineData = pipelineGet(pipeline);
     *pipelineData = {};
 
     VkPipelineLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     layoutInfo.setLayoutCount = 1;
-    layoutInfo.pSetLayouts = &vkState.bindlessLayout;
+    layoutInfo.pSetLayouts = &vk.bindlessLayout;
 
     VkPushConstantRange push{VK_SHADER_STAGE_COMPUTE_BIT, 0, pushSize};
     layoutInfo.pushConstantRangeCount = pushSize > 0 ? 1 : 0;
     layoutInfo.pPushConstantRanges = pushSize > 0 ? &push : nullptr;
 
-    VkResult layoutResult = vkCreatePipelineLayout(vkState.device, &layoutInfo, nullptr, &pipelineData->layout);
+    VkResult layoutResult = vkCreatePipelineLayout(vk.device, &layoutInfo, nullptr, &pipelineData->layout);
     if (pipelineData->layout == nullptr)
         hgError("Could not create VkPipelineLayout: %s\n", vkResultToStr(layoutResult));
 
     VkShaderModule computeShader = createShaderModule(shaderCode, shaderCodeSize);
-    hgDefer(vkDestroyShaderModule(vkState.device, computeShader, nullptr));
+    hgDefer(vkDestroyShaderModule(vk.device, computeShader, nullptr));
 
     VkComputePipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -2397,7 +2397,7 @@ HgGpuPipeline hgGpuPipelineCreateCompute(u32 pushSize, const u8* shaderCode, u64
     pipelineInfo.basePipelineIndex = -1;
 
     VkResult pipelineResult = vkCreateComputePipelines(
-        vkState.device, nullptr, 1, &pipelineInfo, nullptr, &pipelineData->pipeline);
+        vk.device, nullptr, 1, &pipelineInfo, nullptr, &pipelineData->pipeline);
     if (pipelineData == nullptr)
         hgError("Failed to create Vulkan compute pipeline: %s\n", vkResultToStr(pipelineResult));
 
@@ -2408,11 +2408,11 @@ HgGpuPipeline hgGpuPipelineCreateCompute(u32 pushSize, const u8* shaderCode, u64
 
 void hgGpuPipelineDestroy(HgGpuPipeline pipeline)
 {
-    if (hgPoolAlive(&vkState.pipelines, pipeline.handle))
+    if (hgPoolAlive(&vk.pipelines, pipeline.handle))
     {
         HgGpuPipelineData* pipelineData = pipelineGet(pipeline);
-        vkDestroyPipeline(vkState.device, pipelineData->pipeline, nullptr);
-        vkDestroyPipelineLayout(vkState.device, pipelineData->layout, nullptr);
+        vkDestroyPipeline(vk.device, pipelineData->pipeline, nullptr);
+        vkDestroyPipelineLayout(vk.device, pipelineData->layout, nullptr);
     }
 }
 
@@ -2420,12 +2420,12 @@ HgGpuCmd* hgGpuCmdBegin()
 {
     VkCommandBufferAllocateInfo cmdInfo{};
     cmdInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    cmdInfo.commandPool = vkState.cmdPool;
+    cmdInfo.commandPool = vk.cmdPool;
     cmdInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     cmdInfo.commandBufferCount = 1;
 
     VkCommandBuffer cmd = nullptr;
-    vkAllocateCommandBuffers(vkState.device, &cmdInfo, &cmd);
+    vkAllocateCommandBuffers(vk.device, &cmdInfo, &cmd);
 
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -2444,18 +2444,18 @@ void hgGpuCmdEnd(HgGpuCmd* cmd)
     fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 
     VkFence fence = nullptr;
-    vkCreateFence(vkState.device, &fenceInfo, nullptr, &fence);
-    hgDefer(vkDestroyFence(vkState.device, fence, nullptr));
+    vkCreateFence(vk.device, &fenceInfo, nullptr, &fence);
+    hgDefer(vkDestroyFence(vk.device, fence, nullptr));
 
     VkSubmitInfo submit{};
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submit.commandBufferCount = 1;
     submit.pCommandBuffers = (VkCommandBuffer*)&cmd;
 
-    vkQueueSubmit(vkState.queue, 1, &submit, fence);
-    vkWaitForFences(vkState.device, 1, &fence, VK_TRUE, UINT64_MAX);
+    vkQueueSubmit(vk.queue, 1, &submit, fence);
+    vkWaitForFences(vk.device, 1, &fence, VK_TRUE, UINT64_MAX);
 
-    vkFreeCommandBuffers(vkState.device, vkState.cmdPool, 1, (VkCommandBuffer*)&cmd);
+    vkFreeCommandBuffers(vk.device, vk.cmdPool, 1, (VkCommandBuffer*)&cmd);
 }
 
 void hgGpuBindPipeline(HgGpuCmd* cmd, HgGpuPipeline pipeline)
@@ -2473,7 +2473,7 @@ void hgGpuBindPipeline(HgGpuCmd* cmd, HgGpuPipeline pipeline)
         pipelineData->layout,
         0,
         1,
-        &vkState.bindlessSet,
+        &vk.bindlessSet,
         0,
         nullptr);
 }
@@ -3015,14 +3015,14 @@ struct PlatformState {
     bool imguiInitialized = false;
 };
 
-static PlatformState platformState{};
+static PlatformState platform{};
 
 static HgWindowData* windowGet(HgWindow window)
 {
-    hgAssert(hgPoolAlive(&platformState.handles, window.handle));
+    hgAssert(hgPoolAlive(&platform.handles, window.handle));
     u32 idx = hgHandleIdx(window.handle);
-    u32 width = platformState.windowWidth;
-    return (HgWindowData*)((u8*)platformState.windowPool + width * idx);
+    u32 width = platform.windowWidth;
+    return (HgWindowData*)((u8*)platform.windowPool + width * idx);
 }
 
 void hgPlatformInit(HgArena* arena, u32 maxWindows, u32 maxEvents)
@@ -3034,13 +3034,13 @@ void hgPlatformInit(HgArena* arena, u32 maxWindows, u32 maxEvents)
         SDL_INIT_GAMEPAD |
         SDL_INIT_EVENTS);
 
-    platformState.handles = hgPoolCreate<void>(arena, maxWindows);
+    platform.handles = hgPoolCreate<void>(arena, maxWindows);
 
-    platformState.windowMaxEvents = maxEvents;
-    platformState.windowWidth = (u32)hgAlign(sizeof(HgWindowData) + sizeof(HgWindowEvent) * (maxEvents - 1), alignof(HgWindowData));
-    platformState.windowPool = (HgWindowData*)hgAlloc(arena, platformState.windowWidth * maxWindows, alignof(HgWindowData));
+    platform.windowMaxEvents = maxEvents;
+    platform.windowWidth = (u32)hgAlign(sizeof(HgWindowData) + sizeof(HgWindowEvent) * (maxEvents - 1), alignof(HgWindowData));
+    platform.windowPool = (HgWindowData*)hgAlloc(arena, platform.windowWidth * maxWindows, alignof(HgWindowData));
 
-    platformState.ids = hgMapCreate<SDL_WindowID, HgWindowData*>(arena, maxWindows * 2);
+    platform.ids = hgMapCreate<SDL_WindowID, HgWindowData*>(arena, maxWindows * 2);
 }
 
 void hgPlatformDeinit()
@@ -3067,30 +3067,30 @@ static void resizeWindowSwapchain(HgWindowData* window)
     HgArena* scratch = hgScratch();
     hgArenaScope(scratch);
 
-    vkQueueWaitIdle(vkState.queue);
+    vkQueueWaitIdle(vk.queue);
 
     for (u32 i = 0; i < window->imageCount; ++i)
     {
 
-        vkDestroyImageView(vkState.device, viewGet(window->views[i])->view, nullptr);
+        vkDestroyImageView(vk.device, viewGet(window->views[i])->view, nullptr);
 
-        vkDestroySemaphore(vkState.device, window->readyToPresent[i], nullptr);
+        vkDestroySemaphore(vk.device, window->readyToPresent[i], nullptr);
         window->readyToPresent[i] = nullptr;
 
-        hgPoolFree(&vkState.views, window->views[i].handle);
-        hgPoolFree(&vkState.images, window->images[i].handle);
+        hgPoolFree(&vk.views, window->views[i].handle);
+        hgPoolFree(&vk.images, window->images[i].handle);
     }
 
-    for (u32 i = 0; i < vkState.frameCount; ++i)
+    for (u32 i = 0; i < vk.frameCount; ++i)
     {
-        vkDestroySemaphore(vkState.device, window->imageAvailable[i], nullptr);
+        vkDestroySemaphore(vk.device, window->imageAvailable[i], nullptr);
         window->imageAvailable[i] = nullptr;
     }
 
     VkSwapchainKHR oldSwapchain = window->swapchain;
 
     VkSurfaceCapabilitiesKHR capabilities;
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vkState.physicalDevice, window->surface, &capabilities);
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vk.physicalDevice, window->surface, &capabilities);
 
     if (capabilities.currentExtent.width != (u32)-1)
         window->width = capabilities.currentExtent.width;
@@ -3113,12 +3113,12 @@ static void resizeWindowSwapchain(HgWindowData* window)
         swapchainInfo.clipped = VK_TRUE;
         swapchainInfo.oldSwapchain = window->swapchain;
 
-        VkResult result = vkCreateSwapchainKHR(vkState.device, &swapchainInfo, nullptr, &window->swapchain);
+        VkResult result = vkCreateSwapchainKHR(vk.device, &swapchainInfo, nullptr, &window->swapchain);
         if (window->swapchain == nullptr)
             hgError("Failed to create swapchain: %s\n", vkResultToStr(result));
 
         u32 swapImageCount;
-        vkGetSwapchainImagesKHR(vkState.device, window->swapchain, &swapImageCount, nullptr);
+        vkGetSwapchainImagesKHR(vk.device, window->swapchain, &swapImageCount, nullptr);
 
         if (window->imageCount != swapImageCount)
         {
@@ -3129,11 +3129,11 @@ static void resizeWindowSwapchain(HgWindowData* window)
         }
 
         VkImage* swapImages = hgAlloc<VkImage>(scratch, window->imageCount);
-        vkGetSwapchainImagesKHR(vkState.device, window->swapchain, &window->imageCount, swapImages);
+        vkGetSwapchainImagesKHR(vk.device, window->swapchain, &window->imageCount, swapImages);
 
         for (u32 i = 0; i < window->imageCount; ++i)
         {
-            window->images[i] = {hgPoolAlloc(&vkState.images)};
+            window->images[i] = {hgPoolAlloc(&vk.images)};
             HgGpuImageData* imageData = imageGet(window->images[i]);
 
             *imageData = {};
@@ -3154,12 +3154,12 @@ static void resizeWindowSwapchain(HgWindowData* window)
             viewInfo.format = formatToVk(window->format);
             viewInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
 
-            window->views[i] = {hgPoolAlloc(&vkState.views)};
+            window->views[i] = {hgPoolAlloc(&vk.views)};
             HgGpuViewData* viewData = viewGet(window->views[i]);
 
             *viewData = {};
 
-            VkResult viewResult = vkCreateImageView(vkState.device, &viewInfo, nullptr, &viewData->view);
+            VkResult viewResult = vkCreateImageView(vk.device, &viewInfo, nullptr, &viewData->view);
             if (viewData->view == nullptr)
                 hgError("Could not create VkImageView: %s\n", vkResultToStr(viewResult));
 
@@ -3174,17 +3174,17 @@ static void resizeWindowSwapchain(HgWindowData* window)
             VkSemaphoreCreateInfo semaphoreInfo{};
             semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-            VkResult readyToPresentResult = vkCreateSemaphore(vkState.device, &semaphoreInfo, nullptr, &window->readyToPresent[i]);
+            VkResult readyToPresentResult = vkCreateSemaphore(vk.device, &semaphoreInfo, nullptr, &window->readyToPresent[i]);
             if (window->readyToPresent[i] == nullptr)
                 hgError("Could not create VkSemaphore: %s\n", vkResultToStr(readyToPresentResult));
         }
 
-        for (u32 i = 0; i < vkState.frameCount; ++i)
+        for (u32 i = 0; i < vk.frameCount; ++i)
         {
             VkSemaphoreCreateInfo semaphoreInfo{};
             semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-            VkResult imageAvailableResult = vkCreateSemaphore(vkState.device, &semaphoreInfo, nullptr, &window->imageAvailable[i]);
+            VkResult imageAvailableResult = vkCreateSemaphore(vk.device, &semaphoreInfo, nullptr, &window->imageAvailable[i]);
             if (window->imageAvailable[i] == nullptr)
                 hgError("Could not create VkSemaphore: %s\n", vkResultToStr(imageAvailableResult));
         }
@@ -3196,7 +3196,7 @@ static void resizeWindowSwapchain(HgWindowData* window)
 
     window->imageIdx = (u32)-1;
 
-    vkDestroySwapchainKHR(vkState.device, oldSwapchain, nullptr);
+    vkDestroySwapchainKHR(vk.device, oldSwapchain, nullptr);
 }
 
 static HgFormat findSwapchainFormat(VkSurfaceKHR surface)
@@ -3207,9 +3207,9 @@ static HgFormat findSwapchainFormat(VkSurfaceKHR surface)
     hgArenaScope(scratch);
 
     u32 formatCount = 0;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(vkState.physicalDevice, surface, &formatCount, nullptr);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(vk.physicalDevice, surface, &formatCount, nullptr);
     VkSurfaceFormatKHR* formats = hgAlloc<VkSurfaceFormatKHR>(scratch, formatCount);
-    vkGetPhysicalDeviceSurfaceFormatsKHR(vkState.physicalDevice, surface, &formatCount, formats);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(vk.physicalDevice, surface, &formatCount, formats);
 
     for (u32 i = 0; i < formatCount; ++i)
     {
@@ -3234,9 +3234,9 @@ static HgGpuPresentMode findSwapchainPresentMode(
         return desiredMode;
 
     u32 modeCount = 0;
-    vkGetPhysicalDeviceSurfacePresentModesKHR(vkState.physicalDevice, surface, &modeCount, nullptr);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(vk.physicalDevice, surface, &modeCount, nullptr);
     VkPresentModeKHR* presentModes = hgAlloc<VkPresentModeKHR>(scratch, modeCount);
-    vkGetPhysicalDeviceSurfacePresentModesKHR(vkState.physicalDevice, surface, &modeCount, presentModes);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(vk.physicalDevice, surface, &modeCount, presentModes);
 
     for (u32 i = 0; i < modeCount; ++i)
     {
@@ -3252,8 +3252,8 @@ static void createWindowSwapchain(HgWindowData* window, const HgWindowConfig* co
     window->presentMode = findSwapchainPresentMode(window->surface, config->preferredPresentMode);
     window->imageUsage = config->imageUsage;
 
-    window->imageAvailable = (VkSemaphore*)malloc(sizeof(VkSemaphore) * vkState.frameCount);
-    for (u32 i = 0; i < vkState.frameCount; ++i)
+    window->imageAvailable = (VkSemaphore*)malloc(sizeof(VkSemaphore) * vk.frameCount);
+    for (u32 i = 0; i < vk.frameCount; ++i)
     {
         window->imageAvailable[i] = nullptr;
     }
@@ -3265,18 +3265,18 @@ static void destroyWindowSwapchain(HgWindowData* window)
 {
     for (u32 i = 0; i < window->imageCount; ++i)
     {
-        vkDestroySemaphore(vkState.device, window->readyToPresent[i], nullptr);
-        vkDestroyImageView(vkState.device, viewGet(window->views[i])->view, nullptr);
-        hgPoolFree(&vkState.views, window->views[i].handle);
-        hgPoolFree(&vkState.images, window->images[i].handle);
+        vkDestroySemaphore(vk.device, window->readyToPresent[i], nullptr);
+        vkDestroyImageView(vk.device, viewGet(window->views[i])->view, nullptr);
+        hgPoolFree(&vk.views, window->views[i].handle);
+        hgPoolFree(&vk.images, window->images[i].handle);
     }
 
-    for (u32 i = 0; i < vkState.frameCount; ++i)
+    for (u32 i = 0; i < vk.frameCount; ++i)
     {
-        vkDestroySemaphore(vkState.device, window->imageAvailable[i], nullptr);
+        vkDestroySemaphore(vk.device, window->imageAvailable[i], nullptr);
     }
 
-    vkDestroySwapchainKHR(vkState.device, window->swapchain, nullptr);
+    vkDestroySwapchainKHR(vk.device, window->swapchain, nullptr);
 
     free(window->readyToPresent);
     free(window->imageAvailable);
@@ -3290,9 +3290,9 @@ HgWindow hgWindowCreate(const char* title, u32 width, u32 height, const HgWindow
     if (config == nullptr)
         config = &defaultConfig;
 
-    HgWindow window = {hgPoolAlloc(&platformState.handles).id};
-    HgWindowData* data = &platformState.windowPool[hgHandleIdx(window.handle)];
-    memset((void*)data, 0, platformState.windowWidth);
+    HgWindow window = {hgPoolAlloc(&platform.handles).id};
+    HgWindowData* data = &platform.windowPool[hgHandleIdx(window.handle)];
+    memset((void*)data, 0, platform.windowWidth);
     *data = {};
 
     if (title == nullptr)
@@ -3317,17 +3317,17 @@ HgWindow hgWindowCreate(const char* title, u32 width, u32 height, const HgWindow
     if (data->sdlWindow == nullptr)
         hgError("Failed to create SDL window: %s\n", SDL_GetError());
 
-    bool success = SDL_Vulkan_CreateSurface(data->sdlWindow, vkState.instance, nullptr, &data->surface);
+    bool success = SDL_Vulkan_CreateSurface(data->sdlWindow, vk.instance, nullptr, &data->surface);
     if (!success || data->surface == nullptr)
         hgError("Failed to create Vulkan surface: %s\n", SDL_GetError());
 
     SDL_WindowID windowID = SDL_GetWindowID(data->sdlWindow);
-    hgMapAdd(&platformState.ids, windowID, data);
+    hgMapAdd(&platform.ids, windowID, data);
 
     SDL_GetWindowSize(data->sdlWindow, (int*)&data->width, (int*)&data->height);
     createWindowSwapchain(data, config);
 
-    data->eventCapacity = platformState.windowMaxEvents;
+    data->eventCapacity = platform.windowMaxEvents;
     data->eventCount = 0;
 
     return window;
@@ -3340,24 +3340,24 @@ void hgWindowDestroy(HgWindow window)
     destroyWindowSwapchain(data);
 
     SDL_WindowID windowID = SDL_GetWindowID(data->sdlWindow);
-    hgMapRemove(&platformState.ids, windowID);
+    hgMapRemove(&platform.ids, windowID);
 
-    vkDestroySurfaceKHR(vkState.instance, data->surface, nullptr);
+    vkDestroySurfaceKHR(vk.instance, data->surface, nullptr);
     SDL_DestroyWindow(data->sdlWindow);
 
-    hgPoolFree(&platformState.handles, window.handle);
+    hgPoolFree(&platform.handles, window.handle);
 }
 
 HgGpuCmd* hgGpuFrameBegin(HgWindow* windows, u32 windowCount)
 {
-    Frame* frame = &vkState.frames[vkState.currentFrame];
+    Frame* frame = &vk.frames[vk.currentFrame];
 
     hgAssert(windowCount < frame->windowCapacity);
     if (windowCount > 0)
         hgAssert(windows != nullptr);
 
-    vkWaitForFences(vkState.device, 1, &frame->fence, VK_TRUE, UINT64_MAX);
-    vkResetFences(vkState.device, 1, &frame->fence);
+    vkWaitForFences(vk.device, 1, &frame->fence, VK_TRUE, UINT64_MAX);
+    vkResetFences(vk.device, 1, &frame->fence);
 
     frame->windowCount = 0;
     for (u32 i = 0; i < windowCount; ++i)
@@ -3367,10 +3367,10 @@ HgGpuCmd* hgGpuFrameBegin(HgWindow* windows, u32 windowCount)
             continue;
 
         VkResult result = vkAcquireNextImageKHR(
-            vkState.device,
+            vk.device,
             window->swapchain,
             UINT64_MAX,
-            window->imageAvailable[vkState.currentFrame],
+            window->imageAvailable[vk.currentFrame],
             nullptr,
             &window->imageIdx);
 
@@ -3389,7 +3389,7 @@ HgGpuCmd* hgGpuFrameBegin(HgWindow* windows, u32 windowCount)
         }
     }
 
-    vkResetCommandPool(vkState.device, frame->cmdPool, 0);
+    vkResetCommandPool(vk.device, frame->cmdPool, 0);
 
     VkCommandBufferAllocateInfo cmdInfo{};
     cmdInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -3398,7 +3398,7 @@ HgGpuCmd* hgGpuFrameBegin(HgWindow* windows, u32 windowCount)
     cmdInfo.commandBufferCount = 1;
 
     VkCommandBuffer cmd = nullptr;
-    vkAllocateCommandBuffers(vkState.device, &cmdInfo, &cmd);
+    vkAllocateCommandBuffers(vk.device, &cmdInfo, &cmd);
 
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -3416,7 +3416,7 @@ void hgGpuFrameEnd(HgGpuCmd* cmd)
     HgArena* scratch = hgScratch();
     hgArenaScope(scratch);
 
-    Frame* frame = &vkState.frames[vkState.currentFrame];
+    Frame* frame = &vk.frames[vk.currentFrame];
 
     VkPipelineStageFlags* waitStages = hgAlloc<VkPipelineStageFlags>(scratch, frame->windowCount);
     VkSemaphore* imageAvailableSemaphores = hgAlloc<VkSemaphore>(scratch, frame->windowCount);
@@ -3430,7 +3430,7 @@ void hgGpuFrameEnd(HgGpuCmd* cmd)
         HgWindowData* window = windowGet(frame->windows[i]);
 
         waitStages[i] = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        imageAvailableSemaphores[i] = window->imageAvailable[vkState.currentFrame];
+        imageAvailableSemaphores[i] = window->imageAvailable[vk.currentFrame];
         readyToPresentSemaphores[i] = window->readyToPresent[window->imageIdx];
 
         swapchains[i] = window->swapchain;
@@ -3448,7 +3448,7 @@ void hgGpuFrameEnd(HgGpuCmd* cmd)
     submit.signalSemaphoreCount = frame->windowCount;
     submit.pSignalSemaphores = readyToPresentSemaphores;
 
-    vkQueueSubmit(vkState.queue, 1, &submit, frame->fence);
+    vkQueueSubmit(vk.queue, 1, &submit, frame->fence);
 
     if (frame->windowCount > 0)
     {
@@ -3460,10 +3460,10 @@ void hgGpuFrameEnd(HgGpuCmd* cmd)
         presentInfo.pSwapchains = swapchains;
         presentInfo.pImageIndices = imageIndices;
 
-        vkQueuePresentKHR(vkState.queue, &presentInfo);
+        vkQueuePresentKHR(vk.queue, &presentInfo);
     }
 
-    vkState.currentFrame = (vkState.currentFrame + 1) % vkState.frameCount;
+    vk.currentFrame = (vk.currentFrame + 1) % vk.frameCount;
 }
 
 HgGpuView hgWindowImageView(HgWindow window)
@@ -3718,29 +3718,29 @@ static HgButton sdlButtonToHgButton(u32 button)
 
 void hgProcessEvents()
 {
-    platformState.mouseDX = 0;
-    platformState.mouseDY = 0;
+    platform.mouseDX = 0;
+    platform.mouseDY = 0;
 
-    for (u32 i = 0; i < platformState.ids.capacity; ++i)
+    for (u32 i = 0; i < platform.ids.capacity; ++i)
     {
-        if (platformState.ids.hasVal[i])
-            platformState.ids.vals[i]->eventCount = 0;
+        if (platform.ids.hasVal[i])
+            platform.ids.vals[i]->eventCount = 0;
     }
 
     SDL_Event event;
     while (SDL_PollEvent(&event))
     {
-        if (platformState.imguiInitialized)
+        if (platform.imguiInitialized)
             ImGui_ImplSDL3_ProcessEvent(&event);
 
         switch (event.type)
         {
             case SDL_EVENT_QUIT:
-                platformState.wasQuit = true;
+                platform.wasQuit = true;
                 break;
             case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
             {
-                HgWindowData** window = hgMapGet(&platformState.ids, event.window.windowID);
+                HgWindowData** window = hgMapGet(&platform.ids, event.window.windowID);
                 if (window != nullptr)
                     (*window)->wasClosed = true;
             } break;
@@ -3748,7 +3748,7 @@ void hgProcessEvents()
             case SDL_EVENT_WINDOW_RESTORED: [[fallthrough]];
             case SDL_EVENT_WINDOW_RESIZED:
             {
-                HgWindowData** window = hgMapGet(&platformState.ids, event.window.windowID);
+                HgWindowData** window = hgMapGet(&platform.ids, event.window.windowID);
                 if (window != nullptr)
                 {
                     SDL_GetWindowSize((*window)->sdlWindow, (int*)&(*window)->width, (int*)&(*window)->height);
@@ -3757,19 +3757,19 @@ void hgProcessEvents()
             } break;
             case SDL_EVENT_MOUSE_MOTION:
             {
-                HgWindowData** window = hgMapGet(&platformState.ids, event.button.windowID);
+                HgWindowData** window = hgMapGet(&platform.ids, event.button.windowID);
                 if (window != nullptr)
                 {
                     (*window)->mouseX = event.motion.x;
                     (*window)->mouseY = event.motion.y;
                 }
-                platformState.mouseDX += event.motion.xrel;
-                platformState.mouseDY += event.motion.yrel;
+                platform.mouseDX += event.motion.xrel;
+                platform.mouseDY += event.motion.yrel;
             } break;
             case SDL_EVENT_KEY_DOWN:
             {
                 HgButton key = sdlKeycodeToHgButton(event.key.key);
-                HgWindowData** window = hgMapGet(&platformState.ids, event.key.windowID);
+                HgWindowData** window = hgMapGet(&platform.ids, event.key.windowID);
                 if (window != nullptr)
                 {
                     HgWindowEvent windowEvent{};
@@ -3783,7 +3783,7 @@ void hgProcessEvents()
             case SDL_EVENT_KEY_UP:
             {
                 HgButton key = sdlKeycodeToHgButton(event.key.key);
-                HgWindowData** window = hgMapGet(&platformState.ids, event.key.windowID);
+                HgWindowData** window = hgMapGet(&platform.ids, event.key.windowID);
                 if (window != nullptr)
                 {
                     HgWindowEvent windowEvent{};
@@ -3797,7 +3797,7 @@ void hgProcessEvents()
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
             {
                 HgButton key = sdlButtonToHgButton(event.button.button);
-                HgWindowData** window = hgMapGet(&platformState.ids, event.button.windowID);
+                HgWindowData** window = hgMapGet(&platform.ids, event.button.windowID);
                 if (window != nullptr)
                 {
                     HgWindowEvent windowEvent{};
@@ -3811,7 +3811,7 @@ void hgProcessEvents()
             case SDL_EVENT_MOUSE_BUTTON_UP:
             {
                 HgButton key = sdlButtonToHgButton(event.button.button);
-                HgWindowData** window = hgMapGet(&platformState.ids, event.button.windowID);
+                HgWindowData** window = hgMapGet(&platform.ids, event.button.windowID);
                 if (window != nullptr)
                 {
                     HgWindowEvent windowEvent{};
@@ -3828,7 +3828,7 @@ void hgProcessEvents()
 
 bool hgWasQuit()
 {
-    return platformState.wasQuit;
+    return platform.wasQuit;
 }
 
 bool hgWindowWasClosed(HgWindow window)
@@ -3870,13 +3870,13 @@ f32 hgMouseY(HgWindow window)
 f32 hgMouseDeltaX(HgWindow window)
 {
     HgWindowData* data = windowGet(window);
-    return platformState.mouseDX / (f32)data->height;
+    return platform.mouseDX / (f32)data->height;
 }
 
 f32 hgMouseDeltaY(HgWindow window)
 {
     HgWindowData* data = windowGet(window);
-    return platformState.mouseDY / (f32)data->height;
+    return platform.mouseDY / (f32)data->height;
 }
 
 bool hgIsButtonDown(HgWindow window, HgButton key)
@@ -3912,11 +3912,11 @@ void hgImGuiInit(
     VkFormat stencilVkFormat = formatToVk(stencilFormat);
 
     ImGui_ImplVulkan_InitInfo imguiInfo{};
-    imguiInfo.Instance = vkState.instance;
-    imguiInfo.PhysicalDevice = vkState.physicalDevice;
-    imguiInfo.Device = vkState.device;
-    imguiInfo.QueueFamily = vkState.queueFamily;
-    imguiInfo.Queue = vkState.queue;
+    imguiInfo.Instance = vk.instance;
+    imguiInfo.PhysicalDevice = vk.physicalDevice;
+    imguiInfo.Device = vk.device;
+    imguiInfo.QueueFamily = vk.queueFamily;
+    imguiInfo.Queue = vk.queue;
     imguiInfo.DescriptorPoolSize = 1000;
     imguiInfo.MinImageCount = data->imageCount;
     imguiInfo.ImageCount = data->imageCount;
@@ -3931,12 +3931,12 @@ void hgImGuiInit(
 
     ImGui_ImplVulkan_Init(&imguiInfo);
 
-    platformState.imguiInitialized = true;
+    platform.imguiInitialized = true;
 }
 
 void hgImGuiDeinit()
 {
-    platformState.imguiInitialized = false;
+    platform.imguiInitialized = false;
 
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplSDL3_Shutdown();

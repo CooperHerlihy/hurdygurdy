@@ -893,9 +893,12 @@ void hgStringInsert(HgArena* arena, HgStringBuilder* dst, u64 idx, HgStringView 
 HgStringOwner hgStringAlloc(HgStringView data)
 {
     HgStringOwner str{};
-    str.chars = (char*)malloc(data.length);
-    memcpy((char*)str.chars, data.chars, data.length);
-    str.length = data.length;
+    if (data != "")
+    {
+        str.chars = (char*)malloc(data.length);
+        memcpy((char*)str.chars, data.chars, data.length);
+        str.length = data.length;
+    }
     return str;
 }
 
@@ -2567,9 +2570,7 @@ bool hgEcsHas(HgEcs* ecs, HgEntity e, u64 componentId)
     hgAssert(hgEcsAlive(ecs, e));
 
     HgComponent* system = hgMapGet(&ecs->components, componentId);
-    hgAssert(system != nullptr);
-
-    return system->indices[hgHandleIdx(e.handle)] < system->count;
+    return system != nullptr && system->indices[hgHandleIdx(e.handle)] < system->count;
 }
 
 void* hgEcsGet(HgEcs* ecs, HgEntity e, u64 componentId)
