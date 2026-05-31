@@ -9,19 +9,7 @@
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_vulkan.h"
 
-struct Descriptor {
-    u32 id = (u32)-1;
-};
-
-constexpr u32 descriptorIdx(Descriptor desc)
-{
-    return desc.id & 0x0000ffff;
-}
-
-constexpr u32 descriptorGeneration(Descriptor desc)
-{
-    return (desc.id & 0x0fff0000) >> 16;
-}
+typedef HgIndexHandle Descriptor;
 
 enum DescriptorType : u32 {
     DescriptorType_combinedImageSampler = 0,
@@ -30,11 +18,6 @@ enum DescriptorType : u32 {
     DescriptorType_storageBuffer = 3,
     DescriptorType_count,
 };
-
-constexpr DescriptorType descriptorType(Descriptor desc)
-{
-    return (DescriptorType)((desc.id & 0xf0000000) >> 28);
-}
 
 struct HgGpuBufferData {
     VkBuffer buffer;
@@ -160,8 +143,7 @@ struct VulkanState {
     VkDescriptorSetLayout bindlessLayout = nullptr;
     VkDescriptorSet bindlessSet = nullptr;
 
-    Descriptor** descriptorPools = nullptr;
-    Descriptor* descriptorPoolNexts = nullptr;
+    HgIndexPool descriptorPools[DescriptorType_count];
 
     HgPool<HgGpuBufferData> buffers;
     HgPool<HgGpuImageData> images;
@@ -618,24 +600,6 @@ static VkDescriptorSetLayout createBindlessDescriptorLayout()
     return layout;
 }
 
-static Descriptor* createBindlessPool(HgArena* arena, DescriptorType type, Descriptor* next)
-{
-    hgAssert(arena != nullptr);
-    hgAssert(next != nullptr);
-
-    Descriptor* pool = hgAlloc<Descriptor>(arena, UINT16_MAX);
-
-    for (u32 i = 0; i < UINT16_MAX; ++i)
-    {
-        pool[i] = {i + 1};
-        pool[i].id = (pool[i].id & 0x0fffffff) | (type << 28);
-    }
-    *next = {0};
-    next->id = (next->id & 0x0fffffff) | (type << 28);
-
-    return pool;
-}
-
 static VkFilter gpuFilterToVk(HgGpuFilter filter)
 {
     return (VkFilter)filter;
@@ -765,13 +729,11 @@ void hgGpuInit(HgArena* arena, HgGpuInit* config)
             hgError("Could not allocate bindless VkDescriptorSet: %s\n", vkResultToStr(result));
     }
 
-    if (vkState.descriptorPools == nullptr)
+    for (u32 i = 0; i < DescriptorType_count; ++i)
     {
-        vkState.descriptorPools = hgAlloc<Descriptor*>(arena, DescriptorType_count);
-        vkState.descriptorPoolNexts = hgAlloc<Descriptor>(arena, DescriptorType_count);
-        for (u32 i = 0; i < DescriptorType_count; ++i)
+        if (vkState.descriptorPools[i].capacity == 0)
         {
-            vkState.descriptorPools[i] = createBindlessPool(arena, (DescriptorType)i, &vkState.descriptorPoolNexts[i]);
+            vkState.descriptorPools[i] = hgPoolCreate<void>(arena, UINT16_MAX);
         }
     }
 
@@ -846,8 +808,10 @@ void hgGpuDeinit()
     vkState.images = {};
     vkState.buffers = {};
 
-    vkState.descriptorPools = nullptr;
-    vkState.descriptorPoolNexts = nullptr;
+    for (u32 i = 0; i < DescriptorType_count; ++i)
+    {
+        vkState.descriptorPools[i] = {};
+    }
 
     if (vkState.bindlessLayout != nullptr)
     {
@@ -1432,17 +1396,11 @@ static Descriptor descriptorCreate(
     const DescriptorImageInfo* imageInfo)
 {
     hgAssert(type < DescriptorType_count);
-    hgAssert(descriptorIdx(vkState.descriptorPoolNexts[type]) != UINT16_MAX);
 
     HgArena* scratch = hgScratch();
     hgArenaScope(scratch);
 
-    Descriptor desc = vkState.descriptorPoolNexts[type];
-
-    u32 idx = descriptorIdx(vkState.descriptorPoolNexts[type]);
-    vkState.descriptorPoolNexts[type] = vkState.descriptorPools[type][idx];
-
-    vkState.descriptorPools[type][descriptorIdx(desc)] = desc;
+    Descriptor desc = hgPoolAlloc(&vkState.descriptorPools[type]);
 
     VkDescriptorBufferInfo bufferVkInfo = bufferInfo != nullptr
         ? VkDescriptorBufferInfo{bufferInfo->buffer->buffer, bufferInfo->offset, bufferInfo->range}
@@ -1460,7 +1418,7 @@ static Descriptor descriptorCreate(
     write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     write.dstSet = vkState.bindlessSet;
     write.dstBinding = type;
-    write.dstArrayElement = idx;
+    write.dstArrayElement = hgHandleIdx(desc);
     write.descriptorCount = 1;
     write.descriptorType = descriptorTypeToVk(type);
     write.pBufferInfo = bufferInfo != nullptr ? &bufferVkInfo : nullptr;
@@ -1472,20 +1430,12 @@ static Descriptor descriptorCreate(
     return desc;
 }
 
-static void descriptorDestroy(Descriptor desc)
+static void descriptorDestroy(Descriptor desc, DescriptorType type)
 {
-    if (desc.id == Descriptor{}.id)
-        return;
-
-    DescriptorType type = descriptorType(desc);
-
-    hgAssert(desc.id == vkState.descriptorPools[type][descriptorIdx(desc)].id);
-
-    u32 idx = descriptorIdx(desc);
-    vkState.descriptorPools[type][idx] = vkState.descriptorPoolNexts[type];
-
-    desc.id += 1 << 16;
-    vkState.descriptorPoolNexts[type] = desc;
+    if (!hgHandleIsNull(desc))
+    {
+        hgPoolFree(&vkState.descriptorPools[type], desc);
+    }
 }
 
 static HgGpuBufferData* bufferGet(HgGpuBuffer buffer)
@@ -1558,8 +1508,8 @@ void hgGpuBufferDestroy(HgGpuBuffer buffer)
     if (hgPoolAlive(&vkState.buffers, buffer))
     {
         HgGpuBufferData* bufferData = bufferGet(buffer);
-        descriptorDestroy(bufferData->storageDesc);
-        descriptorDestroy(bufferData->uniformDesc);
+        descriptorDestroy(bufferData->storageDesc, DescriptorType_storageBuffer);
+        descriptorDestroy(bufferData->uniformDesc, DescriptorType_uniformBuffer);
         vmaDestroyBuffer(vkState.vma, bufferData->buffer, bufferData->alloc);
     }
 }
@@ -1567,15 +1517,15 @@ void hgGpuBufferDestroy(HgGpuBuffer buffer)
 u32 hgGpuBufferUniformDescriptor(HgGpuBuffer buffer)
 {
     Descriptor desc = bufferGet(buffer)->uniformDesc;
-    hgAssert(desc.id == vkState.descriptorPools[descriptorType(desc)][descriptorIdx(desc)].id);
-    return descriptorIdx(desc);
+    hgAssert(hgPoolAlive(&vkState.descriptorPools[DescriptorType_uniformBuffer], desc));
+    return hgHandleIdx(desc);
 }
 
 u32 hgGpuBufferStorageDescriptor(HgGpuBuffer buffer)
 {
     Descriptor desc = bufferGet(buffer)->storageDesc;
-    hgAssert(desc.id == vkState.descriptorPools[descriptorType(desc)][descriptorIdx(desc)].id);
-    return descriptorIdx(desc);
+    hgAssert(hgPoolAlive(&vkState.descriptorPools[DescriptorType_storageBuffer], desc));
+    return hgHandleIdx(desc);
 }
 
 void hgGpuBufferWrite(HgGpuBuffer dst, u64 offset, const void* src, u64 size)
@@ -1838,8 +1788,8 @@ void hgGpuViewDestroy(HgGpuView view)
     if (hgPoolAlive(&vkState.views, view))
     {
         HgGpuViewData* viewData = viewGet(view);
-        descriptorDestroy(viewData->storageDesc);
-        descriptorDestroy(viewData->samplerDesc);
+        descriptorDestroy(viewData->storageDesc, DescriptorType_storageImage);
+        descriptorDestroy(viewData->samplerDesc, DescriptorType_combinedImageSampler);
         vkDestroyImageView(vkState.device, viewData->view, nullptr);
     }
 }
@@ -1847,15 +1797,15 @@ void hgGpuViewDestroy(HgGpuView view)
 u32 hgGpuImageSamplerDescriptor(HgGpuView view)
 {
     Descriptor desc = viewGet(view)->samplerDesc;
-    hgAssert(desc.id == vkState.descriptorPools[descriptorType(desc)][descriptorIdx(desc)].id);
-    return descriptorIdx(desc);
+    hgAssert(hgPoolAlive(&vkState.descriptorPools[DescriptorType_combinedImageSampler], desc));
+    return hgHandleIdx(desc);
 }
 
 u32 hgGpuImageStorageDescriptor(HgGpuView view)
 {
     Descriptor desc = viewGet(view)->storageDesc;
-    hgAssert(desc.id == vkState.descriptorPools[descriptorType(desc)][descriptorIdx(desc)].id);
-    return descriptorIdx(desc);
+    hgAssert(hgPoolAlive(&vkState.descriptorPools[DescriptorType_storageImage], desc));
+    return hgHandleIdx(desc);
 }
 
 void hgGpuImageWrite(HgGpuView dst, const void* src)

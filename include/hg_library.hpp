@@ -24,22 +24,36 @@
  * =============================================================================
  */
 
-#ifndef HURDYGURDY_HPP
-#define HURDYGURDY_HPP
+#ifndef HG_LIBRARY_HPP
+#define HG_LIBRARY_HPP
 
-#include "hg_core.hpp"
-#include "hg_math.hpp"
-#include "hg_memory.hpp"
-#include "hg_templates.hpp"
 #include "hg_strings.hpp"
-#include "hg_library.hpp"
-#include "hg_time.hpp"
-#include "hg_concurrency.hpp"
-#include "hg_gpu.hpp"
-#include "hg_window.hpp"
-#include "hg_audio.hpp"
-#include "hg_assets.hpp"
-#include "hg_ecs.hpp"
-#include "hg_rendering.hpp"
 
-#endif // HURDYGURDY_HPP
+/**
+ * A dynamically loaded library
+ */
+struct HgLibrary;
+
+/**
+ * Load a dynamic library
+ */
+HgLibrary* hgLibraryLoad(HgStringView path);
+
+/**
+ * Unload a dynamic library
+ */
+void hgLibraryUnload(HgLibrary* lib);
+
+/**
+ * Find a function from a dynamic library
+ *
+ * Parameters
+ * - lib The dynamic library to load from
+ * - path The symbol of the function to load
+ *
+ * Returns
+ * - A function pointer to the found symbol, or nullptr not found
+ */
+void* hgLibraryFindFunction(HgLibrary* lib, HgStringView symbol);
+
+#endif // HG_LIBRARY_HPP
