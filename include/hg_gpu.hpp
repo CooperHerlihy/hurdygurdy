@@ -411,14 +411,11 @@ enum HgGpuAccess : u32 {
 typedef u32 HgGpuAccessFlags;
 
 /**
- * The implementation data for HgGpuBuffer
- */
-struct HgGpuBufferData;
-
-/**
  * A gpu buffer
  */
-typedef HgHandle<HgGpuBufferData> HgGpuBuffer;
+struct HgGpuBuffer {
+    HgHandle handle;
+};
 
 /**
  * How a gpu buffer will be used
@@ -525,14 +522,11 @@ void hgGpuBufferWrite(HgGpuBuffer dst, u64 offset, const void* src, u64 size);
 void hgGpuBufferRead(void* dst, HgGpuBuffer src, u64 offset, u64 size);
 
 /**
- * The implementation data for HgGpuImage
- */
-struct HgGpuImageData;
-
-/**
  * A gpu image
  */
-typedef HgHandle<HgGpuImageData> HgGpuImage;
+struct HgGpuImage {
+    HgHandle handle;
+};
 
 /**
  * How an image will be used
@@ -636,14 +630,11 @@ HgGpuImage hgGpuImageCreateEx(const HgGpuImageCreateEx* create);
 void hgGpuImageDestroy(HgGpuImage image);
 
 /**
- * The implementation data for HgGpuView
- */
-struct HgGpuViewData;
-
-/**
  * A gpu view
  */
-typedef HgHandle<HgGpuViewData> HgGpuView;
+struct HgGpuView {
+    HgHandle handle;
+};
 
 /**
  * The dimensionality of an image
@@ -804,14 +795,11 @@ void hgGpuImageRead(void* dst, HgGpuView src);
 void hgGpuImageGenMipmaps(HgGpuView dst);
 
 /**
- * The implementation data for HgGpuPipeline
- */
-struct HgGpuPipelineData;
-
-/**
  * A gpu pipeline
  */
-typedef HgHandle<HgGpuPipelineData> HgGpuPipeline;
+struct HgGpuPipeline {
+    HgHandle handle;
+};
 
 /**
  * A push constant range in a pipeline
@@ -1021,7 +1009,7 @@ void hgGpuDraw(HgGpuCmd* cmd, u32 vertexBegin, u32 vertexCount, u32 instanceBegi
  * - groupCountY The number of workgroups in the y dimension
  * - groupCountZ The number of workgroups in the z dimension
  */
-void hgGpuCompute(HgGpuCmd* cmd, u32 groupCountX, u32 groupCountY, u32 groupCountZ);
+void hgGpuDispatch(HgGpuCmd* cmd, u32 groupCountX, u32 groupCountY, u32 groupCountZ);
 
 /**
  * An image dependency barrier

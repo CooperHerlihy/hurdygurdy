@@ -409,7 +409,7 @@ void drawEditorEntity(HgArena* frame, HgEntity e)
         }
 
         HgEntity child = node->firstChild;
-        while (!hgHandleIsNull(child.handle))
+        while (!hgNullHandle(child.handle))
         {
             HgEntity next = hgEcsGet<HgNode>(&ecs, child)->nextSibling;
             drawEditorEntity(frame, child);
@@ -508,7 +508,7 @@ void render()
 {
     HgGpuCmd* cmd = hgGpuFrameBegin(&window, 1);
     hgClockTick(&cpuClock);
-    if (!hgHandleIsNull(hgWindowImageView(window)))
+    if (!hgNullHandle(hgWindowImageView(window).handle))
     {
         HgGpuRenderAttachment renderColorAttachment{};
         renderColorAttachment.image = renderView;

@@ -42,7 +42,7 @@ struct HgEntity {
     /**
      * The entity handle
      */
-    HgIndexHandle handle;
+    HgHandle handle;
 };
 
 /**
@@ -50,7 +50,7 @@ struct HgEntity {
  */
 constexpr bool operator==(HgEntity lhs, HgEntity rhs)
 {
-    return lhs.handle == rhs.handle;
+    return lhs.handle.id == rhs.handle.id;
 }
 
 /**
@@ -58,7 +58,7 @@ constexpr bool operator==(HgEntity lhs, HgEntity rhs)
  */
 constexpr bool operator!=(HgEntity lhs, HgEntity rhs)
 {
-    return lhs.handle != rhs.handle;
+    return lhs.handle.id != rhs.handle.id;
 }
 
 /**
@@ -67,7 +67,7 @@ constexpr bool operator!=(HgEntity lhs, HgEntity rhs)
 template<>
 constexpr u64 hgHash(HgEntity e)
 {
-    return hgHash(e.handle);
+    return hgHash(e.handle.id);
 }
 
 /**

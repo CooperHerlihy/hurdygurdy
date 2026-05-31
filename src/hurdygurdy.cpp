@@ -1836,19 +1836,19 @@ static HgPool<HgMutexData> mutexPool{};
 
 HgMutex hgMutexCreate()
 {
-    HgMutex mtx = hgPoolAlloc(&mutexPool);
-    new (hgPoolGet(&mutexPool, mtx)) HgMutexData{false};
-    return mtx;
+    HgHandle handle = hgPoolAlloc(&mutexPool);
+    new (hgPoolGet(&mutexPool, handle)) HgMutexData{false};
+    return {handle};
 }
 
 void hgMutexDestroy(HgMutex mtx)
 {
-    hgPoolFree(&mutexPool, mtx);
+    hgPoolFree(&mutexPool, mtx.handle);
 }
 
 void hgMutexAcquire(HgMutex mtx)
 {
-    HgMutexData* data = hgPoolGet(&mutexPool, mtx);
+    HgMutexData* data = hgPoolGet(&mutexPool, mtx.handle);
     bool acquired = false;
     while (!data->acquired.compare_exchange_weak(acquired, true))
     {
@@ -1859,14 +1859,14 @@ void hgMutexAcquire(HgMutex mtx)
 
 bool hgMutexTryAcquire(HgMutex mtx)
 {
-    HgMutexData* data = hgPoolGet(&mutexPool, mtx);
+    HgMutexData* data = hgPoolGet(&mutexPool, mtx.handle);
     bool acquired = false;
     return data->acquired.compare_exchange_weak(acquired, true);
 }
 
 void hgMutexRelease(HgMutex mtx)
 {
-    HgMutexData* data = hgPoolGet(&mutexPool, mtx);
+    HgMutexData* data = hgPoolGet(&mutexPool, mtx.handle);
     hgAssert(data->acquired);
     data->acquired.store(false);
 }
@@ -1879,44 +1879,45 @@ static HgPool<HgFenceData> fencePool{};
 
 HgFence hgFenceCreate()
 {
-    HgFence fence = hgPoolAlloc(&fencePool);
-    new (hgPoolGet(&fencePool, fence)) HgFenceData{0};
-    return fence;
+    HgHandle handle = hgPoolAlloc(&fencePool);
+    new (hgPoolGet(&fencePool, handle)) HgFenceData{0};
+    return {handle};
 }
 
 void hgFenceDestroy(HgFence fence)
 {
-    hgPoolFree(&fencePool, fence);
+    if (hgPoolAlive(&fencePool, fence.handle))
+        hgPoolFree(&fencePool, fence.handle);
 }
 
 void hgFenceAttach(HgFence fence, u32 count)
 {
-    hgPoolGet(&fencePool, fence)->counter.fetch_add(count);
+    hgPoolGet(&fencePool, fence.handle)->counter.fetch_add(count);
 }
 
 void hgFenceSignal(HgFence fence, u32 count)
 {
-    hgPoolGet(&fencePool, fence)->counter.fetch_sub(count);
+    hgPoolGet(&fencePool, fence.handle)->counter.fetch_sub(count);
 }
 
 bool hgFenceIsComplete(HgFence fence)
 {
-    return hgPoolGet(&fencePool, fence)->counter.load() == 0;
+    return hgPoolGet(&fencePool, fence.handle)->counter.load() == 0;
 }
 
 bool hgFenceWait(HgFence fence, f64 timeoutSeconds)
 {
     auto end = std::chrono::steady_clock::now() + std::chrono::duration<f64>(timeoutSeconds);
-    while (hgPoolAlive(&fencePool, fence) && !hgFenceIsComplete(fence) && std::chrono::steady_clock::now() < end)
+    while (hgPoolAlive(&fencePool, fence.handle) && !hgFenceIsComplete(fence) && std::chrono::steady_clock::now() < end)
     {
         _mm_pause();
     }
-    return !hgPoolAlive(&fencePool, fence) || hgFenceIsComplete(fence);
+    return !hgPoolAlive(&fencePool, fence.handle) || hgFenceIsComplete(fence);
 }
 
 void hgFenceWaitIndefinite(HgFence fence)
 {
-    while (hgPoolAlive(&fencePool, fence) && !hgFenceIsComplete(fence))
+    while (hgPoolAlive(&fencePool, fence.handle) && !hgFenceIsComplete(fence))
     {
         _mm_pause();
     }
@@ -1985,7 +1986,7 @@ static bool poolExecute()
     hgAssert(work.fn != nullptr);
     work.fn(work.data);
 
-    if (!hgHandleIsNull(work.fence))
+    if (!hgNullHandle(work.fence.handle))
         hgFenceSignal(work.fence, 1);
     return true;
 }
@@ -2076,7 +2077,7 @@ bool hgThreadsHelp(HgFence fence, f64 timeout)
 void hgThreadsCall(HgFence fence, void* data, void (*fn)(void* data))
 {
     hgAssert(fn != nullptr);
-    if (!hgHandleIsNull(fence))
+    if (!hgNullHandle(fence.handle))
         hgFenceAttach(fence, 1);
 
     u32 idx = threadPool.workingHead.fetch_add(1) & (threadPool.workCapacity - 1);
@@ -2794,7 +2795,7 @@ void ecsSerialFindEntities(HgEcs* ecs, HgEntity root, EcsSerialScene* scene)
     {
         HgNode* node = hgEcsGet<HgNode>(ecs, root);
         HgEntity child = node->firstChild;
-        while (!hgHandleIsNull(child.handle))
+        while (!hgNullHandle(child.handle))
         {
             ecsSerialFindEntities(ecs, child, scene);
             child = hgEcsGet<HgNode>(ecs, child)->nextSibling;
@@ -2840,7 +2841,7 @@ void ecsSerialGatherData(HgArena* arena, HgEcs* ecs, HgEntity root, EcsSerialSce
     {
         HgNode* node = hgEcsGet<HgNode>(ecs, root);
         HgEntity child = node->firstChild;
-        while (!hgHandleIsNull(child.handle))
+        while (!hgNullHandle(child.handle))
         {
             ecsSerialGatherData(arena, ecs, child, scene);
             child = hgEcsGet<HgNode>(ecs, child)->nextSibling;
@@ -3009,10 +3010,10 @@ void hgEcsSerializeImpl(
     void* dst)
 {
     HgNodeSerial node{};
-    node.parent = hgHandleIsNull(src->parent.handle) ? (u32)-1 : *hgMapGet(entities, src->parent);
-    node.nextSibling = hgHandleIsNull(src->nextSibling.handle) ? (u32)-1 : *hgMapGet(entities, src->nextSibling);
-    node.prevSibling = hgHandleIsNull(src->prevSibling.handle) ? (u32)-1 : *hgMapGet(entities, src->prevSibling);
-    node.firstChild = hgHandleIsNull(src->firstChild.handle) ? (u32)-1 : *hgMapGet(entities, src->firstChild);
+    node.parent = hgNullHandle(src->parent.handle) ? (u32)-1 : *hgMapGet(entities, src->parent);
+    node.nextSibling = hgNullHandle(src->nextSibling.handle) ? (u32)-1 : *hgMapGet(entities, src->nextSibling);
+    node.prevSibling = hgNullHandle(src->prevSibling.handle) ? (u32)-1 : *hgMapGet(entities, src->prevSibling);
+    node.firstChild = hgNullHandle(src->firstChild.handle) ? (u32)-1 : *hgMapGet(entities, src->firstChild);
     memcpy(dst, &node, sizeof(node));
 }
 
@@ -3040,11 +3041,11 @@ void hgNodeAddChild(HgEcs* ecs, HgEntity parent, HgEntity child)
     HgNode* node = hgEcsGet<HgNode>(ecs, parent);
     HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
 
-    hgAssert(hgHandleIsNull(childNode->parent.handle));
-    hgAssert(hgHandleIsNull(childNode->prevSibling.handle));
-    hgAssert(hgHandleIsNull(childNode->nextSibling.handle));
+    hgAssert(hgNullHandle(childNode->parent.handle));
+    hgAssert(hgNullHandle(childNode->prevSibling.handle));
+    hgAssert(hgNullHandle(childNode->nextSibling.handle));
 
-    if (!hgHandleIsNull(node->firstChild.handle))
+    if (!hgNullHandle(node->firstChild.handle))
     {
         hgEcsGet<HgNode>(ecs, node->firstChild)->prevSibling = child;
         childNode->nextSibling = node->firstChild;
@@ -3059,13 +3060,13 @@ void hgNodeDetach(HgEcs* ecs, HgEntity e)
     hgAssert(hgEcsAlive(ecs, e));
 
     HgNode* node = hgEcsGet<HgNode>(ecs, e);
-    if (hgHandleIsNull(node->parent.handle))
+    if (hgNullHandle(node->parent.handle))
     {
-        hgAssert(hgHandleIsNull(node->prevSibling.handle));
-        hgAssert(hgHandleIsNull(node->nextSibling.handle));
+        hgAssert(hgNullHandle(node->prevSibling.handle));
+        hgAssert(hgNullHandle(node->nextSibling.handle));
 
         HgEntity child = node->firstChild;
-        while (!hgHandleIsNull(child.handle))
+        while (!hgNullHandle(child.handle))
         {
             HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
             HgEntity next = childNode->nextSibling;
@@ -3075,16 +3076,16 @@ void hgNodeDetach(HgEcs* ecs, HgEntity e)
             child = next;
         }
     } else {
-        if (!hgHandleIsNull(node->prevSibling.handle))
+        if (!hgNullHandle(node->prevSibling.handle))
             hgEcsGet<HgNode>(ecs, node->prevSibling)->nextSibling = node->nextSibling;
         else
             hgEcsGet<HgNode>(ecs, node->parent)->firstChild = node->nextSibling;
 
-        if (!hgHandleIsNull(node->nextSibling.handle))
+        if (!hgNullHandle(node->nextSibling.handle))
             hgEcsGet<HgNode>(ecs, node->nextSibling)->prevSibling = node->prevSibling;
 
         HgEntity child = node->firstChild;
-        while (!hgHandleIsNull(child.handle))
+        while (!hgNullHandle(child.handle))
         {
             HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
             HgEntity next = childNode->nextSibling;
@@ -3104,19 +3105,19 @@ void hgNodeDestroy(HgEcs* ecs, HgEntity e)
     hgAssert(hgEcsAlive(ecs, e));
 
     HgNode* node = hgEcsGet<HgNode>(ecs, e);
-    if (!hgHandleIsNull(node->parent.handle))
+    if (!hgNullHandle(node->parent.handle))
     {
-        if (!hgHandleIsNull(node->prevSibling.handle))
+        if (!hgNullHandle(node->prevSibling.handle))
             hgEcsGet<HgNode>(ecs, node->prevSibling)->nextSibling = node->nextSibling;
         else
             hgEcsGet<HgNode>(ecs, node->parent)->firstChild = node->nextSibling;
 
-        if (!hgHandleIsNull(node->nextSibling.handle))
+        if (!hgNullHandle(node->nextSibling.handle))
             hgEcsGet<HgNode>(ecs, node->nextSibling)->prevSibling = node->prevSibling;
     }
 
     HgEntity child = node->firstChild;
-    while (!hgHandleIsNull(child.handle))
+    while (!hgNullHandle(child.handle))
     {
         HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
         HgEntity next = childNode->nextSibling;
@@ -3139,7 +3140,7 @@ void transformUpdateChild(HgEcs* ecs, HgEntity e)
             * hgMatModel3D(tf->position, tf->scale, tf->rotation);
 
     HgEntity child = node->firstChild;
-    while (!hgHandleIsNull(child.handle))
+    while (!hgNullHandle(child.handle))
     {
         hgTransformUpdate(ecs, child);
         child = hgEcsGet<HgNode>(ecs, child)->nextSibling;
@@ -3155,7 +3156,7 @@ void hgTransformUpdate(HgEcs* ecs, HgEntity e)
     if (hgEcsHas<HgNode>(ecs, e))
     {
         HgNode* node = hgEcsGet<HgNode>(ecs, e);
-        if (!hgHandleIsNull(node->parent.handle) && hgEcsHas<HgTransform>(ecs, node->parent))
+        if (!hgNullHandle(node->parent.handle) && hgEcsHas<HgTransform>(ecs, node->parent))
         {
             transformUpdateChild(ecs, e);
         }
@@ -3165,7 +3166,7 @@ void hgTransformUpdate(HgEcs* ecs, HgEntity e)
             tf->mat = hgMatModel3D(tf->position, tf->scale, tf->rotation);
 
             HgEntity child = node->firstChild;
-            while (!hgHandleIsNull(child.handle))
+            while (!hgNullHandle(child.handle))
             {
                 transformUpdateChild(ecs, child);
                 child = hgEcsGet<HgNode>(ecs, child)->nextSibling;
@@ -3317,7 +3318,7 @@ void hgSpritesDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 
     hgEcsForEach<HgSprite, HgTransform>(ecs, [&](HgEntity, HgSprite* sprite, HgTransform* tf)
     {
-        HgGpuTexture* texture = hgHandleIsNull(sprite->texture)
+        HgGpuTexture* texture = hgNullHandle(sprite->texture.handle)
             ? &spritePipeline.defaultTex
             : hgAssetGet(sprite->texture);
 
@@ -3428,7 +3429,7 @@ void hgSkyboxDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 
     hgEcsForEach<HgSkybox>(ecs, [&](HgEntity, HgSkybox* skybox)
     {
-        HgGpuTexture* texture = hgHandleIsNull(skybox->texture)
+        HgGpuTexture* texture = hgNullHandle(skybox->texture.handle)
             ? &skyboxPipeline.defaultTex
             : hgAssetGet(skybox->texture);
 
@@ -3704,15 +3705,15 @@ void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 
     hgEcsForEach<HgModel, HgTransform>(ecs, [&](HgEntity, HgModel* model, HgTransform* tf)
     {
-        HgGpuTexture* colorMap = hgHandleIsNull(model->colorMap)
+        HgGpuTexture* colorMap = hgNullHandle(model->colorMap.handle)
             ? &modelPipeline.defaultColorMap
             : hgAssetGet(model->colorMap);
 
-        HgGpuTexture* normalMap = hgHandleIsNull(model->normalMap)
+        HgGpuTexture* normalMap = hgNullHandle(model->normalMap.handle)
             ? &modelPipeline.defaultNormalMap
             : hgAssetGet(model->normalMap);
 
-        HgGpuMesh* gpuModel = hgHandleIsNull(model->model)
+        HgGpuMesh* gpuModel = hgNullHandle(model->model.handle)
             ? &modelPipeline.defaultModel
             : hgAssetGet(model->model);
 

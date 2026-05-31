@@ -94,14 +94,11 @@ struct HgWindowConfig {
 };
 
 /**
- * The implementation data for HgWindow
- */
-struct HgWindowData;
-
-/**
  * A window
  */
-typedef HgHandle<HgWindowData> HgWindow;
+struct HgWindow {
+    HgHandle handle;
+};
 
 /**
  * Create a new window

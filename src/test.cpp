@@ -2335,30 +2335,30 @@ void hgTest()
             HgEntity root = hgEcsDeserialize(&ecs, scene);
             hgAssert(hgEcsHas<HgNode>(&ecs, root));
             HgNode* rootNode = hgEcsGet<HgNode>(&ecs, root);
-            hgAssert(hgHandleIsNull(rootNode->parent.handle));
-            hgAssert(hgHandleIsNull(rootNode->nextSibling.handle));
-            hgAssert(hgHandleIsNull(rootNode->prevSibling.handle));
-            hgAssert(!hgHandleIsNull(rootNode->firstChild.handle));
+            hgAssert(hgNullHandle(rootNode->parent.handle));
+            hgAssert(hgNullHandle(rootNode->nextSibling.handle));
+            hgAssert(hgNullHandle(rootNode->prevSibling.handle));
+            hgAssert(!hgNullHandle(rootNode->firstChild.handle));
 
             HgEntity a = rootNode->firstChild;
-            hgAssert(!hgHandleIsNull(a.handle));
+            hgAssert(!hgNullHandle(a.handle));
 
             hgAssert(hgEcsHas<HgNode>(&ecs, a));
             HgNode* aNode = hgEcsGet<HgNode>(&ecs, a);
             hgAssert(aNode->parent == root);
-            hgAssert(hgHandleIsNull(aNode->prevSibling.handle));
-            hgAssert(!hgHandleIsNull(aNode->nextSibling.handle));
-            hgAssert(hgHandleIsNull(aNode->firstChild.handle));
+            hgAssert(hgNullHandle(aNode->prevSibling.handle));
+            hgAssert(!hgNullHandle(aNode->nextSibling.handle));
+            hgAssert(hgNullHandle(aNode->firstChild.handle));
 
             HgEntity b = aNode->nextSibling;
-            hgAssert(!hgHandleIsNull(b.handle));
+            hgAssert(!hgNullHandle(b.handle));
 
             hgAssert(hgEcsHas<HgNode>(&ecs, b));
             HgNode* bNode = hgEcsGet<HgNode>(&ecs, b);
             hgAssert(bNode->parent == root);
             hgAssert(bNode->prevSibling == a);
-            hgAssert(hgHandleIsNull(bNode->nextSibling.handle));
-            hgAssert(hgHandleIsNull(bNode->firstChild.handle));
+            hgAssert(hgNullHandle(bNode->nextSibling.handle));
+            hgAssert(hgNullHandle(bNode->firstChild.handle));
 
             hgAssert(hgEcsHas<u32>(&ecs, a));
             hgAssert(*hgEcsGet<u32>(&ecs, a) == 12);

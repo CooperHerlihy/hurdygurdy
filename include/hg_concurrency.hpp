@@ -47,14 +47,11 @@ void hgConcurrencyInit(HgArena* arena, u32 maxMutices, u32 maxFences);
 void hgConcurrencyDeinit();
 
 /**
- * The implementation data for HgMutex
- */
-struct HgMutexData;
-
-/**
  * A spinlock mutex for basic thread synchronization
  */
-typedef HgHandle<HgMutexData> HgMutex;
+struct HgMutex {
+    HgHandle handle;
+};
 
 /**
  * Create a new mutex
@@ -86,14 +83,11 @@ bool hgMutexTryAcquire(HgMutex mtx);
 void hgMutexRelease(HgMutex mtx);
 
 /**
- * The implementation data for HgFence
- */
-struct HgFenceData;
-
-/**
  * A spinlock fence for basic thread synchronization
  */
-typedef HgHandle<HgFenceData> HgFence;
+struct HgFence {
+    HgHandle handle;
+};
 
 /**
  * Create a new fence
@@ -195,7 +189,7 @@ void hgThreadsCall(HgFence fence, void* data, void (*fn)(void* data));
  * - begin The first index to iterate from
  * - end The end index to iterate to
  * - data The data pointer passed to fn
- * - fn The function to use to iterate, takes begin and end indicces
+ * - fn The function to use to iterate, takes the index
  */
 void hgThreadsFor(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx));
 

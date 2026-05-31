@@ -9,7 +9,7 @@
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_vulkan.h"
 
-typedef HgIndexHandle Descriptor;
+typedef HgHandle Descriptor;
 
 enum DescriptorType : u32 {
     DescriptorType_combinedImageSampler = 0,
@@ -1432,7 +1432,7 @@ static Descriptor descriptorCreate(
 
 static void descriptorDestroy(Descriptor desc, DescriptorType type)
 {
-    if (!hgHandleIsNull(desc))
+    if (!hgNullHandle(desc))
     {
         hgPoolFree(&vkState.descriptorPools[type], desc);
     }
@@ -1440,7 +1440,7 @@ static void descriptorDestroy(Descriptor desc, DescriptorType type)
 
 static HgGpuBufferData* bufferGet(HgGpuBuffer buffer)
 {
-    return hgPoolGet(&vkState.buffers, buffer);
+    return hgPoolGet(&vkState.buffers, buffer.handle);
 }
 
 HgGpuBuffer hgGpuBufferCreate(
@@ -1505,7 +1505,7 @@ HgGpuBuffer hgGpuBufferCreate(
 
 void hgGpuBufferDestroy(HgGpuBuffer buffer)
 {
-    if (hgPoolAlive(&vkState.buffers, buffer))
+    if (hgPoolAlive(&vkState.buffers, buffer.handle))
     {
         HgGpuBufferData* bufferData = bufferGet(buffer);
         descriptorDestroy(bufferData->storageDesc, DescriptorType_storageBuffer);
@@ -1599,7 +1599,7 @@ void hgGpuBufferRead(void* dst, HgGpuBuffer src, u64 offset, u64 size)
 
 static HgGpuImageData* imageGet(HgGpuImage image)
 {
-    return hgPoolGet(&vkState.images, image);
+    return hgPoolGet(&vkState.images, image.handle);
 }
 
 HgGpuImage hgGpuImageCreate(u32 width, u32 height, HgFormat format, HgGpuImageUsageFlags usage)
@@ -1661,7 +1661,7 @@ HgGpuImage hgGpuImageCreateEx(const HgGpuImageCreateEx* create)
 
 void hgGpuImageDestroy(HgGpuImage image)
 {
-    if (hgPoolAlive(&vkState.images, image))
+    if (hgPoolAlive(&vkState.images, image.handle))
     {
         HgGpuImageData* imageData = imageGet(image);
         vmaDestroyImage(vkState.vma, imageData->image, imageData->alloc);
@@ -1709,7 +1709,7 @@ static VkSampler samplerGet(
 
 static HgGpuViewData* viewGet(HgGpuView view)
 {
-    return hgPoolGet(&vkState.views, view);
+    return hgPoolGet(&vkState.views, view.handle);
 }
 
 HgGpuView hgGpuViewCreate(
@@ -1785,7 +1785,7 @@ HgGpuView hgGpuViewCreateEx(const HgGpuViewCreateEx* config)
 
 void hgGpuViewDestroy(HgGpuView view)
 {
-    if (hgPoolAlive(&vkState.views, view))
+    if (hgPoolAlive(&vkState.views, view.handle))
     {
         HgGpuViewData* viewData = viewGet(view);
         descriptorDestroy(viewData->storageDesc, DescriptorType_storageImage);
@@ -2178,7 +2178,7 @@ static VkShaderModule createShaderModule(const void* spirvCode, u64 codeSize)
 
 static HgGpuPipelineData* pipelineGet(HgGpuPipeline pipeline)
 {
-    return hgPoolGet(&vkState.pipelines, pipeline);
+    return hgPoolGet(&vkState.pipelines, pipeline.handle);
 }
 
 HgGpuPipeline hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* config)
@@ -2408,7 +2408,7 @@ HgGpuPipeline hgGpuPipelineCreateCompute(u32 pushSize, const u8* shaderCode, u64
 
 void hgGpuPipelineDestroy(HgGpuPipeline pipeline)
 {
-    if (hgPoolAlive(&vkState.pipelines, pipeline))
+    if (hgPoolAlive(&vkState.pipelines, pipeline.handle))
     {
         HgGpuPipelineData* pipelineData = pipelineGet(pipeline);
         vkDestroyPipeline(vkState.device, pipelineData->pipeline, nullptr);
@@ -2498,7 +2498,7 @@ void hgGpuDraw(HgGpuCmd* cmd, u32 vertexBegin, u32 vertexCount, u32 instanceBegi
     vkCmdDraw((VkCommandBuffer)cmd, vertexCount, instanceCount, vertexBegin, instanceBegin);
 }
 
-void hgGpuCompute(HgGpuCmd* cmd, u32 groupCountX, u32 groupCountY, u32 groupCountZ)
+void hgGpuDispatch(HgGpuCmd* cmd, u32 groupCountX, u32 groupCountY, u32 groupCountZ)
 {
     vkCmdDispatch((VkCommandBuffer)cmd, groupCountX, groupCountY, groupCountZ);
 }
@@ -3019,8 +3019,8 @@ static PlatformState platformState{};
 
 static HgWindowData* windowGet(HgWindow window)
 {
-    hgAssert(hgPoolAlive(&platformState.handles, {window.id}));
-    u32 idx = hgHandleIdx(window);
+    hgAssert(hgPoolAlive(&platformState.handles, window.handle));
+    u32 idx = hgHandleIdx(window.handle);
     u32 width = platformState.windowWidth;
     return (HgWindowData*)((u8*)platformState.windowPool + width * idx);
 }
@@ -3077,8 +3077,8 @@ static void resizeWindowSwapchain(HgWindowData* window)
         vkDestroySemaphore(vkState.device, window->readyToPresent[i], nullptr);
         window->readyToPresent[i] = nullptr;
 
-        hgPoolFree(&vkState.views, window->views[i]);
-        hgPoolFree(&vkState.images, window->images[i]);
+        hgPoolFree(&vkState.views, window->views[i].handle);
+        hgPoolFree(&vkState.images, window->images[i].handle);
     }
 
     for (u32 i = 0; i < vkState.frameCount; ++i)
@@ -3267,8 +3267,8 @@ static void destroyWindowSwapchain(HgWindowData* window)
     {
         vkDestroySemaphore(vkState.device, window->readyToPresent[i], nullptr);
         vkDestroyImageView(vkState.device, viewGet(window->views[i])->view, nullptr);
-        hgPoolFree(&vkState.views, window->views[i]);
-        hgPoolFree(&vkState.images, window->images[i]);
+        hgPoolFree(&vkState.views, window->views[i].handle);
+        hgPoolFree(&vkState.images, window->images[i].handle);
     }
 
     for (u32 i = 0; i < vkState.frameCount; ++i)
@@ -3291,7 +3291,7 @@ HgWindow hgWindowCreate(const char* title, u32 width, u32 height, const HgWindow
         config = &defaultConfig;
 
     HgWindow window = {hgPoolAlloc(&platformState.handles).id};
-    HgWindowData* data = &platformState.windowPool[hgHandleIdx(window)];
+    HgWindowData* data = &platformState.windowPool[hgHandleIdx(window.handle)];
     memset((void*)data, 0, platformState.windowWidth);
     *data = {};
 
@@ -3345,7 +3345,7 @@ void hgWindowDestroy(HgWindow window)
     vkDestroySurfaceKHR(vkState.instance, data->surface, nullptr);
     SDL_DestroyWindow(data->sdlWindow);
 
-    hgPoolFree(&platformState.handles, {window.id});
+    hgPoolFree(&platformState.handles, window.handle);
 }
 
 HgGpuCmd* hgGpuFrameBegin(HgWindow* windows, u32 windowCount)

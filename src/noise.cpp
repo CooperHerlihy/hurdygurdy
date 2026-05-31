@@ -187,9 +187,9 @@ int main()
 
         hgGpuPushConstants(cmd, noisePipeline, 0, &noisePush, sizeof(noisePush));
 
-        hgGpuCompute(cmd, noiseWidth / 16, noiseHeight / 16, 1);
+        hgGpuDispatch(cmd, noiseWidth / 16, noiseHeight / 16, 1);
 
-        if (!hgHandleIsNull(hgWindowImageView(window)))
+        if (!hgNullHandle(hgWindowImageView(window).handle))
         {
             HgGpuRenderAttachment colorAttachment{};
             colorAttachment.image = hgWindowImageView(window);

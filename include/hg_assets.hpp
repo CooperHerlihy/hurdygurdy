@@ -51,7 +51,7 @@ void hgAssetInitDefaults(
 void hgAssetDeinitDefaults();
 
 /**
- * The extra data associated with assets
+ * The data associated with assets
  */
 template<typename T>
 struct HgAssetData {
@@ -79,7 +79,9 @@ struct HgAssetData {
  * A handle to an asset
  */
 template<typename T>
-using HgAssetHandle = HgHandle<HgAssetData<T>>;
+struct HgAssetHandle {
+    HgHandle handle;
+};
 
 /**
  * An asset manager
@@ -165,12 +167,12 @@ void hgAssetUnloadImpl(HgAssetData<T>* data)
  * - A handle to the created asset
  */
 template<typename T>
-HgAssetHandle<T> hgAssetLoad(HgStringView path)
+HgAssetHandle<T> hgAssetLoad(HgStringView path = {})
 {
     if (path == "")
     {
         hgMutexAcquire(hgAssets<T>.mtx);
-        HgAssetHandle<T> handle = hgPoolAlloc(&hgAssets<T>.pool);
+        HgHandle handle = hgPoolAlloc(&hgAssets<T>.pool);
         hgMutexRelease(hgAssets<T>.mtx);
 
         HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle);
@@ -179,21 +181,21 @@ HgAssetHandle<T> hgAssetLoad(HgStringView path)
         data->refCount = 1;
         data->asset = {};
 
-        return handle;
+        return {handle};
     }
     else
     {
         hgMutexAcquire(hgAssets<T>.mtx);
-        HgAssetHandle<T>* phandle = hgMapGet(&hgAssets<T>.map, path);
-        if (phandle != nullptr)
+        HgAssetHandle<T>* asset = hgMapGet(&hgAssets<T>.map, path);
+        if (asset != nullptr)
         {
-            ++hgPoolGet(&hgAssets<T>.pool, *phandle)->refCount;
+            ++hgPoolGet(&hgAssets<T>.pool, asset->handle)->refCount;
             hgMutexRelease(hgAssets<T>.mtx);
-            return *phandle;
+            return *asset;
         }
         else
         {
-            HgAssetHandle<T> handle = hgPoolAlloc(&hgAssets<T>.pool);
+            HgHandle handle = hgPoolAlloc(&hgAssets<T>.pool);
 
             HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle);
             data->path = hgStringAlloc(path);
@@ -201,14 +203,14 @@ HgAssetHandle<T> hgAssetLoad(HgStringView path)
             data->refCount = 1;
             data->asset = {};
 
-            hgMapAdd(&hgAssets<T>.map, data->path, handle);
+            hgMapAdd(&hgAssets<T>.map, data->path, {handle});
 
             hgFenceAttach(data->isLoaded, 1);
             hgMutexRelease(hgAssets<T>.mtx);
             hgAssetLoadImpl(data);
             hgFenceSignal(data->isLoaded, 1);
 
-            return handle;
+            return {handle};
         }
     }
 }
@@ -217,11 +219,11 @@ HgAssetHandle<T> hgAssetLoad(HgStringView path)
  * Destroy an asset and unload it (or decrement the ref count)
  */
 template<typename T>
-void hgAssetUnload(HgAssetHandle<T> handle)
+void hgAssetUnload(HgAssetHandle<T> asset)
 {
-    if (hgPoolAlive(&hgAssets<T>.pool, handle))
+    if (hgPoolAlive(&hgAssets<T>.pool, asset.handle))
     {
-        HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle);
+        HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, asset.handle);
         hgMutexAcquire(hgAssets<T>.mtx);
         if (--data->refCount == 0)
         {
@@ -233,7 +235,7 @@ void hgAssetUnload(HgAssetHandle<T> handle)
                 free((void*)data->path.chars);
             }
             hgFenceDestroy(data->isLoaded);
-            hgPoolFree(&hgAssets<T>.pool, handle);
+            hgPoolFree(&hgAssets<T>.pool, asset.handle);
         }
         hgMutexRelease(hgAssets<T>.mtx);
     }
@@ -243,9 +245,9 @@ void hgAssetUnload(HgAssetHandle<T> handle)
  * Hot reload an asset
  */
 template<typename T>
-void hgAssetReload(HgAssetHandle<T> handle)
+void hgAssetReload(HgAssetHandle<T> asset)
 {
-    HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle);
+    HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, asset.handle);
     hgFenceAttach(data->isLoaded);
     hgAssetUnloadImpl(data);
     hgAssetLoadImpl(data);
@@ -256,12 +258,12 @@ void hgAssetReload(HgAssetHandle<T> handle)
  * Load an asset asynchronously
  */
 template<typename T>
-HgAssetHandle<T> hgAssetLoadAsync(HgStringView path)
+HgAssetHandle<T> hgAssetLoadAsync(HgStringView path = {})
 {
     if (path == "")
     {
         hgMutexAcquire(hgAssets<T>.mtx);
-        HgAssetHandle<T> handle = hgPoolAlloc(&hgAssets<T>.pool);
+        HgHandle handle = hgPoolAlloc(&hgAssets<T>.pool);
         hgMutexRelease(hgAssets<T>.mtx);
 
         HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle);
@@ -270,21 +272,21 @@ HgAssetHandle<T> hgAssetLoadAsync(HgStringView path)
         data->refCount = 1;
         data->asset = {};
 
-        return handle;
+        return {handle};
     }
     else
     {
         hgMutexAcquire(hgAssets<T>.mtx);
-        HgAssetHandle<T>* phandle = hgMapGet(&hgAssets<T>.map, path);
-        if (phandle != nullptr)
+        HgAssetHandle<T>* asset = hgMapGet(&hgAssets<T>.map, path);
+        if (asset != nullptr)
         {
-            ++hgPoolGet(&hgAssets<T>.pool, *phandle)->refCount;
+            ++hgPoolGet(&hgAssets<T>.pool, asset->handle)->refCount;
             hgMutexRelease(hgAssets<T>.mtx);
-            return *phandle;
+            return *asset;
         }
         else
         {
-            HgAssetHandle<T> handle = hgPoolAlloc(&hgAssets<T>.pool);
+            HgHandle handle = hgPoolAlloc(&hgAssets<T>.pool);
 
             HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle);
             data->path = hgStringAlloc(path);
@@ -292,7 +294,7 @@ HgAssetHandle<T> hgAssetLoadAsync(HgStringView path)
             data->refCount = 1;
             data->asset = {};
 
-            hgMapAdd(&hgAssets<T>.map, data->path, handle);
+            hgMapAdd(&hgAssets<T>.map, data->path, {handle});
 
             hgThreadsCall(data->isLoaded, data, [](void* pdata)
             {
@@ -300,7 +302,7 @@ HgAssetHandle<T> hgAssetLoadAsync(HgStringView path)
             });
             hgMutexRelease(hgAssets<T>.mtx);
 
-            return handle;
+            return {handle};
         }
     }
 }
@@ -309,23 +311,23 @@ HgAssetHandle<T> hgAssetLoadAsync(HgStringView path)
  * Unload an asset asynchronously
  */
 template<typename T>
-void hgAssetUnloadAsync(HgAssetHandle<T> handle)
+void hgAssetUnloadAsync(HgAssetHandle<T> asset)
 {
-    if (hgPoolAlive(&hgAssets<T>.pool, handle))
+    if (hgPoolAlive(&hgAssets<T>.pool, asset.handle))
     {
         static_assert(sizeof(void*) >= sizeof(HgAssetHandle<T>));
         union HandleData {
             void* p;
-            HgAssetHandle<T> handle;
+            HgHandle handle;
         };
         HandleData handleData{};
-        handleData.handle = handle;
+        handleData.handle = asset.handle;
 
         hgThreadsCall(HgFence{}, handleData.p, [](void* phandle)
         {
             HandleData handleData{};
             handleData.p = phandle;
-            HgAssetHandle<T> handle = handleData.handle;
+            HgHandle handle = handleData.handle;
             HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle);
 
             hgMutexAcquire(hgAssets<T>.mtx);
@@ -350,9 +352,9 @@ void hgAssetUnloadAsync(HgAssetHandle<T> handle)
  * Hot reload an asset asynchronously
  */
 template<typename T>
-void hgAssetReloadAsync(HgAssetHandle<T> handle)
+void hgAssetReloadAsync(HgAssetHandle<T> asset)
 {
-    HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle);
+    HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, asset.handle);
     hgThreadsCall(data->isLoaded, data, [](void* pdata)
     {
         HgAssetData<T>* data = (HgAssetData<T>*)pdata;
@@ -365,12 +367,12 @@ void hgAssetReloadAsync(HgAssetHandle<T> handle)
  * Returns the asset's data
  */
 template<typename T>
-T* hgAssetGet(HgAssetHandle<T> handle)
+T* hgAssetGet(HgAssetHandle<T> asset)
 {
-    if (!hgPoolAlive(&hgAssets<T>.pool, handle))
+    if (!hgPoolAlive(&hgAssets<T>.pool, asset.handle))
         return nullptr;
 
-    HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, handle);
+    HgAssetData<T>* data = hgPoolGet(&hgAssets<T>.pool, asset.handle);
     hgAssert(data->refCount > 0);
     hgFenceWaitIndefinite(data->isLoaded);
     return &data->asset;
@@ -380,9 +382,9 @@ T* hgAssetGet(HgAssetHandle<T> handle)
  * Returns the path associated with an asset
  */
 template<typename T>
-HgStringView hgAssetPath(HgAssetHandle<T> handle)
+HgStringView hgAssetPath(HgAssetHandle<T> asset)
 {
-    return hgPoolGet(&hgAssets<T>.pool, handle)->path;
+    return hgPoolGet(&hgAssets<T>.pool, asset.handle)->path;
 }
 
 /**

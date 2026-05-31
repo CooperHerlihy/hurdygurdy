@@ -34,7 +34,11 @@
  * The hash template
  */
 template<typename T>
-constexpr u64 hgHash(T val);
+constexpr u64 hgHash(T)
+{
+    static_assert(false, "hgHash must be implemented for each type");
+    return 0;
+}
 
 /**
  * A hash set
@@ -483,40 +487,12 @@ constexpr u64 hgHash(void* val)
 /**
  * A generation counted handle
  */
-template<typename T>
 struct HgHandle {
     /**
-     * The handle id
+     * The handle id, defaults to null
      */
     u32 id = (u32)-1;
 };
-
-/**
- * Hashing for handles
- */
-template<typename T>
-constexpr u64 hgHash(HgHandle<T> handle)
-{
-    return handle.id;
-}
-
-/**
- * Compare handles
- */
-template<typename T>
-constexpr bool operator==(HgHandle<T> lhs, HgHandle<T> rhs)
-{
-    return lhs.id == rhs.id;
-}
-
-/**
- * Compare handles
- */
-template<typename T>
-constexpr bool operator!=(HgHandle<T> lhs, HgHandle<T> rhs)
-{
-    return lhs.id != rhs.id;
-}
 
 /**
  * The number of bits in a handle used for the index
@@ -526,8 +502,7 @@ static constexpr u32 hgHandleIdxBits = 24;
 /**
  * Get the index from a handle
  */
-template<typename T>
-constexpr u32 hgHandleIdx(HgHandle<T> handle)
+constexpr u32 hgHandleIdx(HgHandle handle)
 {
     return handle.id & ((1 << hgHandleIdxBits) - 1);
 }
@@ -535,8 +510,7 @@ constexpr u32 hgHandleIdx(HgHandle<T> handle)
 /**
  * Get the generation from a handle
  */
-template<typename T>
-constexpr u32 hgHandleGeneration(HgHandle<T> handle)
+constexpr u32 hgHandleGeneration(HgHandle handle)
 {
     return handle.id & ~((1 << hgHandleIdxBits) - 1);
 }
@@ -544,8 +518,7 @@ constexpr u32 hgHandleGeneration(HgHandle<T> handle)
 /**
  * Returns a new handle at the same index
  */
-template<typename T>
-constexpr HgHandle<T> hgHandleNextGeneration(HgHandle<T> handle)
+constexpr HgHandle hgHandleNextGeneration(HgHandle handle)
 {
     return {handle.id + (1 << hgHandleIdxBits)};
 }
@@ -553,10 +526,9 @@ constexpr HgHandle<T> hgHandleNextGeneration(HgHandle<T> handle)
 /**
  * Returns whether the handle is the null handle
  */
-template<typename T>
-constexpr bool hgHandleIsNull(HgHandle<T> handle)
+constexpr bool hgNullHandle(HgHandle handle)
 {
-    return handle.id == HgHandle<T>{}.id;
+    return handle.id == HgHandle{}.id;
 }
 
 /**
@@ -573,11 +545,11 @@ struct HgPool {
     /**
      * The handle free list
      */
-    HgHandle<T>* freeList;
+    HgHandle* freeList;
     /**
      * The next handle in the free list
      */
-    HgHandle<T> next;
+    HgHandle next;
     /**
      * The capacity of the pool
      */
@@ -610,7 +582,7 @@ HgPool<T> hgPoolCreate(HgArena* arena, u32 capacity)
 
     HgPool<T> pool{};
     pool.vals = hgAlloc<T>(arena, capacity);
-    pool.freeList = hgAlloc<HgHandle<T>>(arena, capacity);
+    pool.freeList = hgAlloc<HgHandle>(arena, capacity);
     pool.capacity = capacity;
     hgPoolReset(&pool);
 
@@ -623,7 +595,7 @@ HgPool<T> hgPoolCreate(HgArena* arena, u32 capacity)
  * Note, does not initialize the object
  */
 template<typename T>
-constexpr HgHandle<T> hgPoolAlloc(HgPool<T>* pool)
+constexpr HgHandle hgPoolAlloc(HgPool<T>* pool)
 {
     hgAssert(pool != nullptr);
     hgAssert(hgHandleIdx(pool->next) < pool->capacity);
@@ -638,7 +610,7 @@ constexpr HgHandle<T> hgPoolAlloc(HgPool<T>* pool)
  * Returns whether a handle is alive in the pool
  */
 template<typename T>
-constexpr bool hgPoolAlive(HgPool<T>* pool, HgHandle<T> handle)
+constexpr bool hgPoolAlive(HgPool<T>* pool, HgHandle handle)
 {
     return hgHandleIdx(handle) < pool->capacity && pool->freeList[hgHandleIdx(handle)].id == handle.id;
 }
@@ -649,7 +621,7 @@ constexpr bool hgPoolAlive(HgPool<T>* pool, HgHandle<T> handle)
  * Note, the object handle must be valid and alive
  */
 template<typename T>
-constexpr void hgPoolFree(HgPool<T>* pool, HgHandle<T> handle)
+constexpr void hgPoolFree(HgPool<T>* pool, HgHandle handle)
 {
     hgAssert(hgPoolAlive(pool, handle));
     pool->freeList[hgHandleIdx(handle)] = pool->next;
@@ -660,16 +632,11 @@ constexpr void hgPoolFree(HgPool<T>* pool, HgHandle<T> handle)
  * Get an object from a pool
  */
 template<typename T>
-constexpr T* hgPoolGet(HgPool<T>* pool, HgHandle<T> handle)
+constexpr T* hgPoolGet(HgPool<T>* pool, HgHandle handle)
 {
     hgAssert(hgPoolAlive(pool, handle));
     return &pool->vals[hgHandleIdx(handle)];
 }
-
-/**
- * A handle to an index from HgIndexPool
- */
-typedef HgHandle<void> HgIndexHandle;
 
 /**
  * A pool of indices
@@ -684,11 +651,11 @@ struct HgPool<void> {
     /**
      * The handle free list
      */
-    HgIndexHandle* freeList;
+    HgHandle* freeList;
     /**
      * The next handle in the free list
      */
-    HgIndexHandle next;
+    HgHandle next;
     /**
      * The capacity of the pool
      */
@@ -705,7 +672,7 @@ inline HgPool<void> hgPoolCreate(HgArena* arena, u32 capacity)
     hgAssert(capacity > 0);
 
     HgPool<void> pool{};
-    pool.freeList = hgAlloc<HgIndexHandle>(arena, capacity);
+    pool.freeList = hgAlloc<HgHandle>(arena, capacity);
     pool.capacity = capacity;
     hgPoolReset(&pool);
 
