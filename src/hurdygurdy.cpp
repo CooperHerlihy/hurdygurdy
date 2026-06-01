@@ -1515,7 +1515,6 @@ void hgThreadsInit(HgArena* arena, u32 queueSize, u32 threadCount)
     {
         new (threadPool.threads + i) std::thread([] {
             hgScratchInit((u32)-1);
-            hgDefer(hgScratchDeinit());
 
             for (;;)
             {
@@ -1526,7 +1525,7 @@ void hgThreadsInit(HgArena* arena, u32 queueSize, u32 threadCount)
                 }
                 lock.unlock();
                 if (threadPool.shouldClose.load())
-                    return;
+                    break;
 
                 static constexpr u32 spinCount = 128;
                 for (u32 j = 0; j < spinCount; ++j)
@@ -1535,6 +1534,8 @@ void hgThreadsInit(HgArena* arena, u32 queueSize, u32 threadCount)
                         _mm_pause();
                 }
             }
+
+            hgScratchDeinit();
         });
     }
 }
@@ -1607,8 +1608,6 @@ void hgThreadsFor(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx
     u64 chunkSize = (u64)std::ceil((f32)(end - begin) / (8.0f * (f32)hgHardwareThreadCount()));
 
     HgFence fence = hgFenceCreate();
-    hgDefer(hgFenceDestroy(fence));
-
     for (u64 i = begin; i < end; i += chunkSize)
     {
         struct Capture
@@ -1635,6 +1634,7 @@ void hgThreadsFor(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx
         });
     }
     hgThreadsHelp(fence, INFINITY);
+    hgFenceDestroy(fence);
 }
 
 void hgAssetInitDefaults(
@@ -1672,14 +1672,16 @@ void hgAssetLoadImpl(HgAssetData<HgBinary>* data)
     FILE* fileHandle = fopen(cpath, "rb");
     if (fileHandle == nullptr)
     {
-    hgWarn("Could not find file to read binary: %s\n", cpath);
-    return;
+        hgWarn("Could not find file to read binary: %s\n", cpath);
+        data->asset = {};
+        return;
     }
-    hgDefer(fclose(fileHandle));
 
     if (fseek(fileHandle, 0, SEEK_END) != 0)
     {
         hgWarn("Failed to read binary from file: %s\n", cpath);
+        fclose(fileHandle);
+        data->asset = {};
         return;
     }
 
@@ -1689,11 +1691,13 @@ void hgAssetLoadImpl(HgAssetData<HgBinary>* data)
     rewind(fileHandle);
     if (fread(data->asset.data, 1, data->asset.size, fileHandle) != data->asset.size)
     {
-        free(data->asset.data);
-        data->asset = {};
         hgWarn("Failed to read binary from file: %s\n", cpath);
+        free(data->asset.data);
+        fclose(fileHandle);
+        data->asset = {};
         return;
     }
+    fclose(fileHandle);
 }
 
 template<>
@@ -1716,8 +1720,6 @@ void hgBinaryStore(HgBinary* bin, HgStringView path, HgFence fence)
     hgThreadsCall(fence, c, [](void* pc)
     {
         Capture* c = (Capture*)pc;
-        hgDefer(free(c));
-        hgDefer(hgStringFree(&c->path));
 
         HgArena* scratch = hgScratch();
         hgArenaScope(scratch);
@@ -1725,17 +1727,20 @@ void hgBinaryStore(HgBinary* bin, HgStringView path, HgFence fence)
         char* cpath = hgCString(scratch, c->path);
 
         FILE* fileHandle = fopen(cpath, "wb");
-        if (fileHandle == nullptr)
+        if (fileHandle != nullptr)
+        {
+            if (fwrite(c->bin.data, 1, c->bin.size, fileHandle) != c->bin.size)
+            {
+                hgWarn("Failed to write binary data to file: %s\n", cpath);
+            }
+            fclose(fileHandle);
+        }
+        else
         {
             hgWarn("Failed to create file to write binary: %s\n", cpath);
-            return;
         }
-        hgDefer(fclose(fileHandle));
-
-        if (fwrite(c->bin.data, 1, c->bin.size, fileHandle) != c->bin.size)
-        {
-            hgWarn("Failed to write binary data to file: %s\n", cpath);
-        }
+        hgStringFree(&c->path);
+        free(c);
     });
 }
 
@@ -1763,11 +1768,9 @@ template<>
 void hgAssetLoadImpl(HgAssetData<HgJson>* data)
 {
     HgBinaryHandle bin = hgAssetLoad<HgBinary>(data->path);
-    hgDefer(hgAssetUnload(bin));
 
     HgArena* scratch = hgScratch();
     u64 head = scratch->head;
-    hgDefer(scratch->head = head);
 
     HgBinary* jsonBin = hgAssetGet(bin);
     HgStringView jsonStr = {(char*)jsonBin->data, jsonBin->size};
@@ -1792,6 +1795,9 @@ void hgAssetLoadImpl(HgAssetData<HgJson>* data)
         data->asset.errors = nullptr;
     }
     memcpy((void*)data->asset.file, (void*)parse.file, scratch->head - head);
+
+    scratch->head = head;
+    hgAssetUnload(bin);
 }
 
 template<>
@@ -2421,8 +2427,6 @@ void hgTextureStorePng(HgTexture* texture, HgStringView path, HgFence fence)
     hgThreadsCall(fence, c, [](void* pc)
     {
         Capture* c = (Capture*)pc;
-        hgDefer(free(c));
-        hgDefer(hgStringFree(&c->path));
 
         HgArena* scratch = hgScratch();
         hgArenaScope(scratch);
@@ -2436,6 +2440,9 @@ void hgTextureStorePng(HgTexture* texture, HgStringView path, HgFence fence)
             4,
             c->tex.pixels,
             (int)(c->tex.width * sizeof(u32)));
+
+        hgStringFree(&c->path);
+        free(c);
     });
 }
 
@@ -2443,7 +2450,6 @@ template<>
 void hgAssetLoadImpl(HgAssetData<HgGpuTexture>* data)
 {
     HgTextureHandle texHandle = hgAssetLoad<HgTexture>(data->path);
-    hgDefer(hgAssetUnload(texHandle));
 
     HgTexture* tex = hgAssetGet(texHandle); 
     if (tex->pixels == nullptr)
@@ -2462,6 +2468,8 @@ void hgAssetLoadImpl(HgAssetData<HgGpuTexture>* data)
     data->asset.view = hgGpuViewCreate(data->asset.image, HgGpuAspect_color, HgGpuFilter_nearest);
 
     hgGpuImageWrite(data->asset.view, tex->pixels);
+
+    hgAssetUnload(texHandle);
 }
 
 template<>
@@ -2498,7 +2506,6 @@ template<>
 void hgAssetLoadImpl(HgAssetData<HgGpuMesh>* data)
 {
     HgMeshHandle meshHandle = hgAssetLoad<HgMesh>(data->path);
-    hgDefer(hgAssetUnload(meshHandle));
 
     HgMesh* mesh = hgAssetGet(meshHandle);
     if (mesh->vertices == nullptr || mesh->indices == nullptr)
@@ -2530,6 +2537,8 @@ void hgAssetLoadImpl(HgAssetData<HgGpuMesh>* data)
         0,
         mesh->indices,
         data->asset.indexCount * sizeof(u32));
+
+    hgAssetUnload(meshHandle);
 }
 
 template<>
@@ -3394,10 +3403,24 @@ void hgSpritesInit(
     hgAssert(colorFormat != HgFormat_undefined);
     hgAssert(depthFormat != HgFormat_undefined);
 
-    HgBinaryHandle spriteVertSpvHandle = hgAssetLoad<HgBinary>("build/sprite.vert.spv");
-    HgBinaryHandle spriteFragSpvHandle = hgAssetLoad<HgBinary>("build/sprite.frag.spv");
-    hgDefer(hgAssetUnload(spriteVertSpvHandle));
-    hgDefer(hgAssetUnload(spriteFragSpvHandle));
+    HgBinaryHandle spriteVertSpvHandle = hgAssetLoadAsync<HgBinary>("build/sprite.vert.spv");
+    HgBinaryHandle spriteFragSpvHandle = hgAssetLoadAsync<HgBinary>("build/sprite.frag.spv");
+
+    struct Color {
+        u8 r, g, b, a;
+    };
+    Color defaultColors[]{
+        {0xff, 0x00, 0xff, 0xff}, {0x00, 0x00, 0x00, 0xff},
+        {0x00, 0x00, 0x00, 0xff}, {0xff, 0x00, 0xff, 0xff},
+    };
+
+    spritePipeline.defaultTex.image = hgGpuImageCreate(2, 2, HgFormat_r8g8b8a8_srgb,
+        HgGpuImageUsage_sampled | HgGpuImageUsage_transferDst);
+
+    spritePipeline.defaultTex.view = hgGpuViewCreate(
+        spritePipeline.defaultTex.image, HgGpuAspect_color, HgGpuFilter_nearest);
+
+    hgGpuImageWrite(spritePipeline.defaultTex.view, defaultColors);
 
     HgBinary* spriteVertSpv = hgAssetGet(spriteVertSpvHandle);
     HgBinary* spriteFragSpv = hgAssetGet(spriteFragSpvHandle);
@@ -3420,21 +3443,8 @@ void hgSpritesInit(
 
     spritePipeline.pipeline = hgGpuPipelineCreateGraphics(&pipelineConfig);
 
-    struct Color {
-        u8 r, g, b, a;
-    };
-    Color defaultColors[]{
-        {0xff, 0x00, 0xff, 0xff}, {0x00, 0x00, 0x00, 0xff},
-        {0x00, 0x00, 0x00, 0xff}, {0xff, 0x00, 0xff, 0xff},
-    };
-
-    spritePipeline.defaultTex.image = hgGpuImageCreate(2, 2, HgFormat_r8g8b8a8_srgb,
-        HgGpuImageUsage_sampled | HgGpuImageUsage_transferDst);
-
-    spritePipeline.defaultTex.view = hgGpuViewCreate(
-        spritePipeline.defaultTex.image, HgGpuAspect_color, HgGpuFilter_nearest);
-
-    hgGpuImageWrite(spritePipeline.defaultTex.view, defaultColors);
+    hgAssetUnload(spriteVertSpvHandle);
+    hgAssetUnload(spriteFragSpvHandle);
 }
 
 void hgSpritesDeinit()
@@ -3487,29 +3497,8 @@ void hgSkyboxInit(HgFormat colorFormat, HgFormat depthFormat)
 {
     hgAssert(colorFormat != HgFormat_undefined);
 
-    HgBinaryHandle vertSpvHandle = hgAssetLoad<HgBinary>("build/skybox.vert.spv");
-    HgBinaryHandle fragSpvHandle = hgAssetLoad<HgBinary>("build/skybox.frag.spv");
-    hgDefer(hgAssetUnload(vertSpvHandle));
-    hgDefer(hgAssetUnload(fragSpvHandle));
-
-    HgBinary* vertSpv = hgAssetGet(vertSpvHandle);
-    HgBinary* fragSpv = hgAssetGet(fragSpvHandle);
-
-    HgCreateGpuGraphicsPipeline pipelineConfig{};
-    pipelineConfig.vertexShader = vertSpv->data;
-    pipelineConfig.vertexShaderSize = vertSpv->size;
-    pipelineConfig.fragmentShader = fragSpv->data;
-    pipelineConfig.fragmentShaderSize = fragSpv->size;
-    pipelineConfig.colorAttachmentFormats = &colorFormat;
-    pipelineConfig.colorAttachmentCount = 1;
-    pipelineConfig.depthAttachmentFormat = depthFormat;
-    HgGpuPushRange push{0, sizeof(SkyboxPipelinePush)};
-    pipelineConfig.pushRanges = &push;
-    pipelineConfig.pushRangeCount = 1;
-    bool enableColorBlend = true;
-    pipelineConfig.colorBlendEnables = &enableColorBlend;
-
-    skyboxPipeline.pipeline = hgGpuPipelineCreateGraphics(&pipelineConfig);
+    HgBinaryHandle vertSpvHandle = hgAssetLoadAsync<HgBinary>("build/skybox.vert.spv");
+    HgBinaryHandle fragSpvHandle = hgAssetLoadAsync<HgBinary>("build/skybox.frag.spv");
 
     struct Color {
         u8 r, g, b, a;
@@ -3549,6 +3538,28 @@ void hgSkyboxInit(HgFormat colorFormat, HgFormat depthFormat)
     skyboxPipeline.defaultTex.view = hgGpuViewCreateEx(&viewConfig);
 
     hgGpuImageWriteCubemap(skyboxPipeline.defaultTex.view, defaultColors);
+
+    HgBinary* vertSpv = hgAssetGet(vertSpvHandle);
+    HgBinary* fragSpv = hgAssetGet(fragSpvHandle);
+
+    HgCreateGpuGraphicsPipeline pipelineConfig{};
+    pipelineConfig.vertexShader = vertSpv->data;
+    pipelineConfig.vertexShaderSize = vertSpv->size;
+    pipelineConfig.fragmentShader = fragSpv->data;
+    pipelineConfig.fragmentShaderSize = fragSpv->size;
+    pipelineConfig.colorAttachmentFormats = &colorFormat;
+    pipelineConfig.colorAttachmentCount = 1;
+    pipelineConfig.depthAttachmentFormat = depthFormat;
+    HgGpuPushRange push{0, sizeof(SkyboxPipelinePush)};
+    pipelineConfig.pushRanges = &push;
+    pipelineConfig.pushRangeCount = 1;
+    bool enableColorBlend = true;
+    pipelineConfig.colorBlendEnables = &enableColorBlend;
+
+    skyboxPipeline.pipeline = hgGpuPipelineCreateGraphics(&pipelineConfig);
+
+    hgAssetUnload(vertSpvHandle);
+    hgAssetUnload(fragSpvHandle);
 }
 
 void hgSkyboxDeinit()
@@ -3625,30 +3636,8 @@ void hgModelsInit(
     hgAssert(colorFormat != HgFormat_undefined);
     hgAssert(depthFormat != HgFormat_undefined);
 
-    HgBinaryHandle modelVertSpvHandle = hgAssetLoad<HgBinary>("build/model.vert.spv");
-    HgBinaryHandle modelFragSpvHandle = hgAssetLoad<HgBinary>("build/model.frag.spv");
-    hgDefer(hgAssetUnload(modelVertSpvHandle));
-    hgDefer(hgAssetUnload(modelFragSpvHandle));
-
-    HgBinary* modelVertSpv = hgAssetGet(modelVertSpvHandle);
-    HgBinary* modelFragSpv = hgAssetGet(modelFragSpvHandle);
-
-    HgCreateGpuGraphicsPipeline pipelineConfig{};
-    pipelineConfig.vertexShader = modelVertSpv->data;
-    pipelineConfig.vertexShaderSize = modelVertSpv->size;
-    pipelineConfig.fragmentShader = modelFragSpv->data;
-    pipelineConfig.fragmentShaderSize = modelFragSpv->size;
-    pipelineConfig.colorAttachmentFormats = &colorFormat;
-    pipelineConfig.colorAttachmentCount = 1;
-    pipelineConfig.depthAttachmentFormat = depthFormat;
-    HgGpuPushRange push{0, sizeof(ModelPipelinePush)};
-    pipelineConfig.pushRanges = &push;
-    pipelineConfig.pushRangeCount = 1;
-    pipelineConfig.cullMode = HgGpuCull_back;
-    pipelineConfig.enableDepthRead = true;
-    pipelineConfig.enableDepthWrite = true;
-
-    modelPipeline.pipeline = hgGpuPipelineCreateGraphics(&pipelineConfig);
+    HgBinaryHandle modelVertSpvHandle = hgAssetLoadAsync<HgBinary>("build/model.vert.spv");
+    HgBinaryHandle modelFragSpvHandle = hgAssetLoadAsync<HgBinary>("build/model.frag.spv");
 
     modelPipeline.dirLightCapacity = 16;
     modelPipeline.dirLightBuffer = hgGpuBufferCreate(
@@ -3741,6 +3730,29 @@ void hgModelsInit(
 
     hgGpuImageWrite(modelPipeline.defaultColorMap.view, defaultColors);
     hgGpuImageWrite(modelPipeline.defaultNormalMap.view, &defaultNormal);
+
+    HgBinary* modelVertSpv = hgAssetGet(modelVertSpvHandle);
+    HgBinary* modelFragSpv = hgAssetGet(modelFragSpvHandle);
+
+    HgCreateGpuGraphicsPipeline pipelineConfig{};
+    pipelineConfig.vertexShader = modelVertSpv->data;
+    pipelineConfig.vertexShaderSize = modelVertSpv->size;
+    pipelineConfig.fragmentShader = modelFragSpv->data;
+    pipelineConfig.fragmentShaderSize = modelFragSpv->size;
+    pipelineConfig.colorAttachmentFormats = &colorFormat;
+    pipelineConfig.colorAttachmentCount = 1;
+    pipelineConfig.depthAttachmentFormat = depthFormat;
+    HgGpuPushRange push{0, sizeof(ModelPipelinePush)};
+    pipelineConfig.pushRanges = &push;
+    pipelineConfig.pushRangeCount = 1;
+    pipelineConfig.cullMode = HgGpuCull_back;
+    pipelineConfig.enableDepthRead = true;
+    pipelineConfig.enableDepthWrite = true;
+
+    modelPipeline.pipeline = hgGpuPipelineCreateGraphics(&pipelineConfig);
+
+    hgAssetUnload(modelVertSpvHandle);
+    hgAssetUnload(modelFragSpvHandle);
 }
 
 void hgModelsDeinit()

@@ -3,7 +3,6 @@
 int main()
 {
     hgInit(nullptr);
-    hgDefer(hgDeinit());
 
     hgTest();
 
@@ -11,21 +10,16 @@ int main()
     hgArenaScope(arena);
 
     HgWindow window = hgWindowCreate("Hg Minimal Example", 1200, 800, nullptr);
-    hgDefer(hgWindowDestroy(window));
 
     u32 width = 0;
     u32 height = 0;
 
     HgGpuImage depthImage;
     HgGpuView depthView;
-    hgDefer(hgGpuImageDestroy(depthImage));
-    hgDefer(hgGpuViewDestroy(depthView));
 
     hgSpritesInit(hgWindowImageFormat(window), HgFormat_d32_sfloat);
-    hgDefer(hgSpritesDeinit());
 
     HgEcs ecs = hgEcsCreate(arena, 128, 16);
-    hgDefer(hgEcsReset(&ecs));
 
     hgEcsRegisterType(&ecs, arena, HgCamera, 8);
     hgEcsRegisterType(&ecs, arena, HgTransform, 128);
@@ -125,5 +119,14 @@ int main()
 
 quit:
     hgGpuWaitIdle();
+
+    hgEcsReset(&ecs);
+    hgSpritesDeinit();
+
+    hgGpuImageDestroy(depthImage);
+    hgGpuViewDestroy(depthView);
+    hgWindowDestroy(window);
+
+    hgDeinit();
 }
 
