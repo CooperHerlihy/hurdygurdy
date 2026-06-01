@@ -1,4 +1,14 @@
-#include "hurdygurdy.hpp"
+#include "hg_core.hpp"
+#include "hg_memory.hpp"
+#include "hg_containers.hpp"
+#include "hg_math.hpp"
+#include "hg_time.hpp"
+#include "hg_concurrency.hpp"
+#include "hg_platform.hpp"
+#include "hg_gpu.hpp"
+#include "hg_assets.hpp"
+#include "hg_ecs.hpp"
+#include "hg_rendering.hpp"
 
 #include <atomic>
 #include <condition_variable>
@@ -62,6 +72,441 @@ void hgDeinit()
     hgPlatformDeinit();
 
     hgScratchDeinit();
+}
+
+void* hgAlloc(HgArena* arena, u64 size, u64 alignment)
+{
+    hgAssert(arena != nullptr);
+    arena->head = hgAlign((u64)arena->head, alignment) + size;
+    hgAssert(arena->head <= arena->capacity);
+    return (void*)((uptr)arena->memory + arena->head - size);
+}
+
+void* hgRealloc(HgArena* arena, void* allocation, u64 oldSize, u64 newSize, u64 alignment)
+{
+    hgAssert(arena != nullptr);
+
+    if (allocation >= arena->memory && (uptr)allocation + oldSize <= (uptr)arena->memory + arena->capacity)
+    {
+        if ((uptr)allocation + oldSize - (uptr)arena->memory == (uptr)arena->head)
+        {
+            arena->head = (uptr)allocation + newSize - (uptr)arena->memory;
+            hgAssert(arena->head <= arena->capacity);
+            return allocation;
+        }
+
+        if (newSize < oldSize)
+            return allocation;
+    }
+
+    void* newAllocation = hgAlloc(arena, newSize, alignment);
+    if (allocation != nullptr)
+        memcpy(newAllocation, allocation, std::min(oldSize, newSize));
+    return newAllocation;
+}
+
+static constexpr u32 arenaCount = 2;
+static thread_local HgArena arenas[arenaCount]{};
+
+void hgScratchInit(u64 size)
+{
+    for (u32 i = 0; i < arenaCount; ++i)
+    {
+        if (arenas[i].memory == nullptr)
+        {
+            u64 arenaSize = size;
+            arenas[i] = {malloc(arenaSize), arenaSize, 0};
+        }
+    }
+}
+
+void hgScratchDeinit()
+{
+    for (u32 i = 0; i < arenaCount; ++i)
+    {
+        if (arenas[i].memory != nullptr)
+        {
+            free(arenas[i].memory);
+            arenas[i] = {};
+        }
+    }
+}
+
+HgArena* hgScratch(HgArena const* const* conflicts, u32 count)
+{
+    if (conflicts != nullptr)
+        hgAssert(count > 0);
+
+    for (HgArena& arena : arenas)
+    {
+        hgAssert(arena.memory != nullptr);
+
+        for (u32 i = 0; i < count; ++i)
+        {
+            if (&arena == conflicts[i])
+                goto next;
+        }
+        return &arena;
+next:
+        continue;
+    }
+    hgError("No scratch arena available\n");
+}
+
+HgPool hgPoolCreate(HgArena* arena, u32 capacity)
+{
+    hgAssert(arena != nullptr);
+    hgAssert(capacity > 0);
+
+    HgPool pool{};
+    pool.freeList = hgAlloc<HgHandle>(arena, capacity);
+    pool.capacity = capacity;
+    hgPoolReset(&pool);
+
+    return pool;
+}
+
+void hgPoolReset(HgPool* pool)
+{
+    hgAssert(pool != nullptr);
+
+    for (u32 i = 0; i < pool->capacity; ++i)
+    {
+        pool->freeList[i] = {i + 1};
+    }
+    pool->next = {0};
+}
+
+HgHandle hgPoolAlloc(HgPool* pool)
+{
+    hgAssert(pool != nullptr);
+    hgAssert(hgHandleIdx(pool->next) < pool->capacity);
+
+    HgHandle handle = pool->next;
+    pool->next = pool->freeList[hgHandleIdx(handle)];
+    pool->freeList[hgHandleIdx(handle)] = handle;
+    return handle;
+}
+
+bool hgPoolAlive(HgPool* pool, HgHandle handle)
+{
+    return hgHandleIdx(handle) < pool->capacity && pool->freeList[hgHandleIdx(handle)].id == handle.id;
+}
+
+void hgPoolFree(HgPool* pool, HgHandle handle)
+{
+    hgAssert(hgPoolAlive(pool, handle));
+    pool->freeList[hgHandleIdx(handle)] = pool->next;
+    pool->next = hgHandleNextGeneration(handle);
+}
+
+char* hgCString(HgArena* arena, HgStringView str)
+{
+    hgAssert(arena != nullptr);
+    if (str.length > 0)
+        hgAssert(str.chars != nullptr);
+
+    char* cStr = hgAlloc<char>(arena, str.length + 1);
+    memcpy(cStr, str.chars, str.length);
+    cStr[str.length] = 0;
+    return cStr;
+}
+
+HgStringBuilder hgStringCopy(HgArena* arena, HgStringView str)
+{
+    hgAssert(arena != nullptr);
+
+    HgStringBuilder copy{};
+    copy.chars = hgAlloc<char>(arena, str.length);
+    memcpy(copy.chars, str.chars, str.length);
+    copy.length = str.length;
+    return copy;
+}
+
+void hgStringInsert(HgArena* arena, HgStringBuilder* dst, u64 idx, HgStringView src)
+{
+    hgAssert(arena != nullptr);
+    hgAssert(dst != nullptr);
+    hgAssert(idx <= dst->length);
+    if (src.length > 0)
+        hgAssert(src.chars != nullptr);
+
+    u64 newLength = dst->length + src.length;
+
+    dst->chars = hgRealloc(arena, dst->chars, dst->length, newLength);
+
+    if (idx != dst->length)
+        memmove(&dst->chars[idx + src.length], &dst->chars[idx], dst->length - idx);
+    memcpy(&dst->chars[idx], src.chars, src.length);
+
+    dst->length = newLength;
+}
+
+HgStringOwner hgStringAlloc(HgStringView data)
+{
+    HgStringOwner str{};
+    if (data != "")
+    {
+        str.chars = (char*)malloc(data.length);
+        memcpy((char*)str.chars, data.chars, data.length);
+        str.length = data.length;
+    }
+    return str;
+}
+
+void hgStringFree(HgStringOwner* str)
+{
+    free((char*)str->chars);
+}
+
+bool hgIsWhitespace(char c)
+{
+    return c == ' ' || c == '\t' || c == '\n';
+}
+
+bool hgIsNumeral(char c)
+{
+    return c >= '0' && c <= '9';
+}
+
+bool hgIsInteger(HgStringView str)
+{
+    if (str.length == 0)
+        return false;
+
+    u64 head = 0;
+    if (!hgIsNumeral(str[head]) && str[head] != '+' && str[head] != '-')
+        return false;
+
+    ++head;
+    while (head < str.length)
+    {
+        if (!hgIsNumeral(str[head]))
+            return false;
+        ++head;
+    }
+    return true;
+}
+
+bool hgIsFloat(HgStringView str)
+{
+    if (str.length == 0)
+        return false;
+
+    bool hasDecimal = false;
+    bool hasExponent = false;
+
+    u64 head = 0;
+
+    if (!hgIsNumeral(str[head]) && str[head] != '.' && str[head] != '+' && str[head] != '-')
+        return false;
+
+    if (str[head] == '.')
+        hasDecimal = true;
+
+    ++head;
+    while (head < str.length)
+    {
+        if (hgIsNumeral(str[head]))
+        {
+            ++head;
+            continue;
+        }
+
+        if (str[head] == '.' && !hasDecimal)
+        {
+            hasDecimal = true;
+            ++head;
+            continue;
+        }
+
+        if (str[head] == 'e' && !hasExponent)
+        {
+            hasExponent = true;
+            ++head;
+            if (hgIsNumeral(str[head]) || str[head] == '+' || str[head] == '-')
+            {
+                ++head;
+                continue;
+            }
+            return false;
+        }
+
+        if (str[head] == 'f' && head == str.length - 1)
+            break;
+
+        return false;
+    }
+
+    return hasDecimal || hasExponent;
+}
+
+i64 hgStringToInteger(HgStringView str)
+{
+    hgAssert(hgIsInteger(str));
+
+    i64 power = 1;
+    i64 ret = 0;
+
+    u64 head = str.length - 1;
+    while (head > 0)
+    {
+        ret += (i64)(str[head] - '0') * power;
+        power *= 10;
+        --head;
+    }
+
+    if (str[head] != '+')
+    {
+        if (str[head] == '-')
+            ret *= -1;
+        else
+            ret += (i64)(str[head] - '0') * power;
+    }
+
+    return ret;
+}
+
+f64 hgStringToFloat(HgStringView str)
+{
+    hgAssert(hgIsFloat(str));
+
+    f64 ret = 0.0;
+    u64 head = 0;
+
+    bool isNegative = str[head] == '-';
+    if (isNegative || str[head] == '+')
+        ++head;
+
+    if (hgIsNumeral(str[head]))
+    {
+        u64 intPartBegin = head;
+        while (head < str.length && str[head] != '.' && str[head] != 'e')
+        {
+            ++head;
+        }
+        ret += (f64)hgStringToInteger({&str[intPartBegin], &str[head]});
+    }
+
+    if (head < str.length && str[head] == '.')
+    {
+        ++head;
+
+        f64 power = 0.1;
+        while (head < str.length && hgIsNumeral(str[head]))
+        {
+            ret += (f64)(str[head] - '0') * power;
+            power *= 0.1;
+            ++head;
+        }
+    }
+
+    if (head < str.length && str[head] == 'e')
+    {
+        ++head;
+
+        bool expIsNegative = str[head] == '-';
+        if (expIsNegative || str[head] == '+')
+            ++head;
+
+        u64 expBegin = head;
+        while (head < str.length && hgIsNumeral(str[head]))
+        {
+            ++head;
+        }
+
+        i64 exp = hgStringToInteger({&str[expBegin], str.chars + head});
+        if (exp != 0)
+        {
+            if (expIsNegative)
+            {
+                for (i64 i = 0; i < exp; ++i)
+                {
+                    ret *= 0.1;
+                }
+            } else {
+                for (i64 i = 0; i < exp; ++i)
+                {
+                    ret *= 10.0;
+                }
+            }
+        } else {
+            ret = 1.0;
+        }
+    }
+
+    if (isNegative)
+        ret *= -1.0;
+
+    return ret;
+}
+
+HgStringBuilder hgIntegerToString(HgArena* arena, i64 num)
+{
+    hgAssert(arena != nullptr);
+
+    HgArena* scratch = hgScratch(&arena, 1);
+    hgArenaScope(scratch);
+
+    if (num == 0)
+        return hgStringCopy(arena, "0");
+
+    bool isNegative = num < 0;
+    u64 unum = (u64)std::abs(num);
+
+    HgStringBuilder reverse{};
+    while (unum != 0)
+    {
+        u64 digit = unum % 10;
+        unum = (u64)((f64)unum / 10.0);
+        hgStringAppendc(scratch, &reverse, '0' + (char)digit);
+    }
+
+    HgStringBuilder ret{};
+    if (isNegative)
+        hgStringAppendc(arena, &ret, '-');
+    for (u64 i = reverse.length - 1; i < reverse.length; --i)
+    {
+        hgStringAppendc(arena, &ret, reverse[i]);
+    }
+    return ret;
+}
+
+HgStringBuilder hgFloatToString(HgArena* arena, f64 num, u32 decimalCount)
+{
+    hgAssert(arena != nullptr);
+
+    HgArena* scratch = hgScratch(&arena, 1);
+    hgArenaScope(scratch);
+
+    if (num == 0.0)
+        return hgStringCopy(arena, "0.0");
+
+    HgStringBuilder intStr = hgIntegerToString(scratch, (i64)fabs(num));
+
+    HgStringBuilder decStr{};
+    hgStringAppendc(scratch, &decStr, '.');
+
+    f64 decPart = fabs(num);
+    for (u64 i = 0; i < decimalCount; ++i)
+    {
+        decPart *= 10.0;
+        hgStringAppendc(scratch, &decStr, '0' + (char)((u64)decPart % 10));
+    }
+
+    HgStringBuilder ret{};
+    if (num < 0.0)
+        hgStringAppendc(arena, &ret, '-');
+    hgStringAppend(arena, &ret, intStr);
+    hgStringAppend(arena, &ret, decStr);
+    return ret;
+}
+
+HgStringBuilder hgStringFormat(HgArena* arena, HgStringView fmt, ...)
+{
+    (void)arena;
+    (void)fmt;
+    hgError("hgFormatString not implemented yet : TODO\n");
 }
 
 const HgVec2& HgVec2::operator+=(HgVec2 other)
@@ -771,441 +1216,6 @@ u32 hgGetMaxMipmaps(u32 width, u32 height, u32 depth)
     u32 max = width > height ? width : height;
     max = max > depth ? max : depth;
     return max == 0 ? 0 : (u32)log2((f32)max) + 1;
-}
-
-void* hgAlloc(HgArena* arena, u64 size, u64 alignment)
-{
-    hgAssert(arena != nullptr);
-    arena->head = hgAlign((u64)arena->head, alignment) + size;
-    hgAssert(arena->head <= arena->capacity);
-    return (void*)((uptr)arena->memory + arena->head - size);
-}
-
-void* hgRealloc(HgArena* arena, void* allocation, u64 oldSize, u64 newSize, u64 alignment)
-{
-    hgAssert(arena != nullptr);
-
-    if (allocation >= arena->memory && (uptr)allocation + oldSize <= (uptr)arena->memory + arena->capacity)
-    {
-        if ((uptr)allocation + oldSize - (uptr)arena->memory == (uptr)arena->head)
-        {
-            arena->head = (uptr)allocation + newSize - (uptr)arena->memory;
-            hgAssert(arena->head <= arena->capacity);
-            return allocation;
-        }
-
-        if (newSize < oldSize)
-            return allocation;
-    }
-
-    void* newAllocation = hgAlloc(arena, newSize, alignment);
-    if (allocation != nullptr)
-        memcpy(newAllocation, allocation, std::min(oldSize, newSize));
-    return newAllocation;
-}
-
-static constexpr u32 arenaCount = 2;
-static thread_local HgArena arenas[arenaCount]{};
-
-void hgScratchInit(u64 size)
-{
-    for (u32 i = 0; i < arenaCount; ++i)
-    {
-        if (arenas[i].memory == nullptr)
-        {
-            u64 arenaSize = size;
-            arenas[i] = {malloc(arenaSize), arenaSize, 0};
-        }
-    }
-}
-
-void hgScratchDeinit()
-{
-    for (u32 i = 0; i < arenaCount; ++i)
-    {
-        if (arenas[i].memory != nullptr)
-        {
-            free(arenas[i].memory);
-            arenas[i] = {};
-        }
-    }
-}
-
-HgArena* hgScratch(HgArena const* const* conflicts, u32 count)
-{
-    if (conflicts != nullptr)
-        hgAssert(count > 0);
-
-    for (HgArena& arena : arenas)
-    {
-        hgAssert(arena.memory != nullptr);
-
-        for (u32 i = 0; i < count; ++i)
-        {
-            if (&arena == conflicts[i])
-                goto next;
-        }
-        return &arena;
-next:
-        continue;
-    }
-    hgError("No scratch arena available\n");
-}
-
-HgPool hgPoolCreate(HgArena* arena, u32 capacity)
-{
-    hgAssert(arena != nullptr);
-    hgAssert(capacity > 0);
-
-    HgPool pool{};
-    pool.freeList = hgAlloc<HgHandle>(arena, capacity);
-    pool.capacity = capacity;
-    hgPoolReset(&pool);
-
-    return pool;
-}
-
-void hgPoolReset(HgPool* pool)
-{
-    hgAssert(pool != nullptr);
-
-    for (u32 i = 0; i < pool->capacity; ++i)
-    {
-        pool->freeList[i] = {i + 1};
-    }
-    pool->next = {0};
-}
-
-HgHandle hgPoolAlloc(HgPool* pool)
-{
-    hgAssert(pool != nullptr);
-    hgAssert(hgHandleIdx(pool->next) < pool->capacity);
-
-    HgHandle handle = pool->next;
-    pool->next = pool->freeList[hgHandleIdx(handle)];
-    pool->freeList[hgHandleIdx(handle)] = handle;
-    return handle;
-}
-
-bool hgPoolAlive(HgPool* pool, HgHandle handle)
-{
-    return hgHandleIdx(handle) < pool->capacity && pool->freeList[hgHandleIdx(handle)].id == handle.id;
-}
-
-void hgPoolFree(HgPool* pool, HgHandle handle)
-{
-    hgAssert(hgPoolAlive(pool, handle));
-    pool->freeList[hgHandleIdx(handle)] = pool->next;
-    pool->next = hgHandleNextGeneration(handle);
-}
-
-char* hgCString(HgArena* arena, HgStringView str)
-{
-    hgAssert(arena != nullptr);
-    if (str.length > 0)
-        hgAssert(str.chars != nullptr);
-
-    char* cStr = hgAlloc<char>(arena, str.length + 1);
-    memcpy(cStr, str.chars, str.length);
-    cStr[str.length] = 0;
-    return cStr;
-}
-
-HgStringBuilder hgStringCopy(HgArena* arena, HgStringView str)
-{
-    hgAssert(arena != nullptr);
-
-    HgStringBuilder copy{};
-    copy.chars = hgAlloc<char>(arena, str.length);
-    memcpy(copy.chars, str.chars, str.length);
-    copy.length = str.length;
-    return copy;
-}
-
-void hgStringInsert(HgArena* arena, HgStringBuilder* dst, u64 idx, HgStringView src)
-{
-    hgAssert(arena != nullptr);
-    hgAssert(dst != nullptr);
-    hgAssert(idx <= dst->length);
-    if (src.length > 0)
-        hgAssert(src.chars != nullptr);
-
-    u64 newLength = dst->length + src.length;
-
-    dst->chars = hgRealloc(arena, dst->chars, dst->length, newLength);
-
-    if (idx != dst->length)
-        memmove(&dst->chars[idx + src.length], &dst->chars[idx], dst->length - idx);
-    memcpy(&dst->chars[idx], src.chars, src.length);
-
-    dst->length = newLength;
-}
-
-HgStringOwner hgStringAlloc(HgStringView data)
-{
-    HgStringOwner str{};
-    if (data != "")
-    {
-        str.chars = (char*)malloc(data.length);
-        memcpy((char*)str.chars, data.chars, data.length);
-        str.length = data.length;
-    }
-    return str;
-}
-
-void hgStringFree(HgStringOwner* str)
-{
-    free((char*)str->chars);
-}
-
-bool hgIsWhitespace(char c)
-{
-    return c == ' ' || c == '\t' || c == '\n';
-}
-
-bool hgIsNumeral(char c)
-{
-    return c >= '0' && c <= '9';
-}
-
-bool hgIsInteger(HgStringView str)
-{
-    if (str.length == 0)
-        return false;
-
-    u64 head = 0;
-    if (!hgIsNumeral(str[head]) && str[head] != '+' && str[head] != '-')
-        return false;
-
-    ++head;
-    while (head < str.length)
-    {
-        if (!hgIsNumeral(str[head]))
-            return false;
-        ++head;
-    }
-    return true;
-}
-
-bool hgIsFloat(HgStringView str)
-{
-    if (str.length == 0)
-        return false;
-
-    bool hasDecimal = false;
-    bool hasExponent = false;
-
-    u64 head = 0;
-
-    if (!hgIsNumeral(str[head]) && str[head] != '.' && str[head] != '+' && str[head] != '-')
-        return false;
-
-    if (str[head] == '.')
-        hasDecimal = true;
-
-    ++head;
-    while (head < str.length)
-    {
-        if (hgIsNumeral(str[head]))
-        {
-            ++head;
-            continue;
-        }
-
-        if (str[head] == '.' && !hasDecimal)
-        {
-            hasDecimal = true;
-            ++head;
-            continue;
-        }
-
-        if (str[head] == 'e' && !hasExponent)
-        {
-            hasExponent = true;
-            ++head;
-            if (hgIsNumeral(str[head]) || str[head] == '+' || str[head] == '-')
-            {
-                ++head;
-                continue;
-            }
-            return false;
-        }
-
-        if (str[head] == 'f' && head == str.length - 1)
-            break;
-
-        return false;
-    }
-
-    return hasDecimal || hasExponent;
-}
-
-i64 hgStringToInteger(HgStringView str)
-{
-    hgAssert(hgIsInteger(str));
-
-    i64 power = 1;
-    i64 ret = 0;
-
-    u64 head = str.length - 1;
-    while (head > 0)
-    {
-        ret += (i64)(str[head] - '0') * power;
-        power *= 10;
-        --head;
-    }
-
-    if (str[head] != '+')
-    {
-        if (str[head] == '-')
-            ret *= -1;
-        else
-            ret += (i64)(str[head] - '0') * power;
-    }
-
-    return ret;
-}
-
-f64 hgStringToFloat(HgStringView str)
-{
-    hgAssert(hgIsFloat(str));
-
-    f64 ret = 0.0;
-    u64 head = 0;
-
-    bool isNegative = str[head] == '-';
-    if (isNegative || str[head] == '+')
-        ++head;
-
-    if (hgIsNumeral(str[head]))
-    {
-        u64 intPartBegin = head;
-        while (head < str.length && str[head] != '.' && str[head] != 'e')
-        {
-            ++head;
-        }
-        ret += (f64)hgStringToInteger({&str[intPartBegin], &str[head]});
-    }
-
-    if (head < str.length && str[head] == '.')
-    {
-        ++head;
-
-        f64 power = 0.1;
-        while (head < str.length && hgIsNumeral(str[head]))
-        {
-            ret += (f64)(str[head] - '0') * power;
-            power *= 0.1;
-            ++head;
-        }
-    }
-
-    if (head < str.length && str[head] == 'e')
-    {
-        ++head;
-
-        bool expIsNegative = str[head] == '-';
-        if (expIsNegative || str[head] == '+')
-            ++head;
-
-        u64 expBegin = head;
-        while (head < str.length && hgIsNumeral(str[head]))
-        {
-            ++head;
-        }
-
-        i64 exp = hgStringToInteger({&str[expBegin], str.chars + head});
-        if (exp != 0)
-        {
-            if (expIsNegative)
-            {
-                for (i64 i = 0; i < exp; ++i)
-                {
-                    ret *= 0.1;
-                }
-            } else {
-                for (i64 i = 0; i < exp; ++i)
-                {
-                    ret *= 10.0;
-                }
-            }
-        } else {
-            ret = 1.0;
-        }
-    }
-
-    if (isNegative)
-        ret *= -1.0;
-
-    return ret;
-}
-
-HgStringBuilder hgIntegerToString(HgArena* arena, i64 num)
-{
-    hgAssert(arena != nullptr);
-
-    HgArena* scratch = hgScratch(&arena, 1);
-    hgArenaScope(scratch);
-
-    if (num == 0)
-        return hgStringCopy(arena, "0");
-
-    bool isNegative = num < 0;
-    u64 unum = (u64)std::abs(num);
-
-    HgStringBuilder reverse{};
-    while (unum != 0)
-    {
-        u64 digit = unum % 10;
-        unum = (u64)((f64)unum / 10.0);
-        hgStringAppendc(scratch, &reverse, '0' + (char)digit);
-    }
-
-    HgStringBuilder ret{};
-    if (isNegative)
-        hgStringAppendc(arena, &ret, '-');
-    for (u64 i = reverse.length - 1; i < reverse.length; --i)
-    {
-        hgStringAppendc(arena, &ret, reverse[i]);
-    }
-    return ret;
-}
-
-HgStringBuilder hgFloatToString(HgArena* arena, f64 num, u32 decimalCount)
-{
-    hgAssert(arena != nullptr);
-
-    HgArena* scratch = hgScratch(&arena, 1);
-    hgArenaScope(scratch);
-
-    if (num == 0.0)
-        return hgStringCopy(arena, "0.0");
-
-    HgStringBuilder intStr = hgIntegerToString(scratch, (i64)fabs(num));
-
-    HgStringBuilder decStr{};
-    hgStringAppendc(scratch, &decStr, '.');
-
-    f64 decPart = fabs(num);
-    for (u64 i = 0; i < decimalCount; ++i)
-    {
-        decPart *= 10.0;
-        hgStringAppendc(scratch, &decStr, '0' + (char)((u64)decPart % 10));
-    }
-
-    HgStringBuilder ret{};
-    if (num < 0.0)
-        hgStringAppendc(arena, &ret, '-');
-    hgStringAppend(arena, &ret, intStr);
-    hgStringAppend(arena, &ret, decStr);
-    return ret;
-}
-
-HgStringBuilder hgStringFormat(HgArena* arena, HgStringView fmt, ...)
-{
-    (void)arena;
-    (void)fmt;
-    hgError("hgFormatString not implemented yet : TODO\n");
 }
 
 f64 hgClockTick(HgClock* clock)

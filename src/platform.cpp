@@ -1,4 +1,11 @@
-#include "hurdygurdy.hpp"
+#include "hg_core.hpp"
+#include "hg_memory.hpp"
+#include "hg_containers.hpp"
+#include "hg_library.hpp"
+#include "hg_platform.hpp"
+#include "hg_gpu.hpp"
+#include "hg_window.hpp"
+#include "hg_audio.hpp"
 
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>

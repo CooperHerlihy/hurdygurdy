@@ -28,9 +28,9 @@
 #define HURDYGURDY_HPP
 
 #include "hg_core.hpp"
-#include "hg_math.hpp"
 #include "hg_memory.hpp"
 #include "hg_containers.hpp"
+#include "hg_math.hpp"
 #include "hg_library.hpp"
 #include "hg_time.hpp"
 #include "hg_concurrency.hpp"
