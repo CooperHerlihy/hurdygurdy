@@ -1208,6 +1208,588 @@ HgStringBuilder hgStringFormat(HgArena* arena, HgStringView fmt, ...)
     hgError("hgFormatString not implemented yet : TODO\n");
 }
 
+f64 hgClockTick(HgClock* clock)
+{
+    hgAssert(clock != nullptr);
+
+    f64 prev = clock->time;
+    timespec ts;
+    timespec_get(&ts, TIME_UTC);
+    clock->time = (f64)ts.tv_sec + (f64)ts.tv_nsec * 1e-9;
+    return clock->time - prev;
+}
+
+HgPerf hgPerfCreate(HgArena* arena, u32 count)
+{
+    hgAssert(arena != nullptr);
+
+    HgPerf perf;
+    perf.times = hgAlloc<f64>(arena, count);
+    perf.count = count;
+    perf.current = 0;
+    return perf;
+}
+
+void hgPerfBegin(HgPerf* perf)
+{
+    hgAssert(perf != nullptr);
+    hgClockTick(&perf->clock);
+}
+
+f64 hgPerfEnd(HgPerf* perf)
+{
+    hgAssert(perf != nullptr);
+    hgAssert(perf->current < perf->count);
+
+    f64 time = hgClockTick(&perf->clock);
+    perf->times[perf->current++] = time;
+
+    return time;
+}
+
+HgPerfStats hgPerfAnalyze(const HgPerf* perf)
+{
+    hgAssert(perf != nullptr);
+
+    HgPerfStats stats;
+    stats.avg = 0.0;
+    stats.best = INFINITY;
+    stats.worst = 0.0;
+
+    for (u32 i = 0; i < perf->current; ++i)
+    {
+        if (perf->times[i] < stats.best)
+            stats.best = perf->times[i];
+        if (perf->times[i] > stats.worst)
+            stats.worst = perf->times[i];
+        stats.avg += perf->times[i];
+    }
+    stats.avg /= (f64)perf->current;
+
+    return stats;
+}
+
+void hgPerfLog(HgStringView title, const HgPerfStats* stats, HgPerfScale scale)
+{
+    hgAssert(stats != nullptr);
+    if (title.length == 0 || title.chars == nullptr)
+        title = "Title Missing";
+
+    switch (scale)
+    {
+        case HgPerfScale_seconds:
+            printf("HG Performance - %.*s: avg: %.4fs, best: %.4fs, worst: %.4fs\n",
+                (int)title.length, title.chars, stats->avg, stats->best, stats->worst);
+            break;
+        case HgPerfScale_milli:
+            printf("HG Performance - %.*s: avg: %.4fms, best: %.4fms, worst: %.4fms\n",
+                (int)title.length, title.chars, stats->avg * 1.e3, stats->best * 1.e3, stats->worst * 1.e3);
+            break;
+        case HgPerfScale_micro:
+            printf("HG Performance - %.*s: avg: %.4fmcs, best: %.4fmcs, worst: %.4fmcs\n",
+                (int)title.length, title.chars, stats->avg * 1.e6, stats->best * 1.e6, stats->worst * 1.e6);
+            break;
+        case HgPerfScale_nano:
+            printf("HG Performance - %.*s: avg: %.4fns, best: %.4fns, worst: %.4fns\n",
+                (int)title.length, title.chars, stats->avg * 1.e9, stats->best * 1.e9, stats->worst * 1.e9);
+            break;
+    }
+}
+
+u32 hgHardwareThreadCount()
+{
+    return (u32)std::thread::hardware_concurrency();
+}
+
+struct HgMutexData {
+    std::atomic_bool acquired;
+};
+
+static HgPool mutexPool{};
+static HgMutexData* mutices = nullptr;
+
+HgMutex hgMutexCreate()
+{
+    HgHandle handle = hgPoolAlloc(&mutexPool);
+    new (&mutices[hgHandleIdx(handle)]) HgMutexData{false};
+    return {handle};
+}
+
+void hgMutexDestroy(HgMutex mtx)
+{
+    hgPoolFree(&mutexPool, mtx.handle);
+}
+
+void hgMutexAcquire(HgMutex mtx)
+{
+    hgAssert(hgPoolAlive(&mutexPool, mtx.handle));
+    HgMutexData* data = &mutices[hgHandleIdx(mtx.handle)];
+    bool acquired = false;
+    while (!data->acquired.compare_exchange_weak(acquired, true))
+    {
+        _mm_pause();
+        acquired = false;
+    }
+}
+
+bool hgMutexTryAcquire(HgMutex mtx)
+{
+    hgAssert(hgPoolAlive(&mutexPool, mtx.handle));
+    HgMutexData* data = &mutices[hgHandleIdx(mtx.handle)];
+    bool acquired = false;
+    return data->acquired.compare_exchange_weak(acquired, true);
+}
+
+void hgMutexRelease(HgMutex mtx)
+{
+    hgAssert(hgPoolAlive(&mutexPool, mtx.handle));
+    HgMutexData* data = &mutices[hgHandleIdx(mtx.handle)];
+    hgAssert(data->acquired);
+    data->acquired.store(false);
+}
+
+struct HgFenceData {
+    std::atomic<u32> counter{0};
+};
+
+static HgPool fencePool{};
+static HgFenceData* fences = nullptr;
+
+HgFence hgFenceCreate()
+{
+    HgHandle handle = hgPoolAlloc(&fencePool);
+    new (&fences[hgHandleIdx(handle)]) HgFenceData{false};
+    return {handle};
+}
+
+void hgFenceDestroy(HgFence fence)
+{
+    if (hgPoolAlive(&fencePool, fence.handle))
+        hgPoolFree(&fencePool, fence.handle);
+}
+
+void hgFenceAttach(HgFence fence, u32 count)
+{
+    hgAssert(hgPoolAlive(&fencePool, fence.handle));
+    fences[hgHandleIdx(fence.handle)].counter.fetch_add(count);
+}
+
+void hgFenceSignal(HgFence fence, u32 count)
+{
+    hgAssert(hgPoolAlive(&fencePool, fence.handle));
+    fences[hgHandleIdx(fence.handle)].counter.fetch_sub(count);
+}
+
+bool hgFenceIsComplete(HgFence fence)
+{
+    hgAssert(hgPoolAlive(&fencePool, fence.handle));
+    return fences[hgHandleIdx(fence.handle)].counter.load() == 0;
+}
+
+bool hgFenceWait(HgFence fence, f64 timeoutSeconds)
+{
+    hgAssert(hgPoolAlive(&fencePool, fence.handle));
+    auto end = std::chrono::steady_clock::now() + std::chrono::duration<f64>(timeoutSeconds);
+    while (hgPoolAlive(&fencePool, fence.handle) && !hgFenceIsComplete(fence) && std::chrono::steady_clock::now() < end)
+    {
+        _mm_pause();
+    }
+    return !hgPoolAlive(&fencePool, fence.handle) || hgFenceIsComplete(fence);
+}
+
+void hgFenceWaitIndefinite(HgFence fence)
+{
+    hgAssert(hgPoolAlive(&fencePool, fence.handle));
+    while (hgPoolAlive(&fencePool, fence.handle) && !hgFenceIsComplete(fence))
+    {
+        _mm_pause();
+    }
+}
+
+void hgConcurrencyInit(HgArena* arena, u32 maxMutices, u32 maxFences)
+{
+    mutexPool = hgPoolCreate(arena, maxMutices);
+    mutices = hgAlloc<HgMutexData>(arena, maxMutices);
+    fencePool = hgPoolCreate(arena, maxFences);
+    fences = hgAlloc<HgFenceData>(arena, maxFences);
+}
+
+void hgConcurrencyDeinit()
+{
+    fencePool = {};
+    mutexPool = {};
+}
+
+struct ThreadWork {
+    HgFence fence;
+    void* data;
+    void (*fn)(void*);
+};
+
+struct ThreadPoolState {
+    std::thread* threads = nullptr;
+    u32 threadCount = 0;
+    std::atomic_bool shouldClose = false;
+
+    std::mutex mtx{};
+    std::condition_variable cv{};
+
+    ThreadWork* work = nullptr;
+    std::atomic_bool* hasWork = nullptr;
+    u32 workCapacity = 0;
+
+    std::atomic<u32> workCount = 0;
+    std::atomic<u32> tail = 0;
+    std::atomic<u32> workingTail = 0;
+    std::atomic<u32> head = 0;
+    std::atomic<u32> workingHead = 0;
+};
+
+static ThreadPoolState threadPool{};
+
+static bool poolExecute()
+{
+    u32 idx = threadPool.workingTail.load();
+    do {
+        if (idx == threadPool.head.load())
+            return false;
+    } while (!threadPool.workingTail.compare_exchange_weak(idx, (idx + 1) & (threadPool.workCapacity - 1)));
+
+    ThreadWork work = threadPool.work[idx];
+    threadPool.hasWork[idx].store(false);
+
+    u32 t = threadPool.tail.load();
+    while (t != threadPool.head.load() && !threadPool.hasWork[t].load())
+    {
+        u32 next = (t + 1) & (threadPool.workCapacity - 1);
+        threadPool.tail.compare_exchange_strong(t, next);
+        t = next;
+    }
+
+    --threadPool.workCount;
+
+    hgAssert(work.fn != nullptr);
+    work.fn(work.data);
+
+    if (!hgNullHandle(work.fence.handle))
+        hgFenceSignal(work.fence, 1);
+    return true;
+}
+
+void hgThreadsInit(HgArena* arena, u32 queueSize, u32 threadCount)
+{
+    hgAssert(arena != nullptr);
+    hgAssert(threadCount > 0);
+    hgAssert(queueSize > 0 && (queueSize & (queueSize - 1)) == 0);
+
+    threadPool.shouldClose.store(false);
+    threadPool.threadCount = threadCount;
+    threadPool.threads = hgAlloc<std::thread>(arena, threadCount);
+
+    threadPool.work = hgAlloc<ThreadWork>(arena, queueSize);
+    threadPool.hasWork = hgAlloc<std::atomic_bool>(arena, queueSize);
+    threadPool.workCapacity = queueSize;
+
+    threadPool.workCount.store(0);
+    threadPool.tail.store(0);
+    threadPool.workingTail.store(0);
+    threadPool.head.store(0);
+    threadPool.workingHead.store(0);
+
+    for (u32 i = 0; i < threadPool.workCapacity; ++i)
+    {
+        threadPool.hasWork[i].store(false);
+    }
+
+    for (u32 i = 0; i < threadCount; ++i)
+    {
+        new (threadPool.threads + i) std::thread([] {
+            hgScratchInit((u32)-1);
+            hgDefer(hgScratchDeinit());
+
+            for (;;)
+            {
+                std::unique_lock<std::mutex> lock{threadPool.mtx};
+                while (threadPool.workCount.load() == 0 && !threadPool.shouldClose.load())
+                {
+                    threadPool.cv.wait(lock);
+                }
+                lock.unlock();
+                if (threadPool.shouldClose.load())
+                    return;
+
+                static constexpr u32 spinCount = 128;
+                for (u32 j = 0; j < spinCount; ++j)
+                {
+                    if (!poolExecute())
+                        _mm_pause();
+                }
+            }
+        });
+    }
+}
+
+void hgThreadsDeinit()
+{
+    threadPool.mtx.lock();
+    threadPool.shouldClose = true;
+    threadPool.mtx.unlock();
+    threadPool.cv.notify_all();
+
+    for (u32 i = 0; i < threadPool.threadCount; ++i)
+    {
+        threadPool.threads[i].join();
+    }
+    for (u32 i = 0; i < threadPool.threadCount; ++i)
+    {
+        threadPool.threads[i].~thread();
+    }
+    threadPool.cv.~condition_variable();
+    threadPool.mtx.~mutex();
+}
+
+bool hgThreadsHelp(HgFence fence, f64 timeout)
+{
+    auto end = std::chrono::steady_clock::now() + std::chrono::duration<f64>(timeout);
+    while (!hgFenceIsComplete(fence) && std::chrono::steady_clock::now() < end)
+    {
+        if (!poolExecute())
+            _mm_pause();
+    }
+    return hgFenceIsComplete(fence);
+}
+
+void hgThreadsCall(HgFence fence, void* data, void (*fn)(void* data))
+{
+    hgAssert(fn != nullptr);
+    if (!hgNullHandle(fence.handle))
+        hgFenceAttach(fence, 1);
+
+    u32 idx = threadPool.workingHead.fetch_add(1) & (threadPool.workCapacity - 1);
+
+    threadPool.work[idx].fence = fence;
+    threadPool.work[idx].data = data;
+    threadPool.work[idx].fn = fn;
+    threadPool.hasWork[idx].store(true);
+
+    u32 h = threadPool.head.load();
+    while (threadPool.hasWork[h].load())
+    {
+        u32 next = (h + 1) & (threadPool.workCapacity - 1);
+        threadPool.head.compare_exchange_strong(h, next);
+        h = next;
+    }
+
+    ++threadPool.workCount;
+    threadPool.mtx.lock();
+    threadPool.mtx.unlock();
+    threadPool.cv.notify_one();
+}
+
+void hgThreadsFor(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx))
+{
+    hgAssert(begin <= end);
+    hgAssert(fn != nullptr);
+
+    HgArena* scratch = hgScratch();
+    hgArenaScope(scratch);
+
+    u64 chunkSize = (u64)std::ceil((f32)(end - begin) / (8.0f * (f32)hgHardwareThreadCount()));
+
+    HgFence fence = hgFenceCreate();
+    hgDefer(hgFenceDestroy(fence));
+
+    for (u64 i = begin; i < end; i += chunkSize)
+    {
+        struct Capture
+        {
+            void* data;
+            void (*fn)(void* data, u64 idx);
+            u64 begin;
+            u64 end;
+        };
+
+        Capture* capture = hgAlloc<Capture>(scratch, 1);
+        capture->data = data;
+        capture->fn = fn;
+        capture->begin = i;
+        capture->end = std::min(i + chunkSize, end);
+
+        hgThreadsCall(fence, capture, [](void* pcapture)
+        {
+            Capture* capture = (Capture*)pcapture;
+            for (u64 i = capture->begin; i < capture->end; ++i)
+            {
+                (capture->fn)(capture->data, i);
+            }
+        });
+    }
+    hgThreadsHelp(fence, INFINITY);
+}
+
+void hgAssetInitDefaults(
+    HgArena* arena,
+    u32 maxBinaries,
+    u32 maxTextures,
+    u32 maxGpuTextures,
+    u32 maxMeshes,
+    u32 maxGpuMeshes)
+{
+    hgAssetInit<HgBinary>(arena, maxBinaries);
+    hgAssetInit<HgTexture>(arena, maxTextures);
+    hgAssetInit<HgGpuTexture>(arena, maxGpuTextures);
+    hgAssetInit<HgMesh>(arena, maxMeshes);
+    hgAssetInit<HgGpuMesh>(arena, maxGpuMeshes);
+}
+
+void hgAssetDeinitDefaults()
+{
+    hgAssetDeinit<HgGpuMesh>();
+    hgAssetDeinit<HgMesh>();
+    hgAssetDeinit<HgGpuTexture>();
+    hgAssetDeinit<HgTexture>();
+    hgAssetDeinit<HgBinary>();
+}
+
+template<>
+void hgAssetLoadImpl(HgAssetData<HgBinary>* data)
+{
+    HgArena* scratch = hgScratch();
+    hgArenaScope(scratch);
+
+    char* cpath = hgCString(scratch, data->path);
+
+    FILE* fileHandle = fopen(cpath, "rb");
+    if (fileHandle == nullptr)
+    {
+    hgWarn("Could not find file to read binary: %s\n", cpath);
+    return;
+    }
+    hgDefer(fclose(fileHandle));
+
+    if (fseek(fileHandle, 0, SEEK_END) != 0)
+    {
+        hgWarn("Failed to read binary from file: %s\n", cpath);
+        return;
+    }
+
+    data->asset.size = (u32)ftell(fileHandle);
+    data->asset.data = malloc(data->asset.size);
+
+    rewind(fileHandle);
+    if (fread(data->asset.data, 1, data->asset.size, fileHandle) != data->asset.size)
+    {
+        free(data->asset.data);
+        data->asset = {};
+        hgWarn("Failed to read binary from file: %s\n", cpath);
+        return;
+    }
+}
+
+template<>
+void hgAssetUnloadImpl(HgAssetData<HgBinary>* data)
+{
+    hgFenceWaitIndefinite(data->isLoaded);
+    free(data->asset.data);
+}
+
+void hgBinaryStore(HgBinary* bin, HgStringView path, HgFence fence)
+{
+    struct Capture {
+        HgBinary bin;
+        HgStringOwner path;
+    };
+    Capture* c = (Capture*)malloc(sizeof(*c));
+    c->bin = *bin;
+    c->path = hgStringAlloc(path);
+
+    hgThreadsCall(fence, c, [](void* pc)
+    {
+        Capture* c = (Capture*)pc;
+        hgDefer(free(c));
+        hgDefer(hgStringFree(&c->path));
+
+        HgArena* scratch = hgScratch();
+        hgArenaScope(scratch);
+
+        char* cpath = hgCString(scratch, c->path);
+
+        FILE* fileHandle = fopen(cpath, "wb");
+        if (fileHandle == nullptr)
+        {
+            hgWarn("Failed to create file to write binary: %s\n", cpath);
+            return;
+        }
+        hgDefer(fclose(fileHandle));
+
+        if (fwrite(c->bin.data, 1, c->bin.size, fileHandle) != c->bin.size)
+        {
+            hgWarn("Failed to write binary data to file: %s\n", cpath);
+        }
+    });
+}
+
+HgBinary hgBinaryResize(HgArena* arena, const HgBinary* bin, u64 newSize)
+{
+    HgBinary newBin{};
+    newBin.data = hgRealloc(arena, bin->data, bin->size, newSize, 1);
+    newBin.size = newSize;
+    return newBin;
+}
+
+void hgBinaryRead(const HgBinary* bin, u64 idx, void* dst, u64 len)
+{
+    hgAssert(idx + len <= bin->size);
+    memcpy(dst, (u8*)bin->data + idx, len);
+}
+
+void hgBinaryOverwrite(HgBinary* bin, u64 idx, const void* src, u64 len)
+{
+    hgAssert(idx + len <= bin->size);
+    memcpy((u8*)bin->data + idx, src, len);
+}
+
+template<>
+void hgAssetLoadImpl(HgAssetData<HgJson>* data)
+{
+    HgBinaryHandle bin = hgAssetLoad<HgBinary>(data->path);
+    hgDefer(hgAssetUnload(bin));
+
+    HgArena* scratch = hgScratch();
+    u64 head = scratch->head;
+    hgDefer(scratch->head = head);
+
+    HgBinary* jsonBin = hgAssetGet(bin);
+    HgStringView jsonStr = {(char*)jsonBin->data, jsonBin->size};
+    HgJson parse = hgParseJson(scratch, jsonStr);
+
+    HgJsonError* e = parse.errors;
+    while (e != nullptr)
+    {
+        hgWarn("Json parse error: %.*s\n", (int)e->msg.length, e->msg.chars);
+        e = e->next;
+    }
+
+    data->asset.file = (HgJsonNode*)malloc(scratch->head - head);
+    if (parse.errors != nullptr)
+    {
+        data->asset.errors = (HgJsonError*)(
+            (u8*)data->asset.file +
+                ((uptr)parse.errors - (uptr)parse.file));
+    }
+    else
+    {
+        data->asset.errors = nullptr;
+    }
+    memcpy((void*)data->asset.file, (void*)parse.file, scratch->head - head);
+}
+
+template<>
+void hgAssetUnloadImpl(HgAssetData<HgJson>* data)
+{
+    free(data->asset.file);
+}
+
 struct JsonParseState {
     HgStringView text;
     u64 head;
@@ -1789,547 +2371,6 @@ HgJson hgParseJson(HgArena* arena, HgStringView text)
     return jsonParseNext(arena, &parseState);
 }
 
-f64 hgClockTick(HgClock* clock)
-{
-    hgAssert(clock != nullptr);
-
-    f64 prev = clock->time;
-    timespec ts;
-    timespec_get(&ts, TIME_UTC);
-    clock->time = (f64)ts.tv_sec + (f64)ts.tv_nsec * 1e-9;
-    return clock->time - prev;
-}
-
-HgPerf hgPerfCreate(HgArena* arena, u32 count)
-{
-    hgAssert(arena != nullptr);
-
-    HgPerf perf;
-    perf.times = hgAlloc<f64>(arena, count);
-    perf.count = count;
-    perf.current = 0;
-    return perf;
-}
-
-void hgPerfBegin(HgPerf* perf)
-{
-    hgAssert(perf != nullptr);
-    hgClockTick(&perf->clock);
-}
-
-f64 hgPerfEnd(HgPerf* perf)
-{
-    hgAssert(perf != nullptr);
-    hgAssert(perf->current < perf->count);
-
-    f64 time = hgClockTick(&perf->clock);
-    perf->times[perf->current++] = time;
-
-    return time;
-}
-
-HgPerfStats hgPerfAnalyze(const HgPerf* perf)
-{
-    hgAssert(perf != nullptr);
-
-    HgPerfStats stats;
-    stats.avg = 0.0;
-    stats.best = INFINITY;
-    stats.worst = 0.0;
-
-    for (u32 i = 0; i < perf->current; ++i)
-    {
-        if (perf->times[i] < stats.best)
-            stats.best = perf->times[i];
-        if (perf->times[i] > stats.worst)
-            stats.worst = perf->times[i];
-        stats.avg += perf->times[i];
-    }
-    stats.avg /= (f64)perf->current;
-
-    return stats;
-}
-
-void hgPerfLog(HgStringView title, const HgPerfStats* stats, HgPerfScale scale)
-{
-    hgAssert(stats != nullptr);
-    if (title.length == 0 || title.chars == nullptr)
-        title = "Title Missing";
-
-    switch (scale)
-    {
-        case HgPerfScale_seconds:
-            printf("HG Performance - %.*s: avg: %.4fs, best: %.4fs, worst: %.4fs\n",
-                (int)title.length, title.chars, stats->avg, stats->best, stats->worst);
-            break;
-        case HgPerfScale_milli:
-            printf("HG Performance - %.*s: avg: %.4fms, best: %.4fms, worst: %.4fms\n",
-                (int)title.length, title.chars, stats->avg * 1.e3, stats->best * 1.e3, stats->worst * 1.e3);
-            break;
-        case HgPerfScale_micro:
-            printf("HG Performance - %.*s: avg: %.4fmcs, best: %.4fmcs, worst: %.4fmcs\n",
-                (int)title.length, title.chars, stats->avg * 1.e6, stats->best * 1.e6, stats->worst * 1.e6);
-            break;
-        case HgPerfScale_nano:
-            printf("HG Performance - %.*s: avg: %.4fns, best: %.4fns, worst: %.4fns\n",
-                (int)title.length, title.chars, stats->avg * 1.e9, stats->best * 1.e9, stats->worst * 1.e9);
-            break;
-    }
-}
-
-u32 hgHardwareThreadCount()
-{
-    return (u32)std::thread::hardware_concurrency();
-}
-
-struct HgMutexData {
-    std::atomic_bool acquired;
-};
-
-static HgPool mutexPool{};
-static HgMutexData* mutices = nullptr;
-
-HgMutex hgMutexCreate()
-{
-    HgHandle handle = hgPoolAlloc(&mutexPool);
-    new (&mutices[hgHandleIdx(handle)]) HgMutexData{false};
-    return {handle};
-}
-
-void hgMutexDestroy(HgMutex mtx)
-{
-    hgPoolFree(&mutexPool, mtx.handle);
-}
-
-void hgMutexAcquire(HgMutex mtx)
-{
-    hgAssert(hgPoolAlive(&mutexPool, mtx.handle));
-    HgMutexData* data = &mutices[hgHandleIdx(mtx.handle)];
-    bool acquired = false;
-    while (!data->acquired.compare_exchange_weak(acquired, true))
-    {
-        _mm_pause();
-        acquired = false;
-    }
-}
-
-bool hgMutexTryAcquire(HgMutex mtx)
-{
-    hgAssert(hgPoolAlive(&mutexPool, mtx.handle));
-    HgMutexData* data = &mutices[hgHandleIdx(mtx.handle)];
-    bool acquired = false;
-    return data->acquired.compare_exchange_weak(acquired, true);
-}
-
-void hgMutexRelease(HgMutex mtx)
-{
-    hgAssert(hgPoolAlive(&mutexPool, mtx.handle));
-    HgMutexData* data = &mutices[hgHandleIdx(mtx.handle)];
-    hgAssert(data->acquired);
-    data->acquired.store(false);
-}
-
-struct HgFenceData {
-    std::atomic<u32> counter{0};
-};
-
-static HgPool fencePool{};
-static HgFenceData* fences = nullptr;
-
-HgFence hgFenceCreate()
-{
-    HgHandle handle = hgPoolAlloc(&fencePool);
-    new (&fences[hgHandleIdx(handle)]) HgFenceData{false};
-    return {handle};
-}
-
-void hgFenceDestroy(HgFence fence)
-{
-    if (hgPoolAlive(&fencePool, fence.handle))
-        hgPoolFree(&fencePool, fence.handle);
-}
-
-void hgFenceAttach(HgFence fence, u32 count)
-{
-    hgAssert(hgPoolAlive(&fencePool, fence.handle));
-    fences[hgHandleIdx(fence.handle)].counter.fetch_add(count);
-}
-
-void hgFenceSignal(HgFence fence, u32 count)
-{
-    hgAssert(hgPoolAlive(&fencePool, fence.handle));
-    fences[hgHandleIdx(fence.handle)].counter.fetch_sub(count);
-}
-
-bool hgFenceIsComplete(HgFence fence)
-{
-    hgAssert(hgPoolAlive(&fencePool, fence.handle));
-    return fences[hgHandleIdx(fence.handle)].counter.load() == 0;
-}
-
-bool hgFenceWait(HgFence fence, f64 timeoutSeconds)
-{
-    hgAssert(hgPoolAlive(&fencePool, fence.handle));
-    auto end = std::chrono::steady_clock::now() + std::chrono::duration<f64>(timeoutSeconds);
-    while (hgPoolAlive(&fencePool, fence.handle) && !hgFenceIsComplete(fence) && std::chrono::steady_clock::now() < end)
-    {
-        _mm_pause();
-    }
-    return !hgPoolAlive(&fencePool, fence.handle) || hgFenceIsComplete(fence);
-}
-
-void hgFenceWaitIndefinite(HgFence fence)
-{
-    hgAssert(hgPoolAlive(&fencePool, fence.handle));
-    while (hgPoolAlive(&fencePool, fence.handle) && !hgFenceIsComplete(fence))
-    {
-        _mm_pause();
-    }
-}
-
-void hgConcurrencyInit(HgArena* arena, u32 maxMutices, u32 maxFences)
-{
-    mutexPool = hgPoolCreate(arena, maxMutices);
-    mutices = hgAlloc<HgMutexData>(arena, maxMutices);
-    fencePool = hgPoolCreate(arena, maxFences);
-    fences = hgAlloc<HgFenceData>(arena, maxFences);
-}
-
-void hgConcurrencyDeinit()
-{
-    fencePool = {};
-    mutexPool = {};
-}
-
-struct ThreadWork {
-    HgFence fence;
-    void* data;
-    void (*fn)(void*);
-};
-
-struct ThreadPoolState {
-    std::thread* threads = nullptr;
-    u32 threadCount = 0;
-    std::atomic_bool shouldClose = false;
-
-    std::mutex mtx{};
-    std::condition_variable cv{};
-
-    ThreadWork* work = nullptr;
-    std::atomic_bool* hasWork = nullptr;
-    u32 workCapacity = 0;
-
-    std::atomic<u32> workCount = 0;
-    std::atomic<u32> tail = 0;
-    std::atomic<u32> workingTail = 0;
-    std::atomic<u32> head = 0;
-    std::atomic<u32> workingHead = 0;
-};
-
-static ThreadPoolState threadPool{};
-
-static bool poolExecute()
-{
-    u32 idx = threadPool.workingTail.load();
-    do {
-        if (idx == threadPool.head.load())
-            return false;
-    } while (!threadPool.workingTail.compare_exchange_weak(idx, (idx + 1) & (threadPool.workCapacity - 1)));
-
-    ThreadWork work = threadPool.work[idx];
-    threadPool.hasWork[idx].store(false);
-
-    u32 t = threadPool.tail.load();
-    while (t != threadPool.head.load() && !threadPool.hasWork[t].load())
-    {
-        u32 next = (t + 1) & (threadPool.workCapacity - 1);
-        threadPool.tail.compare_exchange_strong(t, next);
-        t = next;
-    }
-
-    --threadPool.workCount;
-
-    hgAssert(work.fn != nullptr);
-    work.fn(work.data);
-
-    if (!hgNullHandle(work.fence.handle))
-        hgFenceSignal(work.fence, 1);
-    return true;
-}
-
-void hgThreadsInit(HgArena* arena, u32 queueSize, u32 threadCount)
-{
-    hgAssert(arena != nullptr);
-    hgAssert(threadCount > 0);
-    hgAssert(queueSize > 0 && (queueSize & (queueSize - 1)) == 0);
-
-    threadPool.shouldClose.store(false);
-    threadPool.threadCount = threadCount;
-    threadPool.threads = hgAlloc<std::thread>(arena, threadCount);
-
-    threadPool.work = hgAlloc<ThreadWork>(arena, queueSize);
-    threadPool.hasWork = hgAlloc<std::atomic_bool>(arena, queueSize);
-    threadPool.workCapacity = queueSize;
-
-    threadPool.workCount.store(0);
-    threadPool.tail.store(0);
-    threadPool.workingTail.store(0);
-    threadPool.head.store(0);
-    threadPool.workingHead.store(0);
-
-    for (u32 i = 0; i < threadPool.workCapacity; ++i)
-    {
-        threadPool.hasWork[i].store(false);
-    }
-
-    for (u32 i = 0; i < threadCount; ++i)
-    {
-        new (threadPool.threads + i) std::thread([] {
-            hgScratchInit((u32)-1);
-            hgDefer(hgScratchDeinit());
-
-            for (;;)
-            {
-                std::unique_lock<std::mutex> lock{threadPool.mtx};
-                while (threadPool.workCount.load() == 0 && !threadPool.shouldClose.load())
-                {
-                    threadPool.cv.wait(lock);
-                }
-                lock.unlock();
-                if (threadPool.shouldClose.load())
-                    return;
-
-                static constexpr u32 spinCount = 128;
-                for (u32 j = 0; j < spinCount; ++j)
-                {
-                    if (!poolExecute())
-                        _mm_pause();
-                }
-            }
-        });
-    }
-}
-
-void hgThreadsDeinit()
-{
-    threadPool.mtx.lock();
-    threadPool.shouldClose = true;
-    threadPool.mtx.unlock();
-    threadPool.cv.notify_all();
-
-    for (u32 i = 0; i < threadPool.threadCount; ++i)
-    {
-        threadPool.threads[i].join();
-    }
-    for (u32 i = 0; i < threadPool.threadCount; ++i)
-    {
-        threadPool.threads[i].~thread();
-    }
-    threadPool.cv.~condition_variable();
-    threadPool.mtx.~mutex();
-}
-
-bool hgThreadsHelp(HgFence fence, f64 timeout)
-{
-    auto end = std::chrono::steady_clock::now() + std::chrono::duration<f64>(timeout);
-    while (!hgFenceIsComplete(fence) && std::chrono::steady_clock::now() < end)
-    {
-        if (!poolExecute())
-            _mm_pause();
-    }
-    return hgFenceIsComplete(fence);
-}
-
-void hgThreadsCall(HgFence fence, void* data, void (*fn)(void* data))
-{
-    hgAssert(fn != nullptr);
-    if (!hgNullHandle(fence.handle))
-        hgFenceAttach(fence, 1);
-
-    u32 idx = threadPool.workingHead.fetch_add(1) & (threadPool.workCapacity - 1);
-
-    threadPool.work[idx].fence = fence;
-    threadPool.work[idx].data = data;
-    threadPool.work[idx].fn = fn;
-    threadPool.hasWork[idx].store(true);
-
-    u32 h = threadPool.head.load();
-    while (threadPool.hasWork[h].load())
-    {
-        u32 next = (h + 1) & (threadPool.workCapacity - 1);
-        threadPool.head.compare_exchange_strong(h, next);
-        h = next;
-    }
-
-    ++threadPool.workCount;
-    threadPool.mtx.lock();
-    threadPool.mtx.unlock();
-    threadPool.cv.notify_one();
-}
-
-void hgThreadsFor(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx))
-{
-    hgAssert(begin <= end);
-    hgAssert(fn != nullptr);
-
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
-
-    u64 chunkSize = (u64)std::ceil((f32)(end - begin) / (8.0f * (f32)hgHardwareThreadCount()));
-
-    HgFence fence = hgFenceCreate();
-    hgDefer(hgFenceDestroy(fence));
-
-    for (u64 i = begin; i < end; i += chunkSize)
-    {
-        struct Capture
-        {
-            void* data;
-            void (*fn)(void* data, u64 idx);
-            u64 begin;
-            u64 end;
-        };
-
-        Capture* capture = hgAlloc<Capture>(scratch, 1);
-        capture->data = data;
-        capture->fn = fn;
-        capture->begin = i;
-        capture->end = std::min(i + chunkSize, end);
-
-        hgThreadsCall(fence, capture, [](void* pcapture)
-        {
-            Capture* capture = (Capture*)pcapture;
-            for (u64 i = capture->begin; i < capture->end; ++i)
-            {
-                (capture->fn)(capture->data, i);
-            }
-        });
-    }
-    hgThreadsHelp(fence, INFINITY);
-}
-
-void hgAssetInitDefaults(
-    HgArena* arena,
-    u32 maxBinaries,
-    u32 maxTextures,
-    u32 maxGpuTextures,
-    u32 maxMeshes,
-    u32 maxGpuMeshes)
-{
-    hgAssetInit<HgBinary>(arena, maxBinaries);
-    hgAssetInit<HgTexture>(arena, maxTextures);
-    hgAssetInit<HgGpuTexture>(arena, maxGpuTextures);
-    hgAssetInit<HgMesh>(arena, maxMeshes);
-    hgAssetInit<HgGpuMesh>(arena, maxGpuMeshes);
-}
-
-void hgAssetDeinitDefaults()
-{
-    hgAssetDeinit<HgGpuMesh>();
-    hgAssetDeinit<HgMesh>();
-    hgAssetDeinit<HgGpuTexture>();
-    hgAssetDeinit<HgTexture>();
-    hgAssetDeinit<HgBinary>();
-}
-
-template<>
-void hgAssetLoadImpl(HgAssetData<HgBinary>* data)
-{
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
-
-    char* cpath = hgCString(scratch, data->path);
-
-    FILE* fileHandle = fopen(cpath, "rb");
-    if (fileHandle == nullptr)
-    {
-    hgWarn("Could not find file to read binary: %s\n", cpath);
-    return;
-    }
-    hgDefer(fclose(fileHandle));
-
-    if (fseek(fileHandle, 0, SEEK_END) != 0)
-    {
-        hgWarn("Failed to read binary from file: %s\n", cpath);
-        return;
-    }
-
-    data->asset.size = (u32)ftell(fileHandle);
-    data->asset.data = malloc(data->asset.size);
-
-    rewind(fileHandle);
-    if (fread(data->asset.data, 1, data->asset.size, fileHandle) != data->asset.size)
-    {
-        free(data->asset.data);
-        data->asset = {};
-        hgWarn("Failed to read binary from file: %s\n", cpath);
-        return;
-    }
-}
-
-template<>
-void hgAssetUnloadImpl(HgAssetData<HgBinary>* data)
-{
-    hgFenceWaitIndefinite(data->isLoaded);
-    free(data->asset.data);
-}
-
-void hgBinaryStore(HgBinary* bin, HgStringView path, HgFence fence)
-{
-    struct Capture {
-        HgBinary bin;
-        HgStringOwner path;
-    };
-    Capture* c = (Capture*)malloc(sizeof(*c));
-    c->bin = *bin;
-    c->path = hgStringAlloc(path);
-
-    hgThreadsCall(fence, c, [](void* pc)
-    {
-        Capture* c = (Capture*)pc;
-        hgDefer(free(c));
-        hgDefer(hgStringFree(&c->path));
-
-        HgArena* scratch = hgScratch();
-        hgArenaScope(scratch);
-
-        char* cpath = hgCString(scratch, c->path);
-
-        FILE* fileHandle = fopen(cpath, "wb");
-        if (fileHandle == nullptr)
-        {
-            hgWarn("Failed to create file to write binary: %s\n", cpath);
-            return;
-        }
-        hgDefer(fclose(fileHandle));
-
-        if (fwrite(c->bin.data, 1, c->bin.size, fileHandle) != c->bin.size)
-        {
-            hgWarn("Failed to write binary data to file: %s\n", cpath);
-        }
-    });
-}
-
-HgBinary hgBinaryResize(HgArena* arena, const HgBinary* bin, u64 newSize)
-{
-    HgBinary newBin{};
-    newBin.data = hgRealloc(arena, bin->data, bin->size, newSize, 1);
-    newBin.size = newSize;
-    return newBin;
-}
-
-void hgBinaryRead(const HgBinary* bin, u64 idx, void* dst, u64 len)
-{
-    hgAssert(idx + len <= bin->size);
-    memcpy(dst, (u8*)bin->data + idx, len);
-}
-
-void hgBinaryOverwrite(HgBinary* bin, u64 idx, const void* src, u64 len)
-{
-    hgAssert(idx + len <= bin->size);
-    memcpy((u8*)bin->data + idx, src, len);
-}
-
 template<>
 void hgAssetLoadImpl(HgAssetData<HgTexture>* data)
 {
@@ -2525,7 +2566,7 @@ void hgEcsRegisterComponent(HgEcs* ecs, HgArena* arena, HgEcsRegisterComponent* 
 {
     hgAssert(ecs != nullptr);
 
-    u64 id = hgHash(config->name);
+    u64 id = hgHashImpl(config->name);
     hgAssert(hgMapGet(&ecs->components, id) == nullptr);
 
     HgComponent* system = hgMapAdd(&ecs->components, id, {});
@@ -3048,7 +3089,7 @@ HgEntity hgEcsDeserialize(HgEcs* ecs, HgBinary scene)
         EcsSerialComponentDesc comp = hgBinaryRead<EcsSerialComponentDesc>(
             &scene, header.componentsBegin + i * sizeof(EcsSerialComponentDesc));
 
-        u64 componentId = hgHash(strings[comp.nameString]);
+        u64 componentId = hgHashImpl(strings[comp.nameString]);
 
         for (u32 j = 0; j < comp.count; ++j)
         {
@@ -3827,7 +3868,7 @@ void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 // };
 //
 // template<>
-// constexpr u64 hgHash(HgAudioPlayerDesc desc)
+// constexpr u64 hgHashImpl(HgAudioPlayerDesc desc)
 // {
 //     (void)desc;
 //     return desc.frequency + (desc.channels << 24) + (desc.format << 28);

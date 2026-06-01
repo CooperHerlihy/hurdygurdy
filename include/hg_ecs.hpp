@@ -64,9 +64,9 @@ constexpr bool operator!=(HgEntity lhs, HgEntity rhs)
  * Hashing for entities
  */
 template<>
-constexpr u64 hgHash(HgEntity e)
+constexpr u64 hgHashImpl(HgEntity e)
 {
-    return hgHash(e.handle.id);
+    return hgHashImpl(e.handle.id);
 }
 
 /**
@@ -239,7 +239,7 @@ struct HgEcsRegisterComponent {
 };
 
 /**
- * Create a new component type in the ECS, with componentId hgHash(name)
+ * Create a new component type in the ECS, with componentId hgHashImpl(name)
  *
  * Parameters
  * - ecs The entity component system
@@ -309,7 +309,7 @@ void hgEcsDeserializeImpl(
  */
 #define hgEcsRegisterType(ecs, arena, type, maxCount) \
     do { \
-        hgComponentId<type> = hgHash(#type); \
+        hgComponentId<type> = hgHashImpl(#type); \
         HgEcsRegisterComponent registerComponent{}; \
         registerComponent.name = #type; \
         registerComponent.align = alignof(type); \

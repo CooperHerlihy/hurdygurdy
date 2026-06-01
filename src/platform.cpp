@@ -587,7 +587,7 @@ struct SamplerInfo {
 };
 
 template<>
-constexpr u64 hgHash(SamplerInfo info)
+constexpr u64 hgHashImpl(SamplerInfo info)
 {
     return info.border + (info.mode << 4) + (info.filter << 8);
 }

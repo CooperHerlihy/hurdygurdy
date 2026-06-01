@@ -34,9 +34,9 @@
  * The hash template
  */
 template<typename T>
-constexpr u64 hgHash(T)
+constexpr u64 hgHashImpl(T)
 {
-    static_assert(false, "hgHash must be implemented for each type");
+    static_assert(false, "hgHashImpl must be implemented for each type");
     return 0;
 }
 
@@ -109,10 +109,10 @@ void hgSetAdd(HgSet<V>* set, const T& val)
 
     hgAssert(set->count < set->capacity - 1);
 
-    u32 idx = hgHash(v) % set->capacity;
+    u32 idx = hgHashImpl(v) % set->capacity;
     for (u32 dist = 0; set->hasVal[idx] && set->vals[idx] != v; ++dist)
     {
-        u32 otherDist = hgHash(set->vals[idx]) % set->capacity - idx;
+        u32 otherDist = hgHashImpl(set->vals[idx]) % set->capacity - idx;
         if (otherDist > set->capacity)
             otherDist += set->capacity;
 
@@ -141,7 +141,7 @@ void hgSetRemove(HgSet<V>* set, const T& val)
     static_assert(std::is_convertible_v<T, V>);
     V v = (V)val;
 
-    u32 idx = hgHash(v) % set->capacity;
+    u32 idx = hgHashImpl(v) % set->capacity;
     while (set->hasVal[idx])
     {
         if (set->vals[idx] == v)
@@ -154,7 +154,7 @@ void hgSetRemove(HgSet<V>* set, const T& val)
     u32 next = (idx + 1) % set->capacity;
     while (set->hasVal[next])
     {
-        if (hgHash(set->vals[next]) % set->capacity != next)
+        if (hgHashImpl(set->vals[next]) % set->capacity != next)
         {
             set->vals[idx] = set->vals[next];
             idx = next;
@@ -174,7 +174,7 @@ bool hgSetHas(const HgSet<V>* set, const T& val)
     static_assert(std::is_convertible_v<T, V>);
     V v = (V)val;
 
-    for (u32 idx = hgHash(v) % set->capacity; set->hasVal[idx]; idx = (idx + 1) % set->capacity)
+    for (u32 idx = hgHashImpl(v) % set->capacity; set->hasVal[idx]; idx = (idx + 1) % set->capacity)
     {
         if (set->vals[idx] == v)
             return true;
@@ -266,10 +266,10 @@ V* hgMapAdd(HgMap<K, V>* map, const T& key, const U& val)
 
     hgAssert(map->count < map->capacity - 1);
 
-    u32 idx = hgHash(k) % map->capacity;
+    u32 idx = hgHashImpl(k) % map->capacity;
     for (u32 dist = 0; map->hasVal[idx] && map->keys[idx] != k; ++dist)
     {
-        u32 otherDist = hgHash(map->keys[idx]) % map->capacity - idx;
+        u32 otherDist = hgHashImpl(map->keys[idx]) % map->capacity - idx;
         if (otherDist > map->capacity)
             otherDist += map->capacity;
 
@@ -311,7 +311,7 @@ bool hgMapRemove(HgMap<K, V>* map, const T& key, V* val = nullptr)
     static_assert(std::is_convertible_v<T, K>);
     K k = (K)key;
 
-    u32 idx = hgHash(k) % map->capacity;
+    u32 idx = hgHashImpl(k) % map->capacity;
     while (map->hasVal[idx])
     {
         if (map->keys[idx] == k)
@@ -327,7 +327,7 @@ bool hgMapRemove(HgMap<K, V>* map, const T& key, V* val = nullptr)
     u32 next = (idx + 1) % map->capacity;
     while (map->hasVal[next])
     {
-        if (hgHash(map->keys[next]) % map->capacity != next)
+        if (hgHashImpl(map->keys[next]) % map->capacity != next)
         {
             map->keys[idx] = map->keys[next];
             map->vals[idx] = map->vals[next];
@@ -353,7 +353,7 @@ V* hgMapGet(const HgMap<K, V>* map, const T& key)
     static_assert(std::is_convertible_v<T, K>);
     K k = (K)key;
 
-    for (u32 idx = hgHash(key) % map->capacity; map->hasVal[idx]; idx = (idx + 1) % map->capacity)
+    for (u32 idx = hgHashImpl(key) % map->capacity; map->hasVal[idx]; idx = (idx + 1) % map->capacity)
     {
         if (map->keys[idx] == k)
             return map->vals + idx;
@@ -365,7 +365,7 @@ V* hgMapGet(const HgMap<K, V>* map, const T& key)
  * Hash map hashing for u8
  */
 template<>
-constexpr u64 hgHash(u8 val)
+constexpr u64 hgHashImpl(u8 val)
 {
     return (u64)val;
 }
@@ -374,7 +374,7 @@ constexpr u64 hgHash(u8 val)
  * Hash map hashing for u16
  */
 template<>
-constexpr u64 hgHash(u16 val)
+constexpr u64 hgHashImpl(u16 val)
 {
     return (u64)val;
 }
@@ -383,7 +383,7 @@ constexpr u64 hgHash(u16 val)
  * Hash map hashing for u32
  */
 template<>
-constexpr u64 hgHash(u32 val)
+constexpr u64 hgHashImpl(u32 val)
 {
     return (u64)val;
 }
@@ -392,7 +392,7 @@ constexpr u64 hgHash(u32 val)
  * Hash map hashing for u64
  */
 template<>
-constexpr u64 hgHash(u64 val)
+constexpr u64 hgHashImpl(u64 val)
 {
     return (u64)val;
 }
@@ -401,7 +401,7 @@ constexpr u64 hgHash(u64 val)
  * Hash map hashing for i8
  */
 template<>
-constexpr u64 hgHash(i8 val)
+constexpr u64 hgHashImpl(i8 val)
 {
     return (u64)val;
 }
@@ -410,7 +410,7 @@ constexpr u64 hgHash(i8 val)
  * Hash map hashing for i16
  */
 template<>
-constexpr u64 hgHash(i16 val)
+constexpr u64 hgHashImpl(i16 val)
 {
     return (u64)val;
 }
@@ -419,7 +419,7 @@ constexpr u64 hgHash(i16 val)
  * Hash map hashing for i32
  */
 template<>
-constexpr u64 hgHash(i32 val)
+constexpr u64 hgHashImpl(i32 val)
 {
     return (u64)val;
 }
@@ -428,7 +428,7 @@ constexpr u64 hgHash(i32 val)
  * Hash map hashing for i64
  */
 template<>
-constexpr u64 hgHash(i64 val)
+constexpr u64 hgHashImpl(i64 val)
 {
     return (u64)val;
 }
@@ -437,7 +437,7 @@ constexpr u64 hgHash(i64 val)
  * Hash map hashing for f32
  */
 template<>
-constexpr u64 hgHash(f32 val)
+constexpr u64 hgHashImpl(f32 val)
 {
     union {
         f32 asFloat;
@@ -451,7 +451,7 @@ constexpr u64 hgHash(f32 val)
  * Hash map hashing for f64
  */
 template<>
-constexpr u64 hgHash(f64 val)
+constexpr u64 hgHashImpl(f64 val)
 {
     union {
         f64 asFloat;
@@ -479,7 +479,7 @@ constexpr u64 hgPtrHash(T* val)
  * Hash map hashing for void*
  */
 template<>
-constexpr u64 hgHash(void* val)
+constexpr u64 hgHashImpl(void* val)
 {
     return hgPtrHash<void>(val);
 }
@@ -498,9 +498,9 @@ struct HgHandle {
  * Hash map hashing for void*
  */
 template<>
-constexpr u64 hgHash(HgHandle val)
+constexpr u64 hgHashImpl(HgHandle val)
 {
-    return hgHash(val.id);
+    return hgHashImpl(val.id);
 }
 
 /**
@@ -650,7 +650,7 @@ struct HgStringView {
  * Hash map hashing for strings
  */
 template<>
-constexpr u64 hgHash(HgStringView str)
+constexpr u64 hgHashImpl(HgStringView str)
 {
     u64 ret = 0;
     u64 mult = 1;
@@ -691,9 +691,9 @@ char* hgCString(HgArena* arena, HgStringView str);
  * Hash map hashing for C string
  */
 template<>
-constexpr u64 hgHash(const char* str)
+constexpr u64 hgHashImpl(const char* str)
 {
-    return hgHash(HgStringView{str});
+    return hgHashImpl(HgStringView{str});
 }
 
 /**
@@ -731,9 +731,9 @@ struct HgStringOwner {
  * Hash map hashing for HgStringOwner
  */
 template<>
-constexpr u64 hgHash(HgStringOwner str)
+constexpr u64 hgHashImpl(HgStringOwner str)
 {
-    return hgHash(HgStringView{str});
+    return hgHashImpl(HgStringView{str});
 }
 
 /**
@@ -787,9 +787,9 @@ struct HgStringBuilder {
  * Hash map hashing for HgStringBuilder
  */
 template<>
-constexpr u64 hgHash(HgStringBuilder str)
+constexpr u64 hgHashImpl(HgStringBuilder str)
 {
-    return hgHash(HgStringView{str});
+    return hgHashImpl(HgStringView{str});
 }
 
 /**
@@ -957,138 +957,5 @@ HgStringBuilder hgFloatToString(HgArena* arena, f64 num, u32 decimalCount);
 
 // base 2 and 16 string-int conversions : TODO
 // arbitrary base string-int conversions : TODO?
-
-/**
- * An error contained in the json
- */
-struct HgJsonError {
-    /**
-     * The next error
-     */
-    HgJsonError* next;
-    /**
-     * The error message
-     */
-    HgStringView msg;
-};
-
-/**
- * A node in the json file
- */
-struct HgJsonNode;
-
-/**
- * The types contained in nodes
- */
-enum HgJsonType : u32 {
-    HgJsonType_none = 0,
-    HgJsonType_struct,
-    HgJsonType_field,
-    HgJsonType_array,
-    HgJsonType_string,
-    HgJsonType_float,
-    HgJsonType_integer,
-    HgJsonType_bool,
-};
-
-/**
- * A field in a struct
- */
-struct HgJsonField {
-    /**
-     * The next field
-     */
-    HgJsonField* next;
-    /**
-     * The name of the field
-     */
-    HgStringView name;
-    /**
-     * The value stored in the field
-     */
-    HgJsonNode* value;
-};
-
-/**
- * A struct contained in the json
- */
-struct HgJsonStruct {
-    /**
-     * The first field
-     */
-    HgJsonField* fields;
-};
-
-/**
- * An element in an array
- */
-struct HgJsonElem {
-    /**
-     * The next element
-     */
-    HgJsonElem* next;
-    /**
-     * The value stored in the element
-     */
-    HgJsonNode* value;
-};
-
-/**
- * An array contained in the json
- */
-struct HgJsonArray {
-    /**
-     * The first element
-     */
-    HgJsonElem* elems;
-};
-
-/**
- * A node in the json file
- */
-struct HgJsonNode {
-    /**
-     * The node's type
-     */
-    HgJsonType type;
-    /**
-     * The value in the node
-     */
-    union {
-        HgJsonStruct jstruct;
-        HgJsonField field;
-        HgJsonArray array;
-        HgStringView string;
-        f64 floating;
-        i64 integer;
-        bool boolean;
-    };
-};
-
-/**
- * A parsed Json file
- */
-struct HgJson {
-    /**
-     * The successfully parsed nodes
-     */
-    HgJsonNode* file;
-    /**
-     * The errors found
-     */
-    HgJsonError* errors;
-};
-
-/**
- * Parses json text into a tree
- *
- * Parameters
- * - arena The arena to allocate from
- * - text The json text to parse
- *
- * Returns
- * - The parsed json, errors contained inside
- */
-HgJson hgParseJson(HgArena* arena, HgStringView text);
 
 #endif // HG_CONTAINERS_HPP

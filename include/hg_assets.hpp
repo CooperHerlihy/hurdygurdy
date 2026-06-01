@@ -425,6 +425,156 @@ void hgBinaryOverwrite(HgBinary* bin, u64 idx, const T& src)
 }
 
 /**
+ * An error contained in the json
+ */
+struct HgJsonError {
+    /**
+     * The next error
+     */
+    HgJsonError* next;
+    /**
+     * The error message
+     */
+    HgStringView msg;
+};
+
+/**
+ * A node in the json file
+ */
+struct HgJsonNode;
+
+/**
+ * The types contained in nodes
+ */
+enum HgJsonType : u32 {
+    HgJsonType_none = 0,
+    HgJsonType_struct,
+    HgJsonType_field,
+    HgJsonType_array,
+    HgJsonType_string,
+    HgJsonType_float,
+    HgJsonType_integer,
+    HgJsonType_bool,
+};
+
+/**
+ * A field in a struct
+ */
+struct HgJsonField {
+    /**
+     * The next field
+     */
+    HgJsonField* next;
+    /**
+     * The name of the field
+     */
+    HgStringView name;
+    /**
+     * The value stored in the field
+     */
+    HgJsonNode* value;
+};
+
+/**
+ * A struct contained in the json
+ */
+struct HgJsonStruct {
+    /**
+     * The first field
+     */
+    HgJsonField* fields;
+};
+
+/**
+ * An element in an array
+ */
+struct HgJsonElem {
+    /**
+     * The next element
+     */
+    HgJsonElem* next;
+    /**
+     * The value stored in the element
+     */
+    HgJsonNode* value;
+};
+
+/**
+ * An array contained in the json
+ */
+struct HgJsonArray {
+    /**
+     * The first element
+     */
+    HgJsonElem* elems;
+};
+
+/**
+ * A node in the json file
+ */
+struct HgJsonNode {
+    /**
+     * The node's type
+     */
+    HgJsonType type;
+    /**
+     * The value in the node
+     */
+    union {
+        HgJsonStruct jstruct;
+        HgJsonField field;
+        HgJsonArray array;
+        HgStringView string;
+        f64 floating;
+        i64 integer;
+        bool boolean;
+    };
+};
+
+/**
+ * A parsed Json file
+ */
+struct HgJson {
+    /**
+     * The successfully parsed nodes
+     */
+    HgJsonNode* file;
+    /**
+     * The errors found
+     */
+    HgJsonError* errors;
+};
+
+/**
+ * A binary file asset handle
+ */
+typedef HgAssetHandle<HgJson> HgJsonHandle;
+
+/**
+ * HgJson asset load implementation
+ */
+template<>
+void hgAssetLoadImpl(HgAssetData<HgJson>* data);
+
+/**
+ * HgJson asset unload implementation
+ */
+template<>
+void hgAssetUnloadImpl(HgAssetData<HgJson>* data);
+
+/**
+ * Parses json text into a tree
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - text The json text to parse
+ *
+ * Returns
+ * - The parsed json, errors contained inside
+ */
+HgJson hgParseJson(HgArena* arena, HgStringView text);
+
+/**
  * A texture asset
  */
 struct HgTexture {

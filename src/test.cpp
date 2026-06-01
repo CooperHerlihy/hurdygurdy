@@ -1299,10 +1299,10 @@ void hgTest()
 
         HgMap<StrHash, u32> map = hgMapCreate<StrHash, u32>(arena, 128);
 
-        StrHash a = hgHash("a");
-        StrHash b = hgHash("b");
-        StrHash ab = hgHash("ab");
-        StrHash scf = hgHash("supercalifragilisticexpialidocious");
+        StrHash a = hgHashImpl("a");
+        StrHash b = hgHashImpl("b");
+        StrHash ab = hgHashImpl("ab");
+        StrHash scf = hgHashImpl("supercalifragilisticexpialidocious");
 
         hgAssert(hgMapGet(&map, a) == nullptr);
         hgAssert(hgMapGet(&map, b) == nullptr);
@@ -1447,10 +1447,10 @@ void hgTest()
 
         HgSet<StrHash> set = hgSetCreate<StrHash>(arena, 128);
 
-        StrHash a = hgHash("a");
-        StrHash b = hgHash("b");
-        StrHash ab = hgHash("ab");
-        StrHash scf = hgHash("supercalifragilisticexpialidocious");
+        StrHash a = hgHashImpl("a");
+        StrHash b = hgHashImpl("b");
+        StrHash ab = hgHashImpl("ab");
+        StrHash scf = hgHashImpl("supercalifragilisticexpialidocious");
 
         hgAssert(!hgSetHas(&set, a));
         hgAssert(!hgSetHas(&set, b));
