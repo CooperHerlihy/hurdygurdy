@@ -78,6 +78,7 @@ void hgTest()
     // HgArena
     {
         void* block = malloc(1024);
+        hgDefer(free(block));
 
         HgArena arena{block, 1024, 0};
 
@@ -118,8 +119,6 @@ void hgTest()
 
             arena.head = 0;
         }
-
-        free(block);
     }
 
     // HgHandle and HgPool
@@ -1582,8 +1581,9 @@ void hgTest()
 
     // thread pool
     {
-        HgFence fence = hgFenceCreate();
         {
+            HgFence fence = hgFenceCreate();
+            hgDefer(hgFenceDestroy(fence));
 
             bool a = false;
             bool b = false;
@@ -1606,6 +1606,9 @@ void hgTest()
         }
 
         {
+            HgFence fence = hgFenceCreate();
+            hgDefer(hgFenceDestroy(fence));
+
             bool vals[100]{};
             for (bool& val : vals)
             {
@@ -1639,6 +1642,9 @@ void hgTest()
         }
 
         {
+            HgFence fence = hgFenceCreate();
+            hgDefer(hgFenceDestroy(fence));
+
             for (u32 n = 0; n < 3; ++n)
             {
                 std::atomic_bool start{false};
@@ -1682,7 +1688,6 @@ void hgTest()
                 }
             }
         }
-        hgFenceDestroy(fence);
     }
 
     // HgMutex
@@ -1694,27 +1699,24 @@ void hgTest()
         Capture c{};
 
         c.mtx = hgMutexCreate();
+        hgDefer(hgMutexDestroy(c.mtx));
 
         c.count = 0;
         hgThreadsFor(0, 100, &c, [](void* pc, u64)
         {
             Capture* c = (Capture*)pc;
             hgMutexAcquire(c->mtx);
+            hgDefer(hgMutexRelease(c->mtx));
             for (u32 i = 0; i < 10000; ++i)
             {
                 ++c->count;
             }
-            hgMutexRelease(c->mtx);
         });
         hgAssert(c.count == 1000000);
-
-        hgMutexDestroy(c.mtx);
     }
 
     // HgAssetManager and HgBinary
     {
-        HgFence fence = hgFenceCreate();
-
         {
             HgBinaryHandle bin1 = hgAssetCreate<HgBinary>();
             hgAssert(hgAssetPath(bin1) == "");
@@ -1740,6 +1742,9 @@ void hgTest()
         }
 
         u32 saveData[]{12, 42, 100, 128};
+
+        HgFence fence = hgFenceCreate();
+        hgDefer(hgFenceDestroy(fence));
 
         {
             HgBinary bin{saveData, sizeof(saveData)};
@@ -1776,15 +1781,15 @@ void hgTest()
             hgAssetUnload(binHandle2);
             hgAssert(hgAssetGet(binHandle2) == nullptr);
         }
-
-        hgFenceDestroy(fence);
     }
 
     // HgAssetManager and HgBinary async
     {
-        HgFence fence = hgFenceCreate();
-
         u32 saveData[]{12, 42, 100, 128};
+
+        HgFence fence = hgFenceCreate();
+        hgDefer(hgFenceDestroy(fence));
+
         {
             HgBinary bin{saveData, sizeof(saveData)};
 
@@ -1810,8 +1815,6 @@ void hgTest()
             hgAssetUnload(binHandle2);
             hgAssert(hgAssetGet(binHandle2) == nullptr);
         }
-
-        hgFenceDestroy(fence);
     }
 
     // HgImage
@@ -1842,20 +1845,18 @@ void hgTest()
         testImage.pixels = saveData;
 
         HgFence fence = hgFenceCreate();
+        hgDefer(hgFenceDestroy(fence));
         {
             hgTextureStorePng(&testImage, path, fence);
             hgAssert(hgFenceWait(fence, 2.0));
 
             HgTextureHandle imageHandle = hgAssetLoad<HgTexture>(path);
-
+            hgDefer(hgAssetUnload(imageHandle));
             HgTexture* image = hgAssetGet(imageHandle);
             hgAssert(image->width == testImage.width);
             hgAssert(image->height == testImage.height);
             hgAssert(memcmp(image->pixels, saveData, sizeof(saveData)) == 0);
-
-            hgAssetUnload(imageHandle);
         }
-        hgFenceDestroy(fence);
     }
 
     hgWarn("HgMesh test : TODO\n");
@@ -1866,6 +1867,7 @@ void hgTest()
         hgArenaScope(arena);
 
         HgEcs ecs = hgEcsCreate(arena, 256, 4);
+        hgDefer(hgEcsReset(&ecs));
 
         hgEcsRegisterType(&ecs, arena, u32, 256);
         hgEcsRegisterType(&ecs, arena, u64, 256);
@@ -2053,8 +2055,6 @@ void hgTest()
             hgAssert(hgEcsCount<u32>(&ecs) == 1);
             hgAssert(hgEcsCount<u64>(&ecs) == 1);
         }
-
-        hgEcsReset(&ecs);
     }
 
     // Ecs concurrency
@@ -2063,6 +2063,7 @@ void hgTest()
         hgArenaScope(arena);
 
         HgEcs ecs = hgEcsCreate(arena, 256, 4);
+        hgDefer(hgEcsReset(&ecs));
 
         hgEcsRegisterType(&ecs, arena, u32, 256);
         hgEcsRegisterType(&ecs, arena, u64, 256);
@@ -2129,8 +2130,6 @@ void hgTest()
             });
             hgAssert(success);
         }
-
-        hgEcsReset(&ecs);
     }
 
     // Ecs sort
@@ -2139,6 +2138,7 @@ void hgTest()
         hgArenaScope(arena);
 
         HgEcs ecs = hgEcsCreate(arena, 256, 4);
+        hgDefer(hgEcsReset(&ecs));
 
         hgEcsRegisterType(&ecs, arena, u32, 256);
         hgEcsRegisterType(&ecs, arena, u64, 256);
@@ -2285,8 +2285,6 @@ void hgTest()
 
             hgEcsReset(&ecs);
         }
-
-        hgEcsReset(&ecs);
     }
 
     // HgEcs serialization
@@ -2298,6 +2296,7 @@ void hgTest()
 
         {
             HgEcs ecs = hgEcsCreate(arena, 128, 4);
+            hgDefer(hgEcsReset(&ecs));
 
             hgEcsRegisterType(&ecs, arena, HgNode, 128);
             hgEcsRegisterType(&ecs, arena, u32, 128);
@@ -2317,12 +2316,11 @@ void hgTest()
             hgNodeAddChild(&ecs, root, a);
 
             scene = hgEcsSerialize(arena, &ecs, root);
-
-            hgEcsReset(&ecs);
         }
 
         {
             HgEcs ecs = hgEcsCreate(arena, 128, 4);
+            hgDefer(hgEcsReset(&ecs));
 
             hgEcsRegisterType(&ecs, arena, HgNode, 128);
             hgEcsRegisterType(&ecs, arena, u32, 128);
@@ -2360,8 +2358,6 @@ void hgTest()
 
             hgAssert(hgEcsHas<u32>(&ecs, b));
             hgAssert(*hgEcsGet<u32>(&ecs, b) == 42);
-
-            hgEcsReset(&ecs);
         }
     }
 
@@ -2371,6 +2367,7 @@ void hgTest()
         hgArenaScope(arena);
 
         HgEcs ecs = hgEcsCreate(arena, 128, 4);
+        hgDefer(hgEcsReset(&ecs));
 
         hgEcsRegisterType(&ecs, arena, HgNode, 128);
 
@@ -2450,8 +2447,6 @@ void hgTest()
 
             hgEcsDespawn(&ecs, b);
         }
-
-        hgEcsReset(&ecs);
     }
 
     printf("HurdyGurdy: Tests Complete in %fms\n", hgClockTick(&timer) * 1000.0f);

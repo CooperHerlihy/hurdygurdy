@@ -8,6 +8,7 @@
 int main()
 {
     hgInit(nullptr);
+    hgDefer(hgDeinit());
 
     hgTest();
 
@@ -15,17 +16,22 @@ int main()
     hgArenaScope(arena);
 
     HgWindow window = hgWindowCreate("Hg Noise Test", 1200, 800, nullptr);
+    hgDefer(hgWindowDestroy(window));
 
     u32 width = 0;
     u32 height = 0;
 
     HgGpuImage depthImage;
     HgGpuView depthView;
+    hgDefer(hgGpuImageDestroy(depthImage));
+    hgDefer(hgGpuViewDestroy(depthView));
 
     hgSpritesInit(hgWindowImageFormat(window), HgFormat_d32_sfloat);
+    hgDefer(hgSpritesDeinit());
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
+    hgDefer(ImGui::DestroyContext());
 
     ImGui::StyleColorsDark();
     ImGuiIO& io = ImGui::GetIO();
@@ -34,6 +40,7 @@ int main()
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
     hgImGuiInit(window, hgWindowImageFormat(window), HgFormat_d32_sfloat);
+    hgDefer(hgImGuiDeinit());
 
     HgBinaryHandle noiseShaderHandle = hgAssetLoad<HgBinary>("build/noise.comp.spv");
 
@@ -48,8 +55,10 @@ int main()
         noiseHeight,
         HgFormat_r8g8b8a8_unorm,
         HgGpuImageUsage_storage | HgGpuImageUsage_sampled);
+    hgDefer(hgGpuImageDestroy(noiseTex->image));
 
     noiseTex->view = hgGpuViewCreate(noiseTex->image, HgGpuAspect_color, HgGpuFilter_nearest);
+    hgDefer(hgGpuViewDestroy(noiseTex->view));
 
     u32 noiseSeed = std::random_device{}();
     u32 noiseScaleBegin = 4;
@@ -67,14 +76,13 @@ int main()
     };
 
     HgBinary* noiseShaderCode = hgAssetGet(noiseShaderHandle);
-    HgGpuPipeline noisePipeline = hgGpuPipelineCreateCompute(
-        sizeof(NoisePush),
-        (u8*)noiseShaderCode->data,
-        noiseShaderCode->size);
+    HgGpuPipeline noisePipeline = hgGpuPipelineCreateCompute(sizeof(NoisePush), (u8*)noiseShaderCode->data, noiseShaderCode->size);
+    hgDefer(hgGpuPipelineDestroy(noisePipeline));
 
     hgAssetUnload(noiseShaderHandle);
 
     HgEcs ecs = hgEcsCreate(arena, 128, 16);
+    hgDefer(hgEcsReset(&ecs));
 
     hgEcsRegisterType(&ecs, arena, HgCamera, 8);
     hgEcsRegisterType(&ecs, arena, HgTransform, 128);
@@ -220,23 +228,5 @@ int main()
 
 quit:
     hgGpuWaitIdle();
-
-    hgEcsReset(&ecs);
-
-    hgGpuPipelineDestroy(noisePipeline);
-
-    hgGpuViewDestroy(noiseTex->view);
-    hgGpuImageDestroy(noiseTex->image);
-
-    hgImGuiDeinit();
-    ImGui::DestroyContext();
-
-    hgSpritesDeinit();
-
-    hgGpuViewDestroy(depthView);
-    hgGpuImageDestroy(depthImage);
-    hgWindowDestroy(window);
-
-    hgDeinit();
 }
 

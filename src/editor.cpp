@@ -291,8 +291,12 @@ void drawEditorEntity(HgArena* frame, HgEntity e)
 
     if (ImGui::TreeNodeEx(name, ImGuiTreeNodeFlags_DefaultOpen))
     {
+        hgDefer(ImGui::TreePop());
+
         if (ImGui::BeginPopupContextItem())
         {
+            hgDefer(ImGui::EndPopup());
+
             if (ImGui::MenuItem("Destroy"))
             {
                 hgNodeDestroy(&ecs, e);
@@ -331,8 +335,6 @@ void drawEditorEntity(HgArena* frame, HgEntity e)
 
                 ImGui::EndPopup();
             }
-
-            ImGui::EndPopup();
         }
 
         ImGuiTreeNodeFlags componentFlags = ImGuiTreeNodeFlags_DefaultOpen;
@@ -415,8 +417,6 @@ void drawEditorEntity(HgArena* frame, HgEntity e)
             drawEditorEntity(frame, child);
             child = next;
         }
-
-        ImGui::TreePop();
     }
 }
 
@@ -589,15 +589,21 @@ void drawUI(HgArena* frame)
 
 int main()
 {
+    hgDefer(hgDebug("Exited successfully\n"));
+
     hgInit(nullptr);
+    hgDefer(hgDeinit());
+
     hgTest();
 
     HgArena* arena = hgScratch();
     hgArenaScope(arena);
 
     init(arena);
+    hgDefer(deinit());
 
     HgAudioPlayer audioPlayer = hgAudioPlayerCreate(HgAudioFormat_f32, 8000, 1);
+    hgDefer(hgAudioPlayerDestroy(audioPlayer));
 
     f32 audioBase[8000];
     for (u32 i = 0; i < 8000; ++i)
@@ -696,13 +702,6 @@ int main()
         cpuDelta += hgClockTick(&cpuClock);
         render();
     }
-    hgAudioPlayerDestroy(audioPlayer);
-
     hgGpuWaitIdle();
-
-    deinit();
-
-    hgDeinit();
-    hgDebug("Exited successfully\n");
 }
 

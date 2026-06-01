@@ -155,6 +155,38 @@ typedef double_t f64;
  */
 #define hgMacroConcat(x, y) hgMacroConcatInternal(x, y)
 
+/**
+ * A template to defer code execution until end of scope
+ */
+template<typename F>
+struct HgDefer {
+    /**
+     * The function to execute
+     */
+    F fn;
+
+    /**
+     * Prepare the function to defer
+     */
+    HgDefer(F fnVal) : fn(fnVal) {}
+
+    /**
+     * Execute the function
+     */
+    ~HgDefer()
+    {
+        fn();
+    }
+};
+
+/**
+ * Defers a piece of code until the end of the scope
+ *
+ * Parameters
+ * - code The code to run, may be placed inside braces or not
+ */
+#define hgDefer(code) [[maybe_unused]] HgDefer hgMacroConcat(hgDefer_, __LINE__){[&]{code;}};
+
 #ifdef HG_LOGGING
 
 /**

@@ -1584,6 +1584,7 @@ void hgGpuBufferWrite(HgGpuBuffer dst, u64 offset, const void* src, u64 size)
     }
 
     HgGpuBuffer stage = hgGpuBufferCreate(size, HgGpuBufferUsage_transferSrc, HgGpuMemoryUsage_stagingWrite);
+    hgDefer(hgGpuBufferDestroy(stage));
     hgGpuBufferWrite(stage, 0, src, size);
 
     HgGpuCmd* cmd = hgGpuCmdBegin();
@@ -1598,8 +1599,6 @@ void hgGpuBufferWrite(HgGpuBuffer dst, u64 offset, const void* src, u64 size)
 
     dstData->lastStage = HgGpuStage_transfer;
     dstData->lastAccess = HgGpuAccess_transferWrite;
-
-    hgGpuBufferDestroy(stage);
 }
 
 void hgGpuBufferRead(void* dst, HgGpuBuffer src, u64 offset, u64 size)
@@ -1619,6 +1618,7 @@ void hgGpuBufferRead(void* dst, HgGpuBuffer src, u64 offset, u64 size)
     }
 
     HgGpuBuffer stage = hgGpuBufferCreate(size, HgGpuBufferUsage_transferDst, HgGpuMemoryUsage_stagingRead);
+    hgDefer(hgGpuBufferDestroy(stage));
 
     HgGpuCmd* cmd = hgGpuCmdBegin();
 
@@ -1634,8 +1634,6 @@ void hgGpuBufferRead(void* dst, HgGpuBuffer src, u64 offset, u64 size)
 
     srcData->lastStage = HgGpuStage_transfer;
     srcData->lastAccess = HgGpuAccess_transferRead;
-
-    hgGpuBufferDestroy(stage);
 }
 
 HgGpuImage hgGpuImageCreate(u32 width, u32 height, HgFormat format, HgGpuImageUsageFlags usage)
@@ -1850,6 +1848,7 @@ void hgGpuImageWrite(HgGpuView dst, const void* src)
              * hgFormatToSize(dstData->image->format);
 
     HgGpuBuffer stage = hgGpuBufferCreate(size, HgGpuBufferUsage_transferSrc, HgGpuMemoryUsage_stagingWrite);
+    hgDefer(hgGpuBufferDestroy(stage));
     hgGpuBufferWrite(stage, 0, src, size);
 
     HgGpuCmd* cmd = hgGpuCmdBegin();
@@ -1893,8 +1892,6 @@ void hgGpuImageWrite(HgGpuView dst, const void* src)
     dstData->lastStage = HgGpuStage_transfer;
     dstData->lastAccess = HgGpuAccess_transferWrite;
     dstData->lastLayout = HgGpuLayout_transferDst;
-
-    hgGpuBufferDestroy(stage);
 }
 
 void hgGpuImageWriteCubemap(HgGpuView dst, const void* src)
@@ -1908,6 +1905,7 @@ void hgGpuImageWriteCubemap(HgGpuView dst, const void* src)
     u64 size = dstData->image->width * dstData->image->height * hgFormatToSize(dstData->image->format);
 
     HgGpuBuffer buffer = hgGpuBufferCreate(size * 4 * 3, HgGpuBufferUsage_transferSrc, HgGpuMemoryUsage_stagingWrite);
+    hgDefer(hgGpuBufferDestroy(buffer));
 
     hgGpuBufferWrite(buffer, 0, src, size * 4 * 3);
 
@@ -1916,6 +1914,7 @@ void hgGpuImageWriteCubemap(HgGpuView dst, const void* src)
         dstData->image->height * 3,
         dstData->image->format,
         HgGpuImageUsage_transferDst | HgGpuImageUsage_transferSrc);
+    hgDefer(hgGpuImageDestroy(stage));
 
     HgGpuImageData* stageData = imageGet(stage);
 
@@ -2038,9 +2037,6 @@ void hgGpuImageWriteCubemap(HgGpuView dst, const void* src)
     dstData->lastStage = HgGpuStage_transfer;
     dstData->lastAccess = HgGpuAccess_transferWrite;
     dstData->lastLayout = HgGpuLayout_transferDst;
-
-    hgGpuImageDestroy(stage);
-    hgGpuBufferDestroy(buffer);
 }
 
 void hgGpuImageRead(void* dst, HgGpuView src)
@@ -2055,6 +2051,7 @@ void hgGpuImageRead(void* dst, HgGpuView src)
              * hgFormatToSize(srcData->image->format);
 
     HgGpuBuffer stage = hgGpuBufferCreate(size, HgGpuBufferUsage_transferDst, HgGpuMemoryUsage_stagingRead);
+    hgDefer(hgGpuBufferDestroy(stage));
 
     HgGpuCmd* cmd = hgGpuCmdBegin();
 
@@ -2102,8 +2099,6 @@ void hgGpuImageRead(void* dst, HgGpuView src)
     srcData->lastStage = HgGpuStage_transfer;
     srcData->lastAccess = HgGpuAccess_transferRead;
     srcData->lastLayout = HgGpuLayout_transferSrc;
-
-    hgGpuBufferDestroy(stage);
 }
 
 void hgGpuImageGenMipmaps(HgGpuView dst)
@@ -2245,6 +2240,8 @@ HgGpuPipeline hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* con
 
     VkShaderModule vertexShader = createShaderModule(config->vertexShader, config->vertexShaderSize);
     VkShaderModule fragmentShader = createShaderModule(config->fragmentShader, config->fragmentShaderSize);
+    hgDefer(vkDestroyShaderModule(vk.device, vertexShader, nullptr));
+    hgDefer(vkDestroyShaderModule(vk.device, fragmentShader, nullptr));
 
     VkPipelineShaderStageCreateInfo shaderStages[2]{};
     shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -2385,8 +2382,6 @@ HgGpuPipeline hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* con
 
     pipelineData->bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
-    vkDestroyShaderModule(vk.device, vertexShader, nullptr);
-    vkDestroyShaderModule(vk.device, fragmentShader, nullptr);
     return pipeline;
 }
 
@@ -2413,6 +2408,7 @@ HgGpuPipeline hgGpuPipelineCreateCompute(u32 pushSize, const u8* shaderCode, u64
         hgError("Could not create VkPipelineLayout: %s\n", vkResultToStr(layoutResult));
 
     VkShaderModule computeShader = createShaderModule(shaderCode, shaderCodeSize);
+    hgDefer(vkDestroyShaderModule(vk.device, computeShader, nullptr));
 
     VkComputePipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -2431,7 +2427,6 @@ HgGpuPipeline hgGpuPipelineCreateCompute(u32 pushSize, const u8* shaderCode, u64
 
     pipelineData->bindPoint = VK_PIPELINE_BIND_POINT_COMPUTE;
 
-    vkDestroyShaderModule(vk.device, computeShader, nullptr);
     return pipeline;
 }
 
@@ -2474,6 +2469,7 @@ void hgGpuCmdEnd(HgGpuCmd* cmd)
 
     VkFence fence = nullptr;
     vkCreateFence(vk.device, &fenceInfo, nullptr, &fence);
+    hgDefer(vkDestroyFence(vk.device, fence, nullptr));
 
     VkSubmitInfo submit{};
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -2484,7 +2480,6 @@ void hgGpuCmdEnd(HgGpuCmd* cmd)
     vkWaitForFences(vk.device, 1, &fence, VK_TRUE, UINT64_MAX);
 
     vkFreeCommandBuffers(vk.device, vk.cmdPool, 1, (VkCommandBuffer*)&cmd);
-    vkDestroyFence(vk.device, fence, nullptr);
 }
 
 void hgGpuBindPipeline(HgGpuCmd* cmd, HgGpuPipeline pipeline)
@@ -3405,10 +3400,11 @@ HgWindow hgWindowCreate(const char* title, u32 width, u32 height, const HgWindow
     {
         int modeCount = 0;
         SDL_DisplayMode** modes = SDL_GetFullscreenDisplayModes(SDL_GetPrimaryDisplay(), &modeCount);
+        hgDefer(SDL_free(modes));
+
         width = modes[0]->w;
         height = modes[0]->h;
         flags |= SDL_WINDOW_FULLSCREEN;
-        SDL_free(modes);
     }
 
     data->sdlWindow = SDL_CreateWindow(title, width, height, flags);
