@@ -28,19 +28,8 @@
 #define HG_AUDIO_HPP
 
 #include "hg_core.hpp"
-#include "hg_memory.hpp"
-#include "hg_templates.hpp"
-#include "hg_ecs.hpp"
-
-/**
- * Initialize the audio system
- */
-void hgAudioInit(HgArena* arena, u32 maxPlayers);
-
-/**
- * Deinitialize the audio system
- */
-void hgAudioDeinit();
+#include "hg_containers.hpp"
+#include "hg_assets.hpp"
 
 /**
  * An audio player
@@ -138,27 +127,37 @@ void hgAssetLoadImpl(HgAssetData<HgAudio>* data);
 template<>
 void hgAssetUnloadImpl(HgAssetData<HgAudio>* data);
 
-/**
- * An audio source component
- */
-struct HgAudioSource {
-    /**
-     * The audio to play from
-     */
-    HgAudioHandle audio;
-    /**
-     * The current audio position
-     */
-    u64 position;
-    /**
-     * Whether the source should repeat playing
-     */
-    bool repeat;
-};
-
-/**
- * Update all audio sources, playing sound if needed
- */
-void hgAudioUpdate(HgEcs* ecs, HgEntity listener);
+// /**
+//  * Initialize the audio system
+//  */
+// void hgAudioInit(HgArena* arena);
+//
+// /**
+//  * Deinitialize the audio system
+//  */
+// void hgAudioDeinit();
+//
+// /**
+//  * An audio source component
+//  */
+// struct HgAudioSource {
+//     /**
+//      * The audio to play from
+//      */
+//     HgAudioHandle audio;
+//     /**
+//      * The current audio position
+//      */
+//     u64 position;
+//     /**
+//      * Whether the source should repeat playing
+//      */
+//     bool repeat;
+// };
+//
+// /**
+//  * Update all audio sources, playing sound if needed
+//  */
+// void hgAudioUpdate(HgEcs* ecs, HgEntity listener);
 
 #endif // HG_AUDIO_HPP

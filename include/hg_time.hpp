@@ -29,7 +29,7 @@
 
 #include "hg_core.hpp"
 #include "hg_memory.hpp"
-#include "hg_strings.hpp"
+#include "hg_containers.hpp"
 
 /**
  * A high precision clock for timers and game deltas

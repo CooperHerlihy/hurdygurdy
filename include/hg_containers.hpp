@@ -24,8 +24,8 @@
  * =============================================================================
  */
 
-#ifndef HG_TEMPLATES_HPP
-#define HG_TEMPLATES_HPP
+#ifndef HG_CONTAINERS_HPP
+#define HG_CONTAINERS_HPP
 
 #include "hg_core.hpp"
 #include "hg_memory.hpp"
@@ -495,6 +495,15 @@ struct HgHandle {
 };
 
 /**
+ * Hash map hashing for void*
+ */
+template<>
+constexpr u64 hgHash(HgHandle val)
+{
+    return hgHash(val.id);
+}
+
+/**
  * The number of bits in a handle used for the index
  */
 static constexpr u32 hgHandleIdxBits = 24;
@@ -528,20 +537,13 @@ constexpr HgHandle hgHandleNextGeneration(HgHandle handle)
  */
 constexpr bool hgNullHandle(HgHandle handle)
 {
-    return handle.id == HgHandle{}.id;
+    return handle.id == (u32)-1;
 }
 
 /**
- * An object pool
+ * An index pool
  */
-template<typename T>
 struct HgPool {
-    static_assert(std::is_trivially_destructible_v<T>);
-
-    /**
-     * The values stored in the pool
-     */
-    T* vals;
     /**
      * The handle free list
      */
@@ -555,128 +557,538 @@ struct HgPool {
      */
     u32 capacity;
 };
+
+/**
+ * Create a new object pool
+ */
+HgPool hgPoolCreate(HgArena* arena, u32 capacity);
 
 /**
  * Reset an object pool
  */
-template<typename T>
-constexpr void hgPoolReset(HgPool<T>* pool)
-{
-    hgAssert(pool != nullptr);
-
-    for (u32 i = 0; i < pool->capacity; ++i)
-    {
-        pool->freeList[i] = {i + 1};
-    }
-    pool->next = {0};
-}
+void hgPoolReset(HgPool* pool);
 
 /**
- * Create a new object pool
+ * Allocate an index from the pool
  */
-template<typename T>
-HgPool<T> hgPoolCreate(HgArena* arena, u32 capacity)
-{
-    hgAssert(arena != nullptr);
-    hgAssert(capacity > 0);
-
-    HgPool<T> pool{};
-    pool.vals = hgAlloc<T>(arena, capacity);
-    pool.freeList = hgAlloc<HgHandle>(arena, capacity);
-    pool.capacity = capacity;
-    hgPoolReset(&pool);
-
-    return pool;
-}
-
-/**
- * Allocate an object from a pool
- *
- * Note, does not initialize the object
- */
-template<typename T>
-constexpr HgHandle hgPoolAlloc(HgPool<T>* pool)
-{
-    hgAssert(pool != nullptr);
-    hgAssert(hgHandleIdx(pool->next) < pool->capacity);
-
-    HgHandle handle = pool->next;
-    pool->next = pool->freeList[hgHandleIdx(handle)];
-    pool->freeList[hgHandleIdx(handle)] = handle;
-    return handle;
-}
+HgHandle hgPoolAlloc(HgPool* pool);
 
 /**
  * Returns whether a handle is alive in the pool
  */
-template<typename T>
-constexpr bool hgPoolAlive(HgPool<T>* pool, HgHandle handle)
-{
-    return hgHandleIdx(handle) < pool->capacity && pool->freeList[hgHandleIdx(handle)].id == handle.id;
-}
+bool hgPoolAlive(HgPool* pool, HgHandle handle);
 
 /**
- * Free an object back into a pool
+ * Free an index back into a pool
  *
  * Note, the object handle must be valid and alive
  */
-template<typename T>
-constexpr void hgPoolFree(HgPool<T>* pool, HgHandle handle)
-{
-    hgAssert(hgPoolAlive(pool, handle));
-    pool->freeList[hgHandleIdx(handle)] = pool->next;
-    pool->next = hgHandleNextGeneration(handle);
-}
+void hgPoolFree(HgPool* pool, HgHandle handle);
 
 /**
- * Get an object from a pool
+ * A span view into a string
  */
-template<typename T>
-constexpr T* hgPoolGet(HgPool<T>* pool, HgHandle handle)
-{
-    hgAssert(hgPoolAlive(pool, handle));
-    return &pool->vals[hgHandleIdx(handle)];
-}
+struct HgStringView {
+    /**
+     * The characters
+     */
+    const char* chars;
+    /**
+     * The number of characters;
+     */
+    u64 length;
 
-/**
- * A pool of indices
- */
-typedef HgPool<void> HgIndexPool;
+    /**
+     * Construct uninitialized
+     */
+    HgStringView() = default;
 
-/**
- * A pool of indices
- */
-template<>
-struct HgPool<void> {
     /**
-     * The handle free list
+     * Create a string view from a pointer and length
      */
-    HgHandle* freeList;
+    constexpr HgStringView(const char* charsVal, u64 lengthVal)
+        : chars{charsVal}, length{lengthVal} {}
+
     /**
-     * The next handle in the free list
+     * Create a string view from begin and end pointers
      */
-    HgHandle next;
+    constexpr HgStringView(const char* charsBegin, const char* charsEnd)
+        : chars{charsBegin}, length{(uptr)(charsEnd - charsBegin)}
+    {
+        hgAssert(charsBegin <= charsEnd);
+    }
+
     /**
-     * The capacity of the pool
+     * Implicit constexpr conversion from c string
+     *
+     * Potentially dangerous, c string should be at most 4096 chars
      */
-    u32 capacity;
+    constexpr HgStringView(const char* cStr) : chars{cStr}, length{0}
+    {
+        if (cStr == nullptr)
+            return;
+
+        while (cStr[length] != '\0')
+        {
+            ++length;
+            hgAssert(length <= 4096);
+        }
+    }
+
+    /**
+     * Convenience to index into the array with debug bounds checking
+     */
+    constexpr const char& operator[](u64 index) const
+    {
+        hgAssert(chars != nullptr);
+        hgAssert(index < length);
+        return chars[index];
+    }
 };
 
 /**
- * Create a new object pool
+ * Hash map hashing for strings
  */
 template<>
-inline HgPool<void> hgPoolCreate(HgArena* arena, u32 capacity)
+constexpr u64 hgHash(HgStringView str)
 {
-    hgAssert(arena != nullptr);
-    hgAssert(capacity > 0);
-
-    HgPool<void> pool{};
-    pool.freeList = hgAlloc<HgHandle>(arena, capacity);
-    pool.capacity = capacity;
-    hgPoolReset(&pool);
-
-    return pool;
+    u64 ret = 0;
+    u64 mult = 1;
+    for (u32 i = 0; i < str.length; ++i)
+    {
+        ret += (u64)str[i] * mult;
+        mult *= 257;
+    }
+    return ret;
 }
 
-#endif // HG_TEMPLATES_HPP
+/**
+ * Compare string views
+ */
+constexpr bool operator==(HgStringView lhs, HgStringView rhs)
+{
+    return lhs.length == rhs.length && (lhs.length == 0 || memcmp(lhs.chars, rhs.chars, lhs.length) == 0);
+}
+
+/**
+ * Compare string views
+ */
+constexpr bool operator!=(HgStringView lhs, HgStringView rhs)
+{
+    return !(lhs == rhs);
+}
+
+/**
+ * Create a null terminated string for C interop
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - str The string to create from
+ */
+char* hgCString(HgArena* arena, HgStringView str);
+
+/**
+ * Hash map hashing for C string
+ */
+template<>
+constexpr u64 hgHash(const char* str)
+{
+    return hgHash(HgStringView{str});
+}
+
+/**
+ * A dynamically allocated owning string
+ */
+struct HgStringOwner {
+    /**
+     * The string characters
+     */
+    const char* chars;
+    /**
+     * The length of the string
+     */
+    u64 length;
+
+    /**
+     * Access using the index operator
+     */
+    constexpr const char& operator[](u64 index) const
+    {
+        hgAssert(index < length);
+        return chars[index];
+    }
+
+    /**
+     * Implicit converts to a string view
+     */
+    constexpr operator HgStringView() const
+    {
+        return {chars, length};
+    }
+};
+
+/**
+ * Hash map hashing for HgStringOwner
+ */
+template<>
+constexpr u64 hgHash(HgStringOwner str)
+{
+    return hgHash(HgStringView{str});
+}
+
+/**
+ * Compare string owners
+ */
+inline bool operator==(const HgStringOwner& lhs, const HgStringOwner& rhs)
+{
+    return HgStringView{lhs} == HgStringView{rhs};
+}
+
+/**
+ * Compare string owners
+ */
+inline bool operator!=(const HgStringOwner& lhs, const HgStringOwner& rhs)
+{
+    return !(lhs == rhs);
+}
+
+/**
+ * A string builder using arenas
+ */
+struct HgStringBuilder {
+    /**
+     * The string data
+     */
+    char* chars;
+    /**
+     * The number of characters currently in the string
+     */
+    u64 length;
+
+    /**
+     * Access using the index operator
+     */
+    constexpr char& operator[](u64 index) const
+    {
+        hgAssert(index < length);
+        return chars[index];
+    }
+
+    /**
+     * Implicit converts to a string view
+     */
+    constexpr operator HgStringView() const
+    {
+        return {chars, length};
+    }
+};
+
+/**
+ * Hash map hashing for HgStringBuilder
+ */
+template<>
+constexpr u64 hgHash(HgStringBuilder str)
+{
+    return hgHash(HgStringView{str});
+}
+
+/**
+ * Compare string builders
+ */
+inline bool operator==(const HgStringBuilder& lhs, const HgStringBuilder& rhs)
+{
+    return HgStringView{lhs} == HgStringView{rhs};
+}
+
+/**
+ * Compare string builders
+ */
+inline bool operator!=(const HgStringBuilder& lhs, const HgStringBuilder& rhs)
+{
+    return !(lhs == rhs);
+}
+
+/**
+ * Creates a new string copied from an existing string
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - init The initial string to copy from
+ */
+HgStringBuilder hgStringCopy(HgArena* arena, HgStringView str);
+
+/**
+ * Create a formatted string : TODO
+ *
+ * Format specifiers
+ * - int (i64): "{i}"
+ * - unsigned int (u64): "{u}"
+ * - hexadecimal (i64): "{x}"
+ * - float with 6 decimals (f64): "{f}"
+ * - float with N decimals (f64): "{fN}"
+ * - char (char): "{c}"
+ * - string (HgStringView): "{s}"
+ * - c string (char*): "{cstr}"
+ *
+ * Use {{ and }} to escape the format specifier
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - fmt The format string
+ * - ... The format parameters
+ */
+HgStringBuilder hgStringFormat(HgArena* arena, HgStringView fmt, ...);
+
+/**
+ * Copies another string into the string at index
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - dst The string to insert into
+ * - idx The index into dst
+ * - src The string to copy from
+ */
+void hgStringInsert(HgArena* arena, HgStringBuilder* dst, u64 idx, HgStringView src);
+
+/**
+ * Copies another string to the end of the string
+ */
+inline void hgStringAppend(HgArena* arena, HgStringBuilder* dst, HgStringView src)
+{
+    hgStringInsert(arena, dst, dst->length, src);
+}
+
+/**
+ * Copies another string to the beginning of the string
+ */
+inline void hgStringPrepend(HgArena* arena, HgStringBuilder* dst, HgStringView src)
+{
+    hgStringInsert(arena, dst, 0, src);
+}
+
+/**
+ * Copies a character into the string at index
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - dst The string to insert into
+ * - idx The index into dst
+ * - c The character to insert
+ */
+inline void hgStringInsertc(HgArena* arena, HgStringBuilder* dst, u64 idx, char c)
+{
+    hgStringInsert(arena, dst, idx, {&c, 1});
+}
+
+/**
+ * Copies another string to the end of the string
+ */
+inline void hgStringAppendc(HgArena* arena, HgStringBuilder* dst, char c)
+{
+    hgStringInsertc(arena, dst, dst->length, c);
+}
+
+/**
+ * Copies another string to the beginning of the string
+ */
+inline void hgStringPrependc(HgArena* arena, HgStringBuilder* dst, char c)
+{
+    hgStringInsertc(arena, dst, 0, c);
+}
+
+/**
+ * Allocate a new HgString
+ */
+HgStringOwner hgStringAlloc(HgStringView data);
+
+/**
+ * Free an HgString
+ */
+void hgStringFree(HgStringOwner* str);
+
+/**
+ * Check whether a character is whitespace (space, tab, or newline)
+ */
+bool hgIsWhitespace(char c);
+
+/**
+ * Check whether a character is a base 10 numeral (0-9)
+ */
+bool hgIsNumeral(char c);
+
+/**
+ * Check whether a string is a base 10 integer
+ */
+bool hgIsInteger(HgStringView str);
+
+/**
+ * Check whether a string is a base 10 floating point number
+ */
+bool hgIsFloat(HgStringView str);
+
+/**
+ * Create an integer from a base 10 string
+ */
+i64 hgStringToInteger(HgStringView str);
+
+/**
+ * Create a float from a base 10 string
+ */
+f64 hgStringToFloat(HgStringView str);
+
+/**
+ * Create a base 10 string from an integer
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - num The integer number to create from
+ */
+HgStringBuilder hgIntegerToString(HgArena* arena, i64 num);
+
+/**
+ * Create a base 10 string from an integer
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - num The integer number to create from
+ * - decimalCount The number of trailing decimal digits
+ */
+HgStringBuilder hgFloatToString(HgArena* arena, f64 num, u32 decimalCount);
+
+// base 2 and 16 string-int conversions : TODO
+// arbitrary base string-int conversions : TODO?
+
+/**
+ * An error contained in the json
+ */
+struct HgJsonError {
+    /**
+     * The next error
+     */
+    HgJsonError* next;
+    /**
+     * The error message
+     */
+    HgStringView msg;
+};
+
+/**
+ * A node in the json file
+ */
+struct HgJsonNode;
+
+/**
+ * The types contained in nodes
+ */
+enum HgJsonType : u32 {
+    HgJsonType_none = 0,
+    HgJsonType_struct,
+    HgJsonType_field,
+    HgJsonType_array,
+    HgJsonType_string,
+    HgJsonType_float,
+    HgJsonType_integer,
+    HgJsonType_bool,
+};
+
+/**
+ * A field in a struct
+ */
+struct HgJsonField {
+    /**
+     * The next field
+     */
+    HgJsonField* next;
+    /**
+     * The name of the field
+     */
+    HgStringView name;
+    /**
+     * The value stored in the field
+     */
+    HgJsonNode* value;
+};
+
+/**
+ * A struct contained in the json
+ */
+struct HgJsonStruct {
+    /**
+     * The first field
+     */
+    HgJsonField* fields;
+};
+
+/**
+ * An element in an array
+ */
+struct HgJsonElem {
+    /**
+     * The next element
+     */
+    HgJsonElem* next;
+    /**
+     * The value stored in the element
+     */
+    HgJsonNode* value;
+};
+
+/**
+ * An array contained in the json
+ */
+struct HgJsonArray {
+    /**
+     * The first element
+     */
+    HgJsonElem* elems;
+};
+
+/**
+ * A node in the json file
+ */
+struct HgJsonNode {
+    /**
+     * The node's type
+     */
+    HgJsonType type;
+    /**
+     * The value in the node
+     */
+    union {
+        HgJsonStruct jstruct;
+        HgJsonField field;
+        HgJsonArray array;
+        HgStringView string;
+        f64 floating;
+        i64 integer;
+        bool boolean;
+    };
+};
+
+/**
+ * A parsed Json file
+ */
+struct HgJson {
+    /**
+     * The successfully parsed nodes
+     */
+    HgJsonNode* file;
+    /**
+     * The errors found
+     */
+    HgJsonError* errors;
+};
+
+/**
+ * Parses json text into a tree
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - text The json text to parse
+ *
+ * Returns
+ * - The parsed json, errors contained inside
+ */
+HgJson hgParseJson(HgArena* arena, HgStringView text);
+
+#endif // HG_CONTAINERS_HPP

@@ -852,6 +852,53 @@ next:
     hgError("No scratch arena available\n");
 }
 
+HgPool hgPoolCreate(HgArena* arena, u32 capacity)
+{
+    hgAssert(arena != nullptr);
+    hgAssert(capacity > 0);
+
+    HgPool pool{};
+    pool.freeList = hgAlloc<HgHandle>(arena, capacity);
+    pool.capacity = capacity;
+    hgPoolReset(&pool);
+
+    return pool;
+}
+
+void hgPoolReset(HgPool* pool)
+{
+    hgAssert(pool != nullptr);
+
+    for (u32 i = 0; i < pool->capacity; ++i)
+    {
+        pool->freeList[i] = {i + 1};
+    }
+    pool->next = {0};
+}
+
+HgHandle hgPoolAlloc(HgPool* pool)
+{
+    hgAssert(pool != nullptr);
+    hgAssert(hgHandleIdx(pool->next) < pool->capacity);
+
+    HgHandle handle = pool->next;
+    pool->next = pool->freeList[hgHandleIdx(handle)];
+    pool->freeList[hgHandleIdx(handle)] = handle;
+    return handle;
+}
+
+bool hgPoolAlive(HgPool* pool, HgHandle handle)
+{
+    return hgHandleIdx(handle) < pool->capacity && pool->freeList[hgHandleIdx(handle)].id == handle.id;
+}
+
+void hgPoolFree(HgPool* pool, HgHandle handle)
+{
+    hgAssert(hgPoolAlive(pool, handle));
+    pool->freeList[hgHandleIdx(handle)] = pool->next;
+    pool->next = hgHandleNextGeneration(handle);
+}
+
 char* hgCString(HgArena* arena, HgStringView str)
 {
     hgAssert(arena != nullptr);
@@ -1839,12 +1886,13 @@ struct HgMutexData {
     std::atomic_bool acquired;
 };
 
-static HgPool<HgMutexData> mutexPool{};
+static HgPool mutexPool{};
+static HgMutexData* mutices = nullptr;
 
 HgMutex hgMutexCreate()
 {
     HgHandle handle = hgPoolAlloc(&mutexPool);
-    new (hgPoolGet(&mutexPool, handle)) HgMutexData{false};
+    new (&mutices[hgHandleIdx(handle)]) HgMutexData{false};
     return {handle};
 }
 
@@ -1855,7 +1903,8 @@ void hgMutexDestroy(HgMutex mtx)
 
 void hgMutexAcquire(HgMutex mtx)
 {
-    HgMutexData* data = hgPoolGet(&mutexPool, mtx.handle);
+    hgAssert(hgPoolAlive(&mutexPool, mtx.handle));
+    HgMutexData* data = &mutices[hgHandleIdx(mtx.handle)];
     bool acquired = false;
     while (!data->acquired.compare_exchange_weak(acquired, true))
     {
@@ -1866,14 +1915,16 @@ void hgMutexAcquire(HgMutex mtx)
 
 bool hgMutexTryAcquire(HgMutex mtx)
 {
-    HgMutexData* data = hgPoolGet(&mutexPool, mtx.handle);
+    hgAssert(hgPoolAlive(&mutexPool, mtx.handle));
+    HgMutexData* data = &mutices[hgHandleIdx(mtx.handle)];
     bool acquired = false;
     return data->acquired.compare_exchange_weak(acquired, true);
 }
 
 void hgMutexRelease(HgMutex mtx)
 {
-    HgMutexData* data = hgPoolGet(&mutexPool, mtx.handle);
+    hgAssert(hgPoolAlive(&mutexPool, mtx.handle));
+    HgMutexData* data = &mutices[hgHandleIdx(mtx.handle)];
     hgAssert(data->acquired);
     data->acquired.store(false);
 }
@@ -1882,12 +1933,13 @@ struct HgFenceData {
     std::atomic<u32> counter{0};
 };
 
-static HgPool<HgFenceData> fencePool{};
+static HgPool fencePool{};
+static HgFenceData* fences = nullptr;
 
 HgFence hgFenceCreate()
 {
     HgHandle handle = hgPoolAlloc(&fencePool);
-    new (hgPoolGet(&fencePool, handle)) HgFenceData{0};
+    new (&fences[hgHandleIdx(handle)]) HgFenceData{false};
     return {handle};
 }
 
@@ -1899,21 +1951,25 @@ void hgFenceDestroy(HgFence fence)
 
 void hgFenceAttach(HgFence fence, u32 count)
 {
-    hgPoolGet(&fencePool, fence.handle)->counter.fetch_add(count);
+    hgAssert(hgPoolAlive(&fencePool, fence.handle));
+    fences[hgHandleIdx(fence.handle)].counter.fetch_add(count);
 }
 
 void hgFenceSignal(HgFence fence, u32 count)
 {
-    hgPoolGet(&fencePool, fence.handle)->counter.fetch_sub(count);
+    hgAssert(hgPoolAlive(&fencePool, fence.handle));
+    fences[hgHandleIdx(fence.handle)].counter.fetch_sub(count);
 }
 
 bool hgFenceIsComplete(HgFence fence)
 {
-    return hgPoolGet(&fencePool, fence.handle)->counter.load() == 0;
+    hgAssert(hgPoolAlive(&fencePool, fence.handle));
+    return fences[hgHandleIdx(fence.handle)].counter.load() == 0;
 }
 
 bool hgFenceWait(HgFence fence, f64 timeoutSeconds)
 {
+    hgAssert(hgPoolAlive(&fencePool, fence.handle));
     auto end = std::chrono::steady_clock::now() + std::chrono::duration<f64>(timeoutSeconds);
     while (hgPoolAlive(&fencePool, fence.handle) && !hgFenceIsComplete(fence) && std::chrono::steady_clock::now() < end)
     {
@@ -1924,6 +1980,7 @@ bool hgFenceWait(HgFence fence, f64 timeoutSeconds)
 
 void hgFenceWaitIndefinite(HgFence fence)
 {
+    hgAssert(hgPoolAlive(&fencePool, fence.handle));
     while (hgPoolAlive(&fencePool, fence.handle) && !hgFenceIsComplete(fence))
     {
         _mm_pause();
@@ -1932,8 +1989,10 @@ void hgFenceWaitIndefinite(HgFence fence)
 
 void hgConcurrencyInit(HgArena* arena, u32 maxMutices, u32 maxFences)
 {
-    mutexPool = hgPoolCreate<HgMutexData>(arena, maxMutices);
-    fencePool = hgPoolCreate<HgFenceData>(arena, maxFences);
+    mutexPool = hgPoolCreate(arena, maxMutices);
+    mutices = hgAlloc<HgMutexData>(arena, maxMutices);
+    fencePool = hgPoolCreate(arena, maxFences);
+    fences = hgAlloc<HgFenceData>(arena, maxFences);
 }
 
 void hgConcurrencyDeinit()
@@ -2434,7 +2493,7 @@ HgEcs hgEcsCreate(HgArena* arena, u32 maxEntities, u32 maxComponentTypes)
     hgAssert(arena != nullptr);
 
     HgEcs ecs{};
-    ecs.entities = hgPoolCreate<void>(arena, maxEntities);
+    ecs.entities = hgPoolCreate(arena, maxEntities);
     ecs.components = hgMapCreate<u64, HgComponent>(arena, maxComponentTypes + 1);
     hgEcsReset(&ecs);
     return ecs;
@@ -3784,7 +3843,7 @@ void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 //     return !(lhs == rhs);
 // }
 //
-// void hgAudioInit(HgArena* arena, u32 maxPlayers)
+// void hgAudioInit(HgArena* arena)
 // {
 // }
 //

@@ -290,6 +290,9 @@ struct HgInit {
  * - Resource managers
  * - Windowing/input
  * - Hardware graphics
+ *
+ * Parameters
+ * - init The initialization config, or nullptr for reasonable defaults
  */
 void hgInit(const HgInit* init);
 

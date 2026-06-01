@@ -733,12 +733,16 @@ struct VulkanState {
     VkDescriptorSetLayout bindlessLayout = nullptr;
     VkDescriptorSet bindlessSet = nullptr;
 
-    HgIndexPool descriptorPools[DescriptorType_count];
+    HgPool descriptorPools[DescriptorType_count];
 
-    HgPool<HgGpuBufferData> buffers;
-    HgPool<HgGpuImageData> images;
-    HgPool<HgGpuViewData> views;
-    HgPool<HgGpuPipelineData> pipelines;
+    HgPool bufferPool;
+    HgGpuBufferData* bufferData;
+    HgPool imagePool;
+    HgGpuImageData* imageData;
+    HgPool viewPool;
+    HgGpuViewData* viewData;
+    HgPool pipelinePool;
+    HgGpuPipelineData* pipelineData;
 
     HgMap<SamplerInfo, VkSampler> samplers;
 
@@ -751,29 +755,33 @@ static VulkanState vk{};
 
 static HgGpuBufferData* bufferGet(HgGpuBuffer buffer)
 {
-    return hgPoolGet(&vk.buffers, buffer.handle);
+    hgAssert(hgPoolAlive(&vk.bufferPool, buffer.handle));
+    return &vk.bufferData[hgHandleIdx(buffer.handle)];
 }
 
 static HgGpuImageData* imageGet(HgGpuImage image)
 {
-    return hgPoolGet(&vk.images, image.handle);
+    hgAssert(hgPoolAlive(&vk.imagePool, image.handle));
+    return &vk.imageData[hgHandleIdx(image.handle)];
 }
 
 static HgGpuViewData* viewGet(HgGpuView view)
 {
-    return hgPoolGet(&vk.views, view.handle);
+    hgAssert(hgPoolAlive(&vk.viewPool, view.handle));
+    return &vk.viewData[hgHandleIdx(view.handle)];
 }
 
 static HgGpuPipelineData* pipelineGet(HgGpuPipeline pipeline)
 {
-    return hgPoolGet(&vk.pipelines, pipeline.handle);
+    hgAssert(hgPoolAlive(&vk.pipelinePool, pipeline.handle));
+    return &vk.pipelineData[hgHandleIdx(pipeline.handle)];
 }
 
 struct WindowState {
+    HgPool pool = {};
     u32 windowWidth = 0;
     u32 windowMaxEvents = 0;
     HgWindowData* data = nullptr;
-    HgIndexPool handles = {};
 
     HgMap<SDL_WindowID, HgWindowData*> ids = {};
 
@@ -788,7 +796,7 @@ static WindowState windows{};
 
 static HgWindowData* windowGet(HgWindow window)
 {
-    hgAssert(hgPoolAlive(&windows.handles, window.handle));
+    hgAssert(hgPoolAlive(&windows.pool, window.handle));
     u32 idx = hgHandleIdx(window.handle);
     u32 width = windows.windowWidth;
     return (HgWindowData*)((u8*)windows.data + width * idx);
@@ -800,10 +808,17 @@ struct HgAudioPlayerData {
 
 struct AudioState {
     SDL_AudioDeviceID device;
-    HgPool<HgAudioPlayerData> players;
+    HgPool playerPool;
+    HgAudioPlayerData* playerData;
 };
 
 static AudioState audio{};
+
+static HgAudioPlayerData* audioPlayerGet(HgAudioPlayer player)
+{
+    hgAssert(hgPoolAlive(&audio.playerPool, player.handle));
+    return &audio.playerData[hgHandleIdx(player.handle)];
+}
 
 static void loadVulkan();
 static void unloadVulkan();
@@ -1243,28 +1258,32 @@ void hgGpuInit(HgArena* arena, HgGpuInit* config)
     {
         if (vk.descriptorPools[i].capacity == 0)
         {
-            vk.descriptorPools[i] = hgPoolCreate<void>(arena, UINT16_MAX);
+            vk.descriptorPools[i] = hgPoolCreate(arena, UINT16_MAX);
         }
     }
 
-    if (vk.buffers.capacity == 0)
+    if (vk.bufferPool.capacity == 0)
     {
-        vk.buffers = hgPoolCreate<HgGpuBufferData>(arena, config->maxBuffers);
+        vk.bufferPool = hgPoolCreate(arena, config->maxBuffers);
+        vk.bufferData = hgAlloc<HgGpuBufferData>(arena, config->maxBuffers);
     }
 
-    if (vk.images.capacity == 0)
+    if (vk.imagePool.capacity == 0)
     {
-        vk.images = hgPoolCreate<HgGpuImageData>(arena, config->maxImages);
+        vk.imagePool = hgPoolCreate(arena, config->maxImages);
+        vk.imageData = hgAlloc<HgGpuImageData>(arena, config->maxImages);
     }
 
-    if (vk.views.capacity == 0)
+    if (vk.viewPool.capacity == 0)
     {
-        vk.views = hgPoolCreate<HgGpuViewData>(arena, config->maxViews);
+        vk.viewPool = hgPoolCreate(arena, config->maxViews);
+        vk.viewData = hgAlloc<HgGpuViewData>(arena, config->maxViews);
     }
 
-    if (vk.pipelines.capacity == 0)
+    if (vk.pipelinePool.capacity == 0)
     {
-        vk.pipelines = hgPoolCreate<HgGpuPipelineData>(arena, config->maxPipelines);
+        vk.pipelinePool = hgPoolCreate(arena, config->maxPipelines);
+        vk.pipelineData = hgAlloc<HgGpuPipelineData>(arena, config->maxPipelines);
     }
 
     if (vk.samplers.capacity == 0)
@@ -1310,10 +1329,14 @@ void hgGpuDeinit()
     }
     hgMapReset(&vk.samplers);
 
-    vk.pipelines = {};
-    vk.views = {};
-    vk.images = {};
-    vk.buffers = {};
+    vk.pipelinePool = {};
+    vk.pipelineData = {};
+    vk.viewPool = {};
+    vk.viewData = {};
+    vk.imagePool = {};
+    vk.imageData = {};
+    vk.bufferPool = {};
+    vk.bufferData = {};
 
     for (u32 i = 0; i < DescriptorType_count; ++i)
     {
@@ -1460,7 +1483,7 @@ HgGpuBuffer hgGpuBufferCreate(
     hgAssert(size > 0);
     hgAssert(usageFlags != 0);
 
-    HgGpuBuffer buffer = {hgPoolAlloc(&vk.buffers)};
+    HgGpuBuffer buffer = {hgPoolAlloc(&vk.bufferPool)};
     HgGpuBufferData* bufferData = bufferGet(buffer);
     *bufferData = {};
 
@@ -1514,7 +1537,7 @@ HgGpuBuffer hgGpuBufferCreate(
 
 void hgGpuBufferDestroy(HgGpuBuffer buffer)
 {
-    if (hgPoolAlive(&vk.buffers, buffer.handle))
+    if (hgPoolAlive(&vk.bufferPool, buffer.handle))
     {
         HgGpuBufferData* bufferData = bufferGet(buffer);
         descriptorDestroy(bufferData->storageDesc, DescriptorType_storageBuffer);
@@ -1621,7 +1644,7 @@ HgGpuImage hgGpuImageCreateEx(const HgGpuImageCreateEx* create)
     hgAssert(create->format != HgFormat_undefined);
     hgAssert(create->usage != 0);
 
-    HgGpuImage image = {hgPoolAlloc(&vk.images)};
+    HgGpuImage image = {hgPoolAlloc(&vk.imagePool)};
     HgGpuImageData* imageData = imageGet(image);
     *imageData = {};
 
@@ -1665,7 +1688,7 @@ HgGpuImage hgGpuImageCreateEx(const HgGpuImageCreateEx* create)
 
 void hgGpuImageDestroy(HgGpuImage image)
 {
-    if (hgPoolAlive(&vk.images, image.handle))
+    if (hgPoolAlive(&vk.imagePool, image.handle))
     {
         HgGpuImageData* imageData = imageGet(image);
         vmaDestroyImage(vk.vma, imageData->image, imageData->alloc);
@@ -1736,7 +1759,7 @@ HgGpuView hgGpuViewCreateEx(const HgGpuViewCreateEx* config)
 {
     hgAssert(config->aspectFlags != 0);
 
-    HgGpuView view = {hgPoolAlloc(&vk.views)};
+    HgGpuView view = {hgPoolAlloc(&vk.viewPool)};
     HgGpuViewData* viewData = viewGet(view);
     *viewData = {};
 
@@ -1784,7 +1807,7 @@ HgGpuView hgGpuViewCreateEx(const HgGpuViewCreateEx* config)
 
 void hgGpuViewDestroy(HgGpuView view)
 {
-    if (hgPoolAlive(&vk.views, view.handle))
+    if (hgPoolAlive(&vk.viewPool, view.handle))
     {
         HgGpuViewData* viewData = viewGet(view);
         descriptorDestroy(viewData->storageDesc, DescriptorType_storageImage);
@@ -2182,7 +2205,7 @@ HgGpuPipeline hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* con
     if (config->colorAttachmentCount > 0)
         hgAssert(config->colorAttachmentFormats != nullptr);
 
-    HgGpuPipeline pipeline = {hgPoolAlloc(&vk.pipelines)};
+    HgGpuPipeline pipeline = {hgPoolAlloc(&vk.pipelinePool)};
     HgGpuPipelineData* pipelineData = pipelineGet(pipeline);
     *pipelineData = {};
 
@@ -2360,7 +2383,7 @@ HgGpuPipeline hgGpuPipelineCreateCompute(u32 pushSize, const u8* shaderCode, u64
     hgAssert(shaderCode != nullptr);
     hgAssert(shaderCodeSize > 0);
 
-    HgGpuPipeline pipeline = {hgPoolAlloc(&vk.pipelines)};
+    HgGpuPipeline pipeline = {hgPoolAlloc(&vk.pipelinePool)};
     HgGpuPipelineData* pipelineData = pipelineGet(pipeline);
     *pipelineData = {};
 
@@ -2402,7 +2425,7 @@ HgGpuPipeline hgGpuPipelineCreateCompute(u32 pushSize, const u8* shaderCode, u64
 
 void hgGpuPipelineDestroy(HgGpuPipeline pipeline)
 {
-    if (hgPoolAlive(&vk.pipelines, pipeline.handle))
+    if (hgPoolAlive(&vk.pipelinePool, pipeline.handle))
     {
         HgGpuPipelineData* pipelineData = pipelineGet(pipeline);
         vkDestroyPipeline(vk.device, pipelineData->pipeline, nullptr);
@@ -3008,8 +3031,8 @@ static void resizeWindowSwapchain(HgWindowData* window)
         vkDestroySemaphore(vk.device, window->readyToPresent[i], nullptr);
         window->readyToPresent[i] = nullptr;
 
-        hgPoolFree(&vk.views, window->views[i].handle);
-        hgPoolFree(&vk.images, window->images[i].handle);
+        hgPoolFree(&vk.viewPool, window->views[i].handle);
+        hgPoolFree(&vk.imagePool, window->images[i].handle);
     }
 
     for (u32 i = 0; i < vk.frameCount; ++i)
@@ -3064,7 +3087,7 @@ static void resizeWindowSwapchain(HgWindowData* window)
 
         for (u32 i = 0; i < window->imageCount; ++i)
         {
-            window->images[i] = {hgPoolAlloc(&vk.images)};
+            window->images[i] = {hgPoolAlloc(&vk.imagePool)};
             HgGpuImageData* imageData = imageGet(window->images[i]);
 
             *imageData = {};
@@ -3085,7 +3108,7 @@ static void resizeWindowSwapchain(HgWindowData* window)
             viewInfo.format = formatToVk(window->format);
             viewInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
 
-            window->views[i] = {hgPoolAlloc(&vk.views)};
+            window->views[i] = {hgPoolAlloc(&vk.viewPool)};
             HgGpuViewData* viewData = viewGet(window->views[i]);
 
             *viewData = {};
@@ -3255,7 +3278,7 @@ void hgPlatformInit(HgArena* arena, u32 maxWindows, u32 maxEvents, u32 maxAudioP
         SDL_INIT_GAMEPAD |
         SDL_INIT_EVENTS);
 
-    windows.handles = hgPoolCreate<void>(arena, maxWindows);
+    windows.pool = hgPoolCreate(arena, maxWindows);
 
     windows.windowMaxEvents = maxEvents;
     windows.windowWidth = (u32)hgAlign(sizeof(HgWindowData) + sizeof(HgWindowEvent) * (maxEvents - 1), alignof(HgWindowData));
@@ -3267,19 +3290,20 @@ void hgPlatformInit(HgArena* arena, u32 maxWindows, u32 maxEvents, u32 maxAudioP
     if (audio.device == 0)
         hgError("SDL could not open audio device: %s\n", SDL_GetError());
 
-    audio.players = hgPoolCreate<HgAudioPlayerData>(arena, maxAudioPlayers);
+    audio.playerPool = hgPoolCreate(arena, maxAudioPlayers);
+    audio.playerData = hgAlloc<HgAudioPlayerData>(arena, maxAudioPlayers);
     for (u32 i = 0; i < maxAudioPlayers; ++i)
     {
-        audio.players.vals[i].stream = nullptr;
+        audio.playerData[i].stream = nullptr;
     }
 }
 
 void hgPlatformDeinit()
 {
-    for (u32 i = 0; i < audio.players.capacity; ++i)
+    for (u32 i = 0; i < audio.playerPool.capacity; ++i)
     {
-        if (audio.players.vals[i].stream != nullptr)
-            SDL_DestroyAudioStream(audio.players.vals[i].stream);
+        if (audio.playerData[i].stream != nullptr)
+            SDL_DestroyAudioStream(audio.playerData[i].stream);
     }
     SDL_CloseAudioDevice(audio.device);
 
@@ -3353,7 +3377,7 @@ HgWindow hgWindowCreate(const char* title, u32 width, u32 height, const HgWindow
     if (config == nullptr)
         config = &defaultConfig;
 
-    HgWindow window = {hgPoolAlloc(&windows.handles).id};
+    HgWindow window = {hgPoolAlloc(&windows.pool).id};
     HgWindowData* data = &windows.data[hgHandleIdx(window.handle)];
     memset((void*)data, 0, windows.windowWidth);
     *data = {};
@@ -3414,8 +3438,8 @@ void hgWindowDestroy(HgWindow window)
     {
         vkDestroySemaphore(vk.device, data->readyToPresent[i], nullptr);
         vkDestroyImageView(vk.device, viewGet(data->views[i])->view, nullptr);
-        hgPoolFree(&vk.views, data->views[i].handle);
-        hgPoolFree(&vk.images, data->images[i].handle);
+        hgPoolFree(&vk.viewPool, data->views[i].handle);
+        hgPoolFree(&vk.imagePool, data->images[i].handle);
     }
 
     for (u32 i = 0; i < vk.frameCount; ++i)
@@ -3436,7 +3460,7 @@ void hgWindowDestroy(HgWindow window)
     vkDestroySurfaceKHR(vk.instance, data->surface, nullptr);
     SDL_DestroyWindow(data->sdlWindow);
 
-    hgPoolFree(&windows.handles, window.handle);
+    hgPoolFree(&windows.pool, window.handle);
 }
 
 HgGpuView hgWindowImageView(HgWindow window)
@@ -3906,8 +3930,8 @@ static SDL_AudioFormat hgAudioFormatToSDL(HgAudioFormat format)
 
 HgAudioPlayer hgAudioPlayerCreate(HgAudioFormat format, u32 frequency, u32 channels)
 {
-    HgHandle handle = hgPoolAlloc(&audio.players);
-    HgAudioPlayerData* data = hgPoolGet(&audio.players, handle);
+    HgHandle handle = hgPoolAlloc(&audio.playerPool);
+    HgAudioPlayerData* data = &audio.playerData[hgHandleIdx(handle)];
 
     SDL_AudioSpec audioSpec{};
     audioSpec.format = hgAudioFormatToSDL(format);
@@ -3933,25 +3957,25 @@ HgAudioPlayer hgAudioPlayerCreate(HgAudioFormat format, u32 frequency, u32 chann
 
 void hgAudioPlayerDestroy(HgAudioPlayer player)
 {
-    HgAudioPlayerData* data = hgPoolGet(&audio.players, player.handle);
+    HgAudioPlayerData* data = audioPlayerGet(player);
 
     SDL_UnbindAudioStream(data->stream);
     if (!SDL_ClearAudioStream(data->stream))
         hgError("SDL could not clear audio stream: %s\n", SDL_GetError());
 
-    hgPoolFree(&audio.players, player.handle);
+    hgPoolFree(&audio.playerPool, player.handle);
 }
 
 void hgAudioPlayerPush(HgAudioPlayer player, const void* data, u64 size)
 {
-    HgAudioPlayerData* playerData = hgPoolGet(&audio.players, player.handle);
+    HgAudioPlayerData* playerData = audioPlayerGet(player);
     if (!SDL_PutAudioStreamData(playerData->stream, data, size))
         hgError("SDL could not push audio data: %s\n", SDL_GetError());
 }
 
 u64 hgAudioPlayerQueuedSize(HgAudioPlayer player)
 {
-    HgAudioPlayerData* data = hgPoolGet(&audio.players, player.handle);
+    HgAudioPlayerData* data = audioPlayerGet(player);
 
     int size = SDL_GetAudioStreamQueued(data->stream);
     if (size == -1)
@@ -3962,7 +3986,7 @@ u64 hgAudioPlayerQueuedSize(HgAudioPlayer player)
 
 void hgAudioPlayerClear(HgAudioPlayer player)
 {
-    HgAudioPlayerData* data = hgPoolGet(&audio.players, player.handle);
+    HgAudioPlayerData* data = audioPlayerGet(player);
     if (!SDL_ClearAudioStream(data->stream))
         hgError("SDL could not clear audio stream: %s\n", SDL_GetError());
 }

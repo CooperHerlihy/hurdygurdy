@@ -29,7 +29,7 @@
 
 #include "hg_core.hpp"
 #include "hg_memory.hpp"
-#include "hg_templates.hpp"
+#include "hg_containers.hpp"
 
 /**
  * Returns the number of concurrent threads available in hardware

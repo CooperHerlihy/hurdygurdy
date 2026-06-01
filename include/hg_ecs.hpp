@@ -30,8 +30,7 @@
 #include "hg_core.hpp"
 #include "hg_math.hpp"
 #include "hg_memory.hpp"
-#include "hg_templates.hpp"
-#include "hg_strings.hpp"
+#include "hg_containers.hpp"
 #include "hg_concurrency.hpp"
 #include "hg_assets.hpp"
 
@@ -164,7 +163,7 @@ struct HgEcs {
     /**
      * The entity pool
      */
-    HgIndexPool entities;
+    HgPool entities;
     /**
      * The component systems
      */

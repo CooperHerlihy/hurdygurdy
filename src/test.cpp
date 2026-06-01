@@ -126,21 +126,15 @@ void hgTest()
         HgArena* arena = hgScratch();
         hgArenaScope(arena);
 
-        HgPool<u32> pool = hgPoolCreate<u32>(arena, 32);
+        HgPool pool = hgPoolCreate(arena, 32);
 
         HgHandle u1 = hgPoolAlloc(&pool);
         hgAssert(hgPoolAlive(&pool, u1));
         hgAssert(u1.id == 0);
-        hgAssert(hgPoolGet(&pool, u1) != nullptr);
-        *hgPoolGet(&pool, u1) = 12;
-        hgAssert(*hgPoolGet(&pool, u1) == 12);
 
         HgHandle u2 = hgPoolAlloc(&pool);
         hgAssert(hgPoolAlive(&pool, u2));
         hgAssert(u2.id == 1);
-        hgAssert(hgPoolGet(&pool, u2) != nullptr);
-        *hgPoolGet(&pool, u2) = 42;
-        hgAssert(*hgPoolGet(&pool, u2) == 42);
 
         hgPoolFree(&pool, u1);
         hgAssert(!hgPoolAlive(&pool, u1));
@@ -150,8 +144,6 @@ void hgTest()
         hgAssert(!hgPoolAlive(&pool, u1));
         hgAssert(u12.id != 0);
         hgAssert(hgHandleIdx(u12) == 0);
-        hgAssert(hgPoolGet(&pool, u12) != nullptr);
-        hgAssert(*hgPoolGet(&pool, u12) == 12);
 
         hgPoolReset(&pool);
         hgAssert(!hgPoolAlive(&pool, u1));
