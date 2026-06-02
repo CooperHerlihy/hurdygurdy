@@ -89,17 +89,16 @@ int main()
     hgEcsRegisterType(&ecs, arena, HgSprite, 128);
 
     HgEntity camera = hgEcsSpawn(&ecs);
-    HgCamera* cameraC = hgEcsAdd<HgCamera>(&ecs, camera);
-    HgTransform* cameraTf = hgEcsAdd<HgTransform>(&ecs, camera);
+    HgCamera* cameraC = hgCameraAdd(&ecs, camera);
+    HgTransform* cameraTf = hgTransformAdd(&ecs, camera, HgVec3{0, 0, -1});
     cameraC->type = HgCameraType_perspective;
     cameraC->perspective.fov = (f32)hgPi * 0.5f;
     cameraC->perspective.near = 0.1f;
     cameraC->perspective.far = 1000.0f;
-    cameraTf->position = HgVec3{0, 0, -1};
 
     HgEntity noiseSquare = hgEcsSpawn(&ecs);
-    hgEcsAdd<HgTransform>(&ecs, noiseSquare);
-    *hgEcsAdd<HgSprite>(&ecs, noiseSquare) = {noiseTexHandle, HgVec2{0}, HgVec2{1}};
+    hgTransformAdd(&ecs, noiseSquare);
+    hgSpriteAdd(&ecs, noiseSquare, hgAssetCopy(noiseTexHandle));
 
     HgClock gameClock;
     hgClockTick(&gameClock);

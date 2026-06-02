@@ -295,19 +295,32 @@ struct HgCamera {
 /**
  * HgCamera ecs add implementation
  */
-template<>
-void hgEcsAddImpl(HgCamera* camera);
+HgCamera* hgCameraAdd(HgEcs* ecs, HgEntity e);
 
 /**
- * HgCamera ecs remove implementation
+ * HgCamera ecs destructor
  */
 template<>
-void hgEcsRemoveImpl(HgCamera* camera);
+void hgEcsDtor(HgCamera* camera);
 
 /**
  * Update the camera's gpu side data, must have a camera and transform
  */
 void hgCameraUpdate(HgEcs* ecs, HgEntity e);
+
+/**
+ * Initialize the sprite pipeline
+ *
+ * Parameters
+ * - colorFormat The format of the color attachment, must not be undefined
+ * - depthFormat The format of the depth attachment, must not be undefined
+ */
+void hgSpritesInit(HgFormat colorFormat, HgFormat depthFormat);
+
+/**
+ * Deinitialize the sprite pipeline
+ */
+void hgSpritesDeinit();
 
 /**
  * A sprite component
@@ -328,18 +341,25 @@ struct HgSprite {
 };
 
 /**
- * Initialize the sprite pipeline
+ * Add a sprite to an entity
  *
  * Parameters
- * - colorFormat The format of the color attachment, must not be undefined
- * - depthFormat The format of the depth attachment, must not be undefined
+ * - ecs The ecs
+ * - e The entity to add to
+ * - texture A copy of the sprite's texture
  */
-void hgSpritesInit(HgFormat colorFormat, HgFormat depthFormat);
+HgSprite* hgSpriteAdd(
+    HgEcs* ecs,
+    HgEntity e,
+    HgGpuTextureHandle texture,
+    HgVec2 uvPos = HgVec2{0.0f},
+    HgVec2 uvSize = HgVec2{1.0f});
 
 /**
- * Deinitialize the sprite pipeline
+ * HgSprite ecs destructor
  */
-void hgSpritesDeinit();
+template<>
+void hgEcsDtor(HgSprite* sprite);
 
 /**
  * Issue draw commands for all HgSprite2D components in the ecs
@@ -376,6 +396,22 @@ void hgSkyboxInit(HgFormat colorFormat, HgFormat depthFormat);
 void hgSkyboxDeinit();
 
 /**
+ * Add a skybox to an entity
+ *
+ * Parameters
+ * - ecs The ecs
+ * - e The entity to add to
+ * - texture A copy of the skybox's texture
+ */
+HgSkybox* hgSkyboxAdd(HgEcs* ecs, HgEntity e, HgGpuTextureHandle texture);
+
+/**
+ * HgSkybox ecs destructor
+ */
+template<>
+void hgEcsDtor(HgSkybox* skybox);
+
+/**
  * Draw a skybox from a texture
  *
  * Parameters
@@ -400,6 +436,11 @@ struct HgDirLight {
 };
 
 /**
+ * Add a directional light to an entity
+ */
+HgDirLight* hgDirLightAdd(HgEcs* ecs, HgEntity e, HgVec3 dir, HgVec4 color);
+
+/**
  * A point light component, should have a transform
  */
 struct HgPointLight {
@@ -410,13 +451,18 @@ struct HgPointLight {
 };
 
 /**
+ * Add a point light to an entity
+ */
+HgPointLight* hgPointLightAdd(HgEcs* ecs, HgEntity e, HgVec4 color);
+
+/**
  * A 3D model component
  */
 struct HgModel {
     /**
      * The model to render
      */
-    HgGpuMeshHandle model;
+    HgGpuMeshHandle mesh;
     /**
      * The model's color map
      */
@@ -440,6 +486,22 @@ void hgModelsInit(HgFormat colorFormat, HgFormat depthFormat);
  * Deinitialize the 3D model pipeline
  */
 void hgModelsDeinit();
+
+/**
+ * Add a model to an entity
+ */
+HgModel* hgModelAdd(
+    HgEcs* ecs,
+    HgEntity e,
+    HgGpuMeshHandle mesh,
+    HgGpuTextureHandle colorMap,
+    HgGpuTextureHandle normalMap);
+
+/**
+ * HgModel ecs destructor
+ */
+template<>
+void hgEcsDtor(HgModel* model);
 
 /**
  * Issue draw commands for all HgModel3D components in the ecs

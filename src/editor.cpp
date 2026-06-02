@@ -20,7 +20,7 @@ static void* renderImGuiTex;
 static HgGpuImage depthImage;
 static HgGpuView depthView;
 
-static HgEcs ecs = {};
+static HgEcs* ecs = nullptr;
 static HgEntity root;
 
 static HgEntity player;
@@ -83,31 +83,31 @@ void init(HgArena* arena)
     hgModelsInit(HgFormat_r8g8b8a8_srgb, HgFormat_d32_sfloat);
     hgSkyboxInit(HgFormat_r8g8b8a8_srgb, HgFormat_d32_sfloat);
 
-    ecs = hgEcsCreate(arena, 1024, 64);
+    ecs = hgAlloc<HgEcs>(arena, 1);
+    *ecs = hgEcsCreate(arena, 1024, 64);
 
-    hgEcsRegisterType(&ecs, arena, HgNode, 1024);
-    hgEcsRegisterType(&ecs, arena, HgCamera, 8);
-    hgEcsRegisterType(&ecs, arena, HgTransform, 1024);
-    hgEcsRegisterType(&ecs, arena, HgSkybox, 8);
-    hgEcsRegisterType(&ecs, arena, HgSprite, 256);
-    hgEcsRegisterType(&ecs, arena, HgDirLight, 64);
-    hgEcsRegisterType(&ecs, arena, HgPointLight, 64);
-    hgEcsRegisterType(&ecs, arena, HgModel, 256);
-    hgEcsRegisterType(&ecs, arena, HgAudioSource, 64);
+    hgEcsRegisterType(ecs, arena, HgNode, 1024);
+    hgEcsRegisterType(ecs, arena, HgTransform, 1024);
+    hgEcsRegisterType(ecs, arena, HgCamera, 8);
+    hgEcsRegisterType(ecs, arena, HgSkybox, 8);
+    hgEcsRegisterType(ecs, arena, HgSprite, 256);
+    hgEcsRegisterType(ecs, arena, HgDirLight, 64);
+    hgEcsRegisterType(ecs, arena, HgPointLight, 64);
+    hgEcsRegisterType(ecs, arena, HgModel, 256);
+    hgEcsRegisterType(ecs, arena, HgAudioSource, 64);
 
-    hgEcsRegisterType(&ecs, arena, Name, 1024);
-    hgEcsRegisterType(&ecs, arena, Spin, 256);
+    hgEcsRegisterType(ecs, arena, Name, 1024);
+    hgEcsRegisterType(ecs, arena, Spin, 256);
 
-    root = hgEcsSpawn(&ecs);
-    *hgEcsAdd<Name>(&ecs, root) = {"root"};
-    hgEcsAdd<HgNode>(&ecs, root);
+    root = hgEcsSpawn(ecs);
+    *hgEcsAdd<Name>(ecs, root) = {"root"};
+    hgNodeAdd(ecs, root);
 
-    player = hgEcsSpawn(&ecs);
-    *hgEcsAdd<Name>(&ecs, player) = {"player"};
-    hgEcsAdd<HgNode>(&ecs, player);
-    transform = hgEcsAdd<HgTransform>(&ecs, player);
-    transform->position = HgVec3{0, 0, -1};
-    camera = hgEcsAdd<HgCamera>(&ecs, player);
+    player = hgEcsSpawn(ecs);
+    *hgEcsAdd<Name>(ecs, player) = {"player"};
+    hgNodeAdd(ecs, player);
+    transform = hgTransformAdd(ecs, player, HgVec3{0, 0, -1});
+    camera = hgCameraAdd(ecs, player);
     camera->type = HgCameraType_perspective;
     camera->perspective.fov = (f32)hgPi * 0.5f;
     camera->perspective.near = 0.01f;
@@ -119,56 +119,48 @@ void init(HgArena* arena)
     camera->orthographic.near = 0;
     camera->orthographic.far = 10;
 
-    HgEntity skybox = hgEcsSpawn(&ecs);
-    *hgEcsAdd<Name>(&ecs, skybox) = {"skybox"};
-    hgEcsAdd<HgNode>(&ecs, skybox);
-    hgEcsAdd<HgSkybox>(&ecs, skybox);
+    HgEntity skybox = hgEcsSpawn(ecs);
+    *hgEcsAdd<Name>(ecs, skybox) = {"skybox"};
+    hgNodeAdd(ecs, skybox);
+    hgSkyboxAdd(ecs, skybox, {});
 
-    HgEntity pointLight = hgEcsSpawn(&ecs);
-    *hgEcsAdd<Name>(&ecs, pointLight) = {"pointLight"};
-    hgEcsAdd<HgNode>(&ecs, pointLight);
-    hgEcsAdd<HgTransform>(&ecs, pointLight);
-    hgEcsGet<HgTransform>(&ecs, pointLight)->position = HgVec3{0, -2, 0};
-    *hgEcsAdd<HgPointLight>(&ecs, pointLight) = {HgVec4{1, 1, 1, 4}};
-    hgTransformUpdate(&ecs, pointLight);
+    HgEntity pointLight = hgEcsSpawn(ecs);
+    *hgEcsAdd<Name>(ecs, pointLight) = {"pointLight"};
+    hgNodeAdd(ecs, pointLight);
+    hgTransformAdd(ecs, pointLight, HgVec3{0, -2, 0});
+    hgPointLightAdd(ecs, pointLight, HgVec4{1, 1, 1, 4});
 
-    HgEntity square = hgEcsSpawn(&ecs);
-    *hgEcsAdd<Name>(&ecs, square) = {"square"};
-    hgEcsAdd<HgNode>(&ecs, square);
-    hgEcsAdd<HgTransform>(&ecs, square);
-    hgEcsGet<HgTransform>(&ecs, square)->position = HgVec3{-1, 0, 1};
-    hgTransformUpdate(&ecs, square);
-    *hgEcsAdd<HgSprite>(&ecs, square) = {HgGpuTextureHandle{}, HgVec2{0.0f}, HgVec2{1.0f}};
-    *hgEcsAdd<Spin>(&ecs, square) = {1.0f};
+    HgEntity square = hgEcsSpawn(ecs);
+    *hgEcsAdd<Name>(ecs, square) = {"square"};
+    hgNodeAdd(ecs, square);
+    hgTransformAdd(ecs, square, HgVec3{-1, 0, 1});
+    hgSpriteAdd(ecs, square, {});
+    *hgEcsAdd<Spin>(ecs, square) = {1.0f};
 
-    HgEntity cube = hgEcsSpawn(&ecs);
-    *hgEcsAdd<Name>(&ecs, cube) = {"cube"};
-    hgEcsAdd<HgNode>(&ecs, cube);
-    hgEcsAdd<HgTransform>(&ecs, cube);
-    hgEcsGet<HgTransform>(&ecs, cube)->position = HgVec3{1, 0, 1};
-    hgTransformUpdate(&ecs, cube);
-    *hgEcsAdd<HgModel>(&ecs, cube) = {HgGpuMeshHandle{}, HgGpuTextureHandle{}, HgGpuTextureHandle{}};
-    *hgEcsAdd<Spin>(&ecs, cube) = {1.0f};
+    HgEntity cube = hgEcsSpawn(ecs);
+    *hgEcsAdd<Name>(ecs, cube) = {"cube"};
+    hgNodeAdd(ecs, cube);
+    hgTransformAdd(ecs, cube, HgVec3{1, 0, 1});
+    hgModelAdd(ecs, cube, {}, {}, {});
+    *hgEcsAdd<Spin>(ecs, cube) = {1.0f};
 
-    HgEntity sound = hgEcsSpawn(&ecs);
-    *hgEcsAdd<Name>(&ecs, sound) = {"sound"};
-    hgEcsAdd<HgNode>(&ecs, sound);
-    hgEcsAdd<HgTransform>(&ecs, sound);
-    hgEcsAdd<HgAudioSource>(&ecs, sound);
-    hgEcsGet<HgAudioSource>(&ecs, sound)->audio = audioHandle;
-    hgEcsGet<HgAudioSource>(&ecs, sound)->repeat = true;
+    HgEntity sound = hgEcsSpawn(ecs);
+    *hgEcsAdd<Name>(ecs, sound) = {"sound"};
+    hgNodeAdd(ecs, sound);
+    hgTransformAdd(ecs, sound);
+    hgAudioSourceAdd(ecs, sound, hgAssetCopy(audioHandle), true);
 
-    hgNodeAddChild(&ecs, root, sound);
-    hgNodeAddChild(&ecs, root, cube);
-    hgNodeAddChild(&ecs, root, square);
-    hgNodeAddChild(&ecs, root, pointLight);
-    hgNodeAddChild(&ecs, root, skybox);
-    hgNodeAddChild(&ecs, root, player);
+    hgNodeAddChild(ecs, root, sound);
+    hgNodeAddChild(ecs, root, cube);
+    hgNodeAddChild(ecs, root, square);
+    hgNodeAddChild(ecs, root, pointLight);
+    hgNodeAddChild(ecs, root, skybox);
+    hgNodeAddChild(ecs, root, player);
 }
 
 void deinit()
 {
-    hgEcsReset(&ecs);
+    hgEcsReset(ecs);
 
     hgModelsDeinit();
     hgSpritesDeinit();
@@ -269,25 +261,25 @@ void drawMenu()
 template<typename C, typename... Reqs>
 void addComponent(HgEntity e, const char* name)
 {
-    if (!hgEcsHas<C>(&ecs, e) && ImGui::MenuItem(name))
+    if (!hgEcsHas<C>(ecs, e) && ImGui::MenuItem(name))
     {
         ([&] {
-            if (!hgEcsHas<Reqs>(&ecs, e))
-                hgEcsAdd<Reqs>(&ecs, e);
+            if (!hgEcsHas<Reqs>(ecs, e))
+                hgEcsAdd<Reqs>(ecs, e);
         }(), ...);
-        hgEcsAdd<C>(&ecs, e);
+        hgEcsAdd<C>(ecs, e);
     }
 }
 
 template<typename C, typename... Deps>
 void removeComponent(HgEntity e, const char* name)
 {
-    if (hgEcsHas<C>(&ecs, e) && ImGui::MenuItem(name))
+    if (hgEcsHas<C>(ecs, e) && ImGui::MenuItem(name))
     {
-        hgEcsRemove<C>(&ecs, e);
+        hgEcsRemove<C>(ecs, e);
         ([&] {
-            if (hgEcsHas<Deps>(&ecs, e))
-                hgEcsRemove<Deps>(&ecs, e);
+            if (hgEcsHas<Deps>(ecs, e))
+                hgEcsRemove<Deps>(ecs, e);
         }(), ...);
     }
 }
@@ -295,9 +287,9 @@ void removeComponent(HgEntity e, const char* name)
 void drawEditorEntity(HgArena* frame, HgEntity e)
 {
     char* name = nullptr;
-    if (hgEcsHas<Name>(&ecs, e))
+    if (hgEcsHas<Name>(ecs, e))
     {
-        name = hgCString(frame, hgEcsGet<Name>(&ecs, e)->name);
+        name = hgCString(frame, hgEcsGet<Name>(ecs, e)->name);
     }
     else
     {
@@ -306,7 +298,7 @@ void drawEditorEntity(HgArena* frame, HgEntity e)
         name = hgCString(frame, nameStr);
     }
 
-    HgNode* node = hgEcsGet<HgNode>(&ecs, e);
+    HgNode* node = hgEcsGet<HgNode>(ecs, e);
 
     if (ImGui::TreeNodeEx(name, ImGuiTreeNodeFlags_DefaultOpen))
     {
@@ -318,15 +310,15 @@ void drawEditorEntity(HgArena* frame, HgEntity e)
 
             if (ImGui::MenuItem("Destroy"))
             {
-                hgNodeDestroy(&ecs, e);
+                hgNodeDestroy(ecs, e);
                 return;
             }
 
             if (ImGui::MenuItem("Add Child"))
             {
-                HgEntity child = hgEcsSpawn(&ecs);
-                *hgEcsAdd<HgNode>(&ecs, child) = {};
-                hgNodeAddChild(&ecs, e, child);
+                HgEntity child = hgEcsSpawn(ecs);
+                *hgNodeAdd(ecs, child) = {};
+                hgNodeAddChild(ecs, e, child);
             }
 
             if (ImGui::BeginMenu("Add Component"))
@@ -358,19 +350,19 @@ void drawEditorEntity(HgArena* frame, HgEntity e)
 
         ImGuiTreeNodeFlags componentFlags = ImGuiTreeNodeFlags_DefaultOpen;
 
-        if (hgEcsHas<HgTransform>(&ecs, e) && ImGui::TreeNodeEx("Transform", componentFlags))
+        if (hgEcsHas<HgTransform>(ecs, e) && ImGui::TreeNodeEx("Transform", componentFlags))
         {
-            HgTransform* tf = hgEcsGet<HgTransform>(&ecs, e);
+            HgTransform* tf = hgEcsGet<HgTransform>(ecs, e);
             if (ImGui::DragFloat3("Position", &tf->position.x, 0.01f) +
                 ImGui::DragFloat3("Scale", &tf->scale.x, 0.01f) +
                 ImGui::DragFloat4("Rotation", &tf->rotation.r, 0.01f))
-                hgTransformUpdate(&ecs, e);
+                hgTransformUpdate(ecs, e);
             ImGui::TreePop();
         }
 
-        if (hgEcsHas<HgCamera>(&ecs, e) && ImGui::TreeNodeEx("Camera", componentFlags))
+        if (hgEcsHas<HgCamera>(ecs, e) && ImGui::TreeNodeEx("Camera", componentFlags))
         {
-            HgCamera* c = hgEcsGet<HgCamera>(&ecs, e);
+            HgCamera* c = hgEcsGet<HgCamera>(ecs, e);
             if (c->type == HgCameraType_perspective)
             {
                 if (ImGui::Button("Perspective"))
@@ -395,44 +387,44 @@ void drawEditorEntity(HgArena* frame, HgEntity e)
             ImGui::TreePop();
         }
 
-        if (hgEcsHas<HgSprite>(&ecs, e) && ImGui::TreeNodeEx("Sprite", componentFlags))
+        if (hgEcsHas<HgSprite>(ecs, e) && ImGui::TreeNodeEx("Sprite", componentFlags))
         {
-            HgSprite* s = hgEcsGet<HgSprite>(&ecs, e);
+            HgSprite* s = hgEcsGet<HgSprite>(ecs, e);
             ImGui::DragFloat2("UV Position", &s->uvPos.x, 0.01f);
             ImGui::DragFloat2("UV Size", &s->uvSize.x, 0.01f);
             ImGui::TreePop();
         }
 
-        if (hgEcsHas<HgModel>(&ecs, e) && ImGui::TreeNodeEx("Model 3D", componentFlags))
+        if (hgEcsHas<HgModel>(ecs, e) && ImGui::TreeNodeEx("Model 3D", componentFlags))
         {
             ImGui::TreePop();
         }
 
-        if (hgEcsHas<HgDirLight>(&ecs, e) && ImGui::TreeNodeEx("Directional Light 3D", componentFlags))
+        if (hgEcsHas<HgDirLight>(ecs, e) && ImGui::TreeNodeEx("Directional Light 3D", componentFlags))
         {
-            HgDirLight* l = hgEcsGet<HgDirLight>(&ecs, e);
+            HgDirLight* l = hgEcsGet<HgDirLight>(ecs, e);
             ImGui::DragFloat3("Direction", &l->dir.x, 0.01f);
             ImGui::DragFloat4("Color", &l->color.x, 0.01f);
             ImGui::TreePop();
         }
 
-        if (hgEcsHas<HgPointLight>(&ecs, e) && ImGui::TreeNodeEx("Point Light 3D", componentFlags))
+        if (hgEcsHas<HgPointLight>(ecs, e) && ImGui::TreeNodeEx("Point Light 3D", componentFlags))
         {
-            HgPointLight* l = hgEcsGet<HgPointLight>(&ecs, e);
+            HgPointLight* l = hgEcsGet<HgPointLight>(ecs, e);
             ImGui::DragFloat4("Color", &l->color.x, 0.01f);
             ImGui::TreePop();
         }
 
-        if (hgEcsHas<Spin>(&ecs, e) && ImGui::TreeNodeEx("Spin", componentFlags))
+        if (hgEcsHas<Spin>(ecs, e) && ImGui::TreeNodeEx("Spin", componentFlags))
         {
-            ImGui::DragFloat("Speed", &hgEcsGet<Spin>(&ecs, e)->speed, 0.1f);
+            ImGui::DragFloat("Speed", &hgEcsGet<Spin>(ecs, e)->speed, 0.1f);
             ImGui::TreePop();
         }
 
         HgEntity child = node->firstChild;
         while (child.handle != hgNullHandle)
         {
-            HgEntity next = hgEcsGet<HgNode>(&ecs, child)->nextSibling;
+            HgEntity next = hgEcsGet<HgNode>(ecs, child)->nextSibling;
             drawEditorEntity(frame, child);
             child = next;
         }
@@ -457,7 +449,7 @@ void drawEditor(HgArena* frame)
                 transform->position = HgVec3{0, 0, -1};
                 transform->scale = HgVec3{1, 1, 1};
                 transform->rotation = HgQuat{1, 0, 0, 0};
-                hgTransformUpdate(&ecs, player);
+                hgTransformUpdate(ecs, player);
             }
             ImGui::Checkbox("3D Movement", &move3D);
             ImGui::Checkbox("Fixed Aspect", &fixedAspect);
@@ -548,10 +540,10 @@ void render()
 
         hgGpuRenderPassBegin(cmd, width, height, &renderPass);
 
-        hgCameraUpdate(&ecs, player);
-        hgSkyboxDraw(&ecs, player, cmd);
-        hgSpritesDraw(&ecs, player, cmd);
-        hgModelsDraw(&ecs, player, cmd);
+        hgCameraUpdate(ecs, player);
+        hgSkyboxDraw(ecs, player, cmd);
+        hgSpritesDraw(ecs, player, cmd);
+        hgModelsDraw(ecs, player, cmd);
 
         hgGpuRenderPassEnd(cmd);
 
@@ -705,15 +697,15 @@ int main()
         if (hgWasQuit() || hgWindowWasClosed(window))
             quit = true;
 
-        hgAudioUpdate(&ecs, player);
+        hgAudioUpdate(ecs, player);
 
         // if (hgAudioPlayerQueuedSize(audioPlayer) < (int)sizeof(audioBase))
         //     hgAudioPlayerPush(audioPlayer, audioBase, sizeof(audioBase));
 
-        hgEcsForEach<Spin, HgTransform>(&ecs, [&](HgEntity e, Spin* spin, HgTransform* tf)
+        hgEcsForEach<Spin, HgTransform>(ecs, [&](HgEntity e, Spin* spin, HgTransform* tf)
         {
             tf->rotation = hgQuatAxisAngle(HgVec3{0, -1, 0}, (f32)delta * spin->speed) * tf->rotation;
-            hgTransformUpdate(&ecs, e);
+            hgTransformUpdate(ecs, e);
         });
 
         if (renderHovered)
@@ -744,7 +736,7 @@ int main()
                 transform->position += hgVecNorm3(HgVec3{rotated.x, movement.y, rotated.z}) * moveSpeed;
             }
 
-            hgTransformUpdate(&ecs, player);
+            hgTransformUpdate(ecs, player);
         }
 
         drawUI(frame);

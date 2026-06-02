@@ -309,7 +309,7 @@ template<typename T>
 HgAssetHandle<T> hgAssetCopy(HgAssetHandle<T> asset)
 {
     hgAssert(hgPoolAlive(&hgAssets<T>.pool, asset.handle));
-    ++hgAssets<T>.data[hgHandleIdx(asset.handle)].ref_count;
+    ++hgAssets<T>.data[hgHandleIdx(asset.handle)].refCount;
     return asset;
 }
 

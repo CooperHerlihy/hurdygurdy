@@ -2198,6 +2198,34 @@ void hgAssetUnloadImpl(HgAssetData<HgGpuMesh>* data)
     hgGpuBufferDestroy(data->asset.indexBuffer);
 }
 
+u32 hgEcsSerializerEntity(HgEcsSerializer* serializer, HgEntity e)
+{
+    u32* idx = hgMapGet(&serializer->entities, e);
+    hgAssert(idx != nullptr);
+    return *idx;
+}
+
+u32 hgEcsSerializerString(HgEcsSerializer* serializer, HgStringView str)
+{
+    u32* idx = hgMapGet(&serializer->strings, str);
+    if (idx == nullptr)
+        idx = hgMapAdd(
+            &serializer->strings,
+            hgStringCopy(serializer->stringArena, str),
+            serializer->strings.count);
+    return *idx;
+}
+
+HgEntity hgEcsDeserializerEntity(HgEcsDeserializer* deserializer, u32 idx)
+{
+    return deserializer->entities[idx];
+}
+
+HgStringView hgEcsSerializerString(HgEcsDeserializer* deserializer, u32 idx)
+{
+    return deserializer->strings[idx];
+}
+
 HgEcs hgEcsCreate(HgArena* arena, u32 maxEntities, u32 maxComponentTypes)
 {
     hgAssert(arena != nullptr);
@@ -2221,7 +2249,7 @@ void hgEcsReset(HgEcs* ecs)
 
             for (u32 c = 0; c < system->count; ++c)
             {
-                system->remove((u8*)system->components + c * system->width);
+                system->dtor((u8*)system->components + c * system->width);
             }
             memset(system->indices, -1, ecs->entities.capacity * sizeof(*system->indices));
             system->count = 0;
@@ -2248,8 +2276,7 @@ void hgEcsRegisterComponent(HgEcs* ecs, HgArena* arena, HgEcsRegisterComponent* 
     system->count = 0;
     system->capacity = config->max;
 
-    system->add = config->add;
-    system->remove = config->remove;
+    system->dtor = config->dtor;
     system->serialWidth = config->serialWidth;
     system->serialize = config->serialize;
     system->deserialize = config->deserialize;
@@ -2306,7 +2333,6 @@ void* hgEcsAdd(HgEcs* ecs, HgEntity e, u64 componentId)
     void* c = (u8*)system->components + system->width * system->count;
     ++system->count;
 
-    system->add(c);
     return c;
 }
 
@@ -2320,7 +2346,7 @@ void hgEcsRemove(HgEcs* ecs, HgEntity e, u64 componentId)
     hgAssert(system != nullptr);
 
     u32 idx = system->indices[hgHandleIdx(e.handle)];
-    system->remove((u8*)system->components + system->width * idx);
+    system->dtor((u8*)system->components + system->width * idx);
 
     HgEntity last = system->entities[system->count - 1];
     system->entities[system->count - 1] = HgEntity{};
@@ -2556,14 +2582,13 @@ struct EcsSerialComponent {
 };
 
 struct EcsSerialScene {
-    HgMap<HgEntity, u32> entities;
-    HgMap<HgStringView, u32> strings;
+    HgEcsSerializer serializer;
     HgMap<u64, EcsSerialComponent> components;
 };
 
 void ecsSerialFindEntities(HgEcs* ecs, HgEntity root, EcsSerialScene* scene)
 {
-    hgMapAdd(&scene->entities, root, scene->entities.count);
+    hgMapAdd(&scene->serializer.entities, root, scene->serializer.entities.count);
 
     if (hgEcsHas<HgNode>(ecs, root))
     {
@@ -2589,9 +2614,9 @@ void ecsSerialGatherData(HgArena* arena, HgEcs* ecs, HgEntity root, EcsSerialSce
                 compData = hgMapAdd(&scene->components, ecs->components.keys[c], {});
 
                 HgStringBuilder name = hgStringCopy(arena, ecs->components.vals[c].name);
-                u32* nameIdx = hgMapGet(&scene->strings, name);
+                u32* nameIdx = hgMapGet(&scene->serializer.strings, name);
                 if (nameIdx == nullptr)
-                    nameIdx = hgMapAdd(&scene->strings, name, scene->strings.count);
+                    nameIdx = hgMapAdd(&scene->serializer.strings, name, scene->serializer.strings.count);
 
                 compData->nameString = *nameIdx;
                 compData->entities = hgAlloc<u32>(arena, ecs->entities.capacity);
@@ -2600,11 +2625,9 @@ void ecsSerialGatherData(HgArena* arena, HgEcs* ecs, HgEntity root, EcsSerialSce
                 compData->count = 0;
             }
 
-            compData->entities[compData->count] = *hgMapGet(&scene->entities, root);
+            compData->entities[compData->count] = *hgMapGet(&scene->serializer.entities, root);
             ecs->components.vals[c].serialize(
-                    arena,
-                    &scene->entities,
-                    &scene->strings,
+                    &scene->serializer,
                     hgEcsGet(ecs, root, ecs->components.keys[c]),
                     (u8*)compData->data + compData->dataWidth * compData->count);
             ++compData->count;
@@ -2631,7 +2654,7 @@ HgBinary ecsSerialWriteBin(HgArena* arena, EcsSerialScene* data)
     header.versionMinor = ecsSceneVersionMinor;
     header.versionPatch = ecsSceneVersionPatch;
 
-    header.entityCount = data->entities.count;
+    header.entityCount = data->serializer.entities.count;
 
     HgBinary bin{};
     bin = hgBinaryResize(arena, &bin, bin.size + sizeof(header));
@@ -2641,7 +2664,7 @@ HgBinary ecsSerialWriteBin(HgArena* arena, EcsSerialScene* data)
     bin = hgBinaryResize(arena, &bin, bin.size + sizeof(EcsSerialComponentDesc) * header.componentCount);
 
     header.stringsBegin = bin.size;
-    header.stringCount = data->strings.count;
+    header.stringCount = data->serializer.strings.count;
     bin = hgBinaryResize(arena, &bin, bin.size + sizeof(EcsSerialStringDesc) * header.stringCount);
 
     hgBinaryOverwrite(&bin, 0, header);
@@ -2670,17 +2693,17 @@ HgBinary ecsSerialWriteBin(HgArena* arena, EcsSerialScene* data)
         }
     }
 
-    for (u32 s = 0; s < data->strings.capacity; ++s)
+    for (u32 s = 0; s < data->serializer.strings.capacity; ++s)
     {
-        if (data->strings.hasVal[s])
+        if (data->serializer.strings.hasVal[s])
         {
             EcsSerialStringDesc str{};
             str.begin = bin.size;
-            str.length = data->strings.keys[s].length;
+            str.length = data->serializer.strings.keys[s].length;
             bin = hgBinaryResize(arena, &bin, bin.size + str.length);
 
-            hgBinaryOverwrite(&bin, header.stringsBegin + sizeof(str) * data->strings.vals[s], str);
-            hgBinaryOverwrite(&bin, str.begin, data->strings.keys[s].chars, str.length);
+            hgBinaryOverwrite(&bin, header.stringsBegin + sizeof(str) * data->serializer.strings.vals[s], str);
+            hgBinaryOverwrite(&bin, str.begin, data->serializer.strings.keys[s].chars, str.length);
         }
     }
 
@@ -2696,8 +2719,9 @@ HgBinary hgEcsSerialize(HgArena* arena, HgEcs* ecs, HgEntity root)
     hgArenaScope(scratch);
 
     EcsSerialScene data;
-    data.entities = hgMapCreate<HgEntity, u32>(scratch, ecs->entities.capacity);
-    data.strings = hgMapCreate<HgStringView, u32>(scratch, 4096);
+    data.serializer.stringArena = scratch;
+    data.serializer.entities = hgMapCreate<HgEntity, u32>(scratch, ecs->entities.capacity);
+    data.serializer.strings = hgMapCreate<HgStringView, u32>(scratch, 4096);
     data.components = hgMapCreate<u64, EcsSerialComponent>(scratch, ecs->components.count * 2);
 
     ecsSerialFindEntities(ecs, root, &data);
@@ -2735,20 +2759,22 @@ HgEntity hgEcsDeserialize(HgEcs* ecs, HgBinary scene)
         hgWarn("Scene file has wrong patch version: %d instead of %d", header.versionPatch, ecsSceneVersionPatch);
     }
 
-    HgEntity* entities = hgAlloc<HgEntity>(scratch, header.entityCount);
+    HgEcsDeserializer deserializer{};
+
+    deserializer.entities = hgAlloc<HgEntity>(scratch, header.entityCount);
     for (u32 i = 0; i < header.entityCount; ++i)
     {
-        entities[i] = hgEcsSpawn(ecs);
+        deserializer.entities[i] = hgEcsSpawn(ecs);
     }
 
-    HgStringView* strings = hgAlloc<HgStringView>(scratch, header.stringCount);
+    deserializer.strings = hgAlloc<HgStringView>(scratch, header.stringCount);
     for (u32 i = 0; i < header.stringCount; ++i)
     {
         EcsSerialStringDesc str = hgBinaryRead<EcsSerialStringDesc>(
             &scene, header.stringsBegin + i * sizeof(EcsSerialStringDesc));
 
-        strings[i].chars = (char*)((u8*)scene.data + str.begin);
-        strings[i].length = str.length;
+        deserializer.strings[i].chars = (char*)((u8*)scene.data + str.begin);
+        deserializer.strings[i].length = str.length;
     }
 
     for (u32 i = 0; i < header.componentCount; ++i)
@@ -2756,74 +2782,56 @@ HgEntity hgEcsDeserialize(HgEcs* ecs, HgBinary scene)
         EcsSerialComponentDesc comp = hgBinaryRead<EcsSerialComponentDesc>(
             &scene, header.componentsBegin + i * sizeof(EcsSerialComponentDesc));
 
-        u64 componentId = hgHashImpl(strings[comp.nameString]);
+        u64 componentId = hgHashImpl(deserializer.strings[comp.nameString]);
 
         for (u32 j = 0; j < comp.count; ++j)
         {
-            HgEntity e = entities[hgBinaryRead<u32>(&scene, comp.entitiesBegin + j * sizeof(u32))];
+            HgEntity e = deserializer.entities[hgBinaryRead<u32>(&scene, comp.entitiesBegin + j * sizeof(u32))];
 
             hgMapGet(&ecs->components, componentId)->deserialize(
-                entities,
-                strings,
+                &deserializer,
                 (u8*)scene.data + comp.dataBegin + j * comp.dataWidth,
                 hgEcsAdd(ecs, e, componentId));
         }
     }
 
-    return entities[0];
+    return deserializer.entities[0];
 }
 
-template<>
-void hgEcsSerializeImpl(
-    HgArena*,
-    HgMap<HgEntity, u32>* entities,
-    HgMap<HgStringView, u32>*,
-    HgNode* src,
-    void* dst)
+HgNode* hgNodeAdd(HgEcs* ecs, HgEntity e)
 {
-    HgNodeSerial node{};
-    node.parent = src->parent.handle == hgNullHandle ? (u32)-1 : *hgMapGet(entities, src->parent);
-    node.nextSibling = src->nextSibling.handle == hgNullHandle ? (u32)-1 : *hgMapGet(entities, src->nextSibling);
-    node.prevSibling = src->prevSibling.handle == hgNullHandle ? (u32)-1 : *hgMapGet(entities, src->prevSibling);
-    node.firstChild = src->firstChild.handle == hgNullHandle ? (u32)-1 : *hgMapGet(entities, src->firstChild);
-    memcpy(dst, &node, sizeof(node));
+    HgNode* node = hgEcsAdd<HgNode>(ecs, e);
+    *node = {};
+    return node;
 }
 
-template<>
-void hgEcsDeserializeImpl(
-    HgEntity* entities,
-    HgStringView*,
-    void* src,
-    HgNode* dst)
-{
-    HgNodeSerial node;
-    memcpy(&node, src, sizeof(node));
-    dst->parent = node.parent == (u32)-1 ? HgEntity{} : entities[node.parent];
-    dst->nextSibling = node.nextSibling == (u32)-1 ? HgEntity{} : entities[node.nextSibling];
-    dst->prevSibling = node.prevSibling == (u32)-1 ? HgEntity{} : entities[node.prevSibling];
-    dst->firstChild = node.firstChild == (u32)-1 ? HgEntity{} : entities[node.firstChild];
-}
-
-void hgNodeAddChild(HgEcs* ecs, HgEntity parent, HgEntity child)
+void hgNodeDestroy(HgEcs* ecs, HgEntity e)
 {
     hgAssert(ecs != nullptr);
-    hgAssert(hgEcsAlive(ecs, parent));
-    hgAssert(hgEcsAlive(ecs, child));
+    hgAssert(hgEcsAlive(ecs, e));
 
-    HgNode* node = hgEcsGet<HgNode>(ecs, parent);
-    HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
-
-    hgAssert(childNode->parent.handle == hgNullHandle);
-    hgAssert(childNode->prevSibling.handle == hgNullHandle);
-    hgAssert(childNode->nextSibling.handle == hgNullHandle);
-
-    if (node->firstChild.handle != hgNullHandle)
+    HgNode* node = hgEcsGet<HgNode>(ecs, e);
+    if (node->parent.handle != hgNullHandle)
     {
-        hgEcsGet<HgNode>(ecs, node->firstChild)->prevSibling = child;
-        childNode->nextSibling = node->firstChild;
+        if (node->prevSibling.handle != hgNullHandle)
+            hgEcsGet<HgNode>(ecs, node->prevSibling)->nextSibling = node->nextSibling;
+        else
+            hgEcsGet<HgNode>(ecs, node->parent)->firstChild = node->nextSibling;
+
+        if (node->nextSibling.handle != hgNullHandle)
+            hgEcsGet<HgNode>(ecs, node->nextSibling)->prevSibling = node->prevSibling;
     }
-    node->firstChild = child;
-    childNode->parent = parent;
+
+    HgEntity child = node->firstChild;
+    while (child.handle != hgNullHandle)
+    {
+        HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
+        HgEntity next = childNode->nextSibling;
+        hgNodeDestroy(ecs, child);
+        child = next;
+    }
+
+    hgEcsDespawn(ecs, e);
 }
 
 void hgNodeDetach(HgEcs* ecs, HgEntity e)
@@ -2871,54 +2879,70 @@ void hgNodeDetach(HgEcs* ecs, HgEntity e)
     *node = {};
 }
 
-void hgNodeDestroy(HgEcs* ecs, HgEntity e)
+void hgNodeAddChild(HgEcs* ecs, HgEntity parent, HgEntity child)
+{
+    hgAssert(ecs != nullptr);
+    hgAssert(hgEcsAlive(ecs, parent));
+    hgAssert(hgEcsAlive(ecs, child));
+
+    HgNode* node = hgEcsGet<HgNode>(ecs, parent);
+    HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
+
+    hgAssert(childNode->parent.handle == hgNullHandle);
+    hgAssert(childNode->prevSibling.handle == hgNullHandle);
+    hgAssert(childNode->nextSibling.handle == hgNullHandle);
+
+    if (node->firstChild.handle != hgNullHandle)
+    {
+        hgEcsGet<HgNode>(ecs, node->firstChild)->prevSibling = child;
+        childNode->nextSibling = node->firstChild;
+    }
+    node->firstChild = child;
+    childNode->parent = parent;
+}
+
+struct HgNodeSerial {
+    u32 parent;
+    u32 nextSibling;
+    u32 prevSibling;
+    u32 firstChild;
+};
+
+const u32 HgEcsSerializationImpl<HgNode>::width = sizeof(HgNodeSerial);
+
+void HgEcsSerializationImpl<HgNode>::serialize(HgEcsSerializer* s, HgNode* src, void* dst)
+{
+    HgNodeSerial node{};
+    node.parent = src->parent.handle == hgNullHandle ? (u32)-1 : hgEcsSerializerEntity(s, src->parent);
+    node.nextSibling = src->nextSibling.handle == hgNullHandle ? (u32)-1 : hgEcsSerializerEntity(s, src->nextSibling);
+    node.prevSibling = src->prevSibling.handle == hgNullHandle ? (u32)-1 : hgEcsSerializerEntity(s, src->prevSibling);
+    node.firstChild = src->firstChild.handle == hgNullHandle ? (u32)-1 : hgEcsSerializerEntity(s, src->firstChild);
+    memcpy(dst, &node, sizeof(node));
+}
+
+void HgEcsSerializationImpl<HgNode>::deserialize(HgEcsDeserializer* d, void* src, HgNode* dst)
+{
+    HgNodeSerial node;
+    memcpy(&node, src, sizeof(node));
+    dst->parent = node.parent == (u32)-1 ? HgEntity{} : hgEcsDeserializerEntity(d, node.parent);
+    dst->nextSibling = node.nextSibling == (u32)-1 ? HgEntity{} : hgEcsDeserializerEntity(d, node.nextSibling);
+    dst->prevSibling = node.prevSibling == (u32)-1 ? HgEntity{} : hgEcsDeserializerEntity(d, node.prevSibling);
+    dst->firstChild = node.firstChild == (u32)-1 ? HgEntity{} : hgEcsDeserializerEntity(d, node.firstChild);
+}
+
+HgTransform* hgTransformAdd(HgEcs* ecs, HgEntity e, HgVec3 position, HgVec3 scale, HgQuat rotation)
 {
     hgAssert(ecs != nullptr);
     hgAssert(hgEcsAlive(ecs, e));
 
-    HgNode* node = hgEcsGet<HgNode>(ecs, e);
-    if (node->parent.handle != hgNullHandle)
-    {
-        if (node->prevSibling.handle != hgNullHandle)
-            hgEcsGet<HgNode>(ecs, node->prevSibling)->nextSibling = node->nextSibling;
-        else
-            hgEcsGet<HgNode>(ecs, node->parent)->firstChild = node->nextSibling;
+    HgTransform* tf = hgEcsAdd<HgTransform>(ecs, e);
+    *tf = {};
+    tf->position = position;
+    tf->scale = scale;
+    tf->rotation = rotation;
+    hgTransformUpdate(ecs, e);
 
-        if (node->nextSibling.handle != hgNullHandle)
-            hgEcsGet<HgNode>(ecs, node->nextSibling)->prevSibling = node->prevSibling;
-    }
-
-    HgEntity child = node->firstChild;
-    while (child.handle != hgNullHandle)
-    {
-        HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
-        HgEntity next = childNode->nextSibling;
-        hgNodeDestroy(ecs, child);
-        child = next;
-    }
-
-    hgEcsDespawn(ecs, e);
-}
-
-template<>
-void hgEcsSerializeImpl(
-    HgArena*,
-    HgMap<HgEntity, u32>*,
-    HgMap<HgStringView, u32>*,
-    HgTransform* srcComponent,
-    void* dstData)
-{
-    memcpy(dstData, &srcComponent->position, sizeof(HgTransformSerial));
-}
-
-template<>
-void hgEcsDeserializeImpl(
-    HgEntity*,
-    HgStringView*,
-    void* srcData,
-    HgTransform* dstComponent)
-{
-    memcpy(&dstComponent->position, srcData, sizeof(HgTransformSerial));
+    return tf;
 }
 
 static void transformUpdateChild(HgEcs* ecs, HgEntity e)
@@ -2973,24 +2997,54 @@ void hgTransformUpdate(HgEcs* ecs, HgEntity e)
     }
 }
 
+
+/**
+ * The serialized form for HgTransform
+ */
+struct HgTransformSerial {
+    HgVec3 position;
+    HgVec3 scale;
+    HgQuat rotation;
+};
+
+const u32 HgEcsSerializationImpl<HgTransform>::width = sizeof(HgTransformSerial);
+
+void HgEcsSerializationImpl<HgTransform>::serialize(
+    HgEcsSerializer*,
+    HgTransform* srcComponent,
+    void* dstData)
+{
+    memcpy(dstData, &srcComponent->position, sizeof(HgTransformSerial));
+}
+
+void HgEcsSerializationImpl<HgTransform>::deserialize(
+    HgEcsDeserializer*,
+    void* srcData,
+    HgTransform* dstComponent)
+{
+    memcpy(&dstComponent->position, srcData, sizeof(HgTransformSerial));
+}
+
 struct VPUniform {
     HgMat4 proj;
     HgMat4 view;
 };
 
-template<>
-void hgEcsAddImpl(HgCamera* camera)
+HgCamera* hgCameraAdd(HgEcs* ecs, HgEntity e)
 {
+    HgCamera* camera = hgEcsAdd<HgCamera>(ecs, e);
     *camera = {};
 
     camera->vpBuffer = hgGpuBufferCreate(
         sizeof(VPUniform),
         HgGpuBufferUsage_uniformBuffer,
         HgGpuMemoryUsage_frequentUpdate);
+
+    return camera;
 }
 
 template<>
-void hgEcsRemoveImpl(HgCamera* camera)
+void hgEcsDtor(HgCamera* camera)
 {
     hgGpuBufferDestroy(camera->vpBuffer);
 }
@@ -3100,6 +3154,26 @@ void hgSpritesDeinit()
 
     hgGpuViewDestroy(spritePipeline.defaultTex.view);
     hgGpuImageDestroy(spritePipeline.defaultTex.image);
+}
+
+HgSprite* hgSpriteAdd(HgEcs* ecs, HgEntity e, HgGpuTextureHandle texture, HgVec2 uvPos, HgVec2 uvSize)
+{
+    hgAssert(ecs != nullptr);
+    hgAssert(hgEcsAlive(ecs, e));
+
+    HgSprite* sprite = hgEcsAdd<HgSprite>(ecs, e);
+    *sprite = {};
+    sprite->texture = texture;
+    sprite->uvPos = uvPos;
+    sprite->uvSize = uvSize;
+
+    return sprite;
+}
+
+template<>
+void hgEcsDtor(HgSprite* sprite)
+{
+    hgAssetUnload(sprite->texture);
 }
 
 void hgSpritesDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
@@ -3216,6 +3290,23 @@ void hgSkyboxDeinit()
     hgGpuImageDestroy(skyboxPipeline.defaultTex.image);
 }
 
+HgSkybox* hgSkyboxAdd(HgEcs* ecs, HgEntity e, HgGpuTextureHandle texture)
+{
+    hgAssert(ecs != nullptr);
+    hgAssert(hgEcsAlive(ecs, e));
+
+    HgSkybox* skybox = hgEcsAdd<HgSkybox>(ecs, e);
+    *skybox = {texture};
+
+    return skybox;
+}
+
+template<>
+void hgEcsDtor(HgSkybox* skybox)
+{
+    hgAssetUnload(skybox->texture);
+}
+
 void hgSkyboxDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 {
     hgGpuBindPipeline(cmd, skyboxPipeline.pipeline);
@@ -3234,6 +3325,28 @@ void hgSkyboxDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 
         hgGpuDraw(cmd, 0, 36, 0, 1);
     });
+}
+
+HgDirLight* hgDirLightAdd(HgEcs* ecs, HgEntity e, HgVec3 dir, HgVec4 color)
+{
+    hgAssert(ecs != nullptr);
+    hgAssert(hgEcsAlive(ecs, e));
+
+    HgDirLight* light = hgEcsAdd<HgDirLight>(ecs, e);
+    *light = {dir, color};
+
+    return light;
+}
+
+HgPointLight* hgPointLightAdd(HgEcs* ecs, HgEntity e, HgVec4 color)
+{
+    hgAssert(ecs != nullptr);
+    hgAssert(hgEcsAlive(ecs, e));
+
+    HgPointLight* light = hgEcsAdd<HgPointLight>(ecs, e);
+    *light = {color};
+
+    return light;
 }
 
 struct ModelPipelineDirLightData {
@@ -3417,6 +3530,33 @@ void hgModelsDeinit()
     hgGpuBufferDestroy(modelPipeline.dirLightBuffer);
 }
 
+HgModel* hgModelAdd(
+    HgEcs* ecs,
+    HgEntity e,
+    HgGpuMeshHandle mesh,
+    HgGpuTextureHandle colorMap,
+    HgGpuTextureHandle normalMap)
+{
+    hgAssert(ecs != nullptr);
+    hgAssert(hgEcsAlive(ecs, e));
+
+    HgModel* model = hgEcsAdd<HgModel>(ecs, e);
+    *model = {};
+    model->mesh = mesh;
+    model->colorMap = colorMap;
+    model->normalMap = normalMap;
+
+    return model;
+}
+
+template<>
+void hgEcsDtor(HgModel* model)
+{
+    hgAssetUnload(model->normalMap);
+    hgAssetUnload(model->colorMap);
+    hgAssetUnload(model->mesh);
+}
+
 void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 {
     hgAssert(ecs != nullptr);
@@ -3506,9 +3646,9 @@ void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
             ? &modelPipeline.defaultNormalMap
             : hgAssetGet(model->normalMap);
 
-        HgGpuMesh* gpuModel = model->model.handle == hgNullHandle
+        HgGpuMesh* gpuModel = model->mesh.handle == hgNullHandle
             ? &modelPipeline.defaultModel
-            : hgAssetGet(model->model);
+            : hgAssetGet(model->mesh);
 
         ModelPipelinePush push{};
         push.model = tf->mat;
@@ -3542,18 +3682,26 @@ void hgAssetUnloadImpl(HgAssetData<HgAudio>* data)
     hgError("Unload audio file impl : TODO\n");
 }
 
-template<>
-void hgEcsAddImpl(HgAudioSource* src)
+HgAudioSource* hgAudioSourceAdd(HgEcs* ecs, HgEntity e, HgAudioHandle audio, bool repeat)
 {
+    hgAssert(ecs != nullptr);
+    hgAssert(hgEcsAlive(ecs, e));
+
+    HgAudioSource* src = hgEcsAdd<HgAudioSource>(ecs, e);
     *src = {};
     src->player = hgAudioPlayerCreate(HgAudioFormat_f32, 8000, 1);
+    src->audio = audio;
+    src->position = 0;
+    src->repeat = repeat;
+
+    return src;
 }
 
 template<>
-void hgEcsRemoveImpl(HgAudioSource* src)
+void hgEcsDtor(HgAudioSource* src)
 {
+    hgAssetUnload(src->audio);
     hgAudioPlayerDestroy(src->player);
-    *src = {};
 }
 
 void hgAudioUpdate(HgEcs* ecs, HgEntity listener)

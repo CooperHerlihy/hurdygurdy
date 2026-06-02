@@ -27,12 +27,12 @@
 #ifndef HG_CORE_HPP
 #define HG_CORE_HPP
 
-#include <float.h>
-#include <math.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cfloat>
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 /**
  * An 8 bit, 1 byte unsigned integer

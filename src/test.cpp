@@ -2305,9 +2305,9 @@ void hgTest()
             HgEntity a = hgEcsSpawn(&ecs);
             HgEntity b = hgEcsSpawn(&ecs);
 
-            hgEcsAdd<HgNode>(&ecs, root);
-            hgEcsAdd<HgNode>(&ecs, a);
-            hgEcsAdd<HgNode>(&ecs, b);
+            hgNodeAdd(&ecs, root);
+            hgNodeAdd(&ecs, a);
+            hgNodeAdd(&ecs, b);
 
             *hgEcsAdd<u32>(&ecs, a) = 12;
             *hgEcsAdd<u32>(&ecs, b) = 42;
@@ -2377,10 +2377,10 @@ void hgTest()
             HgEntity aa = hgEcsSpawn(&ecs);
             HgEntity ab = hgEcsSpawn(&ecs);
 
-            *hgEcsAdd<HgNode>(&ecs, a) = {};
-            *hgEcsAdd<HgNode>(&ecs, b) = {};
-            *hgEcsAdd<HgNode>(&ecs, aa) = {};
-            *hgEcsAdd<HgNode>(&ecs, ab) = {};
+            *hgNodeAdd(&ecs, a) = {};
+            *hgNodeAdd(&ecs, b) = {};
+            *hgNodeAdd(&ecs, aa) = {};
+            *hgNodeAdd(&ecs, ab) = {};
 
             hgNodeAddChild(&ecs, a, aa);
             hgNodeAddChild(&ecs, a, ab);
@@ -2408,12 +2408,12 @@ void hgTest()
             HgEntity aba = hgEcsSpawn(&ecs);
             HgEntity abb = hgEcsSpawn(&ecs);
 
-            *hgEcsAdd<HgNode>(&ecs, a) = {};
-            *hgEcsAdd<HgNode>(&ecs, b) = {};
-            *hgEcsAdd<HgNode>(&ecs, aa) = {};
-            *hgEcsAdd<HgNode>(&ecs, ab) = {};
-            *hgEcsAdd<HgNode>(&ecs, aba) = {};
-            *hgEcsAdd<HgNode>(&ecs, abb) = {};
+            *hgNodeAdd(&ecs, a) = {};
+            *hgNodeAdd(&ecs, b) = {};
+            *hgNodeAdd(&ecs, aa) = {};
+            *hgNodeAdd(&ecs, ab) = {};
+            *hgNodeAdd(&ecs, aba) = {};
+            *hgNodeAdd(&ecs, abb) = {};
 
             hgNodeAddChild(&ecs, ab, aba);
             hgNodeAddChild(&ecs, ab, abb);

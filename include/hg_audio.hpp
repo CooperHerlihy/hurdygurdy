@@ -150,21 +150,19 @@ struct HgAudioSource {
     bool repeat;
 };
 
-/**
- * HgAudioSource ecs add implementation
- */
-template<>
-void hgEcsAddImpl(HgAudioSource* src);
+HgAudioSource* hgAudioSourceAdd(HgEcs* ecs, HgEntity e, HgAudioHandle audio, bool repeat);
 
 /**
- * HgAudioSource ecs remove implementation
+ * HgAudioSource ecs destructor
  */
 template<>
-void hgEcsRemoveImpl(HgAudioSource* src);
+void hgEcsDtor(HgAudioSource* src);
 
 /**
  * Update all audio sources, playing sound if needed
  */
 void hgAudioUpdate(HgEcs* ecs, HgEntity listener);
+
+// mixing : TODO
 
 #endif // HG_AUDIO_HPP
