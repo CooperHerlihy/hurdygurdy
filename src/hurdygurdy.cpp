@@ -6,6 +6,7 @@
 #include "hg_concurrency.hpp"
 #include "hg_platform.hpp"
 #include "hg_gpu.hpp"
+#include "hg_audio.hpp"
 #include "hg_assets.hpp"
 #include "hg_ecs.hpp"
 #include "hg_rendering.hpp"
@@ -22,7 +23,7 @@ void hgInit(const HgInit* init)
         init = &defaultInit;
     }
 
-    hgScratchInit(init->arenaSize);
+    hgScratchInit(init->arenaCount, init->arenaSize);
     HgArena* arena = hgScratch();
 
     hgPlatformInit(
@@ -42,7 +43,7 @@ void hgInit(const HgInit* init)
 
     hgConcurrencyInit(arena, init->maxMutices, init->maxFences);
 
-    u32 workerCount = (u32)std::max(1, (i32)hgHardwareThreadCount() - 1); // main thread
+    u32 workerCount = (u32)hgMax(1, (i32)hgHardwareThreadCount() - 1); // main thread
     hgThreadsInit(arena, init->threadPoolQueueSize, workerCount);
 
     hgAssetInitDefaults(
@@ -51,7 +52,8 @@ void hgInit(const HgInit* init)
         init->maxTextures,
         init->maxGpuTextures,
         init->maxMeshes,
-        init->maxGpuMeshes);
+        init->maxGpuMeshes,
+        init->maxAudios);
 }
 
 void hgDeinit()
@@ -94,34 +96,38 @@ void* hgRealloc(HgArena* arena, void* allocation, u64 oldSize, u64 newSize, u64 
 
     void* newAllocation = hgAlloc(arena, newSize, alignment);
     if (allocation != nullptr)
-        memcpy(newAllocation, allocation, std::min(oldSize, newSize));
+        memcpy(newAllocation, allocation, hgMin(oldSize, newSize));
     return newAllocation;
 }
 
-static constexpr u32 arenaCount = 2;
-static thread_local HgArena arenas[arenaCount]{};
+static thread_local HgArena* arenas{};
+static thread_local u32 arenaCount = 0;
 
-void hgScratchInit(u64 size)
+void hgScratchInit(u32 count, u64 size)
 {
-    for (u32 i = 0; i < arenaCount; ++i)
+    if (arenas != nullptr)
+        return;
+
+    size = hgAlign(size, 16);
+    hgAssert(size < UINT64_MAX / count);
+
+    void* block = malloc(count * size);
+    HgArena base = {block, size, 0};
+    arenas = hgAlloc<HgArena>(&base, count);
+    arenaCount = count;
+
+    arenas[0] = base;
+    for (u32 i = 1; i < arenaCount; ++i)
     {
-        if (arenas[i].memory == nullptr)
-        {
-            u64 arenaSize = size;
-            arenas[i] = {malloc(arenaSize), arenaSize, 0};
-        }
+        arenas[i] = {(u8*)block + i * size, size, 0};
     }
 }
 
 void hgScratchDeinit()
 {
-    for (u32 i = 0; i < arenaCount; ++i)
+    if (arenas != nullptr)
     {
-        if (arenas[i].memory != nullptr)
-        {
-            free(arenas[i].memory);
-            arenas[i] = {};
-        }
+        free(arenas);
     }
 }
 
@@ -130,16 +136,16 @@ HgArena* hgScratch(HgArena const* const* conflicts, u32 count)
     if (conflicts != nullptr)
         hgAssert(count > 0);
 
-    for (HgArena& arena : arenas)
+    for (u32 i = 0; i < arenaCount; ++i)
     {
-        hgAssert(arena.memory != nullptr);
+        hgAssert(arenas[i].memory != nullptr);
 
-        for (u32 i = 0; i < count; ++i)
+        for (u32 j = 0; j < count; ++j)
         {
-            if (&arena == conflicts[i])
+            if (&arenas[i] == conflicts[j])
                 goto next;
         }
-        return &arena;
+        return &arenas[i];
 next:
         continue;
     }
@@ -1294,13 +1300,15 @@ void hgAssetInitDefaults(
     u32 maxTextures,
     u32 maxGpuTextures,
     u32 maxMeshes,
-    u32 maxGpuMeshes)
+    u32 maxGpuMeshes,
+    u32 maxAudios)
 {
     hgAssetInit<HgBinary>(arena, maxBinaries);
     hgAssetInit<HgTexture>(arena, maxTextures);
     hgAssetInit<HgGpuTexture>(arena, maxGpuTextures);
     hgAssetInit<HgMesh>(arena, maxMeshes);
     hgAssetInit<HgGpuMesh>(arena, maxGpuMeshes);
+    hgAssetInit<HgAudio>(arena, maxAudios);
 }
 
 void hgAssetDeinitDefaults()
@@ -2561,7 +2569,7 @@ void ecsSerialFindEntities(HgEcs* ecs, HgEntity root, EcsSerialScene* scene)
     {
         HgNode* node = hgEcsGet<HgNode>(ecs, root);
         HgEntity child = node->firstChild;
-        while (!hgNullHandle(child.handle))
+        while (child.handle != hgNullHandle)
         {
             ecsSerialFindEntities(ecs, child, scene);
             child = hgEcsGet<HgNode>(ecs, child)->nextSibling;
@@ -2607,7 +2615,7 @@ void ecsSerialGatherData(HgArena* arena, HgEcs* ecs, HgEntity root, EcsSerialSce
     {
         HgNode* node = hgEcsGet<HgNode>(ecs, root);
         HgEntity child = node->firstChild;
-        while (!hgNullHandle(child.handle))
+        while (child.handle != hgNullHandle)
         {
             ecsSerialGatherData(arena, ecs, child, scene);
             child = hgEcsGet<HgNode>(ecs, child)->nextSibling;
@@ -2774,10 +2782,10 @@ void hgEcsSerializeImpl(
     void* dst)
 {
     HgNodeSerial node{};
-    node.parent = hgNullHandle(src->parent.handle) ? (u32)-1 : *hgMapGet(entities, src->parent);
-    node.nextSibling = hgNullHandle(src->nextSibling.handle) ? (u32)-1 : *hgMapGet(entities, src->nextSibling);
-    node.prevSibling = hgNullHandle(src->prevSibling.handle) ? (u32)-1 : *hgMapGet(entities, src->prevSibling);
-    node.firstChild = hgNullHandle(src->firstChild.handle) ? (u32)-1 : *hgMapGet(entities, src->firstChild);
+    node.parent = src->parent.handle == hgNullHandle ? (u32)-1 : *hgMapGet(entities, src->parent);
+    node.nextSibling = src->nextSibling.handle == hgNullHandle ? (u32)-1 : *hgMapGet(entities, src->nextSibling);
+    node.prevSibling = src->prevSibling.handle == hgNullHandle ? (u32)-1 : *hgMapGet(entities, src->prevSibling);
+    node.firstChild = src->firstChild.handle == hgNullHandle ? (u32)-1 : *hgMapGet(entities, src->firstChild);
     memcpy(dst, &node, sizeof(node));
 }
 
@@ -2805,11 +2813,11 @@ void hgNodeAddChild(HgEcs* ecs, HgEntity parent, HgEntity child)
     HgNode* node = hgEcsGet<HgNode>(ecs, parent);
     HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
 
-    hgAssert(hgNullHandle(childNode->parent.handle));
-    hgAssert(hgNullHandle(childNode->prevSibling.handle));
-    hgAssert(hgNullHandle(childNode->nextSibling.handle));
+    hgAssert(childNode->parent.handle == hgNullHandle);
+    hgAssert(childNode->prevSibling.handle == hgNullHandle);
+    hgAssert(childNode->nextSibling.handle == hgNullHandle);
 
-    if (!hgNullHandle(node->firstChild.handle))
+    if (node->firstChild.handle != hgNullHandle)
     {
         hgEcsGet<HgNode>(ecs, node->firstChild)->prevSibling = child;
         childNode->nextSibling = node->firstChild;
@@ -2824,13 +2832,13 @@ void hgNodeDetach(HgEcs* ecs, HgEntity e)
     hgAssert(hgEcsAlive(ecs, e));
 
     HgNode* node = hgEcsGet<HgNode>(ecs, e);
-    if (hgNullHandle(node->parent.handle))
+    if (node->parent.handle == hgNullHandle)
     {
-        hgAssert(hgNullHandle(node->prevSibling.handle));
-        hgAssert(hgNullHandle(node->nextSibling.handle));
+        hgAssert(node->prevSibling.handle == hgNullHandle);
+        hgAssert(node->nextSibling.handle == hgNullHandle);
 
         HgEntity child = node->firstChild;
-        while (!hgNullHandle(child.handle))
+        while (child.handle != hgNullHandle)
         {
             HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
             HgEntity next = childNode->nextSibling;
@@ -2840,16 +2848,16 @@ void hgNodeDetach(HgEcs* ecs, HgEntity e)
             child = next;
         }
     } else {
-        if (!hgNullHandle(node->prevSibling.handle))
+        if (node->prevSibling.handle != hgNullHandle)
             hgEcsGet<HgNode>(ecs, node->prevSibling)->nextSibling = node->nextSibling;
         else
             hgEcsGet<HgNode>(ecs, node->parent)->firstChild = node->nextSibling;
 
-        if (!hgNullHandle(node->nextSibling.handle))
+        if (node->nextSibling.handle != hgNullHandle)
             hgEcsGet<HgNode>(ecs, node->nextSibling)->prevSibling = node->prevSibling;
 
         HgEntity child = node->firstChild;
-        while (!hgNullHandle(child.handle))
+        while (child.handle != hgNullHandle)
         {
             HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
             HgEntity next = childNode->nextSibling;
@@ -2869,19 +2877,19 @@ void hgNodeDestroy(HgEcs* ecs, HgEntity e)
     hgAssert(hgEcsAlive(ecs, e));
 
     HgNode* node = hgEcsGet<HgNode>(ecs, e);
-    if (!hgNullHandle(node->parent.handle))
+    if (node->parent.handle != hgNullHandle)
     {
-        if (!hgNullHandle(node->prevSibling.handle))
+        if (node->prevSibling.handle != hgNullHandle)
             hgEcsGet<HgNode>(ecs, node->prevSibling)->nextSibling = node->nextSibling;
         else
             hgEcsGet<HgNode>(ecs, node->parent)->firstChild = node->nextSibling;
 
-        if (!hgNullHandle(node->nextSibling.handle))
+        if (node->nextSibling.handle != hgNullHandle)
             hgEcsGet<HgNode>(ecs, node->nextSibling)->prevSibling = node->prevSibling;
     }
 
     HgEntity child = node->firstChild;
-    while (!hgNullHandle(child.handle))
+    while (child.handle != hgNullHandle)
     {
         HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
         HgEntity next = childNode->nextSibling;
@@ -2925,7 +2933,7 @@ static void transformUpdateChild(HgEcs* ecs, HgEntity e)
             * hgMatModel3D(tf->position, tf->scale, tf->rotation);
 
     HgEntity child = node->firstChild;
-    while (!hgNullHandle(child.handle))
+    while (child.handle != hgNullHandle)
     {
         hgTransformUpdate(ecs, child);
         child = hgEcsGet<HgNode>(ecs, child)->nextSibling;
@@ -2941,7 +2949,7 @@ void hgTransformUpdate(HgEcs* ecs, HgEntity e)
     if (hgEcsHas<HgNode>(ecs, e))
     {
         HgNode* node = hgEcsGet<HgNode>(ecs, e);
-        if (!hgNullHandle(node->parent.handle) && hgEcsHas<HgTransform>(ecs, node->parent))
+        if (node->parent.handle != hgNullHandle && hgEcsHas<HgTransform>(ecs, node->parent))
         {
             transformUpdateChild(ecs, e);
         }
@@ -2951,7 +2959,7 @@ void hgTransformUpdate(HgEcs* ecs, HgEntity e)
             tf->mat = hgMatModel3D(tf->position, tf->scale, tf->rotation);
 
             HgEntity child = node->firstChild;
-            while (!hgNullHandle(child.handle))
+            while (child.handle != hgNullHandle)
             {
                 transformUpdateChild(ecs, child);
                 child = hgEcsGet<HgNode>(ecs, child)->nextSibling;
@@ -3103,7 +3111,7 @@ void hgSpritesDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 
     hgEcsForEach<HgSprite, HgTransform>(ecs, [&](HgEntity, HgSprite* sprite, HgTransform* tf)
     {
-        HgGpuTexture* texture = hgNullHandle(sprite->texture.handle)
+        HgGpuTexture* texture = sprite->texture.handle == hgNullHandle
             ? &spritePipeline.defaultTex
             : hgAssetGet(sprite->texture);
 
@@ -3214,7 +3222,7 @@ void hgSkyboxDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 
     hgEcsForEach<HgSkybox>(ecs, [&](HgEntity, HgSkybox* skybox)
     {
-        HgGpuTexture* texture = hgNullHandle(skybox->texture.handle)
+        HgGpuTexture* texture = skybox->texture.handle == hgNullHandle
             ? &skyboxPipeline.defaultTex
             : hgAssetGet(skybox->texture);
 
@@ -3363,9 +3371,9 @@ void hgModelsInit(
     hgGpuBufferWrite(modelPipeline.defaultModel.vertexBuffer, 0, cubeVertices, sizeof(cubeVertices));
     hgGpuBufferWrite(modelPipeline.defaultModel.indexBuffer, 0, cubeIndices, sizeof(cubeIndices));
 
-    modelPipeline.defaultModel.vertexCount = sizeof(cubeVertices) / sizeof(*cubeVertices);
+    modelPipeline.defaultModel.vertexCount = hgArrayCount(cubeVertices);
     modelPipeline.defaultModel.vertexWidth = sizeof(HgMeshVertex);
-    modelPipeline.defaultModel.indexCount = sizeof(cubeIndices) / sizeof(*cubeIndices);
+    modelPipeline.defaultModel.indexCount = hgArrayCount(cubeIndices);
 
     struct Color {
         u8 r, g, b, a;
@@ -3490,15 +3498,15 @@ void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 
     hgEcsForEach<HgModel, HgTransform>(ecs, [&](HgEntity, HgModel* model, HgTransform* tf)
     {
-        HgGpuTexture* colorMap = hgNullHandle(model->colorMap.handle)
+        HgGpuTexture* colorMap = model->colorMap.handle == hgNullHandle
             ? &modelPipeline.defaultColorMap
             : hgAssetGet(model->colorMap);
 
-        HgGpuTexture* normalMap = hgNullHandle(model->normalMap.handle)
+        HgGpuTexture* normalMap = model->normalMap.handle == hgNullHandle
             ? &modelPipeline.defaultNormalMap
             : hgAssetGet(model->normalMap);
 
-        HgGpuMesh* gpuModel = hgNullHandle(model->model.handle)
+        HgGpuMesh* gpuModel = model->model.handle == hgNullHandle
             ? &modelPipeline.defaultModel
             : hgAssetGet(model->model);
 
@@ -3520,138 +3528,136 @@ void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
     });
 }
 
-// struct HgAudioPlayerDesc {
-//     HgAudioFormat format;
-//     u32 frequency;
-//     u32 channels;
-// };
-//
-// template<>
-// constexpr u64 hgHashImpl(HgAudioPlayerDesc desc)
-// {
-//     (void)desc;
-//     return desc.frequency + (desc.channels << 24) + (desc.format << 28);
-// }
-//
-// static bool operator==(const HgAudioPlayerDesc& lhs, const HgAudioPlayerDesc& rhs)
-// {
-//     return memcmp(&lhs, &rhs, sizeof(HgAudioPlayerDesc)) == 0;
-// }
-//
-// static bool operator!=(const HgAudioPlayerDesc& lhs, const HgAudioPlayerDesc& rhs)
-// {
-//     return !(lhs == rhs);
-// }
-//
-// void hgAudioInit(HgArena* arena)
-// {
-// }
-//
-// void hgAudioDeinit()
-// {
-// }
-//
-// template<>
-// void hgAssetLoadImpl(HgAssetData<HgAudio>* data)
-// {
-//     (void)data;
-//     hgError("Load audio file impl : TODO\n");
-// }
-//
-// template<>
-// void hgAssetUnloadImpl(HgAssetData<HgAudio>* data)
-// {
-//     (void)data;
-//     hgError("Unload audio file impl : TODO\n");
-// }
-//
-// void hgAudioUpdate(HgEcs* ecs, HgEntity listener)
-// {
-//     hgEcsForPar<HgAudioSource>(ecs, [&](HgEntity e, HgAudioSource* src)
-//     {
-//         HgAudio* audio = hgAssetGet(src->audio);
-//         if (src->position == audio->size && !src->repeat)
-//             return;
-//
-//         HgArena* scratch = hgScratch();
-//         hgArenaScope(scratch);
-//
-//         u64 queued = hgAudioPlayerQueuedSize(src->player);
-//         u64 sizeToPush = (u64)((f32)audio->frequency / 4.0f) - queued;
-//
-//         void* queue = hgAlloc(scratch, sizeToPush, hgAudioFormatSize(audio->format));
-//         u64 queueSize = 0;
-//
-//         while (queueSize < sizeToPush)
-//         {
-//             u64 audioRemaining = audio->size - src->position;
-//             u64 sizeToQueue = std::min(sizeToPush, audioRemaining);
-//             memcpy(queue, (u8*)audio->data + src->position, sizeToQueue);
-//             queueSize += sizeToQueue;
-//             src->position += sizeToQueue;
-//
-//             if (!src->repeat)
-//                 break;
-//
-//             if (src->position == audio->size)
-//                 src->position = 0;
-//         }
-//
-//         if (hgEcsHas<HgTransform>(ecs, e))
-//         {
-//             hgAssert(hgEcsHas<HgTransform>(ecs, listener));
-//
-//             HgVec3 relPos = hgTransformWorldPos(*hgEcsGet<HgTransform>(ecs, listener))
-//                           - hgTransformWorldPos(*hgEcsGet<HgTransform>(ecs, e));
-//             f32 dist = hgVecDot3(relPos, relPos);
-//             f32 factor = 1.0f / dist;
-//
-//             switch (audio->format)
-//             {
-//                 case HgAudioFormat_u8:
-//                     for (u64 i = 0; i < sizeToPush / sizeof(u8); ++i)
-//                     {
-//                         u8 val = ((u8*)queue)[i];
-//                         val = (u8)((f32)val * factor);
-//                         ((u8*)queue)[i] = val;
-//                     }
-//                     break;
-//                 case HgAudioFormat_s8:
-//                     for (u64 i = 0; i < sizeToPush / sizeof(i8); ++i)
-//                     {
-//                         i8 val = ((i8*)queue)[i];
-//                         val = (i8)((f32)val * factor);
-//                         ((i8*)queue)[i] = val;
-//                     }
-//                     break;
-//                 case HgAudioFormat_s16:
-//                     for (u64 i = 0; i < sizeToPush / sizeof(i16); ++i)
-//                     {
-//                         i16 val = ((i16*)queue)[i];
-//                         val = (i16)((f32)val * factor);
-//                         ((i16*)queue)[i] = val;
-//                     }
-//                     break;
-//                 case HgAudioFormat_s32:
-//                     for (u64 i = 0; i < sizeToPush / sizeof(i32); ++i)
-//                     {
-//                         i32 val = ((i32*)queue)[i];
-//                         val = (i32)((f32)val * factor);
-//                         ((i32*)queue)[i] = val;
-//                     }
-//                     break;
-//                 case HgAudioFormat_f32:
-//                     for (u64 i = 0; i < sizeToPush / sizeof(f32); ++i)
-//                     {
-//                         ((f32*)queue)[i] *= factor;
-//                     }
-//                     break;
-//                 default:
-//                     hgError("Invalid audio format enum: %u\n", audio->format);
-//             }
-//         }
-//
-//         hgAudioPlayerPush(src->player, queue, queueSize);
-//     });
-// }
+template<>
+void hgAssetLoadImpl(HgAssetData<HgAudio>* data)
+{
+    (void)data;
+    hgError("Load audio file impl : TODO\n");
+}
+
+template<>
+void hgAssetUnloadImpl(HgAssetData<HgAudio>* data)
+{
+    (void)data;
+    hgError("Unload audio file impl : TODO\n");
+}
+
+template<>
+void hgEcsAddImpl(HgAudioSource* src)
+{
+    *src = {};
+    src->player = hgAudioPlayerCreate(HgAudioFormat_f32, 8000, 1);
+}
+
+template<>
+void hgEcsRemoveImpl(HgAudioSource* src)
+{
+    hgAudioPlayerDestroy(src->player);
+    *src = {};
+}
+
+void hgAudioUpdate(HgEcs* ecs, HgEntity listener)
+{
+    hgEcsForEach<HgAudioSource>(ecs, [&](HgEntity e, HgAudioSource* src)
+    {
+        HgAudio* audio = hgAssetGet(src->audio);
+        if (src->position == audio->size && !src->repeat)
+            return;
+
+        HgArena* scratch = hgScratch();
+        hgArenaScope(scratch);
+
+        u32 width = hgAudioFormatSize(audio->format);
+
+        u32 total = audio->frequency * width / 8;
+        u32 queued = hgAudioPlayerQueuedSize(src->player);
+        if (queued >= total)
+            return;
+        u32 sizeToPush = total - queued;
+
+        hgDebug("total size: %u\n", audio->frequency * width);
+        hgDebug("queued: %u\n", queued);
+        hgDebug("sizeToPush: %u\n", sizeToPush);
+
+        void* queue = hgAlloc(scratch, sizeToPush, width);
+        u32 queueSize = 0;
+
+        if (src->repeat)
+        {
+            while (queueSize < sizeToPush)
+            {
+                if (src->position == audio->size)
+                    src->position = 0;
+
+                u32 sizeToQueue = hgMin(sizeToPush - queueSize, (u32)(audio->size - src->position));
+                memcpy((u8*)queue + queueSize, (u8*)audio->data + src->position, sizeToQueue);
+                queueSize += sizeToQueue;
+                src->position += sizeToQueue;
+            }
+        }
+        else
+        {
+            queueSize = hgMin(sizeToPush, (u32)(audio->size - src->position));
+            memcpy(queue, (u8*)audio->data + src->position, queueSize);
+            src->position += queueSize;
+        }
+
+        if (hgEcsHas<HgTransform>(ecs, e))
+        {
+            hgAssert(hgEcsHas<HgTransform>(ecs, listener));
+
+            HgVec3 relPos = hgTransformWorldPos(*hgEcsGet<HgTransform>(ecs, listener))
+                          - hgTransformWorldPos(*hgEcsGet<HgTransform>(ecs, e));
+            f32 dist = hgVecDot3(relPos, relPos);
+            f32 factor = 1.0f / dist;
+
+            switch (audio->format)
+            {
+                case HgAudioFormat_u8:
+                    for (u64 i = 0; i < sizeToPush / sizeof(u8); ++i)
+                    {
+                        u8 val = ((u8*)queue)[i];
+                        val = (u8)((f32)val * factor);
+                        ((u8*)queue)[i] = val;
+                    }
+                    break;
+                case HgAudioFormat_s8:
+                    for (u64 i = 0; i < sizeToPush / sizeof(i8); ++i)
+                    {
+                        i8 val = ((i8*)queue)[i];
+                        val = (i8)((f32)val * factor);
+                        ((i8*)queue)[i] = val;
+                    }
+                    break;
+                case HgAudioFormat_s16:
+                    for (u64 i = 0; i < sizeToPush / sizeof(i16); ++i)
+                    {
+                        i16 val = ((i16*)queue)[i];
+                        val = (i16)((f32)val * factor);
+                        ((i16*)queue)[i] = val;
+                    }
+                    break;
+                case HgAudioFormat_s32:
+                    for (u64 i = 0; i < sizeToPush / sizeof(i32); ++i)
+                    {
+                        i32 val = ((i32*)queue)[i];
+                        val = (i32)((f32)val * factor);
+                        ((i32*)queue)[i] = val;
+                    }
+                    break;
+                case HgAudioFormat_f32:
+                    for (u64 i = 0; i < sizeToPush / sizeof(f32); ++i)
+                    {
+                        ((f32*)queue)[i] *= factor;
+                    }
+                    break;
+                default:
+                    hgError("Invalid audio format enum: %u\n", audio->format);
+            }
+        }
+
+        hgAssert(queueSize <= sizeToPush);
+        hgAudioPlayerPush(src->player, queue, queueSize);
+    });
+}
 

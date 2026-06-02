@@ -27,6 +27,9 @@ static HgEntity player;
 static HgTransform* transform;
 static HgCamera* camera;
 
+static f32 audioData[4000];
+static HgAudioHandle audioHandle;
+
 static bool showEditor = true;
 static bool showRender = true;
 static bool showImguiDemo = false;
@@ -68,6 +71,14 @@ void init(HgArena* arena)
 
     hgImGuiInit(window, hgWindowImageFormat(window));
 
+    audioHandle = hgAssetCreate<HgAudio>();
+    HgAudio* audio = hgAssetGet(audioHandle);
+    audio->data = audioData;
+    audio->size = sizeof(audioData);
+    audio->format = HgAudioFormat_f32;
+    audio->frequency = 8000;
+    audio->channels = 1;
+
     hgSpritesInit(HgFormat_r8g8b8a8_srgb, HgFormat_d32_sfloat);
     hgModelsInit(HgFormat_r8g8b8a8_srgb, HgFormat_d32_sfloat);
     hgSkyboxInit(HgFormat_r8g8b8a8_srgb, HgFormat_d32_sfloat);
@@ -82,7 +93,7 @@ void init(HgArena* arena)
     hgEcsRegisterType(&ecs, arena, HgDirLight, 64);
     hgEcsRegisterType(&ecs, arena, HgPointLight, 64);
     hgEcsRegisterType(&ecs, arena, HgModel, 256);
-    // hgEcsRegisterType(&ecs, arena, HgAudioSource, 64);
+    hgEcsRegisterType(&ecs, arena, HgAudioSource, 64);
 
     hgEcsRegisterType(&ecs, arena, Name, 1024);
     hgEcsRegisterType(&ecs, arena, Spin, 256);
@@ -137,9 +148,16 @@ void init(HgArena* arena)
     hgEcsGet<HgTransform>(&ecs, cube)->position = HgVec3{1, 0, 1};
     hgTransformUpdate(&ecs, cube);
     *hgEcsAdd<HgModel>(&ecs, cube) = {HgGpuMeshHandle{}, HgGpuTextureHandle{}, HgGpuTextureHandle{}};
-    // hgEcsAdd<HgAudioSource>(&ecs, cube);
     *hgEcsAdd<Spin>(&ecs, cube) = {1.0f};
 
+    // HgEntity sound = hgEcsSpawn(&ecs);
+    // *hgEcsAdd<Name>(&ecs, sound) = {"sound"};
+    // hgEcsAdd<HgNode>(&ecs, sound);
+    hgEcsAdd<HgAudioSource>(&ecs, cube);
+    hgEcsGet<HgAudioSource>(&ecs, cube)->audio = audioHandle;
+    hgEcsGet<HgAudioSource>(&ecs, cube)->repeat = true;
+
+    // hgNodeAddChild(&ecs, root, sound);
     hgNodeAddChild(&ecs, root, cube);
     hgNodeAddChild(&ecs, root, square);
     hgNodeAddChild(&ecs, root, pointLight);
@@ -411,7 +429,7 @@ void drawEditorEntity(HgArena* frame, HgEntity e)
         }
 
         HgEntity child = node->firstChild;
-        while (!hgNullHandle(child.handle))
+        while (child.handle != hgNullHandle)
         {
             HgEntity next = hgEcsGet<HgNode>(&ecs, child)->nextSibling;
             drawEditorEntity(frame, child);
@@ -460,8 +478,8 @@ void drawRender()
     {
         ImVec2 size = ImGui::GetContentRegionAvail();
 
-        u32 viewHeight = std::max((u32)1, fixedAspect ? (u32)std::min(size.y, size.x / aspectRatio) : (u32)size.y);
-        u32 viewWidth = std::max((u32)1, fixedAspect ? (u32)((f32)viewHeight * aspectRatio) : (u32)size.x);
+        u32 viewHeight = hgMax((u32)1, fixedAspect ? (u32)hgMin(size.y, size.x / aspectRatio) : (u32)size.y);
+        u32 viewWidth = hgMax((u32)1, fixedAspect ? (u32)((f32)viewHeight * aspectRatio) : (u32)size.x);
         if (width != viewWidth || height != viewHeight)
         {
             width = viewWidth;
@@ -510,7 +528,7 @@ void render()
 {
     HgGpuCmd* cmd = hgGpuFrameBegin(&window, 1);
     hgClockTick(&cpuClock);
-    if (!hgNullHandle(hgWindowImageView(window).handle))
+    if (hgWindowImageView(window).handle != hgNullHandle)
     {
         HgGpuRenderAttachment renderColorAttachment{};
         renderColorAttachment.image = renderView;
@@ -599,41 +617,70 @@ int main()
     HgArena* arena = hgScratch();
     hgArenaScope(arena);
 
-    init(arena);
-    hgDefer(deinit());
-
-    HgAudioPlayer audioPlayer = hgAudioPlayerCreate(HgAudioFormat_f32, 8000, 1);
-    hgDefer(hgAudioPlayerDestroy(audioPlayer));
-
-    f32 audioBase[8000];
-    for (u32 i = 0; i < 8000; ++i)
+    for (u32 i = 0; i < hgArrayCount(audioData); ++i)
     {
 
-        // // saw harmonics
-        // f32 t = (f32)i * (f32)hgPi * 2.0f / 8000.0f;
-        // audioBase[i] = 0;
-        // for (u32 j = 1; j <= 64; ++j)
-        // {
-        //     f32 x = (f32)j;
-        //     audioBase[i] += 1.0f / x * std::sin(100.f * t * x);
-        // }
+        // saw harmonics
+        f32 t = (f32)i * (f32)hgPi * 2.0f / 8000.0f;
+        audioData[i] = 0;
+        for (u32 j = 1; j <= 64; ++j)
+        {
+            f32 x = (f32)j;
+            audioData[i] += 1.0f / x * std::sin(100.f * t * x);
+        }
 
         // // square harmonics
         // f32 t = (f32)i * (f32)hgPi * 2.0f / 8000.0f;
-        // audioBase[i] = 0;
+        // audioData[i] = 0;
         // for (u32 j = 1; j <= 64; ++j)
         // {
         //     f32 x = (f32)j * 2.0f - 1.0f;
-        //     audioBase[i] += 1.0f / x * std::sin(100.f * t * x);
+        //     audioData[i] += 1.0f / x * std::sin(100.f * t * x);
         // }
 
-        // square exact
-        if (i % 80 < 40)
-            audioBase[i] = 1.0f;
-        else
-            audioBase[i] = -1.0f;
+        // // square exact
+        // if (i % 80 < 40)
+        //     audioData[i] = 1.0f;
+        // else
+        //     audioData[i] = -1.0f;
 
     }
+
+    init(arena);
+    hgDefer(deinit());
+
+    // HgAudioPlayer audioPlayer = hgAudioPlayerCreate(HgAudioFormat_f32, 8000, 1);
+    // hgDefer(hgAudioPlayerDestroy(audioPlayer));
+
+    // f32 audioBase[8000];
+    // for (u32 i = 0; i < 8000; ++i)
+    // {
+    //
+    //     // // saw harmonics
+    //     // f32 t = (f32)i * (f32)hgPi * 2.0f / 8000.0f;
+    //     // audioBase[i] = 0;
+    //     // for (u32 j = 1; j <= 64; ++j)
+    //     // {
+    //     //     f32 x = (f32)j;
+    //     //     audioBase[i] += 1.0f / x * std::sin(100.f * t * x);
+    //     // }
+    //
+    //     // // square harmonics
+    //     // f32 t = (f32)i * (f32)hgPi * 2.0f / 8000.0f;
+    //     // audioBase[i] = 0;
+    //     // for (u32 j = 1; j <= 64; ++j)
+    //     // {
+    //     //     f32 x = (f32)j * 2.0f - 1.0f;
+    //     //     audioBase[i] += 1.0f / x * std::sin(100.f * t * x);
+    //     // }
+    //
+    //     // square exact
+    //     if (i % 80 < 40)
+    //         audioBase[i] = 1.0f;
+    //     else
+    //         audioBase[i] = -1.0f;
+    //
+    // }
 
     // temporary, trick the OS into thinking we're important
     hgThreadsCall(HgFence{}, nullptr, [](void*)
@@ -657,8 +704,10 @@ int main()
         if (hgWasQuit() || hgWindowWasClosed(window))
             quit = true;
 
-        if (hgAudioPlayerQueuedSize(audioPlayer) < (int)sizeof(audioBase))
-            hgAudioPlayerPush(audioPlayer, audioBase, sizeof(audioBase));
+        hgAudioUpdate(&ecs, player);
+
+        // if (hgAudioPlayerQueuedSize(audioPlayer) < (int)sizeof(audioBase))
+        //     hgAudioPlayerPush(audioPlayer, audioBase, sizeof(audioBase));
 
         hgEcsForEach<Spin, HgTransform>(&ecs, [&](HgEntity e, Spin* spin, HgTransform* tf)
         {

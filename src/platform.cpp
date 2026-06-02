@@ -211,7 +211,7 @@ static bool poolExecute()
     hgAssert(work.fn != nullptr);
     work.fn(work.data);
 
-    if (!hgNullHandle(work.fence.handle))
+    if (work.fence.handle != hgNullHandle)
         hgFenceSignal(work.fence, 1);
     return true;
 }
@@ -244,7 +244,7 @@ void hgThreadsInit(HgArena* arena, u32 queueSize, u32 threadCount)
     for (u32 i = 0; i < threadCount; ++i)
     {
         new (threadPool.threads + i) std::thread([] {
-            hgScratchInit((u32)-1);
+            hgScratchInit(2, 1 << 16);
             hgDefer(hgScratchDeinit());
 
             for (;;)
@@ -302,7 +302,7 @@ bool hgThreadsHelp(HgFence fence, f64 timeout)
 void hgThreadsCall(HgFence fence, void* data, void (*fn)(void* data))
 {
     hgAssert(fn != nullptr);
-    if (!hgNullHandle(fence.handle))
+    if (fence.handle != hgNullHandle)
         hgFenceAttach(fence, 1);
 
     u32 idx = threadPool.workingHead.fetch_add(1) & (threadPool.workCapacity - 1);
@@ -353,7 +353,7 @@ void hgThreadsFor(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx
         capture->data = data;
         capture->fn = fn;
         capture->begin = i;
-        capture->end = std::min(i + chunkSize, end);
+        capture->end = hgMin(i + chunkSize, end);
 
         hgThreadsCall(fence, capture, [](void* pcapture)
         {
@@ -957,11 +957,6 @@ constexpr bool operator==(const SamplerInfo& lhs, const SamplerInfo& rhs)
         && lhs.border == rhs.border;
 }
 
-constexpr bool operator!=(const SamplerInfo& lhs, const SamplerInfo& rhs)
-{
-    return !(lhs == rhs);
-}
-
 struct HgGpuViewData {
     HgGpuImageData* image;
     VkImageView view;
@@ -1258,7 +1253,7 @@ static VkInstance createInstance(HgStringView* extensions, u32 extensionCount)
     const char* layers[]{
         "VK_LAYER_KHRONOS_validation",
     };
-    instanceInfo.enabledLayerCount = sizeof(layers) / sizeof(*layers);
+    instanceInfo.enabledLayerCount = hgArrayCount(layers);
     instanceInfo.ppEnabledLayerNames = layers;
 #endif
 
@@ -1350,7 +1345,7 @@ static VkPhysicalDevice findPhysicalDevice()
         }
         vkEnumerateDeviceExtensionProperties(gpu, nullptr, &newPropCount, extProps);
 
-        for (u32 j = 0; j < sizeof(deviceExtensions) / sizeof(*deviceExtensions); j++)
+        for (u32 j = 0; j < hgArrayCount(deviceExtensions); j++)
         {
             for (u32 k = 0; k < newPropCount; k++)
             {
@@ -1429,7 +1424,7 @@ static VkDevice createDevice()
     deviceInfo.pNext = &synchronization2Feature;
     deviceInfo.queueCreateInfoCount = 1;
     deviceInfo.pQueueCreateInfos = &queueInfo;
-    deviceInfo.enabledExtensionCount = sizeof(deviceExtensions) / sizeof(*deviceExtensions);
+    deviceInfo.enabledExtensionCount = hgArrayCount(deviceExtensions);
     deviceInfo.ppEnabledExtensionNames = deviceExtensions;
     deviceInfo.pEnabledFeatures = &features;
 
@@ -1454,7 +1449,7 @@ static VkDescriptorPool createBindlessDescriptorPool()
     info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     info.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
     info.maxSets = 1;
-    info.poolSizeCount = sizeof(sizes) / sizeof(*sizes);
+    info.poolSizeCount = hgArrayCount(sizes);
     info.pPoolSizes = sizes;
 
     VkDescriptorPool pool = nullptr;
@@ -1480,14 +1475,14 @@ static VkDescriptorSetLayout createBindlessDescriptorLayout()
 
     VkDescriptorSetLayoutBindingFlagsCreateInfo flagsInfo{};
     flagsInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
-    flagsInfo.bindingCount = sizeof(bindings) / sizeof(*bindings);
+    flagsInfo.bindingCount = hgArrayCount(bindings);
     flagsInfo.pBindingFlags = flags;
 
     VkDescriptorSetLayoutCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     info.pNext = &flagsInfo;
     info.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
-    info.bindingCount = sizeof(bindings) / sizeof(*bindings);
+    info.bindingCount = hgArrayCount(bindings);
     info.pBindings = bindings;
 
     VkDescriptorSetLayout layout = nullptr;
@@ -1827,7 +1822,7 @@ static Descriptor descriptorCreate(
 
 static void descriptorDestroy(Descriptor desc, DescriptorType type)
 {
-    if (!hgNullHandle(desc))
+    if (desc != hgNullHandle)
     {
         hgPoolFree(&vk.descriptorPools[type], desc);
     }
@@ -2331,7 +2326,7 @@ void hgGpuImageWriteCubemap(HgGpuView dst, const void* src)
 
     VkDependencyInfo transferDep{};
     transferDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    transferDep.imageMemoryBarrierCount = sizeof(transferBarriers) / sizeof(*transferBarriers);
+    transferDep.imageMemoryBarrierCount = hgArrayCount(transferBarriers);
     transferDep.pImageMemoryBarriers = transferBarriers;
 
     vkCmdPipelineBarrier2((VkCommandBuffer)cmd, &transferDep);
@@ -2380,7 +2375,7 @@ void hgGpuImageWriteCubemap(HgGpuView dst, const void* src)
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         dstData->image->image,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        sizeof(regions) / sizeof(*regions),
+        hgArrayCount(regions),
         regions);
 
     hgGpuCmdEnd(cmd);
@@ -2690,7 +2685,7 @@ HgGpuPipeline hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* con
     VkDynamicState dynamicStates[]{VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
     VkPipelineDynamicStateCreateInfo dynamicState{};
     dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-    dynamicState.dynamicStateCount = sizeof(dynamicStates) / sizeof(*dynamicStates);
+    dynamicState.dynamicStateCount = hgArrayCount(dynamicStates);
     dynamicState.pDynamicStates = dynamicStates;
 
     VkFormat* colorFormats = hgAlloc<VkFormat>(scratch, config->colorAttachmentCount);
@@ -2711,7 +2706,7 @@ HgGpuPipeline hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* con
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     pipelineInfo.pNext = &renderingInfo;
-    pipelineInfo.stageCount = sizeof(shaderStages) / sizeof(*shaderStages);
+    pipelineInfo.stageCount = hgArrayCount(shaderStages);
     pipelineInfo.pStages = shaderStages;
     pipelineInfo.pVertexInputState = &vertexInputState;
     pipelineInfo.pInputAssemblyState = &inputAssemblyState;
@@ -3414,7 +3409,7 @@ static void resizeWindowSwapchain(HgWindowData* window)
         VkSwapchainCreateInfoKHR swapchainInfo{};
         swapchainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
         swapchainInfo.surface = window->surface;
-        swapchainInfo.minImageCount = std::min(capabilities.minImageCount, capabilities.maxImageCount - 1) + 1;
+        swapchainInfo.minImageCount = hgMin(capabilities.minImageCount, capabilities.maxImageCount - 1) + 1;
         swapchainInfo.imageFormat = formatToVk(window->format);
         swapchainInfo.imageExtent = {window->width, window->height};
         swapchainInfo.imageArrayLayers = 1;
@@ -4331,7 +4326,7 @@ void hgAudioPlayerPush(HgAudioPlayer player, const void* data, u64 size)
         hgError("SDL could not push audio data: %s\n", SDL_GetError());
 }
 
-u64 hgAudioPlayerQueuedSize(HgAudioPlayer player)
+u32 hgAudioPlayerQueuedSize(HgAudioPlayer player)
 {
     HgAudioPlayerData* data = audioPlayerGet(player);
 
@@ -4339,7 +4334,7 @@ u64 hgAudioPlayerQueuedSize(HgAudioPlayer player)
     if (size == -1)
         hgError("SDL could not read audio data: %s\n", SDL_GetError());
 
-    return (u64)size;
+    return (u32)size;
 }
 
 void hgAudioPlayerClear(HgAudioPlayer player)

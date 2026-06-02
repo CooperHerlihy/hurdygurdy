@@ -31,6 +31,44 @@
 #include "hg_memory.hpp"
 
 /**
+ * Return the lesser of the two
+ */
+template<typename T>
+constexpr T hgMin(T lhs, T rhs)
+{
+    return lhs < rhs ? lhs : rhs;
+}
+
+/**
+ * Return the greater of the two
+ */
+template<typename T>
+constexpr T hgMax(T lhs, T rhs)
+{
+    return lhs > rhs ? lhs : rhs;
+}
+
+/**
+ * Swap the values of two objects
+ */
+template<typename T>
+constexpr void hgSwap(T* lhs, T* rhs)
+{
+    T tmp = *lhs;
+    *lhs = *rhs;
+    *rhs = tmp;
+}
+
+/**
+ * Returns the size of a stack array
+ */
+template<typename T, u64 N>
+constexpr u64 hgArrayCount(T (&)[N])
+{
+    return N;
+}
+
+/**
  * The hash template
  */
 template<typename T>
@@ -110,7 +148,7 @@ void hgSetAdd(HgSet<V>* set, const T& val)
     hgAssert(set->count < set->capacity - 1);
 
     u32 idx = hgHashImpl(v) % set->capacity;
-    for (u32 dist = 0; set->hasVal[idx] && set->vals[idx] != v; ++dist)
+    for (u32 dist = 0; set->hasVal[idx] && !(set->vals[idx] == v); ++dist)
     {
         u32 otherDist = hgHashImpl(set->vals[idx]) % set->capacity - idx;
         if (otherDist > set->capacity)
@@ -118,9 +156,7 @@ void hgSetAdd(HgSet<V>* set, const T& val)
 
         if (otherDist < dist)
         {
-            V valTmp = set->vals[idx];
-            set->vals[idx] = v;
-            v = valTmp;
+            hgSwap(&v, &set->vals[idx]);
             dist = otherDist;
         }
 
@@ -267,7 +303,7 @@ V* hgMapAdd(HgMap<K, V>* map, const T& key, const U& val)
     hgAssert(map->count < map->capacity - 1);
 
     u32 idx = hgHashImpl(k) % map->capacity;
-    for (u32 dist = 0; map->hasVal[idx] && map->keys[idx] != k; ++dist)
+    for (u32 dist = 0; map->hasVal[idx] && !(map->keys[idx] == k); ++dist)
     {
         u32 otherDist = hgHashImpl(map->keys[idx]) % map->capacity - idx;
         if (otherDist > map->capacity)
@@ -275,12 +311,8 @@ V* hgMapAdd(HgMap<K, V>* map, const T& key, const U& val)
 
         if (otherDist < dist)
         {
-            K keyTmp = map->keys[idx];
-            V valTmp = map->vals[idx];
-            map->keys[idx] = k;
-            map->vals[idx] = v;
-            k = keyTmp;
-            v = valTmp;
+            hgSwap(&k, &map->keys[idx]);
+            hgSwap(&v, &map->vals[idx]);
             dist = otherDist;
         }
 
@@ -495,6 +527,27 @@ struct HgHandle {
 };
 
 /**
+ * The null handle
+ */
+static constexpr HgHandle hgNullHandle = HgHandle{};
+
+/**
+ * Compare handles
+ */
+constexpr bool operator==(HgHandle lhs, HgHandle rhs)
+{
+    return lhs.id == rhs.id;
+}
+
+/**
+ * Compare handles
+ */
+constexpr bool operator!=(HgHandle lhs, HgHandle rhs)
+{
+    return lhs.id != rhs.id;
+}
+
+/**
  * Hash map hashing for void*
  */
 template<>
@@ -530,14 +583,6 @@ constexpr u32 hgHandleGeneration(HgHandle handle)
 constexpr HgHandle hgHandleNextGeneration(HgHandle handle)
 {
     return {handle.id + (1 << hgHandleIdxBits)};
-}
-
-/**
- * Returns whether the handle is the null handle
- */
-constexpr bool hgNullHandle(HgHandle handle)
-{
-    return handle.id == (u32)-1;
 }
 
 /**
@@ -584,6 +629,76 @@ bool hgPoolAlive(HgPool* pool, HgHandle handle);
  * Note, the object handle must be valid and alive
  */
 void hgPoolFree(HgPool* pool, HgHandle handle);
+
+/**
+ * A block of binary data
+ */
+struct HgBinary {
+    /**
+     * The data in the file
+     */
+    void* data;
+    /**
+     * The size of the file in bytes
+     */
+    u64 size;
+};
+
+/**
+ * Resize the file
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - newSize The new size of the file in bytes
+ */
+HgBinary hgBinaryResize(HgArena* arena, const HgBinary* bin, u64 newSize);
+
+/**
+ * Read data at index into a buffer
+ *
+ * Parameters
+ * - idx The index into the file in bytes to read from
+ * - dst A pointer to store the read data
+ * - size The size in bytes to read
+ */
+void hgBinaryRead(const HgBinary* bin, u64 idx, void* dst, u64 len);
+
+/**
+ * Read data of arbitrary type from the file
+ *
+ * Parameters
+ * - idx The index into the file in bytes to read from
+ */
+template<typename T>
+T hgBinaryRead(const HgBinary* bin, u64 idx)
+{
+    T ret;
+    hgBinaryRead(bin, idx, &ret, sizeof(T));
+    return ret;
+}
+
+/**
+ * Overwrite data at the index
+ *
+ * Parameters
+ * - idx The index into the file to overwrite
+ * - src The data to write
+ * - size The size of the data in bytes
+ */
+void hgBinaryOverwrite(HgBinary* bin, u64 idx, const void* src, u64 len);
+
+/**
+ * Overwrite data of arbitrary type at the index
+ *
+ * Parameters
+ * - idx The index into the file to overwrite
+ * - src The data to write
+ */
+template<typename T>
+void hgBinaryOverwrite(HgBinary* bin, u64 idx, const T& src)
+{
+    hgBinaryOverwrite(bin, idx, &src, sizeof(T));
+}
 
 /**
  * A span view into a string
@@ -897,12 +1012,12 @@ inline void hgStringPrependc(HgArena* arena, HgStringBuilder* dst, char c)
 }
 
 /**
- * Allocate a new HgString
+ * Allocate a new HgStringOwner
  */
 HgStringOwner hgStringAlloc(HgStringView data);
 
 /**
- * Free an HgString
+ * Free an HgStringOwner
  */
 void hgStringFree(HgStringOwner* str);
 

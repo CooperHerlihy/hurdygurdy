@@ -51,8 +51,8 @@ struct HgArena {
  * Create a guard which restores an arena's head at the end of the scope
  */
 #define hgArenaScope(arena) \
-    u64 hgArenaHead_##arena = arena->head; \
-    hgDefer(arena->head = hgArenaHead_##arena);
+    u64 hgArenaScopeHead_##arena = arena->head; \
+    hgDefer(arena->head = hgArenaScopeHead_##arena);
 
 /**
  * Allocates memory from an arena
@@ -128,9 +128,10 @@ T* hgRealloc(HgArena* arena, T* allocation, u64 oldCount, u64 newCount)
  * Initializes scratch arenas on this thread
  *
  * Parameters
+ * - count The number of arenas to allocate
  * - size The size of each arena in bytes
  */
-void hgScratchInit(u64 size);
+void hgScratchInit(u32 count, u64 size);
 
 /**
  * Deinitializes scratch arenas

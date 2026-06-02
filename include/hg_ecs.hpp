@@ -32,7 +32,6 @@
 #include "hg_containers.hpp"
 #include "hg_math.hpp"
 #include "hg_concurrency.hpp"
-#include "hg_assets.hpp"
 
 /**
  * An entity in the ecs
@@ -43,6 +42,10 @@ struct HgEntity {
      */
     HgHandle handle;
 };
+
+/**
+ */
+static constexpr HgEntity hgEntityNull = HgEntity{};
 
 /**
  * Compare entities

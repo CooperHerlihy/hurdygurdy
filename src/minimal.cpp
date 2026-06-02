@@ -92,7 +92,7 @@ int main()
         hgTransformUpdate(&ecs, camera);
 
         HgGpuCmd* cmd = hgGpuFrameBegin(&window, 1);
-        if (!hgNullHandle(hgWindowImageView(window).handle))
+        if (hgWindowImageView(window).handle != hgNullHandle)
         {
             HgGpuRenderAttachment colorAttachment{};
             colorAttachment.image = hgWindowImageView(window);

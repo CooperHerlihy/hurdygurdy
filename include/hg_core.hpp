@@ -257,7 +257,8 @@ struct HgDefer {
  * The config for the HurdyGurdy library init
  */
 struct HgInit {
-    u64 arenaSize = UINT32_MAX;
+    u32 arenaCount = 2;
+    u64 arenaSize = (u64)1 << 32;
 
     u32 maxMutices = 2048;
     u32 maxFences = 2048;
@@ -279,6 +280,7 @@ struct HgInit {
     u32 maxGpuTextures = 256;
     u32 maxMeshes = 256;
     u32 maxGpuMeshes = 256;
+    u32 maxAudios = 256;
 };
 
 /**

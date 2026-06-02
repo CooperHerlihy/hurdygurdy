@@ -1633,7 +1633,7 @@ void hgTest()
             {
                 ((bool*)pvals)[idx] = true;
             };
-            hgThreadsFor(0, sizeof(vals) / sizeof(*vals), vals, fn);
+            hgThreadsFor(0, hgArrayCount(vals), vals, fn);
 
             for (bool& val : vals)
             {
@@ -1670,7 +1670,7 @@ void hgTest()
                         hgThreadsCall(fence, vals + i, fn);
                     }
                 };
-                for (u32 j = 0; j < sizeof(producers) / sizeof(*producers); ++j)
+                for (u32 j = 0; j < hgArrayCount(producers); ++j)
                 {
                     producers[j] = std::thread(prodFn, j);
                 }
@@ -2166,7 +2166,7 @@ void hgTest()
 
         {
             u32 smallScramble1[]{1, 0};
-            for (u32 i = 0; i < sizeof(smallScramble1) / sizeof(*smallScramble1); ++i)
+            for (u32 i = 0; i < hgArrayCount(smallScramble1); ++i)
             {
                 *hgEcsAdd<u32>(&ecs, hgEcsSpawn(&ecs)) = smallScramble1[i];
             }
@@ -2204,7 +2204,7 @@ void hgTest()
 
         {
             u32 mediumScramble1[]{8, 9, 1, 6, 0, 3, 7, 2, 5, 4};
-            for (u32 i = 0; i < sizeof(mediumScramble1) / sizeof(*mediumScramble1); ++i)
+            for (u32 i = 0; i < hgArrayCount(mediumScramble1); ++i)
             {
                 *hgEcsAdd<u32>(&ecs, hgEcsSpawn(&ecs)) = mediumScramble1[i];
             }
@@ -2225,7 +2225,7 @@ void hgTest()
 
         {
             u32 mediumScramble2[]{3, 9, 7, 6, 8, 5, 0, 1, 2, 4};
-            for (u32 i = 0; i < sizeof(mediumScramble2) / sizeof(*mediumScramble2); ++i)
+            for (u32 i = 0; i < hgArrayCount(mediumScramble2); ++i)
             {
                 *hgEcsAdd<u32>(&ecs, hgEcsSpawn(&ecs)) = mediumScramble2[i];
             }
@@ -2328,30 +2328,30 @@ void hgTest()
             HgEntity root = hgEcsDeserialize(&ecs, scene);
             hgAssert(hgEcsHas<HgNode>(&ecs, root));
             HgNode* rootNode = hgEcsGet<HgNode>(&ecs, root);
-            hgAssert(hgNullHandle(rootNode->parent.handle));
-            hgAssert(hgNullHandle(rootNode->nextSibling.handle));
-            hgAssert(hgNullHandle(rootNode->prevSibling.handle));
-            hgAssert(!hgNullHandle(rootNode->firstChild.handle));
+            hgAssert(rootNode->parent.handle == hgNullHandle);
+            hgAssert(rootNode->nextSibling.handle == hgNullHandle);
+            hgAssert(rootNode->prevSibling.handle == hgNullHandle);
+            hgAssert(rootNode->firstChild.handle != hgNullHandle);
 
             HgEntity a = rootNode->firstChild;
-            hgAssert(!hgNullHandle(a.handle));
+            hgAssert(a.handle != hgNullHandle);
 
             hgAssert(hgEcsHas<HgNode>(&ecs, a));
             HgNode* aNode = hgEcsGet<HgNode>(&ecs, a);
             hgAssert(aNode->parent == root);
-            hgAssert(hgNullHandle(aNode->prevSibling.handle));
-            hgAssert(!hgNullHandle(aNode->nextSibling.handle));
-            hgAssert(hgNullHandle(aNode->firstChild.handle));
+            hgAssert(aNode->prevSibling.handle == hgNullHandle);
+            hgAssert(aNode->nextSibling.handle != hgNullHandle);
+            hgAssert(aNode->firstChild.handle == hgNullHandle);
 
             HgEntity b = aNode->nextSibling;
-            hgAssert(!hgNullHandle(b.handle));
+            hgAssert(b.handle != hgNullHandle);
 
             hgAssert(hgEcsHas<HgNode>(&ecs, b));
             HgNode* bNode = hgEcsGet<HgNode>(&ecs, b);
             hgAssert(bNode->parent == root);
             hgAssert(bNode->prevSibling == a);
-            hgAssert(hgNullHandle(bNode->nextSibling.handle));
-            hgAssert(hgNullHandle(bNode->firstChild.handle));
+            hgAssert(bNode->nextSibling.handle == hgNullHandle);
+            hgAssert(bNode->firstChild.handle == hgNullHandle);
 
             hgAssert(hgEcsHas<u32>(&ecs, a));
             hgAssert(*hgEcsGet<u32>(&ecs, a) == 12);
