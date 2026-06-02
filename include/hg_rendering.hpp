@@ -30,9 +30,205 @@
 #include "hg_core.hpp"
 #include "hg_math.hpp"
 #include "hg_gpu.hpp"
-#include "hg_window.hpp"
 #include "hg_assets.hpp"
 #include "hg_ecs.hpp"
+#include "hg_window.hpp"
+
+/**
+ * A texture asset
+ */
+struct HgTexture {
+    /**
+     * The width of the texture in pixels
+     */
+    u32 width;
+    /**
+     * The height of the texture in pixels
+     */
+    u32 height;
+    /**
+     * The depth of the texture in pixels
+     */
+    u32 depth;
+    /**
+     * The format of each pixel
+     */
+    HgFormat format;
+    /**
+     * The pixel data, aligned to 16 bytes
+     */
+    void* pixels;
+};
+
+/**
+ * A handle to a texture
+ */
+typedef HgAssetHandle<HgTexture> HgTextureHandle;
+
+/**
+ * HgTexture asset load implementation
+ */
+template<>
+void hgAssetLoadImpl(HgAssetData<HgTexture>* data);
+
+/**
+ * HgTexture asset unload implementation
+ */
+template<>
+void hgAssetUnloadImpl(HgAssetData<HgTexture>* data);
+
+/**
+ * Store an image to disc in the png format
+ */
+void hgTextureStorePng(HgTexture* texture, HgStringView path, HgFence fence);
+
+/**
+ * A texture asset stored on the gpu
+ */
+struct HgGpuTexture {
+    /**
+     * The image
+     */
+    HgGpuImage image;
+    /**
+     * The image view
+     */
+    HgGpuView view;
+};
+
+/**
+ * A handle to a texture asset
+ */
+typedef HgAssetHandle<HgGpuTexture> HgGpuTextureHandle;
+
+/**
+ * HgGpuTexture asset load implementation
+ */
+template<>
+void hgAssetLoadImpl(HgAssetData<HgGpuTexture>* data);
+
+/**
+ * HgGpuTexture asset unload implementation
+ */
+template<>
+void hgAssetUnloadImpl(HgAssetData<HgGpuTexture>* data);
+
+/**
+ * A vertex in a mesh
+ */
+struct HgMeshVertex {
+    /**
+     * The vertex position
+     */
+    alignas(16) HgVec3 pos;
+    /**
+     * The vertex normal
+     */
+    alignas(16) HgVec3 norm;
+    /**
+     * The vertex tangent
+     */
+    alignas(16) HgVec4 tan;
+    /**
+     * The vertex uv coordinate
+     */
+    alignas(16) HgVec2 uv;
+};
+
+/**
+ * A 3d mesh asset
+ */
+struct HgMesh {
+    /**
+     * The file index of the first vertex
+     */
+    HgMeshVertex* vertices;
+    /**
+     * The file index of the first geometry index
+     */
+    u32* indices;
+    /**
+     * The number of vertices
+     */
+    u32 vertexCount;
+    /**
+     * The size of each vertex in bytes
+     */
+    u32 vertexWidth;
+    /**
+     * The number of indices (4 bytes each)
+     */
+    u32 indexCount;
+    /**
+     * How the vertices should be interpreted in sequence
+     */
+    HgGpuTopology topology;
+};
+
+/**
+ * A handle to a 3d mesh asset
+ */
+typedef HgAssetHandle<HgMesh> HgMeshHandle;
+
+/**
+ * HgMesh asset load implementation
+ */
+template<>
+void hgAssetLoadImpl(HgAssetData<HgMesh>* data);
+
+/**
+ * HgMesh asset unload implementation
+ */
+template<>
+void hgAssetUnloadImpl(HgAssetData<HgMesh>* data);
+
+/**
+ * Store the model data to disc in gltf format : TODO
+ */
+void hgMeshStoreGltf(HgMesh* data, HgStringView path, HgFence fence);
+
+/**
+ * A 3d mesh asset stored on the gpu
+ */
+struct HgGpuMesh {
+    /**
+     * The vertex buffer
+     */
+    HgGpuBuffer vertexBuffer;
+    /**
+     * The index buffer
+     */
+    HgGpuBuffer indexBuffer;
+    /**
+     * The number of vertices
+     */
+    u32 vertexCount;
+    /**
+     * The size of each vertex in bytes
+     */
+    u32 vertexWidth;
+    /**
+     * The number of indices (4 bytes each)
+     */
+    u32 indexCount;
+};
+
+/**
+ * A gpu mesh asset handle
+ */
+typedef HgAssetHandle<HgGpuMesh> HgGpuMeshHandle;
+
+/**
+ * HgGpuMesh asset load implementation
+ */
+template<>
+void hgAssetLoadImpl(HgAssetData<HgGpuMesh>* data);
+
+/**
+ * HgGpuMesh asset unload implementation
+ */
+template<>
+void hgAssetUnloadImpl(HgAssetData<HgGpuMesh>* data);
 
 /**
  * The types of camera projections
