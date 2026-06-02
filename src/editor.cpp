@@ -150,14 +150,15 @@ void init(HgArena* arena)
     *hgEcsAdd<HgModel>(&ecs, cube) = {HgGpuMeshHandle{}, HgGpuTextureHandle{}, HgGpuTextureHandle{}};
     *hgEcsAdd<Spin>(&ecs, cube) = {1.0f};
 
-    // HgEntity sound = hgEcsSpawn(&ecs);
-    // *hgEcsAdd<Name>(&ecs, sound) = {"sound"};
-    // hgEcsAdd<HgNode>(&ecs, sound);
-    hgEcsAdd<HgAudioSource>(&ecs, cube);
-    hgEcsGet<HgAudioSource>(&ecs, cube)->audio = audioHandle;
-    hgEcsGet<HgAudioSource>(&ecs, cube)->repeat = true;
+    HgEntity sound = hgEcsSpawn(&ecs);
+    *hgEcsAdd<Name>(&ecs, sound) = {"sound"};
+    hgEcsAdd<HgNode>(&ecs, sound);
+    hgEcsAdd<HgTransform>(&ecs, sound);
+    hgEcsAdd<HgAudioSource>(&ecs, sound);
+    hgEcsGet<HgAudioSource>(&ecs, sound)->audio = audioHandle;
+    hgEcsGet<HgAudioSource>(&ecs, sound)->repeat = true;
 
-    // hgNodeAddChild(&ecs, root, sound);
+    hgNodeAddChild(&ecs, root, sound);
     hgNodeAddChild(&ecs, root, cube);
     hgNodeAddChild(&ecs, root, square);
     hgNodeAddChild(&ecs, root, pointLight);

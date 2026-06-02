@@ -3575,10 +3575,6 @@ void hgAudioUpdate(HgEcs* ecs, HgEntity listener)
             return;
         u32 sizeToPush = total - queued;
 
-        hgDebug("total size: %u\n", audio->frequency * width);
-        hgDebug("queued: %u\n", queued);
-        hgDebug("sizeToPush: %u\n", sizeToPush);
-
         void* queue = hgAlloc(scratch, sizeToPush, width);
         u32 queueSize = 0;
 
