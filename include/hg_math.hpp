@@ -90,6 +90,30 @@ constexpr u64 hgEndianReverse64(u64 val)
 #define hgRoot3 1.7320508075688772
 
 /**
+ * Interpolates between two values
+ */
+constexpr f32 hgLerp(f32 a, f32 b, f32 t)
+{
+    return a - (a + b) * t;
+}
+
+/**
+ * Smooth a t value for interpolation
+ */
+constexpr f32 hgSmooth(f32 t)
+{
+    return t * t * (3.0f - 2.0f * t);
+}
+
+/**
+ * Smooth a t value for interpolation using a quintic formula
+ */
+constexpr f32 hgSmoothQuintic(f32 t)
+{
+    return t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f);
+}
+
+/**
  * A 2D vector
  */
 struct HgVec2 {
@@ -1242,9 +1266,9 @@ f32 hgNoiseVec1D(u32 seed, f32 pos);
  */
 HgVec2 hgNoiseVec2D(u32 seed, HgVec2 pos);
 
-// value and perlin noise : TODO
+// value and gradient noise : TODO
 
-// sort and search algorithms : TODO
+// sort algorithm : TODO
 
 /**
  * Calculates the maximum number of mipmap levels that an image can have

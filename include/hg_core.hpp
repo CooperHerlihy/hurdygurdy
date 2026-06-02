@@ -254,6 +254,53 @@ struct HgDefer {
 #endif
 
 /**
+ * Returns the size of a stack array
+ */
+template<typename T, u64 N>
+constexpr u64 hgArrayCount(T (&)[N])
+{
+    return N;
+}
+
+/**
+ * Swap the values of two objects
+ */
+template<typename T>
+constexpr void hgSwap(T* a, T* b)
+{
+    T tmp = *a;
+    *a = *b;
+    *b = tmp;
+}
+
+/**
+ * Return the lesser of the two
+ */
+template<typename T>
+constexpr T hgMin(T a, T b)
+{
+    return a < b ? a : b;
+}
+
+/**
+ * Return the greater of the two
+ */
+template<typename T>
+constexpr T hgMax(T a, T b)
+{
+    return a > b ? a : b;
+}
+
+/**
+ * Clamps a value between two other
+ */
+template<typename T>
+constexpr T hgClamp(T x, T min, T max)
+{
+    return x >= max ? max : x <= min ? min : x;
+}
+
+/**
  * The config for the HurdyGurdy library init
  */
 struct HgInit {

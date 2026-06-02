@@ -31,44 +31,6 @@
 #include "hg_memory.hpp"
 
 /**
- * Return the lesser of the two
- */
-template<typename T>
-constexpr T hgMin(T lhs, T rhs)
-{
-    return lhs < rhs ? lhs : rhs;
-}
-
-/**
- * Return the greater of the two
- */
-template<typename T>
-constexpr T hgMax(T lhs, T rhs)
-{
-    return lhs > rhs ? lhs : rhs;
-}
-
-/**
- * Swap the values of two objects
- */
-template<typename T>
-constexpr void hgSwap(T* lhs, T* rhs)
-{
-    T tmp = *lhs;
-    *lhs = *rhs;
-    *rhs = tmp;
-}
-
-/**
- * Returns the size of a stack array
- */
-template<typename T, u64 N>
-constexpr u64 hgArrayCount(T (&)[N])
-{
-    return N;
-}
-
-/**
  * The hash template
  */
 template<typename T>
