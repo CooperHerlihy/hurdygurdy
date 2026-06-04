@@ -699,9 +699,6 @@ int main()
 
         hgAudioUpdate(ecs, player);
 
-        // if (hgAudioPlayerQueuedSize(audioPlayer) < (int)sizeof(audioBase))
-        //     hgAudioPlayerPush(audioPlayer, audioBase, sizeof(audioBase));
-
         hgEcsForEach<Spin, HgTransform>(ecs, [&](HgEntity e, Spin* spin, HgTransform* tf)
         {
             tf->rotation = hgQuatAxisAngle(HgVec3{0, -1, 0}, (f32)delta * spin->speed) * tf->rotation;

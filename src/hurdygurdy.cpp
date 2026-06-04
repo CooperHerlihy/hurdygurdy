@@ -1,15 +1,15 @@
-#include "hg_core.hpp"
-#include "hg_memory.hpp"
-#include "hg_containers.hpp"
-#include "hg_math.hpp"
-#include "hg_time.hpp"
-#include "hg_concurrency.hpp"
-#include "hg_platform.hpp"
-#include "hg_gpu.hpp"
-#include "hg_audio.hpp"
 #include "hg_assets.hpp"
+#include "hg_audio.hpp"
+#include "hg_concurrency.hpp"
+#include "hg_core.hpp"
 #include "hg_ecs.hpp"
+#include "hg_gpu.hpp"
+#include "hg_math.hpp"
+#include "hg_memory.hpp"
+#include "hg_platform.hpp"
 #include "hg_rendering.hpp"
+#include "hg_serialization.hpp"
+#include "hg_time.hpp"
 
 #include "stb_image.h"
 #include "stb_image_write.h"
@@ -197,6 +197,26 @@ void hgPoolFree(HgPool* pool, HgHandle handle)
     hgAssert(hgPoolAlive(pool, handle));
     pool->freeList[hgHandleIdx(handle)] = pool->next;
     pool->next = hgHandleNextGeneration(handle);
+}
+
+HgBinary hgBinaryResize(HgArena* arena, const HgBinary* bin, u64 newSize)
+{
+    HgBinary newBin{};
+    newBin.data = hgRealloc(arena, bin->data, bin->size, newSize, 1);
+    newBin.size = newSize;
+    return newBin;
+}
+
+void hgBinaryRead(const HgBinary* bin, u64 idx, void* dst, u64 len)
+{
+    hgAssert(idx + len <= bin->size);
+    memcpy(dst, (u8*)bin->data + idx, len);
+}
+
+void hgBinaryOverwrite(HgBinary* bin, u64 idx, const void* src, u64 len)
+{
+    hgAssert(idx + len <= bin->size);
+    memcpy((u8*)bin->data + idx, src, len);
 }
 
 char* hgCString(HgArena* arena, HgStringView str)
@@ -1217,247 +1237,1222 @@ u32 hgGetMaxMipmaps(u32 width, u32 height, u32 depth)
     return max == 0 ? 0 : (u32)log2((f32)max) + 1;
 }
 
-HgPerf hgPerfCreate(HgArena* arena, u32 count)
+const char* hgSerialTypeToString(HgSerialType s)
 {
-    hgAssert(arena != nullptr);
-
-    HgPerf perf;
-    perf.times = hgAlloc<f64>(arena, count);
-    perf.count = count;
-    perf.current = 0;
-    return perf;
-}
-
-void hgPerfBegin(HgPerf* perf)
-{
-    hgAssert(perf != nullptr);
-    hgClockTick(&perf->clock);
-}
-
-f64 hgPerfEnd(HgPerf* perf)
-{
-    hgAssert(perf != nullptr);
-    hgAssert(perf->current < perf->count);
-
-    f64 time = hgClockTick(&perf->clock);
-    perf->times[perf->current++] = time;
-
-    return time;
-}
-
-HgPerfStats hgPerfAnalyze(const HgPerf* perf)
-{
-    hgAssert(perf != nullptr);
-
-    HgPerfStats stats;
-    stats.avg = 0.0;
-    stats.best = INFINITY;
-    stats.worst = 0.0;
-
-    for (u32 i = 0; i < perf->current; ++i)
+    switch (s)
     {
-        if (perf->times[i] < stats.best)
-            stats.best = perf->times[i];
-        if (perf->times[i] > stats.worst)
-            stats.worst = perf->times[i];
-        stats.avg += perf->times[i];
-    }
-    stats.avg /= (f64)perf->current;
-
-    return stats;
-}
-
-void hgPerfLog(HgStringView title, const HgPerfStats* stats, HgPerfScale scale)
-{
-    hgAssert(stats != nullptr);
-    if (title.length == 0 || title.chars == nullptr)
-        title = "Title Missing";
-
-    switch (scale)
-    {
-        case HgPerfScale_seconds:
-            printf("HG Performance - %.*s: avg: %.4fs, best: %.4fs, worst: %.4fs\n",
-                (int)title.length, title.chars, stats->avg, stats->best, stats->worst);
-            break;
-        case HgPerfScale_milli:
-            printf("HG Performance - %.*s: avg: %.4fms, best: %.4fms, worst: %.4fms\n",
-                (int)title.length, title.chars, stats->avg * 1.e3, stats->best * 1.e3, stats->worst * 1.e3);
-            break;
-        case HgPerfScale_micro:
-            printf("HG Performance - %.*s: avg: %.4fmcs, best: %.4fmcs, worst: %.4fmcs\n",
-                (int)title.length, title.chars, stats->avg * 1.e6, stats->best * 1.e6, stats->worst * 1.e6);
-            break;
-        case HgPerfScale_nano:
-            printf("HG Performance - %.*s: avg: %.4fns, best: %.4fns, worst: %.4fns\n",
-                (int)title.length, title.chars, stats->avg * 1.e9, stats->best * 1.e9, stats->worst * 1.e9);
-            break;
+        case HgSerialType_null:
+            return "HgSerialType_null";
+        case HgSerialType_object:
+            return "HgSerialType_object";
+        case HgSerialType_array:
+            return "HgSerialType_array";
+        case HgSerialType_string:
+            return "HgSerialType_string";
+        case HgSerialType_integer:
+            return "HgSerialType_integer";
+        case HgSerialType_floating:
+            return "HgSerialType_floating";
+        case HgSerialType_boolean:
+            return "HgSerialType_boolean";
+        default:
+            return "invalid HgSerialType";
     }
 }
 
-void hgAssetInitDefaults(
-    HgArena* arena,
-    u32 maxBinaries,
-    u32 maxTextures,
-    u32 maxGpuTextures,
-    u32 maxMeshes,
-    u32 maxGpuMeshes,
-    u32 maxAudios)
+HgSerializer hgSerialWriter(HgArena* arena)
 {
-    hgAssetInit<HgBinary>(arena, maxBinaries);
-    hgAssetInit<HgTexture>(arena, maxTextures);
-    hgAssetInit<HgGpuTexture>(arena, maxGpuTextures);
-    hgAssetInit<HgMesh>(arena, maxMeshes);
-    hgAssetInit<HgGpuMesh>(arena, maxGpuMeshes);
-    hgAssetInit<HgAudio>(arena, maxAudios);
+    HgSerializer s{};
+    s.writing = true;
+    s.idx = 0;
+    s.current = hgAlloc<HgSerialNode>(arena, 1);
+    s.current->type = HgSerialType_object;
+    s.current->object = {0, nullptr};
+    return s;
 }
 
-void hgAssetDeinitDefaults()
+HgSerializer hgSerialReader(HgSerialNode* begin)
 {
-    hgAssetDeinit<HgGpuMesh>();
-    hgAssetDeinit<HgMesh>();
-    hgAssetDeinit<HgGpuTexture>();
-    hgAssetDeinit<HgTexture>();
-    hgAssetDeinit<HgBinary>();
+    HgSerializer s{};
+    s.writing = false;
+    s.idx = 0;
+    s.current = begin;
+    return s;
 }
 
-template<>
-void hgAssetLoadImpl(HgAssetData<HgBinary>* data)
+static HgSerialNode serialNodeNull = {HgSerialType_null, {}};
+static HgSerializer serializerNull = {false, 0, &serialNodeNull};
+
+bool hgSerializerIsNull(HgSerializer s)
 {
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
-
-    char* cpath = hgCString(scratch, data->path);
-
-    FILE* fileHandle = fopen(cpath, "rb");
-    if (fileHandle == nullptr)
-    {
-    hgWarn("Could not find file to read binary: %s\n", cpath);
-    return;
-    }
-    hgDefer(fclose(fileHandle));
-
-    if (fseek(fileHandle, 0, SEEK_END) != 0)
-    {
-        hgWarn("Failed to read binary from file: %s\n", cpath);
-        return;
-    }
-
-    data->asset.size = (u32)ftell(fileHandle);
-    data->asset.data = malloc(data->asset.size);
-
-    rewind(fileHandle);
-    if (fread(data->asset.data, 1, data->asset.size, fileHandle) != data->asset.size)
-    {
-        free(data->asset.data);
-        data->asset = {};
-        hgWarn("Failed to read binary from file: %s\n", cpath);
-        return;
-    }
+    return s.current == &serialNodeNull || s.current->type == HgSerialType_null;
 }
 
-template<>
-void hgAssetUnloadImpl(HgAssetData<HgBinary>* data)
+HgSerializer hgSerializerBeginArray(HgArena* arena, HgSerializer* s, HgStringView name, u32* length)
 {
-    hgFenceWaitIndefinite(data->isLoaded);
-    free(data->asset.data);
-}
-
-void hgBinaryStore(HgBinary* bin, HgStringView path, HgFence fence)
-{
-    struct Capture {
-        HgBinary bin;
-        HgStringOwner path;
-    };
-    Capture* c = (Capture*)malloc(sizeof(*c));
-    c->bin = *bin;
-    c->path = hgStringAlloc(path);
-
-    hgThreadsCall(fence, c, [](void* pc)
+    if (s->writing)
     {
-        Capture* c = (Capture*)pc;
-        hgDefer(free(c));
-        hgDefer(hgStringFree(&c->path));
-
-        HgArena* scratch = hgScratch();
-        hgArenaScope(scratch);
-
-        char* cpath = hgCString(scratch, c->path);
-
-        FILE* fileHandle = fopen(cpath, "wb");
-        if (fileHandle == nullptr)
+        switch (s->current->type)
         {
-            hgWarn("Failed to create file to write binary: %s\n", cpath);
-            return;
+            case HgSerialType_object:
+            {
+                if (name == "")
+                    hgWarn("Serializing object field with no name\n");
+
+                s->current->object.fields = hgRealloc(
+                    arena,
+                    s->current->object.fields,
+                    s->current->object.fieldCount,
+                    s->current->object.fieldCount + 1);
+
+                HgSerialField* field = &s->current->object.fields[s->current->object.fieldCount++];
+                field->name = hgStringCopy(arena, name);
+                field->data.type = HgSerialType_array;
+                field->data.array = {*length, hgAlloc<HgSerialNode>(arena, *length)};
+
+                HgSerializer next{};
+                next.writing = true;
+                next.idx = 0;
+                next.current = &field->data;
+                return next;
+            }
+            case HgSerialType_array:
+            {
+                if (name != "")
+                    hgWarn("Serializing array element with name: %.*s\n", (int)name.length, name.chars);
+
+                HgSerialNode* elem = &s->current->array.elems[s->idx++];
+                elem->type = HgSerialType_array;
+                elem->array = {*length, hgAlloc<HgSerialNode>(arena, *length)};
+
+                HgSerializer next{};
+                next.writing = true;
+                next.idx = 0;
+                next.current = elem;
+                return next;
+            }
+            default:
+            {
+                hgWarn("Serializer cannot write an array to a non-object/non-array: %s\n", hgSerialTypeToString(s->current->type));
+                return serializerNull;
+            }
         }
-        hgDefer(fclose(fileHandle));
-
-        if (fwrite(c->bin.data, 1, c->bin.size, fileHandle) != c->bin.size)
-        {
-            hgWarn("Failed to write binary data to file: %s\n", cpath);
-        }
-    });
-}
-
-HgBinary hgBinaryResize(HgArena* arena, const HgBinary* bin, u64 newSize)
-{
-    HgBinary newBin{};
-    newBin.data = hgRealloc(arena, bin->data, bin->size, newSize, 1);
-    newBin.size = newSize;
-    return newBin;
-}
-
-void hgBinaryRead(const HgBinary* bin, u64 idx, void* dst, u64 len)
-{
-    hgAssert(idx + len <= bin->size);
-    memcpy(dst, (u8*)bin->data + idx, len);
-}
-
-void hgBinaryOverwrite(HgBinary* bin, u64 idx, const void* src, u64 len)
-{
-    hgAssert(idx + len <= bin->size);
-    memcpy((u8*)bin->data + idx, src, len);
-}
-
-template<>
-void hgAssetLoadImpl(HgAssetData<HgJson>* data)
-{
-    HgBinaryHandle bin = hgAssetLoad<HgBinary>(data->path);
-    hgDefer(hgAssetUnload(bin));
-
-    HgArena* scratch = hgScratch();
-    u64 head = scratch->head;
-    hgDefer(scratch->head = head);
-
-    HgBinary* jsonBin = hgAssetGet(bin);
-    HgStringView jsonStr = {(char*)jsonBin->data, jsonBin->size};
-    HgJson parse = hgParseJson(scratch, jsonStr);
-
-    HgJsonError* e = parse.errors;
-    while (e != nullptr)
-    {
-        hgWarn("Json parse error: %.*s\n", (int)e->msg.length, e->msg.chars);
-        e = e->next;
-    }
-
-    data->asset.file = (HgJsonNode*)malloc(scratch->head - head);
-    if (parse.errors != nullptr)
-    {
-        data->asset.errors = (HgJsonError*)(
-            (u8*)data->asset.file +
-                ((uptr)parse.errors - (uptr)parse.file));
     }
     else
     {
-        data->asset.errors = nullptr;
+        switch (s->current->type)
+        {
+            case HgSerialType_object:
+            {
+                if (s->idx >= s->current->object.fieldCount)
+                {
+                    hgWarn("Serializer current object cannot be further deserialized\n");
+                    return serializerNull;
+                }
+
+                HgSerialField* field = &s->current->object.fields[s->idx++];
+
+                if (field->name != name)
+                    hgWarn("Serializer array name \"%.*s\" does not match expected name \"%.*s\"\n",
+                            (int)field->name.length, field->name.chars, (int)name.length, name.chars);
+
+                if (field->data.type != HgSerialType_array)
+                {
+                    hgWarn("Serializer expected array, found: %s\n", hgSerialTypeToString(field->data.type));
+                    return serializerNull;
+                };
+
+                *length = field->data.array.elemCount;
+
+                HgSerializer next{};
+                next.writing = false;
+                next.idx = 0;
+                next.current = &field->data;
+                return next;
+            }
+            case HgSerialType_array:
+            {
+                if (name != "")
+                    hgWarn("Serializing array element with name: \"%.*s\"\n", (int)name.length, name.chars);
+
+                if (s->idx >= s->current->array.elemCount)
+                {
+                    hgWarn("Serializer current array cannot be further deserialized\n");
+                    return serializerNull;
+                }
+
+                HgSerialNode* elem = &s->current->array.elems[s->idx++];
+
+                if (elem->type != HgSerialType_array)
+                {
+                    hgWarn("Serializer expected array, found: %s\n", hgSerialTypeToString(elem->type));
+                    return serializerNull;
+                };
+
+                *length = elem->array.elemCount;
+
+                HgSerializer next{};
+                next.writing = false;
+                next.idx = 0;
+                next.current = elem;
+                return next;
+            }
+            default:
+            {
+                hgWarn("Serializer cannot read an array from a non-object/non-array: %s\n", hgSerialTypeToString(s->current->type));
+                return serializerNull;
+            }
+        }
     }
-    memcpy((void*)data->asset.file, (void*)parse.file, scratch->head - head);
+}
+
+HgSerializer hgSerializerBeginObject(HgArena* arena, HgSerializer* s, HgStringView name)
+{
+    if (s->writing)
+    {
+        switch (s->current->type)
+        {
+            case HgSerialType_object:
+            {
+                if (name == "")
+                    hgWarn("Serializing object field with no name\n");
+
+                s->current->object.fields = hgRealloc(
+                    arena,
+                    s->current->object.fields,
+                    s->current->object.fieldCount,
+                    s->current->object.fieldCount + 1);
+
+                HgSerialField* field = &s->current->object.fields[s->current->object.fieldCount++];
+                field->name = hgStringCopy(arena, name);
+                field->data.type = HgSerialType_object;
+                field->data.object = {0, nullptr};
+
+                HgSerializer next{};
+                next.writing = true;
+                next.idx = 0;
+                next.current = &field->data;
+                return next;
+            }
+            case HgSerialType_array:
+            {
+                if (name != "")
+                    hgWarn("Serializing array element with name: %.*s\n", (int)name.length, name.chars);
+
+                HgSerialNode* elem = &s->current->array.elems[s->idx++];
+                elem->type = HgSerialType_object;
+                elem->object = {0, nullptr};
+
+                HgSerializer next{};
+                next.writing = true;
+                next.idx = 0;
+                next.current = elem;
+                return next;
+            }
+            default:
+            {
+                hgWarn("Serializer cannot write an object to a non-object/non-array: %s\n", hgSerialTypeToString(s->current->type));
+                return serializerNull;
+            }
+        }
+    }
+    else
+    {
+        switch (s->current->type)
+        {
+            case HgSerialType_object:
+            {
+                if (s->idx >= s->current->object.fieldCount)
+                {
+                    hgWarn("Serializer current object cannot be further deserialized\n");
+                    return serializerNull;
+                }
+
+                HgSerialField* field = &s->current->object.fields[s->idx++];
+
+                if (field->name != name)
+                    hgWarn("Serializer object name \"%.*s\" does not match expected name \"%.*s\"\n",
+                            (int)field->name.length, field->name.chars, (int)name.length, name.chars);
+
+                if (field->data.type != HgSerialType_object)
+                {
+                    hgWarn("Serializer expected object, found: %s\n", hgSerialTypeToString(field->data.type));
+                    return serializerNull;
+                };
+
+                HgSerializer next{};
+                next.writing = false;
+                next.idx = 0;
+                next.current = &field->data;
+                return next;
+            }
+            case HgSerialType_array:
+            {
+                if (name != "")
+                    hgWarn("Serializing array element with name: \"%.*s\"\n", (int)name.length, name.chars);
+
+                if (s->idx >= s->current->array.elemCount)
+                {
+                    hgWarn("Serializer current array cannot be further deserialized\n");
+                    return serializerNull;
+                }
+
+                HgSerialNode* elem = &s->current->array.elems[s->idx++];
+
+                if (elem->type != HgSerialType_object)
+                {
+                    hgWarn("Serializer expected object, found: %s\n", hgSerialTypeToString(elem->type));
+                    return serializerNull;
+                };
+
+                HgSerializer next{};
+                next.writing = false;
+                next.idx = 0;
+                next.current = elem;
+                return next;
+            }
+            default:
+            {
+                hgWarn("Serializer cannot read an object from a non-object/non-array: %s\n", hgSerialTypeToString(s->current->type));
+                return serializerNull;
+            }
+        }
+    }
+}
+
+void hgSerializeNull(HgArena* arena, HgSerializer* s, HgStringView name)
+{
+    if (s->writing)
+    {
+        switch (s->current->type)
+        {
+            case HgSerialType_object:
+            {
+                if (name == "")
+                    hgWarn("Serializing object field with no name\n");
+
+                s->current->object.fields = hgRealloc(
+                    arena,
+                    s->current->object.fields,
+                    s->current->object.fieldCount,
+                    s->current->object.fieldCount + 1);
+
+                HgSerialField* field = &s->current->object.fields[s->current->object.fieldCount++];
+                field->name = hgStringCopy(arena, name);
+                field->data.type = HgSerialType_null;
+                return;
+            }
+            case HgSerialType_array:
+            {
+                if (name != "")
+                    hgWarn("Serializing array element with name: %.*s\n", (int)name.length, name.chars);
+
+                HgSerialNode* elem = &s->current->array.elems[s->idx++];
+                elem->type = HgSerialType_object;
+                elem->object = {0, nullptr};
+                return;
+            }
+            default:
+            {
+                hgWarn("Serializer cannot write a value to a non-object/non-array: %s\n", hgSerialTypeToString(s->current->type));
+                return;
+            }
+        }
+    }
+    else
+    {
+        switch (s->current->type)
+        {
+            case HgSerialType_object:
+            {
+                if (s->idx >= s->current->object.fieldCount)
+                {
+                    hgWarn("Serializer current object cannot be further deserialized\n");
+                    return;
+                }
+
+                HgSerialField* field = &s->current->object.fields[s->idx++];
+
+                if (field->name != name)
+                    hgWarn("Serializer object name \"%.*s\" does not match expected name \"%.*s\"\n",
+                            (int)field->name.length, field->name.chars, (int)name.length, name.chars);
+
+                if (field->data.type != HgSerialType_null)
+                {
+                    hgWarn("Serializer expected null, found: %s\n", hgSerialTypeToString(field->data.type));
+                    return;
+                };
+
+                return;
+            }
+            case HgSerialType_array:
+            {
+                if (name != "")
+                    hgWarn("Serializing array element with name: \"%.*s\"\n", (int)name.length, name.chars);
+
+                if (s->idx >= s->current->array.elemCount)
+                {
+                    hgWarn("Serializer current array cannot be further deserialized\n");
+                    return;
+                }
+
+                HgSerialNode* elem = &s->current->array.elems[s->idx++];
+
+                if (elem->type != HgSerialType_null)
+                {
+                    hgWarn("Serializer expected null, found: %s\n", hgSerialTypeToString(elem->type));
+                    return;
+                };
+
+                return;
+            }
+            default:
+            {
+                hgWarn("Serializer cannot read a value from a non-object/non-array: %s\n", hgSerialTypeToString(s->current->type));
+                return;
+            }
+        }
+    }
+}
+
+void serializeString(HgArena* arena, HgSerializer* s, HgStringView name, HgStringBuilder* string)
+{
+    if (s->writing)
+    {
+        switch (s->current->type)
+        {
+            case HgSerialType_object:
+            {
+                if (name == "")
+                    hgWarn("Serializing object field with no name\n");
+
+                s->current->object.fields = hgRealloc(
+                    arena,
+                    s->current->object.fields,
+                    s->current->object.fieldCount,
+                    s->current->object.fieldCount + 1);
+
+                HgSerialField* field = &s->current->object.fields[s->current->object.fieldCount++];
+                field->name = hgStringCopy(arena, name);
+                field->data.type = HgSerialType_string;
+                field->data.string = hgStringCopy(arena, *string);
+                return;
+            }
+            case HgSerialType_array:
+            {
+                if (name != "")
+                    hgWarn("Serializing array element with name: %.*s\n", (int)name.length, name.chars);
+
+                HgSerialNode* elem = &s->current->array.elems[s->idx++];
+                elem->type = HgSerialType_string;
+                elem->string = hgStringCopy(arena, *string);
+                return;
+            }
+            default:
+            {
+                hgWarn("Serializer cannot write a value to a non-object/non-array: %s\n", hgSerialTypeToString(s->current->type));
+                return;
+            }
+        }
+    }
+    else
+    {
+        switch (s->current->type)
+        {
+            case HgSerialType_object:
+            {
+                if (s->idx >= s->current->object.fieldCount)
+                {
+                    hgWarn("Serializer current object cannot be further deserialized\n");
+                    return;
+                }
+
+                HgSerialField* field = &s->current->object.fields[s->idx++];
+
+                if (field->name != name)
+                    hgWarn("Serializer object name \"%.*s\" does not match expected name \"%.*s\"\n",
+                            (int)field->name.length, field->name.chars, (int)name.length, name.chars);
+
+                if (field->data.type != HgSerialType_string)
+                {
+                    hgWarn("Serializer expected string, found: %s\n", hgSerialTypeToString(field->data.type));
+                    return;
+                };
+
+                *string = hgStringCopy(arena, field->data.string);
+                return;
+            }
+            case HgSerialType_array:
+            {
+                if (name != "")
+                    hgWarn("Serializing array element with name: \"%.*s\"\n", (int)name.length, name.chars);
+
+                if (s->idx >= s->current->array.elemCount)
+                {
+                    hgWarn("Serializer current array cannot be further deserialized\n");
+                    return;
+                }
+
+                HgSerialNode* elem = &s->current->array.elems[s->idx++];
+
+                if (elem->type != HgSerialType_string)
+                {
+                    hgWarn("Serializer expected string, found: %s\n", hgSerialTypeToString(elem->type));
+                    return;
+                };
+
+                *string = hgStringCopy(arena, elem->string);
+                return;
+            }
+            default:
+            {
+                hgWarn("Serializer cannot read a value from a non-object/non-array: %s\n", hgSerialTypeToString(s->current->type));
+                return;
+            }
+        }
+    }
+}
+
+void hgSerializeData(HgArena* arena, HgSerializer* s, HgStringView name, void** data, u64* size)
+{
+    HgStringBuilder str = {*(char**)data, *size};
+    serializeString(arena, s, name, &str);
+    *data = str.chars;
+    *size = str.length;
+}
+
+template<typename T>
+void serializeInteger(HgArena* arena, HgSerializer* s, HgStringView name, T* val)
+{
+    if (s->writing)
+    {
+        switch (s->current->type)
+        {
+            case HgSerialType_object:
+            {
+                if (name == "")
+                    hgWarn("Serializing object field with no name\n");
+
+                s->current->object.fields = hgRealloc(
+                    arena,
+                    s->current->object.fields,
+                    s->current->object.fieldCount,
+                    s->current->object.fieldCount + 1);
+
+                HgSerialField* field = &s->current->object.fields[s->current->object.fieldCount++];
+                field->name = hgStringCopy(arena, name);
+                field->data.type = HgSerialType_integer;
+                field->data.integer = (i64)*val;
+                return;
+            }
+            case HgSerialType_array:
+            {
+                if (name != "")
+                    hgWarn("Serializing array element with name: %.*s\n", (int)name.length, name.chars);
+
+                HgSerialNode* elem = &s->current->array.elems[s->idx++];
+                elem->type = HgSerialType_integer;
+                elem->integer = (i64)*val;
+                return;
+            }
+            default:
+            {
+                hgWarn("Serializer cannot write a value to a non-object/non-array: %s\n", hgSerialTypeToString(s->current->type));
+                return;
+            }
+        }
+    }
+    else
+    {
+        switch (s->current->type)
+        {
+            case HgSerialType_object:
+            {
+                if (s->idx >= s->current->object.fieldCount)
+                {
+                    hgWarn("Serializer current object cannot be further deserialized\n");
+                    return;
+                }
+
+                HgSerialField* field = &s->current->object.fields[s->idx++];
+
+                if (field->name != name)
+                    hgWarn("Serializer object name \"%.*s\" does not match expected name \"%.*s\"\n",
+                            (int)field->name.length, field->name.chars, (int)name.length, name.chars);
+
+                if (field->data.type != HgSerialType_integer)
+                {
+                    hgWarn("Serializer expected integer, found: %s\n", hgSerialTypeToString(field->data.type));
+                    return;
+                };
+
+                *val = (T)field->data.integer;
+                return;
+            }
+            case HgSerialType_array:
+            {
+                if (name != "")
+                    hgWarn("Serializing array element with name: \"%.*s\"\n", (int)name.length, name.chars);
+
+                if (s->idx >= s->current->array.elemCount)
+                {
+                    hgWarn("Serializer current array cannot be further deserialized\n");
+                    return;
+                }
+
+                HgSerialNode* elem = &s->current->array.elems[s->idx++];
+
+                if (elem->type != HgSerialType_integer)
+                {
+                    hgWarn("Serializer expected integer, found: %s\n", hgSerialTypeToString(elem->type));
+                    return;
+                };
+
+                *val = (T)elem->integer;
+                return;
+            }
+            default:
+            {
+                hgWarn("Serializer cannot read a value from a non-object/non-array: %s\n", hgSerialTypeToString(s->current->type));
+                return;
+            }
+        }
+    }
 }
 
 template<>
-void hgAssetUnloadImpl(HgAssetData<HgJson>* data)
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, u8* val)
 {
-    free(data->asset.file);
+    serializeInteger(arena, s, name, val);
 }
+
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, u16* val)
+{
+    serializeInteger(arena, s, name, val);
+}
+
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, u32* val)
+{
+    serializeInteger(arena, s, name, val);
+}
+
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, u64* val)
+{
+    serializeInteger(arena, s, name, val);
+}
+
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, i8* val)
+{
+    serializeInteger(arena, s, name, val);
+}
+
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, i16* val)
+{
+    serializeInteger(arena, s, name, val);
+}
+
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, i32* val)
+{
+    serializeInteger(arena, s, name, val);
+}
+
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, i64* val)
+{
+    serializeInteger(arena, s, name, val);
+}
+
+template<typename T>
+void serializeFloating(HgArena* arena, HgSerializer* s, HgStringView name, T* val)
+{
+    if (s->writing)
+    {
+        switch (s->current->type)
+        {
+            case HgSerialType_object:
+            {
+                if (name == "")
+                    hgWarn("Serializing object field with no name\n");
+
+                s->current->object.fields = hgRealloc(
+                    arena,
+                    s->current->object.fields,
+                    s->current->object.fieldCount,
+                    s->current->object.fieldCount + 1);
+
+                HgSerialField* field = &s->current->object.fields[s->current->object.fieldCount++];
+                field->name = hgStringCopy(arena, name);
+                field->data.type = HgSerialType_floating;
+                field->data.floating = (f64)*val;
+                return;
+            }
+            case HgSerialType_array:
+            {
+                if (name != "")
+                    hgWarn("Serializing array element with name: %.*s\n", (int)name.length, name.chars);
+
+                HgSerialNode* elem = &s->current->array.elems[s->idx++];
+                elem->type = HgSerialType_floating;
+                elem->floating = (f64)*val;
+                return;
+            }
+            default:
+            {
+                hgWarn("Serializer cannot write a value to a non-object/non-array: %s\n", hgSerialTypeToString(s->current->type));
+                return;
+            }
+        }
+    }
+    else
+    {
+        switch (s->current->type)
+        {
+            case HgSerialType_object:
+            {
+                if (s->idx >= s->current->object.fieldCount)
+                {
+                    hgWarn("Serializer current object cannot be further deserialized\n");
+                    return;
+                }
+
+                HgSerialField* field = &s->current->object.fields[s->idx++];
+
+                if (field->name != name)
+                    hgWarn("Serializer object name \"%.*s\" does not match expected name \"%.*s\"\n",
+                            (int)field->name.length, field->name.chars, (int)name.length, name.chars);
+
+                if (field->data.type != HgSerialType_floating)
+                {
+                    hgWarn("Serializer expected floating, found: %s\n", hgSerialTypeToString(field->data.type));
+                    return;
+                };
+
+                *val = (T)field->data.floating;
+                return;
+            }
+            case HgSerialType_array:
+            {
+                if (name != "")
+                    hgWarn("Serializing array element with name: \"%.*s\"\n", (int)name.length, name.chars);
+
+                if (s->idx >= s->current->array.elemCount)
+                {
+                    hgWarn("Serializer current array cannot be further deserialized\n");
+                    return;
+                }
+
+                HgSerialNode* elem = &s->current->array.elems[s->idx++];
+
+                if (elem->type != HgSerialType_floating)
+                {
+                    hgWarn("Serializer expected floating, found: %s\n", hgSerialTypeToString(elem->type));
+                    return;
+                };
+
+                *val = (T)elem->floating;
+                return;
+            }
+            default:
+            {
+                hgWarn("Serializer cannot read a value from a non-object/non-array: %s\n", hgSerialTypeToString(s->current->type));
+                return;
+            }
+        }
+    }
+}
+
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, f32* val)
+{
+    serializeFloating(arena, s, name, val);
+}
+
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, f64* val)
+{
+    serializeFloating(arena, s, name, val);
+}
+
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, bool* val)
+{
+    if (s->writing)
+    {
+        switch (s->current->type)
+        {
+            case HgSerialType_object:
+            {
+                if (name == "")
+                    hgWarn("Serializing object field with no name\n");
+
+                s->current->object.fields = hgRealloc(
+                    arena,
+                    s->current->object.fields,
+                    s->current->object.fieldCount,
+                    s->current->object.fieldCount + 1);
+
+                HgSerialField* field = &s->current->object.fields[s->current->object.fieldCount++];
+                field->name = hgStringCopy(arena, name);
+                field->data.type = HgSerialType_boolean;
+                field->data.boolean = *val;
+                return;
+            }
+            case HgSerialType_array:
+            {
+                if (name != "")
+                    hgWarn("Serializing array element with name: %.*s\n", (int)name.length, name.chars);
+
+                HgSerialNode* elem = &s->current->array.elems[s->idx++];
+                elem->type = HgSerialType_boolean;
+                elem->boolean = *val;
+                return;
+            }
+            default:
+            {
+                hgWarn("Serializer cannot write a value to a non-object/non-array: %s\n", hgSerialTypeToString(s->current->type));
+                return;
+            }
+        }
+    }
+    else
+    {
+        switch (s->current->type)
+        {
+            case HgSerialType_object:
+            {
+                if (s->idx >= s->current->object.fieldCount)
+                {
+                    hgWarn("Serializer current object cannot be further deserialized\n");
+                    return;
+                }
+
+                HgSerialField* field = &s->current->object.fields[s->idx++];
+
+                if (field->name != name)
+                    hgWarn("Serializer object name \"%.*s\" does not match expected name \"%.*s\"\n",
+                            (int)field->name.length, field->name.chars, (int)name.length, name.chars);
+
+                if (field->data.type != HgSerialType_boolean)
+                {
+                    hgWarn("Serializer expected boolean, found: %s\n", hgSerialTypeToString(field->data.type));
+                    return;
+                };
+
+                *val = field->data.boolean;
+                return;
+            }
+            case HgSerialType_array:
+            {
+                if (name != "")
+                    hgWarn("Serializing array element with name: \"%.*s\"\n", (int)name.length, name.chars);
+
+                if (s->idx >= s->current->array.elemCount)
+                {
+                    hgWarn("Serializer current array cannot be further deserialized\n");
+                    return;
+                }
+
+                HgSerialNode* elem = &s->current->array.elems[s->idx++];
+
+                if (elem->type != HgSerialType_boolean)
+                {
+                    hgWarn("Serializer expected boolean, found: %s\n", hgSerialTypeToString(elem->type));
+                    return;
+                };
+
+                *val = elem->floating;
+                return;
+            }
+            default:
+            {
+                hgWarn("Serializer cannot read a value from a non-object/non-array: %s\n", hgSerialTypeToString(s->current->type));
+                return;
+            }
+        }
+    }
+}
+
+/**
+ * HgStringView serialization
+ */
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgStringView* val)
+{
+    HgStringBuilder str = {(char*)val->chars, val->length};
+    serializeString(arena, s, name, &str);
+    if (!s->writing)
+        *val = str;
+}
+
+/**
+ * HgStringBuilder serialization
+ */
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgStringBuilder* val)
+{
+    serializeString(arena, s, name, val);
+}
+
+/**
+ * HgStringOwner serialization
+ */
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgStringOwner* val)
+{
+    HgStringBuilder str = {(char*)val->chars, val->length};
+    if (s->writing)
+    {
+        serializeString(arena, s, name, &str);
+    }
+    else
+    {
+        serializeString(hgScratch(), s, name, &str);
+        *val = hgStringAlloc(str);
+    }
+}
+
+/**
+ * HgBinary serialization
+ */
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgBinary* val)
+{
+    hgSerializeData(arena, s, name, &val->data, &val->size);
+}
+
+static constexpr char serialBinTag[] = "HgData";
+static constexpr u32 serialBinVersionMajor = 0;
+static constexpr u32 serialBinVersionMinor = 0;
+static constexpr u32 serialBinVersionPatch = 0;
+
+struct SerialBinHeader {
+    char tag[sizeof(serialBinTag)];
+    u32 versionMajor;
+    u32 versionMinor;
+    u32 versionPatch;
+
+    u32 nodeBegin;
+};
+
+struct SerialBinArray {
+    u32 elemsBegin;
+    u32 elemCount;
+};
+
+struct SerialBinElem {
+    u32 elemBegin;
+};
+
+struct SerialBinObject {
+    u32 fieldsBegin;
+    u32 fieldCount;
+};
+
+struct SerialBinField {
+    u32 nameBegin;
+    u32 nameLength;
+    u32 dataBegin;
+};
+
+struct SerialBinString {
+    u32 begin;
+    u32 length;
+};
+
+struct SerialBinNode {
+    HgSerialType type;
+    union {
+        SerialBinArray array;
+        SerialBinObject object;
+        SerialBinString string;
+        i64 integer;
+        f64 floating;
+        bool boolean;
+    };
+};
+
+static void serialBinWriteNode(HgArena* arena, HgBinary* bin, HgSerialNode* node);
+
+static void serialBinWriteNull(HgArena* arena, HgBinary* bin)
+{
+    SerialBinNode node{};
+
+    u32 idx = bin->size;
+    *bin = hgBinaryResize(arena, bin, bin->size + sizeof(SerialBinNode));
+
+    node.type = HgSerialType_null;
+    hgBinaryOverwrite(bin, idx, node);
+}
+
+static void serialBinWriteArray(HgArena* arena, HgBinary* bin, HgSerialArray array)
+{
+    SerialBinNode node{};
+
+    u32 idx = bin->size;
+    *bin = hgBinaryResize(arena, bin, bin->size + sizeof(SerialBinNode));
+
+    node.type = HgSerialType_array;
+    node.array.elemsBegin = bin->size;
+    node.array.elemCount = array.elemCount;
+    hgBinaryOverwrite(bin, idx, node);
+
+    *bin = hgBinaryResize(arena, bin, bin->size + array.elemCount * sizeof(SerialBinElem));
+    for (u32 i = 0; i < array.elemCount; ++i)
+    {
+        SerialBinElem elem{};
+        elem.elemBegin = bin->size;
+        serialBinWriteNode(arena, bin, &array.elems[i]);
+        hgBinaryOverwrite(bin, node.array.elemsBegin + i * sizeof(elem), elem);
+    }
+}
+
+static void serialBinWriteObject(HgArena* arena, HgBinary* bin, HgSerialObject object)
+{
+    SerialBinNode node{};
+
+    u32 idx = bin->size;
+    *bin = hgBinaryResize(arena, bin, bin->size + sizeof(SerialBinNode));
+
+    node.type = HgSerialType_object;
+    node.object.fieldsBegin = bin->size;
+    node.object.fieldCount = object.fieldCount;
+    hgBinaryOverwrite(bin, idx, node);
+
+    *bin = hgBinaryResize(arena, bin, bin->size + object.fieldCount * sizeof(SerialBinField));
+    for (u32 i = 0; i < object.fieldCount; ++i)
+    {
+        SerialBinField field{};
+
+        field.nameBegin = bin->size;
+        field.nameLength = object.fields[i].name.length;
+        *bin = hgBinaryResize(arena, bin, bin->size + field.nameLength);
+        hgBinaryOverwrite(bin, field.nameBegin, object.fields[i].name.chars, field.nameLength);
+
+        field.dataBegin = bin->size;
+        serialBinWriteNode(arena, bin, &object.fields[i].data);
+
+        hgBinaryOverwrite(bin, node.object.fieldsBegin + i * sizeof(field), field);
+    }
+}
+
+static void serialBinWriteString(HgArena* arena, HgBinary* bin, HgStringView string)
+{
+    SerialBinNode node{};
+
+    u32 idx = bin->size;
+    *bin = hgBinaryResize(arena, bin, bin->size + sizeof(SerialBinNode));
+
+    node.type = HgSerialType_string;
+    node.string.begin = bin->size;
+    node.string.length = string.length;
+    hgBinaryOverwrite(bin, idx, node);
+
+    *bin = hgBinaryResize(arena, bin, bin->size + string.length);
+    hgBinaryOverwrite(bin, node.string.begin, string.chars, string.length);
+}
+
+static void serialBinWriteInteger(HgArena* arena, HgBinary* bin, i64 integer)
+{
+    SerialBinNode node{};
+
+    u32 idx = bin->size;
+    *bin = hgBinaryResize(arena, bin, bin->size + sizeof(SerialBinNode));
+
+    node.type = HgSerialType_integer;
+    node.integer = integer;
+    hgBinaryOverwrite(bin, idx, node);
+}
+
+static void serialBinWriteFloating(HgArena* arena, HgBinary* bin, f64 floating)
+{
+    SerialBinNode node{};
+
+    u32 idx = bin->size;
+    *bin = hgBinaryResize(arena, bin, bin->size + sizeof(SerialBinNode));
+
+    node.type = HgSerialType_floating;
+    node.floating = floating;
+    hgBinaryOverwrite(bin, idx, node);
+}
+
+static void serialBinWriteBoolean(HgArena* arena, HgBinary* bin, bool boolean)
+{
+    SerialBinNode node{};
+
+    u32 idx = bin->size;
+    *bin = hgBinaryResize(arena, bin, bin->size + sizeof(SerialBinNode));
+
+    node.type = HgSerialType_boolean;
+    node.boolean = boolean;
+    hgBinaryOverwrite(bin, idx, node);
+}
+
+static void serialBinWriteNode(HgArena* arena, HgBinary* bin, HgSerialNode* node)
+{
+    switch (node->type)
+    {
+        case HgSerialType_null:
+            serialBinWriteNull(arena, bin);
+            return;
+        case HgSerialType_array:
+            serialBinWriteArray(arena, bin, node->array);
+            return;
+        case HgSerialType_object:
+            serialBinWriteObject(arena, bin, node->object);
+            return;
+        case HgSerialType_string:
+            serialBinWriteString(arena, bin, node->string);
+            return;
+        case HgSerialType_integer:
+            serialBinWriteInteger(arena, bin, node->integer);
+            return;
+        case HgSerialType_floating:
+            serialBinWriteFloating(arena, bin, node->floating);
+            return;
+        case HgSerialType_boolean:
+            serialBinWriteBoolean(arena, bin, node->boolean);
+            return;
+        default:
+            hgError("Invalid HgSerialType: %s\n", hgSerialTypeToString(node->type));
+    }
+}
+
+HgBinary hgBinaryWriteSerial(HgArena* arena, HgSerializer serial)
+{
+    HgBinary bin{};
+
+    SerialBinHeader header{};
+    bin = hgBinaryResize(arena, &bin, bin.size + sizeof(header));
+
+    memcpy(header.tag, serialBinTag, sizeof(serialBinTag));
+    header.versionMajor = serialBinVersionMajor;
+    header.versionMinor = serialBinVersionMinor;
+    header.versionPatch = serialBinVersionPatch;
+    header.nodeBegin = bin.size;
+    hgBinaryOverwrite(&bin, 0, header);
+
+    serialBinWriteNode(arena, &bin, serial.current);
+
+    return bin;
+}
+
+static void serialBinReadNode(HgArena* arena, HgStringView name, HgBinary bin, SerialBinNode node, HgSerializer* s);
+
+static void serialBinReadArray(HgArena* arena, HgStringView name, HgBinary bin, SerialBinArray array, HgSerializer* s)
+{
+    HgSerializer arr = hgSerializerBeginArray(arena, s, name, &array.elemCount);
+    for (u32 i = 0; i < array.elemCount; ++i)
+    {
+        SerialBinElem elem = hgBinaryRead<SerialBinElem>(&bin, array.elemsBegin + i * sizeof(elem));
+        serialBinReadNode(arena, "", bin, hgBinaryRead<SerialBinNode>(&bin, elem.elemBegin), &arr);
+    }
+}
+
+static void serialBinReadObject(
+    HgArena* arena,
+    HgStringView name,
+    HgBinary bin,
+    SerialBinObject object,
+    HgSerializer* s)
+{
+    HgSerializer obj = hgSerializerBeginObject(arena, s, name);
+    for (u32 i = 0; i < object.fieldCount; ++i)
+    {
+        SerialBinField field = hgBinaryRead<SerialBinField>(&bin, object.fieldsBegin + i * sizeof(field));
+        HgStringView fieldName = {(char*)bin.data + field.nameBegin, field.nameLength};
+        serialBinReadNode(arena, fieldName, bin, hgBinaryRead<SerialBinNode>(&bin, field.dataBegin), &obj);
+    }
+}
+
+static void serialBinReadString(
+    HgArena* arena,
+    HgStringView name,
+    HgBinary bin,
+    SerialBinString string,
+    HgSerializer* s)
+{
+    HgStringView val = {(char*)bin.data + string.begin, string.length};
+    hgSerialize(arena, s, name, &val);
+}
+
+static void serialBinReadNode(HgArena* arena, HgStringView name, HgBinary bin, SerialBinNode node, HgSerializer* s)
+{
+    switch (node.type)
+    {
+        case HgSerialType_null:
+            hgSerializeNull(arena, s, name);
+            return;
+        case HgSerialType_array:
+            serialBinReadArray(arena, name, bin, node.array, s);
+            return;
+        case HgSerialType_object:
+            serialBinReadObject(arena, name, bin, node.object, s);
+            return;
+        case HgSerialType_string:
+            serialBinReadString(arena, name, bin, node.string, s);
+            return;
+        case HgSerialType_integer:
+            hgSerialize(arena, s, name, &node.integer);
+            return;
+        case HgSerialType_floating:
+            hgSerialize(arena, s, name, &node.floating);
+            return;
+        case HgSerialType_boolean:
+            hgSerialize(arena, s, name, &node.boolean);
+            return;
+        default:
+            hgError("Invalid HgSerialType: %s\n", hgSerialTypeToString(node.type));
+    }
+}
+
+HgSerializer hgBinaryReadSerial(HgArena* arena, HgBinary bin)
+{
+    SerialBinHeader header = hgBinaryRead<SerialBinHeader>(&bin, 0);
+
+    if (memcmp(header.tag, serialBinTag, sizeof(serialBinTag)) != 0)
+    {
+        hgWarn("Serial binary could not be read, does not have a header\n");
+        return {};
+    }
+    else if (header.versionMajor != serialBinVersionMajor)
+    {
+        hgWarn("Serial binary has wrong major version: %d instead of %d", header.versionMajor, serialBinVersionMajor);
+    }
+    else if (header.versionMinor != serialBinVersionMinor)
+    {
+        hgWarn("Serial binary has wrong minor version: %d instead of %d", header.versionMinor, serialBinVersionMinor);
+    }
+    else if (header.versionPatch != serialBinVersionPatch)
+    {
+        hgWarn("Serial binary has wrong patch version: %d instead of %d", header.versionPatch, serialBinVersionPatch);
+    }
+
+    HgSerializer s = hgSerialWriter(arena);
+
+    SerialBinObject object = hgBinaryRead<SerialBinNode>(&bin, header.nodeBegin).object;
+    for (u32 i = 0; i < object.fieldCount; ++i)
+    {
+        SerialBinField field = hgBinaryRead<SerialBinField>(&bin, object.fieldsBegin + i * sizeof(field));
+        HgStringView fieldName = {(char*)bin.data + field.nameBegin, field.nameLength};
+        serialBinReadNode(arena, fieldName, bin, hgBinaryRead<SerialBinNode>(&bin, field.dataBegin), &s);
+    }
+
+    return hgSerialReader(s.current);
+}
+
+// HgStringView hgJsonWriteSerial(HgArena* arena, HgSerializer* serial)
+// {
+// }
+//
+// HgSerializer hgJsonReadSerial(HgArena* arena, HgStringView json)
+// {
+// }
 
 struct JsonParseState {
     HgStringView text;
@@ -2038,6 +3033,228 @@ HgJson hgParseJson(HgArena* arena, HgStringView text)
     parseState.head = 0;
     parseState.line = 1;
     return jsonParseNext(arena, &parseState);
+}
+
+HgPerf hgPerfCreate(HgArena* arena, u32 count)
+{
+    hgAssert(arena != nullptr);
+
+    HgPerf perf;
+    perf.times = hgAlloc<f64>(arena, count);
+    perf.count = count;
+    perf.current = 0;
+    return perf;
+}
+
+void hgPerfBegin(HgPerf* perf)
+{
+    hgAssert(perf != nullptr);
+    hgClockTick(&perf->clock);
+}
+
+f64 hgPerfEnd(HgPerf* perf)
+{
+    hgAssert(perf != nullptr);
+    hgAssert(perf->current < perf->count);
+
+    f64 time = hgClockTick(&perf->clock);
+    perf->times[perf->current++] = time;
+
+    return time;
+}
+
+HgPerfStats hgPerfAnalyze(const HgPerf* perf)
+{
+    hgAssert(perf != nullptr);
+
+    HgPerfStats stats;
+    stats.avg = 0.0;
+    stats.best = INFINITY;
+    stats.worst = 0.0;
+
+    for (u32 i = 0; i < perf->current; ++i)
+    {
+        if (perf->times[i] < stats.best)
+            stats.best = perf->times[i];
+        if (perf->times[i] > stats.worst)
+            stats.worst = perf->times[i];
+        stats.avg += perf->times[i];
+    }
+    stats.avg /= (f64)perf->current;
+
+    return stats;
+}
+
+void hgPerfLog(HgStringView title, const HgPerfStats* stats, HgPerfScale scale)
+{
+    hgAssert(stats != nullptr);
+    if (title.length == 0 || title.chars == nullptr)
+        title = "Title Missing";
+
+    switch (scale)
+    {
+        case HgPerfScale_seconds:
+            printf("HG Performance - %.*s: avg: %.4fs, best: %.4fs, worst: %.4fs\n",
+                (int)title.length, title.chars, stats->avg, stats->best, stats->worst);
+            break;
+        case HgPerfScale_milli:
+            printf("HG Performance - %.*s: avg: %.4fms, best: %.4fms, worst: %.4fms\n",
+                (int)title.length, title.chars, stats->avg * 1.e3, stats->best * 1.e3, stats->worst * 1.e3);
+            break;
+        case HgPerfScale_micro:
+            printf("HG Performance - %.*s: avg: %.4fmcs, best: %.4fmcs, worst: %.4fmcs\n",
+                (int)title.length, title.chars, stats->avg * 1.e6, stats->best * 1.e6, stats->worst * 1.e6);
+            break;
+        case HgPerfScale_nano:
+            printf("HG Performance - %.*s: avg: %.4fns, best: %.4fns, worst: %.4fns\n",
+                (int)title.length, title.chars, stats->avg * 1.e9, stats->best * 1.e9, stats->worst * 1.e9);
+            break;
+    }
+}
+
+void hgAssetInitDefaults(
+    HgArena* arena,
+    u32 maxBinaries,
+    u32 maxTextures,
+    u32 maxGpuTextures,
+    u32 maxMeshes,
+    u32 maxGpuMeshes,
+    u32 maxAudios)
+{
+    hgAssetInit<HgBinary>(arena, maxBinaries);
+    hgAssetInit<HgTexture>(arena, maxTextures);
+    hgAssetInit<HgGpuTexture>(arena, maxGpuTextures);
+    hgAssetInit<HgMesh>(arena, maxMeshes);
+    hgAssetInit<HgGpuMesh>(arena, maxGpuMeshes);
+    hgAssetInit<HgAudio>(arena, maxAudios);
+}
+
+void hgAssetDeinitDefaults()
+{
+    hgAssetDeinit<HgGpuMesh>();
+    hgAssetDeinit<HgMesh>();
+    hgAssetDeinit<HgGpuTexture>();
+    hgAssetDeinit<HgTexture>();
+    hgAssetDeinit<HgBinary>();
+}
+
+template<>
+void hgAssetLoadImpl(HgAssetData<HgBinary>* data)
+{
+    HgArena* scratch = hgScratch();
+    hgArenaScope(scratch);
+
+    char* cpath = hgCString(scratch, data->path);
+
+    FILE* fileHandle = fopen(cpath, "rb");
+    if (fileHandle == nullptr)
+    {
+    hgWarn("Could not find file to read binary: %s\n", cpath);
+    return;
+    }
+    hgDefer(fclose(fileHandle));
+
+    if (fseek(fileHandle, 0, SEEK_END) != 0)
+    {
+        hgWarn("Failed to read binary from file: %s\n", cpath);
+        return;
+    }
+
+    data->asset.size = (u32)ftell(fileHandle);
+    data->asset.data = malloc(data->asset.size);
+
+    rewind(fileHandle);
+    if (fread(data->asset.data, 1, data->asset.size, fileHandle) != data->asset.size)
+    {
+        free(data->asset.data);
+        data->asset = {};
+        hgWarn("Failed to read binary from file: %s\n", cpath);
+        return;
+    }
+}
+
+template<>
+void hgAssetUnloadImpl(HgAssetData<HgBinary>* data)
+{
+    hgFenceWaitIndefinite(data->isLoaded);
+    free(data->asset.data);
+}
+
+void hgBinaryStore(HgBinary* bin, HgStringView path, HgFence fence)
+{
+    struct Capture {
+        HgBinary bin;
+        HgStringOwner path;
+    };
+    Capture* c = (Capture*)malloc(sizeof(*c));
+    c->bin = *bin;
+    c->path = hgStringAlloc(path);
+
+    hgThreadsCall(fence, c, [](void* pc)
+    {
+        Capture* c = (Capture*)pc;
+        hgDefer(free(c));
+        hgDefer(hgStringFree(&c->path));
+
+        HgArena* scratch = hgScratch();
+        hgArenaScope(scratch);
+
+        char* cpath = hgCString(scratch, c->path);
+
+        FILE* fileHandle = fopen(cpath, "wb");
+        if (fileHandle == nullptr)
+        {
+            hgWarn("Failed to create file to write binary: %s\n", cpath);
+            return;
+        }
+        hgDefer(fclose(fileHandle));
+
+        if (fwrite(c->bin.data, 1, c->bin.size, fileHandle) != c->bin.size)
+        {
+            hgWarn("Failed to write binary data to file: %s\n", cpath);
+        }
+    });
+}
+
+template<>
+void hgAssetLoadImpl(HgAssetData<HgJson>* data)
+{
+    HgBinaryHandle bin = hgAssetLoad<HgBinary>(data->path);
+    hgDefer(hgAssetUnload(bin));
+
+    HgArena* scratch = hgScratch();
+    u64 head = scratch->head;
+    hgDefer(scratch->head = head);
+
+    HgBinary* jsonBin = hgAssetGet(bin);
+    HgStringView jsonStr = {(char*)jsonBin->data, jsonBin->size};
+    HgJson parse = hgParseJson(scratch, jsonStr);
+
+    HgJsonError* e = parse.errors;
+    while (e != nullptr)
+    {
+        hgWarn("Json parse error: %.*s\n", (int)e->msg.length, e->msg.chars);
+        e = e->next;
+    }
+
+    data->asset.file = (HgJsonNode*)malloc(scratch->head - head);
+    if (parse.errors != nullptr)
+    {
+        data->asset.errors = (HgJsonError*)(
+            (u8*)data->asset.file +
+                ((uptr)parse.errors - (uptr)parse.file));
+    }
+    else
+    {
+        data->asset.errors = nullptr;
+    }
+    memcpy((void*)data->asset.file, (void*)parse.file, scratch->head - head);
+}
+
+template<>
+void hgAssetUnloadImpl(HgAssetData<HgJson>* data)
+{
+    free(data->asset.file);
 }
 
 template<>

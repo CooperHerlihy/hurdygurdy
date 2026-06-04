@@ -27,7 +27,7 @@
 #ifndef HG_LIBRARY_HPP
 #define HG_LIBRARY_HPP
 
-#include "hg_containers.hpp"
+#include "hg_memory.hpp"
 
 /**
  * A dynamically loaded library

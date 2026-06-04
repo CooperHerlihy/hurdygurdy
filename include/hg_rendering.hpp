@@ -27,11 +27,11 @@
 #ifndef HG_RENDERING_HPP
 #define HG_RENDERING_HPP
 
-#include "hg_core.hpp"
-#include "hg_math.hpp"
-#include "hg_gpu.hpp"
 #include "hg_assets.hpp"
+#include "hg_core.hpp"
 #include "hg_ecs.hpp"
+#include "hg_gpu.hpp"
+#include "hg_math.hpp"
 #include "hg_window.hpp"
 
 /**

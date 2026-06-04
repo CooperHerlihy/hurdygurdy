@@ -29,7 +29,6 @@
 
 #include "hg_core.hpp"
 #include "hg_memory.hpp"
-#include "hg_containers.hpp"
 
 /**
  * Initializes global platform resources

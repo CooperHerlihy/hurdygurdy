@@ -27,9 +27,8 @@
 #ifndef HG_AUDIO_HPP
 #define HG_AUDIO_HPP
 
-#include "hg_core.hpp"
-#include "hg_containers.hpp"
 #include "hg_assets.hpp"
+#include "hg_core.hpp"
 #include "hg_ecs.hpp"
 
 /**

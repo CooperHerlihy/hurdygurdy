@@ -21,60 +21,6 @@ void hgTest()
     HgClock timer;
     hgClockTick(&timer);
 
-    // HgMat
-    {
-        HgMat2 mat{
-            HgVec2{1.0f, 0.0f},
-            HgVec2{1.0f, 0.0f},
-        };
-        HgVec2 vec{1.0f, 1.0f};
-
-        HgMat2 identity{
-            HgVec2{1.0f, 0.0f},
-            HgVec2{0.0f, 1.0f},
-        };
-        hgAssert(identity * mat == mat);
-        hgAssert(identity * vec == vec);
-
-        HgMat2 matRotated{
-            HgVec2{0.0f, 1.0f},
-            HgVec2{0.0f, 1.0f},
-        };
-        HgVec2 vecRotated{-1.0f, 1.0f};
-
-        HgMat2 rotation{
-            HgVec2{0.0f, 1.0f},
-            HgVec2{-1.0f, 0.0f},
-        };
-        hgAssert(rotation * mat == matRotated);
-        hgAssert(rotation * vec == vecRotated);
-
-        hgAssert((identity * rotation) * mat == identity * (rotation * mat));
-        hgAssert((identity * rotation) * vec == identity * (rotation * vec));
-        hgAssert((rotation * rotation) * mat == rotation * (rotation * mat));
-        hgAssert((rotation * rotation) * vec == rotation * (rotation * vec));
-    }
-
-    // HgQuat
-    {
-        HgMat3 identityMat = HgMat3{1.0f};
-        HgVec3 upVec{0.0f, -1.0f, 0.0f};
-        HgQuat rotation = hgQuatAxisAngle(HgVec3{0.0f, 0.0f, -1.0f}, -(f32)hgPi * 0.5f);
-
-        HgVec3 rotatedVec = hgVecRotate(rotation, upVec);
-        HgMat3 rotatedMat = hgMatRotate(rotation, identityMat);
-
-        HgVec3 matRotatedVec = rotatedMat * upVec;
-
-        hgAssert(abs(rotatedVec.x - 1.0f) < FLT_EPSILON
-                    && abs(rotatedVec.y - 0.0f) < FLT_EPSILON
-                    && abs(rotatedVec.y - 0.0f) < FLT_EPSILON);
-
-        hgAssert(abs(matRotatedVec.x - rotatedVec.x) < FLT_EPSILON
-                    && abs(matRotatedVec.y - rotatedVec.y) < FLT_EPSILON
-                    && abs(matRotatedVec.y - rotatedVec.z) < FLT_EPSILON);
-    }
-
     // HgArena
     {
         void* block = malloc(1024);
@@ -118,6 +64,153 @@ void hgTest()
             hgAssert(memcmp(reallocBig, reallocBig2, 2 * sizeof(*reallocBig)) == 0);
 
             arena.head = 0;
+        }
+    }
+
+    // HgHashSet
+    {
+        HgArena* arena = hgScratch();
+        hgArenaScope(arena);
+
+        constexpr u32 count = 128;
+
+        HgSet<u32> set = hgSetCreate<u32>(arena, count);
+
+        for (u32 i = 0; i < 3; ++i)
+        {
+            hgAssert(set.count == 0);
+            hgAssert(!hgSetHas(&set, 0));
+            hgAssert(!hgSetHas(&set, 1));
+            hgAssert(!hgSetHas(&set, 12));
+            hgAssert(!hgSetHas(&set, 42));
+            hgAssert(!hgSetHas(&set, 100000));
+
+            hgSetAdd(&set, 1);
+            hgAssert(set.count == 1);
+            hgAssert(hgSetHas(&set, 1));
+
+            hgSetRemove(&set, 1);
+            hgAssert(set.count == 0);
+            hgAssert(!hgSetHas(&set, 1));
+
+            hgAssert(!hgSetHas(&set, 12));
+            hgAssert(!hgSetHas(&set, 12 + count));
+
+            hgSetAdd(&set, 12);
+            hgAssert(set.count == 1);
+            hgAssert(hgSetHas(&set, 12));
+            hgAssert(!hgSetHas(&set, 12 + count));
+
+            hgSetAdd(&set, 12 + count);
+            hgAssert(set.count == 2);
+            hgAssert(hgSetHas(&set, 12));
+            hgAssert(hgSetHas(&set, 12 + count));
+
+            hgSetAdd(&set, 12 + count * 2);
+            hgAssert(set.count == 3);
+            hgAssert(hgSetHas(&set, 12));
+            hgAssert(hgSetHas(&set, 12 + count));
+            hgAssert(hgSetHas(&set, 12 + count * 2));
+
+            hgSetRemove(&set, 12);
+            hgAssert(set.count == 2);
+            hgAssert(!hgSetHas(&set, 12));
+            hgAssert(hgSetHas(&set, 12 + count));
+
+            hgSetAdd(&set, 42);
+            hgAssert(set.count == 3);
+            hgAssert(hgSetHas(&set, 42));
+
+            hgSetRemove(&set, 12 + count);
+            hgAssert(set.count == 2);
+            hgAssert(!hgSetHas(&set, 12));
+            hgAssert(!hgSetHas(&set, 12 + count));
+
+            hgSetRemove(&set, 42);
+            hgAssert(set.count == 1);
+            hgAssert(!hgSetHas(&set, 42));
+
+            hgSetRemove(&set, 12 + count * 2);
+            hgAssert(set.count == 0);
+            hgAssert(!hgSetHas(&set, 12));
+            hgAssert(!hgSetHas(&set, 12 + count));
+            hgAssert(!hgSetHas(&set, 12 + count * 2));
+
+            hgSetReset(&set);
+        }
+    }
+
+    // HgHashMap
+    {
+        HgArena* arena = hgScratch();
+        hgArenaScope(arena);
+
+        constexpr u32 count = 128;
+
+        HgMap<u32, u32> map = hgMapCreate<u32, u32>(arena, count);
+
+        for (u32 i = 0; i < 3; ++i)
+        {
+            hgAssert(map.count == 0);
+            hgAssert(hgMapGet(&map, 0) == nullptr);
+            hgAssert(hgMapGet(&map, 1) == nullptr);
+            hgAssert(hgMapGet(&map, 12) == nullptr);
+            hgAssert(hgMapGet(&map, 42) == nullptr);
+            hgAssert(hgMapGet(&map, 100000) == nullptr);
+
+            hgMapAdd(&map, 1, 1);
+            hgAssert(map.count == 1);
+            hgAssert(hgMapGet(&map, 1) != nullptr);
+            hgAssert(*hgMapGet(&map, 1) == 1);
+
+            hgMapRemove(&map, 1);
+            hgAssert(map.count == 0);
+            hgAssert(hgMapGet(&map, 1) == nullptr);
+
+            hgAssert(hgMapGet(&map, 12) == nullptr);
+            hgAssert(hgMapGet(&map, 12 + count) == nullptr);
+
+            hgMapAdd(&map, 12, 42);
+            hgAssert(map.count == 1);
+            hgAssert(hgMapGet(&map, 12) != nullptr && *hgMapGet(&map, 12) == 42);
+            hgAssert(hgMapGet(&map, 12 + count) == nullptr);
+
+            hgMapAdd(&map, 12 + count, 100);
+            hgAssert(map.count == 2);
+            hgAssert(hgMapGet(&map, 12) != nullptr && *hgMapGet(&map, 12) == 42);
+            hgAssert(hgMapGet(&map, 12 + count) != nullptr && *hgMapGet(&map, 12 + count) == 100);
+
+            hgMapAdd(&map, 12 + count * 2, 200);
+            hgAssert(map.count == 3);
+            hgAssert(hgMapGet(&map, 12) != nullptr && *hgMapGet(&map, 12) == 42);
+            hgAssert(hgMapGet(&map, 12 + count) != nullptr && *hgMapGet(&map, 12 + count) == 100);
+            hgAssert(hgMapGet(&map, 12 + count * 2) != nullptr && *hgMapGet(&map, 12 + count * 2) == 200);
+
+            hgMapRemove(&map, 12);
+            hgAssert(map.count == 2);
+            hgAssert(hgMapGet(&map, 12) == nullptr);
+            hgAssert(hgMapGet(&map, 12 + count) != nullptr && *hgMapGet(&map, 12 + count) == 100);
+
+            hgMapAdd(&map, 42, 12);
+            hgAssert(map.count == 3);
+            hgAssert(hgMapGet(&map, 42) != nullptr && *hgMapGet(&map, 42) == 12);
+
+            hgMapRemove(&map, 12 + count);
+            hgAssert(map.count == 2);
+            hgAssert(hgMapGet(&map, 12) == nullptr);
+            hgAssert(hgMapGet(&map, 12 + count) == nullptr);
+
+            hgMapRemove(&map, 42);
+            hgAssert(map.count == 1);
+            hgAssert(hgMapGet(&map, 42) == nullptr);
+
+            hgMapRemove(&map, 12 + count * 2);
+            hgAssert(map.count == 0);
+            hgAssert(hgMapGet(&map, 12) == nullptr);
+            hgAssert(hgMapGet(&map, 12 + count) == nullptr);
+            hgAssert(hgMapGet(&map, 12 + count * 2) == nullptr);
+
+            hgMapReset(&map);
         }
     }
 
@@ -449,845 +542,1026 @@ void hgTest()
         hgAssert(hgFloatToString(arena, 9e-1f, 3) == "0.899");
     }
 
-    // HgJson
+    // thread pool
     {
-        HgArena* arena = hgScratch();
-        hgArenaScope(arena);
-
-        HgStringView file = R"(
-        )";
-
-        HgJson json = hgParseJson(arena, file);
-
-        hgAssert(json.errors == nullptr);
-        hgAssert(json.file == nullptr);
-    }
-
-    {
-        HgArena* arena = hgScratch();
-        hgArenaScope(arena);
-
-        HgStringView file = R"(
-            {
-            }
-        )";
-
-        HgJson json = hgParseJson(arena, file);
-
-        hgAssert(json.errors == nullptr);
-        hgAssert(json.file != nullptr);
-
-        HgJsonNode* node = json.file;
-        hgAssert(node->type == HgJsonType_struct);
-        hgAssert(node->jstruct.fields == nullptr);
-    }
-
-    {
-        HgArena* arena = hgScratch();
-        hgArenaScope(arena);
-
-        HgStringView file = R"(
-            {
-                1234
-            }
-        )";
-
-        HgJson json = hgParseJson(arena, file);
-
-        hgAssert(json.errors != nullptr);
-        hgAssert(json.file != nullptr);
-
-        HgJsonError* error = json.errors;
-        hgAssert(error->next == nullptr);
-        hgAssert(error->msg == "on line 4, struct has a literal instead of a field\n");
-
-        HgJsonNode* node = json.file;
-        hgAssert(node->type == HgJsonType_struct);
-        hgAssert(node->jstruct.fields == nullptr);
-    }
-
-    {
-        HgArena* arena = hgScratch();
-        hgArenaScope(arena);
-
-        HgStringView file = R"(
-            {
-                "asdf"
-            }
-        )";
-
-        HgJson json = hgParseJson(arena, file);
-
-        hgAssert(json.errors != nullptr);
-        hgAssert(json.file != nullptr);
-
-        HgJsonError* error = json.errors;
-        hgAssert(error->next == nullptr);
-        hgAssert(error->msg == "on line 4, struct has a literal instead of a field\n");
-
-        HgJsonNode* node = json.file;
-        hgAssert(node->type == HgJsonType_struct);
-        hgAssert(node->jstruct.fields == nullptr);
-    }
-
-    {
-        HgArena* arena = hgScratch();
-        hgArenaScope(arena);
-
-        HgStringView file = R"(
-            {
-                "asdf":
-            }
-        )";
-
-        HgJson json = hgParseJson(arena, file);
-
-        hgAssert(json.errors != nullptr);
-        hgAssert(json.file != nullptr);
-
-        HgJsonError* error = json.errors;
-        hgAssert(error->next != nullptr);
-        hgAssert(error->msg == "on line 4, struct has a field named \"asdf\" which has no value\n");
-        error = error->next;
-        hgAssert(error->next == nullptr);
-        hgAssert(error->msg == "on line 4, found unexpected token \"}\"\n");
-
-        HgJsonNode* node = json.file;
-        hgAssert(node->type == HgJsonType_struct);
-        hgAssert(node->jstruct.fields == nullptr);
-    }
-
-    {
-        HgArena* arena = hgScratch();
-        hgArenaScope(arena);
-
-        HgStringView file = R"(
-            {
-                "asdf": true
-            }
-        )";
-
-        HgJson json = hgParseJson(arena, file);
-
-        hgAssert(json.errors == nullptr);
-        hgAssert(json.file != nullptr);
-
-        HgJsonNode* node = json.file;
-        hgAssert(node->type == HgJsonType_struct);
-        hgAssert(node->jstruct.fields != nullptr);
-
-        HgJsonField* field = node->jstruct.fields;
-        hgAssert(field->next == nullptr);
-        hgAssert(field->name == "asdf");
-        hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType_bool);
-        hgAssert(field->value->boolean == true);
-    }
-
-    {
-        HgArena* arena = hgScratch();
-        hgArenaScope(arena);
-
-        HgStringView file = R"(
-            {
-                "asdf": false
-            }
-        )";
-
-        HgJson json = hgParseJson(arena, file);
-
-        hgAssert(json.errors == nullptr);
-        hgAssert(json.file != nullptr);
-
-        HgJsonNode* node = json.file;
-        hgAssert(node->type == HgJsonType_struct);
-        hgAssert(node->jstruct.fields != nullptr);
-
-        HgJsonField* field = node->jstruct.fields;
-        hgAssert(field->next == nullptr);
-        hgAssert(field->name == "asdf");
-        hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType_bool);
-        hgAssert(field->value->boolean == false);
-    }
-
-    {
-        HgArena* arena = hgScratch();
-        hgArenaScope(arena);
-
-        HgStringView file = R"(
-            {
-                "asdf": asdf
-            }
-        )";
-
-        HgJson json = hgParseJson(arena, file);
-
-        hgAssert(json.errors != nullptr);
-        hgAssert(json.file != nullptr);
-
-        HgJsonError* error = json.errors;
-        hgAssert(error->next != nullptr);
-        hgAssert(error->msg == "on line 4, struct has a field named \"asdf\" which has no value\n");
-        error = error->next;
-        hgAssert(error->next == nullptr);
-        hgAssert(error->msg == "on line 3, found unexpected token \"asdf\"\n");
-
-        HgJsonNode* node = json.file;
-        hgAssert(node->type == HgJsonType_struct);
-        hgAssert(node->jstruct.fields == nullptr);
-    }
-
-    {
-        HgArena* arena = hgScratch();
-        hgArenaScope(arena);
-
-        HgStringView file = R"(
-            {
-                "asdf": "asdf"
-            }
-        )";
-
-        HgJson json = hgParseJson(arena, file);
-
-        hgAssert(json.errors == nullptr);
-        hgAssert(json.file != nullptr);
-
-        HgJsonNode* node = json.file;
-        hgAssert(node->type == HgJsonType_struct);
-        hgAssert(node->jstruct.fields != nullptr);
-
-        HgJsonField* field = node->jstruct.fields;
-        hgAssert(field->next == nullptr);
-        hgAssert(field->name == "asdf");
-        hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType_string);
-        hgAssert(field->value->string == "asdf");
-    }
-
-    {
-        HgArena* arena = hgScratch();
-        hgArenaScope(arena);
-
-        HgStringView file = R"(
-            {
-                "asdf": 1234
-            }
-        )";
-
-        HgJson json = hgParseJson(arena, file);
-
-        hgAssert(json.errors == nullptr);
-        hgAssert(json.file != nullptr);
-
-        HgJsonNode* node = json.file;
-        hgAssert(node->type == HgJsonType_struct);
-        hgAssert(node->jstruct.fields != nullptr);
-
-        HgJsonField* field = node->jstruct.fields;
-        hgAssert(field->next == nullptr);
-        hgAssert(field->name == "asdf");
-        hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType_integer);
-        hgAssert(field->value->integer == 1234);
-    }
-
-    {
-        HgArena* arena = hgScratch();
-        hgArenaScope(arena);
-
-        HgStringView file = R"(
-            {
-                "asdf": 1234.0
-            }
-        )";
-
-        HgJson json = hgParseJson(arena, file);
-
-        hgAssert(json.errors == nullptr);
-        hgAssert(json.file != nullptr);
-
-        HgJsonNode* node = json.file;
-        hgAssert(node->type == HgJsonType_struct);
-        hgAssert(node->jstruct.fields != nullptr);
-
-        HgJsonField* field = node->jstruct.fields;
-        hgAssert(field->next == nullptr);
-        hgAssert(field->name == "asdf");
-        hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType_float);
-        hgAssert(field->value->floating == 1234.0);
-    }
-
-    {
-        HgArena* arena = hgScratch();
-        hgArenaScope(arena);
-
-        HgStringView file = R"(
-            {
-                "asdf": 1234.0,
-                "hjkl": 5678.0
-            }
-        )";
-
-        HgJson json = hgParseJson(arena, file);
-
-        hgAssert(json.errors == nullptr);
-        hgAssert(json.file != nullptr);
-
-        HgJsonNode* node = json.file;
-        hgAssert(node->type == HgJsonType_struct);
-        hgAssert(node->jstruct.fields != nullptr);
-
-        HgJsonField* field = node->jstruct.fields;
-        hgAssert(field->next != nullptr);
-        hgAssert(field->name == "asdf");
-        hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType_float);
-        hgAssert(field->value->floating == 1234.0);
-
-        field = field->next;
-        hgAssert(field->next == nullptr);
-        hgAssert(field->name == "hjkl");
-        hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType_float);
-        hgAssert(field->value->floating == 5678.0);
-    }
-
-    {
-        HgArena* arena = hgScratch();
-        hgArenaScope(arena);
-
-        HgStringView file = R"(
-            {
-                "asdf": [1, 2, 3, 4]
-            }
-        )";
-
-        HgJson json = hgParseJson(arena, file);
-
-        hgAssert(json.errors == nullptr);
-        hgAssert(json.file != nullptr);
-
-        HgJsonNode* node = json.file;
-        hgAssert(node->type == HgJsonType_struct);
-        hgAssert(node->jstruct.fields != nullptr);
-
-        HgJsonField* field = node->jstruct.fields;
-        hgAssert(field->next == nullptr);
-        hgAssert(field->name == "asdf");
-        hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType_array);
-        hgAssert(field->value->array.elems != nullptr);
-
-        HgJsonElem* elem = field->value->array.elems;
-        hgAssert(elem->next != nullptr);
-        hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType_integer);
-        hgAssert(elem->value->integer == 1);
-
-        elem = elem->next;
-        hgAssert(elem->next != nullptr);
-        hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType_integer);
-        hgAssert(elem->value->integer == 2);
-
-        elem = elem->next;
-        hgAssert(elem->next != nullptr);
-        hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType_integer);
-        hgAssert(elem->value->integer == 3);
-
-        elem = elem->next;
-        hgAssert(elem->next == nullptr);
-        hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType_integer);
-        hgAssert(elem->value->integer == 4);
-    }
-
-    {
-        HgArena* arena = hgScratch();
-        hgArenaScope(arena);
-
-        HgStringView file = R"(
-            {
-                "asdf": [1 2 3 4]
-            }
-        )";
-
-        HgJson json = hgParseJson(arena, file);
-
-        hgAssert(json.errors == nullptr);
-        hgAssert(json.file != nullptr);
-
-        HgJsonNode* node = json.file;
-        hgAssert(node->type == HgJsonType_struct);
-        hgAssert(node->jstruct.fields != nullptr);
-
-        HgJsonField* field = node->jstruct.fields;
-        hgAssert(field->next == nullptr);
-        hgAssert(field->name == "asdf");
-        hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType_array);
-        hgAssert(field->value->array.elems != nullptr);
-
-        HgJsonElem* elem = field->value->array.elems;
-        hgAssert(elem->next != nullptr);
-        hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType_integer);
-        hgAssert(elem->value->integer == 1);
-
-        elem = elem->next;
-        hgAssert(elem->next != nullptr);
-        hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType_integer);
-        hgAssert(elem->value->integer == 2);
-
-        elem = elem->next;
-        hgAssert(elem->next != nullptr);
-        hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType_integer);
-        hgAssert(elem->value->integer == 3);
-
-        elem = elem->next;
-        hgAssert(elem->next == nullptr);
-        hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType_integer);
-        hgAssert(elem->value->integer == 4);
-    }
-
-    {
-        HgArena* arena = hgScratch();
-        hgArenaScope(arena);
-
-        HgStringView file = R"(
-            {
-                "asdf": [1, 2, "3", 4]
-            }
-        )";
-
-        HgJson json = hgParseJson(arena, file);
-
-        hgAssert(json.errors != nullptr);
-        hgAssert(json.file != nullptr);
-
-        HgJsonError* error = json.errors;
-        hgAssert(error->next == nullptr);
-        hgAssert(error->msg ==
-            "on line 3, array has element which is not the same type as the first valid element\n");
-
-        HgJsonNode* node = json.file;
-        hgAssert(node->type == HgJsonType_struct);
-        hgAssert(node->jstruct.fields != nullptr);
-
-        HgJsonField* field = node->jstruct.fields;
-        hgAssert(field->next == nullptr);
-        hgAssert(field->name == "asdf");
-        hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType_array);
-        hgAssert(field->value->array.elems != nullptr);
-
-        HgJsonElem* elem = field->value->array.elems;
-        hgAssert(elem->next != nullptr);
-        hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType_integer);
-        hgAssert(elem->value->integer == 1);
-
-        elem = elem->next;
-        hgAssert(elem->next != nullptr);
-        hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType_integer);
-        hgAssert(elem->value->integer == 2);
-
-        elem = elem->next;
-        hgAssert(elem->next == nullptr);
-        hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType_integer);
-        hgAssert(elem->value->integer == 4);
-    }
-
-    {
-        HgArena* arena = hgScratch();
-        hgArenaScope(arena);
-
-        HgStringView file = R"(
-            {
-                "asdf": {
-                    "a": 1,
-                    "s": 2.0,
-                    "d": 3,
-                    "f": 4.0,
-                }
-            }
-        )";
-
-        HgJson json = hgParseJson(arena, file);
-
-        hgAssert(json.errors == nullptr);
-        hgAssert(json.file != nullptr);
-
-        HgJsonNode* node = json.file;
-        hgAssert(node->type == HgJsonType_struct);
-        hgAssert(node->jstruct.fields != nullptr);
-
-        HgJsonField* field = node->jstruct.fields;
-        hgAssert(field->next == nullptr);
-        hgAssert(field->name == "asdf");
-        hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType_struct);
-        hgAssert(field->value->array.elems != nullptr);
-
-        HgJsonField* subField = field->value->jstruct.fields;
-        hgAssert(subField->next != nullptr);
-        hgAssert(subField->name == "a");
-        hgAssert(subField->value != nullptr);
-        hgAssert(subField->value->type == HgJsonType_integer);
-        hgAssert(subField->value->integer == 1);
-
-        subField = subField->next;
-        hgAssert(subField->next != nullptr);
-        hgAssert(subField->name == "s");
-        hgAssert(subField->value != nullptr);
-        hgAssert(subField->value->type == HgJsonType_float);
-        hgAssert(subField->value->floating == 2.0);
-
-        subField = subField->next;
-        hgAssert(subField->next != nullptr);
-        hgAssert(subField->name == "d");
-        hgAssert(subField->value != nullptr);
-        hgAssert(subField->value->type == HgJsonType_integer);
-        hgAssert(subField->value->integer == 3);
-
-        subField = subField->next;
-        hgAssert(subField->next == nullptr);
-        hgAssert(subField->name == "f");
-        hgAssert(subField->value != nullptr);
-        hgAssert(subField->value->type == HgJsonType_float);
-        hgAssert(subField->value->floating == 4.0);
-    }
-
-    {
-        HgArena* arena = hgScratch();
-        hgArenaScope(arena);
-
-        HgStringView file = R"(
-            {
-                "player": {
-                    "transform": {
-                        "position": [1.0, 0.0, -1.0],
-                        "scale": [1.0, 1.0, 1.0],
-                        "rotation": [1.0, 0.0, 0.0, 0.0]
-                    },
-                    "sprite": {
-                        "texture": "tex.png",
-                        "uvPos": [0.0, 0.0],
-                        "uvSize": [1.0, 1.0]
-                    }
-                }
-            }
-        )";
-
-        HgJson json = hgParseJson(arena, file);
-
-        hgAssert(json.errors == nullptr);
-        hgAssert(json.file != nullptr);
-
-        HgJsonNode* mainStruct = json.file;
-        hgAssert(mainStruct->type == HgJsonType_struct);
-        hgAssert(mainStruct->jstruct.fields != nullptr);
-
-        HgJsonField* player = mainStruct->jstruct.fields;
-        hgAssert(player->next == nullptr);
-        hgAssert(player->name == "player");
-        hgAssert(player->value != nullptr);
-        hgAssert(player->value->type == HgJsonType_struct);
-        hgAssert(player->value->jstruct.fields != nullptr);
-
-        HgJsonField* component = player->value->jstruct.fields;
-        hgAssert(component->next != nullptr);
-        hgAssert(component->name == "transform");
-        hgAssert(component->value != nullptr);
-        hgAssert(component->value->type == HgJsonType_struct);
-        hgAssert(component->value->jstruct.fields != nullptr);
-
-        HgJsonField* field = component->value->jstruct.fields;
-        hgAssert(field->next != nullptr);
-        hgAssert(field->name == "position");
-        hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType_array);
-        hgAssert(field->value->array.elems != nullptr);
-
-        HgJsonElem* elem = field->value->array.elems;
-        hgAssert(elem->next != nullptr);
-        hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType_float);
-        hgAssert(elem->value->floating == 1.0);
-
-        elem = elem->next;
-        hgAssert(elem->next != nullptr);
-        hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType_float);
-        hgAssert(elem->value->floating == 0.0);
-
-        elem = elem->next;
-        hgAssert(elem->next == nullptr);
-        hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType_float);
-        hgAssert(elem->value->floating == -1.0);
-
-        field = field->next;
-        hgAssert(field->next != nullptr);
-        hgAssert(field->name == "scale");
-        hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType_array);
-        hgAssert(field->value->array.elems != nullptr);
-
-        elem = field->value->array.elems;
-        hgAssert(elem->next != nullptr);
-        hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType_float);
-        hgAssert(elem->value->floating == 1.0);
-
-        elem = elem->next;
-        hgAssert(elem->next != nullptr);
-        hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType_float);
-        hgAssert(elem->value->floating == 1.0);
-
-        elem = elem->next;
-        hgAssert(elem->next == nullptr);
-        hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType_float);
-        hgAssert(elem->value->floating == 1.0);
-
-        field = field->next;
-        hgAssert(field->next == nullptr);
-        hgAssert(field->name == "rotation");
-        hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType_array);
-        hgAssert(field->value->array.elems != nullptr);
-
-        elem = field->value->array.elems;
-        hgAssert(elem->next != nullptr);
-        hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType_float);
-        hgAssert(elem->value->floating == 1.0);
-
-        elem = elem->next;
-        hgAssert(elem->next != nullptr);
-        hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType_float);
-        hgAssert(elem->value->floating == 0.0);
-
-        elem = elem->next;
-        hgAssert(elem->next != nullptr);
-        hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType_float);
-        hgAssert(elem->value->floating == 0.0);
-
-        elem = elem->next;
-        hgAssert(elem->next == nullptr);
-        hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType_float);
-        hgAssert(elem->value->floating == 0.0);
-
-        component = component->next;
-        hgAssert(component->next == nullptr);
-        hgAssert(component->name == "sprite");
-        hgAssert(component->value != nullptr);
-        hgAssert(component->value->type == HgJsonType_struct);
-        hgAssert(component->value->jstruct.fields != nullptr);
-
-        field = component->value->jstruct.fields;
-        hgAssert(field->next != nullptr);
-        hgAssert(field->name == "texture");
-        hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType_string);
-        hgAssert(field->value->string == "tex.png");
-
-        field = field->next;
-        hgAssert(field->next != nullptr);
-        hgAssert(field->name == "uvPos");
-        hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType_array);
-        hgAssert(field->value->array.elems != nullptr);
-
-        elem = field->value->array.elems;
-        hgAssert(elem->next != nullptr);
-        hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType_float);
-        hgAssert(elem->value->floating == 0.0);
-
-        elem = elem->next;
-        hgAssert(elem->next == nullptr);
-        hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType_float);
-        hgAssert(elem->value->floating == 0.0);
-
-        field = field->next;
-        hgAssert(field->next == nullptr);
-        hgAssert(field->name == "uvSize");
-        hgAssert(field->value != nullptr);
-        hgAssert(field->value->type == HgJsonType_array);
-        hgAssert(field->value->array.elems != nullptr);
-
-        elem = field->value->array.elems;
-        hgAssert(elem->next != nullptr);
-        hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType_float);
-        hgAssert(elem->value->floating == 1.0);
-
-        elem = elem->next;
-        hgAssert(elem->next == nullptr);
-        hgAssert(elem->value != nullptr);
-        hgAssert(elem->value->type == HgJsonType_float);
-        hgAssert(elem->value->floating == 1.0);
-    }
-
-    // HgHashSet
-    {
-        HgArena* arena = hgScratch();
-        hgArenaScope(arena);
-
-        constexpr u32 count = 128;
-
-        HgSet<u32> set = hgSetCreate<u32>(arena, count);
-
-        for (u32 i = 0; i < 3; ++i)
         {
-            hgAssert(set.count == 0);
-            hgAssert(!hgSetHas(&set, 0));
-            hgAssert(!hgSetHas(&set, 1));
-            hgAssert(!hgSetHas(&set, 12));
-            hgAssert(!hgSetHas(&set, 42));
-            hgAssert(!hgSetHas(&set, 100000));
+            HgFence fence = hgFenceCreate();
+            hgDefer(hgFenceDestroy(fence));
 
-            hgSetAdd(&set, 1);
-            hgAssert(set.count == 1);
-            hgAssert(hgSetHas(&set, 1));
+            bool a = false;
+            bool b = false;
 
-            hgSetRemove(&set, 1);
-            hgAssert(set.count == 0);
-            hgAssert(!hgSetHas(&set, 1));
+            hgThreadsCall(fence, &a, [](void *pa)
+            {
+                *(bool*)pa = true;
+            });
+            hgThreadsCall(fence, &b, [](void *pb)
+            {
+                *(bool*)pb = true;
+            });
 
-            hgAssert(!hgSetHas(&set, 12));
-            hgAssert(!hgSetHas(&set, 12 + count));
+            hgFenceWait(fence, 2.0);
 
-            hgSetAdd(&set, 12);
-            hgAssert(set.count == 1);
-            hgAssert(hgSetHas(&set, 12));
-            hgAssert(!hgSetHas(&set, 12 + count));
+            hgAssert(hgFenceWait(fence, 2.0));
 
-            hgSetAdd(&set, 12 + count);
-            hgAssert(set.count == 2);
-            hgAssert(hgSetHas(&set, 12));
-            hgAssert(hgSetHas(&set, 12 + count));
+            hgAssert(a == true);
+            hgAssert(b == true);
+        }
 
-            hgSetAdd(&set, 12 + count * 2);
-            hgAssert(set.count == 3);
-            hgAssert(hgSetHas(&set, 12));
-            hgAssert(hgSetHas(&set, 12 + count));
-            hgAssert(hgSetHas(&set, 12 + count * 2));
+        {
+            HgFence fence = hgFenceCreate();
+            hgDefer(hgFenceDestroy(fence));
 
-            hgSetRemove(&set, 12);
-            hgAssert(set.count == 2);
-            hgAssert(!hgSetHas(&set, 12));
-            hgAssert(hgSetHas(&set, 12 + count));
+            bool vals[100]{};
+            for (bool& val : vals)
+            {
+                hgThreadsCall(fence, &val, [](void* data)
+                {
+                    *(bool*)data = true;
+                });
+            }
 
-            hgSetAdd(&set, 42);
-            hgAssert(set.count == 3);
-            hgAssert(hgSetHas(&set, 42));
+            hgAssert(hgThreadsHelp(fence, 2.0));
 
-            hgSetRemove(&set, 12 + count);
-            hgAssert(set.count == 2);
-            hgAssert(!hgSetHas(&set, 12));
-            hgAssert(!hgSetHas(&set, 12 + count));
+            for (bool& val : vals)
+            {
+                hgAssert(val == true);
+            }
+        }
 
-            hgSetRemove(&set, 42);
-            hgAssert(set.count == 1);
-            hgAssert(!hgSetHas(&set, 42));
+        {
+            bool vals[100]{};
 
-            hgSetRemove(&set, 12 + count * 2);
-            hgAssert(set.count == 0);
-            hgAssert(!hgSetHas(&set, 12));
-            hgAssert(!hgSetHas(&set, 12 + count));
-            hgAssert(!hgSetHas(&set, 12 + count * 2));
+            auto fn = [](void* pvals, u64 idx)
+            {
+                ((bool*)pvals)[idx] = true;
+            };
+            hgThreadsFor(0, hgArrayCount(vals), vals, fn);
 
-            hgSetReset(&set);
+            for (bool& val : vals)
+            {
+                hgAssert(val == true);
+            }
+        }
+
+        {
+            HgFence fence = hgFenceCreate();
+            hgDefer(hgFenceDestroy(fence));
+
+            for (u32 n = 0; n < 3; ++n)
+            {
+                std::atomic_bool start{false};
+                std::thread producers[4];
+
+                bool vals[100]{};
+
+                auto fn = [](void* pval)
+                {
+                    *((bool*)pval) = !*((bool*)pval);
+                };
+
+                auto prodFn = [&](u32 idx)
+                {
+                    while (!start)
+                    {
+                        _mm_pause();
+                    }
+                    u32 begin = idx * 25;
+                    u32 end = begin + 25;
+                    for (u32 i = begin; i < end; ++i)
+                    {
+                        hgThreadsCall(fence, vals + i, fn);
+                    }
+                };
+                for (u32 j = 0; j < hgArrayCount(producers); ++j)
+                {
+                    producers[j] = std::thread(prodFn, j);
+                }
+
+                start.store(true);
+                for (auto& thread : producers)
+                {
+                    thread.join();
+                }
+
+                hgAssert(hgThreadsHelp(fence, 2.0));
+                for (auto val : vals)
+                {
+                    hgAssert(val == true);
+                }
+            }
         }
     }
 
-    // HgHashMap
+    // HgMutex
     {
-        HgArena* arena = hgScratch();
-        hgArenaScope(arena);
+        struct Capture {
+            HgMutex mtx;
+            u32 count;
+        };
+        Capture c{};
 
-        constexpr u32 count = 128;
+        c.mtx = hgMutexCreate();
+        hgDefer(hgMutexDestroy(c.mtx));
 
-        HgMap<u32, u32> map = hgMapCreate<u32, u32>(arena, count);
-
-        for (u32 i = 0; i < 3; ++i)
+        c.count = 0;
+        hgThreadsFor(0, 100, &c, [](void* pc, u64)
         {
-            hgAssert(map.count == 0);
-            hgAssert(hgMapGet(&map, 0) == nullptr);
-            hgAssert(hgMapGet(&map, 1) == nullptr);
-            hgAssert(hgMapGet(&map, 12) == nullptr);
-            hgAssert(hgMapGet(&map, 42) == nullptr);
-            hgAssert(hgMapGet(&map, 100000) == nullptr);
+            Capture* c = (Capture*)pc;
+            hgMutexAcquire(c->mtx);
+            hgDefer(hgMutexRelease(c->mtx));
+            for (u32 i = 0; i < 10000; ++i)
+            {
+                ++c->count;
+            }
+        });
+        hgAssert(c.count == 1000000);
+    }
 
-            hgMapAdd(&map, 1, 1);
-            hgAssert(map.count == 1);
-            hgAssert(hgMapGet(&map, 1) != nullptr);
-            hgAssert(*hgMapGet(&map, 1) == 1);
+    // HgMat
+    {
+        HgMat2 mat{
+            HgVec2{1.0f, 0.0f},
+            HgVec2{1.0f, 0.0f},
+        };
+        HgVec2 vec{1.0f, 1.0f};
 
-            hgMapRemove(&map, 1);
-            hgAssert(map.count == 0);
-            hgAssert(hgMapGet(&map, 1) == nullptr);
+        HgMat2 identity{
+            HgVec2{1.0f, 0.0f},
+            HgVec2{0.0f, 1.0f},
+        };
+        hgAssert(identity * mat == mat);
+        hgAssert(identity * vec == vec);
 
-            hgAssert(hgMapGet(&map, 12) == nullptr);
-            hgAssert(hgMapGet(&map, 12 + count) == nullptr);
+        HgMat2 matRotated{
+            HgVec2{0.0f, 1.0f},
+            HgVec2{0.0f, 1.0f},
+        };
+        HgVec2 vecRotated{-1.0f, 1.0f};
 
-            hgMapAdd(&map, 12, 42);
-            hgAssert(map.count == 1);
-            hgAssert(hgMapGet(&map, 12) != nullptr && *hgMapGet(&map, 12) == 42);
-            hgAssert(hgMapGet(&map, 12 + count) == nullptr);
+        HgMat2 rotation{
+            HgVec2{0.0f, 1.0f},
+            HgVec2{-1.0f, 0.0f},
+        };
+        hgAssert(rotation * mat == matRotated);
+        hgAssert(rotation * vec == vecRotated);
 
-            hgMapAdd(&map, 12 + count, 100);
-            hgAssert(map.count == 2);
-            hgAssert(hgMapGet(&map, 12) != nullptr && *hgMapGet(&map, 12) == 42);
-            hgAssert(hgMapGet(&map, 12 + count) != nullptr && *hgMapGet(&map, 12 + count) == 100);
+        hgAssert((identity * rotation) * mat == identity * (rotation * mat));
+        hgAssert((identity * rotation) * vec == identity * (rotation * vec));
+        hgAssert((rotation * rotation) * mat == rotation * (rotation * mat));
+        hgAssert((rotation * rotation) * vec == rotation * (rotation * vec));
+    }
 
-            hgMapAdd(&map, 12 + count * 2, 200);
-            hgAssert(map.count == 3);
-            hgAssert(hgMapGet(&map, 12) != nullptr && *hgMapGet(&map, 12) == 42);
-            hgAssert(hgMapGet(&map, 12 + count) != nullptr && *hgMapGet(&map, 12 + count) == 100);
-            hgAssert(hgMapGet(&map, 12 + count * 2) != nullptr && *hgMapGet(&map, 12 + count * 2) == 200);
+    // HgQuat
+    {
+        HgMat3 identityMat = HgMat3{1.0f};
+        HgVec3 upVec{0.0f, -1.0f, 0.0f};
+        HgQuat rotation = hgQuatAxisAngle(HgVec3{0.0f, 0.0f, -1.0f}, -(f32)hgPi * 0.5f);
 
-            hgMapRemove(&map, 12);
-            hgAssert(map.count == 2);
-            hgAssert(hgMapGet(&map, 12) == nullptr);
-            hgAssert(hgMapGet(&map, 12 + count) != nullptr && *hgMapGet(&map, 12 + count) == 100);
+        HgVec3 rotatedVec = hgVecRotate(rotation, upVec);
+        HgMat3 rotatedMat = hgMatRotate(rotation, identityMat);
 
-            hgMapAdd(&map, 42, 12);
-            hgAssert(map.count == 3);
-            hgAssert(hgMapGet(&map, 42) != nullptr && *hgMapGet(&map, 42) == 12);
+        HgVec3 matRotatedVec = rotatedMat * upVec;
 
-            hgMapRemove(&map, 12 + count);
-            hgAssert(map.count == 2);
-            hgAssert(hgMapGet(&map, 12) == nullptr);
-            hgAssert(hgMapGet(&map, 12 + count) == nullptr);
+        hgAssert(abs(rotatedVec.x - 1.0f) < FLT_EPSILON
+                    && abs(rotatedVec.y - 0.0f) < FLT_EPSILON
+                    && abs(rotatedVec.y - 0.0f) < FLT_EPSILON);
 
-            hgMapRemove(&map, 42);
-            hgAssert(map.count == 1);
-            hgAssert(hgMapGet(&map, 42) == nullptr);
+        hgAssert(abs(matRotatedVec.x - rotatedVec.x) < FLT_EPSILON
+                    && abs(matRotatedVec.y - rotatedVec.y) < FLT_EPSILON
+                    && abs(matRotatedVec.y - rotatedVec.z) < FLT_EPSILON);
+    }
 
-            hgMapRemove(&map, 12 + count * 2);
-            hgAssert(map.count == 0);
-            hgAssert(hgMapGet(&map, 12) == nullptr);
-            hgAssert(hgMapGet(&map, 12 + count) == nullptr);
-            hgAssert(hgMapGet(&map, 12 + count * 2) == nullptr);
+    // Serialization
+    {
+        struct PlainOldData {
+            i64 a;
+            u16 b;
+            f32 c;
+            bool d;
+            u32 e[3];
+        };
 
-            hgMapReset(&map);
+        PlainOldData pod = {
+            -12,
+            42,
+            2.5f,
+            true,
+            {2, 4, 6},
+        };
+
+        {
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
+
+            HgSerializer writer = hgSerialWriter(arena);
+            hgSerialize(arena, &writer, "data", &pod);
+
+            PlainOldData podCopy{};
+
+            HgSerializer reader = hgSerialReader(writer.current);
+            hgSerialize(arena, &reader, "data", &podCopy);
+
+            hgAssert(memcmp(&podCopy, &pod, sizeof(pod)) == 0);
+        }
+
+        {
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
+
+            HgSerializer writer = hgSerialWriter(arena);
+            hgSerialize(arena, &writer, "data", &pod);
+
+            HgBinary bin = hgBinaryWriteSerial(arena, writer);
+
+            PlainOldData podCopy{};
+
+            HgSerializer reader = hgBinaryReadSerial(arena, bin);
+            hgSerialize(arena, &reader, "data", &podCopy);
+
+            hgAssert(memcmp(&podCopy, &pod, sizeof(pod)) == 0);
+        }
+
+        struct Data {
+            i64 a;
+            u16 b;
+            f32 c;
+            bool d;
+            u32 e[3];
+            HgStringView f;
+        };
+
+        Data data = {
+            -12,
+            42,
+            2.5f,
+            true,
+            {2, 4, 6},
+            "hello"
+        };
+
+        auto serializeData = [](HgArena* arena, HgSerializer* s, HgStringView name, Data* val)
+        {
+            HgSerializer data = hgSerializerBeginObject(arena, s, name);
+
+            hgSerialize(arena, &data, "a", &val->a);
+            hgSerialize(arena, &data, "b", &val->b);
+            hgSerialize(arena, &data, "c", &val->c);
+            hgSerialize(arena, &data, "d", &val->d);
+
+            u32 eSize = hgArrayCount(val->e);
+            HgSerializer eArr = hgSerializerBeginArray(arena, &data, "e", &eSize);
+            for (u32 i = 0; i < eSize; ++i)
+            {
+                hgSerialize(arena, &eArr, "", &val->e[i]);
+            }
+
+            hgSerialize(arena, &data, "f", &val->f);
+        };
+
+        {
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
+
+            HgSerializer writer = hgSerialWriter(arena);
+            serializeData(arena, &writer, "data", &data);
+
+            Data dataCopy{};
+
+            HgSerializer reader = hgSerialReader(writer.current);
+            serializeData(arena, &reader, "data", &dataCopy);
+
+            hgAssert(memcmp(&dataCopy, &data, sizeof(data)) != 0);
+            hgAssert(data.a == dataCopy.a);
+            hgAssert(data.b == dataCopy.b);
+            hgAssert(data.c == dataCopy.c);
+            hgAssert(data.d == dataCopy.d);
+            hgAssert(data.e[0] == dataCopy.e[0]);
+            hgAssert(data.e[1] == dataCopy.e[1]);
+            hgAssert(data.e[2] == dataCopy.e[2]);
+            hgAssert(data.f == dataCopy.f);
+        }
+
+        {
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
+
+            HgSerializer writer = hgSerialWriter(arena);
+            serializeData(arena, &writer, "data", &data);
+
+            HgBinary bin = hgBinaryWriteSerial(arena, writer);
+
+            Data dataCopy{};
+
+            HgSerializer reader = hgBinaryReadSerial(arena, bin);
+            serializeData(arena, &reader, "data", &dataCopy);
+
+            hgAssert(memcmp(&dataCopy, &data, sizeof(data)) != 0);
+            hgAssert(data.a == dataCopy.a);
+            hgAssert(data.b == dataCopy.b);
+            hgAssert(data.c == dataCopy.c);
+            hgAssert(data.d == dataCopy.d);
+            hgAssert(data.e[0] == dataCopy.e[0]);
+            hgAssert(data.e[1] == dataCopy.e[1]);
+            hgAssert(data.e[2] == dataCopy.e[2]);
+            hgAssert(data.f == dataCopy.f);
+        }
+    }
+
+    // HgJson
+    {
+        {
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
+
+            HgStringView file = R"(
+            )";
+
+            HgJson json = hgParseJson(arena, file);
+
+            hgAssert(json.errors == nullptr);
+            hgAssert(json.file == nullptr);
+        }
+
+        {
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
+
+            HgStringView file = R"(
+                {
+                }
+            )";
+
+            HgJson json = hgParseJson(arena, file);
+
+            hgAssert(json.errors == nullptr);
+            hgAssert(json.file != nullptr);
+
+            HgJsonNode* node = json.file;
+            hgAssert(node->type == HgJsonType_struct);
+            hgAssert(node->jstruct.fields == nullptr);
+        }
+
+        {
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
+
+            HgStringView file = R"(
+                {
+                    1234
+                }
+            )";
+
+            HgJson json = hgParseJson(arena, file);
+
+            hgAssert(json.errors != nullptr);
+            hgAssert(json.file != nullptr);
+
+            HgJsonError* error = json.errors;
+            hgAssert(error->next == nullptr);
+            hgAssert(error->msg == "on line 4, struct has a literal instead of a field\n");
+
+            HgJsonNode* node = json.file;
+            hgAssert(node->type == HgJsonType_struct);
+            hgAssert(node->jstruct.fields == nullptr);
+        }
+
+        {
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
+
+            HgStringView file = R"(
+                {
+                    "asdf"
+                }
+            )";
+
+            HgJson json = hgParseJson(arena, file);
+
+            hgAssert(json.errors != nullptr);
+            hgAssert(json.file != nullptr);
+
+            HgJsonError* error = json.errors;
+            hgAssert(error->next == nullptr);
+            hgAssert(error->msg == "on line 4, struct has a literal instead of a field\n");
+
+            HgJsonNode* node = json.file;
+            hgAssert(node->type == HgJsonType_struct);
+            hgAssert(node->jstruct.fields == nullptr);
+        }
+
+        {
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
+
+            HgStringView file = R"(
+                {
+                    "asdf":
+                }
+            )";
+
+            HgJson json = hgParseJson(arena, file);
+
+            hgAssert(json.errors != nullptr);
+            hgAssert(json.file != nullptr);
+
+            HgJsonError* error = json.errors;
+            hgAssert(error->next != nullptr);
+            hgAssert(error->msg == "on line 4, struct has a field named \"asdf\" which has no value\n");
+            error = error->next;
+            hgAssert(error->next == nullptr);
+            hgAssert(error->msg == "on line 4, found unexpected token \"}\"\n");
+
+            HgJsonNode* node = json.file;
+            hgAssert(node->type == HgJsonType_struct);
+            hgAssert(node->jstruct.fields == nullptr);
+        }
+
+        {
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
+
+            HgStringView file = R"(
+                {
+                    "asdf": true
+                }
+            )";
+
+            HgJson json = hgParseJson(arena, file);
+
+            hgAssert(json.errors == nullptr);
+            hgAssert(json.file != nullptr);
+
+            HgJsonNode* node = json.file;
+            hgAssert(node->type == HgJsonType_struct);
+            hgAssert(node->jstruct.fields != nullptr);
+
+            HgJsonField* field = node->jstruct.fields;
+            hgAssert(field->next == nullptr);
+            hgAssert(field->name == "asdf");
+            hgAssert(field->value != nullptr);
+            hgAssert(field->value->type == HgJsonType_bool);
+            hgAssert(field->value->boolean == true);
+        }
+
+        {
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
+
+            HgStringView file = R"(
+                {
+                    "asdf": false
+                }
+            )";
+
+            HgJson json = hgParseJson(arena, file);
+
+            hgAssert(json.errors == nullptr);
+            hgAssert(json.file != nullptr);
+
+            HgJsonNode* node = json.file;
+            hgAssert(node->type == HgJsonType_struct);
+            hgAssert(node->jstruct.fields != nullptr);
+
+            HgJsonField* field = node->jstruct.fields;
+            hgAssert(field->next == nullptr);
+            hgAssert(field->name == "asdf");
+            hgAssert(field->value != nullptr);
+            hgAssert(field->value->type == HgJsonType_bool);
+            hgAssert(field->value->boolean == false);
+        }
+
+        {
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
+
+            HgStringView file = R"(
+                {
+                    "asdf": asdf
+                }
+            )";
+
+            HgJson json = hgParseJson(arena, file);
+
+            hgAssert(json.errors != nullptr);
+            hgAssert(json.file != nullptr);
+
+            HgJsonError* error = json.errors;
+            hgAssert(error->next != nullptr);
+            hgAssert(error->msg == "on line 4, struct has a field named \"asdf\" which has no value\n");
+            error = error->next;
+            hgAssert(error->next == nullptr);
+            hgAssert(error->msg == "on line 3, found unexpected token \"asdf\"\n");
+
+            HgJsonNode* node = json.file;
+            hgAssert(node->type == HgJsonType_struct);
+            hgAssert(node->jstruct.fields == nullptr);
+        }
+
+        {
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
+
+            HgStringView file = R"(
+                {
+                    "asdf": "asdf"
+                }
+            )";
+
+            HgJson json = hgParseJson(arena, file);
+
+            hgAssert(json.errors == nullptr);
+            hgAssert(json.file != nullptr);
+
+            HgJsonNode* node = json.file;
+            hgAssert(node->type == HgJsonType_struct);
+            hgAssert(node->jstruct.fields != nullptr);
+
+            HgJsonField* field = node->jstruct.fields;
+            hgAssert(field->next == nullptr);
+            hgAssert(field->name == "asdf");
+            hgAssert(field->value != nullptr);
+            hgAssert(field->value->type == HgJsonType_string);
+            hgAssert(field->value->string == "asdf");
+        }
+
+        {
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
+
+            HgStringView file = R"(
+                {
+                    "asdf": 1234
+                }
+            )";
+
+            HgJson json = hgParseJson(arena, file);
+
+            hgAssert(json.errors == nullptr);
+            hgAssert(json.file != nullptr);
+
+            HgJsonNode* node = json.file;
+            hgAssert(node->type == HgJsonType_struct);
+            hgAssert(node->jstruct.fields != nullptr);
+
+            HgJsonField* field = node->jstruct.fields;
+            hgAssert(field->next == nullptr);
+            hgAssert(field->name == "asdf");
+            hgAssert(field->value != nullptr);
+            hgAssert(field->value->type == HgJsonType_integer);
+            hgAssert(field->value->integer == 1234);
+        }
+
+        {
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
+
+            HgStringView file = R"(
+                {
+                    "asdf": 1234.0
+                }
+            )";
+
+            HgJson json = hgParseJson(arena, file);
+
+            hgAssert(json.errors == nullptr);
+            hgAssert(json.file != nullptr);
+
+            HgJsonNode* node = json.file;
+            hgAssert(node->type == HgJsonType_struct);
+            hgAssert(node->jstruct.fields != nullptr);
+
+            HgJsonField* field = node->jstruct.fields;
+            hgAssert(field->next == nullptr);
+            hgAssert(field->name == "asdf");
+            hgAssert(field->value != nullptr);
+            hgAssert(field->value->type == HgJsonType_float);
+            hgAssert(field->value->floating == 1234.0);
+        }
+
+        {
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
+
+            HgStringView file = R"(
+                {
+                    "asdf": 1234.0,
+                    "hjkl": 5678.0
+                }
+            )";
+
+            HgJson json = hgParseJson(arena, file);
+
+            hgAssert(json.errors == nullptr);
+            hgAssert(json.file != nullptr);
+
+            HgJsonNode* node = json.file;
+            hgAssert(node->type == HgJsonType_struct);
+            hgAssert(node->jstruct.fields != nullptr);
+
+            HgJsonField* field = node->jstruct.fields;
+            hgAssert(field->next != nullptr);
+            hgAssert(field->name == "asdf");
+            hgAssert(field->value != nullptr);
+            hgAssert(field->value->type == HgJsonType_float);
+            hgAssert(field->value->floating == 1234.0);
+
+            field = field->next;
+            hgAssert(field->next == nullptr);
+            hgAssert(field->name == "hjkl");
+            hgAssert(field->value != nullptr);
+            hgAssert(field->value->type == HgJsonType_float);
+            hgAssert(field->value->floating == 5678.0);
+        }
+
+        {
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
+
+            HgStringView file = R"(
+                {
+                    "asdf": [1, 2, 3, 4]
+                }
+            )";
+
+            HgJson json = hgParseJson(arena, file);
+
+            hgAssert(json.errors == nullptr);
+            hgAssert(json.file != nullptr);
+
+            HgJsonNode* node = json.file;
+            hgAssert(node->type == HgJsonType_struct);
+            hgAssert(node->jstruct.fields != nullptr);
+
+            HgJsonField* field = node->jstruct.fields;
+            hgAssert(field->next == nullptr);
+            hgAssert(field->name == "asdf");
+            hgAssert(field->value != nullptr);
+            hgAssert(field->value->type == HgJsonType_array);
+            hgAssert(field->value->array.elems != nullptr);
+
+            HgJsonElem* elem = field->value->array.elems;
+            hgAssert(elem->next != nullptr);
+            hgAssert(elem->value != nullptr);
+            hgAssert(elem->value->type == HgJsonType_integer);
+            hgAssert(elem->value->integer == 1);
+
+            elem = elem->next;
+            hgAssert(elem->next != nullptr);
+            hgAssert(elem->value != nullptr);
+            hgAssert(elem->value->type == HgJsonType_integer);
+            hgAssert(elem->value->integer == 2);
+
+            elem = elem->next;
+            hgAssert(elem->next != nullptr);
+            hgAssert(elem->value != nullptr);
+            hgAssert(elem->value->type == HgJsonType_integer);
+            hgAssert(elem->value->integer == 3);
+
+            elem = elem->next;
+            hgAssert(elem->next == nullptr);
+            hgAssert(elem->value != nullptr);
+            hgAssert(elem->value->type == HgJsonType_integer);
+            hgAssert(elem->value->integer == 4);
+        }
+
+        {
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
+
+            HgStringView file = R"(
+                {
+                    "asdf": [1 2 3 4]
+                }
+            )";
+
+            HgJson json = hgParseJson(arena, file);
+
+            hgAssert(json.errors == nullptr);
+            hgAssert(json.file != nullptr);
+
+            HgJsonNode* node = json.file;
+            hgAssert(node->type == HgJsonType_struct);
+            hgAssert(node->jstruct.fields != nullptr);
+
+            HgJsonField* field = node->jstruct.fields;
+            hgAssert(field->next == nullptr);
+            hgAssert(field->name == "asdf");
+            hgAssert(field->value != nullptr);
+            hgAssert(field->value->type == HgJsonType_array);
+            hgAssert(field->value->array.elems != nullptr);
+
+            HgJsonElem* elem = field->value->array.elems;
+            hgAssert(elem->next != nullptr);
+            hgAssert(elem->value != nullptr);
+            hgAssert(elem->value->type == HgJsonType_integer);
+            hgAssert(elem->value->integer == 1);
+
+            elem = elem->next;
+            hgAssert(elem->next != nullptr);
+            hgAssert(elem->value != nullptr);
+            hgAssert(elem->value->type == HgJsonType_integer);
+            hgAssert(elem->value->integer == 2);
+
+            elem = elem->next;
+            hgAssert(elem->next != nullptr);
+            hgAssert(elem->value != nullptr);
+            hgAssert(elem->value->type == HgJsonType_integer);
+            hgAssert(elem->value->integer == 3);
+
+            elem = elem->next;
+            hgAssert(elem->next == nullptr);
+            hgAssert(elem->value != nullptr);
+            hgAssert(elem->value->type == HgJsonType_integer);
+            hgAssert(elem->value->integer == 4);
+        }
+
+        {
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
+
+            HgStringView file = R"(
+                {
+                    "asdf": [1, 2, "3", 4]
+                }
+            )";
+
+            HgJson json = hgParseJson(arena, file);
+
+            hgAssert(json.errors != nullptr);
+            hgAssert(json.file != nullptr);
+
+            HgJsonError* error = json.errors;
+            hgAssert(error->next == nullptr);
+            hgAssert(error->msg ==
+                "on line 3, array has element which is not the same type as the first valid element\n");
+
+            HgJsonNode* node = json.file;
+            hgAssert(node->type == HgJsonType_struct);
+            hgAssert(node->jstruct.fields != nullptr);
+
+            HgJsonField* field = node->jstruct.fields;
+            hgAssert(field->next == nullptr);
+            hgAssert(field->name == "asdf");
+            hgAssert(field->value != nullptr);
+            hgAssert(field->value->type == HgJsonType_array);
+            hgAssert(field->value->array.elems != nullptr);
+
+            HgJsonElem* elem = field->value->array.elems;
+            hgAssert(elem->next != nullptr);
+            hgAssert(elem->value != nullptr);
+            hgAssert(elem->value->type == HgJsonType_integer);
+            hgAssert(elem->value->integer == 1);
+
+            elem = elem->next;
+            hgAssert(elem->next != nullptr);
+            hgAssert(elem->value != nullptr);
+            hgAssert(elem->value->type == HgJsonType_integer);
+            hgAssert(elem->value->integer == 2);
+
+            elem = elem->next;
+            hgAssert(elem->next == nullptr);
+            hgAssert(elem->value != nullptr);
+            hgAssert(elem->value->type == HgJsonType_integer);
+            hgAssert(elem->value->integer == 4);
+        }
+
+        {
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
+
+            HgStringView file = R"(
+                {
+                    "asdf": {
+                        "a": 1,
+                        "s": 2.0,
+                        "d": 3,
+                        "f": 4.0,
+                    }
+                }
+            )";
+
+            HgJson json = hgParseJson(arena, file);
+
+            hgAssert(json.errors == nullptr);
+            hgAssert(json.file != nullptr);
+
+            HgJsonNode* node = json.file;
+            hgAssert(node->type == HgJsonType_struct);
+            hgAssert(node->jstruct.fields != nullptr);
+
+            HgJsonField* field = node->jstruct.fields;
+            hgAssert(field->next == nullptr);
+            hgAssert(field->name == "asdf");
+            hgAssert(field->value != nullptr);
+            hgAssert(field->value->type == HgJsonType_struct);
+            hgAssert(field->value->array.elems != nullptr);
+
+            HgJsonField* subField = field->value->jstruct.fields;
+            hgAssert(subField->next != nullptr);
+            hgAssert(subField->name == "a");
+            hgAssert(subField->value != nullptr);
+            hgAssert(subField->value->type == HgJsonType_integer);
+            hgAssert(subField->value->integer == 1);
+
+            subField = subField->next;
+            hgAssert(subField->next != nullptr);
+            hgAssert(subField->name == "s");
+            hgAssert(subField->value != nullptr);
+            hgAssert(subField->value->type == HgJsonType_float);
+            hgAssert(subField->value->floating == 2.0);
+
+            subField = subField->next;
+            hgAssert(subField->next != nullptr);
+            hgAssert(subField->name == "d");
+            hgAssert(subField->value != nullptr);
+            hgAssert(subField->value->type == HgJsonType_integer);
+            hgAssert(subField->value->integer == 3);
+
+            subField = subField->next;
+            hgAssert(subField->next == nullptr);
+            hgAssert(subField->name == "f");
+            hgAssert(subField->value != nullptr);
+            hgAssert(subField->value->type == HgJsonType_float);
+            hgAssert(subField->value->floating == 4.0);
+        }
+
+        {
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
+
+            HgStringView file = R"(
+                {
+                    "player": {
+                        "transform": {
+                            "position": [1.0, 0.0, -1.0],
+                            "scale": [1.0, 1.0, 1.0],
+                            "rotation": [1.0, 0.0, 0.0, 0.0]
+                        },
+                        "sprite": {
+                            "texture": "tex.png",
+                            "uvPos": [0.0, 0.0],
+                            "uvSize": [1.0, 1.0]
+                        }
+                    }
+                }
+            )";
+
+            HgJson json = hgParseJson(arena, file);
+
+            hgAssert(json.errors == nullptr);
+            hgAssert(json.file != nullptr);
+
+            HgJsonNode* mainStruct = json.file;
+            hgAssert(mainStruct->type == HgJsonType_struct);
+            hgAssert(mainStruct->jstruct.fields != nullptr);
+
+            HgJsonField* player = mainStruct->jstruct.fields;
+            hgAssert(player->next == nullptr);
+            hgAssert(player->name == "player");
+            hgAssert(player->value != nullptr);
+            hgAssert(player->value->type == HgJsonType_struct);
+            hgAssert(player->value->jstruct.fields != nullptr);
+
+            HgJsonField* component = player->value->jstruct.fields;
+            hgAssert(component->next != nullptr);
+            hgAssert(component->name == "transform");
+            hgAssert(component->value != nullptr);
+            hgAssert(component->value->type == HgJsonType_struct);
+            hgAssert(component->value->jstruct.fields != nullptr);
+
+            HgJsonField* field = component->value->jstruct.fields;
+            hgAssert(field->next != nullptr);
+            hgAssert(field->name == "position");
+            hgAssert(field->value != nullptr);
+            hgAssert(field->value->type == HgJsonType_array);
+            hgAssert(field->value->array.elems != nullptr);
+
+            HgJsonElem* elem = field->value->array.elems;
+            hgAssert(elem->next != nullptr);
+            hgAssert(elem->value != nullptr);
+            hgAssert(elem->value->type == HgJsonType_float);
+            hgAssert(elem->value->floating == 1.0);
+
+            elem = elem->next;
+            hgAssert(elem->next != nullptr);
+            hgAssert(elem->value != nullptr);
+            hgAssert(elem->value->type == HgJsonType_float);
+            hgAssert(elem->value->floating == 0.0);
+
+            elem = elem->next;
+            hgAssert(elem->next == nullptr);
+            hgAssert(elem->value != nullptr);
+            hgAssert(elem->value->type == HgJsonType_float);
+            hgAssert(elem->value->floating == -1.0);
+
+            field = field->next;
+            hgAssert(field->next != nullptr);
+            hgAssert(field->name == "scale");
+            hgAssert(field->value != nullptr);
+            hgAssert(field->value->type == HgJsonType_array);
+            hgAssert(field->value->array.elems != nullptr);
+
+            elem = field->value->array.elems;
+            hgAssert(elem->next != nullptr);
+            hgAssert(elem->value != nullptr);
+            hgAssert(elem->value->type == HgJsonType_float);
+            hgAssert(elem->value->floating == 1.0);
+
+            elem = elem->next;
+            hgAssert(elem->next != nullptr);
+            hgAssert(elem->value != nullptr);
+            hgAssert(elem->value->type == HgJsonType_float);
+            hgAssert(elem->value->floating == 1.0);
+
+            elem = elem->next;
+            hgAssert(elem->next == nullptr);
+            hgAssert(elem->value != nullptr);
+            hgAssert(elem->value->type == HgJsonType_float);
+            hgAssert(elem->value->floating == 1.0);
+
+            field = field->next;
+            hgAssert(field->next == nullptr);
+            hgAssert(field->name == "rotation");
+            hgAssert(field->value != nullptr);
+            hgAssert(field->value->type == HgJsonType_array);
+            hgAssert(field->value->array.elems != nullptr);
+
+            elem = field->value->array.elems;
+            hgAssert(elem->next != nullptr);
+            hgAssert(elem->value != nullptr);
+            hgAssert(elem->value->type == HgJsonType_float);
+            hgAssert(elem->value->floating == 1.0);
+
+            elem = elem->next;
+            hgAssert(elem->next != nullptr);
+            hgAssert(elem->value != nullptr);
+            hgAssert(elem->value->type == HgJsonType_float);
+            hgAssert(elem->value->floating == 0.0);
+
+            elem = elem->next;
+            hgAssert(elem->next != nullptr);
+            hgAssert(elem->value != nullptr);
+            hgAssert(elem->value->type == HgJsonType_float);
+            hgAssert(elem->value->floating == 0.0);
+
+            elem = elem->next;
+            hgAssert(elem->next == nullptr);
+            hgAssert(elem->value != nullptr);
+            hgAssert(elem->value->type == HgJsonType_float);
+            hgAssert(elem->value->floating == 0.0);
+
+            component = component->next;
+            hgAssert(component->next == nullptr);
+            hgAssert(component->name == "sprite");
+            hgAssert(component->value != nullptr);
+            hgAssert(component->value->type == HgJsonType_struct);
+            hgAssert(component->value->jstruct.fields != nullptr);
+
+            field = component->value->jstruct.fields;
+            hgAssert(field->next != nullptr);
+            hgAssert(field->name == "texture");
+            hgAssert(field->value != nullptr);
+            hgAssert(field->value->type == HgJsonType_string);
+            hgAssert(field->value->string == "tex.png");
+
+            field = field->next;
+            hgAssert(field->next != nullptr);
+            hgAssert(field->name == "uvPos");
+            hgAssert(field->value != nullptr);
+            hgAssert(field->value->type == HgJsonType_array);
+            hgAssert(field->value->array.elems != nullptr);
+
+            elem = field->value->array.elems;
+            hgAssert(elem->next != nullptr);
+            hgAssert(elem->value != nullptr);
+            hgAssert(elem->value->type == HgJsonType_float);
+            hgAssert(elem->value->floating == 0.0);
+
+            elem = elem->next;
+            hgAssert(elem->next == nullptr);
+            hgAssert(elem->value != nullptr);
+            hgAssert(elem->value->type == HgJsonType_float);
+            hgAssert(elem->value->floating == 0.0);
+
+            field = field->next;
+            hgAssert(field->next == nullptr);
+            hgAssert(field->name == "uvSize");
+            hgAssert(field->value != nullptr);
+            hgAssert(field->value->type == HgJsonType_array);
+            hgAssert(field->value->array.elems != nullptr);
+
+            elem = field->value->array.elems;
+            hgAssert(elem->next != nullptr);
+            hgAssert(elem->value != nullptr);
+            hgAssert(elem->value->type == HgJsonType_float);
+            hgAssert(elem->value->floating == 1.0);
+
+            elem = elem->next;
+            hgAssert(elem->next == nullptr);
+            hgAssert(elem->value != nullptr);
+            hgAssert(elem->value->type == HgJsonType_float);
+            hgAssert(elem->value->floating == 1.0);
         }
     }
 
@@ -1577,142 +1851,6 @@ void hgTest()
         hgAssert(!hgSetHas(&set, "b"));
         hgAssert(!hgSetHas(&set, "ab"));
         hgAssert(!hgSetHas(&set, "supercalifragilisticexpialidocious"));
-    }
-
-    // thread pool
-    {
-        {
-            HgFence fence = hgFenceCreate();
-            hgDefer(hgFenceDestroy(fence));
-
-            bool a = false;
-            bool b = false;
-
-            hgThreadsCall(fence, &a, [](void *pa)
-            {
-                *(bool*)pa = true;
-            });
-            hgThreadsCall(fence, &b, [](void *pb)
-            {
-                *(bool*)pb = true;
-            });
-
-            hgFenceWait(fence, 2.0);
-
-            hgAssert(hgFenceWait(fence, 2.0));
-
-            hgAssert(a == true);
-            hgAssert(b == true);
-        }
-
-        {
-            HgFence fence = hgFenceCreate();
-            hgDefer(hgFenceDestroy(fence));
-
-            bool vals[100]{};
-            for (bool& val : vals)
-            {
-                hgThreadsCall(fence, &val, [](void* data)
-                {
-                    *(bool*)data = true;
-                });
-            }
-
-            hgAssert(hgThreadsHelp(fence, 2.0));
-
-            for (bool& val : vals)
-            {
-                hgAssert(val == true);
-            }
-        }
-
-        {
-            bool vals[100]{};
-
-            auto fn = [](void* pvals, u64 idx)
-            {
-                ((bool*)pvals)[idx] = true;
-            };
-            hgThreadsFor(0, hgArrayCount(vals), vals, fn);
-
-            for (bool& val : vals)
-            {
-                hgAssert(val == true);
-            }
-        }
-
-        {
-            HgFence fence = hgFenceCreate();
-            hgDefer(hgFenceDestroy(fence));
-
-            for (u32 n = 0; n < 3; ++n)
-            {
-                std::atomic_bool start{false};
-                std::thread producers[4];
-
-                bool vals[100]{};
-
-                auto fn = [](void* pval)
-                {
-                    *((bool*)pval) = !*((bool*)pval);
-                };
-
-                auto prodFn = [&](u32 idx)
-                {
-                    while (!start)
-                    {
-                        _mm_pause();
-                    }
-                    u32 begin = idx * 25;
-                    u32 end = begin + 25;
-                    for (u32 i = begin; i < end; ++i)
-                    {
-                        hgThreadsCall(fence, vals + i, fn);
-                    }
-                };
-                for (u32 j = 0; j < hgArrayCount(producers); ++j)
-                {
-                    producers[j] = std::thread(prodFn, j);
-                }
-
-                start.store(true);
-                for (auto& thread : producers)
-                {
-                    thread.join();
-                }
-
-                hgAssert(hgThreadsHelp(fence, 2.0));
-                for (auto val : vals)
-                {
-                    hgAssert(val == true);
-                }
-            }
-        }
-    }
-
-    // HgMutex
-    {
-        struct Capture {
-            HgMutex mtx;
-            u32 count;
-        };
-        Capture c{};
-
-        c.mtx = hgMutexCreate();
-        hgDefer(hgMutexDestroy(c.mtx));
-
-        c.count = 0;
-        hgThreadsFor(0, 100, &c, [](void* pc, u64)
-        {
-            Capture* c = (Capture*)pc;
-            hgMutexAcquire(c->mtx);
-            hgDefer(hgMutexRelease(c->mtx));
-            for (u32 i = 0; i < 10000; ++i)
-            {
-                ++c->count;
-            }
-        });
-        hgAssert(c.count == 1000000);
     }
 
     // HgAssetManager and HgBinary

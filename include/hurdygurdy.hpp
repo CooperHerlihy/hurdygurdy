@@ -30,7 +30,6 @@
 #include "hg_assets.hpp"
 #include "hg_audio.hpp"
 #include "hg_concurrency.hpp"
-#include "hg_containers.hpp"
 #include "hg_core.hpp"
 #include "hg_ecs.hpp"
 #include "hg_gpu.hpp"
@@ -39,6 +38,7 @@
 #include "hg_memory.hpp"
 #include "hg_platform.hpp"
 #include "hg_rendering.hpp"
+#include "hg_serialization.hpp"
 #include "hg_time.hpp"
 #include "hg_window.hpp"
 
