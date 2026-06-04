@@ -246,15 +246,15 @@ HgBinary hgBinaryWriteSerial(HgArena* arena, HgSerializer serial);
  */
 HgSerializer hgBinaryReadSerial(HgArena* arena, HgBinary bin);
 
-// /**
-//  * Write serialized data as json
-//  */
-// HgStringView hgJsonWriteSerial(HgArena* arena, HgSerializer serial);
-//
-// /**
-//  * Read json data to be deserialized
-//  */
-// HgSerializer hgJsonReadSerial(HgArena* arena, HgStringView json);
+/**
+ * Write serialized data as json
+ */
+HgStringView hgJsonWriteSerial(HgArena* arena, HgSerializer serial);
+
+/**
+ * Read json data to be deserialized
+ */
+HgSerializer hgJsonReadSerial(HgArena* arena, HgStringView json);
 
 /**
  * An error contained in the json

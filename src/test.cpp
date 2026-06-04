@@ -782,6 +782,23 @@ void hgTest()
             hgAssert(memcmp(&podCopy, &pod, sizeof(pod)) == 0);
         }
 
+        // {
+        //     HgArena* arena = hgScratch();
+        //     hgArenaScope(arena);
+        //
+        //     HgSerializer writer = hgSerialWriter(arena);
+        //     hgSerialize(arena, &writer, "data", &pod);
+        //
+        //     HgStringView json = hgJsonWriteSerial(arena, writer);
+        //
+        //     PlainOldData podCopy{};
+        //
+        //     HgSerializer reader = hgJsonReadSerial(arena, json);
+        //     hgSerialize(arena, &reader, "data", &podCopy);
+        //
+        //     hgAssert(memcmp(&podCopy, &pod, sizeof(pod)) == 0);
+        // }
+
         struct Data {
             i64 a;
             u16 b;
@@ -865,6 +882,49 @@ void hgTest()
             hgAssert(data.e[1] == dataCopy.e[1]);
             hgAssert(data.e[2] == dataCopy.e[2]);
             hgAssert(data.f == dataCopy.f);
+        }
+
+        {
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
+
+            HgSerializer writer = hgSerialWriter(arena);
+            serializeData(arena, &writer, "data", &data);
+
+            HgStringView json = hgJsonWriteSerial(arena, writer);
+
+            hgDebug("json: %.*s\n", (int)json.length, json.chars);
+            hgAssert(json ==
+R"({
+    "data" : {
+        "a" : -12,
+        "b" : 42,
+        "c" : 2.500000,
+        "d" : true,
+        "e" : [
+            2,
+            4,
+            6
+        ],
+        "f" : "hello"
+    }
+}
+)");
+
+            // Data dataCopy{};
+            //
+            // HgSerializer reader = hgJsonReadSerial(arena, json);
+            // serializeData(arena, &reader, "data", &dataCopy);
+            //
+            // hgAssert(memcmp(&dataCopy, &data, sizeof(data)) != 0);
+            // hgAssert(data.a == dataCopy.a);
+            // hgAssert(data.b == dataCopy.b);
+            // hgAssert(data.c == dataCopy.c);
+            // hgAssert(data.d == dataCopy.d);
+            // hgAssert(data.e[0] == dataCopy.e[0]);
+            // hgAssert(data.e[1] == dataCopy.e[1]);
+            // hgAssert(data.e[2] == dataCopy.e[2]);
+            // hgAssert(data.f == dataCopy.f);
         }
     }
 

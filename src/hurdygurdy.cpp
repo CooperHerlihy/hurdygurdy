@@ -478,15 +478,15 @@ HgStringBuilder hgIntegerToString(HgArena* arena, i64 num)
     {
         u64 digit = unum % 10;
         unum = (u64)((f64)unum / 10.0);
-        hgStringAppendc(scratch, &reverse, '0' + (char)digit);
+        hgStringAppendC(scratch, &reverse, '0' + (char)digit);
     }
 
     HgStringBuilder ret{};
     if (isNegative)
-        hgStringAppendc(arena, &ret, '-');
+        hgStringAppendC(arena, &ret, '-');
     for (u64 i = reverse.length - 1; i < reverse.length; --i)
     {
-        hgStringAppendc(arena, &ret, reverse[i]);
+        hgStringAppendC(arena, &ret, reverse[i]);
     }
     return ret;
 }
@@ -504,18 +504,18 @@ HgStringBuilder hgFloatToString(HgArena* arena, f64 num, u32 decimalCount)
     HgStringBuilder intStr = hgIntegerToString(scratch, (i64)fabs(num));
 
     HgStringBuilder decStr{};
-    hgStringAppendc(scratch, &decStr, '.');
+    hgStringAppendC(scratch, &decStr, '.');
 
     f64 decPart = fabs(num);
     for (u64 i = 0; i < decimalCount; ++i)
     {
         decPart *= 10.0;
-        hgStringAppendc(scratch, &decStr, '0' + (char)((u64)decPart % 10));
+        hgStringAppendC(scratch, &decStr, '0' + (char)((u64)decPart % 10));
     }
 
     HgStringBuilder ret{};
     if (num < 0.0)
-        hgStringAppendc(arena, &ret, '-');
+        hgStringAppendC(arena, &ret, '-');
     hgStringAppend(arena, &ret, intStr);
     hgStringAppend(arena, &ret, decStr);
     return ret;
@@ -2342,46 +2342,46 @@ HgBinary hgBinaryWriteSerial(HgArena* arena, HgSerializer serial)
     return bin;
 }
 
-static void serialBinReadNode(HgArena* arena, HgStringView name, HgBinary bin, SerialBinNode node, HgSerializer* s);
+static void serialBinReadNode(HgArena* arena, HgSerializer* s, HgStringView name, HgBinary bin, SerialBinNode node);
 
-static void serialBinReadArray(HgArena* arena, HgStringView name, HgBinary bin, SerialBinArray array, HgSerializer* s)
+static void serialBinReadArray(HgArena* arena, HgSerializer* s, HgStringView name, HgBinary bin, SerialBinArray array)
 {
     HgSerializer arr = hgSerializerBeginArray(arena, s, name, &array.elemCount);
     for (u32 i = 0; i < array.elemCount; ++i)
     {
         SerialBinElem elem = hgBinaryRead<SerialBinElem>(&bin, array.elemsBegin + i * sizeof(elem));
-        serialBinReadNode(arena, "", bin, hgBinaryRead<SerialBinNode>(&bin, elem.elemBegin), &arr);
+        serialBinReadNode(arena, &arr, "", bin, hgBinaryRead<SerialBinNode>(&bin, elem.elemBegin));
     }
 }
 
 static void serialBinReadObject(
     HgArena* arena,
+    HgSerializer* s,
     HgStringView name,
     HgBinary bin,
-    SerialBinObject object,
-    HgSerializer* s)
+    SerialBinObject object)
 {
     HgSerializer obj = hgSerializerBeginObject(arena, s, name);
     for (u32 i = 0; i < object.fieldCount; ++i)
     {
         SerialBinField field = hgBinaryRead<SerialBinField>(&bin, object.fieldsBegin + i * sizeof(field));
         HgStringView fieldName = {(char*)bin.data + field.nameBegin, field.nameLength};
-        serialBinReadNode(arena, fieldName, bin, hgBinaryRead<SerialBinNode>(&bin, field.dataBegin), &obj);
+        serialBinReadNode(arena, &obj, fieldName, bin, hgBinaryRead<SerialBinNode>(&bin, field.dataBegin));
     }
 }
 
 static void serialBinReadString(
     HgArena* arena,
+    HgSerializer* s,
     HgStringView name,
     HgBinary bin,
-    SerialBinString string,
-    HgSerializer* s)
+    SerialBinString string)
 {
     HgStringView val = {(char*)bin.data + string.begin, string.length};
     hgSerialize(arena, s, name, &val);
 }
 
-static void serialBinReadNode(HgArena* arena, HgStringView name, HgBinary bin, SerialBinNode node, HgSerializer* s)
+static void serialBinReadNode(HgArena* arena, HgSerializer* s, HgStringView name, HgBinary bin, SerialBinNode node)
 {
     switch (node.type)
     {
@@ -2389,13 +2389,13 @@ static void serialBinReadNode(HgArena* arena, HgStringView name, HgBinary bin, S
             hgSerializeNull(arena, s, name);
             return;
         case HgSerialType_array:
-            serialBinReadArray(arena, name, bin, node.array, s);
+            serialBinReadArray(arena, s, name, bin, node.array);
             return;
         case HgSerialType_object:
-            serialBinReadObject(arena, name, bin, node.object, s);
+            serialBinReadObject(arena, s, name, bin, node.object);
             return;
         case HgSerialType_string:
-            serialBinReadString(arena, name, bin, node.string, s);
+            serialBinReadString(arena, s, name, bin, node.string);
             return;
         case HgSerialType_integer:
             hgSerialize(arena, s, name, &node.integer);
@@ -2440,19 +2440,222 @@ HgSerializer hgBinaryReadSerial(HgArena* arena, HgBinary bin)
     {
         SerialBinField field = hgBinaryRead<SerialBinField>(&bin, object.fieldsBegin + i * sizeof(field));
         HgStringView fieldName = {(char*)bin.data + field.nameBegin, field.nameLength};
-        serialBinReadNode(arena, fieldName, bin, hgBinaryRead<SerialBinNode>(&bin, field.dataBegin), &s);
+        serialBinReadNode(arena, &s, fieldName, bin, hgBinaryRead<SerialBinNode>(&bin, field.dataBegin));
     }
 
     return hgSerialReader(s.current);
 }
 
-// HgStringView hgJsonWriteSerial(HgArena* arena, HgSerializer* serial)
-// {
-// }
-//
-// HgSerializer hgJsonReadSerial(HgArena* arena, HgStringView json)
-// {
-// }
+void serialJsonWriteNode(HgArena* arena, HgStringBuilder* str, u32 indentation, HgStringView name, HgSerialNode* node);
+
+void serialJsonWriteNull(HgArena* arena, HgStringBuilder* str, u32 indentation, HgStringView name)
+{
+    for (u32 i = 0; i < indentation; ++i)
+    {
+        hgStringAppend(arena, str, "    ");
+    }
+    if (name != "")
+    {
+        hgStringAppendC(arena, str, '"');
+        hgStringAppend(arena, str, name);
+        hgStringAppend(arena, str, "\" : ");
+    }
+    hgStringAppend(arena, str, "null");
+}
+
+void serialJsonWriteArray(
+    HgArena* arena,
+    HgStringBuilder* str,
+    u32 indentation,
+    HgStringView name,
+    HgSerialArray array)
+{
+    for (u32 i = 0; i < indentation; ++i)
+    {
+        hgStringAppend(arena, str, "    ");
+    }
+    if (name != "")
+    {
+        hgStringAppendC(arena, str, '"');
+        hgStringAppend(arena, str, name);
+        hgStringAppend(arena, str, "\" : ");
+    }
+    hgStringAppend(arena, str, "[\n");
+    serialJsonWriteNode(arena, str, indentation + 1, "", &array.elems[0]);
+    for (u32 i = 1; i < array.elemCount; ++i)
+    {
+        hgStringAppend(arena, str, ",\n");
+        serialJsonWriteNode(arena, str, indentation + 1, "", &array.elems[i]);
+    }
+    hgStringAppendC(arena, str, '\n');
+    for (u32 i = 0; i < indentation; ++i)
+    {
+        hgStringAppend(arena, str, "    ");
+    }
+    hgStringAppendC(arena, str, ']');
+}
+
+void serialJsonWriteObject(
+    HgArena* arena,
+    HgStringBuilder* str,
+    u32 indentation,
+    HgStringView name,
+    HgSerialObject object)
+{
+    for (u32 i = 0; i < indentation; ++i)
+    {
+        hgStringAppend(arena, str, "    ");
+    }
+    if (name != "")
+    {
+        hgStringAppendC(arena, str, '"');
+        hgStringAppend(arena, str, name);
+        hgStringAppend(arena, str, "\" : ");
+    }
+    hgStringAppend(arena, str, "{\n");
+    serialJsonWriteNode(arena, str, indentation + 1, object.fields[0].name, &object.fields[0].data);
+    for (u32 i = 1; i < object.fieldCount; ++i)
+    {
+        hgStringAppend(arena, str, ",\n");
+        serialJsonWriteNode(arena, str, indentation + 1, object.fields[i].name, &object.fields[i].data);
+    }
+    hgStringAppendC(arena, str, '\n');
+    for (u32 i = 0; i < indentation; ++i)
+    {
+        hgStringAppend(arena, str, "    ");
+    }
+    hgStringAppendC(arena, str, '}');
+}
+
+void serialJsonWriteString(
+    HgArena* arena,
+    HgStringBuilder* str,
+    u32 indentation,
+    HgStringView name,
+    HgStringView string)
+{
+    for (u32 i = 0; i < indentation; ++i)
+    {
+        hgStringAppend(arena, str, "    ");
+    }
+    if (name != "")
+    {
+        hgStringAppendC(arena, str, '"');
+        hgStringAppend(arena, str, name);
+        hgStringAppend(arena, str, "\" : ");
+    }
+    hgStringAppendC(arena, str, '"');
+    hgStringAppend(arena, str, string);
+    hgStringAppendC(arena, str, '"');
+}
+
+void serialJsonWriteInteger(
+    HgArena* arena,
+    HgStringBuilder* str,
+    u32 indentation,
+    HgStringView name,
+    i64 integer)
+{
+    for (u32 i = 0; i < indentation; ++i)
+    {
+        hgStringAppend(arena, str, "    ");
+    }
+    if (name != "")
+    {
+        hgStringAppendC(arena, str, '"');
+        hgStringAppend(arena, str, name);
+        hgStringAppend(arena, str, "\" : ");
+    }
+    hgStringAppend(arena, str, hgIntegerToString(hgScratch(), integer));
+}
+
+void serialJsonWriteFloating(
+    HgArena* arena,
+    HgStringBuilder* str,
+    u32 indentation,
+    HgStringView name,
+    f64 floating)
+{
+    for (u32 i = 0; i < indentation; ++i)
+    {
+        hgStringAppend(arena, str, "    ");
+    }
+    if (name != "")
+    {
+        hgStringAppendC(arena, str, '"');
+        hgStringAppend(arena, str, name);
+        hgStringAppend(arena, str, "\" : ");
+    }
+    hgStringAppend(arena, str, hgFloatToString(hgScratch(), floating, 6));
+}
+
+void serialJsonWriteBoolean(
+    HgArena* arena,
+    HgStringBuilder* str,
+    u32 indentation,
+    HgStringView name,
+    bool boolean)
+{
+    for (u32 i = 0; i < indentation; ++i)
+    {
+        hgStringAppend(arena, str, "    ");
+    }
+    if (name != "")
+    {
+        hgStringAppendC(arena, str, '"');
+        hgStringAppend(arena, str, name);
+        hgStringAppend(arena, str, "\" : ");
+    }
+    if (boolean)
+        hgStringAppend(arena, str, "true");
+    else
+        hgStringAppend(arena, str, "false");
+}
+
+void serialJsonWriteNode(HgArena* arena, HgStringBuilder* str, u32 indentation, HgStringView name, HgSerialNode* node)
+{
+    switch (node->type)
+    {
+        case HgSerialType_null:
+            serialJsonWriteNull(arena, str, indentation, name);
+            return;
+        case HgSerialType_array:
+            serialJsonWriteArray(arena, str, indentation, name, node->array);
+            return;
+        case HgSerialType_object:
+            serialJsonWriteObject(arena, str, indentation, name, node->object);
+            return;
+        case HgSerialType_string:
+            serialJsonWriteString(arena, str, indentation, name, node->string);
+            return;
+        case HgSerialType_integer:
+            serialJsonWriteInteger(arena, str, indentation, name, node->integer);
+            return;
+        case HgSerialType_floating:
+            serialJsonWriteFloating(arena, str, indentation, name, node->floating);
+            return;
+        case HgSerialType_boolean:
+            serialJsonWriteBoolean(arena, str, indentation, name, node->boolean);
+            return;
+        default:
+            hgError("Invalid HgSerialType: %s\n", hgSerialTypeToString(node->type));
+    }
+}
+
+HgStringView hgJsonWriteSerial(HgArena* arena, HgSerializer serial)
+{
+    HgStringBuilder str{};
+    serialJsonWriteNode(arena, &str, 0, "", serial.current);
+    hgStringAppendC(arena, &str, '\n');
+    return str;
+}
+
+HgSerializer hgJsonReadSerial(HgArena* arena, HgStringView json)
+{
+    (void)arena;
+    (void)json;
+    return {};
+}
 
 struct JsonParseState {
     HgStringView text;
@@ -2829,7 +3032,7 @@ static HgJson jsonParseString(HgArena* arena, JsonParseState* state)
             {
                 // escape sequences : TODO
             }
-            hgStringAppendc(arena, &str, c);
+            hgStringAppendC(arena, &str, c);
         }
 
         HgJson json{};

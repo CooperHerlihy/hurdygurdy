@@ -1072,7 +1072,7 @@ inline void hgStringPrepend(HgArena* arena, HgStringBuilder* dst, HgStringView s
  * - idx The index into dst
  * - c The character to insert
  */
-inline void hgStringInsertc(HgArena* arena, HgStringBuilder* dst, u64 idx, char c)
+inline void hgStringInsertC(HgArena* arena, HgStringBuilder* dst, u64 idx, char c)
 {
     hgStringInsert(arena, dst, idx, {&c, 1});
 }
@@ -1080,17 +1080,17 @@ inline void hgStringInsertc(HgArena* arena, HgStringBuilder* dst, u64 idx, char 
 /**
  * Copies another string to the end of the string
  */
-inline void hgStringAppendc(HgArena* arena, HgStringBuilder* dst, char c)
+inline void hgStringAppendC(HgArena* arena, HgStringBuilder* dst, char c)
 {
-    hgStringInsertc(arena, dst, dst->length, c);
+    hgStringInsertC(arena, dst, dst->length, c);
 }
 
 /**
  * Copies another string to the beginning of the string
  */
-inline void hgStringPrependc(HgArena* arena, HgStringBuilder* dst, char c)
+inline void hgStringPrependC(HgArena* arena, HgStringBuilder* dst, char c)
 {
-    hgStringInsertc(arena, dst, 0, c);
+    hgStringInsertC(arena, dst, 0, c);
 }
 
 /**
