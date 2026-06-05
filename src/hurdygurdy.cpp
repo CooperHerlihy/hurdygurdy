@@ -4030,22 +4030,6 @@ void hgEcsSort(
     q.quicksort(0, system->count);
 }
 
-void ecsSerialFindEntities(HgEntitySerializer* s, HgEcs* ecs, HgEntity root)
-{
-    hgMapAdd(&s->entityToIdx, root, s->entityToIdx.count);
-
-    if (hgEcsHas<HgNode>(ecs, root))
-    {
-        HgNode* node = hgEcsGet<HgNode>(ecs, root);
-        HgEntity child = node->firstChild;
-        while (child.handle != hgNullHandle)
-        {
-            ecsSerialFindEntities(s, ecs, child);
-            child = hgEcsGet<HgNode>(ecs, child)->nextSibling;
-        }
-    }
-}
-
 template<>
 void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgEcs* ecs)
 {
@@ -4117,7 +4101,7 @@ void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgEcs* ecs)
         u32 compCount;
         if (s->writing)
             compCount = systemData->count;
-        HgSerializer compArr = hgSerializerBeginArray(arena, &systemObj, "Components", &compCount);
+        HgSerializer compArr = hgSerializerBeginArray(arena, &systemObj, "Data", &compCount);
 
         for (u32 c = 0; c < compCount; ++c)
         {
@@ -4133,7 +4117,7 @@ void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgEcs* ecs)
                 compData = (u8*)systemData->components + c * systemData->width;
             else
                 compData = hgEcsAdd(ecs, ecsSerial.idxToEntity[entityIdx], systemId);
-            systemData->serialize(arena, &compObj, "Data", compData, &ecsSerial);
+            systemData->serialize(arena, &compObj, "Component", compData, &ecsSerial);
         }
     }
 }

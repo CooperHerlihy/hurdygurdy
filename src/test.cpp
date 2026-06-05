@@ -2516,6 +2516,9 @@ void hgTest()
             HgSerializer s = hgSerialWriter(arena);
             hgSerialize(arena, &s, "Ecs", &ecs);
             scene = s.current;
+
+            HgStringView json = hgJsonWriteSerial(arena, s);
+            hgDebug("json scene: %.*s\n", (int)json.length, json.chars);
         }
 
         {
