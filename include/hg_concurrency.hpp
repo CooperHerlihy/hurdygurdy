@@ -192,4 +192,25 @@ void hgThreadsCall(HgFence fence, void* data, void (*fn)(void* data));
  */
 void hgThreadsFor(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx));
 
+/**
+ * Iterates in parallel over a function n times using the thread pool
+ *
+ * Note, uses a fence internally to wait for all work to complete
+ *
+ * Parameters
+ * - begin The first index to iterate from
+ * - end The end index to iterate to
+ * - fn The function to use to iterate, takes the index
+ */
+template<typename F>
+void hgThreadsFor(u64 begin, u64 end, F fn)
+{
+    static_assert(std::is_invocable_r_v<void, F, u64>);
+
+    hgThreadsFor(begin, end, &fn, [](void* pfn, u64 idx)
+    {
+        (*(F*)pfn)(idx);
+    });
+}
+
 #endif // HG_CONCURRENCY_HPP

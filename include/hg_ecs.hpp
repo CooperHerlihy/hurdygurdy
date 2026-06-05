@@ -31,6 +31,7 @@
 #include "hg_core.hpp"
 #include "hg_math.hpp"
 #include "hg_memory.hpp"
+#include "hg_serialization.hpp"
 
 /**
  * An entity in the ecs
@@ -78,61 +79,37 @@ template<typename T>
 inline u64 hgComponentId = (u64)-1;
 
 /**
- * An entity Component System
+ * The function called on removing the component, may be overridden
  */
-struct HgEcs;
+template<typename T>
+void hgEcsDtor(T* component)
+{
+    (void)component;
+}
 
 /**
  * The serializer for an ecs
  */
-struct HgEcsSerializer {
+union HgEntitySerializer {
     /**
-     * Where strings are allocated from
+     * The indices of entities
      */
-    HgArena* stringArena;
-    /**
-     * The serial indices of entities
-     */
-    HgMap<HgEntity, u32> entities;
-    /**
-     * The serial indices of strings
-     */
-    HgMap<HgStringView, u32> strings;
-};
-
-/**
- * Get the index of an entity while serializing
- */
-u32 hgEcsSerializerEntity(HgEcsSerializer* serializer, HgEntity e);
-
-/**
- * Get the index of a string while serializing
- */
-u32 hgEcsSerializerString(HgEcsSerializer* serializer, HgStringView str);
-
-/**
- * The serializer for an ecs
- */
-struct HgEcsDeserializer {
+    HgMap<HgEntity, u32> entityToIdx;
     /**
      * The entities by index
      */
-    HgEntity* entities;
-    /**
-     * The strings by index
-     */
-    HgStringView* strings;
+    HgEntity* idxToEntity;
 };
 
 /**
- * Get an entity from an index while deserializing
+ * The default serialization for a component, should be overridden
  */
-HgEntity hgEcsDeserializerEntity(HgEcsDeserializer* deserializer, u32 idx);
-
-/**
- * Get a string from an index while deserializing
- */
-HgStringView hgEcsSerializerString(HgEcsDeserializer* deserializer, u32 idx);
+template<typename T>
+void hgEcsSerialize(HgArena* arena, HgSerializer* s, HgStringView name, T* val, HgEntitySerializer* ecs)
+{
+    hgSerialize(arena, s, name, val);
+    (void)ecs;
+}
 
 /**
  * A system of components
@@ -171,33 +148,16 @@ struct HgComponent {
      */
     void (*dtor)(void* component);
     /**
-     * The width of each component serialized in bytes
-     */
-    u32 serialWidth;
-    /**
      * The function called on serializing the component
      *
      * Parameters
-     * - serializer The serializer data
-     * - srcComponent The component to serialize
-     * - dstData Where to store the component data, may not be aligned
+     * - arena The arena to allocate from
+     * - s The serializer
+     * - name The name of the field
+     * - The value to serialize
+     * - ecs The ecs serializer data, if needed
      */
-    void (*serialize)(
-        HgEcsSerializer* serializer,
-        void* srcComponent,
-        void* dstData);
-    /**
-     * The function called on deserializing the component
-     *
-     * Parameters
-     * - deserializer The deserializer data
-     * - srcData The component to deserialize, may not be aligned
-     * - dstComponent Where to load the component
-     */
-    void (*deserialize)(
-        HgEcsDeserializer* deserializer,
-        void* srcData,
-        void* dstComponent);
+    void (*serialize)(HgArena* arena, HgSerializer* s, HgStringView name, void* val, HgEntitySerializer* ecs);
 };
 
 /**
@@ -228,6 +188,17 @@ HgEcs hgEcsCreate(HgArena* arena, u32 maxEntities, u32 maxComponentTypes);
  * Destroy all entities
  */
 void hgEcsReset(HgEcs* ecs);
+
+/**
+ * HgEcs serialization
+ */
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgEcs* ecs);
+
+/**
+ * HgEntity ecs serialization
+ */
+void hgEntitySerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgEntity* val, HgEntitySerializer* ecs);
 
 /**
  * The config to register a component
@@ -262,17 +233,7 @@ struct HgEcsRegisterComponent {
     /**
      * The function called on serializing the component
      */
-    void (*serialize)(
-        HgEcsSerializer* serializer,
-        void* srcComponent,
-        void* dstData);
-    /**
-     * The function called on deserializing the component
-     */
-    void (*deserialize)(
-        HgEcsDeserializer* deserializer,
-        void* srcData,
-        void* dstComponent);
+    void (*serialize)(HgArena* arena, HgSerializer* s, HgStringView name, void* val, HgEntitySerializer* ecs);
 };
 
 /**
@@ -284,41 +245,6 @@ struct HgEcsRegisterComponent {
  * - config The component config
  */
 void hgEcsRegisterComponent(HgEcs* ecs, HgArena* arena, HgEcsRegisterComponent* config);
-
-/**
- * The function called on removing the component
- */
-template<typename T>
-void hgEcsDtor(T* component)
-{
-    (void)component;
-}
-
-template<typename T>
-struct HgEcsSerializationImpl {
-    /**
-     * The width in bytes of the serialized component
-     */
-    static const u32 width = sizeof(T);
-
-    /**
-     * The serialize function
-     */
-    static void serialize(HgEcsSerializer* serializer, T* srcComponent, void* dstData)
-    {
-        (void)serializer;
-        memcpy(dstData, srcComponent, sizeof(T));
-    }
-
-    /**
-     * The function called on deserializing the component
-     */
-    static void deserialize(HgEcsDeserializer* deserializer, void* srcData, T* dstComponent)
-    {
-        (void)deserializer;
-        memcpy(dstComponent, srcData, sizeof(T));
-    }
-};
 
 /**
  * Create a new component type in the Ecs from a type and its name
@@ -335,26 +261,14 @@ struct HgEcsSerializationImpl {
         { \
             hgEcsDtor<type>((type*)component); \
         }; \
-        registerComponent.serialWidth = HgEcsSerializationImpl<type>::width; \
         registerComponent.serialize = []( \
-            HgEcsSerializer* serializer, \
-            void* srcComponent, \
-            void* dstData) \
+            HgArena* arena, \
+            HgSerializer* s, \
+            HgStringView name, \
+            void* val, \
+            HgEntitySerializer* entities) \
         { \
-            HgEcsSerializationImpl<type>::serialize( \
-                serializer, \
-                (type*)srcComponent, \
-                dstData); \
-        }; \
-        registerComponent.deserialize = []( \
-            HgEcsDeserializer* deserializer, \
-            void* srcData, \
-            void* dstComponent) \
-        { \
-            HgEcsSerializationImpl<type>::deserialize( \
-                deserializer, \
-                srcData, \
-                (type*)dstComponent); \
+            hgEcsSerialize<type>(arena, s, name, (type*)val, entities); \
         }; \
         hgEcsRegisterComponent(ecs, arena, &registerComponent); \
     } while (0)
@@ -752,16 +666,6 @@ void hgEcsSort(HgEcs* ecs, void* data, bool (*compare)(void*, HgEcs* ecs, HgEnti
 }
 
 /**
- * Serialize a scene from a root entity
- */
-HgBinary hgEcsSerialize(HgArena* arena, HgEcs* ecs, HgEntity root);
-
-/**
- * Deserialize a scene and return the root entity
- */
-HgEntity hgEcsDeserialize(HgEcs* ecs, HgBinary scene);
-
-/**
  * A node component for entities in a hierarchy
  */
 struct HgNode {
@@ -782,6 +686,12 @@ struct HgNode {
      */
     HgEntity firstChild{};
 };
+
+/**
+ * HgNode serialization implementation
+ */
+template<>
+void hgEcsSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgNode* node, HgEntitySerializer* ecs);
 
 /**
  * Add an empty node to an entity
@@ -817,16 +727,6 @@ void hgNodeDestroy(HgEcs* ecs, HgEntity e);
 void hgNodeAddChild(HgEcs* ecs, HgEntity parent, HgEntity child);
 
 /**
- * HgNode serialization implementation
- */
-template<>
-struct HgEcsSerializationImpl<HgNode> {
-    static const u32 width;
-    static void serialize(HgEcsSerializer* serializer, HgNode* srcComponent, void* dstData);
-    static void deserialize(HgEcsDeserializer* deserializer, void* srcData, HgNode* dstComponent);
-};
-
-/**
  * The transform component for entities in absolute space
  */
 struct HgTransform {
@@ -855,6 +755,12 @@ struct HgTransform {
 };
 
 /**
+ * HgTransform serialization impl
+ */
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgTransform* node);
+
+/**
  * Add an identity transform to an entity
  */
 HgTransform* hgTransformAdd(
@@ -876,15 +782,5 @@ constexpr HgVec3 hgTransformWorldPos(HgTransform& tf)
  * Update HgTransform for the entity and its children to the HgTransformLocal
  */
 void hgTransformUpdate(HgEcs* ecs, HgEntity e);
-
-/**
- * HgTransform serialization impl
- */
-template<>
-struct HgEcsSerializationImpl<HgTransform> {
-    static const u32 width;
-    static void serialize(HgEcsSerializer* serializer, HgTransform* srcComponent, void* dstData);
-    static void deserialize(HgEcsDeserializer* deserializer, void* srcData, HgTransform* dstComponent);
-};
 
 #endif // HG_ECS_HPP

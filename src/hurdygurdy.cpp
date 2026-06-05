@@ -1285,7 +1285,14 @@ static HgSerializer serializerNull = {false, 0, &serialNodeNull};
 
 bool hgSerializerIsNull(HgSerializer s)
 {
-    return s.current == &serialNodeNull || s.current->type == HgSerialType_null;
+    return
+        s.current->type == HgSerialType_null ||
+        (s.current->type == HgSerialType_object &&
+         (s.current->object.fieldCount == s.idx ||
+          s.current->object.fields[s.idx].data.type == HgSerialType_null)) ||
+        (s.current->type == HgSerialType_array &&
+         (s.current->array.elemCount == s.idx ||
+          s.current->array.elems[s.idx].type == HgSerialType_null));
 }
 
 HgSerializer hgSerializerBeginArray(HgArena* arena, HgSerializer* s, HgStringView name, u32* length)
@@ -1713,12 +1720,47 @@ void serializeString(HgArena* arena, HgSerializer* s, HgStringView name, HgStrin
     }
 }
 
-void hgSerializeData(HgArena* arena, HgSerializer* s, HgStringView name, void** data, u64* size)
+void hgSerializeBinary(HgArena* arena, HgSerializer* s, HgStringView name, HgBinary* binary)
 {
-    HgStringBuilder str = {*(char**)data, *size};
+    HgStringBuilder str = {(char*)binary->data, binary->size};
     serializeString(arena, s, name, &str);
-    *data = str.chars;
-    *size = str.length;
+    if (!s->writing)
+        *binary = {str.chars, str.length};
+}
+
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgBinary* val)
+{
+    hgSerializeBinary(arena, s, name, val);
+}
+
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgStringView* val)
+{
+    HgStringBuilder str = {(char*)val->chars, val->length};
+    serializeString(arena, s, name, &str);
+    if (!s->writing)
+        *val = str;
+}
+
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgStringBuilder* val)
+{
+    serializeString(arena, s, name, val);
+}
+
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgStringOwner* val)
+{
+    HgStringBuilder str = {(char*)val->chars, val->length};
+    if (s->writing)
+    {
+        serializeString(arena, s, name, &str);
+    }
+    else
+    {
+        serializeString(hgScratch(), s, name, &str);
+        *val = hgStringAlloc(str);
+    }
 }
 
 template<typename T>
@@ -2078,52 +2120,84 @@ void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, bool* val)
     }
 }
 
-/**
- * HgStringView serialization
- */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgStringView* val)
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgVec2* val)
 {
-    HgStringBuilder str = {(char*)val->chars, val->length};
-    serializeString(arena, s, name, &str);
-    if (!s->writing)
-        *val = str;
+    u32 len = 2;
+    HgSerializer obj = hgSerializerBeginArray(arena, s, name, &len);
+    hgSerialize(arena, &obj, "", &val->x);
+    hgSerialize(arena, &obj, "", &val->y);
 }
 
-/**
- * HgStringBuilder serialization
- */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgStringBuilder* val)
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgVec3* val)
 {
-    serializeString(arena, s, name, val);
+    u32 len = 3;
+    HgSerializer obj = hgSerializerBeginArray(arena, s, name, &len);
+    hgSerialize(arena, &obj, "", &val->x);
+    hgSerialize(arena, &obj, "", &val->y);
+    hgSerialize(arena, &obj, "", &val->z);
 }
 
-/**
- * HgStringOwner serialization
- */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgStringOwner* val)
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgVec4* val)
 {
-    HgStringBuilder str = {(char*)val->chars, val->length};
-    if (s->writing)
-    {
-        serializeString(arena, s, name, &str);
-    }
-    else
-    {
-        serializeString(hgScratch(), s, name, &str);
-        *val = hgStringAlloc(str);
-    }
+    u32 len = 4;
+    HgSerializer obj = hgSerializerBeginArray(arena, s, name, &len);
+    hgSerialize(arena, &obj, "", &val->x);
+    hgSerialize(arena, &obj, "", &val->y);
+    hgSerialize(arena, &obj, "", &val->z);
+    hgSerialize(arena, &obj, "", &val->w);
 }
 
-/**
- * HgBinary serialization
- */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgBinary* val)
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgMat2* val)
 {
-    hgSerializeData(arena, s, name, &val->data, &val->size);
+    u32 len = 2;
+    HgSerializer obj = hgSerializerBeginArray(arena, s, name, &len);
+    hgSerialize(arena, &obj, "", &val->x);
+    hgSerialize(arena, &obj, "", &val->y);
+}
+
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgMat3* val)
+{
+    u32 len = 3;
+    HgSerializer obj = hgSerializerBeginArray(arena, s, name, &len);
+    hgSerialize(arena, &obj, "", &val->x);
+    hgSerialize(arena, &obj, "", &val->y);
+    hgSerialize(arena, &obj, "", &val->z);
+}
+
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgMat4* val)
+{
+    u32 len = 4;
+    HgSerializer obj = hgSerializerBeginArray(arena, s, name, &len);
+    hgSerialize(arena, &obj, "", &val->x);
+    hgSerialize(arena, &obj, "", &val->y);
+    hgSerialize(arena, &obj, "", &val->z);
+    hgSerialize(arena, &obj, "", &val->w);
+}
+
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgComplex* val)
+{
+    u32 len = 2;
+    HgSerializer obj = hgSerializerBeginArray(arena, s, name, &len);
+    hgSerialize(arena, &obj, "", &val->r);
+    hgSerialize(arena, &obj, "", &val->i);
+}
+
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgQuat* val)
+{
+    u32 len = 4;
+    HgSerializer obj = hgSerializerBeginArray(arena, s, name, &len);
+    hgSerialize(arena, &obj, "", &val->r);
+    hgSerialize(arena, &obj, "", &val->i);
+    hgSerialize(arena, &obj, "", &val->j);
+    hgSerialize(arena, &obj, "", &val->k);
 }
 
 static constexpr char serialBinTag[] = "HgData";
@@ -2545,7 +2619,33 @@ void serialJsonWriteString(
         hgStringAppend(arena, str, "\" : ");
     }
     hgStringAppendC(arena, str, '"');
-    hgStringAppend(arena, str, string);
+    for (u32 i = 0; i < string.length; ++i)
+    {
+        switch (string[i])
+        {
+        case '\\':
+            hgStringAppend(arena, str, "\\\\");
+            break;
+        case '\"':
+            hgStringAppend(arena, str, "\\\"");
+            break;
+        case '\n':
+            hgStringAppend(arena, str, "\\n");
+            break;
+        case '\r':
+            hgStringAppend(arena, str, "\\r");
+            break;
+        case '\f':
+            hgStringAppend(arena, str, "\\f");
+            break;
+        case '\b':
+            hgStringAppend(arena, str, "\\b");
+            break;
+        default:
+            hgStringAppendC(arena, str, string[i]);
+            break;
+        }
+    }
     hgStringAppendC(arena, str, '"');
 }
 
@@ -3618,34 +3718,6 @@ void hgAssetUnloadImpl(HgAssetData<HgGpuMesh>* data)
     hgGpuBufferDestroy(data->asset.indexBuffer);
 }
 
-u32 hgEcsSerializerEntity(HgEcsSerializer* serializer, HgEntity e)
-{
-    u32* idx = hgMapGet(&serializer->entities, e);
-    hgAssert(idx != nullptr);
-    return *idx;
-}
-
-u32 hgEcsSerializerString(HgEcsSerializer* serializer, HgStringView str)
-{
-    u32* idx = hgMapGet(&serializer->strings, str);
-    if (idx == nullptr)
-        idx = hgMapAdd(
-            &serializer->strings,
-            hgStringCopy(serializer->stringArena, str),
-            serializer->strings.count);
-    return *idx;
-}
-
-HgEntity hgEcsDeserializerEntity(HgEcsDeserializer* deserializer, u32 idx)
-{
-    return deserializer->entities[idx];
-}
-
-HgStringView hgEcsSerializerString(HgEcsDeserializer* deserializer, u32 idx)
-{
-    return deserializer->strings[idx];
-}
-
 HgEcs hgEcsCreate(HgArena* arena, u32 maxEntities, u32 maxComponentTypes)
 {
     hgAssert(arena != nullptr);
@@ -3697,9 +3769,7 @@ void hgEcsRegisterComponent(HgEcs* ecs, HgArena* arena, HgEcsRegisterComponent* 
     system->capacity = config->max;
 
     system->dtor = config->dtor;
-    system->serialWidth = config->serialWidth;
     system->serialize = config->serialize;
-    system->deserialize = config->deserialize;
 
     memset(system->indices, -1, ecs->entities.capacity * sizeof(*system->indices));
 }
@@ -3960,55 +4030,9 @@ void hgEcsSort(
     q.quicksort(0, system->count);
 }
 
-static constexpr char ecsSceneTag[] = "HgScene";
-static constexpr u32 ecsSceneVersionMajor = 0;
-static constexpr u32 ecsSceneVersionMinor = 0;
-static constexpr u32 ecsSceneVersionPatch = 0;
-
-struct EcsSerialHeader {
-    char tag[sizeof(ecsSceneTag)];
-    u32 versionMajor;
-    u32 versionMinor;
-    u32 versionPatch;
-
-    u32 entityCount;
-
-    u32 componentsBegin;
-    u32 componentCount;
-
-    u32 stringsBegin;
-    u32 stringCount;
-};
-
-struct EcsSerialComponentDesc {
-    u32 nameString;
-    u32 entitiesBegin;
-    u32 dataBegin;
-    u32 dataWidth;
-    u32 count;
-};
-
-struct EcsSerialStringDesc {
-    u32 begin;
-    u32 length;
-};
-
-struct EcsSerialComponent {
-    u32 nameString;
-    u32* entities;
-    void* data;
-    u32 dataWidth;
-    u32 count;
-};
-
-struct EcsSerialScene {
-    HgEcsSerializer serializer;
-    HgMap<u64, EcsSerialComponent> components;
-};
-
-void ecsSerialFindEntities(HgEcs* ecs, HgEntity root, EcsSerialScene* scene)
+void ecsSerialFindEntities(HgEntitySerializer* s, HgEcs* ecs, HgEntity root)
 {
-    hgMapAdd(&scene->serializer.entities, root, scene->serializer.entities.count);
+    hgMapAdd(&s->entityToIdx, root, s->entityToIdx.count);
 
     if (hgEcsHas<HgNode>(ecs, root))
     {
@@ -4016,121 +4040,14 @@ void ecsSerialFindEntities(HgEcs* ecs, HgEntity root, EcsSerialScene* scene)
         HgEntity child = node->firstChild;
         while (child.handle != hgNullHandle)
         {
-            ecsSerialFindEntities(ecs, child, scene);
+            ecsSerialFindEntities(s, ecs, child);
             child = hgEcsGet<HgNode>(ecs, child)->nextSibling;
         }
     }
 }
 
-void ecsSerialGatherData(HgArena* arena, HgEcs* ecs, HgEntity root, EcsSerialScene* scene)
-{
-    for (u32 c = 0; c < ecs->components.capacity; ++c)
-    {
-        if (ecs->components.hasVal[c] && hgEcsHas(ecs, root, ecs->components.keys[c]))
-        {
-            EcsSerialComponent* compData = hgMapGet(&scene->components, ecs->components.keys[c]);
-            if (compData == nullptr)
-            {
-                compData = hgMapAdd(&scene->components, ecs->components.keys[c], {});
-
-                HgStringBuilder name = hgStringCopy(arena, ecs->components.vals[c].name);
-                u32* nameIdx = hgMapGet(&scene->serializer.strings, name);
-                if (nameIdx == nullptr)
-                    nameIdx = hgMapAdd(&scene->serializer.strings, name, scene->serializer.strings.count);
-
-                compData->nameString = *nameIdx;
-                compData->entities = hgAlloc<u32>(arena, ecs->entities.capacity);
-                compData->data = hgAlloc(arena, ecs->components.vals[c].width * ecs->entities.capacity, 1);
-                compData->dataWidth = ecs->components.vals[c].serialWidth;
-                compData->count = 0;
-            }
-
-            compData->entities[compData->count] = *hgMapGet(&scene->serializer.entities, root);
-            ecs->components.vals[c].serialize(
-                    &scene->serializer,
-                    hgEcsGet(ecs, root, ecs->components.keys[c]),
-                    (u8*)compData->data + compData->dataWidth * compData->count);
-            ++compData->count;
-        }
-    };
-
-    if (hgEcsHas<HgNode>(ecs, root))
-    {
-        HgNode* node = hgEcsGet<HgNode>(ecs, root);
-        HgEntity child = node->firstChild;
-        while (child.handle != hgNullHandle)
-        {
-            ecsSerialGatherData(arena, ecs, child, scene);
-            child = hgEcsGet<HgNode>(ecs, child)->nextSibling;
-        }
-    }
-}
-
-HgBinary ecsSerialWriteBin(HgArena* arena, EcsSerialScene* data)
-{
-    EcsSerialHeader header{};
-    memcpy(header.tag, ecsSceneTag, sizeof(ecsSceneTag));
-    header.versionMajor = ecsSceneVersionMajor;
-    header.versionMinor = ecsSceneVersionMinor;
-    header.versionPatch = ecsSceneVersionPatch;
-
-    header.entityCount = data->serializer.entities.count;
-
-    HgBinary bin{};
-    bin = hgBinaryResize(arena, &bin, bin.size + sizeof(header));
-
-    header.componentsBegin = bin.size;
-    header.componentCount = data->components.count;
-    bin = hgBinaryResize(arena, &bin, bin.size + sizeof(EcsSerialComponentDesc) * header.componentCount);
-
-    header.stringsBegin = bin.size;
-    header.stringCount = data->serializer.strings.count;
-    bin = hgBinaryResize(arena, &bin, bin.size + sizeof(EcsSerialStringDesc) * header.stringCount);
-
-    hgBinaryOverwrite(&bin, 0, header);
-
-    u32 compIdx = 0;
-    for (u32 c = 0; c < data->components.capacity; ++c)
-    {
-        if (data->components.hasVal[c])
-        {
-            EcsSerialComponentDesc comp{};
-            comp.nameString = data->components.vals[c].nameString;
-            comp.dataWidth = data->components.vals[c].dataWidth;
-            comp.count = data->components.vals[c].count;
-
-            comp.entitiesBegin = bin.size;
-            bin = hgBinaryResize(arena, &bin, bin.size + sizeof(u32) * comp.count);
-
-            comp.dataBegin = bin.size;
-            bin = hgBinaryResize(arena, &bin, bin.size + comp.dataWidth * comp.count);
-
-            hgBinaryOverwrite(&bin, header.componentsBegin + sizeof(comp) * compIdx, comp);
-            hgBinaryOverwrite(&bin, comp.entitiesBegin, data->components.vals[c].entities, sizeof(u32) * comp.count);
-            hgBinaryOverwrite(&bin, comp.dataBegin, data->components.vals[c].data, comp.dataWidth * comp.count);
-
-            ++compIdx;
-        }
-    }
-
-    for (u32 s = 0; s < data->serializer.strings.capacity; ++s)
-    {
-        if (data->serializer.strings.hasVal[s])
-        {
-            EcsSerialStringDesc str{};
-            str.begin = bin.size;
-            str.length = data->serializer.strings.keys[s].length;
-            bin = hgBinaryResize(arena, &bin, bin.size + str.length);
-
-            hgBinaryOverwrite(&bin, header.stringsBegin + sizeof(str) * data->serializer.strings.vals[s], str);
-            hgBinaryOverwrite(&bin, str.begin, data->serializer.strings.keys[s].chars, str.length);
-        }
-    }
-
-    return bin;
-}
-
-HgBinary hgEcsSerialize(HgArena* arena, HgEcs* ecs, HgEntity root)
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgEcs* ecs)
 {
     hgAssert(arena != nullptr);
     hgAssert(ecs != nullptr);
@@ -4138,84 +4055,112 @@ HgBinary hgEcsSerialize(HgArena* arena, HgEcs* ecs, HgEntity root)
     HgArena* scratch = hgScratch(&arena, 1);
     hgArenaScope(scratch);
 
-    EcsSerialScene data;
-    data.serializer.stringArena = scratch;
-    data.serializer.entities = hgMapCreate<HgEntity, u32>(scratch, ecs->entities.capacity);
-    data.serializer.strings = hgMapCreate<HgStringView, u32>(scratch, 4096);
-    data.components = hgMapCreate<u64, EcsSerialComponent>(scratch, ecs->components.count * 2);
+    HgSerializer obj = hgSerializerBeginObject(arena, s, name);
 
-    ecsSerialFindEntities(ecs, root, &data);
-    ecsSerialGatherData(scratch, ecs, root, &data);
-    return ecsSerialWriteBin(arena, &data);
-}
-
-struct EcsDeserialScene {
-    HgEntity* entities;
+    HgEntitySerializer ecsSerial{};
     u32 entityCount;
-};
-
-HgEntity hgEcsDeserialize(HgEcs* ecs, HgBinary scene)
-{
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
-
-    EcsSerialHeader header = hgBinaryRead<EcsSerialHeader>(&scene, 0);
-
-    if (memcmp(header.tag, ecsSceneTag, sizeof(ecsSceneTag)) != 0)
+    if (s->writing)
     {
-        hgWarn("Scene file could not be read, does not have a header\n");
-        return HgEntity{};
-    }
-    else if (header.versionMajor != ecsSceneVersionMajor)
-    {
-        hgWarn("Scene file has wrong major version: %d instead of %d", header.versionMajor, ecsSceneVersionMajor);
-    }
-    else if (header.versionMinor != ecsSceneVersionMinor)
-    {
-        hgWarn("Scene file has wrong minor version: %d instead of %d", header.versionMinor, ecsSceneVersionMinor);
-    }
-    else if (header.versionPatch != ecsSceneVersionPatch)
-    {
-        hgWarn("Scene file has wrong patch version: %d instead of %d", header.versionPatch, ecsSceneVersionPatch);
-    }
-
-    HgEcsDeserializer deserializer{};
-
-    deserializer.entities = hgAlloc<HgEntity>(scratch, header.entityCount);
-    for (u32 i = 0; i < header.entityCount; ++i)
-    {
-        deserializer.entities[i] = hgEcsSpawn(ecs);
-    }
-
-    deserializer.strings = hgAlloc<HgStringView>(scratch, header.stringCount);
-    for (u32 i = 0; i < header.stringCount; ++i)
-    {
-        EcsSerialStringDesc str = hgBinaryRead<EcsSerialStringDesc>(
-            &scene, header.stringsBegin + i * sizeof(EcsSerialStringDesc));
-
-        deserializer.strings[i].chars = (char*)((u8*)scene.data + str.begin);
-        deserializer.strings[i].length = str.length;
-    }
-
-    for (u32 i = 0; i < header.componentCount; ++i)
-    {
-        EcsSerialComponentDesc comp = hgBinaryRead<EcsSerialComponentDesc>(
-            &scene, header.componentsBegin + i * sizeof(EcsSerialComponentDesc));
-
-        u64 componentId = hgHashImpl(deserializer.strings[comp.nameString]);
-
-        for (u32 j = 0; j < comp.count; ++j)
+        ecsSerial.entityToIdx = hgMapCreate<HgEntity, u32>(scratch, ecs->entities.capacity);
+        for (u32 i = 0; i < ecs->entities.capacity; ++i)
         {
-            HgEntity e = deserializer.entities[hgBinaryRead<u32>(&scene, comp.entitiesBegin + j * sizeof(u32))];
+            if (hgHandleIdx({ecs->entities.freeList[i]}) == i)
+                hgMapAdd(&ecsSerial.entityToIdx, {ecs->entities.freeList[i]}, i);
+        }
 
-            hgMapGet(&ecs->components, componentId)->deserialize(
-                &deserializer,
-                (u8*)scene.data + comp.dataBegin + j * comp.dataWidth,
-                hgEcsAdd(ecs, e, componentId));
+        entityCount = ecsSerial.entityToIdx.count;
+        hgSerialize(arena, &obj, "Entity Count", &entityCount);
+    }
+    else
+    {
+        hgSerialize(arena, &obj, "Entity Count", &entityCount);
+
+        ecsSerial.idxToEntity = hgAlloc<HgEntity>(scratch, entityCount);
+        for (u32 i = 0; i < entityCount; ++i)
+        {
+            ecsSerial.idxToEntity[i] = hgEcsSpawn(ecs);
         }
     }
 
-    return deserializer.entities[0];
+    HgSerializer systemArr{};
+    u32 systemCount;
+    if (s->writing)
+        systemCount = ecs->components.count;
+    systemArr = hgSerializerBeginArray(arena, &obj, "Components", &systemCount);
+
+    u32 systemIdx = (u32)-1;
+    for (u32 i = 0; i < systemCount; ++i)
+    {
+        HgSerializer systemObj = hgSerializerBeginObject(arena, &systemArr, "");
+
+        u64 systemId = (u64)-1;
+        HgComponent* systemData;
+        if (s->writing)
+        {
+            ++systemIdx;
+            while (!ecs->components.hasVal[systemIdx])
+            {
+                ++systemIdx;
+            }
+            systemId = ecs->components.keys[systemIdx];
+            systemData = &ecs->components.vals[systemIdx];
+            hgSerialize(arena, &systemObj, "Name", &systemData->name);
+        }
+        else
+        {
+            HgStringView compName;
+            hgSerialize(arena, &systemObj, "Name", &compName);
+            systemId = hgHashImpl(compName);
+            systemData = hgMapGet(&ecs->components, systemId);
+        }
+
+        u32 compCount;
+        if (s->writing)
+            compCount = systemData->count;
+        HgSerializer compArr = hgSerializerBeginArray(arena, &systemObj, "Components", &compCount);
+
+        for (u32 c = 0; c < compCount; ++c)
+        {
+            HgSerializer compObj = hgSerializerBeginObject(arena, &compArr, "");
+
+            u32 entityIdx;
+            if (s->writing)
+                entityIdx = *hgMapGet(&ecsSerial.entityToIdx, systemData->entities[c]);
+            hgSerialize(arena, &compObj, "Entity Index", &entityIdx);
+
+            void* compData;
+            if (s->writing)
+                compData = (u8*)systemData->components + c * systemData->width;
+            else
+                compData = hgEcsAdd(ecs, ecsSerial.idxToEntity[entityIdx], systemId);
+            systemData->serialize(arena, &compObj, "Data", compData, &ecsSerial);
+        }
+    }
+}
+
+void hgEntitySerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgEntity* val, HgEntitySerializer* ecs)
+{
+    if (s->writing)
+    {
+        u32 idx = *val != hgEntityNull ? *hgMapGet(&ecs->entityToIdx, *val) : (u32)-1;
+        hgSerialize(arena, s, name, (i32*)&idx);
+    }
+    else
+    {
+        u32 idx = (u32)-1;
+        hgSerialize(arena, s, name, (i32*)&idx);
+        *val = idx != (u32)-1 ? ecs->idxToEntity[idx] : hgEntityNull;
+    }
+}
+
+template<>
+void hgEcsSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgNode* node, HgEntitySerializer* ecs)
+{
+    HgSerializer obj = hgSerializerBeginObject(arena, s, name);
+    hgEntitySerialize(arena, &obj, "Parent", &node->parent, ecs);
+    hgEntitySerialize(arena, &obj, "Next Sibling", &node->nextSibling, ecs);
+    hgEntitySerialize(arena, &obj, "Previous Sibling", &node->prevSibling, ecs);
+    hgEntitySerialize(arena, &obj, "First Child", &node->firstChild, ecs);
 }
 
 HgNode* hgNodeAdd(HgEcs* ecs, HgEntity e)
@@ -4321,33 +4266,13 @@ void hgNodeAddChild(HgEcs* ecs, HgEntity parent, HgEntity child)
     childNode->parent = parent;
 }
 
-struct HgNodeSerial {
-    u32 parent;
-    u32 nextSibling;
-    u32 prevSibling;
-    u32 firstChild;
-};
-
-const u32 HgEcsSerializationImpl<HgNode>::width = sizeof(HgNodeSerial);
-
-void HgEcsSerializationImpl<HgNode>::serialize(HgEcsSerializer* s, HgNode* src, void* dst)
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgTransform* node)
 {
-    HgNodeSerial node{};
-    node.parent = src->parent.handle == hgNullHandle ? (u32)-1 : hgEcsSerializerEntity(s, src->parent);
-    node.nextSibling = src->nextSibling.handle == hgNullHandle ? (u32)-1 : hgEcsSerializerEntity(s, src->nextSibling);
-    node.prevSibling = src->prevSibling.handle == hgNullHandle ? (u32)-1 : hgEcsSerializerEntity(s, src->prevSibling);
-    node.firstChild = src->firstChild.handle == hgNullHandle ? (u32)-1 : hgEcsSerializerEntity(s, src->firstChild);
-    memcpy(dst, &node, sizeof(node));
-}
-
-void HgEcsSerializationImpl<HgNode>::deserialize(HgEcsDeserializer* d, void* src, HgNode* dst)
-{
-    HgNodeSerial node;
-    memcpy(&node, src, sizeof(node));
-    dst->parent = node.parent == (u32)-1 ? HgEntity{} : hgEcsDeserializerEntity(d, node.parent);
-    dst->nextSibling = node.nextSibling == (u32)-1 ? HgEntity{} : hgEcsDeserializerEntity(d, node.nextSibling);
-    dst->prevSibling = node.prevSibling == (u32)-1 ? HgEntity{} : hgEcsDeserializerEntity(d, node.prevSibling);
-    dst->firstChild = node.firstChild == (u32)-1 ? HgEntity{} : hgEcsDeserializerEntity(d, node.firstChild);
+    HgSerializer obj = hgSerializerBeginObject(arena, s, name);
+    hgSerialize(arena, &obj, "Position", &node->position);
+    hgSerialize(arena, &obj, "Scale", &node->scale);
+    hgSerialize(arena, &obj, "Rotation", &node->rotation);
 }
 
 HgTransform* hgTransformAdd(HgEcs* ecs, HgEntity e, HgVec3 position, HgVec3 scale, HgQuat rotation)
@@ -4415,34 +4340,6 @@ void hgTransformUpdate(HgEcs* ecs, HgEntity e)
         HgTransform* tf = hgEcsGet<HgTransform>(ecs, e);
         tf->mat = hgMatModel3D(tf->position, tf->scale, tf->rotation);
     }
-}
-
-
-/**
- * The serialized form for HgTransform
- */
-struct HgTransformSerial {
-    HgVec3 position;
-    HgVec3 scale;
-    HgQuat rotation;
-};
-
-const u32 HgEcsSerializationImpl<HgTransform>::width = sizeof(HgTransformSerial);
-
-void HgEcsSerializationImpl<HgTransform>::serialize(
-    HgEcsSerializer*,
-    HgTransform* srcComponent,
-    void* dstData)
-{
-    memcpy(dstData, &srcComponent->position, sizeof(HgTransformSerial));
-}
-
-void HgEcsSerializationImpl<HgTransform>::deserialize(
-    HgEcsDeserializer*,
-    void* srcData,
-    HgTransform* dstComponent)
-{
-    memcpy(&dstComponent->position, srcData, sizeof(HgTransformSerial));
 }
 
 struct VPUniform {

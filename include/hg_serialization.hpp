@@ -29,15 +29,40 @@
 
 #include "hg_assets.hpp"
 #include "hg_core.hpp"
+#include "hg_math.hpp"
 #include "hg_memory.hpp"
 
+/**
+ * The primitive serializable types
+ */
 enum HgSerialType : u32 {
+    /**
+     * No value
+     */
     HgSerialType_null,
+    /**
+     * An array of values
+     */
     HgSerialType_array,
+    /**
+     * An object with fields
+     */
     HgSerialType_object,
+    /**
+     * String data
+     */
     HgSerialType_string,
+    /**
+     * An integer value
+     */
     HgSerialType_integer,
+    /**
+     * A floating point value
+     */
     HgSerialType_floating,
+    /**
+     * A boolean value
+     */
     HgSerialType_boolean,
 };
 
@@ -125,7 +150,7 @@ void hgSerializeNull(HgArena* arena, HgSerializer* s, HgStringView name);
 /**
  * Serialize arbitrary data
  */
-void hgSerializeData(HgArena* arena, HgSerializer* s, HgStringView name, void** data, u64* size);
+void hgSerializeBinary(HgArena* arena, HgSerializer* s, HgStringView name, HgBinary* binary);
 
 /**
  * Default serialization, should be overridden
@@ -133,18 +158,41 @@ void hgSerializeData(HgArena* arena, HgSerializer* s, HgStringView name, void** 
 template<typename T>
 void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, T* val)
 {
-    u64 size = sizeof(T);
+    HgBinary bin = {val, sizeof(T)};
     if (s->writing)
     {
-        hgSerializeData(arena, s, name, (void**)&val, &size);
+        hgSerializeBinary(arena, s, name, &bin);
     }
     else
     {
-        void* tmp = val;
-        hgSerializeData(hgScratch(), s, name, &tmp, &size);
-        memcpy(val, tmp, sizeof(T));
+        hgSerializeBinary(hgScratch(), s, name, &bin);
+        memcpy(val, bin.data, sizeof(T));
     }
 }
+
+/**
+ * HgBinary serialization
+ */
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgBinary* val);
+
+/**
+ * HgStringView serialization
+ */
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgStringView* val);
+
+/**
+ * HgStringBuilder serialization
+ */
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgStringBuilder* val);
+
+/**
+ * HgStringOwner serialization
+ */
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgStringOwner* val);
 
 /**
  * u8 serialization
@@ -213,28 +261,52 @@ template<>
 void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, bool* val);
 
 /**
- * HgStringView serialization
+ * HgVec2 serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgStringView* val);
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgVec2* val);
 
 /**
- * HgStringBuilder serialization
+ * HgVec3 serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgStringBuilder* val);
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgVec3* val);
 
 /**
- * HgStringOwner serialization
+ * HgVec4 serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgStringOwner* val);
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgVec4* val);
 
 /**
- * HgBinary serialization
+ * HgMat2 serialization
  */
 template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgBinary* bin);
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgMat2* val);
+
+/**
+ * HgMat3 serialization
+ */
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgMat3* val);
+
+/**
+ * HgMat4 serialization
+ */
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgMat4* val);
+
+/**
+ * HgComplex serialization
+ */
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgComplex* val);
+
+/**
+ * HgQuat serialization
+ */
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgQuat* val);
 
 /**
  * Write serialized data in a binary format
@@ -251,10 +323,10 @@ HgSerializer hgBinaryReadSerial(HgArena* arena, HgBinary bin);
  */
 HgStringView hgJsonWriteSerial(HgArena* arena, HgSerializer serial);
 
-/**
- * Read json data to be deserialized
- */
-HgSerializer hgJsonReadSerial(HgArena* arena, HgStringView json);
+// /**
+//  * Read json data to be deserialized
+//  */
+// HgSerializer hgJsonReadSerial(HgArena* arena, HgStringView json);
 
 /**
  * An error contained in the json
