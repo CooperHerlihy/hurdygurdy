@@ -30,6 +30,7 @@
 #include "hg_concurrency.hpp"
 #include "hg_core.hpp"
 #include "hg_memory.hpp"
+#include "hg_serialization.hpp"
 
 /**
  * Initialize all default HurdyGurdy asset types
@@ -334,6 +335,28 @@ template<typename T>
 HgStringView hgAssetPath(HgAssetHandle<T> asset)
 {
     return hgAssets<T>.data[hgHandleIdx(asset.handle)].path;
+}
+
+/**
+ * HgAssetHandle serialization
+ */
+template<typename T>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgAssetHandle<T>* asset)
+{
+    if (s->writing)
+    {
+        HgStringView path = hgAssetPath(*asset);
+        hgSerialize(arena, s, name, &path);
+    }
+    else
+    {
+        HgStringView path;
+        hgSerialize(hgScratch(), s, name, &path);
+        if (path != "")
+            *asset = hgAssetLoad<T>(path);
+        else
+            *asset = {};
+    }
 }
 
 /**

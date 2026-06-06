@@ -261,6 +261,12 @@ struct HgCameraPerspective {
 };
 
 /**
+ * HgCameraPerspective serialization
+ */
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgCameraPerspective* camera);
+
+/**
  * An orthographic camera
  */
 struct HgCameraOrthographic {
@@ -269,6 +275,12 @@ struct HgCameraOrthographic {
      */
     f32 left, right, top, bottom, near, far;
 };
+
+/**
+ * HgCameraOrthographic serialization
+ */
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgCameraOrthographic* camera);
 
 /**
  * A camera component
@@ -291,6 +303,12 @@ struct HgCamera {
      */
     HgCameraPerspective perspective;
 };
+
+/**
+ * HgCamera serialization
+ */
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgCamera* camera);
 
 /**
  * HgCamera ecs add implementation
@@ -341,6 +359,12 @@ struct HgSprite {
 };
 
 /**
+ * HgSprite serialization
+ */
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgSprite* sprite);
+
+/**
  * Add a sprite to an entity
  *
  * Parameters
@@ -372,16 +396,6 @@ void hgEcsDtor(HgSprite* sprite);
 void hgSpritesDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd);
 
 /**
- * A skybox component
- */
-struct HgSkybox {
-    /**
-     * The cubemap texture
-     */
-    HgGpuTextureHandle texture;
-};
-
-/**
  * Initialize the skybox pipeline
  *
  * Parameters
@@ -394,6 +408,22 @@ void hgSkyboxInit(HgFormat colorFormat, HgFormat depthFormat);
  * Deinitialize the skybox pipeline
  */
 void hgSkyboxDeinit();
+
+/**
+ * A skybox component
+ */
+struct HgSkybox {
+    /**
+     * The cubemap texture
+     */
+    HgGpuTextureHandle texture;
+};
+
+/**
+ * HgSkybox serialization
+ */
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgSkybox* skybox);
 
 /**
  * Add a skybox to an entity
@@ -436,6 +466,12 @@ struct HgDirLight {
 };
 
 /**
+ * HgDirLight serialization
+ */
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgDirLight* light);
+
+/**
  * Add a directional light to an entity
  */
 HgDirLight* hgDirLightAdd(HgEcs* ecs, HgEntity e, HgVec3 dir, HgVec4 color);
@@ -451,9 +487,29 @@ struct HgPointLight {
 };
 
 /**
+ * HgPointLight serialization
+ */
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgPointLight* light);
+
+/**
  * Add a point light to an entity
  */
 HgPointLight* hgPointLightAdd(HgEcs* ecs, HgEntity e, HgVec4 color);
+
+/**
+ * Initialize the 3D model pipeline
+ *
+ * Parameters
+ * - colorFormat The format of the color attachment, must not be undefined
+ * - depthFormat The format of the depth attachment, must not be undefined
+ */
+void hgModelsInit(HgFormat colorFormat, HgFormat depthFormat);
+
+/**
+ * Deinitialize the 3D model pipeline
+ */
+void hgModelsDeinit();
 
 /**
  * A 3D model component
@@ -474,18 +530,9 @@ struct HgModel {
 };
 
 /**
- * Initialize the 3D model pipeline
- *
- * Parameters
- * - colorFormat The format of the color attachment, must not be undefined
- * - depthFormat The format of the depth attachment, must not be undefined
+ * HgModel serialization
  */
-void hgModelsInit(HgFormat colorFormat, HgFormat depthFormat);
-
-/**
- * Deinitialize the 3D model pipeline
- */
-void hgModelsDeinit();
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgModel* model);
 
 /**
  * Add a model to an entity

@@ -27,7 +27,6 @@
 #ifndef HG_SERIALIZATION_HPP
 #define HG_SERIALIZATION_HPP
 
-#include "hg_assets.hpp"
 #include "hg_core.hpp"
 #include "hg_math.hpp"
 #include "hg_memory.hpp"
@@ -449,22 +448,22 @@ struct HgJson {
     HgJsonError* errors;
 };
 
-/**
- * A binary file asset handle
- */
-typedef HgAssetHandle<HgJson> HgJsonHandle;
-
-/**
- * HgJson asset load implementation
- */
-template<>
-void hgAssetLoadImpl(HgAssetData<HgJson>* data);
-
-/**
- * HgJson asset unload implementation
- */
-template<>
-void hgAssetUnloadImpl(HgAssetData<HgJson>* data);
+// /**
+//  * A binary file asset handle
+//  */
+// typedef HgAssetHandle<HgJson> HgJsonHandle;
+//
+// /**
+//  * HgJson asset load implementation
+//  */
+// template<>
+// void hgAssetLoadImpl(HgAssetData<HgJson>* data);
+//
+// /**
+//  * HgJson asset unload implementation
+//  */
+// template<>
+// void hgAssetUnloadImpl(HgAssetData<HgJson>* data);
 
 /**
  * Parses json text into a tree

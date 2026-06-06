@@ -105,10 +105,10 @@ union HgEntitySerializer {
  * The default serialization for a component, should be overridden
  */
 template<typename T>
-void hgEcsSerialize(HgArena* arena, HgSerializer* s, HgStringView name, T* val, HgEntitySerializer* ecs)
+void hgEcsSerialize(HgArena* arena, HgSerializer* s, HgStringView name, T* val, HgEntitySerializer* entities)
 {
     hgSerialize(arena, s, name, val);
-    (void)ecs;
+    (void)entities;
 }
 
 /**

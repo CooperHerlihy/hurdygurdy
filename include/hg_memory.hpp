@@ -611,7 +611,7 @@ struct HgHandle {
 /**
  * The null handle
  */
-static constexpr HgHandle hgNullHandle = HgHandle{};
+static constexpr HgHandle hgHandleNull = HgHandle{};
 
 /**
  * Compare handles

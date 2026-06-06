@@ -210,7 +210,7 @@ static bool poolExecute()
     hgAssert(work.fn != nullptr);
     work.fn(work.data);
 
-    if (work.fence.handle != hgNullHandle)
+    if (work.fence.handle != hgHandleNull)
         hgFenceSignal(work.fence, 1);
     return true;
 }
@@ -301,7 +301,7 @@ bool hgThreadsHelp(HgFence fence, f64 timeout)
 void hgThreadsCall(HgFence fence, void* data, void (*fn)(void* data))
 {
     hgAssert(fn != nullptr);
-    if (fence.handle != hgNullHandle)
+    if (fence.handle != hgHandleNull)
         hgFenceAttach(fence, 1);
 
     u32 idx = threadPool.workingHead.fetch_add(1) & (threadPool.workCapacity - 1);
@@ -1821,7 +1821,7 @@ static Descriptor descriptorCreate(
 
 static void descriptorDestroy(Descriptor desc, DescriptorType type)
 {
-    if (desc != hgNullHandle)
+    if (desc != hgHandleNull)
     {
         hgPoolFree(&vk.descriptorPools[type], desc);
     }

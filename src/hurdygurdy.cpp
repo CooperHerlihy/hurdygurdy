@@ -4160,19 +4160,19 @@ void hgNodeDestroy(HgEcs* ecs, HgEntity e)
     hgAssert(hgEcsAlive(ecs, e));
 
     HgNode* node = hgEcsGet<HgNode>(ecs, e);
-    if (node->parent.handle != hgNullHandle)
+    if (node->parent.handle != hgHandleNull)
     {
-        if (node->prevSibling.handle != hgNullHandle)
+        if (node->prevSibling.handle != hgHandleNull)
             hgEcsGet<HgNode>(ecs, node->prevSibling)->nextSibling = node->nextSibling;
         else
             hgEcsGet<HgNode>(ecs, node->parent)->firstChild = node->nextSibling;
 
-        if (node->nextSibling.handle != hgNullHandle)
+        if (node->nextSibling.handle != hgHandleNull)
             hgEcsGet<HgNode>(ecs, node->nextSibling)->prevSibling = node->prevSibling;
     }
 
     HgEntity child = node->firstChild;
-    while (child.handle != hgNullHandle)
+    while (child.handle != hgHandleNull)
     {
         HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
         HgEntity next = childNode->nextSibling;
@@ -4189,13 +4189,13 @@ void hgNodeDetach(HgEcs* ecs, HgEntity e)
     hgAssert(hgEcsAlive(ecs, e));
 
     HgNode* node = hgEcsGet<HgNode>(ecs, e);
-    if (node->parent.handle == hgNullHandle)
+    if (node->parent.handle == hgHandleNull)
     {
-        hgAssert(node->prevSibling.handle == hgNullHandle);
-        hgAssert(node->nextSibling.handle == hgNullHandle);
+        hgAssert(node->prevSibling.handle == hgHandleNull);
+        hgAssert(node->nextSibling.handle == hgHandleNull);
 
         HgEntity child = node->firstChild;
-        while (child.handle != hgNullHandle)
+        while (child.handle != hgHandleNull)
         {
             HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
             HgEntity next = childNode->nextSibling;
@@ -4205,16 +4205,16 @@ void hgNodeDetach(HgEcs* ecs, HgEntity e)
             child = next;
         }
     } else {
-        if (node->prevSibling.handle != hgNullHandle)
+        if (node->prevSibling.handle != hgHandleNull)
             hgEcsGet<HgNode>(ecs, node->prevSibling)->nextSibling = node->nextSibling;
         else
             hgEcsGet<HgNode>(ecs, node->parent)->firstChild = node->nextSibling;
 
-        if (node->nextSibling.handle != hgNullHandle)
+        if (node->nextSibling.handle != hgHandleNull)
             hgEcsGet<HgNode>(ecs, node->nextSibling)->prevSibling = node->prevSibling;
 
         HgEntity child = node->firstChild;
-        while (child.handle != hgNullHandle)
+        while (child.handle != hgHandleNull)
         {
             HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
             HgEntity next = childNode->nextSibling;
@@ -4237,11 +4237,11 @@ void hgNodeAddChild(HgEcs* ecs, HgEntity parent, HgEntity child)
     HgNode* node = hgEcsGet<HgNode>(ecs, parent);
     HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
 
-    hgAssert(childNode->parent.handle == hgNullHandle);
-    hgAssert(childNode->prevSibling.handle == hgNullHandle);
-    hgAssert(childNode->nextSibling.handle == hgNullHandle);
+    hgAssert(childNode->parent.handle == hgHandleNull);
+    hgAssert(childNode->prevSibling.handle == hgHandleNull);
+    hgAssert(childNode->nextSibling.handle == hgHandleNull);
 
-    if (node->firstChild.handle != hgNullHandle)
+    if (node->firstChild.handle != hgHandleNull)
     {
         hgEcsGet<HgNode>(ecs, node->firstChild)->prevSibling = child;
         childNode->nextSibling = node->firstChild;
@@ -4286,7 +4286,7 @@ static void transformUpdateChild(HgEcs* ecs, HgEntity e)
             * hgMatModel3D(tf->position, tf->scale, tf->rotation);
 
     HgEntity child = node->firstChild;
-    while (child.handle != hgNullHandle)
+    while (child.handle != hgHandleNull)
     {
         hgTransformUpdate(ecs, child);
         child = hgEcsGet<HgNode>(ecs, child)->nextSibling;
@@ -4302,7 +4302,7 @@ void hgTransformUpdate(HgEcs* ecs, HgEntity e)
     if (hgEcsHas<HgNode>(ecs, e))
     {
         HgNode* node = hgEcsGet<HgNode>(ecs, e);
-        if (node->parent.handle != hgNullHandle && hgEcsHas<HgTransform>(ecs, node->parent))
+        if (node->parent.handle != hgHandleNull && hgEcsHas<HgTransform>(ecs, node->parent))
         {
             transformUpdateChild(ecs, e);
         }
@@ -4312,7 +4312,7 @@ void hgTransformUpdate(HgEcs* ecs, HgEntity e)
             tf->mat = hgMatModel3D(tf->position, tf->scale, tf->rotation);
 
             HgEntity child = node->firstChild;
-            while (child.handle != hgNullHandle)
+            while (child.handle != hgHandleNull)
             {
                 transformUpdateChild(ecs, child);
                 child = hgEcsGet<HgNode>(ecs, child)->nextSibling;
@@ -4330,6 +4330,37 @@ struct VPUniform {
     HgMat4 proj;
     HgMat4 view;
 };
+
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgCameraPerspective* camera)
+{
+    HgSerializer obj = hgSerializerBeginObject(arena, s, name);
+    hgSerialize(arena, &obj, "Field of View", &camera->fov);
+    hgSerialize(arena, &obj, "Aspect Ratio", &camera->aspect);
+    hgSerialize(arena, &obj, "Near Plane", &camera->near);
+    hgSerialize(arena, &obj, "Far Plane", &camera->far);
+}
+
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgCameraOrthographic* camera)
+{
+    HgSerializer obj = hgSerializerBeginObject(arena, s, name);
+    hgSerialize(arena, &obj, "Left", &camera->left);
+    hgSerialize(arena, &obj, "Right", &camera->right);
+    hgSerialize(arena, &obj, "Top", &camera->top);
+    hgSerialize(arena, &obj, "Bottom", &camera->bottom);
+    hgSerialize(arena, &obj, "Near", &camera->near);
+    hgSerialize(arena, &obj, "Far", &camera->far);
+}
+
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgCamera* camera)
+{
+    HgSerializer obj = hgSerializerBeginObject(arena, s, name);
+    hgSerialize(arena, &obj, "Type", &camera->type);
+    hgSerialize(arena, &obj, "Orthographic", &camera->orthographic);
+    hgSerialize(arena, &obj, "Perspective", &camera->perspective);
+}
 
 HgCamera* hgCameraAdd(HgEcs* ecs, HgEntity e)
 {
@@ -4457,6 +4488,15 @@ void hgSpritesDeinit()
     hgGpuImageDestroy(spritePipeline.defaultTex.image);
 }
 
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgSprite* sprite)
+{
+    HgSerializer obj = hgSerializerBeginObject(arena, s, name);
+    hgSerialize(arena, &obj, "Texture", &sprite->texture);
+    hgSerialize(arena, &obj, "UV Position", &sprite->uvPos);
+    hgSerialize(arena, &obj, "UV Size", &sprite->uvSize);
+}
+
 HgSprite* hgSpriteAdd(HgEcs* ecs, HgEntity e, HgGpuTextureHandle texture, HgVec2 uvPos, HgVec2 uvSize)
 {
     hgAssert(ecs != nullptr);
@@ -4486,7 +4526,7 @@ void hgSpritesDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 
     hgEcsForEach<HgSprite, HgTransform>(ecs, [&](HgEntity, HgSprite* sprite, HgTransform* tf)
     {
-        HgGpuTexture* texture = sprite->texture.handle == hgNullHandle
+        HgGpuTexture* texture = sprite->texture.handle == hgHandleNull
             ? &spritePipeline.defaultTex
             : hgAssetGet(sprite->texture);
 
@@ -4591,6 +4631,13 @@ void hgSkyboxDeinit()
     hgGpuImageDestroy(skyboxPipeline.defaultTex.image);
 }
 
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgSkybox* skybox)
+{
+    HgSerializer obj = hgSerializerBeginObject(arena, s, name);
+    hgSerialize(arena, &obj, "Texture", &skybox->texture);
+}
+
 HgSkybox* hgSkyboxAdd(HgEcs* ecs, HgEntity e, HgGpuTextureHandle texture)
 {
     hgAssert(ecs != nullptr);
@@ -4614,7 +4661,7 @@ void hgSkyboxDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 
     hgEcsForEach<HgSkybox>(ecs, [&](HgEntity, HgSkybox* skybox)
     {
-        HgGpuTexture* texture = skybox->texture.handle == hgNullHandle
+        HgGpuTexture* texture = skybox->texture.handle == hgHandleNull
             ? &skyboxPipeline.defaultTex
             : hgAssetGet(skybox->texture);
 
@@ -4628,6 +4675,14 @@ void hgSkyboxDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
     });
 }
 
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgDirLight* light)
+{
+    HgSerializer obj = hgSerializerBeginObject(arena, s, name);
+    hgSerialize(arena, &obj, "Direction", &light->dir);
+    hgSerialize(arena, &obj, "Color", &light->color);
+}
+
 HgDirLight* hgDirLightAdd(HgEcs* ecs, HgEntity e, HgVec3 dir, HgVec4 color)
 {
     hgAssert(ecs != nullptr);
@@ -4637,6 +4692,13 @@ HgDirLight* hgDirLightAdd(HgEcs* ecs, HgEntity e, HgVec3 dir, HgVec4 color)
     *light = {dir, color};
 
     return light;
+}
+
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgPointLight* light)
+{
+    HgSerializer obj = hgSerializerBeginObject(arena, s, name);
+    hgSerialize(arena, &obj, "Color", &light->color);
 }
 
 HgPointLight* hgPointLightAdd(HgEcs* ecs, HgEntity e, HgVec4 color)
@@ -4831,6 +4893,14 @@ void hgModelsDeinit()
     hgGpuBufferDestroy(modelPipeline.dirLightBuffer);
 }
 
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgModel* model)
+{
+    HgSerializer obj = hgSerializerBeginObject(arena, s, name);
+    hgSerialize(arena, &obj, "Mesh", &model->mesh);
+    hgSerialize(arena, &obj, "Color Map", &model->colorMap);
+    hgSerialize(arena, &obj, "Normal Map", &model->normalMap);
+}
+
 HgModel* hgModelAdd(
     HgEcs* ecs,
     HgEntity e,
@@ -4939,15 +5009,15 @@ void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
 
     hgEcsForEach<HgModel, HgTransform>(ecs, [&](HgEntity, HgModel* model, HgTransform* tf)
     {
-        HgGpuTexture* colorMap = model->colorMap.handle == hgNullHandle
+        HgGpuTexture* colorMap = model->colorMap.handle == hgHandleNull
             ? &modelPipeline.defaultColorMap
             : hgAssetGet(model->colorMap);
 
-        HgGpuTexture* normalMap = model->normalMap.handle == hgNullHandle
+        HgGpuTexture* normalMap = model->normalMap.handle == hgHandleNull
             ? &modelPipeline.defaultNormalMap
             : hgAssetGet(model->normalMap);
 
-        HgGpuMesh* gpuModel = model->mesh.handle == hgNullHandle
+        HgGpuMesh* gpuModel = model->mesh.handle == hgHandleNull
             ? &modelPipeline.defaultModel
             : hgAssetGet(model->mesh);
 
@@ -4981,6 +5051,15 @@ void hgAssetUnloadImpl(HgAssetData<HgAudio>* data)
 {
     (void)data;
     hgError("Unload audio file impl : TODO\n");
+}
+
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgAudioSource* src)
+{
+    HgSerializer obj = hgSerializerBeginObject(arena, s, name);
+    hgSerialize(arena, &obj, "Audio", &src->audio);
+    hgSerialize(arena, &obj, "Position", &src->position);
+    hgSerialize(arena, &obj, "Repeat", &src->repeat);
 }
 
 HgAudioSource* hgAudioSourceAdd(HgEcs* ecs, HgEntity e, HgAudioHandle audio, bool repeat)

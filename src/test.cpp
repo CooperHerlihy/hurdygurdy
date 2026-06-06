@@ -2516,9 +2516,6 @@ void hgTest()
             HgSerializer s = hgSerialWriter(arena);
             hgSerialize(arena, &s, "Ecs", &ecs);
             scene = s.current;
-
-            HgStringView json = hgJsonWriteSerial(arena, s);
-            hgDebug("json scene: %.*s\n", (int)json.length, json.chars);
         }
 
         {
@@ -2535,30 +2532,30 @@ void hgTest()
 
             hgAssert(hgEcsHas<HgNode>(&ecs, root));
             HgNode* rootNode = hgEcsGet<HgNode>(&ecs, root);
-            hgAssert(rootNode->parent.handle == hgNullHandle);
-            hgAssert(rootNode->nextSibling.handle == hgNullHandle);
-            hgAssert(rootNode->prevSibling.handle == hgNullHandle);
-            hgAssert(rootNode->firstChild.handle != hgNullHandle);
+            hgAssert(rootNode->parent.handle == hgHandleNull);
+            hgAssert(rootNode->nextSibling.handle == hgHandleNull);
+            hgAssert(rootNode->prevSibling.handle == hgHandleNull);
+            hgAssert(rootNode->firstChild.handle != hgHandleNull);
 
             HgEntity a = rootNode->firstChild;
-            hgAssert(a.handle != hgNullHandle);
+            hgAssert(a.handle != hgHandleNull);
 
             hgAssert(hgEcsHas<HgNode>(&ecs, a));
             HgNode* aNode = hgEcsGet<HgNode>(&ecs, a);
             hgAssert(aNode->parent == root);
-            hgAssert(aNode->prevSibling.handle == hgNullHandle);
-            hgAssert(aNode->nextSibling.handle != hgNullHandle);
-            hgAssert(aNode->firstChild.handle == hgNullHandle);
+            hgAssert(aNode->prevSibling.handle == hgHandleNull);
+            hgAssert(aNode->nextSibling.handle != hgHandleNull);
+            hgAssert(aNode->firstChild.handle == hgHandleNull);
 
             HgEntity b = aNode->nextSibling;
-            hgAssert(b.handle != hgNullHandle);
+            hgAssert(b.handle != hgHandleNull);
 
             hgAssert(hgEcsHas<HgNode>(&ecs, b));
             HgNode* bNode = hgEcsGet<HgNode>(&ecs, b);
             hgAssert(bNode->parent == root);
             hgAssert(bNode->prevSibling == a);
-            hgAssert(bNode->nextSibling.handle == hgNullHandle);
-            hgAssert(bNode->firstChild.handle == hgNullHandle);
+            hgAssert(bNode->nextSibling.handle == hgHandleNull);
+            hgAssert(bNode->firstChild.handle == hgHandleNull);
 
             hgAssert(hgEcsHas<u32>(&ecs, a));
             hgAssert(*hgEcsGet<u32>(&ecs, a) == 12);

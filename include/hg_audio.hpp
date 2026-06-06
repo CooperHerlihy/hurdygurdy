@@ -149,6 +149,15 @@ struct HgAudioSource {
     bool repeat;
 };
 
+/**
+ * HgAudioSource serialization
+ */
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgAudioSource* src);
+
+/**
+ * Add an audio source to an entity
+ */
 HgAudioSource* hgAudioSourceAdd(HgEcs* ecs, HgEntity e, HgAudioHandle audio, bool repeat);
 
 /**
