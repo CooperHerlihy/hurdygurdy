@@ -30,6 +30,7 @@
 #include "hg_core.hpp"
 #include "hg_math.hpp"
 #include "hg_memory.hpp"
+#include "hg_strings.hpp"
 
 /**
  * The primitive serializable types
@@ -70,22 +71,55 @@ enum HgSerialType : u32 {
  */
 const char* hgSerialTypeToString(HgSerialType s);
 
+/**
+ * A serialized data node
+ */
 struct HgSerialNode;
 
+/**
+ * A serialized data field in an object
+ */
 struct HgSerialField;
 
+/**
+ * A serialized array
+ */
 struct HgSerialArray {
+    /**
+     * The number of elements
+     */
     u32 elemCount;
+    /**
+     * The elements
+     */
     HgSerialNode* elems;
 };
 
+/**
+ * A serialized object
+ */
 struct HgSerialObject {
+    /**
+     * The number of fields
+     */
     u32 fieldCount;
+    /**
+     * The fields
+     */
     HgSerialField* fields;
 };
 
+/**
+ * A serialized data node
+ */
 struct HgSerialNode {
+    /**
+     * The type of data
+     */
     HgSerialType type;
+    /**
+     * The data
+     */
     union {
         HgSerialArray array;
         HgSerialObject object;
@@ -96,11 +130,23 @@ struct HgSerialNode {
     };
 };
 
+/**
+ * A serialized data field
+ */
 struct HgSerialField {
+    /**
+     * The name of the field
+     */
     HgStringView name;
+    /**
+     * The field's data
+     */
     HgSerialNode data;
 };
 
+/**
+ * The data for serialization
+ */
 struct HgSerializer {
     /**
      * Whether the serializer is reading or writing
@@ -134,12 +180,12 @@ bool hgSerializerIsNull(HgSerializer s);
 /**
  * Begin serializing an array
  */
-HgSerializer hgSerializerBeginArray(HgArena* arena, HgSerializer* s, HgStringView name, u32* length);
+HgSerializer hgSerializeArray(HgArena* arena, HgSerializer* s, HgStringView name, u32* length);
 
 /**
  * Begin serializing an object
  */
-HgSerializer hgSerializerBeginObject(HgArena* arena, HgSerializer* s, HgStringView name);
+HgSerializer hgSerializeObject(HgArena* arena, HgSerializer* s, HgStringView name);
 
 /**
  * Serialize a null object
@@ -165,7 +211,7 @@ void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, T* val)
     else
     {
         hgSerializeBinary(hgScratch(), s, name, &bin);
-        memcpy(val, bin.data, sizeof(T));
+        hgMemCopy(val, bin.data, sizeof(T));
     }
 }
 
@@ -182,16 +228,16 @@ template<>
 void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgStringView* val);
 
 /**
- * HgStringBuilder serialization
- */
-template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgStringBuilder* val);
-
-/**
  * HgStringOwner serialization
  */
 template<>
 void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgStringOwner* val);
+
+/**
+ * HgStringBuilder serialization
+ */
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgStringBuilder* val);
 
 /**
  * u8 serialization
@@ -323,7 +369,7 @@ HgSerializer hgBinaryReadSerial(HgArena* arena, HgBinary bin);
 HgStringView hgJsonWriteSerial(HgArena* arena, HgSerializer serial);
 
 // /**
-//  * Read json data to be deserialized
+//  * Read json data to be deserialized : TODO
 //  */
 // HgSerializer hgJsonReadSerial(HgArena* arena, HgStringView json);
 

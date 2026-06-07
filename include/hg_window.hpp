@@ -31,6 +31,16 @@
 #include "hg_gpu.hpp"
 
 /**
+ * Initialize the windowing subsystem
+ */
+void hgWindowsInit();
+
+/**
+ * Deinitialize the windowing subsystem
+ */
+void hgWindowsDeinit();
+
+/**
  * The present mode for the swapchain
  */
 enum HgGpuPresentMode : u32 {

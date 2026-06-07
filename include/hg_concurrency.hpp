@@ -28,20 +28,14 @@
 #define HG_CONCURRENCY_HPP
 
 #include "hg_core.hpp"
-#include "hg_memory.hpp"
 
 /**
- * Returns the number of concurrent threads available in hardware
+ * Initialize synchronization and threads
  */
-u32 hgHardwareThreadCount();
+void hgConcurrencyInit();
 
 /**
- * Initialize synchronization primitives
- */
-void hgConcurrencyInit(HgArena* arena, u32 maxMutices, u32 maxFences);
-
-/**
- * Deinitialize synchronization primitives
+ * Deinitialize synchronization and threads
  */
 void hgConcurrencyDeinit();
 
@@ -137,24 +131,6 @@ bool hgFenceWait(HgFence fence, f64 timeoutSeconds);
  * Spin waits for all work submissions to be completed
  */
 void hgFenceWaitIndefinite(HgFence fence);
-
-/**
- * Initialize the thread pool
- *
- * Note, the recommended thread is the hardware thread count minus dedicated
- * threads such as main thread, IO thread, etc.
- *
- * Parameters
- * - arena The arena to allocate from
- * - queueSize The max capacity of the thread work queue
- * - threadCount The number of threads to spawn in the pool
- */
-void hgThreadsInit(HgArena* arena, u32 queueSize, u32 threadCount);
-
-/**
- * Deinitialize the thread pool
- */
-void hgThreadsDeinit();
 
 /**
  * Wait on a fence, and help complete work in the meantime

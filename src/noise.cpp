@@ -7,7 +7,7 @@
 
 int main()
 {
-    hgInit(nullptr);
+    hgInit();
     hgDefer(hgDeinit());
 
     hgTest();
@@ -21,8 +21,8 @@ int main()
     u32 width = 0;
     u32 height = 0;
 
-    HgGpuImage depthImage;
-    HgGpuView depthView;
+    HgGpuImage depthImage{};
+    HgGpuView depthView{};
     hgDefer(hgGpuImageDestroy(depthImage));
     hgDefer(hgGpuViewDestroy(depthView));
 
@@ -81,12 +81,12 @@ int main()
 
     hgAssetUnload(noiseShaderHandle);
 
-    HgEcs ecs = hgEcsCreate(arena, 128, 16);
-    hgDefer(hgEcsReset(&ecs));
+    HgEcs ecs = hgEcsCreate();
+    hgDefer(hgEcsDestroy(&ecs));
 
-    hgEcsRegisterType(&ecs, arena, HgCamera, 8);
-    hgEcsRegisterType(&ecs, arena, HgTransform, 128);
-    hgEcsRegisterType(&ecs, arena, HgSprite, 128);
+    hgEcsRegisterType(&ecs, HgCamera);
+    hgEcsRegisterType(&ecs, HgTransform);
+    hgEcsRegisterType(&ecs, HgSprite);
 
     HgEntity camera = hgEcsSpawn(&ecs);
     HgCamera* cameraC = hgCameraAdd(&ecs, camera);

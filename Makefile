@@ -5,7 +5,7 @@ TEST_DIR := $(SRC_DIR)/hg_test_dir
 STD := -std=c++17 -MMD -MP
 WARNINGS := -Werror -Wall -Wextra -pedantic
 
-DEBUG_CONFIG := -g -Og -fsanitize=undefined -fno-exceptions -fno-rtti
+DEBUG_CONFIG := -g -O0 -Wno-cpp -fsanitize=undefined -fno-exceptions -fno-rtti
 RELEASE_CONFIG := -O3 -DNDEBUG -fno-exceptions -fno-rtti
 CONFIG := $(DEBUG_CONFIG)
 
@@ -32,6 +32,7 @@ IMGUI_BACKEND := \
 
 SRC := \
 	hurdygurdy.cpp \
+	concurrency.cpp \
 	platform.cpp \
 	test.cpp
 

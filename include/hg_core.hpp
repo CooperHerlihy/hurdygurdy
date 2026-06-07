@@ -86,6 +86,66 @@ typedef float_t f32;
  */
 typedef double_t f64;
 
+/**
+ * A generation counted handle
+ */
+struct HgHandle {
+    /**
+     * The handle id
+     */
+    u32 id;
+};
+
+/**
+ * The null handle
+ */
+static constexpr HgHandle hgHandleNull = HgHandle{0};
+
+/**
+ * Compare handles
+ */
+constexpr bool operator==(HgHandle lhs, HgHandle rhs)
+{
+    return lhs.id == rhs.id;
+}
+
+/**
+ * Compare handles
+ */
+constexpr bool operator!=(HgHandle lhs, HgHandle rhs)
+{
+    return lhs.id != rhs.id;
+}
+
+/**
+ * The number of bits in a handle used for the index
+ */
+static constexpr u32 hgHandleIdxBits = 24;
+
+/**
+ * Get the index from a handle
+ */
+constexpr u32 hgHandleIdx(HgHandle handle)
+{
+    return handle.id & ((1 << hgHandleIdxBits) - 1);
+}
+
+/**
+ * Get the generation from a handle
+ */
+constexpr u32 hgHandleGeneration(HgHandle handle)
+{
+    return handle.id & ~((1 << hgHandleIdxBits) - 1);
+}
+
+/**
+ * Returns a new handle at the same index
+ */
+constexpr HgHandle hgHandleNextGeneration(HgHandle handle)
+{
+    return {handle.id + (1 << hgHandleIdxBits)};
+}
+
 #ifdef __GNUC__
 #define HG_COMPILER_GCC 1
 #endif
@@ -301,52 +361,30 @@ constexpr T hgClamp(T x, T min, T max)
 }
 
 /**
- * The config for the HurdyGurdy library init
+ * The Hurdy Gurdy subsystems
  */
-struct HgInit {
-    u32 arenaCount = 2;
-    u64 arenaSize = (u64)1 << 32;
-
-    u32 maxMutices = 2048;
-    u32 maxFences = 2048;
-    u32 threadPoolQueueSize = 2048;
-
-    u32 maxBuffers = 512;
-    u32 maxImages = 512;
-    u32 maxViews = 512;
-    u32 maxPipelines = 512;
-
-    u32 maxFramesInFlight = 2;
-    u32 maxWindows = 8;
-    u32 maxWindowEvents = 2048;
-
-    u32 maxAudioPlayers = 64;
-
-    u32 maxBinaries = 256;
-    u32 maxTextures = 256;
-    u32 maxGpuTextures = 256;
-    u32 maxMeshes = 256;
-    u32 maxGpuMeshes = 256;
-    u32 maxAudios = 256;
+enum HgSubsystem : u32 {
+    HgSubsystem_memory = 0x1,
+    HgSubsystem_concurrency = 0x2,
+    HgSubsystem_gpu = 0x4,
+    HgSubsystem_assets = 0x8,
+    HgSubsystem_platform = 0x10,
+    HgSubsystem_windowing = 0x20,
+    HgSubsystem_audio = 0x40,
+    HgSubsystem_all = (u32)-1,
 };
+typedef u32 HgSubsystemFlags;
 
 /**
- * Initialize the HurdyGurdy library
- *
- * Subsystems initialized:
- * - Arena allocation
- * - Thread pool
- * - Resource managers
- * - Windowing/input
- * - Hardware graphics
+ * Initialize the Hurdy Gurdy library
  *
  * Parameters
- * - init The initialization config, or nullptr for reasonable defaults
+ * - init Which subsystems to initialize, all are recommended
  */
-void hgInit(const HgInit* init);
+void hgInit(HgSubsystemFlags init = HgSubsystem_all);
 
 /**
- * Shut down the HurdyGurdy library
+ * Shut down the Hurdy Gurdy library
  */
 void hgDeinit();
 
@@ -354,5 +392,15 @@ void hgDeinit();
  * Run Hurdy Gurdy tests, asserting success
  */
 void hgTest();
+
+/**
+ * Initialize the platform
+ */
+void hgPlatformInit();
+
+/**
+ * Deinitialize the platform
+ */
+void hgPlatformDeinit();
 
 #endif // HG_CORE_HPP

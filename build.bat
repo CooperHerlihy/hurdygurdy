@@ -40,6 +40,7 @@ set SHADERS= ^
 
 set SRC= ^
     hurdygurdy.cpp ^
+    concurrency.cpp ^
     platform.cpp ^
     test.cpp
 

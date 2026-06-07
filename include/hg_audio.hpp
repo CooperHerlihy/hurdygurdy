@@ -28,8 +28,18 @@
 #define HG_AUDIO_HPP
 
 #include "hg_assets.hpp"
+#include "hg_containers.hpp"
 #include "hg_core.hpp"
-#include "hg_ecs.hpp"
+
+/**
+ * Initialize the audio subsystem
+ */
+void hgAudioInit();
+
+/**
+ * Deinitialize the audio subsystem
+ */
+void hgAudioDeinit();
 
 /**
  * An audio player

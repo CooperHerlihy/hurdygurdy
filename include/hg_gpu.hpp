@@ -28,42 +28,11 @@
 #define HG_GPU_HPP
 
 #include "hg_core.hpp"
-#include "hg_memory.hpp"
-
-/**
- * Gpu init config
- */
-struct HgGpuInit {
-    /**
-     * The maximum gpu buffers
-     */
-    u32 maxBuffers;
-    /**
-     * The maximum gpu images
-     */
-    u32 maxImages;
-    /**
-     * The maximum gpu views
-     */
-    u32 maxViews;
-    /**
-     * The maximum gpu pipelines
-     */
-    u32 maxPipelines;
-    /**
-     * The maximum frames rendered concurrently, should be 2
-     */
-    u32 maxFramesInFlight;
-    /**
-     * The maximum OS windows, same as in platform init
-     */
-    u32 maxWindows;
-};
 
 /**
  * Initializes the graphics subsystem, loading all global Vulkan resources
  */
-void hgGpuInit(HgArena* arena, HgGpuInit* config);
+void hgGpuInit();
 
 /**
  * Deinitializes the graphics subsystem, unloading all global Vulkan resources

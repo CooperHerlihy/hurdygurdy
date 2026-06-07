@@ -1,19 +1,11 @@
 #include "hg_core.hpp"
+#include "hg_containers.hpp"
 #include "hg_memory.hpp"
 #include "hg_library.hpp"
-#include "hg_time.hpp"
-#include "hg_concurrency.hpp"
 #include "hg_platform.hpp"
 #include "hg_gpu.hpp"
 #include "hg_window.hpp"
 #include "hg_audio.hpp"
-
-#include <atomic>
-#include <condition_variable>
-#include <mutex>
-#include <thread>
-
-#include <emmintrin.h>
 
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
@@ -23,348 +15,6 @@
 
 #include "imgui_impl_vulkan.h"
 #include "imgui_impl_sdl3.h"
-
-f64 hgClockTick(HgClock* clock)
-{
-    hgAssert(clock != nullptr);
-
-    f64 prev = clock->time;
-    timespec ts;
-    timespec_get(&ts, TIME_UTC);
-    clock->time = (f64)ts.tv_sec + (f64)ts.tv_nsec * 1e-9;
-    return clock->time - prev;
-}
-
-u32 hgHardwareThreadCount()
-{
-    return (u32)std::thread::hardware_concurrency();
-}
-
-struct HgMutexData {
-    std::atomic_bool acquired;
-};
-
-static HgPool mutexPool{};
-static HgMutexData* mutices = nullptr;
-
-HgMutex hgMutexCreate()
-{
-    HgHandle handle = hgPoolAlloc(&mutexPool);
-    new (&mutices[hgHandleIdx(handle)]) HgMutexData{false};
-    return {handle};
-}
-
-void hgMutexDestroy(HgMutex mtx)
-{
-    hgPoolFree(&mutexPool, mtx.handle);
-}
-
-void hgMutexAcquire(HgMutex mtx)
-{
-    hgAssert(hgPoolAlive(&mutexPool, mtx.handle));
-    HgMutexData* data = &mutices[hgHandleIdx(mtx.handle)];
-    bool acquired = false;
-    while (!data->acquired.compare_exchange_weak(acquired, true))
-    {
-        _mm_pause();
-        acquired = false;
-    }
-}
-
-bool hgMutexTryAcquire(HgMutex mtx)
-{
-    hgAssert(hgPoolAlive(&mutexPool, mtx.handle));
-    HgMutexData* data = &mutices[hgHandleIdx(mtx.handle)];
-    bool acquired = false;
-    return data->acquired.compare_exchange_weak(acquired, true);
-}
-
-void hgMutexRelease(HgMutex mtx)
-{
-    hgAssert(hgPoolAlive(&mutexPool, mtx.handle));
-    HgMutexData* data = &mutices[hgHandleIdx(mtx.handle)];
-    hgAssert(data->acquired);
-    data->acquired.store(false);
-}
-
-struct HgFenceData {
-    std::atomic<u32> counter{0};
-};
-
-static HgPool fencePool{};
-static HgFenceData* fences = nullptr;
-
-HgFence hgFenceCreate()
-{
-    HgHandle handle = hgPoolAlloc(&fencePool);
-    new (&fences[hgHandleIdx(handle)]) HgFenceData{false};
-    return {handle};
-}
-
-void hgFenceDestroy(HgFence fence)
-{
-    if (hgPoolAlive(&fencePool, fence.handle))
-        hgPoolFree(&fencePool, fence.handle);
-}
-
-void hgFenceAttach(HgFence fence, u32 count)
-{
-    hgAssert(hgPoolAlive(&fencePool, fence.handle));
-    fences[hgHandleIdx(fence.handle)].counter.fetch_add(count);
-}
-
-void hgFenceSignal(HgFence fence, u32 count)
-{
-    hgAssert(hgPoolAlive(&fencePool, fence.handle));
-    fences[hgHandleIdx(fence.handle)].counter.fetch_sub(count);
-}
-
-bool hgFenceIsComplete(HgFence fence)
-{
-    hgAssert(hgPoolAlive(&fencePool, fence.handle));
-    return fences[hgHandleIdx(fence.handle)].counter.load() == 0;
-}
-
-bool hgFenceWait(HgFence fence, f64 timeoutSeconds)
-{
-    hgAssert(hgPoolAlive(&fencePool, fence.handle));
-    auto end = std::chrono::steady_clock::now() + std::chrono::duration<f64>(timeoutSeconds);
-    while (hgPoolAlive(&fencePool, fence.handle) && !hgFenceIsComplete(fence) && std::chrono::steady_clock::now() < end)
-    {
-        _mm_pause();
-    }
-    return !hgPoolAlive(&fencePool, fence.handle) || hgFenceIsComplete(fence);
-}
-
-void hgFenceWaitIndefinite(HgFence fence)
-{
-    hgAssert(hgPoolAlive(&fencePool, fence.handle));
-    while (hgPoolAlive(&fencePool, fence.handle) && !hgFenceIsComplete(fence))
-    {
-        _mm_pause();
-    }
-}
-
-void hgConcurrencyInit(HgArena* arena, u32 maxMutices, u32 maxFences)
-{
-    mutexPool = hgPoolCreate(arena, maxMutices);
-    mutices = hgAlloc<HgMutexData>(arena, maxMutices);
-    fencePool = hgPoolCreate(arena, maxFences);
-    fences = hgAlloc<HgFenceData>(arena, maxFences);
-}
-
-void hgConcurrencyDeinit()
-{
-    fencePool = {};
-    mutexPool = {};
-}
-
-struct ThreadWork {
-    HgFence fence;
-    void* data;
-    void (*fn)(void*);
-};
-
-struct ThreadPoolState {
-    std::thread* threads = nullptr;
-    u32 threadCount = 0;
-    std::atomic_bool shouldClose = false;
-
-    std::mutex mtx{};
-    std::condition_variable cv{};
-
-    ThreadWork* work = nullptr;
-    std::atomic_bool* hasWork = nullptr;
-    u32 workCapacity = 0;
-
-    std::atomic<u32> workCount = 0;
-    std::atomic<u32> tail = 0;
-    std::atomic<u32> workingTail = 0;
-    std::atomic<u32> head = 0;
-    std::atomic<u32> workingHead = 0;
-};
-
-static ThreadPoolState threadPool{};
-
-static bool poolExecute()
-{
-    u32 idx = threadPool.workingTail.load();
-    do {
-        if (idx == threadPool.head.load())
-            return false;
-    } while (!threadPool.workingTail.compare_exchange_weak(idx, (idx + 1) & (threadPool.workCapacity - 1)));
-
-    ThreadWork work = threadPool.work[idx];
-    threadPool.hasWork[idx].store(false);
-
-    u32 t = threadPool.tail.load();
-    while (t != threadPool.head.load() && !threadPool.hasWork[t].load())
-    {
-        u32 next = (t + 1) & (threadPool.workCapacity - 1);
-        threadPool.tail.compare_exchange_strong(t, next);
-        t = next;
-    }
-
-    --threadPool.workCount;
-
-    hgAssert(work.fn != nullptr);
-    work.fn(work.data);
-
-    if (work.fence.handle != hgHandleNull)
-        hgFenceSignal(work.fence, 1);
-    return true;
-}
-
-void hgThreadsInit(HgArena* arena, u32 queueSize, u32 threadCount)
-{
-    hgAssert(arena != nullptr);
-    hgAssert(threadCount > 0);
-    hgAssert(queueSize > 0 && (queueSize & (queueSize - 1)) == 0);
-
-    threadPool.shouldClose.store(false);
-    threadPool.threadCount = threadCount;
-    threadPool.threads = hgAlloc<std::thread>(arena, threadCount);
-
-    threadPool.work = hgAlloc<ThreadWork>(arena, queueSize);
-    threadPool.hasWork = hgAlloc<std::atomic_bool>(arena, queueSize);
-    threadPool.workCapacity = queueSize;
-
-    threadPool.workCount.store(0);
-    threadPool.tail.store(0);
-    threadPool.workingTail.store(0);
-    threadPool.head.store(0);
-    threadPool.workingHead.store(0);
-
-    for (u32 i = 0; i < threadPool.workCapacity; ++i)
-    {
-        threadPool.hasWork[i].store(false);
-    }
-
-    for (u32 i = 0; i < threadCount; ++i)
-    {
-        new (threadPool.threads + i) std::thread([] {
-            hgScratchInit(2, 1 << 16);
-            hgDefer(hgScratchDeinit());
-
-            for (;;)
-            {
-                std::unique_lock<std::mutex> lock{threadPool.mtx};
-                while (threadPool.workCount.load() == 0 && !threadPool.shouldClose.load())
-                {
-                    threadPool.cv.wait(lock);
-                }
-                lock.unlock();
-                if (threadPool.shouldClose.load())
-                    return;
-
-                static constexpr u32 spinCount = 128;
-                for (u32 j = 0; j < spinCount; ++j)
-                {
-                    if (!poolExecute())
-                        _mm_pause();
-                }
-            }
-        });
-    }
-}
-
-void hgThreadsDeinit()
-{
-    threadPool.mtx.lock();
-    threadPool.shouldClose = true;
-    threadPool.mtx.unlock();
-    threadPool.cv.notify_all();
-
-    for (u32 i = 0; i < threadPool.threadCount; ++i)
-    {
-        threadPool.threads[i].join();
-    }
-    for (u32 i = 0; i < threadPool.threadCount; ++i)
-    {
-        threadPool.threads[i].~thread();
-    }
-    threadPool.cv.~condition_variable();
-    threadPool.mtx.~mutex();
-}
-
-bool hgThreadsHelp(HgFence fence, f64 timeout)
-{
-    auto end = std::chrono::steady_clock::now() + std::chrono::duration<f64>(timeout);
-    while (!hgFenceIsComplete(fence) && std::chrono::steady_clock::now() < end)
-    {
-        if (!poolExecute())
-            _mm_pause();
-    }
-    return hgFenceIsComplete(fence);
-}
-
-void hgThreadsCall(HgFence fence, void* data, void (*fn)(void* data))
-{
-    hgAssert(fn != nullptr);
-    if (fence.handle != hgHandleNull)
-        hgFenceAttach(fence, 1);
-
-    u32 idx = threadPool.workingHead.fetch_add(1) & (threadPool.workCapacity - 1);
-
-    threadPool.work[idx].fence = fence;
-    threadPool.work[idx].data = data;
-    threadPool.work[idx].fn = fn;
-    threadPool.hasWork[idx].store(true);
-
-    u32 h = threadPool.head.load();
-    while (threadPool.hasWork[h].load())
-    {
-        u32 next = (h + 1) & (threadPool.workCapacity - 1);
-        threadPool.head.compare_exchange_strong(h, next);
-        h = next;
-    }
-
-    ++threadPool.workCount;
-    threadPool.mtx.lock();
-    threadPool.mtx.unlock();
-    threadPool.cv.notify_one();
-}
-
-void hgThreadsFor(u64 begin, u64 end, void* data, void (*fn)(void* data, u64 idx))
-{
-    hgAssert(begin <= end);
-    hgAssert(fn != nullptr);
-
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
-
-    u64 chunkSize = (u64)std::ceil((f32)(end - begin) / (8.0f * (f32)hgHardwareThreadCount()));
-
-    HgFence fence = hgFenceCreate();
-    hgDefer(hgFenceDestroy(fence));
-
-    for (u64 i = begin; i < end; i += chunkSize)
-    {
-        struct Capture
-        {
-            void* data;
-            void (*fn)(void* data, u64 idx);
-            u64 begin;
-            u64 end;
-        };
-
-        Capture* capture = hgAlloc<Capture>(scratch, 1);
-        capture->data = data;
-        capture->fn = fn;
-        capture->begin = i;
-        capture->end = hgMin(i + chunkSize, end);
-
-        hgThreadsCall(fence, capture, [](void* pcapture)
-        {
-            Capture* capture = (Capture*)pcapture;
-            for (u64 i = capture->begin; i < capture->end; ++i)
-            {
-                (capture->fn)(capture->data, i);
-            }
-        });
-    }
-    hgThreadsHelp(fence, INFINITY);
-}
 
 static const char* vkResultToStr(VkResult result)
 {
@@ -944,7 +594,7 @@ struct SamplerInfo {
 };
 
 template<>
-constexpr u64 hgHashImpl(SamplerInfo info)
+constexpr u64 hgHash(SamplerInfo info)
 {
     return info.border + (info.mode << 4) + (info.filter << 8);
 }
@@ -1085,16 +735,12 @@ struct VulkanState {
     VkDescriptorSetLayout bindlessLayout = nullptr;
     VkDescriptorSet bindlessSet = nullptr;
 
-    HgPool descriptorPools[DescriptorType_count];
+    HgHandlePool<void> descriptorPools[DescriptorType_count];
 
-    HgPool bufferPool;
-    HgGpuBufferData* bufferData;
-    HgPool imagePool;
-    HgGpuImageData* imageData;
-    HgPool viewPool;
-    HgGpuViewData* viewData;
-    HgPool pipelinePool;
-    HgGpuPipelineData* pipelineData;
+    HgHandlePool<HgGpuBufferData> buffers;
+    HgHandlePool<HgGpuImageData> images;
+    HgHandlePool<HgGpuViewData> views;
+    HgHandlePool<HgGpuPipelineData> pipelines;
 
     HgMap<SamplerInfo, VkSampler> samplers;
 
@@ -1107,33 +753,33 @@ static VulkanState vk{};
 
 static HgGpuBufferData* bufferGet(HgGpuBuffer buffer)
 {
-    hgAssert(hgPoolAlive(&vk.bufferPool, buffer.handle));
-    return &vk.bufferData[hgHandleIdx(buffer.handle)];
+    hgAssert(hgPoolAlive(&vk.buffers, buffer.handle));
+    return hgPoolGet(&vk.buffers, buffer.handle);
 }
 
 static HgGpuImageData* imageGet(HgGpuImage image)
 {
-    hgAssert(hgPoolAlive(&vk.imagePool, image.handle));
-    return &vk.imageData[hgHandleIdx(image.handle)];
+    hgAssert(hgPoolAlive(&vk.images, image.handle));
+    return hgPoolGet(&vk.images, image.handle);
 }
 
 static HgGpuViewData* viewGet(HgGpuView view)
 {
-    hgAssert(hgPoolAlive(&vk.viewPool, view.handle));
-    return &vk.viewData[hgHandleIdx(view.handle)];
+    hgAssert(hgPoolAlive(&vk.views, view.handle));
+    return hgPoolGet(&vk.views, view.handle);
 }
 
 static HgGpuPipelineData* pipelineGet(HgGpuPipeline pipeline)
 {
-    hgAssert(hgPoolAlive(&vk.pipelinePool, pipeline.handle));
-    return &vk.pipelineData[hgHandleIdx(pipeline.handle)];
+    hgAssert(hgPoolAlive(&vk.pipelines, pipeline.handle));
+    return hgPoolGet(&vk.pipelines, pipeline.handle);
 }
 
 struct WindowState {
-    HgPool pool = {};
-    u32 windowWidth = 0;
-    u32 windowMaxEvents = 0;
-    HgWindowData* data = nullptr;
+    HgHandlePool<void> pool = {};
+    HgArrayAny data = {};
+    u32 capacity = 0;
+    u32 maxEvents = 0;
 
     HgMap<SDL_WindowID, HgWindowData*> ids = {};
 
@@ -1149,9 +795,7 @@ static WindowState windows{};
 static HgWindowData* windowGet(HgWindow window)
 {
     hgAssert(hgPoolAlive(&windows.pool, window.handle));
-    u32 idx = hgHandleIdx(window.handle);
-    u32 width = windows.windowWidth;
-    return (HgWindowData*)((u8*)windows.data + width * idx);
+    return (HgWindowData*)windows.data[hgHandleIdx(window.handle)];
 }
 
 struct HgAudioPlayerData {
@@ -1160,16 +804,15 @@ struct HgAudioPlayerData {
 
 struct AudioState {
     SDL_AudioDeviceID device;
-    HgPool playerPool;
-    HgAudioPlayerData* playerData;
+    HgHandlePool<HgAudioPlayerData> players;
 };
 
 static AudioState audio{};
 
 static HgAudioPlayerData* audioPlayerGet(HgAudioPlayer player)
 {
-    hgAssert(hgPoolAlive(&audio.playerPool, player.handle));
-    return &audio.playerData[hgHandleIdx(player.handle)];
+    hgAssert(hgPoolAlive(&audio.players, player.handle));
+    return hgPoolGet(&audio.players, player.handle);
 }
 
 static void loadVulkan();
@@ -1256,7 +899,7 @@ static VkInstance createInstance(HgStringView* extensions, u32 extensionCount)
     instanceInfo.ppEnabledLayerNames = layers;
 #endif
 
-    const char** extCStrs = hgAlloc<const char*>(scratch, extensionCount);
+    const char** extCStrs = hgArenaAlloc<const char*>(scratch, extensionCount);
     for (u32 i = 0; i < extensionCount; ++i)
     {
         extCStrs[i] = hgCString(scratch, extensions[i]);
@@ -1297,7 +940,7 @@ static bool findQueueFamily(VkPhysicalDevice gpu, u32* queueFamily, VkQueueFlags
 
     u32 familyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(gpu, &familyCount, nullptr);
-    VkQueueFamilyProperties* families = hgAlloc<VkQueueFamilyProperties>(scratch, familyCount);
+    VkQueueFamilyProperties* families = hgArenaAlloc<VkQueueFamilyProperties>(scratch, familyCount);
     vkGetPhysicalDeviceQueueFamilyProperties(gpu, &familyCount, families);
 
     for (u32 i = 0; i < familyCount; ++i)
@@ -1324,7 +967,7 @@ static VkPhysicalDevice findPhysicalDevice()
 
     u32 gpuCount;
     vkEnumeratePhysicalDevices(vk.instance, &gpuCount, nullptr);
-    VkPhysicalDevice* gpus = hgAlloc<VkPhysicalDevice>(scratch, gpuCount);
+    VkPhysicalDevice* gpus = hgArenaAlloc<VkPhysicalDevice>(scratch, gpuCount);
     vkEnumeratePhysicalDevices(vk.instance, &gpuCount, gpus);
 
     VkExtensionProperties* extProps = nullptr;
@@ -1339,7 +982,7 @@ static VkPhysicalDevice findPhysicalDevice()
         vkEnumerateDeviceExtensionProperties(gpu, nullptr, &newPropCount, nullptr);
         if (newPropCount > extPropCount)
         {
-            extProps = hgRealloc(scratch, extProps, extPropCount, newPropCount);
+            extProps = hgArenaRealloc(scratch, extProps, extPropCount, newPropCount);
             extPropCount = newPropCount;
         }
         vkEnumerateDeviceExtensionProperties(gpu, nullptr, &newPropCount, extProps);
@@ -1492,15 +1135,13 @@ static VkDescriptorSetLayout createBindlessDescriptorLayout()
     return layout;
 }
 
-static Frame createFrame(HgArena* arena, u32 maxWindows)
+static Frame createFrame()
 {
-    hgAssert(arena != nullptr);
-
     Frame frame{};
 
-    frame.windows = hgAlloc<HgWindowData*>(arena, maxWindows);
-    frame.windowCapacity = maxWindows;
+    frame.windowCapacity = 8;
     frame.windowCount = 0;
+    frame.windows = hgGpaAlloc<HgWindowData*>(frame.windowCapacity);
 
     VkCommandPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -1522,47 +1163,36 @@ static Frame createFrame(HgArena* arena, u32 maxWindows)
     return frame;
 }
 
-void hgGpuInit(HgArena* arena, HgGpuInit* config)
+void hgGpuInit()
 {
-    hgAssert(arena != nullptr);
-
     loadVulkan();
 
-    if (vk.instance == nullptr)
-    {
-        HgArena* scratch = hgScratch();
-        hgArenaScope(scratch);
+    HgArena* scratch = hgScratch();
+    hgArenaScope(scratch);
 
+    {
         HgStringView* exts;
         u32 extCount = hgPlatformGetVulkanExtensions(scratch, &exts);
 #ifdef HG_VK_DEBUG_MESSENGER
-        exts = hgRealloc(scratch, exts, extCount, extCount + 1);
+        exts = hgArenaRealloc(scratch, exts, extCount, extCount + 1);
         exts[extCount++] = "VK_EXT_debug_utils";
 #endif
         vk.instance = createInstance(exts, extCount);
-        loadVulkanInstanceFuncs(vk.instance);
     }
+    loadVulkanInstanceFuncs(vk.instance);
 
 #ifdef HG_VK_DEBUG_MESSENGER
-    if (vk.debugMessenger == nullptr)
-        vk.debugMessenger = createDebugUtilsMessenger();
+    vk.debugMessenger = createDebugUtilsMessenger();
 #endif
 
-    if (vk.physicalDevice == nullptr)
-    {
-        vk.physicalDevice = findPhysicalDevice();
-        findQueueFamily(vk.physicalDevice, &vk.queueFamily,
-            VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT | VK_QUEUE_COMPUTE_BIT);
-    }
+    vk.physicalDevice = findPhysicalDevice();
+    findQueueFamily(vk.physicalDevice, &vk.queueFamily,
+        VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT | VK_QUEUE_COMPUTE_BIT);
 
-    if (vk.device == nullptr)
-    {
-        vk.device = createDevice();
-        loadVulkanDeviceFuncs(vk.device);
-        vkGetDeviceQueue(vk.device, vk.queueFamily, 0, &vk.queue);
-    }
+    vk.device = createDevice();
+    loadVulkanDeviceFuncs(vk.device);
+    vkGetDeviceQueue(vk.device, vk.queueFamily, 0, &vk.queue);
 
-    if (vk.vma == nullptr)
     {
         VmaAllocatorCreateInfo allocatorInfo{};
         allocatorInfo.physicalDevice = vk.physicalDevice;
@@ -1575,7 +1205,6 @@ void hgGpuInit(HgArena* arena, HgGpuInit* config)
             hgError("Could not create Vulkan memory allocator: %s\n", vkResultToStr(result));
     }
 
-    if (vk.cmdPool == nullptr)
     {
         VkCommandPoolCreateInfo cmdPoolInfo{};
         cmdPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -1587,13 +1216,8 @@ void hgGpuInit(HgArena* arena, HgGpuInit* config)
             hgError("Could not create Vulkan command pool: %s\n", vkResultToStr(result));
     }
 
-    if (vk.bindlessPool == nullptr)
-        vk.bindlessPool = createBindlessDescriptorPool();
-
-    if (vk.bindlessLayout == nullptr)
-        vk.bindlessLayout = createBindlessDescriptorLayout();
-
-    if (vk.bindlessSet == nullptr)
+    vk.bindlessPool = createBindlessDescriptorPool();
+    vk.bindlessLayout = createBindlessDescriptorLayout();
     {
         VkDescriptorSetAllocateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -1608,56 +1232,26 @@ void hgGpuInit(HgArena* arena, HgGpuInit* config)
 
     for (u32 i = 0; i < DescriptorType_count; ++i)
     {
-        if (vk.descriptorPools[i].capacity == 0)
-        {
-            vk.descriptorPools[i] = hgPoolCreate(arena, UINT16_MAX);
-        }
+        vk.descriptorPools[i] = hgPoolCreate<void>();
     }
 
-    if (vk.bufferPool.capacity == 0)
-    {
-        vk.bufferPool = hgPoolCreate(arena, config->maxBuffers);
-        vk.bufferData = hgAlloc<HgGpuBufferData>(arena, config->maxBuffers);
-    }
+    vk.buffers = hgPoolCreate<HgGpuBufferData>();
+    vk.images = hgPoolCreate<HgGpuImageData>();
+    vk.views = hgPoolCreate<HgGpuViewData>();
+    vk.pipelines = hgPoolCreate<HgGpuPipelineData>();
 
-    if (vk.imagePool.capacity == 0)
-    {
-        vk.imagePool = hgPoolCreate(arena, config->maxImages);
-        vk.imageData = hgAlloc<HgGpuImageData>(arena, config->maxImages);
-    }
+    vk.samplers = hgMapCreate<SamplerInfo, VkSampler>(
+        2 *
+        HgGpuFilter_count *
+        HgGpuSamplerEdgeMode_count *
+        HgGpuSamplerBorder_count);
 
-    if (vk.viewPool.capacity == 0)
+    vk.frameCount = 2;
+    vk.currentFrame = 0;
+    vk.frames = hgGpaAlloc<Frame>(vk.frameCount);
+    for (u32 i = 0; i < vk.frameCount; ++i)
     {
-        vk.viewPool = hgPoolCreate(arena, config->maxViews);
-        vk.viewData = hgAlloc<HgGpuViewData>(arena, config->maxViews);
-    }
-
-    if (vk.pipelinePool.capacity == 0)
-    {
-        vk.pipelinePool = hgPoolCreate(arena, config->maxPipelines);
-        vk.pipelineData = hgAlloc<HgGpuPipelineData>(arena, config->maxPipelines);
-    }
-
-    if (vk.samplers.capacity == 0)
-    {
-        vk.samplers = hgMapCreate<SamplerInfo, VkSampler>(
-            arena,
-            2 *
-            HgGpuFilter_count *
-            HgGpuSamplerEdgeMode_count *
-            HgGpuSamplerBorder_count);
-    }
-
-    if (vk.frames == nullptr)
-    {
-        vk.frames = hgAlloc<Frame>(arena, config->maxFramesInFlight);
-        vk.frameCount = config->maxFramesInFlight;
-        vk.currentFrame = 0;
-
-        for (u32 i = 0; i < vk.frameCount; ++i)
-        {
-            vk.frames[i] = createFrame(arena, config->maxWindows);
-        }
+        vk.frames[i] = createFrame();
     }
 }
 
@@ -1665,61 +1259,42 @@ void hgGpuDeinit()
 {
     for (u32 i = 0; i < vk.frameCount; ++i)
     {
-        vkDestroyCommandPool(vk.device, vk.frames[i].cmdPool, nullptr);
         vkDestroyFence(vk.device, vk.frames[i].fence, nullptr);
+        vkDestroyCommandPool(vk.device, vk.frames[i].cmdPool, nullptr);
+        hgGpaFree(vk.frames[i].windows, vk.frames[i].windowCapacity);
     }
-    vk.currentFrame = 0;
-    vk.frameCount = 0;
-    vk.frames = nullptr;
+    hgGpaFree(vk.frames, vk.frameCount);
 
-    for (u32 i = 0; i < vk.samplers.capacity; ++i)
+    hgMapForEach(&vk.samplers, [](SamplerInfo*, VkSampler* sampler)
     {
-        if (vk.samplers.hasVal[i])
-        {
-            vkDestroySampler(vk.device, vk.samplers.vals[i], nullptr);
-        }
-    }
+        vkDestroySampler(vk.device, *sampler, nullptr);
+    });
     hgMapReset(&vk.samplers);
 
-    vk.pipelinePool = {};
-    vk.pipelineData = {};
-    vk.viewPool = {};
-    vk.viewData = {};
-    vk.imagePool = {};
-    vk.imageData = {};
-    vk.bufferPool = {};
-    vk.bufferData = {};
+    hgPoolDestroy(&vk.pipelines);
+    hgPoolDestroy(&vk.views);
+    hgPoolDestroy(&vk.images);
+    hgPoolDestroy(&vk.buffers);
 
     for (u32 i = 0; i < DescriptorType_count; ++i)
     {
-        vk.descriptorPools[i] = {};
+        hgPoolDestroy(&vk.descriptorPools[i]);
     }
 
     vkDestroyDescriptorSetLayout(vk.device, vk.bindlessLayout, nullptr);
-    vk.bindlessLayout = nullptr;
-
     vkDestroyDescriptorPool(vk.device, vk.bindlessPool, nullptr);
-    vk.bindlessPool = nullptr;
 
     vkDestroyCommandPool(vk.device, vk.cmdPool, nullptr);
-    vk.cmdPool = nullptr;
 
     vmaDestroyAllocator(vk.vma);
-    vk.vma = nullptr;
 
     vkDestroyDevice(vk.device, nullptr);
-    vk.device = nullptr;
-
-    vk.physicalDevice = nullptr;
-    vk.queueFamily = (u32)-1;
 
 #ifdef HG_VK_DEBUG_MESSENGER
     vkDestroyDebugUtilsMessengerEXT(vk.instance, vk.debugMessenger, nullptr);
-    vk.debugMessenger = nullptr;
 #endif
 
     vkDestroyInstance(vk.instance, nullptr);
-    vk.instance = nullptr;
 
     unloadVulkan();
 }
@@ -1835,7 +1410,7 @@ HgGpuBuffer hgGpuBufferCreate(
     hgAssert(size > 0);
     hgAssert(usageFlags != 0);
 
-    HgGpuBuffer buffer = {hgPoolAlloc(&vk.bufferPool)};
+    HgGpuBuffer buffer = {hgPoolAlloc(&vk.buffers)};
     HgGpuBufferData* bufferData = bufferGet(buffer);
     *bufferData = {};
 
@@ -1889,7 +1464,7 @@ HgGpuBuffer hgGpuBufferCreate(
 
 void hgGpuBufferDestroy(HgGpuBuffer buffer)
 {
-    if (hgPoolAlive(&vk.bufferPool, buffer.handle))
+    if (hgPoolAlive(&vk.buffers, buffer.handle))
     {
         HgGpuBufferData* bufferData = bufferGet(buffer);
         descriptorDestroy(bufferData->storageDesc, DescriptorType_storageBuffer);
@@ -1996,7 +1571,7 @@ HgGpuImage hgGpuImageCreateEx(const HgGpuImageCreateEx* create)
     hgAssert(create->format != HgFormat_undefined);
     hgAssert(create->usage != 0);
 
-    HgGpuImage image = {hgPoolAlloc(&vk.imagePool)};
+    HgGpuImage image = {hgPoolAlloc(&vk.images)};
     HgGpuImageData* imageData = imageGet(image);
     *imageData = {};
 
@@ -2040,7 +1615,7 @@ HgGpuImage hgGpuImageCreateEx(const HgGpuImageCreateEx* create)
 
 void hgGpuImageDestroy(HgGpuImage image)
 {
-    if (hgPoolAlive(&vk.imagePool, image.handle))
+    if (hgPoolAlive(&vk.images, image.handle))
     {
         HgGpuImageData* imageData = imageGet(image);
         vmaDestroyImage(vk.vma, imageData->image, imageData->alloc);
@@ -2111,7 +1686,7 @@ HgGpuView hgGpuViewCreateEx(const HgGpuViewCreateEx* config)
 {
     hgAssert(config->aspectFlags != 0);
 
-    HgGpuView view = {hgPoolAlloc(&vk.viewPool)};
+    HgGpuView view = {hgPoolAlloc(&vk.views)};
     HgGpuViewData* viewData = viewGet(view);
     *viewData = {};
 
@@ -2159,7 +1734,7 @@ HgGpuView hgGpuViewCreateEx(const HgGpuViewCreateEx* config)
 
 void hgGpuViewDestroy(HgGpuView view)
 {
-    if (hgPoolAlive(&vk.viewPool, view.handle))
+    if (hgPoolAlive(&vk.views, view.handle))
     {
         HgGpuViewData* viewData = viewGet(view);
         descriptorDestroy(viewData->storageDesc, DescriptorType_storageImage);
@@ -2557,14 +2132,14 @@ HgGpuPipeline hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* con
     if (config->colorAttachmentCount > 0)
         hgAssert(config->colorAttachmentFormats != nullptr);
 
-    HgGpuPipeline pipeline = {hgPoolAlloc(&vk.pipelinePool)};
+    HgGpuPipeline pipeline = {hgPoolAlloc(&vk.pipelines)};
     HgGpuPipelineData* pipelineData = pipelineGet(pipeline);
     *pipelineData = {};
 
     HgArena* scratch = hgScratch();
     hgArenaScope(scratch);
 
-    VkPushConstantRange* pushRanges = hgAlloc<VkPushConstantRange>(scratch, config->pushRangeCount);
+    VkPushConstantRange* pushRanges = hgArenaAlloc<VkPushConstantRange>(scratch, config->pushRangeCount);
     for (u32 i = 0; i < config->pushRangeCount; ++i)
     {
         pushRanges[i].stageFlags = VK_SHADER_STAGE_ALL;
@@ -2650,7 +2225,7 @@ HgGpuPipeline hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* con
     depthStencilState.maxDepthBounds = 1.0f;
 
     VkPipelineColorBlendAttachmentState* colorBlendAttachments
-        = hgAlloc<VkPipelineColorBlendAttachmentState>(scratch, config->colorAttachmentCount);
+        = hgArenaAlloc<VkPipelineColorBlendAttachmentState>(scratch, config->colorAttachmentCount);
 
     for (u32 i = 0; i < config->colorAttachmentCount; ++i)
     {
@@ -2687,7 +2262,7 @@ HgGpuPipeline hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* con
     dynamicState.dynamicStateCount = hgArrayCount(dynamicStates);
     dynamicState.pDynamicStates = dynamicStates;
 
-    VkFormat* colorFormats = hgAlloc<VkFormat>(scratch, config->colorAttachmentCount);
+    VkFormat* colorFormats = hgArenaAlloc<VkFormat>(scratch, config->colorAttachmentCount);
     for (u32 i = 0; i < config->colorAttachmentCount; ++i)
     {
         colorFormats[i] = formatToVk(config->colorAttachmentFormats[i]);
@@ -2735,7 +2310,7 @@ HgGpuPipeline hgGpuPipelineCreateCompute(u32 pushSize, const u8* shaderCode, u64
     hgAssert(shaderCode != nullptr);
     hgAssert(shaderCodeSize > 0);
 
-    HgGpuPipeline pipeline = {hgPoolAlloc(&vk.pipelinePool)};
+    HgGpuPipeline pipeline = {hgPoolAlloc(&vk.pipelines)};
     HgGpuPipelineData* pipelineData = pipelineGet(pipeline);
     *pipelineData = {};
 
@@ -2777,7 +2352,7 @@ HgGpuPipeline hgGpuPipelineCreateCompute(u32 pushSize, const u8* shaderCode, u64
 
 void hgGpuPipelineDestroy(HgGpuPipeline pipeline)
 {
-    if (hgPoolAlive(&vk.pipelinePool, pipeline.handle))
+    if (hgPoolAlive(&vk.pipelines, pipeline.handle))
     {
         HgGpuPipelineData* pipelineData = pipelineGet(pipeline);
         vkDestroyPipeline(vk.device, pipelineData->pipeline, nullptr);
@@ -2882,8 +2457,8 @@ void hgGpuMemoryBarrier(
     HgArena* scratch = hgScratch();
     hgArenaScope(scratch);
 
-    VkBufferMemoryBarrier2* vkBufferBarriers = hgAlloc<VkBufferMemoryBarrier2>(scratch, imageBarrierCount);
-    VkImageMemoryBarrier2* vkImageBarriers = hgAlloc<VkImageMemoryBarrier2>(scratch, imageBarrierCount);
+    VkBufferMemoryBarrier2* vkBufferBarriers = hgArenaAlloc<VkBufferMemoryBarrier2>(scratch, imageBarrierCount);
+    VkImageMemoryBarrier2* vkImageBarriers = hgArenaAlloc<VkImageMemoryBarrier2>(scratch, imageBarrierCount);
 
     for (u32 i = 0; i < bufferBarrierCount; ++i)
     {
@@ -2958,7 +2533,7 @@ void hgGpuComputePass(HgGpuCmd* cmd, const HgGpuComputePass* pass)
     VkImageMemoryBarrier2* imageBarriers = nullptr;
     u32 imageBarrierCount = 0;
 
-    bufferBarriers = hgRealloc<VkBufferMemoryBarrier2>(scratch,
+    bufferBarriers = hgArenaRealloc<VkBufferMemoryBarrier2>(scratch,
         bufferBarriers, bufferBarrierCount, bufferBarrierCount + pass->uniformBufferCount);
 
     for (u32 i = bufferBarrierCount; i < bufferBarrierCount + pass->uniformBufferCount; ++i)
@@ -2980,7 +2555,7 @@ void hgGpuComputePass(HgGpuCmd* cmd, const HgGpuComputePass* pass)
 
     bufferBarrierCount += pass->uniformBufferCount;
 
-    bufferBarriers = hgRealloc<VkBufferMemoryBarrier2>(scratch,
+    bufferBarriers = hgArenaRealloc<VkBufferMemoryBarrier2>(scratch,
         bufferBarriers, bufferBarrierCount, bufferBarrierCount + pass->storageBufferCount);
 
     for (u32 i = bufferBarrierCount; i < bufferBarrierCount + pass->storageBufferCount; ++i)
@@ -3002,7 +2577,7 @@ void hgGpuComputePass(HgGpuCmd* cmd, const HgGpuComputePass* pass)
 
     bufferBarrierCount += pass->storageBufferCount;
 
-    imageBarriers = hgRealloc<VkImageMemoryBarrier2>(scratch,
+    imageBarriers = hgArenaRealloc<VkImageMemoryBarrier2>(scratch,
         imageBarriers, imageBarrierCount, imageBarrierCount + pass->sampledImageCount);
 
     for (u32 i = imageBarrierCount; i < imageBarrierCount + pass->sampledImageCount; ++i)
@@ -3033,7 +2608,7 @@ void hgGpuComputePass(HgGpuCmd* cmd, const HgGpuComputePass* pass)
 
     imageBarrierCount += pass->sampledImageCount;
 
-    imageBarriers = hgRealloc<VkImageMemoryBarrier2>(scratch,
+    imageBarriers = hgArenaRealloc<VkImageMemoryBarrier2>(scratch,
         imageBarriers, imageBarrierCount, imageBarrierCount + pass->storageImageCount);
 
     for (u32 i = imageBarrierCount; i < imageBarrierCount + pass->storageImageCount; ++i)
@@ -3084,7 +2659,7 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, u32 width, u32 height, const HgGpuRende
     VkImageMemoryBarrier2* imageBarriers = nullptr;
     u32 imageBarrierCount = 0;
 
-    bufferBarriers = hgRealloc<VkBufferMemoryBarrier2>(scratch,
+    bufferBarriers = hgArenaRealloc<VkBufferMemoryBarrier2>(scratch,
         bufferBarriers, bufferBarrierCount, bufferBarrierCount + pass->uniformBufferCount);
 
     for (u32 i = bufferBarrierCount; i < bufferBarrierCount + pass->uniformBufferCount; ++i)
@@ -3106,7 +2681,7 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, u32 width, u32 height, const HgGpuRende
 
     bufferBarrierCount += pass->uniformBufferCount;
 
-    bufferBarriers = hgRealloc<VkBufferMemoryBarrier2>(scratch,
+    bufferBarriers = hgArenaRealloc<VkBufferMemoryBarrier2>(scratch,
         bufferBarriers, bufferBarrierCount, bufferBarrierCount + pass->storageBufferCount);
 
     for (u32 i = bufferBarrierCount; i < bufferBarrierCount + pass->storageBufferCount; ++i)
@@ -3128,7 +2703,7 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, u32 width, u32 height, const HgGpuRende
 
     bufferBarrierCount += pass->storageBufferCount;
 
-    imageBarriers = hgRealloc<VkImageMemoryBarrier2>(scratch,
+    imageBarriers = hgArenaRealloc<VkImageMemoryBarrier2>(scratch,
         imageBarriers, imageBarrierCount, imageBarrierCount + pass->sampledImageCount);
 
     for (u32 i = imageBarrierCount; i < imageBarrierCount + pass->sampledImageCount; ++i)
@@ -3159,7 +2734,7 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, u32 width, u32 height, const HgGpuRende
 
     imageBarrierCount += pass->sampledImageCount;
 
-    imageBarriers = hgRealloc<VkImageMemoryBarrier2>(scratch,
+    imageBarriers = hgArenaRealloc<VkImageMemoryBarrier2>(scratch,
         imageBarriers, imageBarrierCount, imageBarrierCount + pass->storageImageCount);
 
     for (u32 i = imageBarrierCount; i < imageBarrierCount + pass->storageImageCount; ++i)
@@ -3190,7 +2765,7 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, u32 width, u32 height, const HgGpuRende
 
     imageBarrierCount += pass->storageImageCount;
 
-    imageBarriers = hgRealloc<VkImageMemoryBarrier2>(
+    imageBarriers = hgArenaRealloc<VkImageMemoryBarrier2>(
         scratch, imageBarriers, imageBarrierCount, imageBarrierCount + pass->colorAttachmentCount);
 
     for (u32 i = imageBarrierCount; i < imageBarrierCount + pass->colorAttachmentCount; ++i)
@@ -3224,7 +2799,7 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, u32 width, u32 height, const HgGpuRende
 
     if (pass->depthAttachment != nullptr)
     {
-        imageBarriers = hgRealloc<VkImageMemoryBarrier2>(
+        imageBarriers = hgArenaRealloc<VkImageMemoryBarrier2>(
             scratch, imageBarriers, imageBarrierCount, imageBarrierCount + 1);
 
         HgGpuViewData* image = viewGet(pass->depthAttachment->image);
@@ -3259,7 +2834,7 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, u32 width, u32 height, const HgGpuRende
 
     if (pass->stencilAttachment != nullptr)
     {
-        imageBarriers = hgRealloc<VkImageMemoryBarrier2>(
+        imageBarriers = hgArenaRealloc<VkImageMemoryBarrier2>(
             scratch, imageBarriers, imageBarrierCount, imageBarrierCount + 1);
 
         HgGpuViewData* image = viewGet(pass->stencilAttachment->image);
@@ -3302,7 +2877,7 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, u32 width, u32 height, const HgGpuRende
     vkCmdPipelineBarrier2((VkCommandBuffer)cmd, &dep);
 
     VkRenderingAttachmentInfo* colorAttachments
-        = hgAlloc<VkRenderingAttachmentInfo>(scratch, pass->colorAttachmentCount);
+        = hgArenaAlloc<VkRenderingAttachmentInfo>(scratch, pass->colorAttachmentCount);
 
     for (u32 i = 0; i < pass->colorAttachmentCount; ++i)
     {
@@ -3312,7 +2887,7 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, u32 width, u32 height, const HgGpuRende
         colorAttachments[i].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         colorAttachments[i].loadOp = gpuLoadOpToVk(pass->colorAttachments[i].loadOp);
         colorAttachments[i].storeOp = gpuStoreOpToVk(pass->colorAttachments[i].storeOp);
-        memcpy(&colorAttachments[i].clearValue, &pass->colorAttachments[i].clearValue, sizeof(VkClearValue));
+        hgMemCopy(&colorAttachments[i].clearValue, &pass->colorAttachments[i].clearValue, sizeof(VkClearValue));
     }
 
     VkRenderingAttachmentInfo depthAttachment{};
@@ -3323,7 +2898,7 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, u32 width, u32 height, const HgGpuRende
         depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
         depthAttachment.loadOp = gpuLoadOpToVk(pass->depthAttachment->loadOp);
         depthAttachment.storeOp = gpuStoreOpToVk(pass->depthAttachment->storeOp);
-        memcpy(&depthAttachment.clearValue, &pass->depthAttachment->clearValue, sizeof(VkClearValue));
+        hgMemCopy(&depthAttachment.clearValue, &pass->depthAttachment->clearValue, sizeof(VkClearValue));
     }
 
     VkRenderingAttachmentInfo stencilAttachment{};
@@ -3334,7 +2909,7 @@ void hgGpuRenderPassBegin(HgGpuCmd* cmd, u32 width, u32 height, const HgGpuRende
         stencilAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         stencilAttachment.loadOp = gpuLoadOpToVk(pass->stencilAttachment->loadOp);
         stencilAttachment.storeOp = gpuStoreOpToVk(pass->stencilAttachment->storeOp);
-        memcpy(&stencilAttachment.clearValue, &pass->stencilAttachment->clearValue, sizeof(VkClearValue));
+        hgMemCopy(&stencilAttachment.clearValue, &pass->stencilAttachment->clearValue, sizeof(VkClearValue));
     }
 
     VkRenderingInfo renderingInfo{};
@@ -3383,8 +2958,8 @@ static void resizeWindowSwapchain(HgWindowData* window)
         vkDestroySemaphore(vk.device, window->readyToPresent[i], nullptr);
         window->readyToPresent[i] = nullptr;
 
-        hgPoolFree(&vk.viewPool, window->views[i].handle);
-        hgPoolFree(&vk.imagePool, window->images[i].handle);
+        hgPoolFree(&vk.views, window->views[i].handle);
+        hgPoolFree(&vk.images, window->images[i].handle);
     }
 
     for (u32 i = 0; i < vk.frameCount; ++i)
@@ -3434,12 +3009,12 @@ static void resizeWindowSwapchain(HgWindowData* window)
             window->imageCount = swapImageCount;
         }
 
-        VkImage* swapImages = hgAlloc<VkImage>(scratch, window->imageCount);
+        VkImage* swapImages = hgArenaAlloc<VkImage>(scratch, window->imageCount);
         vkGetSwapchainImagesKHR(vk.device, window->swapchain, &window->imageCount, swapImages);
 
         for (u32 i = 0; i < window->imageCount; ++i)
         {
-            window->images[i] = {hgPoolAlloc(&vk.imagePool)};
+            window->images[i] = {hgPoolAlloc(&vk.images)};
             HgGpuImageData* imageData = imageGet(window->images[i]);
 
             *imageData = {};
@@ -3460,7 +3035,7 @@ static void resizeWindowSwapchain(HgWindowData* window)
             viewInfo.format = formatToVk(window->format);
             viewInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
 
-            window->views[i] = {hgPoolAlloc(&vk.viewPool)};
+            window->views[i] = {hgPoolAlloc(&vk.views)};
             HgGpuViewData* viewData = viewGet(window->views[i]);
 
             *viewData = {};
@@ -3575,12 +3150,12 @@ void hgGpuFrameEnd(HgGpuCmd* cmd)
 
     Frame* frame = &vk.frames[vk.currentFrame];
 
-    VkPipelineStageFlags* waitStages = hgAlloc<VkPipelineStageFlags>(scratch, frame->windowCount);
-    VkSemaphore* imageAvailableSemaphores = hgAlloc<VkSemaphore>(scratch, frame->windowCount);
-    VkSemaphore* readyToPresentSemaphores = hgAlloc<VkSemaphore>(scratch, frame->windowCount);
+    VkPipelineStageFlags* waitStages = hgArenaAlloc<VkPipelineStageFlags>(scratch, frame->windowCount);
+    VkSemaphore* imageAvailableSemaphores = hgArenaAlloc<VkSemaphore>(scratch, frame->windowCount);
+    VkSemaphore* readyToPresentSemaphores = hgArenaAlloc<VkSemaphore>(scratch, frame->windowCount);
 
-    VkSwapchainKHR* swapchains = hgAlloc<VkSwapchainKHR>(scratch, frame->windowCount);
-    u32* imageIndices = hgAlloc<u32>(scratch, frame->windowCount);
+    VkSwapchainKHR* swapchains = hgArenaAlloc<VkSwapchainKHR>(scratch, frame->windowCount);
+    u32* imageIndices = hgArenaAlloc<u32>(scratch, frame->windowCount);
 
     for (u32 i = 0; i < frame->windowCount; ++i)
     {
@@ -3621,7 +3196,7 @@ void hgGpuFrameEnd(HgGpuCmd* cmd)
     vk.currentFrame = (vk.currentFrame + 1) % vk.frameCount;
 }
 
-void hgPlatformInit(HgArena* arena, u32 maxWindows, u32 maxEvents, u32 maxAudioPlayers)
+void hgPlatformInit()
 {
     SDL_Init(
         SDL_INIT_AUDIO |
@@ -3629,36 +3204,10 @@ void hgPlatformInit(HgArena* arena, u32 maxWindows, u32 maxEvents, u32 maxAudioP
         SDL_INIT_JOYSTICK |
         SDL_INIT_GAMEPAD |
         SDL_INIT_EVENTS);
-
-    windows.pool = hgPoolCreate(arena, maxWindows);
-
-    windows.windowMaxEvents = maxEvents;
-    windows.windowWidth = (u32)hgAlign(sizeof(HgWindowData) + sizeof(HgWindowEvent) * (maxEvents - 1), alignof(HgWindowData));
-    windows.data = (HgWindowData*)hgAlloc(arena, windows.windowWidth * maxWindows, alignof(HgWindowData));
-
-    windows.ids = hgMapCreate<SDL_WindowID, HgWindowData*>(arena, maxWindows * 2);
-
-    audio.device = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
-    if (audio.device == 0)
-        hgError("SDL could not open audio device: %s\n", SDL_GetError());
-
-    audio.playerPool = hgPoolCreate(arena, maxAudioPlayers);
-    audio.playerData = hgAlloc<HgAudioPlayerData>(arena, maxAudioPlayers);
-    for (u32 i = 0; i < maxAudioPlayers; ++i)
-    {
-        audio.playerData[i].stream = nullptr;
-    }
 }
 
 void hgPlatformDeinit()
 {
-    for (u32 i = 0; i < audio.playerPool.capacity; ++i)
-    {
-        if (audio.playerData[i].stream != nullptr)
-            SDL_DestroyAudioStream(audio.playerData[i].stream);
-    }
-    SDL_CloseAudioDevice(audio.device);
-
     SDL_Quit();
 }
 
@@ -3667,13 +3216,36 @@ u32 hgPlatformGetVulkanExtensions(HgArena* arena, HgStringView** extBuffer)
     u32 extCount;
     const char* const* exts = SDL_Vulkan_GetInstanceExtensions(&extCount);
 
-    *extBuffer = hgAlloc<HgStringView>(arena, extCount);
+    *extBuffer = hgArenaAlloc<HgStringView>(arena, extCount);
     for (u32 i = 0; i < extCount; ++i)
     {
         (*extBuffer)[i] = exts[i];
     }
 
     return extCount;
+}
+
+void hgWindowsInit()
+{
+    windows.pool = hgPoolCreate<void>();
+    windows.capacity = windows.pool.handles.capacity;
+
+    windows.maxEvents = 2048;
+    windows.data = hgArrayAnyCreate(
+        (u32)hgAlign(
+            sizeof(HgWindowData) + sizeof(HgWindowEvent) * (windows.maxEvents - 1),
+            alignof(HgWindowData)),
+        alignof(HgWindowData));
+    hgArrayAnyPush(&windows.data);
+
+    windows.ids = hgMapCreate<SDL_WindowID, HgWindowData*>();
+}
+
+void hgWindowsDeinit()
+{
+    hgMapDestroy(&windows.ids);
+    hgArrayAnyDestroy(&windows.data);
+    hgPoolDestroy(&windows.pool);
 }
 
 static HgFormat findSwapchainFormat(VkSurfaceKHR surface)
@@ -3685,7 +3257,7 @@ static HgFormat findSwapchainFormat(VkSurfaceKHR surface)
 
     u32 formatCount = 0;
     vkGetPhysicalDeviceSurfaceFormatsKHR(vk.physicalDevice, surface, &formatCount, nullptr);
-    VkSurfaceFormatKHR* formats = hgAlloc<VkSurfaceFormatKHR>(scratch, formatCount);
+    VkSurfaceFormatKHR* formats = hgArenaAlloc<VkSurfaceFormatKHR>(scratch, formatCount);
     vkGetPhysicalDeviceSurfaceFormatsKHR(vk.physicalDevice, surface, &formatCount, formats);
 
     for (u32 i = 0; i < formatCount; ++i)
@@ -3712,7 +3284,7 @@ static HgGpuPresentMode findSwapchainPresentMode(
 
     u32 modeCount = 0;
     vkGetPhysicalDeviceSurfacePresentModesKHR(vk.physicalDevice, surface, &modeCount, nullptr);
-    VkPresentModeKHR* presentModes = hgAlloc<VkPresentModeKHR>(scratch, modeCount);
+    VkPresentModeKHR* presentModes = hgArenaAlloc<VkPresentModeKHR>(scratch, modeCount);
     vkGetPhysicalDeviceSurfacePresentModesKHR(vk.physicalDevice, surface, &modeCount, presentModes);
 
     for (u32 i = 0; i < modeCount; ++i)
@@ -3730,8 +3302,16 @@ HgWindow hgWindowCreate(const char* title, u32 width, u32 height, const HgWindow
         config = &defaultConfig;
 
     HgWindow window = {hgPoolAlloc(&windows.pool).id};
-    HgWindowData* data = &windows.data[hgHandleIdx(window.handle)];
-    memset((void*)data, 0, windows.windowWidth);
+    HgWindowData* data;
+    if (hgHandleIdx(window.handle) == windows.data.count)
+    {
+        data = (HgWindowData*)hgArrayAnyPush(&windows.data);
+    }
+    else
+    {
+        data = (HgWindowData*)windows.data[hgHandleIdx(window.handle)];
+    }
+    hgMemClear(data, windows.data.width);
     *data = {};
 
     if (title == nullptr)
@@ -3776,7 +3356,7 @@ HgWindow hgWindowCreate(const char* title, u32 width, u32 height, const HgWindow
 
     resizeWindowSwapchain(data);
 
-    data->eventCapacity = windows.windowMaxEvents;
+    data->eventCapacity = windows.maxEvents;
     data->eventCount = 0;
 
     return window;
@@ -3790,8 +3370,8 @@ void hgWindowDestroy(HgWindow window)
     {
         vkDestroySemaphore(vk.device, data->readyToPresent[i], nullptr);
         vkDestroyImageView(vk.device, viewGet(data->views[i])->view, nullptr);
-        hgPoolFree(&vk.viewPool, data->views[i].handle);
-        hgPoolFree(&vk.imagePool, data->images[i].handle);
+        hgPoolFree(&vk.views, data->views[i].handle);
+        hgPoolFree(&vk.images, data->images[i].handle);
     }
 
     for (u32 i = 0; i < vk.frameCount; ++i)
@@ -4242,6 +3822,27 @@ HgWindowEvent* hgWindowEvents(HgWindow window, u32* count)
     return data->events;
 }
 
+void hgAudioInit()
+{
+    audio.device = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
+    if (audio.device == 0)
+        hgError("SDL could not open audio device: %s\n", SDL_GetError());
+
+    audio.players = hgPoolCreate<HgAudioPlayerData>();
+}
+
+void hgAudioDeinit()
+{
+    for (u32 i = 0; i < audio.players.vals.count; ++i)
+    {
+        if (audio.players.vals[i].stream != nullptr)
+            SDL_DestroyAudioStream(audio.players.vals[i].stream);
+    }
+    hgPoolDestroy(&audio.players);
+
+    SDL_CloseAudioDevice(audio.device);
+}
+
 u32 hgAudioFormatSize(HgAudioFormat format)
 {
     switch (format)
@@ -4282,8 +3883,8 @@ static SDL_AudioFormat hgAudioFormatToSDL(HgAudioFormat format)
 
 HgAudioPlayer hgAudioPlayerCreate(HgAudioFormat format, u32 frequency, u32 channels)
 {
-    HgHandle handle = hgPoolAlloc(&audio.playerPool);
-    HgAudioPlayerData* data = &audio.playerData[hgHandleIdx(handle)];
+    HgHandle handle = hgPoolAlloc(&audio.players);
+    HgAudioPlayerData* data = hgPoolGet(&audio.players, handle);
 
     SDL_AudioSpec audioSpec{};
     audioSpec.format = hgAudioFormatToSDL(format);
@@ -4315,7 +3916,7 @@ void hgAudioPlayerDestroy(HgAudioPlayer player)
     if (!SDL_ClearAudioStream(data->stream))
         hgError("SDL could not clear audio stream: %s\n", SDL_GetError());
 
-    hgPoolFree(&audio.playerPool, player.handle);
+    hgPoolFree(&audio.players, player.handle);
 }
 
 void hgAudioPlayerPush(HgAudioPlayer player, const void* data, u64 size)

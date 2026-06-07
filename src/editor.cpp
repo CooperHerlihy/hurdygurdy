@@ -83,21 +83,21 @@ void init(HgArena* arena)
     hgModelsInit(HgFormat_r8g8b8a8_srgb, HgFormat_d32_sfloat);
     hgSkyboxInit(HgFormat_r8g8b8a8_srgb, HgFormat_d32_sfloat);
 
-    ecs = hgAlloc<HgEcs>(arena, 1);
-    *ecs = hgEcsCreate(arena, 1024, 64);
+    ecs = hgArenaAlloc<HgEcs>(arena, 1);
+    *ecs = hgEcsCreate();
 
-    hgEcsRegisterType(ecs, arena, HgNode, 1024);
-    hgEcsRegisterType(ecs, arena, HgTransform, 1024);
-    hgEcsRegisterType(ecs, arena, HgCamera, 8);
-    hgEcsRegisterType(ecs, arena, HgSkybox, 8);
-    hgEcsRegisterType(ecs, arena, HgSprite, 256);
-    hgEcsRegisterType(ecs, arena, HgDirLight, 64);
-    hgEcsRegisterType(ecs, arena, HgPointLight, 64);
-    hgEcsRegisterType(ecs, arena, HgModel, 256);
-    hgEcsRegisterType(ecs, arena, HgAudioSource, 64);
+    hgEcsRegisterType(ecs, HgNode);
+    hgEcsRegisterType(ecs, HgTransform);
+    hgEcsRegisterType(ecs, HgCamera);
+    hgEcsRegisterType(ecs, HgSkybox);
+    hgEcsRegisterType(ecs, HgSprite);
+    hgEcsRegisterType(ecs, HgDirLight);
+    hgEcsRegisterType(ecs, HgPointLight);
+    hgEcsRegisterType(ecs, HgModel);
+    hgEcsRegisterType(ecs, HgAudioSource);
 
-    hgEcsRegisterType(ecs, arena, Name, 1024);
-    hgEcsRegisterType(ecs, arena, Spin, 256);
+    hgEcsRegisterType(ecs, Name);
+    hgEcsRegisterType(ecs, Spin);
 
     root = hgEcsSpawn(ecs);
     *hgEcsAdd<Name>(ecs, root) = {"root"};
@@ -221,7 +221,7 @@ void drawMenu()
 
             if (ImGui::MenuItem("Save Screenshot"))
             {
-                void* pixels = hgAlloc(hgScratch(), width * height * 4, 4);
+                void* pixels = hgArenaAlloc(hgScratch(), width * height * 4, 4);
 
                 hgGpuImageRead(pixels, renderView);
                 stbi_write_png(
@@ -602,7 +602,7 @@ int main()
 {
     hgDefer(hgDebug("Exited successfully\n"));
 
-    hgInit(nullptr);
+    hgInit();
     hgDefer(hgDeinit());
 
     hgTest();
