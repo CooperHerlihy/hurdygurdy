@@ -1494,7 +1494,7 @@ void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, bool* val)
                     return;
                 };
 
-                *val = elem->floating;
+                *val = elem->boolean;
                 return;
             }
             default:
@@ -1643,7 +1643,7 @@ static void serialBinWriteNull(HgArena* arena, HgBinary* bin)
 {
     SerialBinNode node{};
 
-    u32 idx = bin->size;
+    u32 idx = (u32)bin->size;
     hgBinaryResize(arena, bin, bin->size + sizeof(SerialBinNode));
 
     node.type = HgSerialType_null;
@@ -1654,11 +1654,11 @@ static void serialBinWriteArray(HgArena* arena, HgBinary* bin, HgSerialArray arr
 {
     SerialBinNode node{};
 
-    u32 idx = bin->size;
+    u32 idx = (u32)bin->size;
     hgBinaryResize(arena, bin, bin->size + sizeof(SerialBinNode));
 
     node.type = HgSerialType_array;
-    node.array.elemsBegin = bin->size;
+    node.array.elemsBegin = (u32)bin->size;
     node.array.elemCount = array.elemCount;
     hgBinaryOverwrite(bin, idx, node);
 
@@ -1666,7 +1666,7 @@ static void serialBinWriteArray(HgArena* arena, HgBinary* bin, HgSerialArray arr
     for (u32 i = 0; i < array.elemCount; ++i)
     {
         SerialBinElem elem{};
-        elem.elemBegin = bin->size;
+        elem.elemBegin = (u32)bin->size;
         serialBinWriteNode(arena, bin, &array.elems[i]);
         hgBinaryOverwrite(bin, node.array.elemsBegin + i * sizeof(elem), elem);
     }
@@ -1676,11 +1676,11 @@ static void serialBinWriteObject(HgArena* arena, HgBinary* bin, HgSerialObject o
 {
     SerialBinNode node{};
 
-    u32 idx = bin->size;
+    u32 idx = (u32)bin->size;
     hgBinaryResize(arena, bin, bin->size + sizeof(SerialBinNode));
 
     node.type = HgSerialType_object;
-    node.object.fieldsBegin = bin->size;
+    node.object.fieldsBegin = (u32)bin->size;
     node.object.fieldCount = object.fieldCount;
     hgBinaryOverwrite(bin, idx, node);
 
@@ -1689,12 +1689,12 @@ static void serialBinWriteObject(HgArena* arena, HgBinary* bin, HgSerialObject o
     {
         SerialBinField field{};
 
-        field.nameBegin = bin->size;
-        field.nameLength = object.fields[i].name.length;
+        field.nameBegin = (u32)bin->size;
+        field.nameLength = (u32)object.fields[i].name.length;
         hgBinaryResize(arena, bin, bin->size + field.nameLength);
         hgBinaryOverwrite(bin, field.nameBegin, object.fields[i].name.chars, field.nameLength);
 
-        field.dataBegin = bin->size;
+        field.dataBegin = (u32)bin->size;
         serialBinWriteNode(arena, bin, &object.fields[i].data);
 
         hgBinaryOverwrite(bin, node.object.fieldsBegin + i * sizeof(field), field);
@@ -1705,12 +1705,12 @@ static void serialBinWriteString(HgArena* arena, HgBinary* bin, HgStringView str
 {
     SerialBinNode node{};
 
-    u32 idx = bin->size;
+    u32 idx = (u32)bin->size;
     hgBinaryResize(arena, bin, bin->size + sizeof(SerialBinNode));
 
     node.type = HgSerialType_string;
-    node.string.begin = bin->size;
-    node.string.length = string.length;
+    node.string.begin = (u32)bin->size;
+    node.string.length = (u32)string.length;
     hgBinaryOverwrite(bin, idx, node);
 
     hgBinaryResize(arena, bin, bin->size + string.length);
@@ -1721,7 +1721,7 @@ static void serialBinWriteInteger(HgArena* arena, HgBinary* bin, i64 integer)
 {
     SerialBinNode node{};
 
-    u32 idx = bin->size;
+    u32 idx = (u32)bin->size;
     hgBinaryResize(arena, bin, bin->size + sizeof(SerialBinNode));
 
     node.type = HgSerialType_integer;
@@ -1733,7 +1733,7 @@ static void serialBinWriteFloating(HgArena* arena, HgBinary* bin, f64 floating)
 {
     SerialBinNode node{};
 
-    u32 idx = bin->size;
+    u32 idx = (u32)bin->size;
     hgBinaryResize(arena, bin, bin->size + sizeof(SerialBinNode));
 
     node.type = HgSerialType_floating;
@@ -1745,7 +1745,7 @@ static void serialBinWriteBoolean(HgArena* arena, HgBinary* bin, bool boolean)
 {
     SerialBinNode node{};
 
-    u32 idx = bin->size;
+    u32 idx = (u32)bin->size;
     hgBinaryResize(arena, bin, bin->size + sizeof(SerialBinNode));
 
     node.type = HgSerialType_boolean;
@@ -1794,7 +1794,7 @@ HgBinary hgBinaryWriteSerial(HgArena* arena, HgSerializer serial)
     header.versionMajor = serialBinVersionMajor;
     header.versionMinor = serialBinVersionMinor;
     header.versionPatch = serialBinVersionPatch;
-    header.nodeBegin = bin.size;
+    header.nodeBegin = (u32)bin.size;
     hgBinaryOverwrite(&bin, 0, header);
 
     serialBinWriteNode(arena, &bin, serial.current);
@@ -4403,9 +4403,9 @@ void hgModelsInit(
     hgGpuBufferWrite(modelPipeline.defaultModel.vertexBuffer, 0, cubeVertices, sizeof(cubeVertices));
     hgGpuBufferWrite(modelPipeline.defaultModel.indexBuffer, 0, cubeIndices, sizeof(cubeIndices));
 
-    modelPipeline.defaultModel.vertexCount = hgArrayCount(cubeVertices);
-    modelPipeline.defaultModel.vertexWidth = sizeof(HgMeshVertex);
-    modelPipeline.defaultModel.indexCount = hgArrayCount(cubeIndices);
+    modelPipeline.defaultModel.vertexCount = (u32)hgArrayCount(cubeVertices);
+    modelPipeline.defaultModel.vertexWidth = (u32)sizeof(HgMeshVertex);
+    modelPipeline.defaultModel.indexCount = (u32)hgArrayCount(cubeIndices);
 
     struct Color {
         u8 r, g, b, a;

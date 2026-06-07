@@ -597,7 +597,7 @@ void hgTest()
             hgSerialize(arena, &data, "c", &val->c);
             hgSerialize(arena, &data, "d", &val->d);
 
-            u32 eSize = hgArrayCount(val->e);
+            u32 eSize = (u32)hgArrayCount(val->e);
             HgSerializer eArr = hgSerializeArray(arena, &data, "e", &eSize);
             for (u32 i = 0; i < eSize; ++i)
             {
@@ -1569,74 +1569,76 @@ void hgTest()
 
     // HgSet
     {
-        HgArena* arena = hgScratch();
-        hgArenaScope(arena);
-
-        constexpr u32 count = 128;
-
-        HgSet<u32> set = hgSetTemp<u32>(arena, count);
-
-        for (u32 i = 0; i < 3; ++i)
         {
-            hgAssert(set.count == 0);
-            hgAssert(!hgSetHas(&set, 0));
-            hgAssert(!hgSetHas(&set, 1));
-            hgAssert(!hgSetHas(&set, 12));
-            hgAssert(!hgSetHas(&set, 42));
-            hgAssert(!hgSetHas(&set, 100000));
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
 
-            hgSetAdd(&set, 1);
-            hgAssert(set.count == 1);
-            hgAssert(hgSetHas(&set, 1));
+            constexpr u32 count = 128;
 
-            hgSetRemove(&set, 1);
-            hgAssert(set.count == 0);
-            hgAssert(!hgSetHas(&set, 1));
+            HgSet<u32> set = hgSetTemp<u32>(arena, count);
 
-            hgAssert(!hgSetHas(&set, 12));
-            hgAssert(!hgSetHas(&set, 12 + count));
+            for (u32 i = 0; i < 3; ++i)
+            {
+                hgAssert(set.count == 0);
+                hgAssert(!hgSetHas(&set, 0));
+                hgAssert(!hgSetHas(&set, 1));
+                hgAssert(!hgSetHas(&set, 12));
+                hgAssert(!hgSetHas(&set, 42));
+                hgAssert(!hgSetHas(&set, 100000));
 
-            hgSetAdd(&set, 12);
-            hgAssert(set.count == 1);
-            hgAssert(hgSetHas(&set, 12));
-            hgAssert(!hgSetHas(&set, 12 + count));
+                hgSetAdd(&set, 1);
+                hgAssert(set.count == 1);
+                hgAssert(hgSetHas(&set, 1));
 
-            hgSetAdd(&set, 12 + count);
-            hgAssert(set.count == 2);
-            hgAssert(hgSetHas(&set, 12));
-            hgAssert(hgSetHas(&set, 12 + count));
+                hgSetRemove(&set, 1);
+                hgAssert(set.count == 0);
+                hgAssert(!hgSetHas(&set, 1));
 
-            hgSetAdd(&set, 12 + count * 2);
-            hgAssert(set.count == 3);
-            hgAssert(hgSetHas(&set, 12));
-            hgAssert(hgSetHas(&set, 12 + count));
-            hgAssert(hgSetHas(&set, 12 + count * 2));
+                hgAssert(!hgSetHas(&set, 12));
+                hgAssert(!hgSetHas(&set, 12 + count));
 
-            hgSetRemove(&set, 12);
-            hgAssert(set.count == 2);
-            hgAssert(!hgSetHas(&set, 12));
-            hgAssert(hgSetHas(&set, 12 + count));
+                hgSetAdd(&set, 12);
+                hgAssert(set.count == 1);
+                hgAssert(hgSetHas(&set, 12));
+                hgAssert(!hgSetHas(&set, 12 + count));
 
-            hgSetAdd(&set, 42);
-            hgAssert(set.count == 3);
-            hgAssert(hgSetHas(&set, 42));
+                hgSetAdd(&set, 12 + count);
+                hgAssert(set.count == 2);
+                hgAssert(hgSetHas(&set, 12));
+                hgAssert(hgSetHas(&set, 12 + count));
 
-            hgSetRemove(&set, 12 + count);
-            hgAssert(set.count == 2);
-            hgAssert(!hgSetHas(&set, 12));
-            hgAssert(!hgSetHas(&set, 12 + count));
+                hgSetAdd(&set, 12 + count * 2);
+                hgAssert(set.count == 3);
+                hgAssert(hgSetHas(&set, 12));
+                hgAssert(hgSetHas(&set, 12 + count));
+                hgAssert(hgSetHas(&set, 12 + count * 2));
 
-            hgSetRemove(&set, 42);
-            hgAssert(set.count == 1);
-            hgAssert(!hgSetHas(&set, 42));
+                hgSetRemove(&set, 12);
+                hgAssert(set.count == 2);
+                hgAssert(!hgSetHas(&set, 12));
+                hgAssert(hgSetHas(&set, 12 + count));
 
-            hgSetRemove(&set, 12 + count * 2);
-            hgAssert(set.count == 0);
-            hgAssert(!hgSetHas(&set, 12));
-            hgAssert(!hgSetHas(&set, 12 + count));
-            hgAssert(!hgSetHas(&set, 12 + count * 2));
+                hgSetAdd(&set, 42);
+                hgAssert(set.count == 3);
+                hgAssert(hgSetHas(&set, 42));
 
-            hgSetReset(&set);
+                hgSetRemove(&set, 12 + count);
+                hgAssert(set.count == 2);
+                hgAssert(!hgSetHas(&set, 12));
+                hgAssert(!hgSetHas(&set, 12 + count));
+
+                hgSetRemove(&set, 42);
+                hgAssert(set.count == 1);
+                hgAssert(!hgSetHas(&set, 42));
+
+                hgSetRemove(&set, 12 + count * 2);
+                hgAssert(set.count == 0);
+                hgAssert(!hgSetHas(&set, 12));
+                hgAssert(!hgSetHas(&set, 12 + count));
+                hgAssert(!hgSetHas(&set, 12 + count * 2));
+
+                hgSetReset(&set);
+            }
         }
 
         {
@@ -1782,75 +1784,77 @@ void hgTest()
 
     // HgMap
     {
-        HgArena* arena = hgScratch();
-        hgArenaScope(arena);
-
-        constexpr u32 count = 128;
-
-        HgMap<u32, u32> map = hgMapTemp<u32, u32>(arena, count);
-
-        for (u32 i = 0; i < 3; ++i)
         {
-            hgAssert(map.count == 0);
-            hgAssert(hgMapGet(&map, 0) == nullptr);
-            hgAssert(hgMapGet(&map, 1) == nullptr);
-            hgAssert(hgMapGet(&map, 12) == nullptr);
-            hgAssert(hgMapGet(&map, 42) == nullptr);
-            hgAssert(hgMapGet(&map, 100000) == nullptr);
+            HgArena* arena = hgScratch();
+            hgArenaScope(arena);
 
-            hgMapAdd(&map, 1, 1);
-            hgAssert(map.count == 1);
-            hgAssert(hgMapGet(&map, 1) != nullptr);
-            hgAssert(*hgMapGet(&map, 1) == 1);
+            constexpr u32 count = 128;
 
-            hgMapRemove(&map, 1);
-            hgAssert(map.count == 0);
-            hgAssert(hgMapGet(&map, 1) == nullptr);
+            HgMap<u32, u32> map = hgMapTemp<u32, u32>(arena, count);
 
-            hgAssert(hgMapGet(&map, 12) == nullptr);
-            hgAssert(hgMapGet(&map, 12 + count) == nullptr);
+            for (u32 i = 0; i < 3; ++i)
+            {
+                hgAssert(map.count == 0);
+                hgAssert(hgMapGet(&map, 0) == nullptr);
+                hgAssert(hgMapGet(&map, 1) == nullptr);
+                hgAssert(hgMapGet(&map, 12) == nullptr);
+                hgAssert(hgMapGet(&map, 42) == nullptr);
+                hgAssert(hgMapGet(&map, 100000) == nullptr);
 
-            hgMapAdd(&map, 12, 42);
-            hgAssert(map.count == 1);
-            hgAssert(hgMapGet(&map, 12) != nullptr && *hgMapGet(&map, 12) == 42);
-            hgAssert(hgMapGet(&map, 12 + count) == nullptr);
+                hgMapAdd(&map, 1, 1);
+                hgAssert(map.count == 1);
+                hgAssert(hgMapGet(&map, 1) != nullptr);
+                hgAssert(*hgMapGet(&map, 1) == 1);
 
-            hgMapAdd(&map, 12 + count, 100);
-            hgAssert(map.count == 2);
-            hgAssert(hgMapGet(&map, 12) != nullptr && *hgMapGet(&map, 12) == 42);
-            hgAssert(hgMapGet(&map, 12 + count) != nullptr && *hgMapGet(&map, 12 + count) == 100);
+                hgMapRemove(&map, 1);
+                hgAssert(map.count == 0);
+                hgAssert(hgMapGet(&map, 1) == nullptr);
 
-            hgMapAdd(&map, 12 + count * 2, 200);
-            hgAssert(map.count == 3);
-            hgAssert(hgMapGet(&map, 12) != nullptr && *hgMapGet(&map, 12) == 42);
-            hgAssert(hgMapGet(&map, 12 + count) != nullptr && *hgMapGet(&map, 12 + count) == 100);
-            hgAssert(hgMapGet(&map, 12 + count * 2) != nullptr && *hgMapGet(&map, 12 + count * 2) == 200);
+                hgAssert(hgMapGet(&map, 12) == nullptr);
+                hgAssert(hgMapGet(&map, 12 + count) == nullptr);
 
-            hgMapRemove(&map, 12);
-            hgAssert(map.count == 2);
-            hgAssert(hgMapGet(&map, 12) == nullptr);
-            hgAssert(hgMapGet(&map, 12 + count) != nullptr && *hgMapGet(&map, 12 + count) == 100);
+                hgMapAdd(&map, 12, 42);
+                hgAssert(map.count == 1);
+                hgAssert(hgMapGet(&map, 12) != nullptr && *hgMapGet(&map, 12) == 42);
+                hgAssert(hgMapGet(&map, 12 + count) == nullptr);
 
-            hgMapAdd(&map, 42, 12);
-            hgAssert(map.count == 3);
-            hgAssert(hgMapGet(&map, 42) != nullptr && *hgMapGet(&map, 42) == 12);
+                hgMapAdd(&map, 12 + count, 100);
+                hgAssert(map.count == 2);
+                hgAssert(hgMapGet(&map, 12) != nullptr && *hgMapGet(&map, 12) == 42);
+                hgAssert(hgMapGet(&map, 12 + count) != nullptr && *hgMapGet(&map, 12 + count) == 100);
 
-            hgMapRemove(&map, 12 + count);
-            hgAssert(map.count == 2);
-            hgAssert(hgMapGet(&map, 12) == nullptr);
-            hgAssert(hgMapGet(&map, 12 + count) == nullptr);
+                hgMapAdd(&map, 12 + count * 2, 200);
+                hgAssert(map.count == 3);
+                hgAssert(hgMapGet(&map, 12) != nullptr && *hgMapGet(&map, 12) == 42);
+                hgAssert(hgMapGet(&map, 12 + count) != nullptr && *hgMapGet(&map, 12 + count) == 100);
+                hgAssert(hgMapGet(&map, 12 + count * 2) != nullptr && *hgMapGet(&map, 12 + count * 2) == 200);
 
-            hgMapRemove(&map, 42);
-            hgAssert(map.count == 1);
-            hgAssert(hgMapGet(&map, 42) == nullptr);
+                hgMapRemove(&map, 12);
+                hgAssert(map.count == 2);
+                hgAssert(hgMapGet(&map, 12) == nullptr);
+                hgAssert(hgMapGet(&map, 12 + count) != nullptr && *hgMapGet(&map, 12 + count) == 100);
 
-            hgMapRemove(&map, 12 + count * 2);
-            hgAssert(map.count == 0);
-            hgAssert(hgMapGet(&map, 12) == nullptr);
-            hgAssert(hgMapGet(&map, 12 + count) == nullptr);
-            hgAssert(hgMapGet(&map, 12 + count * 2) == nullptr);
+                hgMapAdd(&map, 42, 12);
+                hgAssert(map.count == 3);
+                hgAssert(hgMapGet(&map, 42) != nullptr && *hgMapGet(&map, 42) == 12);
 
-            hgMapReset(&map);
+                hgMapRemove(&map, 12 + count);
+                hgAssert(map.count == 2);
+                hgAssert(hgMapGet(&map, 12) == nullptr);
+                hgAssert(hgMapGet(&map, 12 + count) == nullptr);
+
+                hgMapRemove(&map, 42);
+                hgAssert(map.count == 1);
+                hgAssert(hgMapGet(&map, 42) == nullptr);
+
+                hgMapRemove(&map, 12 + count * 2);
+                hgAssert(map.count == 0);
+                hgAssert(hgMapGet(&map, 12) == nullptr);
+                hgAssert(hgMapGet(&map, 12 + count) == nullptr);
+                hgAssert(hgMapGet(&map, 12 + count * 2) == nullptr);
+
+                hgMapReset(&map);
+            }
         }
 
         {

@@ -34,6 +34,8 @@
 #include <cstdlib>
 #include <cstring>
 
+#include <type_traits>
+
 #ifdef __GNUC__
 #define HG_COMPILER_GCC 1
 #endif

@@ -115,10 +115,10 @@ constexpr u32 hgEndianReverse32(u32 val)
  */
 constexpr u64 hgEndianReverse64(u64 val)
 {
-    return (val & 0xff000000 >> 24) &
-           (val & 0x00ff0000 >> 8) &
-           (val & 0x0000ff00 << 8) &
-           (val & 0x000000ff << 24);
+    return (val & (u32)0xff000000 >> 24) &
+           (val & (u32)0x00ff0000 >> 8) &
+           (val & (u32)0x0000ff00 << 8) &
+           (val & (u32)0x000000ff << 24);
 }
 
 /**

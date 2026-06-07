@@ -124,19 +124,29 @@ struct HgMeshVertex {
     /**
      * The vertex position
      */
-    alignas(16) HgVec3 pos;
+    HgVec3 pos;
+    /**
+     * The u part of the vertex uv coordinate
+     */
+    f32 uvU;
     /**
      * The vertex normal
      */
-    alignas(16) HgVec3 norm;
+    HgVec3 norm;
+    /**
+     * The v part of the vertex uv coordinate
+     */
+    f32 uvV;
     /**
      * The vertex tangent
      */
-    alignas(16) HgVec4 tan;
+    HgVec4 tan;
+
     /**
-     * The vertex uv coordinate
+     * Construct the vertex
      */
-    alignas(16) HgVec2 uv;
+    HgMeshVertex(HgVec3 pos, HgVec3 norm, HgVec4 tan, HgVec2 uv)
+        : pos{pos}, uvU{uv.x}, norm{norm}, uvV{uv.y}, tan{tan} {}
 };
 
 /**

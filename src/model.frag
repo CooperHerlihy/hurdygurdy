@@ -44,13 +44,15 @@ layout (location = 0) out vec4 outColor;
 void main()
 {
     vec3 normal = hgTransformNormalMap(
-        texture(uTextures[push.normalMap], vIn.vertex.uvCoord).xyz,
-        vIn.vertex.normal,
+        texture(
+            uTextures[push.normalMap],
+            vec2(vIn.vertex.position.w, vIn.vertex.normal.w)).xyz,
+        vIn.vertex.normal.xyz,
         vIn.vertex.tangent);
 
     vec3 lighting = vec3(0.0);
 
-    vec3 viewDir = -normalize(vIn.vertex.position);
+    vec3 viewDir = -normalize(vIn.vertex.position.xyz);
 
     for (uint i = 0; i < push.dirLightCount; ++i)
     {
@@ -73,7 +75,7 @@ void main()
     {
         PointLight light = pointLights[push.pointLights].lights[i];
 
-        vec3 lightPosRel = light.pos.xyz - vIn.vertex.position;
+        vec3 lightPosRel = light.pos.xyz - vIn.vertex.position.xyz;
         lighting +=
             light.color.xyz *
             light.color.w *
@@ -90,7 +92,7 @@ void main()
 
     vec3 color = texture(
         uTextures[push.colorMap],
-        vIn.vertex.uvCoord).xyz
+        vec2(vIn.vertex.position.w, vIn.vertex.normal.w)).xyz
         * lighting;
     outColor = vec4(hgAcesFittedTonemap(color), 1.0);
 }

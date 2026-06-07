@@ -155,9 +155,9 @@ int main()
             {
                 noiseSeed = std::random_device{}();
             }
-            ImGui::DragInt("ScaleBegin", (int*)&noiseScaleBegin, 1, 1, noiseScaleEnd - 1);
-            ImGui::DragInt("ScaleEnd", (int*)&noiseScaleEnd, 1, noiseScaleBegin + 1, noiseWidth);
-            ImGui::DragInt("Tiling", (int*)&noiseTiling, 1, 0, noiseWidth);
+            ImGui::DragInt("ScaleBegin", (int*)&noiseScaleBegin, 1, 1, (int)noiseScaleEnd - 1);
+            ImGui::DragInt("ScaleEnd", (int*)&noiseScaleEnd, 1, (int)noiseScaleBegin + 1, (int)noiseWidth);
+            ImGui::DragInt("Tiling", (int*)&noiseTiling, 1, 0, (int)noiseWidth);
         }
         ImGui::End();
 

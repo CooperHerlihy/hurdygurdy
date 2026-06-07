@@ -776,7 +776,7 @@ struct WindowState {
     bool imguiInitialized = false;
 };
 
-static WindowState windows{};
+static WindowState windowState{};
 
 struct HgAudioPlayer {
     SDL_AudioStream* stream;
@@ -869,7 +869,7 @@ static VkInstance createInstance(HgStringView* extensions, u32 extensionCount)
     const char* layers[]{
         "VK_LAYER_KHRONOS_validation",
     };
-    instanceInfo.enabledLayerCount = hgArrayCount(layers);
+    instanceInfo.enabledLayerCount = (u32)hgArrayCount(layers);
     instanceInfo.ppEnabledLayerNames = layers;
 #endif
 
@@ -961,7 +961,7 @@ static VkPhysicalDevice findPhysicalDevice()
         }
         vkEnumerateDeviceExtensionProperties(gpu, nullptr, &newPropCount, extProps);
 
-        for (u32 j = 0; j < hgArrayCount(deviceExtensions); j++)
+        for (u32 j = 0; j < (u32)hgArrayCount(deviceExtensions); j++)
         {
             for (u32 k = 0; k < newPropCount; k++)
             {
@@ -1040,7 +1040,7 @@ static VkDevice createDevice()
     deviceInfo.pNext = &synchronization2Feature;
     deviceInfo.queueCreateInfoCount = 1;
     deviceInfo.pQueueCreateInfos = &queueInfo;
-    deviceInfo.enabledExtensionCount = hgArrayCount(deviceExtensions);
+    deviceInfo.enabledExtensionCount = (u32)hgArrayCount(deviceExtensions);
     deviceInfo.ppEnabledExtensionNames = deviceExtensions;
     deviceInfo.pEnabledFeatures = &features;
 
@@ -1065,7 +1065,7 @@ static VkDescriptorPool createBindlessDescriptorPool()
     info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     info.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
     info.maxSets = 1;
-    info.poolSizeCount = hgArrayCount(sizes);
+    info.poolSizeCount = (u32)hgArrayCount(sizes);
     info.pPoolSizes = sizes;
 
     VkDescriptorPool pool = nullptr;
@@ -1091,14 +1091,14 @@ static VkDescriptorSetLayout createBindlessDescriptorLayout()
 
     VkDescriptorSetLayoutBindingFlagsCreateInfo flagsInfo{};
     flagsInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
-    flagsInfo.bindingCount = hgArrayCount(bindings);
+    flagsInfo.bindingCount = (u32)hgArrayCount(bindings);
     flagsInfo.pBindingFlags = flags;
 
     VkDescriptorSetLayoutCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     info.pNext = &flagsInfo;
     info.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
-    info.bindingCount = hgArrayCount(bindings);
+    info.bindingCount = (u32)hgArrayCount(bindings);
     info.pBindings = bindings;
 
     VkDescriptorSetLayout layout = nullptr;
@@ -1575,10 +1575,10 @@ HgGpuImage* hgGpuImageCreateEx(const HgGpuImageCreateEx* create)
     image->width = create->width;
     image->height = create->height;
     image->depth = create->depth;
-    image->dimensions = create->dimensions;
-    image->mipLevels = create->mipLevels;
-    image->arrayLayers = create->arrayLayers;
-    image->msaaSamples = countToMsaaSampleBits(create->msaaSamples);
+    image->dimensions = (u8)create->dimensions;
+    image->mipLevels = (u8)create->mipLevels;
+    image->arrayLayers = (u8)create->arrayLayers;
+    image->msaaSamples = (u8)countToMsaaSampleBits(create->msaaSamples);
 
     return image;
 }
@@ -1689,10 +1689,10 @@ HgGpuView* hgGpuViewCreateEx(const HgGpuViewCreateEx* config)
     view->image = config->image;
     view->type = config->type;
     view->aspectFlags = config->aspectFlags;
-    view->baseMipLevel = config->baseMipLevel;
-    view->levelCount = config->levelCount;
-    view->baseArrayLayer = config->baseArrayLayer;
-    view->layerCount = config->layerCount;
+    view->baseMipLevel = (u8)config->baseMipLevel;
+    view->levelCount = (u8)config->levelCount;
+    view->baseArrayLayer = (u8)config->baseArrayLayer;
+    view->layerCount = (u8)config->layerCount;
 
     return view;
 }
@@ -1863,7 +1863,7 @@ void hgGpuImageWriteCubemap(HgGpuView* dst, const void* src)
 
     VkDependencyInfo transferDep{};
     transferDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    transferDep.imageMemoryBarrierCount = hgArrayCount(transferBarriers);
+    transferDep.imageMemoryBarrierCount = (u32)hgArrayCount(transferBarriers);
     transferDep.pImageMemoryBarriers = transferBarriers;
 
     vkCmdPipelineBarrier2((VkCommandBuffer)cmd, &transferDep);
@@ -1912,7 +1912,7 @@ void hgGpuImageWriteCubemap(HgGpuView* dst, const void* src)
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         dst->image->image,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        hgArrayCount(regions),
+        (u32)hgArrayCount(regions),
         regions);
 
     hgGpuCmdEnd(cmd);
@@ -2221,7 +2221,7 @@ HgGpuPipeline* hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* co
     VkDynamicState dynamicStates[]{VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
     VkPipelineDynamicStateCreateInfo dynamicState{};
     dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-    dynamicState.dynamicStateCount = hgArrayCount(dynamicStates);
+    dynamicState.dynamicStateCount = (u32)hgArrayCount(dynamicStates);
     dynamicState.pDynamicStates = dynamicStates;
 
     VkFormat* colorFormats = hgArenaAlloc<VkFormat>(scratch, config->colorAttachmentCount);
@@ -2242,7 +2242,7 @@ HgGpuPipeline* hgGpuPipelineCreateGraphics(const HgCreateGpuGraphicsPipeline* co
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     pipelineInfo.pNext = &renderingInfo;
-    pipelineInfo.stageCount = hgArrayCount(shaderStages);
+    pipelineInfo.stageCount = (u32)hgArrayCount(shaderStages);
     pipelineInfo.pStages = shaderStages;
     pipelineInfo.pVertexInputState = &vertexInputState;
     pipelineInfo.pInputAssemblyState = &inputAssemblyState;
@@ -3153,14 +3153,14 @@ u32 hgPlatformGetVulkanExtensions(HgArena* arena, HgStringView** extBuffer)
 
 void hgWindowsInit()
 {
-    windows.pool = hgPoolCreate<HgWindow>();
-    windows.ids = hgMapCreate<SDL_WindowID, HgWindow*>();
+    windowState.pool = hgPoolCreate<HgWindow>();
+    windowState.ids = hgMapCreate<SDL_WindowID, HgWindow*>();
 }
 
 void hgWindowsDeinit()
 {
-    hgMapDestroy(&windows.ids);
-    hgPoolDestroy(&windows.pool);
+    hgMapDestroy(&windowState.ids);
+    hgPoolDestroy(&windowState.pool);
 }
 
 static HgFormat findSwapchainFormat(VkSurfaceKHR surface)
@@ -3216,7 +3216,7 @@ HgWindow* hgWindowCreate(const char* title, u32 width, u32 height, const HgWindo
     if (config == nullptr)
         config = &defaultConfig;
 
-    HgWindow* window = hgPoolAlloc(&windows.pool);
+    HgWindow* window = hgPoolAlloc(&windowState.pool);
     *window = {};
 
     if (title == nullptr)
@@ -3232,17 +3232,17 @@ HgWindow* hgWindowCreate(const char* title, u32 width, u32 height, const HgWindo
         SDL_DisplayMode** modes = SDL_GetFullscreenDisplayModes(SDL_GetPrimaryDisplay(), &modeCount);
         hgDefer(SDL_free(modes));
 
-        width = modes[0]->w;
-        height = modes[0]->h;
+        width = (u32)modes[0]->w;
+        height = (u32)modes[0]->h;
         flags |= SDL_WINDOW_FULLSCREEN;
     }
 
-    window->sdlWindow = SDL_CreateWindow(title, width, height, flags);
+    window->sdlWindow = SDL_CreateWindow(title, (int)width, (int)height, flags);
     if (window->sdlWindow == nullptr)
         hgError("Failed to create SDL window: %s\n", SDL_GetError());
 
     SDL_WindowID windowID = SDL_GetWindowID(window->sdlWindow);
-    hgMapAdd(&windows.ids, windowID, window);
+    hgMapAdd(&windowState.ids, windowID, window);
 
     SDL_GetWindowSize(window->sdlWindow, (int*)&window->width, (int*)&window->height);
 
@@ -3289,12 +3289,12 @@ void hgWindowDestroy(HgWindow* window)
     hgArrayDestroy(&window->images);
 
     SDL_WindowID windowID = SDL_GetWindowID(window->sdlWindow);
-    hgMapRemove(&windows.ids, windowID);
+    hgMapRemove(&windowState.ids, windowID);
 
     vkDestroySurfaceKHR(vk.instance, window->surface, nullptr);
     SDL_DestroyWindow(window->sdlWindow);
 
-    hgPoolFree(&windows.pool, window);
+    hgPoolFree(&windowState.pool, window);
 }
 
 HgGpuView* hgWindowImageView(HgWindow* window)
@@ -3547,10 +3547,10 @@ static HgButton sdlButtonToHgButton(u32 button)
 
 void hgProcessEvents()
 {
-    windows.mouseDX = 0;
-    windows.mouseDY = 0;
+    windowState.mouseDX = 0;
+    windowState.mouseDY = 0;
 
-    hgMapForEach(&windows.ids, [&](SDL_WindowID*, HgWindow** window)
+    hgMapForEach(&windowState.ids, [&](SDL_WindowID*, HgWindow** window)
     {
         (*window)->events.count = 0;
     });
@@ -3558,17 +3558,17 @@ void hgProcessEvents()
     SDL_Event event;
     while (SDL_PollEvent(&event))
     {
-        if (windows.imguiInitialized)
+        if (windowState.imguiInitialized)
             ImGui_ImplSDL3_ProcessEvent(&event);
 
         switch (event.type)
         {
             case SDL_EVENT_QUIT:
-                windows.wasQuit = true;
+                windowState.wasQuit = true;
                 break;
             case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
             {
-                HgWindow** window = hgMapGet(&windows.ids, event.window.windowID);
+                HgWindow** window = hgMapGet(&windowState.ids, event.window.windowID);
                 if (window != nullptr)
                     (*window)->wasClosed = true;
             } break;
@@ -3576,7 +3576,7 @@ void hgProcessEvents()
             case SDL_EVENT_WINDOW_RESTORED: [[fallthrough]];
             case SDL_EVENT_WINDOW_RESIZED:
             {
-                HgWindow** window = hgMapGet(&windows.ids, event.window.windowID);
+                HgWindow** window = hgMapGet(&windowState.ids, event.window.windowID);
                 if (window != nullptr)
                 {
                     SDL_GetWindowSize((*window)->sdlWindow, (int*)&(*window)->width, (int*)&(*window)->height);
@@ -3585,19 +3585,19 @@ void hgProcessEvents()
             } break;
             case SDL_EVENT_MOUSE_MOTION:
             {
-                HgWindow** window = hgMapGet(&windows.ids, event.button.windowID);
+                HgWindow** window = hgMapGet(&windowState.ids, event.button.windowID);
                 if (window != nullptr)
                 {
                     (*window)->mouseX = event.motion.x;
                     (*window)->mouseY = event.motion.y;
                 }
-                windows.mouseDX += event.motion.xrel;
-                windows.mouseDY += event.motion.yrel;
+                windowState.mouseDX += event.motion.xrel;
+                windowState.mouseDY += event.motion.yrel;
             } break;
             case SDL_EVENT_KEY_DOWN:
             {
                 HgButton key = sdlKeycodeToHgButton(event.key.key);
-                HgWindow** window = hgMapGet(&windows.ids, event.key.windowID);
+                HgWindow** window = hgMapGet(&windowState.ids, event.key.windowID);
                 if (window != nullptr)
                 {
                     HgWindowEvent windowEvent{};
@@ -3611,7 +3611,7 @@ void hgProcessEvents()
             case SDL_EVENT_KEY_UP:
             {
                 HgButton key = sdlKeycodeToHgButton(event.key.key);
-                HgWindow** window = hgMapGet(&windows.ids, event.key.windowID);
+                HgWindow** window = hgMapGet(&windowState.ids, event.key.windowID);
                 if (window != nullptr)
                 {
                     HgWindowEvent windowEvent{};
@@ -3625,7 +3625,7 @@ void hgProcessEvents()
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
             {
                 HgButton key = sdlButtonToHgButton(event.button.button);
-                HgWindow** window = hgMapGet(&windows.ids, event.button.windowID);
+                HgWindow** window = hgMapGet(&windowState.ids, event.button.windowID);
                 if (window != nullptr)
                 {
                     HgWindowEvent windowEvent{};
@@ -3639,7 +3639,7 @@ void hgProcessEvents()
             case SDL_EVENT_MOUSE_BUTTON_UP:
             {
                 HgButton key = sdlButtonToHgButton(event.button.button);
-                HgWindow** window = hgMapGet(&windows.ids, event.button.windowID);
+                HgWindow** window = hgMapGet(&windowState.ids, event.button.windowID);
                 if (window != nullptr)
                 {
                     HgWindowEvent windowEvent{};
@@ -3656,7 +3656,7 @@ void hgProcessEvents()
 
 bool hgWasQuit()
 {
-    return windows.wasQuit;
+    return windowState.wasQuit;
 }
 
 bool hgWindowWasClosed(HgWindow* window)
@@ -3698,13 +3698,13 @@ f32 hgMouseY(HgWindow* window)
 f32 hgMouseDeltaX(HgWindow* window)
 {
     hgAssert(window != nullptr);
-    return windows.mouseDX / (f32)window->height;
+    return windowState.mouseDX / (f32)window->height;
 }
 
 f32 hgMouseDeltaY(HgWindow* window)
 {
     hgAssert(window != nullptr);
-    return windows.mouseDY / (f32)window->height;
+    return windowState.mouseDY / (f32)window->height;
 }
 
 bool hgIsButtonDown(HgWindow* window, HgButton key)
@@ -3781,8 +3781,8 @@ HgAudioPlayer* hgAudioPlayerCreate(HgAudioFormat format, u32 frequency, u32 chan
 
     SDL_AudioSpec audioSpec{};
     audioSpec.format = hgAudioFormatToSDL(format);
-    audioSpec.freq = frequency;
-    audioSpec.channels = channels;
+    audioSpec.freq = (int)frequency;
+    audioSpec.channels = (int)channels;
 
     player->stream = SDL_CreateAudioStream(&audioSpec, nullptr);
     if (player->stream == nullptr)
@@ -3805,7 +3805,7 @@ void hgAudioPlayerDestroy(HgAudioPlayer* player)
 
 void hgAudioPlayerPush(HgAudioPlayer* player, const void* data, u64 size)
 {
-    if (!SDL_PutAudioStreamData(player->stream, data, size))
+    if (!SDL_PutAudioStreamData(player->stream, data, (int)size))
         hgError("SDL could not push audio data: %s\n", SDL_GetError());
 }
 
@@ -3862,12 +3862,12 @@ void hgImGuiInit(
 
     ImGui_ImplVulkan_Init(&imguiInfo);
 
-    windows.imguiInitialized = true;
+    windowState.imguiInitialized = true;
 }
 
 void hgImGuiDeinit()
 {
-    windows.imguiInitialized = false;
+    windowState.imguiInitialized = false;
 
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplSDL3_Shutdown();
@@ -5535,6 +5535,9 @@ void* hgLibraryFindFunction(HgLibrary* lib, HgStringView symbol)
 
 #elif defined(HG_PLATFORM_WINDOWS)
 
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+
 HgLibrary* hgLibraryLoad(HgStringView path)
 {
     char* cstr = hgCString(hgScratch(), path);
@@ -5558,7 +5561,7 @@ void* hgLibraryFindFunction(HgLibrary* lib, HgStringView symbol)
 
     void* fn = GetProcAddress((HMODULE)lib, cstr);
     if (lib == nullptr)
-        hgWarn("Could not load function symbol \"%s\": %s\n", cstr, dlerror());
+        hgWarn("Could not load function symbol \"%s\"\n", cstr);
 
     return fn;
 }

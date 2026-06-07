@@ -682,7 +682,7 @@ constexpr u32 hgHandleIdx(HgHandle handle)
  */
 constexpr u32 hgHandleGeneration(HgHandle handle)
 {
-    return handle.id & ~((1 << hgHandleIdxBits) - 1);
+    return handle.id & ~(((u32)1 << hgHandleIdxBits) - (u32)1);
 }
 
 /**

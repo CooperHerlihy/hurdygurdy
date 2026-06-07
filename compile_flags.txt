@@ -1,6 +1,8 @@
 -std=c++17
 -Wall
 -Wextra
+-Wconversion
+-Wsign-conversion
 -pedantic
 -fno-exceptions
 -fno-rtti
