@@ -29,6 +29,77 @@
 
 #include "hg_core.hpp"
 #include "hg_memory.hpp"
+#include "hg_utils.hpp"
+
+/**
+ * A block of binary data
+ */
+struct HgBinary {
+    /**
+     * The data in the file
+     */
+    void* data;
+    /**
+     * The size of the file in bytes
+     */
+    u64 size;
+};
+
+/**
+ * Resize the file
+ *
+ * Parameters
+ * - arena The arena to allocate from
+ * - newSize The new size of the file in bytes
+ */
+void hgBinaryResize(HgArena* arena, HgBinary* bin, u64 newSize);
+
+/**
+ * Read data at index into a buffer
+ *
+ * Parameters
+ * - idx The index into the file in bytes to read from
+ * - dst A pointer to store the read data
+ * - size The size in bytes to read
+ */
+void hgBinaryRead(const HgBinary* bin, u64 idx, void* dst, u64 len);
+
+/**
+ * Read data of arbitrary type from the file
+ *
+ * Parameters
+ * - idx The index into the file in bytes to read from
+ */
+template<typename T>
+T hgBinaryRead(const HgBinary* bin, u64 idx)
+{
+    T ret;
+    hgBinaryRead(bin, idx, &ret, sizeof(T));
+    return ret;
+}
+
+/**
+ * Overwrite data at the index
+ *
+ * Parameters
+ * - idx The index into the file to overwrite
+ * - src The data to write
+ * - size The size of the data in bytes
+ */
+void hgBinaryOverwrite(HgBinary* bin, u64 idx, const void* src, u64 len);
+
+/**
+ * Overwrite data of arbitrary type at the index
+ *
+ * Parameters
+ * - idx The index into the file to overwrite
+ * - src The data to write
+ */
+template<typename T>
+void hgBinaryOverwrite(HgBinary* bin, u64 idx, const T& src)
+{
+    hgBinaryOverwrite(bin, idx, &src, sizeof(T));
+}
 
 /**
  * A span view into a string

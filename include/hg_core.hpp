@@ -34,58 +34,6 @@
 #include <cstdlib>
 #include <cstring>
 
-/**
- * An 8 bit, 1 byte unsigned integer
- */
-typedef uint8_t u8;
-/**
- * A 16 bit, 2 byte unsigned integer
- */
-typedef uint16_t u16;
-/**
- * A 32 bit, 4 byte unsigned integer
- */
-typedef uint32_t u32;
-/**
- * A 64 bit, 8 byte unsigned integer
- */
-typedef uint64_t u64;
-
-/**
- * An 8 bit, 1 byte signed integer
- */
-typedef int8_t i8;
-/**
- * A 16 bit, 2 byte signed integer
- */
-typedef int16_t i16;
-/**
- * A 32 bit, 4 byte signed integer
- */
-typedef int32_t i32;
-/**
- * A 64 bit, 8 byte signed integer
- */
-typedef int64_t i64;
-
-/**
- * An unsigned integer representing a pointer
- */
-typedef uintptr_t uptr;
-/**
- * A signed integer representing a pointer
- */
-typedef intptr_t iptr;
-
-/**
- * A 32 bit, 4 byte floating point value
- */
-typedef float_t f32;
-/**
- * A 64 bit, 8 byte floating point value
- */
-typedef double_t f64;
-
 #ifdef __GNUC__
 #define HG_COMPILER_GCC 1
 #endif
@@ -254,51 +202,56 @@ struct HgDefer {
 #endif
 
 /**
- * Returns the size of a stack array
+ * An 8 bit, 1 byte unsigned integer
  */
-template<typename T, u64 N>
-constexpr u64 hgArrayCount(T (&)[N])
-{
-    return N;
-}
+typedef uint8_t u8;
+/**
+ * A 16 bit, 2 byte unsigned integer
+ */
+typedef uint16_t u16;
+/**
+ * A 32 bit, 4 byte unsigned integer
+ */
+typedef uint32_t u32;
+/**
+ * A 64 bit, 8 byte unsigned integer
+ */
+typedef uint64_t u64;
 
 /**
- * Swap the values of two objects
+ * An 8 bit, 1 byte signed integer
  */
-template<typename T>
-constexpr void hgSwap(T* a, T* b)
-{
-    T tmp = *a;
-    *a = *b;
-    *b = tmp;
-}
+typedef int8_t i8;
+/**
+ * A 16 bit, 2 byte signed integer
+ */
+typedef int16_t i16;
+/**
+ * A 32 bit, 4 byte signed integer
+ */
+typedef int32_t i32;
+/**
+ * A 64 bit, 8 byte signed integer
+ */
+typedef int64_t i64;
 
 /**
- * Return the lesser of the two
+ * An unsigned integer representing a pointer
  */
-template<typename T>
-constexpr T hgMin(T a, T b)
-{
-    return a < b ? a : b;
-}
+typedef uintptr_t uptr;
+/**
+ * A signed integer representing a pointer
+ */
+typedef intptr_t iptr;
 
 /**
- * Return the greater of the two
+ * A 32 bit, 4 byte floating point value
  */
-template<typename T>
-constexpr T hgMax(T a, T b)
-{
-    return a > b ? a : b;
-}
-
+typedef float_t f32;
 /**
- * Clamps a value between two other
+ * A 64 bit, 8 byte floating point value
  */
-template<typename T>
-constexpr T hgClamp(T x, T min, T max)
-{
-    return x >= max ? max : x <= min ? min : x;
-}
+typedef double_t f64;
 
 /**
  * The Hurdy Gurdy subsystems
@@ -308,9 +261,8 @@ enum HgSubsystem : u32 {
     HgSubsystem_concurrency = 0x2,
     HgSubsystem_gpu = 0x4,
     HgSubsystem_assets = 0x8,
-    HgSubsystem_platform = 0x10,
-    HgSubsystem_windowing = 0x20,
-    HgSubsystem_audio = 0x40,
+    HgSubsystem_windowing = 0x10,
+    HgSubsystem_audio = 0x20,
     HgSubsystem_all = (u32)-1,
 };
 typedef u32 HgSubsystemFlags;

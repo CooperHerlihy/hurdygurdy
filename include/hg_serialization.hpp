@@ -28,9 +28,9 @@
 #define HG_SERIALIZATION_HPP
 
 #include "hg_core.hpp"
-#include "hg_math.hpp"
 #include "hg_memory.hpp"
 #include "hg_strings.hpp"
+#include "hg_math.hpp"
 
 /**
  * The primitive serializable types

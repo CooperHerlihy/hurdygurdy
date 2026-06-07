@@ -1,15 +1,20 @@
 #include "hg_assets.hpp"
 #include "hg_audio.hpp"
 #include "hg_concurrency.hpp"
-#include "hg_core.hpp"
 #include "hg_containers.hpp"
+#include "hg_core.hpp"
+#include "hg_ecs.hpp"
 #include "hg_gpu.hpp"
 #include "hg_math.hpp"
 #include "hg_memory.hpp"
 #include "hg_platform.hpp"
 #include "hg_rendering.hpp"
 #include "hg_serialization.hpp"
+#include "hg_strings.hpp"
+#include "hg_templates.hpp"
 #include "hg_time.hpp"
+#include "hg_utils.hpp"
+#include "hg_window.hpp"
 
 #include "stb_image.h"
 #include "stb_image_write.h"
@@ -19,27 +24,48 @@ static HgSubsystemFlags initialized = 0;
 void hgInit(HgSubsystemFlags init)
 {
     if (init & HgSubsystem_memory)
+    {
         hgScratchInit(2, (u64)1 << 24);
+        initialized |= HgSubsystem_memory;
+    }
 
     if (init & HgSubsystem_concurrency)
+    {
         hgConcurrencyInit();
+        initialized |= HgSubsystem_concurrency;
+    }
 
-    if (init & HgSubsystem_platform)
+    if (init & HgSubsystem_gpu ||
+        init & HgSubsystem_windowing ||
+        init & HgSubsystem_audio)
+    {
         hgPlatformInit();
+    }
 
-    if (init & HgSubsystem_gpu)
+    if (init & HgSubsystem_gpu ||
+        init & HgSubsystem_windowing)
+    {
         hgGpuInit();
+        initialized |= HgSubsystem_gpu;
+    }
 
     if (init & HgSubsystem_assets)
+    {
         hgAssetInitDefaults();
+        initialized |= HgSubsystem_assets;
+    }
 
     if (init & HgSubsystem_windowing)
+    {
         hgWindowsInit();
+        initialized |= HgSubsystem_assets;
+    }
 
     if (init & HgSubsystem_audio)
+    {
         hgAudioInit();
-
-    initialized |= init;
+        initialized |= HgSubsystem_assets;
+    }
 }
 
 void hgDeinit()
@@ -56,7 +82,9 @@ void hgDeinit()
     if (initialized & HgSubsystem_gpu)
         hgGpuDeinit();
 
-    if (initialized & HgSubsystem_platform)
+    if (initialized & HgSubsystem_gpu ||
+        initialized & HgSubsystem_windowing ||
+        initialized & HgSubsystem_audio)
         hgPlatformDeinit();
 
     if (initialized & HgSubsystem_concurrency)
@@ -207,715 +235,6 @@ void hgBinaryOverwrite(HgBinary* bin, u64 idx, const void* src, u64 len)
 {
     hgAssert(idx + len <= bin->size);
     hgMemCopy((u8*)bin->data + idx, src, len);
-}
-
-const HgVec2& HgVec2::operator+=(HgVec2 other)
-{
-    x += other.x;
-    y += other.y;
-    return* this;
-}
-
-const HgVec2& HgVec2::operator-=(HgVec2 other)
-{
-    x -= other.x;
-    y -= other.y;
-    return* this;
-}
-
-const HgVec2& HgVec2::operator*=(HgVec2 other)
-{
-    x *= other.x;
-    y *= other.y;
-    return* this;
-}
-
-const HgVec2& HgVec2::operator/=(HgVec2 other)
-{
-    x /= other.x;
-    y /= other.y;
-    return* this;
-}
-
-const HgVec3& HgVec3::operator+=(HgVec3 other)
-{
-    x += other.x;
-    y += other.y;
-    z += other.z;
-    return* this;
-}
-
-const HgVec3& HgVec3::operator-=(HgVec3 other)
-{
-    x -= other.x;
-    y -= other.y;
-    z -= other.z;
-    return* this;
-}
-
-const HgVec3& HgVec3::operator*=(HgVec3 other)
-{
-    x *= other.x;
-    y *= other.y;
-    z *= other.z;
-    return* this;
-}
-
-const HgVec3& HgVec3::operator/=(HgVec3 other)
-{
-    x /= other.x;
-    y /= other.y;
-    z /= other.z;
-    return* this;
-}
-
-const HgVec4& HgVec4::operator+=(HgVec4 other)
-{
-    x += other.x;
-    y += other.y;
-    z += other.z;
-    w += other.w;
-    return* this;
-}
-
-const HgVec4& HgVec4::operator-=(HgVec4 other)
-{
-    x -= other.x;
-    y -= other.y;
-    z -= other.z;
-    w -= other.w;
-    return* this;
-}
-
-const HgVec4& HgVec4::operator*=(HgVec4 other)
-{
-    x *= other.x;
-    y *= other.y;
-    z *= other.z;
-    w *= other.w;
-    return* this;
-}
-
-const HgVec4& HgVec4::operator/=(HgVec4 other)
-{
-    x /= other.x;
-    y /= other.y;
-    z /= other.z;
-    w /= other.w;
-    return* this;
-}
-
-const HgMat2& HgMat2::operator+=(const HgMat2& other)
-{
-    x += other.x;
-    y += other.y;
-    return* this;
-}
-
-const HgMat2& HgMat2::operator-=(const HgMat2& other)
-{
-    x -= other.x;
-    y -= other.y;
-    return* this;
-}
-
-const HgMat3& HgMat3::operator+=(const HgMat3& other)
-{
-    x += other.x;
-    y += other.y;
-    z += other.z;
-    return* this;
-}
-
-const HgMat3& HgMat3::operator-=(const HgMat3& other)
-{
-    x -= other.x;
-    y -= other.y;
-    z -= other.z;
-    return* this;
-}
-
-const HgMat4& HgMat4::operator+=(const HgMat4& other)
-{
-    x += other.x;
-    y += other.y;
-    z += other.z;
-    w += other.w;
-    return* this;
-}
-
-const HgMat4& HgMat4::operator-=(const HgMat4& other)
-{
-    x -= other.x;
-    y -= other.y;
-    z -= other.z;
-    w -= other.w;
-    return* this;
-}
-
-void hgMatTranspose(u32 width, u32 height, f32* dst, const f32* mat)
-{
-    for (u32 i = 0; i < width; ++i)
-    {
-        for (u32 j = 0; j < height; ++j)
-        {
-            dst[j * width + i] = mat[i * height + j];
-        }
-    }
-}
-
-HgMat2 hgMatTranspose2(const HgMat2& mat)
-{
-    HgMat2 ret;
-    hgMatTranspose(2, 2, &ret.x.x, &mat.x.x);
-    return ret;
-}
-
-HgMat3 hgMatTranspose3(const HgMat3& mat)
-{
-    HgMat3 ret;
-    hgMatTranspose(3, 3, &ret.x.x, &mat.x.x);
-    return ret;
-}
-
-HgMat4 hgMatTranspose4(const HgMat4& mat)
-{
-    HgMat4 ret;
-    hgMatTranspose(4, 4, &ret.x.x, &mat.x.x);
-    return ret;
-}
-
-const HgComplex& HgComplex::operator+=(HgComplex other)
-{
-    r += other.r;
-    i += other.i;
-    return* this;
-}
-
-const HgComplex& HgComplex::operator-=(HgComplex other)
-{
-    r -= other.r;
-    i -= other.i;
-    return* this;
-}
-
-const HgQuat& HgQuat::operator+=(HgQuat other)
-{
-    r += other.r;
-    i += other.i;
-    j += other.j;
-    k += other.k;
-    return* this;
-}
-
-const HgQuat& HgQuat::operator-=(HgQuat other)
-{
-    r -= other.r;
-    i -= other.i;
-    j -= other.j;
-    k -= other.k;
-    return* this;
-}
-
-void hgVecAdd(u32 size, f32* dst, const f32* lhs, const f32* rhs)
-{
-    hgAssert(dst != nullptr);
-    hgAssert(lhs != nullptr);
-    hgAssert(rhs != nullptr);
-    for (u32 i = 0; i < size; ++i)
-    {
-        dst[i] = lhs[i] + rhs[i];
-    }
-}
-
-void hgVecSub(u32 size, f32* dst, const f32* lhs, const f32* rhs)
-{
-    hgAssert(dst != nullptr);
-    hgAssert(lhs != nullptr);
-    hgAssert(rhs != nullptr);
-    for (u32 i = 0; i < size; ++i)
-    {
-        dst[i] = lhs[i] - rhs[i];
-    }
-}
-
-void hgVecMulPairwise(u32 size, f32* dst, const f32* lhs, const f32* rhs)
-{
-    hgAssert(dst != nullptr);
-    hgAssert(lhs != nullptr);
-    hgAssert(rhs != nullptr);
-    for (u32 i = 0; i < size; ++i)
-    {
-        dst[i] = lhs[i] * rhs[i];
-    }
-}
-
-void hgVecMulScalar(u32 size, f32* dst, f32 scalar, const f32* vec)
-{
-    hgAssert(dst != nullptr);
-    hgAssert(vec != nullptr);
-    for (u32 i = 0; i < size; ++i)
-    {
-        dst[i] = scalar * vec[i];
-    }
-}
-
-void hgVecDivPairwise(u32 size, f32* dst, const f32* lhs, const f32* rhs)
-{
-    hgAssert(dst != nullptr);
-    hgAssert(lhs != nullptr);
-    hgAssert(rhs != nullptr);
-    for (u32 i = 0; i < size; ++i)
-    {
-        hgAssert(rhs[i] != 0);
-        dst[i] = lhs[i] / rhs[i];
-    }
-}
-
-void hgVecDivScalar(u32 size, f32* dst, const f32* vec, f32 scalar)
-{
-    hgAssert(dst != nullptr);
-    hgAssert(vec != nullptr);
-    hgAssert(scalar != 0);
-    for (u32 i = 0; i < size; ++i)
-    {
-        dst[i] = vec[i] / scalar;
-    }
-}
-
-void hgVecDot(u32 size, f32* dst, const f32* lhs, const f32* rhs)
-{
-    hgAssert(dst != nullptr);
-    hgAssert(lhs != nullptr);
-    hgAssert(rhs != nullptr);
-    *dst = 0;
-    for (u32 i = 0; i < size; ++i)
-    {
-        *dst += lhs[i] * rhs[i];
-    }
-}
-
-void hgVecLen(u32 size, f32* dst, const f32* vec)
-{
-    hgAssert(dst != nullptr);
-    hgAssert(vec != nullptr);
-    hgVecDot(size, dst, vec, vec);
-    *dst = (f32)sqrt(*dst);
-}
-
-f32 hgVecLen2(HgVec2 vec)
-{
-    return (f32)sqrt(hgVecDot2(vec, vec));
-}
-
-f32 hgVecLen3(HgVec3 vec)
-{
-    return (f32)sqrt(hgVecDot3(vec, vec));
-}
-
-f32 hgVecLen4(HgVec4 vec)
-{
-    return (f32)sqrt(hgVecDot3(vec, vec));
-}
-
-void hgVecNorm(u32 size, f32* dst, const f32* vec)
-{
-    hgAssert(dst != nullptr);
-    hgAssert(vec != nullptr);
-    f32 len;
-    hgVecLen(size, &len, vec);
-    hgAssert(len != 0);
-    for (u32 i = 0; i < size; ++i)
-    {
-        dst[i] = vec[i] / len;
-    }
-}
-
-HgVec2 hgVecNorm2(HgVec2 vec)
-{
-    f32 len = hgVecLen2(vec);
-    hgAssert(len != 0);
-    return HgVec2{vec.x / len, vec.y / len};
-}
-
-HgVec3 hgVecNorm3(HgVec3 vec)
-{
-    f32 len = hgVecLen3(vec);
-    hgAssert(len != 0);
-    return HgVec3{vec.x / len, vec.y / len, vec.z / len};
-}
-
-HgVec4 hgVecNorm4(HgVec4 vec)
-{
-    f32 len = hgVecLen4(vec);
-    hgAssert(len != 0);
-    return HgVec4{vec.x / len, vec.y / len, vec.z / len, vec.w / len};
-}
-
-void hgVecCross(f32* dst, const f32* lhs, const f32* rhs)
-{
-    hgAssert(dst != nullptr);
-    hgAssert(lhs != nullptr);
-    hgAssert(rhs != nullptr);
-    dst[0] = lhs[1] * rhs[2] - lhs[2] * rhs[1];
-    dst[1] = lhs[2] * rhs[0] - lhs[0] * rhs[2];
-    dst[2] = lhs[0] * rhs[1] - lhs[1] * rhs[0];
-}
-
-HgVec3 hgCross(const HgVec3& lhs, const HgVec3& rhs)
-{
-    return HgVec3{
-        lhs.y * rhs.z - lhs.z * rhs.y,
-        lhs.z * rhs.x - lhs.x * rhs.z,
-        lhs.x * rhs.y - lhs.y * rhs.x
-    };
-}
-
-void hgMatAdd(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs)
-{
-    hgAssert(dst != nullptr);
-    hgAssert(lhs != nullptr);
-    hgAssert(rhs != nullptr);
-    for (u32 i = 0; i < width; ++i)
-    {
-        for (u32 j = 0; j < height; ++j)
-        {
-            dst[i * width + j] = lhs[i * width + j] + rhs[i * width + j];
-        }
-    }
-}
-
-HgMat2 operator+(const HgMat2& lhs, const HgMat2& rhs)
-{
-    HgMat2 result{};
-    hgMatAdd(2, 2, &result.x.x, &lhs.x.x, &rhs.x.x);
-    return result;
-}
-
-HgMat3 operator+(const HgMat3& lhs, const HgMat3& rhs)
-{
-    HgMat3 result{};
-    hgMatAdd(3, 3, &result.x.x, &lhs.x.x, &rhs.x.x);
-    return result;
-}
-
-HgMat4 operator+(const HgMat4& lhs, const HgMat4& rhs)
-{
-    HgMat4 result{};
-    hgMatAdd(4, 4, &result.x.x, &lhs.x.x, &rhs.x.x);
-    return result;
-}
-
-void hgMatSub(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs)
-{
-    hgAssert(dst != nullptr);
-    hgAssert(lhs != nullptr);
-    hgAssert(rhs != nullptr);
-    for (u32 i = 0; i < width; ++i)
-    {
-        for (u32 j = 0; j < height; ++j)
-        {
-            dst[i * width + j] = lhs[i * width + j] - rhs[i * width + j];
-        }
-    }
-}
-
-HgMat2 operator-(const HgMat2& lhs, const HgMat2& rhs)
-{
-    HgMat2 result{};
-    hgMatSub(2, 2, &result.x.x, &lhs.x.x, &rhs.x.x);
-    return result;
-}
-
-HgMat3 operator-(const HgMat3& lhs, const HgMat3& rhs)
-{
-    HgMat3 result{};
-    hgMatSub(3, 3, &result.x.x, &lhs.x.x, &rhs.x.x);
-    return result;
-}
-
-HgMat4 operator-(const HgMat4& lhs, const HgMat4& rhs)
-{
-    HgMat4 result{};
-    hgMatSub(4, 4, &result.x.x, &lhs.x.x, &rhs.x.x);
-    return result;
-}
-
-void hgMatMul(f32* dst, u32 wl, u32 hl, const f32* lhs, u32 wr, u32 hr, const f32* rhs)
-{
-    hgAssert(hr == wl);
-    hgAssert(dst != nullptr);
-    hgAssert(lhs != nullptr);
-    hgAssert(rhs != nullptr);
-    (void)hr;
-    for (u32 i = 0; i < wl; ++i)
-    {
-        for (u32 j = 0; j < wr; ++j)
-        {
-            dst[i * wl + j] = 0.0f;
-            for (u32 k = 0; k < hl; ++k)
-            {
-                dst[i * wl + j] += lhs[k * wl + j] * rhs[i * wr + k];
-            }
-        }
-    }
-}
-
-HgMat2 operator*(const HgMat2& lhs, const HgMat2& rhs)
-{
-    HgMat2 result{};
-    hgMatMul(&result.x.x, 2, 2, &lhs.x.x, 2, 2, &rhs.x.x);
-    return result;
-}
-
-HgMat3 operator*(const HgMat3& lhs, const HgMat3& rhs)
-{
-    HgMat3 result{};
-    hgMatMul(&result.x.x, 3, 3, &lhs.x.x, 3, 3, &rhs.x.x);
-    return result;
-}
-
-HgMat4 operator*(const HgMat4& lhs, const HgMat4& rhs)
-{
-    HgMat4 result{};
-    hgMatMul(&result.x.x, 4, 4, &lhs.x.x, 4, 4, &rhs.x.x);
-    return result;
-}
-
-void hgMatMulVec(u32 width, u32 height, f32* dst, const f32* mat, const f32* vec)
-{
-    hgAssert(dst != nullptr);
-    hgAssert(mat != nullptr);
-    hgAssert(vec != nullptr);
-    for (u32 i = 0; i < height; ++i)
-    {
-        dst[i] = 0.0f;
-        for (u32 j = 0; j < width; ++j)
-        {
-            dst[i] += mat[j * width + i] * vec[j];
-        }
-    }
-}
-
-HgVec2 operator*(const HgMat2& lhs, HgVec2 rhs)
-{
-    HgVec2 result{};
-    hgMatMulVec(2, 2, &result.x, &lhs.x.x, &rhs.x);
-    return result;
-}
-
-HgVec3 operator*(const HgMat3& lhs, HgVec3 rhs)
-{
-    HgVec3 result{};
-    hgMatMulVec(3, 3, &result.x, &lhs.x.x, &rhs.x);
-    return result;
-}
-
-HgVec4 operator*(const HgMat4& lhs, HgVec4 rhs)
-{
-    HgVec4 result{};
-    hgMatMulVec(4, 4, &result.x, &lhs.x.x, &rhs.x);
-    return result;
-}
-
-HgQuat operator*(HgQuat lhs, HgQuat rhs)
-{
-    return HgQuat{
-        lhs.r * rhs.r - lhs.i * rhs.i - lhs.j * rhs.j - lhs.k * rhs.k,
-        lhs.r * rhs.i + lhs.i * rhs.r + lhs.j * rhs.k - lhs.k * rhs.j,
-        lhs.r * rhs.j - lhs.i * rhs.k + lhs.j * rhs.r + lhs.k * rhs.i,
-        lhs.r * rhs.k + lhs.i * rhs.j - lhs.j * rhs.i + lhs.k * rhs.r,
-    };
-}
-
-HgQuat hgQuatAxisAngle(HgVec3 axis, f32 angle)
-{
-    f32 halfAngle = angle * (f32)0.5;
-    f32 sinHalfAngle = (f32)std::sin(halfAngle);
-    return HgQuat{
-        (f32)std::cos(halfAngle),
-        axis.x * sinHalfAngle,
-        axis.y * sinHalfAngle,
-        axis.z * sinHalfAngle,
-    };
-}
-
-HgVec3 hgVecRotate(HgQuat lhs, HgVec3 rhs)
-{
-    HgQuat q = lhs * HgQuat{0, rhs.x, rhs.y, rhs.z} * hgQuatConj(lhs);
-    return HgVec3{q.i, q.j, q.k};
-}
-
-HgMat3 hgMatRotate(HgQuat lhs, HgMat3 rhs)
-{
-    return HgMat3{
-        hgVecRotate(lhs, rhs.x),
-        hgVecRotate(lhs, rhs.y),
-        hgVecRotate(lhs, rhs.z),
-    };
-}
-
-HgMat4 hgMatModel2D(HgVec3 position, HgVec2 scale, f32 rotation)
-{
-    HgMat2 m2{HgVec2{scale.x, 0.0f}, HgVec2{0.0f, scale.y}};
-    f32 rotSin = (f32)std::sin(rotation);
-    f32 rotCos = (f32)std::cos(rotation);
-    HgMat2 rot{HgVec2{rotCos, rotSin}, HgVec2{-rotSin, rotCos}};
-    HgMat4 m4 = HgMat4{rot * m2};
-    m4.w.x = position.x;
-    m4.w.y = position.y;
-    m4.w.z = position.z;
-    return m4;
-}
-
-HgMat4 hgMatModel3D(const HgVec3& position, const HgVec3& scale, const HgQuat& rotation)
-{
-    HgMat3 m3{1.0f};
-    m3.x.x = scale.x;
-    m3.y.y = scale.y;
-    m3.z.z = scale.z;
-    m3 = hgMatRotate(rotation, m3);
-    HgMat4 m4 = HgMat4{m3};
-    m4.w.x = position.x;
-    m4.w.y = position.y;
-    m4.w.z = position.z;
-    return m4;
-}
-
-HgMat4 hgMatView(const HgVec3& position, const HgVec3& zoom, const HgQuat& rotation)
-{
-    HgMat4 rot{hgMatRotate(hgQuatConj(rotation), HgMat3{1.0f})};
-    HgMat4 pos{1.0f};
-    pos.x.x = zoom.x;
-    pos.y.y = zoom.y;
-    pos.z.z = zoom.z;
-    pos.w.x = -position.x;
-    pos.w.y = -position.y;
-    pos.w.z = -position.z;
-    return rot * pos;
-}
-
-HgMat4 hgMatModelToView(const HgMat4& model)
-{
-    if (HgVec3{model.x} == HgVec3{0} || HgVec3{model.y} == HgVec3{0} || HgVec3{model.z} == HgVec3{0})
-        return HgMat4{HgMat3{0}};
-
-    HgMat3 inv3 = hgMatTranspose3(HgMat3{
-        hgVecNorm3(HgVec3{model.x}),
-        hgVecNorm3(HgVec3{model.y}),
-        hgVecNorm3(HgVec3{model.z}),
-    });
-    HgMat4 inv4{inv3};
-    inv4.w = HgVec4{HgVec3{inv3 * HgVec3{model.w} * -1}, 1};
-    return inv4;
-}
-
-HgMat4 hgMatOrthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far)
-{
-    return HgMat4{
-        HgVec4{2.0f / (right - left), 0.0f, 0.0f, 0.0f},
-        HgVec4{0.0f, 2.0f / (bottom - top), 0.0f, 0.0f},
-        HgVec4{0.0f, 0.0f, 1.0f / (far - near), 0.0f},
-        HgVec4{-(right + left) / (right - left), -(bottom + top) / (bottom - top), -(near) / (far - near), 1.0f},
-    };
-}
-
-HgMat4 hgMatPerspective(f32 fov, f32 aspect, f32 near, f32 far)
-{
-    hgAssert(near > 0.0f);
-    hgAssert(far > near);
-    f32 scale = 1.0f / (f32)tan(fov * 0.5f);
-    return HgMat4{
-        HgVec4{scale / aspect, 0.0f, 0.0f, 0.0f},
-        HgVec4{0.0f, scale, 0.0f, 0.0f},
-        HgVec4{0.0f, 0.0f, far / (far - near), 1.0f},
-        HgVec4{0.0f, 0.0f, -(far * near) / (far - near), 0.0f},
-    };
-}
-
-u32 hgNoise(u32 seed, u32 pos)
-{
-    u32 ret = (pos + 384521713u) * 955740521u;
-    ret ^= ret >> 13;
-    ret *= seed * 725937977u;
-    ret ^= ret >> 7;
-    ret *= 358166231u;
-    ret ^= ret >> 11;
-    return ret;
-}
-
-u32 hgNoise2D(u32 seed, u32 x, u32 y)
-{
-    return hgNoise(seed, x + (y * 425537443u));
-}
-
-u32 hgNoise3D(u32 seed, u32 x, u32 y, u32 z)
-{
-    return hgNoise(seed, x + y * 425537443u + z * 682607u);
-}
-
-u32 hgNoise4D(u32 seed, u32 x, u32 y, u32 z, u32 w)
-{
-    return hgNoise(seed, x + y * 425537443u + z * 682607u + w * 9067);
-}
-
-f32 hgNoiseNorm(u32 seed, f32 pos)
-{
-    union Convert {
-        f32 asF32;
-        u32 asU32;
-    };
-    return (f32)hgNoise(seed, Convert{pos}.asU32) / (f32)UINT32_MAX;
-}
-
-f32 hgNoiseNorm2D(u32 seed, HgVec2 pos)
-{
-    union Convert {
-        f32 asF32;
-        u32 asU32;
-    };
-    return (f32)hgNoise2D(seed, Convert{pos.x}.asU32, Convert{pos.y}.asU32) / (f32)UINT32_MAX;
-}
-
-f32 hgNoiseNorm3D(u32 seed, HgVec3 pos)
-{
-    union Convert {
-        f32 asF32;
-        u32 asU32;
-    };
-    return (f32)hgNoise3D(seed, Convert{pos.x}.asU32, Convert{pos.y}.asU32, Convert{pos.z}.asU32) / (f32)UINT32_MAX;
-}
-
-f32 hgNoiseNorm4D(u32 seed, HgVec4 pos)
-{
-    union Convert {
-        f32 asF32;
-        u32 asU32;
-    };
-    return (f32)hgNoise4D(
-        seed,
-        Convert{pos.x}.asU32,
-        Convert{pos.y}.asU32,
-        Convert{pos.z}.asU32,
-        Convert{pos.w}.asU32) / (f32)UINT32_MAX;
-}
-
-f32 hgNoiseVec1D(u32 seed, f32 pos)
-{
-    return hgNoiseNorm(seed, pos) * 2.0f - 1.0f;
-}
-
-HgVec2 hgNoiseVec2D(u32 seed, HgVec2 pos)
-{
-    f32 rot = 2.0f * (f32)hgPi * hgNoiseNorm2D(seed, pos);
-    return HgVec2(std::cos(rot), std::sin(rot));
-}
-
-u32 hgGetMaxMipmaps(u32 width, u32 height, u32 depth)
-{
-    u32 max = width > height ? width : height;
-    max = max > depth ? max : depth;
-    return max == 0 ? 0 : (u32)log2((f32)max) + 1;
 }
 
 char* hgCString(HgArena* arena, HgStringView str)
@@ -1225,6 +544,83 @@ HgStringBuilder hgStringFormat(HgArena* arena, HgStringView fmt, ...)
     (void)arena;
     (void)fmt;
     hgError("hgFormatString not implemented yet : TODO\n");
+}
+
+HgPerf hgPerfCreate(HgArena* arena, u32 count)
+{
+    hgAssert(arena != nullptr);
+
+    HgPerf perf;
+    perf.times = hgArenaAlloc<f64>(arena, count);
+    perf.count = count;
+    perf.current = 0;
+    return perf;
+}
+
+void hgPerfBegin(HgPerf* perf)
+{
+    hgAssert(perf != nullptr);
+    hgClockTick(&perf->clock);
+}
+
+f64 hgPerfEnd(HgPerf* perf)
+{
+    hgAssert(perf != nullptr);
+    hgAssert(perf->current < perf->count);
+
+    f64 time = hgClockTick(&perf->clock);
+    perf->times[perf->current++] = time;
+
+    return time;
+}
+
+HgPerfStats hgPerfAnalyze(const HgPerf* perf)
+{
+    hgAssert(perf != nullptr);
+
+    HgPerfStats stats;
+    stats.avg = 0.0;
+    stats.best = INFINITY;
+    stats.worst = 0.0;
+
+    for (u32 i = 0; i < perf->current; ++i)
+    {
+        if (perf->times[i] < stats.best)
+            stats.best = perf->times[i];
+        if (perf->times[i] > stats.worst)
+            stats.worst = perf->times[i];
+        stats.avg += perf->times[i];
+    }
+    stats.avg /= (f64)perf->current;
+
+    return stats;
+}
+
+void hgPerfLog(HgStringView title, const HgPerfStats* stats, HgPerfScale scale)
+{
+    hgAssert(stats != nullptr);
+    if (title.length == 0 || title.chars == nullptr)
+        title = "Title Missing";
+
+    switch (scale)
+    {
+        case HgPerfScale_seconds:
+            printf("HG Performance - %.*s: avg: %.4fs, best: %.4fs, worst: %.4fs\n",
+                (int)title.length, title.chars, stats->avg, stats->best, stats->worst);
+            break;
+        case HgPerfScale_milli:
+            printf("HG Performance - %.*s: avg: %.4fms, best: %.4fms, worst: %.4fms\n",
+                (int)title.length, title.chars, stats->avg * 1.e3, stats->best * 1.e3, stats->worst * 1.e3);
+            break;
+        case HgPerfScale_micro:
+            printf("HG Performance - %.*s: avg: %.4fmcs, best: %.4fmcs, worst: %.4fmcs\n",
+                (int)title.length, title.chars, stats->avg * 1.e6, stats->best * 1.e6, stats->worst * 1.e6);
+            break;
+        case HgPerfScale_nano:
+            printf("HG Performance - %.*s: avg: %.4fns, best: %.4fns, worst: %.4fns\n",
+                (int)title.length, title.chars, stats->avg * 1.e9, stats->best * 1.e9, stats->worst * 1.e9);
+            break;
+    }
 }
 
 const char* hgSerialTypeToString(HgSerialType s)
@@ -3342,6 +2738,143 @@ HgJson hgParseJson(HgArena* arena, HgStringView text)
     return jsonParseNext(arena, &parseState);
 }
 
+void hgAssetInitDefaults()
+{
+    hgAssetInit<HgBinary>();
+    hgAssetInit<HgTexture>();
+    hgAssetInit<HgGpuTexture>();
+    hgAssetInit<HgMesh>();
+    hgAssetInit<HgGpuMesh>();
+    hgAssetInit<HgAudio>();
+}
+
+void hgAssetDeinitDefaults()
+{
+    hgAssetDeinit<HgAudio>();
+    hgAssetDeinit<HgGpuMesh>();
+    hgAssetDeinit<HgMesh>();
+    hgAssetDeinit<HgGpuTexture>();
+    hgAssetDeinit<HgTexture>();
+    hgAssetDeinit<HgBinary>();
+}
+
+template<>
+void hgAssetLoadImpl(HgAsset<HgBinary>* data)
+{
+    HgArena* scratch = hgScratch();
+    hgArenaScope(scratch);
+
+    char* cpath = hgCString(scratch, data->path);
+
+    FILE* fileHandle = fopen(cpath, "rb");
+    if (fileHandle == nullptr)
+    {
+    hgWarn("Could not find file to read binary: %s\n", cpath);
+    return;
+    }
+    hgDefer(fclose(fileHandle));
+
+    if (fseek(fileHandle, 0, SEEK_END) != 0)
+    {
+        hgWarn("Failed to read binary from file: %s\n", cpath);
+        return;
+    }
+
+    data->data.size = (u32)ftell(fileHandle);
+    data->data.data = malloc(data->data.size);
+
+    rewind(fileHandle);
+    if (fread(data->data.data, 1, data->data.size, fileHandle) != data->data.size)
+    {
+        free(data->data.data);
+        data->data = {};
+        hgWarn("Failed to read binary from file: %s\n", cpath);
+        return;
+    }
+}
+
+template<>
+void hgAssetUnloadImpl(HgAsset<HgBinary>* data)
+{
+    free(data->data.data);
+}
+
+void hgBinaryStore(HgBinary* bin, HgStringView path, HgFence* fence)
+{
+    struct Capture {
+        HgBinary bin;
+        HgStringOwner path;
+    };
+    Capture* c = (Capture*)malloc(sizeof(*c));
+    c->bin = *bin;
+    c->path = hgStringCreate(path);
+
+    hgThreadsCall(fence, c, [](void* pc)
+    {
+        Capture* c = (Capture*)pc;
+        hgDefer(free(c));
+        hgDefer(hgStringDestroy(&c->path));
+
+        HgArena* scratch = hgScratch();
+        hgArenaScope(scratch);
+
+        char* cpath = hgCString(scratch, c->path);
+
+        FILE* fileHandle = fopen(cpath, "wb");
+        if (fileHandle == nullptr)
+        {
+            hgWarn("Failed to create file to write binary: %s\n", cpath);
+            return;
+        }
+        hgDefer(fclose(fileHandle));
+
+        if (fwrite(c->bin.data, 1, c->bin.size, fileHandle) != c->bin.size)
+        {
+            hgWarn("Failed to write binary data to file: %s\n", cpath);
+        }
+    });
+}
+
+template<>
+void hgAssetLoadImpl(HgAsset<HgJson>* data)
+{
+    HgBinaryAsset* bin = hgAssetLoad<HgBinary>(data->path);
+    hgDefer(hgAssetUnload(bin));
+
+    HgArena* scratch = hgScratch();
+    u64 head = scratch->head;
+    hgDefer(scratch->head = head);
+
+    HgStringView jsonStr = {(char*)bin->data.data, bin->data.size};
+    HgJson parse = hgParseJson(scratch, jsonStr);
+
+    HgJsonError* e = parse.errors;
+    while (e != nullptr)
+    {
+        hgWarn("Json parse error: %.*s\n", (int)e->msg.length, e->msg.chars);
+        e = e->next;
+    }
+
+    data->data.file = (HgJsonNode*)malloc(scratch->head - head);
+    if (parse.errors != nullptr)
+    {
+        data->data.errors = (HgJsonError*)(
+            (u8*)data->data.file +
+                ((uptr)parse.errors - (uptr)parse.file));
+    }
+    else
+    {
+        data->data.errors = nullptr;
+    }
+    hgMemCopy((void*)data->data.file, (void*)parse.file, scratch->head - head);
+}
+
+template<>
+void hgAssetUnloadImpl(HgAsset<HgJson>* data)
+{
+    free(data->data.file);
+}
+
 HgArrayAny hgArrayAnyCreate(u32 width, u32 align, u32 count, u32 capacity)
 {
     if (capacity < count)
@@ -3495,776 +3028,713 @@ void hgHandlePoolFree(HgHandlePool* pool, HgHandle handle)
     *hgArrayPush(&pool->freed) = hgHandleNextGeneration(handle);
 }
 
-HgEcs hgEcsCreate()
+const HgVec2& HgVec2::operator+=(HgVec2 other)
 {
-    HgEcs ecs{};
-    ecs.entities = hgHandlePoolCreate();
-    ecs.components = hgMapCreate<u64, HgComponent>(128);
-    hgEcsReset(&ecs);
-    return ecs;
+    x += other.x;
+    y += other.y;
+    return* this;
 }
 
-void hgEcsDestroy(HgEcs* ecs)
+const HgVec2& HgVec2::operator-=(HgVec2 other)
 {
-    hgEcsReset(ecs);
-
-    hgMapForEach(&ecs->components, [&](u64*, HgComponent* system)
-    {
-        hgArrayAnyDestroy(&system->components);
-        hgArrayDestroy(&system->entities);
-        hgArrayDestroy(&system->indices);
-        hgStringDestroy(&system->name);
-    });
-
-    hgMapDestroy(&ecs->components);
-    hgHandlePoolDestroy(&ecs->entities);
+    x -= other.x;
+    y -= other.y;
+    return* this;
 }
 
-void hgEcsReset(HgEcs* ecs)
+const HgVec2& HgVec2::operator*=(HgVec2 other)
 {
-    hgAssert(ecs != nullptr);
+    x *= other.x;
+    y *= other.y;
+    return* this;
+}
 
-    hgMapForEach(&ecs->components, [&](u64*, HgComponent* system)
+const HgVec2& HgVec2::operator/=(HgVec2 other)
+{
+    x /= other.x;
+    y /= other.y;
+    return* this;
+}
+
+const HgVec3& HgVec3::operator+=(HgVec3 other)
+{
+    x += other.x;
+    y += other.y;
+    z += other.z;
+    return* this;
+}
+
+const HgVec3& HgVec3::operator-=(HgVec3 other)
+{
+    x -= other.x;
+    y -= other.y;
+    z -= other.z;
+    return* this;
+}
+
+const HgVec3& HgVec3::operator*=(HgVec3 other)
+{
+    x *= other.x;
+    y *= other.y;
+    z *= other.z;
+    return* this;
+}
+
+const HgVec3& HgVec3::operator/=(HgVec3 other)
+{
+    x /= other.x;
+    y /= other.y;
+    z /= other.z;
+    return* this;
+}
+
+const HgVec4& HgVec4::operator+=(HgVec4 other)
+{
+    x += other.x;
+    y += other.y;
+    z += other.z;
+    w += other.w;
+    return* this;
+}
+
+const HgVec4& HgVec4::operator-=(HgVec4 other)
+{
+    x -= other.x;
+    y -= other.y;
+    z -= other.z;
+    w -= other.w;
+    return* this;
+}
+
+const HgVec4& HgVec4::operator*=(HgVec4 other)
+{
+    x *= other.x;
+    y *= other.y;
+    z *= other.z;
+    w *= other.w;
+    return* this;
+}
+
+const HgVec4& HgVec4::operator/=(HgVec4 other)
+{
+    x /= other.x;
+    y /= other.y;
+    z /= other.z;
+    w /= other.w;
+    return* this;
+}
+
+const HgMat2& HgMat2::operator+=(const HgMat2& other)
+{
+    x += other.x;
+    y += other.y;
+    return* this;
+}
+
+const HgMat2& HgMat2::operator-=(const HgMat2& other)
+{
+    x -= other.x;
+    y -= other.y;
+    return* this;
+}
+
+const HgMat3& HgMat3::operator+=(const HgMat3& other)
+{
+    x += other.x;
+    y += other.y;
+    z += other.z;
+    return* this;
+}
+
+const HgMat3& HgMat3::operator-=(const HgMat3& other)
+{
+    x -= other.x;
+    y -= other.y;
+    z -= other.z;
+    return* this;
+}
+
+const HgMat4& HgMat4::operator+=(const HgMat4& other)
+{
+    x += other.x;
+    y += other.y;
+    z += other.z;
+    w += other.w;
+    return* this;
+}
+
+const HgMat4& HgMat4::operator-=(const HgMat4& other)
+{
+    x -= other.x;
+    y -= other.y;
+    z -= other.z;
+    w -= other.w;
+    return* this;
+}
+
+void hgMatTranspose(u32 width, u32 height, f32* dst, const f32* mat)
+{
+    for (u32 i = 0; i < width; ++i)
     {
-        for (u32 c = 1; c < system->components.count; ++c)
+        for (u32 j = 0; j < height; ++j)
         {
-            system->dtor(system->components[c]);
-        }
-        system->entities.count = 1;
-        system->components.count = 1;
-        hgMemClear(system->indices.vals, system->indices.count * sizeof(*system->indices.vals));
-    });
-    hgHandlePoolReset(&ecs->entities);
-}
-
-void hgEcsRegisterComponent(HgEcs* ecs, HgEcsRegisterComponent* config)
-{
-    hgAssert(ecs != nullptr);
-
-    u64 id = hgHash(config->name);
-    hgAssert(hgMapGet(&ecs->components, id) == nullptr);
-
-    if (ecs->components.count * 2 > ecs->components.capacity)
-        hgMapResize(&ecs->components, ecs->components.capacity * 2);
-    HgComponent* system = hgMapAdd(&ecs->components, id, {});
-
-    system->name = hgStringCreate(config->name);
-    system->indices = hgArrayCreate<u32>();
-    system->entities = hgArrayCreate<HgEntity>();
-    system->components = hgArrayAnyCreate(config->width, config->align);
-    system->dtor = config->dtor;
-    system->serialize = config->serialize;
-
-    hgArrayPush(&system->entities);
-    hgArrayAnyPush(&system->components);
-}
-
-void hgEcsUnregisterComponent(HgEcs* ecs, u64 componentId)
-{
-    HgComponent* system = hgMapGet(&ecs->components, componentId);
-
-    for (u32 c = 1; c < system->components.count; ++c)
-    {
-        system->dtor(system->components[c]);
-    }
-    hgArrayAnyDestroy(&system->components);
-    hgArrayDestroy(&system->entities);
-    hgArrayDestroy(&system->indices);
-    hgStringDestroy(&system->name);
-
-    hgMapRemove(&ecs->components, componentId);
-}
-
-HgStringView hgEcsComponentName(HgEcs* ecs, u64 componentId)
-{
-    hgAssert(ecs != nullptr);
-    HgComponent* system = hgMapGet(&ecs->components, componentId);
-    hgAssert(system != nullptr);
-    return system->name;
-}
-
-HgEntity hgEcsSpawn(HgEcs* ecs)
-{
-    hgAssert(ecs != nullptr);
-    return {hgHandlePoolAlloc(&ecs->entities)};
-}
-
-void hgEcsDespawn(HgEcs* ecs, HgEntity e)
-{
-    hgAssert(ecs != nullptr);
-    hgAssert(hgEcsAlive(ecs, e));
-
-    hgMapForEach(&ecs->components, [&](u64* id, HgComponent*)
-    {
-        if (hgEcsHas(ecs, e, *id))
-            hgEcsRemove(ecs, e, *id);
-    });
-    hgHandlePoolFree(&ecs->entities, e.handle);
-}
-
-bool hgEcsAlive(HgEcs* ecs, HgEntity e)
-{
-    hgAssert(ecs != nullptr);
-    return hgHandlePoolAlive(&ecs->entities, e.handle);
-}
-
-void* hgEcsAdd(HgEcs* ecs, HgEntity e, u64 componentId)
-{
-    hgAssert(ecs != nullptr);
-    hgAssert(hgEcsAlive(ecs, e));
-    hgAssert(!hgEcsHas(ecs, e, componentId));
-
-    HgComponent* system = hgMapGet(&ecs->components, componentId);
-    hgAssert(system != nullptr);
-
-    u32 idx = hgHandleIdx(e.handle);
-    if (idx >= system->indices.count)
-    {
-        u32 oldCount = system->indices.count;
-        u32 newCount = idx * 2;
-        hgArrayResize(&system->indices, newCount);
-        for (u32 i = oldCount; i < newCount; ++i)
-            system->indices[i] = 0;
-    }
-    system->indices[idx] = system->entities.count;
-    *hgArrayPush(&system->entities) = e;
-    return hgArrayAnyPush(&system->components);
-}
-
-void hgEcsRemove(HgEcs* ecs, HgEntity e, u64 componentId)
-{
-    hgAssert(ecs != nullptr);
-    hgAssert(hgEcsAlive(ecs, e));
-    hgAssert(hgEcsHas(ecs, e, componentId));
-
-    HgComponent* system = hgMapGet(&ecs->components, componentId);
-    hgAssert(system != nullptr);
-
-    u32 idx = system->indices[hgHandleIdx(e.handle)];
-    system->dtor(system->components[idx]);
-
-    HgEntity last = hgArrayPop(&system->entities);
-    if (e != last)
-    {
-        system->entities[idx] = last;
-        system->indices[hgHandleIdx(last.handle)] = idx;
-        hgMemCopy(
-            system->components[idx],
-            system->components[system->components.count - 1],
-            system->components.width);
-    }
-    system->indices[hgHandleIdx(e.handle)] = 0;
-    --system->components.count;
-}
-
-bool hgEcsHas(HgEcs* ecs, HgEntity e, u64 componentId)
-{
-    hgAssert(ecs != nullptr);
-    hgAssert(hgEcsAlive(ecs, e));
-
-    HgComponent* system = hgMapGet(&ecs->components, componentId);
-    if (system == nullptr)
-        return false;
-
-    u32 idx = hgHandleIdx(e.handle);
-    return idx < system->indices.count && system->indices[idx] != 0;
-}
-
-void* hgEcsGet(HgEcs* ecs, HgEntity e, u64 componentId)
-{
-    hgAssert(ecs != nullptr);
-    hgAssert(hgEcsAlive(ecs, e));
-
-    HgComponent* system = hgMapGet(&ecs->components, componentId);
-    hgAssert(system != nullptr);
-    hgAssert(system->indices[hgHandleIdx(e.handle)] != 0);
-    hgAssert(system->indices[hgHandleIdx(e.handle)] < system->entities.count);
-
-    return system->components[system->indices[hgHandleIdx(e.handle)]];
-}
-
-HgEntity hgEcsGetEntity(HgEcs* ecs, const void* component, u64 componentId)
-{
-    hgAssert(ecs != nullptr);
-    hgAssert(component != nullptr);
-
-    HgComponent* system = hgMapGet(&ecs->components, componentId);
-    hgAssert(system != nullptr);
-
-    return system->entities[(u32)((uptr)component - (uptr)system->components.vals) / system->components.width];
-}
-
-HgEntity* hgEcsEntities(HgEcs* ecs, u64 componentId)
-{
-    hgAssert(ecs != nullptr);
-    hgAssert(hgMapGet(&ecs->components, componentId) != nullptr);
-    hgAssert(hgMapGet(&ecs->components, componentId)->entities.count != 0);
-    return hgMapGet(&ecs->components, componentId)->entities.vals + 1;
-}
-
-void* hgEcsComponents(HgEcs* ecs, u64 componentId)
-{
-    hgAssert(ecs != nullptr);
-    hgAssert(hgMapGet(&ecs->components, componentId) != nullptr);
-    hgAssert(hgMapGet(&ecs->components, componentId)->components.count != 0);
-    HgComponent* system = hgMapGet(&ecs->components, componentId);
-    return (u8*)system->components.vals + system->components.width;
-}
-
-u32 hgEcsCount(HgEcs* ecs, u64 componentId)
-{
-    hgAssert(ecs != nullptr);
-    hgAssert(hgMapGet(&ecs->components, componentId) != nullptr);
-    hgAssert(hgMapGet(&ecs->components, componentId)->entities.count != 0);
-    return hgMapGet(&ecs->components, componentId)->entities.count - 1;
-}
-
-u64 hgEcsFindSmallest(HgEcs* ecs, u64* ids, u32 idCount)
-{
-    hgAssert(ecs != nullptr);
-
-    u32 smallestCount = (u32)-1;
-    u64 smallest = ids[0];
-
-    for (u32 i = 1; i < idCount; ++i)
-    {
-        HgComponent* system = hgMapGet(&ecs->components, ids[i]);
-        hgAssert(system != nullptr);
-
-        if (system->entities.count < smallestCount)
-        {
-            smallestCount = system->entities.count;
-            smallest = ids[i];
+            dst[j * width + i] = mat[i * height + j];
         }
     }
-    return smallest;
 }
 
-static void swapIdxLocation(HgEcs* ecs, u32 lhs, u32 rhs, u64 componentId)
+HgMat2 hgMatTranspose2(const HgMat2& mat)
 {
-    hgAssert(ecs != nullptr);
-
-    HgComponent* system = hgMapGet(&ecs->components, componentId);
-    hgAssert(system != nullptr);
-
-    hgAssert(lhs != 0 && lhs < system->entities.count);
-    hgAssert(rhs != 0 && rhs < system->entities.count);
-
-    HgEntity lhsEntity = system->entities[lhs];
-    HgEntity rhsEntity = system->entities[rhs];
-
-    hgAssert(hgEcsAlive(ecs, lhsEntity));
-    hgAssert(hgEcsAlive(ecs, rhsEntity));
-    hgAssert(hgEcsHas(ecs, lhsEntity, componentId));
-    hgAssert(hgEcsHas(ecs, rhsEntity, componentId));
-
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
-
-    system->entities[lhs] = rhsEntity;
-    system->entities[rhs] = lhsEntity;
-    system->indices[hgHandleIdx(lhsEntity.handle)] = rhs;
-    system->indices[hgHandleIdx(rhsEntity.handle)] = lhs;
-
-    void* temp = hgArenaAlloc(scratch, system->components.width, 1);
-    hgMemCopy(temp, system->components[lhs], system->components.width);
-    hgMemCopy(system->components[lhs], system->components[rhs], system->components.width);
-    hgMemCopy(system->components[rhs], temp, system->components.width);
+    HgMat2 ret;
+    hgMatTranspose(2, 2, &ret.x.x, &mat.x.x);
+    return ret;
 }
 
-namespace {
-    struct QuicksortData {
-        HgEcs* ecs;
-        HgComponent* system;
-        u64 comp;
-        void* data;
-        bool (*compare)(void*, HgEcs* ecs, HgEntity lhs, HgEntity rhs);
+HgMat3 hgMatTranspose3(const HgMat3& mat)
+{
+    HgMat3 ret;
+    hgMatTranspose(3, 3, &ret.x.x, &mat.x.x);
+    return ret;
+}
 
-        u32 quicksortInter(u32 pivot, u32 inc, u32 dec)
-        {
-            while (inc != dec)
-            {
-                while (!compare(data, ecs, system->entities[dec], system->entities[pivot]))
-                {
-                    --dec;
-                    if (dec == inc)
-                        goto finish;
-                }
-                while (!compare(data, ecs, system->entities[pivot], system->entities[inc]))
-                {
-                    ++inc;
-                    if (inc == dec)
-                        goto finish;
-                }
-                swapIdxLocation(ecs, inc, dec, comp);
-            }
+HgMat4 hgMatTranspose4(const HgMat4& mat)
+{
+    HgMat4 ret;
+    hgMatTranspose(4, 4, &ret.x.x, &mat.x.x);
+    return ret;
+}
 
-        finish:
-            if (compare(data, ecs, system->entities[inc], system->entities[pivot]))
-                swapIdxLocation(ecs, pivot, inc, comp);
+const HgComplex& HgComplex::operator+=(HgComplex other)
+{
+    r += other.r;
+    i += other.i;
+    return* this;
+}
 
-            return inc;
-        }
+const HgComplex& HgComplex::operator-=(HgComplex other)
+{
+    r -= other.r;
+    i -= other.i;
+    return* this;
+}
 
-        void quicksort(u32 begin, u32 end)
-        {
-            if (begin + 1 >= end)
-                return;
+const HgQuat& HgQuat::operator+=(HgQuat other)
+{
+    r += other.r;
+    i += other.i;
+    j += other.j;
+    k += other.k;
+    return* this;
+}
 
-            u32 middle = quicksortInter(begin, begin + 1, end - 1);
-            quicksort(begin, middle);
-            quicksort(middle, end);
-        }
+const HgQuat& HgQuat::operator-=(HgQuat other)
+{
+    r -= other.r;
+    i -= other.i;
+    j -= other.j;
+    k -= other.k;
+    return* this;
+}
+
+void hgVecAdd(u32 size, f32* dst, const f32* lhs, const f32* rhs)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(lhs != nullptr);
+    hgAssert(rhs != nullptr);
+    for (u32 i = 0; i < size; ++i)
+    {
+        dst[i] = lhs[i] + rhs[i];
+    }
+}
+
+void hgVecSub(u32 size, f32* dst, const f32* lhs, const f32* rhs)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(lhs != nullptr);
+    hgAssert(rhs != nullptr);
+    for (u32 i = 0; i < size; ++i)
+    {
+        dst[i] = lhs[i] - rhs[i];
+    }
+}
+
+void hgVecMulPairwise(u32 size, f32* dst, const f32* lhs, const f32* rhs)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(lhs != nullptr);
+    hgAssert(rhs != nullptr);
+    for (u32 i = 0; i < size; ++i)
+    {
+        dst[i] = lhs[i] * rhs[i];
+    }
+}
+
+void hgVecMulScalar(u32 size, f32* dst, f32 scalar, const f32* vec)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(vec != nullptr);
+    for (u32 i = 0; i < size; ++i)
+    {
+        dst[i] = scalar * vec[i];
+    }
+}
+
+void hgVecDivPairwise(u32 size, f32* dst, const f32* lhs, const f32* rhs)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(lhs != nullptr);
+    hgAssert(rhs != nullptr);
+    for (u32 i = 0; i < size; ++i)
+    {
+        hgAssert(rhs[i] != 0);
+        dst[i] = lhs[i] / rhs[i];
+    }
+}
+
+void hgVecDivScalar(u32 size, f32* dst, const f32* vec, f32 scalar)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(vec != nullptr);
+    hgAssert(scalar != 0);
+    for (u32 i = 0; i < size; ++i)
+    {
+        dst[i] = vec[i] / scalar;
+    }
+}
+
+void hgVecDot(u32 size, f32* dst, const f32* lhs, const f32* rhs)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(lhs != nullptr);
+    hgAssert(rhs != nullptr);
+    *dst = 0;
+    for (u32 i = 0; i < size; ++i)
+    {
+        *dst += lhs[i] * rhs[i];
+    }
+}
+
+void hgVecLen(u32 size, f32* dst, const f32* vec)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(vec != nullptr);
+    hgVecDot(size, dst, vec, vec);
+    *dst = (f32)sqrt(*dst);
+}
+
+f32 hgVecLen2(HgVec2 vec)
+{
+    return (f32)sqrt(hgVecDot2(vec, vec));
+}
+
+f32 hgVecLen3(HgVec3 vec)
+{
+    return (f32)sqrt(hgVecDot3(vec, vec));
+}
+
+f32 hgVecLen4(HgVec4 vec)
+{
+    return (f32)sqrt(hgVecDot3(vec, vec));
+}
+
+void hgVecNorm(u32 size, f32* dst, const f32* vec)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(vec != nullptr);
+    f32 len;
+    hgVecLen(size, &len, vec);
+    hgAssert(len != 0);
+    for (u32 i = 0; i < size; ++i)
+    {
+        dst[i] = vec[i] / len;
+    }
+}
+
+HgVec2 hgVecNorm2(HgVec2 vec)
+{
+    f32 len = hgVecLen2(vec);
+    hgAssert(len != 0);
+    return HgVec2{vec.x / len, vec.y / len};
+}
+
+HgVec3 hgVecNorm3(HgVec3 vec)
+{
+    f32 len = hgVecLen3(vec);
+    hgAssert(len != 0);
+    return HgVec3{vec.x / len, vec.y / len, vec.z / len};
+}
+
+HgVec4 hgVecNorm4(HgVec4 vec)
+{
+    f32 len = hgVecLen4(vec);
+    hgAssert(len != 0);
+    return HgVec4{vec.x / len, vec.y / len, vec.z / len, vec.w / len};
+}
+
+void hgVecCross(f32* dst, const f32* lhs, const f32* rhs)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(lhs != nullptr);
+    hgAssert(rhs != nullptr);
+    dst[0] = lhs[1] * rhs[2] - lhs[2] * rhs[1];
+    dst[1] = lhs[2] * rhs[0] - lhs[0] * rhs[2];
+    dst[2] = lhs[0] * rhs[1] - lhs[1] * rhs[0];
+}
+
+HgVec3 hgCross(const HgVec3& lhs, const HgVec3& rhs)
+{
+    return HgVec3{
+        lhs.y * rhs.z - lhs.z * rhs.y,
+        lhs.z * rhs.x - lhs.x * rhs.z,
+        lhs.x * rhs.y - lhs.y * rhs.x
     };
 }
 
-void hgEcsSort(
-    HgEcs* ecs,
-    u64 componentId,
-    void* data,
-    bool (*compare)(void*, HgEcs* ecs, HgEntity lhs, HgEntity rhs))
+void hgMatAdd(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs)
 {
-    hgAssert(ecs != nullptr);
-    hgAssert(compare != nullptr);
-
-    HgComponent* system = hgMapGet(&ecs->components, componentId);
-    hgAssert(system != nullptr);
-
-    QuicksortData q{ecs, system, componentId, data, compare};
-    q.quicksort(1, system->entities.count);
+    hgAssert(dst != nullptr);
+    hgAssert(lhs != nullptr);
+    hgAssert(rhs != nullptr);
+    for (u32 i = 0; i < width; ++i)
+    {
+        for (u32 j = 0; j < height; ++j)
+        {
+            dst[i * width + j] = lhs[i * width + j] + rhs[i * width + j];
+        }
+    }
 }
 
-template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgEcs* ecs)
+HgMat2 operator+(const HgMat2& lhs, const HgMat2& rhs)
 {
-    hgAssert(arena != nullptr);
-    hgAssert(ecs != nullptr);
+    HgMat2 result{};
+    hgMatAdd(2, 2, &result.x.x, &lhs.x.x, &rhs.x.x);
+    return result;
+}
 
-    HgArena* scratch = hgScratch(&arena, 1);
-    hgArenaScope(scratch);
+HgMat3 operator+(const HgMat3& lhs, const HgMat3& rhs)
+{
+    HgMat3 result{};
+    hgMatAdd(3, 3, &result.x.x, &lhs.x.x, &rhs.x.x);
+    return result;
+}
 
-    HgSerializer obj = hgSerializeObject(arena, s, name);
+HgMat4 operator+(const HgMat4& lhs, const HgMat4& rhs)
+{
+    HgMat4 result{};
+    hgMatAdd(4, 4, &result.x.x, &lhs.x.x, &rhs.x.x);
+    return result;
+}
 
-    HgEntitySerializer ecsSerial{};
-    u32 entityCount = 0;
-    if (s->writing)
+void hgMatSub(u32 width, u32 height, f32* dst, const f32* lhs, const f32* rhs)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(lhs != nullptr);
+    hgAssert(rhs != nullptr);
+    for (u32 i = 0; i < width; ++i)
     {
-        ecsSerial.entityToIdx = hgArenaAlloc<u32>(scratch, ecs->entities.handles.count);
-        for (u32 i = 1; i < ecs->entities.handles.count; ++i)
+        for (u32 j = 0; j < height; ++j)
         {
-            if (ecs->entities.handles[i] != hgHandleNull)
-                ecsSerial.entityToIdx[hgHandleIdx(ecs->entities.handles[i])] = entityCount++;
+            dst[i * width + j] = lhs[i * width + j] - rhs[i * width + j];
         }
-
-        hgSerialize(arena, &obj, "Entity Count", &entityCount);
     }
-    else
+}
+
+HgMat2 operator-(const HgMat2& lhs, const HgMat2& rhs)
+{
+    HgMat2 result{};
+    hgMatSub(2, 2, &result.x.x, &lhs.x.x, &rhs.x.x);
+    return result;
+}
+
+HgMat3 operator-(const HgMat3& lhs, const HgMat3& rhs)
+{
+    HgMat3 result{};
+    hgMatSub(3, 3, &result.x.x, &lhs.x.x, &rhs.x.x);
+    return result;
+}
+
+HgMat4 operator-(const HgMat4& lhs, const HgMat4& rhs)
+{
+    HgMat4 result{};
+    hgMatSub(4, 4, &result.x.x, &lhs.x.x, &rhs.x.x);
+    return result;
+}
+
+void hgMatMul(f32* dst, u32 wl, u32 hl, const f32* lhs, u32 wr, u32 hr, const f32* rhs)
+{
+    hgAssert(hr == wl);
+    hgAssert(dst != nullptr);
+    hgAssert(lhs != nullptr);
+    hgAssert(rhs != nullptr);
+    (void)hr;
+    for (u32 i = 0; i < wl; ++i)
     {
-        hgSerialize(arena, &obj, "Entity Count", &entityCount);
-
-        ecsSerial.idxToEntity = hgArenaAlloc<HgEntity>(scratch, entityCount);
-        for (u32 i = 0; i < entityCount; ++i)
+        for (u32 j = 0; j < wr; ++j)
         {
-            ecsSerial.idxToEntity[i] = hgEcsSpawn(ecs);
-        }
-    }
-
-    HgSerializer systemArr{};
-    u32 systemCount;
-    if (s->writing)
-        systemCount = ecs->components.count;
-    systemArr = hgSerializeArray(arena, &obj, "Components", &systemCount);
-
-    u32 systemIdx = (u32)-1;
-    for (u32 i = 0; i < systemCount; ++i)
-    {
-        HgSerializer systemObj = hgSerializeObject(arena, &systemArr, "");
-
-        u64 systemId = (u64)-1;
-        HgComponent* systemData;
-        if (s->writing)
-        {
-            ++systemIdx;
-            while (!ecs->components.hasVal[systemIdx])
+            dst[i * wl + j] = 0.0f;
+            for (u32 k = 0; k < hl; ++k)
             {
-                ++systemIdx;
-            }
-            systemId = ecs->components.keys[systemIdx];
-            systemData = &ecs->components.vals[systemIdx];
-            hgSerialize(arena, &systemObj, "Name", &systemData->name);
-        }
-        else
-        {
-            HgStringView compName;
-            hgSerialize(arena, &systemObj, "Name", &compName);
-            systemId = hgHash(compName);
-            systemData = hgMapGet(&ecs->components, systemId);
-        }
-
-        u32 compCount;
-        if (s->writing)
-            compCount = systemData->entities.count - 1;
-        HgSerializer compArr = hgSerializeArray(arena, &systemObj, "Data", &compCount);
-
-        for (u32 c = 0; c < compCount; ++c)
-        {
-            HgSerializer compObj = hgSerializeObject(arena, &compArr, "");
-
-            u32 entityIdx;
-            if (s->writing)
-                entityIdx = ecsSerial.entityToIdx[
-                    hgHandleIdx(systemData->entities[c + 1].handle)];
-            hgSerialize(arena, &compObj, "Entity Index", &entityIdx);
-
-            void* compData;
-            if (s->writing)
-                compData = systemData->components[c + 1];
-            else
-                compData = hgEcsAdd(ecs, ecsSerial.idxToEntity[entityIdx], systemId);
-            systemData->serialize(arena, &compObj, "Component", compData, &ecsSerial);
-        }
-    }
-}
-
-void hgEntitySerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgEntity* val, HgEntitySerializer* ecs)
-{
-    if (s->writing)
-    {
-        u32 idx = *val != hgEntityNull ? ecs->entityToIdx[hgHandleIdx(val->handle)] : (u32)-1;
-        hgSerialize(arena, s, name, (i32*)&idx);
-    }
-    else
-    {
-        u32 idx = (u32)-1;
-        hgSerialize(arena, s, name, (i32*)&idx);
-        *val = idx != (u32)-1 ? ecs->idxToEntity[idx] : hgEntityNull;
-    }
-}
-
-template<>
-void hgEcsSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgNode* node, HgEntitySerializer* ecs)
-{
-    HgSerializer obj = hgSerializeObject(arena, s, name);
-    hgEntitySerialize(arena, &obj, "Parent", &node->parent, ecs);
-    hgEntitySerialize(arena, &obj, "Next Sibling", &node->nextSibling, ecs);
-    hgEntitySerialize(arena, &obj, "Previous Sibling", &node->prevSibling, ecs);
-    hgEntitySerialize(arena, &obj, "First Child", &node->firstChild, ecs);
-}
-
-HgNode* hgNodeAdd(HgEcs* ecs, HgEntity e)
-{
-    HgNode* node = hgEcsAdd<HgNode>(ecs, e);
-    *node = {};
-    return node;
-}
-
-void hgNodeDestroy(HgEcs* ecs, HgEntity e)
-{
-    hgAssert(ecs != nullptr);
-    hgAssert(hgEcsAlive(ecs, e));
-
-    HgNode* node = hgEcsGet<HgNode>(ecs, e);
-    if (node->parent.handle != hgHandleNull)
-    {
-        if (node->prevSibling.handle != hgHandleNull)
-            hgEcsGet<HgNode>(ecs, node->prevSibling)->nextSibling = node->nextSibling;
-        else
-            hgEcsGet<HgNode>(ecs, node->parent)->firstChild = node->nextSibling;
-
-        if (node->nextSibling.handle != hgHandleNull)
-            hgEcsGet<HgNode>(ecs, node->nextSibling)->prevSibling = node->prevSibling;
-    }
-
-    HgEntity child = node->firstChild;
-    while (child.handle != hgHandleNull)
-    {
-        HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
-        HgEntity next = childNode->nextSibling;
-        hgNodeDestroy(ecs, child);
-        child = next;
-    }
-
-    hgEcsDespawn(ecs, e);
-}
-
-void hgNodeDetach(HgEcs* ecs, HgEntity e)
-{
-    hgAssert(ecs != nullptr);
-    hgAssert(hgEcsAlive(ecs, e));
-
-    HgNode* node = hgEcsGet<HgNode>(ecs, e);
-    if (node->parent.handle == hgHandleNull)
-    {
-        hgAssert(node->prevSibling.handle == hgHandleNull);
-        hgAssert(node->nextSibling.handle == hgHandleNull);
-
-        HgEntity child = node->firstChild;
-        while (child.handle != hgHandleNull)
-        {
-            HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
-            HgEntity next = childNode->nextSibling;
-            childNode->parent = HgEntity{};
-            childNode->nextSibling = HgEntity{};
-            childNode->prevSibling = HgEntity{};
-            child = next;
-        }
-    } else {
-        if (node->prevSibling.handle != hgHandleNull)
-            hgEcsGet<HgNode>(ecs, node->prevSibling)->nextSibling = node->nextSibling;
-        else
-            hgEcsGet<HgNode>(ecs, node->parent)->firstChild = node->nextSibling;
-
-        if (node->nextSibling.handle != hgHandleNull)
-            hgEcsGet<HgNode>(ecs, node->nextSibling)->prevSibling = node->prevSibling;
-
-        HgEntity child = node->firstChild;
-        while (child.handle != hgHandleNull)
-        {
-            HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
-            HgEntity next = childNode->nextSibling;
-            childNode->parent = HgEntity{};
-            childNode->nextSibling = HgEntity{};
-            childNode->prevSibling = HgEntity{};
-            hgNodeAddChild(ecs, node->parent, child);
-            child = next;
-        }
-    }
-    *node = {};
-}
-
-void hgNodeAddChild(HgEcs* ecs, HgEntity parent, HgEntity child)
-{
-    hgAssert(ecs != nullptr);
-    hgAssert(hgEcsAlive(ecs, parent));
-    hgAssert(hgEcsAlive(ecs, child));
-
-    HgNode* node = hgEcsGet<HgNode>(ecs, parent);
-    HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
-
-    hgAssert(childNode->parent.handle == hgHandleNull);
-    hgAssert(childNode->prevSibling.handle == hgHandleNull);
-    hgAssert(childNode->nextSibling.handle == hgHandleNull);
-
-    if (node->firstChild.handle != hgHandleNull)
-    {
-        hgEcsGet<HgNode>(ecs, node->firstChild)->prevSibling = child;
-        childNode->nextSibling = node->firstChild;
-    }
-    node->firstChild = child;
-    childNode->parent = parent;
-}
-
-template<>
-void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgTransform* node)
-{
-    HgSerializer obj = hgSerializeObject(arena, s, name);
-    hgSerialize(arena, &obj, "Position", &node->position);
-    hgSerialize(arena, &obj, "Scale", &node->scale);
-    hgSerialize(arena, &obj, "Rotation", &node->rotation);
-}
-
-HgTransform* hgTransformAdd(HgEcs* ecs, HgEntity e, HgVec3 position, HgVec3 scale, HgQuat rotation)
-{
-    hgAssert(ecs != nullptr);
-    hgAssert(hgEcsAlive(ecs, e));
-
-    HgTransform* tf = hgEcsAdd<HgTransform>(ecs, e);
-    *tf = {};
-    tf->position = position;
-    tf->scale = scale;
-    tf->rotation = rotation;
-    hgTransformUpdate(ecs, e);
-
-    return tf;
-}
-
-static void transformUpdateChild(HgEcs* ecs, HgEntity e)
-{
-    hgAssert(hgEcsHas<HgTransform>(ecs, e));
-
-    HgNode* node = hgEcsGet<HgNode>(ecs, e);
-
-    HgTransform* tf = hgEcsGet<HgTransform>(ecs, e);
-
-    tf->mat = hgEcsGet<HgTransform>(ecs, node->parent)->mat
-            * hgMatModel3D(tf->position, tf->scale, tf->rotation);
-
-    HgEntity child = node->firstChild;
-    while (child.handle != hgHandleNull)
-    {
-        hgTransformUpdate(ecs, child);
-        child = hgEcsGet<HgNode>(ecs, child)->nextSibling;
-    }
-}
-
-void hgTransformUpdate(HgEcs* ecs, HgEntity e)
-{
-    hgAssert(ecs != nullptr);
-    hgAssert(hgEcsAlive(ecs, e));
-    hgAssert(hgEcsHas<HgTransform>(ecs, e));
-
-    if (hgEcsHas<HgNode>(ecs, e))
-    {
-        HgNode* node = hgEcsGet<HgNode>(ecs, e);
-        if (node->parent.handle != hgHandleNull && hgEcsHas<HgTransform>(ecs, node->parent))
-        {
-            transformUpdateChild(ecs, e);
-        }
-        else
-        {
-            HgTransform* tf = hgEcsGet<HgTransform>(ecs, e);
-            tf->mat = hgMatModel3D(tf->position, tf->scale, tf->rotation);
-
-            HgEntity child = node->firstChild;
-            while (child.handle != hgHandleNull)
-            {
-                transformUpdateChild(ecs, child);
-                child = hgEcsGet<HgNode>(ecs, child)->nextSibling;
+                dst[i * wl + j] += lhs[k * wl + j] * rhs[i * wr + k];
             }
         }
     }
-    else
+}
+
+HgMat2 operator*(const HgMat2& lhs, const HgMat2& rhs)
+{
+    HgMat2 result{};
+    hgMatMul(&result.x.x, 2, 2, &lhs.x.x, 2, 2, &rhs.x.x);
+    return result;
+}
+
+HgMat3 operator*(const HgMat3& lhs, const HgMat3& rhs)
+{
+    HgMat3 result{};
+    hgMatMul(&result.x.x, 3, 3, &lhs.x.x, 3, 3, &rhs.x.x);
+    return result;
+}
+
+HgMat4 operator*(const HgMat4& lhs, const HgMat4& rhs)
+{
+    HgMat4 result{};
+    hgMatMul(&result.x.x, 4, 4, &lhs.x.x, 4, 4, &rhs.x.x);
+    return result;
+}
+
+void hgMatMulVec(u32 width, u32 height, f32* dst, const f32* mat, const f32* vec)
+{
+    hgAssert(dst != nullptr);
+    hgAssert(mat != nullptr);
+    hgAssert(vec != nullptr);
+    for (u32 i = 0; i < height; ++i)
     {
-        HgTransform* tf = hgEcsGet<HgTransform>(ecs, e);
-        tf->mat = hgMatModel3D(tf->position, tf->scale, tf->rotation);
+        dst[i] = 0.0f;
+        for (u32 j = 0; j < width; ++j)
+        {
+            dst[i] += mat[j * width + i] * vec[j];
+        }
     }
 }
 
-void hgAssetInitDefaults()
+HgVec2 operator*(const HgMat2& lhs, HgVec2 rhs)
 {
-    hgAssetInit<HgBinary>();
-    hgAssetInit<HgTexture>();
-    hgAssetInit<HgGpuTexture>();
-    hgAssetInit<HgMesh>();
-    hgAssetInit<HgGpuMesh>();
-    hgAssetInit<HgAudio>();
+    HgVec2 result{};
+    hgMatMulVec(2, 2, &result.x, &lhs.x.x, &rhs.x);
+    return result;
 }
 
-void hgAssetDeinitDefaults()
+HgVec3 operator*(const HgMat3& lhs, HgVec3 rhs)
 {
-    hgAssetDeinit<HgAudio>();
-    hgAssetDeinit<HgGpuMesh>();
-    hgAssetDeinit<HgMesh>();
-    hgAssetDeinit<HgGpuTexture>();
-    hgAssetDeinit<HgTexture>();
-    hgAssetDeinit<HgBinary>();
+    HgVec3 result{};
+    hgMatMulVec(3, 3, &result.x, &lhs.x.x, &rhs.x);
+    return result;
 }
 
-template<>
-void hgAssetLoadImpl(HgAsset<HgBinary>* data)
+HgVec4 operator*(const HgMat4& lhs, HgVec4 rhs)
 {
-    HgArena* scratch = hgScratch();
-    hgArenaScope(scratch);
-
-    char* cpath = hgCString(scratch, data->path);
-
-    FILE* fileHandle = fopen(cpath, "rb");
-    if (fileHandle == nullptr)
-    {
-    hgWarn("Could not find file to read binary: %s\n", cpath);
-    return;
-    }
-    hgDefer(fclose(fileHandle));
-
-    if (fseek(fileHandle, 0, SEEK_END) != 0)
-    {
-        hgWarn("Failed to read binary from file: %s\n", cpath);
-        return;
-    }
-
-    data->data.size = (u32)ftell(fileHandle);
-    data->data.data = malloc(data->data.size);
-
-    rewind(fileHandle);
-    if (fread(data->data.data, 1, data->data.size, fileHandle) != data->data.size)
-    {
-        free(data->data.data);
-        data->data = {};
-        hgWarn("Failed to read binary from file: %s\n", cpath);
-        return;
-    }
+    HgVec4 result{};
+    hgMatMulVec(4, 4, &result.x, &lhs.x.x, &rhs.x);
+    return result;
 }
 
-template<>
-void hgAssetUnloadImpl(HgAsset<HgBinary>* data)
+HgQuat operator*(HgQuat lhs, HgQuat rhs)
 {
-    free(data->data.data);
-}
-
-void hgBinaryStore(HgBinary* bin, HgStringView path, HgFence* fence)
-{
-    struct Capture {
-        HgBinary bin;
-        HgStringOwner path;
+    return HgQuat{
+        lhs.r * rhs.r - lhs.i * rhs.i - lhs.j * rhs.j - lhs.k * rhs.k,
+        lhs.r * rhs.i + lhs.i * rhs.r + lhs.j * rhs.k - lhs.k * rhs.j,
+        lhs.r * rhs.j - lhs.i * rhs.k + lhs.j * rhs.r + lhs.k * rhs.i,
+        lhs.r * rhs.k + lhs.i * rhs.j - lhs.j * rhs.i + lhs.k * rhs.r,
     };
-    Capture* c = (Capture*)malloc(sizeof(*c));
-    c->bin = *bin;
-    c->path = hgStringCreate(path);
+}
 
-    hgThreadsCall(fence, c, [](void* pc)
-    {
-        Capture* c = (Capture*)pc;
-        hgDefer(free(c));
-        hgDefer(hgStringDestroy(&c->path));
+HgQuat hgQuatAxisAngle(HgVec3 axis, f32 angle)
+{
+    f32 halfAngle = angle * (f32)0.5;
+    f32 sinHalfAngle = (f32)std::sin(halfAngle);
+    return HgQuat{
+        (f32)std::cos(halfAngle),
+        axis.x * sinHalfAngle,
+        axis.y * sinHalfAngle,
+        axis.z * sinHalfAngle,
+    };
+}
 
-        HgArena* scratch = hgScratch();
-        hgArenaScope(scratch);
+HgVec3 hgVecRotate(HgQuat lhs, HgVec3 rhs)
+{
+    HgQuat q = lhs * HgQuat{0, rhs.x, rhs.y, rhs.z} * hgQuatConj(lhs);
+    return HgVec3{q.i, q.j, q.k};
+}
 
-        char* cpath = hgCString(scratch, c->path);
+HgMat3 hgMatRotate(HgQuat lhs, HgMat3 rhs)
+{
+    return HgMat3{
+        hgVecRotate(lhs, rhs.x),
+        hgVecRotate(lhs, rhs.y),
+        hgVecRotate(lhs, rhs.z),
+    };
+}
 
-        FILE* fileHandle = fopen(cpath, "wb");
-        if (fileHandle == nullptr)
-        {
-            hgWarn("Failed to create file to write binary: %s\n", cpath);
-            return;
-        }
-        hgDefer(fclose(fileHandle));
+HgMat4 hgMatModel2D(HgVec3 position, HgVec2 scale, f32 rotation)
+{
+    HgMat2 m2{HgVec2{scale.x, 0.0f}, HgVec2{0.0f, scale.y}};
+    f32 rotSin = (f32)std::sin(rotation);
+    f32 rotCos = (f32)std::cos(rotation);
+    HgMat2 rot{HgVec2{rotCos, rotSin}, HgVec2{-rotSin, rotCos}};
+    HgMat4 m4 = HgMat4{rot * m2};
+    m4.w.x = position.x;
+    m4.w.y = position.y;
+    m4.w.z = position.z;
+    return m4;
+}
 
-        if (fwrite(c->bin.data, 1, c->bin.size, fileHandle) != c->bin.size)
-        {
-            hgWarn("Failed to write binary data to file: %s\n", cpath);
-        }
+HgMat4 hgMatModel3D(const HgVec3& position, const HgVec3& scale, const HgQuat& rotation)
+{
+    HgMat3 m3{1.0f};
+    m3.x.x = scale.x;
+    m3.y.y = scale.y;
+    m3.z.z = scale.z;
+    m3 = hgMatRotate(rotation, m3);
+    HgMat4 m4 = HgMat4{m3};
+    m4.w.x = position.x;
+    m4.w.y = position.y;
+    m4.w.z = position.z;
+    return m4;
+}
+
+HgMat4 hgMatView(const HgVec3& position, const HgVec3& zoom, const HgQuat& rotation)
+{
+    HgMat4 rot{hgMatRotate(hgQuatConj(rotation), HgMat3{1.0f})};
+    HgMat4 pos{1.0f};
+    pos.x.x = zoom.x;
+    pos.y.y = zoom.y;
+    pos.z.z = zoom.z;
+    pos.w.x = -position.x;
+    pos.w.y = -position.y;
+    pos.w.z = -position.z;
+    return rot * pos;
+}
+
+HgMat4 hgMatModelToView(const HgMat4& model)
+{
+    if (HgVec3{model.x} == HgVec3{0} || HgVec3{model.y} == HgVec3{0} || HgVec3{model.z} == HgVec3{0})
+        return HgMat4{HgMat3{0}};
+
+    HgMat3 inv3 = hgMatTranspose3(HgMat3{
+        hgVecNorm3(HgVec3{model.x}),
+        hgVecNorm3(HgVec3{model.y}),
+        hgVecNorm3(HgVec3{model.z}),
     });
+    HgMat4 inv4{inv3};
+    inv4.w = HgVec4{HgVec3{inv3 * HgVec3{model.w} * -1}, 1};
+    return inv4;
 }
 
-template<>
-void hgAssetLoadImpl(HgAsset<HgJson>* data)
+HgMat4 hgMatOrthographic(f32 left, f32 right, f32 top, f32 bottom, f32 near, f32 far)
 {
-    HgBinaryAsset* bin = hgAssetLoad<HgBinary>(data->path);
-    hgDefer(hgAssetUnload(bin));
-
-    HgArena* scratch = hgScratch();
-    u64 head = scratch->head;
-    hgDefer(scratch->head = head);
-
-    HgStringView jsonStr = {(char*)bin->data.data, bin->data.size};
-    HgJson parse = hgParseJson(scratch, jsonStr);
-
-    HgJsonError* e = parse.errors;
-    while (e != nullptr)
-    {
-        hgWarn("Json parse error: %.*s\n", (int)e->msg.length, e->msg.chars);
-        e = e->next;
-    }
-
-    data->data.file = (HgJsonNode*)malloc(scratch->head - head);
-    if (parse.errors != nullptr)
-    {
-        data->data.errors = (HgJsonError*)(
-            (u8*)data->data.file +
-                ((uptr)parse.errors - (uptr)parse.file));
-    }
-    else
-    {
-        data->data.errors = nullptr;
-    }
-    hgMemCopy((void*)data->data.file, (void*)parse.file, scratch->head - head);
+    return HgMat4{
+        HgVec4{2.0f / (right - left), 0.0f, 0.0f, 0.0f},
+        HgVec4{0.0f, 2.0f / (bottom - top), 0.0f, 0.0f},
+        HgVec4{0.0f, 0.0f, 1.0f / (far - near), 0.0f},
+        HgVec4{-(right + left) / (right - left), -(bottom + top) / (bottom - top), -(near) / (far - near), 1.0f},
+    };
 }
 
-template<>
-void hgAssetUnloadImpl(HgAsset<HgJson>* data)
+HgMat4 hgMatPerspective(f32 fov, f32 aspect, f32 near, f32 far)
 {
-    free(data->data.file);
+    hgAssert(near > 0.0f);
+    hgAssert(far > near);
+    f32 scale = 1.0f / (f32)tan(fov * 0.5f);
+    return HgMat4{
+        HgVec4{scale / aspect, 0.0f, 0.0f, 0.0f},
+        HgVec4{0.0f, scale, 0.0f, 0.0f},
+        HgVec4{0.0f, 0.0f, far / (far - near), 1.0f},
+        HgVec4{0.0f, 0.0f, -(far * near) / (far - near), 0.0f},
+    };
+}
+
+u32 hgNoise(u32 seed, u32 pos)
+{
+    u32 ret = (pos + 384521713u) * 955740521u;
+    ret ^= ret >> 13;
+    ret *= seed * 725937977u;
+    ret ^= ret >> 7;
+    ret *= 358166231u;
+    ret ^= ret >> 11;
+    return ret;
+}
+
+u32 hgNoise2D(u32 seed, u32 x, u32 y)
+{
+    return hgNoise(seed, x + (y * 425537443u));
+}
+
+u32 hgNoise3D(u32 seed, u32 x, u32 y, u32 z)
+{
+    return hgNoise(seed, x + y * 425537443u + z * 682607u);
+}
+
+u32 hgNoise4D(u32 seed, u32 x, u32 y, u32 z, u32 w)
+{
+    return hgNoise(seed, x + y * 425537443u + z * 682607u + w * 9067);
+}
+
+f32 hgNoiseNorm(u32 seed, f32 pos)
+{
+    union Convert {
+        f32 asF32;
+        u32 asU32;
+    };
+    return (f32)hgNoise(seed, Convert{pos}.asU32) / (f32)UINT32_MAX;
+}
+
+f32 hgNoiseNorm2D(u32 seed, HgVec2 pos)
+{
+    union Convert {
+        f32 asF32;
+        u32 asU32;
+    };
+    return (f32)hgNoise2D(seed, Convert{pos.x}.asU32, Convert{pos.y}.asU32) / (f32)UINT32_MAX;
+}
+
+f32 hgNoiseNorm3D(u32 seed, HgVec3 pos)
+{
+    union Convert {
+        f32 asF32;
+        u32 asU32;
+    };
+    return (f32)hgNoise3D(seed, Convert{pos.x}.asU32, Convert{pos.y}.asU32, Convert{pos.z}.asU32) / (f32)UINT32_MAX;
+}
+
+f32 hgNoiseNorm4D(u32 seed, HgVec4 pos)
+{
+    union Convert {
+        f32 asF32;
+        u32 asU32;
+    };
+    return (f32)hgNoise4D(
+        seed,
+        Convert{pos.x}.asU32,
+        Convert{pos.y}.asU32,
+        Convert{pos.z}.asU32,
+        Convert{pos.w}.asU32) / (f32)UINT32_MAX;
+}
+
+f32 hgNoiseVec1D(u32 seed, f32 pos)
+{
+    return hgNoiseNorm(seed, pos) * 2.0f - 1.0f;
+}
+
+HgVec2 hgNoiseVec2D(u32 seed, HgVec2 pos)
+{
+    f32 rot = 2.0f * (f32)hgPi * hgNoiseNorm2D(seed, pos);
+    return HgVec2(std::cos(rot), std::sin(rot));
+}
+
+u32 hgGetMaxMipmaps(u32 width, u32 height, u32 depth)
+{
+    u32 max = width > height ? width : height;
+    max = max > depth ? max : depth;
+    return max == 0 ? 0 : (u32)log2((f32)max) + 1;
 }
 
 template<>
@@ -5125,83 +4595,6 @@ void hgModelsDraw(HgEcs* ecs, HgEntity camera, HgGpuCmd* cmd)
     });
 }
 
-HgPerf hgPerfCreate(HgArena* arena, u32 count)
-{
-    hgAssert(arena != nullptr);
-
-    HgPerf perf;
-    perf.times = hgArenaAlloc<f64>(arena, count);
-    perf.count = count;
-    perf.current = 0;
-    return perf;
-}
-
-void hgPerfBegin(HgPerf* perf)
-{
-    hgAssert(perf != nullptr);
-    hgClockTick(&perf->clock);
-}
-
-f64 hgPerfEnd(HgPerf* perf)
-{
-    hgAssert(perf != nullptr);
-    hgAssert(perf->current < perf->count);
-
-    f64 time = hgClockTick(&perf->clock);
-    perf->times[perf->current++] = time;
-
-    return time;
-}
-
-HgPerfStats hgPerfAnalyze(const HgPerf* perf)
-{
-    hgAssert(perf != nullptr);
-
-    HgPerfStats stats;
-    stats.avg = 0.0;
-    stats.best = INFINITY;
-    stats.worst = 0.0;
-
-    for (u32 i = 0; i < perf->current; ++i)
-    {
-        if (perf->times[i] < stats.best)
-            stats.best = perf->times[i];
-        if (perf->times[i] > stats.worst)
-            stats.worst = perf->times[i];
-        stats.avg += perf->times[i];
-    }
-    stats.avg /= (f64)perf->current;
-
-    return stats;
-}
-
-void hgPerfLog(HgStringView title, const HgPerfStats* stats, HgPerfScale scale)
-{
-    hgAssert(stats != nullptr);
-    if (title.length == 0 || title.chars == nullptr)
-        title = "Title Missing";
-
-    switch (scale)
-    {
-        case HgPerfScale_seconds:
-            printf("HG Performance - %.*s: avg: %.4fs, best: %.4fs, worst: %.4fs\n",
-                (int)title.length, title.chars, stats->avg, stats->best, stats->worst);
-            break;
-        case HgPerfScale_milli:
-            printf("HG Performance - %.*s: avg: %.4fms, best: %.4fms, worst: %.4fms\n",
-                (int)title.length, title.chars, stats->avg * 1.e3, stats->best * 1.e3, stats->worst * 1.e3);
-            break;
-        case HgPerfScale_micro:
-            printf("HG Performance - %.*s: avg: %.4fmcs, best: %.4fmcs, worst: %.4fmcs\n",
-                (int)title.length, title.chars, stats->avg * 1.e6, stats->best * 1.e6, stats->worst * 1.e6);
-            break;
-        case HgPerfScale_nano:
-            printf("HG Performance - %.*s: avg: %.4fns, best: %.4fns, worst: %.4fns\n",
-                (int)title.length, title.chars, stats->avg * 1.e9, stats->best * 1.e9, stats->worst * 1.e9);
-            break;
-    }
-}
-
 template<>
 void hgAssetLoadImpl(HgAsset<HgAudio>* data)
 {
@@ -5346,5 +4739,640 @@ void hgAudioUpdate(HgEcs* ecs, HgEntity listener)
         hgAssert(queueSize <= sizeToPush);
         hgAudioPlayerPush(src->player, queue, queueSize);
     });
+}
+
+HgEcs hgEcsCreate()
+{
+    HgEcs ecs{};
+    ecs.entities = hgHandlePoolCreate();
+    ecs.components = hgMapCreate<u64, HgComponent>(128);
+    hgEcsReset(&ecs);
+    return ecs;
+}
+
+void hgEcsDestroy(HgEcs* ecs)
+{
+    hgEcsReset(ecs);
+
+    hgMapForEach(&ecs->components, [&](u64*, HgComponent* system)
+    {
+        hgArrayAnyDestroy(&system->components);
+        hgArrayDestroy(&system->entities);
+        hgArrayDestroy(&system->indices);
+        hgStringDestroy(&system->name);
+    });
+
+    hgMapDestroy(&ecs->components);
+    hgHandlePoolDestroy(&ecs->entities);
+}
+
+void hgEcsReset(HgEcs* ecs)
+{
+    hgAssert(ecs != nullptr);
+
+    hgMapForEach(&ecs->components, [&](u64*, HgComponent* system)
+    {
+        for (u32 c = 1; c < system->components.count; ++c)
+        {
+            system->dtor(system->components[c]);
+        }
+        system->entities.count = 1;
+        system->components.count = 1;
+        hgMemClear(system->indices.vals, system->indices.count * sizeof(*system->indices.vals));
+    });
+    hgHandlePoolReset(&ecs->entities);
+}
+
+void hgEcsRegisterComponent(HgEcs* ecs, HgEcsRegisterComponent* config)
+{
+    hgAssert(ecs != nullptr);
+
+    u64 id = hgHash(config->name);
+    hgAssert(hgMapGet(&ecs->components, id) == nullptr);
+
+    if (ecs->components.count * 2 > ecs->components.capacity)
+        hgMapResize(&ecs->components, ecs->components.capacity * 2);
+    HgComponent* system = hgMapAdd(&ecs->components, id, {});
+
+    system->name = hgStringCreate(config->name);
+    system->indices = hgArrayCreate<u32>();
+    system->entities = hgArrayCreate<HgEntity>();
+    system->components = hgArrayAnyCreate(config->width, config->align);
+    system->dtor = config->dtor;
+    system->serialize = config->serialize;
+
+    hgArrayPush(&system->entities);
+    hgArrayAnyPush(&system->components);
+}
+
+void hgEcsUnregisterComponent(HgEcs* ecs, u64 componentId)
+{
+    HgComponent* system = hgMapGet(&ecs->components, componentId);
+
+    for (u32 c = 1; c < system->components.count; ++c)
+    {
+        system->dtor(system->components[c]);
+    }
+    hgArrayAnyDestroy(&system->components);
+    hgArrayDestroy(&system->entities);
+    hgArrayDestroy(&system->indices);
+    hgStringDestroy(&system->name);
+
+    hgMapRemove(&ecs->components, componentId);
+}
+
+HgStringView hgEcsComponentName(HgEcs* ecs, u64 componentId)
+{
+    hgAssert(ecs != nullptr);
+    HgComponent* system = hgMapGet(&ecs->components, componentId);
+    hgAssert(system != nullptr);
+    return system->name;
+}
+
+HgEntity hgEcsSpawn(HgEcs* ecs)
+{
+    hgAssert(ecs != nullptr);
+    return {hgHandlePoolAlloc(&ecs->entities)};
+}
+
+void hgEcsDespawn(HgEcs* ecs, HgEntity e)
+{
+    hgAssert(ecs != nullptr);
+    hgAssert(hgEcsAlive(ecs, e));
+
+    hgMapForEach(&ecs->components, [&](u64* id, HgComponent*)
+    {
+        if (hgEcsHas(ecs, e, *id))
+            hgEcsRemove(ecs, e, *id);
+    });
+    hgHandlePoolFree(&ecs->entities, e.handle);
+}
+
+bool hgEcsAlive(HgEcs* ecs, HgEntity e)
+{
+    hgAssert(ecs != nullptr);
+    return hgHandlePoolAlive(&ecs->entities, e.handle);
+}
+
+void* hgEcsAdd(HgEcs* ecs, HgEntity e, u64 componentId)
+{
+    hgAssert(ecs != nullptr);
+    hgAssert(hgEcsAlive(ecs, e));
+    hgAssert(!hgEcsHas(ecs, e, componentId));
+
+    HgComponent* system = hgMapGet(&ecs->components, componentId);
+    hgAssert(system != nullptr);
+
+    u32 idx = hgHandleIdx(e.handle);
+    if (idx >= system->indices.count)
+    {
+        u32 oldCount = system->indices.count;
+        u32 newCount = idx * 2;
+        hgArrayResize(&system->indices, newCount);
+        for (u32 i = oldCount; i < newCount; ++i)
+            system->indices[i] = 0;
+    }
+    system->indices[idx] = system->entities.count;
+    *hgArrayPush(&system->entities) = e;
+    return hgArrayAnyPush(&system->components);
+}
+
+void hgEcsRemove(HgEcs* ecs, HgEntity e, u64 componentId)
+{
+    hgAssert(ecs != nullptr);
+    hgAssert(hgEcsAlive(ecs, e));
+    hgAssert(hgEcsHas(ecs, e, componentId));
+
+    HgComponent* system = hgMapGet(&ecs->components, componentId);
+    hgAssert(system != nullptr);
+
+    u32 idx = system->indices[hgHandleIdx(e.handle)];
+    system->dtor(system->components[idx]);
+
+    HgEntity last = hgArrayPop(&system->entities);
+    if (e != last)
+    {
+        system->entities[idx] = last;
+        system->indices[hgHandleIdx(last.handle)] = idx;
+        hgMemCopy(
+            system->components[idx],
+            system->components[system->components.count - 1],
+            system->components.width);
+    }
+    system->indices[hgHandleIdx(e.handle)] = 0;
+    --system->components.count;
+}
+
+bool hgEcsHas(HgEcs* ecs, HgEntity e, u64 componentId)
+{
+    hgAssert(ecs != nullptr);
+    hgAssert(hgEcsAlive(ecs, e));
+
+    HgComponent* system = hgMapGet(&ecs->components, componentId);
+    if (system == nullptr)
+        return false;
+
+    u32 idx = hgHandleIdx(e.handle);
+    return idx < system->indices.count && system->indices[idx] != 0;
+}
+
+void* hgEcsGet(HgEcs* ecs, HgEntity e, u64 componentId)
+{
+    hgAssert(ecs != nullptr);
+    hgAssert(hgEcsAlive(ecs, e));
+
+    HgComponent* system = hgMapGet(&ecs->components, componentId);
+    hgAssert(system != nullptr);
+    hgAssert(system->indices[hgHandleIdx(e.handle)] != 0);
+    hgAssert(system->indices[hgHandleIdx(e.handle)] < system->entities.count);
+
+    return system->components[system->indices[hgHandleIdx(e.handle)]];
+}
+
+HgEntity hgEcsGetEntity(HgEcs* ecs, const void* component, u64 componentId)
+{
+    hgAssert(ecs != nullptr);
+    hgAssert(component != nullptr);
+
+    HgComponent* system = hgMapGet(&ecs->components, componentId);
+    hgAssert(system != nullptr);
+
+    return system->entities[(u32)((uptr)component - (uptr)system->components.vals) / system->components.width];
+}
+
+HgEntity* hgEcsEntities(HgEcs* ecs, u64 componentId)
+{
+    hgAssert(ecs != nullptr);
+    hgAssert(hgMapGet(&ecs->components, componentId) != nullptr);
+    hgAssert(hgMapGet(&ecs->components, componentId)->entities.count != 0);
+    return hgMapGet(&ecs->components, componentId)->entities.vals + 1;
+}
+
+void* hgEcsComponents(HgEcs* ecs, u64 componentId)
+{
+    hgAssert(ecs != nullptr);
+    hgAssert(hgMapGet(&ecs->components, componentId) != nullptr);
+    hgAssert(hgMapGet(&ecs->components, componentId)->components.count != 0);
+    HgComponent* system = hgMapGet(&ecs->components, componentId);
+    return (u8*)system->components.vals + system->components.width;
+}
+
+u32 hgEcsCount(HgEcs* ecs, u64 componentId)
+{
+    hgAssert(ecs != nullptr);
+    hgAssert(hgMapGet(&ecs->components, componentId) != nullptr);
+    hgAssert(hgMapGet(&ecs->components, componentId)->entities.count != 0);
+    return hgMapGet(&ecs->components, componentId)->entities.count - 1;
+}
+
+u64 hgEcsFindSmallest(HgEcs* ecs, u64* ids, u32 idCount)
+{
+    hgAssert(ecs != nullptr);
+
+    u32 smallestCount = (u32)-1;
+    u64 smallest = ids[0];
+
+    for (u32 i = 1; i < idCount; ++i)
+    {
+        HgComponent* system = hgMapGet(&ecs->components, ids[i]);
+        hgAssert(system != nullptr);
+
+        if (system->entities.count < smallestCount)
+        {
+            smallestCount = system->entities.count;
+            smallest = ids[i];
+        }
+    }
+    return smallest;
+}
+
+static void swapIdxLocation(HgEcs* ecs, u32 lhs, u32 rhs, u64 componentId)
+{
+    hgAssert(ecs != nullptr);
+
+    HgComponent* system = hgMapGet(&ecs->components, componentId);
+    hgAssert(system != nullptr);
+
+    hgAssert(lhs != 0 && lhs < system->entities.count);
+    hgAssert(rhs != 0 && rhs < system->entities.count);
+
+    HgEntity lhsEntity = system->entities[lhs];
+    HgEntity rhsEntity = system->entities[rhs];
+
+    hgAssert(hgEcsAlive(ecs, lhsEntity));
+    hgAssert(hgEcsAlive(ecs, rhsEntity));
+    hgAssert(hgEcsHas(ecs, lhsEntity, componentId));
+    hgAssert(hgEcsHas(ecs, rhsEntity, componentId));
+
+    HgArena* scratch = hgScratch();
+    hgArenaScope(scratch);
+
+    system->entities[lhs] = rhsEntity;
+    system->entities[rhs] = lhsEntity;
+    system->indices[hgHandleIdx(lhsEntity.handle)] = rhs;
+    system->indices[hgHandleIdx(rhsEntity.handle)] = lhs;
+
+    void* temp = hgArenaAlloc(scratch, system->components.width, 1);
+    hgMemCopy(temp, system->components[lhs], system->components.width);
+    hgMemCopy(system->components[lhs], system->components[rhs], system->components.width);
+    hgMemCopy(system->components[rhs], temp, system->components.width);
+}
+
+namespace {
+    struct QuicksortData {
+        HgEcs* ecs;
+        HgComponent* system;
+        u64 comp;
+        void* data;
+        bool (*compare)(void*, HgEcs* ecs, HgEntity lhs, HgEntity rhs);
+
+        u32 quicksortInter(u32 pivot, u32 inc, u32 dec)
+        {
+            while (inc != dec)
+            {
+                while (!compare(data, ecs, system->entities[dec], system->entities[pivot]))
+                {
+                    --dec;
+                    if (dec == inc)
+                        goto finish;
+                }
+                while (!compare(data, ecs, system->entities[pivot], system->entities[inc]))
+                {
+                    ++inc;
+                    if (inc == dec)
+                        goto finish;
+                }
+                swapIdxLocation(ecs, inc, dec, comp);
+            }
+
+        finish:
+            if (compare(data, ecs, system->entities[inc], system->entities[pivot]))
+                swapIdxLocation(ecs, pivot, inc, comp);
+
+            return inc;
+        }
+
+        void quicksort(u32 begin, u32 end)
+        {
+            if (begin + 1 >= end)
+                return;
+
+            u32 middle = quicksortInter(begin, begin + 1, end - 1);
+            quicksort(begin, middle);
+            quicksort(middle, end);
+        }
+    };
+}
+
+void hgEcsSort(
+    HgEcs* ecs,
+    u64 componentId,
+    void* data,
+    bool (*compare)(void*, HgEcs* ecs, HgEntity lhs, HgEntity rhs))
+{
+    hgAssert(ecs != nullptr);
+    hgAssert(compare != nullptr);
+
+    HgComponent* system = hgMapGet(&ecs->components, componentId);
+    hgAssert(system != nullptr);
+
+    QuicksortData q{ecs, system, componentId, data, compare};
+    q.quicksort(1, system->entities.count);
+}
+
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgEcs* ecs)
+{
+    hgAssert(arena != nullptr);
+    hgAssert(ecs != nullptr);
+
+    HgArena* scratch = hgScratch(&arena, 1);
+    hgArenaScope(scratch);
+
+    HgSerializer obj = hgSerializeObject(arena, s, name);
+
+    HgEntitySerializer ecsSerial{};
+    u32 entityCount = 0;
+    if (s->writing)
+    {
+        ecsSerial.entityToIdx = hgArenaAlloc<u32>(scratch, ecs->entities.handles.count);
+        for (u32 i = 1; i < ecs->entities.handles.count; ++i)
+        {
+            if (ecs->entities.handles[i] != hgHandleNull)
+                ecsSerial.entityToIdx[hgHandleIdx(ecs->entities.handles[i])] = entityCount++;
+        }
+
+        hgSerialize(arena, &obj, "Entity Count", &entityCount);
+    }
+    else
+    {
+        hgSerialize(arena, &obj, "Entity Count", &entityCount);
+
+        ecsSerial.idxToEntity = hgArenaAlloc<HgEntity>(scratch, entityCount);
+        for (u32 i = 0; i < entityCount; ++i)
+        {
+            ecsSerial.idxToEntity[i] = hgEcsSpawn(ecs);
+        }
+    }
+
+    HgSerializer systemArr{};
+    u32 systemCount;
+    if (s->writing)
+        systemCount = ecs->components.count;
+    systemArr = hgSerializeArray(arena, &obj, "Components", &systemCount);
+
+    u32 systemIdx = (u32)-1;
+    for (u32 i = 0; i < systemCount; ++i)
+    {
+        HgSerializer systemObj = hgSerializeObject(arena, &systemArr, "");
+
+        u64 systemId = (u64)-1;
+        HgComponent* systemData;
+        if (s->writing)
+        {
+            ++systemIdx;
+            while (!ecs->components.hasVal[systemIdx])
+            {
+                ++systemIdx;
+            }
+            systemId = ecs->components.keys[systemIdx];
+            systemData = &ecs->components.vals[systemIdx];
+            hgSerialize(arena, &systemObj, "Name", &systemData->name);
+        }
+        else
+        {
+            HgStringView compName;
+            hgSerialize(arena, &systemObj, "Name", &compName);
+            systemId = hgHash(compName);
+            systemData = hgMapGet(&ecs->components, systemId);
+        }
+
+        u32 compCount;
+        if (s->writing)
+            compCount = systemData->entities.count - 1;
+        HgSerializer compArr = hgSerializeArray(arena, &systemObj, "Data", &compCount);
+
+        for (u32 c = 0; c < compCount; ++c)
+        {
+            HgSerializer compObj = hgSerializeObject(arena, &compArr, "");
+
+            u32 entityIdx;
+            if (s->writing)
+                entityIdx = ecsSerial.entityToIdx[
+                    hgHandleIdx(systemData->entities[c + 1].handle)];
+            hgSerialize(arena, &compObj, "Entity Index", &entityIdx);
+
+            void* compData;
+            if (s->writing)
+                compData = systemData->components[c + 1];
+            else
+                compData = hgEcsAdd(ecs, ecsSerial.idxToEntity[entityIdx], systemId);
+            systemData->serialize(arena, &compObj, "Component", compData, &ecsSerial);
+        }
+    }
+}
+
+void hgEntitySerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgEntity* val, HgEntitySerializer* ecs)
+{
+    if (s->writing)
+    {
+        u32 idx = *val != hgEntityNull ? ecs->entityToIdx[hgHandleIdx(val->handle)] : (u32)-1;
+        hgSerialize(arena, s, name, (i32*)&idx);
+    }
+    else
+    {
+        u32 idx = (u32)-1;
+        hgSerialize(arena, s, name, (i32*)&idx);
+        *val = idx != (u32)-1 ? ecs->idxToEntity[idx] : hgEntityNull;
+    }
+}
+
+template<>
+void hgEcsSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgNode* node, HgEntitySerializer* ecs)
+{
+    HgSerializer obj = hgSerializeObject(arena, s, name);
+    hgEntitySerialize(arena, &obj, "Parent", &node->parent, ecs);
+    hgEntitySerialize(arena, &obj, "Next Sibling", &node->nextSibling, ecs);
+    hgEntitySerialize(arena, &obj, "Previous Sibling", &node->prevSibling, ecs);
+    hgEntitySerialize(arena, &obj, "First Child", &node->firstChild, ecs);
+}
+
+HgNode* hgNodeAdd(HgEcs* ecs, HgEntity e)
+{
+    HgNode* node = hgEcsAdd<HgNode>(ecs, e);
+    *node = {};
+    return node;
+}
+
+void hgNodeDestroy(HgEcs* ecs, HgEntity e)
+{
+    hgAssert(ecs != nullptr);
+    hgAssert(hgEcsAlive(ecs, e));
+
+    HgNode* node = hgEcsGet<HgNode>(ecs, e);
+    if (node->parent.handle != hgHandleNull)
+    {
+        if (node->prevSibling.handle != hgHandleNull)
+            hgEcsGet<HgNode>(ecs, node->prevSibling)->nextSibling = node->nextSibling;
+        else
+            hgEcsGet<HgNode>(ecs, node->parent)->firstChild = node->nextSibling;
+
+        if (node->nextSibling.handle != hgHandleNull)
+            hgEcsGet<HgNode>(ecs, node->nextSibling)->prevSibling = node->prevSibling;
+    }
+
+    HgEntity child = node->firstChild;
+    while (child.handle != hgHandleNull)
+    {
+        HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
+        HgEntity next = childNode->nextSibling;
+        hgNodeDestroy(ecs, child);
+        child = next;
+    }
+
+    hgEcsDespawn(ecs, e);
+}
+
+void hgNodeDetach(HgEcs* ecs, HgEntity e)
+{
+    hgAssert(ecs != nullptr);
+    hgAssert(hgEcsAlive(ecs, e));
+
+    HgNode* node = hgEcsGet<HgNode>(ecs, e);
+    if (node->parent.handle == hgHandleNull)
+    {
+        hgAssert(node->prevSibling.handle == hgHandleNull);
+        hgAssert(node->nextSibling.handle == hgHandleNull);
+
+        HgEntity child = node->firstChild;
+        while (child.handle != hgHandleNull)
+        {
+            HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
+            HgEntity next = childNode->nextSibling;
+            childNode->parent = HgEntity{};
+            childNode->nextSibling = HgEntity{};
+            childNode->prevSibling = HgEntity{};
+            child = next;
+        }
+    } else {
+        if (node->prevSibling.handle != hgHandleNull)
+            hgEcsGet<HgNode>(ecs, node->prevSibling)->nextSibling = node->nextSibling;
+        else
+            hgEcsGet<HgNode>(ecs, node->parent)->firstChild = node->nextSibling;
+
+        if (node->nextSibling.handle != hgHandleNull)
+            hgEcsGet<HgNode>(ecs, node->nextSibling)->prevSibling = node->prevSibling;
+
+        HgEntity child = node->firstChild;
+        while (child.handle != hgHandleNull)
+        {
+            HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
+            HgEntity next = childNode->nextSibling;
+            childNode->parent = HgEntity{};
+            childNode->nextSibling = HgEntity{};
+            childNode->prevSibling = HgEntity{};
+            hgNodeAddChild(ecs, node->parent, child);
+            child = next;
+        }
+    }
+    *node = {};
+}
+
+void hgNodeAddChild(HgEcs* ecs, HgEntity parent, HgEntity child)
+{
+    hgAssert(ecs != nullptr);
+    hgAssert(hgEcsAlive(ecs, parent));
+    hgAssert(hgEcsAlive(ecs, child));
+
+    HgNode* node = hgEcsGet<HgNode>(ecs, parent);
+    HgNode* childNode = hgEcsGet<HgNode>(ecs, child);
+
+    hgAssert(childNode->parent.handle == hgHandleNull);
+    hgAssert(childNode->prevSibling.handle == hgHandleNull);
+    hgAssert(childNode->nextSibling.handle == hgHandleNull);
+
+    if (node->firstChild.handle != hgHandleNull)
+    {
+        hgEcsGet<HgNode>(ecs, node->firstChild)->prevSibling = child;
+        childNode->nextSibling = node->firstChild;
+    }
+    node->firstChild = child;
+    childNode->parent = parent;
+}
+
+template<>
+void hgSerialize(HgArena* arena, HgSerializer* s, HgStringView name, HgTransform* node)
+{
+    HgSerializer obj = hgSerializeObject(arena, s, name);
+    hgSerialize(arena, &obj, "Position", &node->position);
+    hgSerialize(arena, &obj, "Scale", &node->scale);
+    hgSerialize(arena, &obj, "Rotation", &node->rotation);
+}
+
+HgTransform* hgTransformAdd(HgEcs* ecs, HgEntity e, HgVec3 position, HgVec3 scale, HgQuat rotation)
+{
+    hgAssert(ecs != nullptr);
+    hgAssert(hgEcsAlive(ecs, e));
+
+    HgTransform* tf = hgEcsAdd<HgTransform>(ecs, e);
+    *tf = {};
+    tf->position = position;
+    tf->scale = scale;
+    tf->rotation = rotation;
+    hgTransformUpdate(ecs, e);
+
+    return tf;
+}
+
+static void transformUpdateChild(HgEcs* ecs, HgEntity e)
+{
+    hgAssert(hgEcsHas<HgTransform>(ecs, e));
+
+    HgNode* node = hgEcsGet<HgNode>(ecs, e);
+
+    HgTransform* tf = hgEcsGet<HgTransform>(ecs, e);
+
+    tf->mat = hgEcsGet<HgTransform>(ecs, node->parent)->mat
+            * hgMatModel3D(tf->position, tf->scale, tf->rotation);
+
+    HgEntity child = node->firstChild;
+    while (child.handle != hgHandleNull)
+    {
+        hgTransformUpdate(ecs, child);
+        child = hgEcsGet<HgNode>(ecs, child)->nextSibling;
+    }
+}
+
+void hgTransformUpdate(HgEcs* ecs, HgEntity e)
+{
+    hgAssert(ecs != nullptr);
+    hgAssert(hgEcsAlive(ecs, e));
+    hgAssert(hgEcsHas<HgTransform>(ecs, e));
+
+    if (hgEcsHas<HgNode>(ecs, e))
+    {
+        HgNode* node = hgEcsGet<HgNode>(ecs, e);
+        if (node->parent.handle != hgHandleNull && hgEcsHas<HgTransform>(ecs, node->parent))
+        {
+            transformUpdateChild(ecs, e);
+        }
+        else
+        {
+            HgTransform* tf = hgEcsGet<HgTransform>(ecs, e);
+            tf->mat = hgMatModel3D(tf->position, tf->scale, tf->rotation);
+
+            HgEntity child = node->firstChild;
+            while (child.handle != hgHandleNull)
+            {
+                transformUpdateChild(ecs, child);
+                child = hgEcsGet<HgNode>(ecs, child)->nextSibling;
+            }
+        }
+    }
+    else
+    {
+        HgTransform* tf = hgEcsGet<HgTransform>(ecs, e);
+        tf->mat = hgMatModel3D(tf->position, tf->scale, tf->rotation);
+    }
 }
 

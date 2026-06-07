@@ -1,12 +1,15 @@
-#include "hg_core.hpp"
+#include "hg_audio.hpp"
 #include "hg_containers.hpp"
+#include "hg_core.hpp"
 #include "hg_gpu.hpp"
 #include "hg_library.hpp"
 #include "hg_memory.hpp"
 #include "hg_platform.hpp"
+#include "hg_rendering.hpp"
+#include "hg_strings.hpp"
 #include "hg_templates.hpp"
+#include "hg_utils.hpp"
 #include "hg_window.hpp"
-#include "hg_audio.hpp"
 
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
@@ -16,6 +19,21 @@
 
 #include "imgui_impl_vulkan.h"
 #include "imgui_impl_sdl3.h"
+
+void hgPlatformInit()
+{
+    SDL_Init(
+        SDL_INIT_AUDIO |
+        SDL_INIT_VIDEO |
+        SDL_INIT_JOYSTICK |
+        SDL_INIT_GAMEPAD |
+        SDL_INIT_EVENTS);
+}
+
+void hgPlatformDeinit()
+{
+    SDL_Quit();
+}
 
 static const char* vkResultToStr(VkResult result)
 {
@@ -3117,21 +3135,6 @@ void hgGpuFrameEnd(HgGpuCmd* cmd)
     }
 
     vk.currentFrame = (vk.currentFrame + 1) % vk.frameCount;
-}
-
-void hgPlatformInit()
-{
-    SDL_Init(
-        SDL_INIT_AUDIO |
-        SDL_INIT_VIDEO |
-        SDL_INIT_JOYSTICK |
-        SDL_INIT_GAMEPAD |
-        SDL_INIT_EVENTS);
-}
-
-void hgPlatformDeinit()
-{
-    SDL_Quit();
 }
 
 u32 hgPlatformGetVulkanExtensions(HgArena* arena, HgStringView** extBuffer)

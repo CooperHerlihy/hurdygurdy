@@ -67,60 +67,6 @@ void hgTest()
         }
     }
 
-    // HgMat
-    {
-        HgMat2 mat{
-            HgVec2{1.0f, 0.0f},
-            HgVec2{1.0f, 0.0f},
-        };
-        HgVec2 vec{1.0f, 1.0f};
-
-        HgMat2 identity{
-            HgVec2{1.0f, 0.0f},
-            HgVec2{0.0f, 1.0f},
-        };
-        hgAssert(identity * mat == mat);
-        hgAssert(identity * vec == vec);
-
-        HgMat2 matRotated{
-            HgVec2{0.0f, 1.0f},
-            HgVec2{0.0f, 1.0f},
-        };
-        HgVec2 vecRotated{-1.0f, 1.0f};
-
-        HgMat2 rotation{
-            HgVec2{0.0f, 1.0f},
-            HgVec2{-1.0f, 0.0f},
-        };
-        hgAssert(rotation * mat == matRotated);
-        hgAssert(rotation * vec == vecRotated);
-
-        hgAssert((identity * rotation) * mat == identity * (rotation * mat));
-        hgAssert((identity * rotation) * vec == identity * (rotation * vec));
-        hgAssert((rotation * rotation) * mat == rotation * (rotation * mat));
-        hgAssert((rotation * rotation) * vec == rotation * (rotation * vec));
-    }
-
-    // HgQuat
-    {
-        HgMat3 identityMat = HgMat3{1.0f};
-        HgVec3 upVec{0.0f, -1.0f, 0.0f};
-        HgQuat rotation = hgQuatAxisAngle(HgVec3{0.0f, 0.0f, -1.0f}, -(f32)hgPi * 0.5f);
-
-        HgVec3 rotatedVec = hgVecRotate(rotation, upVec);
-        HgMat3 rotatedMat = hgMatRotate(rotation, identityMat);
-
-        HgVec3 matRotatedVec = rotatedMat * upVec;
-
-        hgAssert(abs(rotatedVec.x - 1.0f) < FLT_EPSILON
-                    && abs(rotatedVec.y - 0.0f) < FLT_EPSILON
-                    && abs(rotatedVec.y - 0.0f) < FLT_EPSILON);
-
-        hgAssert(abs(matRotatedVec.x - rotatedVec.x) < FLT_EPSILON
-                    && abs(matRotatedVec.y - rotatedVec.y) < FLT_EPSILON
-                    && abs(matRotatedVec.y - rotatedVec.z) < FLT_EPSILON);
-    }
-
     // HgString
     {
         HgArena* arena = hgScratch();
@@ -2150,6 +2096,162 @@ void hgTest()
         hgAssert(!hgHandlePoolAlive(&pool, u12));
     }
 
+    // HgMat
+    {
+        HgMat2 mat{
+            HgVec2{1.0f, 0.0f},
+            HgVec2{1.0f, 0.0f},
+        };
+        HgVec2 vec{1.0f, 1.0f};
+
+        HgMat2 identity{
+            HgVec2{1.0f, 0.0f},
+            HgVec2{0.0f, 1.0f},
+        };
+        hgAssert(identity * mat == mat);
+        hgAssert(identity * vec == vec);
+
+        HgMat2 matRotated{
+            HgVec2{0.0f, 1.0f},
+            HgVec2{0.0f, 1.0f},
+        };
+        HgVec2 vecRotated{-1.0f, 1.0f};
+
+        HgMat2 rotation{
+            HgVec2{0.0f, 1.0f},
+            HgVec2{-1.0f, 0.0f},
+        };
+        hgAssert(rotation * mat == matRotated);
+        hgAssert(rotation * vec == vecRotated);
+
+        hgAssert((identity * rotation) * mat == identity * (rotation * mat));
+        hgAssert((identity * rotation) * vec == identity * (rotation * vec));
+        hgAssert((rotation * rotation) * mat == rotation * (rotation * mat));
+        hgAssert((rotation * rotation) * vec == rotation * (rotation * vec));
+    }
+
+    // HgQuat
+    {
+        HgMat3 identityMat = HgMat3{1.0f};
+        HgVec3 upVec{0.0f, -1.0f, 0.0f};
+        HgQuat rotation = hgQuatAxisAngle(HgVec3{0.0f, 0.0f, -1.0f}, -(f32)hgPi * 0.5f);
+
+        HgVec3 rotatedVec = hgVecRotate(rotation, upVec);
+        HgMat3 rotatedMat = hgMatRotate(rotation, identityMat);
+
+        HgVec3 matRotatedVec = rotatedMat * upVec;
+
+        hgAssert(abs(rotatedVec.x - 1.0f) < FLT_EPSILON
+                    && abs(rotatedVec.y - 0.0f) < FLT_EPSILON
+                    && abs(rotatedVec.y - 0.0f) < FLT_EPSILON);
+
+        hgAssert(abs(matRotatedVec.x - rotatedVec.x) < FLT_EPSILON
+                    && abs(matRotatedVec.y - rotatedVec.y) < FLT_EPSILON
+                    && abs(matRotatedVec.y - rotatedVec.z) < FLT_EPSILON);
+    }
+
+    // HgAssetManager and HgBinary
+    {
+        {
+            HgBinaryAsset* bin1 = hgAssetCreate<HgBinary>();
+            hgAssert(bin1 != nullptr);
+            hgAssert(bin1->path == "");
+
+            HgBinaryAsset* bin2 = hgAssetCreate<HgBinary>();
+            hgAssert(bin2 != nullptr);
+            hgAssert(bin2->path == "");
+            hgAssert(bin2 != bin1);
+
+            hgAssetUnload(bin1);
+            hgAssetUnload(bin2);
+        }
+
+        {
+            HgBinaryAsset* bin = hgAssetLoad<HgBinary>("file_does_not_exist.bin");
+            hgAssert(bin->data.data == nullptr);
+            hgAssert(bin->data.size == 0);
+            hgAssetUnload(bin);
+        }
+
+        u32 saveData[]{12, 42, 100, 128};
+
+        HgFence* fence = hgFenceCreate();
+        hgDefer(hgFenceDestroy(fence));
+
+        {
+            HgBinary bin{saveData, sizeof(saveData)};
+
+            hgBinaryStore(&bin, "dir/does/not/exist.bin", fence);
+            hgAssert(hgFenceWait(fence, 2.0));
+
+            FILE* fileHandle = fopen("dir/does/not/exist.bin", "rb");
+            hgAssert(fileHandle == nullptr);
+        }
+
+        {
+            HgBinary bin{saveData, sizeof(saveData)};
+
+            HgStringView filePath = "hg_test_dir/file_bin_test.bin";
+
+            hgBinaryStore(&bin, filePath, fence);
+            hgAssert(hgFenceWait(fence, 2.0));
+
+            HgBinaryAsset* newBin = hgAssetLoad<HgBinary>(filePath);
+
+            hgAssert(newBin->data.data != nullptr);
+            hgAssert(newBin->data.data != saveData);
+            hgAssert(newBin->data.size == sizeof(saveData));
+            hgAssert(hgMemEqual(saveData, newBin->data.data, newBin->data.size));
+
+            HgBinaryAsset* newBin2 = hgAssetLoad<HgBinary>(filePath);
+            hgAssert(newBin2 == newBin);
+
+            hgAssetUnload(newBin);
+            hgAssetUnload(newBin2);
+        }
+    }
+
+    // HgImage
+    {
+        struct color {
+            u8 r, g, b, a;
+
+            operator u32() { return *(u32*)this; }
+        };
+
+        u32 red =    color{0xff, 0x00, 0x00, 0xff};
+        u32 green =  color{0x00, 0xff, 0x00, 0xff};
+        u32 blue =   color{0x00, 0x00, 0xff, 0xff};
+        u32 yellow = color{0xff, 0xff, 0x00, 0xff};
+
+        u32 saveData[2][2]{
+            {red, green},
+            {blue, yellow},
+        };
+
+        HgStringView path = "hg_test_dir/image_test.png";
+
+        HgTexture testImage{};
+        testImage.width = 2;
+        testImage.height = 2;
+        testImage.depth = 1;
+        testImage.format = HgFormat_r8g8b8a8_srgb;
+        testImage.pixels = saveData;
+
+        HgFence* fence = hgFenceCreate();
+        hgDefer(hgFenceDestroy(fence));
+        {
+            hgTextureStorePng(&testImage, path, fence);
+            hgAssert(hgFenceWait(fence, 2.0));
+
+            HgTextureAsset* image = hgAssetLoad<HgTexture>(path);
+            hgDefer(hgAssetUnload(image));
+            hgAssert(image->data.width == testImage.width);
+            hgAssert(image->data.height == testImage.height);
+            hgAssert(hgMemEqual(image->data.pixels, saveData, sizeof(saveData)));
+        }
+    }
+
     // HgEcs basics
     {
         HgEcs ecs = hgEcsCreate();
@@ -2729,108 +2831,6 @@ void hgTest()
             hgAssert(!hgEcsAlive(&ecs, abb));
 
             hgEcsDespawn(&ecs, b);
-        }
-    }
-
-    // HgAssetManager and HgBinary
-    {
-        {
-            HgBinaryAsset* bin1 = hgAssetCreate<HgBinary>();
-            hgAssert(bin1 != nullptr);
-            hgAssert(bin1->path == "");
-
-            HgBinaryAsset* bin2 = hgAssetCreate<HgBinary>();
-            hgAssert(bin2 != nullptr);
-            hgAssert(bin2->path == "");
-            hgAssert(bin2 != bin1);
-
-            hgAssetUnload(bin1);
-            hgAssetUnload(bin2);
-        }
-
-        {
-            HgBinaryAsset* bin = hgAssetLoad<HgBinary>("file_does_not_exist.bin");
-            hgAssert(bin->data.data == nullptr);
-            hgAssert(bin->data.size == 0);
-            hgAssetUnload(bin);
-        }
-
-        u32 saveData[]{12, 42, 100, 128};
-
-        HgFence* fence = hgFenceCreate();
-        hgDefer(hgFenceDestroy(fence));
-
-        {
-            HgBinary bin{saveData, sizeof(saveData)};
-
-            hgBinaryStore(&bin, "dir/does/not/exist.bin", fence);
-            hgAssert(hgFenceWait(fence, 2.0));
-
-            FILE* fileHandle = fopen("dir/does/not/exist.bin", "rb");
-            hgAssert(fileHandle == nullptr);
-        }
-
-        {
-            HgBinary bin{saveData, sizeof(saveData)};
-
-            HgStringView filePath = "hg_test_dir/file_bin_test.bin";
-
-            hgBinaryStore(&bin, filePath, fence);
-            hgAssert(hgFenceWait(fence, 2.0));
-
-            HgBinaryAsset* newBin = hgAssetLoad<HgBinary>(filePath);
-
-            hgAssert(newBin->data.data != nullptr);
-            hgAssert(newBin->data.data != saveData);
-            hgAssert(newBin->data.size == sizeof(saveData));
-            hgAssert(hgMemEqual(saveData, newBin->data.data, newBin->data.size));
-
-            HgBinaryAsset* newBin2 = hgAssetLoad<HgBinary>(filePath);
-            hgAssert(newBin2 == newBin);
-
-            hgAssetUnload(newBin);
-            hgAssetUnload(newBin2);
-        }
-    }
-
-    // HgImage
-    {
-        struct color {
-            u8 r, g, b, a;
-
-            operator u32() { return *(u32*)this; }
-        };
-
-        u32 red =    color{0xff, 0x00, 0x00, 0xff};
-        u32 green =  color{0x00, 0xff, 0x00, 0xff};
-        u32 blue =   color{0x00, 0x00, 0xff, 0xff};
-        u32 yellow = color{0xff, 0xff, 0x00, 0xff};
-
-        u32 saveData[2][2]{
-            {red, green},
-            {blue, yellow},
-        };
-
-        HgStringView path = "hg_test_dir/image_test.png";
-
-        HgTexture testImage{};
-        testImage.width = 2;
-        testImage.height = 2;
-        testImage.depth = 1;
-        testImage.format = HgFormat_r8g8b8a8_srgb;
-        testImage.pixels = saveData;
-
-        HgFence* fence = hgFenceCreate();
-        hgDefer(hgFenceDestroy(fence));
-        {
-            hgTextureStorePng(&testImage, path, fence);
-            hgAssert(hgFenceWait(fence, 2.0));
-
-            HgTextureAsset* image = hgAssetLoad<HgTexture>(path);
-            hgDefer(hgAssetUnload(image));
-            hgAssert(image->data.width == testImage.width);
-            hgAssert(image->data.height == testImage.height);
-            hgAssert(hgMemEqual(image->data.pixels, saveData, sizeof(saveData)));
         }
     }
 

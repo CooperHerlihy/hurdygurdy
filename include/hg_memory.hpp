@@ -30,26 +30,6 @@
 #include "hg_core.hpp"
 
 /**
- * Clear a section of memory to 0
- */
-void hgMemClear(void* dst, u64 size);
-
-/**
- * Copy memory from src to dst, may not overlap
- */
-void hgMemCopy(void* __restrict dst, const void* __restrict src, u64 size);
-
-/**
- * Copy memory from src to dst, may overlap
- */
-void hgMemMove(void* dst, const void* src, u64 size);
-
-/**
- * Check if two regions of memory are identical
- */
-bool hgMemEqual(const void* dst, const void* src, u64 size);
-
-/**
  * Allocates memory from a general purpose allocator
  *
  * Parameters
@@ -254,75 +234,5 @@ void hgScratchDeinit();
  * - A scratch arena, never nullptr
  */
 HgArena* hgScratch(HgArena const* const* conflicts = nullptr, u32 count = 0);
-
-/**
- * A block of binary data
- */
-struct HgBinary {
-    /**
-     * The data in the file
-     */
-    void* data;
-    /**
-     * The size of the file in bytes
-     */
-    u64 size;
-};
-
-/**
- * Resize the file
- *
- * Parameters
- * - arena The arena to allocate from
- * - newSize The new size of the file in bytes
- */
-void hgBinaryResize(HgArena* arena, HgBinary* bin, u64 newSize);
-
-/**
- * Read data at index into a buffer
- *
- * Parameters
- * - idx The index into the file in bytes to read from
- * - dst A pointer to store the read data
- * - size The size in bytes to read
- */
-void hgBinaryRead(const HgBinary* bin, u64 idx, void* dst, u64 len);
-
-/**
- * Read data of arbitrary type from the file
- *
- * Parameters
- * - idx The index into the file in bytes to read from
- */
-template<typename T>
-T hgBinaryRead(const HgBinary* bin, u64 idx)
-{
-    T ret;
-    hgBinaryRead(bin, idx, &ret, sizeof(T));
-    return ret;
-}
-
-/**
- * Overwrite data at the index
- *
- * Parameters
- * - idx The index into the file to overwrite
- * - src The data to write
- * - size The size of the data in bytes
- */
-void hgBinaryOverwrite(HgBinary* bin, u64 idx, const void* src, u64 len);
-
-/**
- * Overwrite data of arbitrary type at the index
- *
- * Parameters
- * - idx The index into the file to overwrite
- * - src The data to write
- */
-template<typename T>
-void hgBinaryOverwrite(HgBinary* bin, u64 idx, const T& src)
-{
-    hgBinaryOverwrite(bin, idx, &src, sizeof(T));
-}
 
 #endif // HG_MEMORY_HPP

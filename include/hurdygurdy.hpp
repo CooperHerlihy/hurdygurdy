@@ -40,7 +40,10 @@
 #include "hg_platform.hpp"
 #include "hg_rendering.hpp"
 #include "hg_serialization.hpp"
+#include "hg_strings.hpp"
+#include "hg_templates.hpp"
 #include "hg_time.hpp"
+#include "hg_utils.hpp"
 #include "hg_window.hpp"
 
 #endif // HURDYGURDY_HPP

@@ -28,10 +28,14 @@
 #define HG_RENDERING_HPP
 
 #include "hg_assets.hpp"
+#include "hg_concurrency.hpp"
 #include "hg_core.hpp"
+#include "hg_ecs.hpp"
 #include "hg_gpu.hpp"
 #include "hg_math.hpp"
-#include "hg_templates.hpp"
+#include "hg_memory.hpp"
+#include "hg_serialization.hpp"
+#include "hg_strings.hpp"
 #include "hg_window.hpp"
 
 /**

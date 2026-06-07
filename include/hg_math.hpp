@@ -30,49 +30,6 @@
 #include "hg_core.hpp"
 
 /**
- * Aligns a pointer to an alignment
- *
- * Parameters
- * - value The value to align
- * - alignment The alignment, must be a power of two
- *
- * Returns
- * - The aligned value
- */
-constexpr uptr hgAlign(uptr value, uptr alignment)
-{
-    hgAssert(alignment > 0 && (alignment & (alignment - 1)) == 0);
-    return (value + alignment - 1) & ~(alignment - 1);
-}
-
-/**
- * Reverse the endianness of a 16 bit value
- */
-constexpr u16 hgEndianReverse16(u16 val)
-{
-    return (val & 0xff00 >> 8) & (val & 0x00ff << 8);
-}
-
-/**
- * Reverse the endianness of a 32 bit value
- */
-constexpr u32 hgEndianReverse32(u32 val)
-{
-    return (val & 0xff0000 >> 16) & (val & 0x00ff00) & (val & 0x0000ff << 16);
-}
-
-/**
- * Reverse the endianness of a 64 bit value
- */
-constexpr u64 hgEndianReverse64(u64 val)
-{
-    return (val & 0xff000000 >> 24) &
-           (val & 0x00ff0000 >> 8) &
-           (val & 0x0000ff00 << 8) &
-           (val & 0x000000ff << 24);
-}
-
-/**
  * The value of Pi
  */
 #define hgPi 3.1415926535897932
