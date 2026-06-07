@@ -717,12 +717,12 @@ int main()
             HgVec3 movement = HgVec3{0.0f};
             if (move3D)
             {
-                movement.y += hgIsButtonDown(window, HgButton_lshift) - hgIsButtonDown(window, HgButton_space);
-                movement.x += hgIsButtonDown(window, HgButton_d) - hgIsButtonDown(window, HgButton_a);
-                movement.z += hgIsButtonDown(window, HgButton_w) - hgIsButtonDown(window, HgButton_s);
+                movement.y += (f32)(hgIsButtonDown(window, HgButton_lshift) - hgIsButtonDown(window, HgButton_space));
+                movement.x += (f32)(hgIsButtonDown(window, HgButton_d) - hgIsButtonDown(window, HgButton_a));
+                movement.z += (f32)(hgIsButtonDown(window, HgButton_w) - hgIsButtonDown(window, HgButton_s));
             } else {
-                movement.y += hgIsButtonDown(window, HgButton_s) - hgIsButtonDown(window, HgButton_w);
-                movement.x += hgIsButtonDown(window, HgButton_d) - hgIsButtonDown(window, HgButton_a);
+                movement.y += (f32)(hgIsButtonDown(window, HgButton_s) - hgIsButtonDown(window, HgButton_w));
+                movement.x += (f32)(hgIsButtonDown(window, HgButton_d) - hgIsButtonDown(window, HgButton_a));
             }
 
             if (movement != HgVec3{0.0f})

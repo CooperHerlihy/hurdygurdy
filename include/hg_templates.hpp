@@ -399,10 +399,10 @@ void hgSetAdd(HgSet<V>* set, const T& val)
     static_assert(std::is_convertible_v<T, V>);
     V v = (V)val;
 
-    u32 idx = hgHash(v) % set->capacity;
+    u32 idx = (u32)(hgHash(v) % set->capacity);
     for (u32 dist = 0; set->hasVal[idx] && !(set->vals[idx] == v); ++dist)
     {
-        u32 otherDist = hgHash(set->vals[idx]) % set->capacity - idx;
+        u32 otherDist = (u32)(hgHash(set->vals[idx]) % set->capacity) - idx;
         if (otherDist > set->capacity)
             otherDist += set->capacity;
 
@@ -428,7 +428,7 @@ void hgSetRemove(HgSet<V>* set, const T& val)
     static_assert(std::is_convertible_v<T, V>);
     V v = (V)val;
 
-    u32 idx = hgHash(v) % set->capacity;
+    u32 idx = (u32)(hgHash(v) % set->capacity);
     while (set->hasVal[idx])
     {
         if (set->vals[idx] == v)
@@ -460,7 +460,7 @@ bool hgSetHas(const HgSet<V>* set, const T& val)
     static_assert(std::is_convertible_v<T, V>);
     V v = (V)val;
 
-    for (u32 idx = hgHash(v) % set->capacity; set->hasVal[idx]; idx = (idx + 1) % set->capacity)
+    for (u32 idx = (u32)(hgHash(v) % set->capacity); set->hasVal[idx]; idx = (idx + 1) % set->capacity)
     {
         if (set->vals[idx] == v)
             return true;
@@ -564,10 +564,10 @@ V* hgMapAdd(HgMap<K, V>* map, const T& key, const U& val)
     K k = (K)key;
     V v = (V)val;
 
-    u32 idx = hgHash(k) % map->capacity;
+    u32 idx = (u32)(hgHash(k) % map->capacity);
     for (u32 dist = 0; map->hasVal[idx] && !(map->keys[idx] == k); ++dist)
     {
-        u32 otherDist = hgHash(map->keys[idx]) % map->capacity - idx;
+        u32 otherDist = (u32)(hgHash(map->keys[idx]) % map->capacity) - idx;
         if (otherDist > map->capacity)
             otherDist += map->capacity;
 
@@ -597,7 +597,7 @@ bool hgMapRemove(HgMap<K, V>* map, const T& key, V* val)
     static_assert(std::is_convertible_v<T, K>);
     K k = (K)key;
 
-    u32 idx = hgHash(k) % map->capacity;
+    u32 idx = (u32)(hgHash(k) % map->capacity);
     while (map->hasVal[idx])
     {
         if (map->keys[idx] == k)
@@ -635,7 +635,7 @@ V* hgMapGet(const HgMap<K, V>* map, const T& key)
     static_assert(std::is_convertible_v<T, K>);
     K k = (K)key;
 
-    for (u32 idx = hgHash(key) % map->capacity; map->hasVal[idx]; idx = (idx + 1) % map->capacity)
+    for (u32 idx = (u32)(hgHash(key) % map->capacity); map->hasVal[idx]; idx = (idx + 1) % map->capacity)
     {
         if (map->keys[idx] == k)
             return map->vals + idx;
